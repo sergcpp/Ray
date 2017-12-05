@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 namespace ray {
 struct pixel_color_t {
     float r, g, b, a;
