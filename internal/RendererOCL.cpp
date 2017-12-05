@@ -98,7 +98,8 @@ ray::ocl::Renderer::Renderer(int w, int h) : w_(w), h_(h), iteration_(0) {
         cl_src_defines += "#define W_BITS " + std::to_string(W_BITS) + "\n";
         cl_src_defines += "#define AXIS_ALIGNED_BIT " + std::to_string(AXIS_ALIGNED_BIT) + "\n";
         cl_src_defines += "#define HaltonSeqLen " + std::to_string(HaltonSeqLen) + "\n";
-        cl_src_defines += "#define MAX_MIP_LEVELS " + std::to_string(MAX_MIP_LEVELS) + "\n";
+        cl_src_defines += "#define MAX_MIP_LEVEL " + std::to_string(MAX_MIP_LEVEL) + "\n";
+        cl_src_defines += "#define NUM_MIP_LEVELS " + std::to_string(NUM_MIP_LEVELS) + "\n";
         cl_src_defines += "#define MAX_TEXTURE_SIZE " + std::to_string(MAX_TEXTURE_SIZE) + "\n";
         cl_src_defines += "#define MAX_MATERIAL_TEXTURES " + std::to_string(MAX_MATERIAL_TEXTURES) + "\n";
         cl_src_defines += "#define DiffuseMaterial " + std::to_string(DiffuseMaterial) + "\n";

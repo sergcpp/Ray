@@ -106,7 +106,7 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
         A[0] = dpdu.yz;
         A[1] = dpdv.yz;
         Bx = do_dx.yz;
-        By = do_dx.yz;
+        By = do_dy.yz;
     } else if (fabs(N.y) > fabs(N.z)) {
         A[0] = dpdu.xz;
         A[1] = dpdv.xz;
@@ -134,11 +134,6 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
 
     ////////////////////////////////////////////////////////
 
-    float lod = native_log2(max(fast_length(duv_dx), fast_length(duv_dy)));
-    lod = clamp(lod, 0.0f, (float)(MAX_MIP_LEVELS - 1));
-
-    //////////////////////////////////////////
-
     const float3 b1 = (float3)(v1->b[0], v1->b[1], v1->b[2]);
     const float3 b2 = (float3)(v2->b[0], v2->b[1], v2->b[2]);
     const float3 b3 = (float3)(v3->b[0], v3->b[1], v3->b[2]);
@@ -146,8 +141,7 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
     float3 B = b1 * _w + b2 * inter->u + b3 * inter->v;
     float3 T = cross(B, N);
 
-    float4 normals = SampleTextureTrilinear(texture_atlas, &textures[mat->textures[NORMALS_TEXTURE]], uvs, lod);
-    //float4 normals = SampleTextureAnisotropic(texture_atlas, &textures[mat->textures[NORMALS_TEXTURE]], uvs, duv_dx, duv_dy);
+    float4 normals = SampleTextureAnisotropic(texture_atlas, &textures[mat->textures[NORMALS_TEXTURE]], uvs, duv_dx, duv_dy);
 
     normals = 2.0f * normals - 1.0f;
 
@@ -165,11 +159,8 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
 
     //////////////////////////////////////////
 
-    float4 res = SampleTextureTrilinear(texture_atlas, &textures[mat->textures[MAIN_TEXTURE]], uvs, lod);
-    //float4 res = SampleTextureAnisotropic(texture_atlas, &textures[mat->textures[MAIN_TEXTURE]], uvs, duv_dx, duv_dy);
-    // * heat_map(lod / (float)MAX_MIP_LEVELS);
-
-    res = native_powr(res, 2.2f);
+    float4 albedo = SampleTextureAnisotropic(texture_atlas, &textures[mat->textures[MAIN_TEXTURE]], uvs, duv_dx, duv_dy);
+    albedo = native_powr(albedo, 2.2f);
 
     //////////////////////////////////////////
 
@@ -200,7 +191,7 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
 
         k = clamp(k, 0.0f, 1.0f);
 
-        col = res.xyz * env.sun_col * v * k;
+        col = albedo.xyz * env.sun_col * v * k;
 
         const float z = halton[hi * 2];
         const float temp = native_sqrt(1.0f - z * z);
@@ -214,7 +205,7 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
         ray_packet_t r;
         r.o = (float4)(P + 0.001f * N, (float)x);
         r.d = (float4)(V, (float)y);
-        r.c = orig_ray->c * z * res.xyz;
+        r.c = orig_ray->c * z * albedo.xyz;
         r.do_dx = do_dx;
         r.do_dy = do_dy;
         r.dd_dx = dd_dx - 2 * (dot(orig_ray->d.xyz, N) * dndx + ddn_dx * N);

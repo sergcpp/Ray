@@ -99,7 +99,7 @@ uint32_t ray::ocl::Scene::AddTexture(const tex_desc_t &_t) {
         mip++;
     }
 
-    for (int i = mip; i < MAX_MIP_LEVELS; i++) {
+    for (int i = mip; i < NUM_MIP_LEVELS; i++) {
         t.page[i] = t.page[mip - 1];
         t.pos[i][0] = t.pos[mip - 1][0];
         t.pos[i][1] = t.pos[mip - 1][1];
