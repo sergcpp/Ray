@@ -27,7 +27,7 @@ void IntersectTris(const ray_packet_t *r, __global const tri_accel_t *tris,
 
         float tmpdet0 = det - detu - detv;
 
-        if ((tmpdet0 > -_hit_eps & detu > -_hit_eps && detv > -_hit_eps) || 
+        if ((tmpdet0 > -_hit_eps && detu > -_hit_eps && detv > -_hit_eps) ||
             (tmpdet0 < _hit_eps && detu < _hit_eps && detv < _hit_eps)) {
 
             float rdet = 1.0f / det;
