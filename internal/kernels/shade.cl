@@ -223,6 +223,7 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
         
         // shlick fresnel
         float RR = mat->fresnel + (1.0f - mat->fresnel) * native_powr(1.0f + dot(I, N), 5.0f);
+        RR = clamp(RR, 0.0f, 1.0f);
 
         float3 V = reflect(I, N);
 
@@ -246,8 +247,10 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
         r.dd_dx = dd_dx - 2 * (dot(orig_ray->d.xyz, N) * dndx + ddn_dx * N);
         r.dd_dy = dd_dy - 2 * (dot(orig_ray->d.xyz, N) * dndy + ddn_dy * N);
 
-        const int index = atomic_inc(out_secondary_rays_count);
-        out_secondary_rays[index] = r;
+        if (dot(r.c, r.c) > 0.005f) {
+            const int index = atomic_inc(out_secondary_rays_count);
+            out_secondary_rays[index] = r;
+        }
     }
 
     //////////////////////////////////////////
