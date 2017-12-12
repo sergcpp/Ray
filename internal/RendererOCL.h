@@ -90,7 +90,7 @@ public:
     ~Renderer();
 
     std::pair<int, int> size() const override {
-        return std::make_pair((int)w_, (int)h_);
+        return std::make_pair(w_, h_);
     }
 
     const pixel_color_t *get_pixels_ref() const override {

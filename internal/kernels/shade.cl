@@ -300,7 +300,6 @@ void ShadeSecondary(const int iteration, __global const float *halton,
     const int index = get_global_id(0);
 
     __global const ray_packet_t *orig_ray = &prim_rays[index];
-    __global const hit_data_t *inter = &prim_inters[index];
 
     const int x = (int)orig_ray->o.w,
               y = (int)orig_ray->d.w;

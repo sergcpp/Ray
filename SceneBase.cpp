@@ -26,7 +26,6 @@ void ray::SceneBase::SetCamera(uint32_t i, eCamType type, const float origin[3],
 
 void ray::SceneBase::RemoveCamera(uint32_t i) {
     assert(i < (uint32_t)cams_.size());
-    memset(&cams_[i], 0, sizeof(cam_storage_t));
     cams_[i].next_free = cam_first_free_;
     cam_first_free_ = i;
 }

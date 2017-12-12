@@ -44,8 +44,8 @@ float4 SampleTextureAnisotropic(__read_only image2d_array_t texture_atlas, __glo
 
     float2 _uvs = uvs - step * 0.5f;
 
-    step = step * k;
     int num = clamp((int)(1.0f / k), 1, 32);
+    step = step / num;
 
     float4 res = 0;
     
