@@ -22,13 +22,17 @@ enum eVertexLayout {
 enum eMaterialType {
     DiffuseMaterial,
     GlossyMaterial,
+    EmissiveMaterial,
+    MixMaterial,
 };
 
 struct mat_desc_t {
     eMaterialType type;
     uint32_t main_texture;
     uint32_t normal_map = 0xffffffff;
+    uint32_t mix_materials[2] = { 0xffffffff };
     float roughness = 0;
+    float strength = 1;
     float fresnel = 1;
 };
 
@@ -74,6 +78,7 @@ protected:
 public:
     virtual ~SceneBase() = default;
 
+    virtual void GetEnvironment(environment_desc_t &env) = 0;
     virtual void SetEnvironment(const environment_desc_t &env) = 0;
 
     virtual uint32_t AddTexture(const tex_desc_t &t) = 0;

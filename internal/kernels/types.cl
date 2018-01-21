@@ -74,7 +74,10 @@ typedef struct _texture_t {
 typedef struct _material_t {
     uint type;
     uint textures[MAX_MATERIAL_TEXTURES];
-    float roughness;
+    union {
+        float roughness;
+        float strength;
+    };
     float fresnel;
 } material_t;
 

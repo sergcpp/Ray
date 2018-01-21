@@ -36,6 +36,13 @@ ray::ocl::Scene::Scene(const cl::Context &context, const cl::CommandQueue &queue
     }
 }
 
+void ray::ocl::Scene::GetEnvironment(environment_desc_t &env) {
+    memcpy(&env.sun_dir[0], &env_.sun_dir, 3 * sizeof(float));
+    memcpy(&env.sun_col[0], &env_.sun_col, 3 * sizeof(float));
+    memcpy(&env.sky_col[0], &env_.sky_col, 3 * sizeof(float));
+    env.sun_softness = env_.sun_softness;
+}
+
 void ray::ocl::Scene::SetEnvironment(const environment_desc_t &env) {
     memcpy(&env_.sun_dir, &env.sun_dir[0], 3 * sizeof(float));
     memcpy(&env_.sun_col, &env.sun_col[0], 3 * sizeof(float));
@@ -115,13 +122,17 @@ uint32_t ray::ocl::Scene::AddMaterial(const mat_desc_t &m) {
 
     mat.type = m.type;
     mat.textures[MAIN_TEXTURE] = m.main_texture;
-    mat.roughness = m.roughness;
     mat.fresnel = m.fresnel;
 
     if (m.type == DiffuseMaterial) {
 
     } else if (m.type == GlossyMaterial) {
-
+        mat.roughness = m.roughness;
+    } else if (m.type == EmissiveMaterial) {
+        mat.strength = m.strength;
+    } else if (m.type == MixMaterial) {
+        mat.textures[MIX_MAT1] = m.mix_materials[0];
+        mat.textures[MIX_MAT2] = m.mix_materials[1];
     }
 
     if (m.normal_map != 0xffffffff) {

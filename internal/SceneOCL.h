@@ -40,6 +40,7 @@ protected:
 public:
     Scene(const cl::Context &context, const cl::CommandQueue &queue);
 
+    void GetEnvironment(environment_desc_t &env) override;
     void SetEnvironment(const environment_desc_t &env) override;
 
     uint32_t AddTexture(const tex_desc_t &t) override;

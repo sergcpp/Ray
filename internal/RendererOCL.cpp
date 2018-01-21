@@ -104,8 +104,12 @@ ray::ocl::Renderer::Renderer(int w, int h) : w_(w), h_(h), iteration_(0) {
         cl_src_defines += "#define MAX_MATERIAL_TEXTURES " + std::to_string(MAX_MATERIAL_TEXTURES) + "\n";
         cl_src_defines += "#define DiffuseMaterial " + std::to_string(DiffuseMaterial) + "\n";
         cl_src_defines += "#define GlossyMaterial " + std::to_string(GlossyMaterial) + "\n";
+        cl_src_defines += "#define EmissiveMaterial " + std::to_string(EmissiveMaterial) + "\n";
+        cl_src_defines += "#define MixMaterial " + std::to_string(MixMaterial) + "\n";
         cl_src_defines += "#define MAIN_TEXTURE " + std::to_string(MAIN_TEXTURE) + "\n";
         cl_src_defines += "#define NORMALS_TEXTURE " + std::to_string(NORMALS_TEXTURE) + "\n";
+        cl_src_defines += "#define MIX_MAT1 " + std::to_string(MIX_MAT1) + "\n";
+        cl_src_defines += "#define MIX_MAT2 " + std::to_string(MIX_MAT2) + "\n";
 
         cl_int error = CL_SUCCESS;
         cl::Program::Sources srcs = {
@@ -126,6 +130,13 @@ ray::ocl::Renderer::Renderer(int w, int h) : w_(w), h_(h), iteration_(0) {
         }
 
         error = program_.build(build_opts.c_str());
+        if (error == CL_INVALID_BUILD_OPTIONS) {
+            // -cl-strict-aliasing not supported sometimes, try to build without it
+            build_opts = "-Werror -cl-mad-enable -cl-no-signed-zeros -cl-fast-relaxed-math ";
+            program_ = cl::Program(context_, srcs, &error);
+            if (error != CL_SUCCESS) throw std::runtime_error("Cannot create OpenCL renderer!");
+            error = program_.build(build_opts.c_str());
+        }
 
         if (error != CL_SUCCESS) {
             auto build_log = program_.getBuildInfo<CL_PROGRAM_BUILD_LOG>(device_);
@@ -295,7 +306,7 @@ void ray::ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s) {
 #endif
 
             if (queue_.enqueueCopyImage(temp_buf_, final_buf_, { 0, 0, 0 }, { 0, 0, 0 },
-        { (size_t)w_, (size_t)h_, 1 }) != CL_SUCCESS) return;
+                { (size_t)w_, (size_t)h_, 1 }) != CL_SUCCESS) return;
 
             if (!kernel_ShadeSecondary((cl_int)iteration_, halton_seq_buf_,
                                        prim_inters_buf_, secondary_rays_buf_, secondary_rays_count, w_, h_,

@@ -45,7 +45,9 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
         return (float4)(orig_ray->c * env.sky_col, 1);
     }
 
-    float3 P = orig_ray->o.xyz + inter->t * orig_ray->d.xyz;
+    const float3 P = orig_ray->o.xyz + inter->t * orig_ray->d.xyz;
+
+    const float3 I = normalize(P - orig_ray->o.xyz);
 
     __global const tri_accel_t *tri = &tris[inter->prim_index];
 
@@ -118,7 +120,23 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
     const float inv_det = fabs(det) < FLT_EPSILON ? 0 : 1.0f / det;
     const float2 duv_dx = (float2)(A[0].x * Bx.x - A[0].y * Bx.y, A[1].x * Bx.x - A[1].y * Bx.y) * inv_det;
     const float2 duv_dy = (float2)(A[0].x * By.x - A[0].y * By.y, A[1].x * By.x - A[1].y * By.y) * inv_det;
-    
+
+    ////////////////////////////////////////////////////////
+
+    const int hi = (hash(index) + iteration) & (HaltonSeqLen - 1);
+
+    // resolve mix material
+    while (mat->type == MixMaterial) {
+        const float4 mix = SampleTextureAnisotropic(texture_atlas, &textures[mat->textures[MAIN_TEXTURE]], uvs, duv_dx, duv_dy);
+        const float r = halton[hi * 2];
+
+         // shlick fresnel
+        float RR = mat->fresnel + (1.0f - mat->fresnel) * native_powr(1.0f + dot(I, N), 5.0f);
+        RR = clamp(RR, 0.0f, 1.0f);
+
+        mat = (r * RR < mix.x) ? &materials[mat->textures[MIX_MAT1]] : &materials[mat->textures[MIX_MAT2]];
+    }
+
     ////////////////////////////////////////////////////////
 
     // Derivative for normal
@@ -156,14 +174,10 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
     B = TransformNormal(&B, &tr->inv_xform);
     T = TransformNormal(&T, &tr->inv_xform);
 
-    const int hi = (hash(index) + iteration) & (HaltonSeqLen - 1);
-
     //////////////////////////////////////////
 
     float4 albedo = SampleTextureAnisotropic(texture_atlas, &textures[mat->textures[MAIN_TEXTURE]], uvs, duv_dx, duv_dy);
     albedo = native_powr(albedo, 2.2f);
-
-    //////////////////////////////////////////
 
     float3 col;
 
@@ -197,11 +211,13 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
         const float z = halton[hi * 2];
         const float temp = native_sqrt(1.0f - z * z);
 
-        const float phi = halton[hi * 2 + 1] * 2 * M_PI;
+        const float phi = halton[((hash(hi) + iteration) & (HaltonSeqLen - 1)) * 2 + 0] * 2 * M_PI;
         float cos_phi;
         const float sin_phi = sincos(phi, &cos_phi);
 
         const float3 V = temp * sin_phi * B + z * N + temp * cos_phi * T;
+
+        //col = V * 0.5f + 0.5f;
         
         ray_packet_t r;
         r.o = (float4)(P + 0.001f * N, (float)x);
@@ -219,12 +235,6 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
     } else if (mat->type == GlossyMaterial) {
         col = (float3)(0, 0, 0);
 
-        const float3 I = normalize(P - orig_ray->o.xyz);
-        
-        // shlick fresnel
-        float RR = mat->fresnel + (1.0f - mat->fresnel) * native_powr(1.0f + dot(I, N), 5.0f);
-        RR = clamp(RR, 0.0f, 1.0f);
-
         float3 V = reflect(I, N);
 
         const float z = 1.0f - halton[hi * 2] * mat->roughness;
@@ -241,7 +251,7 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
         ray_packet_t r;
         r.o = (float4)(P + 0.001f * N, (float)x);
         r.d = (float4)(V, (float)y);
-        r.c = z * RR * orig_ray->c;
+        r.c = z * orig_ray->c;
         r.do_dx = do_dx;
         r.do_dy = do_dy;
         r.dd_dx = dd_dx - 2 * (dot(orig_ray->d.xyz, N) * dndx + ddn_dx * N);
@@ -251,6 +261,8 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
             const int index = atomic_inc(out_secondary_rays_count);
             out_secondary_rays[index] = r;
         }
+    } else if (mat->type == EmissiveMaterial) {
+        col = mat->strength * albedo.xyz;
     }
 
     //////////////////////////////////////////

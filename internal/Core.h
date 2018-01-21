@@ -77,10 +77,16 @@ const int MAX_MATERIAL_TEXTURES = 5;
 const int NORMALS_TEXTURE = 0;
 const int MAIN_TEXTURE = 1;
 
+const int MIX_MAT1 = 2;
+const int MIX_MAT2 = 3;
+
 struct material_t {
     uint32_t type;
     uint32_t textures[MAX_MATERIAL_TEXTURES];
-    float roughness;
+    union {
+        float roughness;
+        float strength;
+    };
     float fresnel;
 };
 static_assert(sizeof(material_t) == 32, "!");
