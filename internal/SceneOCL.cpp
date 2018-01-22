@@ -133,6 +133,8 @@ uint32_t ray::ocl::Scene::AddMaterial(const mat_desc_t &m) {
     } else if (m.type == MixMaterial) {
         mat.textures[MIX_MAT1] = m.mix_materials[0];
         mat.textures[MIX_MAT2] = m.mix_materials[1];
+    } else if (m.type == TransparentMaterial) {
+	
     }
 
     if (m.normal_map != 0xffffffff) {

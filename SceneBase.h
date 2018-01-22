@@ -24,6 +24,7 @@ enum eMaterialType {
     GlossyMaterial,
     EmissiveMaterial,
     MixMaterial,
+    TransparentMaterial,
 };
 
 struct mat_desc_t {

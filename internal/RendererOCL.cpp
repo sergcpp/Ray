@@ -106,6 +106,7 @@ ray::ocl::Renderer::Renderer(int w, int h) : w_(w), h_(h), iteration_(0) {
         cl_src_defines += "#define GlossyMaterial " + std::to_string(GlossyMaterial) + "\n";
         cl_src_defines += "#define EmissiveMaterial " + std::to_string(EmissiveMaterial) + "\n";
         cl_src_defines += "#define MixMaterial " + std::to_string(MixMaterial) + "\n";
+        cl_src_defines += "#define TransparentMaterial " + std::to_string(TransparentMaterial) + "\n";
         cl_src_defines += "#define MAIN_TEXTURE " + std::to_string(MAIN_TEXTURE) + "\n";
         cl_src_defines += "#define NORMALS_TEXTURE " + std::to_string(NORMALS_TEXTURE) + "\n";
         cl_src_defines += "#define MIX_MAT1 " + std::to_string(MIX_MAT1) + "\n";

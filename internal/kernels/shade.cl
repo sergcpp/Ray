@@ -130,7 +130,7 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
         const float4 mix = SampleTextureAnisotropic(texture_atlas, &textures[mat->textures[MAIN_TEXTURE]], uvs, duv_dx, duv_dy);
         const float r = halton[hi * 2];
 
-         // shlick fresnel
+        // shlick fresnel
         float RR = mat->fresnel + (1.0f - mat->fresnel) * native_powr(1.0f + dot(I, N), 5.0f);
         RR = clamp(RR, 0.0f, 1.0f);
 
@@ -216,8 +216,6 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
         const float sin_phi = sincos(phi, &cos_phi);
 
         const float3 V = temp * sin_phi * B + z * N + temp * cos_phi * T;
-
-        //col = V * 0.5f + 0.5f;
         
         ray_packet_t r;
         r.o = (float4)(P + 0.001f * N, (float)x);
@@ -240,7 +238,7 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
         const float z = 1.0f - halton[hi * 2] * mat->roughness;
         const float temp = native_sqrt(1.0f - z * z);
 
-        const float phi = halton[hi * 2 + 1] * 2 * M_PI;
+        const float phi = halton[((hash(hi) + iteration) & (HaltonSeqLen - 1)) * 2 + 0] * 2 * M_PI;
         float cos_phi;
         const float sin_phi = sincos(phi, &cos_phi);
 
@@ -263,6 +261,22 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
         }
     } else if (mat->type == EmissiveMaterial) {
         col = mat->strength * albedo.xyz;
+    } else if (mat->type == TransparentMaterial) {
+		col = (float3)(0, 0, 0);
+
+		ray_packet_t r;
+        r.o = (float4)(P + 0.001f * orig_ray->d.xyz, (float)x);
+        r.d = orig_ray->d;
+        r.c = orig_ray->c;
+        r.do_dx = do_dx;
+        r.do_dy = do_dy;
+        r.dd_dx = dd_dx;
+        r.dd_dy = dd_dy;
+
+        if (dot(r.c, r.c) > 0.005f) {
+            const int index = atomic_inc(out_secondary_rays_count);
+            out_secondary_rays[index] = r;
+        }
     }
 
     //////////////////////////////////////////
