@@ -17,10 +17,10 @@ ray::ocl::Scene::Scene(const cl::Context &context, const cl::CommandQueue &queue
       vtx_indices_(context, queue, CL_MEM_READ_ONLY),
       materials_(context, queue, CL_MEM_READ_ONLY),
       textures_(context, queue, CL_MEM_READ_ONLY),
-      texture_atlas_(context_, queue_, {
+    texture_atlas_(context_, queue_, {
     MAX_TEXTURE_SIZE, MAX_TEXTURE_SIZE
 }) {
-    SetEnvironment({ { 0, 0, 0 }, { 0, 0, 0 }, { 0, 0, 0 } });
+    SetEnvironment( { { 0, 0, 0 }, { 0, 0, 0 }, { 0, 0, 0 } });
 
     pixel_color8_t default_normalmap = { 127, 127, 255 };
 
@@ -75,9 +75,9 @@ uint32_t ray::ocl::Scene::AddTexture(const tex_desc_t &_t) {
                 int a = tex[(j + 0) * res.x + i].a + tex[(j + 0) * res.x + i + 1].a +
                         tex[(j + 1) * res.x + i].a + tex[(j + 1) * res.x + i + 1].a;
 
-                ret.push_back({ (uint8_t)std::round(r * 0.25f), (uint8_t)std::round(g * 0.25f),
-                                (uint8_t)std::round(b * 0.25f), (uint8_t)std::round(a * 0.25f)
-                              });
+                ret.push_back( { (uint8_t)std::round(r * 0.25f), (uint8_t)std::round(g * 0.25f),
+                                 (uint8_t)std::round(b * 0.25f), (uint8_t)std::round(a * 0.25f)
+                               });
             }
         }
         return ret;
@@ -128,13 +128,16 @@ uint32_t ray::ocl::Scene::AddMaterial(const mat_desc_t &m) {
 
     } else if (m.type == GlossyMaterial) {
         mat.roughness = m.roughness;
+    } else if (m.type == RefractiveMaterial) {
+        mat.roughness = m.roughness;
+        mat.ior = m.ior;
     } else if (m.type == EmissiveMaterial) {
         mat.strength = m.strength;
     } else if (m.type == MixMaterial) {
         mat.textures[MIX_MAT1] = m.mix_materials[0];
         mat.textures[MIX_MAT2] = m.mix_materials[1];
     } else if (m.type == TransparentMaterial) {
-	
+
     }
 
     if (m.normal_map != 0xffffffff) {
@@ -437,7 +440,7 @@ void ray::ocl::Scene::RebuildMacroBVH() {
     mesh_instances_.Get(&mesh_instances[0], 0, mi_count);
 
     for (const auto &mi : mesh_instances) {
-        primitives.push_back({ make_vec3(mi.bbox_min), make_vec3(mi.bbox_max) });
+        primitives.push_back( { make_vec3(mi.bbox_min), make_vec3(mi.bbox_max) });
     }
 
     std::vector<bvh_node_t> bvh_nodes;

@@ -6,6 +6,13 @@ float3 reflect(float3 V, float3 N) {
     return V - 2.0f * dot(V, N) * N;
 }
 
+float3 refract(float3 I, float3 N, float eta) {
+	float cosi = dot(-I, N);
+	float cost2 = 1.0f - eta * eta * (1.0f - cosi * cosi);
+	float3 t = eta * I + ((eta * cosi - sqrt(fabs(cost2))) * N);
+	return t * (float3)(cost2 > 0);
+}
+
 __constant float3 heatmap_colors[4] = { (float3)(0, 0, 1), (float3)(0, 1, 0), (float3)(1, 1, 0), (float3)(1, 0, 0) };
 
 float3 heat_map(float val) {
@@ -45,9 +52,8 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
         return (float4)(orig_ray->c * env.sky_col, 1);
     }
 
-    const float3 P = orig_ray->o.xyz + inter->t * orig_ray->d.xyz;
-
-    const float3 I = normalize(P - orig_ray->o.xyz);
+    const float3 I = orig_ray->d.xyz;
+    const float3 P = orig_ray->o.xyz + inter->t * I;
 
     __global const tri_accel_t *tri = &tris[inter->prim_index];
 
@@ -71,7 +77,7 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
 
     //////////////////////////////////////////
 
-    float2 tex_atlas_size = (float2)(get_image_width(texture_atlas), get_image_height(texture_atlas));
+    const float2 tex_atlas_size = (float2)(get_image_width(texture_atlas), get_image_height(texture_atlas));
 
     //////////////////////////////////////////
 
@@ -81,11 +87,11 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
 
     // From 'Tracing Ray Differentials' [1999]
 
-    float dt_dx = -dot(orig_ray->do_dx + inter->t * orig_ray->dd_dx, N) / dot(orig_ray->d.xyz, N);
-    float dt_dy = -dot(orig_ray->do_dy + inter->t * orig_ray->dd_dy, N) / dot(orig_ray->d.xyz, N);
+    float dt_dx = -dot(orig_ray->do_dx + inter->t * orig_ray->dd_dx, N) / dot(I, N);
+    float dt_dy = -dot(orig_ray->do_dy + inter->t * orig_ray->dd_dy, N) / dot(I, N);
     
-    const float3 do_dx = (orig_ray->do_dx + inter->t * orig_ray->dd_dx) + dt_dx * orig_ray->d.xyz;
-    const float3 do_dy = (orig_ray->do_dy + inter->t * orig_ray->dd_dy) + dt_dy * orig_ray->d.xyz;
+    const float3 do_dx = (orig_ray->do_dx + inter->t * orig_ray->dd_dx) + dt_dx * I;
+    const float3 do_dy = (orig_ray->do_dy + inter->t * orig_ray->dd_dy) + dt_dy * I;
     const float3 dd_dx = orig_ray->dd_dx;
     const float3 dd_dy = orig_ray->dd_dy;
 
@@ -148,8 +154,8 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
     const float3 dndx = dndu * duv_dx.x + dndv * duv_dx.y;
     const float3 dndy = dndu * duv_dy.x + dndv * duv_dy.y;
 
-    const float ddn_dx = dot(dd_dx, N) + dot(orig_ray->d.xyz, dndx);
-    const float ddn_dy = dot(dd_dy, N) + dot(orig_ray->d.xyz, dndy);
+    const float ddn_dx = dot(dd_dx, N) + dot(I, dndx);
+    const float ddn_dy = dot(dd_dy, N) + dot(I, dndy);
 
     ////////////////////////////////////////////////////////
 
@@ -223,8 +229,8 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
         r.c = orig_ray->c * z * albedo.xyz;
         r.do_dx = do_dx;
         r.do_dy = do_dy;
-        r.dd_dx = dd_dx - 2 * (dot(orig_ray->d.xyz, N) * dndx + ddn_dx * N);
-        r.dd_dy = dd_dy - 2 * (dot(orig_ray->d.xyz, N) * dndy + ddn_dy * N);
+        r.dd_dx = dd_dx - 2 * (dot(I, N) * dndx + ddn_dx * N);
+        r.dd_dy = dd_dy - 2 * (dot(I, N) * dndy + ddn_dy * N);
 
         if (dot(r.c, r.c) > 0.005f) {
             const int index = atomic_inc(out_secondary_rays_count);
@@ -233,7 +239,7 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
     } else if (mat->type == GlossyMaterial) {
         col = (float3)(0, 0, 0);
 
-        float3 V = reflect(I, N);
+        float3 V = reflect(I, dot(I, N) > 0 ? N : -N);
 
         const float z = 1.0f - halton[hi * 2] * mat->roughness;
         const float temp = native_sqrt(1.0f - z * z);
@@ -252,8 +258,52 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
         r.c = z * orig_ray->c;
         r.do_dx = do_dx;
         r.do_dy = do_dy;
-        r.dd_dx = dd_dx - 2 * (dot(orig_ray->d.xyz, N) * dndx + ddn_dx * N);
-        r.dd_dy = dd_dy - 2 * (dot(orig_ray->d.xyz, N) * dndy + ddn_dy * N);
+        r.dd_dx = dd_dx - 2 * (dot(I, N) * dndx + ddn_dx * N);
+        r.dd_dy = dd_dy - 2 * (dot(I, N) * dndy + ddn_dy * N);
+
+        if (dot(r.c, r.c) > 0.005f) {
+            const int index = atomic_inc(out_secondary_rays_count);
+            out_secondary_rays[index] = r;
+        }
+	} else if (mat->type == RefractiveMaterial) {
+		col = (float3)(0, 0, 0);
+
+		const float3 _N = dot(I, N) > 0 ? -N : N;
+
+		float eta = 1.0f / mat->ior;
+		float cosi = dot(-I, _N);
+		float cost2 = 1.0f - eta * eta * (1.0f - cosi * cosi);
+		float m = eta * cosi - sqrt(fabs(cost2));
+		float3 V = eta * I + m * _N;
+		V *= (float3)(cost2 > 0);
+
+		// ** REFACTOR THIS **
+
+		const float z = 1.0f - halton[hi * 2] * mat->roughness;
+        const float temp = native_sqrt(1.0f - z * z);
+
+        const float phi = halton[((hash(hi) + iteration) & (HaltonSeqLen - 1)) * 2 + 0] * 2 * M_PI;
+        float cos_phi;
+        const float sin_phi = sincos(phi, &cos_phi);
+
+        float3 TT = normalize(cross(V, B));
+        float3 BB = normalize(cross(V, TT));
+        V = temp * sin_phi * BB + z * V + temp * cos_phi * TT;
+
+		//////////////////
+
+		float k = (eta - eta * eta * dot(I, N) / dot(V, N));
+		float3 dmdx = k * ddn_dx;
+		float3 dmdy = k * ddn_dy;
+
+		ray_packet_t r;
+        r.o = (float4)(P + 0.001f * I, (float)x);
+        r.d = (float4)(V, (float)y);
+        r.c = z * orig_ray->c;
+        r.do_dx = do_dx;
+        r.do_dy = do_dy;
+        r.dd_dx = eta * dd_dx - (m * dndx + dmdx * N);
+        r.dd_dy = eta * dd_dy - (m * dndy + dmdy * N);
 
         if (dot(r.c, r.c) > 0.005f) {
             const int index = atomic_inc(out_secondary_rays_count);
@@ -265,7 +315,7 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
 		col = (float3)(0, 0, 0);
 
 		ray_packet_t r;
-        r.o = (float4)(P + 0.001f * orig_ray->d.xyz, (float)x);
+        r.o = (float4)(P + 0.001f * I, (float)x);
         r.d = orig_ray->d;
         r.c = orig_ray->c;
         r.do_dx = do_dx;

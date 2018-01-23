@@ -104,6 +104,7 @@ ray::ocl::Renderer::Renderer(int w, int h) : w_(w), h_(h), iteration_(0) {
         cl_src_defines += "#define MAX_MATERIAL_TEXTURES " + std::to_string(MAX_MATERIAL_TEXTURES) + "\n";
         cl_src_defines += "#define DiffuseMaterial " + std::to_string(DiffuseMaterial) + "\n";
         cl_src_defines += "#define GlossyMaterial " + std::to_string(GlossyMaterial) + "\n";
+        cl_src_defines += "#define RefractiveMaterial " + std::to_string(RefractiveMaterial) + "\n";
         cl_src_defines += "#define EmissiveMaterial " + std::to_string(EmissiveMaterial) + "\n";
         cl_src_defines += "#define MixMaterial " + std::to_string(MixMaterial) + "\n";
         cl_src_defines += "#define TransparentMaterial " + std::to_string(TransparentMaterial) + "\n";
@@ -203,7 +204,7 @@ ray::ocl::Renderer::Renderer(int w, int h) : w_(w), h_(h), iteration_(0) {
             color_table.push_back({ ray::U_0_p1(), ray::U_0_p1(), ray::U_0_p1(), 1 });
         }*/
         for (int i = 0; i < 64; i++) {
-            color_table.push_back({ float(i) / 63, float(i) / 63, float(i) / 63, 1 });
+            color_table.push_back( { float(i) / 63, float(i) / 63, float(i) / 63, 1 });
         }
 
         color_table_buf_ = cl::Buffer(context_, CL_MEM_READ_ONLY, sizeof(pixel_color_t) * color_table.size(), nullptr, &error);
@@ -226,9 +227,9 @@ void ray::ocl::Renderer::Resize(int w, int h) {
     prim_rays_buf_ = cl::Buffer(context_, CL_MEM_WRITE_ONLY | CL_MEM_HOST_NO_ACCESS, sizeof(ray_packet_t) * w * h, nullptr, &error);
     secondary_rays_buf_ = cl::Buffer(context_, CL_MEM_READ_WRITE | CL_MEM_HOST_NO_ACCESS, sizeof(ray_packet_t) * w * h, nullptr, &error);
     prim_inters_buf_ = cl::Buffer(context_, CL_MEM_READ_WRITE | CL_MEM_HOST_NO_ACCESS, sizeof(hit_data_t) * w * h, nullptr, &error);
-    temp_buf_ = cl::Image2D(context_, CL_MEM_READ_WRITE, cl::ImageFormat{ CL_RGBA, CL_FLOAT }, w, h, 0, nullptr, &error);
-    clean_buf_ = cl::Image2D(context_, CL_MEM_READ_WRITE, cl::ImageFormat{ CL_RGBA, CL_FLOAT }, w, h, 0, nullptr, &error);
-    final_buf_ = cl::Image2D(context_, CL_MEM_READ_WRITE, cl::ImageFormat{ CL_RGBA, CL_FLOAT }, w, h, 0, nullptr, &error);
+    temp_buf_ = cl::Image2D(context_, CL_MEM_READ_WRITE, cl::ImageFormat { CL_RGBA, CL_FLOAT }, w, h, 0, nullptr, &error);
+    clean_buf_ = cl::Image2D(context_, CL_MEM_READ_WRITE, cl::ImageFormat { CL_RGBA, CL_FLOAT }, w, h, 0, nullptr, &error);
+    final_buf_ = cl::Image2D(context_, CL_MEM_READ_WRITE, cl::ImageFormat { CL_RGBA, CL_FLOAT }, w, h, 0, nullptr, &error);
     if (error != CL_SUCCESS) throw std::runtime_error("Cannot create OpenCL renderer!");
 
     frame_pixels_.resize(4 * w * h);
@@ -307,7 +308,7 @@ void ray::ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s) {
 #endif
 
             if (queue_.enqueueCopyImage(temp_buf_, final_buf_, { 0, 0, 0 }, { 0, 0, 0 },
-                { (size_t)w_, (size_t)h_, 1 }) != CL_SUCCESS) return;
+        { (size_t)w_, (size_t)h_, 1 }) != CL_SUCCESS) return;
 
             if (!kernel_ShadeSecondary((cl_int)iteration_, halton_seq_buf_,
                                        prim_inters_buf_, secondary_rays_buf_, secondary_rays_count, w_, h_,
@@ -348,7 +349,7 @@ bool ray::ocl::Renderer::kernel_GeneratePrimaryRays(const cl_int iteration, cons
             prim_rays_gen_kernel_.setArg(argc++, out_rays) != CL_SUCCESS) {
         return false;
     }
-    return CL_SUCCESS == queue_.enqueueNDRangeKernel(prim_rays_gen_kernel_, cl::NullRange, cl::NDRange{ (size_t)w, (size_t)h });
+    return CL_SUCCESS == queue_.enqueueNDRangeKernel(prim_rays_gen_kernel_, cl::NullRange, cl::NDRange { (size_t)w, (size_t)h });
 }
 
 bool ray::ocl::Renderer::kernel_IntersectTris(const cl::Buffer &rays, cl_int rays_count, const cl::Buffer &tris, cl_int tris_count, const cl::Buffer &intersections, const cl::Buffer &intersections_counter) {
@@ -360,7 +361,7 @@ bool ray::ocl::Renderer::kernel_IntersectTris(const cl::Buffer &rays, cl_int ray
             intersect_tris_kernel_.setArg(argc++, intersections_counter) != CL_SUCCESS) {
         return false;
     }
-    return CL_SUCCESS == queue_.enqueueNDRangeKernel(intersect_tris_kernel_, cl::NullRange, cl::NDRange{ (size_t)rays_count });
+    return CL_SUCCESS == queue_.enqueueNDRangeKernel(intersect_tris_kernel_, cl::NullRange, cl::NDRange { (size_t)rays_count });
 }
 
 bool ray::ocl::Renderer::kernel_IntersectCones(const cl::Buffer &rays, cl_int rays_count, const cl::Buffer &cones, cl_int cones_count, const cl::Buffer &intersections, const cl::Buffer &intersections_counter) {
@@ -372,7 +373,7 @@ bool ray::ocl::Renderer::kernel_IntersectCones(const cl::Buffer &rays, cl_int ra
             intersect_cones_kernel_.setArg(argc++, intersections_counter) != CL_SUCCESS) {
         return false;
     }
-    return CL_SUCCESS == queue_.enqueueNDRangeKernel(intersect_cones_kernel_, cl::NullRange, cl::NDRange{ (size_t)rays_count });
+    return CL_SUCCESS == queue_.enqueueNDRangeKernel(intersect_cones_kernel_, cl::NullRange, cl::NDRange { (size_t)rays_count });
 }
 
 bool ray::ocl::Renderer::kernel_IntersectBoxes(const cl::Buffer &rays, cl_int rays_count, const cl::Buffer &boxes, cl_int boxes_count, const cl::Buffer &intersections, const cl::Buffer &intersections_counter) {
@@ -384,7 +385,7 @@ bool ray::ocl::Renderer::kernel_IntersectBoxes(const cl::Buffer &rays, cl_int ra
             intersect_boxes_kernel_.setArg(argc++, intersections_counter) != CL_SUCCESS) {
         return false;
     }
-    return CL_SUCCESS == queue_.enqueueNDRangeKernel(intersect_boxes_kernel_, cl::NullRange, cl::NDRange{ (size_t)rays_count });
+    return CL_SUCCESS == queue_.enqueueNDRangeKernel(intersect_boxes_kernel_, cl::NullRange, cl::NDRange { (size_t)rays_count });
 }
 
 bool ray::ocl::Renderer::kernel_TextureDebugPage(const cl::Image2DArray &textures, cl_int page, const cl::Image2D &frame_buf) {
@@ -398,7 +399,7 @@ bool ray::ocl::Renderer::kernel_TextureDebugPage(const cl::Image2DArray &texture
     int w = frame_buf.getImageInfo<CL_IMAGE_WIDTH>(),
         h = frame_buf.getImageInfo<CL_IMAGE_HEIGHT>();
 
-    return CL_SUCCESS == queue_.enqueueNDRangeKernel(texture_debug_page_kernel_, cl::NullRange, cl::NDRange{ (size_t)w, (size_t)h });
+    return CL_SUCCESS == queue_.enqueueNDRangeKernel(texture_debug_page_kernel_, cl::NullRange, cl::NDRange { (size_t)w, (size_t)h });
 }
 
 bool ray::ocl::Renderer::kernel_ShadePrimary(const cl_int iteration, const cl::Buffer &halton,
@@ -436,7 +437,7 @@ bool ray::ocl::Renderer::kernel_ShadePrimary(const cl_int iteration, const cl::B
         return false;
     }
 
-    return CL_SUCCESS == queue_.enqueueNDRangeKernel(shade_primary_kernel_, cl::NullRange, cl::NDRange{ (size_t)w, (size_t)h });
+    return CL_SUCCESS == queue_.enqueueNDRangeKernel(shade_primary_kernel_, cl::NullRange, cl::NDRange { (size_t)w, (size_t)h });
 }
 
 bool ray::ocl::Renderer::kernel_ShadeSecondary(const cl_int iteration, const cl::Buffer &halton,
@@ -477,7 +478,7 @@ bool ray::ocl::Renderer::kernel_ShadeSecondary(const cl_int iteration, const cl:
         return false;
     }
 
-    return CL_SUCCESS == queue_.enqueueNDRangeKernel(shade_secondary_kernel_, cl::NullRange, cl::NDRange{ (size_t)rays_count });
+    return CL_SUCCESS == queue_.enqueueNDRangeKernel(shade_secondary_kernel_, cl::NullRange, cl::NDRange { (size_t)rays_count });
 }
 
 bool ray::ocl::Renderer::kernel_TracePrimaryRays(const cl::Buffer &rays, cl_int w, cl_int h, const cl::Buffer &mesh_instances, const cl::Buffer &mi_indices, const cl::Buffer &meshes, const cl::Buffer &transforms,

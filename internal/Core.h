@@ -87,7 +87,10 @@ struct material_t {
         float roughness;
         float strength;
     };
-    float fresnel;
+    union {
+        float fresnel;
+        float ior;
+    };
 };
 static_assert(sizeof(material_t) == 32, "!");
 

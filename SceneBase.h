@@ -22,6 +22,7 @@ enum eVertexLayout {
 enum eMaterialType {
     DiffuseMaterial,
     GlossyMaterial,
+    RefractiveMaterial,
     EmissiveMaterial,
     MixMaterial,
     TransparentMaterial,
@@ -35,6 +36,7 @@ struct mat_desc_t {
     float roughness = 0;
     float strength = 1;
     float fresnel = 1;
+    float ior = 1;
 };
 
 struct shape_desc_t {
