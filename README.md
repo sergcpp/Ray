@@ -10,6 +10,6 @@ CPU backends dragging behind now and do not include any shading.
 
 - Uses plucker test for intersection with precomputed data per triangle as described in 'Ray-Triangle Intersection Algorithm for Modern CPU Architectures' paper.
 - Uses SAH-based BVH with stackless traversal as described in 'Efficient Stack-less BVH Traversal for Ray Tracing' paper.
-- Uses ray differentials for choosing mipmap level as described in 'Tracing Ray Differentials' paper.
+- Uses ray differentials for choosing mip level and filter kernel as described in 'Tracing Ray Differentials' paper.
 - Textures are packed in 2d texture array atlas for easier passing to OpenCL kernel.
 - Halton sequence is used for sampling.
