@@ -35,8 +35,7 @@ protected:
     shade_primary_kernel_, shade_secondary_kernel_, trace_primary_rays_kernel_,
     trace_secondary_rays_kernel_, mix_incremental_kernel_, post_process_kernel_;
 
-    cl::Buffer prim_rays_buf_, prim_inters_buf_,
-    secondary_inters_count_buf_, color_table_buf_,
+    cl::Buffer prim_rays_buf_, prim_inters_buf_, color_table_buf_,
     secondary_rays_buf_, secondary_rays_count_buf_;
 
     int w_, h_;
@@ -50,12 +49,12 @@ protected:
 
     std::vector<float> frame_pixels_;
 
-    bool kernel_GeneratePrimaryRays(const cl_int iteration, const ray::ocl::camera_t &cam, const cl::Buffer &halton, cl_int w, cl_int h, const cl::Buffer &out_rays);
+    bool kernel_GeneratePrimaryRays(cl_int iteration, const ray::ocl::camera_t &cam, const cl::Buffer &halton, cl_int w, cl_int h, const cl::Buffer &out_rays);
     bool kernel_IntersectTris(const cl::Buffer &rays, cl_int rays_count, const cl::Buffer &tris, cl_int tris_count, const cl::Buffer &intersections, const cl::Buffer &intersections_counter);
     bool kernel_IntersectCones(const cl::Buffer &rays, cl_int rays_count, const cl::Buffer &cones, cl_int cones_count, const cl::Buffer &intersections, const cl::Buffer &intersections_counter);
     bool kernel_IntersectBoxes(const cl::Buffer &rays, cl_int rays_count, const cl::Buffer &boxes, cl_int boxes_count, const cl::Buffer &intersections, const cl::Buffer &intersections_counter);
     bool kernel_TextureDebugPage(const cl::Image2DArray &textures, cl_int page, const cl::Image2D &frame_buf);
-    bool kernel_ShadePrimary(const cl_int iteration, const cl::Buffer &halton,
+    bool kernel_ShadePrimary(cl_int iteration, const cl::Buffer &halton,
                              const cl::Buffer &intersections, const cl::Buffer &rays,
                              int w, int h,
                              const cl::Buffer &mesh_instances, const cl::Buffer &mi_indices, const cl::Buffer &meshes,
@@ -65,7 +64,7 @@ protected:
                              const environment_t &env, const cl::Buffer &materials,
                              const cl::Buffer &textures, const cl::Image2DArray &texture_atlas, const cl::Image2D &frame_buf,
                              const cl::Buffer &secondary_rays, const cl::Buffer &secondary_rays_count);
-    bool kernel_ShadeSecondary(const cl_int iteration, const cl::Buffer &halton,
+    bool kernel_ShadeSecondary(cl_int iteration, const cl::Buffer &halton,
                                const cl::Buffer &intersections, const cl::Buffer &rays,
                                cl_int rays_count, int w, int h,
                                const cl::Buffer &mesh_instances, const cl::Buffer &mi_indices, const cl::Buffer &meshes,
@@ -87,7 +86,7 @@ protected:
     bool UpdateHaltonSequence();
 public:
     Renderer(int w, int h);
-    ~Renderer();
+    ~Renderer() override = default;
 
     std::pair<int, int> size() const override {
         return std::make_pair(w_, h_);
@@ -103,7 +102,7 @@ public:
     std::shared_ptr<SceneBase> CreateScene() override;
     void RenderScene(const std::shared_ptr<SceneBase> &s) override;
 
-    virtual void GetStats(stats_t &st) override;
+    void GetStats(stats_t &st) override;
 };
 }
 }

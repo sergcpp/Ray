@@ -1,12 +1,16 @@
 cmake_minimum_required(VERSION 2.8.4)
 project(ray)
 
-IF(WIN32)
+IF(MSVC)
 
-ELSE(WIN32)
+ELSE(MSVC)
     set(CMAKE_CXX_STANDARD 11)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -mavx2 -msse3")
-ENDIF(WIN32)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mavx2 -msse3")
+	IF(WIN32)
+    ELSE(WIN32)
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
+    ENDIF(WIN32)
+ENDIF(MSVC)
 
 set(INTERNAL_SOURCE_FILES internal/BVHSplit.h
                           internal/BVHSplit.cpp
@@ -46,7 +50,7 @@ set(SOURCE_FILES RendererBase.h
                  SceneBase.h
                  SceneBase.cpp
                  Types.h)
-                 
+
 set(KERNEL_FILES internal/kernels/intersect_boxes.cl
                  internal/kernels/intersect_cones.cl
                  internal/kernels/intersect_tris.cl

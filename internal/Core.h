@@ -7,7 +7,7 @@
 
 #ifdef __GNUC__
 #if !defined(__ANDROID__) && !defined(__EMSCRIPTEN__)
-#define force_inline __attribute__((always_inline))
+#define force_inline __attribute__((always_inline)) inline
 #else
 #define force_inline __inline__
 #endif

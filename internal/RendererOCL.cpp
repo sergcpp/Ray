@@ -5,6 +5,7 @@
 
 #include <random>
 #include <string>
+#include <utility>
 
 #include <math/math.hpp>
 
@@ -15,37 +16,37 @@
 
 namespace ray {
 namespace ocl {
-const std::string cl_src_types =
+const char *cl_src_types =
 #include "kernels/types.cl"
     ;
-const std::string cl_src_primary_ray_gen =
+const char *cl_src_primary_ray_gen =
 #include "kernels/primary_ray_gen.cl"
     ;
-const std::string cl_src_intersect_tris =
+const char *cl_src_intersect_tris =
 #include "kernels/intersect_tris.cl"
     ;
-const std::string cl_src_intersect_boxes =
+const char *cl_src_intersect_boxes =
 #include "kernels/intersect_boxes.cl"
     ;
-const std::string cl_src_intersect_cones =
+const char *cl_src_intersect_cones =
 #include "kernels/intersect_cones.cl"
     ;
-const std::string cl_src_traverse =
+const char *cl_src_traverse =
 #include "kernels/traverse_bvh.cl"
     ;
-const std::string cl_src_trace =
+const char *cl_src_trace =
 #include "kernels/trace.cl"
     ;
-const std::string cl_src_texturing =
+const char *cl_src_texturing =
 #include "kernels/texture.cl"
     ;
-const std::string cl_src_shade =
+const char *cl_src_shade =
 #include "kernels/shade.cl"
     ;
-const std::string cl_src_postprocess =
+const char *cl_src_postprocess =
 #include "kernels/postprocess.cl"
     ;
-const std::string cl_src_transform =
+const char *cl_src_transform =
 #include "kernels/transform.cl"
     ;
 }
@@ -126,7 +127,7 @@ ray::ocl::Renderer::Renderer(int w, int h) : w_(w), h_(h), iteration_(0) {
 
         std::string build_opts = "-Werror -cl-strict-aliasing -cl-mad-enable -cl-no-signed-zeros -cl-fast-relaxed-math ";// = "-cl-opt-disable ";
 
-        struct stat info;
+        struct stat info = { 0 };
         if (stat("./.dumps", &info) == 0 && info.st_mode & S_IFDIR) {
             build_opts += "-save-temps=./.dumps/ ";
         }
@@ -193,8 +194,8 @@ ray::ocl::Renderer::Renderer(int w, int h) : w_(w), h_(h), iteration_(0) {
         cl_int error = CL_SUCCESS;
         Resize(w, h);
 
-        secondary_inters_count_buf_ = cl::Buffer(context_, CL_MEM_READ_WRITE, sizeof(cl_int), nullptr, &error);
-        if (error != CL_SUCCESS) throw std::runtime_error("Cannot create OpenCL renderer!");
+        //secondary_inters_count_buf_ = cl::Buffer(context_, CL_MEM_READ_WRITE, sizeof(cl_int), nullptr, &error);
+        //if (error != CL_SUCCESS) throw std::runtime_error("Cannot create OpenCL renderer!");
 
         secondary_rays_count_buf_ = cl::Buffer(context_, CL_MEM_READ_WRITE, sizeof(cl_int), nullptr, &error);
         if (error != CL_SUCCESS) throw std::runtime_error("Cannot create OpenCL renderer!");
@@ -220,19 +221,17 @@ ray::ocl::Renderer::Renderer(int w, int h) : w_(w), h_(h), iteration_(0) {
     }
 }
 
-ray::ocl::Renderer::~Renderer() {}
-
 void ray::ocl::Renderer::Resize(int w, int h) {
     cl_int error = CL_SUCCESS;
     prim_rays_buf_ = cl::Buffer(context_, CL_MEM_WRITE_ONLY | CL_MEM_HOST_NO_ACCESS, sizeof(ray_packet_t) * w * h, nullptr, &error);
     secondary_rays_buf_ = cl::Buffer(context_, CL_MEM_READ_WRITE | CL_MEM_HOST_NO_ACCESS, sizeof(ray_packet_t) * w * h, nullptr, &error);
     prim_inters_buf_ = cl::Buffer(context_, CL_MEM_READ_WRITE | CL_MEM_HOST_NO_ACCESS, sizeof(hit_data_t) * w * h, nullptr, &error);
-    temp_buf_ = cl::Image2D(context_, CL_MEM_READ_WRITE, cl::ImageFormat { CL_RGBA, CL_FLOAT }, w, h, 0, nullptr, &error);
-    clean_buf_ = cl::Image2D(context_, CL_MEM_READ_WRITE, cl::ImageFormat { CL_RGBA, CL_FLOAT }, w, h, 0, nullptr, &error);
-    final_buf_ = cl::Image2D(context_, CL_MEM_READ_WRITE, cl::ImageFormat { CL_RGBA, CL_FLOAT }, w, h, 0, nullptr, &error);
+    temp_buf_ = cl::Image2D(context_, CL_MEM_READ_WRITE, cl::ImageFormat { CL_RGBA, CL_FLOAT }, (size_t)w, (size_t)h, 0, nullptr, &error);
+    clean_buf_ = cl::Image2D(context_, CL_MEM_READ_WRITE, cl::ImageFormat { CL_RGBA, CL_FLOAT }, (size_t)w, (size_t)h, 0, nullptr, &error);
+    final_buf_ = cl::Image2D(context_, CL_MEM_READ_WRITE, cl::ImageFormat { CL_RGBA, CL_FLOAT }, (size_t)w, (size_t)h, 0, nullptr, &error);
     if (error != CL_SUCCESS) throw std::runtime_error("Cannot create OpenCL renderer!");
 
-    frame_pixels_.resize(4 * w * h);
+    frame_pixels_.resize((size_t)4 * w * h);
 
     w_ = w;
     h_ = h;
@@ -342,7 +341,7 @@ void ray::ocl::Renderer::GetStats(stats_t &st) {
 }
 
 bool ray::ocl::Renderer::kernel_GeneratePrimaryRays(const cl_int iteration, const ray::ocl::camera_t &cam, const cl::Buffer &halton, cl_int w, cl_int h, const cl::Buffer &out_rays) {
-    int argc = 0;
+    cl_uint argc = 0;
     if (prim_rays_gen_kernel_.setArg(argc++, iteration) != CL_SUCCESS ||
             prim_rays_gen_kernel_.setArg(argc++, cam) != CL_SUCCESS ||
             prim_rays_gen_kernel_.setArg(argc++, halton) != CL_SUCCESS ||
@@ -353,7 +352,7 @@ bool ray::ocl::Renderer::kernel_GeneratePrimaryRays(const cl_int iteration, cons
 }
 
 bool ray::ocl::Renderer::kernel_IntersectTris(const cl::Buffer &rays, cl_int rays_count, const cl::Buffer &tris, cl_int tris_count, const cl::Buffer &intersections, const cl::Buffer &intersections_counter) {
-    int argc = 0;
+    cl_uint argc = 0;
     if (intersect_tris_kernel_.setArg(argc++, rays) != CL_SUCCESS ||
             intersect_tris_kernel_.setArg(argc++, tris) != CL_SUCCESS ||
             intersect_tris_kernel_.setArg(argc++, tris_count) != CL_SUCCESS ||
@@ -365,7 +364,7 @@ bool ray::ocl::Renderer::kernel_IntersectTris(const cl::Buffer &rays, cl_int ray
 }
 
 bool ray::ocl::Renderer::kernel_IntersectCones(const cl::Buffer &rays, cl_int rays_count, const cl::Buffer &cones, cl_int cones_count, const cl::Buffer &intersections, const cl::Buffer &intersections_counter) {
-    int argc = 0;
+    cl_uint argc = 0;
     if (intersect_cones_kernel_.setArg(argc++, rays) != CL_SUCCESS ||
             intersect_cones_kernel_.setArg(argc++, cones) != CL_SUCCESS ||
             intersect_cones_kernel_.setArg(argc++, cones_count) != CL_SUCCESS ||
@@ -377,7 +376,7 @@ bool ray::ocl::Renderer::kernel_IntersectCones(const cl::Buffer &rays, cl_int ra
 }
 
 bool ray::ocl::Renderer::kernel_IntersectBoxes(const cl::Buffer &rays, cl_int rays_count, const cl::Buffer &boxes, cl_int boxes_count, const cl::Buffer &intersections, const cl::Buffer &intersections_counter) {
-    int argc = 0;
+    cl_uint argc = 0;
     if (intersect_boxes_kernel_.setArg(argc++, rays) != CL_SUCCESS ||
             intersect_boxes_kernel_.setArg(argc++, boxes) != CL_SUCCESS ||
             intersect_boxes_kernel_.setArg(argc++, boxes_count) != CL_SUCCESS ||
@@ -389,15 +388,15 @@ bool ray::ocl::Renderer::kernel_IntersectBoxes(const cl::Buffer &rays, cl_int ra
 }
 
 bool ray::ocl::Renderer::kernel_TextureDebugPage(const cl::Image2DArray &textures, cl_int page, const cl::Image2D &frame_buf) {
-    int argc = 0;
+    cl_uint argc = 0;
     if (texture_debug_page_kernel_.setArg(argc++, textures) != CL_SUCCESS ||
             texture_debug_page_kernel_.setArg(argc++, page) != CL_SUCCESS ||
             texture_debug_page_kernel_.setArg(argc++, frame_buf) != CL_SUCCESS) {
         return false;
     }
 
-    int w = frame_buf.getImageInfo<CL_IMAGE_WIDTH>(),
-        h = frame_buf.getImageInfo<CL_IMAGE_HEIGHT>();
+    auto w = frame_buf.getImageInfo<CL_IMAGE_WIDTH>(),
+         h = frame_buf.getImageInfo<CL_IMAGE_HEIGHT>();
 
     return CL_SUCCESS == queue_.enqueueNDRangeKernel(texture_debug_page_kernel_, cl::NullRange, cl::NDRange { (size_t)w, (size_t)h });
 }
@@ -412,7 +411,7 @@ bool ray::ocl::Renderer::kernel_ShadePrimary(const cl_int iteration, const cl::B
         const environment_t &env, const cl::Buffer &materials,
         const cl::Buffer &textures, const cl::Image2DArray &texture_atlas, const cl::Image2D &frame_buf,
         const cl::Buffer &secondary_rays, const cl::Buffer &secondary_rays_count) {
-    int argc = 0;
+    cl_uint argc = 0;
     if (shade_primary_kernel_.setArg(argc++, iteration) != CL_SUCCESS ||
             shade_primary_kernel_.setArg(argc++, halton) != CL_SUCCESS ||
             shade_primary_kernel_.setArg(argc++, intersections) != CL_SUCCESS ||
@@ -452,7 +451,7 @@ bool ray::ocl::Renderer::kernel_ShadeSecondary(const cl_int iteration, const cl:
         const cl::Buffer &secondary_rays, const cl::Buffer &secondary_rays_count) {
     if (rays_count == 0) return true;
 
-    int argc = 0;
+    cl_uint argc = 0;
     if (shade_secondary_kernel_.setArg(argc++, iteration) != CL_SUCCESS ||
             shade_secondary_kernel_.setArg(argc++, halton) != CL_SUCCESS ||
             shade_secondary_kernel_.setArg(argc++, intersections) != CL_SUCCESS ||
@@ -483,7 +482,7 @@ bool ray::ocl::Renderer::kernel_ShadeSecondary(const cl_int iteration, const cl:
 
 bool ray::ocl::Renderer::kernel_TracePrimaryRays(const cl::Buffer &rays, cl_int w, cl_int h, const cl::Buffer &mesh_instances, const cl::Buffer &mi_indices, const cl::Buffer &meshes, const cl::Buffer &transforms,
         const cl::Buffer &nodes, cl_uint node_index, const cl::Buffer &tris, const cl::Buffer &tri_indices, const cl::Buffer &intersections) {
-    int argc = 0;
+    cl_uint argc = 0;
     if (trace_primary_rays_kernel_.setArg(argc++, rays) != CL_SUCCESS ||
             trace_primary_rays_kernel_.setArg(argc++, w) != CL_SUCCESS ||
             trace_primary_rays_kernel_.setArg(argc++, mesh_instances) != CL_SUCCESS ||
@@ -527,7 +526,7 @@ bool ray::ocl::Renderer::kernel_TracePrimaryRays(const cl::Buffer &rays, cl_int 
 bool ray::ocl::Renderer::kernel_TraceSecondaryRays(const cl::Buffer &rays, cl_int rays_count,
         const cl::Buffer &mesh_instances, const cl::Buffer &mi_indices, const cl::Buffer &meshes, const cl::Buffer &transforms,
         const cl::Buffer &nodes, cl_uint node_index, const cl::Buffer &tris, const cl::Buffer &tri_indices, const cl::Buffer &intersections) {
-    int argc = 0;
+    cl_uint argc = 0;
     if (trace_secondary_rays_kernel_.setArg(argc++, rays) != CL_SUCCESS ||
             trace_secondary_rays_kernel_.setArg(argc++, mesh_instances) != CL_SUCCESS ||
             trace_secondary_rays_kernel_.setArg(argc++, mi_indices) != CL_SUCCESS ||
@@ -548,7 +547,7 @@ bool ray::ocl::Renderer::kernel_TraceSecondaryRays(const cl::Buffer &rays, cl_in
 }
 
 bool ray::ocl::Renderer::kernel_MixIncremental(const cl::Image2D &fbuf1, const cl::Image2D &fbuf2, cl_float k, const cl::Image2D &res) {
-    int argc = 0;
+    cl_uint argc = 0;
     if (mix_incremental_kernel_.setArg(argc++, fbuf1) != CL_SUCCESS ||
             mix_incremental_kernel_.setArg(argc++, fbuf2) != CL_SUCCESS ||
             mix_incremental_kernel_.setArg(argc++, k) != CL_SUCCESS ||
@@ -556,8 +555,8 @@ bool ray::ocl::Renderer::kernel_MixIncremental(const cl::Image2D &fbuf1, const c
         return false;
     }
 
-    int w = fbuf1.getImageInfo<CL_IMAGE_WIDTH>(),
-        h = fbuf1.getImageInfo<CL_IMAGE_HEIGHT>();
+    const auto w = fbuf1.getImageInfo<CL_IMAGE_WIDTH>(),
+               h = fbuf1.getImageInfo<CL_IMAGE_HEIGHT>();
 
     cl::NDRange global = { (size_t)w, (size_t)h };
     cl::NDRange local = cl::NullRange;
@@ -566,7 +565,7 @@ bool ray::ocl::Renderer::kernel_MixIncremental(const cl::Image2D &fbuf1, const c
 }
 
 bool ray::ocl::Renderer::kernel_Postprocess(const cl::Image2D &frame_buf, cl_int w, cl_int h, const cl::Image2D &out_pixels) {
-    int argc = 0;
+    cl_uint argc = 0;
     if (post_process_kernel_.setArg(argc++, frame_buf) != CL_SUCCESS ||
             post_process_kernel_.setArg(argc++, w) != CL_SUCCESS ||
             post_process_kernel_.setArg(argc++, h) != CL_SUCCESS ||
@@ -589,8 +588,8 @@ bool ray::ocl::Renderer::UpdateHaltonSequence() {
     std::vector<float> new_sequence(HaltonSeqLen * 2);
 
     for (int i = 0; i < HaltonSeqLen; i++) {
-        new_sequence[i * 2 + 0] = ray::ScrambledRadicalInverse<29>(&permutations_[100], iteration_ + i);
-        new_sequence[i * 2 + 1] = ray::ScrambledRadicalInverse<31>(&permutations_[129], iteration_ + i);
+        new_sequence[i * 2 + 0] = ray::ScrambledRadicalInverse<29>(&permutations_[100], (uint64_t)(iteration_ + i));
+        new_sequence[i * 2 + 1] = ray::ScrambledRadicalInverse<31>(&permutations_[129], (uint64_t)(iteration_ + i));
     }
 
     return CL_SUCCESS == queue_.enqueueWriteBuffer(halton_seq_buf_, CL_TRUE, 0, sizeof(float) * HaltonSeqLen * 2, &new_sequence[0]);
