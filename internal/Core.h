@@ -72,7 +72,7 @@ struct texture_t {
 };
 static_assert(sizeof(texture_t) == 64, "!");
 
-const int MAX_MATERIAL_TEXTURES = 5;
+const int MAX_MATERIAL_TEXTURES = 3;
 
 const int NORMALS_TEXTURE = 0;
 const int MAIN_TEXTURE = 1;
@@ -83,6 +83,7 @@ const int MIX_MAT2 = 3;
 struct material_t {
     uint32_t type;
     uint32_t textures[MAX_MATERIAL_TEXTURES];
+    float main_color[3], pad;
     union {
         float roughness;
         float strength;
@@ -91,8 +92,9 @@ struct material_t {
         float fresnel;
         float ior;
     };
+    float pad1[2];
 };
-static_assert(sizeof(material_t) == 32, "!");
+static_assert(sizeof(material_t) == 48, "!");
 
 struct prim_t;
 

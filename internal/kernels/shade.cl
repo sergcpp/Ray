@@ -7,10 +7,10 @@ float3 reflect(float3 V, float3 N) {
 }
 
 float3 refract(float3 I, float3 N, float eta) {
-	float cosi = dot(-I, N);
-	float cost2 = 1.0f - eta * eta * (1.0f - cosi * cosi);
-	float3 t = eta * I + ((eta * cosi - sqrt(fabs(cost2))) * N);
-	return t * (float3)(cost2 > 0);
+    float cosi = dot(-I, N);
+    float cost2 = 1.0f - eta * eta * (1.0f - cosi * cosi);
+    float3 t = eta * I + ((eta * cosi - sqrt(fabs(cost2))) * N);
+    return t * (float3)(cost2 > 0);
 }
 
 __constant float3 heatmap_colors[4] = { (float3)(0, 0, 1), (float3)(0, 1, 0), (float3)(1, 1, 0), (float3)(1, 0, 0) };
@@ -183,6 +183,7 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
     //////////////////////////////////////////
 
     float4 albedo = SampleTextureAnisotropic(texture_atlas, &textures[mat->textures[MAIN_TEXTURE]], uvs, duv_dx, duv_dy);
+    albedo.xyz *= mat->main_color;
     albedo = native_powr(albedo, 2.2f);
 
     float3 col;
@@ -265,21 +266,21 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
             const int index = atomic_inc(out_secondary_rays_count);
             out_secondary_rays[index] = r;
         }
-	} else if (mat->type == RefractiveMaterial) {
-		col = (float3)(0, 0, 0);
+    } else if (mat->type == RefractiveMaterial) {
+        col = (float3)(0, 0, 0);
 
-		const float3 _N = dot(I, N) > 0 ? -N : N;
+        const float3 _N = dot(I, N) > 0 ? -N : N;
 
-		float eta = 1.0f / mat->ior;
-		float cosi = dot(-I, _N);
-		float cost2 = 1.0f - eta * eta * (1.0f - cosi * cosi);
-		float m = eta * cosi - sqrt(fabs(cost2));
-		float3 V = eta * I + m * _N;
-		V *= (float3)(cost2 > 0);
+        float eta = 1.0f / mat->ior;
+        float cosi = dot(-I, _N);
+        float cost2 = 1.0f - eta * eta * (1.0f - cosi * cosi);
+        float m = eta * cosi - sqrt(fabs(cost2));
+        float3 V = eta * I + m * _N;
+        V *= (float3)(cost2 > 0);
 
-		// ** REFACTOR THIS **
+        // ** REFACTOR THIS **
 
-		const float z = 1.0f - halton[hi * 2] * mat->roughness;
+        const float z = 1.0f - halton[hi * 2] * mat->roughness;
         const float temp = native_sqrt(1.0f - z * z);
 
         const float phi = halton[((hash(hi) + iteration) & (HaltonSeqLen - 1)) * 2 + 0] * 2 * M_PI;
@@ -290,13 +291,13 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
         float3 BB = normalize(cross(V, TT));
         V = temp * sin_phi * BB + z * V + temp * cos_phi * TT;
 
-		//////////////////
+        //////////////////
 
-		float k = (eta - eta * eta * dot(I, N) / dot(V, N));
-		float3 dmdx = k * ddn_dx;
-		float3 dmdy = k * ddn_dy;
+        float k = (eta - eta * eta * dot(I, N) / dot(V, N));
+        float3 dmdx = k * ddn_dx;
+        float3 dmdy = k * ddn_dy;
 
-		ray_packet_t r;
+        ray_packet_t r;
         r.o = (float4)(P + 0.001f * I, (float)x);
         r.d = (float4)(V, (float)y);
         r.c = z * orig_ray->c;
@@ -312,9 +313,9 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
     } else if (mat->type == EmissiveMaterial) {
         col = mat->strength * albedo.xyz;
     } else if (mat->type == TransparentMaterial) {
-		col = (float3)(0, 0, 0);
+        col = (float3)(0, 0, 0);
 
-		ray_packet_t r;
+        ray_packet_t r;
         r.o = (float4)(P + 0.001f * I, (float)x);
         r.d = orig_ray->d;
         r.c = orig_ray->c;

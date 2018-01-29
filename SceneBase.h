@@ -30,6 +30,7 @@ enum eMaterialType {
 
 struct mat_desc_t {
     eMaterialType type;
+    float main_color[3] = { 1, 1, 1 };
     uint32_t main_texture;
     uint32_t normal_map = 0xffffffff;
     uint32_t mix_materials[2] = { 0xffffffff };
