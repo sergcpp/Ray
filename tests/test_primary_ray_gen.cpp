@@ -25,7 +25,7 @@ void test_primary_ray_gen() {
     {
         // test reference
         math::aligned_vector<ray::ref::ray_packet_t> rays;
-        ray::ref::GeneratePrimaryRays(cam, 4, 4, rays);
+        ray::ref::GeneratePrimaryRays(cam, { 0, 0, 4, 4 }, 4, 4, rays);
 
         require(rays.size() == 16);
         for (int i = 0; i < 16; i++) {
@@ -42,7 +42,7 @@ void test_primary_ray_gen() {
     {
         // test sse
         math::aligned_vector<ray::sse::ray_packet_t> rays;
-        ray::sse::GeneratePrimaryRays(cam, 4, 4, rays);
+        ray::sse::GeneratePrimaryRays(cam, { 0, 0, 4, 4 }, 4, 4, rays);
 
         require(rays.size() == 4);
 
@@ -90,7 +90,7 @@ void test_primary_ray_gen() {
     {
         // test avx
         math::aligned_vector<ray::avx::ray_packet_t> rays;
-        ray::avx::GeneratePrimaryRays(cam, 4, 4, rays);
+        ray::avx::GeneratePrimaryRays(cam, { 0, 0, 4, 4 }, 4, 4, rays);
 
         require(rays.size() == 2);
 

@@ -13,8 +13,6 @@ enum eRendererType {
     RendererOCL = 8,
 };
 
-struct region_t { int x, y, w, h; };
-
 class RendererBase {
 public:
     virtual ~RendererBase() = default;
