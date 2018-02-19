@@ -275,9 +275,9 @@ void ray::sse::ConstructRayPacket(const float *o, const float *d, int size, ray_
     }
 }
 
-void ray::sse::GeneratePrimaryRays(const camera_t &cam, int w, int h, math::aligned_vector<ray_packet_t> &out_rays) {
+void ray::sse::GeneratePrimaryRays(const camera_t &cam, const region_t &r, int w, int h, math::aligned_vector<ray_packet_t> &out_rays) {
     size_t i = 0;
-    out_rays.resize(w * h / 4 + ((w * h) % 4 != 0));
+    out_rays.resize(r.w * r.h / 4 + ((r.w * r.h) % 4 != 0));
 
     __m128 ww = _mm_set1_ps((float)w), hh = _mm_set1_ps((float)h);
 
@@ -288,14 +288,14 @@ void ray::sse::GeneratePrimaryRays(const camera_t &cam, int w, int h, math::alig
                               up[3] = { _mm_set1_ps(cam.up[0] * k), _mm_set1_ps(cam.up[1] * k), _mm_set1_ps(cam.up[2] * k) };
 
 
-    for (int y = 0; y < h - (h & (RayPacketDimY - 1)); y += RayPacketDimY) {
-        __m128 xx = _mm_setr_ps(0, 1, 0, 1);
+    for (int y = r.y; y < r.y + r.h - (r.h & (RayPacketDimY - 1)); y += RayPacketDimY) {
+        __m128 xx = _mm_setr_ps(float(r.x), float(r.x + 1), float(r.x), float(r.x + 1));
         float fy = float(y);
         __m128 yy = _mm_setr_ps(-fy, -fy, -fy - 1, -fy - 1);
         yy = _mm_div_ps(yy, hh);
         yy = _mm_add_ps(yy, _0_5);
 
-        for (int x = 0; x < w - (w & (RayPacketDimX - 1)); x += RayPacketDimX) {
+        for (int x = r.x; x < r.x + r.w - (r.w & (RayPacketDimX - 1)); x += RayPacketDimX) {
             __m128 dd[3];
 
             // x / w - 0.5

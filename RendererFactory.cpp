@@ -12,7 +12,7 @@
 std::shared_ptr<ray::RendererBase> ray::CreateRenderer(int w, int h, uint32_t flags) {
     math::init();
 
-    if (flags & PreferOCL) {
+    if (flags & RendererOCL) {
         std::cout << "ray: Creating OpenCL renderer " << w << "x" << h << std::endl;
         try {
             return std::make_shared<ocl::Renderer>(w, h);
@@ -20,15 +20,15 @@ std::shared_ptr<ray::RendererBase> ray::CreateRenderer(int w, int h, uint32_t fl
             std::cout << "ray: Creating OpenCL renderer failed" << std::endl;
         }
     }
-    if ((flags & PreferAVX) && math::supported(math::AVX)) {
+    if ((flags & RendererAVX) && math::supported(math::AVX)) {
         std::cout << "ray: Creating AVX renderer " << w << "x" << h << std::endl;
         return std::make_shared<avx::Renderer>(w, h);
     }
-    if ((flags & PreferSSE) && math::supported(math::SSE2)) {
+    if ((flags & RendererSSE) && math::supported(math::SSE2)) {
         std::cout << "ray: Creating SSE renderer " << w << "x" << h << std::endl;
         return std::make_shared<sse::Renderer>(w, h);
     }
-    if (flags & PreferRef) {
+    if (flags & RendererRef) {
         std::cout << "ray: Creating Ref renderer " << w << "x" << h << std::endl;
         return std::make_shared<ref::Renderer>(w, h);
     }

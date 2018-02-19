@@ -21,13 +21,13 @@ ray::ref::Renderer::Renderer(int w, int h) : framebuf_(w, h) {
 }
 
 std::shared_ptr<ray::SceneBase> ray::ref::Renderer::CreateScene() {
-    return std::make_shared<Scene>();
+    return std::make_shared<ref::Scene>();
 }
 
-void ray::ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s) {
+void ray::ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, const region_t &region) {
     using namespace math;
 
-    auto s = std::dynamic_pointer_cast<Scene>(_s);
+    auto s = std::dynamic_pointer_cast<ref::Scene>(_s);
     if (!s) return;
 
     const auto &cam = s->GetCamera(s->current_cam());
@@ -57,25 +57,27 @@ void ray::ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s) {
 
     int w = framebuf_.w(), h = framebuf_.h();
 
-    GeneratePrimaryRays(cam, w, h, primary_rays_);
+    math::aligned_vector<ray_packet_t> primary_rays;
+    math::aligned_vector<hit_data_t> intersections;
 
-    intersections_.clear();
-    intersections_.reserve(primary_rays_.size());
+    GeneratePrimaryRays(cam, region, w, h, primary_rays);
 
-    for (size_t i = 0; i < primary_rays_.size(); i++) {
+    intersections.reserve(primary_rays.size());
+
+    for (size_t i = 0; i < primary_rays.size(); i++) {
         hit_data_t inter;
-        inter.id = primary_rays_[i].id;
+        inter.id = primary_rays[i].id;
 
-        const ray_packet_t &r = primary_rays_[i];
+        const ray_packet_t &r = primary_rays[i];
         float inv_d[3] = { 1.0f / r.d[0], 1.0f / r.d[1], 1.0f / r.d[2] };
 
-        if (Traverse_MacroTree_GPU(r, inv_d, nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, inter)) {
-            intersections_.push_back(inter);
+        if (Traverse_MacroTree_CPU(r, inv_d, nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, inter)) {
+            intersections.push_back(inter);
         }
     }
 
-    for (size_t i = 0; i < intersections_.size(); i++) {
-        const auto &ii = intersections_[i];
+    for (size_t i = 0; i < intersections.size(); i++) {
+        const auto &ii = intersections[i];
 
         int x = ii.id.x;
         int y = ii.id.y;

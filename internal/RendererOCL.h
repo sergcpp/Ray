@@ -88,6 +88,8 @@ public:
     Renderer(int w, int h);
     ~Renderer() override = default;
 
+    eRendererType type() const override { return RendererOCL; }
+
     std::pair<int, int> size() const override {
         return std::make_pair(w_, h_);
     }
@@ -100,7 +102,7 @@ public:
     void Clear(const pixel_color_t &c) override;
 
     std::shared_ptr<SceneBase> CreateScene() override;
-    void RenderScene(const std::shared_ptr<SceneBase> &s) override;
+    void RenderScene(const std::shared_ptr<SceneBase> &s, const region_t &region) override;
 
     void GetStats(stats_t &st) override;
 };

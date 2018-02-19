@@ -26,7 +26,7 @@ std::shared_ptr<ray::SceneBase> ray::sse::Renderer::CreateScene() {
     return std::make_shared<ref::Scene>();
 }
 
-void ray::sse::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s) {
+void ray::sse::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, const region_t &region) {
     using namespace math;
 
     auto s = std::dynamic_pointer_cast<ref::Scene>(_s);
@@ -59,26 +59,28 @@ void ray::sse::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s) {
 
     int w = framebuf_.w(), h = framebuf_.h();
 
-    GeneratePrimaryRays(cam, w, h, primary_rays_);
+    math::aligned_vector<ray_packet_t> primary_rays;
+    math::aligned_vector<hit_data_t> intersections;
 
-    intersections_.clear();
-    intersections_.reserve(primary_rays_.size());
+    GeneratePrimaryRays(cam, region, w, h, primary_rays);
 
-    for (size_t i = 0; i < primary_rays_.size(); i++) {
+    intersections.reserve(primary_rays.size());
+
+    for (size_t i = 0; i < primary_rays.size(); i++) {
         hit_data_t inter;
-        inter.id = primary_rays_[i].id;
+        inter.id = primary_rays[i].id;
 
-        const ray_packet_t &r = primary_rays_[i];
+        const ray_packet_t &r = primary_rays[i];
         __m128 inv_d[3] = { _mm_rcp_ps(r.d[0]), _mm_rcp_ps(r.d[1]), _mm_rcp_ps(r.d[2]) };
 
         if (Traverse_MacroTree_CPU(r, inv_d, nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, inter)) {
-            intersections_.push_back(inter);
+            intersections.push_back(inter);
         }
     }
 
     const int col_table_mask = color_table_.size() - 1;
-    for (size_t i = 0; i < intersections_.size(); i++) {
-        const auto &ii = intersections_[i];
+    for (size_t i = 0; i < intersections.size(); i++) {
+        const auto &ii = intersections[i];
 
         int x = ii.id.x;
         int y = ii.id.y;

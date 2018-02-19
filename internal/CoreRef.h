@@ -36,7 +36,7 @@ struct hit_data_t {
 
 // Generating rays
 void ConstructRayPacket(const float *o, const float *d, int size, ray_packet_t &out_r);
-void GeneratePrimaryRays(const camera_t &cam, int w, int h, math::aligned_vector<ray_packet_t> &out_rays);
+void GeneratePrimaryRays(const camera_t &cam, const region_t &r, int w, int h, math::aligned_vector<ray_packet_t> &out_rays);
 
 // Intersect primitives
 bool IntersectTris(const ray_packet_t &r, const tri_accel_t *tris, int num_tris, int obj_index, hit_data_t &out_inter);

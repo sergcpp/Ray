@@ -96,7 +96,7 @@ void ray::ref::ConstructRayPacket(const float *o, const float *d, int size, ray_
     }
 }
 
-void ray::ref::GeneratePrimaryRays(const camera_t &cam, int w, int h, math::aligned_vector<ray_packet_t> &out_rays) {
+void ray::ref::GeneratePrimaryRays(const camera_t &cam, const region_t &r, int w, int h, math::aligned_vector<ray_packet_t> &out_rays) {
     using namespace math;
 
     vec3 origin = make_vec3(cam.origin), fwd = make_vec3(cam.fwd), side = make_vec3(cam.side), up = make_vec3(cam.up);
@@ -104,10 +104,10 @@ void ray::ref::GeneratePrimaryRays(const camera_t &cam, int w, int h, math::alig
     up *= float(h) / w;
 
     size_t i = 0;
-    out_rays.resize(w * h);
+    out_rays.resize(r.w * r.h);
 
-    for (int y = 0; y < h; y += RayPacketDimY) {
-        for (int x = 0; x < w; x += RayPacketDimX) {
+    for (int y = r.y; y < r.y + r.h; y += RayPacketDimY) {
+        for (int x = r.x; x < r.x + r.w; x += RayPacketDimX) {
             vec3 _d(float(x) / w - 0.5f, float(-y) / h + 0.5f, 1);
             _d = _d.x * side + _d.y * up + _d.z * fwd;
             _d = normalize(_d);

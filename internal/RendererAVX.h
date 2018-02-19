@@ -9,12 +9,11 @@ namespace avx {
 class Renderer : public RendererBase {
     ray::ref::Framebuffer framebuf_;
 
-    math::aligned_vector<ray_packet_t> primary_rays_;
-    math::aligned_vector<hit_data_t> intersections_;
-
     std::vector<pixel_color_t> color_table_;
 public:
     Renderer(int w, int h);
+
+    eRendererType type() const override { return RendererAVX; }
 
     std::pair<int, int> size() const override {
         return std::make_pair(framebuf_.w(), framebuf_.h());
@@ -32,7 +31,7 @@ public:
     }
 
     std::shared_ptr<SceneBase> CreateScene() override;
-    void RenderScene(const std::shared_ptr<SceneBase> &s) override;
+    void RenderScene(const std::shared_ptr<SceneBase> &s, const region_t &region) override;
 
     virtual void GetStats(stats_t &st) override {
         st.iterations_count = 0;

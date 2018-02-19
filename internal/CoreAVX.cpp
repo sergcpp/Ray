@@ -308,9 +308,9 @@ void ray::avx::ConstructRayPacket(const float *o, const float *d, int size, ray_
     }
 }
 
-void ray::avx::GeneratePrimaryRays(const camera_t &cam, int w, int h, math::aligned_vector<ray_packet_t> &out_rays) {
+void ray::avx::GeneratePrimaryRays(const camera_t &cam, const region_t &r, int w, int h, math::aligned_vector<ray_packet_t> &out_rays) {
     size_t i = 0;
-    out_rays.resize((size_t)(w * h / 8 + ((w * h) % 4 != 0)));
+    out_rays.resize((size_t)(r.w * r.h / 8 + ((r.w * r.h) % 4 != 0)));
 
     __m256 ww = _mm256_set1_ps((float)w), hh = _mm256_set1_ps((float)h);
 
@@ -320,14 +320,15 @@ void ray::avx::GeneratePrimaryRays(const camera_t &cam, int w, int h, math::alig
                     side[3] = { _mm256_set1_ps(cam.side[0]), _mm256_set1_ps(cam.side[1]), _mm256_set1_ps(cam.side[2]) },
                               up[3] = { _mm256_set1_ps(cam.up[0] * k), _mm256_set1_ps(cam.up[1] * k), _mm256_set1_ps(cam.up[2] * k) };
 
-    for (int y = 0; y < h - (h & (RayPacketDimY - 1)); y += RayPacketDimY) {
-        __m256 xx = _mm256_setr_ps(0, 1, 0, 1, 2, 3, 2, 3);
+    for (int y = r.y; y < r.y + r.h - (r.h & (RayPacketDimY - 1)); y += RayPacketDimY) {
+        __m256 xx = _mm256_setr_ps(float(r.x + 0), float(r.x + 1), float(r.x + 0), float(r.x + 1), 
+                                   float(r.x + 2), float(r.x + 3), float(r.x + 2), float(r.x + 3));
         float fy = float(y);
         __m256 yy = _mm256_setr_ps(-fy, -fy, -fy - 1, -fy - 1, -fy, -fy, -fy - 1, -fy - 1);
         yy = _mm256_div_ps(yy, hh);
         yy = _mm256_add_ps(yy, _0_5);
 
-        for (int x = 0; x < w - (w & (RayPacketDimX - 1)); x += RayPacketDimX) {
+        for (int x = r.x; x < r.x + r.w - (r.w & (RayPacketDimX - 1)); x += RayPacketDimX) {
             __m256 dd[3];
 
             // x / w - 0.5
