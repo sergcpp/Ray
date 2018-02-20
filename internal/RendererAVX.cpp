@@ -78,7 +78,7 @@ void ray::avx::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, const
         }
     }
 
-    const int col_table_mask = color_table_.size() - 1;
+    const uint32_t col_table_mask = (uint32_t)color_table_.size() - 1;
     for (size_t i = 0; i < intersections.size(); i++) {
         const auto &ii = intersections[i];
 

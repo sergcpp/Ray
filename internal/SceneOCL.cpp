@@ -164,7 +164,7 @@ uint32_t ray::ocl::Scene::AddMesh(const mesh_desc_t &_m) {
 
     PreprocessMesh(_m.vtx_attrs, _m.vtx_attrs_count, _m.vtx_indices, _m.vtx_indices_count, _m.layout, new_nodes, new_tris, new_tri_indices);
     for (size_t i = 0; i < _m.vtx_indices_count; i++) {
-        new_vtx_indices.push_back(_m.vtx_indices[i] + vertices_.size());
+        new_vtx_indices.push_back(_m.vtx_indices[i] + (uint32_t)vertices_.size());
     }
 
     // set material index for triangles
@@ -176,19 +176,19 @@ uint32_t ray::ocl::Scene::AddMesh(const mesh_desc_t &_m) {
 
     // offset nodes and primitives
     for (auto &n : new_nodes) {
-        if (n.parent != 0xffffffff) n.parent += nodes_.size();
-        if (n.sibling) n.sibling += nodes_.size();
+        if (n.parent != 0xffffffff) n.parent += (uint32_t)nodes_.size();
+        if (n.sibling) n.sibling += (uint32_t)nodes_.size();
         if (n.prim_count) {
-            n.prim_index += tri_indices_.size();
+            n.prim_index += (uint32_t)tri_indices_.size();
         } else {
-            n.left_child += nodes_.size();
-            n.right_child += nodes_.size();
+            n.left_child += (uint32_t)nodes_.size();
+            n.right_child += (uint32_t)nodes_.size();
         }
     }
 
     // offset triangle indices
     for (auto &i : new_tri_indices) {
-        i += tris_.size();
+        i += (uint32_t)tris_.size();
     }
 
     // add mesh
@@ -244,7 +244,7 @@ uint32_t ray::ocl::Scene::AddMesh(const mesh_desc_t &_m) {
         if (i1 || i2) {
             uint32_t index = twin_verts[_m.vtx_indices[i + 0]][i1 + i2 - 1];
             if (index == 0) {
-                index = vertices_.size() + new_vertices.size();
+                index = (uint32_t)(vertices_.size() + new_vertices.size());
                 new_vertices.push_back(*v0);
                 memset(&new_vertices.back().b[0], 0, 3 * sizeof(float));
                 twin_verts[_m.vtx_indices[i + 0]][i1 + i2 - 1] = index;
@@ -268,7 +268,7 @@ uint32_t ray::ocl::Scene::AddMesh(const mesh_desc_t &_m) {
         if (i1 || i2) {
             uint32_t index = twin_verts[_m.vtx_indices[i + 1]][i1 + i2 - 1];
             if (index == 0) {
-                index = vertices_.size() + new_vertices.size();
+                index = (uint32_t)(vertices_.size() + new_vertices.size());
                 new_vertices.push_back(*v1);
                 memset(&new_vertices.back().b[0], 0, 3 * sizeof(float));
                 twin_verts[_m.vtx_indices[i + 1]][i1 + i2 - 1] = index;
@@ -292,7 +292,7 @@ uint32_t ray::ocl::Scene::AddMesh(const mesh_desc_t &_m) {
         if (i1 || i2) {
             uint32_t index = twin_verts[_m.vtx_indices[i + 2]][i1 + i2 - 1];
             if (index == 0) {
-                index = vertices_.size() + new_vertices.size();
+                index = (uint32_t)(vertices_.size() + new_vertices.size());
                 new_vertices.push_back(*v2);
                 memset(&new_vertices.back().b[0], 0, 3 * sizeof(float));
                 twin_verts[_m.vtx_indices[i + 2]][i1 + i2 - 1] = index;
@@ -447,16 +447,16 @@ void ray::ocl::Scene::RebuildMacroBVH() {
     std::vector<bvh_node_t> bvh_nodes;
     std::vector<uint32_t> mi_indices;
 
-    macro_nodes_start_ = nodes_.size();
+    macro_nodes_start_ = (uint32_t)nodes_.size();
     macro_nodes_count_ = PreprocessPrims(&primitives[0], primitives.size(), bvh_nodes, mi_indices);
 
     // offset nodes
     for (auto &n : bvh_nodes) {
-        if (n.parent != 0xffffffff) n.parent += nodes_.size();
-        if (n.sibling) n.sibling += nodes_.size();
+        if (n.parent != 0xffffffff) n.parent += (uint32_t)nodes_.size();
+        if (n.sibling) n.sibling += (uint32_t)nodes_.size();
         if (!n.prim_count) {
-            n.left_child += nodes_.size();
-            n.right_child += nodes_.size();
+            n.left_child += (uint32_t)nodes_.size();
+            n.right_child += (uint32_t)nodes_.size();
         }
     }
 

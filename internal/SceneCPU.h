@@ -31,7 +31,7 @@ protected:
     std::vector<mesh_instance_t> mesh_instances_;
     std::vector<uint32_t> mi_indices_;
 
-    size_t macro_nodes_start_ = 0, macro_nodes_count_ = 0;
+    uint32_t macro_nodes_start_ = 0, macro_nodes_count_ = 0;
 
     void RemoveNodes(uint32_t node_index, uint32_t node_count);
     void RebuildMacroBVH();

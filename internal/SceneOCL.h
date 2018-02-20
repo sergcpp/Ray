@@ -31,7 +31,7 @@ protected:
 
     ocl::environment_t env_;
 
-    size_t macro_nodes_start_ = 0, macro_nodes_count_ = 0;
+    uint32_t macro_nodes_start_ = 0, macro_nodes_count_ = 0;
 
     uint32_t default_normals_texture_;
 

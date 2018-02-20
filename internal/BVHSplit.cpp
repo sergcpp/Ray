@@ -145,7 +145,7 @@ ray::split_data_t ray::SplitPrimitives_SAH(const prim_t *primitives, const std::
             if (sah < res_sah) {
                 res_sah = sah;
                 div_axis = axis;
-                div_index = i;
+                div_index = (uint32_t)i;
                 res_left_bounds = left_bounds;
                 res_right_bounds = right_bounds[i - 1];
             }

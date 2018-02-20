@@ -113,7 +113,7 @@ uint32_t ray::PreprocessMesh(const float *attrs, size_t attrs_count, const uint3
     uint32_t num_out_nodes = PreprocessPrims(&primitives[0], primitives.size(), out_nodes, out_tri_indices);
 
     for (size_t i = indices_start; i < out_tri_indices.size(); i++) {
-        out_tri_indices[i] += tris_start;
+        out_tri_indices[i] += (uint32_t)tris_start;
     }
 
     return num_out_nodes;
@@ -139,7 +139,7 @@ uint32_t ray::PreprocessPrims(const prim_t *prims, size_t prims_count,
     int32_t root_node_index = (int32_t)num_nodes;
 
     for (size_t j = 0; j < prims_count; j++) {
-        triangle_lists.back().indices.push_back(j);
+        triangle_lists.back().indices.push_back((uint32_t)j);
         triangle_lists.back().min = min(triangle_lists.back().min, prims[j].bbox_min);
         triangle_lists.back().max = max(triangle_lists.back().max, prims[j].bbox_max);
     }

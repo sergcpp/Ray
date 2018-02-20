@@ -143,6 +143,6 @@ void ray::ref::Scene::RebuildMacroBVH() {
         primitives.push_back({ make_vec3(mi.bbox_min), make_vec3(mi.bbox_max) });
     }
 
-    macro_nodes_start_ = nodes_.size();
+    macro_nodes_start_ = (uint32_t)nodes_.size();
     macro_nodes_count_ = PreprocessPrims(&primitives[0], primitives.size(), nodes_, mi_indices_);
 }
