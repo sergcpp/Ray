@@ -6,11 +6,12 @@
 #include "internal/TextureSplitter.cpp"
 
 #include "internal/Core.cpp"
-#include "internal/SceneCPU.cpp"
 
 #include "internal/CoreRef.cpp"
 #include "internal/FramebufferRef.cpp"
 #include "internal/RendererRef.cpp"
+#include "internal/SceneRef.cpp"
+#include "internal/TextureAtlasRef.cpp"
 
 #include "internal/CoreSSE.cpp"
 #include "internal/RendererSSE.cpp"
@@ -23,6 +24,7 @@
 #include "internal/TextureAtlasOCL.cpp"
 
 // TODO:
+// catch up CPU backends
 // fix precision issues
 // make camera fov work
 // add deletion functions for OpenCL backend

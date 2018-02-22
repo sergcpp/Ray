@@ -34,12 +34,14 @@ set(INTERNAL_SOURCE_FILES internal/BVHSplit.h
                           internal/RendererRef.cpp
                           internal/RendererSSE.h
                           internal/RendererSSE.cpp
-                          internal/SceneCPU.h
-                          internal/SceneCPU.cpp
                           internal/SceneOCL.h
                           internal/SceneOCL.cpp
+                          internal/SceneRef.h
+                          internal/SceneRef.cpp
                           internal/TextureAtlasOCL.h
                           internal/TextureAtlasOCL.cpp
+                          internal/TextureAtlasRef.h
+                          internal/TextureAtlasRef.cpp
                           internal/TextureSplitter.h
                           internal/TextureSplitter.cpp
                           internal/VectorOCL.h)

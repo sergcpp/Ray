@@ -72,7 +72,7 @@ struct texture_t {
 };
 static_assert(sizeof(texture_t) == 64, "!");
 
-const int MAX_MATERIAL_TEXTURES = 3;
+const int MAX_MATERIAL_TEXTURES = 7;
 
 const int NORMALS_TEXTURE = 0;
 const int MAIN_TEXTURE = 1;
@@ -94,7 +94,7 @@ struct material_t {
     };
     float pad1[2];
 };
-static_assert(sizeof(material_t) == 48, "!");
+static_assert(sizeof(material_t) == 64, "!");
 
 struct prim_t;
 

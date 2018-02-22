@@ -58,10 +58,12 @@ int ray::ocl::TextureAtlas::Allocate(const pixel_color8_t *data, const math::ive
 
 bool ray::ocl::TextureAtlas::Free(int page, const math::ivec2 &pos) {
     if (page < 0 || page > pages_count_) return false;
+    // TODO: fill with black in debug
     return splitters_[page].Free(pos);
 }
 
 bool ray::ocl::TextureAtlas::Resize(int pages_count) {
+    // if we shrink atlas, all redundant pages required to be empty
     for (int i = pages_count; i < pages_count_; i++) {
         if (!splitters_[i].empty()) return false;
     }

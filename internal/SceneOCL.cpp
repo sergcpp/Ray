@@ -60,6 +60,7 @@ uint32_t ray::ocl::Scene::AddTexture(const tex_desc_t &_t) {
     int mip = 0;
     math::ivec2 res = { _t.w, _t.h };
 
+    // TODO: add downsampling for non-power-of-2 textures
     auto downsample = [](std::vector<pixel_color8_t> &_tex, const math::ivec2 &res) {
         const pixel_color8_t *tex = &_tex[0];
 
@@ -89,6 +90,7 @@ uint32_t ray::ocl::Scene::AddTexture(const tex_desc_t &_t) {
         math::ivec2 pos;
         int page = texture_atlas_.Allocate(&tex_data[0], res, pos);
         if (page == -1) {
+            // release allocated mip levels on fail
             for (int i = mip; i >= 0; i--) {
                 texture_atlas_.Free(t.page[i], { t.pos[i][0], t.pos[i][1] });
             }
@@ -106,6 +108,7 @@ uint32_t ray::ocl::Scene::AddTexture(const tex_desc_t &_t) {
         mip++;
     }
 
+    // fill remaining mip levels with the last one
     for (int i = mip; i < NUM_MIP_LEVELS; i++) {
         t.page[i] = t.page[mip - 1];
         t.pos[i][0] = t.pos[mip - 1][0];

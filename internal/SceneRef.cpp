@@ -1,8 +1,41 @@
-#include "SceneCPU.h"
+#include "SceneRef.h"
 
 #include <cstring>
 
-ray::ref::Scene::Scene() {}
+ray::ref::Scene::Scene() : texture_atlas_({ MAX_TEXTURE_SIZE, MAX_TEXTURE_SIZE }) {}
+
+uint32_t ray::ref::Scene::AddTexture(const tex_desc_t &_t) {
+    uint32_t tex_index = (uint32_t)textures_.size();
+
+    texture_t t;
+    t.size[0] = (uint16_t)_t.w;
+    t.size[1] = (uint16_t)_t.h;
+
+    int mip = 0;
+    math::ivec2 res = { _t.w, _t.h };
+
+    // TODO: add all mip levels
+    math::ivec2 pos;
+    int page = texture_atlas_.Allocate(_t.data, res, pos);
+    if (page == -1) {
+        return 0xffffffff;
+    }
+
+    t.page[mip] = (uint32_t)page;
+    t.pos[mip][0] = (uint16_t)pos.x;
+    t.pos[mip][1] = (uint16_t)pos.y;
+
+    // fill remaining mip levels with the last one
+    for (int i = mip; i < NUM_MIP_LEVELS; i++) {
+        t.page[i] = t.page[mip - 1];
+        t.pos[i][0] = t.pos[mip - 1][0];
+        t.pos[i][1] = t.pos[mip - 1][1];
+    }
+
+    textures_.push_back(t);
+
+    return tex_index;
+}
 
 uint32_t ray::ref::Scene::AddMesh(const mesh_desc_t &desc) {
     meshes_.emplace_back();

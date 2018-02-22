@@ -1,6 +1,6 @@
 #include "RendererSSE.h"
 
-#include "SceneCPU.h"
+#include "SceneRef.h"
 
 #include <math/math.hpp>
 

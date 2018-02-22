@@ -4,6 +4,7 @@
 
 #include "BVHSplit.h"
 #include "Core.h"
+#include "TextureAtlasRef.h"
 #include "../SceneBase.h"
 
 namespace ray {
@@ -31,6 +32,9 @@ protected:
     std::vector<mesh_instance_t> mesh_instances_;
     std::vector<uint32_t> mi_indices_;
 
+    TextureAtlas texture_atlas_;
+    std::vector<texture_t> textures_;
+
     uint32_t macro_nodes_start_ = 0, macro_nodes_count_ = 0;
 
     void RemoveNodes(uint32_t node_index, uint32_t node_count);
@@ -41,9 +45,7 @@ public:
     void GetEnvironment(environment_desc_t &env) override {}
     void SetEnvironment(const environment_desc_t &env) override {}
 
-    uint32_t AddTexture(const tex_desc_t &t) override {
-        return 0xffffffff;
-    }
+    uint32_t AddTexture(const tex_desc_t &t) override;
     void RemoveTexture(uint32_t) override {}
 
     uint32_t AddMaterial(const mat_desc_t &m) override {
