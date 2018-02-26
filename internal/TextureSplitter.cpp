@@ -38,6 +38,14 @@ bool ray::TextureSplitter::Free(int i) {
     return true;
 }
 
+int ray::TextureSplitter::FindNode(const math::ivec2 &pos, math::ivec2 &size) const {
+    int i = Find_Recursive(0, pos);
+    if (i != -1) {
+        size = nodes_[i].size;
+    }
+    return i;
+}
+
 int ray::TextureSplitter::Insert_Recursive(int i, const math::ivec2 &res) {
     if (!nodes_[i].is_free || res.x > nodes_[i].size.x || res.y > nodes_[i].size.y) {
         return -1;

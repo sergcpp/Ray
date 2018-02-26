@@ -63,11 +63,11 @@ bool IntersectBoxes(const ray_packet_t &r, const aabox_t *boxes, int num_boxes, 
 
 // Traverse acceleration structure
 // stack-less cpu-style traversal of outer nodes
-bool Traverse_MacroTree_CPU(const ray_packet_t &r, const __m256 inv_d[3], const bvh_node_t *nodes, uint32_t node_index,
+bool Traverse_MacroTree_CPU(const ray_packet_t &r, const __m256i ray_mask, const __m256 inv_d[3], const bvh_node_t *nodes, uint32_t node_index,
                             const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
                             const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t &inter);
 // stack-less cpu-style traversal of inner nodes
-bool Traverse_MicroTree_CPU(const ray_packet_t &r, const __m256 inv_d[3], const bvh_node_t *nodes, uint32_t node_index,
+bool Traverse_MicroTree_CPU(const ray_packet_t &r, const __m256i ray_mask, const __m256 inv_d[3], const bvh_node_t *nodes, uint32_t node_index,
                             const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, hit_data_t &inter);
 
 // Transform

@@ -5,7 +5,11 @@
 
 namespace ray {
 namespace ref {
+class Renderer;
+
 class TextureAtlas {
+    friend class ref::Renderer;
+
     const math::ivec2 res_;
     int pages_count_;
 

@@ -31,6 +31,8 @@ protected:
     std::vector<mesh_t> meshes_;
     std::vector<mesh_instance_t> mesh_instances_;
     std::vector<uint32_t> mi_indices_;
+    std::vector<vertex_t> vertices_;
+    std::vector<uint32_t> vtx_indices_;
 
     TextureAtlas texture_atlas_;
     std::vector<texture_t> textures_;

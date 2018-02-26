@@ -12,6 +12,7 @@
 #include "internal/RendererRef.cpp"
 #include "internal/SceneRef.cpp"
 #include "internal/TextureAtlasRef.cpp"
+#include "internal/TextureUtilsRef.cpp"
 
 #include "internal/CoreSSE.cpp"
 #include "internal/RendererSSE.cpp"

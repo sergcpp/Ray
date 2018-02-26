@@ -44,6 +44,8 @@ set(INTERNAL_SOURCE_FILES internal/BVHSplit.h
                           internal/TextureAtlasRef.cpp
                           internal/TextureSplitter.h
                           internal/TextureSplitter.cpp
+                          internal/TextureUtilsRef.h
+                          internal/TextureUtilsRef.cpp
                           internal/VectorOCL.h)
 
 set(SOURCE_FILES RendererBase.h
@@ -66,19 +68,23 @@ set(KERNEL_FILES internal/kernels/intersect_boxes.cl
                  internal/kernels/types.cl)
 
 list(APPEND ALL_SOURCE_FILES ${INTERNAL_SOURCE_FILES})
-set_source_files_properties(${INTERNAL_SOURCE_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
 source_group("src\\internal" FILES ${INTERNAL_SOURCE_FILES})
 
 list(APPEND ALL_SOURCE_FILES ${SOURCE_FILES})
-set_source_files_properties(${SOURCE_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
 source_group("src" FILES ${SOURCE_FILES})
 
 list(APPEND ALL_SOURCE_FILES ${KERNEL_FILES})
-set_source_files_properties(${KERNEL_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
 source_group("src\\internal\\kernels" FILES ${KERNEL_FILES})
 
-list(APPEND ALL_SOURCE_FILES _ray.cpp)
-source_group("src" FILES _ray.cpp)
+# enable or disable unity build
+IF(1)
+    set_source_files_properties(${INTERNAL_SOURCE_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
+    set_source_files_properties(${SOURCE_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
+    set_source_files_properties(${KERNEL_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
+
+    list(APPEND ALL_SOURCE_FILES _ray.cpp)
+    source_group("src" FILES _ray.cpp)
+ENDIF()
 
 add_library(ray STATIC ${ALL_SOURCE_FILES})
 target_link_libraries(ray OpenCL math)

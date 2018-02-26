@@ -1,5 +1,7 @@
 #include "SceneRef.h"
 
+#include "TextureUtilsRef.h"
+
 #include <cstring>
 
 ray::ref::Scene::Scene() : texture_atlas_({ MAX_TEXTURE_SIZE, MAX_TEXTURE_SIZE }) {}
@@ -14,16 +16,29 @@ uint32_t ray::ref::Scene::AddTexture(const tex_desc_t &_t) {
     int mip = 0;
     math::ivec2 res = { _t.w, _t.h };
 
-    // TODO: add all mip levels
-    math::ivec2 pos;
-    int page = texture_atlas_.Allocate(_t.data, res, pos);
-    if (page == -1) {
-        return 0xffffffff;
-    }
+    std::vector<pixel_color8_t> tex_data(_t.data, _t.data + _t.w * _t.h);
 
-    t.page[mip] = (uint32_t)page;
-    t.pos[mip][0] = (uint16_t)pos.x;
-    t.pos[mip][1] = (uint16_t)pos.y;
+    while (res.x >= 1 && res.y >= 1) {
+        math::ivec2 pos;
+        int page = texture_atlas_.Allocate(&tex_data[0], res, pos);
+        if (page == -1) {
+            // release allocated mip levels on fail
+            for (int i = mip; i >= 0; i--) {
+                texture_atlas_.Free(t.page[i], { t.pos[i][0], t.pos[i][1] });
+            }
+            return 0xffffffff;
+        }
+
+        t.page[mip] = (uint32_t)page;
+        t.pos[mip][0] = (uint16_t)pos.x;
+        t.pos[mip][1] = (uint16_t)pos.y;
+
+        tex_data = ref::DownsampleTexture(tex_data, res);
+
+        res.x /= 2;
+        res.y /= 2;
+        mip++;
+    }
 
     // fill remaining mip levels with the last one
     for (int i = mip; i < NUM_MIP_LEVELS; i++) {
@@ -37,20 +52,43 @@ uint32_t ray::ref::Scene::AddTexture(const tex_desc_t &_t) {
     return tex_index;
 }
 
-uint32_t ray::ref::Scene::AddMesh(const mesh_desc_t &desc) {
+uint32_t ray::ref::Scene::AddMesh(const mesh_desc_t &_m) {
     meshes_.emplace_back();
     auto &m = meshes_.back();
     m.node_index = (uint32_t)nodes_.size();
     m.node_count = 0;
 
     size_t tris_start = tris_.size();
-    m.node_count += PreprocessMesh(desc.vtx_attrs, desc.vtx_attrs_count, desc.vtx_indices, desc.vtx_indices_count, desc.layout, nodes_, tris_, tri_indices_);
+    m.node_count += PreprocessMesh(_m.vtx_attrs, _m.vtx_attrs_count, _m.vtx_indices, _m.vtx_indices_count, _m.layout, nodes_, tris_, tri_indices_);
 
-    for (const auto &s : desc.shapes) {
+    for (const auto &s : _m.shapes) {
         for (size_t i = s.vtx_start; i < s.vtx_start + s.vtx_count; i += 3) {
             tris_[tris_start + i / 3].mi = s.material_index;
         }
     }
+
+    std::vector<uint32_t> new_vtx_indices;
+    new_vtx_indices.reserve(_m.vtx_indices_count);
+    for (size_t i = 0; i < _m.vtx_indices_count; i++) {
+        new_vtx_indices.push_back(_m.vtx_indices[i] + (uint32_t)vertices_.size());
+    }
+
+    // add attributes
+    assert(_m.layout == PxyzNxyzTuv);
+    size_t new_vertices_start = vertices_.size();
+    vertices_.resize(new_vertices_start + _m.vtx_attrs_count);
+    for (size_t i = 0; i < _m.vtx_attrs_count; i++) {
+        auto &v = vertices_[new_vertices_start + i];
+
+        memcpy(&v.p[0], (_m.vtx_attrs + i * 8), 3 * sizeof(float));
+        memcpy(&v.n[0], (_m.vtx_attrs + i * 8 + 3), 3 * sizeof(float));
+        memcpy(&v.t0[0], (_m.vtx_attrs + i * 8 + 6), 2 * sizeof(float));
+
+        memset(&v.b[0], 0, 3 * sizeof(float));
+    }
+
+    auto _new_vtx_indices = new_vtx_indices;
+    ComputeTextureBasis(vertices_.size(), vertices_, new_vtx_indices, &_new_vtx_indices[0], _new_vtx_indices.size());
 
     return (uint32_t)(meshes_.size() - 1);
 }

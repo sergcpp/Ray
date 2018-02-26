@@ -3,8 +3,6 @@ R"(
 __constant int _next_u[] = { 1, 0, 0 },
                _next_v[] = { 2, 2, 1 };
 
-__constant float _hit_eps = 0.0001f;
-
 void IntersectTris(const ray_packet_t *r, __global const tri_accel_t *tris,
                    __global const uint *tri_indices, uint tri_index, uint tri_count, 
                    int obj_index, hit_data_t *hit) {
@@ -27,8 +25,8 @@ void IntersectTris(const ray_packet_t *r, __global const tri_accel_t *tris,
 
         float tmpdet0 = det - detu - detv;
 
-        if ((tmpdet0 > -_hit_eps && detu > -_hit_eps && detv > -_hit_eps) ||
-            (tmpdet0 < _hit_eps && detu < _hit_eps && detv < _hit_eps)) {
+        if ((tmpdet0 > -HIT_EPS && detu > -HIT_EPS && detv > -HIT_EPS) ||
+            (tmpdet0 < HIT_EPS && detu < HIT_EPS && detv < HIT_EPS)) {
 
             float rdet = 1.0f / det;
             float t = dett * rdet;
@@ -68,8 +66,8 @@ float IntersectTris_Shadow(const ray_packet_t *r, __global const tri_accel_t *tr
         float tmpdet0 = det - detu - detv;
 
         if (sign(dett) == sign(det) && 
-            ((tmpdet0 > -_hit_eps && detu > -_hit_eps && detv > -_hit_eps) || 
-            (tmpdet0 < _hit_eps && detu < _hit_eps && detv < _hit_eps))) {
+            ((tmpdet0 > -HIT_EPS && detu > -HIT_EPS && detv > -HIT_EPS) || 
+            (tmpdet0 < HIT_EPS && detu < HIT_EPS && detv < HIT_EPS))) {
             return 0;
         }
     }

@@ -73,7 +73,7 @@ void ray::avx::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, const
         const ray_packet_t &r = primary_rays[i];
         __m256 inv_d[3] = { _mm256_rcp_ps(r.d[0]), _mm256_rcp_ps(r.d[1]), _mm256_rcp_ps(r.d[2]) };
 
-        if (Traverse_MacroTree_CPU(r, inv_d, nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, inter)) {
+        if (Traverse_MacroTree_CPU(r, FF_MASK, inv_d, nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, inter)) {
             intersections.push_back(inter);
         }
     }

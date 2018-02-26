@@ -98,6 +98,7 @@ ray::ocl::Renderer::Renderer(int w, int h) : w_(w), h_(h), iteration_(0) {
         std::string cl_src_defines;
         cl_src_defines += "#define W_BITS " + std::to_string(W_BITS) + "\n";
         cl_src_defines += "#define AXIS_ALIGNED_BIT " + std::to_string(AXIS_ALIGNED_BIT) + "\n";
+        cl_src_defines += "#define HIT_EPS " + std::to_string(HIT_EPS) + "\n";
         cl_src_defines += "#define HaltonSeqLen " + std::to_string(HaltonSeqLen) + "\n";
         cl_src_defines += "#define MAX_MIP_LEVEL " + std::to_string(MAX_MIP_LEVEL) + "\n";
         cl_src_defines += "#define NUM_MIP_LEVELS " + std::to_string(NUM_MIP_LEVELS) + "\n";

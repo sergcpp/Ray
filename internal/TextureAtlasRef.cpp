@@ -31,8 +31,20 @@ int ray::ref::TextureAtlas::Allocate(const pixel_color8_t *data, const math::ive
 
 bool ray::ref::TextureAtlas::Free(int page, const math::ivec2 &pos) {
     if (page < 0 || page > pages_count_) return false;
-    // TODO: fill with black in debug
+#ifndef NDEBUG
+    math::ivec2 size;
+    int index = splitters_[page].FindNode(pos, size);
+    if (index != -1) {
+        for (int j = pos.y; j < pos.y + size.y; j++) {
+            memset(&pages_[page][j * res_.x + pos.x], 0, size.x * sizeof(pixel_color8_t));
+        }
+        return splitters_[page].Free(index);
+    } else {
+        return false;
+    }
+#else
     return splitters_[page].Free(pos);
+#endif
 }
 
 bool ray::ref::TextureAtlas::Resize(int pages_count) {

@@ -33,6 +33,8 @@ public:
     int Allocate(const math::ivec2 &res, math::ivec2 &pos);
     bool Free(const math::ivec2 &pos);
     bool Free(int i);
+
+    int FindNode(const math::ivec2 &pos, math::ivec2 &size) const;
 };
 
 }

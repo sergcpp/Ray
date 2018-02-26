@@ -13,17 +13,29 @@ namespace ray {
 namespace sse {
 const __m128 _0_5 = _mm_set1_ps(0.5f);
 
-const __m128 ZERO = _mm_set1_ps(0);
+const __m128 ZERO = _mm_setzero_ps();
 const __m128 MINUS_ZERO = _mm_set1_ps(-0.0f);
 
 const __m128 ONE = _mm_set1_ps(1);
 const __m128 TWO = _mm_set1_ps(2);
 const __m128 FOUR = _mm_set1_ps(4);
 
-const __m128 EPS = _mm_set1_ps(std::numeric_limits<float>::epsilon());
-const __m128 M_EPS = _mm_set1_ps(-std::numeric_limits<float>::epsilon());
+const __m128 HIT_EPS = _mm_set1_ps(ray::HIT_EPS);
+const __m128 M_HIT_EPS = _mm_set1_ps(-ray::HIT_EPS);
 
 const __m128i FF_MASK = _mm_set1_epi32(0xffffffff);
+
+force_inline __m128i _mm_blendv_si128(__m128i x, __m128i y, __m128i mask) {
+    return _mm_blendv_epi8(x, y, mask);
+}
+
+force_inline bool _mm_all_zeroes(__m128i x) {
+    return _mm_movemask_epi8(x) == 0;
+}
+
+force_inline bool _mm_not_all_zeroes(__m128i x) {
+    return _mm_movemask_epi8(x) != 0;
+}
 
 force_inline void _IntersectTri(const ray_packet_t &r, const __m128i ray_mask, const tri_accel_t &tri, uint32_t prim_index, hit_data_t &inter) {
     __m128 nu = _mm_set1_ps(tri.nu), nv = _mm_set1_ps(tri.nv), np = _mm_set1_ps(tri.np);
@@ -42,7 +54,7 @@ force_inline void _IntersectTri(const ray_packet_t &r, const __m128i ray_mask, c
     // from "Ray-Triangle Intersection Algorithm for Modern CPU Architectures" [2007]
 
     //temporary variables
-    __m128 det, dett, detu, detv, nrv, nru, du, dv, ou, ov, tmpdet0;//, tmpdet1;
+    /*__m128 det, dett, detu, detv, nrv, nru, du, dv, ou, ov, tmpdet0;//, tmpdet1;
 
     // ----ray-packet/triangle hit test----
     //dett = np -(ou*nu+ov*nv+ow)
@@ -96,55 +108,63 @@ force_inline void _IntersectTri(const ray_packet_t &r, const __m128i ray_mask, c
     nrv = _mm_mul_ps(nrv, dv);
     dv = e0v;
     dv = _mm_mul_ps(dv, du);
-    detv = _mm_sub_ps(nrv, dv);
+    detv = _mm_sub_ps(nrv, dv);*/
+
+    __m128 det = _mm_add_ps(_mm_add_ps(_mm_mul_ps(r.d[u], nu), _mm_mul_ps(r.d[v], nv)), r.d[w]); 
+    __m128 dett = _mm_sub_ps(np, _mm_add_ps(_mm_mul_ps(r.o[u], nu), _mm_add_ps(_mm_mul_ps(r.o[v], nv), r.o[w])));
+    __m128 Du = _mm_sub_ps(_mm_mul_ps(r.d[u], dett), _mm_mul_ps(_mm_sub_ps(pu, r.o[u]), det));
+    __m128 Dv = _mm_sub_ps(_mm_mul_ps(r.d[v], dett), _mm_mul_ps(_mm_sub_ps(pv, r.o[v]), det));
+    __m128 detu = _mm_sub_ps(_mm_mul_ps(e1v, Du), _mm_mul_ps(e1u, Dv));
+    __m128 detv = _mm_sub_ps(_mm_mul_ps(e0u, Dv), _mm_mul_ps(e0v, Du));
+
+    __m128 tmpdet0;
 
     // same sign of 'det - detu - detv', 'detu', 'detv' indicates intersection
 
     tmpdet0 = _mm_sub_ps(_mm_sub_ps(det, detu), detv);
-    /*tmpdet0 = _mm_xor_ps(tmpdet0, detu);
-    tmpdet1 = _mm_xor_ps(detv, detu);
-    //
-    __m128 tmp = _mm_xor_ps(dett, det); // make sure t is positive
-    //
-    tmpdet1 = _mm_or_ps(tmpdet0, tmpdet1);
-    tmpdet1 = _mm_or_ps(tmpdet1, tmp);
-    // test
-    __m128i mask = _mm_castps_si128(tmpdet1);
-    mask = _mm_srai_epi32(mask, 31);
-    mask = _mm_xor_si128(mask, FF_MASK);
-    mask = _mm_and_si128(mask, ray_mask);*/
 
     //////////////////////////////////////////////////////////////////////////
 
-    __m128 mm1 = _mm_mul_ps(tmpdet0, detu);
-    __m128 mm = _mm_cmpgt_ps(mm1, M_EPS);
+    __m128 mm1 = _mm_cmpgt_ps(tmpdet0, M_HIT_EPS);
+    mm1 = _mm_and_ps(mm1, _mm_cmpgt_ps(detu, M_HIT_EPS));
+    mm1 = _mm_and_ps(mm1, _mm_cmpgt_ps(detv, M_HIT_EPS));
+
+    __m128 mm2 = _mm_cmplt_ps(tmpdet0, HIT_EPS);
+    mm2 = _mm_and_ps(mm2, _mm_cmplt_ps(detu, HIT_EPS));
+    mm2 = _mm_and_ps(mm2, _mm_cmplt_ps(detv, HIT_EPS));
+
+    __m128 mm = _mm_or_ps(mm1, mm2);
+
+    ///////
+
+    /*__m128 mm1 = _mm_mul_ps(tmpdet0, detu);
+    __m128 mm = _mm_cmpgt_ps(mm1, M_HIT_EPS);
     __m128 mm2 = _mm_mul_ps(detu, detv);
     mm = _mm_and_ps(mm, _mm_cmpgt_ps(mm2, ZERO));
     __m128 mm3 = _mm_mul_ps(dett, det);
-    mm = _mm_and_ps(mm, _mm_cmpgt_ps(mm3, ZERO));
+    mm = _mm_and_ps(mm, _mm_cmpgt_ps(mm3, ZERO));*/
 
     __m128i mask = _mm_castps_si128(mm);
     mask = _mm_and_si128(mask, ray_mask);
 
     //////////////////////////////////////////////////////////////////////////
 
-    if (_mm_movemask_epi8(mask) == 0) return; // no intersection found
-    //if (_mm_test_all_zeros(mask, FF_MASK)) continue; // no intersection found
+    if (_mm_all_zeroes(mask)) return; // no intersection found
 
     __m128 rdet = _mm_rcp_ps(det);  // 1 / det
     __m128 t = _mm_mul_ps(dett, rdet);
 
-    __m128i t_valid = _mm_castps_si128(_mm_cmplt_ps(t, inter.t));
-    if (_mm_test_all_zeros(t_valid, mask)) return; // all intersections further than needed
+    __m128i t_valid = _mm_castps_si128(_mm_and_ps(_mm_cmplt_ps(t, inter.t), _mm_cmpgt_ps(t, ZERO)));
+    mask = _mm_and_si128(mask, t_valid);
+    if (_mm_all_zeroes(mask)) return; // all intersections further than needed
 
     __m128 bar_u = _mm_mul_ps(detu, rdet);
     __m128 bar_v = _mm_mul_ps(detv, rdet);
 
-    mask = _mm_and_si128(mask, t_valid);
     __m128 mask_ps = _mm_castsi128_ps(mask);
 
     inter.mask = _mm_or_si128(inter.mask, mask);
-    inter.prim_index = _mm_blendv_epi8(inter.prim_index, _mm_set1_epi32(prim_index), mask);
+    inter.prim_index = _mm_blendv_si128(inter.prim_index, _mm_set1_epi32(prim_index), mask);
     inter.t = _mm_blendv_ps(inter.t, t, mask_ps);
     inter.u = _mm_blendv_ps(inter.u, bar_u, mask_ps);
     inter.v = _mm_blendv_ps(inter.v, bar_v, mask_ps);
@@ -209,19 +229,20 @@ struct TraversalState {
 
     force_inline void select_near_child(const ray_packet_t &r, const bvh_node_t &node) {
         __m128i mask1 = _mm_castps_si128(_mm_cmplt_ps(r.d[node.space_axis], ZERO));
-        if (_mm_test_all_zeros(mask1, queue[index].mask)) {
+        mask1 = _mm_and_si128(mask1, queue[index].mask);
+        if (_mm_all_zeroes(mask1)) {
             queue[index].cur = node.left_child;
         } else {
-            __m128i mask2 = _mm_andnot_si128(mask1, FF_MASK);
-            if (_mm_test_all_zeros(mask2, queue[index].mask)) {
+            __m128i mask2 = _mm_andnot_si128(mask1, queue[index].mask);
+            if (_mm_all_zeroes(mask2)) {
                 queue[index].cur = node.right_child;
             } else {
                 queue[num].cur = node.left_child;
-                queue[num].mask = _mm_and_si128(queue[index].mask, mask2);
+                queue[num].mask = mask2;
                 queue[num].src = queue[index].src;
                 num++;
                 queue[index].cur = node.right_child;
-                queue[index].mask = _mm_and_si128(queue[index].mask, mask1);
+                queue[index].mask = mask1;
             }
         }
     }
@@ -230,7 +251,7 @@ struct TraversalState {
 }
 
 ray::sse::hit_data_t::hit_data_t() {
-    mask = _mm_set1_epi32(0);
+    mask = _mm_setzero_si128();
     obj_index = _mm_set1_epi32(-1);
     prim_index = _mm_set1_epi32(-1);
     t = _mm_set1_ps(std::numeric_limits<float>::max());
@@ -362,15 +383,15 @@ bool ray::sse::IntersectTris(const ray_packet_t &r, const __m128i ray_mask, cons
     }
 
     out_inter.mask = _mm_or_si128(out_inter.mask, inter.mask);
-    out_inter.obj_index = _mm_blendv_epi8(out_inter.obj_index, inter.obj_index, inter.mask);
-    out_inter.prim_index = _mm_blendv_epi8(out_inter.prim_index, inter.prim_index, inter.mask);
+    out_inter.obj_index = _mm_blendv_si128(out_inter.obj_index, inter.obj_index, inter.mask);
+    out_inter.prim_index = _mm_blendv_si128(out_inter.prim_index, inter.prim_index, inter.mask);
     out_inter.t = inter.t; // already contains min value
 
     __m128 mask_ps = _mm_castsi128_ps(inter.mask);
     out_inter.u = _mm_blendv_ps(out_inter.u, inter.u, mask_ps);
     out_inter.v = _mm_blendv_ps(out_inter.v, inter.v, mask_ps);
 
-    return !_mm_test_all_zeros(inter.mask, FF_MASK);
+    return _mm_not_all_zeroes(inter.mask);
 }
 
 bool ray::sse::IntersectTris(const ray_packet_t &r, const __m128i ray_mask, const tri_accel_t *tris, const uint32_t *indices, int num_tris, int obj_index, hit_data_t &out_inter) {
@@ -385,15 +406,15 @@ bool ray::sse::IntersectTris(const ray_packet_t &r, const __m128i ray_mask, cons
     }
 
     out_inter.mask = _mm_or_si128(out_inter.mask, inter.mask);
-    out_inter.obj_index = _mm_blendv_epi8(out_inter.obj_index, inter.obj_index, inter.mask);
-    out_inter.prim_index = _mm_blendv_epi8(out_inter.prim_index, inter.prim_index, inter.mask);
+    out_inter.obj_index = _mm_blendv_si128(out_inter.obj_index, inter.obj_index, inter.mask);
+    out_inter.prim_index = _mm_blendv_si128(out_inter.prim_index, inter.prim_index, inter.mask);
     out_inter.t = inter.t; // already contains min value
 
     __m128 mask_ps = _mm_castsi128_ps(inter.mask);
     out_inter.u = _mm_blendv_ps(out_inter.u, inter.u, mask_ps);
     out_inter.v = _mm_blendv_ps(out_inter.v, inter.v, mask_ps);
 
-    return !_mm_test_all_zeros(inter.mask, FF_MASK);
+    return _mm_not_all_zeroes(inter.mask);
 }
 
 bool ray::sse::IntersectCones(const ray_packet_t &r, const cone_accel_t *cones, int num_cones, hit_data_t &out_inter) {
@@ -462,7 +483,7 @@ bool ray::sse::IntersectCones(const ray_packet_t &r, const cone_accel_t *cones, 
 
         __m128i m = _mm_castps_si128(_mm_cmpge_ps(D, ZERO));
 
-        if (_mm_test_all_zeros(m, FF_MASK)) continue;
+        if (_mm_all_zeroes(m)) continue;
 
         D = _mm_sqrt_ps(D);
 
@@ -481,7 +502,7 @@ bool ray::sse::IntersectCones(const ray_packet_t &r, const cone_accel_t *cones, 
         mask2 = _mm_and_ps(mask2, _mm_cmplt_ps(t2, inter.t));
         __m128i mask = _mm_castps_si128(_mm_or_ps(mask1, mask2));
 
-        if (_mm_test_all_zeros(mask, FF_MASK)) continue;
+        if (_mm_all_zeroes(mask)) continue;
 
         __m128 p1c[3], p2c[3];
         p1c[0] = _mm_add_ps(r.o[0], _mm_mul_ps(t1, r.d[0]));
@@ -517,18 +538,18 @@ bool ray::sse::IntersectCones(const ray_packet_t &r, const cone_accel_t *cones, 
         mask2 = _mm_and_ps(mask2, _mm_cmple_ps(dot2, cone_end));
         mask = _mm_castps_si128(_mm_or_ps(mask1, mask2));
 
-        if (_mm_test_all_zeros(mask, FF_MASK)) continue;
+        if (_mm_all_zeroes(mask)) continue;
 
         inter.mask = _mm_or_si128(inter.mask, mask);
-        inter.prim_index = _mm_blendv_epi8(inter.prim_index, _mm_set1_epi32(i), mask);
+        inter.prim_index = _mm_blendv_si128(inter.prim_index, _mm_set1_epi32(i), mask);
         //intersections.t = _mm_or_ps(_mm_andnot_ps(mask_ps, intersections.t1), _mm_and_ps(mask_ps, t1));
     }
 
     out_inter.mask = _mm_or_si128(out_inter.mask, inter.mask);
-    out_inter.prim_index = _mm_blendv_epi8(out_inter.prim_index, inter.prim_index, inter.mask);
+    out_inter.prim_index = _mm_blendv_si128(out_inter.prim_index, inter.prim_index, inter.mask);
     //out_intersections.t = intersections.t; // already contains min value
 
-    return !_mm_test_all_zeros(inter.mask, FF_MASK);
+    return _mm_not_all_zeroes(inter.mask);
 }
 
 bool ray::sse::IntersectBoxes(const ray_packet_t &r, const aabox_t *boxes, int num_boxes, hit_data_t &out_inter) {
@@ -566,68 +587,69 @@ bool ray::sse::IntersectBoxes(const ray_packet_t &r, const aabox_t *boxes, int n
         mask = _mm_and_ps(mask, _mm_cmplt_ps(tmin, inter.t));
 
         __m128i imask = _mm_castps_si128(mask);
-        if (_mm_test_all_zeros(imask, FF_MASK)) continue;
+        if (_mm_all_zeroes(imask)) continue;
 
         inter.mask = _mm_or_si128(inter.mask, imask);
-        inter.prim_index = _mm_blendv_epi8(inter.prim_index, _mm_set1_epi32(i), imask);
+        inter.prim_index = _mm_blendv_si128(inter.prim_index, _mm_set1_epi32(i), imask);
         inter.t = _mm_or_ps(_mm_andnot_ps(mask, inter.t), _mm_and_ps(mask, tmin));
     }
 
     out_inter.mask = _mm_or_si128(out_inter.mask, inter.mask);
-    out_inter.prim_index = _mm_blendv_epi8(out_inter.prim_index, inter.prim_index, inter.mask);
+    out_inter.prim_index = _mm_blendv_si128(out_inter.prim_index, inter.prim_index, inter.mask);
     //out_intersections.t = intersections.t; // already contains min value
 
-    return !_mm_test_all_zeros(inter.mask, FF_MASK);
+    return _mm_not_all_zeroes(inter.mask);
 }
 
-bool ray::sse::Traverse_MacroTree_CPU(const ray_packet_t &r, const __m128 inv_d[3], const bvh_node_t *nodes, uint32_t node_index,
+bool ray::sse::Traverse_MacroTree_CPU(const ray_packet_t &r, const __m128i ray_mask, const __m128 inv_d[3], const bvh_node_t *nodes, uint32_t root_index,
                                       const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
                                       const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t &inter) {
     bool res = false;
 
     TraversalState st;
 
-    st.queue[0].mask = FF_MASK;
+    st.queue[0].mask = ray_mask;
 
     st.queue[0].src = FromSibling;
-    st.queue[0].cur = node_index;
+    st.queue[0].cur = root_index;
 
-    if (!is_leaf_node(nodes[node_index])) {
+    if (!is_leaf_node(nodes[root_index])) {
         st.queue[0].src = FromParent;
-        st.select_near_child(r, nodes[node_index]);
+        st.select_near_child(r, nodes[root_index]);
     }
 
     while (st.index < st.num) {
         uint32_t &cur = st.queue[st.index].cur;
-        eTraversalSource &state = st.queue[st.index].src;
+        eTraversalSource &src = st.queue[st.index].src;
 
-        switch (state) {
+        switch (src) {
         case FromChild:
-            if (cur == node_index || cur == 0xffffffff) {
+            if (cur == root_index || cur == 0xffffffff) {
                 st.index++;
                 continue;
             }
             if (cur == near_child(r, st.queue[st.index].mask, nodes[nodes[cur].parent])) {
                 cur = nodes[cur].sibling;
-                state = FromSibling;
+                src = FromSibling;
             } else {
                 cur = nodes[cur].parent;
-                state = FromChild;
+                src = FromChild;
             }
             break;
         case FromSibling: {
             __m128i mask1 = bbox_test(r.o, inv_d, inter.t, nodes[cur]);
-            if (_mm_test_all_zeros(mask1, st.queue[st.index].mask)) {
+            mask1 = _mm_and_si128(mask1, st.queue[st.index].mask);
+            if (_mm_all_zeroes(mask1)) {
                 cur = nodes[cur].parent;
-                state = FromChild;
+                src = FromChild;
             } else {
-                __m128i mask2 = _mm_andnot_si128(mask1, FF_MASK);
-                if (!_mm_test_all_zeros(mask2, st.queue[st.index].mask)) {
+                __m128i mask2 = _mm_andnot_si128(mask1, st.queue[st.index].mask);
+                if (_mm_not_all_zeroes(mask2)) {
                     st.queue[st.num].cur = nodes[cur].parent;
-                    st.queue[st.num].mask = _mm_and_si128(st.queue[st.index].mask, mask2);
+                    st.queue[st.num].mask = mask2;
                     st.queue[st.num].src = FromChild;
                     st.num++;
-                    st.queue[st.index].mask = _mm_and_si128(st.queue[st.index].mask, mask1);
+                    st.queue[st.index].mask = mask1;
                 }
 
                 if (is_leaf_node(nodes[cur])) {
@@ -637,22 +659,21 @@ bool ray::sse::Traverse_MacroTree_CPU(const ray_packet_t &r, const __m128 inv_d[
                         const auto &m = meshes[mi.mesh_index];
                         const auto &tr = transforms[mi.tr_index];
 
-                        auto bbox_mask = bbox_test(r.o, inv_d, inter.t, mi.bbox_min, mi.bbox_max);
-                        if (_mm_test_all_zeros(bbox_mask, FF_MASK)) continue;
+                        __m128i bbox_mask = bbox_test(r.o, inv_d, inter.t, mi.bbox_min, mi.bbox_max);
+                        bbox_mask = _mm_and_si128(st.queue[st.index].mask, bbox_mask);
+                        if (_mm_all_zeroes(bbox_mask)) continue;
 
                         ray_packet_t _r = TransformRay(r, tr.inv_xform);
 
                         __m128 _inv_d[3] = { _mm_rcp_ps(_r.d[0]), _mm_rcp_ps(_r.d[1]), _mm_rcp_ps(_r.d[2]) };
 
-                        if (Traverse_MicroTree_CPU(_r, _inv_d, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter)) {
-                            res = true;
-                        }
+                        res |= Traverse_MicroTree_CPU(_r, bbox_mask, _inv_d, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter);
                     }
 
                     cur = nodes[cur].parent;
-                    state = FromChild;
+                    src = FromChild;
                 } else {
-                    state = FromParent;
+                    src = FromParent;
                     st.select_near_child(r, nodes[cur]);
                 }
             }
@@ -660,17 +681,18 @@ bool ray::sse::Traverse_MacroTree_CPU(const ray_packet_t &r, const __m128 inv_d[
         break;
         case FromParent: {
             __m128i mask1 = bbox_test(r.o, inv_d, inter.t, nodes[cur]);
-            if (_mm_test_all_zeros(mask1, st.queue[st.index].mask)) {
+            mask1 = _mm_and_si128(mask1, st.queue[st.index].mask);
+            if (_mm_all_zeroes(mask1)) {
                 cur = nodes[cur].sibling;
-                state = FromSibling;
+                src = FromSibling;
             } else {
-                __m128i mask2 = _mm_andnot_si128(mask1, FF_MASK);
-                if (!_mm_test_all_zeros(mask2, st.queue[st.index].mask)) {
+                __m128i mask2 = _mm_andnot_si128(mask1, st.queue[st.index].mask);
+                if (_mm_not_all_zeroes(mask2)) {
                     st.queue[st.num].cur = nodes[cur].sibling;
-                    st.queue[st.num].mask = _mm_and_si128(st.queue[st.index].mask, mask2);
+                    st.queue[st.num].mask = mask2;
                     st.queue[st.num].src = FromSibling;
                     st.num++;
-                    st.queue[st.index].mask = _mm_and_si128(st.queue[st.index].mask, mask1);
+                    st.queue[st.index].mask = mask1;
                 }
 
                 if (is_leaf_node(nodes[cur])) {
@@ -680,22 +702,21 @@ bool ray::sse::Traverse_MacroTree_CPU(const ray_packet_t &r, const __m128 inv_d[
                         const auto &m = meshes[mi.mesh_index];
                         const auto &tr = transforms[mi.tr_index];
 
-                        auto bbox_mask = bbox_test(r.o, inv_d, inter.t, mi.bbox_min, mi.bbox_max);
-                        if (_mm_test_all_zeros(bbox_mask, FF_MASK)) continue;
+                        __m128i bbox_mask = bbox_test(r.o, inv_d, inter.t, mi.bbox_min, mi.bbox_max);
+                        bbox_mask = _mm_and_si128(st.queue[st.index].mask, bbox_mask);
+                        if (_mm_all_zeroes(bbox_mask)) continue;
 
                         ray_packet_t _r = TransformRay(r, tr.inv_xform);
 
                         __m128 _inv_d[3] = { _mm_rcp_ps(_r.d[0]), _mm_rcp_ps(_r.d[1]), _mm_rcp_ps(_r.d[2]) };
 
-                        if (Traverse_MicroTree_CPU(_r, _inv_d, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter)) {
-                            res = true;
-                        }
+                        res |= Traverse_MicroTree_CPU(_r, bbox_mask, _inv_d, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter);
                     }
 
                     cur = nodes[cur].sibling;
-                    state = FromSibling;
+                    src = FromSibling;
                 } else {
-                    state = FromParent;
+                    src = FromParent;
                     st.select_near_child(r, nodes[cur]);
                 }
             }
@@ -706,64 +727,64 @@ bool ray::sse::Traverse_MacroTree_CPU(const ray_packet_t &r, const __m128 inv_d[
     return res;
 }
 
-bool ray::sse::Traverse_MicroTree_CPU(const ray_packet_t &r, const __m128 inv_d[3], const bvh_node_t *nodes, uint32_t node_index,
+bool ray::sse::Traverse_MicroTree_CPU(const ray_packet_t &r, const __m128i ray_mask, const __m128 inv_d[3], const bvh_node_t *nodes, uint32_t root_index,
                                       const tri_accel_t *tris, const uint32_t *indices, int obj_index, hit_data_t &inter) {
     bool res = false;
 
     TraversalState st;
 
-    st.queue[0].mask = FF_MASK;
+    st.queue[0].mask = ray_mask;
 
     st.queue[0].src = FromSibling;
-    st.queue[0].cur = node_index;
+    st.queue[0].cur = root_index;
 
-    if (!is_leaf_node(nodes[node_index])) {
+    if (!is_leaf_node(nodes[root_index])) {
         st.queue[0].src = FromParent;
-        st.select_near_child(r, nodes[node_index]);
+        st.select_near_child(r, nodes[root_index]);
     }
 
     while (st.index < st.num) {
         uint32_t &cur = st.queue[st.index].cur;
-        eTraversalSource &state = st.queue[st.index].src;
+        eTraversalSource &src = st.queue[st.index].src;
 
-        switch (state) {
+        switch (src) {
         case FromChild:
-            if (cur == node_index || cur == 0xffffffff) {
+            if (cur == root_index || cur == 0xffffffff) {
                 st.index++;
                 continue;
             }
             if (cur == near_child(r, st.queue[st.index].mask, nodes[nodes[cur].parent])) {
                 cur = nodes[cur].sibling;
-                state = FromSibling;
+                src = FromSibling;
             } else {
                 cur = nodes[cur].parent;
-                state = FromChild;
+                src = FromChild;
             }
             break;
         case FromSibling: {
             __m128i mask1 = bbox_test(r.o, inv_d, inter.t, nodes[cur]);
-            if (_mm_test_all_zeros(mask1, st.queue[st.index].mask)) {
+            mask1 = _mm_and_si128(mask1, st.queue[st.index].mask);
+            if (_mm_all_zeroes(mask1)) {
                 cur = nodes[cur].parent;
-                state = FromChild;
+                src = FromChild;
             } else {
-                __m128i mask2 = _mm_andnot_si128(mask1, FF_MASK);
-                if (!_mm_test_all_zeros(mask2, st.queue[st.index].mask)) {
+                __m128i mask2 = _mm_andnot_si128(mask1, st.queue[st.index].mask);
+                if (_mm_not_all_zeroes(mask2)) {
                     st.queue[st.num].cur = nodes[cur].parent;
-                    st.queue[st.num].mask = _mm_and_si128(st.queue[st.index].mask, mask2);
+                    st.queue[st.num].mask = mask2;
                     st.queue[st.num].src = FromChild;
                     st.num++;
-                    st.queue[st.index].mask = _mm_and_si128(st.queue[st.index].mask, mask1);
+                    st.queue[st.index].mask = mask1;
                 }
 
                 if (is_leaf_node(nodes[cur])) {
                     // process leaf
-                    if (IntersectTris(r, st.queue[st.index].mask, tris, &indices[nodes[cur].prim_index], nodes[cur].prim_count, obj_index, inter)) {
-                        res = true;
-                    }
+                    res |= IntersectTris(r, st.queue[st.index].mask, tris, &indices[nodes[cur].prim_index], nodes[cur].prim_count, obj_index, inter);
+
                     cur = nodes[cur].parent;
-                    state = FromChild;
+                    src = FromChild;
                 } else {
-                    state = FromParent;
+                    src = FromParent;
                     st.select_near_child(r, nodes[cur]);
                 }
             }
@@ -771,31 +792,28 @@ bool ray::sse::Traverse_MicroTree_CPU(const ray_packet_t &r, const __m128 inv_d[
         break;
         case FromParent: {
             __m128i mask1 = bbox_test(r.o, inv_d, inter.t, nodes[cur]);
-            if (_mm_test_all_zeros(mask1, st.queue[st.index].mask)) {
+            mask1 = _mm_and_si128(mask1, st.queue[st.index].mask);
+            if (_mm_all_zeroes(mask1)) {
                 cur = nodes[cur].sibling;
-                state = FromSibling;
+                src = FromSibling;
             } else {
-                __m128i mask2 = _mm_andnot_si128(mask1, FF_MASK);
-                if (!_mm_test_all_zeros(mask2, st.queue[st.index].mask)) {
+                __m128i mask2 = _mm_andnot_si128(mask1, st.queue[st.index].mask);
+                if (_mm_not_all_zeroes(mask2)) {
                     st.queue[st.num].cur = nodes[cur].sibling;
-                    st.queue[st.num].mask = _mm_and_si128(st.queue[st.index].mask, mask2);
+                    st.queue[st.num].mask = mask2;
                     st.queue[st.num].src = FromSibling;
                     st.num++;
-                    st.queue[st.index].mask = _mm_and_si128(st.queue[st.index].mask, mask1);
+                    st.queue[st.index].mask = mask1;
                 }
 
                 if (is_leaf_node(nodes[cur])) {
                     // process leaf
-                    if (IntersectTris(r, st.queue[st.index].mask, tris, &indices[nodes[cur].prim_index], nodes[cur].prim_count, obj_index, inter)) {
-                        res = true;
+                    res |= IntersectTris(r, st.queue[st.index].mask, tris, &indices[nodes[cur].prim_index], nodes[cur].prim_count, obj_index, inter);
 
-                        //intersections.index = _mm_or_si128(_mm_andnot_si128(intersections.mask, intersections.index),
-                        //	_mm_and_si128(intersections.mask, _mm_set1_epi32(st.num_rays)));
-                    }
                     cur = nodes[cur].sibling;
-                    state = FromSibling;
+                    src = FromSibling;
                 } else {
-                    state = FromParent;
+                    src = FromParent;
                     st.select_near_child(r, nodes[cur]);
                 }
             }

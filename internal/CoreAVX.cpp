@@ -25,8 +25,8 @@ const __m256 ONE = _mm256_set1_ps(1);
 const __m256 TWO = _mm256_set1_ps(2);
 const __m256 FOUR = _mm256_set1_ps(4);
 
-const __m256 EPS = _mm256_set1_ps(std::numeric_limits<float>::epsilon());
-const __m256 M_EPS = _mm256_set1_ps(-std::numeric_limits<float>::epsilon());
+const __m256 HIT_EPS = _mm256_set1_ps(ray::HIT_EPS);
+const __m256 M_HIT_EPS = _mm256_set1_ps(-ray::HIT_EPS);
 
 const __m256i FF_MASK = _mm256_set1_epi32(0xffffffff);
 
@@ -122,7 +122,7 @@ force_inline void _IntersectTri(const ray_packet_t &r, const __m256i ray_mask, c
     //////////////////////////////////////////////////////////////////////////
 
     __m256 mm1 = _mm256_mul_ps(tmpdet0, detu);
-    __m256 mm = _mm256_cmp_ps(mm1, M_EPS, _CMP_GT_OS);
+    __m256 mm = _mm256_cmp_ps(mm1, M_HIT_EPS, _CMP_GT_OS);
     __m256 mm2 = _mm256_mul_ps(detu, detv);
     mm = _mm256_and_ps(mm, _mm256_cmp_ps(mm2, ZERO, _CMP_GT_OS));
     __m256 mm3 = _mm256_mul_ps(dett, det);
@@ -235,7 +235,7 @@ struct TraversalState {
 }
 
 ray::avx::hit_data_t::hit_data_t() {
-    mask = _mm256_set1_epi32(0);
+    mask = _mm256_setzero_si256();
     obj_index = _mm256_set1_epi32(-1);
     prim_index = _mm256_set1_epi32(-1);
     t = _mm256_set1_ps(std::numeric_limits<float>::max());
@@ -403,7 +403,7 @@ bool ray::avx::IntersectTris(const ray_packet_t &r, const __m256i ray_mask, cons
     out_inter.u = _mm256_blendv_ps(out_inter.u, inter.u, mask_ps);
     out_inter.v = _mm256_blendv_ps(out_inter.v, inter.v, mask_ps);
 
-    return !_mm256_test_all_zeros(inter.mask, FF_MASK);
+    return _mm256_movemask_epi8(inter.mask) != 0;
 }
 
 bool ray::avx::IntersectTris(const ray_packet_t &r, const __m256i ray_mask, const tri_accel_t *tris, const uint32_t *indices, int num_tris, int obj_index, hit_data_t &out_inter) {
@@ -426,7 +426,7 @@ bool ray::avx::IntersectTris(const ray_packet_t &r, const __m256i ray_mask, cons
     out_inter.u = _mm256_blendv_ps(out_inter.u, inter.u, mask_ps);
     out_inter.v = _mm256_blendv_ps(out_inter.v, inter.v, mask_ps);
 
-    return !_mm256_test_all_zeros(inter.mask, FF_MASK);
+    return _mm256_movemask_epi8(inter.mask) != 0;
 }
 
 bool ray::avx::IntersectCones(const ray_packet_t &r, const cone_accel_t *cones, int num_cones, hit_data_t &out_inter) {
@@ -610,14 +610,14 @@ bool ray::avx::IntersectBoxes(const ray_packet_t &r, const aabox_t *boxes, int n
     return !_mm256_test_all_zeros(inter.mask, FF_MASK);
 }
 
-bool ray::avx::Traverse_MacroTree_CPU(const ray_packet_t &r, const __m256 inv_d[3], const bvh_node_t *nodes, uint32_t node_index,
+bool ray::avx::Traverse_MacroTree_CPU(const ray_packet_t &r, const __m256i ray_mask, const __m256 inv_d[3], const bvh_node_t *nodes, uint32_t node_index,
                                       const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
                                       const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t &inter) {
     bool res = false;
 
     TraversalState st;
 
-    st.queue[0].mask = FF_MASK;
+    st.queue[0].mask = ray_mask;
 
     st.queue[0].src = FromSibling;
     st.queue[0].cur = node_index;
@@ -667,16 +667,15 @@ bool ray::avx::Traverse_MacroTree_CPU(const ray_packet_t &r, const __m256 inv_d[
                         const auto &m = meshes[mi.mesh_index];
                         const auto &tr = transforms[mi.tr_index];
 
-                        auto bbox_mask = bbox_test(r.o, inv_d, inter.t, mi.bbox_min, mi.bbox_max);
-                        if (_mm256_test_all_zeros(bbox_mask, FF_MASK)) continue;
+                        __m256i bbox_mask = bbox_test(r.o, inv_d, inter.t, mi.bbox_min, mi.bbox_max);
+                        __m256i final_mask = _mm256_and_si256(st.queue[st.index].mask, bbox_mask);
+                        if (_mm256_movemask_epi8(final_mask) == 0) continue;
 
                         ray_packet_t _r = TransformRay(r, tr.inv_xform);
 
                         __m256 _inv_d[3] = { _mm256_rcp_ps(_r.d[0]), _mm256_rcp_ps(_r.d[1]), _mm256_rcp_ps(_r.d[2]) };
 
-                        if (Traverse_MicroTree_CPU(_r, _inv_d, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter)) {
-                            res = true;
-                        }
+                        res |= Traverse_MicroTree_CPU(_r, final_mask, _inv_d, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter);
                     }
 
                     cur = nodes[cur].parent;
@@ -710,16 +709,15 @@ bool ray::avx::Traverse_MacroTree_CPU(const ray_packet_t &r, const __m256 inv_d[
                         const auto &m = meshes[mi.mesh_index];
                         const auto &tr = transforms[mi.tr_index];
 
-                        auto bbox_mask = bbox_test(r.o, inv_d, inter.t, mi.bbox_min, mi.bbox_max);
-                        if (_mm256_test_all_zeros(bbox_mask, FF_MASK)) continue;
+                        __m256i bbox_mask = bbox_test(r.o, inv_d, inter.t, mi.bbox_min, mi.bbox_max);
+                        __m256i final_mask = _mm256_and_si256(st.queue[st.index].mask, bbox_mask);
+                        if (_mm256_movemask_epi8(final_mask) == 0) continue;
 
                         ray_packet_t _r = TransformRay(r, tr.inv_xform);
 
                         __m256 _inv_d[3] = { _mm256_rcp_ps(_r.d[0]), _mm256_rcp_ps(_r.d[1]), _mm256_rcp_ps(_r.d[2]) };
 
-                        if (Traverse_MicroTree_CPU(_r, _inv_d, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter)) {
-                            res = true;
-                        }
+                        res |= Traverse_MicroTree_CPU(_r, final_mask, _inv_d, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter);
                     }
 
                     cur = nodes[cur].sibling;
@@ -736,13 +734,13 @@ bool ray::avx::Traverse_MacroTree_CPU(const ray_packet_t &r, const __m256 inv_d[
     return res;
 }
 
-bool ray::avx::Traverse_MicroTree_CPU(const ray_packet_t &r, const __m256 inv_d[3], const bvh_node_t *nodes, uint32_t node_index,
+bool ray::avx::Traverse_MicroTree_CPU(const ray_packet_t &r, const __m256i ray_mask, const __m256 inv_d[3], const bvh_node_t *nodes, uint32_t node_index,
                                       const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, hit_data_t &inter) {
     bool ret = false;
 
     TraversalState st;
 
-    st.queue[0].mask = FF_MASK;
+    st.queue[0].mask = ray_mask;
 
     st.queue[0].src = FromSibling;
     st.queue[0].cur = node_index;
@@ -754,9 +752,9 @@ bool ray::avx::Traverse_MicroTree_CPU(const ray_packet_t &r, const __m256 inv_d[
 
     while (st.index < st.num) {
         uint32_t &cur = st.queue[st.index].cur;
-        eTraversalSource &state = st.queue[st.index].src;
+        eTraversalSource &src = st.queue[st.index].src;
 
-        switch (state) {
+        switch (src) {
         case FromChild:
             if (cur == node_index || cur == 0xffffffff) {
                 st.index++;
@@ -764,17 +762,17 @@ bool ray::avx::Traverse_MicroTree_CPU(const ray_packet_t &r, const __m256 inv_d[
             }
             if (cur == near_child(r, st.queue[st.index].mask, nodes[nodes[cur].parent])) {
                 cur = nodes[cur].sibling;
-                state = FromSibling;
+                src = FromSibling;
             } else {
                 cur = nodes[cur].parent;
-                state = FromChild;
+                src = FromChild;
             }
             break;
         case FromSibling: {
             __m256i mask1 = bbox_test(r.o, inv_d, inter.t, nodes[cur]);
             if (_mm256_test_all_zeros(mask1, st.queue[st.index].mask)) {
                 cur = nodes[cur].parent;
-                state = FromChild;
+                src = FromChild;
             } else {
                 __m256i mask2 = _mm256_andnot_si256(mask1, FF_MASK);
                 if (!_mm256_test_all_zeros(mask2, st.queue[st.index].mask)) {
@@ -787,13 +785,12 @@ bool ray::avx::Traverse_MicroTree_CPU(const ray_packet_t &r, const __m256 inv_d[
 
                 if (is_leaf_node(nodes[cur])) {
                     // process leaf
-                    if (IntersectTris(r, st.queue[st.index].mask, tris, &tri_indices[nodes[cur].prim_index], nodes[cur].prim_count, obj_index, inter)) {
-                        ret = true;
-                    }
+                    ret |= IntersectTris(r, st.queue[st.index].mask, tris, &tri_indices[nodes[cur].prim_index], nodes[cur].prim_count, obj_index, inter);
+
                     cur = nodes[cur].parent;
-                    state = FromChild;
+                    src = FromChild;
                 } else {
-                    state = FromParent;
+                    src = FromParent;
                     st.select_near_child(r, nodes[cur]);
                 }
             }
@@ -803,7 +800,7 @@ bool ray::avx::Traverse_MicroTree_CPU(const ray_packet_t &r, const __m256 inv_d[
             __m256i mask1 = bbox_test(r.o, inv_d, inter.t, nodes[cur]);
             if (_mm256_test_all_zeros(mask1, st.queue[st.index].mask)) {
                 cur = nodes[cur].sibling;
-                state = FromSibling;
+                src = FromSibling;
             } else {
                 __m256i mask2 = _mm256_andnot_si256(mask1, FF_MASK);
                 if (!_mm256_test_all_zeros(mask2, st.queue[st.index].mask)) {
@@ -816,13 +813,12 @@ bool ray::avx::Traverse_MicroTree_CPU(const ray_packet_t &r, const __m256 inv_d[
 
                 if (is_leaf_node(nodes[cur])) {
                     // process leaf
-                    if (IntersectTris(r, st.queue[st.index].mask, tris, &tri_indices[nodes[cur].prim_index], nodes[cur].prim_count, obj_index, inter)) {
-                        ret = true;
-                    }
+                    ret |= IntersectTris(r, st.queue[st.index].mask, tris, &tri_indices[nodes[cur].prim_index], nodes[cur].prim_count, obj_index, inter);
+
                     cur = nodes[cur].sibling;
-                    state = FromSibling;
+                    src = FromSibling;
                 } else {
-                    state = FromParent;
+                    src = FromParent;
                     st.select_near_child(r, nodes[cur]);
                 }
             }

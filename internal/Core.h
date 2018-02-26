@@ -41,6 +41,8 @@ static_assert(sizeof(tri_accel_t) == 48, "!");
 const uint8_t W_BITS = 0b00000011;
 const uint8_t AXIS_ALIGNED_BIT = 0b00000100;
 
+const float HIT_EPS = 0.0001f;
+
 struct cone_accel_t {
     float o[3], v[3];
     float cos_phi_sqr;

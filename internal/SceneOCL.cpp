@@ -1,6 +1,7 @@
 #include "SceneOCL.h"
 
 #include "BVHSplit.h"
+#include "TextureUtilsRef.h"
 
 #include <math/math.hpp>
 
@@ -60,30 +61,6 @@ uint32_t ray::ocl::Scene::AddTexture(const tex_desc_t &_t) {
     int mip = 0;
     math::ivec2 res = { _t.w, _t.h };
 
-    // TODO: add downsampling for non-power-of-2 textures
-    auto downsample = [](std::vector<pixel_color8_t> &_tex, const math::ivec2 &res) {
-        const pixel_color8_t *tex = &_tex[0];
-
-        std::vector<pixel_color8_t> ret;
-        for (int j = 0; j < res.y; j += 2) {
-            for (int i = 0; i < res.x; i += 2) {
-                int r = tex[(j + 0) * res.x + i].r + tex[(j + 0) * res.x + i + 1].r +
-                        tex[(j + 1) * res.x + i].r + tex[(j + 1) * res.x + i + 1].r;
-                int g = tex[(j + 0) * res.x + i].g + tex[(j + 0) * res.x + i + 1].g +
-                        tex[(j + 1) * res.x + i].g + tex[(j + 1) * res.x + i + 1].g;
-                int b = tex[(j + 0) * res.x + i].b + tex[(j + 0) * res.x + i + 1].b +
-                        tex[(j + 1) * res.x + i].b + tex[(j + 1) * res.x + i + 1].b;
-                int a = tex[(j + 0) * res.x + i].a + tex[(j + 0) * res.x + i + 1].a +
-                        tex[(j + 1) * res.x + i].a + tex[(j + 1) * res.x + i + 1].a;
-
-                ret.push_back( { (uint8_t)std::round(r * 0.25f), (uint8_t)std::round(g * 0.25f),
-                                 (uint8_t)std::round(b * 0.25f), (uint8_t)std::round(a * 0.25f)
-                               });
-            }
-        }
-        return ret;
-    };
-
     std::vector<pixel_color8_t> tex_data(_t.data, _t.data + _t.w * _t.h);
 
     while (res.x >= 1 && res.y >= 1) {
@@ -101,7 +78,7 @@ uint32_t ray::ocl::Scene::AddTexture(const tex_desc_t &_t) {
         t.pos[mip][0] = (uint16_t)pos.x;
         t.pos[mip][1] = (uint16_t)pos.y;
 
-        tex_data = downsample(tex_data, res);
+        tex_data = ref::DownsampleTexture(tex_data, res);
 
         res.x /= 2;
         res.y /= 2;
@@ -205,8 +182,6 @@ uint32_t ray::ocl::Scene::AddMesh(const mesh_desc_t &_m) {
     // add nodes
     nodes_.Append(&new_nodes[0], new_nodes.size());
 
-    //const auto &t = textures_[0];
-
     // add attributes
     assert(_m.layout == PxyzNxyzTuv);
     std::vector<vertex_t> new_vertices(_m.vtx_attrs_count);
@@ -220,105 +195,7 @@ uint32_t ray::ocl::Scene::AddMesh(const mesh_desc_t &_m) {
         memset(&v.b[0], 0, 3 * sizeof(float));
     }
 
-    std::vector<std::array<uint32_t, 3>> twin_verts(new_vertices.size(), { 0, 0, 0 });
-    aligned_vector<vec3> binormals(new_vertices.size());
-    for (size_t i = 0; i < _m.vtx_indices_count; i += 3) {
-        auto *v0 = &new_vertices[_m.vtx_indices[i + 0]];
-        auto *v1 = &new_vertices[_m.vtx_indices[i + 1]];
-        auto *v2 = &new_vertices[_m.vtx_indices[i + 2]];
-
-        auto *b0 = &binormals[_m.vtx_indices[i + 0]];
-        auto *b1 = &binormals[_m.vtx_indices[i + 1]];
-        auto *b2 = &binormals[_m.vtx_indices[i + 2]];
-
-        vec3 dp1 = make_vec3(v1->p) - make_vec3(v0->p);
-        vec3 dp2 = make_vec3(v2->p) - make_vec3(v0->p);
-
-        vec2 dt1 = make_vec2(v1->t0) - make_vec2(v0->t0);
-        vec2 dt2 = make_vec2(v2->t0) - make_vec2(v0->t0);
-
-        float inv_det = 1.0f / (dt1.x * dt2.y - dt1.y * dt2.x);
-        vec3 tangent = (dp1 * dt2.y - dp2 * dt1.y) * inv_det;
-        vec3 binormal = (dp2 * dt1.x - dp1 * dt2.x) * inv_det;
-
-        int i1 = v0->b[0] * tangent.x + v0->b[1] * tangent.y + v0->b[2] * tangent.z < 0;
-        int i2 = 2 * (b0->x * binormal.x + b0->y * binormal.y + b0->z * binormal.z < 0);
-
-        if (i1 || i2) {
-            uint32_t index = twin_verts[_m.vtx_indices[i + 0]][i1 + i2 - 1];
-            if (index == 0) {
-                index = (uint32_t)(vertices_.size() + new_vertices.size());
-                new_vertices.push_back(*v0);
-                memset(&new_vertices.back().b[0], 0, 3 * sizeof(float));
-                twin_verts[_m.vtx_indices[i + 0]][i1 + i2 - 1] = index;
-
-                v1 = &new_vertices[_m.vtx_indices[i + 1]];
-                v2 = &new_vertices[_m.vtx_indices[i + 2]];
-            }
-            new_vtx_indices[i] = index;
-            v0 = &new_vertices[index - vertices_.size()];
-        } else {
-            *b0 = binormal;
-        }
-
-        v0->b[0] += tangent.x;
-        v0->b[1] += tangent.y;
-        v0->b[2] += tangent.z;
-
-        i1 = v1->b[0] * tangent.x + v1->b[1] * tangent.y + v1->b[2] * tangent.z < 0;
-        i2 = 2 * (b1->x * binormal.x + b1->y * binormal.y + b1->z * binormal.z < 0);
-
-        if (i1 || i2) {
-            uint32_t index = twin_verts[_m.vtx_indices[i + 1]][i1 + i2 - 1];
-            if (index == 0) {
-                index = (uint32_t)(vertices_.size() + new_vertices.size());
-                new_vertices.push_back(*v1);
-                memset(&new_vertices.back().b[0], 0, 3 * sizeof(float));
-                twin_verts[_m.vtx_indices[i + 1]][i1 + i2 - 1] = index;
-
-                v0 = &new_vertices[_m.vtx_indices[i + 0]];
-                v2 = &new_vertices[_m.vtx_indices[i + 2]];
-            }
-            new_vtx_indices[i + 1] = index;
-            v1 = &new_vertices[index - vertices_.size()];
-        } else {
-            *b1 = binormal;
-        }
-
-        v1->b[0] += tangent.x;
-        v1->b[1] += tangent.y;
-        v1->b[2] += tangent.z;
-
-        i1 = v2->b[0] * tangent.x + v2->b[1] * tangent.y + v2->b[2] * tangent.z < 0;
-        i2 = 2 * (b2->x * binormal.x + b2->y * binormal.y + b2->z * binormal.z < 0);
-
-        if (i1 || i2) {
-            uint32_t index = twin_verts[_m.vtx_indices[i + 2]][i1 + i2 - 1];
-            if (index == 0) {
-                index = (uint32_t)(vertices_.size() + new_vertices.size());
-                new_vertices.push_back(*v2);
-                memset(&new_vertices.back().b[0], 0, 3 * sizeof(float));
-                twin_verts[_m.vtx_indices[i + 2]][i1 + i2 - 1] = index;
-
-                v0 = &new_vertices[_m.vtx_indices[i + 0]];
-                v1 = &new_vertices[_m.vtx_indices[i + 1]];
-            }
-            new_vtx_indices[i + 2] = index;
-            v2 = &new_vertices[index - vertices_.size()];
-        } else {
-            *b2 = binormal;
-        }
-
-        v2->b[0] += tangent.x;
-        v2->b[1] += tangent.y;
-        v2->b[2] += tangent.z;
-    }
-
-    for (auto &v : new_vertices) {
-        vec3 tangent = make_vec3(v.b);
-        vec3 binormal = normalize(cross(make_vec3(v.n), tangent));
-        memcpy(&v.b[0], value_ptr(binormal), 3 * sizeof(float));
-    }
+    ref::ComputeTextureBasis(vertices_.size(), new_vertices, new_vtx_indices, _m.vtx_indices, _m.vtx_indices_count);
 
     vertices_.Append(&new_vertices[0], new_vertices.size());
 
