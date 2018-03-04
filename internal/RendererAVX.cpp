@@ -26,38 +26,42 @@ std::shared_ptr<ray::SceneBase> ray::avx::Renderer::CreateScene() {
     return std::make_shared<ref::Scene>();
 }
 
-void ray::avx::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, const region_t &region) {
+void ray::avx::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, region_t region) {
     using namespace math;
 
-    auto s = std::dynamic_pointer_cast<ref::Scene>(_s);
+    const auto s = std::dynamic_pointer_cast<ref::Scene>(_s);
     if (!s) return;
 
     const auto &cam = s->GetCamera(s->current_cam());
 
-    int num_tris = (int)s->tris_.size();
+    const auto num_tris = (uint32_t)s->tris_.size();
     const auto *tris = num_tris ? &s->tris_[0] : nullptr;
 
-    int num_indices = (int)s->tri_indices_.size();
+    const auto num_indices = (uint32_t)s->tri_indices_.size();
     const auto *tri_indices = num_indices ? &s->tri_indices_[0] : nullptr;
 
-    int num_nodes = (int)s->nodes_.size();
+    const auto num_nodes = (uint32_t)s->nodes_.size();
     const auto *nodes = num_nodes ? &s->nodes_[0] : nullptr;
 
-    int macro_tree_root = (int)s->macro_nodes_start_;
+    const auto macro_tree_root = (uint32_t)s->macro_nodes_start_;
 
-    int num_meshes = (int)s->meshes_.size();
+    const auto num_meshes = (uint32_t)s->meshes_.size();
     const auto *meshes = num_meshes ? &s->meshes_[0] : nullptr;
 
-    int num_transforms = (int)s->transforms_.size();
+    const auto num_transforms = (uint32_t)s->transforms_.size();
     const auto *transforms = num_transforms ? &s->transforms_[0] : nullptr;
 
-    int num_mesh_instances = (int)s->mesh_instances_.size();
+    const auto num_mesh_instances = (uint32_t)s->mesh_instances_.size();
     const auto *mesh_instances = num_mesh_instances ? &s->mesh_instances_[0] : nullptr;
 
-    int num_mi_indices = (int)s->mi_indices_.size();
+    const auto num_mi_indices = (uint32_t)s->mi_indices_.size();
     const auto *mi_indices = num_mi_indices ? &s->mi_indices_[0] : nullptr;
 
-    int w = framebuf_.w(), h = framebuf_.h();
+    const int w = framebuf_.w(), h = framebuf_.h();
+
+    if (region.w == 0 || region.h == 0) {
+        region = { 0, 0, w, h };
+    }
 
     math::aligned_vector<ray_packet_t> primary_rays;
     
@@ -71,7 +75,7 @@ void ray::avx::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, const
         inter.id = primary_rays[i].id;
 
         const ray_packet_t &r = primary_rays[i];
-        __m256 inv_d[3] = { _mm256_rcp_ps(r.d[0]), _mm256_rcp_ps(r.d[1]), _mm256_rcp_ps(r.d[2]) };
+        __m256 inv_d[3] = { _mm256_div_ps(ONE, r.d[0]), _mm256_div_ps(ONE, r.d[1]), _mm256_div_ps(ONE, r.d[2]) };
 
         if (Traverse_MacroTree_CPU(r, FF_MASK, inv_d, nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, inter)) {
             intersections.push_back(inter);

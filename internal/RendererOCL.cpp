@@ -250,7 +250,7 @@ std::shared_ptr<ray::SceneBase> ray::ocl::Renderer::CreateScene() {
     return std::make_shared<ocl::Scene>(context_, queue_);
 }
 
-void ray::ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, const region_t &region) {
+void ray::ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, region_t region) {
     using namespace math;
 
     auto s = std::dynamic_pointer_cast<ocl::Scene>(_s);

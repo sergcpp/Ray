@@ -27,7 +27,7 @@ public:
     virtual void Clear(const pixel_color_t &c = { 0, 0, 0, 0 }) = 0;
 
     virtual std::shared_ptr<SceneBase> CreateScene() = 0;
-    virtual void RenderScene(const std::shared_ptr<SceneBase> &s, const region_t &region = { 0, 0, 0, 0 }) = 0;
+    virtual void RenderScene(const std::shared_ptr<SceneBase> &s, region_t region = { 0, 0, 0, 0 }) = 0;
 
     struct stats_t {
         int iterations_count;

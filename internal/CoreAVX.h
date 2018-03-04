@@ -56,10 +56,10 @@ void ConstructRayPacket(const float *o, const float *d, int size, ray_packet_t &
 void GeneratePrimaryRays(const camera_t &cam, const region_t &r, int w, int h, math::aligned_vector<ray_packet_t> &out_rays);
 
 // Intersect primitives
-bool IntersectTris(const ray_packet_t &r, const __m256i ray_mask, const tri_accel_t *tris, int num_tris, int obj_index, hit_data_t &out_inter);
-bool IntersectTris(const ray_packet_t &r, const __m256i ray_mask, const tri_accel_t *tris, const uint32_t *indices, int num_tris, int obj_index, hit_data_t &out_inter);
-bool IntersectCones(const ray_packet_t &r, const cone_accel_t *cones, int num_cones, hit_data_t &out_inter);
-bool IntersectBoxes(const ray_packet_t &r, const aabox_t *boxes, int num_boxes, hit_data_t &out_inter);
+bool IntersectTris(const ray_packet_t &r, const __m256i ray_mask, const tri_accel_t *tris, uint32_t num_tris, uint32_t obj_index, hit_data_t &out_inter);
+bool IntersectTris(const ray_packet_t &r, const __m256i ray_mask, const tri_accel_t *tris, const uint32_t *indices, uint32_t num_tris, uint32_t obj_index, hit_data_t &out_inter);
+bool IntersectCones(const ray_packet_t &r, const cone_accel_t *cones, uint32_t num_cones, hit_data_t &out_inter);
+bool IntersectBoxes(const ray_packet_t &r, const aabox_t *boxes, uint32_t num_boxes, hit_data_t &out_inter);
 
 // Traverse acceleration structure
 // stack-less cpu-style traversal of outer nodes

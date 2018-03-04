@@ -30,6 +30,18 @@ const __m256 M_HIT_EPS = _mm256_set1_ps(-ray::HIT_EPS);
 
 const __m256i FF_MASK = _mm256_set1_epi32(0xffffffff);
 
+force_inline __m256i _mm256_blendv_si128(__m256i x, __m256i y, __m256i mask) {
+    return _mm256_blendv_epi8(x, y, mask);
+}
+
+force_inline bool _mm256_all_zeroes(__m256i x) {
+    return _mm256_movemask_epi8(x) == 0;
+}
+
+force_inline bool _mm256_not_all_zeroes(__m256i x) {
+    return _mm256_movemask_epi8(x) != 0;
+}
+
 force_inline void _IntersectTri(const ray_packet_t &r, const __m256i ray_mask, const tri_accel_t &tri, uint32_t prim_index, hit_data_t &inter) {
     __m256 nu = _mm256_set1_ps(tri.nu), nv = _mm256_set1_ps(tri.nv), np = _mm256_set1_ps(tri.np);
     __m256 pu = _mm256_set1_ps(tri.pu), pv = _mm256_set1_ps(tri.pv);
@@ -106,41 +118,32 @@ force_inline void _IntersectTri(const ray_packet_t &r, const __m256i ray_mask, c
     // same sign of 'det - detu - detv', 'detu', 'detv' indicates intersection
 
     tmpdet0 = _mm256_sub_ps(_mm256_sub_ps(det, detu), detv);
-    /*tmpdet0 = _mm256_xor_ps(tmpdet0, detu);
-    tmpdet1 = _mm256_xor_ps(detv, detu);
-    //
-    __m256 tmp = _mm256_xor_ps(dett, det); // make sure t is positive
-    //
-    tmpdet1 = _mm256_or_ps(tmpdet0, tmpdet1);
-    tmpdet1 = _mm256_or_ps(tmpdet1, tmp);
-    // test
-    __m256i mask = _mm256_castps_si256(tmpdet1);
-    mask = _mm256_srai_epi32(mask, 31);
-    mask = _mm256_xor_si256(mask, FF_MASK);
-    mask = _mm256_and_si256(mask, ray_mask);*/
 
     //////////////////////////////////////////////////////////////////////////
 
-    __m256 mm1 = _mm256_mul_ps(tmpdet0, detu);
-    __m256 mm = _mm256_cmp_ps(mm1, M_HIT_EPS, _CMP_GT_OS);
-    __m256 mm2 = _mm256_mul_ps(detu, detv);
-    mm = _mm256_and_ps(mm, _mm256_cmp_ps(mm2, ZERO, _CMP_GT_OS));
-    __m256 mm3 = _mm256_mul_ps(dett, det);
-    mm = _mm256_and_ps(mm, _mm256_cmp_ps(mm3, ZERO, _CMP_GT_OS));
+    __m256 mm1 = _mm256_cmp_ps(tmpdet0, M_HIT_EPS, _CMP_GT_OS);
+    mm1 = _mm256_and_ps(mm1, _mm256_cmp_ps(detu, M_HIT_EPS, _CMP_GT_OS));
+    mm1 = _mm256_and_ps(mm1, _mm256_cmp_ps(detv, M_HIT_EPS, _CMP_GT_OS));
+
+    __m256 mm2 = _mm256_cmp_ps(tmpdet0, HIT_EPS, _CMP_LT_OS);
+    mm2 = _mm256_and_ps(mm2, _mm256_cmp_ps(detu, HIT_EPS, _CMP_LT_OS));
+    mm2 = _mm256_and_ps(mm2, _mm256_cmp_ps(detv, HIT_EPS, _CMP_LT_OS));
+
+    __m256 mm = _mm256_or_ps(mm1, mm2);
 
     __m256i mask = _mm256_castps_si256(mm);
     mask = _mm256_and_si256(mask, ray_mask);
 
     //////////////////////////////////////////////////////////////////////////
 
-    if (_mm256_movemask_epi8(mask) == 0) return; // no intersection found
-    //if (_mm256_test_all_zeros(mask, FF_MASK)) continue; // no intersection found
+    if (_mm256_all_zeroes(mask)) return; // no intersection found
 
-    __m256 rdet = _mm256_rcp_ps(det);  // 1 / det
+    __m256 rdet = _mm256_div_ps(ONE, det);
     __m256 t = _mm256_mul_ps(dett, rdet);
 
     __m256i t_valid = _mm256_castps_si256(_mm256_cmp_ps(t, inter.t, _CMP_LT_OS));
-    if (_mm256_test_all_zeros(t_valid, mask)) return; // all intersections further than needed
+    mask = _mm256_and_si256(mask, t_valid);
+    if (_mm256_all_zeroes(mask)) return; // all intersections further than needed
 
     __m256 bar_u = _mm256_mul_ps(detu, rdet);
     __m256 bar_v = _mm256_mul_ps(detv, rdet);
@@ -383,15 +386,13 @@ void ray::avx::GeneratePrimaryRays(const camera_t &cam, const region_t &r, int w
     }
 }
 
-bool ray::avx::IntersectTris(const ray_packet_t &r, const __m256i ray_mask, const tri_accel_t *tris, int num_tris, int obj_index, hit_data_t &out_inter) {
+bool ray::avx::IntersectTris(const ray_packet_t &r, const __m256i ray_mask, const tri_accel_t *tris, uint32_t num_tris, uint32_t obj_index, hit_data_t &out_inter) {
     hit_data_t inter;
     inter.obj_index = _mm256_set1_epi32(obj_index);
     inter.t = out_inter.t;
 
-    for (int i = 0; i < num_tris; i++) {
-        const tri_accel_t &tri = tris[i];
-
-        _IntersectTri(r, ray_mask, tri, i, inter);
+    for (uint32_t i = 0; i < num_tris; i++) {
+        _IntersectTri(r, ray_mask, tris[i], i, inter);
     }
 
     out_inter.mask = _mm256_or_si256(out_inter.mask, inter.mask);
@@ -406,15 +407,14 @@ bool ray::avx::IntersectTris(const ray_packet_t &r, const __m256i ray_mask, cons
     return _mm256_movemask_epi8(inter.mask) != 0;
 }
 
-bool ray::avx::IntersectTris(const ray_packet_t &r, const __m256i ray_mask, const tri_accel_t *tris, const uint32_t *indices, int num_tris, int obj_index, hit_data_t &out_inter) {
+bool ray::avx::IntersectTris(const ray_packet_t &r, const __m256i ray_mask, const tri_accel_t *tris, const uint32_t *indices, uint32_t num_tris, uint32_t obj_index, hit_data_t &out_inter) {
     hit_data_t inter;
     inter.obj_index = _mm256_set1_epi32(obj_index);
     inter.t = out_inter.t;
 
-    for (int i = 0; i < num_tris; i++) {
-        const tri_accel_t &tri = tris[indices[i]];
-
-        _IntersectTri(r, ray_mask, tri, indices[i], inter);
+    for (uint32_t i = 0; i < num_tris; i++) {
+        uint32_t index = indices[i];
+        _IntersectTri(r, ray_mask, tris[index], index, inter);
     }
 
     out_inter.mask = _mm256_or_si256(out_inter.mask, inter.mask);
@@ -429,11 +429,11 @@ bool ray::avx::IntersectTris(const ray_packet_t &r, const __m256i ray_mask, cons
     return _mm256_movemask_epi8(inter.mask) != 0;
 }
 
-bool ray::avx::IntersectCones(const ray_packet_t &r, const cone_accel_t *cones, int num_cones, hit_data_t &out_inter) {
+bool ray::avx::IntersectCones(const ray_packet_t &r, const cone_accel_t *cones, uint32_t num_cones, hit_data_t &out_inter) {
     hit_data_t inter;
     inter.t = out_inter.t;
 
-    for (int i = 0; i < num_cones; i++) {
+    for (uint32_t i = 0; i < num_cones; i++) {
         const cone_accel_t &cone = cones[i];
 
         __m256 cone_o[3], cone_v[3], cone_cos_phi_sqr;
@@ -562,13 +562,13 @@ bool ray::avx::IntersectCones(const ray_packet_t &r, const cone_accel_t *cones, 
     return !_mm256_test_all_zeros(inter.mask, FF_MASK);
 }
 
-bool ray::avx::IntersectBoxes(const ray_packet_t &r, const aabox_t *boxes, int num_boxes, hit_data_t &out_inter) {
+bool ray::avx::IntersectBoxes(const ray_packet_t &r, const aabox_t *boxes, uint32_t num_boxes, hit_data_t &out_inter) {
     hit_data_t inter;
     inter.t = out_inter.t;
 
     __m256 inv_d[3] = { _mm256_rcp_ps(r.d[0]), _mm256_rcp_ps(r.d[1]), _mm256_rcp_ps(r.d[2]) };
 
-    for (int i = 0; i < num_boxes; i++) {
+    for (uint32_t i = 0; i < num_boxes; i++) {
         const aabox_t &box = boxes[i];
 
         __m256 box_min[3] = { _mm256_set1_ps(box.min[0]), _mm256_set1_ps(box.min[1]), _mm256_set1_ps(box.min[2]) },
@@ -647,17 +647,18 @@ bool ray::avx::Traverse_MacroTree_CPU(const ray_packet_t &r, const __m256i ray_m
             break;
         case FromSibling: {
             __m256i mask1 = bbox_test(r.o, inv_d, inter.t, nodes[cur]);
-            if (_mm256_test_all_zeros(mask1, st.queue[st.index].mask)) {
+            mask1 = _mm256_and_si256(mask1, st.queue[st.index].mask);
+            if (_mm256_all_zeroes(mask1)) {
                 cur = nodes[cur].parent;
                 src = FromChild;
             } else {
-                __m256i mask2 = _mm256_andnot_si256(mask1, FF_MASK);
-                if (!_mm256_test_all_zeros(mask2, st.queue[st.index].mask)) {
+                __m256i mask2 = _mm256_andnot_si256(mask1, st.queue[st.index].mask);
+                if (_mm256_not_all_zeroes(mask2)) {
                     st.queue[st.num].cur = nodes[cur].parent;
-                    st.queue[st.num].mask = _mm256_and_si256(st.queue[st.index].mask, mask2);
+                    st.queue[st.num].mask = mask2;
                     st.queue[st.num].src = FromChild;
                     st.num++;
-                    st.queue[st.index].mask = _mm256_and_si256(st.queue[st.index].mask, mask1);
+                    st.queue[st.index].mask = mask1;
                 }
 
                 if (is_leaf_node(nodes[cur])) {
@@ -668,14 +669,14 @@ bool ray::avx::Traverse_MacroTree_CPU(const ray_packet_t &r, const __m256i ray_m
                         const auto &tr = transforms[mi.tr_index];
 
                         __m256i bbox_mask = bbox_test(r.o, inv_d, inter.t, mi.bbox_min, mi.bbox_max);
-                        __m256i final_mask = _mm256_and_si256(st.queue[st.index].mask, bbox_mask);
-                        if (_mm256_movemask_epi8(final_mask) == 0) continue;
+                        bbox_mask = _mm256_and_si256(st.queue[st.index].mask, bbox_mask);
+                        if (_mm256_all_zeroes(bbox_mask)) continue;
 
                         ray_packet_t _r = TransformRay(r, tr.inv_xform);
 
-                        __m256 _inv_d[3] = { _mm256_rcp_ps(_r.d[0]), _mm256_rcp_ps(_r.d[1]), _mm256_rcp_ps(_r.d[2]) };
+                        __m256 _inv_d[3] = { _mm256_div_ps(ONE, _r.d[0]), _mm256_div_ps(ONE, _r.d[1]), _mm256_div_ps(ONE, _r.d[2]) };
 
-                        res |= Traverse_MicroTree_CPU(_r, final_mask, _inv_d, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter);
+                        res |= Traverse_MicroTree_CPU(_r, bbox_mask, _inv_d, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter);
                     }
 
                     cur = nodes[cur].parent;
@@ -689,17 +690,18 @@ bool ray::avx::Traverse_MacroTree_CPU(const ray_packet_t &r, const __m256i ray_m
         break;
         case FromParent: {
             __m256i mask1 = bbox_test(r.o, inv_d, inter.t, nodes[cur]);
-            if (_mm256_test_all_zeros(mask1, st.queue[st.index].mask)) {
+            mask1 = _mm256_and_si256(mask1, st.queue[st.index].mask);
+            if (_mm256_all_zeroes(mask1)) {
                 cur = nodes[cur].sibling;
                 src = FromSibling;
             } else {
-                __m256i mask2 = _mm256_andnot_si256(mask1, FF_MASK);
-                if (!_mm256_test_all_zeros(mask2, st.queue[st.index].mask)) {
+                __m256i mask2 = _mm256_andnot_si256(mask1, st.queue[st.index].mask);
+                if (!_mm256_not_all_zeroes(mask2)) {
                     st.queue[st.num].cur = nodes[cur].sibling;
-                    st.queue[st.num].mask = _mm256_and_si256(st.queue[st.index].mask, mask2);
+                    st.queue[st.num].mask = mask2;
                     st.queue[st.num].src = FromSibling;
                     st.num++;
-                    st.queue[st.index].mask = _mm256_and_si256(st.queue[st.index].mask, mask1);
+                    st.queue[st.index].mask = mask1;
                 }
 
                 if (is_leaf_node(nodes[cur])) {
@@ -710,14 +712,14 @@ bool ray::avx::Traverse_MacroTree_CPU(const ray_packet_t &r, const __m256i ray_m
                         const auto &tr = transforms[mi.tr_index];
 
                         __m256i bbox_mask = bbox_test(r.o, inv_d, inter.t, mi.bbox_min, mi.bbox_max);
-                        __m256i final_mask = _mm256_and_si256(st.queue[st.index].mask, bbox_mask);
-                        if (_mm256_movemask_epi8(final_mask) == 0) continue;
+                        bbox_mask = _mm256_and_si256(st.queue[st.index].mask, bbox_mask);
+                        if (_mm256_all_zeroes(bbox_mask)) continue;
 
                         ray_packet_t _r = TransformRay(r, tr.inv_xform);
 
-                        __m256 _inv_d[3] = { _mm256_rcp_ps(_r.d[0]), _mm256_rcp_ps(_r.d[1]), _mm256_rcp_ps(_r.d[2]) };
+                        __m256 _inv_d[3] = { _mm256_div_ps(ONE, _r.d[0]), _mm256_div_ps(ONE, _r.d[1]), _mm256_div_ps(ONE, _r.d[2]) };
 
-                        res |= Traverse_MicroTree_CPU(_r, final_mask, _inv_d, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter);
+                        res |= Traverse_MicroTree_CPU(_r, bbox_mask, _inv_d, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter);
                     }
 
                     cur = nodes[cur].sibling;
@@ -770,17 +772,18 @@ bool ray::avx::Traverse_MicroTree_CPU(const ray_packet_t &r, const __m256i ray_m
             break;
         case FromSibling: {
             __m256i mask1 = bbox_test(r.o, inv_d, inter.t, nodes[cur]);
-            if (_mm256_test_all_zeros(mask1, st.queue[st.index].mask)) {
+            mask1 = _mm256_and_si256(mask1, st.queue[st.index].mask);
+            if (_mm256_all_zeroes(mask1)) {
                 cur = nodes[cur].parent;
                 src = FromChild;
             } else {
-                __m256i mask2 = _mm256_andnot_si256(mask1, FF_MASK);
-                if (!_mm256_test_all_zeros(mask2, st.queue[st.index].mask)) {
+                __m256i mask2 = _mm256_andnot_si256(mask1, st.queue[st.index].mask);
+                if (_mm256_not_all_zeroes(mask2)) {
                     st.queue[st.num].cur = nodes[cur].parent;
-                    st.queue[st.num].mask = _mm256_and_si256(st.queue[st.index].mask, mask2);
+                    st.queue[st.num].mask = mask2;
                     st.queue[st.num].src = FromChild;
                     st.num++;
-                    st.queue[st.index].mask = _mm256_and_si256(st.queue[st.index].mask, mask1);
+                    st.queue[st.index].mask = mask1;
                 }
 
                 if (is_leaf_node(nodes[cur])) {
@@ -798,17 +801,18 @@ bool ray::avx::Traverse_MicroTree_CPU(const ray_packet_t &r, const __m256i ray_m
         break;
         case FromParent: {
             __m256i mask1 = bbox_test(r.o, inv_d, inter.t, nodes[cur]);
-            if (_mm256_test_all_zeros(mask1, st.queue[st.index].mask)) {
+            mask1 = _mm256_and_si256(mask1, st.queue[st.index].mask);
+            if (_mm256_all_zeroes(mask1)) {
                 cur = nodes[cur].sibling;
                 src = FromSibling;
             } else {
-                __m256i mask2 = _mm256_andnot_si256(mask1, FF_MASK);
-                if (!_mm256_test_all_zeros(mask2, st.queue[st.index].mask)) {
+                __m256i mask2 = _mm256_andnot_si256(mask1, st.queue[st.index].mask);
+                if (_mm256_not_all_zeroes(mask2)) {
                     st.queue[st.num].cur = nodes[cur].sibling;
-                    st.queue[st.num].mask = _mm256_and_si256(st.queue[st.index].mask, mask2);
+                    st.queue[st.num].mask = mask2;
                     st.queue[st.num].src = FromSibling;
                     st.num++;
-                    st.queue[st.index].mask = _mm256_and_si256(st.queue[st.index].mask, mask1);
+                    st.queue[st.index].mask = mask1;
                 }
 
                 if (is_leaf_node(nodes[cur])) {

@@ -125,9 +125,7 @@ bool ray::ref::IntersectTris(const ray_packet_t &r, const tri_accel_t *tris, int
     inter.t = out_inter.t;
 
     for (int i = 0; i < num_tris; i++) {
-        const tri_accel_t &tri = tris[i];
-
-        _IntersectTri(r, tri, i, inter);
+        _IntersectTri(r, tris[i], i, inter);
     }
 
     out_inter.mask_values[0] |= inter.mask_values[0];
@@ -146,9 +144,8 @@ bool ray::ref::IntersectTris(const ray_packet_t &r, const tri_accel_t *tris, con
     inter.t = out_inter.t;
 
     for (int i = 0; i < num_indices; i++) {
-        const tri_accel_t &tri = tris[indices[i]];
-
-        _IntersectTri(r, tri, indices[i], inter);
+        uint32_t index = indices[i];
+        _IntersectTri(r, tris[index], index, inter);
     }
 
     out_inter.mask_values[0] |= inter.mask_values[0];
@@ -402,7 +399,6 @@ bool ray::ref::Traverse_MicroTree_CPU(const ray_packet_t &r, const float inv_d[3
     uint32_t cur = root_index;
     eTraversalSource src = FromSibling;
 
-    // if not leaf node
     if (!is_leaf_node(nodes[root_index])) {
         cur = near_child(r, nodes[root_index]);
         src = FromParent;

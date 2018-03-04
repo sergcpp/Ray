@@ -102,7 +102,7 @@ public:
     void Clear(const pixel_color_t &c) override;
 
     std::shared_ptr<SceneBase> CreateScene() override;
-    void RenderScene(const std::shared_ptr<SceneBase> &s, const region_t &region) override;
+    void RenderScene(const std::shared_ptr<SceneBase> &s, region_t region) override;
 
     void GetStats(stats_t &st) override;
 };

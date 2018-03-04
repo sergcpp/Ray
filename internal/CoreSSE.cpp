@@ -54,7 +54,7 @@ force_inline void _IntersectTri(const ray_packet_t &r, const __m128i ray_mask, c
     // from "Ray-Triangle Intersection Algorithm for Modern CPU Architectures" [2007]
 
     //temporary variables
-    /*__m128 det, dett, detu, detv, nrv, nru, du, dv, ou, ov, tmpdet0;//, tmpdet1;
+    __m128 det, dett, detu, detv, nrv, nru, du, dv, ou, ov, tmpdet0;//, tmpdet1;
 
     // ----ray-packet/triangle hit test----
     //dett = np -(ou*nu+ov*nv+ow)
@@ -108,16 +108,7 @@ force_inline void _IntersectTri(const ray_packet_t &r, const __m128i ray_mask, c
     nrv = _mm_mul_ps(nrv, dv);
     dv = e0v;
     dv = _mm_mul_ps(dv, du);
-    detv = _mm_sub_ps(nrv, dv);*/
-
-    __m128 det = _mm_add_ps(_mm_add_ps(_mm_mul_ps(r.d[u], nu), _mm_mul_ps(r.d[v], nv)), r.d[w]); 
-    __m128 dett = _mm_sub_ps(np, _mm_add_ps(_mm_mul_ps(r.o[u], nu), _mm_add_ps(_mm_mul_ps(r.o[v], nv), r.o[w])));
-    __m128 Du = _mm_sub_ps(_mm_mul_ps(r.d[u], dett), _mm_mul_ps(_mm_sub_ps(pu, r.o[u]), det));
-    __m128 Dv = _mm_sub_ps(_mm_mul_ps(r.d[v], dett), _mm_mul_ps(_mm_sub_ps(pv, r.o[v]), det));
-    __m128 detu = _mm_sub_ps(_mm_mul_ps(e1v, Du), _mm_mul_ps(e1u, Dv));
-    __m128 detv = _mm_sub_ps(_mm_mul_ps(e0u, Dv), _mm_mul_ps(e0v, Du));
-
-    __m128 tmpdet0;
+    detv = _mm_sub_ps(nrv, dv);
 
     // same sign of 'det - detu - detv', 'detu', 'detv' indicates intersection
 
@@ -135,15 +126,6 @@ force_inline void _IntersectTri(const ray_packet_t &r, const __m128i ray_mask, c
 
     __m128 mm = _mm_or_ps(mm1, mm2);
 
-    ///////
-
-    /*__m128 mm1 = _mm_mul_ps(tmpdet0, detu);
-    __m128 mm = _mm_cmpgt_ps(mm1, M_HIT_EPS);
-    __m128 mm2 = _mm_mul_ps(detu, detv);
-    mm = _mm_and_ps(mm, _mm_cmpgt_ps(mm2, ZERO));
-    __m128 mm3 = _mm_mul_ps(dett, det);
-    mm = _mm_and_ps(mm, _mm_cmpgt_ps(mm3, ZERO));*/
-
     __m128i mask = _mm_castps_si128(mm);
     mask = _mm_and_si128(mask, ray_mask);
 
@@ -151,7 +133,7 @@ force_inline void _IntersectTri(const ray_packet_t &r, const __m128i ray_mask, c
 
     if (_mm_all_zeroes(mask)) return; // no intersection found
 
-    __m128 rdet = _mm_rcp_ps(det);  // 1 / det
+    __m128 rdet = _mm_div_ps(ONE, det);
     __m128 t = _mm_mul_ps(dett, rdet);
 
     __m128i t_valid = _mm_castps_si128(_mm_and_ps(_mm_cmplt_ps(t, inter.t), _mm_cmpgt_ps(t, ZERO)));
@@ -371,15 +353,13 @@ void ray::sse::GeneratePrimaryRays(const camera_t &cam, const region_t &r, int w
     }
 }
 
-bool ray::sse::IntersectTris(const ray_packet_t &r, const __m128i ray_mask, const tri_accel_t *tris, int num_tris, int obj_index, hit_data_t &out_inter) {
+bool ray::sse::IntersectTris(const ray_packet_t &r, const __m128i ray_mask, const tri_accel_t *tris, uint32_t num_tris, uint32_t obj_index, hit_data_t &out_inter) {
     hit_data_t inter;
     inter.obj_index = _mm_set1_epi32(obj_index);
     inter.t = out_inter.t;
 
-    for (int i = 0; i < num_tris; i++) {
-        const tri_accel_t &tri = tris[i];
-
-        _IntersectTri(r, ray_mask, tri, i, inter);
+    for (uint32_t i = 0; i < num_tris; i++) {
+        _IntersectTri(r, ray_mask, tris[i], i, inter);
     }
 
     out_inter.mask = _mm_or_si128(out_inter.mask, inter.mask);
@@ -394,15 +374,14 @@ bool ray::sse::IntersectTris(const ray_packet_t &r, const __m128i ray_mask, cons
     return _mm_not_all_zeroes(inter.mask);
 }
 
-bool ray::sse::IntersectTris(const ray_packet_t &r, const __m128i ray_mask, const tri_accel_t *tris, const uint32_t *indices, int num_tris, int obj_index, hit_data_t &out_inter) {
+bool ray::sse::IntersectTris(const ray_packet_t &r, const __m128i ray_mask, const tri_accel_t *tris, const uint32_t *indices, uint32_t num_tris, uint32_t obj_index, hit_data_t &out_inter) {
     hit_data_t inter;
     inter.obj_index = _mm_set1_epi32(obj_index);
     inter.t = out_inter.t;
 
-    for (int i = 0; i < num_tris; i++) {
-        const tri_accel_t &tri = tris[indices[i]];
-
-        _IntersectTri(r, ray_mask, tri, indices[i], inter);
+    for (uint32_t i = 0; i < num_tris; i++) {
+        uint32_t index = indices[i];
+        _IntersectTri(r, ray_mask, tris[index], index, inter);
     }
 
     out_inter.mask = _mm_or_si128(out_inter.mask, inter.mask);
@@ -417,11 +396,11 @@ bool ray::sse::IntersectTris(const ray_packet_t &r, const __m128i ray_mask, cons
     return _mm_not_all_zeroes(inter.mask);
 }
 
-bool ray::sse::IntersectCones(const ray_packet_t &r, const cone_accel_t *cones, int num_cones, hit_data_t &out_inter) {
+bool ray::sse::IntersectCones(const ray_packet_t &r, const cone_accel_t *cones, uint32_t num_cones, hit_data_t &out_inter) {
     hit_data_t inter;
     inter.t = out_inter.t;
 
-    for (int i = 0; i < num_cones; i++) {
+    for (uint32_t i = 0; i < num_cones; i++) {
         const cone_accel_t &cone = cones[i];
 
         __m128 cone_o[3], cone_v[3], cone_cos_phi_sqr;
@@ -552,14 +531,14 @@ bool ray::sse::IntersectCones(const ray_packet_t &r, const cone_accel_t *cones, 
     return _mm_not_all_zeroes(inter.mask);
 }
 
-bool ray::sse::IntersectBoxes(const ray_packet_t &r, const aabox_t *boxes, int num_boxes, hit_data_t &out_inter) {
+bool ray::sse::IntersectBoxes(const ray_packet_t &r, const aabox_t *boxes, uint32_t num_boxes, hit_data_t &out_inter) {
 
     hit_data_t inter;
     inter.t = out_inter.t;
 
     __m128 inv_d[3] = { _mm_rcp_ps(r.d[0]), _mm_rcp_ps(r.d[1]), _mm_rcp_ps(r.d[2]) };
 
-    for (int i = 0; i < num_boxes; i++) {
+    for (uint32_t i = 0; i < num_boxes; i++) {
         const aabox_t &box = boxes[i];
 
         __m128 box_min[3] = { _mm_set1_ps(box.min[0]), _mm_set1_ps(box.min[1]), _mm_set1_ps(box.min[2]) },
@@ -665,7 +644,7 @@ bool ray::sse::Traverse_MacroTree_CPU(const ray_packet_t &r, const __m128i ray_m
 
                         ray_packet_t _r = TransformRay(r, tr.inv_xform);
 
-                        __m128 _inv_d[3] = { _mm_rcp_ps(_r.d[0]), _mm_rcp_ps(_r.d[1]), _mm_rcp_ps(_r.d[2]) };
+                        __m128 _inv_d[3] = { _mm_div_ps(ONE, _r.d[0]), _mm_div_ps(ONE, _r.d[1]), _mm_div_ps(ONE, _r.d[2]) };
 
                         res |= Traverse_MicroTree_CPU(_r, bbox_mask, _inv_d, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter);
                     }
@@ -708,7 +687,7 @@ bool ray::sse::Traverse_MacroTree_CPU(const ray_packet_t &r, const __m128i ray_m
 
                         ray_packet_t _r = TransformRay(r, tr.inv_xform);
 
-                        __m128 _inv_d[3] = { _mm_rcp_ps(_r.d[0]), _mm_rcp_ps(_r.d[1]), _mm_rcp_ps(_r.d[2]) };
+                        __m128 _inv_d[3] = { _mm_div_ps(ONE, _r.d[0]), _mm_div_ps(ONE, _r.d[1]), _mm_div_ps(ONE, _r.d[2]) };
 
                         res |= Traverse_MicroTree_CPU(_r, bbox_mask, _inv_d, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter);
                     }
