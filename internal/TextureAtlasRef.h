@@ -11,6 +11,7 @@ class TextureAtlas {
     friend class ref::Renderer;
 
     const math::ivec2 res_;
+    const math::vec2 res_f_;
     int pages_count_;
 
     using Page = std::vector<pixel_color8_t>;
@@ -24,6 +25,9 @@ public:
     bool Free(int page, const math::ivec2 &pos);
 
     bool Resize(int pages_count);
+
+    pixel_color_t SampleNearest(const texture_t &t, const math::vec2 &uvs, float lod) const;
+    pixel_color_t SampleBilinear(const texture_t &t, const math::vec2 &uvs, float lod) const;
 };
 }
 }

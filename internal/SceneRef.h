@@ -34,10 +34,13 @@ protected:
     std::vector<vertex_t> vertices_;
     std::vector<uint32_t> vtx_indices_;
 
-    TextureAtlas texture_atlas_;
+    std::vector<material_t> materials_;
     std::vector<texture_t> textures_;
+    TextureAtlas texture_atlas_;
 
     uint32_t macro_nodes_start_ = 0, macro_nodes_count_ = 0;
+
+    uint32_t default_normals_texture_;
 
     void RemoveNodes(uint32_t node_index, uint32_t node_count);
     void RebuildMacroBVH();
@@ -50,9 +53,7 @@ public:
     uint32_t AddTexture(const tex_desc_t &t) override;
     void RemoveTexture(uint32_t) override {}
 
-    uint32_t AddMaterial(const mat_desc_t &m) override {
-        return 0xffffffff;
-    }
+    uint32_t AddMaterial(const mat_desc_t &m) override;
     void RemoveMaterial(uint32_t) override {}
 
     uint32_t AddMesh(const mesh_desc_t &m) override;

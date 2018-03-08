@@ -502,14 +502,30 @@ bool ray::ref::Traverse_MicroTree_GPU(const ray_packet_t &r, const float inv_d[3
 }
 
 ray::ref::ray_packet_t ray::ref::TransformRay(const ray_packet_t &r, const float *xform) {
-    math::vec3 _o = math::make_mat4(xform) * math::vec4(math::make_vec3(r.o), 1);
-    math::vec3 _d = math::make_mat4(xform) * math::vec4(math::make_vec3(r.d), 0);
+    using namespace math;
 
-    math::vec3 inv_d = 1.0f / _d;
+    vec3 _o = make_mat4(xform) * vec4(make_vec3(r.o), 1);
+    vec3 _d = make_mat4(xform) * vec4(make_vec3(r.d), 0);
+
+    vec3 inv_d = 1.0f / _d;
 
     ray_packet_t _r = r;
-    memcpy(&_r.o[0], math::value_ptr(_o), 3 * sizeof(float));
-    memcpy(&_r.d[0], math::value_ptr(_d), 3 * sizeof(float));
+    memcpy(&_r.o[0], value_ptr(_o), 3 * sizeof(float));
+    memcpy(&_r.d[0], value_ptr(_d), 3 * sizeof(float));
 
     return _r;
+}
+
+void ray::ref::TransformUVs(const float _uvs[2], const float tex_atlas_size[2], const texture_t *t, int mip_level, float out_uvs[2]) {
+    using namespace math;
+    
+    vec2 pos = { (float)t->pos[mip_level][0], (float)t->pos[mip_level][1] };
+    vec2 size = { (float)(t->size[0] >> mip_level), (float)(t->size[1] >> mip_level) };
+    vec2 uvs = make_vec2(_uvs);
+    uvs = uvs - floor(uvs);
+    vec2 res = pos + uvs * size + vec2{ 1.0f, 1.0f };
+    res /= make_vec2(tex_atlas_size);
+    
+    out_uvs[0] = res.x;
+    out_uvs[1] = res.y;
 }

@@ -55,14 +55,26 @@ void ray::ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, regio
     const auto num_mi_indices = (uint32_t)s->mi_indices_.size();
     const auto *mi_indices = num_mi_indices ? &s->mi_indices_[0] : nullptr;
 
+    const auto num_vertices = (uint32_t)s->vertices_.size();
+    const auto *vertices = num_vertices ? &s->vertices_[0] : nullptr;
+
+    const auto num_vtx_indices = (uint32_t)s->vtx_indices_.size();
+    const auto *vtx_indices = num_vtx_indices ? &s->vtx_indices_[0] : nullptr;
+
+    const auto num_textures = (uint32_t)s->textures_.size();
+    const auto *textures = num_textures ? &s->textures_[0] : nullptr;
+
+    const auto num_materials = (uint32_t)s->materials_.size();
+    const auto *materials = num_materials ? &s->materials_[0] : nullptr;
+
     const auto w = framebuf_.w(), h = framebuf_.h();
 
     if (region.w == 0 || region.h == 0) {
         region = { 0, 0, w, h };
     }
 
-    math::aligned_vector<ray_packet_t> primary_rays;
-    math::aligned_vector<hit_data_t> intersections;
+    aligned_vector<ray_packet_t> primary_rays;
+    aligned_vector<hit_data_t> intersections;
 
     GeneratePrimaryRays(cam, region, w, h, primary_rays);
 
@@ -86,10 +98,41 @@ void ray::ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, regio
         const int x = ii.id.x;
         const int y = ii.id.y;
 
-        const pixel_color_t col1 = color_table_[ii.prim_indices[0] % color_table_.size()];
+        /*const pixel_color_t col1 = color_table_[ii.prim_indices[0] % color_table_.size()];
 
         if (ii.mask_values[0]) {
             framebuf_.SetPixel(x, y, col1);
+        }*/
+
+        /////////////////
+
+        const auto &t = s->texture_atlas_;
+
+        if (!ii.mask_values[0]) continue;
+
+        const auto &tri = tris[ii.prim_indices[0]];
+
+        const auto &mat = materials[tri.mi];
+
+        const auto &v1 = vertices[vtx_indices[ii.prim_indices[0] * 3 + 0]];
+        const auto &v2 = vertices[vtx_indices[ii.prim_indices[0] * 3 + 1]];
+        const auto &v3 = vertices[vtx_indices[ii.prim_indices[0] * 3 + 2]];
+
+        const vec2 u1 = make_vec2(v1.t0);
+        const vec2 u2 = make_vec2(v2.t0);
+        const vec2 u3 = make_vec2(v3.t0);
+
+        float w = 1.0f - ii.u - ii.v;
+        vec2 uvs = u1 * w + u2 * ii.u + u3 * ii.v;
+
+        if (mat.type == DiffuseMaterial) {
+            const auto &diff_tex = textures[mat.textures[MAIN_TEXTURE]];
+
+            pixel_color_t col = t.SampleBilinear(diff_tex, uvs, 0);
+
+            framebuf_.SetPixel(x, y, col);
+        } else {
+            framebuf_.SetPixel(x, y, { 0, 1.0f, 1.0f, 1.0f });
         }
     }
 

@@ -4,7 +4,20 @@
 
 #include <cstring>
 
-ray::ref::Scene::Scene() : texture_atlas_({ MAX_TEXTURE_SIZE, MAX_TEXTURE_SIZE }) {}
+ray::ref::Scene::Scene() : texture_atlas_({ MAX_TEXTURE_SIZE, MAX_TEXTURE_SIZE }) {
+    pixel_color8_t default_normalmap = { 127, 127, 255 };
+
+    tex_desc_t t;
+    t.data = &default_normalmap;
+    t.w = 1;
+    t.h = 1;
+
+    default_normals_texture_ = AddTexture(t);
+
+    if (default_normals_texture_ == 0xffffffff) {
+        throw std::runtime_error("Cannot allocate 1px default normal map!");
+    }
+}
 
 uint32_t ray::ref::Scene::AddTexture(const tex_desc_t &_t) {
     uint32_t tex_index = (uint32_t)textures_.size();
@@ -52,6 +65,43 @@ uint32_t ray::ref::Scene::AddTexture(const tex_desc_t &_t) {
     return tex_index;
 }
 
+uint32_t ray::ref::Scene::AddMaterial(const mat_desc_t &m) {
+    material_t mat;
+
+    mat.type = m.type;
+    mat.textures[MAIN_TEXTURE] = m.main_texture;
+    memcpy(&mat.main_color[0], &m.main_color[0], 3 * sizeof(float));
+    mat.fresnel = m.fresnel;
+
+    if (m.type == DiffuseMaterial) {
+
+    } else if (m.type == GlossyMaterial) {
+        mat.roughness = m.roughness;
+    } else if (m.type == RefractiveMaterial) {
+        mat.roughness = m.roughness;
+        mat.ior = m.ior;
+    } else if (m.type == EmissiveMaterial) {
+        mat.strength = m.strength;
+    } else if (m.type == MixMaterial) {
+        mat.textures[MIX_MAT1] = m.mix_materials[0];
+        mat.textures[MIX_MAT2] = m.mix_materials[1];
+    } else if (m.type == TransparentMaterial) {
+
+    }
+
+    if (m.normal_map != 0xffffffff) {
+        mat.textures[NORMALS_TEXTURE] = m.normal_map;
+    } else {
+        mat.textures[NORMALS_TEXTURE] = default_normals_texture_;
+    }
+
+    uint32_t mat_index = (uint32_t)materials_.size();
+
+    materials_.push_back(mat);
+
+    return mat_index;
+}
+
 uint32_t ray::ref::Scene::AddMesh(const mesh_desc_t &_m) {
     meshes_.emplace_back();
     auto &m = meshes_.back();
@@ -89,6 +139,8 @@ uint32_t ray::ref::Scene::AddMesh(const mesh_desc_t &_m) {
 
     auto _new_vtx_indices = new_vtx_indices;
     ComputeTextureBasis(vertices_.size(), vertices_, new_vtx_indices, &_new_vtx_indices[0], _new_vtx_indices.size());
+
+    vtx_indices_.insert(vtx_indices_.end(), _new_vtx_indices.begin(), _new_vtx_indices.end());
 
     return (uint32_t)(meshes_.size() - 1);
 }

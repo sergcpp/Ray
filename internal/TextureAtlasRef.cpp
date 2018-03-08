@@ -1,26 +1,53 @@
 #include "TextureAtlasRef.h"
 
-ray::ref::TextureAtlas::TextureAtlas(const math::ivec2 &res, int pages_count) : res_(res), pages_count_(0) {
+ray::ref::TextureAtlas::TextureAtlas(const math::ivec2 &res, int pages_count) : res_(res), res_f_{ (float)res.x, (float)res.y }, pages_count_(0) {
     if (!Resize(pages_count)) {
         throw std::runtime_error("TextureAtlas cannot be resized!");
     }
 }
 
 int ray::ref::TextureAtlas::Allocate(const pixel_color8_t *data, const math::ivec2 &_res, math::ivec2 &pos) {
-    // TODO: add 1px border
-    math::ivec2 res = _res;// +math::ivec2{ 2, 2 };
+    using namespace math;
+
+    ivec2 res = _res + ivec2{ 2, 2 };
 
     if (res.x > res_.x || res.y > res_.y) return -1;
+
+    auto write_page = [_res, res, this](std::vector<pixel_color8_t> &page, const ivec2 &pos, const ivec2 &size, const pixel_color8_t *data) {
+        for (int y = 0; y < size.y; y++) {
+            memcpy(&page[(pos.y + y) * res_.x + pos.x], &data[y * size.x], size.x * sizeof(pixel_color8_t));
+        }
+    };
 
     for (int page_index = 0; page_index < pages_count_; page_index++) {
         int index = splitters_[page_index].Allocate(res, pos);
         if (index != -1) {
             auto &page = pages_[page_index];
 
-            for (int y = 0; y < res.y; y++) {
-                memcpy(&page[(pos.y + y) * res_.x + pos.x], &data[y * res.x], res.x * sizeof(pixel_color8_t));
-            }
+            write_page(page, { pos.x + 1, pos.y + 1 }, _res, &data[0]);
 
+            // add 1px border
+            write_page(page, { pos.x + 1, pos.y }, { _res.x, 1 }, &data[(_res.y - 1) * _res.x]);
+
+            write_page(page, { pos.x + 1, pos.y + res.y - 1 }, { _res.x, 1 }, &data[0]);
+            
+            std::vector<pixel_color8_t> vertical_border(res.y);
+            vertical_border[0] = data[(_res.y - 1) * _res.x + _res.y - 1];
+            for (int i = 0; i < _res.y; i++) {
+                vertical_border[i + 1] = data[i * _res.x + _res.y - 1];
+            }
+            vertical_border[res.y - 1] = data[0 * _res.x + _res.y - 1];
+
+            write_page(page, pos, { 1, res.y }, &vertical_border[0]);
+
+            vertical_border[0] = data[(_res.y - 1) * _res.x];
+            for (int i = 0; i < _res.y; i++) {
+                vertical_border[i + 1] = data[i * _res.x];
+            }
+            vertical_border[res.y - 1] = data[0];
+
+            write_page(page, { pos.x + res.x - 1, pos.y }, { 1, res.y }, &vertical_border[0]);
+            
             return page_index;
         }
     }
@@ -63,4 +90,62 @@ bool ray::ref::TextureAtlas::Resize(int pages_count) {
     pages_count_ = pages_count;
 
     return true;
+}
+
+ray::pixel_color_t ray::ref::TextureAtlas::SampleNearest(const texture_t &t, const math::vec2 &uvs, float lod) const {
+    using namespace math;
+
+    int _lod = (int)floor(lod);
+
+    float _uvs[2];
+    TransformUVs(value_ptr(uvs), value_ptr(res_f_), &t, _lod, _uvs);
+
+    _lod = min(_lod, MAX_MIP_LEVEL);
+
+    int page = t.page[_lod];
+
+    const auto &pix = pages_[page][res_.x * int(_uvs[1] * res_.y - 0.5f) + int(_uvs[0] * res_.x - 0.5f)];
+
+    const float k = 1.0f / 255.0f;
+
+    return pixel_color_t{ pix.r * k, pix.g * k, pix.b * k, pix.a * k };
+}
+
+ray::pixel_color_t ray::ref::TextureAtlas::SampleBilinear(const texture_t &t, const math::vec2 &uvs, float lod) const {
+    using namespace math;
+
+    int _lod = (int)floor(lod);
+
+    float _uvs[2];
+    TransformUVs(value_ptr(uvs), value_ptr(res_f_), &t, _lod, _uvs);
+
+    _lod = min(_lod, MAX_MIP_LEVEL);
+
+    int page = t.page[_lod];
+
+    _uvs[0] = _uvs[0] * res_.x - 0.5f;
+    _uvs[1] = _uvs[1] * res_.y - 0.5f;
+
+    const auto &p00 = pages_[page][res_.x * int(_uvs[1]) + int(_uvs[0])];
+    const auto &p01 = pages_[page][res_.x * int(_uvs[1]) + int(_uvs[0]) + 1];
+    const auto &p10 = pages_[page][res_.x * (int(_uvs[1]) + 1) + int(_uvs[0])];
+    const auto &p11 = pages_[page][res_.x * (int(_uvs[1]) + 1) + int(_uvs[0]) + 1];
+
+    float kx = fract(_uvs[0]), ky = fract(_uvs[1]);
+
+    const auto p0 = pixel_color_t{ p01.r * kx + p00.r * (1 - kx),
+                                   p01.g * kx + p00.g * (1 - kx),
+                                   p01.b * kx + p00.b * (1 - kx),
+                                   p01.a * kx + p00.a * (1 - kx) };
+
+    const auto p1 = pixel_color_t{ p11.r * kx + p10.r * (1 - kx),
+                                   p11.g * kx + p10.g * (1 - kx),
+                                   p11.b * kx + p10.b * (1 - kx),
+                                   p11.a * kx + p10.a * (1 - kx) };
+
+    const float k = 1.0f / 255.0f;
+    return pixel_color_t{ k * (p1.r * ky + p0.r * (1 - ky)),
+                          k * (p1.g * ky + p0.g * (1 - ky)),
+                          k * (p1.b * ky + p0.b * (1 - ky)),
+                          k * (p1.a * ky + p0.a * (1 - ky)) };
 }
