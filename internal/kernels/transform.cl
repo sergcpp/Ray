@@ -15,7 +15,7 @@ ray_packet_t TransformRay(const ray_packet_t *r, const __global float16 *xform) 
 }
 
 float3 TransformNormal(const float3 *n, const __global float16 *inv_xform) {
-    float3 _n = *n;
+    float3 _n;
 
     _n.x = (*inv_xform).s0 * (*n).x + (*inv_xform).s1 * (*n).y + (*inv_xform).s2 * (*n).z;
     _n.y = (*inv_xform).s4 * (*n).x + (*inv_xform).s5 * (*n).y + (*inv_xform).s6 * (*n).z;

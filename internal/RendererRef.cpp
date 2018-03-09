@@ -93,47 +93,17 @@ void ray::ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, regio
     }
 
     for (size_t i = 0; i < intersections.size(); i++) {
-        const auto &ii = intersections[i];
+        const auto &inter = intersections[i];
 
-        const int x = ii.id.x;
-        const int y = ii.id.y;
+        if (!inter.mask_values[0]) continue;
 
-        /*const pixel_color_t col1 = color_table_[ii.prim_indices[0] % color_table_.size()];
+        const int x = inter.id.x;
+        const int y = inter.id.y;
+        
+        pixel_color_t col = ShadeSurface(inter, primary_rays[0], mesh_instances, mi_indices, meshes, transforms, vtx_indices,
+                                         vertices, nodes, macro_tree_root, tris, tri_indices, materials, textures, s->texture_atlas_);
 
-        if (ii.mask_values[0]) {
-            framebuf_.SetPixel(x, y, col1);
-        }*/
-
-        /////////////////
-
-        const auto &t = s->texture_atlas_;
-
-        if (!ii.mask_values[0]) continue;
-
-        const auto &tri = tris[ii.prim_indices[0]];
-
-        const auto &mat = materials[tri.mi];
-
-        const auto &v1 = vertices[vtx_indices[ii.prim_indices[0] * 3 + 0]];
-        const auto &v2 = vertices[vtx_indices[ii.prim_indices[0] * 3 + 1]];
-        const auto &v3 = vertices[vtx_indices[ii.prim_indices[0] * 3 + 2]];
-
-        const vec2 u1 = make_vec2(v1.t0);
-        const vec2 u2 = make_vec2(v2.t0);
-        const vec2 u3 = make_vec2(v3.t0);
-
-        float w = 1.0f - ii.u - ii.v;
-        vec2 uvs = u1 * w + u2 * ii.u + u3 * ii.v;
-
-        if (mat.type == DiffuseMaterial) {
-            const auto &diff_tex = textures[mat.textures[MAIN_TEXTURE]];
-
-            pixel_color_t col = t.SampleBilinear(diff_tex, uvs, 0);
-
-            framebuf_.SetPixel(x, y, col);
-        } else {
-            framebuf_.SetPixel(x, y, { 0, 1.0f, 1.0f, 1.0f });
-        }
+        framebuf_.SetPixel(x, y, col);
     }
 
     /*const auto &t = s->texture_atlas_;

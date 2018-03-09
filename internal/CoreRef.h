@@ -34,6 +34,8 @@ struct hit_data_t {
     static const size_t alignment = 1;
 };
 
+class TextureAtlas;
+
 // Generating rays
 void ConstructRayPacket(const float *o, const float *d, int size, ray_packet_t &out_r);
 void GeneratePrimaryRays(const camera_t &cam, const region_t &r, int w, int h, math::aligned_vector<ray_packet_t> &out_rays);
@@ -62,6 +64,13 @@ bool Traverse_MicroTree_GPU(const ray_packet_t &r, const float inv_d[3], const b
 
 // Transform
 ray_packet_t TransformRay(const ray_packet_t &r, const float *xform);
+void TransformNormal(const float *n, const float *inv_xform, float *out_n);
 void TransformUVs(const float uvs[2], const float tex_atlas_size[2], const texture_t *t, int mip_level, float out_uvs[2]);
+
+// Shade
+ray::pixel_color_t ShadeSurface(const hit_data_t &inter, const ray_packet_t &ray, const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
+                                const mesh_t *meshes, const transform_t *transforms, const uint32_t *vtx_indices, const vertex_t *vertices,
+                                const bvh_node_t *nodes, uint32_t node_index, const tri_accel_t *tris, const uint32_t *tri_indices,
+                                const material_t *materials, const texture_t *textures, const TextureAtlas &tex_atlas);
 }
 }

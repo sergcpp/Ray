@@ -516,6 +516,16 @@ ray::ref::ray_packet_t ray::ref::TransformRay(const ray_packet_t &r, const float
     return _r;
 }
 
+void ray::ref::TransformNormal(const float *n, const float *inv_xform, float *out_n) {
+    using namespace math;
+
+    const auto _n = make_vec3(n);
+
+    out_n[0] = dot(make_vec3(&inv_xform[0]), _n);
+    out_n[1] = dot(make_vec3(&inv_xform[4]), _n);
+    out_n[2] = dot(make_vec3(&inv_xform[8]), _n);
+}
+
 void ray::ref::TransformUVs(const float _uvs[2], const float tex_atlas_size[2], const texture_t *t, int mip_level, float out_uvs[2]) {
     using namespace math;
     
@@ -528,4 +538,54 @@ void ray::ref::TransformUVs(const float _uvs[2], const float tex_atlas_size[2], 
     
     out_uvs[0] = res.x;
     out_uvs[1] = res.y;
+}
+
+ray::pixel_color_t ray::ref::ShadeSurface(const hit_data_t &inter, const ray_packet_t &ray, const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
+                                     const mesh_t *meshes, const transform_t *transforms, const uint32_t *vtx_indices, const vertex_t *vertices,
+                                     const bvh_node_t *nodes, uint32_t node_index, const tri_accel_t *tris, const uint32_t *tri_indices,
+                                     const material_t *materials, const texture_t *textures, const TextureAtlas &tex_atlas) {
+    using namespace math;
+    
+    const auto &tri = tris[inter.prim_indices[0]];
+
+    const auto &mat = materials[tri.mi];
+
+    const auto &v1 = vertices[vtx_indices[inter.prim_indices[0] * 3 + 0]];
+    const auto &v2 = vertices[vtx_indices[inter.prim_indices[0] * 3 + 1]];
+    const auto &v3 = vertices[vtx_indices[inter.prim_indices[0] * 3 + 2]];
+
+    const vec3 n1 = make_vec3(v1.n);
+    const vec3 n2 = make_vec3(v2.n);
+    const vec3 n3 = make_vec3(v3.n);
+
+    const vec2 u1 = make_vec2(v1.t0);
+    const vec2 u2 = make_vec2(v2.t0);
+    const vec2 u3 = make_vec2(v3.t0);
+
+    float w = 1.0f - inter.u - inter.v;
+    vec2 uvs = u1 * w + u2 * inter.u + u3 * inter.v;
+
+    const vec3 p1 = make_vec3(v1.p);
+    const vec3 p2 = make_vec3(v2.p);
+    const vec3 p3 = make_vec3(v3.p);
+
+    const auto *tr = &transforms[mesh_instances[inter.obj_indices[0]].tr_index];
+
+    vec3 N = n1 * w + n2 * inter.u + n3 * inter.v;
+        
+    float _N[3];
+    TransformNormal(value_ptr(N), tr->inv_xform, &_N[0]);
+
+    if (mat.type == DiffuseMaterial) {
+        const auto &diff_tex = textures[mat.textures[MAIN_TEXTURE]];
+
+        //pixel_color_t col = t.SampleBilinear(diff_tex, uvs, 0);
+        pixel_color_t col = { _N[0] * 0.5f + 0.5f, _N[1] * 0.5f + 0.5f, _N[2] * 0.5f + 0.5f, 1.0f };
+
+        return col;
+    } else {
+        //framebuf_.SetPixel(x, y, { 0, 1.0f, 1.0f, 1.0f });
+    }
+
+    return {};
 }
