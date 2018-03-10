@@ -34,6 +34,15 @@ public:
     void Resize(int w, int h);
     void Clear(const pixel_color_t &p);
 
+    template <typename F>
+    void Apply(const region_t &reg, F &&f) {
+        for (int y = reg.y; y < reg.y + reg.h; y++) {
+            for (int x = reg.x; x < reg.x + reg.w; x++) {
+                f(pixels_[y * w_ + x]);
+            }
+        }
+    }
+
     const pixel_color_t *get_pixels_ref() const {
         return &pixels_[0];
     }

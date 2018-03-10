@@ -76,6 +76,7 @@ force_inline bool bbox_test(const float o[3], const float inv_d[3], const float 
 }
 
 enum eTraversalSource { FromParent, FromChild, FromSibling };
+
 }
 }
 
@@ -86,15 +87,6 @@ ray::ref::hit_data_t::hit_data_t() {
     t = std::numeric_limits<float>::max();
 }
 
-void ray::ref::ConstructRayPacket(const float *o, const float *d, int size, ray_packet_t &out_r) {
-    assert(size <= RayPacketSize);
-
-    for (int i = 0; i < 3; i++) {
-        out_r.o[i] = o[i];
-        out_r.d[i] = d[i];
-    }
-}
-
 void ray::ref::GeneratePrimaryRays(const camera_t &cam, const region_t &r, int w, int h, math::aligned_vector<ray_packet_t> &out_rays) {
     using namespace math;
 
@@ -102,19 +94,41 @@ void ray::ref::GeneratePrimaryRays(const camera_t &cam, const region_t &r, int w
 
     up *= float(h) / w;
 
+    auto get_pix_dir = [fwd, side, up, w, h](const float x, const float y) {
+        vec3 _d(float(x) / w - 0.5f, float(-y) / h + 0.5f, 1);
+        _d = _d.x * side + _d.y * up + _d.z * fwd;
+        _d = normalize(_d);
+        return _d;
+    };
+
     size_t i = 0;
     out_rays.resize(r.w * r.h);
 
     for (int y = r.y; y < r.y + r.h; y += RayPacketDimY) {
         for (int x = r.x; x < r.x + r.w; x += RayPacketDimX) {
-            vec3 _d(float(x) / w - 0.5f, float(-y) / h + 0.5f, 1);
-            _d = _d.x * side + _d.y * up + _d.z * fwd;
-            _d = normalize(_d);
+            auto &out_r = out_rays[i++];
 
-            ConstructRayPacket(value_ptr(origin), value_ptr(_d), RayPacketSize, out_rays[i]);
-            out_rays[i].id.x = x;
-            out_rays[i].id.y = y;
-            i++;
+            float _x = (float)x;
+            float _y = (float)y;
+
+            vec3 _d = get_pix_dir(_x, _y);
+
+            vec3 _dx = get_pix_dir(_x + 1, _y),
+                 _dy = get_pix_dir(_x, _y + 1);
+
+            for (int j = 0; j < 3; j++) {
+                out_r.o[j] = origin[j];
+                out_r.d[j] = _d[j];
+                out_r.c[j] = 1.0f;
+
+                out_r.do_dx[j] = 0;
+                out_r.dd_dx[j] = _dx[j] - _d[j];
+                out_r.do_dy[j] = 0;
+                out_r.dd_dy[j] = _dy[j] - _d[j];
+            }
+
+            out_r.id.x = x;
+            out_r.id.y = y;
         }
     }
 }
@@ -540,12 +554,19 @@ void ray::ref::TransformUVs(const float _uvs[2], const float tex_atlas_size[2], 
     out_uvs[1] = res.y;
 }
 
-ray::pixel_color_t ray::ref::ShadeSurface(const hit_data_t &inter, const ray_packet_t &ray, const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
-                                     const mesh_t *meshes, const transform_t *transforms, const uint32_t *vtx_indices, const vertex_t *vertices,
-                                     const bvh_node_t *nodes, uint32_t node_index, const tri_accel_t *tris, const uint32_t *tri_indices,
-                                     const material_t *materials, const texture_t *textures, const TextureAtlas &tex_atlas) {
+ray::pixel_color_t ray::ref::ShadeSurface(const hit_data_t &inter, const ray_packet_t &ray, const environment_t &env, const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
+                                          const mesh_t *meshes, const transform_t *transforms, const uint32_t *vtx_indices, const vertex_t *vertices,
+                                          const bvh_node_t *nodes, uint32_t node_index, const tri_accel_t *tris, const uint32_t *tri_indices,
+                                          const material_t *materials, const texture_t *textures, const TextureAtlas &tex_atlas) {
     using namespace math;
-    
+
+    if (!inter.mask_values[0]) {
+        return ray::pixel_color_t{ env.sky_col[0], env.sky_col[1], env.sky_col[2], 1.0f };
+    }
+
+    const auto I = make_vec3(ray.d);
+    const auto P = make_vec3(ray.o) + inter.t * I;
+
     const auto &tri = tris[inter.prim_indices[0]];
 
     const auto &mat = materials[tri.mi];
@@ -563,15 +584,60 @@ ray::pixel_color_t ray::ref::ShadeSurface(const hit_data_t &inter, const ray_pac
     const vec2 u3 = make_vec2(v3.t0);
 
     float w = 1.0f - inter.u - inter.v;
+    vec3 N = n1 * w + n2 * inter.u + n3 * inter.v;
     vec2 uvs = u1 * w + u2 * inter.u + u3 * inter.v;
+
+    //////////////////////////////////////////
 
     const vec3 p1 = make_vec3(v1.p);
     const vec3 p2 = make_vec3(v2.p);
     const vec3 p3 = make_vec3(v3.p);
 
-    const auto *tr = &transforms[mesh_instances[inter.obj_indices[0]].tr_index];
+    // From 'Tracing Ray Differentials' [1999]
 
-    vec3 N = n1 * w + n2 * inter.u + n3 * inter.v;
+    float dt_dx = -dot(make_vec3(ray.do_dx) + inter.t * make_vec3(ray.dd_dx), N) / dot(I, N);
+    float dt_dy = -dot(make_vec3(ray.do_dy) + inter.t * make_vec3(ray.dd_dy), N) / dot(I, N);
+
+    const vec3 do_dx = (make_vec3(ray.do_dx) + inter.t * make_vec3(ray.dd_dx)) + dt_dx * I;
+    const vec3 do_dy = (make_vec3(ray.do_dy) + inter.t * make_vec3(ray.dd_dy)) + dt_dy * I;
+    const vec3 dd_dx = make_vec3(ray.dd_dx);
+    const vec3 dd_dy = make_vec3(ray.dd_dy);
+
+    //////////////////////////////////////////
+
+    // From 'Physically Based Rendering: ...' book
+
+    const vec2 duv13 = u1 - u3, duv23 = u2 - u3;
+    const vec3 dp13 = p1 - p3, dp23 = p2 - p3;
+
+    const float inv_det_uv = 1.0f / (duv13.x * duv23.y - duv13.y * duv23.x);
+    const vec3 dpdu = (duv23.y * dp13 - duv13.y * dp23) * inv_det_uv;
+    const vec3 dpdv = (-duv23.x * dp13 + duv13.x * dp23) * inv_det_uv;
+
+    vec2 A[2] = { { dpdu.x, dpdu.y }, { dpdv.x, dpdv.y } };
+    vec2 Bx = { do_dx.x, do_dx.y };
+    vec2 By = { do_dy.x, do_dy.y };
+
+    if (abs(N.x) > abs(N.y) && abs(N.x) > abs(N.z)) {
+        A[0] = { dpdu.y, dpdu.z };
+        A[1] = { dpdv.y, dpdv.z };
+        Bx = { do_dx.y, do_dx.z };
+        By = { do_dy.y, do_dy.z };
+    } else if (abs(N.y) > abs(N.z)) {
+        A[0] = { dpdu.x, dpdu.z };
+        A[1] = { dpdv.x, dpdv.z };
+        Bx = { do_dx.x, do_dx.z };
+        By = { do_dy.x, do_dy.z };
+    }
+
+    const float det = A[0].x * A[1].y - A[1].x * A[0].y;
+    const float inv_det = fabs(det) < FLT_EPSILON ? 0 : 1.0f / det;
+    const vec2 duv_dx = vec2{ A[0].x * Bx.x - A[0].y * Bx.y, A[1].x * Bx.x - A[1].y * Bx.y } * inv_det;
+    const vec2 duv_dy = vec2{ A[0].x * By.x - A[0].y * By.y, A[1].x * By.x - A[1].y * By.y } * inv_det;
+
+    ////////////////////////////////////////////////////////
+
+    const auto *tr = &transforms[mesh_instances[inter.obj_indices[0]].tr_index];
         
     float _N[3];
     TransformNormal(value_ptr(N), tr->inv_xform, &_N[0]);

@@ -67,6 +67,8 @@ void ray::ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, regio
     const auto num_materials = (uint32_t)s->materials_.size();
     const auto *materials = num_materials ? &s->materials_[0] : nullptr;
 
+    const auto &env = s->env_;
+
     const auto w = framebuf_.w(), h = framebuf_.h();
 
     if (region.w == 0 || region.h == 0) {
@@ -81,30 +83,35 @@ void ray::ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, regio
     intersections.reserve(primary_rays.size());
 
     for (size_t i = 0; i < primary_rays.size(); i++) {
-        hit_data_t inter;
-        inter.id = primary_rays[i].id;
-
         const ray_packet_t &r = primary_rays[i];
         const float inv_d[3] = { 1.0f / r.d[0], 1.0f / r.d[1], 1.0f / r.d[2] };
 
-        if (Traverse_MacroTree_CPU(r, inv_d, nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, inter)) {
-            intersections.push_back(inter);
-        }
+        hit_data_t inter;
+        inter.id = r.id;
+
+        Traverse_MacroTree_CPU(r, inv_d, nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, inter);
+        intersections.push_back(inter);
     }
 
     for (size_t i = 0; i < intersections.size(); i++) {
+        const auto &r = primary_rays[i];
         const auto &inter = intersections[i];
-
-        if (!inter.mask_values[0]) continue;
 
         const int x = inter.id.x;
         const int y = inter.id.y;
         
-        pixel_color_t col = ShadeSurface(inter, primary_rays[0], mesh_instances, mi_indices, meshes, transforms, vtx_indices,
+        pixel_color_t col = ShadeSurface(inter, r, env, mesh_instances, mi_indices, meshes, transforms, vtx_indices,
                                          vertices, nodes, macro_tree_root, tris, tri_indices, materials, textures, s->texture_atlas_);
 
         framebuf_.SetPixel(x, y, col);
     }
+
+    framebuf_.Apply(region, [](pixel_color_t &p) {
+        auto c = make_vec4(&p.r);
+        c = pow(c, vec4(1.0f / 2.2f));
+        c = clamp(c, 0.0f, 1.0f);
+        memcpy(&p.r, value_ptr(c), sizeof(vec4));
+    });
 
     /*const auto &t = s->texture_atlas_;
 

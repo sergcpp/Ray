@@ -10,7 +10,12 @@ namespace ray {
 namespace ref {
 struct ray_packet_t {
     rays_id_t id;
+    // origin and direction
     float o[3], d[3];
+    // color of ray
+    float c[3];
+    // derivatives
+    float do_dx[3], dd_dx[3], do_dy[3], dd_dy[3];
 
     // hint for math::aligned_vector
     static const size_t alignment = 1;
@@ -34,10 +39,16 @@ struct hit_data_t {
     static const size_t alignment = 1;
 };
 
+struct environment_t {
+    float sun_dir[3];
+    float sun_col[3];
+    float sky_col[3];
+    float sun_softness;
+};
+
 class TextureAtlas;
 
 // Generating rays
-void ConstructRayPacket(const float *o, const float *d, int size, ray_packet_t &out_r);
 void GeneratePrimaryRays(const camera_t &cam, const region_t &r, int w, int h, math::aligned_vector<ray_packet_t> &out_rays);
 
 // Intersect primitives
@@ -68,7 +79,7 @@ void TransformNormal(const float *n, const float *inv_xform, float *out_n);
 void TransformUVs(const float uvs[2], const float tex_atlas_size[2], const texture_t *t, int mip_level, float out_uvs[2]);
 
 // Shade
-ray::pixel_color_t ShadeSurface(const hit_data_t &inter, const ray_packet_t &ray, const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
+ray::pixel_color_t ShadeSurface(const hit_data_t &inter, const ray_packet_t &ray, const environment_t &env, const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
                                 const mesh_t *meshes, const transform_t *transforms, const uint32_t *vtx_indices, const vertex_t *vertices,
                                 const bvh_node_t *nodes, uint32_t node_index, const tri_accel_t *tris, const uint32_t *tri_indices,
                                 const material_t *materials, const texture_t *textures, const TextureAtlas &tex_atlas);

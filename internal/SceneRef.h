@@ -38,6 +38,8 @@ protected:
     std::vector<texture_t> textures_;
     TextureAtlas texture_atlas_;
 
+    environment_t env_;
+
     uint32_t macro_nodes_start_ = 0, macro_nodes_count_ = 0;
 
     uint32_t default_normals_texture_;
@@ -47,8 +49,8 @@ protected:
 public:
     Scene();
 
-    void GetEnvironment(environment_desc_t &env) override {}
-    void SetEnvironment(const environment_desc_t &env) override {}
+    void GetEnvironment(environment_desc_t &env) override;
+    void SetEnvironment(const environment_desc_t &env) override;
 
     uint32_t AddTexture(const tex_desc_t &t) override;
     void RemoveTexture(uint32_t) override {}

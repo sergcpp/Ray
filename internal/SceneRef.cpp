@@ -19,6 +19,20 @@ ray::ref::Scene::Scene() : texture_atlas_({ MAX_TEXTURE_SIZE, MAX_TEXTURE_SIZE }
     }
 }
 
+void ray::ref::Scene::GetEnvironment(environment_desc_t &env) {
+    memcpy(&env.sun_dir[0], &env_.sun_dir, 3 * sizeof(float));
+    memcpy(&env.sun_col[0], &env_.sun_col, 3 * sizeof(float));
+    memcpy(&env.sky_col[0], &env_.sky_col, 3 * sizeof(float));
+    env.sun_softness = env_.sun_softness;
+}
+
+void ray::ref::Scene::SetEnvironment(const environment_desc_t &env) {
+    memcpy(&env_.sun_dir, &env.sun_dir[0], 3 * sizeof(float));
+    memcpy(&env_.sun_col, &env.sun_col[0], 3 * sizeof(float));
+    memcpy(&env_.sky_col, &env.sky_col[0], 3 * sizeof(float));
+    env_.sun_softness = env.sun_softness;
+}
+
 uint32_t ray::ref::Scene::AddTexture(const tex_desc_t &_t) {
     uint32_t tex_index = (uint32_t)textures_.size();
 
