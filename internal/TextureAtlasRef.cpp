@@ -92,7 +92,7 @@ bool ray::ref::TextureAtlas::Resize(int pages_count) {
     return true;
 }
 
-ray::pixel_color_t ray::ref::TextureAtlas::SampleNearest(const texture_t &t, const math::vec2 &uvs, float lod) const {
+math::vec4 ray::ref::TextureAtlas::SampleNearest(const texture_t &t, const math::vec2 &uvs, float lod) const {
     using namespace math;
 
     int _lod = (int)floor(lod);
@@ -108,20 +108,16 @@ ray::pixel_color_t ray::ref::TextureAtlas::SampleNearest(const texture_t &t, con
 
     const float k = 1.0f / 255.0f;
 
-    return pixel_color_t{ pix.r * k, pix.g * k, pix.b * k, pix.a * k };
+    return vec4{ pix.r * k, pix.g * k, pix.b * k, pix.a * k };
 }
 
-ray::pixel_color_t ray::ref::TextureAtlas::SampleBilinear(const texture_t &t, const math::vec2 &uvs, float lod) const {
+math::vec4 ray::ref::TextureAtlas::SampleBilinear(const texture_t &t, const math::vec2 &uvs, int lod) const {
     using namespace math;
 
-    int _lod = (int)floor(lod);
-
     float _uvs[2];
-    TransformUVs(value_ptr(uvs), value_ptr(res_f_), &t, _lod, _uvs);
+    TransformUVs(value_ptr(uvs), value_ptr(res_f_), &t, lod, _uvs);
 
-    _lod = min(_lod, MAX_MIP_LEVEL);
-
-    int page = t.page[_lod];
+    int page = t.page[lod];
 
     _uvs[0] = _uvs[0] * res_.x - 0.5f;
     _uvs[1] = _uvs[1] * res_.y - 0.5f;
@@ -144,8 +140,57 @@ ray::pixel_color_t ray::ref::TextureAtlas::SampleBilinear(const texture_t &t, co
                                    p11.a * kx + p10.a * (1 - kx) };
 
     const float k = 1.0f / 255.0f;
-    return pixel_color_t{ k * (p1.r * ky + p0.r * (1 - ky)),
-                          k * (p1.g * ky + p0.g * (1 - ky)),
-                          k * (p1.b * ky + p0.b * (1 - ky)),
-                          k * (p1.a * ky + p0.a * (1 - ky)) };
+    return vec4{ k * (p1.r * ky + p0.r * (1 - ky)),
+                 k * (p1.g * ky + p0.g * (1 - ky)),
+                 k * (p1.b * ky + p0.b * (1 - ky)),
+                 k * (p1.a * ky + p0.a * (1 - ky)) };
+}
+
+math::vec4 ray::ref::TextureAtlas::SampleTrilinear(const texture_t &t, const math::vec2 &uvs, float lod) const {
+    using namespace math;
+    
+    auto col1 = SampleBilinear(t, uvs, (int)floor(lod));
+    auto col2 = SampleBilinear(t, uvs, (int)ceil(lod));
+
+    return mix(col1, col2, lod - floor(lod));
+}
+
+math::vec4 ray::ref::TextureAtlas::SampleAnisotropic(const texture_t &t, const math::vec2 &uvs,
+                                                     const math::vec2 &duv_dx, const math::vec2 &duv_dy) const {
+    using namespace math;
+
+    auto sz = vec2{ (float)t.size[0], (float)t.size[1] };
+
+    float l1 = length(duv_dx * sz);
+    float l2 = length(duv_dy * sz);
+
+    float lod;
+    float k;
+    vec2 step{ Uninitialize };
+
+    if (l1 <= l2) {
+        lod = log2(l1);
+        k = l1 / l2;
+        step = duv_dy;
+    } else {
+        lod = log2(l2);
+        k = l2 / l1;
+        step = duv_dx;
+    }
+
+    lod = clamp(lod, 0.0f, (float)MAX_MIP_LEVEL);
+
+    vec2 _uvs = uvs - step * 0.5f;
+
+    int num = clamp((int)(2.0f / k), 1, 32);
+    step = step / float(num);
+
+    vec4 res;
+
+    for (int i = 0; i < num; i++) {
+        res += SampleTrilinear(t, _uvs, lod);
+        _uvs += step;
+    }
+
+    return res / float(num);
 }

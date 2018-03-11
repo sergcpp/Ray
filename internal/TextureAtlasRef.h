@@ -26,8 +26,11 @@ public:
 
     bool Resize(int pages_count);
 
-    pixel_color_t SampleNearest(const texture_t &t, const math::vec2 &uvs, float lod) const;
-    pixel_color_t SampleBilinear(const texture_t &t, const math::vec2 &uvs, float lod) const;
+    math::vec4 SampleNearest(const texture_t &t, const math::vec2 &uvs, float lod) const;
+    math::vec4 SampleBilinear(const texture_t &t, const math::vec2 &uvs, int lod) const;
+    math::vec4 SampleTrilinear(const texture_t &t, const math::vec2 &uvs, float lod) const;
+    math::vec4 SampleAnisotropic(const texture_t &t, const math::vec2 &uvs,
+                                 const math::vec2 &duv_dx, const math::vec2 &duv_dy) const;
 };
 }
 }

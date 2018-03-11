@@ -4,6 +4,8 @@
 
 #include <math/math.hpp>
 
+#include "TextureAtlasRef.h"
+
 namespace ray {
 namespace ref {
 force_inline void _IntersectTri(const ray_packet_t &r, const tri_accel_t &tri, uint32_t i, hit_data_t &inter) {
@@ -530,14 +532,12 @@ ray::ref::ray_packet_t ray::ref::TransformRay(const ray_packet_t &r, const float
     return _r;
 }
 
-void ray::ref::TransformNormal(const float *n, const float *inv_xform, float *out_n) {
+math::vec3 ray::ref::TransformNormal(const math::vec3 &n, const float *inv_xform) {
     using namespace math;
 
-    const auto _n = make_vec3(n);
-
-    out_n[0] = dot(make_vec3(&inv_xform[0]), _n);
-    out_n[1] = dot(make_vec3(&inv_xform[4]), _n);
-    out_n[2] = dot(make_vec3(&inv_xform[8]), _n);
+    return vec3{ dot(make_vec3(&inv_xform[0]), n),
+                 dot(make_vec3(&inv_xform[4]), n),
+                 dot(make_vec3(&inv_xform[8]), n) };
 }
 
 void ray::ref::TransformUVs(const float _uvs[2], const float tex_atlas_size[2], const texture_t *t, int mip_level, float out_uvs[2]) {
@@ -631,24 +631,57 @@ ray::pixel_color_t ray::ref::ShadeSurface(const hit_data_t &inter, const ray_pac
     }
 
     const float det = A[0].x * A[1].y - A[1].x * A[0].y;
-    const float inv_det = fabs(det) < FLT_EPSILON ? 0 : 1.0f / det;
+    const float inv_det = abs(det) < FLT_EPSILON ? 0 : 1.0f / det;
     const vec2 duv_dx = vec2{ A[0].x * Bx.x - A[0].y * Bx.y, A[1].x * Bx.x - A[1].y * Bx.y } * inv_det;
     const vec2 duv_dy = vec2{ A[0].x * By.x - A[0].y * By.y, A[1].x * By.x - A[1].y * By.y } * inv_det;
 
     ////////////////////////////////////////////////////////
 
+    // Derivative for normal
+
+    const vec3 dn1 = n1 - n3, dn2 = n2 - n3;
+    const vec3 dndu = (duv23.y * dn1 - duv13.y * dn2) * inv_det_uv;
+    const vec3 dndv = (-duv23.x * dn1 + duv13.x * dn2) * inv_det_uv;
+
+    const vec3 dndx = dndu * duv_dx.x + dndv * duv_dx.y;
+    const vec3 dndy = dndu * duv_dy.x + dndv * duv_dy.y;
+
+    const float ddn_dx = dot(dd_dx, N) + dot(I, dndx);
+    const float ddn_dy = dot(dd_dy, N) + dot(I, dndy);
+
+    ////////////////////////////////////////////////////////
+
+    const vec3 b1 = make_vec3(v1.b);
+    const vec3 b2 = make_vec3(v2.b);
+    const vec3 b3 = make_vec3(v3.b);
+
+    vec3 B = b1 * w + b2 * inter.u + b3 * inter.v;
+    vec3 T = cross(B, N);
+
+    auto normals = tex_atlas.SampleAnisotropic(textures[mat.textures[NORMALS_TEXTURE]], uvs, duv_dx, duv_dy);
+    
+    normals = normals * 2.0f - 1.0f;
+
+    N = normals.r * B + normals.g * N + normals.b * T;
+
+    //////////////////////////////////////////
+
     const auto *tr = &transforms[mesh_instances[inter.obj_indices[0]].tr_index];
         
-    float _N[3];
-    TransformNormal(value_ptr(N), tr->inv_xform, &_N[0]);
+    N = TransformNormal(N, tr->inv_xform);
+    B = TransformNormal(B, tr->inv_xform);
+    T = TransformNormal(T, tr->inv_xform);
+
+    //////////////////////////////////////////
+
+    auto albedo = tex_atlas.SampleAnisotropic(textures[mat.textures[MAIN_TEXTURE]], uvs, duv_dx, duv_dy);
+    albedo.x *= mat.main_color[0];
+    albedo.y *= mat.main_color[1];
+    albedo.z *= mat.main_color[2];
+    albedo = pow(albedo, vec4(2.2f));
 
     if (mat.type == DiffuseMaterial) {
-        const auto &diff_tex = textures[mat.textures[MAIN_TEXTURE]];
-
-        //pixel_color_t col = t.SampleBilinear(diff_tex, uvs, 0);
-        pixel_color_t col = { _N[0] * 0.5f + 0.5f, _N[1] * 0.5f + 0.5f, _N[2] * 0.5f + 0.5f, 1.0f };
-
-        return col;
+        return pixel_color_t{ albedo.r, albedo.g, albedo.b, 1.0f };
     } else {
         //framebuf_.SetPixel(x, y, { 0, 1.0f, 1.0f, 1.0f });
     }

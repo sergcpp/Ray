@@ -75,7 +75,7 @@ bool Traverse_MicroTree_GPU(const ray_packet_t &r, const float inv_d[3], const b
 
 // Transform
 ray_packet_t TransformRay(const ray_packet_t &r, const float *xform);
-void TransformNormal(const float *n, const float *inv_xform, float *out_n);
+math::vec3 TransformNormal(const math::vec3 &n, const float *inv_xform);
 void TransformUVs(const float uvs[2], const float tex_atlas_size[2], const texture_t *t, int mip_level, float out_uvs[2]);
 
 // Shade

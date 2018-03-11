@@ -33,18 +33,18 @@ float4 SampleTextureAnisotropic(__read_only image2d_array_t texture_atlas, __glo
     if (l1 <= l2) {
         lod = native_log2(l1);
         k = l1 / l2;
-        step = duv_dx / (float2)(texture->size[0], texture->size[1]);
+        step = duv_dy;
     } else {
         lod = native_log2(l2);
         k = l2 / l1;
-        step = duv_dy / (float2)(texture->size[0], texture->size[1]);
+        step = duv_dx;
     }
 
     lod = clamp(lod, 0.0f, (float)MAX_MIP_LEVEL);
 
     float2 _uvs = uvs - step * 0.5f;
 
-    int num = clamp((int)(1.0f / k), 1, 32);
+    int num = clamp((int)(2.0f / k), 1, 32);
     step = step / num;
 
     float4 res = 0;
