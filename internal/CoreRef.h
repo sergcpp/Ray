@@ -49,7 +49,7 @@ struct environment_t {
 class TextureAtlas;
 
 // Generating rays
-void GeneratePrimaryRays(const camera_t &cam, const region_t &r, int w, int h, math::aligned_vector<ray_packet_t> &out_rays);
+void GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, int h, math::aligned_vector<ray_packet_t> &out_rays);
 
 // Intersect primitives
 bool IntersectTris(const ray_packet_t &r, const tri_accel_t *tris, int num_tris, int obj_index, hit_data_t &out_inter);
@@ -79,7 +79,8 @@ math::vec3 TransformNormal(const math::vec3 &n, const float *inv_xform);
 void TransformUVs(const float uvs[2], const float tex_atlas_size[2], const texture_t *t, int mip_level, float out_uvs[2]);
 
 // Shade
-ray::pixel_color_t ShadeSurface(const hit_data_t &inter, const ray_packet_t &ray, const environment_t &env, const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
+ray::pixel_color_t ShadeSurface(const int iteration, const float *halton, const hit_data_t &inter, const ray_packet_t &ray, 
+                                const environment_t &env, const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
                                 const mesh_t *meshes, const transform_t *transforms, const uint32_t *vtx_indices, const vertex_t *vertices,
                                 const bvh_node_t *nodes, uint32_t node_index, const tri_accel_t *tris, const uint32_t *tri_indices,
                                 const material_t *materials, const texture_t *textures, const TextureAtlas &tex_atlas);

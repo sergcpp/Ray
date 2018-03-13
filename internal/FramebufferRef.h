@@ -35,7 +35,7 @@ public:
     void Clear(const pixel_color_t &p);
 
     template <typename F>
-    void Apply(const region_t &reg, F &&f) {
+    void Apply(const rect_t &reg, F &&f) {
         for (int y = reg.y; y < reg.y + reg.h; y++) {
             for (int x = reg.x; x < reg.x + reg.w; x++) {
                 f(pixels_[y * w_ + x]);

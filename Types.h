@@ -13,7 +13,7 @@ struct pixel_color8_t {
 };
 static_assert(sizeof(pixel_color8_t) == 4, "!");
 
-struct region_t { int x, y, w, h; };
+struct rect_t { int x, y, w, h; };
 
 enum eCamType { Persp, Ortho };
 

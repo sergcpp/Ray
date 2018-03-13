@@ -278,7 +278,7 @@ void ray::sse::ConstructRayPacket(const float *o, const float *d, int size, ray_
     }
 }
 
-void ray::sse::GeneratePrimaryRays(const camera_t &cam, const region_t &r, int w, int h, math::aligned_vector<ray_packet_t> &out_rays) {
+void ray::sse::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, int h, math::aligned_vector<ray_packet_t> &out_rays) {
     size_t i = 0;
     out_rays.resize(r.w * r.h / 4 + ((r.w * r.h) % 4 != 0));
 

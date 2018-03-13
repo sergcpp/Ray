@@ -26,7 +26,7 @@ std::shared_ptr<ray::SceneBase> ray::sse::Renderer::CreateScene() {
     return std::make_shared<ref::Scene>();
 }
 
-void ray::sse::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, region_t region) {
+void ray::sse::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, RegionContext &region) {
     using namespace math;
 
     auto s = std::dynamic_pointer_cast<ref::Scene>(_s);
@@ -59,14 +59,15 @@ void ray::sse::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, regio
 
     const int w = framebuf_.w(), h = framebuf_.h();
 
-    if (region.w == 0 || region.h == 0) {
-        region = { 0, 0, w, h };
+    auto rect = region.rect();
+    if (rect.w == 0 || rect.h == 0) {
+        rect = { 0, 0, w, h };
     }
 
     math::aligned_vector<ray_packet_t> primary_rays;
     math::aligned_vector<hit_data_t> intersections;
 
-    GeneratePrimaryRays(cam, region, w, h, primary_rays);
+    GeneratePrimaryRays(cam, rect, w, h, primary_rays);
 
     intersections.reserve(primary_rays.size());
 

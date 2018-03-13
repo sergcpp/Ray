@@ -31,7 +31,7 @@ public:
     }
 
     std::shared_ptr<SceneBase> CreateScene() override;
-    void RenderScene(const std::shared_ptr<SceneBase> &s, region_t region) override;
+    void RenderScene(const std::shared_ptr<SceneBase> &s, RegionContext &region) override;
 
     virtual void GetStats(stats_t &st) override {
         st.iterations_count = 0;

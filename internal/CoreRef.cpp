@@ -89,7 +89,7 @@ ray::ref::hit_data_t::hit_data_t() {
     t = std::numeric_limits<float>::max();
 }
 
-void ray::ref::GeneratePrimaryRays(const camera_t &cam, const region_t &r, int w, int h, math::aligned_vector<ray_packet_t> &out_rays) {
+void ray::ref::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, int h, math::aligned_vector<ray_packet_t> &out_rays) {
     using namespace math;
 
     vec3 origin = make_vec3(cam.origin), fwd = make_vec3(cam.fwd), side = make_vec3(cam.side), up = make_vec3(cam.up);
@@ -554,7 +554,8 @@ void ray::ref::TransformUVs(const float _uvs[2], const float tex_atlas_size[2], 
     out_uvs[1] = res.y;
 }
 
-ray::pixel_color_t ray::ref::ShadeSurface(const hit_data_t &inter, const ray_packet_t &ray, const environment_t &env, const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
+ray::pixel_color_t ray::ref::ShadeSurface(const int iteration, const float *halton, const hit_data_t &inter, const ray_packet_t &ray,
+                                          const environment_t &env, const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
                                           const mesh_t *meshes, const transform_t *transforms, const uint32_t *vtx_indices, const vertex_t *vertices,
                                           const bvh_node_t *nodes, uint32_t node_index, const tri_accel_t *tris, const uint32_t *tri_indices,
                                           const material_t *materials, const texture_t *textures, const TextureAtlas &tex_atlas) {
@@ -663,7 +664,7 @@ ray::pixel_color_t ray::ref::ShadeSurface(const hit_data_t &inter, const ray_pac
     
     normals = normals * 2.0f - 1.0f;
 
-    N = normals.r * B + normals.g * N + normals.b * T;
+    N = normals.x * B + normals.z * N + normals.y * T;
 
     //////////////////////////////////////////
 
@@ -681,11 +682,25 @@ ray::pixel_color_t ray::ref::ShadeSurface(const hit_data_t &inter, const ray_pac
     albedo.z *= mat.main_color[2];
     albedo = pow(albedo, vec4(2.2f));
 
+    vec3 col;
+
+    // generate secondary ray
     if (mat.type == DiffuseMaterial) {
-        return pixel_color_t{ albedo.r, albedo.g, albedo.b, 1.0f };
+        float k = dot(N, make_vec3(env.sun_dir));
+
+        float v = 1;
+        if (k > 0) {
+            
+        }
+
+        k = clamp(k, 0.0f, 1.0f);
+
+        col = albedo * make_vec3(env.sun_col) * v * k;
+
+        //return pixel_color_t{ albedo.r, albedo.g, albedo.b, 1.0f };
     } else {
         //framebuf_.SetPixel(x, y, { 0, 1.0f, 1.0f, 1.0f });
     }
 
-    return {};
+    return pixel_color_t{ ray.c[0] * col.r, ray.c[1] * col.g, ray.c[2] * col.b, 1.0f };
 }

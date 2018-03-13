@@ -13,6 +13,22 @@ enum eRendererType {
     RendererOCL = 8,
 };
 
+class RegionContext {
+    const rect_t rect_;
+public:
+    int iteration = 0;
+    std::unique_ptr<float[]> halton_seq;
+
+    explicit RegionContext(const rect_t &rect) : rect_(rect) {}
+
+    rect_t rect() const { return rect_; }
+
+    void Clear() {
+        iteration = 0;
+        halton_seq = nullptr;
+    }
+};
+
 class RendererBase {
 public:
     virtual ~RendererBase() = default;
@@ -27,7 +43,7 @@ public:
     virtual void Clear(const pixel_color_t &c = { 0, 0, 0, 0 }) = 0;
 
     virtual std::shared_ptr<SceneBase> CreateScene() = 0;
-    virtual void RenderScene(const std::shared_ptr<SceneBase> &s, region_t region = { 0, 0, 0, 0 }) = 0;
+    virtual void RenderScene(const std::shared_ptr<SceneBase> &s, RegionContext &region) = 0;
 
     struct stats_t {
         int iterations_count;

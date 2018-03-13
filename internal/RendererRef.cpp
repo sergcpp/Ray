@@ -1,5 +1,8 @@
 #include "RendererRef.h"
 
+#include <random>
+
+#include "Halton.h"
 #include "SceneRef.h"
 
 #include <math/math.hpp>
@@ -24,7 +27,7 @@ std::shared_ptr<ray::SceneBase> ray::ref::Renderer::CreateScene() {
     return std::make_shared<ref::Scene>();
 }
 
-void ray::ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, region_t region) {
+void ray::ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, RegionContext &region) {
     using namespace math;
 
     const auto s = std::dynamic_pointer_cast<ref::Scene>(_s);
@@ -71,14 +74,19 @@ void ray::ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, regio
 
     const auto w = framebuf_.w(), h = framebuf_.h();
 
-    if (region.w == 0 || region.h == 0) {
-        region = { 0, 0, w, h };
+    auto rect = region.rect();
+    if (rect.w == 0 || rect.h == 0) {
+        rect = { 0, 0, w, h };
+    }
+
+    if (!region.halton_seq || ++region.iteration % HaltonSeqLen) {
+        UpdateHaltonSequence(region.iteration, region.halton_seq);
     }
 
     aligned_vector<ray_packet_t> primary_rays;
     aligned_vector<hit_data_t> intersections;
 
-    GeneratePrimaryRays(cam, region, w, h, primary_rays);
+    GeneratePrimaryRays(cam, rect, w, h, primary_rays);
 
     intersections.reserve(primary_rays.size());
 
@@ -100,34 +108,31 @@ void ray::ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, regio
         const int x = inter.id.x;
         const int y = inter.id.y;
         
-        pixel_color_t col = ShadeSurface(inter, r, env, mesh_instances, mi_indices, meshes, transforms, vtx_indices,
-                                         vertices, nodes, macro_tree_root, tris, tri_indices, materials, textures, s->texture_atlas_);
+        pixel_color_t col = ShadeSurface(region.iteration, &region.halton_seq[0], inter, r, env, mesh_instances, 
+                                         mi_indices, meshes, transforms, vtx_indices, vertices, nodes, macro_tree_root,
+                                         tris, tri_indices, materials, textures, s->texture_atlas_);
 
         framebuf_.SetPixel(x, y, col);
     }
 
-    framebuf_.Apply(region, [](pixel_color_t &p) {
+    framebuf_.Apply(rect, [](pixel_color_t &p) {
         auto c = make_vec4(&p.r);
         c = pow(c, vec4(1.0f / 2.2f));
         c = clamp(c, 0.0f, 1.0f);
         memcpy(&p.r, value_ptr(c), sizeof(vec4));
     });
+}
 
-    /*const auto &t = s->texture_atlas_;
+void ray::ref::Renderer::UpdateHaltonSequence(int iteration, std::unique_ptr<float[]> &seq) {
+    if (permutations_.empty()) {
+        auto rand_func = std::bind(std::uniform_int_distribution<int>(), std::mt19937(0));
+        permutations_ = ray::ComputeRadicalInversePermutations(g_primes, PrimesCount, rand_func);
+    }
 
-    const int M = 4;
+    seq.reset(new float[HaltonSeqLen * 2]);
 
-    for (int j = region.y; j < region.y + region.h; j++) {
-        for (int i = region.x; i < region.x + region.w; i++) {
-            if ((M * i) >= MAX_TEXTURE_SIZE || (M * j) >= MAX_TEXTURE_SIZE) continue;
-
-            pixel_color_t col;
-            col.r = t.pages_[0][(M * j) * MAX_TEXTURE_SIZE + (M * i)].r / 255.0f;
-            col.g = t.pages_[0][(M * j) * MAX_TEXTURE_SIZE + (M * i)].g / 255.0f;
-            col.b = t.pages_[0][(M * j) * MAX_TEXTURE_SIZE + (M * i)].b / 255.0f;
-            col.a = 1;
-
-            framebuf_.SetPixel(i, j, col);
-        }
-    }*/
+    for (int i = 0; i < HaltonSeqLen; i++) {
+        seq[i * 2 + 0] = ray::ScrambledRadicalInverse<29>(&permutations_[100], (uint64_t)(iteration + i));
+        seq[i * 2 + 1] = ray::ScrambledRadicalInverse<31>(&permutations_[129], (uint64_t)(iteration + i));
+    }
 }

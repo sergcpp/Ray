@@ -10,6 +10,9 @@ class Renderer : public RendererBase {
     ray::ref::Framebuffer framebuf_;
 
     std::vector<pixel_color_t> color_table_;
+
+    std::vector<uint16_t> permutations_;
+    void UpdateHaltonSequence(int iteration, std::unique_ptr<float[]> &seq);
 public:
     Renderer(int w, int h);
 
@@ -31,7 +34,7 @@ public:
     }
 
     std::shared_ptr<SceneBase> CreateScene() override;
-    void RenderScene(const std::shared_ptr<SceneBase> &s, region_t region) override;
+    void RenderScene(const std::shared_ptr<SceneBase> &s, RegionContext &region) override;
 
     virtual void GetStats(stats_t &st) override {
         st.iterations_count = 0;

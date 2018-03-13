@@ -51,7 +51,7 @@ static_assert(alignof(hit_data_t) == alignof(__m128), "!");
 
 // Generating rays
 void ConstructRayPacket(const float *o, const float *d, int size, ray_packet_t &out_r);
-void GeneratePrimaryRays(const camera_t &cam, const region_t &r, int w, int h, math::aligned_vector<ray_packet_t> &out_rays);
+void GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, int h, math::aligned_vector<ray_packet_t> &out_rays);
 
 // Intersect primitives
 bool IntersectTris(const ray_packet_t &r, const __m128i ray_mask, const tri_accel_t *tris, uint32_t num_tris, uint32_t obj_index, hit_data_t &out_inter);
