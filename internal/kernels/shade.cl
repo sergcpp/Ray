@@ -102,7 +102,8 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
     const float2 duv13 = u1 - u3, duv23 = u2 - u3;
     const float3 dp13 = p1 - p3, dp23 = p2 - p3;
 
-    const float inv_det_uv = 1.0f / (duv13.x * duv23.y - duv13.y * duv23.x);
+    const float det_uv = duv13.x * duv23.y - duv13.y * duv23.x;
+    const float inv_det_uv = fabs(det_uv) < FLT_EPSILON ? 0 : 1.0f / det_uv;
     const float3 dpdu = (duv23.y * dp13 - duv13.y * dp23) * inv_det_uv;
     const float3 dpdv = (-duv23.x * dp13 + duv13.x * dp23) * inv_det_uv;
 
