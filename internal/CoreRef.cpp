@@ -104,7 +104,7 @@ void ray::ref::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, 
     };
 
     size_t i = 0;
-    out_rays.resize(r.w * r.h);
+    out_rays.resize((size_t)r.w * r.h);
 
     for (int y = r.y; y < r.y + r.h; y += RayPacketDimY) {
         for (int x = r.x; x < r.x + r.w; x += RayPacketDimX) {
@@ -129,8 +129,8 @@ void ray::ref::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, 
                 out_r.dd_dy[j] = _dy[j] - _d[j];
             }
 
-            out_r.id.x = x;
-            out_r.id.y = y;
+            out_r.id.x = (uint16_t)x;
+            out_r.id.y = (uint16_t)y;
         }
     }
 }
@@ -612,7 +612,7 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int iteration, const float *halt
     const vec3 dp13 = p1 - p3, dp23 = p2 - p3;
 
     const float det_uv = duv13.x * duv23.y - duv13.y * duv23.x;
-    const float inv_det_uv = abs(det_uv) < FLT_EPSILON ? 0 : 1.0f / det_uv;
+    const float inv_det_uv = abs(det_uv) < std::numeric_limits<float>::epsilon() ? 0 : 1.0f / det_uv;
     const vec3 dpdu = (duv23.y * dp13 - duv13.y * dp23) * inv_det_uv;
     const vec3 dpdv = (-duv23.x * dp13 + duv13.x * dp23) * inv_det_uv;
 
@@ -633,7 +633,7 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int iteration, const float *halt
     }
 
     const float det = A[0].x * A[1].y - A[1].x * A[0].y;
-    const float inv_det = abs(det) < FLT_EPSILON ? 0 : 1.0f / det;
+    const float inv_det = abs(det) < std::numeric_limits<float>::epsilon() ? 0 : 1.0f / det;
     const vec2 duv_dx = vec2{ A[0].x * Bx.x - A[0].y * Bx.y, A[1].x * Bx.x - A[1].y * Bx.y } * inv_det;
     const vec2 duv_dy = vec2{ A[0].x * By.x - A[0].y * By.y, A[1].x * By.x - A[1].y * By.y } * inv_det;
 
