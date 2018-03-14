@@ -87,22 +87,21 @@ void ray::ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
     }
 
     aligned_vector<ray_packet_t> primary_rays;
-    aligned_vector<hit_data_t> intersections;
 
     GeneratePrimaryRays(cam, rect, w, h, primary_rays);
 
-    intersections.reserve(primary_rays.size());
+    aligned_vector<hit_data_t> intersections(primary_rays.size());
 
     for (size_t i = 0; i < primary_rays.size(); i++) {
         const ray_packet_t &r = primary_rays[i];
         const float inv_d[3] = { 1.0f / r.d[0], 1.0f / r.d[1], 1.0f / r.d[2] };
 
-        hit_data_t inter;
-        inter.id = r.id;
-
-        Traverse_MacroTree_CPU(r, inv_d, nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, inter);
-        intersections.push_back(inter);
+        intersections[i].id = r.id;
+        Traverse_MacroTree_CPU(r, inv_d, nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, intersections[i]);
     }
+
+    aligned_vector<ray_packet_t> secondary_rays(intersections.size());
+    int secondary_rays_count = 0;
 
     for (size_t i = 0; i < intersections.size(); i++) {
         const auto &r = primary_rays[i];
@@ -111,12 +110,47 @@ void ray::ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
         const int x = inter.id.x;
         const int y = inter.id.y;
         
-        pixel_color_t col = ShadeSurface(region.iteration, &region.halton_seq[0], inter, r, env, mesh_instances, 
+        pixel_color_t col = ShadeSurface((y * framebuf_.w() + x), region.iteration, &region.halton_seq[0], inter, r, env, mesh_instances, 
                                          mi_indices, meshes, transforms, vtx_indices, vertices, nodes, macro_tree_root,
-                                         tris, tri_indices, materials, textures, s->texture_atlas_);
+                                         tris, tri_indices, materials, textures, s->texture_atlas_, &secondary_rays[0], &secondary_rays_count);
 
         framebuf_.SetPixel(x, y, col);
     }
+
+    /*printf("%i\n", secondary_rays_count);
+
+    for (size_t i = 0; i < secondary_rays_count; i++) {
+        const auto &r = secondary_rays[i];
+        const float inv_d[3] = { 1.0f / r.d[0], 1.0f / r.d[1], 1.0f / r.d[2] };
+
+        intersections[i].id = r.id;
+        Traverse_MacroTree_CPU(r, inv_d, nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, intersections[i]);
+    }
+
+    int rays_count = secondary_rays_count;
+    secondary_rays_count = 0;
+    std::swap(primary_rays, secondary_rays);
+
+    for (size_t i = 0; i < rays_count; i++){
+        const auto &r = primary_rays[i];
+        const auto &inter = intersections[i];
+
+        const int x = inter.id.x;
+        const int y = inter.id.y;
+
+        pixel_color_t col = ShadeSurface((y * framebuf_.w() + x), region.iteration, &region.halton_seq[0], inter, r, env, mesh_instances,
+                                         mi_indices, meshes, transforms, vtx_indices, vertices, nodes, macro_tree_root,
+                                         tris, tri_indices, materials, textures, s->texture_atlas_, &secondary_rays[0], &secondary_rays_count);
+
+        pixel_color_t col2;
+        framebuf_.GetPixel(x, y, col2);
+
+        col2.r += col.r;
+        col2.g += col.g;
+        col2.b += col.b;
+
+        framebuf_.SetPixel(x, y, col2);
+    }*/
 
     framebuf_.Apply(rect, [](pixel_color_t &p) {
         auto c = make_vec4(&p.r);

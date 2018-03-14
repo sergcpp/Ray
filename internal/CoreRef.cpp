@@ -79,6 +79,13 @@ force_inline bool bbox_test(const float o[3], const float inv_d[3], const float 
 
 enum eTraversalSource { FromParent, FromChild, FromSibling };
 
+force_inline int hash(int x) {
+    x = ((x >> 16) ^ x) * 0x45d9f3b;
+    x = ((x >> 16) ^ x) * 0x45d9f3b;
+    x = (x >> 16) ^ x;
+    return x;
+}
+
 }
 }
 
@@ -554,11 +561,11 @@ void ray::ref::TransformUVs(const float _uvs[2], const float tex_atlas_size[2], 
     out_uvs[1] = res.y;
 }
 
-ray::pixel_color_t ray::ref::ShadeSurface(const int iteration, const float *halton, const hit_data_t &inter, const ray_packet_t &ray,
+ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, const float *halton, const hit_data_t &inter, const ray_packet_t &ray,
                                           const environment_t &env, const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
                                           const mesh_t *meshes, const transform_t *transforms, const uint32_t *vtx_indices, const vertex_t *vertices,
                                           const bvh_node_t *nodes, uint32_t node_index, const tri_accel_t *tris, const uint32_t *tri_indices,
-                                          const material_t *materials, const texture_t *textures, const TextureAtlas &tex_atlas) {
+                                          const material_t *materials, const texture_t *textures, const TextureAtlas &tex_atlas, ray_packet_t *out_secondary_rays, int *out_secondary_rays_count) {
     using namespace math;
 
     if (!inter.mask_values[0]) {
@@ -570,7 +577,7 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int iteration, const float *halt
 
     const auto &tri = tris[inter.prim_indices[0]];
 
-    const auto &mat = materials[tri.mi];
+    const auto *mat = &materials[tri.mi];
 
     const auto &v1 = vertices[vtx_indices[inter.prim_indices[0] * 3 + 0]];
     const auto &v2 = vertices[vtx_indices[inter.prim_indices[0] * 3 + 1]];
@@ -639,6 +646,22 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int iteration, const float *halt
 
     ////////////////////////////////////////////////////////
 
+    const int hi = (hash(index) + iteration) & (HaltonSeqLen - 1);
+
+    // resolve mix material
+    while (mat->type == MixMaterial) {
+        const auto mix = tex_atlas.SampleAnisotropic(textures[mat->textures[MAIN_TEXTURE]], uvs, duv_dx, duv_dy);
+        const float r = halton[hi * 2];
+
+        // shlick fresnel
+        float RR = mat->fresnel + (1.0f - mat->fresnel) * pow(1.0f + dot(I, N), 5.0f);
+        RR = clamp(RR, 0.0f, 1.0f);
+
+        mat = (r * RR < mix.x) ? &materials[mat->textures[MIX_MAT1]] : &materials[mat->textures[MIX_MAT2]];
+    }
+
+    ////////////////////////////////////////////////////////
+
     // Derivative for normal
 
     const vec3 dn1 = n1 - n3, dn2 = n2 - n3;
@@ -660,7 +683,7 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int iteration, const float *halt
     vec3 B = b1 * w + b2 * inter.u + b3 * inter.v;
     vec3 T = cross(B, N);
 
-    auto normals = tex_atlas.SampleAnisotropic(textures[mat.textures[NORMALS_TEXTURE]], uvs, duv_dx, duv_dy);
+    auto normals = tex_atlas.SampleAnisotropic(textures[mat->textures[NORMALS_TEXTURE]], uvs, duv_dx, duv_dy);
     
     normals = normals * 2.0f - 1.0f;
 
@@ -676,28 +699,90 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int iteration, const float *halt
 
     //////////////////////////////////////////
 
-    auto albedo = tex_atlas.SampleAnisotropic(textures[mat.textures[MAIN_TEXTURE]], uvs, duv_dx, duv_dy);
-    albedo.x *= mat.main_color[0];
-    albedo.y *= mat.main_color[1];
-    albedo.z *= mat.main_color[2];
+    auto albedo = tex_atlas.SampleAnisotropic(textures[mat->textures[MAIN_TEXTURE]], uvs, duv_dx, duv_dy);
+    albedo.x *= mat->main_color[0];
+    albedo.y *= mat->main_color[1];
+    albedo.z *= mat->main_color[2];
     albedo = pow(albedo, vec4(2.2f));
 
     vec3 col;
 
     // generate secondary ray
-    if (mat.type == DiffuseMaterial) {
+    if (mat->type == DiffuseMaterial) {
         float k = dot(N, make_vec3(env.sun_dir));
 
         float v = 1;
         if (k > 0) {
-            
+            const float z = 1.0f - halton[hi * 2] * env.sun_softness;
+            const float temp = sqrt(1.0f - z * z);
+
+            const float phi = halton[hi * 2 + 1] * 2 * pi<float>();
+            const float cos_phi = math::cos(phi);
+            const float sin_phi = math::sin(phi);
+
+            vec3 TT = normalize(cross(make_vec3(env.sun_dir), B));
+            vec3 BB = normalize(cross(make_vec3(env.sun_dir), TT));
+            const vec3 V = temp * sin_phi * BB + z * make_vec3(env.sun_dir) + temp * cos_phi * TT;
+
+            ray_packet_t r;
+
+            r.o[0] = P[0] + 0.001f * N[0];
+            r.o[1] = P[1] + 0.001f * N[1];
+            r.o[2] = P[2] + 0.001f * N[2];
+
+            r.d[0] = V[0];
+            r.d[1] = V[1];
+            r.d[2] = V[2];
+
+            const float inv_d[3] = { 1.0f / r.d[0], 1.0f / r.d[1], 1.0f / r.d[2] };
+            hit_data_t inter;
+            if (Traverse_MacroTree_CPU(r, inv_d, nodes, node_index, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, inter)) {
+                v = 0;
+            }
+            //v = TraceShadowRay(&r, mesh_instances, mi_indices, meshes, transforms, nodes, node_index, tris, tri_indices);
         }
 
         k = clamp(k, 0.0f, 1.0f);
 
         col = albedo * make_vec3(env.sun_col) * v * k;
 
-        //return pixel_color_t{ albedo.r, albedo.g, albedo.b, 1.0f };
+        const float z = halton[hi * 2];
+        const float temp = sqrt(1.0f - z * z);
+
+        const float phi = halton[((hash(hi) + iteration) & (HaltonSeqLen - 1)) * 2 + 0] * 2 * pi<float>();
+        const float cos_phi = math::cos(phi);
+        const float sin_phi = math::sin(phi);
+
+        const vec3 V = temp * sin_phi * B + z * N + temp * cos_phi * T;
+
+        ray_packet_t r;
+
+        r.id = ray.id;
+
+        r.o[0] = P[0] + 0.001f * N[0];
+        r.o[1] = P[1] + 0.001f * N[1];
+        r.o[2] = P[2] + 0.001f * N[2];
+
+        memcpy(&r.d[0], value_ptr(V), 3 * sizeof(float));
+
+        r.c[0] = ray.c[0] * z * albedo[0];
+        r.c[1] = ray.c[1] * z * albedo[1];
+        r.c[2] = ray.c[2] * z * albedo[2];
+        
+        memcpy(&r.do_dx[0], value_ptr(do_dx), 3 * sizeof(float));
+        memcpy(&r.do_dy[0], value_ptr(do_dy), 3 * sizeof(float));
+
+        memcpy(&r.dd_dx[0], value_ptr(dd_dx - 2 * (dot(I, N) * dndx + ddn_dx * N)), 3 * sizeof(float));
+        memcpy(&r.dd_dy[0], value_ptr(dd_dy - 2 * (dot(I, N) * dndy + ddn_dy * N)), 3 * sizeof(float));
+
+        if ((r.c[0] * r.c[0] + r.c[1] * r.c[1] + r.c[2] * r.c[2]) > 0.005f) {
+            const int index = (*out_secondary_rays_count)++;
+            out_secondary_rays[index] = r;
+
+            if (std::isnan(r.o[0])) {
+                //__debugbreak();
+            }
+        }
     } else {
         //framebuf_.SetPixel(x, y, { 0, 1.0f, 1.0f, 1.0f });
     }
