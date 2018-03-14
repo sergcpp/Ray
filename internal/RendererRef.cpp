@@ -21,6 +21,9 @@ ray::ref::Renderer::Renderer(int w, int h) : framebuf_(w, h) {
     for (int i = 0; i < 64; i++) {
         color_table_.push_back({ u_0_to_1(), u_0_to_1(), u_0_to_1(), 1 });
     }
+
+    auto rand_func = std::bind(std::uniform_int_distribution<int>(), std::mt19937(0));
+    permutations_ = ray::ComputeRadicalInversePermutations(g_primes, PrimesCount, rand_func);
 }
 
 std::shared_ptr<ray::SceneBase> ray::ref::Renderer::CreateScene() {
@@ -124,10 +127,6 @@ void ray::ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
 }
 
 void ray::ref::Renderer::UpdateHaltonSequence(int iteration, std::unique_ptr<float[]> &seq) {
-    if (permutations_.empty()) {
-        auto rand_func = std::bind(std::uniform_int_distribution<int>(), std::mt19937(0));
-        permutations_ = ray::ComputeRadicalInversePermutations(g_primes, PrimesCount, rand_func);
-    }
 
     seq.reset(new float[HaltonSeqLen * 2]);
 
