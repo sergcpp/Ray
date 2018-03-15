@@ -7,65 +7,79 @@
 
 #include "Types.h"
 
+/**
+  @file
+*/
+
 namespace ray {
+/// Mesh primitive type
 enum ePrimType {
-    // indexed triangle list
-    TriangleList,
+    TriangleList,   ///< indexed triangle list
 };
+
+/** Vertex attribute layout.
+    P - vertex position
+    N - vertex normal
+    T - vertex texture coordinates
+*/
 enum eVertexLayout {
-    // P - vertex position
-    // N - vertex normal
-    // T - vertex texture coordinates
-    PxyzNxyzTuv, // [ P.x, P.y, P.z, N.x, N.y, N.z, T.x, Ty ]
+    PxyzNxyzTuv, ///< [ P.x, P.y, P.z, N.x, N.y, N.z, T.x, Ty ]
 };
 
+/// Mesh region material type
 enum eMaterialType {
-    DiffuseMaterial,
-    GlossyMaterial,
-    RefractiveMaterial,
-    EmissiveMaterial,
-    MixMaterial,
-    TransparentMaterial,
+    DiffuseMaterial,        ///< Pure Lambert diffuse
+    GlossyMaterial,         ///< Pure reflective material
+    RefractiveMaterial,     ///< Pure refractive material
+    EmissiveMaterial,       ///< Pure emissive material
+    MixMaterial,            ///< Mix of two materials
+    TransparentMaterial,    ///< Transparent material
 };
 
+/// Material descriptor struct
 struct mat_desc_t {
-    eMaterialType type;
-    float main_color[3] = { 1, 1, 1 };
-    uint32_t main_texture;
-    uint32_t normal_map = 0xffffffff;
-    uint32_t mix_materials[2] = { 0xffffffff };
-    float roughness = 0;
-    float strength = 1;
-    float fresnel = 1;
-    float ior = 1;
+    eMaterialType type;                         ///< Material type
+    float main_color[3] = { 1, 1, 1 };          ///< Main color
+    uint32_t main_texture;                      ///< Main texture index
+    uint32_t normal_map = 0xffffffff;           ///< Normal map index
+    uint32_t mix_materials[2] = { 0xffffffff }; ///< Indices for two materials for mixing
+    float roughness = 0;                        ///< Roughness of reflective or refractive material
+    float strength = 1;                         ///< Strength of emissive material
+    float fresnel = 1;                          ///< Fresnel factor of mix material
+    float ior = 1;                              ///< IOR for reflective or refractive material
 };
 
+/// Defines mesh region with specific material
 struct shape_desc_t {
-    uint32_t material_index;
-    size_t vtx_start;
-    size_t vtx_count;
+    uint32_t material_index;    ///< Index of material
+    size_t vtx_start;           ///< Vertex start index
+    size_t vtx_count;           ///< Vertex count
 };
 
+/// Mesh description
 struct mesh_desc_t {
-    ePrimType prim_type;
-    eVertexLayout layout;
-    const float *vtx_attrs;
-    size_t vtx_attrs_count;
-    const uint32_t *vtx_indices;
-    size_t vtx_indices_count;
-    std::vector<shape_desc_t> shapes;
+    ePrimType prim_type;                ///< Primitive type
+    eVertexLayout layout;               ///< Vertex attribute layout
+    const float *vtx_attrs;             ///< Pointer to vertex attribute
+    size_t vtx_attrs_count;             ///< Vertex attribute count (number of vertices)
+    const uint32_t *vtx_indices;        ///< Pointer to vertex indices, defining primitive
+    size_t vtx_indices_count;           ///< Primitive indices count
+    std::vector<shape_desc_t> shapes;   ///< Vector of shapes in mesh
 };
 
+/// Texture description
 struct tex_desc_t {
-    const pixel_color8_t *data;
-    int w, h;
+    const pixel_color8_t *data;     ///< Single byte RGBA pixel data
+    int w,                          ///< Texture width
+        h;                          ///< Texture height
 };
 
+/// Environment description
 struct environment_desc_t {
-    float sun_dir[3];
-    float sun_col[3];
-    float sky_col[3];
-    float sun_softness;
+    float sun_dir[3];               ///< Sun direction unit vector
+    float sun_col[3];               ///< Sun color
+    float sky_col[3];               ///< Sky color
+    float sun_softness;             ///< defines shadow softness (0 - had shadow)
 };
 
 class SceneBase {
