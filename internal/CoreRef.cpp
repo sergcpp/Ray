@@ -764,10 +764,7 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
         r.o[2] = P[2] + 0.001f * N[2];
 
         memcpy(&r.d[0], value_ptr(V), 3 * sizeof(float));
-
-        r.c[0] = ray.c[0] * z * albedo[0];
-        r.c[1] = ray.c[1] * z * albedo[1];
-        r.c[2] = ray.c[2] * z * albedo[2];
+        memcpy(&r.c[0], value_ptr(make_vec3(ray.c) * z * albedo), 3 * sizeof(float));
         
         memcpy(&r.do_dx[0], value_ptr(do_dx), 3 * sizeof(float));
         memcpy(&r.do_dy[0], value_ptr(do_dy), 3 * sizeof(float));
@@ -778,10 +775,6 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
         if ((r.c[0] * r.c[0] + r.c[1] * r.c[1] + r.c[2] * r.c[2]) > 0.005f) {
             const int index = (*out_secondary_rays_count)++;
             out_secondary_rays[index] = r;
-
-            if (std::isnan(r.o[0])) {
-                //__debugbreak();
-            }
         }
     } else {
         //framebuf_.SetPixel(x, y, { 0, 1.0f, 1.0f, 1.0f });

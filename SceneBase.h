@@ -82,6 +82,8 @@ struct environment_desc_t {
     float sun_softness;             ///< defines shadow softness (0 - had shadow)
 };
 
+/** Base Scene class
+*/
 class SceneBase {
 protected:
     union cam_storage_t {
@@ -89,38 +91,113 @@ protected:
         uint32_t next_free;
     };
 
-    std::vector<cam_storage_t> cams_;
-    uint32_t cam_first_free_ = 0xffffffff;
+    std::vector<cam_storage_t> cams_;       ///< scene cameras
+    uint32_t cam_first_free_ = 0xffffffff;  ///< index to first free cam in cams_ array
 
-    uint32_t current_cam_ = 0xffffffff;
+    uint32_t current_cam_ = 0xffffffff;     ///< index of current camera
 public:
     virtual ~SceneBase() = default;
 
+    /// Get current environment description
     virtual void GetEnvironment(environment_desc_t &env) = 0;
+
+    /// Set environment from description
     virtual void SetEnvironment(const environment_desc_t &env) = 0;
 
+    /** @brief Adds texture to scene
+        @param t texture description
+        @return New texture index
+    */
     virtual uint32_t AddTexture(const tex_desc_t &t) = 0;
-    virtual void RemoveTexture(uint32_t) = 0;
 
+    /** @brief Removes texture with specific index from scene
+        @param i texture index
+    */
+    virtual void RemoveTexture(uint32_t i) = 0;
+
+    /** @brief Adds material to scene
+        @param m material description
+        @return New material index
+    */
     virtual uint32_t AddMaterial(const mat_desc_t &m) = 0;
-    virtual void RemoveMaterial(uint32_t) = 0;
 
+    /** @brief Removes material with specific index from scene
+        @param i material index
+    */
+    virtual void RemoveMaterial(uint32_t i) = 0;
+
+    /** @brief Adds mesh to scene
+        @param m mesh description
+        @return New mesh index
+    */
     virtual uint32_t AddMesh(const mesh_desc_t &m) = 0;
-    virtual void RemoveMesh(uint32_t) = 0;
 
+    /** @brief Removes mesh with specific index from scene
+        @param i mesh index
+    */
+    virtual void RemoveMesh(uint32_t i) = 0;
+
+    /** @brief Adds mesh instance to a scene
+        @param m_index mesh index
+        @param xform array of 16 floats holding transformation matrix
+        @return New mesh instance index
+    */
     virtual uint32_t AddMeshInstance(uint32_t m_index, const float *xform) = 0;
-    virtual void SetMeshInstanceTransform(uint32_t mi_index, const float *xform) = 0;
-    virtual void RemoveMeshInstance(uint32_t) = 0;
 
+    /** @brief Sets mesh instance transformation
+        @param mi_index mesh instance index
+        @param xform array of 16 floats holding transformation matrix
+    */
+    virtual void SetMeshInstanceTransform(uint32_t mi_index, const float *xform) = 0;
+
+    /** @brief Removes mesh instance from scene
+        @param mi_index mesh instance index
+        
+        Removes mesh instance from scene. Associated mesh remains loaded in scene even if
+        there is no instances of this mesh left.
+    */
+    virtual void RemoveMeshInstance(uint32_t mi_index) = 0;
+
+    /** @brief Adds camera to a scene
+        @param type camera projection type
+        @return New camera index
+    */
     uint32_t AddCamera(eCamType type) {
         const float o[3] = { 0, 0, 0 }, fwd[3] = { 0, 0, -1 }, fov = 60;
         return AddCamera(type, o, fwd, fov);
     }
+
+    /** @brief Adds camera to a scene
+        @param type camera projection type
+        @param origin camera origin point
+        @param fwd camera forward unit vector
+        @param fov camera field of view in grad.
+        @return New camera index
+    */
     uint32_t AddCamera(eCamType type, const float origin[3], const float fwd[3], float fov);
+    
+    /** @brief Get const reference to a camera with specific index
+        @param i camera index
+        @return Camera const reference
+    */
     const camera_t &GetCamera(uint32_t i) const {
         return cams_[i].cam;
     }
+
+    /** @brief Sets camera properties
+        @param i camera index
+        @param type camera projection type
+        @param origin camera origin point
+        @param fwd camera forward unit vector
+        @param fov camera field of view in grad.
+    */
     void SetCamera(uint32_t i, eCamType type, const float origin[3], const float fwd[3], float fov);
+    
+    /** @brief Removes camera with specific index from scene
+        @param i camera index
+
+        Removes camera with specific index from scene. Other cameras indices remain valid.
+    */
     void RemoveCamera(uint32_t i);
 
     uint32_t current_cam() {
