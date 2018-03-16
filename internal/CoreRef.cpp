@@ -86,6 +86,30 @@ force_inline int hash(int x) {
     return x;
 }
 
+force_inline math::vec3 safe_invert(const math::vec3 &v) {
+    math::vec3 inv_v = 1.0f / v;
+
+    if (v.x <= FLT_EPS && v.x >= 0) {
+        inv_v.x = 99999999;//std::numeric_limits<float>::max();
+    } else if (v.x >= -FLT_EPS && v.x < 0) {
+        inv_v.x = -99999999;//std::numeric_limits<float>::max();
+    }
+
+    if (v.y <= FLT_EPS && v.y >= 0) {
+        inv_v.y = 99999999;//std::numeric_limits<float>::max();
+    } else if (v.y >= -FLT_EPS && v.y < 0) {
+        inv_v.y = -99999999;//std::numeric_limits<float>::max();
+    }
+
+    if (v.z <= FLT_EPS && v.z >= 0) {
+        inv_v.z = 99999999;//std::numeric_limits<float>::max();
+    } else if (v.z >= -FLT_EPS && v.z < 0) {
+        inv_v.z = -99999999;//std::numeric_limits<float>::max();
+    }
+
+    return inv_v;
+}
+
 }
 }
 
@@ -310,9 +334,9 @@ bool ray::ref::Traverse_MacroTree_CPU(const ray_packet_t &r, const float inv_d[3
 
                     ray_packet_t _r = TransformRay(r, tr.inv_xform);
 
-                    float _inv_d[3] = { 1.0f / _r.d[0], 1.0f / _r.d[1], 1.0f / _r.d[2] };
+                    math::vec3 _inv_d = safe_invert(math::make_vec3(_r.d));
 
-                    res |= Traverse_MicroTree_CPU(_r, _inv_d, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter);
+                    res |= Traverse_MicroTree_CPU(_r, math::value_ptr(_inv_d), nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter);
                 }
 
                 cur = nodes[cur].parent;
@@ -337,9 +361,9 @@ bool ray::ref::Traverse_MacroTree_CPU(const ray_packet_t &r, const float inv_d[3
 
                     ray_packet_t _r = TransformRay(r, tr.inv_xform);
 
-                    float _inv_d[3] = { 1.0f / _r.d[0], 1.0f / _r.d[1], 1.0f / _r.d[2] };
+                    math::vec3 _inv_d = safe_invert(math::make_vec3(_r.d));
 
-                    res |= Traverse_MicroTree_CPU(_r, _inv_d, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter);
+                    res |= Traverse_MicroTree_CPU(_r, math::value_ptr(_inv_d), nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter);
                 }
 
                 cur = nodes[cur].sibling;
@@ -530,8 +554,6 @@ ray::ref::ray_packet_t ray::ref::TransformRay(const ray_packet_t &r, const float
     vec3 _o = make_mat4(xform) * vec4(make_vec3(r.o), 1);
     vec3 _d = make_mat4(xform) * vec4(make_vec3(r.d), 0);
 
-    vec3 inv_d = 1.0f / _d;
-
     ray_packet_t _r = r;
     memcpy(&_r.o[0], value_ptr(_o), 3 * sizeof(float));
     memcpy(&_r.d[0], value_ptr(_d), 3 * sizeof(float));
@@ -619,7 +641,7 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
     const vec3 dp13 = p1 - p3, dp23 = p2 - p3;
 
     const float det_uv = duv13.x * duv23.y - duv13.y * duv23.x;
-    const float inv_det_uv = abs(det_uv) < std::numeric_limits<float>::epsilon() ? 0 : 1.0f / det_uv;
+    const float inv_det_uv = abs(det_uv) < FLT_EPS ? 0 : 1.0f / det_uv;
     const vec3 dpdu = (duv23.y * dp13 - duv13.y * dp23) * inv_det_uv;
     const vec3 dpdv = (-duv23.x * dp13 + duv13.x * dp23) * inv_det_uv;
 
@@ -640,7 +662,7 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
     }
 
     const float det = A[0].x * A[1].y - A[1].x * A[0].y;
-    const float inv_det = abs(det) < std::numeric_limits<float>::epsilon() ? 0 : 1.0f / det;
+    const float inv_det = abs(det) < FLT_EPS ? 0 : 1.0f / det;
     const vec2 duv_dx = vec2{ A[0].x * Bx.x - A[0].y * Bx.y, A[1].x * Bx.x - A[1].y * Bx.y } * inv_det;
     const vec2 duv_dy = vec2{ A[0].x * By.x - A[0].y * By.y, A[1].x * By.x - A[1].y * By.y } * inv_det;
 
@@ -684,7 +706,7 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
     vec3 T = cross(B, N);
 
     auto normals = tex_atlas.SampleAnisotropic(textures[mat->textures[NORMALS_TEXTURE]], uvs, duv_dx, duv_dy);
-    
+
     normals = normals * 2.0f - 1.0f;
 
     N = normals.x * B + normals.z * N + normals.y * T;
@@ -726,17 +748,13 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
 
             ray_packet_t r;
 
-            r.o[0] = P[0] + 0.001f * N[0];
-            r.o[1] = P[1] + 0.001f * N[1];
-            r.o[2] = P[2] + 0.001f * N[2];
+            memcpy(&r.o[0], value_ptr(P + 0.001f * N), 3 * sizeof(float));
+            memcpy(&r.d[0], value_ptr(V), 3 * sizeof(float));
 
-            r.d[0] = V[0];
-            r.d[1] = V[1];
-            r.d[2] = V[2];
-
-            const float inv_d[3] = { 1.0f / r.d[0], 1.0f / r.d[1], 1.0f / r.d[2] };
+            vec3 inv_d = safe_invert(make_vec3(r.d));
             hit_data_t inter;
-            if (Traverse_MacroTree_CPU(r, inv_d, nodes, node_index, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, inter)) {
+            Traverse_MacroTree_CPU(r, value_ptr(inv_d), nodes, node_index, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, inter);
+            if (inter.mask_values[0] == 0xffffffff) {
                 v = 0;
             }
             //v = TraceShadowRay(&r, mesh_instances, mi_indices, meshes, transforms, nodes, node_index, tris, tri_indices);
@@ -744,7 +762,9 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
 
         k = clamp(k, 0.0f, 1.0f);
 
-        col = albedo * make_vec3(env.sun_col) * v * k;
+        return pixel_color_t{ v, v, v, 1.0f };
+
+        col = vec3(albedo) * make_vec3(env.sun_col) * v * k;
 
         const float z = halton[hi * 2];
         const float temp = sqrt(1.0f - z * z);
@@ -759,12 +779,9 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
 
         r.id = ray.id;
 
-        r.o[0] = P[0] + 0.001f * N[0];
-        r.o[1] = P[1] + 0.001f * N[1];
-        r.o[2] = P[2] + 0.001f * N[2];
-
+        memcpy(&r.o[0], value_ptr(P + 0.001f * N), 3 * sizeof(float));
         memcpy(&r.d[0], value_ptr(V), 3 * sizeof(float));
-        memcpy(&r.c[0], value_ptr(make_vec3(ray.c) * z * albedo), 3 * sizeof(float));
+        memcpy(&r.c[0], value_ptr(make_vec3(ray.c) * z * vec3(albedo)), 3 * sizeof(float));
         
         memcpy(&r.do_dx[0], value_ptr(do_dx), 3 * sizeof(float));
         memcpy(&r.do_dy[0], value_ptr(do_dy), 3 * sizeof(float));

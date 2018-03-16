@@ -117,7 +117,7 @@ void ray::ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
         framebuf_.SetPixel(x, y, col);
     }
 
-    for (size_t i = 0; i < secondary_rays_count; i++) {
+    /*for (size_t i = 0; i < secondary_rays_count; i++) {
         const auto &r = secondary_rays[i];
         const float inv_d[3] = { 1.0f / r.d[0], 1.0f / r.d[1], 1.0f / r.d[2] };
 
@@ -148,7 +148,7 @@ void ray::ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
         col2.b += col.b;
 
         framebuf_.SetPixel(x, y, col2);
-    }
+    }*/
 
     framebuf_.Apply(rect, [](pixel_color_t &p) {
         auto c = make_vec4(&p.r);
