@@ -34,7 +34,7 @@ public:
     void RenderScene(const std::shared_ptr<SceneBase> &s, RegionContext &region) override;
 
     virtual void GetStats(stats_t &st) override {
-        st.iterations_count = 0;
+        
     }
 };
 }

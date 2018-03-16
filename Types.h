@@ -2,6 +2,10 @@
 
 #include <cstdint>
 
+/**
+  @file Types.h
+*/
+
 namespace ray {
 /// RGBA single precision f32 color
 struct pixel_color_t {

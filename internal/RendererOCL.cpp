@@ -338,7 +338,7 @@ void ray::ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
 }
 
 void ray::ocl::Renderer::GetStats(stats_t &st) {
-    st.iterations_count = iteration_;
+    
 }
 
 bool ray::ocl::Renderer::kernel_GeneratePrimaryRays(const cl_int iteration, const ray::ocl::camera_t &cam, const cl::Buffer &halton, cl_int w, cl_int h, const cl::Buffer &out_rays) {

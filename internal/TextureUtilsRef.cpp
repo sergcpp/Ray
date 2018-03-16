@@ -127,7 +127,7 @@ void ray::ref::ComputeTextureBasis(size_t vtx_offset, std::vector<vertex_t> &ver
     }
 
     for (auto &v : vertices) {
-        if (abs(v.b[0]) > FLT_EPS && abs(v.b[1]) > FLT_EPS && abs(v.b[2]) > FLT_EPS) {
+        if (abs(v.b[0]) > FLT_EPS || abs(v.b[1]) > FLT_EPS || abs(v.b[2]) > FLT_EPS) {
             vec3 tangent = make_vec3(v.b);
             vec3 binormal = normalize(cross(make_vec3(v.n), tangent));
             memcpy(&v.b[0], value_ptr(binormal), 3 * sizeof(float));

@@ -8,7 +8,8 @@
 #include "Types.h"
 
 /**
-  @file
+  @file SceneBase.h
+  @brief Contains common scene interface
 */
 
 namespace ray {
@@ -82,7 +83,8 @@ struct environment_desc_t {
     float sun_softness;             ///< defines shadow softness (0 - had shadow)
 };
 
-/** Base Scene class
+/** Base Scene class,
+    cpu and gpu backends have different implementation of SceneBase
 */
 class SceneBase {
 protected:
@@ -200,14 +202,24 @@ public:
     */
     void RemoveCamera(uint32_t i);
 
+    /** @brief Get const reference to a camera with specific index
+        @return Current camera index
+    */
     uint32_t current_cam() {
         return current_cam_;
     }
+
+    /** @brief Sets camera with specific index to be current
+        @param i camera index
+    */
     void set_current_cam(uint32_t i) {
         current_cam_ = i;
     }
 
+    /// Overall triangle count in scene
     virtual uint32_t triangle_count() = 0;
+
+    /// Overall BVH node count in scene
     virtual uint32_t node_count() = 0;
 };
 }
