@@ -207,7 +207,7 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
             const float3 V = temp * sin_phi * BB + z * env.sun_dir + temp * cos_phi * TT;
 
             ray_packet_t r;
-            r.o = (float4)(P + 0.001f * N, 0);
+            r.o = (float4)(P + HIT_BIAS * N, 0);
             r.d = (float4)(V, 0);
             v = TraceShadowRay(&r, mesh_instances, mi_indices, meshes, transforms, nodes, node_index, tris, tri_indices);
         }
@@ -226,7 +226,7 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
         const float3 V = temp * sin_phi * B + z * N + temp * cos_phi * T;
         
         ray_packet_t r;
-        r.o = (float4)(P + 0.001f * N, (float)x);
+        r.o = (float4)(P + HIT_BIAS * N, (float)x);
         r.d = (float4)(V, (float)y);
         r.c = orig_ray->c * z * albedo.xyz;
         r.do_dx = do_dx;
@@ -255,7 +255,7 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
         V = temp * sin_phi * BB + z * V + temp * cos_phi * TT;
 
         ray_packet_t r;
-        r.o = (float4)(P + 0.001f * N, (float)x);
+        r.o = (float4)(P + HIT_BIAS * N, (float)x);
         r.d = (float4)(V, (float)y);
         r.c = z * orig_ray->c;
         r.do_dx = do_dx;
@@ -299,7 +299,7 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
         float3 dmdy = k * ddn_dy;
 
         ray_packet_t r;
-        r.o = (float4)(P + 0.001f * I, (float)x);
+        r.o = (float4)(P + HIT_BIAS * I, (float)x);
         r.d = (float4)(V, (float)y);
         r.c = z * orig_ray->c;
         r.do_dx = do_dx;
@@ -317,7 +317,7 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
         col = (float3)(0, 0, 0);
 
         ray_packet_t r;
-        r.o = (float4)(P + 0.001f * I, (float)x);
+        r.o = (float4)(P + HIT_BIAS * I, (float)x);
         r.d = orig_ray->d;
         r.c = orig_ray->c;
         r.do_dx = do_dx;

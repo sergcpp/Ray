@@ -13,7 +13,7 @@ bool bbox_test(const float o[3], const float inv_d[3], const float t, const floa
 }
 }
 
-ray::ref::Renderer::Renderer(int w, int h) : framebuf_(w, h) {
+ray::ref::Renderer::Renderer(int w, int h) : final_buf_(w, h), temp_buf_(w, h) {
     auto u_0_to_1 = []() {
         return float(rand()) / RAND_MAX;
     };
@@ -75,20 +75,21 @@ void ray::ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
 
     const auto &env = s->env_;
 
-    const auto w = framebuf_.w(), h = framebuf_.h();
+    const auto w = final_buf_.w(), h = final_buf_.h();
 
     auto rect = region.rect();
     if (rect.w == 0 || rect.h == 0) {
         rect = { 0, 0, w, h };
     }
 
-    if (!region.halton_seq || ++region.iteration % HaltonSeqLen) {
+    region.iteration++;
+    if (!region.halton_seq || region.iteration % HaltonSeqLen == 0) {
         UpdateHaltonSequence(region.iteration, region.halton_seq);
     }
 
     aligned_vector<ray_packet_t> primary_rays;
 
-    GeneratePrimaryRays(cam, rect, w, h, primary_rays);
+    GeneratePrimaryRays(region.iteration, cam, rect, w, h, &region.halton_seq[0], primary_rays);
 
     aligned_vector<hit_data_t> intersections(primary_rays.size());
 
@@ -110,17 +111,17 @@ void ray::ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
         const int x = inter.id.x;
         const int y = inter.id.y;
         
-        pixel_color_t col = ShadeSurface((y * framebuf_.w() + x), region.iteration, &region.halton_seq[0], inter, r, env, mesh_instances, 
+        pixel_color_t col = ShadeSurface((y * final_buf_.w() + x), region.iteration, &region.halton_seq[0], inter, r, env, mesh_instances, 
                                          mi_indices, meshes, transforms, vtx_indices, vertices, nodes, macro_tree_root,
                                          tris, tri_indices, materials, textures, s->texture_atlas_, &secondary_rays[0], &secondary_rays_count);
-
-        framebuf_.SetPixel(x, y, col);
+        temp_buf_.SetPixel(x, y, col);
     }
 
-    /*for (size_t i = 0; i < secondary_rays_count; i++) {
+    for (int i = 0; i < secondary_rays_count; i++) {
         const auto &r = secondary_rays[i];
         const float inv_d[3] = { 1.0f / r.d[0], 1.0f / r.d[1], 1.0f / r.d[2] };
 
+        intersections[i] = {};
         intersections[i].id = r.id;
         Traverse_MacroTree_CPU(r, inv_d, nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, intersections[i]);
     }
@@ -129,38 +130,34 @@ void ray::ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
     secondary_rays_count = 0;
     std::swap(primary_rays, secondary_rays);
 
-    for (size_t i = 0; i < rays_count; i++){
+    for (int i = 0; i < rays_count; i++){
         const auto &r = primary_rays[i];
         const auto &inter = intersections[i];
 
         const int x = inter.id.x;
         const int y = inter.id.y;
 
-        pixel_color_t col = ShadeSurface((y * framebuf_.w() + x), region.iteration, &region.halton_seq[0], inter, r, env, mesh_instances,
+        pixel_color_t col = ShadeSurface((y * final_buf_.w() + x), region.iteration, &region.halton_seq[0], inter, r, env, mesh_instances,
                                          mi_indices, meshes, transforms, vtx_indices, vertices, nodes, macro_tree_root,
                                          tris, tri_indices, materials, textures, s->texture_atlas_, &secondary_rays[0], &secondary_rays_count);
 
-        pixel_color_t col2;
-        framebuf_.GetPixel(x, y, col2);
+        temp_buf_.AddPixel(x, y, col);
+    }
 
-        col2.r += col.r;
-        col2.g += col.g;
-        col2.b += col.b;
-
-        framebuf_.SetPixel(x, y, col2);
-    }*/
-
-    framebuf_.Apply(rect, [](pixel_color_t &p) {
+    auto clamp_and_gamma_correct = [](const pixel_color_t &p) {
         auto c = make_vec4(&p.r);
         c = pow(c, vec4(1.0f / 2.2f));
         c = clamp(c, 0.0f, 1.0f);
-        memcpy(&p.r, value_ptr(c), sizeof(vec4));
-    });
+        return pixel_color_t{ c.r, c.g, c.b, c.a };
+    };
+
+    final_buf_.MixIncremental(temp_buf_, rect, clamp_and_gamma_correct, 1.0f / region.iteration);
 }
 
 void ray::ref::Renderer::UpdateHaltonSequence(int iteration, std::unique_ptr<float[]> &seq) {
-
-    seq.reset(new float[HaltonSeqLen * 2]);
+    if (!seq) {
+        seq.reset(new float[HaltonSeqLen * 2]);
+    }
 
     for (int i = 0; i < HaltonSeqLen; i++) {
         seq[i * 2 + 0] = ray::ScrambledRadicalInverse<29>(&permutations_[100], (uint64_t)(iteration + i));

@@ -14,21 +14,38 @@ class Framebuffer {
 public:
     Framebuffer(int w, int h);
 
-    int w() const {
+    force_inline int w() const {
         return w_;
     }
-    int h() const {
+
+    force_inline int h() const {
         return h_;
     }
 
-    void SetPixel(int x, int y, const pixel_color_t &p) {
+    force_inline void SetPixel(int x, int y, const pixel_color_t &p) {
         int i = y * w_ + x;
         pixels_[i] = p;
     }
 
-    void GetPixel(int x, int y, pixel_color_t &out_p) {
+    force_inline pixel_color_t GetPixel(int x, int y) const {
         int i = y * w_ + x;
-        out_p = pixels_[i];
+        return pixels_[i];
+    }
+
+    force_inline void AddPixel(int x, int y, const pixel_color_t &p) {
+        int i = y * w_ + x;
+        pixels_[i].r += p.r;
+        pixels_[i].g += p.g;
+        pixels_[i].b += p.b;
+        pixels_[i].a += p.a;
+    }
+
+    force_inline void MixPixel(int x, int y, const pixel_color_t &p, float k) {
+        int i = y * w_ + x;
+        pixels_[i].r += (p.r - pixels_[i].r) * k;
+        pixels_[i].g += (p.g - pixels_[i].g) * k;
+        pixels_[i].b += (p.b - pixels_[i].b) * k;
+        pixels_[i].a += (p.a - pixels_[i].a) * k;
     }
 
     void Resize(int w, int h);
@@ -45,6 +62,15 @@ public:
 
     const pixel_color_t *get_pixels_ref() const {
         return &pixels_[0];
+    }
+
+    template <typename F>
+    void MixIncremental(const Framebuffer &f2, const rect_t &rect, F &&filter, float k) {
+        for (int y = rect.y; y < rect.y + rect.h; y++) {
+            for (int x = rect.x; x < rect.x + rect.w; x++) {
+                this->MixPixel(x, y, filter(f2.GetPixel(x, y)), k);
+            }
+        }
     }
 };
 }

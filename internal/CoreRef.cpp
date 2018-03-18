@@ -12,7 +12,7 @@ force_inline void _IntersectTri(const ray_packet_t &r, const tri_accel_t &tri, u
     const int _next_u[] = { 1, 0, 0 },
                           _next_v[] = { 2, 2, 1 };
 
-    int w = tri.ci & ray::W_BITS,
+    int w = tri.ci & ray::TRI_W_BITS,
         u = _next_u[w],
         v = _next_v[w];
 
@@ -90,21 +90,21 @@ force_inline math::vec3 safe_invert(const math::vec3 &v) {
     math::vec3 inv_v = 1.0f / v;
 
     if (v.x <= FLT_EPS && v.x >= 0) {
-        inv_v.x = 99999999;//std::numeric_limits<float>::max();
+        inv_v.x = std::numeric_limits<float>::max();
     } else if (v.x >= -FLT_EPS && v.x < 0) {
-        inv_v.x = -99999999;//std::numeric_limits<float>::max();
+        inv_v.x = -std::numeric_limits<float>::max();
     }
 
     if (v.y <= FLT_EPS && v.y >= 0) {
-        inv_v.y = 99999999;//std::numeric_limits<float>::max();
+        inv_v.y = std::numeric_limits<float>::max();
     } else if (v.y >= -FLT_EPS && v.y < 0) {
-        inv_v.y = -99999999;//std::numeric_limits<float>::max();
+        inv_v.y = -std::numeric_limits<float>::max();
     }
 
     if (v.z <= FLT_EPS && v.z >= 0) {
-        inv_v.z = 99999999;//std::numeric_limits<float>::max();
+        inv_v.z = std::numeric_limits<float>::max();
     } else if (v.z >= -FLT_EPS && v.z < 0) {
-        inv_v.z = -99999999;//std::numeric_limits<float>::max();
+        inv_v.z = -std::numeric_limits<float>::max();
     }
 
     return inv_v;
@@ -120,7 +120,7 @@ ray::ref::hit_data_t::hit_data_t() {
     t = std::numeric_limits<float>::max();
 }
 
-void ray::ref::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, int h, math::aligned_vector<ray_packet_t> &out_rays) {
+void ray::ref::GeneratePrimaryRays(int iteration, const camera_t &cam, const rect_t &r, int w, int h, const float *halton, math::aligned_vector<ray_packet_t> &out_rays) {
     using namespace math;
 
     vec3 origin = make_vec3(cam.origin), fwd = make_vec3(cam.fwd), side = make_vec3(cam.side), up = make_vec3(cam.up);
@@ -141,8 +141,11 @@ void ray::ref::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, 
         for (int x = r.x; x < r.x + r.w; x += RayPacketDimX) {
             auto &out_r = out_rays[i++];
 
-            float _x = (float)x;
-            float _y = (float)y;
+            const int index = y * w + x;
+            const int hi = (hash(index) + iteration) & (HaltonSeqLen - 1);
+
+            float _x = (float)x + halton[hi * 2];
+            float _y = (float)y + halton[hi * 2 + 1];
 
             vec3 _d = get_pix_dir(_x, _y);
 
@@ -591,7 +594,7 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
     using namespace math;
 
     if (!inter.mask_values[0]) {
-        return ray::pixel_color_t{ env.sky_col[0], env.sky_col[1], env.sky_col[2], 1.0f };
+        return ray::pixel_color_t{ ray.c[0] * env.sky_col[0], ray.c[1] * env.sky_col[1], ray.c[2] * env.sky_col[2], 1.0f };
     }
 
     const auto I = make_vec3(ray.d);
@@ -762,7 +765,7 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
 
         k = clamp(k, 0.0f, 1.0f);
 
-        return pixel_color_t{ v, v, v, 1.0f };
+        //return pixel_color_t{ v, v, v, 1.0f };
 
         col = vec3(albedo) * make_vec3(env.sun_col) * v * k;
 

@@ -56,9 +56,9 @@ void ray::PreprocessTri(const float *p, int stride, tri_accel_t *acc) {
 
     acc->ci = w;
     if (std::abs(acc->nu) < axis_aligned_normal_eps && std::abs(acc->nv) < axis_aligned_normal_eps) {
-        acc->ci |= AXIS_ALIGNED_BIT;
+        acc->ci |= TRI_AXIS_ALIGNED_BIT;
     }
-    assert((acc->ci & W_BITS) == w);
+    assert((acc->ci & TRI_W_BITS) == w);
 }
 
 void ray::PreprocessCone(const float o[3], const float v[3], float phi, float cone_start, float cone_end, cone_accel_t *acc) {

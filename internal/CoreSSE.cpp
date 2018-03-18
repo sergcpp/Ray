@@ -47,7 +47,7 @@ force_inline void _IntersectTri(const ray_packet_t &r, const __m128i ray_mask, c
     const int _next_u[] = { 1, 0, 0 },
                           _next_v[] = { 2, 2, 1 };
 
-    int w = (tri.ci & W_BITS),
+    int w = (tri.ci & TRI_W_BITS),
         u = _next_u[w],
         v = _next_v[w];
 

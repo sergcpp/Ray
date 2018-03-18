@@ -13,7 +13,7 @@ void IntersectTris(const ray_packet_t *r, __global const tri_accel_t *tris,
     for (uint j = tri_index; j < tri_index + tri_count; j++) {
         const __global tri_accel_t *tri = &tris[tri_indices[j]];
 
-        int w = tri->ci & W_BITS,
+        int w = tri->ci & TRI_W_BITS,
             u = _next_u[w], v = _next_v[w];
 
         float det = rd[u] * tri->nu + rd[v] * tri->nv + rd[w];
@@ -53,7 +53,7 @@ float IntersectTris_Shadow(const ray_packet_t *r, __global const tri_accel_t *tr
     for (int j = tri_index; j < tri_index + tri_count; j++) {
         const __global tri_accel_t *tri = &tris[tri_indices[j]];
 
-        int w = tri->ci & W_BITS,
+        int w = tri->ci & TRI_W_BITS,
             u = _next_u[w], v = _next_v[w];
 
         float det = rd[u] * tri->nu + rd[v] * tri->nv + rd[w];

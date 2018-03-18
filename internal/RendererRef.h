@@ -7,7 +7,7 @@
 namespace ray {
 namespace ref {
 class Renderer : public RendererBase {
-    ray::ref::Framebuffer framebuf_;
+    ray::ref::Framebuffer final_buf_, temp_buf_;
 
     std::vector<pixel_color_t> color_table_;
 
@@ -19,18 +19,19 @@ public:
     eRendererType type() const override { return RendererRef; }
 
     std::pair<int, int> size() const override {
-        return std::make_pair(framebuf_.w(), framebuf_.h());
+        return std::make_pair(final_buf_.w(), final_buf_.h());
     }
 
     const pixel_color_t *get_pixels_ref() const override {
-        return framebuf_.get_pixels_ref();
+        return final_buf_.get_pixels_ref();
     }
 
     void Resize(int w, int h) override {
-        framebuf_.Resize(w, h);
+        final_buf_.Resize(w, h);
+        temp_buf_.Resize(w, h);
     }
     void Clear(const pixel_color_t &c) override {
-        framebuf_.Clear(c);
+        final_buf_.Clear(c);
     }
 
     std::shared_ptr<SceneBase> CreateScene() override;

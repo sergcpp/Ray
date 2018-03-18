@@ -24,8 +24,9 @@ void test_primary_ray_gen() {
 
     {
         // test reference
+        std::vector<float> dummy_halton(ray::HaltonSeqLen * 2);
         math::aligned_vector<ray::ref::ray_packet_t> rays;
-        ray::ref::GeneratePrimaryRays(cam, { 0, 0, 4, 4 }, 4, 4, rays);
+        ray::ref::GeneratePrimaryRays(0, cam, { 0, 0, 4, 4 }, 4, 4, &dummy_halton[0], rays);
 
         require(rays.size() == 16);
         for (int i = 0; i < 16; i++) {
