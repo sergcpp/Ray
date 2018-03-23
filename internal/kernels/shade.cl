@@ -202,8 +202,8 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
             float cos_phi;
             const float sin_phi = sincos(phi, &cos_phi);
 
-            float3 TT = normalize(cross(env.sun_dir, B));
-            float3 BB = normalize(cross(env.sun_dir, TT));
+            float3 TT = cross(env.sun_dir, B);
+            float3 BB = cross(env.sun_dir, TT);
             const float3 V = temp * sin_phi * BB + z * env.sun_dir + temp * cos_phi * TT;
 
             ray_packet_t r;
@@ -250,8 +250,8 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
         float cos_phi;
         const float sin_phi = sincos(phi, &cos_phi);
 
-        float3 TT = normalize(cross(V, B));
-        float3 BB = normalize(cross(V, TT));
+        float3 TT = cross(V, B);
+        float3 BB = cross(V, TT);
         V = temp * sin_phi * BB + z * V + temp * cos_phi * TT;
 
         ray_packet_t r;

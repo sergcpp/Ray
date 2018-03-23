@@ -745,13 +745,13 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
             const float cos_phi = math::cos(phi);
             const float sin_phi = math::sin(phi);
 
-            vec3 TT = normalize(cross(make_vec3(env.sun_dir), B));
-            vec3 BB = normalize(cross(make_vec3(env.sun_dir), TT));
-            const vec3 V = temp * sin_phi * BB + z * make_vec3(env.sun_dir) + temp * cos_phi * TT;
+            vec3 TT = cross(make_vec3(env.sun_dir), B);
+            vec3 BB = cross(make_vec3(env.sun_dir), TT);
+            vec3 V = temp * sin_phi * BB + z * make_vec3(env.sun_dir) + temp * cos_phi * TT;
 
             ray_packet_t r;
 
-            memcpy(&r.o[0], value_ptr(P + 0.001f * N), 3 * sizeof(float));
+            memcpy(&r.o[0], value_ptr(P + HIT_BIAS * N), 3 * sizeof(float));
             memcpy(&r.d[0], value_ptr(V), 3 * sizeof(float));
 
             vec3 inv_d = safe_invert(make_vec3(r.d));
@@ -764,8 +764,6 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
         }
 
         k = clamp(k, 0.0f, 1.0f);
-
-        //return pixel_color_t{ v, v, v, 1.0f };
 
         col = vec3(albedo) * make_vec3(env.sun_col) * v * k;
 
@@ -782,7 +780,7 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
 
         r.id = ray.id;
 
-        memcpy(&r.o[0], value_ptr(P + 0.001f * N), 3 * sizeof(float));
+        memcpy(&r.o[0], value_ptr(P + HIT_BIAS * N), 3 * sizeof(float));
         memcpy(&r.d[0], value_ptr(V), 3 * sizeof(float));
         memcpy(&r.c[0], value_ptr(make_vec3(ray.c) * z * vec3(albedo)), 3 * sizeof(float));
         
