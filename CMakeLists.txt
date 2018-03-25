@@ -67,6 +67,10 @@ set(KERNEL_FILES internal/kernels/intersect_boxes.cl
                  internal/kernels/traverse_bvh.cl
                  internal/kernels/types.cl)
 
+set(SIMD_FILES internal/simd/simd_vec.h
+               internal/simd/simd_vec_sse.h
+               internal/simd/simd_vec_avx.h)
+
 list(APPEND ALL_SOURCE_FILES ${INTERNAL_SOURCE_FILES})
 source_group("src\\internal" FILES ${INTERNAL_SOURCE_FILES})
 
@@ -76,11 +80,15 @@ source_group("src" FILES ${SOURCE_FILES})
 list(APPEND ALL_SOURCE_FILES ${KERNEL_FILES})
 source_group("src\\internal\\kernels" FILES ${KERNEL_FILES})
 
+list(APPEND ALL_SOURCE_FILES ${SIMD_FILES})
+source_group("src\\internal\\simd" FILES ${SIMD_FILES})
+
+set_source_files_properties(${KERNEL_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
+
 # enable or disable unity build
 IF(1)
     set_source_files_properties(${INTERNAL_SOURCE_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
     set_source_files_properties(${SOURCE_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
-    set_source_files_properties(${KERNEL_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
 
     list(APPEND ALL_SOURCE_FILES _ray.cpp)
     source_group("src" FILES _ray.cpp)

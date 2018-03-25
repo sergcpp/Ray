@@ -1,0 +1,390 @@
+
+{
+    std::cout << "Test simd_fvec4 native_count = " << simd_fvec4::native_count() << " | ";
+
+    simd_fvec4 v1, v2 = { 42.0f }, v3 = { 1.0f, 2.0f, 3.0f, 4.0f };
+
+    require(v2[0] == 42.0f);
+    require(v2[1] == 42.0f);
+    require(v2[2] == 42.0f);
+    require(v2[3] == 42.0f);
+
+    require(v3[0] == 1.0f);
+    require(v3[1] == 2.0f);
+    require(v3[2] == 3.0f);
+    require(v3[3] == 4.0f);
+
+    simd_fvec4 v4(v2), v5 = v3;
+
+    require(v4[0] == 42.0f);
+    require(v4[1] == 42.0f);
+    require(v4[2] == 42.0f);
+    require(v4[3] == 42.0f);
+
+    require(v5[0] == 1.0f);
+    require(v5[1] == 2.0f);
+    require(v5[2] == 3.0f);
+    require(v5[3] == 4.0f);
+
+    v1 = v5;
+
+    require(v1[0] == 1.0f);
+    require(v1[1] == 2.0f);
+    require(v1[2] == 3.0f);
+    require(v1[3] == 4.0f);
+
+    float unaligned_array[] = { 0.0f, 2.0f, 30.0f, 14.0f };
+    alignas(simd_fvec4::alignment) float aligned_array[] = { 0.0f, 2.0f, 30.0f, 14.0f };
+    
+    simd_fvec4 v7 = { &unaligned_array[0] },
+               v8 = { &aligned_array[0], simd_mem_aligned };
+
+    require(v7[0] == 0.0f);
+    require(v7[1] == 2.0f);
+    require(v7[2] == 30.0f);
+    require(v7[3] == 14.0f);
+
+    require(v8[0] == 0.0f);
+    require(v8[1] == 2.0f);
+    require(v8[2] == 30.0f);
+    require(v8[3] == 14.0f);
+
+    v5.copy_to(&unaligned_array[0]);
+    v1.copy_to(&aligned_array[0], simd_mem_aligned);
+
+    require(unaligned_array[0] == 1.0f);
+    require(unaligned_array[1] == 2.0f);
+    require(unaligned_array[2] == 3.0f);
+    require(unaligned_array[3] == 4.0f);
+
+    require(aligned_array[0] == 1.0f);
+    require(aligned_array[1] == 2.0f);
+    require(aligned_array[2] == 3.0f);
+    require(aligned_array[3] == 4.0f);
+
+    v1 = { 1.0f, 2.0f, 3.0f, 4.0f };
+    v2 = { 4.0f, 5.0f, 6.0f, 7.0f };
+
+    v3 = v1 + v2;
+    v4 = v1 - v2;
+    v5 = v1 * v2;
+    auto v6 = v1 / v2;
+    
+    require(v3[0] == Approx(5));
+    require(v3[1] == Approx(7));
+    require(v3[2] == Approx(9));
+    require(v3[3] == Approx(11));
+
+    require(v4[0] == Approx(-3));
+    require(v4[1] == Approx(-3));
+    require(v4[2] == Approx(-3));
+    require(v4[3] == Approx(-3));
+
+    require(v5[0] == Approx(4));
+    require(v5[1] == Approx(10));
+    require(v5[2] == Approx(18));
+    require(v5[3] == Approx(28));
+
+    require(v6[0] == Approx(0.25));
+    require(v6[1] == Approx(0.4));
+    require(v6[2] == Approx(0.5));
+    require(v6[3] == Approx(0.57142));
+
+    std::cout << "OK" << std::endl;
+}
+
+{
+    std::cout << "Test simd_ivec4 native_count = " << simd_ivec4::native_count() << " | ";
+
+    simd_ivec4 v1, v2 = { 42 }, v3 = { 1, 2, 3, 4 };
+
+    require(v2[0] == 42);
+    require(v2[1] == 42);
+    require(v2[2] == 42);
+    require(v2[3] == 42);
+
+    require(v3[0] == 1);
+    require(v3[1] == 2);
+    require(v3[2] == 3);
+    require(v3[3] == 4);
+
+    simd_ivec4 v4(v2), v5 = v3;
+
+    require(v4[0] == 42);
+    require(v4[1] == 42);
+    require(v4[2] == 42);
+    require(v4[3] == 42);
+
+    require(v5[0] == 1);
+    require(v5[1] == 2);
+    require(v5[2] == 3);
+    require(v5[3] == 4);
+
+    v1 = v5;
+
+    require(v1[0] == 1);
+    require(v1[1] == 2);
+    require(v1[2] == 3);
+    require(v1[3] == 4);
+
+    int unaligned_array[] = { 0, 2, 30, 14 };
+    alignas(simd_ivec4::alignment) int aligned_array[] = { 0, 2, 30, 14 };
+    
+    simd_ivec4 v7 = { &unaligned_array[0] },
+               v8 = { &aligned_array[0], simd_mem_aligned };
+
+    require(v7[0] == 0);
+    require(v7[1] == 2);
+    require(v7[2] == 30);
+    require(v7[3] == 14);
+
+    require(v8[0] == 0);
+    require(v8[1] == 2);
+    require(v8[2] == 30);
+    require(v8[3] == 14);
+
+    v5.copy_to(&unaligned_array[0]);
+    v1.copy_to(&aligned_array[0], simd_mem_aligned);
+
+    require(unaligned_array[0] == 1);
+    require(unaligned_array[1] == 2);
+    require(unaligned_array[2] == 3);
+    require(unaligned_array[3] == 4);
+
+    require(aligned_array[0] == 1);
+    require(aligned_array[1] == 2);
+    require(aligned_array[2] == 3);
+    require(aligned_array[3] == 4);
+
+    v1 = { 1, 2, 3, 4 };
+    v2 = { 4, 5, 6, 7 };
+
+    v3 = v1 + v2;
+    v4 = v1 - v2;
+    v5 = v1 * v2;
+    auto v6 = v1 / v2;
+    
+    require(v3[0] == 5);
+    require(v3[1] == 7);
+    require(v3[2] == 9);
+    require(v3[3] == 11);
+
+    require(v4[0] == -3);
+    require(v4[1] == -3);
+    require(v4[2] == -3);
+    require(v4[3] == -3);
+
+    require(v5[0] == 4);
+    require(v5[1] == 10);
+    require(v5[2] == 18);
+    require(v5[3] == 28);
+
+    require(v6[0] == 0);
+    require(v6[1] == 0);
+    require(v6[2] == 0);
+    require(v6[3] == 0);
+
+    std::cout << "OK" << std::endl;
+}
+
+{
+    std::cout << "Test simd_fvec8 native_count = " << simd_fvec8::native_count() << " | ";
+
+    simd_fvec8 v1, v2 = { 42.0f }, v3 = { 1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f };
+
+    require(v2[0] == 42.0f);
+    require(v2[1] == 42.0f);
+    require(v2[2] == 42.0f);
+    require(v2[3] == 42.0f);
+    require(v2[4] == 42.0f);
+    require(v2[5] == 42.0f);
+    require(v2[6] == 42.0f);
+    require(v2[7] == 42.0f);
+
+    require(v3[0] == 1.0f);
+    require(v3[1] == 2.0f);
+    require(v3[2] == 3.0f);
+    require(v3[3] == 4.0f);
+    require(v3[4] == 5.0f);
+    require(v3[5] == 6.0f);
+    require(v3[6] == 7.0f);
+    require(v3[7] == 8.0f);
+
+    simd_fvec8 v4(v2), v5 = v3;
+
+    require(v4[0] == 42.0f);
+    require(v4[1] == 42.0f);
+    require(v4[2] == 42.0f);
+    require(v4[3] == 42.0f);
+    require(v4[4] == 42.0f);
+    require(v4[5] == 42.0f);
+    require(v4[6] == 42.0f);
+    require(v4[7] == 42.0f);
+
+    require(v5[0] == 1.0f);
+    require(v5[1] == 2.0f);
+    require(v5[2] == 3.0f);
+    require(v5[3] == 4.0f);
+    require(v5[4] == 5.0f);
+    require(v5[5] == 6.0f);
+    require(v5[6] == 7.0f);
+    require(v5[7] == 8.0f);
+
+    v1 = v5;
+
+    require(v1[0] == 1.0f);
+    require(v1[1] == 2.0f);
+    require(v1[2] == 3.0f);
+    require(v1[3] == 4.0f);
+    require(v1[4] == 5.0f);
+    require(v1[5] == 6.0f);
+    require(v1[6] == 7.0f);
+    require(v1[7] == 8.0f);
+
+    v1 = { 1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 4.0f,  3.0f, 2.0f };
+    v2 = { 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 10.0f, 12.0f, 1.0f };
+
+    v3 = v1 + v2;
+    v4 = v1 - v2;
+    v5 = v1 * v2;
+    auto v6 = v1 / v2;
+    
+    require(v3[0] == Approx(5));
+    require(v3[1] == Approx(7));
+    require(v3[2] == Approx(9));
+    require(v3[3] == Approx(11));
+    require(v3[4] == Approx(13));
+    require(v3[5] == Approx(14));
+    require(v3[6] == Approx(15));
+    require(v3[7] == Approx(3));
+
+    require(v4[0] == Approx(-3));
+    require(v4[1] == Approx(-3));
+    require(v4[2] == Approx(-3));
+    require(v4[3] == Approx(-3));
+    require(v4[4] == Approx(-3));
+    require(v4[5] == Approx(-6));
+    require(v4[6] == Approx(-9));
+    require(v4[7] == Approx(1));
+
+    require(v5[0] == Approx(4));
+    require(v5[1] == Approx(10));
+    require(v5[2] == Approx(18));
+    require(v5[3] == Approx(28));
+    require(v5[4] == Approx(40));
+    require(v5[5] == Approx(40));
+    require(v5[6] == Approx(36));
+    require(v5[7] == Approx(2));
+
+    require(v6[0] == Approx(0.25));
+    require(v6[1] == Approx(0.4));
+    require(v6[2] == Approx(0.5));
+    require(v6[3] == Approx(0.57142));
+    require(v6[4] == Approx(0.625));
+    require(v6[5] == Approx(0.4));
+    require(v6[6] == Approx(0.25));
+    require(v6[7] == Approx(2.0));
+
+    std::cout << "OK" << std::endl;
+}
+
+{
+    std::cout << "Test simd_ivec8 native_count = " << simd_ivec8::native_count() << " | ";
+
+    simd_ivec8 v1, v2 = { 42 }, v3 = { 1, 2, 3, 4, 5, 6, 7, 8 };
+
+    require(v2[0] == 42);
+    require(v2[1] == 42);
+    require(v2[2] == 42);
+    require(v2[3] == 42);
+    require(v2[4] == 42);
+    require(v2[5] == 42);
+    require(v2[6] == 42);
+    require(v2[7] == 42);
+
+    require(v3[0] == 1);
+    require(v3[1] == 2);
+    require(v3[2] == 3);
+    require(v3[3] == 4);
+    require(v3[4] == 5);
+    require(v3[5] == 6);
+    require(v3[6] == 7);
+    require(v3[7] == 8);
+
+    simd_ivec8 v4(v2), v5 = v3;
+
+    require(v4[0] == 42);
+    require(v4[1] == 42);
+    require(v4[2] == 42);
+    require(v4[3] == 42);
+    require(v4[4] == 42);
+    require(v4[5] == 42);
+    require(v4[6] == 42);
+    require(v4[7] == 42);
+
+    require(v5[0] == 1);
+    require(v5[1] == 2);
+    require(v5[2] == 3);
+    require(v5[3] == 4);
+    require(v5[4] == 5);
+    require(v5[5] == 6);
+    require(v5[6] == 7);
+    require(v5[7] == 8);
+
+    v1 = v5;
+
+    require(v1[0] == 1);
+    require(v1[1] == 2);
+    require(v1[2] == 3);
+    require(v1[3] == 4);
+    require(v1[4] == 5);
+    require(v1[5] == 6);
+    require(v1[6] == 7);
+    require(v1[7] == 8);
+
+    v1 = { 1, 2, 3, 4, 5, 4,  3,  2 };
+    v2 = { 4, 5, 6, 7, 8, 10, 12, 1 };
+
+    v3 = v1 + v2;
+    v4 = v1 - v2;
+    v5 = v1 * v2;
+    auto v6 = v1 / v2;
+    
+    require(v3[0] == 5);
+    require(v3[1] == 7);
+    require(v3[2] == 9);
+    require(v3[3] == 11);
+    require(v3[4] == 13);
+    require(v3[5] == 14);
+    require(v3[6] == 15);
+    require(v3[7] == 3);
+
+    require(v4[0] == -3);
+    require(v4[1] == -3);
+    require(v4[2] == -3);
+    require(v4[3] == -3);
+    require(v4[4] == -3);
+    require(v4[5] == -6);
+    require(v4[6] == -9);
+    require(v4[7] == 1);
+
+    require(v5[0] == 4);
+    require(v5[1] == 10);
+    require(v5[2] == 18);
+    require(v5[3] == 28);
+    require(v5[4] == 40);
+    require(v5[5] == 40);
+    require(v5[6] == 36);
+    require(v5[7] == 2);
+
+    require(v6[0] == 0);
+    require(v6[1] == 0);
+    require(v6[2] == 0);
+    require(v6[3] == 0);
+    require(v6[4] == 0);
+    require(v6[5] == 0);
+    require(v6[6] == 0);
+    require(v6[7] == 2);
+
+    std::cout << "OK" << std::endl;
+}
