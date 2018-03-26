@@ -717,7 +717,7 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
     //////////////////////////////////////////
 
     const auto *tr = &transforms[mesh_instances[inter.obj_indices[0]].tr_index];
-        
+
     N = TransformNormal(N, tr->inv_xform);
     B = TransformNormal(B, tr->inv_xform);
     T = TransformNormal(T, tr->inv_xform);
@@ -795,7 +795,7 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
             out_secondary_rays[index] = r;
         }
     } else {
-        //framebuf_.SetPixel(x, y, { 0, 1.0f, 1.0f, 1.0f });
+        return pixel_color_t{ 0.0f, 1.0f, 1.0f, 1.0f };
     }
 
     return pixel_color_t{ ray.c[0] * col.r, ray.c[1] * col.g, ray.c[2] * col.b, 1.0f };

@@ -151,10 +151,9 @@ uint32_t ray::ref::Scene::AddMesh(const mesh_desc_t &_m) {
         memset(&v.b[0], 0, 3 * sizeof(float));
     }
 
-    auto _new_vtx_indices = new_vtx_indices;
-    ComputeTextureBasis(vertices_.size(), vertices_, new_vtx_indices, &_new_vtx_indices[0], _new_vtx_indices.size());
+    ComputeTextureBasis(0, vertices_, new_vtx_indices, _m.vtx_indices, _m.vtx_indices_count);
 
-    vtx_indices_.insert(vtx_indices_.end(), _new_vtx_indices.begin(), _new_vtx_indices.end());
+    vtx_indices_.insert(vtx_indices_.end(), new_vtx_indices.begin(), new_vtx_indices.end());
 
     return (uint32_t)(meshes_.size() - 1);
 }
