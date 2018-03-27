@@ -13,7 +13,7 @@ bool bbox_test(const float o[3], const float inv_d[3], const float t, const floa
 }
 }
 
-ray::ref::Renderer::Renderer(int w, int h) : final_buf_(w, h), temp_buf_(w, h) {
+ray::ref::Renderer::Renderer(int w, int h) : clean_buf_(w, h), final_buf_(w, h), temp_buf_(w, h) {
     auto u_0_to_1 = []() {
         return float(rand()) / RAND_MAX;
     };
@@ -95,10 +95,10 @@ void ray::ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
 
     for (size_t i = 0; i < primary_rays.size(); i++) {
         const ray_packet_t &r = primary_rays[i];
-        const float inv_d[3] = { 1.0f / r.d[0], 1.0f / r.d[1], 1.0f / r.d[2] };
+        auto inv_d = safe_invert(make_vec3(r.d));
 
         intersections[i].id = r.id;
-        Traverse_MacroTree_CPU(r, inv_d, nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, intersections[i]);
+        Traverse_MacroTree_CPU(r, value_ptr(inv_d), nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, intersections[i]);
     }
 
     aligned_vector<ray_packet_t> secondary_rays(intersections.size());
@@ -117,32 +117,36 @@ void ray::ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
         temp_buf_.SetPixel(x, y, col);
     }
 
-    for (int i = 0; i < secondary_rays_count; i++) {
-        const auto &r = secondary_rays[i];
-        const float inv_d[3] = { 1.0f / r.d[0], 1.0f / r.d[1], 1.0f / r.d[2] };
+    for (int bounce = 0; bounce < 4 && secondary_rays_count; bounce++) {
+        for (int i = 0; i < secondary_rays_count; i++) {
+            const auto &r = secondary_rays[i];
+            auto inv_d = safe_invert(make_vec3(r.d));
 
-        intersections[i] = {};
-        intersections[i].id = r.id;
-        Traverse_MacroTree_CPU(r, inv_d, nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, intersections[i]);
+            intersections[i] = {};
+            intersections[i].id = r.id;
+            Traverse_MacroTree_CPU(r, value_ptr(inv_d), nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, intersections[i]);
+        }
+
+        int rays_count = secondary_rays_count;
+        secondary_rays_count = 0;
+        std::swap(primary_rays, secondary_rays);
+
+        for (int i = 0; i < rays_count; i++) {
+            const auto &r = primary_rays[i];
+            const auto &inter = intersections[i];
+
+            const int x = inter.id.x;
+            const int y = inter.id.y;
+
+            pixel_color_t col = ShadeSurface((y * final_buf_.w() + x), region.iteration, &region.halton_seq[0], inter, r, env, mesh_instances,
+                                             mi_indices, meshes, transforms, vtx_indices, vertices, nodes, macro_tree_root,
+                                             tris, tri_indices, materials, textures, s->texture_atlas_, &secondary_rays[0], &secondary_rays_count);
+
+            temp_buf_.AddPixel(x, y, col);
+        }
     }
 
-    int rays_count = secondary_rays_count;
-    secondary_rays_count = 0;
-    std::swap(primary_rays, secondary_rays);
-
-    for (int i = 0; i < rays_count; i++){
-        const auto &r = primary_rays[i];
-        const auto &inter = intersections[i];
-
-        const int x = inter.id.x;
-        const int y = inter.id.y;
-
-        pixel_color_t col = ShadeSurface((y * final_buf_.w() + x), region.iteration, &region.halton_seq[0], inter, r, env, mesh_instances,
-                                         mi_indices, meshes, transforms, vtx_indices, vertices, nodes, macro_tree_root,
-                                         tris, tri_indices, materials, textures, s->texture_atlas_, &secondary_rays[0], &secondary_rays_count);
-
-        temp_buf_.AddPixel(x, y, col);
-    }
+    clean_buf_.MixIncremental(temp_buf_, rect, 1.0f / region.iteration);
 
     auto clamp_and_gamma_correct = [](const pixel_color_t &p) {
         auto c = make_vec4(&p.r);
@@ -151,7 +155,7 @@ void ray::ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
         return pixel_color_t{ c.r, c.g, c.b, c.a };
     };
 
-    final_buf_.MixIncremental(temp_buf_, rect, clamp_and_gamma_correct, 1.0f / region.iteration);
+    final_buf_.CopyFrom(clean_buf_, rect, clamp_and_gamma_correct);
 }
 
 void ray::ref::Renderer::UpdateHaltonSequence(int iteration, std::unique_ptr<float[]> &seq) {

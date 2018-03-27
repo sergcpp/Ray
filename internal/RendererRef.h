@@ -7,7 +7,7 @@
 namespace ray {
 namespace ref {
 class Renderer : public RendererBase {
-    ray::ref::Framebuffer final_buf_, temp_buf_;
+    ray::ref::Framebuffer clean_buf_, final_buf_, temp_buf_;
 
     std::vector<pixel_color_t> color_table_;
 

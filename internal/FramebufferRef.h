@@ -64,11 +64,19 @@ public:
         return &pixels_[0];
     }
 
-    template <typename F>
-    void MixIncremental(const Framebuffer &f2, const rect_t &rect, F &&filter, float k) {
+    void MixIncremental(const Framebuffer &f2, const rect_t &rect, float k) {
         for (int y = rect.y; y < rect.y + rect.h; y++) {
             for (int x = rect.x; x < rect.x + rect.w; x++) {
-                this->MixPixel(x, y, filter(f2.GetPixel(x, y)), k);
+                this->MixPixel(x, y, f2.GetPixel(x, y), k);
+            }
+        }
+    }
+
+    template <typename F>
+    void CopyFrom(const Framebuffer &f2, const rect_t &rect, F &&filter) {
+        for (int y = rect.y; y < rect.y + rect.h; y++) {
+            for (int x = rect.x; x < rect.x + rect.w; x++) {
+                this->SetPixel(x, y, filter(f2.GetPixel(x, y)));
             }
         }
     }
