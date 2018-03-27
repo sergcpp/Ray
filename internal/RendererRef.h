@@ -27,11 +27,12 @@ public:
     }
 
     void Resize(int w, int h) override {
+        clean_buf_.Resize(w, h);
         final_buf_.Resize(w, h);
         temp_buf_.Resize(w, h);
     }
     void Clear(const pixel_color_t &c) override {
-        final_buf_.Clear(c);
+        clean_buf_.Clear(c);
     }
 
     std::shared_ptr<SceneBase> CreateScene() override;
