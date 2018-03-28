@@ -1,5 +1,6 @@
 #include "CoreSIMD.h"
 
+#include <cassert>
 //#include <limits>
 
 namespace ray {
@@ -16,29 +17,17 @@ const simd_fvec16 FOUR = { 4.0f };
 const simd_fvec16 HIT_EPS = { ray::HIT_EPS };
 const simd_fvec16 M_HIT_EPS = { -ray::HIT_EPS };
 
-const simd_ivec16 FF_MASK = { (int)0xffffffff };
+const simd_ivec16 FF_MASK = { -1 };
 
-/*force_inline __m128i _mm_blendv_si128(__m128i x, __m128i y, __m128i mask) {
-    return _mm_blendv_epi8(x, y, mask);
-}
+force_inline void _IntersectTri(const ray_packet_t &r, const simd_ivec16 &ray_mask, const tri_accel_t &tri, uint32_t prim_index, hit_data_t &inter) {
+    simd_fvec16 nu = { tri.nu }, nv = { tri.nv }, np = { tri.np };
+    simd_fvec16 pu = { tri.pu }, pv = { tri.pv };
 
-force_inline bool _mm_all_zeroes(__m128i x) {
-    return _mm_movemask_epi8(x) == 0;
-}
-
-force_inline bool _mm_not_all_zeroes(__m128i x) {
-    return _mm_movemask_epi8(x) != 0;
-}
-
-force_inline void _IntersectTri(const ray_packet_t &r, const __m128i ray_mask, const tri_accel_t &tri, uint32_t prim_index, hit_data_t &inter) {
-    __m128 nu = _mm_set1_ps(tri.nu), nv = _mm_set1_ps(tri.nv), np = _mm_set1_ps(tri.np);
-    __m128 pu = _mm_set1_ps(tri.pu), pv = _mm_set1_ps(tri.pv);
-
-    __m128 e0u = _mm_set1_ps(tri.e0u), e0v = _mm_set1_ps(tri.e0v);
-    __m128 e1u = _mm_set1_ps(tri.e1u), e1v = _mm_set1_ps(tri.e1v);
+    simd_fvec16 e0u = { tri.e0u }, e0v = { tri.e0v };
+    simd_fvec16 e1u = { tri.e1u }, e1v = { tri.e1v };
 
     const int _next_u[] = { 1, 0, 0 },
-                          _next_v[] = { 2, 2, 1 };
+              _next_v[] = { 2, 2, 1 };
 
     int w = (tri.ci & TRI_W_BITS),
         u = _next_u[w],
@@ -46,143 +35,83 @@ force_inline void _IntersectTri(const ray_packet_t &r, const __m128i ray_mask, c
 
     // from "Ray-Triangle Intersection Algorithm for Modern CPU Architectures" [2007]
 
-    //temporary variables
-    __m128 det, dett, detu, detv, nrv, nru, du, dv, ou, ov, tmpdet0;//, tmpdet1;
+    simd_fvec16 det = r.d[u] * nu + r.d[v] * nv + r.d[w];
+    simd_fvec16 dett = np - (r.o[u] * nu + r.o[v] * nv + r.o[w]);
+    simd_fvec16 Du = r.d[u] * dett - (pu - r.o[u]) * det;
+    simd_fvec16 Dv = r.d[v] * dett - (pv - r.o[v]) * det;
+    simd_fvec16 detu = e1v * Du - e1u * Dv;
+    simd_fvec16 detv = e0u * Dv - e0v * Du;
 
-    // ----ray-packet/triangle hit test----
-    //dett = np -(ou*nu+ov*nv+ow)
-    dett = np;
-    dett = _mm_sub_ps(dett, r.o[w]);
-
-    du = nu;
-    dv = nv;
-
-    ou = r.o[u];
-    ov = r.o[v];
-
-    du = _mm_mul_ps(du, ou);
-    dv = _mm_mul_ps(dv, ov);
-    dett = _mm_sub_ps(dett, du);
-    dett = _mm_sub_ps(dett, dv);
-    //det = du * nu + dv * nv + dw
-
-    du = r.d[u];
-    dv = r.d[v];
-
-    ou = _mm_sub_ps(pu, ou);
-    ov = _mm_sub_ps(pv, ov);
-
-    det = nu;
-    det = _mm_mul_ps(det, du);
-    nrv = nv;
-    nrv = _mm_mul_ps(nrv, dv);
-
-    det = _mm_add_ps(det, r.d[w]);
-
-    det = _mm_add_ps(det, nrv);
-    //Du = du*dett - (pu-ou)*det
-    nru = _mm_mul_ps(ou, det);
-
-    du = _mm_mul_ps(du, dett);
-    du = _mm_sub_ps(du, nru);
-    //Dv = dv*dett - (pv-ov)*det
-    nrv = _mm_mul_ps(ov, det);
-
-    dv = _mm_mul_ps(dv, dett);
-    dv = _mm_sub_ps(dv, nrv);
-    //detu = (e1vDu ? e1u*Dv)
-    nru = e1v;
-    nrv = e1u;
-    nru = _mm_mul_ps(nru, du);
-    nrv = _mm_mul_ps(nrv, dv);
-    detu = _mm_sub_ps(nru, nrv);
-    //detv = (e0u*Dv ? e0v*Du)
-    nrv = e0u;
-    nrv = _mm_mul_ps(nrv, dv);
-    dv = e0v;
-    dv = _mm_mul_ps(dv, du);
-    detv = _mm_sub_ps(nrv, dv);
-
-    // same sign of 'det - detu - detv', 'detu', 'detv' indicates intersection
-
-    tmpdet0 = _mm_sub_ps(_mm_sub_ps(det, detu), detv);
+    simd_fvec16 tmpdet0 = det - detu - detv;
 
     //////////////////////////////////////////////////////////////////////////
 
-    __m128 mm1 = _mm_cmpgt_ps(tmpdet0, M_HIT_EPS);
-    mm1 = _mm_and_ps(mm1, _mm_cmpgt_ps(detu, M_HIT_EPS));
-    mm1 = _mm_and_ps(mm1, _mm_cmpgt_ps(detv, M_HIT_EPS));
+    simd_fvec16 mm = ((tmpdet0 > M_HIT_EPS) & (detu > M_HIT_EPS) & (detv > M_HIT_EPS)) |
+                     ((tmpdet0 < HIT_EPS) & (detu < HIT_EPS) & (detv < HIT_EPS));
 
-    __m128 mm2 = _mm_cmplt_ps(tmpdet0, HIT_EPS);
-    mm2 = _mm_and_ps(mm2, _mm_cmplt_ps(detu, HIT_EPS));
-    mm2 = _mm_and_ps(mm2, _mm_cmplt_ps(detv, HIT_EPS));
-
-    __m128 mm = _mm_or_ps(mm1, mm2);
-
-    __m128i mask = _mm_castps_si128(mm);
-    mask = _mm_and_si128(mask, ray_mask);
+    simd_ivec16 imask = reinterpret_cast<const simd_ivec16&>(mm) & ray_mask;
 
     //////////////////////////////////////////////////////////////////////////
 
-    if (_mm_all_zeroes(mask)) return; // no intersection found
+    if (imask.all_zeros()) return; // no intersection found
 
-    __m128 rdet = _mm_div_ps(ONE, det);
-    __m128 t = _mm_mul_ps(dett, rdet);
+    simd_fvec16 rdet = ONE / det;
+    simd_fvec16 t = dett * rdet;
 
-    __m128i t_valid = _mm_castps_si128(_mm_and_ps(_mm_cmplt_ps(t, inter.t), _mm_cmpgt_ps(t, ZERO)));
-    mask = _mm_and_si128(mask, t_valid);
-    if (_mm_all_zeroes(mask)) return; // all intersections further than needed
+    simd_ivec16 t_valid = reinterpret_cast<const simd_ivec16&>((t < inter.t) & (t > ZERO));
+    imask = imask & t_valid;
 
-    __m128 bar_u = _mm_mul_ps(detu, rdet);
-    __m128 bar_v = _mm_mul_ps(detv, rdet);
+    if (imask.all_zeros()) return; // all intersections further than needed
 
-    __m128 mask_ps = _mm_castsi128_ps(mask);
+    simd_fvec16 bar_u = detu * rdet;
+    simd_fvec16 bar_v = detv * rdet;
 
-    inter.mask = _mm_or_si128(inter.mask, mask);
-    inter.prim_index = _mm_blendv_si128(inter.prim_index, _mm_set1_epi32(prim_index), mask);
-    inter.t = _mm_blendv_ps(inter.t, t, mask_ps);
-    inter.u = _mm_blendv_ps(inter.u, bar_u, mask_ps);
-    inter.v = _mm_blendv_ps(inter.v, bar_v, mask_ps);
+    const auto &fmask = reinterpret_cast<const simd_fvec16&>(imask);
+
+    inter.mask = inter.mask | imask;
+
+    where(imask, inter.prim_index) = simd_ivec16{ reinterpret_cast<const int&>(prim_index) };
+    where(fmask, inter.t) = t;
+    where(fmask, inter.u) = bar_u;
+    where(fmask, inter.v) = bar_v;
 }
 
-__m128i bbox_test(const __m128 o[3], const __m128 inv_d[3], const __m128 t, const float _bbox_min[3], const float _bbox_max[3]) {
-    __m128 box_min[3] = { _mm_set1_ps(_bbox_min[0]), _mm_set1_ps(_bbox_min[1]), _mm_set1_ps(_bbox_min[2]) },
-                        box_max[3] = { _mm_set1_ps(_bbox_max[0]), _mm_set1_ps(_bbox_max[1]), _mm_set1_ps(_bbox_max[2]) };
+force_inline simd_ivec16 bbox_test(const simd_fvec16 o[3], const simd_fvec16 inv_d[3], const simd_fvec16 t, const float _bbox_min[3], const float _bbox_max[3]) {
+    simd_fvec16 box_min[3] = { { _bbox_min[0] }, { _bbox_min[1] }, { _bbox_min[2] } },
+                box_max[3] = { { _bbox_max[0] }, { _bbox_max[1] }, { _bbox_max[2] } };
 
-    __m128 low, high, tmin, tmax;
+    simd_fvec16 low, high, tmin, tmax;
 
-    low = _mm_mul_ps(inv_d[0], _mm_sub_ps(box_min[0], o[0]));
-    high = _mm_mul_ps(inv_d[0], _mm_sub_ps(box_max[0], o[0]));
-    tmin = _mm_min_ps(low, high);
-    tmax = _mm_max_ps(low, high);
+    low = inv_d[0] * (box_min[0] - o[0]);
+    high = inv_d[0] * (box_max[0] - o[0]);
+    tmin = min(low, high);
+    tmax = max(low, high);
 
-    low = _mm_mul_ps(inv_d[1], _mm_sub_ps(box_min[1], o[1]));
-    high = _mm_mul_ps(inv_d[1], _mm_sub_ps(box_max[1], o[1]));
-    tmin = _mm_max_ps(tmin, _mm_min_ps(low, high));
-    tmax = _mm_min_ps(tmax, _mm_max_ps(low, high));
+    low = inv_d[1] * (box_min[1] - o[1]);
+    high = inv_d[1] * (box_max[1] - o[1]);
+    tmin = max(tmin, min(low, high));
+    tmax = min(tmax, max(low, high));
 
-    low = _mm_mul_ps(inv_d[2], _mm_sub_ps(box_min[2], o[2]));
-    high = _mm_mul_ps(inv_d[2], _mm_sub_ps(box_max[2], o[2]));
-    tmin = _mm_max_ps(tmin, _mm_min_ps(low, high));
-    tmax = _mm_min_ps(tmax, _mm_max_ps(low, high));
+    low = inv_d[2] * (box_min[2] - o[2]);
+    high = inv_d[2] * (box_max[2] - o[2]);
+    tmin = max(tmin, min(low, high));
+    tmax = min(tmax, max(low, high));
 
-    __m128 mask = _mm_cmple_ps(tmin, tmax);
-    mask = _mm_and_ps(mask, _mm_cmple_ps(tmin, t));
-    mask = _mm_and_ps(mask, _mm_cmpgt_ps(tmax, ZERO));
+    simd_fvec16 mask = (tmin <= tmax) & (tmin <= t) & (tmax > ZERO);
 
-    return _mm_castps_si128(mask);
+    return reinterpret_cast<const simd_ivec16&>(mask);
 }
 
-force_inline __m128i bbox_test(const __m128 o[3], const __m128 inv_d[3], const __m128 t, const bvh_node_t &node) {
+force_inline simd_ivec16 bbox_test(const simd_fvec16 o[3], const simd_fvec16 inv_d[3], const simd_fvec16 t, const bvh_node_t &node) {
     return bbox_test(o, inv_d, t, node.bbox[0], node.bbox[1]);
 }
 
-force_inline uint32_t near_child(const ray_packet_t &r, const __m128i ray_mask, const bvh_node_t &node) {
-    __m128i mask = _mm_castps_si128(_mm_cmplt_ps(r.d[node.space_axis], ZERO));
-    if (_mm_test_all_zeros(mask, ray_mask)) {
+force_inline uint32_t near_child(const ray_packet_t &r, const simd_ivec16 ray_mask, const bvh_node_t &node) {
+    simd_ivec16 mask = reinterpret_cast<const simd_ivec16 &>(r.d[node.space_axis] < ZERO);
+    if (mask.all_zeros(ray_mask)) {
         return node.left_child;
     } else {
-        assert(_mm_test_all_zeros(_mm_andnot_si128(mask, FF_MASK), ray_mask));
+        assert(and_not(mask, FF_MASK).all_zeros(ray_mask));
         return node.right_child;
     }
 }
@@ -195,21 +124,21 @@ enum eTraversalSource { FromParent, FromChild, FromSibling };
 
 struct TraversalState {
     struct {
-        __m128i mask;
+        simd_ivec16 mask;
         uint32_t cur;
         eTraversalSource src;
-    } queue[4];
+    } queue[16];
 
     int index = 0, num = 1;
 
     force_inline void select_near_child(const ray_packet_t &r, const bvh_node_t &node) {
-        __m128i mask1 = _mm_castps_si128(_mm_cmplt_ps(r.d[node.space_axis], ZERO));
-        mask1 = _mm_and_si128(mask1, queue[index].mask);
-        if (_mm_all_zeroes(mask1)) {
+        simd_fvec16 fmask = r.d[node.space_axis] < ZERO;
+        const auto &mask1 = reinterpret_cast<const simd_ivec16&>(fmask);
+        if (mask1.all_zeros()) {
             queue[index].cur = node.left_child;
         } else {
-            __m128i mask2 = _mm_andnot_si128(mask1, queue[index].mask);
-            if (_mm_all_zeroes(mask2)) {
+            simd_ivec16 mask2 = and_not(mask1, queue[index].mask);
+            if (mask2.all_zeros()) {
                 queue[index].cur = node.right_child;
             } else {
                 queue[num].cur = node.left_child;
@@ -221,7 +150,7 @@ struct TraversalState {
             }
         }
     }
-};*/
+};
 }
 }
 
@@ -289,25 +218,15 @@ void ray::NS::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, i
             dd[2] = ONE;
 
             // d = d.x * side + d.y * up + d.z * fwd
-            simd_fvec16 temp1 = dd[0] * side[0];
-            temp1 = temp1 + dd[1] * up[0];
-            temp1 = temp1 + dd[2] * fwd[0];
-
-            simd_fvec16 temp2 = dd[0] * side[1];
-            temp2 = temp2 + dd[1] * up[1];
-            temp2 = temp2 + dd[2] * fwd[1];
-
-            simd_fvec16 temp3 = dd[0] * side[2];
-            temp3 = temp3 + dd[1] * up[2];
-            temp3 = temp3 + dd[2] * fwd[2];
+            simd_fvec16 temp1 = dd[0] * side[0] + dd[1] * up[0] + dd[2] * fwd[0];
+            simd_fvec16 temp2 = dd[0] * side[1] + dd[1] * up[1] + dd[2] * fwd[1];
+            simd_fvec16 temp3 = dd[0] * side[2] + dd[1] * up[2] + dd[2] * fwd[2];
 
             dd[0] = temp1;
             dd[1] = temp2;
             dd[2] = temp3;
 
-            simd_fvec16 inv_l = dd[0] * dd[0];
-            inv_l = inv_l + dd[1] * dd[1];
-            inv_l = inv_l + dd[2] * dd[2];
+            simd_fvec16 inv_l = dd[0] * dd[0] + dd[1] * dd[1] + dd[2] * dd[2];
             inv_l = sqrt(inv_l);
             inv_l = ONE / inv_l;
 
@@ -330,30 +249,33 @@ void ray::NS::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, i
     }
 }
 
-/*bool ray::sse::IntersectTris(const ray_packet_t &r, const __m128i ray_mask, const tri_accel_t *tris, uint32_t num_tris, uint32_t obj_index, hit_data_t &out_inter) {
+bool ray::NS::IntersectTris(const ray_packet_t &r, const simd_ivec16 &ray_mask, const tri_accel_t *tris, uint32_t num_tris, uint32_t obj_index, hit_data_t &out_inter) {
     hit_data_t inter;
-    inter.obj_index = _mm_set1_epi32(obj_index);
+    inter.obj_index = { reinterpret_cast<const int&>(obj_index) };
     inter.t = out_inter.t;
 
     for (uint32_t i = 0; i < num_tris; i++) {
         _IntersectTri(r, ray_mask, tris[i], i, inter);
     }
 
-    out_inter.mask = _mm_or_si128(out_inter.mask, inter.mask);
-    out_inter.obj_index = _mm_blendv_si128(out_inter.obj_index, inter.obj_index, inter.mask);
-    out_inter.prim_index = _mm_blendv_si128(out_inter.prim_index, inter.prim_index, inter.mask);
+    const auto &fmask = reinterpret_cast<const simd_fvec16&>(inter.mask);
+
+    out_inter.mask = out_inter.mask | inter.mask;
+
+    where(inter.mask, out_inter.obj_index) = inter.obj_index;
+    where(inter.mask, out_inter.prim_index) = inter.prim_index;
+
     out_inter.t = inter.t; // already contains min value
 
-    __m128 mask_ps = _mm_castsi128_ps(inter.mask);
-    out_inter.u = _mm_blendv_ps(out_inter.u, inter.u, mask_ps);
-    out_inter.v = _mm_blendv_ps(out_inter.v, inter.v, mask_ps);
+    where(fmask, out_inter.u) = inter.u;
+    where(fmask, out_inter.v) = inter.v;
 
-    return _mm_not_all_zeroes(inter.mask);
+    return inter.mask.not_all_zeros();
 }
 
-bool ray::sse::IntersectTris(const ray_packet_t &r, const __m128i ray_mask, const tri_accel_t *tris, const uint32_t *indices, uint32_t num_tris, uint32_t obj_index, hit_data_t &out_inter) {
+bool ray::NS::IntersectTris(const ray_packet_t &r, const simd_ivec16 &ray_mask, const tri_accel_t *tris, const uint32_t *indices, uint32_t num_tris, uint32_t obj_index, hit_data_t &out_inter) {
     hit_data_t inter;
-    inter.obj_index = _mm_set1_epi32(obj_index);
+    inter.obj_index = { reinterpret_cast<const int&>(obj_index) };
     inter.t = out_inter.t;
 
     for (uint32_t i = 0; i < num_tris; i++) {
@@ -361,203 +283,151 @@ bool ray::sse::IntersectTris(const ray_packet_t &r, const __m128i ray_mask, cons
         _IntersectTri(r, ray_mask, tris[index], index, inter);
     }
 
-    out_inter.mask = _mm_or_si128(out_inter.mask, inter.mask);
-    out_inter.obj_index = _mm_blendv_si128(out_inter.obj_index, inter.obj_index, inter.mask);
-    out_inter.prim_index = _mm_blendv_si128(out_inter.prim_index, inter.prim_index, inter.mask);
+    const auto &fmask = reinterpret_cast<const simd_fvec16&>(inter.mask);
+
+    out_inter.mask = out_inter.mask | inter.mask;
+
+    where(inter.mask, out_inter.obj_index) = inter.obj_index;
+    where(inter.mask, out_inter.prim_index) = inter.prim_index;
+
     out_inter.t = inter.t; // already contains min value
 
-    __m128 mask_ps = _mm_castsi128_ps(inter.mask);
-    out_inter.u = _mm_blendv_ps(out_inter.u, inter.u, mask_ps);
-    out_inter.v = _mm_blendv_ps(out_inter.v, inter.v, mask_ps);
+    where(fmask, out_inter.u) = inter.u;
+    where(fmask, out_inter.v) = inter.v;
 
-    return _mm_not_all_zeroes(inter.mask);
+    return inter.mask.not_all_zeros();
 }
 
-bool ray::sse::IntersectCones(const ray_packet_t &r, const cone_accel_t *cones, uint32_t num_cones, hit_data_t &out_inter) {
+bool ray::NS::IntersectCones(const ray_packet_t &r, const cone_accel_t *cones, uint32_t num_cones, hit_data_t &out_inter) {
     hit_data_t inter;
     inter.t = out_inter.t;
 
     for (uint32_t i = 0; i < num_cones; i++) {
         const cone_accel_t &cone = cones[i];
 
-        __m128 cone_o[3], cone_v[3], cone_cos_phi_sqr;
-        cone_o[0] = _mm_set1_ps(cone.o[0]);
-        cone_o[1] = _mm_set1_ps(cone.o[1]);
-        cone_o[2] = _mm_set1_ps(cone.o[2]);
+        simd_fvec16 cone_o[3] = { { cone.o[0] }, { cone.o[1] }, { cone.o[2] } },
+                    cone_v[3] = { { cone.v[0] }, { cone.v[1] }, { cone.v[0] } },
+                    cone_cos_phi_sqr = { cone.cos_phi_sqr };
 
-        cone_v[0] = _mm_set1_ps(cone.v[0]);
-        cone_v[1] = _mm_set1_ps(cone.v[1]);
-        cone_v[2] = _mm_set1_ps(cone.v[2]);
-
-        cone_cos_phi_sqr = _mm_set1_ps(cone.cos_phi_sqr);
-
-        __m128 co[3];
-        co[0] = _mm_sub_ps(r.o[0], cone_o[0]);
-        co[1] = _mm_sub_ps(r.o[1], cone_o[1]);
-        co[2] = _mm_sub_ps(r.o[2], cone_o[2]);
+        simd_fvec16 co[3] = { { r.o[0] - cone_o[0] }, { r.o[1] - cone_o[1] }, { r.o[2] - cone_o[2] } };
 
         // a = dot(d, cone_v)
-        __m128 a = _mm_mul_ps(r.d[0], cone_v[0]);
-        a = _mm_add_ps(a, _mm_mul_ps(r.d[1], cone_v[1]));
-        a = _mm_add_ps(a, _mm_mul_ps(r.d[2], cone_v[2]));
+        simd_fvec16 a = r.d[0] * cone_v[0] + r.d[1] * cone_v[1] + r.d[2] * cone_v[2];
 
         // c = dot(co, cone_v)
-        __m128 c = _mm_mul_ps(co[0], cone_v[0]);
-        c = _mm_add_ps(c, _mm_mul_ps(co[1], cone_v[1]));
-        c = _mm_add_ps(c, _mm_mul_ps(co[2], cone_v[2]));
+        simd_fvec16 c = co[0] * cone_v[0] + co[1] * cone_v[1] + co[2] * cone_v[2];
 
         // b = 2 * (a * c - dot(d, co) * cone.cos_phi_sqr)
-        __m128 b = _mm_mul_ps(r.d[0], co[0]);
-        b = _mm_add_ps(b, _mm_mul_ps(r.d[1], co[1]));
-        b = _mm_add_ps(b, _mm_mul_ps(r.d[2], co[2]));
-        b = _mm_mul_ps(b, cone_cos_phi_sqr);
-        b = _mm_sub_ps(_mm_mul_ps(a, c), b);
-        b = _mm_mul_ps(b, TWO);
+        simd_fvec16 b = TWO * (a * c - (r.d[0] * co[0] + r.d[1] * co[1] + r.d[2] * co[2]) * cone_cos_phi_sqr);
 
         // a = a * a - cone.cos_phi_sqr
-        a = _mm_mul_ps(a, a);
-        a = _mm_sub_ps(a, cone_cos_phi_sqr);
+        a = a * a - cone_cos_phi_sqr;
 
         // c = c * c - dot(co, co) * cone.cos_phi_sqr
-        c = _mm_mul_ps(c, c);
-
-        __m128 temp = _mm_mul_ps(co[0], co[0]);
-        temp = _mm_add_ps(temp, _mm_mul_ps(co[1], co[1]));
-        temp = _mm_add_ps(temp, _mm_mul_ps(co[2], co[2]));
-
-        temp = _mm_mul_ps(temp, cone_cos_phi_sqr);
-
-        c = _mm_sub_ps(c, temp);
+        c = c * c - (co[0] * co[0] + co[1] * co[1] + co[2] * co[2]) * cone_cos_phi_sqr;
 
         // D = b * b - 4 * a * c
-        __m128 D = _mm_mul_ps(b, b);
+        simd_fvec16 D = b * b - FOUR * a * c;
 
-        temp = _mm_mul_ps(FOUR, a);
-        temp = _mm_mul_ps(temp, c);
+        const auto &m = reinterpret_cast<const simd_ivec16&>(D >= ZERO);
 
-        D = _mm_sub_ps(D, temp);
+        if (m.all_zeros()) continue;
 
-        __m128i m = _mm_castps_si128(_mm_cmpge_ps(D, ZERO));
+        D = sqrt(D);
 
-        if (_mm_all_zeroes(m)) continue;
+        a = a * TWO;
+        b = b ^ MINUS_ZERO; // swap sign
 
-        D = _mm_sqrt_ps(D);
+        simd_fvec16 t1 = (b - D) / a,
+                    t2 = (b + D) / a;
 
-        a = _mm_mul_ps(a, TWO);
-        b = _mm_xor_ps(b, MINUS_ZERO); // swap sign
+        simd_fvec16 mask1 = (t1 > ZERO) & (t1 < inter.t);
+        simd_fvec16 mask2 = (t2 > ZERO) & (t2 < inter.t);
+        auto mask = reinterpret_cast<const simd_ivec16&>(mask1 | mask2);
 
-        __m128 t1, t2;
-        t1 = _mm_sub_ps(b, D);
-        t1 = _mm_div_ps(t1, a);
-        t2 = _mm_add_ps(b, D);
-        t2 = _mm_div_ps(t2, a);
+        if (mask.all_zeros()) continue;
 
-        __m128 mask1 = _mm_cmpgt_ps(t1, ZERO);
-        mask1 = _mm_and_ps(mask1, _mm_cmplt_ps(t1, inter.t));
-        __m128 mask2 = _mm_cmpgt_ps(t2, ZERO);
-        mask2 = _mm_and_ps(mask2, _mm_cmplt_ps(t2, inter.t));
-        __m128i mask = _mm_castps_si128(_mm_or_ps(mask1, mask2));
+        simd_fvec16 p1c[3] = { { cone_o[0] - r.o[0] + t1 * r.d[0] },
+                               { cone_o[1] - r.o[1] + t1 * r.d[1] },
+                               { cone_o[2] - r.o[2] + t1 * r.d[2] } },
+                    p2c[3] = { { cone_o[0] - r.o[0] + t2 * r.d[0] },
+                               { cone_o[1] - r.o[1] + t2 * r.d[1] },
+                               { cone_o[2] - r.o[2] + t2 * r.d[2] } };
 
-        if (_mm_all_zeroes(mask)) continue;
+        simd_fvec16 dot1 = p1c[0] * cone_v[0] + p1c[1] * cone_v[1] + p1c[2] * cone_v[2];
+        simd_fvec16 dot2 = p2c[0] * cone_v[0] + p2c[1] * cone_v[1] + p2c[2] * cone_v[2];
 
-        __m128 p1c[3], p2c[3];
-        p1c[0] = _mm_add_ps(r.o[0], _mm_mul_ps(t1, r.d[0]));
-        p1c[1] = _mm_add_ps(r.o[1], _mm_mul_ps(t1, r.d[1]));
-        p1c[2] = _mm_add_ps(r.o[2], _mm_mul_ps(t1, r.d[2]));
+        simd_fvec16 cone_start = { cone.cone_start },
+                    cone_end = { cone.cone_end };
 
-        p2c[0] = _mm_add_ps(r.o[0], _mm_mul_ps(t2, r.d[0]));
-        p2c[1] = _mm_add_ps(r.o[1], _mm_mul_ps(t2, r.d[1]));
-        p2c[2] = _mm_add_ps(r.o[2], _mm_mul_ps(t2, r.d[2]));
+        mask1 = (dot1 >= cone_start) & (dot1 <= cone_end);
+        mask2 = (dot2 >= cone_start) & (dot2 <= cone_end);
 
-        p1c[0] = _mm_sub_ps(cone_o[0], p1c[0]);
-        p1c[1] = _mm_sub_ps(cone_o[1], p1c[1]);
-        p1c[2] = _mm_sub_ps(cone_o[2], p1c[2]);
+        mask = reinterpret_cast<const simd_ivec16&>(mask1 | mask2);
 
-        p2c[0] = _mm_sub_ps(cone_o[0], p2c[0]);
-        p2c[1] = _mm_sub_ps(cone_o[1], p2c[1]);
-        p2c[2] = _mm_sub_ps(cone_o[2], p2c[2]);
+        if (mask.all_zeros()) continue;
 
-        __m128 dot1 = _mm_mul_ps(p1c[0], cone_v[0]);
-        dot1 = _mm_add_ps(dot1, _mm_mul_ps(p1c[1], cone_v[1]));
-        dot1 = _mm_add_ps(dot1, _mm_mul_ps(p1c[2], cone_v[2]));
+        inter.mask = inter.mask | mask;
 
-        __m128 dot2 = _mm_mul_ps(p2c[0], cone_v[0]);
-        dot2 = _mm_add_ps(dot2, _mm_mul_ps(p2c[1], cone_v[1]));
-        dot2 = _mm_add_ps(dot2, _mm_mul_ps(p2c[2], cone_v[2]));
-
-        __m128 cone_start = _mm_set1_ps(cone.cone_start),
-               cone_end = _mm_set1_ps(cone.cone_end);
-
-        mask1 = _mm_cmpge_ps(dot1, cone_start);
-        mask2 = _mm_cmpge_ps(dot2, cone_start);
-        mask1 = _mm_and_ps(mask1, _mm_cmple_ps(dot1, cone_end));
-        mask2 = _mm_and_ps(mask2, _mm_cmple_ps(dot2, cone_end));
-        mask = _mm_castps_si128(_mm_or_ps(mask1, mask2));
-
-        if (_mm_all_zeroes(mask)) continue;
-
-        inter.mask = _mm_or_si128(inter.mask, mask);
-        inter.prim_index = _mm_blendv_si128(inter.prim_index, _mm_set1_epi32(i), mask);
-        //intersections.t = _mm_or_ps(_mm_andnot_ps(mask_ps, intersections.t1), _mm_and_ps(mask_ps, t1));
+        where(mask, inter.prim_index) = { reinterpret_cast<const int&>(i) };
     }
 
-    out_inter.mask = _mm_or_si128(out_inter.mask, inter.mask);
-    out_inter.prim_index = _mm_blendv_si128(out_inter.prim_index, inter.prim_index, inter.mask);
-    //out_intersections.t = intersections.t; // already contains min value
+    out_inter.mask = out_inter.mask | inter.mask;
 
-    return _mm_not_all_zeroes(inter.mask);
+    where(inter.mask, out_inter.prim_index) = inter.prim_index;
+
+    return inter.mask.not_all_zeros();
 }
 
-bool ray::sse::IntersectBoxes(const ray_packet_t &r, const aabox_t *boxes, uint32_t num_boxes, hit_data_t &out_inter) {
-
+bool ray::NS::IntersectBoxes(const ray_packet_t &r, const aabox_t *boxes, uint32_t num_boxes, hit_data_t &out_inter) {
     hit_data_t inter;
     inter.t = out_inter.t;
 
-    __m128 inv_d[3] = { _mm_rcp_ps(r.d[0]), _mm_rcp_ps(r.d[1]), _mm_rcp_ps(r.d[2]) };
+    simd_fvec16 inv_d[3] = { { ONE / r.d[0] }, { ONE / r.d[1] }, { ONE / r.d[2] } };
 
     for (uint32_t i = 0; i < num_boxes; i++) {
         const aabox_t &box = boxes[i];
 
-        __m128 box_min[3] = { _mm_set1_ps(box.min[0]), _mm_set1_ps(box.min[1]), _mm_set1_ps(box.min[2]) },
-                            box_max[3] = { _mm_set1_ps(box.max[0]), _mm_set1_ps(box.max[1]), _mm_set1_ps(box.max[2]) };
+        simd_fvec16 box_min[3] = { { box.min[0] }, { box.min[1] }, { box.min[2] } },
+                    box_max[3] = { { box.max[0] }, { box.max[1] }, { box.max[2] } };
 
-        __m128 low, high, tmin, tmax;
+        simd_fvec16 low, high, tmin, tmax;
 
-        low = _mm_mul_ps(inv_d[0], _mm_sub_ps(box_min[0], r.o[0]));
-        high = _mm_mul_ps(inv_d[0], _mm_sub_ps(box_max[0], r.o[0]));
-        tmin = _mm_min_ps(low, high);
-        tmax = _mm_max_ps(low, high);
+        low = inv_d[0] * (box_min[0] - r.o[0]);
+        high = inv_d[0] * (box_max[0] - r.o[0]);
+        tmin = min(low, high);
+        tmax = max(low, high);
 
-        low = _mm_mul_ps(inv_d[1], _mm_sub_ps(box_min[1], r.o[1]));
-        high = _mm_mul_ps(inv_d[1], _mm_sub_ps(box_max[1], r.o[1]));
-        tmin = _mm_max_ps(tmin, _mm_min_ps(low, high));
-        tmax = _mm_min_ps(tmax, _mm_max_ps(low, high));
+        low = inv_d[1] * (box_min[1] - r.o[1]);
+        high = inv_d[1] * (box_max[1] - r.o[1]);
+        tmin = max(tmin, min(low, high));
+        tmax = min(tmax, max(low, high));
 
-        low = _mm_mul_ps(inv_d[2], _mm_sub_ps(box_min[2], r.o[2]));
-        high = _mm_mul_ps(inv_d[2], _mm_sub_ps(box_max[2], r.o[2]));
-        tmin = _mm_max_ps(tmin, _mm_min_ps(low, high));
-        tmax = _mm_min_ps(tmax, _mm_max_ps(low, high));
+        low = inv_d[2] * (box_min[2] - r.o[2]);
+        high = inv_d[2] * (box_max[2] - r.o[2]);
+        tmin = max(tmin, min(low, high));
+        tmax = min(tmax, max(low, high));
 
-        __m128 mask = _mm_cmple_ps(tmin, tmax);
-        mask = _mm_and_ps(mask, _mm_cmpgt_ps(tmax, ZERO));
-        mask = _mm_and_ps(mask, _mm_cmplt_ps(tmin, inter.t));
+        simd_fvec16 mask = (tmin <= tmax) & (tmax > ZERO) & (tmin < inter.t);
 
-        __m128i imask = _mm_castps_si128(mask);
-        if (_mm_all_zeroes(imask)) continue;
+        const auto &imask = reinterpret_cast<const simd_ivec16&>(mask);
+        if (imask.all_zeros()) continue;
 
-        inter.mask = _mm_or_si128(inter.mask, imask);
-        inter.prim_index = _mm_blendv_si128(inter.prim_index, _mm_set1_epi32(i), imask);
-        inter.t = _mm_or_ps(_mm_andnot_ps(mask, inter.t), _mm_and_ps(mask, tmin));
+        inter.mask = inter.mask | imask;
+
+        where(imask, inter.prim_index) = { reinterpret_cast<const int&>(i) };
+        where(mask, inter.t) = tmin;
     }
 
-    out_inter.mask = _mm_or_si128(out_inter.mask, inter.mask);
-    out_inter.prim_index = _mm_blendv_si128(out_inter.prim_index, inter.prim_index, inter.mask);
+    out_inter.mask = out_inter.mask | inter.mask;
+
+    where(inter.mask, out_inter.prim_index) = inter.prim_index;
     //out_intersections.t = intersections.t; // already contains min value
 
-    return _mm_not_all_zeroes(inter.mask);
+    return inter.mask.not_all_zeros();
 }
 
-bool ray::sse::Traverse_MacroTree_CPU(const ray_packet_t &r, const __m128i ray_mask, const __m128 inv_d[3], const bvh_node_t *nodes, uint32_t root_index,
+bool ray::NS::Traverse_MacroTree_CPU(const ray_packet_t &r, const simd_ivec16 &ray_mask, const simd_fvec16 inv_d[3], const bvh_node_t *nodes, uint32_t root_index,
                                       const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
                                       const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t &inter) {
     bool res = false;
@@ -593,14 +463,13 @@ bool ray::sse::Traverse_MacroTree_CPU(const ray_packet_t &r, const __m128i ray_m
             }
             break;
         case FromSibling: {
-            __m128i mask1 = bbox_test(r.o, inv_d, inter.t, nodes[cur]);
-            mask1 = _mm_and_si128(mask1, st.queue[st.index].mask);
-            if (_mm_all_zeroes(mask1)) {
+            auto mask1 = bbox_test(r.o, inv_d, inter.t, nodes[cur]) & st.queue[st.index].mask;
+            if (mask1.all_zeros()) {
                 cur = nodes[cur].parent;
                 src = FromChild;
             } else {
-                __m128i mask2 = _mm_andnot_si128(mask1, st.queue[st.index].mask);
-                if (_mm_not_all_zeroes(mask2)) {
+                auto mask2 = and_not(mask1, st.queue[st.index].mask);
+                if (mask2.not_all_zeros()) {
                     st.queue[st.num].cur = nodes[cur].parent;
                     st.queue[st.num].mask = mask2;
                     st.queue[st.num].src = FromChild;
@@ -615,13 +484,12 @@ bool ray::sse::Traverse_MacroTree_CPU(const ray_packet_t &r, const __m128i ray_m
                         const auto &m = meshes[mi.mesh_index];
                         const auto &tr = transforms[mi.tr_index];
 
-                        __m128i bbox_mask = bbox_test(r.o, inv_d, inter.t, mi.bbox_min, mi.bbox_max);
-                        bbox_mask = _mm_and_si128(st.queue[st.index].mask, bbox_mask);
-                        if (_mm_all_zeroes(bbox_mask)) continue;
+                        auto bbox_mask = bbox_test(r.o, inv_d, inter.t, mi.bbox_min, mi.bbox_max) & st.queue[st.index].mask;
+                        if (bbox_mask.all_zeros()) continue;
 
                         ray_packet_t _r = TransformRay(r, tr.inv_xform);
 
-                        __m128 _inv_d[3] = { _mm_div_ps(ONE, _r.d[0]), _mm_div_ps(ONE, _r.d[1]), _mm_div_ps(ONE, _r.d[2]) };
+                        simd_fvec16 _inv_d[3] = { { ONE / _r.d[0] }, { ONE / _r.d[1] }, { ONE / _r.d[2] } };
 
                         res |= Traverse_MicroTree_CPU(_r, bbox_mask, _inv_d, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter);
                     }
@@ -636,14 +504,13 @@ bool ray::sse::Traverse_MacroTree_CPU(const ray_packet_t &r, const __m128i ray_m
         }
         break;
         case FromParent: {
-            __m128i mask1 = bbox_test(r.o, inv_d, inter.t, nodes[cur]);
-            mask1 = _mm_and_si128(mask1, st.queue[st.index].mask);
-            if (_mm_all_zeroes(mask1)) {
+            auto mask1 = bbox_test(r.o, inv_d, inter.t, nodes[cur]) & st.queue[st.index].mask;
+            if (mask1.all_zeros()) {
                 cur = nodes[cur].sibling;
                 src = FromSibling;
             } else {
-                __m128i mask2 = _mm_andnot_si128(mask1, st.queue[st.index].mask);
-                if (_mm_not_all_zeroes(mask2)) {
+                auto mask2 = and_not(mask1, st.queue[st.index].mask);
+                if (mask2.not_all_zeros()) {
                     st.queue[st.num].cur = nodes[cur].sibling;
                     st.queue[st.num].mask = mask2;
                     st.queue[st.num].src = FromSibling;
@@ -658,13 +525,12 @@ bool ray::sse::Traverse_MacroTree_CPU(const ray_packet_t &r, const __m128i ray_m
                         const auto &m = meshes[mi.mesh_index];
                         const auto &tr = transforms[mi.tr_index];
 
-                        __m128i bbox_mask = bbox_test(r.o, inv_d, inter.t, mi.bbox_min, mi.bbox_max);
-                        bbox_mask = _mm_and_si128(st.queue[st.index].mask, bbox_mask);
-                        if (_mm_all_zeroes(bbox_mask)) continue;
+                        auto bbox_mask = bbox_test(r.o, inv_d, inter.t, mi.bbox_min, mi.bbox_max) & st.queue[st.index].mask;
+                        if (bbox_mask.all_zeros()) continue;
 
                         ray_packet_t _r = TransformRay(r, tr.inv_xform);
 
-                        __m128 _inv_d[3] = { _mm_div_ps(ONE, _r.d[0]), _mm_div_ps(ONE, _r.d[1]), _mm_div_ps(ONE, _r.d[2]) };
+                        simd_fvec16 _inv_d[3] = { { ONE / _r.d[0] }, { ONE / _r.d[1] }, { ONE / _r.d[2] } };
 
                         res |= Traverse_MicroTree_CPU(_r, bbox_mask, _inv_d, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter);
                     }
@@ -683,7 +549,7 @@ bool ray::sse::Traverse_MacroTree_CPU(const ray_packet_t &r, const __m128i ray_m
     return res;
 }
 
-bool ray::sse::Traverse_MicroTree_CPU(const ray_packet_t &r, const __m128i ray_mask, const __m128 inv_d[3], const bvh_node_t *nodes, uint32_t root_index,
+bool ray::NS::Traverse_MicroTree_CPU(const ray_packet_t &r, const simd_ivec16 &ray_mask, const simd_fvec16 inv_d[3], const bvh_node_t *nodes, uint32_t root_index,
                                       const tri_accel_t *tris, const uint32_t *indices, int obj_index, hit_data_t &inter) {
     bool res = false;
 
@@ -718,14 +584,13 @@ bool ray::sse::Traverse_MicroTree_CPU(const ray_packet_t &r, const __m128i ray_m
             }
             break;
         case FromSibling: {
-            __m128i mask1 = bbox_test(r.o, inv_d, inter.t, nodes[cur]);
-            mask1 = _mm_and_si128(mask1, st.queue[st.index].mask);
-            if (_mm_all_zeroes(mask1)) {
+            auto mask1 = bbox_test(r.o, inv_d, inter.t, nodes[cur]) & st.queue[st.index].mask;
+            if (mask1.all_zeros()) {
                 cur = nodes[cur].parent;
                 src = FromChild;
             } else {
-                __m128i mask2 = _mm_andnot_si128(mask1, st.queue[st.index].mask);
-                if (_mm_not_all_zeroes(mask2)) {
+                auto mask2 = and_not(mask1, st.queue[st.index].mask);
+                if (mask2.not_all_zeros()) {
                     st.queue[st.num].cur = nodes[cur].parent;
                     st.queue[st.num].mask = mask2;
                     st.queue[st.num].src = FromChild;
@@ -747,14 +612,13 @@ bool ray::sse::Traverse_MicroTree_CPU(const ray_packet_t &r, const __m128i ray_m
         }
         break;
         case FromParent: {
-            __m128i mask1 = bbox_test(r.o, inv_d, inter.t, nodes[cur]);
-            mask1 = _mm_and_si128(mask1, st.queue[st.index].mask);
-            if (_mm_all_zeroes(mask1)) {
+            auto mask1 = bbox_test(r.o, inv_d, inter.t, nodes[cur]) & st.queue[st.index].mask;
+            if (mask1.all_zeros()) {
                 cur = nodes[cur].sibling;
                 src = FromSibling;
             } else {
-                __m128i mask2 = _mm_andnot_si128(mask1, st.queue[st.index].mask);
-                if (_mm_not_all_zeroes(mask2)) {
+                auto mask2 = and_not(mask1, st.queue[st.index].mask);
+                if (mask2.not_all_zeros()) {
                     st.queue[st.num].cur = nodes[cur].sibling;
                     st.queue[st.num].mask = mask2;
                     st.queue[st.num].src = FromSibling;
@@ -780,16 +644,16 @@ bool ray::sse::Traverse_MicroTree_CPU(const ray_packet_t &r, const __m128i ray_m
     return res;
 }
 
-ray::sse::ray_packet_t ray::sse::TransformRay(const ray_packet_t &r, const float *xform) {
+ray::NS::ray_packet_t ray::NS::TransformRay(const ray_packet_t &r, const float *xform) {
     ray_packet_t _r = r;
 
-    _r.o[0] = _mm_add_ps(_mm_add_ps(_mm_mul_ps(_mm_set1_ps(xform[0]), r.o[0]), _mm_mul_ps(_mm_set1_ps(xform[4]), r.o[1])), _mm_add_ps(_mm_mul_ps(_mm_set1_ps(xform[8]), r.o[2]), _mm_set1_ps(xform[12])));
-    _r.o[1] = _mm_add_ps(_mm_add_ps(_mm_mul_ps(_mm_set1_ps(xform[1]), r.o[0]), _mm_mul_ps(_mm_set1_ps(xform[5]), r.o[1])), _mm_add_ps(_mm_mul_ps(_mm_set1_ps(xform[9]), r.o[2]), _mm_set1_ps(xform[13])));
-    _r.o[2] = _mm_add_ps(_mm_add_ps(_mm_mul_ps(_mm_set1_ps(xform[2]), r.o[0]), _mm_mul_ps(_mm_set1_ps(xform[6]), r.o[1])), _mm_add_ps(_mm_mul_ps(_mm_set1_ps(xform[10]), r.o[2]), _mm_set1_ps(xform[14])));
+    _r.o[0] = r.o[0] * xform[0] + r.o[1] * xform[4] + r.o[2] * xform[8] + xform[12];
+    _r.o[1] = r.o[0] * xform[1] + r.o[1] * xform[5] + r.o[2] * xform[9] + xform[13];
+    _r.o[2] = r.o[0] * xform[2] + r.o[1] * xform[6] + r.o[2] * xform[10] + xform[14];
 
-    _r.d[0] = _mm_add_ps(_mm_add_ps(_mm_mul_ps(_mm_set1_ps(xform[0]), r.d[0]), _mm_mul_ps(_mm_set1_ps(xform[4]), r.d[1])), _mm_mul_ps(_mm_set1_ps(xform[8]), r.d[2]));
-    _r.d[1] = _mm_add_ps(_mm_add_ps(_mm_mul_ps(_mm_set1_ps(xform[1]), r.d[0]), _mm_mul_ps(_mm_set1_ps(xform[5]), r.d[1])), _mm_mul_ps(_mm_set1_ps(xform[9]), r.d[2]));
-    _r.d[2] = _mm_add_ps(_mm_add_ps(_mm_mul_ps(_mm_set1_ps(xform[2]), r.d[0]), _mm_mul_ps(_mm_set1_ps(xform[6]), r.d[1])), _mm_mul_ps(_mm_set1_ps(xform[10]), r.d[2]));
+    _r.d[0] = r.d[0] * xform[0] + r.d[1] * xform[4] + r.d[2] * xform[8];
+    _r.d[1] = r.d[0] * xform[1] + r.d[1] * xform[5] + r.d[2] * xform[9];
+    _r.d[2] = r.d[0] * xform[2] + r.d[1] * xform[6] + r.d[2] * xform[10];
 
     return _r;
-}*/
+}

@@ -14,21 +14,21 @@
 #include "internal/TextureAtlasRef.cpp"
 #include "internal/TextureUtilsRef.cpp"
 
+#define NS ref2
+#include "internal/CoreSIMD.cpp"
+#undef NS
+
 #define NS sse
 #define USE_SSE
-#define INSTANTIATION_ID 1
 #include "internal/CoreSIMD.cpp"
-#undef INSTANTIATION_ID
 #undef USE_SSE
 #undef NS
 
-#define NS avx
+/*#define NS avx
 #define USE_AVX
-#define INSTANTIATION_ID 2
 #include "internal/CoreSIMD.cpp"
-#undef INSTANTIATION_ID
 #undef USE_AVX
-#undef NS
+#undef NS*/
 
 //#include "internal/CoreSSE.cpp"
 //#include "internal/RendererSSE.cpp"

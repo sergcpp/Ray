@@ -1,4 +1,4 @@
-#pragma once
+//#pragma once
 
 #include "simd_vec_sse.h"
 
@@ -8,6 +8,9 @@
 #pragma GCC push_options
 #pragma GCC target ("avx")
 #endif
+
+namespace ray {
+namespace NS {
 
 template <int S>
 class simd_vec<typename std::enable_if<S % 8 == 0, float>::type, S> {
@@ -74,6 +77,46 @@ public:
         return *this;
     }
 
+    simd_vec<float, S> operator<(const simd_vec<float, S> &rhs) const {
+        simd_vec<float, S> ret;
+        for (int i = 0; i < S / 8; i++) {
+            ret.vec_[i] = _mm256_cmp_ps(vec_[i], rhs.vec_[i], _CMP_LT_OS);
+        }
+        return ret;
+    }
+
+    simd_vec<float, S> operator<=(const simd_vec<float, S> &rhs) const {
+        simd_vec<float, S> ret;
+        for (int i = 0; i < S / 8; i++) {
+            ret.vec_[i] = _mm256_cmp_ps(vec_[i], rhs.vec_[i], _CMP_LE_OS);
+        }
+        return ret;
+    }
+
+    simd_vec<float, S> operator>(const simd_vec<float, S> &rhs) const {
+        simd_vec<float, S> ret;
+        for (int i = 0; i < S / 8; i++) {
+            ret.vec_[i] = _mm256_cmp_ps(vec_[i], rhs.vec_[i], _CMP_GT_OS);
+        }
+        return ret;
+    }
+
+    simd_vec<float, S> operator>=(const simd_vec<float, S> &rhs) const {
+        simd_vec<float, S> ret;
+        for (int i = 0; i < S / 8; i++) {
+            ret.vec_[i] = _mm256_cmp_ps(vec_[i], rhs.vec_[i], _CMP_GE_OS);
+        }
+        return ret;
+    }
+
+    simd_vec<float, S> sqrt() const {
+        simd_vec<float, S> temp;
+        for (int i = 0; i < S / 8; i++) {
+            temp.vec_[i] = _mm256_sqrt_ps(vec_[i]);
+        }
+        return temp;
+    }
+
     void copy_to(float *f) const {
         for (int i = 0; i < S / 8; i++) {
             _mm256_storeu_ps(f, vec_[i]);
@@ -88,23 +131,12 @@ public:
         }
     }
 
-    friend simd_vec<float, S> sqrt(const simd_vec<float, S> &v1);
-
     static const size_t alignment = alignof(__m256);
 
     static int size() { return S; }
     static int native_count() { return S / 8; }
     static bool is_native() { return native_count() == 1; }
 };
-
-template <int S>
-inline simd_vec<float, S> sqrt(const simd_vec<float, S> &v1) {
-    simd_vec<float, S> temp;
-    for (int i = 0; i < S/4; i++) {
-        temp.vec_[i] = _mm256_sqrt_ps(v1.vec_[i]);
-    }
-    return temp;
-}
 
 template <int S>
 class simd_vec<typename std::enable_if<S % 8 == 0, int>::type, S> {
@@ -210,6 +242,9 @@ public:
 using native_simd_fvec = simd_fvec<8>;
 using native_simd_ivec = simd_ivec<8>;
 #endif
+
+}
+}
 
 #ifdef __GNUC__
 #pragma GCC pop_options

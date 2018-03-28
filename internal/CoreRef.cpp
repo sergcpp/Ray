@@ -20,8 +20,8 @@ force_inline void _IntersectTri(const ray_packet_t &r, const tri_accel_t &tri, u
     float dett = tri.np - (r.o[u] * tri.nu + r.o[v] * tri.nv + r.o[w]);
     float Du = r.d[u] * dett - (tri.pu - r.o[u]) * det;
     float Dv = r.d[v] * dett - (tri.pv - r.o[v]) * det;
-    float detu = (tri.e1v * Du - tri.e1u * Dv);
-    float detv = (tri.e0u * Dv - tri.e0v * Du);
+    float detu = tri.e1v * Du - tri.e1u * Dv;
+    float detv = tri.e0u * Dv - tri.e0v * Du;
 
     float tmpdet0 = det - detu - detv;
     //if ((tmpdet0 >= 0 && detu >= 0 && detv >= 0) || (tmpdet0 <= 0 && detu <= 0 && detv <= 0)) {

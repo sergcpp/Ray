@@ -1,3 +1,4 @@
+using namespace ray::NS;
 
 {
     std::cout << "Test simd_fvec4 native_count = " << simd_fvec4::native_count() << " | ";
@@ -97,6 +98,22 @@
     require(v5[2] == Approx(4.2426));
     require(v5[3] == Approx(5.2915));
 
+    simd_fvec4 v9 = { 3.0f, 6.0f, 7.0f, 6.0f };
+
+    auto v10 = v2 < v9;
+
+    require(v10[0] == 0);
+    require(reinterpret_cast<const uint32_t&>(v10[1]) == 0xFFFFFFFF);
+    require(reinterpret_cast<const uint32_t&>(v10[2]) == 0xFFFFFFFF);
+    require(v10[3] == 0);
+
+    auto v11 = v2 > v9;
+
+    require(reinterpret_cast<const uint32_t&>(v11[0]) == 0xFFFFFFFF);
+    require(v11[1] == 0);
+    require(v11[2] == 0);
+    require(reinterpret_cast<const uint32_t&>(v11[3]) == 0xFFFFFFFF);
+
     std::cout << "OK" << std::endl;
 }
 
@@ -190,6 +207,13 @@
     require(v6[1] == 0);
     require(v6[2] == 0);
     require(v6[3] == 0);
+
+    require(!v3.all_zeros());
+    require(v6.all_zeros());
+
+    //simd_ivec4 v9 = { 3, 6, 7, 6 };
+
+    //auto v10 = v2 < v9;
 
     std::cout << "OK" << std::endl;
 }
@@ -302,6 +326,30 @@
     require(v5[5] == Approx(6.3246));
     require(v5[6] == Approx(6));
     require(v5[7] == Approx(1.4142));
+
+    simd_fvec8 v9 = { 3.0f, 6.0f, 7.0f, 6.0f, 2.0f, 12.0f, 18.0f, 0.0f };
+
+    auto v10 = v2 < v9;
+
+    require(v10[0] == 0);
+    require(reinterpret_cast<const uint32_t&>(v10[1]) == 0xFFFFFFFF);
+    require(reinterpret_cast<const uint32_t&>(v10[2]) == 0xFFFFFFFF);
+    require(v10[3] == 0);
+    require(v10[4] == 0);
+    require(reinterpret_cast<const uint32_t&>(v10[5]) == 0xFFFFFFFF);
+    require(reinterpret_cast<const uint32_t&>(v10[6]) == 0xFFFFFFFF);
+    require(v10[7] == 0);
+
+    auto v11 = v2 > v9;
+
+    require(reinterpret_cast<const uint32_t&>(v11[0]) == 0xFFFFFFFF);
+    require(v11[1] == 0);
+    require(v11[2] == 0);
+    require(reinterpret_cast<const uint32_t&>(v11[3]) == 0xFFFFFFFF);
+    require(reinterpret_cast<const uint32_t&>(v11[4]) == 0xFFFFFFFF);
+    require(v11[5] == 0);
+    require(v11[6] == 0);
+    require(reinterpret_cast<const uint32_t&>(v11[7]) == 0xFFFFFFFF);
 
     std::cout << "OK" << std::endl;
 }

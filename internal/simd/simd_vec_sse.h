@@ -1,6 +1,4 @@
-#pragma once
-
-#include "simd_vec.h"
+//#pragma once
 
 #include <type_traits>
 
@@ -11,6 +9,9 @@
 #pragma GCC push_options
 #pragma GCC target ("sse2")
 #endif
+
+namespace ray {
+namespace NS {
 
 template <int S>
 class simd_vec<typename std::enable_if<S % 4 == 0
@@ -81,6 +82,46 @@ public:
         return *this;
     }
 
+    simd_vec<float, S> operator<(const simd_vec<float, S> &rhs) const {
+        simd_vec<float, S> ret;
+        for (int i = 0; i < S/4; i++) {
+            ret.vec_[i] = _mm_cmplt_ps(vec_[i], rhs.vec_[i]);
+        }
+        return ret;
+    }
+
+    simd_vec<float, S> operator<=(const simd_vec<float, S> &rhs) const {
+        simd_vec<float, S> ret;
+        for (int i = 0; i < S / 4; i++) {
+            ret.vec_[i] = _mm_cmple_ps(vec_[i], rhs.vec_[i]);
+        }
+        return ret;
+    }
+
+    simd_vec<float, S> operator>(const simd_vec<float, S> &rhs) const {
+        simd_vec<float, S> ret;
+        for (int i = 0; i < S / 4; i++) {
+            ret.vec_[i] = _mm_cmpgt_ps(vec_[i], rhs.vec_[i]);
+        }
+        return ret;
+    }
+
+    simd_vec<float, S> operator>=(const simd_vec<float, S> &rhs) const {
+        simd_vec<float, S> ret;
+        for (int i = 0; i < S / 4; i++) {
+            ret.vec_[i] = _mm_cmpge_ps(vec_[i], rhs.vec_[i]);
+        }
+        return ret;
+    }
+
+    simd_vec<float, S> sqrt() const {
+        simd_vec<float, S> temp;
+        for (int i = 0; i < S / 4; i++) {
+            temp.vec_[i] = _mm_sqrt_ps(vec_[i]);
+        }
+        return temp;
+    }
+
     void copy_to(float *f) const {
         for (int i = 0; i < S/4; i++) {
             _mm_storeu_ps(f, vec_[i]);
@@ -95,7 +136,59 @@ public:
         }
     }
 
-    friend simd_vec<float, S> sqrt(const simd_vec<float, S> &v1);
+    void blend_to(const simd_vec<float, S> &mask, const simd_vec<float, S> &v1) {
+        for (int i = 0; i < S/4; i++) {
+            vec_[i] = _mm_blendv_ps(vec_[i], v1.vec_[i], mask.vec_[i]);
+        }
+    }
+
+    static simd_vec<float, S> min(const simd_vec<float, S> &v1, const simd_vec<float, S> &v2) {
+        simd_vec<float, S> temp;
+        for (int i = 0; i < S/4; i++) {
+            temp.vec_[i] = _mm_min_ps(v1.vec_[i], v2.vec_[i]);
+        }
+        return temp;
+    }
+
+    static simd_vec<float, S> max(const simd_vec<float, S> &v1, const simd_vec<float, S> &v2) {
+        simd_vec<float, S> temp;
+        for (int i = 0; i < S/4; i++) {
+            temp.vec_[i] = _mm_max_ps(v1.vec_[i], v2.vec_[i]);
+        }
+        return temp;
+    }
+
+    static simd_vec<float, S> and (const simd_vec<float, S> &v1, const simd_vec<float, S> &v2) {
+        simd_vec<float, S> temp;
+        for (int i = 0; i < S/4; i++) {
+            temp.vec_[i] = _mm_and_ps(v1.vec_[i], v2.vec_[i]);
+        }
+        return temp;
+    }
+
+    static simd_vec<float, S> and_not(const simd_vec<float, S> &v1, const simd_vec<float, S> &v2) {
+        simd_vec<float, S> temp;
+        for (int i = 0; i < S/4; i++) {
+            temp.vec_[i] = _mm_andnot_ps(v1.vec_[i], v2.vec_[i]);
+        }
+        return temp;
+    }
+
+    static simd_vec<float, S> or(const simd_vec<float, S> &v1, const simd_vec<float, S> &v2) {
+        simd_vec<float, S> temp;
+        for (int i = 0; i < S/4; i++) {
+            temp.vec_[i] = _mm_or_ps(v1.vec_[i], v2.vec_[i]);
+        }
+        return temp;
+    }
+
+    static simd_vec<float, S> xor(const simd_vec<float, S> &v1, const simd_vec<float, S> &v2) {
+        simd_vec<float, S> temp;
+        for (int i = 0; i < S / 4; i++) {
+            temp.vec_[i] = _mm_xor_ps(v1.vec_[i], v2.vec_[i]);
+        }
+        return temp;
+    }
 
     static const size_t alignment = alignof(__m128);
 
@@ -103,15 +196,6 @@ public:
     static int native_count() { return S/4; }
     static bool is_native() { return native_count() == 1; }
 };
-
-template <int S>
-inline simd_vec<float, S> sqrt(const simd_vec<float, S> &v1) {
-    simd_vec<float, S> temp;
-    for (int i = 0; i < S/4; i++) {
-        temp.vec_[i] = _mm_sqrt_ps(v1.vec_[i]);
-    }
-    return temp;
-}
 
 template <int S>
 class simd_vec<typename std::enable_if<S % 4 == 0
@@ -139,13 +223,13 @@ public:
         }
     }
     simd_vec(const int *f) {
-        for (int i = 0; i < S / 4; i++) {
+        for (int i = 0; i < S/4; i++) {
             vec_[i] = _mm_loadu_si128((const __m128i *)f);
             f += 4;
         }
     }
     simd_vec(const int *f, simd_mem_aligned_tag) {
-        for (int i = 0; i < S / 4; i++) {
+        for (int i = 0; i < S/4; i++) {
             vec_[i] = _mm_load_si128((const __m128i *)f);
             f += 4;
         }
@@ -155,14 +239,14 @@ public:
     int operator[](int i) const { return comp_[i]; }
 
     simd_vec<int, S> &operator+=(const simd_vec<int, S> &rhs) {
-        for (int i = 0; i < S / 4; i++) {
+        for (int i = 0; i < S/4; i++) {
             vec_[i] = _mm_add_epi32(vec_[i], rhs.vec_[i]);
         }
         return *this;
     }
 
     simd_vec<int, S> &operator-=(const simd_vec<int, S> &rhs) {
-        for (int i = 0; i < S / 4; i++) {
+        for (int i = 0; i < S/4; i++) {
             vec_[i] = _mm_sub_epi32(vec_[i], rhs.vec_[i]);
         }
         return *this;
@@ -189,17 +273,105 @@ public:
     }
 
     void copy_to(int *f) const {
-        for (int i = 0; i < S / 4; i++) {
+        for (int i = 0; i < S/4; i++) {
             _mm_storeu_si128((__m128i *)f, vec_[i]);
             f += 4;
         }
     }
 
     void copy_to(int *f, simd_mem_aligned_tag) const {
-        for (int i = 0; i < S / 4; i++) {
+        for (int i = 0; i < S/4; i++) {
             _mm_store_si128((__m128i *)f, vec_[i]);
             f += 4;
         }
+    }
+
+    void blend_to(const simd_vec<int, S> &mask, const simd_vec<int, S> &v1) {
+        for (int i = 0; i < S/4; i++) {
+            vec_[i] = _mm_blendv_epi8(vec_[i], v1.vec_[i], mask.vec_[i]);
+        }
+    }
+
+    bool all_zeros() const {
+        for (int i = 0; i < S/4; i++) {
+#if 1
+            if (_mm_movemask_epi8(_mm_cmpeq_epi32(vec_[i], _mm_setzero_si128())) != 0xFFFF) return false;
+#else
+            if (!_mm_test_all_zeros(vec_[i], vec_[i])) return false;
+#endif
+        }
+        return true;
+    }
+
+    bool all_zeros(const simd_vec<int, S> &mask) const {
+        for (int i = 0; i < S/4; i++) {
+#if 1
+            if (!_mm_test_all_zeros(vec_[i], mask.vec_[i])) return false;
+#else
+#error "!!!"
+            if (_mm_movemask_epi8(_mm_cmpeq_epi32(vec_[i], _mm_setzero_si128())) != 0xFFFF) return false;
+#endif
+        }
+        return true;
+    }
+
+    bool not_all_zeros() const {
+        for (int i = 0; i < S/4; i++) {
+#if 1
+            if (_mm_movemask_epi8(_mm_cmpeq_epi32(vec_[i], _mm_setzero_si128())) == 0xFFFF) return true;
+#else
+            if (_mm_test_all_zeros(vec_[i], vec_[i])) return true;
+#endif
+        }
+        return false;
+    }
+
+    static simd_vec<int, S> min(const simd_vec<int, S> &v1, const simd_vec<int, S> &v2) {
+        simd_vec<int, S> temp;
+        for (int i = 0; i < S/4; i++) {
+            temp.vec_[i] = _mm_min_si128(v1.vec_[i], v2.vec_[i]);
+        }
+        return temp;
+    }
+
+    static simd_vec<int, S> max(const simd_vec<int, S> &v1, const simd_vec<int, S> &v2) {
+        simd_vec<int, S> temp;
+        for (int i = 0; i < S/4; i++) {
+            temp.vec_[i] = _mm_max_si128(v1.vec_[i], v2.vec_[i]);
+        }
+        return temp;
+    }
+
+    static simd_vec<int, S> and(const simd_vec<int, S> &v1, const simd_vec<int, S> &v2) {
+        simd_vec<int, S> temp;
+        for (int i = 0; i < S/4; i++) {
+            temp.vec_[i] = _mm_and_si128(v1.vec_[i], v2.vec_[i]);
+        }
+        return temp;
+    }
+
+    static simd_vec<int, S> and_not(const simd_vec<int, S> &v1, const simd_vec<int, S> &v2) {
+        simd_vec<int, S> temp;
+        for (int i = 0; i < S/4; i++) {
+            temp.vec_[i] = _mm_andnot_si128(v1.vec_[i], v2.vec_[i]);
+        }
+        return temp;
+    }
+
+    static simd_vec<int, S> or(const simd_vec<int, S> &v1, const simd_vec<int, S> &v2) {
+        simd_vec<int, S> temp;
+        for (int i = 0; i < S/4; i++) {
+            temp.vec_[i] = _mm_or_si128(v1.vec_[i], v2.vec_[i]);
+        }
+        return temp;
+    }
+
+    static simd_vec<int, S> xor(const simd_vec<int, S> &v1, const simd_vec<int, S> &v2) {
+        simd_vec<int, S> temp;
+        for (int i = 0; i < S / 4; i++) {
+            temp.vec_[i] = _mm_xor_si128(v1.vec_[i], v2.vec_[i]);
+        }
+        return temp;
     }
 
     static const size_t alignment = alignof(__m128i);
@@ -213,6 +385,9 @@ public:
 using native_simd_fvec = simd_fvec<4>;
 using native_simd_ivec = simd_ivec<4>;
 #endif
+
+}
+}
 
 #ifdef __GNUC__
 #pragma GCC pop_options
