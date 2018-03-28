@@ -90,6 +90,13 @@
     require(v6[2] == Approx(0.5));
     require(v6[3] == Approx(0.57142));
 
+    v5 = sqrt(v5);
+
+    require(v5[0] == Approx(2));
+    require(v5[1] == Approx(3.1623));
+    require(v5[2] == Approx(4.2426));
+    require(v5[3] == Approx(5.2915));
+
     std::cout << "OK" << std::endl;
 }
 
@@ -284,6 +291,17 @@
     require(v6[5] == Approx(0.4));
     require(v6[6] == Approx(0.25));
     require(v6[7] == Approx(2.0));
+
+    v5 = sqrt(v5);
+
+    require(v5[0] == Approx(2));
+    require(v5[1] == Approx(3.1623));
+    require(v5[2] == Approx(4.2426));
+    require(v5[3] == Approx(5.2915));
+    require(v5[4] == Approx(6.3246));
+    require(v5[5] == Approx(6.3246));
+    require(v5[6] == Approx(6));
+    require(v5[7] == Approx(1.4142));
 
     std::cout << "OK" << std::endl;
 }

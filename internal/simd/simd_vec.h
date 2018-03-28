@@ -97,6 +97,15 @@ inline simd_vec<T, S> operator*(const simd_vec<T, S> &v1, const simd_vec<T, S> &
 template <typename T, int S, int I = INSTANTIATION_ID>
 inline simd_vec<T, S> operator/(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) { simd_vec<T, S> temp = v1; temp /= v2; return temp; }
 
+template <typename T, int S, int I = INSTANTIATION_ID>
+inline simd_vec<T, S> sqrt(const simd_vec<T, S> &v1) {
+    simd_vec<T, S> temp;
+    for (int i = 0; i < S; i++) {
+        temp[i] = sqrt(v1[i]);
+    }
+    return temp;
+}
+
 template <int S>
 using simd_fvec = simd_vec<float, S>;
 using simd_fvec4 = simd_fvec<4>;

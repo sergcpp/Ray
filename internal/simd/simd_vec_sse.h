@@ -95,12 +95,23 @@ public:
         }
     }
 
+    friend simd_vec<float, S> sqrt(const simd_vec<float, S> &v1);
+
     static const size_t alignment = alignof(__m128);
 
     static int size() { return S; }
     static int native_count() { return S/4; }
     static bool is_native() { return native_count() == 1; }
 };
+
+template <int S>
+inline simd_vec<float, S> sqrt(const simd_vec<float, S> &v1) {
+    simd_vec<float, S> temp;
+    for (int i = 0; i < S/4; i++) {
+        temp.vec_[i] = _mm_sqrt_ps(v1.vec_[i]);
+    }
+    return temp;
+}
 
 template <int S>
 class simd_vec<typename std::enable_if<S % 4 == 0

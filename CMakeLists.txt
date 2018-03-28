@@ -21,6 +21,8 @@ set(INTERNAL_SOURCE_FILES internal/BVHSplit.h
                           internal/CoreOCL.h
                           internal/CoreRef.h
                           internal/CoreRef.cpp
+						  internal/CoreSIMD.h
+						  internal/CoreSIMD.cpp
                           internal/CoreSSE.h
                           internal/CoreSSE.cpp
                           internal/FramebufferRef.h

@@ -14,11 +14,27 @@
 #include "internal/TextureAtlasRef.cpp"
 #include "internal/TextureUtilsRef.cpp"
 
-#include "internal/CoreSSE.cpp"
-#include "internal/RendererSSE.cpp"
+#define NS sse
+#define USE_SSE
+#define INSTANTIATION_ID 1
+#include "internal/CoreSIMD.cpp"
+#undef INSTANTIATION_ID
+#undef USE_SSE
+#undef NS
 
-#include "internal/CoreAVX.cpp"
-#include "internal/RendererAVX.cpp"
+#define NS avx
+#define USE_AVX
+#define INSTANTIATION_ID 2
+#include "internal/CoreSIMD.cpp"
+#undef INSTANTIATION_ID
+#undef USE_AVX
+#undef NS
+
+//#include "internal/CoreSSE.cpp"
+//#include "internal/RendererSSE.cpp"
+
+//#include "internal/CoreAVX.cpp"
+//#include "internal/RendererAVX.cpp"
 
 #include "internal/RendererOCL.cpp"
 #include "internal/SceneOCL.cpp"
