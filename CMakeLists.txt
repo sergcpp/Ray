@@ -34,6 +34,8 @@ set(INTERNAL_SOURCE_FILES internal/BVHSplit.h
                           internal/RendererOCL.cpp
                           internal/RendererRef.h
                           internal/RendererRef.cpp
+                          internal/RendererSIMD.h
+                          internal/RendererSIMD.cpp
                           internal/RendererSSE.h
                           internal/RendererSSE.cpp
                           internal/SceneOCL.h

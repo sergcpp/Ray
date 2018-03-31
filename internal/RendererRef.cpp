@@ -7,12 +7,6 @@
 
 #include <math/math.hpp>
 
-namespace ray {
-namespace ref {
-bool bbox_test(const float o[3], const float inv_d[3], const float t, const float bbox_min[3], const float bbox_max[3]);
-}
-}
-
 ray::ref::Renderer::Renderer(int w, int h) : clean_buf_(w, h), final_buf_(w, h), temp_buf_(w, h) {
     auto u_0_to_1 = []() {
         return float(rand()) / RAND_MAX;

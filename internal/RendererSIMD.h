@@ -1,39 +1,33 @@
 #pragma once
 
-#include "CoreRef.h"
+//#include "CoreSIMD.h"
 #include "FramebufferRef.h"
 #include "../RendererBase.h"
 
 namespace ray {
-namespace ref {
+namespace NS {
 class Renderer : public RendererBase {
-    ray::ref::Framebuffer clean_buf_, final_buf_, temp_buf_;
+    ray::ref::Framebuffer framebuf_;
 
     std::vector<pixel_color_t> color_table_;
-
-    std::vector<uint16_t> permutations_;
-    void UpdateHaltonSequence(int iteration, std::unique_ptr<float[]> &seq);
 public:
     Renderer(int w, int h);
 
-    eRendererType type() const override { return RendererRef; }
+    eRendererType type() const override { return RendererSSE; }
 
     std::pair<int, int> size() const override {
-        return std::make_pair(final_buf_.w(), final_buf_.h());
+        return std::make_pair(framebuf_.w(), framebuf_.h());
     }
 
     const pixel_color_t *get_pixels_ref() const override {
-        return final_buf_.get_pixels_ref();
+        return framebuf_.get_pixels_ref();
     }
 
     void Resize(int w, int h) override {
-        clean_buf_.Resize(w, h);
-        final_buf_.Resize(w, h);
-        temp_buf_.Resize(w, h);
+        framebuf_.Resize(w, h);
     }
-
     void Clear(const pixel_color_t &c) override {
-        clean_buf_.Clear(c);
+        framebuf_.Clear(c);
     }
 
     std::shared_ptr<SceneBase> CreateScene() override;

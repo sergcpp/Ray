@@ -4,6 +4,7 @@
 
 #include <vector>
 
+#include "Core.h"
 #include "../Types.h"
 
 namespace ray {

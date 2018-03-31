@@ -14,13 +14,15 @@
 #include "internal/TextureAtlasRef.cpp"
 #include "internal/TextureUtilsRef.cpp"
 
-#define NS ref2
+/*#define NS ref2
 #include "internal/CoreSIMD.cpp"
-#undef NS
+#include "internal/RendererSIMD.cpp"
+#undef NS*/
 
-#define NS sse
+#define NS sse2
 #define USE_SSE
 #include "internal/CoreSIMD.cpp"
+#include "internal/RendererSIMD.cpp"
 #undef USE_SSE
 #undef NS
 
@@ -30,8 +32,8 @@
 #undef USE_AVX
 #undef NS*/
 
-//#include "internal/CoreSSE.cpp"
-//#include "internal/RendererSSE.cpp"
+#include "internal/CoreSSE.cpp"
+#include "internal/RendererSSE.cpp"
 
 //#include "internal/CoreAVX.cpp"
 //#include "internal/RendererAVX.cpp"

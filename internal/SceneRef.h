@@ -14,6 +14,12 @@ class Renderer;
 namespace avx {
 class Renderer;
 }
+namespace ref2 {
+class Renderer;
+}
+namespace sse2 {
+class Renderer;
+}
 
 namespace ref {
 class Renderer;
@@ -21,7 +27,9 @@ class Renderer;
 class Scene : public SceneBase {
 protected:
     friend class ref::Renderer;
+    friend class ref2::Renderer;
     friend class sse::Renderer;
+    friend class sse2::Renderer;
     friend class avx::Renderer;
 
     std::vector<bvh_node_t> nodes_;

@@ -161,7 +161,7 @@ public:
     }
     simd_vec(const int *f) {
         for (int i = 0; i < S / 8; i++) {
-            vec_[i] = _mm256_loadu_si128((const __m256i *)f);
+            vec_[i] = _mm256_loadu_si256((const __m256i *)f);
             f += 4;
         }
     }

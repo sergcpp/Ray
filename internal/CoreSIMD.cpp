@@ -49,7 +49,7 @@ force_inline void _IntersectTri(const ray_packet_t &r, const simd_ivec16 &ray_ma
     simd_fvec16 mm = ((tmpdet0 > M_HIT_EPS) & (detu > M_HIT_EPS) & (detv > M_HIT_EPS)) |
                      ((tmpdet0 < HIT_EPS) & (detu < HIT_EPS) & (detv < HIT_EPS));
 
-    simd_ivec16 imask = reinterpret_cast<const simd_ivec16&>(mm) & ray_mask;
+    simd_ivec16 imask = cast<simd_ivec16>(mm) & ray_mask;
 
     //////////////////////////////////////////////////////////////////////////
 
@@ -58,15 +58,15 @@ force_inline void _IntersectTri(const ray_packet_t &r, const simd_ivec16 &ray_ma
     simd_fvec16 rdet = ONE / det;
     simd_fvec16 t = dett * rdet;
 
-    simd_ivec16 t_valid = reinterpret_cast<const simd_ivec16&>((t < inter.t) & (t > ZERO));
-    imask = imask & t_valid;
+    simd_fvec16 t_valid = (t < inter.t) & (t > ZERO);
+    imask = imask & cast<simd_ivec16>(t_valid);
 
     if (imask.all_zeros()) return; // all intersections further than needed
 
     simd_fvec16 bar_u = detu * rdet;
     simd_fvec16 bar_v = detv * rdet;
 
-    const auto &fmask = reinterpret_cast<const simd_fvec16&>(imask);
+    const auto &fmask = cast<simd_fvec16>(imask);
 
     inter.mask = inter.mask | imask;
 
@@ -76,7 +76,7 @@ force_inline void _IntersectTri(const ray_packet_t &r, const simd_ivec16 &ray_ma
     where(fmask, inter.v) = bar_v;
 }
 
-force_inline simd_ivec16 bbox_test(const simd_fvec16 o[3], const simd_fvec16 inv_d[3], const simd_fvec16 t, const float _bbox_min[3], const float _bbox_max[3]) {
+force_inline simd_ivec16 bbox_test(const simd_fvec16 o[3], const simd_fvec16 inv_d[3], const simd_fvec16 &t, const float _bbox_min[3], const float _bbox_max[3]) {
     simd_fvec16 box_min[3] = { { _bbox_min[0] }, { _bbox_min[1] }, { _bbox_min[2] } },
                 box_max[3] = { { _bbox_max[0] }, { _bbox_max[1] }, { _bbox_max[2] } };
 
@@ -99,15 +99,15 @@ force_inline simd_ivec16 bbox_test(const simd_fvec16 o[3], const simd_fvec16 inv
 
     simd_fvec16 mask = (tmin <= tmax) & (tmin <= t) & (tmax > ZERO);
 
-    return reinterpret_cast<const simd_ivec16&>(mask);
+    return cast<const simd_ivec16&>(mask);
 }
 
 force_inline simd_ivec16 bbox_test(const simd_fvec16 o[3], const simd_fvec16 inv_d[3], const simd_fvec16 t, const bvh_node_t &node) {
     return bbox_test(o, inv_d, t, node.bbox[0], node.bbox[1]);
 }
 
-force_inline uint32_t near_child(const ray_packet_t &r, const simd_ivec16 ray_mask, const bvh_node_t &node) {
-    simd_ivec16 mask = reinterpret_cast<const simd_ivec16 &>(r.d[node.space_axis] < ZERO);
+force_inline uint32_t near_child(const ray_packet_t &r, const simd_ivec16 &ray_mask, const bvh_node_t &node) {
+    simd_ivec16 mask = cast<simd_ivec16>(r.d[node.space_axis] < ZERO);
     if (mask.all_zeros(ray_mask)) {
         return node.left_child;
     } else {
@@ -127,13 +127,13 @@ struct TraversalState {
         simd_ivec16 mask;
         uint32_t cur;
         eTraversalSource src;
-    } queue[16];
+    } queue[RayPacketSize];
 
     int index = 0, num = 1;
 
     force_inline void select_near_child(const ray_packet_t &r, const bvh_node_t &node) {
-        simd_fvec16 fmask = r.d[node.space_axis] < ZERO;
-        const auto &mask1 = reinterpret_cast<const simd_ivec16&>(fmask);
+        auto mask1 = cast<simd_ivec16>(r.d[node.space_axis] < ZERO);
+        mask1 = mask1 & queue[index].mask;
         if (mask1.all_zeros()) {
             queue[index].cur = node.left_child;
         } else {
@@ -181,9 +181,6 @@ void ray::NS::ConstructRayPacket(const float *o, const float *d, int size, ray_p
 }
 
 void ray::NS::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, int h, math::aligned_vector<ray_packet_t> &out_rays) {
-    size_t i = 0;
-    out_rays.resize(r.w * r.h / RayPacketSize + ((r.w * r.h) % 4 != 0));
-
     simd_fvec16 ww = { (float)w }, hh = { (float)h };
 
     float k = float(h) / w;
@@ -192,59 +189,48 @@ void ray::NS::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, i
                 side[3] = { { cam.side[0] }, { cam.side[1] }, { cam.side[2] } },
                 up[3] = { { cam.up[0] * k }, { cam.up[1] * k }, { cam.up[2] * k } };
 
+    auto get_pix_dirs = [&fwd, &side, &up, &ww, &hh](const simd_fvec16 &x, const simd_fvec16 &y, simd_fvec16 d[3]) {
+        auto _dx = x / ww - 0.5f;
+        auto _dy = -y / hh + 0.5f;
+
+        d[0] = _dx * side[0] + _dy * up[0] + fwd[0];
+        d[1] = _dx * side[1] + _dy * up[1] + fwd[1];
+        d[2] = _dx * side[2] + _dy * up[2] + fwd[2];
+
+        simd_fvec16 len = sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+        d[0] /= len;
+        d[1] /= len;
+        d[2] /= len;
+    };
+
+    simd_fvec16 off_x, off_y;
+
+    for (int i = 0; i < RayPacketSize; i++) {
+        off_x[i] = (float)ray_packet_pattern_x[i];
+        off_y[i] = (float)ray_packet_pattern_y[i];
+    }
+
+    size_t i = 0;
+    out_rays.resize(r.w * r.h / RayPacketSize + ((r.w * r.h) % 4 != 0));
+
     for (int y = r.y; y < r.y + r.h - (r.h & (RayPacketDimY - 1)); y += RayPacketDimY) {
-        simd_fvec16 xx = { float(r.x + 0), float(r.x + 1), float(r.x + 2), float(r.x + 3),
-                           float(r.x + 0), float(r.x + 1), float(r.x + 2), float(r.x + 3),
-                           float(r.x + 0), float(r.x + 1), float(r.x + 2), float(r.x + 3),
-                           float(r.x + 0), float(r.x + 1), float(r.x + 2), float(r.x + 3) };
-        float fy = float(y);
-        simd_fvec16 yy = { -fy - 0, -fy - 0, -fy - 0, -fy - 0,
-                           -fy - 1, -fy - 1, -fy - 1, -fy - 1,
-                           -fy - 2, -fy - 2, -fy - 2, -fy - 2,
-                           -fy - 3, -fy - 3, -fy - 3, -fy - 3 };
-        yy /= hh;
-        yy += _0_5;
-
         for (int x = r.x; x < r.x + r.w - (r.w & (RayPacketDimX - 1)); x += RayPacketDimX) {
-            simd_fvec16 dd[3];
+            auto &out_r = out_rays[i++];
 
-            // x / w - 0.5
-            dd[0] /= ww;
-            dd[0] -= _0_5;
+            simd_fvec16 xx = { (float)x };
+            xx += off_x;
 
-            // -y / h + 0.5
-            dd[1] = yy;
+            simd_fvec16 yy = { (float)y };
+            yy += off_y;
 
-            dd[2] = ONE;
+            out_r.o[0] = { cam.origin[0] };
+            out_r.o[1] = { cam.origin[1] };
+            out_r.o[2] = { cam.origin[2] };
 
-            // d = d.x * side + d.y * up + d.z * fwd
-            simd_fvec16 temp1 = dd[0] * side[0] + dd[1] * up[0] + dd[2] * fwd[0];
-            simd_fvec16 temp2 = dd[0] * side[1] + dd[1] * up[1] + dd[2] * fwd[1];
-            simd_fvec16 temp3 = dd[0] * side[2] + dd[1] * up[2] + dd[2] * fwd[2];
+            get_pix_dirs(xx, yy, out_r.d);
 
-            dd[0] = temp1;
-            dd[1] = temp2;
-            dd[2] = temp3;
-
-            simd_fvec16 inv_l = dd[0] * dd[0] + dd[1] * dd[1] + dd[2] * dd[2];
-            inv_l = sqrt(inv_l);
-            inv_l = ONE / inv_l;
-
-            assert(i < out_rays.size());
-            auto &r = out_rays[i++];
-
-            r.d[0] = dd[0] * inv_l;
-            r.d[1] = dd[1] * inv_l;
-            r.d[2] = dd[2] * inv_l;
-
-            r.o[0] = { cam.origin[0] };
-            r.o[1] = { cam.origin[1] };
-            r.o[2] = { cam.origin[2] };
-
-            //r.id.x = x;
-            //r.id.y = y;
-
-            xx = xx + TWO;
+            out_r.x = x;
+            out_r.y = y;
         }
     }
 }
@@ -258,7 +244,7 @@ bool ray::NS::IntersectTris(const ray_packet_t &r, const simd_ivec16 &ray_mask, 
         _IntersectTri(r, ray_mask, tris[i], i, inter);
     }
 
-    const auto &fmask = reinterpret_cast<const simd_fvec16&>(inter.mask);
+    const auto &fmask = cast<simd_fvec16>(inter.mask);
 
     out_inter.mask = out_inter.mask | inter.mask;
 
@@ -283,7 +269,7 @@ bool ray::NS::IntersectTris(const ray_packet_t &r, const simd_ivec16 &ray_mask, 
         _IntersectTri(r, ray_mask, tris[index], index, inter);
     }
 
-    const auto &fmask = reinterpret_cast<const simd_fvec16&>(inter.mask);
+    const auto &fmask = cast<simd_fvec16>(inter.mask);
 
     out_inter.mask = out_inter.mask | inter.mask;
 
@@ -329,7 +315,7 @@ bool ray::NS::IntersectCones(const ray_packet_t &r, const cone_accel_t *cones, u
         // D = b * b - 4 * a * c
         simd_fvec16 D = b * b - FOUR * a * c;
 
-        const auto &m = reinterpret_cast<const simd_ivec16&>(D >= ZERO);
+        const auto &m = cast<simd_ivec16>(D >= ZERO);
 
         if (m.all_zeros()) continue;
 
@@ -343,7 +329,7 @@ bool ray::NS::IntersectCones(const ray_packet_t &r, const cone_accel_t *cones, u
 
         simd_fvec16 mask1 = (t1 > ZERO) & (t1 < inter.t);
         simd_fvec16 mask2 = (t2 > ZERO) & (t2 < inter.t);
-        auto mask = reinterpret_cast<const simd_ivec16&>(mask1 | mask2);
+        auto mask = cast<simd_ivec16>(mask1 | mask2);
 
         if (mask.all_zeros()) continue;
 
@@ -363,7 +349,7 @@ bool ray::NS::IntersectCones(const ray_packet_t &r, const cone_accel_t *cones, u
         mask1 = (dot1 >= cone_start) & (dot1 <= cone_end);
         mask2 = (dot2 >= cone_start) & (dot2 <= cone_end);
 
-        mask = reinterpret_cast<const simd_ivec16&>(mask1 | mask2);
+        mask = cast<simd_ivec16>(mask1 | mask2);
 
         if (mask.all_zeros()) continue;
 
@@ -410,7 +396,7 @@ bool ray::NS::IntersectBoxes(const ray_packet_t &r, const aabox_t *boxes, uint32
 
         simd_fvec16 mask = (tmin <= tmax) & (tmax > ZERO) & (tmin < inter.t);
 
-        const auto &imask = reinterpret_cast<const simd_ivec16&>(mask);
+        const auto &imask = cast<simd_ivec16>(mask);
         if (imask.all_zeros()) continue;
 
         inter.mask = inter.mask | imask;
@@ -428,8 +414,8 @@ bool ray::NS::IntersectBoxes(const ray_packet_t &r, const aabox_t *boxes, uint32
 }
 
 bool ray::NS::Traverse_MacroTree_CPU(const ray_packet_t &r, const simd_ivec16 &ray_mask, const simd_fvec16 inv_d[3], const bvh_node_t *nodes, uint32_t root_index,
-                                      const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
-                                      const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t &inter) {
+                                     const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
+                                     const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t &inter) {
     bool res = false;
 
     TraversalState st;
@@ -550,7 +536,7 @@ bool ray::NS::Traverse_MacroTree_CPU(const ray_packet_t &r, const simd_ivec16 &r
 }
 
 bool ray::NS::Traverse_MicroTree_CPU(const ray_packet_t &r, const simd_ivec16 &ray_mask, const simd_fvec16 inv_d[3], const bvh_node_t *nodes, uint32_t root_index,
-                                      const tri_accel_t *tris, const uint32_t *indices, int obj_index, hit_data_t &inter) {
+                                     const tri_accel_t *tris, const uint32_t *indices, int obj_index, hit_data_t &inter) {
     bool res = false;
 
     TraversalState st;
