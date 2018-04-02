@@ -5,20 +5,6 @@
 
 namespace ray {
 namespace NS {
-const simd_fvec16 _0_5 = { 0.5f };
-
-const simd_fvec16 ZERO = { 0.0f };
-const simd_fvec16 MINUS_ZERO = { -0.0f };
-
-const simd_fvec16 ONE = { 1.0f };
-const simd_fvec16 TWO = { 2.0f };
-const simd_fvec16 FOUR = { 4.0f };
-
-const simd_fvec16 HIT_EPS = { ray::HIT_EPS };
-const simd_fvec16 M_HIT_EPS = { -ray::HIT_EPS };
-
-const simd_ivec16 FF_MASK = { -1 };
-
 force_inline void _IntersectTri(const ray_packet_t &r, const simd_ivec16 &ray_mask, const tri_accel_t &tri, uint32_t prim_index, hit_data_t &inter) {
     simd_fvec16 nu = { tri.nu }, nv = { tri.nv }, np = { tri.np };
     simd_fvec16 pu = { tri.pu }, pv = { tri.pv };
@@ -46,19 +32,17 @@ force_inline void _IntersectTri(const ray_packet_t &r, const simd_ivec16 &ray_ma
 
     //////////////////////////////////////////////////////////////////////////
 
-    simd_fvec16 mm = ((tmpdet0 > M_HIT_EPS) & (detu > M_HIT_EPS) & (detv > M_HIT_EPS)) |
+    simd_fvec16 mm = ((tmpdet0 > -HIT_EPS) & (detu > -HIT_EPS) & (detv > -HIT_EPS)) |
                      ((tmpdet0 < HIT_EPS) & (detu < HIT_EPS) & (detv < HIT_EPS));
 
     simd_ivec16 imask = cast<simd_ivec16>(mm) & ray_mask;
 
-    //////////////////////////////////////////////////////////////////////////
-
     if (imask.all_zeros()) return; // no intersection found
 
-    simd_fvec16 rdet = ONE / det;
+    simd_fvec16 rdet = 1.0f / det;
     simd_fvec16 t = dett * rdet;
 
-    simd_fvec16 t_valid = (t < inter.t) & (t > ZERO);
+    simd_fvec16 t_valid = (t < inter.t) & (t > 0.0f);
     imask = imask & cast<simd_ivec16>(t_valid);
 
     if (imask.all_zeros()) return; // all intersections further than needed
@@ -95,7 +79,7 @@ force_inline simd_ivec16 bbox_test(const simd_fvec16 o[3], const simd_fvec16 inv
     tmin = max(tmin, min(low, high));
     tmax = min(tmax, max(low, high));
 
-    simd_fvec16 mask = (tmin <= tmax) & (tmin <= t) & (tmax > ZERO);
+    simd_fvec16 mask = (tmin <= tmax) & (tmin <= t) & (tmax > 0.0f);
 
     return cast<const simd_ivec16&>(mask);
 }
@@ -105,11 +89,11 @@ force_inline simd_ivec16 bbox_test(const simd_fvec16 o[3], const simd_fvec16 inv
 }
 
 force_inline uint32_t near_child(const ray_packet_t &r, const simd_ivec16 &ray_mask, const bvh_node_t &node) {
-    simd_ivec16 mask = cast<simd_ivec16>(r.d[node.space_axis] < ZERO);
+    simd_ivec16 mask = cast<simd_ivec16>(r.d[node.space_axis] < 0.0f);
     if (mask.all_zeros(ray_mask)) {
         return node.left_child;
     } else {
-        assert(and_not(mask, FF_MASK).all_zeros(ray_mask));
+        assert(and_not(mask, ray_mask).all_zeros());
         return node.right_child;
     }
 }
@@ -130,7 +114,7 @@ struct TraversalState {
     int index = 0, num = 1;
 
     force_inline void select_near_child(const ray_packet_t &r, const bvh_node_t &node) {
-        auto mask1 = cast<simd_ivec16>(r.d[node.space_axis] < ZERO);
+        auto mask1 = cast<simd_ivec16>(r.d[node.space_axis] < 0.0f);
         mask1 = mask1 & queue[index].mask;
         if (mask1.all_zeros()) {
             queue[index].cur = node.left_child;
@@ -150,13 +134,6 @@ struct TraversalState {
     }
 };
 }
-}
-
-ray::NS::hit_data_t::hit_data_t() {
-    mask = { 0 };
-    obj_index = { -1 };
-    prim_index = { -1 };
-    t = { std::numeric_limits<float>::max() };
 }
 
 void ray::NS::ConstructRayPacket(const float *o, const float *d, int size, ray_packet_t &out_r) {
@@ -282,135 +259,6 @@ bool ray::NS::IntersectTris(const ray_packet_t &r, const simd_ivec16 &ray_mask, 
     return inter.mask.not_all_zeros();
 }
 
-bool ray::NS::IntersectCones(const ray_packet_t &r, const cone_accel_t *cones, uint32_t num_cones, hit_data_t &out_inter) {
-    hit_data_t inter;
-    inter.t = out_inter.t;
-
-    for (uint32_t i = 0; i < num_cones; i++) {
-        const cone_accel_t &cone = cones[i];
-
-        simd_fvec16 cone_o[3] = { { cone.o[0] }, { cone.o[1] }, { cone.o[2] } },
-                    cone_v[3] = { { cone.v[0] }, { cone.v[1] }, { cone.v[0] } },
-                    cone_cos_phi_sqr = { cone.cos_phi_sqr };
-
-        simd_fvec16 co[3] = { { r.o[0] - cone_o[0] }, { r.o[1] - cone_o[1] }, { r.o[2] - cone_o[2] } };
-
-        // a = dot(d, cone_v)
-        simd_fvec16 a = r.d[0] * cone_v[0] + r.d[1] * cone_v[1] + r.d[2] * cone_v[2];
-
-        // c = dot(co, cone_v)
-        simd_fvec16 c = co[0] * cone_v[0] + co[1] * cone_v[1] + co[2] * cone_v[2];
-
-        // b = 2 * (a * c - dot(d, co) * cone.cos_phi_sqr)
-        simd_fvec16 b = TWO * (a * c - (r.d[0] * co[0] + r.d[1] * co[1] + r.d[2] * co[2]) * cone_cos_phi_sqr);
-
-        // a = a * a - cone.cos_phi_sqr
-        a = a * a - cone_cos_phi_sqr;
-
-        // c = c * c - dot(co, co) * cone.cos_phi_sqr
-        c = c * c - (co[0] * co[0] + co[1] * co[1] + co[2] * co[2]) * cone_cos_phi_sqr;
-
-        // D = b * b - 4 * a * c
-        simd_fvec16 D = b * b - FOUR * a * c;
-
-        const auto &m = cast<simd_ivec16>(D >= ZERO);
-
-        if (m.all_zeros()) continue;
-
-        D = sqrt(D);
-
-        a = a * TWO;
-        b = b ^ MINUS_ZERO; // swap sign
-
-        simd_fvec16 t1 = (b - D) / a,
-                    t2 = (b + D) / a;
-
-        simd_fvec16 mask1 = (t1 > ZERO) & (t1 < inter.t);
-        simd_fvec16 mask2 = (t2 > ZERO) & (t2 < inter.t);
-        auto mask = cast<simd_ivec16>(mask1 | mask2);
-
-        if (mask.all_zeros()) continue;
-
-        simd_fvec16 p1c[3] = { { cone_o[0] - r.o[0] + t1 * r.d[0] },
-                               { cone_o[1] - r.o[1] + t1 * r.d[1] },
-                               { cone_o[2] - r.o[2] + t1 * r.d[2] } },
-                    p2c[3] = { { cone_o[0] - r.o[0] + t2 * r.d[0] },
-                               { cone_o[1] - r.o[1] + t2 * r.d[1] },
-                               { cone_o[2] - r.o[2] + t2 * r.d[2] } };
-
-        simd_fvec16 dot1 = p1c[0] * cone_v[0] + p1c[1] * cone_v[1] + p1c[2] * cone_v[2];
-        simd_fvec16 dot2 = p2c[0] * cone_v[0] + p2c[1] * cone_v[1] + p2c[2] * cone_v[2];
-
-        simd_fvec16 cone_start = { cone.cone_start },
-                    cone_end = { cone.cone_end };
-
-        mask1 = (dot1 >= cone_start) & (dot1 <= cone_end);
-        mask2 = (dot2 >= cone_start) & (dot2 <= cone_end);
-
-        mask = cast<simd_ivec16>(mask1 | mask2);
-
-        if (mask.all_zeros()) continue;
-
-        inter.mask = inter.mask | mask;
-
-        where(mask, inter.prim_index) = { reinterpret_cast<const int&>(i) };
-    }
-
-    out_inter.mask = out_inter.mask | inter.mask;
-
-    where(inter.mask, out_inter.prim_index) = inter.prim_index;
-
-    return inter.mask.not_all_zeros();
-}
-
-bool ray::NS::IntersectBoxes(const ray_packet_t &r, const aabox_t *boxes, uint32_t num_boxes, hit_data_t &out_inter) {
-    hit_data_t inter;
-    inter.t = out_inter.t;
-
-    simd_fvec16 inv_d[3] = { { ONE / r.d[0] }, { ONE / r.d[1] }, { ONE / r.d[2] } };
-
-    for (uint32_t i = 0; i < num_boxes; i++) {
-        const aabox_t &box = boxes[i];
-
-        simd_fvec16 box_min[3] = { { box.min[0] }, { box.min[1] }, { box.min[2] } },
-                    box_max[3] = { { box.max[0] }, { box.max[1] }, { box.max[2] } };
-
-        simd_fvec16 low, high, tmin, tmax;
-
-        low = inv_d[0] * (box_min[0] - r.o[0]);
-        high = inv_d[0] * (box_max[0] - r.o[0]);
-        tmin = min(low, high);
-        tmax = max(low, high);
-
-        low = inv_d[1] * (box_min[1] - r.o[1]);
-        high = inv_d[1] * (box_max[1] - r.o[1]);
-        tmin = max(tmin, min(low, high));
-        tmax = min(tmax, max(low, high));
-
-        low = inv_d[2] * (box_min[2] - r.o[2]);
-        high = inv_d[2] * (box_max[2] - r.o[2]);
-        tmin = max(tmin, min(low, high));
-        tmax = min(tmax, max(low, high));
-
-        simd_fvec16 mask = (tmin <= tmax) & (tmax > ZERO) & (tmin < inter.t);
-
-        const auto &imask = cast<simd_ivec16>(mask);
-        if (imask.all_zeros()) continue;
-
-        inter.mask = inter.mask | imask;
-
-        where(imask, inter.prim_index) = { reinterpret_cast<const int&>(i) };
-        where(mask, inter.t) = tmin;
-    }
-
-    out_inter.mask = out_inter.mask | inter.mask;
-
-    where(inter.mask, out_inter.prim_index) = inter.prim_index;
-    //out_intersections.t = intersections.t; // already contains min value
-
-    return inter.mask.not_all_zeros();
-}
-
 bool ray::NS::Traverse_MacroTree_CPU(const ray_packet_t &r, const simd_ivec16 &ray_mask, const simd_fvec16 inv_d[3], const bvh_node_t *nodes, uint32_t root_index,
                                      const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
                                      const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t &inter) {
@@ -473,7 +321,7 @@ bool ray::NS::Traverse_MacroTree_CPU(const ray_packet_t &r, const simd_ivec16 &r
 
                         ray_packet_t _r = TransformRay(r, tr.inv_xform);
 
-                        simd_fvec16 _inv_d[3] = { { ONE / _r.d[0] }, { ONE / _r.d[1] }, { ONE / _r.d[2] } };
+                        simd_fvec16 _inv_d[3] = { { 1.0f / _r.d[0] }, { 1.0f / _r.d[1] }, { 1.0f / _r.d[2] } };
 
                         res |= Traverse_MicroTree_CPU(_r, bbox_mask, _inv_d, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter);
                     }
@@ -514,7 +362,7 @@ bool ray::NS::Traverse_MacroTree_CPU(const ray_packet_t &r, const simd_ivec16 &r
 
                         ray_packet_t _r = TransformRay(r, tr.inv_xform);
 
-                        simd_fvec16 _inv_d[3] = { { ONE / _r.d[0] }, { ONE / _r.d[1] }, { ONE / _r.d[2] } };
+                        simd_fvec16 _inv_d[3] = { { 1.0f / _r.d[0] }, { 1.0f / _r.d[1] }, { 1.0f / _r.d[2] } };
 
                         res |= Traverse_MicroTree_CPU(_r, bbox_mask, _inv_d, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter);
                     }

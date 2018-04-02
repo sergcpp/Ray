@@ -45,6 +45,8 @@ const float HIT_BIAS = 0.001f;
 const float HIT_EPS = 0.000001f;
 const float FLT_EPS = 0.0000001f;
 
+const float MAX_DIST = 3.402823466e+38F;
+
 struct cone_accel_t {
     float o[3], v[3];
     float cos_phi_sqr;

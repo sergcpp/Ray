@@ -131,6 +131,38 @@ public:
         return ret;
     }
 
+    force_inline simd_vec<T, S> operator<(T rhs) const {
+        T set;
+        memset(&set, 0xFF, sizeof(T));
+        simd_vec<T, S> ret;
+        ITERATE(S, { ret.vec_[i] = vec_[i] < rhs ? set : 0; })
+            return ret;
+    }
+
+    force_inline simd_vec<T, S> operator<=(T rhs) const {
+        T set;
+        memset(&set, 0xFF, sizeof(T));
+        simd_vec<T, S> ret;
+        ITERATE(S, { ret.vec_[i] = vec_[i] <= rhs ? set : 0; })
+            return ret;
+    }
+
+    force_inline simd_vec<T, S> operator>(T rhs) const {
+        T set;
+        memset(&set, 0xFF, sizeof(T));
+        simd_vec<T, S> ret;
+        ITERATE(S, { ret.vec_[i] = vec_[i] > rhs ? set : 0; })
+            return ret;
+    }
+
+    force_inline simd_vec<T, S> operator>=(T rhs) const {
+        T set;
+        memset(&set, 0xFF, sizeof(T));
+        simd_vec<T, S> ret;
+        ITERATE(S, { ret.vec_[i] = vec_[i] >= rhs ? set : 0; })
+            return ret;
+    }
+
     force_inline simd_vec<T, S> sqrt() const {
         simd_vec<T, S> temp;
         ITERATE(S, { temp[i] = ::sqrt(vec_[i]); })
@@ -274,7 +306,16 @@ template <typename T, int S>
 force_inline simd_vec<T, S> operator/(const simd_vec<T, S> &v1, T v2) { simd_vec<T, S> temp = v1; temp /= v2; return temp; }
 
 template <typename T, int S>
+force_inline simd_vec<T, S> operator+(T v1, const simd_vec<T, S> &v2) { simd_vec<T, S> temp = { v1 }; temp += v2; return temp; }
+
+template <typename T, int S>
 force_inline simd_vec<T, S> operator-(T v1, const simd_vec<T, S> &v2) { simd_vec<T, S> temp = { v1 }; temp -= v2; return temp; }
+
+template <typename T, int S>
+force_inline simd_vec<T, S> operator*(T v1, const simd_vec<T, S> &v2) { simd_vec<T, S> temp = { v1 }; temp *= v2; return temp; }
+
+template <typename T, int S>
+force_inline simd_vec<T, S> operator/(T v1, const simd_vec<T, S> &v2) { simd_vec<T, S> temp = { v1 }; temp /= v2; return temp; }
 
 template <typename T, int S>
 force_inline simd_vec<T, S> operator<(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) { return simd_vec<T, S>::operator<(v1, v2); }
@@ -287,6 +328,18 @@ force_inline simd_vec<T, S> operator>(const simd_vec<T, S> &v1, const simd_vec<T
 
 template <typename T, int S>
 force_inline simd_vec<T, S> operator>=(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) { return simd_vec<T, S>::operator>=(v1, v2); }
+
+template <typename T, int S>
+force_inline simd_vec<T, S> operator<(const simd_vec<T, S> &v1, T v2) { return simd_vec<T, S>::operator<(v1, v2); }
+
+template <typename T, int S>
+force_inline simd_vec<T, S> operator<=(const simd_vec<T, S> &v1, T v2) { return simd_vec<T, S>::operator<=(v1, v2); }
+
+template <typename T, int S>
+force_inline simd_vec<T, S> operator>(const simd_vec<T, S> &v1, T v2) { return simd_vec<T, S>::operator>(v1, v2); }
+
+template <typename T, int S>
+force_inline simd_vec<T, S> operator>=(const simd_vec<T, S> &v1, T v2) { return simd_vec<T, S>::operator>=(v1, v2); }
 
 template <typename T, int S>
 force_inline simd_vec<T, S> operator&(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) { return simd_vec<T, S>::and_(v1, v2); }

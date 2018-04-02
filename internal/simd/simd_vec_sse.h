@@ -137,6 +137,30 @@ public:
         return ret;
     }
 
+    force_inline simd_vec<float, S> operator<(float rhs) const {
+        simd_vec<float, S> ret;
+        ITERATE(S / 4, { ret.vec_[i] = _mm_cmplt_ps(vec_[i], _mm_set1_ps(rhs)); })
+        return ret;
+    }
+
+    force_inline simd_vec<float, S> operator<=(float rhs) const {
+        simd_vec<float, S> ret;
+        ITERATE(S / 4, { ret.vec_[i] = _mm_cmple_ps(vec_[i], _mm_set1_ps(rhs)); })
+        return ret;
+    }
+
+    force_inline simd_vec<float, S> operator>(float rhs) const {
+        simd_vec<float, S> ret;
+        ITERATE(S / 4, { ret.vec_[i] = _mm_cmpgt_ps(vec_[i], _mm_set1_ps(rhs)); })
+        return ret;
+    }
+
+    force_inline simd_vec<float, S> operator>=(float rhs) const {
+        simd_vec<float, S> ret;
+        ITERATE(S / 4, { ret.vec_[i] = _mm_cmpge_ps(vec_[i], _mm_set1_ps(rhs)); })
+        return ret;
+    }
+
     force_inline simd_vec<float, S> sqrt() const {
         simd_vec<float, S> temp;
         ITERATE(S/4, { temp.vec_[i] = _mm_sqrt_ps(vec_[i]); })

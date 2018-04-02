@@ -49,7 +49,12 @@ struct hit_data_t {
     int pad[14];
 
     hit_data_t(eUninitialize) {}
-    hit_data_t();
+    hit_data_t() {
+        mask = { 0 };
+        obj_index = { -1 };
+        prim_index = { -1 };
+        t = { MAX_DIST };
+    }
 
     // hint for math::aligned_vector
     static const size_t alignment = alignof(simd_fvec16);
@@ -65,8 +70,6 @@ void GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, int h, mat
 // Intersect primitives
 bool IntersectTris(const ray_packet_t &r, const simd_ivec16 &ray_mask, const tri_accel_t *tris, uint32_t num_tris, uint32_t obj_index, hit_data_t &out_inter);
 bool IntersectTris(const ray_packet_t &r, const simd_ivec16 &ray_mask, const tri_accel_t *tris, const uint32_t *indices, uint32_t num_tris, uint32_t obj_index, hit_data_t &out_inter);
-bool IntersectCones(const ray_packet_t &r, const cone_accel_t *cones, uint32_t num_cones, hit_data_t &out_inter);
-bool IntersectBoxes(const ray_packet_t &r, const aabox_t *boxes, uint32_t num_boxes, hit_data_t &out_inter);
 
 // Traverse acceleration structure
 // stack-less cpu-style traversal of outer nodes

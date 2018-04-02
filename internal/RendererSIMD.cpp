@@ -77,9 +77,9 @@ void ray::NS::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Region
         inter.y = primary_rays[i].y;
 
         const ray_packet_t &r = primary_rays[i];
-        simd_fvec16 inv_d[3] = { { ONE / r.d[0] }, { ONE / r.d[1] }, { ONE / r.d[2] } };
+        const simd_fvec16 inv_d[3] = { { 1.0f / r.d[0] }, { 1.0f / r.d[1] }, { 1.0f / r.d[2] } };
 
-        if (Traverse_MacroTree_CPU(r, FF_MASK, inv_d, nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, inter)) {
+        if (Traverse_MacroTree_CPU(r, { -1 }, inv_d, nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, inter)) {
             intersections.push_back(inter);
         }
     }
