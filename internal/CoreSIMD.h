@@ -85,143 +85,141 @@ ray_packet_t<S> TransformRay(const ray_packet_t<S> &r, const float *xform);
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 #include <cassert>
-//#include <limits>
 
 namespace ray {
 namespace NS {
-    template <int S>
-    force_inline void _IntersectTri(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const tri_accel_t &tri, uint32_t prim_index, hit_data_t<S> &inter) {
-        simd_fvec<S> nu = { tri.nu }, nv = { tri.nv }, np = { tri.np };
-        simd_fvec<S> pu = { tri.pu }, pv = { tri.pv };
+template <int S>
+force_inline void _IntersectTri(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const tri_accel_t &tri, uint32_t prim_index, hit_data_t<S> &inter) {
+    simd_fvec<S> nu = { tri.nu }, nv = { tri.nv }, np = { tri.np };
+    simd_fvec<S> pu = { tri.pu }, pv = { tri.pv };
 
-        simd_fvec<S> e0u = { tri.e0u }, e0v = { tri.e0v };
-        simd_fvec<S> e1u = { tri.e1u }, e1v = { tri.e1v };
+    simd_fvec<S> e0u = { tri.e0u }, e0v = { tri.e0v };
+    simd_fvec<S> e1u = { tri.e1u }, e1v = { tri.e1v };
 
-        const int _next_u[] = { 1, 0, 0 },
-            _next_v[] = { 2, 2, 1 };
+    const int _next_u[] = { 1, 0, 0 },
+        _next_v[] = { 2, 2, 1 };
 
-        int w = (tri.ci & TRI_W_BITS),
-            u = _next_u[w],
-            v = _next_v[w];
+    int w = (tri.ci & TRI_W_BITS),
+        u = _next_u[w],
+        v = _next_v[w];
 
-        // from "Ray-Triangle Intersection Algorithm for Modern CPU Architectures" [2007]
+    // from "Ray-Triangle Intersection Algorithm for Modern CPU Architectures" [2007]
 
-        simd_fvec<S> det = r.d[u] * nu + r.d[v] * nv + r.d[w];
-        simd_fvec<S> dett = np - (r.o[u] * nu + r.o[v] * nv + r.o[w]);
-        simd_fvec<S> Du = r.d[u] * dett - (pu - r.o[u]) * det;
-        simd_fvec<S> Dv = r.d[v] * dett - (pv - r.o[v]) * det;
-        simd_fvec<S> detu = e1v * Du - e1u * Dv;
-        simd_fvec<S> detv = e0u * Dv - e0v * Du;
+    simd_fvec<S> det = r.d[u] * nu + r.d[v] * nv + r.d[w];
+    simd_fvec<S> dett = np - (r.o[u] * nu + r.o[v] * nv + r.o[w]);
+    simd_fvec<S> Du = r.d[u] * dett - (pu - r.o[u]) * det;
+    simd_fvec<S> Dv = r.d[v] * dett - (pv - r.o[v]) * det;
+    simd_fvec<S> detu = e1v * Du - e1u * Dv;
+    simd_fvec<S> detv = e0u * Dv - e0v * Du;
 
-        simd_fvec<S> tmpdet0 = det - detu - detv;
+    simd_fvec<S> tmpdet0 = det - detu - detv;
 
-        //////////////////////////////////////////////////////////////////////////
+    //////////////////////////////////////////////////////////////////////////
 
-        simd_fvec<S> mm = ((tmpdet0 > -HIT_EPS) & (detu > -HIT_EPS) & (detv > -HIT_EPS)) |
-            ((tmpdet0 < HIT_EPS) & (detu < HIT_EPS) & (detv < HIT_EPS));
+    simd_fvec<S> mm = ((tmpdet0 > -HIT_EPS) & (detu > -HIT_EPS) & (detv > -HIT_EPS)) |
+                      ((tmpdet0 < HIT_EPS) & (detu < HIT_EPS) & (detv < HIT_EPS));
 
-        simd_ivec<S> imask = cast<simd_ivec<S>>(mm) & ray_mask;
+    simd_ivec<S> imask = cast<simd_ivec<S>>(mm) & ray_mask;
 
-        if (imask.all_zeros()) return; // no intersection found
+    if (imask.all_zeros()) return; // no intersection found
 
-        simd_fvec<S> rdet = 1.0f / det;
-        simd_fvec<S> t = dett * rdet;
+    simd_fvec<S> rdet = 1.0f / det;
+    simd_fvec<S> t = dett * rdet;
 
-        simd_fvec<S> t_valid = (t < inter.t) & (t > 0.0f);
-        imask = imask & cast<simd_ivec<S>>(t_valid);
+    simd_fvec<S> t_valid = (t < inter.t) & (t > 0.0f);
+    imask = imask & cast<simd_ivec<S>>(t_valid);
 
-        if (imask.all_zeros()) return; // all intersections further than needed
+    if (imask.all_zeros()) return; // all intersections further than needed
 
-        simd_fvec<S> bar_u = detu * rdet;
-        simd_fvec<S> bar_v = detv * rdet;
+    simd_fvec<S> bar_u = detu * rdet;
+    simd_fvec<S> bar_v = detv * rdet;
 
-        const auto &fmask = cast<simd_fvec<S>>(imask);
+    const auto &fmask = cast<simd_fvec<S>>(imask);
 
-        inter.mask = inter.mask | imask;
+    inter.mask = inter.mask | imask;
 
-        where(imask, inter.prim_index) = simd_ivec<S>{ reinterpret_cast<const int&>(prim_index) };
-        where(fmask, inter.t) = t;
-        where(fmask, inter.u) = bar_u;
-        where(fmask, inter.v) = bar_v;
+    where(imask, inter.prim_index) = simd_ivec<S>{ reinterpret_cast<const int&>(prim_index) };
+    where(fmask, inter.t) = t;
+    where(fmask, inter.u) = bar_u;
+    where(fmask, inter.v) = bar_v;
+}
+
+template <int S>
+force_inline simd_ivec<S> bbox_test(const simd_fvec<S> o[3], const simd_fvec<S> inv_d[3], const simd_fvec<S> &t, const float _bbox_min[3], const float _bbox_max[3]) {
+    simd_fvec<S> low, high, tmin, tmax;
+    
+    low = inv_d[0] * (_bbox_min[0] - o[0]);
+    high = inv_d[0] * (_bbox_max[0] - o[0]);
+    tmin = min(low, high);
+    tmax = max(low, high);
+
+    low = inv_d[1] * (_bbox_min[1] - o[1]);
+    high = inv_d[1] * (_bbox_max[1] - o[1]);
+    tmin = max(tmin, min(low, high));
+    tmax = min(tmax, max(low, high));
+
+    low = inv_d[2] * (_bbox_min[2] - o[2]);
+    high = inv_d[2] * (_bbox_max[2] - o[2]);
+    tmin = max(tmin, min(low, high));
+    tmax = min(tmax, max(low, high));
+
+    simd_fvec<S> mask = (tmin <= tmax) & (tmin <= t) & (tmax > 0.0f);
+    
+    return cast<const simd_ivec<S>&>(mask);
+}
+
+template <int S>
+force_inline simd_ivec<S> bbox_test(const simd_fvec<S> o[3], const simd_fvec<S> inv_d[3], const simd_fvec<S> t, const bvh_node_t &node) {
+    return bbox_test(o, inv_d, t, node.bbox[0], node.bbox[1]);
+}
+
+template <int S>
+force_inline uint32_t near_child(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const bvh_node_t &node) {
+    simd_ivec<S> mask = cast<simd_ivec<S>>(r.d[node.space_axis] < 0.0f);
+    if (mask.all_zeros(ray_mask)) {
+        return node.left_child;
+    } else {
+        assert(and_not(mask, ray_mask).all_zeros());
+        return node.right_child;
     }
+}
 
-    template <int S>
-    force_inline simd_ivec<S> bbox_test(const simd_fvec<S> o[3], const simd_fvec<S> inv_d[3], const simd_fvec<S> &t, const float _bbox_min[3], const float _bbox_max[3]) {
+force_inline bool is_leaf_node(const bvh_node_t &node) {
+    return node.prim_count != 0;
+}
 
-        simd_fvec<S> low, high, tmin, tmax;
+enum eTraversalSource { FromParent, FromChild, FromSibling };
 
-        low = inv_d[0] * (_bbox_min[0] - o[0]);
-        high = inv_d[0] * (_bbox_max[0] - o[0]);
-        tmin = min(low, high);
-        tmax = max(low, high);
+template <int S>
+struct TraversalState {
+    struct {
+        simd_ivec<S> mask;
+        uint32_t cur;
+        eTraversalSource src;
+    } queue[S];
 
-        low = inv_d[1] * (_bbox_min[1] - o[1]);
-        high = inv_d[1] * (_bbox_max[1] - o[1]);
-        tmin = max(tmin, min(low, high));
-        tmax = min(tmax, max(low, high));
+    int index = 0, num = 1;
 
-        low = inv_d[2] * (_bbox_min[2] - o[2]);
-        high = inv_d[2] * (_bbox_max[2] - o[2]);
-        tmin = max(tmin, min(low, high));
-        tmax = min(tmax, max(low, high));
-
-        simd_fvec<S> mask = (tmin <= tmax) & (tmin <= t) & (tmax > 0.0f);
-
-        return cast<const simd_ivec<S>&>(mask);
-    }
-
-    template <int S>
-    force_inline simd_ivec<S> bbox_test(const simd_fvec<S> o[3], const simd_fvec<S> inv_d[3], const simd_fvec<S> t, const bvh_node_t &node) {
-        return bbox_test(o, inv_d, t, node.bbox[0], node.bbox[1]);
-    }
-
-    template <int S>
-    force_inline uint32_t near_child(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const bvh_node_t &node) {
-        simd_ivec<S> mask = cast<simd_ivec<S>>(r.d[node.space_axis] < 0.0f);
-        if (mask.all_zeros(ray_mask)) {
-            return node.left_child;
+    force_inline void select_near_child(const ray_packet_t<S> &r, const bvh_node_t &node) {
+        auto mask1 = cast<simd_ivec<S>>(r.d[node.space_axis] < 0.0f);
+        mask1 = mask1 & queue[index].mask;
+        if (mask1.all_zeros()) {
+            queue[index].cur = node.left_child;
         } else {
-            assert(and_not(mask, ray_mask).all_zeros());
-            return node.right_child;
-        }
-    }
-
-    force_inline bool is_leaf_node(const bvh_node_t &node) {
-        return node.prim_count != 0;
-    }
-
-    enum eTraversalSource { FromParent, FromChild, FromSibling };
-
-    template <int S>
-    struct TraversalState {
-        struct {
-            simd_ivec<S> mask;
-            uint32_t cur;
-            eTraversalSource src;
-        } queue[S];
-
-        int index = 0, num = 1;
-
-        force_inline void select_near_child(const ray_packet_t<S> &r, const bvh_node_t &node) {
-            auto mask1 = cast<simd_ivec<S>>(r.d[node.space_axis] < 0.0f);
-            mask1 = mask1 & queue[index].mask;
-            if (mask1.all_zeros()) {
-                queue[index].cur = node.left_child;
+            simd_ivec<S> mask2 = and_not(mask1, queue[index].mask);
+            if (mask2.all_zeros()) {
+                queue[index].cur = node.right_child;
             } else {
-                simd_ivec<S> mask2 = and_not(mask1, queue[index].mask);
-                if (mask2.all_zeros()) {
-                    queue[index].cur = node.right_child;
-                } else {
-                    queue[num].cur = node.left_child;
-                    queue[num].mask = mask2;
-                    queue[num].src = queue[index].src;
-                    num++;
-                    queue[index].cur = node.right_child;
-                    queue[index].mask = mask1;
-                }
+                queue[num].cur = node.left_child;
+                queue[num].mask = mask2;
+                queue[num].src = queue[index].src;
+                num++;
+                queue[index].cur = node.right_child;
+                queue[index].mask = mask1;
             }
         }
-    };
+    }
+};
 }
 }
 
@@ -307,7 +305,7 @@ void ray::NS::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, i
 
 template <int S>
 bool ray::NS::IntersectTris(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const tri_accel_t *tris, uint32_t num_tris, uint32_t obj_index, hit_data_t<S> &out_inter) {
-    hit_data_t inter;
+    hit_data_t<S> inter;
     inter.obj_index = { reinterpret_cast<const int&>(obj_index) };
     inter.t = out_inter.t;
 

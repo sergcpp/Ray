@@ -14,6 +14,8 @@
 #endif
 #ifdef _MSC_VER
 #define force_inline __forceinline
+//__declspec(noinline)
+//__forceinline
 #endif
 
 namespace ray {

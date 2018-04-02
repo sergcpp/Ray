@@ -5,11 +5,10 @@
 #include <math/math.hpp>
 
 #include "internal/RendererRef.h"
-//#include "internal/RendererAVX.h"
-
-#include "internal/RendererRef2.h"
+//#include "internal/RendererRef2.h"
 #include "internal/RendererSSE.h"
-
+#include "internal/RendererAVX.h"
+#include "internal/RendererAVX2.h"
 #include "internal/RendererOCL.h"
 
 std::shared_ptr<ray::RendererBase> ray::CreateRenderer(int w, int h, uint32_t flags) {
@@ -25,11 +24,11 @@ std::shared_ptr<ray::RendererBase> ray::CreateRenderer(int w, int h, uint32_t fl
     }
     if ((flags & RendererAVX) && math::supported(math::AVX)) {
         std::cout << "ray: Creating AVX renderer " << w << "x" << h << std::endl;
-        //return std::make_shared<avx::Renderer>(w, h);
+        return std::make_shared<avx2::Renderer>(w, h);
     }
     if ((flags & RendererSSE) && math::supported(math::SSE4_1)) {
         std::cout << "ray: Creating SSE renderer " << w << "x" << h << std::endl;
-        return std::make_shared<sse::Renderer>(w, h);
+        //return std::make_shared<sse::Renderer>(w, h);
     }
     if (flags & RendererRef) {
         std::cout << "ray: Creating Ref renderer " << w << "x" << h << std::endl;

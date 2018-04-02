@@ -24,7 +24,7 @@ class simd_vec<typename std::enable_if<S % 4 == 0
         float comp_[S];
     };
 public:
-    simd_vec() = default;
+    force_inline simd_vec() = default;
     force_inline simd_vec(float f) {
         ITERATE(S/4, { vec_[i] = _mm_set1_ps(f); })
     }
@@ -233,7 +233,7 @@ class simd_vec<typename std::enable_if<S % 4 == 0
         int comp_[S];
     };
 public:
-    simd_vec() = default;
+    force_inline simd_vec() = default;
     force_inline simd_vec(int f) {
         ITERATE(S/4, { vec_[i] = _mm_set1_epi32(f); })
     }
@@ -332,7 +332,7 @@ public:
 
     force_inline static simd_vec<int, S> max(const simd_vec<int, S> &v1, const simd_vec<int, S> &v2) {
         simd_vec<int, S> temp;
-        ITERATE(S/4, { temp.vec_[i] = _mm_max_si128(v1.vec_[i], v2.vec_[i]); })
+        ITERATE(S/4, { temp.vec_[i] = _mm_max_epi32(v1.vec_[i], v2.vec_[i]); })
         return temp;
     }
 

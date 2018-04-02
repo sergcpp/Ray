@@ -8,6 +8,10 @@
 #include "../SceneBase.h"
 
 namespace ray {
+namespace ref2 {
+template <int DimX, int DimY>
+class RendererSIMD;
+}
 namespace sse {
 template <int DimX, int DimY>
 class RendererSIMD;
@@ -15,7 +19,7 @@ class RendererSIMD;
 namespace avx {
 class Renderer;
 }
-namespace ref2 {
+namespace avx2 {
 template <int DimX, int DimY>
 class RendererSIMD;
 }
@@ -31,6 +35,8 @@ protected:
     template <int DimX, int DimY>
     friend class sse::RendererSIMD;
     friend class avx::Renderer;
+    template <int DimX, int DimY>
+    friend class avx2::RendererSIMD;
 
     std::vector<bvh_node_t> nodes_;
     std::vector<tri_accel_t> tris_;

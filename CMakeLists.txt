@@ -27,6 +27,7 @@ set(INTERNAL_SOURCE_FILES internal/BVHSplit.h
                           internal/Halton.h
                           internal/RendererAVX.h
                           internal/RendererAVX.cpp
+                          internal/RendererAVX2.h
                           internal/RendererOCL.h
                           internal/RendererOCL.cpp
                           internal/RendererRef.h
