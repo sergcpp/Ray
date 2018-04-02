@@ -19,12 +19,12 @@
 #include "internal/RendererSIMD.cpp"
 #undef NS*/
 
-#define NS sse2
+/*#define NS sse2
 #define USE_SSE
 #include "internal/CoreSIMD.cpp"
 #include "internal/RendererSIMD.cpp"
 #undef USE_SSE
-#undef NS
+#undef NS*/
 
 /*#define NS avx
 #define USE_AVX
@@ -32,8 +32,10 @@
 #undef USE_AVX
 #undef NS*/
 
-#include "internal/CoreSSE.cpp"
-#include "internal/RendererSSE.cpp"
+/*#define NS ref3
+#include "internal/CoreSIMD2.h"
+#include "internal/RendererSIMD2.h"
+#undef NS*/
 
 //#include "internal/CoreAVX.cpp"
 //#include "internal/RendererAVX.cpp"

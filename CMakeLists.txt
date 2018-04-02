@@ -21,10 +21,7 @@ set(INTERNAL_SOURCE_FILES internal/BVHSplit.h
                           internal/CoreOCL.h
                           internal/CoreRef.h
                           internal/CoreRef.cpp
-						  internal/CoreSIMD.h
-						  internal/CoreSIMD.cpp
-                          internal/CoreSSE.h
-                          internal/CoreSSE.cpp
+                          internal/CoreSIMD.h
                           internal/FramebufferRef.h
                           internal/FramebufferRef.cpp
                           internal/Halton.h
@@ -34,10 +31,9 @@ set(INTERNAL_SOURCE_FILES internal/BVHSplit.h
                           internal/RendererOCL.cpp
                           internal/RendererRef.h
                           internal/RendererRef.cpp
+                          internal/RendererRef2.h
                           internal/RendererSIMD.h
-                          internal/RendererSIMD.cpp
                           internal/RendererSSE.h
-                          internal/RendererSSE.cpp
                           internal/SceneOCL.h
                           internal/SceneOCL.cpp
                           internal/SceneRef.h

@@ -9,16 +9,15 @@
 
 namespace ray {
 namespace sse {
-class Renderer;
+template <int DimX, int DimY>
+class RendererSIMD;
 }
 namespace avx {
 class Renderer;
 }
 namespace ref2 {
-class Renderer;
-}
-namespace sse2 {
-class Renderer;
+template <int DimX, int DimY>
+class RendererSIMD;
 }
 
 namespace ref {
@@ -27,9 +26,10 @@ class Renderer;
 class Scene : public SceneBase {
 protected:
     friend class ref::Renderer;
-    friend class ref2::Renderer;
-    friend class sse::Renderer;
-    friend class sse2::Renderer;
+    template <int DimX, int DimY>
+    friend class ref2::RendererSIMD;
+    template <int DimX, int DimY>
+    friend class sse::RendererSIMD;
     friend class avx::Renderer;
 
     std::vector<bvh_node_t> nodes_;
