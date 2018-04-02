@@ -77,23 +77,21 @@ force_inline void _IntersectTri(const ray_packet_t &r, const simd_ivec16 &ray_ma
 }
 
 force_inline simd_ivec16 bbox_test(const simd_fvec16 o[3], const simd_fvec16 inv_d[3], const simd_fvec16 &t, const float _bbox_min[3], const float _bbox_max[3]) {
-    simd_fvec16 box_min[3] = { { _bbox_min[0] }, { _bbox_min[1] }, { _bbox_min[2] } },
-                box_max[3] = { { _bbox_max[0] }, { _bbox_max[1] }, { _bbox_max[2] } };
 
     simd_fvec16 low, high, tmin, tmax;
 
-    low = inv_d[0] * (box_min[0] - o[0]);
-    high = inv_d[0] * (box_max[0] - o[0]);
+    low = inv_d[0] * (_bbox_min[0] - o[0]);
+    high = inv_d[0] * (_bbox_max[0] - o[0]);
     tmin = min(low, high);
     tmax = max(low, high);
 
-    low = inv_d[1] * (box_min[1] - o[1]);
-    high = inv_d[1] * (box_max[1] - o[1]);
+    low = inv_d[1] * (_bbox_min[1] - o[1]);
+    high = inv_d[1] * (_bbox_max[1] - o[1]);
     tmin = max(tmin, min(low, high));
     tmax = min(tmax, max(low, high));
 
-    low = inv_d[2] * (box_min[2] - o[2]);
-    high = inv_d[2] * (box_max[2] - o[2]);
+    low = inv_d[2] * (_bbox_min[2] - o[2]);
+    high = inv_d[2] * (_bbox_max[2] - o[2]);
     tmin = max(tmin, min(low, high));
     tmax = min(tmax, max(low, high));
 
@@ -214,14 +212,14 @@ void ray::NS::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, i
     out_rays.resize(r.w * r.h / RayPacketSize + ((r.w * r.h) % 4 != 0));
 
     for (int y = r.y; y < r.y + r.h - (r.h & (RayPacketDimY - 1)); y += RayPacketDimY) {
+        simd_fvec16 yy = { (float)y };
+        yy += off_y;
+
         for (int x = r.x; x < r.x + r.w - (r.w & (RayPacketDimX - 1)); x += RayPacketDimX) {
             auto &out_r = out_rays[i++];
 
             simd_fvec16 xx = { (float)x };
             xx += off_x;
-
-            simd_fvec16 yy = { (float)y };
-            yy += off_y;
 
             out_r.o[0] = { cam.origin[0] };
             out_r.o[1] = { cam.origin[1] };

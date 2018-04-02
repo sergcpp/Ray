@@ -1,16 +1,30 @@
 
 #include <cstring>
 
-#ifdef __GNUC__
-#if !defined(__ANDROID__) && !defined(__EMSCRIPTEN__)
-#define force_inline __attribute__((always_inline)) inline
-#else
-#define force_inline __inline__
-#endif
-#endif
-#ifdef _MSC_VER
-#define force_inline __forceinline
-#endif
+#define ITERATE(n, exp)  \
+    if (n <= 16) {                              \
+        switch (n) {                            \
+        case 16: { const int i = n - 16; exp }  \
+        case 15: { const int i = n - 15; exp }  \
+        case 14: { const int i = n - 14; exp }  \
+        case 13: { const int i = n - 13; exp }  \
+        case 12: { const int i = n - 12; exp }  \
+        case 11: { const int i = n - 11; exp }  \
+        case 10: { const int i = n - 10; exp }  \
+        case 9: { const int i = n - 9; exp }    \
+        case 8: { const int i = n - 8; exp }    \
+        case 7: { const int i = n - 7; exp }    \
+        case 6: { const int i = n - 6; exp }    \
+        case 5: { const int i = n - 5; exp }    \
+        case 4: { const int i = n - 4; exp }    \
+        case 3: { const int i = n - 3; exp }    \
+        case 2: { const int i = n - 2; exp }    \
+        case 1: { const int i = n - 1; exp }    \
+        }                                       \
+    } else                                      \
+    for (int i = 0; i < n; i++) {               \
+        exp                                     \
+    }
 
 namespace ray {
 namespace NS {
@@ -23,9 +37,7 @@ class simd_vec {
 public:
     force_inline simd_vec() = default;
     force_inline simd_vec(T f) {
-        for (auto &v : vec_) {
-            v = f;
-        }
+        ITERATE(S, { vec_[i] = f; })
     }
     template <typename... Tail>
     force_inline simd_vec(typename std::enable_if<sizeof...(Tail)+1 == S, T>::type head, Tail... tail)
@@ -42,66 +54,48 @@ public:
     force_inline T operator[](int i) const { return vec_[i]; }
 
     force_inline simd_vec<T, S> &operator+=(const simd_vec<T, S> &rhs) {
-        for (int i = 0; i < S; i++) {
-            vec_[i] += rhs.vec_[i];
-        }
+        ITERATE(S, { vec_[i] += rhs.vec_[i]; })
         return *this;
     }
 
     force_inline simd_vec<T, S> &operator-=(const simd_vec<T, S> &rhs) {
-        for (int i = 0; i < S; i++) {
-            vec_[i] -= rhs.vec_[i];
-        }
+        ITERATE(S, { vec_[i] -= rhs.vec_[i]; })
         return *this;
     }
 
     force_inline simd_vec<T, S> &operator*=(const simd_vec<T, S> &rhs) {
-        for (int i = 0; i < S; i++) {
-            vec_[i] *= rhs.vec_[i];
-        }
+        ITERATE(S, { vec_[i] *= rhs.vec_[i]; })
         return *this;
     }
 
     force_inline simd_vec<T, S> &operator/=(const simd_vec<T, S> &rhs) {
-        for (int i = 0; i < S; i++) {
-            vec_[i] /= rhs.vec_[i];
-        }
+        ITERATE(S, { vec_[i] /= rhs.vec_[i]; })
         return *this;
     }
 
     force_inline simd_vec<T, S> &operator+=(T rhs) {
-        for (int i = 0; i < S; i++) {
-            vec_[i] += rhs;
-        }
+        ITERATE(S, { vec_[i] += rhs; })
         return *this;
     }
 
     force_inline simd_vec<T, S> &operator-=(T rhs) {
-        for (int i = 0; i < S; i++) {
-            vec_[i] -= rhs;
-        }
+        ITERATE(S, { vec_[i] -= rhs; })
         return *this;
     }
 
     force_inline simd_vec<T, S> &operator*=(T rhs) {
-        for (int i = 0; i < S; i++) {
-            vec_[i] *= rhs;
-        }
+        ITERATE(S, { vec_[i] *= rhs; })
         return *this;
     }
 
     force_inline simd_vec<T, S> &operator/=(T rhs) {
-        for (int i = 0; i < S; i++) {
-            vec_[i] /= rhs;
-        }
+        ITERATE(S, { vec_[i] /= rhs; })
         return *this;
     }
 
     force_inline simd_vec<T, S> operator-() const {
         simd_vec<T, S> temp;
-        for (int i = 0; i < S; i++) {
-            temp.vec_[i] = -vec_[i];
-        }
+        ITERATE(S, { temp.vec_[i] = -vec_[i]; })
         return temp;
     }
 
@@ -109,9 +103,7 @@ public:
         T set;
         memset(&set, 0xFF, sizeof(T));
         simd_vec<T, S> ret;
-        for (int i = 0; i < S; i++) {
-            ret.vec_[i] = vec_[i] < rhs.vec_[i] ? set : 0;
-        }
+        ITERATE(S, { ret.vec_[i] = vec_[i] < rhs.vec_[i] ? set : 0; })
         return ret;
     }
 
@@ -119,9 +111,7 @@ public:
         T set;
         memset(&set, 0xFF, sizeof(T));
         simd_vec<T, S> ret;
-        for (int i = 0; i < S; i++) {
-            ret.vec_[i] = vec_[i] <= rhs.vec_[i] ? set : 0;
-        }
+        ITERATE(S, { ret.vec_[i] = vec_[i] <= rhs.vec_[i] ? set : 0; })
         return ret;
     }
 
@@ -129,9 +119,7 @@ public:
         T set;
         memset(&set, 0xFF, sizeof(T));
         simd_vec<T, S> ret;
-        for (int i = 0; i < S; i++) {
-            ret.vec_[i] = vec_[i] > rhs.vec_[i] ? set : 0;
-        }
+        ITERATE(S, { ret.vec_[i] = vec_[i] > rhs.vec_[i] ? set : 0; })
         return ret;
     }
 
@@ -139,17 +127,13 @@ public:
         T set;
         memset(&set, 0xFF, sizeof(T));
         simd_vec<T, S> ret;
-        for (int i = 0; i < S; i++) {
-            ret.vec_[i] = vec_[i] >= rhs.vec_[i] ? set : 0;
-        }
+        ITERATE(S, { ret.vec_[i] = vec_[i] >= rhs.vec_[i] ? set : 0; })
         return ret;
     }
 
     force_inline simd_vec<T, S> sqrt() const {
         simd_vec<T, S> temp;
-        for (int i = 0; i < S; i++) {
-            temp[i] = ::sqrt(vec_[i]);
-        }
+        ITERATE(S, { temp[i] = ::sqrt(vec_[i]); })
         return temp;
     }
 
@@ -162,9 +146,7 @@ public:
     }
 
     force_inline bool all_zeros() const {
-        for (int i = 0; i < S; i++) {
-            if (vec_[i] != 0) return false;
-        }
+        ITERATE(S, { if (vec_[i] != 0) return false; })
         return true;
     }
 
@@ -175,35 +157,28 @@ public:
         for (int i = 0; i < S * sizeof(T); i++) {
             if ((src1[i] & src2[i]) != 0) return false;
         }
+
         return true;
     }
 
     force_inline bool not_all_zeros() const {
-        for (int i = 0; i < S; i++) {
-            if (vec_[i] != 0) return true;
-        }
+        ITERATE(S, { if (vec_[i] != 0) return true; })
         return false;
     }
 
     force_inline void blend_to(const simd_vec<T, S> &mask, const simd_vec<T, S> &v1) {
-        for (int i = 0; i < S; i++) {
-            if (mask.vec_[i] != T(0)) vec_[i] = v1.vec_[i];
-        }
+        ITERATE(S, { if (mask.vec_[i] != T(0)) vec_[i] = v1.vec_[i]; })
     }
 
     force_inline static simd_vec<T, S> min(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) {
         simd_vec<T, S> temp;
-        for (int i = 0; i < S; i++) {
-            temp.vec_[i] = std::min(v1.vec_[i], v2.vec_[i]);
-        }
+        ITERATE(S, { temp.vec_[i] = std::min(v1.vec_[i], v2.vec_[i]); })
         return temp;
     }
 
     force_inline static simd_vec<T, S> max(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) {
         simd_vec<T, S> temp;
-        for (int i = 0; i < S; i++) {
-            temp.vec_[i] = std::max(v1.vec_[i], v2.vec_[i]);
-        }
+        ITERATE(S, { temp.vec_[i] = std::max(v1.vec_[i], v2.vec_[i]); })
         return temp;
     }
 
@@ -218,6 +193,7 @@ public:
         for (int i = 0; i < S * sizeof(T); i++) {
             dst[i] = src1[i] & src2[i];
         }
+
         return ret;
     }
 
@@ -232,6 +208,7 @@ public:
         for (int i = 0; i < S * sizeof(T); i++) {
             dst[i] = (~src1[i]) & src2[i];
         }
+
         return ret;
     }
 
@@ -246,6 +223,7 @@ public:
         for (int i = 0; i < S * sizeof(T); i++) {
             dst[i] = src1[i] | src2[i];
         }
+
         return ret;
     }
 
@@ -260,6 +238,7 @@ public:
         for (int i = 0; i < S * sizeof(T); i++) {
             dst[i] = src1[i] ^ src2[i];
         }
+
         return ret;
     }
 
@@ -293,6 +272,9 @@ force_inline simd_vec<T, S> operator*(const simd_vec<T, S> &v1, T v2) { simd_vec
 
 template <typename T, int S>
 force_inline simd_vec<T, S> operator/(const simd_vec<T, S> &v1, T v2) { simd_vec<T, S> temp = v1; temp /= v2; return temp; }
+
+template <typename T, int S>
+force_inline simd_vec<T, S> operator-(T v1, const simd_vec<T, S> &v2) { simd_vec<T, S> temp = { v1 }; temp -= v2; return temp; }
 
 template <typename T, int S>
 force_inline simd_vec<T, S> operator<(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) { return simd_vec<T, S>::operator<(v1, v2); }
@@ -374,3 +356,5 @@ using native_simd_ivec = simd_ivec<1>;
 }
 }
 #endif
+
+#undef ITERATE
