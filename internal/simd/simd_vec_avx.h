@@ -9,6 +9,11 @@
 #pragma GCC target ("avx")
 #endif
 
+#if defined(__GNUC__)
+#define _mm256_test_all_zeros(mask, val) \
+              _mm256_testz_si256((mask), (val))
+#endif
+
 namespace ray {
 namespace NS {
 

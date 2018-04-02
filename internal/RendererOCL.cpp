@@ -52,7 +52,7 @@ const char *cl_src_transform =
 }
 }
 
-ray::ocl::Renderer::Renderer(int w, int h) : w_(w), h_(h), iteration_(0) {
+ray::ocl::Renderer::Renderer(int w, int h) : w_(w), h_(h), loaded_halton_(-1) {
     std::vector<cl::Platform> platforms;
     cl::Platform::get(&platforms);
     if (platforms.empty()) throw std::runtime_error("Cannot create OpenCL renderer!");
@@ -218,9 +218,10 @@ ray::ocl::Renderer::Renderer(int w, int h) : w_(w), h_(h), iteration_(0) {
 
         halton_seq_buf_ = cl::Buffer(context_, CL_MEM_READ_ONLY | CL_MEM_HOST_WRITE_ONLY, sizeof(float) * HaltonSeqLen * 2, nullptr, &error);
         if (error != CL_SUCCESS) throw std::runtime_error("Cannot create OpenCL renderer!");
-
-        if (!UpdateHaltonSequence()) throw std::runtime_error("Cannot create OpenCL renderer!");
     }
+
+    auto rand_func = std::bind(std::uniform_int_distribution<int>(), std::mt19937(0));
+    permutations_ = ray::ComputeRadicalInversePermutations(g_primes, PrimesCount, rand_func);
 }
 
 void ray::ocl::Renderer::Resize(int w, int h) {
@@ -243,8 +244,6 @@ void ray::ocl::Renderer::Clear(const pixel_color_t &c) {
     static_assert(sizeof(pixel_color_t) == sizeof(cl_float4), "!");
     queue_.enqueueFillImage(clean_buf_, *(cl_float4 *)&c, {}, { (size_t)w_, (size_t)h_, 1 });
     queue_.enqueueFillImage(final_buf_, *(cl_float4 *)&c, {}, { (size_t)w_, (size_t)h_, 1 });
-    iteration_ = 0;
-    UpdateHaltonSequence();
 }
 
 std::shared_ptr<ray::SceneBase> ray::ocl::Renderer::CreateScene() {
@@ -257,8 +256,16 @@ void ray::ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
     auto s = std::dynamic_pointer_cast<ocl::Scene>(_s);
     if (!s) return;
 
-    if (++iteration_ % HaltonSeqLen == 0) {
-        UpdateHaltonSequence();
+    region.iteration++;
+    if (!region.halton_seq || region.iteration % HaltonSeqLen == 0) {
+        UpdateHaltonSequence(region.iteration, region.halton_seq);
+    }
+
+    if (region.iteration != loaded_halton_) {
+        if (CL_SUCCESS != queue_.enqueueWriteBuffer(halton_seq_buf_, CL_TRUE, 0, sizeof(float) * HaltonSeqLen * 2, &region.halton_seq[0])) {
+            return;
+        }
+        loaded_halton_ = region.iteration;
     }
 
     const auto &cam = s->GetCamera(s->current_cam());
@@ -269,7 +276,7 @@ void ray::ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
     cl_cam.up.y *= float(h_) / w_;
     cl_cam.up.z *= float(h_) / w_;
 
-    if (!kernel_GeneratePrimaryRays((cl_int)iteration_, cl_cam, halton_seq_buf_, w_, h_, prim_rays_buf_)) return;
+    if (!kernel_GeneratePrimaryRays((cl_int)region.iteration, cl_cam, halton_seq_buf_, w_, h_, prim_rays_buf_)) return;
 
     {
         cl_int error = CL_SUCCESS;
@@ -282,7 +289,7 @@ void ray::ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
         if (queue_.enqueueWriteBuffer(secondary_rays_count_buf_, CL_TRUE, 0, sizeof(cl_int),
                                       &secondary_rays_count) != CL_SUCCESS) return;
 
-        if (!kernel_ShadePrimary((cl_int)iteration_, halton_seq_buf_,
+        if (!kernel_ShadePrimary((cl_int)region.iteration, halton_seq_buf_,
                                  prim_inters_buf_, prim_rays_buf_, w_, h_,
                                  s->mesh_instances_.buf(), s->mi_indices_.buf(), s->meshes_.buf(),
                                  s->transforms_.buf(), s->vtx_indices_.buf(), s->vertices_.buf(),
@@ -311,7 +318,7 @@ void ray::ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
             if (queue_.enqueueCopyImage(temp_buf_, final_buf_, { 0, 0, 0 }, { 0, 0, 0 },
         { (size_t)w_, (size_t)h_, 1 }) != CL_SUCCESS) return;
 
-            if (!kernel_ShadeSecondary((cl_int)iteration_, halton_seq_buf_,
+            if (!kernel_ShadeSecondary((cl_int)region.iteration, halton_seq_buf_,
                                        prim_inters_buf_, secondary_rays_buf_, secondary_rays_count, w_, h_,
                                        s->mesh_instances_.buf(), s->mi_indices_.buf(), s->meshes_.buf(),
                                        s->transforms_.buf(), s->vtx_indices_.buf(), s->vertices_.buf(),
@@ -327,7 +334,7 @@ void ray::ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
             std::swap(secondary_rays_buf_, prim_rays_buf_);
         }
 
-        float k = 1.0f / iteration_;
+        float k = 1.0f / region.iteration;
 
         if (!kernel_MixIncremental(clean_buf_, temp_buf_, (cl_float)k, final_buf_)) return;
         std::swap(final_buf_, clean_buf_);
@@ -581,18 +588,13 @@ bool ray::ocl::Renderer::kernel_Postprocess(const cl::Image2D &frame_buf, cl_int
     return CL_SUCCESS == queue_.enqueueNDRangeKernel(post_process_kernel_, cl::NullRange, global, local);
 }
 
-bool ray::ocl::Renderer::UpdateHaltonSequence() {
-    if (permutations_.empty()) {
-        auto rand_func = std::bind(std::uniform_int_distribution<int>(), std::mt19937(0));
-        permutations_ = ray::ComputeRadicalInversePermutations(g_primes, PrimesCount, rand_func);
+void ray::ocl::Renderer::UpdateHaltonSequence(int iteration, std::unique_ptr<float[]> &seq) {
+    if (!seq) {
+        seq.reset(new float[HaltonSeqLen * 2]);
     }
-
-    std::vector<float> new_sequence(HaltonSeqLen * 2);
 
     for (int i = 0; i < HaltonSeqLen; i++) {
-        new_sequence[i * 2 + 0] = ray::ScrambledRadicalInverse<29>(&permutations_[100], (uint64_t)(iteration_ + i));
-        new_sequence[i * 2 + 1] = ray::ScrambledRadicalInverse<31>(&permutations_[129], (uint64_t)(iteration_ + i));
+        seq[i * 2 + 0] = ray::ScrambledRadicalInverse<29>(&permutations_[100], (uint64_t)(iteration + i));
+        seq[i * 2 + 1] = ray::ScrambledRadicalInverse<31>(&permutations_[129], (uint64_t)(iteration + i));
     }
-
-    return CL_SUCCESS == queue_.enqueueWriteBuffer(halton_seq_buf_, CL_TRUE, 0, sizeof(float) * HaltonSeqLen * 2, &new_sequence[0]);
 }

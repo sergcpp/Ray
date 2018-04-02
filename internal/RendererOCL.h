@@ -40,8 +40,8 @@ protected:
 
     int w_, h_;
 
-    int iteration_;
     std::vector<uint16_t> permutations_;
+    int loaded_halton_;
 
     cl::Buffer halton_seq_buf_;
 
@@ -83,7 +83,7 @@ protected:
     bool kernel_MixIncremental(const cl::Image2D &fbuf1, const cl::Image2D &fbuf2, cl_float k, const cl::Image2D &res);
     bool kernel_Postprocess(const cl::Image2D &frame_buf, cl_int w, cl_int h, const cl::Image2D &out_pixels);
 
-    bool UpdateHaltonSequence();
+    void UpdateHaltonSequence(int iteration, std::unique_ptr<float[]> &seq);
 public:
     Renderer(int w, int h);
     ~Renderer() override = default;

@@ -169,7 +169,7 @@ force_inline simd_ivec<S> bbox_test(const simd_fvec<S> o[3], const simd_fvec<S> 
 }
 
 template <int S>
-force_inline simd_ivec<S> bbox_test(const simd_fvec<S> o[3], const simd_fvec<S> inv_d[3], const simd_fvec<S> t, const bvh_node_t &node) {
+force_inline simd_ivec<S> bbox_test(const simd_fvec<S> o[3], const simd_fvec<S> inv_d[3], const simd_fvec<S> &t, const bvh_node_t &node) {
     return bbox_test(o, inv_d, t, node.bbox[0], node.bbox[1]);
 }
 
