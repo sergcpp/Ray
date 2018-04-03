@@ -417,7 +417,7 @@ bool ray::NS::Traverse_MacroTree_CPU(const ray_packet_t<S> &r, const simd_ivec<S
 
                         ray_packet_t<S> _r = TransformRay(r, tr.inv_xform);
 
-                        simd_fvec<S> _inv_d[3] = { { 1.0f / _r.d[0] },{ 1.0f / _r.d[1] },{ 1.0f / _r.d[2] } };
+                        simd_fvec<S> _inv_d[3] = { { 1.0f / _r.d[0] }, { 1.0f / _r.d[1] }, { 1.0f / _r.d[2] } };
 
                         res |= Traverse_MicroTree_CPU(_r, bbox_mask, _inv_d, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter);
                     }
@@ -430,7 +430,7 @@ bool ray::NS::Traverse_MacroTree_CPU(const ray_packet_t<S> &r, const simd_ivec<S
                 }
             }
         }
-                          break;
+        break;
         case FromParent: {
             auto mask1 = bbox_test(r.o, inv_d, inter.t, nodes[cur]) & st.queue[st.index].mask;
             if (mask1.all_zeros()) {
@@ -458,7 +458,7 @@ bool ray::NS::Traverse_MacroTree_CPU(const ray_packet_t<S> &r, const simd_ivec<S
 
                         ray_packet_t<S> _r = TransformRay(r, tr.inv_xform);
 
-                        simd_fvec<S> _inv_d[3] = { { 1.0f / _r.d[0] },{ 1.0f / _r.d[1] },{ 1.0f / _r.d[2] } };
+                        simd_fvec<S> _inv_d[3] = { { 1.0f / _r.d[0] }, { 1.0f / _r.d[1] }, { 1.0f / _r.d[2] } };
 
                         res |= Traverse_MicroTree_CPU(_r, bbox_mask, _inv_d, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter);
                     }
@@ -471,7 +471,7 @@ bool ray::NS::Traverse_MacroTree_CPU(const ray_packet_t<S> &r, const simd_ivec<S
                 }
             }
         }
-                         break;
+        break;
         }
     }
     return res;
@@ -539,7 +539,7 @@ bool ray::NS::Traverse_MicroTree_CPU(const ray_packet_t<S> &r, const simd_ivec<S
                 }
             }
         }
-                          break;
+        break;
         case FromParent: {
             auto mask1 = bbox_test(r.o, inv_d, inter.t, nodes[cur]) & st.queue[st.index].mask;
             if (mask1.all_zeros()) {
@@ -567,7 +567,7 @@ bool ray::NS::Traverse_MicroTree_CPU(const ray_packet_t<S> &r, const simd_ivec<S
                 }
             }
         }
-                         break;
+        break;
         }
     }
     return res;

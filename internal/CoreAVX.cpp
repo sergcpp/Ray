@@ -148,7 +148,6 @@ force_inline void _IntersectTri(const ray_packet_t &r, const __m256i ray_mask, c
     __m256 bar_u = _mm256_mul_ps(detu, rdet);
     __m256 bar_v = _mm256_mul_ps(detv, rdet);
 
-    mask = _mm256_and_si256(mask, t_valid);
     __m256 mask_ps = _mm256_castsi256_ps(mask);
 
     inter.mask = _mm256_or_si256(inter.mask, mask);

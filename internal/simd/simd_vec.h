@@ -100,66 +100,66 @@ public:
     }
 
     force_inline simd_vec<T, S> operator<(const simd_vec<T, S> &rhs) const {
-        T set;
+        T set, not_set = T(0);
         memset(&set, 0xFF, sizeof(T));
         simd_vec<T, S> ret;
-        ITERATE(S, { ret.vec_[i] = vec_[i] < rhs.vec_[i] ? set : 0; })
+        ITERATE(S, { ret.vec_[i] = vec_[i] < rhs.vec_[i] ? set : not_set; })
         return ret;
     }
 
     force_inline simd_vec<T, S> operator<=(const simd_vec<T, S> &rhs) const {
-        T set;
+        T set, not_set = T(0);
         memset(&set, 0xFF, sizeof(T));
         simd_vec<T, S> ret;
-        ITERATE(S, { ret.vec_[i] = vec_[i] <= rhs.vec_[i] ? set : 0; })
+        ITERATE(S, { ret.vec_[i] = vec_[i] <= rhs.vec_[i] ? set : not_set; })
         return ret;
     }
 
     force_inline simd_vec<T, S> operator>(const simd_vec<T, S> &rhs) const {
-        T set;
+        T set, not_set = T(0);
         memset(&set, 0xFF, sizeof(T));
         simd_vec<T, S> ret;
-        ITERATE(S, { ret.vec_[i] = vec_[i] > rhs.vec_[i] ? set : 0; })
+        ITERATE(S, { ret.vec_[i] = vec_[i] > rhs.vec_[i] ? set : not_set; })
         return ret;
     }
 
     force_inline simd_vec<T, S> operator>=(const simd_vec<T, S> &rhs) const {
-        T set;
+        T set, not_set = T(0);
         memset(&set, 0xFF, sizeof(T));
         simd_vec<T, S> ret;
-        ITERATE(S, { ret.vec_[i] = vec_[i] >= rhs.vec_[i] ? set : 0; })
+        ITERATE(S, { ret.vec_[i] = vec_[i] >= rhs.vec_[i] ? set : not_set; })
         return ret;
     }
 
     force_inline simd_vec<T, S> operator<(T rhs) const {
-        T set;
+        T set, not_set = T(0);
         memset(&set, 0xFF, sizeof(T));
         simd_vec<T, S> ret;
-        ITERATE(S, { ret.vec_[i] = vec_[i] < rhs ? set : 0; })
+        ITERATE(S, { ret.vec_[i] = vec_[i] < rhs ? set : not_set; })
             return ret;
     }
 
     force_inline simd_vec<T, S> operator<=(T rhs) const {
-        T set;
+        T set, not_set = T(0);
         memset(&set, 0xFF, sizeof(T));
         simd_vec<T, S> ret;
-        ITERATE(S, { ret.vec_[i] = vec_[i] <= rhs ? set : 0; })
+        ITERATE(S, { ret.vec_[i] = vec_[i] <= rhs ? set : not_set; })
             return ret;
     }
 
     force_inline simd_vec<T, S> operator>(T rhs) const {
-        T set;
+        T set, not_set = T(0);
         memset(&set, 0xFF, sizeof(T));
         simd_vec<T, S> ret;
-        ITERATE(S, { ret.vec_[i] = vec_[i] > rhs ? set : 0; })
+        ITERATE(S, { ret.vec_[i] = vec_[i] > rhs ? set : not_set; })
             return ret;
     }
 
     force_inline simd_vec<T, S> operator>=(T rhs) const {
-        T set;
+        T set, not_set = T(0);
         memset(&set, 0xFF, sizeof(T));
         simd_vec<T, S> ret;
-        ITERATE(S, { ret.vec_[i] = vec_[i] >= rhs ? set : 0; })
+        ITERATE(S, { ret.vec_[i] = vec_[i] >= rhs ? set : not_set; })
             return ret;
     }
 
