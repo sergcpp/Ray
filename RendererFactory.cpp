@@ -32,7 +32,7 @@ std::shared_ptr<ray::RendererBase> ray::CreateRenderer(int w, int h, uint32_t fl
     }
     if (flags & RendererRef) {
         std::cout << "ray: Creating Ref renderer " << w << "x" << h << std::endl;
-        return std::make_shared<ref::Renderer>(w, h);
+        return std::make_shared<ref2::Renderer>(w, h);
     }
     std::cout << "ray: Creating Ref renderer " << w << "x" << h << std::endl;
     return std::make_shared<ref::Renderer>(w, h);

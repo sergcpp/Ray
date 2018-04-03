@@ -191,28 +191,98 @@ public:
         return temp;
     }
 
-    force_inline static simd_vec<float, S> and_(const simd_vec<float, S> &v1, const simd_vec<float, S> &v2) {
-        simd_vec<float, S> temp;
-        ITERATE(S / 4, { temp.vec_[i] = _mm_and_ps(v1.vec_[i], v2.vec_[i]); })
-        return temp;
-    }
-
     force_inline static simd_vec<float, S> and_not(const simd_vec<float, S> &v1, const simd_vec<float, S> &v2) {
         simd_vec<float, S> temp;
         ITERATE(S/4, { temp.vec_[i] = _mm_andnot_ps(v1.vec_[i], v2.vec_[i]); })
         return temp;
     }
 
-    force_inline static simd_vec<float, S> or_(const simd_vec<float, S> &v1, const simd_vec<float, S> &v2) {
+    friend force_inline simd_vec<float, S> operator&(const simd_vec<float, S> &v1, const simd_vec<float, S> &v2) {
+        simd_vec<float, S> temp;
+        ITERATE(S / 4, { temp.vec_[i] = _mm_and_ps(v1.vec_[i], v2.vec_[i]); })
+        return temp;
+    }
+
+    friend force_inline simd_vec<float, S> operator|(const simd_vec<float, S> &v1, const simd_vec<float, S> &v2) {
         simd_vec<float, S> temp;
         ITERATE(S/4, { temp.vec_[i] = _mm_or_ps(v1.vec_[i], v2.vec_[i]); })
         return temp;
     }
 
-    force_inline static simd_vec<float, S> xor_(const simd_vec<float, S> &v1, const simd_vec<float, S> &v2) {
+    friend force_inline simd_vec<float, S> operator^(const simd_vec<float, S> &v1, const simd_vec<float, S> &v2) {
         simd_vec<float, S> temp;
         ITERATE(S/4, { temp.vec_[i] = _mm_xor_ps(v1.vec_[i], v2.vec_[i]); })
         return temp;
+    }
+
+    friend force_inline simd_vec<float, S> operator+(const simd_vec<float, S> &v1, const simd_vec<float, S> &v2) {
+        simd_vec<float, S> ret;
+        ITERATE(S/4, { ret.vec_[i] = _mm_add_ps(v1.vec_[i], v2.vec_[i]); })
+        return ret;
+    }
+
+    friend force_inline simd_vec<float, S> operator-(const simd_vec<float, S> &v1, const simd_vec<float, S> &v2) {
+        simd_vec<float, S> ret;
+        ITERATE(S/4, { ret.vec_[i] = _mm_sub_ps(v1.vec_[i], v2.vec_[i]); })
+        return ret;
+    }
+
+    friend force_inline simd_vec<float, S> operator*(const simd_vec<float, S> &v1, const simd_vec<float, S> &v2) {
+        simd_vec<float, S> ret;
+        ITERATE(S/4, { ret.vec_[i] = _mm_mul_ps(v1.vec_[i], v2.vec_[i]); })
+        return ret;
+    }
+
+    friend force_inline simd_vec<float, S> operator/(const simd_vec<float, S> &v1, const simd_vec<float, S> &v2) {
+        simd_vec<float, S> ret;
+        ITERATE(S/4, { ret.vec_[i] = _mm_div_ps(v1.vec_[i], v2.vec_[i]); })
+        return ret;
+    }
+
+    friend force_inline simd_vec<float, S> operator+(const simd_vec<float, S> &v1, float v2) {
+        simd_vec<float, S> ret;
+        ITERATE(S/4, { ret.vec_[i] = _mm_add_ps(v1.vec_[i], _mm_set1_ps(v2)); })
+        return ret;
+    }
+
+    friend force_inline simd_vec<float, S> operator-(const simd_vec<float, S> &v1, float v2) {
+        simd_vec<float, S> ret;
+        ITERATE(S/4, { ret.vec_[i] = _mm_sub_ps(v1.vec_[i], _mm_set1_ps(v2)); })
+        return ret;
+    }
+
+    friend force_inline simd_vec<float, S> operator*(const simd_vec<float, S> &v1, float v2) {
+        simd_vec<float, S> ret;
+        ITERATE(S/4, { ret.vec_[i] = _mm_mul_ps(v1.vec_[i], _mm_set1_ps(v2)); })
+        return ret;
+    }
+
+    friend force_inline simd_vec<float, S> operator/(const simd_vec<float, S> &v1, float v2) {
+        simd_vec<float, S> ret;
+        ITERATE(S/4, { ret.vec_[i] = _mm_div_ps(v1.vec_[i], _mm_set1_ps(v2)); })
+        return ret;
+    }
+
+    friend force_inline simd_vec<float, S> operator+(float v1, const simd_vec<float, S> &v2) {
+        return operator+(v2, v1);
+    }
+
+    friend force_inline simd_vec<float, S> operator-(float v1, const simd_vec<float, S> &v2) {
+        simd_vec<float, S> ret;
+        ITERATE(S/4, { ret.vec_[i] = _mm_sub_ps(_mm_set1_ps(v1), v2.vec_[i]); })
+        return ret;
+    }
+
+    friend force_inline simd_vec<float, S> operator*(float v1, const simd_vec<float, S> &v2) {
+        simd_vec<float, S> ret;
+        ITERATE(S/4, { ret.vec_[i] = _mm_mul_ps(_mm_set1_ps(v1), v2.vec_[i]); })
+        return ret;
+    }
+
+    friend force_inline simd_vec<float, S> operator/(float v1, const simd_vec<float, S> &v2) {
+        simd_vec<float, S> ret;
+        ITERATE(S/4, { ret.vec_[i] = _mm_div_ps(_mm_set1_ps(v1), v2.vec_[i]); })
+        return ret;
     }
 
     static const size_t alignment = alignof(__m128);
@@ -336,25 +406,25 @@ public:
         return temp;
     }
 
-    force_inline static simd_vec<int, S> and_(const simd_vec<int, S> &v1, const simd_vec<int, S> &v2) {
-        simd_vec<int, S> temp;
-        ITERATE(S/4, { temp.vec_[i] = _mm_and_si128(v1.vec_[i], v2.vec_[i]); })
-        return temp;
-    }
-
     force_inline static simd_vec<int, S> and_not(const simd_vec<int, S> &v1, const simd_vec<int, S> &v2) {
         simd_vec<int, S> temp;
         ITERATE(S/4, { temp.vec_[i] = _mm_andnot_si128(v1.vec_[i], v2.vec_[i]); })
         return temp;
     }
 
-    force_inline static simd_vec<int, S> or_(const simd_vec<int, S> &v1, const simd_vec<int, S> &v2) {
+    friend force_inline simd_vec<int, S> operator&(const simd_vec<int, S> &v1, const simd_vec<int, S> &v2) {
+        simd_vec<int, S> temp;
+        ITERATE(S/4, { temp.vec_[i] = _mm_and_si128(v1.vec_[i], v2.vec_[i]); })
+        return temp;
+    }
+
+    friend force_inline simd_vec<int, S> operator|(const simd_vec<int, S> &v1, const simd_vec<int, S> &v2) {
         simd_vec<int, S> temp;
         ITERATE(S/4, { temp.vec_[i] = _mm_or_si128(v1.vec_[i], v2.vec_[i]); })
         return temp;
     }
 
-    force_inline static simd_vec<int, S> xor_(const simd_vec<int, S> &v1, const simd_vec<int, S> &v2) {
+    friend force_inline simd_vec<int, S> operator^(const simd_vec<int, S> &v1, const simd_vec<int, S> &v2) {
         simd_vec<int, S> temp;
         ITERATE(S / 4, { temp.vec_[i] = _mm_xor_si128(v1.vec_[i], v2.vec_[i]); });
         return temp;

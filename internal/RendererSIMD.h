@@ -101,6 +101,8 @@ void ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
         rect = { 0, 0, w, h };
     }
 
+    region.iteration++;
+
     math::aligned_vector<ray_packet_t<S>> primary_rays;
     math::aligned_vector<hit_data_t<S>> intersections;
 
