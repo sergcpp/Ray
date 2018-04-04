@@ -42,7 +42,7 @@ struct hit_data_t {
     int x, y;
 
     hit_data_t(eUninitialize) {}
-    hit_data_t() {
+    force_inline hit_data_t() {
         mask = { 0 };
         obj_index = { -1 };
         prim_index = { -1 };
@@ -315,7 +315,8 @@ void ray::NS::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, i
 
 template <int S>
 bool ray::NS::IntersectTris(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const tri_accel_t *tris, uint32_t num_tris, uint32_t obj_index, hit_data_t<S> &out_inter) {
-    hit_data_t<S> inter;
+    hit_data_t<S> inter = { Uninitialize };
+    inter.mask = { 0 };
     inter.obj_index = { reinterpret_cast<const int&>(obj_index) };
     inter.t = out_inter.t;
 
@@ -340,7 +341,8 @@ bool ray::NS::IntersectTris(const ray_packet_t<S> &r, const simd_ivec<S> &ray_ma
 
 template <int S>
 bool ray::NS::IntersectTris(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const tri_accel_t *tris, const uint32_t *indices, uint32_t num_tris, uint32_t obj_index, hit_data_t<S> &out_inter) {
-    hit_data_t<S> inter;
+    hit_data_t<S> inter = { Uninitialize };
+    inter.mask = { 0 };
     inter.obj_index = { reinterpret_cast<const int&>(obj_index) };
     inter.t = out_inter.t;
 
