@@ -116,7 +116,8 @@ void ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
         inter.y = primary_rays[i].y;
 
         const auto &r = primary_rays[i];
-        const simd_fvec<S> inv_d[3] = { { 1.0f / r.d[0] },{ 1.0f / r.d[1] },{ 1.0f / r.d[2] } };
+        simd_fvec<S> inv_d[3];
+        safe_invert(r.d, inv_d);
 
         if (NS::Traverse_MacroTree_CPU(r, { -1 }, inv_d, nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, inter)) {
             intersections.push_back(inter);

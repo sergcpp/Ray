@@ -90,14 +90,8 @@ namespace ray {
 namespace NS {
 template <int S>
 force_inline void _IntersectTri(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const tri_accel_t &tri, uint32_t prim_index, hit_data_t<S> &inter) {
-    simd_fvec<S> nu = { tri.nu }, nv = { tri.nv }, np = { tri.np };
-    simd_fvec<S> pu = { tri.pu }, pv = { tri.pv };
-
-    simd_fvec<S> e0u = { tri.e0u }, e0v = { tri.e0v };
-    simd_fvec<S> e1u = { tri.e1u }, e1v = { tri.e1v };
-
     const int _next_u[] = { 1, 0, 0 },
-        _next_v[] = { 2, 2, 1 };
+              _next_v[] = { 2, 2, 1 };
 
     int w = (tri.ci & TRI_W_BITS),
         u = _next_u[w],
@@ -105,12 +99,12 @@ force_inline void _IntersectTri(const ray_packet_t<S> &r, const simd_ivec<S> &ra
 
     // from "Ray-Triangle Intersection Algorithm for Modern CPU Architectures" [2007]
 
-    simd_fvec<S> det = r.d[u] * nu + r.d[v] * nv + r.d[w];
-    simd_fvec<S> dett = np - (r.o[u] * nu + r.o[v] * nv + r.o[w]);
-    simd_fvec<S> Du = r.d[u] * dett - (pu - r.o[u]) * det;
-    simd_fvec<S> Dv = r.d[v] * dett - (pv - r.o[v]) * det;
-    simd_fvec<S> detu = e1v * Du - e1u * Dv;
-    simd_fvec<S> detv = e0u * Dv - e0v * Du;
+    simd_fvec<S> det = r.d[u] * tri.nu + r.d[v] * tri.nv + r.d[w];
+    simd_fvec<S> dett = tri.np - (r.o[u] * tri.nu + r.o[v] * tri.nv + r.o[w]);
+    simd_fvec<S> Du = r.d[u] * dett - (tri.pu - r.o[u]) * det;
+    simd_fvec<S> Dv = r.d[v] * dett - (tri.pv - r.o[v]) * det;
+    simd_fvec<S> detu = tri.e1v * Du - tri.e1u * Dv;
+    simd_fvec<S> detv = tri.e0u * Dv - tri.e0v * Du;
 
     simd_fvec<S> tmpdet0 = det - detu - detv;
 
@@ -220,6 +214,22 @@ struct TraversalState {
         }
     }
 };
+
+template <int S>
+force_inline void safe_invert(const simd_fvec<S> v[3], simd_fvec<S> inv_v[3]) {
+    inv_v[0] = { 1.0f / v[0] };
+    where(v[0] <= FLT_EPS & v[0] >= 0, inv_v[0]) = MAX_DIST;
+    where(v[0] >= -FLT_EPS & v[0] < 0, inv_v[0]) = -MAX_DIST;
+
+    inv_v[1] = { 1.0f / v[1] };
+    where(v[1] <= FLT_EPS & v[1] >= 0, inv_v[1]) = MAX_DIST;
+    where(v[1] >= -FLT_EPS & v[1] < 0, inv_v[1]) = -MAX_DIST;
+
+    inv_v[2] = { 1.0f / v[2] };
+    where(v[2] <= FLT_EPS & v[2] >= 0, inv_v[2]) = MAX_DIST;
+    where(v[2] >= -FLT_EPS & v[2] < 0, inv_v[2]) = -MAX_DIST;
+}
+
 }
 }
 
@@ -417,7 +427,8 @@ bool ray::NS::Traverse_MacroTree_CPU(const ray_packet_t<S> &r, const simd_ivec<S
 
                         ray_packet_t<S> _r = TransformRay(r, tr.inv_xform);
 
-                        simd_fvec<S> _inv_d[3] = { { 1.0f / _r.d[0] }, { 1.0f / _r.d[1] }, { 1.0f / _r.d[2] } };
+                        simd_fvec<S> _inv_d[3];
+                        safe_invert(_r.d, _inv_d);
 
                         res |= Traverse_MicroTree_CPU(_r, bbox_mask, _inv_d, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter);
                     }
@@ -458,7 +469,8 @@ bool ray::NS::Traverse_MacroTree_CPU(const ray_packet_t<S> &r, const simd_ivec<S
 
                         ray_packet_t<S> _r = TransformRay(r, tr.inv_xform);
 
-                        simd_fvec<S> _inv_d[3] = { { 1.0f / _r.d[0] }, { 1.0f / _r.d[1] }, { 1.0f / _r.d[2] } };
+                        simd_fvec<S> _inv_d[3];
+                        safe_invert(_r.d, _inv_d);
 
                         res |= Traverse_MicroTree_CPU(_r, bbox_mask, _inv_d, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter);
                     }

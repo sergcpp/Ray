@@ -6,7 +6,7 @@
 
 namespace ray {
 namespace ref2 {
-class Renderer : public RendererSIMD<1, 1> {
+class Renderer : public RendererSIMD<4, 4> {
 public:
     Renderer(int w, int h) : RendererSIMD(w, h) {}
 
