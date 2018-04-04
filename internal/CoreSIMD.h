@@ -9,15 +9,15 @@
 namespace ray {
 namespace NS {
 
-const int ray_packet_pattern_x[] = { 0, 1, 0, 1,
-                                     2, 3, 2, 3,
-                                     0, 1, 0, 1,
-                                     2, 3, 2, 3 };
+const int ray_packet_layout_x[] = { 0, 1, 0, 1,
+                                    2, 3, 2, 3,
+                                    0, 1, 0, 1,
+                                    2, 3, 2, 3 };
 
-const int ray_packet_pattern_y[] = { 0, 0, 1, 1,
-                                     0, 0, 1, 1,
-                                     2, 2, 3, 3,
-                                     2, 2, 3, 3 };
+const int ray_packet_layout_y[] = { 0, 0, 1, 1,
+                                    0, 0, 1, 1,
+                                    2, 2, 3, 3,
+                                    2, 2, 3, 3 };
 
 template <int S>
 struct ray_packet_t {
@@ -284,8 +284,8 @@ void ray::NS::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, i
     simd_fvec<S> off_x, off_y;
 
     for (int i = 0; i < S; i++) {
-        off_x[i] = (float)ray_packet_pattern_x[i];
-        off_y[i] = (float)ray_packet_pattern_y[i];
+        off_x[i] = (float)ray_packet_layout_x[i];
+        off_y[i] = (float)ray_packet_layout_y[i];
     }
 
     size_t i = 0;

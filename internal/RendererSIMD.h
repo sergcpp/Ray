@@ -136,7 +136,7 @@ void ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
         for (int j = 0; j < S; j++) {
             if (ii.mask[j]) {
                 const pixel_color_t col1 = color_table_[ii.prim_index[j] & col_table_mask];
-                framebuf_.SetPixel(x + NS::ray_packet_pattern_x[j], y + NS::ray_packet_pattern_y[j], col1);
+                framebuf_.SetPixel(x + NS::ray_packet_layout_x[j], y + NS::ray_packet_layout_y[j], col1);
             }
         }
     }
