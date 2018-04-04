@@ -42,7 +42,7 @@ const uint8_t TRI_W_BITS = 0b00000011;
 const uint8_t TRI_AXIS_ALIGNED_BIT = 0b00000100;
 
 const float HIT_BIAS = 0.001f;
-const float HIT_EPS = 0.0001f;
+const float HIT_EPS = 0.000001f;
 const float FLT_EPS = 0.0000001f;
 
 struct cone_accel_t {
