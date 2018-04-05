@@ -6,7 +6,11 @@
 
 namespace ray {
 namespace ref2 {
-class Renderer : public RendererSIMD<4, 4> {
+const int RayPacketDimX = 4;
+const int RayPacketDimY = 4;
+const int RayPacketSize = RayPacketDimX * RayPacketDimY;
+
+class Renderer : public RendererSIMD<RayPacketDimX, RayPacketDimY> {
 public:
     Renderer(int w, int h) : RendererSIMD(w, h) {}
 

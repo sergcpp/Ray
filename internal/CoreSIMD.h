@@ -53,6 +53,13 @@ struct hit_data_t {
     static const size_t alignment = alignof(simd_fvec16);
 };
 
+struct environment_t {
+    float sun_dir[3];
+    float sun_col[3];
+    float sky_col[3];
+    float sun_softness;
+};
+
 // Generating rays
 template <int DimX, int DimY>
 void ConstructRayPacket(const float *o, const float *d, int size, ray_packet_t<DimX * DimY> &out_r);
@@ -79,6 +86,14 @@ bool Traverse_MicroTree_CPU(const ray_packet_t<S> &r, const simd_ivec<S> &ray_ma
 // Transform
 template <int S>
 ray_packet_t<S> TransformRay(const ray_packet_t<S> &r, const float *xform);
+
+// Shade
+template <int S>
+void ShadeSurface(const int index, const int iteration, const float *halton, const hit_data_t<S> &inter, const ray_packet_t<S> &ray,
+                  const environment_t &env, const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
+                  const mesh_t *meshes, const transform_t *transforms, const uint32_t *vtx_indices, const vertex_t *vertices,
+                  const bvh_node_t *nodes, uint32_t node_index, const tri_accel_t *tris, const uint32_t *tri_indices,
+                  const material_t *materials, const texture_t *textures, const ray::ref::TextureAtlas &tex_atlas, simd_fvec<S> out_rgba[4], ray_packet_t<S> *out_secondary_rays, int *out_secondary_rays_count);
 }
 }
 
@@ -588,7 +603,7 @@ bool ray::NS::Traverse_MicroTree_CPU(const ray_packet_t<S> &r, const simd_ivec<S
 }
 
 template <int S>
-ray::NS::ray_packet_t<S> ray::NS::TransformRay(const ray_packet_t<S> &r, const float *xform) {
+force_inline ray::NS::ray_packet_t<S> ray::NS::TransformRay(const ray_packet_t<S> &r, const float *xform) {
     ray_packet_t<S> _r = r;
 
     _r.o[0] = r.o[0] * xform[0] + r.o[1] * xform[4] + r.o[2] * xform[8] + xform[12];
@@ -600,4 +615,13 @@ ray::NS::ray_packet_t<S> ray::NS::TransformRay(const ray_packet_t<S> &r, const f
     _r.d[2] = r.d[0] * xform[2] + r.d[1] * xform[6] + r.d[2] * xform[10];
 
     return _r;
+}
+
+template <int S>
+void ray::NS::ShadeSurface(const int index, const int iteration, const float *halton, const hit_data_t<S> &inter, const ray_packet_t<S> &ray,
+                           const environment_t &env, const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
+                           const mesh_t *meshes, const transform_t *transforms, const uint32_t *vtx_indices, const vertex_t *vertices,
+                           const bvh_node_t *nodes, uint32_t node_index, const tri_accel_t *tris, const uint32_t *tri_indices,
+                           const material_t *materials, const texture_t *textures, const ray::ref::TextureAtlas &tex_atlas, simd_fvec<S> out_rgba[4], ray_packet_t<S> *out_secondary_rays, int *out_secondary_rays_count) {
+
 }

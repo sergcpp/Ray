@@ -1,6 +1,8 @@
 
 #include <cstring>
 
+// Used to force loop unroll in release mode
+
 #define ITERATE(n, exp)  \
     if (n <= 16) {                              \
         switch (n) {                            \

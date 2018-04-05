@@ -36,7 +36,7 @@ public:
         if (S > 8) {
             vec_[1] = _mm256_setr_ps(_tail[7], _tail[8], _tail[9], _tail[10], _tail[11], _tail[12], _tail[13], _tail[14]);
         }
-        
+
         for (int i = 15; i < S - 1; i += 8) {
             vec_[(i + 1) / 8] = _mm256_setr_ps(_tail[i], _tail[i + 1], _tail[i + 2], _tail[i + 3], _tail[i + 4], _tail[i + 5], _tail[i + 6], _tail[i + 7]);
         }
@@ -148,7 +148,7 @@ public:
         return temp;
     }
 
-    friend force_inline static simd_vec<float, S> operator&(const simd_vec<float, S> &v1, const simd_vec<float, S> &v2) {
+    friend force_inline simd_vec<float, S> operator&(const simd_vec<float, S> &v1, const simd_vec<float, S> &v2) {
         simd_vec<float, S> temp;
         ITERATE(S/8, { temp.vec_[i] = _mm256_and_ps(v1.vec_[i], v2.vec_[i]); })
         return temp;
@@ -160,7 +160,7 @@ public:
         return temp;
     }
 
-    friend force_inline static simd_vec<float, S> operator^(const simd_vec<float, S> &v1, const simd_vec<float, S> &v2) {
+    friend force_inline simd_vec<float, S> operator^(const simd_vec<float, S> &v1, const simd_vec<float, S> &v2) {
         simd_vec<float, S> temp;
         ITERATE(S/8, { temp.vec_[i] = _mm256_xor_ps(v1.vec_[i], v2.vec_[i]); })
         return temp;
@@ -321,13 +321,13 @@ public:
     force_inline simd_vec(const int *f) {
         ITERATE(S/8, {
             vec_[i] = _mm256_loadu_si256((const __m256i *)f);
-            f += 4;
+            f += 8;
         })
     }
     force_inline simd_vec(const int *f, simd_mem_aligned_tag) {
         ITERATE(S/8, {
             vec_[i] = _mm256_load_si256((const __m256i *)f);
-            f += 4;
+            f += 8;
         })
     }
 
