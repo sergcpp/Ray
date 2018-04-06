@@ -9,7 +9,7 @@
 namespace ray {
 namespace avx2 {
 const int RayPacketDimX = 4;
-const int RayPacketDimY = 4;
+const int RayPacketDimY = 2;
 const int RayPacketSize = RayPacketDimX * RayPacketDimY;
 
 class Renderer : public RendererSIMD<RayPacketDimX, RayPacketDimY> {

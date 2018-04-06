@@ -7,25 +7,27 @@ namespace ray {
 namespace NS {
 template <int DimX, int DimY>
 class RendererSIMD : public RendererBase {
-    ray::ref::Framebuffer framebuf_;
+    ray::ref::Framebuffer clean_buf_, final_buf_, temp_buf_;
 
     std::vector<pixel_color_t> color_table_;
 public:
     RendererSIMD(int w, int h);
 
     std::pair<int, int> size() const override {
-        return std::make_pair(framebuf_.w(), framebuf_.h());
+        return std::make_pair(final_buf_.w(), final_buf_.h());
     }
 
     const pixel_color_t *get_pixels_ref() const override {
-        return framebuf_.get_pixels_ref();
+        return final_buf_.get_pixels_ref();
     }
 
     void Resize(int w, int h) override {
-        framebuf_.Resize(w, h);
+        clean_buf_.Resize(w, h);
+        final_buf_.Resize(w, h);
+        temp_buf_.Resize(w, h);
     }
     void Clear(const pixel_color_t &c) override {
-        framebuf_.Clear(c);
+        clean_buf_.Clear(c);
     }
 
     std::shared_ptr<SceneBase> CreateScene() override;
@@ -45,7 +47,7 @@ public:
 #include <math/math.hpp>
 
 template <int DimX, int DimY>
-ray::NS::RendererSIMD<DimX, DimY>::RendererSIMD(int w, int h) : framebuf_(w, h) {
+ray::NS::RendererSIMD<DimX, DimY>::RendererSIMD(int w, int h) : clean_buf_(w, h), final_buf_(w, h), temp_buf_(w, h) {
     auto u_0_to_1 = []() {
         return float(rand()) / RAND_MAX;
     };
@@ -94,7 +96,28 @@ void ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
     const auto num_mi_indices = (uint32_t)s->mi_indices_.size();
     const auto *mi_indices = num_mi_indices ? &s->mi_indices_[0] : nullptr;
 
-    const int w = framebuf_.w(), h = framebuf_.h();
+    const auto num_vertices = (uint32_t)s->vertices_.size();
+    const auto *vertices = num_vertices ? &s->vertices_[0] : nullptr;
+
+    const auto num_vtx_indices = (uint32_t)s->vtx_indices_.size();
+    const auto *vtx_indices = num_vtx_indices ? &s->vtx_indices_[0] : nullptr;
+
+    const auto num_textures = (uint32_t)s->textures_.size();
+    const auto *textures = num_textures ? &s->textures_[0] : nullptr;
+
+    const auto num_materials = (uint32_t)s->materials_.size();
+    const auto *materials = num_materials ? &s->materials_[0] : nullptr;
+
+    const auto &tex_atlas = s->texture_atlas_;
+    //const auto &env = s->env_;
+
+    NS::environment_t env;
+    memcpy(&env.sun_dir[0], &s->env_.sun_dir[0], 3 * sizeof(float));
+    memcpy(&env.sun_col[0], &s->env_.sun_col[0], 3 * sizeof(float));
+    memcpy(&env.sky_col[0], &s->env_.sky_col[0], 3 * sizeof(float));
+    env.sun_softness = s->env_.sun_softness;
+
+    const auto w = final_buf_.w(), h = final_buf_.h();
 
     auto rect = region.rect();
     if (rect.w == 0 || rect.h == 0) {
@@ -104,28 +127,24 @@ void ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
     region.iteration++;
 
     math::aligned_vector<ray_packet_t<S>> primary_rays;
-    math::aligned_vector<hit_data_t<S>> intersections;
 
     GeneratePrimaryRays<DimX, DimY>(cam, rect, w, h, primary_rays);
 
-    intersections.reserve(primary_rays.size());
+    math::aligned_vector<hit_data_t<S>> intersections(primary_rays.size());
 
     for (size_t i = 0; i < primary_rays.size(); i++) {
-        hit_data_t<S> inter;
-        inter.x = primary_rays[i].x;
-        inter.y = primary_rays[i].y;
-
         const auto &r = primary_rays[i];
         simd_fvec<S> inv_d[3];
         safe_invert(r.d, inv_d);
 
-        if (NS::Traverse_MacroTree_CPU(r, { -1 }, inv_d, nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, inter)) {
-            intersections.push_back(inter);
-        }
+        intersections[i].x = r.x;
+        intersections[i].y = r.y;
+        NS::Traverse_MacroTree_CPU(r, { -1 }, inv_d, nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, intersections[i]);
     }
 
     const uint32_t col_table_mask = (uint32_t)color_table_.size() - 1;
     for (size_t i = 0; i < intersections.size(); i++) {
+        const auto &r = primary_rays[i];
         const auto &ii = intersections[i];
 
         int x = ii.x;
@@ -133,11 +152,29 @@ void ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
 
         const pixel_color_t col1 = { 0.65f, 0.65f, 0.65f, 1 };
 
-        for (int j = 0; j < S; j++) {
+        /*for (int j = 0; j < S; j++) {
             if (ii.mask[j]) {
                 const pixel_color_t col1 = color_table_[ii.prim_index[j] & col_table_mask];
                 framebuf_.SetPixel(x + NS::ray_packet_layout_x[j], y + NS::ray_packet_layout_y[j], col1);
             }
+        }*/
+
+        simd_fvec<S> out_rgba[4];
+        NS::ShadeSurface<S>((y * w + x), region.iteration, nullptr, ii, r, env, mesh_instances,
+                         mi_indices, meshes, transforms, vtx_indices, vertices, nodes, macro_tree_root,
+                         tris, tri_indices, materials, textures, tex_atlas, out_rgba, nullptr, nullptr);
+
+        for (int j = 0; j < S; j++) {
+            clean_buf_.SetPixel(x + ray_packet_layout_x[j], y + ray_packet_layout_y[j], { out_rgba[0][j], out_rgba[1][j], out_rgba[2][j], out_rgba[3][j] });
         }
     }
+
+    auto clamp_and_gamma_correct = [](const pixel_color_t &p) {
+        auto c = make_vec4(&p.r);
+        c = pow(c, vec4(1.0f / 2.2f));
+        c = clamp(c, 0.0f, 1.0f);
+        return pixel_color_t{ c.r, c.g, c.b, c.a };
+    };
+
+    final_buf_.CopyFrom(clean_buf_, rect, clamp_and_gamma_correct);
 }

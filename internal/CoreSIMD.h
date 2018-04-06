@@ -25,6 +25,8 @@ struct ray_packet_t {
     simd_fvec<S> d[3];
     // origins of rays in packet
     simd_fvec<S> o[3];
+    // color of ray
+    simd_fvec<S> c[3];
     // left top corner coordinates of packet
     int x, y;
 
@@ -278,9 +280,9 @@ void ray::NS::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, i
 
     float k = float(h) / w;
 
-    simd_fvec<S> fwd[3] = { { cam.fwd[0] },{ cam.fwd[1] },{ cam.fwd[2] } },
-        side[3] = { { cam.side[0] },{ cam.side[1] },{ cam.side[2] } },
-        up[3] = { { cam.up[0] * k },{ cam.up[1] * k },{ cam.up[2] * k } };
+    simd_fvec<S> fwd[3] = { { cam.fwd[0] }, { cam.fwd[1] }, { cam.fwd[2] } },
+                 side[3] = { { cam.side[0] }, { cam.side[1] }, { cam.side[2] } },
+                 up[3] = { { cam.up[0] * k }, { cam.up[1] * k }, { cam.up[2] * k } };
 
     auto get_pix_dirs = [&fwd, &side, &up, &ww, &hh](const simd_fvec<S> &x, const simd_fvec<S> &y, simd_fvec<S> d[3]) {
         auto _dx = x / ww - 0.5f;
@@ -321,6 +323,10 @@ void ray::NS::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, i
             out_r.o[2] = { cam.origin[2] };
 
             get_pix_dirs(xx, yy, out_r.d);
+
+            out_r.c[0] = { 1.0f };
+            out_r.c[1] = { 1.0f };
+            out_r.c[2] = { 1.0f };
 
             out_r.x = x;
             out_r.y = y;
@@ -618,10 +624,136 @@ force_inline ray::NS::ray_packet_t<S> ray::NS::TransformRay(const ray_packet_t<S
 }
 
 template <int S>
-void ray::NS::ShadeSurface(const int index, const int iteration, const float *halton, const hit_data_t<S> &inter, const ray_packet_t<S> &ray,
+__declspec(noinline) void ray::NS::ShadeSurface(const int index, const int iteration, const float *halton, const hit_data_t<S> &inter, const ray_packet_t<S> &ray,
                            const environment_t &env, const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
                            const mesh_t *meshes, const transform_t *transforms, const uint32_t *vtx_indices, const vertex_t *vertices,
                            const bvh_node_t *nodes, uint32_t node_index, const tri_accel_t *tris, const uint32_t *tri_indices,
                            const material_t *materials, const texture_t *textures, const ray::ref::TextureAtlas &tex_atlas, simd_fvec<S> out_rgba[4], ray_packet_t<S> *out_secondary_rays, int *out_secondary_rays_count) {
+    out_rgba[3] = { 1.0f };
+    
+    auto ino_hit = inter.mask ^ simd_ivec<S>(-1);
+    auto no_hit = cast<simd_fvec<S>>(ino_hit);
+    
+    where(no_hit, out_rgba[0]) = ray.c[0] * env.sky_col[0];
+    where(no_hit, out_rgba[1]) = ray.c[1] * env.sky_col[1];
+    where(no_hit, out_rgba[2]) = ray.c[2] * env.sky_col[2];
+    
+    if (inter.mask.all_zeros()) return;
 
+    simd_fvec<S> w = simd_fvec<S>{ 1.0f } - inter.u - inter.v;
+
+    simd_fvec<S> n1[3], n2[3], n3[3];
+    simd_fvec<S> u1[2], u2[2], u3[2];
+
+    simd_ivec<S> inter_prim_index = inter.prim_index;
+    where(ino_hit, inter_prim_index) = { 0 };
+
+    for (int i = 0; i < S; i++) {
+        const auto &v1 = vertices[vtx_indices[inter_prim_index[i] * 3 + 0]];
+        const auto &v2 = vertices[vtx_indices[inter_prim_index[i] * 3 + 1]];
+        const auto &v3 = vertices[vtx_indices[inter_prim_index[i] * 3 + 2]];
+
+        n1[0][i] = v1.n[0]; n1[1][i] = v1.n[1]; n1[2][i] = v1.n[2];
+        n2[0][i] = v2.n[0]; n2[1][i] = v2.n[1]; n2[2][i] = v2.n[2];
+        n3[0][i] = v3.n[0]; n3[1][i] = v3.n[1]; n3[2][i] = v3.n[2];
+
+        u1[0][i] = v1.t0[0]; u1[1][i] = v1.t0[1];
+        u2[0][i] = v2.t0[0]; u2[1][i] = v2.t0[1];
+        u3[0][i] = v3.t0[0]; u3[1][i] = v3.t0[1];
+    }
+
+    simd_fvec<S> N[3] = { n1[0] * w + n2[0] * inter.u + n3[0] * inter.v,
+                          n1[1] * w + n2[1] * inter.u + n3[1] * inter.v,
+                          n1[2] * w + n2[2] * inter.u + n3[2] * inter.v };
+
+    simd_fvec<S> uvs[2] = { u1[0] * w + u2[0] * inter.u + u3[0] * inter.v,
+                            u1[1] * w + u2[1] * inter.u + u3[1] * inter.v };
+
+    {
+        simd_ivec<S> ray_queue[S];
+        int index = 0;
+        int num = 1;
+
+        ray_queue[0] = inter.mask;
+
+        while (index != num) {
+            uint32_t first_mi = 0xffffffff;
+            simd_ivec<S> mat_index = { -1 };
+
+            for (int i = 0; i < S; i++) {
+                if (!ray_queue[index][i]) continue;
+
+                const auto &tri = tris[inter.prim_index[i]];
+                mat_index[i] = reinterpret_cast<const int&>(tri.mi);
+                if (first_mi == 0xffffffff)
+                    first_mi = tri.mi;
+            }
+    
+            auto same_mi = mat_index == first_mi;
+            auto diff_mi = and_not(same_mi, ray_queue[index]);
+
+            if (diff_mi.not_all_zeros()) {
+                ray_queue[num] = diff_mi;
+                num++;
+            }
+
+            /////////////////////////////////////////
+
+            const auto *mat = &materials[first_mi];
+
+            for (int i = 0; i < S; i++) {
+                if (!same_mi[i]) continue;
+
+                math::vec2 _uvs = { uvs[0][i], uvs[1][i] };
+                auto albedo = tex_atlas.SampleNearest(textures[mat->textures[MAIN_TEXTURE]], _uvs, 0);
+            
+                const auto &mask = cast<simd_fvec<S>>(same_mi);
+
+                out_rgba[0][i] = albedo.r;
+                out_rgba[1][i] = albedo.g;
+                out_rgba[2][i] = albedo.b;
+            }
+            /////////////////////////////////////////
+
+            index++;
+        }
+
+        /*const auto &hit = cast<simd_fvec<S>>(inter.mask);
+
+        where(hit, out_rgba[0]) = { num * 0.025f };
+        where(hit, out_rgba[1]) = { num * 0.025f };
+        where(hit, out_rgba[2]) = { num * 0.025f };
+
+        return;*/
+
+        return;
+    }
+
+    ////////////////////////////////////////////////////////
+
+    // TODO: compute derivatives
+
+    ////////////////////////////////////////////////////////
+
+    // TODO: sample normal map
+
+    ////////////////////////////////////////////////////////
+
+    // TODO: apply transformation to basis
+
+    //////////////////////////////////////////
+
+    simd_ivec<S> inter_obj_index = inter.obj_index;
+    where(ino_hit, inter_obj_index) = { 0 };
+
+    /*for (int i = 0; i < S; i++) {
+        const auto &tri = tris[inter.prim_indices[i]];
+        const auto *mat = &materials[tri.mi];
+    }*/
+
+    const auto &hit = cast<simd_fvec<S>>(inter.mask);
+
+    where(hit, out_rgba[0]) = { N[0] * 0.5f + 0.5f };
+    where(hit, out_rgba[1]) = { N[1] * 0.5f + 0.5f };
+    where(hit, out_rgba[2]) = { N[2] * 0.5f + 0.5f };
 }

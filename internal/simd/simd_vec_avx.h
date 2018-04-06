@@ -354,6 +354,12 @@ public:
         return *this;
     }
 
+    force_inline simd_vec<int, S> operator==(int rhs) const {
+        simd_vec<int, S> ret;
+        ITERATE(S/8, { ret.vec_[i] = _mm256_cmpeq_epi32(vec_[i], _mm256_set1_epi32(rhs)); })
+        return ret;
+    }
+
     force_inline void copy_to(int *f) const {
         ITERATE(S/8, {
             _mm256_storeu_si256((__m256i *)f, vec_[i]);
@@ -373,13 +379,15 @@ public:
     }
 
     force_inline bool all_zeros() const {
-        ITERATE(S/8, { if (!_mm256_test_all_zeros(vec_[i], vec_[i])) return false; });
-        return true;
+        int res = 1;
+        ITERATE(S/8, { res &= _mm256_test_all_zeros(vec_[i], vec_[i]); })
+        return res != 0;
     }
 
     force_inline bool all_zeros(const simd_vec<int, S> &mask) const {
-        ITERATE(S/8, { if (!_mm256_test_all_zeros(vec_[i], mask.vec_[i])) return false; })
-        return true;
+        int res = 1;
+        ITERATE(S/8, { res &= _mm256_test_all_zeros(vec_[i], mask.vec_[i]); })
+        return res != 0;
     }
 
     force_inline bool not_all_zeros() const {

@@ -4,28 +4,28 @@
 // Used to force loop unroll in release mode
 
 #define ITERATE(n, exp)  \
-    if (n <= 16) {                              \
-        switch (n) {                            \
-        case 16: { const int i = n - 16; exp }  \
-        case 15: { const int i = n - 15; exp }  \
-        case 14: { const int i = n - 14; exp }  \
-        case 13: { const int i = n - 13; exp }  \
-        case 12: { const int i = n - 12; exp }  \
-        case 11: { const int i = n - 11; exp }  \
-        case 10: { const int i = n - 10; exp }  \
-        case 9: { const int i = n - 9; exp }    \
-        case 8: { const int i = n - 8; exp }    \
-        case 7: { const int i = n - 7; exp }    \
-        case 6: { const int i = n - 6; exp }    \
-        case 5: { const int i = n - 5; exp }    \
-        case 4: { const int i = n - 4; exp }    \
-        case 3: { const int i = n - 3; exp }    \
-        case 2: { const int i = n - 2; exp }    \
-        case 1: { const int i = n - 1; exp }    \
-        }                                       \
-    } else                                      \
-    for (int i = 0; i < n; i++) {               \
-        exp                                     \
+    if ((n) <= 16) {                                \
+        switch (n) {                                \
+        case 16: { const int i = (n) - 16; exp }    \
+        case 15: { const int i = (n) - 15; exp }    \
+        case 14: { const int i = (n) - 14; exp }    \
+        case 13: { const int i = (n) - 13; exp }    \
+        case 12: { const int i = (n) - 12; exp }    \
+        case 11: { const int i = (n) - 11; exp }    \
+        case 10: { const int i = (n) - 10; exp }    \
+        case 9: { const int i = (n) - 9; exp }      \
+        case 8: { const int i = (n) - 8; exp }      \
+        case 7: { const int i = (n) - 7; exp }      \
+        case 6: { const int i = (n) - 6; exp }      \
+        case 5: { const int i = (n) - 5; exp }      \
+        case 4: { const int i = (n) - 4; exp }      \
+        case 3: { const int i = (n) - 3; exp }      \
+        case 2: { const int i = (n) - 2; exp }      \
+        case 1: { const int i = (n) - 1; exp }      \
+        }                                           \
+    } else                                          \
+    for (int i = 0; i < (n); i++) {                 \
+        exp                                         \
     }
 
 namespace ray {
@@ -99,6 +99,14 @@ public:
         simd_vec<T, S> temp;
         ITERATE(S, { temp.vec_[i] = -vec_[i]; })
         return temp;
+    }
+
+    force_inline simd_vec<T, S> operator==(T rhs) const {
+        T set, not_set = T(0);
+        memset(&set, 0xFF, sizeof(T));
+        simd_vec<T, S> ret;
+        ITERATE(S, { ret.vec_[i] = vec_[i] < rhs ? set : not_set; })
+        return ret;
     }
 
     force_inline simd_vec<T, S> operator<(const simd_vec<T, S> &rhs) const {

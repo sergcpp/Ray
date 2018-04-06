@@ -355,6 +355,12 @@ public:
         return *this;
     }
 
+    force_inline simd_vec<int, S> operator==(int rhs) const {
+        simd_vec<int, S> ret;
+        ITERATE(S/4, { ret.vec_[i] = _mm_cmpeq_epi32(vec_[i], _mm_set1_epi32(rhs)); })
+        return ret;
+    }
+
     force_inline void copy_to(int *f) const {
         ITERATE(S/4, { _mm_storeu_si128((__m128i *)f, vec_[i]); f += 4; })
     }

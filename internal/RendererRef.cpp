@@ -67,6 +67,7 @@ void ray::ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
     const auto num_materials = (uint32_t)s->materials_.size();
     const auto *materials = num_materials ? &s->materials_[0] : nullptr;
 
+    const auto &tex_atlas = s->texture_atlas_;
     const auto &env = s->env_;
 
     const auto w = final_buf_.w(), h = final_buf_.h();
@@ -105,9 +106,9 @@ void ray::ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
         const int x = inter.id.x;
         const int y = inter.id.y;
         
-        pixel_color_t col = ShadeSurface((y * final_buf_.w() + x), region.iteration, &region.halton_seq[0], inter, r, env, mesh_instances, 
+        pixel_color_t col = ShadeSurface((y * w + x), region.iteration, &region.halton_seq[0], inter, r, env, mesh_instances, 
                                          mi_indices, meshes, transforms, vtx_indices, vertices, nodes, macro_tree_root,
-                                         tris, tri_indices, materials, textures, s->texture_atlas_, &secondary_rays[0], &secondary_rays_count);
+                                         tris, tri_indices, materials, textures, tex_atlas, &secondary_rays[0], &secondary_rays_count);
         temp_buf_.SetPixel(x, y, col);
     }
 
@@ -132,9 +133,9 @@ void ray::ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
             const int x = inter.id.x;
             const int y = inter.id.y;
 
-            pixel_color_t col = ShadeSurface((y * final_buf_.w() + x), region.iteration, &region.halton_seq[0], inter, r, env, mesh_instances,
+            pixel_color_t col = ShadeSurface((y * w + x), region.iteration, &region.halton_seq[0], inter, r, env, mesh_instances,
                                              mi_indices, meshes, transforms, vtx_indices, vertices, nodes, macro_tree_root,
-                                             tris, tri_indices, materials, textures, s->texture_atlas_, &secondary_rays[0], &secondary_rays_count);
+                                             tris, tri_indices, materials, textures, tex_atlas, &secondary_rays[0], &secondary_rays_count);
 
             temp_buf_.AddPixel(x, y, col);
         }
