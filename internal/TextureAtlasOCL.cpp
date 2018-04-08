@@ -15,7 +15,7 @@ int ray::ocl::TextureAtlas::Allocate(const pixel_color8_t *data, const math::ive
     if (res.x > res_.x || res.y > res_.y) return -1;
 
     for (int page = 0; page < pages_count_; page++) {
-        int index = splitters_[page].Allocate(res, pos);
+        int index = splitters_[page].Allocate(value_ptr(res), &pos[0]);
         if (index != -1) {
             cl_int error = queue_.enqueueWriteImage(atlas_, CL_TRUE, { (size_t)pos.x + 1, (size_t)pos.y + 1, (size_t)page }, { (size_t)_res.x, (size_t)_res.y, 1 }, 0, 0, data);
             if (error != CL_SUCCESS) return -1;
@@ -59,7 +59,7 @@ int ray::ocl::TextureAtlas::Allocate(const pixel_color8_t *data, const math::ive
 bool ray::ocl::TextureAtlas::Free(int page, const math::ivec2 &pos) {
     if (page < 0 || page > pages_count_) return false;
     // TODO: fill with black in debug
-    return splitters_[page].Free(pos);
+    return splitters_[page].Free(value_ptr(pos));
 }
 
 bool ray::ocl::TextureAtlas::Resize(int pages_count) {
@@ -80,7 +80,7 @@ bool ray::ocl::TextureAtlas::Resize(int pages_count) {
 
     atlas_ = std::move(new_atlas);
 
-	splitters_.resize(pages_count, TextureSplitter{ res_ });
+	splitters_.resize(pages_count, TextureSplitter{ value_ptr(res_) });
     pages_count_ = pages_count;
 
     return true;

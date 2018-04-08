@@ -8,14 +8,6 @@
 #include <math/math.hpp>
 
 ray::ref::Renderer::Renderer(int w, int h) : clean_buf_(w, h), final_buf_(w, h), temp_buf_(w, h) {
-    auto u_0_to_1 = []() {
-        return float(rand()) / RAND_MAX;
-    };
-
-    for (int i = 0; i < 64; i++) {
-        color_table_.push_back({ u_0_to_1(), u_0_to_1(), u_0_to_1(), 1 });
-    }
-
     auto rand_func = std::bind(std::uniform_int_distribution<int>(), std::mt19937(0));
     permutations_ = ray::ComputeRadicalInversePermutations(g_primes, PrimesCount, rand_func);
 }
@@ -90,10 +82,9 @@ void ray::ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
 
     for (size_t i = 0; i < primary_rays.size(); i++) {
         const ray_packet_t &r = primary_rays[i];
-        auto inv_d = safe_invert(make_vec3(r.d));
 
         intersections[i].id = r.id;
-        Traverse_MacroTree_CPU(r, value_ptr(inv_d), nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, intersections[i]);
+        Traverse_MacroTree_CPU(r, nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, intersections[i]);
     }
 
     aligned_vector<ray_packet_t> secondary_rays(intersections.size());
@@ -115,11 +106,10 @@ void ray::ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
     for (int bounce = 0; bounce < 4 && secondary_rays_count; bounce++) {
         for (int i = 0; i < secondary_rays_count; i++) {
             const auto &r = secondary_rays[i];
-            auto inv_d = safe_invert(make_vec3(r.d));
 
             intersections[i] = {};
             intersections[i].id = r.id;
-            Traverse_MacroTree_CPU(r, value_ptr(inv_d), nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, intersections[i]);
+            Traverse_MacroTree_CPU(r, nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, intersections[i]);
         }
 
         int rays_count = secondary_rays_count;

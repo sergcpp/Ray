@@ -20,7 +20,7 @@ int ray::ref::TextureAtlas::Allocate(const pixel_color8_t *data, const math::ive
     };
 
     for (int page_index = 0; page_index < pages_count_; page_index++) {
-        int index = splitters_[page_index].Allocate(res, pos);
+        int index = splitters_[page_index].Allocate(value_ptr(res), &pos[0]);
         if (index != -1) {
             auto &page = pages_[page_index];
 
@@ -60,7 +60,7 @@ bool ray::ref::TextureAtlas::Free(int page, const math::ivec2 &pos) {
     if (page < 0 || page > pages_count_) return false;
 #ifndef NDEBUG
     math::ivec2 size;
-    int index = splitters_[page].FindNode(pos, size);
+    int index = splitters_[page].FindNode(math::value_ptr(pos), &size[0]);
     if (index != -1) {
         for (int j = pos.y; j < pos.y + size.y; j++) {
             memset(&pages_[page][j * res_.x + pos.x], 0, size.x * sizeof(pixel_color8_t));
@@ -70,7 +70,7 @@ bool ray::ref::TextureAtlas::Free(int page, const math::ivec2 &pos) {
         return false;
     }
 #else
-    return splitters_[page].Free(pos);
+    return splitters_[page].Free(value_ptr(pos));
 #endif
 }
 
@@ -85,7 +85,7 @@ bool ray::ref::TextureAtlas::Resize(int pages_count) {
         p.resize(res_.x * res_.y, { 0, 0, 0, 0 });
     }
 
-    splitters_.resize(pages_count, TextureSplitter{ res_ });
+    splitters_.resize(pages_count, TextureSplitter{ value_ptr(res_) });
 
     pages_count_ = pages_count;
 

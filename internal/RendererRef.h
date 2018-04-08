@@ -9,8 +9,6 @@ namespace ref {
 class Renderer : public RendererBase {
     ray::ref::Framebuffer clean_buf_, final_buf_, temp_buf_;
 
-    std::vector<pixel_color_t> color_table_;
-
     std::vector<uint16_t> permutations_;
     void UpdateHaltonSequence(int iteration, std::unique_ptr<float[]> &seq);
 public:

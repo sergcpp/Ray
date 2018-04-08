@@ -339,8 +339,18 @@ public:
         return *this;
     }
 
+    force_inline simd_vec<int, S> &operator+=(int rhs) {
+        ITERATE(S/8, { vec_[i] = _mm256_add_epi32(vec_[i], _mm256_set1_epi32(rhs)); })
+        return *this;
+    }
+
     force_inline simd_vec<int, S> &operator-=(const simd_vec<int, S> &rhs) {
         ITERATE(S/8, { vec_[i] = _mm256_sub_epi32(vec_[i], rhs.vec_[i]); })
+        return *this;
+    }
+
+    force_inline simd_vec<int, S> &operator-=(int rhs) {
+        ITERATE(S/8, { vec_[i] = _mm256_sub_epi32(vec_[i], _mm256_set1_epi32(rhs)); })
         return *this;
     }
 
@@ -349,8 +359,18 @@ public:
         return *this;
     }
 
+    force_inline simd_vec<int, S> &operator*=(int rhs) {
+        ITERATE(S, { comp_[i] = comp_[i] * rhs; })
+        return *this;
+    }
+
     force_inline simd_vec<int, S> &operator/=(const simd_vec<int, S> &rhs) {
         ITERATE(S, { comp_[i] = comp_[i] / rhs.comp_[i]; })
+        return *this;
+    }
+
+    force_inline simd_vec<int, S> &operator/=(int rhs) {
+        ITERATE(S, { comp_[i] = comp_[i] / rhs; })
         return *this;
     }
 
@@ -428,6 +448,84 @@ public:
     friend force_inline simd_vec<int, S> operator^(const simd_vec<int, S> &v1, const simd_vec<int, S> &v2) {
         simd_vec<int, S> temp;
         ITERATE(S/8, { temp.vec_[i] = _mm256_xor_si256(v1.vec_[i], v2.vec_[i]); });
+        return temp;
+    }
+
+    friend force_inline simd_vec<int, S> operator+(const simd_vec<int, S> &v1, const simd_vec<int, S> &v2) {
+        simd_vec<int, S> temp;
+        ITERATE(S/8, { temp.vec_[i] = _mm256_add_epi32(v1.vec_[i], v2.vec_[i]); })
+        return temp;
+    }
+
+    friend force_inline simd_vec<int, S> operator-(const simd_vec<int, S> &v1, const simd_vec<int, S> &v2) {
+        simd_vec<int, S> temp;
+        ITERATE(S/8, { temp.vec_[i] = _mm256_sub_epi32(v1.vec_[i], v2.vec_[i]); })
+        return temp;
+    }
+
+    friend force_inline simd_vec<int, S> operator*(const simd_vec<int, S> &v1, const simd_vec<int, S> &v2) {
+        simd_vec<int, S> temp;
+        ITERATE(S, { temp.comp_[i] = v1.comp_[i] * v2.comp_[i]; })
+        return temp;
+    }
+
+    friend force_inline simd_vec<int, S> operator/(const simd_vec<int, S> &v1, const simd_vec<int, S> &v2) {
+        simd_vec<int, S> temp;
+        ITERATE(S/8, { temp.comp_[i] = v1.vec_[i] / v2.vec_[i]; })
+        return temp;
+    }
+
+    friend force_inline simd_vec<int, S> operator+(const simd_vec<int, S> &v1, int v2) {
+        simd_vec<int, S> temp;
+        ITERATE(S/8, { temp.vec_[i] = _mm256_add_epi32(v1.vec_[i], _mm256_set1_epi32(v2)); })
+        return temp;
+    }
+
+    friend force_inline simd_vec<int, S> operator-(const simd_vec<int, S> &v1, int v2) {
+        simd_vec<int, S> temp;
+        ITERATE(S/8, { temp.vec_[i] = _mm256_sub_epi32(v1.vec_[i], _mm256_set1_epi32(v2)); })
+        return temp;
+    }
+
+    friend force_inline simd_vec<int, S> operator*(const simd_vec<int, S> &v1, int v2) {
+        simd_vec<int, S> temp;
+        ITERATE(S, { temp.comp_[i] = v1.comp_[i] * v2; })
+        return temp;
+    }
+
+    friend force_inline simd_vec<int, S> operator/(const simd_vec<int, S> &v1, int v2) {
+        simd_vec<int, S> temp;
+        ITERATE(S, { temp.comp_[i] = v1.comp_[i] / v2; })
+        return temp;
+    }
+
+    friend force_inline simd_vec<int, S> operator+(int v1, const simd_vec<int, S> &v2) {
+        simd_vec<int, S> temp;
+        ITERATE(S/8, { temp.vec_[i] = _mm256_add_epi32(_mm256_set1_epi32(v1), v2.vec_[i]); })
+        return temp;
+    }
+
+    friend force_inline simd_vec<int, S> operator-(int v1, const simd_vec<int, S> &v2) {
+        simd_vec<int, S> temp;
+        ITERATE(S/8, { temp.vec_[i] = _mm256_sub_epi32(_mm256_set1_epi32(v1), v2.vec_[i]); })
+        return temp;
+    }
+
+    friend force_inline simd_vec<int, S> operator*(int v1, const simd_vec<int, S> &v2) {
+        simd_vec<int, S> temp;
+        ITERATE(S, { temp.comp_[i] = v1 * v2.comp_[i]; })
+        return temp;
+    }
+
+    friend force_inline simd_vec<int, S> operator/(int v1, const simd_vec<int, S> &v2) {
+        simd_vec<int, S> temp;
+        ITERATE(S, { temp.comp_[i] = v1 / v2.comp_[i]; })
+        return temp;
+    }
+
+    friend force_inline simd_vec<int, S> operator>>(const simd_vec<int, S> &v1, int v2) {
+        simd_vec<int, S> temp;
+        ITERATE(S/8, { temp.vec_[i] = _mm256_srli_epi32(v1.vec_[i], v2); })
         return temp;
     }
 

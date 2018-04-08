@@ -105,7 +105,7 @@ public:
         T set, not_set = T(0);
         memset(&set, 0xFF, sizeof(T));
         simd_vec<T, S> ret;
-        ITERATE(S, { ret.vec_[i] = vec_[i] < rhs ? set : not_set; })
+        ITERATE(S, { ret.vec_[i] = vec_[i] == rhs ? set : not_set; })
         return ret;
     }
 
@@ -354,6 +354,12 @@ public:
         return ret;
     }
 
+    friend force_inline simd_vec<T, S> operator>>(const simd_vec<T, S> &v1, T v2) {
+        simd_vec<T, S> ret;
+        ITERATE(S, { ret.vec_[i] = v1.vec_[i] >> v2; })
+        return ret;
+    }
+
     static const size_t alignment = 1;
 
     static int size() { return S; }
@@ -395,12 +401,14 @@ force_inline simd_vec_where_helper<T, S> where(const simd_vec<T, S> &mask, simd_
 
 template <int S>
 using simd_fvec = simd_vec<float, S>;
+using simd_fvec2 = simd_fvec<2>;
 using simd_fvec4 = simd_fvec<4>;
 using simd_fvec8 = simd_fvec<8>;
 using simd_fvec16 = simd_fvec<16>;
 
 template <int S>
 using simd_ivec = simd_vec<int, S>;
+using simd_ivec2 = simd_ivec<2>;
 using simd_ivec4 = simd_ivec<4>;
 using simd_ivec8 = simd_ivec<8>;
 using simd_ivec16 = simd_ivec<16>;

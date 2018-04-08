@@ -233,6 +233,13 @@ struct TraversalState {
         }
     }
 };
+
+force_inline void safe_invert(const __m256 v[3], __m256 out_v[3]) {
+    out_v[0] = _mm256_div_ps(ONE, v[0]);
+    out_v[1] = _mm256_div_ps(ONE, v[1]);
+    out_v[2] = _mm256_div_ps(ONE, v[2]);
+}
+
 }
 }
 
@@ -609,10 +616,13 @@ bool ray::avx::IntersectBoxes(const ray_packet_t &r, const aabox_t *boxes, uint3
     return !_mm256_test_all_zeros(inter.mask, FF_MASK);
 }
 
-bool ray::avx::Traverse_MacroTree_CPU(const ray_packet_t &r, const __m256i ray_mask, const __m256 inv_d[3], const bvh_node_t *nodes, uint32_t node_index,
+bool ray::avx::Traverse_MacroTree_CPU(const ray_packet_t &r, const __m256i ray_mask, const bvh_node_t *nodes, uint32_t node_index,
                                       const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
                                       const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t &inter) {
     bool res = false;
+
+    __m256 inv_d[3];
+    safe_invert(r.d, inv_d);
 
     TraversalState st;
 
@@ -673,9 +683,7 @@ bool ray::avx::Traverse_MacroTree_CPU(const ray_packet_t &r, const __m256i ray_m
 
                         ray_packet_t _r = TransformRay(r, tr.inv_xform);
 
-                        __m256 _inv_d[3] = { _mm256_div_ps(ONE, _r.d[0]), _mm256_div_ps(ONE, _r.d[1]), _mm256_div_ps(ONE, _r.d[2]) };
-
-                        res |= Traverse_MicroTree_CPU(_r, bbox_mask, _inv_d, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter);
+                        res |= Traverse_MicroTree_CPU(_r, bbox_mask, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter);
                     }
 
                     cur = nodes[cur].parent;
@@ -716,9 +724,7 @@ bool ray::avx::Traverse_MacroTree_CPU(const ray_packet_t &r, const __m256i ray_m
 
                         ray_packet_t _r = TransformRay(r, tr.inv_xform);
 
-                        __m256 _inv_d[3] = { _mm256_div_ps(ONE, _r.d[0]), _mm256_div_ps(ONE, _r.d[1]), _mm256_div_ps(ONE, _r.d[2]) };
-
-                        res |= Traverse_MicroTree_CPU(_r, bbox_mask, _inv_d, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter);
+                        res |= Traverse_MicroTree_CPU(_r, bbox_mask, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter);
                     }
 
                     cur = nodes[cur].sibling;
@@ -735,9 +741,12 @@ bool ray::avx::Traverse_MacroTree_CPU(const ray_packet_t &r, const __m256i ray_m
     return res;
 }
 
-bool ray::avx::Traverse_MicroTree_CPU(const ray_packet_t &r, const __m256i ray_mask, const __m256 inv_d[3], const bvh_node_t *nodes, uint32_t node_index,
+bool ray::avx::Traverse_MicroTree_CPU(const ray_packet_t &r, const __m256i ray_mask, const bvh_node_t *nodes, uint32_t node_index,
                                       const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, hit_data_t &inter) {
     bool ret = false;
+
+    __m256 inv_d[3];
+    safe_invert(r.d, inv_d);
 
     TraversalState st;
 

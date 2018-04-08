@@ -86,28 +86,28 @@ force_inline int hash(int x) {
     return x;
 }
 
-force_inline math::vec3 safe_invert(const math::vec3 &v) {
-    math::vec3 inv_v = 1.0f / v;
+force_inline void safe_invert(const float v[3], float out_v[3]) {
+    out_v[0] = 1.0f / v[0];
+    out_v[1] = 1.0f / v[1];
+    out_v[2] = 1.0f / v[2];
 
-    if (v.x <= FLT_EPS && v.x >= 0) {
-        inv_v.x = std::numeric_limits<float>::max();
-    } else if (v.x >= -FLT_EPS && v.x < 0) {
-        inv_v.x = -std::numeric_limits<float>::max();
+    if (v[0] <= FLT_EPS && v[0] >= 0) {
+        out_v[0] = std::numeric_limits<float>::max();
+    } else if (v[0] >= -FLT_EPS && v[0] < 0) {
+        out_v[0] = -std::numeric_limits<float>::max();
     }
 
-    if (v.y <= FLT_EPS && v.y >= 0) {
-        inv_v.y = std::numeric_limits<float>::max();
-    } else if (v.y >= -FLT_EPS && v.y < 0) {
-        inv_v.y = -std::numeric_limits<float>::max();
+    if (v[1] <= FLT_EPS && v[1] >= 0) {
+        out_v[1] = std::numeric_limits<float>::max();
+    } else if (v[1] >= -FLT_EPS && v[1] < 0) {
+        out_v[1] = -std::numeric_limits<float>::max();
     }
 
-    if (v.z <= FLT_EPS && v.z >= 0) {
-        inv_v.z = std::numeric_limits<float>::max();
-    } else if (v.z >= -FLT_EPS && v.z < 0) {
-        inv_v.z = -std::numeric_limits<float>::max();
+    if (v[2] <= FLT_EPS && v[2] >= 0) {
+        out_v[2] = std::numeric_limits<float>::max();
+    } else if (v[2] >= -FLT_EPS && v[2] < 0) {
+        out_v[2] = -std::numeric_limits<float>::max();
     }
-
-    return inv_v;
 }
 
 }
@@ -297,10 +297,13 @@ bool ray::ref::IntersectBoxes(const ray_packet_t &r, const aabox_t *boxes, int n
     return inter.mask_values[0] != 0;
 }
 
-bool ray::ref::Traverse_MacroTree_CPU(const ray_packet_t &r, const float inv_d[3], const bvh_node_t *nodes, uint32_t root_index,
+bool ray::ref::Traverse_MacroTree_CPU(const ray_packet_t &r, const bvh_node_t *nodes, uint32_t root_index,
                                       const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
                                       const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t &inter) {
     bool res = false;
+
+    float inv_d[3];
+    safe_invert(r.d, inv_d);
 
     uint32_t cur = root_index;
     eTraversalSource src = FromSibling;
@@ -337,9 +340,10 @@ bool ray::ref::Traverse_MacroTree_CPU(const ray_packet_t &r, const float inv_d[3
 
                     ray_packet_t _r = TransformRay(r, tr.inv_xform);
 
-                    math::vec3 _inv_d = safe_invert(math::make_vec3(_r.d));
+                    float _inv_d[3];
+                    safe_invert(_r.d, _inv_d);
 
-                    res |= Traverse_MicroTree_CPU(_r, math::value_ptr(_inv_d), nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter);
+                    res |= Traverse_MicroTree_CPU(_r, _inv_d, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter);
                 }
 
                 cur = nodes[cur].parent;
@@ -364,9 +368,10 @@ bool ray::ref::Traverse_MacroTree_CPU(const ray_packet_t &r, const float inv_d[3
 
                     ray_packet_t _r = TransformRay(r, tr.inv_xform);
 
-                    math::vec3 _inv_d = safe_invert(math::make_vec3(_r.d));
+                    float _inv_d[3];
+                    safe_invert(_r.d, _inv_d);
 
-                    res |= Traverse_MicroTree_CPU(_r, math::value_ptr(_inv_d), nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter);
+                    res |= Traverse_MicroTree_CPU(_r, _inv_d, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter);
                 }
 
                 cur = nodes[cur].sibling;
@@ -382,10 +387,13 @@ bool ray::ref::Traverse_MacroTree_CPU(const ray_packet_t &r, const float inv_d[3
     return res;
 }
 
-bool ray::ref::Traverse_MacroTree_GPU(const ray_packet_t &r, const float inv_d[3], const bvh_node_t *nodes, uint32_t root_index,
+bool ray::ref::Traverse_MacroTree_GPU(const ray_packet_t &r, const bvh_node_t *nodes, uint32_t root_index,
                                       const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
                                       const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t &inter) {
     bool res = false;
+
+    float inv_d[3];
+    safe_invert(r.d, inv_d);
 
     uint32_t cur = root_index;
     uint32_t last = root_index;
@@ -754,9 +762,8 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
             memcpy(&r.o[0], value_ptr(P + HIT_BIAS * N), 3 * sizeof(float));
             memcpy(&r.d[0], value_ptr(V), 3 * sizeof(float));
 
-            vec3 inv_d = safe_invert(make_vec3(r.d));
             hit_data_t inter;
-            Traverse_MacroTree_CPU(r, value_ptr(inv_d), nodes, node_index, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, inter);
+            Traverse_MacroTree_CPU(r, nodes, node_index, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, inter);
             if (inter.mask_values[0] == 0xffffffff) {
                 v = 0;
             }

@@ -1,14 +1,15 @@
 #include "TextureSplitter.h"
 
-int ray::TextureSplitter::Allocate(const math::ivec2 &res, math::ivec2 &pos) {
+int ray::TextureSplitter::Allocate(const int res[2], int pos[2]) {
     int i = Insert_Recursive(0, res);
     if (i != -1) {
-        pos = nodes_[i].pos;
+        pos[0] = nodes_[i].pos[0];
+        pos[1] = nodes_[i].pos[1];
     }
     return i;
 }
 
-bool ray::TextureSplitter::Free(const math::ivec2 &pos) {
+bool ray::TextureSplitter::Free(const int pos[2]) {
     int i = Find_Recursive(0, pos);
     return Free(i);
 }
@@ -38,16 +39,17 @@ bool ray::TextureSplitter::Free(int i) {
     return true;
 }
 
-int ray::TextureSplitter::FindNode(const math::ivec2 &pos, math::ivec2 &size) const {
+int ray::TextureSplitter::FindNode(const int pos[2], int size[2]) const {
     int i = Find_Recursive(0, pos);
     if (i != -1) {
-        size = nodes_[i].size;
+        size[0] = nodes_[i].size[0];
+        size[1] = nodes_[i].size[1];
     }
     return i;
 }
 
-int ray::TextureSplitter::Insert_Recursive(int i, const math::ivec2 &res) {
-    if (!nodes_[i].is_free || res.x > nodes_[i].size.x || res.y > nodes_[i].size.y) {
+int ray::TextureSplitter::Insert_Recursive(int i, const int res[2]) {
+    if (!nodes_[i].is_free || res[0] > nodes_[i].size[0] || res[1] > nodes_[i].size[1]) {
         return -1;
     }
 
@@ -59,7 +61,7 @@ int ray::TextureSplitter::Insert_Recursive(int i, const math::ivec2 &res) {
 
         return Insert_Recursive(ch1, res);
     } else {
-        if (res.x == nodes_[i].size.x && res.y == nodes_[i].size.y) {
+        if (res[0] == nodes_[i].size[0] && res[1] == nodes_[i].size[1]) {
             nodes_[i].is_free = false;
             return i;
         }
@@ -71,19 +73,23 @@ int ray::TextureSplitter::Insert_Recursive(int i, const math::ivec2 &res) {
 
         auto &n = nodes_[i];
 
-        int dw = n.size.x - res.x;
-        int dh = n.size.y - res.y;
+        int dw = n.size[0] - res[0];
+        int dh = n.size[1] - res[1];
 
         if (dw > dh) {
-            nodes_[ch0].pos = n.pos;
-            nodes_[ch0].size = { res.x, n.size.y };
-            nodes_[ch1].pos = { n.pos.x + res.x, n.pos.y };
-            nodes_[ch1].size = { n.size.x - res.x, n.size.y };
+            nodes_[ch0].pos[0] = n.pos[0];  nodes_[ch0].pos[1] = n.pos[1];
+            nodes_[ch0].size[0] = res[0];   nodes_[ch0].size[1] = n.size[1];
+            nodes_[ch1].pos[0] = n.pos[0] + res[0];
+            nodes_[ch1].pos[1] = n.pos[1];
+            nodes_[ch1].size[0] = n.size[0] - res[0];
+            nodes_[ch1].size[1] = n.size[1];
         } else {
-            nodes_[ch0].pos = n.pos;
-            nodes_[ch0].size = { n.size.x, res.y };
-            nodes_[ch1].pos = { n.pos.x, n.pos.y + res.y };
-            nodes_[ch1].size = { n.size.x, n.size.y - res.y };
+            nodes_[ch0].pos[0] = n.pos[0];  nodes_[ch0].pos[1] = n.pos[1];
+            nodes_[ch0].size[0] = n.size[0]; nodes_[ch0].size[1] = res[1];
+            nodes_[ch1].pos[0] = n.pos[0];
+            nodes_[ch1].pos[1] = n.pos[1] + res[1];
+            nodes_[ch1].size[0] = n.size[0];
+            nodes_[ch1].size[1] = n.size[1] - res[1];
         }
 
         nodes_[ch0].parent = nodes_[ch1].parent = i;
@@ -92,10 +98,10 @@ int ray::TextureSplitter::Insert_Recursive(int i, const math::ivec2 &res) {
     }
 }
 
-int ray::TextureSplitter::Find_Recursive(int i, const math::ivec2 &pos) const {
+int ray::TextureSplitter::Find_Recursive(int i, const int pos[2]) const {
     if (nodes_[i].is_free ||
-            pos.x < nodes_[i].pos.x || pos.x >(nodes_[i].pos.x + nodes_[i].size.x) ||
-            pos.y < nodes_[i].pos.y || pos.y >(nodes_[i].pos.y + nodes_[i].size.y)) {
+            pos[0] < nodes_[i].pos[0] || pos[0] > (nodes_[i].pos[0] + nodes_[i].size[0]) ||
+            pos[1] < nodes_[i].pos[1] || pos[1] > (nodes_[i].pos[1] + nodes_[i].size[1])) {
         return -1;
     }
 
@@ -106,7 +112,7 @@ int ray::TextureSplitter::Find_Recursive(int i, const math::ivec2 &pos) const {
         if (i != -1) return i;
         return Find_Recursive(ch1, pos);
     } else {
-        if (pos.x == nodes_[i].pos.x && pos.y == nodes_[i].pos.y) {
+        if (pos[0] == nodes_[i].pos[0] && pos[1] == nodes_[i].pos[1]) {
             return i;
         } else {
             return -1;

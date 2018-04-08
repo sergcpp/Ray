@@ -9,7 +9,8 @@ template <int DimX, int DimY>
 class RendererSIMD : public RendererBase {
     ray::ref::Framebuffer clean_buf_, final_buf_, temp_buf_;
 
-    std::vector<pixel_color_t> color_table_;
+    std::vector<uint16_t> permutations_;
+    void UpdateHaltonSequence(int iteration, std::unique_ptr<float[]> &seq);
 public:
     RendererSIMD(int w, int h);
 
@@ -42,24 +43,19 @@ public:
 
 ////////////////////////////////////////////////////////////////////////////////////////////
 
-#include "SceneRef.h"
+#include "SceneRef2.h"
 
 #include <math/math.hpp>
 
 template <int DimX, int DimY>
 ray::NS::RendererSIMD<DimX, DimY>::RendererSIMD(int w, int h) : clean_buf_(w, h), final_buf_(w, h), temp_buf_(w, h) {
-    auto u_0_to_1 = []() {
-        return float(rand()) / RAND_MAX;
-    };
-
-    for (int i = 0; i < 64; i++) {
-        color_table_.push_back({ u_0_to_1(), u_0_to_1(), u_0_to_1(), 1 });
-    }
+    auto rand_func = std::bind(std::uniform_int_distribution<int>(), std::mt19937(0));
+    permutations_ = ray::ComputeRadicalInversePermutations(g_primes, PrimesCount, rand_func);
 }
 
 template <int DimX, int DimY>
 std::shared_ptr<ray::SceneBase> ray::NS::RendererSIMD<DimX, DimY>::CreateScene() {
-    return std::make_shared<ref::Scene>();
+    return std::make_shared<ref::Scene2>();
 }
 
 template <int DimX, int DimY>
@@ -68,7 +64,7 @@ void ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
 
     const int S = DimX * DimY;
 
-    auto s = std::dynamic_pointer_cast<ref::Scene>(_s);
+    auto s = std::dynamic_pointer_cast<ref::Scene2>(_s);
     if (!s) return;
 
     const auto &cam = s->GetCamera(s->current_cam());
@@ -125,6 +121,9 @@ void ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
     }
 
     region.iteration++;
+    if (!region.halton_seq || region.iteration % HaltonSeqLen == 0) {
+        UpdateHaltonSequence(region.iteration, region.halton_seq);
+    }
 
     math::aligned_vector<ray_packet_t<S>> primary_rays;
 
@@ -134,33 +133,25 @@ void ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
 
     for (size_t i = 0; i < primary_rays.size(); i++) {
         const auto &r = primary_rays[i];
-        simd_fvec<S> inv_d[3];
-        safe_invert(r.d, inv_d);
 
         intersections[i].x = r.x;
         intersections[i].y = r.y;
-        NS::Traverse_MacroTree_CPU(r, { -1 }, inv_d, nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, intersections[i]);
+        NS::Traverse_MacroTree_CPU(r, { -1 }, nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, intersections[i]);
     }
 
-    const uint32_t col_table_mask = (uint32_t)color_table_.size() - 1;
     for (size_t i = 0; i < intersections.size(); i++) {
         const auto &r = primary_rays[i];
-        const auto &ii = intersections[i];
+        const auto &inter = intersections[i];
 
-        int x = ii.x;
-        int y = ii.y;
+        int x = inter.x;
+        int y = inter.y;
 
-        const pixel_color_t col1 = { 0.65f, 0.65f, 0.65f, 1 };
-
-        /*for (int j = 0; j < S; j++) {
-            if (ii.mask[j]) {
-                const pixel_color_t col1 = color_table_[ii.prim_index[j] & col_table_mask];
-                framebuf_.SetPixel(x + NS::ray_packet_layout_x[j], y + NS::ray_packet_layout_y[j], col1);
-            }
-        }*/
+        simd_ivec<S> index = { y * w + x };
+        index += { ray_packet_layout_x };
+        index += w * simd_ivec<S>{ ray_packet_layout_y };
 
         simd_fvec<S> out_rgba[4];
-        NS::ShadeSurface<S>((y * w + x), region.iteration, nullptr, ii, r, env, mesh_instances,
+        NS::ShadeSurface<S>(index, region.iteration, &region.halton_seq[0], inter, r, env, mesh_instances,
                          mi_indices, meshes, transforms, vtx_indices, vertices, nodes, macro_tree_root,
                          tris, tri_indices, materials, textures, tex_atlas, out_rgba, nullptr, nullptr);
 
@@ -177,4 +168,16 @@ void ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
     };
 
     final_buf_.CopyFrom(clean_buf_, rect, clamp_and_gamma_correct);
+}
+
+template <int DimX, int DimY>
+void ray::NS::RendererSIMD<DimX, DimY>::UpdateHaltonSequence(int iteration, std::unique_ptr<float[]> &seq) {
+    if (!seq) {
+        seq.reset(new float[HaltonSeqLen * 2]);
+    }
+
+    for (int i = 0; i < HaltonSeqLen; i++) {
+        seq[i * 2 + 0] = ray::ScrambledRadicalInverse<29>(&permutations_[100], (uint64_t)(iteration + i));
+        seq[i * 2 + 1] = ray::ScrambledRadicalInverse<31>(&permutations_[129], (uint64_t)(iteration + i));
+    }
 }

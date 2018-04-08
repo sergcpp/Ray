@@ -14,6 +14,9 @@
 #include "internal/TextureAtlasRef.cpp"
 #include "internal/TextureUtilsRef.cpp"
 
+#include "internal/SceneRef2.cpp"
+#include "internal/TextureAtlas2.cpp"
+
 #include "internal/CoreAVX.cpp"
 #include "internal/RendererAVX.cpp"
 
