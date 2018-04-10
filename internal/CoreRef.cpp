@@ -208,95 +208,6 @@ bool ray::ref::IntersectTris(const ray_packet_t &r, const tri_accel_t *tris, con
     return inter.mask_values[0] != 0;
 }
 
-bool ray::ref::IntersectCones(const ray_packet_t &r, const cone_accel_t *cones, int num_cones, hit_data_t &out_inter) {
-    using namespace math;
-
-    hit_data_t inter;
-    inter.t = out_inter.t;
-
-    vec3 o = make_vec3(r.o);
-    vec3 d = make_vec3(r.d);
-
-    for (int i = 0; i < num_cones; i++) {
-        const cone_accel_t &cone = cones[i];
-
-        vec3 cone_o = make_vec3(cone.o);
-        vec3 cone_v = make_vec3(cone.v);
-        vec3 co = o - cone_o;
-
-        float a = dot(d, cone_v);
-        float c = dot(co, cone_v);
-        float b = 2 * (a * c - dot(d, co) * cone.cos_phi_sqr);
-        a = a * a - cone.cos_phi_sqr;
-        c = c * c - dot(co, co) * cone.cos_phi_sqr;
-
-        float D = b * b - 4 * a * c;
-        if (D >= 0) {
-            D = sqrtf(D);
-            float t1 = (-b - D) / (2 * a), t2 = (-b + D) / (2 * a);
-
-            if ((t1 > 0 && t1 < inter.t) || (t2 > 0 && t2 < inter.t)) {
-                vec3 p1 = o + t1 * d, p2 = o + t2 * d;
-                vec3 p1c = cone_o - p1, p2c = cone_o - p2;
-
-                float dot1 = dot(p1c, cone_v), dot2 = dot(p2c, cone_v);
-
-                if ((dot1 >= cone.cone_start && dot1 <= cone.cone_end) || (dot2 >= cone.cone_start && dot2 <= cone.cone_end)) {
-                    inter.mask_values[0] = 0xffffffff;
-                    inter.obj_indices[0] = i;
-                    inter.t = t1 < t2 ? t1 : t2;
-                }
-            }
-        }
-    }
-
-    out_inter.mask_values[0] |= inter.mask_values[0];
-    out_inter.obj_indices[0] = (inter.obj_indices[0] & inter.mask_values[0]) + (out_inter.obj_indices[0] & ~inter.mask_values[0]);
-    out_inter.t = inter.t; // already contains min value
-
-    return inter.mask_values[0] != 0;
-}
-
-bool ray::ref::IntersectBoxes(const ray_packet_t &r, const aabox_t *boxes, int num_boxes, hit_data_t &out_inter) {
-    using namespace math;
-
-    hit_data_t inter;
-    inter.t = out_inter.t;
-
-    vec3 inv_d = 1.0f / make_vec3(r.d);
-
-    for (int i = 0; i < num_boxes; i++) {
-        const aabox_t &box = boxes[i];
-
-        float low = inv_d[0] * (box.min[0] - r.o[0]);
-        float high = inv_d[0] * (box.max[0] - r.o[0]);
-        float tmin = min(low, high);
-        float tmax = max(low, high);
-
-        low = inv_d[1] * (box.min[1] - r.o[1]);
-        high = inv_d[1] * (box.max[1] - r.o[1]);
-        tmin = max(tmin, min(low, high));
-        tmax = min(tmax, max(low, high));
-
-        low = inv_d[2] * (box.min[2] - r.o[2]);
-        high = inv_d[2] * (box.max[2] - r.o[2]);
-        tmin = max(tmin, min(low, high));
-        tmax = min(tmax, max(low, high));
-
-        if (tmin <= tmax && tmax > 0 && tmin < inter.t) {
-            inter.mask_values[0] = 0xffffffff;
-            inter.obj_indices[0] = i;
-            inter.t = tmin;
-        }
-    }
-
-    out_inter.mask_values[0] |= inter.mask_values[0];
-    out_inter.obj_indices[0] = (inter.obj_indices[0] & inter.mask_values[0]) + (out_inter.obj_indices[0] & ~inter.mask_values[0]);
-    out_inter.t = inter.t; // already contains min value
-
-    return inter.mask_values[0] != 0;
-}
-
 bool ray::ref::Traverse_MacroTree_CPU(const ray_packet_t &r, const bvh_node_t *nodes, uint32_t root_index,
                                       const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
                                       const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t &inter) {
@@ -767,7 +678,6 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
             if (inter.mask_values[0] == 0xffffffff) {
                 v = 0;
             }
-            //v = TraceShadowRay(&r, mesh_instances, mi_indices, meshes, transforms, nodes, node_index, tris, tri_indices);
         }
 
         k = clamp(k, 0.0f, 1.0f);

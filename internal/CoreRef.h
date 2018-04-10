@@ -54,8 +54,6 @@ void GeneratePrimaryRays(int iteration, const camera_t &cam, const rect_t &r, in
 // Intersect primitives
 bool IntersectTris(const ray_packet_t &r, const tri_accel_t *tris, int num_tris, int obj_index, hit_data_t &out_inter);
 bool IntersectTris(const ray_packet_t &r, const tri_accel_t *tris, const uint32_t *indices, int num_indices, int obj_index, hit_data_t &out_inter);
-bool IntersectCones(const ray_packet_t &r, const cone_accel_t *cones, int num_cones, hit_data_t &out_inter);
-bool IntersectBoxes(const ray_packet_t &r, const aabox_t *boxes, int num_boxes, hit_data_t &out_inter);
 
 // Traverse acceleration structure
 // stack-less cpu-style traversal of outer nodes

@@ -17,9 +17,6 @@ template <int DimX, int DimY>
 class RendererSIMD;
 }
 namespace avx {
-class Renderer;
-}
-namespace avx2 {
 template <int DimX, int DimY>
 class RendererSIMD;
 }
@@ -34,9 +31,8 @@ protected:
     friend class ref2::RendererSIMD;
     template <int DimX, int DimY>
     friend class sse::RendererSIMD;
-    friend class avx::Renderer;
     template <int DimX, int DimY>
-    friend class avx2::RendererSIMD;
+    friend class avx::RendererSIMD;
 
     std::vector<bvh_node_t> nodes_;
     std::vector<tri_accel_t> tris_;

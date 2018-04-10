@@ -22,14 +22,8 @@ const char *cl_src_types =
 const char *cl_src_primary_ray_gen =
 #include "kernels/primary_ray_gen.cl"
     ;
-const char *cl_src_intersect_tris =
-#include "kernels/intersect_tris.cl"
-    ;
-const char *cl_src_intersect_boxes =
-#include "kernels/intersect_boxes.cl"
-    ;
-const char *cl_src_intersect_cones =
-#include "kernels/intersect_cones.cl"
+const char *cl_src_intersect =
+#include "kernels/intersect.cl"
     ;
 const char *cl_src_traverse =
 #include "kernels/traverse_bvh.cl"
@@ -119,8 +113,8 @@ ray::ocl::Renderer::Renderer(int w, int h) : w_(w), h_(h), loaded_halton_(-1) {
         cl_int error = CL_SUCCESS;
         cl::Program::Sources srcs = {
             cl_src_defines,
-            cl_src_types, cl_src_transform, cl_src_primary_ray_gen, cl_src_intersect_tris,
-            cl_src_intersect_boxes, cl_src_intersect_cones, cl_src_traverse, cl_src_trace,
+            cl_src_types, cl_src_transform, cl_src_primary_ray_gen,
+            cl_src_intersect, cl_src_traverse, cl_src_trace,
             cl_src_texturing, cl_src_shade, cl_src_postprocess
         };
 

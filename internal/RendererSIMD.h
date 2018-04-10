@@ -129,6 +129,7 @@ void ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
 
     GeneratePrimaryRays<DimX, DimY>(cam, rect, w, h, primary_rays);
 
+    math::aligned_vector<simd_ivec<S>> primary_masks(primary_rays.size());
     math::aligned_vector<hit_data_t<S>> intersections(primary_rays.size());
 
     for (size_t i = 0; i < primary_rays.size(); i++) {
@@ -138,6 +139,10 @@ void ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
         intersections[i].y = r.y;
         NS::Traverse_MacroTree_CPU(r, { -1 }, nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, intersections[i]);
     }
+
+    math::aligned_vector<ray_packet_t<S>> secondary_rays(intersections.size());
+    math::aligned_vector<simd_ivec<S>> secondary_masks(intersections.size());
+    int secondary_rays_count = 0;
 
     for (size_t i = 0; i < intersections.size(); i++) {
         const auto &r = primary_rays[i];
@@ -150,15 +155,59 @@ void ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
         index += { ray_packet_layout_x };
         index += w * simd_ivec<S>{ ray_packet_layout_y };
 
-        simd_fvec<S> out_rgba[4];
-        NS::ShadeSurface<S>(index, region.iteration, &region.halton_seq[0], inter, r, env, mesh_instances,
+        secondary_masks[i] = { 0 };
+
+        simd_fvec<S> out_rgba[4] = { 0.0f };
+        NS::ShadeSurface(index, region.iteration, &region.halton_seq[0], inter, r, env, mesh_instances,
                          mi_indices, meshes, transforms, vtx_indices, vertices, nodes, macro_tree_root,
-                         tris, tri_indices, materials, textures, tex_atlas, out_rgba, nullptr, nullptr);
+                         tris, tri_indices, materials, textures, tex_atlas, out_rgba, &secondary_masks[0], &secondary_rays[0], &secondary_rays_count);
 
         for (int j = 0; j < S; j++) {
-            clean_buf_.SetPixel(x + ray_packet_layout_x[j], y + ray_packet_layout_y[j], { out_rgba[0][j], out_rgba[1][j], out_rgba[2][j], out_rgba[3][j] });
+            temp_buf_.SetPixel(x + ray_packet_layout_x[j], y + ray_packet_layout_y[j], { out_rgba[0][j], out_rgba[1][j], out_rgba[2][j], out_rgba[3][j] });
         }
     }
+
+    for (int bounce = 0; bounce < 2 && secondary_rays_count; bounce++) {
+        for (int i = 0; i < secondary_rays_count; i++) {
+            const auto &r = secondary_rays[i];
+
+            intersections[i] = {};
+            intersections[i].x = r.x;
+            intersections[i].y = r.y;
+
+            NS::Traverse_MacroTree_CPU(r, secondary_masks[i], nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, intersections[i]);
+        }
+
+        int rays_count = secondary_rays_count;
+        secondary_rays_count = 0;
+        std::swap(primary_rays, secondary_rays);
+        std::swap(primary_masks, secondary_masks);
+
+        for (int i = 0; i < rays_count; i++) {
+            const auto &r = primary_rays[i];
+            const auto &inter = intersections[i];
+
+            int x = inter.x;
+            int y = inter.y;
+
+            simd_ivec<S> index = { y * w + x };
+            index += { ray_packet_layout_x };
+            index += w * simd_ivec<S>{ ray_packet_layout_y };
+
+            simd_fvec<S> out_rgba[4] = { 0.0f };
+            NS::ShadeSurface(index, region.iteration, &region.halton_seq[0], inter, r, env, mesh_instances,
+                             mi_indices, meshes, transforms, vtx_indices, vertices, nodes, macro_tree_root,
+                             tris, tri_indices, materials, textures, tex_atlas, out_rgba, &secondary_masks[0], &secondary_rays[0], &secondary_rays_count);
+
+            for (int j = 0; j < S; j++) {
+                if (!primary_masks[i][j]) continue;
+
+                temp_buf_.AddPixel(x + ray_packet_layout_x[j], y + ray_packet_layout_y[j], { out_rgba[0][j], out_rgba[1][j], out_rgba[2][j], out_rgba[3][j] });
+            }
+        }
+    }
+
+    clean_buf_.MixIncremental(temp_buf_, rect, 1.0f / region.iteration);
 
     auto clamp_and_gamma_correct = [](const pixel_color_t &p) {
         auto c = make_vec4(&p.r);

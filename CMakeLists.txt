@@ -16,8 +16,6 @@ set(INTERNAL_SOURCE_FILES internal/BVHSplit.h
                           internal/BVHSplit.cpp
                           internal/Core.h
                           internal/Core.cpp
-                          internal/CoreAVX.h
-                          internal/CoreAVX.cpp
                           internal/CoreOCL.h
                           internal/CoreRef.h
                           internal/CoreRef.cpp
@@ -26,8 +24,6 @@ set(INTERNAL_SOURCE_FILES internal/BVHSplit.h
                           internal/FramebufferRef.cpp
                           internal/Halton.h
                           internal/RendererAVX.h
-                          internal/RendererAVX.cpp
-                          internal/RendererAVX2.h
                           internal/RendererOCL.h
                           internal/RendererOCL.cpp
                           internal/RendererRef.h
@@ -60,9 +56,7 @@ set(SOURCE_FILES RendererBase.h
                  SceneBase.cpp
                  Types.h)
 
-set(KERNEL_FILES internal/kernels/intersect_boxes.cl
-                 internal/kernels/intersect_cones.cl
-                 internal/kernels/intersect_tris.cl
+set(KERNEL_FILES internal/kernels/intersect.cl
                  internal/kernels/postprocess.cl
                  internal/kernels/primary_ray_gen.cl
                  internal/kernels/shade.cl
