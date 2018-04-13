@@ -29,9 +29,7 @@ protected:
 
     cl::CommandQueue queue_;
 
-    cl::Kernel prim_rays_gen_kernel_,
-    intersect_tris_kernel_, intersect_boxes_kernel_, intersect_cones_kernel_,
-    texture_debug_page_kernel_,
+    cl::Kernel prim_rays_gen_kernel_, texture_debug_page_kernel_,
     shade_primary_kernel_, shade_secondary_kernel_, trace_primary_rays_kernel_,
     trace_secondary_rays_kernel_, mix_incremental_kernel_, post_process_kernel_;
 
@@ -50,9 +48,6 @@ protected:
     std::vector<float> frame_pixels_;
 
     bool kernel_GeneratePrimaryRays(cl_int iteration, const ray::ocl::camera_t &cam, const cl::Buffer &halton, cl_int w, cl_int h, const cl::Buffer &out_rays);
-    bool kernel_IntersectTris(const cl::Buffer &rays, cl_int rays_count, const cl::Buffer &tris, cl_int tris_count, const cl::Buffer &intersections, const cl::Buffer &intersections_counter);
-    bool kernel_IntersectCones(const cl::Buffer &rays, cl_int rays_count, const cl::Buffer &cones, cl_int cones_count, const cl::Buffer &intersections, const cl::Buffer &intersections_counter);
-    bool kernel_IntersectBoxes(const cl::Buffer &rays, cl_int rays_count, const cl::Buffer &boxes, cl_int boxes_count, const cl::Buffer &intersections, const cl::Buffer &intersections_counter);
     bool kernel_TextureDebugPage(const cl::Image2DArray &textures, cl_int page, const cl::Image2D &frame_buf);
     bool kernel_ShadePrimary(cl_int iteration, const cl::Buffer &halton,
                              const cl::Buffer &intersections, const cl::Buffer &rays,

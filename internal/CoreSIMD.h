@@ -93,11 +93,23 @@ simd_fvec2 TransformUVs(const simd_fvec2 &_uvs, const simd_fvec2 &atlas_size, co
 template <int S>
 void TransformNormal(const simd_fvec<S> n[3], const float *inv_xform, simd_fvec<S> out_n[3]);
 
+template <int S>
+void TransformUVs(const simd_fvec<S> _uvs[2], float sx, float sy, const texture_t &t, const simd_ivec<S> &mip_level, simd_fvec<S> out_res[2]);
+
 // Sample texture
 simd_fvec4 SampleNearest(const ref::TextureAtlas2 &atlas, const texture_t &t, const simd_fvec2 &uvs, float lod);
 simd_fvec4 SampleBilinear(const ref::TextureAtlas2 &atlas, const texture_t &t, const simd_fvec2 &uvs, int lod);
 simd_fvec4 SampleTrilinear(const ref::TextureAtlas2 &atlas, const texture_t &t, const simd_fvec2 &uvs, float lod);
 simd_fvec4 SampleAnisotropic(const ref::TextureAtlas2 &atlas, const texture_t &t, const simd_fvec2 &uvs, const simd_fvec2 &duv_dx, const simd_fvec2 &duv_dy);
+
+template <int S>
+void SampleNearest(const ref::TextureAtlas2 &atlas, const texture_t &t, const simd_fvec<S> uvs[2], const simd_fvec<S> &lod, const simd_ivec<S> &mask, simd_fvec<S> out_rgba[4]);
+template <int S>
+void SampleBilinear(const ref::TextureAtlas2 &atlas, const texture_t &t, const simd_fvec<S> uvs[2], const simd_ivec<S> &lod, const simd_ivec<S> &mask, simd_fvec<S> out_rgba[4]);
+template <int S>
+void SampleTrilinear(const ref::TextureAtlas2 &atlas, const texture_t &t, const simd_fvec<S> uvs[2], const simd_fvec<S> &lod, const simd_ivec<S> &mask, simd_fvec<S> out_rgba[4]);
+template <int S>
+void SampleAnisotropic(const ref::TextureAtlas2 &atlas, const texture_t &t, const simd_fvec<S> uvs[2], const simd_fvec<S> duv_dx[2], const simd_fvec<S> duv_dy[2], const simd_ivec<S> &mask, simd_fvec<S> out_rgba[4]);
 
 // Shade
 template <int S>
@@ -687,6 +699,20 @@ void ray::NS::TransformNormal(const simd_fvec<S> n[3], const float *inv_xform, s
     out_n[2] = n[0] * inv_xform[8] + n[1] * inv_xform[9] + n[2] * inv_xform[10];
 }
 
+template <int S>
+void ray::NS::TransformUVs(const simd_fvec<S> uvs[2], float sx, float sy, const texture_t &t, const simd_ivec<S> &mip_level, simd_fvec<S> out_res[2]) {
+    simd_fvec<S> pos[2], size[2];
+    for (int i = 0; i < S; i++) {
+        pos[0][i] = (float)t.pos[mip_level[i]][0];
+        pos[1][i] = (float)t.pos[mip_level[i]][1];
+        size[0][i] = (float)(t.size[0] >> mip_level[i]);
+        size[1][i] = (float)(t.size[1] >> mip_level[i]);
+    }
+
+    out_res[0] = (pos[0] + (uvs[0] - floor(uvs[0])) * size[0] + 1.0f) / sx;
+    out_res[1] = (pos[1] + (uvs[1] - floor(uvs[1])) * size[1] + 1.0f) / sy;
+}
+
 ray::NS::simd_fvec4 ray::NS::SampleNearest(const ref::TextureAtlas2 &atlas, const texture_t &t, const simd_fvec2 &uvs, float lod) {
     int _lod = (int)lod;
 
@@ -734,7 +760,7 @@ ray::NS::simd_fvec4 ray::NS::SampleBilinear(const ref::TextureAtlas2 &atlas, con
 
 ray::NS::simd_fvec4 ray::NS::SampleTrilinear(const ref::TextureAtlas2 &atlas, const texture_t &t, const simd_fvec2 &uvs, float lod) {
     auto col1 = SampleBilinear(atlas, t, uvs, (int)floor(lod));
-    auto col2 = SampleBilinear(atlas, t, uvs, (int)ceil(lod));
+    auto col2 = SampleBilinear(atlas, t, uvs, (int)std::ceil(lod));
 
     const float k = lod - floor(lod);
     return col1 * (1 - k) + col2 * k;
@@ -778,6 +804,161 @@ ray::NS::simd_fvec4 ray::NS::SampleAnisotropic(const ref::TextureAtlas2 &atlas, 
     }
 
     return res / float(num);
+}
+
+template <int S>
+void ray::NS::SampleNearest(const ref::TextureAtlas2 &atlas, const texture_t &t, const simd_fvec<S> uvs[2], const simd_fvec<S> &lod, const simd_ivec<S> &mask, simd_fvec<S> out_rgba[4]) {
+    simd_ivec<S> _lod = (simd_ivec<S>)lod;
+
+    simd_fvec<S> _uvs[2];
+    TransformUVs(uvs, atlas.size_x(), atlas.size_y(), t, _lod, _uvs);
+
+    where(_lod > MAX_MIP_LEVEL, _lod) = MAX_MIP_LEVEL;
+
+    for (int i = 0; i < S; i++) {
+        if (!mask[i]) continue;
+
+        int page = t.page[_lod[i]];
+
+        const auto &pix = atlas.Get(page, _uvs[0][i], _uvs[1][i]);
+
+        out_rgba[0][i] = (float)pix.r;
+        out_rgba[1][i] = (float)pix.g;
+        out_rgba[2][i] = (float)pix.b;
+        out_rgba[3][i] = (float)pix.a;
+    }
+
+    const float k = 1.0f / 255.0f;
+
+    out_rgba[0] *= k;
+    out_rgba[1] *= k;
+    out_rgba[2] *= k;
+    out_rgba[3] *= k;
+}
+
+template <int S>
+void ray::NS::SampleBilinear(const ref::TextureAtlas2 &atlas, const texture_t &t, const simd_fvec<S> uvs[2], const simd_ivec<S> &lod, const simd_ivec<S> &mask, simd_fvec<S> out_rgba[4]) {
+    simd_fvec<S> _uvs[2];
+    TransformUVs(uvs, atlas.size_x(), atlas.size_y(), t, lod, _uvs);
+
+    _uvs[0] = _uvs[0] * atlas.size_x() - 0.5f;
+    _uvs[1] = _uvs[1] * atlas.size_y() - 0.5f;
+
+    simd_fvec<S> k[2] = { _uvs[0] - floor(_uvs[0]), _uvs[1] - floor(_uvs[1]) };
+
+    simd_fvec<S> p0[4], p1[4];
+
+    for (int i = 0; i < S; i++) {
+        if (!mask[i]) continue;
+
+        int page = t.page[lod[i]];
+
+        const auto &p00 = atlas.Get(page, int(_uvs[0][i]), int(_uvs[1][i]));
+        const auto &p01 = atlas.Get(page, int(_uvs[0][i] + 1), int(_uvs[1][i]));
+        const auto &p10 = atlas.Get(page, int(_uvs[0][i]), int(_uvs[1][i] + 1));
+        const auto &p11 = atlas.Get(page, int(_uvs[0][i] + 1), int(_uvs[1][i] + 1));
+
+        p0[0][i] = p01.r * k[0][i] + p00.r * (1 - k[0][i]);
+        p0[1][i] = p01.g * k[0][i] + p00.g * (1 - k[0][i]);
+        p0[2][i] = p01.b * k[0][i] + p00.b * (1 - k[0][i]);
+        p0[3][i] = p01.a * k[0][i] + p00.a * (1 - k[0][i]);
+
+        p1[0][i] = p11.r * k[0][i] + p10.r * (1 - k[0][i]);
+        p1[1][i] = p11.g * k[0][i] + p10.g * (1 - k[0][i]);
+        p1[2][i] = p11.b * k[0][i] + p10.b * (1 - k[0][i]);
+        p1[3][i] = p11.a * k[0][i] + p10.a * (1 - k[0][i]);
+    }
+
+    const float _k = 1.0f / 255.0f;
+
+    out_rgba[0] = (p1[0] * k[1] + p0[0] * (1.0f - k[1])) * _k;
+    out_rgba[1] = (p1[1] * k[1] + p0[1] * (1.0f - k[1])) * _k;
+    out_rgba[2] = (p1[2] * k[1] + p0[2] * (1.0f - k[1])) * _k;
+    out_rgba[3] = (p1[3] * k[1] + p0[3] * (1.0f - k[1])) * _k;
+}
+
+template <int S>
+void ray::NS::SampleTrilinear(const ref::TextureAtlas2 &atlas, const texture_t &t, const simd_fvec<S> uvs[2], const simd_fvec<S> &lod, const simd_ivec<S> &mask, simd_fvec<S> out_rgba[4]) {
+    simd_fvec<S> col1[4];
+    SampleBilinear(atlas, t, uvs, (simd_ivec<S>)floor(lod), mask, col1);
+    simd_fvec<S> col2[4];
+    SampleBilinear(atlas, t, uvs, (simd_ivec<S>)ceil(lod), mask, col2);
+
+    simd_fvec<S> k = lod - floor(lod);
+
+    out_rgba[0] = col1[0] * (1.0f - k) + col2[0] * k;
+    out_rgba[1] = col1[1] * (1.0f - k) + col2[1] * k;
+    out_rgba[2] = col1[2] * (1.0f - k) + col2[2] * k;
+    out_rgba[3] = col1[3] * (1.0f - k) + col2[3] * k;
+}
+
+template <int S>
+void ray::NS::SampleAnisotropic(const ref::TextureAtlas2 &atlas, const texture_t &t, const simd_fvec<S> uvs[2], const simd_fvec<S> duv_dx[2], const simd_fvec<S> duv_dy[2], const simd_ivec<S> &mask, simd_fvec<S> out_rgba[4]) {
+    simd_fvec<S> temp1 = duv_dx[0] * (float)t.size[0];
+    simd_fvec<S> temp2 = duv_dx[1] * (float)t.size[1];
+
+    simd_fvec<S> l1 = sqrt(temp1 * temp1 + temp2 * temp2);
+
+    temp1 = duv_dy[0] * (float)t.size[0];
+    temp2 = duv_dy[1] * (float)t.size[1];
+
+    simd_fvec<S> l2 = sqrt(temp1 * temp1 + temp2 * temp2);
+
+    simd_fvec<S> lod,
+                 k = l2 / l1,
+                 step[2] = { duv_dx[0], duv_dx[1] };
+
+    for (int i = 0; i < S; i++) {
+        lod[i] = log2(l2[i]);
+    }
+
+    auto _mask = l1 <= l2;
+    where(_mask, k) = l1 / l2;
+    where(_mask, step[0]) = duv_dy[0];
+    where(_mask, step[1]) = duv_dy[1];
+
+    for (int i = 0; i < S; i++) {
+        if (cast<simd_ivec<S>>(_mask)[i]) {
+            lod[i] = log2(l1[i]);
+        }
+    }
+
+    where(lod < 0.0f, lod) = 0.0f;
+    where(lod > (float)MAX_MIP_LEVEL, lod) = (float)MAX_MIP_LEVEL;
+    where(cast<simd_fvec<S>>(mask == 0), lod) = 0.0f;
+
+    simd_fvec<S> _uvs[2] = { uvs[0] - step[0] * 0.5f, uvs[1] - step[1] * 0.5f };
+
+    simd_ivec<S> num = (simd_ivec<S>)(2.0f / k);
+    where(num < 1, num) = 1;
+    where(num > 32, num) = 32;
+
+    step[0] /= (simd_fvec<S>)num;
+    step[1] /= (simd_fvec<S>)num;
+
+    out_rgba[0] = 0.0f;
+    out_rgba[1] = 0.0f;
+    out_rgba[2] = 0.0f;
+    out_rgba[3] = 0.0f;
+
+    for (int i = 0; i < 32; i++) {
+        auto imask = (num > i) & mask;
+        if (imask.all_zeros()) break;
+
+        simd_fvec<S> col[4];
+        SampleTrilinear(atlas, t, _uvs, lod, imask, col);
+
+        const auto &fmask = cast<simd_fvec<S>>(imask);
+        where(fmask, out_rgba[0]) = out_rgba[0] + col[0];
+        where(fmask, out_rgba[1]) = out_rgba[1] + col[1];
+        where(fmask, out_rgba[2]) = out_rgba[2] + col[2];
+        where(fmask, out_rgba[3]) = out_rgba[3] + col[3];
+    }
+
+    out_rgba[0] /= (simd_fvec<S>)num;
+    out_rgba[1] /= (simd_fvec<S>)num;
+    out_rgba[2] /= (simd_fvec<S>)num;
+    out_rgba[3] /= (simd_fvec<S>)num;
 }
 
 template <int S>
@@ -874,20 +1055,20 @@ __declspec(noinline) void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, co
     // From 'Physically Based Rendering: ...' book
 
     simd_fvec<S> duv13[2] = { u1[0] - u3[0], u1[1] - u3[1] },
-                    duv23[2] = { u2[0] - u3[0], u2[1] - u3[1] };
+                 duv23[2] = { u2[0] - u3[0], u2[1] - u3[1] };
     simd_fvec<S> dp13[3] = { p1[0] - p3[0], p1[1] - p3[1], p1[2] - p3[2] },
-                    dp23[3] = { p2[0] - p3[0], p2[1] - p3[1], p2[2] - p3[2] };
+                 dp23[3] = { p2[0] - p3[0], p2[1] - p3[1], p2[2] - p3[2] };
 
     simd_fvec<S> det_uv = duv13[0] * duv23[1] - duv13[1] * duv23[0];
     simd_fvec<S> inv_det_uv = 1.0f / det_uv;
     where(abs(det_uv) < FLT_EPS, inv_det_uv) = { 0.0f };
 
     const simd_fvec<S> dpdu[3] = { (duv23[1] * dp13[0] - duv13[1] * dp23[0]) * inv_det_uv,
-                                    (duv23[1] * dp13[1] - duv13[1] * dp23[1]) * inv_det_uv,
-                                    (duv23[1] * dp13[2] - duv13[1] * dp23[2]) * inv_det_uv };
+                                   (duv23[1] * dp13[1] - duv13[1] * dp23[1]) * inv_det_uv,
+                                   (duv23[1] * dp13[2] - duv13[1] * dp23[2]) * inv_det_uv };
     const simd_fvec<S> dpdv[3] = { (-duv23[0] * dp13[0] + duv13[0] * dp23[0]) * inv_det_uv,
-                                    (-duv23[0] * dp13[1] + duv13[0] * dp23[1]) * inv_det_uv,
-                                    (-duv23[0] * dp13[2] + duv13[0] * dp23[2]) * inv_det_uv };
+                                   (-duv23[0] * dp13[1] + duv13[0] * dp23[1]) * inv_det_uv,
+                                   (-duv23[0] * dp13[2] + duv13[0] * dp23[2]) * inv_det_uv };
 
     simd_fvec<S> A[2][2] = { { dpdu[0], dpdu[1] }, { dpdv[0], dpdv[1] } };
     simd_fvec<S> Bx[2] = { do_dx[0], do_dx[1] };
@@ -914,27 +1095,27 @@ __declspec(noinline) void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, co
     where(abs(det) < FLT_EPS, inv_det) = { 0.0f };
 
     simd_fvec<S> duv_dx[2] = { (A[0][0] * Bx[0] - A[0][1] * Bx[1]) * inv_det,
-                                (A[1][0] * Bx[0] - A[1][1] * Bx[1]) * inv_det };
+                               (A[1][0] * Bx[0] - A[1][1] * Bx[1]) * inv_det };
     simd_fvec<S> duv_dy[2] = { (A[0][0] * By[0] - A[0][1] * By[1]) * inv_det,
-                                (A[1][0] * By[0] - A[1][1] * By[1]) * inv_det };
+                               (A[1][0] * By[0] - A[1][1] * By[1]) * inv_det };
 
     // Derivative for normal
 
     simd_fvec<S> dn1[3] = { n1[0] - n3[0], n1[1] - n3[1], n1[2] - n3[2] },
-                    dn2[3] = { n2[0] - n3[0], n2[1] - n3[1], n2[2] - n3[2] };
+                 dn2[3] = { n2[0] - n3[0], n2[1] - n3[1], n2[2] - n3[2] };
     simd_fvec<S> dndu[3] = { (duv23[1] * dn1[0] - duv13[1] * dn2[0]) * inv_det_uv,
-                                (duv23[1] * dn1[1] - duv13[1] * dn2[1]) * inv_det_uv,
-                                (duv23[1] * dn1[2] - duv13[1] * dn2[2]) * inv_det_uv };
+                             (duv23[1] * dn1[1] - duv13[1] * dn2[1]) * inv_det_uv,
+                             (duv23[1] * dn1[2] - duv13[1] * dn2[2]) * inv_det_uv };
     simd_fvec<S> dndv[3] = { (-duv23[0] * dn1[0] + duv13[0] * dn2[0]) * inv_det_uv,
-                                (-duv23[0] * dn1[1] + duv13[0] * dn2[1]) * inv_det_uv,
-                                (-duv23[0] * dn1[2] + duv13[0] * dn2[2]) * inv_det_uv };
+                             (-duv23[0] * dn1[1] + duv13[0] * dn2[1]) * inv_det_uv,
+                             (-duv23[0] * dn1[2] + duv13[0] * dn2[2]) * inv_det_uv };
 
     simd_fvec<S> dndx[3] = { dndu[0] * duv_dx[0] + dndv[0] * duv_dx[1],
-                                dndu[1] * duv_dx[0] + dndv[1] * duv_dx[1],
-                                dndu[2] * duv_dx[0] + dndv[2] * duv_dx[1] };
+                             dndu[1] * duv_dx[0] + dndv[1] * duv_dx[1],
+                             dndu[2] * duv_dx[0] + dndv[2] * duv_dx[1] };
     simd_fvec<S> dndy[3] = { dndu[0] * duv_dy[0] + dndv[0] * duv_dy[1],
-                                dndu[1] * duv_dy[0] + dndv[1] * duv_dy[1],
-                                dndu[2] * duv_dy[0] + dndv[2] * duv_dy[1] };
+                             dndu[1] * duv_dy[0] + dndv[1] * duv_dy[1],
+                             dndu[2] * duv_dy[0] + dndv[2] * duv_dy[1] };
 
     simd_fvec<S> ddn_dx = dot(dd_dx, N) + dot(I, dndx);
     simd_fvec<S> ddn_dy = dot(dd_dy, N) + dot(I, dndy);
@@ -942,8 +1123,8 @@ __declspec(noinline) void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, co
     ////////////////////////////////////////////////////////
 
     simd_fvec<S> B[3] = { b1[0] * w + b2[0] * inter.u + b3[0] * inter.v,
-                            b1[1] * w + b2[1] * inter.u + b3[1] * inter.v,
-                            b1[2] * w + b2[2] * inter.u + b3[2] * inter.v };
+                          b1[1] * w + b2[1] * inter.u + b3[1] * inter.v,
+                          b1[2] * w + b2[2] * inter.u + b3[2] * inter.v };
 
     simd_fvec<S> T[3];
     cross(B, N, T);
@@ -985,26 +1166,34 @@ __declspec(noinline) void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, co
 
             const auto *mat = &materials[first_mi];
 
-            simd_fvec<S> tex_normal[3], tex_albedo[3];
+            simd_fvec<S> tex_normal[4], tex_albedo[4];
+
+            SampleNearest(tex_atlas, textures[mat->textures[NORMALS_TEXTURE]], uvs, { 0.0f }, same_mi, tex_normal);
+            
+            tex_normal[0] = tex_normal[0] * 2.0f - 1.0f;
+            tex_normal[1] = tex_normal[1] * 2.0f - 1.0f;
+            tex_normal[2] = tex_normal[2] * 2.0f - 1.0f;
+            
+            SampleAnisotropic(tex_atlas, textures[mat->textures[MAIN_TEXTURE]], uvs, duv_dx, duv_dy, same_mi, tex_albedo);
 
             for (int i = 0; i < S; i++) {
                 if (!same_mi[i]) continue;
 
-                simd_fvec2 _duv_dx = { duv_dx[0][i], duv_dx[1][i] };
-                simd_fvec2 _duv_dy = { duv_dy[0][i], duv_dy[1][i] };
+                //simd_fvec2 _duv_dx = { duv_dx[0][i], duv_dx[1][i] };
+                //simd_fvec2 _duv_dy = { duv_dy[0][i], duv_dy[1][i] };
 
-                simd_fvec2 _uvs = { uvs[0][i], uvs[1][i] };
-                auto normals = SampleAnisotropic(tex_atlas, textures[mat->textures[NORMALS_TEXTURE]], _uvs, _duv_dx, _duv_dy);
+                //simd_fvec2 _uvs = { uvs[0][i], uvs[1][i] };
+                //auto normals = SampleAnisotropic(tex_atlas, textures[mat->textures[NORMALS_TEXTURE]], _uvs, _duv_dx, _duv_dy);
             
-                tex_normal[0][i] = normals[0] * 2.0f - 1.0f;
-                tex_normal[1][i] = normals[1] * 2.0f - 1.0f;
-                tex_normal[2][i] = normals[2] * 2.0f - 1.0f;
+                //tex_normal[0][i] = normals[0] * 2.0f - 1.0f;
+                //tex_normal[1][i] = normals[1] * 2.0f - 1.0f;
+                //tex_normal[2][i] = normals[2] * 2.0f - 1.0f;
 
-                auto albedo = SampleAnisotropic(tex_atlas, textures[mat->textures[MAIN_TEXTURE]], _uvs, _duv_dx, _duv_dy);
+                //auto albedo = SampleAnisotropic(tex_atlas, textures[mat->textures[MAIN_TEXTURE]], _uvs, _duv_dx, _duv_dy);
 
-                tex_albedo[0][i] = pow(albedo[0] * mat->main_color[0], 2.2f);
-                tex_albedo[1][i] = pow(albedo[1] * mat->main_color[1], 2.2f);
-                tex_albedo[2][i] = pow(albedo[2] * mat->main_color[2], 2.2f);
+                tex_albedo[0][i] = pow(tex_albedo[0][i] * mat->main_color[0], 2.2f);
+                tex_albedo[1][i] = pow(tex_albedo[1][i] * mat->main_color[1], 2.2f);
+                tex_albedo[2][i] = pow(tex_albedo[2][i] * mat->main_color[2], 2.2f);
             }
 
             simd_fvec<S> temp[3];

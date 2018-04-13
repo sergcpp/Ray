@@ -146,15 +146,19 @@ ray::ocl::Renderer::Renderer(int w, int h) : w_(w), h_(h), loaded_halton_(-1) {
         }
 
         prim_rays_gen_kernel_ = cl::Kernel(program_, "GeneratePrimaryRays", &error);
-        intersect_tris_kernel_ = cl::Kernel(program_, "IntersectTris", &error);
-        intersect_boxes_kernel_ = cl::Kernel(program_, "IntersectBoxes", &error);
-        intersect_cones_kernel_ = cl::Kernel(program_, "IntersectCones", &error);
+        if (error != CL_SUCCESS) throw std::runtime_error("Cannot create OpenCL renderer!");
         texture_debug_page_kernel_ = cl::Kernel(program_, "TextureDebugPage", &error);
+        if (error != CL_SUCCESS) throw std::runtime_error("Cannot create OpenCL renderer!");
         shade_primary_kernel_ = cl::Kernel(program_, "ShadePrimary", &error);
+        if (error != CL_SUCCESS) throw std::runtime_error("Cannot create OpenCL renderer!");
         shade_secondary_kernel_ = cl::Kernel(program_, "ShadeSecondary", &error);
+        if (error != CL_SUCCESS) throw std::runtime_error("Cannot create OpenCL renderer!");
         trace_primary_rays_kernel_ = cl::Kernel(program_, "TracePrimaryRays", &error);
+        if (error != CL_SUCCESS) throw std::runtime_error("Cannot create OpenCL renderer!");
         trace_secondary_rays_kernel_ = cl::Kernel(program_, "TraceSecondaryRays", &error);
+        if (error != CL_SUCCESS) throw std::runtime_error("Cannot create OpenCL renderer!");
         mix_incremental_kernel_ = cl::Kernel(program_, "MixIncremental", &error);
+        if (error != CL_SUCCESS) throw std::runtime_error("Cannot create OpenCL renderer!");
         post_process_kernel_ = cl::Kernel(program_, "PostProcess", &error);
         if (error != CL_SUCCESS) throw std::runtime_error("Cannot create OpenCL renderer!");
 
@@ -352,42 +356,6 @@ bool ray::ocl::Renderer::kernel_GeneratePrimaryRays(const cl_int iteration, cons
         return false;
     }
     return CL_SUCCESS == queue_.enqueueNDRangeKernel(prim_rays_gen_kernel_, cl::NullRange, cl::NDRange { (size_t)w, (size_t)h });
-}
-
-bool ray::ocl::Renderer::kernel_IntersectTris(const cl::Buffer &rays, cl_int rays_count, const cl::Buffer &tris, cl_int tris_count, const cl::Buffer &intersections, const cl::Buffer &intersections_counter) {
-    cl_uint argc = 0;
-    if (intersect_tris_kernel_.setArg(argc++, rays) != CL_SUCCESS ||
-            intersect_tris_kernel_.setArg(argc++, tris) != CL_SUCCESS ||
-            intersect_tris_kernel_.setArg(argc++, tris_count) != CL_SUCCESS ||
-            intersect_tris_kernel_.setArg(argc++, intersections) != CL_SUCCESS ||
-            intersect_tris_kernel_.setArg(argc++, intersections_counter) != CL_SUCCESS) {
-        return false;
-    }
-    return CL_SUCCESS == queue_.enqueueNDRangeKernel(intersect_tris_kernel_, cl::NullRange, cl::NDRange { (size_t)rays_count });
-}
-
-bool ray::ocl::Renderer::kernel_IntersectCones(const cl::Buffer &rays, cl_int rays_count, const cl::Buffer &cones, cl_int cones_count, const cl::Buffer &intersections, const cl::Buffer &intersections_counter) {
-    cl_uint argc = 0;
-    if (intersect_cones_kernel_.setArg(argc++, rays) != CL_SUCCESS ||
-            intersect_cones_kernel_.setArg(argc++, cones) != CL_SUCCESS ||
-            intersect_cones_kernel_.setArg(argc++, cones_count) != CL_SUCCESS ||
-            intersect_cones_kernel_.setArg(argc++, intersections) != CL_SUCCESS ||
-            intersect_cones_kernel_.setArg(argc++, intersections_counter) != CL_SUCCESS) {
-        return false;
-    }
-    return CL_SUCCESS == queue_.enqueueNDRangeKernel(intersect_cones_kernel_, cl::NullRange, cl::NDRange { (size_t)rays_count });
-}
-
-bool ray::ocl::Renderer::kernel_IntersectBoxes(const cl::Buffer &rays, cl_int rays_count, const cl::Buffer &boxes, cl_int boxes_count, const cl::Buffer &intersections, const cl::Buffer &intersections_counter) {
-    cl_uint argc = 0;
-    if (intersect_boxes_kernel_.setArg(argc++, rays) != CL_SUCCESS ||
-            intersect_boxes_kernel_.setArg(argc++, boxes) != CL_SUCCESS ||
-            intersect_boxes_kernel_.setArg(argc++, boxes_count) != CL_SUCCESS ||
-            intersect_boxes_kernel_.setArg(argc++, intersections) != CL_SUCCESS ||
-            intersect_boxes_kernel_.setArg(argc++, intersections_counter) != CL_SUCCESS) {
-        return false;
-    }
-    return CL_SUCCESS == queue_.enqueueNDRangeKernel(intersect_boxes_kernel_, cl::NullRange, cl::NDRange { (size_t)rays_count });
 }
 
 bool ray::ocl::Renderer::kernel_TextureDebugPage(const cl::Image2DArray &textures, cl_int page, const cl::Image2D &frame_buf) {
