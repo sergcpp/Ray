@@ -851,107 +851,102 @@ __declspec(noinline) void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, co
     simd_fvec<S> uvs[2] = { u1[0] * w + u2[0] * inter.u + u3[0] * inter.v,
                             u1[1] * w + u2[1] * inter.u + u3[1] * inter.v };
 
-    /////{
-        // From 'Tracing Ray Differentials' [1999]
+    // From 'Tracing Ray Differentials' [1999]
 
-        simd_fvec<S> temp[3];
+    simd_fvec<S> temp[3];
 
-        temp[0] = ray.do_dx[0] + inter.t * ray.dd_dx[0];
-        temp[1] = ray.do_dx[1] + inter.t * ray.dd_dx[1];
-        temp[2] = ray.do_dx[2] + inter.t * ray.dd_dx[2];
+    temp[0] = ray.do_dx[0] + inter.t * ray.dd_dx[0];
+    temp[1] = ray.do_dx[1] + inter.t * ray.dd_dx[1];
+    temp[2] = ray.do_dx[2] + inter.t * ray.dd_dx[2];
 
-        auto a = -dot(temp, N);
-        auto b = dot(I, N);
+    simd_fvec<S> dt_dx = -dot(temp, N) / dot(I, N);
+    simd_fvec<S> do_dx[3] = { temp[0] + dt_dx * I[0], temp[1] + dt_dx * I[1], temp[2] + dt_dx * I[2] };
+    simd_fvec<S> dd_dx[3] = { ray.dd_dx[0], ray.dd_dx[1], ray.dd_dx[2] };
 
-        simd_fvec<S> dt_dx = -dot(temp, N) / dot(I, N);
-        simd_fvec<S> do_dx[3] = { temp[0] + dt_dx * I[0], temp[1] + dt_dx * I[1], temp[2] + dt_dx * I[2] };
-        simd_fvec<S> dd_dx[3] = { ray.dd_dx[0], ray.dd_dx[1], ray.dd_dx[2] };
+    temp[0] = ray.do_dy[0] + inter.t * ray.dd_dy[0];
+    temp[1] = ray.do_dy[1] + inter.t * ray.dd_dy[1];
+    temp[2] = ray.do_dy[2] + inter.t * ray.dd_dy[2];
 
-        temp[0] = ray.do_dy[0] + inter.t * ray.dd_dy[0];
-        temp[1] = ray.do_dy[1] + inter.t * ray.dd_dy[1];
-        temp[2] = ray.do_dy[2] + inter.t * ray.dd_dy[2];
+    simd_fvec<S> dt_dy = -dot(temp, N) / dot(I, N);
+    simd_fvec<S> do_dy[3] = { temp[0] + dt_dy * I[0], temp[1] + dt_dy * I[1], temp[2] + dt_dy * I[2] };
+    simd_fvec<S> dd_dy[3] = { ray.dd_dy[0], ray.dd_dy[1], ray.dd_dy[2] };
 
-        simd_fvec<S> dt_dy = -dot(temp, N) / dot(I, N);
-        simd_fvec<S> do_dy[3] = { temp[0] + dt_dy * I[0], temp[1] + dt_dy * I[1], temp[2] + dt_dy * I[2] };
-        simd_fvec<S> dd_dy[3] = { ray.dd_dy[0], ray.dd_dy[1], ray.dd_dy[2] };
+    // From 'Physically Based Rendering: ...' book
 
-        // From 'Physically Based Rendering: ...' book
+    simd_fvec<S> duv13[2] = { u1[0] - u3[0], u1[1] - u3[1] },
+                    duv23[2] = { u2[0] - u3[0], u2[1] - u3[1] };
+    simd_fvec<S> dp13[3] = { p1[0] - p3[0], p1[1] - p3[1], p1[2] - p3[2] },
+                    dp23[3] = { p2[0] - p3[0], p2[1] - p3[1], p2[2] - p3[2] };
 
-        simd_fvec<S> duv13[2] = { u1[0] - u3[0], u1[1] - u3[1] },
-                     duv23[2] = { u2[0] - u3[0], u2[1] - u3[1] };
-        simd_fvec<S> dp13[3] = { p1[0] - p3[0], p1[1] - p3[1], p1[2] - p3[2] },
-                     dp23[3] = { p2[0] - p3[0], p2[1] - p3[1], p2[2] - p3[2] };
+    simd_fvec<S> det_uv = duv13[0] * duv23[1] - duv13[1] * duv23[0];
+    simd_fvec<S> inv_det_uv = 1.0f / det_uv;
+    where(abs(det_uv) < FLT_EPS, inv_det_uv) = { 0.0f };
 
-        simd_fvec<S> det_uv = duv13[0] * duv23[1] - duv13[1] * duv23[0];
-        simd_fvec<S> inv_det_uv = 1.0f / det_uv;
-        where(abs(det_uv) < FLT_EPS, inv_det_uv) = { 0.0f };
+    const simd_fvec<S> dpdu[3] = { (duv23[1] * dp13[0] - duv13[1] * dp23[0]) * inv_det_uv,
+                                    (duv23[1] * dp13[1] - duv13[1] * dp23[1]) * inv_det_uv,
+                                    (duv23[1] * dp13[2] - duv13[1] * dp23[2]) * inv_det_uv };
+    const simd_fvec<S> dpdv[3] = { (-duv23[0] * dp13[0] + duv13[0] * dp23[0]) * inv_det_uv,
+                                    (-duv23[0] * dp13[1] + duv13[0] * dp23[1]) * inv_det_uv,
+                                    (-duv23[0] * dp13[2] + duv13[0] * dp23[2]) * inv_det_uv };
 
-        const simd_fvec<S> dpdu[3] = { (duv23[1] * dp13[0] - duv13[1] * dp23[0]) * inv_det_uv,
-                                       (duv23[1] * dp13[1] - duv13[1] * dp23[1]) * inv_det_uv,
-                                       (duv23[1] * dp13[2] - duv13[1] * dp23[2]) * inv_det_uv };
-        const simd_fvec<S> dpdv[3] = { (-duv23[0] * dp13[0] + duv13[0] * dp23[0]) * inv_det_uv,
-                                       (-duv23[0] * dp13[1] + duv13[0] * dp23[1]) * inv_det_uv,
-                                       (-duv23[0] * dp13[2] + duv13[0] * dp23[2]) * inv_det_uv };
+    simd_fvec<S> A[2][2] = { { dpdu[0], dpdu[1] }, { dpdv[0], dpdv[1] } };
+    simd_fvec<S> Bx[2] = { do_dx[0], do_dx[1] };
+    simd_fvec<S> By[2] = { do_dy[0], do_dy[1] };
 
-        simd_fvec<S> A[2][2] = { { dpdu[0], dpdu[1] }, { dpdv[0], dpdv[1] } };
-        simd_fvec<S> Bx[2] = { do_dx[0], do_dx[1] };
-        simd_fvec<S> By[2] = { do_dy[0], do_dy[1] };
+    auto mask1 = abs(N[0]) > abs(N[1]) & abs(N[0]) > abs(N[2]);
+    where(mask1, A[0][0]) = dpdu[1];
+    where(mask1, A[0][1]) = dpdu[2];
+    where(mask1, A[1][0]) = dpdv[1];
+    where(mask1, A[1][1]) = dpdv[2];
+    where(mask1, Bx[0]) = do_dx[1];
+    where(mask1, Bx[1]) = do_dx[2];
+    where(mask1, By[0]) = do_dy[1];
+    where(mask1, By[1]) = do_dy[2];
 
-        auto mask1 = abs(N[0]) > abs(N[1]) & abs(N[0]) > abs(N[2]);
-        where(mask1, A[0][0]) = dpdu[1];
-        where(mask1, A[0][1]) = dpdu[2];
-        where(mask1, A[1][0]) = dpdv[1];
-        where(mask1, A[1][1]) = dpdv[2];
-        where(mask1, Bx[0]) = do_dx[1];
-        where(mask1, Bx[1]) = do_dx[2];
-        where(mask1, By[0]) = do_dy[1];
-        where(mask1, By[1]) = do_dy[2];
+    auto mask2 = abs(N[1]) > abs(N[0]) & abs(N[1]) > abs(N[2]);
+    where(mask2, A[0][1]) = dpdu[2];
+    where(mask2, A[1][1]) = dpdv[2];
+    where(mask2, Bx[1]) = do_dx[2];
+    where(mask2, By[1]) = do_dy[2];
 
-        auto mask2 = abs(N[1]) > abs(N[0]) & abs(N[1]) > abs(N[2]);
-        where(mask2, A[0][1]) = dpdu[2];
-        where(mask2, A[1][1]) = dpdv[2];
-        where(mask2, Bx[1]) = do_dx[2];
-        where(mask2, By[1]) = do_dy[2];
+    simd_fvec<S> det = A[0][0] * A[1][1] - A[1][0] * A[0][1];
+    simd_fvec<S> inv_det = 1.0f / det;
+    where(abs(det) < FLT_EPS, inv_det) = { 0.0f };
 
-        simd_fvec<S> det = A[0][0] * A[1][1] - A[1][0] * A[0][1];
-        simd_fvec<S> inv_det = 1.0f / det;
-        where(abs(det) < FLT_EPS, inv_det) = { 0.0f };
+    simd_fvec<S> duv_dx[2] = { (A[0][0] * Bx[0] - A[0][1] * Bx[1]) * inv_det,
+                                (A[1][0] * Bx[0] - A[1][1] * Bx[1]) * inv_det };
+    simd_fvec<S> duv_dy[2] = { (A[0][0] * By[0] - A[0][1] * By[1]) * inv_det,
+                                (A[1][0] * By[0] - A[1][1] * By[1]) * inv_det };
 
-        simd_fvec<S> duv_dx[2] = { (A[0][0] * Bx[0] - A[0][1] * Bx[1]) * inv_det,
-                                   (A[1][0] * Bx[0] - A[1][1] * Bx[1]) * inv_det };
-        simd_fvec<S> duv_dy[2] = { (A[0][0] * By[0] - A[0][1] * By[1]) * inv_det,
-                                   (A[1][0] * By[0] - A[1][1] * By[1]) * inv_det };
+    // Derivative for normal
 
-        // Derivative for normal
+    simd_fvec<S> dn1[3] = { n1[0] - n3[0], n1[1] - n3[1], n1[2] - n3[2] },
+                    dn2[3] = { n2[0] - n3[0], n2[1] - n3[1], n2[2] - n3[2] };
+    simd_fvec<S> dndu[3] = { (duv23[1] * dn1[0] - duv13[1] * dn2[0]) * inv_det_uv,
+                                (duv23[1] * dn1[1] - duv13[1] * dn2[1]) * inv_det_uv,
+                                (duv23[1] * dn1[2] - duv13[1] * dn2[2]) * inv_det_uv };
+    simd_fvec<S> dndv[3] = { (-duv23[0] * dn1[0] + duv13[0] * dn2[0]) * inv_det_uv,
+                                (-duv23[0] * dn1[1] + duv13[0] * dn2[1]) * inv_det_uv,
+                                (-duv23[0] * dn1[2] + duv13[0] * dn2[2]) * inv_det_uv };
 
-        simd_fvec<S> dn1[3] = { n1[0] - n3[0], n1[1] - n3[1], n1[2] - n3[2] },
-                     dn2[3] = { n2[0] - n3[0], n2[1] - n3[1], n2[2] - n3[2] };
-        simd_fvec<S> dndu[3] = { (duv23[1] * dn1[0] - duv13[1] * dn2[0]) * inv_det_uv,
-                                 (duv23[1] * dn1[1] - duv13[1] * dn2[1]) * inv_det_uv,
-                                 (duv23[1] * dn1[2] - duv13[1] * dn2[2]) * inv_det_uv };
-        simd_fvec<S> dndv[3] = { (-duv23[0] * dn1[0] + duv13[0] * dn2[0]) * inv_det_uv,
-                                 (-duv23[0] * dn1[1] + duv13[0] * dn2[1]) * inv_det_uv,
-                                 (-duv23[0] * dn1[2] + duv13[0] * dn2[2]) * inv_det_uv };
+    simd_fvec<S> dndx[3] = { dndu[0] * duv_dx[0] + dndv[0] * duv_dx[1],
+                                dndu[1] * duv_dx[0] + dndv[1] * duv_dx[1],
+                                dndu[2] * duv_dx[0] + dndv[2] * duv_dx[1] };
+    simd_fvec<S> dndy[3] = { dndu[0] * duv_dy[0] + dndv[0] * duv_dy[1],
+                                dndu[1] * duv_dy[0] + dndv[1] * duv_dy[1],
+                                dndu[2] * duv_dy[0] + dndv[2] * duv_dy[1] };
 
-        simd_fvec<S> dndx[3] = { dndu[0] * duv_dx[0] + dndv[0] * duv_dx[1],
-                                 dndu[1] * duv_dx[0] + dndv[1] * duv_dx[1],
-                                 dndu[2] * duv_dx[0] + dndv[2] * duv_dx[1] };
-        simd_fvec<S> dndy[3] = { dndu[0] * duv_dy[0] + dndv[0] * duv_dy[1],
-                                 dndu[1] * duv_dy[0] + dndv[1] * duv_dy[1],
-                                 dndu[2] * duv_dy[0] + dndv[2] * duv_dy[1] };
+    simd_fvec<S> ddn_dx = dot(dd_dx, N) + dot(I, dndx);
+    simd_fvec<S> ddn_dy = dot(dd_dy, N) + dot(I, dndy);
 
-        simd_fvec<S> ddn_dx = dot(dd_dx, N) + dot(I, dndx);
-        simd_fvec<S> ddn_dy = dot(dd_dy, N) + dot(I, dndy);
+    ////////////////////////////////////////////////////////
 
-        ////////////////////////////////////////////////////////
+    simd_fvec<S> B[3] = { b1[0] * w + b2[0] * inter.u + b3[0] * inter.v,
+                            b1[1] * w + b2[1] * inter.u + b3[1] * inter.v,
+                            b1[2] * w + b2[2] * inter.u + b3[2] * inter.v };
 
-        simd_fvec<S> B[3] = { b1[0] * w + b2[0] * inter.u + b3[0] * inter.v,
-                              b1[1] * w + b2[1] * inter.u + b3[1] * inter.v,
-                              b1[2] * w + b2[2] * inter.u + b3[2] * inter.v };
-
-        simd_fvec<S> T[3];
-        cross(B, N, T);
-    /////}
+    simd_fvec<S> T[3];
+    cross(B, N, T);
 
     const simd_ivec<S> hi = (hash(px_index) + iteration) & (HaltonSeqLen - 1);
 

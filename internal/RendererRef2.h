@@ -6,8 +6,8 @@
 
 namespace ray {
 namespace ref2 {
-const int RayPacketDimX = 4;
-const int RayPacketDimY = 4;
+const int RayPacketDimX = 1;
+const int RayPacketDimY = 1;
 const int RayPacketSize = RayPacketDimX * RayPacketDimY;
 
 class Renderer : public RendererSIMD<RayPacketDimX, RayPacketDimY> {

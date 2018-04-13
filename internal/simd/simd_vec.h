@@ -4,28 +4,42 @@
 // Used to force loop unroll in release mode
 
 #define ITERATE(n, exp)  \
-    if ((n) <= 16) {                                \
-        switch (n) {                                \
-        case 16: { const int i = (n) - 16; exp }    \
-        case 15: { const int i = (n) - 15; exp }    \
-        case 14: { const int i = (n) - 14; exp }    \
-        case 13: { const int i = (n) - 13; exp }    \
-        case 12: { const int i = (n) - 12; exp }    \
-        case 11: { const int i = (n) - 11; exp }    \
-        case 10: { const int i = (n) - 10; exp }    \
-        case 9: { const int i = (n) - 9; exp }      \
-        case 8: { const int i = (n) - 8; exp }      \
-        case 7: { const int i = (n) - 7; exp }      \
-        case 6: { const int i = (n) - 6; exp }      \
-        case 5: { const int i = (n) - 5; exp }      \
-        case 4: { const int i = (n) - 4; exp }      \
-        case 3: { const int i = (n) - 3; exp }      \
-        case 2: { const int i = (n) - 2; exp }      \
-        case 1: { const int i = (n) - 1; exp }      \
-        }                                           \
-    } else                                          \
-    for (int i = 0; i < (n); i++) {                 \
-        exp                                         \
+    if ((n) == 16) {                \
+        { const int i = 0; exp }    \
+        { const int i = 1; exp }    \
+        { const int i = 2; exp }    \
+        { const int i = 3; exp }    \
+        { const int i = 4; exp }    \
+        { const int i = 5; exp }    \
+        { const int i = 6; exp }    \
+        { const int i = 7; exp }    \
+        { const int i = 8; exp }    \
+        { const int i = 9; exp }    \
+        { const int i = 10; exp }   \
+        { const int i = 11; exp }   \
+        { const int i = 12; exp }   \
+        { const int i = 13; exp }   \
+        { const int i = 14; exp }   \
+        { const int i = 15; exp }   \
+    } else if ((n) == 8) {          \
+        { const int i = 0; exp }    \
+        { const int i = 1; exp }    \
+        { const int i = 2; exp }    \
+        { const int i = 3; exp }    \
+        { const int i = 4; exp }    \
+        { const int i = 5; exp }    \
+        { const int i = 6; exp }    \
+        { const int i = 7; exp }    \
+    } else if ((n) == 4) {          \
+        { const int i = 0; exp }    \
+        { const int i = 1; exp }    \
+        { const int i = 2; exp }    \
+        { const int i = 3; exp }    \
+    } else if ((n) == 2) {          \
+        { const int i = 0; exp }    \
+        { const int i = 1; exp }    \
+    } else if ((n) == 1) {          \
+        { const int i = 0; exp }    \
     }
 
 namespace ray {
