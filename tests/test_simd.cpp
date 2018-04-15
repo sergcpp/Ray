@@ -2,7 +2,9 @@
 
 #include <iostream>
 
-#define NS ref
+#include "../internal/Core.h"
+
+#define NS ref2
 #include "../internal/simd/simd_vec.h"
 
 void test_simd_ref() {

@@ -499,7 +499,7 @@ public:
 
     friend force_inline simd_vec<int, S> operator/(const simd_vec<int, S> &v1, const simd_vec<int, S> &v2) {
         simd_vec<int, S> temp;
-        ITERATE(S/8, { temp.comp_[i] = v1.vec_[i] / v2.vec_[i]; })
+        ITERATE(S, { temp.comp_[i] = v1.comp_[i] / v2.comp_[i]; })
         return temp;
     }
 

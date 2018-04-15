@@ -340,19 +340,19 @@ public:
     template <typename... Tail>
     force_inline simd_vec(typename std::enable_if<sizeof...(Tail)+1 == S, int>::type head, Tail... tail) {
         const int _tail[] = { tail... };
-        vec_[0] = _mm_setr_ps(head, _tail[0], _tail[1], _tail[2]);
+        vec_[0] = _mm_setr_epi32(head, _tail[0], _tail[1], _tail[2]);
         if (S > 4) {
-            vec_[1] = _mm_setr_ps(_tail[3], _tail[4], _tail[5], _tail[6]);
+            vec_[1] = _mm_setr_epi32(_tail[3], _tail[4], _tail[5], _tail[6]);
             if (S > 8) {
-                vec_[2] = _mm_setr_ps(_tail[7], _tail[8], _tail[9], _tail[10]);
+                vec_[2] = _mm_setr_epi32(_tail[7], _tail[8], _tail[9], _tail[10]);
                 if (S > 12) {
-                    vec_[3] = _mm_setr_ps(_tail[11], _tail[12], _tail[13], _tail[14]);
+                    vec_[3] = _mm_setr_epi32(_tail[11], _tail[12], _tail[13], _tail[14]);
                 }
             }
         }
 
         for (int i = 15; i < S - 1; i += 4) {
-            vec_[(i + 1)/4] = _mm_setr_ps(_tail[i], _tail[i + 1], _tail[i + 2], _tail[i + 3]);
+            vec_[(i + 1)/4] = _mm_setr_epi32(_tail[i], _tail[i + 1], _tail[i + 2], _tail[i + 3]);
         }
     }
     force_inline simd_vec(const int *f) {
@@ -553,14 +553,14 @@ public:
     }
 
     friend force_inline simd_vec<int, S> operator*(const simd_vec<int, S> &v1, const simd_vec<int, S> &v2) {
-        simd_vec<float, S> ret;
+        simd_vec<int, S> ret;
         ITERATE(S, { ret.comp_[i] = v1.comp_[i] * v2.comp_[i]; })
         return ret;
     }
 
     friend force_inline simd_vec<int, S> operator/(const simd_vec<int, S> &v1, const simd_vec<int, S> &v2) {
         simd_vec<int, S> ret;
-        ITERATE(S, { ret.comp_[i] = v1.vec_[i] / v2.vec_[i]; })
+        ITERATE(S, { ret.comp_[i] = v1.comp_[i] / v2.comp_[i]; })
         return ret;
     }
 

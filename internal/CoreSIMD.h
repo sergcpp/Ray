@@ -97,10 +97,10 @@ template <int S>
 void TransformUVs(const simd_fvec<S> _uvs[2], float sx, float sy, const texture_t &t, const simd_ivec<S> &mip_level, const simd_ivec<S> &mask, simd_fvec<S> out_res[2]);
 
 // Sample texture
-simd_fvec4 SampleNearest(const ref::TextureAtlas2 &atlas, const texture_t &t, const simd_fvec2 &uvs, float lod);
+/*simd_fvec4 SampleNearest(const ref::TextureAtlas2 &atlas, const texture_t &t, const simd_fvec2 &uvs, float lod);
 simd_fvec4 SampleBilinear(const ref::TextureAtlas2 &atlas, const texture_t &t, const simd_fvec2 &uvs, int lod);
 simd_fvec4 SampleTrilinear(const ref::TextureAtlas2 &atlas, const texture_t &t, const simd_fvec2 &uvs, float lod);
-simd_fvec4 SampleAnisotropic(const ref::TextureAtlas2 &atlas, const texture_t &t, const simd_fvec2 &uvs, const simd_fvec2 &duv_dx, const simd_fvec2 &duv_dy);
+simd_fvec4 SampleAnisotropic(const ref::TextureAtlas2 &atlas, const texture_t &t, const simd_fvec2 &uvs, const simd_fvec2 &duv_dx, const simd_fvec2 &duv_dy);*/
 
 template <int S>
 void SampleNearest(const ref::TextureAtlas2 &atlas, const texture_t &t, const simd_fvec<S> uvs[2], const simd_fvec<S> &lod, const simd_ivec<S> &mask, simd_fvec<S> out_rgba[4]);
@@ -720,7 +720,7 @@ void ray::NS::TransformUVs(const simd_fvec<S> uvs[2], float sx, float sy, const 
     out_res[1] = (pos[1] + (uvs[1] - floor(uvs[1])) * static_cast<simd_fvec<S>>(isize[1] >> mip_level) + 1.0f) / sy;
 }
 
-ray::NS::simd_fvec4 ray::NS::SampleNearest(const ref::TextureAtlas2 &atlas, const texture_t &t, const simd_fvec2 &uvs, float lod) {
+/*ray::NS::simd_fvec4 ray::NS::SampleNearest(const ref::TextureAtlas2 &atlas, const texture_t &t, const simd_fvec2 &uvs, float lod) {
     int _lod = (int)lod;
 
     simd_fvec2 atlas_size = { atlas.size_x(), atlas.size_y() };
@@ -811,7 +811,7 @@ ray::NS::simd_fvec4 ray::NS::SampleAnisotropic(const ref::TextureAtlas2 &atlas, 
     }
 
     return res / float(num);
-}
+}*/
 
 template <int S>
 void ray::NS::SampleNearest(const ref::TextureAtlas2 &atlas, const texture_t &t, const simd_fvec<S> uvs[2], const simd_fvec<S> &lod, const simd_ivec<S> &mask, simd_fvec<S> out_rgba[4]) {
