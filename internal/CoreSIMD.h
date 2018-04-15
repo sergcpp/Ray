@@ -66,7 +66,7 @@ struct environment_t {
 
 // Generating rays
 template <int DimX, int DimY>
-void GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, int h, math::aligned_vector<ray_packet_t<DimX * DimY>> &out_rays);
+void GeneratePrimaryRays(const int iteration, const camera_t &cam, const rect_t &r, int w, int h, const float *halton, math::aligned_vector<ray_packet_t<DimX * DimY>> &out_rays);
 
 // Intersect primitives
 template <int S>
@@ -325,7 +325,7 @@ const float PI = 3.14159265358979323846264338327950288f;
 }
 
 template <int DimX, int DimY>
-void ray::NS::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, int h, math::aligned_vector<ray_packet_t<DimX * DimY>> &out_rays) {
+void ray::NS::GeneratePrimaryRays(const int iteration, const camera_t &cam, const rect_t &r, int w, int h, const float *halton, math::aligned_vector<ray_packet_t<DimX * DimY>> &out_rays) {
     const int S = DimX * DimY;
 
     static_assert(S <= 16, "!");
@@ -363,16 +363,22 @@ void ray::NS::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, i
     out_rays.resize(r.w * r.h / S + ((r.w * r.h) % 4 != 0));
 
     for (int y = r.y; y < r.y + r.h - (r.h & (DimY - 1)); y += DimY) {
-        simd_fvec<S> yy = { (float)y };
-        yy += off_y;
-
         for (int x = r.x; x < r.x + r.w - (r.w & (DimX - 1)); x += DimX) {
             auto &out_r = out_rays[i++];
+
+            simd_ivec<S> index = simd_ivec<S>(y) * w + x;
+            simd_ivec<S> hi = (hash(index) + iteration) & (HaltonSeqLen - 1);
 
             simd_fvec<S> xx = { (float)x };
             xx += off_x;
 
-            
+            simd_fvec<S> yy = { (float)y };
+            yy += off_y;
+
+            for (int i = 0; i < S; i++) {
+                xx[i] += halton[hi[i] * 2];
+                yy[i] += halton[hi[i] * 2 + 1];
+            }
 
             simd_fvec<S> _d[3], _dx[3], _dy[3];
             get_pix_dirs(xx, yy, _d);
@@ -830,11 +836,7 @@ void ray::NS::SampleNearest(const ref::TextureAtlas2 &atlas, const texture_t &t,
     }
 
     const float k = 1.0f / 255.0f;
-
-    out_rgba[0] *= k;
-    out_rgba[1] *= k;
-    out_rgba[2] *= k;
-    out_rgba[3] *= k;
+    ITERATE(4, { out_rgba[i] *= k; })
 }
 
 template <int S>
@@ -887,10 +889,7 @@ void ray::NS::SampleTrilinear(const ref::TextureAtlas2 &atlas, const texture_t &
 
     simd_fvec<S> k = lod - floor(lod);
 
-    out_rgba[0] = col1[0] * (1.0f - k) + col2[0] * k;
-    out_rgba[1] = col1[1] * (1.0f - k) + col2[1] * k;
-    out_rgba[2] = col1[2] * (1.0f - k) + col2[2] * k;
-    out_rgba[3] = col1[3] * (1.0f - k) + col2[3] * k;
+    ITERATE(4, { out_rgba[i] = col1[i] * (1.0f - k) + col2[i] * k; })
 }
 
 template <int S>
@@ -909,20 +908,18 @@ void ray::NS::SampleAnisotropic(const ref::TextureAtlas2 &atlas, const texture_t
                  k = l2 / l1,
                  step[2] = { duv_dx[0], duv_dx[1] };
 
-    for (int i = 0; i < S; i++) {
-        lod[i] = log2(l2[i]);
-    }
+    ITERATE(S, { lod[i] = log2(l2[i]); })
 
     auto _mask = l1 <= l2;
     where(_mask, k) = l1 / l2;
     where(_mask, step[0]) = duv_dy[0];
     where(_mask, step[1]) = duv_dy[1];
 
-    for (int i = 0; i < S; i++) {
+    ITERATE(S, {
         if (cast<simd_ivec<S>>(_mask)[i]) {
             lod[i] = log2(l1[i]);
         }
-    }
+    })
 
     where(lod < 0.0f, lod) = 0.0f;
     where(lod > (float)MAX_MIP_LEVEL, lod) = (float)MAX_MIP_LEVEL;
@@ -937,10 +934,7 @@ void ray::NS::SampleAnisotropic(const ref::TextureAtlas2 &atlas, const texture_t
     step[0] /= (simd_fvec<S>)num;
     step[1] /= (simd_fvec<S>)num;
 
-    out_rgba[0] = 0.0f;
-    out_rgba[1] = 0.0f;
-    out_rgba[2] = 0.0f;
-    out_rgba[3] = 0.0f;
+    ITERATE(4, { out_rgba[i] = 0.0f; })
 
     for (int i = 0; i < 32; i++) {
         auto imask = (num > i) & mask;
@@ -950,20 +944,15 @@ void ray::NS::SampleAnisotropic(const ref::TextureAtlas2 &atlas, const texture_t
         SampleTrilinear(atlas, t, _uvs, lod, imask, col);
 
         const auto &fmask = cast<simd_fvec<S>>(imask);
-        where(fmask, out_rgba[0]) = out_rgba[0] + col[0];
-        where(fmask, out_rgba[1]) = out_rgba[1] + col[1];
-        where(fmask, out_rgba[2]) = out_rgba[2] + col[2];
-        where(fmask, out_rgba[3]) = out_rgba[3] + col[3];
+        ITERATE(4, { where(fmask, out_rgba[i]) = out_rgba[i] + col[i]; })
     }
 
-    out_rgba[0] /= (simd_fvec<S>)num;
-    out_rgba[1] /= (simd_fvec<S>)num;
-    out_rgba[2] /= (simd_fvec<S>)num;
-    out_rgba[3] /= (simd_fvec<S>)num;
+    const auto fnum = (simd_fvec<S>)num;
+    ITERATE(4, { out_rgba[i] /= fnum; })
 }
 
 template <int S>
-__declspec(noinline) void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, const float *halton, const hit_data_t<S> &inter, const ray_packet_t<S> &ray,
+void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, const float *halton, const hit_data_t<S> &inter, const ray_packet_t<S> &ray,
                            const environment_t &env, const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
                            const mesh_t *meshes, const transform_t *transforms, const uint32_t *vtx_indices, const vertex_t *vertices,
                            const bvh_node_t *nodes, uint32_t node_index, const tri_accel_t *tris, const uint32_t *tri_indices,
@@ -982,12 +971,12 @@ __declspec(noinline) void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, co
     const auto *I = ray.d;
     const simd_fvec<S> P[3] = { ray.o[0] + inter.t * I[0], ray.o[1] + inter.t * I[1], ray.o[2] + inter.t * I[2] };
 
-    simd_fvec<S> w = simd_fvec<S>{ 1.0f } - inter.u - inter.v;
+    simd_fvec<S> w = 1.0f - inter.u - inter.v;
 
-    simd_fvec<S> p1[3], p2[3], p3[3];
-    simd_fvec<S> n1[3], n2[3], n3[3];
-    simd_fvec<S> u1[2], u2[2], u3[2];
-    simd_fvec<S> b1[3], b2[3], b3[3];
+    simd_fvec<S> p1[3], p2[3], p3[3],
+                 n1[3], n2[3], n3[3],
+                 u1[2], u2[2], u3[2],
+                 b1[3], b2[3], b3[3];
 
     simd_ivec<S> inter_prim_index = inter.prim_index;
     where(ino_hit, inter_prim_index) = { 0 };
@@ -1179,18 +1168,6 @@ __declspec(noinline) void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, co
 
             for (int i = 0; i < S; i++) {
                 if (!same_mi[i]) continue;
-
-                //simd_fvec2 _duv_dx = { duv_dx[0][i], duv_dx[1][i] };
-                //simd_fvec2 _duv_dy = { duv_dy[0][i], duv_dy[1][i] };
-
-                //simd_fvec2 _uvs = { uvs[0][i], uvs[1][i] };
-                //auto normals = SampleAnisotropic(tex_atlas, textures[mat->textures[NORMALS_TEXTURE]], _uvs, _duv_dx, _duv_dy);
-            
-                //tex_normal[0][i] = normals[0] * 2.0f - 1.0f;
-                //tex_normal[1][i] = normals[1] * 2.0f - 1.0f;
-                //tex_normal[2][i] = normals[2] * 2.0f - 1.0f;
-
-                //auto albedo = SampleAnisotropic(tex_atlas, textures[mat->textures[MAIN_TEXTURE]], _uvs, _duv_dx, _duv_dy);
 
                 tex_albedo[0][i] = pow(tex_albedo[0][i] * mat->main_color[0], 2.2f);
                 tex_albedo[1][i] = pow(tex_albedo[1][i] * mat->main_color[1], 2.2f);

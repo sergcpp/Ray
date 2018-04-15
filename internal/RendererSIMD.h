@@ -128,7 +128,7 @@ void ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
 
     math::aligned_vector<ray_packet_t<S>> primary_rays;
 
-    GeneratePrimaryRays<DimX, DimY>(cam, rect, w, h, primary_rays);
+    GeneratePrimaryRays<DimX, DimY>(region.iteration, cam, rect, w, h, &region.halton_seq[0], primary_rays);
 
     math::aligned_vector<simd_ivec<S>> primary_masks(primary_rays.size());
     math::aligned_vector<hit_data_t<S>> intersections(primary_rays.size());

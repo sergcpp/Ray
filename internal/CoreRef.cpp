@@ -57,18 +57,18 @@ force_inline bool is_leaf_node(const bvh_node_t &node) {
 bool bbox_test(const float o[3], const float inv_d[3], const float t, const float bbox_min[3], const float bbox_max[3]) {
     float low = inv_d[0] * (bbox_min[0] - o[0]);
     float high = inv_d[0] * (bbox_max[0] - o[0]);
-    float tmin = math::min(low, high);
-    float tmax = math::max(low, high);
+    float tmin = std::min(low, high);
+    float tmax = std::max(low, high);
 
     low = inv_d[1] * (bbox_min[1] - o[1]);
     high = inv_d[1] * (bbox_max[1] - o[1]);
-    tmin = math::max(tmin, math::min(low, high));
-    tmax = math::min(tmax, math::max(low, high));
+    tmin = std::max(tmin, std::min(low, high));
+    tmax = std::min(tmax, std::max(low, high));
 
     low = inv_d[2] * (bbox_min[2] - o[2]);
     high = inv_d[2] * (bbox_max[2] - o[2]);
-    tmin = math::max(tmin, math::min(low, high));
-    tmax = math::min(tmax, math::max(low, high));
+    tmin = std::max(tmin, std::min(low, high));
+    tmax = std::min(tmax, std::max(low, high));
 
     return tmin <= tmax && tmin <= t && tmax > 0;
 }
