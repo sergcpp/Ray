@@ -1,5 +1,5 @@
 Small pathtracing lib created for learning purposes. Includes CPU and GPU (OpenCL) backends.
-CPU backends dragging behind now and do not include any shading.
+~~CPU backends dragging behind and do not include any shading.~~ Its fine now, but should be optimized.
 
 
 - Full application : https://bitbucket.org/Apfel1994/raydemo
