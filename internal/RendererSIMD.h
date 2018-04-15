@@ -1,6 +1,9 @@
 
+#include <random>
+
 #include "CoreSIMD.h"
 #include "FramebufferRef.h"
+#include "Halton.h"
 #include "../RendererBase.h"
 
 namespace ray {
@@ -35,7 +38,7 @@ public:
     void RenderScene(const std::shared_ptr<SceneBase> &s, RegionContext &region) override;
 
     virtual void GetStats(stats_t &st) override {
-        
+
     }
 };
 }
@@ -44,8 +47,6 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////
 
 #include "SceneRef2.h"
-
-#include <math/math.hpp>
 
 template <int DimX, int DimY>
 ray::NS::RendererSIMD<DimX, DimY>::RendererSIMD(int w, int h) : clean_buf_(w, h), final_buf_(w, h), temp_buf_(w, h) {
@@ -167,7 +168,7 @@ void ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
         }
     }
 
-    for (int bounce = 0; bounce < 2 && secondary_rays_count; bounce++) {
+    for (int bounce = 0; bounce < 4 && secondary_rays_count; bounce++) {
         for (int i = 0; i < secondary_rays_count; i++) {
             const auto &r = secondary_rays[i];
 

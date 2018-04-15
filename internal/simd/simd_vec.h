@@ -398,6 +398,12 @@ public:
         return ret;
     }
 
+    friend force_inline simd_vec<T, S> operator>>(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) {
+        simd_vec<T, S> ret;
+        ITERATE(S, { ret.comp_[i] = v1.comp_[i] >> v2.comp_[i]; })
+        return ret;
+    }
+
     friend force_inline simd_vec<T, S> operator>>(const simd_vec<T, S> &v1, T v2) {
         simd_vec<T, S> ret;
         ITERATE(S, { ret.comp_[i] = v1.comp_[i] >> v2; })
@@ -481,4 +487,4 @@ using native_simd_ivec = simd_ivec<1>;
 
 #pragma warning(pop)
 
-#undef ITERATE
+//#undef ITERATE

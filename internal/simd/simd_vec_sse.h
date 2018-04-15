@@ -610,6 +610,12 @@ public:
         return ret;
     }
 
+    friend force_inline simd_vec<int, S> operator>>(const simd_vec<int, S> &v1, const simd_vec<int, S> &v2) {
+        simd_vec<int, S> ret;
+        ITERATE(S/4, { ret.vec_[i] = _mm_srlv_epi32(v1.vec_[i], v2.vec_[i]); })
+        return ret;
+    }
+
     friend force_inline simd_vec<int, S> operator>>(const simd_vec<int, S> &v1, int v2) {
         simd_vec<int, S> ret;
         ITERATE(S/4, { ret.vec_[i] = _mm_srli_epi32(v1.vec_[i], v2); })

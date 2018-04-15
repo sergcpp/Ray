@@ -575,6 +575,12 @@ public:
         return ret;
     }
 
+    friend force_inline simd_vec<int, S> operator>>(const simd_vec<int, S> &v1, const simd_vec<int, S> &v2) {
+        simd_vec<int, S> temp;
+        ITERATE(S/8, { temp.vec_[i] = _mm256_srlv_epi32(v1.vec_[i], v2.vec_[i]); })
+        return temp;
+    }
+
     friend force_inline simd_vec<int, S> operator>>(const simd_vec<int, S> &v1, int v2) {
         simd_vec<int, S> temp;
         ITERATE(S/8, { temp.vec_[i] = _mm256_srli_epi32(v1.vec_[i], v2); })

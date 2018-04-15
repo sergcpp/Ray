@@ -94,7 +94,7 @@ template <int S>
 void TransformNormal(const simd_fvec<S> n[3], const float *inv_xform, simd_fvec<S> out_n[3]);
 
 template <int S>
-void TransformUVs(const simd_fvec<S> _uvs[2], float sx, float sy, const texture_t &t, const simd_ivec<S> &mip_level, simd_fvec<S> out_res[2]);
+void TransformUVs(const simd_fvec<S> _uvs[2], float sx, float sy, const texture_t &t, const simd_ivec<S> &mip_level, const simd_ivec<S> &mask, simd_fvec<S> out_res[2]);
 
 // Sample texture
 simd_fvec4 SampleNearest(const ref::TextureAtlas2 &atlas, const texture_t &t, const simd_fvec2 &uvs, float lod);
@@ -318,6 +318,8 @@ force_inline float length(const simd_fvec2 &x) {
 force_inline float floor(float x) {
     return (float)((int)x - (x < 0.0f));
 }
+
+const float PI = 3.14159265358979323846264338327950288f;
 
 }
 }
@@ -700,17 +702,16 @@ void ray::NS::TransformNormal(const simd_fvec<S> n[3], const float *inv_xform, s
 }
 
 template <int S>
-void ray::NS::TransformUVs(const simd_fvec<S> uvs[2], float sx, float sy, const texture_t &t, const simd_ivec<S> &mip_level, simd_fvec<S> out_res[2]) {
-    simd_fvec<S> pos[2], size[2];
-    for (int i = 0; i < S; i++) {
-        pos[0][i] = (float)t.pos[mip_level[i]][0];
-        pos[1][i] = (float)t.pos[mip_level[i]][1];
-        size[0][i] = (float)(t.size[0] >> mip_level[i]);
-        size[1][i] = (float)(t.size[1] >> mip_level[i]);
-    }
+void ray::NS::TransformUVs(const simd_fvec<S> uvs[2], float sx, float sy, const texture_t &t, const simd_ivec<S> &mip_level, const simd_ivec<S> &mask, simd_fvec<S> out_res[2]) {
+    simd_fvec<S> pos[2];
 
-    out_res[0] = (pos[0] + (uvs[0] - floor(uvs[0])) * size[0] + 1.0f) / sx;
-    out_res[1] = (pos[1] + (uvs[1] - floor(uvs[1])) * size[1] + 1.0f) / sy;
+    ITERATE(S, { pos[0][i] = (float)t.pos[mip_level[i]][0]; });
+    ITERATE(S, { pos[1][i] = (float)t.pos[mip_level[i]][1]; });
+
+    simd_ivec<S> isize[2] = { (int)t.size[0], (int)t.size[1] };
+
+    out_res[0] = (pos[0] + (uvs[0] - floor(uvs[0])) * static_cast<simd_fvec<S>>(isize[0] >> mip_level) + 1.0f) / sx;
+    out_res[1] = (pos[1] + (uvs[1] - floor(uvs[1])) * static_cast<simd_fvec<S>>(isize[1] >> mip_level) + 1.0f) / sy;
 }
 
 ray::NS::simd_fvec4 ray::NS::SampleNearest(const ref::TextureAtlas2 &atlas, const texture_t &t, const simd_fvec2 &uvs, float lod) {
@@ -811,7 +812,7 @@ void ray::NS::SampleNearest(const ref::TextureAtlas2 &atlas, const texture_t &t,
     simd_ivec<S> _lod = (simd_ivec<S>)lod;
 
     simd_fvec<S> _uvs[2];
-    TransformUVs(uvs, atlas.size_x(), atlas.size_y(), t, _lod, _uvs);
+    TransformUVs(uvs, atlas.size_x(), atlas.size_y(), t, _lod, mask, _uvs);
 
     where(_lod > MAX_MIP_LEVEL, _lod) = MAX_MIP_LEVEL;
 
@@ -839,7 +840,7 @@ void ray::NS::SampleNearest(const ref::TextureAtlas2 &atlas, const texture_t &t,
 template <int S>
 void ray::NS::SampleBilinear(const ref::TextureAtlas2 &atlas, const texture_t &t, const simd_fvec<S> uvs[2], const simd_ivec<S> &lod, const simd_ivec<S> &mask, simd_fvec<S> out_rgba[4]) {
     simd_fvec<S> _uvs[2];
-    TransformUVs(uvs, atlas.size_x(), atlas.size_y(), t, lod, _uvs);
+    TransformUVs(uvs, atlas.size_x(), atlas.size_y(), t, lod, mask, _uvs);
 
     _uvs[0] = _uvs[0] * atlas.size_x() - 0.5f;
     _uvs[1] = _uvs[1] * atlas.size_y() - 0.5f;
@@ -1168,7 +1169,7 @@ __declspec(noinline) void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, co
 
             simd_fvec<S> tex_normal[4], tex_albedo[4];
 
-            SampleNearest(tex_atlas, textures[mat->textures[NORMALS_TEXTURE]], uvs, { 0.0f }, same_mi, tex_normal);
+            SampleAnisotropic(tex_atlas, textures[mat->textures[NORMALS_TEXTURE]], uvs, duv_dx, duv_dy, same_mi, tex_normal);
             
             tex_normal[0] = tex_normal[0] * 2.0f - 1.0f;
             tex_normal[1] = tex_normal[1] * 2.0f - 1.0f;
@@ -1229,7 +1230,7 @@ __declspec(noinline) void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, co
                         const float z = 1.0f - halton[hi[i] * 2] * env.sun_softness;
                         const float temp = std::sqrt(1.0f - z * z);
 
-                        const float phi = halton[hi[i] * 2 + 1] * 2 * 3.14159265358979323846264338327950288f;
+                        const float phi = halton[hi[i] * 2 + 1] * 2 * PI;
                         const float cos_phi = std::cos(phi);
                         const float sin_phi = std::sin(phi);
 
@@ -1275,7 +1276,7 @@ __declspec(noinline) void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, co
                     const float z = 1.0f - halton[hi[i] * 2];
                     const float temp = std::sqrt(1.0f - z * z);
 
-                    const float phi = halton[((hash(hi[i]) + iteration) & (HaltonSeqLen - 1)) * 2 + 0] * 2 * 3.14159265358979323846264338327950288f;
+                    const float phi = halton[((hash(hi[i]) + iteration) & (HaltonSeqLen - 1)) * 2 + 0] * 2 * PI;
                     const float cos_phi = std::cos(phi);
                     const float sin_phi = std::sin(phi);
 
