@@ -1139,9 +1139,10 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
                 if (first_oi == 0xffffffff)
                     first_oi = inter.obj_index[i];
 
-                const auto &tri = tris[inter.prim_index[i]];
                 if (first_mi == 0xffffffff)
-                    first_mi = tri.mi;
+                    first_mi = mat_index[i];
+
+                const auto *mat = &materials[first_mi];
             }
     
             auto same_mi = mat_index == first_mi;
@@ -1304,6 +1305,12 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
                     where(new_ray_mask, r.dd_dy[1]) = dd_dy[1] - 2 * (dot(I, _N) * dndy[1] + ddn_dy * _N[1]);
                     where(new_ray_mask, r.dd_dy[2]) = dd_dy[2] - 2 * (dot(I, _N) * dndy[2] + ddn_dy * _N[2]);
                 }
+            } else if (mat->type == EmissiveMaterial) {
+                const auto &mask = cast<simd_fvec<S>>(same_mi);
+
+                where(mask, out_rgba[0]) = mat->strength * ray.c[0] * mat->main_color[0];
+                where(mask, out_rgba[1]) = mat->strength * ray.c[1] * mat->main_color[1];
+                where(mask, out_rgba[2]) = mat->strength * ray.c[2] * mat->main_color[2];
             }
 
             index++;

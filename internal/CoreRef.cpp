@@ -700,7 +700,7 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
         memcpy(&r.o[0], value_ptr(P + HIT_BIAS * N), 3 * sizeof(float));
         memcpy(&r.d[0], value_ptr(V), 3 * sizeof(float));
         memcpy(&r.c[0], value_ptr(make_vec3(ray.c) * z * vec3(albedo)), 3 * sizeof(float));
-        
+
         memcpy(&r.do_dx[0], value_ptr(do_dx), 3 * sizeof(float));
         memcpy(&r.do_dy[0], value_ptr(do_dy), 3 * sizeof(float));
 
@@ -711,8 +711,106 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
             const int index = (*out_secondary_rays_count)++;
             out_secondary_rays[index] = r;
         }
-    } else {
-        return pixel_color_t{ 0.0f, 1.0f, 1.0f, 1.0f };
+    } else if (mat->type == GlossyMaterial) {
+        vec3 V = reflect(I, dot(I, N) > 0 ? N : -N);
+
+        const float z = 1.0f - halton[hi * 2] * mat->roughness;
+        const float temp = sqrt(1.0f - z * z);
+
+        const float phi = halton[((hash(hi) + iteration) & (HaltonSeqLen - 1)) * 2 + 0] * 2 * pi<float>();
+        const float cos_phi = math::cos(phi);
+        const float sin_phi = math::sin(phi);
+
+        vec3 TT = cross(V, B);
+        vec3 BB = cross(V, TT);
+        V = temp * sin_phi * BB + z * V + temp * cos_phi * TT;
+
+        ray_packet_t r;
+
+        r.id = ray.id;
+
+        memcpy(&r.o[0], value_ptr(P + HIT_BIAS * N), 3 * sizeof(float));
+        memcpy(&r.d[0], value_ptr(V), 3 * sizeof(float));
+        memcpy(&r.c[0], value_ptr(make_vec3(ray.c) * z), 3 * sizeof(float));
+
+        memcpy(&r.do_dx[0], value_ptr(do_dx), 3 * sizeof(float));
+        memcpy(&r.do_dy[0], value_ptr(do_dy), 3 * sizeof(float));
+
+        memcpy(&r.dd_dx[0], value_ptr(dd_dx - 2 * (dot(I, N) * dndx + ddn_dx * N)), 3 * sizeof(float));
+        memcpy(&r.dd_dy[0], value_ptr(dd_dy - 2 * (dot(I, N) * dndy + ddn_dy * N)), 3 * sizeof(float));
+
+        if ((r.c[0] * r.c[0] + r.c[1] * r.c[1] + r.c[2] * r.c[2]) > 0.005f) {
+            const int index = (*out_secondary_rays_count)++;
+            out_secondary_rays[index] = r;
+        }
+    } else if (mat->type == RefractiveMaterial) {
+        const vec3 _N = dot(I, N) > 0 ? -N : N;
+
+        float eta = 1.0f / mat->ior;
+        float cosi = dot(-I, _N);
+        float cost2 = 1.0f - eta * eta * (1.0f - cosi * cosi);
+        float m = eta * cosi - sqrt(fabs(cost2));
+        vec3 V = eta * I + m * _N;
+        if (cost2 < 0) V = vec3{ 0 };
+
+        // ** REFACTOR THIS **
+
+        const float z = 1.0f - halton[hi * 2] * mat->roughness;
+        const float temp = sqrt(1.0f - z * z);
+
+        const float phi = halton[((hash(hi) + iteration) & (HaltonSeqLen - 1)) * 2 + 0] * 2 * pi<float>();
+        const float cos_phi = math::cos(phi);
+        const float sin_phi = math::sin(phi);
+
+        vec3 TT = normalize(cross(V, B));
+        vec3 BB = normalize(cross(V, TT));
+        V = temp * sin_phi * BB + z * V + temp * cos_phi * TT;
+
+        //////////////////
+
+        float k = (eta - eta * eta * dot(I, N) / dot(V, N));
+        float dmdx = k * ddn_dx;
+        float dmdy = k * ddn_dy;
+
+        ray_packet_t r;
+
+        r.id = ray.id;
+
+        memcpy(&r.o[0], value_ptr(P + HIT_BIAS * I), 3 * sizeof(float));
+        memcpy(&r.d[0], value_ptr(V), 3 * sizeof(float));
+        memcpy(&r.c[0], value_ptr(make_vec3(ray.c) * z), 3 * sizeof(float));
+
+        memcpy(&r.do_dx[0], value_ptr(do_dx), 3 * sizeof(float));
+        memcpy(&r.do_dy[0], value_ptr(do_dy), 3 * sizeof(float));
+
+        memcpy(&r.dd_dx[0], value_ptr(eta * dd_dx - (m * dndx + dmdx * N)), 3 * sizeof(float));
+        memcpy(&r.dd_dy[0], value_ptr(eta * dd_dy - (m * dndy + dmdy * N)), 3 * sizeof(float));
+
+        if ((r.c[0] * r.c[0] + r.c[1] * r.c[1] + r.c[2] * r.c[2]) > 0.005f) {
+            const int index = (*out_secondary_rays_count)++;
+            out_secondary_rays[index] = r;
+        }
+    } else if (mat->type == EmissiveMaterial) {
+        col = mat->strength * vec3(albedo);
+    } else if (mat->type == TransparentMaterial) {
+        ray_packet_t r;
+
+        r.id = ray.id;
+
+        memcpy(&r.o[0], value_ptr(P + HIT_BIAS * I), 3 * sizeof(float));
+        memcpy(&r.d[0], &ray.d[0], 3 * sizeof(float));
+        memcpy(&r.c[0], &ray.c[0], 3 * sizeof(float));
+
+        memcpy(&r.do_dx[0], &ray.do_dx[0], 3 * sizeof(float));
+        memcpy(&r.do_dy[0], &ray.do_dy[0], 3 * sizeof(float));
+
+        memcpy(&r.dd_dx[0], &ray.dd_dx[0], 3 * sizeof(float));
+        memcpy(&r.dd_dy[0], &ray.dd_dy[0], 3 * sizeof(float));
+
+        if ((r.c[0] * r.c[0] + r.c[1] * r.c[1] + r.c[2] * r.c[2]) > 0.005f) {
+            const int index = (*out_secondary_rays_count)++;
+            out_secondary_rays[index] = r;
+        }
     }
 
     return pixel_color_t{ ray.c[0] * col.r, ray.c[1] * col.g, ray.c[2] * col.b, 1.0f };

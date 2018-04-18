@@ -152,7 +152,7 @@ uint32_t ray::ref::Scene2::AddMesh(const mesh_desc_t &_m) {
         memset(&v.b[0], 0, 3 * sizeof(float));
     }
 
-    ComputeTextureBasis(0, vertices_, new_vtx_indices, _m.vtx_indices, _m.vtx_indices_count);
+    ComputeTextureBasis(0, vertices_, new_vtx_indices, &new_vtx_indices[0], new_vtx_indices.size());
 
     vtx_indices_.insert(vtx_indices_.end(), new_vtx_indices.begin(), new_vtx_indices.end());
 

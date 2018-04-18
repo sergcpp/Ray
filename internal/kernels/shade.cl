@@ -295,8 +295,8 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
         //////////////////
 
         float k = (eta - eta * eta * dot(I, N) / dot(V, N));
-        float3 dmdx = k * ddn_dx;
-        float3 dmdy = k * ddn_dy;
+        float dmdx = k * ddn_dx;
+        float dmdy = k * ddn_dy;
 
         ray_packet_t r;
         r.o = (float4)(P + HIT_BIAS * I, (float)x);
