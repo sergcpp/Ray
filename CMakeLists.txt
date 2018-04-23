@@ -35,10 +35,6 @@ set(INTERNAL_SOURCE_FILES internal/BVHSplit.h
                           internal/SceneOCL.cpp
                           internal/SceneRef.h
                           internal/SceneRef.cpp
-                          internal/SceneRef2.h
-                          internal/SceneRef2.cpp
-                          internal/TextureAtlas2.h
-                          internal/TextureAtlas2.cpp
                           internal/TextureAtlasOCL.h
                           internal/TextureAtlasOCL.cpp
                           internal/TextureAtlasRef.h

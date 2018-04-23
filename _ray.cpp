@@ -14,9 +14,6 @@
 #include "internal/TextureAtlasRef.cpp"
 #include "internal/TextureUtilsRef.cpp"
 
-#include "internal/SceneRef2.cpp"
-#include "internal/TextureAtlas2.cpp"
-
 #include "internal/RendererOCL.cpp"
 #include "internal/SceneOCL.cpp"
 #include "internal/TextureAtlasOCL.cpp"

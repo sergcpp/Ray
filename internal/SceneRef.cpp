@@ -4,7 +4,7 @@
 
 #include <cstring>
 
-ray::ref::Scene::Scene() : texture_atlas_({ MAX_TEXTURE_SIZE, MAX_TEXTURE_SIZE }) {
+ray::ref::Scene::Scene() : texture_atlas_(MAX_TEXTURE_SIZE, MAX_TEXTURE_SIZE) {
     pixel_color8_t default_normalmap = { 127, 127, 255 };
 
     tex_desc_t t;
@@ -41,29 +41,30 @@ uint32_t ray::ref::Scene::AddTexture(const tex_desc_t &_t) {
     t.size[1] = (uint16_t)_t.h;
 
     int mip = 0;
-    math::ivec2 res = { _t.w, _t.h };
+    int res[2] = { _t.w, _t.h };
 
     std::vector<pixel_color8_t> tex_data(_t.data, _t.data + _t.w * _t.h);
 
-    while (res.x >= 1 && res.y >= 1) {
-        math::ivec2 pos;
+    while (res[0] >= 1 && res[1] >= 1) {
+        int pos[2];
         int page = texture_atlas_.Allocate(&tex_data[0], res, pos);
         if (page == -1) {
             // release allocated mip levels on fail
             for (int i = mip; i >= 0; i--) {
-                texture_atlas_.Free(t.page[i], { t.pos[i][0], t.pos[i][1] });
+                int _pos[2] = { t.pos[i][0], t.pos[i][1] };
+                texture_atlas_.Free(t.page[i], _pos);
             }
             return 0xffffffff;
         }
 
         t.page[mip] = (uint32_t)page;
-        t.pos[mip][0] = (uint16_t)pos.x;
-        t.pos[mip][1] = (uint16_t)pos.y;
+        t.pos[mip][0] = (uint16_t)pos[0];
+        t.pos[mip][1] = (uint16_t)pos[1];
 
-        tex_data = ref::DownsampleTexture(tex_data, res);
+        tex_data = ref::DownsampleTexture(tex_data, math::ivec2{ res[0], res[1] });
 
-        res.x /= 2;
-        res.y /= 2;
+        res[0] /= 2;
+        res[1] /= 2;
         mip++;
     }
 

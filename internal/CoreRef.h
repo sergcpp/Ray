@@ -74,7 +74,13 @@ bool Traverse_MicroTree_GPU(const ray_packet_t &r, const float inv_d[3], const b
 // Transform
 ray_packet_t TransformRay(const ray_packet_t &r, const float *xform);
 math::vec3 TransformNormal(const math::vec3 &n, const float *inv_xform);
-void TransformUVs(const float uvs[2], const float tex_atlas_size[2], const texture_t *t, int mip_level, float out_uvs[2]);
+math::vec2 TransformUVs(const math::vec2 &uvs, const math::vec2 &tex_atlas_size, const texture_t *t, int mip_level);
+
+// Sample Texture
+math::vec4 SampleNearest(const TextureAtlas &atlas, const texture_t &t, const math::vec2 &uvs, float lod);
+math::vec4 SampleBilinear(const TextureAtlas &atlas, const texture_t &t, const math::vec2 &uvs, int lod);
+math::vec4 SampleTrilinear(const TextureAtlas &atlas, const texture_t &t, const math::vec2 &uvs, float lod);
+math::vec4 SampleAnisotropic(const TextureAtlas &atlas, const texture_t &t, const math::vec2 &uvs, const math::vec2 &duv_dx, const math::vec2 &duv_dy);
 
 // Shade
 ray::pixel_color_t ShadeSurface(const int index, const int iteration, const float *halton, const hit_data_t &inter, const ray_packet_t &ray, 

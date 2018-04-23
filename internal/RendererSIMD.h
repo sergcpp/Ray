@@ -46,7 +46,7 @@ public:
 
 ////////////////////////////////////////////////////////////////////////////////////////////
 
-#include "SceneRef2.h"
+#include "SceneRef.h"
 
 template <int DimX, int DimY>
 ray::NS::RendererSIMD<DimX, DimY>::RendererSIMD(int w, int h) : clean_buf_(w, h), final_buf_(w, h), temp_buf_(w, h) {
@@ -56,7 +56,7 @@ ray::NS::RendererSIMD<DimX, DimY>::RendererSIMD(int w, int h) : clean_buf_(w, h)
 
 template <int DimX, int DimY>
 std::shared_ptr<ray::SceneBase> ray::NS::RendererSIMD<DimX, DimY>::CreateScene() {
-    return std::make_shared<ref::Scene2>();
+    return std::make_shared<ref::Scene>();
 }
 
 template <int DimX, int DimY>
@@ -65,7 +65,7 @@ void ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
 
     const int S = DimX * DimY;
 
-    auto s = std::dynamic_pointer_cast<ref::Scene2>(_s);
+    auto s = std::dynamic_pointer_cast<ref::Scene>(_s);
     if (!s) return;
 
     const auto &cam = s->GetCamera(s->current_cam());

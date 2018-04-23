@@ -2,7 +2,7 @@
 
 #include <vector>
 
-#include "TextureAtlas2.h"
+#include "TextureAtlasRef.h"
 
 #include "simd/simd_vec.h"
 
@@ -103,13 +103,13 @@ simd_fvec4 SampleTrilinear(const ref::TextureAtlas2 &atlas, const texture_t &t, 
 simd_fvec4 SampleAnisotropic(const ref::TextureAtlas2 &atlas, const texture_t &t, const simd_fvec2 &uvs, const simd_fvec2 &duv_dx, const simd_fvec2 &duv_dy);*/
 
 template <int S>
-void SampleNearest(const ref::TextureAtlas2 &atlas, const texture_t &t, const simd_fvec<S> uvs[2], const simd_fvec<S> &lod, const simd_ivec<S> &mask, simd_fvec<S> out_rgba[4]);
+void SampleNearest(const ref::TextureAtlas &atlas, const texture_t &t, const simd_fvec<S> uvs[2], const simd_fvec<S> &lod, const simd_ivec<S> &mask, simd_fvec<S> out_rgba[4]);
 template <int S>
-void SampleBilinear(const ref::TextureAtlas2 &atlas, const texture_t &t, const simd_fvec<S> uvs[2], const simd_ivec<S> &lod, const simd_ivec<S> &mask, simd_fvec<S> out_rgba[4]);
+void SampleBilinear(const ref::TextureAtlas &atlas, const texture_t &t, const simd_fvec<S> uvs[2], const simd_ivec<S> &lod, const simd_ivec<S> &mask, simd_fvec<S> out_rgba[4]);
 template <int S>
-void SampleTrilinear(const ref::TextureAtlas2 &atlas, const texture_t &t, const simd_fvec<S> uvs[2], const simd_fvec<S> &lod, const simd_ivec<S> &mask, simd_fvec<S> out_rgba[4]);
+void SampleTrilinear(const ref::TextureAtlas &atlas, const texture_t &t, const simd_fvec<S> uvs[2], const simd_fvec<S> &lod, const simd_ivec<S> &mask, simd_fvec<S> out_rgba[4]);
 template <int S>
-void SampleAnisotropic(const ref::TextureAtlas2 &atlas, const texture_t &t, const simd_fvec<S> uvs[2], const simd_fvec<S> duv_dx[2], const simd_fvec<S> duv_dy[2], const simd_ivec<S> &mask, simd_fvec<S> out_rgba[4]);
+void SampleAnisotropic(const ref::TextureAtlas &atlas, const texture_t &t, const simd_fvec<S> uvs[2], const simd_fvec<S> duv_dx[2], const simd_fvec<S> duv_dy[2], const simd_ivec<S> &mask, simd_fvec<S> out_rgba[4]);
 
 // Shade
 template <int S>
@@ -117,7 +117,7 @@ void ShadeSurface(const simd_ivec<S> &index, const int iteration, const float *h
                   const environment_t &env, const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
                   const mesh_t *meshes, const transform_t *transforms, const uint32_t *vtx_indices, const vertex_t *vertices,
                   const bvh_node_t *nodes, uint32_t node_index, const tri_accel_t *tris, const uint32_t *tri_indices,
-                  const material_t *materials, const texture_t *textures, const ray::ref::TextureAtlas2 &tex_atlas, simd_fvec<S> out_rgba[4], simd_ivec<S> *out_secondary_masks, ray_packet_t<S> *out_secondary_rays, int *out_secondary_rays_count);
+                  const material_t *materials, const texture_t *textures, const ray::ref::TextureAtlas &tex_atlas, simd_fvec<S> out_rgba[4], simd_ivec<S> *out_secondary_masks, ray_packet_t<S> *out_secondary_rays, int *out_secondary_rays_count);
 }
 }
 
@@ -814,7 +814,7 @@ ray::NS::simd_fvec4 ray::NS::SampleAnisotropic(const ref::TextureAtlas2 &atlas, 
 }*/
 
 template <int S>
-void ray::NS::SampleNearest(const ref::TextureAtlas2 &atlas, const texture_t &t, const simd_fvec<S> uvs[2], const simd_fvec<S> &lod, const simd_ivec<S> &mask, simd_fvec<S> out_rgba[4]) {
+void ray::NS::SampleNearest(const ref::TextureAtlas &atlas, const texture_t &t, const simd_fvec<S> uvs[2], const simd_fvec<S> &lod, const simd_ivec<S> &mask, simd_fvec<S> out_rgba[4]) {
     simd_ivec<S> _lod = (simd_ivec<S>)lod;
 
     simd_fvec<S> _uvs[2];
@@ -840,7 +840,7 @@ void ray::NS::SampleNearest(const ref::TextureAtlas2 &atlas, const texture_t &t,
 }
 
 template <int S>
-void ray::NS::SampleBilinear(const ref::TextureAtlas2 &atlas, const texture_t &t, const simd_fvec<S> uvs[2], const simd_ivec<S> &lod, const simd_ivec<S> &mask, simd_fvec<S> out_rgba[4]) {
+void ray::NS::SampleBilinear(const ref::TextureAtlas &atlas, const texture_t &t, const simd_fvec<S> uvs[2], const simd_ivec<S> &lod, const simd_ivec<S> &mask, simd_fvec<S> out_rgba[4]) {
     simd_fvec<S> _uvs[2];
     TransformUVs(uvs, atlas.size_x(), atlas.size_y(), t, lod, mask, _uvs);
 
@@ -881,7 +881,7 @@ void ray::NS::SampleBilinear(const ref::TextureAtlas2 &atlas, const texture_t &t
 }
 
 template <int S>
-void ray::NS::SampleTrilinear(const ref::TextureAtlas2 &atlas, const texture_t &t, const simd_fvec<S> uvs[2], const simd_fvec<S> &lod, const simd_ivec<S> &mask, simd_fvec<S> out_rgba[4]) {
+void ray::NS::SampleTrilinear(const ref::TextureAtlas &atlas, const texture_t &t, const simd_fvec<S> uvs[2], const simd_fvec<S> &lod, const simd_ivec<S> &mask, simd_fvec<S> out_rgba[4]) {
     simd_fvec<S> col1[4];
     SampleBilinear(atlas, t, uvs, (simd_ivec<S>)floor(lod), mask, col1);
     simd_fvec<S> col2[4];
@@ -893,7 +893,7 @@ void ray::NS::SampleTrilinear(const ref::TextureAtlas2 &atlas, const texture_t &
 }
 
 template <int S>
-void ray::NS::SampleAnisotropic(const ref::TextureAtlas2 &atlas, const texture_t &t, const simd_fvec<S> uvs[2], const simd_fvec<S> duv_dx[2], const simd_fvec<S> duv_dy[2], const simd_ivec<S> &mask, simd_fvec<S> out_rgba[4]) {
+void ray::NS::SampleAnisotropic(const ref::TextureAtlas &atlas, const texture_t &t, const simd_fvec<S> uvs[2], const simd_fvec<S> duv_dx[2], const simd_fvec<S> duv_dy[2], const simd_ivec<S> &mask, simd_fvec<S> out_rgba[4]) {
     simd_fvec<S> temp1 = duv_dx[0] * (float)t.size[0];
     simd_fvec<S> temp2 = duv_dx[1] * (float)t.size[1];
 
@@ -956,7 +956,7 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
                            const environment_t &env, const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
                            const mesh_t *meshes, const transform_t *transforms, const uint32_t *vtx_indices, const vertex_t *vertices,
                            const bvh_node_t *nodes, uint32_t node_index, const tri_accel_t *tris, const uint32_t *tri_indices,
-                           const material_t *materials, const texture_t *textures, const ray::ref::TextureAtlas2 &tex_atlas, simd_fvec<S> out_rgba[4], simd_ivec<S> *out_secondary_masks, ray_packet_t<S> *out_secondary_rays, int *out_secondary_rays_count) {
+                           const material_t *materials, const texture_t *textures, const ray::ref::TextureAtlas &tex_atlas, simd_fvec<S> out_rgba[4], simd_ivec<S> *out_secondary_masks, ray_packet_t<S> *out_secondary_rays, int *out_secondary_rays_count) {
     out_rgba[3] = { 1.0f };
     
     auto ino_hit = inter.mask ^ simd_ivec<S>(-1);
@@ -1006,7 +1006,8 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
         b2[0][i] = v2.b[0]; b2[1][i] = v2.b[1]; b2[2][i] = v2.b[2];
         b3[0][i] = v3.b[0]; b3[1][i] = v3.b[1]; b3[2][i] = v3.b[2];
 
-        mat_index[i] = reinterpret_cast<const int&>(tris[inter.prim_index[i]].mi);
+        uint32_t mi = tris[inter.prim_index[i]].mi;
+        mat_index[i] = reinterpret_cast<const int&>(mi);
 
         const auto *tr = &transforms[mesh_instances[inter.obj_index[i]].tr_index];
 
@@ -1141,8 +1142,6 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
 
                 if (first_mi == 0xffffffff)
                     first_mi = mat_index[i];
-
-                const auto *mat = &materials[first_mi];
             }
     
             auto same_mi = mat_index == first_mi;
@@ -1311,6 +1310,8 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
                 where(mask, out_rgba[0]) = mat->strength * ray.c[0] * mat->main_color[0];
                 where(mask, out_rgba[1]) = mat->strength * ray.c[1] * mat->main_color[1];
                 where(mask, out_rgba[2]) = mat->strength * ray.c[2] * mat->main_color[2];
+            } else if (mat->type == MixMaterial) {
+
             }
 
             index++;

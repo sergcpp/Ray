@@ -491,18 +491,115 @@ math::vec3 ray::ref::TransformNormal(const math::vec3 &n, const float *inv_xform
                  dot(make_vec3(&inv_xform[8]), n) };
 }
 
-void ray::ref::TransformUVs(const float _uvs[2], const float tex_atlas_size[2], const texture_t *t, int mip_level, float out_uvs[2]) {
+math::vec2 ray::ref::TransformUVs(const math::vec2 &_uvs, const math::vec2 &tex_atlas_size, const texture_t *t, int mip_level) {
     using namespace math;
     
     vec2 pos = { (float)t->pos[mip_level][0], (float)t->pos[mip_level][1] };
     vec2 size = { (float)(t->size[0] >> mip_level), (float)(t->size[1] >> mip_level) };
-    vec2 uvs = make_vec2(_uvs);
-    uvs = uvs - floor(uvs);
+    vec2 uvs = _uvs - floor(_uvs);
     vec2 res = pos + uvs * size + vec2{ 1.0f, 1.0f };
-    res /= make_vec2(tex_atlas_size);
+    res /= tex_atlas_size;
     
-    out_uvs[0] = res.x;
-    out_uvs[1] = res.y;
+    return { res.x, res.y };
+}
+
+math::vec4 ray::ref::SampleNearest(const TextureAtlas &atlas, const texture_t &t, const math::vec2 &uvs, float lod) {
+    int _lod = (int)lod;
+
+    math::vec2 atlas_size = { atlas.size_x(), atlas.size_y() };
+    math::vec2 _uvs = TransformUVs(uvs, atlas_size, &t, _lod);
+
+    if (_lod > MAX_MIP_LEVEL) _lod = MAX_MIP_LEVEL;
+
+    int page = t.page[_lod];
+
+    const auto &pix = atlas.Get(page, _uvs[0], _uvs[1]);
+
+    const float k = 1.0f / 255.0f;
+    return math::vec4{ pix.r * k, pix.g * k, pix.b * k, pix.a * k };
+}
+
+math::vec4 ray::ref::SampleBilinear(const TextureAtlas &atlas, const texture_t &t, const math::vec2 &uvs, int lod) {
+    using namespace math;
+
+    vec2 atlas_size = { atlas.size_x(), atlas.size_y() };
+    vec2 _uvs = TransformUVs(uvs, atlas_size, &t, lod);
+
+    int page = t.page[lod];
+
+    _uvs = _uvs * atlas_size - 0.5f;
+
+    const auto &p00 = atlas.Get(page, int(_uvs[0]), int(_uvs[1]));
+    const auto &p01 = atlas.Get(page, int(_uvs[0] + 1), int(_uvs[1]));
+    const auto &p10 = atlas.Get(page, int(_uvs[0]), int(_uvs[1] + 1));
+    const auto &p11 = atlas.Get(page, int(_uvs[0] + 1), int(_uvs[1] + 1));
+
+    float kx = _uvs[0] - floor(_uvs[0]), ky = _uvs[1] - floor(_uvs[1]);
+
+    const auto p0 = vec4{ p01.r * kx + p00.r * (1 - kx),
+        p01.g * kx + p00.g * (1 - kx),
+        p01.b * kx + p00.b * (1 - kx),
+        p01.a * kx + p00.a * (1 - kx) };
+
+    const auto p1 = vec4{ p11.r * kx + p10.r * (1 - kx),
+        p11.g * kx + p10.g * (1 - kx),
+        p11.b * kx + p10.b * (1 - kx),
+        p11.a * kx + p10.a * (1 - kx) };
+
+    const float k = 1.0f / 255.0f;
+    return (p1 * ky + p0 * (1 - ky)) * k;
+}
+
+math::vec4 ray::ref::SampleTrilinear(const TextureAtlas &atlas, const texture_t &t, const math::vec2 &uvs, float lod) {
+    using namespace math;
+
+    auto col1 = SampleBilinear(atlas, t, uvs, (int)floor(lod));
+    auto col2 = SampleBilinear(atlas, t, uvs, (int)ceil(lod));
+
+    const float k = lod - floor(lod);
+    return col1 * (1 - k) + col2 * k;
+}
+
+math::vec4 ray::ref::SampleAnisotropic(const TextureAtlas &atlas, const texture_t &t, const math::vec2 &uvs, const math::vec2 &duv_dx, const math::vec2 &duv_dy) {
+    using namespace math;
+
+    vec2 sz = { (float)t.size[0], (float)t.size[1] };
+
+    float l1 = length(duv_dx * sz);
+    float l2 = length(duv_dy * sz);
+
+    float lod, k;
+    vec2 step = { noinit };
+
+    if (l1 <= l2) {
+        lod = log2(l1);
+        k = l1 / l2;
+        step = duv_dy;
+    } else {
+        lod = log2(l2);
+        k = l2 / l1;
+        step = duv_dx;
+    }
+
+    if (lod < 0.0f) lod = 0.0f;
+    else if (lod >(float)MAX_MIP_LEVEL) lod = (float)MAX_MIP_LEVEL;
+
+    vec2 _uvs = uvs - step * 0.5f;
+
+    int num = (int)(2.0f / k);
+    if (num < 1) num = 1;
+    else if (num > 32) num = 32;
+
+    step = step / float(num);
+
+    auto res = vec4{ 0.0f };
+
+    for (int i = 0; i < num; i++) {
+        res += SampleTrilinear(atlas, t, _uvs, lod);
+        _uvs += step;
+    }
+
+    return res / float(num);
 }
 
 ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, const float *halton, const hit_data_t &inter, const ray_packet_t &ray,
@@ -594,7 +691,7 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
 
     // resolve mix material
     while (mat->type == MixMaterial) {
-        const auto mix = tex_atlas.SampleAnisotropic(textures[mat->textures[MAIN_TEXTURE]], uvs, duv_dx, duv_dy);
+        const auto mix = SampleAnisotropic(tex_atlas, textures[mat->textures[MAIN_TEXTURE]], uvs, duv_dx, duv_dy);
         const float r = halton[hi * 2];
 
         // shlick fresnel
@@ -627,7 +724,7 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
     vec3 B = b1 * w + b2 * inter.u + b3 * inter.v;
     vec3 T = cross(B, N);
 
-    auto normals = tex_atlas.SampleAnisotropic(textures[mat->textures[NORMALS_TEXTURE]], uvs, duv_dx, duv_dy);
+    auto normals = SampleAnisotropic(tex_atlas, textures[mat->textures[NORMALS_TEXTURE]], uvs, duv_dx, duv_dy);
 
     normals = normals * 2.0f - 1.0f;
 
@@ -643,7 +740,7 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
 
     //////////////////////////////////////////
 
-    auto albedo = tex_atlas.SampleAnisotropic(textures[mat->textures[MAIN_TEXTURE]], uvs, duv_dx, duv_dy);
+    auto albedo = SampleAnisotropic(tex_atlas, textures[mat->textures[MAIN_TEXTURE]], uvs, duv_dx, duv_dy);
     albedo.x *= mat->main_color[0];
     albedo.y *= mat->main_color[1];
     albedo.z *= mat->main_color[2];
