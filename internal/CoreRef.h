@@ -7,16 +7,15 @@
 #include "Core.h"
 
 #define NS ref
-#if defined(__AVX2__) || defined(__AVX__)
-//#define USE_AVX
-#elif defined(_M_AMD64) || defined(_M_X64) || (defined(_M_IX86_FP) && _M_IX86_FP == 2)
-//#define USE_SSE
+#if defined(_M_AMD64) || defined(_M_X64) || (defined(_M_IX86_FP) && _M_IX86_FP == 2)
+#define USE_SSE
+#pragma message("ray::ref::simd_vec will use SSE2")
 #else
+#pragma message("ray::ref::simd_vec will not use SIMD")
 #endif
 
 #include "simd/simd_vec.h"
 
-#undef USE_AVX
 #undef USE_SSE
 #undef NS
 

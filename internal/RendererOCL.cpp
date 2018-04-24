@@ -301,7 +301,7 @@ void ray::ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
         if (queue_.enqueueReadBuffer(secondary_rays_count_buf_, CL_TRUE, 0, sizeof(cl_int),
                                      &secondary_rays_count) != CL_SUCCESS) return;
 
-        for (int depth = 0; depth < 4 && secondary_rays_count; depth++) {
+        for (int depth = 0; depth < MAX_BOUNCES && secondary_rays_count; depth++) {
             if (!kernel_TraceSecondaryRays(secondary_rays_buf_, secondary_rays_count,
                                            s->mesh_instances_.buf(), s->mi_indices_.buf(), s->meshes_.buf(), s->transforms_.buf(),
                                            s->nodes_.buf(), (cl_uint)s->macro_nodes_start_, s->tris_.buf(), s->tri_indices_.buf(), prim_inters_buf_)) return;

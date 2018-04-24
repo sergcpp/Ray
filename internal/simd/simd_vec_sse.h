@@ -207,11 +207,15 @@ public:
 
     force_inline static simd_vec<float, S> floor(const simd_vec<float, S> &v1) {
         simd_vec<float, S> temp;
+#if 1
         ITERATE(S/4, {
             __m128 t = _mm_cvtepi32_ps(_mm_cvttps_epi32(v1.vec_[i]));
             __m128 r = _mm_sub_ps(t, _mm_and_ps(_mm_cmplt_ps(v1.vec_[i], t), _mm_set1_ps(1.0f)));
             temp.vec_[i] = r;
         })
+#else
+        ITERATE(S/4, { temp.vec_[i] = _mm_floor_ps(v1.vec_[i]); })
+#endif
         return temp;
     }
 
@@ -311,6 +315,42 @@ public:
         simd_vec<float, S> ret;
         ITERATE(S/4, { ret.vec_[i] = _mm_div_ps(_mm_set1_ps(v1), v2.vec_[i]); })
         return ret;
+    }
+
+    friend force_inline float dot(const simd_vec<float, S> &v1, const simd_vec<float, S> &v2) {
+        float ret = { 0 };
+        
+        ITERATE(S/4, ({
+            __m128 r1, r2;
+            r1 = _mm_mul_ps(v1.vec_[i], v2.vec_[i]);
+            r2 = _mm_shuffle_ps(r1, r1, _MM_SHUFFLE(2, 3, 0, 1));
+            r1 = _mm_add_ps(r1, r2);
+            r2 = _mm_shuffle_ps(r1, r1, _MM_SHUFFLE(0, 1, 2, 3));
+            r1 = _mm_add_ps(r1, r2);
+            ret += _mm_cvtss_f32(r1);
+        }))
+            
+        return ret;
+    }
+
+    friend force_inline simd_vec<float, S> clamp(const simd_vec<float, S> &v1, float min, float max) {
+        simd_vec<float, S> ret;
+        ITERATE(S/4, { ret.vec_[i] = _mm_max_ps(_mm_set1_ps(min), _mm_min_ps(v1.vec_[i], _mm_set1_ps(max))); })
+        return ret;
+    }
+
+    friend force_inline simd_vec<float, S> pow(const simd_vec<float, S> &v1, const simd_vec<float, S> &v2) {
+        simd_vec<float, S> ret;
+        ITERATE(S, { ret.comp_[i] = std::pow(v1.comp_[i], v2.comp_[i]); })
+        return ret;
+    }
+
+    friend force_inline simd_vec<float, S> normalize(const simd_vec<float, S> &v1) {
+        return v1 / v1.length();
+    }
+
+    friend force_inline const float *value_ptr(const simd_vec<float, S> &v1) {
+        return &v1.comp_[0];
     }
 
     static const size_t alignment = alignof(__m128);

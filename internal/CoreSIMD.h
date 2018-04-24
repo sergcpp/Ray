@@ -6,6 +6,9 @@
 
 #include "simd/simd_vec.h"
 
+#pragma warning(push)
+#pragma warning(disable : 4752)
+
 namespace ray {
 namespace NS {
 
@@ -88,11 +91,8 @@ bool Traverse_MicroTree_CPU(const ray_packet_t<S> &r, const simd_ivec<S> &ray_ma
 // Transform
 template <int S>
 ray_packet_t<S> TransformRay(const ray_packet_t<S> &r, const float *xform);
-simd_fvec2 TransformUVs(const simd_fvec2 &_uvs, const simd_fvec2 &atlas_size, const texture_t *t, int mip_level);
-
 template <int S>
 void TransformNormal(const simd_fvec<S> n[3], const float *inv_xform, simd_fvec<S> out_n[3]);
-
 template <int S>
 void TransformUVs(const simd_fvec<S> _uvs[2], float sx, float sy, const texture_t &t, const simd_ivec<S> &mip_level, const simd_ivec<S> &mask, simd_fvec<S> out_res[2]);
 
@@ -684,15 +684,6 @@ force_inline ray::NS::ray_packet_t<S> ray::NS::TransformRay(const ray_packet_t<S
     return _r;
 }
 
-force_inline ray::NS::simd_fvec2 ray::NS::TransformUVs(const simd_fvec2 &_uvs, const simd_fvec2 &atlas_size, const texture_t *t, int mip_level) {
-    simd_fvec2 pos = { (float)t->pos[mip_level][0], (float)t->pos[mip_level][1] };
-    simd_fvec2 size = { (float)(t->size[0] >> mip_level), (float)(t->size[1] >> mip_level) };
-    simd_fvec2 uvs = { _uvs[0] - floor(_uvs[0]), _uvs[1] - floor(_uvs[1]) };
-    simd_fvec2 res = pos + uvs * size + 1.0f;
-
-    return res / atlas_size;
-}
-
 template <int S>
 void ray::NS::TransformNormal(const simd_fvec<S> n[3], const float *inv_xform, simd_fvec<S> out_n[3]) {
     out_n[0] = n[0] * inv_xform[0] + n[1] * inv_xform[1] + n[2] * inv_xform[2];
@@ -702,15 +693,15 @@ void ray::NS::TransformNormal(const simd_fvec<S> n[3], const float *inv_xform, s
 
 template <int S>
 void ray::NS::TransformUVs(const simd_fvec<S> uvs[2], float sx, float sy, const texture_t &t, const simd_ivec<S> &mip_level, const simd_ivec<S> &mask, simd_fvec<S> out_res[2]) {
-    simd_fvec<S> pos[2];
+    simd_ivec<S> ipos[2];
 
-    ITERATE(S, { pos[0][i] = (float)t.pos[mip_level[i]][0]; });
-    ITERATE(S, { pos[1][i] = (float)t.pos[mip_level[i]][1]; });
+    ITERATE(S, { ipos[0][i] = (int)t.pos[mip_level[i]][0];
+                 ipos[1][i] = (int)t.pos[mip_level[i]][1]; });
 
     simd_ivec<S> isize[2] = { (int)t.size[0], (int)t.size[1] };
 
-    out_res[0] = (pos[0] + (uvs[0] - floor(uvs[0])) * static_cast<simd_fvec<S>>(isize[0] >> mip_level) + 1.0f) / sx;
-    out_res[1] = (pos[1] + (uvs[1] - floor(uvs[1])) * static_cast<simd_fvec<S>>(isize[1] >> mip_level) + 1.0f) / sy;
+    out_res[0] = (static_cast<simd_fvec<S>>(ipos[0]) + (uvs[0] - floor(uvs[0])) * static_cast<simd_fvec<S>>(isize[0] >> mip_level) + 1.0f) / sx;
+    out_res[1] = (static_cast<simd_fvec<S>>(ipos[1]) + (uvs[1] - floor(uvs[1])) * static_cast<simd_fvec<S>>(isize[1] >> mip_level) + 1.0f) / sy;
 }
 
 template <int S>
@@ -1230,3 +1221,5 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
         (*out_secondary_rays_count)++;
     }
 }
+
+#pragma warning(pop)

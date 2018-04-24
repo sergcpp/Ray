@@ -51,6 +51,8 @@ const float PI = 3.141592653589793238463f;
 
 const float MAX_DIST = 3.402823466e+38F;
 
+const int MAX_BOUNCES = 4;
+
 struct cone_accel_t {
     float o[3], v[3];
     float cos_phi_sqr;

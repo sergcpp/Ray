@@ -103,7 +103,7 @@ void ray::ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
         temp_buf_.SetPixel(x, y, col);
     }
 
-    for (int bounce = 0; bounce < 4 && secondary_rays_count; bounce++) {
+    for (int bounce = 0; bounce < MAX_BOUNCES && secondary_rays_count; bounce++) {
         for (int i = 0; i < secondary_rays_count; i++) {
             const auto &r = secondary_rays[i];
 

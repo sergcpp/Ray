@@ -169,7 +169,7 @@ void ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
         }
     }
 
-    for (int bounce = 0; bounce < 4 && secondary_rays_count; bounce++) {
+    for (int bounce = 0; bounce < MAX_BOUNCES && secondary_rays_count; bounce++) {
         for (int i = 0; i < secondary_rays_count; i++) {
             const auto &r = secondary_rays[i];
 

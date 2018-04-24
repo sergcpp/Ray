@@ -14,6 +14,9 @@
               _mm256_testz_si256((mask), (val))
 #endif
 
+#pragma warning(push)
+#pragma warning(disable : 4752)
+
 namespace ray {
 namespace NS {
 
@@ -601,6 +604,8 @@ using native_simd_ivec = simd_ivec<8>;
 
 }
 }
+
+#pragma warning(pop)
 
 #ifdef __GNUC__
 #pragma GCC pop_options
