@@ -6,6 +6,20 @@
 
 #include "Core.h"
 
+#define NS ref
+#if defined(__AVX2__) || defined(__AVX__)
+#define USE_AVX
+#elif defined(_M_AMD64) || defined(_M_X64) || (defined(_M_IX86_FP) && _M_IX86_FP == 2)
+//#define USE_SSE
+#else
+#endif
+
+#include "simd/simd_vec.h"
+
+#undef USE_AVX
+#undef USE_SSE
+#undef NS
+
 namespace ray {
 namespace ref {
 struct ray_packet_t {
@@ -73,14 +87,14 @@ bool Traverse_MicroTree_GPU(const ray_packet_t &r, const float inv_d[3], const b
 
 // Transform
 ray_packet_t TransformRay(const ray_packet_t &r, const float *xform);
-math::vec3 TransformNormal(const math::vec3 &n, const float *inv_xform);
-math::vec2 TransformUVs(const math::vec2 &uvs, const math::vec2 &tex_atlas_size, const texture_t *t, int mip_level);
+simd_fvec3 TransformNormal(const simd_fvec3 &n, const float *inv_xform);
+simd_fvec2 TransformUVs(const simd_fvec2 &uvs, const simd_fvec2 &tex_atlas_size, const texture_t *t, int mip_level);
 
 // Sample Texture
-math::vec4 SampleNearest(const TextureAtlas &atlas, const texture_t &t, const math::vec2 &uvs, float lod);
-math::vec4 SampleBilinear(const TextureAtlas &atlas, const texture_t &t, const math::vec2 &uvs, int lod);
-math::vec4 SampleTrilinear(const TextureAtlas &atlas, const texture_t &t, const math::vec2 &uvs, float lod);
-math::vec4 SampleAnisotropic(const TextureAtlas &atlas, const texture_t &t, const math::vec2 &uvs, const math::vec2 &duv_dx, const math::vec2 &duv_dy);
+simd_fvec4 SampleNearest(const TextureAtlas &atlas, const texture_t &t, const simd_fvec2 &uvs, float lod);
+simd_fvec4 SampleBilinear(const TextureAtlas &atlas, const texture_t &t, const simd_fvec2 &uvs, int lod);
+simd_fvec4 SampleTrilinear(const TextureAtlas &atlas, const texture_t &t, const simd_fvec2 &uvs, float lod);
+simd_fvec4 SampleAnisotropic(const TextureAtlas &atlas, const texture_t &t, const simd_fvec2 &uvs, const simd_fvec2 &duv_dx, const simd_fvec2 &duv_dy);
 
 // Shade
 ray::pixel_color_t ShadeSurface(const int index, const int iteration, const float *halton, const hit_data_t &inter, const ray_packet_t &ray, 

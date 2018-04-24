@@ -35,6 +35,10 @@
         { const int i = 1; exp }    \
         { const int i = 2; exp }    \
         { const int i = 3; exp }    \
+    } else if ((n) == 3) {          \
+        { const int i = 0; exp }    \
+        { const int i = 1; exp }    \
+        { const int i = 2; exp }    \
     } else if ((n) == 2) {          \
         { const int i = 0; exp }    \
         { const int i = 1; exp }    \
@@ -209,6 +213,12 @@ public:
         simd_vec<T, S> temp;
         ITERATE(S, { temp[i] = ::sqrt(comp_[i]); })
         return temp;
+    }
+
+    force_inline T length() const {
+        T temp = { 0 };
+        ITERATE(S, { temp += comp_[i] * comp_[i]; })
+        return std::sqrt(temp);
     }
 
     force_inline void copy_to(T *f) const {
@@ -410,6 +420,32 @@ public:
         return ret;
     }
 
+    friend force_inline T dot(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) {
+        T ret = { 0 };
+        ITERATE(S, { ret += v1.comp_[i] * v2.comp_[i]; })
+        return ret;
+    }
+
+    friend force_inline simd_vec<T, S> clamp(const simd_vec<T, S> &v1, T min, T max) {
+        simd_vec<T, S> ret;
+        ITERATE(S, { ret.comp_[i] = v1.comp_[i] < min ? min : (v1.comp_[i] > max ? max : v1.comp_[i]); })
+        return ret;
+    }
+
+    friend force_inline simd_vec<T, S> pow(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) {
+        simd_vec<T, S> ret;
+        ITERATE(S, { ret.comp_[i] = std::pow(v1.comp_[i], v2.comp_[i]); })
+        return ret;
+    }
+
+    friend force_inline simd_vec<T, S> normalize(const simd_vec<T, S> &v1) {
+        return v1 / v1.length();
+    }
+
+    friend force_inline const T *value_ptr(const simd_vec<T, S> &v1) {
+        return &v1.comp_[0];
+    }
+
     static const size_t alignment = 1;
 
     static int size() { return S; }
@@ -428,6 +464,9 @@ force_inline simd_vec<T, S> ceil(const simd_vec<T, S> &v1) { return simd_vec<T, 
 
 template <typename T, int S>
 force_inline simd_vec<T, S> sqrt(const simd_vec<T, S> &v1) { return v1.sqrt(); }
+
+template <typename T, int S>
+force_inline T length(const simd_vec<T, S> &v1) { return v1.length(); }
 
 template <typename T, int S>
 force_inline simd_vec<T, S> min(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) { return simd_vec<T, S>::min(v1, v2); }
@@ -458,6 +497,7 @@ force_inline simd_comp_where_helper<T, S> where(const simd_vec<T, S> &mask, simd
 template <int S>
 using simd_fvec = simd_vec<float, S>;
 using simd_fvec2 = simd_fvec<2>;
+using simd_fvec3 = simd_fvec<3>;
 using simd_fvec4 = simd_fvec<4>;
 using simd_fvec8 = simd_fvec<8>;
 using simd_fvec16 = simd_fvec<16>;
@@ -465,6 +505,7 @@ using simd_fvec16 = simd_fvec<16>;
 template <int S>
 using simd_ivec = simd_vec<int, S>;
 using simd_ivec2 = simd_ivec<2>;
+using simd_ivec3 = simd_ivec<3>;
 using simd_ivec4 = simd_ivec<4>;
 using simd_ivec8 = simd_ivec<8>;
 using simd_ivec16 = simd_ivec<16>;

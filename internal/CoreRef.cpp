@@ -110,6 +110,20 @@ force_inline void safe_invert(const float v[3], float out_v[3]) {
     }
 }
 
+force_inline float clamp(float val, float min, float max) {
+    return val < min ? min : (val > max ? max : val);
+}
+
+force_inline simd_fvec3 cross(const simd_fvec3 &v1, const simd_fvec3 &v2) {
+    return simd_fvec3{  };
+}
+
+force_inline simd_fvec3 reflect(const simd_fvec3 &I, const simd_fvec3 &N) {
+    return I - 2 * dot(N, I) * N;
+}
+
+const float PI = 3.141592653589793238463f;
+
 }
 }
 
@@ -483,31 +497,26 @@ ray::ref::ray_packet_t ray::ref::TransformRay(const ray_packet_t &r, const float
     return _r;
 }
 
-math::vec3 ray::ref::TransformNormal(const math::vec3 &n, const float *inv_xform) {
-    using namespace math;
-
-    return vec3{ dot(make_vec3(&inv_xform[0]), n),
-                 dot(make_vec3(&inv_xform[4]), n),
-                 dot(make_vec3(&inv_xform[8]), n) };
+ray::ref::simd_fvec3 ray::ref::TransformNormal(const simd_fvec3 &n, const float *inv_xform) {
+    return simd_fvec3{ dot(simd_fvec3(&inv_xform[0]), n),
+                       dot(simd_fvec3(&inv_xform[4]), n),
+                       dot(simd_fvec3(&inv_xform[8]), n) };
 }
 
-math::vec2 ray::ref::TransformUVs(const math::vec2 &_uvs, const math::vec2 &tex_atlas_size, const texture_t *t, int mip_level) {
-    using namespace math;
-    
-    vec2 pos = { (float)t->pos[mip_level][0], (float)t->pos[mip_level][1] };
-    vec2 size = { (float)(t->size[0] >> mip_level), (float)(t->size[1] >> mip_level) };
-    vec2 uvs = _uvs - floor(_uvs);
-    vec2 res = pos + uvs * size + vec2{ 1.0f, 1.0f };
+ray::ref::simd_fvec2 ray::ref::TransformUVs(const simd_fvec2 &_uvs, const simd_fvec2 &tex_atlas_size, const texture_t *t, int mip_level) {
+    simd_fvec2 pos = { (float)t->pos[mip_level][0], (float)t->pos[mip_level][1] };
+    simd_fvec2 size = { (float)(t->size[0] >> mip_level), (float)(t->size[1] >> mip_level) };
+    simd_fvec2 uvs = _uvs - floor(_uvs);
+    simd_fvec2 res = pos + uvs * size + 1.0f;
     res /= tex_atlas_size;
-    
-    return { res.x, res.y };
+    return res;
 }
 
-math::vec4 ray::ref::SampleNearest(const TextureAtlas &atlas, const texture_t &t, const math::vec2 &uvs, float lod) {
+ray::ref::simd_fvec4 ray::ref::SampleNearest(const TextureAtlas &atlas, const texture_t &t, const simd_fvec2 &uvs, float lod) {
     int _lod = (int)lod;
 
-    math::vec2 atlas_size = { atlas.size_x(), atlas.size_y() };
-    math::vec2 _uvs = TransformUVs(uvs, atlas_size, &t, _lod);
+    simd_fvec2 atlas_size = { atlas.size_x(), atlas.size_y() };
+    simd_fvec2 _uvs = TransformUVs(uvs, atlas_size, &t, _lod);
 
     if (_lod > MAX_MIP_LEVEL) _lod = MAX_MIP_LEVEL;
 
@@ -516,14 +525,14 @@ math::vec4 ray::ref::SampleNearest(const TextureAtlas &atlas, const texture_t &t
     const auto &pix = atlas.Get(page, _uvs[0], _uvs[1]);
 
     const float k = 1.0f / 255.0f;
-    return math::vec4{ pix.r * k, pix.g * k, pix.b * k, pix.a * k };
+    return simd_fvec4{ pix.r * k, pix.g * k, pix.b * k, pix.a * k };
 }
 
-math::vec4 ray::ref::SampleBilinear(const TextureAtlas &atlas, const texture_t &t, const math::vec2 &uvs, int lod) {
+ray::ref::simd_fvec4 ray::ref::SampleBilinear(const TextureAtlas &atlas, const texture_t &t, const simd_fvec2 &uvs, int lod) {
     using namespace math;
 
-    vec2 atlas_size = { atlas.size_x(), atlas.size_y() };
-    vec2 _uvs = TransformUVs(uvs, atlas_size, &t, lod);
+    simd_fvec2 atlas_size = { atlas.size_x(), atlas.size_y() };
+    simd_fvec2 _uvs = TransformUVs(uvs, atlas_size, &t, lod);
 
     int page = t.page[lod];
 
@@ -534,42 +543,40 @@ math::vec4 ray::ref::SampleBilinear(const TextureAtlas &atlas, const texture_t &
     const auto &p10 = atlas.Get(page, int(_uvs[0]), int(_uvs[1] + 1));
     const auto &p11 = atlas.Get(page, int(_uvs[0] + 1), int(_uvs[1] + 1));
 
-    float kx = _uvs[0] - floor(_uvs[0]), ky = _uvs[1] - floor(_uvs[1]);
+    float kx = _uvs[0] - math::floor(_uvs[0]), ky = _uvs[1] - math::floor(_uvs[1]);
 
-    const auto p0 = vec4{ p01.r * kx + p00.r * (1 - kx),
-        p01.g * kx + p00.g * (1 - kx),
-        p01.b * kx + p00.b * (1 - kx),
-        p01.a * kx + p00.a * (1 - kx) };
+    const auto p0 = simd_fvec4{ p01.r * kx + p00.r * (1 - kx),
+                                p01.g * kx + p00.g * (1 - kx),
+                                p01.b * kx + p00.b * (1 - kx),
+                                p01.a * kx + p00.a * (1 - kx) };
 
-    const auto p1 = vec4{ p11.r * kx + p10.r * (1 - kx),
-        p11.g * kx + p10.g * (1 - kx),
-        p11.b * kx + p10.b * (1 - kx),
-        p11.a * kx + p10.a * (1 - kx) };
+    const auto p1 = simd_fvec4{ p11.r * kx + p10.r * (1 - kx),
+                                p11.g * kx + p10.g * (1 - kx),
+                                p11.b * kx + p10.b * (1 - kx),
+                                p11.a * kx + p10.a * (1 - kx) };
 
     const float k = 1.0f / 255.0f;
     return (p1 * ky + p0 * (1 - ky)) * k;
 }
 
-math::vec4 ray::ref::SampleTrilinear(const TextureAtlas &atlas, const texture_t &t, const math::vec2 &uvs, float lod) {
-    using namespace math;
+ray::ref::simd_fvec4 ray::ref::SampleTrilinear(const TextureAtlas &atlas, const texture_t &t, const simd_fvec2 &uvs, float lod) {
+    auto col1 = SampleBilinear(atlas, t, uvs, (int)std::floor(lod));
+    auto col2 = SampleBilinear(atlas, t, uvs, (int)std::ceil(lod));
 
-    auto col1 = SampleBilinear(atlas, t, uvs, (int)floor(lod));
-    auto col2 = SampleBilinear(atlas, t, uvs, (int)ceil(lod));
-
-    const float k = lod - floor(lod);
+    const float k = lod - std::floor(lod);
     return col1 * (1 - k) + col2 * k;
 }
 
-math::vec4 ray::ref::SampleAnisotropic(const TextureAtlas &atlas, const texture_t &t, const math::vec2 &uvs, const math::vec2 &duv_dx, const math::vec2 &duv_dy) {
+ray::ref::simd_fvec4 ray::ref::SampleAnisotropic(const TextureAtlas &atlas, const texture_t &t, const simd_fvec2 &uvs, const simd_fvec2 &duv_dx, const simd_fvec2 &duv_dy) {
     using namespace math;
 
-    vec2 sz = { (float)t.size[0], (float)t.size[1] };
+    simd_fvec2 sz = { (float)t.size[0], (float)t.size[1] };
 
     float l1 = length(duv_dx * sz);
     float l2 = length(duv_dy * sz);
 
     float lod, k;
-    vec2 step = { noinit };
+    simd_fvec2 step = { noinit };
 
     if (l1 <= l2) {
         lod = log2(l1);
@@ -584,7 +591,7 @@ math::vec4 ray::ref::SampleAnisotropic(const TextureAtlas &atlas, const texture_
     if (lod < 0.0f) lod = 0.0f;
     else if (lod >(float)MAX_MIP_LEVEL) lod = (float)MAX_MIP_LEVEL;
 
-    vec2 _uvs = uvs - step * 0.5f;
+    simd_fvec2 _uvs = uvs - step * 0.5f;
 
     int num = (int)(2.0f / k);
     if (num < 1) num = 1;
@@ -592,7 +599,7 @@ math::vec4 ray::ref::SampleAnisotropic(const TextureAtlas &atlas, const texture_
 
     step = step / float(num);
 
-    auto res = vec4{ 0.0f };
+    auto res = simd_fvec4{ 0.0f };
 
     for (int i = 0; i < num; i++) {
         res += SampleTrilinear(atlas, t, _uvs, lod);
@@ -607,14 +614,12 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
                                           const mesh_t *meshes, const transform_t *transforms, const uint32_t *vtx_indices, const vertex_t *vertices,
                                           const bvh_node_t *nodes, uint32_t node_index, const tri_accel_t *tris, const uint32_t *tri_indices,
                                           const material_t *materials, const texture_t *textures, const TextureAtlas &tex_atlas, ray_packet_t *out_secondary_rays, int *out_secondary_rays_count) {
-    using namespace math;
-
     if (!inter.mask_values[0]) {
         return ray::pixel_color_t{ ray.c[0] * env.sky_col[0], ray.c[1] * env.sky_col[1], ray.c[2] * env.sky_col[2], 1.0f };
     }
 
-    const auto I = make_vec3(ray.d);
-    const auto P = make_vec3(ray.o) + inter.t * I;
+    const auto I = simd_fvec3(ray.d);
+    const auto P = simd_fvec3(ray.o) + inter.t * I;
 
     const auto &tri = tris[inter.prim_indices[0]];
 
@@ -624,66 +629,66 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
     const auto &v2 = vertices[vtx_indices[inter.prim_indices[0] * 3 + 1]];
     const auto &v3 = vertices[vtx_indices[inter.prim_indices[0] * 3 + 2]];
 
-    const vec3 n1 = make_vec3(v1.n);
-    const vec3 n2 = make_vec3(v2.n);
-    const vec3 n3 = make_vec3(v3.n);
+    const auto n1 = simd_fvec3(v1.n);
+    const auto n2 = simd_fvec3(v2.n);
+    const auto n3 = simd_fvec3(v3.n);
 
-    const vec2 u1 = make_vec2(v1.t0);
-    const vec2 u2 = make_vec2(v2.t0);
-    const vec2 u3 = make_vec2(v3.t0);
+    const auto u1 = simd_fvec2(v1.t0);
+    const auto u2 = simd_fvec2(v2.t0);
+    const auto u3 = simd_fvec2(v3.t0);
 
     float w = 1.0f - inter.u - inter.v;
-    vec3 N = n1 * w + n2 * inter.u + n3 * inter.v;
-    vec2 uvs = u1 * w + u2 * inter.u + u3 * inter.v;
+    simd_fvec3 N = n1 * w + n2 * inter.u + n3 * inter.v;
+    simd_fvec2 uvs = u1 * w + u2 * inter.u + u3 * inter.v;
 
     //////////////////////////////////////////
 
-    const vec3 p1 = make_vec3(v1.p);
-    const vec3 p2 = make_vec3(v2.p);
-    const vec3 p3 = make_vec3(v3.p);
+    const auto p1 = simd_fvec3(v1.p);
+    const auto p2 = simd_fvec3(v2.p);
+    const auto p3 = simd_fvec3(v3.p);
 
     // From 'Tracing Ray Differentials' [1999]
 
-    float dt_dx = -dot(make_vec3(ray.do_dx) + inter.t * make_vec3(ray.dd_dx), N) / dot(I, N);
-    float dt_dy = -dot(make_vec3(ray.do_dy) + inter.t * make_vec3(ray.dd_dy), N) / dot(I, N);
+    float dt_dx = -dot(simd_fvec3(ray.do_dx) + inter.t * simd_fvec3(ray.dd_dx), N) / dot(I, N);
+    float dt_dy = -dot(simd_fvec3(ray.do_dy) + inter.t * simd_fvec3(ray.dd_dy), N) / dot(I, N);
 
-    const vec3 do_dx = (make_vec3(ray.do_dx) + inter.t * make_vec3(ray.dd_dx)) + dt_dx * I;
-    const vec3 do_dy = (make_vec3(ray.do_dy) + inter.t * make_vec3(ray.dd_dy)) + dt_dy * I;
-    const vec3 dd_dx = make_vec3(ray.dd_dx);
-    const vec3 dd_dy = make_vec3(ray.dd_dy);
+    const auto do_dx = (simd_fvec3(ray.do_dx) + inter.t * simd_fvec3(ray.dd_dx)) + dt_dx * I;
+    const auto do_dy = (simd_fvec3(ray.do_dy) + inter.t * simd_fvec3(ray.dd_dy)) + dt_dy * I;
+    const auto dd_dx = simd_fvec3(ray.dd_dx);
+    const auto dd_dy = simd_fvec3(ray.dd_dy);
 
     //////////////////////////////////////////
 
     // From 'Physically Based Rendering: ...' book
 
-    const vec2 duv13 = u1 - u3, duv23 = u2 - u3;
-    const vec3 dp13 = p1 - p3, dp23 = p2 - p3;
+    const simd_fvec2 duv13 = u1 - u3, duv23 = u2 - u3;
+    const simd_fvec3 dp13 = p1 - p3, dp23 = p2 - p3;
 
-    const float det_uv = duv13.x * duv23.y - duv13.y * duv23.x;
+    const float det_uv = duv13[0] * duv23[1] - duv13[1] * duv23[0];
     const float inv_det_uv = abs(det_uv) < FLT_EPS ? 0 : 1.0f / det_uv;
-    const vec3 dpdu = (duv23.y * dp13 - duv13.y * dp23) * inv_det_uv;
-    const vec3 dpdv = (-duv23.x * dp13 + duv13.x * dp23) * inv_det_uv;
+    const simd_fvec3 dpdu = (duv23[1] * dp13 - duv13[1] * dp23) * inv_det_uv;
+    const simd_fvec3 dpdv = (-duv23[0] * dp13 + duv13[0] * dp23) * inv_det_uv;
 
-    vec2 A[2] = { { dpdu.x, dpdu.y }, { dpdv.x, dpdv.y } };
-    vec2 Bx = { do_dx.x, do_dx.y };
-    vec2 By = { do_dy.x, do_dy.y };
+    simd_fvec2 A[2] = { { dpdu[0], dpdu[1] }, { dpdv[0], dpdv[1] } };
+    simd_fvec2 Bx = { do_dx[0], do_dx[1] };
+    simd_fvec2 By = { do_dy[0], do_dy[1] };
 
-    if (abs(N.x) > abs(N.y) && abs(N.x) > abs(N.z)) {
-        A[0] = { dpdu.y, dpdu.z };
-        A[1] = { dpdv.y, dpdv.z };
-        Bx = { do_dx.y, do_dx.z };
-        By = { do_dy.y, do_dy.z };
-    } else if (abs(N.y) > abs(N.z)) {
-        A[0] = { dpdu.x, dpdu.z };
-        A[1] = { dpdv.x, dpdv.z };
-        Bx = { do_dx.x, do_dx.z };
-        By = { do_dy.x, do_dy.z };
+    if (std::abs(N[0]) > std::abs(N[1]) && std::abs(N[0]) > std::abs(N[2])) {
+        A[0] = { dpdu[1], dpdu[2] };
+        A[1] = { dpdv[1], dpdv[2] };
+        Bx = { do_dx[1], do_dx[2] };
+        By = { do_dy[1], do_dy[2] };
+    } else if (std::abs(N[1]) > std::abs(N[2])) {
+        A[0] = { dpdu[0], dpdu[2] };
+        A[1] = { dpdv[0], dpdv[2] };
+        Bx = { do_dx[0], do_dx[2] };
+        By = { do_dy[0], do_dy[2] };
     }
 
-    const float det = A[0].x * A[1].y - A[1].x * A[0].y;
-    const float inv_det = abs(det) < FLT_EPS ? 0 : 1.0f / det;
-    const vec2 duv_dx = vec2{ A[0].x * Bx.x - A[0].y * Bx.y, A[1].x * Bx.x - A[1].y * Bx.y } * inv_det;
-    const vec2 duv_dy = vec2{ A[0].x * By.x - A[0].y * By.y, A[1].x * By.x - A[1].y * By.y } * inv_det;
+    const float det = A[0][0] * A[1][1] - A[1][0] * A[0][1];
+    const float inv_det = std::abs(det) < FLT_EPS ? 0 : 1.0f / det;
+    const auto duv_dx = simd_fvec2{ A[0][0] * Bx[0] - A[0][1] * Bx[1], A[1][0] * Bx[0] - A[1][1] * Bx[1] } * inv_det;
+    const auto duv_dy = simd_fvec2{ A[0][0] * By[0] - A[0][1] * By[1], A[1][0] * By[0] - A[1][1] * By[1] } * inv_det;
 
     ////////////////////////////////////////////////////////
 
@@ -695,40 +700,40 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
         const float r = halton[hi * 2];
 
         // shlick fresnel
-        float RR = mat->fresnel + (1.0f - mat->fresnel) * pow(1.0f + dot(I, N), 5.0f);
+        float RR = mat->fresnel + (1.0f - mat->fresnel) * std::pow(1.0f + dot(I, N), 5.0f);
         RR = clamp(RR, 0.0f, 1.0f);
 
-        mat = (r * RR < mix.x) ? &materials[mat->textures[MIX_MAT1]] : &materials[mat->textures[MIX_MAT2]];
+        mat = (r * RR < mix[0]) ? &materials[mat->textures[MIX_MAT1]] : &materials[mat->textures[MIX_MAT2]];
     }
 
     ////////////////////////////////////////////////////////
 
     // Derivative for normal
 
-    const vec3 dn1 = n1 - n3, dn2 = n2 - n3;
-    const vec3 dndu = (duv23.y * dn1 - duv13.y * dn2) * inv_det_uv;
-    const vec3 dndv = (-duv23.x * dn1 + duv13.x * dn2) * inv_det_uv;
+    const auto dn1 = n1 - n3, dn2 = n2 - n3;
+    const auto dndu = (duv23[1] * dn1 - duv13[1] * dn2) * inv_det_uv;
+    const auto dndv = (-duv23[0] * dn1 + duv13[0] * dn2) * inv_det_uv;
 
-    const vec3 dndx = dndu * duv_dx.x + dndv * duv_dx.y;
-    const vec3 dndy = dndu * duv_dy.x + dndv * duv_dy.y;
+    const auto dndx = dndu * duv_dx[0] + dndv * duv_dx[1];
+    const auto dndy = dndu * duv_dy[0] + dndv * duv_dy[1];
 
     const float ddn_dx = dot(dd_dx, N) + dot(I, dndx);
     const float ddn_dy = dot(dd_dy, N) + dot(I, dndy);
 
     ////////////////////////////////////////////////////////
 
-    const vec3 b1 = make_vec3(v1.b);
-    const vec3 b2 = make_vec3(v2.b);
-    const vec3 b3 = make_vec3(v3.b);
+    const auto b1 = simd_fvec3(v1.b);
+    const auto b2 = simd_fvec3(v2.b);
+    const auto b3 = simd_fvec3(v3.b);
 
-    vec3 B = b1 * w + b2 * inter.u + b3 * inter.v;
-    vec3 T = cross(B, N);
+    simd_fvec3 B = b1 * w + b2 * inter.u + b3 * inter.v;
+    simd_fvec3 T = cross(B, N);
 
     auto normals = SampleAnisotropic(tex_atlas, textures[mat->textures[NORMALS_TEXTURE]], uvs, duv_dx, duv_dy);
 
     normals = normals * 2.0f - 1.0f;
 
-    N = normals.x * B + normals.z * N + normals.y * T;
+    N = normals[0] * B + normals[2] * N + normals[1] * T;
 
     //////////////////////////////////////////
 
@@ -741,29 +746,29 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
     //////////////////////////////////////////
 
     auto albedo = SampleAnisotropic(tex_atlas, textures[mat->textures[MAIN_TEXTURE]], uvs, duv_dx, duv_dy);
-    albedo.x *= mat->main_color[0];
-    albedo.y *= mat->main_color[1];
-    albedo.z *= mat->main_color[2];
-    albedo = pow(albedo, vec4(2.2f));
+    albedo[0] *= mat->main_color[0];
+    albedo[1] *= mat->main_color[1];
+    albedo[2] *= mat->main_color[2];
+    albedo = pow(albedo, simd_fvec4(2.2f));
 
-    vec3 col;
+    simd_fvec3 col;
 
     // generate secondary ray
     if (mat->type == DiffuseMaterial) {
-        float k = dot(N, make_vec3(env.sun_dir));
+        float k = dot(N, simd_fvec3(env.sun_dir));
 
         float v = 1;
         if (k > 0) {
             const float z = 1.0f - halton[hi * 2] * env.sun_softness;
-            const float temp = sqrt(1.0f - z * z);
+            const float temp = math::sqrt(1.0f - z * z);
 
-            const float phi = halton[hi * 2 + 1] * 2 * pi<float>();
+            const float phi = halton[hi * 2 + 1] * 2 * PI;
             const float cos_phi = math::cos(phi);
             const float sin_phi = math::sin(phi);
 
-            vec3 TT = cross(make_vec3(env.sun_dir), B);
-            vec3 BB = cross(make_vec3(env.sun_dir), TT);
-            vec3 V = temp * sin_phi * BB + z * make_vec3(env.sun_dir) + temp * cos_phi * TT;
+            auto TT = cross(simd_fvec3(env.sun_dir), B);
+            auto BB = cross(simd_fvec3(env.sun_dir), TT);
+            auto V = temp * sin_phi * BB + z * simd_fvec3(env.sun_dir) + temp * cos_phi * TT;
 
             ray_packet_t r;
 
@@ -779,16 +784,16 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
 
         k = clamp(k, 0.0f, 1.0f);
 
-        col = vec3(albedo) * make_vec3(env.sun_col) * v * k;
+        col = simd_fvec3(&albedo[0]) * simd_fvec3(env.sun_col) * v * k;
 
         const float z = halton[hi * 2];
-        const float temp = sqrt(1.0f - z * z);
+        const float temp = std::sqrt(1.0f - z * z);
 
-        const float phi = halton[((hash(hi) + iteration) & (HaltonSeqLen - 1)) * 2 + 0] * 2 * pi<float>();
-        const float cos_phi = math::cos(phi);
-        const float sin_phi = math::sin(phi);
+        const float phi = halton[((hash(hi) + iteration) & (HaltonSeqLen - 1)) * 2 + 0] * 2 * PI;
+        const float cos_phi = std::cos(phi);
+        const float sin_phi = std::sin(phi);
 
-        const vec3 V = temp * sin_phi * B + z * N + temp * cos_phi * T;
+        const auto V = temp * sin_phi * B + z * N + temp * cos_phi * T;
 
         ray_packet_t r;
 
@@ -796,7 +801,7 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
 
         memcpy(&r.o[0], value_ptr(P + HIT_BIAS * N), 3 * sizeof(float));
         memcpy(&r.d[0], value_ptr(V), 3 * sizeof(float));
-        memcpy(&r.c[0], value_ptr(make_vec3(ray.c) * z * vec3(albedo)), 3 * sizeof(float));
+        memcpy(&r.c[0], value_ptr(simd_fvec3(ray.c) * z * simd_fvec3(&albedo[0])), 3 * sizeof(float));
 
         memcpy(&r.do_dx[0], value_ptr(do_dx), 3 * sizeof(float));
         memcpy(&r.do_dy[0], value_ptr(do_dy), 3 * sizeof(float));
@@ -809,17 +814,17 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
             out_secondary_rays[index] = r;
         }
     } else if (mat->type == GlossyMaterial) {
-        vec3 V = reflect(I, dot(I, N) > 0 ? N : -N);
+        simd_fvec3 V = reflect(I, dot(I, N) > 0 ? N : -N);
 
         const float z = 1.0f - halton[hi * 2] * mat->roughness;
-        const float temp = sqrt(1.0f - z * z);
+        const float temp = std::sqrt(1.0f - z * z);
 
-        const float phi = halton[((hash(hi) + iteration) & (HaltonSeqLen - 1)) * 2 + 0] * 2 * pi<float>();
-        const float cos_phi = math::cos(phi);
-        const float sin_phi = math::sin(phi);
+        const float phi = halton[((hash(hi) + iteration) & (HaltonSeqLen - 1)) * 2 + 0] * 2 * PI;
+        const float cos_phi = std::cos(phi);
+        const float sin_phi = std::sin(phi);
 
-        vec3 TT = cross(V, B);
-        vec3 BB = cross(V, TT);
+        auto TT = cross(V, B);
+        auto BB = cross(V, TT);
         V = temp * sin_phi * BB + z * V + temp * cos_phi * TT;
 
         ray_packet_t r;
@@ -828,7 +833,7 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
 
         memcpy(&r.o[0], value_ptr(P + HIT_BIAS * N), 3 * sizeof(float));
         memcpy(&r.d[0], value_ptr(V), 3 * sizeof(float));
-        memcpy(&r.c[0], value_ptr(make_vec3(ray.c) * z), 3 * sizeof(float));
+        memcpy(&r.c[0], value_ptr(simd_fvec3(ray.c) * z), 3 * sizeof(float));
 
         memcpy(&r.do_dx[0], value_ptr(do_dx), 3 * sizeof(float));
         memcpy(&r.do_dy[0], value_ptr(do_dy), 3 * sizeof(float));
@@ -841,26 +846,26 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
             out_secondary_rays[index] = r;
         }
     } else if (mat->type == RefractiveMaterial) {
-        const vec3 _N = dot(I, N) > 0 ? -N : N;
+        const auto _N = dot(I, N) > 0 ? -N : N;
 
         float eta = 1.0f / mat->ior;
         float cosi = dot(-I, _N);
         float cost2 = 1.0f - eta * eta * (1.0f - cosi * cosi);
-        float m = eta * cosi - sqrt(fabs(cost2));
-        vec3 V = eta * I + m * _N;
-        if (cost2 < 0) V = vec3{ 0 };
+        float m = eta * cosi - std::sqrt(std::abs(cost2));
+        auto V = eta * I + m * _N;
+        if (cost2 < 0) V = 0.0f;
 
         // ** REFACTOR THIS **
 
         const float z = 1.0f - halton[hi * 2] * mat->roughness;
-        const float temp = sqrt(1.0f - z * z);
+        const float temp = std::sqrt(1.0f - z * z);
 
-        const float phi = halton[((hash(hi) + iteration) & (HaltonSeqLen - 1)) * 2 + 0] * 2 * pi<float>();
-        const float cos_phi = math::cos(phi);
-        const float sin_phi = math::sin(phi);
+        const float phi = halton[((hash(hi) + iteration) & (HaltonSeqLen - 1)) * 2 + 0] * 2 * PI;
+        const float cos_phi = std::cos(phi);
+        const float sin_phi = std::sin(phi);
 
-        vec3 TT = normalize(cross(V, B));
-        vec3 BB = normalize(cross(V, TT));
+        auto TT = normalize(cross(V, B));
+        auto BB = normalize(cross(V, TT));
         V = temp * sin_phi * BB + z * V + temp * cos_phi * TT;
 
         //////////////////
@@ -875,7 +880,7 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
 
         memcpy(&r.o[0], value_ptr(P + HIT_BIAS * I), 3 * sizeof(float));
         memcpy(&r.d[0], value_ptr(V), 3 * sizeof(float));
-        memcpy(&r.c[0], value_ptr(make_vec3(ray.c) * z), 3 * sizeof(float));
+        memcpy(&r.c[0], value_ptr(simd_fvec3(ray.c) * z), 3 * sizeof(float));
 
         memcpy(&r.do_dx[0], value_ptr(do_dx), 3 * sizeof(float));
         memcpy(&r.do_dy[0], value_ptr(do_dy), 3 * sizeof(float));
@@ -888,7 +893,7 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
             out_secondary_rays[index] = r;
         }
     } else if (mat->type == EmissiveMaterial) {
-        col = mat->strength * vec3(albedo);
+        col = mat->strength * simd_fvec3(&albedo[0]);
     } else if (mat->type == TransparentMaterial) {
         ray_packet_t r;
 
@@ -910,5 +915,5 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
         }
     }
 
-    return pixel_color_t{ ray.c[0] * col.r, ray.c[1] * col.g, ray.c[2] * col.b, 1.0f };
+    return pixel_color_t{ ray.c[0] * col[0], ray.c[1] * col[1], ray.c[2] * col[2], 1.0f };
 }
