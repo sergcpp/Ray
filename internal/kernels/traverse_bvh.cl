@@ -26,21 +26,21 @@ bool bbox_test(const float o[3], const float inv_d[3], const float t, __global c
 float3 safe_invert(const float3 v) {
     float3 inv_v = 1.0f / v;
 
-    if (v.x <= FLT_EPSILON && v.x >= 0) {
+    if (v.x <= FLT_EPS && v.x >= 0) {
         inv_v.x = FLT_MAX;
-    } else if (v.x >= -FLT_EPSILON && v.x < 0) {
+    } else if (v.x >= -FLT_EPS && v.x < 0) {
         inv_v.x = -FLT_MAX;
     }
 
-    if (v.y <= FLT_EPSILON && v.y >= 0) {
+    if (v.y <= FLT_EPS && v.y >= 0) {
         inv_v.y = FLT_MAX;
-    } else if (v.y >= -FLT_EPSILON && v.y < 0) {
+    } else if (v.y >= -FLT_EPS && v.y < 0) {
         inv_v.y = -FLT_MAX;
     }
 
-    if (v.z <= FLT_EPSILON && v.z >= 0) {
+    if (v.z <= FLT_EPS && v.z >= 0) {
         inv_v.z = FLT_MAX;
-    } else if (v.z >= -FLT_EPSILON && v.z < 0) {
+    } else if (v.z >= -FLT_EPS && v.z < 0) {
         inv_v.z = -FLT_MAX;
     }
 

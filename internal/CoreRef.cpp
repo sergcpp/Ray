@@ -115,14 +115,12 @@ force_inline float clamp(float val, float min, float max) {
 }
 
 force_inline simd_fvec3 cross(const simd_fvec3 &v1, const simd_fvec3 &v2) {
-    return simd_fvec3{  };
+    return simd_fvec3{ v1[1] * v2[2] - v1[2] * v2[1], v1[2] * v2[0] - v1[0] * v2[2], v1[0] * v2[1] - v1[1] * v2[0] };
 }
 
 force_inline simd_fvec3 reflect(const simd_fvec3 &I, const simd_fvec3 &N) {
     return I - 2 * dot(N, I) * N;
 }
-
-const float PI = 3.141592653589793238463f;
 
 }
 }
@@ -543,7 +541,7 @@ ray::ref::simd_fvec4 ray::ref::SampleBilinear(const TextureAtlas &atlas, const t
     const auto &p10 = atlas.Get(page, int(_uvs[0]), int(_uvs[1] + 1));
     const auto &p11 = atlas.Get(page, int(_uvs[0] + 1), int(_uvs[1] + 1));
 
-    float kx = _uvs[0] - math::floor(_uvs[0]), ky = _uvs[1] - math::floor(_uvs[1]);
+    float kx = _uvs[0] - std::floor(_uvs[0]), ky = _uvs[1] - std::floor(_uvs[1]);
 
     const auto p0 = simd_fvec4{ p01.r * kx + p00.r * (1 - kx),
                                 p01.g * kx + p00.g * (1 - kx),
@@ -649,8 +647,10 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
 
     // From 'Tracing Ray Differentials' [1999]
 
-    float dt_dx = -dot(simd_fvec3(ray.do_dx) + inter.t * simd_fvec3(ray.dd_dx), N) / dot(I, N);
-    float dt_dy = -dot(simd_fvec3(ray.do_dy) + inter.t * simd_fvec3(ray.dd_dy), N) / dot(I, N);
+    float dot_I_N = dot(I, N);
+    float inv_dot = std::abs(dot_I_N) < FLT_EPS ? 0.0f : 1.0f/dot_I_N;
+    float dt_dx = -dot(simd_fvec3(ray.do_dx) + inter.t * simd_fvec3(ray.dd_dx), N) * inv_dot;
+    float dt_dy = -dot(simd_fvec3(ray.do_dy) + inter.t * simd_fvec3(ray.dd_dy), N) * inv_dot;
 
     const auto do_dx = (simd_fvec3(ray.do_dx) + inter.t * simd_fvec3(ray.dd_dx)) + dt_dx * I;
     const auto do_dy = (simd_fvec3(ray.do_dy) + inter.t * simd_fvec3(ray.dd_dy)) + dt_dy * I;
@@ -760,11 +760,11 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
         float v = 1;
         if (k > 0) {
             const float z = 1.0f - halton[hi * 2] * env.sun_softness;
-            const float temp = math::sqrt(1.0f - z * z);
+            const float temp = std::sqrt(1.0f - z * z);
 
             const float phi = halton[hi * 2 + 1] * 2 * PI;
-            const float cos_phi = math::cos(phi);
-            const float sin_phi = math::sin(phi);
+            const float cos_phi = std::cos(phi);
+            const float sin_phi = std::sin(phi);
 
             auto TT = cross(simd_fvec3(env.sun_dir), B);
             auto BB = cross(simd_fvec3(env.sun_dir), TT);

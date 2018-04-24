@@ -97,11 +97,6 @@ template <int S>
 void TransformUVs(const simd_fvec<S> _uvs[2], float sx, float sy, const texture_t &t, const simd_ivec<S> &mip_level, const simd_ivec<S> &mask, simd_fvec<S> out_res[2]);
 
 // Sample texture
-/*simd_fvec4 SampleNearest(const ref::TextureAtlas2 &atlas, const texture_t &t, const simd_fvec2 &uvs, float lod);
-simd_fvec4 SampleBilinear(const ref::TextureAtlas2 &atlas, const texture_t &t, const simd_fvec2 &uvs, int lod);
-simd_fvec4 SampleTrilinear(const ref::TextureAtlas2 &atlas, const texture_t &t, const simd_fvec2 &uvs, float lod);
-simd_fvec4 SampleAnisotropic(const ref::TextureAtlas2 &atlas, const texture_t &t, const simd_fvec2 &uvs, const simd_fvec2 &duv_dx, const simd_fvec2 &duv_dy);*/
-
 template <int S>
 void SampleNearest(const ref::TextureAtlas &atlas, const texture_t &t, const simd_fvec<S> uvs[2], const simd_fvec<S> &lod, const simd_ivec<S> &mask, simd_fvec<S> out_rgba[4]);
 template <int S>
@@ -318,8 +313,6 @@ force_inline float length(const simd_fvec2 &x) {
 force_inline float floor(float x) {
     return (float)((int)x - (x < 0.0f));
 }
-
-const float PI = 3.14159265358979323846264338327950288f;
 
 }
 }
@@ -720,99 +713,6 @@ void ray::NS::TransformUVs(const simd_fvec<S> uvs[2], float sx, float sy, const 
     out_res[1] = (pos[1] + (uvs[1] - floor(uvs[1])) * static_cast<simd_fvec<S>>(isize[1] >> mip_level) + 1.0f) / sy;
 }
 
-/*ray::NS::simd_fvec4 ray::NS::SampleNearest(const ref::TextureAtlas2 &atlas, const texture_t &t, const simd_fvec2 &uvs, float lod) {
-    int _lod = (int)lod;
-
-    simd_fvec2 atlas_size = { atlas.size_x(), atlas.size_y() };
-    simd_fvec2 _uvs = TransformUVs(uvs, atlas_size, &t, _lod);
-
-    if (_lod > MAX_MIP_LEVEL) _lod = MAX_MIP_LEVEL;
-
-    int page = t.page[_lod];
-
-    const auto &pix = atlas.Get(page, _uvs[0], _uvs[1]);
-
-    const float k = 1.0f / 255.0f;
-    return simd_fvec4{ pix.r * k, pix.g * k, pix.b * k, pix.a * k };
-}
-
-ray::NS::simd_fvec4 ray::NS::SampleBilinear(const ref::TextureAtlas2 &atlas, const texture_t &t, const simd_fvec2 &uvs, int lod) {
-    simd_fvec2 atlas_size = { atlas.size_x(), atlas.size_y() };
-    simd_fvec2 _uvs = TransformUVs(uvs, atlas_size, &t, lod);
-
-    int page = t.page[lod];
-
-    _uvs = _uvs * atlas_size - 0.5f;
-
-    const auto &p00 = atlas.Get(page, int(_uvs[0]), int(_uvs[1]));
-    const auto &p01 = atlas.Get(page, int(_uvs[0] + 1), int(_uvs[1]));
-    const auto &p10 = atlas.Get(page, int(_uvs[0]), int(_uvs[1] + 1));
-    const auto &p11 = atlas.Get(page, int(_uvs[0] + 1), int(_uvs[1] + 1));
-
-    float kx = _uvs[0] - floor(_uvs[0]), ky = _uvs[1] - floor(_uvs[1]);
-
-    const auto p0 = simd_fvec4{ p01.r * kx + p00.r * (1 - kx),
-                                p01.g * kx + p00.g * (1 - kx),
-                                p01.b * kx + p00.b * (1 - kx),
-                                p01.a * kx + p00.a * (1 - kx) };
-
-    const auto p1 = simd_fvec4{ p11.r * kx + p10.r * (1 - kx),
-                                p11.g * kx + p10.g * (1 - kx),
-                                p11.b * kx + p10.b * (1 - kx),
-                                p11.a * kx + p10.a * (1 - kx) };
-
-    const float k = 1.0f / 255.0f;
-    return (p1 * ky + p0 * (1 - ky)) * k;
-}
-
-ray::NS::simd_fvec4 ray::NS::SampleTrilinear(const ref::TextureAtlas2 &atlas, const texture_t &t, const simd_fvec2 &uvs, float lod) {
-    auto col1 = SampleBilinear(atlas, t, uvs, (int)floor(lod));
-    auto col2 = SampleBilinear(atlas, t, uvs, (int)std::ceil(lod));
-
-    const float k = lod - floor(lod);
-    return col1 * (1 - k) + col2 * k;
-}
-
-ray::NS::simd_fvec4 ray::NS::SampleAnisotropic(const ref::TextureAtlas2 &atlas, const texture_t &t, const simd_fvec2 &uvs, const simd_fvec2 &duv_dx, const simd_fvec2 &duv_dy) {
-    simd_fvec2 sz = { (float)t.size[0], (float)t.size[1] };
-    
-    float l1 = length(duv_dx * sz);
-    float l2 = length(duv_dy * sz);
-
-    float lod, k;
-    simd_fvec2 step;
-
-    if (l1 <= l2) {
-        lod = log2(l1);
-        k = l1 / l2;
-        step = duv_dy;
-    } else {
-        lod = log2(l2);
-        k = l2 / l1;
-        step = duv_dx;
-    }
-
-    if (lod < 0.0f) lod = 0.0f;
-    else if (lod > (float)MAX_MIP_LEVEL) lod = (float)MAX_MIP_LEVEL;
-
-    simd_fvec2 _uvs = uvs - step * 0.5f;
-
-    int num = (int)(2.0f / k);
-    if (num < 1) num = 1;
-    else if (num > 32) num = 32;
-
-    step = step / float(num);
-
-    simd_fvec4 res = { 0.0f };
-
-    for (int i = 0; i < num; i++) {
-        res += SampleTrilinear(atlas, t, _uvs, lod);
-        _uvs += step;
-    }
-
-    return res / float(num);
-}*/
-
 template <int S>
 void ray::NS::SampleNearest(const ref::TextureAtlas &atlas, const texture_t &t, const simd_fvec<S> uvs[2], const simd_fvec<S> &lod, const simd_ivec<S> &mask, simd_fvec<S> out_rgba[4]) {
     simd_ivec<S> _lod = (simd_ivec<S>)lod;
@@ -1027,11 +927,15 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
 
     simd_fvec<S> temp[3];
 
+    simd_fvec<S> dot_I_N = dot(I, N);
+    simd_fvec<S> inv_dot = 1.0f / dot_I_N;
+    where(abs(dot_I_N) < FLT_EPS, inv_dot) = { 0.0f };
+
     temp[0] = ray.do_dx[0] + inter.t * ray.dd_dx[0];
     temp[1] = ray.do_dx[1] + inter.t * ray.dd_dx[1];
     temp[2] = ray.do_dx[2] + inter.t * ray.dd_dx[2];
 
-    simd_fvec<S> dt_dx = -dot(temp, N) / dot(I, N);
+    simd_fvec<S> dt_dx = -dot(temp, N) * inv_dot;
     simd_fvec<S> do_dx[3] = { temp[0] + dt_dx * I[0], temp[1] + dt_dx * I[1], temp[2] + dt_dx * I[2] };
     simd_fvec<S> dd_dx[3] = { ray.dd_dx[0], ray.dd_dx[1], ray.dd_dx[2] };
 
@@ -1039,7 +943,7 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
     temp[1] = ray.do_dy[1] + inter.t * ray.dd_dy[1];
     temp[2] = ray.do_dy[2] + inter.t * ray.dd_dy[2];
 
-    simd_fvec<S> dt_dy = -dot(temp, N) / dot(I, N);
+    simd_fvec<S> dt_dy = -dot(temp, N) * inv_dot;
     simd_fvec<S> do_dy[3] = { temp[0] + dt_dy * I[0], temp[1] + dt_dy * I[1], temp[2] + dt_dy * I[2] };
     simd_fvec<S> dd_dy[3] = { ray.dd_dy[0], ray.dd_dy[1], ray.dd_dy[2] };
 

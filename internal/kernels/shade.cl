@@ -87,8 +87,10 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
 
     // From 'Tracing Ray Differentials' [1999]
 
-    float dt_dx = -dot(orig_ray->do_dx + inter->t * orig_ray->dd_dx, N) / dot(I, N);
-    float dt_dy = -dot(orig_ray->do_dy + inter->t * orig_ray->dd_dy, N) / dot(I, N);
+    float dot_I_N = dot(I, N);
+    float inv_dot = fabs(dot_I_N) < FLT_EPS ? 0.0f : 1.0f/dot_I_N;
+    float dt_dx = -dot(orig_ray->do_dx + inter->t * orig_ray->dd_dx, N) * inv_dot;
+    float dt_dy = -dot(orig_ray->do_dy + inter->t * orig_ray->dd_dy, N) * inv_dot;
     
     const float3 do_dx = (orig_ray->do_dx + inter->t * orig_ray->dd_dx) + dt_dx * I;
     const float3 do_dy = (orig_ray->do_dy + inter->t * orig_ray->dd_dy) + dt_dy * I;
@@ -103,7 +105,7 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
     const float3 dp13 = p1 - p3, dp23 = p2 - p3;
 
     const float det_uv = duv13.x * duv23.y - duv13.y * duv23.x;
-    const float inv_det_uv = fabs(det_uv) < FLT_EPSILON ? 0 : 1.0f / det_uv;
+    const float inv_det_uv = fabs(det_uv) < FLT_EPS ? 0 : 1.0f / det_uv;
     const float3 dpdu = (duv23.y * dp13 - duv13.y * dp23) * inv_det_uv;
     const float3 dpdv = (-duv23.x * dp13 + duv13.x * dp23) * inv_det_uv;
 
@@ -124,7 +126,7 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
     }
 
     const float det = A[0].x * A[1].y - A[1].x * A[0].y;
-    const float inv_det = fabs(det) < FLT_EPSILON ? 0 : 1.0f / det;
+    const float inv_det = fabs(det) < FLT_EPS ? 0 : 1.0f / det;
     const float2 duv_dx = (float2)(A[0].x * Bx.x - A[0].y * Bx.y, A[1].x * Bx.x - A[1].y * Bx.y) * inv_det;
     const float2 duv_dy = (float2)(A[0].x * By.x - A[0].y * By.y, A[1].x * By.x - A[1].y * By.y) * inv_det;
 
@@ -198,7 +200,7 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
             const float z = 1.0f - halton[hi * 2] * env.sun_softness;
             const float temp = native_sqrt(1.0f - z * z);
 
-            const float phi = halton[hi * 2 + 1] * 2 * M_PI;
+            const float phi = halton[hi * 2 + 1] * 2 * PI;
             float cos_phi;
             const float sin_phi = sincos(phi, &cos_phi);
 
@@ -219,7 +221,7 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
         const float z = halton[hi * 2];
         const float temp = native_sqrt(1.0f - z * z);
 
-        const float phi = halton[((hash(hi) + iteration) & (HaltonSeqLen - 1)) * 2 + 0] * 2 * M_PI;
+        const float phi = halton[((hash(hi) + iteration) & (HaltonSeqLen - 1)) * 2 + 0] * 2 * PI;
         float cos_phi;
         const float sin_phi = sincos(phi, &cos_phi);
 
@@ -246,7 +248,7 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
         const float z = 1.0f - halton[hi * 2] * mat->roughness;
         const float temp = native_sqrt(1.0f - z * z);
 
-        const float phi = halton[((hash(hi) + iteration) & (HaltonSeqLen - 1)) * 2 + 0] * 2 * M_PI;
+        const float phi = halton[((hash(hi) + iteration) & (HaltonSeqLen - 1)) * 2 + 0] * 2 * PI;
         float cos_phi;
         const float sin_phi = sincos(phi, &cos_phi);
 
@@ -284,7 +286,7 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
         const float z = 1.0f - halton[hi * 2] * mat->roughness;
         const float temp = native_sqrt(1.0f - z * z);
 
-        const float phi = halton[((hash(hi) + iteration) & (HaltonSeqLen - 1)) * 2 + 0] * 2 * M_PI;
+        const float phi = halton[((hash(hi) + iteration) & (HaltonSeqLen - 1)) * 2 + 0] * 2 * PI;
         float cos_phi;
         const float sin_phi = sincos(phi, &cos_phi);
 
