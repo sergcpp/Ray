@@ -1,4 +1,5 @@
 
+#include <functional>
 #include <random>
 
 #include "CoreSIMD.h"

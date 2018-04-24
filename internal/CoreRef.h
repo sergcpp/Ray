@@ -8,7 +8,7 @@
 
 #define NS ref
 #if defined(__AVX2__) || defined(__AVX__)
-#define USE_AVX
+//#define USE_AVX
 #elif defined(_M_AMD64) || defined(_M_X64) || (defined(_M_IX86_FP) && _M_IX86_FP == 2)
 //#define USE_SSE
 #else
