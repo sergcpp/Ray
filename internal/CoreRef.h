@@ -45,7 +45,7 @@ struct hit_data_t {
     float t, u, v;
     rays_id_t id;
 
-    hit_data_t(eUninitialize) {}
+    explicit hit_data_t(eUninitialize) {}
     hit_data_t();
 
     // hint for math::aligned_vector

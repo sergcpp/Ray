@@ -270,7 +270,7 @@ force_inline simd_fvec<S> dot(const simd_fvec<S> v1[3], const simd_fvec<S> v2[3]
 }
 
 template <int S>
-force_inline simd_fvec<S> abs(const simd_fvec<S> v) {
+force_inline simd_fvec<S> abs(const simd_fvec<S> &v) {
     // TODO: find faster implementation
     return max(v, -v);
 }
@@ -947,7 +947,7 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
 
     simd_fvec<S> det_uv = duv13[0] * duv23[1] - duv13[1] * duv23[0];
     simd_fvec<S> inv_det_uv = 1.0f / det_uv;
-    where(abs(det_uv) < FLT_EPS, inv_det_uv) = { 0.0f };
+    where(abs(det_uv) < FLT_EPS, inv_det_uv) = 0.0f;
 
     const simd_fvec<S> dpdu[3] = { (duv23[1] * dp13[0] - duv13[1] * dp23[0]) * inv_det_uv,
                                    (duv23[1] * dp13[1] - duv13[1] * dp23[1]) * inv_det_uv,
