@@ -870,13 +870,14 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
                  b1[3], b2[3], b3[3];
 
     simd_ivec<S> inter_prim_index = inter.prim_index;
-    where(ino_hit, inter_prim_index) = { 0 };
 
     simd_ivec<S> mat_index = { -1 };
 
     simd_fvec<S> inv_xform1[3], inv_xform2[3], inv_xform3[3];
 
     for (int i = 0; i < S; i++) {
+        if (ino_hit[i]) continue;
+
         const auto &v1 = vertices[vtx_indices[inter_prim_index[i] * 3 + 0]];
         const auto &v2 = vertices[vtx_indices[inter_prim_index[i] * 3 + 1]];
         const auto &v3 = vertices[vtx_indices[inter_prim_index[i] * 3 + 2]];
@@ -1086,7 +1087,7 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
                 simd_fvec<S> k = _N[0] * env.sun_dir[0] + _N[1] * env.sun_dir[1] + _N[2] * env.sun_dir[2];
                 simd_fvec<S> v = { 1.0f };
 
-                const auto _mask = cast<simd_ivec<S>>(k > 0.0f) & ray_queue[index];
+                const auto _mask = cast<simd_ivec<S>>(k > 0.0f) & same_mi;
 
                 if (_mask.not_all_zeros()) {
                     simd_fvec<S> V[3], TT[3], BB[3];
@@ -1124,7 +1125,7 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
                     hit_data_t<S> inter;
                     Traverse_MacroTree_CPU(r, _mask, nodes, node_index, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, inter);
                     
-                    where(cast<simd_fvec<S>>(inter.mask), v) = { 0.0f };
+                    where(cast<simd_fvec<S>>(inter.mask), v) = 0.0f;
                 }
 
                 k = clamp(k, 0.0f, 1.0f);
