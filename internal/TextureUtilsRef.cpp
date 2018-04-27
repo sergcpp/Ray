@@ -3,6 +3,8 @@
 #include <array>
 
 std::vector<ray::pixel_color8_t> ray::ref::DownsampleTexture(const std::vector<pixel_color8_t> &_tex, const math::ivec2 &res) {
+    if (res.x == 1 || res.y == 1) return _tex;
+    
     const pixel_color8_t *tex = &_tex[0];
 
     // TODO: properly downsample non-power-of-2 textures
