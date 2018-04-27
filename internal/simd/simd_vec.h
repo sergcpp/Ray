@@ -474,9 +474,6 @@ force_inline simd_vec<T, S> min(const simd_vec<T, S> &v1, const simd_vec<T, S> &
 template <typename T, int S>
 force_inline simd_vec<T, S> max(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) { return simd_vec<T, S>::max(v1, v2); }
 
-template <typename T, typename U>
-force_inline const T &cast(const U &v1) { return reinterpret_cast<const T&>(v1); }
-
 template <typename T, int S>
 class simd_comp_where_helper {
     const simd_vec<T, S> &mask_;
