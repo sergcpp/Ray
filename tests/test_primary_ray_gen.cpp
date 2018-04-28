@@ -10,8 +10,12 @@
 #include "../internal/RendererAVX.h"
 #include "../internal/RendererOCL.h"
 
+#include "../internal/simd/detect.h"
+
 void test_primary_ray_gen() {
     extern std::vector<float> primary_ray_gen_test_data;
+
+    auto features = ray::GetCpuFeatures();
 
     ray::camera_t cam;
 
@@ -38,8 +42,8 @@ void test_primary_ray_gen() {
             require(rays[i].d[2] == Approx(primary_ray_gen_test_data[i * 7 + 6]));
         }
     }
-
-    {
+    
+    if (features.sse2_supported) {
         // test sse
         ray::aligned_vector<ray::sse::ray_packet_t<ray::sse::RayPacketSize>> rays;
         ray::sse::GeneratePrimaryRays<ray::sse::RayPacketDimX, ray::sse::RayPacketDimY>(0, cam, { 0, 0, 4, 4 }, 4, 4, &dummy_halton[0], rays);
@@ -85,9 +89,11 @@ void test_primary_ray_gen() {
                 i++;
             }
         }
+    } else {
+        std::cout << "Cannot test SSE" << std::endl;
     }
-
-    {
+    
+    if (features.avx_supported) {
         // test avx
         ray::aligned_vector<ray::avx::ray_packet_t<ray::avx::RayPacketSize>> rays;
         ray::avx::GeneratePrimaryRays<ray::avx::RayPacketDimX, ray::avx::RayPacketDimY>(0, cam, { 0, 0, 4, 4 }, 4, 4, &dummy_halton[0], rays);
@@ -157,8 +163,10 @@ void test_primary_ray_gen() {
                 i++;
             }
         }
+    } else {
+        std::cout << "Cannot test AVX" << std::endl;
     }
-
+    
     {
         // test OpenCL
         class TestRenderer : public ray::ocl::Renderer {
@@ -168,7 +176,7 @@ void test_primary_ray_gen() {
                 cl_int error = queue_.enqueueWriteBuffer(halton_seq_buf_, CL_TRUE, 0, sizeof(float) * ray::HaltonSeqLen * 2, &dummy_halton[0]);
                 require(error == CL_SUCCESS);
 
-                // override host_no_access with read_only to check results
+                // override host_no_access with host_read_only to check results
                 prim_rays_buf_ = cl::Buffer(context_, CL_MEM_WRITE_ONLY | CL_MEM_HOST_READ_ONLY, sizeof(ray::ocl::ray_packet_t) * w_ * h_, nullptr, &error);
             }
 

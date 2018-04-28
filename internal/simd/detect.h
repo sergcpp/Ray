@@ -6,7 +6,7 @@
 #include <intrin.h>
 #ifdef __GNUC__
 #include <cpuid.h>
-void cpuid(int info[4], int InfoType) {
+inline void cpuid(int info[4], int InfoType) {
     __cpuid_count(InfoType, 0, info[0], info[1], info[2], info[3]);
 }
 #else
@@ -18,7 +18,7 @@ void cpuid(int info[4], int InfoType) {
 #if !defined(__arm__) && !defined(__EMSCRIPTEN__)
 //  GCC Intrinsics
 #include <cpuid.h>
-void cpuid(int info[4], int InfoType) {
+inline void cpuid(int info[4], int InfoType) {
     __cpuid_count(InfoType, 0, info[0], info[1], info[2], info[3]);
 }
 #endif
@@ -30,7 +30,7 @@ namespace ray {
         bool sse2_supported, avx_supported;
     };
 
-    CpuFeatures GetCpuFeatures() {
+    inline CpuFeatures GetCpuFeatures() {
         CpuFeatures ret;
 
         ret.sse2_supported = false;
@@ -53,3 +53,5 @@ namespace ray {
         return ret;
     }
 }
+
+#undef cpuid

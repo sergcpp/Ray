@@ -1,8 +1,20 @@
 cmake_minimum_required(VERSION 2.8.4)
 project(ray)
 
-IF(MSVC)
+add_library(OpenCL STATIC IMPORTED)
 
+include_directories(ocl/include)
+
+IF(MSVC)
+    if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+        set_target_properties(OpenCL PROPERTIES
+          IMPORTED_LOCATION "${CMAKE_CURRENT_LIST_DIR}/ocl/lib/x86_64/opencl.lib"
+        )
+    else(CMAKE_SIZEOF_VOID_P EQUAL 8)
+        set_target_properties(OpenCL PROPERTIES
+          IMPORTED_LOCATION "${CMAKE_CURRENT_LIST_DIR}/ocl/lib/x86/opencl.lib"
+        )
+    endif()
 ELSE(MSVC)
     set(CMAKE_CXX_STANDARD 11)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mavx2 -msse3")
