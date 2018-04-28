@@ -4,12 +4,6 @@
 
 #include <array>
 
-namespace ray {
-namespace ref {
-    force_inline simd_fvec3 cross(const simd_fvec3 &v1, const simd_fvec3 &v2);
-}
-}
-
 std::vector<ray::pixel_color8_t> ray::ref::DownsampleTexture(const std::vector<pixel_color8_t> &_tex, const int res[2]) {
     if (res[0] == 1 || res[1] == 1) return _tex;
     
@@ -134,6 +128,10 @@ void ray::ref::ComputeTextureBasis(size_t vtx_offset, std::vector<vertex_t> &ver
         v2->b[1] += tangent[1];
         v2->b[2] += tangent[2];
     }
+
+    auto cross = [](const simd_fvec3 &v1, const simd_fvec3 &v2) -> simd_fvec3 {
+        return simd_fvec3{ v1[1] * v2[2] - v1[2] * v2[1], v1[2] * v2[0] - v1[0] * v2[2], v1[0] * v2[1] - v1[1] * v2[0] };
+    };
 
     for (auto &v : vertices) {
         if (std::abs(v.b[0]) > FLT_EPS || std::abs(v.b[1]) > FLT_EPS || std::abs(v.b[2]) > FLT_EPS) {

@@ -31,7 +31,6 @@ set(INTERNAL_SOURCE_FILES internal/BVHSplit.h
                           internal/RendererRef2.h
                           internal/RendererSIMD.h
                           internal/RendererSSE.h
-                          internal/RendererSSE.cpp
                           internal/SceneOCL.h
                           internal/SceneOCL.cpp
                           internal/SceneRef.h
