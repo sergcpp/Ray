@@ -1,0 +1,35 @@
+
+image:
+    - Visual Studio 2015
+    - Visual Studio 2017
+
+clone_folder: c:\projects\ray
+shallow_clone: true
+
+matrix:
+    fast_finish: true
+
+platform:
+    - x64
+    - x86
+
+configuration:
+    - Debug
+    - Release
+    
+init:
+    - set arch=
+    - if "%PLATFORM%"=="x64" ( set arch= Win64)
+    - if "%APPVEYOR_BUILD_WORKER_IMAGE%"=="Visual Studio 2017" ( set generator="Visual Studio 15 2017%arch%" )
+    - if "%APPVEYOR_BUILD_WORKER_IMAGE%"=="Visual Studio 2015" ( set generator="Visual Studio 14 2015%arch%" )
+
+before_build:
+    - mkdir build
+    - cd build
+    - cmake .. -G %generator%
+        
+build:
+    project: build\ALL_BUILD.vcxproj
+
+test_script:
+    - tests\%CONFIGURATION%\test_ray
