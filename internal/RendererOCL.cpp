@@ -7,8 +7,6 @@
 #include <string>
 #include <utility>
 
-#include <math/math.hpp>
-
 #include "CoreOCL.h"
 #include "Halton.h"
 #include "SceneOCL.h"
@@ -251,8 +249,6 @@ std::shared_ptr<ray::SceneBase> ray::ocl::Renderer::CreateScene() {
 }
 
 void ray::ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, RegionContext &region) {
-    using namespace math;
-
     auto s = std::dynamic_pointer_cast<ocl::Scene>(_s);
     if (!s) return;
 

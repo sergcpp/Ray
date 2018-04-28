@@ -4,13 +4,18 @@
 #include <cmath>
 #include <cstring>
 
-#include <math/math.hpp>
 #include <vector>
 
 #include "BVHSplit.h"
 
 namespace ray {
 const float axis_aligned_normal_eps = 0.000001f;
+
+force_inline ref::simd_fvec3 cross(const ref::simd_fvec3 &v1, const ref::simd_fvec3 &v2) {
+    return { v1[1] * v2[2] - v1[2] * v2[1],
+             v1[2] * v2[0] - v1[0] * v2[2],
+             v1[0] * v2[1] - v1[1] * v2[0] };
+}
 }
 
 void ray::PreprocessTri(const float *p, int stride, tri_accel_t *acc) {
@@ -66,7 +71,7 @@ void ray::PreprocessCone(const float o[3], const float v[3], float phi, float co
         acc->o[i] = o[i];
         acc->v[i] = -v[i];
     }
-    float cos_phi = math::cos(phi);
+    float cos_phi = std::cos(phi);
     acc->cos_phi_sqr = cos_phi * cos_phi;
     acc->cone_start = cone_start;
     acc->cone_end = cone_end;
@@ -81,8 +86,6 @@ void ray::PreprocessBox(const float min[3], const float max[3], aabox_t *box) {
 
 uint32_t ray::PreprocessMesh(const float *attrs, size_t attrs_count, const uint32_t *vtx_indices, size_t vtx_indices_count, eVertexLayout layout,
                              std::vector<bvh_node_t> &out_nodes, std::vector<tri_accel_t> &out_tris, std::vector<uint32_t> &out_tri_indices) {
-    using namespace math;
-
     assert(vtx_indices_count && vtx_indices_count % 3 == 0);
     assert(layout == PxyzNxyzTuv);
 
@@ -103,8 +106,8 @@ uint32_t ray::PreprocessMesh(const float *attrs, size_t attrs_count, const uint3
 
         PreprocessTri(&p[0], 0, &out_tris[tris_start + j / 3]);
 
-        vec3 _min = min(make_vec3(&p[0]), min(make_vec3(&p[3]), make_vec3(&p[6]))),
-             _max = max(make_vec3(&p[0]), max(make_vec3(&p[3]), make_vec3(&p[6])));
+        ref::simd_fvec3 _min = min(ref::simd_fvec3{ &p[0] }, min(ref::simd_fvec3{ &p[3] }, ref::simd_fvec3{ &p[6] })),
+                        _max = max(ref::simd_fvec3{ &p[0] }, max(ref::simd_fvec3{ &p[3] }, ref::simd_fvec3{ &p[6] }));
 
         primitives.push_back({ _min, _max });
     }
@@ -121,13 +124,11 @@ uint32_t ray::PreprocessMesh(const float *attrs, size_t attrs_count, const uint3
 
 uint32_t ray::PreprocessPrims(const prim_t *prims, size_t prims_count,
                               std::vector<bvh_node_t> &out_nodes, std::vector<uint32_t> &out_indices) {
-    using namespace math;
-
     struct prims_coll_t {
         std::vector<uint32_t> indices;
-        vec3 min = vec3{ std::numeric_limits<float>::max() }, max = vec3{ std::numeric_limits<float>::lowest() };
+        ref::simd_fvec3 min = { std::numeric_limits<float>::max() }, max = { std::numeric_limits<float>::lowest() };
         prims_coll_t() {}
-        prims_coll_t(std::vector<uint32_t> &&_indices, const vec3 &_min, const vec3 &_max)
+        prims_coll_t(std::vector<uint32_t> &&_indices, const ref::simd_fvec3 &_min, const ref::simd_fvec3 &_max)
             : indices(std::move(_indices)), min(_min), max(_max) {
         }
     };
@@ -164,12 +165,12 @@ uint32_t ray::PreprocessPrims(const prim_t *prims, size_t prims_count,
         }
 
         if (split_data.right_indices.empty()) {
-            vec3 bbox_min = split_data.left_bounds[0],
-                 bbox_max = split_data.left_bounds[1];
+            ref::simd_fvec3 bbox_min = split_data.left_bounds[0],
+                            bbox_max = split_data.left_bounds[1];
 
             out_nodes.push_back({ (uint32_t)out_indices.size(), (uint32_t)split_data.left_indices.size(), 0, 0, parent_index, sibling_index, 0,
-                {   { bbox_min.x, bbox_min.y, bbox_min.z },
-                    { bbox_max.x, bbox_max.y, bbox_max.z }
+                {   { bbox_min[0], bbox_min[1], bbox_min[2] },
+                    { bbox_max[0], bbox_max[1], bbox_max[2] }
                 }
             });
             out_indices.insert(out_indices.end(), split_data.left_indices.begin(), split_data.left_indices.end());
@@ -177,25 +178,25 @@ uint32_t ray::PreprocessPrims(const prim_t *prims, size_t prims_count,
             uint32_t index = (uint32_t)num_nodes;
 
             uint32_t space_axis = 0;
-            vec3 c_left = (split_data.left_bounds[0] + split_data.left_bounds[1]) / 2,
-                 c_right = (split_data.right_bounds[1] + split_data.right_bounds[1]) / 2;
+            ref::simd_fvec3 c_left = (split_data.left_bounds[0] + split_data.left_bounds[1]) / 2,
+                            c_right = (split_data.right_bounds[1] + split_data.right_bounds[1]) / 2;
 
-            vec3 dist = abs(c_left - c_right);
+            ref::simd_fvec3 dist = abs(c_left - c_right);
 
-            if (dist.x > dist.y && dist.x > dist.z) {
+            if (dist[0] > dist[1] && dist[0] > dist[2]) {
                 space_axis = 0;
-            } else if (dist.y > dist.x && dist.y > dist.z) {
+            } else if (dist[1] > dist[0] && dist[1] > dist[2]) {
                 space_axis = 1;
             } else {
                 space_axis = 2;
             }
 
-            vec3 bbox_min = math::min(split_data.left_bounds[0], split_data.right_bounds[0]),
-                 bbox_max = math::max(split_data.left_bounds[1], split_data.right_bounds[1]);
+            ref::simd_fvec3 bbox_min = min(split_data.left_bounds[0], split_data.right_bounds[0]),
+                            bbox_max = max(split_data.left_bounds[1], split_data.right_bounds[1]);
 
             out_nodes.push_back({ 0, 0, index + 1, index + 2, parent_index, sibling_index, space_axis,
-                {   { bbox_min.x, bbox_min.y, bbox_min.z },
-                    { bbox_max.x, bbox_max.y, bbox_max.z }
+                {   { bbox_min[0], bbox_min[1], bbox_min[2] },
+                    { bbox_max[0], bbox_max[1], bbox_max[2] }
                 }
             });
 
@@ -247,29 +248,25 @@ bool ray::NaiivePluckerTest(const float p[9], const float o[3], const float d[3]
 }
 
 void ray::ConstructCamera(eCamType type, const float origin[3], const float fwd[3], float fov, camera_t *cam) {
-    using namespace math;
-
     if (type == Persp) {
-        vec3 o = make_vec3(origin);
-        vec3 f = make_vec3(fwd);
-        vec3 u = { 0, 1, 0 };
+        ref::simd_fvec3 o = { origin };
+        ref::simd_fvec3 f = { fwd };
+        ref::simd_fvec3 u = { 0, 1, 0 };
 
-        vec3 s = normalize(cross(f, u));
+        ref::simd_fvec3 s = normalize(cross(f, u));
         u = cross(s, f);
 
         cam->type = type;
-        memcpy(&cam->origin[0], value_ptr(o), sizeof(vec3));
-        memcpy(&cam->fwd[0], value_ptr(f), sizeof(vec3));
-        memcpy(&cam->side[0], value_ptr(s), sizeof(vec3));
-        memcpy(&cam->up[0], value_ptr(u), sizeof(vec3));
+        memcpy(&cam->origin[0], &o[0], 3 * sizeof(float));
+        memcpy(&cam->fwd[0], &f[0], 3 * sizeof(float));
+        memcpy(&cam->side[0], &s[0], 3 * sizeof(float));
+        memcpy(&cam->up[0], &u[0], 3 * sizeof(float));
     } else if (type == Ortho) {
         // TODO!
     }
 }
 
 void ray::TransformBoundingBox(const float bbox[2][3], const float *xform, float out_bbox[2][3]) {
-    using namespace math;
-
     out_bbox[0][0] = out_bbox[1][0] = xform[12];
     out_bbox[0][1] = out_bbox[1][1] = xform[13];
     out_bbox[0][2] = out_bbox[1][2] = xform[14];
@@ -288,4 +285,47 @@ void ray::TransformBoundingBox(const float bbox[2][3], const float *xform, float
             }
         }
     }
+}
+
+void ray::InverseMatrix(const float mat[16], float out_mat[16]) {
+    float A2323 = mat[10] * mat[15] - mat[11] * mat[14];
+    float A1323 = mat[9] * mat[15] - mat[11] * mat[13];
+    float A1223 = mat[9] * mat[14] - mat[10] * mat[13];
+    float A0323 = mat[8] * mat[15] - mat[11] * mat[12];
+    float A0223 = mat[8] * mat[14] - mat[10] * mat[12];
+    float A0123 = mat[8] * mat[13] - mat[9] * mat[12];
+    float A2313 = mat[6] * mat[15] - mat[7] * mat[14];
+    float A1313 = mat[5] * mat[15] - mat[7] * mat[13];
+    float A1213 = mat[5] * mat[14] - mat[6] * mat[13];
+    float A2312 = mat[6] * mat[11] - mat[7] * mat[10];
+    float A1312 = mat[5] * mat[11] - mat[7] * mat[9];
+    float A1212 = mat[5] * mat[10] - mat[6] * mat[9];
+    float A0313 = mat[4] * mat[15] - mat[7] * mat[12];
+    float A0213 = mat[4] * mat[14] - mat[6] * mat[12];
+    float A0312 = mat[4] * mat[11] - mat[7] * mat[8];
+    float A0212 = mat[4] * mat[10] - mat[6] * mat[8];
+    float A0113 = mat[4] * mat[13] - mat[5] * mat[12];
+    float A0112 = mat[4] * mat[9] - mat[5] * mat[8];
+
+    float inv_det = 1.0f / (mat[0] * (mat[5] * A2323 - mat[6] * A1323 + mat[7] * A1223)
+                            - mat[1] * (mat[4] * A2323 - mat[6] * A0323 + mat[7] * A0223)
+                            + mat[2] * (mat[4] * A1323 - mat[5] * A0323 + mat[7] * A0123)
+                            - mat[3] * (mat[4] * A1223 - mat[5] * A0223 + mat[6] * A0123));
+
+    out_mat[0] = inv_det *   (mat[5] * A2323 - mat[6] * A1323 + mat[7] * A1223);
+    out_mat[1] = inv_det * -(mat[1] * A2323 - mat[2] * A1323 + mat[3] * A1223);
+    out_mat[2] = inv_det *   (mat[1] * A2313 - mat[2] * A1313 + mat[3] * A1213);
+    out_mat[3] = inv_det * -(mat[1] * A2312 - mat[2] * A1312 + mat[3] * A1212);
+    out_mat[4] = inv_det * -(mat[4] * A2323 - mat[6] * A0323 + mat[7] * A0223);
+    out_mat[5] = inv_det *   (mat[0] * A2323 - mat[2] * A0323 + mat[3] * A0223);
+    out_mat[6] = inv_det * -(mat[0] * A2313 - mat[2] * A0313 + mat[3] * A0213);
+    out_mat[7] = inv_det *   (mat[0] * A2312 - mat[2] * A0312 + mat[3] * A0212);
+    out_mat[8] = inv_det *   (mat[4] * A1323 - mat[5] * A0323 + mat[7] * A0123);
+    out_mat[9] = inv_det * -(mat[0] * A1323 - mat[1] * A0323 + mat[3] * A0123);
+    out_mat[10] = inv_det *   (mat[0] * A1313 - mat[1] * A0313 + mat[3] * A0113);
+    out_mat[11] = inv_det * -(mat[0] * A1312 - mat[1] * A0312 + mat[3] * A0112);
+    out_mat[12] = inv_det * -(mat[4] * A1223 - mat[5] * A0223 + mat[6] * A0123);
+    out_mat[13] = inv_det *   (mat[0] * A1223 - mat[1] * A0223 + mat[2] * A0123);
+    out_mat[14] = inv_det * -(mat[0] * A1213 - mat[1] * A0213 + mat[2] * A0113);
+    out_mat[15] = inv_det *   (mat[0] * A1212 - mat[1] * A0212 + mat[2] * A0112);
 }

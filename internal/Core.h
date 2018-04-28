@@ -14,9 +14,9 @@
 #endif
 #ifdef _MSC_VER
 #define force_inline __forceinline
-//__declspec(noinline)
-//__forceinline
 #endif
+
+#include "simd/aligned_allocator.h"
 
 namespace ray {
 enum eUninitialize { Uninitialize };
@@ -51,7 +51,7 @@ const float PI = 3.141592653589793238463f;
 
 const float MAX_DIST = 3.402823466e+38F;
 
-const int MAX_BOUNCES = 4;
+const int MAX_BOUNCES = 0;
 
 struct cone_accel_t {
     float o[3], v[3];
@@ -110,6 +110,9 @@ static_assert(sizeof(material_t) == 64, "!");
 
 struct prim_t;
 
+template <typename T, std::size_t Alignment = T::alignment>
+using aligned_vector = std::vector<T, aligned_allocator<T, Alignment>>;
+
 void PreprocessTri(const float *p, int stride, tri_accel_t *acc);
 void PreprocessCone(const float o[3], const float v[3], float phi, float cone_start, float cone_end, cone_accel_t *acc);
 void PreprocessBox(const float min[3], const float max[3], aabox_t *box);
@@ -125,6 +128,8 @@ bool NaiivePluckerTest(const float p[9], const float o[3], const float d[3]);
 void ConstructCamera(eCamType type, const float origin[3], const float fwd[3], float fov, camera_t *cam);
 
 void TransformBoundingBox(const float bbox[2][3], const float *xform, float out_bbox[2][3]);
+
+void InverseMatrix(const float mat[16], float out_mat[16]);
 
 const int PrimesCount = 11;
 const int g_primes[PrimesCount] = { 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31 };

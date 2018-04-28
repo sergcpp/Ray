@@ -1,8 +1,9 @@
 #include "SceneRef.h"
 
-#include "TextureUtilsRef.h"
-
+#include <cassert>
 #include <cstring>
+
+#include "TextureUtilsRef.h"
 
 ray::ref::Scene::Scene() : texture_atlas_(MAX_TEXTURE_SIZE, MAX_TEXTURE_SIZE) {
     pixel_color8_t default_normalmap = { 127, 127, 255 };
@@ -61,7 +62,7 @@ uint32_t ray::ref::Scene::AddTexture(const tex_desc_t &_t) {
         t.pos[mip][0] = (uint16_t)pos[0];
         t.pos[mip][1] = (uint16_t)pos[1];
 
-        tex_data = ref::DownsampleTexture(tex_data, math::ivec2{ res[0], res[1] });
+        tex_data = ref::DownsampleTexture(tex_data, res);
 
         res[0] /= 2;
         res[1] /= 2;
@@ -210,14 +211,11 @@ uint32_t ray::ref::Scene::AddMeshInstance(uint32_t mesh_index, const float *xfor
 }
 
 void ray::ref::Scene::SetMeshInstanceTransform(uint32_t mi_index, const float *xform) {
-    using namespace math;
-
     auto &mi = mesh_instances_[mi_index];
     auto &tr = transforms_[mi.tr_index];
 
-    math::mat4 inv_mat = math::inverse(math::make_mat4(xform));
     memcpy(tr.xform, xform, 16 * sizeof(float));
-    memcpy(tr.inv_xform, math::value_ptr(inv_mat), 16 * sizeof(float));
+    InverseMatrix(tr.xform, tr.inv_xform);
 
     const auto &m = meshes_[mi.mesh_index];
     const auto &n = nodes_[m.node_index];
@@ -268,8 +266,6 @@ void ray::ref::Scene::RemoveNodes(uint32_t node_index, uint32_t node_count) {
 }
 
 void ray::ref::Scene::RebuildMacroBVH() {
-    using namespace math;
-
     RemoveNodes(macro_nodes_start_, macro_nodes_count_);
     mi_indices_.clear();
 
@@ -277,7 +273,7 @@ void ray::ref::Scene::RebuildMacroBVH() {
     primitives.reserve(mesh_instances_.size());
 
     for (const auto &mi : mesh_instances_) {
-        primitives.push_back({ make_vec3(mi.bbox_min), make_vec3(mi.bbox_max) });
+        primitives.push_back({ ref::simd_fvec3{ mi.bbox_min }, ref::simd_fvec3{ mi.bbox_max } });
     }
 
     macro_nodes_start_ = (uint32_t)nodes_.size();

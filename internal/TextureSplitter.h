@@ -1,6 +1,6 @@
 #pragma once
 
-#include <math/math.hpp>
+#include <vector>
 
 namespace ray {
 class TextureSplitter {

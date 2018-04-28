@@ -1,25 +1,33 @@
 #include "TextureUtilsRef.h"
 
+#include "CoreRef.h"
+
 #include <array>
 
-std::vector<ray::pixel_color8_t> ray::ref::DownsampleTexture(const std::vector<pixel_color8_t> &_tex, const math::ivec2 &res) {
-    if (res.x == 1 || res.y == 1) return _tex;
+namespace ray {
+namespace ref {
+    force_inline simd_fvec3 cross(const simd_fvec3 &v1, const simd_fvec3 &v2);
+}
+}
+
+std::vector<ray::pixel_color8_t> ray::ref::DownsampleTexture(const std::vector<pixel_color8_t> &_tex, const int res[2]) {
+    if (res[0] == 1 || res[1] == 1) return _tex;
     
     const pixel_color8_t *tex = &_tex[0];
 
     // TODO: properly downsample non-power-of-2 textures
 
     std::vector<pixel_color8_t> ret;
-    for (int j = 0; j < res.y; j += 2) {
-        for (int i = 0; i < res.x; i += 2) {
-            int r = tex[(j + 0) * res.x + i].r + tex[(j + 0) * res.x + i + 1].r +
-                tex[(j + 1) * res.x + i].r + tex[(j + 1) * res.x + i + 1].r;
-            int g = tex[(j + 0) * res.x + i].g + tex[(j + 0) * res.x + i + 1].g +
-                tex[(j + 1) * res.x + i].g + tex[(j + 1) * res.x + i + 1].g;
-            int b = tex[(j + 0) * res.x + i].b + tex[(j + 0) * res.x + i + 1].b +
-                tex[(j + 1) * res.x + i].b + tex[(j + 1) * res.x + i + 1].b;
-            int a = tex[(j + 0) * res.x + i].a + tex[(j + 0) * res.x + i + 1].a +
-                tex[(j + 1) * res.x + i].a + tex[(j + 1) * res.x + i + 1].a;
+    for (int j = 0; j < res[1]; j += 2) {
+        for (int i = 0; i < res[0]; i += 2) {
+            int r = tex[(j + 0) * res[0] + i].r + tex[(j + 0) * res[0] + i + 1].r +
+                    tex[(j + 1) * res[0] + i].r + tex[(j + 1) * res[0] + i + 1].r;
+            int g = tex[(j + 0) * res[0] + i].g + tex[(j + 0) * res[0] + i + 1].g +
+                    tex[(j + 1) * res[0] + i].g + tex[(j + 1) * res[0] + i + 1].g;
+            int b = tex[(j + 0) * res[0] + i].b + tex[(j + 0) * res[0] + i + 1].b +
+                    tex[(j + 1) * res[0] + i].b + tex[(j + 1) * res[0] + i + 1].b;
+            int a = tex[(j + 0) * res[0] + i].a + tex[(j + 0) * res[0] + i + 1].a +
+                    tex[(j + 1) * res[0] + i].a + tex[(j + 1) * res[0] + i + 1].a;
 
             ret.push_back({ (uint8_t)std::round(r * 0.25f), (uint8_t)std::round(g * 0.25f),
                 (uint8_t)std::round(b * 0.25f), (uint8_t)std::round(a * 0.25f)
@@ -31,32 +39,31 @@ std::vector<ray::pixel_color8_t> ray::ref::DownsampleTexture(const std::vector<p
 
 void ray::ref::ComputeTextureBasis(size_t vtx_offset, std::vector<vertex_t> &vertices, std::vector<uint32_t> &new_vtx_indices,
                                    const uint32_t *indices, size_t indices_count) {
-    using namespace math;
 
     std::vector<std::array<uint32_t, 3>> twin_verts(vertices.size(), { 0, 0, 0 });
-    aligned_vector<vec3> binormals(vertices.size());
+    aligned_vector<simd_fvec3> binormals(vertices.size());
     for (size_t i = 0; i < indices_count; i += 3) {
         auto *v0 = &vertices[indices[i + 0]];
         auto *v1 = &vertices[indices[i + 1]];
         auto *v2 = &vertices[indices[i + 2]];
 
-        auto *b0 = &binormals[indices[i + 0]];
-        auto *b1 = &binormals[indices[i + 1]];
-        auto *b2 = &binormals[indices[i + 2]];
+        auto &b0 = binormals[indices[i + 0]];
+        auto &b1 = binormals[indices[i + 1]];
+        auto &b2 = binormals[indices[i + 2]];
 
-        vec3 dp1 = make_vec3(v1->p) - make_vec3(v0->p);
-        vec3 dp2 = make_vec3(v2->p) - make_vec3(v0->p);
+        simd_fvec3 dp1 = simd_fvec3(v1->p) -simd_fvec3(v0->p);
+        simd_fvec3 dp2 = simd_fvec3(v2->p) - simd_fvec3(v0->p);
 
-        vec2 dt1 = make_vec2(v1->t0) - make_vec2(v0->t0);
-        vec2 dt2 = make_vec2(v2->t0) - make_vec2(v0->t0);
+        simd_fvec2 dt1 = simd_fvec2(v1->t0) - simd_fvec2(v0->t0);
+        simd_fvec2 dt2 = simd_fvec2(v2->t0) - simd_fvec2(v0->t0);
 
-        float det = dt1.x * dt2.y - dt1.y * dt2.x;
-        float inv_det = abs(det) > FLT_EPS ? 1.0f / det : 0;
-        vec3 tangent = (dp1 * dt2.y - dp2 * dt1.y) * inv_det;
-        vec3 binormal = (dp2 * dt1.x - dp1 * dt2.x) * inv_det;
+        float det = dt1[0] * dt2[1] - dt1[1] * dt2[0];
+        float inv_det = std::abs(det) > FLT_EPS ? 1.0f / det : 0;
+        simd_fvec3 tangent = (dp1 * dt2[1] - dp2 * dt1[1]) * inv_det;
+        simd_fvec3 binormal = (dp2 * dt1[0] - dp1 * dt2[0]) * inv_det;
 
-        int i1 = v0->b[0] * tangent.x + v0->b[1] * tangent.y + v0->b[2] * tangent.z < 0;
-        int i2 = 2 * (b0->x * binormal.x + b0->y * binormal.y + b0->z * binormal.z < 0);
+        int i1 = v0->b[0] * tangent[0] + v0->b[1] * tangent[1] + v0->b[2] * tangent[2] < 0;
+        int i2 = 2 * (b0[0] * binormal[0] + b0[1] * binormal[1] + b0[2] * binormal[2] < 0);
 
         if (i1 || i2) {
             uint32_t index = twin_verts[indices[i + 0]][i1 + i2 - 1];
@@ -72,15 +79,15 @@ void ray::ref::ComputeTextureBasis(size_t vtx_offset, std::vector<vertex_t> &ver
             new_vtx_indices[i] = index;
             v0 = &vertices[index - vtx_offset];
         } else {
-            *b0 = binormal;
+            b0 = binormal;
         }
 
-        v0->b[0] += tangent.x;
-        v0->b[1] += tangent.y;
-        v0->b[2] += tangent.z;
+        v0->b[0] += tangent[0];
+        v0->b[1] += tangent[1];
+        v0->b[2] += tangent[2];
 
-        i1 = v1->b[0] * tangent.x + v1->b[1] * tangent.y + v1->b[2] * tangent.z < 0;
-        i2 = 2 * (b1->x * binormal.x + b1->y * binormal.y + b1->z * binormal.z < 0);
+        i1 = v1->b[0] * tangent[0] + v1->b[1] * tangent[1] + v1->b[2] * tangent[2] < 0;
+        i2 = 2 * (b1[0] * binormal[0] + b1[1] * binormal[1] + b1[2] * binormal[2] < 0);
 
         if (i1 || i2) {
             uint32_t index = twin_verts[indices[i + 1]][i1 + i2 - 1];
@@ -96,15 +103,15 @@ void ray::ref::ComputeTextureBasis(size_t vtx_offset, std::vector<vertex_t> &ver
             new_vtx_indices[i + 1] = index;
             v1 = &vertices[index - vtx_offset];
         } else {
-            *b1 = binormal;
+            b1 = binormal;
         }
 
-        v1->b[0] += tangent.x;
-        v1->b[1] += tangent.y;
-        v1->b[2] += tangent.z;
+        v1->b[0] += tangent[0];
+        v1->b[1] += tangent[1];
+        v1->b[2] += tangent[2];
 
-        i1 = v2->b[0] * tangent.x + v2->b[1] * tangent.y + v2->b[2] * tangent.z < 0;
-        i2 = 2 * (b2->x * binormal.x + b2->y * binormal.y + b2->z * binormal.z < 0);
+        i1 = v2->b[0] * tangent[0] + v2->b[1] * tangent[1] + v2->b[2] * tangent[2] < 0;
+        i2 = 2 * (b2[0] * binormal[0] + b2[1] * binormal[1] + b2[2] * binormal[2] < 0);
 
         if (i1 || i2) {
             uint32_t index = twin_verts[indices[i + 2]][i1 + i2 - 1];
@@ -120,19 +127,19 @@ void ray::ref::ComputeTextureBasis(size_t vtx_offset, std::vector<vertex_t> &ver
             new_vtx_indices[i + 2] = index;
             v2 = &vertices[index - vtx_offset];
         } else {
-            *b2 = binormal;
+            b2 = binormal;
         }
 
-        v2->b[0] += tangent.x;
-        v2->b[1] += tangent.y;
-        v2->b[2] += tangent.z;
+        v2->b[0] += tangent[0];
+        v2->b[1] += tangent[1];
+        v2->b[2] += tangent[2];
     }
 
     for (auto &v : vertices) {
-        if (abs(v.b[0]) > FLT_EPS || abs(v.b[1]) > FLT_EPS || abs(v.b[2]) > FLT_EPS) {
-            vec3 tangent = make_vec3(v.b);
-            vec3 binormal = normalize(cross(make_vec3(v.n), tangent));
-            memcpy(&v.b[0], value_ptr(binormal), 3 * sizeof(float));
+        if (std::abs(v.b[0]) > FLT_EPS || std::abs(v.b[1]) > FLT_EPS || std::abs(v.b[2]) > FLT_EPS) {
+            simd_fvec3 tangent = { v.b };
+            simd_fvec3 binormal = normalize(cross(simd_fvec3(v.n), tangent));
+            memcpy(&v.b[0], &binormal[0], 3 * sizeof(float));
         }
     }
 };

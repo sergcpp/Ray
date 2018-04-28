@@ -62,8 +62,6 @@ std::shared_ptr<ray::SceneBase> ray::NS::RendererSIMD<DimX, DimY>::CreateScene()
 
 template <int DimX, int DimY>
 void ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneBase> &_s, RegionContext &region) {
-    using namespace math;
-
     const int S = DimX * DimY;
 
     auto s = std::dynamic_pointer_cast<ref::Scene>(_s);
@@ -127,12 +125,12 @@ void ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
         UpdateHaltonSequence(region.iteration, region.halton_seq);
     }
 
-    math::aligned_vector<ray_packet_t<S>> primary_rays;
+    aligned_vector<ray_packet_t<S>> primary_rays;
 
     GeneratePrimaryRays<DimX, DimY>(region.iteration, cam, rect, w, h, &region.halton_seq[0], primary_rays);
 
-    math::aligned_vector<simd_ivec<S>> primary_masks(primary_rays.size());
-    math::aligned_vector<hit_data_t<S>> intersections(primary_rays.size());
+    aligned_vector<simd_ivec<S>> primary_masks(primary_rays.size());
+    aligned_vector<hit_data_t<S>> intersections(primary_rays.size());
 
     for (size_t i = 0; i < primary_rays.size(); i++) {
         const auto &r = primary_rays[i];
@@ -142,8 +140,8 @@ void ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
         NS::Traverse_MacroTree_CPU(r, { -1 }, nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, intersections[i]);
     }
 
-    math::aligned_vector<ray_packet_t<S>> secondary_rays(intersections.size());
-    math::aligned_vector<simd_ivec<S>> secondary_masks(intersections.size());
+    aligned_vector<ray_packet_t<S>> secondary_rays(intersections.size());
+    aligned_vector<simd_ivec<S>> secondary_masks(intersections.size());
     int secondary_rays_count = 0;
 
     for (size_t i = 0; i < intersections.size(); i++) {
@@ -212,10 +210,10 @@ void ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
     clean_buf_.MixIncremental(temp_buf_, rect, 1.0f / region.iteration);
 
     auto clamp_and_gamma_correct = [](const pixel_color_t &p) {
-        auto c = make_vec4(&p.r);
-        c = pow(c, vec4(1.0f / 2.2f));
+        auto c = simd_fvec4(&p.r);
+        c = pow(c, simd_fvec4(1.0f / 2.2f));
         c = clamp(c, 0.0f, 1.0f);
-        return pixel_color_t{ c.r, c.g, c.b, c.a };
+        return pixel_color_t{ c[0], c[1], c[2], c[3] };
     };
 
     final_buf_.CopyFrom(clean_buf_, rect, clamp_and_gamma_correct);

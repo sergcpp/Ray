@@ -1,6 +1,8 @@
 
 #include <cstring>
 
+#include <algorithm> // for std::max
+
 // Used to force loop unroll in release mode
 
 #define ITERATE(n, exp)  \
@@ -475,6 +477,12 @@ template <typename T, int S>
 force_inline simd_vec<T, S> max(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) { return simd_vec<T, S>::max(v1, v2); }
 
 template <typename T, int S>
+force_inline simd_vec<T, S> abs(const simd_vec<T, S> &v) {
+    // TODO: find faster implementation
+    return max(v, -v);
+}
+
+template <typename T, int S>
 class simd_comp_where_helper {
     const simd_vec<T, S> &mask_;
     simd_vec<T, S> &comp_;
@@ -506,6 +514,14 @@ using simd_ivec3 = simd_ivec<3>;
 using simd_ivec4 = simd_ivec<4>;
 using simd_ivec8 = simd_ivec<8>;
 using simd_ivec16 = simd_ivec<16>;
+
+template <int S>
+using simd_dvec = simd_vec<double, S>;
+using simd_dvec2 = simd_dvec<2>;
+using simd_dvec3 = simd_dvec<3>;
+using simd_dvec4 = simd_dvec<4>;
+using simd_dvec8 = simd_dvec<8>;
+using simd_dvec16 = simd_dvec<16>;
 
 }
 }

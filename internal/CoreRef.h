@@ -2,8 +2,6 @@
 
 #include <vector>
 
-#include <math/common.hpp>
-
 #include "Core.h"
 
 #define NS ref
@@ -30,7 +28,7 @@ struct ray_packet_t {
     // derivatives
     float do_dx[3], dd_dx[3], do_dy[3], dd_dy[3];
 
-    // hint for math::aligned_vector
+    // hint for aligned_vector
     static const size_t alignment = 1;
 };
 
@@ -48,7 +46,7 @@ struct hit_data_t {
     explicit hit_data_t(eUninitialize) {}
     hit_data_t();
 
-    // hint for math::aligned_vector
+    // hint for aligned_vector
     static const size_t alignment = 1;
 };
 
@@ -62,7 +60,7 @@ struct environment_t {
 class TextureAtlas;
 
 // Generating rays
-void GeneratePrimaryRays(int iteration, const camera_t &cam, const rect_t &r, int w, int h, const float *halton, math::aligned_vector<ray_packet_t> &out_rays);
+void GeneratePrimaryRays(int iteration, const camera_t &cam, const rect_t &r, int w, int h, const float *halton, aligned_vector<ray_packet_t> &out_rays);
 
 // Intersect primitives
 bool IntersectTris(const ray_packet_t &r, const tri_accel_t *tris, int num_tris, int obj_index, hit_data_t &out_inter);

@@ -3,8 +3,6 @@
 #include <iostream>
 #include <string>
 
-#include <math/math.hpp>
-
 #include "../internal/CoreRef.h"
 #include "../internal/CoreOCL.h"
 
@@ -26,7 +24,7 @@ void test_primary_ray_gen() {
 
     {
         // test reference
-        math::aligned_vector<ray::ref::ray_packet_t> rays;
+        ray::aligned_vector<ray::ref::ray_packet_t> rays;
         ray::ref::GeneratePrimaryRays(0, cam, { 0, 0, 4, 4 }, 4, 4, &dummy_halton[0], rays);
 
         require(rays.size() == 16);
@@ -43,7 +41,7 @@ void test_primary_ray_gen() {
 
     {
         // test sse
-        math::aligned_vector<ray::sse::ray_packet_t<ray::sse::RayPacketSize>> rays;
+        ray::aligned_vector<ray::sse::ray_packet_t<ray::sse::RayPacketSize>> rays;
         ray::sse::GeneratePrimaryRays<ray::sse::RayPacketDimX, ray::sse::RayPacketDimY>(0, cam, { 0, 0, 4, 4 }, 4, 4, &dummy_halton[0], rays);
 
         require(rays.size() == 4);
@@ -91,7 +89,7 @@ void test_primary_ray_gen() {
 
     {
         // test avx
-        math::aligned_vector<ray::avx::ray_packet_t<ray::avx::RayPacketSize>> rays;
+        ray::aligned_vector<ray::avx::ray_packet_t<ray::avx::RayPacketSize>> rays;
         ray::avx::GeneratePrimaryRays<ray::avx::RayPacketDimX, ray::avx::RayPacketDimY>(0, cam, { 0, 0, 4, 4 }, 4, 4, &dummy_halton[0], rays);
 
         require(rays.size() == 2);

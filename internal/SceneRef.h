@@ -3,7 +3,7 @@
 #include <vector>
 
 #include "BVHSplit.h"
-#include "Core.h"
+#include "CoreRef.h"
 #include "TextureAtlasRef.h"
 #include "../SceneBase.h"
 

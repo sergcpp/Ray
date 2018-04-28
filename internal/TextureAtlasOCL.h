@@ -11,24 +11,20 @@ class TextureAtlas {
 
     cl::Image2DArray atlas_;
 
-    const math::ivec2 res_;
+    const int res_[2];
     int pages_count_;
 
     std::vector<TextureSplitter> splitters_;
 public:
     TextureAtlas(const cl::Context &context, const cl::CommandQueue &queue,
-                 const math::ivec2 &res, int pages_count = 4);
-
-    math::ivec2 res() const {
-        return res_;
-    }
+                 int resx, int resy, int pages_count = 4);
 
     const cl::Image2DArray &atlas() const {
         return atlas_;
     }
 
-    int Allocate(const pixel_color8_t *data, const math::ivec2 &res, math::ivec2 &pos);
-    bool Free(int page, const math::ivec2 &pos);
+    int Allocate(const pixel_color8_t *data, const int res[2], int pos[2]);
+    bool Free(int page, const int pos[2]);
 
     bool Resize(int pages_count);
 };

@@ -1,11 +1,10 @@
 #include "RendererRef.h"
 
+#include <functional>
 #include <random>
 
 #include "Halton.h"
 #include "SceneRef.h"
-
-#include <math/math.hpp>
 
 ray::ref::Renderer::Renderer(int w, int h) : clean_buf_(w, h), final_buf_(w, h), temp_buf_(w, h) {
     auto rand_func = std::bind(std::uniform_int_distribution<int>(), std::mt19937(0));
@@ -17,8 +16,6 @@ std::shared_ptr<ray::SceneBase> ray::ref::Renderer::CreateScene() {
 }
 
 void ray::ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, RegionContext &region) {
-    using namespace math;
-
     const auto s = std::dynamic_pointer_cast<ref::Scene>(_s);
     if (!s) return;
 
@@ -134,10 +131,10 @@ void ray::ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
     clean_buf_.MixIncremental(temp_buf_, rect, 1.0f / region.iteration);
 
     auto clamp_and_gamma_correct = [](const pixel_color_t &p) {
-        auto c = make_vec4(&p.r);
-        c = pow(c, vec4(1.0f / 2.2f));
+        simd_fvec4 c = { &p.r };
+        c = pow(c, simd_fvec4{ 1.0f / 2.2f });
         c = clamp(c, 0.0f, 1.0f);
-        return pixel_color_t{ c.r, c.g, c.b, c.a };
+        return pixel_color_t{ c[0], c[1], c[2], c[3] };
     };
 
     final_buf_.CopyFrom(clean_buf_, rect, clamp_and_gamma_correct);

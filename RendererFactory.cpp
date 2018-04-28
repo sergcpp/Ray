@@ -2,16 +2,16 @@
 
 #include <iostream>
 
-#include <math/math.hpp>
-
 #include "internal/RendererRef.h"
 #include "internal/RendererRef2.h"
 #include "internal/RendererSSE.h"
 #include "internal/RendererAVX.h"
 #include "internal/RendererOCL.h"
 
+#include "internal/simd/detect.h"
+
 std::shared_ptr<ray::RendererBase> ray::CreateRenderer(int w, int h, uint32_t flags) {
-    math::init();
+    auto features = GetCpuFeatures();
 
     if (flags & RendererOCL) {
         std::cout << "ray: Creating OpenCL renderer " << w << "x" << h << std::endl;
@@ -21,11 +21,11 @@ std::shared_ptr<ray::RendererBase> ray::CreateRenderer(int w, int h, uint32_t fl
             std::cout << "ray: Creating OpenCL renderer failed" << std::endl;
         }
     }
-    if ((flags & RendererAVX) && math::supported(math::AVX)) {
+    if ((flags & RendererAVX) && features.avx_supported) {
         std::cout << "ray: Creating AVX renderer " << w << "x" << h << std::endl;
         return std::make_shared<avx::Renderer>(w, h);
     }
-    if ((flags & RendererSSE) && math::supported(math::SSE4_1)) {
+    if ((flags & RendererSSE) && features.sse2_supported) {
         std::cout << "ray: Creating SSE renderer " << w << "x" << h << std::endl;
         return std::make_shared<sse::Renderer>(w, h);
     }

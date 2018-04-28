@@ -10,26 +10,24 @@ const float SpatialSplitAlpha = 0.00001f;
 const int NumSpatialSplitBins = 64;
 
 struct bbox_t {
-    math::vec3 min = math::vec3{ std::numeric_limits<float>::max() },
-               max = math::vec3{ std::numeric_limits<float>::lowest() };
+    ref::simd_fvec3 min = { std::numeric_limits<float>::max() },
+                    max = { std::numeric_limits<float>::lowest() };
     bbox_t() {}
-    bbox_t(const math::vec3 &_min, const math::vec3 &_max) : min(_min), max(_max) {}
+    bbox_t(const ref::simd_fvec3 &_min, const ref::simd_fvec3 &_max) : min(_min), max(_max) {}
 
     float surface_area() const {
-        math::vec3 d = max - min;
-        return 2 * (d.x + d.y + d.z);
-        //return d.x * d.y + d.x * d.z + d.y * d.z;
+        ref::simd_fvec3 d = max - min;
+        return 2 * (d[0] + d[1] + d[2]);
+        //return d[0] * d[1] + d[0] * d[2] + d[1] * d[2];
     }
 };
 
 // stolen from Mitsuba
-static int sutherland_hodgman(const math::dvec3 *input, int in_count, math::dvec3 *output, int axis, double split_pos, bool is_minimum) {
-    using namespace math;
-
+static int sutherland_hodgman(const ref::simd_dvec3 *input, int in_count, ref::simd_dvec3 *output, int axis, double split_pos, bool is_minimum) {
     if (in_count < 3)
         return 0;
 
-    dvec3 cur = input[0];
+    ref::simd_dvec3 cur = input[0];
     double sign = is_minimum ? 1.0f : -1.0f;
     double distance = sign * (cur[axis] - split_pos);
     bool cur_is_inside = (distance >= 0);
@@ -39,7 +37,7 @@ static int sutherland_hodgman(const math::dvec3 *input, int in_count, math::dvec
         int nextIdx = i + 1;
         if (nextIdx == in_count)
             nextIdx = 0;
-        dvec3 next = input[nextIdx];
+        ref::simd_dvec3 next = input[nextIdx];
         distance = sign * (next[axis] - split_pos);
         bool nextIsInside = (distance >= 0);
 
@@ -49,13 +47,13 @@ static int sutherland_hodgman(const math::dvec3 *input, int in_count, math::dvec
         } else if (cur_is_inside && !nextIsInside) {
             // Going outside -- add the intersection
             double t = (split_pos - cur[axis]) / (next[axis] - cur[axis]);
-            dvec3 p = cur + (next - cur) * t;
+            ref::simd_dvec3 p = cur + (next - cur) * t;
             p[axis] = split_pos; // Avoid roundoff errors
             output[out_count++] = p;
         } else if (!cur_is_inside && nextIsInside) {
             // Coming back inside -- add the intersection + next vertex
             double t = (split_pos - cur[axis]) / (next[axis] - cur[axis]);
-            dvec3 p = cur + (next - cur) * t;
+            ref::simd_dvec3 p = cur + (next - cur) * t;
             p[axis] = split_pos; // Avoid roundoff errors
             output[out_count++] = p;
             output[out_count++] = next;
@@ -68,15 +66,41 @@ static int sutherland_hodgman(const math::dvec3 *input, int in_count, math::dvec
     return out_count;
 }
 
-bbox_t GetClippedAABB(const math::vec3 &_v0, const math::vec3 &_v1, const math::vec3 &_v2, const bbox_t &limits) {
-    using namespace math;
+force_inline float castflt_down(double val) {
+    int32_t b;
+    float a = (float)val;
 
-    dvec3 vertices1[9], vertices2[9];
+    memcpy(&b, &a, sizeof(float));
+
+    if ((double)a > val)
+        b += a > 0 ? -1 : 1;
+
+    memcpy(&a, &b, sizeof(float));
+
+    return a;
+}
+
+force_inline float castflt_up(double val) {
+    int32_t b;
+    float a = (float)val;
+
+    memcpy(&b, &a, sizeof(float));
+
+    if ((double)a < val)
+        b += a > 0 ? -1 : 1;
+
+    memcpy(&a, &b, sizeof(float));
+
+    return a;
+}
+
+bbox_t GetClippedAABB(const ref::simd_fvec3 &_v0, const ref::simd_fvec3 &_v1, const ref::simd_fvec3 &_v2, const bbox_t &limits) {
+    ref::simd_dvec3 vertices1[9], vertices2[9];
     int nVertices = 3;
 
-    vertices1[0] = dvec3(_v0);
-    vertices1[1] = dvec3(_v1);
-    vertices1[2] = dvec3(_v2);
+    vertices1[0] = { (double)_v0[0], (double)_v0[1], (double)_v0[2] };
+    vertices1[1] = { (double)_v1[0], (double)_v1[1], (double)_v1[2] };
+    vertices1[2] = { (double)_v2[0], (double)_v2[1], (double)_v2[2] };
 
     for (int axis = 0; axis < 3; axis++) {
         nVertices = sutherland_hodgman(vertices1, nVertices, vertices2, axis, limits.min[axis], true);
@@ -88,8 +112,8 @@ bbox_t GetClippedAABB(const math::vec3 &_v0, const math::vec3 &_v1, const math::
     for (int i = 0; i < nVertices; ++i) {
         for (int j = 0; j < 3; ++j) {
             double pos = vertices1[i][j];
-            extends.min[j] = min((float)extends.min[j], castflt_down(pos));
-            extends.max[j] = max((float)extends.max[j], castflt_up(pos));
+            extends.min[j] = std::min((float)extends.min[j], castflt_down(pos));
+            extends.max[j] = std::max((float)extends.max[j], castflt_up(pos));
         }
     }
 
@@ -97,9 +121,7 @@ bbox_t GetClippedAABB(const math::vec3 &_v0, const math::vec3 &_v1, const math::
 }
 }
 
-ray::split_data_t ray::SplitPrimitives_SAH(const prim_t *primitives, const std::vector<uint32_t> &tri_indices, const math::vec3 &bbox_min, const math::vec3 &bbox_max) {
-    using namespace math;
-
+ray::split_data_t ray::SplitPrimitives_SAH(const prim_t *primitives, const std::vector<uint32_t> &tri_indices, const ref::simd_fvec3 &bbox_min, const ref::simd_fvec3 &bbox_max) {
     size_t num_tris = tri_indices.size();
     bbox_t whole_box = { bbox_min, bbox_max };
 

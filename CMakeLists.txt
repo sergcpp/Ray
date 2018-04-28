@@ -31,6 +31,7 @@ set(INTERNAL_SOURCE_FILES internal/BVHSplit.h
                           internal/RendererRef2.h
                           internal/RendererSIMD.h
                           internal/RendererSSE.h
+                          internal/RendererSSE.cpp
                           internal/SceneOCL.h
                           internal/SceneOCL.cpp
                           internal/SceneRef.h
@@ -62,7 +63,9 @@ set(KERNEL_FILES internal/kernels/intersect.cl
                  internal/kernels/traverse_bvh.cl
                  internal/kernels/types.cl)
 
-set(SIMD_FILES internal/simd/simd_vec.h
+set(SIMD_FILES internal/simd/aligned_allocator.h
+               internal/simd/detect.h
+               internal/simd/simd_vec.h
                internal/simd/simd_vec_sse.h
                internal/simd/simd_vec_avx.h)
 
@@ -90,6 +93,6 @@ IF(1)
 ENDIF()
 
 add_library(ray STATIC ${ALL_SOURCE_FILES})
-target_link_libraries(ray OpenCL math)
+target_link_libraries(ray OpenCL)
 
 add_subdirectory(tests)

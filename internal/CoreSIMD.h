@@ -35,7 +35,7 @@ struct ray_packet_t {
     // left top corner coordinates of packet
     int x, y;
 
-    // hint for math::aligned_vector
+    // hint for aligned_vector
     static const size_t alignment = alignof(simd_fvec<S>);
 };
 
@@ -56,7 +56,7 @@ struct hit_data_t {
         t = { MAX_DIST };
     }
 
-    // hint for math::aligned_vector
+    // hint for aligned_vector
     static const size_t alignment = alignof(simd_fvec16);
 };
 
@@ -69,7 +69,7 @@ struct environment_t {
 
 // Generating rays
 template <int DimX, int DimY>
-void GeneratePrimaryRays(const int iteration, const camera_t &cam, const rect_t &r, int w, int h, const float *halton, math::aligned_vector<ray_packet_t<DimX * DimY>> &out_rays);
+void GeneratePrimaryRays(const int iteration, const camera_t &cam, const rect_t &r, int w, int h, const float *halton, aligned_vector<ray_packet_t<DimX * DimY>> &out_rays);
 
 // Intersect primitives
 template <int S>
@@ -270,12 +270,6 @@ force_inline simd_fvec<S> dot(const simd_fvec<S> v1[3], const simd_fvec<S> v2[3]
 }
 
 template <int S>
-force_inline simd_fvec<S> abs(const simd_fvec<S> &v) {
-    // TODO: find faster implementation
-    return max(v, -v);
-}
-
-template <int S>
 force_inline void cross(const simd_fvec<S> v1[3], const simd_fvec<S> v2[3], simd_fvec<S> res[3]) {
     res[0] = v1[1] * v2[2] - v1[2] * v2[1];
     res[1] = v1[2] * v2[0] - v1[0] * v2[2];
@@ -318,7 +312,7 @@ force_inline float floor(float x) {
 }
 
 template <int DimX, int DimY>
-void ray::NS::GeneratePrimaryRays(const int iteration, const camera_t &cam, const rect_t &r, int w, int h, const float *halton, math::aligned_vector<ray_packet_t<DimX * DimY>> &out_rays) {
+void ray::NS::GeneratePrimaryRays(const int iteration, const camera_t &cam, const rect_t &r, int w, int h, const float *halton, aligned_vector<ray_packet_t<DimX * DimY>> &out_rays) {
     const int S = DimX * DimY;
 
     static_assert(S <= 16, "!");

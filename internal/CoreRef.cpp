@@ -1,8 +1,7 @@
 #include "CoreRef.h"
 
+#include <algorithm>
 #include <limits>
-
-#include <math/math.hpp>
 
 #include "TextureAtlasRef.h"
 
@@ -132,16 +131,14 @@ ray::ref::hit_data_t::hit_data_t() {
     t = std::numeric_limits<float>::max();
 }
 
-void ray::ref::GeneratePrimaryRays(int iteration, const camera_t &cam, const rect_t &r, int w, int h, const float *halton, math::aligned_vector<ray_packet_t> &out_rays) {
-    using namespace math;
-
-    vec3 origin = make_vec3(cam.origin), fwd = make_vec3(cam.fwd), side = make_vec3(cam.side), up = make_vec3(cam.up);
+void ray::ref::GeneratePrimaryRays(int iteration, const camera_t &cam, const rect_t &r, int w, int h, const float *halton, aligned_vector<ray_packet_t> &out_rays) {
+    simd_fvec3 origin = { cam.origin }, fwd = { cam.fwd }, side = { cam.side }, up = { cam.up };
 
     up *= float(h) / w;
 
     auto get_pix_dir = [fwd, side, up, w, h](const float x, const float y) {
-        vec3 _d(float(x) / w - 0.5f, float(-y) / h + 0.5f, 1);
-        _d = _d.x * side + _d.y * up + _d.z * fwd;
+        simd_fvec3 _d(float(x) / w - 0.5f, float(-y) / h + 0.5f, 1);
+        _d = _d[0] * side + _d[1] * up + _d[2] * fwd;
         _d = normalize(_d);
         return _d;
     };
@@ -159,10 +156,10 @@ void ray::ref::GeneratePrimaryRays(int iteration, const camera_t &cam, const rec
             float _x = (float)x + halton[hi * 2];
             float _y = (float)y + halton[hi * 2 + 1];
 
-            vec3 _d = get_pix_dir(_x, _y);
+            simd_fvec3 _d = get_pix_dir(_x, _y);
 
-            vec3 _dx = get_pix_dir(_x + 1, _y),
-                 _dy = get_pix_dir(_x, _y + 1);
+            simd_fvec3 _dx = get_pix_dir(_x + 1, _y),
+                       _dy = get_pix_dir(_x, _y + 1);
 
             for (int j = 0; j < 3; j++) {
                 out_r.o[j] = origin[j];
@@ -483,22 +480,23 @@ bool ray::ref::Traverse_MicroTree_GPU(const ray_packet_t &r, const float inv_d[3
 }
 
 ray::ref::ray_packet_t ray::ref::TransformRay(const ray_packet_t &r, const float *xform) {
-    using namespace math;
-
-    vec3 _o = make_mat4(xform) * vec4(make_vec3(r.o), 1);
-    vec3 _d = make_mat4(xform) * vec4(make_vec3(r.d), 0);
-
     ray_packet_t _r = r;
-    memcpy(&_r.o[0], value_ptr(_o), 3 * sizeof(float));
-    memcpy(&_r.d[0], value_ptr(_d), 3 * sizeof(float));
+
+    _r.o[0] = xform[0] * r.o[0] + xform[4] * r.o[1] + xform[8] * r.o[2] + xform[12];
+    _r.o[1] = xform[1] * r.o[0] + xform[5] * r.o[1] + xform[9] * r.o[2] + xform[13];
+    _r.o[2] = xform[2] * r.o[0] + xform[6] * r.o[1] + xform[10] * r.o[2] + xform[14];
+
+    _r.d[0] = xform[0] * r.d[0] + xform[4] * r.d[1] + xform[8] * r.d[2];
+    _r.d[1] = xform[1] * r.d[0] + xform[5] * r.d[1] + xform[9] * r.d[2];
+    _r.d[2] = xform[2] * r.d[0] + xform[6] * r.d[1] + xform[10] * r.d[2];
 
     return _r;
 }
 
 ray::ref::simd_fvec3 ray::ref::TransformNormal(const simd_fvec3 &n, const float *inv_xform) {
-    return simd_fvec3{ dot(simd_fvec3(&inv_xform[0]), n),
-                       dot(simd_fvec3(&inv_xform[4]), n),
-                       dot(simd_fvec3(&inv_xform[8]), n) };
+    return simd_fvec3{ inv_xform[0] * n[0] + inv_xform[1] * n[1] + inv_xform[2] * n[2],
+                       inv_xform[4] * n[0] + inv_xform[5] * n[1] + inv_xform[6] * n[2],
+                       inv_xform[8] * n[0] + inv_xform[9] * n[1] + inv_xform[10] * n[2] };
 }
 
 ray::ref::simd_fvec2 ray::ref::TransformUVs(const simd_fvec2 &_uvs, const simd_fvec2 &tex_atlas_size, const texture_t *t, int mip_level) {
@@ -527,8 +525,6 @@ ray::ref::simd_fvec4 ray::ref::SampleNearest(const TextureAtlas &atlas, const te
 }
 
 ray::ref::simd_fvec4 ray::ref::SampleBilinear(const TextureAtlas &atlas, const texture_t &t, const simd_fvec2 &uvs, int lod) {
-    using namespace math;
-
     simd_fvec2 atlas_size = { atlas.size_x(), atlas.size_y() };
     simd_fvec2 _uvs = TransformUVs(uvs, atlas_size, &t, lod);
 
@@ -566,15 +562,13 @@ ray::ref::simd_fvec4 ray::ref::SampleTrilinear(const TextureAtlas &atlas, const 
 }
 
 ray::ref::simd_fvec4 ray::ref::SampleAnisotropic(const TextureAtlas &atlas, const texture_t &t, const simd_fvec2 &uvs, const simd_fvec2 &duv_dx, const simd_fvec2 &duv_dy) {
-    using namespace math;
-
     simd_fvec2 sz = { (float)t.size[0], (float)t.size[1] };
 
     float l1 = length(duv_dx * sz);
     float l2 = length(duv_dy * sz);
 
     float lod, k;
-    simd_fvec2 step = { noinit };
+    simd_fvec2 step;
 
     if (l1 <= l2) {
         lod = log2(l1);
@@ -665,7 +659,7 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
     const simd_fvec3 dp13 = p1 - p3, dp23 = p2 - p3;
 
     const float det_uv = duv13[0] * duv23[1] - duv13[1] * duv23[0];
-    const float inv_det_uv = abs(det_uv) < FLT_EPS ? 0 : 1.0f / det_uv;
+    const float inv_det_uv = std::abs(det_uv) < FLT_EPS ? 0 : 1.0f / det_uv;
     const simd_fvec3 dpdu = (duv23[1] * dp13 - duv13[1] * dp23) * inv_det_uv;
     const simd_fvec3 dpdv = (-duv23[0] * dp13 + duv13[0] * dp23) * inv_det_uv;
 

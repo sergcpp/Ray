@@ -1,9 +1,9 @@
 #include "SceneOCL.h"
 
+#include <cassert>
+
 #include "BVHSplit.h"
 #include "TextureUtilsRef.h"
-
-#include <math/math.hpp>
 
 ray::ocl::Scene::Scene(const cl::Context &context, const cl::CommandQueue &queue)
     : context_(context), queue_(queue),
@@ -18,9 +18,7 @@ ray::ocl::Scene::Scene(const cl::Context &context, const cl::CommandQueue &queue
       vtx_indices_(context, queue, CL_MEM_READ_ONLY),
       materials_(context, queue, CL_MEM_READ_ONLY),
       textures_(context, queue, CL_MEM_READ_ONLY),
-    texture_atlas_(context_, queue_, {
-    MAX_TEXTURE_SIZE, MAX_TEXTURE_SIZE
-}) {
+    texture_atlas_(context_, queue_, MAX_TEXTURE_SIZE, MAX_TEXTURE_SIZE) {
     SetEnvironment( { { 0, 0, 0 }, { 0, 0, 0 }, { 0, 0, 0 } });
 
     pixel_color8_t default_normalmap = { 127, 127, 255 };
@@ -59,29 +57,30 @@ uint32_t ray::ocl::Scene::AddTexture(const tex_desc_t &_t) {
     t.size[1] = (uint16_t)_t.h;
 
     int mip = 0;
-    math::ivec2 res = { _t.w, _t.h };
+    int res[2] = { _t.w, _t.h };
 
     std::vector<pixel_color8_t> tex_data(_t.data, _t.data + _t.w * _t.h);
 
-    while (res.x >= 1 && res.y >= 1) {
-        math::ivec2 pos;
+    while (res[0] >= 1 && res[1] >= 1) {
+        int pos[2];
         int page = texture_atlas_.Allocate(&tex_data[0], res, pos);
         if (page == -1) {
             // release allocated mip levels on fail
             for (int i = mip; i >= 0; i--) {
-                texture_atlas_.Free(t.page[i], { t.pos[i][0], t.pos[i][1] });
+                int _pos[2] = { t.pos[i][0], t.pos[i][1] };
+                texture_atlas_.Free(t.page[i], _pos);
             }
             return 0xffffffff;
         }
 
         t.page[mip] = (uint32_t)page;
-        t.pos[mip][0] = (uint16_t)pos.x;
-        t.pos[mip][1] = (uint16_t)pos.y;
+        t.pos[mip][0] = (uint16_t)pos[0];
+        t.pos[mip][1] = (uint16_t)pos[1];
 
         tex_data = ref::DownsampleTexture(tex_data, res);
 
-        res.x /= 2;
-        res.y /= 2;
+        res[0] /= 2;
+        res[1] /= 2;
         mip++;
     }
 
@@ -135,8 +134,6 @@ uint32_t ray::ocl::Scene::AddMaterial(const mat_desc_t &m) {
 }
 
 uint32_t ray::ocl::Scene::AddMesh(const mesh_desc_t &_m) {
-    using namespace math;
-
     std::vector<bvh_node_t> new_nodes;
     std::vector<tri_accel_t> new_tris;
     std::vector<uint32_t> new_tri_indices;
@@ -225,9 +222,9 @@ uint32_t ray::ocl::Scene::AddMeshInstance(uint32_t mesh_index, const float *xfor
 
     transform_t tr;
 
-    math::mat4 inv_mat = math::inverse(math::make_mat4(xform));
     memcpy(tr.xform, xform, 16 * sizeof(float));
-    memcpy(tr.inv_xform, math::value_ptr(inv_mat), 16 * sizeof(float));
+    InverseMatrix(tr.xform, tr.inv_xform);
+
     transforms_.PushBack(tr);
 
     SetMeshInstanceTransform(mi_index, xform);
@@ -238,9 +235,8 @@ uint32_t ray::ocl::Scene::AddMeshInstance(uint32_t mesh_index, const float *xfor
 void ray::ocl::Scene::SetMeshInstanceTransform(uint32_t mi_index, const float *xform) {
     transform_t tr;
 
-    math::mat4 inv_mat = math::inverse(math::make_mat4(xform));
     memcpy(tr.xform, xform, 16 * sizeof(float));
-    memcpy(tr.inv_xform, math::value_ptr(inv_mat), 16 * sizeof(float));
+    InverseMatrix(tr.xform, tr.inv_xform);
 
     mesh_instance_t mi;
     mesh_instances_.Get(mi_index, mi);
@@ -307,8 +303,6 @@ void ray::ocl::Scene::RemoveNodes(uint32_t node_index, uint32_t node_count) {
 }
 
 void ray::ocl::Scene::RebuildMacroBVH() {
-    using namespace math;
-
     RemoveNodes(macro_nodes_start_, macro_nodes_count_);
     mi_indices_.Clear();
 
@@ -321,7 +315,7 @@ void ray::ocl::Scene::RebuildMacroBVH() {
     mesh_instances_.Get(&mesh_instances[0], 0, mi_count);
 
     for (const auto &mi : mesh_instances) {
-        primitives.push_back( { make_vec3(mi.bbox_min), make_vec3(mi.bbox_max) });
+        primitives.push_back({ ref::simd_fvec3{ mi.bbox_min }, ref::simd_fvec3{ mi.bbox_max } });
     }
 
     std::vector<bvh_node_t> bvh_nodes;
