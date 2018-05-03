@@ -85,11 +85,12 @@ bool Traverse_MicroTree_GPU(const ray_packet_t &r, const float inv_d[3], const b
 // Transform
 ray_packet_t TransformRay(const ray_packet_t &r, const float *xform);
 simd_fvec3 TransformNormal(const simd_fvec3 &n, const float *inv_xform);
-simd_fvec2 TransformUVs(const simd_fvec2 &uvs, const simd_fvec2 &tex_atlas_size, const texture_t *t, int mip_level);
+simd_fvec2 TransformUV(const simd_fvec2 &uv, const simd_fvec2 &tex_atlas_size, const texture_t &t, int mip_level);
 
 // Sample Texture
 simd_fvec4 SampleNearest(const TextureAtlas &atlas, const texture_t &t, const simd_fvec2 &uvs, float lod);
 simd_fvec4 SampleBilinear(const TextureAtlas &atlas, const texture_t &t, const simd_fvec2 &uvs, int lod);
+simd_fvec4 SampleBilinear(const TextureAtlas &atlas, const simd_fvec2 &uvs, int page);
 simd_fvec4 SampleTrilinear(const TextureAtlas &atlas, const texture_t &t, const simd_fvec2 &uvs, float lod);
 simd_fvec4 SampleAnisotropic(const TextureAtlas &atlas, const texture_t &t, const simd_fvec2 &uvs, const simd_fvec2 &duv_dx, const simd_fvec2 &duv_dy);
 

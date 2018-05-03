@@ -499,11 +499,11 @@ ray::ref::simd_fvec3 ray::ref::TransformNormal(const simd_fvec3 &n, const float 
                        inv_xform[8] * n[0] + inv_xform[9] * n[1] + inv_xform[10] * n[2] };
 }
 
-ray::ref::simd_fvec2 ray::ref::TransformUVs(const simd_fvec2 &_uvs, const simd_fvec2 &tex_atlas_size, const texture_t *t, int mip_level) {
-    simd_fvec2 pos = { (float)t->pos[mip_level][0], (float)t->pos[mip_level][1] };
-    simd_fvec2 size = { (float)(t->size[0] >> mip_level), (float)(t->size[1] >> mip_level) };
-    simd_fvec2 uvs = _uvs - floor(_uvs);
-    simd_fvec2 res = pos + uvs * size + 1.0f;
+ray::ref::simd_fvec2 ray::ref::TransformUV(const simd_fvec2 &_uv, const simd_fvec2 &tex_atlas_size, const texture_t &t, int mip_level) {
+    simd_fvec2 pos = { (float)t.pos[mip_level][0], (float)t.pos[mip_level][1] };
+    simd_fvec2 size = { (float)(t.size[0] >> mip_level), (float)(t.size[1] >> mip_level) };
+    simd_fvec2 uv = _uv - floor(_uv);
+    simd_fvec2 res = pos + uv * size + 1.0f;
     res /= tex_atlas_size;
     return res;
 }
@@ -512,7 +512,7 @@ ray::ref::simd_fvec4 ray::ref::SampleNearest(const TextureAtlas &atlas, const te
     int _lod = (int)lod;
 
     simd_fvec2 atlas_size = { atlas.size_x(), atlas.size_y() };
-    simd_fvec2 _uvs = TransformUVs(uvs, atlas_size, &t, _lod);
+    simd_fvec2 _uvs = TransformUV(uvs, atlas_size, t, _lod);
 
     if (_lod > MAX_MIP_LEVEL) _lod = MAX_MIP_LEVEL;
 
@@ -526,7 +526,7 @@ ray::ref::simd_fvec4 ray::ref::SampleNearest(const TextureAtlas &atlas, const te
 
 ray::ref::simd_fvec4 ray::ref::SampleBilinear(const TextureAtlas &atlas, const texture_t &t, const simd_fvec2 &uvs, int lod) {
     simd_fvec2 atlas_size = { atlas.size_x(), atlas.size_y() };
-    simd_fvec2 _uvs = TransformUVs(uvs, atlas_size, &t, lod);
+    simd_fvec2 _uvs = TransformUV(uvs, atlas_size, t, lod);
 
     int page = t.page[lod];
 
@@ -551,6 +551,28 @@ ray::ref::simd_fvec4 ray::ref::SampleBilinear(const TextureAtlas &atlas, const t
 
     const float k = 1.0f / 255.0f;
     return (p1 * ky + p0 * (1 - ky)) * k;
+}
+
+ray::ref::simd_fvec4 ray::ref::SampleBilinear(const TextureAtlas &atlas, const simd_fvec2 &uvs, int page) {
+    const auto &p00 = atlas.Get(page, int(uvs[0] + 0), int(uvs[1] + 0));
+    const auto &p01 = atlas.Get(page, int(uvs[0] + 1), int(uvs[1] + 0));
+    const auto &p10 = atlas.Get(page, int(uvs[0] + 0), int(uvs[1] + 1));
+    const auto &p11 = atlas.Get(page, int(uvs[0] + 1), int(uvs[1] + 1));
+
+    simd_fvec2 k = uvs - floor(uvs);
+
+    const auto p0 = simd_fvec4{ p01.r * k[0] + p00.r * (1 - k[0]),
+                                p01.g * k[0] + p00.g * (1 - k[0]),
+                                p01.b * k[0] + p00.b * (1 - k[0]),
+                                p01.a * k[0] + p00.a * (1 - k[0]) };
+
+    const auto p1 = simd_fvec4{ p11.r * k[0] + p10.r * (1 - k[0]),
+                                p11.g * k[0] + p10.g * (1 - k[0]),
+                                p11.b * k[0] + p10.b * (1 - k[0]),
+                                p11.a * k[0] + p10.a * (1 - k[0]) };
+
+    const float _k = 1.0f / 255.0f;
+    return (p1 * k[1] + p0 * (1 - k[1])) * _k;
 }
 
 ray::ref::simd_fvec4 ray::ref::SampleTrilinear(const TextureAtlas &atlas, const texture_t &t, const simd_fvec2 &uvs, float lod) {
@@ -593,9 +615,32 @@ ray::ref::simd_fvec4 ray::ref::SampleAnisotropic(const TextureAtlas &atlas, cons
 
     auto res = simd_fvec4{ 0.0f };
 
+    int lod1 = (int)std::floor(lod);
+    int lod2 = (int)std::ceil(lod);
+
+    int page1 = t.page[lod1];
+    int page2 = t.page[lod2];
+
+    simd_fvec2 pos1 = simd_fvec2{ (float)t.pos[lod1][0], (float)t.pos[lod1][1] } + 0.5f;
+    simd_fvec2 size1 = { (float)(t.size[0] >> lod1), (float)(t.size[1] >> lod1) };
+
+    simd_fvec2 pos2 = simd_fvec2{ (float)t.pos[lod2][0], (float)t.pos[lod2][1] } + 0.5f;
+    simd_fvec2 size2 = { (float)(t.size[0] >> lod2), (float)(t.size[1] >> lod2) };
+
+    const float kz = lod - std::floor(lod);
+
     for (int i = 0; i < num; i++) {
-        res += SampleTrilinear(atlas, t, _uvs, lod);
-        _uvs += step;
+        _uvs = _uvs - floor(_uvs);
+
+        simd_fvec2 _uvs1 = pos1 + _uvs * size1;
+        res += (1 - kz) * SampleBilinear(atlas, _uvs1, page1);
+
+        if (kz > 0.0001f) {
+            simd_fvec2 _uvs2 = pos2 + _uvs * size2;
+            res += kz * SampleBilinear(atlas, _uvs2, page2);
+        }
+
+        _uvs = _uvs + step;
     }
 
     return res / float(num);

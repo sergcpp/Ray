@@ -856,7 +856,7 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
     const auto *I = ray.d;
     const simd_fvec<S> P[3] = { ray.o[0] + inter.t * I[0], ray.o[1] + inter.t * I[1], ray.o[2] + inter.t * I[2] };
 
-    simd_fvec<S> w = 1.0f - inter.u - inter.v;
+    const simd_fvec<S> w = 1.0f - inter.u - inter.v;
 
     simd_fvec<S> p1[3], p2[3], p3[3],
                  n1[3], n2[3], n3[3],
