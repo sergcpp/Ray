@@ -905,13 +905,13 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
             out_secondary_rays[index] = r;
         }
     } else if (mat->type == RefractiveMaterial) {
-        const auto _N = dot(I, N) > 0 ? -N : N;
+        const auto __N = dot(I, N) > 0 ? -N : N;
 
         float eta = 1.0f / mat->ior;
-        float cosi = dot(-I, _N);
+        float cosi = dot(-I, __N);
         float cost2 = 1.0f - eta * eta * (1.0f - cosi * cosi);
         float m = eta * cosi - std::sqrt(std::abs(cost2));
-        auto V = eta * I + m * _N;
+        auto V = eta * I + m * __N;
         if (cost2 < 0) V = 0.0f;
 
         // ** REFACTOR THIS **

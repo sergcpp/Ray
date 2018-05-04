@@ -7,7 +7,7 @@
 
 static void handle_assert(bool passed, const char* assert, const char* file, long line) {
     if (!passed) {
-        printf("Assertion failed %s in %s at line %d\n", assert, file, line);
+        printf("Assertion failed %s in %s at line %d\n", assert, file, int(line));
         exit(-1);
     }
 }

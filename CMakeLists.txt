@@ -1,9 +1,10 @@
 cmake_minimum_required(VERSION 2.8.4)
 project(ray)
 
-add_library(OpenCL STATIC IMPORTED)
-
-include_directories(ocl/include)
+if(NOT CMAKE_SYSTEM_NAME MATCHES "Android")
+    add_library(OpenCL STATIC IMPORTED)
+    include_directories(ocl/include)
+endif()
 
 IF(MSVC)
     if(CMAKE_SIZEOF_VOID_P EQUAL 8)
@@ -17,45 +18,52 @@ IF(MSVC)
     endif()
 ELSE(MSVC)
     set(CMAKE_CXX_STANDARD 11)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mavx2 -msse3")
-	IF(WIN32)
-    ELSE(WIN32)
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
-    ENDIF(WIN32)
+    set(CMAKE_CXX_STANDARD_REQUIRED ON)
+    if(NOT CMAKE_SYSTEM_NAME MATCHES "Android")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mavx2 -msse3")
+        IF(WIN32)
+        ELSE(WIN32)
+            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
+        ENDIF(WIN32)
+    endif()
 ENDIF(MSVC)
 
 set(INTERNAL_SOURCE_FILES internal/BVHSplit.h
                           internal/BVHSplit.cpp
                           internal/Core.h
                           internal/Core.cpp
-                          internal/CoreOCL.h
                           internal/CoreRef.h
                           internal/CoreRef.cpp
                           internal/CoreSIMD.h
                           internal/FramebufferRef.h
                           internal/FramebufferRef.cpp
                           internal/Halton.h
-                          internal/RendererAVX.h
-                          internal/RendererOCL.h
-                          internal/RendererOCL.cpp
                           internal/RendererRef.h
                           internal/RendererRef.cpp
                           internal/RendererRef2.h
                           internal/RendererSIMD.h
-                          internal/RendererSSE.h
-                          internal/SceneOCL.h
-                          internal/SceneOCL.cpp
                           internal/SceneRef.h
                           internal/SceneRef.cpp
-                          internal/TextureAtlasOCL.h
-                          internal/TextureAtlasOCL.cpp
                           internal/TextureAtlasRef.h
                           internal/TextureAtlasRef.cpp
                           internal/TextureSplitter.h
                           internal/TextureSplitter.cpp
                           internal/TextureUtilsRef.h
-                          internal/TextureUtilsRef.cpp
+                          internal/TextureUtilsRef.cpp)
+                          
+if(NOT CMAKE_SYSTEM_NAME MATCHES "Android")
+set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
+                          internal/CoreOCL.h
+                          internal/RendererAVX.h
+                          internal/RendererOCL.h
+                          internal/RendererOCL.cpp
+                          internal/RendererSSE.h
+                          internal/SceneOCL.h
+                          internal/SceneOCL.cpp
+                          internal/TextureAtlasOCL.h
+                          internal/TextureAtlasOCL.cpp
                           internal/VectorOCL.h)
+endif()
 
 set(SOURCE_FILES RendererBase.h
                  RendererFactory.h
@@ -104,6 +112,8 @@ IF(1)
 ENDIF()
 
 add_library(ray STATIC ${ALL_SOURCE_FILES})
-target_link_libraries(ray OpenCL)
+if(NOT CMAKE_SYSTEM_NAME MATCHES "Android")
+    target_link_libraries(ray OpenCL)
+endif()
 
 add_subdirectory(tests)

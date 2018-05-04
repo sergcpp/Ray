@@ -2,6 +2,8 @@
 
 #include "CoreRef.h"
 
+#include <cmath>
+
 #include <array>
 
 std::vector<ray::pixel_color8_t> ray::ref::DownsampleTexture(const std::vector<pixel_color8_t> &_tex, const int res[2]) {

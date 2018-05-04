@@ -4,11 +4,13 @@
 #include <string>
 
 #include "../internal/CoreRef.h"
+#if !defined(__ANDROID__)
 #include "../internal/CoreOCL.h"
 
 #include "../internal/RendererSSE.h"
 #include "../internal/RendererAVX.h"
 #include "../internal/RendererOCL.h"
+#endif
 
 #include "../internal/simd/detect.h"
 
@@ -44,6 +46,7 @@ void test_primary_ray_gen() {
     }
     
     if (features.sse2_supported) {
+#if !defined(__ANDROID__)
         // test sse
         ray::aligned_vector<ray::sse::ray_packet_t<ray::sse::RayPacketSize>> rays;
         ray::sse::GeneratePrimaryRays<ray::sse::RayPacketDimX, ray::sse::RayPacketDimY>(0, cam, { 0, 0, 4, 4 }, 4, 4, &dummy_halton[0], rays);
@@ -89,11 +92,13 @@ void test_primary_ray_gen() {
                 i++;
             }
         }
+#endif
     } else {
         std::cout << "Cannot test SSE" << std::endl;
     }
     
     if (features.avx_supported) {
+#if !defined(__ANDROID__)
         // test avx
         ray::aligned_vector<ray::avx::ray_packet_t<ray::avx::RayPacketSize>> rays;
         ray::avx::GeneratePrimaryRays<ray::avx::RayPacketDimX, ray::avx::RayPacketDimY>(0, cam, { 0, 0, 4, 4 }, 4, 4, &dummy_halton[0], rays);
@@ -163,11 +168,13 @@ void test_primary_ray_gen() {
                 i++;
             }
         }
+#endif
     } else {
         std::cout << "Cannot test AVX" << std::endl;
     }
     
     {
+#if !defined(__ANDROID__)
         // test OpenCL
         class TestRenderer : public ray::ocl::Renderer {
         public:
@@ -207,5 +214,6 @@ void test_primary_ray_gen() {
         } catch (std::runtime_error &e) {
             std::cout << "Failed to test OpenCL: " << e.what() << std::endl;
         }
+#endif
     }
 }

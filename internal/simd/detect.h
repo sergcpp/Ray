@@ -35,7 +35,7 @@ namespace ray {
 
         ret.sse2_supported = false;
         ret.avx_supported = false;
-
+#if !defined(__ANDROID__)
         int info[4];
         cpuid(info, 0);
         int nIds = info[0];
@@ -49,6 +49,7 @@ namespace ray {
             ret.sse2_supported = (info[3] & ((int)1 << 26)) != 0;
             ret.avx_supported = (info[2] & ((int)1 << 28)) != 0;
         }
+#endif
 
         return ret;
     }

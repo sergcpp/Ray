@@ -14,9 +14,11 @@
 #include "internal/TextureAtlasRef.cpp"
 #include "internal/TextureUtilsRef.cpp"
 
+#if !defined(__ANDROID__)
 #include "internal/RendererOCL.cpp"
 #include "internal/SceneOCL.cpp"
 #include "internal/TextureAtlasOCL.cpp"
+#endif
 
 // TODO:
 // make camera fov work

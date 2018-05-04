@@ -1,4 +1,5 @@
 
+#include <cmath>
 #include <cstring>
 
 #include <algorithm> // for std::max
@@ -50,6 +51,11 @@
 
 #pragma warning(push)
 #pragma warning(disable : 4789)
+
+#ifdef __GNUC__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Warray-bounds"
+#endif
 
 namespace ray {
 namespace NS {
@@ -213,7 +219,7 @@ public:
 
     force_inline simd_vec<T, S> sqrt() const {
         simd_vec<T, S> temp;
-        ITERATE(S, { temp[i] = ::sqrt(comp_[i]); })
+        ITERATE(S, { temp[i] = std::sqrt(comp_[i]); })
         return temp;
     }
 
@@ -537,6 +543,10 @@ using native_simd_fvec = simd_fvec<1>;
 using native_simd_ivec = simd_ivec<1>;
 }
 }
+#endif
+
+#ifdef __GNUC__
+#pragma GCC diagnostic pop
 #endif
 
 #pragma warning(pop)

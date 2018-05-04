@@ -4,6 +4,8 @@
 
 #include "../internal/Core.h"
 
+#if !defined(__ANDROID__)
+
 #define NS ref2
 #include "../internal/simd/simd_vec.h"
 
@@ -32,8 +34,12 @@ void test_simd_avx() {
 #undef USE_AVX
 #undef NS
 
+#endif
+
 void test_simd() {
+#if !defined(__ANDROID__)
     test_simd_ref();
     test_simd_sse();
     test_simd_avx();
+#endif
 }
