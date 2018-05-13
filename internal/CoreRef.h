@@ -4,6 +4,9 @@
 
 #include "Core.h"
 
+#pragma push_macro("NS")
+#undef NS
+
 #define NS ref
 #if defined(_M_AMD64) || defined(_M_X64) || (defined(_M_IX86_FP) && _M_IX86_FP == 2)
 #define USE_SSE
@@ -16,6 +19,8 @@
 
 #undef USE_SSE
 #undef NS
+
+#pragma pop_macro("NS")
 
 namespace ray {
 namespace ref {

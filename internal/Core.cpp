@@ -66,24 +66,6 @@ void ray::PreprocessTri(const float *p, int stride, tri_accel_t *acc) {
     assert((acc->ci & TRI_W_BITS) == w);
 }
 
-void ray::PreprocessCone(const float o[3], const float v[3], float phi, float cone_start, float cone_end, cone_accel_t *acc) {
-    for (int i = 0; i < 3; i++) {
-        acc->o[i] = o[i];
-        acc->v[i] = -v[i];
-    }
-    float cos_phi = std::cos(phi);
-    acc->cos_phi_sqr = cos_phi * cos_phi;
-    acc->cone_start = cone_start;
-    acc->cone_end = cone_end;
-}
-
-void ray::PreprocessBox(const float min[3], const float max[3], aabox_t *box) {
-    for (int i = 0; i < 3; i++) {
-        box->min[i] = min[i];
-        box->max[i] = max[i];
-    }
-}
-
 uint32_t ray::PreprocessMesh(const float *attrs, size_t attrs_count, const uint32_t *vtx_indices, size_t vtx_indices_count, eVertexLayout layout,
                              std::vector<bvh_node_t> &out_nodes, std::vector<tri_accel_t> &out_tris, std::vector<uint32_t> &out_tri_indices) {
     assert(vtx_indices_count && vtx_indices_count % 3 == 0);

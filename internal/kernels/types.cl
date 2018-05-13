@@ -23,16 +23,6 @@ typedef struct _tri_accel_t {
     int pad1;
 } tri_accel_t;
 
-typedef struct _cone_accel_t {
-    float3 o, v;
-    float cos_phi_sqr;
-    float cone_start, cone_end;
-} cone_accel_t;
-
-typedef struct _aabox_t {
-    float3 min, max;
-} aabox_t;
-
 typedef struct _hit_data_t {
     int mask, obj_index, prim_index;
     float t, u, v;
@@ -93,7 +83,7 @@ typedef struct _environment_t {
     float pad[3];
 } environment_t;
 
-__kernel void TypesCheck(ray_packet_t r, camera_t c, tri_accel_t t, aabox_t a, hit_data_t i,
+__kernel void TypesCheck(ray_packet_t r, camera_t c, tri_accel_t t, hit_data_t i,
                          bvh_node_t b, vertex_t v, mesh_t m, mesh_instance_t mi, transform_t tr,
                          texture_t tex, material_t mat, environment_t env) {}
 

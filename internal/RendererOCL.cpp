@@ -171,7 +171,6 @@ ray::ocl::Renderer::Renderer(int w, int h) : w_(w), h_(h), loaded_halton_(-1) {
         if (types_check.setArg(argc++, sizeof(ray_packet_t), buf) != CL_SUCCESS ||
                 types_check.setArg(argc++, sizeof(ocl::camera_t), buf) != CL_SUCCESS ||
                 types_check.setArg(argc++, sizeof(tri_accel_t), buf) != CL_SUCCESS ||
-                types_check.setArg(argc++, sizeof(aabox_t), buf) != CL_SUCCESS ||
                 types_check.setArg(argc++, sizeof(hit_data_t), buf) != CL_SUCCESS ||
                 types_check.setArg(argc++, sizeof(bvh_node_t), buf) != CL_SUCCESS ||
                 types_check.setArg(argc++, sizeof(vertex_t), buf) != CL_SUCCESS ||

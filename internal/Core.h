@@ -53,18 +53,6 @@ const float MAX_DIST = 3.402823466e+38F;
 
 const int MAX_BOUNCES = 4;
 
-struct cone_accel_t {
-    float o[3], v[3];
-    float cos_phi_sqr;
-    float cone_start, cone_end;
-};
-static_assert(sizeof(cone_accel_t) == 36, "!");
-
-struct aabox_t {
-    float min[3], max[3];
-};
-static_assert(sizeof(aabox_t) == 24, "!");
-
 struct bvh_node_t {
     uint32_t prim_index, prim_count,
              left_child, right_child, parent, sibling,
@@ -114,8 +102,6 @@ template <typename T, std::size_t Alignment = T::alignment>
 using aligned_vector = std::vector<T, aligned_allocator<T, Alignment>>;
 
 void PreprocessTri(const float *p, int stride, tri_accel_t *acc);
-void PreprocessCone(const float o[3], const float v[3], float phi, float cone_start, float cone_end, cone_accel_t *acc);
-void PreprocessBox(const float min[3], const float max[3], aabox_t *box);
 
 uint32_t PreprocessMesh(const float *attrs, size_t attrs_count, const uint32_t *indices, size_t indices_count, eVertexLayout layout,
                         std::vector<bvh_node_t> &out_nodes, std::vector<tri_accel_t> &out_tris, std::vector<uint32_t> &out_indices);

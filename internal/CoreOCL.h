@@ -20,32 +20,6 @@ struct ray_packet_t {
 };
 static_assert(sizeof(ray_packet_t) == 112, "!");
 
-struct aabox_t {
-    cl_float3 min, max;
-
-    aabox_t() {}
-    aabox_t(const ray::aabox_t &box) {
-        memcpy(&min, &box.min[0], sizeof(float) * 3);
-        memcpy(&max, &box.max[0], sizeof(float) * 3);
-    }
-};
-static_assert(sizeof(aabox_t) == 32, "!");
-
-struct cone_accel_t {
-    cl_float3 o, v;
-    float cos_phi_sqr;
-    float cone_start, cone_end;
-
-    cone_accel_t() {}
-    cone_accel_t(const ray::cone_accel_t &acc) {
-        memcpy(&o, &acc.o[0], sizeof(float) * 3);
-        memcpy(&v, &acc.v[0], sizeof(float) * 3);
-        cos_phi_sqr = acc.cos_phi_sqr;
-        cone_start = acc.cone_start;
-        cone_end = acc.cone_end;
-    }
-};
-
 const int RayPacketDimX = 1;
 const int RayPacketDimY = 1;
 const int RayPacketSize = 1;
