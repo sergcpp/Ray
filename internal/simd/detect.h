@@ -15,7 +15,7 @@ inline void cpuid(int info[4], int InfoType) {
 
 #else
 
-#if !defined(__arm__) && !defined(__EMSCRIPTEN__) && !defined(__ANDROID__)
+#if !defined(__arm__) && !defined(__aarch64__) && !defined(__EMSCRIPTEN__) && !defined(__ANDROID__)
 //  GCC Intrinsics
 #include <cpuid.h>
 inline void cpuid(int info[4], int InfoType) {
