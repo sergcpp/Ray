@@ -11,7 +11,7 @@ void ray::ref::Framebuffer::Resize(int w, int h) {
     assert(w > 0 && h > 0);
     w_ = w;
     h_ = h;
-    size_t buf_size = w * h * sizeof(pixel_color_t);
+    size_t buf_size = w * h;
     pixels_.resize(buf_size, pixel_color_t{});
 }
 
