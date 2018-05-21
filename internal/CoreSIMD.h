@@ -203,7 +203,8 @@ force_inline simd_ivec<S> bbox_test(const simd_fvec<S> o[3], const simd_fvec<S> 
 
 template <int S>
 force_inline uint32_t near_child(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const bvh_node_t &node) {
-    simd_ivec<S> mask = reinterpret_cast<const simd_ivec<S>&>(r.d[node.space_axis] < 0.0f);
+    const auto dir_neg_mask = r.d[node.space_axis] < 0.0f;
+    const auto mask = reinterpret_cast<const simd_ivec<S>&>(dir_neg_mask);
     if (mask.all_zeros(ray_mask)) {
         return node.left_child;
     } else {
@@ -229,8 +230,8 @@ struct TraversalState {
     int index = 0, num = 1;
 
     force_inline void select_near_child(const ray_packet_t<S> &r, const bvh_node_t &node) {
-        auto mask1 = reinterpret_cast<const simd_ivec<S>&>(r.d[node.space_axis] < 0.0f);
-        mask1 = mask1 & queue[index].mask;
+        const auto dir_neg_mask = r.d[node.space_axis] < 0.0f;
+        const auto mask1 = reinterpret_cast<const simd_ivec<S>&>(dir_neg_mask) & queue[index].mask;
         if (mask1.all_zeros()) {
             queue[index].cur = node.left_child;
         } else {
@@ -400,7 +401,7 @@ bool ray::NS::IntersectTris(const ray_packet_t<S> &r, const simd_ivec<S> &ray_ma
         _IntersectTri(r, ray_mask, tris[i], i, inter);
     }
 
-    const auto &fmask = cast<simd_fvec<S>>(inter.mask);
+    const auto &fmask = reinterpret_cast<const simd_fvec<S>&>(inter.mask);
 
     out_inter.mask = out_inter.mask | inter.mask;
 
@@ -808,11 +809,13 @@ void ray::NS::SampleAnisotropic(const ref::TextureAtlas &atlas, const texture_t 
 
     where(lod < 0.0f, lod) = 0.0f;
     where(lod > (float)MAX_MIP_LEVEL, lod) = (float)MAX_MIP_LEVEL;
-    where(reinterpret_cast<const simd_fvec<S>&>(mask == 0), lod) = 0.0f;
+
+    const auto imask = mask == 0;
+    where(reinterpret_cast<const simd_fvec<S>&>(imask), lod) = 0.0f;
 
     simd_fvec<S> _uvs[2] = { uvs[0] - step[0] * 0.5f, uvs[1] - step[1] * 0.5f };
 
-    simd_ivec<S> num = (simd_ivec<S>)(2.0f / k);
+    auto num = (simd_ivec<S>)(2.0f / k);
     where(num < 1, num) = 1;
     where(num > 32, num) = 32;
 
@@ -1081,7 +1084,8 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
                 simd_fvec<S> k = _N[0] * env.sun_dir[0] + _N[1] * env.sun_dir[1] + _N[2] * env.sun_dir[2];
                 simd_fvec<S> v = { 1.0f };
 
-                const auto _mask = reinterpret_cast<const simd_ivec<S>&>(k > 0.0f) & same_mi;
+                const auto k_pos_mask = k > 0.0f;
+                const auto _mask = reinterpret_cast<const simd_ivec<S>&>(k_pos_mask) & same_mi;
 
                 if (_mask.not_all_zeros()) {
                     simd_fvec<S> V[3], TT[3], BB[3];

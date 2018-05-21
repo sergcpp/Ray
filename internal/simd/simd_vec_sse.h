@@ -328,7 +328,7 @@ public:
             r2 = _mm_shuffle_ps(r1, r1, _MM_SHUFFLE(0, 1, 2, 3));
             r1 = _mm_add_ps(r1, r2);
             ret += _mm_cvtss_f32(r1);
-        }))
+        });)
             
         return ret;
     }
