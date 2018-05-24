@@ -5,11 +5,12 @@
 
 #include "../internal/CoreRef.h"
 #if !defined(__ANDROID__)
-#include "../internal/CoreOCL.h"
-
 #include "../internal/RendererSSE.h"
 #include "../internal/RendererAVX.h"
+#if !defined(DISABLE_OCL)
+#include "../internal/CoreOCL.h"
 #include "../internal/RendererOCL.h"
+#endif
 #endif
 
 #include "../internal/simd/detect.h"
@@ -174,7 +175,7 @@ void test_primary_ray_gen() {
     }
     
     {
-#if defined(__ANDROID__) || (defined(DISABLE_OCL) && DISABLE_OCL)
+#if defined(__ANDROID__) || defined(DISABLE_OCL)
          std::cout << "Skipping OpenCL test" << std::endl;
 #else
         // test OpenCL

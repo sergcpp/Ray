@@ -14,7 +14,8 @@
 #include "internal/TextureAtlasRef.cpp"
 #include "internal/TextureUtilsRef.cpp"
 
-#if !defined(__ANDROID__)
+#if defined(__ANDROID__) || defined(DISABLE_OCL)
+#else
 #include "internal/RendererOCL.cpp"
 #include "internal/SceneOCL.cpp"
 #include "internal/TextureAtlasOCL.cpp"

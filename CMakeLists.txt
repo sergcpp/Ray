@@ -2,19 +2,29 @@ cmake_minimum_required(VERSION 2.8.4)
 project(ray)
 
 if(NOT CMAKE_SYSTEM_NAME MATCHES "Android")
-    add_library(OpenCL STATIC IMPORTED)
+	OPTION(ENABLE_OPENCL "Enables OpenCL backend" ON)
+else()
+	OPTION(ENABLE_OPENCL "Enables OpenCL backend" OFF)
+endif()
+
+if(ENABLE_OPENCL)
+	add_library(OpenCL STATIC IMPORTED)
     include_directories(ocl/include)
+else()
+	add_definitions(-DDISABLE_OCL)
 endif()
 
 IF(MSVC)
-    if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-        set_target_properties(OpenCL PROPERTIES
-          IMPORTED_LOCATION "${CMAKE_CURRENT_LIST_DIR}/ocl/lib/x86_64/opencl.lib"
-        )
-    else(CMAKE_SIZEOF_VOID_P EQUAL 8)
-        set_target_properties(OpenCL PROPERTIES
-          IMPORTED_LOCATION "${CMAKE_CURRENT_LIST_DIR}/ocl/lib/x86/opencl.lib"
-        )
+    if(ENABLE_OPENCL)
+        if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+            set_target_properties(OpenCL PROPERTIES
+              IMPORTED_LOCATION "${CMAKE_CURRENT_LIST_DIR}/ocl/lib/x86_64/opencl.lib"
+            )
+        else(CMAKE_SIZEOF_VOID_P EQUAL 8)
+            set_target_properties(OpenCL PROPERTIES
+              IMPORTED_LOCATION "${CMAKE_CURRENT_LIST_DIR}/ocl/lib/x86/opencl.lib"
+            )
+        endif()
     endif()
 ELSE(MSVC)
     set(CMAKE_CXX_STANDARD 11)
@@ -63,6 +73,18 @@ set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
                           internal/TextureAtlasOCL.h
                           internal/TextureAtlasOCL.cpp
                           internal/VectorOCL.h)
+
+	if (ENABLE_OPENCL)
+		set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
+                          internal/CoreOCL.h
+                          internal/RendererOCL.h
+                          internal/RendererOCL.cpp
+                          internal/SceneOCL.h
+                          internal/SceneOCL.cpp
+                          internal/TextureAtlasOCL.h
+                          internal/TextureAtlasOCL.cpp
+                          internal/VectorOCL.h)
+	endif()
 endif()
 
 set(SOURCE_FILES RendererBase.h
@@ -72,15 +94,17 @@ set(SOURCE_FILES RendererBase.h
                  SceneBase.cpp
                  Types.h)
 
-set(KERNEL_FILES internal/kernels/intersect.cl
-                 internal/kernels/postprocess.cl
-                 internal/kernels/primary_ray_gen.cl
-                 internal/kernels/shade.cl
-                 internal/kernels/texture.cl
-                 internal/kernels/trace.cl
-                 internal/kernels/transform.cl
-                 internal/kernels/traverse_bvh.cl
-                 internal/kernels/types.cl)
+if (ENABLE_OPENCL)
+	set(KERNEL_FILES internal/kernels/intersect.cl
+					 internal/kernels/postprocess.cl
+					 internal/kernels/primary_ray_gen.cl
+					 internal/kernels/shade.cl
+					 internal/kernels/texture.cl
+					 internal/kernels/trace.cl
+					 internal/kernels/transform.cl
+					 internal/kernels/traverse_bvh.cl
+					 internal/kernels/types.cl)
+endif()
 
 set(SIMD_FILES internal/simd/aligned_allocator.h
                internal/simd/detect.h
@@ -113,7 +137,7 @@ IF(1)
 ENDIF()
 
 add_library(ray STATIC ${ALL_SOURCE_FILES})
-if(NOT CMAKE_SYSTEM_NAME MATCHES "Android")
+if(ENABLE_OPENCL)
     target_link_libraries(ray OpenCL)
 endif()
 
