@@ -26,7 +26,7 @@ init:
 before_build:
     - mkdir build
     - cd build
-    - cmake .. -G %generator%
+    - cmake .. -G %generator% -DDISABLE_OCL=1
         
 build:
     project: build\ALL_BUILD.vcxproj

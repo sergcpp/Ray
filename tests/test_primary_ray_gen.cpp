@@ -174,7 +174,9 @@ void test_primary_ray_gen() {
     }
     
     {
-#if !defined(__ANDROID__)
+#if defined(__ANDROID__) || (defined(DISABLE_OCL) && DISABLE_OCL)
+         std::cout << "Skipping OpenCL test" << std::endl;
+#else
         // test OpenCL
         class TestRenderer : public ray::ocl::Renderer {
         public:

@@ -86,7 +86,8 @@ set(SIMD_FILES internal/simd/aligned_allocator.h
                internal/simd/detect.h
                internal/simd/simd_vec.h
                internal/simd/simd_vec_sse.h
-               internal/simd/simd_vec_avx.h)
+               internal/simd/simd_vec_avx.h
+			   internal/simd/simd_vec_neon.h)
 
 list(APPEND ALL_SOURCE_FILES ${INTERNAL_SOURCE_FILES})
 source_group("src\\internal" FILES ${INTERNAL_SOURCE_FILES})
