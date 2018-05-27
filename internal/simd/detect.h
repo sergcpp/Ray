@@ -49,6 +49,8 @@ namespace ray {
             ret.sse2_supported = (info[3] & ((int)1 << 26)) != 0;
             ret.avx_supported = (info[2] & ((int)1 << 28)) != 0;
         }
+#elif defined(__i386__) || defined(__x86_64__)
+        ret.sse2_supported = true;
 #endif
 
         return ret;

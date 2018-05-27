@@ -40,11 +40,6 @@ force_inline float32x4_t neon_cvt_s32_to_f32(int32x4_t a) {
     return vcvtq_f32_s32(a);
 }
 
-force_inline int32_t neon_is_not_zero(int32x4_t v) {
-    int32x2_t tmp = vorr_u32(vget_low_s32(v), vget_high_s32(v));
-    return vget_lane_s32(vpmax_s32(tmp, tmp), 0);
-}
-
 template <int S>
 class simd_vec<typename std::enable_if<S % 4 == 0, float>::type, S> {
     union {
@@ -479,12 +474,12 @@ public:
     }
 
     force_inline simd_vec<int, S> &operator*=(const simd_vec<int, S> &rhs) {
-        ITERATE(S, { comp_[i] = comp_[i] * rhs.comp_[i]; })
+        ITERATE(S/4, { vec_[i] = vmulq_s32(vec_[i], rhs.vec_[i]); })
         return *this;
     }
 
     force_inline simd_vec<int, S> &operator*=(int rhs) {
-        ITERATE(S, { comp_[i] = comp_[i] * rhs; })
+        ITERATE(S/4, { vec_[i] = vmulq_s32(vec_[i], vdupq_n_s32(rhs)); })
         return *this;
     }
 
@@ -577,20 +572,26 @@ public:
 
     force_inline bool all_zeros() const {
         int32_t res = 0;
-        ITERATE(S/4, { res |= neon_is_not_zero(vec_[i]); })
+#if defined(__aarch64__)
+        ITERATE(S/4, { res |= vaddvq_s32(vec_[i]); })
+#else
+        ITERATE(S, { res |= comp_[i] != 0; })
+#endif
         return res == 0;
     }
 
     force_inline bool all_zeros(const simd_vec<int, S> &mask) const {
         int32_t res = 0;
-        ITERATE(S/4, { res |= neon_is_not_zero(vandq_s32(vec_[i], mask.vec_[i])); })
+#if defined(__aarch64__)
+        ITERATE(S/4, { res |= vaddvq_s32(vandq_s32(vec_[i], mask.vec_[i])); })
+#else
+        ITERATE(S, { res |= (comp_[i] & mask.comp_[i]) != 0; })
+#endif
         return res == 0;
     }
 
     force_inline bool not_all_zeros() const {
-        int32_t res = 0;
-        ITERATE(S/4, { res |= neon_is_not_zero(vec_[i]); })
-        return res != 0;
+        return !all_zeros();
     }
 
     force_inline static simd_vec<int, S> min(const simd_vec<int, S> &v1, const simd_vec<int, S> &v2) {

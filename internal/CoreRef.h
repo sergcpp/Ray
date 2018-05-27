@@ -14,6 +14,9 @@
 #elif defined(__ARM_NEON__) || defined(__aarch64__)
 #define USE_NEON
 #pragma message("ray::ref::simd_vec will use NEON")
+#elif defined(__ANDROID__) && (defined(__i386__) || defined(__x86_64__))
+#define USE_SSE
+#pragma message("ray::ref::simd_vec will use SSE2")
 #else
 #pragma message("ray::ref::simd_vec will not use SIMD")
 #endif
@@ -21,6 +24,7 @@
 #include "simd/simd_vec.h"
 
 #undef USE_SSE
+#undef USE_NEON
 #undef NS
 
 #pragma pop_macro("NS")
