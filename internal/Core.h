@@ -6,11 +6,11 @@
 #include "../Types.h"
 
 #ifdef __GNUC__
-#if !defined(__ANDROID__) && !defined(__EMSCRIPTEN__)
+//#if !defined(__ANDROID__) && !defined(__EMSCRIPTEN__)
 #define force_inline __attribute__((always_inline)) inline
-#else
-#define force_inline __inline__
-#endif
+//#else
+//#define force_inline __inline__
+//#endif
 #endif
 #ifdef _MSC_VER
 #define force_inline __forceinline

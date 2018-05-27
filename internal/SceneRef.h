@@ -21,6 +21,11 @@ template <int DimX, int DimY>
 class RendererSIMD;
 }
 
+namespace neon {
+template <int DimX, int DimY>
+class RendererSIMD;
+}
+
 namespace ref {
 class Renderer;
 
@@ -33,6 +38,8 @@ protected:
     friend class sse::RendererSIMD;
     template <int DimX, int DimY>
     friend class avx::RendererSIMD;
+	template <int DimX, int DimY>
+    friend class neon::RendererSIMD;
 
     std::vector<bvh_node_t> nodes_;
     std::vector<tri_accel_t> tris_;

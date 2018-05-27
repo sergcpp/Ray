@@ -12,6 +12,7 @@
 #pragma message("Compiling without OpenCL support")
 #endif
 #else
+#include "internal/RendererNEON.h"
 #pragma message("Compiling without OpenCL support")
 #endif
 
@@ -41,6 +42,11 @@ std::shared_ptr<ray::RendererBase> ray::CreateRenderer(int w, int h, uint32_t fl
     if (flags & RendererRef) {
         log_stream << "ray: Creating Ref renderer " << w << "x" << h << std::endl;
         return std::make_shared<ref::Renderer>(w, h);
+    }
+#elif defined(__ARM_NEON__) || defined(__aarch64__)
+    if (flags & RendererNEON) {
+        log_stream << "ray: Creating NEON renderer " << w << "x" << h << std::endl;
+        return std::make_shared<neon::Renderer>(w, h);
     }
 #endif
     log_stream << "ray: Creating Ref renderer " << w << "x" << h << std::endl;

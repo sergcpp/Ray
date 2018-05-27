@@ -534,8 +534,10 @@ using simd_dvec16 = simd_dvec<16>;
 
 #if defined(USE_SSE)
 #include "simd_vec_sse.h"
-#elif defined (USE_AVX)
+#elif defined(USE_AVX)
 #include "simd_vec_avx.h"
+#elif defined(USE_NEON)
+#include "simd_vec_neon.h"
 #else
 namespace ray {
 namespace NS {
