@@ -1,5 +1,6 @@
 #pragma once
 
+#include <iostream>
 #include <memory>
 
 #include "RendererBase.h"
@@ -17,5 +18,5 @@ const uint32_t default_renderer_flags = RendererRef | RendererSSE | RendererAVX 
     @param h initial image height
     @return shared pointer to created renderer
 */
-std::shared_ptr<RendererBase> CreateRenderer(int w, int h, uint32_t flags = default_renderer_flags);
+std::shared_ptr<RendererBase> CreateRenderer(int w, int h, uint32_t flags = default_renderer_flags, std::ostream &log_stream = std::cout);
 }

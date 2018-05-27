@@ -24,12 +24,18 @@ init:
     - if "%APPVEYOR_BUILD_WORKER_IMAGE%"=="Visual Studio 2015" ( set generator="Visual Studio 14 2015%arch%" )
 
 before_build:
-    - mkdir build
-    - cd build
-    - cmake .. -G %generator% -DENABLE_OCL=OFF
-        
-build:
-    project: build\ALL_BUILD.vcxproj
+    - mkdir build_normal
+    - mkdir build_unity
+    - cd build_normal
+    - cmake .. -G %generator% -DENABLE_OPENCL=OFF -DENABLE_UNITYBUILD=OFF
+    - cd ..\build_unity
+    - cmake .. -G %generator% -DENABLE_OPENCL=OFF -DENABLE_UNITYBUILD=ON
+    - cd ..
+
+build_script:
+  - msbuild build_normal\ALL_BUILD.vcxproj
+  - msbuild build_unity\ALL_BUILD.vcxproj
 
 test_script:
-    - tests\%CONFIGURATION%\test_ray
+    - build_normal\tests\%CONFIGURATION%\test_ray
+    - build_unity\tests\%CONFIGURATION%\test_ray

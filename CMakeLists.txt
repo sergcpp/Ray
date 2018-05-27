@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 2.8.4)
 project(ray)
 
+OPTION(ENABLE_UNITYBUILD "Enable compilation of one large cpp file" ON)
+
 if(NOT CMAKE_SYSTEM_NAME MATCHES "Android")
 	OPTION(ENABLE_OPENCL "Enables OpenCL backend" ON)
 else()
@@ -63,16 +65,8 @@ set(INTERNAL_SOURCE_FILES internal/BVHSplit.h
                           
 if(NOT CMAKE_SYSTEM_NAME MATCHES "Android")
 set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
-                          internal/CoreOCL.h
                           internal/RendererAVX.h
-                          internal/RendererOCL.h
-                          internal/RendererOCL.cpp
-                          internal/RendererSSE.h
-                          internal/SceneOCL.h
-                          internal/SceneOCL.cpp
-                          internal/TextureAtlasOCL.h
-                          internal/TextureAtlasOCL.cpp
-                          internal/VectorOCL.h)
+                          internal/RendererSSE.h)
 
 	if (ENABLE_OPENCL)
 		set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
@@ -128,7 +122,7 @@ source_group("src\\internal\\simd" FILES ${SIMD_FILES})
 set_source_files_properties(${KERNEL_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
 
 # enable or disable unity build
-IF(1)
+IF(ENABLE_UNITYBUILD)
     set_source_files_properties(${INTERNAL_SOURCE_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
     set_source_files_properties(${SOURCE_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
 
