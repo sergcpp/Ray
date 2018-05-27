@@ -467,7 +467,7 @@ public:
 
     force_inline simd_vec<int, S> operator<=(const simd_vec<int, S> &rhs) const {
         simd_vec<int, S> ret;
-        ITERATE(S/4, { ret.vec_[i] = _mm_cmple_epi32(vec_[i], rhs.vec_[i]); })
+        ITERATE(S/4, { ret.vec_[i] = _mm_andnot_si128(_mm_cmpgt_epi32(vec_[i], rhs.vec_[i]), _mm_set_epi32(~0, ~0, ~0, ~0)); })
         return ret;
     }
 
@@ -479,7 +479,7 @@ public:
 
     force_inline simd_vec<int, S> operator>=(const simd_vec<int, S> &rhs) const {
         simd_vec<int, S> ret;
-        ITERATE(S/4, { ret.vec_[i] = _mm_cmpge_epi32(vec_[i], rhs.vec_[i]); })
+        ITERATE(S/4, { ret.vec_[i] = _mm_andnot_si128(_mm_cmplt_epi32(vec_[i], rhs.vec_[i]), _mm_set_epi32(~0, ~0, ~0, ~0)); })
         return ret;
     }
 
@@ -491,7 +491,7 @@ public:
 
     force_inline simd_vec<int, S> operator<=(int rhs) const {
         simd_vec<int, S> ret;
-        ITERATE(S/4, { ret.vec_[i] = _mm_cmple_epi32(vec_[i], _mm_set1_epi32(rhs)); })
+        ITERATE(S/4, { ret.vec_[i] = _mm_andnot_si128(_mm_cmpgt_epi32(vec_[i], _mm_set1_epi32(rhs)), _mm_set_epi32(~0, ~0, ~0, ~0)); })
         return ret;
     }
 
@@ -503,7 +503,7 @@ public:
 
     force_inline simd_vec<int, S> operator>=(int rhs) const {
         simd_vec<int, S> ret;
-        ITERATE(S/4, { ret.vec_[i] = _mm_cmpge_epi32(vec_[i], _mm_set1_epi32(rhs)); })
+        ITERATE(S/4, { ret.vec_[i] = _mm_andnot_si128(_mm_cmplt_epi32(vec_[i], _mm_set1_epi32(rhs)), _mm_set_epi32(~0, ~0, ~0, ~0)); })
         return ret;
     }
 
