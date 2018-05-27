@@ -27,10 +27,10 @@
 // try again with spatial splits or remove unnecessary indirection
 // add tests for intersection
 // add validation tests (use Cycles)
-// add android build
-// add neon support
 
 // DONE:
+// add neon support
+// add android build
 // add shading to cpu implementations
 // catch up CPU backends
 // fix precision issues
