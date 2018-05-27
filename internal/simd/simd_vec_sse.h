@@ -184,7 +184,15 @@ public:
     }
 
     force_inline void blend_to(const simd_vec<float, S> &mask, const simd_vec<float, S> &v1) {
+#if 0 // requires sse4.1
         ITERATE(S/4, { vec_[i] = _mm_blendv_ps(vec_[i], v1.vec_[i], mask.vec_[i]); })
+#else
+        ITERATE(S/4, {
+            __m128 temp1 = _mm_and_ps(mask.vec_[i], v1.vec_[i]);
+            __m128 temp2 = _mm_andnot_ps(mask.vec_[i], vec_[i]);
+            vec_[i] = _mm_or_ps(temp1, temp2);
+        })
+#endif
     }
 
     force_inline static simd_vec<float, S> min(const simd_vec<float, S> &v1, const simd_vec<float, S> &v2) {
@@ -514,7 +522,15 @@ public:
     }
 
     force_inline void blend_to(const simd_vec<int, S> &mask, const simd_vec<int, S> &v1) {
+#if 0 // requires sse4.1
         ITERATE(S/4, { vec_[i] = _mm_blendv_epi8(vec_[i], v1.vec_[i], mask.vec_[i]); })
+#else
+        ITERATE(S/4, {
+            __m128i temp1 = _mm_and_si128(mask.vec_[i], v1.vec_[i]);
+            __m128i temp2 = _mm_andnot_si128(mask.vec_[i], vec_[i]);
+            vec_[i] = _mm_or_si128(temp1, temp2);
+        })
+#endif
     }
 
     force_inline bool all_zeros() const {
