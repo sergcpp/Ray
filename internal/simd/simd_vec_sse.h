@@ -534,30 +534,25 @@ public:
     }
 
     force_inline bool all_zeros() const {
+#if 0 // requires sse4.1
         ITERATE(S/4, { if (!_mm_test_all_zeros(vec_[i], vec_[i])) return false; });
-#if 0
-            if (_mm_movemask_epi8(_mm_cmpeq_epi32(vec_[i], _mm_setzero_si128())) != 0xFFFF) return false;         
+#else
+        ITERATE(S/4, { if (_mm_movemask_epi8(_mm_cmpeq_epi32(vec_[i], _mm_setzero_si128())) != 0xFFFF) return false; });
 #endif
         return true;
     }
 
-    force_inline bool all_zeros(const simd_vec<int, S> &mask) const {
+    force_inline bool all_zeros(const simd_vec<int, S> &mask) const { 
+#if 0 // requires sse4.1
         ITERATE(S/4, { if (!_mm_test_all_zeros(vec_[i], mask.vec_[i])) return false; })
-#if 1
-            
 #else
-#error "!!!"
-            if (_mm_movemask_epi8(_mm_cmpeq_epi32(vec_[i], _mm_setzero_si128())) != 0xFFFF) return false;
+        ITERATE(S/4, { if (_mm_movemask_epi8(_mm_cmpeq_epi32(_mm_and_si128(vec_[i], mask.vec_[i]), _mm_setzero_si128())) != 0xFFFF) return false; })
 #endif
         return true;
     }
 
     force_inline bool not_all_zeros() const {
-        ITERATE(S/4, { if (!_mm_test_all_zeros(vec_[i], vec_[i])) return true; })
-#if 0
-            if (_mm_movemask_epi8(_mm_cmpeq_epi32(vec_[i], _mm_setzero_si128())) == 0xFFFF) return true;       
-#endif
-        return false;
+        return !all_zeros();
     }
 
     force_inline static simd_vec<int, S> min(const simd_vec<int, S> &v1, const simd_vec<int, S> &v2) {
@@ -668,7 +663,11 @@ public:
 
     friend force_inline simd_vec<int, S> operator>>(const simd_vec<int, S> &v1, const simd_vec<int, S> &v2) {
         simd_vec<int, S> ret;
+#if 0
         ITERATE(S/4, { ret.vec_[i] = _mm_srlv_epi32(v1.vec_[i], v2.vec_[i]); })
+#else
+        ITERATE(S, { ret.comp_[i] = v1.comp_[i] >> v2.comp_[i]; })
+#endif
         return ret;
     }
 
