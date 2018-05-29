@@ -23,6 +23,8 @@ float4 SampleTextureTrilinear(__read_only image2d_array_t texture_atlas, __globa
 
 float4 SampleTextureAnisotropic(__read_only image2d_array_t texture_atlas, __global const texture_t *texture,
                                 const float2 uvs, const float2 duv_dx, const float2 duv_dy) {
+    const float2 tex_atlas_size = (float2)(get_image_width(texture_atlas), get_image_height(texture_atlas));
+
     float l1 = fast_length(duv_dx * (float2)(texture->size[0], texture->size[1]));
     float l2 = fast_length(duv_dy * (float2)(texture->size[0], texture->size[1]));
 
@@ -49,9 +51,34 @@ float4 SampleTextureAnisotropic(__read_only image2d_array_t texture_atlas, __glo
 
     float4 res = 0;
     
+    int lod1 = (int)floor(lod);
+    int lod2 = (int)ceil(lod);
+
+    int page1 = texture->page[lod1];
+    int page2 = texture->page[lod2];
+
+    float2 pos1 = (float2)((float)texture->pos[lod1][0] + 0.5f, (float)texture->pos[lod1][1] + 0.5f);
+    float2 size1 = (float2)((float)(texture->size[0] >> lod1), (float)(texture->size[1] >> lod1));
+    float4 coord1 = (float4)(0.0f, 0.0f, (float)page1, 0);
+
+    float2 pos2 = (float2)((float)texture->pos[lod2][0] + 0.5f, (float)texture->pos[lod2][1] + 0.5f);
+    float2 size2 = (float2)((float)(texture->size[0] >> lod2), (float)(texture->size[1] >> lod2));
+    float4 coord2 = (float4)(0.0f, 0.0f, (float)page2, 0);
+
+    const float kz = lod - floor(lod);
+
     for (int i = 0; i < num; i++) {
-        res += SampleTextureTrilinear(texture_atlas, texture, _uvs, lod);
-        _uvs += step;
+        _uvs = _uvs - floor(_uvs);
+
+        coord1.xy = (pos1 + _uvs * size1) / tex_atlas_size;
+        res += (1 - kz) * read_imagef(texture_atlas, TEX_SAMPLER, coord1);
+
+        if (kz > 0.0001f) {
+            coord2.xy = (pos2 + _uvs * size2) / tex_atlas_size;
+            res += kz * read_imagef(texture_atlas, TEX_SAMPLER, coord2);
+        }
+
+        _uvs = _uvs + step;
     }
 
     return res / num;
