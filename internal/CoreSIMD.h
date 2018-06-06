@@ -34,9 +34,6 @@ struct ray_packet_t {
     simd_fvec<S> do_dx[3], dd_dx[3], do_dy[3], dd_dy[3];
     // left top corner coordinates of packet
     int x, y;
-
-    // hint for aligned_vector
-    static const size_t alignment = alignof(simd_fvec<S>);
 };
 
 template <int S>
@@ -55,9 +52,6 @@ struct hit_data_t {
         prim_index = { -1 };
         t = { MAX_DIST };
     }
-
-    // hint for aligned_vector
-    static const size_t alignment = alignof(simd_fvec16);
 };
 
 struct environment_t {

@@ -454,8 +454,6 @@ public:
         return &v1.comp_[0];
     }
 
-    static const size_t alignment = 1;
-
     static int size() { return S; }
     static int native_count() { return S; }
     static bool is_native() { return native_count() == 1; }

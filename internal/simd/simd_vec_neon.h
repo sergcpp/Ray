@@ -399,8 +399,6 @@ public:
         return &v1.comp_[0];
     }
 
-    static const size_t alignment = alignof(float32x4_t);
-
     static int size() { return S; }
     static int native_count() { return S/4; }
     static bool is_native() { return native_count() == 1; }
@@ -706,8 +704,6 @@ public:
         ITERATE(S, { ret.comp_[i] = v1.comp_[i] >> v2; })
         return ret;
     }
-
-    static const size_t alignment = alignof(int32x4_t);
 
     static int size() { return S; }
     static int native_count() { return S/4; }

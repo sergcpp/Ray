@@ -98,8 +98,8 @@ static_assert(sizeof(material_t) == 64, "!");
 
 struct prim_t;
 
-template <typename T, std::size_t Alignment = T::alignment>
-using aligned_vector = std::vector<T, aligned_allocator<T, Alignment>>;
+template <typename T>
+using aligned_vector = std::vector<T, aligned_allocator<T, alignof(T)>>;
 
 void PreprocessTri(const float *p, int stride, tri_accel_t *acc);
 

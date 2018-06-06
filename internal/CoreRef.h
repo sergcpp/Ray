@@ -39,9 +39,6 @@ struct ray_packet_t {
     float c[3];
     // derivatives
     float do_dx[3], dd_dx[3], do_dy[3], dd_dy[3];
-
-    // hint for aligned_vector
-    static const size_t alignment = 1;
 };
 
 const int RayPacketDimX = 1;
@@ -57,9 +54,6 @@ struct hit_data_t {
 
     explicit hit_data_t(eUninitialize) {}
     hit_data_t();
-
-    // hint for aligned_vector
-    static const size_t alignment = 1;
 };
 
 struct environment_t {

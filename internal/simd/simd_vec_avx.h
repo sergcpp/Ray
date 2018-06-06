@@ -309,8 +309,6 @@ public:
         return ret;
     }
 
-    static const size_t alignment = alignof(__m256);
-
     static int size() { return S; }
     static int native_count() { return S / 8; }
     static bool is_native() { return native_count() == 1; }
@@ -589,8 +587,6 @@ public:
         ITERATE(S/8, { temp.vec_[i] = _mm256_srli_epi32(v1.vec_[i], v2); })
         return temp;
     }
-
-    static const size_t alignment = alignof(__m256i);
 
     static int size() { return S; }
     static int native_count() { return S / 8; }
