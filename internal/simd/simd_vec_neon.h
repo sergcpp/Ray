@@ -4,11 +4,6 @@
 
 #include <arm_neon.h>
 
-#ifdef __GNUC__
-//#pragma GCC push_options
-//#pragma GCC target ("sse2")
-#endif
-
 namespace ray {
 namespace NS {
 
@@ -719,14 +714,10 @@ public:
     static bool is_native() { return native_count() == 1; }
 };
 
-#if defined(USE_SSE)
+#if defined(USE_NEON)
 using native_simd_fvec = simd_fvec<4>;
 using native_simd_ivec = simd_ivec<4>;
 #endif
 
 }
 }
-
-#ifdef __GNUC__
-//#pragma GCC pop_options
-#endif
