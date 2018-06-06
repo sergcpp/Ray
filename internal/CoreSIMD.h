@@ -884,7 +884,8 @@ void ray::NS::SampleAnisotropic(const ref::TextureAtlas &atlas, const texture_t 
 
         const auto &fmask = reinterpret_cast<const simd_fvec<S>&>(imask);
 
-        ITERATE(2, { _uvs[i] = _uvs[i] - floor(_uvs[i]); })
+        _uvs[0] = _uvs[0] - floor(_uvs[0]);
+        _uvs[1] = _uvs[1] - floor(_uvs[1]);
 
         simd_fvec<S> col[4];
 
@@ -898,7 +899,8 @@ void ray::NS::SampleAnisotropic(const ref::TextureAtlas &atlas, const texture_t 
             ITERATE(4, { where(fmask, out_rgba[i]) = out_rgba[i] + kz * col[i]; })
         }
 
-        ITERATE(2, { _uvs[i] = _uvs[i] + step[i]; })
+        _uvs[0] = _uvs[0] + step[0];
+        _uvs[1] = _uvs[1] + step[1];
     }
 
     const auto fnum = static_cast<simd_fvec<S>>(num);
