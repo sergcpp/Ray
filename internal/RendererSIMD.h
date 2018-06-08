@@ -1,5 +1,6 @@
 
 #include <functional>
+#include <mutex>
 #include <random>
 
 #include "CoreSIMD.h"
@@ -9,9 +10,35 @@
 
 namespace ray {
 namespace NS {
+template <int S>
+struct PassData {
+    aligned_vector<ray_packet_t<S>> primary_rays;
+    aligned_vector<simd_ivec<S>> primary_masks;
+    aligned_vector<ray_packet_t<S>> secondary_rays;
+    aligned_vector<simd_ivec<S>> secondary_masks;
+    aligned_vector<hit_data_t<S>> intersections;
+
+    PassData() = default;
+
+    PassData(const PassData &rhs) = delete;
+    PassData(PassData &&rhs) { *this = std::move(rhs); }
+
+    PassData &operator=(const PassData &rhs) = delete;
+    PassData &operator=(PassData &&rhs) {
+        primary_rays = std::move(rhs.primary_rays);
+        primary_masks = std::move(rhs.primary_masks);
+        secondary_rays = std::move(rhs.secondary_rays);
+        intersections = std::move(rhs.intersections);
+        return *this;
+    }
+};
+
 template <int DimX, int DimY>
 class RendererSIMD : public RendererBase {
     ray::ref::Framebuffer clean_buf_, final_buf_, temp_buf_;
+
+    std::mutex pass_cache_mtx_;
+    std::vector<PassData<DimX * DimY>> pass_cache_;
 
     std::vector<uint16_t> permutations_;
     void UpdateHaltonSequence(int iteration, std::unique_ptr<float[]> &seq);
@@ -125,28 +152,38 @@ void ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
         UpdateHaltonSequence(region.iteration, region.halton_seq);
     }
 
-    aligned_vector<ray_packet_t<S>> primary_rays;
+    PassData<S> p;
 
-    GeneratePrimaryRays<DimX, DimY>(region.iteration, cam, rect, w, h, &region.halton_seq[0], primary_rays);
-
-    aligned_vector<simd_ivec<S>> primary_masks(primary_rays.size());
-    aligned_vector<hit_data_t<S>> intersections(primary_rays.size());
-
-    for (size_t i = 0; i < primary_rays.size(); i++) {
-        const auto &r = primary_rays[i];
-
-        intersections[i].x = r.x;
-        intersections[i].y = r.y;
-        NS::Traverse_MacroTree_CPU(r, { -1 }, nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, intersections[i]);
+    {
+        std::lock_guard<std::mutex> _(pass_cache_mtx_);
+        if (!pass_cache_.empty()) {
+            p = std::move(pass_cache_.back());
+            pass_cache_.pop_back();
+        }
     }
 
-    aligned_vector<ray_packet_t<S>> secondary_rays(intersections.size());
-    aligned_vector<simd_ivec<S>> secondary_masks(intersections.size());
+    GeneratePrimaryRays<DimX, DimY>(region.iteration, cam, rect, w, h, &region.halton_seq[0], p.primary_rays);
+
+    p.primary_masks.resize(p.primary_rays.size());
+    p.intersections.resize(p.primary_rays.size());
+
+    for (size_t i = 0; i < p.primary_rays.size(); i++) {
+        const auto &r = p.primary_rays[i];
+        auto &inter = p.intersections[i];
+
+        inter = {};
+        inter.x = r.x;
+        inter.y = r.y;
+        NS::Traverse_MacroTree_CPU(r, { -1 }, nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, inter);
+    }
+
+    p.secondary_rays.resize(p.intersections.size());
+    p.secondary_masks.resize(p.intersections.size());
     int secondary_rays_count = 0;
 
-    for (size_t i = 0; i < intersections.size(); i++) {
-        const auto &r = primary_rays[i];
-        const auto &inter = intersections[i];
+    for (size_t i = 0; i < p.intersections.size(); i++) {
+        const auto &r = p.primary_rays[i];
+        const auto &inter = p.intersections[i];
 
         int x = inter.x;
         int y = inter.y;
@@ -155,12 +192,12 @@ void ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
         index += { ray_packet_layout_x };
         index += w * simd_ivec<S>{ ray_packet_layout_y };
 
-        secondary_masks[i] = { 0 };
+        p.secondary_masks[i] = { 0 };
 
         simd_fvec<S> out_rgba[4] = { 0.0f };
         NS::ShadeSurface(index, region.iteration, &region.halton_seq[0], inter, r, env, mesh_instances,
                          mi_indices, meshes, transforms, vtx_indices, vertices, nodes, macro_tree_root,
-                         tris, tri_indices, materials, textures, tex_atlas, out_rgba, &secondary_masks[0], &secondary_rays[0], &secondary_rays_count);
+                         tris, tri_indices, materials, textures, tex_atlas, out_rgba, &p.secondary_masks[0], &p.secondary_rays[0], &secondary_rays_count);
 
         for (int j = 0; j < S; j++) {
             temp_buf_.SetPixel(x + ray_packet_layout_x[j], y + ray_packet_layout_y[j], { out_rgba[0][j], out_rgba[1][j], out_rgba[2][j], out_rgba[3][j] });
@@ -169,23 +206,24 @@ void ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
 
     for (int bounce = 0; bounce < MAX_BOUNCES && secondary_rays_count; bounce++) {
         for (int i = 0; i < secondary_rays_count; i++) {
-            const auto &r = secondary_rays[i];
+            const auto &r = p.secondary_rays[i];
+            auto &inter = p.intersections[i];
 
-            intersections[i] = {};
-            intersections[i].x = r.x;
-            intersections[i].y = r.y;
+            inter = {};
+            inter.x = r.x;
+            inter.y = r.y;
 
-            NS::Traverse_MacroTree_CPU(r, secondary_masks[i], nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, intersections[i]);
+            NS::Traverse_MacroTree_CPU(r, p.secondary_masks[i], nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, inter);
         }
 
         int rays_count = secondary_rays_count;
         secondary_rays_count = 0;
-        std::swap(primary_rays, secondary_rays);
-        std::swap(primary_masks, secondary_masks);
+        std::swap(p.primary_rays, p.secondary_rays);
+        std::swap(p.primary_masks, p.secondary_masks);
 
         for (int i = 0; i < rays_count; i++) {
-            const auto &r = primary_rays[i];
-            const auto &inter = intersections[i];
+            const auto &r = p.primary_rays[i];
+            const auto &inter = p.intersections[i];
 
             int x = inter.x;
             int y = inter.y;
@@ -197,14 +235,19 @@ void ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
             simd_fvec<S> out_rgba[4] = { 0.0f };
             NS::ShadeSurface(index, region.iteration, &region.halton_seq[0], inter, r, env, mesh_instances,
                              mi_indices, meshes, transforms, vtx_indices, vertices, nodes, macro_tree_root,
-                             tris, tri_indices, materials, textures, tex_atlas, out_rgba, &secondary_masks[0], &secondary_rays[0], &secondary_rays_count);
+                             tris, tri_indices, materials, textures, tex_atlas, out_rgba, &p.secondary_masks[0], &p.secondary_rays[0], &secondary_rays_count);
 
             for (int j = 0; j < S; j++) {
-                if (!primary_masks[i][j]) continue;
+                if (!p.primary_masks[i][j]) continue;
 
                 temp_buf_.AddPixel(x + ray_packet_layout_x[j], y + ray_packet_layout_y[j], { out_rgba[0][j], out_rgba[1][j], out_rgba[2][j], out_rgba[3][j] });
             }
         }
+    }
+
+    {
+        std::lock_guard<std::mutex> _(pass_cache_mtx_);
+        pass_cache_.emplace_back(std::move(p));
     }
 
     clean_buf_.MixIncremental(temp_buf_, rect, 1.0f / region.iteration);

@@ -1,13 +1,37 @@
 #pragma once
 
+#include <mutex>
+
 #include "CoreRef.h"
 #include "FramebufferRef.h"
 #include "../RendererBase.h"
 
 namespace ray {
 namespace ref {
+struct PassData {
+    aligned_vector<ray_packet_t> primary_rays;
+    aligned_vector<ray_packet_t> secondary_rays;
+    aligned_vector<hit_data_t> intersections;
+
+    PassData() = default;
+
+    PassData(const PassData &rhs) = delete;
+    PassData(PassData &&rhs) { *this = std::move(rhs); }
+
+    PassData &operator=(const PassData &rhs) = delete;
+    PassData &operator=(PassData &&rhs) {
+        primary_rays = std::move(rhs.primary_rays);
+        secondary_rays = std::move(rhs.secondary_rays);
+        intersections = std::move(rhs.intersections);
+        return *this;
+    }
+};
+
 class Renderer : public RendererBase {
     ray::ref::Framebuffer clean_buf_, final_buf_, temp_buf_;
+
+    std::mutex pass_cache_mtx_;
+    std::vector<PassData> pass_cache_;
 
     std::vector<uint16_t> permutations_;
     void UpdateHaltonSequence(int iteration, std::unique_ptr<float[]> &seq);

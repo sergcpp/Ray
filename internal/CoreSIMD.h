@@ -1127,13 +1127,9 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
 
             SampleAnisotropic(tex_atlas, textures[mat->textures[MAIN_TEXTURE]], uvs, duv_dx, duv_dy, same_mi, tex_albedo);
 
-            for (int i = 0; i < S; i++) {
-                if (!same_mi[i]) continue;
-
-                tex_albedo[0][i] = std::pow(tex_albedo[0][i] * mat->main_color[0], 2.2f);
-                tex_albedo[1][i] = std::pow(tex_albedo[1][i] * mat->main_color[1], 2.2f);
-                tex_albedo[2][i] = std::pow(tex_albedo[2][i] * mat->main_color[2], 2.2f);
-            }
+            tex_albedo[0] = pow(tex_albedo[0] * mat->main_color[0], 2.2f);
+            tex_albedo[1] = pow(tex_albedo[1] * mat->main_color[1], 2.2f);
+            tex_albedo[2] = pow(tex_albedo[2] * mat->main_color[2], 2.2f);
 
             simd_fvec<S> temp[3];
             temp[0] = tex_normal[0] * B[0] + tex_normal[2] * N[0] + tex_normal[1] * T[0];

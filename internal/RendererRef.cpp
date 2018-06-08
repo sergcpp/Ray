@@ -71,61 +71,77 @@ void ray::ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
         UpdateHaltonSequence(region.iteration, region.halton_seq);
     }
 
-    aligned_vector<ray_packet_t> primary_rays;
+    PassData p;
 
-    GeneratePrimaryRays(region.iteration, cam, rect, w, h, &region.halton_seq[0], primary_rays);
-
-    aligned_vector<hit_data_t> intersections(primary_rays.size());
-
-    for (size_t i = 0; i < primary_rays.size(); i++) {
-        const ray_packet_t &r = primary_rays[i];
-
-        intersections[i].id = r.id;
-        Traverse_MacroTree_CPU(r, nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, intersections[i]);
+    {
+        std::lock_guard<std::mutex> _(pass_cache_mtx_);
+        if (!pass_cache_.empty()) {
+            p = std::move(pass_cache_.back());
+            pass_cache_.pop_back();
+        }
     }
 
-    aligned_vector<ray_packet_t> secondary_rays(intersections.size());
+    GeneratePrimaryRays(region.iteration, cam, rect, w, h, &region.halton_seq[0], p.primary_rays);
+
+    p.intersections.resize(p.primary_rays.size());
+
+    for (size_t i = 0; i < p.primary_rays.size(); i++) {
+        const auto &r = p.primary_rays[i];
+        auto &inter = p.intersections[i];
+
+        inter = {};
+        inter.id = r.id;
+        Traverse_MacroTree_CPU(r, nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, inter);
+    }
+
+    p.secondary_rays.resize(p.intersections.size());
     int secondary_rays_count = 0;
 
-    for (size_t i = 0; i < intersections.size(); i++) {
-        const auto &r = primary_rays[i];
-        const auto &inter = intersections[i];
+    for (size_t i = 0; i < p.intersections.size(); i++) {
+        const auto &r = p.primary_rays[i];
+        const auto &inter = p.intersections[i];
 
         const int x = inter.id.x;
         const int y = inter.id.y;
         
         pixel_color_t col = ShadeSurface((y * w + x), region.iteration, &region.halton_seq[0], inter, r, env, mesh_instances, 
                                          mi_indices, meshes, transforms, vtx_indices, vertices, nodes, macro_tree_root,
-                                         tris, tri_indices, materials, textures, tex_atlas, &secondary_rays[0], &secondary_rays_count);
+                                         tris, tri_indices, materials, textures, tex_atlas, &p.secondary_rays[0], &secondary_rays_count);
         temp_buf_.SetPixel(x, y, col);
     }
 
     for (int bounce = 0; bounce < MAX_BOUNCES && secondary_rays_count; bounce++) {
         for (int i = 0; i < secondary_rays_count; i++) {
-            const auto &r = secondary_rays[i];
+            const auto &r = p.secondary_rays[i];
+            auto &inter = p.intersections[i];
 
-            intersections[i] = {};
-            intersections[i].id = r.id;
-            Traverse_MacroTree_CPU(r, nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, intersections[i]);
+            inter = {};
+            inter.id = r.id;
+            Traverse_MacroTree_CPU(r, nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, inter);
         }
 
         int rays_count = secondary_rays_count;
         secondary_rays_count = 0;
-        std::swap(primary_rays, secondary_rays);
+        std::swap(p.primary_rays, p.secondary_rays);
 
         for (int i = 0; i < rays_count; i++) {
-            const auto &r = primary_rays[i];
-            const auto &inter = intersections[i];
+            const auto &r = p.primary_rays[i];
+            const auto &inter = p.intersections[i];
 
             const int x = inter.id.x;
             const int y = inter.id.y;
 
             pixel_color_t col = ShadeSurface((y * w + x), region.iteration, &region.halton_seq[0], inter, r, env, mesh_instances,
                                              mi_indices, meshes, transforms, vtx_indices, vertices, nodes, macro_tree_root,
-                                             tris, tri_indices, materials, textures, tex_atlas, &secondary_rays[0], &secondary_rays_count);
+                                             tris, tri_indices, materials, textures, tex_atlas, &p.secondary_rays[0], &secondary_rays_count);
 
             temp_buf_.AddPixel(x, y, col);
         }
+    }
+
+    {
+        std::lock_guard<std::mutex> _(pass_cache_mtx_);
+        pass_cache_.emplace_back(std::move(p));
     }
 
     clean_buf_.MixIncremental(temp_buf_, rect, 1.0f / region.iteration);

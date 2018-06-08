@@ -309,6 +309,26 @@ public:
         return ret;
     }
 
+    friend force_inline simd_vec<float, S> clamp(const simd_vec<float, S> &v1, float min, float max) {
+        simd_vec<float, S> ret;
+        ITERATE(S/8, { ret.vec_[i] = _mm256_max_ps(_mm256_set1_ps(min), _mm256_min_ps(v1.vec_[i], _mm256_set1_ps(max))); })
+        return ret;
+    }
+
+    friend force_inline simd_vec<float, S> pow(const simd_vec<float, S> &v1, const simd_vec<float, S> &v2) {
+        simd_vec<float, S> ret;
+        ITERATE(S, { ret.comp_[i] = std::pow(v1.comp_[i], v2.comp_[i]); })
+        return ret;
+    }
+
+    friend force_inline simd_vec<float, S> normalize(const simd_vec<float, S> &v1) {
+        return v1 / v1.length();
+    }
+
+    friend force_inline const float *value_ptr(const simd_vec<float, S> &v1) {
+        return &v1.comp_[0];
+    }
+
     static int size() { return S; }
     static int native_count() { return S / 8; }
     static bool is_native() { return native_count() == 1; }
