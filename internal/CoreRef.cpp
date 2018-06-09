@@ -629,7 +629,7 @@ ray::ref::simd_fvec4 ray::ref::SampleAnisotropic(const TextureAtlas &atlas, cons
 
     int num = (int)(2.0f / k);
     if (num < 1) num = 1;
-    else if (num > 32) num = 32;
+    else if (num > 4) num = 4;
 
     step = step / float(num);
 

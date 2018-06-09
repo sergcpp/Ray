@@ -846,7 +846,7 @@ void ray::NS::SampleAnisotropic(const ref::TextureAtlas &atlas, const texture_t 
 
     auto num = (simd_ivec<S>)(2.0f / k);
     where(num < 1, num) = 1;
-    where(num > 32, num) = 32;
+    where(num > 4, num) = 4;
 
     step[0] /= (simd_fvec<S>)num;
     step[1] /= (simd_fvec<S>)num;
@@ -878,7 +878,7 @@ void ray::NS::SampleAnisotropic(const ref::TextureAtlas &atlas, const texture_t 
     auto kz_big_enough = kz > 0.0001f;
     bool skip_z = reinterpret_cast<simd_ivec<S> &>(kz_big_enough).all_zeros();
 
-    for (int j = 0; j < 32; j++) {
+    for (int j = 0; j < 4; j++) {
         auto imask = (num > j) & mask;
         if (imask.all_zeros()) break;
 
