@@ -33,6 +33,8 @@ class Renderer : public RendererBase {
     std::mutex pass_cache_mtx_;
     std::vector<PassData> pass_cache_;
 
+    stats_t stats_ = { 0 };
+
     std::vector<uint16_t> permutations_;
     void UpdateHaltonSequence(int iteration, std::unique_ptr<float[]> &seq);
 public:
@@ -61,9 +63,8 @@ public:
     std::shared_ptr<SceneBase> CreateScene() override;
     void RenderScene(const std::shared_ptr<SceneBase> &s, RegionContext &region) override;
 
-    virtual void GetStats(stats_t &st) override {
-        
-    }
+    virtual void GetStats(stats_t &st) override { st = stats_; }
+    virtual void ResetStats() override { stats_ = { 0 }; }
 };
 }
 }

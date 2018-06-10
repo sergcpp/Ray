@@ -78,8 +78,13 @@ public:
     virtual void RenderScene(const std::shared_ptr<SceneBase> &s, RegionContext &region) = 0;
 
     struct stats_t {
-        
+        unsigned long long time_primary_ray_gen_us;
+        unsigned long long time_primary_trace_us;
+        unsigned long long time_primary_shade_us;
+        unsigned long long time_secondary_trace_us;
+        unsigned long long time_secondary_shade_us;
     };
     virtual void GetStats(stats_t &st) = 0;
+    virtual void ResetStats() = 0;
 };
 }

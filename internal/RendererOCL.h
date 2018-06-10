@@ -47,6 +47,8 @@ protected:
 
     std::vector<float> frame_pixels_;
 
+    stats_t stats_ = { 0 };
+
     bool kernel_GeneratePrimaryRays(cl_int iteration, const ray::ocl::camera_t &cam, const cl::Buffer &halton, cl_int w, cl_int h, const cl::Buffer &out_rays);
     bool kernel_TextureDebugPage(const cl::Image2DArray &textures, cl_int page, const cl::Image2D &frame_buf);
     bool kernel_ShadePrimary(cl_int iteration, const cl::Buffer &halton,
@@ -99,7 +101,8 @@ public:
     std::shared_ptr<SceneBase> CreateScene() override;
     void RenderScene(const std::shared_ptr<SceneBase> &s, RegionContext &region) override;
 
-    void GetStats(stats_t &st) override;
+    void GetStats(stats_t &st) override { st = stats_; }
+    void ResetStats() override { stats_ = { 0 }; }
 };
 }
 }

@@ -3,6 +3,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
+#include <chrono>
 #include <random>
 #include <string>
 #include <utility>
@@ -271,77 +272,98 @@ void ray::ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
     cl_cam.up.y *= float(h_) / w_;
     cl_cam.up.z *= float(h_) / w_;
 
+    const auto time_start = std::chrono::high_resolution_clock::now();
+
     if (!kernel_GeneratePrimaryRays((cl_int)region.iteration, cl_cam, halton_seq_buf_, w_, h_, prim_rays_buf_)) return;
 
-    {
-        cl_int error = CL_SUCCESS;
+    queue_.finish();
+    const auto time_after_ray_gen = std::chrono::high_resolution_clock::now();
 
-        if (!kernel_TracePrimaryRays(prim_rays_buf_, w_, h_,
-                                     s->mesh_instances_.buf(), s->mi_indices_.buf(), s->meshes_.buf(), s->transforms_.buf(),
-                                     s->nodes_.buf(), (cl_uint)s->macro_nodes_start_, s->tris_.buf(), s->tri_indices_.buf(), prim_inters_buf_)) return;
+    cl_int error = CL_SUCCESS;
 
-        cl_int secondary_rays_count = 0;
+    if (!kernel_TracePrimaryRays(prim_rays_buf_, w_, h_,
+                                    s->mesh_instances_.buf(), s->mi_indices_.buf(), s->meshes_.buf(), s->transforms_.buf(),
+                                    s->nodes_.buf(), (cl_uint)s->macro_nodes_start_, s->tris_.buf(), s->tri_indices_.buf(), prim_inters_buf_)) return;
+
+    cl_int secondary_rays_count = 0;
+    if (queue_.enqueueWriteBuffer(secondary_rays_count_buf_, CL_TRUE, 0, sizeof(cl_int),
+                                    &secondary_rays_count) != CL_SUCCESS) return;
+
+    queue_.finish();
+    const auto time_after_prim_trace = std::chrono::high_resolution_clock::now();
+
+    if (!kernel_ShadePrimary((cl_int)region.iteration, halton_seq_buf_,
+                                prim_inters_buf_, prim_rays_buf_, w_, h_,
+                                s->mesh_instances_.buf(), s->mi_indices_.buf(), s->meshes_.buf(),
+                                s->transforms_.buf(), s->vtx_indices_.buf(), s->vertices_.buf(),
+                                s->nodes_.buf(), (cl_uint)s->macro_nodes_start_,
+                                s->tris_.buf(), s->tri_indices_.buf(),
+                                s->env_, s->materials_.buf(), s->textures_.buf(), s->texture_atlas_.atlas(), temp_buf_,
+                                secondary_rays_buf_, secondary_rays_count_buf_)) return;
+    
+    if (queue_.enqueueReadBuffer(secondary_rays_count_buf_, CL_TRUE, 0, sizeof(cl_int),
+                                    &secondary_rays_count) != CL_SUCCESS) return;
+
+    queue_.finish();
+    const auto time_after_prim_shade = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double, std::micro> secondary_trace_time{}, secondary_shade_time{};
+
+    for (int depth = 0; depth < MAX_BOUNCES && secondary_rays_count; depth++) {
+        auto time_secondary_trace_start = std::chrono::high_resolution_clock::now();
+
+        if (!kernel_TraceSecondaryRays(secondary_rays_buf_, secondary_rays_count,
+                                        s->mesh_instances_.buf(), s->mi_indices_.buf(), s->meshes_.buf(), s->transforms_.buf(),
+                                        s->nodes_.buf(), (cl_uint)s->macro_nodes_start_, s->tris_.buf(), s->tri_indices_.buf(), prim_inters_buf_)) return;
+
+        cl_int new_secondary_rays_count = 0;
         if (queue_.enqueueWriteBuffer(secondary_rays_count_buf_, CL_TRUE, 0, sizeof(cl_int),
-                                      &secondary_rays_count) != CL_SUCCESS) return;
-
-        if (!kernel_ShadePrimary((cl_int)region.iteration, halton_seq_buf_,
-                                 prim_inters_buf_, prim_rays_buf_, w_, h_,
-                                 s->mesh_instances_.buf(), s->mi_indices_.buf(), s->meshes_.buf(),
-                                 s->transforms_.buf(), s->vtx_indices_.buf(), s->vertices_.buf(),
-                                 s->nodes_.buf(), (cl_uint)s->macro_nodes_start_,
-                                 s->tris_.buf(), s->tri_indices_.buf(),
-                                 s->env_, s->materials_.buf(), s->textures_.buf(), s->texture_atlas_.atlas(), temp_buf_,
-                                 secondary_rays_buf_, secondary_rays_count_buf_)) return;
-
-        if (queue_.enqueueReadBuffer(secondary_rays_count_buf_, CL_TRUE, 0, sizeof(cl_int),
-                                     &secondary_rays_count) != CL_SUCCESS) return;
-
-        for (int depth = 0; depth < MAX_BOUNCES && secondary_rays_count; depth++) {
-            if (!kernel_TraceSecondaryRays(secondary_rays_buf_, secondary_rays_count,
-                                           s->mesh_instances_.buf(), s->mi_indices_.buf(), s->meshes_.buf(), s->transforms_.buf(),
-                                           s->nodes_.buf(), (cl_uint)s->macro_nodes_start_, s->tris_.buf(), s->tri_indices_.buf(), prim_inters_buf_)) return;
-
-            cl_int new_secondary_rays_count = 0;
-            if (queue_.enqueueWriteBuffer(secondary_rays_count_buf_, CL_TRUE, 0, sizeof(cl_int),
-                                          &new_secondary_rays_count) != CL_SUCCESS) return;
+                                        &new_secondary_rays_count) != CL_SUCCESS) return;
 
 #if 0
-            pixel_color_t c = { 0, 0, 0, 0 };
-            queue_.enqueueFillImage(temp_buf_, *(cl_float4 *)&c, {}, { (size_t)w_, (size_t)h_, 1 });
+        pixel_color_t c = { 0, 0, 0, 0 };
+        queue_.enqueueFillImage(temp_buf_, *(cl_float4 *)&c, {}, { (size_t)w_, (size_t)h_, 1 });
 #endif
+        queue_.finish();
+        auto time_secondary_shade_start = std::chrono::high_resolution_clock::now();
 
-            if (queue_.enqueueCopyImage(temp_buf_, final_buf_, { 0, 0, 0 }, { 0, 0, 0 },
-        { (size_t)w_, (size_t)h_, 1 }) != CL_SUCCESS) return;
+        if (queue_.enqueueCopyImage(temp_buf_, final_buf_, { 0, 0, 0 }, { 0, 0, 0 },
+    { (size_t)w_, (size_t)h_, 1 }) != CL_SUCCESS) return;
 
-            if (!kernel_ShadeSecondary((cl_int)region.iteration, halton_seq_buf_,
-                                       prim_inters_buf_, secondary_rays_buf_, secondary_rays_count, w_, h_,
-                                       s->mesh_instances_.buf(), s->mi_indices_.buf(), s->meshes_.buf(),
-                                       s->transforms_.buf(), s->vtx_indices_.buf(), s->vertices_.buf(),
-                                       s->nodes_.buf(), (cl_uint)s->macro_nodes_start_,
-                                       s->tris_.buf(), s->tri_indices_.buf(),
-                                       s->env_, s->materials_.buf(), s->textures_.buf(), s->texture_atlas_.atlas(), final_buf_, temp_buf_,
-                                       prim_rays_buf_, secondary_rays_count_buf_)) return;
+        if (!kernel_ShadeSecondary((cl_int)region.iteration, halton_seq_buf_,
+                                    prim_inters_buf_, secondary_rays_buf_, secondary_rays_count, w_, h_,
+                                    s->mesh_instances_.buf(), s->mi_indices_.buf(), s->meshes_.buf(),
+                                    s->transforms_.buf(), s->vtx_indices_.buf(), s->vertices_.buf(),
+                                    s->nodes_.buf(), (cl_uint)s->macro_nodes_start_,
+                                    s->tris_.buf(), s->tri_indices_.buf(),
+                                    s->env_, s->materials_.buf(), s->textures_.buf(), s->texture_atlas_.atlas(), final_buf_, temp_buf_,
+                                    prim_rays_buf_, secondary_rays_count_buf_)) return;
 
-            if (queue_.enqueueReadBuffer(secondary_rays_count_buf_, CL_TRUE, 0, sizeof(cl_int),
-                                         &secondary_rays_count) != CL_SUCCESS) return;
+        if (queue_.enqueueReadBuffer(secondary_rays_count_buf_, CL_TRUE, 0, sizeof(cl_int),
+                                        &secondary_rays_count) != CL_SUCCESS) return;
 
-            std::swap(final_buf_, temp_buf_);
-            std::swap(secondary_rays_buf_, prim_rays_buf_);
-        }
+        queue_.finish();
+        auto time_secondary_shade_end = std::chrono::high_resolution_clock::now();
+        secondary_trace_time += std::chrono::duration<double, std::micro>{ time_secondary_shade_start - time_secondary_trace_start };
+        secondary_shade_time += std::chrono::duration<double, std::micro>{ time_secondary_shade_end - time_secondary_shade_start };
 
-        float k = 1.0f / region.iteration;
-
-        if (!kernel_MixIncremental(clean_buf_, temp_buf_, (cl_float)k, final_buf_)) return;
-        std::swap(final_buf_, clean_buf_);
-
-        if (!kernel_Postprocess(clean_buf_, w_, h_, final_buf_)) return;
-
-        error = queue_.enqueueReadImage(final_buf_, CL_TRUE, {}, { (size_t)w_, (size_t)h_, 1 }, 0, 0, &frame_pixels_[0]);
+        std::swap(final_buf_, temp_buf_);
+        std::swap(secondary_rays_buf_, prim_rays_buf_);
     }
-}
 
-void ray::ocl::Renderer::GetStats(stats_t &st) {
-    
+    stats_.time_primary_ray_gen_us += (unsigned long long)std::chrono::duration<double, std::micro>{ time_after_ray_gen - time_start }.count();
+    stats_.time_primary_trace_us += (unsigned long long)std::chrono::duration<double, std::micro>{ time_after_prim_trace - time_after_ray_gen }.count();
+    stats_.time_primary_shade_us += (unsigned long long)std::chrono::duration<double, std::micro>{ time_after_prim_shade - time_after_prim_trace }.count();
+    stats_.time_secondary_trace_us += (unsigned long long)secondary_trace_time.count();
+    stats_.time_secondary_shade_us += (unsigned long long)secondary_shade_time.count();
+
+    float k = 1.0f / region.iteration;
+
+    if (!kernel_MixIncremental(clean_buf_, temp_buf_, (cl_float)k, final_buf_)) return;
+    std::swap(final_buf_, clean_buf_);
+
+    if (!kernel_Postprocess(clean_buf_, w_, h_, final_buf_)) return;
+
+    error = queue_.enqueueReadImage(final_buf_, CL_TRUE, {}, { (size_t)w_, (size_t)h_, 1 }, 0, 0, &frame_pixels_[0]);
 }
 
 bool ray::ocl::Renderer::kernel_GeneratePrimaryRays(const cl_int iteration, const ray::ocl::camera_t &cam, const cl::Buffer &halton, cl_int w, cl_int h, const cl::Buffer &out_rays) {
