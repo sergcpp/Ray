@@ -4,16 +4,16 @@ project(ray)
 OPTION(ENABLE_UNITYBUILD "Enable compilation of one large cpp file" ON)
 
 if(NOT CMAKE_SYSTEM_NAME MATCHES "Android")
-	OPTION(ENABLE_OPENCL "Enables OpenCL backend" ON)
+    OPTION(ENABLE_OPENCL "Enables OpenCL backend" ON)
 else()
-	OPTION(ENABLE_OPENCL "Enables OpenCL backend" OFF)
+    OPTION(ENABLE_OPENCL "Enables OpenCL backend" OFF)
 endif()
 
 if(ENABLE_OPENCL)
-	add_library(OpenCL STATIC IMPORTED)
+    add_library(OpenCL STATIC IMPORTED)
     include_directories(ocl/include)
 else()
-	add_definitions(-DDISABLE_OCL)
+    add_definitions(-DDISABLE_OCL)
 endif()
 
 IF(MSVC)
@@ -66,10 +66,12 @@ set(INTERNAL_SOURCE_FILES internal/BVHSplit.h
 if(NOT CMAKE_SYSTEM_NAME MATCHES "Android")
 set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
                           internal/RendererAVX.h
-                          internal/RendererSSE.h)
+                          internal/RendererAVX.cpp
+                          internal/RendererSSE.h
+                          internal/RendererSSE.cpp)
 
-	if (ENABLE_OPENCL)
-		set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
+    if (ENABLE_OPENCL)
+        set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
                           internal/CoreOCL.h
                           internal/RendererOCL.h
                           internal/RendererOCL.cpp
@@ -78,8 +80,13 @@ set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
                           internal/TextureAtlasOCL.h
                           internal/TextureAtlasOCL.cpp
                           internal/VectorOCL.h)
-	endif()
+    endif()
 endif()
+
+if(MSVC)
+    set_source_files_properties(internal/RendererSSE.cpp PROPERTIES COMPILE_FLAGS /arch:SSE2)
+    set_source_files_properties(internal/RendererAVX.cpp PROPERTIES COMPILE_FLAGS /arch:AVX)
+endif(MSVC)
 
 set(SOURCE_FILES RendererBase.h
                  RendererFactory.h
@@ -89,15 +96,15 @@ set(SOURCE_FILES RendererBase.h
                  Types.h)
 
 if (ENABLE_OPENCL)
-	set(KERNEL_FILES internal/kernels/intersect.cl
-					 internal/kernels/postprocess.cl
-					 internal/kernels/primary_ray_gen.cl
-					 internal/kernels/shade.cl
-					 internal/kernels/texture.cl
-					 internal/kernels/trace.cl
-					 internal/kernels/transform.cl
-					 internal/kernels/traverse_bvh.cl
-					 internal/kernels/types.cl)
+    set(KERNEL_FILES internal/kernels/intersect.cl
+                     internal/kernels/postprocess.cl
+                     internal/kernels/primary_ray_gen.cl
+                     internal/kernels/shade.cl
+                     internal/kernels/texture.cl
+                     internal/kernels/trace.cl
+                     internal/kernels/transform.cl
+                     internal/kernels/traverse_bvh.cl
+                     internal/kernels/types.cl)
 endif()
 
 set(SIMD_FILES internal/simd/aligned_allocator.h
@@ -105,7 +112,7 @@ set(SIMD_FILES internal/simd/aligned_allocator.h
                internal/simd/simd_vec.h
                internal/simd/simd_vec_sse.h
                internal/simd/simd_vec_avx.h
-			   internal/simd/simd_vec_neon.h)
+               internal/simd/simd_vec_neon.h)
 
 list(APPEND ALL_SOURCE_FILES ${INTERNAL_SOURCE_FILES})
 source_group("src\\internal" FILES ${INTERNAL_SOURCE_FILES})
@@ -128,6 +135,17 @@ IF(ENABLE_UNITYBUILD)
 
     list(APPEND ALL_SOURCE_FILES _ray.cpp)
     source_group("src" FILES _ray.cpp)
+
+    list(APPEND ALL_SOURCE_FILES _ray_sse.cpp)
+    source_group("src" FILES _ray_sse.cpp)
+
+    list(APPEND ALL_SOURCE_FILES _ray_avx.cpp)
+    source_group("src" FILES _ray_avx.cpp)
+
+    if(MSVC)
+        set_source_files_properties(_ray_sse.cpp PROPERTIES COMPILE_FLAGS /arch:SSE2)
+        set_source_files_properties(_ray_avx.cpp PROPERTIES COMPILE_FLAGS /arch:AVX)
+    endif(MSVC)
 ENDIF()
 
 add_library(ray STATIC ${ALL_SOURCE_FILES})
