@@ -810,7 +810,7 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
     albedo[2] *= mat->main_color[2];
     albedo = pow(albedo, simd_fvec4(2.2f));
 
-    simd_fvec3 col;
+    simd_fvec3 col = { 0.0f };
 
     // generate secondary ray
     if (mat->type == DiffuseMaterial) {
