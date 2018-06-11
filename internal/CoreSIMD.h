@@ -718,7 +718,7 @@ void ray::NS::SampleNearest(const ref::TextureAtlas &atlas, const texture_t &t, 
     }
 
     const float k = 1.0f / 255.0f;
-    ITERATE(4, { out_rgba[i] *= k; })
+    ITERATE_4({ out_rgba[i] *= k; })
 }
 
 template <int S>
@@ -804,7 +804,7 @@ void ray::NS::SampleTrilinear(const ref::TextureAtlas &atlas, const texture_t &t
 
     simd_fvec<S> k = lod - floor(lod);
 
-    ITERATE(4, { out_rgba[i] = col1[i] * (1.0f - k) + col2[i] * k; })
+    ITERATE_4({ out_rgba[i] = col1[i] * (1.0f - k) + col2[i] * k; })
 }
 
 template <int S>
@@ -851,7 +851,7 @@ void ray::NS::SampleAnisotropic(const ref::TextureAtlas &atlas, const texture_t 
     step[0] /= (simd_fvec<S>)num;
     step[1] /= (simd_fvec<S>)num;
 
-    ITERATE(4, { out_rgba[i] = 0.0f; })
+    ITERATE_4({ out_rgba[i] = 0.0f; })
 
     simd_ivec<S> lod1 = (simd_ivec<S>)floor(lod);
     simd_ivec<S> lod2 = (simd_ivec<S>)ceil(lod);
@@ -891,12 +891,12 @@ void ray::NS::SampleAnisotropic(const ref::TextureAtlas &atlas, const texture_t 
 
         simd_fvec<S> _uvs1[2] = { pos1[0] + _uvs[0] * size1[0], pos1[1] + _uvs[1] * size1[1] };
         SampleBilinear(atlas, _uvs1, page1, imask, col);
-        ITERATE(4, { where(fmask, out_rgba[i]) = out_rgba[i] + (1.0f - kz) * col[i]; })
+        ITERATE_4({ where(fmask, out_rgba[i]) = out_rgba[i] + (1.0f - kz) * col[i]; })
 
         if (!skip_z) {
             simd_fvec<S> _uvs2[2] = { pos2[0] + _uvs[0] * size2[0], pos2[1] + _uvs[1] * size2[1] };
             SampleBilinear(atlas, _uvs2, page2, imask, col);
-            ITERATE(4, { where(fmask, out_rgba[i]) = out_rgba[i] + kz * col[i]; })
+            ITERATE_4({ where(fmask, out_rgba[i]) = out_rgba[i] + kz * col[i]; })
         }
 
         _uvs[0] = _uvs[0] + step[0];
@@ -904,7 +904,7 @@ void ray::NS::SampleAnisotropic(const ref::TextureAtlas &atlas, const texture_t 
     }
 
     const auto fnum = static_cast<simd_fvec<S>>(num);
-    ITERATE(4, { out_rgba[i] /= fnum; })
+    ITERATE_4({ out_rgba[i] /= fnum; })
 }
 
 template <int S>

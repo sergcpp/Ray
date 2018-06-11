@@ -1,7 +1,7 @@
 using namespace ray::NS;
 
 {
-    std::cout << "Test simd_fvec4 native_count = " << simd_fvec4::native_count() << " | ";
+    std::cout << "Test simd_fvec4 native? = " << simd_fvec4::is_native() << " | ";
 
     simd_fvec4 v1, v2 = { 42.0f }, v3 = { 1.0f, 2.0f, 3.0f, 4.0f };
 
@@ -118,7 +118,7 @@ using namespace ray::NS;
 }
 
 {
-    std::cout << "Test simd_ivec4 native_count = " << simd_ivec4::native_count() << " | ";
+    std::cout << "Test simd_ivec4 native? = " << simd_ivec4::is_native() << " | ";
 
     simd_ivec4 v1, v2 = { 42 }, v3 = { 1, 2, 3, 4 };
 
@@ -219,7 +219,7 @@ using namespace ray::NS;
 }
 
 {
-    std::cout << "Test simd_fvec8 native_count = " << simd_fvec8::native_count() << " | ";
+    std::cout << "Test simd_fvec8 native? = " << simd_fvec8::is_native() << " | ";
 
     simd_fvec8 v1, v2 = { 42.0f }, v3 = { 1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f };
 
@@ -355,7 +355,7 @@ using namespace ray::NS;
 }
 
 {
-    std::cout << "Test simd_ivec8 native_count = " << simd_ivec8::native_count() << " | ";
+    std::cout << "Test simd_ivec8 native? = " << simd_ivec8::is_native() << " | ";
 
     simd_ivec8 v1, v2 = { 42 }, v3 = { 1, 2, 3, 4, 5, 6, 7, 8 };
 

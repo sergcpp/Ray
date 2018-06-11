@@ -49,6 +49,22 @@
         { const int i = 0; exp }    \
     }
 
+#define ITERATE_4(exp)  \
+        { const int i = 0; exp }    \
+        { const int i = 1; exp }    \
+        { const int i = 2; exp }    \
+        { const int i = 3; exp }    \
+
+#define ITERATE_8(exp)  \
+        { const int i = 0; exp }    \
+        { const int i = 1; exp }    \
+        { const int i = 2; exp }    \
+        { const int i = 3; exp }    \
+        { const int i = 4; exp }    \
+        { const int i = 5; exp }    \
+        { const int i = 6; exp }    \
+        { const int i = 7; exp }    \
+
 #pragma warning(push)
 #pragma warning(disable : 4789)
 
@@ -455,8 +471,7 @@ public:
     }
 
     static int size() { return S; }
-    static int native_count() { return S; }
-    static bool is_native() { return native_count() == 1; }
+    static bool is_native() { return false; }
 };
 
 template <typename T, int S>
