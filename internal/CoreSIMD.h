@@ -32,8 +32,8 @@ struct ray_packet_t {
     simd_fvec<S> c[3];
     // derivatives
     simd_fvec<S> do_dx[3], dd_dx[3], do_dy[3], dd_dy[3];
-    // left top corner coordinates of packet
-    int x, y;
+    // 16-bit pixel coordinates of rays in packet ((x << 16) | y)
+    simd_ivec<S> xy;
 };
 
 template <int S>
@@ -42,8 +42,8 @@ struct hit_data_t {
     simd_ivec<S> obj_index;
     simd_ivec<S> prim_index;
     simd_fvec<S> t, u, v;
-    // left top corner coordinates of packet
-    int x, y;
+    // 16-bit pixel coordinates of rays in packet ((x << 16) | y)
+    simd_ivec<S> xy;
 
     hit_data_t(eUninitialize) {}
     force_inline hit_data_t() {
@@ -64,6 +64,11 @@ struct environment_t {
 // Generating rays
 template <int DimX, int DimY>
 void GeneratePrimaryRays(const int iteration, const camera_t &cam, const rect_t &r, int w, int h, const float *halton, aligned_vector<ray_packet_t<DimX * DimY>> &out_rays);
+
+// Sorting rays
+template <int S>
+void SortRays(ray_packet_t<S> *rays, simd_ivec<S> *ray_masks, int &secondary_rays_count, const float root_min[3], const float cell_size[3],
+              simd_ivec<S> *hash_values, int *head_flags, uint32_t *scan_values, ray_chunk_t *chunks, ray_chunk_t *chunks_temp, uint32_t *skeleton);
 
 // Intersect primitives
 template <int S>
@@ -312,6 +317,58 @@ force_inline void reflect(const simd_fvec<S> I[3], const simd_fvec<S> N[3], cons
     res[2] = I[2] - 2.0f * dot_N_I * N[2];
 }
 
+template <int S>
+force_inline simd_ivec<S> get_ray_hash(const ray_packet_t<S> &r, const simd_ivec<S> &mask, const float root_min[3], const float cell_size[3]) {
+    simd_ivec<S> x = (simd_ivec<S>)((r.o[0] - root_min[0]) / cell_size[0]),
+        y = (simd_ivec<S>)((r.o[1] - root_min[1]) / cell_size[1]),
+        z = (simd_ivec<S>)((r.o[2] - root_min[2]) / cell_size[2]);
+
+    simd_ivec<S> omega_index = (simd_ivec<S>)((1.0f + r.d[2]) / omega_step),
+        phi_index_i = (simd_ivec<S>)((1.0f + r.d[1]) / phi_step),
+        phi_index_j = (simd_ivec<S>)((1.0f + r.d[0]) / phi_step);
+
+    simd_ivec<S> o, p;
+
+    ITERATE(S, {
+        if (mask[i]) {
+            x[i] = morton_table_256[x[i]];
+            y[i] = morton_table_256[y[i]];
+            z[i] = morton_table_256[z[i]];
+            o[i] = morton_table_16[omega_table[omega_index[i]]];
+            p[i] = morton_table_16[phi_table[phi_index_i[i]][phi_index_j[i]]];
+        } else {
+            o[i] = p[i] = 0xFFFFFFFF;
+            x[i] = y[i] = z[i] = 0xFFFFFFFF;
+        }
+    });
+
+    return (o << 25) | (p << 24) | (y << 2) | (z << 1) | (x << 0);
+}
+
+force_inline void _radix_sort_lsb(ray_chunk_t *begin, ray_chunk_t *end, ray_chunk_t *begin1, unsigned maxshift) {
+    ray_chunk_t *end1 = begin1 + (end - begin);
+
+    for (unsigned shift = 0; shift <= maxshift; shift += 8) {
+        size_t count[0x100] = {};
+        for (ray_chunk_t *p = begin; p != end; p++) {
+            count[(p->hash >> shift) & 0xFF]++;
+        }
+        ray_chunk_t *bucket[0x100], *q = begin1;
+        for (int i = 0; i < 0x100; q += count[i++]) {
+            bucket[i] = q;
+        }
+        for (ray_chunk_t *p = begin; p != end; p++) {
+            *bucket[(p->hash >> shift) & 0xFF]++ = *p;
+        }
+        std::swap(begin, begin1);
+        std::swap(end, end1);
+    }
+}
+
+force_inline void radix_sort(ray_chunk_t *begin, ray_chunk_t *end, ray_chunk_t *begin1) {
+    _radix_sort_lsb(begin, end, begin1, 32);
+}
+
 }
 }
 
@@ -343,11 +400,11 @@ void ray::NS::GeneratePrimaryRays(const int iteration, const camera_t &cam, cons
         d[2] /= len;
     };
 
-    simd_fvec<S> off_x, off_y;
+    simd_ivec<S> off_x, off_y;
 
     for (int i = 0; i < S; i++) {
-        off_x[i] = (float)ray_packet_layout_x[i];
-        off_y[i] = (float)ray_packet_layout_y[i];
+        off_x[i] = ray_packet_layout_x[i];
+        off_y[i] = ray_packet_layout_y[i];
     }
 
     size_t i = 0;
@@ -357,24 +414,23 @@ void ray::NS::GeneratePrimaryRays(const int iteration, const camera_t &cam, cons
         for (int x = r.x; x < r.x + r.w - (r.w & (DimX - 1)); x += DimX) {
             auto &out_r = out_rays[i++];
 
-            simd_ivec<S> index = simd_ivec<S>(y) * w + x;
+            simd_ivec<S> ixx = x + off_x, iyy = simd_ivec<S>(y) + off_y;
+
+            simd_ivec<S> index = iyy * w + ixx;
             simd_ivec<S> hi = (hash(index) + iteration) & (HaltonSeqLen - 1);
 
-            simd_fvec<S> xx = { (float)x };
-            xx += off_x;
-
-            simd_fvec<S> yy = { (float)y };
-            yy += off_y;
+            simd_fvec<S> fxx = (simd_fvec<S>)ixx,
+                         fyy = (simd_fvec<S>)iyy;
 
             for (int i = 0; i < S; i++) {
-                xx[i] += halton[hi[i] * 2];
-                yy[i] += halton[hi[i] * 2 + 1];
+                fxx[i] += halton[hi[i] * 2];
+                fyy[i] += halton[hi[i] * 2 + 1];
             }
 
             simd_fvec<S> _d[3], _dx[3], _dy[3];
-            get_pix_dirs(xx, yy, _d);
-            get_pix_dirs(xx + 1.0f, yy, _dx);
-            get_pix_dirs(xx, yy + 1.0f, _dy);
+            get_pix_dirs(fxx, fyy, _d);
+            get_pix_dirs(fxx + 1.0f, fyy, _dx);
+            get_pix_dirs(fxx, fyy + 1.0f, _dy);
 
             for (int j = 0; j < 3; j++) {
                 out_r.d[j] = _d[j];
@@ -387,9 +443,133 @@ void ray::NS::GeneratePrimaryRays(const int iteration, const camera_t &cam, cons
                 out_r.dd_dy[j] = _dy[j] - out_r.d[j];
             }
 
-            out_r.x = x;
-            out_r.y = y;
+            out_r.xy = (ixx << 16) | iyy;
         }
+    }
+}
+
+template <int S>
+void ray::NS::SortRays(ray_packet_t<S> *rays, simd_ivec<S> *ray_masks, int &secondary_rays_count, const float root_min[3], const float cell_size[3],
+                       simd_ivec<S> *hash_values, int *head_flags, uint32_t *scan_values, ray_chunk_t *chunks, ray_chunk_t *chunks_temp, uint32_t *skeleton) {
+    // From "Fast Ray Sorting and Breadth-First Packet Traversal for GPU Ray Tracing" [2010]
+
+    // compute ray hash values
+    for (int i = 0; i < secondary_rays_count; i++) {
+        hash_values[i] = get_ray_hash(rays[i], ray_masks[i], root_min, cell_size);
+    }
+
+    // set head flags
+    head_flags[0] = 1;
+    for (int i = 1; i < secondary_rays_count * S; i++) {
+        head_flags[i] = hash_values[i / S][i % S] != hash_values[(i - 1) / S][(i - 1) % S];
+    }
+
+    int chunks_count = 0;
+
+    {   // perform exclusive scan on head flags
+        uint32_t cur_sum = 0;
+        for (int i = 0; i < secondary_rays_count * S; i++) {
+            scan_values[i] = cur_sum;
+            cur_sum += head_flags[i];
+        }
+        chunks_count = cur_sum;
+    }
+
+    // init ray chunks hash and base index
+    for (int i = 0; i < secondary_rays_count * S; i++) {
+        if (head_flags[i]) {
+            chunks[scan_values[i]].hash = reinterpret_cast<const uint32_t &>(hash_values[i / S][i % S]);
+            chunks[scan_values[i]].base = (uint32_t)i;
+        }
+    }
+
+    // init ray chunks size 
+    for (int i = 0; i < chunks_count - 1; i++) {
+        chunks[i].size = chunks[i + 1].base - chunks[i].base;
+    }
+    chunks[chunks_count - 1].size = (uint32_t)secondary_rays_count * S - chunks[chunks_count - 1].base;
+
+    radix_sort(&chunks[0], &chunks[0] + chunks_count, &chunks_temp[0]);
+
+    {   // perform exclusive scan on chunks size
+        uint32_t cur_sum = 0;
+        for (int i = 0; i < chunks_count; i++) {
+            scan_values[i] = cur_sum;
+            cur_sum += chunks[i].size;
+        }
+    }
+
+    std::fill(&skeleton[0], &skeleton[0] + secondary_rays_count * S, 1);
+    std::fill(&head_flags[0], &head_flags[0] + secondary_rays_count * S, 0);
+
+    // init skeleton and head flags array
+    for (int i = 0; i < chunks_count; i++) {
+        skeleton[scan_values[i]] = chunks[i].base;
+        head_flags[scan_values[i]] = 1;
+    }
+
+    {   // perform a segmented scan on skeleton array
+        uint32_t cur_sum = 0;
+        for (int i = 0; i < secondary_rays_count * S; i++) {
+            if (head_flags[i]) cur_sum = 0;
+            cur_sum += skeleton[i];
+            scan_values[i] = cur_sum;
+        }
+    }
+
+    {   // reorder rays
+        int j, k;
+        for (int i = 0; i < secondary_rays_count * S; i++) {
+            while (i != (j = scan_values[i])) {
+                k = scan_values[j];
+
+                {
+                    int jj = j / S, _jj = j % S,
+                        kk = k / S, _kk = k % S;
+
+                    std::swap(hash_values[jj][_jj], hash_values[kk][_kk]);
+
+                    std::swap(rays[jj].d[0][_jj], rays[kk].d[0][_kk]);
+                    std::swap(rays[jj].d[1][_jj], rays[kk].d[1][_kk]);
+                    std::swap(rays[jj].d[2][_jj], rays[kk].d[2][_kk]);
+
+                    std::swap(rays[jj].o[0][_jj], rays[kk].o[0][_kk]);
+                    std::swap(rays[jj].o[1][_jj], rays[kk].o[1][_kk]);
+                    std::swap(rays[jj].o[2][_jj], rays[kk].o[2][_kk]);
+
+                    std::swap(rays[jj].c[0][_jj], rays[kk].c[0][_kk]);
+                    std::swap(rays[jj].c[1][_jj], rays[kk].c[1][_kk]);
+                    std::swap(rays[jj].c[2][_jj], rays[kk].c[2][_kk]);
+
+                    std::swap(rays[jj].do_dx[0][_jj], rays[kk].do_dx[0][_kk]);
+                    std::swap(rays[jj].do_dx[1][_jj], rays[kk].do_dx[1][_kk]);
+                    std::swap(rays[jj].do_dx[2][_jj], rays[kk].do_dx[2][_kk]);
+
+                    std::swap(rays[jj].dd_dx[0][_jj], rays[kk].dd_dx[0][_kk]);
+                    std::swap(rays[jj].dd_dx[1][_jj], rays[kk].dd_dx[1][_kk]);
+                    std::swap(rays[jj].dd_dx[2][_jj], rays[kk].dd_dx[2][_kk]);
+
+                    std::swap(rays[jj].do_dy[0][_jj], rays[kk].do_dy[0][_kk]);
+                    std::swap(rays[jj].do_dy[1][_jj], rays[kk].do_dy[1][_kk]);
+                    std::swap(rays[jj].do_dy[2][_jj], rays[kk].do_dy[2][_kk]);
+
+                    std::swap(rays[jj].dd_dy[0][_jj], rays[kk].dd_dy[0][_kk]);
+                    std::swap(rays[jj].dd_dy[1][_jj], rays[kk].dd_dy[1][_kk]);
+                    std::swap(rays[jj].dd_dy[2][_jj], rays[kk].dd_dy[2][_kk]);
+
+                    std::swap(rays[jj].xy[_jj], rays[kk].xy[_kk]);
+
+                    std::swap(ray_masks[jj][_jj], ray_masks[kk][_kk]);
+                }
+
+                std::swap(scan_values[i], scan_values[j]);
+            }
+        }
+    }
+
+    // remove non-active rays
+    while (secondary_rays_count && ray_masks[secondary_rays_count - 1].all_zeros()) {
+        secondary_rays_count--;
     }
 }
 
@@ -771,10 +951,10 @@ void ray::NS::SampleBilinear(const ref::TextureAtlas &atlas, const texture_t &t,
 
 template <int S>
 void ray::NS::SampleBilinear(const ref::TextureAtlas &atlas, const simd_fvec<S> uvs[2], const simd_ivec<S> &page, const simd_ivec<S> &mask, simd_fvec<S> out_rgba[4]) {
-    simd_fvec<S> p0[4], p1[4];
-    
-    simd_fvec<S> k[2] = { uvs[0] - floor(uvs[0]), uvs[1] - floor(uvs[1]) };
-    
+    simd_fvec<S> _p00[4], _p01[4], _p10[4], _p11[4];
+
+    const simd_fvec<S> k[2] = { uvs[0] - floor(uvs[0]), uvs[1] - floor(uvs[1]) };
+
     for (int i = 0; i < S; i++) {
         if (!mask[i]) continue;
 
@@ -783,23 +963,40 @@ void ray::NS::SampleBilinear(const ref::TextureAtlas &atlas, const simd_fvec<S> 
         const auto &p10 = atlas.Get(page[i], int(uvs[0][i] + 0), int(uvs[1][i] + 1));
         const auto &p11 = atlas.Get(page[i], int(uvs[0][i] + 1), int(uvs[1][i] + 1));
 
-        p0[0][i] = p01.r * k[0][i] + p00.r * (1 - k[0][i]);
-        p0[1][i] = p01.g * k[0][i] + p00.g * (1 - k[0][i]);
-        p0[2][i] = p01.b * k[0][i] + p00.b * (1 - k[0][i]);
-        p0[3][i] = p01.a * k[0][i] + p00.a * (1 - k[0][i]);
+        _p00[0][i] = to_norm_float(p00.r);
+        _p00[1][i] = to_norm_float(p00.g);
+        _p00[2][i] = to_norm_float(p00.b);
+        _p00[3][i] = to_norm_float(p00.a);
 
-        p1[0][i] = p11.r * k[0][i] + p10.r * (1 - k[0][i]);
-        p1[1][i] = p11.g * k[0][i] + p10.g * (1 - k[0][i]);
-        p1[2][i] = p11.b * k[0][i] + p10.b * (1 - k[0][i]);
-        p1[3][i] = p11.a * k[0][i] + p10.a * (1 - k[0][i]);
+        _p01[0][i] = to_norm_float(p01.r);
+        _p01[1][i] = to_norm_float(p01.g);
+        _p01[2][i] = to_norm_float(p01.b);
+        _p01[3][i] = to_norm_float(p01.a);
+
+        _p10[0][i] = to_norm_float(p10.r);
+        _p10[1][i] = to_norm_float(p10.g);
+        _p10[2][i] = to_norm_float(p10.b);
+        _p10[3][i] = to_norm_float(p10.a);
+
+        _p11[0][i] = to_norm_float(p11.r);
+        _p11[1][i] = to_norm_float(p11.g);
+        _p11[2][i] = to_norm_float(p11.b);
+        _p11[3][i] = to_norm_float(p11.a);
     }
 
-    const float _k = 1.0f / 255.0f;
+    const simd_fvec<S> p0X[4] = { _p01[0] * k[0] + _p00[0] * (1 - k[0]),
+                                  _p01[1] * k[0] + _p00[1] * (1 - k[0]),
+                                  _p01[2] * k[0] + _p00[2] * (1 - k[0]),
+                                  _p01[3] * k[0] + _p00[3] * (1 - k[0]) };
+    const simd_fvec<S> p1X[4] = { _p11[0] * k[0] + _p10[0] * (1 - k[0]),
+                                  _p11[1] * k[0] + _p10[1] * (1 - k[0]),
+                                  _p11[2] * k[0] + _p10[2] * (1 - k[0]),
+                                  _p11[3] * k[0] + _p10[3] * (1 - k[0]) };
 
-    out_rgba[0] = (p1[0] * k[1] + p0[0] * (1.0f - k[1])) * _k;
-    out_rgba[1] = (p1[1] * k[1] + p0[1] * (1.0f - k[1])) * _k;
-    out_rgba[2] = (p1[2] * k[1] + p0[2] * (1.0f - k[1])) * _k;
-    out_rgba[3] = (p1[3] * k[1] + p0[3] * (1.0f - k[1])) * _k;
+    out_rgba[0] = p1X[0] * k[1] + p0X[0] * (1.0f - k[1]);
+    out_rgba[1] = p1X[1] * k[1] + p0X[1] * (1.0f - k[1]);
+    out_rgba[2] = p1X[2] * k[1] + p0X[2] * (1.0f - k[1]);
+    out_rgba[3] = p1X[3] * k[1] + p0X[3] * (1.0f - k[1]);
 }
 
 template <int S>
@@ -1361,8 +1558,7 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
     if (secondary_mask.not_all_zeros()) {
         const int index = (*out_secondary_rays_count)++;
         out_secondary_masks[index] = secondary_mask;
-        out_secondary_rays[index].x = ray.x;
-        out_secondary_rays[index].y = ray.y;
+        out_secondary_rays[index].xy = ray.xy;
     }
 }
 

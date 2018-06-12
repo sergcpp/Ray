@@ -19,6 +19,12 @@ struct PassData {
     aligned_vector<simd_ivec<S>> secondary_masks;
     aligned_vector<hit_data_t<S>> intersections;
 
+    aligned_vector<simd_ivec<S>> hash_values;
+    std::vector<int> head_flags;
+    std::vector<uint32_t> scan_values;
+    std::vector<ray_chunk_t> chunks, chunks_temp;
+    std::vector<uint32_t> skeleton;
+
     PassData() = default;
 
     PassData(const PassData &rhs) = delete;
@@ -30,6 +36,12 @@ struct PassData {
         primary_masks = std::move(rhs.primary_masks);
         secondary_rays = std::move(rhs.secondary_rays);
         intersections = std::move(rhs.intersections);
+        hash_values = std::move(rhs.hash_values);
+        head_flags = std::move(rhs.head_flags);
+        scan_values = std::move(rhs.scan_values);
+        chunks = std::move(rhs.chunks);
+        chunks_temp = std::move(rhs.chunks_temp);
+        skeleton = std::move(rhs.skeleton);
         return *this;
     }
 };
@@ -136,6 +148,9 @@ void ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
     const auto &tex_atlas = s->texture_atlas_;
     //const auto &env = s->env_;
 
+    const float *root_min = nodes[macro_tree_root].bbox[0], *root_max = nodes[macro_tree_root].bbox[1];
+    float cell_size[3] = { (root_max[0] - root_min[0]) / 255, (root_max[1] - root_min[1]) / 255, (root_max[2] - root_min[2]) / 255 };
+
     NS::environment_t env;
     memcpy(&env.sun_dir[0], &s->env_.sun_dir[0], 3 * sizeof(float));
     memcpy(&env.sun_col[0], &s->env_.sun_col[0], 3 * sizeof(float));
@@ -178,8 +193,7 @@ void ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
         auto &inter = p.intersections[i];
 
         inter = {};
-        inter.x = r.x;
-        inter.y = r.y;
+        inter.xy = r.xy;
         NS::Traverse_MacroTree_CPU(r, { -1 }, nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, inter);
     }
 
@@ -193,12 +207,10 @@ void ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
         const auto &r = p.primary_rays[i];
         const auto &inter = p.intersections[i];
 
-        int x = inter.x;
-        int y = inter.y;
+        simd_ivec<S> x = inter.xy >> 16,
+                     y = inter.xy & 0x0000FFFF;
 
         simd_ivec<S> index = { y * w + x };
-        index += { ray_packet_layout_x };
-        index += w * simd_ivec<S>{ ray_packet_layout_y };
 
         p.secondary_masks[i] = { 0 };
 
@@ -208,14 +220,62 @@ void ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
                          tris, tri_indices, materials, textures, tex_atlas, out_rgba, &p.secondary_masks[0], &p.secondary_rays[0], &secondary_rays_count);
 
         for (int j = 0; j < S; j++) {
-            temp_buf_.SetPixel(x + ray_packet_layout_x[j], y + ray_packet_layout_y[j], { out_rgba[0][j], out_rgba[1][j], out_rgba[2][j], out_rgba[3][j] });
+            temp_buf_.SetPixel(x[j], y[j], { out_rgba[0][j], out_rgba[1][j], out_rgba[2][j], out_rgba[3][j] });
         }
     }
 
     const auto time_after_prim_shade = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double, std::micro> secondary_trace_time{}, secondary_shade_time{};
+    std::chrono::duration<double, std::micro> secondary_sort_time{}, secondary_trace_time{}, secondary_shade_time{};
+
+    p.hash_values.resize(secondary_rays_count);
+    p.head_flags.resize(secondary_rays_count * S);
+    p.scan_values.resize(secondary_rays_count * S);
+    p.chunks.resize(secondary_rays_count * S);
+    p.chunks_temp.resize(secondary_rays_count * S);
+    p.skeleton.resize(secondary_rays_count * S);
 
     for (int bounce = 0; bounce < MAX_BOUNCES && secondary_rays_count; bounce++) {
+        auto time_secondary_sort_start = std::chrono::high_resolution_clock::now();
+
+        SortRays(&p.secondary_rays[0], &p.secondary_masks[0], secondary_rays_count, root_min, cell_size,
+                          &p.hash_values[0], &p.head_flags[0], &p.scan_values[0], &p.chunks[0], &p.chunks_temp[0], &p.skeleton[0]);
+
+#if 0   // debug hash values
+        static std::vector<simd_fvec3> color_table;
+        if (color_table.empty()) {
+            std::lock_guard<std::mutex> _(pass_cache_mtx_);
+            if (color_table.empty()) {
+                for (int i = 0; i < 1024; i++) {
+                    float t = float(i) / 1024;
+
+                    simd_fvec3 col = t * 2.1f - simd_fvec3{ 1.8f, 1.14f, 0.3f };
+                    col = 1.0f - col * col;
+
+                    col = clamp(col, 0, 1);
+
+                    color_table.push_back(col);
+                    //color_table.emplace_back(t, t, t);
+                }
+            }
+        }
+
+        for (int i = 0; i < secondary_rays_count; i++) {
+            const auto &r = p.secondary_rays[i];
+
+            simd_ivec<S> x = r.xy >> 16,
+                y = r.xy & 0x0000FFFF;
+
+            for (int j = 0; j < S; j++) {
+                if (!p.secondary_masks[i][j]) continue;
+
+                const auto &c = color_table[hash_values[i][j] % 1024];
+
+                pixel_color_t col = { c[0], c[1], c[2], 1.0f };
+                temp_buf_.SetPixel(x[j], y[j], col);
+            }
+        }
+#endif
+
         auto time_secondary_trace_start = std::chrono::high_resolution_clock::now();
 
         for (int i = 0; i < secondary_rays_count; i++) {
@@ -223,8 +283,7 @@ void ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
             auto &inter = p.intersections[i];
 
             inter = {};
-            inter.x = r.x;
-            inter.y = r.y;
+            inter.xy = r.xy;
 
             NS::Traverse_MacroTree_CPU(r, p.secondary_masks[i], nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, inter);
         }
@@ -240,12 +299,10 @@ void ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
             const auto &r = p.primary_rays[i];
             const auto &inter = p.intersections[i];
 
-            int x = inter.x;
-            int y = inter.y;
+            simd_ivec<S> x = inter.xy >> 16,
+                         y = inter.xy & 0x0000FFFF;
 
             simd_ivec<S> index = { y * w + x };
-            index += { ray_packet_layout_x };
-            index += w * simd_ivec<S>{ ray_packet_layout_y };
 
             simd_fvec<S> out_rgba[4] = { 0.0f };
             NS::ShadeSurface(index, region.iteration, &region.halton_seq[0], inter, r, env, mesh_instances,
@@ -255,11 +312,12 @@ void ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
             for (int j = 0; j < S; j++) {
                 if (!p.primary_masks[i][j]) continue;
 
-                temp_buf_.AddPixel(x + ray_packet_layout_x[j], y + ray_packet_layout_y[j], { out_rgba[0][j], out_rgba[1][j], out_rgba[2][j], out_rgba[3][j] });
+                temp_buf_.AddPixel(x[j], y[j], { out_rgba[0][j], out_rgba[1][j], out_rgba[2][j], out_rgba[3][j] });
             }
         }
 
         auto time_secondary_shade_end = std::chrono::high_resolution_clock::now();
+        secondary_sort_time += std::chrono::duration<double, std::micro>{ time_secondary_trace_start - time_secondary_sort_start };
         secondary_trace_time += std::chrono::duration<double, std::micro>{ time_secondary_shade_start - time_secondary_trace_start };
         secondary_shade_time += std::chrono::duration<double, std::micro>{ time_secondary_shade_end - time_secondary_shade_start };
     }
@@ -271,6 +329,7 @@ void ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
         stats_.time_primary_ray_gen_us += (unsigned long long)std::chrono::duration<double, std::micro>{ time_after_ray_gen - time_start }.count();
         stats_.time_primary_trace_us += (unsigned long long)std::chrono::duration<double, std::micro>{ time_after_prim_trace - time_after_ray_gen }.count();
         stats_.time_primary_shade_us += (unsigned long long)std::chrono::duration<double, std::micro>{ time_after_prim_shade - time_after_prim_trace }.count();
+        stats_.time_secondary_sort_us += (unsigned long long)secondary_sort_time.count();
         stats_.time_secondary_trace_us += (unsigned long long)secondary_trace_time.count();
         stats_.time_secondary_shade_us += (unsigned long long)secondary_shade_time.count();
     }

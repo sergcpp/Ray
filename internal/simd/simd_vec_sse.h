@@ -397,6 +397,24 @@ public:
         return ret;
     }
 
+    force_inline simd_vec<int, S> operator==(const simd_vec<int, S> &rhs) const {
+        simd_vec<int, S> ret;
+        ret.vec_ = _mm_cmpeq_epi32(vec_, rhs.vec_);
+        return ret;
+    }
+
+    force_inline simd_vec<int, S> operator!=(int rhs) const {
+        simd_vec<int, S> ret;
+        ret.vec_ = _mm_andnot_si128(_mm_cmpeq_epi32(vec_, _mm_set1_epi32(rhs)), _mm_set1_epi32(~0));
+        return ret;
+    }
+
+    force_inline simd_vec<int, S> operator!=(const simd_vec<int, S> &rhs) const {
+        simd_vec<int, S> ret;
+        ret.vec_ = _mm_andnot_si128(_mm_cmpeq_epi32(vec_, rhs.vec_), _mm_set1_epi32(~0));
+        return ret;
+    }
+
     force_inline simd_vec<int, S> operator<(const simd_vec<int, S> &rhs) const {
         simd_vec<int, S> ret;
         ret.vec_ = _mm_cmplt_epi32(vec_, rhs.vec_);
@@ -610,6 +628,22 @@ public:
     friend force_inline simd_vec<int, S> operator>>(const simd_vec<int, S> &v1, int v2) {
         simd_vec<int, S> ret;
         ret.vec_ = _mm_srli_epi32(v1.vec_, v2);
+        return ret;
+    }
+
+    friend force_inline simd_vec<int, S> operator<<(const simd_vec<int, S> &v1, const simd_vec<int, S> &v2) {
+        simd_vec<int, S> ret;
+#if 0
+        ret.vec_ = _mm_sllv_epi32(v1.vec_, v2.vec_);
+#else
+        ITERATE_4({ ret.comp_[i] = v1.comp_[i] << v2.comp_[i]; })
+#endif
+            return ret;
+    }
+
+    friend force_inline simd_vec<int, S> operator<<(const simd_vec<int, S> &v1, int v2) {
+        simd_vec<int, S> ret;
+        ret.vec_ = _mm_slli_epi32(v1.vec_, v2);
         return ret;
     }
 

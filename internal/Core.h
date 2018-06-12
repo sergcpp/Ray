@@ -117,7 +117,7 @@ const int PrimesCount = 11;
 const int g_primes[PrimesCount] = { 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31 };
 const int g_prime_sums[PrimesCount] = { 0, 2, 5, 10, 17, 28, 41, 58, 77, 100, 129 };
 
-const int HaltonSeqLen = 512;
+const int HaltonSeqLen = 128;
 
 struct vertex_t {
     float p[3], n[3], b[3], t0[2];
@@ -141,4 +141,24 @@ struct mesh_instance_t {
     uint32_t mesh_index;
 };
 static_assert(sizeof(mesh_instance_t) == 32, "!");
+
+extern const float uint8_to_float_table[];
+
+force_inline float to_norm_float(uint8_t v) {
+    return uint8_to_float_table[v];
+}
+
+extern const uint8_t morton_table_16[];
+extern const int morton_table_256[];
+
+extern const float omega_step;
+extern const char omega_table[];
+
+extern const float phi_step;
+extern const char phi_table[][17];
+
+struct ray_chunk_t {
+    uint32_t hash, base, size;
+};
+
 }

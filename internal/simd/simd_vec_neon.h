@@ -348,8 +348,7 @@ public:
     }
 
     static int size() { return S; }
-    static int native_count() { return S/4; }
-    static bool is_native() { return native_count() == 1; }
+    static bool is_native() { true; }
 };
 
 template <int S>
@@ -422,6 +421,24 @@ public:
     force_inline simd_vec<int, S> operator==(int rhs) const {
         simd_vec<int, S> ret;
         ret.vec_ = vreinterpretq_s32_u32(vceqq_s32(vec_, vdupq_n_s32(rhs)));
+        return ret;
+    }
+
+    force_inline simd_vec<int, S> operator==(const simd_vec<int, S> &rhs) const {
+        simd_vec<int, S> ret;
+        ret.vec_ = vreinterpretq_s32_u32(vceqq_s32(vec_, rhs.vec_));
+        return ret;
+    }
+
+    force_inline simd_vec<int, S> operator!=(int rhs) const {
+        simd_vec<int, S> ret;
+        ret.vec_ = vreinterpretq_s32_u32(vmvnq_u32(vceqq_s32(vec_, vdupq_n_s32(rhs))));
+        return ret;
+    }
+
+    force_inline simd_vec<int, S> operator!=(const simd_vec<int, S> &rhs) const {
+        simd_vec<int, S> ret;
+        ret.vec_ = vreinterpretq_s32_u32(vmvnq_u32(vceqq_s32(vec_, rhs.vec_)));
         return ret;
     }
 
@@ -636,9 +653,20 @@ public:
         return ret;
     }
 
+    friend force_inline simd_vec<int, S> operator<<(const simd_vec<int, S> &v1, const simd_vec<int, S> &v2) {
+        simd_vec<int, S> ret;
+        ITERATE_4({ ret.comp_[i] = v1.comp_[i] << v2.comp_[i]; })
+        return ret;
+    }
+
+    friend force_inline simd_vec<int, S> operator<<(const simd_vec<int, S> &v1, int v2) {
+        simd_vec<int, S> ret;
+        ITERATE_4({ ret.comp_[i] = v1.comp_[i] << v2; })
+        return ret;
+    }
+
     static int size() { return S; }
-    static int native_count() { return S/4; }
-    static bool is_native() { return native_count() == 1; }
+    static bool is_native() { return true; }
 };
 
 #if defined(USE_NEON)

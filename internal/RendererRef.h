@@ -8,10 +8,18 @@
 
 namespace ray {
 namespace ref {
+
 struct PassData {
     aligned_vector<ray_packet_t> primary_rays;
     aligned_vector<ray_packet_t> secondary_rays;
     aligned_vector<hit_data_t> intersections;
+
+    std::vector<uint32_t> hash_values;
+    std::vector<int> head_flags;
+    std::vector<uint32_t> scan_values;
+
+    std::vector<ray_chunk_t> chunks, chunks_temp;
+    std::vector<uint32_t> skeleton;
 
     PassData() = default;
 
@@ -23,6 +31,7 @@ struct PassData {
         primary_rays = std::move(rhs.primary_rays);
         secondary_rays = std::move(rhs.secondary_rays);
         intersections = std::move(rhs.intersections);
+        head_flags = std::move(rhs.head_flags);
         return *this;
     }
 };

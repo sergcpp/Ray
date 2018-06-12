@@ -60,6 +60,9 @@ void ray::ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
     const auto &tex_atlas = s->texture_atlas_;
     const auto &env = s->env_;
 
+    const float *root_min = nodes[macro_tree_root].bbox[0], *root_max = nodes[macro_tree_root].bbox[1];
+    const float cell_size[3] = { (root_max[0] - root_min[0]) / 256, (root_max[1] - root_min[1]) / 256, (root_max[2] - root_min[2]) / 256 };
+
     const auto w = final_buf_.w(), h = final_buf_.h();
 
     auto rect = region.rect();
@@ -118,9 +121,42 @@ void ray::ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
     }
 
     const auto time_after_prim_shade = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double, std::micro> secondary_trace_time{}, secondary_shade_time{};
+    std::chrono::duration<double, std::micro> secondary_sort_time{}, secondary_trace_time{}, secondary_shade_time{};
+
+    p.hash_values.resize(secondary_rays_count);
+    p.head_flags.resize(secondary_rays_count);
+    p.scan_values.resize(secondary_rays_count);
+    p.chunks.resize(secondary_rays_count);
+    p.chunks_temp.resize(secondary_rays_count);
+    p.skeleton.resize(secondary_rays_count);
 
     for (int bounce = 0; bounce < MAX_BOUNCES && secondary_rays_count; bounce++) {
+        auto time_secondary_sort_start = std::chrono::high_resolution_clock::now();
+
+        SortRays(&p.secondary_rays[0], (size_t)secondary_rays_count, root_min, cell_size,
+                 &p.hash_values[0], &p.head_flags[0], &p.scan_values[0], &p.chunks[0], &p.chunks_temp[0], &p.skeleton[0]);
+
+#if 0   // debug hash values
+        static std::vector<simd_fvec3> color_table;
+        if (color_table.empty()) {
+            for (int i = 0; i < 1024; i++) {
+                color_table.emplace_back(float(rand()) / RAND_MAX, float(rand()) / RAND_MAX, float(rand()) / RAND_MAX);
+            }
+        }
+
+        for (int i = 0; i < secondary_rays_count; i++) {
+            const auto &r = p.secondary_rays[i];
+
+            const int x = r.id.x;
+            const int y = r.id.y;
+
+            const auto &c = color_table[hash(p.hash_values[i]) % 1024];
+
+            pixel_color_t col = { c[0], c[1], c[2], 1.0f };
+            temp_buf_.SetPixel(x, y, col);
+        }
+#endif
+
         auto time_secondary_trace_start = std::chrono::high_resolution_clock::now();
 
         for (int i = 0; i < secondary_rays_count; i++) {
@@ -153,6 +189,7 @@ void ray::ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
         }
 
         auto time_secondary_shade_end = std::chrono::high_resolution_clock::now();
+        secondary_sort_time += std::chrono::duration<double, std::micro>{ time_secondary_trace_start - time_secondary_sort_start };
         secondary_trace_time += std::chrono::duration<double, std::micro>{ time_secondary_shade_start - time_secondary_trace_start };
         secondary_shade_time += std::chrono::duration<double, std::micro>{ time_secondary_shade_end - time_secondary_shade_start };
     }
@@ -164,6 +201,7 @@ void ray::ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
         stats_.time_primary_ray_gen_us += (unsigned long long)std::chrono::duration<double, std::micro>{ time_after_ray_gen - time_start }.count();
         stats_.time_primary_trace_us += (unsigned long long)std::chrono::duration<double, std::micro>{ time_after_prim_trace - time_after_ray_gen }.count();
         stats_.time_primary_shade_us += (unsigned long long)std::chrono::duration<double, std::micro>{ time_after_prim_shade - time_after_prim_trace }.count();
+        stats_.time_secondary_sort_us += (unsigned long long)secondary_sort_time.count();
         stats_.time_secondary_trace_us += (unsigned long long)secondary_trace_time.count();
         stats_.time_secondary_shade_us += (unsigned long long)secondary_shade_time.count();
     }

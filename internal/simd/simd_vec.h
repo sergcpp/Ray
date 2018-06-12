@@ -53,7 +53,7 @@
         { const int i = 0; exp }    \
         { const int i = 1; exp }    \
         { const int i = 2; exp }    \
-        { const int i = 3; exp }    \
+        { const int i = 3; exp }
 
 #define ITERATE_8(exp)  \
         { const int i = 0; exp }    \
@@ -63,7 +63,7 @@
         { const int i = 4; exp }    \
         { const int i = 5; exp }    \
         { const int i = 6; exp }    \
-        { const int i = 7; exp }    \
+        { const int i = 7; exp }
 
 #pragma warning(push)
 #pragma warning(disable : 4789)
@@ -154,6 +154,30 @@ public:
         memset(&set, 0xFF, sizeof(T));
         simd_vec<T, S> ret;
         ITERATE(S, { ret.comp_[i] = comp_[i] == rhs ? set : not_set; })
+        return ret;
+    }
+
+    force_inline simd_vec<T, S> operator==(const simd_vec<T, S> &rhs) const {
+        T set, not_set = T(0);
+        memset(&set, 0xFF, sizeof(T));
+        simd_vec<T, S> ret;
+        ITERATE(S, { ret.comp_[i] = comp_[i] == rhs.comp_[i] ? set : not_set; })
+        return ret;
+    }
+
+    force_inline simd_vec<T, S> operator!=(T rhs) const {
+        T set, not_set = T(0);
+        memset(&set, 0xFF, sizeof(T));
+        simd_vec<T, S> ret;
+        ITERATE(S, { ret.comp_[i] = comp_[i] != rhs ? set : not_set; })
+        return ret;
+    }
+
+    force_inline simd_vec<T, S> operator!=(const simd_vec<T, S> &rhs) const {
+        T set, not_set = T(0);
+        memset(&set, 0xFF, sizeof(T));
+        simd_vec<T, S> ret;
+        ITERATE(S, { ret.comp_[i] = comp_[i] != rhs.comp_[i] ? set : not_set; })
         return ret;
     }
 
@@ -441,6 +465,18 @@ public:
     friend force_inline simd_vec<T, S> operator>>(const simd_vec<T, S> &v1, T v2) {
         simd_vec<T, S> ret;
         ITERATE(S, { ret.comp_[i] = v1.comp_[i] >> v2; })
+        return ret;
+    }
+
+    friend force_inline simd_vec<T, S> operator<<(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) {
+        simd_vec<T, S> ret;
+        ITERATE(S, { ret.comp_[i] = v1.comp_[i] << v2.comp_[i]; })
+        return ret;
+    }
+
+    friend force_inline simd_vec<T, S> operator<<(const simd_vec<T, S> &v1, T v2) {
+        simd_vec<T, S> ret;
+        ITERATE(S, { ret.comp_[i] = v1.comp_[i] << v2; })
         return ret;
     }
 
