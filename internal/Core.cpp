@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstring>
 
+#include <deque>
 #include <vector>
 
 #include "BVHSplit.h"
@@ -115,7 +116,7 @@ uint32_t ray::PreprocessPrims(const prim_t *prims, size_t prims_count,
         }
     };
 
-    std::vector<prims_coll_t> triangle_lists;
+    std::deque<prims_coll_t> triangle_lists;
     triangle_lists.emplace_back();
 
     size_t num_nodes = out_nodes.size();
@@ -183,8 +184,8 @@ uint32_t ray::PreprocessPrims(const prim_t *prims, size_t prims_count,
             });
 
             // push_front
-            triangle_lists.insert(triangle_lists.begin(), { std::move(split_data.left_indices), split_data.left_bounds[0], split_data.left_bounds[1] });
-            triangle_lists.insert(triangle_lists.begin(), { std::move(split_data.right_indices), split_data.right_bounds[0], split_data.right_bounds[1] });
+            triangle_lists.emplace_front(std::move(split_data.left_indices), split_data.left_bounds[0], split_data.left_bounds[1]);
+            triangle_lists.emplace_front(std::move(split_data.right_indices), split_data.right_bounds[0], split_data.right_bounds[1]);
 
             num_nodes += 2;
         }
