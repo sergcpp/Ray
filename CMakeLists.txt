@@ -100,6 +100,7 @@ if (ENABLE_OPENCL)
                      internal/kernels/postprocess.cl
                      internal/kernels/primary_ray_gen.cl
                      internal/kernels/shade.cl
+					 internal/kernels/sort.cl
                      internal/kernels/texture.cl
                      internal/kernels/trace.cl
                      internal/kernels/transform.cl

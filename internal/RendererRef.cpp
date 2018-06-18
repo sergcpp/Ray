@@ -31,7 +31,7 @@ void ray::ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
     const auto num_nodes = (uint32_t)s->nodes_.size();
     const auto *nodes = num_nodes ? &s->nodes_[0] : nullptr;
 
-    const auto macro_tree_root = (uint32_t)s->macro_nodes_start_;
+    const auto macro_tree_root = s->macro_nodes_start_;
 
     const auto num_meshes = (uint32_t)s->meshes_.size();
     const auto *meshes = num_meshes ? &s->meshes_[0] : nullptr;
@@ -61,7 +61,7 @@ void ray::ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
     const auto &env = s->env_;
 
     const float *root_min = nodes[macro_tree_root].bbox[0], *root_max = nodes[macro_tree_root].bbox[1];
-    const float cell_size[3] = { (root_max[0] - root_min[0]) / 256, (root_max[1] - root_min[1]) / 256, (root_max[2] - root_min[2]) / 256 };
+    const float cell_size[3] = { (root_max[0] - root_min[0]) / 255, (root_max[1] - root_min[1]) / 255, (root_max[2] - root_min[2]) / 255 };
 
     const auto w = final_buf_.w(), h = final_buf_.h();
 

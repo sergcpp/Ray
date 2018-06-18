@@ -98,14 +98,14 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
     const float3 dd_dy = orig_ray->dd_dy;
 
     ////////////////////////////////////////////////////////
-    
+
     // From 'Physically Based Rendering: ...' book
 
     const float2 duv13 = u1 - u3, duv23 = u2 - u3;
     const float3 dp13 = p1 - p3, dp23 = p2 - p3;
 
     const float det_uv = duv13.x * duv23.y - duv13.y * duv23.x;
-    const float inv_det_uv = fabs(det_uv) < FLT_EPS ? 0 : 1.0f / det_uv;
+    const float inv_det_uv = fabs(det_uv) > FLT_EPS ? 1.0f / det_uv : 0.0f;
     const float3 dpdu = (duv23.y * dp13 - duv13.y * dp23) * inv_det_uv;
     const float3 dpdv = (-duv23.x * dp13 + duv13.x * dp23) * inv_det_uv;
 
@@ -126,7 +126,8 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
     }
 
     const float det = A[0].x * A[1].y - A[1].x * A[0].y;
-    const float inv_det = fabs(det) < FLT_EPS ? 0 : 1.0f / det;
+    const float inv_det = fabs(det) > FLT_EPS ? 1.0f / det : 0.0f;
+
     const float2 duv_dx = (float2)(A[0].x * Bx.x - A[0].y * Bx.y, A[1].x * Bx.x - A[1].y * Bx.y) * inv_det;
     const float2 duv_dy = (float2)(A[0].x * By.x - A[0].y * By.y, A[1].x * By.x - A[1].y * By.y) * inv_det;
 
@@ -225,7 +226,7 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
         float cos_phi;
         const float sin_phi = sincos(phi, &cos_phi);
 
-        const float3 V = temp * sin_phi * B + z * N + temp * cos_phi * T;
+        const float3 V = normalize(temp * sin_phi * B + z * N + temp * cos_phi * T);
         
         ray_packet_t r;
         r.o = (float4)(P + HIT_BIAS * N, (float)x);

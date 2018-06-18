@@ -161,7 +161,7 @@ force_inline void _radix_sort_lsb(ray_chunk_t *begin, ray_chunk_t *end, ray_chun
 }
 
 force_inline void radix_sort(ray_chunk_t *begin, ray_chunk_t *end, ray_chunk_t *begin1) {
-	_radix_sort_lsb(begin, end, begin1, 32);
+	_radix_sort_lsb(begin, end, begin1, 24);
 }
 
 }

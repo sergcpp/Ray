@@ -117,7 +117,7 @@ const int PrimesCount = 11;
 const int g_primes[PrimesCount] = { 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31 };
 const int g_prime_sums[PrimesCount] = { 0, 2, 5, 10, 17, 28, 41, 58, 77, 100, 129 };
 
-const int HaltonSeqLen = 128;
+const int HaltonSeqLen = 256;
 
 struct vertex_t {
     float p[3], n[3], b[3], t0[2];

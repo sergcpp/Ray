@@ -4,7 +4,7 @@
 
 namespace ray {
 const float SAHOversplitThreshold = 1.0f;
-const float NodeTraversalCost = 8;
+const float NodeTraversalCost = 128;
 
 const float SpatialSplitAlpha = 0.00001f;
 const int NumSpatialSplitBins = 64;
