@@ -348,7 +348,7 @@ public:
     }
 
     static int size() { return S; }
-    static bool is_native() { true; }
+    static bool is_native() { return true; }
 };
 
 template <int S>
