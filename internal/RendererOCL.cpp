@@ -1204,7 +1204,7 @@ bool ray::ocl::Renderer::SortRays(const cl::Buffer &in_rays, cl_int rays_count, 
     if (!PerformRadixSort_GPU(chunks, chunks2, (cl_int)chunks_count, counters, partial_sums, partial_sums2,
                               scan_values, scan_values2, scan_values3, scan_values4)) return false;
 
-    if (!ExclusiveScan_GPU(chunks, (cl_int)chunks_count, 8, 12, partial_sums, partial_sums2, scan_values2, scan_values3, 
+    if (!ExclusiveScan_GPU(chunks, (cl_int)chunks_count, offsetof(ray_chunk_t, size), sizeof(ray_chunk_t), partial_sums, partial_sums2, scan_values2, scan_values3,
                            scan_values4, scan_values)) return false;
 
     if (queue_.enqueueFillBuffer(skeleton, (uint32_t)1, 0, sizeof(uint32_t) * rays_count) != CL_SUCCESS) return false;
