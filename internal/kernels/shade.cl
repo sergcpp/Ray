@@ -340,7 +340,7 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
 }
 
 __kernel
-void ShadePrimary(const int iteration, __global const float *halton,
+void ShadePrimary(const int iteration, __global const float *halton, int w,
                   __global const hit_data_t *prim_inters, __global const ray_packet_t *prim_rays,
                   __global const mesh_instance_t *mesh_instances, __global const uint *mi_indices,
                   __global const mesh_t *meshes, __global const transform_t *transforms,
@@ -352,7 +352,7 @@ void ShadePrimary(const int iteration, __global const float *halton,
     const int i = get_global_id(0);
     const int j = get_global_id(1);
 
-    const int index = j * get_global_size(0) + i;
+    const int index = j * w + i;
 
     float4 res = ShadeSurface(index, iteration, halton,
                   prim_inters, prim_rays,

@@ -15,12 +15,9 @@ float3 get_cam_dir(const float x, const float y, const camera_t *cam, int w, int
 }
 
 __kernel
-void GeneratePrimaryRays(const int iteration, camera_t cam, __global const float *halton, __global ray_packet_t *out_rays) {
+void GeneratePrimaryRays(const int iteration, camera_t cam, int w, int h, __global const float *halton, __global ray_packet_t *out_rays) {
     const int i = get_global_id(0);
     const int j = get_global_id(1);
-
-    const int w = get_global_size(0);
-    const int h = get_global_size(1);
 
     const int index = j * w + i;
     const int hi = (hash(index) + iteration) & (HaltonSeqLen - 1);

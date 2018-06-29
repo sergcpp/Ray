@@ -57,11 +57,10 @@ protected:
 
     stats_t stats_ = { 0 };
 
-    bool kernel_GeneratePrimaryRays(cl_int iteration, const ray::ocl::camera_t &cam, const cl::Buffer &halton, int w, int h, const cl::Buffer &out_rays);
+    bool kernel_GeneratePrimaryRays(cl_int iteration, const ray::ocl::camera_t &cam, const ray::rect_t &rect, cl_int w, cl_int h, const cl::Buffer &halton, const cl::Buffer &out_rays);
     bool kernel_TextureDebugPage(const cl::Image2DArray &textures, cl_int page, const cl::Image2D &frame_buf);
-    bool kernel_ShadePrimary(cl_int iteration, const cl::Buffer &halton,
+    bool kernel_ShadePrimary(cl_int iteration, const cl::Buffer &halton, const ray::rect_t &rect, cl_int w,
                              const cl::Buffer &intersections, const cl::Buffer &rays,
-                             int w, int h,
                              const cl::Buffer &mesh_instances, const cl::Buffer &mi_indices, const cl::Buffer &meshes,
                              const cl::Buffer &transforms, const cl::Buffer &vtx_indices, const cl::Buffer &vertices,
                              const cl::Buffer &nodes, cl_uint node_index,
@@ -79,7 +78,7 @@ protected:
                                const environment_t &env, const cl::Buffer &materials,
                                const cl::Buffer &textures, const cl::Image2DArray &texture_atlas, const cl::Image2D &frame_buf, const cl::Image2D &frame_buf2,
                                const cl::Buffer &secondary_rays, const cl::Buffer &secondary_rays_count);
-    bool kernel_TracePrimaryRays(const cl::Buffer &rays, cl_int w, cl_int h,
+    bool kernel_TracePrimaryRays(const cl::Buffer &rays, const ray::rect_t &rect, cl_int w,
                                  const cl::Buffer &mesh_instances, const cl::Buffer &mi_indices, const cl::Buffer &meshes, const cl::Buffer &transforms,
                                  const cl::Buffer &nodes, cl_uint node_index, const cl::Buffer &tris, const cl::Buffer &tri_indices, const cl::Buffer &intersections);
     bool kernel_TraceSecondaryRays(const cl::Buffer &rays, cl_int rays_count,
