@@ -84,7 +84,9 @@ set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
 endif()
 
 if(MSVC)
-    set_source_files_properties(internal/RendererSSE.cpp PROPERTIES COMPILE_FLAGS /arch:SSE2)
+    if(NOT CMAKE_CL_64)
+        set_source_files_properties(internal/RendererSSE.cpp PROPERTIES COMPILE_FLAGS /arch:SSE2)
+    endif()
     set_source_files_properties(internal/RendererAVX.cpp PROPERTIES COMPILE_FLAGS /arch:AVX)
 endif(MSVC)
 
@@ -100,7 +102,7 @@ if (ENABLE_OPENCL)
                      internal/kernels/postprocess.cl
                      internal/kernels/primary_ray_gen.cl
                      internal/kernels/shade.cl
-					 internal/kernels/sort.cl
+                     internal/kernels/sort.cl
                      internal/kernels/texture.cl
                      internal/kernels/trace.cl
                      internal/kernels/transform.cl
@@ -144,7 +146,9 @@ IF(ENABLE_UNITYBUILD)
     source_group("src" FILES _ray_avx.cpp)
 
     if(MSVC)
-        set_source_files_properties(_ray_sse.cpp PROPERTIES COMPILE_FLAGS /arch:SSE2)
+        if(NOT CMAKE_CL_64)
+            set_source_files_properties(_ray_sse.cpp PROPERTIES COMPILE_FLAGS /arch:SSE2)
+        endif()
         set_source_files_properties(_ray_avx.cpp PROPERTIES COMPILE_FLAGS /arch:AVX)
     endif(MSVC)
 ENDIF()
