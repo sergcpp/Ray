@@ -48,17 +48,19 @@ const char *cl_src_transform =
 }
 }
 
-ray::ocl::Renderer::Renderer(int w, int h) : w_(w), h_(h), loaded_halton_(-1) {
+ray::ocl::Renderer::Renderer(int w, int h, int platform_index, int device_index) : w_(w), h_(h), loaded_halton_(-1) {
     std::vector<cl::Platform> platforms;
     cl::Platform::get(&platforms);
     if (platforms.empty()) throw std::runtime_error("Cannot create OpenCL renderer!");
 
-    size_t platform_index = 0;
-    for (size_t i = 0; i < platforms.size(); i++) {
-        auto s = platforms[i].getInfo<CL_PLATFORM_VENDOR>();
-        if (s.find("NVIDIA") != std::string::npos || s.find("AMD") != std::string::npos) {
-            platform_index = i;
-            break;
+    if (platform_index == -1) {
+        platform_index = 0;
+        for (size_t i = 0; i < platforms.size(); i++) {
+            auto s = platforms[i].getInfo<CL_PLATFORM_VENDOR>();
+            if (s.find("NVIDIA") != std::string::npos || s.find("AMD") != std::string::npos) {
+                platform_index = (int)i;
+                break;
+            }
         }
     }
 
@@ -69,7 +71,11 @@ ray::ocl::Renderer::Renderer(int w, int h) : w_(w), h_(h), loaded_halton_(-1) {
 
     if (devices.empty()) throw std::runtime_error("Cannot create OpenCL renderer!");
 
-    device_ = cl::Device::setDefault(devices[0]);
+    if (device_index == -1) {
+        device_index = 0;
+    }
+
+    device_ = cl::Device::setDefault(devices[device_index]);
     if (device_ != devices[0]) throw std::runtime_error("Cannot create OpenCL renderer!");
 
     // get properties
@@ -1222,4 +1228,31 @@ bool ray::ocl::Renderer::SortRays(const cl::Buffer &in_rays, cl_int rays_count, 
     if (!kernel_ReorderRays(in_rays, scan_values, (cl_int)rays_count, out_rays)) return false;
 
     return true;
+}
+
+std::vector<ray::ocl::Platform> ray::ocl::Renderer::QueryPlatforms() {
+    std::vector<ray::ocl::Platform> out_platforms;
+
+    std::vector<cl::Platform> platforms;
+    cl::Platform::get(&platforms);
+
+    for (size_t i = 0; i < platforms.size(); i++) {
+        out_platforms.emplace_back();
+
+        auto v = platforms[i].getInfo<CL_PLATFORM_VENDOR>();
+        auto n = platforms[i].getInfo<CL_PLATFORM_NAME>();
+
+        out_platforms.back().vendor = v;
+        out_platforms.back().name = n;
+
+        std::vector<cl::Device> devices;
+        platforms[i].getDevices(CL_DEVICE_TYPE_GPU, &devices);
+
+        for (size_t j = 0; j < devices.size(); j++) {
+            auto n = devices[j].getInfo<CL_DEVICE_NAME>();
+            out_platforms.back().devices.push_back({ n });
+        }
+    }
+
+    return out_platforms;
 }

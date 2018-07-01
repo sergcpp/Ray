@@ -1,6 +1,10 @@
 #pragma once
 
 #include <cstdint>
+#if !defined(DISABLE_OCL)
+#include <string>
+#include <vector>
+#endif
 
 /**
   @file Types.h
@@ -36,4 +40,16 @@ struct camera_t {
           up[3];        ///< Up vector
 };
 static_assert(sizeof(camera_t) == 60, "!");
+
+#if !defined(DISABLE_OCL)
+namespace ocl {
+    struct Device {
+        std::string name;
+    };
+    struct Platform {
+        std::string vendor, name;
+        std::vector<Device> devices;
+    };
+}
+#endif
 }

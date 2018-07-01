@@ -13,10 +13,21 @@ namespace ray {
 /// Default renderer flags used to choose backend, by default tries to create gpu opencl renderer first
 const uint32_t default_renderer_flags = RendererRef | RendererSSE | RendererAVX | RendererNEON | RendererOCL;
 
+struct settings_t {
+    int w, h;
+#if !defined(DISABLE_OCL)
+    int platform_index = -1, device_index = -1;
+#endif
+};
+
 /** @brief Creates renderer
-    @param w initial image width
-    @param h initial image height
     @return shared pointer to created renderer
 */
-std::shared_ptr<RendererBase> CreateRenderer(int w, int h, uint32_t flags = default_renderer_flags, std::ostream &log_stream = std::cout);
+std::shared_ptr<RendererBase> CreateRenderer(const settings_t &s, uint32_t flags = default_renderer_flags, std::ostream &log_stream = std::cout);
+
+#if !defined(DISABLE_OCL)
+namespace ocl {
+    std::vector<Platform> QueryPlatforms();
+}
+#endif
 }

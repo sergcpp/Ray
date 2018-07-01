@@ -129,7 +129,7 @@ protected:
                   const cl::Buffer &scan_values, const cl::Buffer &scan_values2, const cl::Buffer &scan_values3, const cl::Buffer &scan_values4,
                   const cl::Buffer &chunks, const cl::Buffer &chunks2, const cl::Buffer &counters, const cl::Buffer &skeleton, const cl::Buffer &out_rays);
 public:
-    Renderer(int w, int h);
+    Renderer(int w, int h, int platform_index = -1, int device_index = -1);
     ~Renderer() override = default;
 
     eRendererType type() const override { return RendererOCL; }
@@ -150,6 +150,8 @@ public:
 
     void GetStats(stats_t &st) override { st = stats_; }
     void ResetStats() override { stats_ = { 0 }; }
+
+    static std::vector<Platform> QueryPlatforms();
 };
 }
 }
