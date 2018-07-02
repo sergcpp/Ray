@@ -64,7 +64,7 @@ ray::ocl::Renderer::Renderer(int w, int h, int platform_index, int device_index)
         }
     }
 
-    platform_ = cl::Platform::setDefault(platforms[platform_index]);
+    platform_ = platforms[platform_index];
 
     std::vector<cl::Device> devices;
     platform_.getDevices(CL_DEVICE_TYPE_GPU, &devices);
@@ -75,8 +75,8 @@ ray::ocl::Renderer::Renderer(int w, int h, int platform_index, int device_index)
         device_index = 0;
     }
 
-    device_ = cl::Device::setDefault(devices[device_index]);
-    if (device_ != devices[0]) throw std::runtime_error("Cannot create OpenCL renderer!");
+    device_ = devices[device_index];
+    //if (device_ != devices[0]) throw std::runtime_error("Cannot create OpenCL renderer!");
 
     // get properties
     max_compute_units_ = device_.getInfo<CL_DEVICE_MAX_COMPUTE_UNITS>();
@@ -1023,7 +1023,7 @@ bool ray::ocl::Renderer::ExclusiveScan_GPU(const cl::Buffer &values, cl_int coun
             if (!kernel_AddPartialSums(scan_values3, (cl_int)new_num2, scan_values4)) return false;
         }
 
-        if (!kernel_AddPartialSums(scan_values2, (cl_int)new_num, scan_values3)) return false;
+        if (!kernel_AddPartialSums(scan_values2, (cl_int)_new_num, scan_values3)) return false;
     }
 
     if (!kernel_AddPartialSums(out_scan_values, (cl_int)num, scan_values2)) return false;
