@@ -137,7 +137,7 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
 
     // resolve mix material
     while (mat->type == MixMaterial) {
-        const float4 mix = SampleTextureAnisotropic(texture_atlas, &textures[mat->textures[MAIN_TEXTURE]], uvs, duv_dx, duv_dy);
+        const float4 mix = SampleTextureAnisotropic(texture_atlas, &textures[mat->textures[MAIN_TEXTURE]], uvs, duv_dx, duv_dy) * mat->strength;
         const float r = halton[hi * 2];
 
         // shlick fresnel
