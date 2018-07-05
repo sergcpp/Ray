@@ -857,7 +857,7 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
 
     // resolve mix material
     while (mat->type == MixMaterial) {
-        const auto mix = SampleAnisotropic(tex_atlas, textures[mat->textures[MAIN_TEXTURE]], uvs, duv_dx, duv_dy);
+        const auto mix = SampleAnisotropic(tex_atlas, textures[mat->textures[MAIN_TEXTURE]], uvs, duv_dx, duv_dy) * mat->strength;
         const float r = halton[hi * 2];
 
         // shlick fresnel
