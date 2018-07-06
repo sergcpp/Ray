@@ -27,6 +27,7 @@ ray::ocl::Scene::Scene(const cl::Context &context, const cl::CommandQueue &queue
     t.data = &default_normalmap;
     t.w = 1;
     t.h = 1;
+    t.generate_mipmaps = false;
 
     default_normals_texture_ = AddTexture(t);
 
@@ -77,11 +78,16 @@ uint32_t ray::ocl::Scene::AddTexture(const tex_desc_t &_t) {
         t.pos[mip][0] = (uint16_t)pos[0];
         t.pos[mip][1] = (uint16_t)pos[1];
 
-        tex_data = ref::DownsampleTexture(tex_data, res);
-
-        res[0] /= 2;
-        res[1] /= 2;
         mip++;
+
+        if (_t.generate_mipmaps) {
+            tex_data = ref::DownsampleTexture(tex_data, res);
+
+            res[0] /= 2;
+            res[1] /= 2;
+        } else {
+            break;
+        }
     }
 
     // fill remaining mip levels with the last one

@@ -1331,7 +1331,7 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
 
             simd_fvec<S> tex_normal[4], tex_albedo[4];
 
-            SampleAnisotropic(tex_atlas, textures[mat->textures[NORMALS_TEXTURE]], uvs, duv_dx, duv_dy, same_mi, tex_normal);
+            SampleBilinear(tex_atlas, textures[mat->textures[NORMALS_TEXTURE]], uvs, { 0 }, same_mi, tex_normal);
 
             tex_normal[0] = tex_normal[0] * 2.0f - 1.0f;
             tex_normal[1] = tex_normal[1] * 2.0f - 1.0f;

@@ -2,6 +2,17 @@ R"(
 
 __constant sampler_t TEX_SAMPLER = CLK_NORMALIZED_COORDS_TRUE | CLK_ADDRESS_CLAMP | CLK_FILTER_LINEAR;
 
+float4 SampleTextureBilinear(__read_only image2d_array_t texture_atlas, __global const texture_t *texture,
+                              const float2 uvs, int lod) {
+    const float2 tex_atlas_size = (float2)(get_image_width(texture_atlas), get_image_height(texture_atlas));
+    
+    const float2 uvs1 = TransformUVs(uvs, tex_atlas_size, texture, lod);
+
+    float4 coord1 = (float4)(uvs1, (float)texture->page[lod], 0);
+
+    return read_imagef(texture_atlas, TEX_SAMPLER, coord1);
+}
+
 float4 SampleTextureTrilinear(__read_only image2d_array_t texture_atlas, __global const texture_t *texture,
                               const float2 uvs, float lod) {
     const float2 tex_atlas_size = (float2)(get_image_width(texture_atlas), get_image_height(texture_atlas));

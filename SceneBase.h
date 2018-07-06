@@ -73,6 +73,7 @@ struct tex_desc_t {
     const pixel_color8_t *data;     ///< Single byte RGBA pixel data
     int w,                          ///< Texture width
         h;                          ///< Texture height
+    bool generate_mipmaps;
 };
 
 /// Environment description

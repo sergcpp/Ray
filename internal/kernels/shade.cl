@@ -88,7 +88,7 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
     const int _iw = tri->ci & TRI_W_BITS;
     float dot_I_N = -I.y * tri->nu - I.z * tri->nv - I.x;
     if (_iw == 1) {
-        dot_I_N = -I.z * tri->nu - I.x * tri->nv - I.y;
+        dot_I_N = -I.x * tri->nu - I.z * tri->nv - I.y;
     } else if (_iw == 2) {
         dot_I_N = -I.x * tri->nu - I.y * tri->nv - I.z;
     }
@@ -144,7 +144,7 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
 
     // resolve mix material
     while (mat->type == MixMaterial) {
-        const float4 mix = SampleTextureAnisotropic(texture_atlas, &textures[mat->textures[MAIN_TEXTURE]], uvs, duv_dx, duv_dy) * mat->strength;
+        const float4 mix = SampleTextureBilinear(texture_atlas, &textures[mat->textures[MAIN_TEXTURE]], uvs, 0) * mat->strength;
         const float r = halton[hi * 2];
 
         // shlick fresnel
@@ -177,7 +177,7 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
     float3 B = b1 * _w + b2 * inter->u + b3 * inter->v;
     float3 T = cross(B, N);
 
-    float4 normals = SampleTextureAnisotropic(texture_atlas, &textures[mat->textures[NORMALS_TEXTURE]], uvs, duv_dx, duv_dy);
+    float4 normals = SampleTextureBilinear(texture_atlas, &textures[mat->textures[NORMALS_TEXTURE]], uvs, 0);
 
     normals = 2.0f * normals - 1.0f;
 
