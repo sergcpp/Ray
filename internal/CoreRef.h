@@ -35,8 +35,8 @@ struct ray_packet_t {
     rays_id_t id;
     // origin and direction
     float o[3], d[3];
-    // color of ray
-    float c[3];
+    // color of ray and ior of medium
+    float c[3], ior;
     // derivatives
     float do_dx[3], dd_dx[3], do_dy[3], dd_dy[3];
 };

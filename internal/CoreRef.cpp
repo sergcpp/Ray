@@ -217,6 +217,7 @@ void ray::ref::GeneratePrimaryRays(int iteration, const camera_t &cam, const rec
 
             out_r.id.x = (uint16_t)x;
             out_r.id.y = (uint16_t)y;
+            out_r.ior = 1.0f;
         }
     }
 }
@@ -959,6 +960,7 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
         ray_packet_t r;
 
         r.id = ray.id;
+        r.ior = ray.ior;
 
         memcpy(&r.o[0], value_ptr(P + HIT_BIAS * N), 3 * sizeof(float));
         memcpy(&r.d[0], value_ptr(V), 3 * sizeof(float));
@@ -991,6 +993,7 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
         ray_packet_t r;
 
         r.id = ray.id;
+        r.ior = ray.ior;
 
         memcpy(&r.o[0], value_ptr(P + HIT_BIAS * N), 3 * sizeof(float));
         memcpy(&r.d[0], value_ptr(V), 3 * sizeof(float));
@@ -1009,12 +1012,13 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
     } else if (mat->type == RefractiveMaterial) {
         const auto __N = dot(I, N) > 0 ? -N : N;
 
-        float eta = 1.0f / mat->ior;
+        float eta = ray.ior / mat->ior;
+        if (dot(I, N) > 0) eta = ray.ior;
         float cosi = dot(-I, __N);
         float cost2 = 1.0f - eta * eta * (1.0f - cosi * cosi);
         float m = eta * cosi - std::sqrt(std::abs(cost2));
         auto V = eta * I + m * __N;
-        if (cost2 < 0) V = 0.0f;
+        if (cost2 < 0) return pixel_color_t{ 0.0f, 0.0f, 0.0f, 1.0f };
 
         // ** REFACTOR THIS **
 
@@ -1038,6 +1042,7 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
         ray_packet_t r;
 
         r.id = ray.id;
+        r.ior = mat->ior;
 
         memcpy(&r.o[0], value_ptr(P + HIT_BIAS * I), 3 * sizeof(float));
         memcpy(&r.d[0], value_ptr(V), 3 * sizeof(float));
@@ -1059,6 +1064,7 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
         ray_packet_t r;
 
         r.id = ray.id;
+        r.ior = ray.ior;
 
         memcpy(&r.o[0], value_ptr(P + HIT_BIAS * I), 3 * sizeof(float));
         memcpy(&r.d[0], &ray.d[0], 3 * sizeof(float));

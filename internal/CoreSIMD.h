@@ -28,8 +28,8 @@ struct ray_packet_t {
     simd_fvec<S> d[3];
     // origins of rays in packet
     simd_fvec<S> o[3];
-    // color of ray
-    simd_fvec<S> c[3];
+    // color of ray and ior of medium
+    simd_fvec<S> c[4];
     // derivatives
     simd_fvec<S> do_dx[3], dd_dx[3], do_dy[3], dd_dy[3];
     // 16-bit pixel coordinates of rays in packet ((x << 16) | y)
@@ -443,6 +443,7 @@ void ray::NS::GeneratePrimaryRays(const int iteration, const camera_t &cam, cons
                 out_r.dd_dy[j] = _dy[j] - out_r.d[j];
             }
 
+            out_r.c[3] = { 1.0f };
             out_r.xy = (ixx << 16) | iyy;
         }
     }

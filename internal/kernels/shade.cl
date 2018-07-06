@@ -49,7 +49,7 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
 
     if (!inter->mask) {
         // TODO: sample environment map or spherical garm.
-        return (float4)(orig_ray->c * env.sky_col, 1);
+        return (float4)(orig_ray->c.xyz * env.sky_col, 1);
     }
 
     const float3 I = orig_ray->d.xyz;
@@ -231,13 +231,14 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
         ray_packet_t r;
         r.o = (float4)(P + HIT_BIAS * N, (float)x);
         r.d = (float4)(V, (float)y);
-        r.c = orig_ray->c * z * albedo.xyz;
+        r.c = orig_ray->c;
+        r.c.xyz *= z * albedo.xyz;
         r.do_dx = do_dx;
         r.do_dy = do_dy;
         r.dd_dx = dd_dx - 2 * (dot(I, N) * dndx + ddn_dx * N);
         r.dd_dy = dd_dy - 2 * (dot(I, N) * dndy + ddn_dy * N);
 
-        if (dot(r.c, r.c) > 0.005f) {
+        if (dot(r.c.xyz, r.c.xyz) > 0.005f) {
             const int index = atomic_inc(out_secondary_rays_count);
             out_secondary_rays[index] = r;
         }
@@ -260,13 +261,14 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
         ray_packet_t r;
         r.o = (float4)(P + HIT_BIAS * N, (float)x);
         r.d = (float4)(V, (float)y);
-        r.c = z * orig_ray->c;
+        r.c = orig_ray->c;
+        r.c.xyz *= z;
         r.do_dx = do_dx;
         r.do_dy = do_dy;
         r.dd_dx = dd_dx - 2 * (dot(I, N) * dndx + ddn_dx * N);
         r.dd_dy = dd_dy - 2 * (dot(I, N) * dndy + ddn_dy * N);
 
-        if (dot(r.c, r.c) > 0.005f) {
+        if (dot(r.c.xyz, r.c.xyz) > 0.005f) {
             const int index = atomic_inc(out_secondary_rays_count);
             out_secondary_rays[index] = r;
         }
@@ -275,7 +277,8 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
 
         const float3 _N = dot(I, N) > 0 ? -N : N;
 
-        float eta = 1.0f / mat->ior;
+        float eta = orig_ray->c.w / mat->ior;
+        if (dot(I, N) > 0) eta = mat->ior;
         float cosi = dot(-I, _N);
         float cost2 = 1.0f - eta * eta * (1.0f - cosi * cosi);
         float m = eta * cosi - sqrt(fabs(cost2));
@@ -304,13 +307,14 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
         ray_packet_t r;
         r.o = (float4)(P + HIT_BIAS * I, (float)x);
         r.d = (float4)(V, (float)y);
-        r.c = z * orig_ray->c;
+        r.c = orig_ray->c;
+        r.c.xyz *= z;
         r.do_dx = do_dx;
         r.do_dy = do_dy;
         r.dd_dx = eta * dd_dx - (m * dndx + dmdx * N);
         r.dd_dy = eta * dd_dy - (m * dndy + dmdy * N);
 
-        if (dot(r.c, r.c) > 0.005f) {
+        if (dot(r.c.xyz, r.c.xyz) > 0.005f) {
             const int index = atomic_inc(out_secondary_rays_count);
             out_secondary_rays[index] = r;
         }
@@ -328,7 +332,7 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
         r.dd_dx = dd_dx;
         r.dd_dy = dd_dy;
 
-        if (dot(r.c, r.c) > 0.005f) {
+        if (dot(r.c.xyz, r.c.xyz) > 0.005f) {
             const int index = atomic_inc(out_secondary_rays_count);
             out_secondary_rays[index] = r;
         }
@@ -336,7 +340,7 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
 
     //////////////////////////////////////////
 
-    return (float4)(orig_ray->c * col, 1);
+    return (float4)(orig_ray->c.xyz * col, 1);
 }
 
 __kernel

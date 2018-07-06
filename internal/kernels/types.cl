@@ -4,7 +4,7 @@ R"(
 
 typedef struct _ray_packet_t {
     float4 o, d;
-    float3 c;
+    float4 c;
     float3 do_dx, dd_dx, do_dy, dd_dy;
 } ray_packet_t;
 
