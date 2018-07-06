@@ -1145,6 +1145,8 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
 
     simd_fvec<S> inv_xform1[3], inv_xform2[3], inv_xform3[3];
 
+    simd_fvec<S> dot_I_N;
+
     for (int i = 0; i < S; i++) {
         if (ino_hit[i]) continue;
 
@@ -1168,8 +1170,14 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
         b2[0][i] = v2.b[0]; b2[1][i] = v2.b[1]; b2[2][i] = v2.b[2];
         b3[0][i] = v3.b[0]; b3[1][i] = v3.b[1]; b3[2][i] = v3.b[2];
 
-        uint32_t mi = tris[inter.prim_index[i]].mi;
+        const auto &tri = tris[inter.prim_index[i]];
+        uint32_t mi = tri.mi;
         mat_index[i] = reinterpret_cast<const int&>(mi);
+
+        const int _next_u[] = { 1, 0, 0 }, _next_v[] = { 2, 2, 1 };
+        int32_t _iw = tri.ci & TRI_W_BITS;
+
+        dot_I_N[i] = -I[_next_u[_iw]][i] * tri.nu - I[_next_v[_iw]][i] * tri.nv - I[_iw][i];
 
         const auto *tr = &transforms[mesh_instances[inter.obj_index[i]].tr_index];
 
@@ -1189,7 +1197,6 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
 
     simd_fvec<S> temp[3];
 
-    simd_fvec<S> dot_I_N = dot(I, N);
     simd_fvec<S> inv_dot = 1.0f / dot_I_N;
     where(abs(dot_I_N) < FLT_EPS, inv_dot) = { 0.0f };
 

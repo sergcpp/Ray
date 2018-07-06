@@ -85,9 +85,16 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
     const float3 p2 = (float3)(v2->p[0], v2->p[1], v2->p[2]);
     const float3 p3 = (float3)(v3->p[0], v3->p[1], v3->p[2]);
 
+    const int _iw = tri->ci & TRI_W_BITS;
+    float dot_I_N = -I.y * tri->nu - I.z * tri->nv - I.x;
+    if (_iw == 1) {
+        dot_I_N = -I.z * tri->nu - I.x * tri->nv - I.y;
+    } else if (_iw == 2) {
+        dot_I_N = -I.x * tri->nu - I.y * tri->nv - I.z;
+    }
+
     // From 'Tracing Ray Differentials' [1999]
 
-    float dot_I_N = dot(I, N);
     float inv_dot = fabs(dot_I_N) < FLT_EPS ? 0.0f : 1.0f/dot_I_N;
     float dt_dx = -dot(orig_ray->do_dx + inter->t * orig_ray->dd_dx, N) * inv_dot;
     float dt_dy = -dot(orig_ray->do_dy + inter->t * orig_ray->dd_dy, N) * inv_dot;

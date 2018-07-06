@@ -807,9 +807,13 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
     const auto p2 = simd_fvec3(v2.p);
     const auto p3 = simd_fvec3(v3.p);
 
+    const int _next_u[] = { 1, 0, 0 }, _next_v[] = { 2, 2, 1 };
+
+    const int _iw = tri.ci & TRI_W_BITS;
+
     // From 'Tracing Ray Differentials' [1999]
 
-    float dot_I_N = dot(I, N);
+    float dot_I_N = -I[_next_u[_iw]] * tri.nu - I[_next_v[_iw]] * tri.nv - I[_iw];
     float inv_dot = std::abs(dot_I_N) < FLT_EPS ? 0.0f : 1.0f/dot_I_N;
     float dt_dx = -dot(simd_fvec3(ray.do_dx) + inter.t * simd_fvec3(ray.dd_dx), N) * inv_dot;
     float dt_dy = -dot(simd_fvec3(ray.do_dy) + inter.t * simd_fvec3(ray.dd_dy), N) * inv_dot;
