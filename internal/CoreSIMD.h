@@ -1014,21 +1014,21 @@ void ray::NS::SampleTrilinear(const ref::TextureAtlas &atlas, const texture_t &t
 
 template <int S>
 void ray::NS::SampleAnisotropic(const ref::TextureAtlas &atlas, const texture_t &t, const simd_fvec<S> uvs[2], const simd_fvec<S> duv_dx[2], const simd_fvec<S> duv_dy[2], const simd_ivec<S> &mask, simd_fvec<S> out_rgba[4]) {
-    simd_fvec<S> temp1 = duv_dx[0] * (float)t.size[0];
-    simd_fvec<S> temp2 = duv_dx[1] * (float)t.size[1];
+    simd_fvec<S> _duv_dx[2] = { abs(duv_dx[0] * (float)t.size[0]),
+                                abs(duv_dx[1] * (float)t.size[1]) };
 
-    simd_fvec<S> l1 = sqrt(temp1 * temp1 + temp2 * temp2);
+    simd_fvec<S> l1 = sqrt(_duv_dx[0] * _duv_dx[0] + _duv_dx[1] * _duv_dx[1]);
 
-    temp1 = duv_dy[0] * (float)t.size[0];
-    temp2 = duv_dy[1] * (float)t.size[1];
+    simd_fvec<S> _duv_dy[2] = { abs(duv_dy[0] * (float)t.size[0]),
+                                abs(duv_dy[1] * (float)t.size[1]) };
 
-    simd_fvec<S> l2 = sqrt(temp1 * temp1 + temp2 * temp2);
+    simd_fvec<S> l2 = sqrt(_duv_dy[0] * _duv_dy[0] + _duv_dy[1] * _duv_dy[1]);
 
     simd_fvec<S> lod,
                  k = l2 / l1,
                  step[2] = { duv_dx[0], duv_dx[1] };
 
-    ITERATE(S, { lod[i] = log2(l2[i]); })
+    ITERATE(S, { lod[i] = log2(std::min(_duv_dy[0][i], _duv_dy[1][i])); })
 
     auto _mask = l1 <= l2;
     where(_mask, k) = l1 / l2;
@@ -1037,7 +1037,7 @@ void ray::NS::SampleAnisotropic(const ref::TextureAtlas &atlas, const texture_t 
 
     ITERATE(S, {
         if (reinterpret_cast<const simd_ivec<S>&>(_mask)[i]) {
-            lod[i] = log2(l1[i]);
+            lod[i] = log2(std::min(_duv_dx[0][i], _duv_dx[1][i]));
         }
     })
 
@@ -1145,7 +1145,7 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
 
     simd_fvec<S> inv_xform1[3], inv_xform2[3], inv_xform3[3];
 
-    simd_fvec<S> dot_I_N;
+    simd_fvec<S> plane_N[3];
 
     for (int i = 0; i < S; i++) {
         if (ino_hit[i]) continue;
@@ -1177,7 +1177,11 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
         const int _next_u[] = { 1, 0, 0 }, _next_v[] = { 2, 2, 1 };
         int32_t _iw = tri.ci & TRI_W_BITS;
 
-        dot_I_N[i] = -I[_next_u[_iw]][i] * tri.nu - I[_next_v[_iw]][i] * tri.nv - I[_iw][i];
+        float l = std::sqrt(1.0f + tri.nu * tri.nu + tri.nv * tri.nv);
+
+        plane_N[_iw][i] = 1.0f / l;
+        plane_N[_next_u[_iw]][i] = tri.nu / l;
+        plane_N[_next_v[_iw]][i] = tri.nv / l;
 
         const auto *tr = &transforms[mesh_instances[inter.obj_index[i]].tr_index];
 
@@ -1197,6 +1201,7 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
 
     simd_fvec<S> temp[3];
 
+    simd_fvec<S> dot_I_N = -dot(I, plane_N);
     simd_fvec<S> inv_dot = 1.0f / dot_I_N;
     where(abs(dot_I_N) < FLT_EPS, inv_dot) = { 0.0f };
 
@@ -1238,7 +1243,7 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
     simd_fvec<S> Bx[2] = { do_dx[0], do_dx[1] };
     simd_fvec<S> By[2] = { do_dy[0], do_dy[1] };
 
-    auto mask1 = abs(N[0]) > abs(N[1]) & abs(N[0]) > abs(N[2]);
+    auto mask1 = abs(plane_N[0]) > abs(plane_N[1]) & abs(plane_N[0]) > abs(plane_N[2]);
     where(mask1, A[0][0]) = dpdu[1];
     where(mask1, A[0][1]) = dpdu[2];
     where(mask1, A[1][0]) = dpdv[1];
@@ -1248,7 +1253,7 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
     where(mask1, By[0]) = do_dy[1];
     where(mask1, By[1]) = do_dy[2];
 
-    auto mask2 = abs(N[1]) > abs(N[0]) & abs(N[1]) > abs(N[2]);
+    auto mask2 = abs(plane_N[1]) > abs(plane_N[0]) & abs(plane_N[1]) > abs(plane_N[2]);
     where(mask2, A[0][1]) = dpdu[2];
     where(mask2, A[1][1]) = dpdv[2];
     where(mask2, Bx[1]) = do_dx[2];
@@ -1281,8 +1286,8 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
                              dndu[1] * duv_dy[0] + dndv[1] * duv_dy[1],
                              dndu[2] * duv_dy[0] + dndv[2] * duv_dy[1] };
 
-    simd_fvec<S> ddn_dx = dot(dd_dx, N) + dot(I, dndx);
-    simd_fvec<S> ddn_dy = dot(dd_dy, N) + dot(I, dndy);
+    simd_fvec<S> ddn_dx = dot(dd_dx, plane_N) + dot(I, dndx);
+    simd_fvec<S> ddn_dy = dot(dd_dy, plane_N) + dot(I, dndy);
 
     ////////////////////////////////////////////////////////
 

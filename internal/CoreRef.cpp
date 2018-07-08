@@ -709,18 +709,21 @@ ray::ref::simd_fvec4 ray::ref::SampleTrilinear(const TextureAtlas &atlas, const 
 ray::ref::simd_fvec4 ray::ref::SampleAnisotropic(const TextureAtlas &atlas, const texture_t &t, const simd_fvec2 &uvs, const simd_fvec2 &duv_dx, const simd_fvec2 &duv_dy) {
     simd_fvec2 sz = { (float)t.size[0], (float)t.size[1] };
 
-    float l1 = length(duv_dx * sz);
-    float l2 = length(duv_dy * sz);
+    simd_fvec2 _duv_dx = abs(duv_dx * sz);
+    simd_fvec2 _duv_dy = abs(duv_dy * sz);
+
+    float l1 = length(_duv_dx);
+    float l2 = length(_duv_dy);
 
     float lod, k;
     simd_fvec2 step;
 
     if (l1 <= l2) {
-        lod = log2(l1);
+        lod = log2(std::min(_duv_dx[0], _duv_dx[1]));
         k = l1 / l2;
         step = duv_dy;
     } else {
-        lod = log2(l2);
+        lod = log2(std::min(_duv_dy[0], _duv_dy[1]));
         k = l2 / l1;
         step = duv_dx;
     }
@@ -810,10 +813,15 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
     const int _next_u[] = { 1, 0, 0 }, _next_v[] = { 2, 2, 1 };
 
     const int _iw = tri.ci & TRI_W_BITS;
+    simd_fvec3 plane_N;
+    plane_N[_iw] = 1.0f;
+    plane_N[_next_u[_iw]] = tri.nu;
+    plane_N[_next_v[_iw]] = tri.nv;
+    plane_N = normalize(plane_N);
 
     // From 'Tracing Ray Differentials' [1999]
 
-    float dot_I_N = -I[_next_u[_iw]] * tri.nu - I[_next_v[_iw]] * tri.nv - I[_iw];
+    float dot_I_N = dot(-I, plane_N);
     float inv_dot = std::abs(dot_I_N) < FLT_EPS ? 0.0f : 1.0f/dot_I_N;
     float dt_dx = -dot(simd_fvec3(ray.do_dx) + inter.t * simd_fvec3(ray.dd_dx), N) * inv_dot;
     float dt_dy = -dot(simd_fvec3(ray.do_dy) + inter.t * simd_fvec3(ray.dd_dy), N) * inv_dot;
@@ -839,12 +847,12 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
     simd_fvec2 Bx = { do_dx[0], do_dx[1] };
     simd_fvec2 By = { do_dy[0], do_dy[1] };
 
-    if (std::abs(N[0]) > std::abs(N[1]) && std::abs(N[0]) > std::abs(N[2])) {
+    if (std::abs(plane_N[0]) > std::abs(plane_N[1]) && std::abs(plane_N[0]) > std::abs(plane_N[2])) {
         A[0] = { dpdu[1], dpdu[2] };
         A[1] = { dpdv[1], dpdv[2] };
         Bx = { do_dx[1], do_dx[2] };
         By = { do_dy[1], do_dy[2] };
-    } else if (std::abs(N[1]) > std::abs(N[2])) {
+    } else if (std::abs(plane_N[1]) > std::abs(plane_N[2])) {
         A[0] = { dpdu[0], dpdu[2] };
         A[1] = { dpdv[0], dpdv[2] };
         Bx = { do_dx[0], do_dx[2] };
@@ -883,8 +891,8 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
     const auto dndx = dndu * duv_dx[0] + dndv * duv_dx[1];
     const auto dndy = dndu * duv_dy[0] + dndv * duv_dy[1];
 
-    const float ddn_dx = dot(dd_dx, N) + dot(I, dndx);
-    const float ddn_dy = dot(dd_dy, N) + dot(I, dndy);
+    const float ddn_dx = dot(dd_dx, plane_N) + dot(I, dndx);
+    const float ddn_dy = dot(dd_dy, plane_N) + dot(I, dndy);
 
     ////////////////////////////////////////////////////////
 
@@ -973,8 +981,8 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
         memcpy(&r.do_dx[0], value_ptr(do_dx), 3 * sizeof(float));
         memcpy(&r.do_dy[0], value_ptr(do_dy), 3 * sizeof(float));
 
-        memcpy(&r.dd_dx[0], value_ptr(dd_dx - 2 * (dot(I, N) * dndx + ddn_dx * N)), 3 * sizeof(float));
-        memcpy(&r.dd_dy[0], value_ptr(dd_dy - 2 * (dot(I, N) * dndy + ddn_dy * N)), 3 * sizeof(float));
+        memcpy(&r.dd_dx[0], value_ptr(dd_dx - 2 * (dot(I, plane_N) * dndx + ddn_dx * plane_N)), 3 * sizeof(float));
+        memcpy(&r.dd_dy[0], value_ptr(dd_dy - 2 * (dot(I, plane_N) * dndy + ddn_dy * plane_N)), 3 * sizeof(float));
 
         if ((r.c[0] * r.c[0] + r.c[1] * r.c[1] + r.c[2] * r.c[2]) > 0.005f) {
             const int index = (*out_secondary_rays_count)++;
@@ -1006,8 +1014,8 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
         memcpy(&r.do_dx[0], value_ptr(do_dx), 3 * sizeof(float));
         memcpy(&r.do_dy[0], value_ptr(do_dy), 3 * sizeof(float));
 
-        memcpy(&r.dd_dx[0], value_ptr(dd_dx - 2 * (dot(I, N) * dndx + ddn_dx * N)), 3 * sizeof(float));
-        memcpy(&r.dd_dy[0], value_ptr(dd_dy - 2 * (dot(I, N) * dndy + ddn_dy * N)), 3 * sizeof(float));
+        memcpy(&r.dd_dx[0], value_ptr(dd_dx - 2 * (dot(I, plane_N) * dndx + ddn_dx * plane_N)), 3 * sizeof(float));
+        memcpy(&r.dd_dy[0], value_ptr(dd_dy - 2 * (dot(I, plane_N) * dndy + ddn_dy * plane_N)), 3 * sizeof(float));
 
         if ((r.c[0] * r.c[0] + r.c[1] * r.c[1] + r.c[2] * r.c[2]) > 0.005f) {
             const int index = (*out_secondary_rays_count)++;
@@ -1020,11 +1028,9 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
         if (dot(I, N) > 0) eta = ray.ior;
         float cosi = dot(-I, __N);
         float cost2 = 1.0f - eta * eta * (1.0f - cosi * cosi);
-        float m = eta * cosi - std::sqrt(std::abs(cost2));
-        auto V = eta * I + m * __N;
         if (cost2 < 0) return pixel_color_t{ 0.0f, 0.0f, 0.0f, 1.0f };
-
-        // ** REFACTOR THIS **
+        float m = eta * cosi - std::sqrt(cost2);
+        auto V = eta * I + m * __N;
 
         const float z = 1.0f - halton[hi * 2] * mat->roughness;
         const float temp = std::sqrt(1.0f - z * z);
@@ -1039,7 +1045,7 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
 
         //////////////////
 
-        float k = (eta - eta * eta * dot(I, N) / dot(V, N));
+        float k = (eta - eta * eta * dot(I, plane_N) / dot(V, plane_N));
         float dmdx = k * ddn_dx;
         float dmdy = k * ddn_dy;
 
@@ -1055,8 +1061,8 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
         memcpy(&r.do_dx[0], value_ptr(do_dx), 3 * sizeof(float));
         memcpy(&r.do_dy[0], value_ptr(do_dy), 3 * sizeof(float));
 
-        memcpy(&r.dd_dx[0], value_ptr(eta * dd_dx - (m * dndx + dmdx * N)), 3 * sizeof(float));
-        memcpy(&r.dd_dy[0], value_ptr(eta * dd_dy - (m * dndy + dmdy * N)), 3 * sizeof(float));
+        memcpy(&r.dd_dx[0], value_ptr(eta * dd_dx - (m * dndx + dmdx * plane_N)), 3 * sizeof(float));
+        memcpy(&r.dd_dy[0], value_ptr(eta * dd_dy - (m * dndy + dmdy * plane_N)), 3 * sizeof(float));
 
         if ((r.c[0] * r.c[0] + r.c[1] * r.c[1] + r.c[2] * r.c[2]) > 0.005f) {
             const int index = (*out_secondary_rays_count)++;

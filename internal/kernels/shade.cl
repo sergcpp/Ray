@@ -86,18 +86,21 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
     const float3 p3 = (float3)(v3->p[0], v3->p[1], v3->p[2]);
 
     const int _iw = tri->ci & TRI_W_BITS;
-    float dot_I_N = -I.y * tri->nu - I.z * tri->nv - I.x;
+    float3 plane_N = (float3)(1.0f, tri->nu, tri->nv);
     if (_iw == 1) {
-        dot_I_N = -I.x * tri->nu - I.z * tri->nv - I.y;
+        plane_N = (float3)(tri->nu, 1.0f, tri->nv);
     } else if (_iw == 2) {
-        dot_I_N = -I.x * tri->nu - I.y * tri->nv - I.z;
+        plane_N = (float3)(tri->nu, tri->nv, 1.0f);
     }
+    plane_N = fast_normalize(plane_N);
+
+    float dot_I_N = dot(-I, plane_N);
 
     // From 'Tracing Ray Differentials' [1999]
 
     float inv_dot = fabs(dot_I_N) < FLT_EPS ? 0.0f : 1.0f/dot_I_N;
-    float dt_dx = -dot(orig_ray->do_dx + inter->t * orig_ray->dd_dx, N) * inv_dot;
-    float dt_dy = -dot(orig_ray->do_dy + inter->t * orig_ray->dd_dy, N) * inv_dot;
+    float dt_dx = -dot(orig_ray->do_dx + inter->t * orig_ray->dd_dx, plane_N) * inv_dot;
+    float dt_dy = -dot(orig_ray->do_dy + inter->t * orig_ray->dd_dy, plane_N) * inv_dot;
     
     const float3 do_dx = (orig_ray->do_dx + inter->t * orig_ray->dd_dx) + dt_dx * I;
     const float3 do_dy = (orig_ray->do_dy + inter->t * orig_ray->dd_dy) + dt_dy * I;
@@ -120,12 +123,12 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
     float2 Bx = do_dx.xy;
     float2 By = do_dy.xy;
 
-    if (fabs(N.x) > fabs(N.y) && fabs(N.x) > fabs(N.z)) {
+    if (fabs(plane_N.x) > fabs(plane_N.y) && fabs(plane_N.x) > fabs(plane_N.z)) {
         A[0] = dpdu.yz;
         A[1] = dpdv.yz;
         Bx = do_dx.yz;
         By = do_dy.yz;
-    } else if (fabs(N.y) > fabs(N.z)) {
+    } else if (fabs(plane_N.y) > fabs(plane_N.z)) {
         A[0] = dpdu.xz;
         A[1] = dpdv.xz;
         Bx = do_dx.xz;
@@ -154,8 +157,6 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
         mat = (r * RR < mix.x) ? &materials[mat->textures[MIX_MAT1]] : &materials[mat->textures[MIX_MAT2]];
     }
 
-    ////////////////////////////////////////////////////////
-
     // Derivative for normal
 
     const float3 dn1 = n1 - n3, dn2 = n2 - n3;
@@ -165,10 +166,10 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
     const float3 dndx = dndu * duv_dx.x + dndv * duv_dx.y;
     const float3 dndy = dndu * duv_dy.x + dndv * duv_dy.y;
 
-    const float ddn_dx = dot(dd_dx, N) + dot(I, dndx);
-    const float ddn_dy = dot(dd_dy, N) + dot(I, dndy);
+    const float ddn_dx = dot(dd_dx, plane_N) + dot(I, dndx);
+    const float ddn_dy = dot(dd_dy, plane_N) + dot(I, dndy);
 
-    ////////////////////////////////////////////////////////
+    //
 
     const float3 b1 = (float3)(v1->b[0], v1->b[1], v1->b[2]);
     const float3 b2 = (float3)(v2->b[0], v2->b[1], v2->b[2]);
@@ -242,8 +243,8 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
         r.c.xyz *= z * albedo.xyz;
         r.do_dx = do_dx;
         r.do_dy = do_dy;
-        r.dd_dx = dd_dx - 2 * (dot(I, N) * dndx + ddn_dx * N);
-        r.dd_dy = dd_dy - 2 * (dot(I, N) * dndy + ddn_dy * N);
+        r.dd_dx = dd_dx - 2 * (dot(I, plane_N) * dndx + ddn_dx * plane_N);
+        r.dd_dy = dd_dy - 2 * (dot(I, plane_N) * dndy + ddn_dy * plane_N);
 
         if (dot(r.c.xyz, r.c.xyz) > 0.005f) {
             const int index = atomic_inc(out_secondary_rays_count);
@@ -272,8 +273,8 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
         r.c.xyz *= z;
         r.do_dx = do_dx;
         r.do_dy = do_dy;
-        r.dd_dx = dd_dx - 2 * (dot(I, N) * dndx + ddn_dx * N);
-        r.dd_dy = dd_dy - 2 * (dot(I, N) * dndy + ddn_dy * N);
+        r.dd_dx = dd_dx - 2 * (dot(I, plane_N) * dndx + ddn_dx * plane_N);
+        r.dd_dy = dd_dy - 2 * (dot(I, plane_N) * dndy + ddn_dy * plane_N);
 
         if (dot(r.c.xyz, r.c.xyz) > 0.005f) {
             const int index = atomic_inc(out_secondary_rays_count);
@@ -285,14 +286,11 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
         const float3 _N = dot(I, N) > 0 ? -N : N;
 
         float eta = orig_ray->c.w / mat->ior;
-        if (dot(I, N) > 0) eta = mat->ior;
+        if (dot(I, N) > 0) eta = orig_ray->c.w;
         float cosi = dot(-I, _N);
         float cost2 = 1.0f - eta * eta * (1.0f - cosi * cosi);
-        float m = eta * cosi - sqrt(fabs(cost2));
+        float m = eta * cosi - sqrt(cost2);
         float3 V = eta * I + m * _N;
-        V *= (float3)(cost2 > 0);
-
-        // ** REFACTOR THIS **
 
         const float z = 1.0f - halton[hi * 2] * mat->roughness;
         const float temp = native_sqrt(1.0f - z * z);
@@ -307,7 +305,7 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
 
         //////////////////
 
-        float k = (eta - eta * eta * dot(I, N) / dot(V, N));
+        float k = (eta - eta * eta * dot(I, plane_N) / dot(V, plane_N));
         float dmdx = k * ddn_dx;
         float dmdy = k * ddn_dy;
 
@@ -318,10 +316,10 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
         r.c.xyz *= z;
         r.do_dx = do_dx;
         r.do_dy = do_dy;
-        r.dd_dx = eta * dd_dx - (m * dndx + dmdx * N);
-        r.dd_dy = eta * dd_dy - (m * dndy + dmdy * N);
+        r.dd_dx = eta * dd_dx - (m * dndx + dmdx * plane_N);
+        r.dd_dy = eta * dd_dy - (m * dndy + dmdy * plane_N);
 
-        if (dot(r.c.xyz, r.c.xyz) > 0.005f) {
+        if (cost2 >= 0 && dot(r.c.xyz, r.c.xyz) > 0.005f) {
             const int index = atomic_inc(out_secondary_rays_count);
             out_secondary_rays[index] = r;
         }

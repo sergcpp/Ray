@@ -36,19 +36,22 @@ float4 SampleTextureAnisotropic(__read_only image2d_array_t texture_atlas, __glo
                                 const float2 uvs, const float2 duv_dx, const float2 duv_dy) {
     const float2 tex_atlas_size = (float2)(get_image_width(texture_atlas), get_image_height(texture_atlas));
 
-    float l1 = fast_length(duv_dx * (float2)(texture->size[0], texture->size[1]));
-    float l2 = fast_length(duv_dy * (float2)(texture->size[0], texture->size[1]));
+    float2 _duv_dx = fabs(duv_dx * (float2)(texture->size[0], texture->size[1]));
+    float2 _duv_dy = fabs(duv_dy * (float2)(texture->size[0], texture->size[1]));
+
+    float l1 = fast_length(_duv_dx);
+    float l2 = fast_length(_duv_dy);
 
     float lod;
     float k;
     float2 step;
 
     if (l1 <= l2) {
-        lod = native_log2(l1);
+        lod = native_log2(fmin(_duv_dx.x, _duv_dx.y));
         k = l1 / l2;
         step = duv_dy;
     } else {
-        lod = native_log2(l2);
+        lod = native_log2(fmin(_duv_dy.x, _duv_dy.y));
         k = l2 / l1;
         step = duv_dx;
     }
