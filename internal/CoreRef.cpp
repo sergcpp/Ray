@@ -1068,7 +1068,7 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
             out_secondary_rays[index] = r;
         }
     } else if (mat->type == EmissiveMaterial) {
-        col = mat->strength * simd_fvec3(&albedo[0]);
+        col = mat->strength * simd_fvec3(&ray.c[0]) * simd_fvec3(&albedo[0]);
     } else if (mat->type == TransparentMaterial) {
         ray_packet_t r;
 

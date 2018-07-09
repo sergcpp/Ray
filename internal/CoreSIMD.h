@@ -279,6 +279,14 @@ force_inline void cross(const simd_fvec<S> v1[3], const simd_fvec<S> v2[3], simd
 }
 
 template <int S>
+force_inline void normalize(simd_fvec<S> v[3]) {
+    simd_fvec<S> l = sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+    v[0] /= l;
+    v[1] /= l;
+    v[2] /= l;
+}
+
+template <int S>
 force_inline simd_fvec<S> clamp(const simd_fvec<S> &v, float min, float max) {
     simd_fvec<S> ret = v;
     where(ret < min, ret) = min;
@@ -1209,7 +1217,7 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
     temp[1] = ray.do_dx[1] + inter.t * ray.dd_dx[1];
     temp[2] = ray.do_dx[2] + inter.t * ray.dd_dx[2];
 
-    simd_fvec<S> dt_dx = -dot(temp, N) * inv_dot;
+    simd_fvec<S> dt_dx = -dot(temp, plane_N) * inv_dot;
     simd_fvec<S> do_dx[3] = { temp[0] + dt_dx * I[0], temp[1] + dt_dx * I[1], temp[2] + dt_dx * I[2] };
     simd_fvec<S> dd_dx[3] = { ray.dd_dx[0], ray.dd_dx[1], ray.dd_dx[2] };
 
@@ -1217,7 +1225,7 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
     temp[1] = ray.do_dy[1] + inter.t * ray.dd_dy[1];
     temp[2] = ray.do_dy[2] + inter.t * ray.dd_dy[2];
 
-    simd_fvec<S> dt_dy = -dot(temp, N) * inv_dot;
+    simd_fvec<S> dt_dy = -dot(temp, plane_N) * inv_dot;
     simd_fvec<S> do_dy[3] = { temp[0] + dt_dy * I[0], temp[1] + dt_dy * I[1], temp[2] + dt_dy * I[2] };
     simd_fvec<S> dd_dy[3] = { ray.dd_dy[0], ray.dd_dy[1], ray.dd_dy[2] };
 
@@ -1298,6 +1306,8 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
     simd_fvec<S> T[3];
     cross(B, N, T);
 
+    simd_fvec<S> _dot_I_N = dot(I, N);
+
     const simd_ivec<S> hi = (hash(px_index) + iteration) & (HaltonSeqLen - 1);
 
     simd_ivec<S> secondary_mask = { 0 };
@@ -1333,6 +1343,41 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
             /////////////////////////////////////////
 
             const auto *mat = &materials[first_mi];
+
+            while (mat->type == MixMaterial) {
+                simd_fvec<S> mix[4];
+                SampleBilinear(tex_atlas, textures[mat->textures[MAIN_TEXTURE]], uvs, { 0 }, same_mi, mix);
+                mix[0] *= mat->strength;
+
+                first_mi = 0xffffffff;
+
+                for (int i = 0; i < S; i++) {
+                    if (!same_mi[i]) continue;
+
+                    const float r = halton[hi[i] * 2];
+
+                    // shlick fresnel
+                    float RR = mat->fresnel + (1.0f - mat->fresnel) * std::pow(1.0f + _dot_I_N[i], 5.0f);
+                    if (RR < 0.0f) RR = 0.0f;
+                    else if (RR > 1.0f) RR = 1.0f;
+
+                    mat_index[i] = (r * RR < mix[0][i]) ? mat->textures[MIX_MAT1] : mat->textures[MIX_MAT2];
+                    if (first_mi == 0xffffffff) {
+                        first_mi = mat_index[i];
+                    }
+                }
+
+                auto _same_mi = mat_index == first_mi;
+                diff_mi = and_not(_same_mi, same_mi);
+                same_mi = _same_mi;
+
+                if (diff_mi.not_all_zeros()) {
+                    ray_queue[num] = diff_mi;
+                    num++;
+                }
+
+                mat = &materials[first_mi];
+            }
 
             simd_fvec<S> tex_normal[4], tex_albedo[4];
 
@@ -1462,6 +1507,7 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
                     where(new_ray_mask, r.c[0]) = rc[0];
                     where(new_ray_mask, r.c[1]) = rc[1];
                     where(new_ray_mask, r.c[2]) = rc[2];
+                    where(new_ray_mask, r.c[3]) = ray.c[3];
 
                     where(new_ray_mask, r.do_dx[0]) = do_dx[0];
                     where(new_ray_mask, r.do_dx[1]) = do_dx[1];
@@ -1537,6 +1583,7 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
                     where(new_ray_mask, r.c[0]) = rc[0];
                     where(new_ray_mask, r.c[1]) = rc[1];
                     where(new_ray_mask, r.c[2]) = rc[2];
+                    where(new_ray_mask, r.c[3]) = ray.c[3];
 
                     where(new_ray_mask, r.do_dx[0]) = do_dx[0];
                     where(new_ray_mask, r.do_dx[1]) = do_dx[1];
@@ -1554,14 +1601,103 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
                     where(new_ray_mask, r.dd_dy[1]) = dd_dy[1] - 2.0f * (dot_I_N2 * dndy[1] + ddn_dy * __N[1]);
                     where(new_ray_mask, r.dd_dy[2]) = dd_dy[2] - 2.0f * (dot_I_N2 * dndy[2] + ddn_dy * __N[2]);
                 }
+            } else if (mat->type == RefractiveMaterial) {
+                simd_fvec<S> _N[3] = { __N[0], __N[1], __N[2] };
+
+                simd_fvec<S> dot_I_N2 = dot(I, __N);
+
+                where(dot_I_N2 > 0, _N[0]) = -__N[0];
+                where(dot_I_N2 > 0, _N[1]) = -__N[1];
+                where(dot_I_N2 > 0, _N[2]) = -__N[2];
+                
+                simd_fvec<S> eta = ray.c[3];
+                where(dot_I_N2 <= 0, eta) = eta / mat->ior;
+                where(dot_I_N2 < 0, dot_I_N2) = -dot_I_N2;
+
+                simd_fvec<S> _I[3] = { -I[0], -I[1], -I[2] };
+
+                simd_fvec<S> cosi = dot(_I, _N);
+                simd_fvec<S> cost2 = 1.0f - eta * eta * (1.0f - cosi * cosi);
+                simd_fvec<S> m = eta * cosi - sqrt(cost2);
+
+                simd_fvec<S> V[3] = { eta * I[0] + m * _N[0], eta * I[1] + m * _N[1], eta * I[2] + m * _N[2] };
+
+                simd_fvec<S> TT[3], BB[3];
+
+                cross(V, __B, TT);
+                cross(V, TT, BB);
+
+                normalize(TT);
+                normalize(BB);
+
+                simd_fvec<S> rc[3] = { ray.c[0], ray.c[1], ray.c[2] };
+
+                for (int i = 0; i < S; i++) {
+                    const float z = 1.0f - halton[hi[i] * 2] * mat->roughness;
+                    const float temp = std::sqrt(1.0f - z * z);
+
+                    const float phi = halton[((hash(hi[i]) + iteration) & (HaltonSeqLen - 1)) * 2 + 0] * 2 * PI;
+                    const float cos_phi = std::cos(phi);
+                    const float sin_phi = std::sin(phi);
+
+                    V[0][i] = temp * sin_phi * BB[0][i] + z * V[0][i] + temp * cos_phi * TT[0][i];
+                    V[1][i] = temp * sin_phi * BB[1][i] + z * V[1][i] + temp * cos_phi * TT[1][i];
+                    V[2][i] = temp * sin_phi * BB[2][i] + z * V[2][i] + temp * cos_phi * TT[2][i];
+
+                    rc[0][i] *= z;
+                    rc[1][i] *= z;
+                    rc[2][i] *= z;
+                }
+
+                simd_fvec<S> k = (eta - eta * eta * dot(I, plane_N) / dot(V, plane_N));
+                simd_fvec<S> dmdx = k * ddn_dx;
+                simd_fvec<S> dmdy = k * ddn_dy;
+
+                simd_fvec<S> thres = dot(rc, rc);
+
+                const auto new_ray_mask = (cost2 >= 0.0f) & (thres > 0.005f) & reinterpret_cast<const simd_fvec<S>&>(same_mi);
+
+                if (reinterpret_cast<const simd_ivec<S>&>(new_ray_mask).not_all_zeros()) {
+                    const int index = *out_secondary_rays_count;
+                    auto &r = out_secondary_rays[index];
+
+                    secondary_mask = secondary_mask | reinterpret_cast<const simd_ivec<S>&>(new_ray_mask);
+
+                    where(new_ray_mask, r.o[0]) = P[0] + HIT_BIAS * I[0];
+                    where(new_ray_mask, r.o[1]) = P[1] + HIT_BIAS * I[1];
+                    where(new_ray_mask, r.o[2]) = P[2] + HIT_BIAS * I[2];
+
+                    where(new_ray_mask, r.d[0]) = V[0];
+                    where(new_ray_mask, r.d[1]) = V[1];
+                    where(new_ray_mask, r.d[2]) = V[2];
+
+                    where(new_ray_mask, r.c[0]) = rc[0];
+                    where(new_ray_mask, r.c[1]) = rc[1];
+                    where(new_ray_mask, r.c[2]) = rc[2];
+                    where(new_ray_mask, r.c[3]) = mat->ior;
+
+                    where(new_ray_mask, r.do_dx[0]) = do_dx[0];
+                    where(new_ray_mask, r.do_dx[1]) = do_dx[1];
+                    where(new_ray_mask, r.do_dx[2]) = do_dx[2];
+
+                    where(new_ray_mask, r.do_dy[0]) = do_dy[0];
+                    where(new_ray_mask, r.do_dy[1]) = do_dy[1];
+                    where(new_ray_mask, r.do_dy[2]) = do_dy[2];
+
+                    where(new_ray_mask, r.dd_dx[0]) = eta * dd_dx[0] - (m * dndx[0] + dmdx * plane_N[0]);
+                    where(new_ray_mask, r.dd_dx[1]) = eta * dd_dx[1] - (m * dndx[1] + dmdx * plane_N[1]);
+                    where(new_ray_mask, r.dd_dx[2]) = eta * dd_dx[2] - (m * dndx[2] + dmdx * plane_N[2]);
+
+                    where(new_ray_mask, r.dd_dy[0]) = eta * dd_dy[0] - (m * dndy[0] + dmdy * plane_N[0]);
+                    where(new_ray_mask, r.dd_dy[1]) = eta * dd_dy[1] - (m * dndy[1] + dmdy * plane_N[1]);
+                    where(new_ray_mask, r.dd_dy[2]) = eta * dd_dy[2] - (m * dndy[2] + dmdy * plane_N[2]);
+                }
             } else if (mat->type == EmissiveMaterial) {
                 const auto &mask = reinterpret_cast<const simd_fvec<S>&>(same_mi);
 
                 where(mask, out_rgba[0]) = mat->strength * ray.c[0] * mat->main_color[0];
                 where(mask, out_rgba[1]) = mat->strength * ray.c[1] * mat->main_color[1];
                 where(mask, out_rgba[2]) = mat->strength * ray.c[2] * mat->main_color[2];
-            } else if (mat->type == MixMaterial) {
-
             }
 
             index++;

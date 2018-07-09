@@ -323,7 +323,7 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
             out_secondary_rays[index] = r;
         }
     } else if (mat->type == EmissiveMaterial) {
-        col = mat->strength * albedo.xyz;
+        col = mat->strength * orig_ray->c.xyz * albedo.xyz;
     } else if (mat->type == TransparentMaterial) {
         col = (float3)(0, 0, 0);
 
