@@ -285,8 +285,7 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
 
         const float3 _N = dot(I, N) > 0 ? -N : N;
 
-        float eta = orig_ray->c.w / mat->ior;
-        if (dot(I, N) > 0) eta = orig_ray->c.w;
+        float eta = (dot(I, N) > 0) ? orig_ray->c.w : (orig_ray->c.w / mat->ior);
         float cosi = dot(-I, _N);
         float cost2 = 1.0f - eta * eta * (1.0f - cosi * cosi);
         float m = eta * cosi - sqrt(cost2);
@@ -312,8 +311,8 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
         ray_packet_t r;
         r.o = (float4)(P + HIT_BIAS * I, (float)x);
         r.d = (float4)(V, (float)y);
-        r.c = orig_ray->c;
-        r.c.xyz *= z;
+        r.c.xyz = orig_ray->c.xyz * z;
+        r.c.w = mat->ior;
         r.do_dx = do_dx;
         r.do_dy = do_dy;
         r.dd_dx = eta * dd_dx - (m * dndx + dmdx * plane_N);

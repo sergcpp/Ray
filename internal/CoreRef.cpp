@@ -1024,8 +1024,7 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
     } else if (mat->type == RefractiveMaterial) {
         const auto __N = dot(I, N) > 0 ? -N : N;
 
-        float eta = ray.ior / mat->ior;
-        if (dot(I, N) > 0) eta = ray.ior;
+        float eta = (dot(I, N) > 0) ? ray.ior : (ray.ior / mat->ior);
         float cosi = dot(-I, __N);
         float cost2 = 1.0f - eta * eta * (1.0f - cosi * cosi);
         if (cost2 < 0) return pixel_color_t{ 0.0f, 0.0f, 0.0f, 1.0f };
