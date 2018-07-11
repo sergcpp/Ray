@@ -25,12 +25,15 @@ const int RayPacketDimY = 1;
 const int RayPacketSize = 1;
 
 struct camera_t {
-    cl_float3 origin, fwd, side, up;
+    cl_float4 origin, fwd;
+    cl_float3 side, up;
 
     camera_t() {}
     camera_t(const ray::camera_t &cam) {
         memcpy(&origin, &cam.origin[0], sizeof(float) * 3);
+        origin.w = cam.fov;
         memcpy(&fwd, &cam.fwd[0], sizeof(float) * 3);
+        fwd.w = cam.gamma;
         memcpy(&side, &cam.side[0], sizeof(float) * 3);
         memcpy(&up, &cam.up[0], sizeof(float) * 3);
     }

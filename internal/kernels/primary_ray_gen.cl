@@ -8,8 +8,9 @@ int hash(int x) {
 }
 
 float3 get_cam_dir(const float x, const float y, const camera_t *cam, int w, int h) {
-    float3 d = (float3)(x / w - 0.5f, -y / h + 0.5f, 1);
-    d = d.x * cam->side + d.y * cam->up + d.z * cam->fwd;
+    float k = native_tan(0.5f * cam->origin.w * PI / 180.0f);    
+    float3 d = (float3)(2 * k * x / w - k, 2 * k * -y / h + k, 1);
+    d = d.x * cam->side.xyz + d.y * cam->up.xyz + d.z * cam->fwd.xyz;
     d = normalize(d);
     return d;
 }
@@ -29,7 +30,7 @@ void GeneratePrimaryRays(const int iteration, camera_t cam, int w, int h, __glob
 
     __global ray_packet_t *r = &out_rays[index];
 
-    r->o = (float4)(cam.origin, x);
+    r->o = (float4)(cam.origin.xyz, x);
     r->d = (float4)(d, y);
     r->c = (float4)(1.0f, 1.0f, 1.0f, 1.0f);
 

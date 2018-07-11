@@ -33,7 +33,7 @@ enum eCamType { Persp, Ortho };
 */
 struct camera_t {
     eCamType type;      ///< Projection type
-    int pad[2];
+    float fov, gamma;   ///< Field of View in degrees, and gamma
     float origin[3],    ///< Origin point
           fwd[3],       ///< Forward unit vector
           side[3],      ///< Right side unit vector

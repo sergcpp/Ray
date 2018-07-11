@@ -390,13 +390,15 @@ void ray::NS::GeneratePrimaryRays(const int iteration, const camera_t &cam, cons
 
     float k = float(h) / w;
 
+    float fov_k = std::tan(0.5f * cam.fov * PI / 180.0f);
+
     simd_fvec<S> fwd[3] = { { cam.fwd[0] }, { cam.fwd[1] }, { cam.fwd[2] } },
                  side[3] = { { cam.side[0] }, { cam.side[1] }, { cam.side[2] } },
                  up[3] = { { cam.up[0] * k }, { cam.up[1] * k }, { cam.up[2] * k } };
 
-    auto get_pix_dirs = [&fwd, &side, &up, &ww, &hh](const simd_fvec<S> &x, const simd_fvec<S> &y, simd_fvec<S> d[3]) {
-        auto _dx = x / ww - 0.5f;
-        auto _dy = -y / hh + 0.5f;
+    auto get_pix_dirs = [fov_k, &fwd, &side, &up, &ww, &hh](const simd_fvec<S> &x, const simd_fvec<S> &y, simd_fvec<S> d[3]) {
+        auto _dx = 2 * fov_k * x / ww - fov_k;
+        auto _dy = 2 * fov_k  * -y / hh + fov_k;
 
         d[0] = _dx * side[0] + _dy * up[0] + fwd[0];
         d[1] = _dx * side[1] + _dy * up[1] + fwd[1];

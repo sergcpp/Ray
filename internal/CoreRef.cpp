@@ -179,8 +179,10 @@ void ray::ref::GeneratePrimaryRays(int iteration, const camera_t &cam, const rec
 
     up *= float(h) / w;
 
-    auto get_pix_dir = [fwd, side, up, w, h](const float x, const float y) {
-        simd_fvec3 _d(float(x) / w - 0.5f, float(-y) / h + 0.5f, 1);
+    float k = std::tan(0.5f * cam.fov * PI / 180.0f);
+
+    auto get_pix_dir = [k, fwd, side, up, w, h](const float x, const float y) {
+        simd_fvec3 _d(2 * k * float(x) / w - k, 2 * k * float(-y) / h + k, 1);
         _d = _d[0] * side + _d[1] * up + _d[2] * fwd;
         _d = normalize(_d);
         return _d;

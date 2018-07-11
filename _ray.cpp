@@ -26,13 +26,13 @@
 #endif
 
 // TODO:
-// make camera fov work
 // add deletion functions for OpenCL backend
 // try again with spatial splits or remove unnecessary indirection
 // add tests for intersection
 // add validation tests (use Cycles)
 
 // DONE:
+// make camera fov work
 // add neon support
 // add android build
 // add shading to cpu implementations

@@ -208,9 +208,9 @@ void ray::ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
 
     clean_buf_.MixIncremental(temp_buf_, rect, 1.0f / region.iteration);
 
-    auto clamp_and_gamma_correct = [](const pixel_color_t &p) {
+    auto clamp_and_gamma_correct = [cam](const pixel_color_t &p) {
         simd_fvec4 c = { &p.r };
-        c = pow(c, simd_fvec4{ 1.0f / 2.2f });
+        c = pow(c, simd_fvec4{ 1.0f / cam.gamma });
         c = clamp(c, 0.0f, 1.0f);
         return pixel_color_t{ c[0], c[1], c[2], c[3] };
     };

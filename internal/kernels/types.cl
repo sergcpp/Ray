@@ -9,7 +9,8 @@ typedef struct _ray_packet_t {
 } ray_packet_t;
 
 typedef struct _camera_t {
-    float3 origin, fwd, side, up;
+    float4 origin, fwd;
+    float3 side, up;
 } camera_t;
 
 typedef struct _tri_accel_t {

@@ -107,7 +107,7 @@ uint32_t PreprocessPrims(const prim_t *prims, size_t prims_count,
 
 bool NaiivePluckerTest(const float p[9], const float o[3], const float d[3]);
 
-void ConstructCamera(eCamType type, const float origin[3], const float fwd[3], float fov, camera_t *cam);
+void ConstructCamera(eCamType type, const float origin[3], const float fwd[3], float fov, float gamma, camera_t *cam);
 
 void TransformBoundingBox(const float bbox[2][3], const float *xform, float out_bbox[2][3]);
 
