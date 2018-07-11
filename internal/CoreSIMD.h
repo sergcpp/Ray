@@ -377,6 +377,18 @@ force_inline void radix_sort(ray_chunk_t *begin, ray_chunk_t *end, ray_chunk_t *
     _radix_sort_lsb(begin, end, begin1, 24);
 }
 
+template <int S>
+force_inline simd_fvec<S> construct_float(simd_ivec<S> m) {
+    const simd_ivec<S> ieeeMantissa = { 0x007FFFFF }; // binary32 mantissa bitmask
+    const simd_ivec<S> ieeeOne = { 0x3F800000 };      // 1.0 in IEEE binary32
+
+    m = m & ieeeMantissa;                     // Keep only mantissa bits (fractional part)
+    m = m | ieeeOne;                          // Add fractional part to 1.0
+
+    simd_fvec<S>  f = reinterpret_cast<simd_fvec<S> &>(m);  // Range [1:2]
+    return f - simd_fvec<S>{ 1.0f };                                        // Range [0:1]
+}
+
 }
 }
 
@@ -427,14 +439,18 @@ void ray::NS::GeneratePrimaryRays(const int iteration, const camera_t &cam, cons
             simd_ivec<S> ixx = x + off_x, iyy = simd_ivec<S>(y) + off_y;
 
             simd_ivec<S> index = iyy * w + ixx;
-            simd_ivec<S> hi = (hash(index) + iteration) & (HaltonSeqLen - 1);
+            simd_ivec<S> hi = iteration & (HaltonSeqLen - 1);
 
             simd_fvec<S> fxx = (simd_fvec<S>)ixx,
                          fyy = (simd_fvec<S>)iyy;
 
+            simd_fvec<S> rxx = construct_float(hash(hi)),
+                         ryy = construct_float(hash(hash(hi)));
+
             for (int i = 0; i < S; i++) {
-                fxx[i] += halton[hi[i] * 2];
-                fyy[i] += halton[hi[i] * 2 + 1];
+                float _unused;
+                fxx[i] += std::modf(halton[hi[i] * 2] + rxx[i], &_unused);
+                fyy[i] += std::modf(halton[hi[i] * 2 + 1] + ryy[i], &_unused);
             }
 
             simd_fvec<S> _d[3], _dx[3], _dy[3];
@@ -1469,23 +1485,26 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
 
                 simd_fvec<S> V[3];
 
+                simd_ivec<S> _hi = iteration & (HaltonSeqLen - 1);
+
+                simd_fvec<S> f1 = construct_float(hash(px_index));
+                simd_fvec<S> f2 = construct_float(hash(hash(px_index)));
+
                 for (int i = 0; i < S; i++) {
                     if (!same_mi[i]) continue;
 
-                    const float z = 1.0f - halton[hi[i] * 2];
-                    const float temp = std::sqrt(1.0f - z * z);
+                    float _unused;
+                    const float z = std::modf(halton[_hi[i] * 2] + f1[i], &_unused);
 
-                    const float phi = halton[((hash(hi[i]) + iteration) & (HaltonSeqLen - 1)) * 2 + 0] * 2 * PI;
+                    const float dir = std::sqrt(z);
+                    const float phi = 2 * PI * std::modf(halton[_hi[i] * 2 + 1] + f2[i], &_unused);
+
                     const float cos_phi = std::cos(phi);
                     const float sin_phi = std::sin(phi);
 
-                    V[0][i] = temp * sin_phi * B[0][i] + z * __N[0][i] + temp * cos_phi * T[0][i];
-                    V[1][i] = temp * sin_phi * B[1][i] + z * __N[1][i] + temp * cos_phi * T[1][i];
-                    V[2][i] = temp * sin_phi * B[2][i] + z * __N[2][i] + temp * cos_phi * T[2][i];
-
-                    rc[0][i] *= z;
-                    rc[1][i] *= z;
-                    rc[2][i] *= z;
+                    V[0][i] = dir * sin_phi * B[0][i] + std::sqrt(1.0f - dir) * __N[0][i] + dir * cos_phi * T[0][i];
+                    V[1][i] = dir * sin_phi * B[1][i] + std::sqrt(1.0f - dir) * __N[1][i] + dir * cos_phi * T[1][i];
+                    V[2][i] = dir * sin_phi * B[2][i] + std::sqrt(1.0f - dir) * __N[2][i] + dir * cos_phi * T[2][i];
                 }
 
                 simd_fvec<S> thres = dot(rc, rc);

@@ -164,6 +164,17 @@ force_inline void radix_sort(ray_chunk_t *begin, ray_chunk_t *end, ray_chunk_t *
 	_radix_sort_lsb(begin, end, begin1, 24);
 }
 
+force_inline float construct_float(uint32_t m) {
+    const uint32_t ieeeMantissa = 0x007FFFFFu; // binary32 mantissa bitmask
+    const uint32_t ieeeOne = 0x3F800000u;      // 1.0 in IEEE binary32
+
+    m &= ieeeMantissa;                     // Keep only mantissa bits (fractional part)
+    m |= ieeeOne;                          // Add fractional part to 1.0
+
+    float  f = reinterpret_cast<float &>(m);                // Range [1:2]
+    return f - 1.0f;                        // Range [0:1]
+}
+
 }
 }
 
@@ -196,10 +207,11 @@ void ray::ref::GeneratePrimaryRays(int iteration, const camera_t &cam, const rec
             auto &out_r = out_rays[i++];
 
             const int index = y * w + x;
-            const int hi = (hash(index) + iteration) & (HaltonSeqLen - 1);
+            const int hi = iteration & (HaltonSeqLen - 1);
 
-            float _x = (float)x + halton[hi * 2];
-            float _y = (float)y + halton[hi * 2 + 1];
+            float _unused;
+            float _x = (float)x + std::modf(halton[hi * 2] + construct_float(hash(index)), &_unused);
+            float _y = (float)y + std::modf(halton[hi * 2 + 1] + construct_float(hash(hash(index))), &_unused);
 
             simd_fvec3 _d = get_pix_dir(_x, _y);
 
@@ -962,14 +974,21 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
 
         col = simd_fvec3(&albedo[0]) * simd_fvec3(env.sun_col) * v * k;
 
-        const float z = halton[hi * 2];
-        const float temp = std::sqrt(1.0f - z * z);
+        const int _hi = iteration & (HaltonSeqLen - 1);
 
-        const float phi = halton[((hash(hi) + iteration) & (HaltonSeqLen - 1)) * 2 + 0] * 2 * PI;
+        float f1 = construct_float(hash(index));
+        float f2 = construct_float(hash(hash(index)));
+
+        float _unused2;
+        const float z = std::modf(halton[_hi * 2] + f1, &_unused2);
+
+        const float dir = std::sqrt(z);
+        const float phi = 2 * PI * std::modf(halton[_hi * 2 + 1] + f2, &_unused2);
+
         const float cos_phi = std::cos(phi);
         const float sin_phi = std::sin(phi);
 
-        const auto V = temp * sin_phi * B + z * N + temp * cos_phi * T;
+        const auto V = dir * sin_phi * B + std::sqrt(1.0f - dir) * N + dir * cos_phi * T;
 
         ray_packet_t r;
 
@@ -978,7 +997,7 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
 
         memcpy(&r.o[0], value_ptr(P + HIT_BIAS * N), 3 * sizeof(float));
         memcpy(&r.d[0], value_ptr(V), 3 * sizeof(float));
-        memcpy(&r.c[0], value_ptr(simd_fvec3(ray.c) * z * simd_fvec3(&albedo[0])), 3 * sizeof(float));
+        memcpy(&r.c[0], value_ptr(simd_fvec3(ray.c) * simd_fvec3(&albedo[0])), 3 * sizeof(float));
 
         memcpy(&r.do_dx[0], value_ptr(do_dx), 3 * sizeof(float));
         memcpy(&r.do_dy[0], value_ptr(do_dy), 3 * sizeof(float));

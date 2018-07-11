@@ -13,24 +13,6 @@ float3 refract(float3 I, float3 N, float eta) {
     return t * (float3)(cost2 > 0);
 }
 
-__constant float3 heatmap_colors[4] = { (float3)(0, 0, 1), (float3)(0, 1, 0), (float3)(1, 1, 0), (float3)(1, 0, 0) };
-
-float3 heat_map(float val) {
-    int i1, i2;
-    float fract;
-
-    if (val <= 0) { i1 = i2 = 0; }
-    else if (val >= 1) { i1 = i2 = 3; }
-    else {
-        val = val * 4;
-        i1 = floor(val);
-        i2 = i1 + 1;
-        fract = val - i1;
-    }
-
-    return (heatmap_colors[i2] - heatmap_colors[i1]) * fract + heatmap_colors[i1];
-}
-
 float4 ShadeSurface(const int index, const int iteration, __global const float *halton,
                     __global const hit_data_t *prim_inters, __global const ray_packet_t *prim_rays,
                     __global const mesh_instance_t *mesh_instances, __global const uint *mi_indices,
@@ -158,7 +140,6 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
     }
 
     // Derivative for normal
-
     const float3 dn1 = n1 - n3, dn2 = n2 - n3;
     const float3 dndu = (duv23.y * dn1 - duv13.y * dn2) * inv_det_uv;
     const float3 dndv = (-duv23.x * dn1 + duv13.x * dn2) * inv_det_uv;
@@ -170,7 +151,6 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
     const float ddn_dy = dot(dd_dy, plane_N) + dot(I, dndy);
 
     //
-
     const float3 b1 = (float3)(v1->b[0], v1->b[1], v1->b[2]);
     const float3 b2 = (float3)(v2->b[0], v2->b[1], v2->b[2]);
     const float3 b3 = (float3)(v3->b[0], v3->b[1], v3->b[2]);
@@ -227,20 +207,27 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
 
         col = albedo.xyz * env.sun_col * v * k;
 
-        const float z = halton[hi * 2];
-        const float temp = native_sqrt(1.0f - z * z);
+        const int _hi = iteration & (HaltonSeqLen - 1);
 
-        const float phi = halton[((hash(hi) + iteration) & (HaltonSeqLen - 1)) * 2 + 0] * 2 * PI;
+        float f1 = construct_float(hash(index));
+        float f2 = construct_float(hash(hash(index)));
+
+        float _unused2;
+        const float z = fract(halton[_hi * 2] + f1, &_unused2);
+
+        const float dir = native_sqrt(z);
+        const float phi = 2.0f * PI * fract(halton[_hi * 2 + 1] + f2, &_unused2);
+
         float cos_phi;
         const float sin_phi = sincos(phi, &cos_phi);
 
-        const float3 V = normalize(temp * sin_phi * B + z * N + temp * cos_phi * T);
+        const float3 V = normalize(dir * sin_phi * B + native_sqrt(1.0f - dir) * N + dir * cos_phi * T);
         
         ray_packet_t r;
         r.o = (float4)(P + HIT_BIAS * N, (float)x);
         r.d = (float4)(V, (float)y);
         r.c = orig_ray->c;
-        r.c.xyz *= z * albedo.xyz;
+        r.c.xyz *= albedo.xyz;
         r.do_dx = do_dx;
         r.do_dy = do_dy;
         r.dd_dx = dd_dx - 2 * (dot(I, plane_N) * dndx + ddn_dx * plane_N);

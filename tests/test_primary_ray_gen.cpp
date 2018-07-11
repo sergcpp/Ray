@@ -25,7 +25,7 @@ void test_primary_ray_gen() {
     const float o[] = { 0, 0, 4 },
                       d[] = { 0, 0, -1 };
 
-    ray::ConstructCamera(ray::Persp, o, d, 90, &cam);
+    ray::ConstructCamera(ray::Persp, o, d, 53.13f, 2.2f, &cam);
 
     std::vector<float> dummy_halton(ray::HaltonSeqLen * 2);
 
@@ -193,7 +193,7 @@ void test_primary_ray_gen() {
             void Test(const ray::camera_t &cam, const std::vector<float> &test_data) {
                 ray::ocl::camera_t cl_cam = { cam };
 
-                require(kernel_GeneratePrimaryRays(0, cl_cam, halton_seq_buf_, w_, h_, prim_rays_buf_));
+                require(kernel_GeneratePrimaryRays(0, cl_cam, { 0, 0, w_, h_ }, w_, h_, halton_seq_buf_, prim_rays_buf_));
 
                 std::vector<ray::ocl::ray_packet_t> rays(w_ * h_);
                 cl_int error = queue_.enqueueReadBuffer(prim_rays_buf_, CL_TRUE, 0, rays.size() * sizeof(ray::ocl::ray_packet_t), &rays[0]);

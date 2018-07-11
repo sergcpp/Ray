@@ -7,6 +7,17 @@ int hash(int x) {
     return x;
 }
 
+float construct_float(uint m) {
+    const uint ieeeMantissa = 0x007FFFFFu; // binary32 mantissa bitmask
+    const uint ieeeOne      = 0x3F800000u; // 1.0 in IEEE binary32
+
+    m &= ieeeMantissa;                     // Keep only mantissa bits (fractional part)
+    m |= ieeeOne;                          // Add fractional part to 1.0
+
+    float  f = as_float(m);                // Range [1:2]
+    return f - 1.0f;                       // Range [0:1]
+}
+
 float3 get_cam_dir(const float x, const float y, const camera_t *cam, int w, int h) {
     float k = native_tan(0.5f * cam->origin.w * PI / 180.0f);    
     float3 d = (float3)(2 * k * x / w - k, 2 * k * -y / h + k, 1);
@@ -21,10 +32,11 @@ void GeneratePrimaryRays(const int iteration, camera_t cam, int w, int h, __glob
     const int j = get_global_id(1);
 
     const int index = j * w + i;
-    const int hi = (hash(index) + iteration) & (HaltonSeqLen - 1);
+    const int hi = iteration & (HaltonSeqLen - 1);
 
-    const float x = (float)i + halton[hi * 2];
-    const float y = (float)j + halton[hi * 2 + 1];
+    float _unused;
+    const float x = (float)i + fract(halton[hi * 2] + construct_float(hash(index)), &_unused);
+    const float y = (float)j + fract(halton[hi * 2 + 1] + construct_float(hash(hash(index))), &_unused);
 
     float3 d = get_cam_dir(x, y, &cam, w, h);
 

@@ -12,7 +12,7 @@ void ray::ref::Framebuffer::Resize(int w, int h) {
     w_ = w;
     h_ = h;
     size_t buf_size = w * h;
-    pixels_.resize(buf_size, pixel_color_t{});
+    pixels_.resize(buf_size, pixel_color_t{ 0.0f, 0.0f, 0.0f, 0.0f });
 }
 
 void ray::ref::Framebuffer::Clear(const pixel_color_t &p) {
