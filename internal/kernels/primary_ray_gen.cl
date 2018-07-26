@@ -42,8 +42,8 @@ void GeneratePrimaryRays(const int iteration, camera_t cam, int w, int h, __glob
 
     __global ray_packet_t *r = &out_rays[index];
 
-    r->o = (float4)(cam.origin.xyz, x);
-    r->d = (float4)(d, y);
+    r->o = (float4)(cam.origin.xyz, (float)i);
+    r->d = (float4)(d, (float)j);
     r->c = (float4)(1.0f, 1.0f, 1.0f, 1.0f);
 
     r->do_dx = r->do_dy = (float3)(0, 0, 0);

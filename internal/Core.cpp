@@ -127,6 +127,9 @@ void ray::PreprocessTri(const float *p, int stride, tri_accel_t *acc) {
     if (std::abs(acc->nu) < axis_aligned_normal_eps && std::abs(acc->nv) < axis_aligned_normal_eps) {
         acc->ci |= TRI_AXIS_ALIGNED_BIT;
     }
+    if (n[w] < 0) {
+        acc->ci |= TRI_INV_NORMAL_BIT;
+    }
     assert((acc->ci & TRI_W_BITS) == w);
 }
 

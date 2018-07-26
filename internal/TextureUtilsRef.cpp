@@ -33,7 +33,7 @@ std::vector<ray::pixel_color8_t> ray::ref::DownsampleTexture(const std::vector<p
     return ret;
 }
 
-void ray::ref::ComputeTextureBasis(size_t vtx_offset, std::vector<vertex_t> &vertices, std::vector<uint32_t> &new_vtx_indices,
+void ray::ref::ComputeTextureBasis(size_t vtx_offset, size_t vtx_start, std::vector<vertex_t> &vertices, std::vector<uint32_t> &new_vtx_indices,
                                    const uint32_t *indices, size_t indices_count) {
 
     std::vector<std::array<uint32_t, 3>> twin_verts(vertices.size(), { 0, 0, 0 });
@@ -135,7 +135,9 @@ void ray::ref::ComputeTextureBasis(size_t vtx_offset, std::vector<vertex_t> &ver
         return simd_fvec3{ v1[1] * v2[2] - v1[2] * v2[1], v1[2] * v2[0] - v1[0] * v2[2], v1[0] * v2[1] - v1[1] * v2[0] };
     };
 
-    for (auto &v : vertices) {
+    for (size_t i = vtx_start; i < vertices.size(); i++) {
+        auto &v = vertices[i];
+
         if (std::abs(v.b[0]) > FLT_EPS || std::abs(v.b[1]) > FLT_EPS || std::abs(v.b[2]) > FLT_EPS) {
             simd_fvec3 tangent = { v.b };
             simd_fvec3 binormal = normalize(cross(simd_fvec3(v.n), tangent));

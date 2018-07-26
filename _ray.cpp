@@ -29,9 +29,10 @@
 // add deletion functions for OpenCL backend
 // try again with spatial splits or remove unnecessary indirection
 // add tests for intersection
-// add validation tests (use Cycles)
+// add more validation tests (use Cycles)
 
 // DONE:
+// add validation tests (use Cycles)
 // make camera fov work
 // add neon support
 // add android build

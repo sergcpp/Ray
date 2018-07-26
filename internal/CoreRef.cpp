@@ -832,6 +832,7 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
     plane_N[_next_u[_iw]] = tri.nu;
     plane_N[_next_v[_iw]] = tri.nv;
     plane_N = normalize(plane_N);
+    if (tri.ci & TRI_INV_NORMAL_BIT) plane_N = -plane_N;
 
     // From 'Tracing Ray Differentials' [1999]
 
@@ -880,12 +881,21 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
 
     ////////////////////////////////////////////////////////
 
-    const int hi = (hash(index) + iteration) & (HaltonSeqLen - 1);
+    // used to randomize halton sequence among pixels
+    int rand_hash = hash(index), rand_hash2;
+    float rand_offset = construct_float(rand_hash), rand_offset2;
+
+    const int hi = iteration & (HaltonSeqLen - 1);
 
     // resolve mix material
     while (mat->type == MixMaterial) {
         const auto mix = SampleBilinear(tex_atlas, textures[mat->textures[MAIN_TEXTURE]], uvs, 0) * mat->strength;
-        const float r = halton[hi * 2];
+
+        float _unused;
+        const float r = std::modf(halton[hi * 2] + rand_offset, &_unused);
+
+        rand_hash = hash(rand_hash);
+        rand_offset = construct_float(rand_hash);
 
         // shlick fresnel
         float RR = mat->fresnel + (1.0f - mat->fresnel) * std::pow(1.0f + dot(I, N), 5.0f);
@@ -893,6 +903,9 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
 
         mat = (r * RR < mix[0]) ? &materials[mat->textures[MIX_MAT1]] : &materials[mat->textures[MIX_MAT2]];
     }
+
+    rand_hash2 = hash(rand_hash);
+    rand_offset2 = construct_float(rand_hash2);
 
     ////////////////////////////////////////////////////////
 
@@ -946,11 +959,12 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
         float k = dot(N, simd_fvec3(env.sun_dir));
 
         float v = 1;
-        if (k > 0) {
-            const float z = 1.0f - halton[hi * 2] * env.sun_softness;
+        if (k > FLT_EPS) {
+            float _unused;
+            const float z = 1.0f - std::modf(halton[hi * 2] + rand_offset, &_unused) * env.sun_softness;
             const float temp = std::sqrt(1.0f - z * z);
 
-            const float phi = halton[hi * 2 + 1] * 2 * PI;
+            const float phi = 2 * PI * std::modf(halton[hi * 2 + 1] + rand_offset2, &_unused);
             const float cos_phi = std::cos(phi);
             const float sin_phi = std::sin(phi);
 
@@ -974,16 +988,11 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
 
         col = simd_fvec3(&albedo[0]) * simd_fvec3(env.sun_col) * v * k;
 
-        const int _hi = iteration & (HaltonSeqLen - 1);
-
-        float f1 = construct_float(hash(index));
-        float f2 = construct_float(hash(hash(index)));
-
-        float _unused2;
-        const float z = std::modf(halton[_hi * 2] + f1, &_unused2);
+        float _unused;
+        const float z = std::modf(halton[hi * 2] + rand_offset, &_unused);
 
         const float dir = std::sqrt(z);
-        const float phi = 2 * PI * std::modf(halton[_hi * 2 + 1] + f2, &_unused2);
+        const float phi = 2 * PI * std::modf(halton[hi * 2 + 1] + rand_offset2, &_unused);
 
         const float cos_phi = std::cos(phi);
         const float sin_phi = std::sin(phi);
@@ -1012,25 +1021,32 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
     } else if (mat->type == GlossyMaterial) {
         simd_fvec3 V = reflect(I, dot(I, N) > 0 ? N : -N);
 
-        const float z = 1.0f - halton[hi * 2] * mat->roughness;
-        const float temp = std::sqrt(1.0f - z * z);
+        float _unused;
+        const float h = 1.0f - std::cos(0.5f * PI * mat->roughness * mat->roughness);
+        const float z = h * std::modf(halton[hi * 2] + rand_offset, &_unused);
 
-        const float phi = halton[((hash(hi) + iteration) & (HaltonSeqLen - 1)) * 2 + 0] * 2 * PI;
+        const float dir = std::sqrt(z);
+        const float phi = 2 * PI * std::modf(halton[hi * 2 + 1] + rand_offset2, &_unused);
         const float cos_phi = std::cos(phi);
         const float sin_phi = std::sin(phi);
 
         auto TT = cross(V, B);
         auto BB = cross(V, TT);
-        V = temp * sin_phi * BB + z * V + temp * cos_phi * TT;
+
+        if (dot(V, plane_N) > 0) {
+            V = dir * sin_phi * BB + std::sqrt(1.0f - dir) * V + dir * cos_phi * TT;
+        } else {
+            V = -dir * sin_phi * BB + std::sqrt(1.0f - dir) * V - dir * cos_phi * TT;
+        }
 
         ray_packet_t r;
 
         r.id = ray.id;
         r.ior = ray.ior;
 
-        memcpy(&r.o[0], value_ptr(P + HIT_BIAS * N), 3 * sizeof(float));
+        memcpy(&r.o[0], value_ptr(P + HIT_BIAS * plane_N), 3 * sizeof(float));
         memcpy(&r.d[0], value_ptr(V), 3 * sizeof(float));
-        memcpy(&r.c[0], value_ptr(simd_fvec3(ray.c) * z), 3 * sizeof(float));
+        memcpy(&r.c[0], &ray.c[0], 3 * sizeof(float));
 
         memcpy(&r.do_dx[0], value_ptr(do_dx), 3 * sizeof(float));
         memcpy(&r.do_dy[0], value_ptr(do_dy), 3 * sizeof(float));
@@ -1089,7 +1105,7 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
             out_secondary_rays[index] = r;
         }
     } else if (mat->type == EmissiveMaterial) {
-        col = mat->strength * simd_fvec3(&ray.c[0]) * simd_fvec3(&albedo[0]);
+        col = mat->strength * simd_fvec3(&albedo[0]);
     } else if (mat->type == TransparentMaterial) {
         ray_packet_t r;
 

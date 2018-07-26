@@ -103,6 +103,7 @@ ray::ocl::Renderer::Renderer(int w, int h, int platform_index, int device_index)
         std::string cl_src_defines;
         cl_src_defines += "#define TRI_W_BITS " + std::to_string(TRI_W_BITS) + "\n";
         cl_src_defines += "#define TRI_AXIS_ALIGNED_BIT " + std::to_string(TRI_AXIS_ALIGNED_BIT) + "\n";
+        cl_src_defines += "#define TRI_INV_NORMAL_BIT " + std::to_string(TRI_INV_NORMAL_BIT) + "\n";
         cl_src_defines += "#define HIT_BIAS " + std::to_string(HIT_BIAS) + "f\n";
         cl_src_defines += "#define HIT_EPS " + std::to_string(HIT_EPS) + "f\n";
         cl_src_defines += "#define FLT_EPS " + std::to_string(FLT_EPS) + "f\n";

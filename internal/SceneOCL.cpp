@@ -199,7 +199,7 @@ uint32_t ray::ocl::Scene::AddMesh(const mesh_desc_t &_m) {
         memset(&v.b[0], 0, 3 * sizeof(float));
     }
 
-    ref::ComputeTextureBasis(vertices_.size(), new_vertices, new_vtx_indices, _m.vtx_indices, _m.vtx_indices_count);
+    ref::ComputeTextureBasis(vertices_.size(), 0, new_vertices, new_vtx_indices, _m.vtx_indices, _m.vtx_indices_count);
 
     vertices_.Append(&new_vertices[0], new_vertices.size());
 

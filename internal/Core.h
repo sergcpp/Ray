@@ -38,6 +38,7 @@ static_assert(sizeof(tri_accel_t) == 48, "!");
 
 const uint8_t TRI_W_BITS = 0b00000011;
 const uint8_t TRI_AXIS_ALIGNED_BIT = 0b00000100;
+const uint8_t TRI_INV_NORMAL_BIT = 0b00001000;
 
 const float HIT_BIAS = 0.001f;
 const float HIT_EPS = 0.000001f;

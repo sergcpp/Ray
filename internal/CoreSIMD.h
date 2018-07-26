@@ -1204,6 +1204,7 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
         int32_t _iw = tri.ci & TRI_W_BITS;
 
         float l = std::sqrt(1.0f + tri.nu * tri.nu + tri.nv * tri.nv);
+        if (tri.ci & TRI_INV_NORMAL_BIT) l = -l;
 
         plane_N[_iw][i] = 1.0f / l;
         plane_N[_next_u[_iw]][i] = tri.nu / l;
@@ -1326,7 +1327,11 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
 
     simd_fvec<S> _dot_I_N = dot(I, N);
 
-    const simd_ivec<S> hi = (hash(px_index) + iteration) & (HaltonSeqLen - 1);
+    // used to randomize halton sequence among pixels
+    simd_ivec<S> rand_hash = hash(px_index), rand_hash2;
+    simd_fvec<S> rand_offset = construct_float(rand_hash), rand_offset2;
+
+    const simd_ivec<S> hi = iteration & (HaltonSeqLen - 1);
 
     simd_ivec<S> secondary_mask = { 0 };
 
@@ -1372,7 +1377,11 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
                 for (int i = 0; i < S; i++) {
                     if (!same_mi[i]) continue;
 
-                    const float r = halton[hi[i] * 2];
+                    float _unused;
+                    const float r = std::modf(halton[hi[i] * 2] + rand_offset[i], &_unused);
+
+                    rand_hash[i] = hash(rand_hash[i]);
+                    rand_offset = construct_float(rand_hash);
 
                     // shlick fresnel
                     float RR = mat->fresnel + (1.0f - mat->fresnel) * std::pow(1.0f + _dot_I_N[i], 5.0f);
@@ -1396,6 +1405,9 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
 
                 mat = &materials[first_mi];
             }
+
+            rand_hash2 = hash(rand_hash);
+            rand_offset2 = construct_float(rand_hash2);
 
             simd_fvec<S> tex_normal[4], tex_albedo[4];
 
@@ -1428,7 +1440,7 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
                 simd_fvec<S> k = __N[0] * env.sun_dir[0] + __N[1] * env.sun_dir[1] + __N[2] * env.sun_dir[2];
                 simd_fvec<S> v = { 1.0f };
 
-                const auto k_pos_mask = k > 0.0f;
+                const auto k_pos_mask = k > FLT_EPS;
                 const auto _mask = reinterpret_cast<const simd_ivec<S>&>(k_pos_mask) & same_mi;
 
                 if (_mask.not_all_zeros()) {
@@ -1442,10 +1454,11 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
                     for (int i = 0; i < S; i++) {
                         if (!_mask[i]) continue;
 
-                        const float z = 1.0f - halton[hi[i] * 2] * env.sun_softness;
+                        float _unused;
+                        const float z = 1.0f - std::modf(halton[hi[i] * 2] + rand_offset[i], &_unused) * env.sun_softness;
                         const float temp = std::sqrt(1.0f - z * z);
 
-                        const float phi = halton[hi[i] * 2 + 1] * 2 * PI;
+                        const float phi = 2 * PI * std::modf(halton[hi[i] * 2 + 1] + rand_offset2[i], &_unused);
                         const float cos_phi = std::cos(phi);
                         const float sin_phi = std::sin(phi);
 
@@ -1485,19 +1498,14 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
 
                 simd_fvec<S> V[3];
 
-                simd_ivec<S> _hi = iteration & (HaltonSeqLen - 1);
-
-                simd_fvec<S> f1 = construct_float(hash(px_index));
-                simd_fvec<S> f2 = construct_float(hash(hash(px_index)));
-
                 for (int i = 0; i < S; i++) {
                     if (!same_mi[i]) continue;
 
                     float _unused;
-                    const float z = std::modf(halton[_hi[i] * 2] + f1[i], &_unused);
+                    const float z = std::modf(halton[hi[i] * 2] + rand_offset[i], &_unused);
 
                     const float dir = std::sqrt(z);
-                    const float phi = 2 * PI * std::modf(halton[_hi[i] * 2 + 1] + f2[i], &_unused);
+                    const float phi = 2 * PI * std::modf(halton[hi[i] * 2 + 1] + rand_offset2[i], &_unused);
 
                     const float cos_phi = std::cos(phi);
                     const float sin_phi = std::sin(phi);
@@ -1566,21 +1574,20 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
                                        ray.c[1] /* tex_albedo[1]*/,
                                        ray.c[2] /* tex_albedo[2]*/ };
 
-                for (int i = 0; i < S; i++) {
-                    const float z = 1.0f - halton[hi[i] * 2] * mat->roughness;
-                    const float temp = std::sqrt(1.0f - z * z);
+                const float h = 1.0f - std::cos(0.5f * PI * mat->roughness * mat->roughness);
 
-                    const float phi = halton[((hash(hi[i]) + iteration) & (HaltonSeqLen - 1)) * 2 + 0] * 2 * PI;
+                for (int i = 0; i < S; i++) {
+                    float _unused;
+                    const float z = h * std::modf(halton[hi[i] * 2] + rand_offset[i], &_unused);
+                    const float dir = std::sqrt(z);
+
+                    const float phi = 2 * PI * std::modf(halton[hi[i] * 2 + 1] + rand_offset2[i], &_unused);
                     const float cos_phi = std::cos(phi);
                     const float sin_phi = std::sin(phi);
 
-                    V[0][i] = temp * sin_phi * BB[0][i] + z * V[0][i] + temp * cos_phi * TT[0][i];
-                    V[1][i] = temp * sin_phi * BB[1][i] + z * V[1][i] + temp * cos_phi * TT[1][i];
-                    V[2][i] = temp * sin_phi * BB[2][i] + z * V[2][i] + temp * cos_phi * TT[2][i];
-
-                    rc[0][i] *= z;
-                    rc[1][i] *= z;
-                    rc[2][i] *= z;
+                    V[0][i] = dir * sin_phi * BB[0][i] + std::sqrt(1.0f - dir) * V[0][i] + dir * cos_phi * TT[0][i];
+                    V[1][i] = dir * sin_phi * BB[1][i] + std::sqrt(1.0f - dir) * V[1][i] + dir * cos_phi * TT[1][i];
+                    V[2][i] = dir * sin_phi * BB[2][i] + std::sqrt(1.0f - dir) * V[2][i] + dir * cos_phi * TT[2][i];
                 }
 
                 simd_fvec<S> thres = dot(rc, rc);
@@ -1716,9 +1723,9 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
             } else if (mat->type == EmissiveMaterial) {
                 const auto &mask = reinterpret_cast<const simd_fvec<S>&>(same_mi);
 
-                where(mask, out_rgba[0]) = mat->strength * ray.c[0] * mat->main_color[0];
-                where(mask, out_rgba[1]) = mat->strength * ray.c[1] * mat->main_color[1];
-                where(mask, out_rgba[2]) = mat->strength * ray.c[2] * mat->main_color[2];
+                where(mask, out_rgba[0]) = mat->strength * ray.c[0] * tex_albedo[0];
+                where(mask, out_rgba[1]) = mat->strength * ray.c[1] * tex_albedo[1];
+                where(mask, out_rgba[2]) = mat->strength * ray.c[2] * tex_albedo[2];
             }
 
             index++;

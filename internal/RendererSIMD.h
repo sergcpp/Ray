@@ -238,7 +238,7 @@ void ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
         auto time_secondary_sort_start = std::chrono::high_resolution_clock::now();
 
         SortRays(&p.secondary_rays[0], &p.secondary_masks[0], secondary_rays_count, root_min, cell_size,
-                          &p.hash_values[0], &p.head_flags[0], &p.scan_values[0], &p.chunks[0], &p.chunks_temp[0], &p.skeleton[0]);
+                 &p.hash_values[0], &p.head_flags[0], &p.scan_values[0], &p.chunks[0], &p.chunks_temp[0], &p.skeleton[0]);
 
 #if 0   // debug hash values
         static std::vector<simd_fvec3> color_table;
