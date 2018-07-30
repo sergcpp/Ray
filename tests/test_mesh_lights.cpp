@@ -109,7 +109,13 @@ void test_mesh_lights() {
 
         std::shared_ptr<ray::RendererBase> renderer;
 
-        ray::eRendererType renderer_types[] = { ray::RendererRef, ray::RendererSSE, ray::RendererAVX, ray::RendererNEON, ray::RendererOCL };
+        ray::eRendererType renderer_types[] = { ray::RendererRef, ray::RendererSSE, ray::RendererAVX,
+#if defined(__ANDROID__)
+            ray::RendererNEON, 
+#elif !defined(DISABLE_OCL)
+			ray::RendererOCL
+#endif
+			};
         
         for (auto rt : renderer_types) {
             renderer = ray::CreateRenderer(s, rt);
