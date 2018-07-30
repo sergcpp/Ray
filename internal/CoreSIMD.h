@@ -378,11 +378,11 @@ force_inline void radix_sort(ray_chunk_t *begin, ray_chunk_t *end, ray_chunk_t *
 }
 
 template <int S>
-force_inline simd_fvec<S> construct_float(simd_ivec<S> m) {
+force_inline simd_fvec<S> construct_float(const simd_ivec<S> &_m) {
     const simd_ivec<S> ieeeMantissa = { 0x007FFFFF }; // binary32 mantissa bitmask
     const simd_ivec<S> ieeeOne = { 0x3F800000 };      // 1.0 in IEEE binary32
 
-    m = m & ieeeMantissa;                     // Keep only mantissa bits (fractional part)
+    simd_ivec<S> m = _m & ieeeMantissa;       // Keep only mantissa bits (fractional part)
     m = m | ieeeOne;                          // Add fractional part to 1.0
 
     simd_fvec<S>  f = reinterpret_cast<simd_fvec<S> &>(m);  // Range [1:2]
