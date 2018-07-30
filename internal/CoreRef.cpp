@@ -882,8 +882,8 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
     ////////////////////////////////////////////////////////
 
     // used to randomize halton sequence among pixels
-    int rand_hash = hash(index), rand_hash2;
-    float rand_offset = construct_float(rand_hash), rand_offset2;
+    int rand_hash = hash(index), rand_hash2, rand_hash3;
+    float rand_offset = construct_float(rand_hash), rand_offset2, rand_offset3;
 
     const int hi = iteration & (HaltonSeqLen - 1);
 
@@ -906,6 +906,9 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
 
     rand_hash2 = hash(rand_hash);
     rand_offset2 = construct_float(rand_hash2);
+
+    rand_hash3 = hash(rand_hash2);
+    rand_offset3 = construct_float(rand_hash3);
 
     ////////////////////////////////////////////////////////
 
@@ -1014,7 +1017,12 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
         memcpy(&r.dd_dx[0], value_ptr(dd_dx - 2 * (dot(I, plane_N) * dndx + ddn_dx * plane_N)), 3 * sizeof(float));
         memcpy(&r.dd_dy[0], value_ptr(dd_dy - 2 * (dot(I, plane_N) * dndy + ddn_dy * plane_N)), 3 * sizeof(float));
 
-        if ((r.c[0] * r.c[0] + r.c[1] * r.c[1] + r.c[2] * r.c[2]) > 0.005f) {
+        const float thr = std::max(r.c[0], std::max(r.c[1], r.c[2]));
+        const float p = std::modf(halton[hi * 2] + rand_offset3, &_unused);
+        if (p > (1.0f - thr / RAY_TERM_THRES)) {
+            if (thr < RAY_TERM_THRES) {
+                r.c[0] *= RAY_TERM_THRES / thr; r.c[1] *= RAY_TERM_THRES / thr; r.c[2] *= RAY_TERM_THRES / thr;
+            }
             const int index = (*out_secondary_rays_count)++;
             out_secondary_rays[index] = r;
         }
@@ -1054,7 +1062,12 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
         memcpy(&r.dd_dx[0], value_ptr(dd_dx - 2 * (dot(I, plane_N) * dndx + ddn_dx * plane_N)), 3 * sizeof(float));
         memcpy(&r.dd_dy[0], value_ptr(dd_dy - 2 * (dot(I, plane_N) * dndy + ddn_dy * plane_N)), 3 * sizeof(float));
 
-        if ((r.c[0] * r.c[0] + r.c[1] * r.c[1] + r.c[2] * r.c[2]) > 0.005f) {
+        const float thr = std::max(r.c[0], std::max(r.c[1], r.c[2]));
+        const float p = std::modf(halton[hi * 2] + rand_offset3, &_unused);
+        if (p < thr / RAY_TERM_THRES) {
+            if (thr < RAY_TERM_THRES) {
+                r.c[0] *= RAY_TERM_THRES / thr; r.c[1] *= RAY_TERM_THRES / thr; r.c[2] *= RAY_TERM_THRES / thr;
+            }
             const int index = (*out_secondary_rays_count)++;
             out_secondary_rays[index] = r;
         }
@@ -1100,7 +1113,14 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
         memcpy(&r.dd_dx[0], value_ptr(eta * dd_dx - (m * dndx + dmdx * plane_N)), 3 * sizeof(float));
         memcpy(&r.dd_dy[0], value_ptr(eta * dd_dy - (m * dndy + dmdy * plane_N)), 3 * sizeof(float));
 
-        if ((r.c[0] * r.c[0] + r.c[1] * r.c[1] + r.c[2] * r.c[2]) > 0.005f) {
+        float _unused;
+
+        const float thr = std::max(r.c[0], std::max(r.c[1], r.c[2]));
+        const float p = std::modf(halton[hi * 2] + rand_offset3, &_unused);
+        if (p < thr / RAY_TERM_THRES) {
+            if (thr < RAY_TERM_THRES) {
+                r.c[0] *= RAY_TERM_THRES / thr; r.c[1] *= RAY_TERM_THRES / thr; r.c[2] *= RAY_TERM_THRES / thr;
+            }
             const int index = (*out_secondary_rays_count)++;
             out_secondary_rays[index] = r;
         }
@@ -1122,7 +1142,14 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
         memcpy(&r.dd_dx[0], &ray.dd_dx[0], 3 * sizeof(float));
         memcpy(&r.dd_dy[0], &ray.dd_dy[0], 3 * sizeof(float));
 
-        if ((r.c[0] * r.c[0] + r.c[1] * r.c[1] + r.c[2] * r.c[2]) > 0.005f) {
+        float _unused;
+
+        const float thr = std::max(r.c[0], std::max(r.c[1], r.c[2]));
+        const float p = std::modf(halton[hi * 2] + rand_offset3, &_unused);
+        if (p < thr / RAY_TERM_THRES) {
+            if (thr < RAY_TERM_THRES) {
+                r.c[0] *= RAY_TERM_THRES / thr; r.c[1] *= RAY_TERM_THRES / thr; r.c[2] *= RAY_TERM_THRES / thr;
+            }
             const int index = (*out_secondary_rays_count)++;
             out_secondary_rays[index] = r;
         }

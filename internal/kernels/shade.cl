@@ -54,7 +54,7 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
     float3 N = fast_normalize(n1 * _w + n2 * inter->u + n3 * inter->v);
     float2 uvs = u1 * _w + u2 * inter->u + u3 * inter->v;
 
-    //////////////////////////////////////////
+    //
 
     const float2 tex_atlas_size = (float2)(get_image_width(texture_atlas), get_image_height(texture_atlas));
 
@@ -85,8 +85,6 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
     const float3 dd_dx = orig_ray->dd_dx;
     const float3 dd_dy = orig_ray->dd_dy;
 
-    ////////////////////////////////////////////////////////
-
     // From 'Physically Based Rendering: ...' book
 
     const float2 duv13 = u1 - u3, duv23 = u2 - u3;
@@ -115,11 +113,9 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
     const float2 duv_dx = (float2)(A[0].x * Bx.x - A[0].y * Bx.y, A[1].x * Bx.x - A[1].y * Bx.y) * inv_det;
     const float2 duv_dy = (float2)(A[0].x * By.x - A[0].y * By.y, A[1].x * By.x - A[1].y * By.y) * inv_det;
 
-    ////////////////////////////////////////////////////////
-
     // used to randomize halton sequence among pixels
-    int rand_hash = hash(index), rand_hash2;
-    float rand_offset = construct_float(rand_hash), rand_offset2;
+    int rand_hash = hash(index), rand_hash2, rand_hash3;
+    float rand_offset = construct_float(rand_hash), rand_offset2, rand_offset3;
 
     const int hi = iteration & (HaltonSeqLen - 1);
 
@@ -143,6 +139,9 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
     rand_hash2 = hash(rand_hash);
     rand_offset2 = construct_float(rand_hash2);
 
+    rand_hash3 = hash(rand_hash2);
+    rand_offset3 = construct_float(rand_hash3);
+
     // Derivative for normal
     const float3 dn1 = n1 - n3, dn2 = n2 - n3;
     const float3 dndu = (duv23.y * dn1 - duv13.y * dn2) * inv_det_uv;
@@ -153,7 +152,6 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
 
     const float ddn_dx = dot(dd_dx, plane_N) + dot(I, dndx);
     const float ddn_dy = dot(dd_dy, plane_N) + dot(I, dndy);
-
     //
     const float3 b1 = (float3)(v1->b[0], v1->b[1], v1->b[2]);
     const float3 b2 = (float3)(v2->b[0], v2->b[1], v2->b[2]);
@@ -162,13 +160,10 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
     float3 B = b1 * _w + b2 * inter->u + b3 * inter->v;
     float3 T = cross(B, N);
 
-    float4 normals = SampleTextureBilinear(texture_atlas, &textures[mat->textures[NORMALS_TEXTURE]], uvs, 0);
-
-    normals = 2.0f * normals - 1.0f;
-
+    float4 normals = 2 * SampleTextureBilinear(texture_atlas, &textures[mat->textures[NORMALS_TEXTURE]], uvs, 0) - 1;
     N = normals.x * B + normals.z * N + normals.y * T;
     
-    //////////////////////////////////////////
+    //
 
     __global const transform_t *tr = &transforms[mesh_instances[inter->obj_index].tr_index];
 
@@ -179,6 +174,9 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
     float4 albedo = SampleTextureAnisotropic(texture_atlas, &textures[mat->textures[MAIN_TEXTURE]], uvs, duv_dx, duv_dy);
     albedo.xyz *= mat->main_color;
     albedo = native_powr(albedo, 2.2f);
+
+)" // workaround for 16k string literal limitation on msvc
+R"(
 
     float3 col;
 
@@ -207,7 +205,6 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
         }
 
         k = clamp(k, 0.0f, 1.0f);
-
         col = albedo.xyz * env.sun_col * v * k;
 
         float _unused;
@@ -230,7 +227,10 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
         r.dd_dx = dd_dx - 2 * (dot(I, plane_N) * dndx + ddn_dx * plane_N);
         r.dd_dy = dd_dy - 2 * (dot(I, plane_N) * dndy + ddn_dy * plane_N);
 
-        if (dot(r.c.xyz, r.c.xyz) > 0.005f) {
+        const float thr = max(r.c.x, max(r.c.y, r.c.z));
+        const float p = fract(halton[hi * 2] + rand_offset3, &_unused);
+        if (p < thr / RAY_TERM_THRES) {
+            if (thr < RAY_TERM_THRES) r.c.xyz *= RAY_TERM_THRES / thr;
             const int index = atomic_inc(out_secondary_rays_count);
             out_secondary_rays[index] = r;
         }
@@ -266,7 +266,10 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
         r.dd_dx = dd_dx - 2 * (dot(I, plane_N) * dndx + ddn_dx * plane_N);
         r.dd_dy = dd_dy - 2 * (dot(I, plane_N) * dndy + ddn_dy * plane_N);
 
-        if (dot(r.c.xyz, r.c.xyz) > 0.005f) {
+        const float thr = max(r.c.x, max(r.c.y, r.c.z));
+        const float p = fract(halton[hi * 2] + rand_offset3, &_unused);
+        if (p < thr / RAY_TERM_THRES) {
+            if (thr < RAY_TERM_THRES) r.c.xyz *= RAY_TERM_THRES / thr;
             const int index = atomic_inc(out_secondary_rays_count);
             out_secondary_rays[index] = r;
         }
@@ -306,7 +309,12 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
         r.dd_dx = eta * dd_dx - (m * dndx + dmdx * plane_N);
         r.dd_dy = eta * dd_dy - (m * dndy + dmdy * plane_N);
 
-        if (cost2 >= 0 && dot(r.c.xyz, r.c.xyz) > 0.005f) {
+        float _unused;
+
+        const float thr = max(r.c.x, max(r.c.y, r.c.z));
+        const float p = fract(halton[hi * 2] + rand_offset3, &_unused);
+        if (cost2 >= 0 && p < thr / RAY_TERM_THRES) {
+            if (thr < RAY_TERM_THRES) r.c.xyz *= RAY_TERM_THRES / thr;
             const int index = atomic_inc(out_secondary_rays_count);
             out_secondary_rays[index] = r;
         }
@@ -324,7 +332,12 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
         r.dd_dx = dd_dx;
         r.dd_dy = dd_dy;
 
-        if (dot(r.c.xyz, r.c.xyz) > 0.005f) {
+        float _unused;
+
+        const float thr = max(r.c.x, max(r.c.y, r.c.z));
+        const float p = fract(halton[hi * 2] + rand_offset3, &_unused);
+        if (p < thr / RAY_TERM_THRES) {
+            if (thr < RAY_TERM_THRES) r.c.xyz *= RAY_TERM_THRES / thr;
             const int index = atomic_inc(out_secondary_rays_count);
             out_secondary_rays[index] = r;
         }
@@ -360,16 +373,11 @@ void ShadePrimary(const int iteration, __global const float *halton, int w,
 }
 
 __kernel
-void ShadeSecondary(const int iteration, __global const float *halton,
-                    __global const hit_data_t *prim_inters, __global const ray_packet_t *prim_rays,
-                    __global const mesh_instance_t *mesh_instances, __global const uint *mi_indices,
-                    __global const mesh_t *meshes, __global const transform_t *transforms,
-                    __global const uint *vtx_indices, __global const vertex_t *vertices,
-                    __global const bvh_node_t *nodes, uint node_index, 
-                    __global const tri_accel_t *tris, __global const uint *tri_indices, 
-                    const environment_t env, __global const material_t *materials, __global const texture_t *textures, __read_only image2d_array_t texture_atlas,
-                    __write_only image2d_t frame_buf, __read_only image2d_t frame_buf2,
-                    __global ray_packet_t *out_secondary_rays, __global int *out_secondary_rays_count) {
+void ShadeSecondary(const int iteration, __global const float *halton, __global const hit_data_t *prim_inters, __global const ray_packet_t *prim_rays,
+                    __global const mesh_instance_t *mesh_instances, __global const uint *mi_indices, __global const mesh_t *meshes, __global const transform_t *transforms,
+                    __global const uint *vtx_indices, __global const vertex_t *vertices, __global const bvh_node_t *nodes, uint node_index, 
+                    __global const tri_accel_t *tris, __global const uint *tri_indices, const environment_t env, __global const material_t *materials, __global const texture_t *textures, __read_only image2d_array_t texture_atlas,
+                    __write_only image2d_t frame_buf, __read_only image2d_t frame_buf2, __global ray_packet_t *out_secondary_rays, __global int *out_secondary_rays_count) {
     const int index = get_global_id(0);
 
     __global const ray_packet_t *orig_ray = &prim_rays[index];

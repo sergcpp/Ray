@@ -108,6 +108,7 @@ ray::ocl::Renderer::Renderer(int w, int h, int platform_index, int device_index)
         cl_src_defines += "#define HIT_EPS " + std::to_string(HIT_EPS) + "f\n";
         cl_src_defines += "#define FLT_EPS " + std::to_string(FLT_EPS) + "f\n";
         cl_src_defines += "#define PI " + std::to_string(PI) + "f\n";
+        cl_src_defines += "#define RAY_TERM_THRES " + std::to_string(RAY_TERM_THRES) + "f\n";
         cl_src_defines += "#define HaltonSeqLen " + std::to_string(HaltonSeqLen) + "\n";
         cl_src_defines += "#define MAX_MIP_LEVEL " + std::to_string(MAX_MIP_LEVEL) + "\n";
         cl_src_defines += "#define NUM_MIP_LEVELS " + std::to_string(NUM_MIP_LEVELS) + "\n";

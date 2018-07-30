@@ -386,7 +386,7 @@ force_inline simd_fvec<S> construct_float(const simd_ivec<S> &_m) {
     m = m | ieeeOne;                          // Add fractional part to 1.0
 
     simd_fvec<S>  f = reinterpret_cast<simd_fvec<S> &>(m);  // Range [1:2]
-    return f - simd_fvec<S>{ 1.0f };                                        // Range [0:1]
+    return f - simd_fvec<S>{ 1.0f };                        // Range [0:1]
 }
 
 }
@@ -1328,8 +1328,8 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
     simd_fvec<S> _dot_I_N = dot(I, N);
 
     // used to randomize halton sequence among pixels
-    simd_ivec<S> rand_hash = hash(px_index), rand_hash2;
-    simd_fvec<S> rand_offset = construct_float(rand_hash), rand_offset2;
+    simd_ivec<S> rand_hash = hash(px_index), rand_hash2, rand_hash3;
+    simd_fvec<S> rand_offset = construct_float(rand_hash), rand_offset2, rand_offset3;
 
     const simd_ivec<S> hi = iteration & (HaltonSeqLen - 1);
 
@@ -1408,6 +1408,9 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
 
             rand_hash2 = hash(rand_hash);
             rand_offset2 = construct_float(rand_hash2);
+
+            rand_hash3 = hash(rand_hash2);
+            rand_offset3 = construct_float(rand_hash3);
 
             simd_fvec<S> tex_normal[4], tex_albedo[4];
 
@@ -1492,11 +1495,9 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
                 where(mask, out_rgba[2]) = ray.c[2] * tex_albedo[2] * env.sun_col[2] * v * k;
 
                 // !!!!!!!!!!!!
-                simd_fvec<S> rc[3] = { ray.c[0] * tex_albedo[0],
-                                       ray.c[1] * tex_albedo[1],
-                                       ray.c[2] * tex_albedo[2] };
+                simd_fvec<S> rc[3] = { ray.c[0] * tex_albedo[0], ray.c[1] * tex_albedo[1], ray.c[2] * tex_albedo[2] };
 
-                simd_fvec<S> V[3];
+                simd_fvec<S> V[3], p;
 
                 for (int i = 0; i < S; i++) {
                     if (!same_mi[i]) continue;
@@ -1513,15 +1514,21 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
                     V[0][i] = dir * sin_phi * B[0][i] + std::sqrt(1.0f - dir) * __N[0][i] + dir * cos_phi * T[0][i];
                     V[1][i] = dir * sin_phi * B[1][i] + std::sqrt(1.0f - dir) * __N[1][i] + dir * cos_phi * T[1][i];
                     V[2][i] = dir * sin_phi * B[2][i] + std::sqrt(1.0f - dir) * __N[2][i] + dir * cos_phi * T[2][i];
+                
+                    p[i] = std::modf(halton[hi[i] * 2] + rand_offset3[i], &_unused);
                 }
 
-                simd_fvec<S> thres = dot(rc, rc);
-
-                const auto new_ray_mask = (thres > 0.005f) & reinterpret_cast<const simd_fvec<S>&>(same_mi);
+                const simd_fvec<S> thr = max(rc[0], max(rc[1], rc[2]));
+                const auto new_ray_mask = (p < thr / RAY_TERM_THRES) & reinterpret_cast<const simd_fvec<S>&>(same_mi);
 
                 if (reinterpret_cast<const simd_ivec<S>&>(new_ray_mask).not_all_zeros()) {
                     const int index = *out_secondary_rays_count;
                     auto &r = out_secondary_rays[index];
+
+                    // modify weight of non-terminated ray
+                    where(thr < RAY_TERM_THRES, rc[0]) = rc[0] * (RAY_TERM_THRES / thr);
+                    where(thr < RAY_TERM_THRES, rc[1]) = rc[1] * (RAY_TERM_THRES / thr);
+                    where(thr < RAY_TERM_THRES, rc[2]) = rc[2] * (RAY_TERM_THRES / thr);
 
                     secondary_mask = secondary_mask | reinterpret_cast<const simd_ivec<S>&>(new_ray_mask);
 
@@ -1570,9 +1577,7 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
                 cross(V, B, TT);
                 cross(V, TT, BB);
 
-                simd_fvec<S> rc[3] = { ray.c[0] /* tex_albedo[0]*/,
-                                       ray.c[1] /* tex_albedo[1]*/,
-                                       ray.c[2] /* tex_albedo[2]*/ };
+                simd_fvec<S> rc[3] = { ray.c[0], ray.c[1], ray.c[2] }, p;
 
                 const float h = 1.0f - std::cos(0.5f * PI * mat->roughness * mat->roughness);
 
@@ -1588,15 +1593,21 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
                     V[0][i] = dir * sin_phi * BB[0][i] + std::sqrt(1.0f - dir) * V[0][i] + dir * cos_phi * TT[0][i];
                     V[1][i] = dir * sin_phi * BB[1][i] + std::sqrt(1.0f - dir) * V[1][i] + dir * cos_phi * TT[1][i];
                     V[2][i] = dir * sin_phi * BB[2][i] + std::sqrt(1.0f - dir) * V[2][i] + dir * cos_phi * TT[2][i];
+                
+                    p[i] = std::modf(halton[hi[i] * 2] + rand_offset3[i], &_unused);
                 }
 
-                simd_fvec<S> thres = dot(rc, rc);
-
-                const auto new_ray_mask = (thres > 0.005f) & reinterpret_cast<const simd_fvec<S>&>(same_mi);
+                const simd_fvec<S> thr = max(rc[0], max(rc[1], rc[2]));
+                const auto new_ray_mask = (p < thr / RAY_TERM_THRES) & reinterpret_cast<const simd_fvec<S>&>(same_mi);
 
                 if (reinterpret_cast<const simd_ivec<S>&>(new_ray_mask).not_all_zeros()) {
                     const int index = *out_secondary_rays_count;
                     auto &r = out_secondary_rays[index];
+
+                    // modify weight of non-terminated ray
+                    where(thr < RAY_TERM_THRES, rc[0]) = rc[0] * (RAY_TERM_THRES / thr);
+                    where(thr < RAY_TERM_THRES, rc[1]) = rc[1] * (RAY_TERM_THRES / thr);
+                    where(thr < RAY_TERM_THRES, rc[2]) = rc[2] * (RAY_TERM_THRES / thr);
 
                     secondary_mask = secondary_mask | reinterpret_cast<const simd_ivec<S>&>(new_ray_mask);
 
@@ -1658,7 +1669,7 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
                 normalize(TT);
                 normalize(BB);
 
-                simd_fvec<S> rc[3] = { ray.c[0], ray.c[1], ray.c[2] };
+                simd_fvec<S> rc[3] = { ray.c[0], ray.c[1], ray.c[2] }, p;
 
                 for (int i = 0; i < S; i++) {
                     const float z = 1.0f - halton[hi[i] * 2] * mat->roughness;
@@ -1675,6 +1686,9 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
                     rc[0][i] *= z;
                     rc[1][i] *= z;
                     rc[2][i] *= z;
+
+                    float _unused;
+                    p[i] = std::modf(halton[hi[i] * 2] + rand_offset3[i], &_unused);
                 }
 
                 simd_fvec<S> k = (eta - eta * eta * dot(I, plane_N) / dot(V, plane_N));
@@ -1683,11 +1697,17 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
 
                 simd_fvec<S> thres = dot(rc, rc);
 
-                const auto new_ray_mask = (cost2 >= 0.0f) & (thres > 0.005f) & reinterpret_cast<const simd_fvec<S>&>(same_mi);
+                const simd_fvec<S> thr = max(rc[0], max(rc[1], rc[2]));
+                const auto new_ray_mask = (cost2 >= 0.0f) & (p < thr / RAY_TERM_THRES) & reinterpret_cast<const simd_fvec<S>&>(same_mi);
 
                 if (reinterpret_cast<const simd_ivec<S>&>(new_ray_mask).not_all_zeros()) {
                     const int index = *out_secondary_rays_count;
                     auto &r = out_secondary_rays[index];
+
+                    // modify weight of non-terminated ray
+                    where(thr < RAY_TERM_THRES, rc[0]) = rc[0] * (RAY_TERM_THRES / thr);
+                    where(thr < RAY_TERM_THRES, rc[1]) = rc[1] * (RAY_TERM_THRES / thr);
+                    where(thr < RAY_TERM_THRES, rc[2]) = rc[2] * (RAY_TERM_THRES / thr);
 
                     secondary_mask = secondary_mask | reinterpret_cast<const simd_ivec<S>&>(new_ray_mask);
 

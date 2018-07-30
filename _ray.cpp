@@ -32,6 +32,7 @@
 // add more validation tests (use Cycles)
 
 // DONE:
+// proper ray termination
 // add validation tests (use Cycles)
 // make camera fov work
 // add neon support

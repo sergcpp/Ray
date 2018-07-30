@@ -269,6 +269,13 @@ public:
         return std::sqrt(temp);
     }
 
+    force_inline simd_vec<T, S> fract() const {
+        simd_vec<T, S> temp;
+        T _unused;
+        ITERATE(S, { temp[i] = std::modf(comp_[i], &_unused); })
+        return temp;
+    }
+
     force_inline void copy_to(T *f) const {
         memcpy(f, &comp_[0], S * sizeof(T));
     }
@@ -524,6 +531,9 @@ force_inline simd_vec<T, S> sqrt(const simd_vec<T, S> &v1) { return v1.sqrt(); }
 
 template <typename T, int S>
 force_inline T length(const simd_vec<T, S> &v1) { return v1.length(); }
+
+template <typename T, int S>
+force_inline simd_vec<T, S> fract(const simd_vec<T, S> &v1) { return v1.fract(); }
 
 template <typename T, int S>
 force_inline simd_vec<T, S> min(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) { return simd_vec<T, S>::min(v1, v2); }

@@ -50,6 +50,8 @@ const float MAX_DIST = 3.402823466e+38F;
 
 const int MAX_BOUNCES = 4;
 
+const float RAY_TERM_THRES = 0.01f;
+
 struct bvh_node_t {
     uint32_t prim_index, prim_count,
              left_child, right_child, parent, sibling,
