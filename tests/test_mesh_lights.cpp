@@ -157,10 +157,21 @@ void test_mesh_lights() {
 
             renderer->Clear();
 
+            int prog = 0;
+
+            printf("0%%\n");
+
             auto reg = ray::RegionContext{ { 0, 0, 64, 64 } };
             for (int i = 0; i < NUM_SAMPLES; i++) {
                 renderer->RenderScene(scene, reg);
+                float new_prog = float(100 * i) / NUM_SAMPLES;
+                if (new_prog - prog > 10) {
+                    prog = (int)new_prog;
+                    printf("%i%%\n", prog);
+                }
             }
+
+            printf("100%%\n");
 
             const ray::pixel_color_t *pixels = renderer->get_pixels_ref();
 
