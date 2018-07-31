@@ -144,25 +144,30 @@ uint32_t ray::PreprocessMesh(const float *attrs, size_t attrs_count, const uint3
     size_t tris_count = vtx_indices_count / 3;
     out_tris.resize(tris_start + tris_count);
 
+    const float *positions;
+    size_t attr_stride;
+    if (layout == PxyzNxyzTuv) {
+        positions = attrs;
+        attr_stride = 8;
+    }
+
     for (size_t j = 0; j < vtx_indices_count; j += 3) {
         float p[9];
 
-        if (layout == PxyzNxyzTuv) {
-            memcpy(&p[0], &attrs[vtx_indices[j] * 8], 3 * sizeof(float));
-            memcpy(&p[3], &attrs[vtx_indices[j + 1] * 8], 3 * sizeof(float));
-            memcpy(&p[6], &attrs[vtx_indices[j + 2] * 8], 3 * sizeof(float));
-        }
+        memcpy(&p[0], &positions[vtx_indices[j] * attr_stride], 3 * sizeof(float));
+        memcpy(&p[3], &positions[vtx_indices[j + 1] * attr_stride], 3 * sizeof(float));
+        memcpy(&p[6], &positions[vtx_indices[j + 2] * attr_stride], 3 * sizeof(float));
 
         PreprocessTri(&p[0], 0, &out_tris[tris_start + j / 3]);
 
         ref::simd_fvec3 _min = min(ref::simd_fvec3{ &p[0] }, min(ref::simd_fvec3{ &p[3] }, ref::simd_fvec3{ &p[6] })),
                         _max = max(ref::simd_fvec3{ &p[0] }, max(ref::simd_fvec3{ &p[3] }, ref::simd_fvec3{ &p[6] }));
 
-        primitives.push_back({ _min, _max });
+        primitives.push_back({ vtx_indices[j], vtx_indices[j + 1], vtx_indices[j + 2], _min, _max });
     }
 
     size_t indices_start = out_tri_indices.size();
-    uint32_t num_out_nodes = PreprocessPrims(&primitives[0], primitives.size(), out_nodes, out_tri_indices);
+    uint32_t num_out_nodes = PreprocessPrims(&primitives[0], primitives.size(), positions, attr_stride, out_nodes, out_tri_indices);
 
     for (size_t i = indices_start; i < out_tri_indices.size(); i++) {
         out_tri_indices[i] += (uint32_t)tris_start;
@@ -171,7 +176,7 @@ uint32_t ray::PreprocessMesh(const float *attrs, size_t attrs_count, const uint3
     return num_out_nodes;
 }
 
-uint32_t ray::PreprocessPrims(const prim_t *prims, size_t prims_count,
+uint32_t ray::PreprocessPrims(const prim_t *prims, size_t prims_count, const float *positions, size_t stride,
                               std::vector<bvh_node_t> &out_nodes, std::vector<uint32_t> &out_indices) {
     struct prims_coll_t {
         std::vector<uint32_t> indices;
@@ -194,8 +199,11 @@ uint32_t ray::PreprocessPrims(const prim_t *prims, size_t prims_count,
         triangle_lists.back().max = max(triangle_lists.back().max, prims[j].bbox_max);
     }
 
+    ref::simd_fvec3 root_min = triangle_lists.back().min,
+                    root_max = triangle_lists.back().max;
+
     while (!triangle_lists.empty()) {
-        auto split_data = SplitPrimitives_SAH(prims, triangle_lists.back().indices, triangle_lists.back().min, triangle_lists.back().max);
+        auto split_data = SplitPrimitives_SAH(prims, triangle_lists.back().indices, positions, stride, triangle_lists.back().min, triangle_lists.back().max, root_min, root_max, true);
         triangle_lists.pop_back();
 
         uint32_t leaf_index = (uint32_t)out_nodes.size(),

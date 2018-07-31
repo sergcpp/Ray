@@ -322,14 +322,14 @@ void ray::ocl::Scene::RebuildMacroBVH() {
     mesh_instances_.Get(&mesh_instances[0], 0, mi_count);
 
     for (const auto &mi : mesh_instances) {
-        primitives.push_back({ ref::simd_fvec3{ mi.bbox_min }, ref::simd_fvec3{ mi.bbox_max } });
+        primitives.push_back({ 0, 0, 0, ref::simd_fvec3{ mi.bbox_min }, ref::simd_fvec3{ mi.bbox_max } });
     }
 
     std::vector<bvh_node_t> bvh_nodes;
     std::vector<uint32_t> mi_indices;
 
     macro_nodes_start_ = (uint32_t)nodes_.size();
-    macro_nodes_count_ = PreprocessPrims(&primitives[0], primitives.size(), bvh_nodes, mi_indices);
+    macro_nodes_count_ = PreprocessPrims(&primitives[0], primitives.size(), nullptr, 0, bvh_nodes, mi_indices);
 
     // offset nodes
     for (auto &n : bvh_nodes) {

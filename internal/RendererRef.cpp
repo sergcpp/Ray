@@ -107,6 +107,15 @@ void ray::ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
     p.secondary_rays.resize(p.intersections.size());
     int secondary_rays_count = 0;
 
+#if 1
+    static std::vector<simd_fvec3> color_table;
+    if (color_table.empty()) {
+        for (int i = 0; i < 1024; i++) {
+            color_table.emplace_back(float(rand()) / RAND_MAX, float(rand()) / RAND_MAX, float(rand()) / RAND_MAX);
+        }
+    }
+#endif
+
     for (size_t i = 0; i < p.intersections.size(); i++) {
         const auto &r = p.primary_rays[i];
         const auto &inter = p.intersections[i];
@@ -114,9 +123,17 @@ void ray::ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
         const int x = inter.id.x;
         const int y = inter.id.y;
         
+#if 1
+        const auto &c = color_table[inter.prim_indices[0] != -1 ? inter.prim_indices[0] % 1024 : 0];
+        pixel_color_t col = { c[0], c[1], c[2], 1.0f };
+        //float t = std::pow(inter.prim_indices[0] / 32.0f, 2.0f);
+        //pixel_color_t col = { t, t, t, 1.0f };
+#else
+
         pixel_color_t col = ShadeSurface((y * w + x), region.iteration, &region.halton_seq[0], inter, r, env, mesh_instances, 
                                          mi_indices, meshes, transforms, vtx_indices, vertices, nodes, macro_tree_root,
                                          tris, tri_indices, materials, textures, tex_atlas, &p.secondary_rays[0], &secondary_rays_count);
+#endif
         temp_buf_.SetPixel(x, y, col);
     }
 

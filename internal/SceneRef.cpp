@@ -280,9 +280,9 @@ void ray::ref::Scene::RebuildMacroBVH() {
     primitives.reserve(mesh_instances_.size());
 
     for (const auto &mi : mesh_instances_) {
-        primitives.push_back({ ref::simd_fvec3{ mi.bbox_min }, ref::simd_fvec3{ mi.bbox_max } });
+        primitives.push_back({ 0, 0, 0, ref::simd_fvec3{ mi.bbox_min }, ref::simd_fvec3{ mi.bbox_max } });
     }
 
     macro_nodes_start_ = (uint32_t)nodes_.size();
-    macro_nodes_count_ = PreprocessPrims(&primitives[0], primitives.size(), nodes_, mi_indices_);
+    macro_nodes_count_ = PreprocessPrims(&primitives[0], primitives.size(), nullptr, 0, nodes_, mi_indices_);
 }

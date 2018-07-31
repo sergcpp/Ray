@@ -522,6 +522,9 @@ bool ray::ref::Traverse_MicroTree_CPU(const ray_packet_t &r, const float inv_d[3
         src = FromParent;
     }
 
+    int cur_braversal_depth = 1;
+    //inter.prim_indices[0] = 1;
+
     while (true) {
         switch (src) {
         case FromChild:
@@ -532,21 +535,26 @@ bool ray::ref::Traverse_MicroTree_CPU(const ray_packet_t &r, const float inv_d[3
             } else {
                 cur = nodes[cur].parent;
                 src = FromChild;
+                cur_braversal_depth--;
             }
             break;
         case FromSibling:
             if (!bbox_test(r.o, inv_d, inter.t, nodes[cur])) {
                 cur = nodes[cur].parent;
                 src = FromChild;
+                cur_braversal_depth--;
             } else if (is_leaf_node(nodes[cur])) {
                 // process leaf
                 res |= IntersectTris(r, tris, &tri_indices[nodes[cur].prim_index], nodes[cur].prim_count, obj_index, inter);
 
                 cur = nodes[cur].parent;
                 src = FromChild;
+                cur_braversal_depth--;
             } else {
                 cur = near_child(r, nodes[cur]);
                 src = FromParent;
+                cur_braversal_depth++;
+                //inter.prim_indices[0] = std::max(inter.prim_indices[0], cur_braversal_depth);
             }
             break;
         case FromParent:
@@ -562,6 +570,8 @@ bool ray::ref::Traverse_MicroTree_CPU(const ray_packet_t &r, const float inv_d[3
             } else {
                 cur = near_child(r, nodes[cur]);
                 src = FromParent;
+                cur_braversal_depth++;
+                //inter.prim_indices[0] = std::max(inter.prim_indices[0], cur_braversal_depth);
             }
             break;
         }

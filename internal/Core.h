@@ -48,7 +48,7 @@ const float PI = 3.141592653589793238463f;
 
 const float MAX_DIST = 3.402823466e+38F;
 
-const int MAX_BOUNCES = 4;
+const int MAX_BOUNCES = 0;
 
 const float RAY_TERM_THRES = 0.01f;
 
@@ -105,7 +105,7 @@ void PreprocessTri(const float *p, int stride, tri_accel_t *acc);
 uint32_t PreprocessMesh(const float *attrs, size_t attrs_count, const uint32_t *indices, size_t indices_count, eVertexLayout layout,
                         std::vector<bvh_node_t> &out_nodes, std::vector<tri_accel_t> &out_tris, std::vector<uint32_t> &out_indices);
 
-uint32_t PreprocessPrims(const prim_t *prims, size_t prims_count,
+uint32_t PreprocessPrims(const prim_t *prims, size_t prims_count, const float *positions, size_t stride,
                          std::vector<bvh_node_t> &out_nodes, std::vector<uint32_t> &out_indices);
 
 bool NaiivePluckerTest(const float p[9], const float o[3], const float d[3]);
