@@ -53,7 +53,7 @@ force_inline bool is_leaf_node(const bvh_node_t &node) {
     return node.prim_count != 0;
 }
 
-bool bbox_test(const float o[3], const float inv_d[3], const float t, const float bbox_min[3], const float bbox_max[3]) {
+force_inline bool bbox_test(const float o[3], const float inv_d[3], const float t, const float bbox_min[3], const float bbox_max[3]) {
     float low = inv_d[0] * (bbox_min[0] - o[0]);
     float high = inv_d[0] * (bbox_max[0] - o[0]);
     float tmin = std::min(low, high);
