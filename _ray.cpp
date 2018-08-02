@@ -26,6 +26,8 @@
 #endif
 
 // TODO:
+// compare traversal algorithm with stack
+// try using image for node buffer (utilize texture cache)
 // add deletion functions for OpenCL backend
 // try again with spatial splits or remove unnecessary indirection
 // add tests for intersection
