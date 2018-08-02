@@ -26,6 +26,7 @@
 #endif
 
 // TODO:
+// replace box filter with tent
 // compare traversal algorithm with stack
 // try using image for node buffer (utilize texture cache)
 // add deletion functions for OpenCL backend
