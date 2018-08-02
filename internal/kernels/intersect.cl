@@ -3,12 +3,11 @@ R"(
 __constant int _next_u[] = { 1, 0, 0 },
                _next_v[] = { 2, 2, 1 };
 
-void IntersectTris(const ray_packet_t *r, __global const tri_accel_t *tris,
+void IntersectTris(const float3 r_o, const float3 r_d, __global const tri_accel_t *tris,
                    __global const uint *tri_indices, uint tri_index, uint tri_count, 
                    int obj_index, hit_data_t *hit) {
-
-    const float *rd = (const float *)&r->d;
-    const float *ro = (const float *)&r->o;
+	const float *ro = (const float *)&r_o;
+	const float *rd = (const float *)&r_d;
 
     for (uint j = tri_index; j < tri_index + tri_count; j++) {
         const __global tri_accel_t *tri = &tris[tri_indices[j]];
@@ -45,10 +44,10 @@ void IntersectTris(const ray_packet_t *r, __global const tri_accel_t *tris,
     }
 }
 
-float IntersectTris_Shadow(const ray_packet_t *r, __global const tri_accel_t *tris, 
+float IntersectTris_Shadow(const float3 r_o, const float3 r_d, __global const tri_accel_t *tris, 
                            __global const uint *tri_indices, int tri_index, int tri_count) {
-    const float *rd = (const float *)&r->d;
-    const float *ro = (const float *)&r->o;
+    const float *rd = (const float *)&r_d;
+    const float *ro = (const float *)&r_o;
 
     for (int j = tri_index; j < tri_index + tri_count; j++) {
         const __global tri_accel_t *tri = &tris[tri_indices[j]];

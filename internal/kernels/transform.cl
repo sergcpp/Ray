@@ -14,6 +14,26 @@ ray_packet_t TransformRay(const ray_packet_t *r, const __global float16 *xform) 
     return _r;
 }
 
+float3 TransformPoint(const float3 p, const __global float16 *xform) {
+    float3 _p;
+    
+    _p.x = (*xform).s0 * p.x + (*xform).s4 * p.y + (*xform).s8 * p.z + (*xform).sc;
+    _p.y = (*xform).s1 * p.x + (*xform).s5 * p.y + (*xform).s9 * p.z + (*xform).sd;
+    _p.z = (*xform).s2 * p.x + (*xform).s6 * p.y + (*xform).sa * p.z + (*xform).se;
+
+	return _p;
+}
+
+float3 TransformDirection(const float3 d, const __global float16 *xform) {
+    float3 _d;
+    
+    _d.x = (*xform).s0 * d.x + (*xform).s4 * d.y + (*xform).s8 * d.z;
+    _d.y = (*xform).s1 * d.x + (*xform).s5 * d.y + (*xform).s9 * d.z;
+    _d.z = (*xform).s2 * d.x + (*xform).s6 * d.y + (*xform).sa * d.z;
+
+	return _d;
+}
+
 float3 TransformNormal(const float3 *n, const __global float16 *inv_xform) {
     float3 _n;
 

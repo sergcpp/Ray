@@ -198,10 +198,9 @@ R"(
             float3 BB = cross(env.sun_dir, TT);
             const float3 V = temp * sin_phi * BB + z * env.sun_dir + temp * cos_phi * TT;
 
-            ray_packet_t r;
-            r.o = (float4)(P + HIT_BIAS * N, 0);
-            r.d = (float4)(V, 0);
-            v = TraceShadowRay(&r, mesh_instances, mi_indices, meshes, transforms, nodes, node_index, tris, tri_indices);
+            const float3 r_o = P + HIT_BIAS * N;
+            const float3 r_d = V;
+            v = TraceShadowRay(r_o, r_d, mesh_instances, mi_indices, meshes, transforms, nodes, node_index, tris, tri_indices);
         }
 
         k = clamp(k, 0.0f, 1.0f);
