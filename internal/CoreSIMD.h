@@ -1511,12 +1511,17 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
                     const float cos_phi = std::cos(phi);
                     const float sin_phi = std::sin(phi);
 
-                    V[0][i] = dir * sin_phi * B[0][i] + std::sqrt(1.0f - dir) * __N[0][i] + dir * cos_phi * T[0][i];
-                    V[1][i] = dir * sin_phi * B[1][i] + std::sqrt(1.0f - dir) * __N[1][i] + dir * cos_phi * T[1][i];
-                    V[2][i] = dir * sin_phi * B[2][i] + std::sqrt(1.0f - dir) * __N[2][i] + dir * cos_phi * T[2][i];
+                    V[0][i] = dir * sin_phi * __B[0][i] + std::sqrt(1.0f - dir) * __N[0][i] + dir * cos_phi * __T[0][i];
+                    V[1][i] = dir * sin_phi * __B[1][i] + std::sqrt(1.0f - dir) * __N[1][i] + dir * cos_phi * __T[1][i];
+                    V[2][i] = dir * sin_phi * __B[2][i] + std::sqrt(1.0f - dir) * __N[2][i] + dir * cos_phi * __T[2][i];
                 
                     p[i] = std::modf(halton[hi[i] * 2] + rand_offset3[i], &_unused);
                 }
+
+                where(mask, out_rgba[0]) = V[0] * 0.5f + 0.5f;
+                where(mask, out_rgba[1]) = V[1] * 0.5f + 0.5f;
+                where(mask, out_rgba[2]) = V[2] * 0.5f + 0.5f;
+                return;
 
                 const simd_fvec<S> thr = max(rc[0], max(rc[1], rc[2]));
                 const auto new_ray_mask = (p < thr / RAY_TERM_THRES) & reinterpret_cast<const simd_fvec<S>&>(same_mi);

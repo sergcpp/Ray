@@ -33,7 +33,7 @@ force_inline void _IntersectTri(const ray_packet_t &r, const tri_accel_t &tri, u
 
         if (t > 0 && t < inter.t) {
             inter.mask_values[0] = 0xffffffff;
-            inter.prim_indices[0] = i;
+            //inter.prim_indices[0] = i;
             inter.t = t;
             inter.u = u;
             inter.v = v;
@@ -329,7 +329,7 @@ bool ray::ref::IntersectTris(const ray_packet_t &r, const tri_accel_t *tris, int
 
     out_inter.mask_values[0] |= inter.mask_values[0];
     out_inter.obj_indices[0] = inter.mask_values[0] ? inter.obj_indices[0] : out_inter.obj_indices[0];
-    out_inter.prim_indices[0] = inter.mask_values[0] ? inter.prim_indices[0] : out_inter.prim_indices[0];
+    //out_inter.prim_indices[0] = inter.mask_values[0] ? inter.prim_indices[0] : out_inter.prim_indices[0];
     out_inter.t = inter.t; // already contains min value
     out_inter.u = inter.mask_values[0] ? inter.u : out_inter.u;
     out_inter.v = inter.mask_values[0] ? inter.v : out_inter.v;
@@ -349,7 +349,7 @@ bool ray::ref::IntersectTris(const ray_packet_t &r, const tri_accel_t *tris, con
 
     out_inter.mask_values[0] |= inter.mask_values[0];
     out_inter.obj_indices[0] = inter.mask_values[0] ? inter.obj_indices[0] : out_inter.obj_indices[0];
-    out_inter.prim_indices[0] = inter.mask_values[0] ? inter.prim_indices[0] : out_inter.prim_indices[0];
+    //out_inter.prim_indices[0] = inter.mask_values[0] ? inter.prim_indices[0] : out_inter.prim_indices[0];
     out_inter.t = inter.t; // already contains min value
     out_inter.u = inter.mask_values[0] ? inter.u : out_inter.u;
     out_inter.v = inter.mask_values[0] ? inter.v : out_inter.v;
@@ -523,7 +523,7 @@ bool ray::ref::Traverse_MicroTree_CPU(const ray_packet_t &r, const float inv_d[3
     }
 
     int cur_braversal_depth = 1;
-    //inter.prim_indices[0] = 1;
+    inter.prim_indices[0] = 1;
 
     while (true) {
         switch (src) {
@@ -554,7 +554,7 @@ bool ray::ref::Traverse_MicroTree_CPU(const ray_packet_t &r, const float inv_d[3
                 cur = near_child(r, nodes[cur]);
                 src = FromParent;
                 cur_braversal_depth++;
-                //inter.prim_indices[0] = std::max(inter.prim_indices[0], cur_braversal_depth);
+                inter.prim_indices[0] = std::max(inter.prim_indices[0], cur_braversal_depth);
             }
             break;
         case FromParent:
@@ -571,7 +571,7 @@ bool ray::ref::Traverse_MicroTree_CPU(const ray_packet_t &r, const float inv_d[3
                 cur = near_child(r, nodes[cur]);
                 src = FromParent;
                 cur_braversal_depth++;
-                //inter.prim_indices[0] = std::max(inter.prim_indices[0], cur_braversal_depth);
+                inter.prim_indices[0] = std::max(inter.prim_indices[0], cur_braversal_depth);
             }
             break;
         }

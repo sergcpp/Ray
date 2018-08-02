@@ -53,10 +53,13 @@ float3 safe_invert(const float3 v) {
 #define far_child(rd, n)    \
     (rd)[(n)->space_axis] < 0 ? (n)->left_child : (n)->right_child
 
-void Traverse_MicroTree(const float3 ro, const float3 rd, const float3 inv_d, uint obj_index,
+void Traverse_MicroTree(const float3 r_o, const float3 r_d, const float3 inv_d, uint obj_index,
                         __global const bvh_node_t *nodes, uint node_index,
                         __global const tri_accel_t *tris, __global const uint *tri_indices, 
                         hit_data_t *inter) {
+    const float *ro = (const float *)&r_o;
+    const float *rd = (const float *)&r_d;
+
     uint cur = node_index;
     uint last = node_index;
 
@@ -68,7 +71,7 @@ void Traverse_MicroTree(const float3 ro, const float3 rd, const float3 inv_d, ui
         __global const bvh_node_t *n = &nodes[cur];
         
         if (n->tri_count) {
-            IntersectTris(ro, rd, tris, tri_indices, n->tri_index, n->tri_count, obj_index, inter);
+            IntersectTris(r_o, r_d, tris, tri_indices, n->tri_index, n->tri_count, obj_index, inter);
             last = cur; cur = n->parent;
             continue;
         }
@@ -82,7 +85,7 @@ void Traverse_MicroTree(const float3 ro, const float3 rd, const float3 inv_d, ui
         }
 
         uint try_child = (last == n->parent) ? near : far;
-        if (bbox_test(ro, inv_d, inter->t, &nodes[try_child])) {
+        if (bbox_test(r_o, inv_d, inter->t, &nodes[try_child])) {
             last = cur; cur = try_child;
         } else {
             if (try_child == near) {

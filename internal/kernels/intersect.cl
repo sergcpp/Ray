@@ -64,9 +64,8 @@ float IntersectTris_Shadow(const float3 r_o, const float3 r_d, __global const tr
 
         float tmpdet0 = det - detu - detv;
 
-        if (sign(dett) == sign(det) && 
-            ((tmpdet0 > -HIT_EPS && detu > -HIT_EPS && detv > -HIT_EPS) || 
-            (tmpdet0 < HIT_EPS && detu < HIT_EPS && detv < HIT_EPS))) {
+        if (((tmpdet0 > -HIT_EPS && detu > -HIT_EPS && detv > -HIT_EPS) ||
+             (tmpdet0 < HIT_EPS && detu < HIT_EPS && detv < HIT_EPS)) && sign(dett) == sign(det)) {
             return 0;
         }
     }

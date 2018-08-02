@@ -38,6 +38,7 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
 
     __global const tri_accel_t *tri = &tris[inter->prim_index];
     __global const material_t *mat = &materials[tri->mi];
+    __global const transform_t *tr = &transforms[mesh_instances[inter->obj_index].tr_index];
     __global const vertex_t *v1 = &vertices[vtx_indices[inter->prim_index * 3 + 0]];
     __global const vertex_t *v2 = &vertices[vtx_indices[inter->prim_index * 3 + 1]];
     __global const vertex_t *v3 = &vertices[vtx_indices[inter->prim_index * 3 + 2]];
@@ -71,6 +72,8 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
     }
     plane_N = fast_normalize(plane_N);
     if (tri->ci & TRI_INV_NORMAL_BIT) plane_N = -plane_N;
+
+    plane_N = TransformNormal(&plane_N, &tr->inv_xform);
 
     float dot_I_N = dot(-I, plane_N);
 
@@ -160,16 +163,14 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
     float3 B = b1 * _w + b2 * inter->u + b3 * inter->v;
     float3 T = cross(B, N);
 
-    float4 normals = 2 * SampleTextureBilinear(texture_atlas, &textures[mat->textures[NORMALS_TEXTURE]], uvs, 0) - 1;
-    N = normals.x * B + normals.z * N + normals.y * T;
+    //float4 normals = 2 * SampleTextureBilinear(texture_atlas, &textures[mat->textures[NORMALS_TEXTURE]], uvs, 0) - 1;
+    //N = normals.x * B + normals.z * N + normals.y * T;
     
     //
 
-    __global const transform_t *tr = &transforms[mesh_instances[inter->obj_index].tr_index];
-
-    N = TransformNormal(&N, &tr->inv_xform);
-    B = TransformNormal(&B, &tr->inv_xform);
-    T = TransformNormal(&T, &tr->inv_xform);
+    //N = TransformNormal(&N, &tr->inv_xform);
+    //B = TransformNormal(&B, &tr->inv_xform);
+    //T = TransformNormal(&T, &tr->inv_xform);
 
     float4 albedo = SampleTextureAnisotropic(texture_atlas, &textures[mat->textures[MAIN_TEXTURE]], uvs, duv_dx, duv_dy);
     albedo.xyz *= mat->main_color;
@@ -198,26 +199,33 @@ R"(
             float3 BB = cross(env.sun_dir, TT);
             const float3 V = temp * sin_phi * BB + z * env.sun_dir + temp * cos_phi * TT;
 
-            const float3 r_o = P + HIT_BIAS * N;
+            const float3 r_o = P + HIT_BIAS * plane_N;
             const float3 r_d = V;
             v = TraceShadowRay(r_o, r_d, mesh_instances, mi_indices, meshes, transforms, nodes, node_index, tris, tri_indices);
         }
 
         k = clamp(k, 0.0f, 1.0f);
-        col = albedo.xyz * env.sun_col * v * k;
+        //col = albedo.xyz * env.sun_col * v * k;
+        col = (float3)(0.0f);
 
         float _unused;
         const float z = fract(halton[hi * 2] + rand_offset, &_unused);
 
-        const float dir = native_sqrt(z);
+        const float dir = sqrt(z);
         const float phi = 2 * PI * fract(halton[hi * 2 + 1] + rand_offset2, &_unused);
-        float cos_phi;
-        const float sin_phi = sincos(phi, &cos_phi);
+        //float cos_phi;
+        //const float sin_phi = sincos(phi, &cos_phi);
 
-        const float3 V = dir * sin_phi * B + native_sqrt(1.0f - dir) * N + dir * cos_phi * T;
-        
+float cos_phi = cos(phi);
+float sin_phi = sin(phi);
+
+        const float3 V = dir * sin_phi * B + sqrt(1.0f - dir) * N + dir * cos_phi * T;
+
+        float ffff = 1000000.0f * dot(T, N);
+        return (float4)(V * 0.5f + 0.5f, 1.0f);
+
         ray_packet_t r;
-        r.o = (float4)(P + HIT_BIAS * N, (float)px.x);
+        r.o = (float4)(P + HIT_BIAS * plane_N, (float)px.x);
         r.d = (float4)(V, (float)px.y);
         r.c = orig_ray->c;
         r.c.xyz *= albedo.xyz;

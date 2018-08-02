@@ -125,9 +125,9 @@ void ray::ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
         
 #if 1
         const auto &c = color_table[inter.prim_indices[0] != -1 ? inter.prim_indices[0] % 1024 : 0];
-        pixel_color_t col = { c[0], c[1], c[2], 1.0f };
-        //float t = std::pow(inter.prim_indices[0] / 32.0f, 2.0f);
-        //pixel_color_t col = { t, t, t, 1.0f };
+        //pixel_color_t col = { c[0], c[1], c[2], 1.0f };
+        float t = std::pow(inter.prim_indices[0] / 32.0f, 2.0f);
+        pixel_color_t col = { t, t, t, 1.0f };
 #else
 
         pixel_color_t col = ShadeSurface((y * w + x), region.iteration, &region.halton_seq[0], inter, r, env, mesh_instances, 

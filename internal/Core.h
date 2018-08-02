@@ -48,7 +48,7 @@ const float PI = 3.141592653589793238463f;
 
 const float MAX_DIST = 3.402823466e+38F;
 
-const int MAX_BOUNCES = 0;
+const int MAX_BOUNCES = 1;
 
 const float RAY_TERM_THRES = 0.01f;
 
