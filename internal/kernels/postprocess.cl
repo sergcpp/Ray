@@ -74,7 +74,7 @@ __kernel void MixIncremental(__read_only image2d_t fbuf1, __read_only image2d_t 
     float4 col2 = read_imagef(fbuf2, isampler, (int2)(i, j));
 
     float4 diff = col2 - col1;
-    write_imagef(res, (int2)(i, j), col1 + diff.y * k);
+    write_imagef(res, (int2)(i, j), col1 + diff * k);
 
     //write_imagef(res, (int2)(i, j), col2);
 }

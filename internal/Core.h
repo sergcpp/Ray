@@ -48,7 +48,7 @@ const float PI = 3.141592653589793238463f;
 
 const float MAX_DIST = 3.402823466e+38F;
 
-const int MAX_BOUNCES = 1;
+const int MAX_BOUNCES = 4;
 
 const float RAY_TERM_THRES = 0.01f;
 
@@ -116,11 +116,15 @@ void TransformBoundingBox(const float bbox[2][3], const float *xform, float out_
 
 void InverseMatrix(const float mat[16], float out_mat[16]);
 
-const int PrimesCount = 11;
-const int g_primes[PrimesCount] = { 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31 };
-const int g_prime_sums[PrimesCount] = { 0, 2, 5, 10, 17, 28, 41, 58, 77, 100, 129 };
+const int PrimesCount = 24;
+const int g_primes[PrimesCount] =     { 2, 3, 5, 7,  11, 13, 17, 19, 23, 29,  31,  37,  41,  43,  47,  53,  59,  61,  67,  71,  73,  79,  83,  89  };
+const int g_prime_sums[PrimesCount] = { 0, 2, 5, 10, 17, 28, 41, 58, 77, 100, 129, 160, 197, 238, 281, 328, 381, 440, 501, 568, 639, 712, 791, 874 };
 
-const int HaltonSeqLen = 256;
+const int HALTON_COUNT = PrimesCount;
+const int HALTON_2D_COUNT = PrimesCount / 2;
+const int HALTON_SEQ_LEN = 256;
+
+static_assert(MAX_BOUNCES + 1 <= HALTON_2D_COUNT, "!");
 
 struct vertex_t {
     float p[3], n[3], b[3], t0[2];

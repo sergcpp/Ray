@@ -165,7 +165,7 @@ void ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
     }
 
     region.iteration++;
-    if (!region.halton_seq || region.iteration % HaltonSeqLen == 0) {
+    if (!region.halton_seq || region.iteration % HALTON_SEQ_LEN == 0) {
         UpdateHaltonSequence(region.iteration, region.halton_seq);
     }
 
@@ -215,7 +215,7 @@ void ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
         p.secondary_masks[i] = { 0 };
 
         simd_fvec<S> out_rgba[4] = { 0.0f };
-        NS::ShadeSurface(index, region.iteration, &region.halton_seq[0], inter, r, env, mesh_instances,
+        NS::ShadeSurface(index, region.iteration, 1, &region.halton_seq[0], inter, r, env, mesh_instances,
                          mi_indices, meshes, transforms, vtx_indices, vertices, nodes, macro_tree_root,
                          tris, tri_indices, materials, textures, tex_atlas, out_rgba, &p.secondary_masks[0], &p.secondary_rays[0], &secondary_rays_count);
 
@@ -305,7 +305,7 @@ void ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
             simd_ivec<S> index = { y * w + x };
 
             simd_fvec<S> out_rgba[4] = { 0.0f };
-            NS::ShadeSurface(index, region.iteration, &region.halton_seq[0], inter, r, env, mesh_instances,
+            NS::ShadeSurface(index, region.iteration, 2, &region.halton_seq[0], inter, r, env, mesh_instances,
                              mi_indices, meshes, transforms, vtx_indices, vertices, nodes, macro_tree_root,
                              tris, tri_indices, materials, textures, tex_atlas, out_rgba, &p.secondary_masks[0], &p.secondary_rays[0], &secondary_rays_count);
 
@@ -334,11 +334,11 @@ void ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
         stats_.time_secondary_shade_us += (unsigned long long)secondary_shade_time.count();
     }
 
-    clean_buf_.MixIncremental(temp_buf_, rect, 1.0f / region.iteration);
+    clean_buf_.MixWith(temp_buf_, rect, 1.0f / region.iteration);
 
-    auto clamp_and_gamma_correct = [cam](const pixel_color_t &p) {
+    auto clamp_and_gamma_correct = [&cam](const pixel_color_t &p) {
         auto c = simd_fvec4(&p.r);
-        c = pow(c, simd_fvec4(1.0f / cam.gamma));
+        c = pow(c, simd_fvec4{ 1.0f / cam.gamma });
         c = clamp(c, 0.0f, 1.0f);
         return pixel_color_t{ c[0], c[1], c[2], c[3] };
     };
@@ -349,11 +349,33 @@ void ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
 template <int DimX, int DimY>
 void ray::NS::RendererSIMD<DimX, DimY>::UpdateHaltonSequence(int iteration, std::unique_ptr<float[]> &seq) {
     if (!seq) {
-        seq.reset(new float[HaltonSeqLen * 2]);
+        seq.reset(new float[HALTON_COUNT * HALTON_SEQ_LEN]);
     }
 
-    for (int i = 0; i < HaltonSeqLen; i++) {
-        seq[i * 2 + 0] = ray::ScrambledRadicalInverse<29>(&permutations_[100], (uint64_t)(iteration + i));
-        seq[i * 2 + 1] = ray::ScrambledRadicalInverse<31>(&permutations_[129], (uint64_t)(iteration + i));
+    for (int i = 0; i < HALTON_SEQ_LEN; i++) {
+        seq[2 * (i * HALTON_2D_COUNT + 0 ) + 0] = ray::ScrambledRadicalInverse<2 >(&permutations_[0  ], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 0 ) + 1] = ray::ScrambledRadicalInverse<3 >(&permutations_[2  ], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 1 ) + 0] = ray::ScrambledRadicalInverse<5 >(&permutations_[5  ], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 1 ) + 1] = ray::ScrambledRadicalInverse<7 >(&permutations_[10 ], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 2 ) + 0] = ray::ScrambledRadicalInverse<11>(&permutations_[17 ], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 2 ) + 1] = ray::ScrambledRadicalInverse<13>(&permutations_[28 ], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 3 ) + 0] = ray::ScrambledRadicalInverse<17>(&permutations_[41 ], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 3 ) + 1] = ray::ScrambledRadicalInverse<19>(&permutations_[58 ], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 4 ) + 0] = ray::ScrambledRadicalInverse<23>(&permutations_[77 ], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 4 ) + 1] = ray::ScrambledRadicalInverse<29>(&permutations_[100], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 5 ) + 0] = ray::ScrambledRadicalInverse<31>(&permutations_[129], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 5 ) + 1] = ray::ScrambledRadicalInverse<37>(&permutations_[160], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 6 ) + 0] = ray::ScrambledRadicalInverse<41>(&permutations_[197], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 6 ) + 1] = ray::ScrambledRadicalInverse<43>(&permutations_[238], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 7 ) + 0] = ray::ScrambledRadicalInverse<47>(&permutations_[281], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 7 ) + 1] = ray::ScrambledRadicalInverse<53>(&permutations_[328], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 8 ) + 0] = ray::ScrambledRadicalInverse<59>(&permutations_[381], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 8 ) + 1] = ray::ScrambledRadicalInverse<61>(&permutations_[440], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 9 ) + 0] = ray::ScrambledRadicalInverse<67>(&permutations_[501], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 9 ) + 1] = ray::ScrambledRadicalInverse<71>(&permutations_[568], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 10) + 0] = ray::ScrambledRadicalInverse<73>(&permutations_[639], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 10) + 1] = ray::ScrambledRadicalInverse<79>(&permutations_[712], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 11) + 0] = ray::ScrambledRadicalInverse<83>(&permutations_[791], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 11) + 1] = ray::ScrambledRadicalInverse<89>(&permutations_[874], (uint64_t)(iteration + i));
     }
 }

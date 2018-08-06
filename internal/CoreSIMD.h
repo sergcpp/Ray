@@ -109,7 +109,7 @@ void SampleAnisotropic(const ref::TextureAtlas &atlas, const texture_t &t, const
 
 // Shade
 template <int S>
-void ShadeSurface(const simd_ivec<S> &index, const int iteration, const float *halton, const hit_data_t<S> &inter, const ray_packet_t<S> &ray,
+void ShadeSurface(const simd_ivec<S> &index, const int iteration, const int bounce, const float *halton, const hit_data_t<S> &inter, const ray_packet_t<S> &ray,
                   const environment_t &env, const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
                   const mesh_t *meshes, const transform_t *transforms, const uint32_t *vtx_indices, const vertex_t *vertices,
                   const bvh_node_t *nodes, uint32_t node_index, const tri_accel_t *tris, const uint32_t *tri_indices,
@@ -439,18 +439,18 @@ void ray::NS::GeneratePrimaryRays(const int iteration, const camera_t &cam, cons
             simd_ivec<S> ixx = x + off_x, iyy = simd_ivec<S>(y) + off_y;
 
             simd_ivec<S> index = iyy * w + ixx;
-            simd_ivec<S> hi = iteration & (HaltonSeqLen - 1);
+            const int hi = (iteration & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT;
 
             simd_fvec<S> fxx = (simd_fvec<S>)ixx,
                          fyy = (simd_fvec<S>)iyy;
 
-            simd_fvec<S> rxx = construct_float(hash(hi)),
-                         ryy = construct_float(hash(hash(hi)));
+            simd_fvec<S> rxx = construct_float(hash(index)),
+                         ryy = construct_float(hash(hash(index)));
 
             for (int i = 0; i < S; i++) {
                 float _unused;
-                fxx[i] += std::modf(halton[hi[i] * 2] + rxx[i], &_unused);
-                fyy[i] += std::modf(halton[hi[i] * 2 + 1] + ryy[i], &_unused);
+                fxx[i] += std::modf(halton[hi + 0] + rxx[i], &_unused);
+                fyy[i] += std::modf(halton[hi + 1] + ryy[i], &_unused);
             }
 
             simd_fvec<S> _d[3], _dx[3], _dy[3];
@@ -1139,7 +1139,7 @@ void ray::NS::SampleAnisotropic(const ref::TextureAtlas &atlas, const texture_t 
 }
 
 template <int S>
-void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, const float *halton, const hit_data_t<S> &inter, const ray_packet_t<S> &ray,
+void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, const int bounce, const float *halton, const hit_data_t<S> &inter, const ray_packet_t<S> &ray,
                            const environment_t &env, const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
                            const mesh_t *meshes, const transform_t *transforms, const uint32_t *vtx_indices, const vertex_t *vertices,
                            const bvh_node_t *nodes, uint32_t node_index, const tri_accel_t *tris, const uint32_t *tri_indices,
@@ -1165,20 +1165,18 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
                  u1[2], u2[2], u3[2],
                  b1[3], b2[3], b3[3];
 
-    simd_ivec<S> inter_prim_index = inter.prim_index;
-
     simd_ivec<S> mat_index = { -1 };
 
     simd_fvec<S> inv_xform1[3], inv_xform2[3], inv_xform3[3];
 
-    simd_fvec<S> plane_N[3];
+    simd_fvec<S> N[3];
 
     for (int i = 0; i < S; i++) {
         if (ino_hit[i]) continue;
 
-        const auto &v1 = vertices[vtx_indices[inter_prim_index[i] * 3 + 0]];
-        const auto &v2 = vertices[vtx_indices[inter_prim_index[i] * 3 + 1]];
-        const auto &v3 = vertices[vtx_indices[inter_prim_index[i] * 3 + 2]];
+        const auto &v1 = vertices[vtx_indices[inter.prim_index[i] * 3 + 0]];
+        const auto &v2 = vertices[vtx_indices[inter.prim_index[i] * 3 + 1]];
+        const auto &v3 = vertices[vtx_indices[inter.prim_index[i] * 3 + 2]];
 
         p1[0][i] = v1.p[0]; p1[1][i] = v1.p[1]; p1[2][i] = v1.p[2];
         p2[0][i] = v2.p[0]; p2[1][i] = v2.p[1]; p2[2][i] = v2.p[2];
@@ -1206,9 +1204,9 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
         float l = std::sqrt(1.0f + tri.nu * tri.nu + tri.nv * tri.nv);
         if (tri.ci & TRI_INV_NORMAL_BIT) l = -l;
 
-        plane_N[_iw][i] = 1.0f / l;
-        plane_N[_next_u[_iw]][i] = tri.nu / l;
-        plane_N[_next_v[_iw]][i] = tri.nv / l;
+        N[_iw][i] = 1.0f / l;
+        N[_next_u[_iw]][i] = tri.nu / l;
+        N[_next_v[_iw]][i] = tri.nv / l;
 
         const auto *tr = &transforms[mesh_instances[inter.obj_index[i]].tr_index];
 
@@ -1217,9 +1215,11 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
         inv_xform3[0][i] = tr->inv_xform[8]; inv_xform3[1][i] = tr->inv_xform[9]; inv_xform3[2][i] = tr->inv_xform[10];
     }
 
-    simd_fvec<S> N[3] = { n1[0] * w + n2[0] * inter.u + n3[0] * inter.v,
-                          n1[1] * w + n2[1] * inter.u + n3[1] * inter.v,
-                          n1[2] * w + n2[2] * inter.u + n3[2] * inter.v };
+    simd_fvec<S> plane_N[3] = { dot(N, inv_xform1), dot(N, inv_xform2), dot(N, inv_xform3) };
+
+    N[0] = n1[0] * w + n2[0] * inter.u + n3[0] * inter.v;
+    N[1] = n1[1] * w + n2[1] * inter.u + n3[1] * inter.v;
+    N[2] = n1[2] * w + n2[2] * inter.u + n3[2] * inter.v;
 
     simd_fvec<S> uvs[2] = { u1[0] * w + u2[0] * inter.u + u3[0] * inter.v,
                             u1[1] * w + u2[1] * inter.u + u3[1] * inter.v };
@@ -1331,7 +1331,7 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
     simd_ivec<S> rand_hash = hash(px_index), rand_hash2, rand_hash3;
     simd_fvec<S> rand_offset = construct_float(rand_hash), rand_offset2, rand_offset3;
 
-    const simd_ivec<S> hi = iteration & (HaltonSeqLen - 1);
+    const int hi = (iteration & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT + bounce * 2;
 
     simd_ivec<S> secondary_mask = { 0 };
 
@@ -1378,7 +1378,7 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
                     if (!same_mi[i]) continue;
 
                     float _unused;
-                    const float r = std::modf(halton[hi[i] * 2] + rand_offset[i], &_unused);
+                    const float r = std::modf(halton[hi + 0] + rand_offset[i], &_unused);
 
                     rand_hash[i] = hash(rand_hash[i]);
                     rand_offset = construct_float(rand_hash);
@@ -1458,10 +1458,10 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
                         if (!_mask[i]) continue;
 
                         float _unused;
-                        const float z = 1.0f - std::modf(halton[hi[i] * 2] + rand_offset[i], &_unused) * env.sun_softness;
+                        const float z = 1.0f - std::modf(halton[hi + 0] + rand_offset[i], &_unused) * env.sun_softness;
                         const float temp = std::sqrt(1.0f - z * z);
 
-                        const float phi = 2 * PI * std::modf(halton[hi[i] * 2 + 1] + rand_offset2[i], &_unused);
+                        const float phi = 2 * PI * std::modf(halton[hi + 1] + rand_offset2[i], &_unused);
                         const float cos_phi = std::cos(phi);
                         const float sin_phi = std::sin(phi);
 
@@ -1503,10 +1503,10 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
                     if (!same_mi[i]) continue;
 
                     float _unused;
-                    const float z = std::modf(halton[hi[i] * 2] + rand_offset[i], &_unused);
+                    const float z = std::modf(halton[hi + 0] + rand_offset[i], &_unused);
 
                     const float dir = std::sqrt(z);
-                    const float phi = 2 * PI * std::modf(halton[hi[i] * 2 + 1] + rand_offset2[i], &_unused);
+                    const float phi = 2 * PI * std::modf(halton[hi + 1] + rand_offset2[i], &_unused);
 
                     const float cos_phi = std::cos(phi);
                     const float sin_phi = std::sin(phi);
@@ -1515,13 +1515,8 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
                     V[1][i] = dir * sin_phi * __B[1][i] + std::sqrt(1.0f - dir) * __N[1][i] + dir * cos_phi * __T[1][i];
                     V[2][i] = dir * sin_phi * __B[2][i] + std::sqrt(1.0f - dir) * __N[2][i] + dir * cos_phi * __T[2][i];
                 
-                    p[i] = std::modf(halton[hi[i] * 2] + rand_offset3[i], &_unused);
+                    p[i] = std::modf(halton[hi + 0] + rand_offset3[i], &_unused);
                 }
-
-                where(mask, out_rgba[0]) = V[0] * 0.5f + 0.5f;
-                where(mask, out_rgba[1]) = V[1] * 0.5f + 0.5f;
-                where(mask, out_rgba[2]) = V[2] * 0.5f + 0.5f;
-                return;
 
                 const simd_fvec<S> thr = max(rc[0], max(rc[1], rc[2]));
                 const auto new_ray_mask = (p < thr / RAY_TERM_THRES) & reinterpret_cast<const simd_fvec<S>&>(same_mi);
@@ -1588,10 +1583,10 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
 
                 for (int i = 0; i < S; i++) {
                     float _unused;
-                    const float z = h * std::modf(halton[hi[i] * 2] + rand_offset[i], &_unused);
+                    const float z = h * std::modf(halton[hi + 0] + rand_offset[i], &_unused);
                     const float dir = std::sqrt(z);
 
-                    const float phi = 2 * PI * std::modf(halton[hi[i] * 2 + 1] + rand_offset2[i], &_unused);
+                    const float phi = 2 * PI * std::modf(halton[hi + 1] + rand_offset2[i], &_unused);
                     const float cos_phi = std::cos(phi);
                     const float sin_phi = std::sin(phi);
 
@@ -1599,7 +1594,7 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
                     V[1][i] = dir * sin_phi * BB[1][i] + std::sqrt(1.0f - dir) * V[1][i] + dir * cos_phi * TT[1][i];
                     V[2][i] = dir * sin_phi * BB[2][i] + std::sqrt(1.0f - dir) * V[2][i] + dir * cos_phi * TT[2][i];
                 
-                    p[i] = std::modf(halton[hi[i] * 2] + rand_offset3[i], &_unused);
+                    p[i] = std::modf(halton[hi + 0] + rand_offset3[i], &_unused);
                 }
 
                 const simd_fvec<S> thr = max(rc[0], max(rc[1], rc[2]));
@@ -1677,10 +1672,10 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
                 simd_fvec<S> rc[3] = { ray.c[0], ray.c[1], ray.c[2] }, p;
 
                 for (int i = 0; i < S; i++) {
-                    const float z = 1.0f - halton[hi[i] * 2] * mat->roughness;
+                    const float z = 1.0f - halton[hi + 0] * mat->roughness;
                     const float temp = std::sqrt(1.0f - z * z);
 
-                    const float phi = halton[((hash(hi[i]) + iteration) & (HaltonSeqLen - 1)) * 2 + 0] * 2 * PI;
+                    const float phi = halton[(((hash(hi) + iteration) & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT + bounce * 2) + 0] * 2 * PI;
                     const float cos_phi = std::cos(phi);
                     const float sin_phi = std::sin(phi);
 
@@ -1693,7 +1688,7 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
                     rc[2][i] *= z;
 
                     float _unused;
-                    p[i] = std::modf(halton[hi[i] * 2] + rand_offset3[i], &_unused);
+                    p[i] = std::modf(halton[hi + 0] + rand_offset3[i], &_unused);
                 }
 
                 simd_fvec<S> k = (eta - eta * eta * dot(I, plane_N) / dot(V, plane_N));

@@ -105,7 +105,7 @@ simd_fvec4 SampleTrilinear(const TextureAtlas &atlas, const texture_t &t, const 
 simd_fvec4 SampleAnisotropic(const TextureAtlas &atlas, const texture_t &t, const simd_fvec2 &uvs, const simd_fvec2 &duv_dx, const simd_fvec2 &duv_dy);
 
 // Shade
-ray::pixel_color_t ShadeSurface(const int index, const int iteration, const float *halton, const hit_data_t &inter, const ray_packet_t &ray, 
+ray::pixel_color_t ShadeSurface(const int index, const int iteration, const int bounce, const float *halton, const hit_data_t &inter, const ray_packet_t &ray, 
                                 const environment_t &env, const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
                                 const mesh_t *meshes, const transform_t *transforms, const uint32_t *vtx_indices, const vertex_t *vertices,
                                 const bvh_node_t *nodes, uint32_t node_index, const tri_accel_t *tris, const uint32_t *tri_indices,

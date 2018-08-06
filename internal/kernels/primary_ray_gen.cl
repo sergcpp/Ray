@@ -32,11 +32,11 @@ void GeneratePrimaryRays(const int iteration, camera_t cam, int w, int h, __glob
     const int j = get_global_id(1);
 
     const int index = j * w + i;
-    const int hi = iteration & (HaltonSeqLen - 1);
+    const int hi = (iteration & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT;
 
     float _unused;
-    const float x = (float)i + fract(halton[hi * 2] + construct_float(hash(index)), &_unused);
-    const float y = (float)j + fract(halton[hi * 2 + 1] + construct_float(hash(hash(index))), &_unused);
+    const float x = (float)i + fract(halton[hi + 0] + construct_float(hash(index)), &_unused);
+    const float y = (float)j + fract(halton[hi + 1] + construct_float(hash(hash(index))), &_unused);
 
     float3 d = get_cam_dir(x, y, &cam, w, h);
 

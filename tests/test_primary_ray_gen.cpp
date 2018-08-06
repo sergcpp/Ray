@@ -27,7 +27,7 @@ void test_primary_ray_gen() {
 
     ray::ConstructCamera(ray::Persp, o, d, 53.13f, 2.2f, &cam);
 
-    std::vector<float> dummy_halton(ray::HaltonSeqLen * 2);
+    std::vector<float> dummy_halton(ray::HALTON_SEQ_LEN * 2);
 
     {
         // test reference
@@ -182,8 +182,8 @@ void test_primary_ray_gen() {
         class TestRenderer : public ray::ocl::Renderer {
         public:
             TestRenderer() : ray::ocl::Renderer(4, 4) {
-                std::vector<float> dummy_halton(ray::HaltonSeqLen * 2);
-                cl_int error = queue_.enqueueWriteBuffer(halton_seq_buf_, CL_TRUE, 0, sizeof(float) * ray::HaltonSeqLen * 2, &dummy_halton[0]);
+                std::vector<float> dummy_halton(ray::HALTON_SEQ_LEN * 2);
+                cl_int error = queue_.enqueueWriteBuffer(halton_seq_buf_, CL_TRUE, 0, sizeof(float) * ray::HALTON_SEQ_LEN * 2, &dummy_halton[0]);
                 require(error == CL_SUCCESS);
 
                 // override host_no_access with host_read_only to check results

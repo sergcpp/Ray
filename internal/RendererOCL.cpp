@@ -109,7 +109,8 @@ ray::ocl::Renderer::Renderer(int w, int h, int platform_index, int device_index)
         cl_src_defines += "#define FLT_EPS " + std::to_string(FLT_EPS) + "f\n";
         cl_src_defines += "#define PI " + std::to_string(PI) + "f\n";
         cl_src_defines += "#define RAY_TERM_THRES " + std::to_string(RAY_TERM_THRES) + "f\n";
-        cl_src_defines += "#define HaltonSeqLen " + std::to_string(HaltonSeqLen) + "\n";
+        cl_src_defines += "#define HALTON_SEQ_LEN " + std::to_string(HALTON_SEQ_LEN) + "\n";
+        cl_src_defines += "#define HALTON_COUNT " + std::to_string(HALTON_COUNT) + "\n";
         cl_src_defines += "#define MAX_MIP_LEVEL " + std::to_string(MAX_MIP_LEVEL) + "\n";
         cl_src_defines += "#define NUM_MIP_LEVELS " + std::to_string(NUM_MIP_LEVELS) + "\n";
         cl_src_defines += "#define MAX_TEXTURE_SIZE " + std::to_string(MAX_TEXTURE_SIZE) + "\n";
@@ -264,7 +265,7 @@ ray::ocl::Renderer::Renderer(int w, int h, int platform_index, int device_index)
         error = queue_.enqueueWriteBuffer(color_table_buf_, CL_TRUE, 0, sizeof(pixel_color_t) * color_table.size(), &color_table[0]);
         if (error != CL_SUCCESS) throw std::runtime_error("Cannot create OpenCL renderer!");
 
-        halton_seq_buf_ = cl::Buffer(context_, CL_MEM_READ_ONLY | CL_MEM_HOST_WRITE_ONLY, sizeof(float) * HaltonSeqLen * 2, nullptr, &error);
+        halton_seq_buf_ = cl::Buffer(context_, CL_MEM_READ_ONLY | CL_MEM_HOST_WRITE_ONLY, sizeof(float) * HALTON_COUNT * HALTON_SEQ_LEN, nullptr, &error);
         if (error != CL_SUCCESS) throw std::runtime_error("Cannot create OpenCL renderer!");
     }
 
@@ -353,12 +354,12 @@ void ray::ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
     cl_float3 cell_size = { (root_max.s[0] - root_min.s[0]) / 255, (root_max.s[1] - root_min.s[1]) / 255, (root_max.s[2] - root_min.s[2]) / 255 };
 
     region.iteration++;
-    if (!region.halton_seq || region.iteration % HaltonSeqLen == 0) {
+    if (!region.halton_seq || region.iteration % HALTON_SEQ_LEN == 0) {
         UpdateHaltonSequence(region.iteration, region.halton_seq);
     }
 
     if (region.iteration != loaded_halton_) {
-        if (CL_SUCCESS != queue_.enqueueWriteBuffer(halton_seq_buf_, CL_TRUE, 0, sizeof(float) * HaltonSeqLen * 2, &region.halton_seq[0])) {
+        if (CL_SUCCESS != queue_.enqueueWriteBuffer(halton_seq_buf_, CL_TRUE, 0, sizeof(float) * HALTON_COUNT * HALTON_SEQ_LEN, &region.halton_seq[0])) {
             return;
         }
         loaded_halton_ = region.iteration;
@@ -408,7 +409,7 @@ void ray::ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
     const auto time_after_prim_shade = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::micro> secondary_sort_time{}, secondary_trace_time{}, secondary_shade_time{};
 
-    for (int depth = 0; depth < MAX_BOUNCES && secondary_rays_count; depth++) {
+    for (int bounce = 0; bounce < MAX_BOUNCES && secondary_rays_count; bounce++) {
         auto time_secondary_sort_start = std::chrono::high_resolution_clock::now();
 
         if (secondary_rays_count > (cl_int)scan_portion_ * 64) {
@@ -439,7 +440,7 @@ void ray::ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
         if (queue_.enqueueCopyImage(temp_buf_, final_buf_, { 0, 0, 0 }, { 0, 0, 0 },
     { (size_t)w_, (size_t)h_, 1 }) != CL_SUCCESS) return;
 
-        if (!kernel_ShadeSecondary((cl_int)region.iteration, halton_seq_buf_,
+        if (!kernel_ShadeSecondary((cl_int)region.iteration, (cl_int)(bounce + 2), halton_seq_buf_,
                                     prim_inters_buf_, secondary_rays_buf_, (int)secondary_rays_count, w_, h_,
                                     s->mesh_instances_.buf(), s->mi_indices_.buf(), s->meshes_.buf(),
                                     s->transforms_.buf(), s->vtx_indices_.buf(), s->vertices_.buf(),
@@ -545,7 +546,7 @@ bool ray::ocl::Renderer::kernel_ShadePrimary(const cl_int iteration, const cl::B
     return CL_SUCCESS == queue_.enqueueNDRangeKernel(shade_primary_kernel_, { (size_t)rect.x, (size_t)rect.y }, { (size_t)rect.w, (size_t)rect.h });
 }
 
-bool ray::ocl::Renderer::kernel_ShadeSecondary(const cl_int iteration, const cl::Buffer &halton,
+bool ray::ocl::Renderer::kernel_ShadeSecondary(const cl_int iteration, const cl_int bounce, const cl::Buffer &halton,
         const cl::Buffer &intersections, const cl::Buffer &rays,
         int rays_count, int w, int h,
         const cl::Buffer &mesh_instances, const cl::Buffer &mi_indices, const cl::Buffer &meshes,
@@ -559,6 +560,7 @@ bool ray::ocl::Renderer::kernel_ShadeSecondary(const cl_int iteration, const cl:
 
     cl_uint argc = 0;
     if (shade_secondary_kernel_.setArg(argc++, iteration) != CL_SUCCESS ||
+            shade_secondary_kernel_.setArg(argc++, bounce) != CL_SUCCESS ||
             shade_secondary_kernel_.setArg(argc++, halton) != CL_SUCCESS ||
             shade_secondary_kernel_.setArg(argc++, intersections) != CL_SUCCESS ||
             shade_secondary_kernel_.setArg(argc++, rays) != CL_SUCCESS ||
@@ -957,12 +959,34 @@ bool ray::ocl::Renderer::kernel_Postprocess(const cl::Image2D &frame_buf, cl_int
 
 void ray::ocl::Renderer::UpdateHaltonSequence(int iteration, std::unique_ptr<float[]> &seq) {
     if (!seq) {
-        seq.reset(new float[HaltonSeqLen * 2]);
+        seq.reset(new float[HALTON_COUNT * HALTON_SEQ_LEN]);
     }
 
-    for (int i = 0; i < HaltonSeqLen; i++) {
-        seq[i * 2 + 0] = ray::ScrambledRadicalInverse<29>(&permutations_[100], (uint64_t)(iteration + i));
-        seq[i * 2 + 1] = ray::ScrambledRadicalInverse<31>(&permutations_[129], (uint64_t)(iteration + i));
+    for (int i = 0; i < HALTON_SEQ_LEN; i++) {
+        seq[2 * (i * HALTON_2D_COUNT + 0 ) + 0] = ray::ScrambledRadicalInverse<2 >(&permutations_[0  ], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 0 ) + 1] = ray::ScrambledRadicalInverse<3 >(&permutations_[2  ], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 1 ) + 0] = ray::ScrambledRadicalInverse<5 >(&permutations_[5  ], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 1 ) + 1] = ray::ScrambledRadicalInverse<7 >(&permutations_[10 ], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 2 ) + 0] = ray::ScrambledRadicalInverse<11>(&permutations_[17 ], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 2 ) + 1] = ray::ScrambledRadicalInverse<13>(&permutations_[28 ], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 3 ) + 0] = ray::ScrambledRadicalInverse<17>(&permutations_[41 ], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 3 ) + 1] = ray::ScrambledRadicalInverse<19>(&permutations_[58 ], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 4 ) + 0] = ray::ScrambledRadicalInverse<23>(&permutations_[77 ], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 4 ) + 1] = ray::ScrambledRadicalInverse<29>(&permutations_[100], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 5 ) + 0] = ray::ScrambledRadicalInverse<31>(&permutations_[129], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 5 ) + 1] = ray::ScrambledRadicalInverse<37>(&permutations_[160], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 6 ) + 0] = ray::ScrambledRadicalInverse<41>(&permutations_[197], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 6 ) + 1] = ray::ScrambledRadicalInverse<43>(&permutations_[238], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 7 ) + 0] = ray::ScrambledRadicalInverse<47>(&permutations_[281], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 7 ) + 1] = ray::ScrambledRadicalInverse<53>(&permutations_[328], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 8 ) + 0] = ray::ScrambledRadicalInverse<59>(&permutations_[381], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 8 ) + 1] = ray::ScrambledRadicalInverse<61>(&permutations_[440], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 9 ) + 0] = ray::ScrambledRadicalInverse<67>(&permutations_[501], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 9 ) + 1] = ray::ScrambledRadicalInverse<71>(&permutations_[568], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 10) + 0] = ray::ScrambledRadicalInverse<73>(&permutations_[639], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 10) + 1] = ray::ScrambledRadicalInverse<79>(&permutations_[712], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 11) + 0] = ray::ScrambledRadicalInverse<83>(&permutations_[791], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 11) + 1] = ray::ScrambledRadicalInverse<89>(&permutations_[874], (uint64_t)(iteration + i));
     }
 }
 

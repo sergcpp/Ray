@@ -65,7 +65,7 @@ public:
         return &pixels_[0];
     }
 
-    void MixIncremental(const Framebuffer &f2, const rect_t &rect, float k) {
+    void MixWith(const Framebuffer &f2, const rect_t &rect, float k) {
         for (int y = rect.y; y < rect.y + rect.h; y++) {
             for (int x = rect.x; x < rect.x + rect.w; x++) {
                 this->MixPixel(x, y, f2.GetPixel(x, y), k);

@@ -36,7 +36,7 @@ extern template void SampleBilinear<RayPacketSize>(const ref::TextureAtlas &atla
 extern template void SampleTrilinear<RayPacketSize>(const ref::TextureAtlas &atlas, const texture_t &t, const simd_fvec<RayPacketSize> uvs[2], const simd_fvec<RayPacketSize> &lod, const simd_ivec<RayPacketSize> &mask, simd_fvec<RayPacketSize> out_rgba[4]);
 extern template void SampleAnisotropic<RayPacketSize>(const ref::TextureAtlas &atlas, const texture_t &t, const simd_fvec<RayPacketSize> uvs[2], const simd_fvec<RayPacketSize> duv_dx[2], const simd_fvec<RayPacketSize> duv_dy[2], const simd_ivec<RayPacketSize> &mask, simd_fvec<RayPacketSize> out_rgba[4]);
 
-extern template void ShadeSurface<RayPacketSize>(const simd_ivec<RayPacketSize> &index, const int iteration, const float *halton, const hit_data_t<RayPacketSize> &inter, const ray_packet_t<RayPacketSize> &ray,
+extern template void ShadeSurface<RayPacketSize>(const simd_ivec<RayPacketSize> &index, const int iteration, const int bounce, const float *halton, const hit_data_t<RayPacketSize> &inter, const ray_packet_t<RayPacketSize> &ray,
                                                  const environment_t &env, const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
                                                  const mesh_t *meshes, const transform_t *transforms, const uint32_t *vtx_indices, const vertex_t *vertices,
                                                  const bvh_node_t *nodes, uint32_t node_index, const tri_accel_t *tris, const uint32_t *tri_indices,

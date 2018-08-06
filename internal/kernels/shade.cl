@@ -13,7 +13,7 @@ float3 refract(float3 I, float3 N, float eta) {
     return t * (float3)(cost2 > 0);
 }
 
-float4 ShadeSurface(const int index, const int iteration, __global const float *halton,
+float4 ShadeSurface(const int index, const int iteration, const int bounce, __global const float *halton,
                     __global const hit_data_t *prim_inters, __global const ray_packet_t *prim_rays,
                     __global const mesh_instance_t *mesh_instances, __global const uint *mi_indices,
                     __global const mesh_t *meshes, __global const transform_t *transforms,
@@ -120,14 +120,14 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
     int rand_hash = hash(index), rand_hash2, rand_hash3;
     float rand_offset = construct_float(rand_hash), rand_offset2, rand_offset3;
 
-    const int hi = iteration & (HaltonSeqLen - 1);
+    const int hi = (iteration & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT + bounce * 2;
 
     // resolve mix material
     while (mat->type == MixMaterial) {
         const float4 mix = SampleTextureBilinear(texture_atlas, &textures[mat->textures[MAIN_TEXTURE]], uvs, 0) * mat->strength;
 
         float _unused;
-        const float r = fract(halton[hi * 2] + rand_offset, &_unused);
+        const float r = fract(halton[hi + 0] + rand_offset, &_unused);
 
         rand_hash = hash(rand_hash);
         rand_offset = construct_float(rand_hash);
@@ -163,14 +163,12 @@ float4 ShadeSurface(const int index, const int iteration, __global const float *
     float3 B = b1 * _w + b2 * inter->u + b3 * inter->v;
     float3 T = cross(B, N);
 
-    //float4 normals = 2 * SampleTextureBilinear(texture_atlas, &textures[mat->textures[NORMALS_TEXTURE]], uvs, 0) - 1;
-    //N = normals.x * B + normals.z * N + normals.y * T;
+    float4 normals = 2 * SampleTextureBilinear(texture_atlas, &textures[mat->textures[NORMALS_TEXTURE]], uvs, 0) - 1;
+    N = normals.x * B + normals.z * N + normals.y * T;
     
-    //
-
-    //N = TransformNormal(&N, &tr->inv_xform);
-    //B = TransformNormal(&B, &tr->inv_xform);
-    //T = TransformNormal(&T, &tr->inv_xform);
+    N = TransformNormal(&N, &tr->inv_xform);
+    B = TransformNormal(&B, &tr->inv_xform);
+    T = TransformNormal(&T, &tr->inv_xform);
 
     float4 albedo = SampleTextureAnisotropic(texture_atlas, &textures[mat->textures[MAIN_TEXTURE]], uvs, duv_dx, duv_dy);
     albedo.xyz *= mat->main_color;
@@ -188,10 +186,10 @@ R"(
         float v = 1;
         if (k > FLT_EPS) {
             float _unused;
-            const float z = 1.0f - fract(halton[hi * 2] + rand_offset, &_unused) * env.sun_softness;
+            const float z = 1.0f - fract(halton[hi + 0] + rand_offset, &_unused) * env.sun_softness;
             const float temp = native_sqrt(1.0f - z * z);
 
-            const float phi = 2 * PI * fract(halton[hi * 2 + 1] + rand_offset2, &_unused);
+            const float phi = 2 * PI * fract(halton[hi + 1] + rand_offset2, &_unused);
             float cos_phi;
             const float sin_phi = sincos(phi, &cos_phi);
 
@@ -205,24 +203,17 @@ R"(
         }
 
         k = clamp(k, 0.0f, 1.0f);
-        //col = albedo.xyz * env.sun_col * v * k;
-        col = (float3)(0.0f);
+        col = albedo.xyz * env.sun_col * v * k;
 
         float _unused;
-        const float z = fract(halton[hi * 2] + rand_offset, &_unused);
+        const float z = fract(halton[hi + 0] + rand_offset, &_unused);
 
         const float dir = sqrt(z);
-        const float phi = 2 * PI * fract(halton[hi * 2 + 1] + rand_offset2, &_unused);
-        //float cos_phi;
-        //const float sin_phi = sincos(phi, &cos_phi);
-
-float cos_phi = cos(phi);
-float sin_phi = sin(phi);
+        const float phi = 2 * PI * fract(halton[hi + 1] + rand_offset2, &_unused);
+        float cos_phi;
+        const float sin_phi = sincos(phi, &cos_phi);
 
         const float3 V = dir * sin_phi * B + sqrt(1.0f - dir) * N + dir * cos_phi * T;
-
-        float ffff = 1000000.0f * dot(T, N);
-        return (float4)(V * 0.5f + 0.5f, 1.0f);
 
         ray_packet_t r;
         r.o = (float4)(P + HIT_BIAS * plane_N, (float)px.x);
@@ -235,7 +226,7 @@ float sin_phi = sin(phi);
         r.dd_dy = dd_dy - 2 * (dot(I, plane_N) * dndy + ddn_dy * plane_N);
 
         const float thr = max(r.c.x, max(r.c.y, r.c.z));
-        const float p = fract(halton[hi * 2] + rand_offset3, &_unused);
+        const float p = fract(halton[hi + 0] + rand_offset3, &_unused);
         if (p < thr / RAY_TERM_THRES) {
             if (thr < RAY_TERM_THRES) r.c.xyz *= RAY_TERM_THRES / thr;
             const int index = atomic_inc(out_secondary_rays_count);
@@ -248,10 +239,10 @@ float sin_phi = sin(phi);
 
         float _unused;
         const float h = 1.0f - native_cos(0.5f * PI * mat->roughness * mat->roughness);
-        const float z = h * fract(halton[hi * 2] + rand_offset, &_unused);
+        const float z = h * fract(halton[hi + 0] + rand_offset, &_unused);
 
         const float dir = native_sqrt(z);
-        const float phi = 2 * PI * fract(halton[hi * 2 + 1] + rand_offset2, &_unused);
+        const float phi = 2 * PI * fract(halton[hi + 1] + rand_offset2, &_unused);
         float cos_phi;
         const float sin_phi = sincos(phi, &cos_phi);
 
@@ -274,7 +265,7 @@ float sin_phi = sin(phi);
         r.dd_dy = dd_dy - 2 * (dot(I, plane_N) * dndy + ddn_dy * plane_N);
 
         const float thr = max(r.c.x, max(r.c.y, r.c.z));
-        const float p = fract(halton[hi * 2] + rand_offset3, &_unused);
+        const float p = fract(halton[hi + 0] + rand_offset3, &_unused);
         if (p < thr / RAY_TERM_THRES) {
             if (thr < RAY_TERM_THRES) r.c.xyz *= RAY_TERM_THRES / thr;
             const int index = atomic_inc(out_secondary_rays_count);
@@ -291,10 +282,10 @@ float sin_phi = sin(phi);
         float m = eta * cosi - sqrt(cost2);
         float3 V = eta * I + m * _N;
 
-        const float z = 1.0f - halton[hi * 2] * mat->roughness;
+        const float z = 1.0f - halton[hi + 0] * mat->roughness;
         const float temp = native_sqrt(1.0f - z * z);
 
-        const float phi = halton[((hash(hi) + iteration) & (HaltonSeqLen - 1)) * 2 + 0] * 2 * PI;
+        const float phi = halton[(((hash(hi) + iteration) & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT + bounce * 2) + 0] * 2 * PI;
         float cos_phi;
         const float sin_phi = sincos(phi, &cos_phi);
 
@@ -319,7 +310,7 @@ float sin_phi = sin(phi);
         float _unused;
 
         const float thr = max(r.c.x, max(r.c.y, r.c.z));
-        const float p = fract(halton[hi * 2] + rand_offset3, &_unused);
+        const float p = fract(halton[hi + 0] + rand_offset3, &_unused);
         if (cost2 >= 0 && p < thr / RAY_TERM_THRES) {
             if (thr < RAY_TERM_THRES) r.c.xyz *= RAY_TERM_THRES / thr;
             const int index = atomic_inc(out_secondary_rays_count);
@@ -342,7 +333,7 @@ float sin_phi = sin(phi);
         float _unused;
 
         const float thr = max(r.c.x, max(r.c.y, r.c.z));
-        const float p = fract(halton[hi * 2] + rand_offset3, &_unused);
+        const float p = fract(halton[hi + 0] + rand_offset3, &_unused);
         if (p < thr / RAY_TERM_THRES) {
             if (thr < RAY_TERM_THRES) r.c.xyz *= RAY_TERM_THRES / thr;
             const int index = atomic_inc(out_secondary_rays_count);
@@ -366,7 +357,7 @@ void ShadePrimary(const int iteration, __global const float *halton, int w,
     const int i = get_global_id(0);
     const int j = get_global_id(1);
 
-    float4 res = ShadeSurface((j * w + i), iteration, halton,
+    float4 res = ShadeSurface((j * w + i), iteration, 1, halton,
                   prim_inters, prim_rays,
                   mesh_instances, mi_indices,
                   meshes, transforms,
@@ -380,7 +371,7 @@ void ShadePrimary(const int iteration, __global const float *halton, int w,
 }
 
 __kernel
-void ShadeSecondary(const int iteration, __global const float *halton, __global const hit_data_t *prim_inters, __global const ray_packet_t *prim_rays,
+void ShadeSecondary(const int iteration, const int bounce, __global const float *halton, __global const hit_data_t *prim_inters, __global const ray_packet_t *prim_rays,
                     __global const mesh_instance_t *mesh_instances, __global const uint *mi_indices, __global const mesh_t *meshes, __global const transform_t *transforms,
                     __global const uint *vtx_indices, __global const vertex_t *vertices, __global const bvh_node_t *nodes, uint node_index, 
                     __global const tri_accel_t *tris, __global const uint *tri_indices, const environment_t env, __global const material_t *materials, __global const texture_t *textures, __read_only image2d_array_t texture_atlas,
@@ -393,7 +384,7 @@ void ShadeSecondary(const int iteration, __global const float *halton, __global 
 
     float4 col = read_imagef(frame_buf2, FBUF_SAMPLER, px);
 
-    float4 res = ShadeSurface(index, iteration, halton,
+    float4 res = ShadeSurface(index, iteration, bounce, halton,
                   prim_inters, prim_rays,
                   mesh_instances, mi_indices,
                   meshes, transforms,
