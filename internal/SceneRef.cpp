@@ -132,7 +132,7 @@ uint32_t ray::ref::Scene::AddMesh(const mesh_desc_t &_m) {
     m.node_count = 0;
 
     size_t tris_start = tris_.size();
-    m.node_count += PreprocessMesh(_m.vtx_attrs, _m.vtx_attrs_count, _m.vtx_indices, _m.vtx_indices_count, _m.layout, nodes_, tris_, tri_indices_);
+    m.node_count += PreprocessMesh(_m.vtx_attrs, _m.vtx_attrs_count, _m.vtx_indices, _m.vtx_indices_count, _m.layout, _m.allow_spatial_splits, nodes_, tris_, tri_indices_);
 
     for (const auto &s : _m.shapes) {
         for (size_t i = s.vtx_start; i < s.vtx_start + s.vtx_count; i += 3) {
@@ -284,5 +284,5 @@ void ray::ref::Scene::RebuildMacroBVH() {
     }
 
     macro_nodes_start_ = (uint32_t)nodes_.size();
-    macro_nodes_count_ = PreprocessPrims(&primitives[0], primitives.size(), nullptr, 0, nodes_, mi_indices_);
+    macro_nodes_count_ = PreprocessPrims(&primitives[0], primitives.size(), nullptr, 0, false, nodes_, mi_indices_);
 }

@@ -144,7 +144,7 @@ ray::split_data_t ray::SplitPrimitives_SAH(const prim_t *primitives, const std::
 
     std::vector<bbox_t> new_prim_bounds;
 
-    if (true && use_spatial_splits && positions) {
+    if (use_spatial_splits && positions) {
         new_prim_bounds.resize(num_tris);
 
         for (size_t i = 0; i < tri_indices.size(); i++) {
@@ -219,7 +219,7 @@ ray::split_data_t ray::SplitPrimitives_SAH(const prim_t *primitives, const std::
     bbox_t overlap = { max(res_left_bounds.min, res_right_bounds.min),
                        min(res_left_bounds.max, res_right_bounds.max) };
 
-    if (false && use_spatial_splits && (overlap.max <= overlap.min).all_zeros() &&
+    if (use_spatial_splits && (overlap.max <= overlap.min).all_zeros() &&
         overlap.surface_area() > SpatialSplitAlpha * bbox_t::surface_area(root_min, root_max)) {
         struct bin_t {
             bbox_t extends, limits;

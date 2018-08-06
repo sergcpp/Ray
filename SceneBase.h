@@ -66,6 +66,7 @@ struct mesh_desc_t {
     const uint32_t *vtx_indices;        ///< Pointer to vertex indices, defining primitive
     size_t vtx_indices_count;           ///< Primitive indices count
     std::vector<shape_desc_t> shapes;   ///< Vector of shapes in mesh
+    bool allow_spatial_splits = false;  ///< Better BVH, worse load times and memory consumption
 };
 
 /// Texture description

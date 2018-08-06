@@ -134,7 +134,7 @@ void ray::PreprocessTri(const float *p, int stride, tri_accel_t *acc) {
 }
 
 uint32_t ray::PreprocessMesh(const float *attrs, size_t attrs_count, const uint32_t *vtx_indices, size_t vtx_indices_count, eVertexLayout layout,
-                             std::vector<bvh_node_t> &out_nodes, std::vector<tri_accel_t> &out_tris, std::vector<uint32_t> &out_tri_indices) {
+                             bool allow_spatial_splits, std::vector<bvh_node_t> &out_nodes, std::vector<tri_accel_t> &out_tris, std::vector<uint32_t> &out_tri_indices) {
     assert(vtx_indices_count && vtx_indices_count % 3 == 0);
     assert(layout == PxyzNxyzTuv);
 
@@ -167,7 +167,7 @@ uint32_t ray::PreprocessMesh(const float *attrs, size_t attrs_count, const uint3
     }
 
     size_t indices_start = out_tri_indices.size();
-    uint32_t num_out_nodes = PreprocessPrims(&primitives[0], primitives.size(), positions, attr_stride, out_nodes, out_tri_indices);
+    uint32_t num_out_nodes = PreprocessPrims(&primitives[0], primitives.size(), positions, attr_stride, allow_spatial_splits, out_nodes, out_tri_indices);
 
     for (size_t i = indices_start; i < out_tri_indices.size(); i++) {
         out_tri_indices[i] += (uint32_t)tris_start;
@@ -177,7 +177,7 @@ uint32_t ray::PreprocessMesh(const float *attrs, size_t attrs_count, const uint3
 }
 
 uint32_t ray::PreprocessPrims(const prim_t *prims, size_t prims_count, const float *positions, size_t stride,
-                              std::vector<bvh_node_t> &out_nodes, std::vector<uint32_t> &out_indices) {
+                              bool allow_spatial_splits, std::vector<bvh_node_t> &out_nodes, std::vector<uint32_t> &out_indices) {
     struct prims_coll_t {
         std::vector<uint32_t> indices;
         ref::simd_fvec3 min = { std::numeric_limits<float>::max() }, max = { std::numeric_limits<float>::lowest() };
@@ -203,7 +203,7 @@ uint32_t ray::PreprocessPrims(const prim_t *prims, size_t prims_count, const flo
                     root_max = triangle_lists.back().max;
 
     while (!triangle_lists.empty()) {
-        auto split_data = SplitPrimitives_SAH(prims, triangle_lists.back().indices, positions, stride, triangle_lists.back().min, triangle_lists.back().max, root_min, root_max, true);
+        auto split_data = SplitPrimitives_SAH(prims, triangle_lists.back().indices, positions, stride, triangle_lists.back().min, triangle_lists.back().max, root_min, root_max, allow_spatial_splits);
         triangle_lists.pop_back();
 
         uint32_t leaf_index = (uint32_t)out_nodes.size(),

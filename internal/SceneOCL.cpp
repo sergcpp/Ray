@@ -146,7 +146,7 @@ uint32_t ray::ocl::Scene::AddMesh(const mesh_desc_t &_m) {
     std::vector<uint32_t> new_tri_indices;
     std::vector<uint32_t> new_vtx_indices;
 
-    PreprocessMesh(_m.vtx_attrs, _m.vtx_attrs_count, _m.vtx_indices, _m.vtx_indices_count, _m.layout, new_nodes, new_tris, new_tri_indices);
+    PreprocessMesh(_m.vtx_attrs, _m.vtx_attrs_count, _m.vtx_indices, _m.vtx_indices_count, _m.layout, _m.allow_spatial_splits, new_nodes, new_tris, new_tri_indices);
     for (size_t i = 0; i < _m.vtx_indices_count; i++) {
         new_vtx_indices.push_back(_m.vtx_indices[i] + (uint32_t)vertices_.size());
     }
@@ -329,7 +329,7 @@ void ray::ocl::Scene::RebuildMacroBVH() {
     std::vector<uint32_t> mi_indices;
 
     macro_nodes_start_ = (uint32_t)nodes_.size();
-    macro_nodes_count_ = PreprocessPrims(&primitives[0], primitives.size(), nullptr, 0, bvh_nodes, mi_indices);
+    macro_nodes_count_ = PreprocessPrims(&primitives[0], primitives.size(), nullptr, 0, false, bvh_nodes, mi_indices);
 
     // offset nodes
     for (auto &n : bvh_nodes) {
