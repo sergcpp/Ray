@@ -35,7 +35,7 @@
 // add more validation tests (use Cycles)
 
 // DONE:
-// add dof
+// add depth of field
 // try again with spatial splits or remove unnecessary indirection
 // proper ray termination
 // add validation tests (use Cycles)

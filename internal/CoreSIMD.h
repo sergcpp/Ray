@@ -29,7 +29,7 @@ struct ray_packet_t {
     // origins of rays in packet
     simd_fvec<S> o[3];
     // color of ray and ior of medium
-    simd_fvec<S> c[4];
+    simd_fvec<S> c[3], ior;
     // derivatives
     simd_fvec<S> do_dx[3], dd_dx[3], do_dy[3], dd_dy[3];
     // 16-bit pixel coordinates of rays in packet ((x << 16) | y)
@@ -1561,7 +1561,7 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
                     where(new_ray_mask, r.c[0]) = rc[0];
                     where(new_ray_mask, r.c[1]) = rc[1];
                     where(new_ray_mask, r.c[2]) = rc[2];
-                    where(new_ray_mask, r.c[3]) = ray.c[3];
+                    where(new_ray_mask, r.ior) = ray.ior;
 
                     where(new_ray_mask, r.do_dx[0]) = do_dx[0];
                     where(new_ray_mask, r.do_dx[1]) = do_dx[1];
@@ -1640,7 +1640,7 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
                     where(new_ray_mask, r.c[0]) = rc[0];
                     where(new_ray_mask, r.c[1]) = rc[1];
                     where(new_ray_mask, r.c[2]) = rc[2];
-                    where(new_ray_mask, r.c[3]) = ray.c[3];
+                    where(new_ray_mask, r.ior) = ray.ior;
 
                     where(new_ray_mask, r.do_dx[0]) = do_dx[0];
                     where(new_ray_mask, r.do_dx[1]) = do_dx[1];
@@ -1740,7 +1740,7 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
                     where(new_ray_mask, r.c[0]) = rc[0];
                     where(new_ray_mask, r.c[1]) = rc[1];
                     where(new_ray_mask, r.c[2]) = rc[2];
-                    where(new_ray_mask, r.c[3]) = mat->ior;
+                    where(new_ray_mask, r.ior) = mat->ior;
 
                     where(new_ray_mask, r.do_dx[0]) = do_dx[0];
                     where(new_ray_mask, r.do_dx[1]) = do_dx[1];
