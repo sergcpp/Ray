@@ -30,12 +30,13 @@
 // add dof
 // compare traversal algorithm with stack
 // try using image for node buffer (utilize texture cache)
+// add punctual lights support
 // add deletion functions for OpenCL backend
-// try again with spatial splits or remove unnecessary indirection
 // add tests for intersection
 // add more validation tests (use Cycles)
 
 // DONE:
+// try again with spatial splits or remove unnecessary indirection
 // proper ray termination
 // add validation tests (use Cycles)
 // make camera fov work
