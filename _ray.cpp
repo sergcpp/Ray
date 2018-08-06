@@ -27,7 +27,6 @@
 
 // TODO:
 // replace box filter with tent
-// add dof
 // compare traversal algorithm with stack
 // try using image for node buffer (utilize texture cache)
 // add punctual lights support
@@ -36,6 +35,7 @@
 // add more validation tests (use Cycles)
 
 // DONE:
+// add dof
 // try again with spatial splits or remove unnecessary indirection
 // proper ray termination
 // add validation tests (use Cycles)

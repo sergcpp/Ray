@@ -402,19 +402,25 @@ void ray::NS::GeneratePrimaryRays(const int iteration, const camera_t &cam, cons
 
     float k = float(h) / w;
 
-    float fov_k = std::tan(0.5f * cam.fov * PI / 180.0f);
+    float focus_distance = cam.focus_distance;
+    float fov_k = std::tan(0.5f * cam.fov * PI / 180.0f) * focus_distance;
 
     simd_fvec<S> fwd[3] = { { cam.fwd[0] }, { cam.fwd[1] }, { cam.fwd[2] } },
                  side[3] = { { cam.side[0] }, { cam.side[1] }, { cam.side[2] } },
-                 up[3] = { { cam.up[0] * k }, { cam.up[1] * k }, { cam.up[2] * k } };
+                 up[3] = { { cam.up[0] }, { cam.up[1] }, { cam.up[2] } },
+                 cam_origin[3] = { { cam.origin[0] }, { cam.origin[1] }, { cam.origin[2] } };
 
-    auto get_pix_dirs = [fov_k, &fwd, &side, &up, &ww, &hh](const simd_fvec<S> &x, const simd_fvec<S> &y, simd_fvec<S> d[3]) {
+    auto get_pix_dirs = [k, fov_k, focus_distance, &fwd, &side, &up, &cam_origin, &ww, &hh](const simd_fvec<S> &x, const simd_fvec<S> &y, const simd_fvec<S> origin[3], simd_fvec<S> d[3]) {
         auto _dx = 2 * fov_k * x / ww - fov_k;
         auto _dy = 2 * fov_k  * -y / hh + fov_k;
 
-        d[0] = _dx * side[0] + _dy * up[0] + fwd[0];
-        d[1] = _dx * side[1] + _dy * up[1] + fwd[1];
-        d[2] = _dx * side[2] + _dy * up[2] + fwd[2];
+        d[0] = cam_origin[0] + _dx * side[0] + k * _dy * up[0] + fwd[0] * focus_distance;
+        d[1] = cam_origin[1] + _dx * side[1] + k * _dy * up[1] + fwd[1] * focus_distance;
+        d[2] = cam_origin[2] + _dx * side[2] + k * _dy * up[2] + fwd[2] * focus_distance;
+
+        d[0] = d[0] - origin[0];
+        d[1] = d[1] - origin[1];
+        d[2] = d[2] - origin[2];
 
         simd_fvec<DimX * DimY> len = sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
         d[0] /= len;
@@ -444,23 +450,35 @@ void ray::NS::GeneratePrimaryRays(const int iteration, const camera_t &cam, cons
             simd_fvec<S> fxx = (simd_fvec<S>)ixx,
                          fyy = (simd_fvec<S>)iyy;
 
-            simd_fvec<S> rxx = construct_float(hash(index)),
-                         ryy = construct_float(hash(hash(index)));
+            simd_ivec<S> hash_val = hash(index);
+            simd_fvec<S> rxx = construct_float(hash_val);
+            hash_val = hash(hash_val);
+            simd_fvec<S> ryy = construct_float(hash_val);
+            hash_val = hash(hash_val);
+            simd_fvec<S> sxx = construct_float(hash_val);
+            hash_val = hash(hash_val);
+            simd_fvec<S> syy = construct_float(hash_val);
 
             for (int i = 0; i < S; i++) {
                 float _unused;
                 fxx[i] += std::modf(halton[hi + 0] + rxx[i], &_unused);
                 fyy[i] += std::modf(halton[hi + 1] + ryy[i], &_unused);
+                sxx[i] = cam.focus_factor * (-0.5f + std::modf(halton[hi + 0] + sxx[i], &_unused));
+                syy[i] = cam.focus_factor * (-0.5f + std::modf(halton[hi + 1] + syy[i], &_unused));
             }
 
+            simd_fvec<S> _origin[3] = { { cam_origin[0] + side[0] * sxx + up[0] * syy },
+                                        { cam_origin[1] + side[1] * sxx + up[1] * syy },
+                                        { cam_origin[2] + side[2] * sxx + up[2] * syy } };
+
             simd_fvec<S> _d[3], _dx[3], _dy[3];
-            get_pix_dirs(fxx, fyy, _d);
-            get_pix_dirs(fxx + 1.0f, fyy, _dx);
-            get_pix_dirs(fxx, fyy + 1.0f, _dy);
+            get_pix_dirs(fxx, fyy, _origin, _d);
+            get_pix_dirs(fxx + 1.0f, fyy, _origin, _dx);
+            get_pix_dirs(fxx, fyy + 1.0f, _origin, _dy);
 
             for (int j = 0; j < 3; j++) {
                 out_r.d[j] = _d[j];
-                out_r.o[j] = { cam.origin[j] };
+                out_r.o[j] = _origin[j];
                 out_r.c[j] = { 1.0f };
 
                 out_r.do_dx[j] = { 0.0f };

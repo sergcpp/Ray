@@ -186,17 +186,16 @@ ray::ref::hit_data_t::hit_data_t() {
 }
 
 void ray::ref::GeneratePrimaryRays(int iteration, const camera_t &cam, const rect_t &r, int w, int h, const float *halton, aligned_vector<ray_packet_t> &out_rays) {
-    simd_fvec3 origin = { cam.origin }, fwd = { cam.fwd }, side = { cam.side }, up = { cam.up };
+    simd_fvec3 cam_origin = { cam.origin }, fwd = { cam.fwd }, side = { cam.side }, up = { cam.up };
+    float focus_distance = cam.focus_distance;
 
-    up *= float(h) / w;
+    float k = float(h) / w;
+    float fov_k = std::tan(0.5f * cam.fov * PI / 180.0f) * focus_distance;
 
-    float k = std::tan(0.5f * cam.fov * PI / 180.0f);
-
-    auto get_pix_dir = [k, fwd, side, up, w, h](const float x, const float y) {
-        simd_fvec3 _d(2 * k * float(x) / w - k, 2 * k * float(-y) / h + k, 1);
-        _d = _d[0] * side + _d[1] * up + _d[2] * fwd;
-        _d = normalize(_d);
-        return _d;
+    auto get_pix_dir = [k, fov_k, focus_distance, cam_origin, fwd, side, up, w, h](const float x, const float y, const simd_fvec3 &origin) {
+        simd_fvec3 p(2 * fov_k * float(x) / w - fov_k, 2 * fov_k * float(-y) / h + fov_k, focus_distance);
+        p = cam_origin + p[0] * side + k * p[1] * up + p[2] * fwd;
+        return normalize(p - origin);
     };
 
     size_t i = 0;
@@ -210,16 +209,25 @@ void ray::ref::GeneratePrimaryRays(int iteration, const camera_t &cam, const rec
             const int hi = (iteration & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT;
 
             float _unused;
-            float _x = (float)x + std::modf(halton[hi + 0] + construct_float(hash(index)), &_unused);
-            float _y = (float)y + std::modf(halton[hi + 1] + construct_float(hash(hash(index))), &_unused);
+            int hash_val = hash(index);
+            float _x = (float)x + std::modf(halton[hi + 0] + construct_float(hash_val), &_unused);
+            hash_val = hash(index);
+            float _y = (float)y + std::modf(halton[hi + 1] + construct_float(hash_val), &_unused);
 
-            simd_fvec3 _d = get_pix_dir(_x, _y);
+            hash_val = hash(hash_val);
+            float ff1 = cam.focus_factor * (-0.5f + std::modf(halton[hi + 0] + construct_float(hash_val), &_unused));
+            hash_val = hash(hash_val);
+            float ff2 = cam.focus_factor * (-0.5f + std::modf(halton[hi + 1] + construct_float(hash_val), &_unused));
 
-            simd_fvec3 _dx = get_pix_dir(_x + 1, _y),
-                       _dy = get_pix_dir(_x, _y + 1);
+            simd_fvec3 _origin = cam_origin + side * ff1 + up * ff2;
+
+            simd_fvec3 _d = get_pix_dir(_x, _y, _origin);
+
+            simd_fvec3 _dx = get_pix_dir(_x + 1, _y, _origin),
+                       _dy = get_pix_dir(_x, _y + 1, _origin);
 
             for (int j = 0; j < 3; j++) {
-                out_r.o[j] = origin[j];
+                out_r.o[j] = _origin[j];
                 out_r.d[j] = _d[j];
                 out_r.c[j] = 1.0f;
 

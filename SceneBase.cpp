@@ -5,7 +5,7 @@
 
 #include "internal/Core.h"
 
-uint32_t ray::SceneBase::AddCamera(eCamType type, const float origin[3], const float fwd[3], float fov, float gamma) {
+uint32_t ray::SceneBase::AddCamera(eCamType type, const float origin[3], const float fwd[3], float fov, float gamma, float focus_distance, float focus_factor) {
     uint32_t i;
     if (cam_first_free_ == -1) {
         i = (uint32_t)cams_.size();
@@ -14,14 +14,14 @@ uint32_t ray::SceneBase::AddCamera(eCamType type, const float origin[3], const f
         i = cam_first_free_;
         cam_first_free_ = cams_[i].next_free;
     }
-    ConstructCamera(type, origin, fwd, fov, gamma, &cams_[i].cam);
+    ConstructCamera(type, origin, fwd, fov, gamma, focus_distance, focus_factor, &cams_[i].cam);
     if (current_cam_ == 0xffffffff) current_cam_ = i;
     return i;
 }
 
-void ray::SceneBase::SetCamera(uint32_t i, eCamType type, const float origin[3], const float fwd[3], float fov, float gamma) {
+void ray::SceneBase::SetCamera(uint32_t i, eCamType type, const float origin[3], const float fwd[3], float fov, float gamma, float focus_distance, float focus_factor) {
     assert(i < (uint32_t)cams_.size());
-    ConstructCamera(type, origin, fwd, fov, gamma, &cams_[i].cam);
+    ConstructCamera(type, origin, fwd, fov, gamma, focus_distance, focus_factor, &cams_[i].cam);
 }
 
 void ray::SceneBase::RemoveCamera(uint32_t i) {

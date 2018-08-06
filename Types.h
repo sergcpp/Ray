@@ -32,14 +32,15 @@ enum eCamType { Persp, Ortho };
     Should not be used directly, usually returned from SceneBase::GetCamera
 */
 struct camera_t {
-    eCamType type;      ///< Projection type
-    float fov, gamma;   ///< Field of View in degrees, and gamma
-    float origin[3],    ///< Origin point
-          fwd[3],       ///< Forward unit vector
-          side[3],      ///< Right side unit vector
-          up[3];        ///< Up vector
+    eCamType type;                      ///< Projection type
+    float fov, gamma;                   ///< Field of View in degrees, and gamma
+    float focus_distance, focus_factor; ///< Distance to focus point
+    float origin[3],                    ///< Origin point
+          fwd[3],                       ///< Forward unit vector
+          side[3],                      ///< Right side unit vector
+          up[3];                        ///< Up vector
 };
-static_assert(sizeof(camera_t) == 60, "!");
+static_assert(sizeof(camera_t) == 68, "!");
 
 #if !defined(DISABLE_OCL)
 namespace ocl {

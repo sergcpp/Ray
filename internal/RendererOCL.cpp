@@ -369,10 +369,6 @@ void ray::ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
 
     ray::ocl::camera_t cl_cam = { cam };
 
-    cl_cam.up.x *= float(h_) / w_;
-    cl_cam.up.y *= float(h_) / w_;
-    cl_cam.up.z *= float(h_) / w_;
-
     const auto time_start = std::chrono::high_resolution_clock::now();
 
     if (!kernel_GeneratePrimaryRays((cl_int)region.iteration, cl_cam, region.rect(), w_, h_, halton_seq_buf_, prim_rays_buf_)) return;

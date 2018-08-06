@@ -168,7 +168,7 @@ public:
     */
     uint32_t AddCamera(eCamType type) {
         const float o[3] = { 0, 0, 0 }, fwd[3] = { 0, 0, -1 }, fov = 60;
-        return AddCamera(type, o, fwd, fov, 1.0f);
+        return AddCamera(type, o, fwd, fov, 1.0f, 1.0f, 0.001f);
     }
 
     /** @brief Adds camera to a scene
@@ -177,9 +177,11 @@ public:
         @param fwd camera forward unit vector
         @param fov camera field of view in grad.
         @param gamma
+        @param focus distance
+        @param
         @return New camera index
     */
-    uint32_t AddCamera(eCamType type, const float origin[3], const float fwd[3], float fov, float gamma);
+    uint32_t AddCamera(eCamType type, const float origin[3], const float fwd[3], float fov, float gamma, float focus_distance, float focus_factor);
     
     /** @brief Get const reference to a camera with specific index
         @param i camera index
@@ -196,7 +198,7 @@ public:
         @param fwd camera forward unit vector
         @param fov camera field of view in grad.
     */
-    void SetCamera(uint32_t i, eCamType type, const float origin[3], const float fwd[3], float fov, float gamma);
+    void SetCamera(uint32_t i, eCamType type, const float origin[3], const float fwd[3], float fov, float gamma, float focus_distance, float focus_factor);
     
     /** @brief Removes camera with specific index from scene
         @param i camera index

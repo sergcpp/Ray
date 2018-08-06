@@ -26,7 +26,7 @@ const int RayPacketSize = 1;
 
 struct camera_t {
     cl_float4 origin, fwd;
-    cl_float3 side, up;
+    cl_float4 side, up;
 
     camera_t() {}
     camera_t(const ray::camera_t &cam) {
@@ -35,7 +35,9 @@ struct camera_t {
         memcpy(&fwd, &cam.fwd[0], sizeof(float) * 3);
         fwd.w = cam.gamma;
         memcpy(&side, &cam.side[0], sizeof(float) * 3);
+        side.w = cam.focus_distance;
         memcpy(&up, &cam.up[0], sizeof(float) * 3);
+        up.w = cam.focus_factor;
     }
 };
 
