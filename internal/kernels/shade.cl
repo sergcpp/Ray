@@ -199,7 +199,7 @@ R"(
 
             const float3 r_o = P + HIT_BIAS * plane_N;
             const float3 r_d = V;
-            v = TraceShadowRay(r_o, r_d, mesh_instances, mi_indices, meshes, transforms, nodes, node_index, tris, tri_indices);
+            v = TraceOcclusionRay(r_o, r_d, mesh_instances, mi_indices, meshes, transforms, nodes, node_index, tris, tri_indices);
         }
 
         k = clamp(k, 0.0f, 1.0f);

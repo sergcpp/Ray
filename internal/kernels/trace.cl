@@ -1,15 +1,14 @@
 R"(
 
-float TraceShadowRay(const float3 ro, const float3 rd, 
-                     __global const mesh_instance_t *mesh_instances, __global const uint *mi_indices,
-                     __global const mesh_t *meshes, __global const transform_t *transforms,
-                     __global const bvh_node_t *nodes, uint node_index,
-                     __global const tri_accel_t *tris, __global const uint *tri_indices) {
-
+float TraceOcclusionRay(const float3 ro, const float3 rd, 
+                        __global const mesh_instance_t *mesh_instances, __global const uint *mi_indices,
+                        __global const mesh_t *meshes, __global const transform_t *transforms,
+                        __global const bvh_node_t *nodes, uint node_index,
+                        __global const tri_accel_t *tris, __global const uint *tri_indices) {
     const float3 inv_d = safe_invert(rd);
 
-    return Traverse_MacroTree_Shadow(ro, rd, inv_d, mesh_instances, mi_indices, 
-                                     meshes, transforms, nodes, node_index, tris, tri_indices);
+    return Traverse_MacroTree_Occlusion_Stackless(ro, rd, inv_d, mesh_instances, mi_indices, 
+                                                  meshes, transforms, nodes, node_index, tris, tri_indices);
 }
 
 __kernel
@@ -32,8 +31,8 @@ void TracePrimaryRays(__global const ray_packet_t *rays, int w,
     inter.t = FLT_MAX;
     inter.ray_id = (float2)(orig_r_o.w, orig_r_d.w);
 
-    Traverse_MacroTree(orig_r_o.xyz, orig_r_d.xyz, orig_inv_d, mesh_instances, mi_indices, meshes, transforms,
-                       nodes, node_index, tris, tri_indices, &inter);
+    Traverse_MacroTree_WithStack(orig_r_o.xyz, orig_r_d.xyz, orig_inv_d, mesh_instances, mi_indices, meshes, transforms,
+                                 nodes, node_index, tris, tri_indices, &inter);
 
     out_prim_inters[index] = inter;
 }
@@ -58,8 +57,8 @@ void TraceSecondaryRays(__global const ray_packet_t *rays,
     inter.t = FLT_MAX;
     inter.ray_id = (float2)(orig_r_o.w, orig_r_d.w);
 
-    Traverse_MacroTree(orig_r_o.xyz, orig_r_d.xyz, orig_inv_d, mesh_instances, mi_indices, meshes, transforms,
-                       nodes, node_index, tris, tri_indices, &inter);
+    Traverse_MacroTree_WithStack(orig_r_o.xyz, orig_r_d.xyz, orig_inv_d, mesh_instances, mi_indices, meshes, transforms,
+                                 nodes, node_index, tris, tri_indices, &inter);
 
     out_prim_inters[index] = inter;
 }

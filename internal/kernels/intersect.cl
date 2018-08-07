@@ -44,8 +44,8 @@ void IntersectTris(const float3 r_o, const float3 r_d, __global const tri_accel_
     }
 }
 
-float IntersectTris_Shadow(const float3 r_o, const float3 r_d, __global const tri_accel_t *tris, 
-                           __global const uint *tri_indices, int tri_index, int tri_count) {
+float IntersectTris_Occlusion(const float3 r_o, const float3 r_d, __global const tri_accel_t *tris, 
+                              __global const uint *tri_indices, int tri_index, int tri_count) {
     const float *rd = (const float *)&r_d;
     const float *ro = (const float *)&r_o;
 
