@@ -683,7 +683,7 @@ bool ray::ref::Traverse_MacroTree_WithStack(const ray_packet_t &r, const bvh_nod
 
                 float _inv_d[3] = { 1.0f / _r.d[0], 1.0f / _r.d[1], 1.0f / _r.d[2] };
 
-                res |= Traverse_MicroTree_WithStack(_r, _inv_d, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter);
+                res |= Traverse_MicroTree_WithStack(_r, _inv_d, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], &stack[stack_size], inter);
             }
         }
     }
@@ -692,12 +692,9 @@ bool ray::ref::Traverse_MacroTree_WithStack(const ray_packet_t &r, const bvh_nod
 }
 
 bool ray::ref::Traverse_MicroTree_WithStack(const ray_packet_t &r, const float inv_d[3], const bvh_node_t *nodes, uint32_t root_index,
-                                            const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, hit_data_t &inter) {
-    const int MAX_STACK_SIZE = 32;
-
+                                            const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, uint32_t *stack, hit_data_t &inter) {
     bool res = false;
 
-    uint32_t stack[MAX_STACK_SIZE];
     uint32_t stack_size = 0;
 
     stack[stack_size++] = root_index;

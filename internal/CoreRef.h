@@ -98,7 +98,7 @@ bool Traverse_MacroTree_WithStack(const ray_packet_t &r, const bvh_node_t *nodes
                                   const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t &inter);
 // traditional bvh traversal with stack for inner nodes
 bool Traverse_MicroTree_WithStack(const ray_packet_t &r, const float inv_d[3], const bvh_node_t *nodes, uint32_t root_index,
-                                  const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, hit_data_t &inter);
+                                  const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, uint32_t *stack, hit_data_t &inter);
 
 // Transform
 ray_packet_t TransformRay(const ray_packet_t &r, const float *xform);
