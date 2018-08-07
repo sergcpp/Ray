@@ -386,9 +386,9 @@ bool ray::ref::IntersectTris(const ray_packet_t &r, const tri_accel_t *tris, con
     return inter.mask_values[0] != 0;
 }
 
-bool ray::ref::Traverse_MacroTree_CPU(const ray_packet_t &r, const bvh_node_t *nodes, uint32_t root_index,
-                                      const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
-                                      const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t &inter) {
+bool ray::ref::Traverse_MacroTree_Stackless_CPU(const ray_packet_t &r, const bvh_node_t *nodes, uint32_t root_index,
+                                                const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
+                                                const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t &inter) {
     bool res = false;
 
     float inv_d[3];
@@ -432,7 +432,7 @@ bool ray::ref::Traverse_MacroTree_CPU(const ray_packet_t &r, const bvh_node_t *n
                     float _inv_d[3];
                     safe_invert(_r.d, _inv_d);
 
-                    res |= Traverse_MicroTree_CPU(_r, _inv_d, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter);
+                    res |= Traverse_MicroTree_Stackless_CPU(_r, _inv_d, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter);
                 }
 
                 cur = nodes[cur].parent;
@@ -460,7 +460,7 @@ bool ray::ref::Traverse_MacroTree_CPU(const ray_packet_t &r, const bvh_node_t *n
                     float _inv_d[3];
                     safe_invert(_r.d, _inv_d);
 
-                    res |= Traverse_MicroTree_CPU(_r, _inv_d, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter);
+                    res |= Traverse_MicroTree_Stackless_CPU(_r, _inv_d, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter);
                 }
 
                 cur = nodes[cur].sibling;
@@ -476,9 +476,9 @@ bool ray::ref::Traverse_MacroTree_CPU(const ray_packet_t &r, const bvh_node_t *n
     return res;
 }
 
-bool ray::ref::Traverse_MacroTree_GPU(const ray_packet_t &r, const bvh_node_t *nodes, uint32_t root_index,
-                                      const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
-                                      const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t &inter) {
+bool ray::ref::Traverse_MacroTree_Stackless_GPU(const ray_packet_t &r, const bvh_node_t *nodes, uint32_t root_index,
+                                                const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
+                                                const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t &inter) {
     bool res = false;
 
     float inv_d[3];
@@ -506,7 +506,7 @@ bool ray::ref::Traverse_MacroTree_GPU(const ray_packet_t &r, const bvh_node_t *n
 
                 float _inv_d[3] = { 1.0f / _r.d[0], 1.0f / _r.d[1], 1.0f / _r.d[2] };
 
-                res |= Traverse_MicroTree_GPU(_r, _inv_d, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter);
+                res |= Traverse_MicroTree_Stackless_GPU(_r, _inv_d, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter);
             }
             last = cur;
             cur = nodes[cur].parent;
@@ -539,8 +539,8 @@ bool ray::ref::Traverse_MacroTree_GPU(const ray_packet_t &r, const bvh_node_t *n
     return res;
 }
 
-bool ray::ref::Traverse_MicroTree_CPU(const ray_packet_t &r, const float inv_d[3], const bvh_node_t *nodes, uint32_t root_index,
-                                      const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, hit_data_t &inter) {
+bool ray::ref::Traverse_MicroTree_Stackless_CPU(const ray_packet_t &r, const float inv_d[3], const bvh_node_t *nodes, uint32_t root_index,
+                                                const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, hit_data_t &inter) {
     bool res = false;
 
     uint32_t cur = root_index;
@@ -550,9 +550,6 @@ bool ray::ref::Traverse_MicroTree_CPU(const ray_packet_t &r, const float inv_d[3
         cur = near_child(r, nodes[root_index]);
         src = FromParent;
     }
-
-    int cur_braversal_depth = 1;
-    //inter.prim_indices[0] = 1;
 
     while (true) {
         switch (src) {
@@ -564,26 +561,21 @@ bool ray::ref::Traverse_MicroTree_CPU(const ray_packet_t &r, const float inv_d[3
             } else {
                 cur = nodes[cur].parent;
                 src = FromChild;
-                cur_braversal_depth--;
             }
             break;
         case FromSibling:
             if (!bbox_test(r.o, inv_d, inter.t, nodes[cur])) {
                 cur = nodes[cur].parent;
                 src = FromChild;
-                cur_braversal_depth--;
             } else if (is_leaf_node(nodes[cur])) {
                 // process leaf
                 res |= IntersectTris(r, tris, &tri_indices[nodes[cur].prim_index], nodes[cur].prim_count, obj_index, inter);
 
                 cur = nodes[cur].parent;
                 src = FromChild;
-                cur_braversal_depth--;
             } else {
                 cur = near_child(r, nodes[cur]);
                 src = FromParent;
-                cur_braversal_depth++;
-                //inter.prim_indices[0] = std::max(inter.prim_indices[0], cur_braversal_depth);
             }
             break;
         case FromParent:
@@ -599,8 +591,6 @@ bool ray::ref::Traverse_MicroTree_CPU(const ray_packet_t &r, const float inv_d[3
             } else {
                 cur = near_child(r, nodes[cur]);
                 src = FromParent;
-                cur_braversal_depth++;
-                //inter.prim_indices[0] = std::max(inter.prim_indices[0], cur_braversal_depth);
             }
             break;
         }
@@ -609,8 +599,8 @@ bool ray::ref::Traverse_MicroTree_CPU(const ray_packet_t &r, const float inv_d[3
     return res;
 }
 
-bool ray::ref::Traverse_MicroTree_GPU(const ray_packet_t &r, const float inv_d[3], const bvh_node_t *nodes, uint32_t root_index,
-                                      const tri_accel_t *tris, const uint32_t *indices, int obj_index, hit_data_t &inter) {
+bool ray::ref::Traverse_MicroTree_Stackless_GPU(const ray_packet_t &r, const float inv_d[3], const bvh_node_t *nodes, uint32_t root_index,
+                                                const tri_accel_t *tris, const uint32_t *indices, int obj_index, hit_data_t &inter) {
     bool res = false;
 
     uint32_t cur = root_index;
@@ -652,6 +642,76 @@ bool ray::ref::Traverse_MicroTree_GPU(const ray_packet_t &r, const float inv_d[3
                 last = cur;
                 cur = nodes[cur].parent;
             }
+        }
+    }
+
+    return res;
+}
+
+bool ray::ref::Traverse_MacroTree_WithStack(const ray_packet_t &r, const bvh_node_t *nodes, uint32_t root_index,
+                                            const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
+                                            const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t &inter) {
+    const int MAX_STACK_SIZE = 32;
+
+    bool res = false;
+
+    float inv_d[3];
+    safe_invert(r.d, inv_d);
+
+    uint32_t stack[MAX_STACK_SIZE];
+    uint32_t stack_size = 0;
+
+    stack[stack_size++] = root_index;
+
+    while (stack_size) {
+        uint32_t cur = stack[--stack_size];
+
+        if (!bbox_test(r.o, inv_d, inter.t, nodes[cur])) continue;
+
+        if (!is_leaf_node(nodes[cur])) {
+            stack[stack_size++] = far_child(r, nodes[cur]);
+            stack[stack_size++] = near_child(r, nodes[cur]);
+        } else {
+            for (uint32_t i = nodes[cur].prim_index; i < nodes[cur].prim_index + nodes[cur].prim_count; i++) {
+                const auto &mi = mesh_instances[mi_indices[i]];
+                const auto &m = meshes[mi.mesh_index];
+                const auto &tr = transforms[mi.tr_index];
+
+                if (!bbox_test(r.o, inv_d, inter.t, mi.bbox_min, mi.bbox_max)) continue;
+
+                ray_packet_t _r = TransformRay(r, tr.inv_xform);
+
+                float _inv_d[3] = { 1.0f / _r.d[0], 1.0f / _r.d[1], 1.0f / _r.d[2] };
+
+                res |= Traverse_MicroTree_WithStack(_r, _inv_d, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter);
+            }
+        }
+    }
+
+    return res;
+}
+
+bool ray::ref::Traverse_MicroTree_WithStack(const ray_packet_t &r, const float inv_d[3], const bvh_node_t *nodes, uint32_t root_index,
+                                            const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, hit_data_t &inter) {
+    const int MAX_STACK_SIZE = 32;
+
+    bool res = false;
+
+    uint32_t stack[MAX_STACK_SIZE];
+    uint32_t stack_size = 0;
+
+    stack[stack_size++] = root_index;
+
+    while (stack_size) {
+        uint32_t cur = stack[--stack_size];
+
+        if (!bbox_test(r.o, inv_d, inter.t, nodes[cur])) continue;
+
+        if (!is_leaf_node(nodes[cur])) {
+            stack[stack_size++] = far_child(r, nodes[cur]);
+            stack[stack_size++] = near_child(r, nodes[cur]);
+        } else {
+            res |= IntersectTris(r, tris, &tri_indices[nodes[cur].prim_index], nodes[cur].prim_count, obj_index, inter);
         }
     }
 
@@ -1018,7 +1078,7 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
             memcpy(&r.d[0], value_ptr(V), 3 * sizeof(float));
 
             hit_data_t sh_inter;
-            Traverse_MacroTree_CPU(r, nodes, node_index, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, sh_inter);
+            Traverse_MacroTree_WithStack(r, nodes, node_index, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, sh_inter);
             if (sh_inter.mask_values[0]) {
                 v = 0;
             }

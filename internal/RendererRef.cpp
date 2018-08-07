@@ -99,7 +99,7 @@ void ray::ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
 
         inter = {};
         inter.id = r.id;
-        Traverse_MacroTree_CPU(r, nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, inter);
+        Traverse_MacroTree_WithStack(r, nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, inter);
     }
 
     const auto time_after_prim_trace = std::chrono::high_resolution_clock::now();
@@ -182,7 +182,7 @@ void ray::ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
 
             inter = {};
             inter.id = r.id;
-            Traverse_MacroTree_CPU(r, nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, inter);
+            Traverse_MacroTree_WithStack(r, nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, inter);
         }
 
         auto time_secondary_shade_start = std::chrono::high_resolution_clock::now();
