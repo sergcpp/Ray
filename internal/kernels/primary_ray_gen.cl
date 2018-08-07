@@ -35,18 +35,37 @@ void GeneratePrimaryRays(const int iteration, camera_t cam, int w, int h, __glob
 
     float k = ((float)h) / w;
 
+    float x = (float)i;
+    float y = (float)j;
+
     float _unused;
     int hash_val = hash(index);
-    const float x = (float)i + fract(halton[hi + 0] + construct_float(hash_val), &_unused);
-    hash_val = hash(hash_val);
-    const float y = (float)j + fract(halton[hi + 1] + construct_float(hash_val), &_unused);
+    if (cam.flags & CAM_USE_TENT_FILTER) {
+        float rx = fract(halton[hi + 0] + construct_float(hash_val), &_unused);
+        if (rx < 0.5f) {
+            rx = native_sqrt(2 * rx) - 1.0f;
+        } else {
+            rx = 1.0f - native_sqrt(2.0f - 2 * rx);
+        }
+
+        float ry = fract(halton[hi + 1] + construct_float(hash(hash_val)), &_unused);
+        if (ry < 0.5f) {
+            ry = native_sqrt(2 * ry) - 1.0f;
+        } else {
+            ry = 1.0f - native_sqrt(2.0f - 2 * ry);
+        }
+
+        x += 0.5f + rx;
+        y += 0.5f + ry;
+    } else {
+        x += fract(halton[hi + 0] + construct_float(hash_val), &_unused);
+        y += fract(halton[hi + 1] + construct_float(hash(hash_val)), &_unused);
+    }
 
     __global ray_packet_t *r = &out_rays[index];
 
-    hash_val = hash(hash_val);
-    float ff1 = cam.up.w * (-0.5f + fract(halton[hi + 0] + construct_float(hash_val), &_unused));
-    hash_val = hash(hash_val);
-    float ff2 = cam.up.w * (-0.5f + fract(halton[hi + 1] + construct_float(hash_val), &_unused));
+    float ff1 = cam.up.w * (-0.5f + fract(halton[hi + 2 + 0] + construct_float(hash_val), &_unused));
+    float ff2 = cam.up.w * (-0.5f + fract(halton[hi + 2 + 1] + construct_float(hash(hash_val)), &_unused));
 
     float3 origin = cam.origin.xyz + cam.side.xyz * ff1 + cam.up.xyz * ff2;
 

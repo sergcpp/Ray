@@ -357,7 +357,7 @@ void ShadePrimary(const int iteration, __global const float *halton, int w,
     const int i = get_global_id(0);
     const int j = get_global_id(1);
 
-    float4 res = ShadeSurface((j * w + i), iteration, 1, halton,
+    float4 res = ShadeSurface((j * w + i), iteration, 2, halton,
                   prim_inters, prim_rays,
                   mesh_instances, mi_indices,
                   meshes, transforms,

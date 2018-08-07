@@ -304,7 +304,7 @@ bool ray::NaiivePluckerTest(const float p[9], const float o[3], const float d[3]
     return (t0 <= 0 && t1 <= 0 && t2 <= 0) || (t0 >= 0 && t1 >= 0 && t2 >= 0);
 }
 
-void ray::ConstructCamera(eCamType type, const float origin[3], const float fwd[3], float fov, float gamma, float focus_distance, float focus_factor, camera_t *cam) {
+void ray::ConstructCamera(eCamType type, eFilterType filter, const float origin[3], const float fwd[3], float fov, float gamma, float focus_distance, float focus_factor, camera_t *cam) {
     if (type == Persp) {
         ref::simd_fvec3 o = { origin };
         ref::simd_fvec3 f = { fwd };
@@ -314,6 +314,7 @@ void ray::ConstructCamera(eCamType type, const float origin[3], const float fwd[
         u = cross(s, f);
 
         cam->type = type;
+        cam->filter = filter;
         cam->fov = fov;
         cam->gamma = gamma;
         cam->focus_distance = focus_distance;

@@ -127,6 +127,7 @@ ray::ocl::Renderer::Renderer(int w, int h, int platform_index, int device_index)
         cl_src_defines += "#define MIX_MAT2 " + std::to_string(MIX_MAT2) + "\n";
         cl_src_defines += "#define SCAN_PORTION " + std::to_string(scan_portion_) + "\n";
         cl_src_defines += "#define SEG_SCAN_PORTION " + std::to_string(seg_scan_portion_) + "\n";
+        cl_src_defines += "#define CAM_USE_TENT_FILTER " + std::to_string(CAM_USE_TENT_FILTER) + "\n";
 
         cl_int error = CL_SUCCESS;
         cl::Program::Sources srcs = {
@@ -436,7 +437,7 @@ void ray::ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
         if (queue_.enqueueCopyImage(temp_buf_, final_buf_, { 0, 0, 0 }, { 0, 0, 0 },
     { (size_t)w_, (size_t)h_, 1 }) != CL_SUCCESS) return;
 
-        if (!kernel_ShadeSecondary((cl_int)region.iteration, (cl_int)(bounce + 2), halton_seq_buf_,
+        if (!kernel_ShadeSecondary((cl_int)region.iteration, (cl_int)(bounce + 3), halton_seq_buf_,
                                     prim_inters_buf_, secondary_rays_buf_, (int)secondary_rays_count, w_, h_,
                                     s->mesh_instances_.buf(), s->mi_indices_.buf(), s->meshes_.buf(),
                                     s->transforms_.buf(), s->vtx_indices_.buf(), s->vertices_.buf(),

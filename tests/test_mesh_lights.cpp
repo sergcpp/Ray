@@ -122,7 +122,7 @@ void test_mesh_lights() {
 
             auto scene = renderer->CreateScene();
 
-            uint32_t cam = scene->AddCamera(ray::Persp, view_origin, view_dir, 45.0f, 1.0f, 1.0f, 0.0f);
+            uint32_t cam = scene->AddCamera(ray::Persp, ray::Box, view_origin, view_dir, 45.0f, 1.0f, 1.0f, 0.0f);
             scene->set_current_cam(cam);
 
             scene->SetEnvironment(env_desc);

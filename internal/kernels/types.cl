@@ -11,6 +11,7 @@ typedef struct _ray_packet_t {
 typedef struct _camera_t {
     float4 origin, fwd;
     float4 side, up;
+    int flags;
 } camera_t;
 
 typedef struct _tri_accel_t {

@@ -452,20 +452,32 @@ void ray::NS::GeneratePrimaryRays(const int iteration, const camera_t &cam, cons
 
             simd_ivec<S> hash_val = hash(index);
             simd_fvec<S> rxx = construct_float(hash_val);
-            hash_val = hash(hash_val);
-            simd_fvec<S> ryy = construct_float(hash_val);
-            hash_val = hash(hash_val);
-            simd_fvec<S> sxx = construct_float(hash_val);
-            hash_val = hash(hash_val);
-            simd_fvec<S> syy = construct_float(hash_val);
+            simd_fvec<S> ryy = construct_float(hash(hash_val));
+            simd_fvec<S> sxx, syy;
 
             for (int i = 0; i < S; i++) {
                 float _unused;
-                fxx[i] += std::modf(halton[hi + 0] + rxx[i], &_unused);
-                fyy[i] += std::modf(halton[hi + 1] + ryy[i], &_unused);
-                sxx[i] = cam.focus_factor * (-0.5f + std::modf(halton[hi + 0] + sxx[i], &_unused));
-                syy[i] = cam.focus_factor * (-0.5f + std::modf(halton[hi + 1] + syy[i], &_unused));
+                sxx[i] = cam.focus_factor * (-0.5f + std::modf(halton[hi + 2 + 0] + rxx[i], &_unused));
+                syy[i] = cam.focus_factor * (-0.5f + std::modf(halton[hi + 2 + 1] + ryy[i], &_unused));
+                rxx[i] = std::modf(halton[hi + 0] + rxx[i], &_unused);
+                ryy[i] = std::modf(halton[hi + 1] + ryy[i], &_unused);
             }
+
+            if (cam.filter == Tent) {
+                auto temp = rxx;
+                rxx = 1.0f - sqrt(2.0f - 2.0f * temp);
+                where(temp < 0.5f, rxx) = sqrt(2.0f * temp) - 1.0f;
+
+                temp = ryy;
+                ryy = 1.0f - sqrt(2.0f - 2.0f * temp);
+                where(temp < 0.5f, ryy) = sqrt(2.0f * temp) - 1.0f;
+
+                rxx += 0.5f;
+                ryy += 0.5f;
+            }
+
+            fxx += rxx;
+            fyy += ryy;
 
             simd_fvec<S> _origin[3] = { { cam_origin[0] + side[0] * sxx + up[0] * syy },
                                         { cam_origin[1] + side[1] * sxx + up[1] * syy },

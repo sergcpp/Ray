@@ -208,16 +208,37 @@ void ray::ref::GeneratePrimaryRays(int iteration, const camera_t &cam, const rec
             const int index = y * w + x;
             const int hi = (iteration & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT;
 
+            float _x = (float)x;
+            float _y = (float)y;
+
             float _unused;
             int hash_val = hash(index);
-            float _x = (float)x + std::modf(halton[hi + 0] + construct_float(hash_val), &_unused);
-            hash_val = hash(index);
-            float _y = (float)y + std::modf(halton[hi + 1] + construct_float(hash_val), &_unused);
 
-            hash_val = hash(hash_val);
-            float ff1 = cam.focus_factor * (-0.5f + std::modf(halton[hi + 0] + construct_float(hash_val), &_unused));
-            hash_val = hash(hash_val);
-            float ff2 = cam.focus_factor * (-0.5f + std::modf(halton[hi + 1] + construct_float(hash_val), &_unused));
+            if (cam.filter == Tent) {
+                float rx = std::modf(halton[hi + 0] + construct_float(hash_val), &_unused);
+                if (rx < 0.5f) {
+                    rx = std::sqrt(2.0f * rx) - 1.0f;
+                } else {
+                    rx = 1.0f - std::sqrt(2.0f - 2 * rx);
+                }
+
+                float ry = std::modf(halton[hi + 1] + construct_float(hash(hash_val)), &_unused);
+                if (ry < 0.5f) {
+                    ry = std::sqrt(2.0f * ry) - 1.0f;
+                } else {
+                    ry = 1.0f - std::sqrt(2.0f - 2.0f * ry);
+                }
+
+                _x += 0.5f + rx;
+                _y += 0.5f + ry;
+            } else {
+                _x += std::modf(halton[hi + 0] + construct_float(hash_val), &_unused);
+                _y += std::modf(halton[hi + 1] + construct_float(hash(hash_val)), &_unused);
+            }
+
+
+            float ff1 = cam.focus_factor * (-0.5f + std::modf(halton[hi + 2 + 0] + construct_float(hash_val), &_unused));
+            float ff2 = cam.focus_factor * (-0.5f + std::modf(halton[hi + 2 + 1] + construct_float(hash(hash_val)), &_unused));
 
             simd_fvec3 _origin = cam_origin + side * ff1 + up * ff2;
 

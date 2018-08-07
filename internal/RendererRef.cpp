@@ -130,7 +130,7 @@ void ray::ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
         //pixel_color_t col = { t, t, t, 1.0f };
 #else
 
-        pixel_color_t col = ShadeSurface((y * w + x), region.iteration, 1, &region.halton_seq[0], inter, r, env, mesh_instances, 
+        pixel_color_t col = ShadeSurface((y * w + x), region.iteration, 2, &region.halton_seq[0], inter, r, env, mesh_instances, 
                                          mi_indices, meshes, transforms, vtx_indices, vertices, nodes, macro_tree_root,
                                          tris, tri_indices, materials, textures, tex_atlas, &p.secondary_rays[0], &secondary_rays_count);
 #endif
@@ -198,7 +198,7 @@ void ray::ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
             const int x = inter.id.x;
             const int y = inter.id.y;
 
-            pixel_color_t col = ShadeSurface((y * w + x), region.iteration, bounce + 2, &region.halton_seq[0], inter, r, env, mesh_instances,
+            pixel_color_t col = ShadeSurface((y * w + x), region.iteration, bounce + 3, &region.halton_seq[0], inter, r, env, mesh_instances,
                                              mi_indices, meshes, transforms, vtx_indices, vertices, nodes, macro_tree_root,
                                              tris, tri_indices, materials, textures, tex_atlas, &p.secondary_rays[0], &secondary_rays_count);
 

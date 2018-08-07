@@ -215,7 +215,7 @@ void ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
         p.secondary_masks[i] = { 0 };
 
         simd_fvec<S> out_rgba[4] = { 0.0f };
-        NS::ShadeSurface(index, region.iteration, 1, &region.halton_seq[0], inter, r, env, mesh_instances,
+        NS::ShadeSurface(index, region.iteration, 2, &region.halton_seq[0], inter, r, env, mesh_instances,
                          mi_indices, meshes, transforms, vtx_indices, vertices, nodes, macro_tree_root,
                          tris, tri_indices, materials, textures, tex_atlas, out_rgba, &p.secondary_masks[0], &p.secondary_rays[0], &secondary_rays_count);
 
@@ -305,7 +305,7 @@ void ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
             simd_ivec<S> index = { y * w + x };
 
             simd_fvec<S> out_rgba[4] = { 0.0f };
-            NS::ShadeSurface(index, region.iteration, 2, &region.halton_seq[0], inter, r, env, mesh_instances,
+            NS::ShadeSurface(index, region.iteration, bounce + 3, &region.halton_seq[0], inter, r, env, mesh_instances,
                              mi_indices, meshes, transforms, vtx_indices, vertices, nodes, macro_tree_root,
                              tris, tri_indices, materials, textures, tex_atlas, out_rgba, &p.secondary_masks[0], &p.secondary_rays[0], &secondary_rays_count);
 

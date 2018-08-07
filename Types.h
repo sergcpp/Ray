@@ -28,11 +28,14 @@ struct rect_t { int x, y, w, h; };
 
 enum eCamType { Persp, Ortho };
 
+enum eFilterType { Box, Tent };
+
 /** Camera struct.
     Should not be used directly, usually returned from SceneBase::GetCamera
 */
 struct camera_t {
     eCamType type;                      ///< Projection type
+    eFilterType filter;                 ///< Filter type
     float fov, gamma;                   ///< Field of View in degrees, and gamma
     float focus_distance, focus_factor; ///< Distance to focus point
     float origin[3],                    ///< Origin point
@@ -40,7 +43,7 @@ struct camera_t {
           side[3],                      ///< Right side unit vector
           up[3];                        ///< Up vector
 };
-static_assert(sizeof(camera_t) == 68, "!");
+static_assert(sizeof(camera_t) == 72, "!");
 
 #if !defined(DISABLE_OCL)
 namespace ocl {

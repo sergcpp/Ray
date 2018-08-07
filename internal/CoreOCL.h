@@ -24,9 +24,13 @@ const int RayPacketDimX = 1;
 const int RayPacketDimY = 1;
 const int RayPacketSize = 1;
 
+const int CAM_USE_TENT_FILTER = 1;
+
 struct camera_t {
     cl_float4 origin, fwd;
     cl_float4 side, up;
+    cl_int flags;
+    cl_int pad[3];
 
     camera_t() {}
     camera_t(const ray::camera_t &cam) {
@@ -38,6 +42,10 @@ struct camera_t {
         side.w = cam.focus_distance;
         memcpy(&up, &cam.up[0], sizeof(float) * 3);
         up.w = cam.focus_factor;
+        flags = 0;
+        if (cam.filter == Tent) {
+            flags |= CAM_USE_TENT_FILTER;
+        }
     }
 };
 

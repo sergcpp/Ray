@@ -110,7 +110,7 @@ uint32_t PreprocessPrims(const prim_t *prims, size_t prims_count, const float *p
 
 bool NaiivePluckerTest(const float p[9], const float o[3], const float d[3]);
 
-void ConstructCamera(eCamType type, const float origin[3], const float fwd[3], float fov, float gamma, float focus_distance, float focus_factor, camera_t *cam);
+void ConstructCamera(eCamType type, eFilterType filter, const float origin[3], const float fwd[3], float fov, float gamma, float focus_distance, float focus_factor, camera_t *cam);
 
 void TransformBoundingBox(const float bbox[2][3], const float *xform, float out_bbox[2][3]);
 
@@ -124,7 +124,7 @@ const int HALTON_COUNT = PrimesCount;
 const int HALTON_2D_COUNT = PrimesCount / 2;
 const int HALTON_SEQ_LEN = 256;
 
-static_assert(MAX_BOUNCES + 1 <= HALTON_2D_COUNT, "!");
+static_assert(MAX_BOUNCES + 2 <= HALTON_2D_COUNT, "!");
 
 struct vertex_t {
     float p[3], n[3], b[3], t0[2];
