@@ -194,7 +194,7 @@ void ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
 
         inter = {};
         inter.xy = r.xy;
-        NS::Traverse_MacroTree_CPU(r, { -1 }, nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, inter);
+        NS::Traverse_MacroTree_WithStack(r, { -1 }, nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, inter);
     }
 
     const auto time_after_prim_trace = std::chrono::high_resolution_clock::now();
@@ -285,7 +285,7 @@ void ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
             inter = {};
             inter.xy = r.xy;
 
-            NS::Traverse_MacroTree_CPU(r, p.secondary_masks[i], nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, inter);
+            NS::Traverse_MacroTree_WithStack(r, p.secondary_masks[i], nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, inter);
         }
 
         auto time_secondary_shade_start = std::chrono::high_resolution_clock::now();

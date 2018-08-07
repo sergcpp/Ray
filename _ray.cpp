@@ -26,7 +26,6 @@
 #endif
 
 // TODO:
-// compare traversal algorithm with stack
 // try using image for node buffer (utilize texture cache)
 // add punctual lights support
 // add deletion functions for OpenCL backend
@@ -34,6 +33,7 @@
 // add more validation tests (use Cycles)
 
 // DONE:
+// compare traversal algorithm with stack
 // add tent filter
 // add depth of field
 // try again with spatial splits or remove unnecessary indirection

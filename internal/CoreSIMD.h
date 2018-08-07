@@ -79,13 +79,23 @@ bool IntersectTris(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const
 // Traverse acceleration structure
 // stack-less cpu-style traversal of outer nodes
 template <int S>
-bool Traverse_MacroTree_CPU(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const bvh_node_t *nodes, uint32_t node_index,
-                            const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
-                            const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t<S> &inter);
+bool Traverse_MacroTree_Stackless_CPU(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const bvh_node_t *nodes, uint32_t node_index,
+                                      const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
+                                      const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t<S> &inter);
 // stack-less cpu-style traversal of inner nodes
 template <int S>
-bool Traverse_MicroTree_CPU(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const bvh_node_t *nodes, uint32_t node_index,
-                            const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, hit_data_t<S> &inter);
+bool Traverse_MicroTree_Stackless_CPU(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const bvh_node_t *nodes, uint32_t node_index,
+                                      const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, hit_data_t<S> &inter);
+
+// traditional bvh traversal with stack for outer nodes
+template <int S>
+bool Traverse_MacroTree_WithStack(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const bvh_node_t *nodes, uint32_t node_index,
+                                  const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
+                                  const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t<S> &inter);
+// traditional bvh traversal with stack for inner nodes
+template <int S>
+bool Traverse_MicroTree_WithStack(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const bvh_node_t *nodes, uint32_t node_index,
+                                  const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, hit_data_t<S> &inter);
 
 // Transform
 template <int S>
@@ -249,6 +259,44 @@ struct TraversalState {
             }
         }
     }
+};
+
+const int MAX_STACK_SIZE = 32;
+
+template <int S>
+struct TraversalStateStack {
+    struct {
+        simd_ivec<S> mask;
+        uint32_t stack[MAX_STACK_SIZE];
+        uint32_t stack_size;
+    } queue[S];
+
+    force_inline void push_children(const ray_packet_t<S> &r, const bvh_node_t &node) {
+        const auto dir_neg_mask = r.d[node.space_axis] < 0.0f;
+        const auto mask1 = reinterpret_cast<const simd_ivec<S>&>(dir_neg_mask) & queue[index].mask;
+        if (mask1.all_zeros()) {
+            queue[index].stack[queue[index].stack_size++] = node.right_child;
+            queue[index].stack[queue[index].stack_size++] = node.left_child;
+        } else {
+            simd_ivec<S> mask2 = and_not(mask1, queue[index].mask);
+            if (mask2.all_zeros()) {
+                queue[index].stack[queue[index].stack_size++] = node.left_child;
+                queue[index].stack[queue[index].stack_size++] = node.right_child;
+            } else {
+                queue[num].stack_size = queue[index].stack_size;
+                memcpy(queue[num].stack, queue[index].stack, sizeof(uint32_t) * queue[index].stack_size);
+                queue[num].stack[queue[num].stack_size++] = node.right_child;
+                queue[num].stack[queue[num].stack_size++] = node.left_child;
+                queue[num].mask = mask2;
+                num++;
+                queue[index].stack[queue[index].stack_size++] = node.left_child;
+                queue[index].stack[queue[index].stack_size++] = node.right_child;
+                queue[index].mask = mask1;
+            }
+        }
+    }
+
+    int index = 0, num = 1;
 };
 
 template <int S>
@@ -684,9 +732,9 @@ bool ray::NS::IntersectTris(const ray_packet_t<S> &r, const simd_ivec<S> &ray_ma
 }
 
 template <int S>
-bool ray::NS::Traverse_MacroTree_CPU(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const bvh_node_t *nodes, uint32_t root_index,
-                                     const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
-                                     const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t<S> &inter) {
+bool ray::NS::Traverse_MacroTree_Stackless_CPU(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const bvh_node_t *nodes, uint32_t root_index,
+                                               const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
+                                               const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t<S> &inter) {
     bool res = false;
 
     simd_fvec<S> inv_d[3];
@@ -749,7 +797,7 @@ bool ray::NS::Traverse_MacroTree_CPU(const ray_packet_t<S> &r, const simd_ivec<S
 
                         ray_packet_t<S> _r = TransformRay(r, tr.inv_xform);
 
-                        res |= Traverse_MicroTree_CPU(_r, bbox_mask, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter);
+                        res |= Traverse_MicroTree_Stackless_CPU(_r, bbox_mask, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter);
                     }
 
                     cur = nodes[cur].parent;
@@ -788,7 +836,7 @@ bool ray::NS::Traverse_MacroTree_CPU(const ray_packet_t<S> &r, const simd_ivec<S
 
                         ray_packet_t<S> _r = TransformRay(r, tr.inv_xform);
 
-                        res |= Traverse_MicroTree_CPU(_r, bbox_mask, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter);
+                        res |= Traverse_MicroTree_Stackless_CPU(_r, bbox_mask, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter);
                     }
 
                     cur = nodes[cur].sibling;
@@ -806,8 +854,8 @@ bool ray::NS::Traverse_MacroTree_CPU(const ray_packet_t<S> &r, const simd_ivec<S
 }
 
 template <int S>
-bool ray::NS::Traverse_MicroTree_CPU(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const bvh_node_t *nodes, uint32_t root_index,
-                                     const tri_accel_t *tris, const uint32_t *indices, int obj_index, hit_data_t<S> &inter) {
+bool ray::NS::Traverse_MicroTree_Stackless_CPU(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const bvh_node_t *nodes, uint32_t root_index,
+                                               const tri_accel_t *tris, const uint32_t *indices, int obj_index, hit_data_t<S> &inter) {
     bool res = false;
 
     simd_fvec<S> inv_d[3];
@@ -901,6 +949,110 @@ bool ray::NS::Traverse_MicroTree_CPU(const ray_packet_t<S> &r, const simd_ivec<S
         break;
         }
     }
+    return res;
+}
+
+template <int S>
+bool ray::NS::Traverse_MacroTree_WithStack(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const bvh_node_t *nodes, uint32_t node_index,
+                                           const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
+                                           const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t<S> &inter) {
+    bool res = false;
+
+    simd_fvec<S> inv_d[3];
+    safe_invert(r.d, inv_d);
+
+    TraversalStateStack<S> st;
+
+    st.queue[0].mask = ray_mask;
+    st.queue[0].stack_size = 0;
+    st.queue[0].stack[st.queue[0].stack_size++] = node_index;
+
+    while (st.index < st.num) {
+        uint32_t *stack = &st.queue[st.index].stack[0];
+        uint32_t &stack_size = st.queue[st.index].stack_size;
+        while (stack_size) {
+            uint32_t cur = stack[--stack_size];
+
+            auto mask1 = bbox_test(r.o, inv_d, inter.t, nodes[cur]) & st.queue[st.index].mask;
+            if (mask1.all_zeros()) {
+                continue;
+            }
+
+            auto mask2 = and_not(mask1, st.queue[st.index].mask);
+            if (mask2.not_all_zeros()) {
+                st.queue[st.num].mask = mask2;
+                st.queue[st.num].stack_size = stack_size;
+                memcpy(st.queue[st.num].stack, st.queue[st.index].stack, sizeof(uint32_t) * stack_size);
+                st.num++;
+                st.queue[st.index].mask = mask1;
+            }
+
+            if (!is_leaf_node(nodes[cur])) {
+                st.push_children(r, nodes[cur]);
+            } else {
+                for (uint32_t i = nodes[cur].prim_index; i < nodes[cur].prim_index + nodes[cur].prim_count; i++) {
+                    const auto &mi = mesh_instances[mi_indices[i]];
+                    const auto &m = meshes[mi.mesh_index];
+                    const auto &tr = transforms[mi.tr_index];
+
+                    auto bbox_mask = bbox_test(r.o, inv_d, inter.t, mi.bbox_min, mi.bbox_max) & st.queue[st.index].mask;
+                    if (bbox_mask.all_zeros()) continue;
+
+                    ray_packet_t<S> _r = TransformRay(r, tr.inv_xform);
+
+                    res |= Traverse_MicroTree_WithStack(_r, bbox_mask, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter);
+                }
+            }
+        }
+        st.index++;
+    }
+
+    return res;
+}
+
+template <int S>
+bool ray::NS::Traverse_MicroTree_WithStack(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const bvh_node_t *nodes, uint32_t node_index,
+                                           const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, hit_data_t<S> &inter) {
+    bool res = false;
+
+    simd_fvec<S> inv_d[3];
+    safe_invert(r.d, inv_d);
+
+    TraversalStateStack<S> st;
+
+    st.queue[0].mask = ray_mask;
+    st.queue[0].stack_size = 0;
+    st.queue[0].stack[st.queue[0].stack_size++] = node_index;
+
+    while (st.index < st.num) {
+        uint32_t *stack = &st.queue[st.index].stack[0];
+        uint32_t &stack_size = st.queue[st.index].stack_size;
+        while (stack_size) {
+            uint32_t cur = stack[--stack_size];
+
+            auto mask1 = bbox_test(r.o, inv_d, inter.t, nodes[cur]) & st.queue[st.index].mask;
+            if (mask1.all_zeros()) {
+                continue;
+            }
+
+            auto mask2 = and_not(mask1, st.queue[st.index].mask);
+            if (mask2.not_all_zeros()) {
+                st.queue[st.num].mask = mask2;
+                st.queue[st.num].stack_size = stack_size;
+                memcpy(st.queue[st.num].stack, st.queue[st.index].stack, sizeof(uint32_t) * stack_size);
+                st.num++;
+                st.queue[st.index].mask = mask1;
+            }
+
+            if (!is_leaf_node(nodes[cur])) {
+                st.push_children(r, nodes[cur]);
+            } else {
+                res |= IntersectTris(r, st.queue[st.index].mask, tris, &tri_indices[nodes[cur].prim_index], nodes[cur].prim_count, obj_index, inter);
+            }
+        }
+        st.index++;
+    }
+
     return res;
 }
 
@@ -1511,7 +1663,7 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
                     r.d[2] = V[2];
 
                     hit_data_t<S> inter;
-                    Traverse_MacroTree_CPU(r, _mask, nodes, node_index, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, inter);
+                    Traverse_MacroTree_WithStack(r, _mask, nodes, node_index, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, inter);
                     
                     where(reinterpret_cast<const simd_fvec<S>&>(inter.mask), v) = 0.0f;
                 }
