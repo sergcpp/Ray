@@ -14,6 +14,7 @@ protected:
 
     const cl::Context &context_;
     const cl::CommandQueue &queue_;
+    size_t max_img_buf_size_;
 
     ocl::Vector<bvh_node_t> nodes_;
     ocl::Vector<tri_accel_t> tris_;
@@ -38,7 +39,7 @@ protected:
     void RemoveNodes(uint32_t node_index, uint32_t node_count);
     void RebuildMacroBVH();
 public:
-    Scene(const cl::Context &context, const cl::CommandQueue &queue);
+    Scene(const cl::Context &context, const cl::CommandQueue &queue, size_t max_img_buffer_size);
 
     void GetEnvironment(environment_desc_t &env) override;
     void SetEnvironment(const environment_desc_t &env) override;

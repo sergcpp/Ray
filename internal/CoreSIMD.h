@@ -224,6 +224,10 @@ force_inline uint32_t near_child(const ray_packet_t<S> &r, const simd_ivec<S> &r
     }
 }
 
+force_inline uint32_t other_child(const bvh_node_t &node, uint32_t cur_child) {
+    return node.left_child == cur_child ? node.right_child : node.left_child;
+}
+
 force_inline bool is_leaf_node(const bvh_node_t &node) {
     return node.prim_count != 0;
 }
@@ -763,7 +767,7 @@ bool ray::NS::Traverse_MacroTree_Stackless_CPU(const ray_packet_t<S> &r, const s
                 continue;
             }
             if (cur == near_child(r, st.queue[st.index].mask, nodes[nodes[cur].parent])) {
-                cur = nodes[cur].sibling;
+                cur = other_child(nodes[nodes[cur].parent], cur);
                 src = FromSibling;
             } else {
                 cur = nodes[cur].parent;
@@ -812,12 +816,12 @@ bool ray::NS::Traverse_MacroTree_Stackless_CPU(const ray_packet_t<S> &r, const s
         case FromParent: {
             auto mask1 = bbox_test(r.o, inv_d, inter.t, nodes[cur]) & st.queue[st.index].mask;
             if (mask1.all_zeros()) {
-                cur = nodes[cur].sibling;
+                cur = other_child(nodes[nodes[cur].parent], cur);
                 src = FromSibling;
             } else {
                 auto mask2 = and_not(mask1, st.queue[st.index].mask);
                 if (mask2.not_all_zeros()) {
-                    st.queue[st.num].cur = nodes[cur].sibling;
+                    st.queue[st.num].cur = other_child(nodes[nodes[cur].parent], cur);
                     st.queue[st.num].mask = mask2;
                     st.queue[st.num].src = FromSibling;
                     st.num++;
@@ -839,7 +843,7 @@ bool ray::NS::Traverse_MacroTree_Stackless_CPU(const ray_packet_t<S> &r, const s
                         res |= Traverse_MicroTree_Stackless_CPU(_r, bbox_mask, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter);
                     }
 
-                    cur = nodes[cur].sibling;
+                    cur = other_child(nodes[nodes[cur].parent], cur);
                     src = FromSibling;
                 } else {
                     src = FromParent;
@@ -884,7 +888,7 @@ bool ray::NS::Traverse_MicroTree_Stackless_CPU(const ray_packet_t<S> &r, const s
                 continue;
             }
             if (cur == near_child(r, st.queue[st.index].mask, nodes[nodes[cur].parent])) {
-                cur = nodes[cur].sibling;
+                cur = other_child(nodes[nodes[cur].parent], cur);
                 src = FromSibling;
             } else {
                 cur = nodes[cur].parent;
@@ -922,12 +926,12 @@ bool ray::NS::Traverse_MicroTree_Stackless_CPU(const ray_packet_t<S> &r, const s
         case FromParent: {
             auto mask1 = bbox_test(r.o, inv_d, inter.t, nodes[cur]) & st.queue[st.index].mask;
             if (mask1.all_zeros()) {
-                cur = nodes[cur].sibling;
+                cur = other_child(nodes[nodes[cur].parent], cur);
                 src = FromSibling;
             } else {
                 auto mask2 = and_not(mask1, st.queue[st.index].mask);
                 if (mask2.not_all_zeros()) {
-                    st.queue[st.num].cur = nodes[cur].sibling;
+                    st.queue[st.num].cur = other_child(nodes[nodes[cur].parent], cur);
                     st.queue[st.num].mask = mask2;
                     st.queue[st.num].src = FromSibling;
                     st.num++;
@@ -938,7 +942,7 @@ bool ray::NS::Traverse_MicroTree_Stackless_CPU(const ray_packet_t<S> &r, const s
                     // process leaf
                     res |= IntersectTris(r, st.queue[st.index].mask, tris, &indices[nodes[cur].prim_index], nodes[cur].prim_count, obj_index, inter);
 
-                    cur = nodes[cur].sibling;
+                    cur = other_child(nodes[nodes[cur].parent], cur);
                     src = FromSibling;
                 } else {
                     src = FromParent;

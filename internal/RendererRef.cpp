@@ -107,7 +107,7 @@ void ray::ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
     p.secondary_rays.resize(p.intersections.size());
     int secondary_rays_count = 0;
 
-#if 1
+#if 0
     static std::vector<simd_fvec3> color_table;
     if (color_table.empty()) {
         for (int i = 0; i < 1024; i++) {

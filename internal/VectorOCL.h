@@ -8,15 +8,17 @@ template <typename T>
 class Vector {
     const cl::Context &context_;
     const cl::CommandQueue &queue_;
+    size_t max_img_buf_size_;
     cl_mem_flags flags_;
     cl::Buffer buf_;
+    cl::Image1DBuffer img_buf_;
     size_t size_, cap_;
 public:
     Vector(cl_mem_flags flags, size_t capacity = 16)
         : Vector(cl::Context::getDefault(), cl::CommandQueue::getDefault(), flags, capacity) {
     }
-    Vector(const cl::Context &context, const cl::CommandQueue &queue, cl_mem_flags flags, size_t capacity = 16)
-        : context_(context), queue_(queue), flags_(flags), size_(0), cap_(capacity) {
+    Vector(const cl::Context &context, const cl::CommandQueue &queue, cl_mem_flags flags, size_t capacity = 16, size_t max_img_buf_size = 0)
+        : context_(context), queue_(queue), flags_(flags), size_(0), cap_(capacity), max_img_buf_size_(max_img_buf_size){
         cl_int error = CL_SUCCESS;
         buf_ = cl::Buffer(context_, flags_, sizeof(T) * cap_, nullptr, &error);
         if (error != CL_SUCCESS) throw std::runtime_error("Cannot allocate OpenCL buffer!");
@@ -24,6 +26,10 @@ public:
 
     const cl::Buffer &buf() const {
         return buf_;
+    }
+
+    const cl::Image1DBuffer &img_buf() const {
+        return img_buf_;
     }
 
     size_t size() const {
@@ -44,7 +50,12 @@ public:
                 if (error != CL_SUCCESS) throw std::runtime_error("Cannot copy OpenCL buffer!");
             }
 
+            img_buf_ = {};
             buf_ = std::move(new_buf);
+            if (sizeof(T) % 16 == 0 && ((sizeof(T) / 16)) * cap_ <= max_img_buf_size_) {
+                img_buf_ = cl::Image1DBuffer(context_, 0, { CL_RGBA, CL_UNSIGNED_INT32 }, (sizeof(T) / 16) * cap_, buf_, &error);
+                if (error != CL_SUCCESS) throw std::runtime_error("Cannot create image buffer!");
+            }
         }
     }
 

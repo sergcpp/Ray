@@ -1,5 +1,24 @@
 R"(
 
+bool __bbox_test(const float3 o, const float3 inv_d, const float t, const float3 bbox_min, const float3 bbox_max) {
+    float low = inv_d.x * (bbox_min.x - o.x);
+    float high = inv_d.x * (bbox_max.x - o.x);
+    float tmin = fmin(low, high);
+    float tmax = fmax(low, high);
+
+    low = inv_d.y * (bbox_min.y - o.y);
+    high = inv_d.y * (bbox_max.y - o.y);
+    tmin = fmax(tmin, fmin(low, high));
+    tmax = fmin(tmax, fmax(low, high));
+
+    low = inv_d.z * (bbox_min.z - o.z);
+    high = inv_d.z * (bbox_max.z - o.z);
+    tmin = fmax(tmin, fmin(low, high));
+    tmax = fmin(tmax, fmax(low, high));
+
+    return tmin <= tmax && tmin <= t && tmax > 0;
+}
+
 bool _bbox_test(const float3 o, const float3 inv_d, const float t, __global const float *bbox_min, __global const float *bbox_max) {
     float low = inv_d.x * (bbox_min[0] - o.x);
     float high = inv_d.x * (bbox_max[0] - o.x);
@@ -59,21 +78,20 @@ void Traverse_MicroTree_Stackless(const float3 r_o, const float3 r_d, const floa
                                   __global const bvh_node_t *nodes, uint node_index,
                                   __global const tri_accel_t *tris, __global const uint *tri_indices, 
                                   hit_data_t *inter) {
-    const float *ro = (const float *)&r_o;
     const float *rd = (const float *)&r_d;
 
     uint cur = node_index;
     uint last = node_index;
 
-    if (!nodes[cur].tri_count) {
+    if (!nodes[cur].prim_count) {
         cur = near_child(rd, &nodes[cur]);
     }
 
     while (cur != 0xffffffff) {
         __global const bvh_node_t *n = &nodes[cur];
         
-        if (n->tri_count) {
-            IntersectTris(r_o, r_d, tris, tri_indices, n->tri_index, n->tri_count, obj_index, inter);
+        if (n->prim_count) {
+            IntersectTris(r_o, r_d, tris, tri_indices, n->prim_index, n->prim_count, obj_index, inter);
             last = cur; cur = n->parent;
             continue;
         }
@@ -103,7 +121,6 @@ void Traverse_MicroTree_WithStack(const float3 r_o, const float3 r_d, const floa
                                   __global const bvh_node_t *nodes, uint node_index,
                                   __global const tri_accel_t *tris, __global const uint *tri_indices, 
                                   uint *stack, hit_data_t *inter) {
-    const float *ro = (const float *)&r_o;
     const float *rd = (const float *)&r_d;
 
     uint stack_size = 0;
@@ -117,11 +134,49 @@ void Traverse_MicroTree_WithStack(const float3 r_o, const float3 r_d, const floa
 
         if (!bbox_test(r_o, inv_d, inter->t, n)) continue;
 
-        if (!n->tri_count) {
+        if (!n->prim_count) {
             stack[stack_size++] = far_child(rd, n);
             stack[stack_size++] = near_child(rd, n);
         } else {
-            IntersectTris(r_o, r_d, tris, tri_indices, n->tri_index, n->tri_count, obj_index, inter);
+            IntersectTris(r_o, r_d, tris, tri_indices, n->prim_index, n->prim_count, obj_index, inter);
+        }
+    }
+}
+
+void Traverse_MicroTreeImg_WithStack(const float3 r_o, const float3 r_d, const float3 inv_d, uint obj_index,
+                                     __read_only image1d_buffer_t nodes, uint node_index,
+                                     __global const tri_accel_t *tris, __global const uint *tri_indices, 
+                                     uint *stack, uint4 *node_data1, float4 *node_data2, hit_data_t *inter) {
+    const float *rd = (const float *)&r_d;
+
+    uint stack_size = 0;
+
+    stack[stack_size++] = node_index;
+
+    while (stack_size) {
+        uint cur = stack[--stack_size];
+
+        /*
+            struct bvh_node_t {
+                xxx4 node_data1;  // { prim_index, prim_count, left_child, right_child }
+                xxx4 node_data2;  // { parent,     space_axis, bbox[0][0], bbox[0][1]  }
+                xxx4 node_data3;  // { bbox[0][2], bbox[1][0], bbox[1][1], bbox[1][2]  }
+            };
+        */
+
+        *node_data2 = read_imagef(nodes, cur * 3 + 1);
+        {   float4 node_data3 = read_imagef(nodes, cur * 3 + 2);
+            if (!__bbox_test(r_o, inv_d, inter->t, (float3)(node_data2->zw, node_data3.x), node_data3.yzw)) continue;
+        }
+
+        *node_data1 = read_imageui(nodes, cur * 3 + 0);
+
+        if (!node_data1->y) {
+            uint space_axis = as_uint(node_data2->y);
+            stack[stack_size++] = rd[space_axis] < 0 ? node_data1->z : node_data1->w;
+            stack[stack_size++] = rd[space_axis] < 0 ? node_data1->w : node_data1->z;
+        } else {
+            IntersectTris(r_o, r_d, tris, tri_indices, node_data1->x, node_data1->y, obj_index, inter);
         }
     }
 }
@@ -129,21 +184,20 @@ void Traverse_MicroTree_WithStack(const float3 r_o, const float3 r_d, const floa
 float Traverse_MicroTree_Occlusion_Stackless(const float3 r_o, const float3 r_d, const float3 inv_d, 
                                              __global const bvh_node_t *nodes, uint node_index,
                                              __global const tri_accel_t *tris, __global const uint *tri_indices) {
-    const float *ro = (const float *)&r_o;
     const float *rd = (const float *)&r_d;
 
     uint cur = node_index;
     uint last = node_index;
 
-    if (!nodes[cur].tri_count) {
+    if (!nodes[cur].prim_count) {
         cur = near_child(rd, &nodes[cur]);
     }
 
     while (cur != 0xffffffff) {
         __global const bvh_node_t *n = &nodes[cur];
         
-        if (n->tri_count) {
-            if (IntersectTris_Occlusion(r_o, r_d, tris, tri_indices, n->tri_index, n->tri_count) < 1)  {
+        if (n->prim_count) {
+            if (IntersectTris_Occlusion(r_o, r_d, tris, tri_indices, n->prim_index, n->prim_count) < 1)  {
                 return 0;
             }
             last = cur; cur = n->parent;
@@ -177,7 +231,6 @@ float Traverse_MicroTree_Occlusion_WithStack(const float3 r_o, const float3 r_d,
                                              __global const bvh_node_t *nodes, uint node_index,
                                              __global const tri_accel_t *tris, __global const uint *tri_indices,
                                              uint *stack) {
-    const float *ro = (const float *)&r_o;
     const float *rd = (const float *)&r_d;
 
     uint stack_size = 0;
@@ -191,11 +244,11 @@ float Traverse_MicroTree_Occlusion_WithStack(const float3 r_o, const float3 r_d,
 
         if (!bbox_test(r_o, inv_d, FLT_MAX, n)) continue;
 
-        if (!n->tri_count) {
+        if (!n->prim_count) {
             stack[stack_size++] = far_child(rd, n);
             stack[stack_size++] = near_child(rd, n);
         } else {
-            if (IntersectTris_Occlusion(r_o, r_d, tris, tri_indices, n->tri_index, n->tri_count) < 1)  {
+            if (IntersectTris_Occlusion(r_o, r_d, tris, tri_indices, n->prim_index, n->prim_count) < 1)  {
                 return 0;
             }
         }
@@ -204,28 +257,29 @@ float Traverse_MicroTree_Occlusion_WithStack(const float3 r_o, const float3 r_d,
     return 1;
 }
 
+)" // workaround for 16k string literal limitation on msvc
+R"(
+
 void Traverse_MacroTree_Stackless(const float3 orig_r_o, const float3 orig_r_d, const float3 orig_r_inv_d, 
                                   __global const mesh_instance_t *mesh_instances, __global const uint *mi_indices, 
                                   __global const mesh_t *meshes, __global const transform_t *transforms, 
                                   __global const bvh_node_t *nodes, uint node_index, 
                                   __global const tri_accel_t *tris, __global const uint *tri_indices,
                                   hit_data_t *inter) {
-
-    const float *orig_ro = (const float *)&orig_r_o;
     const float *orig_rd = (const float *)&orig_r_d;
 
     uint cur = node_index;
     uint last = node_index;
 
-    if (!nodes[cur].tri_count) {
+    if (!nodes[cur].prim_count) {
         cur = near_child(orig_rd, &nodes[cur]);
     }
 
     while (cur != 0xffffffff) {
         __global const bvh_node_t *n = &nodes[cur];
 
-        if (n->tri_count) {
-            for (uint i = n->tri_index; i < n->tri_index + n->tri_count; i++) {
+        if (n->prim_count) {
+            for (uint i = n->prim_index; i < n->prim_index + n->prim_count; i++) {
                 __global const mesh_instance_t *mi = &mesh_instances[mi_indices[i]];
                 __global const mesh_t *m = &meshes[mi->mesh_index];
                 __global const transform_t *tr = &transforms[mi->tr_index];
@@ -270,7 +324,6 @@ void Traverse_MacroTree_WithStack(const float3 orig_r_o, const float3 orig_r_d, 
                                   __global const bvh_node_t *nodes, uint node_index, 
                                   __global const tri_accel_t *tris, __global const uint *tri_indices,
                                   hit_data_t *inter) {
-    const float *orig_ro = (const float *)&orig_r_o;
     const float *orig_rd = (const float *)&orig_r_d;
     
     uint stack[MAX_STACK_SIZE];
@@ -285,11 +338,11 @@ void Traverse_MacroTree_WithStack(const float3 orig_r_o, const float3 orig_r_d, 
 
         if (!bbox_test(orig_r_o, orig_r_inv_d, inter->t, n)) continue;
 
-        if (!n->tri_count) {
+        if (!n->prim_count) {
             stack[stack_size++] = far_child(orig_rd, n);
             stack[stack_size++] = near_child(orig_rd, n);
         } else {
-            for (uint i = n->tri_index; i < n->tri_index + n->tri_count; i++) {
+            for (uint i = n->prim_index; i < n->prim_index + n->prim_count; i++) {
                 __global const mesh_instance_t *mi = &mesh_instances[mi_indices[i]];
                 __global const mesh_t *m = &meshes[mi->mesh_index];
                 __global const transform_t *tr = &transforms[mi->tr_index];
@@ -306,27 +359,80 @@ void Traverse_MacroTree_WithStack(const float3 orig_r_o, const float3 orig_r_d, 
     }
 }
 
+void Traverse_MacroTreeImg_WithStack(const float3 orig_r_o, const float3 orig_r_d, const float3 orig_r_inv_d, 
+                                     __global const mesh_instance_t *mesh_instances, __global const uint *mi_indices, 
+                                     __global const mesh_t *meshes, __global const transform_t *transforms, 
+                                     __read_only image1d_buffer_t nodes, uint node_index, 
+                                     __global const tri_accel_t *tris, __global const uint *tri_indices,
+                                     hit_data_t *inter) {
+    const float *orig_rd = (const float *)&orig_r_d;
+
+    uint stack[MAX_STACK_SIZE];
+    uint stack_size = 0;
+
+    stack[stack_size++] = node_index;
+
+    while (stack_size) {
+        uint cur = stack[--stack_size];
+
+        /*
+            struct bvh_node_t {
+                xxx4 node_data1;  // { prim_index, prim_count, left_child, right_child }
+                xxx4 node_data2;  // { parent,     space_axis, bbox[0][0], bbox[0][1]  }
+                xxx4 node_data3;  // { bbox[0][2], bbox[1][0], bbox[1][1], bbox[1][2]  }
+            };
+        */
+
+        float4 node_data2 = read_imagef(nodes, cur * 3 + 1);
+        {   float4 node_data3 = read_imagef(nodes, cur * 3 + 2);
+            if (!__bbox_test(orig_r_o, orig_r_inv_d, inter->t, (float3)(node_data2.zw, node_data3.x), node_data3.yzw)) continue;
+        }
+
+        uint4 node_data1 = read_imageui(nodes, cur * 3 + 0);
+
+        if (!node_data1.y) {
+            int space_axis = as_int(node_data2.y);
+            stack[stack_size++] = orig_rd[space_axis] < 0 ? node_data1.z : node_data1.w;
+            stack[stack_size++] = orig_rd[space_axis] < 0 ? node_data1.w : node_data1.z;
+        } else {
+            const uint index_end = node_data1.x + node_data1.y;
+            for (uint i = node_data1.x; i < index_end; i++) {
+                __global const mesh_instance_t *mi = &mesh_instances[mi_indices[i]];
+                __global const mesh_t *m = &meshes[mi->mesh_index];
+                __global const transform_t *tr = &transforms[mi->tr_index];
+
+                if (!_bbox_test(orig_r_o, orig_r_inv_d, inter->t, mi->bbox_min, mi->bbox_max)) continue;
+
+		        const float3 r_o = TransformPoint(orig_r_o, &tr->inv_xform);
+		        const float3 r_d = TransformDirection(orig_r_d, &tr->inv_xform);
+                const float3 inv_d = safe_invert(r_d);
+                
+                Traverse_MicroTreeImg_WithStack(r_o, r_d, inv_d, mi_indices[i], nodes, m->node_index, tris, tri_indices,
+                                                &stack[stack_size], &node_data1, &node_data2, inter);
+            }
+        }
+    }
+}
+
 float Traverse_MacroTree_Occlusion_Stackless(const float3 orig_r_o, const float3 orig_r_d, const float3 orig_r_inv_d, 
                                              __global const mesh_instance_t *mesh_instances, __global const uint *mi_indices, 
                                              __global const mesh_t *meshes, __global const transform_t *transforms, 
                                              __global const bvh_node_t *nodes, uint node_index, 
                                              __global const tri_accel_t *tris, __global const uint *tri_indices) {
-
-    const float *orig_ro = (const float *)&orig_r_o;
     const float *orig_rd = (const float *)&orig_r_d;
 
     uint cur = node_index;
     uint last = node_index;
 
-    if (!nodes[cur].tri_count) {
+    if (!nodes[cur].prim_count) {
         cur = near_child(orig_rd, &nodes[cur]);
     }
 
     while (cur != 0xffffffff) {
         __global const bvh_node_t *n = &nodes[cur];
 
-        if (n->tri_count) {
-            for (uint i = n->tri_index; i < n->tri_index + n->tri_count; i++) {
+        if (n->prim_count) {
+            for (uint i = n->prim_index; i < n->prim_index + n->prim_count; i++) {
                 __global const mesh_instance_t *mi = &mesh_instances[mi_indices[i]];
                 __global const mesh_t *m = &meshes[mi->mesh_index];
                 __global const transform_t *tr = &transforms[mi->tr_index];
@@ -374,7 +480,6 @@ float Traverse_MacroTree_Occlusion_WithStack(const float3 orig_r_o, const float3
                                              __global const mesh_t *meshes, __global const transform_t *transforms, 
                                              __global const bvh_node_t *nodes, uint node_index, 
                                              __global const tri_accel_t *tris, __global const uint *tri_indices) {
-    const float *orig_ro = (const float *)&orig_r_o;
     const float *orig_rd = (const float *)&orig_r_d;
     
     uint stack[MAX_STACK_SIZE];
@@ -389,11 +494,11 @@ float Traverse_MacroTree_Occlusion_WithStack(const float3 orig_r_o, const float3
 
         if (!bbox_test(orig_r_o, orig_r_inv_d, FLT_MAX, n)) continue;
 
-        if (!n->tri_count) {
+        if (!n->prim_count) {
             stack[stack_size++] = far_child(orig_rd, n);
             stack[stack_size++] = near_child(orig_rd, n);
         } else {
-            for (uint i = n->tri_index; i < n->tri_index + n->tri_count; i++) {
+            for (uint i = n->prim_index; i < n->prim_index + n->prim_count; i++) {
                 __global const mesh_instance_t *mi = &mesh_instances[mi_indices[i]];
                 __global const mesh_t *m = &meshes[mi->mesh_index];
                 __global const transform_t *tr = &transforms[mi->tr_index];

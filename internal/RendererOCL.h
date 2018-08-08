@@ -24,6 +24,7 @@ protected:
     cl_ulong mem_size_;
     size_t max_work_group_size_;
     size_t scan_portion_, seg_scan_portion_;
+    size_t max_image_buffer_size_;
 
     cl::Context context_;
     cl::Program program_;
@@ -31,12 +32,12 @@ protected:
     cl::CommandQueue queue_;
 
     cl::Kernel prim_rays_gen_kernel_, texture_debug_page_kernel_,
-    shade_primary_kernel_, shade_secondary_kernel_, trace_primary_rays_kernel_,
+    shade_primary_kernel_, shade_secondary_kernel_, trace_primary_rays_kernel_, trace_primary_rays_img_kernel_,
     compute_ray_hashes_kernel_, set_head_flags_kernel_, excl_scan_kernel_,
     incl_scan_kernel_, add_partial_sums_kernel_, init_chunk_hash_and_base_kernel_,
     init_chunk_size_kernel_, init_skel_and_head_flags_kernel_, init_count_table_kernel_,
     write_sorted_chunks_kernel_, excl_seg_scan_kernel_, incl_seg_scan_kernel_, add_seg_partial_sums_kernel_,
-    reorder_rays_kernel_, trace_secondary_rays_kernel_, mix_incremental_kernel_, post_process_kernel_;
+    reorder_rays_kernel_, trace_secondary_rays_kernel_, trace_secondary_rays_img_kernel_, mix_incremental_kernel_, post_process_kernel_;
 
     cl::Buffer prim_rays_buf_, prim_inters_buf_, color_table_buf_,
     secondary_rays_buf_, secondary_rays_count_buf_;
@@ -81,9 +82,15 @@ protected:
     bool kernel_TracePrimaryRays(const cl::Buffer &rays, const ray::rect_t &rect, cl_int w,
                                  const cl::Buffer &mesh_instances, const cl::Buffer &mi_indices, const cl::Buffer &meshes, const cl::Buffer &transforms,
                                  const cl::Buffer &nodes, cl_uint node_index, const cl::Buffer &tris, const cl::Buffer &tri_indices, const cl::Buffer &intersections);
+    bool kernel_TracePrimaryRaysImg(const cl::Buffer &rays, const ray::rect_t &rect, cl_int w,
+                                    const cl::Buffer &mesh_instances, const cl::Buffer &mi_indices, const cl::Buffer &meshes, const cl::Buffer &transforms,
+                                    const cl::Image1DBuffer &nodes, cl_uint node_index, const cl::Buffer &tris, const cl::Buffer &tri_indices, const cl::Buffer &intersections);
     bool kernel_TraceSecondaryRays(const cl::Buffer &rays, cl_int rays_count,
                                    const cl::Buffer &mesh_instances, const cl::Buffer &mi_indices, const cl::Buffer &meshes, const cl::Buffer &transforms,
                                    const cl::Buffer &nodes, cl_uint node_index, const cl::Buffer &tris, const cl::Buffer &tri_indices, const cl::Buffer &intersections);
+    bool kernel_TraceSecondaryRaysImg(const cl::Buffer &rays, cl_int rays_count,
+                                      const cl::Buffer &mesh_instances, const cl::Buffer &mi_indices, const cl::Buffer &meshes, const cl::Buffer &transforms,
+                                      const cl::Image1DBuffer &nodes, cl_uint node_index, const cl::Buffer &tris, const cl::Buffer &tri_indices, const cl::Buffer &intersections);
     bool kernel_ComputeRayHashes(const cl::Buffer &rays, cl_int rays_count, cl_float3 root_min, cl_float3 cell_size, const cl::Buffer &out_hashes);
     bool kernel_SetHeadFlags(const cl::Buffer &hashes, cl_int hashes_count, const cl::Buffer &out_head_flags);
     bool kernel_ExclusiveScan(const cl::Buffer &values, cl_int count, cl_int offset, cl_int stride, const cl::Buffer &out_scan_values, const cl::Buffer &out_partial_sums);

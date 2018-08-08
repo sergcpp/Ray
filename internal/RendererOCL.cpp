@@ -48,6 +48,8 @@ const char *cl_src_transform =
 }
 }
 
+#define USE_IMG_BUFFERS 1
+
 ray::ocl::Renderer::Renderer(int w, int h, int platform_index, int device_index) : w_(w), h_(h), loaded_halton_(-1) {
     std::vector<cl::Platform> platforms;
     cl::Platform::get(&platforms);
@@ -87,6 +89,10 @@ ray::ocl::Renderer::Renderer(int w, int h, int platform_index, int device_index)
 
     scan_portion_ = max_work_group_size_;
     seg_scan_portion_ = std::min(max_work_group_size_, (size_t)64);
+
+    if (device_.getInfo(CL_DEVICE_IMAGE_MAX_BUFFER_SIZE, &max_image_buffer_size_) != CL_SUCCESS) {
+        max_image_buffer_size_ = 0;
+    }
 
     {
         // create context
@@ -150,7 +156,7 @@ ray::ocl::Renderer::Renderer(int w, int h, int platform_index, int device_index)
         error = program_.build(build_opts.c_str());
         if (error == CL_INVALID_BUILD_OPTIONS) {
             // -cl-strict-aliasing not supported sometimes, try to build without it
-            build_opts = "-Werror -cl-mad-enable -cl-no-signed-zeros -cl-fast-relaxed-math ";
+            build_opts = "-Werror -cl-mad-enable -cl-no-signed-zeros -cl-fast-relaxed-math -cl-std=CL1.2 ";
             program_ = cl::Program(context_, srcs, &error);
             if (error != CL_SUCCESS) throw std::runtime_error("Cannot create OpenCL renderer!");
             error = program_.build(build_opts.c_str());
@@ -173,6 +179,8 @@ ray::ocl::Renderer::Renderer(int w, int h, int platform_index, int device_index)
         shade_secondary_kernel_ = cl::Kernel(program_, "ShadeSecondary", &error);
         if (error != CL_SUCCESS) throw std::runtime_error("Cannot create OpenCL renderer!");
         trace_primary_rays_kernel_ = cl::Kernel(program_, "TracePrimaryRays", &error);
+        if (error != CL_SUCCESS) throw std::runtime_error("Cannot create OpenCL renderer!");
+        trace_primary_rays_img_kernel_ = cl::Kernel(program_, "TracePrimaryRaysImg", &error);
         if (error != CL_SUCCESS) throw std::runtime_error("Cannot create OpenCL renderer!");
         compute_ray_hashes_kernel_ = cl::Kernel(program_, "ComputeRayHashes", &error);
         if (error != CL_SUCCESS) throw std::runtime_error("Cannot create OpenCL renderer!");
@@ -208,6 +216,8 @@ ray::ocl::Renderer::Renderer(int w, int h, int platform_index, int device_index)
         if (error != CL_SUCCESS) throw std::runtime_error("Cannot create OpenCL renderer!");
 
         trace_secondary_rays_kernel_ = cl::Kernel(program_, "TraceSecondaryRays", &error);
+        if (error != CL_SUCCESS) throw std::runtime_error("Cannot create OpenCL renderer!");
+        trace_secondary_rays_img_kernel_ = cl::Kernel(program_, "TraceSecondaryRaysImg", &error);
         if (error != CL_SUCCESS) throw std::runtime_error("Cannot create OpenCL renderer!");
         mix_incremental_kernel_ = cl::Kernel(program_, "MixIncremental", &error);
         if (error != CL_SUCCESS) throw std::runtime_error("Cannot create OpenCL renderer!");
@@ -339,7 +349,11 @@ void ray::ocl::Renderer::Clear(const pixel_color_t &c) {
 }
 
 std::shared_ptr<ray::SceneBase> ray::ocl::Renderer::CreateScene() {
-    return std::make_shared<ocl::Scene>(context_, queue_);
+#if USE_IMG_BUFFERS
+    return std::make_shared<ocl::Scene>(context_, queue_, max_image_buffer_size_);
+#else
+    return std::make_shared<ocl::Scene>(context_, queue_, 0);
+#endif
 }
 
 void ray::ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, RegionContext &region) {
@@ -379,9 +393,15 @@ void ray::ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
 
     cl_int error = CL_SUCCESS;
 
-    if (!kernel_TracePrimaryRays(prim_rays_buf_, region.rect(), w_,
-                                    s->mesh_instances_.buf(), s->mi_indices_.buf(), s->meshes_.buf(), s->transforms_.buf(),
-                                    s->nodes_.buf(), (cl_uint)s->macro_nodes_start_, s->tris_.buf(), s->tri_indices_.buf(), prim_inters_buf_)) return;
+    if (s->nodes_.img_buf().get() != nullptr) {
+        if (!kernel_TracePrimaryRaysImg(prim_rays_buf_, region.rect(), w_,
+            s->mesh_instances_.buf(), s->mi_indices_.buf(), s->meshes_.buf(), s->transforms_.buf(),
+            s->nodes_.img_buf(), (cl_uint)s->macro_nodes_start_, s->tris_.buf(), s->tri_indices_.buf(), prim_inters_buf_)) return;
+    } else {
+        if (!kernel_TracePrimaryRays(prim_rays_buf_, region.rect(), w_,
+            s->mesh_instances_.buf(), s->mi_indices_.buf(), s->meshes_.buf(), s->transforms_.buf(),
+            s->nodes_.buf(), (cl_uint)s->macro_nodes_start_, s->tris_.buf(), s->tri_indices_.buf(), prim_inters_buf_)) return;
+    }
 
     cl_int secondary_rays_count = 0;
     if (queue_.enqueueWriteBuffer(secondary_rays_count_buf_, CL_TRUE, 0, sizeof(cl_int),
@@ -420,9 +440,15 @@ void ray::ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
         queue_.finish();
         auto time_secondary_trace_start = std::chrono::high_resolution_clock::now();
 
-        if (!kernel_TraceSecondaryRays(secondary_rays_buf_, secondary_rays_count,
-                                        s->mesh_instances_.buf(), s->mi_indices_.buf(), s->meshes_.buf(), s->transforms_.buf(),
-                                        s->nodes_.buf(), (cl_uint)s->macro_nodes_start_, s->tris_.buf(), s->tri_indices_.buf(), prim_inters_buf_)) return;
+        if (s->nodes_.img_buf().get() != nullptr) {
+            if (!kernel_TraceSecondaryRaysImg(secondary_rays_buf_, secondary_rays_count,
+                s->mesh_instances_.buf(), s->mi_indices_.buf(), s->meshes_.buf(), s->transforms_.buf(),
+                s->nodes_.img_buf(), (cl_uint)s->macro_nodes_start_, s->tris_.buf(), s->tri_indices_.buf(), prim_inters_buf_)) return;
+        } else {
+            if (!kernel_TraceSecondaryRays(secondary_rays_buf_, secondary_rays_count,
+                s->mesh_instances_.buf(), s->mi_indices_.buf(), s->meshes_.buf(), s->transforms_.buf(),
+                s->nodes_.buf(), (cl_uint)s->macro_nodes_start_, s->tris_.buf(), s->tri_indices_.buf(), prim_inters_buf_)) return;
+        }
 
         cl_int new_secondary_rays_count = 0;
         if (queue_.enqueueWriteBuffer(secondary_rays_count_buf_, CL_TRUE, 0, sizeof(cl_int), &new_secondary_rays_count) != CL_SUCCESS) return;
@@ -649,6 +675,52 @@ bool ray::ocl::Renderer::kernel_TracePrimaryRays(const cl::Buffer &rays, const r
     return true;
 }
 
+bool ray::ocl::Renderer::kernel_TracePrimaryRaysImg(const cl::Buffer &rays, const ray::rect_t &rect, cl_int w,
+                                                    const cl::Buffer &mesh_instances, const cl::Buffer &mi_indices, const cl::Buffer &meshes, const cl::Buffer &transforms,
+                                                    const cl::Image1DBuffer &nodes, cl_uint node_index, const cl::Buffer &tris, const cl::Buffer &tri_indices, const cl::Buffer &intersections) {
+    cl_uint argc = 0;
+    if (trace_primary_rays_img_kernel_.setArg(argc++, rays) != CL_SUCCESS ||
+        trace_primary_rays_img_kernel_.setArg(argc++, w) != CL_SUCCESS ||
+        trace_primary_rays_img_kernel_.setArg(argc++, mesh_instances) != CL_SUCCESS ||
+        trace_primary_rays_img_kernel_.setArg(argc++, mi_indices) != CL_SUCCESS ||
+        trace_primary_rays_img_kernel_.setArg(argc++, meshes) != CL_SUCCESS ||
+        trace_primary_rays_img_kernel_.setArg(argc++, transforms) != CL_SUCCESS ||
+        trace_primary_rays_img_kernel_.setArg(argc++, nodes) != CL_SUCCESS ||
+        trace_primary_rays_img_kernel_.setArg(argc++, node_index) != CL_SUCCESS ||
+        trace_primary_rays_img_kernel_.setArg(argc++, tris) != CL_SUCCESS ||
+        trace_primary_rays_img_kernel_.setArg(argc++, tri_indices) != CL_SUCCESS ||
+        trace_primary_rays_img_kernel_.setArg(argc++, intersections) != CL_SUCCESS) {
+        return false;
+    }
+
+    // local group size 8x8 seems to be optimal for traversing BVH in most scenes
+
+    int border_x = rect.w % 8, border_y = rect.h % 8;
+
+    cl::NDRange global = { (size_t)(rect.w - border_x), (size_t)(rect.h - border_y) };
+    cl::NDRange local = { (size_t)8, std::min((size_t)8, max_work_group_size_ / 8) };
+
+    if (rect.w - border_x > 0 && rect.h - border_y > 0) {
+        if (queue_.enqueueNDRangeKernel(trace_primary_rays_img_kernel_, { (size_t)rect.x, (size_t)rect.y }, global, local) != CL_SUCCESS) {
+            return false;
+        }
+    }
+
+    if (border_x) {
+        if (queue_.enqueueNDRangeKernel(trace_primary_rays_img_kernel_, { (size_t)(rect.x + rect.w - border_x), (size_t)rect.y }, { (size_t)(border_x), (size_t)(rect.h - border_y) }) != CL_SUCCESS) {
+            return false;
+        }
+    }
+
+    if (border_y) {
+        if (queue_.enqueueNDRangeKernel(trace_primary_rays_img_kernel_, { (size_t)rect.x, (size_t)(rect.y + rect.h - border_y) }, { (size_t)(rect.w), (size_t)(border_y) }) != CL_SUCCESS) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 bool ray::ocl::Renderer::kernel_TraceSecondaryRays(const cl::Buffer &rays, cl_int rays_count,
         const cl::Buffer &mesh_instances, const cl::Buffer &mi_indices, const cl::Buffer &meshes, const cl::Buffer &transforms,
         const cl::Buffer &nodes, cl_uint node_index, const cl::Buffer &tris, const cl::Buffer &tri_indices, const cl::Buffer &intersections) {
@@ -681,6 +753,45 @@ bool ray::ocl::Renderer::kernel_TraceSecondaryRays(const cl::Buffer &rays, cl_in
 
     if (remaining) {
         if (queue_.enqueueNDRangeKernel(trace_secondary_rays_kernel_, { (size_t)(rays_count - remaining) }, { (size_t)(remaining) }) != CL_SUCCESS) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool ray::ocl::Renderer::kernel_TraceSecondaryRaysImg(const cl::Buffer &rays, cl_int rays_count,
+                                                      const cl::Buffer &mesh_instances, const cl::Buffer &mi_indices, const cl::Buffer &meshes, const cl::Buffer &transforms,
+                                                      const cl::Image1DBuffer &nodes, cl_uint node_index, const cl::Buffer &tris, const cl::Buffer &tri_indices, const cl::Buffer &intersections) {
+    cl_uint argc = 0;
+    if (trace_secondary_rays_img_kernel_.setArg(argc++, rays) != CL_SUCCESS ||
+        trace_secondary_rays_img_kernel_.setArg(argc++, mesh_instances) != CL_SUCCESS ||
+        trace_secondary_rays_img_kernel_.setArg(argc++, mi_indices) != CL_SUCCESS ||
+        trace_secondary_rays_img_kernel_.setArg(argc++, meshes) != CL_SUCCESS ||
+        trace_secondary_rays_img_kernel_.setArg(argc++, transforms) != CL_SUCCESS ||
+        trace_secondary_rays_img_kernel_.setArg(argc++, nodes) != CL_SUCCESS ||
+        trace_secondary_rays_img_kernel_.setArg(argc++, node_index) != CL_SUCCESS ||
+        trace_secondary_rays_img_kernel_.setArg(argc++, tris) != CL_SUCCESS ||
+        trace_secondary_rays_img_kernel_.setArg(argc++, tri_indices) != CL_SUCCESS ||
+        trace_secondary_rays_img_kernel_.setArg(argc++, intersections) != CL_SUCCESS) {
+        return false;
+    }
+
+    size_t group_size = std::min((size_t)64, max_work_group_size_);
+
+    int remaining = rays_count % group_size;
+
+    cl::NDRange global = { (size_t)(rays_count - remaining) };
+    cl::NDRange local = { (size_t)(group_size) };
+
+    if (rays_count - remaining > 0) {
+        if (queue_.enqueueNDRangeKernel(trace_secondary_rays_img_kernel_, cl::NullRange, global, local) != CL_SUCCESS) {
+            return false;
+        }
+    }
+
+    if (remaining) {
+        if (queue_.enqueueNDRangeKernel(trace_secondary_rays_img_kernel_, { (size_t)(rays_count - remaining) }, { (size_t)(remaining) }) != CL_SUCCESS) {
             return false;
         }
     }

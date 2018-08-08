@@ -259,7 +259,6 @@ void ray::ref::Scene::RemoveNodes(uint32_t node_index, uint32_t node_count) {
             auto &n = nodes_[i];
 
             if (n.parent != 0xffffffff && n.parent > node_index) n.parent -= node_count;
-            if (n.sibling && n.sibling > node_index) n.sibling -= node_count;
             if (!n.prim_count) {
                 if (n.left_child > node_index) n.left_child -= node_count;
                 if (n.right_child > node_index) n.right_child -= node_count;

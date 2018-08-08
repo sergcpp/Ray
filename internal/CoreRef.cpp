@@ -49,6 +49,10 @@ force_inline uint32_t far_child(const ray_packet_t &r, const bvh_node_t &node) {
     return r.d[node.space_axis] < 0 ? node.left_child : node.right_child;
 }
 
+force_inline uint32_t other_child(const bvh_node_t &node, uint32_t cur_child) {
+    return node.left_child == cur_child ? node.right_child : node.left_child;
+}
+
 force_inline bool is_leaf_node(const bvh_node_t &node) {
     return node.prim_count != 0;
 }
@@ -407,7 +411,7 @@ bool ray::ref::Traverse_MacroTree_Stackless_CPU(const ray_packet_t &r, const bvh
         case FromChild:
             if (cur == root_index || cur == 0xffffffff) return res;
             if (cur == near_child(r, nodes[nodes[cur].parent])) {
-                cur = nodes[cur].sibling;
+                cur = other_child(nodes[nodes[cur].parent], cur);
                 src = FromSibling;
             } else {
                 cur = nodes[cur].parent;
@@ -444,7 +448,7 @@ bool ray::ref::Traverse_MacroTree_Stackless_CPU(const ray_packet_t &r, const bvh
             break;
         case FromParent:
             if (!bbox_test(r.o, inv_d, inter.t, nodes[cur])) {
-                cur = nodes[cur].sibling;
+                cur = other_child(nodes[nodes[cur].parent], cur);
                 src = FromSibling;
             } else if (is_leaf_node(nodes[cur])) {
                 // process leaf
@@ -463,7 +467,7 @@ bool ray::ref::Traverse_MacroTree_Stackless_CPU(const ray_packet_t &r, const bvh
                     res |= Traverse_MicroTree_Stackless_CPU(_r, _inv_d, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter);
                 }
 
-                cur = nodes[cur].sibling;
+                cur = other_child(nodes[nodes[cur].parent], cur);
                 src = FromSibling;
             } else {
                 cur = near_child(r, nodes[cur]);
@@ -556,7 +560,7 @@ bool ray::ref::Traverse_MicroTree_Stackless_CPU(const ray_packet_t &r, const flo
         case FromChild:
             if (cur == root_index || cur == 0xffffffff) return res;
             if (cur == near_child(r, nodes[nodes[cur].parent])) {
-                cur = nodes[cur].sibling;
+                cur = other_child(nodes[nodes[cur].parent], cur);
                 src = FromSibling;
             } else {
                 cur = nodes[cur].parent;
@@ -580,13 +584,13 @@ bool ray::ref::Traverse_MicroTree_Stackless_CPU(const ray_packet_t &r, const flo
             break;
         case FromParent:
             if (!bbox_test(r.o, inv_d, inter.t, nodes[cur])) {
-                cur = nodes[cur].sibling;
+                cur = other_child(nodes[nodes[cur].parent], cur);
                 src = FromSibling;
             } else if (is_leaf_node(nodes[cur])) {
                 // process leaf
                 res |= IntersectTris(r, tris, &tri_indices[nodes[cur].prim_index], nodes[cur].prim_count, obj_index, inter);
 
-                cur = nodes[cur].sibling;
+                cur = other_child(nodes[nodes[cur].parent], cur);
                 src = FromSibling;
             } else {
                 cur = near_child(r, nodes[cur]);

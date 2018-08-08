@@ -5,19 +5,19 @@
 #include "BVHSplit.h"
 #include "TextureUtilsRef.h"
 
-ray::ocl::Scene::Scene(const cl::Context &context, const cl::CommandQueue &queue)
-    : context_(context), queue_(queue),
-      nodes_(context, queue, CL_MEM_READ_ONLY),
-      tris_(context, queue, CL_MEM_READ_ONLY),
-      tri_indices_(context, queue, CL_MEM_READ_ONLY),
-      transforms_(context, queue, CL_MEM_READ_ONLY),
-      meshes_(context, queue, CL_MEM_READ_ONLY),
-      mesh_instances_(context, queue, CL_MEM_READ_ONLY),
-      mi_indices_(context, queue, CL_MEM_READ_ONLY),
-      vertices_(context, queue, CL_MEM_READ_ONLY),
-      vtx_indices_(context, queue, CL_MEM_READ_ONLY),
-      materials_(context, queue, CL_MEM_READ_ONLY),
-      textures_(context, queue, CL_MEM_READ_ONLY),
+ray::ocl::Scene::Scene(const cl::Context &context, const cl::CommandQueue &queue, size_t max_img_buf_size)
+    : context_(context), queue_(queue), max_img_buf_size_(max_img_buf_size),
+      nodes_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
+      tris_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
+      tri_indices_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
+      transforms_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
+      meshes_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
+      mesh_instances_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
+      mi_indices_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
+      vertices_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
+      vtx_indices_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
+      materials_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
+      textures_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
     texture_atlas_(context_, queue_, MAX_TEXTURE_SIZE, MAX_TEXTURE_SIZE) {
     SetEnvironment( { { 0, 0, 0 }, { 0, 0, 0 }, { 0, 0, 0 } });
 
@@ -161,7 +161,6 @@ uint32_t ray::ocl::Scene::AddMesh(const mesh_desc_t &_m) {
     // offset nodes and primitives
     for (auto &n : new_nodes) {
         if (n.parent != 0xffffffff) n.parent += (uint32_t)nodes_.size();
-        if (n.sibling) n.sibling += (uint32_t)nodes_.size();
         if (n.prim_count) {
             n.prim_index += (uint32_t)tri_indices_.size();
         } else {
@@ -295,7 +294,6 @@ void ray::ocl::Scene::RemoveNodes(uint32_t node_index, uint32_t node_count) {
             auto &n = nodes[i];
 
             if (n.parent != 0xffffffff && n.parent > node_index) n.parent -= node_count;
-            if (n.sibling && n.sibling > node_index) n.sibling -= node_count;
             if (!n.prim_count) {
                 if (n.left_child > node_index) n.left_child -= node_count;
                 if (n.right_child > node_index) n.right_child -= node_count;
@@ -334,7 +332,6 @@ void ray::ocl::Scene::RebuildMacroBVH() {
     // offset nodes
     for (auto &n : bvh_nodes) {
         if (n.parent != 0xffffffff) n.parent += (uint32_t)nodes_.size();
-        if (n.sibling) n.sibling += (uint32_t)nodes_.size();
         if (!n.prim_count) {
             n.left_child += (uint32_t)nodes_.size();
             n.right_child += (uint32_t)nodes_.size();

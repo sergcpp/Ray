@@ -54,11 +54,11 @@ const float RAY_TERM_THRES = 0.01f;
 
 struct bvh_node_t {
     uint32_t prim_index, prim_count,
-             left_child, right_child, parent, sibling,
+             left_child, right_child, parent,
              space_axis; // axis with maximal child's centroids distance
     float bbox[2][3];
 };
-static_assert(sizeof(bvh_node_t) == 52, "!");
+static_assert(sizeof(bvh_node_t) == 48, "!");
 
 const int MAX_MIP_LEVEL = 11;
 const int NUM_MIP_LEVELS = MAX_MIP_LEVEL + 1;

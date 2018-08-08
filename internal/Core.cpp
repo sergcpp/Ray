@@ -207,16 +207,11 @@ uint32_t ray::PreprocessPrims(const prim_t *prims, size_t prims_count, const flo
         triangle_lists.pop_back();
 
         uint32_t leaf_index = (uint32_t)out_nodes.size(),
-                 parent_index = 0xffffffff, sibling_index = 0;
+                 parent_index = 0xffffffff;
 
         for (int32_t i = leaf_index - 1; i >= root_node_index; i--) {
-            if (out_nodes[i].left_child == leaf_index) {
+            if (out_nodes[i].left_child == leaf_index || out_nodes[i].right_child == leaf_index) {
                 parent_index = i;
-                sibling_index = out_nodes[i].right_child;
-                break;
-            } else if (out_nodes[i].right_child == leaf_index) {
-                parent_index = i;
-                sibling_index = out_nodes[i].left_child;
                 break;
             }
         }
@@ -225,7 +220,7 @@ uint32_t ray::PreprocessPrims(const prim_t *prims, size_t prims_count, const flo
             ref::simd_fvec3 bbox_min = split_data.left_bounds[0],
                             bbox_max = split_data.left_bounds[1];
 
-            out_nodes.push_back({ (uint32_t)out_indices.size(), (uint32_t)split_data.left_indices.size(), 0, 0, parent_index, sibling_index, 0,
+            out_nodes.push_back({ (uint32_t)out_indices.size(), (uint32_t)split_data.left_indices.size(), 0, 0, parent_index, 0,
                 {   { bbox_min[0], bbox_min[1], bbox_min[2] },
                     { bbox_max[0], bbox_max[1], bbox_max[2] }
                 }
@@ -251,7 +246,7 @@ uint32_t ray::PreprocessPrims(const prim_t *prims, size_t prims_count, const flo
             ref::simd_fvec3 bbox_min = min(split_data.left_bounds[0], split_data.right_bounds[0]),
                             bbox_max = max(split_data.left_bounds[1], split_data.right_bounds[1]);
 
-            out_nodes.push_back({ 0, 0, index + 1, index + 2, parent_index, sibling_index, space_axis,
+            out_nodes.push_back({ 0, 0, index + 1, index + 2, parent_index, space_axis,
                 {   { bbox_min[0], bbox_min[1], bbox_min[2] },
                     { bbox_max[0], bbox_max[1], bbox_max[2] }
                 }

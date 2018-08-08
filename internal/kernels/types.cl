@@ -32,8 +32,8 @@ typedef struct _hit_data_t {
 } hit_data_t;
 
 typedef struct _bvh_node_t {
-    uint tri_index, tri_count,
-         left_child, right_child, parent, sibling,
+    uint prim_index, prim_count,
+         left_child, right_child, parent,
          space_axis; // axis with maximum child's centroids distance
     float bbox[2][3];
 } bvh_node_t;
