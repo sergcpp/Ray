@@ -1745,16 +1745,16 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
                 }
             } else if (mat->type == GlossyMaterial) {
                 simd_fvec<S> V[3], TT[3], BB[3];
-                simd_fvec<S> _N[3] = { __N[0], __N[1], __N[2] };
+                simd_fvec<S> _NN[3] = { __N[0], __N[1], __N[2] };
 
                 simd_fvec<S> dot_I_N2 = dot(I, __N);
 
-                where(dot_I_N2 < 0, _N[0]) = -__N[0];
-                where(dot_I_N2 < 0, _N[1]) = -__N[1];
-                where(dot_I_N2 < 0, _N[2]) = -__N[2];
+                where(dot_I_N2 < 0, _NN[0]) = -__N[0];
+                where(dot_I_N2 < 0, _NN[1]) = -__N[1];
+                where(dot_I_N2 < 0, _NN[2]) = -__N[2];
                 where(dot_I_N2 < 0, dot_I_N2) = -dot_I_N2;
 
-                reflect(I, _N, dot_I_N2, V);
+                reflect(I, _NN, dot_I_N2, V);
 
                 cross(V, B, TT);
                 cross(V, TT, BB);
@@ -1823,25 +1823,25 @@ void ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
                     where(new_ray_mask, r.dd_dy[2]) = dd_dy[2] - 2.0f * (dot_I_N2 * dndy[2] + ddn_dy * __N[2]);
                 }
             } else if (mat->type == RefractiveMaterial) {
-                simd_fvec<S> _N[3] = { __N[0], __N[1], __N[2] };
+                simd_fvec<S> _NN[3] = { __N[0], __N[1], __N[2] };
 
                 simd_fvec<S> dot_I_N2 = dot(I, __N);
 
-                where(dot_I_N2 > 0, _N[0]) = -__N[0];
-                where(dot_I_N2 > 0, _N[1]) = -__N[1];
-                where(dot_I_N2 > 0, _N[2]) = -__N[2];
+                where(dot_I_N2 > 0, _NN[0]) = -__N[0];
+                where(dot_I_N2 > 0, _NN[1]) = -__N[1];
+                where(dot_I_N2 > 0, _NN[2]) = -__N[2];
                 
-                simd_fvec<S> eta = ray.c[3];
+                simd_fvec<S> eta = ray.ior;
                 where(dot_I_N2 <= 0, eta) = eta / mat->ior;
                 where(dot_I_N2 < 0, dot_I_N2) = -dot_I_N2;
 
                 simd_fvec<S> _I[3] = { -I[0], -I[1], -I[2] };
 
-                simd_fvec<S> cosi = dot(_I, _N);
+                simd_fvec<S> cosi = dot(_I, _NN);
                 simd_fvec<S> cost2 = 1.0f - eta * eta * (1.0f - cosi * cosi);
                 simd_fvec<S> m = eta * cosi - sqrt(cost2);
 
-                simd_fvec<S> V[3] = { eta * I[0] + m * _N[0], eta * I[1] + m * _N[1], eta * I[2] + m * _N[2] };
+                simd_fvec<S> V[3] = { eta * I[0] + m * _NN[0], eta * I[1] + m * _NN[1], eta * I[2] + m * _NN[2] };
 
                 simd_fvec<S> TT[3], BB[3];
 
