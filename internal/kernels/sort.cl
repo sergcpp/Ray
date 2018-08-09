@@ -52,17 +52,17 @@ int g_phi_table[][17] = { { 2,  2,  2,  2,  2,  3,  3,  3,  4,  4,  4,  4,  5,  
                           { 14, 13, 13, 13, 13, 12, 12, 12, 12, 11, 11, 11, 10, 10, 10, 10, 10 } };
 
 uint get_ray_hash(__global ray_packet_t *r, const float3 root_min, const float3 cell_size) {
-	int x = (int)((r->o.x - root_min.x) / cell_size.x),
-		y = (int)((r->o.y - root_min.y) / cell_size.y),
-		z = (int)((r->o.z - root_min.z) / cell_size.z);
+	int x = clamp((int)((r->o.x - root_min.x) / cell_size.x), 0, 255),
+		y = clamp((int)((r->o.y - root_min.y) / cell_size.y), 0, 255),
+		z = clamp((int)((r->o.z - root_min.z) / cell_size.z), 0, 255);
 
     x = g_morton_table_256[x];
     y = g_morton_table_256[y];
     z = g_morton_table_256[z];
 
-    int oi = (int)((1.0f + r->d.z) / g_omega_step);
-    int pi = (int)((1.0f + r->d.y) / g_phi_step),
-        pj = (int)((1.0f + r->d.x) / g_phi_step);
+    int oi = clamp((int)((1.0f + r->d.z) / g_omega_step), 0, 32);
+    int pi = clamp((int)((1.0f + r->d.y) / g_phi_step), 0, 16),
+        pj = clamp((int)((1.0f + r->d.x) / g_phi_step), 0, 16);
 
 	int o = g_morton_table_16[g_omega_table[oi]];
 	int p = g_morton_table_16[g_phi_table[pi][pj]];

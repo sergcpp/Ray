@@ -166,17 +166,17 @@ void Traverse_MicroTreeImg_WithStack(const float3 r_o, const float3 r_d, const f
 
         *node_data2 = read_imagef(nodes, cur * 3 + 1);
         {   float4 node_data3 = read_imagef(nodes, cur * 3 + 2);
-            if (!__bbox_test(r_o, inv_d, inter->t, (float3)(node_data2->zw, node_data3.x), node_data3.yzw)) continue;
+            if (!__bbox_test(r_o, inv_d, inter->t, (float3)((*node_data2).zw, node_data3.x), node_data3.yzw)) continue;
         }
 
         *node_data1 = read_imageui(nodes, cur * 3 + 0);
 
-        if (!node_data1->y) {
-            uint space_axis = as_uint(node_data2->y);
-            stack[stack_size++] = rd[space_axis] < 0 ? node_data1->z : node_data1->w;
-            stack[stack_size++] = rd[space_axis] < 0 ? node_data1->w : node_data1->z;
+        if (!(*node_data1).y) {
+            uint space_axis = as_uint((*node_data2).y);
+            stack[stack_size++] = rd[space_axis] < 0 ? (*node_data1).z : (*node_data1).w;
+            stack[stack_size++] = rd[space_axis] < 0 ? (*node_data1).w : (*node_data1).z;
         } else {
-            IntersectTris(r_o, r_d, tris, tri_indices, node_data1->x, node_data1->y, obj_index, inter);
+            IntersectTris(r_o, r_d, tris, tri_indices, (*node_data1).x, (*node_data1).y, obj_index, inter);
         }
     }
 }
@@ -395,8 +395,9 @@ void Traverse_MacroTreeImg_WithStack(const float3 orig_r_o, const float3 orig_r_
             stack[stack_size++] = orig_rd[space_axis] < 0 ? node_data1.z : node_data1.w;
             stack[stack_size++] = orig_rd[space_axis] < 0 ? node_data1.w : node_data1.z;
         } else {
+            const uint index_start = node_data1.x;
             const uint index_end = node_data1.x + node_data1.y;
-            for (uint i = node_data1.x; i < index_end; i++) {
+            for (uint i = index_start; i < index_end; i++) {
                 __global const mesh_instance_t *mi = &mesh_instances[mi_indices[i]];
                 __global const mesh_t *m = &meshes[mi->mesh_index];
                 __global const transform_t *tr = &transforms[mi->tr_index];

@@ -379,13 +379,13 @@ force_inline void reflect(const simd_fvec<S> I[3], const simd_fvec<S> N[3], cons
 
 template <int S>
 force_inline simd_ivec<S> get_ray_hash(const ray_packet_t<S> &r, const simd_ivec<S> &mask, const float root_min[3], const float cell_size[3]) {
-    simd_ivec<S> x = (simd_ivec<S>)((r.o[0] - root_min[0]) / cell_size[0]),
-        y = (simd_ivec<S>)((r.o[1] - root_min[1]) / cell_size[1]),
-        z = (simd_ivec<S>)((r.o[2] - root_min[2]) / cell_size[2]);
+    simd_ivec<S> x = clamp((simd_ivec<S>)((r.o[0] - root_min[0]) / cell_size[0]), 0, 255),
+                 y = clamp((simd_ivec<S>)((r.o[1] - root_min[1]) / cell_size[1]), 0, 255),
+                 z = clamp((simd_ivec<S>)((r.o[2] - root_min[2]) / cell_size[2]), 0, 255);
 
-    simd_ivec<S> omega_index = (simd_ivec<S>)((1.0f + r.d[2]) / omega_step),
-        phi_index_i = (simd_ivec<S>)((1.0f + r.d[1]) / phi_step),
-        phi_index_j = (simd_ivec<S>)((1.0f + r.d[0]) / phi_step);
+    simd_ivec<S> omega_index = clamp((simd_ivec<S>)((1.0f + r.d[2]) / omega_step), 0, 32),
+                 phi_index_i = clamp((simd_ivec<S>)((1.0f + r.d[1]) / phi_step), 0, 16),
+                 phi_index_j = clamp((simd_ivec<S>)((1.0f + r.d[0]) / phi_step), 0, 16);
 
     simd_ivec<S> o, p;
 

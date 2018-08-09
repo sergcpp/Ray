@@ -117,6 +117,10 @@ force_inline float clamp(float val, float min, float max) {
     return val < min ? min : (val > max ? max : val);
 }
 
+force_inline int clamp(int val, int min, int max) {
+    return val < min ? min : (val > max ? max : val);
+}
+
 force_inline simd_fvec3 cross(const simd_fvec3 &v1, const simd_fvec3 &v2) {
     return simd_fvec3{ v1[1] * v2[2] - v1[2] * v2[1], v1[2] * v2[0] - v1[0] * v2[2], v1[0] * v2[1] - v1[1] * v2[0] };
 }
@@ -126,9 +130,9 @@ force_inline simd_fvec3 reflect(const simd_fvec3 &I, const simd_fvec3 &N) {
 }
 
 force_inline uint32_t get_ray_hash(const ray_packet_t &r, const float root_min[3], const float cell_size[3]) {
-	int x = (int)((r.o[0] - root_min[0]) / cell_size[0]),
-		y = (int)((r.o[1] - root_min[1]) / cell_size[1]),
-		z = (int)((r.o[2] - root_min[2]) / cell_size[2]);
+    int x = clamp((int)((r.o[0] - root_min[0]) / cell_size[0]), 0, 255),
+        y = clamp((int)((r.o[1] - root_min[1]) / cell_size[1]), 0, 255),
+        z = clamp((int)((r.o[2] - root_min[2]) / cell_size[2]), 0, 255);
 
 	//float omega = omega_table[int(r.d[2] / 0.0625f)];
 	//float std::atan2(r.d[1], r.d[0]);
@@ -138,8 +142,8 @@ force_inline uint32_t get_ray_hash(const ray_packet_t &r, const float root_min[3
     y = morton_table_256[y];
     z = morton_table_256[z];
 
-	int o = morton_table_16[omega_table[int((1.0f + r.d[2]) / omega_step)]];
-	int p = morton_table_16[phi_table[int((1.0f + r.d[1]) / phi_step)][int((1.0f + r.d[0]) / phi_step)]];
+	int o = morton_table_16[omega_table[clamp(int((1.0f + r.d[2]) / omega_step), 0, 32)]];
+	int p = morton_table_16[phi_table[clamp(int((1.0f + r.d[1]) / phi_step), 0, 16)][clamp(int((1.0f + r.d[0]) / phi_step), 0, 16)]];
 
     return (o << 25) | (p << 24) | (y << 2) | (z << 1) | (x << 0);
 }
