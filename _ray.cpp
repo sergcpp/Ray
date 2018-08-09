@@ -26,13 +26,13 @@
 #endif
 
 // TODO:
-// try using image for node buffer (utilize texture cache)
 // add punctual lights support
 // add deletion functions for OpenCL backend
 // add tests for intersection
 // add more validation tests (use Cycles)
 
 // DONE:
+// try using image for node buffer (utilize texture cache)
 // compare traversal algorithm with stack
 // add tent filter
 // add depth of field
