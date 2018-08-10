@@ -52,6 +52,8 @@ const int MAX_BOUNCES = 4;
 
 const float RAY_TERM_THRES = 0.01f;
 
+const float LIGHT_ATTEN_CUTOFF = 0.001f;
+
 struct bvh_node_t {
     uint32_t prim_index, prim_count,
              left_child, right_child, parent,
@@ -79,6 +81,8 @@ const int MAIN_TEXTURE = 1;
 const int MIX_MAT1 = 2;
 const int MIX_MAT2 = 3;
 
+const int MAX_STACK_SIZE = 32;
+
 struct material_t {
     uint32_t type;
     uint32_t textures[MAX_MATERIAL_TEXTURES];
@@ -94,6 +98,13 @@ struct material_t {
     float pad1[2];
 };
 static_assert(sizeof(material_t) == 64, "!");
+
+struct light_t {
+    float pos[3], radius;
+    float col[3], brightness;
+    float dir[3], spot;
+};
+static_assert(sizeof(light_t) == 48, "!");
 
 struct prim_t;
 

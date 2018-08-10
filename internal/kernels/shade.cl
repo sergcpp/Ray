@@ -13,6 +13,76 @@ float3 refract(float3 I, float3 N, float eta) {
     return t * (float3)(cost2 > 0);
 }
 
+float3 ComputeDirectLighting(const float3 P, const float3 N, const float3 B, const float3 plane_N,
+                             __global const float *halton, const int hi, float rand_offset, float rand_offset2,
+                             __global const mesh_instance_t *mesh_instances, __global const uint *mi_indices,
+                             __global const mesh_t *meshes, __global const transform_t *transforms,
+                             __global const uint *vtx_indices, __global const vertex_t *vertices,
+                             __global const bvh_node_t *nodes, uint node_index, __global const tri_accel_t *tris,
+                             __global const uint *tri_indices, __global const light_t *lights,
+                             __global const uint *li_indices, uint light_node_index, __local uint *stack) {
+    float3 col = (float3)(0.0f);    
+
+    uint stack_size = 0;
+    stack[stack_size++] = light_node_index;
+
+    while (stack_size) {
+        uint cur = stack[--stack_size];
+        __global const bvh_node_t *n = &nodes[cur];
+
+        if (!is_point_inside(P, n)) continue;
+
+        if (!n->prim_count) {
+            stack[stack_size++] = n->left_child;
+            stack[stack_size++] = n->right_child;
+        } else {
+            for (uint i = n->prim_index; i < n->prim_index + n->prim_count; i++) {
+                __global const light_t *l = &lights[li_indices[i]];
+
+                float3 L = P - l->pos_and_radius.xyz;
+                float distance = length(L);
+                float d = max(distance - l->pos_and_radius.w, 0.0f);
+                L /= distance;
+
+                float _unused;
+                const float z = fract(halton[hi + 0] + rand_offset, &_unused);
+
+                const float dir = sqrt(z);
+                const float phi = 2 * PI * fract(halton[hi + 1] + rand_offset2, &_unused);
+
+                float cos_phi;
+                const float sin_phi = sincos(phi, &cos_phi);
+
+                float3 TT = cross(L, B);
+                float3 BB = cross(L, TT);
+                const float3 V = dir * sin_phi * BB + sqrt(1.0f - dir) * L + dir * cos_phi * TT;
+
+                L = normalize(l->pos_and_radius.xyz + V * l->pos_and_radius.w - P);
+
+                float denom = d / l->pos_and_radius.w + 1.0f;
+                float atten = 1.0f / (denom * denom);
+
+                atten = (atten - LIGHT_ATTEN_CUTOFF / l->col_and_brightness.w) / (1.0f - LIGHT_ATTEN_CUTOFF);
+                atten = max(atten, 0.0f);
+
+                float _dot1 = max(dot(L, N), 0.0f);
+                float _dot2 = dot(L, l->dir_and_spot.xyz);
+
+                if (_dot1 > FLT_EPS && _dot2 > l->dir_and_spot.w && (l->col_and_brightness.w * atten) > FLT_EPS) {
+                    const float3 r_o = P + HIT_BIAS * plane_N;
+                    const float3 r_d = L;
+
+                    float _v = TraceOcclusionRay_WithLocalStack(r_o, r_d, distance, mesh_instances, mi_indices, meshes, transforms, nodes, node_index, tris, tri_indices, &stack[stack_size]);
+
+                    col += l->col_and_brightness.xyz * _dot1 * _v * atten;
+                }
+            }
+        }
+    }
+
+    return col;
+}
+
 float4 ShadeSurface(const int index, const int iteration, const int bounce, __global const float *halton,
                     __global const hit_data_t *prim_inters, __global const ray_packet_t *prim_rays,
                     __global const mesh_instance_t *mesh_instances, __global const uint *mi_indices,
@@ -21,7 +91,8 @@ float4 ShadeSurface(const int index, const int iteration, const int bounce, __gl
                     __global const bvh_node_t *nodes, uint node_index, 
                     __global const tri_accel_t *tris, __global const uint *tri_indices, 
                     const environment_t env, __global const material_t *materials, __global const texture_t *textures, __read_only image2d_array_t texture_atlas,
-                    __global ray_packet_t *out_secondary_rays, __global int *out_secondary_rays_count) {
+                    __global const light_t *lights, __global const uint *li_indices, uint light_node_index,
+                    __local uint *stack, __global ray_packet_t *out_secondary_rays, __global int *out_secondary_rays_count) {
 
     __global const ray_packet_t *orig_ray = &prim_rays[index];
     __global const hit_data_t *inter = &prim_inters[index];
@@ -180,30 +251,12 @@ R"(
     float3 col;
 
     // Generate secondary ray
-    if (mat->type == DiffuseMaterial) { 
-        float k = dot(N, env.sun_dir);
+    if (mat->type == DiffuseMaterial) {
+        col = ComputeDirectLighting(P, N, B, plane_N, halton, hi, rand_offset, rand_offset2,
+                                    mesh_instances, mi_indices, meshes, transforms, vtx_indices, vertices,
+                                    nodes, node_index, tris, tri_indices, lights, li_indices, light_node_index, stack);
 
-        float v = 1;
-        if (k > FLT_EPS) {
-            float _unused;
-            const float z = 1.0f - fract(halton[hi + 0] + rand_offset, &_unused) * env.sun_softness;
-            const float temp = native_sqrt(1.0f - z * z);
-
-            const float phi = 2 * PI * fract(halton[hi + 1] + rand_offset2, &_unused);
-            float cos_phi;
-            const float sin_phi = sincos(phi, &cos_phi);
-
-            float3 TT = cross(env.sun_dir, B);
-            float3 BB = cross(env.sun_dir, TT);
-            const float3 V = temp * sin_phi * BB + z * env.sun_dir + temp * cos_phi * TT;
-
-            const float3 r_o = P + HIT_BIAS * plane_N;
-            const float3 r_d = V;
-            v = TraceOcclusionRay(r_o, r_d, mesh_instances, mi_indices, meshes, transforms, nodes, node_index, tris, tri_indices);
-        }
-
-        k = clamp(k, 0.0f, 1.0f);
-        col = albedo.xyz * env.sun_col * v * k;
+        col *= albedo.xyz;
 
         float _unused;
         const float z = fract(halton[hi + 0] + rand_offset, &_unused);
@@ -352,20 +405,20 @@ void ShadePrimary(const int iteration, __global const float *halton, int w,
                   __global const uint *vtx_indices, __global const vertex_t *vertices,
                   __global const bvh_node_t *nodes, uint node_index, 
                   __global const tri_accel_t *tris, __global const uint *tri_indices, 
-                  const environment_t env, __global const material_t *materials, __global const texture_t *textures, __read_only image2d_array_t texture_atlas, __write_only image2d_t frame_buf,
+                  const environment_t env, __global const material_t *materials, __global const texture_t *textures, __read_only image2d_array_t texture_atlas,
+                  __global const light_t *lights, __global const uint *li_indices, uint light_node_index, __write_only image2d_t frame_buf,
                   __global ray_packet_t *out_secondary_rays, __global int *out_secondary_rays_count) {
     const int i = get_global_id(0);
     const int j = get_global_id(1);
+    
+    __local uint shared_stack[MAX_STACK_SIZE * TRACE_GROUP_SIZE_X * TRACE_GROUP_SIZE_Y];
+    __local uint *stack = &shared_stack[MAX_STACK_SIZE * (get_local_id(1) * TRACE_GROUP_SIZE_X + get_local_id(0))];
 
-    float4 res = ShadeSurface((j * w + i), iteration, 2, halton,
-                  prim_inters, prim_rays,
-                  mesh_instances, mi_indices,
-                  meshes, transforms,
-                  vtx_indices, vertices,
-                  nodes, node_index, 
-                  tris, tri_indices, 
-                  env, materials, textures, texture_atlas,
-                  out_secondary_rays, out_secondary_rays_count);
+    float4 res = ShadeSurface((j * w + i), iteration, 2, halton, prim_inters, prim_rays,
+                  mesh_instances, mi_indices, meshes, transforms, vtx_indices, vertices,
+                  nodes, node_index, tris, tri_indices, env, materials, textures, texture_atlas,
+                  lights, li_indices, light_node_index,
+                  stack, out_secondary_rays, out_secondary_rays_count);
 
     write_imagef(frame_buf, (int2)(i, j), res);
 }
@@ -375,6 +428,7 @@ void ShadeSecondary(const int iteration, const int bounce, __global const float 
                     __global const mesh_instance_t *mesh_instances, __global const uint *mi_indices, __global const mesh_t *meshes, __global const transform_t *transforms,
                     __global const uint *vtx_indices, __global const vertex_t *vertices, __global const bvh_node_t *nodes, uint node_index, 
                     __global const tri_accel_t *tris, __global const uint *tri_indices, const environment_t env, __global const material_t *materials, __global const texture_t *textures, __read_only image2d_array_t texture_atlas,
+                    __global const light_t *lights, __global const uint *li_indices, uint light_node_index,
                     __write_only image2d_t frame_buf, __read_only image2d_t frame_buf2, __global ray_packet_t *out_secondary_rays, __global int *out_secondary_rays_count) {
     const int index = get_global_id(0);
 
@@ -384,15 +438,14 @@ void ShadeSecondary(const int iteration, const int bounce, __global const float 
 
     float4 col = read_imagef(frame_buf2, FBUF_SAMPLER, px);
 
-    float4 res = ShadeSurface(index, iteration, bounce, halton,
-                  prim_inters, prim_rays,
-                  mesh_instances, mi_indices,
-                  meshes, transforms,
-                  vtx_indices, vertices,
-                  nodes, node_index, 
-                  tris, tri_indices, 
-                  env, materials, textures, texture_atlas,
-                  out_secondary_rays, out_secondary_rays_count);
+    __local uint shared_stack[MAX_STACK_SIZE * TRACE_GROUP_SIZE_X * TRACE_GROUP_SIZE_Y];
+    __local uint *stack = &shared_stack[MAX_STACK_SIZE * (get_local_id(1) * TRACE_GROUP_SIZE_X + get_local_id(0))];
+
+    float4 res = ShadeSurface(index, iteration, bounce, halton, prim_inters, prim_rays,
+                  mesh_instances, mi_indices, meshes, transforms, vtx_indices, vertices,
+                  nodes, node_index, tris, tri_indices, env, materials, textures, texture_atlas,
+                  lights, li_indices, light_node_index,
+                  stack, out_secondary_rays, out_secondary_rays_count);
 
     write_imagef(frame_buf, px, col + res);
 }

@@ -77,6 +77,12 @@ typedef struct _material_t {
     };
 } material_t;
 
+typedef struct _light_t {
+    float4 pos_and_radius;
+    float4 col_and_brightness;
+    float4 dir_and_spot;
+} light_t;
+
 typedef struct _environment_t {
     float3 sun_dir;
     float3 sun_col;
@@ -91,6 +97,6 @@ typedef struct _ray_chunk_t {
 
 __kernel void TypesCheck(ray_packet_t r, camera_t c, tri_accel_t t, hit_data_t i,
                          bvh_node_t b, vertex_t v, mesh_t m, mesh_instance_t mi, transform_t tr,
-                         texture_t tex, material_t mat, environment_t env, ray_chunk_t ch) {}
+                         texture_t tex, material_t mat, light_t l, environment_t env, ray_chunk_t ch) {}
 
 )"

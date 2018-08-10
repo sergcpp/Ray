@@ -57,10 +57,7 @@ struct hit_data_t {
 };
 
 struct environment_t {
-    float sun_dir[3];
-    float sun_col[3];
     float sky_col[3];
-    float sun_softness;
 };
 
 class TextureAtlas;
@@ -112,11 +109,22 @@ simd_fvec4 SampleBilinear(const TextureAtlas &atlas, const simd_fvec2 &uvs, int 
 simd_fvec4 SampleTrilinear(const TextureAtlas &atlas, const texture_t &t, const simd_fvec2 &uvs, float lod);
 simd_fvec4 SampleAnisotropic(const TextureAtlas &atlas, const texture_t &t, const simd_fvec2 &uvs, const simd_fvec2 &duv_dx, const simd_fvec2 &duv_dy);
 
+// Compute punctual lights contribution
+simd_fvec3 ComputeDirectLighting(const simd_fvec3 &P, const simd_fvec3 &N, const simd_fvec3 &B, const simd_fvec3 &plane_N,
+                                 const float *halton, const int hi, float rand_offset, float rand_offset2,
+                                 const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
+                                 const mesh_t *meshes, const transform_t *transforms,
+                                 const uint32_t *vtx_indices, const vertex_t *vertices,
+                                 const bvh_node_t *nodes, uint32_t node_index, const tri_accel_t *tris,
+                                 const uint32_t *tri_indices, const light_t *lights,
+                                 const uint32_t *li_indices, uint32_t light_node_index);
+
 // Shade
 ray::pixel_color_t ShadeSurface(const int index, const int iteration, const int bounce, const float *halton, const hit_data_t &inter, const ray_packet_t &ray, 
                                 const environment_t &env, const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
                                 const mesh_t *meshes, const transform_t *transforms, const uint32_t *vtx_indices, const vertex_t *vertices,
                                 const bvh_node_t *nodes, uint32_t node_index, const tri_accel_t *tris, const uint32_t *tri_indices,
-                                const material_t *materials, const texture_t *textures, const TextureAtlas &tex_atlas, ray_packet_t *out_secondary_rays, int *out_secondary_rays_count);
+                                const material_t *materials, const texture_t *textures, const TextureAtlas &tex_atlas,
+                                const light_t *lights, const uint32_t *li_indices, uint32_t light_node_index, ray_packet_t *out_secondary_rays, int *out_secondary_rays_count);
 }
 }

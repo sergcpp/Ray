@@ -45,7 +45,8 @@ extern template void ShadeSurface<RayPacketSize>(const simd_ivec<RayPacketSize> 
                                                  const environment_t &env, const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
                                                  const mesh_t *meshes, const transform_t *transforms, const uint32_t *vtx_indices, const vertex_t *vertices,
                                                  const bvh_node_t *nodes, uint32_t node_index, const tri_accel_t *tris, const uint32_t *tri_indices,
-                                                 const material_t *materials, const texture_t *textures, const ray::ref::TextureAtlas &tex_atlas, simd_fvec<RayPacketSize> out_rgba[4], simd_ivec<RayPacketSize> *out_secondary_masks, ray_packet_t<RayPacketSize> *out_secondary_rays, int *out_secondary_rays_count);
+                                                 const material_t *materials, const texture_t *textures, const ray::ref::TextureAtlas &tex_atlas,
+                                                 const light_t *lights, const uint32_t *li_indices, uint32_t light_node_index, simd_fvec<RayPacketSize> out_rgba[4], simd_ivec<RayPacketSize> *out_secondary_masks, ray_packet_t<RayPacketSize> *out_secondary_rays, int *out_secondary_rays_count);
 
 extern template class RendererSIMD<RayPacketDimX, RayPacketDimY>;
 

@@ -119,7 +119,8 @@ void ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
     const auto num_nodes = (uint32_t)s->nodes_.size();
     const auto *nodes = num_nodes ? &s->nodes_[0] : nullptr;
 
-    const auto macro_tree_root = (uint32_t)s->macro_nodes_start_;
+    const auto macro_tree_root = s->macro_nodes_start_;
+    const auto light_tree_root = s->light_nodes_start_;
 
     const auto num_meshes = (uint32_t)s->meshes_.size();
     const auto *meshes = num_meshes ? &s->meshes_[0] : nullptr;
@@ -145,6 +146,12 @@ void ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
     const auto num_materials = (uint32_t)s->materials_.size();
     const auto *materials = num_materials ? &s->materials_[0] : nullptr;
 
+    const auto num_lights = (uint32_t)s->lights_.size();
+    const auto *lights = num_lights ? &s->lights_[0] : nullptr;
+
+    const auto num_li_indices = (uint32_t)s->li_indices_.size();
+    const auto *li_indices = num_li_indices ? &s->li_indices_[0] : nullptr;
+
     const auto &tex_atlas = s->texture_atlas_;
     //const auto &env = s->env_;
 
@@ -152,10 +159,7 @@ void ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
     float cell_size[3] = { (root_max[0] - root_min[0]) / 255, (root_max[1] - root_min[1]) / 255, (root_max[2] - root_min[2]) / 255 };
 
     NS::environment_t env;
-    memcpy(&env.sun_dir[0], &s->env_.sun_dir[0], 3 * sizeof(float));
-    memcpy(&env.sun_col[0], &s->env_.sun_col[0], 3 * sizeof(float));
     memcpy(&env.sky_col[0], &s->env_.sky_col[0], 3 * sizeof(float));
-    env.sun_softness = s->env_.sun_softness;
 
     const auto w = final_buf_.w(), h = final_buf_.h();
 
@@ -217,7 +221,8 @@ void ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
         simd_fvec<S> out_rgba[4] = { 0.0f };
         NS::ShadeSurface(index, region.iteration, 2, &region.halton_seq[0], inter, r, env, mesh_instances,
                          mi_indices, meshes, transforms, vtx_indices, vertices, nodes, macro_tree_root,
-                         tris, tri_indices, materials, textures, tex_atlas, out_rgba, &p.secondary_masks[0], &p.secondary_rays[0], &secondary_rays_count);
+                         tris, tri_indices, materials, textures, tex_atlas, lights, li_indices, light_tree_root,
+                         out_rgba, &p.secondary_masks[0], &p.secondary_rays[0], &secondary_rays_count);
 
         for (int j = 0; j < S; j++) {
             temp_buf_.SetPixel(x[j], y[j], { out_rgba[0][j], out_rgba[1][j], out_rgba[2][j], out_rgba[3][j] });
@@ -307,7 +312,8 @@ void ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
             simd_fvec<S> out_rgba[4] = { 0.0f };
             NS::ShadeSurface(index, region.iteration, bounce + 3, &region.halton_seq[0], inter, r, env, mesh_instances,
                              mi_indices, meshes, transforms, vtx_indices, vertices, nodes, macro_tree_root,
-                             tris, tri_indices, materials, textures, tex_atlas, out_rgba, &p.secondary_masks[0], &p.secondary_rays[0], &secondary_rays_count);
+                             tris, tri_indices, materials, textures, tex_atlas, lights, li_indices, light_tree_root, 
+                             out_rgba, &p.secondary_masks[0], &p.secondary_rays[0], &secondary_rays_count);
 
             for (int j = 0; j < S; j++) {
                 if (!p.primary_masks[i][j]) continue;

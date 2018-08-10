@@ -55,14 +55,19 @@ protected:
     std::vector<texture_t> textures_;
     TextureAtlas texture_atlas_;
 
+    std::vector<light_t> lights_;
+    std::vector<uint32_t> li_indices_;
+
     environment_t env_;
 
     uint32_t macro_nodes_start_ = 0, macro_nodes_count_ = 0;
+    uint32_t light_nodes_start_ = 0, light_nodes_count_ = 0;
 
     uint32_t default_normals_texture_;
 
     void RemoveNodes(uint32_t node_index, uint32_t node_count);
     void RebuildMacroBVH();
+    void RebuildLightBVH();
 public:
     Scene();
 
@@ -77,6 +82,9 @@ public:
 
     uint32_t AddMesh(const mesh_desc_t &m) override;
     void RemoveMesh(uint32_t) override;
+
+    uint32_t AddLight(const light_desc_t &l) override;
+    void RemoveLight(uint32_t i) override;
 
     uint32_t AddMeshInstance(uint32_t m_index, const float *xform) override;
     void SetMeshInstanceTransform(uint32_t mi_index, const float *xform) override;

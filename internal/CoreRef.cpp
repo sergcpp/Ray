@@ -76,8 +76,18 @@ force_inline bool bbox_test(const float o[3], const float inv_d[3], const float 
     return tmin <= tmax && tmin <= t && tmax > 0;
 }
 
+force_inline bool bbox_test(const float p[3], const float bbox_min[3], const float bbox_max[3]) {
+    return p[0] > bbox_min[0] && p[0] < bbox_max[0] &&
+           p[1] > bbox_min[1] && p[1] < bbox_max[1] &&
+           p[2] > bbox_min[2] && p[2] < bbox_max[2];
+}
+
 force_inline bool bbox_test(const float o[3], const float inv_d[3], const float t, const bvh_node_t &node) {
     return bbox_test(o, inv_d, t, node.bbox[0], node.bbox[1]);
+}
+
+force_inline bool bbox_test(const float p[3], const bvh_node_t &node) {
+    return bbox_test(p, node.bbox[0], node.bbox[1]);
 }
 
 enum eTraversalSource { FromParent, FromChild, FromSibling };
@@ -659,8 +669,6 @@ bool ray::ref::Traverse_MicroTree_Stackless_GPU(const ray_packet_t &r, const flo
 bool ray::ref::Traverse_MacroTree_WithStack(const ray_packet_t &r, const bvh_node_t *nodes, uint32_t root_index,
                                             const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
                                             const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t &inter) {
-    const int MAX_STACK_SIZE = 32;
-
     bool res = false;
 
     float inv_d[3];
@@ -890,11 +898,92 @@ ray::ref::simd_fvec4 ray::ref::SampleAnisotropic(const TextureAtlas &atlas, cons
     return res / float(num);
 }
 
+ray::ref::simd_fvec3 ray::ref::ComputeDirectLighting(const simd_fvec3 &P, const simd_fvec3 &N, const simd_fvec3 &B, const simd_fvec3 &plane_N,
+                                                     const float *halton, const int hi, float rand_offset, float rand_offset2,
+                                                     const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
+                                                     const mesh_t *meshes, const transform_t *transforms,
+                                                     const uint32_t *vtx_indices, const vertex_t *vertices,
+                                                     const bvh_node_t *nodes, uint32_t node_index, const tri_accel_t *tris,
+                                                     const uint32_t *tri_indices, const light_t *lights,
+                                                     const uint32_t *li_indices, uint32_t light_node_index) {
+    simd_fvec3 col = { 0.0f };
+
+    uint32_t stack[MAX_STACK_SIZE];
+    uint32_t stack_size = 0;
+
+    stack[stack_size++] = light_node_index;
+
+    while (stack_size) {
+        uint32_t cur = stack[--stack_size];
+
+        if (!bbox_test(value_ptr(P), nodes[cur])) continue;
+
+        if (!is_leaf_node(nodes[cur])) {
+            stack[stack_size++] = nodes[cur].left_child;
+            stack[stack_size++] = nodes[cur].right_child;
+        } else {
+            for (uint32_t i = nodes[cur].prim_index; i < nodes[cur].prim_index + nodes[cur].prim_count; i++) {
+                const light_t &l = lights[li_indices[i]];
+
+                simd_fvec3 L = P - simd_fvec3(l.pos);
+                float distance = length(L);
+                float d = std::max(distance - l.radius, 0.0f);
+                L /= distance;
+
+                float _unused;
+                const float z = std::modf(halton[hi + 0] + rand_offset, &_unused);
+
+                const float dir = std::sqrt(z);
+                const float phi = 2 * PI * std::modf(halton[hi + 1] + rand_offset2, &_unused);
+
+                const float cos_phi = std::cos(phi);
+                const float sin_phi = std::sin(phi);
+
+                auto TT = cross(L, B);
+                auto BB = cross(L, TT);
+                const auto V = dir * sin_phi * BB + std::sqrt(1.0f - dir) * L + dir * cos_phi * TT;
+
+                L = normalize(simd_fvec3(l.pos) + V * l.radius - P);
+
+                float denom = d / l.radius + 1.0f;
+                float atten = 1.0f / (denom * denom);
+
+                atten = (atten - LIGHT_ATTEN_CUTOFF / l.brightness) / (1.0f - LIGHT_ATTEN_CUTOFF);
+                atten = std::max(atten, 0.0f);
+
+                float _dot1 = std::max(dot(L, N), 0.0f);
+                float _dot2 = dot(L, simd_fvec3{ l.dir });
+
+                if (_dot1 > FLT_EPS && _dot2 > l.spot && (l.brightness * atten) > FLT_EPS) {
+                    ray_packet_t r;
+
+                    memcpy(&r.o[0], value_ptr(P + HIT_BIAS * plane_N), 3 * sizeof(float));
+                    memcpy(&r.d[0], value_ptr(L), 3 * sizeof(float));
+
+                    hit_data_t sh_inter;
+                    sh_inter.t = distance;
+
+                    float _v = 1.0f;
+                    Traverse_MacroTree_WithStack(r, nodes, node_index, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, sh_inter);
+                    if (sh_inter.mask_values[0]) {
+                        _v = 0;
+                    }
+
+                    col += simd_fvec3(l.col) * _dot1 * _v * atten;
+                }
+            }
+        }
+    }
+
+    return col;
+}
+
 ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, const int bounce, const float *halton, const hit_data_t &inter, const ray_packet_t &ray,
                                           const environment_t &env, const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
                                           const mesh_t *meshes, const transform_t *transforms, const uint32_t *vtx_indices, const vertex_t *vertices,
                                           const bvh_node_t *nodes, uint32_t node_index, const tri_accel_t *tris, const uint32_t *tri_indices,
-                                          const material_t *materials, const texture_t *textures, const TextureAtlas &tex_atlas, ray_packet_t *out_secondary_rays, int *out_secondary_rays_count) {
+                                          const material_t *materials, const texture_t *textures, const TextureAtlas &tex_atlas,
+                                          const light_t *lights, const uint32_t *li_indices, uint32_t light_node_index, ray_packet_t *out_secondary_rays, int *out_secondary_rays_count) {
     if (!inter.mask_values[0]) {
         return ray::pixel_color_t{ ray.c[0] * env.sky_col[0], ray.c[1] * env.sky_col[1], ray.c[2] * env.sky_col[2], 1.0f };
     }
@@ -1061,37 +1150,11 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
 
     // generate secondary ray
     if (mat->type == DiffuseMaterial) {
-        float k = dot(N, simd_fvec3(env.sun_dir));
+        col = ComputeDirectLighting(P, N, B, plane_N, halton, hi, rand_offset, rand_offset2, mesh_instances,
+                                    mi_indices, meshes, transforms, vtx_indices, vertices, nodes, node_index,
+                                    tris, tri_indices, lights, li_indices, light_node_index);
 
-        float v = 1;
-        if (k > FLT_EPS) {
-            float _unused;
-            const float z = 1.0f - std::modf(halton[hi + 0] + rand_offset, &_unused) * env.sun_softness;
-            const float temp = std::sqrt(1.0f - z * z);
-
-            const float phi = 2 * PI * std::modf(halton[hi + 1] + rand_offset2, &_unused);
-            const float cos_phi = std::cos(phi);
-            const float sin_phi = std::sin(phi);
-
-            auto TT = cross(simd_fvec3(env.sun_dir), B);
-            auto BB = cross(simd_fvec3(env.sun_dir), TT);
-            auto V = temp * sin_phi * BB + z * simd_fvec3(env.sun_dir) + temp * cos_phi * TT;
-
-            ray_packet_t r;
-
-            memcpy(&r.o[0], value_ptr(P + HIT_BIAS * plane_N), 3 * sizeof(float));
-            memcpy(&r.d[0], value_ptr(V), 3 * sizeof(float));
-
-            hit_data_t sh_inter;
-            Traverse_MacroTree_WithStack(r, nodes, node_index, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, sh_inter);
-            if (sh_inter.mask_values[0]) {
-                v = 0;
-            }
-        }
-
-        k = clamp(k, 0.0f, 1.0f);
-
-        col = simd_fvec3(&albedo[0]) * simd_fvec3(env.sun_col) * v * k;
+        col *= simd_fvec3(&albedo[0]);
 
         float _unused;
         const float z = std::modf(halton[hi + 0] + rand_offset, &_unused);

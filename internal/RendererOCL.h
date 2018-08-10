@@ -24,6 +24,7 @@ protected:
     cl_ulong mem_size_;
     size_t max_work_group_size_;
     size_t scan_portion_, seg_scan_portion_;
+    size_t trace_group_size_x_, trace_group_size_y_;
     size_t max_image_buffer_size_;
 
     cl::Context context_;
@@ -64,20 +65,19 @@ protected:
                              const cl::Buffer &intersections, const cl::Buffer &rays,
                              const cl::Buffer &mesh_instances, const cl::Buffer &mi_indices, const cl::Buffer &meshes,
                              const cl::Buffer &transforms, const cl::Buffer &vtx_indices, const cl::Buffer &vertices,
-                             const cl::Buffer &nodes, cl_uint node_index,
-                             const cl::Buffer &tris, const cl::Buffer &tri_indices,
-                             const environment_t &env, const cl::Buffer &materials,
-                             const cl::Buffer &textures, const cl::Image2DArray &texture_atlas, const cl::Image2D &frame_buf,
-                             const cl::Buffer &secondary_rays, const cl::Buffer &secondary_rays_count);
+                             const cl::Buffer &nodes, cl_uint node_index, const cl::Buffer &tris, const cl::Buffer &tri_indices,
+                             const environment_t &env, const cl::Buffer &materials, const cl::Buffer &textures, 
+                             const cl::Image2DArray &texture_atlas, const cl::Buffer &lights, const cl::Buffer &li_incies, cl_uint light_node_index,
+                             const cl::Image2D &frame_buf, const cl::Buffer &secondary_rays, const cl::Buffer &secondary_rays_count);
     bool kernel_ShadeSecondary(const cl_int iteration, const cl_int bounce, const cl::Buffer &halton,
                                const cl::Buffer &intersections, const cl::Buffer &rays,
                                int rays_count, int w, int h,
                                const cl::Buffer &mesh_instances, const cl::Buffer &mi_indices, const cl::Buffer &meshes,
                                const cl::Buffer &transforms, const cl::Buffer &vtx_indices, const cl::Buffer &vertices,
-                               const cl::Buffer &nodes, cl_uint node_index,
-                               const cl::Buffer &tris, const cl::Buffer &tri_indices,
-                               const environment_t &env, const cl::Buffer &materials,
-                               const cl::Buffer &textures, const cl::Image2DArray &texture_atlas, const cl::Image2D &frame_buf, const cl::Image2D &frame_buf2,
+                               const cl::Buffer &nodes, cl_uint node_index, const cl::Buffer &tris, const cl::Buffer &tri_indices,
+                               const environment_t &env, const cl::Buffer &materials, const cl::Buffer &textures, const cl::Image2DArray &texture_atlas,
+                               const cl::Buffer &lights, const cl::Buffer &li_incies, cl_uint light_node_index,
+                               const cl::Image2D &frame_buf, const cl::Image2D &frame_buf2,
                                const cl::Buffer &secondary_rays, const cl::Buffer &secondary_rays_count);
     bool kernel_TracePrimaryRays(const cl::Buffer &rays, const ray::rect_t &rect, cl_int w,
                                  const cl::Buffer &mesh_instances, const cl::Buffer &mi_indices, const cl::Buffer &meshes, const cl::Buffer &transforms,

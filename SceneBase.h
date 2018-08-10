@@ -77,12 +77,23 @@ struct tex_desc_t {
     bool generate_mipmaps;
 };
 
+enum eLightType {
+    PointLight,
+    SpotLight,
+    DirectionalLight,
+};
+
+// Light description
+struct light_desc_t {
+    eLightType type;
+    float position[3], radius;
+    float color[3];
+    float direction[3], angle;
+};
+
 /// Environment description
 struct environment_desc_t {
-    float sun_dir[3];               ///< Sun direction unit vector
-    float sun_col[3];               ///< Sun color
     float sky_col[3];               ///< Sky color
-    float sun_softness;             ///< defines shadow softness (0 - had shadow)
 };
 
 /** Base Scene class,
@@ -140,6 +151,17 @@ public:
         @param i mesh index
     */
     virtual void RemoveMesh(uint32_t i) = 0;
+
+    /** @brief Adds light to scene
+        @param l light description
+        @return New light index
+    */
+    virtual uint32_t AddLight(const light_desc_t &l) = 0;
+
+    /** @brief Removes light with specific index from scene
+        @param i light index
+    */
+    virtual void RemoveLight(uint32_t i) = 0;
 
     /** @brief Adds mesh instance to a scene
         @param m_index mesh index

@@ -32,6 +32,7 @@ void ray::ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
     const auto *nodes = num_nodes ? &s->nodes_[0] : nullptr;
 
     const auto macro_tree_root = s->macro_nodes_start_;
+    const auto light_tree_root = s->light_nodes_start_;
 
     const auto num_meshes = (uint32_t)s->meshes_.size();
     const auto *meshes = num_meshes ? &s->meshes_[0] : nullptr;
@@ -56,6 +57,12 @@ void ray::ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
 
     const auto num_materials = (uint32_t)s->materials_.size();
     const auto *materials = num_materials ? &s->materials_[0] : nullptr;
+
+    const auto num_lights = (uint32_t)s->lights_.size();
+    const auto *lights = num_lights ? &s->lights_[0] : nullptr;
+
+    const auto num_li_indices = (uint32_t)s->li_indices_.size();
+    const auto *li_indices = num_li_indices ? &s->li_indices_[0] : nullptr;
 
     const auto &tex_atlas = s->texture_atlas_;
     const auto &env = s->env_;
@@ -132,7 +139,7 @@ void ray::ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
 
         pixel_color_t col = ShadeSurface((y * w + x), region.iteration, 2, &region.halton_seq[0], inter, r, env, mesh_instances, 
                                          mi_indices, meshes, transforms, vtx_indices, vertices, nodes, macro_tree_root,
-                                         tris, tri_indices, materials, textures, tex_atlas, &p.secondary_rays[0], &secondary_rays_count);
+                                         tris, tri_indices, materials, textures, tex_atlas, lights, li_indices, light_tree_root, &p.secondary_rays[0], &secondary_rays_count);
 #endif
         temp_buf_.SetPixel(x, y, col);
     }
@@ -200,7 +207,7 @@ void ray::ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
 
             pixel_color_t col = ShadeSurface((y * w + x), region.iteration, bounce + 3, &region.halton_seq[0], inter, r, env, mesh_instances,
                                              mi_indices, meshes, transforms, vtx_indices, vertices, nodes, macro_tree_root,
-                                             tris, tri_indices, materials, textures, tex_atlas, &p.secondary_rays[0], &secondary_rays_count);
+                                             tris, tri_indices, materials, textures, tex_atlas, lights, li_indices, light_tree_root, &p.secondary_rays[0], &secondary_rays_count);
 
             temp_buf_.AddPixel(x, y, col);
         }

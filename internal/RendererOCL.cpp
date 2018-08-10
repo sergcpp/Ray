@@ -90,6 +90,10 @@ ray::ocl::Renderer::Renderer(int w, int h, int platform_index, int device_index)
     scan_portion_ = max_work_group_size_;
     seg_scan_portion_ = std::min(max_work_group_size_, (size_t)64);
 
+    // local group size 8x8 seems to be optimal for traversing BVH in most scenes
+    trace_group_size_x_ = 8;
+    trace_group_size_y_ = std::min((size_t)8, max_work_group_size_/8);
+
     if (device_.getInfo(CL_DEVICE_IMAGE_MAX_BUFFER_SIZE, &max_image_buffer_size_) != CL_SUCCESS) {
         max_image_buffer_size_ = 0;
     }
@@ -133,7 +137,11 @@ ray::ocl::Renderer::Renderer(int w, int h, int platform_index, int device_index)
         cl_src_defines += "#define MIX_MAT2 " + std::to_string(MIX_MAT2) + "\n";
         cl_src_defines += "#define SCAN_PORTION " + std::to_string(scan_portion_) + "\n";
         cl_src_defines += "#define SEG_SCAN_PORTION " + std::to_string(seg_scan_portion_) + "\n";
+        cl_src_defines += "#define TRACE_GROUP_SIZE_X " + std::to_string(trace_group_size_x_) + "\n";
+        cl_src_defines += "#define TRACE_GROUP_SIZE_Y " + std::to_string(trace_group_size_y_) + "\n";
         cl_src_defines += "#define CAM_USE_TENT_FILTER " + std::to_string(CAM_USE_TENT_FILTER) + "\n";
+        cl_src_defines += "#define MAX_STACK_SIZE " + std::to_string(MAX_STACK_SIZE) + "\n";
+        cl_src_defines += "#define LIGHT_ATTEN_CUTOFF " + std::to_string(LIGHT_ATTEN_CUTOFF) + "\n";
 
         cl_int error = CL_SUCCESS;
         cl::Program::Sources srcs = {
@@ -241,6 +249,7 @@ ray::ocl::Renderer::Renderer(int w, int h, int platform_index, int device_index)
                 types_check.setArg(argc++, sizeof(transform_t), buf) != CL_SUCCESS ||
                 types_check.setArg(argc++, sizeof(texture_t), buf) != CL_SUCCESS ||
                 types_check.setArg(argc++, sizeof(material_t), buf) != CL_SUCCESS ||
+                types_check.setArg(argc++, sizeof(light_t), buf) != CL_SUCCESS ||
                 types_check.setArg(argc++, sizeof(environment_t), buf) != CL_SUCCESS ||
                 types_check.setArg(argc++, sizeof(ray_chunk_t), buf) != CL_SUCCESS) {
 #if defined(_MSC_VER)
@@ -414,10 +423,10 @@ void ray::ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
                                 prim_inters_buf_, prim_rays_buf_,
                                 s->mesh_instances_.buf(), s->mi_indices_.buf(), s->meshes_.buf(),
                                 s->transforms_.buf(), s->vtx_indices_.buf(), s->vertices_.buf(),
-                                s->nodes_.buf(), (cl_uint)s->macro_nodes_start_,
-                                s->tris_.buf(), s->tri_indices_.buf(),
-                                s->env_, s->materials_.buf(), s->textures_.buf(), s->texture_atlas_.atlas(), temp_buf_,
-                                secondary_rays_buf_, secondary_rays_count_buf_)) return;
+                                s->nodes_.buf(), (cl_uint)s->macro_nodes_start_, s->tris_.buf(), s->tri_indices_.buf(),
+                                s->env_, s->materials_.buf(), s->textures_.buf(), s->texture_atlas_.atlas(),
+                                s->lights_.buf(), s->li_indices_.buf(), (cl_uint)s->light_nodes_start_,
+                                temp_buf_, secondary_rays_buf_, secondary_rays_count_buf_)) return;
     
     if (queue_.enqueueReadBuffer(secondary_rays_count_buf_, CL_TRUE, 0, sizeof(cl_int),
                                     &secondary_rays_count) != CL_SUCCESS) return;
@@ -469,8 +478,9 @@ void ray::ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
                                     s->transforms_.buf(), s->vtx_indices_.buf(), s->vertices_.buf(),
                                     s->nodes_.buf(), (cl_uint)s->macro_nodes_start_,
                                     s->tris_.buf(), s->tri_indices_.buf(),
-                                    s->env_, s->materials_.buf(), s->textures_.buf(), s->texture_atlas_.atlas(), final_buf_, temp_buf_,
-                                    prim_rays_buf_, secondary_rays_count_buf_)) return;
+                                    s->env_, s->materials_.buf(), s->textures_.buf(), s->texture_atlas_.atlas(),
+                                    s->lights_.buf(), s->li_indices_.buf(), (cl_uint)s->light_nodes_start_,
+                                    final_buf_, temp_buf_, prim_rays_buf_, secondary_rays_count_buf_)) return;
 
         if (queue_.enqueueReadBuffer(secondary_rays_count_buf_, CL_TRUE, 0, sizeof(cl_int),
                                      &secondary_rays_count) != CL_SUCCESS) return;
@@ -535,10 +545,9 @@ bool ray::ocl::Renderer::kernel_ShadePrimary(const cl_int iteration, const cl::B
         const cl::Buffer &intersections, const cl::Buffer &rays,
         const cl::Buffer &mesh_instances, const cl::Buffer &mi_indices, const cl::Buffer &meshes,
         const cl::Buffer &transforms, const cl::Buffer &vtx_indices, const cl::Buffer &vertices,
-        const cl::Buffer &nodes, cl_uint node_index,
-        const cl::Buffer &tris, const cl::Buffer &tri_indices,
-        const environment_t &env, const cl::Buffer &materials,
-        const cl::Buffer &textures, const cl::Image2DArray &texture_atlas, const cl::Image2D &frame_buf,
+        const cl::Buffer &nodes, cl_uint node_index, const cl::Buffer &tris, const cl::Buffer &tri_indices,
+        const environment_t &env, const cl::Buffer &materials, const cl::Buffer &textures, const cl::Image2DArray &texture_atlas,
+        const cl::Buffer &lights, const cl::Buffer &li_indices, cl_uint light_node_index, const cl::Image2D &frame_buf,
         const cl::Buffer &secondary_rays, const cl::Buffer &secondary_rays_count) {
     cl_uint argc = 0;
     if (shade_primary_kernel_.setArg(argc++, iteration) != CL_SUCCESS ||
@@ -560,13 +569,50 @@ bool ray::ocl::Renderer::kernel_ShadePrimary(const cl_int iteration, const cl::B
             shade_primary_kernel_.setArg(argc++, materials) != CL_SUCCESS ||
             shade_primary_kernel_.setArg(argc++, textures) != CL_SUCCESS ||
             shade_primary_kernel_.setArg(argc++, texture_atlas) != CL_SUCCESS ||
+            shade_primary_kernel_.setArg(argc++, lights) != CL_SUCCESS ||
+            shade_primary_kernel_.setArg(argc++, li_indices) != CL_SUCCESS ||
+            shade_primary_kernel_.setArg(argc++, light_node_index) != CL_SUCCESS ||
             shade_primary_kernel_.setArg(argc++, frame_buf) != CL_SUCCESS ||
             shade_primary_kernel_.setArg(argc++, secondary_rays) != CL_SUCCESS ||
             shade_primary_kernel_.setArg(argc++, secondary_rays_count) != CL_SUCCESS) {
         return false;
     }
 
-    return CL_SUCCESS == queue_.enqueueNDRangeKernel(shade_primary_kernel_, { (size_t)rect.x, (size_t)rect.y }, { (size_t)rect.w, (size_t)rect.h });
+    int border_x = rect.w % trace_group_size_x_, border_y = rect.h % trace_group_size_y_;
+
+    cl::NDRange global = { (size_t)(rect.w - border_x), (size_t)(rect.h - border_y) };
+    cl::NDRange local = { trace_group_size_x_, trace_group_size_y_ };
+
+    if (rect.w - border_x > 0 && rect.h - border_y > 0) {
+        if (queue_.enqueueNDRangeKernel(shade_primary_kernel_, { (size_t)rect.x, (size_t)rect.y }, global, local) != CL_SUCCESS) {
+            return false;
+        }
+    }
+
+    if (border_x) {
+        if (queue_.enqueueNDRangeKernel(shade_primary_kernel_, { (size_t)(rect.x + rect.w - border_x), (size_t)rect.y },
+                                                               { (size_t)(border_x), (size_t)(rect.h - border_y) },
+                                                               { (size_t)(border_x), trace_group_size_y_ }) != CL_SUCCESS) {
+            return false;
+        }
+    }
+
+    if (border_y) {
+        if (queue_.enqueueNDRangeKernel(shade_primary_kernel_, { (size_t)rect.x, (size_t)(rect.y + rect.h - border_y) },
+                                                               { (size_t)(rect.w - border_x), (size_t)(border_y) },
+                                                               { trace_group_size_x_, (size_t)(border_y) }) != CL_SUCCESS) {
+            return false;
+        }
+
+        if (border_x) {
+            if (queue_.enqueueNDRangeKernel(shade_primary_kernel_, { (size_t)(rect.x + rect.w - border_x), (size_t)(rect.y + rect.h - border_y) },
+                                                                   { (size_t)(border_x), (size_t)(border_y) }) != CL_SUCCESS) {
+                return false;
+            }
+        }
+    }
+
+    return true;
 }
 
 bool ray::ocl::Renderer::kernel_ShadeSecondary(const cl_int iteration, const cl_int bounce, const cl::Buffer &halton,
@@ -574,10 +620,10 @@ bool ray::ocl::Renderer::kernel_ShadeSecondary(const cl_int iteration, const cl_
         int rays_count, int w, int h,
         const cl::Buffer &mesh_instances, const cl::Buffer &mi_indices, const cl::Buffer &meshes,
         const cl::Buffer &transforms, const cl::Buffer &vtx_indices, const cl::Buffer &vertices,
-        const cl::Buffer &nodes, cl_uint node_index,
-        const cl::Buffer &tris, const cl::Buffer &tri_indices,
-        const environment_t &env, const cl::Buffer &materials,
-        const cl::Buffer &textures, const cl::Image2DArray &texture_atlas, const cl::Image2D &frame_buf, const cl::Image2D &frame_buf2,
+        const cl::Buffer &nodes, cl_uint node_index, const cl::Buffer &tris, const cl::Buffer &tri_indices,
+        const environment_t &env, const cl::Buffer &materials, const cl::Buffer &textures, const cl::Image2DArray &texture_atlas,
+        const cl::Buffer &lights, const cl::Buffer &li_indices, cl_uint light_node_index,
+        const cl::Image2D &frame_buf, const cl::Image2D &frame_buf2,
         const cl::Buffer &secondary_rays, const cl::Buffer &secondary_rays_count) {
     if (rays_count == 0) return true;
 
@@ -601,6 +647,9 @@ bool ray::ocl::Renderer::kernel_ShadeSecondary(const cl_int iteration, const cl_
             shade_secondary_kernel_.setArg(argc++, materials) != CL_SUCCESS ||
             shade_secondary_kernel_.setArg(argc++, textures) != CL_SUCCESS ||
             shade_secondary_kernel_.setArg(argc++, texture_atlas) != CL_SUCCESS ||
+            shade_secondary_kernel_.setArg(argc++, lights) != CL_SUCCESS ||
+            shade_secondary_kernel_.setArg(argc++, li_indices) != CL_SUCCESS ||
+            shade_secondary_kernel_.setArg(argc++, light_node_index) != CL_SUCCESS ||
             shade_secondary_kernel_.setArg(argc++, frame_buf) != CL_SUCCESS ||
             shade_secondary_kernel_.setArg(argc++, frame_buf2) != CL_SUCCESS ||
             shade_secondary_kernel_.setArg(argc++, secondary_rays) != CL_SUCCESS ||
@@ -647,12 +696,10 @@ bool ray::ocl::Renderer::kernel_TracePrimaryRays(const cl::Buffer &rays, const r
         return false;
     }
 
-    // local group size 8x8 seems to be optimal for traversing BVH in most scenes
-
-    int border_x = rect.w % 8, border_y = rect.h % 8;
+    int border_x = rect.w % trace_group_size_x_, border_y = rect.h % trace_group_size_y_;
 
     cl::NDRange global = { (size_t)(rect.w - border_x), (size_t)(rect.h - border_y) };
-    cl::NDRange local = { (size_t)8, std::min((size_t)8, max_work_group_size_ / 8) };
+    cl::NDRange local = { trace_group_size_x_, trace_group_size_y_ };
 
     if (rect.w - border_x > 0 && rect.h - border_y > 0) {
         if (queue_.enqueueNDRangeKernel(trace_primary_rays_kernel_, { (size_t)rect.x, (size_t)rect.y }, global, local) != CL_SUCCESS) {
@@ -661,14 +708,25 @@ bool ray::ocl::Renderer::kernel_TracePrimaryRays(const cl::Buffer &rays, const r
     }
 
     if (border_x) {
-        if (queue_.enqueueNDRangeKernel(trace_primary_rays_kernel_, { (size_t)(rect.x + rect.w - border_x), (size_t)rect.y }, { (size_t)(border_x), (size_t)(rect.h - border_y) }) != CL_SUCCESS) {
+        if (queue_.enqueueNDRangeKernel(trace_primary_rays_kernel_, { (size_t)(rect.x + rect.w - border_x), (size_t)rect.y },
+                                                                    { (size_t)(border_x), (size_t)(rect.h - border_y) },
+                                                                    { (size_t)(border_x), trace_group_size_y_ }) != CL_SUCCESS) {
             return false;
         }
     }
 
     if (border_y) {
-        if (queue_.enqueueNDRangeKernel(trace_primary_rays_kernel_, { (size_t)rect.x, (size_t)(rect.y + rect.h - border_y) }, { (size_t)(rect.w), (size_t)(border_y) }) != CL_SUCCESS) {
+        if (queue_.enqueueNDRangeKernel(trace_primary_rays_kernel_, { (size_t)rect.x, (size_t)(rect.y + rect.h - border_y) },
+                                                                    { (size_t)(rect.w - border_x), (size_t)(border_y) },
+                                                                    { trace_group_size_x_, (size_t)(border_y) }) != CL_SUCCESS) {
             return false;
+        }
+
+        if (border_x) {
+            if (queue_.enqueueNDRangeKernel(trace_primary_rays_kernel_, { (size_t)(rect.x + rect.w - border_x), (size_t)(rect.y + rect.h - border_y) },
+                                                                        { (size_t)(border_x), (size_t)(border_y) }) != CL_SUCCESS) {
+                return false;
+            }
         }
     }
 
@@ -693,12 +751,10 @@ bool ray::ocl::Renderer::kernel_TracePrimaryRaysImg(const cl::Buffer &rays, cons
         return false;
     }
 
-    // local group size 8x8 seems to be optimal for traversing BVH in most scenes
-
-    int border_x = rect.w % 8, border_y = rect.h % 8;
+    int border_x = rect.w % trace_group_size_x_, border_y = rect.h % trace_group_size_y_;
 
     cl::NDRange global = { (size_t)(rect.w - border_x), (size_t)(rect.h - border_y) };
-    cl::NDRange local = { (size_t)8, std::min((size_t)8, max_work_group_size_ / 8) };
+    cl::NDRange local = { trace_group_size_x_, trace_group_size_y_ };
 
     if (rect.w - border_x > 0 && rect.h - border_y > 0) {
         if (queue_.enqueueNDRangeKernel(trace_primary_rays_img_kernel_, { (size_t)rect.x, (size_t)rect.y }, global, local) != CL_SUCCESS) {
@@ -707,14 +763,25 @@ bool ray::ocl::Renderer::kernel_TracePrimaryRaysImg(const cl::Buffer &rays, cons
     }
 
     if (border_x) {
-        if (queue_.enqueueNDRangeKernel(trace_primary_rays_img_kernel_, { (size_t)(rect.x + rect.w - border_x), (size_t)rect.y }, { (size_t)(border_x), (size_t)(rect.h - border_y) }) != CL_SUCCESS) {
+        if (queue_.enqueueNDRangeKernel(trace_primary_rays_img_kernel_, { (size_t)(rect.x + rect.w - border_x), (size_t)rect.y },
+                                                                        { (size_t)(border_x), (size_t)(rect.h - border_y) },
+                                                                        { (size_t)(border_x), trace_group_size_y_ }) != CL_SUCCESS) {
             return false;
         }
     }
 
     if (border_y) {
-        if (queue_.enqueueNDRangeKernel(trace_primary_rays_img_kernel_, { (size_t)rect.x, (size_t)(rect.y + rect.h - border_y) }, { (size_t)(rect.w), (size_t)(border_y) }) != CL_SUCCESS) {
+        if (queue_.enqueueNDRangeKernel(trace_primary_rays_img_kernel_, { (size_t)rect.x, (size_t)(rect.y + rect.h - border_y) },
+                                                                        { (size_t)(rect.w - border_x), (size_t)(border_y) },
+                                                                        { trace_group_size_x_, (size_t)(border_y) } ) != CL_SUCCESS) {
             return false;
+        }
+
+        if (border_x) {
+            if (queue_.enqueueNDRangeKernel(trace_primary_rays_img_kernel_, { (size_t)(rect.x + rect.w - border_x), (size_t)(rect.y + rect.h - border_y) },
+                                                                            { (size_t)(border_x), (size_t)(border_y) }) != CL_SUCCESS) {
+                return false;
+            }
         }
     }
 
@@ -738,7 +805,7 @@ bool ray::ocl::Renderer::kernel_TraceSecondaryRays(const cl::Buffer &rays, cl_in
         return false;
     }
 
-    size_t group_size = std::min((size_t)64, max_work_group_size_);
+    size_t group_size = trace_group_size_x_ * trace_group_size_y_;
 
     int remaining = rays_count % group_size;
 
@@ -777,7 +844,7 @@ bool ray::ocl::Renderer::kernel_TraceSecondaryRaysImg(const cl::Buffer &rays, cl
         return false;
     }
 
-    size_t group_size = std::min((size_t)64, max_work_group_size_);
+    size_t group_size = trace_group_size_x_ * trace_group_size_y_;
 
     int remaining = rays_count % group_size;
 

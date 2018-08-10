@@ -56,10 +56,7 @@ void test_mesh_lights() {
     const float view_dir[] = { -1.0f, 0.0f, 0.0f };
 
     ray::environment_desc_t env_desc;
-    env_desc.sun_dir[0] = env_desc.sun_dir[1] = env_desc.sun_dir[2] = 0.0f;
-    env_desc.sun_col[0] = env_desc.sun_col[1] = env_desc.sun_col[2] = 0.0f;
     env_desc.sky_col[0] = env_desc.sky_col[1] = env_desc.sky_col[2] = 0.0f;
-    env_desc.sun_softness = 0.0f;
 
     ray::tex_desc_t tex_desc1;
     tex_desc1.w = 1;

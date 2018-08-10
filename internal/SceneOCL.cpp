@@ -18,8 +18,10 @@ ray::ocl::Scene::Scene(const cl::Context &context, const cl::CommandQueue &queue
       vtx_indices_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
       materials_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
       textures_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
-    texture_atlas_(context_, queue_, MAX_TEXTURE_SIZE, MAX_TEXTURE_SIZE) {
-    SetEnvironment( { { 0, 0, 0 }, { 0, 0, 0 }, { 0, 0, 0 } });
+    texture_atlas_(context_, queue_, MAX_TEXTURE_SIZE, MAX_TEXTURE_SIZE),
+      lights_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
+      li_indices_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_) {
+    SetEnvironment( { { 0, 0, 0 } });
 
     pixel_color8_t default_normalmap = { 127, 127, 255 };
 
@@ -37,17 +39,11 @@ ray::ocl::Scene::Scene(const cl::Context &context, const cl::CommandQueue &queue
 }
 
 void ray::ocl::Scene::GetEnvironment(environment_desc_t &env) {
-    memcpy(&env.sun_dir[0], &env_.sun_dir, 3 * sizeof(float));
-    memcpy(&env.sun_col[0], &env_.sun_col, 3 * sizeof(float));
     memcpy(&env.sky_col[0], &env_.sky_col, 3 * sizeof(float));
-    env.sun_softness = env_.sun_softness;
 }
 
 void ray::ocl::Scene::SetEnvironment(const environment_desc_t &env) {
-    memcpy(&env_.sun_dir, &env.sun_dir[0], 3 * sizeof(float));
-    memcpy(&env_.sun_col, &env.sun_col[0], 3 * sizeof(float));
     memcpy(&env_.sky_col, &env.sky_col[0], 3 * sizeof(float));
-    env_.sun_softness = env.sun_softness;
 }
 
 uint32_t ray::ocl::Scene::AddTexture(const tex_desc_t &_t) {
@@ -218,6 +214,56 @@ void ray::ocl::Scene::RemoveMesh(uint32_t) {
     // TODO!!!
 }
 
+uint32_t ray::ocl::Scene::AddLight(const light_desc_t &_l) {
+    light_t l;
+    memcpy(&l.pos[0], &_l.position[0], 3 * sizeof(float));
+    l.radius = _l.radius;
+    memcpy(&l.col[0], &_l.color[0], 3 * sizeof(float));
+    if (_l.type == SpotLight) {
+        l.dir[0] = -_l.direction[0];
+        l.dir[1] = -_l.direction[1];
+        l.dir[2] = -_l.direction[2];
+        l.spot = std::cos(_l.angle * PI / 180.0f);
+    } else if (_l.type == PointLight) {
+        l.dir[0] = l.dir[2] = 0.0f;
+        l.dir[1] = 1.0f;
+        l.spot = -1.0f;
+    } else if (_l.type == DirectionalLight) {
+        float dist = 99999999.0f;
+
+        l.dir[0] = -_l.direction[0];
+        l.dir[1] = -_l.direction[1];
+        l.dir[2] = -_l.direction[2];
+
+        l.pos[0] = l.dir[0] * dist;
+        l.pos[1] = l.dir[1] * dist;
+        l.pos[2] = l.dir[2] * dist;
+
+        l.radius = dist * std::tan(_l.angle * PI / 180.0f) + 1.0f;
+
+        float k = 1.0f + dist / l.radius;
+        k *= k;
+
+        l.col[0] = _l.color[0] * k;
+        l.col[1] = _l.color[1] * k;
+        l.col[2] = _l.color[2] * k;
+
+        l.spot = 0.0f;
+    }
+
+    l.brightness = std::max(l.col[0], std::max(l.col[1], l.col[2]));
+
+    lights_.PushBack(l);
+
+    RebuildLightBVH();
+
+    return (uint32_t)(lights_.size() - 1);
+}
+
+void ray::ocl::Scene::RemoveLight(uint32_t i) {
+    // TODO!!!
+}
+
 uint32_t ray::ocl::Scene::AddMeshInstance(uint32_t mesh_index, const float *xform) {
     uint32_t mi_index = (uint32_t)mesh_instances_.size();
 
@@ -304,6 +350,10 @@ void ray::ocl::Scene::RemoveNodes(uint32_t node_index, uint32_t node_count) {
         if (macro_nodes_start_ > node_index) {
             macro_nodes_start_ -= node_count;
         }
+
+        if (light_nodes_start_ > node_index) {
+            light_nodes_start_ -= node_count;
+        }
     }
 }
 
@@ -340,4 +390,84 @@ void ray::ocl::Scene::RebuildMacroBVH() {
 
     nodes_.Append(&bvh_nodes[0], bvh_nodes.size());
     mi_indices_.Append(&mi_indices[0], mi_indices.size());
+}
+
+void ray::ocl::Scene::RebuildLightBVH() {
+    RemoveNodes(light_nodes_start_, light_nodes_count_);
+    li_indices_.Clear();
+
+    std::vector<prim_t> primitives;
+    primitives.reserve(lights_.size());
+
+    std::vector<light_t> lights(lights_.size());
+    lights_.Get(&lights[0], 0, lights_.size());
+
+    for (const auto &l : lights) {
+        float influence = l.radius * (std::sqrt(l.brightness / LIGHT_ATTEN_CUTOFF) - 1.0f);
+
+        ref::simd_fvec3 bbox_min = { 0.0f }, bbox_max = { 0.0f };
+
+        ref::simd_fvec3 p1 = { -l.dir[0] * influence,
+                               -l.dir[1] * influence,
+                               -l.dir[2] * influence };
+
+        bbox_min = min(bbox_min, p1);
+        bbox_max = max(bbox_max, p1);
+
+        ref::simd_fvec3 p2 = { -l.dir[0] * l.spot * influence,
+                               -l.dir[1] * l.spot * influence,
+                               -l.dir[2] * l.spot * influence };
+
+        float d = std::sqrt(1.0f - l.spot * l.spot) * influence;
+
+        bbox_min = min(bbox_min, p2 - ref::simd_fvec3{ d, 0.0f, d });
+        bbox_max = max(bbox_max, p2 + ref::simd_fvec3{ d, 0.0f, d });
+
+        if (l.spot < 0.0f) {
+            bbox_min = min(bbox_min, p1 - ref::simd_fvec3{ influence, 0.0f, influence });
+            bbox_max = max(bbox_max, p1 + ref::simd_fvec3{ influence, 0.0f, influence });
+        }
+
+        ref::simd_fvec3 up = { 1.0f, 0.0f, 0.0f };
+        if (std::abs(l.dir[1]) < std::abs(l.dir[2]) && std::abs(l.dir[1]) < std::abs(l.dir[0])) {
+            up = { 0.0f, 1.0f, 0.0f };
+        } else if (std::abs(l.dir[2]) < std::abs(l.dir[0]) && std::abs(l.dir[2]) < std::abs(l.dir[1])) {
+            up = { 0.0f, 0.0f, 1.0f };
+        }
+
+        ref::simd_fvec3 side = { -l.dir[1] * up[2] + l.dir[2] * up[1],
+                                 -l.dir[2] * up[0] + l.dir[0] * up[2],
+                                 -l.dir[0] * up[1] + l.dir[1] * up[0] };
+
+        float xform[16] = { side[0],  l.dir[0], up[0],    0.0f,
+                            side[1],  l.dir[1], up[1],    0.0f,
+                            side[2],  l.dir[2], up[2],    0.0f,
+                            l.pos[0], l.pos[1], l.pos[2], 1.0f };
+
+        float bbox[2][3] = { { bbox_min[0], bbox_min[1], bbox_min[2] },
+                             { bbox_max[0], bbox_max[1], bbox_max[2] } };
+        float tr_bbox[2][3];
+
+        TransformBoundingBox(bbox, xform, tr_bbox);
+
+        primitives.push_back({ 0, 0, 0, ref::simd_fvec3{ tr_bbox[0] }, ref::simd_fvec3{ tr_bbox[1] } });
+    }
+
+    std::vector<bvh_node_t> bvh_nodes;
+    std::vector<uint32_t> li_indices;
+
+    light_nodes_start_ = (uint32_t)nodes_.size();
+    light_nodes_count_ = PreprocessPrims(&primitives[0], primitives.size(), nullptr, 0, false, bvh_nodes, li_indices);
+
+    // offset nodes
+    for (auto &n : bvh_nodes) {
+        if (n.parent != 0xffffffff) n.parent += (uint32_t)nodes_.size();
+        if (!n.prim_count) {
+            n.left_child += (uint32_t)nodes_.size();
+            n.right_child += (uint32_t)nodes_.size();
+        }
+    }
+
+    nodes_.Append(&bvh_nodes[0], bvh_nodes.size());
+    li_indices_.Append(&li_indices[0], li_indices.size());
 }

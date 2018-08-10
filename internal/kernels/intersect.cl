@@ -44,7 +44,7 @@ void IntersectTris(const float3 r_o, const float3 r_d, __global const tri_accel_
     }
 }
 
-float IntersectTris_Occlusion(const float3 r_o, const float3 r_d, __global const tri_accel_t *tris, 
+float IntersectTris_Occlusion(const float3 r_o, const float3 r_d, float max_dist, __global const tri_accel_t *tris, 
                               __global const uint *tri_indices, int tri_index, int tri_count) {
     const float *rd = (const float *)&r_d;
     const float *ro = (const float *)&r_o;
@@ -64,9 +64,14 @@ float IntersectTris_Occlusion(const float3 r_o, const float3 r_d, __global const
 
         float tmpdet0 = det - detu - detv;
 
-        if (((tmpdet0 > -HIT_EPS && detu > -HIT_EPS && detv > -HIT_EPS) ||
-             (tmpdet0 < HIT_EPS && detu < HIT_EPS && detv < HIT_EPS)) && sign(dett) == sign(det)) {
-            return 0;
+        if ((tmpdet0 > -HIT_EPS && detu > -HIT_EPS && detv > -HIT_EPS) ||
+            (tmpdet0 < HIT_EPS && detu < HIT_EPS && detv < HIT_EPS)) {
+
+            float t = dett / det;
+            
+            if (t > 0 && t < max_dist) {
+                return 0;
+            }
         }
     }
 
