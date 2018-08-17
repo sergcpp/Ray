@@ -10,7 +10,7 @@ Small pathtracing lib created for learning purposes. Includes CPU and GPU (OpenC
 
 I tried to implement most of the basic features present in 'big' pathtracers:
 - Plucker test for intersection with precomputed data per triangle as described in 'Ray-Triangle Intersection Algorithm for Modern CPU Architectures' paper.
-- SAH-based BVH with stackless traversal as described in 'Efficient Stack-less BVH Traversal for Ray Tracing' paper. BVH tree is made two-level to support basic rigid motion. Optional 'spatial splits' feature can be used for building more optimized BVH in cost of construction times as described in 'Spatial Splits in Bounding Volume Hierarchies' paper.
+- SAH-based BVH with traditional stack- and stackless traversal described in 'Efficient Stack-less BVH Traversal for Ray Tracing' paper. By default traversal with stack is used as it was faster on gpus I tested on. BVH tree is made two-level to support basic rigid motion. Optional 'spatial splits' feature can be used for building better optimized BVH in cost of construction time as described in 'Spatial Splits in Bounding Volume Hierarchies' paper.
 - Ray differentials for choosing mip level and filter kernel as described in 'Tracing Ray Differentials' paper.
 - Textures are packed in 2d texture array atlas for easier passing to OpenCL kernel.
 - Halton sequence is used for sampling.
