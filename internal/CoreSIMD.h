@@ -388,6 +388,14 @@ force_inline simd_fvec<S> clamp(const simd_fvec<S> &v, float min, float max) {
     return ret;
 }
 
+template <int S>
+force_inline simd_ivec<S> clamp(const simd_ivec<S> &v, int min, int max) {
+    simd_ivec<S> ret = v;
+    where(ret < min, ret) = min;
+    where(ret > max, ret) = max;
+    return ret;
+}
+
 force_inline int hash(int x) {
     x = ((x >> 16) ^ x) * 0x45d9f3b;
     x = ((x >> 16) ^ x) * 0x45d9f3b;
@@ -593,7 +601,7 @@ void ray::NS::GeneratePrimaryRays(const int iteration, const camera_t &cam, cons
                 out_r.dd_dy[j] = _dy[j] - out_r.d[j];
             }
 
-            out_r.c[3] = { 1.0f };
+            out_r.ior = { 1.0f };
             out_r.xy = (ixx << 16) | iyy;
         }
     }
@@ -1444,7 +1452,7 @@ void ray::NS::ComputeDirectLighting(const simd_fvec<S> P[3], const simd_fvec<S> 
                     simd_fvec<S> _dot1 = max(dot(L, N), simd_fvec<S>{ 0.0f });
                     simd_fvec<S> _dot2 = dot(L, l.dir);
 
-                    auto fmask = reinterpret_cast<const simd_fvec<S> &>(mask1) & _dot1 > FLT_EPS & _dot2 > l.spot & atten > FLT_EPS;
+                    auto fmask = reinterpret_cast<const simd_fvec<S> &>(mask1) & (_dot1 > FLT_EPS) & (_dot2 > l.spot) & (l.brightness * atten > FLT_EPS);
                     const auto &imask = reinterpret_cast<const simd_ivec<S> &>(fmask);
                     if (imask.not_all_zeros()) {
                         ray_packet_t<S> r;

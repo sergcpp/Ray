@@ -31,11 +31,19 @@ template void SampleBilinear<RayPacketSize>(const ref::TextureAtlas &atlas, cons
 template void SampleTrilinear<RayPacketSize>(const ref::TextureAtlas &atlas, const texture_t &t, const simd_fvec<RayPacketSize> uvs[2], const simd_fvec<RayPacketSize> &lod, const simd_ivec<RayPacketSize> &mask, simd_fvec<RayPacketSize> out_rgba[4]);
 template void SampleAnisotropic<RayPacketSize>(const ref::TextureAtlas &atlas, const texture_t &t, const simd_fvec<RayPacketSize> uvs[2], const simd_fvec<RayPacketSize> duv_dx[2], const simd_fvec<RayPacketSize> duv_dy[2], const simd_ivec<RayPacketSize> &mask, simd_fvec<RayPacketSize> out_rgba[4]);
 
+template void ComputeDirectLighting<RayPacketSize>(const simd_fvec<RayPacketSize> P[3], const simd_fvec<RayPacketSize> N[3], const simd_fvec<RayPacketSize> B[3], const simd_fvec<RayPacketSize> plane_N[3],
+                                                   const float *halton, const int hi, const simd_fvec<RayPacketSize> &rand_offset, const simd_fvec<RayPacketSize> &rand_offset2,
+                                                   const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
+                                                   const uint32_t *vtx_indices, const vertex_t *vertices, const bvh_node_t *nodes, uint32_t node_index,
+                                                   const tri_accel_t *tris, const uint32_t *tri_indices, const light_t *lights,
+                                                   const uint32_t *li_indices, uint32_t light_node_index, const simd_ivec<RayPacketSize> &ray_mask, simd_fvec<RayPacketSize> *out_col);
+
 template void ShadeSurface<RayPacketSize>(const simd_ivec<RayPacketSize> &index, const int iteration, const int bounce, const float *halton, const hit_data_t<RayPacketSize> &inter, const ray_packet_t<RayPacketSize> &ray,
                                           const environment_t &env, const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
                                           const mesh_t *meshes, const transform_t *transforms, const uint32_t *vtx_indices, const vertex_t *vertices,
                                           const bvh_node_t *nodes, uint32_t node_index, const tri_accel_t *tris, const uint32_t *tri_indices,
-                                          const material_t *materials, const texture_t *textures, const ray::ref::TextureAtlas &tex_atlas, simd_fvec<RayPacketSize> out_rgba[4], simd_ivec<RayPacketSize> *out_secondary_masks, ray_packet_t<RayPacketSize> *out_secondary_rays, int *out_secondary_rays_count);
+                                          const material_t *materials, const texture_t *textures, const ray::ref::TextureAtlas &tex_atlas,
+                                          const light_t *lights, const uint32_t *li_indices, uint32_t light_node_index, simd_fvec<RayPacketSize> out_rgba[4], simd_ivec<RayPacketSize> *out_secondary_masks, ray_packet_t<RayPacketSize> *out_secondary_rays, int *out_secondary_rays_count);
 
 template class RendererSIMD<RayPacketDimX, RayPacketDimY>;
 }
