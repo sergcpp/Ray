@@ -8,7 +8,7 @@
 #undef NS
 
 #define NS ref
-#if defined(_M_AMD64) || defined(_M_X64) || (defined(_M_IX86_FP) && _M_IX86_FP == 2)
+#if defined(_M_AMD64) || defined(_M_X64) || (!defined(__ANDROID__) && defined(__x86_64__)) || (defined(_M_IX86_FP) && _M_IX86_FP == 2)
 #define USE_SSE
 #pragma message("ray::ref::simd_vec will use SSE2")
 #elif defined(__ARM_NEON__) || defined(__aarch64__)
