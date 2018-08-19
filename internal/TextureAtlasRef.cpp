@@ -1,5 +1,7 @@
 #include "TextureAtlasRef.h"
 
+#include <cstring>
+
 Ray::Ref::TextureAtlas::TextureAtlas(int resx, int resy, int pages_count) : res_{ resx, resy }, res_f_{ (float)resx, (float)resy }, pages_count_(0) {
     if (!Resize(pages_count)) {
         throw std::runtime_error("TextureAtlas cannot be resized!");

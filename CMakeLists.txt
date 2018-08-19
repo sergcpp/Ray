@@ -132,7 +132,7 @@ source_group("src\\internal\\simd" FILES ${SIMD_FILES})
 set_source_files_properties(${KERNEL_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
 
 # enable or disable unity build
-IF(ENABLE_UNITYBUILD)
+if(ENABLE_UNITYBUILD)
     set_source_files_properties(${INTERNAL_SOURCE_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
     set_source_files_properties(${SOURCE_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
 
@@ -151,7 +151,7 @@ IF(ENABLE_UNITYBUILD)
         endif()
         set_source_files_properties(_Ray_Avx.cpp PROPERTIES COMPILE_FLAGS /arch:AVX)
     endif(MSVC)
-ENDIF()
+endif()
 
 add_library(Ray STATIC ${ALL_SOURCE_FILES})
 if(ENABLE_OPENCL)
