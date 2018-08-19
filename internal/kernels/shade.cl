@@ -250,7 +250,7 @@ R"(
 
     float3 col;
 
-    // Generate secondary ray
+    // Generate secondary Ray
     if (mat->type == DiffuseMaterial) {
         col = ComputeDirectLighting(P, N, B, plane_N, halton, hi, rand_offset, rand_offset2,
                                     mesh_instances, mi_indices, meshes, transforms, vtx_indices, vertices,

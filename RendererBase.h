@@ -9,7 +9,7 @@
   @file RendererBase.h
 */
 
-namespace ray {
+namespace Ray {
 /// Renderer flags used to choose backend
 enum eRendererType {
     RendererRef = 1,

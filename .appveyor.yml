@@ -3,7 +3,7 @@ image:
     - Visual Studio 2015
     - Visual Studio 2017
 
-clone_folder: c:\projects\ray
+clone_folder: c:\projects\Ray
 shallow_clone: true
 
 matrix:
@@ -37,5 +37,5 @@ build_script:
   - msbuild build_unity\ALL_BUILD.vcxproj
 
 test_script:
-    - build_normal\tests\%CONFIGURATION%\test_ray
-    - build_unity\tests\%CONFIGURATION%\test_ray
+    - build_normal\tests\%CONFIGURATION%\test_Ray
+    - build_unity\tests\%CONFIGURATION%\test_Ray

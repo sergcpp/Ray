@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.2)
-project(test_ray)
+project(test_Ray)
 
-add_executable(test_ray main.cpp
+add_executable(test_Ray main.cpp
                         test_common.h
                         test_data.cpp
 						test_img1.h
@@ -12,4 +12,4 @@ add_executable(test_ray main.cpp
 						test_scene1.h
                         )
 
-target_link_libraries(test_ray ray)
+target_link_libraries(test_Ray Ray)

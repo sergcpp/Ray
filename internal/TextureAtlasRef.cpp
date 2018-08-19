@@ -1,12 +1,12 @@
 #include "TextureAtlasRef.h"
 
-ray::ref::TextureAtlas::TextureAtlas(int resx, int resy, int pages_count) : res_{ resx, resy }, res_f_{ (float)resx, (float)resy }, pages_count_(0) {
+Ray::Ref::TextureAtlas::TextureAtlas(int resx, int resy, int pages_count) : res_{ resx, resy }, res_f_{ (float)resx, (float)resy }, pages_count_(0) {
     if (!Resize(pages_count)) {
         throw std::runtime_error("TextureAtlas cannot be resized!");
     }
 }
 
-int ray::ref::TextureAtlas::Allocate(const pixel_color8_t *data, const int _res[2], int pos[2]) {
+int Ray::Ref::TextureAtlas::Allocate(const pixel_color8_t *data, const int _res[2], int pos[2]) {
     int res[2] = { _res[0] + 2, _res[1] + 2 };
 
     if (res[0] > res_[0] || res[1] > res_[1]) return -1;
@@ -54,7 +54,7 @@ int ray::ref::TextureAtlas::Allocate(const pixel_color8_t *data, const int _res[
     return Allocate(data, _res, pos);
 }
 
-bool ray::ref::TextureAtlas::Free(int page, const int pos[2]) {
+bool Ray::Ref::TextureAtlas::Free(int page, const int pos[2]) {
     if (page < 0 || page > pages_count_) return false;
 #ifndef NDEBUG
     int size[2];
@@ -72,7 +72,7 @@ bool ray::ref::TextureAtlas::Free(int page, const int pos[2]) {
 #endif
 }
 
-bool ray::ref::TextureAtlas::Resize(int pages_count) {
+bool Ray::Ref::TextureAtlas::Resize(int pages_count) {
     // if we shrink atlas, all redundant pages required to be empty
     for (int i = pages_count; i < pages_count_; i++) {
         if (!splitters_[i].empty()) return false;

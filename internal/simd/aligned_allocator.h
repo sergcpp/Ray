@@ -12,7 +12,7 @@
 
 // from https://gist.github.com/donny-dont/1471329
 
-namespace ray {
+namespace Ray {
     inline void *aligned_malloc(size_t size, size_t alignment) {
 #if defined(_MSC_VER) || defined(__MINGW32__)
         return _mm_malloc(size, alignment);

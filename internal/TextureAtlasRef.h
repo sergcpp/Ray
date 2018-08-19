@@ -3,8 +3,8 @@
 #include "Core.h"
 #include "TextureSplitter.h"
 
-namespace ray {
-namespace ref {
+namespace Ray {
+namespace Ref {
 class TextureAtlas {
     const int res_[2];
     const float res_f_[2];

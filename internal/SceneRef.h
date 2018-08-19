@@ -7,39 +7,39 @@
 #include "TextureAtlasRef.h"
 #include "../SceneBase.h"
 
-namespace ray {
+namespace Ray {
 namespace ref2 {
 template <int DimX, int DimY>
 class RendererSIMD;
 }
-namespace sse {
+namespace Sse {
 template <int DimX, int DimY>
 class RendererSIMD;
 }
-namespace avx {
-template <int DimX, int DimY>
-class RendererSIMD;
-}
-
-namespace neon {
+namespace Avx {
 template <int DimX, int DimY>
 class RendererSIMD;
 }
 
-namespace ref {
+namespace Neon {
+template <int DimX, int DimY>
+class RendererSIMD;
+}
+
+namespace Ref {
 class Renderer;
 
 class Scene : public SceneBase {
 protected:
-    friend class ref::Renderer;
+    friend class Ref::Renderer;
     template <int DimX, int DimY>
     friend class ref2::RendererSIMD;
     template <int DimX, int DimY>
-    friend class sse::RendererSIMD;
+    friend class Sse::RendererSIMD;
     template <int DimX, int DimY>
-    friend class avx::RendererSIMD;
+    friend class Avx::RendererSIMD;
 	template <int DimX, int DimY>
-    friend class neon::RendererSIMD;
+    friend class Neon::RendererSIMD;
 
     std::vector<bvh_node_t> nodes_;
     std::vector<tri_accel_t> tris_;

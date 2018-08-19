@@ -6,7 +6,7 @@
 
 #if !defined(__ANDROID__)
 
-#define NS ref2
+#define NS Ref2
 #include "../internal/simd/simd_vec.h"
 
 void test_simd_ref() {
@@ -14,7 +14,7 @@ void test_simd_ref() {
 }
 #undef NS
 
-#define NS sse
+#define NS Sse
 #define USE_SSE
 #include "../internal/simd/simd_vec.h"
 
@@ -24,7 +24,7 @@ void test_simd_sse() {
 #undef USE_SSE
 #undef NS
 
-#define NS avx
+#define NS Avx
 #define USE_AVX
 #include "../internal/simd/simd_vec.h"
 

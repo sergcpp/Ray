@@ -5,32 +5,34 @@
 
 #include "TextureUtilsRef.h"
 
-ray::ref::Scene::Scene() : texture_atlas_(MAX_TEXTURE_SIZE, MAX_TEXTURE_SIZE) {
-    pixel_color8_t default_normalmap = { 127, 127, 255 };
+Ray::Ref::Scene::Scene() : texture_atlas_(MAX_TEXTURE_SIZE, MAX_TEXTURE_SIZE) {
+    static const pixel_color8_t default_normalmap = { 127, 127, 255 };
 
-    tex_desc_t t;
-    t.data = &default_normalmap;
-    t.w = 1;
-    t.h = 1;
-    t.generate_mipmaps = false;
+    {
+        tex_desc_t t;
+        t.data = &default_normalmap;
+        t.w = 1;
+        t.h = 1;
+        t.generate_mipmaps = false;
 
-    default_normals_texture_ = AddTexture(t);
+        default_normals_texture_ = AddTexture(t);
+    }
 
     if (default_normals_texture_ == 0xffffffff) {
         throw std::runtime_error("Cannot allocate 1px default normal map!");
     }
 }
 
-void ray::ref::Scene::GetEnvironment(environment_desc_t &env) {
+void Ray::Ref::Scene::GetEnvironment(environment_desc_t &env) {
     memcpy(&env.sky_col[0], &env_.sky_col, 3 * sizeof(float));
 }
 
-void ray::ref::Scene::SetEnvironment(const environment_desc_t &env) {
+void Ray::Ref::Scene::SetEnvironment(const environment_desc_t &env) {
     memcpy(&env_.sky_col, &env.sky_col[0], 3 * sizeof(float));
 }
 
-uint32_t ray::ref::Scene::AddTexture(const tex_desc_t &_t) {
-    uint32_t tex_index = (uint32_t)textures_.size();
+uint32_t Ray::Ref::Scene::AddTexture(const tex_desc_t &_t) {
+    auto tex_index = (uint32_t)textures_.size();
 
     texture_t t;
     t.size[0] = (uint16_t)_t.w;
@@ -53,14 +55,14 @@ uint32_t ray::ref::Scene::AddTexture(const tex_desc_t &_t) {
             return 0xffffffff;
         }
 
-        t.page[mip] = (uint32_t)page;
+        t.page[mip] = (uint8_t)page;
         t.pos[mip][0] = (uint16_t)pos[0];
         t.pos[mip][1] = (uint16_t)pos[1];
 
         mip++;
 
         if (_t.generate_mipmaps) {
-            tex_data = ref::DownsampleTexture(tex_data, res);
+            tex_data = Ref::DownsampleTexture(tex_data, res);
 
             res[0] /= 2;
             res[1] /= 2;
@@ -81,7 +83,7 @@ uint32_t ray::ref::Scene::AddTexture(const tex_desc_t &_t) {
     return tex_index;
 }
 
-uint32_t ray::ref::Scene::AddMaterial(const mat_desc_t &m) {
+uint32_t Ray::Ref::Scene::AddMaterial(const mat_desc_t &m) {
     material_t mat;
 
     mat.type = m.type;
@@ -112,14 +114,14 @@ uint32_t ray::ref::Scene::AddMaterial(const mat_desc_t &m) {
         mat.textures[NORMALS_TEXTURE] = default_normals_texture_;
     }
 
-    uint32_t mat_index = (uint32_t)materials_.size();
+    auto mat_index = (uint32_t)materials_.size();
 
     materials_.push_back(mat);
 
     return mat_index;
 }
 
-uint32_t ray::ref::Scene::AddMesh(const mesh_desc_t &_m) {
+uint32_t Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
     meshes_.emplace_back();
     auto &m = meshes_.back();
     m.node_index = (uint32_t)nodes_.size();
@@ -161,13 +163,13 @@ uint32_t ray::ref::Scene::AddMesh(const mesh_desc_t &_m) {
     return (uint32_t)(meshes_.size() - 1);
 }
 
-void ray::ref::Scene::RemoveMesh(uint32_t i) {
+void Ray::Ref::Scene::RemoveMesh(uint32_t i) {
     const auto &m = meshes_[i];
 
     uint32_t node_index = m.node_index,
              node_count = m.node_count;
 
-    uint32_t last_mesh_index = (uint32_t)(meshes_.size() - 1);
+    auto last_mesh_index = (uint32_t)(meshes_.size() - 1);
 
     std::swap(meshes_[i], meshes_[last_mesh_index]);
 
@@ -197,7 +199,7 @@ void ray::ref::Scene::RemoveMesh(uint32_t i) {
     }
 }
 
-uint32_t ray::ref::Scene::AddLight(const light_desc_t &_l) {
+uint32_t Ray::Ref::Scene::AddLight(const light_desc_t &_l) {
     light_t l;
     memcpy(&l.pos[0], &_l.position[0], 3 * sizeof(float));
     l.radius = _l.radius;
@@ -243,12 +245,12 @@ uint32_t ray::ref::Scene::AddLight(const light_desc_t &_l) {
     return (uint32_t)(lights_.size() - 1);
 }
 
-void ray::ref::Scene::RemoveLight(uint32_t i) {
+void Ray::Ref::Scene::RemoveLight(uint32_t i) {
     // TODO!!!
 }
 
-uint32_t ray::ref::Scene::AddMeshInstance(uint32_t mesh_index, const float *xform) {
-    uint32_t mi_index = (uint32_t)mesh_instances_.size();
+uint32_t Ray::Ref::Scene::AddMeshInstance(uint32_t mesh_index, const float *xform) {
+    auto mi_index = (uint32_t)mesh_instances_.size();
 
     mesh_instances_.emplace_back();
     auto &mi = mesh_instances_.back();
@@ -261,7 +263,7 @@ uint32_t ray::ref::Scene::AddMeshInstance(uint32_t mesh_index, const float *xfor
     return mi_index;
 }
 
-void ray::ref::Scene::SetMeshInstanceTransform(uint32_t mi_index, const float *xform) {
+void Ray::Ref::Scene::SetMeshInstanceTransform(uint32_t mi_index, const float *xform) {
     auto &mi = mesh_instances_[mi_index];
     auto &tr = transforms_[mi.tr_index];
 
@@ -280,13 +282,13 @@ void ray::ref::Scene::SetMeshInstanceTransform(uint32_t mi_index, const float *x
     RebuildMacroBVH();
 }
 
-void ray::ref::Scene::RemoveMeshInstance(uint32_t i) {
+void Ray::Ref::Scene::RemoveMeshInstance(uint32_t i) {
     mesh_instances_.erase(mesh_instances_.begin() + i);
 
     RebuildMacroBVH();
 }
 
-void ray::ref::Scene::RemoveNodes(uint32_t node_index, uint32_t node_count) {
+void Ray::Ref::Scene::RemoveNodes(uint32_t node_index, uint32_t node_count) {
     if (!node_count) return;
 
     nodes_.erase(std::next(nodes_.begin(), node_index),
@@ -319,7 +321,7 @@ void ray::ref::Scene::RemoveNodes(uint32_t node_index, uint32_t node_count) {
     }
 }
 
-void ray::ref::Scene::RebuildMacroBVH() {
+void Ray::Ref::Scene::RebuildMacroBVH() {
     RemoveNodes(macro_nodes_start_, macro_nodes_count_);
     mi_indices_.clear();
 
@@ -327,14 +329,14 @@ void ray::ref::Scene::RebuildMacroBVH() {
     primitives.reserve(mesh_instances_.size());
 
     for (const auto &mi : mesh_instances_) {
-        primitives.push_back({ 0, 0, 0, ref::simd_fvec3{ mi.bbox_min }, ref::simd_fvec3{ mi.bbox_max } });
+        primitives.push_back({ 0, 0, 0, Ref::simd_fvec3{ mi.bbox_min }, Ref::simd_fvec3{ mi.bbox_max } });
     }
 
     macro_nodes_start_ = (uint32_t)nodes_.size();
     macro_nodes_count_ = PreprocessPrims(&primitives[0], primitives.size(), nullptr, 0, false, nodes_, mi_indices_);
 }
 
-void ray::ref::Scene::RebuildLightBVH() {
+void Ray::Ref::Scene::RebuildLightBVH() {
     RemoveNodes(light_nodes_start_, light_nodes_count_);
     li_indices_.clear();
 

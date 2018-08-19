@@ -6,8 +6,8 @@
 #include "FramebufferRef.h"
 #include "../RendererBase.h"
 
-namespace ray {
-namespace ref {
+namespace Ray {
+namespace Ref {
 
 struct PassData {
     aligned_vector<ray_packet_t> primary_rays;
@@ -24,10 +24,10 @@ struct PassData {
     PassData() = default;
 
     PassData(const PassData &rhs) = delete;
-    PassData(PassData &&rhs) { *this = std::move(rhs); }
+    PassData(PassData &&rhs) noexcept { *this = std::move(rhs); }
 
     PassData &operator=(const PassData &rhs) = delete;
-    PassData &operator=(PassData &&rhs) {
+    PassData &operator=(PassData &&rhs) noexcept {
         primary_rays = std::move(rhs.primary_rays);
         secondary_rays = std::move(rhs.secondary_rays);
         intersections = std::move(rhs.intersections);
@@ -37,7 +37,7 @@ struct PassData {
 };
 
 class Renderer : public RendererBase {
-    ray::ref::Framebuffer clean_buf_, final_buf_, temp_buf_;
+    Ref::Framebuffer clean_buf_, final_buf_, temp_buf_;
 
     std::mutex pass_cache_mtx_;
     std::vector<PassData> pass_cache_;
@@ -72,8 +72,8 @@ public:
     std::shared_ptr<SceneBase> CreateScene() override;
     void RenderScene(const std::shared_ptr<SceneBase> &s, RegionContext &region) override;
 
-    virtual void GetStats(stats_t &st) override { st = stats_; }
-    virtual void ResetStats() override { stats_ = { 0 }; }
+    void GetStats(stats_t &st) override { st = stats_; }
+    void ResetStats() override { stats_ = { 0 }; }
 };
 }
 }

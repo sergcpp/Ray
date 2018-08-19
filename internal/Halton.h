@@ -2,7 +2,7 @@
 
 #include <vector>
 
-namespace ray {
+namespace Ray {
 template <typename RandFunc>
 void Shuffle(uint16_t *arr, int count, RandFunc &&rand_func) {
     for (int i = 0; i < count; i++) {

@@ -78,7 +78,7 @@
 #pragma GCC diagnostic ignored "-Warray-bounds"
 #endif
 
-namespace ray {
+namespace Ray {
 namespace NS {
 
 enum simd_mem_aligned_tag { simd_mem_aligned };
@@ -603,7 +603,7 @@ using simd_dvec16 = simd_dvec<16>;
 #elif defined(USE_NEON)
 #include "simd_vec_neon.h"
 #else
-namespace ray {
+namespace Ray {
 namespace NS {
 using native_simd_fvec = simd_fvec<1>;
 using native_simd_ivec = simd_ivec<1>;

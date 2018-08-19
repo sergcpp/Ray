@@ -8,12 +8,12 @@
 
 #include "Core.h"
 
-namespace ray {
-namespace ocl {
+namespace Ray {
+namespace Ocl {
 struct ray_packet_t {
     // origin and direction (o.w and d.w are used for pixel coordinates)
     cl_float4 o, d;
-    // color of ray, determines secondary ray influence
+    // color of Ray, determines secondary Ray influence
     cl_float3 c;
     // derivatives
     cl_float3 do_dx, dd_dx, do_dy, dd_dy;
@@ -33,7 +33,7 @@ struct camera_t {
     cl_int pad[3];
 
     camera_t() {}
-    camera_t(const ray::camera_t &cam) {
+    camera_t(const Ray::camera_t &cam) {
         memcpy(&origin, &cam.origin[0], sizeof(float) * 3);
         origin.w = cam.fov;
         memcpy(&fwd, &cam.fwd[0], sizeof(float) * 3);

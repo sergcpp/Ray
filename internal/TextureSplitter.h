@@ -2,7 +2,7 @@
 
 #include <vector>
 
-namespace ray {
+namespace Ray {
 class TextureSplitter {
     struct node_t {
         int parent = -1;

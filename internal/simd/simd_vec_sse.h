@@ -10,7 +10,7 @@
 #pragma GCC target ("sse2")
 #endif
 
-namespace ray {
+namespace Ray {
 namespace NS {
 
 template <int S>

@@ -3,8 +3,8 @@
 #include "CoreOCL.h"
 #include "TextureSplitter.h"
 
-namespace ray {
-namespace ocl {
+namespace Ray {
+namespace Ocl {
 class TextureAtlas {
     const cl::Context &context_;
     const cl::CommandQueue &queue_;

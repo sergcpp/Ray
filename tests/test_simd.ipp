@@ -1,4 +1,4 @@
-using namespace ray::NS;
+using namespace Ray::NS;
 
 {
     std::cout << "Test simd_fvec4 native? = " << simd_fvec4::is_native() << " | ";

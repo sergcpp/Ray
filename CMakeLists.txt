@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8.4)
-project(ray)
+project(Ray)
 
 OPTION(ENABLE_UNITYBUILD "Enable compilation of one large cpp file" ON)
 
@@ -136,26 +136,26 @@ IF(ENABLE_UNITYBUILD)
     set_source_files_properties(${INTERNAL_SOURCE_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
     set_source_files_properties(${SOURCE_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
 
-    list(APPEND ALL_SOURCE_FILES _ray.cpp)
-    source_group("src" FILES _ray.cpp)
+    list(APPEND ALL_SOURCE_FILES _Ray.cpp)
+    source_group("src" FILES _Ray.cpp)
 
-    list(APPEND ALL_SOURCE_FILES _ray_sse.cpp)
-    source_group("src" FILES _ray_sse.cpp)
+    list(APPEND ALL_SOURCE_FILES _Ray_Sse.cpp)
+    source_group("src" FILES _Ray_Sse.cpp)
 
-    list(APPEND ALL_SOURCE_FILES _ray_avx.cpp)
-    source_group("src" FILES _ray_avx.cpp)
+    list(APPEND ALL_SOURCE_FILES _Ray_Avx.cpp)
+    source_group("src" FILES _Ray_Avx.cpp)
 
     if(MSVC)
         if(NOT CMAKE_CL_64)
-            set_source_files_properties(_ray_sse.cpp PROPERTIES COMPILE_FLAGS /arch:SSE2)
+            set_source_files_properties(_Ray_Sse.cpp PROPERTIES COMPILE_FLAGS /arch:SSE2)
         endif()
-        set_source_files_properties(_ray_avx.cpp PROPERTIES COMPILE_FLAGS /arch:AVX)
+        set_source_files_properties(_Ray_Avx.cpp PROPERTIES COMPILE_FLAGS /arch:AVX)
     endif(MSVC)
 ENDIF()
 
-add_library(ray STATIC ${ALL_SOURCE_FILES})
+add_library(Ray STATIC ${ALL_SOURCE_FILES})
 if(ENABLE_OPENCL)
-    target_link_libraries(ray OpenCL)
+    target_link_libraries(Ray OpenCL)
 endif()
 
 add_subdirectory(tests)

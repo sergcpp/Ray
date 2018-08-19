@@ -17,7 +17,7 @@
 #pragma warning(push)
 #pragma warning(disable : 4752)
 
-namespace ray {
+namespace Ray {
 namespace NS {
 
 template <int S>

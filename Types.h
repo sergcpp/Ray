@@ -10,7 +10,7 @@
   @file Types.h
 */
 
-namespace ray {
+namespace Ray {
 /// RGBA single precision f32 color
 struct pixel_color_t {
     float r, g, b, a;
@@ -46,7 +46,7 @@ struct camera_t {
 static_assert(sizeof(camera_t) == 72, "!");
 
 #if !defined(DISABLE_OCL)
-namespace ocl {
+namespace Ocl {
     struct Device {
         std::string name;
     };

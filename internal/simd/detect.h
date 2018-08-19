@@ -25,7 +25,7 @@ inline void cpuid(int info[4], int InfoType) {
 
 #endif
 
-namespace ray {
+namespace Ray {
     struct CpuFeatures {
         bool sse2_supported, avx_supported;
     };

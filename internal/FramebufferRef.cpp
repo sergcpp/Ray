@@ -3,19 +3,19 @@
 #include <cassert>
 #include <cstring>
 
-ray::ref::Framebuffer::Framebuffer(int w, int h) {
+Ray::Ref::Framebuffer::Framebuffer(int w, int h) {
     Resize(w, h);
 }
 
-void ray::ref::Framebuffer::Resize(int w, int h) {
+void Ray::Ref::Framebuffer::Resize(int w, int h) {
     assert(w > 0 && h > 0);
     w_ = w;
     h_ = h;
-    size_t buf_size = w * h;
+    size_t buf_size = (size_t)w * h;
     pixels_.resize(buf_size, pixel_color_t{ 0.0f, 0.0f, 0.0f, 0.0f });
 }
 
-void ray::ref::Framebuffer::Clear(const pixel_color_t &p) {
+void Ray::Ref::Framebuffer::Clear(const pixel_color_t &p) {
     for (int i = 0; i < w_; i++) {
         pixels_[i] = p;
     }

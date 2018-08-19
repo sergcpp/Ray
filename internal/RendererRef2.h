@@ -4,7 +4,7 @@
 #include "RendererSIMD.h"
 #undef NS
 
-namespace ray {
+namespace Ray {
 namespace ref2 {
 const int RayPacketDimX = 1;
 const int RayPacketDimY = 1;

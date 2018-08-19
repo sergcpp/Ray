@@ -9,17 +9,17 @@
 
 #include "BVHSplit.h"
 
-namespace ray {
+namespace Ray {
 const float axis_aligned_normal_eps = 0.000001f;
 
-force_inline ref::simd_fvec3 cross(const ref::simd_fvec3 &v1, const ref::simd_fvec3 &v2) {
+force_inline Ref::simd_fvec3 cross(const Ref::simd_fvec3 &v1, const Ref::simd_fvec3 &v2) {
     return { v1[1] * v2[2] - v1[2] * v2[1],
              v1[2] * v2[0] - v1[0] * v2[2],
              v1[0] * v2[1] - v1[1] * v2[0] };
 }
 }
 
-const float ray::uint8_to_float_table[] = {
+const float Ray::uint8_to_float_table[] = {
     0.000000000f, 0.003921569f, 0.007843138f, 0.011764706f, 0.015686275f, 0.019607844f, 0.023529412f, 0.027450981f, 0.031372551f, 0.035294119f, 0.039215688f, 0.043137256f, 0.047058824f, 0.050980393f, 0.054901961f, 0.058823530f,
     0.062745102f, 0.066666670f, 0.070588239f, 0.074509807f, 0.078431375f, 0.082352944f, 0.086274512f, 0.090196081f, 0.094117649f, 0.098039217f, 0.101960786f, 0.105882354f, 0.109803922f, 0.113725491f, 0.117647059f, 0.121568628f,
     0.125490203f, 0.129411772f, 0.133333340f, 0.137254909f, 0.141176477f, 0.145098045f, 0.149019614f, 0.152941182f, 0.156862751f, 0.160784319f, 0.164705887f, 0.168627456f, 0.172549024f, 0.176470593f, 0.180392161f, 0.184313729f,
@@ -38,9 +38,9 @@ const float ray::uint8_to_float_table[] = {
     0.941176474f, 0.945098042f, 0.949019611f, 0.952941179f, 0.956862748f, 0.960784316f, 0.964705884f, 0.968627453f, 0.972549021f, 0.976470590f, 0.980392158f, 0.984313726f, 0.988235295f, 0.992156863f, 0.996078432f, 1.000000000f,
 };
 
-const uint8_t ray::morton_table_16[] = { 0, 1, 4, 5, 16, 17, 20, 21, 64, 65, 68, 69, 80, 81, 84, 85 };
+const uint8_t Ray::morton_table_16[] = { 0, 1, 4, 5, 16, 17, 20, 21, 64, 65, 68, 69, 80, 81, 84, 85 };
 
-const int ray::morton_table_256[] = {
+const int Ray::morton_table_256[] = {
     0,          1,          8,          9,          64,         65,         72,         73,         512,        513,        520,        521,        576,        577,        584,        585,
     4096,       4097,       4104,       4105,       4160,       4161,       4168,       4169,       4608,       4609,       4616,       4617,       4672,       4673,       4680,       4681,
     32768,      32769,      32776,      32777,      32832,      32833,      32840,      32841,      33280,      33281,      33288,      33289,      33344,      33345,      33352,      33353,
@@ -59,11 +59,11 @@ const int ray::morton_table_256[] = {
     2396160,    2396161,    2396168,    2396169,    2396224,    2396225,    2396232,    2396233,    2396672,    2396673,    2396680,    2396681,    2396736,    2396737,    2396744,    2396745
 };
 
-const float ray::omega_step = 0.0625f;
-const char ray::omega_table[] = { 15, 14, 13, 12, 12, 11, 11, 11, 10, 10, 9, 9, 9, 8, 8, 8, 8, 7, 7, 7, 6, 6, 6, 5, 5, 4, 4, 4, 3, 3, 2, 1, 0 };
+const float Ray::omega_step = 0.0625f;
+const char Ray::omega_table[] = { 15, 14, 13, 12, 12, 11, 11, 11, 10, 10, 9, 9, 9, 8, 8, 8, 8, 7, 7, 7, 6, 6, 6, 5, 5, 4, 4, 4, 3, 3, 2, 1, 0 };
 
-const float ray::phi_step = 0.125f;
-const char ray::phi_table[][17] = { { 2,  2,  2,  2,  2,  3,  3,  3,  4,  4,  4,  4,  5,  5,  5,  5,  6  },
+const float Ray::phi_step = 0.125f;
+const char Ray::phi_table[][17] = { { 2,  2,  2,  2,  2,  3,  3,  3,  4,  4,  4,  4,  5,  5,  5,  5,  6  },
                                     { 1,  2,  2,  2,  2,  2,  3,  3,  4,  4,  4,  5,  5,  5,  5,  6,  6  },
                                     { 1,  1,  2,  2,  2,  2,  3,  3,  4,  4,  4,  5,  5,  5,  6,  6,  6  },
                                     { 1,  1,  1,  2,  2,  2,  3,  3,  4,  4,  4,  5,  5,  6,  6,  6,  6  },
@@ -82,7 +82,7 @@ const char ray::phi_table[][17] = { { 2,  2,  2,  2,  2,  3,  3,  3,  4,  4,  4,
                                     { 14, 13, 13, 13, 13, 12, 12, 12, 12, 11, 11, 11, 10, 10, 10, 10, 10 } };
 
 
-void ray::PreprocessTri(const float *p, int stride, tri_accel_t *acc) {
+void Ray::PreprocessTri(const float *p, int stride, tri_accel_t *acc) {
     // from "Ray-Triangle Intersection Algorithm for Modern CPU Architectures" [2007]
 
     if (!stride) stride = 3;
@@ -133,7 +133,7 @@ void ray::PreprocessTri(const float *p, int stride, tri_accel_t *acc) {
     assert((acc->ci & TRI_W_BITS) == w);
 }
 
-uint32_t ray::PreprocessMesh(const float *attrs, size_t attrs_count, const uint32_t *vtx_indices, size_t vtx_indices_count, eVertexLayout layout,
+uint32_t Ray::PreprocessMesh(const float *attrs, size_t attrs_count, const uint32_t *vtx_indices, size_t vtx_indices_count, eVertexLayout layout,
                              bool allow_spatial_splits, std::vector<bvh_node_t> &out_nodes, std::vector<tri_accel_t> &out_tris, std::vector<uint32_t> &out_tri_indices) {
     assert(vtx_indices_count && vtx_indices_count % 3 == 0);
     assert(layout == PxyzNxyzTuv);
@@ -160,8 +160,8 @@ uint32_t ray::PreprocessMesh(const float *attrs, size_t attrs_count, const uint3
 
         PreprocessTri(&p[0], 0, &out_tris[tris_start + j / 3]);
 
-        ref::simd_fvec3 _min = min(ref::simd_fvec3{ &p[0] }, min(ref::simd_fvec3{ &p[3] }, ref::simd_fvec3{ &p[6] })),
-                        _max = max(ref::simd_fvec3{ &p[0] }, max(ref::simd_fvec3{ &p[3] }, ref::simd_fvec3{ &p[6] }));
+        Ref::simd_fvec3 _min = min(Ref::simd_fvec3{ &p[0] }, min(Ref::simd_fvec3{ &p[3] }, Ref::simd_fvec3{ &p[6] })),
+                        _max = max(Ref::simd_fvec3{ &p[0] }, max(Ref::simd_fvec3{ &p[3] }, Ref::simd_fvec3{ &p[6] }));
 
         primitives.push_back({ vtx_indices[j], vtx_indices[j + 1], vtx_indices[j + 2], _min, _max });
     }
@@ -176,13 +176,13 @@ uint32_t ray::PreprocessMesh(const float *attrs, size_t attrs_count, const uint3
     return num_out_nodes;
 }
 
-uint32_t ray::PreprocessPrims(const prim_t *prims, size_t prims_count, const float *positions, size_t stride,
+uint32_t Ray::PreprocessPrims(const prim_t *prims, size_t prims_count, const float *positions, size_t stride,
                               bool allow_spatial_splits, std::vector<bvh_node_t> &out_nodes, std::vector<uint32_t> &out_indices) {
     struct prims_coll_t {
         std::vector<uint32_t> indices;
-        ref::simd_fvec3 min = { std::numeric_limits<float>::max() }, max = { std::numeric_limits<float>::lowest() };
+        Ref::simd_fvec3 min = { std::numeric_limits<float>::max() }, max = { std::numeric_limits<float>::lowest() };
         prims_coll_t() {}
-        prims_coll_t(std::vector<uint32_t> &&_indices, const ref::simd_fvec3 &_min, const ref::simd_fvec3 &_max)
+        prims_coll_t(std::vector<uint32_t> &&_indices, const Ref::simd_fvec3 &_min, const Ref::simd_fvec3 &_max)
             : indices(std::move(_indices)), min(_min), max(_max) {
         }
     };
@@ -191,7 +191,7 @@ uint32_t ray::PreprocessPrims(const prim_t *prims, size_t prims_count, const flo
     triangle_lists.emplace_back();
 
     size_t num_nodes = out_nodes.size();
-    int32_t root_node_index = (int32_t)num_nodes;
+    auto root_node_index = (int32_t)num_nodes;
 
     for (size_t j = 0; j < prims_count; j++) {
         triangle_lists.back().indices.push_back((uint32_t)j);
@@ -199,7 +199,7 @@ uint32_t ray::PreprocessPrims(const prim_t *prims, size_t prims_count, const flo
         triangle_lists.back().max = max(triangle_lists.back().max, prims[j].bbox_max);
     }
 
-    ref::simd_fvec3 root_min = triangle_lists.back().min,
+    Ref::simd_fvec3 root_min = triangle_lists.back().min,
                     root_max = triangle_lists.back().max;
 
     while (!triangle_lists.empty()) {
@@ -211,13 +211,13 @@ uint32_t ray::PreprocessPrims(const prim_t *prims, size_t prims_count, const flo
 
         for (int32_t i = leaf_index - 1; i >= root_node_index; i--) {
             if (out_nodes[i].left_child == leaf_index || out_nodes[i].right_child == leaf_index) {
-                parent_index = i;
+                parent_index = (uint32_t)i;
                 break;
             }
         }
 
         if (split_data.right_indices.empty()) {
-            ref::simd_fvec3 bbox_min = split_data.left_bounds[0],
+            Ref::simd_fvec3 bbox_min = split_data.left_bounds[0],
                             bbox_max = split_data.left_bounds[1];
 
             out_nodes.push_back({ (uint32_t)out_indices.size(), (uint32_t)split_data.left_indices.size(), 0, 0, parent_index, 0,
@@ -227,13 +227,13 @@ uint32_t ray::PreprocessPrims(const prim_t *prims, size_t prims_count, const flo
             });
             out_indices.insert(out_indices.end(), split_data.left_indices.begin(), split_data.left_indices.end());
         } else {
-            uint32_t index = (uint32_t)num_nodes;
+            auto index = (uint32_t)num_nodes;
 
             uint32_t space_axis = 0;
-            ref::simd_fvec3 c_left = (split_data.left_bounds[0] + split_data.left_bounds[1]) / 2,
+            Ref::simd_fvec3 c_left = (split_data.left_bounds[0] + split_data.left_bounds[1]) / 2,
                             c_right = (split_data.right_bounds[1] + split_data.right_bounds[1]) / 2;
 
-            ref::simd_fvec3 dist = abs(c_left - c_right);
+            Ref::simd_fvec3 dist = abs(c_left - c_right);
 
             if (dist[0] > dist[1] && dist[0] > dist[2]) {
                 space_axis = 0;
@@ -243,7 +243,7 @@ uint32_t ray::PreprocessPrims(const prim_t *prims, size_t prims_count, const flo
                 space_axis = 2;
             }
 
-            ref::simd_fvec3 bbox_min = min(split_data.left_bounds[0], split_data.right_bounds[0]),
+            Ref::simd_fvec3 bbox_min = min(split_data.left_bounds[0], split_data.right_bounds[0]),
                             bbox_max = max(split_data.left_bounds[1], split_data.right_bounds[1]);
 
             out_nodes.push_back({ 0, 0, index + 1, index + 2, parent_index, space_axis,
@@ -264,7 +264,7 @@ uint32_t ray::PreprocessPrims(const prim_t *prims, size_t prims_count, const flo
 }
 
 
-bool ray::NaiivePluckerTest(const float p[9], const float o[3], const float d[3]) {
+bool Ray::NaiivePluckerTest(const float p[9], const float o[3], const float d[3]) {
     // plucker coordinates for edges
     float e0[6] = { p[6] - p[0], p[7] - p[1], p[8] - p[2],
                     p[7] * p[2] - p[8] * p[1],
@@ -282,7 +282,7 @@ bool ray::NaiivePluckerTest(const float p[9], const float o[3], const float d[3]
                                     p[0] * p[4] - p[1] * p[3]
                                   };
 
-    // plucker coordinates for ray
+    // plucker coordinates for Ray
     float R[6] = { d[1] * o[2] - d[2] * o[1],
                    d[2] * o[0] - d[0] * o[2],
                    d[0] * o[1] - d[1] * o[0],
@@ -299,13 +299,13 @@ bool ray::NaiivePluckerTest(const float p[9], const float o[3], const float d[3]
     return (t0 <= 0 && t1 <= 0 && t2 <= 0) || (t0 >= 0 && t1 >= 0 && t2 >= 0);
 }
 
-void ray::ConstructCamera(eCamType type, eFilterType filter, const float origin[3], const float fwd[3], float fov, float gamma, float focus_distance, float focus_factor, camera_t *cam) {
+void Ray::ConstructCamera(eCamType type, eFilterType filter, const float origin[3], const float fwd[3], float fov, float gamma, float focus_distance, float focus_factor, camera_t *cam) {
     if (type == Persp) {
-        ref::simd_fvec3 o = { origin };
-        ref::simd_fvec3 f = { fwd };
-        ref::simd_fvec3 u = { 0, 1, 0 };
+        Ref::simd_fvec3 o = { origin };
+        Ref::simd_fvec3 f = { fwd };
+        Ref::simd_fvec3 u = { 0, 1, 0 };
 
-        ref::simd_fvec3 s = normalize(cross(f, u));
+        Ref::simd_fvec3 s = normalize(cross(f, u));
         u = cross(s, f);
 
         cam->type = type;
@@ -323,7 +323,7 @@ void ray::ConstructCamera(eCamType type, eFilterType filter, const float origin[
     }
 }
 
-void ray::TransformBoundingBox(const float bbox[2][3], const float *xform, float out_bbox[2][3]) {
+void Ray::TransformBoundingBox(const float bbox[2][3], const float *xform, float out_bbox[2][3]) {
     out_bbox[0][0] = out_bbox[1][0] = xform[12];
     out_bbox[0][1] = out_bbox[1][1] = xform[13];
     out_bbox[0][2] = out_bbox[1][2] = xform[14];
@@ -344,7 +344,7 @@ void ray::TransformBoundingBox(const float bbox[2][3], const float *xform, float
     }
 }
 
-void ray::InverseMatrix(const float mat[16], float out_mat[16]) {
+void Ray::InverseMatrix(const float mat[16], float out_mat[16]) {
     float A2323 = mat[10] * mat[15] - mat[11] * mat[14];
     float A1323 = mat[9] * mat[15] - mat[11] * mat[13];
     float A1223 = mat[9] * mat[14] - mat[10] * mat[13];

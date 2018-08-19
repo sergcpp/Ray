@@ -2,8 +2,8 @@
 
 #include "CoreOCL.h"
 
-namespace ray {
-namespace ocl {
+namespace Ray {
+namespace Ocl {
 template <typename T>
 class Vector {
     const cl::Context &context_;

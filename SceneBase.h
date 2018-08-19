@@ -12,7 +12,7 @@
   @brief Contains common scene interface
 */
 
-namespace ray {
+namespace Ray {
 /// Mesh primitive type
 enum ePrimType {
     TriangleList,   ///< indexed triangle list

@@ -13,8 +13,8 @@
 #include "SceneOCL.h"
 #include "TextureAtlasOCL.h"
 
-namespace ray {
-namespace ocl {
+namespace Ray {
+namespace Ocl {
 const char *cl_src_types =
 #include "kernels/types.cl"
     ;
@@ -50,7 +50,7 @@ const char *cl_src_transform =
 
 #define USE_IMG_BUFFERS 1
 
-ray::ocl::Renderer::Renderer(int w, int h, int platform_index, int device_index) : w_(w), h_(h), loaded_halton_(-1) {
+Ray::Ocl::Renderer::Renderer(int w, int h, int platform_index, int device_index) : w_(w), h_(h), loaded_halton_(-1) {
     std::vector<cl::Platform> platforms;
     cl::Platform::get(&platforms);
     if (platforms.empty()) throw std::runtime_error("Cannot create OpenCL renderer!");
@@ -239,7 +239,7 @@ ray::ocl::Renderer::Renderer(int w, int h, int platform_index, int device_index)
         char buf[512];
         int argc = 0;
         if (types_check.setArg(argc++, sizeof(ray_packet_t), buf) != CL_SUCCESS ||
-                types_check.setArg(argc++, sizeof(ocl::camera_t), buf) != CL_SUCCESS ||
+                types_check.setArg(argc++, sizeof(Ocl::camera_t), buf) != CL_SUCCESS ||
                 types_check.setArg(argc++, sizeof(tri_accel_t), buf) != CL_SUCCESS ||
                 types_check.setArg(argc++, sizeof(hit_data_t), buf) != CL_SUCCESS ||
                 types_check.setArg(argc++, sizeof(bvh_node_t), buf) != CL_SUCCESS ||
@@ -273,7 +273,7 @@ ray::ocl::Renderer::Renderer(int w, int h, int platform_index, int device_index)
 
         std::vector<pixel_color_t> color_table;
         /*for (int i = 0; i < 256; i++) {
-            color_table.push_back({ ray::U_0_p1(), ray::U_0_p1(), ray::U_0_p1(), 1 });
+            color_table.push_back({ Ray::U_0_p1(), Ray::U_0_p1(), Ray::U_0_p1(), 1 });
         }*/
         for (int i = 0; i < 64; i++) {
             color_table.push_back( { float(i) / 63, float(i) / 63, float(i) / 63, 1 });
@@ -290,10 +290,10 @@ ray::ocl::Renderer::Renderer(int w, int h, int platform_index, int device_index)
     }
 
     auto rand_func = std::bind(std::uniform_int_distribution<int>(), std::mt19937(0));
-    permutations_ = ray::ComputeRadicalInversePermutations(g_primes, PrimesCount, rand_func);
+    permutations_ = Ray::ComputeRadicalInversePermutations(g_primes, PrimesCount, rand_func);
 }
 
-void ray::ocl::Renderer::Resize(int w, int h) {
+void Ray::Ocl::Renderer::Resize(int w, int h) {
     const int num_pixels = w * h;
 
     cl_int error = CL_SUCCESS;
@@ -351,22 +351,22 @@ void ray::ocl::Renderer::Resize(int w, int h) {
     h_ = h;
 }
 
-void ray::ocl::Renderer::Clear(const pixel_color_t &c) {
+void Ray::Ocl::Renderer::Clear(const pixel_color_t &c) {
     static_assert(sizeof(pixel_color_t) == sizeof(cl_float4), "!");
     queue_.enqueueFillImage(clean_buf_, *(cl_float4 *)&c, {}, { (size_t)w_, (size_t)h_, 1 });
     queue_.enqueueFillImage(final_buf_, *(cl_float4 *)&c, {}, { (size_t)w_, (size_t)h_, 1 });
 }
 
-std::shared_ptr<ray::SceneBase> ray::ocl::Renderer::CreateScene() {
+std::shared_ptr<Ray::SceneBase> Ray::Ocl::Renderer::CreateScene() {
 #if USE_IMG_BUFFERS
-    return std::make_shared<ocl::Scene>(context_, queue_, max_image_buffer_size_);
+    return std::make_shared<Ocl::Scene>(context_, queue_, max_image_buffer_size_);
 #else
-    return std::make_shared<ocl::Scene>(context_, queue_, 0);
+    return std::make_shared<Ocl::Scene>(context_, queue_, 0);
 #endif
 }
 
-void ray::ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, RegionContext &region) {
-    auto s = std::dynamic_pointer_cast<ocl::Scene>(_s);
+void Ray::Ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, RegionContext &region) {
+    auto s = std::dynamic_pointer_cast<Ocl::Scene>(_s);
     if (!s) return;
 
     uint32_t macro_tree_root = s->macro_nodes_start_;
@@ -391,7 +391,7 @@ void ray::ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
 
     const auto &cam = s->GetCamera(s->current_cam());
 
-    ray::ocl::camera_t cl_cam = { cam };
+    Ray::Ocl::camera_t cl_cam = { cam };
 
     const auto time_start = std::chrono::high_resolution_clock::now();
 
@@ -513,7 +513,7 @@ void ray::ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
     error = queue_.enqueueReadImage(final_buf_, CL_TRUE, {}, { (size_t)w_, (size_t)h_, 1 }, 0, 0, &frame_pixels_[0]);
 }
 
-bool ray::ocl::Renderer::kernel_GeneratePrimaryRays(const cl_int iteration, const ray::ocl::camera_t &cam, const ray::rect_t &rect, cl_int w, cl_int h, const cl::Buffer &halton, const cl::Buffer &out_rays) {
+bool Ray::Ocl::Renderer::kernel_GeneratePrimaryRays(const cl_int iteration, const Ray::Ocl::camera_t &cam, const Ray::rect_t &rect, cl_int w, cl_int h, const cl::Buffer &halton, const cl::Buffer &out_rays) {
     cl_uint argc = 0;
     if (prim_rays_gen_kernel_.setArg(argc++, iteration) != CL_SUCCESS ||
             prim_rays_gen_kernel_.setArg(argc++, cam) != CL_SUCCESS ||
@@ -526,7 +526,7 @@ bool ray::ocl::Renderer::kernel_GeneratePrimaryRays(const cl_int iteration, cons
     return CL_SUCCESS == queue_.enqueueNDRangeKernel(prim_rays_gen_kernel_, cl::NDRange{ (size_t)rect.x, (size_t)rect.y }, cl::NDRange{ (size_t)rect.w, (size_t)rect.h });
 }
 
-bool ray::ocl::Renderer::kernel_TextureDebugPage(const cl::Image2DArray &textures, cl_int page, const cl::Image2D &frame_buf) {
+bool Ray::Ocl::Renderer::kernel_TextureDebugPage(const cl::Image2DArray &textures, cl_int page, const cl::Image2D &frame_buf) {
     cl_uint argc = 0;
     if (texture_debug_page_kernel_.setArg(argc++, textures) != CL_SUCCESS ||
             texture_debug_page_kernel_.setArg(argc++, page) != CL_SUCCESS ||
@@ -540,8 +540,8 @@ bool ray::ocl::Renderer::kernel_TextureDebugPage(const cl::Image2DArray &texture
     return CL_SUCCESS == queue_.enqueueNDRangeKernel(texture_debug_page_kernel_, cl::NullRange, cl::NDRange { (size_t)w, (size_t)h });
 }
 
-bool ray::ocl::Renderer::kernel_ShadePrimary(const cl_int iteration, const cl::Buffer &halton,
-        const ray::rect_t &rect, cl_int w,
+bool Ray::Ocl::Renderer::kernel_ShadePrimary(const cl_int iteration, const cl::Buffer &halton,
+        const Ray::rect_t &rect, cl_int w,
         const cl::Buffer &intersections, const cl::Buffer &rays,
         const cl::Buffer &mesh_instances, const cl::Buffer &mi_indices, const cl::Buffer &meshes,
         const cl::Buffer &transforms, const cl::Buffer &vtx_indices, const cl::Buffer &vertices,
@@ -615,7 +615,7 @@ bool ray::ocl::Renderer::kernel_ShadePrimary(const cl_int iteration, const cl::B
     return true;
 }
 
-bool ray::ocl::Renderer::kernel_ShadeSecondary(const cl_int iteration, const cl_int bounce, const cl::Buffer &halton,
+bool Ray::Ocl::Renderer::kernel_ShadeSecondary(const cl_int iteration, const cl_int bounce, const cl::Buffer &halton,
         const cl::Buffer &intersections, const cl::Buffer &rays,
         int rays_count, int w, int h,
         const cl::Buffer &mesh_instances, const cl::Buffer &mi_indices, const cl::Buffer &meshes,
@@ -679,7 +679,7 @@ bool ray::ocl::Renderer::kernel_ShadeSecondary(const cl_int iteration, const cl_
     return true;
 }
 
-bool ray::ocl::Renderer::kernel_TracePrimaryRays(const cl::Buffer &rays, const ray::rect_t &rect, cl_int w, const cl::Buffer &mesh_instances, const cl::Buffer &mi_indices, const cl::Buffer &meshes, const cl::Buffer &transforms,
+bool Ray::Ocl::Renderer::kernel_TracePrimaryRays(const cl::Buffer &rays, const Ray::rect_t &rect, cl_int w, const cl::Buffer &mesh_instances, const cl::Buffer &mi_indices, const cl::Buffer &meshes, const cl::Buffer &transforms,
         const cl::Buffer &nodes, cl_uint node_index, const cl::Buffer &tris, const cl::Buffer &tri_indices, const cl::Buffer &intersections) {
     cl_uint argc = 0;
     if (trace_primary_rays_kernel_.setArg(argc++, rays) != CL_SUCCESS ||
@@ -733,7 +733,7 @@ bool ray::ocl::Renderer::kernel_TracePrimaryRays(const cl::Buffer &rays, const r
     return true;
 }
 
-bool ray::ocl::Renderer::kernel_TracePrimaryRaysImg(const cl::Buffer &rays, const ray::rect_t &rect, cl_int w,
+bool Ray::Ocl::Renderer::kernel_TracePrimaryRaysImg(const cl::Buffer &rays, const Ray::rect_t &rect, cl_int w,
                                                     const cl::Buffer &mesh_instances, const cl::Buffer &mi_indices, const cl::Buffer &meshes, const cl::Buffer &transforms,
                                                     const cl::Image1DBuffer &nodes, cl_uint node_index, const cl::Buffer &tris, const cl::Buffer &tri_indices, const cl::Buffer &intersections) {
     cl_uint argc = 0;
@@ -788,7 +788,7 @@ bool ray::ocl::Renderer::kernel_TracePrimaryRaysImg(const cl::Buffer &rays, cons
     return true;
 }
 
-bool ray::ocl::Renderer::kernel_TraceSecondaryRays(const cl::Buffer &rays, cl_int rays_count,
+bool Ray::Ocl::Renderer::kernel_TraceSecondaryRays(const cl::Buffer &rays, cl_int rays_count,
         const cl::Buffer &mesh_instances, const cl::Buffer &mi_indices, const cl::Buffer &meshes, const cl::Buffer &transforms,
         const cl::Buffer &nodes, cl_uint node_index, const cl::Buffer &tris, const cl::Buffer &tri_indices, const cl::Buffer &intersections) {
     cl_uint argc = 0;
@@ -827,7 +827,7 @@ bool ray::ocl::Renderer::kernel_TraceSecondaryRays(const cl::Buffer &rays, cl_in
     return true;
 }
 
-bool ray::ocl::Renderer::kernel_TraceSecondaryRaysImg(const cl::Buffer &rays, cl_int rays_count,
+bool Ray::Ocl::Renderer::kernel_TraceSecondaryRaysImg(const cl::Buffer &rays, cl_int rays_count,
                                                       const cl::Buffer &mesh_instances, const cl::Buffer &mi_indices, const cl::Buffer &meshes, const cl::Buffer &transforms,
                                                       const cl::Image1DBuffer &nodes, cl_uint node_index, const cl::Buffer &tris, const cl::Buffer &tri_indices, const cl::Buffer &intersections) {
     cl_uint argc = 0;
@@ -866,7 +866,7 @@ bool ray::ocl::Renderer::kernel_TraceSecondaryRaysImg(const cl::Buffer &rays, cl
     return true;
 }
 
-bool ray::ocl::Renderer::kernel_ComputeRayHashes(const cl::Buffer &rays, cl_int rays_count, cl_float3 root_min, cl_float3 cell_size, const cl::Buffer &out_hashes) {
+bool Ray::Ocl::Renderer::kernel_ComputeRayHashes(const cl::Buffer &rays, cl_int rays_count, cl_float3 root_min, cl_float3 cell_size, const cl::Buffer &out_hashes) {
     cl_uint argc = 0;
     if (compute_ray_hashes_kernel_.setArg(argc++, rays) != CL_SUCCESS ||
         compute_ray_hashes_kernel_.setArg(argc++, root_min) != CL_SUCCESS ||
@@ -880,7 +880,7 @@ bool ray::ocl::Renderer::kernel_ComputeRayHashes(const cl::Buffer &rays, cl_int 
     return queue_.enqueueNDRangeKernel(compute_ray_hashes_kernel_, cl::NullRange, global, cl::NullRange) == CL_SUCCESS;
 }
 
-bool ray::ocl::Renderer::kernel_SetHeadFlags(const cl::Buffer &hashes, cl_int hashes_count, const cl::Buffer &out_head_flags) {
+bool Ray::Ocl::Renderer::kernel_SetHeadFlags(const cl::Buffer &hashes, cl_int hashes_count, const cl::Buffer &out_head_flags) {
     cl_uint argc = 0;
     if (set_head_flags_kernel_.setArg(argc++, hashes) != CL_SUCCESS ||
         set_head_flags_kernel_.setArg(argc++, out_head_flags) != CL_SUCCESS) {
@@ -893,7 +893,7 @@ bool ray::ocl::Renderer::kernel_SetHeadFlags(const cl::Buffer &hashes, cl_int ha
     return queue_.enqueueNDRangeKernel(set_head_flags_kernel_, cl::NullRange, global, local) == CL_SUCCESS;
 }
 
-bool ray::ocl::Renderer::kernel_ExclusiveScan(const cl::Buffer &values, cl_int count, cl_int offset, cl_int stride,
+bool Ray::Ocl::Renderer::kernel_ExclusiveScan(const cl::Buffer &values, cl_int count, cl_int offset, cl_int stride,
                                               const cl::Buffer &out_scan_values, const cl::Buffer &out_partial_sums) {
     cl_uint argc = 0;
     if (excl_scan_kernel_.setArg(argc++, values) != CL_SUCCESS ||
@@ -910,7 +910,7 @@ bool ray::ocl::Renderer::kernel_ExclusiveScan(const cl::Buffer &values, cl_int c
     return queue_.enqueueNDRangeKernel(excl_scan_kernel_, cl::NullRange, global, local) == CL_SUCCESS;
 }
 
-bool ray::ocl::Renderer::kernel_InclusiveScan(const cl::Buffer &values, cl_int count, const cl::Buffer &out_scan_values, const cl::Buffer &out_partial_sums) {
+bool Ray::Ocl::Renderer::kernel_InclusiveScan(const cl::Buffer &values, cl_int count, const cl::Buffer &out_scan_values, const cl::Buffer &out_partial_sums) {
     cl_uint argc = 0;
     if (incl_scan_kernel_.setArg(argc++, values) != CL_SUCCESS ||
         incl_scan_kernel_.setArg(argc++, out_scan_values) != CL_SUCCESS ||
@@ -924,7 +924,7 @@ bool ray::ocl::Renderer::kernel_InclusiveScan(const cl::Buffer &values, cl_int c
     return queue_.enqueueNDRangeKernel(incl_scan_kernel_, cl::NullRange, global, local) == CL_SUCCESS;
 }
 
-bool ray::ocl::Renderer::kernel_ExclusiveSegScan(const cl::Buffer &values, const cl::Buffer &flags, cl_int count, const cl::Buffer &out_scan_values, const cl::Buffer &out_partial_sums) {
+bool Ray::Ocl::Renderer::kernel_ExclusiveSegScan(const cl::Buffer &values, const cl::Buffer &flags, cl_int count, const cl::Buffer &out_scan_values, const cl::Buffer &out_partial_sums) {
     cl_uint argc = 0;
     if (excl_seg_scan_kernel_.setArg(argc++, values) != CL_SUCCESS ||
         excl_seg_scan_kernel_.setArg(argc++, flags) != CL_SUCCESS ||
@@ -939,7 +939,7 @@ bool ray::ocl::Renderer::kernel_ExclusiveSegScan(const cl::Buffer &values, const
     return queue_.enqueueNDRangeKernel(excl_seg_scan_kernel_, cl::NullRange, global, local) == CL_SUCCESS;
 }
 
-bool ray::ocl::Renderer::kernel_InclusiveSegScan(const cl::Buffer &values, const cl::Buffer &flags, cl_int count, const cl::Buffer &out_scan_values,
+bool Ray::Ocl::Renderer::kernel_InclusiveSegScan(const cl::Buffer &values, const cl::Buffer &flags, cl_int count, const cl::Buffer &out_scan_values,
                                                  const cl::Buffer &out_partial_sums, const cl::Buffer &out_partial_flags) {
     cl_uint argc = 0;
     if (incl_seg_scan_kernel_.setArg(argc++, values) != CL_SUCCESS ||
@@ -956,7 +956,7 @@ bool ray::ocl::Renderer::kernel_InclusiveSegScan(const cl::Buffer &values, const
     return queue_.enqueueNDRangeKernel(incl_seg_scan_kernel_, cl::NullRange, global, local) == CL_SUCCESS;
 }
 
-bool ray::ocl::Renderer::kernel_AddPartialSums(const cl::Buffer &values, cl_int count, const cl::Buffer &partial_sums) {
+bool Ray::Ocl::Renderer::kernel_AddPartialSums(const cl::Buffer &values, cl_int count, const cl::Buffer &partial_sums) {
     cl_uint argc = 0;
     if (add_partial_sums_kernel_.setArg(argc++, values) != CL_SUCCESS ||
         add_partial_sums_kernel_.setArg(argc++, partial_sums) != CL_SUCCESS) {
@@ -969,7 +969,7 @@ bool ray::ocl::Renderer::kernel_AddPartialSums(const cl::Buffer &values, cl_int 
     return queue_.enqueueNDRangeKernel(add_partial_sums_kernel_, cl::NullRange, global, local) == CL_SUCCESS;
 }
 
-bool ray::ocl::Renderer::kernel_AddSegPartialSums(const cl::Buffer &flags, const cl::Buffer &values, const cl::Buffer &partial_sums, cl_int count, cl_int _group_size) {
+bool Ray::Ocl::Renderer::kernel_AddSegPartialSums(const cl::Buffer &flags, const cl::Buffer &values, const cl::Buffer &partial_sums, cl_int count, cl_int _group_size) {
     cl_uint argc = 0;
     if (add_seg_partial_sums_kernel_.setArg(argc++, flags) != CL_SUCCESS ||
         add_seg_partial_sums_kernel_.setArg(argc++, values) != CL_SUCCESS ||
@@ -1000,7 +1000,7 @@ bool ray::ocl::Renderer::kernel_AddSegPartialSums(const cl::Buffer &flags, const
     return true;
 }
 
-bool ray::ocl::Renderer::kernel_InitChunkHashAndBase(const cl::Buffer &chunks, cl_int count, const cl::Buffer &hash_values, const cl::Buffer &head_flags, const cl::Buffer &scan_values) {
+bool Ray::Ocl::Renderer::kernel_InitChunkHashAndBase(const cl::Buffer &chunks, cl_int count, const cl::Buffer &hash_values, const cl::Buffer &head_flags, const cl::Buffer &scan_values) {
     cl_uint argc = 0;
     if (init_chunk_hash_and_base_kernel_.setArg(argc++, chunks) != CL_SUCCESS ||
         init_chunk_hash_and_base_kernel_.setArg(argc++, hash_values) != CL_SUCCESS ||
@@ -1014,7 +1014,7 @@ bool ray::ocl::Renderer::kernel_InitChunkHashAndBase(const cl::Buffer &chunks, c
     return queue_.enqueueNDRangeKernel(init_chunk_hash_and_base_kernel_, cl::NullRange, global, cl::NullRange) == CL_SUCCESS;
 }
 
-bool ray::ocl::Renderer::kernel_InitChunkSize(const cl::Buffer &chunks, cl_int count, cl_int ray_count) {
+bool Ray::Ocl::Renderer::kernel_InitChunkSize(const cl::Buffer &chunks, cl_int count, cl_int ray_count) {
     cl_uint argc = 0;
     if (init_chunk_size_kernel_.setArg(argc++, chunks) != CL_SUCCESS ||
         init_chunk_size_kernel_.setArg(argc++, ray_count) != CL_SUCCESS) {
@@ -1026,7 +1026,7 @@ bool ray::ocl::Renderer::kernel_InitChunkSize(const cl::Buffer &chunks, cl_int c
     return queue_.enqueueNDRangeKernel(init_chunk_size_kernel_, cl::NullRange, global, cl::NullRange) == CL_SUCCESS;
 }
 
-bool ray::ocl::Renderer::kernel_InitSkeletonAndHeadFlags(const cl::Buffer &scan_values, const cl::Buffer &chunks, cl_int count, const cl::Buffer &skeleton, const cl::Buffer &head_flags) {
+bool Ray::Ocl::Renderer::kernel_InitSkeletonAndHeadFlags(const cl::Buffer &scan_values, const cl::Buffer &chunks, cl_int count, const cl::Buffer &skeleton, const cl::Buffer &head_flags) {
     cl_uint argc = 0;
     if (init_skel_and_head_flags_kernel_.setArg(argc++, scan_values) != CL_SUCCESS ||
         init_skel_and_head_flags_kernel_.setArg(argc++, chunks) != CL_SUCCESS ||
@@ -1040,7 +1040,7 @@ bool ray::ocl::Renderer::kernel_InitSkeletonAndHeadFlags(const cl::Buffer &scan_
     return queue_.enqueueNDRangeKernel(init_skel_and_head_flags_kernel_, cl::NullRange, global, cl::NullRange) == CL_SUCCESS;
 }
 
-bool ray::ocl::Renderer::kernel_InitCountTable(const cl::Buffer &chunks, cl_int count, cl_int group_size, cl_int shift, const cl::Buffer &counters) {
+bool Ray::Ocl::Renderer::kernel_InitCountTable(const cl::Buffer &chunks, cl_int count, cl_int group_size, cl_int shift, const cl::Buffer &counters) {
     cl_uint argc = 0;
     if (init_count_table_kernel_.setArg(argc++, chunks) != CL_SUCCESS ||
         init_count_table_kernel_.setArg(argc++, shift) != CL_SUCCESS ||
@@ -1054,7 +1054,7 @@ bool ray::ocl::Renderer::kernel_InitCountTable(const cl::Buffer &chunks, cl_int 
     return queue_.enqueueNDRangeKernel(init_count_table_kernel_, cl::NullRange, global, local) == CL_SUCCESS;
 }
 
-bool ray::ocl::Renderer::kernel_WriteSortedChunks(const cl::Buffer &chunks_in, const cl::Buffer &offsets, const cl::Buffer &counts, cl_int count, cl_int shift, cl_int _group_size, const cl::Buffer &chunks_out) {
+bool Ray::Ocl::Renderer::kernel_WriteSortedChunks(const cl::Buffer &chunks_in, const cl::Buffer &offsets, const cl::Buffer &counts, cl_int count, cl_int shift, cl_int _group_size, const cl::Buffer &chunks_out) {
     cl_uint argc = 0;
     if (write_sorted_chunks_kernel_.setArg(argc++, chunks_in) != CL_SUCCESS ||
         write_sorted_chunks_kernel_.setArg(argc++, offsets) != CL_SUCCESS ||
@@ -1085,7 +1085,7 @@ bool ray::ocl::Renderer::kernel_WriteSortedChunks(const cl::Buffer &chunks_in, c
     return true;
 }
 
-bool ray::ocl::Renderer::kernel_ReorderRays(const cl::Buffer &in_rays, const cl::Buffer &in_indices, cl_int count, const cl::Buffer &out_rays) {
+bool Ray::Ocl::Renderer::kernel_ReorderRays(const cl::Buffer &in_rays, const cl::Buffer &in_indices, cl_int count, const cl::Buffer &out_rays) {
     cl_uint argc = 0;
     if (reorder_rays_kernel_.setArg(argc++, in_rays) != CL_SUCCESS ||
         reorder_rays_kernel_.setArg(argc++, in_indices) != CL_SUCCESS ||
@@ -1098,7 +1098,7 @@ bool ray::ocl::Renderer::kernel_ReorderRays(const cl::Buffer &in_rays, const cl:
     return queue_.enqueueNDRangeKernel(reorder_rays_kernel_, cl::NullRange, global, cl::NullRange) == CL_SUCCESS;
 }
 
-bool ray::ocl::Renderer::kernel_MixIncremental(const cl::Image2D &fbuf1, const cl::Image2D &fbuf2, cl_float k, const cl::Image2D &res) {
+bool Ray::Ocl::Renderer::kernel_MixIncremental(const cl::Image2D &fbuf1, const cl::Image2D &fbuf2, cl_float k, const cl::Image2D &res) {
     cl_uint argc = 0;
     if (mix_incremental_kernel_.setArg(argc++, fbuf1) != CL_SUCCESS ||
         mix_incremental_kernel_.setArg(argc++, fbuf2) != CL_SUCCESS ||
@@ -1116,7 +1116,7 @@ bool ray::ocl::Renderer::kernel_MixIncremental(const cl::Image2D &fbuf1, const c
     return queue_.enqueueNDRangeKernel(mix_incremental_kernel_, cl::NullRange, global, local) == CL_SUCCESS;
 }
 
-bool ray::ocl::Renderer::kernel_Postprocess(const cl::Image2D &frame_buf, cl_int w, cl_int h, cl_float gamma, const cl::Image2D &out_pixels) {
+bool Ray::Ocl::Renderer::kernel_Postprocess(const cl::Image2D &frame_buf, cl_int w, cl_int h, cl_float gamma, const cl::Image2D &out_pixels) {
     cl_uint argc = 0;
     if (post_process_kernel_.setArg(argc++, frame_buf) != CL_SUCCESS ||
             post_process_kernel_.setArg(argc++, w) != CL_SUCCESS ||
@@ -1132,40 +1132,40 @@ bool ray::ocl::Renderer::kernel_Postprocess(const cl::Image2D &frame_buf, cl_int
     return queue_.enqueueNDRangeKernel(post_process_kernel_, cl::NullRange, global, local) == CL_SUCCESS;
 }
 
-void ray::ocl::Renderer::UpdateHaltonSequence(int iteration, std::unique_ptr<float[]> &seq) {
+void Ray::Ocl::Renderer::UpdateHaltonSequence(int iteration, std::unique_ptr<float[]> &seq) {
     if (!seq) {
         seq.reset(new float[HALTON_COUNT * HALTON_SEQ_LEN]);
     }
 
     for (int i = 0; i < HALTON_SEQ_LEN; i++) {
-        seq[2 * (i * HALTON_2D_COUNT + 0 ) + 0] = ray::ScrambledRadicalInverse<2 >(&permutations_[0  ], (uint64_t)(iteration + i));
-        seq[2 * (i * HALTON_2D_COUNT + 0 ) + 1] = ray::ScrambledRadicalInverse<3 >(&permutations_[2  ], (uint64_t)(iteration + i));
-        seq[2 * (i * HALTON_2D_COUNT + 1 ) + 0] = ray::ScrambledRadicalInverse<5 >(&permutations_[5  ], (uint64_t)(iteration + i));
-        seq[2 * (i * HALTON_2D_COUNT + 1 ) + 1] = ray::ScrambledRadicalInverse<7 >(&permutations_[10 ], (uint64_t)(iteration + i));
-        seq[2 * (i * HALTON_2D_COUNT + 2 ) + 0] = ray::ScrambledRadicalInverse<11>(&permutations_[17 ], (uint64_t)(iteration + i));
-        seq[2 * (i * HALTON_2D_COUNT + 2 ) + 1] = ray::ScrambledRadicalInverse<13>(&permutations_[28 ], (uint64_t)(iteration + i));
-        seq[2 * (i * HALTON_2D_COUNT + 3 ) + 0] = ray::ScrambledRadicalInverse<17>(&permutations_[41 ], (uint64_t)(iteration + i));
-        seq[2 * (i * HALTON_2D_COUNT + 3 ) + 1] = ray::ScrambledRadicalInverse<19>(&permutations_[58 ], (uint64_t)(iteration + i));
-        seq[2 * (i * HALTON_2D_COUNT + 4 ) + 0] = ray::ScrambledRadicalInverse<23>(&permutations_[77 ], (uint64_t)(iteration + i));
-        seq[2 * (i * HALTON_2D_COUNT + 4 ) + 1] = ray::ScrambledRadicalInverse<29>(&permutations_[100], (uint64_t)(iteration + i));
-        seq[2 * (i * HALTON_2D_COUNT + 5 ) + 0] = ray::ScrambledRadicalInverse<31>(&permutations_[129], (uint64_t)(iteration + i));
-        seq[2 * (i * HALTON_2D_COUNT + 5 ) + 1] = ray::ScrambledRadicalInverse<37>(&permutations_[160], (uint64_t)(iteration + i));
-        seq[2 * (i * HALTON_2D_COUNT + 6 ) + 0] = ray::ScrambledRadicalInverse<41>(&permutations_[197], (uint64_t)(iteration + i));
-        seq[2 * (i * HALTON_2D_COUNT + 6 ) + 1] = ray::ScrambledRadicalInverse<43>(&permutations_[238], (uint64_t)(iteration + i));
-        seq[2 * (i * HALTON_2D_COUNT + 7 ) + 0] = ray::ScrambledRadicalInverse<47>(&permutations_[281], (uint64_t)(iteration + i));
-        seq[2 * (i * HALTON_2D_COUNT + 7 ) + 1] = ray::ScrambledRadicalInverse<53>(&permutations_[328], (uint64_t)(iteration + i));
-        seq[2 * (i * HALTON_2D_COUNT + 8 ) + 0] = ray::ScrambledRadicalInverse<59>(&permutations_[381], (uint64_t)(iteration + i));
-        seq[2 * (i * HALTON_2D_COUNT + 8 ) + 1] = ray::ScrambledRadicalInverse<61>(&permutations_[440], (uint64_t)(iteration + i));
-        seq[2 * (i * HALTON_2D_COUNT + 9 ) + 0] = ray::ScrambledRadicalInverse<67>(&permutations_[501], (uint64_t)(iteration + i));
-        seq[2 * (i * HALTON_2D_COUNT + 9 ) + 1] = ray::ScrambledRadicalInverse<71>(&permutations_[568], (uint64_t)(iteration + i));
-        seq[2 * (i * HALTON_2D_COUNT + 10) + 0] = ray::ScrambledRadicalInverse<73>(&permutations_[639], (uint64_t)(iteration + i));
-        seq[2 * (i * HALTON_2D_COUNT + 10) + 1] = ray::ScrambledRadicalInverse<79>(&permutations_[712], (uint64_t)(iteration + i));
-        seq[2 * (i * HALTON_2D_COUNT + 11) + 0] = ray::ScrambledRadicalInverse<83>(&permutations_[791], (uint64_t)(iteration + i));
-        seq[2 * (i * HALTON_2D_COUNT + 11) + 1] = ray::ScrambledRadicalInverse<89>(&permutations_[874], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 0 ) + 0] = Ray::ScrambledRadicalInverse<2 >(&permutations_[0  ], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 0 ) + 1] = Ray::ScrambledRadicalInverse<3 >(&permutations_[2  ], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 1 ) + 0] = Ray::ScrambledRadicalInverse<5 >(&permutations_[5  ], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 1 ) + 1] = Ray::ScrambledRadicalInverse<7 >(&permutations_[10 ], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 2 ) + 0] = Ray::ScrambledRadicalInverse<11>(&permutations_[17 ], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 2 ) + 1] = Ray::ScrambledRadicalInverse<13>(&permutations_[28 ], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 3 ) + 0] = Ray::ScrambledRadicalInverse<17>(&permutations_[41 ], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 3 ) + 1] = Ray::ScrambledRadicalInverse<19>(&permutations_[58 ], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 4 ) + 0] = Ray::ScrambledRadicalInverse<23>(&permutations_[77 ], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 4 ) + 1] = Ray::ScrambledRadicalInverse<29>(&permutations_[100], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 5 ) + 0] = Ray::ScrambledRadicalInverse<31>(&permutations_[129], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 5 ) + 1] = Ray::ScrambledRadicalInverse<37>(&permutations_[160], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 6 ) + 0] = Ray::ScrambledRadicalInverse<41>(&permutations_[197], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 6 ) + 1] = Ray::ScrambledRadicalInverse<43>(&permutations_[238], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 7 ) + 0] = Ray::ScrambledRadicalInverse<47>(&permutations_[281], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 7 ) + 1] = Ray::ScrambledRadicalInverse<53>(&permutations_[328], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 8 ) + 0] = Ray::ScrambledRadicalInverse<59>(&permutations_[381], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 8 ) + 1] = Ray::ScrambledRadicalInverse<61>(&permutations_[440], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 9 ) + 0] = Ray::ScrambledRadicalInverse<67>(&permutations_[501], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 9 ) + 1] = Ray::ScrambledRadicalInverse<71>(&permutations_[568], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 10) + 0] = Ray::ScrambledRadicalInverse<73>(&permutations_[639], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 10) + 1] = Ray::ScrambledRadicalInverse<79>(&permutations_[712], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 11) + 0] = Ray::ScrambledRadicalInverse<83>(&permutations_[791], (uint64_t)(iteration + i));
+        seq[2 * (i * HALTON_2D_COUNT + 11) + 1] = Ray::ScrambledRadicalInverse<89>(&permutations_[874], (uint64_t)(iteration + i));
     }
 }
 
-bool ray::ocl::Renderer::ExclusiveScan_CPU(const cl::Buffer &values, cl_int count, cl_int offset, cl_int stride, const cl::Buffer &out_scan_values) {
+bool Ray::Ocl::Renderer::ExclusiveScan_CPU(const cl::Buffer &values, cl_int count, cl_int offset, cl_int stride, const cl::Buffer &out_scan_values) {
     std::vector<uint32_t> _values((stride/4) * count), _scan_values(count);
     
     if (queue_.enqueueReadBuffer(values, CL_TRUE, 0, stride * count, &_values[0]) != CL_SUCCESS) return false;
@@ -1179,7 +1179,7 @@ bool ray::ocl::Renderer::ExclusiveScan_CPU(const cl::Buffer &values, cl_int coun
     return queue_.enqueueWriteBuffer(out_scan_values, CL_TRUE, 0, sizeof(uint32_t) * count, &_scan_values[0]) == CL_SUCCESS;
 }
 
-bool ray::ocl::Renderer::ExclusiveScan_GPU(const cl::Buffer &values, cl_int count, cl_int offset, cl_int stride,
+bool Ray::Ocl::Renderer::ExclusiveScan_GPU(const cl::Buffer &values, cl_int count, cl_int offset, cl_int stride,
                                            const cl::Buffer &partial_sums, const cl::Buffer &partial_sums2, const cl::Buffer &scan_values2,
                                            const cl::Buffer &scan_values3, const cl::Buffer &scan_values4, const cl::Buffer &out_scan_values) {
     size_t _rem = count % scan_portion_;
@@ -1233,7 +1233,7 @@ bool ray::ocl::Renderer::ExclusiveScan_GPU(const cl::Buffer &values, cl_int coun
     return true;
 }
 
-bool ray::ocl::Renderer::InclusiveSegScan_CPU(const cl::Buffer &flags, const cl::Buffer &values, cl_int count, const cl::Buffer &out_scan_values) {
+bool Ray::Ocl::Renderer::InclusiveSegScan_CPU(const cl::Buffer &flags, const cl::Buffer &values, cl_int count, const cl::Buffer &out_scan_values) {
     std::vector<uint32_t> _flags(count), _values(count), _scan_values(count);
 
     if (queue_.enqueueReadBuffer(flags, CL_TRUE, 0, sizeof(uint32_t) * count, &_flags[0]) != CL_SUCCESS) return false;
@@ -1249,7 +1249,7 @@ bool ray::ocl::Renderer::InclusiveSegScan_CPU(const cl::Buffer &flags, const cl:
     return queue_.enqueueWriteBuffer(out_scan_values, CL_TRUE, 0, sizeof(uint32_t) * count, &_scan_values[0]) == CL_SUCCESS;
 }
 
-bool ray::ocl::Renderer::InclusiveSegScan_GPU(const cl::Buffer &flags, const cl::Buffer &values, cl_int count, const cl::Buffer &partial_sums,
+bool Ray::Ocl::Renderer::InclusiveSegScan_GPU(const cl::Buffer &flags, const cl::Buffer &values, cl_int count, const cl::Buffer &partial_sums,
                                               const cl::Buffer &partial_sums2, const cl::Buffer &partial_sums3, const cl::Buffer &partial_sums4,
                                               const cl::Buffer &partial_flags, const cl::Buffer &partial_flags2, const cl::Buffer &partial_flags3,
                                               const cl::Buffer &partial_flags4, const cl::Buffer &scan_values2, const cl::Buffer &scan_values3,
@@ -1308,7 +1308,7 @@ bool ray::ocl::Renderer::InclusiveSegScan_GPU(const cl::Buffer &flags, const cl:
     return true;
 }
 
-bool ray::ocl::Renderer::ReorderRays_CPU(const cl::Buffer &scan_values, const cl::Buffer &rays, cl_int count) {
+bool Ray::Ocl::Renderer::ReorderRays_CPU(const cl::Buffer &scan_values, const cl::Buffer &rays, cl_int count) {
     std::vector<uint32_t> _scan_values(count);
     std::vector<ray_packet_t> _rays(count);
 
@@ -1327,7 +1327,7 @@ bool ray::ocl::Renderer::ReorderRays_CPU(const cl::Buffer &scan_values, const cl
     return queue_.enqueueWriteBuffer(rays, CL_TRUE, 0, sizeof(ray_packet_t) * count, &_rays[0]) == CL_SUCCESS;
 }
 
-bool ray::ocl::Renderer::PerformRadixSort_CPU(const cl::Buffer &chunks, cl_int count) {
+bool Ray::Ocl::Renderer::PerformRadixSort_CPU(const cl::Buffer &chunks, cl_int count) {
     std::vector<ray_chunk_t> _chunks(count), _chunks_temp(count);
 
     if (queue_.enqueueReadBuffer(chunks, CL_TRUE, 0, sizeof(ray_chunk_t) * count, &_chunks[0]) != CL_SUCCESS) return false;
@@ -1358,7 +1358,7 @@ bool ray::ocl::Renderer::PerformRadixSort_CPU(const cl::Buffer &chunks, cl_int c
     return queue_.enqueueWriteBuffer(chunks, CL_TRUE, 0, sizeof(ray_chunk_t) * count, &_chunks[0]) == CL_SUCCESS;
 }
 
-bool ray::ocl::Renderer::PerformRadixSort_GPU(const cl::Buffer &chunks, const cl::Buffer &chunks2, cl_int count, const cl::Buffer &counters,
+bool Ray::Ocl::Renderer::PerformRadixSort_GPU(const cl::Buffer &chunks, const cl::Buffer &chunks2, cl_int count, const cl::Buffer &counters,
                                               const cl::Buffer &partial_sums, const cl::Buffer &partial_sums2, const cl::Buffer &scan_values,
                                               const cl::Buffer &scan_values2, const cl::Buffer &scan_values3, const cl::Buffer &scan_values4) {
     size_t group_size = std::min(max_work_group_size_, (size_t)64);
@@ -1386,7 +1386,7 @@ bool ray::ocl::Renderer::PerformRadixSort_GPU(const cl::Buffer &chunks, const cl
     return true;
 }
 
-bool ray::ocl::Renderer::SortRays(const cl::Buffer &in_rays, cl_int rays_count, cl_float3 root_min, cl_float3 cell_size, const cl::Buffer &ray_hashes,
+bool Ray::Ocl::Renderer::SortRays(const cl::Buffer &in_rays, cl_int rays_count, cl_float3 root_min, cl_float3 cell_size, const cl::Buffer &ray_hashes,
                                   const cl::Buffer &head_flags, const cl::Buffer &partial_sums, const cl::Buffer &partial_sums2, const cl::Buffer &partial_sums3, const cl::Buffer &partial_sums4,
                                   const cl::Buffer &partial_flags, const cl::Buffer &partial_flags2, const cl::Buffer &partial_flags3, const cl::Buffer &partial_flags4,
                                   const cl::Buffer &scan_values, const cl::Buffer &scan_values2, const cl::Buffer &scan_values3, const cl::Buffer &scan_values4,
@@ -1432,8 +1432,8 @@ bool ray::ocl::Renderer::SortRays(const cl::Buffer &in_rays, cl_int rays_count, 
     return true;
 }
 
-std::vector<ray::ocl::Platform> ray::ocl::Renderer::QueryPlatforms() {
-    std::vector<ray::ocl::Platform> out_platforms;
+std::vector<Ray::Ocl::Platform> Ray::Ocl::Renderer::QueryPlatforms() {
+    std::vector<Ray::Ocl::Platform> out_platforms;
 
     std::vector<cl::Platform> platforms;
     cl::Platform::get(&platforms);

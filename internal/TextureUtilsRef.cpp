@@ -6,7 +6,7 @@
 
 #include <array>
 
-std::vector<ray::pixel_color8_t> ray::ref::DownsampleTexture(const std::vector<pixel_color8_t> &_tex, const int res[2]) {
+std::vector<Ray::pixel_color8_t> Ray::Ref::DownsampleTexture(const std::vector<pixel_color8_t> &_tex, const int res[2]) {
     if (res[0] == 1 || res[1] == 1) return _tex;
     
     const pixel_color8_t *tex = &_tex[0];
@@ -33,7 +33,7 @@ std::vector<ray::pixel_color8_t> ray::ref::DownsampleTexture(const std::vector<p
     return ret;
 }
 
-void ray::ref::ComputeTextureBasis(size_t vtx_offset, size_t vtx_start, std::vector<vertex_t> &vertices, std::vector<uint32_t> &new_vtx_indices,
+void Ray::Ref::ComputeTextureBasis(size_t vtx_offset, size_t vtx_start, std::vector<vertex_t> &vertices, std::vector<uint32_t> &new_vtx_indices,
                                    const uint32_t *indices, size_t indices_count) {
 
     std::vector<std::array<uint32_t, 3>> twin_verts(vertices.size(), { 0, 0, 0 });
@@ -144,4 +144,4 @@ void ray::ref::ComputeTextureBasis(size_t vtx_offset, size_t vtx_start, std::vec
             memcpy(&v.b[0], &binormal[0], 3 * sizeof(float));
         }
     }
-};
+}

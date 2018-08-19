@@ -14,7 +14,7 @@
 
 #include "simd/aligned_allocator.h"
 
-namespace ray {
+namespace Ray {
 enum eUninitialize { Uninitialize };
 
 union rays_id_t {

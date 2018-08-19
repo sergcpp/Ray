@@ -37,7 +37,7 @@
 // add tent filter
 // add depth of field
 // try again with spatial splits or remove unnecessary indirection
-// proper ray termination
+// proper Ray termination
 // add validation tests (use Cycles)
 // make camera fov work
 // add neon support
@@ -51,6 +51,6 @@
 // simple textures
 // texture atlas
 // rethink 'shapes' in mesh description
-// ray differentials
+// Ray differentials
 // sky and sun colors
 // make render process incremental

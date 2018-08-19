@@ -1,6 +1,6 @@
 #include "TextureAtlasOCL.h"
 
-ray::ocl::TextureAtlas::TextureAtlas(const cl::Context &context, const cl::CommandQueue &queue,
+Ray::Ocl::TextureAtlas::TextureAtlas(const cl::Context &context, const cl::CommandQueue &queue,
                                      int resx, int resy, int pages_count)
     : context_(context), queue_(queue), res_{ resx, resy }, pages_count_(0) {
     if (!Resize(pages_count)) {
@@ -8,7 +8,7 @@ ray::ocl::TextureAtlas::TextureAtlas(const cl::Context &context, const cl::Comma
     }
 }
 
-int ray::ocl::TextureAtlas::Allocate(const pixel_color8_t *data, const int _res[2], int pos[2]) {
+int Ray::Ocl::TextureAtlas::Allocate(const pixel_color8_t *data, const int _res[2], int pos[2]) {
     // add 1px border
     int res[2] = { _res[0] + 2, _res[1] + 2 };
 
@@ -56,13 +56,13 @@ int ray::ocl::TextureAtlas::Allocate(const pixel_color8_t *data, const int _res[
     return Allocate(data, _res, pos);
 }
 
-bool ray::ocl::TextureAtlas::Free(int page, const int pos[2]) {
+bool Ray::Ocl::TextureAtlas::Free(int page, const int pos[2]) {
     if (page < 0 || page > pages_count_) return false;
     // TODO: fill with black in debug
     return splitters_[page].Free(pos);
 }
 
-bool ray::ocl::TextureAtlas::Resize(int pages_count) {
+bool Ray::Ocl::TextureAtlas::Resize(int pages_count) {
     // if we shrink atlas, all redundant pages required to be empty
     for (int i = pages_count; i < pages_count_; i++) {
         if (!splitters_[i].empty()) return false;

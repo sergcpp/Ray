@@ -5,13 +5,13 @@
 
 #include "TextureAtlasRef.h"
 
-namespace ray {
-namespace ref {
+namespace Ray {
+namespace Ref {
 force_inline void _IntersectTri(const ray_packet_t &r, const tri_accel_t &tri, uint32_t i, hit_data_t &inter) {
     const int _next_u[] = { 1, 0, 0 },
                           _next_v[] = { 2, 2, 1 };
 
-    int w = tri.ci & ray::TRI_W_BITS,
+    int w = tri.ci & Ray::TRI_W_BITS,
         u = _next_u[w],
         v = _next_v[w];
 
@@ -196,14 +196,14 @@ force_inline float construct_float(uint32_t m) {
 }
 }
 
-ray::ref::hit_data_t::hit_data_t() {
+Ray::Ref::hit_data_t::hit_data_t() {
     mask_values[0] = 0;
     obj_indices[0] = -1;
     prim_indices[0] = -1;
     t = MAX_DIST;
 }
 
-void ray::ref::GeneratePrimaryRays(int iteration, const camera_t &cam, const rect_t &r, int w, int h, const float *halton, aligned_vector<ray_packet_t> &out_rays) {
+void Ray::Ref::GeneratePrimaryRays(int iteration, const camera_t &cam, const rect_t &r, int w, int h, const float *halton, aligned_vector<ray_packet_t> &out_rays) {
     simd_fvec3 cam_origin = { cam.origin }, fwd = { cam.fwd }, side = { cam.side }, up = { cam.up };
     float focus_distance = cam.focus_distance;
 
@@ -283,11 +283,11 @@ void ray::ref::GeneratePrimaryRays(int iteration, const camera_t &cam, const rec
     }
 }
 
-void ray::ref::SortRays(ray_packet_t *rays, size_t rays_count, const float root_min[3], const float cell_size[3],
+void Ray::Ref::SortRays(ray_packet_t *rays, size_t rays_count, const float root_min[3], const float cell_size[3],
 						uint32_t *hash_values, int *head_flags, uint32_t *scan_values, ray_chunk_t *chunks, ray_chunk_t *chunks_temp, uint32_t *skeleton) {
 	// From "Fast Ray Sorting and Breadth-First Packet Traversal for GPU Ray Tracing" [2010]
 
-	// compute ray hash values
+	// compute Ray hash values
 	for (size_t i = 0; i < rays_count; i++) {
 		hash_values[i] = get_ray_hash(rays[i], root_min, cell_size);
 	}
@@ -309,7 +309,7 @@ void ray::ref::SortRays(ray_packet_t *rays, size_t rays_count, const float root_
 		chunks_count = cur_sum;
 	}
 
-	// init ray chunks hash and base index
+	// init Ray chunks hash and base index
 	for (size_t i = 0; i < rays_count; i++) {
 		if (head_flags[i]) {
 			chunks[scan_values[i]].hash = hash_values[i];
@@ -317,7 +317,7 @@ void ray::ref::SortRays(ray_packet_t *rays, size_t rays_count, const float root_
 		}
 	}
 
-	// init ray chunks size 
+	// init Ray chunks size
 	if (chunks_count) {
 		for (size_t i = 0; i < chunks_count - 1; i++) {
 			chunks[i].size = chunks[i + 1].base - chunks[i].base;
@@ -365,7 +365,7 @@ void ray::ref::SortRays(ray_packet_t *rays, size_t rays_count, const float root_
 	}
 }
 
-bool ray::ref::IntersectTris(const ray_packet_t &r, const tri_accel_t *tris, int num_tris, int obj_index, hit_data_t &out_inter) {
+bool Ray::Ref::IntersectTris(const ray_packet_t &r, const tri_accel_t *tris, int num_tris, int obj_index, hit_data_t &out_inter) {
     hit_data_t inter;
     inter.obj_indices[0] = obj_index;
     inter.t = out_inter.t;
@@ -384,7 +384,7 @@ bool ray::ref::IntersectTris(const ray_packet_t &r, const tri_accel_t *tris, int
     return inter.mask_values[0] != 0;
 }
 
-bool ray::ref::IntersectTris(const ray_packet_t &r, const tri_accel_t *tris, const uint32_t *indices, int num_indices, int obj_index, hit_data_t &out_inter) {
+bool Ray::Ref::IntersectTris(const ray_packet_t &r, const tri_accel_t *tris, const uint32_t *indices, int num_indices, int obj_index, hit_data_t &out_inter) {
     hit_data_t inter;
     inter.obj_indices[0] = obj_index;
     inter.t = out_inter.t;
@@ -404,7 +404,7 @@ bool ray::ref::IntersectTris(const ray_packet_t &r, const tri_accel_t *tris, con
     return inter.mask_values[0] != 0;
 }
 
-bool ray::ref::Traverse_MacroTree_Stackless_CPU(const ray_packet_t &r, const bvh_node_t *nodes, uint32_t root_index,
+bool Ray::Ref::Traverse_MacroTree_Stackless_CPU(const ray_packet_t &r, const bvh_node_t *nodes, uint32_t root_index,
                                                 const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
                                                 const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t &inter) {
     bool res = false;
@@ -494,7 +494,7 @@ bool ray::ref::Traverse_MacroTree_Stackless_CPU(const ray_packet_t &r, const bvh
     return res;
 }
 
-bool ray::ref::Traverse_MacroTree_Stackless_GPU(const ray_packet_t &r, const bvh_node_t *nodes, uint32_t root_index,
+bool Ray::Ref::Traverse_MacroTree_Stackless_GPU(const ray_packet_t &r, const bvh_node_t *nodes, uint32_t root_index,
                                                 const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
                                                 const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t &inter) {
     bool res = false;
@@ -557,7 +557,7 @@ bool ray::ref::Traverse_MacroTree_Stackless_GPU(const ray_packet_t &r, const bvh
     return res;
 }
 
-bool ray::ref::Traverse_MicroTree_Stackless_CPU(const ray_packet_t &r, const float inv_d[3], const bvh_node_t *nodes, uint32_t root_index,
+bool Ray::Ref::Traverse_MicroTree_Stackless_CPU(const ray_packet_t &r, const float inv_d[3], const bvh_node_t *nodes, uint32_t root_index,
                                                 const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, hit_data_t &inter) {
     bool res = false;
 
@@ -617,7 +617,7 @@ bool ray::ref::Traverse_MicroTree_Stackless_CPU(const ray_packet_t &r, const flo
     return res;
 }
 
-bool ray::ref::Traverse_MicroTree_Stackless_GPU(const ray_packet_t &r, const float inv_d[3], const bvh_node_t *nodes, uint32_t root_index,
+bool Ray::Ref::Traverse_MicroTree_Stackless_GPU(const ray_packet_t &r, const float inv_d[3], const bvh_node_t *nodes, uint32_t root_index,
                                                 const tri_accel_t *tris, const uint32_t *indices, int obj_index, hit_data_t &inter) {
     bool res = false;
 
@@ -666,7 +666,7 @@ bool ray::ref::Traverse_MicroTree_Stackless_GPU(const ray_packet_t &r, const flo
     return res;
 }
 
-bool ray::ref::Traverse_MacroTree_WithStack(const ray_packet_t &r, const bvh_node_t *nodes, uint32_t root_index,
+bool Ray::Ref::Traverse_MacroTree_WithStack(const ray_packet_t &r, const bvh_node_t *nodes, uint32_t root_index,
                                             const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
                                             const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t &inter) {
     bool res = false;
@@ -707,7 +707,7 @@ bool ray::ref::Traverse_MacroTree_WithStack(const ray_packet_t &r, const bvh_nod
     return res;
 }
 
-bool ray::ref::Traverse_MicroTree_WithStack(const ray_packet_t &r, const float inv_d[3], const bvh_node_t *nodes, uint32_t root_index,
+bool Ray::Ref::Traverse_MicroTree_WithStack(const ray_packet_t &r, const float inv_d[3], const bvh_node_t *nodes, uint32_t root_index,
                                             const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, uint32_t *stack, hit_data_t &inter) {
     bool res = false;
 
@@ -731,7 +731,7 @@ bool ray::ref::Traverse_MicroTree_WithStack(const ray_packet_t &r, const float i
     return res;
 }
 
-ray::ref::ray_packet_t ray::ref::TransformRay(const ray_packet_t &r, const float *xform) {
+Ray::Ref::ray_packet_t Ray::Ref::TransformRay(const ray_packet_t &r, const float *xform) {
     ray_packet_t _r = r;
 
     _r.o[0] = xform[0] * r.o[0] + xform[4] * r.o[1] + xform[8] * r.o[2] + xform[12];
@@ -745,13 +745,13 @@ ray::ref::ray_packet_t ray::ref::TransformRay(const ray_packet_t &r, const float
     return _r;
 }
 
-ray::ref::simd_fvec3 ray::ref::TransformNormal(const simd_fvec3 &n, const float *inv_xform) {
+Ray::Ref::simd_fvec3 Ray::Ref::TransformNormal(const simd_fvec3 &n, const float *inv_xform) {
     return simd_fvec3{ inv_xform[0] * n[0] + inv_xform[1] * n[1] + inv_xform[2] * n[2],
                        inv_xform[4] * n[0] + inv_xform[5] * n[1] + inv_xform[6] * n[2],
                        inv_xform[8] * n[0] + inv_xform[9] * n[1] + inv_xform[10] * n[2] };
 }
 
-ray::ref::simd_fvec2 ray::ref::TransformUV(const simd_fvec2 &_uv, const simd_fvec2 &tex_atlas_size, const texture_t &t, int mip_level) {
+Ray::Ref::simd_fvec2 Ray::Ref::TransformUV(const simd_fvec2 &_uv, const simd_fvec2 &tex_atlas_size, const texture_t &t, int mip_level) {
     simd_fvec2 pos = { (float)t.pos[mip_level][0], (float)t.pos[mip_level][1] };
     simd_fvec2 size = { (float)(t.size[0] >> mip_level), (float)(t.size[1] >> mip_level) };
     simd_fvec2 uv = _uv - floor(_uv);
@@ -760,7 +760,7 @@ ray::ref::simd_fvec2 ray::ref::TransformUV(const simd_fvec2 &_uv, const simd_fve
     return res;
 }
 
-ray::ref::simd_fvec4 ray::ref::SampleNearest(const TextureAtlas &atlas, const texture_t &t, const simd_fvec2 &uvs, float lod) {
+Ray::Ref::simd_fvec4 Ray::Ref::SampleNearest(const TextureAtlas &atlas, const texture_t &t, const simd_fvec2 &uvs, float lod) {
     int _lod = (int)lod;
 
     simd_fvec2 atlas_size = { atlas.size_x(), atlas.size_y() };
@@ -776,7 +776,7 @@ ray::ref::simd_fvec4 ray::ref::SampleNearest(const TextureAtlas &atlas, const te
     return simd_fvec4{ pix.r * k, pix.g * k, pix.b * k, pix.a * k };
 }
 
-ray::ref::simd_fvec4 ray::ref::SampleBilinear(const TextureAtlas &atlas, const texture_t &t, const simd_fvec2 &uvs, int lod) {
+Ray::Ref::simd_fvec4 Ray::Ref::SampleBilinear(const TextureAtlas &atlas, const texture_t &t, const simd_fvec2 &uvs, int lod) {
     simd_fvec2 atlas_size = { atlas.size_x(), atlas.size_y() };
     simd_fvec2 _uvs = TransformUV(uvs, atlas_size, t, lod);
 
@@ -805,7 +805,7 @@ ray::ref::simd_fvec4 ray::ref::SampleBilinear(const TextureAtlas &atlas, const t
     return (p1 * ky + p0 * (1 - ky)) * k;
 }
 
-ray::ref::simd_fvec4 ray::ref::SampleBilinear(const TextureAtlas &atlas, const simd_fvec2 &uvs, int page) {
+Ray::Ref::simd_fvec4 Ray::Ref::SampleBilinear(const TextureAtlas &atlas, const simd_fvec2 &uvs, int page) {
     const auto &p00 = atlas.Get(page, int(uvs[0] + 0), int(uvs[1] + 0));
     const auto &p01 = atlas.Get(page, int(uvs[0] + 1), int(uvs[1] + 0));
     const auto &p10 = atlas.Get(page, int(uvs[0] + 0), int(uvs[1] + 1));
@@ -824,7 +824,7 @@ ray::ref::simd_fvec4 ray::ref::SampleBilinear(const TextureAtlas &atlas, const s
     return (p1X * k[1] + p0X * (1 - k[1]));
 }
 
-ray::ref::simd_fvec4 ray::ref::SampleTrilinear(const TextureAtlas &atlas, const texture_t &t, const simd_fvec2 &uvs, float lod) {
+Ray::Ref::simd_fvec4 Ray::Ref::SampleTrilinear(const TextureAtlas &atlas, const texture_t &t, const simd_fvec2 &uvs, float lod) {
     auto col1 = SampleBilinear(atlas, t, uvs, (int)std::floor(lod));
     auto col2 = SampleBilinear(atlas, t, uvs, (int)std::ceil(lod));
 
@@ -832,7 +832,7 @@ ray::ref::simd_fvec4 ray::ref::SampleTrilinear(const TextureAtlas &atlas, const 
     return col1 * (1 - k) + col2 * k;
 }
 
-ray::ref::simd_fvec4 ray::ref::SampleAnisotropic(const TextureAtlas &atlas, const texture_t &t, const simd_fvec2 &uvs, const simd_fvec2 &duv_dx, const simd_fvec2 &duv_dy) {
+Ray::Ref::simd_fvec4 Ray::Ref::SampleAnisotropic(const TextureAtlas &atlas, const texture_t &t, const simd_fvec2 &uvs, const simd_fvec2 &duv_dx, const simd_fvec2 &duv_dy) {
     simd_fvec2 sz = { (float)t.size[0], (float)t.size[1] };
 
     simd_fvec2 _duv_dx = abs(duv_dx * sz);
@@ -845,11 +845,11 @@ ray::ref::simd_fvec4 ray::ref::SampleAnisotropic(const TextureAtlas &atlas, cons
     simd_fvec2 step;
 
     if (l1 <= l2) {
-        lod = log2(std::min(_duv_dx[0], _duv_dx[1]));
+        lod = std::log2(std::min(_duv_dx[0], _duv_dx[1]));
         k = l1 / l2;
         step = duv_dy;
     } else {
-        lod = log2(std::min(_duv_dy[0], _duv_dy[1]));
+        lod = std::log2(std::min(_duv_dy[0], _duv_dy[1]));
         k = l2 / l1;
         step = duv_dx;
     }
@@ -898,7 +898,7 @@ ray::ref::simd_fvec4 ray::ref::SampleAnisotropic(const TextureAtlas &atlas, cons
     return res / float(num);
 }
 
-ray::ref::simd_fvec3 ray::ref::ComputeDirectLighting(const simd_fvec3 &P, const simd_fvec3 &N, const simd_fvec3 &B, const simd_fvec3 &plane_N,
+Ray::Ref::simd_fvec3 Ray::Ref::ComputeDirectLighting(const simd_fvec3 &P, const simd_fvec3 &N, const simd_fvec3 &B, const simd_fvec3 &plane_N,
                                                      const float *halton, const int hi, float rand_offset, float rand_offset2,
                                                      const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
                                                      const mesh_t *meshes, const transform_t *transforms,
@@ -978,14 +978,14 @@ ray::ref::simd_fvec3 ray::ref::ComputeDirectLighting(const simd_fvec3 &P, const 
     return col;
 }
 
-ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, const int bounce, const float *halton, const hit_data_t &inter, const ray_packet_t &ray,
+Ray::pixel_color_t Ray::Ref::ShadeSurface(const int index, const int iteration, const int bounce, const float *halton, const hit_data_t &inter, const ray_packet_t &ray,
                                           const environment_t &env, const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
                                           const mesh_t *meshes, const transform_t *transforms, const uint32_t *vtx_indices, const vertex_t *vertices,
                                           const bvh_node_t *nodes, uint32_t node_index, const tri_accel_t *tris, const uint32_t *tri_indices,
                                           const material_t *materials, const texture_t *textures, const TextureAtlas &tex_atlas,
                                           const light_t *lights, const uint32_t *li_indices, uint32_t light_node_index, ray_packet_t *out_secondary_rays, int *out_secondary_rays_count) {
     if (!inter.mask_values[0]) {
-        return ray::pixel_color_t{ ray.c[0] * env.sky_col[0], ray.c[1] * env.sky_col[1], ray.c[2] * env.sky_col[2], 1.0f };
+        return Ray::pixel_color_t{ ray.c[0] * env.sky_col[0], ray.c[1] * env.sky_col[1], ray.c[2] * env.sky_col[2], 1.0f };
     }
 
     const auto I = simd_fvec3(ray.d);
@@ -1148,7 +1148,7 @@ ray::pixel_color_t ray::ref::ShadeSurface(const int index, const int iteration, 
 
     simd_fvec3 col = { 0.0f };
 
-    // generate secondary ray
+    // generate secondary Ray
     if (mat->type == DiffuseMaterial) {
         col = ComputeDirectLighting(P, N, B, plane_N, halton, hi, rand_offset, rand_offset2, mesh_instances,
                                     mi_indices, meshes, transforms, vtx_indices, vertices, nodes, node_index,

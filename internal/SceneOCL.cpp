@@ -5,7 +5,7 @@
 #include "BVHSplit.h"
 #include "TextureUtilsRef.h"
 
-ray::ocl::Scene::Scene(const cl::Context &context, const cl::CommandQueue &queue, size_t max_img_buf_size)
+Ray::Ocl::Scene::Scene(const cl::Context &context, const cl::CommandQueue &queue, size_t max_img_buf_size)
     : context_(context), queue_(queue), max_img_buf_size_(max_img_buf_size),
       nodes_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
       tris_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
@@ -38,15 +38,15 @@ ray::ocl::Scene::Scene(const cl::Context &context, const cl::CommandQueue &queue
     }
 }
 
-void ray::ocl::Scene::GetEnvironment(environment_desc_t &env) {
+void Ray::Ocl::Scene::GetEnvironment(environment_desc_t &env) {
     memcpy(&env.sky_col[0], &env_.sky_col, 3 * sizeof(float));
 }
 
-void ray::ocl::Scene::SetEnvironment(const environment_desc_t &env) {
+void Ray::Ocl::Scene::SetEnvironment(const environment_desc_t &env) {
     memcpy(&env_.sky_col, &env.sky_col[0], 3 * sizeof(float));
 }
 
-uint32_t ray::ocl::Scene::AddTexture(const tex_desc_t &_t) {
+uint32_t Ray::Ocl::Scene::AddTexture(const tex_desc_t &_t) {
     uint32_t tex_index = (uint32_t)textures_.size();
 
     texture_t t;
@@ -77,7 +77,7 @@ uint32_t ray::ocl::Scene::AddTexture(const tex_desc_t &_t) {
         mip++;
 
         if (_t.generate_mipmaps) {
-            tex_data = ref::DownsampleTexture(tex_data, res);
+            tex_data = Ref::DownsampleTexture(tex_data, res);
 
             res[0] /= 2;
             res[1] /= 2;
@@ -98,7 +98,7 @@ uint32_t ray::ocl::Scene::AddTexture(const tex_desc_t &_t) {
     return tex_index;
 }
 
-uint32_t ray::ocl::Scene::AddMaterial(const mat_desc_t &m) {
+uint32_t Ray::Ocl::Scene::AddMaterial(const mat_desc_t &m) {
     material_t mat;
 
     mat.type = m.type;
@@ -136,7 +136,7 @@ uint32_t ray::ocl::Scene::AddMaterial(const mat_desc_t &m) {
     return mat_index;
 }
 
-uint32_t ray::ocl::Scene::AddMesh(const mesh_desc_t &_m) {
+uint32_t Ray::Ocl::Scene::AddMesh(const mesh_desc_t &_m) {
     std::vector<bvh_node_t> new_nodes;
     std::vector<tri_accel_t> new_tris;
     std::vector<uint32_t> new_tri_indices;
@@ -194,7 +194,7 @@ uint32_t ray::ocl::Scene::AddMesh(const mesh_desc_t &_m) {
         memset(&v.b[0], 0, 3 * sizeof(float));
     }
 
-    ref::ComputeTextureBasis(vertices_.size(), 0, new_vertices, new_vtx_indices, _m.vtx_indices, _m.vtx_indices_count);
+    Ref::ComputeTextureBasis(vertices_.size(), 0, new_vertices, new_vtx_indices, _m.vtx_indices, _m.vtx_indices_count);
 
     vertices_.Append(&new_vertices[0], new_vertices.size());
 
@@ -210,11 +210,11 @@ uint32_t ray::ocl::Scene::AddMesh(const mesh_desc_t &_m) {
     return mesh_index;
 }
 
-void ray::ocl::Scene::RemoveMesh(uint32_t) {
+void Ray::Ocl::Scene::RemoveMesh(uint32_t) {
     // TODO!!!
 }
 
-uint32_t ray::ocl::Scene::AddLight(const light_desc_t &_l) {
+uint32_t Ray::Ocl::Scene::AddLight(const light_desc_t &_l) {
     light_t l;
     memcpy(&l.pos[0], &_l.position[0], 3 * sizeof(float));
     l.radius = _l.radius;
@@ -260,11 +260,11 @@ uint32_t ray::ocl::Scene::AddLight(const light_desc_t &_l) {
     return (uint32_t)(lights_.size() - 1);
 }
 
-void ray::ocl::Scene::RemoveLight(uint32_t i) {
+void Ray::Ocl::Scene::RemoveLight(uint32_t i) {
     // TODO!!!
 }
 
-uint32_t ray::ocl::Scene::AddMeshInstance(uint32_t mesh_index, const float *xform) {
+uint32_t Ray::Ocl::Scene::AddMeshInstance(uint32_t mesh_index, const float *xform) {
     uint32_t mi_index = (uint32_t)mesh_instances_.size();
 
     mesh_instance_t mi;
@@ -284,7 +284,7 @@ uint32_t ray::ocl::Scene::AddMeshInstance(uint32_t mesh_index, const float *xfor
     return mi_index;
 }
 
-void ray::ocl::Scene::SetMeshInstanceTransform(uint32_t mi_index, const float *xform) {
+void Ray::Ocl::Scene::SetMeshInstanceTransform(uint32_t mi_index, const float *xform) {
     transform_t tr;
 
     memcpy(tr.xform, xform, 16 * sizeof(float));
@@ -311,11 +311,11 @@ void ray::ocl::Scene::SetMeshInstanceTransform(uint32_t mi_index, const float *x
     RebuildMacroBVH();
 }
 
-void ray::ocl::Scene::RemoveMeshInstance(uint32_t) {
+void Ray::Ocl::Scene::RemoveMeshInstance(uint32_t) {
     // TODO!!
 }
 
-void ray::ocl::Scene::RemoveNodes(uint32_t node_index, uint32_t node_count) {
+void Ray::Ocl::Scene::RemoveNodes(uint32_t node_index, uint32_t node_count) {
     if (!node_count) return;
 
     nodes_.Erase(node_index, node_count);
@@ -357,7 +357,7 @@ void ray::ocl::Scene::RemoveNodes(uint32_t node_index, uint32_t node_count) {
     }
 }
 
-void ray::ocl::Scene::RebuildMacroBVH() {
+void Ray::Ocl::Scene::RebuildMacroBVH() {
     RemoveNodes(macro_nodes_start_, macro_nodes_count_);
     mi_indices_.Clear();
 
@@ -370,7 +370,7 @@ void ray::ocl::Scene::RebuildMacroBVH() {
     mesh_instances_.Get(&mesh_instances[0], 0, mi_count);
 
     for (const auto &mi : mesh_instances) {
-        primitives.push_back({ 0, 0, 0, ref::simd_fvec3{ mi.bbox_min }, ref::simd_fvec3{ mi.bbox_max } });
+        primitives.push_back({ 0, 0, 0, Ref::simd_fvec3{ mi.bbox_min }, Ref::simd_fvec3{ mi.bbox_max } });
     }
 
     std::vector<bvh_node_t> bvh_nodes;
@@ -392,7 +392,7 @@ void ray::ocl::Scene::RebuildMacroBVH() {
     mi_indices_.Append(&mi_indices[0], mi_indices.size());
 }
 
-void ray::ocl::Scene::RebuildLightBVH() {
+void Ray::Ocl::Scene::RebuildLightBVH() {
     RemoveNodes(light_nodes_start_, light_nodes_count_);
     li_indices_.Clear();
 
@@ -405,37 +405,37 @@ void ray::ocl::Scene::RebuildLightBVH() {
     for (const auto &l : lights) {
         float influence = l.radius * (std::sqrt(l.brightness / LIGHT_ATTEN_CUTOFF) - 1.0f);
 
-        ref::simd_fvec3 bbox_min = { 0.0f }, bbox_max = { 0.0f };
+        Ref::simd_fvec3 bbox_min = { 0.0f }, bbox_max = { 0.0f };
 
-        ref::simd_fvec3 p1 = { -l.dir[0] * influence,
+        Ref::simd_fvec3 p1 = { -l.dir[0] * influence,
                                -l.dir[1] * influence,
                                -l.dir[2] * influence };
 
         bbox_min = min(bbox_min, p1);
         bbox_max = max(bbox_max, p1);
 
-        ref::simd_fvec3 p2 = { -l.dir[0] * l.spot * influence,
+        Ref::simd_fvec3 p2 = { -l.dir[0] * l.spot * influence,
                                -l.dir[1] * l.spot * influence,
                                -l.dir[2] * l.spot * influence };
 
         float d = std::sqrt(1.0f - l.spot * l.spot) * influence;
 
-        bbox_min = min(bbox_min, p2 - ref::simd_fvec3{ d, 0.0f, d });
-        bbox_max = max(bbox_max, p2 + ref::simd_fvec3{ d, 0.0f, d });
+        bbox_min = min(bbox_min, p2 - Ref::simd_fvec3{ d, 0.0f, d });
+        bbox_max = max(bbox_max, p2 + Ref::simd_fvec3{ d, 0.0f, d });
 
         if (l.spot < 0.0f) {
-            bbox_min = min(bbox_min, p1 - ref::simd_fvec3{ influence, 0.0f, influence });
-            bbox_max = max(bbox_max, p1 + ref::simd_fvec3{ influence, 0.0f, influence });
+            bbox_min = min(bbox_min, p1 - Ref::simd_fvec3{ influence, 0.0f, influence });
+            bbox_max = max(bbox_max, p1 + Ref::simd_fvec3{ influence, 0.0f, influence });
         }
 
-        ref::simd_fvec3 up = { 1.0f, 0.0f, 0.0f };
+        Ref::simd_fvec3 up = { 1.0f, 0.0f, 0.0f };
         if (std::abs(l.dir[1]) < std::abs(l.dir[2]) && std::abs(l.dir[1]) < std::abs(l.dir[0])) {
             up = { 0.0f, 1.0f, 0.0f };
         } else if (std::abs(l.dir[2]) < std::abs(l.dir[0]) && std::abs(l.dir[2]) < std::abs(l.dir[1])) {
             up = { 0.0f, 0.0f, 1.0f };
         }
 
-        ref::simd_fvec3 side = { -l.dir[1] * up[2] + l.dir[2] * up[1],
+        Ref::simd_fvec3 side = { -l.dir[1] * up[2] + l.dir[2] * up[1],
                                  -l.dir[2] * up[0] + l.dir[0] * up[2],
                                  -l.dir[0] * up[1] + l.dir[1] * up[0] };
 
@@ -450,7 +450,7 @@ void ray::ocl::Scene::RebuildLightBVH() {
 
         TransformBoundingBox(bbox, xform, tr_bbox);
 
-        primitives.push_back({ 0, 0, 0, ref::simd_fvec3{ tr_bbox[0] }, ref::simd_fvec3{ tr_bbox[1] } });
+        primitives.push_back({ 0, 0, 0, Ref::simd_fvec3{ tr_bbox[0] }, Ref::simd_fvec3{ tr_bbox[1] } });
     }
 
     std::vector<bvh_node_t> bvh_nodes;

@@ -7,18 +7,18 @@
 #pragma push_macro("NS")
 #undef NS
 
-#define NS ref
+#define NS Ref
 #if defined(_M_AMD64) || defined(_M_X64) || (!defined(__ANDROID__) && defined(__x86_64__)) || (defined(_M_IX86_FP) && _M_IX86_FP == 2)
 #define USE_SSE
-#pragma message("ray::ref::simd_vec will use SSE2")
+#pragma message("Ray::Ref::simd_vec will use SSE2")
 #elif defined(__ARM_NEON__) || defined(__aarch64__)
 #define USE_NEON
-#pragma message("ray::ref::simd_vec will use NEON")
+#pragma message("Ray::Ref::simd_vec will use NEON")
 #elif defined(__ANDROID__) && (defined(__i386__) || defined(__x86_64__))
 #define USE_SSE
-#pragma message("ray::ref::simd_vec will use SSE2")
+#pragma message("Ray::Ref::simd_vec will use SSE2")
 #else
-#pragma message("ray::ref::simd_vec will not use SIMD")
+#pragma message("Ray::Ref::simd_vec will not use SIMD")
 #endif
 
 #include "simd/simd_vec.h"
@@ -29,13 +29,13 @@
 
 #pragma pop_macro("NS")
 
-namespace ray {
-namespace ref {
+namespace Ray {
+namespace Ref {
 struct ray_packet_t {
     rays_id_t id;
     // origin and direction
     float o[3], d[3];
-    // color of ray and ior of medium
+    // color of Ray and ior of medium
     float c[3], ior;
     // derivatives
     float do_dx[3], dd_dx[3], do_dy[3], dd_dy[3];
@@ -120,7 +120,7 @@ simd_fvec3 ComputeDirectLighting(const simd_fvec3 &P, const simd_fvec3 &N, const
                                  const uint32_t *li_indices, uint32_t light_node_index);
 
 // Shade
-ray::pixel_color_t ShadeSurface(const int index, const int iteration, const int bounce, const float *halton, const hit_data_t &inter, const ray_packet_t &ray, 
+Ray::pixel_color_t ShadeSurface(const int index, const int iteration, const int bounce, const float *halton, const hit_data_t &inter, const ray_packet_t &ray,
                                 const environment_t &env, const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
                                 const mesh_t *meshes, const transform_t *transforms, const uint32_t *vtx_indices, const vertex_t *vertices,
                                 const bvh_node_t *nodes, uint32_t node_index, const tri_accel_t *tris, const uint32_t *tri_indices,

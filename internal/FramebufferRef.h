@@ -7,8 +7,8 @@
 #include "Core.h"
 #include "../Types.h"
 
-namespace ray {
-namespace ref {
+namespace Ray {
+namespace Ref {
 class Framebuffer {
     int w_, h_;
     std::vector<pixel_color_t> pixels_;

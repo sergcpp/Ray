@@ -4,7 +4,7 @@
 
 #include <arm_neon.h>
 
-namespace ray {
+namespace Ray {
 namespace NS {
 
 force_inline float32x4_t vdivq_f32(float32x4_t num, float32x4_t den) {

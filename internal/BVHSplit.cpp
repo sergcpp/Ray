@@ -2,7 +2,7 @@
 
 #include <algorithm>
 
-namespace ray {
+namespace Ray {
 const float SAHOversplitThreshold = 0.95f;
 const float NodeTraversalCost = 2.0f;
 
@@ -10,28 +10,28 @@ const float SpatialSplitAlpha = 0.00001f;
 const int NumSpatialSplitBins = 256;
 
 struct bbox_t {
-    ref::simd_fvec3 min = { std::numeric_limits<float>::max() },
+    Ref::simd_fvec3 min = { std::numeric_limits<float>::max() },
                     max = { std::numeric_limits<float>::lowest() };
     bbox_t() {}
-    bbox_t(const ref::simd_fvec3 &_min, const ref::simd_fvec3 &_max) : min(_min), max(_max) {}
+    bbox_t(const Ref::simd_fvec3 &_min, const Ref::simd_fvec3 &_max) : min(_min), max(_max) {}
 
     float surface_area() const {
         return surface_area(min, max);
     }
 
-    static float surface_area(const ref::simd_fvec3 &min, const ref::simd_fvec3 &max) {
-        ref::simd_fvec3 d = max - min;
+    static float surface_area(const Ref::simd_fvec3 &min, const Ref::simd_fvec3 &max) {
+        Ref::simd_fvec3 d = max - min;
         return 2 * (d[0] + d[1] + d[2]);
         //return d[0] * d[1] + d[0] * d[2] + d[1] * d[2];
     }
 };
 
 // stolen from Mitsuba
-static int sutherland_hodgman(const ref::simd_dvec3 *input, int in_count, ref::simd_dvec3 *output, int axis, double split_pos, bool is_minimum) {
+static int sutherland_hodgman(const Ref::simd_dvec3 *input, int in_count, Ref::simd_dvec3 *output, int axis, double split_pos, bool is_minimum) {
     if (in_count < 3)
         return 0;
 
-    ref::simd_dvec3 cur = input[0];
+    Ref::simd_dvec3 cur = input[0];
     double sign = is_minimum ? 1.0 : -1.0;
     double distance = sign * (cur[axis] - split_pos);
     bool cur_is_inside = (distance >= 0);
@@ -41,7 +41,7 @@ static int sutherland_hodgman(const ref::simd_dvec3 *input, int in_count, ref::s
         int nextIdx = i + 1;
         if (nextIdx == in_count)
             nextIdx = 0;
-        ref::simd_dvec3 next = input[nextIdx];
+        Ref::simd_dvec3 next = input[nextIdx];
         distance = sign * (next[axis] - split_pos);
         bool next_is_inside = (distance >= 0);
 
@@ -51,13 +51,13 @@ static int sutherland_hodgman(const ref::simd_dvec3 *input, int in_count, ref::s
         } else if (cur_is_inside && !next_is_inside) {
             // Going outside -- add the intersection
             double t = (split_pos - cur[axis]) / (next[axis] - cur[axis]);
-            ref::simd_dvec3 p = cur + (next - cur) * t;
+            Ref::simd_dvec3 p = cur + (next - cur) * t;
             p[axis] = split_pos; // Avoid roundoff errors
             output[out_count++] = p;
         } else if (!cur_is_inside && next_is_inside) {
             // Coming back inside -- add the intersection + next vertex
             double t = (split_pos - cur[axis]) / (next[axis] - cur[axis]);
-            ref::simd_dvec3 p = cur + (next - cur) * t;
+            Ref::simd_dvec3 p = cur + (next - cur) * t;
             p[axis] = split_pos; // Avoid roundoff errors
             output[out_count++] = p;
             output[out_count++] = next;
@@ -98,8 +98,8 @@ force_inline float castflt_up(double val) {
     return a;
 }
 
-bbox_t GetClippedAABB(const ref::simd_fvec3 &_v0, const ref::simd_fvec3 &_v1, const ref::simd_fvec3 &_v2, const bbox_t &limits) {
-    ref::simd_dvec3 vertices1[9], vertices2[9];
+bbox_t GetClippedAABB(const Ref::simd_fvec3 &_v0, const Ref::simd_fvec3 &_v1, const Ref::simd_fvec3 &_v2, const bbox_t &limits) {
+    Ref::simd_dvec3 vertices1[9], vertices2[9];
     int vertex_count = 3;
 
     vertices1[0] = { (double)_v0[0], (double)_v0[1], (double)_v0[2] };
@@ -125,9 +125,9 @@ bbox_t GetClippedAABB(const ref::simd_fvec3 &_v0, const ref::simd_fvec3 &_v1, co
 }
 }
 
-ray::split_data_t ray::SplitPrimitives_SAH(const prim_t *primitives, const std::vector<uint32_t> &tri_indices, const float *positions, size_t stride,
-                                           const ref::simd_fvec3 &bbox_min, const ref::simd_fvec3 &bbox_max,
-                                           const ref::simd_fvec3 &root_min, const ref::simd_fvec3 &root_max, bool use_spatial_splits) {
+Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, const std::vector<uint32_t> &tri_indices, const float *positions, size_t stride,
+                                           const Ref::simd_fvec3 &bbox_min, const Ref::simd_fvec3 &bbox_max,
+                                           const Ref::simd_fvec3 &root_min, const Ref::simd_fvec3 &root_max, bool use_spatial_splits) {
     size_t num_tris = tri_indices.size();
     bbox_t whole_box = { bbox_min, bbox_max };
 
@@ -150,7 +150,7 @@ ray::split_data_t ray::SplitPrimitives_SAH(const prim_t *primitives, const std::
         for (size_t i = 0; i < tri_indices.size(); i++) {
             const auto &p = primitives[tri_indices[i]];
 
-            ref::simd_fvec3 v0 = { &positions[p.i0 * stride] },
+            Ref::simd_fvec3 v0 = { &positions[p.i0 * stride] },
                             v1 = { &positions[p.i1 * stride] },
                             v2 = { &positions[p.i2 * stride] };
 
@@ -279,7 +279,7 @@ ray::split_data_t ray::SplitPrimitives_SAH(const prim_t *primitives, const std::
                 bins[exit_index].exit_counter++;
 
                 if (positions) {
-                    ref::simd_fvec3 v0 = { &positions[p.i0 * stride] },
+                    Ref::simd_fvec3 v0 = { &positions[p.i0 * stride] },
                                     v1 = { &positions[p.i1 * stride] },
                                     v2 = { &positions[p.i2 * stride] };
 

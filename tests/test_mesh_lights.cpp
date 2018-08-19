@@ -50,76 +50,76 @@ void WriteTGA(const uint8_t *data, int w, int h, int bpp, const std::string &nam
 void test_mesh_lights() {
     const int NUM_SAMPLES = 4096;
 
-    const ray::pixel_color8_t white = { 255, 255, 255, 255 };
+    const Ray::pixel_color8_t white = { 255, 255, 255, 255 };
 
     const float view_origin[] = { 2.0f, 2.0f, 0.0f };
     const float view_dir[] = { -1.0f, 0.0f, 0.0f };
 
-    ray::environment_desc_t env_desc;
+    Ray::environment_desc_t env_desc;
     env_desc.sky_col[0] = env_desc.sky_col[1] = env_desc.sky_col[2] = 0.0f;
 
-    ray::tex_desc_t tex_desc1;
+    Ray::tex_desc_t tex_desc1;
     tex_desc1.w = 1;
     tex_desc1.h = 1;
     tex_desc1.generate_mipmaps = true;
     tex_desc1.data = &white;
 
-    ray::mat_desc_t mat_desc1;
-    mat_desc1.type = ray::EmissiveMaterial;
+    Ray::mat_desc_t mat_desc1;
+    mat_desc1.type = Ray::EmissiveMaterial;
     mat_desc1.strength = 10.0f;
     mat_desc1.main_color[0] = 1.0f;
     mat_desc1.main_color[1] = 0.0f;
     mat_desc1.main_color[2] = 0.0f;
 
-    ray::mat_desc_t mat_desc2;
-    mat_desc2.type = ray::EmissiveMaterial;
+    Ray::mat_desc_t mat_desc2;
+    mat_desc2.type = Ray::EmissiveMaterial;
     mat_desc2.strength = 10.0f;
     mat_desc2.main_color[0] = 0.0f;
     mat_desc2.main_color[1] = 1.0f;
     mat_desc2.main_color[2] = 0.0f;
 
-    ray::mat_desc_t mat_desc3;
-    mat_desc3.type = ray::EmissiveMaterial;
+    Ray::mat_desc_t mat_desc3;
+    mat_desc3.type = Ray::EmissiveMaterial;
     mat_desc3.strength = 10.0f;
     mat_desc3.main_color[0] = 0.0f;
     mat_desc3.main_color[1] = 0.0f;
     mat_desc3.main_color[2] = 1.0f;
 
-    ray::mat_desc_t mat_desc4;
-    mat_desc4.type = ray::DiffuseMaterial;
+    Ray::mat_desc_t mat_desc4;
+    mat_desc4.type = Ray::DiffuseMaterial;
     mat_desc4.main_color[0] = 1.0f;
     mat_desc4.main_color[1] = 1.0f;
     mat_desc4.main_color[2] = 1.0f;
 
-    ray::mesh_desc_t mesh_desc;
-    mesh_desc.prim_type = ray::TriangleList;
-    mesh_desc.layout = ray::PxyzNxyzTuv;
+    Ray::mesh_desc_t mesh_desc;
+    mesh_desc.prim_type = Ray::TriangleList;
+    mesh_desc.layout = Ray::PxyzNxyzTuv;
     mesh_desc.vtx_attrs = &attrs[0];
     mesh_desc.vtx_attrs_count = attrs_count / 8;
     mesh_desc.vtx_indices = &indices[0];
     mesh_desc.vtx_indices_count = indices_count;
 
     {
-        ray::settings_t s;
+        Ray::settings_t s;
         s.w = 64;
         s.h = 64;
 
-        std::shared_ptr<ray::RendererBase> renderer;
+        std::shared_ptr<Ray::RendererBase> renderer;
 
-        ray::eRendererType renderer_types[] = { ray::RendererRef, ray::RendererSSE, ray::RendererAVX,
+        Ray::eRendererType renderer_types[] = { Ray::RendererRef, Ray::RendererSSE, Ray::RendererAVX,
 #if defined(__ANDROID__)
-            ray::RendererNEON, 
+            Ray::RendererNEON,
 #elif !defined(DISABLE_OCL)
-			ray::RendererOCL
+			Ray::RendererOCL
 #endif
 			};
         
         for (auto rt : renderer_types) {
-            renderer = ray::CreateRenderer(s, rt);
+            renderer = Ray::CreateRenderer(s, rt);
 
             auto scene = renderer->CreateScene();
 
-            uint32_t cam = scene->AddCamera(ray::Persp, ray::Box, view_origin, view_dir, 45.0f, 1.0f, 1.0f, 0.0f);
+            uint32_t cam = scene->AddCamera(Ray::Persp, Ray::Box, view_origin, view_dir, 45.0f, 1.0f, 1.0f, 0.0f);
             scene->set_current_cam(cam);
 
             scene->SetEnvironment(env_desc);
@@ -158,7 +158,7 @@ void test_mesh_lights() {
 
             printf("0%%\n");
 
-            auto reg = ray::RegionContext{ { 0, 0, 64, 64 } };
+            auto reg = Ray::RegionContext{ { 0, 0, 64, 64 } };
             for (int i = 0; i < NUM_SAMPLES; i++) {
                 renderer->RenderScene(scene, reg);
                 float new_prog = float(100 * i) / NUM_SAMPLES;
@@ -170,7 +170,7 @@ void test_mesh_lights() {
 
             printf("100%%\n");
 
-            const ray::pixel_color_t *pixels = renderer->get_pixels_ref();
+            const Ray::pixel_color_t *pixels = renderer->get_pixels_ref();
 
             uint64_t diff = 0;
 
@@ -178,7 +178,7 @@ void test_mesh_lights() {
 
             for (int j = 0; j < img_h; j++) {
                 for (int i = 0; i < img_w; i++) {
-                    ray::pixel_color_t p = pixels[j * img_w + i];
+                    Ray::pixel_color_t p = pixels[j * img_w + i];
 
                     if (p.r > 1.0f) p.r = 1.0f;
                     if (p.g > 1.0f) p.g = 1.0f;
