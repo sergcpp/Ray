@@ -100,8 +100,11 @@ float4 ShadeSurface(const int index, const int iteration, const int bounce, __gl
     const int2 px = (int2)(orig_ray->o.w, orig_ray->d.w);
 
     if (!inter->mask) {
-        // TODO: sample environment map or spherical garm.
-        return (float4)(orig_ray->c.xyz * env.sky_col, 1);
+        float3 env_col = SampleTextureLatlong_RGBE(texture_atlas, &textures[env.env_map], orig_ray->d.xyz).xyz;
+        if (env.env_col_and_clamp.w > FLT_EPS) {
+            env_col = min(env_col, env.env_col_and_clamp.w);
+        }
+        return (float4)(env_col * orig_ray->c.xyz * env.env_col_and_clamp.xyz, 1);
     }
 
     const float3 I = orig_ray->d.xyz;

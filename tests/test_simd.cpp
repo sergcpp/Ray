@@ -3,6 +3,7 @@
 #include <iostream>
 
 #include "../internal/Core.h"
+#include "../internal/simd/detect.h"
 
 #if !defined(__ANDROID__)
 
@@ -38,8 +39,20 @@ void test_simd_avx() {
 
 void test_simd() {
 #if !defined(__ANDROID__)
+    auto features = Ray::GetCpuFeatures();
+
     test_simd_ref();
-    test_simd_sse();
-    test_simd_avx();
+
+    if (features.sse2_supported) {
+        test_simd_sse();
+    } else {
+        puts("Skipping sse2 test!");
+    }
+
+    if (features.avx_supported) {
+        test_simd_avx();
+    } else {
+        puts("Skipping avx test!");
+    }
 #endif
 }

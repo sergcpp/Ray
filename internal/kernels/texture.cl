@@ -1,6 +1,12 @@
 R"(
 
-__constant sampler_t TEX_SAMPLER = CLK_NORMALIZED_COORDS_TRUE | CLK_ADDRESS_CLAMP | CLK_FILTER_LINEAR;
+__constant sampler_t LINEAR_SAMPLER = CLK_NORMALIZED_COORDS_TRUE | CLK_ADDRESS_CLAMP | CLK_FILTER_LINEAR;
+__constant sampler_t NEAREST_SAMPLER = CLK_NORMALIZED_COORDS_TRUE | CLK_ADDRESS_CLAMP | CLK_FILTER_NEAREST;
+
+float4 rgbe_to_rgb(float4 rgbe) {
+    float f = native_powr(2.0f, rgbe.w * 255.0f - 128.0f);
+    return (float4)(rgbe.xyz * f, 1.0f);
+}
 
 float4 SampleTextureBilinear(__read_only image2d_array_t texture_atlas, __global const texture_t *texture,
                               const float2 uvs, int lod) {
@@ -10,7 +16,7 @@ float4 SampleTextureBilinear(__read_only image2d_array_t texture_atlas, __global
 
     float4 coord1 = (float4)(uvs1, (float)texture->page[lod], 0);
 
-    return read_imagef(texture_atlas, TEX_SAMPLER, coord1);
+    return read_imagef(texture_atlas, LINEAR_SAMPLER, coord1);
 }
 
 float4 SampleTextureTrilinear(__read_only image2d_array_t texture_atlas, __global const texture_t *texture,
@@ -26,8 +32,8 @@ float4 SampleTextureTrilinear(__read_only image2d_array_t texture_atlas, __globa
     float4 coord1 = (float4)(uvs1, (float)texture->page[page1], 0);
     float4 coord2 = (float4)(uvs2, (float)texture->page[page2], 0);
 
-    float4 tex_col1 = read_imagef(texture_atlas, TEX_SAMPLER, coord1);
-    float4 tex_col2 = read_imagef(texture_atlas, TEX_SAMPLER, coord2);
+    float4 tex_col1 = read_imagef(texture_atlas, LINEAR_SAMPLER, coord1);
+    float4 tex_col2 = read_imagef(texture_atlas, LINEAR_SAMPLER, coord2);
 
     return mix(tex_col1, tex_col2, lod - floor(lod));
 }
@@ -85,17 +91,50 @@ float4 SampleTextureAnisotropic(__read_only image2d_array_t texture_atlas, __glo
         _uvs = _uvs - floor(_uvs);
 
         coord1.xy = (pos1 + _uvs * size1) / tex_atlas_size;
-        res += (1 - kz) * read_imagef(texture_atlas, TEX_SAMPLER, coord1);
+        res += (1 - kz) * read_imagef(texture_atlas, LINEAR_SAMPLER, coord1);
 
         if (kz > 0.0001f) {
             coord2.xy = (pos2 + _uvs * size2) / tex_atlas_size;
-            res += kz * read_imagef(texture_atlas, TEX_SAMPLER, coord2);
+            res += kz * read_imagef(texture_atlas, LINEAR_SAMPLER, coord2);
         }
 
         _uvs = _uvs + step;
     }
 
     return res / num;
+}
+
+float4 SampleTextureLatlong_RGBE(__read_only image2d_array_t texture_atlas, __global const texture_t *t,
+                                 const float3 dir) {
+    const float2 tex_atlas_size = (float2)(get_image_width(texture_atlas), get_image_height(texture_atlas));
+    float2 kk = 1.0f / tex_atlas_size;
+    
+    float theta = acospi(clamp(dir.y, -1.0f, 1.0f));
+    float r = length(dir.xz);
+    float u = 0.5f * acospi(clamp(dir.x/r, -1.0f, 1.0f));
+    if (dir.z < 0) u = 1.0f - u;
+
+    float2 pos = (float2)((float)t->pos[0][0], (float)t->pos[0][1]);
+    float2 size = (float2)((float)t->size[0], (float)t->size[1]);
+
+    float2 uvs = pos + (float2)(u, theta) * size + (float2)(1.0f, 1.0f);
+    const float kx = uvs.x - floor(uvs.x), ky = uvs.y - floor(uvs.y);
+    uvs /= tex_atlas_size;
+
+    const float4 coord00 = (float4)(uvs + (float2)(0.0f, 0.0f), (float)t->page[0], 0);
+    const float4 coord01 = (float4)(uvs + (float2)(kk.x, 0.0f), (float)t->page[0], 0);
+    const float4 coord10 = (float4)(uvs + (float2)(0.0f, kk.y), (float)t->page[0], 0);
+    const float4 coord11 = (float4)(uvs + (float2)(kk.x, kk.y), (float)t->page[0], 0);
+
+    const float4 c00 = rgbe_to_rgb(read_imagef(texture_atlas, NEAREST_SAMPLER, coord00));
+    const float4 c01 = rgbe_to_rgb(read_imagef(texture_atlas, NEAREST_SAMPLER, coord01));
+    const float4 c10 = rgbe_to_rgb(read_imagef(texture_atlas, NEAREST_SAMPLER, coord10));
+    const float4 c11 = rgbe_to_rgb(read_imagef(texture_atlas, NEAREST_SAMPLER, coord11));
+
+    const float4 c0X = c01 * kx + c00 * (1.0f - kx),
+                 c1X = c11 * kx + c10 * (1.0f - kx);
+
+    return c1X * ky + c0X * (1.0f - ky);
 }
 
 __kernel
@@ -107,7 +146,7 @@ void TextureDebugPage(__read_only image2d_array_t texture_atlas, int page, __wri
     float y = 1.0f * ((float)j) / get_global_size(1);
 
     float4 coord = (float4)(x, y, (float)page, 0);
-    float4 col = read_imagef(texture_atlas, TEX_SAMPLER, coord);
+    float4 col = read_imagef(texture_atlas, LINEAR_SAMPLER, coord);
 
     write_imagef(frame_buf, (int2)(i, j), col);
 }

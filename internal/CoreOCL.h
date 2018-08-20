@@ -57,13 +57,10 @@ struct hit_data_t {
 static_assert(sizeof(hit_data_t) == 32, "!");
 
 struct environment_t {
-    cl_float3 sun_dir;
-    cl_float3 sun_col;
-    cl_float3 sky_col; // TODO: replace with spherical garm.
-    cl_float sun_softness;
-    cl_float pad[3];
-    // TODO: add environment texture
+    cl_float4 env_col_and_clamp;
+    cl_uint   env_map;
+    cl_int    pad[3];
 };
-static_assert(sizeof(environment_t) == 64, "!");
+static_assert(sizeof(environment_t) == 32, "!");
 }
 }

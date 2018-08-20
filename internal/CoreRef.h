@@ -57,7 +57,9 @@ struct hit_data_t {
 };
 
 struct environment_t {
-    float sky_col[3];
+    float env_col[3];
+    float env_clamp;
+    uint32_t env_map;
 };
 
 class TextureAtlas;
@@ -108,6 +110,7 @@ simd_fvec4 SampleBilinear(const TextureAtlas &atlas, const texture_t &t, const s
 simd_fvec4 SampleBilinear(const TextureAtlas &atlas, const simd_fvec2 &uvs, int page);
 simd_fvec4 SampleTrilinear(const TextureAtlas &atlas, const texture_t &t, const simd_fvec2 &uvs, float lod);
 simd_fvec4 SampleAnisotropic(const TextureAtlas &atlas, const texture_t &t, const simd_fvec2 &uvs, const simd_fvec2 &duv_dx, const simd_fvec2 &duv_dy);
+simd_fvec4 SampleLatlong_RGBE(const TextureAtlas &atlas, const texture_t &t, const simd_fvec3 &dir);
 
 // Compute punctual lights contribution
 simd_fvec3 ComputeDirectLighting(const simd_fvec3 &P, const simd_fvec3 &N, const simd_fvec3 &B, const simd_fvec3 &plane_N,

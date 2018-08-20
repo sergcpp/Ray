@@ -193,6 +193,14 @@ force_inline float construct_float(uint32_t m) {
     return f - 1.0f;                        // Range [0:1]
 }
 
+force_inline simd_fvec4 rgbe_to_rgb(const pixel_color8_t &rgbe) {
+    float f = std::pow(2.0f, float(rgbe.a) - 128.0f);
+    return simd_fvec4{ to_norm_float(rgbe.r) * f,
+                       to_norm_float(rgbe.g) * f,
+                       to_norm_float(rgbe.b) * f, 1.0f };
+}
+
+
 }
 }
 
@@ -898,6 +906,35 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleAnisotropic(const TextureAtlas &atlas, cons
     return res / float(num);
 }
 
+Ray::Ref::simd_fvec4 Ray::Ref::SampleLatlong_RGBE(const TextureAtlas &atlas, const texture_t &t, const simd_fvec3 &dir) {
+    float theta = std::acos(clamp(dir[1], -1.0f, 1.0f)) / PI;
+    float r = std::sqrt(dir[0] * dir[0] + dir[2] * dir[2]);
+    float u = 0.5f * std::acos(clamp(dir[0] / r, -1.0f, 1.0f)) / PI;
+    if (dir[2] < 0.0f) u = 1.0f - u;
+
+    simd_fvec2 pos = { (float)t.pos[0][0], (float)t.pos[0][1] },
+               size = { (float)(t.size[0] ), (float)(t.size[1]) };
+
+    simd_fvec2 uvs = pos + simd_fvec2{ u, theta } * size + simd_fvec2{ 1.0f, 1.0f };
+
+    const auto &p00 = atlas.Get(t.page[0], int(uvs[0] + 0), int(uvs[1] + 0));
+    const auto &p01 = atlas.Get(t.page[0], int(uvs[0] + 1), int(uvs[1] + 0));
+    const auto &p10 = atlas.Get(t.page[0], int(uvs[0] + 0), int(uvs[1] + 1));
+    const auto &p11 = atlas.Get(t.page[0], int(uvs[0] + 1), int(uvs[1] + 1));
+
+    simd_fvec2 k = uvs - floor(uvs);
+
+    const auto _p00 = rgbe_to_rgb(p00);
+    const auto _p01 = rgbe_to_rgb(p01);
+    const auto _p10 = rgbe_to_rgb(p10);
+    const auto _p11 = rgbe_to_rgb(p11);
+
+    const auto p0X = _p01 * k[0] + _p00 * (1 - k[0]);
+    const auto p1X = _p11 * k[0] + _p10 * (1 - k[0]);
+
+    return (p1X * k[1] + p0X * (1 - k[1]));
+}
+
 Ray::Ref::simd_fvec3 Ray::Ref::ComputeDirectLighting(const simd_fvec3 &P, const simd_fvec3 &N, const simd_fvec3 &B, const simd_fvec3 &plane_N,
                                                      const float *halton, const int hi, float rand_offset, float rand_offset2,
                                                      const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
@@ -985,7 +1022,13 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int index, const int iteration, 
                                           const material_t *materials, const texture_t *textures, const TextureAtlas &tex_atlas,
                                           const light_t *lights, const uint32_t *li_indices, uint32_t light_node_index, ray_packet_t *out_secondary_rays, int *out_secondary_rays_count) {
     if (!inter.mask_values[0]) {
-        return Ray::pixel_color_t{ ray.c[0] * env.sky_col[0], ray.c[1] * env.sky_col[1], ray.c[2] * env.sky_col[2], 1.0f };
+        auto env_col = SampleLatlong_RGBE(tex_atlas, textures[env.env_map], simd_fvec3{ ray.d });
+        if (env.env_clamp > FLT_EPS) {
+            env_col = min(env_col, simd_fvec4{ env.env_clamp });
+        }
+        return Ray::pixel_color_t{ ray.c[0] * env_col[0] * env.env_col[0],
+                                   ray.c[1] * env_col[1] * env.env_col[1],
+                                   ray.c[2] * env_col[2] * env.env_col[2], 1.0f };
     }
 
     const auto I = simd_fvec3(ray.d);

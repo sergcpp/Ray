@@ -55,10 +55,9 @@ struct hit_data_t {
 };
 
 struct environment_t {
-    float sun_dir[3];
-    float sun_col[3];
-    float sky_col[3];
-    float sun_softness;
+    float env_col[3];
+    float env_clamp;
+    uint32_t env_map;
 };
 
 // Generating rays
@@ -116,6 +115,8 @@ template <int S>
 void SampleTrilinear(const Ref::TextureAtlas &atlas, const texture_t &t, const simd_fvec<S> uvs[2], const simd_fvec<S> &lod, const simd_ivec<S> &mask, simd_fvec<S> out_rgba[4]);
 template <int S>
 void SampleAnisotropic(const Ref::TextureAtlas &atlas, const texture_t &t, const simd_fvec<S> uvs[2], const simd_fvec<S> duv_dx[2], const simd_fvec<S> duv_dy[2], const simd_ivec<S> &mask, simd_fvec<S> out_rgba[4]);
+template <int S>
+void SampleLatlong_RGBE(const Ref::TextureAtlas &atlas, const texture_t &t, const simd_fvec<S> dir[3], const simd_ivec<S> &mask, simd_fvec<S> out_rgb[3]);
 
 // Compute punctual lights contribution
 template <int S>
@@ -1375,6 +1376,70 @@ void Ray::NS::SampleAnisotropic(const Ref::TextureAtlas &atlas, const texture_t 
 }
 
 template <int S>
+void Ray::NS::SampleLatlong_RGBE(const Ref::TextureAtlas &atlas, const texture_t &t, const simd_fvec<S> dir[3], const simd_ivec<S> &mask, simd_fvec<S> out_rgb[3]) {
+    
+    simd_fvec<S> theta, u;
+    simd_fvec<S> r = sqrt(dir[0] * dir[0] + dir[2] * dir[2]);
+    simd_fvec<S> y = clamp(dir[1], -1.0f, 1.0f);
+
+    u = clamp(dir[0] / r, -1.0f, 1.0f);
+
+    ITERATE(S, {
+        theta[i] = std::acos(y[i]) / PI;
+        u[i] = 0.5f * std::acos(u[i]) / PI;
+    })
+
+    where(dir[2] < 0.0f, u) = 1.0f - u;
+
+    simd_fvec<S> uvs[2] = { u * t.size[0] + float(t.pos[0][0]) + 1.0f,
+                            theta * t.size[1] + float(t.pos[0][1]) + 1.0f };
+
+    const simd_fvec<S> k[2] = { uvs[0] - floor(uvs[0]), uvs[1] - floor(uvs[1]) };
+
+    simd_fvec<S> _p00[3], _p01[3], _p10[3], _p11[3];
+
+    for (int i = 0; i < S; i++) {
+        if (!mask[i]) continue;
+
+        const auto &p00 = atlas.Get(t.page[0], int(uvs[0][i] + 0), int(uvs[1][i] + 0));
+        const auto &p01 = atlas.Get(t.page[0], int(uvs[0][i] + 1), int(uvs[1][i] + 0));
+        const auto &p10 = atlas.Get(t.page[0], int(uvs[0][i] + 0), int(uvs[1][i] + 1));
+        const auto &p11 = atlas.Get(t.page[0], int(uvs[0][i] + 1), int(uvs[1][i] + 1));
+
+        float f = std::pow(2.0f, float(p00.a) - 128.0f);
+        _p00[0][i] = to_norm_float(p00.r) * f;
+        _p00[1][i] = to_norm_float(p00.g) * f;
+        _p00[2][i] = to_norm_float(p00.b) * f;
+
+        f = std::pow(2.0f, float(p01.a) - 128.0f);
+        _p01[0][i] = to_norm_float(p01.r) * f;
+        _p01[1][i] = to_norm_float(p01.g) * f;
+        _p01[2][i] = to_norm_float(p01.b) * f;
+
+        f = std::pow(2.0f, float(p10.a) - 128.0f);
+        _p10[0][i] = to_norm_float(p10.r) * f;
+        _p10[1][i] = to_norm_float(p10.g) * f;
+        _p10[2][i] = to_norm_float(p10.b) * f;
+
+        f = std::pow(2.0f, float(p11.a) - 128.0f);
+        _p11[0][i] = to_norm_float(p11.r) * f;
+        _p11[1][i] = to_norm_float(p11.g) * f;
+        _p11[2][i] = to_norm_float(p11.b) * f;
+    }
+
+    const simd_fvec<S> p0X[3] = { _p01[0] * k[0] + _p00[0] * (1 - k[0]),
+                                  _p01[1] * k[0] + _p00[1] * (1 - k[0]),
+                                  _p01[2] * k[0] + _p00[2] * (1 - k[0]) };
+    const simd_fvec<S> p1X[3] = { _p11[0] * k[0] + _p10[0] * (1 - k[0]),
+                                  _p11[1] * k[0] + _p10[1] * (1 - k[0]),
+                                  _p11[2] * k[0] + _p10[2] * (1 - k[0]) };
+
+    out_rgb[0] = p1X[0] * k[1] + p0X[0] * (1.0f - k[1]);
+    out_rgb[1] = p1X[1] * k[1] + p0X[1] * (1.0f - k[1]);
+    out_rgb[2] = p1X[2] * k[1] + p0X[2] * (1.0f - k[1]);
+}
+
+template <int S>
 void Ray::NS::ComputeDirectLighting(const simd_fvec<S> P[3], const simd_fvec<S> N[3], const simd_fvec<S> B[3], const simd_fvec<S> plane_N[3],
                                     const float *halton, const int hi, const simd_fvec<S> &rand_offset, const simd_fvec<S> &rand_offset2,
                                     const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
@@ -1493,11 +1558,21 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
     out_rgba[3] = { 1.0f };
     
     auto ino_hit = inter.mask ^ simd_ivec<S>(-1);
-    auto no_hit = reinterpret_cast<const simd_fvec<S>&>(ino_hit);
-    
-    where(no_hit, out_rgba[0]) = ray.c[0] * env.sky_col[0];
-    where(no_hit, out_rgba[1]) = ray.c[1] * env.sky_col[1];
-    where(no_hit, out_rgba[2]) = ray.c[2] * env.sky_col[2];
+    if (ino_hit.not_all_zeros()) {
+        simd_fvec<S> env_col[3];
+        SampleLatlong_RGBE(tex_atlas, textures[env.env_map], ray.d, ino_hit, env_col);
+
+        if (env.env_clamp > FLT_EPS) {
+            ITERATE_3({ env_col[i] = min(env_col[i], simd_fvec<S>{ env.env_clamp }); })
+        }
+
+        auto fno_hit = reinterpret_cast<const simd_fvec<S>&>(ino_hit);
+
+        where(fno_hit, out_rgba[0]) = ray.c[0] * env_col[0] * env.env_col[0];
+        where(fno_hit, out_rgba[1]) = ray.c[1] * env_col[1] * env.env_col[1];
+        where(fno_hit, out_rgba[2]) = ray.c[2] * env_col[2] * env.env_col[2];
+        where(fno_hit, out_rgba[3]) = 1.0f;
+    }
     
     if (inter.mask.all_zeros()) return;
 

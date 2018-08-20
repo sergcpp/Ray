@@ -38,6 +38,7 @@ protected:
     uint32_t macro_nodes_start_ = 0, macro_nodes_count_ = 0;
     uint32_t light_nodes_start_ = 0, light_nodes_count_ = 0;
 
+    uint32_t default_env_texture_;
     uint32_t default_normals_texture_;
 
     void RemoveNodes(uint32_t node_index, uint32_t node_count);

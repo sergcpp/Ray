@@ -93,7 +93,9 @@ struct light_desc_t {
 
 /// Environment description
 struct environment_desc_t {
-    float sky_col[3];               ///< Sky color
+    float env_col[3];               ///< Environment color
+    float env_clamp = 0.0f;         ///< Environment clamp value
+    uint32_t env_map = 0xffffffff;  ///< Environment texture
 };
 
 /** Base Scene class,

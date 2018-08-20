@@ -7,43 +7,71 @@
 
 Ray::Ocl::Scene::Scene(const cl::Context &context, const cl::CommandQueue &queue, size_t max_img_buf_size)
     : context_(context), queue_(queue), max_img_buf_size_(max_img_buf_size),
-      nodes_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
-      tris_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
-      tri_indices_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
-      transforms_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
-      meshes_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
-      mesh_instances_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
-      mi_indices_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
-      vertices_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
-      vtx_indices_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
-      materials_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
-      textures_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
+    nodes_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
+    tris_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
+    tri_indices_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
+    transforms_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
+    meshes_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
+    mesh_instances_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
+    mi_indices_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
+    vertices_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
+    vtx_indices_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
+    materials_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
+    textures_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
     texture_atlas_(context_, queue_, MAX_TEXTURE_SIZE, MAX_TEXTURE_SIZE),
-      lights_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
-      li_indices_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_) {
-    SetEnvironment( { { 0, 0, 0 } });
+    lights_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
+    li_indices_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_) {
+    {   // add default environment map (white)
+        pixel_color8_t default_env_map = { 255, 255, 255, 128 };
 
-    pixel_color8_t default_normalmap = { 127, 127, 255 };
+        tex_desc_t t;
+        t.data = &default_env_map;
+        t.w = 1;
+        t.h = 1;
+        t.generate_mipmaps = false;
 
-    tex_desc_t t;
-    t.data = &default_normalmap;
-    t.w = 1;
-    t.h = 1;
-    t.generate_mipmaps = false;
+        default_env_texture_ = AddTexture(t);
 
-    default_normals_texture_ = AddTexture(t);
+        if (default_env_texture_ == 0xffffffff) {
+            throw std::runtime_error("Cannot allocate 1px default env map!");
+        }
 
-    if (default_normals_texture_ == 0xffffffff) {
-        throw std::runtime_error("Cannot allocate 1px default normal map!");
+        Ray::environment_desc_t desc;
+        desc.env_col[0] = desc.env_col[1] = desc.env_col[2] = 0.0f;
+        desc.env_map = default_env_texture_;
+        SetEnvironment(desc);
+    }
+
+    {   // add default normal map (flat)
+        pixel_color8_t default_normalmap = { 127, 127, 255 };
+
+        tex_desc_t t;
+        t.data = &default_normalmap;
+        t.w = 1;
+        t.h = 1;
+        t.generate_mipmaps = false;
+
+        default_normals_texture_ = AddTexture(t);
+
+        if (default_normals_texture_ == 0xffffffff) {
+            throw std::runtime_error("Cannot allocate 1px default normal map!");
+        }
     }
 }
 
 void Ray::Ocl::Scene::GetEnvironment(environment_desc_t &env) {
-    memcpy(&env.sky_col[0], &env_.sky_col, 3 * sizeof(float));
+    memcpy(&env.env_col[0], &env_.env_col_and_clamp, 3 * sizeof(float));
+    env.env_clamp = env_.env_col_and_clamp.w;
+    env.env_map = env_.env_map;
 }
 
 void Ray::Ocl::Scene::SetEnvironment(const environment_desc_t &env) {
-    memcpy(&env_.sky_col, &env.sky_col[0], 3 * sizeof(float));
+    memcpy(&env_.env_col_and_clamp, &env.env_col[0], 3 * sizeof(float));
+    env_.env_col_and_clamp.w = env.env_clamp;
+    env_.env_map = env.env_map;
+    if (env_.env_map == 0xffffffff) {
+        env_.env_map = default_env_texture_;
+    }
 }
 
 uint32_t Ray::Ocl::Scene::AddTexture(const tex_desc_t &_t) {

@@ -159,7 +159,9 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
     float cell_size[3] = { (root_max[0] - root_min[0]) / 255, (root_max[1] - root_min[1]) / 255, (root_max[2] - root_min[2]) / 255 };
 
     NS::environment_t env;
-    memcpy(&env.sky_col[0], &s->env_.sky_col[0], 3 * sizeof(float));
+    memcpy(&env.env_col[0], &s->env_.env_col[0], 3 * sizeof(float));
+    env.env_clamp = s->env_.env_clamp;
+    env.env_map = s->env_.env_map;
 
     const auto w = final_buf_.w(), h = final_buf_.h();
 

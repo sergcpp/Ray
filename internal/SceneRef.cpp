@@ -6,9 +6,30 @@
 #include "TextureUtilsRef.h"
 
 Ray::Ref::Scene::Scene() : texture_atlas_(MAX_TEXTURE_SIZE, MAX_TEXTURE_SIZE) {
-    static const pixel_color8_t default_normalmap = { 127, 127, 255 };
+    {   // add default environment map (white)
+        static const pixel_color8_t default_env_map = { 255, 255, 255, 128 };
 
-    {
+        tex_desc_t t;
+        t.data = &default_env_map;
+        t.w = 1;
+        t.h = 1;
+        t.generate_mipmaps = false;
+
+        default_env_texture_ = AddTexture(t);
+
+        if (default_env_texture_ == 0xffffffff) {
+            throw std::runtime_error("Cannot allocate 1px default env map!");
+        }
+
+        Ray::environment_desc_t desc;
+        desc.env_col[0] = desc.env_col[1] = desc.env_col[2] = 0.0f;
+        desc.env_map = default_env_texture_;
+        SetEnvironment(desc);
+    }
+
+    {   // add default normal map (flat)
+        static const pixel_color8_t default_normalmap = { 127, 127, 255 };
+
         tex_desc_t t;
         t.data = &default_normalmap;
         t.w = 1;
@@ -16,19 +37,26 @@ Ray::Ref::Scene::Scene() : texture_atlas_(MAX_TEXTURE_SIZE, MAX_TEXTURE_SIZE) {
         t.generate_mipmaps = false;
 
         default_normals_texture_ = AddTexture(t);
-    }
 
-    if (default_normals_texture_ == 0xffffffff) {
-        throw std::runtime_error("Cannot allocate 1px default normal map!");
+        if (default_normals_texture_ == 0xffffffff) {
+            throw std::runtime_error("Cannot allocate 1px default normal map!");
+        }
     }
 }
 
 void Ray::Ref::Scene::GetEnvironment(environment_desc_t &env) {
-    memcpy(&env.sky_col[0], &env_.sky_col, 3 * sizeof(float));
+    memcpy(&env.env_col[0], &env_.env_col, 3 * sizeof(float));
+    env.env_clamp = env_.env_clamp;
+    env.env_map = env_.env_map;
 }
 
 void Ray::Ref::Scene::SetEnvironment(const environment_desc_t &env) {
-    memcpy(&env_.sky_col, &env.sky_col[0], 3 * sizeof(float));
+    memcpy(&env_.env_col, &env.env_col[0], 3 * sizeof(float));
+    env_.env_clamp = env.env_clamp;
+    env_.env_map = env.env_map;
+    if (env_.env_map == 0xffffffff) {
+        env_.env_map = default_env_texture_;
+    }
 }
 
 uint32_t Ray::Ref::Scene::AddTexture(const tex_desc_t &_t) {

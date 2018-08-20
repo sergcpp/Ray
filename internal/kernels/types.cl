@@ -84,10 +84,8 @@ typedef struct _light_t {
 } light_t;
 
 typedef struct _environment_t {
-    float3 sun_dir;
-    float3 sun_col;
-    float3 sky_col;
-    float sun_softness;
+    float4 env_col_and_clamp;
+    uint env_map;
     float pad[3];
 } environment_t;
 
