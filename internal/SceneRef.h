@@ -33,8 +33,6 @@ class Scene : public SceneBase {
 protected:
     friend class Ref::Renderer;
     template <int DimX, int DimY>
-    friend class ref2::RendererSIMD;
-    template <int DimX, int DimY>
     friend class Sse::RendererSIMD;
     template <int DimX, int DimY>
     friend class Avx::RendererSIMD;

@@ -3,7 +3,6 @@
 #include "internal/RendererRef.h"
 
 #if !defined(__ANDROID__)
-#include "internal/RendererRef2.h"
 #include "internal/RendererSSE.h"
 #include "internal/RendererAVX.h"
 #elif defined(__ARM_NEON__) || defined(__aarch64__)

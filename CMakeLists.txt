@@ -52,7 +52,6 @@ set(INTERNAL_SOURCE_FILES internal/BVHSplit.h
                           internal/Halton.h
                           internal/RendererRef.h
                           internal/RendererRef.cpp
-                          internal/RendererRef2.h
                           internal/RendererSIMD.h
                           internal/SceneRef.h
                           internal/SceneRef.cpp
