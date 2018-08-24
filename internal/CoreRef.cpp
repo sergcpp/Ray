@@ -909,7 +909,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleAnisotropic(const TextureAtlas &atlas, cons
 Ray::Ref::simd_fvec4 Ray::Ref::SampleLatlong_RGBE(const TextureAtlas &atlas, const texture_t &t, const simd_fvec3 &dir) {
     float theta = std::acos(clamp(dir[1], -1.0f, 1.0f)) / PI;
     float r = std::sqrt(dir[0] * dir[0] + dir[2] * dir[2]);
-    float u = 0.5f * std::acos(clamp(dir[0] / r, -1.0f, 1.0f)) / PI;
+    float u = 0.5f * std::acos(r > FLT_EPS ? clamp(dir[0] / r, -1.0f, 1.0f) : 0.0f) / PI;
     if (dir[2] < 0.0f) u = 1.0f - u;
 
     simd_fvec2 pos = { (float)t.pos[0][0], (float)t.pos[0][1] },

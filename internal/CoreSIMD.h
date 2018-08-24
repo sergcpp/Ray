@@ -1378,11 +1378,11 @@ void Ray::NS::SampleAnisotropic(const Ref::TextureAtlas &atlas, const texture_t 
 template <int S>
 void Ray::NS::SampleLatlong_RGBE(const Ref::TextureAtlas &atlas, const texture_t &t, const simd_fvec<S> dir[3], const simd_ivec<S> &mask, simd_fvec<S> out_rgb[3]) {
     
-    simd_fvec<S> theta, u;
+    simd_fvec<S> theta, u = 0.0f;
     simd_fvec<S> r = sqrt(dir[0] * dir[0] + dir[2] * dir[2]);
     simd_fvec<S> y = clamp(dir[1], -1.0f, 1.0f);
 
-    u = clamp(dir[0] / r, -1.0f, 1.0f);
+    where(u > FLT_EPS, u) = clamp(dir[0] / r, -1.0f, 1.0f);
 
     ITERATE(S, {
         theta[i] = std::acos(y[i]) / PI;

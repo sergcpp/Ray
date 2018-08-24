@@ -111,7 +111,7 @@ float4 SampleTextureLatlong_RGBE(__read_only image2d_array_t texture_atlas, __gl
     
     float theta = acospi(clamp(dir.y, -1.0f, 1.0f));
     float r = length(dir.xz);
-    float u = 0.5f * acospi(clamp(dir.x/r, -1.0f, 1.0f));
+    float u = 0.5f * acospi(r > FLT_EPS ? clamp(dir.x/r, -1.0f, 1.0f) : 0.0f);
     if (dir.z < 0) u = 1.0f - u;
 
     float2 pos = (float2)((float)t->pos[0][0], (float)t->pos[0][1]);
