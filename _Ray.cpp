@@ -26,12 +26,15 @@
 #endif
 
 // TODO:
-// add punctual lights support
+// add geometry camera (for lightmapping)
+// add lightmap generation (simple and sh)
 // add deletion functions for OpenCL backend
 // add tests for intersection
 // add more validation tests (use Cycles)
 
 // DONE:
+// add hdr env map
+// add punctual lights support
 // try using image for node buffer (utilize texture cache)
 // compare traversal algorithm with stack
 // add tent filter
