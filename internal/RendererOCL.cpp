@@ -389,7 +389,7 @@ void Ray::Ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
         loaded_halton_ = region.iteration;
     }
 
-    const auto &cam = s->GetCamera(s->current_cam());
+    const auto &cam = s->cams_[s->current_cam()].cam;
 
     Ray::Ocl::camera_t cl_cam = { cam };
 

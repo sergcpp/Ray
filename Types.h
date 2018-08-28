@@ -26,24 +26,24 @@ static_assert(sizeof(pixel_color8_t) == 4, "!");
 /// Rectangle struct
 struct rect_t { int x, y, w, h; };
 
-enum eCamType { Persp, Ortho };
+enum eCamType { Persp, Ortho, Geo };
 
 enum eFilterType { Box, Tent };
 
-/** Camera struct.
-    Should not be used directly, usually returned from SceneBase::GetCamera
-*/
+enum ePassFlags { SkipDirectLight = 1, SkipIndirectLight = 2, LightingOnly = 4, NoBackground = 8 };
+
 struct camera_t {
-    eCamType type;                      ///< Projection type
-    eFilterType filter;                 ///< Filter type
-    float fov, gamma;                   ///< Field of View in degrees, and gamma
-    float focus_distance, focus_factor; ///< Distance to focus point
-    float origin[3],                    ///< Origin point
-          fwd[3],                       ///< Forward unit vector
-          side[3],                      ///< Right side unit vector
-          up[3];                        ///< Up vector
+    eCamType type;
+    eFilterType filter;
+    float fov, gamma;
+    float focus_distance, focus_factor;
+    float origin[3],
+          fwd[3],
+          side[3],
+          up[3];
+    uint32_t mi_index;
+    uint32_t pass_flags;
 };
-static_assert(sizeof(camera_t) == 72, "!");
 
 #if !defined(DISABLE_OCL)
 namespace Ocl {

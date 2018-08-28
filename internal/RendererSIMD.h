@@ -108,7 +108,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
     auto s = std::dynamic_pointer_cast<Ref::Scene>(_s);
     if (!s) return;
 
-    const auto &cam = s->GetCamera(s->current_cam());
+    const auto &cam = s->cams_[s->current_cam()].cam;
 
     const auto num_tris = (uint32_t)s->tris_.size();
     const auto *tris = num_tris ? &s->tris_[0] : nullptr;

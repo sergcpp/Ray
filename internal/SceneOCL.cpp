@@ -209,8 +209,9 @@ uint32_t Ray::Ocl::Scene::AddMesh(const mesh_desc_t &_m) {
     // add nodes
     nodes_.Append(&new_nodes[0], new_nodes.size());
 
+    int stride = _m.layout == PxyzNxyzTuvTuv ? 10 : 8;
+
     // add attributes
-    assert(_m.layout == PxyzNxyzTuv);
     std::vector<vertex_t> new_vertices(_m.vtx_attrs_count);
     for (size_t i = 0; i < _m.vtx_attrs_count; i++) {
         auto &v = new_vertices[i];
@@ -218,8 +219,13 @@ uint32_t Ray::Ocl::Scene::AddMesh(const mesh_desc_t &_m) {
         memcpy(&v.p[0], (_m.vtx_attrs + i * 8), 3 * sizeof(float));
         memcpy(&v.n[0], (_m.vtx_attrs + i * 8 + 3), 3 * sizeof(float));
         memcpy(&v.t0[0], (_m.vtx_attrs + i * 8 + 6), 2 * sizeof(float));
+        if (_m.layout == PxyzNxyzTuv) {
+            v.t1[0] = v.t1[2] = 0.0f;
+        } else if (_m.layout == PxyzNxyzTuvTuv) {
+            memcpy(&v.t1[0], (_m.vtx_attrs + i * stride + 8), 2 * sizeof(float));
+        }
 
-        memset(&v.b[0], 0, 3 * sizeof(float));
+        v.b[0] = v.b[1] = v.b[2] = 0.0f;
     }
 
     Ref::ComputeTextureBasis(vertices_.size(), 0, new_vertices, new_vtx_indices, _m.vtx_indices, _m.vtx_indices_count);

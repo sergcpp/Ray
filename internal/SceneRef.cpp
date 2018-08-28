@@ -170,18 +170,24 @@ uint32_t Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
         new_vtx_indices.push_back(_m.vtx_indices[i] + (uint32_t)vertices_.size());
     }
 
+    int stride = _m.layout == PxyzNxyzTuvTuv ? 10 : 8;
+
     // add attributes
-    assert(_m.layout == PxyzNxyzTuv);
     size_t new_vertices_start = vertices_.size();
     vertices_.resize(new_vertices_start + _m.vtx_attrs_count);
     for (size_t i = 0; i < _m.vtx_attrs_count; i++) {
         auto &v = vertices_[new_vertices_start + i];
 
-        memcpy(&v.p[0], (_m.vtx_attrs + i * 8), 3 * sizeof(float));
-        memcpy(&v.n[0], (_m.vtx_attrs + i * 8 + 3), 3 * sizeof(float));
-        memcpy(&v.t0[0], (_m.vtx_attrs + i * 8 + 6), 2 * sizeof(float));
+        memcpy(&v.p[0], (_m.vtx_attrs + i * stride), 3 * sizeof(float));
+        memcpy(&v.n[0], (_m.vtx_attrs + i * stride + 3), 3 * sizeof(float));
+        memcpy(&v.t0[0], (_m.vtx_attrs + i * stride + 6), 2 * sizeof(float));
+        if (_m.layout == PxyzNxyzTuv) {
+            v.t1[0] = v.t1[1] = 0.0f;
+        } else if (_m.layout == PxyzNxyzTuvTuv) {
+            memcpy(&v.t1[0], (_m.vtx_attrs + i * stride + 8), 2 * sizeof(float));
+        }
 
-        memset(&v.b[0], 0, 3 * sizeof(float));
+        v.b[0] = v.b[1] = v.b[2] = 0.0f;
     }
 
     ComputeTextureBasis(0, new_vertices_start, vertices_, new_vtx_indices, &new_vtx_indices[0], new_vtx_indices.size());

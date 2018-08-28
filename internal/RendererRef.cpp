@@ -20,7 +20,7 @@ void Ray::Ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
     const auto s = std::dynamic_pointer_cast<Ref::Scene>(_s);
     if (!s) return;
 
-    const auto &cam = s->GetCamera(s->current_cam());
+    const auto &cam = s->cams_[s->current_cam()].cam;
 
     const auto num_tris = (uint32_t)s->tris_.size();
     const auto *tris = num_tris ? &s->tris_[0] : nullptr;
@@ -83,6 +83,9 @@ void Ray::Ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
     }
 
     PassData p;
+#if 0
+    static std::vector<simd_fvec3> color_table;
+#endif
 
     {
         std::lock_guard<std::mutex> _(pass_cache_mtx_);
@@ -90,38 +93,52 @@ void Ray::Ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
             p = std::move(pass_cache_.back());
             pass_cache_.pop_back();
         }
+
+#if 0
+        if (color_table.empty()) {
+            for (int i = 0; i < 1024; i++) {
+                color_table.emplace_back(float(rand()) / RAND_MAX, float(rand()) / RAND_MAX, float(rand()) / RAND_MAX);
+            }
+        }
+#endif
     }
 
+    pass_info_t pass_info;
+
+    pass_info.iteration = region.iteration;
+    pass_info.halton = &region.halton_seq[0];
+    pass_info.flags = cam.pass_flags;
+
     const auto time_start = std::chrono::high_resolution_clock::now();
+    std::chrono::time_point<std::chrono::high_resolution_clock> time_after_ray_gen;
 
-    GeneratePrimaryRays(region.iteration, cam, rect, w, h, &region.halton_seq[0], p.primary_rays);
+    if (cam.type != Geo) {
+        GeneratePrimaryRays(region.iteration, cam, rect, w, h, &region.halton_seq[0], p.primary_rays);
 
-    const auto time_after_ray_gen = std::chrono::high_resolution_clock::now();
+        time_after_ray_gen = std::chrono::high_resolution_clock::now();
 
-    p.intersections.resize(p.primary_rays.size());
+        p.intersections.resize(p.primary_rays.size());
 
-    for (size_t i = 0; i < p.primary_rays.size(); i++) {
-        const auto &r = p.primary_rays[i];
-        auto &inter = p.intersections[i];
+        for (size_t i = 0; i < p.primary_rays.size(); i++) {
+            const auto &r = p.primary_rays[i];
+            auto &inter = p.intersections[i];
 
-        inter = {};
-        inter.id = r.id;
-        Traverse_MacroTree_WithStack(r, nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, inter);
+            inter = {};
+            inter.id = r.id;
+            Traverse_MacroTree_WithStack(r, nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, inter);
+        }
+    } else {
+        const auto &mi = mesh_instances[cam.mi_index];
+        SampleMeshInTextureSpace(region.iteration, cam.mi_index, meshes[mi.mesh_index], transforms[mi.tr_index], nodes, tri_indices, vtx_indices, vertices,
+                                 rect, w, h, &region.halton_seq[0], p.primary_rays, p.intersections);
+
+        time_after_ray_gen = std::chrono::high_resolution_clock::now();
     }
 
     const auto time_after_prim_trace = std::chrono::high_resolution_clock::now();
 
     p.secondary_rays.resize(p.intersections.size());
     int secondary_rays_count = 0;
-
-#if 0
-    static std::vector<simd_fvec3> color_table;
-    if (color_table.empty()) {
-        for (int i = 0; i < 1024; i++) {
-            color_table.emplace_back(float(rand()) / RAND_MAX, float(rand()) / RAND_MAX, float(rand()) / RAND_MAX);
-        }
-    }
-#endif
 
     for (size_t i = 0; i < p.intersections.size(); i++) {
         const auto &r = p.primary_rays[i];
@@ -136,8 +153,10 @@ void Ray::Ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
         //float t = std::pow(inter.prim_indices[0] / 32.0f, 2.0f);
         //pixel_color_t col = { t, t, t, 1.0f };
 #else
+        pass_info.bounce = 2;
+        pass_info.index = y * w + x;
 
-        pixel_color_t col = ShadeSurface((y * w + x), region.iteration, 2, &region.halton_seq[0], inter, r, env, mesh_instances, 
+        pixel_color_t col = ShadeSurface(pass_info, inter, r, env, mesh_instances,
                                          mi_indices, meshes, transforms, vtx_indices, vertices, nodes, macro_tree_root,
                                          tris, tri_indices, materials, textures, tex_atlas, lights, li_indices, light_tree_root, &p.secondary_rays[0], &secondary_rays_count);
 #endif
@@ -154,7 +173,7 @@ void Ray::Ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
     p.chunks_temp.resize(secondary_rays_count);
     p.skeleton.resize(secondary_rays_count);
 
-    for (int bounce = 0; bounce < MAX_BOUNCES && secondary_rays_count; bounce++) {
+    for (int bounce = 0; bounce < MAX_BOUNCES && secondary_rays_count && !(pass_info.flags & SkipIndirectLight); bounce++) {
         auto time_secondary_sort_start = std::chrono::high_resolution_clock::now();
 
         SortRays(&p.secondary_rays[0], (size_t)secondary_rays_count, root_min, cell_size,
@@ -205,7 +224,10 @@ void Ray::Ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
             const int x = inter.id.x;
             const int y = inter.id.y;
 
-            pixel_color_t col = ShadeSurface((y * w + x), region.iteration, bounce + 3, &region.halton_seq[0], inter, r, env, mesh_instances,
+            pass_info.index = y * w + x;
+            pass_info.bounce = bounce + 3;
+
+            pixel_color_t col = ShadeSurface(pass_info, inter, r, env, mesh_instances,
                                              mi_indices, meshes, transforms, vtx_indices, vertices, nodes, macro_tree_root,
                                              tris, tri_indices, materials, textures, tex_atlas, lights, li_indices, light_tree_root, &p.secondary_rays[0], &secondary_rays_count);
 

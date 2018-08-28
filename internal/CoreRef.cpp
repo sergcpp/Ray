@@ -291,6 +291,122 @@ void Ray::Ref::GeneratePrimaryRays(int iteration, const camera_t &cam, const rec
     }
 }
 
+void Ray::Ref::SampleMeshInTextureSpace(int iteration, int obj_index, const mesh_t &mesh, const transform_t &tr, const bvh_node_t *nodes, const uint32_t *tri_indices, const uint32_t *vtx_indices, const vertex_t *vertices,
+                                        const rect_t &r, int w, int h, const float *halton, aligned_vector<ray_packet_t> &out_rays, aligned_vector<hit_data_t> &out_inters) {
+    out_rays.resize((size_t)r.w * r.h);
+    out_inters.resize(out_rays.size());
+
+    for (int y = r.y; y < r.y + r.h; y += RayPacketDimY) {
+        for (int x = r.x; x < r.x + r.w; x += RayPacketDimX) {
+            int i = (y - r.y) * r.w + (x - r.x);
+
+            auto &out_ray = out_rays[i];
+            auto &out_inter = out_inters[i];
+
+            out_ray.id.x = x;
+            out_ray.id.y = y;
+            out_ray.c[0] = out_ray.c[1] = out_ray.c[2] = 1.0f;
+            out_inter.mask_values[0] = 0;
+            out_inter.id = out_ray.id;
+        }
+    }
+
+    simd_ivec2 rect_min = { r.x, r.y }, rect_max = { r.x + r.w - 1, r.y + r.h - 1 };
+    simd_fvec2 size = { (float)w, (float)h };
+    
+    for (uint32_t n = mesh.node_index; n < mesh.node_index + mesh.node_count; n++) {
+        if (!nodes[n].prim_count) continue;
+
+        for (uint32_t p = nodes[n].prim_index; p < nodes[n].prim_index + nodes[n].prim_count; p++) {
+            uint32_t tri_index = tri_indices[p];
+
+            const auto &v0 = vertices[vtx_indices[tri_index * 3 + 0]];
+            const auto &v1 = vertices[vtx_indices[tri_index * 3 + 1]];
+            const auto &v2 = vertices[vtx_indices[tri_index * 3 + 2]];
+
+            const simd_fvec2 t0 = simd_fvec2{ v0.t0[0], 1.0f - v0.t0[1] } * size;
+            const simd_fvec2 t1 = simd_fvec2{ v1.t0[0], 1.0f - v1.t0[1] } * size;
+            const simd_fvec2 t2 = simd_fvec2{ v2.t0[0], 1.0f - v2.t0[1] } * size;
+
+            simd_fvec2 bbox_min = t0, bbox_max = t0;
+
+            bbox_min = min(bbox_min, t1);
+            bbox_min = min(bbox_min, t2);
+
+            bbox_max = max(bbox_max, t1);
+            bbox_max = max(bbox_max, t2);
+
+            simd_ivec2 ibbox_min = (simd_ivec2)(bbox_min),
+                       ibbox_max = simd_ivec2{ (int)std::round(bbox_max[0]), (int)std::round(bbox_max[1]) };
+
+            where(ibbox_min < rect_min, ibbox_min) = rect_min;
+            where(ibbox_max < rect_min, ibbox_max) = rect_min;
+
+            where(ibbox_min > rect_max, ibbox_min) = rect_max;
+            where(ibbox_max > rect_max, ibbox_max) = rect_max;
+
+            if (ibbox_max[0] - ibbox_min[0] <= 0 || ibbox_max[1] - ibbox_min[1] <= 0) continue;
+
+            const simd_fvec2 d01 = t0 - t1, d12 = t1 - t2, d20 = t2 - t0;
+
+            float area = d01[0] * d20[1] - d20[0] * d01[1];
+            if (area < FLT_EPS) continue;
+
+            float inv_area = 1.0f / area;
+
+            for (int y = ibbox_min[1]; y <= ibbox_max[1]; y++) {
+                for (int x = ibbox_min[0]; x <= ibbox_max[0]; x++) {
+                    int i = (y - r.y) * r.w + (x - r.x);
+                    auto &out_ray = out_rays[i];
+                    auto &out_inter = out_inters[i];
+
+                    if (out_inter.mask_values[0]) continue;
+
+                    const int index = y * w + x;
+                    const int hi = (iteration & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT;
+
+                    int hash_val = hash(index);
+
+                    float _unused;
+                    float _x = float(x) + std::modf(halton[hi + 0] + construct_float(hash_val), &_unused);
+                    float _y = float(y) + std::modf(halton[hi + 1] + construct_float(hash(hash_val)), &_unused);
+
+                    float u = d01[0] * (_y - t0[1]) - d01[1] * (_x - t0[0]),
+                          v = d12[0] * (_y - t1[1]) - d12[1] * (_x - t1[0]),
+                          w = d20[0] * (_y - t2[1]) - d20[1] * (_x - t2[0]);
+
+                    if (u > 0.0f && v > 0.0f && w > 0.0f) {
+                        const simd_fvec3 p0 = { v0.p }, p1 = { v1.p }, p2 = { v2.p };
+                        const simd_fvec3 n0 = { v0.n }, n1 = { v1.n }, n2 = { v2.n };
+
+                        u *= inv_area; v *= inv_area; w *= inv_area;
+
+                        const simd_fvec3 p = TransformPoint(p0 * v + p1 * w + p2 * u, tr.xform),
+                                         n = TransformNormal(n0 * v + n1 * w + n2 * u, tr.inv_xform);
+
+                        const simd_fvec3 o = p + n, d = -n;
+
+                        memcpy(&out_ray.o[0], value_ptr(o), 3 * sizeof(float));
+                        memcpy(&out_ray.d[0], value_ptr(d), 3 * sizeof(float));
+                        out_ray.ior = 1.0f;
+                        out_ray.do_dx[0] = out_ray.do_dx[1] = out_ray.do_dx[2] = 0.0f;
+                        out_ray.dd_dx[0] = out_ray.dd_dx[1] = out_ray.dd_dx[2] = 0.0f;
+                        out_ray.do_dy[0] = out_ray.do_dy[1] = out_ray.do_dy[2] = 0.0f;
+                        out_ray.dd_dy[0] = out_ray.dd_dy[1] = out_ray.dd_dy[2] = 0.0f;
+
+                        out_inter.mask_values[0] = 0xffffffff;
+                        out_inter.prim_indices[0] = tri_index;
+                        out_inter.obj_indices[0] = obj_index;
+                        out_inter.t = 1.0f;
+                        out_inter.u = w;
+                        out_inter.v = u;
+                    }
+                }
+            }
+        }
+    }
+}
+
 void Ray::Ref::SortRays(ray_packet_t *rays, size_t rays_count, const float root_min[3], const float cell_size[3],
 						uint32_t *hash_values, int *head_flags, uint32_t *scan_values, ray_chunk_t *chunks, ray_chunk_t *chunks_temp, uint32_t *skeleton) {
 	// From "Fast Ray Sorting and Breadth-First Packet Traversal for GPU Ray Tracing" [2010]
@@ -753,6 +869,12 @@ Ray::Ref::ray_packet_t Ray::Ref::TransformRay(const ray_packet_t &r, const float
     return _r;
 }
 
+Ray::Ref::simd_fvec3 Ray::Ref::TransformPoint(const simd_fvec3 &p, const float *xform) {
+    return simd_fvec3{ xform[0] * p[0] + xform[4] * p[1] + xform[8] * p[2] + xform[12],
+                       xform[1] * p[0] + xform[5] * p[1] + xform[9] * p[2] + xform[13],
+                       xform[2] * p[0] + xform[6] * p[1] + xform[10] * p[2] + xform[14] };
+}
+
 Ray::Ref::simd_fvec3 Ray::Ref::TransformNormal(const simd_fvec3 &n, const float *inv_xform) {
     return simd_fvec3{ inv_xform[0] * n[0] + inv_xform[1] * n[1] + inv_xform[2] * n[2],
                        inv_xform[4] * n[0] + inv_xform[5] * n[1] + inv_xform[6] * n[2],
@@ -1015,16 +1137,19 @@ Ray::Ref::simd_fvec3 Ray::Ref::ComputeDirectLighting(const simd_fvec3 &P, const 
     return col;
 }
 
-Ray::pixel_color_t Ray::Ref::ShadeSurface(const int index, const int iteration, const int bounce, const float *halton, const hit_data_t &inter, const ray_packet_t &ray,
+Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_t &inter, const ray_packet_t &ray,
                                           const environment_t &env, const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
                                           const mesh_t *meshes, const transform_t *transforms, const uint32_t *vtx_indices, const vertex_t *vertices,
                                           const bvh_node_t *nodes, uint32_t node_index, const tri_accel_t *tris, const uint32_t *tri_indices,
                                           const material_t *materials, const texture_t *textures, const TextureAtlas &tex_atlas,
                                           const light_t *lights, const uint32_t *li_indices, uint32_t light_node_index, ray_packet_t *out_secondary_rays, int *out_secondary_rays_count) {
     if (!inter.mask_values[0]) {
-        auto env_col = SampleLatlong_RGBE(tex_atlas, textures[env.env_map], simd_fvec3{ ray.d });
-        if (env.env_clamp > FLT_EPS) {
-            env_col = min(env_col, simd_fvec4{ env.env_clamp });
+        simd_fvec4 env_col = { 0.0f };
+        if (pi.should_add_environment()) {
+            env_col = SampleLatlong_RGBE(tex_atlas, textures[env.env_map], simd_fvec3{ ray.d });
+            if (env.env_clamp > FLT_EPS) {
+                env_col = min(env_col, simd_fvec4{ env.env_clamp });
+            }
         }
         return Ray::pixel_color_t{ ray.c[0] * env_col[0] * env.env_col[0],
                                    ray.c[1] * env_col[1] * env.env_col[1],
@@ -1122,17 +1247,17 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int index, const int iteration, 
     ////////////////////////////////////////////////////////
 
     // used to randomize halton sequence among pixels
-    int rand_hash = hash(index), rand_hash2, rand_hash3;
+    int rand_hash = hash(pi.index), rand_hash2, rand_hash3;
     float rand_offset = construct_float(rand_hash), rand_offset2, rand_offset3;
 
-    const int hi = (iteration & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT + bounce * 2;
+    const int hi = (pi.iteration & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT + pi.bounce * 2;
 
     // resolve mix material
     while (mat->type == MixMaterial) {
         const auto mix = SampleBilinear(tex_atlas, textures[mat->textures[MAIN_TEXTURE]], uvs, 0) * mat->strength;
 
         float _unused;
-        const float r = std::modf(halton[hi] + rand_offset, &_unused);
+        const float r = std::modf(pi.halton[hi] + rand_offset, &_unused);
 
         rand_hash = hash(rand_hash);
         rand_offset = construct_float(rand_hash);
@@ -1191,19 +1316,23 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int index, const int iteration, 
 
     simd_fvec3 col = { 0.0f };
 
-    // generate secondary Ray
+    // Evaluate materials
     if (mat->type == DiffuseMaterial) {
-        col = ComputeDirectLighting(P, N, B, plane_N, halton, hi, rand_offset, rand_offset2, mesh_instances,
-                                    mi_indices, meshes, transforms, vtx_indices, vertices, nodes, node_index,
-                                    tris, tri_indices, lights, li_indices, light_node_index);
-
-        col *= simd_fvec3(&albedo[0]);
+        if (pi.should_add_direct_light()) {
+            col = ComputeDirectLighting(P, N, B, plane_N, pi.halton, hi, rand_offset, rand_offset2, mesh_instances,
+                mi_indices, meshes, transforms, vtx_indices, vertices, nodes, node_index,
+                tris, tri_indices, lights, li_indices, light_node_index);
+            
+            if (pi.should_consider_albedo()) {
+                col *= simd_fvec3(&albedo[0]);
+            }
+        }
 
         float _unused;
-        const float z = std::modf(halton[hi + 0] + rand_offset, &_unused);
+        const float z = std::modf(pi.halton[hi + 0] + rand_offset, &_unused);
 
         const float dir = std::sqrt(z);
-        const float phi = 2 * PI * std::modf(halton[hi + 1] + rand_offset2, &_unused);
+        const float phi = 2 * PI * std::modf(pi.halton[hi + 1] + rand_offset2, &_unused);
 
         const float cos_phi = std::cos(phi);
         const float sin_phi = std::sin(phi);
@@ -1226,7 +1355,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int index, const int iteration, 
         memcpy(&r.dd_dy[0], value_ptr(dd_dy - 2 * (dot(I, plane_N) * dndy + ddn_dy * plane_N)), 3 * sizeof(float));
 
         const float thr = std::max(r.c[0], std::max(r.c[1], r.c[2]));
-        const float p = std::modf(halton[hi + 0] + rand_offset3, &_unused);
+        const float p = std::modf(pi.halton[hi + 0] + rand_offset3, &_unused);
         if (p > (1.0f - thr / RAY_TERM_THRES)) {
             if (thr < RAY_TERM_THRES) {
                 r.c[0] *= RAY_TERM_THRES / thr; r.c[1] *= RAY_TERM_THRES / thr; r.c[2] *= RAY_TERM_THRES / thr;
@@ -1239,10 +1368,10 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int index, const int iteration, 
 
         float _unused;
         const float h = 1.0f - std::cos(0.5f * PI * mat->roughness * mat->roughness);
-        const float z = h * std::modf(halton[hi + 0] + rand_offset, &_unused);
+        const float z = h * std::modf(pi.halton[hi + 0] + rand_offset, &_unused);
 
         const float dir = std::sqrt(z);
-        const float phi = 2 * PI * std::modf(halton[hi + 1] + rand_offset2, &_unused);
+        const float phi = 2 * PI * std::modf(pi.halton[hi + 1] + rand_offset2, &_unused);
         const float cos_phi = std::cos(phi);
         const float sin_phi = std::sin(phi);
 
@@ -1271,7 +1400,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int index, const int iteration, 
         memcpy(&r.dd_dy[0], value_ptr(dd_dy - 2 * (dot(I, plane_N) * dndy + ddn_dy * plane_N)), 3 * sizeof(float));
 
         const float thr = std::max(r.c[0], std::max(r.c[1], r.c[2]));
-        const float p = std::modf(halton[hi + 0] + rand_offset3, &_unused);
+        const float p = std::modf(pi.halton[hi + 0] + rand_offset3, &_unused);
         if (p < thr / RAY_TERM_THRES) {
             if (thr < RAY_TERM_THRES) {
                 r.c[0] *= RAY_TERM_THRES / thr; r.c[1] *= RAY_TERM_THRES / thr; r.c[2] *= RAY_TERM_THRES / thr;
@@ -1289,10 +1418,10 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int index, const int iteration, 
         float m = eta * cosi - std::sqrt(cost2);
         auto V = eta * I + m * __N;
 
-        const float z = 1.0f - halton[hi + 0] * mat->roughness;
+        const float z = 1.0f - pi.halton[hi + 0] * mat->roughness;
         const float temp = std::sqrt(1.0f - z * z);
 
-        const float phi = halton[(((hash(hi) + iteration) & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT + bounce * 2) + 0] * 2 * PI;
+        const float phi = pi.halton[(((hash(hi) + pi.iteration) & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT + pi.bounce * 2) + 0] * 2 * PI;
         const float cos_phi = std::cos(phi);
         const float sin_phi = std::sin(phi);
 
@@ -1324,7 +1453,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int index, const int iteration, 
         float _unused;
 
         const float thr = std::max(r.c[0], std::max(r.c[1], r.c[2]));
-        const float p = std::modf(halton[hi + 0] + rand_offset3, &_unused);
+        const float p = std::modf(pi.halton[hi + 0] + rand_offset3, &_unused);
         if (p < thr / RAY_TERM_THRES) {
             if (thr < RAY_TERM_THRES) {
                 r.c[0] *= RAY_TERM_THRES / thr; r.c[1] *= RAY_TERM_THRES / thr; r.c[2] *= RAY_TERM_THRES / thr;
@@ -1353,7 +1482,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int index, const int iteration, 
         float _unused;
 
         const float thr = std::max(r.c[0], std::max(r.c[1], r.c[2]));
-        const float p = std::modf(halton[hi + 0] + rand_offset3, &_unused);
+        const float p = std::modf(pi.halton[hi + 0] + rand_offset3, &_unused);
         if (p < thr / RAY_TERM_THRES) {
             if (thr < RAY_TERM_THRES) {
                 r.c[0] *= RAY_TERM_THRES / thr; r.c[1] *= RAY_TERM_THRES / thr; r.c[2] *= RAY_TERM_THRES / thr;

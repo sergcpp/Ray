@@ -149,6 +149,9 @@ uint32_t Ray::PreprocessMesh(const float *attrs, size_t attrs_count, const uint3
     if (layout == PxyzNxyzTuv) {
         positions = attrs;
         attr_stride = 8;
+    } else if (layout == PxyzNxyzTuvTuv) {
+        positions = attrs;
+        attr_stride = 10;
     }
 
     for (size_t j = 0; j < vtx_indices_count; j += 3) {

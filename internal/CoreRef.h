@@ -62,10 +62,35 @@ struct environment_t {
     uint32_t env_map;
 };
 
+struct pass_info_t {
+    int index;
+    int iteration,
+        bounce;
+    const float *halton;
+    uint32_t flags = 0;
+
+    force_inline bool should_add_direct_light() const {
+        // skip if we want only indirect light contribution
+        // skip if secondary bounce and we want only direct light contribution (only mesh lights should contribute)
+        return !((flags & SkipDirectLight) && (bounce < 3 || (flags & SkipIndirectLight)));
+    }
+
+    force_inline bool should_add_environment() const {
+        return !(flags & NoBackground) || bounce > 2;
+    }
+
+    force_inline bool should_consider_albedo() const {
+        // do not use albedo in lightmap mode for primary bounce
+        return !(flags & LightingOnly) || bounce > 2;
+    }
+};
+
 class TextureAtlas;
 
-// Generating rays
+// Generation of rays
 void GeneratePrimaryRays(int iteration, const camera_t &cam, const rect_t &r, int w, int h, const float *halton, aligned_vector<ray_packet_t> &out_rays);
+void SampleMeshInTextureSpace(int iteration, int obj_index, const mesh_t &mesh, const transform_t &tr, const bvh_node_t *nodes, const uint32_t *tri_indices, const uint32_t *vtx_indices, const vertex_t *vertices,
+                              const rect_t &r, int w, int h, const float *halton, aligned_vector<ray_packet_t> &out_rays, aligned_vector<hit_data_t> &out_inters);
 
 // Sorting of rays
 void SortRays(ray_packet_t *rays, size_t rays_count, const float root_min[3], const float cell_size[3],
@@ -101,6 +126,7 @@ bool Traverse_MicroTree_WithStack(const ray_packet_t &r, const float inv_d[3], c
 
 // Transform
 ray_packet_t TransformRay(const ray_packet_t &r, const float *xform);
+simd_fvec3 TransformPoint(const simd_fvec3 &p, const float *xform);
 simd_fvec3 TransformNormal(const simd_fvec3 &n, const float *inv_xform);
 simd_fvec2 TransformUV(const simd_fvec2 &uv, const simd_fvec2 &tex_atlas_size, const texture_t &t, int mip_level);
 
@@ -123,7 +149,7 @@ simd_fvec3 ComputeDirectLighting(const simd_fvec3 &P, const simd_fvec3 &N, const
                                  const uint32_t *li_indices, uint32_t light_node_index);
 
 // Shade
-Ray::pixel_color_t ShadeSurface(const int index, const int iteration, const int bounce, const float *halton, const hit_data_t &inter, const ray_packet_t &ray,
+Ray::pixel_color_t ShadeSurface(const pass_info_t &pi, const hit_data_t &inter, const ray_packet_t &ray,
                                 const environment_t &env, const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
                                 const mesh_t *meshes, const transform_t *transforms, const uint32_t *vtx_indices, const vertex_t *vertices,
                                 const bvh_node_t *nodes, uint32_t node_index, const tri_accel_t *tris, const uint32_t *tri_indices,

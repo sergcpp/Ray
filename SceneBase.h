@@ -24,7 +24,8 @@ enum ePrimType {
     T - vertex texture coordinates
 */
 enum eVertexLayout {
-    PxyzNxyzTuv, ///< [ P.x, P.y, P.z, N.x, N.y, N.z, T.x, Ty ]
+    PxyzNxyzTuv,    ///< [ P.x, P.y, P.z, N.x, N.y, N.z, T.x, Ty ]
+    PxyzNxyzTuvTuv, ///< [ P.x, P.y, P.z, N.x, N.y, N.z, T.x, Ty, T.x, Ty ]
 };
 
 /// Mesh region material type
@@ -89,6 +90,22 @@ struct light_desc_t {
     float position[3], radius;
     float color[3];
     float direction[3], angle;
+};
+
+// Camera description
+struct camera_desc_t {
+    eCamType type = Persp;              ///< Type of projection
+    eFilterType filter = Tent;          ///< Reconstruction filter
+    float origin[3];                    ///< Camera origin
+    float fwd[3];                       ///< Camera forward unit vector
+    float fov, gamma = 1.0f;            ///< Field of view in degrees, gamma
+    float focus_distance = 1.0f;        ///< Distance to focus point
+    float focus_factor = 0.0f;          ///< Depth of field strength (in non-physical units)
+    uint32_t mi_index;                  ///< Index of mesh instance used by geometry cam
+    bool lighting_only = false;         ///< Render only lightmap
+    bool skip_direct_lighting = false;  ///< Render only indirect light contribution
+    bool skip_indirect_lighting = false;///< Render only direct light contribution
+    bool no_background = false;         ///< Do not render background
 };
 
 /// Environment description
@@ -187,43 +204,21 @@ public:
     virtual void RemoveMeshInstance(uint32_t mi_index) = 0;
 
     /** @brief Adds camera to a scene
-        @param type camera projection type
+        @param c camera description
         @return New camera index
     */
-    uint32_t AddCamera(eCamType type) {
-        const float o[3] = { 0, 0, 0 }, fwd[3] = { 0, 0, -1 }, fov = 60;
-        return AddCamera(type, Tent, o, fwd, fov, 1.0f, 1.0f, 0.001f);
-    }
+    uint32_t AddCamera(const camera_desc_t &c);
 
-    /** @brief Adds camera to a scene
-        @param type camera projection type
-        @param filter image filter type
-        @param origin camera origin point
-        @param fwd camera forward unit vector
-        @param fov camera field of view in grad.
-        @param gamma
-        @param focus distance
-        @param
-        @return New camera index
-    */
-    uint32_t AddCamera(eCamType type, eFilterType filter, const float origin[3], const float fwd[3], float fov, float gamma, float focus_distance, float focus_factor);
-    
-    /** @brief Get const reference to a camera with specific index
+    /** @brief Get camera description
         @param i camera index
-        @return Camera const reference
     */
-    const camera_t &GetCamera(uint32_t i) const {
-        return cams_[i].cam;
-    }
+    void GetCamera(uint32_t i, camera_desc_t &c) const;;
 
     /** @brief Sets camera properties
         @param i camera index
-        @param type camera projection type
-        @param origin camera origin point
-        @param fwd camera forward unit vector
-        @param fov camera field of view in grad.
+        @param c camera description
     */
-    void SetCamera(uint32_t i, eCamType type, eFilterType filter, const float origin[3], const float fwd[3], float fov, float gamma, float focus_distance, float focus_factor);
+    void SetCamera(uint32_t i, const camera_desc_t &c);
     
     /** @brief Removes camera with specific index from scene
         @param i camera index
