@@ -50,8 +50,8 @@ void Ray::Ref::ComputeTextureBasis(size_t vtx_offset, size_t vtx_start, std::vec
         simd_fvec3 dp1 = simd_fvec3(v1->p) -simd_fvec3(v0->p);
         simd_fvec3 dp2 = simd_fvec3(v2->p) - simd_fvec3(v0->p);
 
-        simd_fvec2 dt1 = simd_fvec2(v1->t0) - simd_fvec2(v0->t0);
-        simd_fvec2 dt2 = simd_fvec2(v2->t0) - simd_fvec2(v0->t0);
+        simd_fvec2 dt1 = simd_fvec2(v1->t[0]) - simd_fvec2(v0->t[0]);
+        simd_fvec2 dt2 = simd_fvec2(v2->t[0]) - simd_fvec2(v0->t[0]);
 
         float det = dt1[0] * dt2[1] - dt1[1] * dt2[0];
         float inv_det = std::abs(det) > FLT_EPS ? 1.0f / det : 0;

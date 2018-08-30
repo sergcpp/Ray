@@ -39,7 +39,7 @@ typedef struct _bvh_node_t {
 } bvh_node_t;
 
 typedef struct _vertex_t {
-    float p[3], n[3], b[3], t0[2], t1[2];
+    float p[3], n[3], b[3], t[2][2];
 } vertex_t;
 
 typedef struct _mesh_t {

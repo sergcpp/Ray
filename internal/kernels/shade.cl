@@ -121,9 +121,9 @@ float4 ShadeSurface(const int index, const int iteration, const int bounce, __gl
     const float3 n2 = (float3)(v2->n[0], v2->n[1], v2->n[2]);
     const float3 n3 = (float3)(v3->n[0], v3->n[1], v3->n[2]);
 
-    const float2 u1 = (float2)(v1->t0[0], v1->t0[1]);
-    const float2 u2 = (float2)(v2->t0[0], v2->t0[1]);
-    const float2 u3 = (float2)(v3->t0[0], v3->t0[1]);
+    const float2 u1 = (float2)(v1->t[0][0], v1->t[0][1]);
+    const float2 u2 = (float2)(v2->t[0][0], v2->t[0][1]);
+    const float2 u3 = (float2)(v3->t[0][0], v3->t[0][1]);
 
     const float _w = 1.0f - inter->u - inter->v;
     float3 N = fast_normalize(n1 * _w + n2 * inter->u + n3 * inter->v);

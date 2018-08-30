@@ -295,7 +295,7 @@ void Ray::Ref::GeneratePrimaryRays(int iteration, const camera_t &cam, const rec
     }
 }
 
-void Ray::Ref::SampleMeshInTextureSpace(int iteration, int obj_index, const mesh_t &mesh, const transform_t &tr, const bvh_node_t *nodes, const uint32_t *tri_indices, const uint32_t *vtx_indices, const vertex_t *vertices,
+void Ray::Ref::SampleMeshInTextureSpace(int iteration, int obj_index, int uv_layer, const mesh_t &mesh, const transform_t &tr, const bvh_node_t *nodes, const uint32_t *tri_indices, const uint32_t *vtx_indices, const vertex_t *vertices,
                                         const rect_t &r, int w, int h, const float *halton, aligned_vector<ray_packet_t> &out_rays, aligned_vector<hit_data_t> &out_inters) {
     out_rays.resize((size_t)r.w * r.h);
     out_inters.resize(out_rays.size());
@@ -328,9 +328,9 @@ void Ray::Ref::SampleMeshInTextureSpace(int iteration, int obj_index, const mesh
             const auto &v1 = vertices[vtx_indices[tri_index * 3 + 1]];
             const auto &v2 = vertices[vtx_indices[tri_index * 3 + 2]];
 
-            const simd_fvec2 t0 = simd_fvec2{ v0.t0[0], 1.0f - v0.t0[1] } * size;
-            const simd_fvec2 t1 = simd_fvec2{ v1.t0[0], 1.0f - v1.t0[1] } * size;
-            const simd_fvec2 t2 = simd_fvec2{ v2.t0[0], 1.0f - v2.t0[1] } * size;
+            const simd_fvec2 t0 = simd_fvec2{ v0.t[uv_layer][0], 1.0f - v0.t[uv_layer][1] } * size;
+            const simd_fvec2 t1 = simd_fvec2{ v1.t[uv_layer][0], 1.0f - v1.t[uv_layer][1] } * size;
+            const simd_fvec2 t2 = simd_fvec2{ v2.t[uv_layer][0], 1.0f - v2.t[uv_layer][1] } * size;
 
             simd_fvec2 bbox_min = t0, bbox_max = t0;
 
@@ -1177,9 +1177,9 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
     const auto n2 = simd_fvec3(v2.n);
     const auto n3 = simd_fvec3(v3.n);
 
-    const auto u1 = simd_fvec2(v1.t0);
-    const auto u2 = simd_fvec2(v2.t0);
-    const auto u3 = simd_fvec2(v3.t0);
+    const auto u1 = simd_fvec2(v1.t[0]);
+    const auto u2 = simd_fvec2(v2.t[0]);
+    const auto u3 = simd_fvec2(v3.t[0]);
 
     float w = 1.0f - inter.u - inter.v;
     simd_fvec3 N = n1 * w + n2 * inter.u + n3 * inter.v;

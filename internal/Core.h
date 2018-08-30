@@ -138,7 +138,7 @@ const int HALTON_SEQ_LEN = 256;
 static_assert(MAX_BOUNCES + 2 <= HALTON_2D_COUNT, "!");
 
 struct vertex_t {
-    float p[3], n[3], b[3], t0[2], t1[2];
+    float p[3], n[3], b[3], t[2][2];
 };
 static_assert(sizeof(vertex_t) == 52, "!");
 
