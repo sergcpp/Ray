@@ -32,7 +32,7 @@ protected:
 
     cl::CommandQueue queue_;
 
-    cl::Kernel prim_rays_gen_kernel_, texture_debug_page_kernel_,
+    cl::Kernel prim_rays_gen_kernel_, sample_mesh_kernel_, texture_debug_page_kernel_,
     shade_primary_kernel_, shade_secondary_kernel_, trace_primary_rays_kernel_, trace_primary_rays_img_kernel_,
     compute_ray_hashes_kernel_, set_head_flags_kernel_, excl_scan_kernel_,
     incl_scan_kernel_, add_partial_sums_kernel_, init_chunk_hash_and_base_kernel_,

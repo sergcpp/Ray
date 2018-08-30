@@ -180,6 +180,8 @@ Ray::Ocl::Renderer::Renderer(int w, int h, int platform_index, int device_index)
 
         prim_rays_gen_kernel_ = cl::Kernel(program_, "GeneratePrimaryRays", &error);
         if (error != CL_SUCCESS) throw std::runtime_error("Cannot create OpenCL renderer!");
+        sample_mesh_kernel_ = cl::Kernel(program_, "SampleMeshInTextureSpace", &error);
+        if (error != CL_SUCCESS) throw std::runtime_error("Cannot create OpenCL renderer!");
         texture_debug_page_kernel_ = cl::Kernel(program_, "TextureDebugPage", &error);
         if (error != CL_SUCCESS) throw std::runtime_error("Cannot create OpenCL renderer!");
         shade_primary_kernel_ = cl::Kernel(program_, "ShadePrimary", &error);
@@ -399,6 +401,32 @@ void Ray::Ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
 
     queue_.finish();
     const auto time_after_ray_gen = std::chrono::high_resolution_clock::now();
+
+    {
+        cl_uint argc = 0;
+        if (sample_mesh_kernel_.setArg(argc++, (cl_uint)2) != CL_SUCCESS ||
+            sample_mesh_kernel_.setArg(argc++, s->meshes_.buf()) != CL_SUCCESS ||
+            sample_mesh_kernel_.setArg(argc++, s->transforms_.buf()) != CL_SUCCESS ||
+            sample_mesh_kernel_.setArg(argc++, s->nodes_.buf()) != CL_SUCCESS ||
+            sample_mesh_kernel_.setArg(argc++, s->tri_indices_.buf()) != CL_SUCCESS ||
+            sample_mesh_kernel_.setArg(argc++, s->vtx_indices_.buf()) != CL_SUCCESS ||
+            sample_mesh_kernel_.setArg(argc++, s->vertices_.buf()) != CL_SUCCESS ||
+            sample_mesh_kernel_.setArg(argc++, w_) != CL_SUCCESS ||
+            sample_mesh_kernel_.setArg(argc++, h_) != CL_SUCCESS ||
+            sample_mesh_kernel_.setArg(argc++, final_buf_) != CL_SUCCESS ||
+            sample_mesh_kernel_.setArg(argc++, prim_rays_buf_) != CL_SUCCESS ||
+            sample_mesh_kernel_.setArg(argc++, prim_inters_buf_) != CL_SUCCESS) {
+            return;
+        }
+
+        if (queue_.enqueueNDRangeKernel(sample_mesh_kernel_, { 0, 0 }, { (size_t)w_, (size_t)h_ }) != CL_SUCCESS) {
+            return;
+        }
+
+        auto error = queue_.enqueueReadImage(final_buf_, CL_TRUE, {}, { (size_t)w_, (size_t)h_, 1 }, 0, 0, &frame_pixels_[0]);
+
+        return;
+    }
 
     cl_int error = CL_SUCCESS;
 

@@ -379,7 +379,7 @@ void Ray::Ref::SampleMeshInTextureSpace(int iteration, int obj_index, int uv_lay
                           v = d12[0] * (_y - t1[1]) - d12[1] * (_x - t1[0]),
                           w = d20[0] * (_y - t2[1]) - d20[1] * (_x - t2[0]);
 
-                    if (u > 0.0f && v > 0.0f && w > 0.0f) {
+                    if (u >= 0.0f && v >= 0.0f && w >= 0.0f) {
                         const simd_fvec3 p0 = { v0.p }, p1 = { v1.p }, p2 = { v2.p };
                         const simd_fvec3 n0 = { v0.n }, n1 = { v1.n }, n2 = { v2.n };
 
