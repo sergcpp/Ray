@@ -60,18 +60,22 @@ force_inline bool is_leaf_node(const bvh_node_t &node) {
 force_inline bool bbox_test(const float o[3], const float inv_d[3], const float t, const float bbox_min[3], const float bbox_max[3]) {
     float lo_x = inv_d[0] * (bbox_min[0] - o[0]);
     float hi_x = inv_d[0] * (bbox_max[0] - o[0]);
-    if (lo_x > hi_x) std::swap(lo_x, hi_x);
+    if (lo_x > hi_x) { float tmp = lo_x; lo_x = hi_x; hi_x = tmp; }
 
     float lo_y = inv_d[1] * (bbox_min[1] - o[1]);
     float hi_y = inv_d[1] * (bbox_max[1] - o[1]);
-    if (lo_y > hi_y) std::swap(lo_y, hi_y);
+    if (lo_y > hi_y) { float tmp = lo_y; lo_y = hi_y; hi_y = tmp; }
 
     float lo_z = inv_d[2] * (bbox_min[2] - o[2]);
     float hi_z = inv_d[2] * (bbox_max[2] - o[2]);
-    if (lo_z > hi_z) std::swap(lo_z, hi_z);
+    if (lo_z > hi_z) { float tmp = lo_z; lo_z = hi_z; hi_z = tmp; }
 
-    float tmin = std::max(lo_x, std::max(lo_y, lo_z));
-    float tmax = std::min(hi_x, std::min(hi_y, hi_z));
+    //float tmin = std::max(lo_x, std::max(lo_y, lo_z));
+    //float tmax = std::min(hi_x, std::min(hi_y, hi_z));
+    float tmin = lo_x > lo_y ? lo_x : lo_y;
+    if (lo_z > tmin) tmin = lo_z;
+    float tmax = hi_x < hi_y ? hi_x : hi_y;
+    if (hi_z < tmax) tmax = hi_z;
 
     return tmin <= tmax && tmin <= t && tmax > 0;
 }

@@ -194,7 +194,7 @@ uint32_t Ray::PreprocessPrims(const prim_t *prims, size_t prims_count, const flo
     triangle_lists.emplace_back();
 
     size_t num_nodes = out_nodes.size();
-    auto root_node_index = (int32_t)num_nodes;
+    auto root_node_index = (uint32_t)num_nodes;
 
     for (size_t j = 0; j < prims_count; j++) {
         triangle_lists.back().indices.push_back((uint32_t)j);
@@ -212,10 +212,14 @@ uint32_t Ray::PreprocessPrims(const prim_t *prims, size_t prims_count, const flo
         uint32_t leaf_index = (uint32_t)out_nodes.size(),
                  parent_index = 0xffffffff;
 
-        for (int32_t i = leaf_index - 1; i >= root_node_index; i--) {
-            if (out_nodes[i].left_child == leaf_index || out_nodes[i].right_child == leaf_index) {
-                parent_index = (uint32_t)i;
-                break;
+        if (leaf_index) {
+            // skip bound checks in debug mode
+            const bvh_node_t *_out_nodes = &out_nodes[0];
+            for (uint32_t i = leaf_index - 1; i >= root_node_index; i--) {
+                if (_out_nodes[i].left_child == leaf_index || _out_nodes[i].right_child == leaf_index) {
+                    parent_index = (uint32_t)i;
+                    break;
+                }
             }
         }
 
