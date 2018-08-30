@@ -129,7 +129,8 @@ void Ray::Ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
         }
     } else {
         const auto &mi = mesh_instances[cam.mi_index];
-        SampleMeshInTextureSpace(region.iteration, cam.mi_index, 0, meshes[mi.mesh_index], transforms[mi.tr_index], nodes, tri_indices, vtx_indices, vertices,
+        SampleMeshInTextureSpace(region.iteration, cam.mi_index, cam.uv_index,
+                                 meshes[mi.mesh_index], transforms[mi.tr_index], nodes, tri_indices, vtx_indices, vertices,
                                  rect, w, h, &region.halton_seq[0], p.primary_rays, p.intersections);
 
         time_after_ray_gen = std::chrono::high_resolution_clock::now();

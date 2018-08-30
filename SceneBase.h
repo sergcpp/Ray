@@ -101,7 +101,7 @@ struct camera_desc_t {
     float fov, gamma = 1.0f;            ///< Field of view in degrees, gamma
     float focus_distance = 1.0f;        ///< Distance to focus point
     float focus_factor = 0.0f;          ///< Depth of field strength (in non-physical units)
-    uint32_t mi_index;                  ///< Index of mesh instance used by geometry cam
+    uint32_t mi_index, uv_index = 0;    ///< Index of mesh instance and uv layer used by geometry cam
     bool lighting_only = false;         ///< Render only lightmap
     bool skip_direct_lighting = false;  ///< Render only indirect light contribution
     bool skip_indirect_lighting = false;///< Render only direct light contribution

@@ -32,6 +32,7 @@ void Ray::SceneBase::GetCamera(uint32_t i, camera_desc_t &c) const {
         c.focus_factor = cam.focus_factor;
     } else {
         c.mi_index = cam.mi_index;
+        c.uv_index = cam.uv_index;
     }
 
     c.lighting_only = (cam.pass_flags & LightingOnly) != 0;
@@ -49,6 +50,7 @@ void Ray::SceneBase::SetCamera(uint32_t i, const camera_desc_t &c) {
         cam.type = Geo;
         cam.gamma = c.gamma;
         cam.mi_index = c.mi_index;
+        cam.uv_index = c.uv_index;
     }
 
     cam.pass_flags = 0;

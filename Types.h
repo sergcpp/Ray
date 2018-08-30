@@ -41,7 +41,7 @@ struct camera_t {
           fwd[3],
           side[3],
           up[3];
-    uint32_t mi_index;
+    uint32_t mi_index, uv_index;
     uint32_t pass_flags;
 };
 
