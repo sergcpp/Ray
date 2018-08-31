@@ -62,29 +62,6 @@ struct environment_t {
     uint32_t env_map;
 };
 
-struct pass_info_t {
-    int index;
-    int iteration,
-        bounce;
-    const float *halton;
-    uint32_t flags = 0;
-
-    force_inline bool should_add_direct_light() const {
-        // skip if we want only indirect light contribution
-        // skip if secondary bounce and we want only direct light contribution (only mesh lights should contribute)
-        return !((flags & SkipDirectLight) && (bounce < 3 || (flags & SkipIndirectLight)));
-    }
-
-    force_inline bool should_add_environment() const {
-        return !(flags & NoBackground) || bounce > 2;
-    }
-
-    force_inline bool should_consider_albedo() const {
-        // do not use albedo in lightmap mode for primary bounce
-        return !(flags & LightingOnly) || bounce > 2;
-    }
-};
-
 class TextureAtlas;
 
 // Generation of rays
@@ -149,7 +126,7 @@ simd_fvec3 ComputeDirectLighting(const simd_fvec3 &P, const simd_fvec3 &N, const
                                  const uint32_t *li_indices, uint32_t light_node_index);
 
 // Shade
-Ray::pixel_color_t ShadeSurface(const pass_info_t &pi, const hit_data_t &inter, const ray_packet_t &ray,
+Ray::pixel_color_t ShadeSurface(const pass_info_t &pi, const hit_data_t &inter, const ray_packet_t &ray, const float *halton,
                                 const environment_t &env, const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
                                 const mesh_t *meshes, const transform_t *transforms, const uint32_t *vtx_indices, const vertex_t *vertices,
                                 const bvh_node_t *nodes, uint32_t node_index, const tri_accel_t *tris, const uint32_t *tri_indices,

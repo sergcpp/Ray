@@ -13,6 +13,15 @@ float3 refract(float3 I, float3 N, float eta) {
     return t * (float3)(cost2 > 0);
 }
 
+#define should_add_direct_light(pi) \
+    !((pi->flags & SkipDirectLight) && (pi->bounce < 3 || (pi->flags & SkipIndirectLight)))
+
+#define should_add_environment(pi) \
+    (!(pi->flags & NoBackground) || pi->bounce > 2)
+
+#define should_consider_albedo(pi) \
+    (!(pi->flags & LightingOnly) || pi->bounce > 2)
+
 float3 ComputeDirectLighting(const float3 P, const float3 N, const float3 B, const float3 plane_N,
                              __global const float *halton, const int hi, float rand_offset, float rand_offset2,
                              __global const mesh_instance_t *mesh_instances, __global const uint *mi_indices,
@@ -83,7 +92,7 @@ float3 ComputeDirectLighting(const float3 P, const float3 N, const float3 B, con
     return col;
 }
 
-float4 ShadeSurface(const int index, const int iteration, const int bounce, __global const float *halton,
+float4 ShadeSurface(const pass_info_t *pi, __global const float *halton,
                     __global const hit_data_t *prim_inters, __global const ray_packet_t *prim_rays,
                     __global const mesh_instance_t *mesh_instances, __global const uint *mi_indices,
                     __global const mesh_t *meshes, __global const transform_t *transforms,
@@ -94,15 +103,18 @@ float4 ShadeSurface(const int index, const int iteration, const int bounce, __gl
                     __global const light_t *lights, __global const uint *li_indices, uint light_node_index,
                     __local uint *stack, __global ray_packet_t *out_secondary_rays, __global int *out_secondary_rays_count) {
 
-    __global const ray_packet_t *orig_ray = &prim_rays[index];
-    __global const hit_data_t *inter = &prim_inters[index];
+    __global const ray_packet_t *orig_ray = &prim_rays[pi->index];
+    __global const hit_data_t *inter = &prim_inters[pi->index];
 
     const int2 px = (int2)(orig_ray->o.w, orig_ray->d.w);
 
     if (!inter->mask) {
-        float3 env_col = SampleTextureLatlong_RGBE(texture_atlas, &textures[env.env_map], orig_ray->d.xyz).xyz;
-        if (env.env_col_and_clamp.w > FLT_EPS) {
-            env_col = min(env_col, env.env_col_and_clamp.w);
+        float3 env_col = 0.0f;
+        if (should_add_environment(pi)) {
+            env_col = SampleTextureLatlong_RGBE(texture_atlas, &textures[env.env_map], orig_ray->d.xyz).xyz;
+            if (env.env_col_and_clamp.w > FLT_EPS) {
+                env_col = min(env_col, env.env_col_and_clamp.w);
+            }
         }
         return (float4)(env_col * orig_ray->c.xyz * env.env_col_and_clamp.xyz, 1);
     }
@@ -147,7 +159,7 @@ float4 ShadeSurface(const int index, const int iteration, const int bounce, __gl
     plane_N = fast_normalize(plane_N);
     if (tri->ci & TRI_INV_NORMAL_BIT) plane_N = -plane_N;
 
-    plane_N = TransformNormal(&plane_N, &tr->inv_xform);
+    plane_N = TransformNormal(plane_N, &tr->inv_xform);
 
     float dot_I_N = dot(-I, plane_N);
 
@@ -191,10 +203,10 @@ float4 ShadeSurface(const int index, const int iteration, const int bounce, __gl
     const float2 duv_dy = (float2)(A[0].x * By.x - A[0].y * By.y, A[1].x * By.x - A[1].y * By.y) * inv_det;
 
     // used to randomize halton sequence among pixels
-    int rand_hash = hash(index), rand_hash2, rand_hash3;
+    int rand_hash = hash(pi->index), rand_hash2, rand_hash3;
     float rand_offset = construct_float(rand_hash), rand_offset2, rand_offset3;
 
-    const int hi = (iteration & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT + bounce * 2;
+    const int hi = (pi->iteration & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT + pi->bounce * 2;
 
     // resolve mix material
     while (mat->type == MixMaterial) {
@@ -240,9 +252,9 @@ float4 ShadeSurface(const int index, const int iteration, const int bounce, __gl
     float4 normals = 2 * SampleTextureBilinear(texture_atlas, &textures[mat->textures[NORMALS_TEXTURE]], uvs, 0) - 1;
     N = normals.x * B + normals.z * N + normals.y * T;
     
-    N = TransformNormal(&N, &tr->inv_xform);
-    B = TransformNormal(&B, &tr->inv_xform);
-    T = TransformNormal(&T, &tr->inv_xform);
+    N = TransformNormal(N, &tr->inv_xform);
+    B = TransformNormal(B, &tr->inv_xform);
+    T = TransformNormal(T, &tr->inv_xform);
 
     float4 albedo = SampleTextureAnisotropic(texture_atlas, &textures[mat->textures[MAIN_TEXTURE]], uvs, duv_dx, duv_dy);
     albedo.xyz *= mat->main_color;
@@ -251,15 +263,18 @@ float4 ShadeSurface(const int index, const int iteration, const int bounce, __gl
 )" // workaround for 16k string literal limitation on msvc
 R"(
 
-    float3 col;
+    float3 col = 0.0f;
 
     // Evaluate materials
     if (mat->type == DiffuseMaterial) {
-        col = ComputeDirectLighting(P, N, B, plane_N, halton, hi, rand_offset, rand_offset2,
-                                    mesh_instances, mi_indices, meshes, transforms, vtx_indices, vertices,
-                                    nodes, node_index, tris, tri_indices, lights, li_indices, light_node_index, stack);
-
-        col *= albedo.xyz;
+        if (should_add_direct_light(pi)) {
+            col = ComputeDirectLighting(P, N, B, plane_N, halton, hi, rand_offset, rand_offset2,
+                                        mesh_instances, mi_indices, meshes, transforms, vtx_indices, vertices,
+                                        nodes, node_index, tris, tri_indices, lights, li_indices, light_node_index, stack);
+            if (should_consider_albedo(pi)) {
+                col *= albedo.xyz;
+            }
+        }
 
         float _unused;
         const float z = fract(halton[hi + 0] + rand_offset, &_unused);
@@ -275,7 +290,9 @@ R"(
         r.o = (float4)(P + HIT_BIAS * plane_N, (float)px.x);
         r.d = (float4)(V, (float)px.y);
         r.c = orig_ray->c;
-        r.c.xyz *= albedo.xyz;
+        if (should_consider_albedo(pi)) {
+            r.c.xyz *= albedo.xyz;
+        }
         r.do_dx = do_dx;
         r.do_dy = do_dy;
         r.dd_dx = dd_dx - 2 * (dot(I, plane_N) * dndx + ddn_dx * plane_N);
@@ -341,7 +358,7 @@ R"(
         const float z = 1.0f - halton[hi + 0] * mat->roughness;
         const float temp = native_sqrt(1.0f - z * z);
 
-        const float phi = halton[(((hash(hi) + iteration) & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT + bounce * 2) + 0] * 2 * PI;
+        const float phi = halton[(((hash(hi) + pi->iteration) & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT + pi->bounce * 2) + 0] * 2 * PI;
         float cos_phi;
         const float sin_phi = sincos(phi, &cos_phi);
 
@@ -401,7 +418,7 @@ R"(
 }
 
 __kernel
-void ShadePrimary(const int iteration, __global const float *halton, int w,
+void ShadePrimary(pass_info_t pi, __global const float *halton, int w,
                   __global const hit_data_t *prim_inters, __global const ray_packet_t *prim_rays,
                   __global const mesh_instance_t *mesh_instances, __global const uint *mi_indices,
                   __global const mesh_t *meshes, __global const transform_t *transforms,
@@ -417,7 +434,9 @@ void ShadePrimary(const int iteration, __global const float *halton, int w,
     __local uint shared_stack[MAX_STACK_SIZE * TRACE_GROUP_SIZE_X * TRACE_GROUP_SIZE_Y];
     __local uint *stack = &shared_stack[MAX_STACK_SIZE * (get_local_id(1) * TRACE_GROUP_SIZE_X + get_local_id(0))];
 
-    float4 res = ShadeSurface((j * w + i), iteration, 2, halton, prim_inters, prim_rays,
+    pi.index = j * w + i;
+
+    float4 res = ShadeSurface(&pi, halton, prim_inters, prim_rays,
                   mesh_instances, mi_indices, meshes, transforms, vtx_indices, vertices,
                   nodes, node_index, tris, tri_indices, env, materials, textures, texture_atlas,
                   lights, li_indices, light_node_index,
@@ -427,7 +446,7 @@ void ShadePrimary(const int iteration, __global const float *halton, int w,
 }
 
 __kernel
-void ShadeSecondary(const int iteration, const int bounce, __global const float *halton, __global const hit_data_t *prim_inters, __global const ray_packet_t *prim_rays,
+void ShadeSecondary(pass_info_t pi, __global const float *halton, __global const hit_data_t *prim_inters, __global const ray_packet_t *prim_rays,
                     __global const mesh_instance_t *mesh_instances, __global const uint *mi_indices, __global const mesh_t *meshes, __global const transform_t *transforms,
                     __global const uint *vtx_indices, __global const vertex_t *vertices, __global const bvh_node_t *nodes, uint node_index, 
                     __global const tri_accel_t *tris, __global const uint *tri_indices, const environment_t env, __global const material_t *materials, __global const texture_t *textures, __read_only image2d_array_t texture_atlas,
@@ -444,7 +463,9 @@ void ShadeSecondary(const int iteration, const int bounce, __global const float 
     __local uint shared_stack[MAX_STACK_SIZE * TRACE_GROUP_SIZE_X * TRACE_GROUP_SIZE_Y];
     __local uint *stack = &shared_stack[MAX_STACK_SIZE * (get_local_id(1) * TRACE_GROUP_SIZE_X + get_local_id(0))];
 
-    float4 res = ShadeSurface(index, iteration, bounce, halton, prim_inters, prim_rays,
+    pi.index = index;
+
+    float4 res = ShadeSurface(&pi, halton, prim_inters, prim_rays,
                   mesh_instances, mi_indices, meshes, transforms, vtx_indices, vertices,
                   nodes, node_index, tris, tri_indices, env, materials, textures, texture_atlas,
                   lights, li_indices, light_node_index,

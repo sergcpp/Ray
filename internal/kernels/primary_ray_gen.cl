@@ -84,26 +84,112 @@ void GeneratePrimaryRays(const int iteration, camera_t cam, int w, int h, __glob
     r->dd_dy = _dy - d;
 }
 
+typedef struct _tri_entry_t {
+    uint tri_index;
+    float2 bbox_min, bbox_max;
+} tri_entry_t;
+
+#define TRI_RAST_X 8
+#define TRI_RAST_Y 8
+
 __kernel
-void SampleMeshInTextureSpace(uint mesh_index, __global const mesh_t *meshes, __global const transform_t *transforms,
-                              __global const uint *vtx_indices, __global const vertex_t *vertices,
-                              int w, int h, __write_only image2d_t res,
-                              __global ray_packet_t *out_rays, __global hit_data_t *out_inters) {
+void SampleMeshInTextureSpace_ResetBins(__global uint *out_tri_bins) {
+    const int i = get_global_id(0);
+
+    __global uint *counter = &out_tri_bins[i * 1024];
+    *counter = 0;
+}
+
+__kernel
+void SampleMeshInTextureSpace_BinStage(int uv_layer, uint tri_offset, __global const uint *vtx_indices, __global const vertex_t *vertices,
+                                       int w, int h, __global uint *out_tri_bins) {
+    const int i = get_global_id(0);
+    
+    const float2 size = (float2)(w, h);
+
+    const float2 rect_min = (float2)(0.0f, 0.0f),
+                 rect_max = (float2)(w - 1, h - 1);
+
+    int tw = w / TRI_RAST_X + ((w % TRI_RAST_X) ? 1 : 0);
+
+    uint tri = tri_offset + i;
+
+    __global const vertex_t *v0 = &vertices[vtx_indices[tri * 3 + 0]];
+    __global const vertex_t *v1 = &vertices[vtx_indices[tri * 3 + 1]];
+    __global const vertex_t *v2 = &vertices[vtx_indices[tri * 3 + 2]];
+
+    const float2 t0 = (float2)(v0->t[uv_layer][0], 1.0f - v0->t[uv_layer][1]) * size;
+    const float2 t1 = (float2)(v1->t[uv_layer][0], 1.0f - v1->t[uv_layer][1]) * size;
+    const float2 t2 = (float2)(v2->t[uv_layer][0], 1.0f - v2->t[uv_layer][1]) * size;
+
+    float2 bbox_min = t0, bbox_max = t0;
+
+    bbox_min = fmin(bbox_min, t1);
+    bbox_min = fmin(bbox_min, t2);
+
+    bbox_max = fmax(bbox_max, t1);
+    bbox_max = fmax(bbox_max, t2);
+
+    bbox_min = max(bbox_min, rect_min);
+    bbox_max = min(bbox_max, rect_max);
+
+    int2 ibbox_min = convert_int2(bbox_min),
+            ibbox_max = convert_int2(round(bbox_max));
+
+    for (int y = ibbox_min.y / TRI_RAST_Y; y <= ibbox_max.y / TRI_RAST_Y; y++) {
+        for (int x = ibbox_min.x / TRI_RAST_X; x <= ibbox_max.x / TRI_RAST_X; x++) {
+            __global uint *bins = &out_tri_bins[(y * tw + x) * 1024];
+
+            int index = atomic_inc(bins);
+            if (index < 1023) {
+                bins[index + 1] = tri;
+            }
+        }
+    }
+}
+
+__kernel
+void SampleMeshInTextureSpace_RasterStage(int uv_layer, int iteration, uint tr_index, __global const transform_t *transforms,
+                                          __global const uint *vtx_indices, __global const vertex_t *vertices,
+                                          int w, int h, __global const float *halton, __global const uint *tri_bins,
+                                          __global ray_packet_t *out_rays, __global hit_data_t *out_inters) {
     const int i = get_global_id(0);
     const int j = get_global_id(1);
 
+    const int index = j * w + i;
+    const int hi = (iteration & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT;
+    const int hash_val = hash(index);
+
+    const int bx = i / TRI_RAST_X,
+              by = j / TRI_RAST_Y;
+
+    int tw = w / TRI_RAST_X + ((w % TRI_RAST_X) ? 1 : 0);
+
     float2 size = (float2)(w, h);
 
-    __global const mesh_t *mesh = &meshes[mesh_index];
+    __global const uint *bins = &tri_bins[(by * tw + bx) * 1024];
+    __global const transform_t *tr = &transforms[tr_index];
+    
+    __global ray_packet_t *ray = &out_rays[index];
+    __global hit_data_t *inter = &out_inters[index];
 
-    for (uint tri = mesh->tris_index; tri < mesh->tris_index + mesh->tris_count; tri++) {
+    ray->d = 0.0f;
+
+    inter->mask = 0;
+    inter->ray_id = (float2)(i, j);
+
+    uint tri_count = *bins;
+
+    for (uint p = 0; p < tri_count; p++) {
+        uint tri = bins[p + 1];
+
         __global const vertex_t *v0 = &vertices[vtx_indices[tri * 3 + 0]];
         __global const vertex_t *v1 = &vertices[vtx_indices[tri * 3 + 1]];
         __global const vertex_t *v2 = &vertices[vtx_indices[tri * 3 + 2]];
 
-        const float2 t0 = (float2)(v0->t[0][0], 1.0f - v0->t[0][1]) * size;
-        const float2 t1 = (float2)(v1->t[0][0], 1.0f - v1->t[0][1]) * size;
-        const float2 t2 = (float2)(v2->t[0][0], 1.0f - v2->t[0][1]) * size;
+        const float2 t0 = (float2)(v0->t[uv_layer][0], 1.0f - v0->t[uv_layer][1]) * size;
+        const float2 t1 = (float2)(v1->t[uv_layer][0], 1.0f - v1->t[uv_layer][1]) * size;
+        const float2 t2 = (float2)(v2->t[uv_layer][0], 1.0f - v2->t[uv_layer][1]) * size;
 
         float2 bbox_min = t0, bbox_max = t0;
 
@@ -118,25 +204,51 @@ void SampleMeshInTextureSpace(uint mesh_index, __global const mesh_t *meshes, __
 
         if (i < ibbox_min.x || i > ibbox_max.x || j < ibbox_min.y || j > ibbox_max.y) continue;
 
-        write_imagef(res, (int2)(i, j), (float4)(1.0f, 0.0f, 0.0f, 1.0f));
-
-        /*const float2 d01 = t0 - t1, d12 = t1 - t2, d20 = t2 - t0;
+        const float2 d01 = t0 - t1, d12 = t1 - t2, d20 = t2 - t0;
 
         float area = d01.x * d20.y - d20.x * d01.y;
         if (area < FLT_EPS) continue;
 
         float inv_area = 1.0f / area;
 
-        float _x = (float)(i);
-        float _y = (float)(j);
+        float _unused;
+        float _x = (float)(i) + fract(halton[hi + 0] + construct_float(hash_val), &_unused);
+        float _y = (float)(j) + fract(halton[hi + 1] + construct_float(hash(hash_val)), &_unused);
 
-        float u = d01[0] * (_y - t0[1]) - d01[1] * (_x - t0[0]),
-              v = d12[0] * (_y - t1[1]) - d12[1] * (_x - t1[0]),
-              w = d20[0] * (_y - t2[1]) - d20[1] * (_x - t2[0]);
+        float u = d01.x * (_y - t0.y) - d01.y * (_x - t0.x),
+              v = d12.x * (_y - t1.y) - d12.y * (_x - t1.x),
+              w = d20.x * (_y - t2.y) - d20.y * (_x - t2.x);
 
-        if (u >= 0.0f && v >= 0.0f && w >= 0.0f) {
-            write_imagef(res, (int2)(i, j), (float4)(1.0f, 0.0f, 0.0f, 1.0f));
-        }*/
+        if (u >= -FLT_EPS && v >= -FLT_EPS && w >= -FLT_EPS) {
+            const float3 p0 = (float3)(v0->p[0], v0->p[1], v0->p[2]),
+                         p1 = (float3)(v1->p[0], v1->p[1], v1->p[2]),
+                         p2 = (float3)(v2->p[0], v2->p[1], v2->p[2]);
+
+            const float3 n0 = (float3)(v0->n[0], v0->n[1], v0->n[2]),
+                         n1 = (float3)(v1->n[0], v1->n[1], v1->n[2]),
+                         n2 = (float3)(v2->n[0], v2->n[1], v2->n[2]);
+
+            u *= inv_area; v *= inv_area; w *= inv_area;
+
+            const float3 p = TransformPoint(p0 * v + p1 * w + p2 * u, &tr->xform),
+                         n = TransformNormal(n0 * v + n1 * w + n2 * u, &tr->inv_xform);
+
+            const float3 o = p + n, d = -n;
+
+            ray->o = (float4)(o, (float)i);
+            ray->d = (float4)(d, (float)j);
+   
+            ray->c = (float4)(1.0f, 1.0f, 1.0f, 1.0f);
+            ray->do_dx = ray->do_dy = (float3)(0, 0, 0);
+            ray->dd_dx = ray->dd_dy = (float3)(0, 0, 0);
+
+            inter->mask = 0xffffffff;
+            inter->obj_index = 0;
+            inter->prim_index = tri;
+            inter->t = 1.0f;
+            inter->u = w;
+            inter->v = u;
+        }
     }
 }
 

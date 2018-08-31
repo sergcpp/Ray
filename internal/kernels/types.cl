@@ -94,8 +94,15 @@ typedef struct _ray_chunk_t {
     uint hash, base, size;
 } ray_chunk_t;
 
+typedef struct _pass_info_t {
+    int index;
+    int iteration, bounce;
+    uint flags;
+} pass_info_t;
+
 __kernel void TypesCheck(ray_packet_t r, camera_t c, tri_accel_t t, hit_data_t i,
                          bvh_node_t b, vertex_t v, mesh_t m, mesh_instance_t mi, transform_t tr,
-                         texture_t tex, material_t mat, light_t l, environment_t env, ray_chunk_t ch) {}
+                         texture_t tex, material_t mat, light_t l, environment_t env, ray_chunk_t ch,
+                         pass_info_t pi) {}
 
 )"

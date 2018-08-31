@@ -98,6 +98,9 @@ Ray::Ocl::Renderer::Renderer(int w, int h, int platform_index, int device_index)
         max_image_buffer_size_ = 0;
     }
 
+    tri_rast_x_ = tri_rast_y_ = 8;
+    tri_bin_size_ = 1024;
+
     {
         // create context
         cl_int error = CL_SUCCESS;
@@ -142,6 +145,10 @@ Ray::Ocl::Renderer::Renderer(int w, int h, int platform_index, int device_index)
         cl_src_defines += "#define CAM_USE_TENT_FILTER " + std::to_string(CAM_USE_TENT_FILTER) + "\n";
         cl_src_defines += "#define MAX_STACK_SIZE " + std::to_string(MAX_STACK_SIZE) + "\n";
         cl_src_defines += "#define LIGHT_ATTEN_CUTOFF " + std::to_string(LIGHT_ATTEN_CUTOFF) + "\n";
+        cl_src_defines += "#define SkipDirectLight " + std::to_string(SkipDirectLight) + "\n";
+        cl_src_defines += "#define SkipIndirectLight " + std::to_string(SkipIndirectLight) + "\n";
+        cl_src_defines += "#define LightingOnly " + std::to_string(LightingOnly) + "\n";
+        cl_src_defines += "#define NoBackground " + std::to_string(NoBackground) + "\n";
 
         cl_int error = CL_SUCCESS;
         cl::Program::Sources srcs = {
@@ -154,7 +161,8 @@ Ray::Ocl::Renderer::Renderer(int w, int h, int platform_index, int device_index)
         program_ = cl::Program(context_, srcs, &error);
         if (error != CL_SUCCESS) throw std::runtime_error("Cannot create OpenCL renderer!");
 
-        std::string build_opts = "-Werror -cl-strict-aliasing -cl-mad-enable -cl-no-signed-zeros -cl-fast-relaxed-math ";// = "-cl-opt-disable ";
+        //std::string build_opts = "-Werror -cl-strict-aliasing -cl-mad-enable -cl-no-signed-zeros -cl-fast-relaxed-math ";// = "-cl-opt-disable ";
+        std::string build_opts = "-cl-strict-aliasing -cl-mad-enable -cl-no-signed-zeros -cl-fast-relaxed-math ";// = "-cl-opt-disable ";
 
         struct stat info = { 0 };
         if (stat("./.dumps", &info) == 0 && info.st_mode & S_IFDIR) {
@@ -180,7 +188,11 @@ Ray::Ocl::Renderer::Renderer(int w, int h, int platform_index, int device_index)
 
         prim_rays_gen_kernel_ = cl::Kernel(program_, "GeneratePrimaryRays", &error);
         if (error != CL_SUCCESS) throw std::runtime_error("Cannot create OpenCL renderer!");
-        sample_mesh_kernel_ = cl::Kernel(program_, "SampleMeshInTextureSpace", &error);
+        sample_mesh_reset_bins_kernel_ = cl::Kernel(program_, "SampleMeshInTextureSpace_ResetBins", &error);
+        if (error != CL_SUCCESS) throw std::runtime_error("Cannot create OpenCL renderer!");
+        sample_mesh_bin_stage_kernel_ = cl::Kernel(program_, "SampleMeshInTextureSpace_BinStage", &error);
+        if (error != CL_SUCCESS) throw std::runtime_error("Cannot create OpenCL renderer!");
+        sample_mesh_raster_stage_kernel_ = cl::Kernel(program_, "SampleMeshInTextureSpace_RasterStage", &error);
         if (error != CL_SUCCESS) throw std::runtime_error("Cannot create OpenCL renderer!");
         texture_debug_page_kernel_ = cl::Kernel(program_, "TextureDebugPage", &error);
         if (error != CL_SUCCESS) throw std::runtime_error("Cannot create OpenCL renderer!");
@@ -253,7 +265,8 @@ Ray::Ocl::Renderer::Renderer(int w, int h, int platform_index, int device_index)
                 types_check.setArg(argc++, sizeof(material_t), buf) != CL_SUCCESS ||
                 types_check.setArg(argc++, sizeof(light_t), buf) != CL_SUCCESS ||
                 types_check.setArg(argc++, sizeof(environment_t), buf) != CL_SUCCESS ||
-                types_check.setArg(argc++, sizeof(ray_chunk_t), buf) != CL_SUCCESS) {
+                types_check.setArg(argc++, sizeof(ray_chunk_t), buf) != CL_SUCCESS ||
+                types_check.setArg(argc++, sizeof(pass_info_t), buf) != CL_SUCCESS) {
 #if defined(_MSC_VER)
             __debugbreak();
 #endif
@@ -342,6 +355,12 @@ void Ray::Ocl::Renderer::Resize(int w, int h) {
 
     skeleton_buf_ = cl::Buffer(context_, CL_MEM_READ_WRITE | CL_MEM_HOST_NO_ACCESS, sizeof(uint32_t) * _num, nullptr, &error);
 
+    {
+        size_t _w = (w / tri_rast_x_) + ((w % tri_rast_x_) == 0 ? 0 : 1),
+               _h = (h / tri_rast_y_) + ((h % tri_rast_y_) == 0 ? 0 : 1);
+        tri_bin_buf_ = cl::Buffer(context_, CL_MEM_READ_WRITE | CL_MEM_HOST_NO_ACCESS, sizeof(uint32_t) * _w * _h * tri_bin_size_, nullptr, &error);
+    }
+
     temp_buf_ = cl::Image2D(context_, CL_MEM_READ_WRITE, cl::ImageFormat { CL_RGBA, CL_FLOAT }, (size_t)w, (size_t)h, 0, nullptr, &error);
     clean_buf_ = cl::Image2D(context_, CL_MEM_READ_WRITE, cl::ImageFormat { CL_RGBA, CL_FLOAT }, (size_t)w, (size_t)h, 0, nullptr, &error);
     final_buf_ = cl::Image2D(context_, CL_MEM_READ_WRITE, cl::ImageFormat { CL_RGBA, CL_FLOAT }, (size_t)w, (size_t)h, 0, nullptr, &error);
@@ -393,49 +412,55 @@ void Ray::Ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
 
     const auto &cam = s->cams_[s->current_cam()].cam;
 
+    pass_info_t pass_info;
+
+    pass_info.iteration = region.iteration;
+    pass_info.bounce = 2;
+    pass_info.flags = cam.pass_flags;
+
     Ray::Ocl::camera_t cl_cam = { cam };
-
-    const auto time_start = std::chrono::high_resolution_clock::now();
-
-    if (!kernel_GeneratePrimaryRays((cl_int)region.iteration, cl_cam, region.rect(), w_, h_, halton_seq_buf_, prim_rays_buf_)) return;
-
-    queue_.finish();
-    const auto time_after_ray_gen = std::chrono::high_resolution_clock::now();
-
-    {
-        cl_uint argc = 0;
-        if (sample_mesh_kernel_.setArg(argc++, (cl_uint)0) != CL_SUCCESS ||
-            sample_mesh_kernel_.setArg(argc++, s->meshes_.buf()) != CL_SUCCESS ||
-            sample_mesh_kernel_.setArg(argc++, s->transforms_.buf()) != CL_SUCCESS ||
-            sample_mesh_kernel_.setArg(argc++, s->vtx_indices_.buf()) != CL_SUCCESS ||
-            sample_mesh_kernel_.setArg(argc++, s->vertices_.buf()) != CL_SUCCESS ||
-            sample_mesh_kernel_.setArg(argc++, w_) != CL_SUCCESS ||
-            sample_mesh_kernel_.setArg(argc++, h_) != CL_SUCCESS ||
-            sample_mesh_kernel_.setArg(argc++, final_buf_) != CL_SUCCESS ||
-            sample_mesh_kernel_.setArg(argc++, prim_rays_buf_) != CL_SUCCESS ||
-            sample_mesh_kernel_.setArg(argc++, prim_inters_buf_) != CL_SUCCESS) {
-            return;
-        }
-
-        if (queue_.enqueueNDRangeKernel(sample_mesh_kernel_, { 0, 0 }, { (size_t)w_, (size_t)h_ }) != CL_SUCCESS) {
-            return;
-        }
-
-        auto error = queue_.enqueueReadImage(final_buf_, CL_TRUE, {}, { (size_t)w_, (size_t)h_, 1 }, 0, 0, &frame_pixels_[0]);
-
-        return;
-    }
 
     cl_int error = CL_SUCCESS;
 
-    if (s->nodes_.img_buf().get() != nullptr) {
-        if (!kernel_TracePrimaryRaysImg(prim_rays_buf_, region.rect(), w_,
-            s->mesh_instances_.buf(), s->mi_indices_.buf(), s->meshes_.buf(), s->transforms_.buf(),
-            s->nodes_.img_buf(), (cl_uint)s->macro_nodes_start_, s->tris_.buf(), s->tri_indices_.buf(), prim_inters_buf_)) return;
+    const auto time_start = std::chrono::high_resolution_clock::now();
+
+    std::chrono::time_point<std::chrono::high_resolution_clock> time_after_ray_gen;
+
+    if (cam.type != Geo) {
+        if (!kernel_GeneratePrimaryRays((cl_int)region.iteration, cl_cam, region.rect(), w_, h_, halton_seq_buf_, prim_rays_buf_)) return;
+
+        queue_.finish();
+        time_after_ray_gen = std::chrono::high_resolution_clock::now();
+
+        if (s->nodes_.img_buf().get() != nullptr) {
+            if (!kernel_TracePrimaryRaysImg(prim_rays_buf_, region.rect(), w_,
+                                            s->mesh_instances_.buf(), s->mi_indices_.buf(), s->meshes_.buf(), s->transforms_.buf(),
+                                            s->nodes_.img_buf(), (cl_uint)s->macro_nodes_start_, s->tris_.buf(), s->tri_indices_.buf(), prim_inters_buf_)) return;
+        } else {
+            if (!kernel_TracePrimaryRays(prim_rays_buf_, region.rect(), w_,
+                                         s->mesh_instances_.buf(), s->mi_indices_.buf(), s->meshes_.buf(), s->transforms_.buf(),
+                                         s->nodes_.buf(), (cl_uint)s->macro_nodes_start_, s->tris_.buf(), s->tri_indices_.buf(), prim_inters_buf_)) return;
+        }
     } else {
-        if (!kernel_TracePrimaryRays(prim_rays_buf_, region.rect(), w_,
-            s->mesh_instances_.buf(), s->mi_indices_.buf(), s->meshes_.buf(), s->transforms_.buf(),
-            s->nodes_.buf(), (cl_uint)s->macro_nodes_start_, s->tris_.buf(), s->tri_indices_.buf(), prim_inters_buf_)) return;
+        if (!kernel_SampleMesh_ResetBins(w_, h_, tri_bin_buf_)) return;
+
+        mesh_instance_t mi;
+        if (queue_.enqueueReadBuffer(s->mesh_instances_.buf(), CL_TRUE, cam.mi_index * sizeof(mesh_instance_t), sizeof(mesh_instance_t), &mi) != CL_SUCCESS) {
+            return;
+        }
+
+        mesh_t mesh;
+        if (queue_.enqueueReadBuffer(s->meshes_.buf(), CL_TRUE, mi.mesh_index * sizeof(mesh), sizeof(mesh), &mesh) != CL_SUCCESS) {
+            return;
+        }
+
+        if (!kernel_SampleMesh_BinStage((cl_int)cam.uv_index, mesh.tris_index, mesh.tris_count, s->vtx_indices_.buf(), s->vertices_.buf(), w_, h_, tri_bin_buf_)) return;
+
+        if (!kernel_SampleMesh_RasterStage((cl_int)cam.uv_index, (cl_int)region.iteration, (cl_uint)mi.tr_index, s->transforms_.buf(), s->vtx_indices_.buf(),
+                                           s->vertices_.buf(), (cl_int)w_, (cl_int)h_, halton_seq_buf_, tri_bin_buf_,
+                                           prim_rays_buf_, prim_inters_buf_)) return;
+
+        time_after_ray_gen = std::chrono::high_resolution_clock::now();
     }
 
     cl_int secondary_rays_count = 0;
@@ -445,7 +470,7 @@ void Ray::Ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
     queue_.finish();
     const auto time_after_prim_trace = std::chrono::high_resolution_clock::now();
 
-    if (!kernel_ShadePrimary((cl_int)region.iteration, halton_seq_buf_, region.rect(), w_,
+    if (!kernel_ShadePrimary(pass_info, halton_seq_buf_, region.rect(), w_,
                                 prim_inters_buf_, prim_rays_buf_,
                                 s->mesh_instances_.buf(), s->mi_indices_.buf(), s->meshes_.buf(),
                                 s->transforms_.buf(), s->vtx_indices_.buf(), s->vertices_.buf(),
@@ -461,7 +486,7 @@ void Ray::Ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
     const auto time_after_prim_shade = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::micro> secondary_sort_time{}, secondary_trace_time{}, secondary_shade_time{};
 
-    for (int bounce = 0; bounce < MAX_BOUNCES && secondary_rays_count; bounce++) {
+    for (int bounce = 0; bounce < MAX_BOUNCES && secondary_rays_count && !(pass_info.flags & SkipIndirectLight); bounce++) {
         auto time_secondary_sort_start = std::chrono::high_resolution_clock::now();
 
         if (secondary_rays_count > (cl_int)scan_portion_ * 64) {
@@ -498,12 +523,12 @@ void Ray::Ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
         if (queue_.enqueueCopyImage(temp_buf_, final_buf_, { 0, 0, 0 }, { 0, 0, 0 },
     { (size_t)w_, (size_t)h_, 1 }) != CL_SUCCESS) return;
 
-        if (!kernel_ShadeSecondary((cl_int)region.iteration, (cl_int)(bounce + 3), halton_seq_buf_,
-                                    prim_inters_buf_, secondary_rays_buf_, (int)secondary_rays_count, w_, h_,
+        pass_info.bounce = bounce + 3;
+
+        if (!kernel_ShadeSecondary(pass_info, halton_seq_buf_, prim_inters_buf_, secondary_rays_buf_, (int)secondary_rays_count, w_, h_,
                                     s->mesh_instances_.buf(), s->mi_indices_.buf(), s->meshes_.buf(),
                                     s->transforms_.buf(), s->vtx_indices_.buf(), s->vertices_.buf(),
-                                    s->nodes_.buf(), (cl_uint)s->macro_nodes_start_,
-                                    s->tris_.buf(), s->tri_indices_.buf(),
+                                    s->nodes_.buf(), (cl_uint)s->macro_nodes_start_, s->tris_.buf(), s->tri_indices_.buf(),
                                     s->env_, s->materials_.buf(), s->textures_.buf(), s->texture_atlas_.atlas(),
                                     s->lights_.buf(), s->li_indices_.buf(), (cl_uint)s->light_nodes_start_,
                                     final_buf_, temp_buf_, prim_rays_buf_, secondary_rays_count_buf_)) return;
@@ -552,6 +577,57 @@ bool Ray::Ocl::Renderer::kernel_GeneratePrimaryRays(const cl_int iteration, cons
     return CL_SUCCESS == queue_.enqueueNDRangeKernel(prim_rays_gen_kernel_, cl::NDRange{ (size_t)rect.x, (size_t)rect.y }, cl::NDRange{ (size_t)rect.w, (size_t)rect.h });
 }
 
+bool Ray::Ocl::Renderer::kernel_SampleMesh_ResetBins(cl_int w, cl_int h, const cl::Buffer &tri_bin_buf) {
+    cl_uint argc = 0;
+    if (sample_mesh_reset_bins_kernel_.setArg(argc++, tri_bin_buf) != CL_SUCCESS) {
+        return false;
+    }
+
+    size_t _w = (w / tri_rast_x_) + ((w % tri_rast_x_) == 0 ? 0 : 1),
+           _h = (h / tri_rast_y_) + ((h % tri_rast_y_) == 0 ? 0 : 1);
+
+    return CL_SUCCESS == queue_.enqueueNDRangeKernel(sample_mesh_reset_bins_kernel_, { 0 }, { _w * _h });
+}
+
+bool Ray::Ocl::Renderer::kernel_SampleMesh_BinStage(cl_int uv_layer, uint32_t tris_index, uint32_t tris_count, const cl::Buffer &vtx_indices,
+                                                    const cl::Buffer &vertices, cl_int w, cl_int h, const cl::Buffer &tri_bin_buf) {
+    cl_uint argc = 0;
+    if (sample_mesh_bin_stage_kernel_.setArg(argc++, uv_layer) != CL_SUCCESS ||
+        sample_mesh_bin_stage_kernel_.setArg(argc++, (cl_uint)tris_index) != CL_SUCCESS ||
+        sample_mesh_bin_stage_kernel_.setArg(argc++, vtx_indices) != CL_SUCCESS ||
+        sample_mesh_bin_stage_kernel_.setArg(argc++, vertices) != CL_SUCCESS ||
+        sample_mesh_bin_stage_kernel_.setArg(argc++, w) != CL_SUCCESS ||
+        sample_mesh_bin_stage_kernel_.setArg(argc++, h) != CL_SUCCESS ||
+        sample_mesh_bin_stage_kernel_.setArg(argc++, tri_bin_buf) != CL_SUCCESS) {
+        return false;
+    }
+
+    return CL_SUCCESS == queue_.enqueueNDRangeKernel(sample_mesh_bin_stage_kernel_, { 0 }, { (size_t)tris_count });
+}
+
+bool Ray::Ocl::Renderer::kernel_SampleMesh_RasterStage(cl_int uv_layer, cl_int iteration, cl_uint tr_index, const cl::Buffer &transforms,
+                                                       const cl::Buffer &vtx_indices, const cl::Buffer &vertices, cl_int w, cl_int h,
+                                                       const cl::Buffer &halton_seq, const cl::Buffer &tri_bin_buf,
+                                                       const cl::Buffer &out_rays, const cl::Buffer &out_inters) {
+    cl_uint argc = 0;
+    if (sample_mesh_raster_stage_kernel_.setArg(argc++, uv_layer) != CL_SUCCESS ||
+        sample_mesh_raster_stage_kernel_.setArg(argc++, iteration) != CL_SUCCESS ||
+        sample_mesh_raster_stage_kernel_.setArg(argc++, tr_index) != CL_SUCCESS ||
+        sample_mesh_raster_stage_kernel_.setArg(argc++, transforms) != CL_SUCCESS ||
+        sample_mesh_raster_stage_kernel_.setArg(argc++, vtx_indices) != CL_SUCCESS ||
+        sample_mesh_raster_stage_kernel_.setArg(argc++, vertices) != CL_SUCCESS ||
+        sample_mesh_raster_stage_kernel_.setArg(argc++, w) != CL_SUCCESS ||
+        sample_mesh_raster_stage_kernel_.setArg(argc++, h) != CL_SUCCESS ||
+        sample_mesh_raster_stage_kernel_.setArg(argc++, halton_seq) != CL_SUCCESS ||
+        sample_mesh_raster_stage_kernel_.setArg(argc++, tri_bin_buf) != CL_SUCCESS ||
+        sample_mesh_raster_stage_kernel_.setArg(argc++, out_rays) != CL_SUCCESS ||
+        sample_mesh_raster_stage_kernel_.setArg(argc++, out_inters) != CL_SUCCESS) {
+        return false;
+    }
+
+    return CL_SUCCESS == queue_.enqueueNDRangeKernel(sample_mesh_raster_stage_kernel_, { 0, 0 }, { (size_t)w, (size_t)h });
+}
+
 bool Ray::Ocl::Renderer::kernel_TextureDebugPage(const cl::Image2DArray &textures, cl_int page, const cl::Image2D &frame_buf) {
     cl_uint argc = 0;
     if (texture_debug_page_kernel_.setArg(argc++, textures) != CL_SUCCESS ||
@@ -566,7 +642,7 @@ bool Ray::Ocl::Renderer::kernel_TextureDebugPage(const cl::Image2DArray &texture
     return CL_SUCCESS == queue_.enqueueNDRangeKernel(texture_debug_page_kernel_, cl::NullRange, cl::NDRange { (size_t)w, (size_t)h });
 }
 
-bool Ray::Ocl::Renderer::kernel_ShadePrimary(const cl_int iteration, const cl::Buffer &halton,
+bool Ray::Ocl::Renderer::kernel_ShadePrimary(const pass_info_t pi, const cl::Buffer &halton,
         const Ray::rect_t &rect, cl_int w,
         const cl::Buffer &intersections, const cl::Buffer &rays,
         const cl::Buffer &mesh_instances, const cl::Buffer &mi_indices, const cl::Buffer &meshes,
@@ -576,7 +652,7 @@ bool Ray::Ocl::Renderer::kernel_ShadePrimary(const cl_int iteration, const cl::B
         const cl::Buffer &lights, const cl::Buffer &li_indices, cl_uint light_node_index, const cl::Image2D &frame_buf,
         const cl::Buffer &secondary_rays, const cl::Buffer &secondary_rays_count) {
     cl_uint argc = 0;
-    if (shade_primary_kernel_.setArg(argc++, iteration) != CL_SUCCESS ||
+    if (shade_primary_kernel_.setArg(argc++, pi) != CL_SUCCESS ||
             shade_primary_kernel_.setArg(argc++, halton) != CL_SUCCESS ||
             shade_primary_kernel_.setArg(argc++, w) != CL_SUCCESS ||
             shade_primary_kernel_.setArg(argc++, intersections) != CL_SUCCESS ||
@@ -641,7 +717,7 @@ bool Ray::Ocl::Renderer::kernel_ShadePrimary(const cl_int iteration, const cl::B
     return true;
 }
 
-bool Ray::Ocl::Renderer::kernel_ShadeSecondary(const cl_int iteration, const cl_int bounce, const cl::Buffer &halton,
+bool Ray::Ocl::Renderer::kernel_ShadeSecondary(const pass_info_t pi, const cl::Buffer &halton,
         const cl::Buffer &intersections, const cl::Buffer &rays,
         int rays_count, int w, int h,
         const cl::Buffer &mesh_instances, const cl::Buffer &mi_indices, const cl::Buffer &meshes,
@@ -654,8 +730,7 @@ bool Ray::Ocl::Renderer::kernel_ShadeSecondary(const cl_int iteration, const cl_
     if (rays_count == 0) return true;
 
     cl_uint argc = 0;
-    if (shade_secondary_kernel_.setArg(argc++, iteration) != CL_SUCCESS ||
-            shade_secondary_kernel_.setArg(argc++, bounce) != CL_SUCCESS ||
+    if (shade_secondary_kernel_.setArg(argc++, pi) != CL_SUCCESS ||
             shade_secondary_kernel_.setArg(argc++, halton) != CL_SUCCESS ||
             shade_secondary_kernel_.setArg(argc++, intersections) != CL_SUCCESS ||
             shade_secondary_kernel_.setArg(argc++, rays) != CL_SUCCESS ||

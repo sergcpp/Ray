@@ -34,12 +34,12 @@ float3 TransformDirection(const float3 d, const __global float16 *xform) {
 	return _d;
 }
 
-float3 TransformNormal(const float3 *n, const __global float16 *inv_xform) {
+float3 TransformNormal(const float3 n, const __global float16 *inv_xform) {
     float3 _n;
 
-    _n.x = (*inv_xform).s0 * (*n).x + (*inv_xform).s1 * (*n).y + (*inv_xform).s2 * (*n).z;
-    _n.y = (*inv_xform).s4 * (*n).x + (*inv_xform).s5 * (*n).y + (*inv_xform).s6 * (*n).z;
-    _n.z = (*inv_xform).s8 * (*n).x + (*inv_xform).s9 * (*n).y + (*inv_xform).sa * (*n).z;
+    _n.x = (*inv_xform).s0 * n.x + (*inv_xform).s1 * n.y + (*inv_xform).s2 * n.z;
+    _n.y = (*inv_xform).s4 * n.x + (*inv_xform).s5 * n.y + (*inv_xform).s6 * n.z;
+    _n.z = (*inv_xform).s8 * n.x + (*inv_xform).s9 * n.y + (*inv_xform).sa * n.z;
 
     return _n;
 }

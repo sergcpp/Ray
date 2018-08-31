@@ -26,13 +26,16 @@ protected:
     size_t scan_portion_, seg_scan_portion_;
     size_t trace_group_size_x_, trace_group_size_y_;
     size_t max_image_buffer_size_;
+    size_t tri_rast_x_, tri_rast_y_;
+    size_t tri_bin_size_;
 
     cl::Context context_;
     cl::Program program_;
 
     cl::CommandQueue queue_;
 
-    cl::Kernel prim_rays_gen_kernel_, sample_mesh_kernel_, texture_debug_page_kernel_,
+    cl::Kernel prim_rays_gen_kernel_, sample_mesh_reset_bins_kernel_, sample_mesh_bin_stage_kernel_, sample_mesh_raster_stage_kernel_, 
+    texture_debug_page_kernel_,
     shade_primary_kernel_, shade_secondary_kernel_, trace_primary_rays_kernel_, trace_primary_rays_img_kernel_,
     compute_ray_hashes_kernel_, set_head_flags_kernel_, excl_scan_kernel_,
     incl_scan_kernel_, add_partial_sums_kernel_, init_chunk_hash_and_base_kernel_,
@@ -51,7 +54,8 @@ protected:
     cl::Buffer halton_seq_buf_, ray_hashes_buf_, head_flags_buf_, scan_values_buf_, scan_values2_buf_,
                scan_values3_buf_, scan_values4_buf_, partial_sums_buf_, partial_sums2_buf_,
                partial_sums3_buf_, partial_sums4_buf_, chunks_buf_,
-               chunks2_buf_, skeleton_buf_, counters_buf_, partial_flags_buf_, partial_flags2_buf_, partial_flags3_buf_, partial_flags4_buf_;
+               chunks2_buf_, skeleton_buf_, counters_buf_, partial_flags_buf_, partial_flags2_buf_, partial_flags3_buf_, partial_flags4_buf_,
+               tri_bin_buf_;
 
     cl::Image2D temp_buf_, clean_buf_, final_buf_;
 
@@ -60,8 +64,15 @@ protected:
     stats_t stats_ = { 0 };
 
     bool kernel_GeneratePrimaryRays(cl_int iteration, const Ray::Ocl::camera_t &cam, const Ray::rect_t &rect, cl_int w, cl_int h, const cl::Buffer &halton, const cl::Buffer &out_rays);
+    bool kernel_SampleMesh_ResetBins(cl_int w, cl_int h, const cl::Buffer &tri_bin_buf);
+    bool kernel_SampleMesh_BinStage(cl_int uv_layer, uint32_t tris_index, uint32_t tris_count, const cl::Buffer &vtx_indices, const cl::Buffer &vertices,
+                                    cl_int w, cl_int h, const cl::Buffer &tri_bin_buf);
+    bool kernel_SampleMesh_RasterStage(cl_int uv_layer, cl_int iteration, cl_uint tr_index, const cl::Buffer &transforms,
+                                       const cl::Buffer &vtx_indices, const cl::Buffer &vertices, cl_int w, cl_int h,
+                                       const cl::Buffer &halton_seq, const cl::Buffer &tri_bin_buf,
+                                       const cl::Buffer &out_rays, const cl::Buffer &out_inters);
     bool kernel_TextureDebugPage(const cl::Image2DArray &textures, cl_int page, const cl::Image2D &frame_buf);
-    bool kernel_ShadePrimary(const cl_int iteration, const cl::Buffer &halton, const Ray::rect_t &rect, cl_int w,
+    bool kernel_ShadePrimary(const pass_info_t pi, const cl::Buffer &halton, const Ray::rect_t &rect, cl_int w,
                              const cl::Buffer &intersections, const cl::Buffer &rays,
                              const cl::Buffer &mesh_instances, const cl::Buffer &mi_indices, const cl::Buffer &meshes,
                              const cl::Buffer &transforms, const cl::Buffer &vtx_indices, const cl::Buffer &vertices,
@@ -69,7 +80,7 @@ protected:
                              const environment_t &env, const cl::Buffer &materials, const cl::Buffer &textures, 
                              const cl::Image2DArray &texture_atlas, const cl::Buffer &lights, const cl::Buffer &li_incies, cl_uint light_node_index,
                              const cl::Image2D &frame_buf, const cl::Buffer &secondary_rays, const cl::Buffer &secondary_rays_count);
-    bool kernel_ShadeSecondary(const cl_int iteration, const cl_int bounce, const cl::Buffer &halton,
+    bool kernel_ShadeSecondary(const pass_info_t pi, const cl::Buffer &halton,
                                const cl::Buffer &intersections, const cl::Buffer &rays,
                                int rays_count, int w, int h,
                                const cl::Buffer &mesh_instances, const cl::Buffer &mi_indices, const cl::Buffer &meshes,

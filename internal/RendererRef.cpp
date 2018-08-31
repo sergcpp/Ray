@@ -106,7 +106,7 @@ void Ray::Ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
     pass_info_t pass_info;
 
     pass_info.iteration = region.iteration;
-    pass_info.halton = &region.halton_seq[0];
+    pass_info.bounce = 2;
     pass_info.flags = cam.pass_flags;
 
     const auto time_start = std::chrono::high_resolution_clock::now();
@@ -154,10 +154,9 @@ void Ray::Ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
         //float t = std::pow(inter.prim_indices[0] / 32.0f, 2.0f);
         //pixel_color_t col = { t, t, t, 1.0f };
 #else
-        pass_info.bounce = 2;
         pass_info.index = y * w + x;
 
-        pixel_color_t col = ShadeSurface(pass_info, inter, r, env, mesh_instances,
+        pixel_color_t col = ShadeSurface(pass_info, inter, r, &region.halton_seq[0], env, mesh_instances,
                                          mi_indices, meshes, transforms, vtx_indices, vertices, nodes, macro_tree_root,
                                          tris, tri_indices, materials, textures, tex_atlas, lights, li_indices, light_tree_root, &p.secondary_rays[0], &secondary_rays_count);
 #endif
@@ -228,7 +227,7 @@ void Ray::Ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
             pass_info.index = y * w + x;
             pass_info.bounce = bounce + 3;
 
-            pixel_color_t col = ShadeSurface(pass_info, inter, r, env, mesh_instances,
+            pixel_color_t col = ShadeSurface(pass_info, inter, r, &region.halton_seq[0], env, mesh_instances,
                                              mi_indices, meshes, transforms, vtx_indices, vertices, nodes, macro_tree_root,
                                              tris, tri_indices, materials, textures, tex_atlas, lights, li_indices, light_tree_root, &p.secondary_rays[0], &secondary_rays_count);
 

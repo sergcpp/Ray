@@ -180,4 +180,26 @@ struct ray_chunk_t {
     uint32_t hash, base, size;
 };
 
+struct pass_info_t {
+    int index;
+    int iteration, bounce;
+    uint32_t flags = 0;
+
+    force_inline bool should_add_direct_light() const {
+        // skip if we want only indirect light contribution
+        // skip if secondary bounce and we want only direct light contribution (only mesh lights should contribute)
+        return !((flags & SkipDirectLight) && (bounce < 3 || (flags & SkipIndirectLight)));
+    }
+
+    force_inline bool should_add_environment() const {
+        return !(flags & NoBackground) || bounce > 2;
+    }
+
+    force_inline bool should_consider_albedo() const {
+        // do not use albedo in lightmap mode for primary bounce
+        return !(flags & LightingOnly) || bounce > 2;
+    }
+};
+static_assert(sizeof(pass_info_t) == 16, "!");
+
 }
