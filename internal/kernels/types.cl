@@ -44,6 +44,7 @@ typedef struct _vertex_t {
 
 typedef struct _mesh_t {
     uint node_index, node_count;
+    uint tris_index, tris_count;
 } mesh_t;
 
 typedef struct _transform_t {

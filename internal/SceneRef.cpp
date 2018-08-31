@@ -155,7 +155,7 @@ uint32_t Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
     m.node_index = (uint32_t)nodes_.size();
     m.node_count = 0;
 
-    size_t tris_start = tris_.size();
+    uint32_t tris_start = (uint32_t)tris_.size();
     m.node_count += PreprocessMesh(_m.vtx_attrs, _m.vtx_attrs_count, _m.vtx_indices, _m.vtx_indices_count, _m.layout, _m.allow_spatial_splits, nodes_, tris_, tri_indices_);
 
     for (const auto &s : _m.shapes) {
@@ -163,6 +163,9 @@ uint32_t Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
             tris_[tris_start + i / 3].mi = s.material_index;
         }
     }
+
+    m.tris_index = tris_start;
+    m.tris_count = (uint32_t)tris_.size() - tris_start;
 
     std::vector<uint32_t> new_vtx_indices;
     new_vtx_indices.reserve(_m.vtx_indices_count);
@@ -203,6 +206,9 @@ void Ray::Ref::Scene::RemoveMesh(uint32_t i) {
     uint32_t node_index = m.node_index,
              node_count = m.node_count;
 
+    uint32_t tris_index = m.tris_index,
+             tris_count = m.tris_count;
+
     auto last_mesh_index = (uint32_t)(meshes_.size() - 1);
 
     std::swap(meshes_[i], meshes_[last_mesh_index]);
@@ -226,6 +232,7 @@ void Ray::Ref::Scene::RemoveMesh(uint32_t i) {
         }
     }
 
+    RemoveTris(tris_index, tris_count);
     RemoveNodes(node_index, node_count);
 
     if (rebuild_needed) {
@@ -320,6 +327,21 @@ void Ray::Ref::Scene::RemoveMeshInstance(uint32_t i) {
     mesh_instances_.erase(mesh_instances_.begin() + i);
 
     RebuildMacroBVH();
+}
+
+void Ray::Ref::Scene::RemoveTris(uint32_t tris_index, uint32_t tris_count) {
+    if (!tris_count) return;
+
+    tris_.erase(std::next(tris_.begin(), tris_index),
+                std::next(tris_.begin(), tris_index + tris_count));
+
+    if (tris_index != tris_.size()) {
+        for (auto &m : meshes_) {
+            if (m.tris_index > tris_index) {
+                m.tris_index -= tris_count;
+            }
+        }
+    }
 }
 
 void Ray::Ref::Scene::RemoveNodes(uint32_t node_index, uint32_t node_count) {

@@ -63,6 +63,7 @@ protected:
 
     uint32_t default_normals_texture_, default_env_texture_;
 
+    void RemoveTris(uint32_t tris_index, uint32_t tris_count);
     void RemoveNodes(uint32_t node_index, uint32_t node_count);
     void RebuildMacroBVH();
     void RebuildLightBVH();

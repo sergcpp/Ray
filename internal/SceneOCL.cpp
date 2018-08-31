@@ -202,6 +202,8 @@ uint32_t Ray::Ocl::Scene::AddMesh(const mesh_desc_t &_m) {
     mesh_t m;
     m.node_index = (uint32_t)nodes_.size();
     m.node_count = (uint32_t)new_nodes.size();
+    m.tris_index = (uint32_t)tris_.size();
+    m.tris_count = (uint32_t)new_tris.size();
 
     uint32_t mesh_index = (uint32_t)meshes_.size();
     meshes_.PushBack(m);

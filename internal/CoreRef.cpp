@@ -295,7 +295,7 @@ void Ray::Ref::GeneratePrimaryRays(int iteration, const camera_t &cam, const rec
     }
 }
 
-void Ray::Ref::SampleMeshInTextureSpace(int iteration, int obj_index, int uv_layer, const mesh_t &mesh, const transform_t &tr, const bvh_node_t *nodes, const uint32_t *tri_indices, const uint32_t *vtx_indices, const vertex_t *vertices,
+void Ray::Ref::SampleMeshInTextureSpace(int iteration, int obj_index, int uv_layer, const mesh_t &mesh, const transform_t &tr, const uint32_t *vtx_indices, const vertex_t *vertices,
                                         const rect_t &r, int w, int h, const float *halton, aligned_vector<ray_packet_t> &out_rays, aligned_vector<hit_data_t> &out_inters) {
     out_rays.resize((size_t)r.w * r.h);
     out_inters.resize(out_rays.size());
@@ -318,93 +318,87 @@ void Ray::Ref::SampleMeshInTextureSpace(int iteration, int obj_index, int uv_lay
     simd_ivec2 rect_min = { r.x, r.y }, rect_max = { r.x + r.w - 1, r.y + r.h - 1 };
     simd_fvec2 size = { (float)w, (float)h };
     
-    for (uint32_t n = mesh.node_index; n < mesh.node_index + mesh.node_count; n++) {
-        if (!nodes[n].prim_count) continue;
+    for (uint32_t tri = mesh.tris_index; tri < mesh.tris_index + mesh.tris_count; tri++) {
+        const auto &v0 = vertices[vtx_indices[tri * 3 + 0]];
+        const auto &v1 = vertices[vtx_indices[tri * 3 + 1]];
+        const auto &v2 = vertices[vtx_indices[tri * 3 + 2]];
 
-        for (uint32_t p = nodes[n].prim_index; p < nodes[n].prim_index + nodes[n].prim_count; p++) {
-            uint32_t tri_index = tri_indices[p];
+        const simd_fvec2 t0 = simd_fvec2{ v0.t[uv_layer][0], 1.0f - v0.t[uv_layer][1] } * size;
+        const simd_fvec2 t1 = simd_fvec2{ v1.t[uv_layer][0], 1.0f - v1.t[uv_layer][1] } * size;
+        const simd_fvec2 t2 = simd_fvec2{ v2.t[uv_layer][0], 1.0f - v2.t[uv_layer][1] } * size;
 
-            const auto &v0 = vertices[vtx_indices[tri_index * 3 + 0]];
-            const auto &v1 = vertices[vtx_indices[tri_index * 3 + 1]];
-            const auto &v2 = vertices[vtx_indices[tri_index * 3 + 2]];
+        simd_fvec2 bbox_min = t0, bbox_max = t0;
 
-            const simd_fvec2 t0 = simd_fvec2{ v0.t[uv_layer][0], 1.0f - v0.t[uv_layer][1] } * size;
-            const simd_fvec2 t1 = simd_fvec2{ v1.t[uv_layer][0], 1.0f - v1.t[uv_layer][1] } * size;
-            const simd_fvec2 t2 = simd_fvec2{ v2.t[uv_layer][0], 1.0f - v2.t[uv_layer][1] } * size;
+        bbox_min = min(bbox_min, t1);
+        bbox_min = min(bbox_min, t2);
 
-            simd_fvec2 bbox_min = t0, bbox_max = t0;
+        bbox_max = max(bbox_max, t1);
+        bbox_max = max(bbox_max, t2);
 
-            bbox_min = min(bbox_min, t1);
-            bbox_min = min(bbox_min, t2);
+        simd_ivec2 ibbox_min = (simd_ivec2)(bbox_min),
+                   ibbox_max = simd_ivec2{ (int)std::round(bbox_max[0]), (int)std::round(bbox_max[1]) };
 
-            bbox_max = max(bbox_max, t1);
-            bbox_max = max(bbox_max, t2);
+        where(ibbox_min < rect_min, ibbox_min) = rect_min;
+        where(ibbox_max < rect_min, ibbox_max) = rect_min;
 
-            simd_ivec2 ibbox_min = (simd_ivec2)(bbox_min),
-                       ibbox_max = simd_ivec2{ (int)std::round(bbox_max[0]), (int)std::round(bbox_max[1]) };
+        where(ibbox_min > rect_max, ibbox_min) = rect_max;
+        where(ibbox_max > rect_max, ibbox_max) = rect_max;
 
-            where(ibbox_min < rect_min, ibbox_min) = rect_min;
-            where(ibbox_max < rect_min, ibbox_max) = rect_min;
+        if (ibbox_max[0] - ibbox_min[0] <= 0 || ibbox_max[1] - ibbox_min[1] <= 0) continue;
 
-            where(ibbox_min > rect_max, ibbox_min) = rect_max;
-            where(ibbox_max > rect_max, ibbox_max) = rect_max;
+        const simd_fvec2 d01 = t0 - t1, d12 = t1 - t2, d20 = t2 - t0;
 
-            if (ibbox_max[0] - ibbox_min[0] <= 0 || ibbox_max[1] - ibbox_min[1] <= 0) continue;
+        float area = d01[0] * d20[1] - d20[0] * d01[1];
+        if (area < FLT_EPS) continue;
 
-            const simd_fvec2 d01 = t0 - t1, d12 = t1 - t2, d20 = t2 - t0;
+        float inv_area = 1.0f / area;
 
-            float area = d01[0] * d20[1] - d20[0] * d01[1];
-            if (area < FLT_EPS) continue;
+        for (int y = ibbox_min[1]; y <= ibbox_max[1]; y++) {
+            for (int x = ibbox_min[0]; x <= ibbox_max[0]; x++) {
+                int i = (y - r.y) * r.w + (x - r.x);
+                auto &out_ray = out_rays[i];
+                auto &out_inter = out_inters[i];
 
-            float inv_area = 1.0f / area;
+                if (out_inter.mask_values[0]) continue;
 
-            for (int y = ibbox_min[1]; y <= ibbox_max[1]; y++) {
-                for (int x = ibbox_min[0]; x <= ibbox_max[0]; x++) {
-                    int i = (y - r.y) * r.w + (x - r.x);
-                    auto &out_ray = out_rays[i];
-                    auto &out_inter = out_inters[i];
+                const int index = y * w + x;
+                const int hi = (iteration & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT;
 
-                    if (out_inter.mask_values[0]) continue;
+                int hash_val = hash(index);
 
-                    const int index = y * w + x;
-                    const int hi = (iteration & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT;
+                float _unused;
+                float _x = float(x) + std::modf(halton[hi + 0] + construct_float(hash_val), &_unused);
+                float _y = float(y) + std::modf(halton[hi + 1] + construct_float(hash(hash_val)), &_unused);
 
-                    int hash_val = hash(index);
+                float u = d01[0] * (_y - t0[1]) - d01[1] * (_x - t0[0]),
+                    v = d12[0] * (_y - t1[1]) - d12[1] * (_x - t1[0]),
+                    w = d20[0] * (_y - t2[1]) - d20[1] * (_x - t2[0]);
 
-                    float _unused;
-                    float _x = float(x) + std::modf(halton[hi + 0] + construct_float(hash_val), &_unused);
-                    float _y = float(y) + std::modf(halton[hi + 1] + construct_float(hash(hash_val)), &_unused);
+                if (u >= 0.0f && v >= 0.0f && w >= 0.0f) {
+                    const simd_fvec3 p0 = { v0.p }, p1 = { v1.p }, p2 = { v2.p };
+                    const simd_fvec3 n0 = { v0.n }, n1 = { v1.n }, n2 = { v2.n };
 
-                    float u = d01[0] * (_y - t0[1]) - d01[1] * (_x - t0[0]),
-                          v = d12[0] * (_y - t1[1]) - d12[1] * (_x - t1[0]),
-                          w = d20[0] * (_y - t2[1]) - d20[1] * (_x - t2[0]);
+                    u *= inv_area; v *= inv_area; w *= inv_area;
 
-                    if (u >= 0.0f && v >= 0.0f && w >= 0.0f) {
-                        const simd_fvec3 p0 = { v0.p }, p1 = { v1.p }, p2 = { v2.p };
-                        const simd_fvec3 n0 = { v0.n }, n1 = { v1.n }, n2 = { v2.n };
+                    const simd_fvec3 p = TransformPoint(p0 * v + p1 * w + p2 * u, tr.xform),
+                                     n = TransformNormal(n0 * v + n1 * w + n2 * u, tr.inv_xform);
 
-                        u *= inv_area; v *= inv_area; w *= inv_area;
+                    const simd_fvec3 o = p + n, d = -n;
 
-                        const simd_fvec3 p = TransformPoint(p0 * v + p1 * w + p2 * u, tr.xform),
-                                         n = TransformNormal(n0 * v + n1 * w + n2 * u, tr.inv_xform);
+                    memcpy(&out_ray.o[0], value_ptr(o), 3 * sizeof(float));
+                    memcpy(&out_ray.d[0], value_ptr(d), 3 * sizeof(float));
+                    out_ray.ior = 1.0f;
+                    out_ray.do_dx[0] = out_ray.do_dx[1] = out_ray.do_dx[2] = 0.0f;
+                    out_ray.dd_dx[0] = out_ray.dd_dx[1] = out_ray.dd_dx[2] = 0.0f;
+                    out_ray.do_dy[0] = out_ray.do_dy[1] = out_ray.do_dy[2] = 0.0f;
+                    out_ray.dd_dy[0] = out_ray.dd_dy[1] = out_ray.dd_dy[2] = 0.0f;
 
-                        const simd_fvec3 o = p + n, d = -n;
-
-                        memcpy(&out_ray.o[0], value_ptr(o), 3 * sizeof(float));
-                        memcpy(&out_ray.d[0], value_ptr(d), 3 * sizeof(float));
-                        out_ray.ior = 1.0f;
-                        out_ray.do_dx[0] = out_ray.do_dx[1] = out_ray.do_dx[2] = 0.0f;
-                        out_ray.dd_dx[0] = out_ray.dd_dx[1] = out_ray.dd_dx[2] = 0.0f;
-                        out_ray.do_dy[0] = out_ray.do_dy[1] = out_ray.do_dy[2] = 0.0f;
-                        out_ray.dd_dy[0] = out_ray.dd_dy[1] = out_ray.dd_dy[2] = 0.0f;
-
-                        out_inter.mask_values[0] = 0xffffffff;
-                        out_inter.prim_indices[0] = tri_index;
-                        out_inter.obj_indices[0] = obj_index;
-                        out_inter.t = 1.0f;
-                        out_inter.u = w;
-                        out_inter.v = u;
-                    }
+                    out_inter.mask_values[0] = 0xffffffff;
+                    out_inter.prim_indices[0] = tri;
+                    out_inter.obj_indices[0] = obj_index;
+                    out_inter.t = 1.0f;
+                    out_inter.u = w;
+                    out_inter.v = u;
                 }
             }
         }

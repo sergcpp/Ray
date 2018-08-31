@@ -404,11 +404,9 @@ void Ray::Ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
 
     {
         cl_uint argc = 0;
-        if (sample_mesh_kernel_.setArg(argc++, (cl_uint)2) != CL_SUCCESS ||
+        if (sample_mesh_kernel_.setArg(argc++, (cl_uint)0) != CL_SUCCESS ||
             sample_mesh_kernel_.setArg(argc++, s->meshes_.buf()) != CL_SUCCESS ||
             sample_mesh_kernel_.setArg(argc++, s->transforms_.buf()) != CL_SUCCESS ||
-            sample_mesh_kernel_.setArg(argc++, s->nodes_.buf()) != CL_SUCCESS ||
-            sample_mesh_kernel_.setArg(argc++, s->tri_indices_.buf()) != CL_SUCCESS ||
             sample_mesh_kernel_.setArg(argc++, s->vtx_indices_.buf()) != CL_SUCCESS ||
             sample_mesh_kernel_.setArg(argc++, s->vertices_.buf()) != CL_SUCCESS ||
             sample_mesh_kernel_.setArg(argc++, w_) != CL_SUCCESS ||
