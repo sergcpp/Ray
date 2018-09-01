@@ -1382,7 +1382,7 @@ void Ray::NS::SampleLatlong_RGBE(const Ref::TextureAtlas &atlas, const texture_t
     simd_fvec<S> r = sqrt(dir[0] * dir[0] + dir[2] * dir[2]);
     simd_fvec<S> y = clamp(dir[1], -1.0f, 1.0f);
 
-    where(u > FLT_EPS, u) = clamp(dir[0] / r, -1.0f, 1.0f);
+    where(r > FLT_EPS, u) = clamp(dir[0] / r, -1.0f, 1.0f);
 
     ITERATE(S, {
         theta[i] = std::acos(y[i]) / PI;
