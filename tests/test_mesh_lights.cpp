@@ -119,7 +119,17 @@ void test_mesh_lights() {
 
             auto scene = renderer->CreateScene();
 
-            uint32_t cam = scene->AddCamera(Ray::Persp, Ray::Box, view_origin, view_dir, 45.0f, 1.0f, 1.0f, 0.0f);
+            Ray::camera_desc_t cam_desc;
+            cam_desc.type = Ray::Persp;
+            cam_desc.filter = Ray::Box;
+            memcpy(&cam_desc.origin[0], &view_origin[0], 3 * sizeof(float));
+            memcpy(&cam_desc.fwd[0], &view_dir[0], 3 * sizeof(float));
+            cam_desc.fov = 45.0f;
+            cam_desc.gamma = 1.0f;
+            cam_desc.focus_distance = 1.0f;
+            cam_desc.focus_factor = 0.0f;
+
+            uint32_t cam = scene->AddCamera(cam_desc);
             scene->set_current_cam(cam);
 
             scene->SetEnvironment(env_desc);
