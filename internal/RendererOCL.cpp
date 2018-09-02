@@ -149,6 +149,8 @@ Ray::Ocl::Renderer::Renderer(int w, int h, int platform_index, int device_index)
         cl_src_defines += "#define SkipIndirectLight " + std::to_string(SkipIndirectLight) + "\n";
         cl_src_defines += "#define LightingOnly " + std::to_string(LightingOnly) + "\n";
         cl_src_defines += "#define NoBackground " + std::to_string(NoBackground) + "\n";
+        cl_src_defines += "#define TRI_RAST_X " + std::to_string(tri_rast_x_) + "\n";
+        cl_src_defines += "#define TRI_RAST_Y " + std::to_string(tri_rast_y_) + "\n";
 
         cl_int error = CL_SUCCESS;
         cl::Program::Sources srcs = {

@@ -84,14 +84,6 @@ void GeneratePrimaryRays(const int iteration, camera_t cam, int w, int h, __glob
     r->dd_dy = _dy - d;
 }
 
-typedef struct _tri_entry_t {
-    uint tri_index;
-    float2 bbox_min, bbox_max;
-} tri_entry_t;
-
-#define TRI_RAST_X 8
-#define TRI_RAST_Y 8
-
 __kernel
 void SampleMeshInTextureSpace_ResetBins(__global uint *out_tri_bins) {
     const int i = get_global_id(0);
