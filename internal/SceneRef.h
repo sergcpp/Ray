@@ -36,7 +36,7 @@ protected:
     friend class Sse::RendererSIMD;
     template <int DimX, int DimY>
     friend class Avx::RendererSIMD;
-	template <int DimX, int DimY>
+    template <int DimX, int DimY>
     friend class Neon::RendererSIMD;
 
     std::vector<bvh_node_t> nodes_;

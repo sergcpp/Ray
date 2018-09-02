@@ -383,8 +383,8 @@ void Traverse_MacroTree_Stackless(const float3 orig_r_o, const float3 orig_r_d, 
 
                 if (!_bbox_test(orig_r_o, orig_r_inv_d, inter->t, mi->bbox_min, mi->bbox_max)) continue;
 
-				const float3 r_o = TransformPoint(orig_r_o, &tr->inv_xform);
-				const float3 r_d = TransformDirection(orig_r_d, &tr->inv_xform);
+                const float3 r_o = TransformPoint(orig_r_o, &tr->inv_xform);
+                const float3 r_d = TransformDirection(orig_r_d, &tr->inv_xform);
                 const float3 inv_d = safe_invert(r_d);
                 
                 Traverse_MicroTree_Stackless(r_o, r_d, inv_d, mi_indices[i], nodes, m->node_index, tris, tri_indices, inter);
@@ -444,8 +444,8 @@ void Traverse_MacroTree_WithLocalStack(const float3 orig_r_o, const float3 orig_
 
                 if (!_bbox_test(orig_r_o, orig_r_inv_d, inter->t, mi->bbox_min, mi->bbox_max)) continue;
 
-				const float3 r_o = TransformPoint(orig_r_o, &tr->inv_xform);
-				const float3 r_d = TransformDirection(orig_r_d, &tr->inv_xform);
+                const float3 r_o = TransformPoint(orig_r_o, &tr->inv_xform);
+                const float3 r_d = TransformDirection(orig_r_d, &tr->inv_xform);
                 const float3 inv_d = safe_invert(r_d);
                 
                 Traverse_MicroTree_WithLocalStack(r_o, r_d, inv_d, mi_indices[i], nodes, m->node_index, tris, tri_indices, &stack[stack_size], inter);
@@ -483,8 +483,8 @@ void Traverse_MacroTree_WithPrivateStack(const float3 orig_r_o, const float3 ori
 
                 if (!_bbox_test(orig_r_o, orig_r_inv_d, inter->t, mi->bbox_min, mi->bbox_max)) continue;
 
-				const float3 r_o = TransformPoint(orig_r_o, &tr->inv_xform);
-				const float3 r_d = TransformDirection(orig_r_d, &tr->inv_xform);
+                const float3 r_o = TransformPoint(orig_r_o, &tr->inv_xform);
+                const float3 r_d = TransformDirection(orig_r_d, &tr->inv_xform);
                 const float3 inv_d = safe_invert(r_d);
                 
                 Traverse_MicroTree_WithPrivateStack(r_o, r_d, inv_d, mi_indices[i], nodes, m->node_index, tris, tri_indices, &stack[stack_size], inter);
@@ -536,8 +536,8 @@ void Traverse_MacroTreeImg_WithLocalStack(const float3 orig_r_o, const float3 or
 
                 if (!_bbox_test(orig_r_o, orig_r_inv_d, inter->t, mi->bbox_min, mi->bbox_max)) continue;
 
-		        const float3 r_o = TransformPoint(orig_r_o, &tr->inv_xform);
-		        const float3 r_d = TransformDirection(orig_r_d, &tr->inv_xform);
+                const float3 r_o = TransformPoint(orig_r_o, &tr->inv_xform);
+                const float3 r_d = TransformDirection(orig_r_d, &tr->inv_xform);
                 const float3 inv_d = safe_invert(r_d);
                 
                 Traverse_MicroTreeImg_WithLocalStack(r_o, r_d, inv_d, mi_indices[i], nodes, m->node_index, tris, tri_indices,
@@ -593,8 +593,8 @@ void Traverse_MacroTreeImg_WithPrivateStack(const float3 orig_r_o, const float3 
 
                 if (!_bbox_test(orig_r_o, orig_r_inv_d, inter->t, mi->bbox_min, mi->bbox_max)) continue;
 
-		        const float3 r_o = TransformPoint(orig_r_o, &tr->inv_xform);
-		        const float3 r_d = TransformDirection(orig_r_d, &tr->inv_xform);
+                const float3 r_o = TransformPoint(orig_r_o, &tr->inv_xform);
+                const float3 r_d = TransformDirection(orig_r_d, &tr->inv_xform);
                 const float3 inv_d = safe_invert(r_d);
                 
                 Traverse_MicroTreeImg_WithPrivateStack(r_o, r_d, inv_d, mi_indices[i], nodes, m->node_index, tris, tri_indices,
@@ -629,8 +629,8 @@ float Traverse_MacroTree_Occlusion_Stackless(const float3 orig_r_o, const float3
 
                 if (!_bbox_test(orig_r_o, orig_r_inv_d, max_dist, mi->bbox_min, mi->bbox_max)) continue;
 
-				const float3 r_o = TransformPoint(orig_r_o, &tr->inv_xform);
-				const float3 r_d = TransformDirection(orig_r_d, &tr->inv_xform);
+                const float3 r_o = TransformPoint(orig_r_o, &tr->inv_xform);
+                const float3 r_d = TransformDirection(orig_r_d, &tr->inv_xform);
                 const float3 inv_d = safe_invert(r_d);
 
                 if (Traverse_MicroTree_Occlusion_Stackless(r_o, r_d, inv_d, max_dist, nodes, m->node_index, tris, tri_indices) < 1) {
@@ -694,8 +694,8 @@ float Traverse_MacroTree_Occlusion_WithLocalStack(const float3 orig_r_o, const f
 
                 if (!_bbox_test(orig_r_o, orig_r_inv_d, max_dist, mi->bbox_min, mi->bbox_max)) continue;
 
-				const float3 r_o = TransformPoint(orig_r_o, &tr->inv_xform);
-				const float3 r_d = TransformDirection(orig_r_d, &tr->inv_xform);
+                const float3 r_o = TransformPoint(orig_r_o, &tr->inv_xform);
+                const float3 r_d = TransformDirection(orig_r_d, &tr->inv_xform);
                 const float3 inv_d = safe_invert(r_d);
                 
                 if (Traverse_MicroTree_Occlusion_WithLocalStack(r_o, r_d, inv_d, max_dist, nodes, m->node_index, tris, tri_indices, &stack[stack_size]) < 1) {
@@ -736,8 +736,8 @@ float Traverse_MacroTree_Occlusion_WithPrivateStack(const float3 orig_r_o, const
 
                 if (!_bbox_test(orig_r_o, orig_r_inv_d, max_dist, mi->bbox_min, mi->bbox_max)) continue;
 
-				const float3 r_o = TransformPoint(orig_r_o, &tr->inv_xform);
-				const float3 r_d = TransformDirection(orig_r_d, &tr->inv_xform);
+                const float3 r_o = TransformPoint(orig_r_o, &tr->inv_xform);
+                const float3 r_d = TransformDirection(orig_r_d, &tr->inv_xform);
                 const float3 inv_d = safe_invert(r_d);
                 
                 if (Traverse_MicroTree_Occlusion_WithPrivateStack(r_o, r_d, inv_d, max_dist, nodes, m->node_index, tris, tri_indices, &stack[stack_size]) < 1) {

@@ -148,42 +148,42 @@ force_inline uint32_t get_ray_hash(const ray_packet_t &r, const float root_min[3
         y = clamp((int)((r.o[1] - root_min[1]) / cell_size[1]), 0, 255),
         z = clamp((int)((r.o[2] - root_min[2]) / cell_size[2]), 0, 255);
 
-	//float omega = omega_table[int(r.d[2] / 0.0625f)];
-	//float std::atan2(r.d[1], r.d[0]);
-	//int o = (int)(16 * omega / (PI)), p = (int)(16 * (phi + PI) / (2 * PI));
+    //float omega = omega_table[int(r.d[2] / 0.0625f)];
+    //float std::atan2(r.d[1], r.d[0]);
+    //int o = (int)(16 * omega / (PI)), p = (int)(16 * (phi + PI) / (2 * PI));
 
     x = morton_table_256[x];
     y = morton_table_256[y];
     z = morton_table_256[z];
 
-	int o = morton_table_16[omega_table[clamp(int((1.0f + r.d[2]) / omega_step), 0, 32)]];
-	int p = morton_table_16[phi_table[clamp(int((1.0f + r.d[1]) / phi_step), 0, 16)][clamp(int((1.0f + r.d[0]) / phi_step), 0, 16)]];
+    int o = morton_table_16[omega_table[clamp(int((1.0f + r.d[2]) / omega_step), 0, 32)]];
+    int p = morton_table_16[phi_table[clamp(int((1.0f + r.d[1]) / phi_step), 0, 16)][clamp(int((1.0f + r.d[0]) / phi_step), 0, 16)]];
 
     return (o << 25) | (p << 24) | (y << 2) | (z << 1) | (x << 0);
 }
 
 force_inline void _radix_sort_lsb(ray_chunk_t *begin, ray_chunk_t *end, ray_chunk_t *begin1, unsigned maxshift) {
-	ray_chunk_t *end1 = begin1 + (end - begin);
+    ray_chunk_t *end1 = begin1 + (end - begin);
 
-	for (unsigned shift = 0; shift <= maxshift; shift += 8) {
-		size_t count[0x100] = {};
+    for (unsigned shift = 0; shift <= maxshift; shift += 8) {
+        size_t count[0x100] = {};
         for (ray_chunk_t *p = begin; p != end; p++) {
             count[(p->hash >> shift) & 0xFF]++;
         }
-		ray_chunk_t *bucket[0x100], *q = begin1;
+        ray_chunk_t *bucket[0x100], *q = begin1;
         for (int i = 0; i < 0x100; q += count[i++]) {
             bucket[i] = q;
         }
         for (ray_chunk_t *p = begin; p != end; p++) {
             *bucket[(p->hash >> shift) & 0xFF]++ = *p;
         }
-		std::swap(begin, begin1);
-		std::swap(end, end1);
-	}
+        std::swap(begin, begin1);
+        std::swap(end, end1);
+    }
 }
 
 force_inline void radix_sort(ray_chunk_t *begin, ray_chunk_t *end, ray_chunk_t *begin1) {
-	_radix_sort_lsb(begin, end, begin1, 24);
+    _radix_sort_lsb(begin, end, begin1, 24);
 }
 
 force_inline float construct_float(uint32_t m) {
@@ -404,85 +404,85 @@ void Ray::Ref::SampleMeshInTextureSpace(int iteration, int obj_index, int uv_lay
 }
 
 void Ray::Ref::SortRays(ray_packet_t *rays, size_t rays_count, const float root_min[3], const float cell_size[3],
-						uint32_t *hash_values, int *head_flags, uint32_t *scan_values, ray_chunk_t *chunks, ray_chunk_t *chunks_temp, uint32_t *skeleton) {
-	// From "Fast Ray Sorting and Breadth-First Packet Traversal for GPU Ray Tracing" [2010]
+                        uint32_t *hash_values, int *head_flags, uint32_t *scan_values, ray_chunk_t *chunks, ray_chunk_t *chunks_temp, uint32_t *skeleton) {
+    // From "Fast Ray Sorting and Breadth-First Packet Traversal for GPU Ray Tracing" [2010]
 
-	// compute Ray hash values
-	for (size_t i = 0; i < rays_count; i++) {
-		hash_values[i] = get_ray_hash(rays[i], root_min, cell_size);
-	}
+    // compute Ray hash values
+    for (size_t i = 0; i < rays_count; i++) {
+        hash_values[i] = get_ray_hash(rays[i], root_min, cell_size);
+    }
 
-	// set head flags
-	head_flags[0] = 1;
-	for (size_t i = 1; i < rays_count; i++) {
-		head_flags[i] = hash_values[i] != hash_values[i - 1];
-	}
+    // set head flags
+    head_flags[0] = 1;
+    for (size_t i = 1; i < rays_count; i++) {
+        head_flags[i] = hash_values[i] != hash_values[i - 1];
+    }
 
-	size_t chunks_count = 0;
+    size_t chunks_count = 0;
 
-	{   // perform exclusive scan on head flags
-		uint32_t cur_sum = 0;
-		for (size_t i = 0; i < rays_count; i++) {
-			scan_values[i] = cur_sum;
-			cur_sum += head_flags[i];
-		}
-		chunks_count = cur_sum;
-	}
+    {   // perform exclusive scan on head flags
+        uint32_t cur_sum = 0;
+        for (size_t i = 0; i < rays_count; i++) {
+            scan_values[i] = cur_sum;
+            cur_sum += head_flags[i];
+        }
+        chunks_count = cur_sum;
+    }
 
-	// init Ray chunks hash and base index
-	for (size_t i = 0; i < rays_count; i++) {
-		if (head_flags[i]) {
-			chunks[scan_values[i]].hash = hash_values[i];
-			chunks[scan_values[i]].base = (uint32_t)i;
-		}
-	}
+    // init Ray chunks hash and base index
+    for (size_t i = 0; i < rays_count; i++) {
+        if (head_flags[i]) {
+            chunks[scan_values[i]].hash = hash_values[i];
+            chunks[scan_values[i]].base = (uint32_t)i;
+        }
+    }
 
-	// init Ray chunks size
-	if (chunks_count) {
-		for (size_t i = 0; i < chunks_count - 1; i++) {
-			chunks[i].size = chunks[i + 1].base - chunks[i].base;
-		}
-		chunks[chunks_count - 1].size = (uint32_t)rays_count - chunks[chunks_count - 1].base;
-	}
+    // init Ray chunks size
+    if (chunks_count) {
+        for (size_t i = 0; i < chunks_count - 1; i++) {
+            chunks[i].size = chunks[i + 1].base - chunks[i].base;
+        }
+        chunks[chunks_count - 1].size = (uint32_t)rays_count - chunks[chunks_count - 1].base;
+    }
 
-	radix_sort(&chunks[0], &chunks[0] + chunks_count, &chunks_temp[0]);
+    radix_sort(&chunks[0], &chunks[0] + chunks_count, &chunks_temp[0]);
 
-	{   // perform exclusive scan on chunks size
-		uint32_t cur_sum = 0;
-		for (size_t i = 0; i < chunks_count; i++) {
-			scan_values[i] = cur_sum;
-			cur_sum += chunks[i].size;
-		}
-	}
+    {   // perform exclusive scan on chunks size
+        uint32_t cur_sum = 0;
+        for (size_t i = 0; i < chunks_count; i++) {
+            scan_values[i] = cur_sum;
+            cur_sum += chunks[i].size;
+        }
+    }
 
-	std::fill(skeleton, skeleton + rays_count, 1);
-	std::fill(head_flags, head_flags + rays_count, 0);
+    std::fill(skeleton, skeleton + rays_count, 1);
+    std::fill(head_flags, head_flags + rays_count, 0);
 
-	// init skeleton and head flags array
-	for (size_t i = 0; i < chunks_count; i++) {
-		skeleton[scan_values[i]] = chunks[i].base;
-		head_flags[scan_values[i]] = 1;
-	}
+    // init skeleton and head flags array
+    for (size_t i = 0; i < chunks_count; i++) {
+        skeleton[scan_values[i]] = chunks[i].base;
+        head_flags[scan_values[i]] = 1;
+    }
 
-	{   // perform a segmented scan on skeleton array
-		uint32_t cur_sum = 0;
-		for (size_t i = 0; i < rays_count; i++) {
-			if (head_flags[i]) cur_sum = 0;
-			cur_sum += skeleton[i];
-			scan_values[i] = cur_sum;
-		}
-	}
+    {   // perform a segmented scan on skeleton array
+        uint32_t cur_sum = 0;
+        for (size_t i = 0; i < rays_count; i++) {
+            if (head_flags[i]) cur_sum = 0;
+            cur_sum += skeleton[i];
+            scan_values[i] = cur_sum;
+        }
+    }
 
-	{   // reorder rays
-		uint32_t j, k;
-		for (uint32_t i = 0; i < (uint32_t)rays_count; i++) {
-			while (i != (j = scan_values[i])) {
-				k = scan_values[j];
-				std::swap(rays[j], rays[k]);
-				std::swap(scan_values[i], scan_values[j]);
-			}
-		}
-	}
+    {   // reorder rays
+        uint32_t j, k;
+        for (uint32_t i = 0; i < (uint32_t)rays_count; i++) {
+            while (i != (j = scan_values[i])) {
+                k = scan_values[j];
+                std::swap(rays[j], rays[k]);
+                std::swap(scan_values[i], scan_values[j]);
+            }
+        }
+    }
 }
 
 bool Ray::Ref::IntersectTris(const ray_packet_t &r, const tri_accel_t *tris, int num_tris, int obj_index, hit_data_t &out_inter) {

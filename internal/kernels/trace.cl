@@ -44,8 +44,8 @@ void TracePrimaryRays(__global const ray_packet_t *rays, int w,
 
     const int index = get_global_id(1) * w + get_global_id(0);
 
-	const float4 orig_r_o = rays[index].o;
-	const float4 orig_r_d = rays[index].d;
+    const float4 orig_r_o = rays[index].o;
+    const float4 orig_r_d = rays[index].d;
     const float3 orig_inv_d = safe_invert(orig_r_d.xyz);
 
     hit_data_t inter;
@@ -73,8 +73,8 @@ void TracePrimaryRaysImg(__global const ray_packet_t *rays, int w,
 
     const int index = get_global_id(1) * w + get_global_id(0);
 
-	const float4 orig_r_o = rays[index].o;
-	const float4 orig_r_d = rays[index].d;
+    const float4 orig_r_o = rays[index].o;
+    const float4 orig_r_d = rays[index].d;
     const float3 orig_inv_d = safe_invert(orig_r_d.xyz);
 
     hit_data_t inter;
@@ -103,7 +103,7 @@ void TraceSecondaryRays(__global const ray_packet_t *rays,
     const int index = get_global_id(0);
 
     const float4 orig_r_o = rays[index].o;
-	const float4 orig_r_d = rays[index].d;
+    const float4 orig_r_d = rays[index].d;
     const float3 orig_inv_d = safe_invert(orig_r_d.xyz);
 
     hit_data_t inter;
@@ -132,7 +132,7 @@ void TraceSecondaryRaysImg(__global const ray_packet_t *rays,
     const int index = get_global_id(0);
 
     const float4 orig_r_o = rays[index].o;
-	const float4 orig_r_d = rays[index].d;
+    const float4 orig_r_d = rays[index].d;
     const float3 orig_inv_d = safe_invert(orig_r_d.xyz);
 
     hit_data_t inter;

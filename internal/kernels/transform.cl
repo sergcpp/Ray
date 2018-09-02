@@ -21,7 +21,7 @@ float3 TransformPoint(const float3 p, const __global float16 *xform) {
     _p.y = (*xform).s1 * p.x + (*xform).s5 * p.y + (*xform).s9 * p.z + (*xform).sd;
     _p.z = (*xform).s2 * p.x + (*xform).s6 * p.y + (*xform).sa * p.z + (*xform).se;
 
-	return _p;
+    return _p;
 }
 
 float3 TransformDirection(const float3 d, const __global float16 *xform) {
@@ -31,7 +31,7 @@ float3 TransformDirection(const float3 d, const __global float16 *xform) {
     _d.y = (*xform).s1 * d.x + (*xform).s5 * d.y + (*xform).s9 * d.z;
     _d.z = (*xform).s2 * d.x + (*xform).s6 * d.y + (*xform).sa * d.z;
 
-	return _d;
+    return _d;
 }
 
 float3 TransformNormal(const float3 n, const __global float16 *inv_xform) {

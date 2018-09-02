@@ -15,7 +15,7 @@ enum eRendererType {
     RendererRef = 1,
     RendererSSE = 2,
     RendererAVX = 4,
-	RendererNEON = 8,
+    RendererNEON = 8,
     RendererOCL = 16,
 };
 

@@ -131,7 +131,7 @@ uint32_t Ray::Ocl::Scene::AddMaterial(const mat_desc_t &m) {
 
     mat.type = m.type;
     mat.textures[MAIN_TEXTURE] = m.main_texture;
-	memcpy(&mat.main_color[0], &m.main_color[0], 3 * sizeof(float));
+    memcpy(&mat.main_color[0], &m.main_color[0], 3 * sizeof(float));
     mat.fresnel = m.fresnel;
 
     if (m.type == DiffuseMaterial) {

@@ -80,7 +80,7 @@ bool Ray::Ocl::TextureAtlas::Resize(int pages_count) {
 
     atlas_ = std::move(new_atlas);
 
-	splitters_.resize(pages_count, TextureSplitter{ res_ });
+    splitters_.resize(pages_count, TextureSplitter{ res_ });
     pages_count_ = pages_count;
 
     return true;
