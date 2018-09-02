@@ -26,13 +26,14 @@
 #endif
 
 // TODO:
-// add geometry camera (for lightmapping)
-// add lightmap generation (simple and sh)
+// add SH lightmap generation
 // add deletion functions for OpenCL backend
 // add tests for intersection
 // add more validation tests (use Cycles)
 
 // DONE:
+// add lightmap generation (simple)
+// add geometry camera (for lightmapping)
 // add hdr env map
 // add punctual lights support
 // try using image for node buffer (utilize texture cache)
