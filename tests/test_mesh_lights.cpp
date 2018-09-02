@@ -1,6 +1,7 @@
 #include "test_common.h"
 
 #include <cstdint>
+#include <cstring>
 
 #include <fstream>
 
