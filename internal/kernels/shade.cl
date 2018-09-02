@@ -109,14 +109,15 @@ float4 ShadeSurface(const pass_info_t *pi, __global const float *halton,
     const int2 px = (int2)(orig_ray->o.w, orig_ray->d.w);
 
     if (!inter->mask) {
-        float3 env_col = 0.0f;
+        float4 env_col = 0.0f;
         if (should_add_environment(pi)) {
-            env_col = SampleTextureLatlong_RGBE(texture_atlas, &textures[env.env_map], orig_ray->d.xyz).xyz;
+            env_col.xyz = SampleTextureLatlong_RGBE(texture_atlas, &textures[env.env_map], orig_ray->d.xyz).xyz;
             if (env.env_col_and_clamp.w > FLT_EPS) {
                 env_col = min(env_col, env.env_col_and_clamp.w);
             }
+            env_col.w = 1.0f;
         }
-        return (float4)(env_col * orig_ray->c.xyz * env.env_col_and_clamp.xyz, 1);
+        return (float4)(env_col.xyz * orig_ray->c.xyz * env.env_col_and_clamp.xyz, env_col.w);
     }
 
     const float3 I = orig_ray->d.xyz;

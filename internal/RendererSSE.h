@@ -49,7 +49,7 @@ extern template void ComputeDirectLighting<RayPacketSize>(const simd_fvec<RayPac
                                                           const tri_accel_t *tris, const uint32_t *tri_indices, const light_t *lights,
                                                           const uint32_t *li_indices, uint32_t light_node_index, const simd_ivec<RayPacketSize> &ray_mask, simd_fvec<RayPacketSize> *out_col);
 
-extern template void ShadeSurface<RayPacketSize>(const simd_ivec<RayPacketSize> &index, const int iteration, const int bounce, const float *halton, const hit_data_t<RayPacketSize> &inter, const ray_packet_t<RayPacketSize> &ray,
+extern template void ShadeSurface<RayPacketSize>(const simd_ivec<RayPacketSize> &index, const pass_info_t &pi, const float *halton, const hit_data_t<RayPacketSize> &inter, const ray_packet_t<RayPacketSize> &ray,
                                                  const environment_t &env, const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
                                                  const mesh_t *meshes, const transform_t *transforms, const uint32_t *vtx_indices, const vertex_t *vertices,
                                                  const bvh_node_t *nodes, uint32_t node_index, const tri_accel_t *tris, const uint32_t *tri_indices,

@@ -63,6 +63,9 @@ struct environment_t {
 // Generating rays
 template <int DimX, int DimY>
 void GeneratePrimaryRays(const int iteration, const camera_t &cam, const rect_t &r, int w, int h, const float *halton, aligned_vector<ray_packet_t<DimX * DimY>> &out_rays);
+template <int DimX, int DimY>
+void SampleMeshInTextureSpace(int iteration, int obj_index, int uv_layer, const mesh_t &mesh, const transform_t &tr, const uint32_t *vtx_indices, const vertex_t *vertices,
+                              const rect_t &r, int w, int h, const float *halton, aligned_vector<ray_packet_t<DimX * DimY>> &out_rays, aligned_vector<hit_data_t<DimX * DimY>> &out_inters);
 
 // Sorting rays
 template <int S>
@@ -100,6 +103,8 @@ bool Traverse_MicroTree_WithStack(const ray_packet_t<S> &r, const simd_ivec<S> &
 template <int S>
 ray_packet_t<S> TransformRay(const ray_packet_t<S> &r, const float *xform);
 template <int S>
+void TransformPoint(const simd_fvec<S> p[3], const float *xform, simd_fvec<S> out_p[3]);
+template <int S>
 void TransformNormal(const simd_fvec<S> n[3], const float *inv_xform, simd_fvec<S> out_n[3]);
 template <int S>
 void TransformUVs(const simd_fvec<S> _uvs[2], float sx, float sy, const texture_t &t, const simd_ivec<S> &mip_level, const simd_ivec<S> &mask, simd_fvec<S> out_res[2]);
@@ -129,7 +134,7 @@ void ComputeDirectLighting(const simd_fvec<S> P[3], const simd_fvec<S> N[3], con
 
 // Shade
 template <int S>
-void ShadeSurface(const simd_ivec<S> &index, const int iteration, const int bounce, const float *halton, const hit_data_t<S> &inter, const ray_packet_t<S> &ray,
+void ShadeSurface(const simd_ivec<S> &index, const pass_info_t &pi, const float *halton, const hit_data_t<S> &inter, const ray_packet_t<S> &ray,
                   const environment_t &env, const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
                   const mesh_t *meshes, const transform_t *transforms, const uint32_t *vtx_indices, const vertex_t *vertices,
                   const bvh_node_t *nodes, uint32_t node_index, const tri_accel_t *tris, const uint32_t *tri_indices,
@@ -498,7 +503,6 @@ force_inline simd_fvec<S> construct_float(const simd_ivec<S> &_m) {
 template <int DimX, int DimY>
 void Ray::NS::GeneratePrimaryRays(const int iteration, const camera_t &cam, const rect_t &r, int w, int h, const float *halton, aligned_vector<ray_packet_t<DimX * DimY>> &out_rays) {
     const int S = DimX * DimY;
-
     static_assert(S <= 16, "!");
 
     simd_fvec<S> ww = { (float)w }, hh = { (float)h };
@@ -607,6 +611,146 @@ void Ray::NS::GeneratePrimaryRays(const int iteration, const camera_t &cam, cons
         }
     }
 }
+
+template <int DimX, int DimY>
+void Ray::NS::SampleMeshInTextureSpace(int iteration, int obj_index, int uv_layer, const mesh_t &mesh, const transform_t &tr, const uint32_t *vtx_indices, const vertex_t *vertices,
+                                       const rect_t &r, int w, int h, const float *halton, aligned_vector<ray_packet_t<DimX * DimY>> &out_rays, aligned_vector<hit_data_t<DimX * DimY>> &out_inters) {
+    const int S = DimX * DimY;
+    static_assert(S <= 16, "!");
+
+    out_rays.resize(r.w * r.h / S + ((r.w * r.h) % S != 0));
+    out_inters.resize(out_rays.size());
+
+    simd_ivec<S> off_x, off_y;
+
+    for (int i = 0; i < S; i++) {
+        off_x[i] = ray_packet_layout_x[i];
+        off_y[i] = ray_packet_layout_y[i];
+    }
+
+    size_t i = 0;
+    for (int y = r.y; y < r.y + r.h - (r.h & (DimY - 1)); y += DimY) {
+        for (int x = r.x; x < r.x + r.w - (r.w & (DimX - 1)); x += DimX) {
+            simd_ivec<S> ixx = x + off_x, iyy = simd_ivec<S>(y) + off_y;
+
+            auto &out_ray = out_rays[i];
+            auto &out_inter = out_inters[i];
+            i++;
+
+            out_ray.xy = (ixx << 16) | iyy;
+            out_ray.c[0] = out_ray.c[1] = out_ray.c[2] = 1.0f;
+            out_ray.do_dx[0] = out_ray.do_dx[1] = out_ray.do_dx[2] = 0.0f;
+            out_ray.dd_dx[0] = out_ray.dd_dx[1] = out_ray.dd_dx[2] = 0.0f;
+            out_ray.do_dy[0] = out_ray.do_dy[1] = out_ray.do_dy[2] = 0.0f;
+            out_ray.dd_dy[0] = out_ray.dd_dy[1] = out_ray.dd_dy[2] = 0.0f;
+            out_inter.mask = 0;
+            out_inter.xy = out_ray.xy;
+        }
+    }
+
+    simd_ivec2 irect_min = { r.x, r.y }, irect_max = { r.x + r.w - 1, r.y + r.h - 1 };
+    simd_fvec2 size = { (float)w, (float)h };
+
+    for (uint32_t tri = mesh.tris_index; tri < mesh.tris_index + mesh.tris_count; tri++) {
+        const auto &v0 = vertices[vtx_indices[tri * 3 + 0]];
+        const auto &v1 = vertices[vtx_indices[tri * 3 + 1]];
+        const auto &v2 = vertices[vtx_indices[tri * 3 + 2]];
+
+        const simd_fvec2 t0 = simd_fvec2{ v0.t[uv_layer][0], 1.0f - v0.t[uv_layer][1] } *size;
+        const simd_fvec2 t1 = simd_fvec2{ v1.t[uv_layer][0], 1.0f - v1.t[uv_layer][1] } *size;
+        const simd_fvec2 t2 = simd_fvec2{ v2.t[uv_layer][0], 1.0f - v2.t[uv_layer][1] } *size;
+
+        simd_fvec2 bbox_min = t0, bbox_max = t0;
+
+        bbox_min = min(bbox_min, t1);
+        bbox_min = min(bbox_min, t2);
+
+        bbox_max = max(bbox_max, t1);
+        bbox_max = max(bbox_max, t2);
+
+        simd_ivec2 ibbox_min = (simd_ivec2)(bbox_min),
+                   ibbox_max = simd_ivec2{ (int)std::round(bbox_max[0]), (int)std::round(bbox_max[1]) };
+
+        if (ibbox_max[0] < irect_min[0] || ibbox_max[1] < irect_min[1] ||
+            ibbox_min[0] > irect_max[0] || ibbox_min[1] > irect_max[1]) continue;
+
+        ibbox_min = max(ibbox_min, irect_min);
+        ibbox_max = min(ibbox_max, irect_max);
+
+        ibbox_min[0] -= ibbox_min[0] % DimX;
+        ibbox_min[1] -= ibbox_min[1] % DimY;
+        ibbox_max[0] += ((ibbox_max[0] + 1) % DimX) ? (DimX - (ibbox_max[0] - 1) % DimX) : 0;
+        ibbox_max[1] += ((ibbox_max[1] + 1) % DimY) ? (DimY - (ibbox_max[1] - 1) % DimY) : 0;
+
+        const simd_fvec2 d01 = t0 - t1, d12 = t1 - t2, d20 = t2 - t0;
+
+        float area = d01[0] * d20[1] - d20[0] * d01[1];
+        if (area < FLT_EPS) continue;
+
+        float inv_area = 1.0f / area;
+
+        for (int y = ibbox_min[1]; y <= ibbox_max[1]; y += DimY) {
+            for (int x = ibbox_min[0]; x <= ibbox_max[0]; x += DimX) {
+                simd_ivec<S> ixx = x + off_x, iyy = simd_ivec<S>(y) + off_y;
+
+                int i = ((y - r.y) / DimY) * (r.w / DimX) + (x - r.x) / DimX;
+                auto &out_ray = out_rays[i];
+                auto &out_inter = out_inters[i];
+
+                simd_ivec<S> index = iyy * w + ixx;
+                const int hi = (iteration & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT;
+
+                simd_ivec<S> hash_val = hash(index);
+                simd_fvec<S> rxx = construct_float(hash_val);
+                simd_fvec<S> ryy = construct_float(hash(hash_val));
+
+                for (int i = 0; i < S; i++) {
+                    float _unused;
+                    rxx[i] = std::modf(halton[hi + 0] + rxx[i], &_unused);
+                    ryy[i] = std::modf(halton[hi + 1] + ryy[i], &_unused);
+                }
+
+                simd_fvec<S> fxx = (simd_fvec<S>)ixx + rxx,
+                             fyy = (simd_fvec<S>)iyy + ryy;
+
+                simd_fvec<S> u = d01[0] * (fyy - t0[1]) - d01[1] * (fxx - t0[0]),
+                             v = d12[0] * (fyy - t1[1]) - d12[1] * (fxx - t1[0]),
+                             w = d20[0] * (fyy - t2[1]) - d20[1] * (fxx - t2[0]);
+
+                auto fmask = (u >= -FLT_EPS) & (v >= -FLT_EPS) & (w >= -FLT_EPS);
+                const auto &imask = reinterpret_cast<const simd_ivec<S> &>(fmask);
+
+                if (imask.not_all_zeros()) {
+                    u *= inv_area; v *= inv_area; w *= inv_area;
+
+                    simd_fvec<S> _p[3] = { v0.p[0] * v + v1.p[0] * w + v2.p[0] * u,
+                                           v0.p[1] * v + v1.p[1] * w + v2.p[1] * u,
+                                           v0.p[2] * v + v1.p[2] * w + v2.p[2] * u },
+                                 _n[3] = { v0.n[0] * v + v1.n[0] * w + v2.n[0] * u,
+                                           v0.n[1] * v + v1.n[1] * w + v2.n[1] * u,
+                                           v0.n[2] * v + v1.n[2] * w + v2.n[2] * u };
+
+                    simd_fvec<S> p[3], n[3];
+
+                    TransformPoint(_p, tr.xform, p);
+                    TransformNormal(_n, tr.inv_xform, n);
+
+                    ITERATE_3({ where(fmask, out_ray.o[i]) = p[i] + n[i]; })
+                    ITERATE_3({ where(fmask, out_ray.d[i]) = -n[i]; })
+                    where(fmask, out_ray.ior) = 1.0f;
+
+                    out_inter.mask = out_inter.mask | imask;
+                    where(imask, out_inter.prim_index) = tri;
+                    where(imask, out_inter.obj_index) = obj_index;
+                    where(fmask, out_inter.t) = 1.0f;
+                    where(fmask, out_inter.u) = w;
+                    where(fmask, out_inter.v) = u;
+                }
+            }
+        }
+    }
+}
+
 
 template <int S>
 void Ray::NS::SortRays(ray_packet_t<S> *rays, simd_ivec<S> *ray_masks, int &secondary_rays_count, const float root_min[3], const float cell_size[3],
@@ -1127,6 +1271,13 @@ force_inline Ray::NS::ray_packet_t<S> Ray::NS::TransformRay(const ray_packet_t<S
 }
 
 template <int S>
+void Ray::NS::TransformPoint(const simd_fvec<S> p[3], const float *xform, simd_fvec<S> out_p[3]) {
+    out_p[0] = xform[0] * p[0] + xform[4] * p[1] + xform[8] * p[2] + xform[12];
+    out_p[1] = xform[1] * p[0] + xform[5] * p[1] + xform[9] * p[2] + xform[13];
+    out_p[2] = xform[2] * p[0] + xform[6] * p[1] + xform[10] * p[2] + xform[14];
+}
+
+template <int S>
 void Ray::NS::TransformNormal(const simd_fvec<S> n[3], const float *inv_xform, simd_fvec<S> out_n[3]) {
     out_n[0] = n[0] * inv_xform[0] + n[1] * inv_xform[1] + n[2] * inv_xform[2];
     out_n[1] = n[0] * inv_xform[4] + n[1] * inv_xform[5] + n[2] * inv_xform[6];
@@ -1549,7 +1700,7 @@ void Ray::NS::ComputeDirectLighting(const simd_fvec<S> P[3], const simd_fvec<S> 
 }
 
 template <int S>
-void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, const int bounce, const float *halton, const hit_data_t<S> &inter, const ray_packet_t<S> &ray,
+void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, const float *halton, const hit_data_t<S> &inter, const ray_packet_t<S> &ray,
                            const environment_t &env, const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
                            const mesh_t *meshes, const transform_t *transforms, const uint32_t *vtx_indices, const vertex_t *vertices,
                            const bvh_node_t *nodes, uint32_t node_index, const tri_accel_t *tris, const uint32_t *tri_indices,
@@ -1559,11 +1710,14 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
     
     auto ino_hit = inter.mask ^ simd_ivec<S>(-1);
     if (ino_hit.not_all_zeros()) {
-        simd_fvec<S> env_col[3];
-        SampleLatlong_RGBE(tex_atlas, textures[env.env_map], ray.d, ino_hit, env_col);
+        simd_fvec<S> env_col[4] = { { 0.0f }, { 0.0f }, { 0.0f }, { 0.0f } };
+        if (pi.should_add_environment()) {
+            SampleLatlong_RGBE(tex_atlas, textures[env.env_map], ray.d, ino_hit, env_col);
 
-        if (env.env_clamp > FLT_EPS) {
-            ITERATE_3({ env_col[i] = min(env_col[i], simd_fvec<S>{ env.env_clamp }); })
+            if (env.env_clamp > FLT_EPS) {
+                ITERATE_3({ env_col[i] = min(env_col[i], simd_fvec<S>{ env.env_clamp }); })
+            }
+            env_col[3] = 1.0f;
         }
 
         auto fno_hit = reinterpret_cast<const simd_fvec<S>&>(ino_hit);
@@ -1571,7 +1725,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
         where(fno_hit, out_rgba[0]) = ray.c[0] * env_col[0] * env.env_col[0];
         where(fno_hit, out_rgba[1]) = ray.c[1] * env_col[1] * env.env_col[1];
         where(fno_hit, out_rgba[2]) = ray.c[2] * env_col[2] * env.env_col[2];
-        where(fno_hit, out_rgba[3]) = 1.0f;
+        where(fno_hit, out_rgba[3]) = env_col[3];
     }
     
     if (inter.mask.all_zeros()) return;
@@ -1752,7 +1906,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
     simd_ivec<S> rand_hash = hash(px_index), rand_hash2, rand_hash3;
     simd_fvec<S> rand_offset = construct_float(rand_hash), rand_offset2, rand_offset3;
 
-    const int hi = (iteration & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT + bounce * 2;
+    const int hi = (pi.iteration & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT + pi.bounce * 2;
 
     simd_ivec<S> secondary_mask = { 0 };
 
@@ -1861,18 +2015,25 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
             //////////////////////////////////////////
 
             if (mat->type == DiffuseMaterial) {
-                ComputeDirectLighting(P, __N, __B, plane_N, halton, hi, rand_offset, rand_offset2, mesh_instances, mi_indices,
-                                      meshes, transforms, vtx_indices, vertices, nodes, node_index, tris,
-                                      tri_indices, lights, li_indices, light_node_index, same_mi, out_rgba);
+                if (pi.should_add_direct_light()) {
+                    ComputeDirectLighting(P, __N, __B, plane_N, halton, hi, rand_offset, rand_offset2, mesh_instances, mi_indices,
+                                          meshes, transforms, vtx_indices, vertices, nodes, node_index, tris,
+                                          tri_indices, lights, li_indices, light_node_index, same_mi, out_rgba);
 
-                const auto &mask = reinterpret_cast<const simd_fvec<S>&>(same_mi);
+                    if (pi.should_consider_albedo()) {
+                        const auto &mask = reinterpret_cast<const simd_fvec<S>&>(same_mi);
 
-                where(mask, out_rgba[0]) = ray.c[0] * tex_albedo[0] * out_rgba[0];
-                where(mask, out_rgba[1]) = ray.c[1] * tex_albedo[1] * out_rgba[1];
-                where(mask, out_rgba[2]) = ray.c[2] * tex_albedo[2] * out_rgba[2];
+                        where(mask, out_rgba[0]) = ray.c[0] * tex_albedo[0] * out_rgba[0];
+                        where(mask, out_rgba[1]) = ray.c[1] * tex_albedo[1] * out_rgba[1];
+                        where(mask, out_rgba[2]) = ray.c[2] * tex_albedo[2] * out_rgba[2];
+                    }
+                }
 
-                // !!!!!!!!!!!!
-                simd_fvec<S> rc[3] = { ray.c[0] * tex_albedo[0], ray.c[1] * tex_albedo[1], ray.c[2] * tex_albedo[2] };
+                simd_fvec<S> rc[3] = { ray.c[0], ray.c[1], ray.c[2] };
+
+                if (pi.should_consider_albedo()) {
+                    ITERATE_3({ rc[i] *= tex_albedo[i]; })
+                }
 
                 simd_fvec<S> V[3], p;
 
@@ -2052,7 +2213,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const int iteration, co
                     const float z = 1.0f - halton[hi + 0] * mat->roughness;
                     const float temp = std::sqrt(1.0f - z * z);
 
-                    const float phi = halton[(((hash(hi) + iteration) & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT + bounce * 2) + 0] * 2 * PI;
+                    const float phi = halton[(((hash(hi) + pi.iteration) & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT + pi.bounce * 2) + 0] * 2 * PI;
                     const float cos_phi = std::cos(phi);
                     const float sin_phi = std::sin(phi);
 

@@ -83,9 +83,6 @@ void Ray::Ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
     }
 
     PassData p;
-#if 0
-    static std::vector<simd_fvec3> color_table;
-#endif
 
     {
         std::lock_guard<std::mutex> _(pass_cache_mtx_);
@@ -93,14 +90,6 @@ void Ray::Ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
             p = std::move(pass_cache_.back());
             pass_cache_.pop_back();
         }
-
-#if 0
-        if (color_table.empty()) {
-            for (int i = 0; i < 1024; i++) {
-                color_table.emplace_back(float(rand()) / RAND_MAX, float(rand()) / RAND_MAX, float(rand()) / RAND_MAX);
-            }
-        }
-#endif
     }
 
     pass_info_t pass_info;
@@ -148,18 +137,11 @@ void Ray::Ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
         const int x = inter.id.x;
         const int y = inter.id.y;
         
-#if 0
-        const auto &c = color_table[inter.prim_indices[0] != -1 ? inter.prim_indices[0] % 1024 : 0];
-        pixel_color_t col = { c[0], c[1], c[2], 1.0f };
-        //float t = std::pow(inter.prim_indices[0] / 32.0f, 2.0f);
-        //pixel_color_t col = { t, t, t, 1.0f };
-#else
         pass_info.index = y * w + x;
 
         pixel_color_t col = ShadeSurface(pass_info, inter, r, &region.halton_seq[0], env, mesh_instances,
                                          mi_indices, meshes, transforms, vtx_indices, vertices, nodes, macro_tree_root,
                                          tris, tri_indices, materials, textures, tex_atlas, lights, li_indices, light_tree_root, &p.secondary_rays[0], &secondary_rays_count);
-#endif
         temp_buf_.SetPixel(x, y, col);
     }
 
@@ -217,6 +199,8 @@ void Ray::Ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
         secondary_rays_count = 0;
         std::swap(p.primary_rays, p.secondary_rays);
 
+        pass_info.bounce = bounce + 3;
+
         for (int i = 0; i < rays_count; i++) {
             const auto &r = p.primary_rays[i];
             const auto &inter = p.intersections[i];
@@ -225,7 +209,6 @@ void Ray::Ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
             const int y = inter.id.y;
 
             pass_info.index = y * w + x;
-            pass_info.bounce = bounce + 3;
 
             pixel_color_t col = ShadeSurface(pass_info, inter, r, &region.halton_seq[0], env, mesh_instances,
                                              mi_indices, meshes, transforms, vtx_indices, vertices, nodes, macro_tree_root,

@@ -185,22 +185,40 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
         }
     }
 
+    pass_info_t pass_info;
+
+    pass_info.iteration = region.iteration;
+    pass_info.bounce = 2;
+    pass_info.flags = cam.pass_flags;
+
     const auto time_start = std::chrono::high_resolution_clock::now();
+    std::chrono::time_point<std::chrono::high_resolution_clock> time_after_ray_gen;
 
-    GeneratePrimaryRays<DimX, DimY>(region.iteration, cam, rect, w, h, &region.halton_seq[0], p.primary_rays);
+    if (cam.type != Geo) {
+        GeneratePrimaryRays<DimX, DimY>(region.iteration, cam, rect, w, h, &region.halton_seq[0], p.primary_rays);
 
-    const auto time_after_ray_gen = std::chrono::high_resolution_clock::now();
+        time_after_ray_gen = std::chrono::high_resolution_clock::now();
 
-    p.primary_masks.resize(p.primary_rays.size());
-    p.intersections.resize(p.primary_rays.size());
+        p.primary_masks.resize(p.primary_rays.size());
+        p.intersections.resize(p.primary_rays.size());
 
-    for (size_t i = 0; i < p.primary_rays.size(); i++) {
-        const auto &r = p.primary_rays[i];
-        auto &inter = p.intersections[i];
+        for (size_t i = 0; i < p.primary_rays.size(); i++) {
+            const auto &r = p.primary_rays[i];
+            auto &inter = p.intersections[i];
 
-        inter = {};
-        inter.xy = r.xy;
-        NS::Traverse_MacroTree_WithStack(r, { -1 }, nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, inter);
+            inter = {};
+            inter.xy = r.xy;
+            NS::Traverse_MacroTree_WithStack(r, { -1 }, nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, inter);
+        }
+    } else {
+        const auto &mi = mesh_instances[cam.mi_index];
+        SampleMeshInTextureSpace<DimX, DimY>(region.iteration, cam.mi_index, cam.uv_index,
+                                             meshes[mi.mesh_index], transforms[mi.tr_index], vtx_indices, vertices,
+                                             rect, w, h, &region.halton_seq[0], p.primary_rays, p.intersections);
+
+        p.primary_masks.resize(p.primary_rays.size());
+
+        time_after_ray_gen = std::chrono::high_resolution_clock::now();
     }
 
     const auto time_after_prim_trace = std::chrono::high_resolution_clock::now();
@@ -221,7 +239,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
         p.secondary_masks[i] = { 0 };
 
         simd_fvec<S> out_rgba[4] = { 0.0f };
-        NS::ShadeSurface(index, region.iteration, 2, &region.halton_seq[0], inter, r, env, mesh_instances,
+        NS::ShadeSurface(index, pass_info, &region.halton_seq[0], inter, r, env, mesh_instances,
                          mi_indices, meshes, transforms, vtx_indices, vertices, nodes, macro_tree_root,
                          tris, tri_indices, materials, textures, tex_atlas, lights, li_indices, light_tree_root,
                          out_rgba, &p.secondary_masks[0], &p.secondary_rays[0], &secondary_rays_count);
@@ -241,47 +259,11 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
     p.chunks_temp.resize(secondary_rays_count * S);
     p.skeleton.resize(secondary_rays_count * S);
 
-    for (int bounce = 0; bounce < MAX_BOUNCES && secondary_rays_count; bounce++) {
+    for (int bounce = 0; bounce < MAX_BOUNCES && secondary_rays_count && !(pass_info.flags & SkipIndirectLight); bounce++) {
         auto time_secondary_sort_start = std::chrono::high_resolution_clock::now();
 
         SortRays(&p.secondary_rays[0], &p.secondary_masks[0], secondary_rays_count, root_min, cell_size,
                  &p.hash_values[0], &p.head_flags[0], &p.scan_values[0], &p.chunks[0], &p.chunks_temp[0], &p.skeleton[0]);
-
-#if 0   // debug hash values
-        static std::vector<simd_fvec3> color_table;
-        if (color_table.empty()) {
-            std::lock_guard<std::mutex> _(pass_cache_mtx_);
-            if (color_table.empty()) {
-                for (int i = 0; i < 1024; i++) {
-                    float t = float(i) / 1024;
-
-                    simd_fvec3 col = t * 2.1f - simd_fvec3{ 1.8f, 1.14f, 0.3f };
-                    col = 1.0f - col * col;
-
-                    col = clamp(col, 0, 1);
-
-                    color_table.push_back(col);
-                    //color_table.emplace_back(t, t, t);
-                }
-            }
-        }
-
-        for (int i = 0; i < secondary_rays_count; i++) {
-            const auto &r = p.secondary_rays[i];
-
-            simd_ivec<S> x = r.xy >> 16,
-                y = r.xy & 0x0000FFFF;
-
-            for (int j = 0; j < S; j++) {
-                if (!p.secondary_masks[i][j]) continue;
-
-                const auto &c = color_table[hash_values[i][j] % 1024];
-
-                pixel_color_t col = { c[0], c[1], c[2], 1.0f };
-                temp_buf_.SetPixel(x[j], y[j], col);
-            }
-        }
-#endif
 
         auto time_secondary_trace_start = std::chrono::high_resolution_clock::now();
 
@@ -302,6 +284,8 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
         std::swap(p.primary_rays, p.secondary_rays);
         std::swap(p.primary_masks, p.secondary_masks);
 
+        pass_info.bounce = bounce + 3;
+
         for (int i = 0; i < rays_count; i++) {
             const auto &r = p.primary_rays[i];
             const auto &inter = p.intersections[i];
@@ -312,7 +296,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
             simd_ivec<S> index = { y * w + x };
 
             simd_fvec<S> out_rgba[4] = { 0.0f };
-            NS::ShadeSurface(index, region.iteration, bounce + 3, &region.halton_seq[0], inter, r, env, mesh_instances,
+            NS::ShadeSurface(index, pass_info, &region.halton_seq[0], inter, r, env, mesh_instances,
                              mi_indices, meshes, transforms, vtx_indices, vertices, nodes, macro_tree_root,
                              tris, tri_indices, materials, textures, tex_atlas, lights, li_indices, light_tree_root, 
                              out_rgba, &p.secondary_masks[0], &p.secondary_rays[0], &secondary_rays_count);

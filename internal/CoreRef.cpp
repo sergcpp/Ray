@@ -1146,10 +1146,11 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
             if (env.env_clamp > FLT_EPS) {
                 env_col = min(env_col, simd_fvec4{ env.env_clamp });
             }
+            env_col[3] = 1.0f;
         }
         return Ray::pixel_color_t{ ray.c[0] * env_col[0] * env.env_col[0],
                                    ray.c[1] * env_col[1] * env.env_col[1],
-                                   ray.c[2] * env_col[2] * env.env_col[2], 1.0f };
+                                   ray.c[2] * env_col[2] * env.env_col[2], env_col[3] };
     }
 
     const auto I = simd_fvec3(ray.d);
