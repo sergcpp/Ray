@@ -186,9 +186,8 @@ struct pass_info_t {
     uint32_t flags = 0;
 
     force_inline bool should_add_direct_light() const {
-        // skip if we want only indirect light contribution
-        // skip if secondary bounce and we want only direct light contribution (only mesh lights should contribute)
-        return !((flags & SkipDirectLight) && (bounce < 3 || (flags & SkipIndirectLight)));
+        // skip for primary bounce if we want only indirect light contribution
+        return !(flags & SkipDirectLight) || bounce > 2;
     }
 
     force_inline bool should_add_environment() const {

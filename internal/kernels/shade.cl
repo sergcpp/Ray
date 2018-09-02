@@ -14,7 +14,7 @@ float3 refract(float3 I, float3 N, float eta) {
 }
 
 #define should_add_direct_light(pi) \
-    !((pi->flags & SkipDirectLight) && (pi->bounce < 3 || (pi->flags & SkipIndirectLight)))
+    (!(pi->flags & SkipDirectLight) || pi->bounce > 2)
 
 #define should_add_environment(pi) \
     (!(pi->flags & NoBackground) || pi->bounce > 2)
