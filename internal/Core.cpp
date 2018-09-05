@@ -190,24 +190,24 @@ uint32_t Ray::PreprocessPrims(const prim_t *prims, size_t prims_count, const flo
         }
     };
 
-    std::deque<prims_coll_t> triangle_lists;
-    triangle_lists.emplace_back();
+    std::deque<prims_coll_t> prim_lists;
+    prim_lists.emplace_back();
 
     size_t num_nodes = out_nodes.size();
     auto root_node_index = (uint32_t)num_nodes;
 
     for (size_t j = 0; j < prims_count; j++) {
-        triangle_lists.back().indices.push_back((uint32_t)j);
-        triangle_lists.back().min = min(triangle_lists.back().min, prims[j].bbox_min);
-        triangle_lists.back().max = max(triangle_lists.back().max, prims[j].bbox_max);
+        prim_lists.back().indices.push_back((uint32_t)j);
+        prim_lists.back().min = min(prim_lists.back().min, prims[j].bbox_min);
+        prim_lists.back().max = max(prim_lists.back().max, prims[j].bbox_max);
     }
 
-    Ref::simd_fvec3 root_min = triangle_lists.back().min,
-                    root_max = triangle_lists.back().max;
+    Ref::simd_fvec3 root_min = prim_lists.back().min,
+                    root_max = prim_lists.back().max;
 
-    while (!triangle_lists.empty()) {
-        auto split_data = SplitPrimitives_SAH(prims, triangle_lists.back().indices, positions, stride, triangle_lists.back().min, triangle_lists.back().max, root_min, root_max, allow_spatial_splits);
-        triangle_lists.pop_back();
+    while (!prim_lists.empty()) {
+        auto split_data = SplitPrimitives_SAH(prims, prim_lists.back().indices, positions, stride, prim_lists.back().min, prim_lists.back().max, root_min, root_max, allow_spatial_splits);
+        prim_lists.pop_back();
 
         uint32_t leaf_index = (uint32_t)out_nodes.size(),
                  parent_index = 0xffffffff;
@@ -260,8 +260,8 @@ uint32_t Ray::PreprocessPrims(const prim_t *prims, size_t prims_count, const flo
             });
 
             // push_front
-            triangle_lists.emplace_front(std::move(split_data.left_indices), split_data.left_bounds[0], split_data.left_bounds[1]);
-            triangle_lists.emplace_front(std::move(split_data.right_indices), split_data.right_bounds[0], split_data.right_bounds[1]);
+            prim_lists.emplace_front(std::move(split_data.left_indices), split_data.left_bounds[0], split_data.left_bounds[1]);
+            prim_lists.emplace_front(std::move(split_data.right_indices), split_data.right_bounds[0], split_data.right_bounds[1]);
 
             num_nodes += 2;
         }
