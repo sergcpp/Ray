@@ -62,6 +62,13 @@ struct environment_t {
     uint32_t env_map;
 };
 
+struct derivatives_t {
+    simd_fvec3 do_dx, do_dy, dd_dx, dd_dy;
+    simd_fvec2 duv_dx, duv_dy;
+    simd_fvec3 dndx, dndy;
+    float ddn_dx, ddn_dy;
+};
+
 class TextureAtlas;
 
 // Generation of rays
@@ -124,6 +131,10 @@ simd_fvec3 ComputeDirectLighting(const simd_fvec3 &P, const simd_fvec3 &N, const
                                  const bvh_node_t *nodes, uint32_t node_index, const tri_accel_t *tris,
                                  const uint32_t *tri_indices, const light_t *lights,
                                  const uint32_t *li_indices, uint32_t light_node_index);
+
+// Compute derivatives at hit point
+void ComputeDerivatives(const simd_fvec3 &I, float t, const simd_fvec3 &do_dx, const simd_fvec3 &do_dy, const simd_fvec3 &dd_dx, const simd_fvec3 &dd_dy,
+                        const vertex_t &v1, const vertex_t &v2, const vertex_t &v3, const simd_fvec3 &plane_N, derivatives_t &out_der);
 
 // Shade
 Ray::pixel_color_t ShadeSurface(const pass_info_t &pi, const hit_data_t &inter, const ray_packet_t &ray, const float *halton,

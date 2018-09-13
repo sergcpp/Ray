@@ -1133,6 +1133,64 @@ Ray::Ref::simd_fvec3 Ray::Ref::ComputeDirectLighting(const simd_fvec3 &P, const 
     return col;
 }
 
+void Ray::Ref::ComputeDerivatives(const simd_fvec3 &I, float t, const simd_fvec3 &do_dx, const simd_fvec3 &do_dy, const simd_fvec3 &dd_dx, const simd_fvec3 &dd_dy,
+                                  const vertex_t &v1, const vertex_t &v2, const vertex_t &v3, const simd_fvec3 &plane_N, derivatives_t &out_der) {
+    // From 'Tracing Ray Differentials' [1999]
+
+    float dot_I_N = dot(-I, plane_N);
+    float inv_dot = std::abs(dot_I_N) < FLT_EPS ? 0.0f : 1.0f / dot_I_N;
+    float dt_dx = -dot(simd_fvec3(do_dx) + t * simd_fvec3(dd_dx), plane_N) * inv_dot;
+    float dt_dy = -dot(simd_fvec3(do_dy) + t * simd_fvec3(dd_dy), plane_N) * inv_dot;
+
+    out_der.do_dx = (simd_fvec3(do_dx) + t * simd_fvec3(dd_dx)) + dt_dx * I;
+    out_der.do_dy = (simd_fvec3(do_dy) + t * simd_fvec3(dd_dy)) + dt_dy * I;
+    out_der.dd_dx = simd_fvec3(dd_dx);
+    out_der.dd_dy = simd_fvec3(dd_dy);
+
+    // From 'Physically Based Rendering: ...' book
+
+    const simd_fvec2 duv13 = simd_fvec2(v1.t[0]) - simd_fvec2(v3.t[0]), duv23 = simd_fvec2(v2.t[0]) - simd_fvec2(v3.t[0]);
+    const simd_fvec3 dp13 = simd_fvec3(v1.p) - simd_fvec3(v3.p), dp23 = simd_fvec3(v2.p) - simd_fvec3(v3.p);
+
+    const float det_uv = duv13[0] * duv23[1] - duv13[1] * duv23[0];
+    const float inv_det_uv = std::abs(det_uv) < FLT_EPS ? 0 : 1.0f / det_uv;
+    const simd_fvec3 dpdu = (duv23[1] * dp13 - duv13[1] * dp23) * inv_det_uv;
+    const simd_fvec3 dpdv = (-duv23[0] * dp13 + duv13[0] * dp23) * inv_det_uv;
+
+    simd_fvec2 A[2] = { { dpdu[0], dpdu[1] },{ dpdv[0], dpdv[1] } };
+    simd_fvec2 Bx = { do_dx[0], do_dx[1] };
+    simd_fvec2 By = { do_dy[0], do_dy[1] };
+
+    if (std::abs(plane_N[0]) > std::abs(plane_N[1]) && std::abs(plane_N[0]) > std::abs(plane_N[2])) {
+        A[0] = { dpdu[1], dpdu[2] };
+        A[1] = { dpdv[1], dpdv[2] };
+        Bx = { do_dx[1], do_dx[2] };
+        By = { do_dy[1], do_dy[2] };
+    } else if (std::abs(plane_N[1]) > std::abs(plane_N[2])) {
+        A[0] = { dpdu[0], dpdu[2] };
+        A[1] = { dpdv[0], dpdv[2] };
+        Bx = { do_dx[0], do_dx[2] };
+        By = { do_dy[0], do_dy[2] };
+    }
+
+    const float det = A[0][0] * A[1][1] - A[1][0] * A[0][1];
+    const float inv_det = std::abs(det) < FLT_EPS ? 0 : 1.0f / det;
+    out_der.duv_dx = simd_fvec2{ A[0][0] * Bx[0] - A[0][1] * Bx[1], A[1][0] * Bx[0] - A[1][1] * Bx[1] } * inv_det;
+    out_der.duv_dy = simd_fvec2{ A[0][0] * By[0] - A[0][1] * By[1], A[1][0] * By[0] - A[1][1] * By[1] } * inv_det;
+
+    // Derivative for normal
+
+    const auto dn1 = simd_fvec3(v1.n) - simd_fvec3(v3.n), dn2 = simd_fvec3(v2.n) - simd_fvec3(v3.n);
+    const auto dndu = (duv23[1] * dn1 - duv13[1] * dn2) * inv_det_uv;
+    const auto dndv = (-duv23[0] * dn1 + duv13[0] * dn2) * inv_det_uv;
+
+    out_der.dndx = dndu * out_der.duv_dx[0] + dndv * out_der.duv_dx[1];
+    out_der.dndy = dndu * out_der.duv_dy[0] + dndv * out_der.duv_dy[1];
+
+    out_der.ddn_dx = dot(dd_dx, plane_N) + dot(I, out_der.dndx);
+    out_der.ddn_dy = dot(dd_dy, plane_N) + dot(I, out_der.dndy);
+}
+
 Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_t &inter, const ray_packet_t &ray, const float *halton,
                                           const environment_t &env, const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
                                           const mesh_t *meshes, const transform_t *transforms, const uint32_t *vtx_indices, const vertex_t *vertices,
@@ -1166,82 +1224,17 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
     const auto &v2 = vertices[vtx_indices[inter.prim_indices[0] * 3 + 1]];
     const auto &v3 = vertices[vtx_indices[inter.prim_indices[0] * 3 + 2]];
 
-    const auto n1 = simd_fvec3(v1.n);
-    const auto n2 = simd_fvec3(v2.n);
-    const auto n3 = simd_fvec3(v3.n);
-
-    const auto u1 = simd_fvec2(v1.t[0]);
-    const auto u2 = simd_fvec2(v2.t[0]);
-    const auto u3 = simd_fvec2(v3.t[0]);
-
     float w = 1.0f - inter.u - inter.v;
-    simd_fvec3 N = n1 * w + n2 * inter.u + n3 * inter.v;
-    simd_fvec2 uvs = u1 * w + u2 * inter.u + u3 * inter.v;
+    simd_fvec3 N = simd_fvec3(v1.n) * w + simd_fvec3(v2.n) * inter.u + simd_fvec3(v3.n) * inter.v;
+    simd_fvec2 uvs = simd_fvec2(v1.t[0]) * w + simd_fvec2(v2.t[0]) * inter.u + simd_fvec2(v3.t[0]) * inter.v;
 
-    //////////////////////////////////////////
-
-    const auto p1 = simd_fvec3(v1.p);
-    const auto p2 = simd_fvec3(v2.p);
-    const auto p3 = simd_fvec3(v3.p);
-
-    const int _next_u[] = { 1, 0, 0 }, _next_v[] = { 2, 2, 1 };
-
-    const int _iw = tri.ci & TRI_W_BITS;
+    // find triangle plane normal
     simd_fvec3 plane_N;
-    plane_N[_iw] = 1.0f;
-    plane_N[_next_u[_iw]] = tri.nu;
-    plane_N[_next_v[_iw]] = tri.nv;
-    plane_N = normalize(plane_N);
-    if (tri.ci & TRI_INV_NORMAL_BIT) plane_N = -plane_N;
-
+    ExtractPlaneNormal(tri, &plane_N[0]);
     plane_N = TransformNormal(plane_N, tr->inv_xform);
 
-    // From 'Tracing Ray Differentials' [1999]
-
-    float dot_I_N = dot(-I, plane_N);
-    float inv_dot = std::abs(dot_I_N) < FLT_EPS ? 0.0f : 1.0f/dot_I_N;
-    float dt_dx = -dot(simd_fvec3(ray.do_dx) + inter.t * simd_fvec3(ray.dd_dx), N) * inv_dot;
-    float dt_dy = -dot(simd_fvec3(ray.do_dy) + inter.t * simd_fvec3(ray.dd_dy), N) * inv_dot;
-
-    const auto do_dx = (simd_fvec3(ray.do_dx) + inter.t * simd_fvec3(ray.dd_dx)) + dt_dx * I;
-    const auto do_dy = (simd_fvec3(ray.do_dy) + inter.t * simd_fvec3(ray.dd_dy)) + dt_dy * I;
-    const auto dd_dx = simd_fvec3(ray.dd_dx);
-    const auto dd_dy = simd_fvec3(ray.dd_dy);
-
-    //////////////////////////////////////////
-
-    // From 'Physically Based Rendering: ...' book
-
-    const simd_fvec2 duv13 = u1 - u3, duv23 = u2 - u3;
-    const simd_fvec3 dp13 = p1 - p3, dp23 = p2 - p3;
-
-    const float det_uv = duv13[0] * duv23[1] - duv13[1] * duv23[0];
-    const float inv_det_uv = std::abs(det_uv) < FLT_EPS ? 0 : 1.0f / det_uv;
-    const simd_fvec3 dpdu = (duv23[1] * dp13 - duv13[1] * dp23) * inv_det_uv;
-    const simd_fvec3 dpdv = (-duv23[0] * dp13 + duv13[0] * dp23) * inv_det_uv;
-
-    simd_fvec2 A[2] = { { dpdu[0], dpdu[1] }, { dpdv[0], dpdv[1] } };
-    simd_fvec2 Bx = { do_dx[0], do_dx[1] };
-    simd_fvec2 By = { do_dy[0], do_dy[1] };
-
-    if (std::abs(plane_N[0]) > std::abs(plane_N[1]) && std::abs(plane_N[0]) > std::abs(plane_N[2])) {
-        A[0] = { dpdu[1], dpdu[2] };
-        A[1] = { dpdv[1], dpdv[2] };
-        Bx = { do_dx[1], do_dx[2] };
-        By = { do_dy[1], do_dy[2] };
-    } else if (std::abs(plane_N[1]) > std::abs(plane_N[2])) {
-        A[0] = { dpdu[0], dpdu[2] };
-        A[1] = { dpdv[0], dpdv[2] };
-        Bx = { do_dx[0], do_dx[2] };
-        By = { do_dy[0], do_dy[2] };
-    }
-
-    const float det = A[0][0] * A[1][1] - A[1][0] * A[0][1];
-    const float inv_det = std::abs(det) < FLT_EPS ? 0 : 1.0f / det;
-    const auto duv_dx = simd_fvec2{ A[0][0] * Bx[0] - A[0][1] * Bx[1], A[1][0] * Bx[0] - A[1][1] * Bx[1] } * inv_det;
-    const auto duv_dy = simd_fvec2{ A[0][0] * By[0] - A[0][1] * By[1], A[1][0] * By[0] - A[1][1] * By[1] } * inv_det;
-
-    ////////////////////////////////////////////////////////
+    derivatives_t surf_der;
+    ComputeDerivatives(I, inter.t, ray.do_dx, ray.do_dy, ray.dd_dx, ray.dd_dy, v1, v2, v3, plane_N, surf_der);
 
     // used to randomize halton sequence among pixels
     int rand_hash = hash(pi.index), rand_hash2, rand_hash3;
@@ -1272,27 +1265,9 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
     rand_hash3 = hash(rand_hash2);
     rand_offset3 = construct_float(rand_hash3);
 
-    ////////////////////////////////////////////////////////
+    // apply normal map
 
-    // Derivative for normal
-
-    const auto dn1 = n1 - n3, dn2 = n2 - n3;
-    const auto dndu = (duv23[1] * dn1 - duv13[1] * dn2) * inv_det_uv;
-    const auto dndv = (-duv23[0] * dn1 + duv13[0] * dn2) * inv_det_uv;
-
-    const auto dndx = dndu * duv_dx[0] + dndv * duv_dx[1];
-    const auto dndy = dndu * duv_dy[0] + dndv * duv_dy[1];
-
-    const float ddn_dx = dot(dd_dx, plane_N) + dot(I, dndx);
-    const float ddn_dy = dot(dd_dy, plane_N) + dot(I, dndy);
-
-    ////////////////////////////////////////////////////////
-
-    const auto b1 = simd_fvec3(v1.b);
-    const auto b2 = simd_fvec3(v2.b);
-    const auto b3 = simd_fvec3(v3.b);
-
-    simd_fvec3 B = b1 * w + b2 * inter.u + b3 * inter.v;
+    simd_fvec3 B = simd_fvec3(v1.b) * w + simd_fvec3(v2.b) * inter.u + simd_fvec3(v3.b) * inter.v;
     simd_fvec3 T = cross(B, N);
 
     auto normals = SampleBilinear(tex_atlas, textures[mat->textures[NORMALS_TEXTURE]], uvs, 0);
@@ -1303,9 +1278,9 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
     B = TransformNormal(B, tr->inv_xform);
     T = TransformNormal(T, tr->inv_xform);
 
-    //////////////////////////////////////////
+    // sample main texture
 
-    auto albedo = SampleAnisotropic(tex_atlas, textures[mat->textures[MAIN_TEXTURE]], uvs, duv_dx, duv_dy);
+    auto albedo = SampleAnisotropic(tex_atlas, textures[mat->textures[MAIN_TEXTURE]], uvs, surf_der.duv_dx, surf_der.duv_dy);
     albedo[0] *= mat->main_color[0];
     albedo[1] *= mat->main_color[1];
     albedo[2] *= mat->main_color[2];
@@ -1348,11 +1323,11 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
             r.c[0] *= albedo[0]; r.c[1] *= albedo[1]; r.c[2] *= albedo[2];
         }
 
-        memcpy(&r.do_dx[0], value_ptr(do_dx), 3 * sizeof(float));
-        memcpy(&r.do_dy[0], value_ptr(do_dy), 3 * sizeof(float));
+        memcpy(&r.do_dx[0], value_ptr(surf_der.do_dx), 3 * sizeof(float));
+        memcpy(&r.do_dy[0], value_ptr(surf_der.do_dy), 3 * sizeof(float));
 
-        memcpy(&r.dd_dx[0], value_ptr(dd_dx - 2 * (dot(I, plane_N) * dndx + ddn_dx * plane_N)), 3 * sizeof(float));
-        memcpy(&r.dd_dy[0], value_ptr(dd_dy - 2 * (dot(I, plane_N) * dndy + ddn_dy * plane_N)), 3 * sizeof(float));
+        memcpy(&r.dd_dx[0], value_ptr(surf_der.dd_dx - 2 * (dot(I, plane_N) * surf_der.dndx + surf_der.ddn_dx * plane_N)), 3 * sizeof(float));
+        memcpy(&r.dd_dy[0], value_ptr(surf_der.dd_dy - 2 * (dot(I, plane_N) * surf_der.dndy + surf_der.ddn_dy * plane_N)), 3 * sizeof(float));
 
         const float thr = std::max(r.c[0], std::max(r.c[1], r.c[2]));
         const float p = std::modf(halton[hi + 0] + rand_offset3, &_unused);
@@ -1393,11 +1368,11 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
         memcpy(&r.d[0], value_ptr(V), 3 * sizeof(float));
         memcpy(&r.c[0], &ray.c[0], 3 * sizeof(float));
 
-        memcpy(&r.do_dx[0], value_ptr(do_dx), 3 * sizeof(float));
-        memcpy(&r.do_dy[0], value_ptr(do_dy), 3 * sizeof(float));
+        memcpy(&r.do_dx[0], value_ptr(surf_der.do_dx), 3 * sizeof(float));
+        memcpy(&r.do_dy[0], value_ptr(surf_der.do_dy), 3 * sizeof(float));
 
-        memcpy(&r.dd_dx[0], value_ptr(dd_dx - 2 * (dot(I, plane_N) * dndx + ddn_dx * plane_N)), 3 * sizeof(float));
-        memcpy(&r.dd_dy[0], value_ptr(dd_dy - 2 * (dot(I, plane_N) * dndy + ddn_dy * plane_N)), 3 * sizeof(float));
+        memcpy(&r.dd_dx[0], value_ptr(surf_der.dd_dx - 2 * (dot(I, plane_N) * surf_der.dndx + surf_der.ddn_dx * plane_N)), 3 * sizeof(float));
+        memcpy(&r.dd_dy[0], value_ptr(surf_der.dd_dy - 2 * (dot(I, plane_N) * surf_der.dndy + surf_der.ddn_dy * plane_N)), 3 * sizeof(float));
 
         const float thr = std::max(r.c[0], std::max(r.c[1], r.c[2]));
         const float p = std::modf(halton[hi + 0] + rand_offset3, &_unused);
@@ -1432,8 +1407,8 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
         //////////////////
 
         float k = (eta - eta * eta * dot(I, plane_N) / dot(V, plane_N));
-        float dmdx = k * ddn_dx;
-        float dmdy = k * ddn_dy;
+        float dmdx = k * surf_der.ddn_dx;
+        float dmdy = k * surf_der.ddn_dy;
 
         ray_packet_t r;
 
@@ -1444,11 +1419,11 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
         memcpy(&r.d[0], value_ptr(V), 3 * sizeof(float));
         memcpy(&r.c[0], value_ptr(simd_fvec3(ray.c) * z), 3 * sizeof(float));
 
-        memcpy(&r.do_dx[0], value_ptr(do_dx), 3 * sizeof(float));
-        memcpy(&r.do_dy[0], value_ptr(do_dy), 3 * sizeof(float));
+        memcpy(&r.do_dx[0], value_ptr(surf_der.do_dx), 3 * sizeof(float));
+        memcpy(&r.do_dy[0], value_ptr(surf_der.do_dy), 3 * sizeof(float));
 
-        memcpy(&r.dd_dx[0], value_ptr(eta * dd_dx - (m * dndx + dmdx * plane_N)), 3 * sizeof(float));
-        memcpy(&r.dd_dy[0], value_ptr(eta * dd_dy - (m * dndy + dmdy * plane_N)), 3 * sizeof(float));
+        memcpy(&r.dd_dx[0], value_ptr(eta * surf_der.dd_dx - (m * surf_der.dndx + dmdx * plane_N)), 3 * sizeof(float));
+        memcpy(&r.dd_dy[0], value_ptr(eta * surf_der.dd_dy - (m * surf_der.dndy + dmdy * plane_N)), 3 * sizeof(float));
 
         float _unused;
 

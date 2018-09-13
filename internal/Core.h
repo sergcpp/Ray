@@ -112,6 +112,7 @@ template <typename T>
 using aligned_vector = std::vector<T, aligned_allocator<T, alignof(T)>>;
 
 void PreprocessTri(const float *p, int stride, tri_accel_t *acc);
+void ExtractPlaneNormal(const tri_accel_t &tri, float *out_normal);
 
 uint32_t PreprocessMesh(const float *attrs, size_t attrs_count, const uint32_t *indices, size_t indices_count, eVertexLayout layout,
                         bool allow_spatial_splits, std::vector<bvh_node_t> &out_nodes, std::vector<tri_accel_t> &out_tris, std::vector<uint32_t> &out_indices);

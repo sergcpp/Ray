@@ -133,6 +133,20 @@ void Ray::PreprocessTri(const float *p, int stride, tri_accel_t *acc) {
     assert((acc->ci & TRI_W_BITS) == w);
 }
 
+void Ray::ExtractPlaneNormal(const tri_accel_t &tri, float *out_normal) {
+    const int _next_u[] = { 1, 0, 0 }, _next_v[] = { 2, 2, 1 };
+
+    const int _iw = tri.ci & TRI_W_BITS;
+    out_normal[_iw] = 1.0f;
+    out_normal[_next_u[_iw]] = tri.nu;
+    out_normal[_next_v[_iw]] = tri.nv;
+    float inv_l = std::sqrt(out_normal[0] * out_normal[0] + out_normal[1] * out_normal[1] + out_normal[2] * out_normal[2]);
+    if (tri.ci & TRI_INV_NORMAL_BIT) inv_l = -inv_l;
+    out_normal[0] *= inv_l;
+    out_normal[1] *= inv_l;
+    out_normal[2] *= inv_l;
+}
+
 uint32_t Ray::PreprocessMesh(const float *attrs, size_t attrs_count, const uint32_t *vtx_indices, size_t vtx_indices_count, eVertexLayout layout,
                              bool allow_spatial_splits, std::vector<bvh_node_t> &out_nodes, std::vector<tri_accel_t> &out_tris, std::vector<uint32_t> &out_tri_indices) {
     assert(vtx_indices_count && vtx_indices_count % 3 == 0);
