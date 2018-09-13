@@ -142,7 +142,7 @@ void ComputeDirectLighting(const simd_fvec<S> P[3], const simd_fvec<S> N[3], con
 
 // Compute derivatives at hit point
 template <int S>
-void ComputeDerivatives(const simd_fvec<S> I[3], simd_fvec<S> t, const simd_fvec<S> do_dx[3], const simd_fvec<S> do_dy[3], const simd_fvec<S> dd_dx[3], const simd_fvec<S> dd_dy[3],
+void ComputeDerivatives(const simd_fvec<S> I[3], const simd_fvec<S> &t, const simd_fvec<S> do_dx[3], const simd_fvec<S> do_dy[3], const simd_fvec<S> dd_dx[3], const simd_fvec<S> dd_dy[3],
                         const simd_fvec<S> p1[3], const simd_fvec<S> p2[3], const simd_fvec<S> p3[3], const simd_fvec<S> n1[3], const simd_fvec<S> n2[3], const simd_fvec<S> n3[3],
                         const simd_fvec<S> u1[2], const simd_fvec<S> u2[2], const simd_fvec<S> u3[2], const simd_fvec<S> plane_N[3], derivatives_t<S> &out_der);
 
@@ -1714,7 +1714,7 @@ void Ray::NS::ComputeDirectLighting(const simd_fvec<S> P[3], const simd_fvec<S> 
 }
 
 template <int S>
-void Ray::NS::ComputeDerivatives(const simd_fvec<S> I[3], simd_fvec<S> t, const simd_fvec<S> do_dx[3], const simd_fvec<S> do_dy[3], const simd_fvec<S> dd_dx[3], const simd_fvec<S> dd_dy[3],
+void Ray::NS::ComputeDerivatives(const simd_fvec<S> I[3], const simd_fvec<S> &t, const simd_fvec<S> do_dx[3], const simd_fvec<S> do_dy[3], const simd_fvec<S> dd_dx[3], const simd_fvec<S> dd_dy[3],
                                  const simd_fvec<S> p1[3], const simd_fvec<S> p2[3], const simd_fvec<S> p3[3], const simd_fvec<S> n1[3], const simd_fvec<S> n2[3], const simd_fvec<S> n3[3],
                                  const simd_fvec<S> u1[2], const simd_fvec<S> u2[2], const simd_fvec<S> u3[2], const simd_fvec<S> plane_N[3], derivatives_t<S> &out_der) {
     // From 'Tracing Ray Differentials' [1999]
