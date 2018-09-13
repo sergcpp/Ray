@@ -41,6 +41,10 @@ template void ComputeDirectLighting<RayPacketSize>(const simd_fvec<RayPacketSize
                                                    const tri_accel_t *tris, const uint32_t *tri_indices, const light_t *lights,
                                                    const uint32_t *li_indices, uint32_t light_node_index, const simd_ivec<RayPacketSize> &ray_mask, simd_fvec<RayPacketSize> *out_col);
 
+template void ComputeDerivatives<RayPacketSize>(const simd_fvec<RayPacketSize> I[3], simd_fvec<RayPacketSize> t, const simd_fvec<RayPacketSize> do_dx[3], const simd_fvec<RayPacketSize> do_dy[3], const simd_fvec<RayPacketSize> dd_dx[3], const simd_fvec<RayPacketSize> dd_dy[3],
+                                                const simd_fvec<RayPacketSize> p1[3], const simd_fvec<RayPacketSize> p2[3], const simd_fvec<RayPacketSize> p3[3], const simd_fvec<RayPacketSize> n1[3], const simd_fvec<RayPacketSize> n2[3], const simd_fvec<RayPacketSize> n3[3],
+                                                const simd_fvec<RayPacketSize> u1[2], const simd_fvec<RayPacketSize> u2[2], const simd_fvec<RayPacketSize> u3[2], const simd_fvec<RayPacketSize> plane_N[3], derivatives_t<RayPacketSize> &out_der);
+
 template void ShadeSurface<RayPacketSize>(const simd_ivec<RayPacketSize> &index, const pass_info_t &pi, const float *halton, const hit_data_t<RayPacketSize> &inter, const ray_packet_t<RayPacketSize> &ray,
                                           const environment_t &env, const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
                                           const mesh_t *meshes, const transform_t *transforms, const uint32_t *vtx_indices, const vertex_t *vertices,
