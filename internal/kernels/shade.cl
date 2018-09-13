@@ -92,6 +92,61 @@ float3 ComputeDirectLighting(const float3 P, const float3 N, const float3 B, con
     return col;
 }
 
+void ComputeDerivatives(const float3 I, float t, const float3 do_dx, const float3 do_dy, const float3 dd_dx, const float3 dd_dy,
+                        const float3 p1, const float3 p2, const float3 p3, const float3 n1, const float3 n2, const float3 n3,
+                        const float2 u1, const float2 u2, const float2 u3, const float3 plane_N, derivatives_t *out_der) {
+    // From 'Tracing Ray Differentials' [1999]
+
+    float dot_I_N = dot(-I, plane_N);
+    float inv_dot = fabs(dot_I_N) < FLT_EPS ? 0.0f : 1.0f/dot_I_N;
+    float dt_dx = -dot(do_dx + t * dd_dx, plane_N) * inv_dot;
+    float dt_dy = -dot(do_dy + t * dd_dy, plane_N) * inv_dot;
+    
+    out_der->do_dx = (do_dx + t * dd_dx) + dt_dx * I;
+    out_der->do_dy = (do_dy + t * dd_dy) + dt_dy * I;
+    out_der->dd_dx = dd_dx;
+    out_der->dd_dy = dd_dy;
+
+    // From 'Physically Based Rendering: ...' book
+
+    const float2 duv13 = u1 - u3, duv23 = u2 - u3;
+    const float3 dp13 = p1 - p3, dp23 = p2 - p3;
+
+    const float det_uv = duv13.x * duv23.y - duv13.y * duv23.x;
+    const float inv_det_uv = fabs(det_uv) > FLT_EPS ? 1.0f / det_uv : 0.0f;
+    const float3 dpdu = (duv23.y * dp13 - duv13.y * dp23) * inv_det_uv;
+    const float3 dpdv = (-duv23.x * dp13 + duv13.x * dp23) * inv_det_uv;
+
+    float2 A[2] = { dpdu.xy, dpdv.xy };
+    float2 Bx = out_der->do_dx.xy;
+    float2 By = out_der->do_dy.xy;
+
+    if (fabs(plane_N.x) > fabs(plane_N.y) && fabs(plane_N.x) > fabs(plane_N.z)) {
+        A[0] = dpdu.yz; A[1] = dpdv.yz;
+        Bx = out_der->do_dx.yz;  By = out_der->do_dy.yz;
+    } else if (fabs(plane_N.y) > fabs(plane_N.z)) {
+        A[0] = dpdu.xz; A[1] = dpdv.xz;
+        Bx = out_der->do_dx.xz;  By = out_der->do_dy.xz;
+    }
+
+    const float det = A[0].x * A[1].y - A[1].x * A[0].y;
+    const float inv_det = fabs(det) > FLT_EPS ? 1.0f / det : 0.0f;
+
+    out_der->duv_dx = (float2)(A[0].x * Bx.x - A[0].y * Bx.y, A[1].x * Bx.x - A[1].y * Bx.y) * inv_det;
+    out_der->duv_dy = (float2)(A[0].x * By.x - A[0].y * By.y, A[1].x * By.x - A[1].y * By.y) * inv_det;
+
+    // Derivative for normal
+    const float3 dn1 = n1 - n3, dn2 = n2 - n3;
+    const float3 dndu = (duv23.y * dn1 - duv13.y * dn2) * inv_det_uv;
+    const float3 dndv = (-duv23.x * dn1 + duv13.x * dn2) * inv_det_uv;
+
+    out_der->dndx = dndu * out_der->duv_dx.x + dndv * out_der->duv_dx.y;
+    out_der->dndy = dndu * out_der->duv_dy.x + dndv * out_der->duv_dy.y;
+
+    out_der->ddn_dx = dot(out_der->dd_dx, plane_N) + dot(I, out_der->dndx);
+    out_der->ddn_dy = dot(out_der->dd_dy, plane_N) + dot(I, out_der->dndy);
+}
+
 float4 ShadeSurface(const pass_info_t *pi, __global const float *halton,
                     __global const hit_data_t *prim_inters, __global const ray_packet_t *prim_rays,
                     __global const mesh_instance_t *mesh_instances, __global const uint *mi_indices,
@@ -162,46 +217,9 @@ float4 ShadeSurface(const pass_info_t *pi, __global const float *halton,
 
     plane_N = TransformNormal(plane_N, &tr->inv_xform);
 
-    float dot_I_N = dot(-I, plane_N);
-
-    // From 'Tracing Ray Differentials' [1999]
-
-    float inv_dot = fabs(dot_I_N) < FLT_EPS ? 0.0f : 1.0f/dot_I_N;
-    float dt_dx = -dot(orig_ray->do_dx + inter->t * orig_ray->dd_dx, plane_N) * inv_dot;
-    float dt_dy = -dot(orig_ray->do_dy + inter->t * orig_ray->dd_dy, plane_N) * inv_dot;
-    
-    const float3 do_dx = (orig_ray->do_dx + inter->t * orig_ray->dd_dx) + dt_dx * I;
-    const float3 do_dy = (orig_ray->do_dy + inter->t * orig_ray->dd_dy) + dt_dy * I;
-    const float3 dd_dx = orig_ray->dd_dx;
-    const float3 dd_dy = orig_ray->dd_dy;
-
-    // From 'Physically Based Rendering: ...' book
-
-    const float2 duv13 = u1 - u3, duv23 = u2 - u3;
-    const float3 dp13 = p1 - p3, dp23 = p2 - p3;
-
-    const float det_uv = duv13.x * duv23.y - duv13.y * duv23.x;
-    const float inv_det_uv = fabs(det_uv) > FLT_EPS ? 1.0f / det_uv : 0.0f;
-    const float3 dpdu = (duv23.y * dp13 - duv13.y * dp23) * inv_det_uv;
-    const float3 dpdv = (-duv23.x * dp13 + duv13.x * dp23) * inv_det_uv;
-
-    float2 A[2] = { dpdu.xy, dpdv.xy };
-    float2 Bx = do_dx.xy;
-    float2 By = do_dy.xy;
-
-    if (fabs(plane_N.x) > fabs(plane_N.y) && fabs(plane_N.x) > fabs(plane_N.z)) {
-        A[0] = dpdu.yz; A[1] = dpdv.yz;
-        Bx = do_dx.yz;  By = do_dy.yz;
-    } else if (fabs(plane_N.y) > fabs(plane_N.z)) {
-        A[0] = dpdu.xz; A[1] = dpdv.xz;
-        Bx = do_dx.xz;  By = do_dy.xz;
-    }
-
-    const float det = A[0].x * A[1].y - A[1].x * A[0].y;
-    const float inv_det = fabs(det) > FLT_EPS ? 1.0f / det : 0.0f;
-
-    const float2 duv_dx = (float2)(A[0].x * Bx.x - A[0].y * Bx.y, A[1].x * Bx.x - A[1].y * Bx.y) * inv_det;
-    const float2 duv_dy = (float2)(A[0].x * By.x - A[0].y * By.y, A[1].x * By.x - A[1].y * By.y) * inv_det;
+    derivatives_t surf_der;
+    ComputeDerivatives(I, inter->t, orig_ray->do_dx, orig_ray->do_dy, orig_ray->dd_dx, orig_ray->dd_dy,
+                       p1, p2, p3, n1, n2, n3, u1, u2, u3, plane_N, &surf_der);
 
     // used to randomize halton sequence among pixels
     int rand_hash = hash(pi->index), rand_hash2, rand_hash3;
@@ -232,16 +250,6 @@ float4 ShadeSurface(const pass_info_t *pi, __global const float *halton,
     rand_hash3 = hash(rand_hash2);
     rand_offset3 = construct_float(rand_hash3);
 
-    // Derivative for normal
-    const float3 dn1 = n1 - n3, dn2 = n2 - n3;
-    const float3 dndu = (duv23.y * dn1 - duv13.y * dn2) * inv_det_uv;
-    const float3 dndv = (-duv23.x * dn1 + duv13.x * dn2) * inv_det_uv;
-
-    const float3 dndx = dndu * duv_dx.x + dndv * duv_dx.y;
-    const float3 dndy = dndu * duv_dy.x + dndv * duv_dy.y;
-
-    const float ddn_dx = dot(dd_dx, plane_N) + dot(I, dndx);
-    const float ddn_dy = dot(dd_dy, plane_N) + dot(I, dndy);
     //
     const float3 b1 = (float3)(v1->b[0], v1->b[1], v1->b[2]);
     const float3 b2 = (float3)(v2->b[0], v2->b[1], v2->b[2]);
@@ -257,7 +265,7 @@ float4 ShadeSurface(const pass_info_t *pi, __global const float *halton,
     B = TransformNormal(B, &tr->inv_xform);
     T = TransformNormal(T, &tr->inv_xform);
 
-    float4 albedo = SampleTextureAnisotropic(texture_atlas, &textures[mat->textures[MAIN_TEXTURE]], uvs, duv_dx, duv_dy);
+    float4 albedo = SampleTextureAnisotropic(texture_atlas, &textures[mat->textures[MAIN_TEXTURE]], uvs, surf_der.duv_dx, surf_der.duv_dy);
     albedo.xyz *= mat->main_color;
     albedo = native_powr(albedo, 2.2f);
 
@@ -294,10 +302,10 @@ R"(
         if (should_consider_albedo(pi)) {
             r.c.xyz *= albedo.xyz;
         }
-        r.do_dx = do_dx;
-        r.do_dy = do_dy;
-        r.dd_dx = dd_dx - 2 * (dot(I, plane_N) * dndx + ddn_dx * plane_N);
-        r.dd_dy = dd_dy - 2 * (dot(I, plane_N) * dndy + ddn_dy * plane_N);
+        r.do_dx = surf_der.do_dx;
+        r.do_dy = surf_der.do_dy;
+        r.dd_dx = surf_der.dd_dx - 2 * (dot(I, plane_N) * surf_der.dndx + surf_der.ddn_dx * plane_N);
+        r.dd_dy = surf_der.dd_dy - 2 * (dot(I, plane_N) * surf_der.dndy + surf_der.ddn_dy * plane_N);
 
         const float thr = max(r.c.x, max(r.c.y, r.c.z));
         const float p = fract(halton[hi + 0] + rand_offset3, &_unused);
@@ -333,10 +341,10 @@ R"(
         r.o = (float4)(P + HIT_BIAS * plane_N, (float)px.x);
         r.d = (float4)(V, (float)px.y);
         r.c = orig_ray->c;
-        r.do_dx = do_dx;
-        r.do_dy = do_dy;
-        r.dd_dx = dd_dx - 2 * (dot(I, plane_N) * dndx + ddn_dx * plane_N);
-        r.dd_dy = dd_dy - 2 * (dot(I, plane_N) * dndy + ddn_dy * plane_N);
+        r.do_dx = surf_der.do_dx;
+        r.do_dy = surf_der.do_dy;
+        r.dd_dx = surf_der.dd_dx - 2 * (dot(I, plane_N) * surf_der.dndx + surf_der.ddn_dx * plane_N);
+        r.dd_dy = surf_der.dd_dy - 2 * (dot(I, plane_N) * surf_der.dndy + surf_der.ddn_dy * plane_N);
 
         const float thr = max(r.c.x, max(r.c.y, r.c.z));
         const float p = fract(halton[hi + 0] + rand_offset3, &_unused);
@@ -368,18 +376,18 @@ R"(
         V = temp * sin_phi * BB + z * V + temp * cos_phi * TT;
 
         float k = (eta - eta * eta * dot(I, plane_N) / dot(V, plane_N));
-        float dmdx = k * ddn_dx;
-        float dmdy = k * ddn_dy;
+        float dmdx = k * surf_der.ddn_dx;
+        float dmdy = k * surf_der.ddn_dy;
 
         ray_packet_t r;
         r.o = (float4)(P + HIT_BIAS * I, (float)px.x);
         r.d = (float4)(V, (float)px.y);
         r.c.xyz = orig_ray->c.xyz * z;
         r.c.w = mat->ior;
-        r.do_dx = do_dx;
-        r.do_dy = do_dy;
-        r.dd_dx = eta * dd_dx - (m * dndx + dmdx * plane_N);
-        r.dd_dy = eta * dd_dy - (m * dndy + dmdy * plane_N);
+        r.do_dx = surf_der.do_dx;
+        r.do_dy = surf_der.do_dy;
+        r.dd_dx = eta * surf_der.dd_dx - (m * surf_der.dndx + dmdx * plane_N);
+        r.dd_dy = eta * surf_der.dd_dy - (m * surf_der.dndy + dmdy * plane_N);
 
         float _unused;
 
@@ -399,10 +407,10 @@ R"(
         r.o = (float4)(P + HIT_BIAS * I, (float)px.x);
         r.d = orig_ray->d;
         r.c = orig_ray->c;
-        r.do_dx = do_dx;
-        r.do_dy = do_dy;
-        r.dd_dx = dd_dx;
-        r.dd_dy = dd_dy;
+        r.do_dx = surf_der.do_dx;
+        r.do_dy = surf_der.do_dy;
+        r.dd_dx = surf_der.dd_dx;
+        r.dd_dy = surf_der.dd_dy;
 
         float _unused;
 

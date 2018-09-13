@@ -100,6 +100,13 @@ typedef struct _pass_info_t {
     uint flags;
 } pass_info_t;
 
+typedef struct _derivatives_t {
+    float3 do_dx, do_dy, dd_dx, dd_dy;
+    float2 duv_dx, duv_dy;
+    float3 dndx, dndy;
+    float ddn_dx, ddn_dy;
+} derivatives_t;
+
 __kernel void TypesCheck(ray_packet_t r, camera_t c, tri_accel_t t, hit_data_t i,
                          bvh_node_t b, vertex_t v, mesh_t m, mesh_instance_t mi, transform_t tr,
                          texture_t tex, material_t mat, light_t l, environment_t env, ray_chunk_t ch,
