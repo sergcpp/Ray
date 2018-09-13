@@ -49,6 +49,10 @@
         { const int i = 0; exp }    \
     }
 
+#define ITERATE_2(exp)  \
+        { const int i = 0; exp }    \
+        { const int i = 1; exp }
+
 #define ITERATE_3(exp)  \
         { const int i = 0; exp }    \
         { const int i = 1; exp }    \

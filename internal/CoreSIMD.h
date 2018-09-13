@@ -60,6 +60,14 @@ struct environment_t {
     uint32_t env_map;
 };
 
+template <int S>
+struct derivatives_t {
+    simd_fvec<S> do_dx[3], dd_dx[3], do_dy[3], dd_dy[3];
+    simd_fvec<S> duv_dx[2], duv_dy[2];
+    simd_fvec<S> dndx[3], dndy[3];
+    simd_fvec<S> ddn_dx, ddn_dy;
+};
+
 // Generating rays
 template <int DimX, int DimY>
 void GeneratePrimaryRays(const int iteration, const camera_t &cam, const rect_t &r, int w, int h, const float *halton, aligned_vector<ray_packet_t<DimX * DimY>> &out_rays);
@@ -131,6 +139,12 @@ void ComputeDirectLighting(const simd_fvec<S> P[3], const simd_fvec<S> N[3], con
                            const uint32_t *vtx_indices, const vertex_t *vertices, const bvh_node_t *nodes, uint32_t node_index,
                            const tri_accel_t *tris, const uint32_t *tri_indices, const light_t *lights,
                            const uint32_t *li_indices, uint32_t light_node_index, const simd_ivec<S> &ray_mask, simd_fvec<S> *out_col);
+
+// Compute derivatives at hit point
+template <int S>
+void ComputeDerivatives(const simd_fvec<S> I[3], simd_fvec<S> t, const simd_fvec<S> do_dx[3], const simd_fvec<S> do_dy[3], const simd_fvec<S> dd_dx[3], const simd_fvec<S> dd_dy[3],
+                        const simd_fvec<S> p1[3], const simd_fvec<S> p2[3], const simd_fvec<S> p3[3], const simd_fvec<S> n1[3], const simd_fvec<S> n2[3], const simd_fvec<S> n3[3],
+                        const simd_fvec<S> u1[2], const simd_fvec<S> u2[2], const simd_fvec<S> u3[2], const simd_fvec<S> plane_N[3], derivatives_t<S> &out_der);
 
 // Shade
 template <int S>
@@ -1700,6 +1714,93 @@ void Ray::NS::ComputeDirectLighting(const simd_fvec<S> P[3], const simd_fvec<S> 
 }
 
 template <int S>
+void Ray::NS::ComputeDerivatives(const simd_fvec<S> I[3], simd_fvec<S> t, const simd_fvec<S> do_dx[3], const simd_fvec<S> do_dy[3], const simd_fvec<S> dd_dx[3], const simd_fvec<S> dd_dy[3],
+                                 const simd_fvec<S> p1[3], const simd_fvec<S> p2[3], const simd_fvec<S> p3[3], const simd_fvec<S> n1[3], const simd_fvec<S> n2[3], const simd_fvec<S> n3[3],
+                                 const simd_fvec<S> u1[2], const simd_fvec<S> u2[2], const simd_fvec<S> u3[2], const simd_fvec<S> plane_N[3], derivatives_t<S> &out_der) {
+    // From 'Tracing Ray Differentials' [1999]
+
+    simd_fvec<S> temp[3];
+
+    simd_fvec<S> dot_I_N = -dot(I, plane_N);
+    simd_fvec<S> inv_dot = 1.0f / dot_I_N;
+    where(abs(dot_I_N) < FLT_EPS, inv_dot) = { 0.0f };
+
+    ITERATE_3({ temp[i] = do_dx[i] + t * dd_dx[i]; })
+
+    simd_fvec<S> dt_dx = -dot(temp, plane_N) * inv_dot;
+    ITERATE_3({ out_der.do_dx[i] = temp[i] + dt_dx * I[i]; })
+    ITERATE_3({ out_der.dd_dx[i] = dd_dx[i]; })
+
+    ITERATE_3({ temp[i] = do_dy[i] + t * dd_dy[i]; })
+
+    simd_fvec<S> dt_dy = -dot(temp, plane_N) * inv_dot;
+    ITERATE_3({ out_der.do_dy[i] = temp[i] + dt_dy * I[i]; })
+    ITERATE_3({ out_der.dd_dy[i] = dd_dy[i]; })
+
+    // From 'Physically Based Rendering: ...' book
+
+    simd_fvec<S> duv13[2] = { u1[0] - u3[0], u1[1] - u3[1] },
+                 duv23[2] = { u2[0] - u3[0], u2[1] - u3[1] };
+    simd_fvec<S> dp13[3] = { p1[0] - p3[0], p1[1] - p3[1], p1[2] - p3[2] },
+                 dp23[3] = { p2[0] - p3[0], p2[1] - p3[1], p2[2] - p3[2] };
+
+    simd_fvec<S> det_uv = duv13[0] * duv23[1] - duv13[1] * duv23[0];
+    simd_fvec<S> inv_det_uv = 1.0f / det_uv;
+    where(abs(det_uv) < FLT_EPS, inv_det_uv) = 0.0f;
+
+    const simd_fvec<S> dpdu[3] = { (duv23[1] * dp13[0] - duv13[1] * dp23[0]) * inv_det_uv,
+                                   (duv23[1] * dp13[1] - duv13[1] * dp23[1]) * inv_det_uv,
+                                   (duv23[1] * dp13[2] - duv13[1] * dp23[2]) * inv_det_uv };
+    const simd_fvec<S> dpdv[3] = { (-duv23[0] * dp13[0] + duv13[0] * dp23[0]) * inv_det_uv,
+                                   (-duv23[0] * dp13[1] + duv13[0] * dp23[1]) * inv_det_uv,
+                                   (-duv23[0] * dp13[2] + duv13[0] * dp23[2]) * inv_det_uv };
+
+    simd_fvec<S> A[2][2] = { { dpdu[0], dpdu[1] },{ dpdv[0], dpdv[1] } };
+    simd_fvec<S> Bx[2] = { out_der.do_dx[0], out_der.do_dx[1] };
+    simd_fvec<S> By[2] = { out_der.do_dy[0], out_der.do_dy[1] };
+
+    auto mask1 = abs(plane_N[0]) > abs(plane_N[1]) & abs(plane_N[0]) > abs(plane_N[2]);
+    where(mask1, A[0][0]) = dpdu[1];
+    where(mask1, A[0][1]) = dpdu[2];
+    where(mask1, A[1][0]) = dpdv[1];
+    where(mask1, A[1][1]) = dpdv[2];
+    where(mask1, Bx[0]) = out_der.do_dx[1];
+    where(mask1, Bx[1]) = out_der.do_dx[2];
+    where(mask1, By[0]) = out_der.do_dy[1];
+    where(mask1, By[1]) = out_der.do_dy[2];
+
+    auto mask2 = abs(plane_N[1]) > abs(plane_N[0]) & abs(plane_N[1]) > abs(plane_N[2]);
+    where(mask2, A[0][1]) = dpdu[2];
+    where(mask2, A[1][1]) = dpdv[2];
+    where(mask2, Bx[1]) = out_der.do_dx[2];
+    where(mask2, By[1]) = out_der.do_dy[2];
+
+    simd_fvec<S> det = A[0][0] * A[1][1] - A[1][0] * A[0][1];
+    simd_fvec<S> inv_det = 1.0f / det;
+    where(abs(det) < FLT_EPS, inv_det) = { 0.0f };
+
+    ITERATE_2({ out_der.duv_dx[i] = (A[i][0] * Bx[0] - A[i][1] * Bx[1]) * inv_det; })
+    ITERATE_2({ out_der.duv_dy[i] = (A[i][0] * By[0] - A[i][1] * By[1]) * inv_det; })
+
+    // Derivative for normal
+
+    simd_fvec<S> dn1[3] = { n1[0] - n3[0], n1[1] - n3[1], n1[2] - n3[2] },
+                 dn2[3] = { n2[0] - n3[0], n2[1] - n3[1], n2[2] - n3[2] };
+    simd_fvec<S> dndu[3] = { (duv23[1] * dn1[0] - duv13[1] * dn2[0]) * inv_det_uv,
+                             (duv23[1] * dn1[1] - duv13[1] * dn2[1]) * inv_det_uv,
+                             (duv23[1] * dn1[2] - duv13[1] * dn2[2]) * inv_det_uv };
+    simd_fvec<S> dndv[3] = { (-duv23[0] * dn1[0] + duv13[0] * dn2[0]) * inv_det_uv,
+                             (-duv23[0] * dn1[1] + duv13[0] * dn2[1]) * inv_det_uv,
+                             (-duv23[0] * dn1[2] + duv13[0] * dn2[2]) * inv_det_uv };
+
+    ITERATE_3({ out_der.dndx[i] = dndu[i] * out_der.duv_dx[0] + dndv[i] * out_der.duv_dx[1]; })
+    ITERATE_3({ out_der.dndy[i] = dndu[i] * out_der.duv_dy[0] + dndv[i] * out_der.duv_dy[1]; })
+
+    out_der.ddn_dx = dot(out_der.dd_dx, plane_N) + dot(I, out_der.dndx);
+    out_der.ddn_dy = dot(out_der.dd_dy, plane_N) + dot(I, out_der.dndy);
+}
+
+template <int S>
 void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, const float *halton, const hit_data_t<S> &inter, const ray_packet_t<S> &ray,
                            const environment_t &env, const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
                            const mesh_t *meshes, const transform_t *transforms, const uint32_t *vtx_indices, const vertex_t *vertices,
@@ -1773,15 +1874,12 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
         uint32_t mi = tri.mi;
         mat_index[i] = reinterpret_cast<const int&>(mi);
 
-        const int _next_u[] = { 1, 0, 0 }, _next_v[] = { 2, 2, 1 };
-        int32_t _iw = tri.ci & TRI_W_BITS;
+        float _plane_N[3];
+        ExtractPlaneNormal(tri, _plane_N);
 
-        float l = std::sqrt(1.0f + tri.nu * tri.nu + tri.nv * tri.nv);
-        if (tri.ci & TRI_INV_NORMAL_BIT) l = -l;
-
-        N[_iw][i] = 1.0f / l;
-        N[_next_u[_iw]][i] = tri.nu / l;
-        N[_next_v[_iw]][i] = tri.nv / l;
+        N[0][i] = _plane_N[0];
+        N[1][i] = _plane_N[1];
+        N[2][i] = _plane_N[2];
 
         const auto *tr = &transforms[mesh_instances[inter.obj_index[i]].tr_index];
 
@@ -1799,97 +1897,8 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
     simd_fvec<S> uvs[2] = { u1[0] * w + u2[0] * inter.u + u3[0] * inter.v,
                             u1[1] * w + u2[1] * inter.u + u3[1] * inter.v };
 
-    // From 'Tracing Ray Differentials' [1999]
-
-    simd_fvec<S> temp[3];
-
-    simd_fvec<S> dot_I_N = -dot(I, plane_N);
-    simd_fvec<S> inv_dot = 1.0f / dot_I_N;
-    where(abs(dot_I_N) < FLT_EPS, inv_dot) = { 0.0f };
-
-    temp[0] = ray.do_dx[0] + inter.t * ray.dd_dx[0];
-    temp[1] = ray.do_dx[1] + inter.t * ray.dd_dx[1];
-    temp[2] = ray.do_dx[2] + inter.t * ray.dd_dx[2];
-
-    simd_fvec<S> dt_dx = -dot(temp, plane_N) * inv_dot;
-    simd_fvec<S> do_dx[3] = { temp[0] + dt_dx * I[0], temp[1] + dt_dx * I[1], temp[2] + dt_dx * I[2] };
-    simd_fvec<S> dd_dx[3] = { ray.dd_dx[0], ray.dd_dx[1], ray.dd_dx[2] };
-
-    temp[0] = ray.do_dy[0] + inter.t * ray.dd_dy[0];
-    temp[1] = ray.do_dy[1] + inter.t * ray.dd_dy[1];
-    temp[2] = ray.do_dy[2] + inter.t * ray.dd_dy[2];
-
-    simd_fvec<S> dt_dy = -dot(temp, plane_N) * inv_dot;
-    simd_fvec<S> do_dy[3] = { temp[0] + dt_dy * I[0], temp[1] + dt_dy * I[1], temp[2] + dt_dy * I[2] };
-    simd_fvec<S> dd_dy[3] = { ray.dd_dy[0], ray.dd_dy[1], ray.dd_dy[2] };
-
-    // From 'Physically Based Rendering: ...' book
-
-    simd_fvec<S> duv13[2] = { u1[0] - u3[0], u1[1] - u3[1] },
-                 duv23[2] = { u2[0] - u3[0], u2[1] - u3[1] };
-    simd_fvec<S> dp13[3] = { p1[0] - p3[0], p1[1] - p3[1], p1[2] - p3[2] },
-                 dp23[3] = { p2[0] - p3[0], p2[1] - p3[1], p2[2] - p3[2] };
-
-    simd_fvec<S> det_uv = duv13[0] * duv23[1] - duv13[1] * duv23[0];
-    simd_fvec<S> inv_det_uv = 1.0f / det_uv;
-    where(abs(det_uv) < FLT_EPS, inv_det_uv) = 0.0f;
-
-    const simd_fvec<S> dpdu[3] = { (duv23[1] * dp13[0] - duv13[1] * dp23[0]) * inv_det_uv,
-                                   (duv23[1] * dp13[1] - duv13[1] * dp23[1]) * inv_det_uv,
-                                   (duv23[1] * dp13[2] - duv13[1] * dp23[2]) * inv_det_uv };
-    const simd_fvec<S> dpdv[3] = { (-duv23[0] * dp13[0] + duv13[0] * dp23[0]) * inv_det_uv,
-                                   (-duv23[0] * dp13[1] + duv13[0] * dp23[1]) * inv_det_uv,
-                                   (-duv23[0] * dp13[2] + duv13[0] * dp23[2]) * inv_det_uv };
-
-    simd_fvec<S> A[2][2] = { { dpdu[0], dpdu[1] }, { dpdv[0], dpdv[1] } };
-    simd_fvec<S> Bx[2] = { do_dx[0], do_dx[1] };
-    simd_fvec<S> By[2] = { do_dy[0], do_dy[1] };
-
-    auto mask1 = abs(plane_N[0]) > abs(plane_N[1]) & abs(plane_N[0]) > abs(plane_N[2]);
-    where(mask1, A[0][0]) = dpdu[1];
-    where(mask1, A[0][1]) = dpdu[2];
-    where(mask1, A[1][0]) = dpdv[1];
-    where(mask1, A[1][1]) = dpdv[2];
-    where(mask1, Bx[0]) = do_dx[1];
-    where(mask1, Bx[1]) = do_dx[2];
-    where(mask1, By[0]) = do_dy[1];
-    where(mask1, By[1]) = do_dy[2];
-
-    auto mask2 = abs(plane_N[1]) > abs(plane_N[0]) & abs(plane_N[1]) > abs(plane_N[2]);
-    where(mask2, A[0][1]) = dpdu[2];
-    where(mask2, A[1][1]) = dpdv[2];
-    where(mask2, Bx[1]) = do_dx[2];
-    where(mask2, By[1]) = do_dy[2];
-
-    simd_fvec<S> det = A[0][0] * A[1][1] - A[1][0] * A[0][1];
-    simd_fvec<S> inv_det = 1.0f / det;
-    where(abs(det) < FLT_EPS, inv_det) = { 0.0f };
-
-    simd_fvec<S> duv_dx[2] = { (A[0][0] * Bx[0] - A[0][1] * Bx[1]) * inv_det,
-                               (A[1][0] * Bx[0] - A[1][1] * Bx[1]) * inv_det };
-    simd_fvec<S> duv_dy[2] = { (A[0][0] * By[0] - A[0][1] * By[1]) * inv_det,
-                               (A[1][0] * By[0] - A[1][1] * By[1]) * inv_det };
-
-    // Derivative for normal
-
-    simd_fvec<S> dn1[3] = { n1[0] - n3[0], n1[1] - n3[1], n1[2] - n3[2] },
-                 dn2[3] = { n2[0] - n3[0], n2[1] - n3[1], n2[2] - n3[2] };
-    simd_fvec<S> dndu[3] = { (duv23[1] * dn1[0] - duv13[1] * dn2[0]) * inv_det_uv,
-                             (duv23[1] * dn1[1] - duv13[1] * dn2[1]) * inv_det_uv,
-                             (duv23[1] * dn1[2] - duv13[1] * dn2[2]) * inv_det_uv };
-    simd_fvec<S> dndv[3] = { (-duv23[0] * dn1[0] + duv13[0] * dn2[0]) * inv_det_uv,
-                             (-duv23[0] * dn1[1] + duv13[0] * dn2[1]) * inv_det_uv,
-                             (-duv23[0] * dn1[2] + duv13[0] * dn2[2]) * inv_det_uv };
-
-    simd_fvec<S> dndx[3] = { dndu[0] * duv_dx[0] + dndv[0] * duv_dx[1],
-                             dndu[1] * duv_dx[0] + dndv[1] * duv_dx[1],
-                             dndu[2] * duv_dx[0] + dndv[2] * duv_dx[1] };
-    simd_fvec<S> dndy[3] = { dndu[0] * duv_dy[0] + dndv[0] * duv_dy[1],
-                             dndu[1] * duv_dy[0] + dndv[1] * duv_dy[1],
-                             dndu[2] * duv_dy[0] + dndv[2] * duv_dy[1] };
-
-    simd_fvec<S> ddn_dx = dot(dd_dx, plane_N) + dot(I, dndx);
-    simd_fvec<S> ddn_dy = dot(dd_dy, plane_N) + dot(I, dndy);
+    derivatives_t<S> surf_der;
+    ComputeDerivatives(I, inter.t, ray.do_dx, ray.do_dy, ray.dd_dx, ray.dd_dy, p1, p2, p3, n1, n2, n3, u1, u2, u3, plane_N, surf_der);
 
     ////////////////////////////////////////////////////////
 
@@ -1995,7 +2004,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
             tex_normal[1] = tex_normal[1] * 2.0f - 1.0f;
             tex_normal[2] = tex_normal[2] * 2.0f - 1.0f;
 
-            SampleAnisotropic(tex_atlas, textures[mat->textures[MAIN_TEXTURE]], uvs, duv_dx, duv_dy, same_mi, tex_albedo);
+            SampleAnisotropic(tex_atlas, textures[mat->textures[MAIN_TEXTURE]], uvs, surf_der.duv_dx, surf_der.duv_dy, same_mi, tex_albedo);
 
             tex_albedo[0] = pow(tex_albedo[0] * mat->main_color[0], 2.2f);
             tex_albedo[1] = pow(tex_albedo[1] * mat->main_color[1], 2.2f);
@@ -2083,21 +2092,21 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                     where(new_ray_mask, r.c[2]) = rc[2];
                     where(new_ray_mask, r.ior) = ray.ior;
 
-                    where(new_ray_mask, r.do_dx[0]) = do_dx[0];
-                    where(new_ray_mask, r.do_dx[1]) = do_dx[1];
-                    where(new_ray_mask, r.do_dx[2]) = do_dx[2];
+                    where(new_ray_mask, r.do_dx[0]) = surf_der.do_dx[0];
+                    where(new_ray_mask, r.do_dx[1]) = surf_der.do_dx[1];
+                    where(new_ray_mask, r.do_dx[2]) = surf_der.do_dx[2];
 
-                    where(new_ray_mask, r.do_dy[0]) = do_dy[0];
-                    where(new_ray_mask, r.do_dy[1]) = do_dy[1];
-                    where(new_ray_mask, r.do_dy[2]) = do_dy[2];
+                    where(new_ray_mask, r.do_dy[0]) = surf_der.do_dy[0];
+                    where(new_ray_mask, r.do_dy[1]) = surf_der.do_dy[1];
+                    where(new_ray_mask, r.do_dy[2]) = surf_der.do_dy[2];
 
-                    where(new_ray_mask, r.dd_dx[0]) = dd_dx[0] - 2 * (dot(I, __N) * dndx[0] + ddn_dx * __N[0]);
-                    where(new_ray_mask, r.dd_dx[1]) = dd_dx[1] - 2 * (dot(I, __N) * dndx[1] + ddn_dx * __N[1]);
-                    where(new_ray_mask, r.dd_dx[2]) = dd_dx[2] - 2 * (dot(I, __N) * dndx[2] + ddn_dx * __N[2]);
+                    where(new_ray_mask, r.dd_dx[0]) = surf_der.dd_dx[0] - 2 * (dot(I, __N) * surf_der.dndx[0] + surf_der.ddn_dx * __N[0]);
+                    where(new_ray_mask, r.dd_dx[1]) = surf_der.dd_dx[1] - 2 * (dot(I, __N) * surf_der.dndx[1] + surf_der.ddn_dx * __N[1]);
+                    where(new_ray_mask, r.dd_dx[2]) = surf_der.dd_dx[2] - 2 * (dot(I, __N) * surf_der.dndx[2] + surf_der.ddn_dx * __N[2]);
 
-                    where(new_ray_mask, r.dd_dy[0]) = dd_dy[0] - 2 * (dot(I, __N) * dndy[0] + ddn_dy * __N[0]);
-                    where(new_ray_mask, r.dd_dy[1]) = dd_dy[1] - 2 * (dot(I, __N) * dndy[1] + ddn_dy * __N[1]);
-                    where(new_ray_mask, r.dd_dy[2]) = dd_dy[2] - 2 * (dot(I, __N) * dndy[2] + ddn_dy * __N[2]);
+                    where(new_ray_mask, r.dd_dy[0]) = surf_der.dd_dy[0] - 2 * (dot(I, __N) * surf_der.dndy[0] + surf_der.ddn_dy * __N[0]);
+                    where(new_ray_mask, r.dd_dy[1]) = surf_der.dd_dy[1] - 2 * (dot(I, __N) * surf_der.dndy[1] + surf_der.ddn_dy * __N[1]);
+                    where(new_ray_mask, r.dd_dy[2]) = surf_der.dd_dy[2] - 2 * (dot(I, __N) * surf_der.dndy[2] + surf_der.ddn_dy * __N[2]);
                 }
             } else if (mat->type == GlossyMaterial) {
                 simd_fvec<S> V[3], TT[3], BB[3];
@@ -2162,21 +2171,21 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                     where(new_ray_mask, r.c[2]) = rc[2];
                     where(new_ray_mask, r.ior) = ray.ior;
 
-                    where(new_ray_mask, r.do_dx[0]) = do_dx[0];
-                    where(new_ray_mask, r.do_dx[1]) = do_dx[1];
-                    where(new_ray_mask, r.do_dx[2]) = do_dx[2];
+                    where(new_ray_mask, r.do_dx[0]) = surf_der.do_dx[0];
+                    where(new_ray_mask, r.do_dx[1]) = surf_der.do_dx[1];
+                    where(new_ray_mask, r.do_dx[2]) = surf_der.do_dx[2];
 
-                    where(new_ray_mask, r.do_dy[0]) = do_dy[0];
-                    where(new_ray_mask, r.do_dy[1]) = do_dy[1];
-                    where(new_ray_mask, r.do_dy[2]) = do_dy[2];
+                    where(new_ray_mask, r.do_dy[0]) = surf_der.do_dy[0];
+                    where(new_ray_mask, r.do_dy[1]) = surf_der.do_dy[1];
+                    where(new_ray_mask, r.do_dy[2]) = surf_der.do_dy[2];
 
-                    where(new_ray_mask, r.dd_dx[0]) = dd_dx[0] - 2.0f * (dot_I_N2 * dndx[0] + ddn_dx * __N[0]);
-                    where(new_ray_mask, r.dd_dx[1]) = dd_dx[1] - 2.0f * (dot_I_N2 * dndx[1] + ddn_dx * __N[1]);
-                    where(new_ray_mask, r.dd_dx[2]) = dd_dx[2] - 2.0f * (dot_I_N2 * dndx[2] + ddn_dx * __N[2]);
+                    where(new_ray_mask, r.dd_dx[0]) = surf_der.dd_dx[0] - 2.0f * (dot_I_N2 * surf_der.dndx[0] + surf_der.ddn_dx * __N[0]);
+                    where(new_ray_mask, r.dd_dx[1]) = surf_der.dd_dx[1] - 2.0f * (dot_I_N2 * surf_der.dndx[1] + surf_der.ddn_dx * __N[1]);
+                    where(new_ray_mask, r.dd_dx[2]) = surf_der.dd_dx[2] - 2.0f * (dot_I_N2 * surf_der.dndx[2] + surf_der.ddn_dx * __N[2]);
 
-                    where(new_ray_mask, r.dd_dy[0]) = dd_dy[0] - 2.0f * (dot_I_N2 * dndy[0] + ddn_dy * __N[0]);
-                    where(new_ray_mask, r.dd_dy[1]) = dd_dy[1] - 2.0f * (dot_I_N2 * dndy[1] + ddn_dy * __N[1]);
-                    where(new_ray_mask, r.dd_dy[2]) = dd_dy[2] - 2.0f * (dot_I_N2 * dndy[2] + ddn_dy * __N[2]);
+                    where(new_ray_mask, r.dd_dy[0]) = surf_der.dd_dy[0] - 2.0f * (dot_I_N2 * surf_der.dndy[0] + surf_der.ddn_dy * __N[0]);
+                    where(new_ray_mask, r.dd_dy[1]) = surf_der.dd_dy[1] - 2.0f * (dot_I_N2 * surf_der.dndy[1] + surf_der.ddn_dy * __N[1]);
+                    where(new_ray_mask, r.dd_dy[2]) = surf_der.dd_dy[2] - 2.0f * (dot_I_N2 * surf_der.dndy[2] + surf_der.ddn_dy * __N[2]);
                 }
             } else if (mat->type == RefractiveMaterial) {
                 simd_fvec<S> _NN[3] = { __N[0], __N[1], __N[2] };
@@ -2230,8 +2239,8 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                 }
 
                 simd_fvec<S> k = (eta - eta * eta * dot(I, plane_N) / dot(V, plane_N));
-                simd_fvec<S> dmdx = k * ddn_dx;
-                simd_fvec<S> dmdy = k * ddn_dy;
+                simd_fvec<S> dmdx = k * surf_der.ddn_dx;
+                simd_fvec<S> dmdy = k * surf_der.ddn_dy;
 
                 simd_fvec<S> thres = dot(rc, rc);
 
@@ -2262,21 +2271,21 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                     where(new_ray_mask, r.c[2]) = rc[2];
                     where(new_ray_mask, r.ior) = mat->ior;
 
-                    where(new_ray_mask, r.do_dx[0]) = do_dx[0];
-                    where(new_ray_mask, r.do_dx[1]) = do_dx[1];
-                    where(new_ray_mask, r.do_dx[2]) = do_dx[2];
+                    where(new_ray_mask, r.do_dx[0]) = surf_der.do_dx[0];
+                    where(new_ray_mask, r.do_dx[1]) = surf_der.do_dx[1];
+                    where(new_ray_mask, r.do_dx[2]) = surf_der.do_dx[2];
 
-                    where(new_ray_mask, r.do_dy[0]) = do_dy[0];
-                    where(new_ray_mask, r.do_dy[1]) = do_dy[1];
-                    where(new_ray_mask, r.do_dy[2]) = do_dy[2];
+                    where(new_ray_mask, r.do_dy[0]) = surf_der.do_dy[0];
+                    where(new_ray_mask, r.do_dy[1]) = surf_der.do_dy[1];
+                    where(new_ray_mask, r.do_dy[2]) = surf_der.do_dy[2];
 
-                    where(new_ray_mask, r.dd_dx[0]) = eta * dd_dx[0] - (m * dndx[0] + dmdx * plane_N[0]);
-                    where(new_ray_mask, r.dd_dx[1]) = eta * dd_dx[1] - (m * dndx[1] + dmdx * plane_N[1]);
-                    where(new_ray_mask, r.dd_dx[2]) = eta * dd_dx[2] - (m * dndx[2] + dmdx * plane_N[2]);
+                    where(new_ray_mask, r.dd_dx[0]) = eta * surf_der.dd_dx[0] - (m * surf_der.dndx[0] + dmdx * plane_N[0]);
+                    where(new_ray_mask, r.dd_dx[1]) = eta * surf_der.dd_dx[1] - (m * surf_der.dndx[1] + dmdx * plane_N[1]);
+                    where(new_ray_mask, r.dd_dx[2]) = eta * surf_der.dd_dx[2] - (m * surf_der.dndx[2] + dmdx * plane_N[2]);
 
-                    where(new_ray_mask, r.dd_dy[0]) = eta * dd_dy[0] - (m * dndy[0] + dmdy * plane_N[0]);
-                    where(new_ray_mask, r.dd_dy[1]) = eta * dd_dy[1] - (m * dndy[1] + dmdy * plane_N[1]);
-                    where(new_ray_mask, r.dd_dy[2]) = eta * dd_dy[2] - (m * dndy[2] + dmdy * plane_N[2]);
+                    where(new_ray_mask, r.dd_dy[0]) = eta * surf_der.dd_dy[0] - (m * surf_der.dndy[0] + dmdy * plane_N[0]);
+                    where(new_ray_mask, r.dd_dy[1]) = eta * surf_der.dd_dy[1] - (m * surf_der.dndy[1] + dmdy * plane_N[1]);
+                    where(new_ray_mask, r.dd_dy[2]) = eta * surf_der.dd_dy[2] - (m * surf_der.dndy[2] + dmdy * plane_N[2]);
                 }
             } else if (mat->type == EmissiveMaterial) {
                 const auto &mask = reinterpret_cast<const simd_fvec<S>&>(same_mi);
