@@ -1,13 +1,14 @@
 //#pragma once
+// This file is compiled many times for different simd architectures (SSE, NEON...).
+// Macro 'NS' defines a namespace in which everything will be located, so it should be set before including this file.
+// Macros 'USE_XXX' define template instantiation of simd_fvec, simd_ivec classes.
+// Template parameter S defines width of vectors used. Usualy it is equal to ray packet size.
 
 #include <vector>
 
 #include "TextureAtlasRef.h"
 
 #include "simd/simd_vec.h"
-
-#pragma warning(push)
-#pragma warning(disable : 4752)
 
 namespace Ray {
 namespace NS {
@@ -2305,5 +2306,3 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
         out_secondary_rays[index].xy = ray.xy;
     }
 }
-
-#pragma warning(pop)

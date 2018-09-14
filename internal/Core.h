@@ -111,12 +111,16 @@ struct prim_t;
 template <typename T>
 using aligned_vector = std::vector<T, aligned_allocator<T, alignof(T)>>;
 
+// Creates struct of precomputed triangle data for faster Plucker intersection test
 void PreprocessTri(const float *p, int stride, tri_accel_t *acc);
+// Extructs planar trianble normal from precomputed triangle data
 void ExtractPlaneNormal(const tri_accel_t &tri, float *out_normal);
 
+// Builds BVH for mesh and precomputes triangle data
 uint32_t PreprocessMesh(const float *attrs, size_t attrs_count, const uint32_t *indices, size_t indices_count, eVertexLayout layout,
                         bool allow_spatial_splits, std::vector<bvh_node_t> &out_nodes, std::vector<tri_accel_t> &out_tris, std::vector<uint32_t> &out_indices);
 
+// Builds BVH for arbitrary primitives (using their bounding boxes), used to build macro tree
 uint32_t PreprocessPrims(const prim_t *prims, size_t prims_count, const float *positions, size_t stride,
                          bool allow_spatial_splits, std::vector<bvh_node_t> &out_nodes, std::vector<uint32_t> &out_indices);
 
@@ -124,10 +128,12 @@ bool NaiivePluckerTest(const float p[9], const float o[3], const float d[3]);
 
 void ConstructCamera(eCamType type, eFilterType filter, const float origin[3], const float fwd[3], float fov, float gamma, float focus_distance, float focus_factor, camera_t *cam);
 
+// Applies 4x4 matrix matrix transform to bounding box
 void TransformBoundingBox(const float bbox[2][3], const float *xform, float out_bbox[2][3]);
 
 void InverseMatrix(const float mat[16], float out_mat[16]);
 
+// Arrays of prime numbers, used to generate halton sequence for sampling
 const int PrimesCount = 24;
 const int g_primes[PrimesCount] =     { 2, 3, 5, 7,  11, 13, 17, 19, 23, 29,  31,  37,  41,  43,  47,  53,  59,  61,  67,  71,  73,  79,  83,  89  };
 const int g_prime_sums[PrimesCount] = { 0, 2, 5, 10, 17, 28, 41, 58, 77, 100, 129, 160, 197, 238, 281, 328, 381, 440, 501, 568, 639, 712, 791, 874 };
@@ -136,6 +142,8 @@ const int HALTON_COUNT = PrimesCount;
 const int HALTON_2D_COUNT = PrimesCount / 2;
 const int HALTON_SEQ_LEN = 256;
 
+// Sampling stages must be independent from each other (otherwise it may lead to artifacts), so different halton sequences at each ray bounce must be used.
+// This leads to limited number of bounces. Can be easily fixed by generating huge primes table above, but i do not need it for now.
 static_assert(MAX_BOUNCES + 2 <= HALTON_2D_COUNT, "!");
 
 struct vertex_t {

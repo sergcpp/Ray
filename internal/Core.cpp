@@ -19,6 +19,7 @@ force_inline Ref::simd_fvec3 cross(const Ref::simd_fvec3 &v1, const Ref::simd_fv
 }
 }
 
+// Used for fast color conversion
 const float Ray::uint8_to_float_table[] = {
     0.000000000f, 0.003921569f, 0.007843138f, 0.011764706f, 0.015686275f, 0.019607844f, 0.023529412f, 0.027450981f, 0.031372551f, 0.035294119f, 0.039215688f, 0.043137256f, 0.047058824f, 0.050980393f, 0.054901961f, 0.058823530f,
     0.062745102f, 0.066666670f, 0.070588239f, 0.074509807f, 0.078431375f, 0.082352944f, 0.086274512f, 0.090196081f, 0.094117649f, 0.098039217f, 0.101960786f, 0.105882354f, 0.109803922f, 0.113725491f, 0.117647059f, 0.121568628f,
@@ -38,8 +39,10 @@ const float Ray::uint8_to_float_table[] = {
     0.941176474f, 0.945098042f, 0.949019611f, 0.952941179f, 0.956862748f, 0.960784316f, 0.964705884f, 0.968627453f, 0.972549021f, 0.976470590f, 0.980392158f, 0.984313726f, 0.988235295f, 0.992156863f, 0.996078432f, 1.000000000f,
 };
 
+// Used to convert 16x16 sphere sector coordinates to single value
 const uint8_t Ray::morton_table_16[] = { 0, 1, 4, 5, 16, 17, 20, 21, 64, 65, 68, 69, 80, 81, 84, 85 };
 
+// Used to convert 256x256x256 grid coordinates to single value, i think it leads to more uniform distribution than (z << 16) | (y << 8) | (x << 0)
 const int Ray::morton_table_256[] = {
     0,          1,          8,          9,          64,         65,         72,         73,         512,        513,        520,        521,        576,        577,        584,        585,
     4096,       4097,       4104,       4105,       4160,       4161,       4168,       4169,       4608,       4609,       4616,       4617,       4672,       4673,       4680,       4681,
@@ -59,9 +62,11 @@ const int Ray::morton_table_256[] = {
     2396160,    2396161,    2396168,    2396169,    2396224,    2396225,    2396232,    2396233,    2396672,    2396673,    2396680,    2396681,    2396736,    2396737,    2396744,    2396745
 };
 
+// Used to bind horizontal vector angle to sector on sphere
 const float Ray::omega_step = 0.0625f;
 const char Ray::omega_table[] = { 15, 14, 13, 12, 12, 11, 11, 11, 10, 10, 9, 9, 9, 8, 8, 8, 8, 7, 7, 7, 6, 6, 6, 5, 5, 4, 4, 4, 3, 3, 2, 1, 0 };
 
+// Used to bind vectical vector angle to sector on sphere
 const float Ray::phi_step = 0.125f;
 const char Ray::phi_table[][17] = { { 2,  2,  2,  2,  2,  3,  3,  3,  4,  4,  4,  4,  5,  5,  5,  5,  6  },
                                     { 1,  2,  2,  2,  2,  2,  3,  3,  4,  4,  4,  5,  5,  5,  5,  6,  6  },
@@ -292,11 +297,11 @@ bool Ray::NaiivePluckerTest(const float p[9], const float o[3], const float d[3]
                     p[8] * p[0] - p[6] * p[2],
                     p[6] * p[1] - p[7] * p[0]
                   },
-                  e1[6] = { p[3] - p[6], p[4] - p[7], p[5] - p[8],
-                            p[4] * p[8] - p[5] * p[7],
-                            p[5] * p[6] - p[3] * p[8],
-                            p[3] * p[7] - p[4] * p[6]
-                          },
+                e1[6] = { p[3] - p[6], p[4] - p[7], p[5] - p[8],
+                        p[4] * p[8] - p[5] * p[7],
+                        p[5] * p[6] - p[3] * p[8],
+                        p[3] * p[7] - p[4] * p[6]
+                        },
                           e2[6] = { p[0] - p[3], p[1] - p[4], p[2] - p[5],
                                     p[1] * p[5] - p[2] * p[4],
                                     p[2] * p[3] - p[0] * p[5],
