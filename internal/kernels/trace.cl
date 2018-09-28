@@ -56,8 +56,10 @@ void TracePrimaryRays(__global const ray_packet_t *rays, int w,
     __local uint shared_stack[MAX_STACK_SIZE * TRACE_GROUP_SIZE_X * TRACE_GROUP_SIZE_Y];
     __local uint *stack = &shared_stack[MAX_STACK_SIZE * (get_local_id(1) * TRACE_GROUP_SIZE_X + get_local_id(0))];
 
-    Traverse_MacroTree_WithLocalStack(orig_r_o.xyz, orig_r_d.xyz, orig_inv_d, mesh_instances, mi_indices, meshes, transforms,
-                                      nodes, node_index, tris, tri_indices, stack, &inter);
+    if (node_index != 0xffffffff) {
+        Traverse_MacroTree_WithLocalStack(orig_r_o.xyz, orig_r_d.xyz, orig_inv_d, mesh_instances, mi_indices, meshes, transforms,
+                                          nodes, node_index, tris, tri_indices, stack, &inter);
+    }
 
     out_prim_inters[index] = inter;
 }
@@ -85,8 +87,10 @@ void TracePrimaryRaysImg(__global const ray_packet_t *rays, int w,
     __local uint shared_stack[MAX_STACK_SIZE * TRACE_GROUP_SIZE_X * TRACE_GROUP_SIZE_Y];
     __local uint *stack = &shared_stack[MAX_STACK_SIZE * (get_local_id(1) * TRACE_GROUP_SIZE_X + get_local_id(0))];
 
-    Traverse_MacroTreeImg_WithLocalStack(orig_r_o.xyz, orig_r_d.xyz, orig_inv_d, mesh_instances, mi_indices, meshes, transforms,
-                                         nodes, node_index, tris, tri_indices, stack, &inter);
+    if (node_index != 0xffffffff) {
+        Traverse_MacroTreeImg_WithLocalStack(orig_r_o.xyz, orig_r_d.xyz, orig_inv_d, mesh_instances, mi_indices, meshes, transforms,
+                                             nodes, node_index, tris, tri_indices, stack, &inter);
+    }
 
     out_prim_inters[index] = inter;
 }
@@ -114,8 +118,10 @@ void TraceSecondaryRays(__global const ray_packet_t *rays,
     __local uint shared_stack[MAX_STACK_SIZE * TRACE_GROUP_SIZE_X * TRACE_GROUP_SIZE_Y];
     __local uint *stack = &shared_stack[MAX_STACK_SIZE * (get_local_id(1) * TRACE_GROUP_SIZE_X + get_local_id(0))];
 
-    Traverse_MacroTree_WithLocalStack(orig_r_o.xyz, orig_r_d.xyz, orig_inv_d, mesh_instances, mi_indices, meshes, transforms,
-                                      nodes, node_index, tris, tri_indices, stack, &inter);
+    if (node_index != 0xffffffff) {
+        Traverse_MacroTree_WithLocalStack(orig_r_o.xyz, orig_r_d.xyz, orig_inv_d, mesh_instances, mi_indices, meshes, transforms,
+                                          nodes, node_index, tris, tri_indices, stack, &inter);
+    }
 
     out_prim_inters[index] = inter;
 }
@@ -143,8 +149,10 @@ void TraceSecondaryRaysImg(__global const ray_packet_t *rays,
     __local uint shared_stack[MAX_STACK_SIZE * TRACE_GROUP_SIZE_X * TRACE_GROUP_SIZE_Y];
     __local uint *stack = &shared_stack[MAX_STACK_SIZE * (get_local_id(1) * TRACE_GROUP_SIZE_X + get_local_id(0))];
 
-    Traverse_MacroTreeImg_WithLocalStack(orig_r_o.xyz, orig_r_d.xyz, orig_inv_d, mesh_instances, mi_indices, meshes, transforms,
-                                         nodes, node_index, tris, tri_indices, stack, &inter);
+    if (node_index != 0xffffffff) {
+        Traverse_MacroTreeImg_WithLocalStack(orig_r_o.xyz, orig_r_d.xyz, orig_inv_d, mesh_instances, mi_indices, meshes, transforms,
+                                             nodes, node_index, tris, tri_indices, stack, &inter);
+    }
 
     out_prim_inters[index] = inter;
 }

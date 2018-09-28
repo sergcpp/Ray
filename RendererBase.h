@@ -24,7 +24,7 @@ enum eRendererType {
 */
 class RegionContext {
     /// Rectangle on image
-    const rect_t rect_;
+    rect_t rect_;
 public:
     int iteration = 0;                      ///< Number of rendered samples per pixel
     std::unique_ptr<float[]> halton_seq;    ///< Sequense of random 2D points

@@ -43,6 +43,7 @@ class Renderer : public RendererBase {
     std::vector<PassData> pass_cache_;
 
     stats_t stats_ = { 0 };
+    int w_ = 0, h_ = 0;
 
     std::vector<uint16_t> permutations_;
     void UpdateHaltonSequence(int iteration, std::unique_ptr<float[]> &seq);
@@ -60,9 +61,13 @@ public:
     }
 
     void Resize(int w, int h) override {
-        clean_buf_.Resize(w, h);
-        final_buf_.Resize(w, h);
-        temp_buf_.Resize(w, h);
+        if (w_ != w || h_ != h) {
+            clean_buf_.Resize(w, h);
+            final_buf_.Resize(w, h);
+            temp_buf_.Resize(w, h);
+
+            w_ = w; h_ = h;
+        }
     }
 
     void Clear(const pixel_color_t &c) override {

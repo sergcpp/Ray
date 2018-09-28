@@ -67,8 +67,18 @@ void Ray::Ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
     const auto &tex_atlas = s->texture_atlas_;
     const auto &env = s->env_;
 
-    const float *root_min = nodes[macro_tree_root].bbox[0], *root_max = nodes[macro_tree_root].bbox[1];
-    const float cell_size[3] = { (root_max[0] - root_min[0]) / 255, (root_max[1] - root_min[1]) / 255, (root_max[2] - root_min[2]) / 255 };
+    float root_min[3], cell_size[3];
+
+    if (macro_tree_root != 0xffffffff) {
+        root_min[0] = nodes[macro_tree_root].bbox[0][0];
+        root_min[1] = nodes[macro_tree_root].bbox[0][1];
+        root_min[2] = nodes[macro_tree_root].bbox[0][2];
+
+        const float *root_max = nodes[macro_tree_root].bbox[1];
+        cell_size[0] = (root_max[0] - root_min[0]) / 255;
+        cell_size[1] = (root_max[1] - root_min[1]) / 255;
+        cell_size[2] = (root_max[2] - root_min[2]) / 255;
+    }
 
     const auto w = final_buf_.w(), h = final_buf_.h();
 
@@ -114,7 +124,10 @@ void Ray::Ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
 
             inter = {};
             inter.id = r.id;
-            Traverse_MacroTree_WithStack(r, nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, inter);
+
+            if (macro_tree_root != 0xffffffff) {
+                Traverse_MacroTree_WithStack(r, nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, inter);
+            }
         }
     } else {
         const auto &mi = mesh_instances[cam.mi_index];

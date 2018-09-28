@@ -54,6 +54,7 @@ class RendererSIMD : public RendererBase {
     std::vector<PassData<DimX * DimY>> pass_cache_;
 
     stats_t stats_ = { 0 };
+    int w_ = 0, h_ = 0;
 
     std::vector<uint16_t> permutations_;
     void UpdateHaltonSequence(int iteration, std::unique_ptr<float[]> &seq);
@@ -69,9 +70,13 @@ public:
     }
 
     void Resize(int w, int h) override {
-        clean_buf_.Resize(w, h);
-        final_buf_.Resize(w, h);
-        temp_buf_.Resize(w, h);
+        if (w_ != w || h_ != h) {
+            clean_buf_.Resize(w, h);
+            final_buf_.Resize(w, h);
+            temp_buf_.Resize(w, h);
+
+            w_ = w; h_ = h;
+        }
     }
     void Clear(const pixel_color_t &c) override {
         clean_buf_.Clear(c);
@@ -208,7 +213,10 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
 
             inter = {};
             inter.xy = r.xy;
-            NS::Traverse_MacroTree_WithStack(r, { -1 }, nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, inter);
+
+            if (macro_tree_root != 0xffffffff) {
+                NS::Traverse_MacroTree_WithStack(r, { -1 }, nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, inter);
+            }
         }
     } else {
         const auto &mi = mesh_instances[cam.mi_index];

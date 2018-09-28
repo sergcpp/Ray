@@ -47,7 +47,7 @@ protected:
     cl::Buffer prim_rays_buf_, prim_inters_buf_, color_table_buf_,
     secondary_rays_buf_, secondary_rays_count_buf_;
 
-    int w_, h_;
+    int w_ = 0, h_ = 0;
 
     std::vector<uint16_t> permutations_;
     int loaded_halton_;

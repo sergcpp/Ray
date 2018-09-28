@@ -58,8 +58,8 @@ protected:
 
     environment_t env_;
 
-    uint32_t macro_nodes_start_ = 0, macro_nodes_count_ = 0;
-    uint32_t light_nodes_start_ = 0, light_nodes_count_ = 0;
+    uint32_t macro_nodes_start_ = 0xffffffff, macro_nodes_count_ = 0;
+    uint32_t light_nodes_start_ = 0xffffffff, light_nodes_count_ = 0;
 
     uint32_t default_normals_texture_, default_env_texture_;
 
