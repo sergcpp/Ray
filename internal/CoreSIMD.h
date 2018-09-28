@@ -1616,7 +1616,10 @@ void Ray::NS::ComputeDirectLighting(const simd_fvec<S> P[3], const simd_fvec<S> 
 
     st.queue[0].mask = ray_mask;
     st.queue[0].stack_size = 0;
-    st.queue[0].stack[st.queue[0].stack_size++] = light_node_index;
+
+    if (light_node_index != 0xffffffff) {
+        st.queue[0].stack[st.queue[0].stack_size++] = light_node_index;
+    }
 
     while (st.index < st.num) {
         uint32_t *stack = &st.queue[st.index].stack[0];

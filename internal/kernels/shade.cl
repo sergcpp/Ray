@@ -33,7 +33,9 @@ float3 ComputeDirectLighting(const float3 P, const float3 N, const float3 B, con
     float3 col = (float3)(0.0f);    
 
     uint stack_size = 0;
-    stack[stack_size++] = light_node_index;
+    if (light_node_index != 0xffffffff) {
+        stack[stack_size++] = light_node_index;
+    }
 
     while (stack_size) {
         uint cur = stack[--stack_size];

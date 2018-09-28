@@ -1066,7 +1066,9 @@ Ray::Ref::simd_fvec3 Ray::Ref::ComputeDirectLighting(const simd_fvec3 &P, const 
     uint32_t stack[MAX_STACK_SIZE];
     uint32_t stack_size = 0;
 
-    stack[stack_size++] = light_node_index;
+    if (light_node_index != 0xffffffff) {
+        stack[stack_size++] = light_node_index;
+    }
 
     while (stack_size) {
         uint32_t cur = stack[--stack_size];
