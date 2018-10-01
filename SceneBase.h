@@ -66,9 +66,17 @@ struct mat_desc_t {
 
 /// Defines mesh region with specific material
 struct shape_desc_t {
-    uint32_t material_index;    ///< Index of material
-    size_t vtx_start;           ///< Vertex start index
-    size_t vtx_count;           ///< Vertex count
+    uint32_t mat_index;             ///< Index of material
+    uint32_t back_mat_index;        ///< Index of material applied for back faces
+    size_t vtx_start;               ///< Vertex start index
+    size_t vtx_count;               ///< Vertex count
+
+    shape_desc_t(uint32_t _material_index, uint32_t _back_material_index, size_t _vtx_start, size_t _vtx_count)
+        : mat_index(_material_index), back_mat_index(_back_material_index), vtx_start(_vtx_start), vtx_count(_vtx_count) {
+    }
+
+    shape_desc_t(uint32_t _material_index, size_t _vtx_start, size_t _vtx_count)
+        : mat_index(_material_index), back_mat_index(0xffffffff), vtx_start(_vtx_start), vtx_count(_vtx_count) { }
 };
 
 /// Mesh description

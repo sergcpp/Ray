@@ -1845,7 +1845,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                  u1[2], u2[2], u3[2],
                  b1[3], b2[3], b3[3];
 
-    simd_ivec<S> mat_index = { -1 };
+    simd_ivec<S> mat_index = { -1 }, back_mat_index = { -1 };
 
     simd_fvec<S> inv_xform1[3], inv_xform2[3], inv_xform3[3];
 
@@ -1875,8 +1875,8 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
         b3[0][i] = v3.b[0]; b3[1][i] = v3.b[1]; b3[2][i] = v3.b[2];
 
         const auto &tri = tris[inter.prim_index[i]];
-        uint32_t mi = tri.mi;
-        mat_index[i] = reinterpret_cast<const int&>(mi);
+        mat_index[i] = reinterpret_cast<const int&>(tri.mi);
+        back_mat_index[i] = reinterpret_cast<const int&>(tri.back_mi);
 
         float _plane_N[3];
         ExtractPlaneNormal(tri, _plane_N);
@@ -1900,6 +1900,11 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
 
     simd_fvec<S> uvs[2] = { u1[0] * w + u2[0] * inter.u + u3[0] * inter.v,
                             u1[1] * w + u2[1] * inter.u + u3[1] * inter.v };
+
+    auto backfacing = dot(plane_N, I) > 0.0f;
+    where(reinterpret_cast<const simd_ivec<S> &>(backfacing), mat_index) = back_mat_index;
+    ITERATE_3({ where(backfacing, plane_N[i]) = -plane_N[i]; })
+    ITERATE_3({ where(backfacing, N[i]) = -N[i]; })
 
     derivatives_t<S> surf_der;
     ComputeDerivatives(I, inter.t, ray.do_dx, ray.do_dy, ray.dd_dx, ray.dd_dy, p1, p2, p3, n1, n2, n3, u1, u2, u3, plane_N, surf_der);
@@ -1949,6 +1954,13 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
             if (diff_mi.not_all_zeros()) {
                 ray_queue[num] = diff_mi;
                 num++;
+            }
+
+            if (first_mi == 0xffffffff) {
+                const auto &mask = reinterpret_cast<const simd_fvec<S>&>(same_mi);
+                ITERATE_4({ where(mask, out_rgba[i]) = 0.0f; })
+                index++;
+                continue;
             }
 
             /////////////////////////////////////////

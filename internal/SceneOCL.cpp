@@ -178,7 +178,8 @@ uint32_t Ray::Ocl::Scene::AddMesh(const mesh_desc_t &_m) {
     // set material index for triangles
     for (const auto &s : _m.shapes) {
         for (size_t i = s.vtx_start; i < s.vtx_start + s.vtx_count; i += 3) {
-            new_tris[i / 3].mi = s.material_index;
+            new_tris[i / 3].mi = s.mat_index;
+            new_tris[i / 3].back_mi = s.back_mat_index;
         }
     }
 

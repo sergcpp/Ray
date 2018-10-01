@@ -21,8 +21,7 @@ typedef struct _tri_accel_t {
     int ci;
     float e0u, e0v;
     float e1u, e1v;
-    uint mi;
-    int pad1;
+    uint mi, back_mi;
 } tri_accel_t;
 
 typedef struct _hit_data_t {

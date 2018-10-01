@@ -1230,10 +1230,19 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
     simd_fvec3 N = simd_fvec3(v1.n) * w + simd_fvec3(v2.n) * inter.u + simd_fvec3(v3.n) * inter.v;
     simd_fvec2 uvs = simd_fvec2(v1.t[0]) * w + simd_fvec2(v2.t[0]) * inter.u + simd_fvec2(v3.t[0]) * inter.v;
 
-    // find triangle plane normal
     simd_fvec3 plane_N;
     ExtractPlaneNormal(tri, &plane_N[0]);
     plane_N = TransformNormal(plane_N, tr->inv_xform);
+
+    if (dot(plane_N, I) > 0.0f) {
+        if (tri.back_mi == 0xffffffff) {
+            return pixel_color_t{ 0.0f, 0.0f, 0.0f, 0.0f };
+        } else {
+            mat = &materials[tri.back_mi];
+            plane_N = -plane_N;
+            N = -N;
+        }
+    }
 
     derivatives_t surf_der;
     ComputeDerivatives(I, inter.t, ray.do_dx, ray.do_dy, ray.dd_dx, ray.dd_dy, v1, v2, v3, plane_N, surf_der);

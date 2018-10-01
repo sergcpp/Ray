@@ -219,6 +219,16 @@ float4 ShadeSurface(const pass_info_t *pi, __global const float *halton,
 
     plane_N = TransformNormal(plane_N, &tr->inv_xform);
 
+    if (dot(plane_N, I) > 0.0f) {
+        if (tri->back_mi == 0xffffffff) {
+            return (float4)(0.0f, 0.0f, 0.0f, 0.0f);
+        } else {
+            mat = &materials[tri->back_mi];
+            plane_N = -plane_N;
+            N = -N;
+        }
+    }
+
     derivatives_t surf_der;
     ComputeDerivatives(I, inter->t, orig_ray->do_dx, orig_ray->do_dy, orig_ray->dd_dx, orig_ray->dd_dy,
                        p1, p2, p3, n1, n2, n3, u1, u2, u3, plane_N, &surf_der);

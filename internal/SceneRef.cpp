@@ -160,7 +160,8 @@ uint32_t Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
 
     for (const auto &s : _m.shapes) {
         for (size_t i = s.vtx_start; i < s.vtx_start + s.vtx_count; i += 3) {
-            tris_[tris_start + i / 3].mi = s.material_index;
+            tris_[tris_start + i / 3].mi = s.mat_index;
+            tris_[tris_start + i / 3].back_mi = s.back_mat_index;
         }
     }
 

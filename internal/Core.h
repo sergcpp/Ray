@@ -31,8 +31,7 @@ struct tri_accel_t {
     int32_t ci;
     float e0u, e0v;
     float e1u, e1v;
-    uint32_t mi;
-    uint32_t pad;
+    uint32_t mi, back_mi;
 };
 static_assert(sizeof(tri_accel_t) == 48, "!");
 
