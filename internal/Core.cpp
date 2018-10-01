@@ -155,7 +155,6 @@ void Ray::ExtractPlaneNormal(const tri_accel_t &tri, float *out_normal) {
 uint32_t Ray::PreprocessMesh(const float *attrs, size_t attrs_count, const uint32_t *vtx_indices, size_t vtx_indices_count, eVertexLayout layout,
                              bool allow_spatial_splits, std::vector<bvh_node_t> &out_nodes, std::vector<tri_accel_t> &out_tris, std::vector<uint32_t> &out_tri_indices) {
     assert(vtx_indices_count && vtx_indices_count % 3 == 0);
-    assert(layout == PxyzNxyzTuv);
 
     std::vector<prim_t> primitives;
 
@@ -171,6 +170,8 @@ uint32_t Ray::PreprocessMesh(const float *attrs, size_t attrs_count, const uint3
     } else if (layout == PxyzNxyzTuvTuv) {
         positions = attrs;
         attr_stride = 10;
+    } else {
+        return 0xffffffff;
     }
 
     for (size_t j = 0; j < vtx_indices_count; j += 3) {
