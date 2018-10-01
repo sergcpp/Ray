@@ -162,17 +162,8 @@ uint32_t Ray::PreprocessMesh(const float *attrs, size_t attrs_count, const uint3
     size_t tris_count = vtx_indices_count / 3;
     out_tris.resize(tris_start + tris_count);
 
-    const float *positions;
-    size_t attr_stride;
-    if (layout == PxyzNxyzTuv) {
-        positions = attrs;
-        attr_stride = 8;
-    } else if (layout == PxyzNxyzTuvTuv) {
-        positions = attrs;
-        attr_stride = 10;
-    } else {
-        return 0xffffffff;
-    }
+    const float *positions = attrs;
+    size_t attr_stride = AttrStrides[layout];
 
     for (size_t j = 0; j < vtx_indices_count; j += 3) {
         float p[9];

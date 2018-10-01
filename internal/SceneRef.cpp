@@ -173,7 +173,7 @@ uint32_t Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
         new_vtx_indices.push_back(_m.vtx_indices[i] + (uint32_t)vertices_.size());
     }
 
-    int stride = _m.layout == PxyzNxyzTuvTuv ? 10 : 8;
+    size_t stride = AttrStrides[_m.layout];
 
     // add attributes
     size_t new_vertices_start = vertices_.size();
@@ -183,17 +183,29 @@ uint32_t Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
 
         memcpy(&v.p[0], (_m.vtx_attrs + i * stride), 3 * sizeof(float));
         memcpy(&v.n[0], (_m.vtx_attrs + i * stride + 3), 3 * sizeof(float));
-        memcpy(&v.t[0][0], (_m.vtx_attrs + i * stride + 6), 2 * sizeof(float));
+        
         if (_m.layout == PxyzNxyzTuv) {
+            memcpy(&v.t[0][0], (_m.vtx_attrs + i * stride + 6), 2 * sizeof(float));
             v.t[1][0] = v.t[1][1] = 0.0f;
+            v.b[0] = v.b[1] = v.b[2] = 0.0f;
         } else if (_m.layout == PxyzNxyzTuvTuv) {
+            memcpy(&v.t[0][0], (_m.vtx_attrs + i * stride + 6), 2 * sizeof(float));
             memcpy(&v.t[1][0], (_m.vtx_attrs + i * stride + 8), 2 * sizeof(float));
+            v.b[0] = v.b[1] = v.b[2] = 0.0f;
+        } else if (_m.layout == PxyzNxyzBxyzTuv) {
+            memcpy(&v.b[0], (_m.vtx_attrs + i * stride + 6), 3 * sizeof(float));
+            memcpy(&v.t[0][0], (_m.vtx_attrs + i * stride + 9), 2 * sizeof(float));
+            v.t[1][0] = v.t[1][1] = 0.0f;
+        } else if (_m.layout == PxyzNxyzBxyzTuvTuv) {
+            memcpy(&v.b[0], (_m.vtx_attrs + i * stride + 6), 3 * sizeof(float));
+            memcpy(&v.t[0][0], (_m.vtx_attrs + i * stride + 9), 2 * sizeof(float));
+            memcpy(&v.t[1][0], (_m.vtx_attrs + i * stride + 11), 2 * sizeof(float));
         }
-
-        v.b[0] = v.b[1] = v.b[2] = 0.0f;
     }
 
-    ComputeTextureBasis(0, new_vertices_start, vertices_, new_vtx_indices, &new_vtx_indices[0], new_vtx_indices.size());
+    if (_m.layout == PxyzNxyzTuv || _m.layout == PxyzNxyzTuvTuv) {
+        ComputeTextureBasis(0, new_vertices_start, vertices_, new_vtx_indices, &new_vtx_indices[0], new_vtx_indices.size());
+    }
 
     vtx_indices_.insert(vtx_indices_.end(), new_vtx_indices.begin(), new_vtx_indices.end());
 

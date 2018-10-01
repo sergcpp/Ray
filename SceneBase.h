@@ -21,11 +21,24 @@ enum ePrimType {
 /** Vertex attribute layout.
     P - vertex position
     N - vertex normal
+    B - vertex binormal (oriented to vertical texture axis)
     T - vertex texture coordinates
 */
 enum eVertexLayout {
-    PxyzNxyzTuv,    ///< [ P.x, P.y, P.z, N.x, N.y, N.z, T.x, Ty ]
-    PxyzNxyzTuvTuv, ///< [ P.x, P.y, P.z, N.x, N.y, N.z, T.x, Ty, T.x, Ty ]
+    PxyzNxyzTuv = 0,    ///< [ P.x, P.y, P.z, N.x, N.y, N.z, T.x, T.y ]
+    PxyzNxyzTuvTuv,     ///< [ P.x, P.y, P.z, N.x, N.y, N.z, T.x, T.y, T.x, T.y ]
+    PxyzNxyzBxyzTuv,    ///< [ P.x, P.y, P.z, N.x, N.y, N.z, B.x, B.y, B.z, T.x, T.y ]
+    PxyzNxyzBxyzTuvTuv, ///< [ P.x, P.y, P.z, N.x, N.y, N.z, B.x, B.y, B.z, T.x, T.y, T.x, T.y ]
+};
+
+/** Vertex attribute stride value.
+    Represented in number of floats
+*/
+const size_t AttrStrides[] = {
+    8,  ///< PxyzNxyzTuv
+    10, ///< PxyzNxyzTuvTuv
+    11, ///< PxyzNxyzBxyzTuv
+    13, ///< PxyzNxyzBxyzTuvTuv
 };
 
 /// Mesh region material type
