@@ -219,12 +219,12 @@ void Ray::Ref::GeneratePrimaryRays(int iteration, const camera_t &cam, const rec
     simd_fvec3 cam_origin = { cam.origin }, fwd = { cam.fwd }, side = { cam.side }, up = { cam.up };
     float focus_distance = cam.focus_distance;
 
-    float k = float(h) / w;
+    float k = float(w) / h;
     float fov_k = std::tan(0.5f * cam.fov * PI / 180.0f) * focus_distance;
 
     auto get_pix_dir = [k, fov_k, focus_distance, cam_origin, fwd, side, up, w, h](const float x, const float y, const simd_fvec3 &origin) {
         simd_fvec3 p(2 * fov_k * float(x) / w - fov_k, 2 * fov_k * float(-y) / h + fov_k, focus_distance);
-        p = cam_origin + p[0] * side + k * p[1] * up + p[2] * fwd;
+        p = cam_origin + k * p[0] * side + p[1] * up + p[2] * fwd;
         return normalize(p - origin);
     };
 

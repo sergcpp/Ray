@@ -522,7 +522,7 @@ void Ray::NS::GeneratePrimaryRays(const int iteration, const camera_t &cam, cons
 
     simd_fvec<S> ww = { (float)w }, hh = { (float)h };
 
-    float k = float(h) / w;
+    float k = float(w) / h;
 
     float focus_distance = cam.focus_distance;
     float fov_k = std::tan(0.5f * cam.fov * PI / 180.0f) * focus_distance;
@@ -536,9 +536,9 @@ void Ray::NS::GeneratePrimaryRays(const int iteration, const camera_t &cam, cons
         auto _dx = 2 * fov_k * x / ww - fov_k;
         auto _dy = 2 * fov_k  * -y / hh + fov_k;
 
-        d[0] = cam_origin[0] + _dx * side[0] + k * _dy * up[0] + fwd[0] * focus_distance;
-        d[1] = cam_origin[1] + _dx * side[1] + k * _dy * up[1] + fwd[1] * focus_distance;
-        d[2] = cam_origin[2] + _dx * side[2] + k * _dy * up[2] + fwd[2] * focus_distance;
+        d[0] = cam_origin[0] + k * _dx * side[0] + _dy * up[0] + fwd[0] * focus_distance;
+        d[1] = cam_origin[1] + k * _dx * side[1] + _dy * up[1] + fwd[1] * focus_distance;
+        d[2] = cam_origin[2] + k * _dx * side[2] + _dy * up[2] + fwd[2] * focus_distance;
 
         d[0] = d[0] - origin[0];
         d[1] = d[1] - origin[1];

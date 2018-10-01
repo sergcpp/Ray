@@ -21,7 +21,7 @@ float construct_float(uint m) {
 float3 get_cam_dir(const float x, const float y, float3 origin, const camera_t *cam, int w, int h, float prop) {
     float k = native_tan(0.5f * cam->origin.w * PI / 180.0f) * cam->side.w;
     float3 p = (float3)(2 * k * x / w - k, 2 * k * -y / h + k, cam->side.w);
-    p = cam->origin.xyz + p.x * cam->side.xyz + prop * p.y * cam->up.xyz + p.z * cam->fwd.xyz;
+    p = cam->origin.xyz + prop * p.x * cam->side.xyz + p.y * cam->up.xyz + p.z * cam->fwd.xyz;
     return normalize(p - origin);
 }
 
@@ -33,7 +33,7 @@ void GeneratePrimaryRays(const int iteration, camera_t cam, int w, int h, __glob
     const int index = j * w + i;
     const int hi = (iteration & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT;
 
-    float k = ((float)h) / w;
+    float k = ((float)w) / h;
 
     float x = (float)i;
     float y = (float)j;
