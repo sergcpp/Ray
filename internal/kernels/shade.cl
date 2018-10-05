@@ -491,6 +491,7 @@ void ShadeSecondary(pass_info_t pi, __global const float *halton, __global const
                   nodes, node_index, tris, tri_indices, env, materials, textures, texture_atlas,
                   lights, li_indices, light_node_index,
                   stack, out_secondary_rays, out_secondary_rays_count);
+    res.w = 0.0f;
 
     write_imagef(frame_buf, px, col + res);
 }

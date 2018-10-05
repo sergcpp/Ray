@@ -308,6 +308,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
                              mi_indices, meshes, transforms, vtx_indices, vertices, nodes, macro_tree_root,
                              tris, tri_indices, materials, textures, tex_atlas, lights, li_indices, light_tree_root, 
                              out_rgba, &p.secondary_masks[0], &p.secondary_rays[0], &secondary_rays_count);
+            out_rgba[3] = 0.0f;
 
             for (int j = 0; j < S; j++) {
                 if (!p.primary_masks[i][j]) continue;

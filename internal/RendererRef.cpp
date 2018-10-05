@@ -226,6 +226,7 @@ void Ray::Ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
             pixel_color_t col = ShadeSurface(pass_info, inter, r, &region.halton_seq[0], env, mesh_instances,
                                              mi_indices, meshes, transforms, vtx_indices, vertices, nodes, macro_tree_root,
                                              tris, tri_indices, materials, textures, tex_atlas, lights, li_indices, light_tree_root, &p.secondary_rays[0], &secondary_rays_count);
+            col.a = 0.0f;
 
             temp_buf_.AddPixel(x, y, col);
         }
