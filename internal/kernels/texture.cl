@@ -4,7 +4,7 @@ __constant sampler_t LINEAR_SAMPLER = CLK_NORMALIZED_COORDS_TRUE | CLK_ADDRESS_C
 __constant sampler_t NEAREST_SAMPLER = CLK_NORMALIZED_COORDS_TRUE | CLK_ADDRESS_CLAMP | CLK_FILTER_NEAREST;
 
 float4 rgbe_to_rgb(float4 rgbe) {
-    float f = native_powr(2.0f, rgbe.w * 255.0f - 128.0f);
+    float f = native_exp2(rgbe.w * 255.0f - 128.0f);
     return (float4)(rgbe.xyz * f, 1.0f);
 }
 

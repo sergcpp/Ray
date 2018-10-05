@@ -1572,22 +1572,22 @@ void Ray::NS::SampleLatlong_RGBE(const Ref::TextureAtlas &atlas, const texture_t
         const auto &p10 = atlas.Get(t.page[0], int(uvs[0][i] + 0), int(uvs[1][i] + 1));
         const auto &p11 = atlas.Get(t.page[0], int(uvs[0][i] + 1), int(uvs[1][i] + 1));
 
-        float f = std::pow(2.0f, float(p00.a) - 128.0f);
+        float f = std::exp2(float(p00.a) - 128.0f);
         _p00[0][i] = to_norm_float(p00.r) * f;
         _p00[1][i] = to_norm_float(p00.g) * f;
         _p00[2][i] = to_norm_float(p00.b) * f;
 
-        f = std::pow(2.0f, float(p01.a) - 128.0f);
+        f = std::exp2(float(p01.a) - 128.0f);
         _p01[0][i] = to_norm_float(p01.r) * f;
         _p01[1][i] = to_norm_float(p01.g) * f;
         _p01[2][i] = to_norm_float(p01.b) * f;
 
-        f = std::pow(2.0f, float(p10.a) - 128.0f);
+        f = std::exp2(float(p10.a) - 128.0f);
         _p10[0][i] = to_norm_float(p10.r) * f;
         _p10[1][i] = to_norm_float(p10.g) * f;
         _p10[2][i] = to_norm_float(p10.b) * f;
 
-        f = std::pow(2.0f, float(p11.a) - 128.0f);
+        f = std::exp2(float(p11.a) - 128.0f);
         _p11[0][i] = to_norm_float(p11.r) * f;
         _p11[1][i] = to_norm_float(p11.g) * f;
         _p11[2][i] = to_norm_float(p11.b) * f;
@@ -1957,7 +1957,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
             }
 
             if (first_mi == 0xffffffff) {
-                const auto &mask = reinterpret_cast<const simd_fvec<S>&>(same_mi);
+                const auto &mask = reinterpret_cast<const simd_fvec<S>&>(same_mi & inter.mask);
                 ITERATE_4({ where(mask, out_rgba[i]) = 0.0f; })
                 index++;
                 continue;

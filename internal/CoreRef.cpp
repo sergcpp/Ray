@@ -198,7 +198,7 @@ force_inline float construct_float(uint32_t m) {
 }
 
 force_inline simd_fvec4 rgbe_to_rgb(const pixel_color8_t &rgbe) {
-    float f = std::pow(2.0f, float(rgbe.a) - 128.0f);
+    float f = std::exp2(float(rgbe.a) - 128.0f);
     return simd_fvec4{ to_norm_float(rgbe.r) * f,
                        to_norm_float(rgbe.g) * f,
                        to_norm_float(rgbe.b) * f, 1.0f };
