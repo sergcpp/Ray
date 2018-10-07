@@ -1957,7 +1957,8 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
             }
 
             if (first_mi == 0xffffffff) {
-                const auto &mask = reinterpret_cast<const simd_fvec<S>&>(same_mi & inter.mask);
+                same_mi = same_mi & inter.mask;
+                const auto &mask = reinterpret_cast<const simd_fvec<S>&>(same_mi);
                 ITERATE_4({ where(mask, out_rgba[i]) = 0.0f; })
                 index++;
                 continue;
