@@ -30,7 +30,7 @@ enum eCamType { Persp, Ortho, Geo };
 
 enum eFilterType { Box, Tent };
 
-enum ePassFlags { SkipDirectLight = 1, SkipIndirectLight = 2, LightingOnly = 4, NoBackground = 8 };
+enum ePassFlags { SkipDirectLight = 1, SkipIndirectLight = 2, LightingOnly = 4, NoBackground = 8, Clamp = 16 };
 
 struct camera_t {
     eCamType type;

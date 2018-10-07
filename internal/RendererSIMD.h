@@ -340,7 +340,9 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
     auto clamp_and_gamma_correct = [&cam](const pixel_color_t &p) {
         auto c = simd_fvec4(&p.r);
         c = pow(c, simd_fvec4{ 1.0f / cam.gamma });
-        c = clamp(c, 0.0f, 1.0f);
+        if (cam.pass_flags & Clamp) {
+            c = clamp(c, 0.0f, 1.0f);
+        }
         return pixel_color_t{ c[0], c[1], c[2], c[3] };
     };
 

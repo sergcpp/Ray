@@ -127,6 +127,7 @@ struct camera_desc_t {
     bool skip_direct_lighting = false;  ///< Render only indirect light contribution
     bool skip_indirect_lighting = false;///< Render only direct light contribution
     bool no_background = false;         ///< Do not render background
+    bool clamp = false;                 ///< clamp color values to [0..1] range
 };
 
 /// Environment description

@@ -39,6 +39,7 @@ void Ray::SceneBase::GetCamera(uint32_t i, camera_desc_t &c) const {
     c.skip_direct_lighting = (cam.pass_flags & SkipDirectLight) != 0;
     c.skip_indirect_lighting = (cam.pass_flags & SkipIndirectLight) != 0;
     c.no_background = (cam.pass_flags & NoBackground) != 0;
+    c.clamp = (cam.pass_flags & Clamp) != 0;
 }
 
 void Ray::SceneBase::SetCamera(uint32_t i, const camera_desc_t &c) {
@@ -58,6 +59,7 @@ void Ray::SceneBase::SetCamera(uint32_t i, const camera_desc_t &c) {
     if (c.skip_direct_lighting) cam.pass_flags |= SkipDirectLight;
     if (c.skip_indirect_lighting) cam.pass_flags |= SkipIndirectLight;
     if (c.no_background) cam.pass_flags |= NoBackground;
+    if (c.clamp) cam.pass_flags |= Clamp;
 }
 
 void Ray::SceneBase::RemoveCamera(uint32_t i) {
