@@ -126,7 +126,7 @@ void SampleMeshInTextureSpace_BinStage(int uv_layer, uint tri_offset, __global c
     bbox_max = min(bbox_max, rect_max);
 
     int2 ibbox_min = convert_int2(bbox_min),
-            ibbox_max = convert_int2(round(bbox_max));
+         ibbox_max = convert_int2(round(bbox_max));
 
     for (int y = ibbox_min.y / TRI_RAST_Y; y <= ibbox_max.y / TRI_RAST_Y; y++) {
         for (int x = ibbox_min.x / TRI_RAST_X; x <= ibbox_max.x / TRI_RAST_X; x++) {
@@ -141,7 +141,7 @@ void SampleMeshInTextureSpace_BinStage(int uv_layer, uint tri_offset, __global c
 }
 
 __kernel
-void SampleMeshInTextureSpace_RasterStage(int uv_layer, int iteration, uint tr_index, __global const transform_t *transforms,
+void SampleMeshInTextureSpace_RasterStage(int uv_layer, int iteration, uint tr_index, uint obj_index, __global const transform_t *transforms,
                                           __global const uint *vtx_indices, __global const vertex_t *vertices,
                                           int w, int h, __global const float *halton, __global const uint *tri_bins,
                                           __global ray_packet_t *out_rays, __global hit_data_t *out_inters) {
@@ -235,7 +235,7 @@ void SampleMeshInTextureSpace_RasterStage(int uv_layer, int iteration, uint tr_i
             ray->dd_dx = ray->dd_dy = (float3)(0, 0, 0);
 
             inter->mask = 0xffffffff;
-            inter->obj_index = 0;
+            inter->obj_index = obj_index;
             inter->prim_index = tri;
             inter->t = 1.0f;
             inter->u = w;

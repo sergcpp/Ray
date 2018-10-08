@@ -68,7 +68,7 @@ protected:
     bool kernel_SampleMesh_ResetBins(cl_int w, cl_int h, const cl::Buffer &tri_bin_buf);
     bool kernel_SampleMesh_BinStage(cl_int uv_layer, uint32_t tris_index, uint32_t tris_count, const cl::Buffer &vtx_indices, const cl::Buffer &vertices,
                                     cl_int w, cl_int h, const cl::Buffer &tri_bin_buf);
-    bool kernel_SampleMesh_RasterStage(cl_int uv_layer, cl_int iteration, cl_uint tr_index, const cl::Buffer &transforms,
+    bool kernel_SampleMesh_RasterStage(cl_int uv_layer, cl_int iteration, cl_uint tr_index, cl_uint obj_index, const cl::Buffer &transforms,
                                        const cl::Buffer &vtx_indices, const cl::Buffer &vertices, cl_int w, cl_int h,
                                        const cl::Buffer &halton_seq, const cl::Buffer &tri_bin_buf,
                                        const cl::Buffer &out_rays, const cl::Buffer &out_inters);

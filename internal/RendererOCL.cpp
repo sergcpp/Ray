@@ -462,7 +462,7 @@ void Ray::Ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
 
         if (!kernel_SampleMesh_BinStage((cl_int)cam.uv_index, mesh.tris_index, mesh.tris_count, s->vtx_indices_.buf(), s->vertices_.buf(), w_, h_, tri_bin_buf_)) return;
 
-        if (!kernel_SampleMesh_RasterStage((cl_int)cam.uv_index, (cl_int)region.iteration, (cl_uint)mi.tr_index, s->transforms_.buf(), s->vtx_indices_.buf(),
+        if (!kernel_SampleMesh_RasterStage((cl_int)cam.uv_index, (cl_int)region.iteration, (cl_uint)mi.tr_index, (cl_uint)cam.mi_index, s->transforms_.buf(), s->vtx_indices_.buf(),
                                            s->vertices_.buf(), (cl_int)w_, (cl_int)h_, halton_seq_buf_, tri_bin_buf_,
                                            prim_rays_buf_, prim_inters_buf_)) return;
 
@@ -612,7 +612,7 @@ bool Ray::Ocl::Renderer::kernel_SampleMesh_BinStage(cl_int uv_layer, uint32_t tr
     return CL_SUCCESS == queue_.enqueueNDRangeKernel(sample_mesh_bin_stage_kernel_, { 0 }, { (size_t)tris_count });
 }
 
-bool Ray::Ocl::Renderer::kernel_SampleMesh_RasterStage(cl_int uv_layer, cl_int iteration, cl_uint tr_index, const cl::Buffer &transforms,
+bool Ray::Ocl::Renderer::kernel_SampleMesh_RasterStage(cl_int uv_layer, cl_int iteration, cl_uint tr_index, cl_uint obj_index, const cl::Buffer &transforms,
                                                        const cl::Buffer &vtx_indices, const cl::Buffer &vertices, cl_int w, cl_int h,
                                                        const cl::Buffer &halton_seq, const cl::Buffer &tri_bin_buf,
                                                        const cl::Buffer &out_rays, const cl::Buffer &out_inters) {
@@ -620,6 +620,7 @@ bool Ray::Ocl::Renderer::kernel_SampleMesh_RasterStage(cl_int uv_layer, cl_int i
     if (sample_mesh_raster_stage_kernel_.setArg(argc++, uv_layer) != CL_SUCCESS ||
         sample_mesh_raster_stage_kernel_.setArg(argc++, iteration) != CL_SUCCESS ||
         sample_mesh_raster_stage_kernel_.setArg(argc++, tr_index) != CL_SUCCESS ||
+        sample_mesh_raster_stage_kernel_.setArg(argc++, obj_index) != CL_SUCCESS ||
         sample_mesh_raster_stage_kernel_.setArg(argc++, transforms) != CL_SUCCESS ||
         sample_mesh_raster_stage_kernel_.setArg(argc++, vtx_indices) != CL_SUCCESS ||
         sample_mesh_raster_stage_kernel_.setArg(argc++, vertices) != CL_SUCCESS ||
