@@ -9,7 +9,7 @@ Small pathtracing lib created for learning purposes. Includes CPU and GPU (OpenC
 :-------------------------:|:-------------------------:|:-------------------------:
 
 I tried to implement most of the basic features present in 'big' pathtracers:
-- Plucker test for intersection with precomputed data per triangle as described in 'Ray-Triangle Intersection Algorithm for Modern CPU Architectures' paper.
+- Plucker test for ray/trianble intersection with help of precomputed data stored per triangle as described in 'Ray-Triangle Intersection Algorithm for Modern CPU Architectures' paper.
 - SAH-based BVH with traditional stack- and stackless traversal described in 'Efficient Stack-less BVH Traversal for Ray Tracing' paper. By default traversal with stack is used as it was faster on gpus I tested on. BVH tree is made two-level to support basic rigid motion. Optional 'spatial splits' feature can be used for building better optimized BVH in cost of construction time as described in 'Spatial Splits in Bounding Volume Hierarchies' paper.
 - Ray differentials for choosing mip level and filter kernel as described in 'Tracing Ray Differentials' paper.
 - Textures are packed in 2d texture array atlas for easier passing to OpenCL kernel.
@@ -17,3 +17,4 @@ I tried to implement most of the basic features present in 'big' pathtracers:
 - CPU backends can use 2x2 or 4x2 Ray packet traversal optimized with SSE/AVX/NEON intrinsics, which is very effective for primary and glossy secondary rays, but not so effective for very random diffuse secondary rays even after sorting applied. Thin templated wrapper class (simd_vec_*) used to avoid code duplication, looks still ugly though.
 - Compression-sorting-decompression used on secondary rays as described in "Fast Ray Sorting and Breadth-First Packet Traversal for GPU Ray Tracing" paper (only sorting part, no breadth-first traversal used). OpenCL backend uses my terrible implementation of parallel radix sort described in "Introduction to GPU Radix Sort".
 - Russian roulette path termination. When Ray influence falls certain threshold, path gets randomly terminated by probability inversely proportional to that influence. Weight of non-terminated Ray adjusted appropriately.
+- Lightmapping. Special 'Geo' camera type can be used for sampling meshes in texture space to produce direct and indirect lightmaps for realtime rendering. Only simple color values stored for now, but I would like to add SH-lightmaps in the future.
