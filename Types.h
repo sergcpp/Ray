@@ -23,6 +23,11 @@ struct pixel_color8_t {
 };
 static_assert(sizeof(pixel_color8_t) == 4, "!");
 
+struct SHL1_data {
+    float coeff_r[4], coeff_g[4], coeff_b[4];
+};
+static_assert(sizeof(SHL1_data) == 48, "!");
+
 /// Rectangle struct
 struct rect_t { int x, y, w, h; };
 
@@ -30,7 +35,7 @@ enum eCamType { Persp, Ortho, Geo };
 
 enum eFilterType { Box, Tent };
 
-enum ePassFlags { SkipDirectLight = 1, SkipIndirectLight = 2, LightingOnly = 4, NoBackground = 8, Clamp = 16 };
+enum ePassFlags { SkipDirectLight = 1, SkipIndirectLight = 2, LightingOnly = 4, NoBackground = 8, Clamp = 16, OutputSH = 32 };
 
 struct camera_t {
     eCamType type;

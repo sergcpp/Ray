@@ -100,6 +100,12 @@ void Ray::Ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
             p = std::move(pass_cache_.back());
             pass_cache_.pop_back();
         }
+
+        // allocate sh data on demand
+        if (cam.pass_flags & OutputSH) {
+            temp_buf_.Resize(w, h, true);
+            clean_buf_.Resize(w, h, true);
+        }
     }
 
     pass_info_t pass_info;
@@ -167,6 +173,17 @@ void Ray::Ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
     p.chunks.resize(secondary_rays_count);
     p.chunks_temp.resize(secondary_rays_count);
     p.skeleton.resize(secondary_rays_count);
+
+    if (cam.pass_flags & OutputSH) {
+        for (size_t i = 0; i < p.intersections.size(); i++) {
+            const auto &r = p.primary_rays[i];
+
+            const int x = r.id.x;
+            const int y = r.id.y;
+
+            temp_buf_.SetPixelDir(x, y, r.d);
+        }
+    }
 
     for (int bounce = 0; bounce < MAX_BOUNCES && secondary_rays_count && !(pass_info.flags & SkipIndirectLight); bounce++) {
         auto time_secondary_sort_start = std::chrono::high_resolution_clock::now();
@@ -249,7 +266,14 @@ void Ray::Ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
         stats_.time_secondary_shade_us += (unsigned long long)secondary_shade_time.count();
     }
 
-    clean_buf_.MixWith(temp_buf_, rect, 1.0f / region.iteration);
+    // factor used to compute incremental average
+    const float mix_factor = 1.0f / region.iteration;
+
+    clean_buf_.MixWith(temp_buf_, rect, mix_factor);
+    if (cam.pass_flags & OutputSH) {
+        temp_buf_.ComputeSHData(rect);
+        clean_buf_.MixWith_SH(temp_buf_, rect, mix_factor);
+    }
 
     auto clamp_and_gamma_correct = [&cam](const pixel_color_t &p) {
         simd_fvec4 c = { &p.r };

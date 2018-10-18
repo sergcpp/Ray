@@ -12,6 +12,7 @@ namespace Ref {
 class Framebuffer {
     int w_, h_;
     std::vector<pixel_color_t> pixels_;
+    std::vector<SHL1_data> sh_data_;
 public:
     Framebuffer(int w, int h);
 
@@ -49,8 +50,23 @@ public:
         pixels_[i].a += (p.a - pixels_[i].a) * k;
     }
 
-    void Resize(int w, int h);
+    force_inline void SetPixelDir(int x, int y, const float v[3]) {
+        int i = y * w_ + x;
+
+        const float SH_Y0 = 0.282094806f; // sqrt(1.0f / (4.0f * PI))
+        const float SH_Y1 = 0.488602519f; // sqrt(3.0f / (4.0f * PI))
+
+        // temporary store sh coefficients in place of red channel
+        sh_data_[i].coeff_r[0] = SH_Y0;
+        sh_data_[i].coeff_r[1] = SH_Y1 * v[1];
+        sh_data_[i].coeff_r[2] = SH_Y1 * v[2];
+        sh_data_[i].coeff_r[3] = SH_Y1 * v[0];
+    }
+
+    void Resize(int w, int h, bool alloc_sh);
     void Clear(const pixel_color_t &p);
+
+    void ComputeSHData(const rect_t &rect);
 
     template <typename F>
     void Apply(const rect_t &reg, F &&f) {
@@ -65,13 +81,12 @@ public:
         return &pixels_[0];
     }
 
-    void MixWith(const Framebuffer &f2, const rect_t &rect, float k) {
-        for (int y = rect.y; y < rect.y + rect.h; y++) {
-            for (int x = rect.x; x < rect.x + rect.w; x++) {
-                this->MixPixel(x, y, f2.GetPixel(x, y), k);
-            }
-        }
+    const SHL1_data *get_sh_data_ref() const {
+        return &sh_data_[0];
     }
+
+    void MixWith(const Framebuffer &f2, const rect_t &rect, float k);
+    void MixWith_SH(const Framebuffer &f2, const rect_t &rect, float k);
 
     template <typename F>
     void CopyFrom(const Framebuffer &f2, const rect_t &rect, F &&filter) {

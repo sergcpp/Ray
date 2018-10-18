@@ -100,6 +100,7 @@ if (ENABLE_OPENCL)
     set(KERNEL_FILES internal/kernels/intersect.cl
                      internal/kernels/postprocess.cl
                      internal/kernels/primary_ray_gen.cl
+                     internal/kernels/sh.cl
                      internal/kernels/shade.cl
                      internal/kernels/sort.cl
                      internal/kernels/texture.cl

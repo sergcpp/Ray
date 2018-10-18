@@ -60,11 +60,15 @@ public:
         return final_buf_.get_pixels_ref();
     }
 
+    const SHL1_data *get_sh_data_ref() const override {
+        return clean_buf_.get_sh_data_ref();
+    }
+
     void Resize(int w, int h) override {
         if (w_ != w || h_ != h) {
-            clean_buf_.Resize(w, h);
-            final_buf_.Resize(w, h);
-            temp_buf_.Resize(w, h);
+            clean_buf_.Resize(w, h, false);
+            final_buf_.Resize(w, h, false);
+            temp_buf_.Resize(w, h, false);
 
             w_ = w; h_ = h;
         }

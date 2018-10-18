@@ -36,6 +36,9 @@ const char *cl_src_sort =
 const char *cl_src_texture =
 #include "kernels/texture.cl"
     ;
+const char *cl_src_sh =
+#include "kernels/sh.cl"
+    ;
 const char *cl_src_shade =
 #include "kernels/shade.cl"
     ;
@@ -157,7 +160,7 @@ Ray::Ocl::Renderer::Renderer(int w, int h, int platform_index, int device_index)
             cl_src_defines,
             cl_src_types, cl_src_transform, cl_src_primary_ray_gen,
             cl_src_intersect, cl_src_traverse, cl_src_trace, cl_src_sort,
-            cl_src_texture, cl_src_shade, cl_src_postprocess
+            cl_src_texture, cl_src_sh, cl_src_shade, cl_src_postprocess
         };
 
         program_ = cl::Program(context_, srcs, &error);

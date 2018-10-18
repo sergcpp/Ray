@@ -55,6 +55,9 @@ public:
     /// Returns pointer to rendered image
     virtual const pixel_color_t *get_pixels_ref() const = 0;
 
+    /// Returns pointer to SH data
+    virtual const SHL1_data *get_sh_data_ref() const = 0;
+
     /** @brief Resize framebuffer
         @param w new image width
         @param h new image height

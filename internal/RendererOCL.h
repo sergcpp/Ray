@@ -161,6 +161,10 @@ public:
         return (const pixel_color_t *)&frame_pixels_[0];
     }
 
+    const SHL1_data *get_sh_data_ref() const override {
+        return nullptr;
+    }
+
     void Resize(int w, int h) override;
     void Clear(const pixel_color_t &c) override;
 

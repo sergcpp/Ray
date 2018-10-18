@@ -128,6 +128,7 @@ struct camera_desc_t {
     bool skip_indirect_lighting = false;///< Render only direct light contribution
     bool no_background = false;         ///< Do not render background
     bool clamp = false;                 ///< clamp color values to [0..1] range
+    bool output_sh = false;             ///< output 2-band (4 coeff) spherical harmonics data
 };
 
 /// Environment description
