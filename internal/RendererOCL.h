@@ -43,7 +43,8 @@ protected:
     incl_scan_kernel_, add_partial_sums_kernel_, init_chunk_hash_and_base_kernel_,
     init_chunk_size_kernel_, init_skel_and_head_flags_kernel_, init_count_table_kernel_,
     write_sorted_chunks_kernel_, excl_seg_scan_kernel_, incl_seg_scan_kernel_, add_seg_partial_sums_kernel_,
-    reorder_rays_kernel_, trace_secondary_rays_kernel_, trace_secondary_rays_img_kernel_, mix_incremental_kernel_, post_process_kernel_;
+    reorder_rays_kernel_, trace_secondary_rays_kernel_, trace_secondary_rays_img_kernel_, mix_incremental_kernel_, post_process_kernel_,
+        store_sh_coeffs_kernel_, compute_sh_data_kernel_, mix_sh_data_kernel_;
 
     cl::Buffer prim_rays_buf_, prim_inters_buf_, color_table_buf_,
     secondary_rays_buf_, secondary_rays_count_buf_;
@@ -60,9 +61,12 @@ protected:
                tri_bin_buf_;
 
     cl::Image2D temp_buf_, clean_buf_, final_buf_;
-    Vector<shl1_data_t> sh_data_;
 
-    std::vector<float> frame_pixels_;
+    cl::Buffer sh_data_temp_, sh_data_clean_;
+    size_t sh_data_size_ = 0;
+
+    std::vector<pixel_color_t> frame_pixels_;
+    std::vector<shl1_data_t> sh_data_host_;
 
     stats_t stats_ = { 0 };
 
@@ -122,6 +126,9 @@ protected:
     bool kernel_ReorderRays(const cl::Buffer &in_rays, const cl::Buffer &in_indices, cl_int count, const cl::Buffer &out_rays);
     bool kernel_MixIncremental(const cl::Image2D &fbuf1, const cl::Image2D &fbuf2, cl_float k, const cl::Image2D &res);
     bool kernel_Postprocess(const cl::Image2D &frame_buf, cl_int w, cl_int h, cl_float inv_gamma, cl_int clamp, const cl::Image2D &out_pixels);
+    bool kernel_StoreSHCoeffs(const cl::Buffer &in_rays, cl_int rays_count, cl_int w, const cl::Buffer &out_sh_data);
+    bool kernel_ComputeSHData(const cl::Image2D &clean_buf, cl_int w, cl_int h, const cl::Buffer &in_out_sh_data);
+    bool kernel_MixSHData(const cl::Buffer &sh_data_temp, cl_int count, cl_float k, const cl::Buffer &sh_data_clean);
 
     void UpdateHaltonSequence(int iteration, std::unique_ptr<float[]> &seq);
 
@@ -164,7 +171,7 @@ public:
     }
 
     const shl1_data_t *get_sh_data_ref() const override {
-        return nullptr;
+        return &sh_data_host_[0];
     }
 
     void Resize(int w, int h) override;

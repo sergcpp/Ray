@@ -53,7 +53,7 @@ const char *cl_src_transform =
 
 #define USE_IMG_BUFFERS 1
 
-Ray::Ocl::Renderer::Renderer(int w, int h, int platform_index, int device_index) : loaded_halton_(-1), sh_data_{ CL_MEM_READ_WRITE | CL_MEM_HOST_READ_ONLY } {
+Ray::Ocl::Renderer::Renderer(int w, int h, int platform_index, int device_index) : loaded_halton_(-1) {
     std::vector<cl::Platform> platforms;
     cl::Platform::get(&platforms);
     if (platforms.empty()) throw std::runtime_error("Cannot create OpenCL renderer!");
@@ -252,6 +252,13 @@ Ray::Ocl::Renderer::Renderer(int w, int h, int platform_index, int device_index)
         post_process_kernel_ = cl::Kernel(program_, "PostProcess", &error);
         if (error != CL_SUCCESS) throw std::runtime_error("Cannot create OpenCL renderer!");
 
+        store_sh_coeffs_kernel_ = cl::Kernel(program_, "StoreSHCoeffs", &error);
+        if (error != CL_SUCCESS) throw std::runtime_error("Cannot create OpenCL renderer!");
+        compute_sh_data_kernel_ = cl::Kernel(program_, "ComputeSHData", &error);
+        if (error != CL_SUCCESS) throw std::runtime_error("Cannot create OpenCL renderer!");
+        mix_sh_data_kernel_ = cl::Kernel(program_, "MixSHData", &error);
+        if (error != CL_SUCCESS) throw std::runtime_error("Cannot create OpenCL renderer!");
+
 #if !defined(NDEBUG)
         cl::Kernel types_check = cl::Kernel(program_, "TypesCheck", &error);
         if (error != CL_SUCCESS) throw std::runtime_error("Cannot create OpenCL renderer!");
@@ -272,7 +279,8 @@ Ray::Ocl::Renderer::Renderer(int w, int h, int platform_index, int device_index)
                 types_check.setArg(argc++, sizeof(light_t), buf) != CL_SUCCESS ||
                 types_check.setArg(argc++, sizeof(environment_t), buf) != CL_SUCCESS ||
                 types_check.setArg(argc++, sizeof(ray_chunk_t), buf) != CL_SUCCESS ||
-                types_check.setArg(argc++, sizeof(pass_info_t), buf) != CL_SUCCESS) {
+                types_check.setArg(argc++, sizeof(pass_info_t), buf) != CL_SUCCESS ||
+                types_check.setArg(argc++, sizeof(shl1_data_t), buf) != CL_SUCCESS) {
 #if defined(_MSC_VER)
             __debugbreak();
 #endif
@@ -374,7 +382,7 @@ void Ray::Ocl::Renderer::Resize(int w, int h) {
     final_buf_ = cl::Image2D(context_, CL_MEM_READ_WRITE, cl::ImageFormat { CL_RGBA, CL_FLOAT }, (size_t)w, (size_t)h, 0, nullptr, &error);
     if (error != CL_SUCCESS) throw std::runtime_error("Cannot create OpenCL renderer!");
 
-    frame_pixels_.resize((size_t)4 * w * h);
+    frame_pixels_.resize((size_t)w * h);
 
     w_ = w; h_ = h;
 }
@@ -496,6 +504,19 @@ void Ray::Ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
     const auto time_after_prim_shade = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::micro> secondary_sort_time{}, secondary_trace_time{}, secondary_shade_time{};
 
+    if (cam.pass_flags & OutputSH) {
+        if (sh_data_size_ != w_ * h_) {
+            size_t new_size = w_ * h_;
+            sh_data_temp_ = cl::Buffer(context_, CL_MEM_READ_WRITE, sizeof(shl1_data_t) * new_size, nullptr, &error);
+            if (error != CL_SUCCESS) return;
+            sh_data_clean_ = cl::Buffer(context_, CL_MEM_READ_WRITE, sizeof(shl1_data_t) * new_size, nullptr, &error);
+            if (error != CL_SUCCESS) return;
+            sh_data_host_.resize(new_size);
+            sh_data_size_ = new_size;
+        }
+        if (!kernel_StoreSHCoeffs(secondary_rays_buf_, secondary_rays_count, (cl_int)w_, sh_data_temp_)) return;
+    }
+
     for (int bounce = 0; bounce < MAX_BOUNCES && secondary_rays_count && !(pass_info.flags & SkipIndirectLight); bounce++) {
         auto time_secondary_sort_start = std::chrono::high_resolution_clock::now();
 
@@ -564,15 +585,24 @@ void Ray::Ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
     stats_.time_secondary_trace_us += (unsigned long long)secondary_trace_time.count();
     stats_.time_secondary_shade_us += (unsigned long long)secondary_shade_time.count();
 
-    float k = 1.0f / region.iteration;
+    // factor used to compute incremental average
+    float mix_factor = 1.0f / region.iteration;
 
-    if (!kernel_MixIncremental(clean_buf_, temp_buf_, (cl_float)k, final_buf_)) return;
+    if (!kernel_MixIncremental(clean_buf_, temp_buf_, (cl_float)mix_factor, final_buf_)) return;
     std::swap(final_buf_, clean_buf_);
+
+    if (cam.pass_flags & OutputSH) {
+        if (!kernel_ComputeSHData(temp_buf_, (cl_int)w_, (cl_int)h_, sh_data_temp_)) return;
+        if (!kernel_MixSHData(sh_data_temp_, (cl_int)(w_ * h_), mix_factor, sh_data_clean_)) return;
+    }
 
     cl_int _clamp = (cam.pass_flags & Clamp) ? 1 : 0;
     if (!kernel_Postprocess(clean_buf_, w_, h_, (cl_float)(1.0f / cam.gamma), _clamp, final_buf_)) return;
 
     error = queue_.enqueueReadImage(final_buf_, CL_TRUE, {}, { (size_t)w_, (size_t)h_, 1 }, 0, 0, &frame_pixels_[0]);
+    if (error != CL_SUCCESS) return;
+
+    error = queue_.enqueueReadBuffer(sh_data_clean_, CL_TRUE, 0, sizeof(shl1_data_t) * w_ * h_, &sh_data_host_[0]);
 }
 
 bool Ray::Ocl::Renderer::kernel_GeneratePrimaryRays(const cl_int iteration, const Ray::Ocl::camera_t &cam, const Ray::rect_t &rect, cl_int w, cl_int h, const cl::Buffer &halton, const cl::Buffer &out_rays) {
@@ -1244,6 +1274,45 @@ bool Ray::Ocl::Renderer::kernel_Postprocess(const cl::Image2D &frame_buf, cl_int
     cl::NDRange local = cl::NullRange;//{ (size_t)8, std::min((size_t)8, max_work_group_size_ / 8) };
 
     return queue_.enqueueNDRangeKernel(post_process_kernel_, cl::NullRange, global, local) == CL_SUCCESS;
+}
+
+bool Ray::Ocl::Renderer::kernel_StoreSHCoeffs(const cl::Buffer &in_rays, cl_int rays_count, cl_int w, const cl::Buffer &out_sh_data) {
+    cl_uint argc = 0;
+    if (store_sh_coeffs_kernel_.setArg(argc++, in_rays) != CL_SUCCESS ||
+        store_sh_coeffs_kernel_.setArg(argc++, w) != CL_SUCCESS ||
+        store_sh_coeffs_kernel_.setArg(argc++, out_sh_data) != CL_SUCCESS) {
+        return false;
+    }
+
+    cl::NDRange global = { (size_t)(rays_count) };
+
+    return queue_.enqueueNDRangeKernel(store_sh_coeffs_kernel_, cl::NullRange, global, cl::NullRange) == CL_SUCCESS;
+}
+
+bool Ray::Ocl::Renderer::kernel_ComputeSHData(const cl::Image2D &clean_buf, cl_int w, cl_int h, const cl::Buffer &in_out_sh_data) {
+    cl_uint argc = 0;
+    if (compute_sh_data_kernel_.setArg(argc++, clean_buf) != CL_SUCCESS ||
+        compute_sh_data_kernel_.setArg(argc++, w) != CL_SUCCESS ||
+        compute_sh_data_kernel_.setArg(argc++, in_out_sh_data) != CL_SUCCESS) {
+        return false;
+    }
+
+    cl::NDRange global = { (size_t)w, (size_t)h };
+
+    return queue_.enqueueNDRangeKernel(compute_sh_data_kernel_, cl::NullRange, global, cl::NullRange) == CL_SUCCESS;
+}
+
+bool Ray::Ocl::Renderer::kernel_MixSHData(const cl::Buffer &sh_data_temp, cl_int count, cl_float k, const cl::Buffer &sh_data_clean) {
+    cl_uint argc = 0;
+    if (mix_sh_data_kernel_.setArg(argc++, sh_data_temp) != CL_SUCCESS ||
+        mix_sh_data_kernel_.setArg(argc++, k) != CL_SUCCESS ||
+        mix_sh_data_kernel_.setArg(argc++, sh_data_clean) != CL_SUCCESS) {
+        return false;
+    }
+
+    cl::NDRange global = { (size_t)count };
+
+    return queue_.enqueueNDRangeKernel(mix_sh_data_kernel_, cl::NullRange, global, cl::NullRange) == CL_SUCCESS;
 }
 
 void Ray::Ocl::Renderer::UpdateHaltonSequence(int iteration, std::unique_ptr<float[]> &seq) {
