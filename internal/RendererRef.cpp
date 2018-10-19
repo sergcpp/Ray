@@ -175,13 +175,14 @@ void Ray::Ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
     p.skeleton.resize(secondary_rays_count);
 
     if (cam.pass_flags & OutputSH) {
-        for (size_t i = 0; i < p.intersections.size(); i++) {
-            const auto &r = p.primary_rays[i];
+        temp_buf_.ResetSampleData(rect);
 
-            const int x = r.id.x;
-            const int y = r.id.y;
+        for (size_t i = 0; i < secondary_rays_count; i++) {
+            const auto &r = p.secondary_rays[i];
 
-            temp_buf_.SetPixelDir(x, y, r.d[0], r.d[1], r.d[2]);
+            const int x = r.id.x, y = r.id.y;
+
+            temp_buf_.SetSampleDir(x, y, r.d[0], r.d[1], r.d[2]);
             // sample weight for indirect lightmap has all r.c[0..2]`s set to same value
             temp_buf_.SetSampleWeight(x, y, r.c[0]);
         }

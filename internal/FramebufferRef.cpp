@@ -41,14 +41,26 @@ void Ray::Ref::Framebuffer::Clear(const pixel_color_t &p) {
     }
 }
 
+void Ray::Ref::Framebuffer::ResetSampleData(const rect_t &rect) {
+    for (int y = rect.y; y < rect.y + rect.h; y++) {
+        for (int x = rect.x; x < rect.x + rect.w; x++) {
+            int i = y * w_ + x;
+
+            auto &sh_data = sh_data_[i];
+            sh_data.coeff_g[0] = 0.0f;
+        }
+    }
+}
+
 void Ray::Ref::Framebuffer::ComputeSHData(const rect_t &rect) {
     for (int y = rect.y; y < rect.y + rect.h; y++) {
         for (int x = rect.x; x < rect.x + rect.w; x++) {
             int i = y * w_ + x;
 
             auto &sh_data = sh_data_[i];
-            const float *sh_coeff = sh_data.coeff_r;
-            const float inv_weight = 1.0f / sh_data.coeff_g[0];
+            //const float *sh_coeff = sh_data.coeff_r;
+            const float sh_coeff[] = { sh_data.coeff_r[0], sh_data.coeff_r[1], sh_data.coeff_r[2], sh_data.coeff_r[3] };
+            const float inv_weight = sh_data.coeff_g[0] > FLT_EPS ? (4.0f * PI / sh_data.coeff_g[0]) : 0.0f;
 
             auto p = pixels_[i];
             p.r *= inv_weight;
@@ -73,8 +85,6 @@ void Ray::Ref::Framebuffer::MixWith(const Framebuffer &f2, const rect_t &rect, f
 }
 
 void Ray::Ref::Framebuffer::MixWith_SH(const Framebuffer &f2, const rect_t &rect, float k) {
-    const float weight = 4.0f * PI * k;
-
     for (int y = rect.y; y < rect.y + rect.h; y++) {
         for (int x = rect.x; x < rect.x + rect.w; x++) {
             int i = y * w_ + x;
@@ -83,9 +93,9 @@ void Ray::Ref::Framebuffer::MixWith_SH(const Framebuffer &f2, const rect_t &rect
             auto &out_sh = sh_data_[i];
 
             for (int j = 0; j < 4; j++) {
-                out_sh.coeff_r[j] += (in_sh.coeff_r[j] - out_sh.coeff_r[j]) * weight;
-                out_sh.coeff_g[j] += (in_sh.coeff_g[j] - out_sh.coeff_g[j]) * weight;
-                out_sh.coeff_b[j] += (in_sh.coeff_b[j] - out_sh.coeff_b[j]) * weight;
+                out_sh.coeff_r[j] += (in_sh.coeff_r[j] - out_sh.coeff_r[j]) * k;
+                out_sh.coeff_g[j] += (in_sh.coeff_g[j] - out_sh.coeff_g[j]) * k;
+                out_sh.coeff_b[j] += (in_sh.coeff_b[j] - out_sh.coeff_b[j]) * k;
             }
         }
     }

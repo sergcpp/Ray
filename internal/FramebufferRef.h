@@ -50,7 +50,7 @@ public:
         pixels_[i].a += (p.a - pixels_[i].a) * k;
     }
 
-    force_inline void SetPixelDir(int x, int y, float dir_x, float dir_y, float dir_z) {
+    force_inline void SetSampleDir(int x, int y, float dir_x, float dir_y, float dir_z) {
         int i = y * w_ + x;
 
         const float SH_Y0 = 0.282094806f; // sqrt(1.0f / (4.0f * PI))
@@ -74,6 +74,7 @@ public:
     void Resize(int w, int h, bool alloc_sh);
     void Clear(const pixel_color_t &p);
 
+    void ResetSampleData(const rect_t &rect);
     void ComputeSHData(const rect_t &rect);
 
     template <typename F>

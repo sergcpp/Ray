@@ -1325,14 +1325,12 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
 
         if (pi.use_uniform_sampling()) {
             const float dir = std::sqrt(1.0f - u1 * u1);
-            V = dir * sin_phi * B + u1 * N + dir * cos_phi * T;
+            V = normalize(dir * sin_phi * B + u1 * N + dir * cos_phi * T);
             weight = 2 * u1;
         } else {
             const float dir = std::sqrt(u1);
-            V = dir * sin_phi * B + std::sqrt(1.0f - u1) * N + dir * cos_phi * T;
+            V = normalize(dir * sin_phi * B + std::sqrt(1.0f - u1) * N + dir * cos_phi * T);
         }
-
-        const float dir = std::sqrt(1.0f - u1 * u1);
 
         ray_packet_t r;
 

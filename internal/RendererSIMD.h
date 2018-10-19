@@ -285,7 +285,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
                          y = r.xy & 0x0000FFFF;
 
             for (int j = 0; j < S; j++) {
-                temp_buf_.SetPixelDir(x[j], y[j], r.d[0][j], r.d[1][j], r.d[2][j]);
+                temp_buf_.SetSampleDir(x[j], y[j], r.d[0][j], r.d[1][j], r.d[2][j]);
                 // sample weight for indirect lightmap has all r.c[0..2]`s set to same value
                 temp_buf_.SetSampleWeight(x[j], y[j], r.c[0][j]);
             }

@@ -391,6 +391,9 @@ void Ray::Ocl::Renderer::Clear(const pixel_color_t &c) {
     static_assert(sizeof(pixel_color_t) == sizeof(cl_float4), "!");
     queue_.enqueueFillImage(clean_buf_, *(cl_float4 *)&c, {}, { (size_t)w_, (size_t)h_, 1 });
     queue_.enqueueFillImage(final_buf_, *(cl_float4 *)&c, {}, { (size_t)w_, (size_t)h_, 1 });
+
+    shl1_data_t sh_data = {};
+    queue_.enqueueFillBuffer(sh_data_clean_, sh_data, 0, sh_data_size_ * sizeof(shl1_data_t));
 }
 
 std::shared_ptr<Ray::SceneBase> Ray::Ocl::Renderer::CreateScene() {
