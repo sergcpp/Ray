@@ -70,7 +70,7 @@ public:
     }
 
     const SHL1_data *get_sh_data_ref() const override {
-        return final_buf_.get_sh_data_ref();
+        return clean_buf_.get_sh_data_ref();
     }
 
     void Resize(int w, int h) override {
@@ -192,6 +192,12 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
             p = std::move(pass_cache_.back());
             pass_cache_.pop_back();
         }
+
+        // allocate sh data on demand
+        if (cam.pass_flags & OutputSH) {
+            temp_buf_.Resize(w, h, true);
+            clean_buf_.Resize(w, h, true);
+        }
     }
 
     pass_info_t pass_info;
@@ -271,6 +277,21 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
     p.chunks_temp.resize(secondary_rays_count * S);
     p.skeleton.resize(secondary_rays_count * S);
 
+    if (cam.pass_flags & OutputSH) {
+        for (size_t i = 0; i < p.intersections.size(); i++) {
+            const auto &r = p.primary_rays[i];
+
+            simd_ivec<S> x = r.xy >> 16,
+                         y = r.xy & 0x0000FFFF;
+
+            for (int j = 0; j < S; j++) {
+                temp_buf_.SetPixelDir(x[j], y[j], r.d[0][j], r.d[1][j], r.d[2][j]);
+                // sample weight for indirect lightmap has all r.c[0..2]`s set to same value
+                temp_buf_.SetSampleWeight(x[j], y[j], r.c[0][j]);
+            }
+        }
+    }
+
     for (int bounce = 0; bounce < MAX_BOUNCES && secondary_rays_count && !(pass_info.flags & SkipIndirectLight); bounce++) {
         auto time_secondary_sort_start = std::chrono::high_resolution_clock::now();
 
@@ -339,7 +360,14 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
         stats_.time_secondary_shade_us += (unsigned long long)secondary_shade_time.count();
     }
 
-    clean_buf_.MixWith(temp_buf_, rect, 1.0f / region.iteration);
+    // factor used to compute incremental average
+    const float mix_factor = 1.0f / region.iteration;
+
+    clean_buf_.MixWith(temp_buf_, rect, mix_factor);
+    if (cam.pass_flags & OutputSH) {
+        temp_buf_.ComputeSHData(rect);
+        clean_buf_.MixWith_SH(temp_buf_, rect, mix_factor);
+    }
 
     auto clamp_and_gamma_correct = [&cam](const pixel_color_t &p) {
         auto c = simd_fvec4(&p.r);
