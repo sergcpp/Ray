@@ -60,7 +60,7 @@ public:
         return final_buf_.get_pixels_ref();
     }
 
-    const SHL1_data *get_sh_data_ref() const override {
+    const shl1_data_t *get_sh_data_ref() const override {
         return clean_buf_.get_sh_data_ref();
     }
 

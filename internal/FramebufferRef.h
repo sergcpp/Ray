@@ -12,7 +12,7 @@ namespace Ref {
 class Framebuffer {
     int w_, h_;
     std::vector<pixel_color_t> pixels_;
-    std::vector<SHL1_data> sh_data_;
+    std::vector<shl1_data_t> sh_data_;
 public:
     Framebuffer(int w, int h);
 
@@ -89,7 +89,7 @@ public:
         return &pixels_[0];
     }
 
-    const SHL1_data *get_sh_data_ref() const {
+    const shl1_data_t *get_sh_data_ref() const {
         return &sh_data_[0];
     }
 

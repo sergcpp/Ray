@@ -23,10 +23,10 @@ struct pixel_color8_t {
 };
 static_assert(sizeof(pixel_color8_t) == 4, "!");
 
-struct SHL1_data {
+struct shl1_data_t {
     float coeff_r[4], coeff_g[4], coeff_b[4];
 };
-static_assert(sizeof(SHL1_data) == 48, "!");
+static_assert(sizeof(shl1_data_t) == 48, "!");
 
 /// Rectangle struct
 struct rect_t { int x, y, w, h; };

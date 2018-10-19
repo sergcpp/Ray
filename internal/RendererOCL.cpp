@@ -53,7 +53,7 @@ const char *cl_src_transform =
 
 #define USE_IMG_BUFFERS 1
 
-Ray::Ocl::Renderer::Renderer(int w, int h, int platform_index, int device_index) : loaded_halton_(-1) {
+Ray::Ocl::Renderer::Renderer(int w, int h, int platform_index, int device_index) : loaded_halton_(-1), sh_data_{ CL_MEM_READ_WRITE | CL_MEM_HOST_READ_ONLY } {
     std::vector<cl::Platform> platforms;
     cl::Platform::get(&platforms);
     if (platforms.empty()) throw std::runtime_error("Cannot create OpenCL renderer!");

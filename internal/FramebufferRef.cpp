@@ -36,7 +36,7 @@ void Ray::Ref::Framebuffer::Clear(const pixel_color_t &p) {
             sh_data_[i] = {};
         }
         for (int i = 1; i < h_; i++) {
-            memcpy(&sh_data_[i * w_], &sh_data_[0], w_ * sizeof(SHL1_data));
+            memcpy(&sh_data_[i * w_], &sh_data_[0], w_ * sizeof(shl1_data_t));
         }
     }
 }

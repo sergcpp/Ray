@@ -7,6 +7,7 @@
 #include <CL/cl2.hpp>
 
 #include "Core.h"
+#include "VectorOCL.h"
 #include "../RendererBase.h"
 
 namespace Ray {
@@ -59,6 +60,7 @@ protected:
                tri_bin_buf_;
 
     cl::Image2D temp_buf_, clean_buf_, final_buf_;
+    Vector<shl1_data_t> sh_data_;
 
     std::vector<float> frame_pixels_;
 
@@ -161,7 +163,7 @@ public:
         return (const pixel_color_t *)&frame_pixels_[0];
     }
 
-    const SHL1_data *get_sh_data_ref() const override {
+    const shl1_data_t *get_sh_data_ref() const override {
         return nullptr;
     }
 
