@@ -1312,15 +1312,27 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
         }
 
         float _unused;
-        const float z = std::modf(halton[hi + 0] + rand_offset, &_unused);
+        const float u1 = std::modf(halton[hi + 0] + rand_offset, &_unused);
+        const float u2 = std::modf(halton[hi + 1] + rand_offset2, &_unused);
 
-        const float dir = std::sqrt(z);
-        const float phi = 2 * PI * std::modf(halton[hi + 1] + rand_offset2, &_unused);
+        const float phi = 2 * PI * u2;
 
         const float cos_phi = std::cos(phi);
         const float sin_phi = std::sin(phi);
 
-        const auto V = dir * sin_phi * B + std::sqrt(1.0f - dir) * N + dir * cos_phi * T;
+        simd_fvec3 V;
+        float weight = 1.0f;
+
+        if (pi.use_uniform_sampling()) {
+            const float dir = std::sqrt(1.0f - u1 * u1);
+            V = dir * sin_phi * B + u1 * N + dir * cos_phi * T;
+            weight = 2 * u1;
+        } else {
+            const float dir = std::sqrt(u1);
+            V = dir * sin_phi * B + std::sqrt(1.0f - u1) * N + dir * cos_phi * T;
+        }
+
+        const float dir = std::sqrt(1.0f - u1 * u1);
 
         ray_packet_t r;
 
@@ -1331,7 +1343,9 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
         memcpy(&r.d[0], value_ptr(V), 3 * sizeof(float));
         memcpy(&r.c[0], &ray.c[0], 3 * sizeof(float));
         if (pi.should_consider_albedo()) {
-            r.c[0] *= albedo[0]; r.c[1] *= albedo[1]; r.c[2] *= albedo[2];
+            r.c[0] *= weight * albedo[0]; r.c[1] *= weight * albedo[1]; r.c[2] *= weight * albedo[2];
+        } else {
+            r.c[0] *= weight; r.c[1] *= weight; r.c[2] *= weight;
         }
 
         memcpy(&r.do_dx[0], value_ptr(surf_der.do_dx), 3 * sizeof(float));

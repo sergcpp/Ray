@@ -22,6 +22,9 @@ float3 refract(float3 I, float3 N, float eta) {
 #define should_consider_albedo(pi) \
     (!(pi->flags & LightingOnly) || pi->bounce > 2)
 
+#define use_uniform_sampling(pi) \
+    ((pi->flags & OutputSH) && pi->bounce <= 2)
+
 float3 ComputeDirectLighting(const float3 P, const float3 N, const float3 B, const float3 plane_N,
                              __global const float *halton, const int hi, float rand_offset, float rand_offset2,
                              __global const mesh_instance_t *mesh_instances, __global const uint *mi_indices,
@@ -298,19 +301,29 @@ R"(
         }
 
         float _unused;
-        const float z = fract(halton[hi + 0] + rand_offset, &_unused);
+        const float u1 = fract(halton[hi + 0] + rand_offset, &_unused);
+        const float u2 = fract(halton[hi + 1] + rand_offset2, &_unused);
 
-        const float dir = sqrt(z);
-        const float phi = 2 * PI * fract(halton[hi + 1] + rand_offset2, &_unused);
+        const float phi = 2 * PI * u2;
         float cos_phi;
         const float sin_phi = sincos(phi, &cos_phi);
 
-        const float3 V = dir * sin_phi * B + sqrt(1.0f - dir) * N + dir * cos_phi * T;
+        float3 V;
+        float weight = 1.0f;
+
+        if (use_uniform_sampling(pi)) {
+            const float dir = sqrt(1.0f - u1 * u1);
+            V = dir * sin_phi * B + u1 * N + dir * cos_phi * T;
+            weight = 2.0f * u1;
+        } else {
+            const float dir = sqrt(u1);
+            V = dir * sin_phi * B + sqrt(1.0f - u1) * N + dir * cos_phi * T;
+        }
 
         ray_packet_t r;
         r.o = (float4)(P + HIT_BIAS * plane_N, (float)px.x);
         r.d = (float4)(V, (float)px.y);
-        r.c = orig_ray->c;
+        r.c = orig_ray->c * weight;
         if (should_consider_albedo(pi)) {
             r.c.xyz *= albedo.xyz;
         }

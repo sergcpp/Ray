@@ -63,6 +63,14 @@ public:
         sh_data_[i].coeff_r[3] = SH_Y1 * v[0];
     }
 
+    force_inline void SetSampleWeight(int x, int y, const float weight) {
+        int i = y * w_ + x;
+
+        // temporary store sample weight in place of green channel
+        sh_data_[i].coeff_g[0] = weight;
+
+    }
+
     void Resize(int w, int h, bool alloc_sh);
     void Clear(const pixel_color_t &p);
 

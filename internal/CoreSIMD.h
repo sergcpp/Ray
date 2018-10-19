@@ -2067,18 +2067,27 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                     if (!same_mi[i]) continue;
 
                     float _unused;
-                    const float z = std::modf(halton[hi + 0] + rand_offset[i], &_unused);
+                    const float u1 = std::modf(halton[hi + 0] + rand_offset[i], &_unused);
+                    const float u2 = std::modf(halton[hi + 1] + rand_offset2[i], &_unused);
 
-                    const float dir = std::sqrt(z);
-                    const float phi = 2 * PI * std::modf(halton[hi + 1] + rand_offset2[i], &_unused);
+                    const float phi = 2 * PI * u2;
 
                     const float cos_phi = std::cos(phi);
                     const float sin_phi = std::sin(phi);
 
-                    V[0][i] = dir * sin_phi * __B[0][i] + std::sqrt(1.0f - dir) * __N[0][i] + dir * cos_phi * __T[0][i];
-                    V[1][i] = dir * sin_phi * __B[1][i] + std::sqrt(1.0f - dir) * __N[1][i] + dir * cos_phi * __T[1][i];
-                    V[2][i] = dir * sin_phi * __B[2][i] + std::sqrt(1.0f - dir) * __N[2][i] + dir * cos_phi * __T[2][i];
-                
+                    if (pi.use_uniform_sampling()) {
+                        const float dir = std::sqrt(1.0f - u1 * u1);
+                        V[0][i] = dir * sin_phi * __B[0][i] + u1 * __N[0][i] + dir * cos_phi * __T[0][i];
+                        V[1][i] = dir * sin_phi * __B[1][i] + u1 * __N[1][i] + dir * cos_phi * __T[1][i];
+                        V[2][i] = dir * sin_phi * __B[2][i] + u1 * __N[2][i] + dir * cos_phi * __T[2][i];
+                        rc[0][i] *= 2.0f * u1; rc[1][i] *= 2.0f * u1; rc[2][i] *= 2.0f * u1;
+                    } else {
+                        const float dir = std::sqrt(u1);
+                        V[0][i] = dir * sin_phi * __B[0][i] + std::sqrt(1.0f - u1) * __N[0][i] + dir * cos_phi * __T[0][i];
+                        V[1][i] = dir * sin_phi * __B[1][i] + std::sqrt(1.0f - u1) * __N[1][i] + dir * cos_phi * __T[1][i];
+                        V[2][i] = dir * sin_phi * __B[2][i] + std::sqrt(1.0f - u1) * __N[2][i] + dir * cos_phi * __T[2][i];
+                    }
+
                     p[i] = std::modf(halton[hi + 0] + rand_offset3[i], &_unused);
                 }
 

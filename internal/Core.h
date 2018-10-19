@@ -206,6 +206,11 @@ struct pass_info_t {
         // do not use albedo in lightmap mode for primary bounce
         return !(flags & LightingOnly) || bounce > 2;
     }
+
+    force_inline bool use_uniform_sampling() const {
+        // do not use diffuse-specific sampling
+        return ((flags & OutputSH) && bounce <= 2);
+    }
 };
 static_assert(sizeof(pass_info_t) == 16, "!");
 

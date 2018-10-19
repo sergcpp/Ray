@@ -40,11 +40,12 @@ void Ray::Ref::Framebuffer::ComputeSHData(const rect_t &rect) {
             const auto &p = pixels_[i];
             auto &sh_data = sh_data_[i];
             const float *sh_coeff = sh_data.coeff_r;
+            const float inv_weight = 1.0f / sh_data.coeff_g[0];
 
             for (int j = 0; j < 4; j++) {
-                sh_data.coeff_g[j] = sh_coeff[j] * p.g;
-                sh_data.coeff_b[j] = sh_coeff[j] * p.b;
-                sh_data.coeff_r[j] = sh_coeff[j] * p.r;
+                sh_data.coeff_g[j] = sh_coeff[j] * p.g * inv_weight;
+                sh_data.coeff_b[j] = sh_coeff[j] * p.b * inv_weight;
+                sh_data.coeff_r[j] = sh_coeff[j] * p.r * inv_weight;
             }
         }
     }
