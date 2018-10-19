@@ -1341,11 +1341,11 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
 
         memcpy(&r.o[0], value_ptr(P + HIT_BIAS * plane_N), 3 * sizeof(float));
         memcpy(&r.d[0], value_ptr(V), 3 * sizeof(float));
-        memcpy(&r.c[0], &ray.c[0], 3 * sizeof(float));
+
+        r.c[0] = ray.c[0] * weight; r.c[1] = ray.c[1] * weight; r.c[2] = ray.c[2] * weight;
+
         if (pi.should_consider_albedo()) {
-            r.c[0] *= weight * albedo[0]; r.c[1] *= weight * albedo[1]; r.c[2] *= weight * albedo[2];
-        } else {
-            r.c[0] *= weight; r.c[1] *= weight; r.c[2] *= weight;
+            r.c[0] *= albedo[0]; r.c[1] *= albedo[1]; r.c[2] *= albedo[2];
         }
 
         memcpy(&r.do_dx[0], value_ptr(surf_der.do_dx), 3 * sizeof(float));

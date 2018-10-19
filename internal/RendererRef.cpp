@@ -181,8 +181,8 @@ void Ray::Ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
             const int x = r.id.x;
             const int y = r.id.y;
 
-            temp_buf_.SetPixelDir(x, y, r.d);
-            // sample weight for indirect lightmap has all r.c[0..2] set to same value
+            temp_buf_.SetPixelDir(x, y, r.d[0], r.d[1], r.d[2]);
+            // sample weight for indirect lightmap has all r.c[0..2]`s set to same value
             temp_buf_.SetSampleWeight(x, y, r.c[0]);
         }
     }

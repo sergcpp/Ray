@@ -50,7 +50,7 @@ public:
         pixels_[i].a += (p.a - pixels_[i].a) * k;
     }
 
-    force_inline void SetPixelDir(int x, int y, const float v[3]) {
+    force_inline void SetPixelDir(int x, int y, float dir_x, float dir_y, float dir_z) {
         int i = y * w_ + x;
 
         const float SH_Y0 = 0.282094806f; // sqrt(1.0f / (4.0f * PI))
@@ -58,9 +58,9 @@ public:
 
         // temporary store sh coefficients in place of red channel
         sh_data_[i].coeff_r[0] = SH_Y0;
-        sh_data_[i].coeff_r[1] = SH_Y1 * v[1];
-        sh_data_[i].coeff_r[2] = SH_Y1 * v[2];
-        sh_data_[i].coeff_r[3] = SH_Y1 * v[0];
+        sh_data_[i].coeff_r[1] = SH_Y1 * dir_y;
+        sh_data_[i].coeff_r[2] = SH_Y1 * dir_z;
+        sh_data_[i].coeff_r[3] = SH_Y1 * dir_x;
     }
 
     force_inline void SetSampleWeight(int x, int y, const float weight) {
