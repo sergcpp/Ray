@@ -278,8 +278,9 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
     p.skeleton.resize(secondary_rays_count * S);
 
     if (cam.pass_flags & OutputSH) {
-        for (size_t i = 0; i < p.intersections.size(); i++) {
-            const auto &r = p.primary_rays[i];
+        temp_buf_.ResetSampleData(rect);
+        for (size_t i = 0; i < secondary_rays_count; i++) {
+            const auto &r = p.secondary_rays[i];
 
             simd_ivec<S> x = r.xy >> 16,
                          y = r.xy & 0x0000FFFF;

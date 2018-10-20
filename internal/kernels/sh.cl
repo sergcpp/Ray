@@ -24,6 +24,12 @@ float4 SH_EvaluateDiffuseL1(const float3 v) {
 }
 
 __kernel
+void ResetSampleData(__global shl1_data_t *out_sh_data) {
+    const int i = get_global_id(0);
+    out_sh_data[i].coeff_g.x = 0.0f;
+}
+
+__kernel
 void StoreSHCoeffs(const __global ray_packet_t *rays, int w, __global shl1_data_t *out_sh_data) {
     const int i = get_global_id(0);
 
@@ -42,7 +48,7 @@ void ComputeSHData(__read_only image2d_t clean_buf, int w, __global shl1_data_t 
     __global shl1_data_t *sh_data = &in_out_sh_data[j * w + i];
 
     float4 sh_coeff = sh_data->coeff_r;
-    const float inv_weight = 4.0f * PI / sh_data->coeff_g[0];
+    const float inv_weight = sh_data->coeff_g.x > FLT_EPS ? (4.0f * PI / sh_data->coeff_g.x) : 0.0f;
 
     float4 col = read_imagef(clean_buf, i_fbuf_sampler, (int2)(i, j));
     col *= inv_weight;

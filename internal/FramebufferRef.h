@@ -34,6 +34,11 @@ public:
         return pixels_[i];
     }
 
+    force_inline const shl1_data_t &GetSHData(int x, int y) const {
+        int i = y * w_ + x;
+        return sh_data_[i];
+    }
+
     force_inline void AddPixel(int x, int y, const pixel_color_t &p) {
         int i = y * w_ + x;
         pixels_[i].r += p.r;
@@ -48,6 +53,17 @@ public:
         pixels_[i].g += (p.g - pixels_[i].g) * k;
         pixels_[i].b += (p.b - pixels_[i].b) * k;
         pixels_[i].a += (p.a - pixels_[i].a) * k;
+    }
+
+    force_inline void MixSHData(int x, int y, const shl1_data_t &sh, float k) {
+        int i = y * w_ + x;
+        auto &out_sh = sh_data_[i];
+
+        for (int j = 0; j < 4; j++) {
+            out_sh.coeff_r[j] += (sh.coeff_r[j] - out_sh.coeff_r[j]) * k;
+            out_sh.coeff_g[j] += (sh.coeff_g[j] - out_sh.coeff_g[j]) * k;
+            out_sh.coeff_b[j] += (sh.coeff_b[j] - out_sh.coeff_b[j]) * k;
+        }
     }
 
     force_inline void SetSampleDir(int x, int y, float dir_x, float dir_y, float dir_z) {

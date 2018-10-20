@@ -258,6 +258,8 @@ Ray::Ocl::Renderer::Renderer(int w, int h, int platform_index, int device_index)
         if (error != CL_SUCCESS) throw std::runtime_error("Cannot create OpenCL renderer!");
         mix_sh_data_kernel_ = cl::Kernel(program_, "MixSHData", &error);
         if (error != CL_SUCCESS) throw std::runtime_error("Cannot create OpenCL renderer!");
+        reset_sample_data_kernel_ = cl::Kernel(program_, "ResetSampleData", &error);
+        if (error != CL_SUCCESS) throw std::runtime_error("Cannot create OpenCL renderer!");
 
 #if !defined(NDEBUG)
         cl::Kernel types_check = cl::Kernel(program_, "TypesCheck", &error);
@@ -517,6 +519,7 @@ void Ray::Ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
             sh_data_host_.resize(new_size);
             sh_data_size_ = new_size;
         }
+        if (!kernel_ResetSampleData(sh_data_temp_, (cl_int)sh_data_size_)) return;
         if (!kernel_StoreSHCoeffs(secondary_rays_buf_, secondary_rays_count, (cl_int)w_, sh_data_temp_)) return;
     }
 
@@ -1277,6 +1280,17 @@ bool Ray::Ocl::Renderer::kernel_Postprocess(const cl::Image2D &frame_buf, cl_int
     cl::NDRange local = cl::NullRange;//{ (size_t)8, std::min((size_t)8, max_work_group_size_ / 8) };
 
     return queue_.enqueueNDRangeKernel(post_process_kernel_, cl::NullRange, global, local) == CL_SUCCESS;
+}
+
+bool Ray::Ocl::Renderer::kernel_ResetSampleData(const cl::Buffer &sh_data, cl_int count) {
+    cl_uint argc = 0;
+    if (reset_sample_data_kernel_.setArg(argc++, sh_data) != CL_SUCCESS) {
+        return false;
+    }
+
+    cl::NDRange global = { (size_t)(count) };
+
+    return queue_.enqueueNDRangeKernel(reset_sample_data_kernel_, cl::NullRange, global, cl::NullRange) == CL_SUCCESS;
 }
 
 bool Ray::Ocl::Renderer::kernel_StoreSHCoeffs(const cl::Buffer &in_rays, cl_int rays_count, cl_int w, const cl::Buffer &out_sh_data) {
