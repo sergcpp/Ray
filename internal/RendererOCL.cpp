@@ -457,12 +457,12 @@ void Ray::Ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
 
         if (s->nodes_.img_buf().get() != nullptr) {
             if (!kernel_TracePrimaryRaysImg(prim_rays_buf_, region.rect(), w_,
-                s->mesh_instances_.buf(), s->mi_indices_.buf(), s->meshes_.buf(), s->transforms_.buf(),
-                s->nodes_.img_buf(), (cl_uint)macro_tree_root, s->tris_.buf(), s->tri_indices_.buf(), prim_inters_buf_)) return;
+                                            s->mesh_instances_.buf(), s->mi_indices_.buf(), s->meshes_.buf(), s->transforms_.buf(),
+                                            s->nodes_.img_buf(), (cl_uint)macro_tree_root, s->tris_.buf(), s->tri_indices_.buf(), prim_inters_buf_)) return;
         } else {
             if (!kernel_TracePrimaryRays(prim_rays_buf_, region.rect(), w_,
-                s->mesh_instances_.buf(), s->mi_indices_.buf(), s->meshes_.buf(), s->transforms_.buf(),
-                s->nodes_.buf(), (cl_uint)macro_tree_root, s->tris_.buf(), s->tri_indices_.buf(), prim_inters_buf_)) return;
+                                         s->mesh_instances_.buf(), s->mi_indices_.buf(), s->meshes_.buf(), s->transforms_.buf(),
+                                         s->nodes_.buf(), (cl_uint)macro_tree_root, s->tris_.buf(), s->tri_indices_.buf(), prim_inters_buf_)) return;
         }
     } else {
         if (!kernel_SampleMesh_ResetBins(w_, h_, tri_bin_buf_)) return;
@@ -488,22 +488,22 @@ void Ray::Ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
 
     cl_int secondary_rays_count = 0;
     if (queue_.enqueueWriteBuffer(secondary_rays_count_buf_, CL_TRUE, 0, sizeof(cl_int),
-                                    &secondary_rays_count) != CL_SUCCESS) return;
+                                  &secondary_rays_count) != CL_SUCCESS) return;
 
     queue_.finish();
     const auto time_after_prim_trace = std::chrono::high_resolution_clock::now();
 
     if (!kernel_ShadePrimary(pass_info, halton_seq_buf_, region.rect(), w_,
-                                prim_inters_buf_, prim_rays_buf_,
-                                s->mesh_instances_.buf(), s->mi_indices_.buf(), s->meshes_.buf(),
-                                s->transforms_.buf(), s->vtx_indices_.buf(), s->vertices_.buf(),
-                                s->nodes_.buf(), (cl_uint)macro_tree_root, s->tris_.buf(), s->tri_indices_.buf(),
-                                s->env_, s->materials_.buf(), s->textures_.buf(), s->texture_atlas_.atlas(),
-                                s->lights_.buf(), s->li_indices_.buf(), (cl_uint)s->light_nodes_start_,
-                                temp_buf_, secondary_rays_buf_, secondary_rays_count_buf_)) return;
-    
+                             prim_inters_buf_, prim_rays_buf_,
+                             s->mesh_instances_.buf(), s->mi_indices_.buf(), s->meshes_.buf(),
+                             s->transforms_.buf(), s->vtx_indices_.buf(), s->vertices_.buf(),
+                             s->nodes_.buf(), (cl_uint)macro_tree_root, s->tris_.buf(), s->tri_indices_.buf(),
+                             s->env_, s->materials_.buf(), s->textures_.buf(), s->texture_atlas_.atlas(),
+                             s->lights_.buf(), s->li_indices_.buf(), (cl_uint)s->light_nodes_start_,
+                             temp_buf_, secondary_rays_buf_, secondary_rays_count_buf_)) return;
+
     if (queue_.enqueueReadBuffer(secondary_rays_count_buf_, CL_TRUE, 0, sizeof(cl_int),
-                                    &secondary_rays_count) != CL_SUCCESS) return;
+                                 &secondary_rays_count) != CL_SUCCESS) return;
 
     queue_.finish();
     const auto time_after_prim_shade = std::chrono::high_resolution_clock::now();
@@ -539,12 +539,12 @@ void Ray::Ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
 
         if (s->nodes_.img_buf().get() != nullptr) {
             if (!kernel_TraceSecondaryRaysImg(secondary_rays_buf_, secondary_rays_count,
-                s->mesh_instances_.buf(), s->mi_indices_.buf(), s->meshes_.buf(), s->transforms_.buf(),
-                s->nodes_.img_buf(), (cl_uint)macro_tree_root, s->tris_.buf(), s->tri_indices_.buf(), prim_inters_buf_)) return;
+                                              s->mesh_instances_.buf(), s->mi_indices_.buf(), s->meshes_.buf(), s->transforms_.buf(),
+                                              s->nodes_.img_buf(), (cl_uint)macro_tree_root, s->tris_.buf(), s->tri_indices_.buf(), prim_inters_buf_)) return;
         } else {
             if (!kernel_TraceSecondaryRays(secondary_rays_buf_, secondary_rays_count,
-                s->mesh_instances_.buf(), s->mi_indices_.buf(), s->meshes_.buf(), s->transforms_.buf(),
-                s->nodes_.buf(), (cl_uint)macro_tree_root, s->tris_.buf(), s->tri_indices_.buf(), prim_inters_buf_)) return;
+                                           s->mesh_instances_.buf(), s->mi_indices_.buf(), s->meshes_.buf(), s->transforms_.buf(),
+                                           s->nodes_.buf(), (cl_uint)macro_tree_root, s->tris_.buf(), s->tri_indices_.buf(), prim_inters_buf_)) return;
         }
 
         cl_int new_secondary_rays_count = 0;
@@ -558,17 +558,17 @@ void Ray::Ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
         auto time_secondary_shade_start = std::chrono::high_resolution_clock::now();
 
         if (queue_.enqueueCopyImage(temp_buf_, final_buf_, { 0, 0, 0 }, { 0, 0, 0 },
-    { (size_t)w_, (size_t)h_, 1 }) != CL_SUCCESS) return;
+        { (size_t)w_, (size_t)h_, 1 }) != CL_SUCCESS) return;
 
         pass_info.bounce = bounce + 3;
 
         if (!kernel_ShadeSecondary(pass_info, halton_seq_buf_, prim_inters_buf_, secondary_rays_buf_, (int)secondary_rays_count, w_, h_,
-                                    s->mesh_instances_.buf(), s->mi_indices_.buf(), s->meshes_.buf(),
-                                    s->transforms_.buf(), s->vtx_indices_.buf(), s->vertices_.buf(),
-                                    s->nodes_.buf(), (cl_uint)macro_tree_root, s->tris_.buf(), s->tri_indices_.buf(),
-                                    s->env_, s->materials_.buf(), s->textures_.buf(), s->texture_atlas_.atlas(),
-                                    s->lights_.buf(), s->li_indices_.buf(), (cl_uint)s->light_nodes_start_,
-                                    final_buf_, temp_buf_, prim_rays_buf_, secondary_rays_count_buf_)) return;
+                                   s->mesh_instances_.buf(), s->mi_indices_.buf(), s->meshes_.buf(),
+                                   s->transforms_.buf(), s->vtx_indices_.buf(), s->vertices_.buf(),
+                                   s->nodes_.buf(), (cl_uint)macro_tree_root, s->tris_.buf(), s->tri_indices_.buf(),
+                                   s->env_, s->materials_.buf(), s->textures_.buf(), s->texture_atlas_.atlas(),
+                                   s->lights_.buf(), s->li_indices_.buf(), (cl_uint)s->light_nodes_start_,
+                                   final_buf_, temp_buf_, prim_rays_buf_, secondary_rays_count_buf_)) return;
 
         if (queue_.enqueueReadBuffer(secondary_rays_count_buf_, CL_TRUE, 0, sizeof(cl_int),
                                      &secondary_rays_count) != CL_SUCCESS) return;
@@ -608,7 +608,9 @@ void Ray::Ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
     error = queue_.enqueueReadImage(final_buf_, CL_TRUE, {}, { (size_t)w_, (size_t)h_, 1 }, 0, 0, &frame_pixels_[0]);
     if (error != CL_SUCCESS) return;
 
-    error = queue_.enqueueReadBuffer(sh_data_clean_, CL_TRUE, 0, sizeof(shl1_data_t) * w_ * h_, &sh_data_host_[0]);
+    if (sh_data_size_ && (cam.pass_flags & OutputSH)) {
+        error = queue_.enqueueReadBuffer(sh_data_clean_, CL_TRUE, 0, sizeof(shl1_data_t) * sh_data_size_, &sh_data_host_[0]);
+    }
 }
 
 bool Ray::Ocl::Renderer::kernel_GeneratePrimaryRays(const cl_int iteration, const Ray::Ocl::camera_t &cam, const Ray::rect_t &rect, cl_int w, cl_int h, const cl::Buffer &halton, const cl::Buffer &out_rays) {

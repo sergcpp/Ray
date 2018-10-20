@@ -3,7 +3,7 @@
 #include <cassert>
 #include <cstring>
 
-Ray::Ref::Framebuffer::Framebuffer(int w, int h) {
+Ray::Ref::Framebuffer::Framebuffer(int w, int h) : w_(0), h_(0) {
     Resize(w, h, false);
 }
 
