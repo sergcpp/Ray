@@ -10,7 +10,7 @@ Ray::Ref::Framebuffer::Framebuffer(int w, int h) : w_(0), h_(0) {
 void Ray::Ref::Framebuffer::Resize(int w, int h, bool alloc_sh) {
     assert(w > 0 && h > 0);
 
-    if (alloc_sh && sh_data_.empty() || w_ != w || h_ != h) {
+    if (alloc_sh && (sh_data_.empty() || w_ != w || h_ != h)) {
         size_t buf_size = (size_t)w * h;
         sh_data_.resize(buf_size, { 0 });
     }

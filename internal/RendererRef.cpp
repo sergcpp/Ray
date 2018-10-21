@@ -176,7 +176,7 @@ void Ray::Ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
 
     if (cam.pass_flags & OutputSH) {
         temp_buf_.ResetSampleData(rect);
-        for (size_t i = 0; i < secondary_rays_count; i++) {
+        for (int i = 0; i < secondary_rays_count; i++) {
             const auto &r = p.secondary_rays[i];
 
             const int x = r.id.x, y = r.id.y;
