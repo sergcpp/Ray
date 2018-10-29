@@ -193,7 +193,7 @@ int main() {
 ![Screenshot](img4.jpg)
 
 ### Multithreading:
-With CPU backends it is save to call RenderScene from different threads for non-overlaping image regions:
+With CPU backends it is safe to call RenderScene from different threads for non-overlaping image regions:
 ```c++
 ...
     // Split image into 4 regions
@@ -266,7 +266,7 @@ With 'output_sh' set to true renderer additionally outputs lightmap in 2-band (4
 - SAH-based binary BVH is used as acceleration structure. Two traversal algorithms are available: stack- and stackless (described in 'Efficient Stack-less BVH Traversal for Ray Tracing' paper). By default traversal with stack is used as it was faster on gpus I tested on. BVH tree is made two-level to support basic rigid motion. Optional 'spatial splits' feature can be used for building better optimized BVH in cost of construction time as described in 'Spatial Splits in Bounding Volume Hierarchies' paper.
 - Textures (with mip maps) are packed into a 2d texture array atlas for easier passing to OpenCL kernel.
 - Ray differentials are used for choosing mip level and filter kernel size as described in 'Tracing Ray Differentials' paper.
-- Sampling is done using Halton sequence with per pixel randomisation.
+- Sampling is done using Halton sequence with per pixel randomization.
 - CPU backends can use 2x2 or 4x2 Ray packet traversal optimized with SSE/AVX/NEON intrinsics, which is very effective for primary and glossy secondary rays, but not so effective for very random diffuse secondary rays even after sorting applied. Thin templated wrapper class (simd_vec_*) used to avoid code duplication, looks still ugly though.
 - To increase ray coherency compression-sorting-decompression used on secondary rays as described in "Fast Ray Sorting and Breadth-First Packet Traversal for GPU Ray Tracing" paper (only sorting part, no breadth-first traversal used). OpenCL backend uses implementation of parallel radix sort described in "Introduction to GPU Radix Sort".
 - Punctual light sources organized in separate BVH tree to accelerate light culling.
