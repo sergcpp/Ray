@@ -418,10 +418,11 @@ force_inline simd_ivec<S> clamp(const simd_ivec<S> &v, int min, int max) {
 }
 
 force_inline int hash(int x) {
-    x = ((x >> 16) ^ x) * 0x45d9f3b;
-    x = ((x >> 16) ^ x) * 0x45d9f3b;
-    x = (x >> 16) ^ x;
-    return x;
+    unsigned ret = reinterpret_cast<const unsigned &>(x);
+    ret = ((ret >> 16) ^ ret) * 0x45d9f3b;
+    ret = ((ret >> 16) ^ ret) * 0x45d9f3b;
+    ret = (ret >> 16) ^ ret;
+    return reinterpret_cast<const int &>(ret);
 }
 
 template <int S>
@@ -564,7 +565,7 @@ void Ray::NS::GeneratePrimaryRays(const int iteration, const camera_t &cam, cons
         for (int x = r.x; x < r.x + r.w - (r.w & (DimX - 1)); x += DimX) {
             auto &out_r = out_rays[i++];
 
-            simd_ivec<S> ixx = x + off_x, iyy = simd_ivec<S>(y) + off_y;
+            simd_ivec<S> ixx = x + off_x, iyy = y + off_y;
 
             simd_ivec<S> index = iyy * w + ixx;
             const int hi = (iteration & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT;

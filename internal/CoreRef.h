@@ -32,13 +32,14 @@
 namespace Ray {
 namespace Ref {
 struct ray_packet_t {
-    rays_id_t id;
     // origin and direction
     float o[3], d[3];
     // color of Ray and ior of medium
     float c[3], ior;
     // derivatives
     float do_dx[3], dd_dx[3], do_dy[3], dd_dy[3];
+    // 16-bit pixel coordinates of ray ((x << 16) | y)
+    int xy;
 };
 
 const int RayPacketDimX = 1;
@@ -50,7 +51,7 @@ struct hit_data_t {
     int obj_indices[RayPacketSize];
     int prim_indices[RayPacketSize];
     float t, u, v;
-    rays_id_t id;
+    int xy;
 
     explicit hit_data_t(eUninitialize) {}
     hit_data_t();

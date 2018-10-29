@@ -1,10 +1,11 @@
 R"(
 
 int hash(int x) {
-    x = ((x >> 16) ^ x) * 0x45d9f3b;
-    x = ((x >> 16) ^ x) * 0x45d9f3b;
-    x = (x >> 16) ^ x;
-    return x;
+    uint ret = as_uint(x);
+    ret = ((ret >> 16) ^ ret) * 0x45d9f3b;
+    ret = ((ret >> 16) ^ ret) * 0x45d9f3b;
+    ret = (ret >> 16) ^ ret;
+    return as_int(ret);
 }
 
 float construct_float(uint m) {

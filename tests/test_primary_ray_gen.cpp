@@ -27,7 +27,7 @@ void test_primary_ray_gen() {
 
     Ray::ConstructCamera(Ray::Persp, Ray::Box, o, d, 53.13f, 2.2f, 1.0f, 0.0f, &cam);
 
-    std::vector<float> dummy_halton(Ray::HALTON_SEQ_LEN * 2);
+    std::vector<float> dummy_halton(Ray::HALTON_SEQ_LEN * 2, 0.0f);
 
     {
         // test reference
@@ -36,13 +36,29 @@ void test_primary_ray_gen() {
 
         require(rays.size() == 16);
         for (int i = 0; i < 16; i++) {
-            require(rays[i].id.id == primary_ray_gen_test_data[i * 7]);
-            require(rays[i].o[0] == Approx(primary_ray_gen_test_data[i * 7 + 1]));
-            require(rays[i].o[1] == Approx(primary_ray_gen_test_data[i * 7 + 2]));
-            require(rays[i].o[2] == Approx(primary_ray_gen_test_data[i * 7 + 3]));
-            require(rays[i].d[0] == Approx(primary_ray_gen_test_data[i * 7 + 4]));
-            require(rays[i].d[1] == Approx(primary_ray_gen_test_data[i * 7 + 5]));
-            require(rays[i].d[2] == Approx(primary_ray_gen_test_data[i * 7 + 6]));
+            require(rays[i].xy == (int)primary_ray_gen_test_data[i * 23]);
+            require(rays[i].o[0] == Approx(primary_ray_gen_test_data[i * 23 + 1]));
+            require(rays[i].o[1] == Approx(primary_ray_gen_test_data[i * 23 + 2]));
+            require(rays[i].o[2] == Approx(primary_ray_gen_test_data[i * 23 + 3]));
+            require(rays[i].d[0] == Approx(primary_ray_gen_test_data[i * 23 + 4]));
+            require(rays[i].d[1] == Approx(primary_ray_gen_test_data[i * 23 + 5]));
+            require(rays[i].d[2] == Approx(primary_ray_gen_test_data[i * 23 + 6]));
+            require(rays[i].c[0] == Approx(primary_ray_gen_test_data[i * 23 + 7]));
+            require(rays[i].c[1] == Approx(primary_ray_gen_test_data[i * 23 + 8]));
+            require(rays[i].c[2] == Approx(primary_ray_gen_test_data[i * 23 + 9]));
+            require(rays[i].ior == Approx(primary_ray_gen_test_data[i * 23 + 10]));
+            require(rays[i].do_dx[0] == Approx(primary_ray_gen_test_data[i * 23 + 11]));
+            require(rays[i].do_dx[1] == Approx(primary_ray_gen_test_data[i * 23 + 12]));
+            require(rays[i].do_dx[2] == Approx(primary_ray_gen_test_data[i * 23 + 13]));
+            require(rays[i].dd_dx[0] == Approx(primary_ray_gen_test_data[i * 23 + 14]));
+            require(rays[i].dd_dx[1] == Approx(primary_ray_gen_test_data[i * 23 + 15]));
+            require(rays[i].dd_dx[2] == Approx(primary_ray_gen_test_data[i * 23 + 16]));
+            require(rays[i].do_dy[0] == Approx(primary_ray_gen_test_data[i * 23 + 17]));
+            require(rays[i].do_dy[1] == Approx(primary_ray_gen_test_data[i * 23 + 18]));
+            require(rays[i].do_dy[2] == Approx(primary_ray_gen_test_data[i * 23 + 19]));
+            require(rays[i].dd_dy[0] == Approx(primary_ray_gen_test_data[i * 23 + 20]));
+            require(rays[i].dd_dy[1] == Approx(primary_ray_gen_test_data[i * 23 + 21]));
+            require(rays[i].dd_dy[2] == Approx(primary_ray_gen_test_data[i * 23 + 22]));
         }
     }
     
@@ -57,38 +73,60 @@ void test_primary_ray_gen() {
         int i = 0;
         for (int y = 0; y < 4; y += Ray::Sse::RayPacketDimY) {
             for (int x = 0; x < 4; x += Ray::Sse::RayPacketDimX) {
-                float r1[Ray::Sse::RayPacketSize];
-                memcpy(&r1[0], &rays[i].o[0], sizeof(float) * Ray::Sse::RayPacketSize);
-                require(r1[0] == Approx(primary_ray_gen_test_data[(y * 4 + x) * 7 + 1]));
-                require(r1[1] == Approx(primary_ray_gen_test_data[(y * 4 + x + 1) * 7 + 1]));
-                require(r1[2] == Approx(primary_ray_gen_test_data[((y + 1) * 4 + x) * 7 + 1]));
-                require(r1[3] == Approx(primary_ray_gen_test_data[((y + 1) * 4 + x + 1) * 7 + 1]));
-                memcpy(&r1[0], &rays[i].o[1], sizeof(float) * Ray::Sse::RayPacketSize);
-                require(r1[0] == Approx(primary_ray_gen_test_data[(y * 4 + x) * 7 + 2]));
-                require(r1[1] == Approx(primary_ray_gen_test_data[(y * 4 + x + 1) * 7 + 2]));
-                require(r1[2] == Approx(primary_ray_gen_test_data[((y + 1) * 4 + x) * 7 + 2]));
-                require(r1[3] == Approx(primary_ray_gen_test_data[((y + 1) * 4 + x + 1) * 7 + 2]));
-                memcpy(&r1[0], &rays[i].o[2], sizeof(float) * Ray::Sse::RayPacketSize);
-                require(r1[0] == Approx(primary_ray_gen_test_data[(y * 4 + x) * 7 + 3]));
-                require(r1[1] == Approx(primary_ray_gen_test_data[(y * 4 + x + 1) * 7 + 3]));
-                require(r1[2] == Approx(primary_ray_gen_test_data[((y + 1) * 4 + x) * 7 + 3]));
-                require(r1[3] == Approx(primary_ray_gen_test_data[((y + 1) * 4 + x + 1) * 7 + 3]));
+                int i1[Ray::Sse::RayPacketSize];
+                memcpy(&i1[0], &rays[i].xy[0], sizeof(int) * Ray::Sse::RayPacketSize);
+                require(i1[0] == (int)primary_ray_gen_test_data[(y * 4 + x) * 23 + 0]);
+                require(i1[1] == (int)primary_ray_gen_test_data[(y * 4 + x + 1) * 23 + 0]);
+                require(i1[2] == (int)primary_ray_gen_test_data[((y + 1) * 4 + x) * 23 + 0]);
+                require(i1[3] == (int)primary_ray_gen_test_data[((y + 1) * 4 + x + 1) * 23 + 0]);
 
-                memcpy(&r1[0], &rays[i].d[0], sizeof(float) * Ray::Sse::RayPacketSize);
-                require(r1[0] == Approx(primary_ray_gen_test_data[(y * 4 + x) * 7 + 4]));
-                require(r1[1] == Approx(primary_ray_gen_test_data[(y * 4 + x + 1) * 7 + 4]));
-                require(r1[2] == Approx(primary_ray_gen_test_data[((y + 1) * 4 + x) * 7 + 4]));
-                require(r1[3] == Approx(primary_ray_gen_test_data[((y + 1) * 4 + x + 1) * 7 + 4]));
-                memcpy(&r1[0], &rays[i].d[1], sizeof(float) * Ray::Sse::RayPacketSize);
-                require(r1[0] == Approx(primary_ray_gen_test_data[(y * 4 + x) * 7 + 5]));
-                require(r1[1] == Approx(primary_ray_gen_test_data[(y * 4 + x + 1) * 7 + 5]));
-                require(r1[2] == Approx(primary_ray_gen_test_data[((y + 1) * 4 + x) * 7 + 5]));
-                require(r1[3] == Approx(primary_ray_gen_test_data[((y + 1) * 4 + x + 1) * 7 + 5]));
-                memcpy(&r1[0], &rays[i].d[2], sizeof(float) * Ray::Sse::RayPacketSize);
-                require(r1[0] == Approx(primary_ray_gen_test_data[(y * 4 + x) * 7 + 6]));
-                require(r1[1] == Approx(primary_ray_gen_test_data[(y * 4 + x + 1) * 7 + 6]));
-                require(r1[2] == Approx(primary_ray_gen_test_data[((y + 1) * 4 + x) * 7 + 6]));
-                require(r1[3] == Approx(primary_ray_gen_test_data[((y + 1) * 4 + x + 1) * 7 + 6]));
+#define CHECK_r1_4(off) \
+    require(r1[0] == Approx(primary_ray_gen_test_data[(y * 4 + x) * 23 + off]));              \
+    require(r1[1] == Approx(primary_ray_gen_test_data[(y * 4 + x + 1) * 23 + off]));          \
+    require(r1[2] == Approx(primary_ray_gen_test_data[((y + 1) * 4 + x) * 23 + off]));        \
+    require(r1[3] == Approx(primary_ray_gen_test_data[((y + 1) * 4 + x + 1) * 23 + off]))
+
+                float r1[Ray::Sse::RayPacketSize];
+
+                for (int j = 0; j < 3; j++) {
+                    memcpy(&r1[0], &rays[i].o[j], sizeof(float) * Ray::Sse::RayPacketSize);
+                    CHECK_r1_4(1 + j);
+                }
+
+                for (int j = 0; j < 3; j++) {
+                    memcpy(&r1[0], &rays[i].d[j], sizeof(float) * Ray::Sse::RayPacketSize);
+                    CHECK_r1_4(4 + j);
+                }
+
+                for (int j = 0; j < 3; j++) {
+                    memcpy(&r1[0], &rays[i].c[j], sizeof(float) * Ray::Sse::RayPacketSize);
+                    CHECK_r1_4(7 + j);
+                }
+
+                memcpy(&r1[0], &rays[i].ior, sizeof(float) * Ray::Sse::RayPacketSize);
+                CHECK_r1_4(10);
+
+                for (int j = 0; j < 3; j++) {
+                    memcpy(&r1[0], &rays[i].do_dx[j], sizeof(float) * Ray::Sse::RayPacketSize);
+                    CHECK_r1_4(11 + j);
+                }
+
+                for (int j = 0; j < 3; j++) {
+                    memcpy(&r1[0], &rays[i].dd_dx[j], sizeof(float) * Ray::Sse::RayPacketSize);
+                    CHECK_r1_4(14 + j);
+                }
+
+                for (int j = 0; j < 3; j++) {
+                    memcpy(&r1[0], &rays[i].do_dy[j], sizeof(float) * Ray::Sse::RayPacketSize);
+                    CHECK_r1_4(17 + j);
+                }
+
+                for (int j = 0; j < 3; j++) {
+                    memcpy(&r1[0], &rays[i].dd_dy[j], sizeof(float) * Ray::Sse::RayPacketSize);
+                    CHECK_r1_4(20 + j);
+                }
+
+#undef CHECK_r1_4
 
                 i++;
             }
@@ -109,62 +147,66 @@ void test_primary_ray_gen() {
         int i = 0;
         for (int y = 0; y < 4; y += Ray::Avx::RayPacketDimY) {
             for (int x = 0; x < 4; x += Ray::Avx::RayPacketDimX) {
-                float r1[Ray::Avx::RayPacketSize];
-                memcpy(&r1[0], &rays[i].o[0], sizeof(float) * Ray::Avx::RayPacketSize);
-                require(r1[0] == Approx(primary_ray_gen_test_data[(y * 4 + x) * 7 + 1]));
-                require(r1[1] == Approx(primary_ray_gen_test_data[(y * 4 + x + 1) * 7 + 1]));
-                require(r1[2] == Approx(primary_ray_gen_test_data[((y + 1) * 4 + x) * 7 + 1]));
-                require(r1[3] == Approx(primary_ray_gen_test_data[((y + 1) * 4 + x + 1) * 7 + 1]));
-                require(r1[4] == Approx(primary_ray_gen_test_data[(y * 4 + x + 2) * 7 + 1]));
-                require(r1[5] == Approx(primary_ray_gen_test_data[(y * 4 + x + 3) * 7 + 1]));
-                require(r1[6] == Approx(primary_ray_gen_test_data[((y + 1) * 4 + x + 2) * 7 + 1]));
-                require(r1[7] == Approx(primary_ray_gen_test_data[((y + 1) * 4 + x + 3) * 7 + 1]));
-                memcpy(&r1[0], &rays[i].o[1], sizeof(float) * Ray::Avx::RayPacketSize);
-                require(r1[0] == Approx(primary_ray_gen_test_data[(y * 4 + x) * 7 + 2]));
-                require(r1[1] == Approx(primary_ray_gen_test_data[(y * 4 + x + 1) * 7 + 2]));
-                require(r1[2] == Approx(primary_ray_gen_test_data[((y + 1) * 4 + x) * 7 + 2]));
-                require(r1[3] == Approx(primary_ray_gen_test_data[((y + 1) * 4 + x + 1) * 7 + 2]));
-                require(r1[4] == Approx(primary_ray_gen_test_data[(y * 4 + x + 2) * 7 + 2]));
-                require(r1[5] == Approx(primary_ray_gen_test_data[(y * 4 + x + 3) * 7 + 2]));
-                require(r1[6] == Approx(primary_ray_gen_test_data[((y + 1) * 4 + x + 2) * 7 + 2]));
-                require(r1[7] == Approx(primary_ray_gen_test_data[((y + 1) * 4 + x + 3) * 7 + 2]));
-                memcpy(&r1[0], &rays[i].o[2], sizeof(float) * Ray::Avx::RayPacketSize);
-                require(r1[0] == Approx(primary_ray_gen_test_data[(y * 4 + x) * 7 + 3]));
-                require(r1[1] == Approx(primary_ray_gen_test_data[(y * 4 + x + 1) * 7 + 3]));
-                require(r1[2] == Approx(primary_ray_gen_test_data[((y + 1) * 4 + x) * 7 + 3]));
-                require(r1[3] == Approx(primary_ray_gen_test_data[((y + 1) * 4 + x + 1) * 7 + 3]));
-                require(r1[4] == Approx(primary_ray_gen_test_data[(y * 4 + x + 2) * 7 + 3]));
-                require(r1[5] == Approx(primary_ray_gen_test_data[(y * 4 + x + 3) * 7 + 3]));
-                require(r1[6] == Approx(primary_ray_gen_test_data[((y + 1) * 4 + x + 2) * 7 + 3]));
-                require(r1[7] == Approx(primary_ray_gen_test_data[((y + 1) * 4 + x + 3) * 7 + 3]));
+                int i1[Ray::Avx::RayPacketSize];
+                memcpy(&i1[0], &rays[i].xy[0], sizeof(int) * Ray::Avx::RayPacketSize);
+                require(i1[0] == int(primary_ray_gen_test_data[(y * 4 + x) * 23 + 0]));
+                require(i1[1] == int(primary_ray_gen_test_data[(y * 4 + x + 1) * 23 + 0]));
+                require(i1[2] == int(primary_ray_gen_test_data[((y + 1) * 4 + x) * 23 + 0]));
+                require(i1[3] == int(primary_ray_gen_test_data[((y + 1) * 4 + x + 1) * 23 + 0]));
+                require(i1[4] == int(primary_ray_gen_test_data[(y * 4 + x + 2) * 23 + 0]));
+                require(i1[5] == int(primary_ray_gen_test_data[(y * 4 + x + 3) * 23 + 0]));
+                require(i1[6] == int(primary_ray_gen_test_data[((y + 1) * 4 + x + 2) * 23 + 0]));
+                require(i1[7] == int(primary_ray_gen_test_data[((y + 1) * 4 + x + 3) * 23 + 0]));
 
-                memcpy(&r1[0], &rays[i].d[0], sizeof(float) * Ray::Avx::RayPacketSize);
-                require(r1[0] == Approx(primary_ray_gen_test_data[(y * 4 + x) * 7 + 4]));
-                require(r1[1] == Approx(primary_ray_gen_test_data[(y * 4 + x + 1) * 7 + 4]));
-                require(r1[2] == Approx(primary_ray_gen_test_data[((y + 1) * 4 + x) * 7 + 4]));
-                require(r1[3] == Approx(primary_ray_gen_test_data[((y + 1) * 4 + x + 1) * 7 + 4]));
-                require(r1[4] == Approx(primary_ray_gen_test_data[(y * 4 + x + 2) * 7 + 4]));
-                require(r1[5] == Approx(primary_ray_gen_test_data[(y * 4 + x + 3) * 7 + 4]));
-                require(r1[6] == Approx(primary_ray_gen_test_data[((y + 1) * 4 + x + 2) * 7 + 4]));
-                require(r1[7] == Approx(primary_ray_gen_test_data[((y + 1) * 4 + x + 3) * 7 + 4]));
-                memcpy(&r1[0], &rays[i].d[1], sizeof(float) * Ray::Avx::RayPacketSize);
-                require(r1[0] == Approx(primary_ray_gen_test_data[(y * 4 + x) * 7 + 5]));
-                require(r1[1] == Approx(primary_ray_gen_test_data[(y * 4 + x + 1) * 7 + 5]));
-                require(r1[2] == Approx(primary_ray_gen_test_data[((y + 1) * 4 + x) * 7 + 5]));
-                require(r1[3] == Approx(primary_ray_gen_test_data[((y + 1) * 4 + x + 1) * 7 + 5]));
-                require(r1[4] == Approx(primary_ray_gen_test_data[(y * 4 + x + 2) * 7 + 5]));
-                require(r1[5] == Approx(primary_ray_gen_test_data[(y * 4 + x + 3) * 7 + 5]));
-                require(r1[6] == Approx(primary_ray_gen_test_data[((y + 1) * 4 + x + 2) * 7 + 5]));
-                require(r1[7] == Approx(primary_ray_gen_test_data[((y + 1) * 4 + x + 3) * 7 + 5]));
-                memcpy(&r1[0], &rays[i].d[2], sizeof(float) * Ray::Avx::RayPacketSize);
-                require(r1[0] == Approx(primary_ray_gen_test_data[(y * 4 + x) * 7 + 6]));
-                require(r1[1] == Approx(primary_ray_gen_test_data[(y * 4 + x + 1) * 7 + 6]));
-                require(r1[2] == Approx(primary_ray_gen_test_data[((y + 1) * 4 + x) * 7 + 6]));
-                require(r1[3] == Approx(primary_ray_gen_test_data[((y + 1) * 4 + x + 1) * 7 + 6]));
-                require(r1[4] == Approx(primary_ray_gen_test_data[(y * 4 + x + 2) * 7 + 6]));
-                require(r1[5] == Approx(primary_ray_gen_test_data[(y * 4 + x + 3) * 7 + 6]));
-                require(r1[6] == Approx(primary_ray_gen_test_data[((y + 1) * 4 + x + 2) * 7 + 6]));
-                require(r1[7] == Approx(primary_ray_gen_test_data[((y + 1) * 4 + x + 3) * 7 + 6]));
+#define CHECK_r1_8(off) \
+    require(r1[0] == Approx(primary_ray_gen_test_data[(y * 4 + x) * 23 + off]));            \
+    require(r1[1] == Approx(primary_ray_gen_test_data[(y * 4 + x + 1) * 23 + off]));        \
+    require(r1[2] == Approx(primary_ray_gen_test_data[((y + 1) * 4 + x) * 23 + off]));      \
+    require(r1[3] == Approx(primary_ray_gen_test_data[((y + 1) * 4 + x + 1) * 23 + off]));  \
+    require(r1[4] == Approx(primary_ray_gen_test_data[(y * 4 + x + 2) * 23 + off]));        \
+    require(r1[5] == Approx(primary_ray_gen_test_data[(y * 4 + x + 3) * 23 + off]));        \
+    require(r1[6] == Approx(primary_ray_gen_test_data[((y + 1) * 4 + x + 2) * 23 + off]));  \
+    require(r1[7] == Approx(primary_ray_gen_test_data[((y + 1) * 4 + x + 3) * 23 + off]))
+
+                float r1[Ray::Avx::RayPacketSize];
+
+                for (int j = 0; j < 3; j++) {
+                    memcpy(&r1[0], &rays[i].o[j], sizeof(float) * Ray::Avx::RayPacketSize);
+                    CHECK_r1_8(1 + j);
+                }
+
+                for (int j = 0; j < 3; j++) {
+                    memcpy(&r1[0], &rays[i].d[j], sizeof(float) * Ray::Avx::RayPacketSize);
+                    CHECK_r1_8(4 + j);
+                }
+
+                for (int j = 0; j < 3; j++) {
+                    memcpy(&r1[0], &rays[i].c[j], sizeof(float) * Ray::Avx::RayPacketSize);
+                    CHECK_r1_8(7 + j);
+                }
+
+                memcpy(&r1[0], &rays[i].ior, sizeof(float) * Ray::Avx::RayPacketSize);
+                CHECK_r1_8(10);
+
+                for (int j = 0; j < 3; j++) {
+                    memcpy(&r1[0], &rays[i].do_dx[j], sizeof(float) * Ray::Avx::RayPacketSize);
+                    CHECK_r1_8(11 + j);
+                }
+
+                for (int j = 0; j < 3; j++) {
+                    memcpy(&r1[0], &rays[i].dd_dx[j], sizeof(float) * Ray::Avx::RayPacketSize);
+                    CHECK_r1_8(14 + j);
+                }
+
+                for (int j = 0; j < 3; j++) {
+                    memcpy(&r1[0], &rays[i].do_dy[j], sizeof(float) * Ray::Avx::RayPacketSize);
+                    CHECK_r1_8(17 + j);
+                }
+
+                for (int j = 0; j < 3; j++) {
+                    memcpy(&r1[0], &rays[i].dd_dy[j], sizeof(float) * Ray::Avx::RayPacketSize);
+                    CHECK_r1_8(20 + j);
+                }
 
                 i++;
             }
@@ -201,12 +243,35 @@ void test_primary_ray_gen() {
 
                 require(rays.size() == 16);
                 for (int i = 0; i < 16; i++) {
-                    require(rays[i].o.x == Approx(primary_ray_gen_test_data[i * 7 + 1]));
-                    require(rays[i].o.y == Approx(primary_ray_gen_test_data[i * 7 + 2]));
-                    require(rays[i].o.z == Approx(primary_ray_gen_test_data[i * 7 + 3]));
-                    require(rays[i].d.x == Approx(primary_ray_gen_test_data[i * 7 + 4]));
-                    require(rays[i].d.y == Approx(primary_ray_gen_test_data[i * 7 + 5]));
-                    require(rays[i].d.z == Approx(primary_ray_gen_test_data[i * 7 + 6]));
+                    int x = int(rays[i].o.w), y = int(rays[i].d.w);
+
+                    int xy = int(primary_ray_gen_test_data[i * 23 + 0]);
+                    require(x == ((xy >> 16) & 0x0000ffff));
+                    require(y == (xy & 0x0000ffff));
+
+                    require(rays[i].o.x == Approx(primary_ray_gen_test_data[i * 23 + 1]));
+                    require(rays[i].o.y == Approx(primary_ray_gen_test_data[i * 23 + 2]));
+                    require(rays[i].o.z == Approx(primary_ray_gen_test_data[i * 23 + 3]));
+                    require(rays[i].d.x == Approx(primary_ray_gen_test_data[i * 23 + 4]));
+                    require(rays[i].d.y == Approx(primary_ray_gen_test_data[i * 23 + 5]));
+                    require(rays[i].d.z == Approx(primary_ray_gen_test_data[i * 23 + 6]));
+                    require(rays[i].c.x == Approx(primary_ray_gen_test_data[i * 23 + 7]));
+                    require(rays[i].c.y == Approx(primary_ray_gen_test_data[i * 23 + 8]));
+                    require(rays[i].c.z == Approx(primary_ray_gen_test_data[i * 23 + 9]));
+                    require(rays[i].c.w == Approx(primary_ray_gen_test_data[i * 23 + 10]));
+
+                    require(rays[i].do_dx.x == Approx(primary_ray_gen_test_data[i * 23 + 11]));
+                    require(rays[i].do_dx.y == Approx(primary_ray_gen_test_data[i * 23 + 12]));
+                    require(rays[i].do_dx.z == Approx(primary_ray_gen_test_data[i * 23 + 13]));
+                    require(rays[i].dd_dx.x == Approx(primary_ray_gen_test_data[i * 23 + 14]));
+                    require(rays[i].dd_dx.y == Approx(primary_ray_gen_test_data[i * 23 + 15]));
+                    require(rays[i].dd_dx.z == Approx(primary_ray_gen_test_data[i * 23 + 16]));
+                    require(rays[i].do_dy.x == Approx(primary_ray_gen_test_data[i * 23 + 17]));
+                    require(rays[i].do_dy.y == Approx(primary_ray_gen_test_data[i * 23 + 18]));
+                    require(rays[i].do_dy.z == Approx(primary_ray_gen_test_data[i * 23 + 19]));
+                    require(rays[i].dd_dy.x == Approx(primary_ray_gen_test_data[i * 23 + 20]));
+                    require(rays[i].dd_dy.y == Approx(primary_ray_gen_test_data[i * 23 + 21]));
+                    require(rays[i].dd_dy.z == Approx(primary_ray_gen_test_data[i * 23 + 22]));
                 }
             }
         };

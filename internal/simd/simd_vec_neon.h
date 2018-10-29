@@ -643,13 +643,13 @@ public:
 
     friend force_inline simd_vec<int, S> operator>>(const simd_vec<int, S> &v1, const simd_vec<int, S> &v2) {
         simd_vec<int, S> ret;
-        ITERATE_4({ ret.comp_[i] = v1.comp_[i] >> v2.comp_[i]; })
+        ITERATE_4({ ret.comp_[i] = reinterpret_cast<const unsigned &>(v1.comp_[i]) >> v2.comp_[i]; })
         return ret;
     }
 
     friend force_inline simd_vec<int, S> operator>>(const simd_vec<int, S> &v1, int v2) {
         simd_vec<int, S> ret;
-        ITERATE_4({ ret.comp_[i] = v1.comp_[i] >> v2; })
+        ITERATE_4({ ret.comp_[i] = reinterpret_cast<const unsigned &>(v1.comp_[i]) >> v2; })
         return ret;
     }
 

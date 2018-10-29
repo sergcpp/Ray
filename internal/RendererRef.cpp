@@ -129,7 +129,7 @@ void Ray::Ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
             auto &inter = p.intersections[i];
 
             inter = {};
-            inter.id = r.id;
+            inter.xy = r.xy;
 
             if (macro_tree_root != 0xffffffff) {
                 Traverse_MacroTree_WithStack(r, nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, inter);
@@ -153,8 +153,8 @@ void Ray::Ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
         const auto &r = p.primary_rays[i];
         const auto &inter = p.intersections[i];
 
-        const int x = inter.id.x;
-        const int y = inter.id.y;
+        const int x = (inter.xy >> 16) & 0x0000ffff;
+        const int y = inter.xy & 0x0000ffff;
         
         pass_info.index = y * w + x;
 
@@ -179,7 +179,8 @@ void Ray::Ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
         for (int i = 0; i < secondary_rays_count; i++) {
             const auto &r = p.secondary_rays[i];
 
-            const int x = r.id.x, y = r.id.y;
+            const int x = (r.xy >> 16) & 0x0000ffff;
+            const int y = r.xy & 0x0000ffff;
 
             temp_buf_.SetSampleDir(x, y, r.d[0], r.d[1], r.d[2]);
             // sample weight for indirect lightmap has all r.c[0..2]`s set to same value
@@ -221,7 +222,7 @@ void Ray::Ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
             auto &inter = p.intersections[i];
 
             inter = {};
-            inter.id = r.id;
+            inter.xy = r.xy;
             Traverse_MacroTree_WithStack(r, nodes, macro_tree_root, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, inter);
         }
 
@@ -237,8 +238,8 @@ void Ray::Ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
             const auto &r = p.primary_rays[i];
             const auto &inter = p.intersections[i];
 
-            const int x = inter.id.x;
-            const int y = inter.id.y;
+            const int x = (inter.xy >> 16) & 0x0000ffff;
+            const int y = inter.xy & 0x0000ffff;
 
             pass_info.index = y * w + x;
 

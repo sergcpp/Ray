@@ -97,10 +97,11 @@ force_inline bool bbox_test(const float p[3], const bvh_node_t &node) {
 enum eTraversalSource { FromParent, FromChild, FromSibling };
 
 force_inline int hash(int x) {
-    x = ((x >> 16) ^ x) * 0x45d9f3b;
-    x = ((x >> 16) ^ x) * 0x45d9f3b;
-    x = (x >> 16) ^ x;
-    return x;
+    unsigned ret = reinterpret_cast<const unsigned &>(x);
+    ret = ((ret >> 16) ^ ret) * 0x45d9f3b;
+    ret = ((ret >> 16) ^ ret) * 0x45d9f3b;
+    ret = (ret >> 16) ^ ret;
+    return reinterpret_cast<const int &>(ret);
 }
 
 force_inline void safe_invert(const float v[3], float out_v[3]) {
@@ -288,8 +289,7 @@ void Ray::Ref::GeneratePrimaryRays(int iteration, const camera_t &cam, const rec
                 out_r.dd_dy[j] = _dy[j] - _d[j];
             }
 
-            out_r.id.x = (uint16_t)x;
-            out_r.id.y = (uint16_t)y;
+            out_r.xy = (x << 16) | y;
             out_r.ior = 1.0f;
         }
     }
@@ -307,11 +307,10 @@ void Ray::Ref::SampleMeshInTextureSpace(int iteration, int obj_index, int uv_lay
             auto &out_ray = out_rays[i];
             auto &out_inter = out_inters[i];
 
-            out_ray.id.x = x;
-            out_ray.id.y = y;
+            out_ray.xy = (x << 16) | y;
             out_ray.c[0] = out_ray.c[1] = out_ray.c[2] = 1.0f;
             out_inter.mask_values[0] = 0;
-            out_inter.id = out_ray.id;
+            out_inter.xy = out_ray.xy;
         }
     }
 
@@ -1334,7 +1333,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
 
         ray_packet_t r;
 
-        r.id = ray.id;
+        r.xy = ray.xy;
         r.ior = ray.ior;
 
         memcpy(&r.o[0], value_ptr(P + HIT_BIAS * plane_N), 3 * sizeof(float));
@@ -1384,7 +1383,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
 
         ray_packet_t r;
 
-        r.id = ray.id;
+        r.xy = ray.xy;
         r.ior = ray.ior;
 
         memcpy(&r.o[0], value_ptr(P + HIT_BIAS * plane_N), 3 * sizeof(float));
@@ -1435,7 +1434,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
 
         ray_packet_t r;
 
-        r.id = ray.id;
+        r.xy = ray.xy;
         r.ior = mat->ior;
 
         memcpy(&r.o[0], value_ptr(P + HIT_BIAS * I), 3 * sizeof(float));
@@ -1464,7 +1463,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
     } else if (mat->type == TransparentMaterial) {
         ray_packet_t r;
 
-        r.id = ray.id;
+        r.xy = ray.xy;
         r.ior = ray.ior;
 
         memcpy(&r.o[0], value_ptr(P + HIT_BIAS * I), 3 * sizeof(float));

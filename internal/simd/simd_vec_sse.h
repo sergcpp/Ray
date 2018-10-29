@@ -620,7 +620,7 @@ public:
 #if 0
         ret.vec_ = _mm_srlv_epi32(v1.vec_, v2.vec_);
 #else
-        ITERATE_4({ ret.comp_[i] = v1.comp_[i] >> v2.comp_[i]; })
+        ITERATE_4({ ret.comp_[i] = reinterpret_cast<const unsigned &>(v1.comp_[i]) >> v2.comp_[i]; })
 #endif
         return ret;
     }

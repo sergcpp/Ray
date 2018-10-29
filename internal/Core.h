@@ -17,13 +17,6 @@
 namespace Ray {
 enum eUninitialize { Uninitialize };
 
-union rays_id_t {
-    uint32_t id;
-    struct {
-        uint16_t x, y;
-    };
-};
-
 struct tri_accel_t {
     float nu, nv;
     float np;
