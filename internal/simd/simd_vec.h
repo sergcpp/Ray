@@ -592,13 +592,6 @@ force_inline simd_comp_where_helper<T, S> where(const simd_vec<T, S> &mask, simd
 #include "simd_vec_avx.h"
 #elif defined(USE_NEON)
 #include "simd_vec_neon.h"
-#else
-namespace Ray {
-namespace NS {
-using native_simd_fvec = simd_fvec<1>;
-using native_simd_ivec = simd_ivec<1>;
-}
-}
 #endif
 
 namespace Ray {
@@ -628,6 +621,15 @@ using simd_dvec8 = simd_dvec<8>;
 using simd_dvec16 = simd_dvec<16>;
 }
 }
+
+#if !defined(USE_SSE2) && !defined(USE_AVX) && !defined(USE_AVX2) && !defined(USE_NEON)
+namespace Ray {
+namespace NS {
+using native_simd_fvec = simd_fvec<1>;
+using native_simd_ivec = simd_ivec<1>;
+}
+}
+#endif
 
 #ifdef __GNUC__
 #pragma GCC diagnostic pop
