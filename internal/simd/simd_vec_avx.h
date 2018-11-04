@@ -310,6 +310,20 @@ public:
         return v1 / v1.length();
     }
 
+#if defined(USE_AVX2)
+    friend force_inline simd_vec<float, 8> fma(const simd_vec<float, 8> &a, const simd_vec<float, 8> &b, const simd_vec<float, 8> &c) {
+        simd_vec<float, 8> ret;
+        ret.vec_ = _mm256_fmadd_ps(a.vec_, b.vec_, c.vec_);
+        return ret;
+    }
+
+    friend force_inline simd_vec<float, 8> fma(const simd_vec<float, 8> &a, const float b, const simd_vec<float, 8> &c) {
+        simd_vec<float, 8> ret;
+        ret.vec_ = _mm256_fmadd_ps(a.vec_, _mm256_set1_ps(b), c.vec_);
+        return ret;
+    }
+#endif
+
     friend force_inline const float *value_ptr(const simd_vec<float, 8> &v1) {
         return &v1.comp_[0];
     }
@@ -317,11 +331,6 @@ public:
     static int size() { return 8; }
     static bool is_native() { return true; }
 };
-
-/*template <typename T, int S>
-force_inline simd_vec<T, S> fma(const simd_vec<T, S> &a, const simd_vec<T, S> &b, const simd_vec<T, S> &c) {
-    return a * b + c;
-}*/
 
 template <>
 class simd_vec<int, 8> {
@@ -704,7 +713,7 @@ force_inline simd_vec<float, 8>::operator simd_vec<int, 8>() const {
     simd_vec<int, 8> ret;
     ret.vec_ = _mm256_cvtps_epi32(vec_);
     return ret;
-    }
+}
 
 #if defined(USE_AVX) || defined(USE_AVX2)
 using native_simd_fvec = simd_vec<float, 8>;

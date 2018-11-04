@@ -239,6 +239,30 @@ force_inline simd_ivec<S> bbox_test(const simd_fvec<S> o[3], const simd_fvec<S> 
 }
 
 template <int S>
+force_inline simd_ivec<S> bbox_test_fma(const simd_fvec<S> inv_d[3], const simd_fvec<S> neg_inv_d_o[3], const simd_fvec<S> &t, const float _bbox_min[3], const float _bbox_max[3]) {
+    simd_fvec<S> low, high, tmin, tmax;
+
+    low = fma(inv_d[0], _bbox_min[0], neg_inv_d_o[0]);
+    high = fma(inv_d[0], _bbox_max[0], neg_inv_d_o[0]);
+    tmin = min(low, high);
+    tmax = max(low, high);
+
+    low = fma(inv_d[1], _bbox_min[1], neg_inv_d_o[1]);
+    high = fma(inv_d[1], _bbox_max[1], neg_inv_d_o[1]);
+    tmin = max(tmin, min(low, high));
+    tmax = min(tmax, max(low, high));
+
+    low = fma(inv_d[2], _bbox_min[2], neg_inv_d_o[2]);
+    high = fma(inv_d[2], _bbox_max[2], neg_inv_d_o[2]);
+    tmin = max(tmin, min(low, high));
+    tmax = min(tmax, max(low, high));
+
+    simd_fvec<S> mask = (tmin <= tmax) & (tmin <= t) & (tmax > 0.0f);
+
+    return reinterpret_cast<const simd_ivec<S>&>(mask);
+}
+
+template <int S>
 force_inline simd_ivec<S> bbox_test(const simd_fvec<S> p[3], const float _bbox_min[3], const float _bbox_max[3]) {
     simd_fvec<S> mask = (p[0] > _bbox_min[0]) & (p[0] < _bbox_max[0]) &
                         (p[1] > _bbox_min[1]) & (p[1] < _bbox_max[1]) &
@@ -249,6 +273,11 @@ force_inline simd_ivec<S> bbox_test(const simd_fvec<S> p[3], const float _bbox_m
 template <int S>
 force_inline simd_ivec<S> bbox_test(const simd_fvec<S> o[3], const simd_fvec<S> inv_d[3], const simd_fvec<S> &t, const bvh_node_t &node) {
     return bbox_test(o, inv_d, t, node.bbox[0], node.bbox[1]);
+}
+
+template <int S>
+force_inline simd_ivec<S> bbox_test_fma(const simd_fvec<S> inv_d[3], const simd_fvec<S> neg_inv_d_o[3], const simd_fvec<S> &t, const bvh_node_t &node) {
+    return bbox_test_fma(inv_d, neg_inv_d_o, t, node.bbox[0], node.bbox[1]);
 }
 
 template <int S>
@@ -955,6 +984,8 @@ bool Ray::NS::Traverse_MacroTree_Stackless_CPU(const ray_packet_t<S> &r, const s
     simd_fvec<S> inv_d[3];
     safe_invert(r.d, inv_d);
 
+    simd_fvec<S> neg_inv_d_o[3] = { -r.o[0] * inv_d[0], -r.o[1] * inv_d[1], -r.o[2] * inv_d[2] };
+
     TraversalState<S> st;
 
     st.queue[0].mask = ray_mask;
@@ -986,7 +1017,7 @@ bool Ray::NS::Traverse_MacroTree_Stackless_CPU(const ray_packet_t<S> &r, const s
             }
             break;
         case FromSibling: {
-            auto mask1 = bbox_test(r.o, inv_d, inter.t, nodes[cur]) & st.queue[st.index].mask;
+            auto mask1 = bbox_test_fma(inv_d, neg_inv_d_o, inter.t, nodes[cur]) & st.queue[st.index].mask;
             if (mask1.all_zeros()) {
                 cur = nodes[cur].parent;
                 src = FromChild;
@@ -1007,7 +1038,7 @@ bool Ray::NS::Traverse_MacroTree_Stackless_CPU(const ray_packet_t<S> &r, const s
                         const auto &m = meshes[mi.mesh_index];
                         const auto &tr = transforms[mi.tr_index];
 
-                        auto bbox_mask = bbox_test(r.o, inv_d, inter.t, mi.bbox_min, mi.bbox_max) & st.queue[st.index].mask;
+                        auto bbox_mask = bbox_test_fma(inv_d, neg_inv_d_o, inter.t, mi.bbox_min, mi.bbox_max) & st.queue[st.index].mask;
                         if (bbox_mask.all_zeros()) continue;
 
                         ray_packet_t<S> _r = TransformRay(r, tr.inv_xform);
@@ -1025,7 +1056,7 @@ bool Ray::NS::Traverse_MacroTree_Stackless_CPU(const ray_packet_t<S> &r, const s
         }
         break;
         case FromParent: {
-            auto mask1 = bbox_test(r.o, inv_d, inter.t, nodes[cur]) & st.queue[st.index].mask;
+            auto mask1 = bbox_test_fma(inv_d, neg_inv_d_o, inter.t, nodes[cur]) & st.queue[st.index].mask;
             if (mask1.all_zeros()) {
                 cur = other_child(nodes[nodes[cur].parent], cur);
                 src = FromSibling;
@@ -1046,7 +1077,7 @@ bool Ray::NS::Traverse_MacroTree_Stackless_CPU(const ray_packet_t<S> &r, const s
                         const auto &m = meshes[mi.mesh_index];
                         const auto &tr = transforms[mi.tr_index];
 
-                        auto bbox_mask = bbox_test(r.o, inv_d, inter.t, mi.bbox_min, mi.bbox_max) & st.queue[st.index].mask;
+                        auto bbox_mask = bbox_test_fma(inv_d, neg_inv_d_o, inter.t, mi.bbox_min, mi.bbox_max) & st.queue[st.index].mask;
                         if (bbox_mask.all_zeros()) continue;
 
                         ray_packet_t<S> _r = TransformRay(r, tr.inv_xform);
@@ -1076,6 +1107,8 @@ bool Ray::NS::Traverse_MicroTree_Stackless_CPU(const ray_packet_t<S> &r, const s
     simd_fvec<S> inv_d[3];
     safe_invert(r.d, inv_d);
 
+    simd_fvec<S> neg_inv_d_o[3] = { -r.o[0] * inv_d[0], -r.o[1] * inv_d[1], -r.o[2] * inv_d[2] };
+
     TraversalState<S> st;
 
     st.queue[0].mask = ray_mask;
@@ -1107,7 +1140,7 @@ bool Ray::NS::Traverse_MicroTree_Stackless_CPU(const ray_packet_t<S> &r, const s
             }
             break;
         case FromSibling: {
-            auto mask1 = bbox_test(r.o, inv_d, inter.t, nodes[cur]) & st.queue[st.index].mask;
+            auto mask1 = bbox_test_fma(inv_d, neg_inv_d_o, inter.t, nodes[cur]) & st.queue[st.index].mask;
             if (mask1.all_zeros()) {
                 cur = nodes[cur].parent;
                 src = FromChild;
@@ -1135,7 +1168,7 @@ bool Ray::NS::Traverse_MicroTree_Stackless_CPU(const ray_packet_t<S> &r, const s
         }
         break;
         case FromParent: {
-            auto mask1 = bbox_test(r.o, inv_d, inter.t, nodes[cur]) & st.queue[st.index].mask;
+            auto mask1 = bbox_test_fma(inv_d, neg_inv_d_o, inter.t, nodes[cur]) & st.queue[st.index].mask;
             if (mask1.all_zeros()) {
                 cur = other_child(nodes[nodes[cur].parent], cur);
                 src = FromSibling;
@@ -1176,6 +1209,8 @@ bool Ray::NS::Traverse_MacroTree_WithStack(const ray_packet_t<S> &r, const simd_
     simd_fvec<S> inv_d[3];
     safe_invert(r.d, inv_d);
 
+    simd_fvec<S> neg_inv_d_o[3] = { -r.o[0] * inv_d[0], -r.o[1] * inv_d[1], -r.o[2] * inv_d[2] };
+
     TraversalStateStack<S> st;
 
     st.queue[0].mask = ray_mask;
@@ -1188,7 +1223,7 @@ bool Ray::NS::Traverse_MacroTree_WithStack(const ray_packet_t<S> &r, const simd_
         while (stack_size) {
             uint32_t cur = stack[--stack_size];
 
-            auto mask1 = bbox_test(r.o, inv_d, inter.t, nodes[cur]) & st.queue[st.index].mask;
+            auto mask1 = bbox_test_fma(inv_d, neg_inv_d_o, inter.t, nodes[cur]) & st.queue[st.index].mask;
             if (mask1.all_zeros()) {
                 continue;
             }
@@ -1210,11 +1245,10 @@ bool Ray::NS::Traverse_MacroTree_WithStack(const ray_packet_t<S> &r, const simd_
                     const auto &m = meshes[mi.mesh_index];
                     const auto &tr = transforms[mi.tr_index];
 
-                    auto bbox_mask = bbox_test(r.o, inv_d, inter.t, mi.bbox_min, mi.bbox_max) & st.queue[st.index].mask;
+                    auto bbox_mask = bbox_test_fma(inv_d, neg_inv_d_o, inter.t, mi.bbox_min, mi.bbox_max) & st.queue[st.index].mask;
                     if (bbox_mask.all_zeros()) continue;
 
                     ray_packet_t<S> _r = TransformRay(r, tr.inv_xform);
-
                     res |= Traverse_MicroTree_WithStack(_r, bbox_mask, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter);
                 }
             }
@@ -1233,6 +1267,8 @@ bool Ray::NS::Traverse_MicroTree_WithStack(const ray_packet_t<S> &r, const simd_
     simd_fvec<S> inv_d[3];
     safe_invert(r.d, inv_d);
 
+    simd_fvec<S> neg_inv_d_o[3] = { -r.o[0] * inv_d[0], -r.o[1] * inv_d[1], -r.o[2] * inv_d[2] };
+
     TraversalStateStack<S> st;
 
     st.queue[0].mask = ray_mask;
@@ -1245,7 +1281,7 @@ bool Ray::NS::Traverse_MicroTree_WithStack(const ray_packet_t<S> &r, const simd_
         while (stack_size) {
             uint32_t cur = stack[--stack_size];
 
-            auto mask1 = bbox_test(r.o, inv_d, inter.t, nodes[cur]) & st.queue[st.index].mask;
+            auto mask1 = bbox_test_fma(inv_d, neg_inv_d_o, inter.t, nodes[cur]) & st.queue[st.index].mask;
             if (mask1.all_zeros()) {
                 continue;
             }
