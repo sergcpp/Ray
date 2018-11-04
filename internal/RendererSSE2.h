@@ -1,13 +1,13 @@
 #pragma once
 
-#define NS Sse
-#define USE_SSE
+#define NS Sse2
+#define USE_SSE2
 #include "RendererSIMD.h"
-#undef USE_SSE
+#undef USE_SSE2
 #undef NS
 
 namespace Ray {
-namespace Sse {
+namespace Sse2 {
 const int RayPacketDimX = 2;
 const int RayPacketDimY = 2;
 const int RayPacketSize = RayPacketDimX * RayPacketDimY;
@@ -69,7 +69,7 @@ class Renderer : public RendererSIMD<RayPacketDimX, RayPacketDimY> {
 public:
     Renderer(int w, int h) : RendererSIMD(w, h) {}
 
-    eRendererType type() const override { return RendererSSE; }
+    eRendererType type() const override { return RendererSSE2; }
 };
 }
 }

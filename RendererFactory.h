@@ -11,7 +11,7 @@
 
 namespace Ray {
 /// Default renderer flags used to choose backend, by default tries to create gpu opencl renderer first
-const uint32_t default_renderer_flags = RendererRef | RendererSSE | RendererAVX | RendererNEON | RendererOCL;
+const uint32_t default_renderer_flags = RendererRef | RendererSSE2 | RendererAVX | RendererAVX2 | RendererNEON | RendererOCL;
 
 struct settings_t {
     int w, h;

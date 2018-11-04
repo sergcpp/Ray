@@ -6,7 +6,11 @@
 
 #ifdef __GNUC__
 #pragma GCC push_options
+#ifdef USE_AVX2
+#pragma GCC target ("avx2")
+#else
 #pragma GCC target ("avx")
+#endif
 #endif
 
 #if defined(__GNUC__)
@@ -339,7 +343,7 @@ public:
     force_inline int operator[](int i) const { return comp_[i]; }
 
     force_inline simd_vec<int, S> &operator+=(const simd_vec<int, S> &rhs) {
-#if 0 // requires AVX2 support
+#if defined(USE_AVX2)
         vec_ = _mm256_add_epi32(vec_, rhs.vec_);
 #else
         ITERATE_8({ comp_[i] = comp_[i] + rhs.comp_[i]; })
@@ -348,7 +352,7 @@ public:
     }
 
     force_inline simd_vec<int, S> &operator+=(int rhs) {
-#if 0 // requires AVX2 support
+#if defined(USE_AVX2)
         vec_ = _mm256_add_epi32(vec_, _mm256_set1_epi32(rhs));
 #else
         ITERATE_8({ comp_[i] = comp_[i] + rhs; })
@@ -357,7 +361,7 @@ public:
     }
 
     force_inline simd_vec<int, S> &operator-=(const simd_vec<int, S> &rhs) {
-#if 0 // requires AVX2 support
+#if defined(USE_AVX2)
         vec_ = _mm256_sub_epi32(vec_, rhs.vec_);
 #else
         ITERATE_8({ comp_[i] = comp_[i] - rhs.comp_[i]; })
@@ -366,7 +370,7 @@ public:
     }
 
     force_inline simd_vec<int, S> &operator-=(int rhs) {
-#if 0 // requires AVX2 support
+#if defined(USE_AVX2)
         vec_ = _mm256_sub_epi32(vec_, _mm256_set1_epi32(rhs));
 #else
         ITERATE_8({ comp_[i] = comp_[i] - rhs; })
@@ -396,7 +400,7 @@ public:
 
     force_inline simd_vec<int, S> operator==(int rhs) const {
         simd_vec<int, S> ret;
-#if 0 // requires AVX2 support
+#if defined(USE_AVX2)
         ret.vec_ = _mm256_cmpeq_epi32(vec_, _mm256_set1_epi32(rhs));
 #else
         ITERATE_8({ ret.comp_[i] = comp_[i] == rhs ? 0xFFFFFFFF : 0; })
@@ -406,7 +410,7 @@ public:
 
     force_inline simd_vec<int, S> operator==(const simd_vec<int, S> &rhs) const {
         simd_vec<int, S> ret;
-#if 0 // requires AVX2 support
+#if defined(USE_AVX2)
         ret.vec_ = _mm256_cmpeq_epi32(vec_, rhs.vec_);
 #else
         ITERATE_8({ ret.comp_[i] = comp_[i] == rhs.comp_[i] ? 0xFFFFFFFF : 0; })
@@ -416,7 +420,7 @@ public:
 
     force_inline simd_vec<int, S> operator!=(int rhs) const {
         simd_vec<int, S> ret;
-#if 0 // requires AVX2 support
+#if defined(USE_AVX2)
         ret.vec_ = _mm256_andnot_si256(_mm256_cmpeq_epi32(vec_, _mm256_set1_epi32(rhs)), _mm256_set1_epi32(~0));
 #else
         ITERATE_8({ ret.comp_[i] = comp_[i] != rhs ? 0xFFFFFFFF : 0; })
@@ -426,7 +430,7 @@ public:
 
     force_inline simd_vec<int, S> operator!=(const simd_vec<int, S> &rhs) const {
         simd_vec<int, S> ret;
-#if 0 // requires AVX2 support
+#if defined(USE_AVX2)
         ret.vec_ = _mm256_andnot_si256(_mm256_cmpeq_epi32(vec_, rhs.vec_), _mm256_set1_epi32(~0));
 #else
         ITERATE_8({ ret.comp_[i] = comp_[i] != rhs.comp_[i] ? 0xFFFFFFFF : 0; })
@@ -467,7 +471,7 @@ public:
 
     force_inline static simd_vec<int, S> min(const simd_vec<int, S> &v1, const simd_vec<int, S> &v2) {
         simd_vec<int, S> temp;
-#if 0 // requires AVX2 support
+#if defined(USE_AVX2)
         temp.vec_ = _mm256_min_epi32(v1.vec_, v2.vec_);
 #else
         ITERATE_8({ temp.comp_[i] = std::min(v1.comp_[i], v2.comp_[i]); })
@@ -477,7 +481,7 @@ public:
 
     force_inline static simd_vec<int, S> max(const simd_vec<int, S> &v1, const simd_vec<int, S> &v2) {
         simd_vec<int, S> temp;
-#if 0 // requires AVX2 support
+#if defined(USE_AVX2)
         temp.vec_ = _mm256_max_epi32(v1.vec_, v2.vec_);
 #else
         ITERATE_8({ temp.comp_[i] = std::max(v1.comp_[i], v2.comp_[i]); })
@@ -511,7 +515,7 @@ public:
 
     friend force_inline simd_vec<int, S> operator+(const simd_vec<int, S> &v1, const simd_vec<int, S> &v2) {
         simd_vec<int, S> temp;
-#if 0 // requires AVX2 support
+#if defined(USE_AVX2)
         temp.vec_ = _mm256_add_epi32(v1.vec_, v2.vec_);
 #else
         ITERATE_8({ temp.comp_[i] = v1.comp_[i] + v2.comp_[i]; })
@@ -521,7 +525,7 @@ public:
 
     friend force_inline simd_vec<int, S> operator-(const simd_vec<int, S> &v1, const simd_vec<int, S> &v2) {
         simd_vec<int, S> temp;
-#if 0 // requires AVX2 support
+#if defined(USE_AVX2)
         temp.vec_ = _mm256_sub_epi32(v1.vec_, v2.vec_);
 #else
         ITERATE_8({ temp.comp_[i] = v1.comp_[i] - v2.comp_[i]; })
@@ -543,7 +547,7 @@ public:
 
     friend force_inline simd_vec<int, S> operator+(const simd_vec<int, S> &v1, int v2) {
         simd_vec<int, S> temp;
-#if 0 // requires AVX2 support
+#if defined(USE_AVX2)
         temp.vec_ = _mm256_add_epi32(v1.vec_, _mm256_set1_epi32(v2));
 #else
         ITERATE_8({ temp.comp_[i] = v1.comp_[i] + v2; })
@@ -553,7 +557,7 @@ public:
 
     friend force_inline simd_vec<int, S> operator-(const simd_vec<int, S> &v1, int v2) {
         simd_vec<int, S> temp;
-#if 0 // requires AVX2 support
+#if defined(USE_AVX2)
         temp.vec_ = _mm256_sub_epi32(v1.vec_, _mm256_set1_epi32(v2));
 #else
         ITERATE_8({ temp.comp_[i] = v1.comp_[i] - v2; })
@@ -575,7 +579,7 @@ public:
 
     friend force_inline simd_vec<int, S> operator+(int v1, const simd_vec<int, S> &v2) {
         simd_vec<int, S> temp;
-#if 0 // requires AVX2 support
+#if defined(USE_AVX2)
         temp.vec_ = _mm256_add_epi32(_mm256_set1_epi32(v1), v2.vec_);
 #else
         ITERATE_8({ temp.comp_[i] = v1 + v2.comp_[i]; })
@@ -585,7 +589,7 @@ public:
 
     friend force_inline simd_vec<int, S> operator-(int v1, const simd_vec<int, S> &v2) {
         simd_vec<int, S> temp;
-#if 0 // requires AVX2 support
+#if defined(USE_AVX2)
         temp.vec_ = _mm256_sub_epi32(_mm256_set1_epi32(v1), v2.vec_);
 #else
         ITERATE_8({ temp.comp_[i] = v1 - v2.comp_[i]; })
@@ -607,7 +611,7 @@ public:
 
     friend force_inline simd_vec<int, S> operator<(const simd_vec<int, S> &v1, const simd_vec<int, S> &v2) {
         simd_vec<int, S> ret;
-#if 0 // requires AVX2 support
+#if defined(USE_AVX2)
         ret.vec_ = _mm256_cmplt_epi32(v1.vec_, v2.vec_);
 #else
         ITERATE_8({ ret.comp_[i] = v1.comp_[i] < v2.comp_[i] ? 0xFFFFFFFF : 0; })
@@ -617,7 +621,7 @@ public:
 
     friend force_inline simd_vec<int, S> operator>(const simd_vec<int, S> &v1, const simd_vec<int, S> &v2) {
         simd_vec<int, S> ret;
-#if 0 // requires AVX2 support
+#if defined(USE_AVX2)
         ret.vec_ = _mm256_cmpgt_epi32(v1.vec_, v2.vec_);
 #else
         ITERATE_8({ ret.comp_[i] = v1.comp_[i] > v2.comp_[i] ? 0xFFFFFFFF : 0; })
@@ -627,7 +631,7 @@ public:
 
     friend force_inline simd_vec<int, S> operator<(const simd_vec<int, S> &v1, int v2) {
         simd_vec<int, S> ret;
-#if 0 // requires AVX2 support
+#if defined(USE_AVX2)
         ret.vec_ = _mm256_cmpgt_epi32(_mm256_set1_epi32(v2), v1.vec_);
 #else
         ITERATE_8({ ret.comp_[i] = v1.comp_[i] < v2 ? 0xFFFFFFFF : 0; })
@@ -637,7 +641,7 @@ public:
 
     friend force_inline simd_vec<int, S> operator>(const simd_vec<int, S> &v1, int v2) {
         simd_vec<int, S> ret;
-#if 0 // requires AVX2 support
+#if defined(USE_AVX2)
         ret.vec_ = _mm256_cmpgt_epi32(v1.vec_, _mm256_set1_epi32(v2));
 #else
         ITERATE_8({ ret.comp_[i] = v1.comp_[i] > v2 ? 0xFFFFFFFF : 0; })
@@ -647,7 +651,7 @@ public:
 
     friend force_inline simd_vec<int, S> operator>>(const simd_vec<int, S> &v1, const simd_vec<int, S> &v2) {
         simd_vec<int, S> ret;
-#if 0 // requires AVX2 support
+#if defined(USE_AVX2)
         ret.vec_ = _mm256_srlv_epi32(v1.vec_, v2.vec_);
 #else
         ITERATE_8({ ret.comp_[i] = reinterpret_cast<const unsigned &>(v1.comp_[i]) >> v2.comp_[i]; })
@@ -657,7 +661,7 @@ public:
 
     friend force_inline simd_vec<int, S> operator>>(const simd_vec<int, S> &v1, int v2) {
         simd_vec<int, S> ret;
-#if 0 // requires AVX2 support
+#if defined(USE_AVX2)
         ret.vec_ = _mm256_srli_epi32(v1.vec_, v2);
 #else
         ITERATE_8({ ret.comp_[i] = reinterpret_cast<const unsigned &>(v1.comp_[i]) >> v2; })
@@ -667,7 +671,7 @@ public:
 
     friend force_inline simd_vec<int, S> operator<<(const simd_vec<int, S> &v1, const simd_vec<int, S> &v2) {
         simd_vec<int, S> ret;
-#if 0 // requires AVX2 support
+#if defined(USE_AVX2)
         ret.vec_ = _mm256_sllv_epi32(v1.vec_, v2.vec_);
 #else
         ITERATE_8({ ret.comp_[i] = v1.comp_[i] << v2.comp_[i]; })
@@ -677,7 +681,7 @@ public:
 
     friend force_inline simd_vec<int, S> operator<<(const simd_vec<int, S> &v1, int v2) {
         simd_vec<int, S> ret;
-#if 0 // requires AVX2 support
+#if defined(USE_AVX2)
         ret.vec_ = _mm256_slli_epi32(v1.vec_, v2);
 #else
         ITERATE_8({ ret.comp_[i] = v1.comp_[i] << v2; })
@@ -689,7 +693,7 @@ public:
     static bool is_native() { return true; }
 };
 
-#if defined(USE_AVX)
+#if defined(USE_AVX) || defined(USE_AVX2)
 using native_simd_fvec = simd_fvec<8>;
 using native_simd_ivec = simd_ivec<8>;
 #endif

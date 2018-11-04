@@ -5,8 +5,9 @@
 
 #include "../internal/CoreRef.h"
 #if !defined(__ANDROID__)
-#include "../internal/RendererSSE.h"
+#include "../internal/RendererSSE2.h"
 #include "../internal/RendererAVX.h"
+#include "../internal/RendererAVX2.h"
 #if !defined(DISABLE_OCL)
 #include "../internal/CoreOCL.h"
 #include "../internal/RendererOCL.h"
@@ -65,16 +66,16 @@ void test_primary_ray_gen() {
     if (features.sse2_supported) {
 #if !defined(__ANDROID__)
         // test Sse
-        Ray::aligned_vector<Ray::Sse::ray_packet_t<Ray::Sse::RayPacketSize>> rays;
-        Ray::Sse::GeneratePrimaryRays<Ray::Sse::RayPacketDimX, Ray::Sse::RayPacketDimY>(0, cam, { 0, 0, 4, 4 }, 4, 4, &dummy_halton[0], rays);
+        Ray::aligned_vector<Ray::Sse2::ray_packet_t<Ray::Sse2::RayPacketSize>> rays;
+        Ray::Sse2::GeneratePrimaryRays<Ray::Sse2::RayPacketDimX, Ray::Sse2::RayPacketDimY>(0, cam, { 0, 0, 4, 4 }, 4, 4, &dummy_halton[0], rays);
 
         require(rays.size() == 4);
 
         int i = 0;
-        for (int y = 0; y < 4; y += Ray::Sse::RayPacketDimY) {
-            for (int x = 0; x < 4; x += Ray::Sse::RayPacketDimX) {
-                int i1[Ray::Sse::RayPacketSize];
-                memcpy(&i1[0], &rays[i].xy[0], sizeof(int) * Ray::Sse::RayPacketSize);
+        for (int y = 0; y < 4; y += Ray::Sse2::RayPacketDimY) {
+            for (int x = 0; x < 4; x += Ray::Sse2::RayPacketDimX) {
+                int i1[Ray::Sse2::RayPacketSize];
+                memcpy(&i1[0], &rays[i].xy[0], sizeof(int) * Ray::Sse2::RayPacketSize);
                 require(i1[0] == (int)primary_ray_gen_test_data[(y * 4 + x) * 23 + 0]);
                 require(i1[1] == (int)primary_ray_gen_test_data[(y * 4 + x + 1) * 23 + 0]);
                 require(i1[2] == (int)primary_ray_gen_test_data[((y + 1) * 4 + x) * 23 + 0]);
@@ -86,43 +87,43 @@ void test_primary_ray_gen() {
     require(r1[2] == Approx(primary_ray_gen_test_data[((y + 1) * 4 + x) * 23 + off]));        \
     require(r1[3] == Approx(primary_ray_gen_test_data[((y + 1) * 4 + x + 1) * 23 + off]))
 
-                float r1[Ray::Sse::RayPacketSize];
+                float r1[Ray::Sse2::RayPacketSize];
 
                 for (int j = 0; j < 3; j++) {
-                    memcpy(&r1[0], &rays[i].o[j], sizeof(float) * Ray::Sse::RayPacketSize);
+                    memcpy(&r1[0], &rays[i].o[j], sizeof(float) * Ray::Sse2::RayPacketSize);
                     CHECK_r1_4(1 + j);
                 }
 
                 for (int j = 0; j < 3; j++) {
-                    memcpy(&r1[0], &rays[i].d[j], sizeof(float) * Ray::Sse::RayPacketSize);
+                    memcpy(&r1[0], &rays[i].d[j], sizeof(float) * Ray::Sse2::RayPacketSize);
                     CHECK_r1_4(4 + j);
                 }
 
                 for (int j = 0; j < 3; j++) {
-                    memcpy(&r1[0], &rays[i].c[j], sizeof(float) * Ray::Sse::RayPacketSize);
+                    memcpy(&r1[0], &rays[i].c[j], sizeof(float) * Ray::Sse2::RayPacketSize);
                     CHECK_r1_4(7 + j);
                 }
 
-                memcpy(&r1[0], &rays[i].ior, sizeof(float) * Ray::Sse::RayPacketSize);
+                memcpy(&r1[0], &rays[i].ior, sizeof(float) * Ray::Sse2::RayPacketSize);
                 CHECK_r1_4(10);
 
                 for (int j = 0; j < 3; j++) {
-                    memcpy(&r1[0], &rays[i].do_dx[j], sizeof(float) * Ray::Sse::RayPacketSize);
+                    memcpy(&r1[0], &rays[i].do_dx[j], sizeof(float) * Ray::Sse2::RayPacketSize);
                     CHECK_r1_4(11 + j);
                 }
 
                 for (int j = 0; j < 3; j++) {
-                    memcpy(&r1[0], &rays[i].dd_dx[j], sizeof(float) * Ray::Sse::RayPacketSize);
+                    memcpy(&r1[0], &rays[i].dd_dx[j], sizeof(float) * Ray::Sse2::RayPacketSize);
                     CHECK_r1_4(14 + j);
                 }
 
                 for (int j = 0; j < 3; j++) {
-                    memcpy(&r1[0], &rays[i].do_dy[j], sizeof(float) * Ray::Sse::RayPacketSize);
+                    memcpy(&r1[0], &rays[i].do_dy[j], sizeof(float) * Ray::Sse2::RayPacketSize);
                     CHECK_r1_4(17 + j);
                 }
 
                 for (int j = 0; j < 3; j++) {
-                    memcpy(&r1[0], &rays[i].dd_dy[j], sizeof(float) * Ray::Sse::RayPacketSize);
+                    memcpy(&r1[0], &rays[i].dd_dy[j], sizeof(float) * Ray::Sse2::RayPacketSize);
                     CHECK_r1_4(20 + j);
                 }
 
@@ -208,12 +209,96 @@ void test_primary_ray_gen() {
                     CHECK_r1_8(20 + j);
                 }
 
+#undef CHECK_r1_8
+
                 i++;
             }
         }
 #endif
     } else {
         std::cout << "Cannot test AVX" << std::endl;
+    }
+
+    if (features.avx2_supported) {
+#if !defined(__ANDROID__)
+        // test Avx
+        Ray::aligned_vector<Ray::Avx2::ray_packet_t<Ray::Avx2::RayPacketSize>> rays;
+        Ray::Avx2::GeneratePrimaryRays<Ray::Avx2::RayPacketDimX, Ray::Avx2::RayPacketDimY>(0, cam, { 0, 0, 4, 4 }, 4, 4, &dummy_halton[0], rays);
+
+        require(rays.size() == 2);
+
+        int i = 0;
+        for (int y = 0; y < 4; y += Ray::Avx2::RayPacketDimY) {
+            for (int x = 0; x < 4; x += Ray::Avx2::RayPacketDimX) {
+                int i1[Ray::Avx2::RayPacketSize];
+                memcpy(&i1[0], &rays[i].xy[0], sizeof(int) * Ray::Avx2::RayPacketSize);
+                require(i1[0] == int(primary_ray_gen_test_data[(y * 4 + x) * 23 + 0]));
+                require(i1[1] == int(primary_ray_gen_test_data[(y * 4 + x + 1) * 23 + 0]));
+                require(i1[2] == int(primary_ray_gen_test_data[((y + 1) * 4 + x) * 23 + 0]));
+                require(i1[3] == int(primary_ray_gen_test_data[((y + 1) * 4 + x + 1) * 23 + 0]));
+                require(i1[4] == int(primary_ray_gen_test_data[(y * 4 + x + 2) * 23 + 0]));
+                require(i1[5] == int(primary_ray_gen_test_data[(y * 4 + x + 3) * 23 + 0]));
+                require(i1[6] == int(primary_ray_gen_test_data[((y + 1) * 4 + x + 2) * 23 + 0]));
+                require(i1[7] == int(primary_ray_gen_test_data[((y + 1) * 4 + x + 3) * 23 + 0]));
+
+#define CHECK_r1_8(off) \
+    require(r1[0] == Approx(primary_ray_gen_test_data[(y * 4 + x) * 23 + off]));            \
+    require(r1[1] == Approx(primary_ray_gen_test_data[(y * 4 + x + 1) * 23 + off]));        \
+    require(r1[2] == Approx(primary_ray_gen_test_data[((y + 1) * 4 + x) * 23 + off]));      \
+    require(r1[3] == Approx(primary_ray_gen_test_data[((y + 1) * 4 + x + 1) * 23 + off]));  \
+    require(r1[4] == Approx(primary_ray_gen_test_data[(y * 4 + x + 2) * 23 + off]));        \
+    require(r1[5] == Approx(primary_ray_gen_test_data[(y * 4 + x + 3) * 23 + off]));        \
+    require(r1[6] == Approx(primary_ray_gen_test_data[((y + 1) * 4 + x + 2) * 23 + off]));  \
+    require(r1[7] == Approx(primary_ray_gen_test_data[((y + 1) * 4 + x + 3) * 23 + off]))
+
+                float r1[Ray::Avx2::RayPacketSize];
+
+                for (int j = 0; j < 3; j++) {
+                    memcpy(&r1[0], &rays[i].o[j], sizeof(float) * Ray::Avx2::RayPacketSize);
+                    CHECK_r1_8(1 + j);
+                }
+
+                for (int j = 0; j < 3; j++) {
+                    memcpy(&r1[0], &rays[i].d[j], sizeof(float) * Ray::Avx2::RayPacketSize);
+                    CHECK_r1_8(4 + j);
+                }
+
+                for (int j = 0; j < 3; j++) {
+                    memcpy(&r1[0], &rays[i].c[j], sizeof(float) * Ray::Avx2::RayPacketSize);
+                    CHECK_r1_8(7 + j);
+                }
+
+                memcpy(&r1[0], &rays[i].ior, sizeof(float) * Ray::Avx2::RayPacketSize);
+                CHECK_r1_8(10);
+
+                for (int j = 0; j < 3; j++) {
+                    memcpy(&r1[0], &rays[i].do_dx[j], sizeof(float) * Ray::Avx2::RayPacketSize);
+                    CHECK_r1_8(11 + j);
+                }
+
+                for (int j = 0; j < 3; j++) {
+                    memcpy(&r1[0], &rays[i].dd_dx[j], sizeof(float) * Ray::Avx2::RayPacketSize);
+                    CHECK_r1_8(14 + j);
+                }
+
+                for (int j = 0; j < 3; j++) {
+                    memcpy(&r1[0], &rays[i].do_dy[j], sizeof(float) * Ray::Avx2::RayPacketSize);
+                    CHECK_r1_8(17 + j);
+                }
+
+                for (int j = 0; j < 3; j++) {
+                    memcpy(&r1[0], &rays[i].dd_dy[j], sizeof(float) * Ray::Avx2::RayPacketSize);
+                    CHECK_r1_8(20 + j);
+                }
+
+#undef CHECK_r1_8
+
+                i++;
+            }
+        }
+#endif
+    } else {
+        std::cout << "Cannot test AVX2" << std::endl;
     }
     
     {

@@ -12,13 +12,17 @@ namespace ref2 {
 template <int DimX, int DimY>
 class RendererSIMD;
 }
-namespace Sse {
+namespace Sse2 {
 template <int DimX, int DimY>
 class RendererSIMD;
 }
 namespace Avx {
 template <int DimX, int DimY>
 class RendererSIMD;
+}
+namespace Avx2 {
+    template <int DimX, int DimY>
+    class RendererSIMD;
 }
 
 namespace Neon {
@@ -33,9 +37,11 @@ class Scene : public SceneBase {
 protected:
     friend class Ref::Renderer;
     template <int DimX, int DimY>
-    friend class Sse::RendererSIMD;
+    friend class Sse2::RendererSIMD;
     template <int DimX, int DimY>
     friend class Avx::RendererSIMD;
+    template <int DimX, int DimY>
+    friend class Avx2::RendererSIMD;
     template <int DimX, int DimY>
     friend class Neon::RendererSIMD;
 

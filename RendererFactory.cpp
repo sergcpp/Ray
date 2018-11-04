@@ -3,12 +3,13 @@
 #include "internal/RendererRef.h"
 
 #if !defined(__ANDROID__)
-#include "internal/RendererSSE.h"
+#include "internal/RendererSSE2.h"
 #include "internal/RendererAVX.h"
+#include "internal/RendererAVX2.h"
 #elif defined(__ARM_NEON__) || defined(__aarch64__)
 #include "internal/RendererNEON.h"
 #elif defined(__i386__) || defined(__x86_64__)
-#include "internal/RendererSSE.h"
+#include "internal/RendererSSE2.h"
 #endif
 
 #if !defined(DISABLE_OCL)
@@ -34,13 +35,17 @@ std::shared_ptr<Ray::RendererBase> Ray::CreateRenderer(const settings_t &s, uint
 #endif
 
 #if !defined(__ANDROID__)
+    if ((flags & RendererAVX2) && features.avx2_supported) {
+        log_stream << "Ray: Creating AVX2 renderer " << s.w << "x" << s.h << std::endl;
+        return std::make_shared<Avx2::Renderer>(s.w, s.h);
+    }
     if ((flags & RendererAVX) && features.avx_supported) {
         log_stream << "Ray: Creating AVX renderer " << s.w << "x" << s.h << std::endl;
         return std::make_shared<Avx::Renderer>(s.w, s.h);
     }
-    if ((flags & RendererSSE) && features.sse2_supported) {
+    if ((flags & RendererSSE2) && features.sse2_supported) {
         log_stream << "Ray: Creating SSE renderer " << s.w << "x" << s.h << std::endl;
-        return std::make_shared<Sse::Renderer>(s.w, s.h);
+        return std::make_shared<Sse2::Renderer>(s.w, s.h);
     }
     if (flags & RendererRef) {
         log_stream << "Ray: Creating Ref renderer " << s.w << "x" << s.h << std::endl;

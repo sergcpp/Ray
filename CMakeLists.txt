@@ -66,8 +66,10 @@ if(NOT CMAKE_SYSTEM_NAME MATCHES "Android")
 set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
                           internal/RendererAVX.h
                           internal/RendererAVX.cpp
-                          internal/RendererSSE.h
-                          internal/RendererSSE.cpp)
+                          internal/RendererAVX2.h
+                          internal/RendererAVX2.cpp
+                          internal/RendererSSE2.h
+                          internal/RendererSSE2.cpp)
 
     if (ENABLE_OPENCL)
         set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
@@ -139,17 +141,21 @@ if(ENABLE_UNITYBUILD)
     list(APPEND ALL_SOURCE_FILES _Ray.cpp)
     source_group("src" FILES _Ray.cpp)
 
-    list(APPEND ALL_SOURCE_FILES _Ray_Sse.cpp)
-    source_group("src" FILES _Ray_Sse.cpp)
+    list(APPEND ALL_SOURCE_FILES _Ray_Sse2.cpp)
+    source_group("src" FILES _Ray_Sse2.cpp)
 
     list(APPEND ALL_SOURCE_FILES _Ray_Avx.cpp)
     source_group("src" FILES _Ray_Avx.cpp)
 
+    list(APPEND ALL_SOURCE_FILES _Ray_Avx2.cpp)
+    source_group("src" FILES _Ray_Avx2.cpp)
+
     if(MSVC)
         if(NOT CMAKE_CL_64)
-            set_source_files_properties(_Ray_Sse.cpp PROPERTIES COMPILE_FLAGS /arch:SSE2)
+            set_source_files_properties(_Ray_Sse2.cpp PROPERTIES COMPILE_FLAGS /arch:SSE2)
         endif()
         set_source_files_properties(_Ray_Avx.cpp PROPERTIES COMPILE_FLAGS /arch:AVX)
+        set_source_files_properties(_Ray_Avx2.cpp PROPERTIES COMPILE_FLAGS /arch:AVX2)
     endif(MSVC)
 endif()
 

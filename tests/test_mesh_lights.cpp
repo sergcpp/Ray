@@ -107,7 +107,7 @@ void test_mesh_lights() {
 
         std::shared_ptr<Ray::RendererBase> renderer;
 
-        Ray::eRendererType renderer_types[] = { Ray::RendererRef, Ray::RendererSSE, Ray::RendererAVX,
+        Ray::eRendererType renderer_types[] = { Ray::RendererRef, Ray::RendererSSE2, Ray::RendererAVX, Ray::RendererAVX2,
 #if defined(__ANDROID__)
             Ray::RendererNEON,
 #elif !defined(DISABLE_OCL)

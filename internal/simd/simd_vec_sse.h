@@ -651,7 +651,7 @@ public:
     static bool is_native() { return true; }
 };
 
-#if defined(USE_SSE)
+#if defined(USE_SSE2)
 using native_simd_fvec = simd_fvec<4>;
 using native_simd_ivec = simd_ivec<4>;
 #endif
