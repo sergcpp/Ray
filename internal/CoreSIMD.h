@@ -773,7 +773,7 @@ void Ray::NS::SortRays(ray_packet_t<S> *rays, simd_ivec<S> *ray_masks, int &seco
                        simd_ivec<S> *hash_values, int *head_flags, uint32_t *scan_values, ray_chunk_t *chunks, ray_chunk_t *chunks_temp, uint32_t *skeleton) {
     // From "Fast Ray Sorting and Breadth-First Packet Traversal for GPU Ray Tracing" [2010]
 
-    // compute Ray hash values
+    // compute ray hash values
     for (int i = 0; i < secondary_rays_count; i++) {
         hash_values[i] = get_ray_hash(rays[i], ray_masks[i], root_min, cell_size);
     }
@@ -795,7 +795,7 @@ void Ray::NS::SortRays(ray_packet_t<S> *rays, simd_ivec<S> *ray_masks, int &seco
         chunks_count = cur_sum;
     }
 
-    // init Ray chunks hash and base index
+    // init ray chunks hash and base index
     for (int i = 0; i < secondary_rays_count * S; i++) {
         if (head_flags[i]) {
             chunks[scan_values[i]].hash = reinterpret_cast<const uint32_t &>(hash_values[i / S][i % S]);
@@ -803,7 +803,7 @@ void Ray::NS::SortRays(ray_packet_t<S> *rays, simd_ivec<S> *ray_masks, int &seco
         }
     }
 
-    // init Ray chunks size
+    // init ray chunks size
     for (int i = 0; i < chunks_count - 1; i++) {
         chunks[i].size = chunks[i + 1].base - chunks[i].base;
     }

@@ -406,7 +406,7 @@ void Ray::Ref::SortRays(ray_packet_t *rays, size_t rays_count, const float root_
                         uint32_t *hash_values, int *head_flags, uint32_t *scan_values, ray_chunk_t *chunks, ray_chunk_t *chunks_temp, uint32_t *skeleton) {
     // From "Fast Ray Sorting and Breadth-First Packet Traversal for GPU Ray Tracing" [2010]
 
-    // compute Ray hash values
+    // compute ray hash values
     for (size_t i = 0; i < rays_count; i++) {
         hash_values[i] = get_ray_hash(rays[i], root_min, cell_size);
     }
@@ -436,7 +436,7 @@ void Ray::Ref::SortRays(ray_packet_t *rays, size_t rays_count, const float root_
         }
     }
 
-    // init Ray chunks size
+    // init ray chunks size
     if (chunks_count) {
         for (size_t i = 0; i < chunks_count - 1; i++) {
             chunks[i].size = chunks[i + 1].base - chunks[i].base;
@@ -504,7 +504,8 @@ bool Ray::Ref::IntersectTris(const ray_packet_t &r, const tri_accel_t *tris, int
 }
 
 bool Ray::Ref::IntersectTris(const ray_packet_t &r, const tri_accel_t *tris, const uint32_t *indices, int num_indices, int obj_index, hit_data_t &out_inter) {
-    hit_data_t inter;
+    hit_data_t inter{ Uninitialize };
+    inter.mask_values[0] = 0;
     inter.obj_indices[0] = obj_index;
     inter.t = out_inter.t;
 
@@ -985,8 +986,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleAnisotropic(const TextureAtlas &atlas, cons
     simd_fvec2 _uvs = uvs - step * 0.5f;
 
     int num = (int)(2.0f / k);
-    if (num < 1) num = 1;
-    else if (num > 4) num = 4;
+    num = clamp(num, 1, 4);
 
     step = step / float(num);
 
