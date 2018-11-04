@@ -557,6 +557,11 @@ force_inline simd_vec<T, S> abs(const simd_vec<T, S> &v) {
 }
 
 template <typename T, int S>
+force_inline simd_vec<T, S> fma(const simd_vec<T, S> &a, const simd_vec<T, S> &b, const simd_vec<T, S> &c) {
+    return a * b + c;
+}
+
+template <typename T, int S>
 class simd_comp_where_helper {
     const simd_vec<T, S> &mask_;
     simd_vec<T, S> &comp_;
@@ -573,6 +578,26 @@ force_inline simd_comp_where_helper<T, S> where(const simd_vec<T, S> &mask, simd
     return { mask, vec };
 }
 
+}
+}
+
+#if defined(USE_SSE2)
+#include "simd_vec_sse.h"
+#elif defined(USE_AVX) || defined(USE_AVX2)
+#include "simd_vec_avx.h"
+#elif defined(USE_NEON)
+#include "simd_vec_neon.h"
+#else
+namespace Ray {
+namespace NS {
+using native_simd_fvec = simd_fvec<1>;
+using native_simd_ivec = simd_ivec<1>;
+}
+}
+#endif
+
+namespace Ray {
+namespace NS {
 template <int S>
 using simd_fvec = simd_vec<float, S>;
 using simd_fvec2 = simd_fvec<2>;
@@ -596,24 +621,8 @@ using simd_dvec3 = simd_dvec<3>;
 using simd_dvec4 = simd_dvec<4>;
 using simd_dvec8 = simd_dvec<8>;
 using simd_dvec16 = simd_dvec<16>;
-
 }
 }
-
-#if defined(USE_SSE2)
-#include "simd_vec_sse.h"
-#elif defined(USE_AVX) || defined(USE_AVX2)
-#include "simd_vec_avx.h"
-#elif defined(USE_NEON)
-#include "simd_vec_neon.h"
-#else
-namespace Ray {
-namespace NS {
-using native_simd_fvec = simd_fvec<1>;
-using native_simd_ivec = simd_ivec<1>;
-}
-}
-#endif
 
 #ifdef __GNUC__
 #pragma GCC diagnostic pop
