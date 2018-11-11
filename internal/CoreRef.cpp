@@ -76,6 +76,7 @@ force_inline bool bbox_test(const float o[3], const float inv_d[3], const float 
     if (lo_z > tmin) tmin = lo_z;
     float tmax = hi_x < hi_y ? hi_x : hi_y;
     if (hi_z < tmax) tmax = hi_z;
+    tmax *= 1.00000024f;
 
     return tmin <= tmax && tmin <= t && tmax > 0;
 }

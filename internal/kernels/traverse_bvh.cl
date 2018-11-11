@@ -15,6 +15,7 @@ bool __bbox_test(const float3 o, const float3 inv_d, const float t, const float3
     high = inv_d.z * (bbox_max.z - o.z);
     tmin = fmax(tmin, fmin(low, high));
     tmax = fmin(tmax, fmax(low, high));
+    tmax *= 1.00000024f;
 
     return tmin <= tmax && tmin <= t && tmax > 0;
 }
@@ -34,6 +35,7 @@ bool __bbox_test_fma(const float3 inv_d, const float3 neg_inv_d_o, const float t
     high = fma(inv_d.z, bbox_max.z, neg_inv_d_o.z);
     tmin = fmax(tmin, fmin(low, high));
     tmax = fmin(tmax, fmax(low, high));
+    tmax *= 1.00000024f;
 
     return tmin <= tmax && tmin <= t && tmax > 0;
 }
@@ -53,6 +55,7 @@ bool _bbox_test(const float3 o, const float3 inv_d, const float t, __global cons
     high = inv_d.z * (bbox_max[2] - o.z);
     tmin = fmax(tmin, fmin(low, high));
     tmax = fmin(tmax, fmax(low, high));
+    tmax *= 1.00000024f;
 
     return tmin <= tmax && tmin <= t && tmax > 0;
 }
@@ -72,6 +75,7 @@ bool _bbox_test_fma(const float3 inv_d, const float3 neg_inv_d_o, const float t,
     high = fma(inv_d.z, bbox_max[2], neg_inv_d_o.z);
     tmin = fmax(tmin, fmin(low, high));
     tmax = fmin(tmax, fmax(low, high));
+    tmax *= 1.00000024f;
 
     return tmin <= tmax && tmin <= t && tmax > 0;
 }

@@ -232,6 +232,7 @@ force_inline simd_ivec<S> bbox_test(const simd_fvec<S> o[3], const simd_fvec<S> 
     high = inv_d[2] * (_bbox_max[2] - o[2]);
     tmin = max(tmin, min(low, high));
     tmax = min(tmax, max(low, high));
+    tmax *= 1.00000024f;
 
     simd_fvec<S> mask = (tmin <= tmax) & (tmin <= t) & (tmax > 0.0f);
     
@@ -256,6 +257,7 @@ force_inline simd_ivec<S> bbox_test_fma(const simd_fvec<S> inv_d[3], const simd_
     high = fma(inv_d[2], _bbox_max[2], neg_inv_d_o[2]);
     tmin = max(tmin, min(low, high));
     tmax = min(tmax, max(low, high));
+    tmax *= 1.00000024f;
 
     simd_fvec<S> mask = (tmin <= tmax) & (tmin <= t) & (tmax > 0.0f);
 
