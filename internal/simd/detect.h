@@ -1,13 +1,21 @@
 #pragma once
 
 #ifdef _WIN32
-
 //  Windows
 #include <intrin.h>
 #ifdef __GNUC__
 #include <cpuid.h>
 inline void cpuid(int info[4], int InfoType) {
     __cpuid_count(InfoType, 0, info[0], info[1], info[2], info[3]);
+}
+inline unsigned long long _xgetbv(unsigned int index) {
+    unsigned int eax, edx;
+    __asm__ __volatile__(
+        "xgetbv;"
+        : "=a" (eax), "=d"(edx)
+        : "c" (index)
+    );
+    return ((unsigned long long)edx << 32) | eax;
 }
 #else
 #define cpuid(info, x)    __cpuidex(info, x, 0)
