@@ -68,7 +68,7 @@ void test_simd() {
     if (features.avx2_supported) {
         test_simd_avx2();
     } else {
-        puts("Skipping avx test!");
+        puts("Skipping avx2 test!");
     }
 #endif
 }

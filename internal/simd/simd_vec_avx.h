@@ -336,6 +336,7 @@ template <>
 class simd_vec<int, 8> {
     union {
         __m256i vec_;
+        __m256 vec_ps_;
         int comp_[8];
     };
 
@@ -507,25 +508,25 @@ public:
 
     force_inline static simd_vec<int, 8> and_not(const simd_vec<int, 8> &v1, const simd_vec<int, 8> &v2) {
         simd_vec<int, 8> temp;
-        temp.vec_ = _mm256_andnot_si256(v1.vec_, v2.vec_);
+        temp.vec_ps_ = _mm256_andnot_ps(v1.vec_ps_, v2.vec_ps_);
         return temp;
     }
 
     friend force_inline simd_vec<int, 8> operator&(const simd_vec<int, 8> &v1, const simd_vec<int, 8> &v2) {
         simd_vec<int, 8> temp;
-        temp.vec_ = _mm256_and_si256(v1.vec_, v2.vec_);
+        temp.vec_ps_ = _mm256_and_ps(v1.vec_ps_, v2.vec_ps_);
         return temp;
     }
 
     friend force_inline simd_vec<int, 8> operator|(const simd_vec<int, 8> &v1, const simd_vec<int, 8> &v2) {
         simd_vec<int, 8> temp;
-        temp.vec_ = _mm256_or_si256(v1.vec_, v2.vec_);
+        temp.vec_ps_ = _mm256_or_ps(v1.vec_ps_, v2.vec_ps_);
         return temp;
     }
 
     friend force_inline simd_vec<int, 8> operator^(const simd_vec<int, 8> &v1, const simd_vec<int, 8> &v2) {
         simd_vec<int, 8> temp;
-        temp.vec_ = _mm256_xor_si256(v1.vec_, v2.vec_);
+        temp.vec_ps_ = _mm256_xor_ps(v1.vec_ps_, v2.vec_ps_);
         return temp;
     }
 
