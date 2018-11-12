@@ -13,7 +13,7 @@ namespace Ocl {
 struct ray_packet_t {
     // origin and direction (o.w and d.w are used for pixel coordinates)
     cl_float4 o, d;
-    // color of Ray, determines secondary Ray influence
+    // color of ray, determines secondary Ray influence
     cl_float3 c;
     // derivatives
     cl_float3 do_dx, dd_dx, do_dy, dd_dy;

@@ -23,7 +23,7 @@ float3 get_cam_dir(const float x, const float y, float3 origin, const camera_t *
     float k = native_tan(0.5f * cam->origin.w * PI / 180.0f) * cam->side.w;
     float3 p = (float3)(2 * k * x / w - k, 2 * k * -y / h + k, cam->side.w);
     p = cam->origin.xyz + prop * p.x * cam->side.xyz + p.y * cam->up.xyz + p.z * cam->fwd.xyz;
-    return normalize(p - origin);
+    return fast_normalize(p - origin);
 }
 
 __kernel
@@ -33,6 +33,10 @@ void GeneratePrimaryRays(const int iteration, camera_t cam, int w, int h, __glob
 
     const int index = j * w + i;
     const int hi = (iteration & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT;
+
+    __global ray_packet_t *r = &out_rays[index];
+    r->do_dx = r->do_dy = (float3)(0.0f);
+    r->c = (float4)(1.0f);
 
     float k = ((float)w) / h;
 
@@ -63,25 +67,19 @@ void GeneratePrimaryRays(const int iteration, camera_t cam, int w, int h, __glob
         y += fract(halton[hi + 1] + construct_float(hash(hash_val)), &_unused);
     }
 
-    __global ray_packet_t *r = &out_rays[index];
-
     float ff1 = cam.up.w * (-0.5f + fract(halton[hi + 2 + 0] + construct_float(hash_val), &_unused));
     float ff2 = cam.up.w * (-0.5f + fract(halton[hi + 2 + 1] + construct_float(hash(hash_val)), &_unused));
 
     float3 origin = cam.origin.xyz + cam.side.xyz * ff1 + cam.up.xyz * ff2;
+    r->o = (float4)(origin, (float)i);
 
     float3 d = get_cam_dir(x, y, origin, &cam, w, h, k);
-
-    r->o = (float4)(origin, (float)i);
     r->d = (float4)(d, (float)j);
-   
-    r->c = (float4)(1.0f, 1.0f, 1.0f, 1.0f);
-    r->do_dx = r->do_dy = (float3)(0, 0, 0);
-
-    float3 _dx = get_cam_dir(x + 1, y, origin, &cam, w, h, k),
-           _dy = get_cam_dir(x, y + 1, origin, &cam, w, h, k);
-
+    
+    float3 _dx = get_cam_dir(x + 1, y, origin, &cam, w, h, k);
     r->dd_dx = _dx - d;
+
+    float3 _dy = get_cam_dir(x, y + 1, origin, &cam, w, h, k);
     r->dd_dy = _dy - d;
 }
 
