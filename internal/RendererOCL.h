@@ -122,7 +122,7 @@ protected:
     bool kernel_InitChunkSize(const cl::Buffer &chunks, cl_int count, cl_int ray_count);
     bool kernel_InitSkeletonAndHeadFlags(const cl::Buffer &scan_values, const cl::Buffer &chunks, cl_int count, const cl::Buffer &skeleton, const cl::Buffer &head_flags);
     bool kernel_InitCountTable(const cl::Buffer &chunks, cl_int count, cl_int group_size, cl_int shift, const cl::Buffer &counters);
-    bool kernel_WriteSortedChunks(const cl::Buffer &chunks_in, const cl::Buffer &offsets, const cl::Buffer &counts, cl_int count, cl_int shift, cl_int group_size, const cl::Buffer &chunks_out);
+    bool kernel_WriteSortedChunks(const cl::Buffer &chunks_in, const cl::Buffer &offsets, cl_int count, cl_int shift, cl_int group_size, const cl::Buffer &chunks_out);
     bool kernel_ReorderRays(const cl::Buffer &in_rays, const cl::Buffer &in_indices, cl_int count, const cl::Buffer &out_rays);
     bool kernel_MixIncremental(const cl::Image2D &fbuf1, const cl::Image2D &fbuf2, cl_float k, const cl::Image2D &res);
     bool kernel_Postprocess(const cl::Image2D &frame_buf, cl_int w, cl_int h, cl_float inv_gamma, cl_int clamp, const cl::Image2D &out_pixels);

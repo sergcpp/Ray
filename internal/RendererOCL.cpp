@@ -159,8 +159,8 @@ Ray::Ocl::Renderer::Renderer(int w, int h, int platform_index, int device_index)
         cl_int error = CL_SUCCESS;
         cl::Program::Sources srcs = {
             cl_src_defines,
-            cl_src_types, cl_src_transform, cl_src_primary_ray_gen,
-            cl_src_intersect, cl_src_traverse, cl_src_trace, cl_src_sort,
+            cl_src_types, cl_src_transform, cl_src_primary_ray_gen, cl_src_sort,
+            cl_src_intersect, cl_src_traverse, cl_src_trace,
             cl_src_texture, cl_src_sh, cl_src_shade, cl_src_postprocess
         };
 
@@ -1205,11 +1205,10 @@ bool Ray::Ocl::Renderer::kernel_InitCountTable(const cl::Buffer &chunks, cl_int 
     return queue_.enqueueNDRangeKernel(init_count_table_kernel_, cl::NullRange, global, local) == CL_SUCCESS;
 }
 
-bool Ray::Ocl::Renderer::kernel_WriteSortedChunks(const cl::Buffer &chunks_in, const cl::Buffer &offsets, const cl::Buffer &counts, cl_int count, cl_int shift, cl_int _group_size, const cl::Buffer &chunks_out) {
+bool Ray::Ocl::Renderer::kernel_WriteSortedChunks(const cl::Buffer &chunks_in, const cl::Buffer &offsets, cl_int count, cl_int shift, cl_int _group_size, const cl::Buffer &chunks_out) {
     cl_uint argc = 0;
     if (write_sorted_chunks_kernel_.setArg(argc++, chunks_in) != CL_SUCCESS ||
         write_sorted_chunks_kernel_.setArg(argc++, offsets) != CL_SUCCESS ||
-        write_sorted_chunks_kernel_.setArg(argc++, counts) != CL_SUCCESS ||
         write_sorted_chunks_kernel_.setArg(argc++, shift) != CL_SUCCESS ||
         write_sorted_chunks_kernel_.setArg(argc++, _group_size) != CL_SUCCESS ||
         write_sorted_chunks_kernel_.setArg(argc++, count) != CL_SUCCESS ||
@@ -1580,7 +1579,7 @@ bool Ray::Ocl::Renderer::PerformRadixSort_GPU(const cl::Buffer &chunks, const cl
     for (int shift = 0; shift <= 28; shift += 4) {
         if (!kernel_InitCountTable(*_chunks1, (cl_int)num, (cl_int)group_size, shift, counters) ||
             !ExclusiveScan_GPU(counters, (cl_int)group_count * 0x10, 0, 4, partial_sums, partial_sums2, scan_values2, scan_values3, scan_values4, scan_values) ||
-            !kernel_WriteSortedChunks(*_chunks1, scan_values, counters, (cl_int)group_count, shift, (cl_int)group_size, *_chunks2)) return false;
+            !kernel_WriteSortedChunks(*_chunks1, scan_values, (cl_int)group_count, shift, (cl_int)group_size, *_chunks2)) return false;
 
         std::swap(_chunks1, _chunks2);
     }
@@ -1610,10 +1609,10 @@ bool Ray::Ocl::Renderer::SortRays(const cl::Buffer &in_rays, cl_int rays_count, 
 
         chunks_count = last_scan_value + last_flag;
     }
-
+    
     if (!kernel_InitChunkHashAndBase(chunks, rays_count, ray_hashes, head_flags, scan_values)) return false;
     if (!kernel_InitChunkSize(chunks, (cl_int)chunks_count, (cl_int)rays_count)) return false;
-
+    
     if (!PerformRadixSort_GPU(chunks, chunks2, (cl_int)chunks_count, counters, partial_sums, partial_sums2,
                               scan_values, scan_values2, scan_values3, scan_values4)) return false;
 

@@ -209,7 +209,7 @@ void InitCountTable(__global ray_chunk_t *chunks, int shift, __global uint *coun
 }
 
 __kernel
-void WriteSortedChunks(__global ray_chunk_t *chunks, __global uint *offsets, __global uint *counts, int shift, int group_size, int global_size, __global ray_chunk_t *chunks_out) {
+void WriteSortedChunks(__global ray_chunk_t *chunks, __global uint *offsets, int shift, int group_size, int global_size, __global ray_chunk_t *chunks_out) {
     const int gi = get_global_id(0);
 
     uint local_offsets[0x10];

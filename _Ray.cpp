@@ -26,12 +26,13 @@
 #endif
 
 // TODO:
-// add SH lightmap generation
+// consider transparency in shadow from punctual lights
 // add deletion functions for OpenCL backend
 // add tests for intersection
 // add more validation tests (use Cycles)
 
 // DONE:
+// add SH lightmap generation
 // add lightmap generation (simple)
 // add geometry camera (for lightmapping)
 // add hdr env map
