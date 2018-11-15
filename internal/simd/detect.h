@@ -59,7 +59,7 @@ namespace Ray {
         int ids_count = info[0];
 
         cpuid(info, 0x80000000);
-        unsigned ex_ids_count = info[0];
+        //unsigned ex_ids_count = info[0];
 
         //  Detect Features
         if (ids_count >= 0x00000001) {

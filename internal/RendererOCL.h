@@ -89,8 +89,7 @@ protected:
                              const cl::Image2D &frame_buf, const cl::Buffer &secondary_rays, const cl::Buffer &secondary_rays_count);
     bool kernel_ShadeSecondary(const pass_info_t pi, const cl::Buffer &halton,
                                const cl::Buffer &intersections, const cl::Buffer &rays,
-                               int rays_count, int w, int h,
-                               const cl::Buffer &mesh_instances, const cl::Buffer &mi_indices, const cl::Buffer &meshes,
+                               int rays_count, const cl::Buffer &mesh_instances, const cl::Buffer &mi_indices, const cl::Buffer &meshes,
                                const cl::Buffer &transforms, const cl::Buffer &vtx_indices, const cl::Buffer &vertices,
                                const cl::Buffer &nodes, cl_uint node_index, const cl::Buffer &tris, const cl::Buffer &tri_indices,
                                const environment_t &env, const cl::Buffer &materials, const cl::Buffer &textures, const cl::Image2DArray &texture_atlas,

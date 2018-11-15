@@ -562,7 +562,7 @@ void Ray::Ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
 
         pass_info.bounce = bounce + 3;
 
-        if (!kernel_ShadeSecondary(pass_info, halton_seq_buf_, prim_inters_buf_, secondary_rays_buf_, (int)secondary_rays_count, w_, h_,
+        if (!kernel_ShadeSecondary(pass_info, halton_seq_buf_, prim_inters_buf_, secondary_rays_buf_, (int)secondary_rays_count,
                                    s->mesh_instances_.buf(), s->mi_indices_.buf(), s->meshes_.buf(),
                                    s->transforms_.buf(), s->vtx_indices_.buf(), s->vertices_.buf(),
                                    s->nodes_.buf(), (cl_uint)macro_tree_root, s->tris_.buf(), s->tri_indices_.buf(),
@@ -769,8 +769,7 @@ bool Ray::Ocl::Renderer::kernel_ShadePrimary(const pass_info_t pi, const cl::Buf
 
 bool Ray::Ocl::Renderer::kernel_ShadeSecondary(const pass_info_t pi, const cl::Buffer &halton,
         const cl::Buffer &intersections, const cl::Buffer &rays,
-        int rays_count, int w, int h,
-        const cl::Buffer &mesh_instances, const cl::Buffer &mi_indices, const cl::Buffer &meshes,
+        int rays_count, const cl::Buffer &mesh_instances, const cl::Buffer &mi_indices, const cl::Buffer &meshes,
         const cl::Buffer &transforms, const cl::Buffer &vtx_indices, const cl::Buffer &vertices,
         const cl::Buffer &nodes, cl_uint node_index, const cl::Buffer &tris, const cl::Buffer &tri_indices,
         const environment_t &env, const cl::Buffer &materials, const cl::Buffer &textures, const cl::Image2DArray &texture_atlas,
@@ -1540,12 +1539,12 @@ bool Ray::Ocl::Renderer::PerformRadixSort_CPU(const cl::Buffer &chunks, cl_int c
         ray_chunk_t *end1 = begin1 + (end - begin);
 
         for (unsigned shift = 0; shift <= 24; shift += 8) {
-            size_t count[0x100] = {};
+            size_t counters[0x100] = {};
             for (ray_chunk_t *p = begin; p != end; p++) {
-                count[(p->hash >> shift) & 0xFF]++;
+                counters[(p->hash >> shift) & 0xFF]++;
             }
             ray_chunk_t *bucket[0x100], *q = begin1;
-            for (int i = 0; i < 0x100; q += count[i++]) {
+            for (int i = 0; i < 0x100; q += counters[i++]) {
                 bucket[i] = q;
             }
             for (ray_chunk_t *p = begin; p != end; p++) {
@@ -1580,7 +1579,6 @@ bool Ray::Ocl::Renderer::PerformRadixSort_GPU(const cl::Buffer &chunks, const cl
         if (!kernel_InitCountTable(*_chunks1, (cl_int)num, (cl_int)group_size, shift, counters) ||
             !ExclusiveScan_GPU(counters, (cl_int)group_count * 0x10, 0, 4, partial_sums, partial_sums2, scan_values2, scan_values3, scan_values4, scan_values) ||
             !kernel_WriteSortedChunks(*_chunks1, scan_values, (cl_int)group_count, shift, (cl_int)group_size, *_chunks2)) return false;
-
         std::swap(_chunks1, _chunks2);
     }
 
@@ -1652,8 +1650,8 @@ std::vector<Ray::Ocl::Platform> Ray::Ocl::Renderer::QueryPlatforms() {
         platforms[i].getDevices(CL_DEVICE_TYPE_GPU, &devices);
 
         for (size_t j = 0; j < devices.size(); j++) {
-            auto n = devices[j].getInfo<CL_DEVICE_NAME>();
-            out_platforms.back().devices.push_back({ n });
+            auto dev_name = devices[j].getInfo<CL_DEVICE_NAME>();
+            out_platforms.back().devices.push_back({ dev_name });
         }
     }
 

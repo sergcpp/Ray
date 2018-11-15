@@ -4,6 +4,10 @@
 
 #include <algorithm> // for std::max
 
+#pragma warning(push)
+#pragma warning(disable : 4789)
+#pragma warning(disable : 4127) // conditional expression is constant
+
 // Used to force loop unroll in release mode
 
 #define ITERATE(n, exp)  \
@@ -73,9 +77,6 @@
         { const int i = 5; exp }    \
         { const int i = 6; exp }    \
         { const int i = 7; exp }
-
-#pragma warning(push)
-#pragma warning(disable : 4789)
 
 #ifdef __GNUC__
 #pragma GCC diagnostic push

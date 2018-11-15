@@ -156,7 +156,7 @@ uint32_t Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
     m.node_count = 0;
 
     uint32_t tris_start = (uint32_t)tris_.size();
-    m.node_count += PreprocessMesh(_m.vtx_attrs, _m.vtx_attrs_count, _m.vtx_indices, _m.vtx_indices_count, _m.layout, _m.allow_spatial_splits, nodes_, tris_, tri_indices_);
+    m.node_count += PreprocessMesh(_m.vtx_attrs, _m.vtx_indices, _m.vtx_indices_count, _m.layout, _m.allow_spatial_splits, nodes_, tris_, tri_indices_);
 
     for (const auto &s : _m.shapes) {
         for (size_t i = s.vtx_start; i < s.vtx_start + s.vtx_count; i += 3) {
@@ -301,6 +301,7 @@ uint32_t Ray::Ref::Scene::AddLight(const light_desc_t &_l) {
 
 void Ray::Ref::Scene::RemoveLight(uint32_t i) {
     // TODO!!!
+    unused(i);
 }
 
 uint32_t Ray::Ref::Scene::AddMeshInstance(uint32_t mesh_index, const float *xform) {

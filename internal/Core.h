@@ -12,6 +12,8 @@
 #define force_inline __forceinline
 #endif
 
+#define unused(x) ((void)x)
+
 #include "simd/aligned_allocator.h"
 
 namespace Ray {
@@ -109,7 +111,7 @@ void PreprocessTri(const float *p, int stride, tri_accel_t *acc);
 void ExtractPlaneNormal(const tri_accel_t &tri, float *out_normal);
 
 // Builds BVH for mesh and precomputes triangle data
-uint32_t PreprocessMesh(const float *attrs, size_t attrs_count, const uint32_t *indices, size_t indices_count, eVertexLayout layout,
+uint32_t PreprocessMesh(const float *attrs, const uint32_t *indices, size_t indices_count, eVertexLayout layout,
                         bool allow_spatial_splits, std::vector<bvh_node_t> &out_nodes, std::vector<tri_accel_t> &out_tris, std::vector<uint32_t> &out_indices);
 
 // Builds BVH for arbitrary primitives (using their bounding boxes), used to build macro tree

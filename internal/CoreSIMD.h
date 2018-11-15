@@ -10,6 +10,9 @@
 
 #include "simd/simd_vec.h"
 
+#pragma warning(push)
+#pragma warning(disable : 4127) // conditional expression is constant
+
 namespace Ray {
 namespace NS {
 
@@ -116,7 +119,7 @@ void TransformPoint(const simd_fvec<S> p[3], const float *xform, simd_fvec<S> ou
 template <int S>
 void TransformNormal(const simd_fvec<S> n[3], const float *inv_xform, simd_fvec<S> out_n[3]);
 template <int S>
-void TransformUVs(const simd_fvec<S> _uvs[2], float sx, float sy, const texture_t &t, const simd_ivec<S> &mip_level, const simd_ivec<S> &mask, simd_fvec<S> out_res[2]);
+void TransformUVs(const simd_fvec<S> _uvs[2], float sx, float sy, const texture_t &t, const simd_ivec<S> &mip_level, simd_fvec<S> out_res[2]);
 
 // Sample texture
 template <int S>
@@ -609,12 +612,12 @@ void Ray::NS::GeneratePrimaryRays(const int iteration, const camera_t &cam, cons
             simd_fvec<S> ryy = construct_float(hash(hash_val));
             simd_fvec<S> sxx, syy;
 
-            for (int i = 0; i < S; i++) {
+            for (int j = 0; j < S; j++) {
                 float _unused;
-                sxx[i] = cam.focus_factor * (-0.5f + std::modf(halton[hi + 2 + 0] + rxx[i], &_unused));
-                syy[i] = cam.focus_factor * (-0.5f + std::modf(halton[hi + 2 + 1] + ryy[i], &_unused));
-                rxx[i] = std::modf(halton[hi + 0] + rxx[i], &_unused);
-                ryy[i] = std::modf(halton[hi + 1] + ryy[i], &_unused);
+                sxx[j] = cam.focus_factor * (-0.5f + std::modf(halton[hi + 2 + 0] + rxx[j], &_unused));
+                syy[j] = cam.focus_factor * (-0.5f + std::modf(halton[hi + 2 + 1] + ryy[j], &_unused));
+                rxx[j] = std::modf(halton[hi + 0] + rxx[j], &_unused);
+                ryy[j] = std::modf(halton[hi + 1] + ryy[j], &_unused);
             }
 
             if (cam.filter == Tent) {
@@ -661,7 +664,7 @@ void Ray::NS::GeneratePrimaryRays(const int iteration, const camera_t &cam, cons
 
 template <int DimX, int DimY>
 void Ray::NS::SampleMeshInTextureSpace(int iteration, int obj_index, int uv_layer, const mesh_t &mesh, const transform_t &tr, const uint32_t *vtx_indices, const vertex_t *vertices,
-                                       const rect_t &r, int w, int h, const float *halton, aligned_vector<ray_packet_t<DimX * DimY>> &out_rays, aligned_vector<hit_data_t<DimX * DimY>> &out_inters) {
+                                       const rect_t &r, int width, int height, const float *halton, aligned_vector<ray_packet_t<DimX * DimY>> &out_rays, aligned_vector<hit_data_t<DimX * DimY>> &out_inters) {
     const int S = DimX * DimY;
     static_assert(S <= 16, "!");
 
@@ -675,14 +678,14 @@ void Ray::NS::SampleMeshInTextureSpace(int iteration, int obj_index, int uv_laye
         off_y[i] = ray_packet_layout_y[i];
     }
 
-    size_t i = 0;
+    size_t count = 0;
     for (int y = r.y; y < r.y + r.h - (r.h & (DimY - 1)); y += DimY) {
         for (int x = r.x; x < r.x + r.w - (r.w & (DimX - 1)); x += DimX) {
             simd_ivec<S> ixx = x + off_x, iyy = simd_ivec<S>(y) + off_y;
 
-            auto &out_ray = out_rays[i];
-            auto &out_inter = out_inters[i];
-            i++;
+            auto &out_ray = out_rays[count];
+            auto &out_inter = out_inters[count];
+            count++;
 
             out_ray.xy = (ixx << 16) | iyy;
             out_ray.c[0] = out_ray.c[1] = out_ray.c[2] = 1.0f;
@@ -696,7 +699,7 @@ void Ray::NS::SampleMeshInTextureSpace(int iteration, int obj_index, int uv_laye
     }
 
     simd_ivec2 irect_min = { r.x, r.y }, irect_max = { r.x + r.w - 1, r.y + r.h - 1 };
-    simd_fvec2 size = { (float)w, (float)h };
+    simd_fvec2 size = { (float)width, (float)height };
 
     for (uint32_t tri = mesh.tris_index; tri < mesh.tris_index + mesh.tris_count; tri++) {
         const auto &v0 = vertices[vtx_indices[tri * 3 + 0]];
@@ -740,11 +743,11 @@ void Ray::NS::SampleMeshInTextureSpace(int iteration, int obj_index, int uv_laye
             for (int x = ibbox_min[0]; x <= ibbox_max[0]; x += DimX) {
                 simd_ivec<S> ixx = x + off_x, iyy = simd_ivec<S>(y) + off_y;
 
-                int i = ((y - r.y) / DimY) * (r.w / DimX) + (x - r.x) / DimX;
-                auto &out_ray = out_rays[i];
-                auto &out_inter = out_inters[i];
+                int ndx = ((y - r.y) / DimY) * (r.w / DimX) + (x - r.x) / DimX;
+                auto &out_ray = out_rays[ndx];
+                auto &out_inter = out_inters[ndx];
 
-                simd_ivec<S> index = iyy * w + ixx;
+                simd_ivec<S> index = iyy * width + ixx;
                 const int hi = (iteration & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT;
 
                 simd_ivec<S> hash_val = hash(index);
@@ -1339,7 +1342,7 @@ void Ray::NS::TransformNormal(const simd_fvec<S> n[3], const float *inv_xform, s
 }
 
 template <int S>
-void Ray::NS::TransformUVs(const simd_fvec<S> uvs[2], float sx, float sy, const texture_t &t, const simd_ivec<S> &mip_level, const simd_ivec<S> &mask, simd_fvec<S> out_res[2]) {
+void Ray::NS::TransformUVs(const simd_fvec<S> uvs[2], float sx, float sy, const texture_t &t, const simd_ivec<S> &mip_level, simd_fvec<S> out_res[2]) {
     simd_ivec<S> ipos[2];
 
     ITERATE(S, { ipos[0][i] = (int)t.pos[mip_level[i]][0];
@@ -1356,7 +1359,7 @@ void Ray::NS::SampleNearest(const Ref::TextureAtlas &atlas, const texture_t &t, 
     simd_ivec<S> _lod = (simd_ivec<S>)lod;
 
     simd_fvec<S> _uvs[2];
-    TransformUVs(uvs, atlas.size_x(), atlas.size_y(), t, _lod, mask, _uvs);
+    TransformUVs(uvs, atlas.size_x(), atlas.size_y(), t, _lod, _uvs);
 
     where(_lod > MAX_MIP_LEVEL, _lod) = MAX_MIP_LEVEL;
 
@@ -1380,7 +1383,7 @@ void Ray::NS::SampleNearest(const Ref::TextureAtlas &atlas, const texture_t &t, 
 template <int S>
 void Ray::NS::SampleBilinear(const Ref::TextureAtlas &atlas, const texture_t &t, const simd_fvec<S> uvs[2], const simd_ivec<S> &lod, const simd_ivec<S> &mask, simd_fvec<S> out_rgba[4]) {
     simd_fvec<S> _uvs[2];
-    TransformUVs(uvs, atlas.size_x(), atlas.size_y(), t, lod, mask, _uvs);
+    TransformUVs(uvs, atlas.size_x(), atlas.size_y(), t, lod, _uvs);
 
     _uvs[0] = _uvs[0] * atlas.size_x() - 0.5f;
     _uvs[1] = _uvs[1] * atlas.size_y() - 0.5f;
@@ -1552,10 +1555,10 @@ void Ray::NS::SampleAnisotropic(const Ref::TextureAtlas &atlas, const texture_t 
     bool skip_z = reinterpret_cast<simd_ivec<S> &>(kz_big_enough).all_zeros();
 
     for (int j = 0; j < 4; j++) {
-        auto imask = (num > j) & mask;
-        if (imask.all_zeros()) break;
+        auto new_imask = (num > j) & mask;
+        if (new_imask.all_zeros()) break;
 
-        const auto &fmask = reinterpret_cast<const simd_fvec<S>&>(imask);
+        const auto &fmask = reinterpret_cast<const simd_fvec<S>&>(new_imask);
 
         _uvs[0] = _uvs[0] - floor(_uvs[0]);
         _uvs[1] = _uvs[1] - floor(_uvs[1]);
@@ -1563,12 +1566,12 @@ void Ray::NS::SampleAnisotropic(const Ref::TextureAtlas &atlas, const texture_t 
         simd_fvec<S> col[4];
 
         simd_fvec<S> _uvs1[2] = { pos1[0] + _uvs[0] * size1[0], pos1[1] + _uvs[1] * size1[1] };
-        SampleBilinear(atlas, _uvs1, page1, imask, col);
+        SampleBilinear(atlas, _uvs1, page1, new_imask, col);
         ITERATE_4({ where(fmask, out_rgba[i]) = out_rgba[i] + (1.0f - kz) * col[i]; })
 
         if (!skip_z) {
             simd_fvec<S> _uvs2[2] = { pos2[0] + _uvs[0] * size2[0], pos2[1] + _uvs[1] * size2[1] };
-            SampleBilinear(atlas, _uvs2, page2, imask, col);
+            SampleBilinear(atlas, _uvs2, page2, new_imask, col);
             ITERATE_4({ where(fmask, out_rgba[i]) = out_rgba[i] + kz * col[i]; })
         }
 
@@ -1651,6 +1654,9 @@ void Ray::NS::ComputeDirectLighting(const simd_fvec<S> P[3], const simd_fvec<S> 
                                     const uint32_t *vtx_indices, const vertex_t *vertices, const bvh_node_t *nodes, uint32_t node_index,
                                     const tri_accel_t *tris, const uint32_t *tri_indices, const light_t *lights,
                                     const uint32_t *li_indices, uint32_t light_node_index, const simd_ivec<S> &ray_mask, simd_fvec<S> *out_col) {
+    unused(vtx_indices);
+    unused(vertices);
+
     TraversalStateStack<S> st;
 
     st.queue[0].mask = ray_mask;
@@ -1683,8 +1689,8 @@ void Ray::NS::ComputeDirectLighting(const simd_fvec<S> P[3], const simd_fvec<S> 
             if (!is_leaf_node(nodes[cur])) {
                 st.push_children(nodes[cur]);
             } else {
-                for (uint32_t i = nodes[cur].prim_index; i < nodes[cur].prim_index + nodes[cur].prim_count; i++) {
-                    const light_t &l = lights[li_indices[i]];
+                for (uint32_t li = nodes[cur].prim_index; li < nodes[cur].prim_index + nodes[cur].prim_count; li++) {
+                    const light_t &l = lights[li_indices[li]];
 
                     simd_fvec<S> L[3] = { { P[0] - l.pos[0] }, { P[1] - l.pos[1] }, { P[2] - l.pos[2] } };
                     simd_fvec<S> distance = length(L);
@@ -2106,25 +2112,25 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                     if (!same_mi[i]) continue;
 
                     float _unused;
-                    const float u1 = std::modf(halton[hi + 0] + rand_offset[i], &_unused);
-                    const float u2 = std::modf(halton[hi + 1] + rand_offset2[i], &_unused);
+                    const float ur1 = std::modf(halton[hi + 0] + rand_offset[i], &_unused);
+                    const float ur2 = std::modf(halton[hi + 1] + rand_offset2[i], &_unused);
 
-                    const float phi = 2 * PI * u2;
+                    const float phi = 2 * PI * ur2;
 
                     const float cos_phi = std::cos(phi);
                     const float sin_phi = std::sin(phi);
 
                     if (pi.use_uniform_sampling()) {
-                        const float dir = std::sqrt(1.0f - u1 * u1);
-                        V[0][i] = dir * sin_phi * __B[0][i] + u1 * __N[0][i] + dir * cos_phi * __T[0][i];
-                        V[1][i] = dir * sin_phi * __B[1][i] + u1 * __N[1][i] + dir * cos_phi * __T[1][i];
-                        V[2][i] = dir * sin_phi * __B[2][i] + u1 * __N[2][i] + dir * cos_phi * __T[2][i];
-                        rc[0][i] *= 2.0f * u1; rc[1][i] *= 2.0f * u1; rc[2][i] *= 2.0f * u1;
+                        const float dir = std::sqrt(1.0f - ur1 * ur1);
+                        V[0][i] = dir * sin_phi * __B[0][i] + ur1 * __N[0][i] + dir * cos_phi * __T[0][i];
+                        V[1][i] = dir * sin_phi * __B[1][i] + ur1 * __N[1][i] + dir * cos_phi * __T[1][i];
+                        V[2][i] = dir * sin_phi * __B[2][i] + ur1 * __N[2][i] + dir * cos_phi * __T[2][i];
+                        rc[0][i] *= 2.0f * ur1; rc[1][i] *= 2.0f * ur1; rc[2][i] *= 2.0f * ur1;
                     } else {
-                        const float dir = std::sqrt(u1);
-                        V[0][i] = dir * sin_phi * __B[0][i] + std::sqrt(1.0f - u1) * __N[0][i] + dir * cos_phi * __T[0][i];
-                        V[1][i] = dir * sin_phi * __B[1][i] + std::sqrt(1.0f - u1) * __N[1][i] + dir * cos_phi * __T[1][i];
-                        V[2][i] = dir * sin_phi * __B[2][i] + std::sqrt(1.0f - u1) * __N[2][i] + dir * cos_phi * __T[2][i];
+                        const float dir = std::sqrt(ur1);
+                        V[0][i] = dir * sin_phi * __B[0][i] + std::sqrt(1.0f - ur1) * __N[0][i] + dir * cos_phi * __T[0][i];
+                        V[1][i] = dir * sin_phi * __B[1][i] + std::sqrt(1.0f - ur1) * __N[1][i] + dir * cos_phi * __T[1][i];
+                        V[2][i] = dir * sin_phi * __B[2][i] + std::sqrt(1.0f - ur1) * __N[2][i] + dir * cos_phi * __T[2][i];
                     }
 
                     p[i] = std::modf(halton[hi + 0] + rand_offset3[i], &_unused);
@@ -2134,8 +2140,8 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                 const auto new_ray_mask = (p < thr / RAY_TERM_THRES) & reinterpret_cast<const simd_fvec<S>&>(same_mi);
 
                 if (reinterpret_cast<const simd_ivec<S>&>(new_ray_mask).not_all_zeros()) {
-                    const int index = *out_secondary_rays_count;
-                    auto &r = out_secondary_rays[index];
+                    const int out_index = *out_secondary_rays_count;
+                    auto &r = out_secondary_rays[out_index];
 
                     // modify weight of non-terminated Ray
                     where(thr < RAY_TERM_THRES, rc[0]) = rc[0] * (RAY_TERM_THRES / thr);
@@ -2213,8 +2219,8 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                 const auto new_ray_mask = (p < thr / RAY_TERM_THRES) & reinterpret_cast<const simd_fvec<S>&>(same_mi);
 
                 if (reinterpret_cast<const simd_ivec<S>&>(new_ray_mask).not_all_zeros()) {
-                    const int index = *out_secondary_rays_count;
-                    auto &r = out_secondary_rays[index];
+                    const int out_index = *out_secondary_rays_count;
+                    auto &r = out_secondary_rays[out_index];
 
                     // modify weight of non-terminated Ray
                     where(thr < RAY_TERM_THRES, rc[0]) = rc[0] * (RAY_TERM_THRES / thr);
@@ -2285,15 +2291,15 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
 
                 for (int i = 0; i < S; i++) {
                     const float z = 1.0f - halton[hi + 0] * mat->roughness;
-                    const float temp = std::sqrt(1.0f - z * z);
+                    const float _temp = std::sqrt(1.0f - z * z);
 
                     const float phi = halton[(((hash(hi) + pi.iteration) & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT + pi.bounce * 2) + 0] * 2 * PI;
                     const float cos_phi = std::cos(phi);
                     const float sin_phi = std::sin(phi);
 
-                    V[0][i] = temp * sin_phi * BB[0][i] + z * V[0][i] + temp * cos_phi * TT[0][i];
-                    V[1][i] = temp * sin_phi * BB[1][i] + z * V[1][i] + temp * cos_phi * TT[1][i];
-                    V[2][i] = temp * sin_phi * BB[2][i] + z * V[2][i] + temp * cos_phi * TT[2][i];
+                    V[0][i] = _temp * sin_phi * BB[0][i] + z * V[0][i] + _temp * cos_phi * TT[0][i];
+                    V[1][i] = _temp * sin_phi * BB[1][i] + z * V[1][i] + _temp * cos_phi * TT[1][i];
+                    V[2][i] = _temp * sin_phi * BB[2][i] + z * V[2][i] + _temp * cos_phi * TT[2][i];
 
                     rc[0][i] *= z;
                     rc[1][i] *= z;
@@ -2313,8 +2319,8 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                 const auto new_ray_mask = (cost2 >= 0.0f) & (p < thr / RAY_TERM_THRES) & reinterpret_cast<const simd_fvec<S>&>(same_mi);
 
                 if (reinterpret_cast<const simd_ivec<S>&>(new_ray_mask).not_all_zeros()) {
-                    const int index = *out_secondary_rays_count;
-                    auto &r = out_secondary_rays[index];
+                    const int out_index = *out_secondary_rays_count;
+                    auto &r = out_secondary_rays[out_index];
 
                     // modify weight of non-terminated Ray
                     where(thr < RAY_TERM_THRES, rc[0]) = rc[0] * (RAY_TERM_THRES / thr);
@@ -2370,3 +2376,5 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
         out_secondary_rays[index].xy = ray.xy;
     }
 }
+
+#pragma warning(pop)

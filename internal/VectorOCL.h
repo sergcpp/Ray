@@ -2,6 +2,9 @@
 
 #include "CoreOCL.h"
 
+#pragma warning(push)
+#pragma warning(disable : 4127) // conditional expression is constant
+
 namespace Ray {
 namespace Ocl {
 template <typename T>
@@ -143,3 +146,5 @@ public:
 };
 }
 }
+
+#pragma warning(pop)

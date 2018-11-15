@@ -11,14 +11,14 @@ force_inline void _IntersectTri(const ray_packet_t &r, const tri_accel_t &tri, u
     const int _next_u[] = { 1, 0, 0 },
                           _next_v[] = { 2, 2, 1 };
 
-    int w = tri.ci & Ray::TRI_W_BITS,
-        u = _next_u[w],
-        v = _next_v[w];
+    int iw = tri.ci & Ray::TRI_W_BITS,
+        iu = _next_u[iw],
+        iv = _next_v[iw];
 
-    float det = r.d[u] * tri.nu + r.d[v] * tri.nv + r.d[w];
-    float dett = tri.np - (r.o[u] * tri.nu + r.o[v] * tri.nv + r.o[w]);
-    float Du = r.d[u] * dett - (tri.pu - r.o[u]) * det;
-    float Dv = r.d[v] * dett - (tri.pv - r.o[v]) * det;
+    float det = r.d[iu] * tri.nu + r.d[iv] * tri.nv + r.d[iw];
+    float dett = tri.np - (r.o[iu] * tri.nu + r.o[iv] * tri.nv + r.o[iw]);
+    float Du = r.d[iu] * dett - (tri.pu - r.o[iu]) * det;
+    float Dv = r.d[iv] * dett - (tri.pv - r.o[iv]) * det;
     float detu = tri.e1v * Du - tri.e1u * Dv;
     float detv = tri.e0u * Dv - tri.e0v * Du;
 
@@ -297,7 +297,7 @@ void Ray::Ref::GeneratePrimaryRays(int iteration, const camera_t &cam, const rec
 }
 
 void Ray::Ref::SampleMeshInTextureSpace(int iteration, int obj_index, int uv_layer, const mesh_t &mesh, const transform_t &tr, const uint32_t *vtx_indices, const vertex_t *vertices,
-                                        const rect_t &r, int w, int h, const float *halton, aligned_vector<ray_packet_t> &out_rays, aligned_vector<hit_data_t> &out_inters) {
+                                        const rect_t &r, int width, int height, const float *halton, aligned_vector<ray_packet_t> &out_rays, aligned_vector<hit_data_t> &out_inters) {
     out_rays.resize((size_t)r.w * r.h);
     out_inters.resize(out_rays.size());
 
@@ -316,7 +316,7 @@ void Ray::Ref::SampleMeshInTextureSpace(int iteration, int obj_index, int uv_lay
     }
 
     simd_ivec2 irect_min = { r.x, r.y }, irect_max = { r.x + r.w - 1, r.y + r.h - 1 };
-    simd_fvec2 size = { (float)w, (float)h };
+    simd_fvec2 size = { (float)width, (float)height };
     
     for (uint32_t tri = mesh.tris_index; tri < mesh.tris_index + mesh.tris_count; tri++) {
         const auto &v0 = vertices[vtx_indices[tri * 3 + 0]];
@@ -359,7 +359,7 @@ void Ray::Ref::SampleMeshInTextureSpace(int iteration, int obj_index, int uv_lay
 
                 if (out_inter.mask_values[0]) continue;
 
-                const int index = y * w + x;
+                const int index = y * width + x;
                 const int hi = (iteration & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT;
 
                 int hash_val = hash(index);
@@ -1061,6 +1061,9 @@ Ray::Ref::simd_fvec3 Ray::Ref::ComputeDirectLighting(const simd_fvec3 &P, const 
                                                      const bvh_node_t *nodes, uint32_t node_index, const tri_accel_t *tris,
                                                      const uint32_t *tri_indices, const light_t *lights,
                                                      const uint32_t *li_indices, uint32_t light_node_index) {
+    unused(vtx_indices);
+    unused(vertices);
+
     simd_fvec3 col = { 0.0f };
 
     uint32_t stack[MAX_STACK_SIZE];

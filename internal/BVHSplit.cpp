@@ -257,7 +257,7 @@ Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, const std::
                     prim_max = new_prim_bounds[i].max[split_axis];
                 }
 
-                int enter_index, exit_index;
+                int enter_index = 0, exit_index = 0;
 
                 for (int j = 0; j < NumSpatialSplitBins; j++) {
                     if (prim_min >= bins[j].limits.min[split_axis]) {
@@ -350,8 +350,6 @@ Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, const std::
 
             const auto &list = axis_lists[div_axis];
             for (const auto i : list) {
-                const auto &p = primitives[prim_indices[i]];
-
                 bool b1 = false, b2 = false;
                 if (new_prim_bounds[i].min[div_axis] <= res_left_bounds.max[div_axis]) {
                     left_indices.push_back(prim_indices[i]);
@@ -374,8 +372,6 @@ Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, const std::
                 res_right_bounds.min[div_axis], res_right_bounds.max[div_axis]);
 
             return{ std::move(left_indices), std::move(right_indices), { res_left_bounds.min, res_left_bounds.max }, { res_right_bounds.min, res_right_bounds.max } };
-        } else {
-            volatile int i = 0;
         }
     }
 

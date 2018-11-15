@@ -86,6 +86,7 @@ namespace Ray {
 
         template<class U>
         void destroy(U *p) {
+            ((void)p);
             p->~T();
         }
 
@@ -93,6 +94,7 @@ namespace Ray {
         // can be deallocated from other, and vice versa.
         // Always returns true for stateless allocators.
         bool operator==(const aligned_allocator& other) const {
+            ((void)other);
             return true;
         }
 
@@ -139,6 +141,7 @@ namespace Ray {
         }
 
         void deallocate(T * const p, const std::size_t n) const {
+            ((void)n);
             aligned_free(p);
         }
 

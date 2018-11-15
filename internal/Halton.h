@@ -31,7 +31,7 @@ std::vector<uint16_t> ComputeRadicalInversePermutations(const int *primes, int p
     uint16_t *p = &perms[0];
     for (int i = 0; i < primes_count; i++) {
         for (int j = 0; j < primes[i]; j++) {
-            p[j] = j;
+            p[j] = (uint16_t)j;
         }
 
         Shuffle(p, primes[i], std::move(rand_func));

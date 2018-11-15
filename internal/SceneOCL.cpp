@@ -98,7 +98,7 @@ uint32_t Ray::Ocl::Scene::AddTexture(const tex_desc_t &_t) {
             return 0xffffffff;
         }
 
-        t.page[mip] = (uint32_t)page;
+        t.page[mip] = (uint8_t)page;
         t.pos[mip][0] = (uint16_t)pos[0];
         t.pos[mip][1] = (uint16_t)pos[1];
 
@@ -170,7 +170,7 @@ uint32_t Ray::Ocl::Scene::AddMesh(const mesh_desc_t &_m) {
     std::vector<uint32_t> new_tri_indices;
     std::vector<uint32_t> new_vtx_indices;
 
-    PreprocessMesh(_m.vtx_attrs, _m.vtx_attrs_count, _m.vtx_indices, _m.vtx_indices_count, _m.layout, _m.allow_spatial_splits, new_nodes, new_tris, new_tri_indices);
+    PreprocessMesh(_m.vtx_attrs, _m.vtx_indices, _m.vtx_indices_count, _m.layout, _m.allow_spatial_splits, new_nodes, new_tris, new_tri_indices);
     for (size_t i = 0; i < _m.vtx_indices_count; i++) {
         new_vtx_indices.push_back(_m.vtx_indices[i] + (uint32_t)vertices_.size());
     }
@@ -311,6 +311,7 @@ uint32_t Ray::Ocl::Scene::AddLight(const light_desc_t &_l) {
 
 void Ray::Ocl::Scene::RemoveLight(uint32_t i) {
     // TODO!!!
+    unused(i);
 }
 
 uint32_t Ray::Ocl::Scene::AddMeshInstance(uint32_t mesh_index, const float *xform) {

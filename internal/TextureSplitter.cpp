@@ -108,8 +108,8 @@ int Ray::TextureSplitter::Find_Recursive(int i, const int pos[2]) const {
     int ch0 = nodes_[i].child[0], ch1 = nodes_[i].child[1];
 
     if (ch0 != -1) {
-        int i = Find_Recursive(ch0, pos);
-        if (i != -1) return i;
+        int ndx = Find_Recursive(ch0, pos);
+        if (ndx != -1) return ndx;
         return Find_Recursive(ch1, pos);
     } else {
         if (pos[0] == nodes_[i].pos[0] && pos[1] == nodes_[i].pos[1]) {
