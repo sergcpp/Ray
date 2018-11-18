@@ -57,12 +57,6 @@ struct hit_data_t {
     hit_data_t();
 };
 
-struct environment_t {
-    float env_col[3];
-    float env_clamp;
-    uint32_t env_map;
-};
-
 struct derivatives_t {
     simd_fvec3 do_dx, do_dy, dd_dx, dd_dy;
     simd_fvec2 duv_dx, duv_dy;
@@ -125,13 +119,8 @@ simd_fvec4 SampleLatlong_RGBE(const TextureAtlas &atlas, const texture_t &t, con
 
 // Compute punctual lights contribution
 simd_fvec3 ComputeDirectLighting(const simd_fvec3 &P, const simd_fvec3 &N, const simd_fvec3 &B, const simd_fvec3 &plane_N,
-                                 const float *halton, const int hi, float rand_offset, float rand_offset2,
-                                 const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
-                                 const mesh_t *meshes, const transform_t *transforms,
-                                 const uint32_t *vtx_indices, const vertex_t *vertices,
-                                 const bvh_node_t *nodes, uint32_t node_index, const tri_accel_t *tris,
-                                 const uint32_t *tri_indices, const light_t *lights,
-                                 const uint32_t *li_indices, uint32_t light_node_index);
+                                 const float *halton, const int hi, int rand_hash, int rand_hash2, float rand_offset, float rand_offset2,
+                                 const scene_data_t &sc, uint32_t node_index, uint32_t light_node_index, const TextureAtlas &tex_atlas);
 
 // Compute derivatives at hit point
 void ComputeDerivatives(const simd_fvec3 &I, float t, const simd_fvec3 &do_dx, const simd_fvec3 &do_dy, const simd_fvec3 &dd_dx, const simd_fvec3 &dd_dy,
@@ -139,10 +128,7 @@ void ComputeDerivatives(const simd_fvec3 &I, float t, const simd_fvec3 &do_dx, c
 
 // Shade
 Ray::pixel_color_t ShadeSurface(const pass_info_t &pi, const hit_data_t &inter, const ray_packet_t &ray, const float *halton,
-                                const environment_t &env, const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
-                                const mesh_t *meshes, const transform_t *transforms, const uint32_t *vtx_indices, const vertex_t *vertices,
-                                const bvh_node_t *nodes, uint32_t node_index, const tri_accel_t *tris, const uint32_t *tri_indices,
-                                const material_t *materials, const texture_t *textures, const TextureAtlas &tex_atlas,
-                                const light_t *lights, const uint32_t *li_indices, uint32_t light_node_index, ray_packet_t *out_secondary_rays, int *out_secondary_rays_count);
+                                const scene_data_t &sc, uint32_t node_index, uint32_t light_node_index, const TextureAtlas &tex_atlas,
+                                ray_packet_t *out_secondary_rays, int *out_secondary_rays_count);
 }
 }

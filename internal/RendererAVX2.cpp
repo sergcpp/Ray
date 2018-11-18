@@ -41,22 +41,17 @@ template void SampleAnisotropic<RayPacketSize>(const Ref::TextureAtlas &atlas, c
 template void SampleLatlong_RGBE<RayPacketSize>(const Ref::TextureAtlas &atlas, const texture_t &t, const simd_fvec<RayPacketSize> dir[3], const simd_ivec<RayPacketSize> &mask, simd_fvec<RayPacketSize> out_rgb[3]);
 
 template void ComputeDirectLighting<RayPacketSize>(const simd_fvec<RayPacketSize> P[3], const simd_fvec<RayPacketSize> N[3], const simd_fvec<RayPacketSize> B[3], const simd_fvec<RayPacketSize> plane_N[3],
-                                                   const float *halton, const int hi, const simd_fvec<RayPacketSize> &rand_offset, const simd_fvec<RayPacketSize> &rand_offset2,
-                                                   const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
-                                                   const uint32_t *vtx_indices, const vertex_t *vertices, const bvh_node_t *nodes, uint32_t node_index,
-                                                   const tri_accel_t *tris, const uint32_t *tri_indices, const light_t *lights,
-                                                   const uint32_t *li_indices, uint32_t light_node_index, const simd_ivec<RayPacketSize> &ray_mask, simd_fvec<RayPacketSize> *out_col);
+                                                   const float *halton, const int hi, const simd_ivec<RayPacketSize> &rand_hash, const simd_ivec<RayPacketSize> &rand_hash2,
+                                                   const simd_fvec<RayPacketSize> &rand_offset, const simd_fvec<RayPacketSize> &rand_offset2, const scene_data_t &sc, uint32_t node_index,
+                                                   uint32_t light_node_index, const Ref::TextureAtlas &tex_atlas, const simd_ivec<RayPacketSize> &ray_mask, simd_fvec<RayPacketSize> *out_col);
 
 template void ComputeDerivatives<RayPacketSize>(const simd_fvec<RayPacketSize> I[3], const simd_fvec<RayPacketSize> &t, const simd_fvec<RayPacketSize> do_dx[3], const simd_fvec<RayPacketSize> do_dy[3], const simd_fvec<RayPacketSize> dd_dx[3], const simd_fvec<RayPacketSize> dd_dy[3],
                                                 const simd_fvec<RayPacketSize> p1[3], const simd_fvec<RayPacketSize> p2[3], const simd_fvec<RayPacketSize> p3[3], const simd_fvec<RayPacketSize> n1[3], const simd_fvec<RayPacketSize> n2[3], const simd_fvec<RayPacketSize> n3[3],
                                                 const simd_fvec<RayPacketSize> u1[2], const simd_fvec<RayPacketSize> u2[2], const simd_fvec<RayPacketSize> u3[2], const simd_fvec<RayPacketSize> plane_N[3], derivatives_t<RayPacketSize> &out_der);
 
 template void ShadeSurface<RayPacketSize>(const simd_ivec<RayPacketSize> &index, const pass_info_t &pi, const float *halton, const hit_data_t<RayPacketSize> &inter, const ray_packet_t<RayPacketSize> &ray,
-                                          const environment_t &env, const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
-                                          const mesh_t *meshes, const transform_t *transforms, const uint32_t *vtx_indices, const vertex_t *vertices,
-                                          const bvh_node_t *nodes, uint32_t node_index, const tri_accel_t *tris, const uint32_t *tri_indices,
-                                          const material_t *materials, const texture_t *textures, const Ref::TextureAtlas &tex_atlas,
-                                          const light_t *lights, const uint32_t *li_indices, uint32_t light_node_index, simd_fvec<RayPacketSize> out_rgba[4], simd_ivec<RayPacketSize> *out_secondary_masks, ray_packet_t<RayPacketSize> *out_secondary_rays, int *out_secondary_rays_count);
+                                          const scene_data_t &sc, uint32_t node_index, uint32_t light_node_index, const Ref::TextureAtlas &tex_atlas,
+                                          simd_fvec<RayPacketSize> out_rgba[4], simd_ivec<RayPacketSize> *out_secondary_masks, ray_packet_t<RayPacketSize> *out_secondary_rays, int *out_secondary_rays_count);
 
 template class RendererSIMD<RayPacketDimX, RayPacketDimY>;
 }

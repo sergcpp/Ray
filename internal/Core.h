@@ -164,6 +164,12 @@ struct mesh_instance_t {
 };
 static_assert(sizeof(mesh_instance_t) == 32, "!");
 
+struct environment_t {
+    float env_col[3];
+    float env_clamp;
+    uint32_t env_map;
+};
+
 extern const float uint8_to_float_table[];
 
 force_inline float to_norm_float(uint8_t v) {
@@ -208,5 +214,22 @@ struct pass_info_t {
     }
 };
 static_assert(sizeof(pass_info_t) == 16, "!");
+
+struct scene_data_t {
+    const environment_t *env;
+    const mesh_instance_t *mesh_instances;
+    const uint32_t *mi_indices;
+    const mesh_t *meshes;
+    const transform_t *transforms;
+    const uint32_t *vtx_indices;
+    const vertex_t *vertices;
+    const bvh_node_t *nodes;
+    const tri_accel_t *tris;
+    const uint32_t *tri_indices;
+    const material_t *materials;
+    const texture_t *textures;
+    const light_t *lights;
+    const uint32_t *li_indices;
+};
 
 }

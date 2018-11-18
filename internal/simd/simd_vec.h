@@ -5,7 +5,7 @@
 #include <algorithm> // for std::max
 
 #pragma warning(push)
-#pragma warning(disable : 4789)
+#pragma warning(disable : 4789) // buffer overrun
 #pragma warning(disable : 4127) // conditional expression is constant
 
 // Used to force loop unroll in release mode

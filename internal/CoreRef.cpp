@@ -1054,15 +1054,9 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleLatlong_RGBE(const TextureAtlas &atlas, con
 }
 
 Ray::Ref::simd_fvec3 Ray::Ref::ComputeDirectLighting(const simd_fvec3 &P, const simd_fvec3 &N, const simd_fvec3 &B, const simd_fvec3 &plane_N,
-                                                     const float *halton, const int hi, float rand_offset, float rand_offset2,
-                                                     const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
-                                                     const mesh_t *meshes, const transform_t *transforms,
-                                                     const uint32_t *vtx_indices, const vertex_t *vertices,
-                                                     const bvh_node_t *nodes, uint32_t node_index, const tri_accel_t *tris,
-                                                     const uint32_t *tri_indices, const light_t *lights,
-                                                     const uint32_t *li_indices, uint32_t light_node_index) {
-    unused(vtx_indices);
-    unused(vertices);
+                                                     const float *halton, const int hi, int rand_hash, int rand_hash2, float rand_offset, float rand_offset2,
+                                                     const scene_data_t &sc, uint32_t node_index, uint32_t light_node_index, const TextureAtlas &tex_atlas) {
+    unused(rand_hash);
 
     simd_fvec3 col = { 0.0f };
 
@@ -1076,14 +1070,14 @@ Ray::Ref::simd_fvec3 Ray::Ref::ComputeDirectLighting(const simd_fvec3 &P, const 
     while (stack_size) {
         uint32_t cur = stack[--stack_size];
 
-        if (!bbox_test(value_ptr(P), nodes[cur])) continue;
+        if (!bbox_test(value_ptr(P), sc.nodes[cur])) continue;
 
-        if (!is_leaf_node(nodes[cur])) {
-            stack[stack_size++] = nodes[cur].left_child;
-            stack[stack_size++] = nodes[cur].right_child;
+        if (!is_leaf_node(sc.nodes[cur])) {
+            stack[stack_size++] = sc.nodes[cur].left_child;
+            stack[stack_size++] = sc.nodes[cur].right_child;
         } else {
-            for (uint32_t i = nodes[cur].prim_index; i < nodes[cur].prim_index + nodes[cur].prim_count; i++) {
-                const light_t &l = lights[li_indices[i]];
+            for (uint32_t i = sc.nodes[cur].prim_index; i < sc.nodes[cur].prim_index + sc.nodes[cur].prim_count; i++) {
+                const light_t &l = sc.lights[sc.li_indices[i]];
 
                 simd_fvec3 L = P - simd_fvec3(l.pos);
                 float distance = length(L);
@@ -1096,8 +1090,7 @@ Ray::Ref::simd_fvec3 Ray::Ref::ComputeDirectLighting(const simd_fvec3 &P, const 
                 const float dir = std::sqrt(z);
                 const float phi = 2 * PI * std::modf(halton[hi + 1] + rand_offset2, &_unused);
 
-                const float cos_phi = std::cos(phi);
-                const float sin_phi = std::sin(phi);
+                const float cos_phi = std::cos(phi), sin_phi = std::sin(phi);
 
                 auto TT = cross(L, B);
                 auto BB = cross(L, TT);
@@ -1120,16 +1113,75 @@ Ray::Ref::simd_fvec3 Ray::Ref::ComputeDirectLighting(const simd_fvec3 &P, const 
                     memcpy(&r.o[0], value_ptr(P + HIT_BIAS * plane_N), 3 * sizeof(float));
                     memcpy(&r.d[0], value_ptr(L), 3 * sizeof(float));
 
-                    hit_data_t sh_inter;
-                    sh_inter.t = distance;
+                    float visibility = 1.0f;
+                    while (distance > HIT_EPS) {
+                        hit_data_t sh_inter;
+                        sh_inter.t = distance;
 
-                    float _v = 1.0f;
-                    Traverse_MacroTree_WithStack(r, nodes, node_index, mesh_instances, mi_indices, meshes, transforms, tris, tri_indices, sh_inter);
-                    if (sh_inter.mask_values[0]) {
-                        _v = 0;
+                        Traverse_MacroTree_WithStack(r, sc.nodes, node_index, sc.mesh_instances, sc.mi_indices, sc.meshes, sc.transforms, sc.tris, sc.tri_indices, sh_inter);
+                        if (!sh_inter.mask_values[0]) break;
+
+                        const auto I = simd_fvec3(r.d);
+
+                        const auto &tri = sc.tris[sh_inter.prim_indices[0]];
+                        const auto *mat = &sc.materials[tri.mi];
+
+                        const auto *tr = &sc.transforms[sc.mesh_instances[sh_inter.obj_indices[0]].tr_index];
+
+                        const auto &v1 = sc.vertices[sc.vtx_indices[sh_inter.prim_indices[0] * 3 + 0]];
+                        const auto &v2 = sc.vertices[sc.vtx_indices[sh_inter.prim_indices[0] * 3 + 1]];
+                        const auto &v3 = sc.vertices[sc.vtx_indices[sh_inter.prim_indices[0] * 3 + 2]];
+
+                        float w = 1.0f - sh_inter.u - sh_inter.v;
+                        simd_fvec3 sh_N = simd_fvec3(v1.n) * w + simd_fvec3(v2.n) * sh_inter.u + simd_fvec3(v3.n) * sh_inter.v;
+                        simd_fvec2 sh_uvs = simd_fvec2(v1.t[0]) * w + simd_fvec2(v2.t[0]) * sh_inter.u + simd_fvec2(v3.t[0]) * sh_inter.v;
+
+                        simd_fvec3 sh_plane_N;
+                        ExtractPlaneNormal(tri, &sh_plane_N[0]);
+                        sh_plane_N = TransformNormal(sh_plane_N, tr->inv_xform);
+
+                        if (dot(sh_plane_N, I) < 0.0f) {
+                            if (tri.back_mi == 0xffffffff) {
+                                goto SKIP;
+                            } else {
+                                mat = &sc.materials[tri.back_mi];
+                                sh_plane_N = -sh_plane_N;
+                            }
+                        }
+
+                        int sh_rand_hash = hash(rand_hash2);
+                        float sh_rand_offset = construct_float(sh_rand_hash);
+
+                        // resolve mix material
+                        while (mat->type == MixMaterial) {
+                            const auto mix = SampleBilinear(tex_atlas, sc.textures[mat->textures[MAIN_TEXTURE]], sh_uvs, 0) * mat->strength;
+
+                            float _sh_unused;
+                            const float sh_r = std::modf(halton[hi] + sh_rand_offset, &_sh_unused);
+
+                            sh_rand_hash = hash(sh_rand_hash);
+                            sh_rand_offset = construct_float(sh_rand_hash);
+
+                            // shlick fresnel
+                            float RR = mat->fresnel + (1.0f - mat->fresnel) * std::pow(1.0f + dot(I, sh_N), 5.0f);
+                            RR = clamp(RR, 0.0f, 1.0f);
+
+                            mat = (sh_r * RR < mix[0]) ? &sc.materials[mat->textures[MIX_MAT1]] : &sc.materials[mat->textures[MIX_MAT2]];
+                        }
+
+                        if (mat->type != TransparentMaterial) {
+                            visibility = 0;
+                            break;
+                        }
+SKIP:
+                        float t = sh_inter.t + HIT_BIAS;
+                        r.o[0] += r.d[0] * t;
+                        r.o[1] += r.d[1] * t;
+                        r.o[2] += r.d[2] * t;
+                        distance -= t;
                     }
 
-                    col += simd_fvec3(l.col) * _dot1 * _v * atten;
+                    col += simd_fvec3(l.col) * _dot1 * visibility * atten;
                 }
             }
         }
@@ -1197,37 +1249,34 @@ void Ray::Ref::ComputeDerivatives(const simd_fvec3 &I, float t, const simd_fvec3
 }
 
 Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_t &inter, const ray_packet_t &ray, const float *halton,
-                                          const environment_t &env, const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
-                                          const mesh_t *meshes, const transform_t *transforms, const uint32_t *vtx_indices, const vertex_t *vertices,
-                                          const bvh_node_t *nodes, uint32_t node_index, const tri_accel_t *tris, const uint32_t *tri_indices,
-                                          const material_t *materials, const texture_t *textures, const TextureAtlas &tex_atlas,
-                                          const light_t *lights, const uint32_t *li_indices, uint32_t light_node_index, ray_packet_t *out_secondary_rays, int *out_secondary_rays_count) {
+                                          const scene_data_t &sc, uint32_t node_index, uint32_t light_node_index, const TextureAtlas &tex_atlas,
+                                          ray_packet_t *out_secondary_rays, int *out_secondary_rays_count) {
     if (!inter.mask_values[0]) {
         simd_fvec4 env_col = { 0.0f };
         if (pi.should_add_environment()) {
-            env_col = SampleLatlong_RGBE(tex_atlas, textures[env.env_map], simd_fvec3{ ray.d });
-            if (env.env_clamp > FLT_EPS) {
-                env_col = min(env_col, simd_fvec4{ env.env_clamp });
+            env_col = SampleLatlong_RGBE(tex_atlas, sc.textures[sc.env->env_map], simd_fvec3{ ray.d });
+            if (sc.env->env_clamp > FLT_EPS) {
+                env_col = min(env_col, simd_fvec4{ sc.env->env_clamp });
             }
             env_col[3] = 1.0f;
         }
-        return Ray::pixel_color_t{ ray.c[0] * env_col[0] * env.env_col[0],
-                                   ray.c[1] * env_col[1] * env.env_col[1],
-                                   ray.c[2] * env_col[2] * env.env_col[2], env_col[3] };
+        return Ray::pixel_color_t{ ray.c[0] * env_col[0] * sc.env->env_col[0],
+                                   ray.c[1] * env_col[1] * sc.env->env_col[1],
+                                   ray.c[2] * env_col[2] * sc.env->env_col[2], env_col[3] };
     }
 
     const auto I = simd_fvec3(ray.d);
     const auto P = simd_fvec3(ray.o) + inter.t * I;
 
-    const auto &tri = tris[inter.prim_indices[0]];
+    const auto &tri = sc.tris[inter.prim_indices[0]];
 
-    const auto *mat = &materials[tri.mi];
+    const auto *mat = &sc.materials[tri.mi];
 
-    const auto *tr = &transforms[mesh_instances[inter.obj_indices[0]].tr_index];
+    const auto *tr = &sc.transforms[sc.mesh_instances[inter.obj_indices[0]].tr_index];
 
-    const auto &v1 = vertices[vtx_indices[inter.prim_indices[0] * 3 + 0]];
-    const auto &v2 = vertices[vtx_indices[inter.prim_indices[0] * 3 + 1]];
-    const auto &v3 = vertices[vtx_indices[inter.prim_indices[0] * 3 + 2]];
+    const auto &v1 = sc.vertices[sc.vtx_indices[inter.prim_indices[0] * 3 + 0]];
+    const auto &v2 = sc.vertices[sc.vtx_indices[inter.prim_indices[0] * 3 + 1]];
+    const auto &v3 = sc.vertices[sc.vtx_indices[inter.prim_indices[0] * 3 + 2]];
 
     float w = 1.0f - inter.u - inter.v;
     simd_fvec3 N = simd_fvec3(v1.n) * w + simd_fvec3(v2.n) * inter.u + simd_fvec3(v3.n) * inter.v;
@@ -1241,7 +1290,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
         if (tri.back_mi == 0xffffffff) {
             return pixel_color_t{ 0.0f, 0.0f, 0.0f, 0.0f };
         } else {
-            mat = &materials[tri.back_mi];
+            mat = &sc.materials[tri.back_mi];
             plane_N = -plane_N;
             N = -N;
         }
@@ -1258,7 +1307,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
 
     // resolve mix material
     while (mat->type == MixMaterial) {
-        const auto mix = SampleBilinear(tex_atlas, textures[mat->textures[MAIN_TEXTURE]], uvs, 0) * mat->strength;
+        const auto mix = SampleBilinear(tex_atlas, sc.textures[mat->textures[MAIN_TEXTURE]], uvs, 0) * mat->strength;
 
         float _unused;
         const float r = std::modf(halton[hi] + rand_offset, &_unused);
@@ -1270,21 +1319,20 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
         float RR = mat->fresnel + (1.0f - mat->fresnel) * std::pow(1.0f + dot(I, N), 5.0f);
         RR = clamp(RR, 0.0f, 1.0f);
 
-        mat = (r * RR < mix[0]) ? &materials[mat->textures[MIX_MAT1]] : &materials[mat->textures[MIX_MAT2]];
+        mat = (r * RR < mix[0]) ? &sc.materials[mat->textures[MIX_MAT1]] : &sc.materials[mat->textures[MIX_MAT2]];
     }
 
     rand_hash2 = hash(rand_hash);
     rand_offset2 = construct_float(rand_hash2);
-
+    
     rand_hash3 = hash(rand_hash2);
     rand_offset3 = construct_float(rand_hash3);
 
     // apply normal map
-
     simd_fvec3 B = simd_fvec3(v1.b) * w + simd_fvec3(v2.b) * inter.u + simd_fvec3(v3.b) * inter.v;
     simd_fvec3 T = cross(B, N);
 
-    auto normals = SampleBilinear(tex_atlas, textures[mat->textures[NORMALS_TEXTURE]], uvs, 0);
+    auto normals = SampleBilinear(tex_atlas, sc.textures[mat->textures[NORMALS_TEXTURE]], uvs, 0);
     normals = normals * 2.0f - 1.0f;
     N = normals[0] * B + normals[2] * N + normals[1] * T;
 
@@ -1294,7 +1342,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
 
     // sample main texture
 
-    auto albedo = SampleAnisotropic(tex_atlas, textures[mat->textures[MAIN_TEXTURE]], uvs, surf_der.duv_dx, surf_der.duv_dy);
+    auto albedo = SampleAnisotropic(tex_atlas, sc.textures[mat->textures[MAIN_TEXTURE]], uvs, surf_der.duv_dx, surf_der.duv_dy);
     albedo[0] *= mat->main_color[0];
     albedo[1] *= mat->main_color[1];
     albedo[2] *= mat->main_color[2];
@@ -1305,9 +1353,8 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
     // Evaluate materials
     if (mat->type == DiffuseMaterial) {
         if (pi.should_add_direct_light()) {
-            col = ComputeDirectLighting(P, N, B, plane_N, halton, hi, rand_offset, rand_offset2, mesh_instances,
-                mi_indices, meshes, transforms, vtx_indices, vertices, nodes, node_index,
-                tris, tri_indices, lights, li_indices, light_node_index);
+            col = ComputeDirectLighting(P, N, B, plane_N, halton, hi, rand_hash, rand_hash2, rand_offset, rand_offset2,
+                                        sc, node_index, light_node_index, tex_atlas);
             
             if (pi.should_consider_albedo()) {
                 col *= simd_fvec3(&albedo[0]);
