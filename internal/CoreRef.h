@@ -117,6 +117,9 @@ simd_fvec4 SampleTrilinear(const TextureAtlas &atlas, const texture_t &t, const 
 simd_fvec4 SampleAnisotropic(const TextureAtlas &atlas, const texture_t &t, const simd_fvec2 &uvs, const simd_fvec2 &duv_dx, const simd_fvec2 &duv_dy);
 simd_fvec4 SampleLatlong_RGBE(const TextureAtlas &atlas, const texture_t &t, const simd_fvec3 &dir);
 
+float ComputeVisibility(const simd_fvec3 &origin, const simd_fvec3 &dir, float dist, const float *halton, const int hi, int rand_hash2,
+                        const scene_data_t &sc, uint32_t node_index, const TextureAtlas &tex_atlas);
+
 // Compute punctual lights contribution
 simd_fvec3 ComputeDirectLighting(const simd_fvec3 &P, const simd_fvec3 &N, const simd_fvec3 &B, const simd_fvec3 &plane_N,
                                  const float *halton, const int hi, int rand_hash, int rand_hash2, float rand_offset, float rand_offset2,

@@ -1053,6 +1053,89 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleLatlong_RGBE(const TextureAtlas &atlas, con
     return (p1X * k[1] + p0X * (1 - k[1]));
 }
 
+float Ray::Ref::ComputeVisibility(const simd_fvec3 &origin, const simd_fvec3 &dir, float dist, const float *halton, const int hi, int rand_hash2,
+                                  const scene_data_t &sc, uint32_t node_index, const TextureAtlas &tex_atlas) {
+    ray_packet_t r;
+
+    memcpy(&r.o[0], value_ptr(origin), 3 * sizeof(float));
+    memcpy(&r.d[0], value_ptr(dir), 3 * sizeof(float));
+    
+    float visibility = 1.0f;
+
+    while (dist > HIT_EPS) {
+        hit_data_t sh_inter;
+        sh_inter.t = dist;
+
+        Traverse_MacroTree_WithStack(r, sc.nodes, node_index, sc.mesh_instances, sc.mi_indices, sc.meshes, sc.transforms, sc.tris, sc.tri_indices, sh_inter);
+        if (!sh_inter.mask_values[0]) break;
+
+        const auto I = simd_fvec3(r.d);
+
+        const auto &tri = sc.tris[sh_inter.prim_indices[0]];
+        const auto *mat = &sc.materials[tri.mi];
+
+        const auto *tr = &sc.transforms[sc.mesh_instances[sh_inter.obj_indices[0]].tr_index];
+
+        const auto &v1 = sc.vertices[sc.vtx_indices[sh_inter.prim_indices[0] * 3 + 0]];
+        const auto &v2 = sc.vertices[sc.vtx_indices[sh_inter.prim_indices[0] * 3 + 1]];
+        const auto &v3 = sc.vertices[sc.vtx_indices[sh_inter.prim_indices[0] * 3 + 2]];
+
+        float w = 1.0f - sh_inter.u - sh_inter.v;
+        simd_fvec3 sh_N = simd_fvec3(v1.n) * w + simd_fvec3(v2.n) * sh_inter.u + simd_fvec3(v3.n) * sh_inter.v;
+        simd_fvec2 sh_uvs = simd_fvec2(v1.t[0]) * w + simd_fvec2(v2.t[0]) * sh_inter.u + simd_fvec2(v3.t[0]) * sh_inter.v;
+
+        simd_fvec3 sh_plane_N;
+        ExtractPlaneNormal(tri, &sh_plane_N[0]);
+        sh_plane_N = TransformNormal(sh_plane_N, tr->inv_xform);
+
+        bool skip = false;
+
+        if (dot(sh_plane_N, I) < 0.0f) {
+            if (tri.back_mi == 0xffffffff) {
+                skip = true;
+            } else {
+                mat = &sc.materials[tri.back_mi];
+                sh_plane_N = -sh_plane_N;
+            }
+        }
+
+        if (!skip) {
+            int sh_rand_hash = hash(rand_hash2);
+            float sh_rand_offset = construct_float(sh_rand_hash);
+
+            // resolve mix material
+            while (mat->type == MixMaterial) {
+                const auto mix = SampleBilinear(tex_atlas, sc.textures[mat->textures[MAIN_TEXTURE]], sh_uvs, 0) * mat->strength;
+
+                float _sh_unused;
+                const float sh_r = std::modf(halton[hi] + sh_rand_offset, &_sh_unused);
+
+                sh_rand_hash = hash(sh_rand_hash);
+                sh_rand_offset = construct_float(sh_rand_hash);
+
+                // shlick fresnel
+                float RR = mat->fresnel + (1.0f - mat->fresnel) * std::pow(1.0f + dot(I, sh_N), 5.0f);
+                RR = clamp(RR, 0.0f, 1.0f);
+
+                mat = (sh_r * RR < mix[0]) ? &sc.materials[mat->textures[MIX_MAT1]] : &sc.materials[mat->textures[MIX_MAT2]];
+            }
+
+            if (mat->type != TransparentMaterial) {
+                visibility = 0;
+                break;
+            }
+        }
+
+        float t = sh_inter.t + HIT_BIAS;
+        r.o[0] += r.d[0] * t;
+        r.o[1] += r.d[1] * t;
+        r.o[2] += r.d[2] * t;
+        dist -= t;
+    }
+
+    return visibility;
+}
+
 Ray::Ref::simd_fvec3 Ray::Ref::ComputeDirectLighting(const simd_fvec3 &P, const simd_fvec3 &N, const simd_fvec3 &B, const simd_fvec3 &plane_N,
                                                      const float *halton, const int hi, int rand_hash, int rand_hash2, float rand_offset, float rand_offset2,
                                                      const scene_data_t &sc, uint32_t node_index, uint32_t light_node_index, const TextureAtlas &tex_atlas) {
@@ -1113,78 +1196,7 @@ Ray::Ref::simd_fvec3 Ray::Ref::ComputeDirectLighting(const simd_fvec3 &P, const 
                     memcpy(&r.o[0], value_ptr(P + HIT_BIAS * plane_N), 3 * sizeof(float));
                     memcpy(&r.d[0], value_ptr(L), 3 * sizeof(float));
 
-                    float visibility = 1.0f;
-                    while (distance > HIT_EPS) {
-                        hit_data_t sh_inter;
-                        sh_inter.t = distance;
-
-                        Traverse_MacroTree_WithStack(r, sc.nodes, node_index, sc.mesh_instances, sc.mi_indices, sc.meshes, sc.transforms, sc.tris, sc.tri_indices, sh_inter);
-                        if (!sh_inter.mask_values[0]) break;
-
-                        const auto I = simd_fvec3(r.d);
-
-                        const auto &tri = sc.tris[sh_inter.prim_indices[0]];
-                        const auto *mat = &sc.materials[tri.mi];
-
-                        const auto *tr = &sc.transforms[sc.mesh_instances[sh_inter.obj_indices[0]].tr_index];
-
-                        const auto &v1 = sc.vertices[sc.vtx_indices[sh_inter.prim_indices[0] * 3 + 0]];
-                        const auto &v2 = sc.vertices[sc.vtx_indices[sh_inter.prim_indices[0] * 3 + 1]];
-                        const auto &v3 = sc.vertices[sc.vtx_indices[sh_inter.prim_indices[0] * 3 + 2]];
-
-                        float w = 1.0f - sh_inter.u - sh_inter.v;
-                        simd_fvec3 sh_N = simd_fvec3(v1.n) * w + simd_fvec3(v2.n) * sh_inter.u + simd_fvec3(v3.n) * sh_inter.v;
-                        simd_fvec2 sh_uvs = simd_fvec2(v1.t[0]) * w + simd_fvec2(v2.t[0]) * sh_inter.u + simd_fvec2(v3.t[0]) * sh_inter.v;
-
-                        simd_fvec3 sh_plane_N;
-                        ExtractPlaneNormal(tri, &sh_plane_N[0]);
-                        sh_plane_N = TransformNormal(sh_plane_N, tr->inv_xform);
-
-                        bool skip = false;
-
-                        if (dot(sh_plane_N, I) < 0.0f) {
-                            if (tri.back_mi == 0xffffffff) {
-                                skip = true;
-                            } else {
-                                mat = &sc.materials[tri.back_mi];
-                                sh_plane_N = -sh_plane_N;
-                            }
-                        }
-
-                        if (!skip) {
-                            int sh_rand_hash = hash(rand_hash2);
-                            float sh_rand_offset = construct_float(sh_rand_hash);
-
-                            // resolve mix material
-                            while (mat->type == MixMaterial) {
-                                const auto mix = SampleBilinear(tex_atlas, sc.textures[mat->textures[MAIN_TEXTURE]], sh_uvs, 0) * mat->strength;
-
-                                float _sh_unused;
-                                const float sh_r = std::modf(halton[hi] + sh_rand_offset, &_sh_unused);
-
-                                sh_rand_hash = hash(sh_rand_hash);
-                                sh_rand_offset = construct_float(sh_rand_hash);
-
-                                // shlick fresnel
-                                float RR = mat->fresnel + (1.0f - mat->fresnel) * std::pow(1.0f + dot(I, sh_N), 5.0f);
-                                RR = clamp(RR, 0.0f, 1.0f);
-
-                                mat = (sh_r * RR < mix[0]) ? &sc.materials[mat->textures[MIX_MAT1]] : &sc.materials[mat->textures[MIX_MAT2]];
-                            }
-
-                            if (mat->type != TransparentMaterial) {
-                                visibility = 0;
-                                break;
-                            }
-                        }
-
-                        float t = sh_inter.t + HIT_BIAS;
-                        r.o[0] += r.d[0] * t;
-                        r.o[1] += r.d[1] * t;
-                        r.o[2] += r.d[2] * t;
-                        distance -= t;
-                    }
-
+                    float visibility = ComputeVisibility(P + HIT_BIAS, L, distance, halton, hi, rand_hash2, sc, node_index, tex_atlas);
                     col += simd_fvec3(l.col) * _dot1 * visibility * atten;
                 }
             }
