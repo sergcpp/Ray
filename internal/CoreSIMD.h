@@ -389,6 +389,22 @@ force_inline void safe_invert(const simd_fvec<S> v[3], simd_fvec<S> inv_v[3]) {
 }
 
 template <int S>
+force_inline void com_aux_inv_values(const simd_fvec<S> o[3], const simd_fvec<S> d[3], simd_fvec<S> inv_d[3], simd_fvec<S> neg_inv_d_o[3]) {
+    for (int i = 0; i < 3; i++) {
+        inv_d[i] = { 1.0f / d[i] };
+        neg_inv_d_o[i] = -o[i] * inv_d[i];
+
+        auto d_is_plus_zero = (d[i] <= FLT_EPS) & (d[i] >= 0);
+        where(d_is_plus_zero, inv_d[i]) = MAX_DIST;
+        where(d_is_plus_zero, neg_inv_d_o[i]) = -MAX_DIST;
+
+        auto d_is_minus_zero = (d[i] >= -FLT_EPS) & (d[i] < 0);
+        where(d_is_minus_zero, inv_d[i]) = -MAX_DIST;
+        where(d_is_minus_zero, neg_inv_d_o[i]) = MAX_DIST;
+    }
+}
+
+template <int S>
 force_inline simd_fvec<S> dot(const simd_fvec<S> v1[3], const simd_fvec<S> v2[3]) {
     return v1[0] * v2[0] + v1[1] * v2[1] + v1[2] * v2[2];
 }
@@ -975,10 +991,8 @@ bool Ray::NS::Traverse_MacroTree_Stackless_CPU(const ray_packet_t<S> &r, const s
                                                const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t<S> &inter) {
     bool res = false;
 
-    simd_fvec<S> inv_d[3];
-    safe_invert(r.d, inv_d);
-
-    simd_fvec<S> neg_inv_d_o[3] = { -r.o[0] * inv_d[0], -r.o[1] * inv_d[1], -r.o[2] * inv_d[2] };
+    simd_fvec<S> inv_d[3], neg_inv_d_o[3];
+    com_aux_inv_values(r.o, r.d, inv_d, neg_inv_d_o);
 
     TraversalState<S> st;
 
@@ -1098,10 +1112,8 @@ bool Ray::NS::Traverse_MicroTree_Stackless_CPU(const ray_packet_t<S> &r, const s
                                                const tri_accel_t *tris, const uint32_t *indices, int obj_index, hit_data_t<S> &inter) {
     bool res = false;
 
-    simd_fvec<S> inv_d[3];
-    safe_invert(r.d, inv_d);
-
-    simd_fvec<S> neg_inv_d_o[3] = { -r.o[0] * inv_d[0], -r.o[1] * inv_d[1], -r.o[2] * inv_d[2] };
+    simd_fvec<S> inv_d[3], neg_inv_d_o[3];
+    com_aux_inv_values(r.o, r.d, inv_d, neg_inv_d_o);
 
     TraversalState<S> st;
 
@@ -1200,10 +1212,8 @@ bool Ray::NS::Traverse_MacroTree_WithStack(const ray_packet_t<S> &r, const simd_
                                            const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t<S> &inter) {
     bool res = false;
 
-    simd_fvec<S> inv_d[3];
-    safe_invert(r.d, inv_d);
-
-    simd_fvec<S> neg_inv_d_o[3] = { -r.o[0] * inv_d[0], -r.o[1] * inv_d[1], -r.o[2] * inv_d[2] };
+    simd_fvec<S> inv_d[3], neg_inv_d_o[3];
+    com_aux_inv_values(r.o, r.d, inv_d, neg_inv_d_o);
 
     TraversalStateStack<S> st;
 
@@ -1258,10 +1268,8 @@ bool Ray::NS::Traverse_MicroTree_WithStack(const ray_packet_t<S> &r, const simd_
                                            const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, hit_data_t<S> &inter) {
     bool res = false;
 
-    simd_fvec<S> inv_d[3];
-    safe_invert(r.d, inv_d);
-
-    simd_fvec<S> neg_inv_d_o[3] = { -r.o[0] * inv_d[0], -r.o[1] * inv_d[1], -r.o[2] * inv_d[2] };
+    simd_fvec<S> inv_d[3], neg_inv_d_o[3];
+    com_aux_inv_values(r.o, r.d, inv_d, neg_inv_d_o);
 
     TraversalStateStack<S> st;
 
@@ -1731,7 +1739,7 @@ void Ray::NS::ComputeDirectLighting(const simd_fvec<S> P[3], const simd_fvec<S> 
                         simd_fvec<S> visibility = 1.0f;
 
                         auto keep_going = (distance > HIT_EPS) & fmask;
-                        const auto &ikeep_going = reinterpret_cast<const simd_ivec<S> &>(keep_going);
+                        const auto &ikeep_going = reinterpret_cast<const simd_ivec<S>&>(keep_going);
                         while (ikeep_going.not_all_zeros()) {
                             hit_data_t<S> sh_inter;
                             sh_inter.t = distance;
