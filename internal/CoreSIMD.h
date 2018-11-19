@@ -1649,6 +1649,8 @@ void Ray::NS::ComputeDirectLighting(const simd_fvec<S> P[3], const simd_fvec<S> 
                                     const float *halton, const int hi, const simd_ivec<S> &rand_hash, const simd_ivec<S> &rand_hash2,
                                     const simd_fvec<S> &rand_offset, const simd_fvec<S> &rand_offset2, const scene_data_t &sc, uint32_t node_index,
                                     uint32_t light_node_index, const Ref::TextureAtlas &tex_atlas, const simd_ivec<S> &ray_mask, simd_fvec<S> *out_col) {
+    unused(rand_hash);
+
     TraversalStateStack<S> st;
 
     st.queue[0].mask = ray_mask;
@@ -1726,15 +1728,15 @@ void Ray::NS::ComputeDirectLighting(const simd_fvec<S> P[3], const simd_fvec<S> 
                     auto fmask = reinterpret_cast<const simd_fvec<S> &>(mask1) & (_dot1 > FLT_EPS) & (_dot2 > l.spot) & (l.brightness * atten > FLT_EPS);
                     const auto &imask = reinterpret_cast<const simd_ivec<S> &>(fmask);
                     if (imask.not_all_zeros()) {
-                        ray_packet_t<S> r;
+                        ray_packet_t<S> sh_r;
 
-                        r.o[0] = P[0] + HIT_BIAS * plane_N[0];
-                        r.o[1] = P[1] + HIT_BIAS * plane_N[1];
-                        r.o[2] = P[2] + HIT_BIAS * plane_N[2];
+                        sh_r.o[0] = P[0] + HIT_BIAS * plane_N[0];
+                        sh_r.o[1] = P[1] + HIT_BIAS * plane_N[1];
+                        sh_r.o[2] = P[2] + HIT_BIAS * plane_N[2];
 
-                        r.d[0] = L[0];
-                        r.d[1] = L[1];
-                        r.d[2] = L[2];
+                        sh_r.d[0] = L[0];
+                        sh_r.d[1] = L[1];
+                        sh_r.d[2] = L[2];
 
                         simd_fvec<S> visibility = 1.0f;
 
@@ -1744,10 +1746,10 @@ void Ray::NS::ComputeDirectLighting(const simd_fvec<S> P[3], const simd_fvec<S> 
                             hit_data_t<S> sh_inter;
                             sh_inter.t = distance;
 
-                            Traverse_MacroTree_WithStack(r, ikeep_going, sc.nodes, node_index, sc.mesh_instances, sc.mi_indices, sc.meshes, sc.transforms, sc.tris, sc.tri_indices, sh_inter);
+                            Traverse_MacroTree_WithStack(sh_r, ikeep_going, sc.nodes, node_index, sc.mesh_instances, sc.mi_indices, sc.meshes, sc.transforms, sc.tris, sc.tri_indices, sh_inter);
                             if (sh_inter.mask.all_zeros()) break;
 
-                            const auto *I = r.d;
+                            const auto *I = sh_r.d;
                             const simd_fvec<S> w = 1.0f - sh_inter.u - sh_inter.v;
 
                             simd_fvec<S> n1[3], n2[3], n3[3],
@@ -1833,65 +1835,60 @@ void Ray::NS::ComputeDirectLighting(const simd_fvec<S> P[3], const simd_fvec<S> 
                                         num++;
                                     }
 
-                                    if (first_mi == 0xffffffff) {
-                                        goto SKIP;
-                                    }
+                                    if (first_mi != 0xffffffff) {
+                                        const auto *mat = &sc.materials[first_mi];
 
-                                    /////////////////////////////////////////
+                                        while (mat->type == MixMaterial) {
+                                            simd_fvec<S> mix[4];
+                                            SampleBilinear(tex_atlas, sc.textures[mat->textures[MAIN_TEXTURE]], sh_uvs, { 0 }, same_mi, mix);
+                                            mix[0] *= mat->strength;
 
-                                    const auto *mat = &sc.materials[first_mi];
+                                            first_mi = 0xffffffff;
 
-                                    while (mat->type == MixMaterial) {
-                                        simd_fvec<S> mix[4];
-                                        SampleBilinear(tex_atlas, sc.textures[mat->textures[MAIN_TEXTURE]], sh_uvs, { 0 }, same_mi, mix);
-                                        mix[0] *= mat->strength;
+                                            for (int i = 0; i < S; i++) {
+                                                if (!same_mi[i]) continue;
 
-                                        first_mi = 0xffffffff;
+                                                float _unused;
+                                                const float r = std::modf(halton[hi + 0] + sh_rand_offset[i], &_unused);
 
-                                        for (int i = 0; i < S; i++) {
-                                            if (!same_mi[i]) continue;
+                                                sh_rand_hash[i] = hash(sh_rand_hash[i]);
+                                                sh_rand_offset = construct_float(sh_rand_hash);
 
-                                            float _unused;
-                                            const float r = std::modf(halton[hi + 0] + sh_rand_offset[i], &_unused);
+                                                // shlick fresnel
+                                                float RR = mat->fresnel + (1.0f - mat->fresnel) * std::pow(1.0f + _dot_I_N[i], 5.0f);
+                                                if (RR < 0.0f) RR = 0.0f;
+                                                else if (RR > 1.0f) RR = 1.0f;
 
-                                            sh_rand_hash[i] = hash(sh_rand_hash[i]);
-                                            sh_rand_offset = construct_float(sh_rand_hash);
-
-                                            // shlick fresnel
-                                            float RR = mat->fresnel + (1.0f - mat->fresnel) * std::pow(1.0f + _dot_I_N[i], 5.0f);
-                                            if (RR < 0.0f) RR = 0.0f;
-                                            else if (RR > 1.0f) RR = 1.0f;
-
-                                            mat_index[i] = (r * RR < mix[0][i]) ? mat->textures[MIX_MAT1] : mat->textures[MIX_MAT2];
-                                            if (first_mi == 0xffffffff) {
-                                                first_mi = mat_index[i];
+                                                mat_index[i] = (r * RR < mix[0][i]) ? mat->textures[MIX_MAT1] : mat->textures[MIX_MAT2];
+                                                if (first_mi == 0xffffffff) {
+                                                    first_mi = mat_index[i];
+                                                }
                                             }
+
+                                            auto _same_mi = mat_index == first_mi;
+                                            diff_mi = and_not(_same_mi, same_mi);
+                                            same_mi = _same_mi;
+
+                                            if (diff_mi.not_all_zeros()) {
+                                                ray_queue[num] = diff_mi;
+                                                num++;
+                                            }
+
+                                            mat = &sc.materials[first_mi];
                                         }
 
-                                        auto _same_mi = mat_index == first_mi;
-                                        diff_mi = and_not(_same_mi, same_mi);
-                                        same_mi = _same_mi;
-
-                                        if (diff_mi.not_all_zeros()) {
-                                            ray_queue[num] = diff_mi;
-                                            num++;
+                                        if (mat->type != TransparentMaterial) {
+                                            const auto &mask = reinterpret_cast<const simd_fvec<S>&>(same_mi);
+                                            where(mask, visibility) = 0.0f;
+                                            index++;
+                                            continue;
                                         }
-
-                                        mat = &sc.materials[first_mi];
                                     }
 
-                                    if (mat->type != TransparentMaterial) {
-                                        const auto &mask = reinterpret_cast<const simd_fvec<S>&>(same_mi);
-                                        where(mask, visibility) = 0.0f;
-                                        index++;
-                                        continue;
-                                    }
-
-SKIP:
                                     simd_fvec<S> t = sh_inter.t + HIT_BIAS;
-                                    r.o[0] += r.d[0] * t;
-                                    r.o[1] += r.d[1] * t;
-                                    r.o[2] += r.d[2] * t;
+                                    sh_r.o[0] += sh_r.d[0] * t;
+                                    sh_r.o[1] += sh_r.d[1] * t;
+                                    sh_r.o[2] += sh_r.d[2] * t;
                                     distance -= t;
 
                                     index++;

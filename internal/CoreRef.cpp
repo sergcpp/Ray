@@ -1140,40 +1140,44 @@ Ray::Ref::simd_fvec3 Ray::Ref::ComputeDirectLighting(const simd_fvec3 &P, const 
                         ExtractPlaneNormal(tri, &sh_plane_N[0]);
                         sh_plane_N = TransformNormal(sh_plane_N, tr->inv_xform);
 
+                        bool skip = false;
+
                         if (dot(sh_plane_N, I) < 0.0f) {
                             if (tri.back_mi == 0xffffffff) {
-                                goto SKIP;
+                                skip = true;
                             } else {
                                 mat = &sc.materials[tri.back_mi];
                                 sh_plane_N = -sh_plane_N;
                             }
                         }
 
-                        int sh_rand_hash = hash(rand_hash2);
-                        float sh_rand_offset = construct_float(sh_rand_hash);
+                        if (!skip) {
+                            int sh_rand_hash = hash(rand_hash2);
+                            float sh_rand_offset = construct_float(sh_rand_hash);
 
-                        // resolve mix material
-                        while (mat->type == MixMaterial) {
-                            const auto mix = SampleBilinear(tex_atlas, sc.textures[mat->textures[MAIN_TEXTURE]], sh_uvs, 0) * mat->strength;
+                            // resolve mix material
+                            while (mat->type == MixMaterial) {
+                                const auto mix = SampleBilinear(tex_atlas, sc.textures[mat->textures[MAIN_TEXTURE]], sh_uvs, 0) * mat->strength;
 
-                            float _sh_unused;
-                            const float sh_r = std::modf(halton[hi] + sh_rand_offset, &_sh_unused);
+                                float _sh_unused;
+                                const float sh_r = std::modf(halton[hi] + sh_rand_offset, &_sh_unused);
 
-                            sh_rand_hash = hash(sh_rand_hash);
-                            sh_rand_offset = construct_float(sh_rand_hash);
+                                sh_rand_hash = hash(sh_rand_hash);
+                                sh_rand_offset = construct_float(sh_rand_hash);
 
-                            // shlick fresnel
-                            float RR = mat->fresnel + (1.0f - mat->fresnel) * std::pow(1.0f + dot(I, sh_N), 5.0f);
-                            RR = clamp(RR, 0.0f, 1.0f);
+                                // shlick fresnel
+                                float RR = mat->fresnel + (1.0f - mat->fresnel) * std::pow(1.0f + dot(I, sh_N), 5.0f);
+                                RR = clamp(RR, 0.0f, 1.0f);
 
-                            mat = (sh_r * RR < mix[0]) ? &sc.materials[mat->textures[MIX_MAT1]] : &sc.materials[mat->textures[MIX_MAT2]];
+                                mat = (sh_r * RR < mix[0]) ? &sc.materials[mat->textures[MIX_MAT1]] : &sc.materials[mat->textures[MIX_MAT2]];
+                            }
+
+                            if (mat->type != TransparentMaterial) {
+                                visibility = 0;
+                                break;
+                            }
                         }
 
-                        if (mat->type != TransparentMaterial) {
-                            visibility = 0;
-                            break;
-                        }
-SKIP:
                         float t = sh_inter.t + HIT_BIAS;
                         r.o[0] += r.d[0] * t;
                         r.o[1] += r.d[1] * t;
