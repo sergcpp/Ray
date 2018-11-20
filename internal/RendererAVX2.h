@@ -45,6 +45,10 @@ extern template void SampleTrilinear<RayPacketSize>(const Ref::TextureAtlas &atl
 extern template void SampleAnisotropic<RayPacketSize>(const Ref::TextureAtlas &atlas, const texture_t &t, const simd_fvec<RayPacketSize> uvs[2], const simd_fvec<RayPacketSize> duv_dx[2], const simd_fvec<RayPacketSize> duv_dy[2], const simd_ivec<RayPacketSize> &mask, simd_fvec<RayPacketSize> out_rgba[4]);
 extern template void SampleLatlong_RGBE<RayPacketSize>(const Ref::TextureAtlas &atlas, const texture_t &t, const simd_fvec<RayPacketSize> dir[3], const simd_ivec<RayPacketSize> &mask, simd_fvec<RayPacketSize> out_rgb[3]);
 
+extern template simd_fvec<RayPacketSize> ComputeVisibility<RayPacketSize>(const simd_fvec<RayPacketSize> p1[3], const simd_fvec<RayPacketSize> p2[3], const simd_ivec<RayPacketSize> &mask,
+                                                                          const float *halton, const int hi, const simd_ivec<RayPacketSize> &rand_hash2,
+                                                                          const scene_data_t &sc, uint32_t node_index, const Ref::TextureAtlas &tex_atlas);
+
 extern template void ComputeDirectLighting<RayPacketSize>(const simd_fvec<RayPacketSize> P[3], const simd_fvec<RayPacketSize> N[3], const simd_fvec<RayPacketSize> B[3], const simd_fvec<RayPacketSize> plane_N[3],
                                                           const float *halton, const int hi, const simd_ivec<RayPacketSize> &rand_hash, const simd_ivec<RayPacketSize> &rand_hash2,
                                                           const simd_fvec<RayPacketSize> &rand_offset, const simd_fvec<RayPacketSize> &rand_offset2, const scene_data_t &sc, uint32_t node_index,

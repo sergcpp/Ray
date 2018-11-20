@@ -1053,11 +1053,15 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleLatlong_RGBE(const TextureAtlas &atlas, con
     return (p1X * k[1] + p0X * (1 - k[1]));
 }
 
-float Ray::Ref::ComputeVisibility(const simd_fvec3 &origin, const simd_fvec3 &dir, float dist, const float *halton, const int hi, int rand_hash2,
+float Ray::Ref::ComputeVisibility(const simd_fvec3 &p1, const simd_fvec3 &p2, const float *halton, const int hi, int rand_hash2,
                                   const scene_data_t &sc, uint32_t node_index, const TextureAtlas &tex_atlas) {
+    auto dir = p2 - p1;
+    float dist = length(dir);
+    dir /= dist;
+
     ray_packet_t r;
 
-    memcpy(&r.o[0], value_ptr(origin), 3 * sizeof(float));
+    memcpy(&r.o[0], value_ptr(p1), 3 * sizeof(float));
     memcpy(&r.d[0], value_ptr(dir), 3 * sizeof(float));
     
     float visibility = 1.0f;
@@ -1191,12 +1195,7 @@ Ray::Ref::simd_fvec3 Ray::Ref::ComputeDirectLighting(const simd_fvec3 &P, const 
                 float _dot2 = dot(L, simd_fvec3{ l.dir });
 
                 if (_dot1 > FLT_EPS && _dot2 > l.spot && (l.brightness * atten) > FLT_EPS) {
-                    ray_packet_t r;
-
-                    memcpy(&r.o[0], value_ptr(P + HIT_BIAS * plane_N), 3 * sizeof(float));
-                    memcpy(&r.d[0], value_ptr(L), 3 * sizeof(float));
-
-                    float visibility = ComputeVisibility(P + HIT_BIAS, L, distance, halton, hi, rand_hash2, sc, node_index, tex_atlas);
+                    float visibility = ComputeVisibility(P + HIT_BIAS * plane_N, simd_fvec3(l.pos), halton, hi, rand_hash2, sc, node_index, tex_atlas);
                     col += simd_fvec3(l.col) * _dot1 * visibility * atten;
                 }
             }

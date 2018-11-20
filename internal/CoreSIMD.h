@@ -129,6 +129,12 @@ void SampleAnisotropic(const Ref::TextureAtlas &atlas, const texture_t &t, const
 template <int S>
 void SampleLatlong_RGBE(const Ref::TextureAtlas &atlas, const texture_t &t, const simd_fvec<S> dir[3], const simd_ivec<S> &mask, simd_fvec<S> out_rgb[3]);
 
+// Get visibility between two points accounting for transparent materials
+template <int S>
+simd_fvec<S> ComputeVisibility(const simd_fvec<S> p1[3], const simd_fvec<S> p2[3], const simd_ivec<S> &mask,
+                               const float *halton, const int hi, const simd_ivec<S> &rand_hash2,
+                               const scene_data_t &sc, uint32_t node_index, const Ref::TextureAtlas &tex_atlas);
+
 // Compute punctual lights contribution
 template <int S>
 void ComputeDirectLighting(const simd_fvec<S> P[3], const simd_fvec<S> N[3], const simd_fvec<S> B[3], const simd_fvec<S> plane_N[3],
@@ -1645,6 +1651,188 @@ void Ray::NS::SampleLatlong_RGBE(const Ref::TextureAtlas &atlas, const texture_t
 }
 
 template <int S>
+Ray::NS::simd_fvec<S> Ray::NS::ComputeVisibility(const simd_fvec<S> p1[3], const simd_fvec<S> p2[3], const simd_ivec<S> &mask,
+                                                 const float *halton, const int hi, const simd_ivec<S> &rand_hash2,
+                                                 const scene_data_t &sc, uint32_t node_index, const Ref::TextureAtlas &tex_atlas) {
+    simd_fvec<S> dir[] = { p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2] };
+    simd_fvec<S> distance = length(dir);
+    ITERATE_3({ dir[i] /= distance; })
+
+    ray_packet_t<S> sh_r;
+
+    sh_r.o[0] = p1[0];
+    sh_r.o[1] = p1[1];
+    sh_r.o[2] = p1[2];
+
+    sh_r.d[0] = dir[0];
+    sh_r.d[1] = dir[1];
+    sh_r.d[2] = dir[2];
+
+    simd_fvec<S> visibility = 1.0f;
+
+    auto keep_going = (distance > HIT_EPS) & reinterpret_cast<const simd_fvec<S>&>(mask);
+    const auto &ikeep_going = reinterpret_cast<const simd_ivec<S>&>(keep_going);
+    while (ikeep_going.not_all_zeros()) {
+        hit_data_t<S> sh_inter;
+        sh_inter.t = distance;
+
+        Traverse_MacroTree_WithStack(sh_r, ikeep_going, sc.nodes, node_index, sc.mesh_instances, sc.mi_indices, sc.meshes, sc.transforms, sc.tris, sc.tri_indices, sh_inter);
+        if (sh_inter.mask.all_zeros()) break;
+
+        const auto *I = sh_r.d;
+        const simd_fvec<S> w = 1.0f - sh_inter.u - sh_inter.v;
+
+        simd_fvec<S> n1[3], n2[3], n3[3],
+            u1[2], u2[2], u3[2];
+
+        simd_ivec<S> mat_index = { -1 }, back_mat_index = { -1 };
+
+        simd_fvec<S> inv_xform1[3], inv_xform2[3], inv_xform3[3];
+        simd_fvec<S> sh_N[3];
+
+        for (int i = 0; i < S; i++) {
+            if (!sh_inter.mask[i]) continue;
+
+            const auto &v1 = sc.vertices[sc.vtx_indices[sh_inter.prim_index[i] * 3 + 0]];
+            const auto &v2 = sc.vertices[sc.vtx_indices[sh_inter.prim_index[i] * 3 + 1]];
+            const auto &v3 = sc.vertices[sc.vtx_indices[sh_inter.prim_index[i] * 3 + 2]];
+
+            n1[0][i] = v1.n[0]; n1[1][i] = v1.n[1]; n1[2][i] = v1.n[2];
+            n2[0][i] = v2.n[0]; n2[1][i] = v2.n[1]; n2[2][i] = v2.n[2];
+            n3[0][i] = v3.n[0]; n3[1][i] = v3.n[1]; n3[2][i] = v3.n[2];
+
+            u1[0][i] = v1.t[0][0]; u1[1][i] = v1.t[0][1];
+            u2[0][i] = v2.t[0][0]; u2[1][i] = v2.t[0][1];
+            u3[0][i] = v3.t[0][0]; u3[1][i] = v3.t[0][1];
+
+            const auto &tri = sc.tris[sh_inter.prim_index[i]];
+            mat_index[i] = reinterpret_cast<const int&>(tri.mi);
+            back_mat_index[i] = reinterpret_cast<const int&>(tri.back_mi);
+
+            float _plane_N[3];
+            ExtractPlaneNormal(tri, _plane_N);
+
+            sh_N[0][i] = _plane_N[0];
+            sh_N[1][i] = _plane_N[1];
+            sh_N[2][i] = _plane_N[2];
+
+            const auto *tr = &sc.transforms[sc.mesh_instances[sh_inter.obj_index[i]].tr_index];
+
+            inv_xform1[0][i] = tr->inv_xform[0]; inv_xform1[1][i] = tr->inv_xform[1]; inv_xform1[2][i] = tr->inv_xform[2];
+            inv_xform2[0][i] = tr->inv_xform[4]; inv_xform2[1][i] = tr->inv_xform[5]; inv_xform2[2][i] = tr->inv_xform[6];
+            inv_xform3[0][i] = tr->inv_xform[8]; inv_xform3[1][i] = tr->inv_xform[9]; inv_xform3[2][i] = tr->inv_xform[10];
+        }
+
+        simd_fvec<S> sh_plane_N[3] = { dot(sh_N, inv_xform1), dot(sh_N, inv_xform2), dot(sh_N, inv_xform3) };
+
+        auto backfacing = dot(sh_plane_N, I) < 0.0f;
+        where(reinterpret_cast<const simd_ivec<S> &>(backfacing), mat_index) = back_mat_index;
+
+        sh_N[0] = n1[0] * w + n2[0] * sh_inter.u + n3[0] * sh_inter.v;
+        sh_N[1] = n1[1] * w + n2[1] * sh_inter.u + n3[1] * sh_inter.v;
+        sh_N[2] = n1[2] * w + n2[2] * sh_inter.u + n3[2] * sh_inter.v;
+
+        simd_fvec<S> _dot_I_N = dot(I, sh_N);
+
+        simd_fvec<S> sh_uvs[2] = { u1[0] * w + u2[0] * sh_inter.u + u3[0] * sh_inter.v,
+            u1[1] * w + u2[1] * sh_inter.u + u3[1] * sh_inter.v };
+
+        simd_ivec<S> sh_rand_hash = hash(rand_hash2);
+        simd_fvec<S> sh_rand_offset = construct_float(sh_rand_hash);
+
+        {
+            simd_ivec<S> ray_queue[S];
+            int index = 0;
+            int num = 1;
+
+            ray_queue[0] = sh_inter.mask;
+
+            while (index != num) {
+                uint32_t first_mi = 0xffffffff;
+
+                for (int i = 0; i < S; i++) {
+                    if (!ray_queue[index][i]) continue;
+
+                    if (first_mi == 0xffffffff)
+                        first_mi = mat_index[i];
+                }
+
+                auto same_mi = mat_index == first_mi;
+                auto diff_mi = and_not(same_mi, ray_queue[index]);
+
+                if (diff_mi.not_all_zeros()) {
+                    ray_queue[num] = diff_mi;
+                    num++;
+                }
+
+                if (first_mi != 0xffffffff) {
+                    const auto *mat = &sc.materials[first_mi];
+
+                    while (mat->type == MixMaterial) {
+                        simd_fvec<S> mix[4];
+                        SampleBilinear(tex_atlas, sc.textures[mat->textures[MAIN_TEXTURE]], sh_uvs, { 0 }, same_mi, mix);
+                        mix[0] *= mat->strength;
+
+                        first_mi = 0xffffffff;
+
+                        for (int i = 0; i < S; i++) {
+                            if (!same_mi[i]) continue;
+
+                            float _unused;
+                            const float r = std::modf(halton[hi + 0] + sh_rand_offset[i], &_unused);
+
+                            sh_rand_hash[i] = hash(sh_rand_hash[i]);
+                            sh_rand_offset = construct_float(sh_rand_hash);
+
+                            // shlick fresnel
+                            float RR = mat->fresnel + (1.0f - mat->fresnel) * std::pow(1.0f + _dot_I_N[i], 5.0f);
+                            if (RR < 0.0f) RR = 0.0f;
+                            else if (RR > 1.0f) RR = 1.0f;
+
+                            mat_index[i] = (r * RR < mix[0][i]) ? mat->textures[MIX_MAT1] : mat->textures[MIX_MAT2];
+                            if (first_mi == 0xffffffff) {
+                                first_mi = mat_index[i];
+                            }
+                        }
+
+                        auto _same_mi = mat_index == first_mi;
+                        diff_mi = and_not(_same_mi, same_mi);
+                        same_mi = _same_mi;
+
+                        if (diff_mi.not_all_zeros()) {
+                            ray_queue[num] = diff_mi;
+                            num++;
+                        }
+
+                        mat = &sc.materials[first_mi];
+                    }
+
+                    if (mat->type != TransparentMaterial) {
+                        const auto &_mask = reinterpret_cast<const simd_fvec<S>&>(same_mi);
+                        where(_mask, visibility) = 0.0f;
+                        index++;
+                        continue;
+                    }
+                }
+
+                simd_fvec<S> t = sh_inter.t + HIT_BIAS;
+                sh_r.o[0] += sh_r.d[0] * t;
+                sh_r.o[1] += sh_r.d[1] * t;
+                sh_r.o[2] += sh_r.d[2] * t;
+                distance -= t;
+
+                index++;
+            }
+        }
+
+        // update mask
+        keep_going = (distance > HIT_EPS) & reinterpret_cast<const simd_fvec<S>&>(mask) & (visibility > 0.0f);
+    }
+
+    return visibility;
+}
+
+template <int S>
 void Ray::NS::ComputeDirectLighting(const simd_fvec<S> P[3], const simd_fvec<S> N[3], const simd_fvec<S> B[3], const simd_fvec<S> plane_N[3],
                                     const float *halton, const int hi, const simd_ivec<S> &rand_hash, const simd_ivec<S> &rand_hash2,
                                     const simd_fvec<S> &rand_offset, const simd_fvec<S> &rand_offset2, const scene_data_t &sc, uint32_t node_index,
@@ -1728,176 +1916,13 @@ void Ray::NS::ComputeDirectLighting(const simd_fvec<S> P[3], const simd_fvec<S> 
                     auto fmask = reinterpret_cast<const simd_fvec<S> &>(mask1) & (_dot1 > FLT_EPS) & (_dot2 > l.spot) & (l.brightness * atten > FLT_EPS);
                     const auto &imask = reinterpret_cast<const simd_ivec<S> &>(fmask);
                     if (imask.not_all_zeros()) {
-                        ray_packet_t<S> sh_r;
+                        const simd_fvec<S> p1[] = { P[0] + HIT_BIAS * plane_N[0],
+                                                    P[1] + HIT_BIAS * plane_N[1],
+                                                    P[2] + HIT_BIAS * plane_N[2] };
+                        const simd_fvec<S> p2[] = { l.pos[0], l.pos[1], l.pos[2] };
 
-                        sh_r.o[0] = P[0] + HIT_BIAS * plane_N[0];
-                        sh_r.o[1] = P[1] + HIT_BIAS * plane_N[1];
-                        sh_r.o[2] = P[2] + HIT_BIAS * plane_N[2];
 
-                        sh_r.d[0] = L[0];
-                        sh_r.d[1] = L[1];
-                        sh_r.d[2] = L[2];
-
-                        simd_fvec<S> visibility = 1.0f;
-
-                        auto keep_going = (distance > HIT_EPS) & fmask;
-                        const auto &ikeep_going = reinterpret_cast<const simd_ivec<S>&>(keep_going);
-                        while (ikeep_going.not_all_zeros()) {
-                            hit_data_t<S> sh_inter;
-                            sh_inter.t = distance;
-
-                            Traverse_MacroTree_WithStack(sh_r, ikeep_going, sc.nodes, node_index, sc.mesh_instances, sc.mi_indices, sc.meshes, sc.transforms, sc.tris, sc.tri_indices, sh_inter);
-                            if (sh_inter.mask.all_zeros()) break;
-
-                            const auto *I = sh_r.d;
-                            const simd_fvec<S> w = 1.0f - sh_inter.u - sh_inter.v;
-
-                            simd_fvec<S> n1[3], n2[3], n3[3],
-                                         u1[2], u2[2], u3[2];
-
-                            simd_ivec<S> mat_index = { -1 }, back_mat_index = { -1 };
-
-                            simd_fvec<S> inv_xform1[3], inv_xform2[3], inv_xform3[3];
-                            simd_fvec<S> sh_N[3];
-
-                            for (int i = 0; i < S; i++) {
-                                if (!sh_inter.mask[i]) continue;
-
-                                const auto &v1 = sc.vertices[sc.vtx_indices[sh_inter.prim_index[i] * 3 + 0]];
-                                const auto &v2 = sc.vertices[sc.vtx_indices[sh_inter.prim_index[i] * 3 + 1]];
-                                const auto &v3 = sc.vertices[sc.vtx_indices[sh_inter.prim_index[i] * 3 + 2]];
-
-                                n1[0][i] = v1.n[0]; n1[1][i] = v1.n[1]; n1[2][i] = v1.n[2];
-                                n2[0][i] = v2.n[0]; n2[1][i] = v2.n[1]; n2[2][i] = v2.n[2];
-                                n3[0][i] = v3.n[0]; n3[1][i] = v3.n[1]; n3[2][i] = v3.n[2];
-
-                                u1[0][i] = v1.t[0][0]; u1[1][i] = v1.t[0][1];
-                                u2[0][i] = v2.t[0][0]; u2[1][i] = v2.t[0][1];
-                                u3[0][i] = v3.t[0][0]; u3[1][i] = v3.t[0][1];
-
-                                const auto &tri = sc.tris[sh_inter.prim_index[i]];
-                                mat_index[i] = reinterpret_cast<const int&>(tri.mi);
-                                back_mat_index[i] = reinterpret_cast<const int&>(tri.back_mi);
-
-                                float _plane_N[3];
-                                ExtractPlaneNormal(tri, _plane_N);
-
-                                sh_N[0][i] = _plane_N[0];
-                                sh_N[1][i] = _plane_N[1];
-                                sh_N[2][i] = _plane_N[2];
-
-                                const auto *tr = &sc.transforms[sc.mesh_instances[sh_inter.obj_index[i]].tr_index];
-
-                                inv_xform1[0][i] = tr->inv_xform[0]; inv_xform1[1][i] = tr->inv_xform[1]; inv_xform1[2][i] = tr->inv_xform[2];
-                                inv_xform2[0][i] = tr->inv_xform[4]; inv_xform2[1][i] = tr->inv_xform[5]; inv_xform2[2][i] = tr->inv_xform[6];
-                                inv_xform3[0][i] = tr->inv_xform[8]; inv_xform3[1][i] = tr->inv_xform[9]; inv_xform3[2][i] = tr->inv_xform[10];
-                            }
-
-                            simd_fvec<S> sh_plane_N[3] = { dot(sh_N, inv_xform1), dot(sh_N, inv_xform2), dot(sh_N, inv_xform3) };
-
-                            auto backfacing = dot(sh_plane_N, I) < 0.0f;
-                            where(reinterpret_cast<const simd_ivec<S> &>(backfacing), mat_index) = back_mat_index;
-
-                            sh_N[0] = n1[0] * w + n2[0] * sh_inter.u + n3[0] * sh_inter.v;
-                            sh_N[1] = n1[1] * w + n2[1] * sh_inter.u + n3[1] * sh_inter.v;
-                            sh_N[2] = n1[2] * w + n2[2] * sh_inter.u + n3[2] * sh_inter.v;
-
-                            simd_fvec<S> _dot_I_N = dot(I, sh_N);
-
-                            simd_fvec<S> sh_uvs[2] = { u1[0] * w + u2[0] * sh_inter.u + u3[0] * sh_inter.v,
-                                                       u1[1] * w + u2[1] * sh_inter.u + u3[1] * sh_inter.v };
-
-                            simd_ivec<S> sh_rand_hash = hash(rand_hash2);
-                            simd_fvec<S> sh_rand_offset = construct_float(sh_rand_hash);
-
-                            {
-                                simd_ivec<S> ray_queue[S];
-                                int index = 0;
-                                int num = 1;
-
-                                ray_queue[0] = sh_inter.mask;
-
-                                while (index != num) {
-                                    uint32_t first_mi = 0xffffffff;
-
-                                    for (int i = 0; i < S; i++) {
-                                        if (!ray_queue[index][i]) continue;
-
-                                        if (first_mi == 0xffffffff)
-                                            first_mi = mat_index[i];
-                                    }
-
-                                    auto same_mi = mat_index == first_mi;
-                                    auto diff_mi = and_not(same_mi, ray_queue[index]);
-
-                                    if (diff_mi.not_all_zeros()) {
-                                        ray_queue[num] = diff_mi;
-                                        num++;
-                                    }
-
-                                    if (first_mi != 0xffffffff) {
-                                        const auto *mat = &sc.materials[first_mi];
-
-                                        while (mat->type == MixMaterial) {
-                                            simd_fvec<S> mix[4];
-                                            SampleBilinear(tex_atlas, sc.textures[mat->textures[MAIN_TEXTURE]], sh_uvs, { 0 }, same_mi, mix);
-                                            mix[0] *= mat->strength;
-
-                                            first_mi = 0xffffffff;
-
-                                            for (int i = 0; i < S; i++) {
-                                                if (!same_mi[i]) continue;
-
-                                                float _unused;
-                                                const float r = std::modf(halton[hi + 0] + sh_rand_offset[i], &_unused);
-
-                                                sh_rand_hash[i] = hash(sh_rand_hash[i]);
-                                                sh_rand_offset = construct_float(sh_rand_hash);
-
-                                                // shlick fresnel
-                                                float RR = mat->fresnel + (1.0f - mat->fresnel) * std::pow(1.0f + _dot_I_N[i], 5.0f);
-                                                if (RR < 0.0f) RR = 0.0f;
-                                                else if (RR > 1.0f) RR = 1.0f;
-
-                                                mat_index[i] = (r * RR < mix[0][i]) ? mat->textures[MIX_MAT1] : mat->textures[MIX_MAT2];
-                                                if (first_mi == 0xffffffff) {
-                                                    first_mi = mat_index[i];
-                                                }
-                                            }
-
-                                            auto _same_mi = mat_index == first_mi;
-                                            diff_mi = and_not(_same_mi, same_mi);
-                                            same_mi = _same_mi;
-
-                                            if (diff_mi.not_all_zeros()) {
-                                                ray_queue[num] = diff_mi;
-                                                num++;
-                                            }
-
-                                            mat = &sc.materials[first_mi];
-                                        }
-
-                                        if (mat->type != TransparentMaterial) {
-                                            const auto &mask = reinterpret_cast<const simd_fvec<S>&>(same_mi);
-                                            where(mask, visibility) = 0.0f;
-                                            index++;
-                                            continue;
-                                        }
-                                    }
-
-                                    simd_fvec<S> t = sh_inter.t + HIT_BIAS;
-                                    sh_r.o[0] += sh_r.d[0] * t;
-                                    sh_r.o[1] += sh_r.d[1] * t;
-                                    sh_r.o[2] += sh_r.d[2] * t;
-                                    distance -= t;
-
-                                    index++;
-                                }
-                            }
-
-                            // update mask
-                            keep_going = (distance > HIT_EPS) & fmask & (visibility > 0.0f);
-                        }
+                        simd_fvec<S> visibility = ComputeVisibility(p1, p2, imask, halton, hi, rand_hash2, sc, node_index, tex_atlas);
 
                         where(fmask, out_col[0]) = out_col[0] + l.col[0] * _dot1 * visibility * atten;
                         where(fmask, out_col[1]) = out_col[1] + l.col[1] * _dot1 * visibility * atten;
