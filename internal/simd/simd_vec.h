@@ -519,6 +519,12 @@ public:
         return v1 / v1.length();
     }
 
+    friend force_inline bool is_equal(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) {
+        bool res = true;
+        ITERATE(S, { res = res && (v1.comp_[i] == v2.comp_[i]); })
+        return res;
+    }
+
     friend force_inline const T *value_ptr(const simd_vec<T, S> &v1) {
         return &v1.comp_[0];
     }

@@ -655,6 +655,11 @@ public:
         return ret;
     }
 
+    friend force_inline bool is_equal(const simd_vec<int, 4> &v1, const simd_vec<int, 4> &v2) {
+        __m128i vcmp = _mm_cmpeq_epi32(v1.vec_, v2.vec_);
+        return (_mm_movemask_epi8(vcmp) == 0xffff);
+    }
+
     static int size() { return 4; }
     static bool is_native() { return true; }
 };

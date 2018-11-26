@@ -706,6 +706,17 @@ public:
         return ret;
     }
 
+    friend force_inline bool is_equal(const simd_vec<int, 8> &v1, const simd_vec<int, 8> &v2) {
+#if defined(USE_AVX2)
+        __m256i vcmp = _mm256_cmpeq_epi32(v1.vec_, v2.vec_);
+        return (_mm256_movemask_epi8(vcmp) == 0xffffffff);
+#else
+        __m256i vcmp = _mm256_cmpeq_epi16(v1.vec_, v2.vec_);
+        return (_mm256_movemask_ps(reinterpret_cast<const __m256&>(vcmp)) == 0xffffffff);
+#endif
+        
+    }
+
     static int size() { return 8; }
     static bool is_native() { return true; }
 };

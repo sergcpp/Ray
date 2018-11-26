@@ -875,8 +875,8 @@ bool Ray::Ref::Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t &r, co
 }
 
 bool Ray::Ref::Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t &r, const bvh_node_t *nodes, uint32_t root_index,
-                                                       const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
-                                                       const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t &inter) {
+                                                   const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
+                                                   const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t &inter) {
     bool res = false;
 
     float inv_d[3];
