@@ -109,8 +109,8 @@ void Ray::Ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
             inter.xy = r.xy;
 
             if (macro_tree_root != 0xffffffff) {
-                Traverse_MacroTree_WithStack(r, sc_data.nodes, macro_tree_root, sc_data.mesh_instances, sc_data.mi_indices, sc_data.meshes,
-                                             sc_data.transforms, sc_data.tris, sc_data.tri_indices, inter);
+                Traverse_MacroTree_WithStack_ClosestHit(r, sc_data.nodes, macro_tree_root, sc_data.mesh_instances, sc_data.mi_indices, sc_data.meshes,
+                                                        sc_data.transforms, sc_data.tris, sc_data.tri_indices, inter);
             }
         }
     } else {
@@ -200,7 +200,7 @@ void Ray::Ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
 
             inter = {};
             inter.xy = r.xy;
-            Traverse_MacroTree_WithStack(r, sc_data.nodes, macro_tree_root, sc_data.mesh_instances, sc_data.mi_indices, sc_data.meshes, sc_data.transforms, sc_data.tris, sc_data.tri_indices, inter);
+            Traverse_MacroTree_WithStack_ClosestHit(r, sc_data.nodes, macro_tree_root, sc_data.mesh_instances, sc_data.mi_indices, sc_data.meshes, sc_data.transforms, sc_data.tris, sc_data.tri_indices, inter);
         }
 
         auto time_secondary_shade_start = std::chrono::high_resolution_clock::now();

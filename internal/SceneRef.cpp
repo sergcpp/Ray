@@ -159,9 +159,35 @@ uint32_t Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
     m.node_count += PreprocessMesh(_m.vtx_attrs, _m.vtx_indices, _m.vtx_indices_count, _m.layout, _m.allow_spatial_splits, nodes_, tris_, tri_indices_);
 
     for (const auto &s : _m.shapes) {
+        bool is_solid = true;
+
+        uint32_t material_stack[32];
+        material_stack[0] = s.mat_index;
+        uint32_t material_count = 1;
+
+        while (material_count) {
+            auto &mat = materials_[material_stack[--material_count]];
+
+            if (mat.type == MixMaterial) {
+                material_stack[material_count++] = mat.textures[MIX_MAT1];
+                material_stack[material_count++] = mat.textures[MIX_MAT2];
+            } else if (mat.type == TransparentMaterial) {
+                is_solid = false;
+                break;
+            }
+        }
+
         for (size_t i = s.vtx_start; i < s.vtx_start + s.vtx_count; i += 3) {
-            tris_[tris_start + i / 3].mi = s.mat_index;
-            tris_[tris_start + i / 3].back_mi = s.back_mat_index;
+            auto &tri = tris_[tris_start + i / 3];
+
+            if (is_solid) {
+                tri.ci = (tri.ci | uint32_t(TRI_SOLID_BIT));
+            } else {
+                tri.ci = (tri.ci & ~uint32_t(TRI_SOLID_BIT));
+            }
+
+            tri.mi = s.mat_index;
+            tri.back_mi = s.back_mat_index;
         }
     }
 
