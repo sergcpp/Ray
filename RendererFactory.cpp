@@ -61,7 +61,7 @@ std::shared_ptr<Ray::RendererBase> Ray::CreateRenderer(const settings_t &s, uint
         return std::make_shared<Ref::Renderer>(s.w, s.h);
     }
 #elif defined(__i386__) || defined(__x86_64__)
-    if ((flags & RendererSSE) && features.sse2_supported) {
+    if ((flags & RendererSSE2) && features.sse2_supported) {
         log_stream << "Ray: Creating SSE2 renderer " << s.w << "x" << s.h << std::endl;
         return std::make_shared<Sse2::Renderer>(s.w, s.h);
     }

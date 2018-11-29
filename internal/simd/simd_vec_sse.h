@@ -14,6 +14,9 @@ namespace Ray {
 namespace NS {
 
 template <>
+class simd_vec<int, 4>;
+
+template <>
 class simd_vec<float, 4> {
     union {
         __m128 vec_;
