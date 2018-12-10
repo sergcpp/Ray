@@ -35,7 +35,7 @@ void GeneratePrimaryRays(const int iteration, camera_t cam, int w, int h, __glob
     const int hi = (iteration & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT;
 
     __global ray_packet_t *r = &out_rays[index];
-    r->do_dx = r->do_dy = (float3)(0.0f);
+    r->do_dx = r->do_dy = (float4)((float3)(0.0f), as_float(0));
     r->c = (float4)(1.0f);
 
     float k = ((float)w) / h;
@@ -77,10 +77,12 @@ void GeneratePrimaryRays(const int iteration, camera_t cam, int w, int h, __glob
     r->d = (float4)(d, (float)j);
     
     float3 _dx = get_cam_dir(x + 1, y, origin, &cam, w, h, k);
-    r->dd_dx = _dx - d;
+    r->dd_dx.xyz = _dx - d;
+    r->dd_dx.w = as_float(0);
 
     float3 _dy = get_cam_dir(x, y + 1, origin, &cam, w, h, k);
-    r->dd_dy = _dy - d;
+    r->dd_dy.xyz = _dy - d;
+    r->dd_dy.w = as_float(0);
 }
 
 __kernel
@@ -230,8 +232,8 @@ void SampleMeshInTextureSpace_RasterStage(int uv_layer, int iteration, uint tr_i
             ray->d = (float4)(d, (float)j);
    
             ray->c = (float4)(1.0f, 1.0f, 1.0f, 1.0f);
-            ray->do_dx = ray->do_dy = (float3)(0, 0, 0);
-            ray->dd_dx = ray->dd_dy = (float3)(0, 0, 0);
+            ray->do_dx = ray->do_dy = (float4)(0.0f, 0.0f, 0.0f, as_float(0));
+            ray->dd_dx = ray->dd_dy = (float4)(0.0f, 0.0f, 0.0f, as_float(0));
 
             inter->mask = 0xffffffff;
             inter->obj_index = obj_index;

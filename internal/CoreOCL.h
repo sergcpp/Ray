@@ -16,7 +16,7 @@ struct ray_packet_t {
     // color of ray, determines secondary Ray influence
     cl_float3 c;
     // derivatives
-    cl_float3 do_dx, dd_dx, do_dy, dd_dy;
+    cl_float4 do_dx, dd_dx, do_dy, dd_dy;
 };
 static_assert(sizeof(ray_packet_t) == 112, "!");
 

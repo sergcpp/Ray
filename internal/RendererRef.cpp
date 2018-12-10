@@ -79,7 +79,7 @@ void Ray::Ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
         }
 
         // allocate sh data on demand
-        if (cam.pass_flags & OutputSH) {
+        if (cam.pass_settings.flags & OutputSH) {
             temp_buf_.Resize(w, h, true);
             clean_buf_.Resize(w, h, true);
         }
@@ -89,7 +89,8 @@ void Ray::Ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
 
     pass_info.iteration = region.iteration;
     pass_info.bounce = 2;
-    pass_info.flags = cam.pass_flags;
+    pass_info.settings = cam.pass_settings;
+    pass_info.settings.max_total_depth = std::min(pass_info.settings.max_total_depth, (uint8_t)MAX_BOUNCES);
 
     const auto time_start = std::chrono::high_resolution_clock::now();
     std::chrono::time_point<std::chrono::high_resolution_clock> time_after_ray_gen;
@@ -151,7 +152,7 @@ void Ray::Ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
     p.chunks_temp.resize(secondary_rays_count);
     p.skeleton.resize(secondary_rays_count);
 
-    if (cam.pass_flags & OutputSH) {
+    if (cam.pass_settings.flags & OutputSH) {
         temp_buf_.ResetSampleData(rect);
         for (int i = 0; i < secondary_rays_count; i++) {
             const auto &r = p.secondary_rays[i];
@@ -160,12 +161,12 @@ void Ray::Ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
             const int y = r.xy & 0x0000ffff;
 
             temp_buf_.SetSampleDir(x, y, r.d[0], r.d[1], r.d[2]);
-            // sample weight for indirect lightmap has all r.c[0..2]`s set to same value
+            // sample weight for indirect lightmap has all r.c[0..2]'s set to same value
             temp_buf_.SetSampleWeight(x, y, r.c[0]);
         }
     }
 
-    for (int bounce = 0; bounce < MAX_BOUNCES && secondary_rays_count && !(pass_info.flags & SkipIndirectLight); bounce++) {
+    for (int bounce = 0; bounce < pass_info.settings.max_total_depth && secondary_rays_count && !(pass_info.settings.flags & SkipIndirectLight); bounce++) {
         auto time_secondary_sort_start = std::chrono::high_resolution_clock::now();
 
         SortRays(&p.secondary_rays[0], (size_t)secondary_rays_count, root_min, cell_size,
@@ -249,7 +250,7 @@ void Ray::Ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
     const float mix_factor = 1.0f / region.iteration;
 
     clean_buf_.MixWith(temp_buf_, rect, mix_factor);
-    if (cam.pass_flags & OutputSH) {
+    if (cam.pass_settings.flags & OutputSH) {
         temp_buf_.ComputeSHData(rect);
         clean_buf_.MixWith_SH(temp_buf_, rect, mix_factor);
     }
@@ -257,7 +258,7 @@ void Ray::Ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
     auto clamp_and_gamma_correct = [&cam](const pixel_color_t &p) {
         simd_fvec4 c = { &p.r };
         c = pow(c, simd_fvec4{ 1.0f / cam.gamma });
-        if (cam.pass_flags & Clamp) {
+        if (cam.pass_settings.flags & Clamp) {
             c = clamp(c, 0.0f, 1.0f);
         }
         return pixel_color_t{ c[0], c[1], c[2], c[3] };

@@ -43,7 +43,7 @@ const float PI = 3.141592653589793238463f;
 
 const float MAX_DIST = 3.402823466e+38F;
 
-const int MAX_BOUNCES = 4;
+const int MAX_BOUNCES = 8;
 
 const float RAY_TERM_THRES = 0.01f;
 
@@ -193,28 +193,28 @@ struct ray_chunk_t {
 struct pass_info_t {
     int index;
     int iteration, bounce;
-    uint32_t flags = 0;
+    pass_settings_t settings;
 
     force_inline bool should_add_direct_light() const {
         // skip for primary bounce if we want only indirect light contribution
-        return !(flags & SkipDirectLight) || bounce > 2;
+        return !(settings.flags & SkipDirectLight) || bounce > 2;
     }
 
     force_inline bool should_add_environment() const {
-        return !(flags & NoBackground) || bounce > 2;
+        return !(settings.flags & NoBackground) || bounce > 2;
     }
 
     force_inline bool should_consider_albedo() const {
         // do not use albedo in lightmap mode for primary bounce
-        return !(flags & LightingOnly) || bounce > 2;
+        return !(settings.flags & LightingOnly) || bounce > 2;
     }
 
     force_inline bool use_uniform_sampling() const {
         // do not use diffuse-specific sampling
-        return ((flags & OutputSH) && bounce <= 2);
+        return ((settings.flags & OutputSH) && bounce <= 2);
     }
 };
-static_assert(sizeof(pass_info_t) == 16, "!");
+static_assert(sizeof(pass_info_t) == 24, "!");
 
 struct scene_data_t {
     const environment_t *env;

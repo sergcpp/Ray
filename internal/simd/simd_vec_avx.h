@@ -656,6 +656,16 @@ public:
         return ret;
     }
 
+    friend force_inline simd_vec<int, 8> operator<=(const simd_vec<int, 8> &v1, int v2) {
+        simd_vec<int, 8> ret;
+#if defined(USE_AVX2)
+        ret.vec_ = _mm256_or_si256(_mm256_cmpeq_epi32(_mm256_set1_epi32(v2), v1.vec_), _mm256_cmpgt_epi32(_mm256_set1_epi32(v2), v1.vec_));
+#else
+        ITERATE_8({ ret.comp_[i] = v1.comp_[i] <= v2 ? 0xFFFFFFFF : 0; })
+#endif
+        return ret;
+    }
+
     friend force_inline simd_vec<int, 8> operator>(const simd_vec<int, 8> &v1, int v2) {
         simd_vec<int, 8> ret;
 #if defined(USE_AVX2)

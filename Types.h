@@ -42,6 +42,16 @@ enum ePassFlags { SkipDirectLight = 1,
                   Clamp = 16,
                   OutputSH = 32 };
 
+struct pass_settings_t {
+    uint8_t max_diff_depth,
+            max_glossy_depth,
+            max_refr_depth,
+            max_transp_depth,
+            max_total_depth;
+    uint8_t pad[3];
+    uint32_t flags;
+};
+
 struct camera_t {
     eCamType type;
     eFilterType filter;
@@ -52,7 +62,7 @@ struct camera_t {
           side[3],
           up[3];
     uint32_t mi_index, uv_index;
-    uint32_t pass_flags;
+    pass_settings_t pass_settings;
 };
 
 #if !defined(DISABLE_OCL)

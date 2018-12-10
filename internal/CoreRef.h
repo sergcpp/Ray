@@ -40,6 +40,8 @@ struct ray_packet_t {
     float do_dx[3], dd_dx[3], do_dy[3], dd_dy[3];
     // 16-bit pixel coordinates of ray ((x << 16) | y)
     int xy;
+    // four 8-bit ray depth counters
+    int ray_depth;
 };
 
 const int RayPacketDimX = 1;

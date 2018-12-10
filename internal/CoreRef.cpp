@@ -292,6 +292,7 @@ void Ray::Ref::GeneratePrimaryRays(int iteration, const camera_t &cam, const rec
 
             out_r.xy = (x << 16) | y;
             out_r.ior = 1.0f;
+            out_r.ray_depth = 0;
         }
     }
 }
@@ -397,6 +398,7 @@ void Ray::Ref::SampleMeshInTextureSpace(int iteration, int obj_index, int uv_lay
                     out_inter.t = 1.0f;
                     out_inter.u = w;
                     out_inter.v = u;
+                    out_ray.ray_depth = 0;
                 }
             }
         }
@@ -1490,6 +1492,12 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
 
     simd_fvec3 col = { 0.0f };
 
+    int diff_depth = ray.ray_depth & 0x000000ff;
+    int gloss_depth = (ray.ray_depth >> 8) & 0x000000ff;
+    int refr_depth = (ray.ray_depth >> 16) & 0x000000ff;
+    int transp_depth = (ray.ray_depth >> 24) & 0x000000ff;
+    int total_depth = diff_depth + gloss_depth + refr_depth + transp_depth;
+
     // Evaluate materials
     if (mat->type == DiffuseMaterial) {
         if (pi.should_add_direct_light()) {
@@ -1501,182 +1509,194 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
             }
         }
 
-        float _unused;
-        const float u1 = std::modf(halton[hi + 0] + rand_offset, &_unused);
-        const float u2 = std::modf(halton[hi + 1] + rand_offset2, &_unused);
+        if (diff_depth < pi.settings.max_diff_depth && total_depth < pi.settings.max_total_depth) {
+            float _unused;
+            const float u1 = std::modf(halton[hi + 0] + rand_offset, &_unused);
+            const float u2 = std::modf(halton[hi + 1] + rand_offset2, &_unused);
 
-        const float phi = 2 * PI * u2;
+            const float phi = 2 * PI * u2;
 
-        const float cos_phi = std::cos(phi);
-        const float sin_phi = std::sin(phi);
+            const float cos_phi = std::cos(phi);
+            const float sin_phi = std::sin(phi);
 
-        simd_fvec3 V;
-        float weight = 1.0f;
+            simd_fvec3 V;
+            float weight = 1.0f;
 
-        if (pi.use_uniform_sampling()) {
-            const float dir = std::sqrt(1.0f - u1 * u1);
-            V = normalize(dir * sin_phi * B + u1 * N + dir * cos_phi * T);
-            weight = 2 * u1;
-        } else {
-            const float dir = std::sqrt(u1);
-            V = normalize(dir * sin_phi * B + std::sqrt(1.0f - u1) * N + dir * cos_phi * T);
-        }
-
-        ray_packet_t r;
-
-        r.xy = ray.xy;
-        r.ior = ray.ior;
-
-        memcpy(&r.o[0], value_ptr(P + HIT_BIAS * plane_N), 3 * sizeof(float));
-        memcpy(&r.d[0], value_ptr(V), 3 * sizeof(float));
-
-        r.c[0] = ray.c[0] * weight; r.c[1] = ray.c[1] * weight; r.c[2] = ray.c[2] * weight;
-
-        if (pi.should_consider_albedo()) {
-            r.c[0] *= albedo[0]; r.c[1] *= albedo[1]; r.c[2] *= albedo[2];
-        }
-
-        memcpy(&r.do_dx[0], value_ptr(surf_der.do_dx), 3 * sizeof(float));
-        memcpy(&r.do_dy[0], value_ptr(surf_der.do_dy), 3 * sizeof(float));
-
-        memcpy(&r.dd_dx[0], value_ptr(surf_der.dd_dx - 2 * (dot(I, plane_N) * surf_der.dndx + surf_der.ddn_dx * plane_N)), 3 * sizeof(float));
-        memcpy(&r.dd_dy[0], value_ptr(surf_der.dd_dy - 2 * (dot(I, plane_N) * surf_der.dndy + surf_der.ddn_dy * plane_N)), 3 * sizeof(float));
-
-        const float thr = std::max(r.c[0], std::max(r.c[1], r.c[2]));
-        const float p = std::modf(halton[hi + 0] + rand_offset3, &_unused);
-        if (p > (1.0f - thr / RAY_TERM_THRES)) {
-            if (thr < RAY_TERM_THRES) {
-                r.c[0] *= RAY_TERM_THRES / thr; r.c[1] *= RAY_TERM_THRES / thr; r.c[2] *= RAY_TERM_THRES / thr;
+            if (pi.use_uniform_sampling()) {
+                const float dir = std::sqrt(1.0f - u1 * u1);
+                V = normalize(dir * sin_phi * B + u1 * N + dir * cos_phi * T);
+                weight = 2 * u1;
+            } else {
+                const float dir = std::sqrt(u1);
+                V = normalize(dir * sin_phi * B + std::sqrt(1.0f - u1) * N + dir * cos_phi * T);
             }
-            const int index = (*out_secondary_rays_count)++;
-            out_secondary_rays[index] = r;
+
+            ray_packet_t r;
+
+            r.xy = ray.xy;
+            r.ior = ray.ior;
+            r.ray_depth = ray.ray_depth + 0x00000001;
+
+            memcpy(&r.o[0], value_ptr(P + HIT_BIAS * plane_N), 3 * sizeof(float));
+            memcpy(&r.d[0], value_ptr(V), 3 * sizeof(float));
+
+            r.c[0] = ray.c[0] * weight; r.c[1] = ray.c[1] * weight; r.c[2] = ray.c[2] * weight;
+
+            if (pi.should_consider_albedo()) {
+                r.c[0] *= albedo[0]; r.c[1] *= albedo[1]; r.c[2] *= albedo[2];
+            }
+
+            memcpy(&r.do_dx[0], value_ptr(surf_der.do_dx), 3 * sizeof(float));
+            memcpy(&r.do_dy[0], value_ptr(surf_der.do_dy), 3 * sizeof(float));
+
+            memcpy(&r.dd_dx[0], value_ptr(surf_der.dd_dx - 2 * (dot(I, plane_N) * surf_der.dndx + surf_der.ddn_dx * plane_N)), 3 * sizeof(float));
+            memcpy(&r.dd_dy[0], value_ptr(surf_der.dd_dy - 2 * (dot(I, plane_N) * surf_der.dndy + surf_der.ddn_dy * plane_N)), 3 * sizeof(float));
+
+            const float thr = std::max(r.c[0], std::max(r.c[1], r.c[2]));
+            const float p = std::modf(halton[hi + 0] + rand_offset3, &_unused);
+            if (p > (1.0f - thr / RAY_TERM_THRES)) {
+                if (thr < RAY_TERM_THRES) {
+                    r.c[0] *= RAY_TERM_THRES / thr; r.c[1] *= RAY_TERM_THRES / thr; r.c[2] *= RAY_TERM_THRES / thr;
+                }
+                const int index = (*out_secondary_rays_count)++;
+                out_secondary_rays[index] = r;
+            }
         }
     } else if (mat->type == GlossyMaterial) {
-        simd_fvec3 V = reflect(I, dot(I, N) > 0 ? N : -N);
+        if (gloss_depth < pi.settings.max_glossy_depth && total_depth < pi.settings.max_total_depth) {
+            simd_fvec3 V = reflect(I, dot(I, N) > 0 ? N : -N);
 
-        float _unused;
-        const float h = 1.0f - std::cos(0.5f * PI * mat->roughness * mat->roughness);
-        const float z = h * std::modf(halton[hi + 0] + rand_offset, &_unused);
+            float _unused;
+            const float h = 1.0f - std::cos(0.5f * PI * mat->roughness * mat->roughness);
+            const float z = h * std::modf(halton[hi + 0] + rand_offset, &_unused);
 
-        const float dir = std::sqrt(z);
-        const float phi = 2 * PI * std::modf(halton[hi + 1] + rand_offset2, &_unused);
-        const float cos_phi = std::cos(phi);
-        const float sin_phi = std::sin(phi);
+            const float dir = std::sqrt(z);
+            const float phi = 2 * PI * std::modf(halton[hi + 1] + rand_offset2, &_unused);
+            const float cos_phi = std::cos(phi);
+            const float sin_phi = std::sin(phi);
 
-        auto TT = cross(V, B);
-        auto BB = cross(V, TT);
+            auto TT = cross(V, B);
+            auto BB = cross(V, TT);
 
-        if (dot(V, plane_N) > 0) {
-            V = dir * sin_phi * BB + std::sqrt(1.0f - dir) * V + dir * cos_phi * TT;
-        } else {
-            V = -dir * sin_phi * BB + std::sqrt(1.0f - dir) * V - dir * cos_phi * TT;
-        }
-
-        ray_packet_t r;
-
-        r.xy = ray.xy;
-        r.ior = ray.ior;
-
-        memcpy(&r.o[0], value_ptr(P + HIT_BIAS * plane_N), 3 * sizeof(float));
-        memcpy(&r.d[0], value_ptr(V), 3 * sizeof(float));
-        memcpy(&r.c[0], &ray.c[0], 3 * sizeof(float));
-
-        memcpy(&r.do_dx[0], value_ptr(surf_der.do_dx), 3 * sizeof(float));
-        memcpy(&r.do_dy[0], value_ptr(surf_der.do_dy), 3 * sizeof(float));
-
-        memcpy(&r.dd_dx[0], value_ptr(surf_der.dd_dx - 2 * (dot(I, plane_N) * surf_der.dndx + surf_der.ddn_dx * plane_N)), 3 * sizeof(float));
-        memcpy(&r.dd_dy[0], value_ptr(surf_der.dd_dy - 2 * (dot(I, plane_N) * surf_der.dndy + surf_der.ddn_dy * plane_N)), 3 * sizeof(float));
-
-        const float thr = std::max(r.c[0], std::max(r.c[1], r.c[2]));
-        const float p = std::modf(halton[hi + 0] + rand_offset3, &_unused);
-        if (p < thr / RAY_TERM_THRES) {
-            if (thr < RAY_TERM_THRES) {
-                r.c[0] *= RAY_TERM_THRES / thr; r.c[1] *= RAY_TERM_THRES / thr; r.c[2] *= RAY_TERM_THRES / thr;
+            if (dot(V, plane_N) > 0) {
+                V = dir * sin_phi * BB + std::sqrt(1.0f - dir) * V + dir * cos_phi * TT;
+            } else {
+                V = -dir * sin_phi * BB + std::sqrt(1.0f - dir) * V - dir * cos_phi * TT;
             }
-            const int index = (*out_secondary_rays_count)++;
-            out_secondary_rays[index] = r;
+
+            ray_packet_t r;
+
+            r.xy = ray.xy;
+            r.ior = ray.ior;
+            r.ray_depth = ray.ray_depth + 0x00000100;
+
+            memcpy(&r.o[0], value_ptr(P + HIT_BIAS * plane_N), 3 * sizeof(float));
+            memcpy(&r.d[0], value_ptr(V), 3 * sizeof(float));
+            memcpy(&r.c[0], &ray.c[0], 3 * sizeof(float));
+
+            memcpy(&r.do_dx[0], value_ptr(surf_der.do_dx), 3 * sizeof(float));
+            memcpy(&r.do_dy[0], value_ptr(surf_der.do_dy), 3 * sizeof(float));
+
+            memcpy(&r.dd_dx[0], value_ptr(surf_der.dd_dx - 2 * (dot(I, plane_N) * surf_der.dndx + surf_der.ddn_dx * plane_N)), 3 * sizeof(float));
+            memcpy(&r.dd_dy[0], value_ptr(surf_der.dd_dy - 2 * (dot(I, plane_N) * surf_der.dndy + surf_der.ddn_dy * plane_N)), 3 * sizeof(float));
+
+            const float thr = std::max(r.c[0], std::max(r.c[1], r.c[2]));
+            const float p = std::modf(halton[hi + 0] + rand_offset3, &_unused);
+            if (p < thr / RAY_TERM_THRES) {
+                if (thr < RAY_TERM_THRES) {
+                    r.c[0] *= RAY_TERM_THRES / thr; r.c[1] *= RAY_TERM_THRES / thr; r.c[2] *= RAY_TERM_THRES / thr;
+                }
+                const int index = (*out_secondary_rays_count)++;
+                out_secondary_rays[index] = r;
+            }
         }
     } else if (mat->type == RefractiveMaterial) {
-        const auto __N = dot(I, N) > 0 ? -N : N;
+        if (refr_depth < pi.settings.max_refr_depth && total_depth < pi.settings.max_total_depth) {
+            const auto __N = dot(I, N) > 0 ? -N : N;
 
-        float eta = (dot(I, N) > 0) ? ray.ior : (ray.ior / mat->ior);
-        float cosi = dot(-I, __N);
-        float cost2 = 1.0f - eta * eta * (1.0f - cosi * cosi);
-        if (cost2 < 0) return pixel_color_t{ 0.0f, 0.0f, 0.0f, 1.0f };
-        float m = eta * cosi - std::sqrt(cost2);
-        auto V = eta * I + m * __N;
+            float eta = (dot(I, N) > 0) ? ray.ior : (ray.ior / mat->ior);
+            float cosi = dot(-I, __N);
+            float cost2 = 1.0f - eta * eta * (1.0f - cosi * cosi);
+            if (cost2 < 0) return pixel_color_t{ 0.0f, 0.0f, 0.0f, 1.0f };
+            float m = eta * cosi - std::sqrt(cost2);
+            auto V = eta * I + m * __N;
 
-        const float z = 1.0f - halton[hi + 0] * mat->roughness;
-        const float temp = std::sqrt(1.0f - z * z);
+            const float z = 1.0f - halton[hi + 0] * mat->roughness;
+            const float temp = std::sqrt(1.0f - z * z);
 
-        const float phi = halton[(((hash(hi) + pi.iteration) & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT + pi.bounce * 2) + 0] * 2 * PI;
-        const float cos_phi = std::cos(phi);
-        const float sin_phi = std::sin(phi);
+            const float phi = halton[(((hash(hi) + pi.iteration) & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT + pi.bounce * 2) + 0] * 2 * PI;
+            const float cos_phi = std::cos(phi);
+            const float sin_phi = std::sin(phi);
 
-        auto TT = normalize(cross(V, B));
-        auto BB = normalize(cross(V, TT));
-        V = temp * sin_phi * BB + z * V + temp * cos_phi * TT;
+            auto TT = normalize(cross(V, B));
+            auto BB = normalize(cross(V, TT));
+            V = temp * sin_phi * BB + z * V + temp * cos_phi * TT;
 
-        //////////////////
+            //////////////////
 
-        float k = (eta - eta * eta * dot(I, plane_N) / dot(V, plane_N));
-        float dmdx = k * surf_der.ddn_dx;
-        float dmdy = k * surf_der.ddn_dy;
+            float k = (eta - eta * eta * dot(I, plane_N) / dot(V, plane_N));
+            float dmdx = k * surf_der.ddn_dx;
+            float dmdy = k * surf_der.ddn_dy;
 
-        ray_packet_t r;
+            ray_packet_t r;
 
-        r.xy = ray.xy;
-        r.ior = mat->ior;
+            r.xy = ray.xy;
+            r.ior = mat->ior;
+            r.ray_depth = ray.ray_depth + 0x00010000;
 
-        memcpy(&r.o[0], value_ptr(P + HIT_BIAS * I), 3 * sizeof(float));
-        memcpy(&r.d[0], value_ptr(V), 3 * sizeof(float));
-        memcpy(&r.c[0], value_ptr(simd_fvec3(ray.c) * z), 3 * sizeof(float));
+            memcpy(&r.o[0], value_ptr(P + HIT_BIAS * I), 3 * sizeof(float));
+            memcpy(&r.d[0], value_ptr(V), 3 * sizeof(float));
+            memcpy(&r.c[0], value_ptr(simd_fvec3(ray.c) * z), 3 * sizeof(float));
 
-        memcpy(&r.do_dx[0], value_ptr(surf_der.do_dx), 3 * sizeof(float));
-        memcpy(&r.do_dy[0], value_ptr(surf_der.do_dy), 3 * sizeof(float));
+            memcpy(&r.do_dx[0], value_ptr(surf_der.do_dx), 3 * sizeof(float));
+            memcpy(&r.do_dy[0], value_ptr(surf_der.do_dy), 3 * sizeof(float));
 
-        memcpy(&r.dd_dx[0], value_ptr(eta * surf_der.dd_dx - (m * surf_der.dndx + dmdx * plane_N)), 3 * sizeof(float));
-        memcpy(&r.dd_dy[0], value_ptr(eta * surf_der.dd_dy - (m * surf_der.dndy + dmdy * plane_N)), 3 * sizeof(float));
+            memcpy(&r.dd_dx[0], value_ptr(eta * surf_der.dd_dx - (m * surf_der.dndx + dmdx * plane_N)), 3 * sizeof(float));
+            memcpy(&r.dd_dy[0], value_ptr(eta * surf_der.dd_dy - (m * surf_der.dndy + dmdy * plane_N)), 3 * sizeof(float));
 
-        float _unused;
+            float _unused;
 
-        const float thr = std::max(r.c[0], std::max(r.c[1], r.c[2]));
-        const float p = std::modf(halton[hi + 0] + rand_offset3, &_unused);
-        if (p < thr / RAY_TERM_THRES) {
-            if (thr < RAY_TERM_THRES) {
-                r.c[0] *= RAY_TERM_THRES / thr; r.c[1] *= RAY_TERM_THRES / thr; r.c[2] *= RAY_TERM_THRES / thr;
+            const float thr = std::max(r.c[0], std::max(r.c[1], r.c[2]));
+            const float p = std::modf(halton[hi + 0] + rand_offset3, &_unused);
+            if (p < thr / RAY_TERM_THRES) {
+                if (thr < RAY_TERM_THRES) {
+                    r.c[0] *= RAY_TERM_THRES / thr; r.c[1] *= RAY_TERM_THRES / thr; r.c[2] *= RAY_TERM_THRES / thr;
+                }
+                const int index = (*out_secondary_rays_count)++;
+                out_secondary_rays[index] = r;
             }
-            const int index = (*out_secondary_rays_count)++;
-            out_secondary_rays[index] = r;
         }
     } else if (mat->type == EmissiveMaterial) {
         col = mat->strength * simd_fvec3(&albedo[0]);
     } else if (mat->type == TransparentMaterial) {
-        ray_packet_t r;
+        if (transp_depth < pi.settings.max_transp_depth && total_depth < pi.settings.max_total_depth) {
+            ray_packet_t r;
 
-        r.xy = ray.xy;
-        r.ior = ray.ior;
+            r.xy = ray.xy;
+            r.ior = ray.ior;
+            r.ray_depth = ray.ray_depth + 0x01000000;
 
-        memcpy(&r.o[0], value_ptr(P + HIT_BIAS * I), 3 * sizeof(float));
-        memcpy(&r.d[0], &ray.d[0], 3 * sizeof(float));
-        memcpy(&r.c[0], &ray.c[0], 3 * sizeof(float));
+            memcpy(&r.o[0], value_ptr(P + HIT_BIAS * I), 3 * sizeof(float));
+            memcpy(&r.d[0], &ray.d[0], 3 * sizeof(float));
+            memcpy(&r.c[0], &ray.c[0], 3 * sizeof(float));
 
-        memcpy(&r.do_dx[0], &ray.do_dx[0], 3 * sizeof(float));
-        memcpy(&r.do_dy[0], &ray.do_dy[0], 3 * sizeof(float));
+            memcpy(&r.do_dx[0], &ray.do_dx[0], 3 * sizeof(float));
+            memcpy(&r.do_dy[0], &ray.do_dy[0], 3 * sizeof(float));
 
-        memcpy(&r.dd_dx[0], &ray.dd_dx[0], 3 * sizeof(float));
-        memcpy(&r.dd_dy[0], &ray.dd_dy[0], 3 * sizeof(float));
+            memcpy(&r.dd_dx[0], &ray.dd_dx[0], 3 * sizeof(float));
+            memcpy(&r.dd_dy[0], &ray.dd_dy[0], 3 * sizeof(float));
 
-        float _unused;
+            float _unused;
 
-        const float thr = std::max(r.c[0], std::max(r.c[1], r.c[2]));
-        const float p = std::modf(halton[hi + 0] + rand_offset3, &_unused);
-        if (p < thr / RAY_TERM_THRES) {
-            if (thr < RAY_TERM_THRES) {
-                r.c[0] *= RAY_TERM_THRES / thr; r.c[1] *= RAY_TERM_THRES / thr; r.c[2] *= RAY_TERM_THRES / thr;
+            const float thr = std::max(r.c[0], std::max(r.c[1], r.c[2]));
+            const float p = std::modf(halton[hi + 0] + rand_offset3, &_unused);
+            if (p < thr / RAY_TERM_THRES) {
+                if (thr < RAY_TERM_THRES) {
+                    r.c[0] *= RAY_TERM_THRES / thr; r.c[1] *= RAY_TERM_THRES / thr; r.c[2] *= RAY_TERM_THRES / thr;
+                }
+                const int index = (*out_secondary_rays_count)++;
+                out_secondary_rays[index] = r;
             }
-            const int index = (*out_secondary_rays_count)++;
-            out_secondary_rays[index] = r;
         }
     }
 

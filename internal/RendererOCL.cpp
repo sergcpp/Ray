@@ -281,6 +281,7 @@ Ray::Ocl::Renderer::Renderer(int w, int h, int platform_index, int device_index)
                 types_check.setArg(argc++, sizeof(light_t), buf) != CL_SUCCESS ||
                 types_check.setArg(argc++, sizeof(environment_t), buf) != CL_SUCCESS ||
                 types_check.setArg(argc++, sizeof(ray_chunk_t), buf) != CL_SUCCESS ||
+                types_check.setArg(argc++, sizeof(pass_settings_t), buf) != CL_SUCCESS ||
                 types_check.setArg(argc++, sizeof(pass_info_t), buf) != CL_SUCCESS ||
                 types_check.setArg(argc++, sizeof(shl1_data_t), buf) != CL_SUCCESS) {
 #if defined(_MSC_VER)
@@ -439,7 +440,8 @@ void Ray::Ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
 
     pass_info.iteration = region.iteration;
     pass_info.bounce = 2;
-    pass_info.flags = cam.pass_flags;
+    pass_info.settings = cam.pass_settings;
+    pass_info.settings.max_total_depth = std::min(pass_info.settings.max_total_depth, (uint8_t)MAX_BOUNCES);
 
     Ray::Ocl::camera_t cl_cam = { cam };
 
@@ -509,7 +511,7 @@ void Ray::Ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
     const auto time_after_prim_shade = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::micro> secondary_sort_time{}, secondary_trace_time{}, secondary_shade_time{};
 
-    if (cam.pass_flags & OutputSH) {
+    if (cam.pass_settings.flags & OutputSH) {
         if (sh_data_size_ != w_ * h_) {
             size_t new_size = w_ * h_;
             sh_data_temp_ = cl::Buffer(context_, CL_MEM_READ_WRITE, sizeof(shl1_data_t) * new_size, nullptr, &error);
@@ -523,7 +525,7 @@ void Ray::Ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
         if (!kernel_StoreSHCoeffs(secondary_rays_buf_, secondary_rays_count, (cl_int)w_, sh_data_temp_)) return;
     }
 
-    for (int bounce = 0; bounce < MAX_BOUNCES && secondary_rays_count && !(pass_info.flags & SkipIndirectLight); bounce++) {
+    for (int bounce = 0; bounce < pass_info.settings.max_total_depth && secondary_rays_count && !(pass_info.settings.flags & SkipIndirectLight); bounce++) {
         auto time_secondary_sort_start = std::chrono::high_resolution_clock::now();
 
         if (secondary_rays_count > (cl_int)scan_portion_ * 64) {
@@ -597,18 +599,18 @@ void Ray::Ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
     if (!kernel_MixIncremental(clean_buf_, temp_buf_, (cl_float)mix_factor, final_buf_)) return;
     std::swap(final_buf_, clean_buf_);
 
-    if (cam.pass_flags & OutputSH) {
+    if (cam.pass_settings.flags & OutputSH) {
         if (!kernel_ComputeSHData(temp_buf_, (cl_int)w_, (cl_int)h_, sh_data_temp_)) return;
         if (!kernel_MixSHData(sh_data_temp_, (cl_int)(w_ * h_), mix_factor, sh_data_clean_)) return;
     }
 
-    cl_int _clamp = (cam.pass_flags & Clamp) ? 1 : 0;
+    cl_int _clamp = (cam.pass_settings.flags & Clamp) ? 1 : 0;
     if (!kernel_Postprocess(clean_buf_, w_, h_, (cl_float)(1.0f / cam.gamma), _clamp, final_buf_)) return;
 
     error = queue_.enqueueReadImage(final_buf_, CL_TRUE, {}, { (size_t)w_, (size_t)h_, 1 }, 0, 0, &frame_pixels_[0]);
     if (error != CL_SUCCESS) return;
 
-    if (sh_data_size_ && (cam.pass_flags & OutputSH)) {
+    if (sh_data_size_ && (cam.pass_settings.flags & OutputSH)) {
         error = queue_.enqueueReadBuffer(sh_data_clean_, CL_TRUE, 0, sizeof(shl1_data_t) * sh_data_size_, &sh_data_host_[0]);
     }
 }

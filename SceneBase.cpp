@@ -35,12 +35,17 @@ void Ray::SceneBase::GetCamera(uint32_t i, camera_desc_t &c) const {
         c.uv_index = cam.uv_index;
     }
 
-    c.lighting_only = (cam.pass_flags & LightingOnly) != 0;
-    c.skip_direct_lighting = (cam.pass_flags & SkipDirectLight) != 0;
-    c.skip_indirect_lighting = (cam.pass_flags & SkipIndirectLight) != 0;
-    c.no_background = (cam.pass_flags & NoBackground) != 0;
-    c.clamp = (cam.pass_flags & Clamp) != 0;
-    c.output_sh = (cam.pass_flags & OutputSH) != 0;
+    c.lighting_only = (cam.pass_settings.flags & LightingOnly) != 0;
+    c.skip_direct_lighting = (cam.pass_settings.flags & SkipDirectLight) != 0;
+    c.skip_indirect_lighting = (cam.pass_settings.flags & SkipIndirectLight) != 0;
+    c.no_background = (cam.pass_settings.flags & NoBackground) != 0;
+    c.clamp = (cam.pass_settings.flags & Clamp) != 0;
+    c.output_sh = (cam.pass_settings.flags & OutputSH) != 0;
+
+    c.max_diff_depth = cam.pass_settings.max_diff_depth;
+    c.max_glossy_depth = cam.pass_settings.max_glossy_depth;
+    c.max_transp_depth = cam.pass_settings.max_transp_depth;
+    c.max_total_depth = cam.pass_settings.max_total_depth;
 }
 
 void Ray::SceneBase::SetCamera(uint32_t i, const camera_desc_t &c) {
@@ -55,13 +60,18 @@ void Ray::SceneBase::SetCamera(uint32_t i, const camera_desc_t &c) {
         cam.uv_index = c.uv_index;
     }
 
-    cam.pass_flags = 0;
-    if (c.lighting_only) cam.pass_flags |= LightingOnly;
-    if (c.skip_direct_lighting) cam.pass_flags |= SkipDirectLight;
-    if (c.skip_indirect_lighting) cam.pass_flags |= SkipIndirectLight;
-    if (c.no_background) cam.pass_flags |= NoBackground;
-    if (c.clamp) cam.pass_flags |= Clamp;
-    if (c.output_sh) cam.pass_flags |= OutputSH;
+    cam.pass_settings.flags = 0;
+    if (c.lighting_only) cam.pass_settings.flags |= LightingOnly;
+    if (c.skip_direct_lighting) cam.pass_settings.flags |= SkipDirectLight;
+    if (c.skip_indirect_lighting) cam.pass_settings.flags |= SkipIndirectLight;
+    if (c.no_background) cam.pass_settings.flags |= NoBackground;
+    if (c.clamp) cam.pass_settings.flags |= Clamp;
+    if (c.output_sh) cam.pass_settings.flags |= OutputSH;
+
+    cam.pass_settings.max_diff_depth = c.max_diff_depth;
+    cam.pass_settings.max_glossy_depth = c.max_glossy_depth;
+    cam.pass_settings.max_transp_depth = c.max_transp_depth;
+    cam.pass_settings.max_total_depth = c.max_total_depth;
 }
 
 void Ray::SceneBase::RemoveCamera(uint32_t i) {

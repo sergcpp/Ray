@@ -127,8 +127,12 @@ struct camera_desc_t {
     bool skip_direct_lighting = false;  ///< Render only indirect light contribution
     bool skip_indirect_lighting = false;///< Render only direct light contribution
     bool no_background = false;         ///< Do not render background
-    bool clamp = false;                 ///< clamp color values to [0..1] range
-    bool output_sh = false;             ///< output 2-band (4 coeff) spherical harmonics data
+    bool clamp = false;                 ///< Clamp color values to [0..1] range
+    bool output_sh = false;             ///< Output 2-band (4 coeff) spherical harmonics data
+    uint8_t max_diff_depth = 4;         ///< Maximum tracing depth of diffuse rays
+    uint8_t max_glossy_depth = 4;       ///< Maximum tracing depth of glossy rays
+    uint8_t max_transp_depth = 4;       ///< Maximum tracing depth of transparency rays
+    uint8_t max_total_depth = 4;        ///< Maximum tracing depth of all rays
 };
 
 /// Environment description

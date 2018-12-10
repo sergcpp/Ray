@@ -166,7 +166,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
         }
 
         // allocate sh data on demand
-        if (cam.pass_flags & OutputSH) {
+        if (cam.pass_settings.flags & OutputSH) {
             temp_buf_.Resize(w, h, true);
             clean_buf_.Resize(w, h, true);
         }
@@ -176,7 +176,8 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
 
     pass_info.iteration = region.iteration;
     pass_info.bounce = 2;
-    pass_info.flags = cam.pass_flags;
+    pass_info.settings = cam.pass_settings;
+    pass_info.settings.max_total_depth = std::min(pass_info.settings.max_total_depth, (uint8_t)MAX_BOUNCES);
 
     const auto time_start = std::chrono::high_resolution_clock::now();
     std::chrono::time_point<std::chrono::high_resolution_clock> time_after_ray_gen;
@@ -247,7 +248,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
     p.chunks_temp.resize(secondary_rays_count * S);
     p.skeleton.resize(secondary_rays_count * S);
 
-    if (cam.pass_flags & OutputSH) {
+    if (cam.pass_settings.flags & OutputSH) {
         temp_buf_.ResetSampleData(rect);
         for (int i = 0; i < secondary_rays_count; i++) {
             const auto &r = p.secondary_rays[i];
@@ -263,7 +264,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
         }
     }
 
-    for (int bounce = 0; bounce < MAX_BOUNCES && secondary_rays_count && !(pass_info.flags & SkipIndirectLight); bounce++) {
+    for (int bounce = 0; bounce < pass_info.settings.max_total_depth && secondary_rays_count && !(pass_info.settings.flags & SkipIndirectLight); bounce++) {
         auto time_secondary_sort_start = std::chrono::high_resolution_clock::now();
 
         SortRays(&p.secondary_rays[0], &p.secondary_masks[0], secondary_rays_count, root_min, cell_size,
@@ -333,7 +334,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
     const float mix_factor = 1.0f / region.iteration;
 
     clean_buf_.MixWith(temp_buf_, rect, mix_factor);
-    if (cam.pass_flags & OutputSH) {
+    if (cam.pass_settings.flags & OutputSH) {
         temp_buf_.ComputeSHData(rect);
         clean_buf_.MixWith_SH(temp_buf_, rect, mix_factor);
     }
@@ -341,7 +342,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
     auto clamp_and_gamma_correct = [&cam](const pixel_color_t &p) {
         auto c = simd_fvec4(&p.r);
         c = pow(c, simd_fvec4{ 1.0f / cam.gamma });
-        if (cam.pass_flags & Clamp) {
+        if (cam.pass_settings.flags & Clamp) {
             c = clamp(c, 0.0f, 1.0f);
         }
         return pixel_color_t{ c[0], c[1], c[2], c[3] };

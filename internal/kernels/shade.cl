@@ -14,16 +14,16 @@ float3 refract(float3 I, float3 N, float eta) {
 }
 
 #define should_add_direct_light(pi) \
-    (!(pi->flags & SkipDirectLight) || pi->bounce > 2)
+    (!(pi->settings.flags & SkipDirectLight) || pi->bounce > 2)
 
 #define should_add_environment(pi) \
-    (!(pi->flags & NoBackground) || pi->bounce > 2)
+    (!(pi->settings.flags & NoBackground) || pi->bounce > 2)
 
 #define should_consider_albedo(pi) \
-    (!(pi->flags & LightingOnly) || pi->bounce > 2)
+    (!(pi->settings.flags & LightingOnly) || pi->bounce > 2)
 
 #define use_uniform_sampling(pi) \
-    ((pi->flags & OutputSH) && pi->bounce <= 2)
+    ((pi->settings.flags & OutputSH) && pi->bounce <= 2)
 
 float3 ComputeDirectLighting(const float3 P, const float3 N, const float3 B, const float3 plane_N,
                              __global const float *halton, const int hi, float rand_offset, float rand_offset2,
@@ -233,7 +233,8 @@ float4 ShadeSurface(const pass_info_t *pi, __global const float *halton,
     }
 
     derivatives_t surf_der;
-    ComputeDerivatives(I, inter->t, orig_ray->do_dx, orig_ray->do_dy, orig_ray->dd_dx, orig_ray->dd_dy,
+    ComputeDerivatives(I, inter->t, orig_ray->do_dx.xyz, orig_ray->do_dy.xyz,
+                       orig_ray->dd_dx.xyz, orig_ray->dd_dy.xyz,
                        p1, p2, p3, n1, n2, n3, u1, u2, u3, plane_N, &surf_der);
 
     // used to randomize halton sequence among pixels
@@ -287,6 +288,12 @@ float4 ShadeSurface(const pass_info_t *pi, __global const float *halton,
 )" // workaround for 16k string literal limitation on msvc
 R"(
 
+    int diff_depth = as_int(orig_ray->do_dx.w);
+    int gloss_depth = as_int(orig_ray->do_dy.w);
+    int refr_depth = as_int(orig_ray->dd_dx.w);
+    int transp_depth = as_int(orig_ray->dd_dy.w);
+    int total_depth = diff_depth + gloss_depth + refr_depth + transp_depth;
+
     float3 col = 0.0f;
 
     // Evaluate materials
@@ -300,151 +307,165 @@ R"(
             }
         }
 
-        float _unused;
-        const float u1 = fract(halton[hi + 0] + rand_offset, &_unused);
-        const float u2 = fract(halton[hi + 1] + rand_offset2, &_unused);
+        if (diff_depth < pi->settings.max_diff_depth && total_depth < pi->settings.max_total_depth) {
+            float _unused;
+            const float u1 = fract(halton[hi + 0] + rand_offset, &_unused);
+            const float u2 = fract(halton[hi + 1] + rand_offset2, &_unused);
 
-        const float phi = 2 * PI * u2;
-        float cos_phi;
-        const float sin_phi = sincos(phi, &cos_phi);
+            const float phi = 2 * PI * u2;
+            float cos_phi;
+            const float sin_phi = sincos(phi, &cos_phi);
 
-        float3 V;
-        float weight = 1.0f;
+            float3 V;
+            float weight = 1.0f;
 
-        if (use_uniform_sampling(pi)) {
-            const float dir = sqrt(1.0f - u1 * u1);
-            V = dir * sin_phi * B + u1 * N + dir * cos_phi * T;
-            weight = 2.0f * u1;
-        } else {
-            const float dir = sqrt(u1);
-            V = dir * sin_phi * B + sqrt(1.0f - u1) * N + dir * cos_phi * T;
-        }
+            if (use_uniform_sampling(pi)) {
+                const float dir = sqrt(1.0f - u1 * u1);
+                V = dir * sin_phi * B + u1 * N + dir * cos_phi * T;
+                weight = 2.0f * u1;
+            } else {
+                const float dir = sqrt(u1);
+                V = dir * sin_phi * B + sqrt(1.0f - u1) * N + dir * cos_phi * T;
+            }
 
-        ray_packet_t r;
-        r.o = (float4)(P + HIT_BIAS * plane_N, (float)px.x);
-        r.d = (float4)(V, (float)px.y);
-        r.c = orig_ray->c * weight;
-        if (should_consider_albedo(pi)) {
-            r.c.xyz *= albedo.xyz;
-        }
-        r.do_dx = surf_der.do_dx;
-        r.do_dy = surf_der.do_dy;
-        r.dd_dx = surf_der.dd_dx - 2 * (dot(I, plane_N) * surf_der.dndx + surf_der.ddn_dx * plane_N);
-        r.dd_dy = surf_der.dd_dy - 2 * (dot(I, plane_N) * surf_der.dndy + surf_der.ddn_dy * plane_N);
+            ray_packet_t r;
+            r.o = (float4)(P + HIT_BIAS * plane_N, (float)px.x);
+            r.d = (float4)(V, (float)px.y);
+            r.c = orig_ray->c * weight;
+            if (should_consider_albedo(pi)) {
+                r.c.xyz *= albedo.xyz;
+            }
+            r.do_dx = (float4)(surf_der.do_dx, as_float(diff_depth + 1));
+            r.do_dy = (float4)(surf_der.do_dy, orig_ray->do_dy.w);
+            r.dd_dx.xyz = surf_der.dd_dx - 2 * (dot(I, plane_N) * surf_der.dndx + surf_der.ddn_dx * plane_N);
+            r.dd_dx.w = orig_ray->dd_dx.w;
+            r.dd_dy.xyz = surf_der.dd_dy - 2 * (dot(I, plane_N) * surf_der.dndy + surf_der.ddn_dy * plane_N);
+            r.dd_dy.w = orig_ray->dd_dy.w;
 
-        const float thr = max(r.c.x, max(r.c.y, r.c.z));
-        const float p = fract(halton[hi + 0] + rand_offset3, &_unused);
-        if (p < thr / RAY_TERM_THRES) {
-            if (thr < RAY_TERM_THRES) r.c.xyz *= RAY_TERM_THRES / thr;
-            const int index = atomic_inc(out_secondary_rays_count);
-            out_secondary_rays[index] = r;
+            const float thr = max(r.c.x, max(r.c.y, r.c.z));
+            const float p = fract(halton[hi + 0] + rand_offset3, &_unused);
+            if (p < thr / RAY_TERM_THRES) {
+                if (thr < RAY_TERM_THRES) r.c.xyz *= RAY_TERM_THRES / thr;
+                const int index = atomic_inc(out_secondary_rays_count);
+                out_secondary_rays[index] = r;
+            }
         }
     } else if (mat->type == GlossyMaterial) {
         col = (float3)(0, 0, 0);
 
-        float3 V = reflect(I, dot(I, N) > 0 ? N : -N);
+        if (gloss_depth < pi->settings.max_glossy_depth && total_depth < pi->settings.max_total_depth) {
+            float3 V = reflect(I, dot(I, N) > 0 ? N : -N);
 
-        float _unused;
-        const float h = 1.0f - native_cos(0.5f * PI * mat->roughness * mat->roughness);
-        const float z = h * fract(halton[hi + 0] + rand_offset, &_unused);
+            float _unused;
+            const float h = 1.0f - native_cos(0.5f * PI * mat->roughness * mat->roughness);
+            const float z = h * fract(halton[hi + 0] + rand_offset, &_unused);
 
-        const float dir = native_sqrt(z);
-        const float phi = 2 * PI * fract(halton[hi + 1] + rand_offset2, &_unused);
-        float cos_phi;
-        const float sin_phi = sincos(phi, &cos_phi);
+            const float dir = native_sqrt(z);
+            const float phi = 2 * PI * fract(halton[hi + 1] + rand_offset2, &_unused);
+            float cos_phi;
+            const float sin_phi = sincos(phi, &cos_phi);
 
-        float3 TT = cross(V, B);
-        float3 BB = cross(V, TT);
+            float3 TT = cross(V, B);
+            float3 BB = cross(V, TT);
 
-        if (dot(V, plane_N) > 0) {
-            V = dir * sin_phi * BB + native_sqrt(1.0f - dir) * V + dir * cos_phi * TT;
-        } else {
-            V = -dir * sin_phi * BB + native_sqrt(1.0f - dir) * V - dir * cos_phi * TT;
-        }
+            if (dot(V, plane_N) > 0) {
+                V = dir * sin_phi * BB + native_sqrt(1.0f - dir) * V + dir * cos_phi * TT;
+            } else {
+                V = -dir * sin_phi * BB + native_sqrt(1.0f - dir) * V - dir * cos_phi * TT;
+            }
 
-        ray_packet_t r;
-        r.o = (float4)(P + HIT_BIAS * plane_N, (float)px.x);
-        r.d = (float4)(V, (float)px.y);
-        r.c = orig_ray->c;
-        r.do_dx = surf_der.do_dx;
-        r.do_dy = surf_der.do_dy;
-        r.dd_dx = surf_der.dd_dx - 2 * (dot(I, plane_N) * surf_der.dndx + surf_der.ddn_dx * plane_N);
-        r.dd_dy = surf_der.dd_dy - 2 * (dot(I, plane_N) * surf_der.dndy + surf_der.ddn_dy * plane_N);
+            ray_packet_t r;
+            r.o = (float4)(P + HIT_BIAS * plane_N, (float)px.x);
+            r.d = (float4)(V, (float)px.y);
+            r.c = orig_ray->c;
+            r.do_dx = (float4)(surf_der.do_dx, orig_ray->do_dx.w);
+            r.do_dy = (float4)(surf_der.do_dy, as_float(gloss_depth + 1));
+            r.dd_dx.xyz = surf_der.dd_dx - 2 * (dot(I, plane_N) * surf_der.dndx + surf_der.ddn_dx * plane_N);
+            r.dd_dx.w = orig_ray->dd_dx.w;
+            r.dd_dy.xyz = surf_der.dd_dy - 2 * (dot(I, plane_N) * surf_der.dndy + surf_der.ddn_dy * plane_N);
+            r.dd_dy.w = orig_ray->dd_dy.w;
 
-        const float thr = max(r.c.x, max(r.c.y, r.c.z));
-        const float p = fract(halton[hi + 0] + rand_offset3, &_unused);
-        if (p < thr / RAY_TERM_THRES) {
-            if (thr < RAY_TERM_THRES) r.c.xyz *= RAY_TERM_THRES / thr;
-            const int index = atomic_inc(out_secondary_rays_count);
-            out_secondary_rays[index] = r;
+            const float thr = max(r.c.x, max(r.c.y, r.c.z));
+            const float p = fract(halton[hi + 0] + rand_offset3, &_unused);
+            if (p < thr / RAY_TERM_THRES) {
+                if (thr < RAY_TERM_THRES) r.c.xyz *= RAY_TERM_THRES / thr;
+                const int index = atomic_inc(out_secondary_rays_count);
+                out_secondary_rays[index] = r;
+            }
         }
     } else if (mat->type == RefractiveMaterial) {
         col = (float3)(0, 0, 0);
 
-        const float3 _N = dot(I, N) > 0 ? -N : N;
+        if (refr_depth < pi->settings.max_refr_depth && total_depth < pi->settings.max_total_depth) {
+            const float3 _N = dot(I, N) > 0 ? -N : N;
 
-        float eta = (dot(I, N) > 0) ? orig_ray->c.w : (orig_ray->c.w / mat->ior);
-        float cosi = dot(-I, _N);
-        float cost2 = 1.0f - eta * eta * (1.0f - cosi * cosi);
-        float m = eta * cosi - sqrt(cost2);
-        float3 V = eta * I + m * _N;
+            float eta = (dot(I, N) > 0) ? orig_ray->c.w : (orig_ray->c.w / mat->ior);
+            float cosi = dot(-I, _N);
+            float cost2 = 1.0f - eta * eta * (1.0f - cosi * cosi);
+            float m = eta * cosi - sqrt(cost2);
+            float3 V = eta * I + m * _N;
 
-        const float z = 1.0f - halton[hi + 0] * mat->roughness;
-        const float temp = native_sqrt(1.0f - z * z);
+            const float z = 1.0f - halton[hi + 0] * mat->roughness;
+            const float temp = native_sqrt(1.0f - z * z);
 
-        const float phi = halton[(((hash(hi) + pi->iteration) & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT + pi->bounce * 2) + 0] * 2 * PI;
-        float cos_phi;
-        const float sin_phi = sincos(phi, &cos_phi);
+            const float phi = halton[(((hash(hi) + pi->iteration) & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT + pi->bounce * 2) + 0] * 2 * PI;
+            float cos_phi;
+            const float sin_phi = sincos(phi, &cos_phi);
 
-        float3 TT = normalize(cross(V, B));
-        float3 BB = normalize(cross(V, TT));
-        V = temp * sin_phi * BB + z * V + temp * cos_phi * TT;
+            float3 TT = normalize(cross(V, B));
+            float3 BB = normalize(cross(V, TT));
+            V = temp * sin_phi * BB + z * V + temp * cos_phi * TT;
 
-        float k = (eta - eta * eta * dot(I, plane_N) / dot(V, plane_N));
-        float dmdx = k * surf_der.ddn_dx;
-        float dmdy = k * surf_der.ddn_dy;
+            float k = (eta - eta * eta * dot(I, plane_N) / dot(V, plane_N));
+            float dmdx = k * surf_der.ddn_dx;
+            float dmdy = k * surf_der.ddn_dy;
 
-        ray_packet_t r;
-        r.o = (float4)(P + HIT_BIAS * I, (float)px.x);
-        r.d = (float4)(V, (float)px.y);
-        r.c.xyz = orig_ray->c.xyz * z;
-        r.c.w = mat->ior;
-        r.do_dx = surf_der.do_dx;
-        r.do_dy = surf_der.do_dy;
-        r.dd_dx = eta * surf_der.dd_dx - (m * surf_der.dndx + dmdx * plane_N);
-        r.dd_dy = eta * surf_der.dd_dy - (m * surf_der.dndy + dmdy * plane_N);
+            ray_packet_t r;
+            r.o = (float4)(P + HIT_BIAS * I, (float)px.x);
+            r.d = (float4)(V, (float)px.y);
+            r.c.xyz = orig_ray->c.xyz * z;
+            r.c.w = mat->ior;
+            r.do_dx = (float4)(surf_der.do_dx, orig_ray->do_dx.w);
+            r.do_dy = (float4)(surf_der.do_dy, orig_ray->do_dy.w);
+            r.dd_dx.xyz = eta * surf_der.dd_dx - (m * surf_der.dndx + dmdx * plane_N);
+            r.dd_dx.w = as_float(refr_depth + 1);
+            r.dd_dy.xyz = eta * surf_der.dd_dy - (m * surf_der.dndy + dmdy * plane_N);
+            r.dd_dy.w = orig_ray->dd_dy.w;
 
-        float _unused;
+            float _unused;
 
-        const float thr = max(r.c.x, max(r.c.y, r.c.z));
-        const float p = fract(halton[hi + 0] + rand_offset3, &_unused);
-        if (cost2 >= 0 && p < thr / RAY_TERM_THRES) {
-            if (thr < RAY_TERM_THRES) r.c.xyz *= RAY_TERM_THRES / thr;
-            const int index = atomic_inc(out_secondary_rays_count);
-            out_secondary_rays[index] = r;
+            const float thr = max(r.c.x, max(r.c.y, r.c.z));
+            const float p = fract(halton[hi + 0] + rand_offset3, &_unused);
+            if (cost2 >= 0 && p < thr / RAY_TERM_THRES) {
+                if (thr < RAY_TERM_THRES) r.c.xyz *= RAY_TERM_THRES / thr;
+                const int index = atomic_inc(out_secondary_rays_count);
+                out_secondary_rays[index] = r;
+            }
         }
     } else if (mat->type == EmissiveMaterial) {
         col = mat->strength * albedo.xyz;
     } else if (mat->type == TransparentMaterial) {
         col = (float3)(0, 0, 0);
 
-        ray_packet_t r;
-        r.o = (float4)(P + HIT_BIAS * I, (float)px.x);
-        r.d = orig_ray->d;
-        r.c = orig_ray->c;
-        r.do_dx = surf_der.do_dx;
-        r.do_dy = surf_der.do_dy;
-        r.dd_dx = surf_der.dd_dx;
-        r.dd_dy = surf_der.dd_dy;
+        if (transp_depth < pi->settings.max_transp_depth && total_depth < pi->settings.max_total_depth) {
+            ray_packet_t r;
+            r.o = (float4)(P + HIT_BIAS * I, (float)px.x);
+            r.d = orig_ray->d;
+            r.c = orig_ray->c;
+            r.do_dx = (float4)(surf_der.do_dx, orig_ray->do_dx.w);
+            r.do_dy = (float4)(surf_der.do_dy, orig_ray->do_dy.w);
+            r.dd_dx = (float4)(surf_der.dd_dx, orig_ray->dd_dx.w);
+            r.dd_dy = (float4)(surf_der.dd_dy, as_float(transp_depth + 1));
 
-        float _unused;
+            float _unused;
 
-        const float thr = max(r.c.x, max(r.c.y, r.c.z));
-        const float p = fract(halton[hi + 0] + rand_offset3, &_unused);
-        if (p < thr / RAY_TERM_THRES) {
-            if (thr < RAY_TERM_THRES) r.c.xyz *= RAY_TERM_THRES / thr;
-            const int index = atomic_inc(out_secondary_rays_count);
-            out_secondary_rays[index] = r;
+            const float thr = max(r.c.x, max(r.c.y, r.c.z));
+            const float p = fract(halton[hi + 0] + rand_offset3, &_unused);
+            if (p < thr / RAY_TERM_THRES) {
+                if (thr < RAY_TERM_THRES) r.c.xyz *= RAY_TERM_THRES / thr;
+                const int index = atomic_inc(out_secondary_rays_count);
+                out_secondary_rays[index] = r;
+            }
         }
     }
 

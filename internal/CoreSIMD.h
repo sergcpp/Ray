@@ -38,6 +38,8 @@ struct ray_packet_t {
     simd_fvec<S> do_dx[3], dd_dx[3], do_dy[3], dd_dy[3];
     // 16-bit pixel coordinates of rays in packet ((x << 16) | y)
     simd_ivec<S> xy;
+    // four 8-bit ray depth counters
+    simd_ivec<S> ray_depth;
 };
 
 template <int S>
@@ -683,6 +685,7 @@ void Ray::NS::GeneratePrimaryRays(const int iteration, const camera_t &cam, cons
 
             out_r.ior = { 1.0f };
             out_r.xy = (ixx << 16) | iyy;
+            out_r.ray_depth = { 0 };
         }
     }
 }
@@ -813,6 +816,7 @@ void Ray::NS::SampleMeshInTextureSpace(int iteration, int obj_index, int uv_laye
                     ITERATE_3({ where(fmask, out_ray.o[i]) = p[i] + n[i]; })
                     ITERATE_3({ where(fmask, out_ray.d[i]) = -n[i]; })
                     where(fmask, out_ray.ior) = 1.0f;
+                    where(reinterpret_cast<const simd_ivec<S>&>(fmask), out_ray.ray_depth) = { 0 };
 
                     out_inter.mask = out_inter.mask | imask;
                     where(imask, out_inter.prim_index) = tri;
@@ -2334,6 +2338,12 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
 
     const int hi = (pi.iteration & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT + pi.bounce * 2;
 
+    simd_ivec<S> diff_depth = ray.ray_depth & 0x000000ff;
+    simd_ivec<S> gloss_depth = (ray.ray_depth >> 8) & 0x000000ff;
+    simd_ivec<S> refr_depth = (ray.ray_depth >> 16) & 0x000000ff;
+    simd_ivec<S> transp_depth = (ray.ray_depth >> 24) & 0x000000ff;
+    simd_ivec<S> total_depth = diff_depth + gloss_depth + refr_depth + transp_depth;
+
     simd_ivec<S> secondary_mask = { 0 };
 
     {
@@ -2495,7 +2505,10 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                 }
 
                 const simd_fvec<S> thr = max(rc[0], max(rc[1], rc[2]));
-                const auto new_ray_mask = (p < thr / RAY_TERM_THRES) & reinterpret_cast<const simd_fvec<S>&>(same_mi);
+                const auto new_ray_mask = (p < thr / RAY_TERM_THRES) &
+                    reinterpret_cast<const simd_fvec<S>&>(same_mi) &
+                    reinterpret_cast<const simd_fvec<S>&>(diff_depth < int(pi.settings.max_diff_depth)) &
+                    reinterpret_cast<const simd_fvec<S>&>(total_depth < int(pi.settings.max_total_depth));
 
                 if (reinterpret_cast<const simd_ivec<S>&>(new_ray_mask).not_all_zeros()) {
                     const int out_index = *out_secondary_rays_count;
@@ -2520,6 +2533,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                     where(new_ray_mask, r.c[1]) = rc[1];
                     where(new_ray_mask, r.c[2]) = rc[2];
                     where(new_ray_mask, r.ior) = ray.ior;
+                    where(reinterpret_cast<const simd_ivec<S>&>(new_ray_mask), r.ray_depth) = ray.ray_depth + 0x00000001;
 
                     where(new_ray_mask, r.do_dx[0]) = surf_der.do_dx[0];
                     where(new_ray_mask, r.do_dx[1]) = surf_der.do_dx[1];
@@ -2574,7 +2588,10 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                 }
 
                 const simd_fvec<S> thr = max(rc[0], max(rc[1], rc[2]));
-                const auto new_ray_mask = (p < thr / RAY_TERM_THRES) & reinterpret_cast<const simd_fvec<S>&>(same_mi);
+                const auto new_ray_mask = (p < thr / RAY_TERM_THRES) &
+                    reinterpret_cast<const simd_fvec<S>&>(same_mi) &
+                    reinterpret_cast<const simd_fvec<S>&>(gloss_depth < pi.settings.max_glossy_depth) &
+                    reinterpret_cast<const simd_fvec<S>&>(total_depth < pi.settings.max_total_depth);
 
                 if (reinterpret_cast<const simd_ivec<S>&>(new_ray_mask).not_all_zeros()) {
                     const int out_index = *out_secondary_rays_count;
@@ -2599,6 +2616,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                     where(new_ray_mask, r.c[1]) = rc[1];
                     where(new_ray_mask, r.c[2]) = rc[2];
                     where(new_ray_mask, r.ior) = ray.ior;
+                    where(reinterpret_cast<const simd_ivec<S>&>(new_ray_mask), r.ray_depth) = ray.ray_depth + 0x00000100;
 
                     where(new_ray_mask, r.do_dx[0]) = surf_der.do_dx[0];
                     where(new_ray_mask, r.do_dx[1]) = surf_der.do_dx[1];
@@ -2674,7 +2692,10 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                 simd_fvec<S> thres = dot(rc, rc);
 
                 const simd_fvec<S> thr = max(rc[0], max(rc[1], rc[2]));
-                const auto new_ray_mask = (cost2 >= 0.0f) & (p < thr / RAY_TERM_THRES) & reinterpret_cast<const simd_fvec<S>&>(same_mi);
+                const auto new_ray_mask = (cost2 >= 0.0f) & (p < thr / RAY_TERM_THRES) &
+                    reinterpret_cast<const simd_fvec<S>&>(same_mi) &
+                    reinterpret_cast<const simd_fvec<S>&>(refr_depth < pi.settings.max_refr_depth) &
+                    reinterpret_cast<const simd_fvec<S>&>(total_depth < pi.settings.max_total_depth);
 
                 if (reinterpret_cast<const simd_ivec<S>&>(new_ray_mask).not_all_zeros()) {
                     const int out_index = *out_secondary_rays_count;
@@ -2699,6 +2720,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                     where(new_ray_mask, r.c[1]) = rc[1];
                     where(new_ray_mask, r.c[2]) = rc[2];
                     where(new_ray_mask, r.ior) = mat->ior;
+                    where(reinterpret_cast<const simd_ivec<S>&>(new_ray_mask), r.ray_depth) = ray.ray_depth + 0x00010000;
 
                     where(new_ray_mask, r.do_dx[0]) = surf_der.do_dx[0];
                     where(new_ray_mask, r.do_dx[1]) = surf_der.do_dx[1];
@@ -2731,7 +2753,10 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                 }
 
                 const simd_fvec<S> thr = max(rc[0], max(rc[1], rc[2]));
-                const auto new_ray_mask = (p < thr / RAY_TERM_THRES) & reinterpret_cast<const simd_fvec<S>&>(same_mi);
+                const auto new_ray_mask = (p < thr / RAY_TERM_THRES) &
+                    reinterpret_cast<const simd_fvec<S>&>(same_mi) &
+                    reinterpret_cast<const simd_fvec<S>&>(transp_depth < pi.settings.max_transp_depth) &
+                    reinterpret_cast<const simd_fvec<S>&>(total_depth < pi.settings.max_total_depth);
 
                 if (reinterpret_cast<const simd_ivec<S>&>(new_ray_mask).not_all_zeros()) {
                     const int out_index = *out_secondary_rays_count;
@@ -2756,6 +2781,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                     where(new_ray_mask, r.c[1]) = rc[1];
                     where(new_ray_mask, r.c[2]) = rc[2];
                     where(new_ray_mask, r.ior) = ray.ior;
+                    where(reinterpret_cast<const simd_ivec<S>&>(new_ray_mask), r.ray_depth) = ray.ray_depth + 0x01000000;
 
                     where(new_ray_mask, r.do_dx[0]) = surf_der.do_dx[0];
                     where(new_ray_mask, r.do_dx[1]) = surf_der.do_dx[1];
