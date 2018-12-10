@@ -84,6 +84,7 @@ bool IntersectTris_ClosestHit(const ray_packet_t &r, const tri_accel_t *tris, co
 bool IntersectTris_AnyHit(const ray_packet_t &r, const tri_accel_t *tris, int num_tris, int obj_index, hit_data_t &out_inter);
 bool IntersectTris_AnyHit(const ray_packet_t &r, const tri_accel_t *tris, const uint32_t *indices, int num_indices, int obj_index, hit_data_t &out_inter);
 
+#ifdef USE_STACKLESS_BVH_TRAVERSAL
 // Traverse acceleration structure
 // stack-less cpu-style traversal of outer nodes
 bool Traverse_MacroTree_Stackless_CPU(const ray_packet_t &r, const bvh_node_t *nodes, uint32_t root_index,
@@ -99,6 +100,7 @@ bool Traverse_MicroTree_Stackless_CPU(const ray_packet_t &r, const float inv_d[3
 // stack-less gpu-style traversal of inner nodes
 bool Traverse_MicroTree_Stackless_GPU(const ray_packet_t &r, const float inv_d[3], const bvh_node_t *nodes, uint32_t root_index,
                                       const tri_accel_t *tris, const uint32_t *indices, int obj_index, hit_data_t &inter);
+#endif
 
 // traditional bvh traversal with stack for outer nodes
 bool Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t &r, const bvh_node_t *nodes, uint32_t root_index,

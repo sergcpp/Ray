@@ -49,13 +49,35 @@ const float RAY_TERM_THRES = 0.01f;
 
 const float LIGHT_ATTEN_CUTOFF = 0.001f;
 
+const uint32_t LEAF_NODE_BIT   = (1u << 31);
+const uint32_t PRIM_INDEX_BITS = ~LEAF_NODE_BIT;
+const uint32_t LEFT_CHILD_BITS = ~LEAF_NODE_BIT;
+
+const uint32_t SEP_AXIS_BITS    = (0b11u << 30);
+const uint32_t PRIM_COUNT_BITS  = ~SEP_AXIS_BITS;
+const uint32_t RIGHT_CHILD_BITS = ~SEP_AXIS_BITS;
+
 struct bvh_node_t {
-    uint32_t prim_index, prim_count,
-             left_child, right_child, parent,
-             space_axis; // axis with maximal child's centroids distance
-    float bbox[2][3];
+    float bbox_min[3];
+    union {
+        uint32_t prim_index;    // First bit is used to identify leaf node
+        uint32_t left_child;
+    };
+    float bbox_max[3];
+    union {
+        uint32_t prim_count;    // First two bits are used for separation axis (0, 1 or 2 - x, y or z)
+        uint32_t right_child;
+    };
+#ifdef USE_STACKLESS_BVH_TRAVERSAL
+    uint32_t parent;
+#endif
 };
-static_assert(sizeof(bvh_node_t) == 48, "!");
+
+#ifdef USE_STACKLESS_BVH_TRAVERSAL
+static_assert(sizeof(bvh_node_t) == 36, "!");
+#else
+static_assert(sizeof(bvh_node_t) == 32, "!");
+#endif
 
 const int MAX_MIP_LEVEL = 11;
 const int NUM_MIP_LEVELS = MAX_MIP_LEVEL + 1;
@@ -124,7 +146,7 @@ bool NaiivePluckerTest(const float p[9], const float o[3], const float d[3]);
 void ConstructCamera(eCamType type, eFilterType filter, const float origin[3], const float fwd[3], float fov, float gamma, float focus_distance, float focus_factor, camera_t *cam);
 
 // Applies 4x4 matrix matrix transform to bounding box
-void TransformBoundingBox(const float bbox[2][3], const float *xform, float out_bbox[2][3]);
+void TransformBoundingBox(const float bbox_min[3], const float bbox_max[3], const float *xform, float out_bbox_min[3], float out_bbox_max[3]);
 
 void InverseMatrix(const float mat[16], float out_mat[16]);
 

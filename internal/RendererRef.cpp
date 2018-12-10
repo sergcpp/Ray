@@ -47,11 +47,11 @@ void Ray::Ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
     float root_min[3], cell_size[3];
 
     if (macro_tree_root != 0xffffffff) {
-        root_min[0] = sc_data.nodes[macro_tree_root].bbox[0][0];
-        root_min[1] = sc_data.nodes[macro_tree_root].bbox[0][1];
-        root_min[2] = sc_data.nodes[macro_tree_root].bbox[0][2];
+        root_min[0] = sc_data.nodes[macro_tree_root].bbox_min[0];
+        root_min[1] = sc_data.nodes[macro_tree_root].bbox_min[1];
+        root_min[2] = sc_data.nodes[macro_tree_root].bbox_min[2];
 
-        const float *root_max = sc_data.nodes[macro_tree_root].bbox[1];
+        const float *root_max = sc_data.nodes[macro_tree_root].bbox_max;
         cell_size[0] = (root_max[0] - root_min[0]) / 255;
         cell_size[1] = (root_max[1] - root_min[1]) / 255;
         cell_size[2] = (root_max[2] - root_min[2]) / 255;

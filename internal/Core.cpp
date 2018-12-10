@@ -227,7 +227,8 @@ uint32_t Ray::PreprocessPrims(const prim_t *prims, size_t prims_count, const flo
             // skip bound checks in debug mode
             const bvh_node_t *_out_nodes = &out_nodes[0];
             for (uint32_t i = leaf_index - 1; i >= root_node_index; i--) {
-                if (_out_nodes[i].left_child == leaf_index || _out_nodes[i].right_child == leaf_index) {
+                if (!(_out_nodes[i].prim_index & LEAF_NODE_BIT) &&
+                    (_out_nodes[i].left_child == leaf_index || (_out_nodes[i].right_child & RIGHT_CHILD_BITS) == leaf_index)) {
                     parent_index = (uint32_t)i;
                     break;
                 }
@@ -238,11 +239,16 @@ uint32_t Ray::PreprocessPrims(const prim_t *prims, size_t prims_count, const flo
             Ref::simd_fvec3 bbox_min = split_data.left_bounds[0],
                             bbox_max = split_data.left_bounds[1];
 
-            out_nodes.push_back({ (uint32_t)out_indices.size(), (uint32_t)split_data.left_indices.size(), 0, 0, parent_index, 0,
-                {   { bbox_min[0], bbox_min[1], bbox_min[2] },
-                    { bbox_max[0], bbox_max[1], bbox_max[2] }
-                }
-            });
+            out_nodes.emplace_back();
+            auto &n = out_nodes.back();
+
+            n.prim_index = LEAF_NODE_BIT + (uint32_t)out_indices.size();
+            n.prim_count = (uint32_t)split_data.left_indices.size();
+            memcpy(&n.bbox_min[0], &bbox_min[0], 3 * sizeof(float));
+            memcpy(&n.bbox_max[0], &bbox_max[0], 3 * sizeof(float));
+#ifdef USE_STACKLESS_BVH_TRAVERSAL
+            n.parent_index = parent_index;
+#endif
             out_indices.insert(out_indices.end(), split_data.left_indices.begin(), split_data.left_indices.end());
         } else {
             auto index = (uint32_t)num_nodes;
@@ -264,13 +270,15 @@ uint32_t Ray::PreprocessPrims(const prim_t *prims, size_t prims_count, const flo
             Ref::simd_fvec3 bbox_min = min(split_data.left_bounds[0], split_data.right_bounds[0]),
                             bbox_max = max(split_data.left_bounds[1], split_data.right_bounds[1]);
 
-            out_nodes.push_back({ 0, 0, index + 1, index + 2, parent_index, space_axis,
-                {   { bbox_min[0], bbox_min[1], bbox_min[2] },
-                    { bbox_max[0], bbox_max[1], bbox_max[2] }
-                }
-            });
-
-            // push_front
+            out_nodes.emplace_back();
+            auto &n = out_nodes.back();
+            n.left_child = index + 1;
+            n.right_child = (space_axis << 30) + index + 2;
+            memcpy(&n.bbox_min[0], &bbox_min[0], 3 * sizeof(float));
+            memcpy(&n.bbox_max[0], &bbox_max[0], 3 * sizeof(float));
+#ifdef USE_STACKLESS_BVH_TRAVERSAL
+            n.parent_index = parent_index;
+#endif
             prim_lists.emplace_front(std::move(split_data.left_indices), split_data.left_bounds[0], split_data.left_bounds[1]);
             prim_lists.emplace_front(std::move(split_data.right_indices), split_data.right_bounds[0], split_data.right_bounds[1]);
 
@@ -341,22 +349,22 @@ void Ray::ConstructCamera(eCamType type, eFilterType filter, const float origin[
     }
 }
 
-void Ray::TransformBoundingBox(const float bbox[2][3], const float *xform, float out_bbox[2][3]) {
-    out_bbox[0][0] = out_bbox[1][0] = xform[12];
-    out_bbox[0][1] = out_bbox[1][1] = xform[13];
-    out_bbox[0][2] = out_bbox[1][2] = xform[14];
+void Ray::TransformBoundingBox(const float bbox_min[3], const float bbox_max[3], const float *xform, float out_bbox_min[3], float out_bbox_max[3]) {
+    out_bbox_min[0] = out_bbox_max[0] = xform[12];
+    out_bbox_min[1] = out_bbox_max[1] = xform[13];
+    out_bbox_min[2] = out_bbox_max[2] = xform[14];
 
     for (int j = 0; j < 3; j++) {
         for (int i = 0; i < 3; i++) {
-            float a = xform[i * 4 + j] * bbox[0][i];
-            float b = xform[i * 4 + j] * bbox[1][i];
+            float a = xform[i * 4 + j] * bbox_min[i];
+            float b = xform[i * 4 + j] * bbox_max[i];
 
             if (a < b) {
-                out_bbox[0][j] += a;
-                out_bbox[1][j] += b;
+                out_bbox_min[j] += a;
+                out_bbox_max[j] += b;
             } else {
-                out_bbox[0][j] += b;
-                out_bbox[1][j] += a;
+                out_bbox_min[j] += b;
+                out_bbox_max[j] += a;
             }
         }
     }

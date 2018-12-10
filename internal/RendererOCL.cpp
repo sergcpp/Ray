@@ -156,6 +156,17 @@ Ray::Ocl::Renderer::Renderer(int w, int h, int platform_index, int device_index)
         cl_src_defines += "#define TRI_RAST_X " + std::to_string(tri_rast_x_) + "\n";
         cl_src_defines += "#define TRI_RAST_Y " + std::to_string(tri_rast_y_) + "\n";
 
+        cl_src_defines += "#define LEAF_NODE_BIT " + std::to_string(LEAF_NODE_BIT) + "\n";
+        cl_src_defines += "#define PRIM_INDEX_BITS " + std::to_string(PRIM_INDEX_BITS) + "\n";
+        cl_src_defines += "#define LEFT_CHILD_BITS " + std::to_string(LEFT_CHILD_BITS) + "\n";
+        cl_src_defines += "#define SEP_AXIS_BITS " + std::to_string(SEP_AXIS_BITS) + "\n";
+        cl_src_defines += "#define PRIM_COUNT_BITS " + std::to_string(PRIM_COUNT_BITS) + "\n";
+        cl_src_defines += "#define RIGHT_CHILD_BITS " + std::to_string(RIGHT_CHILD_BITS) + "\n";
+
+#ifdef USE_STACKLESS_BVH_TRAVERSAL
+        cl_src_defines += "#define USE_STACKLESS_BVH_TRAVERSAL\n";
+#endif
+
         cl_int error = CL_SUCCESS;
         cl::Program::Sources srcs = {
             cl_src_defines,
@@ -418,8 +429,8 @@ void Ray::Ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
         s->nodes_.Get(macro_tree_root, root_node);
     }
 
-    cl_float3 root_min = { root_node.bbox[0][0], root_node.bbox[0][1], root_node.bbox[0][2] },
-              root_max = { root_node.bbox[1][0], root_node.bbox[1][1], root_node.bbox[1][2] };
+    cl_float3 root_min = { root_node.bbox_min[0], root_node.bbox_min[1], root_node.bbox_min[2] },
+              root_max = { root_node.bbox_max[0], root_node.bbox_max[1], root_node.bbox_max[2] };
     cl_float3 cell_size = { (root_max.s[0] - root_min.s[0]) / 255, (root_max.s[1] - root_min.s[1]) / 255, (root_max.s[2] - root_min.s[2]) / 255 };
 
     region.iteration++;

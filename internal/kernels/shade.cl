@@ -46,11 +46,12 @@ float3 ComputeDirectLighting(const float3 P, const float3 N, const float3 B, con
 
         if (!is_point_inside(P, n)) continue;
 
-        if (!n->prim_count) {
+        if ((n->prim_index & LEAF_NODE_BIT) == 0) {
             stack[stack_size++] = n->left_child;
-            stack[stack_size++] = n->right_child;
+            stack[stack_size++] = n->right_child & RIGHT_CHILD_BITS;
         } else {
-            for (uint i = n->prim_index; i < n->prim_index + n->prim_count; i++) {
+            uint prim_index = n->prim_index & PRIM_INDEX_BITS;
+            for (uint i = prim_index; i < prim_index + n->prim_count; i++) {
                 __global const light_t *l = &lights[li_indices[i]];
 
                 float3 L = P - l->pos_and_radius.xyz;

@@ -44,6 +44,7 @@ void Ray::SceneBase::GetCamera(uint32_t i, camera_desc_t &c) const {
 
     c.max_diff_depth = cam.pass_settings.max_diff_depth;
     c.max_glossy_depth = cam.pass_settings.max_glossy_depth;
+    c.max_refr_depth = cam.pass_settings.max_refr_depth;
     c.max_transp_depth = cam.pass_settings.max_transp_depth;
     c.max_total_depth = cam.pass_settings.max_total_depth;
 }
@@ -70,6 +71,7 @@ void Ray::SceneBase::SetCamera(uint32_t i, const camera_desc_t &c) {
 
     cam.pass_settings.max_diff_depth = c.max_diff_depth;
     cam.pass_settings.max_glossy_depth = c.max_glossy_depth;
+    cam.pass_settings.max_refr_depth = c.max_refr_depth;
     cam.pass_settings.max_transp_depth = c.max_transp_depth;
     cam.pass_settings.max_total_depth = c.max_total_depth;
 }

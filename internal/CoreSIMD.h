@@ -90,7 +90,7 @@ bool IntersectTris_AnyHit(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask
 template <int S>
 bool IntersectTris_AnyHit(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const tri_accel_t *tris, const uint32_t *indices, uint32_t num_tris, uint32_t obj_index, hit_data_t<S> &out_inter, simd_ivec<S> &out_is_solid_hit);
 
-
+#ifdef USE_STACKLESS_BVH_TRAVERSAL
 // Traverse acceleration structure
 // stack-less cpu-style traversal of outer nodes
 template <int S>
@@ -101,6 +101,7 @@ bool Traverse_MacroTree_Stackless_CPU(const ray_packet_t<S> &r, const simd_ivec<
 template <int S>
 bool Traverse_MicroTree_Stackless_CPU(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const bvh_node_t *nodes, uint32_t node_index,
                                       const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, hit_data_t<S> &inter);
+#endif
 
 // traditional bvh traversal with stack for outer nodes
 template <int S>
@@ -288,37 +289,37 @@ force_inline simd_ivec<S> bbox_test(const simd_fvec<S> p[3], const float _bbox_m
 
 template <int S>
 force_inline simd_ivec<S> bbox_test(const simd_fvec<S> o[3], const simd_fvec<S> inv_d[3], const simd_fvec<S> &t, const bvh_node_t &node) {
-    return bbox_test(o, inv_d, t, node.bbox[0], node.bbox[1]);
+    return bbox_test(o, inv_d, t, node.bbox_min, node.bbox_max);
 }
 
 template <int S>
 force_inline simd_ivec<S> bbox_test_fma(const simd_fvec<S> inv_d[3], const simd_fvec<S> neg_inv_d_o[3], const simd_fvec<S> &t, const bvh_node_t &node) {
-    return bbox_test_fma(inv_d, neg_inv_d_o, t, node.bbox[0], node.bbox[1]);
+    return bbox_test_fma(inv_d, neg_inv_d_o, t, node.bbox_min, node.bbox_max);
 }
 
 template <int S>
 force_inline simd_ivec<S> bbox_test(const simd_fvec<S> p[3], const bvh_node_t &node) {
-    return bbox_test(p, node.bbox[0], node.bbox[1]);
+    return bbox_test(p, node.bbox_min, node.bbox_max);
 }
 
 template <int S>
 force_inline uint32_t near_child(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const bvh_node_t &node) {
-    const auto dir_neg_mask = r.d[node.space_axis] < 0.0f;
+    const auto dir_neg_mask = r.d[node.prim_count >> 30] < 0.0f;
     const auto mask = reinterpret_cast<const simd_ivec<S>&>(dir_neg_mask);
     if (mask.all_zeros(ray_mask)) {
         return node.left_child;
     } else {
         assert(and_not(mask, ray_mask).all_zeros());
-        return node.right_child;
+        return (node.right_child & RIGHT_CHILD_BITS);
     }
 }
 
 force_inline uint32_t other_child(const bvh_node_t &node, uint32_t cur_child) {
-    return node.left_child == cur_child ? node.right_child : node.left_child;
+    return node.left_child == cur_child ? (node.right_child & RIGHT_CHILD_BITS) : node.left_child;
 }
 
 force_inline bool is_leaf_node(const bvh_node_t &node) {
-    return node.prim_count != 0;
+    return (node.prim_index & LEAF_NODE_BIT) != 0;
 }
 
 enum eTraversalSource { FromParent, FromChild, FromSibling };
@@ -334,20 +335,20 @@ struct TraversalState {
     int index = 0, num = 1;
 
     force_inline void select_near_child(const ray_packet_t<S> &r, const bvh_node_t &node) {
-        const auto dir_neg_mask = r.d[node.space_axis] < 0.0f;
+        const auto dir_neg_mask = r.d[node.prim_count >> 30] < 0.0f;
         const auto mask1 = reinterpret_cast<const simd_ivec<S>&>(dir_neg_mask) & queue[index].mask;
         if (mask1.all_zeros()) {
             queue[index].cur = node.left_child;
         } else {
             simd_ivec<S> mask2 = and_not(mask1, queue[index].mask);
             if (mask2.all_zeros()) {
-                queue[index].cur = node.right_child;
+                queue[index].cur = (node.right_child & RIGHT_CHILD_BITS);
             } else {
                 queue[num].cur = node.left_child;
                 queue[num].mask = mask2;
                 queue[num].src = queue[index].src;
                 num++;
-                queue[index].cur = node.right_child;
+                queue[index].cur = (node.right_child & RIGHT_CHILD_BITS);
                 queue[index].mask = mask1;
             }
         }
@@ -363,25 +364,25 @@ struct TraversalStateStack {
     } queue[S];
 
     force_inline void push_children(const ray_packet_t<S> &r, const bvh_node_t &node) {
-        const auto dir_neg_mask = r.d[node.space_axis] < 0.0f;
+        const auto dir_neg_mask = r.d[node.prim_count >> 30] < 0.0f;
         const auto mask1 = reinterpret_cast<const simd_ivec<S>&>(dir_neg_mask) & queue[index].mask;
         if (mask1.all_zeros()) {
-            queue[index].stack[queue[index].stack_size++] = node.right_child;
+            queue[index].stack[queue[index].stack_size++] = (node.right_child & RIGHT_CHILD_BITS);
             queue[index].stack[queue[index].stack_size++] = node.left_child;
         } else {
             simd_ivec<S> mask2 = and_not(mask1, queue[index].mask);
             if (mask2.all_zeros()) {
                 queue[index].stack[queue[index].stack_size++] = node.left_child;
-                queue[index].stack[queue[index].stack_size++] = node.right_child;
+                queue[index].stack[queue[index].stack_size++] = (node.right_child & RIGHT_CHILD_BITS);
             } else {
                 queue[num].stack_size = queue[index].stack_size;
                 memcpy(queue[num].stack, queue[index].stack, sizeof(uint32_t) * queue[index].stack_size);
-                queue[num].stack[queue[num].stack_size++] = node.right_child;
+                queue[num].stack[queue[num].stack_size++] = (node.right_child & RIGHT_CHILD_BITS);
                 queue[num].stack[queue[num].stack_size++] = node.left_child;
                 queue[num].mask = mask2;
                 num++;
                 queue[index].stack[queue[index].stack_size++] = node.left_child;
-                queue[index].stack[queue[index].stack_size++] = node.right_child;
+                queue[index].stack[queue[index].stack_size++] = (node.right_child & RIGHT_CHILD_BITS);
                 queue[index].mask = mask1;
             }
         }
@@ -389,7 +390,7 @@ struct TraversalStateStack {
 
     force_inline void push_children(const bvh_node_t &node) {
         queue[index].stack[queue[index].stack_size++] = node.left_child;
-        queue[index].stack[queue[index].stack_size++] = node.right_child;
+        queue[index].stack[queue[index].stack_size++] = (node.right_child & RIGHT_CHILD_BITS);
     }
 
     int index = 0, num = 1;
@@ -1070,6 +1071,7 @@ bool Ray::NS::IntersectTris_AnyHit(const ray_packet_t<S> &r, const simd_ivec<S> 
     return inter.mask.not_all_zeros();
 }
 
+#ifdef USE_STACKLESS_BVH_TRAVERSAL
 template <int S>
 bool Ray::NS::Traverse_MacroTree_Stackless_CPU(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const bvh_node_t *nodes, uint32_t root_index,
                                                const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
@@ -1290,6 +1292,7 @@ bool Ray::NS::Traverse_MicroTree_Stackless_CPU(const ray_packet_t<S> &r, const s
     }
     return res;
 }
+#endif
 
 template <int S>
 bool Ray::NS::Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const bvh_node_t *nodes, uint32_t node_index,
@@ -1329,7 +1332,8 @@ bool Ray::NS::Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t<S> &r, 
             if (!is_leaf_node(nodes[cur])) {
                 st.push_children(r, nodes[cur]);
             } else {
-                for (uint32_t i = nodes[cur].prim_index; i < nodes[cur].prim_index + nodes[cur].prim_count; i++) {
+                uint32_t prim_index = (nodes[cur].prim_index & PRIM_INDEX_BITS);
+                for (uint32_t i = prim_index; i < prim_index + nodes[cur].prim_count; i++) {
                     const auto &mi = mesh_instances[mi_indices[i]];
                     const auto &m = meshes[mi.mesh_index];
                     const auto &tr = transforms[mi.tr_index];
@@ -1386,7 +1390,8 @@ bool Ray::NS::Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t<S> &r, cons
             if (!is_leaf_node(nodes[cur])) {
                 st.push_children(r, nodes[cur]);
             } else {
-                for (uint32_t i = nodes[cur].prim_index; i < nodes[cur].prim_index + nodes[cur].prim_count; i++) {
+                uint32_t prim_index = (nodes[cur].prim_index & PRIM_INDEX_BITS);
+                for (uint32_t i = prim_index; i < prim_index + nodes[cur].prim_count; i++) {
                     const auto &mi = mesh_instances[mi_indices[i]];
                     const auto &m = meshes[mi.mesh_index];
                     const auto &tr = transforms[mi.tr_index];
@@ -1446,7 +1451,7 @@ bool Ray::NS::Traverse_MicroTree_WithStack_ClosestHit(const ray_packet_t<S> &r, 
             if (!is_leaf_node(nodes[cur])) {
                 st.push_children(r, nodes[cur]);
             } else {
-                res |= IntersectTris_ClosestHit(r, st.queue[st.index].mask, tris, &tri_indices[nodes[cur].prim_index], nodes[cur].prim_count, obj_index, inter);
+                res |= IntersectTris_ClosestHit(r, st.queue[st.index].mask, tris, &tri_indices[nodes[cur].prim_index & PRIM_INDEX_BITS], nodes[cur].prim_count, obj_index, inter);
             }
         }
         st.index++;
@@ -1492,7 +1497,7 @@ bool Ray::NS::Traverse_MicroTree_WithStack_AnyHit(const ray_packet_t<S> &r, cons
             if (!is_leaf_node(nodes[cur])) {
                 st.push_children(r, nodes[cur]);
             } else {
-                bool hit_found = IntersectTris_AnyHit(r, st.queue[st.index].mask, tris, &tri_indices[nodes[cur].prim_index], nodes[cur].prim_count, obj_index, inter, out_is_solid_hit);
+                bool hit_found = IntersectTris_AnyHit(r, st.queue[st.index].mask, tris, &tri_indices[nodes[cur].prim_index & PRIM_INDEX_BITS], nodes[cur].prim_count, obj_index, inter, out_is_solid_hit);
                 res |= hit_found;
                 if (hit_found && is_equal(out_is_solid_hit, st.queue[st.index].mask)) {
                     break;
@@ -2068,7 +2073,8 @@ void Ray::NS::ComputeDirectLighting(const simd_fvec<S> P[3], const simd_fvec<S> 
             if (!is_leaf_node(sc.nodes[cur])) {
                 st.push_children(sc.nodes[cur]);
             } else {
-                for (uint32_t li = sc.nodes[cur].prim_index; li < sc.nodes[cur].prim_index + sc.nodes[cur].prim_count; li++) {
+                uint32_t prim_index = (sc.nodes[cur].prim_index & PRIM_INDEX_BITS);
+                for (uint32_t li = prim_index; li < prim_index + sc.nodes[cur].prim_count; li++) {
                     const light_t &l = sc.lights[sc.li_indices[li]];
 
                     simd_fvec<S> L[3] = { { P[0] - l.pos[0] }, { P[1] - l.pos[1] }, { P[2] - l.pos[2] } };

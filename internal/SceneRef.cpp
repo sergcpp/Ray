@@ -354,11 +354,7 @@ void Ray::Ref::Scene::SetMeshInstanceTransform(uint32_t mi_index, const float *x
     const auto &m = meshes_[mi.mesh_index];
     const auto &n = nodes_[m.node_index];
 
-    float transformed_bbox[2][3];
-    TransformBoundingBox(n.bbox, xform, transformed_bbox);
-
-    memcpy(mi.bbox_min, transformed_bbox[0], sizeof(float) * 3);
-    memcpy(mi.bbox_max, transformed_bbox[1], sizeof(float) * 3);
+    TransformBoundingBox(n.bbox_min, n.bbox_max, xform, mi.bbox_min, mi.bbox_max);
 
     RebuildMacroBVH();
 }
@@ -400,10 +396,12 @@ void Ray::Ref::Scene::RemoveNodes(uint32_t node_index, uint32_t node_count) {
         for (uint32_t i = node_index; i < nodes_.size(); i++) {
             auto &n = nodes_[i];
 
+#ifdef USE_STACKLESS_BVH_TRAVERSAL
             if (n.parent != 0xffffffff && n.parent > node_index) n.parent -= node_count;
-            if (!n.prim_count) {
+#endif
+            if ((n.prim_index & LEAF_NODE_BIT) == 0) {
                 if (n.left_child > node_index) n.left_child -= node_count;
-                if (n.right_child > node_index) n.right_child -= node_count;
+                if ((n.right_child & RIGHT_CHILD_BITS) > node_index) n.right_child -= node_count;
             }
         }
 
@@ -481,13 +479,11 @@ void Ray::Ref::Scene::RebuildLightBVH() {
                             side[2],  l.dir[2], up[2],    0.0f,
                             l.pos[0], l.pos[1], l.pos[2], 1.0f };
 
-        float bbox[2][3] = { { bbox_min[0], bbox_min[1], bbox_min[2] },
-                             { bbox_max[0], bbox_max[1], bbox_max[2] } };
-        float tr_bbox[2][3];
+        primitives.emplace_back();
+        auto &prim = primitives.back();
 
-        TransformBoundingBox(bbox, xform, tr_bbox);
-
-        primitives.push_back({ 0, 0, 0, simd_fvec3{ tr_bbox[0] }, simd_fvec3{ tr_bbox[1] } });
+        prim.i0 = prim.i1 = prim.i2 = 0;
+        TransformBoundingBox(&bbox_min[0], &bbox_max[0], xform, &prim.bbox_min[0], &prim.bbox_max[0]);
     }
 
     light_nodes_start_ = (uint32_t)nodes_.size();

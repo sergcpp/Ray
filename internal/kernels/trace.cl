@@ -1,5 +1,6 @@
 R"(
 
+#ifdef USE_STACKLESS_BVH_TRAVERSAL
 float TraceOcclusionRay_Stackless(const float3 ro, const float3 rd, float max_dist,
                                   __global const mesh_instance_t *mesh_instances, __global const uint *mi_indices,
                                   __global const mesh_t *meshes, __global const transform_t *transforms,
@@ -10,6 +11,7 @@ float TraceOcclusionRay_Stackless(const float3 ro, const float3 rd, float max_di
     return Traverse_MacroTree_Occlusion_Stackless(ro, rd, inv_d, max_dist, mesh_instances, mi_indices, 
                                                   meshes, transforms, nodes, node_index, tris, tri_indices);
 }
+#endif
 
 float TraceOcclusionRay_WithLocalStack(const float3 ro, const float3 rd, float max_dist,
                                        __global const mesh_instance_t *mesh_instances, __global const uint *mi_indices,

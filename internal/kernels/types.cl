@@ -31,10 +31,19 @@ typedef struct _hit_data_t {
 } hit_data_t;
 
 typedef struct _bvh_node_t {
-    uint prim_index, prim_count,
-         left_child, right_child, parent,
-         space_axis; // axis with maximum child's centroids distance
-    float bbox[2][3];
+    float bbox_min[3];
+    union {
+        uint prim_index;
+        uint left_child;
+    };
+    float bbox_max[3];
+    union {
+        uint prim_count;
+        uint right_child;
+    };
+#ifdef USE_STACKLESS_BVH_TRAVERSAL
+    uint parent;
+#endif
 } bvh_node_t;
 
 typedef struct _vertex_t {
