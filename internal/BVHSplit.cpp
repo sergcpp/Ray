@@ -39,9 +39,10 @@ static int sutherland_hodgman(const Ref::simd_dvec3 *input, int in_count, Ref::s
 
     for (int i = 0; i < in_count; ++i) {
         int nextIdx = i + 1;
-        if (nextIdx == in_count)
+        if (nextIdx == in_count) {
             nextIdx = 0;
-        Ref::simd_dvec3 next = input[nextIdx];
+        }
+        const auto &next = input[nextIdx];
         distance = sign * (next[axis] - split_pos);
         bool next_is_inside = (distance >= 0);
 
@@ -57,9 +58,9 @@ static int sutherland_hodgman(const Ref::simd_dvec3 *input, int in_count, Ref::s
         } else if (!cur_is_inside && next_is_inside) {
             // Coming back inside -- add the intersection + next vertex
             double t = (split_pos - cur[axis]) / (next[axis] - cur[axis]);
-            Ref::simd_dvec3 p = cur + (next - cur) * t;
+            auto &p = output[out_count++];
+            p = cur + (next - cur) * t;
             p[axis] = split_pos; // Avoid roundoff errors
-            output[out_count++] = p;
             output[out_count++] = next;
         } else {
             // Entirely outside - do not add anything
