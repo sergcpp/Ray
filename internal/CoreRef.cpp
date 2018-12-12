@@ -1433,7 +1433,9 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
     ExtractPlaneNormal(tri, &plane_N[0]);
     plane_N = TransformNormal(plane_N, tr->inv_xform);
 
-    if (dot(plane_N, I) > 0.0f) {
+    bool is_backfacing = dot(plane_N, I) > 0.0f;
+
+    if (is_backfacing) {
         if (tri.back_mi == 0xffffffff) {
             return pixel_color_t{ 0.0f, 0.0f, 0.0f, 0.0f };
         } else {
@@ -1447,33 +1449,35 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
     ComputeDerivatives(I, inter.t, ray.do_dx, ray.do_dy, ray.dd_dx, ray.dd_dy, v1, v2, v3, plane_N, surf_der);
 
     // used to randomize halton sequence among pixels
-    int rand_hash = hash(pi.index), rand_hash2, rand_hash3;
-    float rand_offset = construct_float(rand_hash), rand_offset2, rand_offset3;
+    int rand_hash = hash(pi.index),
+        rand_hash2 = hash(rand_hash),
+        rand_hash3 = hash(rand_hash2);
+    float rand_offset = construct_float(rand_hash),
+          rand_offset2 = construct_float(rand_hash2),
+          rand_offset3 = construct_float(rand_hash3);
 
     const int hi = (pi.iteration & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT + pi.bounce * 2;
 
+    float _unused;
+    float mix_rand = std::modf(halton[hi] + rand_offset, &_unused);
+
     // resolve mix material
     while (mat->type == MixMaterial) {
-        const auto mix = SampleBilinear(tex_atlas, sc.textures[mat->textures[MAIN_TEXTURE]], uvs, 0) * mat->strength;
-
-        float _unused;
-        const float r = std::modf(halton[hi] + rand_offset, &_unused);
-
-        rand_hash = hash(rand_hash);
-        rand_offset = construct_float(rand_hash);
+        auto mix = SampleBilinear(tex_atlas, sc.textures[mat->textures[MAIN_TEXTURE]], uvs, 0) * mat->strength;
 
         // shlick fresnel
         float RR = mat->fresnel + (1.0f - mat->fresnel) * std::pow(1.0f + dot(I, N), 5.0f);
         RR = clamp(RR, 0.0f, 1.0f);
 
-        mat = (r * RR < mix[0]) ? &sc.materials[mat->textures[MIX_MAT1]] : &sc.materials[mat->textures[MIX_MAT2]];
+        mix_rand *= RR;
+        if (mix_rand < mix[0]) {
+            mat = &sc.materials[mat->textures[MIX_MAT1]];
+            mix_rand = mix_rand / mix[0];
+        } else {
+            mat = &sc.materials[mat->textures[MIX_MAT2]];
+            mix_rand = (mix_rand - mix[0]) / (1.0f - mix[0]);
+        }
     }
-
-    rand_hash2 = hash(rand_hash);
-    rand_offset2 = construct_float(rand_hash2);
-    
-    rand_hash3 = hash(rand_hash2);
-    rand_offset3 = construct_float(rand_hash3);
 
     // apply normal map
     simd_fvec3 B = simd_fvec3(v1.b) * w + simd_fvec3(v2.b) * inter.u + simd_fvec3(v3.b) * inter.v;
@@ -1490,10 +1494,10 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
     // sample main texture
 
     auto albedo = SampleAnisotropic(tex_atlas, sc.textures[mat->textures[MAIN_TEXTURE]], uvs, surf_der.duv_dx, surf_der.duv_dy);
+    albedo = pow(albedo, simd_fvec4(2.2f));
     albedo[0] *= mat->main_color[0];
     albedo[1] *= mat->main_color[1];
     albedo[2] *= mat->main_color[2];
-    albedo = pow(albedo, simd_fvec4(2.2f));
 
     simd_fvec3 col = { 0.0f };
 
@@ -1515,7 +1519,6 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
         }
 
         if (diff_depth < pi.settings.max_diff_depth && total_depth < pi.settings.max_total_depth) {
-            float _unused;
             const float u1 = std::modf(halton[hi + 0] + rand_offset, &_unused);
             const float u2 = std::modf(halton[hi + 1] + rand_offset2, &_unused);
 
@@ -1529,11 +1532,11 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
 
             if (pi.use_uniform_sampling()) {
                 const float dir = std::sqrt(1.0f - u1 * u1);
-                V = normalize(dir * sin_phi * B + u1 * N + dir * cos_phi * T);
+                V = dir * sin_phi * B + u1 * N + dir * cos_phi * T;
                 weight = 2 * u1;
             } else {
                 const float dir = std::sqrt(u1);
-                V = normalize(dir * sin_phi * B + std::sqrt(1.0f - u1) * N + dir * cos_phi * T);
+                V = dir * sin_phi * B + std::sqrt(1.0f - u1) * N + dir * cos_phi * T;
             }
 
             ray_packet_t r;
@@ -1571,7 +1574,6 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
         if (gloss_depth < pi.settings.max_glossy_depth && total_depth < pi.settings.max_total_depth) {
             simd_fvec3 V = reflect(I, dot(I, N) > 0 ? N : -N);
 
-            float _unused;
             const float h = 1.0f - std::cos(0.5f * PI * mat->roughness * mat->roughness);
             const float z = h * std::modf(halton[hi + 0] + rand_offset, &_unused);
 
@@ -1617,14 +1619,13 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
         }
     } else if (mat->type == RefractiveMaterial) {
         if (refr_depth < pi.settings.max_refr_depth && total_depth < pi.settings.max_total_depth) {
-            const auto __N = dot(I, N) > 0 ? -N : N;
-
-            float eta = (dot(I, N) > 0) ? ray.ior : (ray.ior / mat->ior);
-            float cosi = dot(-I, __N);
+            float ior = is_backfacing ? mat->ext_ior : mat->int_ior;
+            float eta = ray.ior / ior;
+            float cosi = dot(-I, N);
             float cost2 = 1.0f - eta * eta * (1.0f - cosi * cosi);
             if (cost2 < 0) return pixel_color_t{ 0.0f, 0.0f, 0.0f, 1.0f };
             float m = eta * cosi - std::sqrt(cost2);
-            auto V = eta * I + m * __N;
+            auto V = eta * I + m * N;
 
             const float z = 1.0f - halton[hi + 0] * mat->roughness;
             const float temp = std::sqrt(1.0f - z * z);
@@ -1646,7 +1647,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
             ray_packet_t r;
 
             r.xy = ray.xy;
-            r.ior = mat->ior;
+            r.ior = ior;
             r.ray_depth = ray.ray_depth + 0x00010000;
 
             memcpy(&r.o[0], value_ptr(P + HIT_BIAS * I), 3 * sizeof(float));
@@ -1658,8 +1659,6 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
 
             memcpy(&r.dd_dx[0], value_ptr(eta * surf_der.dd_dx - (m * surf_der.dndx + dmdx * plane_N)), 3 * sizeof(float));
             memcpy(&r.dd_dy[0], value_ptr(eta * surf_der.dd_dy - (m * surf_der.dndy + dmdy * plane_N)), 3 * sizeof(float));
-
-            float _unused;
 
             const float thr = std::max(r.c[0], std::max(r.c[1], r.c[2]));
             const float p = std::modf(halton[hi + 0] + rand_offset3, &_unused);
@@ -1690,8 +1689,6 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
 
             memcpy(&r.dd_dx[0], &ray.dd_dx[0], 3 * sizeof(float));
             memcpy(&r.dd_dy[0], &ray.dd_dy[0], 3 * sizeof(float));
-
-            float _unused;
 
             const float thr = std::max(r.c[0], std::max(r.c[1], r.c[2]));
             const float p = std::modf(halton[hi + 0] + rand_offset3, &_unused);

@@ -140,8 +140,12 @@ void Ray::Ref::ComputeTextureBasis(size_t vtx_offset, size_t vtx_start, std::vec
 
         if (std::abs(v.b[0]) > FLT_EPS || std::abs(v.b[1]) > FLT_EPS || std::abs(v.b[2]) > FLT_EPS) {
             simd_fvec3 tangent = { v.b };
-            simd_fvec3 binormal = normalize(cross(simd_fvec3(v.n), tangent));
-            memcpy(&v.b[0], &binormal[0], 3 * sizeof(float));
+            simd_fvec3 binormal = cross(simd_fvec3(v.n), tangent);
+            float l = length(binormal);
+            if (l > FLT_EPS) {
+                binormal /= l;
+                memcpy(&v.b[0], &binormal[0], 3 * sizeof(float));
+            }
         }
     }
 }

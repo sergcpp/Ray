@@ -82,8 +82,9 @@ typedef struct _material_t {
     };
     union {
         float fresnel;
-        float ior;
+        float int_ior;
     };
+    float ext_ior;
 } material_t;
 
 typedef struct _light_t {

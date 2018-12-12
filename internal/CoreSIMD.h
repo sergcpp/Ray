@@ -925,6 +925,8 @@ void Ray::NS::SortRays(ray_packet_t<S> *rays, simd_ivec<S> *ray_masks, int &seco
                     std::swap(rays[jj].c[1][_jj], rays[kk].c[1][_kk]);
                     std::swap(rays[jj].c[2][_jj], rays[kk].c[2][_kk]);
 
+                    std::swap(rays[jj].ior[_jj], rays[kk].ior[_kk]);
+
                     std::swap(rays[jj].do_dx[0][_jj], rays[kk].do_dx[0][_kk]);
                     std::swap(rays[jj].do_dx[1][_jj], rays[kk].do_dx[1][_kk]);
                     std::swap(rays[jj].do_dx[2][_jj], rays[kk].do_dx[2][_kk]);
@@ -2339,8 +2341,12 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
     simd_fvec<S> _dot_I_N = dot(I, N);
 
     // used to randomize halton sequence among pixels
-    simd_ivec<S> rand_hash = hash(px_index), rand_hash2, rand_hash3;
-    simd_fvec<S> rand_offset = construct_float(rand_hash), rand_offset2, rand_offset3;
+    simd_ivec<S> rand_hash = hash(px_index),
+                 rand_hash2 = hash(rand_hash),
+                 rand_hash3 = hash(rand_hash2);
+    simd_fvec<S> rand_offset = construct_float(rand_hash),
+                 rand_offset2 = construct_float(rand_hash2),
+                 rand_offset3 = construct_float(rand_hash3);
 
     const int hi = (pi.iteration & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT + pi.bounce * 2;
 
@@ -2391,6 +2397,12 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
 
             const auto *mat = &sc.materials[first_mi];
 
+            simd_fvec<S> mix_rand;
+            for (int i = 0; i < S; i++) {
+                float _unused;
+                mix_rand[i] = std::modf(halton[hi + 0] + rand_offset[i], &_unused);
+            }
+
             while (mat->type == MixMaterial) {
                 simd_fvec<S> mix[4];
                 SampleBilinear(tex_atlas, sc.textures[mat->textures[MAIN_TEXTURE]], uvs, { 0 }, same_mi, mix);
@@ -2401,18 +2413,21 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                 for (int i = 0; i < S; i++) {
                     if (!same_mi[i]) continue;
 
-                    float _unused;
-                    const float r = std::modf(halton[hi + 0] + rand_offset[i], &_unused);
-
-                    rand_hash[i] = hash(rand_hash[i]);
-                    rand_offset = construct_float(rand_hash);
-
                     // shlick fresnel
                     float RR = mat->fresnel + (1.0f - mat->fresnel) * std::pow(1.0f + _dot_I_N[i], 5.0f);
                     if (RR < 0.0f) RR = 0.0f;
                     else if (RR > 1.0f) RR = 1.0f;
 
-                    mat_index[i] = (r * RR < mix[0][i]) ? mat->textures[MIX_MAT1] : mat->textures[MIX_MAT2];
+                    mix_rand[i] *= RR;
+
+                    if (mix_rand[i] < mix[0][i]) {
+                        mat_index[i] = mat->textures[MIX_MAT1];
+                        mix_rand[i] = mix_rand[i] / mix[0][i];
+                    } else {
+                        mat_index[i] = mat->textures[MIX_MAT2];
+                        mix_rand[i] = (mix_rand[i] - mix[0][i]) / (1.0f - mix[0][i]);
+                    }
+
                     if (first_mi == 0xffffffff) {
                         first_mi = mat_index[i];
                     }
@@ -2430,14 +2445,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                 mat = &sc.materials[first_mi];
             }
 
-            rand_hash2 = hash(rand_hash);
-            rand_offset2 = construct_float(rand_hash2);
-
-            rand_hash3 = hash(rand_hash2);
-            rand_offset3 = construct_float(rand_hash3);
-
             simd_fvec<S> tex_normal[4], tex_albedo[4];
-
             SampleBilinear(tex_atlas, sc.textures[mat->textures[NORMALS_TEXTURE]], uvs, { 0 }, same_mi, tex_normal);
 
             tex_normal[0] = tex_normal[0] * 2.0f - 1.0f;
@@ -2446,9 +2454,13 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
 
             SampleAnisotropic(tex_atlas, sc.textures[mat->textures[MAIN_TEXTURE]], uvs, surf_der.duv_dx, surf_der.duv_dy, same_mi, tex_albedo);
 
-            tex_albedo[0] = pow(tex_albedo[0] * mat->main_color[0], 2.2f);
-            tex_albedo[1] = pow(tex_albedo[1] * mat->main_color[1], 2.2f);
-            tex_albedo[2] = pow(tex_albedo[2] * mat->main_color[2], 2.2f);
+            tex_albedo[0] = pow(tex_albedo[0], 2.2f);
+            tex_albedo[1] = pow(tex_albedo[1], 2.2f);
+            tex_albedo[2] = pow(tex_albedo[2], 2.2f);
+
+            tex_albedo[0] *= mat->main_color[0];
+            tex_albedo[1] *= mat->main_color[1];
+            tex_albedo[2] *= mat->main_color[2];
 
             simd_fvec<S> temp[3];
             temp[0] = tex_normal[0] * B[0] + tex_normal[2] * N[0] + tex_normal[1] * T[0];
@@ -2647,25 +2659,17 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                     where(new_ray_mask, r.dd_dy[2]) = surf_der.dd_dy[2] - 2.0f * (dot_I_N2 * surf_der.dndy[2] + surf_der.ddn_dy * __N[2]);
                 }
             } else if (mat->type == RefractiveMaterial) {
-                simd_fvec<S> _NN[3] = { __N[0], __N[1], __N[2] };
+                simd_fvec<S> ior = mat->int_ior;
+                where(backfacing, ior) = mat->ext_ior;
 
-                simd_fvec<S> dot_I_N2 = dot(I, __N);
-
-                where(dot_I_N2 > 0, _NN[0]) = -__N[0];
-                where(dot_I_N2 > 0, _NN[1]) = -__N[1];
-                where(dot_I_N2 > 0, _NN[2]) = -__N[2];
-                
-                simd_fvec<S> eta = ray.ior;
-                where(dot_I_N2 <= 0, eta) = eta / mat->ior;
-                where(dot_I_N2 < 0, dot_I_N2) = -dot_I_N2;
+                simd_fvec<S> eta = ray.ior / ior;
 
                 simd_fvec<S> _I[3] = { -I[0], -I[1], -I[2] };
-
-                simd_fvec<S> cosi = dot(_I, _NN);
+                simd_fvec<S> cosi = dot(_I, __N);
                 simd_fvec<S> cost2 = 1.0f - eta * eta * (1.0f - cosi * cosi);
                 simd_fvec<S> m = eta * cosi - sqrt(cost2);
 
-                simd_fvec<S> V[3] = { eta * I[0] + m * _NN[0], eta * I[1] + m * _NN[1], eta * I[2] + m * _NN[2] };
+                simd_fvec<S> V[3] = { eta * I[0] + m * __N[0], eta * I[1] + m * __N[1], eta * I[2] + m * __N[2] };
 
                 simd_fvec<S> TT[3], BB[3];
 
@@ -2701,8 +2705,6 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                 simd_fvec<S> dmdx = k * surf_der.ddn_dx;
                 simd_fvec<S> dmdy = k * surf_der.ddn_dy;
 
-                simd_fvec<S> thres = dot(rc, rc);
-
                 simd_ivec<S> irefr_depth_mask = refr_depth < int(pi.settings.max_refr_depth);
 
                 const simd_fvec<S> thr = max(rc[0], max(rc[1], rc[2]));
@@ -2733,7 +2735,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                     where(new_ray_mask, r.c[0]) = rc[0];
                     where(new_ray_mask, r.c[1]) = rc[1];
                     where(new_ray_mask, r.c[2]) = rc[2];
-                    where(new_ray_mask, r.ior) = mat->ior;
+                    where(new_ray_mask, r.ior) = ior;
                     where(reinterpret_cast<const simd_ivec<S>&>(new_ray_mask), r.ray_depth) = ray.ray_depth + 0x00010000;
 
                     where(new_ray_mask, r.do_dx[0]) = surf_der.do_dx[0];

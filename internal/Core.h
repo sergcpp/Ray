@@ -110,9 +110,10 @@ struct material_t {
     };
     union {
         float fresnel;
-        float ior;
+        float int_ior;
     };
-    float pad1[2];
+    float ext_ior;
+    float pad1[1];
 };
 static_assert(sizeof(material_t) == 64, "!");
 

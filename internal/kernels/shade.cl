@@ -223,6 +223,8 @@ float4 ShadeSurface(const pass_info_t *pi, __global const float *halton,
 
     plane_N = TransformNormal(plane_N, &tr->inv_xform);
 
+    float backfacing_param = 0.0f;
+
     if (dot(plane_N, I) > 0.0f) {
         if (tri->back_mi == 0xffffffff) {
             return (float4)(0.0f, 0.0f, 0.0f, 0.0f);
@@ -230,6 +232,7 @@ float4 ShadeSurface(const pass_info_t *pi, __global const float *halton,
             mat = &materials[tri->back_mi];
             plane_N = -plane_N;
             N = -N;
+            backfacing_param = 1.0f;
         }
     }
 
@@ -239,33 +242,35 @@ float4 ShadeSurface(const pass_info_t *pi, __global const float *halton,
                        p1, p2, p3, n1, n2, n3, u1, u2, u3, plane_N, &surf_der);
 
     // used to randomize halton sequence among pixels
-    int rand_hash = hash(pi->index), rand_hash2, rand_hash3;
-    float rand_offset = construct_float(rand_hash), rand_offset2, rand_offset3;
+    int rand_hash = hash(pi->index),
+        rand_hash2 = hash(rand_hash),
+        rand_hash3 = hash(rand_hash2);
+    float rand_offset = construct_float(rand_hash),
+          rand_offset2 = construct_float(rand_hash2),
+          rand_offset3 = construct_float(rand_hash3);
 
     const int hi = (pi->iteration & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT + pi->bounce * 2;
 
+    float _unused;
+    float mix_rand = fract(halton[hi + 0] + rand_offset, &_unused);
+
     // resolve mix material
     while (mat->type == MixMaterial) {
-        const float4 mix = SampleTextureBilinear(texture_atlas, &textures[mat->textures[MAIN_TEXTURE]], uvs, 0) * mat->strength;
-
-        float _unused;
-        const float r = fract(halton[hi + 0] + rand_offset, &_unused);
-
-        rand_hash = hash(rand_hash);
-        rand_offset = construct_float(rand_hash);
+        float4 mix = SampleTextureBilinear(texture_atlas, &textures[mat->textures[MAIN_TEXTURE]], uvs, 0) * mat->strength;
 
         // shlick fresnel
         float RR = mat->fresnel + (1.0f - mat->fresnel) * native_powr(1.0f + dot(I, N), 5.0f);
         RR = clamp(RR, 0.0f, 1.0f);
 
-        mat = (r * RR < mix.x) ? &materials[mat->textures[MIX_MAT1]] : &materials[mat->textures[MIX_MAT2]];
+        mix_rand *= RR;
+        if (mix_rand < mix.x) {
+            mat = &materials[mat->textures[MIX_MAT1]];
+            mix_rand = mix_rand / mix.x;
+        } else {
+            mat = &materials[mat->textures[MIX_MAT2]];
+            mix_rand = (mix_rand - mix.x) / (1.0f - mix.x);
+        }
     }
-
-    rand_hash2 = hash(rand_hash);
-    rand_offset2 = construct_float(rand_hash2);
-
-    rand_hash3 = hash(rand_hash2);
-    rand_offset3 = construct_float(rand_hash3);
 
     //
     const float3 b1 = (float3)(v1->b[0], v1->b[1], v1->b[2]);
@@ -283,8 +288,8 @@ float4 ShadeSurface(const pass_info_t *pi, __global const float *halton,
     T = TransformNormal(T, &tr->inv_xform);
 
     float4 albedo = SampleTextureAnisotropic(texture_atlas, &textures[mat->textures[MAIN_TEXTURE]], uvs, surf_der.duv_dx, surf_der.duv_dy);
-    albedo.xyz *= mat->main_color;
     albedo = native_powr(albedo, 2.2f);
+    albedo.xyz *= mat->main_color;
 
 )" // workaround for 16k string literal limitation on msvc
 R"(
@@ -398,13 +403,13 @@ R"(
         col = (float3)(0, 0, 0);
 
         if (refr_depth < pi->settings.max_refr_depth && total_depth < pi->settings.max_total_depth) {
-            const float3 _N = dot(I, N) > 0 ? -N : N;
+            const float ior = mix(mat->int_ior, mat->ext_ior, backfacing_param);
 
-            float eta = (dot(I, N) > 0) ? orig_ray->c.w : (orig_ray->c.w / mat->ior);
-            float cosi = dot(-I, _N);
+            float eta = orig_ray->c.w / ior;
+            float cosi = dot(-I, N);
             float cost2 = 1.0f - eta * eta * (1.0f - cosi * cosi);
             float m = eta * cosi - sqrt(cost2);
-            float3 V = eta * I + m * _N;
+            float3 V = eta * I + m * N;
 
             const float z = 1.0f - halton[hi + 0] * mat->roughness;
             const float temp = native_sqrt(1.0f - z * z);
@@ -425,7 +430,7 @@ R"(
             r.o = (float4)(P + HIT_BIAS * I, (float)px.x);
             r.d = (float4)(V, (float)px.y);
             r.c.xyz = orig_ray->c.xyz * z;
-            r.c.w = mat->ior;
+            r.c.w = ior;
             r.do_dx = (float4)(surf_der.do_dx, orig_ray->do_dx.w);
             r.do_dy = (float4)(surf_der.do_dy, orig_ray->do_dy.w);
             r.dd_dx.xyz = eta * surf_der.dd_dx - (m * surf_der.dndx + dmdx * plane_N);

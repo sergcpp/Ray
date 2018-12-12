@@ -61,7 +61,8 @@ struct mat_desc_t {
     float roughness = 0;                        ///< Roughness of reflective or refractive material
     float strength = 1;                         ///< Strength of emissive material
     float fresnel = 1;                          ///< Fresnel factor of mix material
-    float ior = 1;                              ///< IOR for reflective or refractive material
+    float int_ior = 1;                          ///< interior IOR for reflective or refractive material
+    float ext_ior = 1;                          ///< exterior IOR for reflective or refractive material
 };
 
 /// Defines mesh region with specific material

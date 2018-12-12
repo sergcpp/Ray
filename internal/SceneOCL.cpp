@@ -140,7 +140,8 @@ uint32_t Ray::Ocl::Scene::AddMaterial(const mat_desc_t &m) {
         mat.roughness = m.roughness;
     } else if (m.type == RefractiveMaterial) {
         mat.roughness = m.roughness;
-        mat.ior = m.ior;
+        mat.int_ior = m.int_ior;
+        mat.ext_ior = m.ext_ior;
     } else if (m.type == EmissiveMaterial) {
         mat.strength = m.strength;
     } else if (m.type == MixMaterial) {
