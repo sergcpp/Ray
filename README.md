@@ -5,8 +5,8 @@ Small pathtracing library created for learning purposes. Includes CPU and GPU (O
 - Full application : https://bitbucket.org/Apfel1994/raydemo
 - Video : https://www.youtube.com/watch?v=MHk9jXcdrZs
 
-![Screenshot](img1.jpg)|![Screenshot](img2.jpg)|![Screenshot](img3.jpg)
-:-------------------------:|:-------------------------:|:-------------------------:
+(Scene is taken from here: https://benedikt-bitterli.me/resources/)
+![Screenshot](scene1.jpg)
 
 ## Installation
 The intended use is to add it as a submodule to an existing project:
@@ -190,7 +190,7 @@ int main() {
     }
 }
 ```
-![Screenshot](img4.jpg)
+![Screenshot](img1.jpg)
 
 ### Multithreading:
 With CPU backends it is safe to call RenderScene from different threads for non-overlaping image regions:
@@ -230,7 +230,7 @@ Lightmapping is done through special 'geometric' camera type:
     scene->set_current_cam(cam_id);
 ...
 ```
-![Screenshot](img5.jpg)
+![Screenshot](img2.jpg)
 
 With 'output_sh' set to true renderer additionally outputs lightmap in 2-band (4 coeffitients per color channel - 12 total) spherical harmonics representation:
 ```c++
