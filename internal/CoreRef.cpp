@@ -1225,7 +1225,9 @@ float Ray::Ref::ComputeVisibility(const simd_fvec3 &p1, const simd_fvec3 &p2, co
 
         bool skip = false;
 
-        if (dot(sh_plane_N, I) < 0.0f) {
+        bool is_backfacing = dot(sh_plane_N, I) < 0.0f;
+
+        if (is_backfacing) {
             if (tri.back_mi == 0xffffffff) {
                 skip = true;
             } else {
@@ -1238,21 +1240,20 @@ float Ray::Ref::ComputeVisibility(const simd_fvec3 &p1, const simd_fvec3 &p2, co
             int sh_rand_hash = hash(rand_hash2);
             float sh_rand_offset = construct_float(sh_rand_hash);
 
+            float _sh_unused;
+            float sh_r = std::modf(halton[hi] + sh_rand_offset, &_sh_unused);
+
             // resolve mix material
             while (mat->type == MixMaterial) {
-                const auto mix = SampleBilinear(tex_atlas, sc.textures[mat->textures[MAIN_TEXTURE]], sh_uvs, 0) * mat->strength;
+                float mix_val = SampleBilinear(tex_atlas, sc.textures[mat->textures[MAIN_TEXTURE]], sh_uvs, 0)[0] * mat->strength;
 
-                float _sh_unused;
-                const float sh_r = std::modf(halton[hi] + sh_rand_offset, &_sh_unused);
-
-                sh_rand_hash = hash(sh_rand_hash);
-                sh_rand_offset = construct_float(sh_rand_hash);
-
-                // shlick fresnel
-                float RR = mat->fresnel + (1.0f - mat->fresnel) * std::pow(1.0f + dot(I, sh_N), 5.0f);
-                RR = clamp(RR, 0.0f, 1.0f);
-
-                mat = (sh_r * RR < mix[0]) ? &sc.materials[mat->textures[MIX_MAT1]] : &sc.materials[mat->textures[MIX_MAT2]];
+                if (sh_r > mix_val) {
+                    mat = &sc.materials[mat->textures[MIX_MAT1]];
+                    sh_r = (sh_r - mix_val) / (1.0f - mix_val);
+                } else {
+                    mat = &sc.materials[mat->textures[MIX_MAT2]];
+                    sh_r = sh_r / mix_val;
+                }
             }
 
             if (mat->type != TransparentMaterial) {
@@ -1463,19 +1464,40 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
 
     // resolve mix material
     while (mat->type == MixMaterial) {
-        auto mix = SampleBilinear(tex_atlas, sc.textures[mat->textures[MAIN_TEXTURE]], uvs, 0) * mat->strength;
+        float mix_val = SampleBilinear(tex_atlas, sc.textures[mat->textures[MAIN_TEXTURE]], uvs, 0)[0] * mat->strength;
 
         // shlick fresnel
-        float RR = mat->fresnel + (1.0f - mat->fresnel) * std::pow(1.0f + dot(I, N), 5.0f);
-        RR = clamp(RR, 0.0f, 1.0f);
+        const float mix_ior = is_backfacing ? mat->ext_ior : mat->int_ior;
 
-        mix_rand *= RR;
-        if (mix_rand < mix[0]) {
+        float R0 = (ray.ior - mix_ior) / (ray.ior + mix_ior);
+        R0 *= R0;
+
+        float RR;
+
+        if (ray.ior > mix_ior) {
+            float eta = ray.ior / mix_ior;
+            float cosi = -dot(I, N);
+            float cost2 = 1.0f - eta * eta * (1.0f - cosi * cosi);
+
+            if (cost2 >= 0.0f) {
+                float m = eta * cosi - std::sqrt(cost2);
+                simd_fvec3 V = eta * I + m * N;
+                RR = R0 + (1.0f - R0) * std::pow(1.0f + dot(V, N), 5.0f);
+            } else {
+                RR = 1.0f;
+            }
+        } else {
+            RR = R0 + (1.0f - R0) * std::pow(1.0f + dot(I, N), 5.0f);
+        }
+
+        mix_val *= clamp(RR, 0.0f, 1.0f);
+
+        if (mix_rand > mix_val) {
             mat = &sc.materials[mat->textures[MIX_MAT1]];
-            mix_rand = mix_rand / mix[0];
+            mix_rand = (mix_rand - mix_val) / (1.0f - mix_val);
         } else {
             mat = &sc.materials[mat->textures[MIX_MAT2]];
-            mix_rand = (mix_rand - mix[0]) / (1.0f - mix[0]);
+            mix_rand = mix_rand / mix_val;
         }
     }
 
@@ -1572,7 +1594,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
         }
     } else if (mat->type == GlossyMaterial) {
         if (gloss_depth < pi.settings.max_glossy_depth && total_depth < pi.settings.max_total_depth) {
-            simd_fvec3 V = reflect(I, dot(I, N) > 0 ? N : -N);
+            simd_fvec3 V = reflect(I, N);
 
             const float h = 1.0f - std::cos(0.5f * PI * mat->roughness * mat->roughness);
             const float z = h * std::modf(halton[hi + 0] + rand_offset, &_unused);
@@ -1621,7 +1643,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
         if (refr_depth < pi.settings.max_refr_depth && total_depth < pi.settings.max_total_depth) {
             float ior = is_backfacing ? mat->ext_ior : mat->int_ior;
             float eta = ray.ior / ior;
-            float cosi = dot(-I, N);
+            float cosi = -dot(I, N);
             float cost2 = 1.0f - eta * eta * (1.0f - cosi * cosi);
             if (cost2 < 0) return pixel_color_t{ 0.0f, 0.0f, 0.0f, 1.0f };
             float m = eta * cosi - std::sqrt(cost2);

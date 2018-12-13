@@ -43,7 +43,7 @@ const float PI = 3.141592653589793238463f;
 
 const float MAX_DIST = 3.402823466e+38F;
 
-const int MAX_BOUNCES = 8;
+const int MAX_BOUNCES = 10;
 
 const float RAY_TERM_THRES = 0.01f;
 
@@ -108,10 +108,7 @@ struct material_t {
         float roughness;
         float strength;
     };
-    union {
-        float fresnel;
-        float int_ior;
-    };
+    float int_ior;
     float ext_ior;
     float pad1[1];
 };

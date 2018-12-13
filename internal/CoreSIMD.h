@@ -1979,21 +1979,26 @@ Ray::NS::simd_fvec<S> Ray::NS::ComputeVisibility(const simd_fvec<S> p1[3], const
 
                         first_mi = 0xffffffff;
 
+                        simd_fvec<S> sh_rand;
+
+                        for (int i = 0; i < S; i++) {
+                            float _unused;
+                            sh_rand[i] = std::modf(halton[hi + 0] + sh_rand_offset[i], &_unused);
+                        }
+
                         for (int i = 0; i < S; i++) {
                             if (!same_mi[i]) continue;
 
-                            float _unused;
-                            const float r = std::modf(halton[hi + 0] + sh_rand_offset[i], &_unused);
+                            float mix_val = mix[0][i];
 
-                            sh_rand_hash[i] = hash(sh_rand_hash[i]);
-                            sh_rand_offset = construct_float(sh_rand_hash);
+                            if (sh_rand[i] > mix_val) {
+                                mat_index[i] = mat->textures[MIX_MAT1];
+                                sh_rand[i] = (sh_rand[i] - mix_val) / (1.0f - mix_val);
+                            } else {
+                                mat_index[i] = mat->textures[MIX_MAT2];
+                                sh_rand[i] = sh_rand[i] / mix_val;
+                            }
 
-                            // shlick fresnel
-                            float RR = mat->fresnel + (1.0f - mat->fresnel) * std::pow(1.0f + _dot_I_N[i], 5.0f);
-                            if (RR < 0.0f) RR = 0.0f;
-                            else if (RR > 1.0f) RR = 1.0f;
-
-                            mat_index[i] = (r * RR < mix[0][i]) ? mat->textures[MIX_MAT1] : mat->textures[MIX_MAT2];
                             if (first_mi == 0xffffffff) {
                                 first_mi = mat_index[i];
                             }
@@ -2410,22 +2415,47 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
 
                 first_mi = 0xffffffff;
 
+                simd_fvec<S> mix_ior = mat->int_ior;
+                where(backfacing, mix_ior) = mat->ext_ior;
+
+                simd_fvec<S> R0 = (ray.ior - mix_ior) / (ray.ior + mix_ior);
+                R0 *= R0;
+
+                simd_fvec<S> eta = ray.ior / mix_ior;
+                simd_fvec<S> cosi = -_dot_I_N;
+                simd_fvec<S> cost2 = 1.0f - eta * eta * (1.0f - cosi * cosi);
+                simd_fvec<S> m = eta * cosi - sqrt(cost2);
+
+                simd_fvec<S> V[3] = { eta * I[0] + m * N[0], eta * I[1] + m * N[1], eta * I[2] + m * N[2] };
+                simd_fvec<S> _dot_V_N = dot(V, N);
+
                 for (int i = 0; i < S; i++) {
                     if (!same_mi[i]) continue;
 
                     // shlick fresnel
-                    float RR = mat->fresnel + (1.0f - mat->fresnel) * std::pow(1.0f + _dot_I_N[i], 5.0f);
+                    float RR;
+
+                    if (ray.ior[i] > mix_ior[i]) {
+                        if (cost2[i] >= 0.0f) {
+                            RR = R0[i] + (1.0f - R0[i]) * std::pow(1.0f + _dot_V_N[i], 5.0f);
+                        } else {
+                            RR = 1.0f;
+                        }
+                    } else {
+                        RR = R0[i] + (1.0f - R0[i]) * std::pow(1.0f + _dot_I_N[i], 5.0f);
+                    }
+
                     if (RR < 0.0f) RR = 0.0f;
                     else if (RR > 1.0f) RR = 1.0f;
 
-                    mix_rand[i] *= RR;
+                    float mix_val = mix[0][i] * RR;
 
-                    if (mix_rand[i] < mix[0][i]) {
+                    if (mix_rand[i] > mix_val) {
                         mat_index[i] = mat->textures[MIX_MAT1];
-                        mix_rand[i] = mix_rand[i] / mix[0][i];
+                        mix_rand[i] = (mix_rand[i] - mix_val) / (1.0f - mix_val);
                     } else {
                         mat_index[i] = mat->textures[MIX_MAT2];
-                        mix_rand[i] = (mix_rand[i] - mix[0][i]) / (1.0f - mix[0][i]);
+                        mix_rand[i] = mix_rand[i] / mix_val;
                     }
 
                     if (first_mi == 0xffffffff) {
@@ -2664,8 +2694,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
 
                 simd_fvec<S> eta = ray.ior / ior;
 
-                simd_fvec<S> _I[3] = { -I[0], -I[1], -I[2] };
-                simd_fvec<S> cosi = dot(_I, __N);
+                simd_fvec<S> cosi = -dot(I, __N);
                 simd_fvec<S> cost2 = 1.0f - eta * eta * (1.0f - cosi * cosi);
                 simd_fvec<S> m = eta * cosi - sqrt(cost2);
 

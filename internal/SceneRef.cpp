@@ -117,7 +117,8 @@ uint32_t Ray::Ref::Scene::AddMaterial(const mat_desc_t &m) {
     mat.type = m.type;
     mat.textures[MAIN_TEXTURE] = m.main_texture;
     memcpy(&mat.main_color[0], &m.main_color[0], 3 * sizeof(float));
-    mat.fresnel = m.fresnel;
+    mat.int_ior = m.int_ior;
+    mat.ext_ior = m.ext_ior;
 
     if (m.type == DiffuseMaterial) {
 
@@ -125,8 +126,6 @@ uint32_t Ray::Ref::Scene::AddMaterial(const mat_desc_t &m) {
         mat.roughness = m.roughness;
     } else if (m.type == RefractiveMaterial) {
         mat.roughness = m.roughness;
-        mat.int_ior = m.int_ior;
-        mat.ext_ior = m.ext_ior;
     } else if (m.type == EmissiveMaterial) {
         mat.strength = m.strength;
     } else if (m.type == MixMaterial) {

@@ -80,10 +80,7 @@ typedef struct _material_t {
         float roughness;
         float strength;
     };
-    union {
-        float fresnel;
-        float int_ior;
-    };
+    float int_ior;
     float ext_ior;
 } material_t;
 

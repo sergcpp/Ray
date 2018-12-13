@@ -256,19 +256,37 @@ float4 ShadeSurface(const pass_info_t *pi, __global const float *halton,
 
     // resolve mix material
     while (mat->type == MixMaterial) {
-        float4 mix = SampleTextureBilinear(texture_atlas, &textures[mat->textures[MAIN_TEXTURE]], uvs, 0) * mat->strength;
+        float mix_val = SampleTextureBilinear(texture_atlas, &textures[mat->textures[MAIN_TEXTURE]], uvs, 0).x * mat->strength;
 
         // shlick fresnel
-        float RR = mat->fresnel + (1.0f - mat->fresnel) * native_powr(1.0f + dot(I, N), 5.0f);
-        RR = clamp(RR, 0.0f, 1.0f);
+        const float mix_ior = mix(mat->int_ior, mat->ext_ior, backfacing_param);
 
-        mix_rand *= RR;
-        if (mix_rand < mix.x) {
+        float R0 = (orig_ray->c.w - mix_ior) / (orig_ray->c.w + mix_ior);
+        R0 *= R0;
+
+        float RR = R0 + (1.0f - R0) * native_powr(1.0f + dot(I, N), 5.0f);
+        if (orig_ray->c.w > mix_ior) {
+            float eta = orig_ray->c.w / mix_ior;
+            float cosi = -dot(I, N);
+            float cost2 = 1.0f - eta * eta * (1.0f - cosi * cosi);
+            
+            if (cost2 >= 0.0f) {
+                float m = eta * cosi - sqrt(cost2);
+                float3 V = eta * I + m * N;
+                RR = R0 + (1.0f - R0) * native_powr(1.0f + dot(V, N), 5.0f);
+            } else {
+                RR = 1.0f;
+            }
+        }
+
+        mix_val *= clamp(RR, 0.0f, 1.0f);
+
+        if (mix_rand > mix_val) {
             mat = &materials[mat->textures[MIX_MAT1]];
-            mix_rand = mix_rand / mix.x;
+            mix_rand = (mix_rand - mix_val) / (1.0f - mix_val);
         } else {
             mat = &materials[mat->textures[MIX_MAT2]];
-            mix_rand = (mix_rand - mix.x) / (1.0f - mix.x);
+            mix_rand = mix_rand / mix_val;
         }
     }
 
@@ -337,7 +355,7 @@ R"(
             ray_packet_t r;
             r.o = (float4)(P + HIT_BIAS * plane_N, (float)px.x);
             r.d = (float4)(V, (float)px.y);
-            r.c = orig_ray->c * weight;
+            r.c = (float4)(orig_ray->c.xyz * weight, orig_ray->c.w);
             if (should_consider_albedo(pi)) {
                 r.c.xyz *= albedo.xyz;
             }
@@ -360,7 +378,7 @@ R"(
         col = (float3)(0, 0, 0);
 
         if (gloss_depth < pi->settings.max_glossy_depth && total_depth < pi->settings.max_total_depth) {
-            float3 V = reflect(I, dot(I, N) > 0 ? N : -N);
+            float3 V = reflect(I, N);
 
             float _unused;
             const float h = 1.0f - native_cos(0.5f * PI * mat->roughness * mat->roughness);
@@ -406,7 +424,7 @@ R"(
             const float ior = mix(mat->int_ior, mat->ext_ior, backfacing_param);
 
             float eta = orig_ray->c.w / ior;
-            float cosi = dot(-I, N);
+            float cosi = -dot(I, N);
             float cost2 = 1.0f - eta * eta * (1.0f - cosi * cosi);
             float m = eta * cosi - sqrt(cost2);
             float3 V = eta * I + m * N;
@@ -429,8 +447,7 @@ R"(
             ray_packet_t r;
             r.o = (float4)(P + HIT_BIAS * I, (float)px.x);
             r.d = (float4)(V, (float)px.y);
-            r.c.xyz = orig_ray->c.xyz * z;
-            r.c.w = ior;
+            r.c = (float4)(orig_ray->c.xyz * z, ior);
             r.do_dx = (float4)(surf_der.do_dx, orig_ray->do_dx.w);
             r.do_dy = (float4)(surf_der.do_dy, orig_ray->do_dy.w);
             r.dd_dx.xyz = eta * surf_der.dd_dx - (m * surf_der.dndx + dmdx * plane_N);
