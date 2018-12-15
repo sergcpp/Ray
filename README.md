@@ -5,8 +5,8 @@ Small pathtracing library created for learning purposes. Includes CPU and GPU (O
 - Full application : https://bitbucket.org/Apfel1994/raydemo
 - Video : https://www.youtube.com/watch?v=MHk9jXcdrZs
 
-(Scene is taken from here: https://benedikt-bitterli.me/resources/)
 ![Screenshot](scene1.jpg)
+(Scene is taken from here: https://benedikt-bitterli.me/resources/)
 
 ## Installation
 The intended use is to add it as a submodule to an existing project:
