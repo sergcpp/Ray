@@ -4,7 +4,7 @@
 
 namespace Ray {
 const float SAHOversplitThreshold = 0.95f;
-const float NodeTraversalCost = 2.0f;
+const float NodeTraversalCost = 0.01f;
 
 const float SpatialSplitAlpha = 0.00001f;
 const int NumSpatialSplitBins = 256;
@@ -206,7 +206,7 @@ Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, const std::
                 left_bounds.max = max(left_bounds.max, new_prim_bounds[list[i - 1]].max);
             }
 
-            float sah = NodeTraversalCost + left_bounds.surface_area() * i + right_bounds[i - 1].surface_area() * (list.size() - i);
+            float sah = NodeTraversalCost * whole_box.surface_area() + left_bounds.surface_area() * i + right_bounds[i - 1].surface_area() * (list.size() - i);
             if (sah < res_sah) {
                 res_sah = sah;
                 div_axis = axis;
