@@ -6,7 +6,9 @@ Small pathtracing library created for learning purposes. Includes CPU and GPU (O
 - Video : https://www.youtube.com/watch?v=MHk9jXcdrZs
 
 ![Screenshot](scene1.jpg)
-(Scene is taken from here: https://benedikt-bitterli.me/resources/)
+![Screenshot](scene2.jpg)
+
+(Scenes are taken from here: https://benedikt-bitterli.me/resources/)
 
 ## Installation
 The intended use is to add it as a submodule to an existing project:

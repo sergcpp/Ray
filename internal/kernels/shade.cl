@@ -402,6 +402,9 @@ R"(
             r.o = (float4)(P + HIT_BIAS * plane_N, (float)px.x);
             r.d = (float4)(V, (float)px.y);
             r.c = orig_ray->c;
+            if (should_consider_albedo(pi)) {
+                r.c.xyz *= albedo.xyz;
+            }
             r.do_dx = (float4)(surf_der.do_dx, orig_ray->do_dx.w);
             r.do_dy = (float4)(surf_der.do_dy, as_float(gloss_depth + 1));
             r.dd_dx.xyz = surf_der.dd_dx - 2 * (dot(I, plane_N) * surf_der.dndx + surf_der.ddn_dx * plane_N);

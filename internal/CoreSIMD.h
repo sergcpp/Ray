@@ -2621,6 +2621,10 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
 
                 simd_fvec<S> rc[3] = { ray.c[0], ray.c[1], ray.c[2] }, p;
 
+                if (pi.should_consider_albedo()) {
+                    ITERATE_3({ rc[i] *= tex_albedo[i]; })
+                }
+
                 const float h = 1.0f - std::cos(0.5f * PI * mat->roughness * mat->roughness);
 
                 for (int i = 0; i < S; i++) {

@@ -1623,6 +1623,10 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
             memcpy(&r.d[0], value_ptr(V), 3 * sizeof(float));
             memcpy(&r.c[0], &ray.c[0], 3 * sizeof(float));
 
+            if (pi.should_consider_albedo()) {
+                r.c[0] *= albedo[0]; r.c[1] *= albedo[1]; r.c[2] *= albedo[2];
+            }
+
             memcpy(&r.do_dx[0], value_ptr(surf_der.do_dx), 3 * sizeof(float));
             memcpy(&r.do_dy[0], value_ptr(surf_der.do_dy), 3 * sizeof(float));
 

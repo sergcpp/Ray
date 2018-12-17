@@ -57,7 +57,7 @@ void Ray::Ref::ComputeTextureBasis(size_t vtx_offset, size_t vtx_start, std::vec
 
         simd_fvec2 dt2 = simd_fvec2(v2->t[0]) - simd_fvec2(v0->t[0]);
         if (length(dt2) < FLT_EPS) {
-            dt2 = simd_fvec2{ 1.0f, 1.0f };
+            dt2 = simd_fvec2{ 1.0f, -1.0f };
         }
 
         float det = dt1[0] * dt2[1] - dt1[1] * dt2[0];
