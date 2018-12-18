@@ -170,7 +170,7 @@ uint32_t Ray::Ocl::Scene::AddMesh(const mesh_desc_t &_m) {
     std::vector<uint32_t> new_tri_indices;
     std::vector<uint32_t> new_vtx_indices;
 
-    PreprocessMesh(_m.vtx_attrs, _m.vtx_indices, _m.vtx_indices_count, _m.layout, _m.allow_spatial_splits, new_nodes, new_tris, new_tri_indices);
+    PreprocessMesh(_m.vtx_attrs, _m.vtx_indices, _m.vtx_indices_count, _m.layout, _m.allow_spatial_splits, _m.use_fast_bvh_build, new_nodes, new_tris, new_tri_indices);
     for (size_t i = 0; i < _m.vtx_indices_count; i++) {
         new_vtx_indices.push_back(_m.vtx_indices[i] + (uint32_t)vertices_.size());
     }
@@ -356,6 +356,7 @@ void Ray::Ocl::Scene::SetMeshInstanceTransform(uint32_t mi_index, const float *x
     mesh_instances_.Set(mi_index, mi);
     transforms_.Set(mi.tr_index, tr);
 
+    //if (mi_index == 10000 - 1)
     RebuildMacroBVH();
 }
 
@@ -428,11 +429,13 @@ void Ray::Ocl::Scene::RebuildMacroBVH() {
     std::vector<uint32_t> mi_indices;
 
     macro_nodes_start_ = (uint32_t)nodes_.size();
-    macro_nodes_count_ = PreprocessPrims(&primitives[0], primitives.size(), nullptr, 0, false, bvh_nodes, mi_indices);
+    macro_nodes_count_ = PreprocessPrims_SAH(&primitives[0], primitives.size(), nullptr, 0, {}, bvh_nodes, mi_indices);
+    
+    //for (int i = 0; i < 10000; i++)
+    //macro_nodes_count_ = PreprocessPrims_HLBVH(&primitives[0], primitives.size(), bvh_nodes, mi_indices);
 
     // offset nodes
     for (auto &n : bvh_nodes) {
-
 #ifdef USE_STACKLESS_BVH_TRAVERSAL
         if (n.parent != 0xffffffff) n.parent += (uint32_t)nodes_.size();
 #endif
@@ -510,7 +513,7 @@ void Ray::Ocl::Scene::RebuildLightBVH() {
     std::vector<uint32_t> li_indices;
 
     light_nodes_start_ = (uint32_t)nodes_.size();
-    light_nodes_count_ = PreprocessPrims(&primitives[0], primitives.size(), nullptr, 0, false, bvh_nodes, li_indices);
+    light_nodes_count_ = PreprocessPrims_SAH(&primitives[0], primitives.size(), nullptr, 0, {}, bvh_nodes, li_indices);
 
     // offset nodes
     for (auto &n : bvh_nodes) {

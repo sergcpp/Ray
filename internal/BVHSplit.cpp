@@ -3,9 +3,6 @@
 #include <algorithm>
 
 namespace Ray {
-const float SAHOversplitThreshold = 0.95f;
-const float NodeTraversalCost = 0.01f;
-
 const float SpatialSplitAlpha = 0.00001f;
 const int NumSpatialSplitBins = 256;
 
@@ -128,7 +125,7 @@ bbox_t GetClippedAABB(const Ref::simd_fvec3 &_v0, const Ref::simd_fvec3 &_v1, co
 
 Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, const std::vector<uint32_t> &prim_indices, const float *positions, size_t stride,
                                            const Ref::simd_fvec3 &bbox_min, const Ref::simd_fvec3 &bbox_max,
-                                           const Ref::simd_fvec3 &root_min, const Ref::simd_fvec3 &root_max, bool use_spatial_splits) {
+                                           const Ref::simd_fvec3 &root_min, const Ref::simd_fvec3 &root_max, const split_settings_t &s) {
     size_t num_tris = prim_indices.size();
     bbox_t whole_box = { bbox_min, bbox_max };
 
@@ -145,7 +142,7 @@ Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, const std::
 
     std::vector<bbox_t> new_prim_bounds;
 
-    if (use_spatial_splits && positions) {
+    if (s.allow_spatial_splits && positions) {
         new_prim_bounds.resize(num_tris);
 
         for (size_t i = 0; i < prim_indices.size(); i++) {
@@ -161,7 +158,7 @@ Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, const std::
 
     std::vector<bbox_t> right_bounds(num_tris);
 
-    float res_sah = SAHOversplitThreshold * whole_box.surface_area() * num_tris;
+    float res_sah = s.oversplit_threshold * whole_box.surface_area() * num_tris;
     int div_axis = -1;
     uint32_t div_index = 0;
     bbox_t res_left_bounds, res_right_bounds;
@@ -206,7 +203,7 @@ Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, const std::
                 left_bounds.max = max(left_bounds.max, new_prim_bounds[list[i - 1]].max);
             }
 
-            float sah = NodeTraversalCost * whole_box.surface_area() + left_bounds.surface_area() * i + right_bounds[i - 1].surface_area() * (list.size() - i);
+            float sah = s.node_traversal_cost * whole_box.surface_area() + left_bounds.surface_area() * i + right_bounds[i - 1].surface_area() * (list.size() - i);
             if (sah < res_sah) {
                 res_sah = sah;
                 div_axis = axis;
@@ -220,7 +217,7 @@ Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, const std::
     bbox_t overlap = { max(res_left_bounds.min, res_right_bounds.min),
                        min(res_left_bounds.max, res_right_bounds.max) };
 
-    if (use_spatial_splits && (overlap.max <= overlap.min).all_zeros() &&
+    if (s.allow_spatial_splits && (overlap.max <= overlap.min).all_zeros() &&
         overlap.surface_area() > SpatialSplitAlpha * bbox_t::surface_area(root_min, root_max)) {
         struct bin_t {
             bbox_t extends, limits;
@@ -327,7 +324,7 @@ Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, const std::
                     num_right += bins[i].exit_counter;
                 }
 
-                float split_sah = NodeTraversalCost + ext_left.surface_area() * num_left + ext_right.surface_area() * num_right;
+                float split_sah = s.node_traversal_cost + ext_left.surface_area() * num_left + ext_right.surface_area() * num_right;
                 if (split_sah < res_sah) {
                     res_sah = split_sah;
                     spatial_split = split;
@@ -335,8 +332,6 @@ Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, const std::
 
                     res_left_bounds = ext_left;
                     res_right_bounds = ext_right;
-
-                    //printf("r l: %i %i\n", num_left, num_right);
                 }
             }
         }

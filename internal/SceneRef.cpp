@@ -156,7 +156,7 @@ uint32_t Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
     m.node_count = 0;
 
     uint32_t tris_start = (uint32_t)tris_.size();
-    m.node_count += PreprocessMesh(_m.vtx_attrs, _m.vtx_indices, _m.vtx_indices_count, _m.layout, _m.allow_spatial_splits, nodes_, tris_, tri_indices_);
+    m.node_count += PreprocessMesh(_m.vtx_attrs, _m.vtx_indices, _m.vtx_indices_count, _m.layout, _m.allow_spatial_splits, _m.use_fast_bvh_build, nodes_, tris_, tri_indices_);
 
     for (const auto &s : _m.shapes) {
         bool is_solid = true;
@@ -427,7 +427,7 @@ void Ray::Ref::Scene::RebuildMacroBVH() {
     }
 
     macro_nodes_start_ = (uint32_t)nodes_.size();
-    macro_nodes_count_ = PreprocessPrims(&primitives[0], primitives.size(), nullptr, 0, false, nodes_, mi_indices_);
+    macro_nodes_count_ = PreprocessPrims_SAH(&primitives[0], primitives.size(), nullptr, 0, {}, nodes_, mi_indices_);
 }
 
 void Ray::Ref::Scene::RebuildLightBVH() {
@@ -487,5 +487,5 @@ void Ray::Ref::Scene::RebuildLightBVH() {
     }
 
     light_nodes_start_ = (uint32_t)nodes_.size();
-    light_nodes_count_ = PreprocessPrims(&primitives[0], primitives.size(), nullptr, 0, false, nodes_, li_indices_);
+    light_nodes_count_ = PreprocessPrims_SAH(&primitives[0], primitives.size(), nullptr, 0, {}, nodes_, li_indices_);
 }

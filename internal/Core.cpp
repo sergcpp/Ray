@@ -17,6 +17,79 @@ force_inline Ref::simd_fvec3 cross(const Ref::simd_fvec3 &v1, const Ref::simd_fv
              v1[2] * v2[0] - v1[0] * v2[2],
              v1[0] * v2[1] - v1[1] * v2[0] };
 }
+
+// "Insert" two 0 bits after each of the 10 low bits of x
+force_inline uint32_t Part1By2(uint32_t x) {
+    x = x & 0b00000000000000000000001111111111;                 // x = ---- ---- ---- ---- ---- --98 7654 3210
+    x = (x ^ (x << 16)) & 0b00000011000000000000000011111111;   // x = ---- --98 ---- ---- ---- ---- 7654 3210
+    x = (x ^ (x << 8)) & 0b00000011000000001111000000001111;    // x = ---- --98 ---- ---- 7654 ---- ---- 3210
+    x = (x ^ (x << 4)) & 0b00000011000011000011000011000011;    // x = ---- --98 ---- 76-- --54 ---- 32-- --10
+    x = (x ^ (x << 2)) & 0b00001001001001001001001001001001;    // x = ---- 9--8 --7- -6-- 5--4 --3- -2-- 1--0
+    return x;
+}
+
+force_inline uint32_t EncodeMorton3(uint32_t x, uint32_t y, uint32_t z) {
+    return (Part1By2(z) << 2) + (Part1By2(y) << 1) + Part1By2(x);
+}
+
+struct prim_chunk_t {
+    uint32_t code, base, size;
+};
+
+const int BitsPerDim = 10;
+const int BitsTotal = 3 * BitsPerDim;
+
+void radix_sort_prim_chunks(prim_chunk_t *begin, prim_chunk_t *end, prim_chunk_t *begin1) {
+    prim_chunk_t *end1 = begin1 + (end - begin);
+
+    const int bits_per_pass = 6;
+    const int bucket_size = 1 << bits_per_pass;
+    const int bit_mask = bucket_size - 1;
+
+    for (int shift = 0; shift < BitsTotal; shift += bits_per_pass) {
+        size_t count[bucket_size] = {};
+        for (prim_chunk_t *p = begin; p != end; p++) {
+            count[(p->code >> shift) & bit_mask]++;
+        }
+        prim_chunk_t *bucket[bucket_size], *q = begin1;
+        for (int i = 0; i < bucket_size; q += count[i++]) {
+            bucket[i] = q;
+        }
+        for (prim_chunk_t *p = begin; p != end; p++) {
+            *bucket[(p->code >> shift) & bit_mask]++ = *p;
+        }
+        std::swap(begin, begin1);
+        std::swap(end, end1);
+    }
+}
+
+void sort_mort_codes(uint32_t *morton_codes, size_t prims_count, uint32_t *out_indices) {
+    std::vector<prim_chunk_t> run_chunks;
+    run_chunks.reserve(prims_count);
+
+    for (uint32_t start = 0, end = 1; end <= (uint32_t)prims_count; end++) {
+        if (end == (uint32_t)prims_count ||
+            (morton_codes[start] != morton_codes[end])) {
+
+            run_chunks.push_back({ morton_codes[start], start, end - start });
+
+            start = end;
+        }
+    }
+
+    std::vector<prim_chunk_t> run_chunks2(run_chunks.size());
+
+    radix_sort_prim_chunks(&run_chunks[0], &run_chunks[0] + run_chunks.size(), &run_chunks2[0]);
+    std::swap(run_chunks, run_chunks2);
+
+    size_t counter = 0;
+    for (const auto &ch : run_chunks) {
+        for (uint32_t j = 0; j < ch.size; j++) {
+            morton_codes[counter] = ch.code;
+            out_indices[counter++] = ch.base + j;
+        }
+    }
+}
 }
 
 // Used for fast color conversion
@@ -153,7 +226,8 @@ void Ray::ExtractPlaneNormal(const tri_accel_t &tri, float *out_normal) {
 }
 
 uint32_t Ray::PreprocessMesh(const float *attrs, const uint32_t *vtx_indices, size_t vtx_indices_count, eVertexLayout layout,
-                             bool allow_spatial_splits, std::vector<bvh_node_t> &out_nodes, std::vector<tri_accel_t> &out_tris, std::vector<uint32_t> &out_tri_indices) {
+                             bool allow_spatial_splits, bool use_fast_bvh_build,
+                             std::vector<bvh_node_t> &out_nodes, std::vector<tri_accel_t> &out_tris, std::vector<uint32_t> &out_tri_indices) {
     assert(vtx_indices_count && vtx_indices_count % 3 == 0);
 
     std::vector<prim_t> primitives;
@@ -181,7 +255,14 @@ uint32_t Ray::PreprocessMesh(const float *attrs, const uint32_t *vtx_indices, si
     }
 
     size_t indices_start = out_tri_indices.size();
-    uint32_t num_out_nodes = PreprocessPrims(&primitives[0], primitives.size(), positions, attr_stride, allow_spatial_splits, out_nodes, out_tri_indices);
+    uint32_t num_out_nodes;
+    if (!use_fast_bvh_build) {
+        split_settings_t s;
+        s.allow_spatial_splits = allow_spatial_splits;
+        num_out_nodes = PreprocessPrims_SAH(&primitives[0], primitives.size(), positions, attr_stride, s, out_nodes, out_tri_indices);
+    } else {
+        num_out_nodes = PreprocessPrims_HLBVH(&primitives[0], primitives.size(), out_nodes, out_tri_indices);
+    }
 
     for (size_t i = indices_start; i < out_tri_indices.size(); i++) {
         out_tri_indices[i] += (uint32_t)tris_start;
@@ -190,8 +271,162 @@ uint32_t Ray::PreprocessMesh(const float *attrs, const uint32_t *vtx_indices, si
     return num_out_nodes;
 }
 
-uint32_t Ray::PreprocessPrims(const prim_t *prims, size_t prims_count, const float *positions, size_t stride,
-                              bool allow_spatial_splits, std::vector<bvh_node_t> &out_nodes, std::vector<uint32_t> &out_indices) {
+uint32_t Ray::EmitLBVH_Recursive(const prim_t *prims, const uint32_t *indices, const uint32_t *morton_codes, uint32_t prim_index, uint32_t prim_count, uint32_t index_offset, int bit_index, std::vector<bvh_node_t> &out_nodes) {
+    if (bit_index == -1 || prim_count < 8) {
+        Ref::simd_fvec3 bbox_min = { std::numeric_limits<float>::max() },
+                        bbox_max = { std::numeric_limits<float>::lowest() };
+
+        for (uint32_t i = prim_index; i < prim_index + prim_count; i++) {
+            bbox_min = min(bbox_min, prims[indices[i]].bbox_min);
+            bbox_max = max(bbox_max, prims[indices[i]].bbox_max);
+        }
+
+        uint32_t node_index = (uint32_t)out_nodes.size();
+
+        out_nodes.emplace_back();
+        auto &node = out_nodes.back();
+
+        node.prim_index = LEAF_NODE_BIT + prim_index + index_offset;
+        node.prim_count = prim_count;
+
+        memcpy(&node.bbox_min[0], &bbox_min[0], 3 * sizeof(float));
+        memcpy(&node.bbox_max[0], &bbox_max[0], 3 * sizeof(float));
+
+        return node_index;
+    } else {
+        uint32_t mask = 1u << bit_index;
+
+        if ((morton_codes[prim_index] & mask) == (morton_codes[prim_index + prim_count - 1] & mask)) {
+            return EmitLBVH_Recursive(prims, indices, morton_codes, prim_index, prim_count, index_offset, bit_index - 1, out_nodes);
+        }
+
+        uint32_t search_start = prim_index, search_end = search_start + prim_count - 1;
+        while (search_start + 1 != search_end) {
+            uint32_t mid = (search_start + search_end) / 2;
+            if ((morton_codes[search_start] & mask) == (morton_codes[mid] & mask)) {
+                search_start = mid;
+            } else {
+                search_end = mid;
+            }
+        }
+
+        uint32_t split_offset = search_end - prim_index;
+
+        uint32_t node_index = (uint32_t)out_nodes.size();
+        out_nodes.emplace_back();
+
+        uint32_t child0 = EmitLBVH_Recursive(prims, indices, morton_codes, prim_index, split_offset, index_offset, bit_index - 1, out_nodes);
+        uint32_t child1 = EmitLBVH_Recursive(prims, indices, morton_codes, prim_index + split_offset, prim_count - split_offset, index_offset, bit_index - 1, out_nodes);
+
+        uint32_t space_axis = bit_index % 3;
+        if (out_nodes[child0].bbox_min[space_axis] > out_nodes[child1].bbox_min[space_axis]) {
+            std::swap(child0, child1);
+        }
+
+        auto &par_node = out_nodes[node_index];
+        par_node.left_child = child0;
+        par_node.right_child = (space_axis << 30) + child1;
+
+        for (int i = 0; i < 3; i++) {
+            par_node.bbox_min[i] = std::min(out_nodes[child0].bbox_min[i], out_nodes[child1].bbox_min[i]);
+            par_node.bbox_max[i] = std::max(out_nodes[child0].bbox_max[i], out_nodes[child1].bbox_max[i]);
+        }
+
+        return node_index;
+    }
+}
+
+uint32_t Ray::EmitLBVH_NonRecursive(const prim_t *prims, const uint32_t *indices, const uint32_t *morton_codes, uint32_t prim_index, uint32_t prim_count, uint32_t index_offset, int bit_index, std::vector<bvh_node_t> &out_nodes) {
+    struct proc_item_t {
+        int bit_index;
+        uint32_t prim_index, prim_count;
+        uint32_t split_offset, node_index;
+    };
+
+    proc_item_t proc_stack[256];
+    uint32_t stack_size = 0;
+
+    uint32_t root_node_index = (uint32_t)out_nodes.size();
+    out_nodes.emplace_back();
+    proc_stack[stack_size++] = { bit_index, prim_index, prim_count, 0xffffffff, root_node_index };
+
+    while (stack_size) {
+        proc_item_t &cur = proc_stack[stack_size - 1];
+
+        if (cur.bit_index == -1 || cur.prim_count < 8) {
+            Ref::simd_fvec3 bbox_min = { std::numeric_limits<float>::max() },
+                bbox_max = { std::numeric_limits<float>::lowest() };
+
+            for (uint32_t i = cur.prim_index; i < cur.prim_index + cur.prim_count; i++) {
+                bbox_min = min(bbox_min, prims[indices[i]].bbox_min);
+                bbox_max = max(bbox_max, prims[indices[i]].bbox_max);
+            }
+
+            auto &node = out_nodes[cur.node_index];
+
+            node.prim_index = LEAF_NODE_BIT + cur.prim_index + index_offset;
+            node.prim_count = cur.prim_count;
+
+            memcpy(&node.bbox_min[0], &bbox_min[0], 3 * sizeof(float));
+            memcpy(&node.bbox_max[0], &bbox_max[0], 3 * sizeof(float));
+        } else {
+            if (cur.split_offset == 0xffffffff) {
+                uint32_t mask = 1u << cur.bit_index;
+
+                uint32_t search_start = cur.prim_index, search_end = search_start + cur.prim_count - 1;
+
+                if ((morton_codes[search_start] & mask) == (morton_codes[search_end] & mask)) {
+                    cur.bit_index--;
+                    continue;
+                }
+
+                while (search_start + 1 != search_end) {
+                    uint32_t mid = (search_start + search_end) / 2;
+                    if ((morton_codes[search_start] & mask) == (morton_codes[mid] & mask)) {
+                        search_start = mid;
+                    } else {
+                        search_end = mid;
+                    }
+                }
+
+                cur.split_offset = search_end - cur.prim_index;
+
+                uint32_t child0 = (uint32_t)out_nodes.size();
+                out_nodes.emplace_back();
+
+                uint32_t child1 = (uint32_t)out_nodes.size();
+                out_nodes.emplace_back();
+
+                out_nodes[cur.node_index].left_child = child0;
+                out_nodes[cur.node_index].right_child = child1;
+
+                proc_stack[stack_size++] = { cur.bit_index - 1, cur.prim_index + cur.split_offset, cur.prim_count - cur.split_offset, 0xffffffff, child1 };
+                proc_stack[stack_size++] = { cur.bit_index - 1, cur.prim_index, cur.split_offset, 0xffffffff, child0 };
+                continue;
+            } else {
+                auto &node = out_nodes[cur.node_index];
+
+                for (int i = 0; i < 3; i++) {
+                    node.bbox_min[i] = std::min(out_nodes[node.left_child].bbox_min[i], out_nodes[node.right_child].bbox_min[i]);
+                    node.bbox_max[i] = std::max(out_nodes[node.left_child].bbox_max[i], out_nodes[node.right_child].bbox_max[i]);
+                }
+
+                uint32_t space_axis = cur.bit_index % 3;
+                if (out_nodes[node.left_child].bbox_min[space_axis] > out_nodes[node.right_child].bbox_min[space_axis]) {
+                    std::swap(node.left_child, node.right_child);
+                }
+                node.right_child += (space_axis << 30);
+            }
+        }
+
+        stack_size--;
+    }
+
+    return root_node_index;
+}
+
+uint32_t Ray::PreprocessPrims_SAH(const prim_t *prims, size_t prims_count, const float *positions, size_t stride,
+                                  const split_settings_t &s, std::vector<bvh_node_t> &out_nodes, std::vector<uint32_t> &out_indices) {
     struct prims_coll_t {
         std::vector<uint32_t> indices;
         Ref::simd_fvec3 min = { std::numeric_limits<float>::max() }, max = { std::numeric_limits<float>::lowest() };
@@ -217,7 +452,7 @@ uint32_t Ray::PreprocessPrims(const prim_t *prims, size_t prims_count, const flo
                     root_max = prim_lists.back().max;
 
     while (!prim_lists.empty()) {
-        auto split_data = SplitPrimitives_SAH(prims, prim_lists.back().indices, positions, stride, prim_lists.back().min, prim_lists.back().max, root_min, root_max, allow_spatial_splits);
+        auto split_data = SplitPrimitives_SAH(prims, prim_lists.back().indices, positions, stride, prim_lists.back().min, prim_lists.back().max, root_min, root_max, s);
         prim_lists.pop_back();
 
         uint32_t leaf_index = (uint32_t)out_nodes.size(),
@@ -289,6 +524,166 @@ uint32_t Ray::PreprocessPrims(const prim_t *prims, size_t prims_count, const flo
     return (uint32_t)(out_nodes.size() - root_node_index);
 }
 
+uint32_t Ray::PreprocessPrims_HLBVH(const prim_t *prims, size_t prims_count, std::vector<bvh_node_t> &out_nodes, std::vector<uint32_t> &out_indices) {
+    std::vector<uint32_t> morton_codes(prims_count);
+
+    Ref::simd_fvec3 whole_min = { std::numeric_limits<float>::max() },
+                    whole_max = { std::numeric_limits<float>::lowest() };
+
+    uint32_t indices_start = (uint32_t)out_indices.size();
+
+    for (uint32_t j = 0; j < prims_count; j++) {
+        whole_min = min(whole_min, prims[j].bbox_min);
+        whole_max = max(whole_max, prims[j].bbox_max);
+
+        out_indices.push_back(j);
+    }
+
+    uint32_t *indices = &out_indices[indices_start];
+
+    const Ref::simd_fvec3 scale = (1 << BitsPerDim) / (whole_max - whole_min);
+
+    // compute morton codes
+    for (size_t i = 0; i < prims_count; i++) {
+        Ref::simd_fvec3 center = 0.5f * (prims[i].bbox_min + prims[i].bbox_max);
+        Ref::simd_fvec3 code = (center - whole_min) * scale;
+
+        uint32_t x = (uint32_t)code[0],
+                 y = (uint32_t)code[1],
+                 z = (uint32_t)code[2];
+
+        uint32_t mort = EncodeMorton3(x, y, z);
+        morton_codes[i] = mort;
+    }
+
+    sort_mort_codes(&morton_codes[0], morton_codes.size(), indices);
+
+#if 0
+    for (size_t i = 0; i < morton_codes.size(); i++) {
+        for (size_t j = i + 1; j < morton_codes.size(); j++) {
+            if (morton_codes[i] > morton_codes[j]) {
+                __debugbreak();
+            }
+        }
+    }
+#endif
+
+    struct treelet_t {
+        uint32_t index, count;
+        uint32_t node_index;
+    };
+
+    std::vector<treelet_t> treelets;
+    treelets.reserve(1 << 12); // Top-level bvh can have up to 4096 items
+
+    // Use upper 12 bits to extracts treelets
+    for (uint32_t start = 0, end = 1; end <= (uint32_t)morton_codes.size(); end++) {
+        uint32_t mask = 0b00111111111111000000000000000000;
+        if (end == (uint32_t)morton_codes.size() ||
+            ((morton_codes[start] & mask) != (morton_codes[end] & mask))) {
+
+            treelets.push_back({ start, end - start });
+
+            start = end;
+        }
+    }
+
+    std::vector<bvh_node_t> bottom_nodes;
+
+    // Build bottom-level hierarchy from each treelet using LBVH
+    const int start_bit = 29 - 12;
+    for (auto &tr : treelets) {
+        tr.node_index = EmitLBVH_NonRecursive(prims, indices, &morton_codes[0], tr.index, tr.count, indices_start, start_bit, bottom_nodes);
+    }
+
+    std::vector<prim_t> top_prims;
+    for (const auto &tr : treelets) {
+        const auto &node = bottom_nodes[tr.node_index];
+
+        top_prims.emplace_back();
+        auto &p = top_prims.back();
+        memcpy(&p.bbox_min[0], node.bbox_min, 3 * sizeof(float));
+        memcpy(&p.bbox_max[0], node.bbox_max, 3 * sizeof(float));
+    }
+
+    uint32_t top_nodes_start = (uint32_t)out_nodes.size();
+
+    std::vector<uint32_t> top_indices;
+
+    // Force spliting until each primitive will be in separate leaf node
+    split_settings_t s;
+    s.oversplit_threshold = std::numeric_limits<float>::max();
+    s.node_traversal_cost = 0.0f;
+    s.allow_spatial_splits = false;
+
+    // Build top level hierarchy using SAH
+    uint32_t new_nodes_count = PreprocessPrims_SAH(&top_prims[0], top_prims.size(), nullptr, 0, s, out_nodes, top_indices);
+    unused(new_nodes_count);
+
+    uint32_t bottom_nodes_start = (uint32_t)out_nodes.size();
+
+    // Replace leaf nodes of top-level bvh with bottom level nodes
+    for (uint32_t i = top_nodes_start; i < (uint32_t)out_nodes.size(); i++) {
+        auto &n = out_nodes[i];
+        if (!(n.prim_index & LEAF_NODE_BIT)) {
+            auto &left = out_nodes[n.left_child],
+                 &right = out_nodes[n.right_child & RIGHT_CHILD_BITS];
+
+            if (left.prim_index & LEAF_NODE_BIT) {
+                assert(left.prim_count == 1);
+                uint32_t index = (left.prim_index & PRIM_INDEX_BITS);
+
+                const auto &tr = treelets[top_indices[index]];
+                n.left_child = bottom_nodes_start + tr.node_index;
+            }
+
+            if (right.prim_index & LEAF_NODE_BIT) {
+                assert(right.prim_count == 1);
+                uint32_t index = (right.prim_index & PRIM_INDEX_BITS);
+
+                const auto &tr = treelets[top_indices[index]];
+                n.right_child = (n.right_child & SEP_AXIS_BITS) + bottom_nodes_start + tr.node_index;
+            }
+        }
+    }
+
+    // Remove top-level leaf nodes
+    for (auto it = out_nodes.begin() + top_nodes_start; it != out_nodes.end(); ) {
+        if (it->prim_index & LEAF_NODE_BIT) {
+            uint32_t index = (uint32_t)std::distance(out_nodes.begin(), it);
+
+            it = out_nodes.erase(it);
+            bottom_nodes_start--;
+
+            for (auto next_it = out_nodes.begin() + top_nodes_start; next_it != out_nodes.end(); ++next_it) {
+                if (!(next_it->prim_index & LEAF_NODE_BIT)) {
+                    if (next_it->left_child > index) {
+                        next_it->left_child--;
+                    }
+                    if ((next_it->right_child & RIGHT_CHILD_BITS) > index) {
+                        next_it->right_child--;
+                    }
+                }
+            }
+        } else {
+            ++it;
+        }
+    }
+
+    uint32_t bottom_nodes_offset = bottom_nodes_start;
+
+    // Offset nodes in bottom-level bvh
+    for (auto &n : bottom_nodes) {
+        if (!(n.prim_index & LEAF_NODE_BIT)) {
+            n.left_child += bottom_nodes_offset;
+            n.right_child += bottom_nodes_offset;
+        }
+    }
+
+    out_nodes.insert(out_nodes.end(), bottom_nodes.begin(), bottom_nodes.end());
+
+    return (uint32_t)(out_nodes.size() - top_nodes_start);
+}
 
 bool Ray::NaiivePluckerTest(const float p[9], const float o[3], const float d[3]) {
     // plucker coordinates for edges

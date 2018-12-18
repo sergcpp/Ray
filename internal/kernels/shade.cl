@@ -25,6 +25,11 @@ float3 refract(float3 I, float3 N, float eta) {
 #define use_uniform_sampling(pi) \
     ((pi->settings.flags & OutputSH) && pi->bounce <= 2)
 
+float3 heatmap(float t) {
+    float3 r = (float3)(t) * 2.1f - (float3)(1.8f, 1.14f, 0.3f);
+    return (float3)(1.0f) - r * r;
+}
+
 float3 ComputeDirectLighting(const float3 P, const float3 N, const float3 B, const float3 plane_N,
                              __global const float *halton, const int hi, float rand_offset, float rand_offset2,
                              __global const mesh_instance_t *mesh_instances, __global const uint *mi_indices,
@@ -204,6 +209,11 @@ float4 ShadeSurface(const pass_info_t *pi, __global const float *halton,
     float2 uvs = u1 * _w + u2 * inter->u + u3 * inter->v;
 
     //
+
+    if (inter->mask != 0xffffffff) {
+        float t = inter->mask * 0.01f;
+        return (float4)(heatmap(t), 1.0f);
+    }
 
     const float2 tex_atlas_size = (float2)(get_image_width(texture_atlas), get_image_height(texture_atlas));
 

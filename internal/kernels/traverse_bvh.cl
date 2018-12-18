@@ -564,6 +564,8 @@ void Traverse_MacroTreeImg_WithLocalStack(const float3 orig_r_o, const float3 or
     uint stack_size = 0;
     stack[stack_size++] = node_index;
 
+    int depth = 0;
+
     while (stack_size) {
         uint cur = stack[--stack_size];
 
@@ -580,6 +582,7 @@ void Traverse_MacroTreeImg_WithLocalStack(const float3 orig_r_o, const float3 or
         if (!__bbox_test_fma(orig_r_inv_d, orig_neg_inv_d_o, inter->t, node_data1.xyz, node_data2.xyz)) continue;
 
         if ((as_uint(node_data1.w) & LEAF_NODE_BIT) == 0) {
+            depth++;
             uint space_axis = as_uint(node_data2.w) >> 30;
             stack[stack_size++] = orig_rd[space_axis] < 0 ? as_uint(node_data1.w) : (as_uint(node_data2.w) & RIGHT_CHILD_BITS);
             stack[stack_size++] = orig_rd[space_axis] < 0 ? (as_uint(node_data2.w) & RIGHT_CHILD_BITS) : as_uint(node_data1.w);
@@ -602,6 +605,8 @@ void Traverse_MacroTreeImg_WithLocalStack(const float3 orig_r_o, const float3 or
             }
         }
     }
+
+    //inter->mask = depth;
 }
 
 )" // workaround for 16k string literal limitation on msvc
