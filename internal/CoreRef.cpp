@@ -405,8 +405,52 @@ void Ray::Ref::SampleMeshInTextureSpace(int iteration, int obj_index, int uv_lay
     }
 }
 
-void Ray::Ref::SortRays(ray_packet_t *rays, size_t rays_count, const float root_min[3], const float cell_size[3],
-                        uint32_t *hash_values, int *head_flags, uint32_t *scan_values, ray_chunk_t *chunks, ray_chunk_t *chunks_temp, uint32_t *skeleton) {
+void Ray::Ref::SortRays_CPU(ray_packet_t *rays, size_t rays_count, const float root_min[3], const float cell_size[3],
+                            uint32_t *hash_values, uint32_t *scan_values, ray_chunk_t *chunks, ray_chunk_t *chunks_temp) {
+    // From "Fast Ray Sorting and Breadth-First Packet Traversal for GPU Ray Tracing" [2010]
+
+    // compute ray hash values
+    for (size_t i = 0; i < rays_count; i++) {
+        hash_values[i] = get_ray_hash(rays[i], root_min, cell_size);
+    }
+
+    size_t chunks_count = 0;
+
+    // compress codes into spans of indentical values (makes sorting stage faster)
+    for (uint32_t start = 0, end = 1; end <= (uint32_t)rays_count; end++) {
+        if (end == (uint32_t)rays_count ||
+            (hash_values[start] != hash_values[end])) {
+            chunks[chunks_count].hash = hash_values[start];
+            chunks[chunks_count].base = start;
+            chunks[chunks_count++].size = end - start;
+            start = end;
+        }
+    }
+
+    radix_sort(&chunks[0], &chunks[0] + chunks_count, &chunks_temp[0]);
+
+    // decompress sorted spans
+    size_t counter = 0;
+    for (uint32_t i = 0; i < chunks_count; i++) {
+        for (uint32_t j = 0; j < chunks[i].size; j++) {
+            scan_values[counter++] = chunks[i].base + j;
+        }
+    }
+
+    {   // reorder rays
+        uint32_t j, k;
+        for (uint32_t i = 0; i < (uint32_t)rays_count; i++) {
+            while (i != (j = scan_values[i])) {
+                k = scan_values[j];
+                std::swap(rays[j], rays[k]);
+                std::swap(scan_values[i], scan_values[j]);
+            }
+        }
+    }
+}
+
+void Ray::Ref::SortRays_GPU(ray_packet_t *rays, size_t rays_count, const float root_min[3], const float cell_size[3],
+                            uint32_t *hash_values, int *head_flags, uint32_t *scan_values, ray_chunk_t *chunks, ray_chunk_t *chunks_temp, uint32_t *skeleton) {
     // From "Fast Ray Sorting and Breadth-First Packet Traversal for GPU Ray Tracing" [2010]
 
     // compute ray hash values
