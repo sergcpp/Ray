@@ -47,25 +47,33 @@ void Ray::Ref::ComputeTextureBasis(size_t vtx_offset, size_t vtx_start, std::vec
         auto &b1 = binormals[indices[i + 1]];
         auto &b2 = binormals[indices[i + 2]];
 
-        simd_fvec3 dp1 = simd_fvec3(v1->p) -simd_fvec3(v0->p);
+        simd_fvec3 dp1 = simd_fvec3(v1->p) - simd_fvec3(v0->p);
         simd_fvec3 dp2 = simd_fvec3(v2->p) - simd_fvec3(v0->p);
 
         simd_fvec2 dt1 = simd_fvec2(v1->t[0]) - simd_fvec2(v0->t[0]);
-        if (length(dt1) < FLT_EPS) {
-            dt1 = simd_fvec2{ 1.0f, 1.0f };
-        }
-
         simd_fvec2 dt2 = simd_fvec2(v2->t[0]) - simd_fvec2(v0->t[0]);
-        if (length(dt2) < FLT_EPS) {
-            dt2 = simd_fvec2{ 1.0f, -1.0f };
-        }
+
+        simd_fvec3 tangent, binormal;
 
         float det = dt1[0] * dt2[1] - dt1[1] * dt2[0];
-        float inv_det = std::abs(det) > FLT_EPS ? 1.0f / det : 0;
-        simd_fvec3 tangent = (dp1 * dt2[1] - dp2 * dt1[1]) * inv_det;
-        simd_fvec3 binormal = (dp2 * dt1[0] - dp1 * dt2[0]) * inv_det;
+        if (std::abs(det) > FLT_EPS) {
+            float inv_det = 1.0f / det;
+            tangent = (dp1 * dt2[1] - dp2 * dt1[1]) * inv_det;
+            binormal = (dp2 * dt1[0] - dp1 * dt2[0]) * inv_det;
+        } else {
+            simd_fvec3 plane_N = cross(dp1, dp2);
+            tangent = simd_fvec3{ 0.0f, 1.0f, 0.0f };
+            if (std::abs(plane_N[0]) <= std::abs(plane_N[1]) && std::abs(plane_N[0]) <= std::abs(plane_N[2])) {
+                tangent = simd_fvec3{ 1.0f, 0.0f, 0.0f };
+            } else if (std::abs(plane_N[2]) <= std::abs(plane_N[0]) && std::abs(plane_N[2]) <= std::abs(plane_N[1])) {
+                tangent = simd_fvec3{ 0.0f, 0.0f, 1.0f };
+            }
 
-        int i1 = v0->b[0] * tangent[0] + v0->b[1] * tangent[1] + v0->b[2] * tangent[2] < 0;
+            binormal = normalize(cross(simd_fvec3(plane_N), tangent));
+            tangent = normalize(cross(simd_fvec3(plane_N), binormal));
+        }
+
+        int i1 = (v0->b[0] * tangent[0] + v0->b[1] * tangent[1] + v0->b[2] * tangent[2]) < 0;
         int i2 = 2 * (b0[0] * binormal[0] + b0[1] * binormal[1] + b0[2] * binormal[2] < 0);
 
         if (i1 || i2) {
