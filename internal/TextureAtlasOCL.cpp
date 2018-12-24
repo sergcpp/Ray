@@ -29,11 +29,11 @@ int Ray::Ocl::TextureAtlas::Allocate(const pixel_color8_t *data, const int _res[
                 if (error != CL_SUCCESS) return -1;
                 
                 std::vector<pixel_color8_t> vertical_border(res[1]);
-                vertical_border[0] = data[(_res[1] - 1) * _res[0] + _res[1] - 1];
+                vertical_border[0] = data[(_res[1] - 1) * _res[0] + _res[0] - 1];
                 for (int i = 0; i < _res[1]; i++) {
-                    vertical_border[i + 1] = data[i * _res[0] + _res[1] - 1];
+                    vertical_border[i + 1] = data[i * _res[0] + _res[0] - 1];
                 }
-                vertical_border[res[1] - 1] = data[0 * _res[0] + _res[1] - 1];
+                vertical_border[res[1] - 1] = data[0 * _res[0] + _res[0] - 1];
 
                 error = queue_.enqueueWriteImage(atlas_, CL_TRUE, { (size_t)pos[0], (size_t)pos[1], (size_t)page }, { 1, (size_t)res[1], 1 }, 0, 0, &vertical_border[0]);
                 if (error != CL_SUCCESS) return -1;

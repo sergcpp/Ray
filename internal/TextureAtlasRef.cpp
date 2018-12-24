@@ -32,11 +32,11 @@ int Ray::Ref::TextureAtlas::Allocate(const pixel_color8_t *data, const int _res[
             write_page(page, pos[0] + 1, pos[1] + res[1] - 1, _res[0], 1, &data[0]);
 
             std::vector<pixel_color8_t> vertical_border(res[1]);
-            vertical_border[0] = data[(_res[1] - 1) * _res[0] + _res[1] - 1];
+            vertical_border[0] = data[(_res[1] - 1) * _res[0] + _res[0] - 1];
             for (int i = 0; i < _res[1]; i++) {
-                vertical_border[i + 1] = data[i * _res[0] + _res[1] - 1];
+                vertical_border[i + 1] = data[i * _res[0] + _res[0] - 1];
             }
-            vertical_border[res[1] - 1] = data[0 * _res[0] + _res[1] - 1];
+            vertical_border[res[1] - 1] = data[0 * _res[0] + _res[0] - 1];
 
             write_page(page, pos[0], pos[1], 1, res[1], &vertical_border[0]);
 
