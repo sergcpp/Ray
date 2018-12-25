@@ -9,6 +9,9 @@ Small pathtracing library created for learning purposes. Includes CPU and GPU (O
   <img src="/scene1.jpg" width="49%" />
   <img src="/scene2.jpg" width="49%" /> 
 </p>
+<p float="left">
+  <img src="/scene3.jpg" width="98.5%" />
+</p>
 
 (Scenes are taken from here: https://benedikt-bitterli.me/resources/)
 
