@@ -210,11 +210,6 @@ float4 ShadeSurface(const pass_info_t *pi, __global const float *halton,
 
     //
 
-    if (inter->mask != 0xffffffff) {
-        float t = inter->mask * 0.01f;
-        return (float4)(heatmap(t), 1.0f);
-    }
-
     const float2 tex_atlas_size = (float2)(get_image_width(texture_atlas), get_image_height(texture_atlas));
 
     const float3 p1 = (float3)(v1->p[0], v1->p[1], v1->p[2]);

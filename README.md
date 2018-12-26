@@ -5,13 +5,15 @@ Small pathtracing library created for learning purposes. Includes CPU and GPU (O
 - Full application : https://bitbucket.org/Apfel1994/raydemo
 - Video : https://www.youtube.com/watch?v=MHk9jXcdrZs
 
-<p float="left">
+<div>
+<div float="left" >
   <img src="/scene1.jpg" width="49%" />
   <img src="/scene2.jpg" width="49%" /> 
-</p>
-<p float="left">
+</div>
+<div float="left">
   <img src="/scene3.jpg" width="98.5%" />
-</p>
+</div>
+</div>
 
 (Scenes are taken from here: https://benedikt-bitterli.me/resources/)
 

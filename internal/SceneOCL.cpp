@@ -431,9 +431,6 @@ void Ray::Ocl::Scene::RebuildMacroBVH() {
     macro_nodes_start_ = (uint32_t)nodes_.size();
     macro_nodes_count_ = PreprocessPrims_SAH(&primitives[0], primitives.size(), nullptr, 0, {}, bvh_nodes, mi_indices);
     
-    //for (int i = 0; i < 10000; i++)
-    //macro_nodes_count_ = PreprocessPrims_HLBVH(&primitives[0], primitives.size(), bvh_nodes, mi_indices);
-
     // offset nodes
     for (auto &n : bvh_nodes) {
 #ifdef USE_STACKLESS_BVH_TRAVERSAL

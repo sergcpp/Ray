@@ -35,6 +35,9 @@ std::vector<Ray::pixel_color8_t> Ray::Ref::DownsampleTexture(const std::vector<p
 
 void Ray::Ref::ComputeTextureBasis(size_t vtx_offset, size_t vtx_start, std::vector<vertex_t> &vertices, std::vector<uint32_t> &new_vtx_indices,
                                    const uint32_t *indices, size_t indices_count) {
+    auto cross = [](const simd_fvec3 &v1, const simd_fvec3 &v2) -> simd_fvec3 {
+        return simd_fvec3{ v1[1] * v2[2] - v1[2] * v2[1], v1[2] * v2[0] - v1[0] * v2[2], v1[0] * v2[1] - v1[1] * v2[0] };
+    };
 
     std::vector<std::array<uint32_t, 3>> twin_verts(vertices.size(), { 0, 0, 0 });
     aligned_vector<simd_fvec3> binormals(vertices.size());
@@ -145,10 +148,6 @@ void Ray::Ref::ComputeTextureBasis(size_t vtx_offset, size_t vtx_start, std::vec
         v2->b[1] += tangent[1];
         v2->b[2] += tangent[2];
     }
-
-    auto cross = [](const simd_fvec3 &v1, const simd_fvec3 &v2) -> simd_fvec3 {
-        return simd_fvec3{ v1[1] * v2[2] - v1[2] * v2[1], v1[2] * v2[0] - v1[0] * v2[2], v1[0] * v2[1] - v1[1] * v2[0] };
-    };
 
     for (size_t i = vtx_start; i < vertices.size(); i++) {
         auto &v = vertices[i];
