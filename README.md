@@ -2,7 +2,7 @@
 
 Small pathtracing library created for learning purposes. Includes CPU and GPU (OpenCL) backends.
 
-- Full application : https://bitbucket.org/Apfel1994/raydemo
+- Full application : https://github.com/SerhiiY-94/RayDemo
 - Video : https://www.youtube.com/watch?v=MHk9jXcdrZs
 
 <div>
@@ -272,7 +272,7 @@ With 'output_sh' set to true renderer additionally outputs lightmap in 2-band (4
 ## Implementation details
 
 - Ray/triangle intersection is done using Plucker test with help of precomputed data stored per triangle as described in 'Ray-Triangle Intersection Algorithm for Modern CPU Architectures' paper.
-- SAH-based binary BVH is used as acceleration structure. Two traversal algorithms are available: stack- and stackless (described in 'Efficient Stack-less BVH Traversal for Ray Tracing' paper). By default traversal with stack is used as it was faster on gpus I tested on. BVH tree is made two-level to support basic rigid motion. Optional 'spatial splits' feature can be used for building better optimized BVH in cost of construction time as described in 'Spatial Splits in Bounding Volume Hierarchies' paper.
+- SAH-based binary BVH is used as acceleration structure. Two traversal algorithms are available: stack- and stackless (described in 'Efficient Stack-less BVH Traversal for Ray Tracing' paper). By default traversal with stack is used as it was faster on gpus I tested on. BVH tree is made two-level to support basic rigid motion. Optional 'spatial splits' feature can be used for building better optimized BVH in cost of construction time as described in 'Spatial Splits in Bounding Volume Hierarchies' paper. Also optional hlbvh can be used, which builds tree faster but with less quality.
 - Textures (with mip maps) are packed into a 2d texture array atlas for easier passing to OpenCL kernel.
 - Ray differentials are used for choosing mip level and filter kernel size as described in 'Tracing Ray Differentials' paper.
 - Sampling is done using Halton sequence with per pixel randomization.

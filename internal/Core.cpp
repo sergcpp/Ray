@@ -576,7 +576,7 @@ uint32_t Ray::PreprocessPrims_HLBVH(const prim_t *prims, size_t prims_count, std
     std::vector<treelet_t> treelets;
     treelets.reserve(1 << 12); // Top-level bvh can have up to 4096 items
 
-    // Use upper 12 bits to extracts treelets
+    // Use upper 12 bits to extract treelets
     for (uint32_t start = 0, end = 1; end <= (uint32_t)morton_codes.size(); end++) {
         uint32_t mask = 0b00111111111111000000000000000000;
         if (end == (uint32_t)morton_codes.size() ||
