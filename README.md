@@ -1,4 +1,4 @@
-# Ray [![Build status](https://ci.appveyor.com/api/projects/status/46ky3ltwvain51u6?svg=true)](https://ci.appveyor.com/project/SerhiiY/ray) [![Build Status](https://travis-ci.org/SerhiiY-94/Ray.svg?branch=master)](https://travis-ci.org/SerhiiY-94/Ray)
+# Ray [![Build status](https://ci.appveyor.com/api/projects/status/abtpdwpy4bvcpqia/branch/master?svg=true)](https://ci.appveyor.com/project/SerhiiY/ray/branch/master) [![Build Status](https://travis-ci.org/SerhiiY-94/Ray.svg?branch=master)](https://travis-ci.org/SerhiiY-94/Ray)
 
 Small pathtracing library created for learning purposes. Includes CPU and GPU (OpenCL) backends.
 
