@@ -6,20 +6,24 @@ template void GeneratePrimaryRays<RayPacketDimX, RayPacketDimY>(const int iterat
 template void SampleMeshInTextureSpace<RayPacketDimX, RayPacketDimY>(int iteration, int obj_index, int uv_layer, const mesh_t &mesh, const transform_t &tr, const uint32_t *vtx_indices, const vertex_t *vertices,
                                                                      const rect_t &r, int w, int h, const float *halton, aligned_vector<ray_packet_t<RayPacketSize>> &out_rays, aligned_vector<hit_data_t<RayPacketSize>> &out_inters);
 
-
-template void SortRays<RayPacketSize>(ray_packet_t<RayPacketSize> *rays, simd_ivec<RayPacketSize> *ray_masks, int &secondary_rays_count, const float root_min[3], const float cell_size[3],
-                                      simd_ivec<RayPacketSize> *hash_values, int *head_flags, uint32_t *scan_values, ray_chunk_t *chunks, ray_chunk_t *chunks_temp, uint32_t *skeleton);
+template void SortRays_CPU<RayPacketSize>(ray_packet_t<RayPacketSize> *rays, simd_ivec<RayPacketSize> *ray_masks, int &secondary_rays_count, const float root_min[3], const float cell_size[3],
+                                          simd_ivec<RayPacketSize> *hash_values, uint32_t *scan_values, ray_chunk_t *chunks, ray_chunk_t *chunks_temp);
+template void SortRays_GPU<RayPacketSize>(ray_packet_t<RayPacketSize> *rays, simd_ivec<RayPacketSize> *ray_masks, int &secondary_rays_count, const float root_min[3], const float cell_size[3],
+                                          simd_ivec<RayPacketSize> *hash_values, int *head_flags, uint32_t *scan_values, ray_chunk_t *chunks, ray_chunk_t *chunks_temp, uint32_t *skeleton);
 
 template bool IntersectTris_ClosestHit<RayPacketSize>(const ray_packet_t<RayPacketSize> &r, const simd_ivec<RayPacketSize> &ray_mask, const tri_accel_t *tris, uint32_t num_tris, uint32_t obj_index, hit_data_t<RayPacketSize> &out_inter);
 template bool IntersectTris_ClosestHit<RayPacketSize>(const ray_packet_t<RayPacketSize> &r, const simd_ivec<RayPacketSize> &ray_mask, const tri_accel_t *tris, const uint32_t *indices, uint32_t num_tris, uint32_t obj_index, hit_data_t<RayPacketSize> &out_inter);
 template bool IntersectTris_AnyHit<RayPacketSize>(const ray_packet_t<RayPacketSize> &r, const simd_ivec<RayPacketSize> &ray_mask, const tri_accel_t *tris, uint32_t num_tris, uint32_t obj_index, hit_data_t<RayPacketSize> &out_inter, simd_ivec<RayPacketSize> &out_is_solid_hit);
 template bool IntersectTris_AnyHit<RayPacketSize>(const ray_packet_t<RayPacketSize> &r, const simd_ivec<RayPacketSize> &ray_mask, const tri_accel_t *tris, const uint32_t *indices, uint32_t num_tris, uint32_t obj_index, hit_data_t<RayPacketSize> &out_inter, simd_ivec<RayPacketSize> &out_is_solid_hit);
 
+#ifdef USE_STACKLESS_BVH_TRAVERSAL
 template bool Traverse_MacroTree_Stackless_CPU<RayPacketSize>(const ray_packet_t<RayPacketSize> &r, const simd_ivec<RayPacketSize> &ray_mask, const bvh_node_t *nodes, uint32_t node_index,
                                                               const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
                                                               const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t<RayPacketSize> &inter);
 template bool Traverse_MicroTree_Stackless_CPU<RayPacketSize>(const ray_packet_t<RayPacketSize> &r, const simd_ivec<RayPacketSize> &ray_mask, const bvh_node_t *nodes, uint32_t node_index,
                                                               const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, hit_data_t<RayPacketSize> &inter);
+#endif
+                                                              
 template bool Traverse_MacroTree_WithStack_ClosestHit<RayPacketSize>(const ray_packet_t<RayPacketSize> &r, const simd_ivec<RayPacketSize> &ray_mask, const bvh_node_t *nodes, uint32_t node_index,
                                                                      const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
                                                                      const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t<RayPacketSize> &inter);
