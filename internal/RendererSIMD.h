@@ -242,11 +242,11 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
     std::chrono::duration<double, std::micro> secondary_sort_time{}, secondary_trace_time{}, secondary_shade_time{};
 
     p.hash_values.resize(secondary_rays_count);
-    p.head_flags.resize(secondary_rays_count * S);
+    //p.head_flags.resize(secondary_rays_count * S);
     p.scan_values.resize(secondary_rays_count * S);
     p.chunks.resize(secondary_rays_count * S);
     p.chunks_temp.resize(secondary_rays_count * S);
-    p.skeleton.resize(secondary_rays_count * S);
+    //p.skeleton.resize(secondary_rays_count * S);
 
     if (cam.pass_settings.flags & OutputSH) {
         temp_buf_.ResetSampleData(rect);
@@ -267,8 +267,8 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
     for (int bounce = 0; bounce < pass_info.settings.max_total_depth && secondary_rays_count && !(pass_info.settings.flags & SkipIndirectLight); bounce++) {
         auto time_secondary_sort_start = std::chrono::high_resolution_clock::now();
 
-        SortRays(&p.secondary_rays[0], &p.secondary_masks[0], secondary_rays_count, root_min, cell_size,
-                 &p.hash_values[0], &p.head_flags[0], &p.scan_values[0], &p.chunks[0], &p.chunks_temp[0], &p.skeleton[0]);
+        SortRays_CPU(&p.secondary_rays[0], &p.secondary_masks[0], secondary_rays_count, root_min, cell_size,
+                     &p.hash_values[0], &p.scan_values[0], &p.chunks[0], &p.chunks_temp[0]);
 
         auto time_secondary_trace_start = std::chrono::high_resolution_clock::now();
 

@@ -77,8 +77,11 @@ void SampleMeshInTextureSpace(int iteration, int obj_index, int uv_layer, const 
 
 // Sorting rays
 template <int S>
-void SortRays(ray_packet_t<S> *rays, simd_ivec<S> *ray_masks, int &secondary_rays_count, const float root_min[3], const float cell_size[3],
-              simd_ivec<S> *hash_values, int *head_flags, uint32_t *scan_values, ray_chunk_t *chunks, ray_chunk_t *chunks_temp, uint32_t *skeleton);
+void SortRays_CPU(ray_packet_t<S> *rays, simd_ivec<S> *ray_masks, int &secondary_rays_count, const float root_min[3], const float cell_size[3],
+                  simd_ivec<S> *hash_values, uint32_t *scan_values, ray_chunk_t *chunks, ray_chunk_t *chunks_temp);
+template <int S>
+void SortRays_GPU(ray_packet_t<S> *rays, simd_ivec<S> *ray_masks, int &secondary_rays_count, const float root_min[3], const float cell_size[3],
+                  simd_ivec<S> *hash_values, int *head_flags, uint32_t *scan_values, ray_chunk_t *chunks, ray_chunk_t *chunks_temp, uint32_t *skeleton);
 
 // Intersect primitives
 template <int S>
@@ -831,79 +834,42 @@ void Ray::NS::SampleMeshInTextureSpace(int iteration, int obj_index, int uv_laye
     }
 }
 
-
 template <int S>
-void Ray::NS::SortRays(ray_packet_t<S> *rays, simd_ivec<S> *ray_masks, int &secondary_rays_count, const float root_min[3], const float cell_size[3],
-                       simd_ivec<S> *hash_values, int *head_flags, uint32_t *scan_values, ray_chunk_t *chunks, ray_chunk_t *chunks_temp, uint32_t *skeleton) {
+void Ray::NS::SortRays_CPU(ray_packet_t<S> *rays, simd_ivec<S> *ray_masks, int &rays_count, const float root_min[3], const float cell_size[3],
+                           simd_ivec<S> *hash_values, uint32_t *scan_values, ray_chunk_t *chunks, ray_chunk_t *chunks_temp) {
     // From "Fast Ray Sorting and Breadth-First Packet Traversal for GPU Ray Tracing" [2010]
 
     // compute ray hash values
-    for (int i = 0; i < secondary_rays_count; i++) {
+    for (int i = 0; i < rays_count; i++) {
         hash_values[i] = get_ray_hash(rays[i], ray_masks[i], root_min, cell_size);
     }
 
-    // set head flags
-    head_flags[0] = 1;
-    for (int i = 1; i < secondary_rays_count * S; i++) {
-        head_flags[i] = hash_values[i / S][i % S] != hash_values[(i - 1) / S][(i - 1) % S];
-    }
+    size_t chunks_count = 0;
 
-    int chunks_count = 0;
-
-    {   // perform exclusive scan on head flags
-        uint32_t cur_sum = 0;
-        for (int i = 0; i < secondary_rays_count * S; i++) {
-            scan_values[i] = cur_sum;
-            cur_sum += head_flags[i];
-        }
-        chunks_count = cur_sum;
-    }
-
-    // init ray chunks hash and base index
-    for (int i = 0; i < secondary_rays_count * S; i++) {
-        if (head_flags[i]) {
-            chunks[scan_values[i]].hash = reinterpret_cast<const uint32_t &>(hash_values[i / S][i % S]);
-            chunks[scan_values[i]].base = (uint32_t)i;
+    // compress codes into spans of indentical values (makes sorting stage faster)
+    for (int start = 0, end = 1; end <= rays_count * S; end++) {
+        if (end == (rays_count * S) ||
+            (hash_values[start / S][start % S] != hash_values[end / S][end % S])) {
+            chunks[chunks_count].hash = hash_values[start / S][start % S];
+            chunks[chunks_count].base = start;
+            chunks[chunks_count++].size = end - start;
+            start = end;
         }
     }
-
-    // init ray chunks size
-    for (int i = 0; i < chunks_count - 1; i++) {
-        chunks[i].size = chunks[i + 1].base - chunks[i].base;
-    }
-    chunks[chunks_count - 1].size = (uint32_t)secondary_rays_count * S - chunks[chunks_count - 1].base;
 
     radix_sort(&chunks[0], &chunks[0] + chunks_count, &chunks_temp[0]);
 
-    {   // perform exclusive scan on chunks size
-        uint32_t cur_sum = 0;
-        for (int i = 0; i < chunks_count; i++) {
-            scan_values[i] = cur_sum;
-            cur_sum += chunks[i].size;
-        }
-    }
-
-    std::fill(&skeleton[0], &skeleton[0] + secondary_rays_count * S, 1);
-    std::fill(&head_flags[0], &head_flags[0] + secondary_rays_count * S, 0);
-
-    // init skeleton and head flags array
-    for (int i = 0; i < chunks_count; i++) {
-        skeleton[scan_values[i]] = chunks[i].base;
-        head_flags[scan_values[i]] = 1;
-    }
-
-    {   // perform a segmented scan on skeleton array
-        uint32_t cur_sum = 0;
-        for (int i = 0; i < secondary_rays_count * S; i++) {
-            if (head_flags[i]) cur_sum = 0;
-            cur_sum += skeleton[i];
-            scan_values[i] = cur_sum;
+    // decompress sorted spans
+    size_t counter = 0;
+    for (uint32_t i = 0; i < chunks_count; i++) {
+        for (uint32_t j = 0; j < chunks[i].size; j++) {
+            scan_values[counter++] = chunks[i].base + j;
         }
     }
 
     {   // reorder rays
         int j, k;
-        for (int i = 0; i < secondary_rays_count * S; i++) {
+        for (int i = 0; i < rays_count * S; i++) {
             while (i != (j = scan_values[i])) {
                 k = scan_values[j];
 
@@ -954,8 +920,135 @@ void Ray::NS::SortRays(ray_packet_t<S> *rays, simd_ivec<S> *ray_masks, int &seco
     }
 
     // remove non-active rays
-    while (secondary_rays_count && ray_masks[secondary_rays_count - 1].all_zeros()) {
-        secondary_rays_count--;
+    while (rays_count && ray_masks[rays_count - 1].all_zeros()) {
+        rays_count--;
+    }
+}
+
+template <int S>
+void Ray::NS::SortRays_GPU(ray_packet_t<S> *rays, simd_ivec<S> *ray_masks, int &rays_count, const float root_min[3], const float cell_size[3],
+                           simd_ivec<S> *hash_values, int *head_flags, uint32_t *scan_values, ray_chunk_t *chunks, ray_chunk_t *chunks_temp, uint32_t *skeleton) {
+    // From "Fast Ray Sorting and Breadth-First Packet Traversal for GPU Ray Tracing" [2010]
+
+    // compute ray hash values
+    for (int i = 0; i < rays_count; i++) {
+        hash_values[i] = get_ray_hash(rays[i], ray_masks[i], root_min, cell_size);
+    }
+
+    // set head flags
+    head_flags[0] = 1;
+    for (int i = 1; i < rays_count * S; i++) {
+        head_flags[i] = hash_values[i / S][i % S] != hash_values[(i - 1) / S][(i - 1) % S];
+    }
+
+    int chunks_count = 0;
+
+    {   // perform exclusive scan on head flags
+        uint32_t cur_sum = 0;
+        for (int i = 0; i < rays_count * S; i++) {
+            scan_values[i] = cur_sum;
+            cur_sum += head_flags[i];
+        }
+        chunks_count = cur_sum;
+    }
+
+    // init ray chunks hash and base index
+    for (int i = 0; i < rays_count * S; i++) {
+        if (head_flags[i]) {
+            chunks[scan_values[i]].hash = reinterpret_cast<const uint32_t &>(hash_values[i / S][i % S]);
+            chunks[scan_values[i]].base = (uint32_t)i;
+        }
+    }
+
+    // init ray chunks size
+    for (int i = 0; i < chunks_count - 1; i++) {
+        chunks[i].size = chunks[i + 1].base - chunks[i].base;
+    }
+    chunks[chunks_count - 1].size = (uint32_t)rays_count * S - chunks[chunks_count - 1].base;
+
+    radix_sort(&chunks[0], &chunks[0] + chunks_count, &chunks_temp[0]);
+
+    {   // perform exclusive scan on chunks size
+        uint32_t cur_sum = 0;
+        for (int i = 0; i < chunks_count; i++) {
+            scan_values[i] = cur_sum;
+            cur_sum += chunks[i].size;
+        }
+    }
+
+    std::fill(&skeleton[0], &skeleton[0] + rays_count * S, 1);
+    std::fill(&head_flags[0], &head_flags[0] + rays_count * S, 0);
+
+    // init skeleton and head flags array
+    for (int i = 0; i < chunks_count; i++) {
+        skeleton[scan_values[i]] = chunks[i].base;
+        head_flags[scan_values[i]] = 1;
+    }
+
+    {   // perform a segmented scan on skeleton array
+        uint32_t cur_sum = 0;
+        for (int i = 0; i < rays_count * S; i++) {
+            if (head_flags[i]) cur_sum = 0;
+            cur_sum += skeleton[i];
+            scan_values[i] = cur_sum;
+        }
+    }
+
+    {   // reorder rays
+        int j, k;
+        for (int i = 0; i < rays_count * S; i++) {
+            while (i != (j = scan_values[i])) {
+                k = scan_values[j];
+
+                {
+                    int jj = j / S, _jj = j % S,
+                        kk = k / S, _kk = k % S;
+
+                    std::swap(hash_values[jj][_jj], hash_values[kk][_kk]);
+
+                    std::swap(rays[jj].d[0][_jj], rays[kk].d[0][_kk]);
+                    std::swap(rays[jj].d[1][_jj], rays[kk].d[1][_kk]);
+                    std::swap(rays[jj].d[2][_jj], rays[kk].d[2][_kk]);
+
+                    std::swap(rays[jj].o[0][_jj], rays[kk].o[0][_kk]);
+                    std::swap(rays[jj].o[1][_jj], rays[kk].o[1][_kk]);
+                    std::swap(rays[jj].o[2][_jj], rays[kk].o[2][_kk]);
+
+                    std::swap(rays[jj].c[0][_jj], rays[kk].c[0][_kk]);
+                    std::swap(rays[jj].c[1][_jj], rays[kk].c[1][_kk]);
+                    std::swap(rays[jj].c[2][_jj], rays[kk].c[2][_kk]);
+
+                    std::swap(rays[jj].ior[_jj], rays[kk].ior[_kk]);
+
+                    std::swap(rays[jj].do_dx[0][_jj], rays[kk].do_dx[0][_kk]);
+                    std::swap(rays[jj].do_dx[1][_jj], rays[kk].do_dx[1][_kk]);
+                    std::swap(rays[jj].do_dx[2][_jj], rays[kk].do_dx[2][_kk]);
+
+                    std::swap(rays[jj].dd_dx[0][_jj], rays[kk].dd_dx[0][_kk]);
+                    std::swap(rays[jj].dd_dx[1][_jj], rays[kk].dd_dx[1][_kk]);
+                    std::swap(rays[jj].dd_dx[2][_jj], rays[kk].dd_dx[2][_kk]);
+
+                    std::swap(rays[jj].do_dy[0][_jj], rays[kk].do_dy[0][_kk]);
+                    std::swap(rays[jj].do_dy[1][_jj], rays[kk].do_dy[1][_kk]);
+                    std::swap(rays[jj].do_dy[2][_jj], rays[kk].do_dy[2][_kk]);
+
+                    std::swap(rays[jj].dd_dy[0][_jj], rays[kk].dd_dy[0][_kk]);
+                    std::swap(rays[jj].dd_dy[1][_jj], rays[kk].dd_dy[1][_kk]);
+                    std::swap(rays[jj].dd_dy[2][_jj], rays[kk].dd_dy[2][_kk]);
+
+                    std::swap(rays[jj].xy[_jj], rays[kk].xy[_kk]);
+
+                    std::swap(ray_masks[jj][_jj], ray_masks[kk][_kk]);
+                }
+
+                std::swap(scan_values[i], scan_values[j]);
+            }
+        }
+    }
+
+    // remove non-active rays
+    while (rays_count && ray_masks[rays_count - 1].all_zeros()) {
+        rays_count--;
     }
 }
 
