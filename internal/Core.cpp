@@ -160,14 +160,18 @@ const char Ray::phi_table[][17] = { { 2,  2,  2,  2,  2,  3,  3,  3,  4,  4,  4,
                                     { 14, 13, 13, 13, 13, 12, 12, 12, 12, 11, 11, 11, 10, 10, 10, 10, 10 } };
 
 
-void Ray::PreprocessTri(const float *p, int stride, tri_accel_t *acc) {
+bool Ray::PreprocessTri(const float *p, int stride, tri_accel_t *acc) {
     // from "Ray-Triangle Intersection Algorithm for Modern CPU Architectures" [2007]
 
     if (!stride) stride = 3;
 
     // edges
     float e0[3] = { p[stride] - p[0], p[stride + 1] - p[1], p[stride + 2] - p[2] },
-                  e1[3] = { p[stride * 2] - p[0], p[stride * 2 + 1] - p[1], p[stride * 2 + 2] - p[2] };
+          e1[3] = { p[stride * 2] - p[0], p[stride * 2 + 1] - p[1], p[stride * 2 + 2] - p[2] };
+
+    bool is_degenerate =
+        (std::abs(e0[0]) < FLT_EPS && std::abs(e0[1]) < FLT_EPS && std::abs(e0[2]) < FLT_EPS) ||
+        (std::abs(e1[0]) < FLT_EPS && std::abs(e1[1]) < FLT_EPS && std::abs(e1[2]) < FLT_EPS);
 
     float n[3] = { e0[1] * e1[2] - e0[2] * e1[1],
                    e0[2] * e1[0] - e0[0] * e1[2],
@@ -187,6 +191,10 @@ void Ray::PreprocessTri(const float *p, int stride, tri_accel_t *acc) {
         w = 2;
         u = 0;
         v = 1;
+    }
+
+    if (std::abs(n[w]) < FLT_EPS) {
+        n[w] = 1.0f;
     }
 
     acc->nu = n[u] / n[w];
@@ -209,6 +217,7 @@ void Ray::PreprocessTri(const float *p, int stride, tri_accel_t *acc) {
         acc->ci |= TRI_INV_NORMAL_BIT;
     }
     assert((acc->ci & TRI_W_BITS) == w);
+    return !is_degenerate;
 }
 
 void Ray::ExtractPlaneNormal(const tri_accel_t &tri, float *out_normal) {

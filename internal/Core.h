@@ -128,8 +128,8 @@ template <typename T>
 using aligned_vector = std::vector<T, aligned_allocator<T, alignof(T)>>;
 
 // Creates struct of precomputed triangle data for faster Plucker intersection test
-void PreprocessTri(const float *p, int stride, tri_accel_t *acc);
-// Extructs planar trianble normal from precomputed triangle data
+bool PreprocessTri(const float *p, int stride, tri_accel_t *acc);
+// Extructs planar triangle normal from precomputed triangle data
 void ExtractPlaneNormal(const tri_accel_t &tri, float *out_normal);
 
 // Builds BVH for mesh and precomputes triangle data

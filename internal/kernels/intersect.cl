@@ -12,13 +12,13 @@ void IntersectTris(const float3 r_o, const float3 r_d, __global const tri_accel_
     for (uint j = tri_index; j < tri_index + tri_count; j++) {
         const __global tri_accel_t *tri = &tris[tri_indices[j]];
 
-        int w = tri->ci & TRI_W_BITS,
-            u = _next_u[w], v = _next_v[w];
+        int iw = tri->ci & TRI_W_BITS,
+            iu = _next_u[iw], iv = _next_v[iw];
 
-        float det = rd[u] * tri->nu + rd[v] * tri->nv + rd[w];
-        float dett = tri->np - (ro[u] * tri->nu + ro[v] * tri->nv + ro[w]);
-        float Du = rd[u] * dett - (tri->pu - ro[u]) * det;
-        float Dv = rd[v] * dett - (tri->pv - ro[v]) * det;
+        float det = rd[iu] * tri->nu + rd[iv] * tri->nv + rd[iw];
+        float dett = tri->np - (ro[iu] * tri->nu + ro[iv] * tri->nv + ro[iw]);
+        float Du = rd[iu] * dett - (tri->pu - ro[iu]) * det;
+        float Dv = rd[iv] * dett - (tri->pv - ro[iv]) * det;
         float detu = (tri->e1v * Du - tri->e1u * Dv);
         float detv = (tri->e0u * Dv - tri->e0v * Du);
 
@@ -52,13 +52,13 @@ float IntersectTris_Occlusion(const float3 r_o, const float3 r_d, float max_dist
     for (int j = tri_index; j < tri_index + tri_count; j++) {
         const __global tri_accel_t *tri = &tris[tri_indices[j]];
 
-        int w = tri->ci & TRI_W_BITS,
-            u = _next_u[w], v = _next_v[w];
+        int iw = tri->ci & TRI_W_BITS,
+            iu = _next_u[iw], iv = _next_v[iw];
 
-        float det = rd[u] * tri->nu + rd[v] * tri->nv + rd[w];
-        float dett = tri->np - (ro[u] * tri->nu + ro[v] * tri->nv + ro[w]);
-        float Du = rd[u] * dett - (tri->pu - ro[u]) * det;
-        float Dv = rd[v] * dett - (tri->pv - ro[v]) * det;
+        float det = rd[iu] * tri->nu + rd[iv] * tri->nv + rd[iw];
+        float dett = tri->np - (ro[iu] * tri->nu + ro[iv] * tri->nv + ro[iw]);
+        float Du = rd[iu] * dett - (tri->pu - ro[iu]) * det;
+        float Dv = rd[iv] * dett - (tri->pv - ro[iv]) * det;
         float detu = (tri->e1v * Du - tri->e1u * Dv);
         float detv = (tri->e0u * Dv - tri->e0v * Du);
 

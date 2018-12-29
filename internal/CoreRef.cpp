@@ -12,8 +12,7 @@ force_inline void _IntersectTri(const ray_packet_t &r, const tri_accel_t &tri, u
               _next_v[] = { 2, 2, 1 };
 
     int iw = tri.ci & Ray::TRI_W_BITS,
-        iu = _next_u[iw],
-        iv = _next_v[iw];
+        iu = _next_u[iw], iv = _next_v[iw];
 
     float det = r.d[iu] * tri.nu + r.d[iv] * tri.nv + r.d[iw];
     float dett = tri.np - (r.o[iu] * tri.nu + r.o[iv] * tri.nv + r.o[iw]);
@@ -26,7 +25,7 @@ force_inline void _IntersectTri(const ray_packet_t &r, const tri_accel_t &tri, u
     //if ((tmpdet0 >= 0 && detu >= 0 && detv >= 0) || (tmpdet0 <= 0 && detu <= 0 && detv <= 0)) {
     if ((tmpdet0 > -HIT_EPS && detu > -HIT_EPS && detv > -HIT_EPS) || 
         (tmpdet0 < HIT_EPS && detu < HIT_EPS && detv < HIT_EPS)) {
-        float rdet = 1 / det;
+        float rdet = 1.0f / det;
         float t = dett * rdet;
         float u = detu * rdet;
         float v = detv * rdet;
