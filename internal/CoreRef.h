@@ -117,6 +117,9 @@ bool Traverse_MicroTree_WithStack_ClosestHit(const ray_packet_t &r, const float 
 bool Traverse_MicroTree_WithStack_AnyHit(const ray_packet_t &r, const float inv_d[3], const bvh_node_t *nodes, uint32_t root_index,
                                          const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, uint32_t *stack, hit_data_t &inter);
 
+// BRDFs
+float BRDF_OrenNayar(const simd_fvec3 &L, const simd_fvec3 &I, const simd_fvec3 &N, const simd_fvec3 &B, float sigma);
+
 // Transform
 ray_packet_t TransformRay(const ray_packet_t &r, const float *xform);
 simd_fvec3 TransformPoint(const simd_fvec3 &p, const float *xform);
@@ -136,8 +139,8 @@ float ComputeVisibility(const simd_fvec3 &p1, const simd_fvec3 &p2, const float 
                         const scene_data_t &sc, uint32_t node_index, const TextureAtlas &tex_atlas);
 
 // Compute punctual lights contribution
-simd_fvec3 ComputeDirectLighting(const simd_fvec3 &P, const simd_fvec3 &N, const simd_fvec3 &B, const simd_fvec3 &plane_N,
-                                 const float *halton, const int hi, int rand_hash, int rand_hash2, float rand_offset, float rand_offset2,
+simd_fvec3 ComputeDirectLighting(const simd_fvec3 &I, const simd_fvec3 &P, const simd_fvec3 &N, const simd_fvec3 &B, const simd_fvec3 &plane_N,
+                                 float sigma, const float *halton, const int hi, int rand_hash, int rand_hash2, float rand_offset, float rand_offset2,
                                  const scene_data_t &sc, uint32_t node_index, uint32_t light_node_index, const TextureAtlas &tex_atlas);
 
 // Compute derivatives at hit point

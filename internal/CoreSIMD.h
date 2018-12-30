@@ -123,6 +123,10 @@ template <int S>
 bool Traverse_MicroTree_WithStack_AnyHit(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const bvh_node_t *nodes, uint32_t node_index,
                                          const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, hit_data_t<S> &inter, simd_ivec<S> &is_solid_hit);
 
+// BRDFs
+template <int S>
+simd_fvec<S> BRDF_OrenNayar(const simd_fvec<S> L[3], const simd_fvec<S> I[3], const simd_fvec<S> N[3], const simd_fvec<S> T[3], const simd_fvec<S> &sigma);
+
 // Transform
 template <int S>
 ray_packet_t<S> TransformRay(const ray_packet_t<S> &r, const float *xform);
@@ -155,7 +159,7 @@ simd_fvec<S> ComputeVisibility(const simd_fvec<S> p1[3], const simd_fvec<S> p2[3
 
 // Compute punctual lights contribution
 template <int S>
-void ComputeDirectLighting(const simd_fvec<S> P[3], const simd_fvec<S> N[3], const simd_fvec<S> B[3], const simd_fvec<S> plane_N[3],
+void ComputeDirectLighting(const simd_fvec<S> I[3], const simd_fvec<S> P[3], const simd_fvec<S> N[3], const simd_fvec<S> B[3], const simd_fvec<S> plane_N[3], const simd_fvec<S> &sigma,
                            const float *halton, const int hi, const simd_ivec<S> &rand_hash, const simd_ivec<S> &rand_hash2,
                            const simd_fvec<S> &rand_offset, const simd_fvec<S> &rand_offset2, const scene_data_t &sc, uint32_t node_index,
                            uint32_t light_node_index, const Ref::TextureAtlas &tex_atlas, const simd_ivec<S> &ray_mask, simd_fvec<S> *out_col);
@@ -1606,6 +1610,29 @@ bool Ray::NS::Traverse_MicroTree_WithStack_AnyHit(const ray_packet_t<S> &r, cons
 }
 
 template <int S>
+Ray::NS::simd_fvec<S> Ray::NS::BRDF_OrenNayar(const simd_fvec<S> L[3], const simd_fvec<S> I[3], const simd_fvec<S> N[3], const simd_fvec<S> T[3], const simd_fvec<S> &sigma) {
+    simd_fvec<S> sigma_sqr = sigma * sigma;
+    simd_fvec<S> A = 1.0f - (sigma_sqr / (2.0f * (sigma_sqr + 0.33f)));
+    simd_fvec<S> B = (0.45f * sigma_sqr) / (sigma_sqr + 0.09f);
+    simd_fvec<S> cosThetaI = dot(L, N);
+    simd_fvec<S> cosThetaO = -dot(I, N);
+    simd_fvec<S> sinThetaI = sqrt(max(simd_fvec<S>{ 0.0f }, 1.0f - (cosThetaI * cosThetaI)));
+    simd_fvec<S> sinThetaO = sqrt(max(simd_fvec<S>{ 0.0f }, 1.0f - (cosThetaO * cosThetaO)));
+    simd_fvec<S> cosPhiI = dot(L, T);
+    simd_fvec<S> cosPhiO = -dot(I, T);
+    simd_fvec<S> sinPhiI = sqrt(max(simd_fvec<S>{ 0.0f }, 1.0f - (cosPhiI * cosPhiI)));
+    simd_fvec<S> sinPhiO = sqrt(max(simd_fvec<S>{ 0.0f }, 1.0f - (cosPhiO * cosPhiO)));
+    simd_fvec<S> temp = max(simd_fvec<S>{ 0.0f }, (cosPhiI * cosPhiO) + (sinPhiI * sinPhiO));
+    simd_fvec<S> sinAlpha = sinThetaI;
+    simd_fvec<S> tanBeta = (sinThetaO / cosThetaO);
+    where(cosThetaI > cosThetaO, sinAlpha) = sinThetaO;
+    where(cosThetaI > cosThetaO, tanBeta) = (sinThetaI / cosThetaI);
+
+    simd_fvec<S> result = (A + (B * temp * sinAlpha * tanBeta));
+    return clamp(result, 0.0f, 1.0f);
+}
+
+template <int S>
 force_inline Ray::NS::ray_packet_t<S> Ray::NS::TransformRay(const ray_packet_t<S> &r, const float *xform) {
     ray_packet_t<S> _r = r;
 
@@ -2135,7 +2162,7 @@ Ray::NS::simd_fvec<S> Ray::NS::ComputeVisibility(const simd_fvec<S> p1[3], const
 }
 
 template <int S>
-void Ray::NS::ComputeDirectLighting(const simd_fvec<S> P[3], const simd_fvec<S> N[3], const simd_fvec<S> B[3], const simd_fvec<S> plane_N[3],
+void Ray::NS::ComputeDirectLighting(const simd_fvec<S> I[3], const simd_fvec<S> P[3], const simd_fvec<S> N[3], const simd_fvec<S> B[3], const simd_fvec<S> plane_N[3], const simd_fvec<S> &sigma,
                                     const float *halton, const int hi, const simd_ivec<S> &rand_hash, const simd_ivec<S> &rand_hash2,
                                     const simd_fvec<S> &rand_offset, const simd_fvec<S> &rand_offset2, const scene_data_t &sc, uint32_t node_index,
                                     uint32_t light_node_index, const Ref::TextureAtlas &tex_atlas, const simd_ivec<S> &ray_mask, simd_fvec<S> *out_col) {
@@ -2226,10 +2253,11 @@ void Ray::NS::ComputeDirectLighting(const simd_fvec<S> P[3], const simd_fvec<S> 
 
 
                         simd_fvec<S> visibility = ComputeVisibility(p1, p2, imask, halton, hi, rand_hash2, sc, node_index, tex_atlas);
+                        simd_fvec<S> diff_k = BRDF_OrenNayar(L, I, N, B, sigma);
 
-                        where(fmask, out_col[0]) = out_col[0] + l.col[0] * _dot1 * visibility * atten;
-                        where(fmask, out_col[1]) = out_col[1] + l.col[1] * _dot1 * visibility * atten;
-                        where(fmask, out_col[2]) = out_col[2] + l.col[2] * _dot1 * visibility * atten;
+                        where(fmask, out_col[0]) = out_col[0] + l.col[0] * _dot1 * visibility * atten * diff_k;
+                        where(fmask, out_col[1]) = out_col[1] + l.col[1] * _dot1 * visibility * atten * diff_k;
+                        where(fmask, out_col[2]) = out_col[2] + l.col[2] * _dot1 * visibility * atten * diff_k;
                     }
                 }
             }
@@ -2600,7 +2628,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
 
             if (mat->type == DiffuseMaterial) {
                 if (pi.should_add_direct_light()) {
-                    ComputeDirectLighting(P, __N, __B, plane_N, halton, hi, rand_hash, rand_hash2, rand_offset, rand_offset2, sc, node_index, light_node_index, tex_atlas, same_mi, out_rgba);
+                    ComputeDirectLighting(I, P, __N, __B, plane_N, { mat->roughness }, halton, hi, rand_hash, rand_hash2, rand_offset, rand_offset2, sc, node_index, light_node_index, tex_atlas, same_mi, out_rgba);
 
                     if (pi.should_consider_albedo()) {
                         const auto &mask = reinterpret_cast<const simd_fvec<S>&>(same_mi);
@@ -2646,6 +2674,9 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
 
                     p[i] = std::modf(halton[hi + 0] + rand_offset3[i], &_unused);
                 }
+
+                simd_fvec<S> diff_k = BRDF_OrenNayar(V, I, __N, __B, { mat->roughness });
+                ITERATE_3({ rc[i] *= diff_k; })
 
                 simd_ivec<S> idiff_depth_mask = diff_depth < int(pi.settings.max_diff_depth);
 

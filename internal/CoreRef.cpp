@@ -1021,6 +1021,32 @@ bool Ray::Ref::Traverse_MicroTree_WithStack_AnyHit(const ray_packet_t &r, const 
     return res;
 }
 
+float Ray::Ref::BRDF_OrenNayar(const simd_fvec3 &L, const simd_fvec3 &I, const simd_fvec3 &N, const simd_fvec3 &T, float sigma) {
+    float sigma_sqr = sigma * sigma;
+    float A = 1.0f - (sigma_sqr / (2.0f * (sigma_sqr + 0.33f)));
+    float B = (0.45f * sigma_sqr) / (sigma_sqr + 0.09f);
+    float cos_theta_I = dot(L, N);
+    float cos_theta_O = -dot(I, N);
+    float sin_theta_I = std::sqrt(std::max(0.0f, 1.0f - (cos_theta_I * cos_theta_I)));
+    float sin_theta_O = std::sqrt(std::max(0.0f, 1.0f - (cos_theta_O * cos_theta_O)));
+    float cos_phi_I = dot(L, T);
+    float cos_phi_O = -dot(I, T);
+    float sin_phi_I = std::sqrt(std::max(0.0f, 1.0f - (cos_phi_I * cos_phi_I)));
+    float sin_phi_O = std::sqrt(std::max(0.0f, 1.0f - (cos_phi_O * cos_phi_O)));
+    float temp = std::max(0.0f, (cos_phi_I * cos_phi_O) + (sin_phi_I * sin_phi_O));
+    float sin_alpha;
+    float tan_beta;
+    if (cos_theta_I > cos_theta_O) {
+        sin_alpha = sin_theta_O;
+        tan_beta = (sin_theta_I / cos_theta_I);
+    } else {
+        sin_alpha = sin_theta_I;
+        tan_beta = (sin_theta_O / cos_theta_O);
+    }
+    float result = (A + (B * temp * sin_alpha * tan_beta));
+    return clamp(result, 0.0f, 1.0f);
+}
+
 Ray::Ref::ray_packet_t Ray::Ref::TransformRay(const ray_packet_t &r, const float *xform) {
     ray_packet_t _r = r;
 
@@ -1315,8 +1341,8 @@ float Ray::Ref::ComputeVisibility(const simd_fvec3 &p1, const simd_fvec3 &p2, co
     return visibility;
 }
 
-Ray::Ref::simd_fvec3 Ray::Ref::ComputeDirectLighting(const simd_fvec3 &P, const simd_fvec3 &N, const simd_fvec3 &B, const simd_fvec3 &plane_N,
-                                                     const float *halton, const int hi, int rand_hash, int rand_hash2, float rand_offset, float rand_offset2,
+Ray::Ref::simd_fvec3 Ray::Ref::ComputeDirectLighting(const simd_fvec3 &I, const simd_fvec3 &P, const simd_fvec3 &N, const simd_fvec3 &B, const simd_fvec3 &plane_N,
+                                                     float sigma, const float *halton, const int hi, int rand_hash, int rand_hash2, float rand_offset, float rand_offset2,
                                                      const scene_data_t &sc, uint32_t node_index, uint32_t light_node_index, const TextureAtlas &tex_atlas) {
     unused(rand_hash);
 
@@ -1372,7 +1398,7 @@ Ray::Ref::simd_fvec3 Ray::Ref::ComputeDirectLighting(const simd_fvec3 &P, const 
 
                 if (_dot1 > FLT_EPS && _dot2 > l.spot && (l.brightness * atten) > FLT_EPS) {
                     float visibility = ComputeVisibility(P + HIT_BIAS * plane_N, simd_fvec3(l.pos), halton, hi, rand_hash2, sc, node_index, tex_atlas);
-                    col += simd_fvec3(l.col) * _dot1 * visibility * atten;
+                    col += simd_fvec3(l.col) * _dot1 * visibility * atten * BRDF_OrenNayar(L, I, N, B, sigma);
                 }
             }
         }
@@ -1427,7 +1453,6 @@ void Ray::Ref::ComputeDerivatives(const simd_fvec3 &I, float t, const simd_fvec3
     out_der.duv_dy = simd_fvec2{ A[0][0] * By[0] - A[0][1] * By[1], A[1][0] * By[0] - A[1][1] * By[1] } * inv_det;
 
     // Derivative for normal
-
     const auto dn1 = simd_fvec3(v1.n) - simd_fvec3(v3.n), dn2 = simd_fvec3(v2.n) - simd_fvec3(v3.n);
     const auto dndu = (duv23[1] * dn1 - duv13[1] * dn2) * inv_det_uv;
     const auto dndv = (-duv23[0] * dn1 + duv13[0] * dn2) * inv_det_uv;
@@ -1438,6 +1463,7 @@ void Ray::Ref::ComputeDerivatives(const simd_fvec3 &I, float t, const simd_fvec3
     out_der.ddn_dx = dot(dd_dx, plane_N) + dot(I, out_der.dndx);
     out_der.ddn_dy = dot(dd_dy, plane_N) + dot(I, out_der.dndy);
 }
+
 
 Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_t &inter, const ray_packet_t &ray, const float *halton,
                                           const scene_data_t &sc, uint32_t node_index, uint32_t light_node_index, const TextureAtlas &tex_atlas,
@@ -1557,7 +1583,6 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
     T = TransformNormal(T, tr->inv_xform);
 
     // sample main texture
-
     auto albedo = SampleAnisotropic(tex_atlas, sc.textures[mat->textures[MAIN_TEXTURE]], uvs, surf_der.duv_dx, surf_der.duv_dy);
     albedo = pow(albedo, simd_fvec4(2.2f));
     albedo[0] *= mat->main_color[0];
@@ -1575,7 +1600,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
     // Evaluate materials
     if (mat->type == DiffuseMaterial) {
         if (pi.should_add_direct_light()) {
-            col = ComputeDirectLighting(P, N, B, plane_N, halton, hi, rand_hash, rand_hash2, rand_offset, rand_offset2,
+            col = ComputeDirectLighting(I, P, N, B, plane_N, mat->roughness, halton, hi, rand_hash, rand_hash2, rand_offset, rand_offset2,
                                         sc, node_index, light_node_index, tex_atlas);
             
             if (pi.should_consider_albedo()) {
@@ -1603,6 +1628,8 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
                 const float dir = std::sqrt(u1);
                 V = dir * sin_phi * B + std::sqrt(1.0f - u1) * N + dir * cos_phi * T;
             }
+
+            weight *= BRDF_OrenNayar(V, I, N, B, mat->roughness);
 
             ray_packet_t r;
 

@@ -136,7 +136,7 @@ uint32_t Ray::Ocl::Scene::AddMaterial(const mat_desc_t &m) {
     mat.ext_ior = m.ext_ior;
 
     if (m.type == DiffuseMaterial) {
-
+        mat.roughness = m.roughness;
     } else if (m.type == GlossyMaterial) {
         mat.roughness = m.roughness;
     } else if (m.type == RefractiveMaterial) {

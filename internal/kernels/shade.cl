@@ -30,7 +30,33 @@ float3 heatmap(float t) {
     return (float3)(1.0f) - r * r;
 }
 
-float3 ComputeDirectLighting(const float3 P, const float3 N, const float3 B, const float3 plane_N,
+float BRDF_OrenNayar(const float3 L, const float3 I, const float3 N, const float3 T, float sigma) {
+    float sigma_sqr = sigma * sigma;
+    float A = 1.0f - (sigma_sqr / (2.0f * (sigma_sqr + 0.33f)));
+    float B = (0.45f * sigma_sqr) / (sigma_sqr + 0.09f);
+    float cos_theta_I = dot(L, N);
+    float cos_theta_O = -dot(I, N);
+    float sin_theta_I = native_sqrt(max(0.0f, 1.0f - (cos_theta_I * cos_theta_I)));
+    float sin_theta_O = native_sqrt(max(0.0f, 1.0f - (cos_theta_O * cos_theta_O)));
+    float cos_phi_I = dot(L, T);
+    float cos_phi_O = -dot(I, T);
+    float sin_phi_I = native_sqrt(max(0.0f, 1.0f - (cos_phi_I * cos_phi_I)));
+    float sin_phi_O = native_sqrt(max(0.0f, 1.0f - (cos_phi_O * cos_phi_O)));
+    float temp = max(0.0f, (cos_phi_I * cos_phi_O) + (sin_phi_I * sin_phi_O));
+    float sin_alpha;
+    float tan_beta;
+    if (cos_theta_I > cos_theta_O) {
+        sin_alpha = sin_theta_O;
+        tan_beta = (sin_theta_I / cos_theta_I);
+    } else {
+        sin_alpha = sin_theta_I;
+        tan_beta = (sin_theta_O / cos_theta_O);
+    }
+    float result = (A + (B * temp * sin_alpha * tan_beta));
+    return clamp(result, 0.0f, 1.0f);
+}
+
+float3 ComputeDirectLighting(const float3 I, const float3 P, const float3 N, const float3 B, const float3 plane_N, float sigma,
                              __global const float *halton, const int hi, float rand_offset, float rand_offset2,
                              __global const mesh_instance_t *mesh_instances, __global const uint *mi_indices,
                              __global const mesh_t *meshes, __global const transform_t *transforms,
@@ -93,8 +119,7 @@ float3 ComputeDirectLighting(const float3 P, const float3 N, const float3 B, con
                     const float3 r_d = L;
 
                     float _v = TraceOcclusionRay_WithLocalStack(r_o, r_d, distance, mesh_instances, mi_indices, meshes, transforms, nodes, node_index, tris, tri_indices, &stack[stack_size]);
-
-                    col += l->col_and_brightness.xyz * _dot1 * _v * atten;
+                    col += l->col_and_brightness.xyz * _dot1 * _v * atten * BRDF_OrenNayar(L, I, N, B, sigma);
                 }
             }
         }
@@ -328,7 +353,7 @@ R"(
     // Evaluate materials
     if (mat->type == DiffuseMaterial) {
         if (should_add_direct_light(pi)) {
-            col = ComputeDirectLighting(P, N, B, plane_N, halton, hi, rand_offset, rand_offset2,
+            col = ComputeDirectLighting(I, P, N, B, plane_N, mat->roughness, halton, hi, rand_offset, rand_offset2,
                                         mesh_instances, mi_indices, meshes, transforms, vtx_indices, vertices,
                                         nodes, node_index, tris, tri_indices, lights, li_indices, light_node_index, stack);
             if (should_consider_albedo(pi)) {
@@ -356,6 +381,8 @@ R"(
                 const float dir = sqrt(u1);
                 V = dir * sin_phi * B + sqrt(1.0f - u1) * N + dir * cos_phi * T;
             }
+
+            weight *= BRDF_OrenNayar(V, I, N, B, mat->roughness);
 
             ray_packet_t r;
             r.o = (float4)(P + HIT_BIAS * plane_N, (float)px.x);
