@@ -65,6 +65,8 @@ protected:
     cl::Buffer sh_data_temp_, sh_data_clean_;
     size_t sh_data_size_ = 0;
 
+    cl::Buffer uniform_buf_;
+
     std::vector<pixel_color_t> frame_pixels_;
     std::vector<shl1_data_t> sh_data_host_;
 

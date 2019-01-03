@@ -53,6 +53,7 @@ const char *cl_src_transform =
 }
 
 #define USE_IMG_BUFFERS 1
+#define UNIFORM_BUF_SIZE 128
 
 Ray::Ocl::Renderer::Renderer(int w, int h, int platform_index, int device_index) : loaded_halton_(-1) {
     std::vector<cl::Platform> platforms;
@@ -318,6 +319,9 @@ Ray::Ocl::Renderer::Renderer(int w, int h, int platform_index, int device_index)
         //if (error != CL_SUCCESS) throw std::runtime_error("Cannot create OpenCL renderer!");
 
         secondary_rays_count_buf_ = cl::Buffer(context_, CL_MEM_READ_WRITE, sizeof(cl_int), nullptr, &error);
+        if (error != CL_SUCCESS) throw std::runtime_error("Cannot create OpenCL renderer!");
+
+        uniform_buf_ = cl::Buffer(context_, CL_MEM_READ_ONLY, (size_t)UNIFORM_BUF_SIZE, nullptr, &error);
         if (error != CL_SUCCESS) throw std::runtime_error("Cannot create OpenCL renderer!");
 
         std::vector<pixel_color_t> color_table;
@@ -633,9 +637,13 @@ void Ray::Ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
 }
 
 bool Ray::Ocl::Renderer::kernel_GeneratePrimaryRays(const cl_int iteration, const Ray::Ocl::camera_t &cam, const Ray::rect_t &rect, cl_int w, cl_int h, const cl::Buffer &halton, const cl::Buffer &out_rays) {
+    if (queue_.enqueueWriteBuffer(uniform_buf_, CL_FALSE, 0, sizeof(cam), &cam) != CL_SUCCESS) {
+        return false;
+    }
+    
     cl_uint argc = 0;
     if (prim_rays_gen_kernel_.setArg(argc++, iteration) != CL_SUCCESS ||
-            prim_rays_gen_kernel_.setArg(argc++, cam) != CL_SUCCESS ||
+            prim_rays_gen_kernel_.setArg(argc++, uniform_buf_) != CL_SUCCESS ||
             prim_rays_gen_kernel_.setArg(argc++, w) != CL_SUCCESS ||
             prim_rays_gen_kernel_.setArg(argc++, h) != CL_SUCCESS ||
             prim_rays_gen_kernel_.setArg(argc++, halton) != CL_SUCCESS ||

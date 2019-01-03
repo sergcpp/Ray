@@ -19,7 +19,7 @@ float construct_float(uint m) {
     return f - 1.0f;                       // Range [0:1]
 }
 
-float3 get_cam_dir(const float x, const float y, float3 origin, const camera_t *cam, int w, int h, float prop) {
+float3 get_cam_dir(const float x, const float y, float3 origin, __constant camera_t *cam, int w, int h, float prop) {
     float k = native_tan(0.5f * cam->origin.w * PI / 180.0f) * cam->side.w;
     float3 p = (float3)(2 * k * x / w - k, 2 * k * -y / h + k, cam->side.w);
     p = cam->origin.xyz + prop * p.x * cam->side.xyz + p.y * cam->up.xyz + p.z * cam->fwd.xyz;
@@ -27,7 +27,7 @@ float3 get_cam_dir(const float x, const float y, float3 origin, const camera_t *
 }
 
 __kernel
-void GeneratePrimaryRays(const int iteration, camera_t cam, int w, int h, __global const float *halton, __global ray_packet_t *out_rays) {
+void GeneratePrimaryRays(const int iteration, __constant camera_t *cam, int w, int h, __global const float *halton, __global ray_packet_t *out_rays) {
     const int i = get_global_id(0);
     const int j = get_global_id(1);
 
@@ -45,7 +45,7 @@ void GeneratePrimaryRays(const int iteration, camera_t cam, int w, int h, __glob
 
     float _unused;
     int hash_val = hash(index);
-    if (cam.flags & CAM_USE_TENT_FILTER) {
+    if (cam->flags & CAM_USE_TENT_FILTER) {
         float rx = fract(halton[hi + 0] + construct_float(hash_val), &_unused);
         if (rx < 0.5f) {
             rx = native_sqrt(2 * rx) - 1.0f;
@@ -67,20 +67,20 @@ void GeneratePrimaryRays(const int iteration, camera_t cam, int w, int h, __glob
         y += fract(halton[hi + 1] + construct_float(hash(hash_val)), &_unused);
     }
 
-    float ff1 = cam.up.w * (-0.5f + fract(halton[hi + 2 + 0] + construct_float(hash_val), &_unused));
-    float ff2 = cam.up.w * (-0.5f + fract(halton[hi + 2 + 1] + construct_float(hash(hash_val)), &_unused));
+    float ff1 = cam->up.w * (-0.5f + fract(halton[hi + 2 + 0] + construct_float(hash_val), &_unused));
+    float ff2 = cam->up.w * (-0.5f + fract(halton[hi + 2 + 1] + construct_float(hash(hash_val)), &_unused));
 
-    float3 origin = cam.origin.xyz + cam.side.xyz * ff1 + cam.up.xyz * ff2;
+    float3 origin = cam->origin.xyz + cam->side.xyz * ff1 + cam->up.xyz * ff2;
     r->o = (float4)(origin, (float)i);
 
-    float3 d = get_cam_dir(x, y, origin, &cam, w, h, k);
+    float3 d = get_cam_dir(x, y, origin, cam, w, h, k);
     r->d = (float4)(d, (float)j);
     
-    float3 _dx = get_cam_dir(x + 1, y, origin, &cam, w, h, k);
+    float3 _dx = get_cam_dir(x + 1, y, origin, cam, w, h, k);
     r->dd_dx.xyz = _dx - d;
     r->dd_dx.w = as_float(0);
 
-    float3 _dy = get_cam_dir(x, y + 1, origin, &cam, w, h, k);
+    float3 _dy = get_cam_dir(x, y + 1, origin, cam, w, h, k);
     r->dd_dy.xyz = _dy - d;
     r->dd_dy.w = as_float(0);
 }
