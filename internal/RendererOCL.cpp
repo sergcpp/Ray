@@ -5,6 +5,7 @@
 
 #include <chrono>
 #include <random>
+#include <sstream>
 #include <string>
 #include <utility>
 
@@ -116,56 +117,61 @@ Ray::Ocl::Renderer::Renderer(int w, int h, int platform_index, int device_index)
     {
         // load kernels
 
-        std::string cl_src_defines;
-        cl_src_defines += "#define TRI_W_BITS " + std::to_string(TRI_W_BITS) + "\n";
-        cl_src_defines += "#define TRI_AXIS_ALIGNED_BIT " + std::to_string(TRI_AXIS_ALIGNED_BIT) + "\n";
-        cl_src_defines += "#define TRI_INV_NORMAL_BIT " + std::to_string(TRI_INV_NORMAL_BIT) + "\n";
-        cl_src_defines += "#define HIT_BIAS " + std::to_string(HIT_BIAS) + "f\n";
-        cl_src_defines += "#define HIT_EPS " + std::to_string(HIT_EPS) + "f\n";
-        cl_src_defines += "#define FLT_EPS " + std::to_string(FLT_EPS) + "f\n";
-        cl_src_defines += "#define PI " + std::to_string(PI) + "f\n";
-        cl_src_defines += "#define RAY_TERM_THRES " + std::to_string(RAY_TERM_THRES) + "f\n";
-        cl_src_defines += "#define HALTON_SEQ_LEN " + std::to_string(HALTON_SEQ_LEN) + "\n";
-        cl_src_defines += "#define HALTON_COUNT " + std::to_string(HALTON_COUNT) + "\n";
-        cl_src_defines += "#define MAX_MIP_LEVEL " + std::to_string(MAX_MIP_LEVEL) + "\n";
-        cl_src_defines += "#define NUM_MIP_LEVELS " + std::to_string(NUM_MIP_LEVELS) + "\n";
-        cl_src_defines += "#define MAX_TEXTURE_SIZE " + std::to_string(MAX_TEXTURE_SIZE) + "\n";
-        cl_src_defines += "#define MAX_MATERIAL_TEXTURES " + std::to_string(MAX_MATERIAL_TEXTURES) + "\n";
-        cl_src_defines += "#define DiffuseMaterial " + std::to_string(DiffuseMaterial) + "\n";
-        cl_src_defines += "#define GlossyMaterial " + std::to_string(GlossyMaterial) + "\n";
-        cl_src_defines += "#define RefractiveMaterial " + std::to_string(RefractiveMaterial) + "\n";
-        cl_src_defines += "#define EmissiveMaterial " + std::to_string(EmissiveMaterial) + "\n";
-        cl_src_defines += "#define MixMaterial " + std::to_string(MixMaterial) + "\n";
-        cl_src_defines += "#define TransparentMaterial " + std::to_string(TransparentMaterial) + "\n";
-        cl_src_defines += "#define MAIN_TEXTURE " + std::to_string(MAIN_TEXTURE) + "\n";
-        cl_src_defines += "#define NORMALS_TEXTURE " + std::to_string(NORMALS_TEXTURE) + "\n";
-        cl_src_defines += "#define MIX_MAT1 " + std::to_string(MIX_MAT1) + "\n";
-        cl_src_defines += "#define MIX_MAT2 " + std::to_string(MIX_MAT2) + "\n";
-        cl_src_defines += "#define SCAN_PORTION " + std::to_string(scan_portion_) + "\n";
-        cl_src_defines += "#define SEG_SCAN_PORTION " + std::to_string(seg_scan_portion_) + "\n";
-        cl_src_defines += "#define TRACE_GROUP_SIZE_X " + std::to_string(trace_group_size_x_) + "\n";
-        cl_src_defines += "#define TRACE_GROUP_SIZE_Y " + std::to_string(trace_group_size_y_) + "\n";
-        cl_src_defines += "#define CAM_USE_TENT_FILTER " + std::to_string(CAM_USE_TENT_FILTER) + "\n";
-        cl_src_defines += "#define MAX_STACK_SIZE " + std::to_string(MAX_STACK_SIZE) + "\n";
-        cl_src_defines += "#define LIGHT_ATTEN_CUTOFF " + std::to_string(LIGHT_ATTEN_CUTOFF) + "\n";
-        cl_src_defines += "#define SkipDirectLight " + std::to_string(SkipDirectLight) + "\n";
-        cl_src_defines += "#define SkipIndirectLight " + std::to_string(SkipIndirectLight) + "\n";
-        cl_src_defines += "#define LightingOnly " + std::to_string(LightingOnly) + "\n";
-        cl_src_defines += "#define NoBackground " + std::to_string(NoBackground) + "\n";
-        cl_src_defines += "#define OutputSH " + std::to_string(OutputSH) + "\n";
-        cl_src_defines += "#define TRI_RAST_X " + std::to_string(tri_rast_x_) + "\n";
-        cl_src_defines += "#define TRI_RAST_Y " + std::to_string(tri_rast_y_) + "\n";
+        std::ostringstream s;
+        s.imbue(std::locale::classic());
 
-        cl_src_defines += "#define LEAF_NODE_BIT " + std::to_string(LEAF_NODE_BIT) + "\n";
-        cl_src_defines += "#define PRIM_INDEX_BITS " + std::to_string(PRIM_INDEX_BITS) + "\n";
-        cl_src_defines += "#define LEFT_CHILD_BITS " + std::to_string(LEFT_CHILD_BITS) + "\n";
-        cl_src_defines += "#define SEP_AXIS_BITS " + std::to_string(SEP_AXIS_BITS) + "\n";
-        cl_src_defines += "#define PRIM_COUNT_BITS " + std::to_string(PRIM_COUNT_BITS) + "\n";
-        cl_src_defines += "#define RIGHT_CHILD_BITS " + std::to_string(RIGHT_CHILD_BITS) + "\n";
+        s << "#define TRI_W_BITS "              << int(TRI_W_BITS) << "\n";
+        s << "#define TRI_AXIS_ALIGNED_BIT "    << int(TRI_AXIS_ALIGNED_BIT) << "\n";
+        s << "#define TRI_INV_NORMAL_BIT "      << int(TRI_INV_NORMAL_BIT) << "\n";
+        s << "#define HIT_BIAS "                << HIT_BIAS << "f\n";
+
+        s << "#define HIT_EPS "                 << HIT_EPS << "f\n";
+        s << "#define FLT_EPS "                 << FLT_EPS << "f\n";
+        s << "#define PI "                      << PI << "f\n";
+        s << "#define RAY_TERM_THRES "          << RAY_TERM_THRES << "f\n";
+        s << "#define HALTON_SEQ_LEN "          << HALTON_SEQ_LEN << "\n";
+        s << "#define HALTON_COUNT "            << HALTON_COUNT << "\n";
+        s << "#define MAX_MIP_LEVEL "           << MAX_MIP_LEVEL << "\n";
+        s << "#define NUM_MIP_LEVELS "          << NUM_MIP_LEVELS << "\n";
+        s << "#define MAX_TEXTURE_SIZE "        << MAX_TEXTURE_SIZE << "\n";
+        s << "#define MAX_MATERIAL_TEXTURES "   << MAX_MATERIAL_TEXTURES << "\n";
+        s << "#define DiffuseMaterial "         << DiffuseMaterial << "\n";
+        s << "#define GlossyMaterial "          << GlossyMaterial << "\n";
+        s << "#define RefractiveMaterial "      << RefractiveMaterial << "\n";
+        s << "#define EmissiveMaterial "        << EmissiveMaterial << "\n";
+        s << "#define MixMaterial "             << MixMaterial << "\n";
+        s << "#define TransparentMaterial "     << TransparentMaterial << "\n";
+        s << "#define MAIN_TEXTURE "            << MAIN_TEXTURE << "\n";
+        s << "#define NORMALS_TEXTURE "         << NORMALS_TEXTURE << "\n";
+        s << "#define MIX_MAT1 "                << MIX_MAT1 << "\n";
+        s << "#define MIX_MAT2 "                << MIX_MAT2 << "\n";
+        s << "#define SCAN_PORTION "            << scan_portion_ << "\n";
+        s << "#define SEG_SCAN_PORTION "        << seg_scan_portion_ << "\n";
+        s << "#define TRACE_GROUP_SIZE_X "      << trace_group_size_x_ << "\n";
+        s << "#define TRACE_GROUP_SIZE_Y "      << trace_group_size_y_ << "\n";
+        s << "#define CAM_USE_TENT_FILTER "     << CAM_USE_TENT_FILTER << "\n";
+        s << "#define MAX_STACK_SIZE "          << MAX_STACK_SIZE << "\n";
+        s << "#define LIGHT_ATTEN_CUTOFF "      << LIGHT_ATTEN_CUTOFF << "f\n";
+        s << "#define SkipDirectLight "         << SkipDirectLight << "\n";
+        s << "#define SkipIndirectLight "       << SkipIndirectLight << "\n";
+        s << "#define LightingOnly "            << LightingOnly << "\n";
+        s << "#define NoBackground "            << NoBackground << "\n";
+        s << "#define OutputSH "                << OutputSH << "\n";
+        s << "#define TRI_RAST_X "              << tri_rast_x_ << "\n";
+        s << "#define TRI_RAST_Y "              << tri_rast_y_ << "\n";
+
+        s << "#define LEAF_NODE_BIT "           << LEAF_NODE_BIT << "\n";
+        s << "#define PRIM_INDEX_BITS "         << PRIM_INDEX_BITS << "\n";
+        s << "#define LEFT_CHILD_BITS "         << LEFT_CHILD_BITS << "\n";
+        s << "#define SEP_AXIS_BITS "           << SEP_AXIS_BITS << "\n";
+        s << "#define PRIM_COUNT_BITS "         << PRIM_COUNT_BITS << "\n";
+        s << "#define RIGHT_CHILD_BITS "        << RIGHT_CHILD_BITS << "\n";
 
 #ifdef USE_STACKLESS_BVH_TRAVERSAL
-        cl_src_defines += "#define USE_STACKLESS_BVH_TRAVERSAL\n";
+        s << "#define USE_STACKLESS_BVH_TRAVERSAL\n";
 #endif
+
+        std::string cl_src_defines = s.str();
 
         cl_int error = CL_SUCCESS;
         cl::Program::Sources srcs = {
