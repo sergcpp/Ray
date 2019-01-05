@@ -68,20 +68,19 @@ typedef struct _mesh_instance_t {
 
 typedef struct _texture_t {
     ushort size[2];
-    uchar page[12];
-    ushort pos[12][2];
+    uchar page[NUM_MIP_LEVELS];
+    ushort pos[NUM_MIP_LEVELS][2];
 } texture_t;
 
 typedef struct _material_t {
-    uint type;
     uint textures[MAX_MATERIAL_TEXTURES];
     float3 main_color;
+    uint type;
     union {
         float roughness;
         float strength;
     };
-    float int_ior;
-    float ext_ior;
+    float int_ior, ext_ior;
 } material_t;
 
 typedef struct _light_t {

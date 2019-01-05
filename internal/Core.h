@@ -90,7 +90,7 @@ struct texture_t {
 };
 static_assert(sizeof(texture_t) == 64, "!");
 
-const int MAX_MATERIAL_TEXTURES = 7;
+const int MAX_MATERIAL_TEXTURES = 4;
 
 const int NORMALS_TEXTURE = 0;
 const int MAIN_TEXTURE = 1;
@@ -101,18 +101,16 @@ const int MIX_MAT2 = 3;
 const int MAX_STACK_SIZE = 32;
 
 struct material_t {
-    uint32_t type;
     uint32_t textures[MAX_MATERIAL_TEXTURES];
     float main_color[3], pad;
+    uint32_t type;
     union {
         float roughness;
         float strength;
     };
-    float int_ior;
-    float ext_ior;
-    float pad1[1];
+    float int_ior, ext_ior;
 };
-static_assert(sizeof(material_t) == 64, "!");
+static_assert(sizeof(material_t) == 48, "!");
 
 struct light_t {
     float pos[3], radius;
