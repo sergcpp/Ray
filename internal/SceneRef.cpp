@@ -156,7 +156,7 @@ uint32_t Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
     m.node_count = 0;
 
     uint32_t tris_start = (uint32_t)tris_.size();
-    m.node_count += PreprocessMesh(_m.vtx_attrs, _m.vtx_indices, _m.vtx_indices_count, _m.layout, _m.allow_spatial_splits, _m.use_fast_bvh_build, nodes_, tris_, tri_indices_);
+    m.node_count += PreprocessMesh(_m.vtx_attrs, _m.vtx_indices, _m.vtx_indices_count, _m.layout, _m.base_vertex, _m.allow_spatial_splits, _m.use_fast_bvh_build, nodes_, tris_, tri_indices_);
 
     for (const auto &s : _m.shapes) {
         bool is_solid = true;
@@ -197,7 +197,7 @@ uint32_t Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
     std::vector<uint32_t> new_vtx_indices;
     new_vtx_indices.reserve(_m.vtx_indices_count);
     for (size_t i = 0; i < _m.vtx_indices_count; i++) {
-        new_vtx_indices.push_back(_m.vtx_indices[i] + (uint32_t)vertices_.size());
+        new_vtx_indices.push_back(_m.vtx_indices[i] + _m.base_vertex + (uint32_t)vertices_.size());
     }
 
     size_t stride = AttrStrides[_m.layout];

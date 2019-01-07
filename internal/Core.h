@@ -131,7 +131,7 @@ bool PreprocessTri(const float *p, int stride, tri_accel_t *acc);
 void ExtractPlaneNormal(const tri_accel_t &tri, float *out_normal);
 
 // Builds BVH for mesh and precomputes triangle data
-uint32_t PreprocessMesh(const float *attrs, const uint32_t *indices, size_t indices_count, eVertexLayout layout,
+uint32_t PreprocessMesh(const float *attrs, const uint32_t *indices, size_t indices_count, eVertexLayout layout, int base_vertex,
                         bool allow_spatial_splits, bool use_fast_bvh_build,
                         std::vector<bvh_node_t> &out_nodes, std::vector<tri_accel_t> &out_tris, std::vector<uint32_t> &out_indices);
 

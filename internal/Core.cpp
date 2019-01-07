@@ -234,7 +234,7 @@ void Ray::ExtractPlaneNormal(const tri_accel_t &tri, float *out_normal) {
     out_normal[2] *= inv_l;
 }
 
-uint32_t Ray::PreprocessMesh(const float *attrs, const uint32_t *vtx_indices, size_t vtx_indices_count, eVertexLayout layout,
+uint32_t Ray::PreprocessMesh(const float *attrs, const uint32_t *vtx_indices, size_t vtx_indices_count, eVertexLayout layout, int base_vertex,
                              bool allow_spatial_splits, bool use_fast_bvh_build,
                              std::vector<bvh_node_t> &out_nodes, std::vector<tri_accel_t> &out_tris, std::vector<uint32_t> &out_tri_indices) {
     assert(vtx_indices_count && vtx_indices_count % 3 == 0);
@@ -251,16 +251,20 @@ uint32_t Ray::PreprocessMesh(const float *attrs, const uint32_t *vtx_indices, si
     for (size_t j = 0; j < vtx_indices_count; j += 3) {
         float p[9];
 
-        memcpy(&p[0], &positions[vtx_indices[j] * attr_stride], 3 * sizeof(float));
-        memcpy(&p[3], &positions[vtx_indices[j + 1] * attr_stride], 3 * sizeof(float));
-        memcpy(&p[6], &positions[vtx_indices[j + 2] * attr_stride], 3 * sizeof(float));
+        uint32_t i0 = vtx_indices[j + 0] + base_vertex,
+                 i1 = vtx_indices[j + 1] + base_vertex,
+                 i2 = vtx_indices[j + 2] + base_vertex;
+
+        memcpy(&p[0], &positions[i0 * attr_stride], 3 * sizeof(float));
+        memcpy(&p[3], &positions[i1 * attr_stride], 3 * sizeof(float));
+        memcpy(&p[6], &positions[i2 * attr_stride], 3 * sizeof(float));
 
         PreprocessTri(&p[0], 0, &out_tris[tris_start + j / 3]);
 
         Ref::simd_fvec3 _min = min(Ref::simd_fvec3{ &p[0] }, min(Ref::simd_fvec3{ &p[3] }, Ref::simd_fvec3{ &p[6] })),
                         _max = max(Ref::simd_fvec3{ &p[0] }, max(Ref::simd_fvec3{ &p[3] }, Ref::simd_fvec3{ &p[6] }));
 
-        primitives.push_back({ vtx_indices[j], vtx_indices[j + 1], vtx_indices[j + 2], _min, _max });
+        primitives.push_back({ i0, i1, i2, _min, _max });
     }
 
     size_t indices_start = out_tri_indices.size();
