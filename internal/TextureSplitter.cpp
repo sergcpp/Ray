@@ -33,6 +33,8 @@ bool Ray::TextureSplitter::Free(int i) {
             nodes_[par].child[0] = nodes_[par].child[1] = -1;
 
             par = nodes_[par].parent;
+        } else {
+            par = -1;
         }
     }
 
