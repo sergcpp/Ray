@@ -571,16 +571,6 @@ uint32_t Ray::PreprocessPrims_HLBVH(const prim_t *prims, size_t prims_count, std
 
     sort_mort_codes(&morton_codes[0], morton_codes.size(), indices);
 
-#if 0
-    for (size_t i = 0; i < morton_codes.size(); i++) {
-        for (size_t j = i + 1; j < morton_codes.size(); j++) {
-            if (morton_codes[i] > morton_codes[j]) {
-                __debugbreak();
-            }
-        }
-    }
-#endif
-
     struct treelet_t {
         uint32_t index, count;
         uint32_t node_index;
