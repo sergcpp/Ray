@@ -81,7 +81,7 @@ protected:
                                        const cl::Buffer &halton_seq, const cl::Buffer &tri_bin_buf,
                                        const cl::Buffer &out_rays, const cl::Buffer &out_inters);
     bool kernel_TextureDebugPage(const cl::Image2DArray &textures, cl_int page, const cl::Image2D &frame_buf);
-    bool kernel_ShadePrimary(const pass_info_t pi, const cl::Buffer &halton, const Ray::rect_t &rect, cl_int w,
+    bool kernel_ShadePrimary(const pass_info_t &pi, const cl::Buffer &halton, const Ray::rect_t &rect, cl_int w,
                              const cl::Buffer &intersections, const cl::Buffer &rays,
                              const cl::Buffer &mesh_instances, const cl::Buffer &mi_indices, const cl::Buffer &meshes,
                              const cl::Buffer &transforms, const cl::Buffer &vtx_indices, const cl::Buffer &vertices,
@@ -89,7 +89,7 @@ protected:
                              const environment_t &env, const cl::Buffer &materials, const cl::Buffer &textures, 
                              const cl::Image2DArray &texture_atlas, const cl::Buffer &lights, const cl::Buffer &li_incies, cl_uint light_node_index,
                              const cl::Image2D &frame_buf, const cl::Buffer &secondary_rays, const cl::Buffer &secondary_rays_count);
-    bool kernel_ShadeSecondary(const pass_info_t pi, const cl::Buffer &halton,
+    bool kernel_ShadeSecondary(const pass_info_t &pi, const cl::Buffer &halton,
                                const cl::Buffer &intersections, const cl::Buffer &rays,
                                int rays_count, const cl::Buffer &mesh_instances, const cl::Buffer &mi_indices, const cl::Buffer &meshes,
                                const cl::Buffer &transforms, const cl::Buffer &vtx_indices, const cl::Buffer &vertices,

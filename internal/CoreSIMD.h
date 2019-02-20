@@ -406,16 +406,16 @@ struct TraversalStateStack {
 template <int S>
 force_inline void safe_invert(const simd_fvec<S> v[3], simd_fvec<S> inv_v[3]) {
     inv_v[0] = { 1.0f / v[0] };
-    where(v[0] <= FLT_EPS & v[0] >= 0, inv_v[0]) = MAX_DIST;
-    where(v[0] >= -FLT_EPS & v[0] < 0, inv_v[0]) = -MAX_DIST;
+    where((v[0] <= FLT_EPS) & (v[0] >= 0), inv_v[0]) = MAX_DIST;
+    where((v[0] >= -FLT_EPS) & (v[0] < 0), inv_v[0]) = -MAX_DIST;
 
     inv_v[1] = { 1.0f / v[1] };
-    where(v[1] <= FLT_EPS & v[1] >= 0, inv_v[1]) = MAX_DIST;
-    where(v[1] >= -FLT_EPS & v[1] < 0, inv_v[1]) = -MAX_DIST;
+    where((v[1] <= FLT_EPS) & (v[1] >= 0), inv_v[1]) = MAX_DIST;
+    where((v[1] >= -FLT_EPS) & (v[1] < 0), inv_v[1]) = -MAX_DIST;
 
     inv_v[2] = { 1.0f / v[2] };
-    where(v[2] <= FLT_EPS & v[2] >= 0, inv_v[2]) = MAX_DIST;
-    where(v[2] >= -FLT_EPS & v[2] < 0, inv_v[2]) = -MAX_DIST;
+    where((v[2] <= FLT_EPS) & (v[2] >= 0), inv_v[2]) = MAX_DIST;
+    where((v[2] >= -FLT_EPS) & (v[2] < 0), inv_v[2]) = -MAX_DIST;
 }
 
 template <int S>
@@ -872,10 +872,10 @@ void Ray::NS::SortRays_CPU(ray_packet_t<S> *rays, simd_ivec<S> *ray_masks, int &
     }
 
     {   // reorder rays
-        int j, k;
         for (int i = 0; i < rays_count * S; i++) {
+            int j;
             while (i != (j = scan_values[i])) {
-                k = scan_values[j];
+                int k = scan_values[j];
 
                 {
                     int jj = j / S, _jj = j % S,
@@ -999,10 +999,10 @@ void Ray::NS::SortRays_GPU(ray_packet_t<S> *rays, simd_ivec<S> *ray_masks, int &
     }
 
     {   // reorder rays
-        int j, k;
         for (int i = 0; i < rays_count * S; i++) {
+            int j;
             while (i != (j = scan_values[i])) {
-                k = scan_values[j];
+                int k = scan_values[j];
 
                 {
                     int jj = j / S, _jj = j % S,
@@ -2312,7 +2312,7 @@ void Ray::NS::ComputeDerivatives(const simd_fvec<S> I[3], const simd_fvec<S> &t,
     simd_fvec<S> Bx[2] = { out_der.do_dx[0], out_der.do_dx[1] };
     simd_fvec<S> By[2] = { out_der.do_dy[0], out_der.do_dy[1] };
 
-    auto mask1 = abs(plane_N[0]) > abs(plane_N[1]) & abs(plane_N[0]) > abs(plane_N[2]);
+    auto mask1 = (abs(plane_N[0]) > abs(plane_N[1])) & (abs(plane_N[0]) > abs(plane_N[2]));
     where(mask1, A[0][0]) = dpdu[1];
     where(mask1, A[0][1]) = dpdu[2];
     where(mask1, A[1][0]) = dpdv[1];
@@ -2322,7 +2322,7 @@ void Ray::NS::ComputeDerivatives(const simd_fvec<S> I[3], const simd_fvec<S> &t,
     where(mask1, By[0]) = out_der.do_dy[1];
     where(mask1, By[1]) = out_der.do_dy[2];
 
-    auto mask2 = abs(plane_N[1]) > abs(plane_N[0]) & abs(plane_N[1]) > abs(plane_N[2]);
+    auto mask2 = (abs(plane_N[1]) > abs(plane_N[0])) & (abs(plane_N[1]) > abs(plane_N[2]));
     where(mask2, A[0][1]) = dpdu[2];
     where(mask2, A[1][1]) = dpdv[2];
     where(mask2, Bx[1]) = out_der.do_dx[2];

@@ -33,7 +33,7 @@ struct camera_t {
     cl_int pad[3];
 
     camera_t() {}
-    camera_t(const Ray::camera_t &cam) {
+    explicit camera_t(const Ray::camera_t &cam) {
         memcpy(&origin, &cam.origin[0], sizeof(float) * 3);
         origin.w = cam.fov;
         memcpy(&fwd, &cam.fwd[0], sizeof(float) * 3);

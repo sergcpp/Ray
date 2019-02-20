@@ -468,6 +468,7 @@ uint32_t Ray::PreprocessPrims_SAH(const prim_t *prims, size_t prims_count, const
         auto split_data = SplitPrimitives_SAH(prims, prim_lists.back().indices, positions, stride, prim_lists.back().min, prim_lists.back().max, root_min, root_max, s);
         prim_lists.pop_back();
 
+#ifdef USE_STACKLESS_BVH_TRAVERSAL
         uint32_t leaf_index = (uint32_t)out_nodes.size(),
                  parent_index = 0xffffffff;
 
@@ -482,6 +483,7 @@ uint32_t Ray::PreprocessPrims_SAH(const prim_t *prims, size_t prims_count, const
                 }
             }
         }
+#endif
 
         if (split_data.right_indices.empty()) {
             Ref::simd_fvec3 bbox_min = split_data.left_bounds[0],

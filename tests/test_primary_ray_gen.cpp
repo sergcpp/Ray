@@ -318,7 +318,7 @@ void test_primary_ray_gen() {
             }
 
             void Test(const Ray::camera_t &cam, const std::vector<float> &test_data) {
-                Ray::Ocl::camera_t cl_cam = { cam };
+                auto cl_cam = Ray::Ocl::camera_t{ cam };
 
                 require(kernel_GeneratePrimaryRays(0, cl_cam, { 0, 0, w_, h_ }, w_, h_, halton_seq_buf_, prim_rays_buf_));
 

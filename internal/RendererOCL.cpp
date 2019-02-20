@@ -464,7 +464,7 @@ void Ray::Ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
     pass_info.settings = cam.pass_settings;
     pass_info.settings.max_total_depth = std::min(pass_info.settings.max_total_depth, (uint8_t)MAX_BOUNCES);
 
-    Ray::Ocl::camera_t cl_cam = { cam };
+    auto cl_cam = Ray::Ocl::camera_t{ cam };
 
     cl_int error = CL_SUCCESS;
 
@@ -719,7 +719,7 @@ bool Ray::Ocl::Renderer::kernel_TextureDebugPage(const cl::Image2DArray &texture
     return CL_SUCCESS == queue_.enqueueNDRangeKernel(texture_debug_page_kernel_, cl::NullRange, cl::NDRange { (size_t)w, (size_t)h });
 }
 
-bool Ray::Ocl::Renderer::kernel_ShadePrimary(const pass_info_t pi, const cl::Buffer &halton,
+bool Ray::Ocl::Renderer::kernel_ShadePrimary(const pass_info_t &pi, const cl::Buffer &halton,
         const Ray::rect_t &rect, cl_int w,
         const cl::Buffer &intersections, const cl::Buffer &rays,
         const cl::Buffer &mesh_instances, const cl::Buffer &mi_indices, const cl::Buffer &meshes,
@@ -794,7 +794,7 @@ bool Ray::Ocl::Renderer::kernel_ShadePrimary(const pass_info_t pi, const cl::Buf
     return true;
 }
 
-bool Ray::Ocl::Renderer::kernel_ShadeSecondary(const pass_info_t pi, const cl::Buffer &halton,
+bool Ray::Ocl::Renderer::kernel_ShadeSecondary(const pass_info_t &pi, const cl::Buffer &halton,
         const cl::Buffer &intersections, const cl::Buffer &rays,
         int rays_count, const cl::Buffer &mesh_instances, const cl::Buffer &mi_indices, const cl::Buffer &meshes,
         const cl::Buffer &transforms, const cl::Buffer &vtx_indices, const cl::Buffer &vertices,
@@ -1542,8 +1542,8 @@ bool Ray::Ocl::Renderer::ReorderRays_CPU(const cl::Buffer &scan_values, const cl
     if (queue_.enqueueReadBuffer(scan_values, CL_TRUE, 0, sizeof(uint32_t) * count, &_scan_values[0]) != CL_SUCCESS) return false;
     if (queue_.enqueueReadBuffer(rays, CL_TRUE, 0, sizeof(ray_packet_t) * count, &_rays[0]) != CL_SUCCESS) return false;
 
-    uint32_t j, k;
     for (uint32_t i = 0; i < (uint32_t)count; i++) {
+        uint32_t j, k;
         while (i != (j = _scan_values[i])) {
             k = _scan_values[j];
             std::swap(_rays[j], _rays[k]);

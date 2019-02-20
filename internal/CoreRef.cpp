@@ -437,10 +437,10 @@ void Ray::Ref::SortRays_CPU(ray_packet_t *rays, size_t rays_count, const float r
     }
 
     {   // reorder rays
-        uint32_t j, k;
         for (uint32_t i = 0; i < (uint32_t)rays_count; i++) {
+            uint32_t j;
             while (i != (j = scan_values[i])) {
-                k = scan_values[j];
+                int k = scan_values[j];
                 std::swap(rays[j], rays[k]);
                 std::swap(scan_values[i], scan_values[j]);
             }
@@ -519,10 +519,10 @@ void Ray::Ref::SortRays_GPU(ray_packet_t *rays, size_t rays_count, const float r
     }
 
     {   // reorder rays
-        uint32_t j, k;
         for (uint32_t i = 0; i < (uint32_t)rays_count; i++) {
+            uint32_t j;
             while (i != (j = scan_values[i])) {
-                k = scan_values[j];
+                int k = scan_values[j];
                 std::swap(rays[j], rays[k]);
                 std::swap(scan_values[i], scan_values[j]);
             }
