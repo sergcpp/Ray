@@ -214,12 +214,14 @@ extern const char omega_table[];
 extern const float phi_step;
 extern const char phi_table[][17];
 
+extern const int sampling_pattern[];
+
 struct ray_chunk_t {
     uint32_t hash, base, size;
 };
 
 struct pass_info_t {
-    int index;
+    int index, rand_index;
     int iteration, bounce;
     pass_settings_t settings;
 
@@ -242,7 +244,7 @@ struct pass_info_t {
         return ((settings.flags & OutputSH) && bounce <= 2);
     }
 };
-static_assert(sizeof(pass_info_t) == 24, "!");
+static_assert(sizeof(pass_info_t) == 28, "!");
 
 struct scene_data_t {
     const environment_t *env;

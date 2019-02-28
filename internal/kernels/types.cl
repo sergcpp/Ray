@@ -110,7 +110,7 @@ typedef struct _pass_settings_t {
 } pass_settings_t;
 
 typedef struct _pass_info_t {
-    int index;
+    int index, rand_index;
     int iteration, bounce;
     pass_settings_t settings;
 } pass_info_t;

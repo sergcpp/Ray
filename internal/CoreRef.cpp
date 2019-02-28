@@ -1519,7 +1519,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
     ComputeDerivatives(I, inter.t, ray.do_dx, ray.do_dy, ray.dd_dx, ray.dd_dy, v1, v2, v3, plane_N, surf_der);
 
     // used to randomize halton sequence among pixels
-    int rand_hash = hash(pi.index),
+    int rand_hash = hash(pi.rand_index),
         rand_hash2 = hash(rand_hash),
         rand_hash3 = hash(rand_hash2);
     float rand_offset = construct_float(rand_hash),

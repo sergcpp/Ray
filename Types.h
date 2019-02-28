@@ -35,12 +35,13 @@ enum eCamType { Persp, Ortho, Geo };
 
 enum eFilterType { Box, Tent };
 
-enum ePassFlags { SkipDirectLight = 1,
-                  SkipIndirectLight = 2,
-                  LightingOnly = 4,
-                  NoBackground = 8,
-                  Clamp = 16,
-                  OutputSH = 32 };
+enum ePassFlags { SkipDirectLight     = (1 << 0),
+                  SkipIndirectLight   = (1 << 1),
+                  LightingOnly        = (1 << 2),
+                  NoBackground        = (1 << 3),
+                  Clamp               = (1 << 4),
+                  OutputSH            = (1 << 5),
+                  UseCoherentSampling = (1 << 6) };
 
 struct pass_settings_t {
     uint8_t max_diff_depth,

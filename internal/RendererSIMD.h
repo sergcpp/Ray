@@ -225,7 +225,16 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
         simd_ivec<S> x = inter.xy >> 16,
                      y = inter.xy & 0x0000FFFF;
 
-        simd_ivec<S> index = { y * w + x };
+        simd_ivec<S> index;
+
+        if (cam.pass_settings.flags & UseCoherentSampling) {
+            for (int j = 0; j < S; j++) {
+                const int blck_x = x[j] % 8, blck_y = y[j] % 8;
+                index[j] = sampling_pattern[blck_y * 8 + blck_x];
+            }
+        } else {
+            index = y * w + x;
+        }
 
         p.secondary_masks[i] = { 0 };
 
@@ -298,7 +307,16 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
             simd_ivec<S> x = inter.xy >> 16,
                          y = inter.xy & 0x0000FFFF;
 
-            simd_ivec<S> index = { y * w + x };
+            simd_ivec<S> index;
+
+            if (cam.pass_settings.flags & UseCoherentSampling) {
+                for (int j = 0; j < S; j++) {
+                    const int blck_x = x[j] % 8, blck_y = y[j] % 8;
+                    index[j] = sampling_pattern[blck_y * 8 + blck_x];
+                }
+            } else {
+                index = y * w + x;
+            }
 
             simd_fvec<S> out_rgba[4] = { 0.0f };
             NS::ShadeSurface(index, pass_info, &region.halton_seq[0], inter, r, sc_data, macro_tree_root, light_tree_root,

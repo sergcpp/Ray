@@ -2468,8 +2468,8 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
 
     // used to randomize halton sequence among pixels
     simd_ivec<S> rand_hash = hash(px_index),
-                 rand_hash2 = hash(rand_hash),
-                 rand_hash3 = hash(rand_hash2);
+        rand_hash2 = hash(rand_hash),
+        rand_hash3 = hash(rand_hash2);
     simd_fvec<S> rand_offset = construct_float(rand_hash),
                  rand_offset2 = construct_float(rand_hash2),
                  rand_offset3 = construct_float(rand_hash3);

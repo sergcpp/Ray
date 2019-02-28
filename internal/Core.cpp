@@ -159,6 +159,15 @@ const char Ray::phi_table[][17] = { { 2,  2,  2,  2,  2,  3,  3,  3,  4,  4,  4,
                                     { 14, 14, 13, 13, 13, 13, 12, 12, 12, 11, 11, 10, 10, 10, 10, 10, 9  },
                                     { 14, 13, 13, 13, 13, 12, 12, 12, 12, 11, 11, 11, 10, 10, 10, 10, 10 } };
 
+const int Ray::sampling_pattern[] = { 0, 1, 2, 3,   1, 2, 3, 0,
+                                      2, 3, 0, 1,   3, 0, 1, 2,
+                                      1, 2, 3, 0,   2, 1, 0, 3,
+                                      3, 0, 1, 2,   0, 3, 2, 1,
+
+                                      2, 3, 0, 1,   1, 0, 3, 2,
+                                      0, 1, 2, 3,   0, 3, 2, 1,
+                                      3, 2, 1, 0,   3, 2, 1, 0,
+                                      1, 0, 3, 2,   2, 1, 0, 3 };
 
 bool Ray::PreprocessTri(const float *p, int stride, tri_accel_t *acc) {
     // from "Ray-Triangle Intersection Algorithm for Modern CPU Architectures" [2007]

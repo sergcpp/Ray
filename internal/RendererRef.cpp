@@ -134,8 +134,14 @@ void Ray::Ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
 
         const int x = (inter.xy >> 16) & 0x0000ffff;
         const int y = inter.xy & 0x0000ffff;
-        
+
         pass_info.index = y * w + x;
+        pass_info.rand_index = pass_info.index;
+        
+        if (cam.pass_settings.flags & UseCoherentSampling) {
+            const int blck_x = x % 8, blck_y = y % 8;
+            pass_info.rand_index = sampling_pattern[blck_y * 8 + blck_x];
+        }
 
         pixel_color_t col = ShadeSurface(pass_info, inter, r, &region.halton_seq[0], sc_data, macro_tree_root, light_tree_root,
                                          tex_atlas, &p.secondary_rays[0], &secondary_rays_count);
@@ -220,6 +226,12 @@ void Ray::Ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
             const int y = inter.xy & 0x0000ffff;
 
             pass_info.index = y * w + x;
+            pass_info.rand_index = pass_info.index;
+
+            if (cam.pass_settings.flags & UseCoherentSampling) {
+                const int blck_x = x % 8, blck_y = y % 8;
+                pass_info.rand_index = sampling_pattern[blck_y * 8 + blck_x];
+            }
 
             pixel_color_t col = ShadeSurface(pass_info, inter, r, &region.halton_seq[0], sc_data, macro_tree_root, light_tree_root,
                                              tex_atlas, &p.secondary_rays[0], &secondary_rays_count);

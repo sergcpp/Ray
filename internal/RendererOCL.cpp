@@ -158,6 +158,7 @@ Ray::Ocl::Renderer::Renderer(int w, int h, int platform_index, int device_index)
         s << "#define LightingOnly "            << LightingOnly << "\n";
         s << "#define NoBackground "            << NoBackground << "\n";
         s << "#define OutputSH "                << OutputSH << "\n";
+        s << "#define UseCoherentSampling "     << UseCoherentSampling << "\n";
         s << "#define TRI_RAST_X "              << tri_rast_x_ << "\n";
         s << "#define TRI_RAST_Y "              << tri_rast_y_ << "\n";
 

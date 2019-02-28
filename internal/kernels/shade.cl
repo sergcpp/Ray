@@ -2,6 +2,16 @@ R"(
 
 __constant sampler_t FBUF_SAMPLER = CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_CLAMP | CLK_FILTER_NEAREST;
 
+__constant int sampling_pattern[] = { 0, 1, 2, 3,   1, 2, 3, 0,
+                                      2, 3, 0, 1,   3, 0, 1, 2,
+                                      1, 2, 3, 0,   2, 1, 0, 3,
+                                      3, 0, 1, 2,   0, 3, 2, 1,
+
+                                      2, 3, 0, 1,   1, 0, 3, 2,
+                                      0, 1, 2, 3,   0, 3, 2, 1,
+                                      3, 2, 1, 0,   3, 2, 1, 0,
+                                      1, 0, 3, 2,   2, 1, 0, 3 };
+
 float3 reflect(float3 V, float3 N) {
     return V - 2.0f * dot(V, N) * N;
 }
@@ -272,7 +282,7 @@ float4 ShadeSurface(const pass_info_t *pi, __global const float *halton,
                        p1, p2, p3, n1, n2, n3, u1, u2, u3, plane_N, &surf_der);
 
     // used to randomize halton sequence among pixels
-    int rand_hash = hash(pi->index),
+    int rand_hash = hash(pi->rand_index),
         rand_hash2 = hash(rand_hash),
         rand_hash3 = hash(rand_hash2);
     float rand_offset = construct_float(rand_hash),
@@ -549,6 +559,13 @@ void ShadePrimary(pass_info_t pi, __global const float *halton, int w,
 
     pi.index = j * w + i;
 
+    if (pi.settings.flags & UseCoherentSampling) {
+        const int blck_x = i % 8, blck_y = j % 8;
+        pi.rand_index = sampling_pattern[blck_y * 8 + blck_x];
+    } else {
+        pi.rand_index = pi.index;
+    }
+
     float4 res = ShadeSurface(&pi, halton, prim_inters, prim_rays,
                   mesh_instances, mi_indices, meshes, transforms, vtx_indices, vertices,
                   nodes, node_index, tris, tri_indices, env, materials, textures, texture_atlas,
@@ -577,6 +594,13 @@ void ShadeSecondary(pass_info_t pi, __global const float *halton, __global const
     __local uint *stack = &shared_stack[MAX_STACK_SIZE * (get_local_id(1) * TRACE_GROUP_SIZE_X + get_local_id(0))];
 
     pi.index = index;
+
+    if (pi.settings.flags & UseCoherentSampling) {
+        const int2 blck_px = px % 8;
+        pi.rand_index = sampling_pattern[blck_px.y * 8 + blck_px.x];
+    } else {
+        pi.rand_index = pi.index;
+    }
 
     float4 res = ShadeSurface(&pi, halton, prim_inters, prim_rays,
                   mesh_instances, mi_indices, meshes, transforms, vtx_indices, vertices,
