@@ -390,6 +390,7 @@ void Ray::Ref::SampleMeshInTextureSpace(int iteration, int obj_index, int uv_lay
                     out_ray.dd_dx[0] = out_ray.dd_dx[1] = out_ray.dd_dx[2] = 0.0f;
                     out_ray.do_dy[0] = out_ray.do_dy[1] = out_ray.do_dy[2] = 0.0f;
                     out_ray.dd_dy[0] = out_ray.dd_dy[1] = out_ray.dd_dy[2] = 0.0f;
+                    out_ray.ray_depth = 0;
 
                     out_inter.mask_values[0] = 0xffffffff;
                     out_inter.prim_indices[0] = tri;
@@ -397,7 +398,6 @@ void Ray::Ref::SampleMeshInTextureSpace(int iteration, int obj_index, int uv_lay
                     out_inter.t = 1.0f;
                     out_inter.u = w;
                     out_inter.v = u;
-                    out_ray.ray_depth = 0;
                 }
             }
         }

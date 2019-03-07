@@ -417,8 +417,8 @@ void Ray::Ocl::Renderer::Clear(const pixel_color_t &c) {
     queue_.enqueueFillImage(clean_buf_, *(cl_float4 *)&c, {}, { (size_t)w_, (size_t)h_, 1 });
     queue_.enqueueFillImage(final_buf_, *(cl_float4 *)&c, {}, { (size_t)w_, (size_t)h_, 1 });
 
-    shl1_data_t sh_data = {};
-    queue_.enqueueFillBuffer(sh_data_clean_, sh_data, 0, sh_data_size_ * sizeof(shl1_data_t));
+    float zero = 0.0f;
+    queue_.enqueueFillBuffer(sh_data_clean_, zero, 0, sh_data_size_ * sizeof(shl1_data_t));
 }
 
 std::shared_ptr<Ray::SceneBase> Ray::Ocl::Renderer::CreateScene() {
@@ -540,6 +540,11 @@ void Ray::Ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
             if (error != CL_SUCCESS) return;
             sh_data_clean_ = cl::Buffer(context_, CL_MEM_READ_WRITE, sizeof(shl1_data_t) * new_size, nullptr, &error);
             if (error != CL_SUCCESS) return;
+
+            float zero = 0.0f;
+            error = queue_.enqueueFillBuffer(sh_data_clean_, zero, 0, sizeof(shl1_data_t) * new_size);
+            if (error != CL_SUCCESS) return;
+
             sh_data_host_.resize(new_size);
             sh_data_size_ = new_size;
         }
