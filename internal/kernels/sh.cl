@@ -48,7 +48,7 @@ void ComputeSHData(__read_only image2d_t clean_buf, int w, __global shl1_data_t 
     __global shl1_data_t *sh_data = &in_out_sh_data[j * w + i];
 
     float4 sh_coeff = sh_data->coeff_r;
-    const float inv_weight = sh_data->coeff_g.x > FLT_EPS ? (4.0f * PI / sh_data->coeff_g.x) : 0.0f;
+    const float inv_weight = sh_data->coeff_g.x > FLT_EPS ? (2.0f * PI / sh_data->coeff_g.x) : 0.0f;
 
     float4 col = read_imagef(clean_buf, i_fbuf_sampler, (int2)(i, j));
     col *= inv_weight;

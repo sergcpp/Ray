@@ -61,7 +61,7 @@ void Ray::Ref::Framebuffer::ComputeSHData(const rect_t &rect) {
 
             auto &sh_data = sh_data_[i];
             const float *sh_coeff = sh_data.coeff_r;
-            const float inv_weight = sh_data.coeff_g[0] > FLT_EPS ? (4.0f * PI / sh_data.coeff_g[0]) : 0.0f;
+            const float inv_weight = sh_data.coeff_g[0] > FLT_EPS ? (2.0f * PI / sh_data.coeff_g[0]) : 0.0f;
 
             auto p = pixels_[i];
             p.r *= inv_weight;
