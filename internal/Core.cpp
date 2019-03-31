@@ -514,7 +514,7 @@ uint32_t Ray::PreprocessPrims_SAH(const prim_t *prims, size_t prims_count, const
 
             uint32_t space_axis = 0;
             Ref::simd_fvec3 c_left = (split_data.left_bounds[0] + split_data.left_bounds[1]) / 2,
-                            c_right = (split_data.right_bounds[1] + split_data.right_bounds[1]) / 2;
+                            c_right = (split_data.right_bounds[0] + split_data.right_bounds[1]) / 2;
 
             Ref::simd_fvec3 dist = abs(c_left - c_right);
 
