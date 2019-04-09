@@ -23,8 +23,8 @@ bool Ray::TextureSplitter::Free(int i) {
     while (par != -1) {
         int ch0 = nodes_[par].child[0], ch1 = nodes_[par].child[1];
 
-        if (nodes_[ch0].has_children() && nodes_[ch0].is_free &&
-                nodes_[ch1].has_children() && nodes_[ch1].is_free) {
+        if (!nodes_[ch0].has_children() && nodes_[ch0].is_free &&
+            !nodes_[ch1].has_children() && nodes_[ch1].is_free) {
 
             SafeErase(ch0, &par, 1);
             ch1 = nodes_[par].child[1];
