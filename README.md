@@ -2,20 +2,20 @@
 
 Small pathtracing library created for learning purposes. Includes CPU and GPU (OpenCL) backends.
 
-- Full application : https://github.com/SerhiiY-94/RayDemo
-- Video : https://www.youtube.com/watch?v=MHk9jXcdrZs
+  - Full application : <https://github.com/SerhiiY-94/RayDemo>
+  - Video : <https://www.youtube.com/watch?v=MHk9jXcdrZs>
 
 <div>
 <div float="left" >
-  <img src="/scene1.jpg" width="49%" />
-  <img src="/scene2.jpg" width="49%" /> 
+  <img src="scene1.jpg" width="49%" />
+  <img src="scene2.jpg" width="49%" /> 
 </div>
 <div float="left">
-  <img src="/scene3.jpg" width="98.5%" />
+  <img src="scene3.jpg" width="98.5%" />
 </div>
 </div>
 
-(Scenes are taken from here: https://benedikt-bitterli.me/resources/)
+(Scenes are taken from here: <https://benedikt-bitterli.me/resources/>)
 
 ## Installation
 The intended use is to add it as a submodule to an existing project:
@@ -48,10 +48,10 @@ $ ./tests/test_Ray
 ### Android
 Status of OpenCL on Android is still unclear and seems like it only works on a small number of devices, so OpenCL backend is disabled by default.
 But library includes reference and NEON implementations, which work on Android. For compilation Android NDK tools are needed.
-For details about compilation with cmake and ninja please see: https://github.com/SerhiiY-94/occdemo/blob/master/build_android.py
+For details about compilation with cmake and ninja please see: <https://github.com/SerhiiY-94/occdemo/blob/master/build_android.py>
 
 ## Usage
-### Image rendering:
+### Image rendering
 ```c++
 #include <Ray/RendererFactory.h>
 
@@ -201,7 +201,7 @@ int main() {
 ```
 ![Screenshot](img1.jpg)
 
-### Multithreading:
+### Multithreading
 With CPU backends it is safe to call RenderScene from different threads for non-overlaping image regions:
 ```c++
 ...
@@ -220,7 +220,7 @@ With CPU backends it is safe to call RenderScene from different threads for non-
 ...
 ```
 
-### Lightmap generation:
+### Lightmap generation
 Lightmapping is done through special 'geometric' camera type:
 ```c++
 ...
@@ -271,13 +271,15 @@ With 'output_sh' set to true renderer additionally outputs lightmap in 2-band (4
 
 ## Implementation details
 
-- Ray/triangle intersection is done using Plucker test with help of precomputed data stored per triangle as described in 'Ray-Triangle Intersection Algorithm for Modern CPU Architectures' paper.
-- SAH-based binary BVH is used as acceleration structure. Two traversal algorithms are available: stack- and stackless (described in 'Efficient Stack-less BVH Traversal for Ray Tracing' paper). By default traversal with stack is used as it was faster on gpus I tested on. BVH tree is made two-level to support basic rigid motion. Optional 'spatial splits' feature can be used for building better optimized BVH in cost of construction time as described in 'Spatial Splits in Bounding Volume Hierarchies' paper. Also optional hlbvh can be used, which builds tree faster but with less quality.
-- Textures (with mip maps) are packed into a 2d texture array atlas for easier passing to OpenCL kernel.
-- Ray differentials are used for choosing mip level and filter kernel size as described in 'Tracing Ray Differentials' paper.
-- Sampling is done using Halton sequence with per pixel randomization.
-- CPU backends can use 2x2 or 4x2 Ray packet traversal optimized with SSE/AVX/NEON intrinsics, which is very effective for primary and glossy secondary rays, but not so effective for very random diffuse secondary rays even after sorting applied. Thin templated wrapper class (simd_vec_*) used to avoid code duplication, looks still ugly though.
-- To increase ray coherency compression-sorting-decompression used on secondary rays as described in "Fast Ray Sorting and Breadth-First Packet Traversal for GPU Ray Tracing" paper (only sorting part, no breadth-first traversal used). OpenCL backend uses implementation of parallel radix sort described in "Introduction to GPU Radix Sort".
-- Punctual light sources organized in separate BVH tree to accelerate light culling.
-- (Random path termination) When Ray influence falls certain threshold, path gets randomly terminated by probability inversely proportional to that influence. Weight of non-terminated Ray adjusted appropriately.
-- (Lightmapping) Special 'Geo' camera type can be used for sampling meshes in texture space to produce direct and indirect lightmaps for realtime rendering. Simple color map and 2-band spherical harmonics representation available as output. Latter can be used for creating lightmaps that interact with surface normal maps.
+  - Ray/triangle intersection is done using Plucker test with help of precomputed data stored per triangle as described in 'Ray-Triangle Intersection Algorithm for Modern CPU Architectures' paper.
+  - SAH-based binary BVH is used as acceleration structure. Two traversal algorithms are available: stack- and stackless (described in 'Efficient Stack-less BVH Traversal for Ray Tracing' paper). By default traversal with stack is used as it was faster on gpus I tested on. BVH tree is made two-level to support basic rigid motion. Optional 'spatial splits' feature can be used for building better optimized BVH in cost of construction time as described in 'Spatial Splits in Bounding Volume Hierarchies' paper. Also optional hlbvh can be used, which builds tree faster but with less quality.
+  - Textures (with mip maps) are packed into a 2d texture array atlas for easier passing to OpenCL kernel.
+  - Ray differentials are used for choosing mip level and filter kernel size as described in 'Tracing Ray Differentials' paper.
+  - Sampling is done using Halton sequence with per pixel randomization.
+  - CPU backends can use 2x2 or 4x2 Ray packet traversal optimized with SSE/AVX/NEON intrinsics, which is very effective for primary and glossy secondary rays, but not so effective for very random diffuse secondary rays even after sorting applied. Thin templated wrapper class (simd_vec_*) used to avoid code duplication, looks still ugly though.
+  - To increase ray coherency compression-sorting-decompression used on secondary rays as described in "Fast Ray Sorting and Breadth-First Packet Traversal for GPU Ray Tracing" paper (only sorting part, no breadth-first traversal used). OpenCL backend uses implementation of parallel radix sort described in "Introduction to GPU Radix Sort".
+  - Punctual light sources organized in separate BVH tree to accelerate light culling.
+  - (Random path termination) When Ray influence falls certain threshold, path gets randomly terminated by probability inversely proportional to that influence. Weight of non-terminated Ray adjusted appropriately.
+  - (Lightmapping) Special 'Geo' camera type can be used for sampling meshes in texture space to produce direct and indirect lightmaps for realtime rendering. Simple color map and 2-band spherical harmonics representation available as output. Latter can be used for creating lightmaps that interact with surface normal maps.
+  
+  [![HitCount](http://hits.dwyl.io/SerhiiY-94/Ray.svg)](http://hits.dwyl.io/SerhiiY-94/Ray)

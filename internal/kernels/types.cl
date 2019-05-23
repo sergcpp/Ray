@@ -1,6 +1,6 @@
 R"(
 
-/* This file should be passed in cl program first */
+/* This file should be passed to cl program first */
 
 typedef struct _ray_packet_t {
     float4 o, d;
