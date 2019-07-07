@@ -45,24 +45,25 @@ protected:
     template <int DimX, int DimY>
     friend class Neon::RendererSIMD;
 
-    std::vector<bvh_node_t> nodes_;
-    std::vector<tri_accel_t> tris_;
-    std::vector<uint32_t> tri_indices_;
-    std::vector<transform_t> transforms_;
-    std::vector<mesh_t> meshes_;
+    std::vector<bvh_node_t>     nodes_;
+    std::vector<bvh_node8_t>    oct_nodes_;
+    std::vector<tri_accel_t>    tris_;
+    std::vector<uint32_t>       tri_indices_;
+    std::vector<transform_t>    transforms_;
+    std::vector<mesh_t>         meshes_;
     std::vector<mesh_instance_t> mesh_instances_;
-    std::vector<uint32_t> mi_indices_;
-    std::vector<vertex_t> vertices_;
-    std::vector<uint32_t> vtx_indices_;
+    std::vector<uint32_t>       mi_indices_;
+    std::vector<vertex_t>       vertices_;
+    std::vector<uint32_t>       vtx_indices_;
 
-    std::vector<material_t> materials_;
-    std::vector<texture_t> textures_;
-    TextureAtlas texture_atlas_;
+    std::vector<material_t>     materials_;
+    std::vector<texture_t>      textures_;
+    TextureAtlas                texture_atlas_;
 
-    std::vector<light_t> lights_;
-    std::vector<uint32_t> li_indices_;
+    std::vector<light_t>        lights_;
+    std::vector<uint32_t>       li_indices_;
 
-    environment_t env_;
+    environment_t               env_;
 
     uint32_t macro_nodes_start_ = 0xffffffff, macro_nodes_count_ = 0;
     uint32_t light_nodes_start_ = 0xffffffff, light_nodes_count_ = 0;

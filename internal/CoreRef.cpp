@@ -56,6 +56,10 @@ force_inline bool is_leaf_node(const bvh_node_t &node) {
     return (node.prim_index & LEAF_NODE_BIT) != 0;
 }
 
+force_inline bool is_leaf_node(const bvh_node8_t &node) {
+    return (node.child[0] & LEAF_NODE_BIT) != 0;
+}
+
 force_inline bool bbox_test(const float o[3], const float inv_d[3], const float t, const float bbox_min[3], const float bbox_max[3]) {
     float lo_x = inv_d[0] * (bbox_min[0] - o[0]);
     float hi_x = inv_d[0] * (bbox_max[0] - o[0]);
@@ -92,6 +96,28 @@ force_inline bool bbox_test(const float o[3], const float inv_d[3], const float 
 
 force_inline bool bbox_test(const float p[3], const bvh_node_t &node) {
     return bbox_test(p, node.bbox_min, node.bbox_max);
+}
+
+force_inline bool bbox_test_oct(const float o[3], const float inv_d[3], const float t, const bvh_node8_t &node, int i) {
+    float lo_x = inv_d[0] * (node.bbox_min[0][i] - o[0]);
+    float hi_x = inv_d[0] * (node.bbox_max[0][i] - o[0]);
+    if (lo_x > hi_x) { float tmp = lo_x; lo_x = hi_x; hi_x = tmp; }
+
+    float lo_y = inv_d[1] * (node.bbox_min[1][i] - o[1]);
+    float hi_y = inv_d[1] * (node.bbox_max[1][i] - o[1]);
+    if (lo_y > hi_y) { float tmp = lo_y; lo_y = hi_y; hi_y = tmp; }
+
+    float lo_z = inv_d[2] * (node.bbox_min[2][i] - o[2]);
+    float hi_z = inv_d[2] * (node.bbox_max[2][i] - o[2]);
+    if (lo_z > hi_z) { float tmp = lo_z; lo_z = hi_z; hi_z = tmp; }
+
+    float tmin = lo_x > lo_y ? lo_x : lo_y;
+    if (lo_z > tmin) tmin = lo_z;
+    float tmax = hi_x < hi_y ? hi_x : hi_y;
+    if (hi_z < tmax) tmax = hi_z;
+    tmax *= 1.00000024f;
+
+    return tmin <= tmax && tmin <= t && tmax > 0;
 }
 
 enum eTraversalSource { FromParent, FromChild, FromSibling };
@@ -922,6 +948,56 @@ bool Ray::Ref::Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t &r, co
     return res;
 }
 
+bool Ray::Ref::Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t &r, const bvh_node8_t *nodes, uint32_t root_index,
+                                                       const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
+                                                       const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t &inter) {
+    bool res = false;
+
+    int ray_dir_oct = ((r.d[2] > 0.0f) << 2) | ((r.d[1] > 0.0f) << 1) | (r.d[0] > 0.0f);
+
+    float inv_d[3];
+    safe_invert(r.d, inv_d);
+
+    uint32_t stack[MAX_STACK_SIZE];
+    uint32_t stack_size = 0;
+
+    stack[stack_size++] = root_index;
+
+    while (stack_size) {
+        uint32_t cur = stack[--stack_size];
+
+        if (!is_leaf_node(nodes[cur])) {
+            bool res[8];
+            for (int i = 0; i < 8; i++) {
+                res[i] = bbox_test_oct(r.o, inv_d, inter.t, nodes[cur], i);
+            }
+
+            for (int i = 0; i < 8; i++) {
+                int j = i ^ ray_dir_oct;
+                if (!res[j]) continue;
+
+                stack[stack_size++] = nodes[cur].child[j];
+            }
+        } else {
+            uint32_t prim_index = (nodes[cur].child[0] & PRIM_INDEX_BITS);
+            for (uint32_t i = prim_index; i < prim_index + nodes[cur].child[1]; i++) {
+                const auto &mi = mesh_instances[mi_indices[i]];
+                const auto &m = meshes[mi.mesh_index];
+                const auto &tr = transforms[mi.tr_index];
+
+                if (!bbox_test(r.o, inv_d, inter.t, mi.bbox_min, mi.bbox_max)) continue;
+
+                ray_packet_t _r = TransformRay(r, tr.inv_xform);
+
+                const float _inv_d[3] = { 1.0f / _r.d[0], 1.0f / _r.d[1], 1.0f / _r.d[2] };
+                res |= Traverse_MicroTree_WithStack_ClosestHit(_r, _inv_d, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], &stack[stack_size], inter);
+            }
+        }
+    }
+
+    return res;
+}
+
 bool Ray::Ref::Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t &r, const bvh_node_t *nodes, uint32_t root_index,
                                                    const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
                                                    const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t &inter) {
@@ -973,7 +1049,6 @@ bool Ray::Ref::Traverse_MicroTree_WithStack_ClosestHit(const ray_packet_t &r, co
     bool res = false;
 
     uint32_t stack_size = 0;
-
     stack[stack_size++] = root_index;
 
     while (stack_size) {
@@ -986,6 +1061,38 @@ bool Ray::Ref::Traverse_MicroTree_WithStack_ClosestHit(const ray_packet_t &r, co
             stack[stack_size++] = near_child(r, nodes[cur]);
         } else {
             res |= IntersectTris_ClosestHit(r, tris, &tri_indices[nodes[cur].prim_index & PRIM_INDEX_BITS], nodes[cur].prim_count, obj_index, inter);
+        }
+    }
+
+    return res;
+}
+
+bool Ray::Ref::Traverse_MicroTree_WithStack_ClosestHit(const ray_packet_t &r, const float inv_d[3], const bvh_node8_t *nodes, uint32_t root_index,
+                                                       const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, uint32_t *stack, hit_data_t &inter) {
+    bool res = false;
+
+    int ray_dir_oct = ((r.d[2] > 0.0f) << 2) | ((r.d[1] > 0.0f) << 1) | (r.d[0] > 0.0f);
+
+    uint32_t stack_size = 0;
+    stack[stack_size++] = root_index;
+
+    while (stack_size) {
+        uint32_t cur = stack[--stack_size];
+
+        if (!is_leaf_node(nodes[cur])) {
+            bool res[8];
+            for (int i = 0; i < 8; i++) {
+                res[i] = bbox_test_oct(r.o, inv_d, inter.t, nodes[cur], i);
+            }
+
+            for (int i = 0; i < 8; i++) {
+                int j = i ^ ray_dir_oct;
+                if (!res[j]) continue;
+
+                stack[stack_size++] = nodes[cur].child[j];
+            }
+        } else {
+            res |= IntersectTris_ClosestHit(r, tris, &tri_indices[nodes[cur].child[0] & PRIM_INDEX_BITS], nodes[cur].child[1], obj_index, inter);
         }
     }
 
