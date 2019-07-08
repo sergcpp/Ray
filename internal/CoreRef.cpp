@@ -98,7 +98,13 @@ force_inline bool bbox_test(const float p[3], const bvh_node_t &node) {
     return bbox_test(p, node.bbox_min, node.bbox_max);
 }
 
-force_inline bool bbox_test_oct(const float o[3], const float inv_d[3], const float t, const bvh_node8_t &node, int i) {
+force_inline bool bbox_test_oct(const float p[3], const bvh_node8_t &node, int i) {
+    return p[0] > node.bbox_min[i][0] && p[0] < node.bbox_max[i][0] &&
+           p[1] > node.bbox_min[i][1] && p[1] < node.bbox_max[i][1] &&
+           p[2] > node.bbox_min[i][2] && p[2] < node.bbox_max[i][2];
+}
+
+force_inline int bbox_test_oct(const float o[3], const float inv_d[3], const float t, const bvh_node8_t &node, int i) {
     float lo_x = inv_d[0] * (node.bbox_min[0][i] - o[0]);
     float hi_x = inv_d[0] * (node.bbox_max[0][i] - o[0]);
     if (lo_x > hi_x) { float tmp = lo_x; lo_x = hi_x; hi_x = tmp; }
@@ -117,7 +123,7 @@ force_inline bool bbox_test_oct(const float o[3], const float inv_d[3], const fl
     if (hi_z < tmax) tmax = hi_z;
     tmax *= 1.00000024f;
 
-    return tmin <= tmax && tmin <= t && tmax > 0;
+    return (tmin <= tmax && tmin <= t && tmax > 0) ? 1 : 0;
 }
 
 enum eTraversalSource { FromParent, FromChild, FromSibling };
@@ -953,7 +959,10 @@ bool Ray::Ref::Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t &r, co
                                                        const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t &inter) {
     bool res = false;
 
-    int ray_dir_oct = ((r.d[2] > 0.0f) << 2) | ((r.d[1] > 0.0f) << 1) | (r.d[0] > 0.0f);
+    const int ray_dir_oct = ((r.d[2] > 0.0f) << 2) | ((r.d[1] > 0.0f) << 1) | (r.d[0] > 0.0f);
+
+    int child_order[8];
+    ITERATE_8({ child_order[i] = i ^ ray_dir_oct; })
 
     float inv_d[3];
     safe_invert(r.d, inv_d);
@@ -967,17 +976,14 @@ bool Ray::Ref::Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t &r, co
         uint32_t cur = stack[--stack_size];
 
         if (!is_leaf_node(nodes[cur])) {
-            bool res[8];
-            for (int i = 0; i < 8; i++) {
-                res[i] = bbox_test_oct(r.o, inv_d, inter.t, nodes[cur], i);
-            }
+            int res[8];
+            ITERATE_8({ res[i] = bbox_test_oct(r.o, inv_d, inter.t, nodes[cur], i); })
 
-            for (int i = 0; i < 8; i++) {
-                int j = i ^ ray_dir_oct;
-                if (!res[j]) continue;
-
-                stack[stack_size++] = nodes[cur].child[j];
-            }
+            ITERATE_8({
+                int j = child_order[i];
+                stack[stack_size] = nodes[cur].child[j];
+                stack_size += res[j];
+            })
         } else {
             uint32_t prim_index = (nodes[cur].child[0] & PRIM_INDEX_BITS);
             for (uint32_t i = prim_index; i < prim_index + nodes[cur].child[1]; i++) {
@@ -1044,6 +1050,60 @@ bool Ray::Ref::Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t &r, const 
     return res;
 }
 
+bool Ray::Ref::Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t &r, const bvh_node8_t *nodes, uint32_t root_index,
+                                                   const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
+                                                   const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t &inter) {
+    bool res = false;
+
+    const int ray_dir_oct = ((r.d[2] > 0.0f) << 2) | ((r.d[1] > 0.0f) << 1) | (r.d[0] > 0.0f);
+
+    int child_order[8];
+    ITERATE_8({ child_order[i] = i ^ ray_dir_oct; })
+
+    float inv_d[3];
+    safe_invert(r.d, inv_d);
+
+    uint32_t stack[MAX_STACK_SIZE];
+    uint32_t stack_size = 0;
+
+    stack[stack_size++] = root_index;
+
+    while (stack_size) {
+        uint32_t cur = stack[--stack_size];
+
+        if (!is_leaf_node(nodes[cur])) {
+            int res[8];
+            ITERATE_8({ res[i] = bbox_test_oct(r.o, inv_d, inter.t, nodes[cur], i); })
+
+            ITERATE_8({
+                int j = child_order[i];
+                stack[stack_size] = nodes[cur].child[j];
+                stack_size += res[j];
+            })
+        } else {
+            uint32_t prim_index = (nodes[cur].child[0] & PRIM_INDEX_BITS);
+            for (uint32_t i = prim_index; i < prim_index + nodes[cur].child[1]; i++) {
+                const auto &mi = mesh_instances[mi_indices[i]];
+                const auto &m = meshes[mi.mesh_index];
+                const auto &tr = transforms[mi.tr_index];
+
+                if (!bbox_test(r.o, inv_d, inter.t, mi.bbox_min, mi.bbox_max)) continue;
+
+                ray_packet_t _r = TransformRay(r, tr.inv_xform);
+
+                const float _inv_d[3] = { 1.0f / _r.d[0], 1.0f / _r.d[1], 1.0f / _r.d[2] };
+                bool hit_found = Traverse_MicroTree_WithStack_ClosestHit(_r, _inv_d, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], &stack[stack_size], inter);
+                res |= hit_found;
+                if (hit_found && (tris[inter.prim_indices[0]].ci & TRI_SOLID_BIT)) {
+                    return true;
+                }
+            }
+        }
+    }
+
+    return res;
+}
+
 bool Ray::Ref::Traverse_MicroTree_WithStack_ClosestHit(const ray_packet_t &r, const float inv_d[3], const bvh_node_t *nodes, uint32_t root_index,
                                                        const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, uint32_t *stack, hit_data_t &inter) {
     bool res = false;
@@ -1071,7 +1131,10 @@ bool Ray::Ref::Traverse_MicroTree_WithStack_ClosestHit(const ray_packet_t &r, co
                                                        const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, uint32_t *stack, hit_data_t &inter) {
     bool res = false;
 
-    int ray_dir_oct = ((r.d[2] > 0.0f) << 2) | ((r.d[1] > 0.0f) << 1) | (r.d[0] > 0.0f);
+    const int ray_dir_oct = ((r.d[2] > 0.0f) << 2) | ((r.d[1] > 0.0f) << 1) | (r.d[0] > 0.0f);
+
+    int child_order[8];
+    ITERATE_8({ child_order[i] = i ^ ray_dir_oct; })
 
     uint32_t stack_size = 0;
     stack[stack_size++] = root_index;
@@ -1080,17 +1143,14 @@ bool Ray::Ref::Traverse_MicroTree_WithStack_ClosestHit(const ray_packet_t &r, co
         uint32_t cur = stack[--stack_size];
 
         if (!is_leaf_node(nodes[cur])) {
-            bool res[8];
-            for (int i = 0; i < 8; i++) {
-                res[i] = bbox_test_oct(r.o, inv_d, inter.t, nodes[cur], i);
-            }
+            int res[8];
+            ITERATE_8({ res[i] = bbox_test_oct(r.o, inv_d, inter.t, nodes[cur], i); })
 
-            for (int i = 0; i < 8; i++) {
-                int j = i ^ ray_dir_oct;
-                if (!res[j]) continue;
-
-                stack[stack_size++] = nodes[cur].child[j];
-            }
+            ITERATE_8({
+                int j = child_order[i];
+                stack[stack_size] = nodes[cur].child[j];
+                stack_size += res[j];
+            })
         } else {
             res |= IntersectTris_ClosestHit(r, tris, &tri_indices[nodes[cur].child[0] & PRIM_INDEX_BITS], nodes[cur].child[1], obj_index, inter);
         }
@@ -1372,7 +1432,11 @@ float Ray::Ref::ComputeVisibility(const simd_fvec3 &p1, const simd_fvec3 &p2, co
         hit_data_t sh_inter;
         sh_inter.t = dist;
 
-        Traverse_MacroTree_WithStack_AnyHit(r, sc.nodes, node_index, sc.mesh_instances, sc.mi_indices, sc.meshes, sc.transforms, sc.tris, sc.tri_indices, sh_inter);
+        if (sc.oct_nodes) {
+            Traverse_MacroTree_WithStack_AnyHit(r, sc.oct_nodes, node_index, sc.mesh_instances, sc.mi_indices, sc.meshes, sc.transforms, sc.tris, sc.tri_indices, sh_inter);
+        } else {
+            Traverse_MacroTree_WithStack_AnyHit(r, sc.nodes, node_index, sc.mesh_instances, sc.mi_indices, sc.meshes, sc.transforms, sc.tris, sc.tri_indices, sh_inter);
+        }
         if (!sh_inter.mask_values[0]) break;
 
         const auto &tri = sc.tris[sh_inter.prim_indices[0]];
@@ -1448,6 +1512,43 @@ float Ray::Ref::ComputeVisibility(const simd_fvec3 &p1, const simd_fvec3 &p2, co
     return visibility;
 }
 
+void Ray::Ref::AcumulateLightContribution(const light_t &l, const simd_fvec3 &I, const simd_fvec3 &P, const simd_fvec3 &N, const simd_fvec3 &B, const simd_fvec3 &plane_N,
+                                          const scene_data_t &sc, uint32_t node_index, const TextureAtlas &tex_atlas,
+                                          float sigma, const float *halton, const int hi, int rand_hash2, float rand_offset, float rand_offset2, simd_fvec3 &col) {
+    simd_fvec3 L = P - simd_fvec3(l.pos);
+    float distance = length(L);
+    float d = std::max(distance - l.radius, 0.0f);
+    L /= distance;
+
+    float _unused;
+    const float z = std::modf(halton[hi + 0] + rand_offset, &_unused);
+
+    const float dir = std::sqrt(z);
+    const float phi = 2 * PI * std::modf(halton[hi + 1] + rand_offset2, &_unused);
+
+    const float cos_phi = std::cos(phi), sin_phi = std::sin(phi);
+
+    auto TT = cross(L, B);
+    auto BB = cross(L, TT);
+    const auto V = dir * sin_phi * BB + std::sqrt(1.0f - dir) * L + dir * cos_phi * TT;
+
+    L = normalize(simd_fvec3(l.pos) + V * l.radius - P);
+
+    float denom = d / l.radius + 1.0f;
+    float atten = 1.0f / (denom * denom);
+
+    atten = (atten - LIGHT_ATTEN_CUTOFF / l.brightness) / (1.0f - LIGHT_ATTEN_CUTOFF);
+    atten = std::max(atten, 0.0f);
+
+    float _dot1 = std::max(dot(L, N), 0.0f);
+    float _dot2 = dot(L, simd_fvec3{ l.dir });
+
+    if (_dot1 > FLT_EPS && _dot2 > l.spot && (l.brightness * atten) > FLT_EPS) {
+        float visibility = ComputeVisibility(P + HIT_BIAS * plane_N, simd_fvec3(l.pos), halton, hi, rand_hash2, sc, node_index, tex_atlas);
+        col += simd_fvec3(l.col) * _dot1 * visibility * atten * BRDF_OrenNayar(L, I, N, B, sigma);
+    }
+}
+
 Ray::Ref::simd_fvec3 Ray::Ref::ComputeDirectLighting(const simd_fvec3 &I, const simd_fvec3 &P, const simd_fvec3 &N, const simd_fvec3 &B, const simd_fvec3 &plane_N,
                                                      float sigma, const float *halton, const int hi, int rand_hash, int rand_hash2, float rand_offset, float rand_offset2,
                                                      const scene_data_t &sc, uint32_t node_index, uint32_t light_node_index, const TextureAtlas &tex_atlas) {
@@ -1462,50 +1563,42 @@ Ray::Ref::simd_fvec3 Ray::Ref::ComputeDirectLighting(const simd_fvec3 &I, const 
         stack[stack_size++] = light_node_index;
     }
 
-    while (stack_size) {
-        uint32_t cur = stack[--stack_size];
+    if (sc.oct_nodes) {
+        while (stack_size) {
+            uint32_t cur = stack[--stack_size];
 
-        if (!bbox_test(value_ptr(P), sc.nodes[cur])) continue;
+            if (!is_leaf_node(sc.oct_nodes[cur])) {
+                bool res[8];
+                for (int i = 0; i < 8; i++) {
+                    res[i] = bbox_test_oct(value_ptr(P), sc.oct_nodes[cur], i);
+                }
 
-        if (!is_leaf_node(sc.nodes[cur])) {
-            stack[stack_size++] = sc.nodes[cur].left_child;
-            stack[stack_size++] = (sc.nodes[cur].right_child & RIGHT_CHILD_BITS);
-        } else {
-            uint32_t prim_index = (sc.nodes[cur].prim_index & PRIM_INDEX_BITS);
-            for (uint32_t i = prim_index; i < prim_index + sc.nodes[cur].prim_count; i++) {
-                const light_t &l = sc.lights[sc.li_indices[i]];
+                for (int i = 0; i < 8; i++) {
+                    if (!res[i]) continue;
+                    stack[stack_size++] = sc.oct_nodes[cur].child[i];
+                }
+            } else {
+                uint32_t prim_index = (sc.oct_nodes[cur].child[0] & PRIM_INDEX_BITS);
+                for (uint32_t i = prim_index; i < prim_index + sc.oct_nodes[cur].child[1]; i++) {
+                    const light_t &l = sc.lights[sc.li_indices[i]];
+                    AcumulateLightContribution(l, I, P, N, B, plane_N, sc, node_index, tex_atlas, sigma, halton, hi, rand_hash2, rand_offset, rand_offset2, col);
+                }
+            }
+        }
+    } else {
+        while (stack_size) {
+            uint32_t cur = stack[--stack_size];
 
-                simd_fvec3 L = P - simd_fvec3(l.pos);
-                float distance = length(L);
-                float d = std::max(distance - l.radius, 0.0f);
-                L /= distance;
+            if (!bbox_test(value_ptr(P), sc.nodes[cur])) continue;
 
-                float _unused;
-                const float z = std::modf(halton[hi + 0] + rand_offset, &_unused);
-
-                const float dir = std::sqrt(z);
-                const float phi = 2 * PI * std::modf(halton[hi + 1] + rand_offset2, &_unused);
-
-                const float cos_phi = std::cos(phi), sin_phi = std::sin(phi);
-
-                auto TT = cross(L, B);
-                auto BB = cross(L, TT);
-                const auto V = dir * sin_phi * BB + std::sqrt(1.0f - dir) * L + dir * cos_phi * TT;
-
-                L = normalize(simd_fvec3(l.pos) + V * l.radius - P);
-
-                float denom = d / l.radius + 1.0f;
-                float atten = 1.0f / (denom * denom);
-
-                atten = (atten - LIGHT_ATTEN_CUTOFF / l.brightness) / (1.0f - LIGHT_ATTEN_CUTOFF);
-                atten = std::max(atten, 0.0f);
-
-                float _dot1 = std::max(dot(L, N), 0.0f);
-                float _dot2 = dot(L, simd_fvec3{ l.dir });
-
-                if (_dot1 > FLT_EPS && _dot2 > l.spot && (l.brightness * atten) > FLT_EPS) {
-                    float visibility = ComputeVisibility(P + HIT_BIAS * plane_N, simd_fvec3(l.pos), halton, hi, rand_hash2, sc, node_index, tex_atlas);
-                    col += simd_fvec3(l.col) * _dot1 * visibility * atten * BRDF_OrenNayar(L, I, N, B, sigma);
+            if (!is_leaf_node(sc.nodes[cur])) {
+                stack[stack_size++] = sc.nodes[cur].left_child;
+                stack[stack_size++] = (sc.nodes[cur].right_child & RIGHT_CHILD_BITS);
+            } else {
+                uint32_t prim_index = (sc.nodes[cur].prim_index & PRIM_INDEX_BITS);
+                for (uint32_t i = prim_index; i < prim_index + sc.nodes[cur].prim_count; i++) {
+                    const light_t &l = sc.lights[sc.li_indices[i]];
+                    AcumulateLightContribution(l, I, P, N, B, plane_N, sc, node_index, tex_atlas, sigma, halton, hi, rand_hash2, rand_offset, rand_offset2, col);
                 }
             }
         }

@@ -574,6 +574,11 @@ force_inline simd_vec<T, S> fma(const simd_vec<T, S> &a, const float b, const si
 }
 
 template <typename T, int S>
+force_inline simd_vec<T, S> fma(const float a, const simd_vec<T, S> &b, const float c) {
+    return a * b + c;
+}
+
+template <typename T, int S>
 class simd_comp_where_helper {
     const simd_vec<T, S> &mask_;
     simd_vec<T, S> &comp_;

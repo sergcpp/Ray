@@ -20,6 +20,15 @@ enum eRendererType {
     RendererOCL     = (1 << 5),
 };
 
+/// Renderer settings
+struct settings_t {
+    int w, h;
+#if !defined(DISABLE_OCL)
+    int platform_index = -1, device_index = -1;
+#endif
+    bool use_wide_bvh = true;
+};
+
 /** Render region context,
     holds information for specific rectangle on image
 */

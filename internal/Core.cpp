@@ -244,8 +244,7 @@ void Ray::ExtractPlaneNormal(const tri_accel_t &tri, float *out_normal) {
 }
 
 uint32_t Ray::PreprocessMesh(const float *attrs, const uint32_t *vtx_indices, size_t vtx_indices_count, eVertexLayout layout, int base_vertex,
-                             bool allow_spatial_splits, bool use_fast_bvh_build,
-                             std::vector<bvh_node_t> &out_nodes, std::vector<tri_accel_t> &out_tris, std::vector<uint32_t> &out_tri_indices) {
+                             const bvh_settings_t &s, std::vector<bvh_node_t> &out_nodes, std::vector<tri_accel_t> &out_tris, std::vector<uint32_t> &out_tri_indices) {
     assert(vtx_indices_count && vtx_indices_count % 3 == 0);
 
     std::vector<prim_t> primitives;
@@ -278,9 +277,7 @@ uint32_t Ray::PreprocessMesh(const float *attrs, const uint32_t *vtx_indices, si
 
     size_t indices_start = out_tri_indices.size();
     uint32_t num_out_nodes;
-    if (!use_fast_bvh_build) {
-        split_settings_t s;
-        s.allow_spatial_splits = allow_spatial_splits;
+    if (!s.use_fast_bvh_build) {
         num_out_nodes = PreprocessPrims_SAH(&primitives[0], primitives.size(), positions, attr_stride, s, out_nodes, out_tri_indices);
     } else {
         num_out_nodes = PreprocessPrims_HLBVH(&primitives[0], primitives.size(), out_nodes, out_tri_indices);
@@ -448,7 +445,7 @@ uint32_t Ray::EmitLBVH_NonRecursive(const prim_t *prims, const uint32_t *indices
 }
 
 uint32_t Ray::PreprocessPrims_SAH(const prim_t *prims, size_t prims_count, const float *positions, size_t stride,
-                                  const split_settings_t &s, std::vector<bvh_node_t> &out_nodes, std::vector<uint32_t> &out_indices) {
+                                  const bvh_settings_t &s, std::vector<bvh_node_t> &out_nodes, std::vector<uint32_t> &out_indices) {
     struct prims_coll_t {
         std::vector<uint32_t> indices;
         Ref::simd_fvec3 min = { std::numeric_limits<float>::max() }, max = { std::numeric_limits<float>::lowest() };
@@ -625,7 +622,7 @@ uint32_t Ray::PreprocessPrims_HLBVH(const prim_t *prims, size_t prims_count, std
     std::vector<uint32_t> top_indices;
 
     // Force spliting until each primitive will be in separate leaf node
-    split_settings_t s;
+    bvh_settings_t s;
     s.oversplit_threshold = std::numeric_limits<float>::max();
     s.node_traversal_cost = 0.0f;
     s.allow_spatial_splits = false;
@@ -699,7 +696,7 @@ uint32_t Ray::PreprocessPrims_HLBVH(const prim_t *prims, size_t prims_count, std
     return (uint32_t)(out_nodes.size() - top_nodes_start);
 }
 
-uint32_t Ray::FlattenBVH_Recursive(const bvh_node_t *nodes, uint32_t node_index, uint32_t parent_index, std::vector<bvh_node8_t> &out_nodes) {
+uint32_t Ray::FlattenBVH_Recursive(const bvh_node_t *nodes, uint32_t node_index, uint32_t parent_index, aligned_vector<bvh_node8_t> &out_nodes) {
     const bvh_node_t &cur_node = nodes[node_index];
 
     // allocate new node
@@ -731,13 +728,13 @@ uint32_t Ray::FlattenBVH_Recursive(const bvh_node_t *nodes, uint32_t node_index,
     const bvh_node_t &child0 = nodes[cur_node.left_child];
     
     if (child0.prim_index & LEAF_NODE_BIT) {
-        children[children_count++] = cur_node.left_child;
+        children[children_count++] = cur_node.left_child & LEFT_CHILD_BITS;
     } else {
         const bvh_node_t &child00 = nodes[child0.left_child];
         const bvh_node_t &child01 = nodes[child0.right_child & RIGHT_CHILD_BITS];
 
         if (child00.prim_index & LEAF_NODE_BIT) {
-            children[children_count++] = child0.left_child;
+            children[children_count++] = child0.left_child & LEFT_CHILD_BITS;
         } else {
             children[children_count++] = child00.left_child;
             children[children_count++] = child00.right_child & RIGHT_CHILD_BITS;
@@ -760,7 +757,7 @@ uint32_t Ray::FlattenBVH_Recursive(const bvh_node_t *nodes, uint32_t node_index,
         const bvh_node_t &child11 = nodes[child1.right_child & RIGHT_CHILD_BITS];
 
         if (child10.prim_index & LEAF_NODE_BIT) {
-            children[children_count++] = child1.left_child;
+            children[children_count++] = child1.left_child & LEFT_CHILD_BITS;
         } else {
             children[children_count++] = child10.left_child;
             children[children_count++] = child10.right_child & RIGHT_CHILD_BITS;
@@ -828,8 +825,9 @@ uint32_t Ray::FlattenBVH_Recursive(const bvh_node_t *nodes, uint32_t node_index,
             new_node.bbox_max[1][i] = nodes[sorted_children[i]].bbox_max[1];
             new_node.bbox_max[2][i] = nodes[sorted_children[i]].bbox_max[2];
         } else {
-            new_node.bbox_min[0][i] = new_node.bbox_min[1][i] = new_node.bbox_min[2][i] = 0.0f;
-            new_node.bbox_max[0][i] = new_node.bbox_max[1][i] = new_node.bbox_max[2][i] = 0.0f;
+            // Init as invalid bounding box
+            new_node.bbox_min[0][i] = new_node.bbox_min[1][i] = new_node.bbox_min[2][i] = std::numeric_limits<float>::max();
+            new_node.bbox_max[0][i] = new_node.bbox_max[1][i] = new_node.bbox_max[2][i] = std::numeric_limits<float>::max();
         }
     }
 
