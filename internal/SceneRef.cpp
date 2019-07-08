@@ -5,7 +5,7 @@
 
 #include "TextureUtilsRef.h"
 
-Ray::Ref::Scene::Scene() : texture_atlas_(MAX_TEXTURE_SIZE, MAX_TEXTURE_SIZE) {
+Ray::Ref::Scene::Scene(bool use_wide_bvh) : use_wide_bvh_(use_wide_bvh), texture_atlas_(MAX_TEXTURE_SIZE, MAX_TEXTURE_SIZE) {
     {   // add default environment map (white)
         static const pixel_color8_t default_env_map = { 255, 255, 255, 128 };
 
@@ -152,18 +152,27 @@ uint32_t Ray::Ref::Scene::AddMaterial(const mat_desc_t &m) {
 uint32_t Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
     meshes_.emplace_back();
     auto &m = meshes_.back();
-    m.node_index = (uint32_t)nodes_.size();
-    m.node_count = 0;
-
+    
     uint32_t tris_start = (uint32_t)tris_.size();
-    m.node_count += PreprocessMesh(_m.vtx_attrs, _m.vtx_indices, _m.vtx_indices_count, _m.layout, _m.base_vertex, _m.allow_spatial_splits, _m.use_fast_bvh_build, nodes_, tris_, tri_indices_);
 
-    {   // test test test
+    bvh_settings_t s;
+    s.node_traversal_cost = use_wide_bvh_ ? 0.0025f : 0.025f;
+    s.oversplit_threshold = use_wide_bvh_ ? 0.99999f : 0.95f;
+    s.allow_spatial_splits = _m.allow_spatial_splits;
+    s.use_fast_bvh_build = _m.use_fast_bvh_build;
+
+    m.node_index = (uint32_t)nodes_.size();
+    m.node_count = PreprocessMesh(_m.vtx_attrs, _m.vtx_indices, _m.vtx_indices_count, _m.layout, _m.base_vertex, s, nodes_, tris_, tri_indices_);
+
+    if (use_wide_bvh_) {
         uint32_t before_count = (uint32_t)oct_nodes_.size();
         uint32_t new_root = FlattenBVH_Recursive(nodes_.data(), m.node_index, 0xffffffff, oct_nodes_);
 
-        m.oct_node_index = new_root;
-        m.oct_node_count = (uint32_t)(oct_nodes_.size() - before_count);
+        m.node_index = new_root;
+        m.node_count = (uint32_t)(oct_nodes_.size() - before_count);
+
+        // nodes_ is treated as temporary storage
+        nodes_.clear();
     }
 
     for (const auto &s : _m.shapes) {
@@ -353,16 +362,47 @@ uint32_t Ray::Ref::Scene::AddMeshInstance(uint32_t mesh_index, const float *xfor
 }
 
 void Ray::Ref::Scene::SetMeshInstanceTransform(uint32_t mi_index, const float *xform) {
-    auto &mi = mesh_instances_[mi_index];
-    auto &tr = transforms_[mi.tr_index];
+    mesh_instance_t &mi = mesh_instances_[mi_index];
+    transform_t &tr = transforms_[mi.tr_index];
 
     memcpy(tr.xform, xform, 16 * sizeof(float));
     InverseMatrix(tr.xform, tr.inv_xform);
 
     const auto &m = meshes_[mi.mesh_index];
-    const auto &n = nodes_[m.node_index];
 
-    TransformBoundingBox(n.bbox_min, n.bbox_max, xform, mi.bbox_min, mi.bbox_max);
+    if (!use_wide_bvh_) {
+        const bvh_node_t &n = nodes_[m.node_index];
+        TransformBoundingBox(n.bbox_min, n.bbox_max, xform, mi.bbox_min, mi.bbox_max);
+    } else {
+        const bvh_node8_t &n = oct_nodes_[m.node_index];
+
+        float bbox_min[3] = { MAX_DIST, MAX_DIST, MAX_DIST },
+              bbox_max[3] = { -MAX_DIST, -MAX_DIST, -MAX_DIST };
+
+        if (n.child[0] & LEAF_NODE_BIT) {
+            bbox_min[0] = n.bbox_min[0][0];
+            bbox_min[1] = n.bbox_min[1][0];
+            bbox_min[2] = n.bbox_min[2][0];
+
+            bbox_max[0] = n.bbox_max[0][0];
+            bbox_max[1] = n.bbox_max[1][0];
+            bbox_max[2] = n.bbox_max[2][0];
+        } else {
+            for (int i = 0; i < 8; i++) {
+                if (n.child[i] == 0x7fffffff) continue;
+
+                bbox_min[0] = std::min(bbox_min[0], n.bbox_min[0][i]);
+                bbox_min[1] = std::min(bbox_min[1], n.bbox_min[1][i]);
+                bbox_min[2] = std::min(bbox_min[2], n.bbox_min[2][i]);
+
+                bbox_max[0] = std::max(bbox_max[0], n.bbox_max[0][i]);
+                bbox_max[1] = std::max(bbox_max[1], n.bbox_max[1][i]);
+                bbox_max[2] = std::max(bbox_max[2], n.bbox_max[2][i]);
+            }
+        }
+
+        TransformBoundingBox(bbox_min, bbox_max, xform, mi.bbox_min, mi.bbox_max);
+    }
 
     RebuildMacroBVH();
 }
@@ -391,10 +431,15 @@ void Ray::Ref::Scene::RemoveTris(uint32_t tris_index, uint32_t tris_count) {
 void Ray::Ref::Scene::RemoveNodes(uint32_t node_index, uint32_t node_count) {
     if (!node_count) return;
 
-    nodes_.erase(std::next(nodes_.begin(), node_index),
-                 std::next(nodes_.begin(), node_index + node_count));
+    if (!use_wide_bvh_) {
+        nodes_.erase(std::next(nodes_.begin(), node_index),
+                     std::next(nodes_.begin(), node_index + node_count));
+    } else {
+        oct_nodes_.erase(std::next(oct_nodes_.begin(), node_index),
+                         std::next(oct_nodes_.begin(), node_index + node_count));
+    }
 
-    if (node_index != nodes_.size()) {
+    if ((!use_wide_bvh_ && node_index != nodes_.size()) || (use_wide_bvh_ && node_index != oct_nodes_.size())) {
         for (auto &m : meshes_) {
             if (m.node_index > node_index) {
                 m.node_index -= node_count;
@@ -413,18 +458,27 @@ void Ray::Ref::Scene::RemoveNodes(uint32_t node_index, uint32_t node_count) {
             }
         }
 
-        if (macro_nodes_start_ > node_index) {
-            macro_nodes_start_ -= node_count;
+        for (uint32_t i = node_index; i < oct_nodes_.size(); i++) {
+            auto &n = oct_nodes_[i];
+
+            if ((n.child[0] & LEAF_NODE_BIT) == 0) {
+                if (n.child[0] > node_index) n.child[0] -= node_count;
+                if ((n.child[1] & RIGHT_CHILD_BITS) > node_index) n.child[1] -= node_count;
+            }
         }
 
-        if (light_nodes_start_ > node_index) {
-            light_nodes_start_ -= node_count;
+        if (macro_nodes_root_ > node_index) {
+            macro_nodes_root_ -= node_count;
+        }
+
+        if (light_nodes_root_ > node_index) {
+            light_nodes_root_ -= node_count;
         }
     }
 }
 
 void Ray::Ref::Scene::RebuildMacroBVH() {
-    RemoveNodes(macro_nodes_start_, macro_nodes_count_);
+    RemoveNodes(macro_nodes_root_, macro_nodes_count_);
     mi_indices_.clear();
 
     std::vector<prim_t> primitives;
@@ -434,20 +488,23 @@ void Ray::Ref::Scene::RebuildMacroBVH() {
         primitives.push_back({ 0, 0, 0, Ref::simd_fvec3{ mi.bbox_min }, Ref::simd_fvec3{ mi.bbox_max } });
     }
 
-    macro_nodes_start_ = (uint32_t)nodes_.size();
+    macro_nodes_root_ = (uint32_t)nodes_.size();
     macro_nodes_count_ = PreprocessPrims_SAH(&primitives[0], primitives.size(), nullptr, 0, {}, nodes_, mi_indices_);
 
-    {   // test test test
+    if (use_wide_bvh_) {
         uint32_t before_count = (uint32_t)oct_nodes_.size();
-        uint32_t new_root = FlattenBVH_Recursive(nodes_.data(), macro_nodes_start_, 0xffffffff, oct_nodes_);
+        uint32_t new_root = FlattenBVH_Recursive(nodes_.data(), macro_nodes_root_, 0xffffffff, oct_nodes_);
 
-        macro_oct_nodes_start_ = new_root;
-        macro_oct_nodes_count_ = (uint32_t)(oct_nodes_.size() - before_count);
+        macro_nodes_root_ = new_root;
+        macro_nodes_count_ = (uint32_t)(oct_nodes_.size() - before_count);
+
+        // nodes_ is temporary storage when wide BVH is used
+        nodes_.clear();
     }
 }
 
 void Ray::Ref::Scene::RebuildLightBVH() {
-    RemoveNodes(light_nodes_start_, light_nodes_count_);
+    RemoveNodes(light_nodes_root_, light_nodes_count_);
     li_indices_.clear();
 
     std::vector<prim_t> primitives;
@@ -502,6 +559,17 @@ void Ray::Ref::Scene::RebuildLightBVH() {
         TransformBoundingBox(&bbox_min[0], &bbox_max[0], xform, &prim.bbox_min[0], &prim.bbox_max[0]);
     }
 
-    light_nodes_start_ = (uint32_t)nodes_.size();
+    light_nodes_root_ = (uint32_t)nodes_.size();
     light_nodes_count_ = PreprocessPrims_SAH(&primitives[0], primitives.size(), nullptr, 0, {}, nodes_, li_indices_);
+
+    if (use_wide_bvh_) {
+        uint32_t before_count = (uint32_t)oct_nodes_.size();
+        uint32_t new_root = FlattenBVH_Recursive(nodes_.data(), light_nodes_root_, 0xffffffff, oct_nodes_);
+
+        light_nodes_root_ = new_root;
+        light_nodes_count_ = (uint32_t)(oct_nodes_.size() - before_count);
+
+        // nodes_ is temporary storage when wide BVH is used
+        nodes_.clear();
+    }
 }

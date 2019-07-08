@@ -33,17 +33,26 @@ extern template bool Traverse_MacroTree_Stackless_CPU<RayPacketSize>(const ray_p
 extern template bool Traverse_MicroTree_Stackless_CPU<RayPacketSize>(const ray_packet_t<RayPacketSize> &r, const simd_ivec<RayPacketSize> &ray_mask, const bvh_node_t *nodes, uint32_t node_index,
                                                                      const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, hit_data_t<RayPacketSize> &inter);
 #endif
-
 extern template bool Traverse_MacroTree_WithStack_ClosestHit<RayPacketSize>(const ray_packet_t<RayPacketSize> &r, const simd_ivec<RayPacketSize> &ray_mask, const bvh_node_t *nodes, uint32_t node_index,
+                                                                            const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
+                                                                            const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t<RayPacketSize> &inter);
+extern template bool Traverse_MacroTree_WithStack_ClosestHit<RayPacketSize>(const ray_packet_t<RayPacketSize> &r, const simd_ivec<RayPacketSize> &ray_mask, const bvh_node8_t *oct_nodes, uint32_t node_index,
                                                                             const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
                                                                             const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t<RayPacketSize> &inter);
 extern template bool Traverse_MacroTree_WithStack_AnyHit<RayPacketSize>(const ray_packet_t<RayPacketSize> &r, const simd_ivec<RayPacketSize> &ray_mask, const bvh_node_t *nodes, uint32_t node_index,
                                                                         const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
                                                                         const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t<RayPacketSize> &inter, simd_ivec<RayPacketSize> &is_solid_hit);
+extern template bool Traverse_MacroTree_WithStack_AnyHit<RayPacketSize>(const ray_packet_t<RayPacketSize> &r, const simd_ivec<RayPacketSize> &ray_mask, const bvh_node8_t *oct_nodes, uint32_t node_index,
+                                                                        const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
+                                                                        const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t<RayPacketSize> &inter, simd_ivec<RayPacketSize> &is_solid_hit);
 extern template bool Traverse_MicroTree_WithStack_ClosestHit<RayPacketSize>(const ray_packet_t<RayPacketSize> &r, const simd_ivec<RayPacketSize> &ray_mask, const bvh_node_t *nodes, uint32_t node_index,
+                                                                            const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, hit_data_t<RayPacketSize> &inter);
+extern template bool Traverse_MicroTree_WithStack_ClosestHit<RayPacketSize>(const float ro[3], const float rd[3], int i, const bvh_node8_t *oct_nodes, uint32_t node_index,
                                                                             const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, hit_data_t<RayPacketSize> &inter);
 extern template bool Traverse_MicroTree_WithStack_AnyHit<RayPacketSize>(const ray_packet_t<RayPacketSize> &r, const simd_ivec<RayPacketSize> &ray_mask, const bvh_node_t *nodes, uint32_t node_index,
                                                                         const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, hit_data_t<RayPacketSize> &inter, simd_ivec<RayPacketSize> &is_solid_hit);
+extern template bool Traverse_MicroTree_WithStack_AnyHit(const float ro[3], const float rd[3], int i, const bvh_node8_t *oct_nodes, uint32_t node_index,
+                                                         const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, hit_data_t<RayPacketSize> &inter, simd_ivec<RayPacketSize> &is_solid_hit);
 
 extern template ray_packet_t<RayPacketSize> TransformRay<RayPacketSize>(const ray_packet_t<RayPacketSize> &r, const float *xform);
 extern template void TransformNormal<RayPacketSize>(const simd_fvec<RayPacketSize> n[3], const float *inv_xform, simd_fvec<RayPacketSize> out_n[3]);
@@ -77,7 +86,7 @@ extern template class RendererSIMD<RayPacketDimX, RayPacketDimY>;
 
 class Renderer : public RendererSIMD<RayPacketDimX, RayPacketDimY> {
 public:
-    Renderer(int w, int h) : RendererSIMD(w, h) {}
+    Renderer(const settings_t &s) : RendererSIMD(s) {}
 
     eRendererType type() const override { return RendererAVX2; }
 };

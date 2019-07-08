@@ -125,7 +125,7 @@ bbox_t GetClippedAABB(const Ref::simd_fvec3 &_v0, const Ref::simd_fvec3 &_v1, co
 
 Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, const std::vector<uint32_t> &prim_indices, const float *positions, size_t stride,
                                            const Ref::simd_fvec3 &bbox_min, const Ref::simd_fvec3 &bbox_max,
-                                           const Ref::simd_fvec3 &root_min, const Ref::simd_fvec3 &root_max, const split_settings_t &s) {
+                                           const Ref::simd_fvec3 &root_min, const Ref::simd_fvec3 &root_max, const bvh_settings_t &s) {
     size_t num_tris = prim_indices.size();
     bbox_t whole_box = { bbox_min, bbox_max };
 
