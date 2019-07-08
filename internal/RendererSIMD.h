@@ -14,16 +14,16 @@ namespace NS {
 template <int S>
 struct PassData {
     aligned_vector<ray_packet_t<S>> primary_rays;
-    aligned_vector<simd_ivec<S>> primary_masks;
+    aligned_vector<simd_ivec<S>>    primary_masks;
     aligned_vector<ray_packet_t<S>> secondary_rays;
-    aligned_vector<simd_ivec<S>> secondary_masks;
-    aligned_vector<hit_data_t<S>> intersections;
+    aligned_vector<simd_ivec<S>>    secondary_masks;
+    aligned_vector<hit_data_t<S>>   intersections;
 
-    aligned_vector<simd_ivec<S>> hash_values;
-    std::vector<int> head_flags;
-    std::vector<uint32_t> scan_values;
-    std::vector<ray_chunk_t> chunks, chunks_temp;
-    std::vector<uint32_t> skeleton;
+    aligned_vector<simd_ivec<S>>    hash_values;
+    std::vector<int>                head_flags;
+    std::vector<uint32_t>           scan_values;
+    std::vector<ray_chunk_t>        chunks, chunks_temp;
+    std::vector<uint32_t>           skeleton;
 
     PassData() = default;
 
@@ -129,6 +129,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
     sc_data.vtx_indices = s->vtx_indices_.empty() ? nullptr : &s->vtx_indices_[0];
     sc_data.vertices = s->vertices_.empty() ? nullptr : &s->vertices_[0];
     sc_data.nodes = s->nodes_.empty() ? nullptr : &s->nodes_[0];
+    sc_data.oct_nodes = s->oct_nodes_.empty() ? nullptr : &s->oct_nodes_[0];
     sc_data.tris = s->tris_.empty() ? nullptr : &s->tris_[0];
     sc_data.tri_indices = s->tri_indices_.empty() ? nullptr : &s->tri_indices_[0];
     sc_data.materials = s->materials_.empty() ? nullptr : &s->materials_[0];
@@ -198,7 +199,11 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
             inter.xy = r.xy;
 
             if (macro_tree_root != 0xffffffff) {
+#if 0
                 NS::Traverse_MacroTree_WithStack_ClosestHit(r, { -1 }, sc_data.nodes, macro_tree_root, sc_data.mesh_instances, sc_data.mi_indices, sc_data.meshes, sc_data.transforms, sc_data.tris, sc_data.tri_indices, inter);
+#else
+                NS::Traverse_MacroTree_WithStack_ClosestHit(r, { -1 }, sc_data.oct_nodes, s->macro_oct_nodes_start_, sc_data.mesh_instances, sc_data.mi_indices, sc_data.meshes, sc_data.transforms, sc_data.tris, sc_data.tri_indices, inter);
+#endif
             }
         }
     } else {
@@ -288,7 +293,11 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
             inter = {};
             inter.xy = r.xy;
 
+#if 0
             NS::Traverse_MacroTree_WithStack_ClosestHit(r, p.secondary_masks[i], sc_data.nodes, macro_tree_root, sc_data.mesh_instances, sc_data.mi_indices, sc_data.meshes, sc_data.transforms, sc_data.tris, sc_data.tri_indices, inter);
+#else
+            NS::Traverse_MacroTree_WithStack_ClosestHit(r, p.secondary_masks[i], sc_data.oct_nodes, s->macro_oct_nodes_start_, sc_data.mesh_instances, sc_data.mi_indices, sc_data.meshes, sc_data.transforms, sc_data.tris, sc_data.tri_indices, inter);
+#endif
         }
 
         auto time_secondary_shade_start = std::chrono::high_resolution_clock::now();

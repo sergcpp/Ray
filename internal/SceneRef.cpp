@@ -158,6 +158,14 @@ uint32_t Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
     uint32_t tris_start = (uint32_t)tris_.size();
     m.node_count += PreprocessMesh(_m.vtx_attrs, _m.vtx_indices, _m.vtx_indices_count, _m.layout, _m.base_vertex, _m.allow_spatial_splits, _m.use_fast_bvh_build, nodes_, tris_, tri_indices_);
 
+    {   // test test test
+        uint32_t before_count = (uint32_t)oct_nodes_.size();
+        uint32_t new_root = FlattenBVH_Recursive(nodes_.data(), m.node_index, 0xffffffff, oct_nodes_);
+
+        m.oct_node_index = new_root;
+        m.oct_node_count = (uint32_t)(oct_nodes_.size() - before_count);
+    }
+
     for (const auto &s : _m.shapes) {
         bool is_solid = true;
 
@@ -428,6 +436,14 @@ void Ray::Ref::Scene::RebuildMacroBVH() {
 
     macro_nodes_start_ = (uint32_t)nodes_.size();
     macro_nodes_count_ = PreprocessPrims_SAH(&primitives[0], primitives.size(), nullptr, 0, {}, nodes_, mi_indices_);
+
+    {   // test test test
+        uint32_t before_count = (uint32_t)oct_nodes_.size();
+        uint32_t new_root = FlattenBVH_Recursive(nodes_.data(), macro_nodes_start_, 0xffffffff, oct_nodes_);
+
+        macro_oct_nodes_start_ = new_root;
+        macro_oct_nodes_count_ = (uint32_t)(oct_nodes_.size() - before_count);
+    }
 }
 
 void Ray::Ref::Scene::RebuildLightBVH() {
