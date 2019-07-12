@@ -1,8 +1,8 @@
-# Ray [![Build status](https://ci.appveyor.com/api/projects/status/abtpdwpy4bvcpqia/branch/master?svg=true)](https://ci.appveyor.com/project/SerhiiY/ray/branch/master) [![Build Status](https://travis-ci.org/SergeyYablokov/Ray.svg?branch=master)](https://travis-ci.org/SergeyYablokov/Ray)
+# Ray [![Build status](https://ci.appveyor.com/api/projects/status/abtpdwpy4bvcpqia/branch/master?svg=true)](https://ci.appveyor.com/project/SerhiiY/ray/branch/master) [![Build Status](https://travis-ci.org/sergcpp/Ray.svg?branch=master)](https://travis-ci.org/sergcpp/Ray)
 
 Small pathtracing library created for learning purposes. Includes CPU and GPU (OpenCL) backends.
 
-  - Full application : <https://github.com/SergeyYablokov/RayDemo>
+  - Full application : <https://github.com/sergcpp/RayDemo>
   - Video : <https://www.youtube.com/watch?v=MHk9jXcdrZs>
 
 <div>
@@ -20,7 +20,7 @@ Small pathtracing library created for learning purposes. Includes CPU and GPU (O
 ## Installation
 The intended use is to add it as a submodule to an existing project:
 ```console
-$ git submodule add https://github.com/SergeyYablokov/Ray.git
+$ git submodule add https://github.com/sergcpp/Ray.git
 ```
 Then in CMakeLists.txt file:
 ```cmake
@@ -29,7 +29,7 @@ add_subdirectory(Ray)
 But also standalone test can be compiled and run:
 ### Windows
 ```console
-$ git clone https://github.com/SergeyYablokov/Ray.git
+$ git clone https://github.com/sergcpp/Ray.git
 $ cd Ray
 $ mkdir build && cd build/
 $ cmake ..
@@ -39,7 +39,7 @@ $ tests/Release/test_Ray.exe
 ### Linux/MacOS
 Either OpenCL should be installed on the system or -DENABLE_OPENCL=OFF flag should be passed to cmake.
 ```console
-$ git clone https://github.com/SergeyYablokov/Ray.git
+$ git clone https://github.com/sergcpp/Ray.git
 $ cd Ray
 $ mkdir build && cd build/
 $ cmake .. -DCMAKE_BUILD_TYPE=Release && make
@@ -48,7 +48,7 @@ $ ./tests/test_Ray
 ### Android
 Status of OpenCL on Android is still unclear and seems like it only works on a small number of devices, so OpenCL backend is disabled by default.
 But library includes reference and NEON implementations, which work on Android. For compilation Android NDK tools are needed.
-For details about compilation with cmake and ninja please see: <https://github.com/SergeyYablokov/occdemo/blob/master/build_android.py>
+For details about compilation with cmake and ninja please see: <https://github.com/sergcpp/DummyEngine/blob/master/build_android.py>
 
 ## Usage
 ### Image rendering
@@ -276,7 +276,7 @@ With 'output_sh' set to true renderer additionally outputs lightmap in 2-band (4
   - Textures (with mip maps) are packed into a 2d texture array atlas for easier passing to OpenCL kernel.
   - Ray differentials are used for choosing mip level and filter kernel size as described in 'Tracing Ray Differentials' paper.
   - Sampling is done using Halton sequence with per pixel randomization.
-  - CPU backends can use 2x2 or 4x2 Ray packet traversal optimized with SSE/AVX/NEON intrinsics, which is very effective for primary and glossy secondary rays, but not so effective for very random diffuse secondary rays even after sorting applied. Thin templated wrapper class (simd_vec_*) used to avoid code duplication, looks still ugly though.
+  - CPU backend can use either packets or single rays with wide BVH tree. Both variants are optimized with SSE/AVX/NEON intrinsics. Thin templated wrapper class (simd_vec_*) used to avoid code duplication, looks still ugly though.
   - To increase ray coherency compression-sorting-decompression used on secondary rays as described in "Fast Ray Sorting and Breadth-First Packet Traversal for GPU Ray Tracing" paper (only sorting part, no breadth-first traversal used). OpenCL backend uses implementation of parallel radix sort described in "Introduction to GPU Radix Sort".
   - Punctual light sources organized in separate BVH tree to accelerate light culling.
   - (Random path termination) When Ray influence falls certain threshold, path gets randomly terminated by probability inversely proportional to that influence. Weight of non-terminated Ray adjusted appropriately.

@@ -363,7 +363,8 @@ force_inline void bbox_test_oct(const float inv_d[3], const float neg_inv_d_o[3]
     tmax = min(tmax, max(low, high));
     tmax *= 1.00000024f;
 
-    out_mask = reinterpret_cast<const simd_ivec<S>&>((tmin <= tmax) & (tmin <= t) & (tmax > 0.0f));
+    simd_fvec<S> fmask = (tmin <= tmax) & (tmin <= t) & (tmax > 0.0f);
+    out_mask = reinterpret_cast<const simd_ivec<S>&>(fmask);
 }
 
 template <int S>
@@ -2660,16 +2661,18 @@ void Ray::NS::ComputeDirectLighting(const simd_fvec<S> I[3], const simd_fvec<S> 
     if (sc.oct_nodes) {
         const int LanesCount = 8 / S;
 
-        for (int i = 0; i < S; i++) {
-            if (!ray_mask[i]) continue;
+        for (int ri = 0; ri < S; ri++) {
+            if (!ray_mask[ri]) continue;
 
             // recombine in AoS layout
-            const float _P[3] = { P[0][i], P[1][i], P[2][i] };
+            const float _P[3] = { P[0][ri], P[1][ri], P[2][ri] };
 
             uint32_t stack[MAX_STACK_SIZE];
             uint32_t stack_size = 0;
 
-            stack[stack_size++] = light_node_index;
+            if (light_node_index != 0xffffffff) {
+                stack[stack_size++] = light_node_index;
+            }
 
             while (stack_size) {
                 uint32_t cur = stack[--stack_size];
@@ -2708,19 +2711,19 @@ void Ray::NS::ComputeDirectLighting(const simd_fvec<S> I[3], const simd_fvec<S> 
 
                         simd_fvec<S> V, TT, BB;
 
-                        BB[0] = B[0][i];
-                        BB[1] = B[1][i];
-                        BB[2] = B[2][i];
+                        BB[0] = B[0][ri];
+                        BB[1] = B[1][ri];
+                        BB[2] = B[2][ri];
 
                         cross(L, BB, TT);
                         cross(L, TT, BB);
 
                         {
                             float _unused;
-                            const float z = std::modf(halton[hi + 0] + rand_offset[i], &_unused);
+                            const float z = std::modf(halton[hi + 0] + rand_offset[ri], &_unused);
 
                             const float dir = std::sqrt(z);
-                            const float phi = 2 * PI * std::modf(halton[hi + 1] + rand_offset2[i], &_unused);
+                            const float phi = 2 * PI * std::modf(halton[hi + 1] + rand_offset2[ri], &_unused);
 
                             const float cos_phi = std::cos(phi);
                             const float sin_phi = std::sin(phi);
@@ -2740,7 +2743,7 @@ void Ray::NS::ComputeDirectLighting(const simd_fvec<S> I[3], const simd_fvec<S> 
                         atten = (atten - LIGHT_ATTEN_CUTOFF / l.brightness) / (1.0f - LIGHT_ATTEN_CUTOFF);
                         atten = std::max(atten, 0.0f);
 
-                        float _dot1 = std::max(L[0] * N[0][i] + L[1] * N[1][i] + L[2] * N[2][i], 0.0f);
+                        float _dot1 = std::max(L[0] * N[0][ri] + L[1] * N[1][ri] + L[2] * N[2][ri], 0.0f);
                         float _dot2 = L[0] * l.dir[0] + L[1] * l.dir[1] + L[2] * l.dir[2];
 
                         if ((_dot1 > FLT_EPS) && (_dot2 > l.spot) && (l.brightness * atten > FLT_EPS)) {
@@ -2748,17 +2751,17 @@ void Ray::NS::ComputeDirectLighting(const simd_fvec<S> I[3], const simd_fvec<S> 
 
                             // Setup to check only one ray in lane (not very effective, should be changed later)
                             simd_ivec<S> imask = { 0 };
-                            imask[i] = 0xffffffff;
+                            imask[ri] = 0xffffffff;
 
                             simd_fvec<S> visibility = ComputeVisibility(P_biased, p2, imask, halton, hi, rand_hash2, sc, node_index, tex_atlas);
 
                             simd_fvec<S> _L[3];
-                            _L[0][i] = L[0]; _L[1][i] = L[1]; _L[2][i] = L[2];
+                            _L[0][ri] = L[0]; _L[1][ri] = L[1]; _L[2][ri] = L[2];
                             simd_fvec<S> diff_k = BRDF_OrenNayar(_L, I, N, B, sigma);
 
-                            out_col[0][i] = out_col[0][i] + l.col[0] * _dot1 * visibility[i] * atten * diff_k[i];
-                            out_col[1][i] = out_col[1][i] + l.col[1] * _dot1 * visibility[i] * atten * diff_k[i];
-                            out_col[2][i] = out_col[2][i] + l.col[2] * _dot1 * visibility[i] * atten * diff_k[i];
+                            out_col[0][ri] = out_col[0][ri] + l.col[0] * _dot1 * visibility[ri] * atten * diff_k[ri];
+                            out_col[1][ri] = out_col[1][ri] + l.col[1] * _dot1 * visibility[ri] * atten * diff_k[ri];
+                            out_col[2][ri] = out_col[2][ri] + l.col[2] * _dot1 * visibility[ri] * atten * diff_k[ri];
                         }
                     }
                 }
