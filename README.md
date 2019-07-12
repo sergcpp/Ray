@@ -1,8 +1,8 @@
-# Ray [![Build status](https://ci.appveyor.com/api/projects/status/abtpdwpy4bvcpqia/branch/master?svg=true)](https://ci.appveyor.com/project/SerhiiY/ray/branch/master) [![Build Status](https://travis-ci.org/SerhiiY-94/Ray.svg?branch=master)](https://travis-ci.org/SerhiiY-94/Ray)
+# Ray [![Build status](https://ci.appveyor.com/api/projects/status/abtpdwpy4bvcpqia/branch/master?svg=true)](https://ci.appveyor.com/project/SerhiiY/ray/branch/master) [![Build Status](https://travis-ci.org/SergeyYablokov/Ray.svg?branch=master)](https://travis-ci.org/SergeyYablokov/Ray)
 
 Small pathtracing library created for learning purposes. Includes CPU and GPU (OpenCL) backends.
 
-  - Full application : <https://github.com/SerhiiY-94/RayDemo>
+  - Full application : <https://github.com/SergeyYablokov/RayDemo>
   - Video : <https://www.youtube.com/watch?v=MHk9jXcdrZs>
 
 <div>
@@ -20,7 +20,7 @@ Small pathtracing library created for learning purposes. Includes CPU and GPU (O
 ## Installation
 The intended use is to add it as a submodule to an existing project:
 ```console
-$ git submodule add https://github.com/SerhiiY-94/Ray.git
+$ git submodule add https://github.com/SergeyYablokov/Ray.git
 ```
 Then in CMakeLists.txt file:
 ```cmake
@@ -29,7 +29,7 @@ add_subdirectory(Ray)
 But also standalone test can be compiled and run:
 ### Windows
 ```console
-$ git clone https://github.com/SerhiiY-94/Ray.git
+$ git clone https://github.com/SergeyYablokov/Ray.git
 $ cd Ray
 $ mkdir build && cd build/
 $ cmake ..
@@ -39,7 +39,7 @@ $ tests/Release/test_Ray.exe
 ### Linux/MacOS
 Either OpenCL should be installed on the system or -DENABLE_OPENCL=OFF flag should be passed to cmake.
 ```console
-$ git clone https://github.com/SerhiiY-94/Ray.git
+$ git clone https://github.com/SergeyYablokov/Ray.git
 $ cd Ray
 $ mkdir build && cd build/
 $ cmake .. -DCMAKE_BUILD_TYPE=Release && make
@@ -48,7 +48,7 @@ $ ./tests/test_Ray
 ### Android
 Status of OpenCL on Android is still unclear and seems like it only works on a small number of devices, so OpenCL backend is disabled by default.
 But library includes reference and NEON implementations, which work on Android. For compilation Android NDK tools are needed.
-For details about compilation with cmake and ninja please see: <https://github.com/SerhiiY-94/occdemo/blob/master/build_android.py>
+For details about compilation with cmake and ninja please see: <https://github.com/SergeyYablokov/occdemo/blob/master/build_android.py>
 
 ## Usage
 ### Image rendering
@@ -282,4 +282,3 @@ With 'output_sh' set to true renderer additionally outputs lightmap in 2-band (4
   - (Random path termination) When Ray influence falls certain threshold, path gets randomly terminated by probability inversely proportional to that influence. Weight of non-terminated Ray adjusted appropriately.
   - (Lightmapping) Special 'Geo' camera type can be used for sampling meshes in texture space to produce direct and indirect lightmaps for realtime rendering. Simple color map and 2-band spherical harmonics representation available as output. Latter can be used for creating lightmaps that interact with surface normal maps.
   
-  [![HitCount](http://hits.dwyl.io/SerhiiY-94/Ray.svg)](http://hits.dwyl.io/SerhiiY-94/Ray)
