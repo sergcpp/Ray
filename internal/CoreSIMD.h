@@ -344,7 +344,7 @@ force_inline simd_ivec<S> bbox_test_fma(const simd_fvec<S> inv_d[3], const simd_
 }
 
 template <int S>
-force_inline void bbox_test_oct(const float inv_d[3], const float neg_inv_d_o[3], float t, const simd_fvec<S> bbox_min[3], const simd_fvec<S> bbox_max[3], simd_ivec<S> &out_mask) {
+force_inline void bbox_test_oct(const float inv_d[3], const float neg_inv_d_o[3], float t, const simd_fvec<S> bbox_min[3], const simd_fvec<S> bbox_max[3], simd_ivec<S> &out_mask, simd_fvec<S> &out_dist) {
     simd_fvec<S> low, high, tmin, tmax;
 
     low = fma(inv_d[0], bbox_min[0], neg_inv_d_o[0]);
@@ -365,6 +365,7 @@ force_inline void bbox_test_oct(const float inv_d[3], const float neg_inv_d_o[3]
 
     simd_fvec<S> fmask = (tmin <= tmax) & (tmin <= t) & (tmax > 0.0f);
     out_mask = reinterpret_cast<const simd_ivec<S>&>(fmask);
+    out_dist = tmin;
 }
 
 template <int S>
@@ -1694,13 +1695,20 @@ bool Ray::NS::Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t<S> &r, 
         int child_order[8];
         ITERATE_8({ child_order[i] = i ^ ray_dir_oct; })
 
-        uint32_t stack[MAX_STACK_SIZE];
+        struct {
+            uint32_t index;
+            float dist;
+        } stack[MAX_STACK_SIZE];
         uint32_t stack_size = 0;
 
-        stack[stack_size++] = node_index;
+        stack[stack_size].index = node_index;
+        stack[stack_size++].dist = 0.0f;
 
         while (stack_size) {
-            uint32_t cur = stack[--stack_size];
+            uint32_t cur = stack[--stack_size].index;
+            float cur_dist = stack[stack_size].dist;
+
+            if (cur_dist > inter.t[ri]) continue;
 
             if (!is_leaf_node(nodes[cur])) {
                 simd_fvec<S> bbox_min[LanesCount][3], bbox_max[LanesCount][3];
@@ -1715,12 +1723,16 @@ bool Ray::NS::Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t<S> &r, 
                 })
 
                 simd_ivec<S> res_mask[LanesCount];
-                ITERATE(LanesCount, { bbox_test_oct(_inv_d, _neg_inv_d_o, inter.t[ri], bbox_min[i], bbox_max[i], res_mask[i]); })
+                simd_fvec<S> res_dist[LanesCount];
+                ITERATE(LanesCount, {
+                    bbox_test_oct(_inv_d, _neg_inv_d_o, inter.t[ri], bbox_min[i], bbox_max[i], res_mask[i], res_dist[i]);
+                })
 
                 ITERATE_8({
                     int j = child_order[i];
-                    stack[stack_size] = nodes[cur].child[j];
-                    stack_size -= res_mask[i / S][j % 8];
+                    stack[stack_size].index = nodes[cur].child[j];
+                    stack[stack_size].dist = res_dist[j / S][j % S];
+                    stack_size -= res_mask[j / S][j % S];
                 })
             } else {
                 uint32_t prim_index = (nodes[cur].child[0] & PRIM_INDEX_BITS);
@@ -1830,13 +1842,20 @@ bool Ray::NS::Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t<S> &r, cons
         int child_order[8];
         ITERATE_8({ child_order[i] = i ^ ray_dir_oct; })
 
-        uint32_t stack[MAX_STACK_SIZE];
+        struct {
+            uint32_t index;
+            float dist;
+        } stack[MAX_STACK_SIZE];
         uint32_t stack_size = 0;
 
-        stack[stack_size++] = node_index;
+        stack[stack_size].index = node_index;
+        stack[stack_size++].dist = 0.0f;
 
         while (stack_size) {
-            uint32_t cur = stack[--stack_size];
+            uint32_t cur = stack[--stack_size].index;
+            float cur_dist = stack[stack_size].dist;
+
+            if (cur_dist > inter.t[ri]) continue;
 
             if (!is_leaf_node(nodes[cur])) {
                 simd_fvec<S> bbox_min[LanesCount][3], bbox_max[LanesCount][3];
@@ -1851,11 +1870,15 @@ bool Ray::NS::Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t<S> &r, cons
                 })
 
                 simd_ivec<S> res_mask[LanesCount];
-                ITERATE(LanesCount, { bbox_test_oct(_inv_d, _neg_inv_d_o, inter.t[ri], bbox_min[i], bbox_max[i], res_mask[i]); })
+                simd_fvec<S> res_dist[LanesCount];
+                ITERATE(LanesCount, {
+                    bbox_test_oct(_inv_d, _neg_inv_d_o, inter.t[ri], bbox_min[i], bbox_max[i], res_mask[i], res_dist[i]);
+                })
 
                 ITERATE_8({
                     int j = child_order[i];
-                    stack[stack_size] = nodes[cur].child[j];
+                    stack[stack_size].index = nodes[cur].child[j];
+                    stack[stack_size].dist = res_dist[j / S][j % S];
                     stack_size -= res_mask[j / S][j % S];
                 })
             } else {
@@ -1942,15 +1965,22 @@ bool Ray::NS::Traverse_MicroTree_WithStack_ClosestHit(const float ro[3], const f
     int child_order[8];
     ITERATE_8({ child_order[i] = i ^ ray_dir_oct; })
 
-    uint32_t stack[MAX_STACK_SIZE];
+    struct {
+        uint32_t index;
+        float dist;
+    } stack[MAX_STACK_SIZE];
     uint32_t stack_size = 0;
 
-    stack[stack_size++] = node_index;
+    stack[stack_size].index = node_index;
+    stack[stack_size++].dist = 0.0f;
 
     const int LanesCount = 8 / S;
 
     while (stack_size) {
-        uint32_t cur = stack[--stack_size];
+        uint32_t cur = stack[--stack_size].index;
+        float cur_dist = stack[stack_size].dist;
+
+        if (cur_dist > inter.t[ri]) continue;
 
         if (!is_leaf_node(nodes[cur])) {
             simd_fvec<S> bbox_min[LanesCount][3], bbox_max[LanesCount][3];
@@ -1965,11 +1995,15 @@ bool Ray::NS::Traverse_MicroTree_WithStack_ClosestHit(const float ro[3], const f
             })
 
             simd_ivec<S> res_mask[LanesCount];
-            ITERATE(LanesCount, { bbox_test_oct(_inv_d, _neg_inv_d_o, inter.t[ri], bbox_min[i], bbox_max[i], res_mask[i]); })
+            simd_fvec<S> res_dist[LanesCount];
+            ITERATE(LanesCount, {
+                bbox_test_oct(_inv_d, _neg_inv_d_o, inter.t[ri], bbox_min[i], bbox_max[i], res_mask[i], res_dist[i]);
+            })
 
             ITERATE_8({
                 int j = child_order[i];
-                stack[stack_size] = nodes[cur].child[j];
+                stack[stack_size].index = nodes[cur].child[j];
+                stack[stack_size].dist = res_dist[j / S][j % S];
                 stack_size -= res_mask[j / S][j % S];
             })
         } else {
@@ -2043,15 +2077,22 @@ bool Ray::NS::Traverse_MicroTree_WithStack_AnyHit(const float ro[3], const float
     int child_order[8];
     ITERATE_8({ child_order[i] = i ^ ray_dir_oct; })
 
-    uint32_t stack[MAX_STACK_SIZE];
+    struct {
+        uint32_t index;
+        float dist;
+    } stack[MAX_STACK_SIZE];
     uint32_t stack_size = 0;
 
-    stack[stack_size++] = node_index;
+    stack[stack_size].index = node_index;
+    stack[stack_size++].dist = 0.0f;
 
     const int LanesCount = 8 / S;
 
     while (stack_size) {
-        uint32_t cur = stack[--stack_size];
+        uint32_t cur = stack[--stack_size].index;
+        float cur_dist = stack[stack_size].dist;
+
+        if (cur_dist > inter.t[ri]) continue;
 
         if (!is_leaf_node(nodes[cur])) {
             simd_fvec<S> bbox_min[LanesCount][3], bbox_max[LanesCount][3];
@@ -2066,11 +2107,15 @@ bool Ray::NS::Traverse_MicroTree_WithStack_AnyHit(const float ro[3], const float
             })
 
             simd_ivec<S> res_mask[LanesCount];
-            ITERATE(LanesCount, { bbox_test_oct(_inv_d, _neg_inv_d_o, inter.t[ri], bbox_min[i], bbox_max[i], res_mask[i]); })
+            simd_fvec<S> res_dist[LanesCount];
+            ITERATE(LanesCount, {
+                bbox_test_oct(_inv_d, _neg_inv_d_o, inter.t[ri], bbox_min[i], bbox_max[i], res_mask[i], res_dist[i]);
+            })
 
             ITERATE_8({
                 int j = child_order[i];
-                stack[stack_size] = nodes[cur].child[j];
+                stack[stack_size].index = nodes[cur].child[j];
+                stack[stack_size].dist = res_dist[j / S][j % S];
                 stack_size -= res_mask[j / S][j % S];
             })
         } else {

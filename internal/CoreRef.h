@@ -119,11 +119,11 @@ bool Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t &r, const bvh_node8_
                                          const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t &inter);
 // traditional bvh traversal with stack for inner nodes
 bool Traverse_MicroTree_WithStack_ClosestHit(const ray_packet_t &r, const float inv_d[3], const bvh_node_t *nodes, uint32_t root_index,
-                                             const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, uint32_t *stack, hit_data_t &inter);
+                                             const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, hit_data_t &inter);
 bool Traverse_MicroTree_WithStack_ClosestHit(const ray_packet_t &r, const float inv_d[3], const bvh_node8_t *nodes, uint32_t root_index,
-                                             const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, uint32_t *stack, hit_data_t &inter);
+                                             const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, hit_data_t &inter);
 bool Traverse_MicroTree_WithStack_AnyHit(const ray_packet_t &r, const float inv_d[3], const bvh_node_t *nodes, uint32_t root_index,
-                                         const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, uint32_t *stack, hit_data_t &inter);
+                                         const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, hit_data_t &inter);
 
 // BRDFs
 float BRDF_OrenNayar(const simd_fvec3 &L, const simd_fvec3 &I, const simd_fvec3 &N, const simd_fvec3 &B, float sigma);

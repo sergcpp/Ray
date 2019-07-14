@@ -104,26 +104,29 @@ force_inline bool bbox_test_oct(const float p[3], const bvh_node8_t &node, int i
            p[2] > node.bbox_min[i][2] && p[2] < node.bbox_max[i][2];
 }
 
-force_inline int bbox_test_oct(const float o[3], const float inv_d[3], const float t, const bvh_node8_t &node, int i) {
-    float lo_x = inv_d[0] * (node.bbox_min[0][i] - o[0]);
-    float hi_x = inv_d[0] * (node.bbox_max[0][i] - o[0]);
-    if (lo_x > hi_x) { float tmp = lo_x; lo_x = hi_x; hi_x = tmp; }
+force_inline void bbox_test_oct(const float o[3], const float inv_d[3], const float t, const bvh_node8_t &node, int res[8], float dist[8]) {
+    ITERATE_8({
+        float lo_x = inv_d[0] * (node.bbox_min[0][i] - o[0]);
+        float hi_x = inv_d[0] * (node.bbox_max[0][i] - o[0]);
+        if (lo_x > hi_x) { float tmp = lo_x; lo_x = hi_x; hi_x = tmp; }
 
-    float lo_y = inv_d[1] * (node.bbox_min[1][i] - o[1]);
-    float hi_y = inv_d[1] * (node.bbox_max[1][i] - o[1]);
-    if (lo_y > hi_y) { float tmp = lo_y; lo_y = hi_y; hi_y = tmp; }
+        float lo_y = inv_d[1] * (node.bbox_min[1][i] - o[1]);
+        float hi_y = inv_d[1] * (node.bbox_max[1][i] - o[1]);
+        if (lo_y > hi_y) { float tmp = lo_y; lo_y = hi_y; hi_y = tmp; }
 
-    float lo_z = inv_d[2] * (node.bbox_min[2][i] - o[2]);
-    float hi_z = inv_d[2] * (node.bbox_max[2][i] - o[2]);
-    if (lo_z > hi_z) { float tmp = lo_z; lo_z = hi_z; hi_z = tmp; }
+        float lo_z = inv_d[2] * (node.bbox_min[2][i] - o[2]);
+        float hi_z = inv_d[2] * (node.bbox_max[2][i] - o[2]);
+        if (lo_z > hi_z) { float tmp = lo_z; lo_z = hi_z; hi_z = tmp; }
 
-    float tmin = lo_x > lo_y ? lo_x : lo_y;
-    if (lo_z > tmin) tmin = lo_z;
-    float tmax = hi_x < hi_y ? hi_x : hi_y;
-    if (hi_z < tmax) tmax = hi_z;
-    tmax *= 1.00000024f;
+        float tmin = lo_x > lo_y ? lo_x : lo_y;
+        if (lo_z > tmin) tmin = lo_z;
+        float tmax = hi_x < hi_y ? hi_x : hi_y;
+        if (hi_z < tmax) tmax = hi_z;
+        tmax *= 1.00000024f;
 
-    return (tmin <= tmax && tmin <= t && tmax > 0) ? 1 : 0;
+        dist[i] = tmin;
+        res[i] = (tmin <= tmax && tmin <= t && tmax > 0) ? 1 : 0;
+    })
 }
 
 enum eTraversalSource { FromParent, FromChild, FromSibling };
@@ -946,7 +949,7 @@ bool Ray::Ref::Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t &r, co
 
                 float _inv_d[3] = { 1.0f / _r.d[0], 1.0f / _r.d[1], 1.0f / _r.d[2] };
 
-                res |= Traverse_MicroTree_WithStack_ClosestHit(_r, _inv_d, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], &stack[stack_size], inter);
+                res |= Traverse_MicroTree_WithStack_ClosestHit(_r, _inv_d, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter);
             }
         }
     }
@@ -967,21 +970,30 @@ bool Ray::Ref::Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t &r, co
     float inv_d[3];
     safe_invert(r.d, inv_d);
 
-    uint32_t stack[MAX_STACK_SIZE];
+    struct {
+        uint32_t index;
+        float dist;
+    } stack[MAX_STACK_SIZE];
     uint32_t stack_size = 0;
 
-    stack[stack_size++] = root_index;
+    stack[stack_size].index = root_index;
+    stack[stack_size++].dist = 0.0f;
 
     while (stack_size) {
-        uint32_t cur = stack[--stack_size];
+        uint32_t cur = stack[--stack_size].index;
+        float cur_dist = stack[stack_size].dist;
+
+        if (cur_dist > inter.t) continue;
 
         if (!is_leaf_node(nodes[cur])) {
             int res[8];
-            ITERATE_8({ res[i] = bbox_test_oct(r.o, inv_d, inter.t, nodes[cur], i); })
+            float dist[8];
+            bbox_test_oct(r.o, inv_d, inter.t, nodes[cur], res, dist);
 
             ITERATE_8({
                 int j = child_order[i];
-                stack[stack_size] = nodes[cur].child[j];
+                stack[stack_size].index = nodes[cur].child[j];
+                stack[stack_size].dist = dist[j];
                 stack_size += res[j];
             })
         } else {
@@ -996,7 +1008,7 @@ bool Ray::Ref::Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t &r, co
                 ray_packet_t _r = TransformRay(r, tr.inv_xform);
 
                 const float _inv_d[3] = { 1.0f / _r.d[0], 1.0f / _r.d[1], 1.0f / _r.d[2] };
-                res |= Traverse_MicroTree_WithStack_ClosestHit(_r, _inv_d, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], &stack[stack_size], inter);
+                res |= Traverse_MicroTree_WithStack_ClosestHit(_r, _inv_d, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter);
             }
         }
     }
@@ -1038,7 +1050,7 @@ bool Ray::Ref::Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t &r, const 
 
                 float _inv_d[3] = { 1.0f / _r.d[0], 1.0f / _r.d[1], 1.0f / _r.d[2] };
 
-                bool hit_found = Traverse_MicroTree_WithStack_ClosestHit(_r, _inv_d, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], &stack[stack_size], inter);
+                bool hit_found = Traverse_MicroTree_WithStack_ClosestHit(_r, _inv_d, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter);
                 res |= hit_found;
                 if (hit_found && (tris[inter.prim_indices[0]].ci & TRI_SOLID_BIT)) {
                     return true;
@@ -1063,21 +1075,30 @@ bool Ray::Ref::Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t &r, const 
     float inv_d[3];
     safe_invert(r.d, inv_d);
 
-    uint32_t stack[MAX_STACK_SIZE];
+    struct {
+        uint32_t index;
+        float dist;
+    } stack[MAX_STACK_SIZE];
     uint32_t stack_size = 0;
 
-    stack[stack_size++] = root_index;
+    stack[stack_size].index = root_index;
+    stack[stack_size++].dist = 0.0f;
 
     while (stack_size) {
-        uint32_t cur = stack[--stack_size];
+        uint32_t cur = stack[--stack_size].index;
+        float cur_dist = stack[stack_size].dist;
+
+        if (cur_dist > inter.t) continue;
 
         if (!is_leaf_node(nodes[cur])) {
             int res[8];
-            ITERATE_8({ res[i] = bbox_test_oct(r.o, inv_d, inter.t, nodes[cur], i); })
+            float dist[8];
+            bbox_test_oct(r.o, inv_d, inter.t, nodes[cur], res, dist);
 
             ITERATE_8({
                 int j = child_order[i];
-                stack[stack_size] = nodes[cur].child[j];
+                stack[stack_size].index = nodes[cur].child[j];
+                stack[stack_size].dist = dist[j];
                 stack_size += res[j];
             })
         } else {
@@ -1092,7 +1113,7 @@ bool Ray::Ref::Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t &r, const 
                 ray_packet_t _r = TransformRay(r, tr.inv_xform);
 
                 const float _inv_d[3] = { 1.0f / _r.d[0], 1.0f / _r.d[1], 1.0f / _r.d[2] };
-                bool hit_found = Traverse_MicroTree_WithStack_ClosestHit(_r, _inv_d, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], &stack[stack_size], inter);
+                bool hit_found = Traverse_MicroTree_WithStack_ClosestHit(_r, _inv_d, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter);
                 res |= hit_found;
                 if (hit_found && (tris[inter.prim_indices[0]].ci & TRI_SOLID_BIT)) {
                     return true;
@@ -1105,10 +1126,12 @@ bool Ray::Ref::Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t &r, const 
 }
 
 bool Ray::Ref::Traverse_MicroTree_WithStack_ClosestHit(const ray_packet_t &r, const float inv_d[3], const bvh_node_t *nodes, uint32_t root_index,
-                                                       const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, uint32_t *stack, hit_data_t &inter) {
+                                                       const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, hit_data_t &inter) {
     bool res = false;
 
+    uint32_t stack[MAX_STACK_SIZE];
     uint32_t stack_size = 0;
+
     stack[stack_size++] = root_index;
 
     while (stack_size) {
@@ -1128,7 +1151,7 @@ bool Ray::Ref::Traverse_MicroTree_WithStack_ClosestHit(const ray_packet_t &r, co
 }
 
 bool Ray::Ref::Traverse_MicroTree_WithStack_ClosestHit(const ray_packet_t &r, const float inv_d[3], const bvh_node8_t *nodes, uint32_t root_index,
-                                                       const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, uint32_t *stack, hit_data_t &inter) {
+                                                       const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, hit_data_t &inter) {
     bool res = false;
 
     const int ray_dir_oct = ((r.d[2] > 0.0f) << 2) | ((r.d[1] > 0.0f) << 1) | (r.d[0] > 0.0f);
@@ -1136,19 +1159,30 @@ bool Ray::Ref::Traverse_MicroTree_WithStack_ClosestHit(const ray_packet_t &r, co
     int child_order[8];
     ITERATE_8({ child_order[i] = i ^ ray_dir_oct; })
 
+    struct {
+        uint32_t index;
+        float dist;
+    } stack[MAX_STACK_SIZE];
     uint32_t stack_size = 0;
-    stack[stack_size++] = root_index;
+
+    stack[stack_size].index = root_index;
+    stack[stack_size++].dist = 0.0f;
 
     while (stack_size) {
-        uint32_t cur = stack[--stack_size];
+        uint32_t cur = stack[--stack_size].index;
+        float cur_dist = stack[stack_size].dist;
+
+        if (cur_dist > inter.t) continue;
 
         if (!is_leaf_node(nodes[cur])) {
             int res[8];
-            ITERATE_8({ res[i] = bbox_test_oct(r.o, inv_d, inter.t, nodes[cur], i); })
+            float dist[8];
+            bbox_test_oct(r.o, inv_d, inter.t, nodes[cur], res, dist);
 
             ITERATE_8({
                 int j = child_order[i];
-                stack[stack_size] = nodes[cur].child[j];
+                stack[stack_size].index = nodes[cur].child[j];
+                stack[stack_size].dist = dist[j];
                 stack_size += res[j];
             })
         } else {
@@ -1160,9 +1194,10 @@ bool Ray::Ref::Traverse_MicroTree_WithStack_ClosestHit(const ray_packet_t &r, co
 }
 
 bool Ray::Ref::Traverse_MicroTree_WithStack_AnyHit(const ray_packet_t &r, const float inv_d[3], const bvh_node_t *nodes, uint32_t root_index,
-                                                   const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, uint32_t *stack, hit_data_t &inter) {
+                                                   const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, hit_data_t &inter) {
     bool res = false;
 
+    uint32_t stack[MAX_STACK_SIZE];
     uint32_t stack_size = 0;
 
     stack[stack_size++] = root_index;
