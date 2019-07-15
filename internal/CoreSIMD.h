@@ -89,12 +89,16 @@ bool IntersectTris_ClosestHit(const ray_packet_t<S> &r, const simd_ivec<S> &ray_
 template <int S>
 bool IntersectTris_ClosestHit(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const tri_accel_t *tris, const uint32_t *indices, uint32_t num_tris, uint32_t obj_index, hit_data_t<S> &out_inter);
 template <int S>
+bool IntersectTris_ClosestHit(const float o[3], const float d[3], int i, const tri_accel_t *tris, const uint32_t *indices, uint32_t num_tris, uint32_t obj_index, hit_data_t<S> &out_inter);
+template <int S>
 bool IntersectTris_AnyHit(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const tri_accel_t *tris, uint32_t num_tris, uint32_t obj_index, hit_data_t<S> &out_inter, simd_ivec<S> &out_is_solid_hit);
 template <int S>
 bool IntersectTris_AnyHit(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const tri_accel_t *tris, const uint32_t *indices, uint32_t num_tris, uint32_t obj_index, hit_data_t<S> &out_inter, simd_ivec<S> &out_is_solid_hit);
+template <int S>
+bool IntersectTris_AnyHit(const float o[3], const float d[3], int i, const tri_accel_t *tris, const uint32_t *indices, uint32_t num_tris, uint32_t obj_index, hit_data_t<S> &out_inter, simd_ivec<S> &out_is_solid_hit);
 
-#ifdef USE_STACKLESS_BVH_TRAVERSAL
 // Traverse acceleration structure
+#ifdef USE_STACKLESS_BVH_TRAVERSAL
 // stack-less cpu-style traversal of outer nodes
 template <int S>
 bool Traverse_MacroTree_Stackless_CPU(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const bvh_node_t *nodes, uint32_t node_index,
@@ -112,7 +116,15 @@ bool Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t<S> &r, const sim
                                              const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
                                              const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t<S> &inter);
 template <int S>
+bool Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const bvh_node8_t *oct_nodes, uint32_t node_index,
+                                             const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
+                                             const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t<S> &inter);
+template <int S>
 bool Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const bvh_node_t *nodes, uint32_t node_index,
+                                         const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
+                                         const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t<S> &inter, simd_ivec<S> &is_solid_hit);
+template <int S>
+bool Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const bvh_node8_t *oct_nodes, uint32_t node_index,
                                          const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
                                          const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t<S> &inter, simd_ivec<S> &is_solid_hit);
 // traditional bvh traversal with stack for inner nodes
@@ -120,7 +132,13 @@ template <int S>
 bool Traverse_MicroTree_WithStack_ClosestHit(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const bvh_node_t *nodes, uint32_t node_index,
                                              const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, hit_data_t<S> &inter);
 template <int S>
+bool Traverse_MicroTree_WithStack_ClosestHit(const float ro[3], const float rd[3], int i, const bvh_node8_t *oct_nodes, uint32_t node_index,
+                                             const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, hit_data_t<S> &inter);
+template <int S>
 bool Traverse_MicroTree_WithStack_AnyHit(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const bvh_node_t *nodes, uint32_t node_index,
+                                         const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, hit_data_t<S> &inter, simd_ivec<S> &is_solid_hit);
+template <int S>
+bool Traverse_MicroTree_WithStack_AnyHit(const float ro[3], const float rd[3], int i, const bvh_node8_t *oct_nodes, uint32_t node_index,
                                          const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, hit_data_t<S> &inter, simd_ivec<S> &is_solid_hit);
 
 // BRDFs
@@ -136,6 +154,8 @@ template <int S>
 void TransformNormal(const simd_fvec<S> n[3], const float *inv_xform, simd_fvec<S> out_n[3]);
 template <int S>
 void TransformUVs(const simd_fvec<S> _uvs[2], float sx, float sy, const texture_t &t, const simd_ivec<S> &mip_level, simd_fvec<S> out_res[2]);
+
+void TransformRay(const float ro[3], const float rd[3], const float *xform, float out_ro[3], float out_rd[3]);
 
 // Sample texture
 template <int S>
@@ -237,6 +257,43 @@ force_inline simd_ivec<S> _IntersectTri(const ray_packet_t<S> &r, const simd_ive
 }
 
 template <int S>
+force_inline bool _IntersectTri(const float o[3], const float d[3], int i, const tri_accel_t &tri, uint32_t prim_index, hit_data_t<S> &inter) {
+    const int _next_u[] = { 1, 0, 0 },
+              _next_v[] = { 2, 2, 1 };
+
+    int iw = tri.ci & Ray::TRI_W_BITS,
+        iu = _next_u[iw], iv = _next_v[iw];
+
+    float det = d[iu] * tri.nu + d[iv] * tri.nv + d[iw];
+    float dett = tri.np - (o[iu] * tri.nu + o[iv] * tri.nv + o[iw]);
+    float Du = d[iu] * dett - (tri.pu - o[iu]) * det;
+    float Dv = d[iv] * dett - (tri.pv - o[iv]) * det;
+    float detu = tri.e1v * Du - tri.e1u * Dv;
+    float detv = tri.e0u * Dv - tri.e0v * Du;
+
+    float tmpdet0 = det - detu - detv;
+    if ((tmpdet0 > -HIT_EPS && detu > -HIT_EPS && detv > -HIT_EPS) ||
+        (tmpdet0 < HIT_EPS && detu < HIT_EPS && detv < HIT_EPS)) {
+        float rdet = 1.0f / det;
+        float t = dett * rdet;
+        float u = detu * rdet;
+        float v = detv * rdet;
+
+        if (t > 0 && t < inter.t[i]) {
+            inter.mask[i] = 0xffffffff;
+            inter.prim_index[i] = prim_index;
+            inter.t[i] = t;
+            inter.u[i] = u;
+            inter.v[i] = v;
+
+            return true;
+        }
+    }
+
+    return false;
+}
+
+template <int S>
 force_inline simd_ivec<S> bbox_test(const simd_fvec<S> o[3], const simd_fvec<S> inv_d[3], const simd_fvec<S> &t, const float _bbox_min[3], const float _bbox_max[3]) {
     simd_fvec<S> low, high, tmin, tmax;
     
@@ -287,6 +344,61 @@ force_inline simd_ivec<S> bbox_test_fma(const simd_fvec<S> inv_d[3], const simd_
 }
 
 template <int S>
+force_inline void bbox_test_oct(const float inv_d[3], const float neg_inv_d_o[3], float t, const simd_fvec<S> bbox_min[3], const simd_fvec<S> bbox_max[3], simd_ivec<S> &out_mask, simd_fvec<S> &out_dist) {
+    simd_fvec<S> low, high, tmin, tmax;
+
+    low = fma(inv_d[0], bbox_min[0], neg_inv_d_o[0]);
+    high = fma(inv_d[0], bbox_max[0], neg_inv_d_o[0]);
+    tmin = min(low, high);
+    tmax = max(low, high);
+
+    low = fma(inv_d[1], bbox_min[1], neg_inv_d_o[1]);
+    high = fma(inv_d[1], bbox_max[1], neg_inv_d_o[1]);
+    tmin = max(tmin, min(low, high));
+    tmax = min(tmax, max(low, high));
+
+    low = fma(inv_d[2], bbox_min[2], neg_inv_d_o[2]);
+    high = fma(inv_d[2], bbox_max[2], neg_inv_d_o[2]);
+    tmin = max(tmin, min(low, high));
+    tmax = min(tmax, max(low, high));
+    tmax *= 1.00000024f;
+
+    simd_fvec<S> fmask = (tmin <= tmax) & (tmin <= t) & (tmax > 0.0f);
+    out_mask = reinterpret_cast<const simd_ivec<S>&>(fmask);
+    out_dist = tmin;
+}
+
+template <int S>
+force_inline void bbox_test_oct(const float p[3], const simd_fvec<S> bbox_min[3], const simd_fvec<S> bbox_max[3], simd_ivec<S> &out_mask) {
+    simd_fvec<S> mask = (bbox_min[0] < p[0]) & (bbox_max[0] > p[0]) &
+                        (bbox_min[1] < p[1]) & (bbox_max[1] > p[1]) &
+                        (bbox_min[2] < p[2]) & (bbox_max[2] > p[2]);
+    out_mask = reinterpret_cast<const simd_ivec<S>&>(mask);
+}
+
+force_inline bool bbox_test(const float inv_d[3], const float neg_inv_do[3], const float t, const float bbox_min[3], const float bbox_max[3]) {
+    float lo_x = inv_d[0] * bbox_min[0] + neg_inv_do[0];
+    float hi_x = inv_d[0] * bbox_max[0] + neg_inv_do[0];
+    if (lo_x > hi_x) { float tmp = lo_x; lo_x = hi_x; hi_x = tmp; }
+
+    float lo_y = inv_d[1] * bbox_min[1] + neg_inv_do[1];
+    float hi_y = inv_d[1] * bbox_max[1] + neg_inv_do[1];
+    if (lo_y > hi_y) { float tmp = lo_y; lo_y = hi_y; hi_y = tmp; }
+
+    float lo_z = inv_d[2] * bbox_min[2] + neg_inv_do[2];
+    float hi_z = inv_d[2] * bbox_max[2] + neg_inv_do[2];
+    if (lo_z > hi_z) { float tmp = lo_z; lo_z = hi_z; hi_z = tmp; }
+
+    float tmin = lo_x > lo_y ? lo_x : lo_y;
+    if (lo_z > tmin) tmin = lo_z;
+    float tmax = hi_x < hi_y ? hi_x : hi_y;
+    if (hi_z < tmax) tmax = hi_z;
+    tmax *= 1.00000024f;
+
+    return tmin <= tmax && tmin <= t && tmax > 0;
+}
+
+template <int S>
 force_inline simd_ivec<S> bbox_test(const simd_fvec<S> p[3], const float _bbox_min[3], const float _bbox_max[3]) {
     simd_fvec<S> mask = (p[0] > _bbox_min[0]) & (p[0] < _bbox_max[0]) &
                         (p[1] > _bbox_min[1]) & (p[1] < _bbox_max[1]) &
@@ -327,6 +439,10 @@ force_inline uint32_t other_child(const bvh_node_t &node, uint32_t cur_child) {
 
 force_inline bool is_leaf_node(const bvh_node_t &node) {
     return (node.prim_index & LEAF_NODE_BIT) != 0;
+}
+
+force_inline bool is_leaf_node(const bvh_node8_t &node) {
+    return (node.child[0] & LEAF_NODE_BIT) != 0;
 }
 
 enum eTraversalSource { FromParent, FromChild, FromSibling };
@@ -418,8 +534,32 @@ force_inline void safe_invert(const simd_fvec<S> v[3], simd_fvec<S> inv_v[3]) {
     where((v[2] >= -FLT_EPS) & (v[2] < 0), inv_v[2]) = -MAX_DIST;
 }
 
+force_inline void safe_invert(const float v[3], float out_v[3]) {
+    out_v[0] = 1.0f / v[0];
+    out_v[1] = 1.0f / v[1];
+    out_v[2] = 1.0f / v[2];
+
+    if (v[0] <= FLT_EPS && v[0] >= 0) {
+        out_v[0] = MAX_DIST;
+    } else if (v[0] >= -FLT_EPS && v[0] < 0) {
+        out_v[0] = -MAX_DIST;
+    }
+
+    if (v[1] <= FLT_EPS && v[1] >= 0) {
+        out_v[1] = MAX_DIST;
+    } else if (v[1] >= -FLT_EPS && v[1] < 0) {
+        out_v[1] = -MAX_DIST;
+    }
+
+    if (v[2] <= FLT_EPS && v[2] >= 0) {
+        out_v[2] = MAX_DIST;
+    } else if (v[2] >= -FLT_EPS && v[2] < 0) {
+        out_v[2] = -MAX_DIST;
+    }
+}
+
 template <int S>
-force_inline void com_aux_inv_values(const simd_fvec<S> o[3], const simd_fvec<S> d[3], simd_fvec<S> inv_d[3], simd_fvec<S> neg_inv_d_o[3]) {
+force_inline void comp_aux_inv_values(const simd_fvec<S> o[3], const simd_fvec<S> d[3], simd_fvec<S> inv_d[3], simd_fvec<S> neg_inv_d_o[3]) {
     for (int i = 0; i < 3; i++) {
         inv_d[i] = { 1.0f / d[i] };
         neg_inv_d_o[i] = -o[i] * inv_d[i];
@@ -431,6 +571,40 @@ force_inline void com_aux_inv_values(const simd_fvec<S> o[3], const simd_fvec<S>
         auto d_is_minus_zero = (d[i] >= -FLT_EPS) & (d[i] < 0);
         where(d_is_minus_zero, inv_d[i]) = -MAX_DIST;
         where(d_is_minus_zero, neg_inv_d_o[i]) = MAX_DIST;
+    }
+}
+
+force_inline void comp_aux_inv_values(const float o[3], const float d[3], float inv_d[3], float neg_inv_d_o[3]) {
+    inv_d[0] = 1.0f / d[0];
+    inv_d[1] = 1.0f / d[1];
+    inv_d[2] = 1.0f / d[2];
+
+    neg_inv_d_o[0] = -inv_d[0] * o[0];
+    neg_inv_d_o[1] = -inv_d[1] * o[1];
+    neg_inv_d_o[2] = -inv_d[2] * o[2];
+
+    if (d[0] <= FLT_EPS && d[0] >= 0) {
+        inv_d[0] = MAX_DIST;
+        neg_inv_d_o[0] = -MAX_DIST;
+    } else if (d[0] >= -FLT_EPS && d[0] < 0) {
+        inv_d[0] = -MAX_DIST;
+        neg_inv_d_o[0] = MAX_DIST;
+    }
+
+    if (d[1] <= FLT_EPS && d[1] >= 0) {
+        inv_d[1] = MAX_DIST;
+        neg_inv_d_o[1] = -MAX_DIST;
+    } else if (d[1] >= -FLT_EPS && d[1] < 0) {
+        inv_d[1] = -MAX_DIST;
+        neg_inv_d_o[1] = MAX_DIST;
+    }
+
+    if (d[2] <= FLT_EPS && d[2] >= 0) {
+        inv_d[2] = MAX_DIST;
+        neg_inv_d_o[2] = -MAX_DIST;
+    } else if (d[2] >= -FLT_EPS && d[2] < 0) {
+        inv_d[2] = -MAX_DIST;
+        neg_inv_d_o[2] = MAX_DIST;
     }
 }
 
@@ -452,6 +626,13 @@ force_inline simd_fvec<S> dot(const float v1[3], const simd_fvec<S> v2[3]) {
 
 template <int S>
 force_inline void cross(const simd_fvec<S> v1[3], const simd_fvec<S> v2[3], simd_fvec<S> res[3]) {
+    res[0] = v1[1] * v2[2] - v1[2] * v2[1];
+    res[1] = v1[2] * v2[0] - v1[0] * v2[2];
+    res[2] = v1[0] * v2[1] - v1[1] * v2[0];
+}
+
+template <int S>
+force_inline void cross(const simd_fvec<S> &v1, const simd_fvec<S> &v2, simd_fvec<S> &res) {
     res[0] = v1[1] * v2[2] - v1[2] * v2[1];
     res[1] = v1[2] * v2[0] - v1[0] * v2[2];
     res[2] = v1[0] * v2[1] - v1[1] * v2[0];
@@ -1110,6 +1291,22 @@ bool Ray::NS::IntersectTris_ClosestHit(const ray_packet_t<S> &r, const simd_ivec
 }
 
 template <int S>
+bool Ray::NS::IntersectTris_ClosestHit(const float o[3], const float d[3], int i, const tri_accel_t *tris, const uint32_t *indices, uint32_t num_tris, uint32_t obj_index, hit_data_t<S> &out_inter) {
+    bool res = false;
+    
+    for (uint32_t j = 0; j < num_tris; j++) {
+        uint32_t index = indices[j];
+        res |= _IntersectTri(o, d, i, tris[index], index, out_inter);
+    }
+
+    if (res) {
+        out_inter.obj_index[i] = obj_index;
+    }
+
+    return res;
+}
+
+template <int S>
 bool Ray::NS::IntersectTris_AnyHit(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const tri_accel_t *tris, uint32_t num_tris, uint32_t obj_index, hit_data_t<S> &out_inter, simd_ivec<S> &out_is_solid_hit) {
     hit_data_t<S> inter = { Uninitialize };
     inter.mask = { 0 };
@@ -1170,6 +1367,28 @@ bool Ray::NS::IntersectTris_AnyHit(const ray_packet_t<S> &r, const simd_ivec<S> 
     return inter.mask.not_all_zeros();
 }
 
+template <int S>
+bool Ray::NS::IntersectTris_AnyHit(const float o[3], const float d[3], int i, const tri_accel_t *tris, const uint32_t *indices, uint32_t num_tris, uint32_t obj_index, hit_data_t<S> &out_inter, simd_ivec<S> &out_is_solid_hit) {
+    bool res = false;
+
+    for (uint32_t j = 0; j < num_tris; j++) {
+        uint32_t index = indices[j];
+        if (_IntersectTri(o, d, i, tris[index], index, out_inter)) {
+            res = true;
+            if (tris[index].ci & TRI_SOLID_BIT) {
+                out_is_solid_hit[i] = 0xffffffff;
+                break;
+            }
+        }
+    }
+
+    if (res) {
+        out_inter.obj_index[i] = obj_index;
+    }
+
+    return res;
+}
+
 #ifdef USE_STACKLESS_BVH_TRAVERSAL
 template <int S>
 bool Ray::NS::Traverse_MacroTree_Stackless_CPU(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const bvh_node_t *nodes, uint32_t root_index,
@@ -1178,7 +1397,7 @@ bool Ray::NS::Traverse_MacroTree_Stackless_CPU(const ray_packet_t<S> &r, const s
     bool res = false;
 
     simd_fvec<S> inv_d[3], neg_inv_d_o[3];
-    com_aux_inv_values(r.o, r.d, inv_d, neg_inv_d_o);
+    comp_aux_inv_values(r.o, r.d, inv_d, neg_inv_d_o);
 
     TraversalState<S> st;
 
@@ -1299,7 +1518,7 @@ bool Ray::NS::Traverse_MicroTree_Stackless_CPU(const ray_packet_t<S> &r, const s
     bool res = false;
 
     simd_fvec<S> inv_d[3], neg_inv_d_o[3];
-    com_aux_inv_values(r.o, r.d, inv_d, neg_inv_d_o);
+    comp_aux_inv_values(r.o, r.d, inv_d, neg_inv_d_o);
 
     TraversalState<S> st;
 
@@ -1400,7 +1619,7 @@ bool Ray::NS::Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t<S> &r, 
     bool res = false;
 
     simd_fvec<S> inv_d[3], neg_inv_d_o[3];
-    com_aux_inv_values(r.o, r.d, inv_d, neg_inv_d_o);
+    comp_aux_inv_values(r.o, r.d, inv_d, neg_inv_d_o);
 
     TraversalStateStack<S> st;
 
@@ -1452,13 +1671,98 @@ bool Ray::NS::Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t<S> &r, 
 }
 
 template <int S>
+bool Ray::NS::Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const bvh_node8_t *nodes, uint32_t node_index,
+                                                      const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
+                                                      const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t<S> &inter) {
+    bool res = false;
+
+    simd_fvec<S> inv_d[3], neg_inv_d_o[3];
+    comp_aux_inv_values(r.o, r.d, inv_d, neg_inv_d_o);
+
+    const int LanesCount = 8 / S;
+
+    for (int ri = 0; ri < S; ri++) {
+        if (!ray_mask[ri]) continue;
+
+        // recombine in AoS layout
+        const float r_o[3] = { r.o[0][ri], r.o[1][ri], r.o[2][ri] },
+                    r_d[3] = { r.d[0][ri], r.d[1][ri], r.d[2][ri] };
+        const float _inv_d[3] = { inv_d[0][ri], inv_d[1][ri], inv_d[2][ri] },
+                    _neg_inv_d_o[3] = { neg_inv_d_o[0][ri], neg_inv_d_o[1][ri], neg_inv_d_o[2][ri] };
+
+        const int ray_dir_oct = ((r_d[2] > 0.0f) << 2) | ((r_d[1] > 0.0f) << 1) | (r_d[0] > 0.0f);
+
+        int child_order[8];
+        ITERATE_8({ child_order[i] = i ^ ray_dir_oct; })
+
+        struct {
+            uint32_t index;
+            float dist;
+        } stack[MAX_STACK_SIZE];
+        uint32_t stack_size = 0;
+
+        stack[stack_size].index = node_index;
+        stack[stack_size++].dist = 0.0f;
+
+        while (stack_size) {
+            uint32_t cur = stack[--stack_size].index;
+            float cur_dist = stack[stack_size].dist;
+
+            if (cur_dist > inter.t[ri]) continue;
+
+            if (!is_leaf_node(nodes[cur])) {
+                simd_fvec<S> bbox_min[LanesCount][3], bbox_max[LanesCount][3];
+
+                ITERATE(LanesCount, {
+                    bbox_min[i][0] = simd_fvec<S>(nodes[cur].bbox_min[0] + i * S, simd_mem_aligned);
+                    bbox_min[i][1] = simd_fvec<S>(nodes[cur].bbox_min[1] + i * S, simd_mem_aligned);
+                    bbox_min[i][2] = simd_fvec<S>(nodes[cur].bbox_min[2] + i * S, simd_mem_aligned);
+                    bbox_max[i][0] = simd_fvec<S>(nodes[cur].bbox_max[0] + i * S, simd_mem_aligned);
+                    bbox_max[i][1] = simd_fvec<S>(nodes[cur].bbox_max[1] + i * S, simd_mem_aligned);
+                    bbox_max[i][2] = simd_fvec<S>(nodes[cur].bbox_max[2] + i * S, simd_mem_aligned);
+                })
+
+                simd_ivec<S> res_mask[LanesCount];
+                simd_fvec<S> res_dist[LanesCount];
+                ITERATE(LanesCount, {
+                    bbox_test_oct(_inv_d, _neg_inv_d_o, inter.t[ri], bbox_min[i], bbox_max[i], res_mask[i], res_dist[i]);
+                })
+
+                ITERATE_8({
+                    int j = child_order[i];
+                    stack[stack_size].index = nodes[cur].child[j];
+                    stack[stack_size].dist = res_dist[j / S][j % S];
+                    stack_size -= res_mask[j / S][j % S];
+                })
+            } else {
+                uint32_t prim_index = (nodes[cur].child[0] & PRIM_INDEX_BITS);
+                for (uint32_t j = prim_index; j < prim_index + nodes[cur].child[1]; j++) {
+                    const auto &mi = mesh_instances[mi_indices[j]];
+                    const auto &m = meshes[mi.mesh_index];
+                    const auto &tr = transforms[mi.tr_index];
+
+                    if (!bbox_test(_inv_d, _neg_inv_d_o, inter.t[ri], mi.bbox_min, mi.bbox_max)) continue;
+
+                    float tr_ro[3], tr_rd[3];
+                    TransformRay(r_o, r_d, tr.inv_xform, tr_ro, tr_rd);
+
+                    res |= Traverse_MicroTree_WithStack_ClosestHit(tr_ro, tr_rd, ri, nodes, m.node_index, tris, tri_indices, (int)mi_indices[j], inter);
+                }
+            }
+        }
+    }
+
+    return res;
+}
+
+template <int S>
 bool Ray::NS::Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const bvh_node_t *nodes, uint32_t node_index,
                                                   const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
                                                   const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t<S> &inter, simd_ivec<S> &is_solid_hit) {
     bool res = false;
 
     simd_fvec<S> inv_d[3], neg_inv_d_o[3];
-    com_aux_inv_values(r.o, r.d, inv_d, neg_inv_d_o);
+    comp_aux_inv_values(r.o, r.d, inv_d, neg_inv_d_o);
 
     TraversalStateStack<S> st;
 
@@ -1514,12 +1818,101 @@ bool Ray::NS::Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t<S> &r, cons
 }
 
 template <int S>
+bool Ray::NS::Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const bvh_node8_t *nodes, uint32_t node_index,
+                                                  const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
+                                                  const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t<S> &inter, simd_ivec<S> &is_solid_hit) {
+    bool res = false;
+
+    simd_fvec<S> inv_d[3], neg_inv_d_o[3];
+    comp_aux_inv_values(r.o, r.d, inv_d, neg_inv_d_o);
+
+    const int LanesCount = 8 / S;
+
+    for (int ri = 0; ri < S; ri++) {
+        if (!ray_mask[ri]) continue;
+
+        // recombine in AoS layout
+        const float r_o[3] = { r.o[0][ri], r.o[1][ri], r.o[2][ri] },
+                    r_d[3] = { r.d[0][ri], r.d[1][ri], r.d[2][ri] };
+        const float _inv_d[3] = { inv_d[0][ri], inv_d[1][ri], inv_d[2][ri] },
+                    _neg_inv_d_o[3] = { neg_inv_d_o[0][ri], neg_inv_d_o[1][ri], neg_inv_d_o[2][ri] };
+
+        const int ray_dir_oct = ((r_d[2] > 0.0f) << 2) | ((r_d[1] > 0.0f) << 1) | (r_d[0] > 0.0f);
+
+        int child_order[8];
+        ITERATE_8({ child_order[i] = i ^ ray_dir_oct; })
+
+        struct {
+            uint32_t index;
+            float dist;
+        } stack[MAX_STACK_SIZE];
+        uint32_t stack_size = 0;
+
+        stack[stack_size].index = node_index;
+        stack[stack_size++].dist = 0.0f;
+
+        while (stack_size) {
+            uint32_t cur = stack[--stack_size].index;
+            float cur_dist = stack[stack_size].dist;
+
+            if (cur_dist > inter.t[ri]) continue;
+
+            if (!is_leaf_node(nodes[cur])) {
+                simd_fvec<S> bbox_min[LanesCount][3], bbox_max[LanesCount][3];
+
+                ITERATE(LanesCount, {
+                    bbox_min[i][0] = simd_fvec<S>(nodes[cur].bbox_min[0] + i * S, simd_mem_aligned);
+                    bbox_min[i][1] = simd_fvec<S>(nodes[cur].bbox_min[1] + i * S, simd_mem_aligned);
+                    bbox_min[i][2] = simd_fvec<S>(nodes[cur].bbox_min[2] + i * S, simd_mem_aligned);
+                    bbox_max[i][0] = simd_fvec<S>(nodes[cur].bbox_max[0] + i * S, simd_mem_aligned);
+                    bbox_max[i][1] = simd_fvec<S>(nodes[cur].bbox_max[1] + i * S, simd_mem_aligned);
+                    bbox_max[i][2] = simd_fvec<S>(nodes[cur].bbox_max[2] + i * S, simd_mem_aligned);
+                })
+
+                simd_ivec<S> res_mask[LanesCount];
+                simd_fvec<S> res_dist[LanesCount];
+                ITERATE(LanesCount, {
+                    bbox_test_oct(_inv_d, _neg_inv_d_o, inter.t[ri], bbox_min[i], bbox_max[i], res_mask[i], res_dist[i]);
+                })
+
+                ITERATE_8({
+                    int j = child_order[i];
+                    stack[stack_size].index = nodes[cur].child[j];
+                    stack[stack_size].dist = res_dist[j / S][j % S];
+                    stack_size -= res_mask[j / S][j % S];
+                })
+            } else {
+                uint32_t prim_index = (nodes[cur].child[0] & PRIM_INDEX_BITS);
+                for (uint32_t j = prim_index; j < prim_index + nodes[cur].child[1]; j++) {
+                    const auto &mi = mesh_instances[mi_indices[j]];
+                    const auto &m = meshes[mi.mesh_index];
+                    const auto &tr = transforms[mi.tr_index];
+
+                    if (!bbox_test(_inv_d, _neg_inv_d_o, inter.t[ri], mi.bbox_min, mi.bbox_max)) continue;
+
+                    float tr_ro[3], tr_rd[3];
+                    TransformRay(r_o, r_d, tr.inv_xform, tr_ro, tr_rd);
+
+                    bool hit_found = Traverse_MicroTree_WithStack_AnyHit(tr_ro, tr_rd, ri, nodes, m.node_index, tris, tri_indices, (int)mi_indices[j], inter, is_solid_hit);
+                    res |= hit_found;
+                    if (hit_found && is_solid_hit[ri]) {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    return res;
+}
+
+template <int S>
 bool Ray::NS::Traverse_MicroTree_WithStack_ClosestHit(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const bvh_node_t *nodes, uint32_t node_index,
                                                       const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, hit_data_t<S> &inter) {
     bool res = false;
 
     simd_fvec<S> inv_d[3], neg_inv_d_o[3];
-    com_aux_inv_values(r.o, r.d, inv_d, neg_inv_d_o);
+    comp_aux_inv_values(r.o, r.d, inv_d, neg_inv_d_o);
 
     TraversalStateStack<S> st;
 
@@ -1560,12 +1953,74 @@ bool Ray::NS::Traverse_MicroTree_WithStack_ClosestHit(const ray_packet_t<S> &r, 
 }
 
 template <int S>
+bool Ray::NS::Traverse_MicroTree_WithStack_ClosestHit(const float ro[3], const float rd[3], int ri, const bvh_node8_t *nodes, uint32_t node_index,
+                                                      const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, hit_data_t<S> &inter) {
+    bool res = false;
+
+    float _inv_d[3], _neg_inv_d_o[3];
+    comp_aux_inv_values(ro, rd, _inv_d, _neg_inv_d_o);
+        
+    const int ray_dir_oct = ((rd[2] > 0.0f) << 2) | ((rd[1] > 0.0f) << 1) | (rd[0] > 0.0f);
+
+    int child_order[8];
+    ITERATE_8({ child_order[i] = i ^ ray_dir_oct; })
+
+    struct {
+        uint32_t index;
+        float dist;
+    } stack[MAX_STACK_SIZE];
+    uint32_t stack_size = 0;
+
+    stack[stack_size].index = node_index;
+    stack[stack_size++].dist = 0.0f;
+
+    const int LanesCount = 8 / S;
+
+    while (stack_size) {
+        uint32_t cur = stack[--stack_size].index;
+        float cur_dist = stack[stack_size].dist;
+
+        if (cur_dist > inter.t[ri]) continue;
+
+        if (!is_leaf_node(nodes[cur])) {
+            simd_fvec<S> bbox_min[LanesCount][3], bbox_max[LanesCount][3];
+
+            ITERATE(LanesCount, {
+                bbox_min[i][0] = simd_fvec<S>(nodes[cur].bbox_min[0] + i * S, simd_mem_aligned);
+                bbox_min[i][1] = simd_fvec<S>(nodes[cur].bbox_min[1] + i * S, simd_mem_aligned);
+                bbox_min[i][2] = simd_fvec<S>(nodes[cur].bbox_min[2] + i * S, simd_mem_aligned);
+                bbox_max[i][0] = simd_fvec<S>(nodes[cur].bbox_max[0] + i * S, simd_mem_aligned);
+                bbox_max[i][1] = simd_fvec<S>(nodes[cur].bbox_max[1] + i * S, simd_mem_aligned);
+                bbox_max[i][2] = simd_fvec<S>(nodes[cur].bbox_max[2] + i * S, simd_mem_aligned);
+            })
+
+            simd_ivec<S> res_mask[LanesCount];
+            simd_fvec<S> res_dist[LanesCount];
+            ITERATE(LanesCount, {
+                bbox_test_oct(_inv_d, _neg_inv_d_o, inter.t[ri], bbox_min[i], bbox_max[i], res_mask[i], res_dist[i]);
+            })
+
+            ITERATE_8({
+                int j = child_order[i];
+                stack[stack_size].index = nodes[cur].child[j];
+                stack[stack_size].dist = res_dist[j / S][j % S];
+                stack_size -= res_mask[j / S][j % S];
+            })
+        } else {
+            res |= IntersectTris_ClosestHit(ro, rd, ri, tris, &tri_indices[nodes[cur].child[0] & PRIM_INDEX_BITS], nodes[cur].child[1], obj_index, inter);
+        }
+    }
+
+    return res;
+}
+
+template <int S>
 bool Ray::NS::Traverse_MicroTree_WithStack_AnyHit(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const bvh_node_t *nodes, uint32_t node_index,
                                                   const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, hit_data_t<S> &inter, simd_ivec<S> &out_is_solid_hit) {
     bool res = false;
 
     simd_fvec<S> inv_d[3], neg_inv_d_o[3];
-    com_aux_inv_values(r.o, r.d, inv_d, neg_inv_d_o);
+    comp_aux_inv_values(r.o, r.d, inv_d, neg_inv_d_o);
 
     TraversalStateStack<S> st;
 
@@ -1610,6 +2065,72 @@ bool Ray::NS::Traverse_MicroTree_WithStack_AnyHit(const ray_packet_t<S> &r, cons
 }
 
 template <int S>
+bool Ray::NS::Traverse_MicroTree_WithStack_AnyHit(const float ro[3], const float rd[3], int ri, const bvh_node8_t *nodes, uint32_t node_index,
+                                                  const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, hit_data_t<S> &inter, simd_ivec<S> &is_solid_hit) {
+    bool res = false;
+
+    float _inv_d[3], _neg_inv_d_o[3];
+    comp_aux_inv_values(ro, rd, _inv_d, _neg_inv_d_o);
+
+    const int ray_dir_oct = ((rd[2] > 0.0f) << 2) | ((rd[1] > 0.0f) << 1) | (rd[0] > 0.0f);
+
+    int child_order[8];
+    ITERATE_8({ child_order[i] = i ^ ray_dir_oct; })
+
+    struct {
+        uint32_t index;
+        float dist;
+    } stack[MAX_STACK_SIZE];
+    uint32_t stack_size = 0;
+
+    stack[stack_size].index = node_index;
+    stack[stack_size++].dist = 0.0f;
+
+    const int LanesCount = 8 / S;
+
+    while (stack_size) {
+        uint32_t cur = stack[--stack_size].index;
+        float cur_dist = stack[stack_size].dist;
+
+        if (cur_dist > inter.t[ri]) continue;
+
+        if (!is_leaf_node(nodes[cur])) {
+            simd_fvec<S> bbox_min[LanesCount][3], bbox_max[LanesCount][3];
+
+            ITERATE(LanesCount, {
+                bbox_min[i][0] = simd_fvec<S>(nodes[cur].bbox_min[0] + i * S, simd_mem_aligned);
+                bbox_min[i][1] = simd_fvec<S>(nodes[cur].bbox_min[1] + i * S, simd_mem_aligned);
+                bbox_min[i][2] = simd_fvec<S>(nodes[cur].bbox_min[2] + i * S, simd_mem_aligned);
+                bbox_max[i][0] = simd_fvec<S>(nodes[cur].bbox_max[0] + i * S, simd_mem_aligned);
+                bbox_max[i][1] = simd_fvec<S>(nodes[cur].bbox_max[1] + i * S, simd_mem_aligned);
+                bbox_max[i][2] = simd_fvec<S>(nodes[cur].bbox_max[2] + i * S, simd_mem_aligned);
+            })
+
+            simd_ivec<S> res_mask[LanesCount];
+            simd_fvec<S> res_dist[LanesCount];
+            ITERATE(LanesCount, {
+                bbox_test_oct(_inv_d, _neg_inv_d_o, inter.t[ri], bbox_min[i], bbox_max[i], res_mask[i], res_dist[i]);
+            })
+
+            ITERATE_8({
+                int j = child_order[i];
+                stack[stack_size].index = nodes[cur].child[j];
+                stack[stack_size].dist = res_dist[j / S][j % S];
+                stack_size -= res_mask[j / S][j % S];
+            })
+        } else {
+            bool hit_found = IntersectTris_AnyHit(ro, rd, ri, tris, &tri_indices[nodes[cur].child[0] & PRIM_INDEX_BITS], nodes[cur].child[1], obj_index, inter, is_solid_hit);
+            res |= hit_found;
+            if (hit_found && is_solid_hit[ri]) {
+                break;
+            }
+        }
+    }
+
+    return res;
+}
+
+template <int S>
 Ray::NS::simd_fvec<S> Ray::NS::BRDF_OrenNayar(const simd_fvec<S> L[3], const simd_fvec<S> I[3], const simd_fvec<S> N[3], const simd_fvec<S> T[3], const simd_fvec<S> &sigma) {
     simd_fvec<S> sigma_sqr = sigma * sigma;
     simd_fvec<S> A = 1.0f - (sigma_sqr / (2.0f * (sigma_sqr + 0.33f)));
@@ -1645,6 +2166,16 @@ force_inline Ray::NS::ray_packet_t<S> Ray::NS::TransformRay(const ray_packet_t<S
     _r.d[2] = r.d[0] * xform[2] + r.d[1] * xform[6] + r.d[2] * xform[10];
 
     return _r;
+}
+
+force_inline void Ray::NS::TransformRay(const float ro[3], const float rd[3], const float *xform, float out_ro[3], float out_rd[3]) {
+    out_ro[0] = ro[0] * xform[0] + ro[1] * xform[4] + ro[2] * xform[8] + xform[12];
+    out_ro[1] = ro[0] * xform[1] + ro[1] * xform[5] + ro[2] * xform[9] + xform[13];
+    out_ro[2] = ro[0] * xform[2] + ro[1] * xform[6] + ro[2] * xform[10] + xform[14];
+
+    out_rd[0] = rd[0] * xform[0] + rd[1] * xform[4] + rd[2] * xform[8];
+    out_rd[1] = rd[0] * xform[1] + rd[1] * xform[5] + rd[2] * xform[9];
+    out_rd[2] = rd[0] * xform[2] + rd[1] * xform[6] + rd[2] * xform[10];
 }
 
 template <int S>
@@ -1977,13 +2508,8 @@ Ray::NS::simd_fvec<S> Ray::NS::ComputeVisibility(const simd_fvec<S> p1[3], const
 
     ray_packet_t<S> sh_r;
 
-    sh_r.o[0] = p1[0];
-    sh_r.o[1] = p1[1];
-    sh_r.o[2] = p1[2];
-
-    sh_r.d[0] = dir[0];
-    sh_r.d[1] = dir[1];
-    sh_r.d[2] = dir[2];
+    ITERATE_3({ sh_r.o[i] = p1[i]; })
+    ITERATE_3({ sh_r.d[i] = dir[i]; })
 
     simd_fvec<S> visibility = 1.0f;
 
@@ -1995,7 +2521,12 @@ Ray::NS::simd_fvec<S> Ray::NS::ComputeVisibility(const simd_fvec<S> p1[3], const
 
         simd_ivec<S> is_solid_hit = { 0 };
 
-        Traverse_MacroTree_WithStack_AnyHit(sh_r, ikeep_going, sc.nodes, node_index, sc.mesh_instances, sc.mi_indices, sc.meshes, sc.transforms, sc.tris, sc.tri_indices, sh_inter, is_solid_hit);
+        if (sc.oct_nodes) {
+            Traverse_MacroTree_WithStack_AnyHit(sh_r, ikeep_going, sc.oct_nodes, node_index, sc.mesh_instances, sc.mi_indices, sc.meshes, sc.transforms, sc.tris, sc.tri_indices, sh_inter, is_solid_hit);
+        } else {
+            Traverse_MacroTree_WithStack_AnyHit(sh_r, ikeep_going, sc.nodes, node_index, sc.mesh_instances, sc.mi_indices, sc.meshes, sc.transforms, sc.tris, sc.tri_indices, sh_inter, is_solid_hit);
+        }
+
         if (sh_inter.mask.all_zeros()) break;
 
         if (is_equal(is_solid_hit, ikeep_going)) {
@@ -2168,101 +2699,213 @@ void Ray::NS::ComputeDirectLighting(const simd_fvec<S> I[3], const simd_fvec<S> 
                                     uint32_t light_node_index, const Ref::TextureAtlas &tex_atlas, const simd_ivec<S> &ray_mask, simd_fvec<S> *out_col) {
     unused(rand_hash);
 
-    TraversalStateStack<S> st;
+    const simd_fvec<S> P_biased[] = { P[0] + HIT_BIAS * plane_N[0],
+                                      P[1] + HIT_BIAS * plane_N[1],
+                                      P[2] + HIT_BIAS * plane_N[2] };
 
-    st.queue[0].mask = ray_mask;
-    st.queue[0].stack_size = 0;
+    if (sc.oct_nodes) {
+        const int LanesCount = 8 / S;
 
-    if (light_node_index != 0xffffffff) {
-        st.queue[0].stack[st.queue[0].stack_size++] = light_node_index;
-    }
+        for (int ri = 0; ri < S; ri++) {
+            if (!ray_mask[ri]) continue;
 
-    while (st.index < st.num) {
-        uint32_t *stack = &st.queue[st.index].stack[0];
-        uint32_t &stack_size = st.queue[st.index].stack_size;
-        while (stack_size) {
-            uint32_t cur = stack[--stack_size];
+            // recombine in AoS layout
+            const float _P[3] = { P[0][ri], P[1][ri], P[2][ri] };
 
-            auto mask1 = bbox_test(P, sc.nodes[cur]) & st.queue[st.index].mask;
-            if (mask1.all_zeros()) {
-                continue;
+            uint32_t stack[MAX_STACK_SIZE];
+            uint32_t stack_size = 0;
+
+            if (light_node_index != 0xffffffff) {
+                stack[stack_size++] = light_node_index;
             }
 
-            auto mask2 = and_not(mask1, st.queue[st.index].mask);
-            if (mask2.not_all_zeros()) {
-                st.queue[st.num].mask = mask2;
-                st.queue[st.num].stack_size = stack_size;
-                memcpy(st.queue[st.num].stack, st.queue[st.index].stack, sizeof(uint32_t) * stack_size);
-                st.num++;
-                st.queue[st.index].mask = mask1;
-            }
+            while (stack_size) {
+                uint32_t cur = stack[--stack_size];
 
-            if (!is_leaf_node(sc.nodes[cur])) {
-                st.push_children(sc.nodes[cur]);
-            } else {
-                uint32_t prim_index = (sc.nodes[cur].prim_index & PRIM_INDEX_BITS);
-                for (uint32_t li = prim_index; li < prim_index + sc.nodes[cur].prim_count; li++) {
-                    const light_t &l = sc.lights[sc.li_indices[li]];
+                if (!is_leaf_node(sc.oct_nodes[cur])) {
+                    simd_fvec<S> bbox_min[LanesCount][3], bbox_max[LanesCount][3];
 
-                    simd_fvec<S> L[3] = { { P[0] - l.pos[0] }, { P[1] - l.pos[1] }, { P[2] - l.pos[2] } };
-                    simd_fvec<S> distance = length(L);
-                    simd_fvec<S> d = max(distance - l.radius, simd_fvec<S>{ 0.0f });
-                    ITERATE_3({ L[i] /= distance; })
+                    ITERATE(LanesCount, {
+                        bbox_min[i][0] = simd_fvec<S>(sc.oct_nodes[cur].bbox_min[0] + i * S, simd_mem_aligned);
+                        bbox_min[i][1] = simd_fvec<S>(sc.oct_nodes[cur].bbox_min[1] + i * S, simd_mem_aligned);
+                        bbox_min[i][2] = simd_fvec<S>(sc.oct_nodes[cur].bbox_min[2] + i * S, simd_mem_aligned);
+                        bbox_max[i][0] = simd_fvec<S>(sc.oct_nodes[cur].bbox_max[0] + i * S, simd_mem_aligned);
+                        bbox_max[i][1] = simd_fvec<S>(sc.oct_nodes[cur].bbox_max[1] + i * S, simd_mem_aligned);
+                        bbox_max[i][2] = simd_fvec<S>(sc.oct_nodes[cur].bbox_max[2] + i * S, simd_mem_aligned);
+                    })
 
-                    simd_fvec<S> V[3], TT[3], BB[3];
+                    simd_ivec<S> res_mask[LanesCount];
+                    ITERATE(LanesCount, { bbox_test_oct(_P, bbox_min[i], bbox_max[i], res_mask[i]); })
 
-                    cross(L, B, TT);
-                    cross(L, TT, BB);
+                    ITERATE_8({
+                        stack[stack_size] = sc.oct_nodes[cur].child[i];
+                        stack_size -= res_mask[i / S][i % S];
+                    })
+                } else {
+                    uint32_t prim_index = (sc.oct_nodes[cur].child[0] & PRIM_INDEX_BITS);
+                    for (uint32_t li = prim_index; li < prim_index + sc.oct_nodes[cur].child[1]; li++) {
+                        const light_t &l = sc.lights[sc.li_indices[li]];
 
-                    for (int i = 0; i < S; i++) {
-                        if (!mask1[i]) continue;
+                        simd_fvec<S> L = { 0.0f };
+                        ITERATE_3({ L[i] = _P[i] - l.pos[i]; })
 
-                        float _unused;
-                        const float z = std::modf(halton[hi + 0] + rand_offset[i], &_unused);
+                        float distance = length(L);
+                        float d = std::max(distance - l.radius, 0.0f);
 
-                        const float dir = std::sqrt(z);
-                        const float phi = 2 * PI * std::modf(halton[hi + 1] + rand_offset2[i], &_unused);
+                        ITERATE_3({ L[i] /= distance; })
 
-                        const float cos_phi = std::cos(phi);
-                        const float sin_phi = std::sin(phi);
+                        simd_fvec<S> V, TT, BB;
 
-                        V[0][i] = dir * sin_phi * BB[0][i] + std::sqrt(1.0f - dir) * L[0][i] + dir * cos_phi * TT[0][i];
-                        V[1][i] = dir * sin_phi * BB[1][i] + std::sqrt(1.0f - dir) * L[1][i] + dir * cos_phi * TT[1][i];
-                        V[2][i] = dir * sin_phi * BB[2][i] + std::sqrt(1.0f - dir) * L[2][i] + dir * cos_phi * TT[2][i];
-                    }
+                        BB[0] = B[0][ri];
+                        BB[1] = B[1][ri];
+                        BB[2] = B[2][ri];
 
-                    ITERATE_3({ L[i] = l.pos[i] + V[i] * l.radius - P[i]; })
-                    normalize(L);
+                        cross(L, BB, TT);
+                        cross(L, TT, BB);
 
-                    simd_fvec<S> denom = d / l.radius + 1.0f;
-                    simd_fvec<S> atten = 1.0f / (denom * denom);
+                        {
+                            float _unused;
+                            const float z = std::modf(halton[hi + 0] + rand_offset[ri], &_unused);
 
-                    atten = (atten - LIGHT_ATTEN_CUTOFF / l.brightness) / (1.0f - LIGHT_ATTEN_CUTOFF);
-                    atten = max(atten, simd_fvec<S>{ 0.0f });
+                            const float dir = std::sqrt(z);
+                            const float phi = 2 * PI * std::modf(halton[hi + 1] + rand_offset2[ri], &_unused);
 
-                    simd_fvec<S> _dot1 = max(dot(L, N), simd_fvec<S>{ 0.0f });
-                    simd_fvec<S> _dot2 = dot(L, l.dir);
+                            const float cos_phi = std::cos(phi);
+                            const float sin_phi = std::sin(phi);
 
-                    auto fmask = reinterpret_cast<const simd_fvec<S> &>(mask1) & (_dot1 > FLT_EPS) & (_dot2 > l.spot) & (l.brightness * atten > FLT_EPS);
-                    const auto &imask = reinterpret_cast<const simd_ivec<S> &>(fmask);
-                    if (imask.not_all_zeros()) {
-                        const simd_fvec<S> p1[] = { P[0] + HIT_BIAS * plane_N[0],
-                                                    P[1] + HIT_BIAS * plane_N[1],
-                                                    P[2] + HIT_BIAS * plane_N[2] };
-                        const simd_fvec<S> p2[] = { l.pos[0], l.pos[1], l.pos[2] };
+                            V[0] = dir * sin_phi * BB[0] + std::sqrt(1.0f - dir) * L[0] + dir * cos_phi * TT[0];
+                            V[1] = dir * sin_phi * BB[1] + std::sqrt(1.0f - dir) * L[1] + dir * cos_phi * TT[1];
+                            V[2] = dir * sin_phi * BB[2] + std::sqrt(1.0f - dir) * L[2] + dir * cos_phi * TT[2];
+                        }
 
+                        ITERATE_3({ L[i] = l.pos[i] + V[i] * l.radius - _P[i]; })
+                        float len = std::sqrt(L[0] * L[0] + L[1] * L[1] + L[2] * L[2]);
+                        ITERATE_3({ L[i] /= len; })
 
-                        simd_fvec<S> visibility = ComputeVisibility(p1, p2, imask, halton, hi, rand_hash2, sc, node_index, tex_atlas);
-                        simd_fvec<S> diff_k = BRDF_OrenNayar(L, I, N, B, sigma);
+                        float denom = d / l.radius + 1.0f;
+                        float atten = 1.0f / (denom * denom);
 
-                        where(fmask, out_col[0]) = out_col[0] + l.col[0] * _dot1 * visibility * atten * diff_k;
-                        where(fmask, out_col[1]) = out_col[1] + l.col[1] * _dot1 * visibility * atten * diff_k;
-                        where(fmask, out_col[2]) = out_col[2] + l.col[2] * _dot1 * visibility * atten * diff_k;
+                        atten = (atten - LIGHT_ATTEN_CUTOFF / l.brightness) / (1.0f - LIGHT_ATTEN_CUTOFF);
+                        atten = std::max(atten, 0.0f);
+
+                        float _dot1 = std::max(L[0] * N[0][ri] + L[1] * N[1][ri] + L[2] * N[2][ri], 0.0f);
+                        float _dot2 = L[0] * l.dir[0] + L[1] * l.dir[1] + L[2] * l.dir[2];
+
+                        if ((_dot1 > FLT_EPS) && (_dot2 > l.spot) && (l.brightness * atten > FLT_EPS)) {
+                            const simd_fvec<S> p2[] = { l.pos[0], l.pos[1], l.pos[2] };
+
+                            // Setup to check only one ray in lane (not very effective, should be changed later)
+                            simd_ivec<S> imask = { 0 };
+                            imask[ri] = 0xffffffff;
+
+                            simd_fvec<S> visibility = ComputeVisibility(P_biased, p2, imask, halton, hi, rand_hash2, sc, node_index, tex_atlas);
+
+                            simd_fvec<S> _L[3];
+                            _L[0][ri] = L[0]; _L[1][ri] = L[1]; _L[2][ri] = L[2];
+                            simd_fvec<S> diff_k = BRDF_OrenNayar(_L, I, N, B, sigma);
+
+                            out_col[0][ri] = out_col[0][ri] + l.col[0] * _dot1 * visibility[ri] * atten * diff_k[ri];
+                            out_col[1][ri] = out_col[1][ri] + l.col[1] * _dot1 * visibility[ri] * atten * diff_k[ri];
+                            out_col[2][ri] = out_col[2][ri] + l.col[2] * _dot1 * visibility[ri] * atten * diff_k[ri];
+                        }
                     }
                 }
             }
         }
-        st.index++;
+    } else {
+        TraversalStateStack<S> st;
+
+        st.queue[0].mask = ray_mask;
+        st.queue[0].stack_size = 0;
+
+        if (light_node_index != 0xffffffff) {
+            st.queue[0].stack[st.queue[0].stack_size++] = light_node_index;
+        }
+
+        while (st.index < st.num) {
+            uint32_t *stack = &st.queue[st.index].stack[0];
+            uint32_t &stack_size = st.queue[st.index].stack_size;
+            while (stack_size) {
+                uint32_t cur = stack[--stack_size];
+
+                auto mask1 = bbox_test(P, sc.nodes[cur]) & st.queue[st.index].mask;
+                if (mask1.all_zeros()) {
+                    continue;
+                }
+
+                auto mask2 = and_not(mask1, st.queue[st.index].mask);
+                if (mask2.not_all_zeros()) {
+                    st.queue[st.num].mask = mask2;
+                    st.queue[st.num].stack_size = stack_size;
+                    memcpy(st.queue[st.num].stack, st.queue[st.index].stack, sizeof(uint32_t) * stack_size);
+                    st.num++;
+                    st.queue[st.index].mask = mask1;
+                }
+
+                if (!is_leaf_node(sc.nodes[cur])) {
+                    st.push_children(sc.nodes[cur]);
+                } else {
+                    uint32_t prim_index = (sc.nodes[cur].prim_index & PRIM_INDEX_BITS);
+                    for (uint32_t li = prim_index; li < prim_index + sc.nodes[cur].prim_count; li++) {
+                        const light_t &l = sc.lights[sc.li_indices[li]];
+
+                        simd_fvec<S> L[3] = { { P[0] - l.pos[0] }, { P[1] - l.pos[1] }, { P[2] - l.pos[2] } };
+                        simd_fvec<S> distance = length(L);
+                        simd_fvec<S> d = max(distance - l.radius, simd_fvec<S>{ 0.0f });
+                        ITERATE_3({ L[i] /= distance; })
+
+                        simd_fvec<S> V[3], TT[3], BB[3];
+
+                        cross(L, B, TT);
+                        cross(L, TT, BB);
+
+                        for (int i = 0; i < S; i++) {
+                            if (!mask1[i]) continue;
+
+                            float _unused;
+                            const float z = std::modf(halton[hi + 0] + rand_offset[i], &_unused);
+
+                            const float dir = std::sqrt(z);
+                            const float phi = 2 * PI * std::modf(halton[hi + 1] + rand_offset2[i], &_unused);
+
+                            const float cos_phi = std::cos(phi);
+                            const float sin_phi = std::sin(phi);
+
+                            V[0][i] = dir * sin_phi * BB[0][i] + std::sqrt(1.0f - dir) * L[0][i] + dir * cos_phi * TT[0][i];
+                            V[1][i] = dir * sin_phi * BB[1][i] + std::sqrt(1.0f - dir) * L[1][i] + dir * cos_phi * TT[1][i];
+                            V[2][i] = dir * sin_phi * BB[2][i] + std::sqrt(1.0f - dir) * L[2][i] + dir * cos_phi * TT[2][i];
+                        }
+
+                        ITERATE_3({ L[i] = l.pos[i] + V[i] * l.radius - P[i]; })
+                        normalize(L);
+
+                        simd_fvec<S> denom = d / l.radius + 1.0f;
+                        simd_fvec<S> atten = 1.0f / (denom * denom);
+
+                        atten = (atten - LIGHT_ATTEN_CUTOFF / l.brightness) / (1.0f - LIGHT_ATTEN_CUTOFF);
+                        atten = max(atten, simd_fvec<S>{ 0.0f });
+
+                        simd_fvec<S> _dot1 = max(dot(L, N), simd_fvec<S>{ 0.0f });
+                        simd_fvec<S> _dot2 = dot(L, l.dir);
+
+                        auto fmask = reinterpret_cast<const simd_fvec<S> &>(mask1) & (_dot1 > FLT_EPS) & (_dot2 > l.spot) & (l.brightness * atten > FLT_EPS);
+                        const auto &imask = reinterpret_cast<const simd_ivec<S> &>(fmask);
+                        if (imask.not_all_zeros()) {
+                            const simd_fvec<S> p2[] = { l.pos[0], l.pos[1], l.pos[2] };
+
+
+                            simd_fvec<S> visibility = ComputeVisibility(P_biased, p2, imask, halton, hi, rand_hash2, sc, node_index, tex_atlas);
+                            simd_fvec<S> diff_k = BRDF_OrenNayar(L, I, N, B, sigma);
+
+                            where(fmask, out_col[0]) = out_col[0] + l.col[0] * _dot1 * visibility * atten * diff_k;
+                            where(fmask, out_col[1]) = out_col[1] + l.col[1] * _dot1 * visibility * atten * diff_k;
+                            where(fmask, out_col[2]) = out_col[2] + l.col[2] * _dot1 * visibility * atten * diff_k;
+                        }
+                    }
+                }
+            }
+            st.index++;
+        }
     }
 }
 

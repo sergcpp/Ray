@@ -37,41 +37,41 @@ std::shared_ptr<Ray::RendererBase> Ray::CreateRenderer(const settings_t &s, uint
 #if !defined(__ANDROID__)
     if ((flags & RendererAVX2) && features.avx2_supported) {
         log_stream << "Ray: Creating AVX2 renderer " << s.w << "x" << s.h << std::endl;
-        return std::make_shared<Avx2::Renderer>(s.w, s.h);
+        return std::make_shared<Avx2::Renderer>(s);
     }
     if ((flags & RendererAVX) && features.avx_supported) {
         log_stream << "Ray: Creating AVX renderer " << s.w << "x" << s.h << std::endl;
-        return std::make_shared<Avx::Renderer>(s.w, s.h);
+        return std::make_shared<Avx::Renderer>(s);
     }
     if ((flags & RendererSSE2) && features.sse2_supported) {
         log_stream << "Ray: Creating SSE2 renderer " << s.w << "x" << s.h << std::endl;
-        return std::make_shared<Sse2::Renderer>(s.w, s.h);
+        return std::make_shared<Sse2::Renderer>(s);
     }
     if (flags & RendererRef) {
         log_stream << "Ray: Creating Ref renderer " << s.w << "x" << s.h << std::endl;
-        return std::make_shared<Ref::Renderer>(s.w, s.h);
+        return std::make_shared<Ref::Renderer>(s);
     }
 #elif defined(__ARM_NEON__) || defined(__aarch64__)
     if (flags & RendererNEON) {
         log_stream << "Ray: Creating NEON renderer " << s.w << "x" << s.h << std::endl;
-        return std::make_shared<Neon::Renderer>(s.w, s.h);
+        return std::make_shared<Neon::Renderer>(s);
     }
     if (flags & RendererRef) {
         log_stream << "Ray: Creating Ref renderer " << s.w << "x" << s.h << std::endl;
-        return std::make_shared<Ref::Renderer>(s.w, s.h);
+        return std::make_shared<Ref::Renderer>(s);
     }
 #elif defined(__i386__) || defined(__x86_64__)
     if ((flags & RendererSSE2) && features.sse2_supported) {
         log_stream << "Ray: Creating SSE2 renderer " << s.w << "x" << s.h << std::endl;
-        return std::make_shared<Sse2::Renderer>(s.w, s.h);
+        return std::make_shared<Sse2::Renderer>(s);
     }
     if (flags & RendererRef) {
         log_stream << "Ray: Creating Ref renderer " << s.w << "x" << s.h << std::endl;
-        return std::make_shared<Ref::Renderer>(s.w, s.h);
+        return std::make_shared<Ref::Renderer>(s);
     }
 #endif
     log_stream << "Ray: Creating Ref renderer " << s.w << "x" << s.h << std::endl;
-    return std::make_shared<Ref::Renderer>(s.w, s.h);
+    return std::make_shared<Ref::Renderer>(s);
 }
 
 #if !defined(DISABLE_OCL)

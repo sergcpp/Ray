@@ -322,6 +322,12 @@ public:
         ret.vec_ = _mm256_fmadd_ps(a.vec_, _mm256_set1_ps(b), c.vec_);
         return ret;
     }
+
+    friend force_inline simd_vec<float, 8> fma(const float a, const simd_vec<float, 8> &b, const float c) {
+        simd_vec<float, 8> ret;
+        ret.vec_ = _mm256_fmadd_ps(_mm256_set1_ps(a), b.vec_, _mm256_set1_ps(c));
+        return ret;
+    }
 #endif
 
     friend force_inline const float *value_ptr(const simd_vec<float, 8> &v1) {

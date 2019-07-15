@@ -45,27 +45,29 @@ protected:
     template <int DimX, int DimY>
     friend class Neon::RendererSIMD;
 
-    std::vector<bvh_node_t> nodes_;
-    std::vector<tri_accel_t> tris_;
-    std::vector<uint32_t> tri_indices_;
-    std::vector<transform_t> transforms_;
-    std::vector<mesh_t> meshes_;
+    bool                        use_wide_bvh_;
+    std::vector<bvh_node_t>     nodes_;
+    aligned_vector<bvh_node8_t> oct_nodes_;
+    std::vector<tri_accel_t>    tris_;
+    std::vector<uint32_t>       tri_indices_;
+    std::vector<transform_t>    transforms_;
+    std::vector<mesh_t>         meshes_;
     std::vector<mesh_instance_t> mesh_instances_;
-    std::vector<uint32_t> mi_indices_;
-    std::vector<vertex_t> vertices_;
-    std::vector<uint32_t> vtx_indices_;
+    std::vector<uint32_t>       mi_indices_;
+    std::vector<vertex_t>       vertices_;
+    std::vector<uint32_t>       vtx_indices_;
 
-    std::vector<material_t> materials_;
-    std::vector<texture_t> textures_;
-    TextureAtlas texture_atlas_;
+    std::vector<material_t>     materials_;
+    std::vector<texture_t>      textures_;
+    TextureAtlas                texture_atlas_;
 
-    std::vector<light_t> lights_;
-    std::vector<uint32_t> li_indices_;
+    std::vector<light_t>        lights_;
+    std::vector<uint32_t>       li_indices_;
 
-    environment_t env_;
+    environment_t               env_;
 
-    uint32_t macro_nodes_start_ = 0xffffffff, macro_nodes_count_ = 0;
-    uint32_t light_nodes_start_ = 0xffffffff, light_nodes_count_ = 0;
+    uint32_t macro_nodes_root_ = 0xffffffff, macro_nodes_count_ = 0;
+    uint32_t light_nodes_root_ = 0xffffffff, light_nodes_count_ = 0;
 
     uint32_t default_normals_texture_, default_env_texture_;
 
@@ -74,7 +76,7 @@ protected:
     void RebuildMacroBVH();
     void RebuildLightBVH();
 public:
-    Scene();
+    Scene(bool use_wide_bvh);
 
     void GetEnvironment(environment_desc_t &env) override;
     void SetEnvironment(const environment_desc_t &env) override;
@@ -99,7 +101,7 @@ public:
         return (uint32_t)tris_.size();
     }
     uint32_t node_count() override {
-        return (uint32_t)nodes_.size();
+        return (uint32_t)(use_wide_bvh_ ? oct_nodes_.size() : nodes_.size());
     }
 };
 }

@@ -14,16 +14,16 @@ namespace NS {
 template <int S>
 struct PassData {
     aligned_vector<ray_packet_t<S>> primary_rays;
-    aligned_vector<simd_ivec<S>> primary_masks;
+    aligned_vector<simd_ivec<S>>    primary_masks;
     aligned_vector<ray_packet_t<S>> secondary_rays;
-    aligned_vector<simd_ivec<S>> secondary_masks;
-    aligned_vector<hit_data_t<S>> intersections;
+    aligned_vector<simd_ivec<S>>    secondary_masks;
+    aligned_vector<hit_data_t<S>>   intersections;
 
-    aligned_vector<simd_ivec<S>> hash_values;
-    std::vector<int> head_flags;
-    std::vector<uint32_t> scan_values;
-    std::vector<ray_chunk_t> chunks, chunks_temp;
-    std::vector<uint32_t> skeleton;
+    aligned_vector<simd_ivec<S>>    hash_values;
+    std::vector<int>                head_flags;
+    std::vector<uint32_t>           scan_values;
+    std::vector<ray_chunk_t>        chunks, chunks_temp;
+    std::vector<uint32_t>           skeleton;
 
     PassData() = default;
 
@@ -53,13 +53,14 @@ class RendererSIMD : public RendererBase {
     std::mutex pass_cache_mtx_;
     std::vector<PassData<DimX * DimY>> pass_cache_;
 
+    bool use_wide_bvh_;
     stats_t stats_ = { 0 };
     int w_ = 0, h_ = 0;
 
     std::vector<uint16_t> permutations_;
     void UpdateHaltonSequence(int iteration, std::unique_ptr<float[]> &seq);
 public:
-    RendererSIMD(int w, int h);
+    RendererSIMD(const settings_t &s);
 
     std::pair<int, int> size() const override {
         return std::make_pair(final_buf_.w(), final_buf_.h());
@@ -100,14 +101,14 @@ public:
 #include "SceneRef.h"
 
 template <int DimX, int DimY>
-Ray::NS::RendererSIMD<DimX, DimY>::RendererSIMD(int w, int h) : clean_buf_(w, h), final_buf_(w, h), temp_buf_(w, h) {
+Ray::NS::RendererSIMD<DimX, DimY>::RendererSIMD(const settings_t &s) : use_wide_bvh_(s.use_wide_bvh), clean_buf_(s.w, s.h), final_buf_(s.w, s.h), temp_buf_(s.w, s.h) {
     auto rand_func = std::bind(std::uniform_int_distribution<int>(), std::mt19937(0));
     permutations_ = Ray::ComputeRadicalInversePermutations(g_primes, PrimesCount, rand_func);
 }
 
 template <int DimX, int DimY>
 std::shared_ptr<Ray::SceneBase> Ray::NS::RendererSIMD<DimX, DimY>::CreateScene() {
-    return std::make_shared<Ref::Scene>();
+    return std::make_shared<Ref::Scene>(use_wide_bvh_);
 }
 
 template <int DimX, int DimY>
@@ -129,6 +130,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
     sc_data.vtx_indices = s->vtx_indices_.empty() ? nullptr : &s->vtx_indices_[0];
     sc_data.vertices = s->vertices_.empty() ? nullptr : &s->vertices_[0];
     sc_data.nodes = s->nodes_.empty() ? nullptr : &s->nodes_[0];
+    sc_data.oct_nodes = s->oct_nodes_.empty() ? nullptr : &s->oct_nodes_[0];
     sc_data.tris = s->tris_.empty() ? nullptr : &s->tris_[0];
     sc_data.tri_indices = s->tri_indices_.empty() ? nullptr : &s->tri_indices_[0];
     sc_data.materials = s->materials_.empty() ? nullptr : &s->materials_[0];
@@ -136,13 +138,41 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
     sc_data.lights = s->lights_.empty() ? nullptr : &s->lights_[0];
     sc_data.li_indices = s->li_indices_.empty() ? nullptr : &s->li_indices_[0];
 
-    const auto macro_tree_root = s->macro_nodes_start_;
-    const auto light_tree_root = s->light_nodes_start_;
+    const auto macro_tree_root = s->macro_nodes_root_;
+    const auto light_tree_root = s->light_nodes_root_;
 
     const auto &tex_atlas = s->texture_atlas_;
 
-    const float *root_min = sc_data.nodes[macro_tree_root].bbox_min, *root_max = sc_data.nodes[macro_tree_root].bbox_max;
-    float cell_size[3] = { (root_max[0] - root_min[0]) / 255, (root_max[1] - root_min[1]) / 255, (root_max[2] - root_min[2]) / 255 };
+    float root_min[3], cell_size[3];
+    if (macro_tree_root != 0xffffffff) {
+        float root_max[3];
+
+        if (sc_data.oct_nodes) {
+            const bvh_node8_t &root_node = sc_data.oct_nodes[macro_tree_root];
+
+            root_min[0] = root_min[1] = root_min[2] = MAX_DIST;
+            root_max[0] = root_max[1] = root_max[2] = -MAX_DIST;
+
+            if (root_node.child[0] & LEAF_NODE_BIT) {
+                ITERATE_3({ root_min[i] = root_node.bbox_min[i][0]; })
+                ITERATE_3({ root_max[i] = root_node.bbox_max[i][0]; })
+            } else {
+                for (int j = 0; j < 8; j++) {
+                    if (root_node.child[j] == 0x7fffffff) continue;
+
+                    ITERATE_3({ root_min[i] = root_node.bbox_min[i][j]; })
+                    ITERATE_3({ root_max[i] = root_node.bbox_max[i][j]; })
+                }
+            }
+        } else {
+            const bvh_node_t &root_node = sc_data.nodes[macro_tree_root];
+
+            ITERATE_3({ root_min[i] = root_node.bbox_min[i]; })
+            ITERATE_3({ root_max[i] = root_node.bbox_max[i]; })
+        }
+
+        ITERATE_3({ cell_size[i] = (root_max[i] - root_min[i]) / 255; })
+    }
 
     const auto w = final_buf_.w(), h = final_buf_.h();
 
@@ -198,7 +228,13 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
             inter.xy = r.xy;
 
             if (macro_tree_root != 0xffffffff) {
-                NS::Traverse_MacroTree_WithStack_ClosestHit(r, { -1 }, sc_data.nodes, macro_tree_root, sc_data.mesh_instances, sc_data.mi_indices, sc_data.meshes, sc_data.transforms, sc_data.tris, sc_data.tri_indices, inter);
+                if (sc_data.oct_nodes) {
+                    NS::Traverse_MacroTree_WithStack_ClosestHit(r, { -1 }, sc_data.oct_nodes, macro_tree_root, sc_data.mesh_instances, sc_data.mi_indices,
+                                                                sc_data.meshes, sc_data.transforms, sc_data.tris, sc_data.tri_indices, inter);
+                } else {
+                    NS::Traverse_MacroTree_WithStack_ClosestHit(r, { -1 }, sc_data.nodes, macro_tree_root, sc_data.mesh_instances, sc_data.mi_indices,
+                                                                sc_data.meshes, sc_data.transforms, sc_data.tris, sc_data.tri_indices, inter);
+                }
             }
         }
     } else {
@@ -288,7 +324,13 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
             inter = {};
             inter.xy = r.xy;
 
-            NS::Traverse_MacroTree_WithStack_ClosestHit(r, p.secondary_masks[i], sc_data.nodes, macro_tree_root, sc_data.mesh_instances, sc_data.mi_indices, sc_data.meshes, sc_data.transforms, sc_data.tris, sc_data.tri_indices, inter);
+            if (sc_data.oct_nodes) {
+                NS::Traverse_MacroTree_WithStack_ClosestHit(r, p.secondary_masks[i], sc_data.oct_nodes, macro_tree_root, sc_data.mesh_instances, sc_data.mi_indices,
+                                                            sc_data.meshes, sc_data.transforms, sc_data.tris, sc_data.tri_indices, inter);
+            } else {
+                NS::Traverse_MacroTree_WithStack_ClosestHit(r, p.secondary_masks[i], sc_data.nodes, macro_tree_root, sc_data.mesh_instances, sc_data.mi_indices,
+                                                            sc_data.meshes, sc_data.transforms, sc_data.tris, sc_data.tri_indices, inter);
+            }
         }
 
         auto time_secondary_shade_start = std::chrono::high_resolution_clock::now();

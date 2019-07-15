@@ -244,8 +244,7 @@ void Ray::ExtractPlaneNormal(const tri_accel_t &tri, float *out_normal) {
 }
 
 uint32_t Ray::PreprocessMesh(const float *attrs, const uint32_t *vtx_indices, size_t vtx_indices_count, eVertexLayout layout, int base_vertex,
-                             bool allow_spatial_splits, bool use_fast_bvh_build,
-                             std::vector<bvh_node_t> &out_nodes, std::vector<tri_accel_t> &out_tris, std::vector<uint32_t> &out_tri_indices) {
+                             const bvh_settings_t &s, std::vector<bvh_node_t> &out_nodes, std::vector<tri_accel_t> &out_tris, std::vector<uint32_t> &out_tri_indices) {
     assert(vtx_indices_count && vtx_indices_count % 3 == 0);
 
     std::vector<prim_t> primitives;
@@ -278,9 +277,7 @@ uint32_t Ray::PreprocessMesh(const float *attrs, const uint32_t *vtx_indices, si
 
     size_t indices_start = out_tri_indices.size();
     uint32_t num_out_nodes;
-    if (!use_fast_bvh_build) {
-        split_settings_t s;
-        s.allow_spatial_splits = allow_spatial_splits;
+    if (!s.use_fast_bvh_build) {
         num_out_nodes = PreprocessPrims_SAH(&primitives[0], primitives.size(), positions, attr_stride, s, out_nodes, out_tri_indices);
     } else {
         num_out_nodes = PreprocessPrims_HLBVH(&primitives[0], primitives.size(), out_nodes, out_tri_indices);
@@ -448,7 +445,7 @@ uint32_t Ray::EmitLBVH_NonRecursive(const prim_t *prims, const uint32_t *indices
 }
 
 uint32_t Ray::PreprocessPrims_SAH(const prim_t *prims, size_t prims_count, const float *positions, size_t stride,
-                                  const split_settings_t &s, std::vector<bvh_node_t> &out_nodes, std::vector<uint32_t> &out_indices) {
+                                  const bvh_settings_t &s, std::vector<bvh_node_t> &out_nodes, std::vector<uint32_t> &out_indices) {
     struct prims_coll_t {
         std::vector<uint32_t> indices;
         Ref::simd_fvec3 min = { std::numeric_limits<float>::max() }, max = { std::numeric_limits<float>::lowest() };
@@ -625,7 +622,7 @@ uint32_t Ray::PreprocessPrims_HLBVH(const prim_t *prims, size_t prims_count, std
     std::vector<uint32_t> top_indices;
 
     // Force spliting until each primitive will be in separate leaf node
-    split_settings_t s;
+    bvh_settings_t s;
     s.oversplit_threshold = std::numeric_limits<float>::max();
     s.node_traversal_cost = 0.0f;
     s.allow_spatial_splits = false;
@@ -697,6 +694,144 @@ uint32_t Ray::PreprocessPrims_HLBVH(const prim_t *prims, size_t prims_count, std
     out_nodes.insert(out_nodes.end(), bottom_nodes.begin(), bottom_nodes.end());
 
     return (uint32_t)(out_nodes.size() - top_nodes_start);
+}
+
+uint32_t Ray::FlattenBVH_Recursive(const bvh_node_t *nodes, uint32_t node_index, uint32_t parent_index, aligned_vector<bvh_node8_t> &out_nodes) {
+    const bvh_node_t &cur_node = nodes[node_index];
+
+    // allocate new node
+    uint32_t new_node_index = (uint32_t)out_nodes.size();
+    out_nodes.emplace_back();
+
+    if (cur_node.prim_index & LEAF_NODE_BIT) {
+        auto &new_node = out_nodes[new_node_index];
+
+        new_node.bbox_min[0][0] = cur_node.bbox_min[0];
+        new_node.bbox_min[1][0] = cur_node.bbox_min[1];
+        new_node.bbox_min[2][0] = cur_node.bbox_min[2];
+
+        new_node.bbox_max[0][0] = cur_node.bbox_max[0];
+        new_node.bbox_max[1][0] = cur_node.bbox_max[1];
+        new_node.bbox_max[2][0] = cur_node.bbox_max[2];
+
+        new_node.child[0] = cur_node.prim_index;
+        new_node.child[1] = cur_node.prim_count;
+
+        return new_node_index;
+    }
+
+    // Gather children 2 levels deep
+
+    uint32_t children[8];
+    int children_count = 0;
+
+    const bvh_node_t &child0 = nodes[cur_node.left_child];
+    
+    if (child0.prim_index & LEAF_NODE_BIT) {
+        children[children_count++] = cur_node.left_child & LEFT_CHILD_BITS;
+    } else {
+        const bvh_node_t &child00 = nodes[child0.left_child];
+        const bvh_node_t &child01 = nodes[child0.right_child & RIGHT_CHILD_BITS];
+
+        if (child00.prim_index & LEAF_NODE_BIT) {
+            children[children_count++] = child0.left_child & LEFT_CHILD_BITS;
+        } else {
+            children[children_count++] = child00.left_child;
+            children[children_count++] = child00.right_child & RIGHT_CHILD_BITS;
+        }
+
+        if (child01.prim_index & LEAF_NODE_BIT) {
+            children[children_count++] = child0.right_child & RIGHT_CHILD_BITS;
+        } else {
+            children[children_count++] = child01.left_child;
+            children[children_count++] = child01.right_child & RIGHT_CHILD_BITS;
+        }
+    }
+
+    const bvh_node_t &child1 = nodes[cur_node.right_child & RIGHT_CHILD_BITS];
+
+    if (child1.prim_index & LEAF_NODE_BIT) {
+        children[children_count++] = cur_node.right_child & RIGHT_CHILD_BITS;
+    } else {
+        const bvh_node_t &child10 = nodes[child1.left_child];
+        const bvh_node_t &child11 = nodes[child1.right_child & RIGHT_CHILD_BITS];
+
+        if (child10.prim_index & LEAF_NODE_BIT) {
+            children[children_count++] = child1.left_child & LEFT_CHILD_BITS;
+        } else {
+            children[children_count++] = child10.left_child;
+            children[children_count++] = child10.right_child & RIGHT_CHILD_BITS;
+        }
+
+        if (child11.prim_index & LEAF_NODE_BIT) {
+            children[children_count++] = child1.right_child & RIGHT_CHILD_BITS;
+        } else {
+            children[children_count++] = child11.left_child;
+            children[children_count++] = child11.right_child & RIGHT_CHILD_BITS;
+        }
+    }
+
+    // Sort children in morton order
+    Ref::simd_fvec3 children_centers[8],
+                    whole_box_min = { std::numeric_limits<float>::max() }, whole_box_max = { std::numeric_limits<float>::lowest() };
+    for (int i = 0; i < children_count; i++) {
+        children_centers[i] = 0.5f * (Ref::simd_fvec3{ nodes[children[i]].bbox_min } + Ref::simd_fvec3{ nodes[children[i]].bbox_max });
+        whole_box_min = min(whole_box_min, children_centers[i]);
+        whole_box_max = max(whole_box_max, children_centers[i]);
+    }
+
+    whole_box_max += Ref::simd_fvec3{ 0.001f };
+
+    Ref::simd_fvec3 scale = 2.0f / (whole_box_max - whole_box_min);
+
+    uint32_t sorted_children[8] = { 0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff,
+                                    0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff };
+    for (int i = 0; i < children_count; i++) {
+        Ref::simd_fvec3 code = (children_centers[i] - whole_box_min) * scale;
+
+        uint32_t x = (uint32_t)code[0],
+                 y = (uint32_t)code[1],
+                 z = (uint32_t)code[2];
+
+        uint32_t mort = (z << 2) | (y << 1) | (x << 0);
+
+        while (sorted_children[mort] != 0xffffffff) {
+            mort = (mort + 1) % 8;
+        }
+
+        sorted_children[mort] = children[i];
+    }
+
+    uint32_t new_children[8];
+
+    for (int i = 0; i < 8; i++) {
+        if (sorted_children[i] != 0xffffffff) {
+            new_children[i] = FlattenBVH_Recursive(nodes, sorted_children[i], node_index, out_nodes);
+        } else {
+            new_children[i] = 0x7fffffff;
+        }
+    }
+
+    auto &new_node = out_nodes[new_node_index];
+    memcpy(new_node.child, new_children, sizeof(new_children));
+
+    for (int i = 0; i < 8; i++) {
+        if (new_children[i] != 0x7fffffff) {
+            new_node.bbox_min[0][i] = nodes[sorted_children[i]].bbox_min[0];
+            new_node.bbox_min[1][i] = nodes[sorted_children[i]].bbox_min[1];
+            new_node.bbox_min[2][i] = nodes[sorted_children[i]].bbox_min[2];
+
+            new_node.bbox_max[0][i] = nodes[sorted_children[i]].bbox_max[0];
+            new_node.bbox_max[1][i] = nodes[sorted_children[i]].bbox_max[1];
+            new_node.bbox_max[2][i] = nodes[sorted_children[i]].bbox_max[2];
+        } else {
+            // Init as invalid bounding box
+            new_node.bbox_min[0][i] = new_node.bbox_min[1][i] = new_node.bbox_min[2][i] = std::numeric_limits<float>::max();
+            new_node.bbox_max[0][i] = new_node.bbox_max[1][i] = new_node.bbox_max[2][i] = std::numeric_limits<float>::max();
+        }
+    }
+
+    return new_node_index;
 }
 
 bool Ray::NaiivePluckerTest(const float p[9], const float o[3], const float d[3]) {

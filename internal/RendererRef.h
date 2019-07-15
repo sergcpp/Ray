@@ -37,6 +37,7 @@ struct PassData {
 };
 
 class Renderer : public RendererBase {
+    bool use_wide_bvh_;
     Ref::Framebuffer clean_buf_, final_buf_, temp_buf_;
 
     std::mutex pass_cache_mtx_;
@@ -48,7 +49,7 @@ class Renderer : public RendererBase {
     std::vector<uint16_t> permutations_;
     void UpdateHaltonSequence(int iteration, std::unique_ptr<float[]> &seq);
 public:
-    Renderer(int w, int h);
+    Renderer(const settings_t &s);
 
     eRendererType type() const override { return RendererRef; }
 

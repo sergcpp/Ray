@@ -7,13 +7,13 @@
 #include "Halton.h"
 #include "SceneRef.h"
 
-Ray::Ref::Renderer::Renderer(int w, int h) : clean_buf_(w, h), final_buf_(w, h), temp_buf_(w, h) {
+Ray::Ref::Renderer::Renderer(const settings_t &s) : use_wide_bvh_(s.use_wide_bvh), clean_buf_(s.w, s.h), final_buf_(s.w, s.h), temp_buf_(s.w, s.h) {
     auto rand_func = std::bind(std::uniform_int_distribution<int>(), std::mt19937(0));
     permutations_ = Ray::ComputeRadicalInversePermutations(g_primes, PrimesCount, rand_func);
 }
 
 std::shared_ptr<Ray::SceneBase> Ray::Ref::Renderer::CreateScene() {
-    return std::make_shared<Ref::Scene>();
+    return std::make_shared<Ref::Scene>(use_wide_bvh_);
 }
 
 void Ray::Ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, RegionContext &region) {
@@ -32,6 +32,7 @@ void Ray::Ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
     sc_data.vtx_indices = s->vtx_indices_.empty() ? nullptr : &s->vtx_indices_[0];
     sc_data.vertices = s->vertices_.empty() ? nullptr : &s->vertices_[0];
     sc_data.nodes = s->nodes_.empty() ? nullptr : &s->nodes_[0];
+    sc_data.oct_nodes = s->oct_nodes_.empty() ? nullptr : &s->oct_nodes_[0];
     sc_data.tris = s->tris_.empty() ? nullptr : &s->tris_[0];
     sc_data.tri_indices = s->tri_indices_.empty() ? nullptr : &s->tri_indices_[0];
     sc_data.materials = s->materials_.empty() ? nullptr : &s->materials_[0];
@@ -39,25 +40,43 @@ void Ray::Ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
     sc_data.lights = s->lights_.empty() ? nullptr : &s->lights_[0];
     sc_data.li_indices = s->li_indices_.empty() ? nullptr : &s->li_indices_[0];
 
-    const auto macro_tree_root = s->macro_nodes_start_;
-    const auto light_tree_root = s->light_nodes_start_;
+    const auto macro_tree_root = s->macro_nodes_root_;
+    const auto light_tree_root = s->light_nodes_root_;
 
     const auto &tex_atlas = s->texture_atlas_;
 
     float root_min[3], cell_size[3];
-
     if (macro_tree_root != 0xffffffff) {
-        root_min[0] = sc_data.nodes[macro_tree_root].bbox_min[0];
-        root_min[1] = sc_data.nodes[macro_tree_root].bbox_min[1];
-        root_min[2] = sc_data.nodes[macro_tree_root].bbox_min[2];
+        float root_max[3];
 
-        const float *root_max = sc_data.nodes[macro_tree_root].bbox_max;
-        cell_size[0] = (root_max[0] - root_min[0]) / 255;
-        cell_size[1] = (root_max[1] - root_min[1]) / 255;
-        cell_size[2] = (root_max[2] - root_min[2]) / 255;
+        if (sc_data.oct_nodes) {
+            const bvh_node8_t &root_node = sc_data.oct_nodes[macro_tree_root];
+
+            root_min[0] = root_min[1] = root_min[2] = MAX_DIST;
+            root_max[0] = root_max[1] = root_max[2] = -MAX_DIST;
+
+            if (root_node.child[0] & LEAF_NODE_BIT) {
+                ITERATE_3({ root_min[i] = root_node.bbox_min[i][0]; })
+                ITERATE_3({ root_max[i] = root_node.bbox_max[i][0]; })
+            } else {
+                for (int j = 0; j < 8; j++) {
+                    if (root_node.child[j] == 0x7fffffff) continue;
+
+                    ITERATE_3({ root_min[i] = root_node.bbox_min[i][j]; })
+                    ITERATE_3({ root_max[i] = root_node.bbox_max[i][j]; })
+                }
+            }
+        } else {
+            const bvh_node_t &root_node = sc_data.nodes[macro_tree_root];
+
+            ITERATE_3({ root_min[i] = root_node.bbox_min[i]; })
+            ITERATE_3({ root_max[i] = root_node.bbox_max[i]; })
+        }
+
+        ITERATE_3({ cell_size[i] = (root_max[i] - root_min[i]) / 255; })
     }
 
-    const auto w = final_buf_.w(), h = final_buf_.h();
+    const int w = final_buf_.w(), h = final_buf_.h();
 
     auto rect = region.rect();
     if (rect.w == 0 || rect.h == 0) {
@@ -110,8 +129,13 @@ void Ray::Ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
             inter.xy = r.xy;
 
             if (macro_tree_root != 0xffffffff) {
-                Traverse_MacroTree_WithStack_ClosestHit(r, sc_data.nodes, macro_tree_root, sc_data.mesh_instances, sc_data.mi_indices, sc_data.meshes,
-                                                        sc_data.transforms, sc_data.tris, sc_data.tri_indices, inter);
+                if (sc_data.oct_nodes) {
+                    Traverse_MacroTree_WithStack_ClosestHit(r, sc_data.oct_nodes, macro_tree_root, sc_data.mesh_instances, sc_data.mi_indices, sc_data.meshes,
+                                                            sc_data.transforms, sc_data.tris, sc_data.tri_indices, inter);
+                } else {
+                    Traverse_MacroTree_WithStack_ClosestHit(r, sc_data.nodes, macro_tree_root, sc_data.mesh_instances, sc_data.mi_indices, sc_data.meshes,
+                                                            sc_data.transforms, sc_data.tris, sc_data.tri_indices, inter);
+                }
             }
         }
     } else {
@@ -207,7 +231,14 @@ void Ray::Ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
 
             inter = {};
             inter.xy = r.xy;
-            Traverse_MacroTree_WithStack_ClosestHit(r, sc_data.nodes, macro_tree_root, sc_data.mesh_instances, sc_data.mi_indices, sc_data.meshes, sc_data.transforms, sc_data.tris, sc_data.tri_indices, inter);
+
+            if (sc_data.oct_nodes) {
+                Traverse_MacroTree_WithStack_ClosestHit(r, sc_data.oct_nodes, macro_tree_root, sc_data.mesh_instances,
+                                                        sc_data.mi_indices, sc_data.meshes, sc_data.transforms, sc_data.tris, sc_data.tri_indices, inter);
+            } else {
+                Traverse_MacroTree_WithStack_ClosestHit(r, sc_data.nodes, macro_tree_root, sc_data.mesh_instances,
+                                                        sc_data.mi_indices, sc_data.meshes, sc_data.transforms, sc_data.tris, sc_data.tri_indices, inter);
+            }
         }
 
         auto time_secondary_shade_start = std::chrono::high_resolution_clock::now();
