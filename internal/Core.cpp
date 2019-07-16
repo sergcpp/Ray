@@ -826,8 +826,8 @@ uint32_t Ray::FlattenBVH_Recursive(const bvh_node_t *nodes, uint32_t node_index,
             new_node.bbox_max[2][i] = nodes[sorted_children[i]].bbox_max[2];
         } else {
             // Init as invalid bounding box
-            new_node.bbox_min[0][i] = new_node.bbox_min[1][i] = new_node.bbox_min[2][i] = std::numeric_limits<float>::max();
-            new_node.bbox_max[0][i] = new_node.bbox_max[1][i] = new_node.bbox_max[2][i] = std::numeric_limits<float>::max();
+            new_node.bbox_min[0][i] = new_node.bbox_min[1][i] = new_node.bbox_min[2][i] = NAN;
+            new_node.bbox_max[0][i] = new_node.bbox_max[1][i] = new_node.bbox_max[2][i] = NAN;
         }
     }
 

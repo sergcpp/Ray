@@ -344,7 +344,7 @@ force_inline simd_ivec<S> bbox_test_fma(const simd_fvec<S> inv_d[3], const simd_
 }
 
 template <int S>
-force_inline void bbox_test_oct(const float inv_d[3], const float neg_inv_d_o[3], float t, const simd_fvec<S> bbox_min[3], const simd_fvec<S> bbox_max[3], simd_ivec<S> &out_mask, simd_fvec<S> &out_dist) {
+force_inline void bbox_test_oct(const float inv_d[3], const float neg_inv_d_o[3], const simd_fvec<S> bbox_min[3], const simd_fvec<S> bbox_max[3], simd_ivec<S> &out_mask, simd_fvec<S> &out_dist) {
     simd_fvec<S> low, high, tmin, tmax;
 
     low = fma(inv_d[0], bbox_min[0], neg_inv_d_o[0]);
@@ -363,7 +363,7 @@ force_inline void bbox_test_oct(const float inv_d[3], const float neg_inv_d_o[3]
     tmax = min(tmax, max(low, high));
     tmax *= 1.00000024f;
 
-    simd_fvec<S> fmask = (tmin <= tmax) & (tmin <= t) & (tmax > 0.0f);
+    simd_fvec<S> fmask = (tmin <= tmax) & (tmax > 0.0f);
     out_mask = reinterpret_cast<const simd_ivec<S>&>(fmask);
     out_dist = tmin;
 }
@@ -1725,7 +1725,7 @@ bool Ray::NS::Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t<S> &r, 
                 simd_ivec<S> res_mask[LanesCount];
                 simd_fvec<S> res_dist[LanesCount];
                 ITERATE(LanesCount, {
-                    bbox_test_oct(_inv_d, _neg_inv_d_o, inter.t[ri], bbox_min[i], bbox_max[i], res_mask[i], res_dist[i]);
+                    bbox_test_oct(_inv_d, _neg_inv_d_o, bbox_min[i], bbox_max[i], res_mask[i], res_dist[i]);
                 })
 
                 ITERATE_8({
@@ -1872,7 +1872,7 @@ bool Ray::NS::Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t<S> &r, cons
                 simd_ivec<S> res_mask[LanesCount];
                 simd_fvec<S> res_dist[LanesCount];
                 ITERATE(LanesCount, {
-                    bbox_test_oct(_inv_d, _neg_inv_d_o, inter.t[ri], bbox_min[i], bbox_max[i], res_mask[i], res_dist[i]);
+                    bbox_test_oct(_inv_d, _neg_inv_d_o, bbox_min[i], bbox_max[i], res_mask[i], res_dist[i]);
                 })
 
                 ITERATE_8({
@@ -1997,7 +1997,7 @@ bool Ray::NS::Traverse_MicroTree_WithStack_ClosestHit(const float ro[3], const f
             simd_ivec<S> res_mask[LanesCount];
             simd_fvec<S> res_dist[LanesCount];
             ITERATE(LanesCount, {
-                bbox_test_oct(_inv_d, _neg_inv_d_o, inter.t[ri], bbox_min[i], bbox_max[i], res_mask[i], res_dist[i]);
+                bbox_test_oct(_inv_d, _neg_inv_d_o, bbox_min[i], bbox_max[i], res_mask[i], res_dist[i]);
             })
 
             ITERATE_8({
@@ -2109,7 +2109,7 @@ bool Ray::NS::Traverse_MicroTree_WithStack_AnyHit(const float ro[3], const float
             simd_ivec<S> res_mask[LanesCount];
             simd_fvec<S> res_dist[LanesCount];
             ITERATE(LanesCount, {
-                bbox_test_oct(_inv_d, _neg_inv_d_o, inter.t[ri], bbox_min[i], bbox_max[i], res_mask[i], res_dist[i]);
+                bbox_test_oct(_inv_d, _neg_inv_d_o, bbox_min[i], bbox_max[i], res_mask[i], res_dist[i]);
             })
 
             ITERATE_8({
