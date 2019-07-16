@@ -104,7 +104,7 @@ force_inline bool bbox_test_oct(const float p[3], const bvh_node8_t &node, int i
            p[2] > node.bbox_min[i][2] && p[2] < node.bbox_max[i][2];
 }
 
-force_inline void bbox_test_oct(const float o[3], const float inv_d[3], const float t, const bvh_node8_t &node, int res[8], float dist[8]) {
+force_inline void bbox_test_oct(const float o[3], const float inv_d[3], const bvh_node8_t &node, int res[8], float dist[8]) {
     ITERATE_8({
         float lo_x = inv_d[0] * (node.bbox_min[0][i] - o[0]);
         float hi_x = inv_d[0] * (node.bbox_max[0][i] - o[0]);
@@ -125,7 +125,7 @@ force_inline void bbox_test_oct(const float o[3], const float inv_d[3], const fl
         tmax *= 1.00000024f;
 
         dist[i] = tmin;
-        res[i] = (tmin <= tmax && tmin <= t && tmax > 0) ? 1 : 0;
+        res[i] = (tmin <= tmax && tmax > 0) ? 1 : 0;
     })
 }
 
@@ -988,7 +988,7 @@ bool Ray::Ref::Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t &r, co
         if (!is_leaf_node(nodes[cur])) {
             int res[8];
             float dist[8];
-            bbox_test_oct(r.o, inv_d, inter.t, nodes[cur], res, dist);
+            bbox_test_oct(r.o, inv_d, nodes[cur], res, dist);
 
             ITERATE_8({
                 int j = child_order[i];
@@ -1093,7 +1093,7 @@ bool Ray::Ref::Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t &r, const 
         if (!is_leaf_node(nodes[cur])) {
             int res[8];
             float dist[8];
-            bbox_test_oct(r.o, inv_d, inter.t, nodes[cur], res, dist);
+            bbox_test_oct(r.o, inv_d, nodes[cur], res, dist);
 
             ITERATE_8({
                 int j = child_order[i];
@@ -1177,7 +1177,7 @@ bool Ray::Ref::Traverse_MicroTree_WithStack_ClosestHit(const ray_packet_t &r, co
         if (!is_leaf_node(nodes[cur])) {
             int res[8];
             float dist[8];
-            bbox_test_oct(r.o, inv_d, inter.t, nodes[cur], res, dist);
+            bbox_test_oct(r.o, inv_d, nodes[cur], res, dist);
 
             ITERATE_8({
                 int j = child_order[i];
