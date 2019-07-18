@@ -99,9 +99,9 @@ force_inline bool bbox_test(const float p[3], const bvh_node_t &node) {
 }
 
 force_inline bool bbox_test_oct(const float p[3], const bvh_node8_t &node, int i) {
-    return p[0] > node.bbox_min[i][0] && p[0] < node.bbox_max[i][0] &&
-           p[1] > node.bbox_min[i][1] && p[1] < node.bbox_max[i][1] &&
-           p[2] > node.bbox_min[i][2] && p[2] < node.bbox_max[i][2];
+    return p[0] > node.bbox_min[0][i] && p[0] < node.bbox_max[0][i] &&
+           p[1] > node.bbox_min[1][i] && p[1] < node.bbox_max[1][i] &&
+           p[2] > node.bbox_min[2][i] && p[2] < node.bbox_max[2][i];
 }
 
 force_inline void bbox_test_oct(const float o[3], const float inv_d[3], const bvh_node8_t &node, int res[8], float dist[8]) {
