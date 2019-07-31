@@ -118,7 +118,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
     auto s = std::dynamic_pointer_cast<Ref::Scene>(_s);
     if (!s) return;
 
-    const auto &cam = s->cams_[s->current_cam()].cam;
+    const camera_t &cam = s->cams_[s->current_cam()].cam;
 
     scene_data_t sc_data;
 
@@ -138,10 +138,10 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
     sc_data.lights = s->lights_.empty() ? nullptr : &s->lights_[0];
     sc_data.li_indices = s->li_indices_.empty() ? nullptr : &s->li_indices_[0];
 
-    const auto macro_tree_root = s->macro_nodes_root_;
-    const auto light_tree_root = s->light_nodes_root_;
+    const uint32_t macro_tree_root = s->macro_nodes_root_;
+    const uint32_t light_tree_root = s->light_nodes_root_;
 
-    const auto &tex_atlas = s->texture_atlas_;
+    const Ref::TextureAtlas &tex_atlas = s->texture_atlas_;
 
     float root_min[3], cell_size[3];
     if (macro_tree_root != 0xffffffff) {
@@ -174,9 +174,9 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
         ITERATE_3({ cell_size[i] = (root_max[i] - root_min[i]) / 255; })
     }
 
-    const auto w = final_buf_.w(), h = final_buf_.h();
+    const int w = final_buf_.w(), h = final_buf_.h();
 
-    auto rect = region.rect();
+    rect_t rect = region.rect();
     if (rect.w == 0 || rect.h == 0) {
         rect = { 0, 0, w, h };
     }
@@ -221,8 +221,8 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
         p.intersections.resize(p.primary_rays.size());
 
         for (size_t i = 0; i < p.primary_rays.size(); i++) {
-            const auto &r = p.primary_rays[i];
-            auto &inter = p.intersections[i];
+            const ray_packet_t<S> &r = p.primary_rays[i];
+            hit_data_t<S> &inter = p.intersections[i];
 
             inter = {};
             inter.xy = r.xy;
@@ -238,7 +238,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
             }
         }
     } else {
-        const auto &mi = sc_data.mesh_instances[cam.mi_index];
+        const mesh_instance_t &mi = sc_data.mesh_instances[cam.mi_index];
         SampleMeshInTextureSpace<DimX, DimY>(region.iteration, cam.mi_index, cam.uv_index,
                                              sc_data.meshes[mi.mesh_index], sc_data.transforms[mi.tr_index], sc_data.vtx_indices, sc_data.vertices,
                                              rect, w, h, &region.halton_seq[0], p.primary_rays, p.intersections);
@@ -255,8 +255,8 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
     int secondary_rays_count = 0;
 
     for (size_t i = 0; i < p.intersections.size(); i++) {
-        const auto &r = p.primary_rays[i];
-        const auto &inter = p.intersections[i];
+        const ray_packet_t<S> &r = p.primary_rays[i];
+        const hit_data_t<S> &inter = p.intersections[i];
 
         simd_ivec<S> x = inter.xy >> 16,
                      y = inter.xy & 0x0000FFFF;
@@ -296,7 +296,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
     if (cam.pass_settings.flags & OutputSH) {
         temp_buf_.ResetSampleData(rect);
         for (int i = 0; i < secondary_rays_count; i++) {
-            const auto &r = p.secondary_rays[i];
+            const ray_packet_t<S> &r = p.secondary_rays[i];
 
             simd_ivec<S> x = r.xy >> 16,
                          y = r.xy & 0x0000FFFF;
@@ -318,8 +318,8 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
         auto time_secondary_trace_start = std::chrono::high_resolution_clock::now();
 
         for (int i = 0; i < secondary_rays_count; i++) {
-            const auto &r = p.secondary_rays[i];
-            auto &inter = p.intersections[i];
+            const ray_packet_t<S> &r = p.secondary_rays[i];
+            hit_data_t<S> &inter = p.intersections[i];
 
             inter = {};
             inter.xy = r.xy;
@@ -343,8 +343,8 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
         pass_info.bounce = bounce + 3;
 
         for (int i = 0; i < rays_count; i++) {
-            const auto &r = p.primary_rays[i];
-            const auto &inter = p.intersections[i];
+            const ray_packet_t<S> &r = p.primary_rays[i];
+            const hit_data_t<S> &inter = p.intersections[i];
 
             simd_ivec<S> x = inter.xy >> 16,
                          y = inter.xy & 0x0000FFFF;

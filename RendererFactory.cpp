@@ -21,7 +21,7 @@
 #include "internal/simd/detect.h"
 
 std::shared_ptr<Ray::RendererBase> Ray::CreateRenderer(const settings_t &s, uint32_t flags, std::ostream &log_stream) {
-    auto features = GetCpuFeatures();
+    CpuFeatures features = GetCpuFeatures();
 
 #if !defined(DISABLE_OCL)
     if (flags & RendererOCL) {

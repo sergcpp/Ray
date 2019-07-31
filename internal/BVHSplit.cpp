@@ -39,7 +39,7 @@ static int sutherland_hodgman(const Ref::simd_dvec3 *input, int in_count, Ref::s
         if (nextIdx == in_count) {
             nextIdx = 0;
         }
-        const auto &next = input[nextIdx];
+        const Ref::simd_dvec3 &next = input[nextIdx];
         distance = sign * (next[axis] - split_pos);
         bool next_is_inside = (distance >= 0);
 
@@ -55,7 +55,7 @@ static int sutherland_hodgman(const Ref::simd_dvec3 *input, int in_count, Ref::s
         } else if (!cur_is_inside && next_is_inside) {
             // Coming back inside -- add the intersection + next vertex
             double t = (split_pos - cur[axis]) / (next[axis] - cur[axis]);
-            auto &p = output[out_count++];
+            Ref::simd_dvec3 &p = output[out_count++];
             p = cur + (next - cur) * t;
             p[axis] = split_pos; // Avoid roundoff errors
             output[out_count++] = next;
@@ -146,7 +146,7 @@ Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, const std::
         new_prim_bounds.resize(num_tris);
 
         for (size_t i = 0; i < prim_indices.size(); i++) {
-            const auto &p = primitives[prim_indices[i]];
+            const prim_t &p = primitives[prim_indices[i]];
 
             Ref::simd_fvec3 v0 = { &positions[p.i0 * stride] },
                             v1 = { &positions[p.i1 * stride] },
@@ -164,7 +164,7 @@ Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, const std::
     bbox_t res_left_bounds, res_right_bounds;
 
     for (int axis = 0; axis < 3; axis++) {
-        auto &list = axis_lists[axis];
+        std::vector<uint32_t> &list = axis_lists[axis];
 
         if (new_prim_bounds.empty()) {
             std::sort(list.begin(), list.end(),
@@ -242,10 +242,10 @@ Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, const std::
 
             bins[NumSpatialSplitBins - 1].limits.max[split_axis] = whole_box.max[split_axis];
 
-            const auto &list = axis_lists[split_axis];
+            const std::vector<uint32_t> &list = axis_lists[split_axis];
 
-            for (const auto i : list) {
-                const auto &p = primitives[prim_indices[i]];
+            for (const uint32_t i : list) {
+                const prim_t &p = primitives[prim_indices[i]];
 
                 float prim_min = p.bbox_min[split_axis],
                       prim_max = p.bbox_max[split_axis];
@@ -344,8 +344,8 @@ Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, const std::
 
             int num_in_both = 0;
 
-            const auto &list = axis_lists[div_axis];
-            for (const auto i : list) {
+            const std::vector<uint32_t> &list = axis_lists[div_axis];
+            for (const uint32_t i : list) {
                 bool b1 = false, b2 = false;
                 if (new_prim_bounds[i].min[div_axis] <= res_left_bounds.max[div_axis]) {
                     left_indices.push_back(prim_indices[i]);

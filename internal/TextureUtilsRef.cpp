@@ -42,13 +42,13 @@ void Ray::Ref::ComputeTextureBasis(size_t vtx_offset, size_t vtx_start, std::vec
     std::vector<std::array<uint32_t, 3>> twin_verts(vertices.size(), { 0, 0, 0 });
     aligned_vector<simd_fvec3> binormals(vertices.size());
     for (size_t i = 0; i < indices_count; i += 3) {
-        auto *v0 = &vertices[indices[i + 0]];
-        auto *v1 = &vertices[indices[i + 1]];
-        auto *v2 = &vertices[indices[i + 2]];
+        vertex_t *v0 = &vertices[indices[i + 0]];
+        vertex_t *v1 = &vertices[indices[i + 1]];
+        vertex_t *v2 = &vertices[indices[i + 2]];
 
-        auto &b0 = binormals[indices[i + 0]];
-        auto &b1 = binormals[indices[i + 1]];
-        auto &b2 = binormals[indices[i + 2]];
+        simd_fvec3 &b0 = binormals[indices[i + 0]];
+        simd_fvec3 &b1 = binormals[indices[i + 1]];
+        simd_fvec3 &b2 = binormals[indices[i + 2]];
 
         simd_fvec3 dp1 = simd_fvec3(v1->p) - simd_fvec3(v0->p);
         simd_fvec3 dp2 = simd_fvec3(v2->p) - simd_fvec3(v0->p);
@@ -150,7 +150,7 @@ void Ray::Ref::ComputeTextureBasis(size_t vtx_offset, size_t vtx_start, std::vec
     }
 
     for (size_t i = vtx_start; i < vertices.size(); i++) {
-        auto &v = vertices[i];
+        vertex_t &v = vertices[i];
 
         if (std::abs(v.b[0]) > FLT_EPS || std::abs(v.b[1]) > FLT_EPS || std::abs(v.b[2]) > FLT_EPS) {
             simd_fvec3 tangent = { v.b };

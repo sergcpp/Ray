@@ -423,12 +423,12 @@ force_inline simd_ivec<S> bbox_test(const simd_fvec<S> p[3], const bvh_node_t &n
 
 template <int S>
 force_inline uint32_t near_child(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const bvh_node_t &node) {
-    const auto dir_neg_mask = r.d[node.prim_count >> 30] < 0.0f;
-    const auto mask = reinterpret_cast<const simd_ivec<S>&>(dir_neg_mask);
-    if (mask.all_zeros(ray_mask)) {
+    const simd_fvec<S> dir_neg_fmask = r.d[node.prim_count >> 30] < 0.0f;
+    const auto dir_neg_imask = reinterpret_cast<const simd_ivec<S>&>(dir_neg_fmask);
+    if (dir_neg_imask.all_zeros(ray_mask)) {
         return node.left_child;
     } else {
-        assert(and_not(mask, ray_mask).all_zeros());
+        assert(and_not(dir_neg_imask, ray_mask).all_zeros());
         return (node.right_child & RIGHT_CHILD_BITS);
     }
 }
@@ -458,7 +458,7 @@ struct TraversalState {
     int index = 0, num = 1;
 
     force_inline void select_near_child(const ray_packet_t<S> &r, const bvh_node_t &node) {
-        const auto dir_neg_mask = r.d[node.prim_count >> 30] < 0.0f;
+        const simd_fvec<S> dir_neg_fmask = r.d[node.prim_count >> 30] < 0.0f;
         const auto mask1 = reinterpret_cast<const simd_ivec<S>&>(dir_neg_mask) & queue[index].mask;
         if (mask1.all_zeros()) {
             queue[index].cur = node.left_child;
@@ -487,7 +487,7 @@ struct TraversalStateStack {
     } queue[S];
 
     force_inline void push_children(const ray_packet_t<S> &r, const bvh_node_t &node) {
-        const auto dir_neg_mask = r.d[node.prim_count >> 30] < 0.0f;
+        const simd_fvec<S> dir_neg_mask = r.d[node.prim_count >> 30] < 0.0f;
         const auto mask1 = reinterpret_cast<const simd_ivec<S>&>(dir_neg_mask) & queue[index].mask;
         if (mask1.all_zeros()) {
             queue[index].stack[queue[index].stack_size++] = (node.right_child & RIGHT_CHILD_BITS);
@@ -564,11 +564,11 @@ force_inline void comp_aux_inv_values(const simd_fvec<S> o[3], const simd_fvec<S
         inv_d[i] = { 1.0f / d[i] };
         neg_inv_d_o[i] = -o[i] * inv_d[i];
 
-        auto d_is_plus_zero = (d[i] <= FLT_EPS) & (d[i] >= 0);
+        simd_fvec<S> d_is_plus_zero = (d[i] <= FLT_EPS) & (d[i] >= 0);
         where(d_is_plus_zero, inv_d[i]) = MAX_DIST;
         where(d_is_plus_zero, neg_inv_d_o[i]) = -MAX_DIST;
 
-        auto d_is_minus_zero = (d[i] >= -FLT_EPS) & (d[i] < 0);
+        simd_fvec<S> d_is_minus_zero = (d[i] >= -FLT_EPS) & (d[i] < 0);
         where(d_is_minus_zero, inv_d[i]) = -MAX_DIST;
         where(d_is_minus_zero, neg_inv_d_o[i]) = MAX_DIST;
     }
@@ -784,8 +784,10 @@ void Ray::NS::GeneratePrimaryRays(const int iteration, const camera_t &cam, cons
                  cam_origin[3] = { { cam.origin[0] }, { cam.origin[1] }, { cam.origin[2] } };
 
     auto get_pix_dirs = [k, fov_k, focus_distance, &fwd, &side, &up, &cam_origin, &ww, &hh](const simd_fvec<S> &x, const simd_fvec<S> &y, const simd_fvec<S> origin[3], simd_fvec<S> d[3]) {
-        auto _dx = 2 * fov_k * x / ww - fov_k;
-        auto _dy = 2 * fov_k  * -y / hh + fov_k;
+        const int S = DimX * DimY;
+
+        simd_fvec<S> _dx = 2 * fov_k * x / ww - fov_k;
+        simd_fvec<S> _dy = 2 * fov_k  * -y / hh + fov_k;
 
         d[0] = cam_origin[0] + k * _dx * side[0] + _dy * up[0] + fwd[0] * focus_distance;
         d[1] = cam_origin[1] + k * _dx * side[1] + _dy * up[1] + fwd[1] * focus_distance;
@@ -813,7 +815,7 @@ void Ray::NS::GeneratePrimaryRays(const int iteration, const camera_t &cam, cons
 
     for (int y = r.y; y < r.y + r.h - (r.h & (DimY - 1)); y += DimY) {
         for (int x = r.x; x < r.x + r.w - (r.w & (DimX - 1)); x += DimX) {
-            auto &out_r = out_rays[i++];
+            ray_packet_t<S> &out_r = out_rays[i++];
 
             simd_ivec<S> ixx = x + off_x, iyy = y + off_y;
 
@@ -837,7 +839,7 @@ void Ray::NS::GeneratePrimaryRays(const int iteration, const camera_t &cam, cons
             }
 
             if (cam.filter == Tent) {
-                auto temp = rxx;
+                simd_fvec<S> temp = rxx;
                 rxx = 1.0f - sqrt(2.0f - 2.0f * temp);
                 where(temp < 0.5f, rxx) = sqrt(2.0f * temp) - 1.0f;
 
@@ -900,8 +902,8 @@ void Ray::NS::SampleMeshInTextureSpace(int iteration, int obj_index, int uv_laye
         for (int x = r.x; x < r.x + r.w - (r.w & (DimX - 1)); x += DimX) {
             simd_ivec<S> ixx = x + off_x, iyy = simd_ivec<S>(y) + off_y;
 
-            auto &out_ray = out_rays[count];
-            auto &out_inter = out_inters[count];
+            ray_packet_t<S> &out_ray = out_rays[count];
+            hit_data_t<S> &out_inter = out_inters[count];
             count++;
 
             out_ray.xy = (ixx << 16) | iyy;
@@ -919,13 +921,13 @@ void Ray::NS::SampleMeshInTextureSpace(int iteration, int obj_index, int uv_laye
     simd_fvec2 size = { (float)width, (float)height };
 
     for (uint32_t tri = mesh.tris_index; tri < mesh.tris_index + mesh.tris_count; tri++) {
-        const auto &v0 = vertices[vtx_indices[tri * 3 + 0]];
-        const auto &v1 = vertices[vtx_indices[tri * 3 + 1]];
-        const auto &v2 = vertices[vtx_indices[tri * 3 + 2]];
+        const vertex_t &v0 = vertices[vtx_indices[tri * 3 + 0]];
+        const vertex_t &v1 = vertices[vtx_indices[tri * 3 + 1]];
+        const vertex_t &v2 = vertices[vtx_indices[tri * 3 + 2]];
 
-        const simd_fvec2 t0 = simd_fvec2{ v0.t[uv_layer][0], 1.0f - v0.t[uv_layer][1] } *size;
-        const simd_fvec2 t1 = simd_fvec2{ v1.t[uv_layer][0], 1.0f - v1.t[uv_layer][1] } *size;
-        const simd_fvec2 t2 = simd_fvec2{ v2.t[uv_layer][0], 1.0f - v2.t[uv_layer][1] } *size;
+        const auto t0 = simd_fvec2{ v0.t[uv_layer][0], 1.0f - v0.t[uv_layer][1] } * size;
+        const auto t1 = simd_fvec2{ v1.t[uv_layer][0], 1.0f - v1.t[uv_layer][1] } * size;
+        const auto t2 = simd_fvec2{ v2.t[uv_layer][0], 1.0f - v2.t[uv_layer][1] } * size;
 
         simd_fvec2 bbox_min = t0, bbox_max = t0;
 
@@ -961,8 +963,8 @@ void Ray::NS::SampleMeshInTextureSpace(int iteration, int obj_index, int uv_laye
                 simd_ivec<S> ixx = x + off_x, iyy = simd_ivec<S>(y) + off_y;
 
                 int ndx = ((y - r.y) / DimY) * (r.w / DimX) + (x - r.x) / DimX;
-                auto &out_ray = out_rays[ndx];
-                auto &out_inter = out_inters[ndx];
+                ray_packet_t<S> &out_ray = out_rays[ndx];
+                hit_data_t<S> &out_inter = out_inters[ndx];
 
                 simd_ivec<S> index = iyy * width + ixx;
                 const int hi = (iteration & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT;
@@ -984,7 +986,7 @@ void Ray::NS::SampleMeshInTextureSpace(int iteration, int obj_index, int uv_laye
                              v = d12[0] * (fyy - t1[1]) - d12[1] * (fxx - t1[0]),
                              w = d20[0] * (fyy - t2[1]) - d20[1] * (fxx - t2[0]);
 
-                auto fmask = (u >= -FLT_EPS) & (v >= -FLT_EPS) & (w >= -FLT_EPS);
+                const simd_fvec<S> fmask = (u >= -FLT_EPS) & (v >= -FLT_EPS) & (w >= -FLT_EPS);
                 const auto &imask = reinterpret_cast<const simd_ivec<S> &>(fmask);
 
                 if (imask.not_all_zeros()) {
@@ -1314,7 +1316,7 @@ bool Ray::NS::IntersectTris_AnyHit(const ray_packet_t<S> &r, const simd_ivec<S> 
     inter.t = out_inter.t;
 
     for (uint32_t i = 0; i < num_tris; i++) {
-        auto hit_found = _IntersectTri(r, ray_mask, tris[i], i, inter);
+        simd_ivec<S> hit_found = _IntersectTri(r, ray_mask, tris[i], i, inter);
         if (tris[i].ci & TRI_SOLID_BIT) {
             out_is_solid_hit = (out_is_solid_hit | hit_found);
             if (is_equal(out_is_solid_hit, ray_mask)) break;
@@ -1345,7 +1347,7 @@ bool Ray::NS::IntersectTris_AnyHit(const ray_packet_t<S> &r, const simd_ivec<S> 
 
     for (uint32_t i = 0; i < num_tris; i++) {
         uint32_t index = indices[i];
-        auto hit_found = _IntersectTri(r, ray_mask, tris[index], index, inter);
+        simd_ivec<S> hit_found = _IntersectTri(r, ray_mask, tris[index], index, inter);
         if (tris[index].ci & TRI_SOLID_BIT) {
             out_is_solid_hit = (out_is_solid_hit | hit_found);
             if (is_equal(out_is_solid_hit, ray_mask)) break;
@@ -1430,12 +1432,12 @@ bool Ray::NS::Traverse_MacroTree_Stackless_CPU(const ray_packet_t<S> &r, const s
             }
             break;
         case FromSibling: {
-            auto mask1 = bbox_test_fma(inv_d, neg_inv_d_o, inter.t, nodes[cur]) & st.queue[st.index].mask;
+            simd_ivec<S> mask1 = bbox_test_fma(inv_d, neg_inv_d_o, inter.t, nodes[cur]) & st.queue[st.index].mask;
             if (mask1.all_zeros()) {
                 cur = nodes[cur].parent;
                 src = FromChild;
             } else {
-                auto mask2 = and_not(mask1, st.queue[st.index].mask);
+                simd_ivec<S> mask2 = and_not(mask1, st.queue[st.index].mask);
                 if (mask2.not_all_zeros()) {
                     st.queue[st.num].cur = nodes[cur].parent;
                     st.queue[st.num].mask = mask2;
@@ -1447,11 +1449,11 @@ bool Ray::NS::Traverse_MacroTree_Stackless_CPU(const ray_packet_t<S> &r, const s
                 if (is_leaf_node(nodes[cur])) {
                     // process leaf
                     for (uint32_t i = nodes[cur].prim_index; i < nodes[cur].prim_index + nodes[cur].prim_count; i++) {
-                        const auto &mi = mesh_instances[mi_indices[i]];
-                        const auto &m = meshes[mi.mesh_index];
-                        const auto &tr = transforms[mi.tr_index];
+                        const mesh_instance_t &mi = mesh_instances[mi_indices[i]];
+                        const mesh_t &m = meshes[mi.mesh_index];
+                        const transform_t &tr = transforms[mi.tr_index];
 
-                        auto bbox_mask = bbox_test_fma(inv_d, neg_inv_d_o, inter.t, mi.bbox_min, mi.bbox_max) & st.queue[st.index].mask;
+                        simd_ivec<S> bbox_mask = bbox_test_fma(inv_d, neg_inv_d_o, inter.t, mi.bbox_min, mi.bbox_max) & st.queue[st.index].mask;
                         if (bbox_mask.all_zeros()) continue;
 
                         ray_packet_t<S> _r = TransformRay(r, tr.inv_xform);
@@ -1469,12 +1471,12 @@ bool Ray::NS::Traverse_MacroTree_Stackless_CPU(const ray_packet_t<S> &r, const s
         }
         break;
         case FromParent: {
-            auto mask1 = bbox_test_fma(inv_d, neg_inv_d_o, inter.t, nodes[cur]) & st.queue[st.index].mask;
+            simd_ivec<S> mask1 = bbox_test_fma(inv_d, neg_inv_d_o, inter.t, nodes[cur]) & st.queue[st.index].mask;
             if (mask1.all_zeros()) {
                 cur = other_child(nodes[nodes[cur].parent], cur);
                 src = FromSibling;
             } else {
-                auto mask2 = and_not(mask1, st.queue[st.index].mask);
+                simd_ivec<S> mask2 = and_not(mask1, st.queue[st.index].mask);
                 if (mask2.not_all_zeros()) {
                     st.queue[st.num].cur = other_child(nodes[nodes[cur].parent], cur);
                     st.queue[st.num].mask = mask2;
@@ -1486,11 +1488,11 @@ bool Ray::NS::Traverse_MacroTree_Stackless_CPU(const ray_packet_t<S> &r, const s
                 if (is_leaf_node(nodes[cur])) {
                     // process leaf
                     for (uint32_t i = nodes[cur].prim_index; i < nodes[cur].prim_index + nodes[cur].prim_count; i++) {
-                        const auto &mi = mesh_instances[mi_indices[i]];
-                        const auto &m = meshes[mi.mesh_index];
-                        const auto &tr = transforms[mi.tr_index];
+                        const mesh_instance_t &mi = mesh_instances[mi_indices[i]];
+                        const mesh_t &m = meshes[mi.mesh_index];
+                        const transform_t &tr = transforms[mi.tr_index];
 
-                        auto bbox_mask = bbox_test_fma(inv_d, neg_inv_d_o, inter.t, mi.bbox_min, mi.bbox_max) & st.queue[st.index].mask;
+                        simd_ivec<S> bbox_mask = bbox_test_fma(inv_d, neg_inv_d_o, inter.t, mi.bbox_min, mi.bbox_max) & st.queue[st.index].mask;
                         if (bbox_mask.all_zeros()) continue;
 
                         ray_packet_t<S> _r = TransformRay(r, tr.inv_xform);
@@ -1551,12 +1553,12 @@ bool Ray::NS::Traverse_MicroTree_Stackless_CPU(const ray_packet_t<S> &r, const s
             }
             break;
         case FromSibling: {
-            auto mask1 = bbox_test_fma(inv_d, neg_inv_d_o, inter.t, nodes[cur]) & st.queue[st.index].mask;
+            simd_ivec<S> mask1 = bbox_test_fma(inv_d, neg_inv_d_o, inter.t, nodes[cur]) & st.queue[st.index].mask;
             if (mask1.all_zeros()) {
                 cur = nodes[cur].parent;
                 src = FromChild;
             } else {
-                auto mask2 = and_not(mask1, st.queue[st.index].mask);
+                simd_ivec<S> mask2 = and_not(mask1, st.queue[st.index].mask);
                 if (mask2.not_all_zeros()) {
                     st.queue[st.num].cur = nodes[cur].parent;
                     st.queue[st.num].mask = mask2;
@@ -1579,12 +1581,12 @@ bool Ray::NS::Traverse_MicroTree_Stackless_CPU(const ray_packet_t<S> &r, const s
         }
         break;
         case FromParent: {
-            auto mask1 = bbox_test_fma(inv_d, neg_inv_d_o, inter.t, nodes[cur]) & st.queue[st.index].mask;
+            simd_ivec<S> mask1 = bbox_test_fma(inv_d, neg_inv_d_o, inter.t, nodes[cur]) & st.queue[st.index].mask;
             if (mask1.all_zeros()) {
                 cur = other_child(nodes[nodes[cur].parent], cur);
                 src = FromSibling;
             } else {
-                auto mask2 = and_not(mask1, st.queue[st.index].mask);
+                simd_ivec<S> mask2 = and_not(mask1, st.queue[st.index].mask);
                 if (mask2.not_all_zeros()) {
                     st.queue[st.num].cur = other_child(nodes[nodes[cur].parent], cur);
                     st.queue[st.num].mask = mask2;
@@ -1633,12 +1635,12 @@ bool Ray::NS::Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t<S> &r, 
         while (stack_size) {
             uint32_t cur = stack[--stack_size];
 
-            auto mask1 = bbox_test_fma(inv_d, neg_inv_d_o, inter.t, nodes[cur]) & st.queue[st.index].mask;
+            simd_ivec<S> mask1 = bbox_test_fma(inv_d, neg_inv_d_o, inter.t, nodes[cur]) & st.queue[st.index].mask;
             if (mask1.all_zeros()) {
                 continue;
             }
 
-            auto mask2 = and_not(mask1, st.queue[st.index].mask);
+            simd_ivec<S> mask2 = and_not(mask1, st.queue[st.index].mask);
             if (mask2.not_all_zeros()) {
                 st.queue[st.num].mask = mask2;
                 st.queue[st.num].stack_size = stack_size;
@@ -1652,11 +1654,11 @@ bool Ray::NS::Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t<S> &r, 
             } else {
                 uint32_t prim_index = (nodes[cur].prim_index & PRIM_INDEX_BITS);
                 for (uint32_t i = prim_index; i < prim_index + nodes[cur].prim_count; i++) {
-                    const auto &mi = mesh_instances[mi_indices[i]];
-                    const auto &m = meshes[mi.mesh_index];
-                    const auto &tr = transforms[mi.tr_index];
+                    const mesh_instance_t &mi = mesh_instances[mi_indices[i]];
+                    const mesh_t &m = meshes[mi.mesh_index];
+                    const transform_t &tr = transforms[mi.tr_index];
 
-                    auto bbox_mask = bbox_test_fma(inv_d, neg_inv_d_o, inter.t, mi.bbox_min, mi.bbox_max) & st.queue[st.index].mask;
+                    simd_ivec<S> bbox_mask = bbox_test_fma(inv_d, neg_inv_d_o, inter.t, mi.bbox_min, mi.bbox_max) & st.queue[st.index].mask;
                     if (bbox_mask.all_zeros()) continue;
 
                     ray_packet_t<S> _r = TransformRay(r, tr.inv_xform);
@@ -1737,9 +1739,9 @@ bool Ray::NS::Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t<S> &r, 
             } else {
                 uint32_t prim_index = (nodes[cur].child[0] & PRIM_INDEX_BITS);
                 for (uint32_t j = prim_index; j < prim_index + nodes[cur].child[1]; j++) {
-                    const auto &mi = mesh_instances[mi_indices[j]];
-                    const auto &m = meshes[mi.mesh_index];
-                    const auto &tr = transforms[mi.tr_index];
+                    const mesh_instance_t &mi = mesh_instances[mi_indices[j]];
+                    const mesh_t &m = meshes[mi.mesh_index];
+                    const transform_t &tr = transforms[mi.tr_index];
 
                     if (!bbox_test(_inv_d, _neg_inv_d_o, inter.t[ri], mi.bbox_min, mi.bbox_max)) continue;
 
@@ -1776,12 +1778,12 @@ bool Ray::NS::Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t<S> &r, cons
         while (stack_size) {
             uint32_t cur = stack[--stack_size];
 
-            auto mask1 = bbox_test_fma(inv_d, neg_inv_d_o, inter.t, nodes[cur]) & st.queue[st.index].mask;
+            simd_ivec<S> mask1 = bbox_test_fma(inv_d, neg_inv_d_o, inter.t, nodes[cur]) & st.queue[st.index].mask;
             if (mask1.all_zeros()) {
                 continue;
             }
 
-            auto mask2 = and_not(mask1, st.queue[st.index].mask);
+            simd_ivec<S> mask2 = and_not(mask1, st.queue[st.index].mask);
             if (mask2.not_all_zeros()) {
                 st.queue[st.num].mask = mask2;
                 st.queue[st.num].stack_size = stack_size;
@@ -1795,11 +1797,11 @@ bool Ray::NS::Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t<S> &r, cons
             } else {
                 uint32_t prim_index = (nodes[cur].prim_index & PRIM_INDEX_BITS);
                 for (uint32_t i = prim_index; i < prim_index + nodes[cur].prim_count; i++) {
-                    const auto &mi = mesh_instances[mi_indices[i]];
-                    const auto &m = meshes[mi.mesh_index];
-                    const auto &tr = transforms[mi.tr_index];
+                    const mesh_instance_t &mi = mesh_instances[mi_indices[i]];
+                    const mesh_t &m = meshes[mi.mesh_index];
+                    const transform_t &tr = transforms[mi.tr_index];
 
-                    auto bbox_mask = bbox_test_fma(inv_d, neg_inv_d_o, inter.t, mi.bbox_min, mi.bbox_max) & st.queue[st.index].mask;
+                    simd_ivec<S> bbox_mask = bbox_test_fma(inv_d, neg_inv_d_o, inter.t, mi.bbox_min, mi.bbox_max) & st.queue[st.index].mask;
                     if (bbox_mask.all_zeros()) continue;
 
                     ray_packet_t<S> _r = TransformRay(r, tr.inv_xform);
@@ -1884,9 +1886,9 @@ bool Ray::NS::Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t<S> &r, cons
             } else {
                 uint32_t prim_index = (nodes[cur].child[0] & PRIM_INDEX_BITS);
                 for (uint32_t j = prim_index; j < prim_index + nodes[cur].child[1]; j++) {
-                    const auto &mi = mesh_instances[mi_indices[j]];
-                    const auto &m = meshes[mi.mesh_index];
-                    const auto &tr = transforms[mi.tr_index];
+                    const mesh_instance_t &mi = mesh_instances[mi_indices[j]];
+                    const mesh_t &m = meshes[mi.mesh_index];
+                    const transform_t &tr = transforms[mi.tr_index];
 
                     if (!bbox_test(_inv_d, _neg_inv_d_o, inter.t[ri], mi.bbox_min, mi.bbox_max)) continue;
 
@@ -1926,12 +1928,12 @@ bool Ray::NS::Traverse_MicroTree_WithStack_ClosestHit(const ray_packet_t<S> &r, 
         while (stack_size) {
             uint32_t cur = stack[--stack_size];
 
-            auto mask1 = bbox_test_fma(inv_d, neg_inv_d_o, inter.t, nodes[cur]) & st.queue[st.index].mask;
+            simd_ivec<S> mask1 = bbox_test_fma(inv_d, neg_inv_d_o, inter.t, nodes[cur]) & st.queue[st.index].mask;
             if (mask1.all_zeros()) {
                 continue;
             }
 
-            auto mask2 = and_not(mask1, st.queue[st.index].mask);
+            simd_ivec<S> mask2 = and_not(mask1, st.queue[st.index].mask);
             if (mask2.not_all_zeros()) {
                 st.queue[st.num].mask = mask2;
                 st.queue[st.num].stack_size = stack_size;
@@ -2034,12 +2036,12 @@ bool Ray::NS::Traverse_MicroTree_WithStack_AnyHit(const ray_packet_t<S> &r, cons
         while (stack_size) {
             uint32_t cur = stack[--stack_size];
 
-            auto mask1 = bbox_test_fma(inv_d, neg_inv_d_o, inter.t, nodes[cur]) & st.queue[st.index].mask;
+            simd_ivec<S> mask1 = bbox_test_fma(inv_d, neg_inv_d_o, inter.t, nodes[cur]) & st.queue[st.index].mask;
             if (mask1.all_zeros()) {
                 continue;
             }
 
-            auto mask2 = and_not(mask1, st.queue[st.index].mask);
+            simd_ivec<S> mask2 = and_not(mask1, st.queue[st.index].mask);
             if (mask2.not_all_zeros()) {
                 st.queue[st.num].mask = mask2;
                 st.queue[st.num].stack_size = stack_size;
@@ -2219,12 +2221,12 @@ void Ray::NS::SampleNearest(const Ref::TextureAtlas &atlas, const texture_t &t, 
 
         int page = t.page[_lod[i]];
 
-        const auto &pix = atlas.Get(page, _uvs[0][i], _uvs[1][i]);
+        const pixel_color8_t &pix = atlas.Get(page, _uvs[0][i], _uvs[1][i]);
 
-        out_rgba[0][i] = (float)pix.r;
-        out_rgba[1][i] = (float)pix.g;
-        out_rgba[2][i] = (float)pix.b;
-        out_rgba[3][i] = (float)pix.a;
+        out_rgba[0][i] = static_cast<float>(pix.r);
+        out_rgba[1][i] = static_cast<float>(pix.g);
+        out_rgba[2][i] = static_cast<float>(pix.b);
+        out_rgba[3][i] = static_cast<float>(pix.a);
     }
 
     const float k = 1.0f / 255.0f;
@@ -2248,10 +2250,10 @@ void Ray::NS::SampleBilinear(const Ref::TextureAtlas &atlas, const texture_t &t,
 
         int page = t.page[lod[i]];
 
-        const auto &p00 = atlas.Get(page, int(_uvs[0][i]), int(_uvs[1][i]));
-        const auto &p01 = atlas.Get(page, int(_uvs[0][i] + 1), int(_uvs[1][i]));
-        const auto &p10 = atlas.Get(page, int(_uvs[0][i]), int(_uvs[1][i] + 1));
-        const auto &p11 = atlas.Get(page, int(_uvs[0][i] + 1), int(_uvs[1][i] + 1));
+        const pixel_color8_t &p00 = atlas.Get(page, int(_uvs[0][i]), int(_uvs[1][i]));
+        const pixel_color8_t &p01 = atlas.Get(page, int(_uvs[0][i] + 1), int(_uvs[1][i]));
+        const pixel_color8_t &p10 = atlas.Get(page, int(_uvs[0][i]), int(_uvs[1][i] + 1));
+        const pixel_color8_t &p11 = atlas.Get(page, int(_uvs[0][i] + 1), int(_uvs[1][i] + 1));
 
         p0[0][i] = p01.r * k[0][i] + p00.r * (1 - k[0][i]);
         p0[1][i] = p01.g * k[0][i] + p00.g * (1 - k[0][i]);
@@ -2281,10 +2283,10 @@ void Ray::NS::SampleBilinear(const Ref::TextureAtlas &atlas, const simd_fvec<S> 
     for (int i = 0; i < S; i++) {
         if (!mask[i]) continue;
 
-        const auto &p00 = atlas.Get(page[i], int(uvs[0][i] + 0), int(uvs[1][i] + 0));
-        const auto &p01 = atlas.Get(page[i], int(uvs[0][i] + 1), int(uvs[1][i] + 0));
-        const auto &p10 = atlas.Get(page[i], int(uvs[0][i] + 0), int(uvs[1][i] + 1));
-        const auto &p11 = atlas.Get(page[i], int(uvs[0][i] + 1), int(uvs[1][i] + 1));
+        const pixel_color8_t &p00 = atlas.Get(page[i], int(uvs[0][i] + 0), int(uvs[1][i] + 0));
+        const pixel_color8_t &p01 = atlas.Get(page[i], int(uvs[0][i] + 1), int(uvs[1][i] + 0));
+        const pixel_color8_t &p10 = atlas.Get(page[i], int(uvs[0][i] + 0), int(uvs[1][i] + 1));
+        const pixel_color8_t &p11 = atlas.Get(page[i], int(uvs[0][i] + 1), int(uvs[1][i] + 1));
 
         _p00[0][i] = to_norm_float(p00.r);
         _p00[1][i] = to_norm_float(p00.g);
@@ -2352,7 +2354,7 @@ void Ray::NS::SampleAnisotropic(const Ref::TextureAtlas &atlas, const texture_t 
 
     ITERATE(S, { lod[i] = log2(std::min(_duv_dy[0][i], _duv_dy[1][i])); })
 
-    auto _mask = l1 <= l2;
+    simd_fvec<S> _mask = l1 <= l2;
     where(_mask, k) = l1 / l2;
     where(_mask, step[0]) = duv_dy[0];
     where(_mask, step[1]) = duv_dy[1];
@@ -2366,12 +2368,12 @@ void Ray::NS::SampleAnisotropic(const Ref::TextureAtlas &atlas, const texture_t 
     where(lod < 0.0f, lod) = 0.0f;
     where(lod > (float)MAX_MIP_LEVEL, lod) = (float)MAX_MIP_LEVEL;
 
-    const auto imask = mask == 0;
+    const simd_ivec<S> imask = mask == 0;
     where(reinterpret_cast<const simd_fvec<S>&>(imask), lod) = 0.0f;
 
     simd_fvec<S> _uvs[2] = { uvs[0] - step[0] * 0.5f, uvs[1] - step[1] * 0.5f };
 
-    auto num = (simd_ivec<S>)(2.0f / k);
+    simd_ivec<S> num = static_cast<simd_ivec<S>>(2.0f / k);
     where(num < 1, num) = 1;
     where(num > 4, num) = 4;
 
@@ -2402,11 +2404,11 @@ void Ray::NS::SampleAnisotropic(const Ref::TextureAtlas &atlas, const texture_t 
 
     const simd_fvec<S> kz = lod - floor(lod);
 
-    auto kz_big_enough = kz > 0.0001f;
+    simd_fvec<S> kz_big_enough = kz > 0.0001f;
     bool skip_z = reinterpret_cast<simd_ivec<S> &>(kz_big_enough).all_zeros();
 
     for (int j = 0; j < 4; j++) {
-        auto new_imask = (num > j) & mask;
+        simd_ivec<S> new_imask = (num > j) & mask;
         if (new_imask.all_zeros()) break;
 
         const auto &fmask = reinterpret_cast<const simd_fvec<S>&>(new_imask);
@@ -2460,10 +2462,10 @@ void Ray::NS::SampleLatlong_RGBE(const Ref::TextureAtlas &atlas, const texture_t
     for (int i = 0; i < S; i++) {
         if (!mask[i]) continue;
 
-        const auto &p00 = atlas.Get(t.page[0], int(uvs[0][i] + 0), int(uvs[1][i] + 0));
-        const auto &p01 = atlas.Get(t.page[0], int(uvs[0][i] + 1), int(uvs[1][i] + 0));
-        const auto &p10 = atlas.Get(t.page[0], int(uvs[0][i] + 0), int(uvs[1][i] + 1));
-        const auto &p11 = atlas.Get(t.page[0], int(uvs[0][i] + 1), int(uvs[1][i] + 1));
+        const pixel_color8_t &p00 = atlas.Get(t.page[0], int(uvs[0][i] + 0), int(uvs[1][i] + 0));
+        const pixel_color8_t &p01 = atlas.Get(t.page[0], int(uvs[0][i] + 1), int(uvs[1][i] + 0));
+        const pixel_color8_t &p10 = atlas.Get(t.page[0], int(uvs[0][i] + 0), int(uvs[1][i] + 1));
+        const pixel_color8_t &p11 = atlas.Get(t.page[0], int(uvs[0][i] + 1), int(uvs[1][i] + 1));
 
         float f = std::exp2(float(p00.a) - 128.0f);
         _p00[0][i] = to_norm_float(p00.r) * f;
@@ -2513,7 +2515,7 @@ Ray::NS::simd_fvec<S> Ray::NS::ComputeVisibility(const simd_fvec<S> p1[3], const
 
     simd_fvec<S> visibility = 1.0f;
 
-    auto keep_going = (distance > HIT_EPS) & reinterpret_cast<const simd_fvec<S>&>(mask);
+    simd_fvec<S> keep_going = (distance > HIT_EPS) & reinterpret_cast<const simd_fvec<S>&>(mask);
     const auto &ikeep_going = reinterpret_cast<const simd_ivec<S>&>(keep_going);
     while (ikeep_going.not_all_zeros()) {
         hit_data_t<S> sh_inter;
@@ -2534,7 +2536,7 @@ Ray::NS::simd_fvec<S> Ray::NS::ComputeVisibility(const simd_fvec<S> p1[3], const
             break;
         }
 
-        const auto *I = sh_r.d;
+        const simd_fvec<S> *I = sh_r.d;
         const simd_fvec<S> w = 1.0f - sh_inter.u - sh_inter.v;
 
         simd_fvec<S> n1[3], n2[3], n3[3],
@@ -2548,9 +2550,9 @@ Ray::NS::simd_fvec<S> Ray::NS::ComputeVisibility(const simd_fvec<S> p1[3], const
         for (int i = 0; i < S; i++) {
             if (!sh_inter.mask[i]) continue;
 
-            const auto &v1 = sc.vertices[sc.vtx_indices[sh_inter.prim_index[i] * 3 + 0]];
-            const auto &v2 = sc.vertices[sc.vtx_indices[sh_inter.prim_index[i] * 3 + 1]];
-            const auto &v3 = sc.vertices[sc.vtx_indices[sh_inter.prim_index[i] * 3 + 2]];
+            const vertex_t &v1 = sc.vertices[sc.vtx_indices[sh_inter.prim_index[i] * 3 + 0]];
+            const vertex_t &v2 = sc.vertices[sc.vtx_indices[sh_inter.prim_index[i] * 3 + 1]];
+            const vertex_t &v3 = sc.vertices[sc.vtx_indices[sh_inter.prim_index[i] * 3 + 2]];
 
             n1[0][i] = v1.n[0]; n1[1][i] = v1.n[1]; n1[2][i] = v1.n[2];
             n2[0][i] = v2.n[0]; n2[1][i] = v2.n[1]; n2[2][i] = v2.n[2];
@@ -2560,7 +2562,7 @@ Ray::NS::simd_fvec<S> Ray::NS::ComputeVisibility(const simd_fvec<S> p1[3], const
             u2[0][i] = v2.t[0][0]; u2[1][i] = v2.t[0][1];
             u3[0][i] = v3.t[0][0]; u3[1][i] = v3.t[0][1];
 
-            const auto &tri = sc.tris[sh_inter.prim_index[i]];
+            const tri_accel_t &tri = sc.tris[sh_inter.prim_index[i]];
             mat_index[i] = reinterpret_cast<const int&>(tri.mi);
             back_mat_index[i] = reinterpret_cast<const int&>(tri.back_mi);
 
@@ -2571,7 +2573,7 @@ Ray::NS::simd_fvec<S> Ray::NS::ComputeVisibility(const simd_fvec<S> p1[3], const
             sh_N[1][i] = _plane_N[1];
             sh_N[2][i] = _plane_N[2];
 
-            const auto *tr = &sc.transforms[sc.mesh_instances[sh_inter.obj_index[i]].tr_index];
+            const transform_t *tr = &sc.transforms[sc.mesh_instances[sh_inter.obj_index[i]].tr_index];
 
             inv_xform1[0][i] = tr->inv_xform[0]; inv_xform1[1][i] = tr->inv_xform[1]; inv_xform1[2][i] = tr->inv_xform[2];
             inv_xform2[0][i] = tr->inv_xform[4]; inv_xform2[1][i] = tr->inv_xform[5]; inv_xform2[2][i] = tr->inv_xform[6];
@@ -2580,7 +2582,7 @@ Ray::NS::simd_fvec<S> Ray::NS::ComputeVisibility(const simd_fvec<S> p1[3], const
 
         simd_fvec<S> sh_plane_N[3] = { dot(sh_N, inv_xform1), dot(sh_N, inv_xform2), dot(sh_N, inv_xform3) };
 
-        auto backfacing = dot(sh_plane_N, I) < 0.0f;
+        simd_fvec<S> backfacing = dot(sh_plane_N, I) < 0.0f;
         where(reinterpret_cast<const simd_ivec<S> &>(backfacing), mat_index) = back_mat_index;
 
         sh_N[0] = n1[0] * w + n2[0] * sh_inter.u + n3[0] * sh_inter.v;
@@ -2612,8 +2614,8 @@ Ray::NS::simd_fvec<S> Ray::NS::ComputeVisibility(const simd_fvec<S> p1[3], const
                         first_mi = mat_index[i];
                 }
 
-                auto same_mi = mat_index == first_mi;
-                auto diff_mi = and_not(same_mi, ray_queue[index]);
+                simd_ivec<S> same_mi = (mat_index == first_mi);
+                simd_ivec<S> diff_mi = and_not(same_mi, ray_queue[index]);
 
                 if (diff_mi.not_all_zeros()) {
                     ray_queue[num] = diff_mi;
@@ -2621,7 +2623,7 @@ Ray::NS::simd_fvec<S> Ray::NS::ComputeVisibility(const simd_fvec<S> p1[3], const
                 }
 
                 if (first_mi != 0xffffffff) {
-                    const auto *mat = &sc.materials[first_mi];
+                    const material_t *mat = &sc.materials[first_mi];
 
                     while (mat->type == MixMaterial) {
                         simd_fvec<S> mix[4];
@@ -2655,7 +2657,7 @@ Ray::NS::simd_fvec<S> Ray::NS::ComputeVisibility(const simd_fvec<S> p1[3], const
                             }
                         }
 
-                        auto _same_mi = mat_index == first_mi;
+                        simd_ivec<S> _same_mi = (mat_index == first_mi);
                         diff_mi = and_not(_same_mi, same_mi);
                         same_mi = _same_mi;
 
@@ -2828,12 +2830,12 @@ void Ray::NS::ComputeDirectLighting(const simd_fvec<S> I[3], const simd_fvec<S> 
             while (stack_size) {
                 uint32_t cur = stack[--stack_size];
 
-                auto mask1 = bbox_test(P, sc.nodes[cur]) & st.queue[st.index].mask;
+                simd_ivec<S> mask1 = bbox_test(P, sc.nodes[cur]) & st.queue[st.index].mask;
                 if (mask1.all_zeros()) {
                     continue;
                 }
 
-                auto mask2 = and_not(mask1, st.queue[st.index].mask);
+                simd_ivec<S> mask2 = and_not(mask1, st.queue[st.index].mask);
                 if (mask2.not_all_zeros()) {
                     st.queue[st.num].mask = mask2;
                     st.queue[st.num].stack_size = stack_size;
@@ -2955,7 +2957,7 @@ void Ray::NS::ComputeDerivatives(const simd_fvec<S> I[3], const simd_fvec<S> &t,
     simd_fvec<S> Bx[2] = { out_der.do_dx[0], out_der.do_dx[1] };
     simd_fvec<S> By[2] = { out_der.do_dy[0], out_der.do_dy[1] };
 
-    auto mask1 = (abs(plane_N[0]) > abs(plane_N[1])) & (abs(plane_N[0]) > abs(plane_N[2]));
+    simd_fvec<S> mask1 = (abs(plane_N[0]) > abs(plane_N[1])) & (abs(plane_N[0]) > abs(plane_N[2]));
     where(mask1, A[0][0]) = dpdu[1];
     where(mask1, A[0][1]) = dpdu[2];
     where(mask1, A[1][0]) = dpdv[1];
@@ -2965,7 +2967,7 @@ void Ray::NS::ComputeDerivatives(const simd_fvec<S> I[3], const simd_fvec<S> &t,
     where(mask1, By[0]) = out_der.do_dy[1];
     where(mask1, By[1]) = out_der.do_dy[2];
 
-    auto mask2 = (abs(plane_N[1]) > abs(plane_N[0])) & (abs(plane_N[1]) > abs(plane_N[2]));
+    simd_fvec<S> mask2 = (abs(plane_N[1]) > abs(plane_N[0])) & (abs(plane_N[1]) > abs(plane_N[2]));
     where(mask2, A[0][1]) = dpdu[2];
     where(mask2, A[1][1]) = dpdv[2];
     where(mask2, Bx[1]) = out_der.do_dx[2];
@@ -3002,7 +3004,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                            simd_fvec<S> out_rgba[4], simd_ivec<S> *out_secondary_masks, ray_packet_t<S> *out_secondary_rays, int *out_secondary_rays_count) {
     out_rgba[3] = { 1.0f };
     
-    auto ino_hit = inter.mask ^ simd_ivec<S>(-1);
+    simd_ivec<S> ino_hit = inter.mask ^ simd_ivec<S>(-1);
     if (ino_hit.not_all_zeros()) {
         simd_fvec<S> env_col[4] = { { 0.0f }, { 0.0f }, { 0.0f }, { 0.0f } };
         if (pi.should_add_environment()) {
@@ -3024,7 +3026,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
     
     if (inter.mask.all_zeros()) return;
 
-    const auto *I = ray.d;
+    const simd_fvec<S> *I = ray.d;
     const simd_fvec<S> P[3] = { ray.o[0] + inter.t * I[0], ray.o[1] + inter.t * I[1], ray.o[2] + inter.t * I[2] };
 
     const simd_fvec<S> w = 1.0f - inter.u - inter.v;
@@ -3043,9 +3045,9 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
     for (int i = 0; i < S; i++) {
         if (ino_hit[i]) continue;
 
-        const auto &v1 = sc.vertices[sc.vtx_indices[inter.prim_index[i] * 3 + 0]];
-        const auto &v2 = sc.vertices[sc.vtx_indices[inter.prim_index[i] * 3 + 1]];
-        const auto &v3 = sc.vertices[sc.vtx_indices[inter.prim_index[i] * 3 + 2]];
+        const vertex_t &v1 = sc.vertices[sc.vtx_indices[inter.prim_index[i] * 3 + 0]];
+        const vertex_t &v2 = sc.vertices[sc.vtx_indices[inter.prim_index[i] * 3 + 1]];
+        const vertex_t &v3 = sc.vertices[sc.vtx_indices[inter.prim_index[i] * 3 + 2]];
 
         p1[0][i] = v1.p[0]; p1[1][i] = v1.p[1]; p1[2][i] = v1.p[2];
         p2[0][i] = v2.p[0]; p2[1][i] = v2.p[1]; p2[2][i] = v2.p[2];
@@ -3063,7 +3065,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
         b2[0][i] = v2.b[0]; b2[1][i] = v2.b[1]; b2[2][i] = v2.b[2];
         b3[0][i] = v3.b[0]; b3[1][i] = v3.b[1]; b3[2][i] = v3.b[2];
 
-        const auto &tri = sc.tris[inter.prim_index[i]];
+        const tri_accel_t &tri = sc.tris[inter.prim_index[i]];
         mat_index[i] = reinterpret_cast<const int&>(tri.mi);
         back_mat_index[i] = reinterpret_cast<const int&>(tri.back_mi);
 
@@ -3074,7 +3076,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
         N[1][i] = _plane_N[1];
         N[2][i] = _plane_N[2];
 
-        const auto *tr = &sc.transforms[sc.mesh_instances[inter.obj_index[i]].tr_index];
+        const transform_t *tr = &sc.transforms[sc.mesh_instances[inter.obj_index[i]].tr_index];
 
         inv_xform1[0][i] = tr->inv_xform[0]; inv_xform1[1][i] = tr->inv_xform[1]; inv_xform1[2][i] = tr->inv_xform[2];
         inv_xform2[0][i] = tr->inv_xform[4]; inv_xform2[1][i] = tr->inv_xform[5]; inv_xform2[2][i] = tr->inv_xform[6];
@@ -3090,7 +3092,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
     simd_fvec<S> uvs[2] = { u1[0] * w + u2[0] * inter.u + u3[0] * inter.v,
                             u1[1] * w + u2[1] * inter.u + u3[1] * inter.v };
 
-    auto backfacing = dot(plane_N, I) > 0.0f;
+    simd_fvec<S> backfacing = dot(plane_N, I) > 0.0f;
     where(reinterpret_cast<const simd_ivec<S> &>(backfacing), mat_index) = back_mat_index;
     ITERATE_3({ where(backfacing, plane_N[i]) = -plane_N[i]; })
     ITERATE_3({ where(backfacing, N[i]) = -N[i]; })
@@ -3146,8 +3148,8 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                     first_mi = mat_index[i];
             }
     
-            auto same_mi = mat_index == first_mi;
-            auto diff_mi = and_not(same_mi, ray_queue[index]);
+            simd_ivec<S> same_mi = (mat_index == first_mi);
+            simd_ivec<S> diff_mi = and_not(same_mi, ray_queue[index]);
 
             if (diff_mi.not_all_zeros()) {
                 ray_queue[num] = diff_mi;
@@ -3164,7 +3166,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
 
             /////////////////////////////////////////
 
-            const auto *mat = &sc.materials[first_mi];
+            const material_t *mat = &sc.materials[first_mi];
 
             simd_fvec<S> mix_rand;
             for (int i = 0; i < S; i++) {
@@ -3227,7 +3229,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                     }
                 }
 
-                auto _same_mi = mat_index == first_mi;
+                simd_ivec<S> _same_mi = (mat_index == first_mi);
                 diff_mi = and_not(_same_mi, same_mi);
                 same_mi = _same_mi;
 
@@ -3324,14 +3326,13 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                 simd_ivec<S> idiff_depth_mask = diff_depth < int(pi.settings.max_diff_depth);
 
                 const simd_fvec<S> thr = max(rc[0], max(rc[1], rc[2]));
-                const auto new_ray_mask = (p < thr / RAY_TERM_THRES) &
-                    reinterpret_cast<const simd_fvec<S>&>(same_mi) &
-                    reinterpret_cast<const simd_fvec<S>&>(idiff_depth_mask) &
-                    reinterpret_cast<const simd_fvec<S>&>(itotal_depth_mask);
+                const simd_fvec<S> new_ray_mask = (p < thr / RAY_TERM_THRES) & reinterpret_cast<const simd_fvec<S>&>(same_mi) &
+                                                                               reinterpret_cast<const simd_fvec<S>&>(idiff_depth_mask) &
+                                                                               reinterpret_cast<const simd_fvec<S>&>(itotal_depth_mask);
 
                 if (reinterpret_cast<const simd_ivec<S>&>(new_ray_mask).not_all_zeros()) {
                     const int out_index = *out_secondary_rays_count;
-                    auto &r = out_secondary_rays[out_index];
+                    ray_packet_t<S> &r = out_secondary_rays[out_index];
 
                     // modify weight of non-terminated Ray
                     where(thr < RAY_TERM_THRES, rc[0]) = rc[0] * (RAY_TERM_THRES / thr);
@@ -3413,14 +3414,13 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                 simd_ivec<S> igloss_depth_mask = gloss_depth < int(pi.settings.max_glossy_depth);
 
                 const simd_fvec<S> thr = max(rc[0], max(rc[1], rc[2]));
-                const auto new_ray_mask = (p < thr / RAY_TERM_THRES) &
-                    reinterpret_cast<const simd_fvec<S>&>(same_mi) &
-                    reinterpret_cast<const simd_fvec<S>&>(igloss_depth_mask) &
-                    reinterpret_cast<const simd_fvec<S>&>(itotal_depth_mask);
+                const simd_fvec<S> new_ray_mask = (p < thr / RAY_TERM_THRES) & reinterpret_cast<const simd_fvec<S>&>(same_mi) &
+                                                                               reinterpret_cast<const simd_fvec<S>&>(igloss_depth_mask) &
+                                                                               reinterpret_cast<const simd_fvec<S>&>(itotal_depth_mask);
 
                 if (reinterpret_cast<const simd_ivec<S>&>(new_ray_mask).not_all_zeros()) {
                     const int out_index = *out_secondary_rays_count;
-                    auto &r = out_secondary_rays[out_index];
+                    ray_packet_t<S> &r = out_secondary_rays[out_index];
 
                     // modify weight of non-terminated Ray
                     where(thr < RAY_TERM_THRES, rc[0]) = rc[0] * (RAY_TERM_THRES / thr);
@@ -3508,14 +3508,13 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                 simd_ivec<S> irefr_depth_mask = refr_depth < int(pi.settings.max_refr_depth);
 
                 const simd_fvec<S> thr = max(rc[0], max(rc[1], rc[2]));
-                const auto new_ray_mask = (cost2 >= 0.0f) & (p < thr / RAY_TERM_THRES) &
-                    reinterpret_cast<const simd_fvec<S>&>(same_mi) &
-                    reinterpret_cast<const simd_fvec<S>&>(irefr_depth_mask) &
-                    reinterpret_cast<const simd_fvec<S>&>(itotal_depth_mask);
+                const simd_fvec<S> new_ray_mask = (cost2 >= 0.0f) & (p < thr / RAY_TERM_THRES) & reinterpret_cast<const simd_fvec<S>&>(same_mi) &
+                                                                                                 reinterpret_cast<const simd_fvec<S>&>(irefr_depth_mask) &
+                                                                                                 reinterpret_cast<const simd_fvec<S>&>(itotal_depth_mask);
 
                 if (reinterpret_cast<const simd_ivec<S>&>(new_ray_mask).not_all_zeros()) {
                     const int out_index = *out_secondary_rays_count;
-                    auto &r = out_secondary_rays[out_index];
+                    ray_packet_t<S> &r = out_secondary_rays[out_index];
 
                     // modify weight of non-terminated Ray
                     where(thr < RAY_TERM_THRES, rc[0]) = rc[0] * (RAY_TERM_THRES / thr);
@@ -3571,14 +3570,13 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                 simd_ivec<S> itransp_depth_mask = transp_depth < int(pi.settings.max_transp_depth);
 
                 const simd_fvec<S> thr = max(rc[0], max(rc[1], rc[2]));
-                const auto new_ray_mask = (p < thr / RAY_TERM_THRES) &
-                    reinterpret_cast<const simd_fvec<S>&>(same_mi) &
-                    reinterpret_cast<const simd_fvec<S>&>(itransp_depth_mask) &
-                    reinterpret_cast<const simd_fvec<S>&>(itotal_depth_mask);
+                const simd_fvec<S> new_ray_mask = (p < thr / RAY_TERM_THRES) & reinterpret_cast<const simd_fvec<S>&>(same_mi) &
+                                                                               reinterpret_cast<const simd_fvec<S>&>(itransp_depth_mask) &
+                                                                               reinterpret_cast<const simd_fvec<S>&>(itotal_depth_mask);
 
                 if (reinterpret_cast<const simd_ivec<S>&>(new_ray_mask).not_all_zeros()) {
                     const int out_index = *out_secondary_rays_count;
-                    auto &r = out_secondary_rays[out_index];
+                    ray_packet_t<S> &r = out_secondary_rays[out_index];
 
                     // modify weight of non-terminated Ray
                     where(thr < RAY_TERM_THRES, rc[0]) = rc[0] * (RAY_TERM_THRES / thr);

@@ -180,7 +180,7 @@ uint32_t Ray::Ocl::Scene::AddMesh(const mesh_desc_t &_m) {
     }
 
     // set material index for triangles
-    for (const auto &s : _m.shapes) {
+    for (const shape_desc_t &s : _m.shapes) {
         for (size_t i = s.vtx_start; i < s.vtx_start + s.vtx_count; i += 3) {
             new_tris[i / 3].mi = s.mat_index;
             new_tris[i / 3].back_mi = s.back_mat_index;
@@ -188,7 +188,7 @@ uint32_t Ray::Ocl::Scene::AddMesh(const mesh_desc_t &_m) {
     }
 
     // offset nodes and primitives
-    for (auto &n : new_nodes) {
+    for (bvh_node_t &n : new_nodes) {
 #ifdef USE_STACKLESS_BVH_TRAVERSAL
         if (n.parent != 0xffffffff) n.parent += (uint32_t)nodes_.size();
 #endif
@@ -201,7 +201,7 @@ uint32_t Ray::Ocl::Scene::AddMesh(const mesh_desc_t &_m) {
     }
 
     // offset triangle indices
-    for (auto &i : new_tri_indices) {
+    for (uint32_t &i : new_tri_indices) {
         i += (uint32_t)tris_.size();
     }
 
@@ -223,7 +223,7 @@ uint32_t Ray::Ocl::Scene::AddMesh(const mesh_desc_t &_m) {
     // add attributes
     std::vector<vertex_t> new_vertices(_m.vtx_attrs_count);
     for (size_t i = 0; i < _m.vtx_attrs_count; i++) {
-        auto &v = new_vertices[i];
+        vertex_t &v = new_vertices[i];
 
         memcpy(&v.p[0], (_m.vtx_attrs + i * stride), 3 * sizeof(float));
         memcpy(&v.n[0], (_m.vtx_attrs + i * stride + 3), 3 * sizeof(float));
@@ -378,7 +378,7 @@ void Ray::Ocl::Scene::RemoveNodes(uint32_t node_index, uint32_t node_count) {
         std::vector<mesh_t> meshes(meshes_count);
         meshes_.Get(&meshes[0], 0, meshes_.size());
 
-        for (auto &m : meshes) {
+        for (mesh_t &m : meshes) {
             if (m.node_index > node_index) {
                 m.node_index -= node_count;
             }
@@ -390,7 +390,7 @@ void Ray::Ocl::Scene::RemoveNodes(uint32_t node_index, uint32_t node_count) {
         nodes_.Get(&nodes[0], 0, nodes_count);
 
         for (uint32_t i = node_index; i < nodes.size(); i++) {
-            auto &n = nodes[i];
+            bvh_node_t &n = nodes[i];
 
 #ifdef USE_STACKLESS_BVH_TRAVERSAL
             if (n.parent != 0xffffffff && n.parent > node_index) n.parent -= node_count;
@@ -425,7 +425,7 @@ void Ray::Ocl::Scene::RebuildMacroBVH() {
     std::vector<mesh_instance_t> mesh_instances(mi_count);
     mesh_instances_.Get(&mesh_instances[0], 0, mi_count);
 
-    for (const auto &mi : mesh_instances) {
+    for (const mesh_instance_t &mi : mesh_instances) {
         primitives.push_back({ 0, 0, 0, Ref::simd_fvec3{ mi.bbox_min }, Ref::simd_fvec3{ mi.bbox_max } });
     }
 
@@ -436,7 +436,7 @@ void Ray::Ocl::Scene::RebuildMacroBVH() {
     macro_nodes_count_ = PreprocessPrims_SAH(&primitives[0], primitives.size(), nullptr, 0, {}, bvh_nodes, mi_indices);
     
     // offset nodes
-    for (auto &n : bvh_nodes) {
+    for (bvh_node_t &n : bvh_nodes) {
 #ifdef USE_STACKLESS_BVH_TRAVERSAL
         if (n.parent != 0xffffffff) n.parent += (uint32_t)nodes_.size();
 #endif
@@ -461,7 +461,7 @@ void Ray::Ocl::Scene::RebuildLightBVH() {
     std::vector<light_t> lights(lights_.size());
     lights_.Get(&lights[0], 0, lights_.size());
 
-    for (const auto &l : lights) {
+    for (const light_t &l : lights) {
         float influence = l.radius * (std::sqrt(l.brightness / LIGHT_ATTEN_CUTOFF) - 1.0f);
 
         Ref::simd_fvec3 bbox_min = { 0.0f }, bbox_max = { 0.0f };
@@ -504,7 +504,7 @@ void Ray::Ocl::Scene::RebuildLightBVH() {
                             l.pos[0], l.pos[1], l.pos[2], 1.0f };
 
         primitives.emplace_back();
-        auto &prim = primitives.back();
+        prim_t &prim = primitives.back();
 
         prim.i0 = prim.i1 = prim.i2 = 0;
         TransformBoundingBox(&bbox_min[0], &bbox_max[0], xform, &prim.bbox_min[0], &prim.bbox_max[0]);
@@ -517,13 +517,13 @@ void Ray::Ocl::Scene::RebuildLightBVH() {
     light_nodes_count_ = PreprocessPrims_SAH(&primitives[0], primitives.size(), nullptr, 0, {}, bvh_nodes, li_indices);
 
     // offset nodes
-    for (auto &n : bvh_nodes) {
+    for (bvh_node_t &n : bvh_nodes) {
 #ifdef USE_STACKLESS_BVH_TRAVERSAL
         if (n.parent != 0xffffffff) n.parent += (uint32_t)nodes_.size();
 #endif
         if ((n.prim_index & LEAF_NODE_BIT) == 0) {
-            n.left_child += (uint32_t)nodes_.size();
-            n.right_child += (uint32_t)nodes_.size();
+            n.left_child += static_cast<uint32_t>(nodes_.size());
+            n.right_child += static_cast<uint32_t>(nodes_.size());
         }
     }
 
