@@ -6,16 +6,17 @@
 namespace Ray {
 namespace Ref {
 class TextureAtlas {
-    const int res_[2];
+    const int   res_[2];
     const float res_f_[2];
-    int pages_count_;
+    int         page_count_;
 
-    using Page = std::vector<pixel_color8_t>;
+    using PageData = std::vector<pixel_color8_t>;
 
     std::vector<TextureSplitter> splitters_;
-    std::vector<Page> pages_;
+    std::vector<PageData>        pages_;
+    std::vector<pixel_color8_t>  temp_storage_;
 public:
-    TextureAtlas(int resx, int resy, int pages_count = 4);
+    TextureAtlas(int resx, int resy, int initial_page_count = 4);
 
     force_inline float size_x() const { return res_f_[0]; }
     force_inline float size_y() const { return res_f_[1]; }
@@ -31,7 +32,7 @@ public:
     int Allocate(const pixel_color8_t *data, const int res[2], int pos[2]);
     bool Free(int page, const int pos[2]);
 
-    bool Resize(int pages_count);
+    bool Resize(int new_page_count);
 };
 }
 }

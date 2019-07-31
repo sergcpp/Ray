@@ -2,10 +2,14 @@
 
 #include <cstring>
 
-Ray::Ref::TextureAtlas::TextureAtlas(int resx, int resy, int pages_count) : res_{ resx, resy }, res_f_{ (float)resx, (float)resy }, pages_count_(0) {
-    if (!Resize(pages_count)) {
+Ray::Ref::TextureAtlas::TextureAtlas(int resx, int resy, int initial_page_count)
+    : res_{ resx, resy }, res_f_{ (float)resx, (float)resy }, page_count_(0) {
+    if (!Resize(initial_page_count)) {
         throw std::runtime_error("TextureAtlas cannot be resized!");
     }
+
+    // Allocate once
+    temp_storage_.reserve(std::max(resx, resy));
 }
 
 int Ray::Ref::TextureAtlas::Allocate(const pixel_color8_t *data, const int _res[2], int pos[2]) {
@@ -19,10 +23,10 @@ int Ray::Ref::TextureAtlas::Allocate(const pixel_color8_t *data, const int _res[
         }
     };
 
-    for (int page_index = 0; page_index < pages_count_; page_index++) {
+    for (int page_index = 0; page_index < page_count_; page_index++) {
         int index = splitters_[page_index].Allocate(&res[0], &pos[0]);
         if (index != -1) {
-            Page &page = pages_[page_index];
+            PageData &page = pages_[page_index];
 
             write_page(page, pos[0] + 1, pos[1] + 1, _res[0], _res[1], &data[0]);
 
@@ -31,7 +35,8 @@ int Ray::Ref::TextureAtlas::Allocate(const pixel_color8_t *data, const int _res[
 
             write_page(page, pos[0] + 1, pos[1] + res[1] - 1, _res[0], 1, &data[0]);
 
-            std::vector<pixel_color8_t> vertical_border(res[1]);
+            temp_storage_.resize(res[1]);
+            PageData &vertical_border = temp_storage_;
             vertical_border[0] = data[(_res[1] - 1) * _res[0] + _res[0] - 1];
             for (int i = 0; i < _res[1]; i++) {
                 vertical_border[i + 1] = data[i * _res[0] + _res[0] - 1];
@@ -52,13 +57,13 @@ int Ray::Ref::TextureAtlas::Allocate(const pixel_color8_t *data, const int _res[
         }
     }
 
-    Resize(pages_count_ * 2);
+    Resize(page_count_ * 2);
     return Allocate(data, _res, pos);
 }
 
 bool Ray::Ref::TextureAtlas::Free(int page, const int pos[2]) {
-    if (page < 0 || page > pages_count_) return false;
-#ifndef NDEBUG
+    if (page < 0 || page > page_count_) return false;
+#ifndef NDEBUG // Fill region with zeros in debug
     int size[2];
     int index = splitters_[page].FindNode(&pos[0], &size[0]);
     if (index != -1) {
@@ -74,20 +79,19 @@ bool Ray::Ref::TextureAtlas::Free(int page, const int pos[2]) {
 #endif
 }
 
-bool Ray::Ref::TextureAtlas::Resize(int pages_count) {
+bool Ray::Ref::TextureAtlas::Resize(int new_page_count) {
     // if we shrink atlas, all redundant pages required to be empty
-    for (int i = pages_count; i < pages_count_; i++) {
+    for (int i = new_page_count; i < page_count_; i++) {
         if (!splitters_[i].empty()) return false;
     }
 
-    pages_.resize(pages_count);
-    for (Page &p : pages_) {
+    pages_.resize(new_page_count);
+    for (PageData &p : pages_) {
         p.resize(res_[0] * res_[1], { 0, 0, 0, 0 });
     }
 
-    splitters_.resize(pages_count, TextureSplitter{ &res_[0] });
-
-    pages_count_ = pages_count;
+    splitters_.resize(new_page_count, TextureSplitter{ &res_[0] });
+    page_count_ = new_page_count;
 
     return true;
 }
