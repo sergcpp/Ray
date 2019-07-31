@@ -22,7 +22,7 @@ int Ray::Ref::TextureAtlas::Allocate(const pixel_color8_t *data, const int _res[
     for (int page_index = 0; page_index < pages_count_; page_index++) {
         int index = splitters_[page_index].Allocate(&res[0], &pos[0]);
         if (index != -1) {
-            auto &page = pages_[page_index];
+            Page &page = pages_[page_index];
 
             write_page(page, pos[0] + 1, pos[1] + 1, _res[0], _res[1], &data[0]);
 
@@ -81,7 +81,7 @@ bool Ray::Ref::TextureAtlas::Resize(int pages_count) {
     }
 
     pages_.resize(pages_count);
-    for (auto &p : pages_) {
+    for (Page &p : pages_) {
         p.resize(res_[0] * res_[1], { 0, 0, 0, 0 });
     }
 

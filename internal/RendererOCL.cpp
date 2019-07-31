@@ -63,7 +63,7 @@ Ray::Ocl::Renderer::Renderer(int w, int h, int platform_index, int device_index)
     if (platform_index == -1) {
         platform_index = 0;
         for (size_t i = 0; i < platforms.size(); i++) {
-            auto s = platforms[i].getInfo<CL_PLATFORM_VENDOR>();
+            std::string s = platforms[i].getInfo<CL_PLATFORM_VENDOR>();
             if (s.find("NVIDIA") != std::string::npos || s.find("AMD") != std::string::npos) {
                 platform_index = (int)i;
                 break;
@@ -204,7 +204,7 @@ Ray::Ocl::Renderer::Renderer(int w, int h, int platform_index, int device_index)
         }
 
         if (error != CL_SUCCESS) {
-            auto build_log = program_.getBuildInfo<CL_PROGRAM_BUILD_LOG>(device_);
+            std::string build_log = program_.getBuildInfo<CL_PROGRAM_BUILD_LOG>(device_);
 #if defined(_MSC_VER)
             __debugbreak();
 #endif
@@ -456,7 +456,7 @@ void Ray::Ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
         loaded_halton_ = region.iteration;
     }
 
-    const auto &cam = s->cams_[s->current_cam()].cam;
+    const Ray::camera_t &cam = s->cams_[s->current_cam()].cam;
 
     pass_info_t pass_info;
 
@@ -719,10 +719,10 @@ bool Ray::Ocl::Renderer::kernel_TextureDebugPage(const cl::Image2DArray &texture
         return false;
     }
 
-    auto w = frame_buf.getImageInfo<CL_IMAGE_WIDTH>(),
-         h = frame_buf.getImageInfo<CL_IMAGE_HEIGHT>();
+    size_t w = frame_buf.getImageInfo<CL_IMAGE_WIDTH>(),
+           h = frame_buf.getImageInfo<CL_IMAGE_HEIGHT>();
 
-    return CL_SUCCESS == queue_.enqueueNDRangeKernel(texture_debug_page_kernel_, cl::NullRange, cl::NDRange { (size_t)w, (size_t)h });
+    return CL_SUCCESS == queue_.enqueueNDRangeKernel(texture_debug_page_kernel_, cl::NullRange, cl::NDRange { w, h });
 }
 
 bool Ray::Ocl::Renderer::kernel_ShadePrimary(const pass_info_t &pi, const cl::Buffer &halton,
@@ -1289,10 +1289,10 @@ bool Ray::Ocl::Renderer::kernel_MixIncremental(const cl::Image2D &fbuf1, const c
         return false;
     }
 
-    const auto w = fbuf1.getImageInfo<CL_IMAGE_WIDTH>(),
-               h = fbuf1.getImageInfo<CL_IMAGE_HEIGHT>();
+    const size_t w = fbuf1.getImageInfo<CL_IMAGE_WIDTH>(),
+                 h = fbuf1.getImageInfo<CL_IMAGE_HEIGHT>();
 
-    cl::NDRange global = { (size_t)w, (size_t)h };
+    cl::NDRange global = { w, h };
     cl::NDRange local = cl::NullRange;
 
     return queue_.enqueueNDRangeKernel(mix_incremental_kernel_, cl::NullRange, global, local) == CL_SUCCESS;
@@ -1606,7 +1606,7 @@ bool Ray::Ocl::Renderer::PerformRadixSort_GPU(const cl::Buffer &chunks, const cl
 
     size_t group_count = num / group_size;
 
-    const auto *_chunks1 = &chunks, *_chunks2 = &chunks2;
+    const cl::Buffer *_chunks1 = &chunks, *_chunks2 = &chunks2;
 
     for (int shift = 0; shift <= 28; shift += 4) {
         if (!kernel_InitCountTable(*_chunks1, (cl_int)num, (cl_int)group_size, shift, counters) ||
@@ -1673,18 +1673,18 @@ std::vector<Ray::Ocl::Platform> Ray::Ocl::Renderer::QueryPlatforms() {
     for (size_t i = 0; i < platforms.size(); i++) {
         out_platforms.emplace_back();
 
-        auto v = platforms[i].getInfo<CL_PLATFORM_VENDOR>();
-        auto n = platforms[i].getInfo<CL_PLATFORM_NAME>();
+        std::string v = platforms[i].getInfo<CL_PLATFORM_VENDOR>();
+        std::string n = platforms[i].getInfo<CL_PLATFORM_NAME>();
 
-        out_platforms.back().vendor = v;
-        out_platforms.back().name = n;
+        out_platforms.back().vendor = std::move(v);
+        out_platforms.back().name = std::move(n);
 
         std::vector<cl::Device> devices;
         platforms[i].getDevices(CL_DEVICE_TYPE_GPU, &devices);
 
         for (size_t j = 0; j < devices.size(); j++) {
-            auto dev_name = devices[j].getInfo<CL_DEVICE_NAME>();
-            out_platforms.back().devices.push_back({ dev_name });
+            std::string dev_name = devices[j].getInfo<CL_DEVICE_NAME>();
+            out_platforms.back().devices.push_back({ std::move(dev_name) });
         }
     }
 

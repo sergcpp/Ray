@@ -20,7 +20,7 @@ uint32_t Ray::SceneBase::AddCamera(const camera_desc_t &c) {
 }
 
 void Ray::SceneBase::GetCamera(uint32_t i, camera_desc_t &c) const {
-    const auto &cam = cams_[i].cam;
+    const camera_t &cam = cams_[i].cam;
     c.type = cam.type;
     c.gamma = cam.gamma;
     if (c.type != Geo) {
@@ -52,7 +52,7 @@ void Ray::SceneBase::GetCamera(uint32_t i, camera_desc_t &c) const {
 
 void Ray::SceneBase::SetCamera(uint32_t i, const camera_desc_t &c) {
     assert(i < (uint32_t)cams_.size());
-    auto &cam = cams_[i].cam;
+    camera_t &cam = cams_[i].cam;
     if (c.type != Geo) {
         ConstructCamera(c.type, c.filter, c.origin, c.fwd, c.fov, c.gamma, c.focus_distance, c.focus_factor, &cam);
     } else {
