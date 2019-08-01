@@ -66,7 +66,8 @@ struct derivatives_t {
     float ddn_dx, ddn_dy;
 };
 
-class TextureAtlas;
+class TextureAtlasTiled;
+using TextureAtlas = TextureAtlasTiled;
 
 // Generation of rays
 void GeneratePrimaryRays(int iteration, const camera_t &cam, const rect_t &r, int w, int h, const float *halton, aligned_vector<ray_packet_t> &out_rays);

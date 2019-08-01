@@ -14,6 +14,9 @@
 #pragma warning(disable : 4127) // conditional expression is constant
 
 namespace Ray {
+namespace Ref {
+    using TextureAtlas = TextureAtlasTiled;
+}
 namespace NS {
 
 const int ray_packet_layout_x[] = { 0, 1, 0, 1,
@@ -459,7 +462,7 @@ struct TraversalState {
 
     force_inline void select_near_child(const ray_packet_t<S> &r, const bvh_node_t &node) {
         const simd_fvec<S> dir_neg_fmask = r.d[node.prim_count >> 30] < 0.0f;
-        const auto mask1 = reinterpret_cast<const simd_ivec<S>&>(dir_neg_mask) & queue[index].mask;
+        const auto mask1 = reinterpret_cast<const simd_ivec<S>&>(dir_neg_fmask) & queue[index].mask;
         if (mask1.all_zeros()) {
             queue[index].cur = node.left_child;
         } else {
@@ -761,6 +764,17 @@ force_inline simd_fvec<S> construct_float(const simd_ivec<S> &_m) {
 
     simd_fvec<S>  f = reinterpret_cast<simd_fvec<S> &>(m);  // Range [1:2]
     return f - simd_fvec<S>{ 1.0f };                        // Range [0:1]
+}
+
+force_inline float fast_log2(float val) {
+    // From https://stackoverflow.com/questions/9411823/fast-log2float-x-implementation-c
+
+    union { float val; int32_t x; } u = { val };
+    register float log_2 = (float)(((u.x >> 23) & 255) - 128);
+    u.x &= ~(255 << 23);
+    u.x += 127 << 23;
+    log_2 += ((-0.34484843f) * u.val + 2.02466578f) * u.val - 0.67487759f;
+    return (log_2);
 }
 
 }
@@ -2352,7 +2366,7 @@ void Ray::NS::SampleAnisotropic(const Ref::TextureAtlas &atlas, const texture_t 
                  k = l2 / l1,
                  step[2] = { duv_dx[0], duv_dx[1] };
 
-    ITERATE(S, { lod[i] = log2(std::min(_duv_dy[0][i], _duv_dy[1][i])); })
+    ITERATE(S, { lod[i] = fast_log2(std::min(_duv_dy[0][i], _duv_dy[1][i])); })
 
     simd_fvec<S> _mask = l1 <= l2;
     where(_mask, k) = l1 / l2;
@@ -2361,7 +2375,7 @@ void Ray::NS::SampleAnisotropic(const Ref::TextureAtlas &atlas, const texture_t 
 
     ITERATE(S, {
         if (reinterpret_cast<const simd_ivec<S>&>(_mask)[i]) {
-            lod[i] = log2(std::min(_duv_dx[0][i], _duv_dx[1][i]));
+            lod[i] = fast_log2(std::min(_duv_dx[0][i], _duv_dx[1][i]));
         }
     })
 

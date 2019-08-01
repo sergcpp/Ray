@@ -18,7 +18,7 @@ Ray::Ocl::Scene::Scene(const cl::Context &context, const cl::CommandQueue &queue
     vtx_indices_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
     materials_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
     textures_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
-    texture_atlas_(context_, queue_, MAX_TEXTURE_SIZE, MAX_TEXTURE_SIZE),
+    texture_atlas_(context_, queue_, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE),
     lights_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
     li_indices_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_) {
     {   // add default environment map (white)

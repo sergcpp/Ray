@@ -90,6 +90,8 @@ const int MAX_MIP_LEVEL = 11;
 const int NUM_MIP_LEVELS = MAX_MIP_LEVEL + 1;
 const int MAX_TEXTURE_SIZE = (1 << NUM_MIP_LEVELS);
 
+const int TEXTURE_ATLAS_SIZE = 8192;
+
 struct texture_t {
     uint16_t size[2];
     uint8_t page[NUM_MIP_LEVELS];

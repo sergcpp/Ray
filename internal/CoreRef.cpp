@@ -240,6 +240,17 @@ force_inline simd_fvec4 rgbe_to_rgb(const pixel_color8_t &rgbe) {
                        to_norm_float(rgbe.b) * f, 1.0f };
 }
 
+force_inline float fast_log2(float val) {
+    // From https://stackoverflow.com/questions/9411823/fast-log2float-x-implementation-c
+
+    union { float val; int32_t x; } u = { val };
+    register float log_2 = (float)(((u.x >> 23) & 255) - 128);
+    u.x &= ~(255 << 23);
+    u.x += 127 << 23;
+    log_2 += ((-0.34484843f) * u.val + 2.02466578f) * u.val - 0.67487759f;
+    return (log_2);
+}
+
 
 }
 }
@@ -1369,11 +1380,11 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleAnisotropic(const TextureAtlas &atlas, cons
     simd_fvec2 step;
 
     if (l1 <= l2) {
-        lod = std::log2(std::min(_duv_dx[0], _duv_dx[1]));
+        lod = fast_log2(std::min(_duv_dx[0], _duv_dx[1]));
         k = l1 / l2;
         step = duv_dy;
     } else {
-        lod = std::log2(std::min(_duv_dy[0], _duv_dy[1]));
+        lod = fast_log2(std::min(_duv_dy[0], _duv_dy[1]));
         k = l2 / l1;
         step = duv_dx;
     }
@@ -1837,7 +1848,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
         if (pi.should_add_direct_light()) {
             col = ComputeDirectLighting(I, P, N, B, plane_N, mat->roughness, halton, hi, rand_hash, rand_hash2, rand_offset, rand_offset2,
                                         sc, node_index, light_node_index, tex_atlas);
-            
+
             if (pi.should_consider_albedo()) {
                 col *= simd_fvec3(&albedo[0]);
             }

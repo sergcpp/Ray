@@ -6,18 +6,18 @@
 namespace Ray {
 namespace Ocl {
 class TextureAtlas {
-    const cl::Context &context_;
-    const cl::CommandQueue &queue_;
+    const cl::Context       &context_;
+    const cl::CommandQueue  &queue_;
 
-    cl::Image2DArray atlas_;
+    cl::Image2DArray        atlas_;
 
-    const int res_[2];
-    int pages_count_;
+    const int               res_[2];
+    int                     page_count_;
 
     std::vector<TextureSplitter> splitters_;
 public:
     TextureAtlas(const cl::Context &context, const cl::CommandQueue &queue,
-                 int resx, int resy, int pages_count = 4);
+                 int resx, int resy, int page_count = 1);
 
     const cl::Image2DArray &atlas() const {
         return atlas_;
