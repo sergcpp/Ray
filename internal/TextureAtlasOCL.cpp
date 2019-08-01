@@ -2,7 +2,7 @@
 
 Ray::Ocl::TextureAtlas::TextureAtlas(const cl::Context &context, const cl::CommandQueue &queue,
                                      int resx, int resy, int pages_count)
-    : context_(context), queue_(queue), res_{ resx, resy }, pages_count_(0) {
+    : context_(context), queue_(queue), res_{ resx, resy }, page_count_(0) {
     if (!Resize(pages_count)) {
         throw std::runtime_error("TextureAtlas cannot be resized!");
     }
@@ -14,7 +14,7 @@ int Ray::Ocl::TextureAtlas::Allocate(const pixel_color8_t *data, const int _res[
 
     if (res[0] > res_[0] || res[1] > res_[1]) return -1;
 
-    for (int page = 0; page < pages_count_; page++) {
+    for (int page = 0; page < page_count_; page++) {
         int index = splitters_[page].Allocate(res, &pos[0]);
         if (index != -1) {
             cl_int error = queue_.enqueueWriteImage(atlas_, CL_TRUE, { (size_t)pos[0] + 1, (size_t)pos[1] + 1, (size_t)page }, { (size_t)_res[0], (size_t)_res[1], 1 }, 0, 0, data);
@@ -52,19 +52,19 @@ int Ray::Ocl::TextureAtlas::Allocate(const pixel_color8_t *data, const int _res[
         }
     }
 
-    Resize(pages_count_ * 2);
+    Resize(page_count_ * 2);
     return Allocate(data, _res, pos);
 }
 
 bool Ray::Ocl::TextureAtlas::Free(int page, const int pos[2]) {
-    if (page < 0 || page > pages_count_) return false;
+    if (page < 0 || page > page_count_) return false;
     // TODO: fill with black in debug
     return splitters_[page].Free(pos);
 }
 
 bool Ray::Ocl::TextureAtlas::Resize(int pages_count) {
     // if we shrink atlas, all redundant pages required to be empty
-    for (int i = pages_count; i < pages_count_; i++) {
+    for (int i = pages_count; i < page_count_; i++) {
         if (!splitters_[i].empty()) return false;
     }
 
@@ -73,15 +73,15 @@ bool Ray::Ocl::TextureAtlas::Resize(int pages_count) {
                                       pages_count, res_[0], res_[1], 0, 0, nullptr, &error);
     if (error != CL_SUCCESS) return false;
 
-    if (pages_count_) {
-        error = queue_.enqueueCopyImage(atlas_, new_atlas, {}, {}, { (size_t)res_[0], (size_t)res_[1], (size_t)pages_count_ });
+    if (page_count_) {
+        error = queue_.enqueueCopyImage(atlas_, new_atlas, {}, {}, { (size_t)res_[0], (size_t)res_[1], (size_t)page_count_ });
         if (error != CL_SUCCESS) return false;
     }
 
     atlas_ = std::move(new_atlas);
 
     splitters_.resize(pages_count, TextureSplitter{ res_ });
-    pages_count_ = pages_count;
+    page_count_ = pages_count;
 
     return true;
 }

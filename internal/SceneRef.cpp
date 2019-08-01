@@ -5,7 +5,7 @@
 
 #include "TextureUtilsRef.h"
 
-Ray::Ref::Scene::Scene(bool use_wide_bvh) : use_wide_bvh_(use_wide_bvh), texture_atlas_(MAX_TEXTURE_SIZE, MAX_TEXTURE_SIZE) {
+Ray::Ref::Scene::Scene(bool use_wide_bvh) : use_wide_bvh_(use_wide_bvh), texture_atlas_(TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE) {
     {   // add default environment map (white)
         static const pixel_color8_t default_env_map = { 255, 255, 255, 128 };
 
