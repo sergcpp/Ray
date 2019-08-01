@@ -2,6 +2,8 @@
 
 #include <cstring>
 
+#include <algorithm> // for std::max
+
 Ray::Ref::TextureAtlasLinear::TextureAtlasLinear(int resx, int resy, int initial_page_count)
     : res_{ resx, resy }, res_f_{ (float)resx, (float)resy }, page_count_(0) {
     if (!Resize(initial_page_count)) {
