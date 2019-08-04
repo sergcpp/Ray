@@ -6,7 +6,7 @@
 #include <random>
 
 void test_atlas() {
-    {   // Test linear atlas_tiled
+    {   // Test two types of atlas
         const int AtlasRes = 8192;
         Ray::Ref::TextureAtlasTiled atlas_linear = { AtlasRes, AtlasRes },
                                     atlas_tiled = { AtlasRes, AtlasRes };
