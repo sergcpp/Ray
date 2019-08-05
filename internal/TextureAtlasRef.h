@@ -15,6 +15,8 @@ class TextureAtlasLinear {
     std::vector<TextureSplitter> splitters_;
     std::vector<PageData>        pages_;
     std::vector<pixel_color8_t>  temp_storage_;
+
+    void WritePageData(int page, int posx, int posy, int sizex, int sizey, const pixel_color8_t *data);
 public:
     TextureAtlasLinear(int resx, int resy, int initial_page_count = 1);
 
@@ -47,6 +49,8 @@ class TextureAtlasTiled {
     std::vector<TextureSplitter> splitters_;
     std::vector<PageData>        pages_;
     std::vector<pixel_color8_t>  temp_storage_;
+
+    void WritePageData(int page, int posx, int posy, int sizex, int sizey, const pixel_color8_t *data);
 public:
     TextureAtlasTiled(int resx, int resy, int initial_page_count = 1);
 

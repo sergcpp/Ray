@@ -19,23 +19,15 @@ int Ray::Ref::TextureAtlasLinear::Allocate(const pixel_color8_t *data, const int
 
     if (res[0] > res_[0] || res[1] > res_[1]) return -1;
 
-    auto write_page = [this](PageData &page, int posx, int posy, int sizex, int sizey, const pixel_color8_t *data) {
-        for (int y = 0; y < sizey; y++) {
-            memcpy(&page[(posy + y) * res_[0] + posx], &data[y * sizex], sizex * sizeof(pixel_color8_t));
-        }
-    };
-
     for (int page_index = 0; page_index < page_count_; page_index++) {
         int index = splitters_[page_index].Allocate(&res[0], &pos[0]);
         if (index != -1) {
-            PageData &page = pages_[page_index];
-
-            write_page(page, pos[0] + 1, pos[1] + 1, _res[0], _res[1], &data[0]);
+            WritePageData(page_index, pos[0] + 1, pos[1] + 1, _res[0], _res[1], &data[0]);
 
             // add 1px border
-            write_page(page, pos[0] + 1, pos[1], _res[0], 1, &data[(_res[1] - 1) * _res[0]]);
+            WritePageData(page_index, pos[0] + 1, pos[1], _res[0], 1, &data[(_res[1] - 1) * _res[0]]);
 
-            write_page(page, pos[0] + 1, pos[1] + res[1] - 1, _res[0], 1, &data[0]);
+            WritePageData(page_index, pos[0] + 1, pos[1] + res[1] - 1, _res[0], 1, &data[0]);
 
             temp_storage_.resize(res[1]);
             PageData &vertical_border = temp_storage_;
@@ -45,7 +37,7 @@ int Ray::Ref::TextureAtlasLinear::Allocate(const pixel_color8_t *data, const int
             }
             vertical_border[res[1] - 1] = data[0 * _res[0] + _res[0] - 1];
 
-            write_page(page, pos[0], pos[1], 1, res[1], &vertical_border[0]);
+            WritePageData(page_index, pos[0], pos[1], 1, res[1], &vertical_border[0]);
 
             vertical_border[0] = data[(_res[1] - 1) * _res[0]];
             for (int i = 0; i < _res[1]; i++) {
@@ -53,7 +45,7 @@ int Ray::Ref::TextureAtlasLinear::Allocate(const pixel_color8_t *data, const int
             }
             vertical_border[res[1] - 1] = data[0];
 
-            write_page(page, pos[0] + res[0] - 1, pos[1], 1, res[1], &vertical_border[0]);
+            WritePageData(page_index, pos[0] + res[0] - 1, pos[1], 1, res[1], &vertical_border[0]);
 
             return page_index;
         }
@@ -98,6 +90,12 @@ bool Ray::Ref::TextureAtlasLinear::Resize(int new_page_count) {
     return true;
 }
 
+void Ray::Ref::TextureAtlasLinear::WritePageData(int page, int posx, int posy, int sizex, int sizey, const pixel_color8_t *data) {
+    for (int y = 0; y < sizey; y++) {
+        memcpy(&pages_[page][(posy + y) * res_[0] + posx], &data[y * sizex], sizex * sizeof(pixel_color8_t));
+    }
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 Ray::Ref::TextureAtlasTiled::TextureAtlasTiled(int resx, int resy, int initial_page_count)
@@ -119,31 +117,15 @@ int Ray::Ref::TextureAtlasTiled::Allocate(const pixel_color8_t *data, const int 
 
     if (res[0] > res_[0] || res[1] > res_[1]) return -1;
 
-    auto write_page = [this](PageData &page, int posx, int posy, int sizex, int sizey, const pixel_color8_t *data) {
-        for (int y = 0; y < sizey; y++) {
-            int tiley = (posy + y) / TileSize,
-                in_tiley = (posy + y) % TileSize;
-
-            for (int x = 0; x < sizex; x++) {
-                int tilex = (posx + x) / TileSize,
-                    in_tilex = (posx + x) % TileSize;
-
-                page[(tiley * res_in_tiles_[0] + tilex) * TileSize * TileSize + in_tiley * TileSize + in_tilex] = data[y * sizex + x];
-            }
-        }
-    };
-
     for (int page_index = 0; page_index < page_count_; page_index++) {
         int index = splitters_[page_index].Allocate(&res[0], &pos[0]);
         if (index != -1) {
-            PageData &page = pages_[page_index];
-
-            write_page(page, pos[0] + 1, pos[1] + 1, _res[0], _res[1], &data[0]);
+            WritePageData(page_index, pos[0] + 1, pos[1] + 1, _res[0], _res[1], &data[0]);
 
             // add 1px border
-            write_page(page, pos[0] + 1, pos[1], _res[0], 1, &data[(_res[1] - 1) * _res[0]]);
+            WritePageData(page_index, pos[0] + 1, pos[1], _res[0], 1, &data[(_res[1] - 1) * _res[0]]);
 
-            write_page(page, pos[0] + 1, pos[1] + res[1] - 1, _res[0], 1, &data[0]);
+            WritePageData(page_index, pos[0] + 1, pos[1] + res[1] - 1, _res[0], 1, &data[0]);
 
             temp_storage_.resize(res[1]);
             PageData &vertical_border = temp_storage_;
@@ -153,7 +135,7 @@ int Ray::Ref::TextureAtlasTiled::Allocate(const pixel_color8_t *data, const int 
             }
             vertical_border[res[1] - 1] = data[0 * _res[0] + _res[0] - 1];
 
-            write_page(page, pos[0], pos[1], 1, res[1], &vertical_border[0]);
+            WritePageData(page_index, pos[0], pos[1], 1, res[1], &vertical_border[0]);
 
             vertical_border[0] = data[(_res[1] - 1) * _res[0]];
             for (int i = 0; i < _res[1]; i++) {
@@ -161,7 +143,7 @@ int Ray::Ref::TextureAtlasTiled::Allocate(const pixel_color8_t *data, const int 
             }
             vertical_border[res[1] - 1] = data[0];
 
-            write_page(page, pos[0] + res[0] - 1, pos[1], 1, res[1], &vertical_border[0]);
+            WritePageData(page_index, pos[0] + res[0] - 1, pos[1], 1, res[1], &vertical_border[0]);
 
             return page_index;
         }
@@ -204,4 +186,18 @@ bool Ray::Ref::TextureAtlasTiled::Resize(int new_page_count) {
     page_count_ = new_page_count;
 
     return true;
+}
+
+void Ray::Ref::TextureAtlasTiled::WritePageData(int page, int posx, int posy, int sizex, int sizey, const pixel_color8_t *data) {
+    for (int y = 0; y < sizey; y++) {
+        int tiley = (posy + y) / TileSize,
+            in_tiley = (posy + y) % TileSize;
+
+        for (int x = 0; x < sizex; x++) {
+            int tilex = (posx + x) / TileSize,
+                in_tilex = (posx + x) % TileSize;
+
+            pages_[page][(tiley * res_in_tiles_[0] + tilex) * TileSize * TileSize + in_tiley * TileSize + in_tilex] = data[y * sizex + x];
+        }
+    }
 }
