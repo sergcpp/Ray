@@ -20,8 +20,7 @@ int Ray::Ocl::TextureAtlas::Allocate(const pixel_color8_t *data, const int _res[
             cl_int error = queue_.enqueueWriteImage(atlas_, CL_TRUE, { (size_t)pos[0] + 1, (size_t)pos[1] + 1, (size_t)page }, { (size_t)_res[0], (size_t)_res[1], 1 }, 0, 0, data);
             if (error != CL_SUCCESS) return -1;
 
-            {
-                // add 1px border
+            {   // add 1px border
                 error = queue_.enqueueWriteImage(atlas_, CL_TRUE, { (size_t)pos[0] + 1, (size_t)pos[1], (size_t)page }, { (size_t)_res[0], 1, 1 }, 0, 0, &data[(_res[1] - 1) * _res[0]]);
                 if (error != CL_SUCCESS) return -1;
 
