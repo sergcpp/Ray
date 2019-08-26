@@ -761,8 +761,8 @@ bool Ray::Ocl::Renderer::kernel_ShadePrimary(const pass_info_t &pi, const cl::Bu
     }
 
     const int border_x = (rect.w % trace_group_size_x_), border_y = (rect.h % trace_group_size_y_);
-    const int extend_x = border_x ? (trace_group_size_x_ - border_x) : 0,
-              extend_y =  border_y ? (trace_group_size_y_ - border_y) : 0;
+    const int extend_x = border_x ? (int(trace_group_size_x_) - border_x) : 0,
+              extend_y =  border_y ? (int(trace_group_size_y_) - border_y) : 0;
 
     const cl::NDRange global = { (size_t)(rect.w + extend_x), (size_t)(rect.h + extend_y) };
     const cl::NDRange local = { trace_group_size_x_, trace_group_size_y_ };
@@ -814,7 +814,7 @@ bool Ray::Ocl::Renderer::kernel_ShadeSecondary(const pass_info_t &pi, const cl::
     const size_t group_size = std::min((size_t)64, max_work_group_size_);
 
     const int remaining = (rays_count % group_size);
-    const int extend = remaining ? (group_size - remaining) : 0;
+    const int extend = remaining ? (int(group_size) - remaining) : 0;
 
     const cl::NDRange global = { (size_t)(rays_count + extend) };
     const cl::NDRange local = { group_size };
@@ -841,8 +841,8 @@ bool Ray::Ocl::Renderer::kernel_TracePrimaryRays(const cl::Buffer &rays, const R
     }
 
     const int border_x = (rect.w % trace_group_size_x_), border_y = (rect.h % trace_group_size_y_);
-    const int extend_x = border_x ? (trace_group_size_x_ - border_x) : 0,
-              extend_y =  border_y ? (trace_group_size_y_ - border_y) : 0;
+    const int extend_x = border_x ? (int(trace_group_size_x_) - border_x) : 0,
+              extend_y =  border_y ? (int(trace_group_size_y_) - border_y) : 0;
 
     const cl::NDRange global = { (size_t)(rect.w + extend_x), (size_t)(rect.h + extend_y) };
     const cl::NDRange local = { trace_group_size_x_, trace_group_size_y_ };
@@ -870,8 +870,8 @@ bool Ray::Ocl::Renderer::kernel_TracePrimaryRaysImg(const cl::Buffer &rays, cons
     }
 
     const int border_x = (rect.w % trace_group_size_x_), border_y = (rect.h % trace_group_size_y_);
-    const int extend_x = border_x ? (trace_group_size_x_ - border_x) : 0,
-              extend_y = border_y ? (trace_group_size_y_ - border_y) : 0;
+    const int extend_x = border_x ? (int(trace_group_size_x_) - border_x) : 0,
+              extend_y = border_y ? (int(trace_group_size_y_) - border_y) : 0;
 
     const cl::NDRange global = { (size_t)(rect.w + extend_x), (size_t)(rect.h + extend_y) };
     const cl::NDRange local = { trace_group_size_x_, trace_group_size_y_ };
@@ -900,7 +900,7 @@ bool Ray::Ocl::Renderer::kernel_TraceSecondaryRays(const cl::Buffer &rays, cl_in
     const size_t group_size = trace_group_size_x_ * trace_group_size_y_;
 
     const int remaining = (rays_count % group_size);
-    const int extend = remaining ? (group_size - remaining) : 0;
+    const int extend = remaining ? (int(group_size) - remaining) : 0;
 
     const cl::NDRange global = { (size_t)(rays_count + extend) };
     const cl::NDRange local = { (size_t)(group_size) };
@@ -929,7 +929,7 @@ bool Ray::Ocl::Renderer::kernel_TraceSecondaryRaysImg(const cl::Buffer &rays, cl
     const size_t group_size = trace_group_size_x_ * trace_group_size_y_;
 
     const int remaining = (rays_count % group_size);
-    const int extend = remaining ? (group_size - remaining) : 0;
+    const int extend = remaining ? (int(group_size) - remaining) : 0;
 
     const cl::NDRange global = { (size_t)(rays_count + extend) };
     const cl::NDRange local = { (size_t)(group_size) };
@@ -1053,7 +1053,7 @@ bool Ray::Ocl::Renderer::kernel_AddSegPartialSums(const cl::Buffer &flags, const
     const size_t group_size = std::min((size_t)32, max_work_group_size_);
 
     const int remaining = (count % group_size);
-    const int extend = remaining ? (group_size - remaining) : 0;
+    const int extend = remaining ? (int(group_size) - remaining) : 0;
 
     const cl::NDRange global = { (size_t)(count + extend) };
     const cl::NDRange local = { (size_t)(group_size) };
@@ -1129,7 +1129,7 @@ bool Ray::Ocl::Renderer::kernel_WriteSortedChunks(const cl::Buffer &chunks_in, c
     const size_t group_size = std::min((size_t)8, max_work_group_size_);
 
     const int remaining = (count % group_size);
-    const int extend = remaining ? (group_size - remaining) : 0;
+    const int extend = remaining ? (int(group_size) - remaining) : 0;
 
     return queue_.enqueueNDRangeKernel(write_sorted_chunks_kernel_, cl::NullRange, { (size_t)(count + extend) }, { group_size }) == CL_SUCCESS;
 }
