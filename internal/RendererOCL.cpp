@@ -49,11 +49,10 @@ const char *cl_src_postprocess =
 const char *cl_src_transform =
 #include "kernels/transform.cl"
     ;
-}
-}
 
-#define USE_IMG_BUFFERS 1
-#define UNIFORM_BUF_SIZE 128
+const size_t UniformBufSize = 128;
+}
+}
 
 Ray::Ocl::Renderer::Renderer(int w, int h, int platform_index, int device_index) : loaded_halton_(-1) {
     std::vector<cl::Platform> platforms;
@@ -323,7 +322,7 @@ Ray::Ocl::Renderer::Renderer(int w, int h, int platform_index, int device_index)
         secondary_rays_count_buf_ = cl::Buffer(context_, CL_MEM_READ_WRITE, sizeof(cl_int), nullptr, &error);
         if (error != CL_SUCCESS) throw std::runtime_error("Cannot create OpenCL renderer!");
 
-        uniform_buf_ = cl::Buffer(context_, CL_MEM_READ_ONLY, (size_t)UNIFORM_BUF_SIZE, nullptr, &error);
+        uniform_buf_ = cl::Buffer(context_, CL_MEM_READ_ONLY, UniformBufSize, nullptr, &error);
         if (error != CL_SUCCESS) throw std::runtime_error("Cannot create OpenCL renderer!");
 
         std::vector<pixel_color_t> color_table;
@@ -423,11 +422,7 @@ void Ray::Ocl::Renderer::Clear(const pixel_color_t &c) {
 }
 
 std::shared_ptr<Ray::SceneBase> Ray::Ocl::Renderer::CreateScene() {
-#if USE_IMG_BUFFERS
     return std::make_shared<Ocl::Scene>(context_, queue_, max_image_buffer_size_);
-#else
-    return std::make_shared<Ocl::Scene>(context_, queue_, 0);
-#endif
 }
 
 void Ray::Ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, RegionContext &region) {
@@ -481,11 +476,11 @@ void Ray::Ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
         time_after_ray_gen = std::chrono::high_resolution_clock::now();
 
         if (s->nodes_.img_buf().get() != nullptr) {
-            if (!kernel_TracePrimaryRaysImg(prim_rays_buf_, region.rect(), w_,
+            if (!kernel_TracePrimaryRaysImg(prim_rays_buf_, region.rect(), w_, h_,
                                             s->mesh_instances_.buf(), s->mi_indices_.buf(), s->meshes_.buf(), s->transforms_.buf(),
                                             s->nodes_.img_buf(), (cl_uint)macro_tree_root, s->tris_.buf(), s->tri_indices_.buf(), prim_inters_buf_)) return;
         } else {
-            if (!kernel_TracePrimaryRays(prim_rays_buf_, region.rect(), w_,
+            if (!kernel_TracePrimaryRays(prim_rays_buf_, region.rect(), w_, h_,
                                          s->mesh_instances_.buf(), s->mi_indices_.buf(), s->meshes_.buf(), s->transforms_.buf(),
                                          s->nodes_.buf(), (cl_uint)macro_tree_root, s->tris_.buf(), s->tri_indices_.buf(), prim_inters_buf_)) return;
         }
@@ -518,7 +513,7 @@ void Ray::Ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
     queue_.finish();
     const auto time_after_prim_trace = std::chrono::high_resolution_clock::now();
 
-    if (!kernel_ShadePrimary(pass_info, halton_seq_buf_, region.rect(), w_,
+    if (!kernel_ShadePrimary(pass_info, halton_seq_buf_, region.rect(), w_, h_,
                              prim_inters_buf_, prim_rays_buf_,
                              s->mesh_instances_.buf(), s->mi_indices_.buf(), s->meshes_.buf(),
                              s->transforms_.buf(), s->vtx_indices_.buf(), s->vertices_.buf(),
@@ -650,11 +645,11 @@ bool Ray::Ocl::Renderer::kernel_GeneratePrimaryRays(const cl_int iteration, cons
     
     cl_uint argc = 0;
     if (prim_rays_gen_kernel_.setArg(argc++, iteration) != CL_SUCCESS ||
-            prim_rays_gen_kernel_.setArg(argc++, uniform_buf_) != CL_SUCCESS ||
-            prim_rays_gen_kernel_.setArg(argc++, w) != CL_SUCCESS ||
-            prim_rays_gen_kernel_.setArg(argc++, h) != CL_SUCCESS ||
-            prim_rays_gen_kernel_.setArg(argc++, halton) != CL_SUCCESS ||
-            prim_rays_gen_kernel_.setArg(argc++, out_rays) != CL_SUCCESS) {
+        prim_rays_gen_kernel_.setArg(argc++, uniform_buf_) != CL_SUCCESS ||
+        prim_rays_gen_kernel_.setArg(argc++, w) != CL_SUCCESS ||
+        prim_rays_gen_kernel_.setArg(argc++, h) != CL_SUCCESS ||
+        prim_rays_gen_kernel_.setArg(argc++, halton) != CL_SUCCESS ||
+        prim_rays_gen_kernel_.setArg(argc++, out_rays) != CL_SUCCESS) {
         return false;
     }
     return CL_SUCCESS == queue_.enqueueNDRangeKernel(prim_rays_gen_kernel_, cl::NDRange{ (size_t)rect.x, (size_t)rect.y }, cl::NDRange{ (size_t)rect.w, (size_t)rect.h });
@@ -727,202 +722,141 @@ bool Ray::Ocl::Renderer::kernel_TextureDebugPage(const cl::Image2DArray &texture
 }
 
 bool Ray::Ocl::Renderer::kernel_ShadePrimary(const pass_info_t &pi, const cl::Buffer &halton,
-        const Ray::rect_t &rect, cl_int w,
-        const cl::Buffer &intersections, const cl::Buffer &rays,
-        const cl::Buffer &mesh_instances, const cl::Buffer &mi_indices, const cl::Buffer &meshes,
-        const cl::Buffer &transforms, const cl::Buffer &vtx_indices, const cl::Buffer &vertices,
-        const cl::Buffer &nodes, cl_uint node_index, const cl::Buffer &tris, const cl::Buffer &tri_indices,
-        const environment_t &env, const cl::Buffer &materials, const cl::Buffer &textures, const cl::Image2DArray &texture_atlas,
-        const cl::Buffer &lights, const cl::Buffer &li_indices, cl_uint light_node_index, const cl::Image2D &frame_buf,
-        const cl::Buffer &secondary_rays, const cl::Buffer &secondary_rays_count) {
+                                             const Ray::rect_t &rect, cl_int w, cl_int h,
+                                             const cl::Buffer &intersections, const cl::Buffer &rays,
+                                             const cl::Buffer &mesh_instances, const cl::Buffer &mi_indices, const cl::Buffer &meshes,
+                                             const cl::Buffer &transforms, const cl::Buffer &vtx_indices, const cl::Buffer &vertices,
+                                             const cl::Buffer &nodes, cl_uint node_index, const cl::Buffer &tris, const cl::Buffer &tri_indices,
+                                             const environment_t &env, const cl::Buffer &materials, const cl::Buffer &textures, const cl::Image2DArray &texture_atlas,
+                                             const cl::Buffer &lights, const cl::Buffer &li_indices, cl_uint light_node_index, const cl::Image2D &frame_buf,
+                                             const cl::Buffer &secondary_rays, const cl::Buffer &secondary_rays_count) {
     cl_uint argc = 0;
     if (shade_primary_kernel_.setArg(argc++, pi) != CL_SUCCESS ||
-            shade_primary_kernel_.setArg(argc++, halton) != CL_SUCCESS ||
-            shade_primary_kernel_.setArg(argc++, w) != CL_SUCCESS ||
-            shade_primary_kernel_.setArg(argc++, intersections) != CL_SUCCESS ||
-            shade_primary_kernel_.setArg(argc++, rays) != CL_SUCCESS ||
-            shade_primary_kernel_.setArg(argc++, mesh_instances) != CL_SUCCESS ||
-            shade_primary_kernel_.setArg(argc++, mi_indices) != CL_SUCCESS ||
-            shade_primary_kernel_.setArg(argc++, meshes) != CL_SUCCESS ||
-            shade_primary_kernel_.setArg(argc++, transforms) != CL_SUCCESS ||
-            shade_primary_kernel_.setArg(argc++, vtx_indices) != CL_SUCCESS ||
-            shade_primary_kernel_.setArg(argc++, vertices) != CL_SUCCESS ||
-            shade_primary_kernel_.setArg(argc++, nodes) != CL_SUCCESS ||
-            shade_primary_kernel_.setArg(argc++, node_index) != CL_SUCCESS ||
-            shade_primary_kernel_.setArg(argc++, tris) != CL_SUCCESS ||
-            shade_primary_kernel_.setArg(argc++, tri_indices) != CL_SUCCESS ||
-            shade_primary_kernel_.setArg(argc++, env) != CL_SUCCESS ||
-            shade_primary_kernel_.setArg(argc++, materials) != CL_SUCCESS ||
-            shade_primary_kernel_.setArg(argc++, textures) != CL_SUCCESS ||
-            shade_primary_kernel_.setArg(argc++, texture_atlas) != CL_SUCCESS ||
-            shade_primary_kernel_.setArg(argc++, lights) != CL_SUCCESS ||
-            shade_primary_kernel_.setArg(argc++, li_indices) != CL_SUCCESS ||
-            shade_primary_kernel_.setArg(argc++, light_node_index) != CL_SUCCESS ||
-            shade_primary_kernel_.setArg(argc++, frame_buf) != CL_SUCCESS ||
-            shade_primary_kernel_.setArg(argc++, secondary_rays) != CL_SUCCESS ||
-            shade_primary_kernel_.setArg(argc++, secondary_rays_count) != CL_SUCCESS) {
+        shade_primary_kernel_.setArg(argc++, halton) != CL_SUCCESS ||
+        shade_primary_kernel_.setArg(argc++, w) != CL_SUCCESS ||
+        shade_primary_kernel_.setArg(argc++, h) != CL_SUCCESS ||
+        shade_primary_kernel_.setArg(argc++, intersections) != CL_SUCCESS ||
+        shade_primary_kernel_.setArg(argc++, rays) != CL_SUCCESS ||
+        shade_primary_kernel_.setArg(argc++, mesh_instances) != CL_SUCCESS ||
+        shade_primary_kernel_.setArg(argc++, mi_indices) != CL_SUCCESS ||
+        shade_primary_kernel_.setArg(argc++, meshes) != CL_SUCCESS ||
+        shade_primary_kernel_.setArg(argc++, transforms) != CL_SUCCESS ||
+        shade_primary_kernel_.setArg(argc++, vtx_indices) != CL_SUCCESS ||
+        shade_primary_kernel_.setArg(argc++, vertices) != CL_SUCCESS ||
+        shade_primary_kernel_.setArg(argc++, nodes) != CL_SUCCESS ||
+        shade_primary_kernel_.setArg(argc++, node_index) != CL_SUCCESS ||
+        shade_primary_kernel_.setArg(argc++, tris) != CL_SUCCESS ||
+        shade_primary_kernel_.setArg(argc++, tri_indices) != CL_SUCCESS ||
+        shade_primary_kernel_.setArg(argc++, env) != CL_SUCCESS ||
+        shade_primary_kernel_.setArg(argc++, materials) != CL_SUCCESS ||
+        shade_primary_kernel_.setArg(argc++, textures) != CL_SUCCESS ||
+        shade_primary_kernel_.setArg(argc++, texture_atlas) != CL_SUCCESS ||
+        shade_primary_kernel_.setArg(argc++, lights) != CL_SUCCESS ||
+        shade_primary_kernel_.setArg(argc++, li_indices) != CL_SUCCESS ||
+        shade_primary_kernel_.setArg(argc++, light_node_index) != CL_SUCCESS ||
+        shade_primary_kernel_.setArg(argc++, frame_buf) != CL_SUCCESS ||
+        shade_primary_kernel_.setArg(argc++, secondary_rays) != CL_SUCCESS ||
+        shade_primary_kernel_.setArg(argc++, secondary_rays_count) != CL_SUCCESS) {
         return false;
     }
 
-    int border_x = rect.w % trace_group_size_x_, border_y = rect.h % trace_group_size_y_;
+    const int border_x = (rect.w % trace_group_size_x_), border_y = (rect.h % trace_group_size_y_);
+    const int extend_x = border_x ? (trace_group_size_x_ - border_x) : 0,
+              extend_y =  border_y ? (trace_group_size_y_ - border_y) : 0;
 
-    cl::NDRange global = { (size_t)(rect.w - border_x), (size_t)(rect.h - border_y) };
-    cl::NDRange local = { trace_group_size_x_, trace_group_size_y_ };
+    const cl::NDRange global = { (size_t)(rect.w + extend_x), (size_t)(rect.h + extend_y) };
+    const cl::NDRange local = { trace_group_size_x_, trace_group_size_y_ };
 
-    if (rect.w - border_x > 0 && rect.h - border_y > 0) {
-        if (queue_.enqueueNDRangeKernel(shade_primary_kernel_, { (size_t)rect.x, (size_t)rect.y }, global, local) != CL_SUCCESS) {
-            return false;
-        }
-    }
-
-    if (border_x) {
-        if (queue_.enqueueNDRangeKernel(shade_primary_kernel_, { (size_t)(rect.x + rect.w - border_x), (size_t)rect.y },
-                                                               { (size_t)(border_x), (size_t)(rect.h - border_y) },
-                                                               { (size_t)(border_x), trace_group_size_y_ }) != CL_SUCCESS) {
-            return false;
-        }
-    }
-
-    if (border_y) {
-        if (queue_.enqueueNDRangeKernel(shade_primary_kernel_, { (size_t)rect.x, (size_t)(rect.y + rect.h - border_y) },
-                                                               { (size_t)(rect.w - border_x), (size_t)(border_y) },
-                                                               { trace_group_size_x_, (size_t)(border_y) }) != CL_SUCCESS) {
-            return false;
-        }
-
-        if (border_x) {
-            if (queue_.enqueueNDRangeKernel(shade_primary_kernel_, { (size_t)(rect.x + rect.w - border_x), (size_t)(rect.y + rect.h - border_y) },
-                                                                   { (size_t)(border_x), (size_t)(border_y) }) != CL_SUCCESS) {
-                return false;
-            }
-        }
-    }
-
-    return true;
+    return queue_.enqueueNDRangeKernel(shade_primary_kernel_, { (size_t)rect.x, (size_t)rect.y }, global, local) == CL_SUCCESS;
 }
 
 bool Ray::Ocl::Renderer::kernel_ShadeSecondary(const pass_info_t &pi, const cl::Buffer &halton,
-        const cl::Buffer &intersections, const cl::Buffer &rays,
-        int rays_count, const cl::Buffer &mesh_instances, const cl::Buffer &mi_indices, const cl::Buffer &meshes,
-        const cl::Buffer &transforms, const cl::Buffer &vtx_indices, const cl::Buffer &vertices,
-        const cl::Buffer &nodes, cl_uint node_index, const cl::Buffer &tris, const cl::Buffer &tri_indices,
-        const environment_t &env, const cl::Buffer &materials, const cl::Buffer &textures, const cl::Image2DArray &texture_atlas,
-        const cl::Buffer &lights, const cl::Buffer &li_indices, cl_uint light_node_index,
-        const cl::Image2D &frame_buf, const cl::Image2D &frame_buf2,
-        const cl::Buffer &secondary_rays, const cl::Buffer &secondary_rays_count) {
+                                               const cl::Buffer &intersections, const cl::Buffer &rays, int rays_count,
+                                               const cl::Buffer &mesh_instances, const cl::Buffer &mi_indices, const cl::Buffer &meshes,
+                                               const cl::Buffer &transforms, const cl::Buffer &vtx_indices, const cl::Buffer &vertices,
+                                               const cl::Buffer &nodes, cl_uint node_index, const cl::Buffer &tris, const cl::Buffer &tri_indices,
+                                               const environment_t &env, const cl::Buffer &materials, const cl::Buffer &textures, const cl::Image2DArray &texture_atlas,
+                                               const cl::Buffer &lights, const cl::Buffer &li_indices, cl_uint light_node_index,
+                                               const cl::Image2D &frame_buf, const cl::Image2D &frame_buf2,
+                                               const cl::Buffer &secondary_rays, const cl::Buffer &secondary_rays_count) {
     if (rays_count == 0) return true;
 
     cl_uint argc = 0;
     if (shade_secondary_kernel_.setArg(argc++, pi) != CL_SUCCESS ||
-            shade_secondary_kernel_.setArg(argc++, halton) != CL_SUCCESS ||
-            shade_secondary_kernel_.setArg(argc++, intersections) != CL_SUCCESS ||
-            shade_secondary_kernel_.setArg(argc++, rays) != CL_SUCCESS ||
-            shade_secondary_kernel_.setArg(argc++, mesh_instances) != CL_SUCCESS ||
-            shade_secondary_kernel_.setArg(argc++, mi_indices) != CL_SUCCESS ||
-            shade_secondary_kernel_.setArg(argc++, meshes) != CL_SUCCESS ||
-            shade_secondary_kernel_.setArg(argc++, transforms) != CL_SUCCESS ||
-            shade_secondary_kernel_.setArg(argc++, vtx_indices) != CL_SUCCESS ||
-            shade_secondary_kernel_.setArg(argc++, vertices) != CL_SUCCESS ||
-            shade_secondary_kernel_.setArg(argc++, nodes) != CL_SUCCESS ||
-            shade_secondary_kernel_.setArg(argc++, node_index) != CL_SUCCESS ||
-            shade_secondary_kernel_.setArg(argc++, tris) != CL_SUCCESS ||
-            shade_secondary_kernel_.setArg(argc++, tri_indices) != CL_SUCCESS ||
-            shade_secondary_kernel_.setArg(argc++, env) != CL_SUCCESS ||
-            shade_secondary_kernel_.setArg(argc++, materials) != CL_SUCCESS ||
-            shade_secondary_kernel_.setArg(argc++, textures) != CL_SUCCESS ||
-            shade_secondary_kernel_.setArg(argc++, texture_atlas) != CL_SUCCESS ||
-            shade_secondary_kernel_.setArg(argc++, lights) != CL_SUCCESS ||
-            shade_secondary_kernel_.setArg(argc++, li_indices) != CL_SUCCESS ||
-            shade_secondary_kernel_.setArg(argc++, light_node_index) != CL_SUCCESS ||
-            shade_secondary_kernel_.setArg(argc++, frame_buf) != CL_SUCCESS ||
-            shade_secondary_kernel_.setArg(argc++, frame_buf2) != CL_SUCCESS ||
-            shade_secondary_kernel_.setArg(argc++, secondary_rays) != CL_SUCCESS ||
-            shade_secondary_kernel_.setArg(argc++, secondary_rays_count) != CL_SUCCESS) {
+        shade_secondary_kernel_.setArg(argc++, halton) != CL_SUCCESS ||
+        shade_secondary_kernel_.setArg(argc++, intersections) != CL_SUCCESS ||
+        shade_secondary_kernel_.setArg(argc++, rays) != CL_SUCCESS ||
+        shade_secondary_kernel_.setArg(argc++, rays_count) != CL_SUCCESS ||
+        shade_secondary_kernel_.setArg(argc++, mesh_instances) != CL_SUCCESS ||
+        shade_secondary_kernel_.setArg(argc++, mi_indices) != CL_SUCCESS ||
+        shade_secondary_kernel_.setArg(argc++, meshes) != CL_SUCCESS ||
+        shade_secondary_kernel_.setArg(argc++, transforms) != CL_SUCCESS ||
+        shade_secondary_kernel_.setArg(argc++, vtx_indices) != CL_SUCCESS ||
+        shade_secondary_kernel_.setArg(argc++, vertices) != CL_SUCCESS ||
+        shade_secondary_kernel_.setArg(argc++, nodes) != CL_SUCCESS ||
+        shade_secondary_kernel_.setArg(argc++, node_index) != CL_SUCCESS ||
+        shade_secondary_kernel_.setArg(argc++, tris) != CL_SUCCESS ||
+        shade_secondary_kernel_.setArg(argc++, tri_indices) != CL_SUCCESS ||
+        shade_secondary_kernel_.setArg(argc++, env) != CL_SUCCESS ||
+        shade_secondary_kernel_.setArg(argc++, materials) != CL_SUCCESS ||
+        shade_secondary_kernel_.setArg(argc++, textures) != CL_SUCCESS ||
+        shade_secondary_kernel_.setArg(argc++, texture_atlas) != CL_SUCCESS ||
+        shade_secondary_kernel_.setArg(argc++, lights) != CL_SUCCESS ||
+        shade_secondary_kernel_.setArg(argc++, li_indices) != CL_SUCCESS ||
+        shade_secondary_kernel_.setArg(argc++, light_node_index) != CL_SUCCESS ||
+        shade_secondary_kernel_.setArg(argc++, frame_buf) != CL_SUCCESS ||
+        shade_secondary_kernel_.setArg(argc++, frame_buf2) != CL_SUCCESS ||
+        shade_secondary_kernel_.setArg(argc++, secondary_rays) != CL_SUCCESS ||
+        shade_secondary_kernel_.setArg(argc++, secondary_rays_count) != CL_SUCCESS) {
         return false;
     }
 
-    size_t group_size = std::min((size_t)64, max_work_group_size_);
+    const size_t group_size = std::min((size_t)64, max_work_group_size_);
 
-    int remaining = rays_count % group_size;
+    const int remaining = (rays_count % group_size);
+    const int extend = remaining ? (group_size - remaining) : 0;
 
-    cl::NDRange global = { (size_t)(rays_count - remaining) };
-    cl::NDRange local = { group_size };
+    const cl::NDRange global = { (size_t)(rays_count + extend) };
+    const cl::NDRange local = { group_size };
 
-    if (rays_count - remaining > 0) {
-        if (queue_.enqueueNDRangeKernel(shade_secondary_kernel_, cl::NullRange, global, local) != CL_SUCCESS) {
-            return false;
-        }
-    }
-
-    if (remaining) {
-        if (queue_.enqueueNDRangeKernel(shade_secondary_kernel_, { (size_t)(rays_count - remaining) }, { (size_t)(remaining) }) != CL_SUCCESS) {
-            return false;
-        }
-    }
-
-    return true;
+    return queue_.enqueueNDRangeKernel(shade_secondary_kernel_, cl::NullRange, global, local) == CL_SUCCESS;
 }
 
-bool Ray::Ocl::Renderer::kernel_TracePrimaryRays(const cl::Buffer &rays, const Ray::rect_t &rect, cl_int w, const cl::Buffer &mesh_instances, const cl::Buffer &mi_indices, const cl::Buffer &meshes, const cl::Buffer &transforms,
+bool Ray::Ocl::Renderer::kernel_TracePrimaryRays(const cl::Buffer &rays, const Ray::rect_t &rect, cl_int w, cl_int h, const cl::Buffer &mesh_instances, const cl::Buffer &mi_indices, const cl::Buffer &meshes, const cl::Buffer &transforms,
         const cl::Buffer &nodes, cl_uint node_index, const cl::Buffer &tris, const cl::Buffer &tri_indices, const cl::Buffer &intersections) {
     cl_uint argc = 0;
     if (trace_primary_rays_kernel_.setArg(argc++, rays) != CL_SUCCESS ||
-            trace_primary_rays_kernel_.setArg(argc++, w) != CL_SUCCESS ||
-            trace_primary_rays_kernel_.setArg(argc++, mesh_instances) != CL_SUCCESS ||
-            trace_primary_rays_kernel_.setArg(argc++, mi_indices) != CL_SUCCESS ||
-            trace_primary_rays_kernel_.setArg(argc++, meshes) != CL_SUCCESS ||
-            trace_primary_rays_kernel_.setArg(argc++, transforms) != CL_SUCCESS ||
-            trace_primary_rays_kernel_.setArg(argc++, nodes) != CL_SUCCESS ||
-            trace_primary_rays_kernel_.setArg(argc++, node_index) != CL_SUCCESS ||
-            trace_primary_rays_kernel_.setArg(argc++, tris) != CL_SUCCESS ||
-            trace_primary_rays_kernel_.setArg(argc++, tri_indices) != CL_SUCCESS ||
-            trace_primary_rays_kernel_.setArg(argc++, intersections) != CL_SUCCESS) {
+        trace_primary_rays_kernel_.setArg(argc++, w) != CL_SUCCESS ||
+        trace_primary_rays_kernel_.setArg(argc++, h) != CL_SUCCESS ||
+        trace_primary_rays_kernel_.setArg(argc++, mesh_instances) != CL_SUCCESS ||
+        trace_primary_rays_kernel_.setArg(argc++, mi_indices) != CL_SUCCESS ||
+        trace_primary_rays_kernel_.setArg(argc++, meshes) != CL_SUCCESS ||
+        trace_primary_rays_kernel_.setArg(argc++, transforms) != CL_SUCCESS ||
+        trace_primary_rays_kernel_.setArg(argc++, nodes) != CL_SUCCESS ||
+        trace_primary_rays_kernel_.setArg(argc++, node_index) != CL_SUCCESS ||
+        trace_primary_rays_kernel_.setArg(argc++, tris) != CL_SUCCESS ||
+        trace_primary_rays_kernel_.setArg(argc++, tri_indices) != CL_SUCCESS ||
+        trace_primary_rays_kernel_.setArg(argc++, intersections) != CL_SUCCESS) {
         return false;
     }
 
-    int border_x = rect.w % trace_group_size_x_, border_y = rect.h % trace_group_size_y_;
+    const int border_x = (rect.w % trace_group_size_x_), border_y = (rect.h % trace_group_size_y_);
+    const int extend_x = border_x ? (trace_group_size_x_ - border_x) : 0,
+              extend_y =  border_y ? (trace_group_size_y_ - border_y) : 0;
 
-    cl::NDRange global = { (size_t)(rect.w - border_x), (size_t)(rect.h - border_y) };
-    cl::NDRange local = { trace_group_size_x_, trace_group_size_y_ };
+    const cl::NDRange global = { (size_t)(rect.w + extend_x), (size_t)(rect.h + extend_y) };
+    const cl::NDRange local = { trace_group_size_x_, trace_group_size_y_ };
 
-    if (rect.w - border_x > 0 && rect.h - border_y > 0) {
-        if (queue_.enqueueNDRangeKernel(trace_primary_rays_kernel_, { (size_t)rect.x, (size_t)rect.y }, global, local) != CL_SUCCESS) {
-            return false;
-        }
-    }
-
-    if (border_x) {
-        if (queue_.enqueueNDRangeKernel(trace_primary_rays_kernel_, { (size_t)(rect.x + rect.w - border_x), (size_t)rect.y },
-                                                                    { (size_t)(border_x), (size_t)(rect.h - border_y) },
-                                                                    { (size_t)(border_x), trace_group_size_y_ }) != CL_SUCCESS) {
-            return false;
-        }
-    }
-
-    if (border_y) {
-        if (queue_.enqueueNDRangeKernel(trace_primary_rays_kernel_, { (size_t)rect.x, (size_t)(rect.y + rect.h - border_y) },
-                                                                    { (size_t)(rect.w - border_x), (size_t)(border_y) },
-                                                                    { trace_group_size_x_, (size_t)(border_y) }) != CL_SUCCESS) {
-            return false;
-        }
-
-        if (border_x) {
-            if (queue_.enqueueNDRangeKernel(trace_primary_rays_kernel_, { (size_t)(rect.x + rect.w - border_x), (size_t)(rect.y + rect.h - border_y) },
-                                                                        { (size_t)(border_x), (size_t)(border_y) }) != CL_SUCCESS) {
-                return false;
-            }
-        }
-    }
-
-    return true;
+    return queue_.enqueueNDRangeKernel(trace_primary_rays_kernel_, { (size_t)rect.x, (size_t)rect.y }, global, local) == CL_SUCCESS;
 }
 
-bool Ray::Ocl::Renderer::kernel_TracePrimaryRaysImg(const cl::Buffer &rays, const Ray::rect_t &rect, cl_int w,
+bool Ray::Ocl::Renderer::kernel_TracePrimaryRaysImg(const cl::Buffer &rays, const Ray::rect_t &rect, cl_int w, cl_int h,
                                                     const cl::Buffer &mesh_instances, const cl::Buffer &mi_indices, const cl::Buffer &meshes, const cl::Buffer &transforms,
                                                     const cl::Image1DBuffer &nodes, cl_uint node_index, const cl::Buffer &tris, const cl::Buffer &tri_indices, const cl::Buffer &intersections) {
     cl_uint argc = 0;
     if (trace_primary_rays_img_kernel_.setArg(argc++, rays) != CL_SUCCESS ||
         trace_primary_rays_img_kernel_.setArg(argc++, w) != CL_SUCCESS ||
+        trace_primary_rays_img_kernel_.setArg(argc++, h) != CL_SUCCESS ||
         trace_primary_rays_img_kernel_.setArg(argc++, mesh_instances) != CL_SUCCESS ||
         trace_primary_rays_img_kernel_.setArg(argc++, mi_indices) != CL_SUCCESS ||
         trace_primary_rays_img_kernel_.setArg(argc++, meshes) != CL_SUCCESS ||
@@ -935,48 +869,22 @@ bool Ray::Ocl::Renderer::kernel_TracePrimaryRaysImg(const cl::Buffer &rays, cons
         return false;
     }
 
-    int border_x = rect.w % trace_group_size_x_, border_y = rect.h % trace_group_size_y_;
+    const int border_x = (rect.w % trace_group_size_x_), border_y = (rect.h % trace_group_size_y_);
+    const int extend_x = border_x ? (trace_group_size_x_ - border_x) : 0,
+              extend_y = border_y ? (trace_group_size_y_ - border_y) : 0;
 
-    cl::NDRange global = { (size_t)(rect.w - border_x), (size_t)(rect.h - border_y) };
-    cl::NDRange local = { trace_group_size_x_, trace_group_size_y_ };
+    const cl::NDRange global = { (size_t)(rect.w + extend_x), (size_t)(rect.h + extend_y) };
+    const cl::NDRange local = { trace_group_size_x_, trace_group_size_y_ };
 
-    if (rect.w - border_x > 0 && rect.h - border_y > 0) {
-        if (queue_.enqueueNDRangeKernel(trace_primary_rays_img_kernel_, { (size_t)rect.x, (size_t)rect.y }, global, local) != CL_SUCCESS) {
-            return false;
-        }
-    }
-
-    if (border_x) {
-        if (queue_.enqueueNDRangeKernel(trace_primary_rays_img_kernel_, { (size_t)(rect.x + rect.w - border_x), (size_t)rect.y },
-                                                                        { (size_t)(border_x), (size_t)(rect.h - border_y) },
-                                                                        { (size_t)(border_x), trace_group_size_y_ }) != CL_SUCCESS) {
-            return false;
-        }
-    }
-
-    if (border_y) {
-        if (queue_.enqueueNDRangeKernel(trace_primary_rays_img_kernel_, { (size_t)rect.x, (size_t)(rect.y + rect.h - border_y) },
-                                                                        { (size_t)(rect.w - border_x), (size_t)(border_y) },
-                                                                        { trace_group_size_x_, (size_t)(border_y) } ) != CL_SUCCESS) {
-            return false;
-        }
-
-        if (border_x) {
-            if (queue_.enqueueNDRangeKernel(trace_primary_rays_img_kernel_, { (size_t)(rect.x + rect.w - border_x), (size_t)(rect.y + rect.h - border_y) },
-                                                                            { (size_t)(border_x), (size_t)(border_y) }) != CL_SUCCESS) {
-                return false;
-            }
-        }
-    }
-
-    return true;
+    return queue_.enqueueNDRangeKernel(trace_primary_rays_img_kernel_, { (size_t)rect.x, (size_t)rect.y }, global, local) == CL_SUCCESS;
 }
 
 bool Ray::Ocl::Renderer::kernel_TraceSecondaryRays(const cl::Buffer &rays, cl_int rays_count,
-        const cl::Buffer &mesh_instances, const cl::Buffer &mi_indices, const cl::Buffer &meshes, const cl::Buffer &transforms,
-        const cl::Buffer &nodes, cl_uint node_index, const cl::Buffer &tris, const cl::Buffer &tri_indices, const cl::Buffer &intersections) {
+                                                   const cl::Buffer &mesh_instances, const cl::Buffer &mi_indices, const cl::Buffer &meshes, const cl::Buffer &transforms,
+                                                   const cl::Buffer &nodes, cl_uint node_index, const cl::Buffer &tris, const cl::Buffer &tri_indices, const cl::Buffer &intersections) {
     cl_uint argc = 0;
     if (trace_secondary_rays_kernel_.setArg(argc++, rays) != CL_SUCCESS ||
+        trace_secondary_rays_kernel_.setArg(argc++, rays_count) != CL_SUCCESS ||
         trace_secondary_rays_kernel_.setArg(argc++, mesh_instances) != CL_SUCCESS ||
         trace_secondary_rays_kernel_.setArg(argc++, mi_indices) != CL_SUCCESS ||
         trace_secondary_rays_kernel_.setArg(argc++, meshes) != CL_SUCCESS ||
@@ -989,26 +897,15 @@ bool Ray::Ocl::Renderer::kernel_TraceSecondaryRays(const cl::Buffer &rays, cl_in
         return false;
     }
 
-    size_t group_size = trace_group_size_x_ * trace_group_size_y_;
+    const size_t group_size = trace_group_size_x_ * trace_group_size_y_;
 
-    int remaining = rays_count % group_size;
+    const int remaining = (rays_count % group_size);
+    const int extend = remaining ? (group_size - remaining) : 0;
 
-    cl::NDRange global = { (size_t)(rays_count - remaining) };
-    cl::NDRange local = { (size_t)(group_size) };
+    const cl::NDRange global = { (size_t)(rays_count + extend) };
+    const cl::NDRange local = { (size_t)(group_size) };
 
-    if (rays_count - remaining > 0) {
-        if (queue_.enqueueNDRangeKernel(trace_secondary_rays_kernel_, cl::NullRange, global, local) != CL_SUCCESS) {
-            return false;
-        }
-    }
-
-    if (remaining) {
-        if (queue_.enqueueNDRangeKernel(trace_secondary_rays_kernel_, { (size_t)(rays_count - remaining) }, { (size_t)(remaining) }) != CL_SUCCESS) {
-            return false;
-        }
-    }
-
-    return true;
+    return queue_.enqueueNDRangeKernel(trace_secondary_rays_kernel_, cl::NullRange, global, local) == CL_SUCCESS;
 }
 
 bool Ray::Ocl::Renderer::kernel_TraceSecondaryRaysImg(const cl::Buffer &rays, cl_int rays_count,
@@ -1016,6 +913,7 @@ bool Ray::Ocl::Renderer::kernel_TraceSecondaryRaysImg(const cl::Buffer &rays, cl
                                                       const cl::Image1DBuffer &nodes, cl_uint node_index, const cl::Buffer &tris, const cl::Buffer &tri_indices, const cl::Buffer &intersections) {
     cl_uint argc = 0;
     if (trace_secondary_rays_img_kernel_.setArg(argc++, rays) != CL_SUCCESS ||
+        trace_secondary_rays_img_kernel_.setArg(argc++, rays_count) != CL_SUCCESS ||
         trace_secondary_rays_img_kernel_.setArg(argc++, mesh_instances) != CL_SUCCESS ||
         trace_secondary_rays_img_kernel_.setArg(argc++, mi_indices) != CL_SUCCESS ||
         trace_secondary_rays_img_kernel_.setArg(argc++, meshes) != CL_SUCCESS ||
@@ -1028,26 +926,15 @@ bool Ray::Ocl::Renderer::kernel_TraceSecondaryRaysImg(const cl::Buffer &rays, cl
         return false;
     }
 
-    size_t group_size = trace_group_size_x_ * trace_group_size_y_;
+    const size_t group_size = trace_group_size_x_ * trace_group_size_y_;
 
-    int remaining = rays_count % group_size;
+    const int remaining = (rays_count % group_size);
+    const int extend = remaining ? (group_size - remaining) : 0;
 
-    cl::NDRange global = { (size_t)(rays_count - remaining) };
-    cl::NDRange local = { (size_t)(group_size) };
+    const cl::NDRange global = { (size_t)(rays_count + extend) };
+    const cl::NDRange local = { (size_t)(group_size) };
 
-    if (rays_count - remaining > 0) {
-        if (queue_.enqueueNDRangeKernel(trace_secondary_rays_img_kernel_, cl::NullRange, global, local) != CL_SUCCESS) {
-            return false;
-        }
-    }
-
-    if (remaining) {
-        if (queue_.enqueueNDRangeKernel(trace_secondary_rays_img_kernel_, { (size_t)(rays_count - remaining) }, { (size_t)(remaining) }) != CL_SUCCESS) {
-            return false;
-        }
-    }
-
-    return true;
+    return queue_.enqueueNDRangeKernel(trace_secondary_rays_img_kernel_, cl::NullRange, global, local) == CL_SUCCESS;
 }
 
 bool Ray::Ocl::Renderer::kernel_ComputeRayHashes(const cl::Buffer &rays, cl_int rays_count, cl_float3 root_min, cl_float3 cell_size, const cl::Buffer &out_hashes) {
@@ -1059,7 +946,7 @@ bool Ray::Ocl::Renderer::kernel_ComputeRayHashes(const cl::Buffer &rays, cl_int 
         return false;
     }
 
-    cl::NDRange global = { (size_t)(rays_count) };
+    const cl::NDRange global = { (size_t)(rays_count) };
 
     return queue_.enqueueNDRangeKernel(compute_ray_hashes_kernel_, cl::NullRange, global, cl::NullRange) == CL_SUCCESS;
 }
@@ -1071,8 +958,8 @@ bool Ray::Ocl::Renderer::kernel_SetHeadFlags(const cl::Buffer &hashes, cl_int ha
         return false;
     }
 
-    cl::NDRange global = { (size_t)hashes_count };
-    cl::NDRange local = cl::NullRange;
+    const cl::NDRange global = { (size_t)hashes_count };
+    const cl::NDRange local = cl::NullRange;
 
     return queue_.enqueueNDRangeKernel(set_head_flags_kernel_, cl::NullRange, global, local) == CL_SUCCESS;
 }
@@ -1088,8 +975,8 @@ bool Ray::Ocl::Renderer::kernel_ExclusiveScan(const cl::Buffer &values, cl_int c
         return false;
     }
 
-    cl::NDRange global = { (size_t)(count) };
-    cl::NDRange local = { scan_portion_ };
+    const cl::NDRange global = { (size_t)(count) };
+    const cl::NDRange local = { scan_portion_ };
 
     return queue_.enqueueNDRangeKernel(excl_scan_kernel_, cl::NullRange, global, local) == CL_SUCCESS;
 }
@@ -1102,8 +989,8 @@ bool Ray::Ocl::Renderer::kernel_InclusiveScan(const cl::Buffer &values, cl_int c
         return false;
     }
 
-    cl::NDRange global = { (size_t)(count) };
-    cl::NDRange local = { scan_portion_ };
+    const cl::NDRange global = { (size_t)(count) };
+    const cl::NDRange local = { scan_portion_ };
 
     return queue_.enqueueNDRangeKernel(incl_scan_kernel_, cl::NullRange, global, local) == CL_SUCCESS;
 }
@@ -1117,8 +1004,8 @@ bool Ray::Ocl::Renderer::kernel_ExclusiveSegScan(const cl::Buffer &values, const
         return false;
     }
 
-    cl::NDRange global = { (size_t)(count) };
-    cl::NDRange local = { seg_scan_portion_ };
+    const cl::NDRange global = { (size_t)(count) };
+    const cl::NDRange local = { seg_scan_portion_ };
 
     return queue_.enqueueNDRangeKernel(excl_seg_scan_kernel_, cl::NullRange, global, local) == CL_SUCCESS;
 }
@@ -1134,8 +1021,8 @@ bool Ray::Ocl::Renderer::kernel_InclusiveSegScan(const cl::Buffer &values, const
         return false;
     }
 
-    cl::NDRange global = { (size_t)(count) };
-    cl::NDRange local = { seg_scan_portion_ };
+    const cl::NDRange global = { (size_t)(count) };
+    const cl::NDRange local = { seg_scan_portion_ };
 
     return queue_.enqueueNDRangeKernel(incl_seg_scan_kernel_, cl::NullRange, global, local) == CL_SUCCESS;
 }
@@ -1147,8 +1034,8 @@ bool Ray::Ocl::Renderer::kernel_AddPartialSums(const cl::Buffer &values, cl_int 
         return false;
     }
 
-    cl::NDRange global = { (size_t)(count) };
-    cl::NDRange local = { scan_portion_ };
+    const cl::NDRange global = { (size_t)(count) };
+    const cl::NDRange local = { scan_portion_ };
 
     return queue_.enqueueNDRangeKernel(add_partial_sums_kernel_, cl::NullRange, global, local) == CL_SUCCESS;
 }
@@ -1158,30 +1045,20 @@ bool Ray::Ocl::Renderer::kernel_AddSegPartialSums(const cl::Buffer &flags, const
     if (add_seg_partial_sums_kernel_.setArg(argc++, flags) != CL_SUCCESS ||
         add_seg_partial_sums_kernel_.setArg(argc++, values) != CL_SUCCESS ||
         add_seg_partial_sums_kernel_.setArg(argc++, partial_sums) != CL_SUCCESS ||
-        add_seg_partial_sums_kernel_.setArg(argc++, _group_size) != CL_SUCCESS) {
+        add_seg_partial_sums_kernel_.setArg(argc++, _group_size) != CL_SUCCESS ||
+        add_seg_partial_sums_kernel_.setArg(argc++, count) != CL_SUCCESS) {
         return false;
     }
 
-    size_t group_size = std::min((size_t)32, max_work_group_size_);
+    const size_t group_size = std::min((size_t)32, max_work_group_size_);
 
-    int remaining = count % group_size;
+    const int remaining = (count % group_size);
+    const int extend = remaining ? (group_size - remaining) : 0;
 
-    cl::NDRange global = { (size_t)(count - remaining) };
-    cl::NDRange local = { (size_t)(group_size) };
+    const cl::NDRange global = { (size_t)(count + extend) };
+    const cl::NDRange local = { (size_t)(group_size) };
 
-    if (count - remaining > 0) {
-        if (queue_.enqueueNDRangeKernel(add_seg_partial_sums_kernel_, cl::NullRange, global, local) != CL_SUCCESS) {
-            return false;
-        }
-    }
-
-    if (remaining) {
-        if (queue_.enqueueNDRangeKernel(add_seg_partial_sums_kernel_, { (size_t)(count - remaining) }, { (size_t)(remaining) }) != CL_SUCCESS) {
-            return false;
-        }
-    }
-
-    return true;
+    return queue_.enqueueNDRangeKernel(add_seg_partial_sums_kernel_, cl::NullRange, global, local) == CL_SUCCESS;
 }
 
 bool Ray::Ocl::Renderer::kernel_InitChunkHashAndBase(const cl::Buffer &chunks, cl_int count, const cl::Buffer &hash_values, const cl::Buffer &head_flags, const cl::Buffer &scan_values) {
@@ -1193,7 +1070,7 @@ bool Ray::Ocl::Renderer::kernel_InitChunkHashAndBase(const cl::Buffer &chunks, c
         return false;
     }
 
-    cl::NDRange global = { (size_t)(count) };
+    const cl::NDRange global = { (size_t)(count) };
 
     return queue_.enqueueNDRangeKernel(init_chunk_hash_and_base_kernel_, cl::NullRange, global, cl::NullRange) == CL_SUCCESS;
 }
@@ -1205,7 +1082,7 @@ bool Ray::Ocl::Renderer::kernel_InitChunkSize(const cl::Buffer &chunks, cl_int c
         return false;
     }
 
-    cl::NDRange global = { (size_t)count };
+    const cl::NDRange global = { (size_t)count };
 
     return queue_.enqueueNDRangeKernel(init_chunk_size_kernel_, cl::NullRange, global, cl::NullRange) == CL_SUCCESS;
 }
@@ -1219,7 +1096,7 @@ bool Ray::Ocl::Renderer::kernel_InitSkeletonAndHeadFlags(const cl::Buffer &scan_
         return false;
     }
 
-    cl::NDRange global = { (size_t)(count) };
+    const cl::NDRange global = { (size_t)(count) };
 
     return queue_.enqueueNDRangeKernel(init_skel_and_head_flags_kernel_, cl::NullRange, global, cl::NullRange) == CL_SUCCESS;
 }
@@ -1232,8 +1109,8 @@ bool Ray::Ocl::Renderer::kernel_InitCountTable(const cl::Buffer &chunks, cl_int 
         return false;
     }
 
-    cl::NDRange global = { (size_t)count };
-    cl::NDRange local = { (size_t)group_size };
+    const cl::NDRange global = { (size_t)count };
+    const cl::NDRange local = { (size_t)group_size };
 
     return queue_.enqueueNDRangeKernel(init_count_table_kernel_, cl::NullRange, global, local) == CL_SUCCESS;
 }
@@ -1249,23 +1126,12 @@ bool Ray::Ocl::Renderer::kernel_WriteSortedChunks(const cl::Buffer &chunks_in, c
         return false;
     }
 
-    size_t group_size = std::min((size_t)8, max_work_group_size_);
+    const size_t group_size = std::min((size_t)8, max_work_group_size_);
 
-    int remaining = count % group_size;
+    const int remaining = (count % group_size);
+    const int extend = remaining ? (group_size - remaining) : 0;
 
-    if (count - remaining > 0) {
-        if (queue_.enqueueNDRangeKernel(write_sorted_chunks_kernel_, cl::NullRange, { (size_t)(count - remaining) }, { group_size }) != CL_SUCCESS) {
-            return false;
-        }
-    }
-
-    if (remaining) {
-        if (queue_.enqueueNDRangeKernel(write_sorted_chunks_kernel_, { (size_t)(count - remaining) }, { (size_t)(remaining) }) != CL_SUCCESS) {
-            return false;
-        }
-    }
-
-    return true;
+    return queue_.enqueueNDRangeKernel(write_sorted_chunks_kernel_, cl::NullRange, { (size_t)(count + extend) }, { group_size }) == CL_SUCCESS;
 }
 
 bool Ray::Ocl::Renderer::kernel_ReorderRays(const cl::Buffer &in_rays, const cl::Buffer &in_indices, cl_int count, const cl::Buffer &out_rays) {
@@ -1276,7 +1142,7 @@ bool Ray::Ocl::Renderer::kernel_ReorderRays(const cl::Buffer &in_rays, const cl:
         return false;
     }
 
-    cl::NDRange global = { (size_t)count };
+    const cl::NDRange global = { (size_t)count };
 
     return queue_.enqueueNDRangeKernel(reorder_rays_kernel_, cl::NullRange, global, cl::NullRange) == CL_SUCCESS;
 }
@@ -1293,8 +1159,8 @@ bool Ray::Ocl::Renderer::kernel_MixIncremental(const cl::Image2D &fbuf1, const c
     const size_t w = fbuf1.getImageInfo<CL_IMAGE_WIDTH>(),
                  h = fbuf1.getImageInfo<CL_IMAGE_HEIGHT>();
 
-    cl::NDRange global = { w, h };
-    cl::NDRange local = cl::NullRange;
+    const cl::NDRange global = { w, h };
+    const cl::NDRange local = cl::NullRange;
 
     return queue_.enqueueNDRangeKernel(mix_incremental_kernel_, cl::NullRange, global, local) == CL_SUCCESS;
 }
@@ -1310,8 +1176,8 @@ bool Ray::Ocl::Renderer::kernel_Postprocess(const cl::Image2D &frame_buf, cl_int
         return false;
     }
 
-    cl::NDRange global = { (size_t)w, (size_t)h };
-    cl::NDRange local = cl::NullRange;//{ (size_t)8, std::min((size_t)8, max_work_group_size_ / 8) };
+    const cl::NDRange global = { (size_t)w, (size_t)h };
+    const cl::NDRange local = cl::NullRange;
 
     return queue_.enqueueNDRangeKernel(post_process_kernel_, cl::NullRange, global, local) == CL_SUCCESS;
 }
@@ -1322,7 +1188,7 @@ bool Ray::Ocl::Renderer::kernel_ResetSampleData(const cl::Buffer &sh_data, cl_in
         return false;
     }
 
-    cl::NDRange global = { (size_t)(count) };
+    const cl::NDRange global = { (size_t)(count) };
 
     return queue_.enqueueNDRangeKernel(reset_sample_data_kernel_, cl::NullRange, global, cl::NullRange) == CL_SUCCESS;
 }
@@ -1335,7 +1201,7 @@ bool Ray::Ocl::Renderer::kernel_StoreSHCoeffs(const cl::Buffer &in_rays, cl_int 
         return false;
     }
 
-    cl::NDRange global = { (size_t)(rays_count) };
+    const cl::NDRange global = { (size_t)(rays_count) };
 
     return queue_.enqueueNDRangeKernel(store_sh_coeffs_kernel_, cl::NullRange, global, cl::NullRange) == CL_SUCCESS;
 }
@@ -1348,7 +1214,7 @@ bool Ray::Ocl::Renderer::kernel_ComputeSHData(const cl::Image2D &clean_buf, cl_i
         return false;
     }
 
-    cl::NDRange global = { (size_t)w, (size_t)h };
+    const cl::NDRange global = { (size_t)w, (size_t)h };
 
     return queue_.enqueueNDRangeKernel(compute_sh_data_kernel_, cl::NullRange, global, cl::NullRange) == CL_SUCCESS;
 }
@@ -1361,7 +1227,7 @@ bool Ray::Ocl::Renderer::kernel_MixSHData(const cl::Buffer &sh_data_temp, cl_int
         return false;
     }
 
-    cl::NDRange global = { (size_t)count };
+    const cl::NDRange global = { (size_t)count };
 
     return queue_.enqueueNDRangeKernel(mix_sh_data_kernel_, cl::NullRange, global, cl::NullRange) == CL_SUCCESS;
 }
@@ -1416,14 +1282,14 @@ bool Ray::Ocl::Renderer::ExclusiveScan_CPU(const cl::Buffer &values, cl_int coun
 bool Ray::Ocl::Renderer::ExclusiveScan_GPU(const cl::Buffer &values, cl_int count, cl_int offset, cl_int stride,
                                            const cl::Buffer &partial_sums, const cl::Buffer &partial_sums2, const cl::Buffer &scan_values2,
                                            const cl::Buffer &scan_values3, const cl::Buffer &scan_values4, const cl::Buffer &out_scan_values) {
-    size_t _rem = count % scan_portion_;
-    size_t num = count + (_rem == 0 ? 0 : scan_portion_ - _rem);
+    const size_t _rem = count % scan_portion_;
+    const size_t num = count + (_rem == 0 ? 0 : scan_portion_ - _rem);
 
     if (!kernel_ExclusiveScan(values, (cl_int)num, offset, stride, out_scan_values, partial_sums)) return false;
 
-    size_t new_num = num / scan_portion_;
-    size_t rem = new_num % scan_portion_;
-    size_t _new_num = new_num + (rem == 0 ? 0 : scan_portion_ - rem);
+    const size_t new_num = num / scan_portion_;
+    const size_t rem = new_num % scan_portion_;
+    const size_t _new_num = new_num + (rem == 0 ? 0 : scan_portion_ - rem);
 
     if (new_num != _new_num) {
         if (queue_.enqueueFillBuffer(partial_sums, (uint32_t)0, sizeof(uint32_t) * new_num, sizeof(uint32_t) * (_new_num - new_num)) != CL_SUCCESS) return false;
@@ -1432,9 +1298,9 @@ bool Ray::Ocl::Renderer::ExclusiveScan_GPU(const cl::Buffer &values, cl_int coun
     if (!kernel_InclusiveScan(partial_sums, (cl_int)_new_num, scan_values2, partial_sums2)) return false;
 
     if (_new_num > scan_portion_) {
-        size_t new_num1 = _new_num / scan_portion_;
-        size_t rem1 = new_num1 % scan_portion_;
-        size_t new_num2 = new_num1 + (rem1 == 0 ? 0 : scan_portion_ - rem1);
+        const size_t new_num1 = _new_num / scan_portion_;
+        const size_t rem1 = new_num1 % scan_portion_;
+        const size_t new_num2 = new_num1 + (rem1 == 0 ? 0 : scan_portion_ - rem1);
 
         if (new_num1 != new_num2) {
             if (queue_.enqueueFillBuffer(partial_sums2, (uint32_t)0, sizeof(uint32_t) * new_num1, sizeof(uint32_t) * (new_num2 - new_num1)) != CL_SUCCESS) return false;
@@ -1443,9 +1309,9 @@ bool Ray::Ocl::Renderer::ExclusiveScan_GPU(const cl::Buffer &values, cl_int coun
         if (!kernel_InclusiveScan(partial_sums2, (cl_int)new_num2, scan_values3, partial_sums)) return false;
 
         if (new_num2 > scan_portion_) {
-            size_t new_num3 = new_num2 / scan_portion_;
-            size_t rem3 = new_num3 % scan_portion_;
-            size_t new_num4 = new_num3 + (rem3 == 0 ? 0 : scan_portion_ - rem3);
+            const size_t new_num3 = new_num2 / scan_portion_;
+            const size_t rem3 = new_num3 % scan_portion_;
+            const size_t new_num4 = new_num3 + (rem3 == 0 ? 0 : scan_portion_ - rem3);
 
             if (new_num4 != scan_portion_) {
                 return false;
@@ -1488,14 +1354,14 @@ bool Ray::Ocl::Renderer::InclusiveSegScan_GPU(const cl::Buffer &flags, const cl:
                                               const cl::Buffer &partial_flags, const cl::Buffer &partial_flags2, const cl::Buffer &partial_flags3,
                                               const cl::Buffer &partial_flags4, const cl::Buffer &scan_values2, const cl::Buffer &scan_values3,
                                               const cl::Buffer &scan_values4, const cl::Buffer &out_scan_values) {
-    size_t _rem = count % seg_scan_portion_;
-    size_t num = count + (_rem == 0 ? 0 : seg_scan_portion_ - _rem);
+    const size_t _rem = count % seg_scan_portion_;
+    const size_t num = count + (_rem == 0 ? 0 : seg_scan_portion_ - _rem);
 
     if (!kernel_InclusiveSegScan(values, flags, (cl_int)num, out_scan_values, partial_sums, partial_flags)) return false;
 
-    size_t new_num = num / seg_scan_portion_;
-    size_t rem = new_num % seg_scan_portion_;
-    size_t _new_num = new_num + (rem == 0 ? 0 : seg_scan_portion_ - rem);
+    const size_t new_num = num / seg_scan_portion_;
+    const size_t rem = new_num % seg_scan_portion_;
+    const size_t _new_num = new_num + (rem == 0 ? 0 : seg_scan_portion_ - rem);
 
     if (new_num != _new_num) {
         if (queue_.enqueueFillBuffer(partial_sums, (uint32_t)0, sizeof(uint32_t) * new_num, sizeof(uint32_t) * (_new_num - new_num)) != CL_SUCCESS) return false;
@@ -1505,9 +1371,9 @@ bool Ray::Ocl::Renderer::InclusiveSegScan_GPU(const cl::Buffer &flags, const cl:
     if (!kernel_InclusiveSegScan(partial_sums, partial_flags, (cl_int)_new_num, scan_values2, partial_sums2, partial_flags2)) return false;
 
     if (_new_num > seg_scan_portion_) {
-        size_t new_num1 = _new_num / seg_scan_portion_;
-        size_t rem1 = new_num1 % seg_scan_portion_;
-        size_t new_num2 = new_num1 + (rem1 == 0 ? 0 : seg_scan_portion_ - rem1);
+        const size_t new_num1 = _new_num / seg_scan_portion_;
+        const size_t rem1 = new_num1 % seg_scan_portion_;
+        const size_t new_num2 = new_num1 + (rem1 == 0 ? 0 : seg_scan_portion_ - rem1);
 
         if (new_num1 != new_num2) {
             if (queue_.enqueueFillBuffer(partial_sums2, (uint32_t)0, sizeof(uint32_t) * new_num1, sizeof(uint32_t) * (new_num2 - new_num1)) != CL_SUCCESS) return false;
@@ -1517,9 +1383,9 @@ bool Ray::Ocl::Renderer::InclusiveSegScan_GPU(const cl::Buffer &flags, const cl:
         if (!kernel_InclusiveSegScan(partial_sums2, partial_flags2, (cl_int)new_num2, scan_values3, partial_sums3, partial_flags3)) return false;
 
         if (new_num2 > seg_scan_portion_) {
-            size_t new_num3 = new_num2 / seg_scan_portion_;
-            size_t rem3 = new_num3 % seg_scan_portion_;
-            size_t new_num4 = new_num3 + (rem3 == 0 ? 0 : seg_scan_portion_ - rem3);
+            const size_t new_num3 = new_num2 / seg_scan_portion_;
+            const size_t rem3 = new_num3 % seg_scan_portion_;
+            const size_t new_num4 = new_num3 + (rem3 == 0 ? 0 : seg_scan_portion_ - rem3);
 
             if (new_num4 != seg_scan_portion_) {
                 return false;
@@ -1595,10 +1461,10 @@ bool Ray::Ocl::Renderer::PerformRadixSort_CPU(const cl::Buffer &chunks, cl_int c
 bool Ray::Ocl::Renderer::PerformRadixSort_GPU(const cl::Buffer &chunks, const cl::Buffer &chunks2, cl_int count, const cl::Buffer &counters,
                                               const cl::Buffer &partial_sums, const cl::Buffer &partial_sums2, const cl::Buffer &scan_values,
                                               const cl::Buffer &scan_values2, const cl::Buffer &scan_values3, const cl::Buffer &scan_values4) {
-    size_t group_size = std::min(max_work_group_size_, (size_t)64);
+    const size_t group_size = std::min(max_work_group_size_, (size_t)64);
 
-    size_t _rem = count % group_size;
-    size_t num = count + (_rem == 0 ? 0 : group_size - _rem);
+    const size_t _rem = count % group_size;
+    const size_t num = count + (_rem == 0 ? 0 : group_size - _rem);
 
     if (_rem) {
         if (queue_.enqueueFillBuffer(chunks, (uint32_t)0xFFFFFFFF, sizeof(ray_chunk_t) * count, sizeof(ray_chunk_t) * (group_size - _rem)) != CL_SUCCESS) return false;

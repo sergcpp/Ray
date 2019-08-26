@@ -81,7 +81,7 @@ protected:
                                        const cl::Buffer &halton_seq, const cl::Buffer &tri_bin_buf,
                                        const cl::Buffer &out_rays, const cl::Buffer &out_inters);
     bool kernel_TextureDebugPage(const cl::Image2DArray &textures, cl_int page, const cl::Image2D &frame_buf);
-    bool kernel_ShadePrimary(const pass_info_t &pi, const cl::Buffer &halton, const Ray::rect_t &rect, cl_int w,
+    bool kernel_ShadePrimary(const pass_info_t &pi, const cl::Buffer &halton, const Ray::rect_t &rect, cl_int w, cl_int h,
                              const cl::Buffer &intersections, const cl::Buffer &rays,
                              const cl::Buffer &mesh_instances, const cl::Buffer &mi_indices, const cl::Buffer &meshes,
                              const cl::Buffer &transforms, const cl::Buffer &vtx_indices, const cl::Buffer &vertices,
@@ -98,10 +98,10 @@ protected:
                                const cl::Buffer &lights, const cl::Buffer &li_incies, cl_uint light_node_index,
                                const cl::Image2D &frame_buf, const cl::Image2D &frame_buf2,
                                const cl::Buffer &secondary_rays, const cl::Buffer &secondary_rays_count);
-    bool kernel_TracePrimaryRays(const cl::Buffer &rays, const Ray::rect_t &rect, cl_int w,
+    bool kernel_TracePrimaryRays(const cl::Buffer &rays, const Ray::rect_t &rect, cl_int w, cl_int h,
                                  const cl::Buffer &mesh_instances, const cl::Buffer &mi_indices, const cl::Buffer &meshes, const cl::Buffer &transforms,
                                  const cl::Buffer &nodes, cl_uint node_index, const cl::Buffer &tris, const cl::Buffer &tri_indices, const cl::Buffer &intersections);
-    bool kernel_TracePrimaryRaysImg(const cl::Buffer &rays, const Ray::rect_t &rect, cl_int w,
+    bool kernel_TracePrimaryRaysImg(const cl::Buffer &rays, const Ray::rect_t &rect, cl_int w, cl_int h,
                                     const cl::Buffer &mesh_instances, const cl::Buffer &mi_indices, const cl::Buffer &meshes, const cl::Buffer &transforms,
                                     const cl::Image1DBuffer &nodes, cl_uint node_index, const cl::Buffer &tris, const cl::Buffer &tri_indices, const cl::Buffer &intersections);
     bool kernel_TraceSecondaryRays(const cl::Buffer &rays, cl_int rays_count,
