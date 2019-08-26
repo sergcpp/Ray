@@ -2,6 +2,7 @@ R"(
 
 __constant sampler_t LINEAR_SAMPLER = CLK_NORMALIZED_COORDS_TRUE | CLK_ADDRESS_CLAMP | CLK_FILTER_LINEAR;
 __constant sampler_t NEAREST_SAMPLER = CLK_NORMALIZED_COORDS_TRUE | CLK_ADDRESS_CLAMP | CLK_FILTER_NEAREST;
+__constant float2 tex_atlas_size = (float2)(TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE);
 
 float4 rgbe_to_rgb(float4 rgbe) {
     float f = native_exp2(rgbe.w * 255.0f - 128.0f);
@@ -10,8 +11,6 @@ float4 rgbe_to_rgb(float4 rgbe) {
 
 float4 SampleTextureBilinear(__read_only image2d_array_t texture_atlas, __global const texture_t *texture,
                               const float2 uvs, int lod) {
-    const float2 tex_atlas_size = (float2)(get_image_width(texture_atlas), get_image_height(texture_atlas));
-    
     const float2 uvs1 = TransformUVs(uvs, tex_atlas_size, texture, lod);
 
     float4 coord1 = (float4)(uvs1, (float)texture->page[lod], 0);
@@ -21,8 +20,6 @@ float4 SampleTextureBilinear(__read_only image2d_array_t texture_atlas, __global
 
 float4 SampleTextureTrilinear(__read_only image2d_array_t texture_atlas, __global const texture_t *texture,
                               const float2 uvs, float lod) {
-    const float2 tex_atlas_size = (float2)(get_image_width(texture_atlas), get_image_height(texture_atlas));
-    
     const float2 uvs1 = TransformUVs(uvs, tex_atlas_size, texture, floor(lod));
     const float2 uvs2 = TransformUVs(uvs, tex_atlas_size, texture, ceil(lod));
 
@@ -40,8 +37,6 @@ float4 SampleTextureTrilinear(__read_only image2d_array_t texture_atlas, __globa
 
 float4 SampleTextureAnisotropic(__read_only image2d_array_t texture_atlas, __global const texture_t *texture,
                                 const float2 uvs, const float2 duv_dx, const float2 duv_dy) {
-    const float2 tex_atlas_size = (float2)(get_image_width(texture_atlas), get_image_height(texture_atlas));
-
     float2 _duv_dx = fabs(duv_dx * (float2)(texture->size[0], texture->size[1]));
     float2 _duv_dy = fabs(duv_dy * (float2)(texture->size[0], texture->size[1]));
 
@@ -104,9 +99,7 @@ float4 SampleTextureAnisotropic(__read_only image2d_array_t texture_atlas, __glo
     return res / num;
 }
 
-float4 SampleTextureLatlong_RGBE(__read_only image2d_array_t texture_atlas, __global const texture_t *t,
-                                 const float3 dir) {
-    const float2 tex_atlas_size = (float2)(get_image_width(texture_atlas), get_image_height(texture_atlas));
+float4 SampleTextureLatlong_RGBE(__read_only image2d_array_t texture_atlas, __global const texture_t *t, const float3 dir) {
     float2 kk = 1.0f / tex_atlas_size;
     
     float theta = acospi(clamp(dir.y, -1.0f, 1.0f));
