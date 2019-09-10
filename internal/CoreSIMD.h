@@ -1744,11 +1744,14 @@ bool Ray::NS::Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t<S> &r, 
                     bbox_test_oct(_inv_d, _neg_inv_d_o, bbox_min[i], bbox_max[i], res_mask[i], res_dist[i]);
                 })
 
+                const float *_res_dist = &res_dist[0][0];
+                const int *_res_mask = &res_mask[0][0];
+
                 ITERATE_8({
-                    int j = child_order[i];
+                    const int j = child_order[i];
                     stack[stack_size].index = nodes[cur].child[j];
-                    stack[stack_size].dist = res_dist[j / S][j % S];
-                    stack_size -= res_mask[j / S][j % S];
+                    stack[stack_size].dist = _res_dist[j];
+                    stack_size -= _res_mask[j];
                 })
             } else {
                 uint32_t prim_index = (nodes[cur].child[0] & PRIM_INDEX_BITS);
@@ -1891,11 +1894,14 @@ bool Ray::NS::Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t<S> &r, cons
                     bbox_test_oct(_inv_d, _neg_inv_d_o, bbox_min[i], bbox_max[i], res_mask[i], res_dist[i]);
                 })
 
+                const float *_res_dist = &res_dist[0][0];
+                const int *_res_mask = &res_mask[0][0];
+
                 ITERATE_8({
-                    int j = child_order[i];
+                    const int j = child_order[i];
                     stack[stack_size].index = nodes[cur].child[j];
-                    stack[stack_size].dist = res_dist[j / S][j % S];
-                    stack_size -= res_mask[j / S][j % S];
+                    stack[stack_size].dist = _res_dist[j];
+                    stack_size -= _res_mask[j];
                 })
             } else {
                 uint32_t prim_index = (nodes[cur].child[0] & PRIM_INDEX_BITS);
@@ -2016,11 +2022,14 @@ bool Ray::NS::Traverse_MicroTree_WithStack_ClosestHit(const float ro[3], const f
                 bbox_test_oct(_inv_d, _neg_inv_d_o, bbox_min[i], bbox_max[i], res_mask[i], res_dist[i]);
             })
 
+            const float *_res_dist = &res_dist[0][0];
+            const int *_res_mask = &res_mask[0][0];
+
             ITERATE_8({
-                int j = child_order[i];
+                const int j = child_order[i];
                 stack[stack_size].index = nodes[cur].child[j];
-                stack[stack_size].dist = res_dist[j / S][j % S];
-                stack_size -= res_mask[j / S][j % S];
+                stack[stack_size].dist = _res_dist[j];
+                stack_size -= _res_mask[j];
             })
         } else {
             res |= IntersectTris_ClosestHit(ro, rd, ri, tris, &tri_indices[nodes[cur].child[0] & PRIM_INDEX_BITS], nodes[cur].child[1], obj_index, inter);
@@ -2128,11 +2137,14 @@ bool Ray::NS::Traverse_MicroTree_WithStack_AnyHit(const float ro[3], const float
                 bbox_test_oct(_inv_d, _neg_inv_d_o, bbox_min[i], bbox_max[i], res_mask[i], res_dist[i]);
             })
 
+            const float *_res_dist = &res_dist[0][0];
+            const int *_res_mask = &res_mask[0][0];
+
             ITERATE_8({
-                int j = child_order[i];
+                const int j = child_order[i];
                 stack[stack_size].index = nodes[cur].child[j];
-                stack[stack_size].dist = res_dist[j / S][j % S];
-                stack_size -= res_mask[j / S][j % S];
+                stack[stack_size].dist = _res_dist[j];
+                stack_size -= _res_mask[j];
             })
         } else {
             bool hit_found = IntersectTris_AnyHit(ro, rd, ri, tris, &tri_indices[nodes[cur].child[0] & PRIM_INDEX_BITS], nodes[cur].child[1], obj_index, inter, is_solid_hit);
@@ -2753,9 +2765,11 @@ void Ray::NS::ComputeDirectLighting(const simd_fvec<S> I[3], const simd_fvec<S> 
                     simd_ivec<S> res_mask[LanesCount];
                     ITERATE(LanesCount, { bbox_test_oct(_P, bbox_min[i], bbox_max[i], res_mask[i]); })
 
+                    const int *_res_mask = &res_mask[0][0];
+
                     ITERATE_8({
                         stack[stack_size] = sc.oct_nodes[cur].child[i];
-                        stack_size -= res_mask[i / S][i % S];
+                        stack_size -= _res_mask[i];
                     })
                 } else {
                     uint32_t prim_index = (sc.oct_nodes[cur].child[0] & PRIM_INDEX_BITS);
