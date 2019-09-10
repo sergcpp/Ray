@@ -488,7 +488,7 @@ public:
     }
 
     force_inline bool not_all_zeros() const {
-        volatile int res = _mm256_test_all_zeros(vec_, vec_);
+        int res = _mm256_test_all_zeros(vec_, vec_);
         return res == 0;
     }
 
