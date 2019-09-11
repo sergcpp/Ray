@@ -66,14 +66,14 @@ void Ray::Ref::ComputeTangentBasis(size_t vtx_offset, size_t vtx_start, std::vec
         } else {
             simd_fvec3 plane_N = cross(dp1, dp2);
 
-            int w = 1;
+            int w = 2;
             tangent = simd_fvec3{ 0.0f, 1.0f, 0.0f };
             if (std::abs(plane_N[0]) <= std::abs(plane_N[1]) && std::abs(plane_N[0]) <= std::abs(plane_N[2])) {
                 tangent = simd_fvec3{ 1.0f, 0.0f, 0.0f };
-                w = 0;
+                w = 1;
             } else if (std::abs(plane_N[2]) <= std::abs(plane_N[0]) && std::abs(plane_N[2]) <= std::abs(plane_N[1])) {
                 tangent = simd_fvec3{ 0.0f, 0.0f, 1.0f };
-                w = 2;
+                w = 0;
             }
 
             if (std::abs(plane_N[w]) > FLT_EPS) {
