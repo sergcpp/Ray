@@ -178,16 +178,12 @@ bool Ray::PreprocessTri(const float *p, int stride, tri_accel_t *acc) {
     float e0[3] = { p[stride] - p[0], p[stride + 1] - p[1], p[stride + 2] - p[2] },
           e1[3] = { p[stride * 2] - p[0], p[stride * 2 + 1] - p[1], p[stride * 2 + 2] - p[2] };
 
-    bool is_degenerate =
-        (std::abs(e0[0]) < FLT_EPS && std::abs(e0[1]) < FLT_EPS && std::abs(e0[2]) < FLT_EPS) ||
-        (std::abs(e1[0]) < FLT_EPS && std::abs(e1[1]) < FLT_EPS && std::abs(e1[2]) < FLT_EPS);
-
     float n[3] = { e0[1] * e1[2] - e0[2] * e1[1],
                    e0[2] * e1[0] - e0[0] * e1[2],
                    e0[0] * e1[1] - e0[1] * e1[0]
                  };
 
-    int w, u, v;
+    int w = 2, u = 0, v = 1;
     if (std::abs(n[0]) > std::abs(n[1]) && std::abs(n[0]) > std::abs(n[2])) {
         w = 0;
         u = 1;
@@ -196,37 +192,43 @@ bool Ray::PreprocessTri(const float *p, int stride, tri_accel_t *acc) {
         w = 1;
         u = 0;
         v = 2;
+    }
+
+    if (std::abs(n[w]) > FLT_EPS) {
+        acc->nu = n[u] / n[w];
+        acc->nv = n[v] / n[w];
+        acc->pu = p[u];
+        acc->pv = p[v];
+        acc->np = acc->nu * acc->pu + acc->nv * acc->pv + p[w];
+
+        int sign = w == 1 ? -1 : 1;
+        acc->e0u = sign * e0[u] / n[w];
+        acc->e0v = sign * e0[v] / n[w];
+        acc->e1u = sign * e1[u] / n[w];
+        acc->e1v = sign * e1[v] / n[w];
+
+        acc->ci = w;
+        if (std::abs(acc->nu) < axis_aligned_normal_eps && std::abs(acc->nv) < axis_aligned_normal_eps) {
+            acc->ci |= TRI_AXIS_ALIGNED_BIT;
+        }
+        if (n[w] < 0) {
+            acc->ci |= TRI_INV_NORMAL_BIT;
+        }
+
+        assert((acc->ci & TRI_W_BITS) == w);
+        return true;
     } else {
-        w = 2;
-        u = 0;
-        v = 1;
-    }
+        acc->nu = acc->nv = NAN;
+        acc->pu = acc->pv = NAN;
+        acc->np = NAN;
 
-    if (std::abs(n[w]) < FLT_EPS) {
-        n[w] = 1.0f;
-    }
+        acc->e0u = acc->e0v = NAN;
+        acc->e1u = acc->e1v = NAN;
 
-    acc->nu = n[u] / n[w];
-    acc->nv = n[v] / n[w];
-    acc->pu = p[u];
-    acc->pv = p[v];
-    acc->np = acc->nu * acc->pu + acc->nv * acc->pv + p[w];
+        acc->ci = 0;
 
-    int sign = w == 1 ? -1 : 1;
-    acc->e0u = sign * e0[u] / n[w];
-    acc->e0v = sign * e0[v] / n[w];
-    acc->e1u = sign * e1[u] / n[w];
-    acc->e1v = sign * e1[v] / n[w];
-
-    acc->ci = w;
-    if (std::abs(acc->nu) < axis_aligned_normal_eps && std::abs(acc->nv) < axis_aligned_normal_eps) {
-        acc->ci |= TRI_AXIS_ALIGNED_BIT;
+        return false;
     }
-    if (n[w] < 0) {
-        acc->ci |= TRI_INV_NORMAL_BIT;
-    }
-    assert((acc->ci & TRI_W_BITS) == w);
-    return !is_degenerate;
 }
 
 void Ray::ExtractPlaneNormal(const tri_accel_t &tri, float *out_normal) {

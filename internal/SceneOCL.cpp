@@ -248,7 +248,7 @@ uint32_t Ray::Ocl::Scene::AddMesh(const mesh_desc_t &_m) {
     }
 
     if (_m.layout == PxyzNxyzTuv || _m.layout == PxyzNxyzTuvTuv) {
-        Ref::ComputeTextureBasis(vertices_.size(), 0, new_vertices, new_vtx_indices, _m.vtx_indices, _m.vtx_indices_count);
+        Ref::ComputeTangentBasis(vertices_.size(), 0, new_vertices, new_vtx_indices, _m.vtx_indices, _m.vtx_indices_count);
     }
 
     vertices_.Append(&new_vertices[0], new_vertices.size());
