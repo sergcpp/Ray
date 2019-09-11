@@ -33,7 +33,7 @@ std::vector<Ray::pixel_color8_t> Ray::Ref::DownsampleTexture(const std::vector<p
     return ret;
 }
 
-void Ray::Ref::ComputeTextureBasis(size_t vtx_offset, size_t vtx_start, std::vector<vertex_t> &vertices, std::vector<uint32_t> &new_vtx_indices,
+void Ray::Ref::ComputeTangentBasis(size_t vtx_offset, size_t vtx_start, std::vector<vertex_t> &vertices, std::vector<uint32_t> &new_vtx_indices,
                                    const uint32_t *indices, size_t indices_count) {
     auto cross = [](const simd_fvec3 &v1, const simd_fvec3 &v2) -> simd_fvec3 {
         return simd_fvec3{ v1[1] * v2[2] - v1[2] * v2[1], v1[2] * v2[0] - v1[0] * v2[2], v1[0] * v2[1] - v1[1] * v2[0] };
@@ -65,15 +65,24 @@ void Ray::Ref::ComputeTextureBasis(size_t vtx_offset, size_t vtx_start, std::vec
             binormal = (dp2 * dt1[0] - dp1 * dt2[0]) * inv_det;
         } else {
             simd_fvec3 plane_N = cross(dp1, dp2);
+
+            int w = 1;
             tangent = simd_fvec3{ 0.0f, 1.0f, 0.0f };
             if (std::abs(plane_N[0]) <= std::abs(plane_N[1]) && std::abs(plane_N[0]) <= std::abs(plane_N[2])) {
                 tangent = simd_fvec3{ 1.0f, 0.0f, 0.0f };
+                w = 0;
             } else if (std::abs(plane_N[2]) <= std::abs(plane_N[0]) && std::abs(plane_N[2]) <= std::abs(plane_N[1])) {
                 tangent = simd_fvec3{ 0.0f, 0.0f, 1.0f };
+                w = 2;
             }
 
-            binormal = normalize(cross(simd_fvec3(plane_N), tangent));
-            tangent = normalize(cross(simd_fvec3(plane_N), binormal));
+            if (std::abs(plane_N[w]) > FLT_EPS) {
+                binormal = normalize(cross(simd_fvec3(plane_N), tangent));
+                tangent = normalize(cross(simd_fvec3(plane_N), binormal));
+            } else {
+                binormal = { 0.0f };
+                tangent = { 0.0f };
+            }
         }
 
         int i1 = (v0->b[0] * tangent[0] + v0->b[1] * tangent[1] + v0->b[2] * tangent[2]) < 0;
