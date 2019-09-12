@@ -140,10 +140,10 @@ Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, const std::
         axis_lists[2].push_back(i);
     }
 
-    std::vector<bbox_t> new_prim_bounds;
+    std::vector<bbox_t> modified_prim_bounds;
 
     if (s.allow_spatial_splits && positions) {
-        new_prim_bounds.resize(num_tris);
+        modified_prim_bounds.resize(num_tris);
 
         for (size_t i = 0; i < prim_indices.size(); i++) {
             const prim_t &p = primitives[prim_indices[i]];
@@ -152,7 +152,7 @@ Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, const std::
                             v1 = { &positions[p.i1 * stride] },
                             v2 = { &positions[p.i2 * stride] };
 
-            new_prim_bounds[i] = GetClippedAABB(v0, v1, v2, whole_box);
+            modified_prim_bounds[i] = GetClippedAABB(v0, v1, v2, whole_box);
         }
     }
 
@@ -166,20 +166,20 @@ Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, const std::
     for (int axis = 0; axis < 3; axis++) {
         std::vector<uint32_t> &list = axis_lists[axis];
 
-        if (new_prim_bounds.empty()) {
+        if (modified_prim_bounds.empty()) {
             std::sort(list.begin(), list.end(),
                 [axis, primitives, &prim_indices](uint32_t p1, uint32_t p2) -> bool {
                 return primitives[prim_indices[p1]].bbox_max[axis] < primitives[prim_indices[p2]].bbox_max[axis];
             });
         } else {
             std::sort(list.begin(), list.end(),
-                [axis, &new_prim_bounds](uint32_t p1, uint32_t p2) -> bool {
-                return new_prim_bounds[p1].max[axis] < new_prim_bounds[p2].max[axis];
+                [axis, &modified_prim_bounds](uint32_t p1, uint32_t p2) -> bool {
+                return modified_prim_bounds[p1].max[axis] < modified_prim_bounds[p2].max[axis];
             });
         }
 
         bbox_t cur_right_bounds;
-        if (new_prim_bounds.empty()) {
+        if (modified_prim_bounds.empty()) {
             for (size_t i = list.size() - 1; i > 0; i--) {
                 cur_right_bounds.min = min(cur_right_bounds.min, primitives[prim_indices[list[i]]].bbox_min);
                 cur_right_bounds.max = max(cur_right_bounds.max, primitives[prim_indices[list[i]]].bbox_max);
@@ -187,20 +187,20 @@ Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, const std::
             }
         } else {
             for (size_t i = list.size() - 1; i > 0; i--) {
-                cur_right_bounds.min = min(cur_right_bounds.min, new_prim_bounds[list[i]].min);
-                cur_right_bounds.max = max(cur_right_bounds.max, new_prim_bounds[list[i]].max);
+                cur_right_bounds.min = min(cur_right_bounds.min, modified_prim_bounds[list[i]].min);
+                cur_right_bounds.max = max(cur_right_bounds.max, modified_prim_bounds[list[i]].max);
                 right_bounds[i - 1] = cur_right_bounds;
             }
         }
 
         bbox_t left_bounds;
         for (size_t i = 1; i < list.size(); i++) {
-            if (new_prim_bounds.empty()) {
+            if (modified_prim_bounds.empty()) {
                 left_bounds.min = min(left_bounds.min, primitives[prim_indices[list[i - 1]]].bbox_min);
                 left_bounds.max = max(left_bounds.max, primitives[prim_indices[list[i - 1]]].bbox_max);
             } else {
-                left_bounds.min = min(left_bounds.min, new_prim_bounds[list[i - 1]].min);
-                left_bounds.max = max(left_bounds.max, new_prim_bounds[list[i - 1]].max);
+                left_bounds.min = min(left_bounds.min, modified_prim_bounds[list[i - 1]].min);
+                left_bounds.max = max(left_bounds.max, modified_prim_bounds[list[i - 1]].max);
             }
 
             float sah = s.node_traversal_cost * whole_box.surface_area() + left_bounds.surface_area() * i + right_bounds[i - 1].surface_area() * (list.size() - i);
@@ -250,9 +250,9 @@ Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, const std::
                 float prim_min = p.bbox_min[split_axis],
                       prim_max = p.bbox_max[split_axis];
 
-                if (!new_prim_bounds.empty()) {
-                    prim_min = new_prim_bounds[i].min[split_axis];
-                    prim_max = new_prim_bounds[i].max[split_axis];
+                if (!modified_prim_bounds.empty()) {
+                    prim_min = modified_prim_bounds[i].min[split_axis];
+                    prim_max = modified_prim_bounds[i].max[split_axis];
                 }
 
                 int enter_index = 0, exit_index = 0;
@@ -347,12 +347,12 @@ Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, const std::
             const std::vector<uint32_t> &list = axis_lists[div_axis];
             for (const uint32_t i : list) {
                 bool b1 = false, b2 = false;
-                if (new_prim_bounds[i].min[div_axis] <= res_left_bounds.max[div_axis]) {
+                if (modified_prim_bounds[i].min[div_axis] <= res_left_bounds.max[div_axis]) {
                     left_indices.push_back(prim_indices[i]);
                     b1 = true;
                 }
 
-                if (new_prim_bounds[i].max[div_axis] >= res_right_bounds.min[div_axis]) {
+                if (modified_prim_bounds[i].max[div_axis] >= res_right_bounds.min[div_axis]) {
                     right_indices.push_back(prim_indices[i]);
                     b2 = true;
                 }
