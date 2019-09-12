@@ -517,6 +517,7 @@ struct TraversalStateStack {
     force_inline void push_children(const bvh_node_t &node) {
         queue[index].stack[queue[index].stack_size++] = node.left_child;
         queue[index].stack[queue[index].stack_size++] = (node.right_child & RIGHT_CHILD_BITS);
+        assert(queue[index].stack_size < MAX_STACK_SIZE);
     }
 
     int index = 0, num = 1;
@@ -1753,6 +1754,11 @@ bool Ray::NS::Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t<S> &r, 
                     stack[stack_size].dist = _res_dist[j];
                     stack_size -= _res_mask[j];
                 })
+
+                assert(stack_size < MAX_STACK_SIZE);
+                for (uint32_t i = 0; i < stack_size; i++) {
+                    assert(stack[i].index != 0x7fffffff && "Invalid index!");
+                }
             } else {
                 uint32_t prim_index = (nodes[cur].child[0] & PRIM_INDEX_BITS);
                 for (uint32_t j = prim_index; j < prim_index + nodes[cur].child[1]; j++) {
@@ -1903,6 +1909,11 @@ bool Ray::NS::Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t<S> &r, cons
                     stack[stack_size].dist = _res_dist[j];
                     stack_size -= _res_mask[j];
                 })
+
+                assert(stack_size < MAX_STACK_SIZE);
+                for (uint32_t i = 0; i < stack_size; i++) {
+                    assert(stack[i].index != 0x7fffffff && "Invalid index!");
+                }
             } else {
                 uint32_t prim_index = (nodes[cur].child[0] & PRIM_INDEX_BITS);
                 for (uint32_t j = prim_index; j < prim_index + nodes[cur].child[1]; j++) {
@@ -2000,6 +2011,7 @@ bool Ray::NS::Traverse_MicroTree_WithStack_ClosestHit(const float ro[3], const f
 
     while (stack_size) {
         uint32_t cur = stack[--stack_size].index;
+
         float cur_dist = stack[stack_size].dist;
 
         if (cur_dist > inter.t[ri]) continue;
@@ -2031,6 +2043,11 @@ bool Ray::NS::Traverse_MicroTree_WithStack_ClosestHit(const float ro[3], const f
                 stack[stack_size].dist = _res_dist[j];
                 stack_size -= _res_mask[j];
             })
+
+            assert(stack_size < MAX_STACK_SIZE);
+            for (uint32_t i = 0; i < stack_size; i++) {
+                assert(stack[i].index != 0x7fffffff && "Invalid index!");
+            }
         } else {
             res |= IntersectTris_ClosestHit(ro, rd, ri, tris, &tri_indices[nodes[cur].child[0] & PRIM_INDEX_BITS], nodes[cur].child[1], obj_index, inter);
         }
@@ -2146,6 +2163,11 @@ bool Ray::NS::Traverse_MicroTree_WithStack_AnyHit(const float ro[3], const float
                 stack[stack_size].dist = _res_dist[j];
                 stack_size -= _res_mask[j];
             })
+
+            assert(stack_size < MAX_STACK_SIZE);
+            for (uint32_t i = 0; i < stack_size; i++) {
+                assert(stack[i].index != 0x7fffffff && "Invalid index!");
+            }
         } else {
             bool hit_found = IntersectTris_AnyHit(ro, rd, ri, tris, &tri_indices[nodes[cur].child[0] & PRIM_INDEX_BITS], nodes[cur].child[1], obj_index, inter, is_solid_hit);
             res |= hit_found;
@@ -2771,6 +2793,11 @@ void Ray::NS::ComputeDirectLighting(const simd_fvec<S> I[3], const simd_fvec<S> 
                         stack[stack_size] = sc.oct_nodes[cur].child[i];
                         stack_size -= _res_mask[i];
                     })
+
+                    assert(stack_size < MAX_STACK_SIZE);
+                    for (uint32_t i = 0; i < stack_size; i++) {
+                        assert(stack[i] != 0x7fffffff && "Invalid index!");
+                    }
                 } else {
                     uint32_t prim_index = (sc.oct_nodes[cur].child[0] & PRIM_INDEX_BITS);
                     for (uint32_t li = prim_index; li < prim_index + sc.oct_nodes[cur].child[1]; li++) {
