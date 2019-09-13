@@ -13,10 +13,8 @@
 
 #include <intrin.h>
 
+#pragma intrinsic(_BitScanForward)
 #pragma intrinsic(_bittestandcomplement)
-#ifdef _M_AMD64
-#pragma intrinsic(_bittestandcomplement64)
-#endif
 #endif
 
 #define unused(x) ((void)x)
@@ -154,7 +152,7 @@ force_inline int bsf(int mask) {
     _BitScanForward(&ret, (unsigned long)mask);
     return int(ret);
 #else
-#error "Not implemented!"
+    return (__builtin_ffs(mask) - 1);
 #endif
 }
 
@@ -165,7 +163,7 @@ force_inline int btc(int mask, int index) {
     _bittestandcomplement(&_mask, index);
     return int(_mask);
 #else
-#error "Not implemented!"
+    return (mask & ~(1 << index));
 #endif
 }
 
