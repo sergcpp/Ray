@@ -364,7 +364,7 @@ public:
 
     force_inline int movemask() const {
         int res = 0;
-        ITERATE(S, { if (mask.comp_[i] != T(0)) res |= (1 << i); })
+        ITERATE(S, { if (comp_[i] != T(0)) res |= (1 << i); })
         return res;
     }
 
