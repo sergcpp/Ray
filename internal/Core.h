@@ -10,6 +10,13 @@
 #endif
 #ifdef _MSC_VER
 #define force_inline __forceinline
+
+#include <intrin.h>
+
+#pragma intrinsic(_bittestandcomplement)
+#ifdef _M_AMD64
+#pragma intrinsic(_bittestandcomplement64)
+#endif
 #endif
 
 #define unused(x) ((void)x)
@@ -139,6 +146,28 @@ struct bvh_settings_t {
 
 template <typename T>
 using aligned_vector = std::vector<T, aligned_allocator<T, alignof(T)>>;
+
+// bit scan forward
+force_inline int bsf(int mask) {
+#ifdef _MSC_VER
+    unsigned long ret;
+    _BitScanForward(&ret, (unsigned long)mask);
+    return int(ret);
+#else
+#error "Not implemented!"
+#endif
+}
+
+// bit test and complement
+force_inline int btc(int mask, int index) {
+#ifdef _MSC_VER
+    long _mask = (long)mask;
+    _bittestandcomplement(&_mask, index);
+    return int(_mask);
+#else
+#error "Not implemented!"
+#endif
+}
 
 // Creates struct of precomputed triangle data for faster Plucker intersection test
 bool PreprocessTri(const float *p, int stride, tri_accel_t *acc);

@@ -498,6 +498,10 @@ public:
 #endif
     }
 
+    force_inline int movemask() const {
+        return _mm_movemask_ps(_mm_castsi128_ps(vec_));
+    }
+
     force_inline bool all_zeros() const {
 #if 0 // requires sse4.1
         if (!_mm_test_all_zeros(vec_, vec_)) return false;

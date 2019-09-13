@@ -53,6 +53,49 @@
         { const int i = 0; exp }    \
     }
 
+#define ITERATE_R(n, exp)  \
+    if ((n) == 16) {                \
+        { const int i = 15; exp }    \
+        { const int i = 14; exp }    \
+        { const int i = 13; exp }    \
+        { const int i = 12; exp }    \
+        { const int i = 11; exp }    \
+        { const int i = 10; exp }    \
+        { const int i = 9; exp }    \
+        { const int i = 8; exp }    \
+        { const int i = 7; exp }    \
+        { const int i = 6; exp }    \
+        { const int i = 5; exp }   \
+        { const int i = 4; exp }   \
+        { const int i = 3; exp }   \
+        { const int i = 2; exp }   \
+        { const int i = 1; exp }   \
+        { const int i = 0; exp }   \
+    } else if ((n) == 8) {          \
+        { const int i = 7; exp }    \
+        { const int i = 6; exp }    \
+        { const int i = 5; exp }    \
+        { const int i = 4; exp }    \
+        { const int i = 3; exp }    \
+        { const int i = 2; exp }    \
+        { const int i = 1; exp }    \
+        { const int i = 0; exp }    \
+    } else if ((n) == 4) {          \
+        { const int i = 3; exp }    \
+        { const int i = 2; exp }    \
+        { const int i = 1; exp }    \
+        { const int i = 0; exp }    \
+    } else if ((n) == 3) {          \
+        { const int i = 2; exp }    \
+        { const int i = 1; exp }    \
+        { const int i = 0; exp }    \
+    } else if ((n) == 2) {          \
+        { const int i = 1; exp }    \
+        { const int i = 0; exp }    \
+    } else if ((n) == 1) {          \
+        { const int i = 0; exp }    \
+    }
+
 #define ITERATE_2(exp)  \
         { const int i = 0; exp }    \
         { const int i = 1; exp }
@@ -317,6 +360,12 @@ public:
 
     force_inline void blend_to(const simd_vec<T, S> &mask, const simd_vec<T, S> &v1) {
         ITERATE(S, { if (mask.comp_[i] != T(0)) comp_[i] = v1.comp_[i]; })
+    }
+
+    force_inline int movemask() const {
+        int res = 0;
+        ITERATE(S, { if (mask.comp_[i] != T(0)) res |= (1 << i); })
+        return res;
     }
 
     force_inline static simd_vec<T, S> min(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) {
