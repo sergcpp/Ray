@@ -479,6 +479,10 @@ public:
         vec_ = _mm256_castps_si256(_mm256_blendv_ps(_mm256_castsi256_ps(vec_), _mm256_castsi256_ps(v1.vec_), _mm256_castsi256_ps(mask.vec_)));
     }
 
+    force_inline int movemask() const {
+        return _mm256_movemask_ps(_mm256_castsi256_ps(vec_));
+    }
+
     force_inline bool all_zeros() const {
         return _mm256_test_all_zeros(vec_, vec_) != 0;
     }

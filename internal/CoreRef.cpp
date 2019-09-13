@@ -129,7 +129,122 @@ force_inline void bbox_test_oct(const float o[3], const float inv_d[3], const bv
     })
 }
 
+force_inline int bbox_test_oct(const float o[3], const float inv_d[3], const float t, const bvh_node8_t &node, float dist[8]) {
+    int mask = 0;
+
+    ITERATE_8({
+        float lo_x = inv_d[0] * (node.bbox_min[0][i] - o[0]);
+        float hi_x = inv_d[0] * (node.bbox_max[0][i] - o[0]);
+        if (lo_x > hi_x) { float tmp = lo_x; lo_x = hi_x; hi_x = tmp; }
+
+        float lo_y = inv_d[1] * (node.bbox_min[1][i] - o[1]);
+        float hi_y = inv_d[1] * (node.bbox_max[1][i] - o[1]);
+        if (lo_y > hi_y) { float tmp = lo_y; lo_y = hi_y; hi_y = tmp; }
+
+        float lo_z = inv_d[2] * (node.bbox_min[2][i] - o[2]);
+        float hi_z = inv_d[2] * (node.bbox_max[2][i] - o[2]);
+        if (lo_z > hi_z) { float tmp = lo_z; lo_z = hi_z; hi_z = tmp; }
+
+        float tmin = lo_x > lo_y ? lo_x : lo_y;
+        if (lo_z > tmin) tmin = lo_z;
+        float tmax = hi_x < hi_y ? hi_x : hi_y;
+        if (hi_z < tmax) tmax = hi_z;
+        tmax *= 1.00000024f;
+
+        dist[i] = tmin;
+        mask |= ((tmin <= tmax && tmin <= t && tmax > 0) ? 1 : 0) << i;
+    })
+
+    return mask;
+}
+
 enum eTraversalSource { FromParent, FromChild, FromSibling };
+
+class TraversalStack {
+public:
+    std::pair<uint32_t, float> stack[MAX_STACK_SIZE];
+    uint32_t stack_size = 0;
+
+    force_inline void push(uint32_t index, float dist) {
+        stack[stack_size++] = std::make_pair(index, dist);
+        assert(stack_size < MAX_STACK_SIZE && "Traversal stack overflow!");
+    }
+
+    force_inline std::pair<uint32_t, float> pop() {
+        return stack[--stack_size];
+    }
+
+    void sort_top3() {
+        assert(stack_size >= 3);
+        uint32_t i = stack_size - 3;
+
+        if (stack[i].second > stack[i + 1].second) {
+            if (stack[i + 1].second > stack[i + 2].second) {
+                return;
+            } else if (stack[i].second > stack[i + 2].second) {
+                std::swap(stack[i + 1], stack[i + 2]);
+            } else {
+                std::pair<uint32_t, float> tmp = stack[i];
+                stack[i] = stack[i + 2];
+                stack[i + 2] = stack[i + 1];
+                stack[i + 1] = tmp;
+            }
+        } else {
+            if (stack[i].second > stack[i + 2].second) {
+                std::swap(stack[i], stack[i + 1]);
+            } else if (stack[i + 2].second > stack[i + 1].second) {
+                std::swap(stack[i], stack[i + 2]);
+            } else {
+                std::pair<uint32_t, float> tmp = stack[i];
+                stack[i] = stack[i + 1];
+                stack[i + 1] = stack[i + 2];
+                stack[i + 2] = tmp;
+            }
+        }
+
+        assert(stack[stack_size - 3].second >= stack[stack_size - 2].second &&
+               stack[stack_size - 2].second >= stack[stack_size - 1].second);
+    }
+
+    void sort_top4() {
+        assert(stack_size >= 4);
+        uint32_t i = stack_size - 4;
+
+        if (stack[i + 0].second < stack[i + 1].second) std::swap(stack[i + 0], stack[i + 1]);
+        if (stack[i + 2].second < stack[i + 3].second) std::swap(stack[i + 2], stack[i + 3]);
+        if (stack[i + 0].second < stack[i + 2].second) std::swap(stack[i + 0], stack[i + 2]);
+        if (stack[i + 1].second < stack[i + 3].second) std::swap(stack[i + 1], stack[i + 3]);
+        if (stack[i + 1].second < stack[i + 2].second) std::swap(stack[i + 1], stack[i + 2]);
+
+        assert(stack[stack_size - 4].second >= stack[stack_size - 3].second &&
+               stack[stack_size - 3].second >= stack[stack_size - 2].second &&
+               stack[stack_size - 2].second >= stack[stack_size - 1].second);
+    }
+
+    void sort_topN(int count) {
+        assert(stack_size >= uint32_t(count));
+        int start = int(stack_size - count);
+
+        for (int i = start + 1; i < int(stack_size); i++) {
+            std::pair<uint32_t, float> key = stack[i];
+
+            int j = i - 1;
+
+            while (j >= start && stack[j].second < key.second) {
+                stack[j + 1] = stack[j];
+                j--;
+            }
+
+            stack[j + 1] = key;
+        }
+
+#ifndef NDEBUG
+        for (int j = 0; j < count - 1; j++) {
+            assert(stack[stack_size - count + j].second >= stack[stack_size - count + j + 1].second);
+        }
+#endif
+    }
+};
 
 force_inline int hash(int x) {
     unsigned ret = reinterpret_cast<const unsigned &>(x);
@@ -973,40 +1088,73 @@ bool Ray::Ref::Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t &r, co
                                                        const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t &inter) {
     bool res = false;
 
-    const int ray_dir_oct = ((r.d[2] > 0.0f) << 2) | ((r.d[1] > 0.0f) << 1) | (r.d[0] > 0.0f);
-
-    int child_order[8];
-    ITERATE_8({ child_order[i] = i ^ ray_dir_oct; })
-
     float inv_d[3];
     safe_invert(r.d, inv_d);
 
-    struct {
-        uint32_t index;
-        float dist;
-    } stack[MAX_STACK_SIZE];
-    uint32_t stack_size = 0;
+    TraversalStack st;
+    st.push(root_index, 0.0f);
 
-    stack[stack_size].index = root_index;
-    stack[stack_size++].dist = 0.0f;
-
-    while (stack_size) {
-        uint32_t cur = stack[--stack_size].index;
-        float cur_dist = stack[stack_size].dist;
+    while (st.stack_size) {
+        uint32_t cur; float cur_dist;
+        std::tie(cur, cur_dist) = st.pop();
 
         if (cur_dist > inter.t) continue;
 
+TRAVERSE:
         if (!is_leaf_node(nodes[cur])) {
-            int res[8];
             float dist[8];
-            bbox_test_oct(r.o, inv_d, nodes[cur], res, dist);
+            long mask = bbox_test_oct(r.o, inv_d, inter.t, nodes[cur], dist);
+            if (mask) {
+                int i = bsf(mask); mask = btc(mask, i);
+                if (mask == 0) { // only one box was hit
+                    cur = nodes[cur].child[i];
+                    goto TRAVERSE;
+                }
 
-            ITERATE_8({
-                int j = child_order[i];
-                stack[stack_size].index = nodes[cur].child[j];
-                stack[stack_size].dist = dist[j];
-                stack_size += res[j];
-            })
+                int i2 = bsf(mask); mask = btc(mask, i2);
+                if (mask == 0) { // two boxes were hit
+                    if (dist[i] < dist[i2]) {
+                        st.push(nodes[cur].child[i2], dist[i2]);
+                        cur = nodes[cur].child[i];
+                    } else {
+                        st.push(nodes[cur].child[i], dist[i]);
+                        cur = nodes[cur].child[i2];
+                    }
+                    goto TRAVERSE;
+                }
+
+                st.push(nodes[cur].child[i], dist[i]);
+                st.push(nodes[cur].child[i2], dist[i2]);
+
+                i = bsf(mask); mask = btc(mask, i);
+                st.push(nodes[cur].child[i], dist[i]);
+                if (mask == 0) { // three boxes were hit
+                    st.sort_top3();
+                    std::tie(cur, std::ignore) = st.pop();
+                    goto TRAVERSE;
+                }
+
+                i = bsf(mask); mask = btc(mask, i);
+                st.push(nodes[cur].child[i], dist[i]);
+                if (mask == 0) { // four boxes were hit
+                    st.sort_top4();
+                    std::tie(cur, std::ignore) = st.pop();
+                    goto TRAVERSE;
+                }
+
+                uint32_t size_before = st.stack_size;
+
+                // from five to eight boxes were hit
+                do {
+                    i = bsf(mask); mask = btc(mask, i);
+                    st.push(nodes[cur].child[i], dist[i]);
+                } while (mask != 0);
+
+                int count = int(st.stack_size - size_before + 4);
+                st.sort_topN(count);
+                std::tie(cur, std::ignore) = st.pop();
+                goto TRAVERSE;
+            }
         } else {
             uint32_t prim_index = (nodes[cur].child[0] & PRIM_INDEX_BITS);
             for (uint32_t i = prim_index; i < prim_index + nodes[cur].child[1]; i++) {
@@ -1061,7 +1209,7 @@ bool Ray::Ref::Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t &r, const 
 
                 float _inv_d[3] = { 1.0f / _r.d[0], 1.0f / _r.d[1], 1.0f / _r.d[2] };
 
-                bool hit_found = Traverse_MicroTree_WithStack_ClosestHit(_r, _inv_d, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter);
+                bool hit_found = Traverse_MicroTree_WithStack_AnyHit(_r, _inv_d, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter);
                 res |= hit_found;
                 if (hit_found && (tris[inter.prim_indices[0]].ci & TRI_SOLID_BIT)) {
                     return true;
@@ -1086,32 +1234,70 @@ bool Ray::Ref::Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t &r, const 
     float inv_d[3];
     safe_invert(r.d, inv_d);
 
-    struct {
-        uint32_t index;
-        float dist;
-    } stack[MAX_STACK_SIZE];
-    uint32_t stack_size = 0;
+    TraversalStack st;
+    st.push(root_index, 0.0f);
 
-    stack[stack_size].index = root_index;
-    stack[stack_size++].dist = 0.0f;
-
-    while (stack_size) {
-        uint32_t cur = stack[--stack_size].index;
-        float cur_dist = stack[stack_size].dist;
+    while (st.stack_size) {
+        uint32_t cur; float cur_dist;
+        std::tie(cur, cur_dist) = st.pop();
 
         if (cur_dist > inter.t) continue;
 
+TRAVERSE:
         if (!is_leaf_node(nodes[cur])) {
-            int res[8];
             float dist[8];
-            bbox_test_oct(r.o, inv_d, nodes[cur], res, dist);
+            long mask = bbox_test_oct(r.o, inv_d, inter.t, nodes[cur], dist);
+            if (mask) {
+                int i = bsf(mask); mask = btc(mask, i);
+                if (mask == 0) { // only one box was hit
+                    cur = nodes[cur].child[i];
+                    goto TRAVERSE;
+                }
 
-            ITERATE_8({
-                int j = child_order[i];
-                stack[stack_size].index = nodes[cur].child[j];
-                stack[stack_size].dist = dist[j];
-                stack_size += res[j];
-            })
+                int i2 = bsf(mask); mask = btc(mask, i2);
+                if (mask == 0) { // two boxes were hit
+                    if (dist[i] < dist[i2]) {
+                        st.push(nodes[cur].child[i2], dist[i2]);
+                        cur = nodes[cur].child[i];
+                    } else {
+                        st.push(nodes[cur].child[i], dist[i]);
+                        cur = nodes[cur].child[i2];
+                    }
+                    goto TRAVERSE;
+                }
+
+                st.push(nodes[cur].child[i], dist[i]);
+                st.push(nodes[cur].child[i2], dist[i2]);
+
+                i = bsf(mask); mask = btc(mask, i);
+                st.push(nodes[cur].child[i], dist[i]);
+                if (mask == 0) { // three boxes were hit
+                    st.sort_top3();
+                    std::tie(cur, std::ignore) = st.pop();
+                    goto TRAVERSE;
+                }
+
+                i = bsf(mask); mask = btc(mask, i);
+                st.push(nodes[cur].child[i], dist[i]);
+                if (mask == 0) { // four boxes were hit
+                    st.sort_top4();
+                    std::tie(cur, std::ignore) = st.pop();
+                    goto TRAVERSE;
+                }
+
+                uint32_t size_before = st.stack_size;
+
+                // from five to eight boxes were hit
+                do {
+                    i = bsf(mask); mask = btc(mask, i);
+                    st.push(nodes[cur].child[i], dist[i]);
+                } while (mask != 0);
+
+                int count = int(st.stack_size - size_before + 4);
+                st.sort_topN(count);
+                std::tie(cur, std::ignore) = st.pop();
+                goto TRAVERSE;
+            }
         } else {
             uint32_t prim_index = (nodes[cur].child[0] & PRIM_INDEX_BITS);
             for (uint32_t i = prim_index; i < prim_index + nodes[cur].child[1]; i++) {
@@ -1165,37 +1351,70 @@ bool Ray::Ref::Traverse_MicroTree_WithStack_ClosestHit(const ray_packet_t &r, co
                                                        const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, hit_data_t &inter) {
     bool res = false;
 
-    const int ray_dir_oct = ((r.d[2] > 0.0f) << 2) | ((r.d[1] > 0.0f) << 1) | (r.d[0] > 0.0f);
+    TraversalStack st;
+    st.push(root_index, 0.0f);
 
-    int child_order[8];
-    ITERATE_8({ child_order[i] = i ^ ray_dir_oct; })
-
-    struct {
-        uint32_t index;
-        float dist;
-    } stack[MAX_STACK_SIZE];
-    uint32_t stack_size = 0;
-
-    stack[stack_size].index = root_index;
-    stack[stack_size++].dist = 0.0f;
-
-    while (stack_size) {
-        uint32_t cur = stack[--stack_size].index;
-        float cur_dist = stack[stack_size].dist;
+    while (st.stack_size) {
+        uint32_t cur; float cur_dist;
+        std::tie(cur, cur_dist) = st.pop();
 
         if (cur_dist > inter.t) continue;
 
+TRAVERSE:
         if (!is_leaf_node(nodes[cur])) {
-            int res[8];
             float dist[8];
-            bbox_test_oct(r.o, inv_d, nodes[cur], res, dist);
+            long mask = bbox_test_oct(r.o, inv_d, inter.t, nodes[cur], dist);
+            if (mask) {
+                int i = bsf(mask); mask = btc(mask, i);
+                if (mask == 0) { // only one box was hit
+                    cur = nodes[cur].child[i];
+                    goto TRAVERSE;
+                }
 
-            ITERATE_8({
-                int j = child_order[i];
-                stack[stack_size].index = nodes[cur].child[j];
-                stack[stack_size].dist = dist[j];
-                stack_size += res[j];
-            })
+                int i2 = bsf(mask); mask = btc(mask, i2);
+                if (mask == 0) { // two boxes were hit
+                    if (dist[i] < dist[i2]) {
+                        st.push(nodes[cur].child[i2], dist[i2]);
+                        cur = nodes[cur].child[i];
+                    } else {
+                        st.push(nodes[cur].child[i], dist[i]);
+                        cur = nodes[cur].child[i2];
+                    }
+                    goto TRAVERSE;
+                }
+
+                st.push(nodes[cur].child[i], dist[i]);
+                st.push(nodes[cur].child[i2], dist[i2]);
+
+                i = bsf(mask); mask = btc(mask, i);
+                st.push(nodes[cur].child[i], dist[i]);
+                if (mask == 0) { // three boxes were hit
+                    st.sort_top3();
+                    std::tie(cur, std::ignore) = st.pop();
+                    goto TRAVERSE;
+                }
+
+                i = bsf(mask); mask = btc(mask, i);
+                st.push(nodes[cur].child[i], dist[i]);
+                if (mask == 0) { // four boxes were hit
+                    st.sort_top4();
+                    std::tie(cur, std::ignore) = st.pop();
+                    goto TRAVERSE;
+                }
+
+                uint32_t size_before = st.stack_size;
+
+                // from five to eight boxes were hit
+                do {
+                    i = bsf(mask); mask = btc(mask, i);
+                    st.push(nodes[cur].child[i], dist[i]);
+                } while (mask != 0);
+
+                int count = int(st.stack_size - size_before + 4);
+                st.sort_topN(count);
+                std::tie(cur, std::ignore) = st.pop();
+                goto TRAVERSE;
+            }
         } else {
             res |= IntersectTris_ClosestHit(r, tris, &tri_indices[nodes[cur].child[0] & PRIM_INDEX_BITS], nodes[cur].child[1], obj_index, inter);
         }
@@ -1228,6 +1447,86 @@ bool Ray::Ref::Traverse_MicroTree_WithStack_AnyHit(const ray_packet_t &r, const 
                 break;
             }
             
+        }
+    }
+
+    return res;
+}
+
+bool Ray::Ref::Traverse_MicroTree_WithStack_AnyHit(const ray_packet_t &r, const float inv_d[3], const bvh_node8_t *nodes, uint32_t root_index,
+                                                   const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, hit_data_t &inter) {
+    bool res = false;
+
+    TraversalStack st;
+    st.push(root_index, 0.0f);
+
+    while (st.stack_size) {
+        uint32_t cur; float cur_dist;
+        std::tie(cur, cur_dist) = st.pop();
+
+        if (cur_dist > inter.t) continue;
+
+    TRAVERSE:
+        if (!is_leaf_node(nodes[cur])) {
+            float dist[8];
+            long mask = bbox_test_oct(r.o, inv_d, inter.t, nodes[cur], dist);
+            if (mask) {
+                int i = bsf(mask); mask = btc(mask, i);
+                if (mask == 0) { // only one box was hit
+                    cur = nodes[cur].child[i];
+                    goto TRAVERSE;
+                }
+
+                int i2 = bsf(mask); mask = btc(mask, i2);
+                if (mask == 0) { // two boxes were hit
+                    if (dist[i] < dist[i2]) {
+                        st.push(nodes[cur].child[i2], dist[i2]);
+                        cur = nodes[cur].child[i];
+                    } else {
+                        st.push(nodes[cur].child[i], dist[i]);
+                        cur = nodes[cur].child[i2];
+                    }
+                    goto TRAVERSE;
+                }
+
+                st.push(nodes[cur].child[i], dist[i]);
+                st.push(nodes[cur].child[i2], dist[i2]);
+
+                i = bsf(mask); mask = btc(mask, i);
+                st.push(nodes[cur].child[i], dist[i]);
+                if (mask == 0) { // three boxes were hit
+                    st.sort_top3();
+                    std::tie(cur, std::ignore) = st.pop();
+                    goto TRAVERSE;
+                }
+
+                i = bsf(mask); mask = btc(mask, i);
+                st.push(nodes[cur].child[i], dist[i]);
+                if (mask == 0) { // four boxes were hit
+                    st.sort_top4();
+                    std::tie(cur, std::ignore) = st.pop();
+                    goto TRAVERSE;
+                }
+
+                uint32_t size_before = st.stack_size;
+
+                // from five to eight boxes were hit
+                do {
+                    i = bsf(mask); mask = btc(mask, i);
+                    st.push(nodes[cur].child[i], dist[i]);
+                } while (mask != 0);
+
+                int count = int(st.stack_size - size_before + 4);
+                st.sort_topN(count);
+                std::tie(cur, std::ignore) = st.pop();
+                goto TRAVERSE;
+            }
+        } else {
+            bool hit_found = IntersectTris_AnyHit(r, tris, &tri_indices[nodes[cur].child[0] & PRIM_INDEX_BITS], nodes[cur].child[1], obj_index, inter);
+            res |= hit_found;
+            if (hit_found && (tris[inter.prim_indices[0]].ci & TRI_SOLID_BIT)) {
+                break;
+            }
         }
     }
 
