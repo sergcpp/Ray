@@ -47,7 +47,7 @@ protected:
 
     bool                        use_wide_bvh_;
     std::vector<bvh_node_t>     nodes_;
-    aligned_vector<mbvh_node_t> oct_nodes_;
+    aligned_vector<mbvh_node_t> mnodes_;
     std::vector<tri_accel_t>    tris_;
     std::vector<uint32_t>       tri_indices_;
     std::vector<transform_t>    transforms_;
@@ -101,7 +101,7 @@ public:
         return (uint32_t)tris_.size();
     }
     uint32_t node_count() override {
-        return (uint32_t)(use_wide_bvh_ ? oct_nodes_.size() : nodes_.size());
+        return (uint32_t)(use_wide_bvh_ ? mnodes_.size() : nodes_.size());
     }
 };
 }

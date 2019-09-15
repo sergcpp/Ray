@@ -92,6 +92,16 @@ void sort_mort_codes(uint32_t *morton_codes, size_t prims_count, uint32_t *out_i
 }
 }
 
+const Ray::tri_accel_t Ray::InvalidTriangle = {
+    NAN, NAN,
+    NAN,
+    NAN, NAN,
+    0,
+    NAN, NAN,
+    NAN, NAN,
+    0xffffffff, 0xffffffff
+};
+
 // Used for fast color conversion
 const float Ray::uint8_to_float_table[] = {
     0.000000000f, 0.003921569f, 0.007843138f, 0.011764706f, 0.015686275f, 0.019607844f, 0.023529412f, 0.027450981f, 0.031372551f, 0.035294119f, 0.039215688f, 0.043137256f, 0.047058824f, 0.050980393f, 0.054901961f, 0.058823530f,
@@ -218,15 +228,7 @@ bool Ray::PreprocessTri(const float *p, int stride, tri_accel_t *acc) {
         assert((acc->ci & TRI_W_BITS) == w);
         return true;
     } else {
-        acc->nu = acc->nv = NAN;
-        acc->pu = acc->pv = NAN;
-        acc->np = NAN;
-
-        acc->e0u = acc->e0v = NAN;
-        acc->e1u = acc->e1v = NAN;
-
-        acc->ci = 0;
-
+        (*acc) = InvalidTriangle;
         return false;
     }
 }
