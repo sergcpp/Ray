@@ -119,7 +119,7 @@ bool Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t<S> &r, const sim
                                              const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
                                              const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t<S> &inter);
 template <int S>
-bool Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const mbvh_node_t *oct_nodes, uint32_t node_index,
+bool Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const mbvh_node_t *mnodes, uint32_t node_index,
                                              const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
                                              const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t<S> &inter);
 template <int S>
@@ -127,7 +127,7 @@ bool Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t<S> &r, const simd_iv
                                          const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
                                          const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t<S> &inter, simd_ivec<S> &is_solid_hit);
 template <int S>
-bool Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const mbvh_node_t *oct_nodes, uint32_t node_index,
+bool Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const mbvh_node_t *mnodes, uint32_t node_index,
                                          const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
                                          const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t<S> &inter, simd_ivec<S> &is_solid_hit);
 // traditional bvh traversal with stack for inner nodes
@@ -135,13 +135,13 @@ template <int S>
 bool Traverse_MicroTree_WithStack_ClosestHit(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const bvh_node_t *nodes, uint32_t node_index,
                                              const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, hit_data_t<S> &inter);
 template <int S>
-bool Traverse_MicroTree_WithStack_ClosestHit(const float ro[3], const float rd[3], int i, const mbvh_node_t *oct_nodes, uint32_t node_index,
+bool Traverse_MicroTree_WithStack_ClosestHit(const float ro[3], const float rd[3], int i, const mbvh_node_t *mnodes, uint32_t node_index,
                                              const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, hit_data_t<S> &inter);
 template <int S>
 bool Traverse_MicroTree_WithStack_AnyHit(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const bvh_node_t *nodes, uint32_t node_index,
                                          const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, hit_data_t<S> &inter, simd_ivec<S> &is_solid_hit);
 template <int S>
-bool Traverse_MicroTree_WithStack_AnyHit(const float ro[3], const float rd[3], int i, const mbvh_node_t *oct_nodes, uint32_t node_index,
+bool Traverse_MicroTree_WithStack_AnyHit(const float ro[3], const float rd[3], int i, const mbvh_node_t *mnodes, uint32_t node_index,
                                          const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, hit_data_t<S> &inter, simd_ivec<S> &is_solid_hit);
 
 // BRDFs
@@ -523,77 +523,92 @@ struct TraversalStateStack_Multi {
     int index = 0, num = 1;
 };
 
+struct stack_entry_t {
+    uint32_t index;
+    float dist;
+};
+
+template<int StackSize>
 class TraversalStateStack_Single {
 public:
-    std::pair<uint32_t, float> stack[MAX_STACK_SIZE];
+    stack_entry_t stack[StackSize];
     uint32_t stack_size = 0;
 
     force_inline void push(uint32_t index, float dist) {
-        stack[stack_size++] = std::make_pair(index, dist);
-        assert(stack_size < MAX_STACK_SIZE && "Traversal stack overflow!");
+        stack[stack_size++] = { index, dist };
+        assert(stack_size < StackSize && "Traversal stack overflow!");
     }
 
-    force_inline std::pair<uint32_t, float> pop() {
+    force_inline stack_entry_t pop() {
         return stack[--stack_size];
+        assert(stack_size >= 0 && "Traversal stack underflow!");
+    }
+
+    force_inline uint32_t pop_index() {
+        return stack[--stack_size].index;
+    }
+
+    force_inline bool empty() const {
+        return stack_size == 0;
     }
 
     void sort_top3() {
         assert(stack_size >= 3);
-        uint32_t i = stack_size - 3;
+        const uint32_t i = stack_size - 3;
 
-        if (stack[i].second > stack[i + 1].second) {
-            if (stack[i + 1].second > stack[i + 2].second) {
+        if (stack[i].dist > stack[i + 1].dist) {
+            if (stack[i + 1].dist > stack[i + 2].dist) {
                 return;
-            } else if (stack[i].second > stack[i + 2].second) {
+            } else if (stack[i].dist > stack[i + 2].dist) {
                 std::swap(stack[i + 1], stack[i + 2]);
             } else {
-                std::pair<uint32_t, float> tmp = stack[i];
+                stack_entry_t tmp = stack[i];
                 stack[i] = stack[i + 2];
                 stack[i + 2] = stack[i + 1];
                 stack[i + 1] = tmp;
             }
         } else {
-            if (stack[i].second > stack[i + 2].second) {
+            if (stack[i].dist > stack[i + 2].dist) {
                 std::swap(stack[i], stack[i + 1]);
-            } else if (stack[i + 2].second > stack[i + 1].second) {
+            } else if (stack[i + 2].dist > stack[i + 1].dist) {
                 std::swap(stack[i], stack[i + 2]);
             } else {
-                std::pair<uint32_t, float> tmp = stack[i];
+                stack_entry_t tmp = stack[i];
                 stack[i] = stack[i + 1];
                 stack[i + 1] = stack[i + 2];
                 stack[i + 2] = tmp;
             }
         }
 
-        assert(stack[stack_size - 3].second >= stack[stack_size - 2].second &&
-               stack[stack_size - 2].second >= stack[stack_size - 1].second);
+        assert(stack[stack_size - 3].dist >= stack[stack_size - 2].dist &&
+               stack[stack_size - 2].dist >= stack[stack_size - 1].dist);
     }
 
     void sort_top4() {
         assert(stack_size >= 4);
-        uint32_t i = stack_size - 4;
+        const uint32_t i = stack_size - 4;
 
-        if (stack[i + 0].second < stack[i + 1].second) std::swap(stack[i + 0], stack[i + 1]);
-        if (stack[i + 2].second < stack[i + 3].second) std::swap(stack[i + 2], stack[i + 3]);
-        if (stack[i + 0].second < stack[i + 2].second) std::swap(stack[i + 0], stack[i + 2]);
-        if (stack[i + 1].second < stack[i + 3].second) std::swap(stack[i + 1], stack[i + 3]);
-        if (stack[i + 1].second < stack[i + 2].second) std::swap(stack[i + 1], stack[i + 2]);
+        if (stack[i + 0].dist < stack[i + 1].dist) std::swap(stack[i + 0], stack[i + 1]);
+        if (stack[i + 2].dist < stack[i + 3].dist) std::swap(stack[i + 2], stack[i + 3]);
+        if (stack[i + 0].dist < stack[i + 2].dist) std::swap(stack[i + 0], stack[i + 2]);
+        if (stack[i + 1].dist < stack[i + 3].dist) std::swap(stack[i + 1], stack[i + 3]);
+        if (stack[i + 1].dist < stack[i + 2].dist) std::swap(stack[i + 1], stack[i + 2]);
 
-        assert(stack[stack_size - 4].second >= stack[stack_size - 3].second &&
-               stack[stack_size - 3].second >= stack[stack_size - 2].second &&
-               stack[stack_size - 2].second >= stack[stack_size - 1].second);
+        assert(stack[stack_size - 4].dist >= stack[stack_size - 3].dist &&
+               stack[stack_size - 3].dist >= stack[stack_size - 2].dist &&
+               stack[stack_size - 2].dist >= stack[stack_size - 1].dist);
     }
 
     void sort_topN(int count) {
         assert(stack_size >= uint32_t(count));
-        int start = int(stack_size - count);
+        const int start = int(stack_size - count);
 
         for (int i = start + 1; i < int(stack_size); i++) {
-            std::pair<uint32_t, float> key = stack[i];
+            const stack_entry_t key = stack[i];
 
             int j = i - 1;
 
-            while (j >= start && stack[j].second < key.second) {
+            while (j >= start && stack[j].dist < key.dist) {
                 stack[j + 1] = stack[j];
                 j--;
             }
@@ -603,7 +618,7 @@ public:
 
 #ifndef NDEBUG
         for (int j = 0; j < count - 1; j++) {
-            assert(stack[stack_size - count + j].second >= stack[stack_size - count + j + 1].second);
+            assert(stack[stack_size - count + j].dist >= stack[stack_size - count + j + 1].dist);
         }
 #endif
     }
@@ -1793,26 +1808,25 @@ bool Ray::NS::Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t<S> &r, 
         const float _inv_d[3] = { inv_d[0][ri], inv_d[1][ri], inv_d[2][ri] },
                     _neg_inv_d_o[3] = { neg_inv_d_o[0][ri], neg_inv_d_o[1][ri], neg_inv_d_o[2][ri] };
 
-        TraversalStateStack_Single st;
+        TraversalStateStack_Single<MAX_STACK_SIZE> st;
         st.push(node_index, 0.0f);
 
-        while (st.stack_size) {
-            uint32_t cur; float cur_dist;
-            std::tie(cur, cur_dist) = st.pop();
+        while (!st.empty()) {
+            stack_entry_t cur = st.pop();
 
-            if (cur_dist > inter.t[ri]) continue;
+            if (cur.dist > inter.t[ri]) continue;
 
 TRAVERSE:
-            if (!is_leaf_node(nodes[cur])) {
+            if (!is_leaf_node(nodes[cur.index])) {
                 simd_fvec<S> bbox_min[LanesCount][3], bbox_max[LanesCount][3];
 
                 ITERATE(LanesCount, {
-                    bbox_min[i][0] = simd_fvec<S>(nodes[cur].bbox_min[0] + i * S, simd_mem_aligned);
-                    bbox_min[i][1] = simd_fvec<S>(nodes[cur].bbox_min[1] + i * S, simd_mem_aligned);
-                    bbox_min[i][2] = simd_fvec<S>(nodes[cur].bbox_min[2] + i * S, simd_mem_aligned);
-                    bbox_max[i][0] = simd_fvec<S>(nodes[cur].bbox_max[0] + i * S, simd_mem_aligned);
-                    bbox_max[i][1] = simd_fvec<S>(nodes[cur].bbox_max[1] + i * S, simd_mem_aligned);
-                    bbox_max[i][2] = simd_fvec<S>(nodes[cur].bbox_max[2] + i * S, simd_mem_aligned);
+                    bbox_min[i][0] = simd_fvec<S>(nodes[cur.index].bbox_min[0] + i * S, simd_mem_aligned);
+                    bbox_min[i][1] = simd_fvec<S>(nodes[cur.index].bbox_min[1] + i * S, simd_mem_aligned);
+                    bbox_min[i][2] = simd_fvec<S>(nodes[cur.index].bbox_min[2] + i * S, simd_mem_aligned);
+                    bbox_max[i][0] = simd_fvec<S>(nodes[cur.index].bbox_max[0] + i * S, simd_mem_aligned);
+                    bbox_max[i][1] = simd_fvec<S>(nodes[cur.index].bbox_max[1] + i * S, simd_mem_aligned);
+                    bbox_max[i][2] = simd_fvec<S>(nodes[cur.index].bbox_max[2] + i * S, simd_mem_aligned);
                 })
 
                 long mask = 0;
@@ -1831,38 +1845,38 @@ TRAVERSE:
 
                     int i = bsf(mask); mask = btc(mask, i);
                     if (mask == 0) { // only one box was hit
-                        cur = nodes[cur].child[i];
+                        cur.index = nodes[cur.index].child[i];
                         goto TRAVERSE;
                     }
 
                     int i2 = bsf(mask); mask = btc(mask, i2);
                     if (mask == 0) { // two boxes were hit
                         if (_res_dist[i] < _res_dist[i2]) {
-                            st.push(nodes[cur].child[i2], _res_dist[i2]);
-                            cur = nodes[cur].child[i];
+                            st.push(nodes[cur.index].child[i2], _res_dist[i2]);
+                            cur.index = nodes[cur.index].child[i];
                         } else {
-                            st.push(nodes[cur].child[i], _res_dist[i]);
-                            cur = nodes[cur].child[i2];
+                            st.push(nodes[cur.index].child[i], _res_dist[i]);
+                            cur.index = nodes[cur.index].child[i2];
                         }
                         goto TRAVERSE;
                     }
 
-                    st.push(nodes[cur].child[i], _res_dist[i]);
-                    st.push(nodes[cur].child[i2], _res_dist[i2]);
+                    st.push(nodes[cur.index].child[i], _res_dist[i]);
+                    st.push(nodes[cur.index].child[i2], _res_dist[i2]);
 
                     i = bsf(mask); mask = btc(mask, i);
-                    st.push(nodes[cur].child[i], _res_dist[i]);
+                    st.push(nodes[cur.index].child[i], _res_dist[i]);
                     if (mask == 0) { // three boxes were hit
                         st.sort_top3();
-                        std::tie(cur, std::ignore) = st.pop();
+                        cur.index = st.pop_index();
                         goto TRAVERSE;
                     }
 
                     i = bsf(mask); mask = btc(mask, i);
-                    st.push(nodes[cur].child[i], _res_dist[i]);
+                    st.push(nodes[cur.index].child[i], _res_dist[i]);
                     if (mask == 0) { // four boxes were hit
                         st.sort_top4();
-                        std::tie(cur, std::ignore) = st.pop();
+                        cur.index = st.pop_index();
                         goto TRAVERSE;
                     }
 
@@ -1871,17 +1885,17 @@ TRAVERSE:
                     // from five to eight boxes were hit
                     do {
                         i = bsf(mask); mask = btc(mask, i);
-                        st.push(nodes[cur].child[i], _res_dist[i]);
+                        st.push(nodes[cur.index].child[i], _res_dist[i]);
                     } while (mask != 0);
 
                     int count = int(st.stack_size - size_before + 4);
                     st.sort_topN(count);
-                    std::tie(cur, std::ignore) = st.pop();
+                    cur.index = st.pop_index();
                     goto TRAVERSE;
                 }
             } else {
-                uint32_t prim_index = (nodes[cur].child[0] & PRIM_INDEX_BITS);
-                for (uint32_t j = prim_index; j < prim_index + nodes[cur].child[1]; j++) {
+                uint32_t prim_index = (nodes[cur.index].child[0] & PRIM_INDEX_BITS);
+                for (uint32_t j = prim_index; j < prim_index + nodes[cur.index].child[1]; j++) {
                     const mesh_instance_t &mi = mesh_instances[mi_indices[j]];
                     const mesh_t &m = meshes[mi.mesh_index];
                     const transform_t &tr = transforms[mi.tr_index];
@@ -1982,26 +1996,25 @@ bool Ray::NS::Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t<S> &r, cons
         const float _inv_d[3] = { inv_d[0][ri], inv_d[1][ri], inv_d[2][ri] },
                     _neg_inv_d_o[3] = { neg_inv_d_o[0][ri], neg_inv_d_o[1][ri], neg_inv_d_o[2][ri] };
 
-        TraversalStateStack_Single st;
+        TraversalStateStack_Single<MAX_STACK_SIZE> st;
         st.push(node_index, 0.0f);
 
-        while (st.stack_size) {
-            uint32_t cur; float cur_dist;
-            std::tie(cur, cur_dist) = st.pop();
+        while (!st.empty()) {
+            stack_entry_t cur = st.pop();
 
-            if (cur_dist > inter.t[ri]) continue;
+            if (cur.dist > inter.t[ri]) continue;
 
 TRAVERSE:
-            if (!is_leaf_node(nodes[cur])) {
+            if (!is_leaf_node(nodes[cur.index])) {
                 simd_fvec<S> bbox_min[LanesCount][3], bbox_max[LanesCount][3];
 
                 ITERATE(LanesCount, {
-                    bbox_min[i][0] = simd_fvec<S>(nodes[cur].bbox_min[0] + i * S, simd_mem_aligned);
-                    bbox_min[i][1] = simd_fvec<S>(nodes[cur].bbox_min[1] + i * S, simd_mem_aligned);
-                    bbox_min[i][2] = simd_fvec<S>(nodes[cur].bbox_min[2] + i * S, simd_mem_aligned);
-                    bbox_max[i][0] = simd_fvec<S>(nodes[cur].bbox_max[0] + i * S, simd_mem_aligned);
-                    bbox_max[i][1] = simd_fvec<S>(nodes[cur].bbox_max[1] + i * S, simd_mem_aligned);
-                    bbox_max[i][2] = simd_fvec<S>(nodes[cur].bbox_max[2] + i * S, simd_mem_aligned);
+                    bbox_min[i][0] = simd_fvec<S>(nodes[cur.index].bbox_min[0] + i * S, simd_mem_aligned);
+                    bbox_min[i][1] = simd_fvec<S>(nodes[cur.index].bbox_min[1] + i * S, simd_mem_aligned);
+                    bbox_min[i][2] = simd_fvec<S>(nodes[cur.index].bbox_min[2] + i * S, simd_mem_aligned);
+                    bbox_max[i][0] = simd_fvec<S>(nodes[cur.index].bbox_max[0] + i * S, simd_mem_aligned);
+                    bbox_max[i][1] = simd_fvec<S>(nodes[cur.index].bbox_max[1] + i * S, simd_mem_aligned);
+                    bbox_max[i][2] = simd_fvec<S>(nodes[cur.index].bbox_max[2] + i * S, simd_mem_aligned);
                 })
 
                 long mask = 0;
@@ -2020,38 +2033,38 @@ TRAVERSE:
 
                     int i = bsf(mask); mask = btc(mask, i);
                     if (mask == 0) { // only one box was hit
-                        cur = nodes[cur].child[i];
+                        cur.index = nodes[cur.index].child[i];
                         goto TRAVERSE;
                     }
 
                     int i2 = bsf(mask); mask = btc(mask, i2);
                     if (mask == 0) { // two boxes were hit
                         if (_res_dist[i] < _res_dist[i2]) {
-                            st.push(nodes[cur].child[i2], _res_dist[i2]);
-                            cur = nodes[cur].child[i];
+                            st.push(nodes[cur.index].child[i2], _res_dist[i2]);
+                            cur.index = nodes[cur.index].child[i];
                         } else {
-                            st.push(nodes[cur].child[i], _res_dist[i]);
-                            cur = nodes[cur].child[i2];
+                            st.push(nodes[cur.index].child[i], _res_dist[i]);
+                            cur.index = nodes[cur.index].child[i2];
                         }
                         goto TRAVERSE;
                     }
 
-                    st.push(nodes[cur].child[i], _res_dist[i]);
-                    st.push(nodes[cur].child[i2], _res_dist[i2]);
+                    st.push(nodes[cur.index].child[i], _res_dist[i]);
+                    st.push(nodes[cur.index].child[i2], _res_dist[i2]);
 
                     i = bsf(mask); mask = btc(mask, i);
-                    st.push(nodes[cur].child[i], _res_dist[i]);
+                    st.push(nodes[cur.index].child[i], _res_dist[i]);
                     if (mask == 0) { // three boxes were hit
                         st.sort_top3();
-                        std::tie(cur, std::ignore) = st.pop();
+                        cur.index = st.pop_index();
                         goto TRAVERSE;
                     }
 
                     i = bsf(mask); mask = btc(mask, i);
-                    st.push(nodes[cur].child[i], _res_dist[i]);
+                    st.push(nodes[cur.index].child[i], _res_dist[i]);
                     if (mask == 0) { // four boxes were hit
                         st.sort_top4();
-                        std::tie(cur, std::ignore) = st.pop();
+                        cur.index = st.pop_index();
                         goto TRAVERSE;
                     }
 
@@ -2060,17 +2073,17 @@ TRAVERSE:
                     // from five to eight boxes were hit
                     do {
                         i = bsf(mask); mask = btc(mask, i);
-                        st.push(nodes[cur].child[i], _res_dist[i]);
+                        st.push(nodes[cur.index].child[i], _res_dist[i]);
                     } while (mask != 0);
 
                     int count = int(st.stack_size - size_before + 4);
                     st.sort_topN(count);
-                    std::tie(cur, std::ignore) = st.pop();
+                    cur.index = st.pop_index();
                     goto TRAVERSE;
                 }
             } else {
-                uint32_t prim_index = (nodes[cur].child[0] & PRIM_INDEX_BITS);
-                for (uint32_t j = prim_index; j < prim_index + nodes[cur].child[1]; j++) {
+                uint32_t prim_index = (nodes[cur.index].child[0] & PRIM_INDEX_BITS);
+                for (uint32_t j = prim_index; j < prim_index + nodes[cur.index].child[1]; j++) {
                     const mesh_instance_t &mi = mesh_instances[mi_indices[j]];
                     const mesh_t &m = meshes[mi.mesh_index];
                     const transform_t &tr = transforms[mi.tr_index];
@@ -2147,28 +2160,27 @@ bool Ray::NS::Traverse_MicroTree_WithStack_ClosestHit(const float ro[3], const f
     float _inv_d[3], _neg_inv_d_o[3];
     comp_aux_inv_values(ro, rd, _inv_d, _neg_inv_d_o);
         
-    TraversalStateStack_Single st;
+    TraversalStateStack_Single<MAX_STACK_SIZE> st;
     st.push(node_index, 0.0f);
 
     const int LanesCount = 8 / S;
 
-    while (st.stack_size) {
-        uint32_t cur; float cur_dist;
-        std::tie(cur, cur_dist) = st.pop();
+    while (!st.empty()) {
+        stack_entry_t cur = st.pop();
 
-        if (cur_dist > inter.t[ri]) continue;
+        if (cur.dist > inter.t[ri]) continue;
 
 TRAVERSE:
-        if (!is_leaf_node(nodes[cur])) {
+        if (!is_leaf_node(nodes[cur.index])) {
             simd_fvec<S> bbox_min[LanesCount][3], bbox_max[LanesCount][3];
 
             ITERATE(LanesCount, {
-                bbox_min[i][0] = simd_fvec<S>(nodes[cur].bbox_min[0] + i * S, simd_mem_aligned);
-                bbox_min[i][1] = simd_fvec<S>(nodes[cur].bbox_min[1] + i * S, simd_mem_aligned);
-                bbox_min[i][2] = simd_fvec<S>(nodes[cur].bbox_min[2] + i * S, simd_mem_aligned);
-                bbox_max[i][0] = simd_fvec<S>(nodes[cur].bbox_max[0] + i * S, simd_mem_aligned);
-                bbox_max[i][1] = simd_fvec<S>(nodes[cur].bbox_max[1] + i * S, simd_mem_aligned);
-                bbox_max[i][2] = simd_fvec<S>(nodes[cur].bbox_max[2] + i * S, simd_mem_aligned);
+                bbox_min[i][0] = simd_fvec<S>(nodes[cur.index].bbox_min[0] + i * S, simd_mem_aligned);
+                bbox_min[i][1] = simd_fvec<S>(nodes[cur.index].bbox_min[1] + i * S, simd_mem_aligned);
+                bbox_min[i][2] = simd_fvec<S>(nodes[cur.index].bbox_min[2] + i * S, simd_mem_aligned);
+                bbox_max[i][0] = simd_fvec<S>(nodes[cur.index].bbox_max[0] + i * S, simd_mem_aligned);
+                bbox_max[i][1] = simd_fvec<S>(nodes[cur.index].bbox_max[1] + i * S, simd_mem_aligned);
+                bbox_max[i][2] = simd_fvec<S>(nodes[cur.index].bbox_max[2] + i * S, simd_mem_aligned);
             })
 
             long mask = 0;
@@ -2187,38 +2199,38 @@ TRAVERSE:
 
                 int i = bsf(mask); mask = btc(mask, i);
                 if (mask == 0) { // only one box was hit
-                    cur = nodes[cur].child[i];
+                    cur.index = nodes[cur.index].child[i];
                     goto TRAVERSE;
                 }
 
                 int i2 = bsf(mask); mask = btc(mask, i2);
                 if (mask == 0) { // two boxes were hit
                     if (_res_dist[i] < _res_dist[i2]) {
-                        st.push(nodes[cur].child[i2], _res_dist[i2]);
-                        cur = nodes[cur].child[i];
+                        st.push(nodes[cur.index].child[i2], _res_dist[i2]);
+                        cur.index = nodes[cur.index].child[i];
                     } else {
-                        st.push(nodes[cur].child[i], _res_dist[i]);
-                        cur = nodes[cur].child[i2];
+                        st.push(nodes[cur.index].child[i], _res_dist[i]);
+                        cur.index = nodes[cur.index].child[i2];
                     }
                     goto TRAVERSE;
                 }
 
-                st.push(nodes[cur].child[i], _res_dist[i]);
-                st.push(nodes[cur].child[i2], _res_dist[i2]);
+                st.push(nodes[cur.index].child[i], _res_dist[i]);
+                st.push(nodes[cur.index].child[i2], _res_dist[i2]);
 
                 i = bsf(mask); mask = btc(mask, i);
-                st.push(nodes[cur].child[i], _res_dist[i]);
+                st.push(nodes[cur.index].child[i], _res_dist[i]);
                 if (mask == 0) { // three boxes were hit
                     st.sort_top3();
-                    std::tie(cur, std::ignore) = st.pop();
+                    cur.index = st.pop_index();
                     goto TRAVERSE;
                 }
 
                 i = bsf(mask); mask = btc(mask, i);
-                st.push(nodes[cur].child[i], _res_dist[i]);
+                st.push(nodes[cur.index].child[i], _res_dist[i]);
                 if (mask == 0) { // four boxes were hit
                     st.sort_top4();
-                    std::tie(cur, std::ignore) = st.pop();
+                    cur.index = st.pop_index();
                     goto TRAVERSE;
                 }
 
@@ -2227,16 +2239,16 @@ TRAVERSE:
                 // from five to eight boxes were hit
                 do {
                     i = bsf(mask); mask = btc(mask, i);
-                    st.push(nodes[cur].child[i], _res_dist[i]);
+                    st.push(nodes[cur.index].child[i], _res_dist[i]);
                 } while (mask != 0);
 
                 int count = int(st.stack_size - size_before + 4);
                 st.sort_topN(count);
-                std::tie(cur, std::ignore) = st.pop();
+                cur.index = st.pop_index();
                 goto TRAVERSE;
             }
         } else {
-            res |= IntersectTris_ClosestHit(ro, rd, ri, tris, &tri_indices[nodes[cur].child[0] & PRIM_INDEX_BITS], nodes[cur].child[1], obj_index, inter);
+            res |= IntersectTris_ClosestHit(ro, rd, ri, tris, &tri_indices[nodes[cur.index].child[0] & PRIM_INDEX_BITS], nodes[cur.index].child[1], obj_index, inter);
         }
     }
 
@@ -2301,28 +2313,27 @@ bool Ray::NS::Traverse_MicroTree_WithStack_AnyHit(const float ro[3], const float
     float _inv_d[3], _neg_inv_d_o[3];
     comp_aux_inv_values(ro, rd, _inv_d, _neg_inv_d_o);
 
-    TraversalStateStack_Single st;
+    TraversalStateStack_Single<MAX_STACK_SIZE> st;
     st.push(node_index, 0.0f);
 
     const int LanesCount = 8 / S;
 
-    while (st.stack_size) {
-        uint32_t cur; float cur_dist;
-        std::tie(cur, cur_dist) = st.pop();
+    while (!st.empty()) {
+        stack_entry_t cur = st.pop();
 
-        if (cur_dist > inter.t[ri]) continue;
+        if (cur.dist > inter.t[ri]) continue;
 
 TRAVERSE:
-        if (!is_leaf_node(nodes[cur])) {
+        if (!is_leaf_node(nodes[cur.index])) {
             simd_fvec<S> bbox_min[LanesCount][3], bbox_max[LanesCount][3];
 
             ITERATE(LanesCount, {
-                bbox_min[i][0] = simd_fvec<S>(nodes[cur].bbox_min[0] + i * S, simd_mem_aligned);
-                bbox_min[i][1] = simd_fvec<S>(nodes[cur].bbox_min[1] + i * S, simd_mem_aligned);
-                bbox_min[i][2] = simd_fvec<S>(nodes[cur].bbox_min[2] + i * S, simd_mem_aligned);
-                bbox_max[i][0] = simd_fvec<S>(nodes[cur].bbox_max[0] + i * S, simd_mem_aligned);
-                bbox_max[i][1] = simd_fvec<S>(nodes[cur].bbox_max[1] + i * S, simd_mem_aligned);
-                bbox_max[i][2] = simd_fvec<S>(nodes[cur].bbox_max[2] + i * S, simd_mem_aligned);
+                bbox_min[i][0] = simd_fvec<S>(nodes[cur.index].bbox_min[0] + i * S, simd_mem_aligned);
+                bbox_min[i][1] = simd_fvec<S>(nodes[cur.index].bbox_min[1] + i * S, simd_mem_aligned);
+                bbox_min[i][2] = simd_fvec<S>(nodes[cur.index].bbox_min[2] + i * S, simd_mem_aligned);
+                bbox_max[i][0] = simd_fvec<S>(nodes[cur.index].bbox_max[0] + i * S, simd_mem_aligned);
+                bbox_max[i][1] = simd_fvec<S>(nodes[cur.index].bbox_max[1] + i * S, simd_mem_aligned);
+                bbox_max[i][2] = simd_fvec<S>(nodes[cur.index].bbox_max[2] + i * S, simd_mem_aligned);
             })
 
             long mask = 0;
@@ -2341,38 +2352,38 @@ TRAVERSE:
 
                 int i = bsf(mask); mask = btc(mask, i);
                 if (mask == 0) { // only one box was hit
-                    cur = nodes[cur].child[i];
+                    cur.index = nodes[cur.index].child[i];
                     goto TRAVERSE;
                 }
 
                 int i2 = bsf(mask); mask = btc(mask, i2);
                 if (mask == 0) { // two boxes were hit
                     if (_res_dist[i] < _res_dist[i2]) {
-                        st.push(nodes[cur].child[i2], _res_dist[i2]);
-                        cur = nodes[cur].child[i];
+                        st.push(nodes[cur.index].child[i2], _res_dist[i2]);
+                        cur.index = nodes[cur.index].child[i];
                     } else {
-                        st.push(nodes[cur].child[i], _res_dist[i]);
-                        cur = nodes[cur].child[i2];
+                        st.push(nodes[cur.index].child[i], _res_dist[i]);
+                        cur.index = nodes[cur.index].child[i2];
                     }
                     goto TRAVERSE;
                 }
 
-                st.push(nodes[cur].child[i], _res_dist[i]);
-                st.push(nodes[cur].child[i2], _res_dist[i2]);
+                st.push(nodes[cur.index].child[i], _res_dist[i]);
+                st.push(nodes[cur.index].child[i2], _res_dist[i2]);
 
                 i = bsf(mask); mask = btc(mask, i);
-                st.push(nodes[cur].child[i], _res_dist[i]);
+                st.push(nodes[cur.index].child[i], _res_dist[i]);
                 if (mask == 0) { // three boxes were hit
                     st.sort_top3();
-                    std::tie(cur, std::ignore) = st.pop();
+                    cur.index = st.pop_index();
                     goto TRAVERSE;
                 }
 
                 i = bsf(mask); mask = btc(mask, i);
-                st.push(nodes[cur].child[i], _res_dist[i]);
+                st.push(nodes[cur.index].child[i], _res_dist[i]);
                 if (mask == 0) { // four boxes were hit
                     st.sort_top4();
-                    std::tie(cur, std::ignore) = st.pop();
+                    cur.index = st.pop_index();
                     goto TRAVERSE;
                 }
 
@@ -2381,16 +2392,16 @@ TRAVERSE:
                 // from five to eight boxes were hit
                 do {
                     i = bsf(mask); mask = btc(mask, i);
-                    st.push(nodes[cur].child[i], _res_dist[i]);
+                    st.push(nodes[cur.index].child[i], _res_dist[i]);
                 } while (mask != 0);
 
                 int count = int(st.stack_size - size_before + 4);
                 st.sort_topN(count);
-                std::tie(cur, std::ignore) = st.pop();
+                cur.index = st.pop_index();
                 goto TRAVERSE;
             }
         } else {
-            bool hit_found = IntersectTris_AnyHit(ro, rd, ri, tris, &tri_indices[nodes[cur].child[0] & PRIM_INDEX_BITS], nodes[cur].child[1], obj_index, inter, is_solid_hit);
+            bool hit_found = IntersectTris_AnyHit(ro, rd, ri, tris, &tri_indices[nodes[cur.index].child[0] & PRIM_INDEX_BITS], nodes[cur.index].child[1], obj_index, inter, is_solid_hit);
             res |= hit_found;
             if (hit_found && is_solid_hit[ri]) {
                 break;
@@ -2792,8 +2803,8 @@ Ray::NS::simd_fvec<S> Ray::NS::ComputeVisibility(const simd_fvec<S> p1[3], const
 
         simd_ivec<S> is_solid_hit = { 0 };
 
-        if (sc.oct_nodes) {
-            Traverse_MacroTree_WithStack_AnyHit(sh_r, ikeep_going, sc.oct_nodes, node_index, sc.mesh_instances, sc.mi_indices, sc.meshes, sc.transforms, sc.tris, sc.tri_indices, sh_inter, is_solid_hit);
+        if (sc.mnodes) {
+            //Traverse_MacroTree_WithStack_AnyHit(sh_r, ikeep_going, sc.mnodes, node_index, sc.mesh_instances, sc.mi_indices, sc.meshes, sc.transforms, sc.mtris, sc.tri_indices, sh_inter, is_solid_hit);
         } else {
             Traverse_MacroTree_WithStack_AnyHit(sh_r, ikeep_going, sc.nodes, node_index, sc.mesh_instances, sc.mi_indices, sc.meshes, sc.transforms, sc.tris, sc.tri_indices, sh_inter, is_solid_hit);
         }
@@ -2974,7 +2985,7 @@ void Ray::NS::ComputeDirectLighting(const simd_fvec<S> I[3], const simd_fvec<S> 
                                       P[1] + HIT_BIAS * plane_N[1],
                                       P[2] + HIT_BIAS * plane_N[2] };
 
-    if (sc.oct_nodes) {
+    if (sc.mnodes) {
         const int LanesCount = 8 / S;
 
         for (int ri = 0; ri < S; ri++) {
@@ -2993,16 +3004,16 @@ void Ray::NS::ComputeDirectLighting(const simd_fvec<S> I[3], const simd_fvec<S> 
             while (stack_size) {
                 uint32_t cur = stack[--stack_size];
 
-                if (!is_leaf_node(sc.oct_nodes[cur])) {
+                if (!is_leaf_node(sc.mnodes[cur])) {
                     simd_fvec<S> bbox_min[LanesCount][3], bbox_max[LanesCount][3];
 
                     ITERATE(LanesCount, {
-                        bbox_min[i][0] = simd_fvec<S>(sc.oct_nodes[cur].bbox_min[0] + i * S, simd_mem_aligned);
-                        bbox_min[i][1] = simd_fvec<S>(sc.oct_nodes[cur].bbox_min[1] + i * S, simd_mem_aligned);
-                        bbox_min[i][2] = simd_fvec<S>(sc.oct_nodes[cur].bbox_min[2] + i * S, simd_mem_aligned);
-                        bbox_max[i][0] = simd_fvec<S>(sc.oct_nodes[cur].bbox_max[0] + i * S, simd_mem_aligned);
-                        bbox_max[i][1] = simd_fvec<S>(sc.oct_nodes[cur].bbox_max[1] + i * S, simd_mem_aligned);
-                        bbox_max[i][2] = simd_fvec<S>(sc.oct_nodes[cur].bbox_max[2] + i * S, simd_mem_aligned);
+                        bbox_min[i][0] = simd_fvec<S>(sc.mnodes[cur].bbox_min[0] + i * S, simd_mem_aligned);
+                        bbox_min[i][1] = simd_fvec<S>(sc.mnodes[cur].bbox_min[1] + i * S, simd_mem_aligned);
+                        bbox_min[i][2] = simd_fvec<S>(sc.mnodes[cur].bbox_min[2] + i * S, simd_mem_aligned);
+                        bbox_max[i][0] = simd_fvec<S>(sc.mnodes[cur].bbox_max[0] + i * S, simd_mem_aligned);
+                        bbox_max[i][1] = simd_fvec<S>(sc.mnodes[cur].bbox_max[1] + i * S, simd_mem_aligned);
+                        bbox_max[i][2] = simd_fvec<S>(sc.mnodes[cur].bbox_max[2] + i * S, simd_mem_aligned);
                     })
 
                     simd_ivec<S> res_mask[LanesCount];
@@ -3011,7 +3022,7 @@ void Ray::NS::ComputeDirectLighting(const simd_fvec<S> I[3], const simd_fvec<S> 
                     const int *_res_mask = &res_mask[0][0];
 
                     ITERATE_8({
-                        stack[stack_size] = sc.oct_nodes[cur].child[i];
+                        stack[stack_size] = sc.mnodes[cur].child[i];
                         stack_size -= _res_mask[i];
                     })
 
@@ -3020,8 +3031,8 @@ void Ray::NS::ComputeDirectLighting(const simd_fvec<S> I[3], const simd_fvec<S> 
                         assert(stack[i] != 0x7fffffff && "Invalid index!");
                     }
                 } else {
-                    uint32_t prim_index = (sc.oct_nodes[cur].child[0] & PRIM_INDEX_BITS);
-                    for (uint32_t li = prim_index; li < prim_index + sc.oct_nodes[cur].child[1]; li++) {
+                    uint32_t prim_index = (sc.mnodes[cur].child[0] & PRIM_INDEX_BITS);
+                    for (uint32_t li = prim_index; li < prim_index + sc.mnodes[cur].child[1]; li++) {
                         const light_t &l = sc.lights[sc.li_indices[li]];
 
                         simd_fvec<S> L = { 0.0f };

@@ -32,7 +32,7 @@ void Ray::Ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
     sc_data.vtx_indices = s->vtx_indices_.empty() ? nullptr : &s->vtx_indices_[0];
     sc_data.vertices = s->vertices_.empty() ? nullptr : &s->vertices_[0];
     sc_data.nodes = s->nodes_.empty() ? nullptr : &s->nodes_[0];
-    sc_data.oct_nodes = s->oct_nodes_.empty() ? nullptr : &s->oct_nodes_[0];
+    sc_data.mnodes = s->mnodes_.empty() ? nullptr : &s->mnodes_[0];
     sc_data.tris = s->tris_.empty() ? nullptr : &s->tris_[0];
     sc_data.tri_indices = s->tri_indices_.empty() ? nullptr : &s->tri_indices_[0];
     sc_data.materials = s->materials_.empty() ? nullptr : &s->materials_[0];
@@ -49,8 +49,8 @@ void Ray::Ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
     if (macro_tree_root != 0xffffffff) {
         float root_max[3];
 
-        if (sc_data.oct_nodes) {
-            const mbvh_node_t &root_node = sc_data.oct_nodes[macro_tree_root];
+        if (sc_data.mnodes) {
+            const mbvh_node_t &root_node = sc_data.mnodes[macro_tree_root];
 
             root_min[0] = root_min[1] = root_min[2] = MAX_DIST;
             root_max[0] = root_max[1] = root_max[2] = -MAX_DIST;
@@ -129,8 +129,8 @@ void Ray::Ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
             inter.xy = r.xy;
 
             if (macro_tree_root != 0xffffffff) {
-                if (sc_data.oct_nodes) {
-                    Traverse_MacroTree_WithStack_ClosestHit(r, sc_data.oct_nodes, macro_tree_root, sc_data.mesh_instances, sc_data.mi_indices, sc_data.meshes,
+                if (sc_data.mnodes) {
+                    Traverse_MacroTree_WithStack_ClosestHit(r, sc_data.mnodes, macro_tree_root, sc_data.mesh_instances, sc_data.mi_indices, sc_data.meshes,
                                                             sc_data.transforms, sc_data.tris, sc_data.tri_indices, inter);
                 } else {
                     Traverse_MacroTree_WithStack_ClosestHit(r, sc_data.nodes, macro_tree_root, sc_data.mesh_instances, sc_data.mi_indices, sc_data.meshes,
@@ -232,8 +232,8 @@ void Ray::Ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
             inter = {};
             inter.xy = r.xy;
 
-            if (sc_data.oct_nodes) {
-                Traverse_MacroTree_WithStack_ClosestHit(r, sc_data.oct_nodes, macro_tree_root, sc_data.mesh_instances,
+            if (sc_data.mnodes) {
+                Traverse_MacroTree_WithStack_ClosestHit(r, sc_data.mnodes, macro_tree_root, sc_data.mesh_instances,
                                                         sc_data.mi_indices, sc_data.meshes, sc_data.transforms, sc_data.tris, sc_data.tri_indices, inter);
             } else {
                 Traverse_MacroTree_WithStack_ClosestHit(r, sc_data.nodes, macro_tree_root, sc_data.mesh_instances,
