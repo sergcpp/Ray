@@ -84,12 +84,12 @@ static_assert(sizeof(bvh_node_t) == 36, "!");
 static_assert(sizeof(bvh_node_t) == 32, "!");
 #endif
 
-struct alignas(32) bvh_node8_t {
+struct alignas(32) mbvh_node_t {
     float bbox_min[3][8];
     float bbox_max[3][8];
     uint32_t child[8];
 };
-static_assert(sizeof(bvh_node8_t) == 224, "!");
+static_assert(sizeof(mbvh_node_t) == 224, "!");
 
 const int MAX_MIP_LEVEL = 11;
 const int NUM_MIP_LEVELS = MAX_MIP_LEVEL + 1;
@@ -188,7 +188,7 @@ uint32_t PreprocessPrims_SAH(const prim_t *prims, size_t prims_count, const floa
 // Builds linear BVH for a set of primitives, fast
 uint32_t PreprocessPrims_HLBVH(const prim_t *prims, size_t prims_count, std::vector<bvh_node_t> &out_nodes, std::vector<uint32_t> &out_indices);
 
-uint32_t FlattenBVH_Recursive(const bvh_node_t *nodes, uint32_t node_index, uint32_t parent_index, aligned_vector<bvh_node8_t> &out_nodes);
+uint32_t FlattenBVH_Recursive(const bvh_node_t *nodes, uint32_t node_index, uint32_t parent_index, aligned_vector<mbvh_node_t> &out_nodes);
 
 bool NaiivePluckerTest(const float p[9], const float o[3], const float d[3]);
 
@@ -298,7 +298,7 @@ struct scene_data_t {
     const uint32_t          *vtx_indices;
     const vertex_t          *vertices;
     const bvh_node_t        *nodes;
-    const bvh_node8_t       *oct_nodes;
+    const mbvh_node_t       *oct_nodes;
     const tri_accel_t       *tris;
     const uint32_t          *tri_indices;
     const material_t        *materials;

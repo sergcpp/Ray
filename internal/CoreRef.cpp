@@ -56,7 +56,7 @@ force_inline bool is_leaf_node(const bvh_node_t &node) {
     return (node.prim_index & LEAF_NODE_BIT) != 0;
 }
 
-force_inline bool is_leaf_node(const bvh_node8_t &node) {
+force_inline bool is_leaf_node(const mbvh_node_t &node) {
     return (node.child[0] & LEAF_NODE_BIT) != 0;
 }
 
@@ -98,13 +98,13 @@ force_inline bool bbox_test(const float p[3], const bvh_node_t &node) {
     return bbox_test(p, node.bbox_min, node.bbox_max);
 }
 
-force_inline bool bbox_test_oct(const float p[3], const bvh_node8_t &node, int i) {
+force_inline bool bbox_test_oct(const float p[3], const mbvh_node_t &node, int i) {
     return p[0] > node.bbox_min[0][i] && p[0] < node.bbox_max[0][i] &&
            p[1] > node.bbox_min[1][i] && p[1] < node.bbox_max[1][i] &&
            p[2] > node.bbox_min[2][i] && p[2] < node.bbox_max[2][i];
 }
 
-force_inline void bbox_test_oct(const float o[3], const float inv_d[3], const bvh_node8_t &node, int res[8], float dist[8]) {
+force_inline void bbox_test_oct(const float o[3], const float inv_d[3], const mbvh_node_t &node, int res[8], float dist[8]) {
     ITERATE_8({
         float lo_x = inv_d[0] * (node.bbox_min[0][i] - o[0]);
         float hi_x = inv_d[0] * (node.bbox_max[0][i] - o[0]);
@@ -129,7 +129,7 @@ force_inline void bbox_test_oct(const float o[3], const float inv_d[3], const bv
     })
 }
 
-force_inline int bbox_test_oct(const float o[3], const float inv_d[3], const float t, const bvh_node8_t &node, float dist[8]) {
+force_inline int bbox_test_oct(const float o[3], const float inv_d[3], const float t, const mbvh_node_t &node, float dist[8]) {
     int mask = 0;
 
     simd_fvec4 low, high, tmin, tmax;
@@ -1104,7 +1104,7 @@ bool Ray::Ref::Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t &r, co
     return res;
 }
 
-bool Ray::Ref::Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t &r, const bvh_node8_t *nodes, uint32_t root_index,
+bool Ray::Ref::Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t &r, const mbvh_node_t *nodes, uint32_t root_index,
                                                        const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
                                                        const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t &inter) {
     bool res = false;
@@ -1242,7 +1242,7 @@ bool Ray::Ref::Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t &r, const 
     return res;
 }
 
-bool Ray::Ref::Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t &r, const bvh_node8_t *nodes, uint32_t root_index,
+bool Ray::Ref::Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t &r, const mbvh_node_t *nodes, uint32_t root_index,
                                                    const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
                                                    const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t &inter) {
     bool res = false;
@@ -1368,7 +1368,7 @@ bool Ray::Ref::Traverse_MicroTree_WithStack_ClosestHit(const ray_packet_t &r, co
     return res;
 }
 
-bool Ray::Ref::Traverse_MicroTree_WithStack_ClosestHit(const ray_packet_t &r, const float inv_d[3], const bvh_node8_t *nodes, uint32_t root_index,
+bool Ray::Ref::Traverse_MicroTree_WithStack_ClosestHit(const ray_packet_t &r, const float inv_d[3], const mbvh_node_t *nodes, uint32_t root_index,
                                                        const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, hit_data_t &inter) {
     bool res = false;
 
@@ -1474,7 +1474,7 @@ bool Ray::Ref::Traverse_MicroTree_WithStack_AnyHit(const ray_packet_t &r, const 
     return res;
 }
 
-bool Ray::Ref::Traverse_MicroTree_WithStack_AnyHit(const ray_packet_t &r, const float inv_d[3], const bvh_node8_t *nodes, uint32_t root_index,
+bool Ray::Ref::Traverse_MicroTree_WithStack_AnyHit(const ray_packet_t &r, const float inv_d[3], const mbvh_node_t *nodes, uint32_t root_index,
                                                    const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, hit_data_t &inter) {
     bool res = false;
 

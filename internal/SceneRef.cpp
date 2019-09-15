@@ -374,7 +374,7 @@ void Ray::Ref::Scene::SetMeshInstanceTransform(uint32_t mi_index, const float *x
         const bvh_node_t &n = nodes_[m.node_index];
         TransformBoundingBox(n.bbox_min, n.bbox_max, xform, mi.bbox_min, mi.bbox_max);
     } else {
-        const bvh_node8_t &n = oct_nodes_[m.node_index];
+        const mbvh_node_t &n = oct_nodes_[m.node_index];
 
         float bbox_min[3] = { MAX_DIST, MAX_DIST, MAX_DIST },
               bbox_max[3] = { -MAX_DIST, -MAX_DIST, -MAX_DIST };
@@ -459,7 +459,7 @@ void Ray::Ref::Scene::RemoveNodes(uint32_t node_index, uint32_t node_count) {
         }
 
         for (uint32_t i = node_index; i < oct_nodes_.size(); i++) {
-            bvh_node8_t &n = oct_nodes_[i];
+            mbvh_node_t &n = oct_nodes_[i];
 
             if ((n.child[0] & LEAF_NODE_BIT) == 0) {
                 if (n.child[0] > node_index) n.child[0] -= node_count;
