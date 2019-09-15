@@ -698,7 +698,7 @@ uint32_t Ray::PreprocessPrims_HLBVH(const prim_t *prims, size_t prims_count, std
     return (uint32_t)(out_nodes.size() - top_nodes_start);
 }
 
-uint32_t Ray::FlattenBVH_Recursive(const bvh_node_t *nodes, uint32_t node_index, uint32_t parent_index, aligned_vector<bvh_node8_t> &out_nodes) {
+uint32_t Ray::FlattenBVH_Recursive(const bvh_node_t *nodes, uint32_t node_index, uint32_t parent_index, aligned_vector<mbvh_node_t> &out_nodes) {
     const bvh_node_t &cur_node = nodes[node_index];
 
     // allocate new node
@@ -706,7 +706,7 @@ uint32_t Ray::FlattenBVH_Recursive(const bvh_node_t *nodes, uint32_t node_index,
     out_nodes.emplace_back();
 
     if (cur_node.prim_index & LEAF_NODE_BIT) {
-        bvh_node8_t &new_node = out_nodes[new_node_index];
+        mbvh_node_t &new_node = out_nodes[new_node_index];
 
         new_node.bbox_min[0][0] = cur_node.bbox_min[0];
         new_node.bbox_min[1][0] = cur_node.bbox_min[1];
@@ -814,7 +814,7 @@ uint32_t Ray::FlattenBVH_Recursive(const bvh_node_t *nodes, uint32_t node_index,
         }
     }
 
-    bvh_node8_t &new_node = out_nodes[new_node_index];
+    mbvh_node_t &new_node = out_nodes[new_node_index];
     memcpy(new_node.child, new_children, sizeof(new_children));
 
     for (int i = 0; i < 8; i++) {

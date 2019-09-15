@@ -50,7 +50,7 @@ void Ray::Ref::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
         float root_max[3];
 
         if (sc_data.oct_nodes) {
-            const bvh_node8_t &root_node = sc_data.oct_nodes[macro_tree_root];
+            const mbvh_node_t &root_node = sc_data.oct_nodes[macro_tree_root];
 
             root_min[0] = root_min[1] = root_min[2] = MAX_DIST;
             root_max[0] = root_max[1] = root_max[2] = -MAX_DIST;

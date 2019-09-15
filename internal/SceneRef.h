@@ -47,7 +47,7 @@ protected:
 
     bool                        use_wide_bvh_;
     std::vector<bvh_node_t>     nodes_;
-    aligned_vector<bvh_node8_t> oct_nodes_;
+    aligned_vector<mbvh_node_t> oct_nodes_;
     std::vector<tri_accel_t>    tris_;
     std::vector<uint32_t>       tri_indices_;
     std::vector<transform_t>    transforms_;
