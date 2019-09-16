@@ -1843,13 +1843,13 @@ TRAVERSE:
                 if (mask) {
                     const float *_res_dist = &res_dist[0][0];
 
-                    int i = bsf(mask); mask = btc(mask, i);
+                    long i = GetFirstBit(mask); mask = ClearBit(mask, i);
                     if (mask == 0) { // only one box was hit
                         cur.index = nodes[cur.index].child[i];
                         goto TRAVERSE;
                     }
 
-                    int i2 = bsf(mask); mask = btc(mask, i2);
+                    long i2 = GetFirstBit(mask); mask = ClearBit(mask, i2);
                     if (mask == 0) { // two boxes were hit
                         if (_res_dist[i] < _res_dist[i2]) {
                             st.push(nodes[cur.index].child[i2], _res_dist[i2]);
@@ -1864,7 +1864,7 @@ TRAVERSE:
                     st.push(nodes[cur.index].child[i], _res_dist[i]);
                     st.push(nodes[cur.index].child[i2], _res_dist[i2]);
 
-                    i = bsf(mask); mask = btc(mask, i);
+                    i = GetFirstBit(mask); mask = ClearBit(mask, i);
                     st.push(nodes[cur.index].child[i], _res_dist[i]);
                     if (mask == 0) { // three boxes were hit
                         st.sort_top3();
@@ -1872,7 +1872,7 @@ TRAVERSE:
                         goto TRAVERSE;
                     }
 
-                    i = bsf(mask); mask = btc(mask, i);
+                    i = GetFirstBit(mask); mask = ClearBit(mask, i);
                     st.push(nodes[cur.index].child[i], _res_dist[i]);
                     if (mask == 0) { // four boxes were hit
                         st.sort_top4();
@@ -1884,7 +1884,7 @@ TRAVERSE:
 
                     // from five to eight boxes were hit
                     do {
-                        i = bsf(mask); mask = btc(mask, i);
+                        i = GetFirstBit(mask); mask = ClearBit(mask, i);
                         st.push(nodes[cur.index].child[i], _res_dist[i]);
                     } while (mask != 0);
 
@@ -2031,13 +2031,13 @@ TRAVERSE:
                 if (mask) {
                     const float *_res_dist = &res_dist[0][0];
 
-                    int i = bsf(mask); mask = btc(mask, i);
+                    long i = GetFirstBit(mask); mask = ClearBit(mask, i);
                     if (mask == 0) { // only one box was hit
                         cur.index = nodes[cur.index].child[i];
                         goto TRAVERSE;
                     }
 
-                    int i2 = bsf(mask); mask = btc(mask, i2);
+                    long i2 = GetFirstBit(mask); mask = ClearBit(mask, i2);
                     if (mask == 0) { // two boxes were hit
                         if (_res_dist[i] < _res_dist[i2]) {
                             st.push(nodes[cur.index].child[i2], _res_dist[i2]);
@@ -2052,7 +2052,7 @@ TRAVERSE:
                     st.push(nodes[cur.index].child[i], _res_dist[i]);
                     st.push(nodes[cur.index].child[i2], _res_dist[i2]);
 
-                    i = bsf(mask); mask = btc(mask, i);
+                    i = GetFirstBit(mask); mask = ClearBit(mask, i);
                     st.push(nodes[cur.index].child[i], _res_dist[i]);
                     if (mask == 0) { // three boxes were hit
                         st.sort_top3();
@@ -2060,7 +2060,7 @@ TRAVERSE:
                         goto TRAVERSE;
                     }
 
-                    i = bsf(mask); mask = btc(mask, i);
+                    i = GetFirstBit(mask); mask = ClearBit(mask, i);
                     st.push(nodes[cur.index].child[i], _res_dist[i]);
                     if (mask == 0) { // four boxes were hit
                         st.sort_top4();
@@ -2072,7 +2072,7 @@ TRAVERSE:
 
                     // from five to eight boxes were hit
                     do {
-                        i = bsf(mask); mask = btc(mask, i);
+                        i = GetFirstBit(mask); mask = ClearBit(mask, i);
                         st.push(nodes[cur.index].child[i], _res_dist[i]);
                     } while (mask != 0);
 
@@ -2197,13 +2197,13 @@ TRAVERSE:
             if (mask) {
                 const float *_res_dist = &res_dist[0][0];
 
-                int i = bsf(mask); mask = btc(mask, i);
+                long i = GetFirstBit(mask); mask = ClearBit(mask, i);
                 if (mask == 0) { // only one box was hit
                     cur.index = nodes[cur.index].child[i];
                     goto TRAVERSE;
                 }
 
-                int i2 = bsf(mask); mask = btc(mask, i2);
+                long i2 = GetFirstBit(mask); mask = ClearBit(mask, i2);
                 if (mask == 0) { // two boxes were hit
                     if (_res_dist[i] < _res_dist[i2]) {
                         st.push(nodes[cur.index].child[i2], _res_dist[i2]);
@@ -2218,7 +2218,7 @@ TRAVERSE:
                 st.push(nodes[cur.index].child[i], _res_dist[i]);
                 st.push(nodes[cur.index].child[i2], _res_dist[i2]);
 
-                i = bsf(mask); mask = btc(mask, i);
+                i = GetFirstBit(mask); mask = ClearBit(mask, i);
                 st.push(nodes[cur.index].child[i], _res_dist[i]);
                 if (mask == 0) { // three boxes were hit
                     st.sort_top3();
@@ -2226,7 +2226,7 @@ TRAVERSE:
                     goto TRAVERSE;
                 }
 
-                i = bsf(mask); mask = btc(mask, i);
+                i = GetFirstBit(mask); mask = ClearBit(mask, i);
                 st.push(nodes[cur.index].child[i], _res_dist[i]);
                 if (mask == 0) { // four boxes were hit
                     st.sort_top4();
@@ -2238,7 +2238,7 @@ TRAVERSE:
 
                 // from five to eight boxes were hit
                 do {
-                    i = bsf(mask); mask = btc(mask, i);
+                    i = GetFirstBit(mask); mask = ClearBit(mask, i);
                     st.push(nodes[cur.index].child[i], _res_dist[i]);
                 } while (mask != 0);
 
@@ -2350,13 +2350,13 @@ TRAVERSE:
             if (mask) {
                 const float *_res_dist = &res_dist[0][0];
 
-                int i = bsf(mask); mask = btc(mask, i);
+                long i = GetFirstBit(mask); mask = ClearBit(mask, i);
                 if (mask == 0) { // only one box was hit
                     cur.index = nodes[cur.index].child[i];
                     goto TRAVERSE;
                 }
 
-                int i2 = bsf(mask); mask = btc(mask, i2);
+                long i2 = GetFirstBit(mask); mask = ClearBit(mask, i2);
                 if (mask == 0) { // two boxes were hit
                     if (_res_dist[i] < _res_dist[i2]) {
                         st.push(nodes[cur.index].child[i2], _res_dist[i2]);
@@ -2371,7 +2371,7 @@ TRAVERSE:
                 st.push(nodes[cur.index].child[i], _res_dist[i]);
                 st.push(nodes[cur.index].child[i2], _res_dist[i2]);
 
-                i = bsf(mask); mask = btc(mask, i);
+                i = GetFirstBit(mask); mask = ClearBit(mask, i);
                 st.push(nodes[cur.index].child[i], _res_dist[i]);
                 if (mask == 0) { // three boxes were hit
                     st.sort_top3();
@@ -2379,7 +2379,7 @@ TRAVERSE:
                     goto TRAVERSE;
                 }
 
-                i = bsf(mask); mask = btc(mask, i);
+                i = GetFirstBit(mask); mask = ClearBit(mask, i);
                 st.push(nodes[cur.index].child[i], _res_dist[i]);
                 if (mask == 0) { // four boxes were hit
                     st.sort_top4();
@@ -2391,7 +2391,7 @@ TRAVERSE:
 
                 // from five to eight boxes were hit
                 do {
-                    i = bsf(mask); mask = btc(mask, i);
+                    i = GetFirstBit(mask); mask = ClearBit(mask, i);
                     st.push(nodes[cur.index].child[i], _res_dist[i]);
                 } while (mask != 0);
 
