@@ -372,6 +372,39 @@ force_inline void bbox_test_oct(const float inv_d[3], const float neg_inv_d_o[3]
 }
 
 template <int S>
+force_inline long bbox_test_oct(const float inv_d[3], const float neg_inv_d_o[3], const float t, const float bbox_min[3][8], const float bbox_max[3][8], float out_dist[8]) {
+    simd_fvec<S> low, high, tmin, tmax;
+    long res = 0;
+    
+    const int LanesCount = 8 / S;
+
+    ITERATE_R(LanesCount, {
+        low = fma(inv_d[0], simd_fvec<S>{ &bbox_min[0][S * i], simd_mem_aligned }, neg_inv_d_o[0]);
+        high = fma(inv_d[0], simd_fvec<S>{ &bbox_max[0][S * i], simd_mem_aligned }, neg_inv_d_o[0]);
+        tmin = min(low, high);
+        tmax = max(low, high);
+
+        low = fma(inv_d[1], simd_fvec<S>{ &bbox_min[1][S * i], simd_mem_aligned }, neg_inv_d_o[1]);
+        high = fma(inv_d[1], simd_fvec<S>{ &bbox_max[1][S * i], simd_mem_aligned }, neg_inv_d_o[1]);
+        tmin = max(tmin, min(low, high));
+        tmax = min(tmax, max(low, high));
+
+        low = fma(inv_d[2], simd_fvec<S>{ &bbox_min[2][S * i], simd_mem_aligned }, neg_inv_d_o[2]);
+        high = fma(inv_d[2], simd_fvec<S>{ &bbox_max[2][S * i], simd_mem_aligned }, neg_inv_d_o[2]);
+        tmin = max(tmin, min(low, high));
+        tmax = min(tmax, max(low, high));
+        tmax *= 1.00000024f;
+
+        simd_fvec<S> fmask = (tmin <= tmax) & (tmin <= t) & (tmax > 0.0f);
+        res <<= S;
+        res |= reinterpret_cast<const simd_ivec<S>&>(fmask).movemask();
+        tmin.copy_to(&out_dist[S * i], simd_mem_aligned);
+    })
+
+    return res;
+}
+
+template <int S>
 force_inline void bbox_test_oct(const float p[3], const simd_fvec<S> bbox_min[3], const simd_fvec<S> bbox_max[3], simd_ivec<S> &out_mask) {
     simd_fvec<S> mask = (bbox_min[0] < p[0]) & (bbox_max[0] > p[0]) &
                         (bbox_min[1] < p[1]) & (bbox_max[1] > p[1]) &
@@ -1797,8 +1830,6 @@ bool Ray::NS::Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t<S> &r, 
     simd_fvec<S> inv_d[3], neg_inv_d_o[3];
     comp_aux_inv_values(r.o, r.d, inv_d, neg_inv_d_o);
 
-    const int LanesCount = 8 / S;
-
     for (int ri = 0; ri < S; ri++) {
         if (!ray_mask[ri]) continue;
 
@@ -1818,31 +1849,9 @@ bool Ray::NS::Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t<S> &r, 
 
 TRAVERSE:
             if (!is_leaf_node(nodes[cur.index])) {
-                simd_fvec<S> bbox_min[LanesCount][3], bbox_max[LanesCount][3];
-
-                ITERATE(LanesCount, {
-                    bbox_min[i][0] = simd_fvec<S>(nodes[cur.index].bbox_min[0] + i * S, simd_mem_aligned);
-                    bbox_min[i][1] = simd_fvec<S>(nodes[cur.index].bbox_min[1] + i * S, simd_mem_aligned);
-                    bbox_min[i][2] = simd_fvec<S>(nodes[cur.index].bbox_min[2] + i * S, simd_mem_aligned);
-                    bbox_max[i][0] = simd_fvec<S>(nodes[cur.index].bbox_max[0] + i * S, simd_mem_aligned);
-                    bbox_max[i][1] = simd_fvec<S>(nodes[cur.index].bbox_max[1] + i * S, simd_mem_aligned);
-                    bbox_max[i][2] = simd_fvec<S>(nodes[cur.index].bbox_max[2] + i * S, simd_mem_aligned);
-                })
-
-                long mask = 0;
-
-                simd_fvec<S> res_dist[LanesCount];
-                ITERATE_R(LanesCount, {
-                    simd_ivec<S> res_mask;
-                    bbox_test_oct(_inv_d, _neg_inv_d_o, inter.t[ri], bbox_min[i], bbox_max[i], res_mask, res_dist[i]);
-
-                    mask <<= S;
-                    mask |= res_mask.movemask();
-                })
-
+                alignas(S * 8) float res_dist[8];
+                long mask = bbox_test_oct<S>(_inv_d, _neg_inv_d_o, inter.t[ri], nodes[cur.index].bbox_min, nodes[cur.index].bbox_max, res_dist);
                 if (mask) {
-                    const float *_res_dist = &res_dist[0][0];
-
                     long i = GetFirstBit(mask); mask = ClearBit(mask, i);
                     if (mask == 0) { // only one box was hit
                         cur.index = nodes[cur.index].child[i];
@@ -1851,21 +1860,21 @@ TRAVERSE:
 
                     long i2 = GetFirstBit(mask); mask = ClearBit(mask, i2);
                     if (mask == 0) { // two boxes were hit
-                        if (_res_dist[i] < _res_dist[i2]) {
-                            st.push(nodes[cur.index].child[i2], _res_dist[i2]);
+                        if (res_dist[i] < res_dist[i2]) {
+                            st.push(nodes[cur.index].child[i2], res_dist[i2]);
                             cur.index = nodes[cur.index].child[i];
                         } else {
-                            st.push(nodes[cur.index].child[i], _res_dist[i]);
+                            st.push(nodes[cur.index].child[i], res_dist[i]);
                             cur.index = nodes[cur.index].child[i2];
                         }
                         goto TRAVERSE;
                     }
 
-                    st.push(nodes[cur.index].child[i], _res_dist[i]);
-                    st.push(nodes[cur.index].child[i2], _res_dist[i2]);
+                    st.push(nodes[cur.index].child[i], res_dist[i]);
+                    st.push(nodes[cur.index].child[i2], res_dist[i2]);
 
                     i = GetFirstBit(mask); mask = ClearBit(mask, i);
-                    st.push(nodes[cur.index].child[i], _res_dist[i]);
+                    st.push(nodes[cur.index].child[i], res_dist[i]);
                     if (mask == 0) { // three boxes were hit
                         st.sort_top3();
                         cur.index = st.pop_index();
@@ -1873,7 +1882,7 @@ TRAVERSE:
                     }
 
                     i = GetFirstBit(mask); mask = ClearBit(mask, i);
-                    st.push(nodes[cur.index].child[i], _res_dist[i]);
+                    st.push(nodes[cur.index].child[i], res_dist[i]);
                     if (mask == 0) { // four boxes were hit
                         st.sort_top4();
                         cur.index = st.pop_index();
@@ -1885,7 +1894,7 @@ TRAVERSE:
                     // from five to eight boxes were hit
                     do {
                         i = GetFirstBit(mask); mask = ClearBit(mask, i);
-                        st.push(nodes[cur.index].child[i], _res_dist[i]);
+                        st.push(nodes[cur.index].child[i], res_dist[i]);
                     } while (mask != 0);
 
                     int count = int(st.stack_size - size_before + 4);
@@ -1985,8 +1994,6 @@ bool Ray::NS::Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t<S> &r, cons
     simd_fvec<S> inv_d[3], neg_inv_d_o[3];
     comp_aux_inv_values(r.o, r.d, inv_d, neg_inv_d_o);
 
-    const int LanesCount = 8 / S;
-
     for (int ri = 0; ri < S; ri++) {
         if (!ray_mask[ri]) continue;
 
@@ -2006,31 +2013,9 @@ bool Ray::NS::Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t<S> &r, cons
 
 TRAVERSE:
             if (!is_leaf_node(nodes[cur.index])) {
-                simd_fvec<S> bbox_min[LanesCount][3], bbox_max[LanesCount][3];
-
-                ITERATE(LanesCount, {
-                    bbox_min[i][0] = simd_fvec<S>(nodes[cur.index].bbox_min[0] + i * S, simd_mem_aligned);
-                    bbox_min[i][1] = simd_fvec<S>(nodes[cur.index].bbox_min[1] + i * S, simd_mem_aligned);
-                    bbox_min[i][2] = simd_fvec<S>(nodes[cur.index].bbox_min[2] + i * S, simd_mem_aligned);
-                    bbox_max[i][0] = simd_fvec<S>(nodes[cur.index].bbox_max[0] + i * S, simd_mem_aligned);
-                    bbox_max[i][1] = simd_fvec<S>(nodes[cur.index].bbox_max[1] + i * S, simd_mem_aligned);
-                    bbox_max[i][2] = simd_fvec<S>(nodes[cur.index].bbox_max[2] + i * S, simd_mem_aligned);
-                })
-
-                long mask = 0;
-
-                simd_fvec<S> res_dist[LanesCount];
-                ITERATE_R(LanesCount, {
-                    simd_ivec<S> res_mask;
-                    bbox_test_oct(_inv_d, _neg_inv_d_o, inter.t[ri], bbox_min[i], bbox_max[i], res_mask, res_dist[i]);
-
-                    mask <<= S;
-                    mask |= res_mask.movemask();
-                })
-
+                alignas(S * 8) float res_dist[8];
+                long mask = bbox_test_oct<S>(_inv_d, _neg_inv_d_o, inter.t[ri], nodes[cur.index].bbox_min, nodes[cur.index].bbox_max, res_dist);
                 if (mask) {
-                    const float *_res_dist = &res_dist[0][0];
-
                     long i = GetFirstBit(mask); mask = ClearBit(mask, i);
                     if (mask == 0) { // only one box was hit
                         cur.index = nodes[cur.index].child[i];
@@ -2039,21 +2024,21 @@ TRAVERSE:
 
                     long i2 = GetFirstBit(mask); mask = ClearBit(mask, i2);
                     if (mask == 0) { // two boxes were hit
-                        if (_res_dist[i] < _res_dist[i2]) {
-                            st.push(nodes[cur.index].child[i2], _res_dist[i2]);
+                        if (res_dist[i] < res_dist[i2]) {
+                            st.push(nodes[cur.index].child[i2], res_dist[i2]);
                             cur.index = nodes[cur.index].child[i];
                         } else {
-                            st.push(nodes[cur.index].child[i], _res_dist[i]);
+                            st.push(nodes[cur.index].child[i], res_dist[i]);
                             cur.index = nodes[cur.index].child[i2];
                         }
                         goto TRAVERSE;
                     }
 
-                    st.push(nodes[cur.index].child[i], _res_dist[i]);
-                    st.push(nodes[cur.index].child[i2], _res_dist[i2]);
+                    st.push(nodes[cur.index].child[i], res_dist[i]);
+                    st.push(nodes[cur.index].child[i2], res_dist[i2]);
 
                     i = GetFirstBit(mask); mask = ClearBit(mask, i);
-                    st.push(nodes[cur.index].child[i], _res_dist[i]);
+                    st.push(nodes[cur.index].child[i], res_dist[i]);
                     if (mask == 0) { // three boxes were hit
                         st.sort_top3();
                         cur.index = st.pop_index();
@@ -2061,7 +2046,7 @@ TRAVERSE:
                     }
 
                     i = GetFirstBit(mask); mask = ClearBit(mask, i);
-                    st.push(nodes[cur.index].child[i], _res_dist[i]);
+                    st.push(nodes[cur.index].child[i], res_dist[i]);
                     if (mask == 0) { // four boxes were hit
                         st.sort_top4();
                         cur.index = st.pop_index();
@@ -2073,7 +2058,7 @@ TRAVERSE:
                     // from five to eight boxes were hit
                     do {
                         i = GetFirstBit(mask); mask = ClearBit(mask, i);
-                        st.push(nodes[cur.index].child[i], _res_dist[i]);
+                        st.push(nodes[cur.index].child[i], res_dist[i]);
                     } while (mask != 0);
 
                     int count = int(st.stack_size - size_before + 4);
@@ -2163,8 +2148,6 @@ bool Ray::NS::Traverse_MicroTree_WithStack_ClosestHit(const float ro[3], const f
     TraversalStateStack_Single<MAX_STACK_SIZE> st;
     st.push(node_index, 0.0f);
 
-    const int LanesCount = 8 / S;
-
     while (!st.empty()) {
         stack_entry_t cur = st.pop();
 
@@ -2172,31 +2155,9 @@ bool Ray::NS::Traverse_MicroTree_WithStack_ClosestHit(const float ro[3], const f
 
 TRAVERSE:
         if (!is_leaf_node(nodes[cur.index])) {
-            simd_fvec<S> bbox_min[LanesCount][3], bbox_max[LanesCount][3];
-
-            ITERATE(LanesCount, {
-                bbox_min[i][0] = simd_fvec<S>(nodes[cur.index].bbox_min[0] + i * S, simd_mem_aligned);
-                bbox_min[i][1] = simd_fvec<S>(nodes[cur.index].bbox_min[1] + i * S, simd_mem_aligned);
-                bbox_min[i][2] = simd_fvec<S>(nodes[cur.index].bbox_min[2] + i * S, simd_mem_aligned);
-                bbox_max[i][0] = simd_fvec<S>(nodes[cur.index].bbox_max[0] + i * S, simd_mem_aligned);
-                bbox_max[i][1] = simd_fvec<S>(nodes[cur.index].bbox_max[1] + i * S, simd_mem_aligned);
-                bbox_max[i][2] = simd_fvec<S>(nodes[cur.index].bbox_max[2] + i * S, simd_mem_aligned);
-            })
-
-            long mask = 0;
-
-            simd_fvec<S> res_dist[LanesCount];
-            ITERATE_R(LanesCount, {
-                simd_ivec<S> res_mask;
-                bbox_test_oct(_inv_d, _neg_inv_d_o, inter.t[ri], bbox_min[i], bbox_max[i], res_mask, res_dist[i]);
-
-                mask <<= S;
-                mask |= res_mask.movemask();
-            })
-
+            alignas(S * 8) float res_dist[8];
+            long mask = bbox_test_oct<S>(_inv_d, _neg_inv_d_o, inter.t[ri], nodes[cur.index].bbox_min, nodes[cur.index].bbox_max, res_dist);
             if (mask) {
-                const float *_res_dist = &res_dist[0][0];
-
                 long i = GetFirstBit(mask); mask = ClearBit(mask, i);
                 if (mask == 0) { // only one box was hit
                     cur.index = nodes[cur.index].child[i];
@@ -2205,21 +2166,21 @@ TRAVERSE:
 
                 long i2 = GetFirstBit(mask); mask = ClearBit(mask, i2);
                 if (mask == 0) { // two boxes were hit
-                    if (_res_dist[i] < _res_dist[i2]) {
-                        st.push(nodes[cur.index].child[i2], _res_dist[i2]);
+                    if (res_dist[i] < res_dist[i2]) {
+                        st.push(nodes[cur.index].child[i2], res_dist[i2]);
                         cur.index = nodes[cur.index].child[i];
                     } else {
-                        st.push(nodes[cur.index].child[i], _res_dist[i]);
+                        st.push(nodes[cur.index].child[i], res_dist[i]);
                         cur.index = nodes[cur.index].child[i2];
                     }
                     goto TRAVERSE;
                 }
 
-                st.push(nodes[cur.index].child[i], _res_dist[i]);
-                st.push(nodes[cur.index].child[i2], _res_dist[i2]);
+                st.push(nodes[cur.index].child[i], res_dist[i]);
+                st.push(nodes[cur.index].child[i2], res_dist[i2]);
 
                 i = GetFirstBit(mask); mask = ClearBit(mask, i);
-                st.push(nodes[cur.index].child[i], _res_dist[i]);
+                st.push(nodes[cur.index].child[i], res_dist[i]);
                 if (mask == 0) { // three boxes were hit
                     st.sort_top3();
                     cur.index = st.pop_index();
@@ -2227,7 +2188,7 @@ TRAVERSE:
                 }
 
                 i = GetFirstBit(mask); mask = ClearBit(mask, i);
-                st.push(nodes[cur.index].child[i], _res_dist[i]);
+                st.push(nodes[cur.index].child[i], res_dist[i]);
                 if (mask == 0) { // four boxes were hit
                     st.sort_top4();
                     cur.index = st.pop_index();
@@ -2239,7 +2200,7 @@ TRAVERSE:
                 // from five to eight boxes were hit
                 do {
                     i = GetFirstBit(mask); mask = ClearBit(mask, i);
-                    st.push(nodes[cur.index].child[i], _res_dist[i]);
+                    st.push(nodes[cur.index].child[i], res_dist[i]);
                 } while (mask != 0);
 
                 int count = int(st.stack_size - size_before + 4);
@@ -2316,8 +2277,6 @@ bool Ray::NS::Traverse_MicroTree_WithStack_AnyHit(const float ro[3], const float
     TraversalStateStack_Single<MAX_STACK_SIZE> st;
     st.push(node_index, 0.0f);
 
-    const int LanesCount = 8 / S;
-
     while (!st.empty()) {
         stack_entry_t cur = st.pop();
 
@@ -2325,31 +2284,9 @@ bool Ray::NS::Traverse_MicroTree_WithStack_AnyHit(const float ro[3], const float
 
 TRAVERSE:
         if (!is_leaf_node(nodes[cur.index])) {
-            simd_fvec<S> bbox_min[LanesCount][3], bbox_max[LanesCount][3];
-
-            ITERATE(LanesCount, {
-                bbox_min[i][0] = simd_fvec<S>(nodes[cur.index].bbox_min[0] + i * S, simd_mem_aligned);
-                bbox_min[i][1] = simd_fvec<S>(nodes[cur.index].bbox_min[1] + i * S, simd_mem_aligned);
-                bbox_min[i][2] = simd_fvec<S>(nodes[cur.index].bbox_min[2] + i * S, simd_mem_aligned);
-                bbox_max[i][0] = simd_fvec<S>(nodes[cur.index].bbox_max[0] + i * S, simd_mem_aligned);
-                bbox_max[i][1] = simd_fvec<S>(nodes[cur.index].bbox_max[1] + i * S, simd_mem_aligned);
-                bbox_max[i][2] = simd_fvec<S>(nodes[cur.index].bbox_max[2] + i * S, simd_mem_aligned);
-            })
-
-            long mask = 0;
-
-            simd_fvec<S> res_dist[LanesCount];
-            ITERATE_R(LanesCount, {
-                simd_ivec<S> res_mask;
-                bbox_test_oct(_inv_d, _neg_inv_d_o, inter.t[ri], bbox_min[i], bbox_max[i], res_mask, res_dist[i]);
-
-                mask <<= S;
-                mask |= res_mask.movemask();
-            })
-
+            alignas(S * 8) float res_dist[8];
+            long mask = bbox_test_oct<S>(_inv_d, _neg_inv_d_o, inter.t[ri], nodes[cur.index].bbox_min, nodes[cur.index].bbox_max, res_dist);
             if (mask) {
-                const float *_res_dist = &res_dist[0][0];
-
                 long i = GetFirstBit(mask); mask = ClearBit(mask, i);
                 if (mask == 0) { // only one box was hit
                     cur.index = nodes[cur.index].child[i];
@@ -2358,21 +2295,21 @@ TRAVERSE:
 
                 long i2 = GetFirstBit(mask); mask = ClearBit(mask, i2);
                 if (mask == 0) { // two boxes were hit
-                    if (_res_dist[i] < _res_dist[i2]) {
-                        st.push(nodes[cur.index].child[i2], _res_dist[i2]);
+                    if (res_dist[i] < res_dist[i2]) {
+                        st.push(nodes[cur.index].child[i2], res_dist[i2]);
                         cur.index = nodes[cur.index].child[i];
                     } else {
-                        st.push(nodes[cur.index].child[i], _res_dist[i]);
+                        st.push(nodes[cur.index].child[i], res_dist[i]);
                         cur.index = nodes[cur.index].child[i2];
                     }
                     goto TRAVERSE;
                 }
 
-                st.push(nodes[cur.index].child[i], _res_dist[i]);
-                st.push(nodes[cur.index].child[i2], _res_dist[i2]);
+                st.push(nodes[cur.index].child[i], res_dist[i]);
+                st.push(nodes[cur.index].child[i2], res_dist[i2]);
 
                 i = GetFirstBit(mask); mask = ClearBit(mask, i);
-                st.push(nodes[cur.index].child[i], _res_dist[i]);
+                st.push(nodes[cur.index].child[i], res_dist[i]);
                 if (mask == 0) { // three boxes were hit
                     st.sort_top3();
                     cur.index = st.pop_index();
@@ -2380,7 +2317,7 @@ TRAVERSE:
                 }
 
                 i = GetFirstBit(mask); mask = ClearBit(mask, i);
-                st.push(nodes[cur.index].child[i], _res_dist[i]);
+                st.push(nodes[cur.index].child[i], res_dist[i]);
                 if (mask == 0) { // four boxes were hit
                     st.sort_top4();
                     cur.index = st.pop_index();
@@ -2392,7 +2329,7 @@ TRAVERSE:
                 // from five to eight boxes were hit
                 do {
                     i = GetFirstBit(mask); mask = ClearBit(mask, i);
-                    st.push(nodes[cur.index].child[i], _res_dist[i]);
+                    st.push(nodes[cur.index].child[i], res_dist[i]);
                 } while (mask != 0);
 
                 int count = int(st.stack_size - size_before + 4);
