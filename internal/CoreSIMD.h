@@ -481,11 +481,11 @@ struct TraversalState {
     }
 };
 
-template <int S>
+template <int S, int StackSize>
 struct TraversalStateStack_Multi {
     struct {
         simd_ivec<S> mask;
-        uint32_t stack[MAX_STACK_SIZE];
+        uint32_t stack[StackSize];
         uint32_t stack_size;
     } queue[S];
 
@@ -517,7 +517,7 @@ struct TraversalStateStack_Multi {
     force_inline void push_children(const bvh_node_t &node) {
         queue[index].stack[queue[index].stack_size++] = node.left_child;
         queue[index].stack[queue[index].stack_size++] = (node.right_child & RIGHT_CHILD_BITS);
-        assert(queue[index].stack_size < MAX_STACK_SIZE);
+        assert(queue[index].stack_size < StackSize);
     }
 
     int index = 0, num = 1;
@@ -1739,7 +1739,7 @@ bool Ray::NS::Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t<S> &r, 
     simd_fvec<S> inv_d[3], neg_inv_d_o[3];
     comp_aux_inv_values(r.o, r.d, inv_d, neg_inv_d_o);
 
-    TraversalStateStack_Multi<S> st;
+    TraversalStateStack_Multi<S, MAX_STACK_SIZE> st;
 
     st.queue[0].mask = ray_mask;
     st.queue[0].stack_size = 0;
@@ -1923,7 +1923,7 @@ bool Ray::NS::Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t<S> &r, cons
     simd_fvec<S> inv_d[3], neg_inv_d_o[3];
     comp_aux_inv_values(r.o, r.d, inv_d, neg_inv_d_o);
 
-    TraversalStateStack_Multi<S> st;
+    TraversalStateStack_Multi<S, MAX_STACK_SIZE> st;
 
     st.queue[0].mask = ray_mask;
     st.queue[0].stack_size = 0;
@@ -2114,7 +2114,7 @@ bool Ray::NS::Traverse_MicroTree_WithStack_ClosestHit(const ray_packet_t<S> &r, 
     simd_fvec<S> inv_d[3], neg_inv_d_o[3];
     comp_aux_inv_values(r.o, r.d, inv_d, neg_inv_d_o);
 
-    TraversalStateStack_Multi<S> st;
+    TraversalStateStack_Multi<S, MAX_STACK_SIZE> st;
 
     st.queue[0].mask = ray_mask;
     st.queue[0].stack_size = 0;
@@ -2263,7 +2263,7 @@ bool Ray::NS::Traverse_MicroTree_WithStack_AnyHit(const ray_packet_t<S> &r, cons
     simd_fvec<S> inv_d[3], neg_inv_d_o[3];
     comp_aux_inv_values(r.o, r.d, inv_d, neg_inv_d_o);
 
-    TraversalStateStack_Multi<S> st;
+    TraversalStateStack_Multi<S, MAX_STACK_SIZE> st;
 
     st.queue[0].mask = ray_mask;
     st.queue[0].stack_size = 0;
@@ -3102,7 +3102,7 @@ void Ray::NS::ComputeDirectLighting(const simd_fvec<S> I[3], const simd_fvec<S> 
             }
         }
     } else {
-        TraversalStateStack_Multi<S> st;
+        TraversalStateStack_Multi<S, MAX_STACK_SIZE> st;
 
         st.queue[0].mask = ray_mask;
         st.queue[0].stack_size = 0;
