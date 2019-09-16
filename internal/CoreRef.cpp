@@ -1,5 +1,6 @@
 #include "CoreRef.h"
 
+#include <cassert>
 #include <algorithm>
 #include <limits>
 
