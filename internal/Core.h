@@ -148,22 +148,21 @@ template <typename T>
 using aligned_vector = std::vector<T, aligned_allocator<T, alignof(T)>>;
 
 // bit scan forward
-force_inline int bsf(int mask) {
+force_inline long GetFirstBit(long mask) {
 #ifdef _MSC_VER
     unsigned long ret;
     _BitScanForward(&ret, (unsigned long)mask);
-    return int(ret);
+    return long(ret);
 #else
-    return (__builtin_ffs(mask) - 1);
+    return long(__builtin_ffsl(mask) - 1);
 #endif
 }
 
 // bit test and complement
-force_inline int btc(int mask, int index) {
+force_inline long ClearBit(long mask, long index) {
 #ifdef _MSC_VER
-    long _mask = (long)mask;
-    _bittestandcomplement(&_mask, index);
-    return int(_mask);
+    _bittestandcomplement(&mask, index);
+    return mask;
 #else
     return (mask & ~(1 << index));
 #endif

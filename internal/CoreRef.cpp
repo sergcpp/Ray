@@ -1140,13 +1140,13 @@ TRAVERSE:
             alignas(16) float dist[8];
             long mask = bbox_test_oct(r.o, inv_d, inter.t, nodes[cur.index], dist);
             if (mask) {
-                int i = bsf(mask); mask = btc(mask, i);
+                long i = GetFirstBit(mask); mask = ClearBit(mask, i);
                 if (mask == 0) { // only one box was hit
                     cur.index = nodes[cur.index].child[i];
                     goto TRAVERSE;
                 }
 
-                int i2 = bsf(mask); mask = btc(mask, i2);
+                long i2 = GetFirstBit(mask); mask = ClearBit(mask, i2);
                 if (mask == 0) { // two boxes were hit
                     if (dist[i] < dist[i2]) {
                         st.push(nodes[cur.index].child[i2], dist[i2]);
@@ -1161,7 +1161,7 @@ TRAVERSE:
                 st.push(nodes[cur.index].child[i], dist[i]);
                 st.push(nodes[cur.index].child[i2], dist[i2]);
 
-                i = bsf(mask); mask = btc(mask, i);
+                i = GetFirstBit(mask); mask = ClearBit(mask, i);
                 st.push(nodes[cur.index].child[i], dist[i]);
                 if (mask == 0) { // three boxes were hit
                     st.sort_top3();
@@ -1169,7 +1169,7 @@ TRAVERSE:
                     goto TRAVERSE;
                 }
 
-                i = bsf(mask); mask = btc(mask, i);
+                i = GetFirstBit(mask); mask = ClearBit(mask, i);
                 st.push(nodes[cur.index].child[i], dist[i]);
                 if (mask == 0) { // four boxes were hit
                     st.sort_top4();
@@ -1181,7 +1181,7 @@ TRAVERSE:
 
                 // from five to eight boxes were hit
                 do {
-                    i = bsf(mask); mask = btc(mask, i);
+                    i = GetFirstBit(mask); mask = ClearBit(mask, i);
                     st.push(nodes[cur.index].child[i], dist[i]);
                 } while (mask != 0);
 
@@ -1282,13 +1282,13 @@ TRAVERSE:
             alignas(16) float dist[8];
             long mask = bbox_test_oct(r.o, inv_d, inter.t, nodes[cur.index], dist);
             if (mask) {
-                int i = bsf(mask); mask = btc(mask, i);
+                long i = GetFirstBit(mask); mask = ClearBit(mask, i);
                 if (mask == 0) { // only one box was hit
                     cur.index = nodes[cur.index].child[i];
                     goto TRAVERSE;
                 }
 
-                int i2 = bsf(mask); mask = btc(mask, i2);
+                int i2 = GetFirstBit(mask); mask = ClearBit(mask, i2);
                 if (mask == 0) { // two boxes were hit
                     if (dist[i] < dist[i2]) {
                         st.push(nodes[cur.index].child[i2], dist[i2]);
@@ -1303,7 +1303,7 @@ TRAVERSE:
                 st.push(nodes[cur.index].child[i], dist[i]);
                 st.push(nodes[cur.index].child[i2], dist[i2]);
 
-                i = bsf(mask); mask = btc(mask, i);
+                i = GetFirstBit(mask); mask = ClearBit(mask, i);
                 st.push(nodes[cur.index].child[i], dist[i]);
                 if (mask == 0) { // three boxes were hit
                     st.sort_top3();
@@ -1311,7 +1311,7 @@ TRAVERSE:
                     goto TRAVERSE;
                 }
 
-                i = bsf(mask); mask = btc(mask, i);
+                i = GetFirstBit(mask); mask = ClearBit(mask, i);
                 st.push(nodes[cur.index].child[i], dist[i]);
                 if (mask == 0) { // four boxes were hit
                     st.sort_top4();
@@ -1323,7 +1323,7 @@ TRAVERSE:
 
                 // from five to eight boxes were hit
                 do {
-                    i = bsf(mask); mask = btc(mask, i);
+                    i = GetFirstBit(mask); mask = ClearBit(mask, i);
                     st.push(nodes[cur.index].child[i], dist[i]);
                 } while (mask != 0);
 
@@ -1398,13 +1398,13 @@ TRAVERSE:
             alignas(16) float dist[8];
             long mask = bbox_test_oct(r.o, inv_d, inter.t, nodes[cur.index], dist);
             if (mask) {
-                int i = bsf(mask); mask = btc(mask, i);
+                long i = GetFirstBit(mask); mask = ClearBit(mask, i);
                 if (mask == 0) { // only one box was hit
                     cur.index = nodes[cur.index].child[i];
                     goto TRAVERSE;
                 }
 
-                int i2 = bsf(mask); mask = btc(mask, i2);
+                long i2 = GetFirstBit(mask); mask = ClearBit(mask, i2);
                 if (mask == 0) { // two boxes were hit
                     if (dist[i] < dist[i2]) {
                         st.push(nodes[cur.index].child[i2], dist[i2]);
@@ -1419,7 +1419,7 @@ TRAVERSE:
                 st.push(nodes[cur.index].child[i], dist[i]);
                 st.push(nodes[cur.index].child[i2], dist[i2]);
 
-                i = bsf(mask); mask = btc(mask, i);
+                i = GetFirstBit(mask); mask = ClearBit(mask, i);
                 st.push(nodes[cur.index].child[i], dist[i]);
                 if (mask == 0) { // three boxes were hit
                     st.sort_top3();
@@ -1427,7 +1427,7 @@ TRAVERSE:
                     goto TRAVERSE;
                 }
 
-                i = bsf(mask); mask = btc(mask, i);
+                i = GetFirstBit(mask); mask = ClearBit(mask, i);
                 st.push(nodes[cur.index].child[i], dist[i]);
                 if (mask == 0) { // four boxes were hit
                     st.sort_top4();
@@ -1439,7 +1439,7 @@ TRAVERSE:
 
                 // from five to eight boxes were hit
                 do {
-                    i = bsf(mask); mask = btc(mask, i);
+                    i = GetFirstBit(mask); mask = ClearBit(mask, i);
                     st.push(nodes[cur.index].child[i], dist[i]);
                 } while (mask != 0);
 
@@ -1503,13 +1503,13 @@ bool Ray::Ref::Traverse_MicroTree_WithStack_AnyHit(const ray_packet_t &r, const 
             alignas(16) float dist[8];
             long mask = bbox_test_oct(r.o, inv_d, inter.t, nodes[cur.index], dist);
             if (mask) {
-                int i = bsf(mask); mask = btc(mask, i);
+                long i = GetFirstBit(mask); mask = ClearBit(mask, i);
                 if (mask == 0) { // only one box was hit
                     cur.index = nodes[cur.index].child[i];
                     goto TRAVERSE;
                 }
 
-                int i2 = bsf(mask); mask = btc(mask, i2);
+                long i2 = GetFirstBit(mask); mask = ClearBit(mask, i2);
                 if (mask == 0) { // two boxes were hit
                     if (dist[i] < dist[i2]) {
                         st.push(nodes[cur.index].child[i2], dist[i2]);
@@ -1524,7 +1524,7 @@ bool Ray::Ref::Traverse_MicroTree_WithStack_AnyHit(const ray_packet_t &r, const 
                 st.push(nodes[cur.index].child[i], dist[i]);
                 st.push(nodes[cur.index].child[i2], dist[i2]);
 
-                i = bsf(mask); mask = btc(mask, i);
+                i = GetFirstBit(mask); mask = ClearBit(mask, i);
                 st.push(nodes[cur.index].child[i], dist[i]);
                 if (mask == 0) { // three boxes were hit
                     st.sort_top3();
@@ -1532,7 +1532,7 @@ bool Ray::Ref::Traverse_MicroTree_WithStack_AnyHit(const ray_packet_t &r, const 
                     goto TRAVERSE;
                 }
 
-                i = bsf(mask); mask = btc(mask, i);
+                i = GetFirstBit(mask); mask = ClearBit(mask, i);
                 st.push(nodes[cur.index].child[i], dist[i]);
                 if (mask == 0) { // four boxes were hit
                     st.sort_top4();
@@ -1544,7 +1544,7 @@ bool Ray::Ref::Traverse_MicroTree_WithStack_AnyHit(const ray_packet_t &r, const 
 
                 // from five to eight boxes were hit
                 do {
-                    i = bsf(mask); mask = btc(mask, i);
+                    i = GetFirstBit(mask); mask = ClearBit(mask, i);
                     st.push(nodes[cur.index].child[i], dist[i]);
                 } while (mask != 0);
 
