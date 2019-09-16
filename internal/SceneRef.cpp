@@ -157,8 +157,8 @@ uint32_t Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
              tri_index_start = (uint32_t)tri_indices_.size();
 
     bvh_settings_t s;
-    s.node_traversal_cost = use_wide_bvh_ ? 0.0025f : 0.025f;
-    s.oversplit_threshold = /*use_wide_bvh_ ? 0.999f :*/ 0.95f;
+    s.node_traversal_cost = 0.025f;
+    s.oversplit_threshold = 0.95f;
     s.allow_spatial_splits = _m.allow_spatial_splits;
     s.use_fast_bvh_build = _m.use_fast_bvh_build;
 

@@ -2804,7 +2804,7 @@ Ray::NS::simd_fvec<S> Ray::NS::ComputeVisibility(const simd_fvec<S> p1[3], const
         simd_ivec<S> is_solid_hit = { 0 };
 
         if (sc.mnodes) {
-            //Traverse_MacroTree_WithStack_AnyHit(sh_r, ikeep_going, sc.mnodes, node_index, sc.mesh_instances, sc.mi_indices, sc.meshes, sc.transforms, sc.mtris, sc.tri_indices, sh_inter, is_solid_hit);
+            Traverse_MacroTree_WithStack_AnyHit(sh_r, ikeep_going, sc.mnodes, node_index, sc.mesh_instances, sc.mi_indices, sc.meshes, sc.transforms, sc.tris, sc.tri_indices, sh_inter, is_solid_hit);
         } else {
             Traverse_MacroTree_WithStack_AnyHit(sh_r, ikeep_going, sc.nodes, node_index, sc.mesh_instances, sc.mi_indices, sc.meshes, sc.transforms, sc.tris, sc.tri_indices, sh_inter, is_solid_hit);
         }
