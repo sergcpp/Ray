@@ -126,7 +126,7 @@ protected:
     bool kernel_WriteSortedChunks(const cl::Buffer &chunks_in, const cl::Buffer &offsets, cl_int count, cl_int shift, cl_int group_size, const cl::Buffer &chunks_out);
     bool kernel_ReorderRays(const cl::Buffer &in_rays, const cl::Buffer &in_indices, cl_int count, const cl::Buffer &out_rays);
     bool kernel_MixIncremental(const cl::Image2D &fbuf1, const cl::Image2D &fbuf2, cl_float k, const cl::Image2D &res);
-    bool kernel_Postprocess(const cl::Image2D &frame_buf, cl_int w, cl_int h, cl_float inv_gamma, cl_int clamp, const cl::Image2D &out_pixels);
+    bool kernel_Postprocess(const cl::Image2D &frame_buf, cl_int w, cl_int h, cl_float inv_gamma, cl_int clamp, cl_int srgb, const cl::Image2D &out_pixels);
     bool kernel_ResetSampleData(const cl::Buffer &sh_data, cl_int count);
     bool kernel_StoreSHCoeffs(const cl::Buffer &in_rays, cl_int rays_count, cl_int w, const cl::Buffer &out_sh_data);
     bool kernel_ComputeSHData(const cl::Image2D &clean_buf, cl_int w, cl_int h, const cl::Buffer &in_out_sh_data);

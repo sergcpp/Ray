@@ -627,8 +627,8 @@ void Ray::Ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
         if (!kernel_MixSHData(sh_data_temp_, (cl_int)(w_ * h_), mix_factor, sh_data_clean_)) return;
     }
 
-    cl_int _clamp = (cam.pass_settings.flags & Clamp) ? 1 : 0;
-    if (!kernel_Postprocess(clean_buf_, w_, h_, (cl_float)(1.0f / cam.gamma), _clamp, final_buf_)) return;
+    cl_int _clamp = (cam.pass_settings.flags & Clamp) ? 1 : 0, _srgb = (cam.dtype == SRGB) ? 1 : 0;
+    if (!kernel_Postprocess(clean_buf_, w_, h_, (cl_float)(1.0f / cam.gamma), _clamp, _srgb, final_buf_)) return;
 
     error = queue_.enqueueReadImage(final_buf_, CL_TRUE, {}, { (size_t)w_, (size_t)h_, 1 }, 0, 0, &frame_pixels_[0]);
     if (error != CL_SUCCESS) return;
@@ -1165,13 +1165,14 @@ bool Ray::Ocl::Renderer::kernel_MixIncremental(const cl::Image2D &fbuf1, const c
     return queue_.enqueueNDRangeKernel(mix_incremental_kernel_, cl::NullRange, global, local) == CL_SUCCESS;
 }
 
-bool Ray::Ocl::Renderer::kernel_Postprocess(const cl::Image2D &frame_buf, cl_int w, cl_int h, cl_float inv_gamma, cl_int clamp, const cl::Image2D &out_pixels) {
+bool Ray::Ocl::Renderer::kernel_Postprocess(const cl::Image2D &frame_buf, cl_int w, cl_int h, cl_float inv_gamma, cl_int clamp, cl_int srgb, const cl::Image2D &out_pixels) {
     cl_uint argc = 0;
     if (post_process_kernel_.setArg(argc++, frame_buf) != CL_SUCCESS ||
             post_process_kernel_.setArg(argc++, w) != CL_SUCCESS ||
             post_process_kernel_.setArg(argc++, h) != CL_SUCCESS ||
             post_process_kernel_.setArg(argc++, inv_gamma) != CL_SUCCESS ||
             post_process_kernel_.setArg(argc++, clamp) != CL_SUCCESS ||
+            post_process_kernel_.setArg(argc++, srgb) != CL_SUCCESS ||
             post_process_kernel_.setArg(argc++, out_pixels) != CL_SUCCESS) {
         return false;
     }

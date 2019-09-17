@@ -114,6 +114,12 @@ public:
         return std::sqrt(temp);
     }
 
+    force_inline float length2() const {
+        float temp = 0;
+        ITERATE_8({ temp += comp_[i] * comp_[i]; })
+        return temp;
+    }
+
     force_inline void copy_to(float *f) const {
         _mm256_storeu_ps(f, vec_);
     }

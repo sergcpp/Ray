@@ -3,12 +3,16 @@ R"(
 __constant sampler_t isampler = CLK_NORMALIZED_COORDS_FALSE | CLK_FILTER_NEAREST;
 
 __kernel
-void PostProcess(__read_only image2d_t frame_buf, int w, int h, float inv_gamma, int _clamp,
+void PostProcess(__read_only image2d_t frame_buf, int w, int h, float inv_gamma, int _clamp, int _srgb,
                  __write_only image2d_t pixels) {
     const int i = get_global_id(0);
     const int j = get_global_id(1);
 
     float4 col = read_imagef(frame_buf, isampler, (int2)(i, j));
+
+    if (_srgb) {
+        col = rgb_to_srgb(col);
+    }
 
     col = native_powr(col, inv_gamma);
     if (_clamp) {

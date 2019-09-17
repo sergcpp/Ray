@@ -14,6 +14,8 @@ std::vector<Ray::pixel_color8_t> Ray::Ref::DownsampleTexture(const std::vector<p
     // TODO: properly downsample non-power-of-2 textures
 
     std::vector<pixel_color8_t> ret;
+    ret.reserve(res[0] * res[1] / 4);
+
     for (int j = 0; j < res[1]; j += 2) {
         for (int i = 0; i < res[0]; i += 2) {
             int r = tex[(j + 0) * res[0] + i].r + tex[(j + 0) * res[0] + i + 1].r +
@@ -25,11 +27,13 @@ std::vector<Ray::pixel_color8_t> Ray::Ref::DownsampleTexture(const std::vector<p
             int a = tex[(j + 0) * res[0] + i].a + tex[(j + 0) * res[0] + i + 1].a +
                     tex[(j + 1) * res[0] + i].a + tex[(j + 1) * res[0] + i + 1].a;
 
-            ret.push_back({ (uint8_t)std::round(r * 0.25f), (uint8_t)std::round(g * 0.25f),
-                (uint8_t)std::round(b * 0.25f), (uint8_t)std::round(a * 0.25f)
+            ret.push_back({
+                uint8_t(r / 4), uint8_t(g / 4),
+                uint8_t(b / 4), uint8_t(a / 4)
             });
         }
     }
+
     return ret;
 }
 
