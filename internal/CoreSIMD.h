@@ -1849,7 +1849,7 @@ bool Ray::NS::Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t<S> &r, 
 
 TRAVERSE:
             if (!is_leaf_node(nodes[cur.index])) {
-                alignas(S * 8) float res_dist[8];
+                alignas(S * 4) float res_dist[8];
                 long mask = bbox_test_oct<S>(_inv_d, _neg_inv_d_o, inter.t[ri], nodes[cur.index].bbox_min, nodes[cur.index].bbox_max, res_dist);
                 if (mask) {
                     long i = GetFirstBit(mask); mask = ClearBit(mask, i);
@@ -2013,7 +2013,7 @@ bool Ray::NS::Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t<S> &r, cons
 
 TRAVERSE:
             if (!is_leaf_node(nodes[cur.index])) {
-                alignas(S * 8) float res_dist[8];
+                alignas(S * 4) float res_dist[8];
                 long mask = bbox_test_oct<S>(_inv_d, _neg_inv_d_o, inter.t[ri], nodes[cur.index].bbox_min, nodes[cur.index].bbox_max, res_dist);
                 if (mask) {
                     long i = GetFirstBit(mask); mask = ClearBit(mask, i);
@@ -2155,7 +2155,7 @@ bool Ray::NS::Traverse_MicroTree_WithStack_ClosestHit(const float ro[3], const f
 
 TRAVERSE:
         if (!is_leaf_node(nodes[cur.index])) {
-            alignas(S * 8) float res_dist[8];
+            alignas(S * 4) float res_dist[8];
             long mask = bbox_test_oct<S>(_inv_d, _neg_inv_d_o, inter.t[ri], nodes[cur.index].bbox_min, nodes[cur.index].bbox_max, res_dist);
             if (mask) {
                 long i = GetFirstBit(mask); mask = ClearBit(mask, i);
@@ -2284,7 +2284,7 @@ bool Ray::NS::Traverse_MicroTree_WithStack_AnyHit(const float ro[3], const float
 
 TRAVERSE:
         if (!is_leaf_node(nodes[cur.index])) {
-            alignas(S * 8) float res_dist[8];
+            alignas(S * 4) float res_dist[8];
             long mask = bbox_test_oct<S>(_inv_d, _neg_inv_d_o, inter.t[ri], nodes[cur.index].bbox_min, nodes[cur.index].bbox_max, res_dist);
             if (mask) {
                 long i = GetFirstBit(mask); mask = ClearBit(mask, i);
