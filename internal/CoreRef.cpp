@@ -370,6 +370,20 @@ force_inline simd_fvec4 rgbe_to_rgb(const pixel_color8_t &rgbe) {
                        to_norm_float(rgbe.b) * f, 1.0f };
 }
 
+force_inline simd_fvec4 srgb_to_rgb(const simd_fvec4 &col) {
+    simd_fvec4 ret;
+    ITERATE_3({
+        if (col[i] > 0.04045f) {
+            ret[i] = std::pow((col[i] + 0.055f) / 1.055f, 2.4f);
+        } else {
+            ret[i] = col[i] / 12.92f;
+        }
+    })
+    ret[3] = col[3];
+
+    return ret;
+}
+
 force_inline float fast_log2(float val) {
     // From https://stackoverflow.com/questions/9411823/fast-log2float-x-implementation-c
 
@@ -381,6 +395,22 @@ force_inline float fast_log2(float val) {
     return (log_2);
 }
 
+float get_texture_lod(const texture_t &t, const simd_fvec2 &duv_dx, const simd_fvec2 &duv_dy) {
+    const simd_fvec2 sz = { (float)t.size[0], (float)t.size[1] };
+    const simd_fvec2 _duv_dx = duv_dx * sz, _duv_dy = duv_dy * sz;
+
+    // Find bounding box of ray footprint
+    const simd_fvec2
+        minuv = min(min(_duv_dx, _duv_dy), { 0.0f }),
+        maxuv = max(max(_duv_dx, _duv_dy), { 0.0f });
+
+    // Choose minimal side of bounds to choose lod
+    float lod = fast_log2(std::min(maxuv[0] - minuv[0], maxuv[1] - minuv[1]));
+    // Substruct 1 from lod to keep 4 texels for interpolation
+    lod = clamp(lod - 1.0f, 0.0f, float(MAX_MIP_LEVEL));
+
+    return lod;
+}
 
 }
 }
@@ -1605,34 +1635,29 @@ Ray::Ref::simd_fvec2 Ray::Ref::TransformUV(const simd_fvec2 &_uv, const simd_fve
     return res;
 }
 
-Ray::Ref::simd_fvec4 Ray::Ref::SampleNearest(const TextureAtlas &atlas, const texture_t &t, const simd_fvec2 &uvs, float lod) {
-    int _lod = (int)lod;
-
+Ray::Ref::simd_fvec4 Ray::Ref::SampleNearest(const TextureAtlas &atlas, const texture_t &t, const simd_fvec2 &uvs, int lod) {
     simd_fvec2 atlas_size = { atlas.size_x(), atlas.size_y() };
-    simd_fvec2 _uvs = TransformUV(uvs, atlas_size, t, _lod);
+    simd_fvec2 _uvs = TransformUV(uvs, atlas_size, t, lod);
+    _uvs = _uvs * atlas_size - 0.5f;
 
-    if (_lod > MAX_MIP_LEVEL) _lod = MAX_MIP_LEVEL;
+    int page = t.page[lod];
 
-    int page = t.page[_lod];
+    const pixel_color8_t &pix = atlas.Get(page, int(_uvs[0]), int(_uvs[1]));
 
-    const pixel_color8_t &pix = atlas.Get(page, _uvs[0], _uvs[1]);
-
-    const float k = 1.0f / 255.0f;
-    return simd_fvec4{ pix.r * k, pix.g * k, pix.b * k, pix.a * k };
+    return simd_fvec4{ to_norm_float(pix.r), to_norm_float(pix.g), to_norm_float(pix.b), to_norm_float(pix.a) };
 }
 
 Ray::Ref::simd_fvec4 Ray::Ref::SampleBilinear(const TextureAtlas &atlas, const texture_t &t, const simd_fvec2 &uvs, int lod) {
     simd_fvec2 atlas_size = { atlas.size_x(), atlas.size_y() };
     simd_fvec2 _uvs = TransformUV(uvs, atlas_size, t, lod);
+    _uvs = _uvs * atlas_size - 0.5f;
 
     int page = t.page[lod];
 
-    _uvs = _uvs * atlas_size - 0.5f;
-
-    const pixel_color8_t &p00 = atlas.Get(page, int(_uvs[0]), int(_uvs[1]));
-    const pixel_color8_t &p01 = atlas.Get(page, int(_uvs[0] + 1), int(_uvs[1]));
-    const pixel_color8_t &p10 = atlas.Get(page, int(_uvs[0]), int(_uvs[1] + 1));
-    const pixel_color8_t &p11 = atlas.Get(page, int(_uvs[0] + 1), int(_uvs[1] + 1));
+    const pixel_color8_t &p00 = atlas.Get(page, int(_uvs[0]) + 0, int(_uvs[1]) + 0);
+    const pixel_color8_t &p01 = atlas.Get(page, int(_uvs[0]) + 1, int(_uvs[1]) + 0);
+    const pixel_color8_t &p10 = atlas.Get(page, int(_uvs[0]) + 0, int(_uvs[1]) + 1);
+    const pixel_color8_t &p11 = atlas.Get(page, int(_uvs[0]) + 1, int(_uvs[1]) + 1);
 
     float kx = _uvs[0] - std::floor(_uvs[0]), ky = _uvs[1] - std::floor(_uvs[1]);
 
@@ -1647,14 +1672,14 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleBilinear(const TextureAtlas &atlas, const t
                                 p11.a * kx + p10.a * (1 - kx) };
 
     const float k = 1.0f / 255.0f;
-    return (p1 * ky + p0 * (1 - ky)) * k;
+    return (p1 * ky + p0 * (1.0f - ky)) * k;
 }
 
 Ray::Ref::simd_fvec4 Ray::Ref::SampleBilinear(const TextureAtlas &atlas, const simd_fvec2 &uvs, int page) {
-    const pixel_color8_t &p00 = atlas.Get(page, int(uvs[0] + 0), int(uvs[1] + 0));
-    const pixel_color8_t &p01 = atlas.Get(page, int(uvs[0] + 1), int(uvs[1] + 0));
-    const pixel_color8_t &p10 = atlas.Get(page, int(uvs[0] + 0), int(uvs[1] + 1));
-    const pixel_color8_t &p11 = atlas.Get(page, int(uvs[0] + 1), int(uvs[1] + 1));
+    const pixel_color8_t &p00 = atlas.Get(page, int(uvs[0]) + 0, int(uvs[1]) + 0);
+    const pixel_color8_t &p01 = atlas.Get(page, int(uvs[0]) + 1, int(uvs[1]) + 0);
+    const pixel_color8_t &p10 = atlas.Get(page, int(uvs[0]) + 0, int(uvs[1]) + 1);
+    const pixel_color8_t &p11 = atlas.Get(page, int(uvs[0]) + 1, int(uvs[1]) + 1);
 
     simd_fvec2 k = uvs - floor(uvs);
     
@@ -1699,8 +1724,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleAnisotropic(const TextureAtlas &atlas, cons
         step = duv_dx;
     }
 
-    if (lod < 0.0f) lod = 0.0f;
-    else if (lod >(float)MAX_MIP_LEVEL) lod = (float)MAX_MIP_LEVEL;
+    lod = clamp(lod, 0.0f, float(MAX_MIP_LEVEL));
 
     simd_fvec2 _uvs = uvs - step * 0.5f;
 
@@ -1967,46 +1991,50 @@ void Ray::Ref::ComputeDerivatives(const simd_fvec3 &I, float t, const simd_fvec3
                                   const vertex_t &v1, const vertex_t &v2, const vertex_t &v3, const simd_fvec3 &plane_N, derivatives_t &out_der) {
     // From 'Tracing Ray Differentials' [1999]
 
-    float dot_I_N = dot(-I, plane_N);
+    float dot_I_N = -dot(I, plane_N);
     float inv_dot = std::abs(dot_I_N) < FLT_EPS ? 0.0f : 1.0f / dot_I_N;
-    float dt_dx = -dot(simd_fvec3(do_dx) + t * simd_fvec3(dd_dx), plane_N) * inv_dot;
-    float dt_dy = -dot(simd_fvec3(do_dy) + t * simd_fvec3(dd_dy), plane_N) * inv_dot;
+    float dt_dx = dot(do_dx + t * dd_dx, plane_N) * inv_dot;
+    float dt_dy = dot(do_dy + t * dd_dy, plane_N) * inv_dot;
 
-    out_der.do_dx = (simd_fvec3(do_dx) + t * simd_fvec3(dd_dx)) + dt_dx * I;
-    out_der.do_dy = (simd_fvec3(do_dy) + t * simd_fvec3(dd_dy)) + dt_dy * I;
-    out_der.dd_dx = simd_fvec3(dd_dx);
-    out_der.dd_dy = simd_fvec3(dd_dy);
+    out_der.do_dx = (do_dx + t * dd_dx) + dt_dx * I;
+    out_der.do_dy = (do_dy + t * dd_dy) + dt_dy * I;
+    out_der.dd_dx = dd_dx;
+    out_der.dd_dy = dd_dy;
 
     // From 'Physically Based Rendering: ...' book
 
-    const simd_fvec2 duv13 = simd_fvec2(v1.t[0]) - simd_fvec2(v3.t[0]), duv23 = simd_fvec2(v2.t[0]) - simd_fvec2(v3.t[0]);
-    const simd_fvec3 dp13 = simd_fvec3(v1.p) - simd_fvec3(v3.p), dp23 = simd_fvec3(v2.p) - simd_fvec3(v3.p);
+    const simd_fvec2 duv13 = simd_fvec2(v1.t[0]) - simd_fvec2(v3.t[0]),
+                     duv23 = simd_fvec2(v2.t[0]) - simd_fvec2(v3.t[0]);
+    const simd_fvec3 dp13 = simd_fvec3(v1.p) - simd_fvec3(v3.p),
+                     dp23 = simd_fvec3(v2.p) - simd_fvec3(v3.p);
 
     const float det_uv = duv13[0] * duv23[1] - duv13[1] * duv23[0];
     const float inv_det_uv = std::abs(det_uv) < FLT_EPS ? 0 : 1.0f / det_uv;
     const simd_fvec3 dpdu = (duv23[1] * dp13 - duv13[1] * dp23) * inv_det_uv;
     const simd_fvec3 dpdv = (-duv23[0] * dp13 + duv13[0] * dp23) * inv_det_uv;
 
-    simd_fvec2 A[2] = { { dpdu[0], dpdu[1] },{ dpdv[0], dpdv[1] } };
-    simd_fvec2 Bx = { do_dx[0], do_dx[1] };
-    simd_fvec2 By = { do_dy[0], do_dy[1] };
+    // System of equations
+    simd_fvec2 A[2] = { { dpdu[0], dpdv[0] }, { dpdu[1], dpdv[1] } };
+    simd_fvec2 Bx = { out_der.do_dx[0], out_der.do_dx[1] };
+    simd_fvec2 By = { out_der.do_dy[0], out_der.do_dy[1] };
 
     if (std::abs(plane_N[0]) > std::abs(plane_N[1]) && std::abs(plane_N[0]) > std::abs(plane_N[2])) {
-        A[0] = { dpdu[1], dpdu[2] };
-        A[1] = { dpdv[1], dpdv[2] };
-        Bx = { do_dx[1], do_dx[2] };
-        By = { do_dy[1], do_dy[2] };
+        A[0] = { dpdu[1], dpdv[1] };
+        A[1] = { dpdu[2], dpdv[2] };
+        Bx = { out_der.do_dx[1], out_der.do_dx[2] };
+        By = { out_der.do_dy[1], out_der.do_dy[2] };
     } else if (std::abs(plane_N[1]) > std::abs(plane_N[2])) {
-        A[0] = { dpdu[0], dpdu[2] };
-        A[1] = { dpdv[0], dpdv[2] };
-        Bx = { do_dx[0], do_dx[2] };
-        By = { do_dy[0], do_dy[2] };
+        A[1] = { dpdu[2], dpdv[2] };
+        Bx = { out_der.do_dx[0], out_der.do_dx[2] };
+        By = { out_der.do_dy[0], out_der.do_dy[2] };
     }
 
-    const float det = A[0][0] * A[1][1] - A[1][0] * A[0][1];
+    // Kramer's rule
+    const float det = A[0][0] * A[1][1] - A[0][1] * A[1][0];
     const float inv_det = std::abs(det) < FLT_EPS ? 0 : 1.0f / det;
-    out_der.duv_dx = simd_fvec2{ A[0][0] * Bx[0] - A[0][1] * Bx[1], A[1][0] * Bx[0] - A[1][1] * Bx[1] } * inv_det;
-    out_der.duv_dy = simd_fvec2{ A[0][0] * By[0] - A[0][1] * By[1], A[1][0] * By[0] - A[1][1] * By[1] } * inv_det;
+    
+    out_der.duv_dx = simd_fvec2{ A[1][1] * Bx[0] - A[0][1] * Bx[1], A[0][0] * Bx[1] - A[1][0] * Bx[0] } * inv_det;
+    out_der.duv_dy = simd_fvec2{ A[1][1] * By[0] - A[0][1] * By[1], A[0][0] * By[1] - A[1][0] * By[0] } * inv_det;
 
     // Derivative for normal
     const simd_fvec3 dn1 = simd_fvec3(v1.n) - simd_fvec3(v3.n), dn2 = simd_fvec3(v2.n) - simd_fvec3(v3.n);
@@ -2139,8 +2167,10 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
     T = TransformNormal(T, tr->inv_xform);
 
     // sample main texture
-    simd_fvec4 albedo = SampleAnisotropic(tex_atlas, sc.textures[mat->textures[MAIN_TEXTURE]], uvs, surf_der.duv_dx, surf_der.duv_dy);
-    albedo = pow(albedo, simd_fvec4(2.2f));
+    const texture_t &main_texture = sc.textures[mat->textures[MAIN_TEXTURE]];
+    const float albedo_lod = get_texture_lod(main_texture, surf_der.duv_dx, surf_der.duv_dy);
+    simd_fvec4 albedo = SampleBilinear(tex_atlas, main_texture, uvs, (int)albedo_lod);
+    albedo = srgb_to_rgb(albedo);
     albedo[0] *= mat->main_color[0];
     albedo[1] *= mat->main_color[1];
     albedo[2] *= mat->main_color[2];

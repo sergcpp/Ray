@@ -120,6 +120,7 @@ struct light_desc_t {
 struct camera_desc_t {
     eCamType type = Persp;              ///< Type of projection
     eFilterType filter = Tent;          ///< Reconstruction filter
+    eDeviceType dtype = SRGB;           ///< Device type
     float origin[3];                    ///< Camera origin
     float fwd[3];                       ///< Camera forward unit vector
     float fov, gamma = 1.0f;            ///< Field of view in degrees, gamma

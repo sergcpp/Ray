@@ -400,8 +400,22 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
     }
 
     auto clamp_and_gamma_correct = [&cam](const pixel_color_t &p) {
-        auto c = simd_fvec4(&p.r);
-        c = pow(c, simd_fvec4{ 1.0f / cam.gamma });
+        auto c = simd_fvec4{ &p.r };
+
+        if (cam.dtype == SRGB) {
+            ITERATE_3({
+                if (c[i] > 0.0031308f) {
+                    c[i] = std::pow(1.055f * c[i], (1.0f / 2.4f)) - 0.055f;
+                } else {
+                    c[i] = 12.92f * c[i];
+                }
+            })
+        }
+
+        if (cam.gamma != 1.0f) {
+            c = pow(c, simd_fvec4{ 1.0f / cam.gamma });
+        }
+
         if (cam.pass_settings.flags & Clamp) {
             c = clamp(c, 0.0f, 1.0f);
         }

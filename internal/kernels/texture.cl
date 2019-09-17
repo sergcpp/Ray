@@ -9,6 +9,36 @@ float4 rgbe_to_rgb(float4 rgbe) {
     return (float4)(rgbe.xyz * f, 1.0f);
 }
 
+float4 srgb_to_rgb(float4 col) {
+    return (float4)(
+        (col.x > 0.04045f) ? (native_powr((col.x + 0.055f) / 1.055f, 2.4f)) : (col.x / 12.92f),
+        (col.y > 0.04045f) ? (native_powr((col.y + 0.055f) / 1.055f, 2.4f)) : (col.y / 12.92f),
+        (col.z > 0.04045f) ? (native_powr((col.z + 0.055f) / 1.055f, 2.4f)) : (col.z / 12.92f),
+        col.w);
+}
+
+float4 rgb_to_srgb(float4 col) {
+    return (float4)(
+            (col.x > 0.0031308f) ? (native_powr(1.055f * col.x, (1.0f / 2.4f)) - 0.055f) : (12.92f * col.x),
+            (col.y > 0.0031308f) ? (native_powr(1.055f * col.y, (1.0f / 2.4f)) - 0.055f) : (12.92f * col.y),
+            (col.z > 0.0031308f) ? (native_powr(1.055f * col.z, (1.0f / 2.4f)) - 0.055f) : (12.92f * col.z),
+            col.w);
+}
+
+float get_texture_lod(__global const texture_t *texture, const float2 duv_dx, const float2 duv_dy) {
+    float2 _duv_dx = duv_dx * (float2)(texture->size[0], texture->size[1]),
+           _duv_dy = duv_dy * (float2)(texture->size[0], texture->size[1]);
+
+    const float2
+        minuv = fmin(fmin(_duv_dx, _duv_dy), (float2)(0.0f)),
+        maxuv = fmax(fmax(_duv_dx, _duv_dy), (float2)(0.0f));
+
+    float lod = native_log2(fmin(maxuv.x - minuv.x, maxuv.y - minuv.y));
+    lod = clamp(lod - 1.0f, 0.0f, (float)MAX_MIP_LEVEL);
+
+    return lod;
+}
+
 float4 SampleTextureBilinear(__read_only image2d_array_t texture_atlas, __global const texture_t *texture,
                               const float2 uvs, int lod) {
     const float2 uvs1 = TransformUVs(uvs, tex_atlas_size, texture, lod);

@@ -143,10 +143,10 @@ void ComputeDerivatives(const float3 I, float t, const float3 do_dx, const float
                         const float2 u1, const float2 u2, const float2 u3, const float3 plane_N, derivatives_t *out_der) {
     // From 'Tracing Ray Differentials' [1999]
 
-    float dot_I_N = dot(-I, plane_N);
+    float dot_I_N = -dot(I, plane_N);
     float inv_dot = fabs(dot_I_N) < FLT_EPS ? 0.0f : 1.0f/dot_I_N;
-    float dt_dx = -dot(do_dx + t * dd_dx, plane_N) * inv_dot;
-    float dt_dy = -dot(do_dy + t * dd_dy, plane_N) * inv_dot;
+    float dt_dx = dot(do_dx + t * dd_dx, plane_N) * inv_dot;
+    float dt_dy = dot(do_dy + t * dd_dy, plane_N) * inv_dot;
     
     out_der->do_dx = (do_dx + t * dd_dx) + dt_dx * I;
     out_der->do_dy = (do_dy + t * dd_dy) + dt_dy * I;
@@ -163,23 +163,27 @@ void ComputeDerivatives(const float3 I, float t, const float3 do_dx, const float
     const float3 dpdu = (duv23.y * dp13 - duv13.y * dp23) * inv_det_uv;
     const float3 dpdv = (-duv23.x * dp13 + duv13.x * dp23) * inv_det_uv;
 
-    float2 A[2] = { dpdu.xy, dpdv.xy };
+    float2 A[2] = {
+        (float2)(dpdu.x, dpdv.x),
+        (float2)(dpdu.y, dpdv.y)
+    };
     float2 Bx = out_der->do_dx.xy;
     float2 By = out_der->do_dy.xy;
 
     if (fabs(plane_N.x) > fabs(plane_N.y) && fabs(plane_N.x) > fabs(plane_N.z)) {
-        A[0] = dpdu.yz; A[1] = dpdv.yz;
+        A[0] = (float2)(dpdu.y, dpdv.y);
+        A[1] = (float2)(dpdu.z, dpdv.z);
         Bx = out_der->do_dx.yz;  By = out_der->do_dy.yz;
     } else if (fabs(plane_N.y) > fabs(plane_N.z)) {
-        A[0] = dpdu.xz; A[1] = dpdv.xz;
+        A[1] = (float2)(dpdu.z, dpdv.z);
         Bx = out_der->do_dx.xz;  By = out_der->do_dy.xz;
     }
 
-    const float det = A[0].x * A[1].y - A[1].x * A[0].y;
+    const float det = A[0].x * A[1].y - A[0].y * A[1].x;
     const float inv_det = fabs(det) > FLT_EPS ? 1.0f / det : 0.0f;
 
-    out_der->duv_dx = (float2)(A[0].x * Bx.x - A[0].y * Bx.y, A[1].x * Bx.x - A[1].y * Bx.y) * inv_det;
-    out_der->duv_dy = (float2)(A[0].x * By.x - A[0].y * By.y, A[1].x * By.x - A[1].y * By.y) * inv_det;
+    out_der->duv_dx = (float2)(A[1].y * Bx.x - A[0].y * Bx.y, A[0].x * Bx.y - A[1].x * Bx.x) * inv_det;
+    out_der->duv_dy = (float2)(A[1].y * By.x - A[0].y * By.y, A[0].x * By.y - A[1].x * By.x) * inv_det;
 
     // Derivative for normal
     const float3 dn1 = n1 - n3, dn2 = n2 - n3;
@@ -345,8 +349,10 @@ float4 ShadeSurface(const pass_info_t *pi, __global const float *halton,
     B = TransformNormal(B, &tr->inv_xform);
     T = TransformNormal(T, &tr->inv_xform);
 
-    float4 albedo = SampleTextureAnisotropic(texture_atlas, &textures[mat->textures[MAIN_TEXTURE]], uvs, surf_der.duv_dx, surf_der.duv_dy);
-    albedo = native_powr(albedo, 2.2f);
+    __global const texture_t *main_texture = &textures[mat->textures[MAIN_TEXTURE]];
+    float albedo_lod = get_texture_lod(main_texture, surf_der.duv_dx, surf_der.duv_dy);
+    float4 albedo = SampleTextureBilinear(texture_atlas, main_texture, uvs, (int)(albedo_lod));
+    albedo = srgb_to_rgb(albedo);
     albedo.xyz *= mat->main_color;
 
 )" // workaround for 16k string literal limitation on msvc

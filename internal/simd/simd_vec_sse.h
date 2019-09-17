@@ -158,6 +158,18 @@ public:
         return _mm_cvtss_f32(_mm_sqrt_ss(r1));
     }
 
+    force_inline float length2() const {
+        __m128 r1, r2;
+        r1 = _mm_mul_ps(vec_, vec_);
+
+        r2 = _mm_shuffle_ps(r1, r1, _MM_SHUFFLE(2, 3, 0, 1));
+        r1 = _mm_add_ps(r1, r2);
+        r2 = _mm_shuffle_ps(r1, r1, _MM_SHUFFLE(0, 1, 2, 3));
+        r1 = _mm_add_ps(r1, r2);
+
+        return _mm_cvtss_f32(r1);
+    }
+
     force_inline void copy_to(float *f) const {
         _mm_storeu_ps(f, vec_);
     }

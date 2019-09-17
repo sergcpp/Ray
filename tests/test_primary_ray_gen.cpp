@@ -26,7 +26,7 @@ void test_primary_ray_gen() {
     const float o[] = { 0, 0, 4 },
                       d[] = { 0, 0, -1 };
 
-    Ray::ConstructCamera(Ray::Persp, Ray::Box, o, d, 53.13f, 2.2f, 1.0f, 0.0f, &cam);
+    Ray::ConstructCamera(Ray::Persp, Ray::Box, Ray::None, o, d, 53.13f, 2.2f, 1.0f, 0.0f, &cam);
 
     std::vector<float> dummy_halton(Ray::HALTON_SEQ_LEN * 2, 0.0f);
 
