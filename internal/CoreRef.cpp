@@ -133,49 +133,28 @@ force_inline void bbox_test_oct(const float o[3], const float inv_d[3], const mb
 force_inline int bbox_test_oct(const float o[3], const float inv_d[3], const float t, const mbvh_node_t &node, float dist[8]) {
     int mask = 0;
 
-    simd_fvec4 low, high, tmin, tmax;
+    ITERATE_8({
+        float lo_x = inv_d[0] * (node.bbox_min[0][i] - o[0]);
+        float hi_x = inv_d[0] * (node.bbox_max[0][i] - o[0]);
+        if (lo_x > hi_x) { float tmp = lo_x; lo_x = hi_x; hi_x = tmp; }
 
-    // intersect first four boxes
-    low = inv_d[0] * (simd_fvec4{ &node.bbox_min[0][0], simd_mem_aligned } - o[0]);
-    high = inv_d[0] * (simd_fvec4{ &node.bbox_max[0][0], simd_mem_aligned } - o[0]);
-    tmin = min(low, high);
-    tmax = max(low, high);
+        float lo_y = inv_d[1] * (node.bbox_min[1][i] - o[1]);
+        float hi_y = inv_d[1] * (node.bbox_max[1][i] - o[1]);
+        if (lo_y > hi_y) { float tmp = lo_y; lo_y = hi_y; hi_y = tmp; }
 
-    low = inv_d[1] * (simd_fvec4{ &node.bbox_min[1][0], simd_mem_aligned } - o[1]);
-    high = inv_d[1] * (simd_fvec4{ &node.bbox_max[1][0], simd_mem_aligned } - o[1]);
-    tmin = max(tmin, min(low, high));
-    tmax = min(tmax, max(low, high));
+        float lo_z = inv_d[2] * (node.bbox_min[2][i] - o[2]);
+        float hi_z = inv_d[2] * (node.bbox_max[2][i] - o[2]);
+        if (lo_z > hi_z) { float tmp = lo_z; lo_z = hi_z; hi_z = tmp; }
 
-    low = inv_d[2] * (simd_fvec4{ &node.bbox_min[2][0], simd_mem_aligned } - o[2]);
-    high = inv_d[2] * (simd_fvec4{ &node.bbox_max[2][0], simd_mem_aligned } - o[2]);
-    tmin = max(tmin, min(low, high));
-    tmax = min(tmax, max(low, high));
-    tmax *= 1.00000024f;
+        float tmin = lo_x > lo_y ? lo_x : lo_y;
+        if (lo_z > tmin) tmin = lo_z;
+        float tmax = hi_x < hi_y ? hi_x : hi_y;
+        if (hi_z < tmax) tmax = hi_z;
+        tmax *= 1.00000024f;
 
-    simd_fvec4 fmask = (tmin <= tmax) & (tmin <= t) & (tmax > 0.0f);
-    mask = reinterpret_cast<const simd_ivec4&>(fmask).movemask();
-    tmin.copy_to(&dist[0], simd_mem_aligned);
-
-    // intersect second four boxes
-    low = inv_d[0] * (simd_fvec4{ &node.bbox_min[0][4], simd_mem_aligned } - o[0]);
-    high = inv_d[0] * (simd_fvec4{ &node.bbox_max[0][4], simd_mem_aligned } - o[0]);
-    tmin = min(low, high);
-    tmax = max(low, high);
-
-    low = inv_d[1] * (simd_fvec4{ &node.bbox_min[1][4], simd_mem_aligned } - o[1]);
-    high = inv_d[1] * (simd_fvec4{ &node.bbox_max[1][4], simd_mem_aligned } - o[1]);
-    tmin = max(tmin, min(low, high));
-    tmax = min(tmax, max(low, high));
-
-    low = inv_d[2] * (simd_fvec4{ &node.bbox_min[2][4], simd_mem_aligned } - o[2]);
-    high = inv_d[2] * (simd_fvec4{ &node.bbox_max[2][4], simd_mem_aligned } - o[2]);
-    tmin = max(tmin, min(low, high));
-    tmax = min(tmax, max(low, high));
-    tmax *= 1.00000024f;
-
-    fmask = (tmin <= tmax) & (tmin <= t) & (tmax > 0.0f);
-    mask |= reinterpret_cast<const simd_ivec4&>(fmask).movemask() << 4;
-    tmin.copy_to(&dist[4], simd_mem_aligned);
+        dist[i] = tmin;
+        mask |= ((tmin <= tmax && tmin <= t && tmax > 0) ? 1 : 0) << i;
+    })
 
     return mask;
 }
@@ -1137,7 +1116,7 @@ bool Ray::Ref::Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t &r, co
 
 TRAVERSE:
         if (!is_leaf_node(nodes[cur.index])) {
-            alignas(16) float dist[8];
+            float dist[8];
             long mask = bbox_test_oct(r.o, inv_d, inter.t, nodes[cur.index], dist);
             if (mask) {
                 long i = GetFirstBit(mask); mask = ClearBit(mask, i);
@@ -1279,7 +1258,7 @@ bool Ray::Ref::Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t &r, const 
 
 TRAVERSE:
         if (!is_leaf_node(nodes[cur.index])) {
-            alignas(16) float dist[8];
+            float dist[8];
             long mask = bbox_test_oct(r.o, inv_d, inter.t, nodes[cur.index], dist);
             if (mask) {
                 long i = GetFirstBit(mask); mask = ClearBit(mask, i);
@@ -1395,7 +1374,7 @@ bool Ray::Ref::Traverse_MicroTree_WithStack_ClosestHit(const ray_packet_t &r, co
 
 TRAVERSE:
         if (!is_leaf_node(nodes[cur.index])) {
-            alignas(16) float dist[8];
+            float dist[8];
             long mask = bbox_test_oct(r.o, inv_d, inter.t, nodes[cur.index], dist);
             if (mask) {
                 long i = GetFirstBit(mask); mask = ClearBit(mask, i);
@@ -1498,9 +1477,9 @@ bool Ray::Ref::Traverse_MicroTree_WithStack_AnyHit(const ray_packet_t &r, const 
 
         if (cur.dist > inter.t) continue;
 
-    TRAVERSE:
+TRAVERSE:
         if (!is_leaf_node(nodes[cur.index])) {
-            alignas(16) float dist[8];
+            float dist[8];
             long mask = bbox_test_oct(r.o, inv_d, inter.t, nodes[cur.index], dist);
             if (mask) {
                 long i = GetFirstBit(mask); mask = ClearBit(mask, i);
