@@ -129,7 +129,6 @@ Ray::Ocl::Renderer::Renderer(int w, int h, int platform_index, int device_index)
         s << "#define HIT_EPS "                 << HIT_EPS << "f\n";
         s << "#define FLT_EPS "                 << FLT_EPS << "f\n";
         s << "#define PI "                      << PI << "f\n";
-        s << "#define RAY_TERM_THRES "          << RAY_TERM_THRES << "f\n";
         s << "#define HALTON_SEQ_LEN "          << HALTON_SEQ_LEN << "\n";
         s << "#define HALTON_COUNT "            << HALTON_COUNT << "\n";
         s << "#define MAX_MIP_LEVEL "           << MAX_MIP_LEVEL << "\n";

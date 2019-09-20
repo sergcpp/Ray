@@ -368,6 +368,8 @@ R"(
     int transp_depth = as_int(orig_ray->dd_dy.w);
     int total_depth = diff_depth + gloss_depth + refr_depth + transp_depth;
 
+    const int cant_terminate = total_depth < pi->settings.termination_start_depth;
+
     float3 col = 0.0f;
 
     // Evaluate materials
@@ -418,10 +420,11 @@ R"(
             r.dd_dy.xyz = surf_der.dd_dy - 2 * (dot(I, plane_N) * surf_der.dndy + surf_der.ddn_dy * plane_N);
             r.dd_dy.w = orig_ray->dd_dy.w;
 
-            const float thr = max(r.c.x, max(r.c.y, r.c.z));
+            const float lum = max(r.c.x, max(r.c.y, r.c.z));
+            const float q = cant_terminate ? 0.0f : max(0.05f, 1.0f - lum);
             const float p = fract(halton[hi + 0] + rand_offset3, &_unused);
-            if (p < thr / RAY_TERM_THRES) {
-                if (thr < RAY_TERM_THRES) r.c.xyz *= RAY_TERM_THRES / thr;
+            if (p >= q) {
+                r.c.xyz /= 1.0f - q;
                 const int index = atomic_inc(out_secondary_rays_count);
                 out_secondary_rays[index] = r;
             }
@@ -464,10 +467,11 @@ R"(
             r.dd_dy.xyz = surf_der.dd_dy - 2 * (dot(I, plane_N) * surf_der.dndy + surf_der.ddn_dy * plane_N);
             r.dd_dy.w = orig_ray->dd_dy.w;
 
-            const float thr = max(r.c.x, max(r.c.y, r.c.z));
+            const float lum = max(r.c.x, max(r.c.y, r.c.z));
+            const float q = cant_terminate ? 0.0f : max(0.05f, 1.0f - lum);
             const float p = fract(halton[hi + 0] + rand_offset3, &_unused);
-            if (p < thr / RAY_TERM_THRES) {
-                if (thr < RAY_TERM_THRES) r.c.xyz *= RAY_TERM_THRES / thr;
+            if (p >= q) {
+                r.c.xyz /= 1.0f - q;
                 const int index = atomic_inc(out_secondary_rays_count);
                 out_secondary_rays[index] = r;
             }
@@ -512,10 +516,11 @@ R"(
 
             float _unused;
 
-            const float thr = max(r.c.x, max(r.c.y, r.c.z));
+            const float lum = max(r.c.x, max(r.c.y, r.c.z));
+            const float q = cant_terminate ? 0.0f : max(0.05f, 1.0f - lum);
             const float p = fract(halton[hi + 0] + rand_offset3, &_unused);
-            if (cost2 >= 0 && p < thr / RAY_TERM_THRES) {
-                if (thr < RAY_TERM_THRES) r.c.xyz *= RAY_TERM_THRES / thr;
+            if (p >= q) {
+                r.c.xyz /= 1.0f - q;
                 const int index = atomic_inc(out_secondary_rays_count);
                 out_secondary_rays[index] = r;
             }
@@ -537,10 +542,11 @@ R"(
 
             float _unused;
 
-            const float thr = max(r.c.x, max(r.c.y, r.c.z));
+            const float lum = max(r.c.x, max(r.c.y, r.c.z));
+            const float q = cant_terminate ? 0.0f : max(0.05f, 1.0f - lum);
             const float p = fract(halton[hi + 0] + rand_offset3, &_unused);
-            if (p < thr / RAY_TERM_THRES) {
-                if (thr < RAY_TERM_THRES) r.c.xyz *= RAY_TERM_THRES / thr;
+            if (p >= q) {
+                r.c.xyz /= 1.0f - q;
                 const int index = atomic_inc(out_secondary_rays_count);
                 out_secondary_rays[index] = r;
             }

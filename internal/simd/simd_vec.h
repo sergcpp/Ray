@@ -368,6 +368,10 @@ public:
         ITERATE(S, { if (mask.comp_[i] != T(0)) comp_[i] = v1.comp_[i]; })
     }
 
+    force_inline void blend_inv_to(const simd_vec<T, S> &mask, const simd_vec<T, S> &v1) {
+        ITERATE(S, { if (mask.comp_[i] == T(0)) comp_[i] = v1.comp_[i]; })
+    }
+
     force_inline int movemask() const {
         int res = 0;
         ITERATE(S, { if (comp_[i] != T(0)) res |= (1 << i); })
@@ -636,7 +640,7 @@ force_inline simd_vec<T, S> fma(const float a, const simd_vec<T, S> &b, const fl
     return a * b + c;
 }
 
-template <typename T, int S>
+template <typename T, int S, bool Inv>
 class simd_comp_where_helper {
     const simd_vec<T, S> &mask_;
     simd_vec<T, S> &comp_;
@@ -644,12 +648,21 @@ public:
     force_inline simd_comp_where_helper(const simd_vec<T, S> &mask, simd_vec<T, S> &vec) : mask_(mask), comp_(vec) {}
 
     force_inline void operator=(const simd_vec<T, S> &vec) {
-        comp_.blend_to(mask_, vec);
+        if (!Inv) {
+            comp_.blend_to(mask_, vec);
+        } else {
+            comp_.blend_inv_to(mask_, vec);
+        }
     }
 };
 
 template <typename T, int S>
-force_inline simd_comp_where_helper<T, S> where(const simd_vec<T, S> &mask, simd_vec<T, S> &vec) {
+force_inline simd_comp_where_helper<T, S, false> where(const simd_vec<T, S> &mask, simd_vec<T, S> &vec) {
+    return { mask, vec };
+}
+
+template <typename T, int S>
+force_inline simd_comp_where_helper<T, S, true> where_not(const simd_vec<T, S> &mask, simd_vec<T, S> &vec) {
     return { mask, vec };
 }
 

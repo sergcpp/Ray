@@ -3391,6 +3391,9 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
     simd_ivec<S> transp_depth = (ray.ray_depth >> 24) & 0x000000ff;
     simd_ivec<S> total_depth = diff_depth + gloss_depth + refr_depth + transp_depth;
 
+    const simd_ivec<S> cant_terminate_imask = total_depth < int(pi.settings.termination_start_depth);
+    const auto cant_terminate_fmask = reinterpret_cast<const simd_fvec<S>&>(cant_terminate_imask);
+
     simd_ivec<S> itotal_depth_mask = total_depth < int(pi.settings.max_total_depth);
 
     simd_ivec<S> secondary_mask = { 0 };
@@ -3592,19 +3595,23 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
 
                 simd_ivec<S> idiff_depth_mask = diff_depth < int(pi.settings.max_diff_depth);
 
-                const simd_fvec<S> thr = max(rc[0], max(rc[1], rc[2]));
-                const simd_fvec<S> new_ray_mask = (p < thr / RAY_TERM_THRES) & reinterpret_cast<const simd_fvec<S>&>(same_mi) &
-                                                                               reinterpret_cast<const simd_fvec<S>&>(idiff_depth_mask) &
-                                                                               reinterpret_cast<const simd_fvec<S>&>(itotal_depth_mask);
+                const simd_fvec<S> lum = max(rc[0], max(rc[1], rc[2]));
+                simd_fvec<S> q = max(simd_fvec<S>{ 0.05f }, 1.0f - lum);
+                where(cant_terminate_fmask, q) = simd_fvec<S>{ 0.0f };
+                const simd_fvec<S> new_ray_mask = 
+                    (p >= q) &
+                    reinterpret_cast<const simd_fvec<S>&>(same_mi) &
+                    reinterpret_cast<const simd_fvec<S>&>(idiff_depth_mask) &
+                    reinterpret_cast<const simd_fvec<S>&>(itotal_depth_mask);
 
                 if (reinterpret_cast<const simd_ivec<S>&>(new_ray_mask).not_all_zeros()) {
                     const int out_index = *out_secondary_rays_count;
                     ray_packet_t<S> &r = out_secondary_rays[out_index];
 
                     // modify weight of non-terminated Ray
-                    where(thr < RAY_TERM_THRES, rc[0]) = rc[0] * (RAY_TERM_THRES / thr);
-                    where(thr < RAY_TERM_THRES, rc[1]) = rc[1] * (RAY_TERM_THRES / thr);
-                    where(thr < RAY_TERM_THRES, rc[2]) = rc[2] * (RAY_TERM_THRES / thr);
+                    rc[0] /= 1.0f - q;
+                    rc[1] /= 1.0f - q;
+                    rc[2] /= 1.0f - q;
 
                     secondary_mask = secondary_mask | reinterpret_cast<const simd_ivec<S>&>(new_ray_mask);
 
@@ -3680,19 +3687,23 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
 
                 simd_ivec<S> igloss_depth_mask = gloss_depth < int(pi.settings.max_glossy_depth);
 
-                const simd_fvec<S> thr = max(rc[0], max(rc[1], rc[2]));
-                const simd_fvec<S> new_ray_mask = (p < thr / RAY_TERM_THRES) & reinterpret_cast<const simd_fvec<S>&>(same_mi) &
-                                                                               reinterpret_cast<const simd_fvec<S>&>(igloss_depth_mask) &
-                                                                               reinterpret_cast<const simd_fvec<S>&>(itotal_depth_mask);
+                const simd_fvec<S> lum = max(rc[0], max(rc[1], rc[2]));
+                simd_fvec<S> q = max(simd_fvec<S>{ 0.05f }, 1.0f - lum);
+                where(cant_terminate_fmask, q) = simd_fvec<S>{ 0.0f };
+                const simd_fvec<S> new_ray_mask =
+                    (p >= q) &
+                    reinterpret_cast<const simd_fvec<S>&>(same_mi) &
+                    reinterpret_cast<const simd_fvec<S>&>(igloss_depth_mask) &
+                    reinterpret_cast<const simd_fvec<S>&>(itotal_depth_mask);
 
                 if (reinterpret_cast<const simd_ivec<S>&>(new_ray_mask).not_all_zeros()) {
                     const int out_index = *out_secondary_rays_count;
                     ray_packet_t<S> &r = out_secondary_rays[out_index];
 
                     // modify weight of non-terminated Ray
-                    where(thr < RAY_TERM_THRES, rc[0]) = rc[0] * (RAY_TERM_THRES / thr);
-                    where(thr < RAY_TERM_THRES, rc[1]) = rc[1] * (RAY_TERM_THRES / thr);
-                    where(thr < RAY_TERM_THRES, rc[2]) = rc[2] * (RAY_TERM_THRES / thr);
+                    rc[0] /= 1.0f - q;
+                    rc[1] /= 1.0f - q;
+                    rc[2] /= 1.0f - q;
 
                     secondary_mask = secondary_mask | reinterpret_cast<const simd_ivec<S>&>(new_ray_mask);
 
@@ -3774,19 +3785,24 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
 
                 simd_ivec<S> irefr_depth_mask = refr_depth < int(pi.settings.max_refr_depth);
 
-                const simd_fvec<S> thr = max(rc[0], max(rc[1], rc[2]));
-                const simd_fvec<S> new_ray_mask = (cost2 >= 0.0f) & (p < thr / RAY_TERM_THRES) & reinterpret_cast<const simd_fvec<S>&>(same_mi) &
-                                                                                                 reinterpret_cast<const simd_fvec<S>&>(irefr_depth_mask) &
-                                                                                                 reinterpret_cast<const simd_fvec<S>&>(itotal_depth_mask);
+                const simd_fvec<S> lum = max(rc[0], max(rc[1], rc[2]));
+                simd_fvec<S> q = max(simd_fvec<S>{ 0.05f }, 1.0f - lum);
+                where(cant_terminate_fmask, q) = simd_fvec<S>{ 0.0f };
+                const simd_fvec<S> new_ray_mask =
+                    (cost2 >= 0.0f) &
+                    (p >= q) &
+                    reinterpret_cast<const simd_fvec<S>&>(same_mi) &
+                    reinterpret_cast<const simd_fvec<S>&>(irefr_depth_mask) &
+                    reinterpret_cast<const simd_fvec<S>&>(itotal_depth_mask);
 
                 if (reinterpret_cast<const simd_ivec<S>&>(new_ray_mask).not_all_zeros()) {
                     const int out_index = *out_secondary_rays_count;
                     ray_packet_t<S> &r = out_secondary_rays[out_index];
 
                     // modify weight of non-terminated Ray
-                    where(thr < RAY_TERM_THRES, rc[0]) = rc[0] * (RAY_TERM_THRES / thr);
-                    where(thr < RAY_TERM_THRES, rc[1]) = rc[1] * (RAY_TERM_THRES / thr);
-                    where(thr < RAY_TERM_THRES, rc[2]) = rc[2] * (RAY_TERM_THRES / thr);
+                    rc[0] /= 1.0f - q;
+                    rc[1] /= 1.0f - q;
+                    rc[2] /= 1.0f - q;
 
                     secondary_mask = secondary_mask | reinterpret_cast<const simd_ivec<S>&>(new_ray_mask);
 
@@ -3836,19 +3852,23 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
 
                 simd_ivec<S> itransp_depth_mask = transp_depth < int(pi.settings.max_transp_depth);
 
-                const simd_fvec<S> thr = max(rc[0], max(rc[1], rc[2]));
-                const simd_fvec<S> new_ray_mask = (p < thr / RAY_TERM_THRES) & reinterpret_cast<const simd_fvec<S>&>(same_mi) &
-                                                                               reinterpret_cast<const simd_fvec<S>&>(itransp_depth_mask) &
-                                                                               reinterpret_cast<const simd_fvec<S>&>(itotal_depth_mask);
+                const simd_fvec<S> lum = max(rc[0], max(rc[1], rc[2]));
+                simd_fvec<S> q = max(simd_fvec<S>{ 0.05f }, 1.0f - lum);
+                where(cant_terminate_fmask, q) = simd_fvec<S>{ 0.0f };
+                const simd_fvec<S> new_ray_mask =
+                    (p >= q) &
+                    reinterpret_cast<const simd_fvec<S>&>(same_mi) &
+                    reinterpret_cast<const simd_fvec<S>&>(itransp_depth_mask) &
+                    reinterpret_cast<const simd_fvec<S>&>(itotal_depth_mask);
 
                 if (reinterpret_cast<const simd_ivec<S>&>(new_ray_mask).not_all_zeros()) {
                     const int out_index = *out_secondary_rays_count;
                     ray_packet_t<S> &r = out_secondary_rays[out_index];
 
                     // modify weight of non-terminated Ray
-                    where(thr < RAY_TERM_THRES, rc[0]) = rc[0] * (RAY_TERM_THRES / thr);
-                    where(thr < RAY_TERM_THRES, rc[1]) = rc[1] * (RAY_TERM_THRES / thr);
-                    where(thr < RAY_TERM_THRES, rc[2]) = rc[2] * (RAY_TERM_THRES / thr);
+                    rc[0] /= 1.0f - q;
+                    rc[1] /= 1.0f - q;
+                    rc[2] /= 1.0f - q;
 
                     secondary_mask = secondary_mask | reinterpret_cast<const simd_ivec<S>&>(new_ray_mask);
 
