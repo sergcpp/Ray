@@ -23,6 +23,10 @@ float3 refract(float3 I, float3 N, float eta) {
     return t * (float3)(cost2 > 0);
 }
 
+float pow5(const float v) {
+    return (v * v) * (v * v) * v;
+}
+
 #define should_add_direct_light(pi) \
     (!(pi->settings.flags & SkipDirectLight) || pi->bounce > 2)
 
@@ -308,7 +312,7 @@ float4 ShadeSurface(const pass_info_t *pi, __global const float *halton,
         float R0 = (orig_ray->c.w - mix_ior) / (orig_ray->c.w + mix_ior);
         R0 *= R0;
 
-        float RR = R0 + (1.0f - R0) * native_powr(1.0f + dot(I, N), 5.0f);
+        float RR = R0 + (1.0f - R0) * pow5(1.0f + dot(I, N));
         if (orig_ray->c.w > mix_ior) {
             float eta = orig_ray->c.w / mix_ior;
             float cosi = -dot(I, N);
@@ -317,7 +321,7 @@ float4 ShadeSurface(const pass_info_t *pi, __global const float *halton,
             if (cost2 >= 0.0f) {
                 float m = eta * cosi - sqrt(cost2);
                 float3 V = eta * I + m * N;
-                RR = R0 + (1.0f - R0) * native_powr(1.0f + dot(V, N), 5.0f);
+                RR = R0 + (1.0f - R0) * pow5(1.0f + dot(V, N));
             } else {
                 RR = 1.0f;
             }
