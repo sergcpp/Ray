@@ -936,6 +936,8 @@ simd_fvec<S> get_texture_lod(const texture_t &t, const simd_fvec<S> duv_dx[2], c
     ITERATE(S, {
         if (reinterpret_cast<const simd_ivec<S>&>(mask)[i]) {
             lod[i] = fast_log2(std::min(dimuv[0][i], dimuv[1][i])) - 1.0f;
+        } else {
+            lod[i] = 0.0f;
         }
     })
 
