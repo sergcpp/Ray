@@ -52,8 +52,6 @@ const float MAX_DIST = 3.402823466e+38F;
 
 const int MAX_BOUNCES = 10;
 
-const float RAY_TERM_THRES = 0.01f;
-
 const float LIGHT_ATTEN_CUTOFF = 0.001f;
 
 const uint32_t LEAF_NODE_BIT   = (1u << 31);

@@ -51,12 +51,13 @@ struct pass_settings_t {
             max_refr_depth,
             max_transp_depth,
             max_total_depth;
-    uint8_t pad[3];
+    uint8_t termination_start_depth;
+    uint8_t pad[2];
     uint32_t flags;
 };
 
 struct camera_t {
-    eCamType type;
+    eCamType    type;
     eFilterType filter;
     eDeviceType dtype;
     float fov, gamma;

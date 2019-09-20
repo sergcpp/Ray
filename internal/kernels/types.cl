@@ -105,7 +105,8 @@ typedef struct _pass_settings_t {
           max_refr_depth,
           max_transp_depth,
           max_total_depth;
-    uchar pad[3];
+    uchar termination_start_depth;
+    uchar pad[2];
     uint flags;
 } pass_settings_t;
 

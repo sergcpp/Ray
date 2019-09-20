@@ -132,6 +132,10 @@ public:
         vec_ = _mm256_blendv_ps(vec_, v1.vec_, mask.vec_);
     }
 
+    force_inline void blend_inv_to(const simd_vec<float, 8> &mask, const simd_vec<float, 8> &v1) {
+        vec_ = _mm256_blendv_ps(v1.vec_, vec_, mask.vec_);
+    }
+
     force_inline static simd_vec<float, 8> min(const simd_vec<float, 8> &v1, const simd_vec<float, 8> &v2) {
         simd_vec<float, 8> temp;
         temp.vec_ = _mm256_min_ps(v1.vec_, v2.vec_);
@@ -483,6 +487,10 @@ public:
 
     force_inline void blend_to(const simd_vec<int, 8> &mask, const simd_vec<int, 8> &v1) {
         vec_ = _mm256_castps_si256(_mm256_blendv_ps(_mm256_castsi256_ps(vec_), _mm256_castsi256_ps(v1.vec_), _mm256_castsi256_ps(mask.vec_)));
+    }
+
+    force_inline void blend_inv_to(const simd_vec<int, 8> &mask, const simd_vec<int, 8> &v1) {
+        vec_ = _mm256_castps_si256(_mm256_blendv_ps(_mm256_castsi256_ps(v1.vec_), _mm256_castsi256_ps(vec_), _mm256_castsi256_ps(mask.vec_)));
     }
 
     force_inline int movemask() const {

@@ -2187,6 +2187,8 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
     int transp_depth = (ray.ray_depth >> 24) & 0x000000ff;
     int total_depth = diff_depth + gloss_depth + refr_depth + transp_depth;
 
+    const bool cant_terminate = total_depth < pi.settings.termination_start_depth;
+
     // Evaluate materials
     if (mat->type == DiffuseMaterial) {
         if (pi.should_add_direct_light()) {
@@ -2242,12 +2244,11 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
             memcpy(&r.dd_dx[0], value_ptr(surf_der.dd_dx - 2 * (dot(I, plane_N) * surf_der.dndx + surf_der.ddn_dx * plane_N)), 3 * sizeof(float));
             memcpy(&r.dd_dy[0], value_ptr(surf_der.dd_dy - 2 * (dot(I, plane_N) * surf_der.dndy + surf_der.ddn_dy * plane_N)), 3 * sizeof(float));
 
-            const float thr = std::max(r.c[0], std::max(r.c[1], r.c[2]));
+            const float lum = std::max(r.c[0], std::max(r.c[1], r.c[2]));
             const float p = std::modf(halton[hi + 0] + rand_offset3, &_unused);
-            if (p > (1.0f - thr / RAY_TERM_THRES)) {
-                if (thr < RAY_TERM_THRES) {
-                    r.c[0] *= RAY_TERM_THRES / thr; r.c[1] *= RAY_TERM_THRES / thr; r.c[2] *= RAY_TERM_THRES / thr;
-                }
+            const float q = cant_terminate ? 0.0f : std::max(0.05f, 1.0f - lum);
+            if (p >= q) {
+                r.c[0] /= 1.0f - q; r.c[1] /= 1.0f - q; r.c[2] /= 1.0f - q;
                 const int index = (*out_secondary_rays_count)++;
                 out_secondary_rays[index] = r;
             }
@@ -2293,12 +2294,11 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
             memcpy(&r.dd_dx[0], value_ptr(surf_der.dd_dx - 2 * (dot(I, plane_N) * surf_der.dndx + surf_der.ddn_dx * plane_N)), 3 * sizeof(float));
             memcpy(&r.dd_dy[0], value_ptr(surf_der.dd_dy - 2 * (dot(I, plane_N) * surf_der.dndy + surf_der.ddn_dy * plane_N)), 3 * sizeof(float));
 
-            const float thr = std::max(r.c[0], std::max(r.c[1], r.c[2]));
+            const float lum = std::max(r.c[0], std::max(r.c[1], r.c[2]));
             const float p = std::modf(halton[hi + 0] + rand_offset3, &_unused);
-            if (p < thr / RAY_TERM_THRES) {
-                if (thr < RAY_TERM_THRES) {
-                    r.c[0] *= RAY_TERM_THRES / thr; r.c[1] *= RAY_TERM_THRES / thr; r.c[2] *= RAY_TERM_THRES / thr;
-                }
+            const float q = cant_terminate ? 0.0f : std::max(0.05f, 1.0f - lum);
+            if (p >= q) {
+                r.c[0] /= 1.0f - q; r.c[1] /= 1.0f - q; r.c[2] /= 1.0f - q;
                 const int index = (*out_secondary_rays_count)++;
                 out_secondary_rays[index] = r;
             }
@@ -2346,12 +2346,11 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
             memcpy(&r.dd_dx[0], value_ptr(eta * surf_der.dd_dx - (m * surf_der.dndx + dmdx * plane_N)), 3 * sizeof(float));
             memcpy(&r.dd_dy[0], value_ptr(eta * surf_der.dd_dy - (m * surf_der.dndy + dmdy * plane_N)), 3 * sizeof(float));
 
-            const float thr = std::max(r.c[0], std::max(r.c[1], r.c[2]));
+            const float lum = std::max(r.c[0], std::max(r.c[1], r.c[2]));
             const float p = std::modf(halton[hi + 0] + rand_offset3, &_unused);
-            if (p < thr / RAY_TERM_THRES) {
-                if (thr < RAY_TERM_THRES) {
-                    r.c[0] *= RAY_TERM_THRES / thr; r.c[1] *= RAY_TERM_THRES / thr; r.c[2] *= RAY_TERM_THRES / thr;
-                }
+            const float q = cant_terminate ? 0.0f : std::max(0.05f, 1.0f - lum);
+            if (p >= q) {
+                r.c[0] /= 1.0f - q; r.c[1] /= 1.0f - q; r.c[2] /= 1.0f - q;
                 const int index = (*out_secondary_rays_count)++;
                 out_secondary_rays[index] = r;
             }
@@ -2376,12 +2375,11 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
             memcpy(&r.dd_dx[0], &ray.dd_dx[0], 3 * sizeof(float));
             memcpy(&r.dd_dy[0], &ray.dd_dy[0], 3 * sizeof(float));
 
-            const float thr = std::max(r.c[0], std::max(r.c[1], r.c[2]));
+            const float lum = std::max(r.c[0], std::max(r.c[1], r.c[2]));
             const float p = std::modf(halton[hi + 0] + rand_offset3, &_unused);
-            if (p < thr / RAY_TERM_THRES) {
-                if (thr < RAY_TERM_THRES) {
-                    r.c[0] *= RAY_TERM_THRES / thr; r.c[1] *= RAY_TERM_THRES / thr; r.c[2] *= RAY_TERM_THRES / thr;
-                }
+            const float q = cant_terminate ? 0.0f : std::max(0.05f, 1.0f - lum);
+            if (p >= q) {
+                r.c[0] /= 1.0f - q; r.c[1] /= 1.0f - q; r.c[2] /= 1.0f - q;
                 const int index = (*out_secondary_rays_count)++;
                 out_secondary_rays[index] = r;
             }

@@ -127,9 +127,9 @@ struct camera_desc_t {
     float focus_distance = 1.0f;        ///< Distance to focus point
     float focus_factor = 0.0f;          ///< Depth of field strength (in non-physical units)
     uint32_t mi_index, uv_index = 0;    ///< Index of mesh instance and uv layer used by geometry cam
-    bool lighting_only = false;         ///< Render only lightmap
-    bool skip_direct_lighting = false;  ///< Render only indirect light contribution
-    bool skip_indirect_lighting = false;///< Render only direct light contribution
+    bool lighting_only = false;         ///< Render lightmap only
+    bool skip_direct_lighting = false;  ///< Render indirect light contribution only
+    bool skip_indirect_lighting = false;///< Render direct light contribution only
     bool no_background = false;         ///< Do not render background
     bool clamp = false;                 ///< Clamp color values to [0..1] range
     bool output_sh = false;             ///< Output 2-band (4 coeff) spherical harmonics data
@@ -139,6 +139,7 @@ struct camera_desc_t {
     uint8_t max_refr_depth = 4;         ///< Maximum tracing depth of glossy rays
     uint8_t max_transp_depth = 4;       ///< Maximum tracing depth of transparency rays
     uint8_t max_total_depth = 4;        ///< Maximum tracing depth of all rays
+    uint8_t termination_start_depth = 3;///< Depth at which random rays termination starts
 };
 
 /// Environment description
