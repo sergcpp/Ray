@@ -309,6 +309,10 @@ force_inline simd_fvec3 reflect(const simd_fvec3 &I, const simd_fvec3 &N) {
     return I - 2 * dot(N, I) * N;
 }
 
+force_inline float pow5(const float v) {
+    return (v * v) * (v * v) * v;
+}
+
 force_inline uint32_t get_ray_hash(const ray_packet_t &r, const float root_min[3], const float cell_size[3]) {
     int x = clamp((int)((r.o[0] - root_min[0]) / cell_size[0]), 0, 255),
         y = clamp((int)((r.o[1] - root_min[1]) / cell_size[1]), 0, 255),
@@ -2135,12 +2139,12 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
             if (cost2 >= 0.0f) {
                 float m = eta * cosi - std::sqrt(cost2);
                 simd_fvec3 V = eta * I + m * N;
-                RR = R0 + (1.0f - R0) * std::pow(1.0f + dot(V, N), 5.0f);
+                RR = R0 + (1.0f - R0) * pow5(1.0f + dot(V, N));
             } else {
                 RR = 1.0f;
             }
         } else {
-            RR = R0 + (1.0f - R0) * std::pow(1.0f + dot(I, N), 5.0f);
+            RR = R0 + (1.0f - R0) * pow5(1.0f + dot(I, N));
         }
 
         mix_val *= clamp(RR, 0.0f, 1.0f);

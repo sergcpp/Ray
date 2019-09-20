@@ -837,6 +837,10 @@ force_inline void reflect(const simd_fvec<S> I[3], const simd_fvec<S> N[3], cons
     res[2] = I[2] - 2.0f * dot_N_I * N[2];
 }
 
+force_inline float pow5(const float v) {
+    return (v * v) * (v * v) * v;
+}
+
 template <int S>
 force_inline simd_ivec<S> get_ray_hash(const ray_packet_t<S> &r, const simd_ivec<S> &mask, const float root_min[3], const float cell_size[3]) {
     simd_ivec<S> x = clamp((simd_ivec<S>)((r.o[0] - root_min[0]) / cell_size[0]), 0, 255),
@@ -3463,12 +3467,12 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
 
                     if (ray.ior[i] > mix_ior[i]) {
                         if (cost2[i] >= 0.0f) {
-                            RR = R0[i] + (1.0f - R0[i]) * std::pow(1.0f + _dot_V_N[i], 5.0f);
+                            RR = R0[i] + (1.0f - R0[i]) * pow5(1.0f + _dot_V_N[i]);
                         } else {
                             RR = 1.0f;
                         }
                     } else {
-                        RR = R0[i] + (1.0f - R0[i]) * std::pow(1.0f + _dot_I_N[i], 5.0f);
+                        RR = R0[i] + (1.0f - R0[i]) * pow5(1.0f + _dot_I_N[i]);
                     }
 
                     if (RR < 0.0f) RR = 0.0f;
