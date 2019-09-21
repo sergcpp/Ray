@@ -23,6 +23,10 @@ float3 refract(float3 I, float3 N, float eta) {
     return t * (float3)(cost2 > 0);
 }
 
+float pow5(const float v) {
+    return (v * v) * (v * v) * v;
+}
+
 #define should_add_direct_light(pi) \
     (!(pi->settings.flags & SkipDirectLight) || pi->bounce > 2)
 
@@ -143,10 +147,10 @@ void ComputeDerivatives(const float3 I, float t, const float3 do_dx, const float
                         const float2 u1, const float2 u2, const float2 u3, const float3 plane_N, derivatives_t *out_der) {
     // From 'Tracing Ray Differentials' [1999]
 
-    float dot_I_N = dot(-I, plane_N);
+    float dot_I_N = -dot(I, plane_N);
     float inv_dot = fabs(dot_I_N) < FLT_EPS ? 0.0f : 1.0f/dot_I_N;
-    float dt_dx = -dot(do_dx + t * dd_dx, plane_N) * inv_dot;
-    float dt_dy = -dot(do_dy + t * dd_dy, plane_N) * inv_dot;
+    float dt_dx = dot(do_dx + t * dd_dx, plane_N) * inv_dot;
+    float dt_dy = dot(do_dy + t * dd_dy, plane_N) * inv_dot;
     
     out_der->do_dx = (do_dx + t * dd_dx) + dt_dx * I;
     out_der->do_dy = (do_dy + t * dd_dy) + dt_dy * I;
@@ -163,23 +167,27 @@ void ComputeDerivatives(const float3 I, float t, const float3 do_dx, const float
     const float3 dpdu = (duv23.y * dp13 - duv13.y * dp23) * inv_det_uv;
     const float3 dpdv = (-duv23.x * dp13 + duv13.x * dp23) * inv_det_uv;
 
-    float2 A[2] = { dpdu.xy, dpdv.xy };
+    float2 A[2] = {
+        (float2)(dpdu.x, dpdv.x),
+        (float2)(dpdu.y, dpdv.y)
+    };
     float2 Bx = out_der->do_dx.xy;
     float2 By = out_der->do_dy.xy;
 
     if (fabs(plane_N.x) > fabs(plane_N.y) && fabs(plane_N.x) > fabs(plane_N.z)) {
-        A[0] = dpdu.yz; A[1] = dpdv.yz;
+        A[0] = (float2)(dpdu.y, dpdv.y);
+        A[1] = (float2)(dpdu.z, dpdv.z);
         Bx = out_der->do_dx.yz;  By = out_der->do_dy.yz;
     } else if (fabs(plane_N.y) > fabs(plane_N.z)) {
-        A[0] = dpdu.xz; A[1] = dpdv.xz;
+        A[1] = (float2)(dpdu.z, dpdv.z);
         Bx = out_der->do_dx.xz;  By = out_der->do_dy.xz;
     }
 
-    const float det = A[0].x * A[1].y - A[1].x * A[0].y;
+    const float det = A[0].x * A[1].y - A[0].y * A[1].x;
     const float inv_det = fabs(det) > FLT_EPS ? 1.0f / det : 0.0f;
 
-    out_der->duv_dx = (float2)(A[0].x * Bx.x - A[0].y * Bx.y, A[1].x * Bx.x - A[1].y * Bx.y) * inv_det;
-    out_der->duv_dy = (float2)(A[0].x * By.x - A[0].y * By.y, A[1].x * By.x - A[1].y * By.y) * inv_det;
+    out_der->duv_dx = (float2)(A[1].y * Bx.x - A[0].y * Bx.y, A[0].x * Bx.y - A[1].x * Bx.x) * inv_det;
+    out_der->duv_dy = (float2)(A[1].y * By.x - A[0].y * By.y, A[0].x * By.y - A[1].x * By.x) * inv_det;
 
     // Derivative for normal
     const float3 dn1 = n1 - n3, dn2 = n2 - n3;
@@ -304,7 +312,7 @@ float4 ShadeSurface(const pass_info_t *pi, __global const float *halton,
         float R0 = (orig_ray->c.w - mix_ior) / (orig_ray->c.w + mix_ior);
         R0 *= R0;
 
-        float RR = R0 + (1.0f - R0) * native_powr(1.0f + dot(I, N), 5.0f);
+        float RR = R0 + (1.0f - R0) * pow5(1.0f + dot(I, N));
         if (orig_ray->c.w > mix_ior) {
             float eta = orig_ray->c.w / mix_ior;
             float cosi = -dot(I, N);
@@ -313,7 +321,7 @@ float4 ShadeSurface(const pass_info_t *pi, __global const float *halton,
             if (cost2 >= 0.0f) {
                 float m = eta * cosi - sqrt(cost2);
                 float3 V = eta * I + m * N;
-                RR = R0 + (1.0f - R0) * native_powr(1.0f + dot(V, N), 5.0f);
+                RR = R0 + (1.0f - R0) * pow5(1.0f + dot(V, N));
             } else {
                 RR = 1.0f;
             }
@@ -345,8 +353,10 @@ float4 ShadeSurface(const pass_info_t *pi, __global const float *halton,
     B = TransformNormal(B, &tr->inv_xform);
     T = TransformNormal(T, &tr->inv_xform);
 
-    float4 albedo = SampleTextureAnisotropic(texture_atlas, &textures[mat->textures[MAIN_TEXTURE]], uvs, surf_der.duv_dx, surf_der.duv_dy);
-    albedo = native_powr(albedo, 2.2f);
+    __global const texture_t *main_texture = &textures[mat->textures[MAIN_TEXTURE]];
+    float albedo_lod = get_texture_lod(main_texture, surf_der.duv_dx, surf_der.duv_dy);
+    float4 albedo = SampleTextureBilinear(texture_atlas, main_texture, uvs, (int)(albedo_lod));
+    albedo = srgb_to_rgb(albedo);
     albedo.xyz *= mat->main_color;
 
 )" // workaround for 16k string literal limitation on msvc
@@ -357,6 +367,8 @@ R"(
     int refr_depth = as_int(orig_ray->dd_dx.w);
     int transp_depth = as_int(orig_ray->dd_dy.w);
     int total_depth = diff_depth + gloss_depth + refr_depth + transp_depth;
+
+    const int cant_terminate = total_depth < pi->settings.termination_start_depth;
 
     float3 col = 0.0f;
 
@@ -408,10 +420,11 @@ R"(
             r.dd_dy.xyz = surf_der.dd_dy - 2 * (dot(I, plane_N) * surf_der.dndy + surf_der.ddn_dy * plane_N);
             r.dd_dy.w = orig_ray->dd_dy.w;
 
-            const float thr = max(r.c.x, max(r.c.y, r.c.z));
+            const float lum = max(r.c.x, max(r.c.y, r.c.z));
+            const float q = cant_terminate ? 0.0f : max(0.05f, 1.0f - lum);
             const float p = fract(halton[hi + 0] + rand_offset3, &_unused);
-            if (p < thr / RAY_TERM_THRES) {
-                if (thr < RAY_TERM_THRES) r.c.xyz *= RAY_TERM_THRES / thr;
+            if (p >= q) {
+                r.c.xyz /= 1.0f - q;
                 const int index = atomic_inc(out_secondary_rays_count);
                 out_secondary_rays[index] = r;
             }
@@ -454,10 +467,11 @@ R"(
             r.dd_dy.xyz = surf_der.dd_dy - 2 * (dot(I, plane_N) * surf_der.dndy + surf_der.ddn_dy * plane_N);
             r.dd_dy.w = orig_ray->dd_dy.w;
 
-            const float thr = max(r.c.x, max(r.c.y, r.c.z));
+            const float lum = max(r.c.x, max(r.c.y, r.c.z));
+            const float q = cant_terminate ? 0.0f : max(0.05f, 1.0f - lum);
             const float p = fract(halton[hi + 0] + rand_offset3, &_unused);
-            if (p < thr / RAY_TERM_THRES) {
-                if (thr < RAY_TERM_THRES) r.c.xyz *= RAY_TERM_THRES / thr;
+            if (p >= q) {
+                r.c.xyz /= 1.0f - q;
                 const int index = atomic_inc(out_secondary_rays_count);
                 out_secondary_rays[index] = r;
             }
@@ -502,10 +516,11 @@ R"(
 
             float _unused;
 
-            const float thr = max(r.c.x, max(r.c.y, r.c.z));
+            const float lum = max(r.c.x, max(r.c.y, r.c.z));
+            const float q = cant_terminate ? 0.0f : max(0.05f, 1.0f - lum);
             const float p = fract(halton[hi + 0] + rand_offset3, &_unused);
-            if (cost2 >= 0 && p < thr / RAY_TERM_THRES) {
-                if (thr < RAY_TERM_THRES) r.c.xyz *= RAY_TERM_THRES / thr;
+            if (p >= q) {
+                r.c.xyz /= 1.0f - q;
                 const int index = atomic_inc(out_secondary_rays_count);
                 out_secondary_rays[index] = r;
             }
@@ -527,10 +542,11 @@ R"(
 
             float _unused;
 
-            const float thr = max(r.c.x, max(r.c.y, r.c.z));
+            const float lum = max(r.c.x, max(r.c.y, r.c.z));
+            const float q = cant_terminate ? 0.0f : max(0.05f, 1.0f - lum);
             const float p = fract(halton[hi + 0] + rand_offset3, &_unused);
-            if (p < thr / RAY_TERM_THRES) {
-                if (thr < RAY_TERM_THRES) r.c.xyz *= RAY_TERM_THRES / thr;
+            if (p >= q) {
+                r.c.xyz /= 1.0f - q;
                 const int index = atomic_inc(out_secondary_rays_count);
                 out_secondary_rays[index] = r;
             }
@@ -541,7 +557,7 @@ R"(
 }
 
 __kernel
-void ShadePrimary(pass_info_t pi, __global const float *halton, int w,
+void ShadePrimary(pass_info_t pi, __global const float *halton, int w, int h,
                   __global const hit_data_t *prim_inters, __global const ray_packet_t *prim_rays,
                   __global const mesh_instance_t *mesh_instances, __global const uint *mi_indices,
                   __global const mesh_t *meshes, __global const transform_t *transforms,
@@ -551,8 +567,8 @@ void ShadePrimary(pass_info_t pi, __global const float *halton, int w,
                   const environment_t env, __global const material_t *materials, __global const texture_t *textures, __read_only image2d_array_t texture_atlas,
                   __global const light_t *lights, __global const uint *li_indices, uint light_node_index, __write_only image2d_t frame_buf,
                   __global ray_packet_t *out_secondary_rays, __global int *out_secondary_rays_count) {
-    const int i = get_global_id(0);
-    const int j = get_global_id(1);
+    const int i = get_global_id(0), j = get_global_id(1);
+    if (i >= w || j >= h) return;
     
     __local uint shared_stack[MAX_STACK_SIZE * TRACE_GROUP_SIZE_X * TRACE_GROUP_SIZE_Y];
     __local uint *stack = &shared_stack[MAX_STACK_SIZE * (get_local_id(1) * TRACE_GROUP_SIZE_X + get_local_id(0))];
@@ -576,13 +592,14 @@ void ShadePrimary(pass_info_t pi, __global const float *halton, int w,
 }
 
 __kernel
-void ShadeSecondary(pass_info_t pi, __global const float *halton, __global const hit_data_t *prim_inters, __global const ray_packet_t *prim_rays,
+void ShadeSecondary(pass_info_t pi, __global const float *halton, __global const hit_data_t *prim_inters, __global const ray_packet_t *prim_rays, int prim_rays_count,
                     __global const mesh_instance_t *mesh_instances, __global const uint *mi_indices, __global const mesh_t *meshes, __global const transform_t *transforms,
                     __global const uint *vtx_indices, __global const vertex_t *vertices, __global const bvh_node_t *nodes, uint node_index, 
                     __global const tri_accel_t *tris, __global const uint *tri_indices, const environment_t env, __global const material_t *materials, __global const texture_t *textures, __read_only image2d_array_t texture_atlas,
                     __global const light_t *lights, __global const uint *li_indices, uint light_node_index,
                     __write_only image2d_t frame_buf, __read_only image2d_t frame_buf2, __global ray_packet_t *out_secondary_rays, __global int *out_secondary_rays_count) {
     const int index = get_global_id(0);
+    if (index >= prim_rays_count) return;
 
     __global const ray_packet_t *orig_ray = &prim_rays[index];
 

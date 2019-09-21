@@ -198,8 +198,14 @@ public:
     }
 
     force_inline void blend_to(const simd_vec<float, 4> &mask, const simd_vec<float, 4> &v1) {
-        int32x4_t temp1 = vandq_s32(vreinterpretq_s32_f32(mask.vec_), vreinterpretq_s32_f32(v1.vec_));
+        int32x4_t temp1 = vandq_s32(vreinterpretq_s32_f32(v1.vec_), vreinterpretq_s32_f32(mask.vec_));
         int32x4_t temp2 = vbicq_s32(vreinterpretq_s32_f32(vec_), vreinterpretq_s32_f32(mask.vec_));
+        vec_ = vreinterpretq_f32_s32(vorrq_s32(temp1, temp2));
+    }
+
+    force_inline void blend_inv_to(const simd_vec<float, 4> &mask, const simd_vec<float, 4> &v1) {
+        int32x4_t temp1 = vandq_s32(vreinterpretq_s32_f32(vec_), vreinterpretq_s32_f32(mask.vec_));
+        int32x4_t temp2 = vbicq_s32(vreinterpretq_s32_f32(v1.vec_), vreinterpretq_s32_f32(mask.vec_));
         vec_ = vreinterpretq_f32_s32(vorrq_s32(temp1, temp2));
     }
 
@@ -511,8 +517,14 @@ public:
     }
 
     force_inline void blend_to(const simd_vec<int, 4> &mask, const simd_vec<int, 4> &v1) {
-        int32x4_t temp1 = vandq_s32(mask.vec_, v1.vec_);
+        int32x4_t temp1 = vandq_s32(v1.vec_, mask.vec_);
         int32x4_t temp2 = vbicq_s32(vec_, mask.vec_);
+        vec_ = vorrq_s32(temp1, temp2);
+    }
+
+    force_inline void blend_inv_to(const simd_vec<int, 4> &mask, const simd_vec<int, 4> &v1) {
+        int32x4_t temp1 = vandq_s32(vec_, mask.vec_);
+        int32x4_t temp2 = vbicq_s32(v1.vec_, mask.vec_);
         vec_ = vorrq_s32(temp1, temp2);
     }
 

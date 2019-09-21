@@ -211,6 +211,7 @@ void InitCountTable(__global ray_chunk_t *chunks, int shift, __global uint *coun
 __kernel
 void WriteSortedChunks(__global ray_chunk_t *chunks, __global uint *offsets, int shift, int group_size, int global_size, __global ray_chunk_t *chunks_out) {
     const int gi = get_global_id(0);
+    if (gi >= global_size) return;
 
     uint local_offsets[0x10];
     for (int i = 0; i < 0x10; i++) {
@@ -301,8 +302,9 @@ void InclusiveSegScan(__global uint *in_values, __global uint *in_flags, __globa
 }
 
 __kernel
-void AddSegPartialSums(__global uint *flags, __global uint *in_values, __global uint *partial_sums, int group_size) {
-    const int gi = get_global_id(0);    
+void AddSegPartialSums(__global uint *flags, __global uint *in_values, __global uint *partial_sums, int group_size, int work_size) {
+    const int gi = get_global_id(0);
+    if (gi >= work_size) return;
 
     uint flag = 0;
     for (int i = 0; i < group_size && gi; i++) {

@@ -53,6 +53,49 @@
         { const int i = 0; exp }    \
     }
 
+#define ITERATE_R(n, exp)  \
+    if ((n) == 16) {                \
+        { const int i = 15; exp }    \
+        { const int i = 14; exp }    \
+        { const int i = 13; exp }    \
+        { const int i = 12; exp }    \
+        { const int i = 11; exp }    \
+        { const int i = 10; exp }    \
+        { const int i = 9; exp }    \
+        { const int i = 8; exp }    \
+        { const int i = 7; exp }    \
+        { const int i = 6; exp }    \
+        { const int i = 5; exp }   \
+        { const int i = 4; exp }   \
+        { const int i = 3; exp }   \
+        { const int i = 2; exp }   \
+        { const int i = 1; exp }   \
+        { const int i = 0; exp }   \
+    } else if ((n) == 8) {          \
+        { const int i = 7; exp }    \
+        { const int i = 6; exp }    \
+        { const int i = 5; exp }    \
+        { const int i = 4; exp }    \
+        { const int i = 3; exp }    \
+        { const int i = 2; exp }    \
+        { const int i = 1; exp }    \
+        { const int i = 0; exp }    \
+    } else if ((n) == 4) {          \
+        { const int i = 3; exp }    \
+        { const int i = 2; exp }    \
+        { const int i = 1; exp }    \
+        { const int i = 0; exp }    \
+    } else if ((n) == 3) {          \
+        { const int i = 2; exp }    \
+        { const int i = 1; exp }    \
+        { const int i = 0; exp }    \
+    } else if ((n) == 2) {          \
+        { const int i = 1; exp }    \
+        { const int i = 0; exp }    \
+    } else if ((n) == 1) {          \
+        { const int i = 0; exp }    \
+    }
+
 #define ITERATE_2(exp)  \
         { const int i = 0; exp }    \
         { const int i = 1; exp }
@@ -279,6 +322,12 @@ public:
         return std::sqrt(temp);
     }
 
+    force_inline T length2() const {
+        T temp = { 0 };
+        ITERATE(S, { temp += comp_[i] * comp_[i]; })
+        return temp;
+    }
+
     force_inline simd_vec<T, S> fract() const {
         simd_vec<T, S> temp;
         T _unused;
@@ -317,6 +366,16 @@ public:
 
     force_inline void blend_to(const simd_vec<T, S> &mask, const simd_vec<T, S> &v1) {
         ITERATE(S, { if (mask.comp_[i] != T(0)) comp_[i] = v1.comp_[i]; })
+    }
+
+    force_inline void blend_inv_to(const simd_vec<T, S> &mask, const simd_vec<T, S> &v1) {
+        ITERATE(S, { if (mask.comp_[i] == T(0)) comp_[i] = v1.comp_[i]; })
+    }
+
+    force_inline int movemask() const {
+        int res = 0;
+        ITERATE(S, { if (comp_[i] != T(0)) res |= (1 << i); })
+        return res;
     }
 
     force_inline static simd_vec<T, S> min(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) {
@@ -549,6 +608,9 @@ template <typename T, int S>
 force_inline T length(const simd_vec<T, S> &v1) { return v1.length(); }
 
 template <typename T, int S>
+force_inline T length2(const simd_vec<T, S> &v1) { return v1.length2(); }
+
+template <typename T, int S>
 force_inline simd_vec<T, S> fract(const simd_vec<T, S> &v1) { return v1.fract(); }
 
 template <typename T, int S>
@@ -578,7 +640,7 @@ force_inline simd_vec<T, S> fma(const float a, const simd_vec<T, S> &b, const fl
     return a * b + c;
 }
 
-template <typename T, int S>
+template <typename T, int S, bool Inv>
 class simd_comp_where_helper {
     const simd_vec<T, S> &mask_;
     simd_vec<T, S> &comp_;
@@ -586,12 +648,21 @@ public:
     force_inline simd_comp_where_helper(const simd_vec<T, S> &mask, simd_vec<T, S> &vec) : mask_(mask), comp_(vec) {}
 
     force_inline void operator=(const simd_vec<T, S> &vec) {
-        comp_.blend_to(mask_, vec);
+        if (!Inv) {
+            comp_.blend_to(mask_, vec);
+        } else {
+            comp_.blend_inv_to(mask_, vec);
+        }
     }
 };
 
 template <typename T, int S>
-force_inline simd_comp_where_helper<T, S> where(const simd_vec<T, S> &mask, simd_vec<T, S> &vec) {
+force_inline simd_comp_where_helper<T, S, false> where(const simd_vec<T, S> &mask, simd_vec<T, S> &vec) {
+    return { mask, vec };
+}
+
+template <typename T, int S>
+force_inline simd_comp_where_helper<T, S, true> where_not(const simd_vec<T, S> &mask, simd_vec<T, S> &vec) {
     return { mask, vec };
 }
 

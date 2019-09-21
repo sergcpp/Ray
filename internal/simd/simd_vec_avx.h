@@ -114,6 +114,12 @@ public:
         return std::sqrt(temp);
     }
 
+    force_inline float length2() const {
+        float temp = 0;
+        ITERATE_8({ temp += comp_[i] * comp_[i]; })
+        return temp;
+    }
+
     force_inline void copy_to(float *f) const {
         _mm256_storeu_ps(f, vec_);
     }
@@ -124,6 +130,10 @@ public:
 
     force_inline void blend_to(const simd_vec<float, 8> &mask, const simd_vec<float, 8> &v1) {
         vec_ = _mm256_blendv_ps(vec_, v1.vec_, mask.vec_);
+    }
+
+    force_inline void blend_inv_to(const simd_vec<float, 8> &mask, const simd_vec<float, 8> &v1) {
+        vec_ = _mm256_blendv_ps(v1.vec_, vec_, mask.vec_);
     }
 
     force_inline static simd_vec<float, 8> min(const simd_vec<float, 8> &v1, const simd_vec<float, 8> &v2) {
@@ -479,6 +489,14 @@ public:
         vec_ = _mm256_castps_si256(_mm256_blendv_ps(_mm256_castsi256_ps(vec_), _mm256_castsi256_ps(v1.vec_), _mm256_castsi256_ps(mask.vec_)));
     }
 
+    force_inline void blend_inv_to(const simd_vec<int, 8> &mask, const simd_vec<int, 8> &v1) {
+        vec_ = _mm256_castps_si256(_mm256_blendv_ps(_mm256_castsi256_ps(v1.vec_), _mm256_castsi256_ps(vec_), _mm256_castsi256_ps(mask.vec_)));
+    }
+
+    force_inline int movemask() const {
+        return _mm256_movemask_ps(_mm256_castsi256_ps(vec_));
+    }
+
     force_inline bool all_zeros() const {
         return _mm256_test_all_zeros(vec_, vec_) != 0;
     }
@@ -488,7 +506,7 @@ public:
     }
 
     force_inline bool not_all_zeros() const {
-        volatile int res = _mm256_test_all_zeros(vec_, vec_);
+        int res = _mm256_test_all_zeros(vec_, vec_);
         return res == 0;
     }
 

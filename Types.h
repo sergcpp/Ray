@@ -35,6 +35,8 @@ enum eCamType { Persp, Ortho, Geo };
 
 enum eFilterType { Box, Tent };
 
+enum eDeviceType { None, SRGB };
+
 enum ePassFlags { SkipDirectLight     = (1 << 0),
                   SkipIndirectLight   = (1 << 1),
                   LightingOnly        = (1 << 2),
@@ -49,13 +51,15 @@ struct pass_settings_t {
             max_refr_depth,
             max_transp_depth,
             max_total_depth;
-    uint8_t pad[3];
+    uint8_t termination_start_depth;
+    uint8_t pad[2];
     uint32_t flags;
 };
 
 struct camera_t {
-    eCamType type;
+    eCamType    type;
     eFilterType filter;
+    eDeviceType dtype;
     float fov, gamma;
     float focus_distance, focus_factor;
     float origin[3],

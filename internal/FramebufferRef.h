@@ -57,7 +57,7 @@ public:
 
     force_inline void MixSHData(int x, int y, const shl1_data_t &sh, float k) {
         int i = y * w_ + x;
-        auto &out_sh = sh_data_[i];
+        shl1_data_t &out_sh = sh_data_[i];
 
         for (int j = 0; j < 4; j++) {
             out_sh.coeff_r[j] += (sh.coeff_r[j] - out_sh.coeff_r[j]) * k;

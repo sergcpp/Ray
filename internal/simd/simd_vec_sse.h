@@ -158,6 +158,18 @@ public:
         return _mm_cvtss_f32(_mm_sqrt_ss(r1));
     }
 
+    force_inline float length2() const {
+        __m128 r1, r2;
+        r1 = _mm_mul_ps(vec_, vec_);
+
+        r2 = _mm_shuffle_ps(r1, r1, _MM_SHUFFLE(2, 3, 0, 1));
+        r1 = _mm_add_ps(r1, r2);
+        r2 = _mm_shuffle_ps(r1, r1, _MM_SHUFFLE(0, 1, 2, 3));
+        r1 = _mm_add_ps(r1, r2);
+
+        return _mm_cvtss_f32(r1);
+    }
+
     force_inline void copy_to(float *f) const {
         _mm_storeu_ps(f, vec_);
     }
@@ -172,6 +184,16 @@ public:
 #else
         __m128 temp1 = _mm_and_ps(mask.vec_, v1.vec_);
         __m128 temp2 = _mm_andnot_ps(mask.vec_, vec_);
+        vec_ = _mm_or_ps(temp1, temp2);
+#endif
+    }
+
+    force_inline void blend_inv_to(const simd_vec<float, 4> &mask, const simd_vec<float, 4> &v1) {
+#if 0 // requires sse4.1
+        vec_ = _mm_blendv_ps(v1.vec_, vec_, mask.vec_);
+#else
+        __m128 temp1 = _mm_andnot_ps(mask.vec_, v1.vec_);
+        __m128 temp2 = _mm_and_ps(mask.vec_, vec_);
         vec_ = _mm_or_ps(temp1, temp2);
 #endif
     }
@@ -496,6 +518,20 @@ public:
         __m128i temp2 = _mm_andnot_si128(mask.vec_, vec_);
         vec_ = _mm_or_si128(temp1, temp2);
 #endif
+    }
+
+    force_inline void blend_inv_to(const simd_vec<int, 4> &mask, const simd_vec<int, 4> &v1) {
+#if 0 // requires sse4.1
+        vec_ = _mm_blendv_epi8(v1.vec_, vec_, mask.vec_);
+#else
+        __m128i temp1 = _mm_andnot_si128(mask.vec_, v1.vec_);
+        __m128i temp2 = _mm_and_si128(mask.vec_, vec_);
+        vec_ = _mm_or_si128(temp1, temp2);
+#endif
+    }
+
+    force_inline int movemask() const {
+        return _mm_movemask_ps(_mm_castsi128_ps(vec_));
     }
 
     force_inline bool all_zeros() const {

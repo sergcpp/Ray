@@ -14,6 +14,8 @@ std::vector<Ray::pixel_color8_t> Ray::Ref::DownsampleTexture(const std::vector<p
     // TODO: properly downsample non-power-of-2 textures
 
     std::vector<pixel_color8_t> ret;
+    ret.reserve(res[0] * res[1] / 4);
+
     for (int j = 0; j < res[1]; j += 2) {
         for (int i = 0; i < res[0]; i += 2) {
             int r = tex[(j + 0) * res[0] + i].r + tex[(j + 0) * res[0] + i + 1].r +
@@ -25,15 +27,17 @@ std::vector<Ray::pixel_color8_t> Ray::Ref::DownsampleTexture(const std::vector<p
             int a = tex[(j + 0) * res[0] + i].a + tex[(j + 0) * res[0] + i + 1].a +
                     tex[(j + 1) * res[0] + i].a + tex[(j + 1) * res[0] + i + 1].a;
 
-            ret.push_back({ (uint8_t)std::round(r * 0.25f), (uint8_t)std::round(g * 0.25f),
-                (uint8_t)std::round(b * 0.25f), (uint8_t)std::round(a * 0.25f)
+            ret.push_back({
+                uint8_t(r / 4), uint8_t(g / 4),
+                uint8_t(b / 4), uint8_t(a / 4)
             });
         }
     }
+
     return ret;
 }
 
-void Ray::Ref::ComputeTextureBasis(size_t vtx_offset, size_t vtx_start, std::vector<vertex_t> &vertices, std::vector<uint32_t> &new_vtx_indices,
+void Ray::Ref::ComputeTangentBasis(size_t vtx_offset, size_t vtx_start, std::vector<vertex_t> &vertices, std::vector<uint32_t> &new_vtx_indices,
                                    const uint32_t *indices, size_t indices_count) {
     auto cross = [](const simd_fvec3 &v1, const simd_fvec3 &v2) -> simd_fvec3 {
         return simd_fvec3{ v1[1] * v2[2] - v1[2] * v2[1], v1[2] * v2[0] - v1[0] * v2[2], v1[0] * v2[1] - v1[1] * v2[0] };
@@ -42,13 +46,13 @@ void Ray::Ref::ComputeTextureBasis(size_t vtx_offset, size_t vtx_start, std::vec
     std::vector<std::array<uint32_t, 3>> twin_verts(vertices.size(), { 0, 0, 0 });
     aligned_vector<simd_fvec3> binormals(vertices.size());
     for (size_t i = 0; i < indices_count; i += 3) {
-        auto *v0 = &vertices[indices[i + 0]];
-        auto *v1 = &vertices[indices[i + 1]];
-        auto *v2 = &vertices[indices[i + 2]];
+        vertex_t *v0 = &vertices[indices[i + 0]];
+        vertex_t *v1 = &vertices[indices[i + 1]];
+        vertex_t *v2 = &vertices[indices[i + 2]];
 
-        auto &b0 = binormals[indices[i + 0]];
-        auto &b1 = binormals[indices[i + 1]];
-        auto &b2 = binormals[indices[i + 2]];
+        simd_fvec3 &b0 = binormals[indices[i + 0]];
+        simd_fvec3 &b1 = binormals[indices[i + 1]];
+        simd_fvec3 &b2 = binormals[indices[i + 2]];
 
         simd_fvec3 dp1 = simd_fvec3(v1->p) - simd_fvec3(v0->p);
         simd_fvec3 dp2 = simd_fvec3(v2->p) - simd_fvec3(v0->p);
@@ -65,15 +69,24 @@ void Ray::Ref::ComputeTextureBasis(size_t vtx_offset, size_t vtx_start, std::vec
             binormal = (dp2 * dt1[0] - dp1 * dt2[0]) * inv_det;
         } else {
             simd_fvec3 plane_N = cross(dp1, dp2);
+
+            int w = 2;
             tangent = simd_fvec3{ 0.0f, 1.0f, 0.0f };
             if (std::abs(plane_N[0]) <= std::abs(plane_N[1]) && std::abs(plane_N[0]) <= std::abs(plane_N[2])) {
                 tangent = simd_fvec3{ 1.0f, 0.0f, 0.0f };
+                w = 1;
             } else if (std::abs(plane_N[2]) <= std::abs(plane_N[0]) && std::abs(plane_N[2]) <= std::abs(plane_N[1])) {
                 tangent = simd_fvec3{ 0.0f, 0.0f, 1.0f };
+                w = 0;
             }
 
-            binormal = normalize(cross(simd_fvec3(plane_N), tangent));
-            tangent = normalize(cross(simd_fvec3(plane_N), binormal));
+            if (std::abs(plane_N[w]) > FLT_EPS) {
+                binormal = normalize(cross(simd_fvec3(plane_N), tangent));
+                tangent = normalize(cross(simd_fvec3(plane_N), binormal));
+            } else {
+                binormal = { 0.0f };
+                tangent = { 0.0f };
+            }
         }
 
         int i1 = (v0->b[0] * tangent[0] + v0->b[1] * tangent[1] + v0->b[2] * tangent[2]) < 0;
@@ -150,7 +163,7 @@ void Ray::Ref::ComputeTextureBasis(size_t vtx_offset, size_t vtx_start, std::vec
     }
 
     for (size_t i = vtx_start; i < vertices.size(); i++) {
-        auto &v = vertices[i];
+        vertex_t &v = vertices[i];
 
         if (std::abs(v.b[0]) > FLT_EPS || std::abs(v.b[1]) > FLT_EPS || std::abs(v.b[2]) > FLT_EPS) {
             simd_fvec3 tangent = { v.b };

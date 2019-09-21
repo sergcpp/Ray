@@ -83,7 +83,7 @@ void sort_mort_codes(uint32_t *morton_codes, size_t prims_count, uint32_t *out_i
     std::swap(run_chunks, run_chunks2);
 
     size_t counter = 0;
-    for (const auto &ch : run_chunks) {
+    for (const prim_chunk_t &ch : run_chunks) {
         for (uint32_t j = 0; j < ch.size; j++) {
             morton_codes[counter] = ch.code;
             out_indices[counter++] = ch.base + j;
@@ -92,24 +92,14 @@ void sort_mort_codes(uint32_t *morton_codes, size_t prims_count, uint32_t *out_i
 }
 }
 
-// Used for fast color conversion
-const float Ray::uint8_to_float_table[] = {
-    0.000000000f, 0.003921569f, 0.007843138f, 0.011764706f, 0.015686275f, 0.019607844f, 0.023529412f, 0.027450981f, 0.031372551f, 0.035294119f, 0.039215688f, 0.043137256f, 0.047058824f, 0.050980393f, 0.054901961f, 0.058823530f,
-    0.062745102f, 0.066666670f, 0.070588239f, 0.074509807f, 0.078431375f, 0.082352944f, 0.086274512f, 0.090196081f, 0.094117649f, 0.098039217f, 0.101960786f, 0.105882354f, 0.109803922f, 0.113725491f, 0.117647059f, 0.121568628f,
-    0.125490203f, 0.129411772f, 0.133333340f, 0.137254909f, 0.141176477f, 0.145098045f, 0.149019614f, 0.152941182f, 0.156862751f, 0.160784319f, 0.164705887f, 0.168627456f, 0.172549024f, 0.176470593f, 0.180392161f, 0.184313729f,
-    0.188235298f, 0.192156866f, 0.196078435f, 0.200000003f, 0.203921571f, 0.207843140f, 0.211764708f, 0.215686277f, 0.219607845f, 0.223529413f, 0.227450982f, 0.231372550f, 0.235294119f, 0.239215687f, 0.243137255f, 0.247058824f,
-    0.250980407f, 0.254901975f, 0.258823544f, 0.262745112f, 0.266666681f, 0.270588249f, 0.274509817f, 0.278431386f, 0.282352954f, 0.286274523f, 0.290196091f, 0.294117659f, 0.298039228f, 0.301960796f, 0.305882365f, 0.309803933f,
-    0.313725501f, 0.317647070f, 0.321568638f, 0.325490206f, 0.329411775f, 0.333333343f, 0.337254912f, 0.341176480f, 0.345098048f, 0.349019617f, 0.352941185f, 0.356862754f, 0.360784322f, 0.364705890f, 0.368627459f, 0.372549027f,
-    0.376470596f, 0.380392164f, 0.384313732f, 0.388235301f, 0.392156869f, 0.396078438f, 0.400000006f, 0.403921574f, 0.407843143f, 0.411764711f, 0.415686280f, 0.419607848f, 0.423529416f, 0.427450985f, 0.431372553f, 0.435294122f,
-    0.439215690f, 0.443137258f, 0.447058827f, 0.450980395f, 0.454901963f, 0.458823532f, 0.462745100f, 0.466666669f, 0.470588237f, 0.474509805f, 0.478431374f, 0.482352942f, 0.486274511f, 0.490196079f, 0.494117647f, 0.498039216f,
-    0.501960814f, 0.505882382f, 0.509803951f, 0.513725519f, 0.517647088f, 0.521568656f, 0.525490224f, 0.529411793f, 0.533333361f, 0.537254930f, 0.541176498f, 0.545098066f, 0.549019635f, 0.552941203f, 0.556862772f, 0.560784340f,
-    0.564705908f, 0.568627477f, 0.572549045f, 0.576470613f, 0.580392182f, 0.584313750f, 0.588235319f, 0.592156887f, 0.596078455f, 0.600000024f, 0.603921592f, 0.607843161f, 0.611764729f, 0.615686297f, 0.619607866f, 0.623529434f,
-    0.627451003f, 0.631372571f, 0.635294139f, 0.639215708f, 0.643137276f, 0.647058845f, 0.650980413f, 0.654901981f, 0.658823550f, 0.662745118f, 0.666666687f, 0.670588255f, 0.674509823f, 0.678431392f, 0.682352960f, 0.686274529f,
-    0.690196097f, 0.694117665f, 0.698039234f, 0.701960802f, 0.705882370f, 0.709803939f, 0.713725507f, 0.717647076f, 0.721568644f, 0.725490212f, 0.729411781f, 0.733333349f, 0.737254918f, 0.741176486f, 0.745098054f, 0.749019623f,
-    0.752941191f, 0.756862760f, 0.760784328f, 0.764705896f, 0.768627465f, 0.772549033f, 0.776470602f, 0.780392170f, 0.784313738f, 0.788235307f, 0.792156875f, 0.796078444f, 0.800000012f, 0.803921580f, 0.807843149f, 0.811764717f,
-    0.815686285f, 0.819607854f, 0.823529422f, 0.827450991f, 0.831372559f, 0.835294127f, 0.839215696f, 0.843137264f, 0.847058833f, 0.850980401f, 0.854901969f, 0.858823538f, 0.862745106f, 0.866666675f, 0.870588243f, 0.874509811f,
-    0.878431380f, 0.882352948f, 0.886274517f, 0.890196085f, 0.894117653f, 0.898039222f, 0.901960790f, 0.905882359f, 0.909803927f, 0.913725495f, 0.917647064f, 0.921568632f, 0.925490201f, 0.929411769f, 0.933333337f, 0.937254906f,
-    0.941176474f, 0.945098042f, 0.949019611f, 0.952941179f, 0.956862748f, 0.960784316f, 0.964705884f, 0.968627453f, 0.972549021f, 0.976470590f, 0.980392158f, 0.984313726f, 0.988235295f, 0.992156863f, 0.996078432f, 1.000000000f,
+const Ray::tri_accel_t Ray::InvalidTriangle = {
+    NAN, NAN,
+    NAN,
+    NAN, NAN,
+    0,
+    NAN, NAN,
+    NAN, NAN,
+    0xffffffff, 0xffffffff
 };
 
 // Used to convert 16x16 sphere sector coordinates to single value
@@ -178,16 +168,12 @@ bool Ray::PreprocessTri(const float *p, int stride, tri_accel_t *acc) {
     float e0[3] = { p[stride] - p[0], p[stride + 1] - p[1], p[stride + 2] - p[2] },
           e1[3] = { p[stride * 2] - p[0], p[stride * 2 + 1] - p[1], p[stride * 2 + 2] - p[2] };
 
-    bool is_degenerate =
-        (std::abs(e0[0]) < FLT_EPS && std::abs(e0[1]) < FLT_EPS && std::abs(e0[2]) < FLT_EPS) ||
-        (std::abs(e1[0]) < FLT_EPS && std::abs(e1[1]) < FLT_EPS && std::abs(e1[2]) < FLT_EPS);
-
     float n[3] = { e0[1] * e1[2] - e0[2] * e1[1],
                    e0[2] * e1[0] - e0[0] * e1[2],
                    e0[0] * e1[1] - e0[1] * e1[0]
                  };
 
-    int w, u, v;
+    int w = 2, u = 0, v = 1;
     if (std::abs(n[0]) > std::abs(n[1]) && std::abs(n[0]) > std::abs(n[2])) {
         w = 0;
         u = 1;
@@ -196,37 +182,35 @@ bool Ray::PreprocessTri(const float *p, int stride, tri_accel_t *acc) {
         w = 1;
         u = 0;
         v = 2;
+    }
+
+    if (std::abs(n[w]) > FLT_EPS) {
+        acc->nu = n[u] / n[w];
+        acc->nv = n[v] / n[w];
+        acc->pu = p[u];
+        acc->pv = p[v];
+        acc->np = acc->nu * acc->pu + acc->nv * acc->pv + p[w];
+
+        int sign = w == 1 ? -1 : 1;
+        acc->e0u = sign * e0[u] / n[w];
+        acc->e0v = sign * e0[v] / n[w];
+        acc->e1u = sign * e1[u] / n[w];
+        acc->e1v = sign * e1[v] / n[w];
+
+        acc->ci = w;
+        if (std::abs(acc->nu) < axis_aligned_normal_eps && std::abs(acc->nv) < axis_aligned_normal_eps) {
+            acc->ci |= TRI_AXIS_ALIGNED_BIT;
+        }
+        if (n[w] < 0) {
+            acc->ci |= TRI_INV_NORMAL_BIT;
+        }
+
+        assert((acc->ci & TRI_W_BITS) == w);
+        return true;
     } else {
-        w = 2;
-        u = 0;
-        v = 1;
+        (*acc) = InvalidTriangle;
+        return false;
     }
-
-    if (std::abs(n[w]) < FLT_EPS) {
-        n[w] = 1.0f;
-    }
-
-    acc->nu = n[u] / n[w];
-    acc->nv = n[v] / n[w];
-    acc->pu = p[u];
-    acc->pv = p[v];
-    acc->np = acc->nu * acc->pu + acc->nv * acc->pv + p[w];
-
-    int sign = w == 1 ? -1 : 1;
-    acc->e0u = sign * e0[u] / n[w];
-    acc->e0v = sign * e0[v] / n[w];
-    acc->e1u = sign * e1[u] / n[w];
-    acc->e1v = sign * e1[v] / n[w];
-
-    acc->ci = w;
-    if (std::abs(acc->nu) < axis_aligned_normal_eps && std::abs(acc->nv) < axis_aligned_normal_eps) {
-        acc->ci |= TRI_AXIS_ALIGNED_BIT;
-    }
-    if (n[w] < 0) {
-        acc->ci |= TRI_INV_NORMAL_BIT;
-    }
-    assert((acc->ci & TRI_W_BITS) == w);
-    return !is_degenerate;
 }
 
 void Ray::ExtractPlaneNormal(const tri_accel_t &tri, float *out_normal) {
@@ -303,7 +287,7 @@ uint32_t Ray::EmitLBVH_Recursive(const prim_t *prims, const uint32_t *indices, c
         uint32_t node_index = (uint32_t)out_nodes.size();
 
         out_nodes.emplace_back();
-        auto &node = out_nodes.back();
+        bvh_node_t &node = out_nodes.back();
 
         node.prim_index = LEAF_NODE_BIT + prim_index + index_offset;
         node.prim_count = prim_count;
@@ -342,7 +326,7 @@ uint32_t Ray::EmitLBVH_Recursive(const prim_t *prims, const uint32_t *indices, c
             std::swap(child0, child1);
         }
 
-        auto &par_node = out_nodes[node_index];
+        bvh_node_t &par_node = out_nodes[node_index];
         par_node.left_child = child0;
         par_node.right_child = (space_axis << 30) + child1;
 
@@ -381,7 +365,7 @@ uint32_t Ray::EmitLBVH_NonRecursive(const prim_t *prims, const uint32_t *indices
                 bbox_max = max(bbox_max, prims[indices[i]].bbox_max);
             }
 
-            auto &node = out_nodes[cur.node_index];
+            bvh_node_t &node = out_nodes[cur.node_index];
 
             node.prim_index = LEAF_NODE_BIT + cur.prim_index + index_offset;
             node.prim_count = cur.prim_count;
@@ -423,7 +407,7 @@ uint32_t Ray::EmitLBVH_NonRecursive(const prim_t *prims, const uint32_t *indices
                 proc_stack[stack_size++] = { cur.bit_index - 1, cur.prim_index, cur.split_offset, 0xffffffff, child0 };
                 continue;
             } else {
-                auto &node = out_nodes[cur.node_index];
+                bvh_node_t &node = out_nodes[cur.node_index];
 
                 for (int i = 0; i < 3; i++) {
                     node.bbox_min[i] = std::min(out_nodes[node.left_child].bbox_min[i], out_nodes[node.right_child].bbox_min[i]);
@@ -459,10 +443,10 @@ uint32_t Ray::PreprocessPrims_SAH(const prim_t *prims, size_t prims_count, const
     prim_lists.emplace_back();
 
     size_t num_nodes = out_nodes.size();
-    auto root_node_index = (uint32_t)num_nodes;
+    uint32_t root_node_index = static_cast<uint32_t>(num_nodes);
 
-    for (size_t j = 0; j < prims_count; j++) {
-        prim_lists.back().indices.push_back((uint32_t)j);
+    for (uint32_t j = 0; j < static_cast<uint32_t>(prims_count); j++) {
+        prim_lists.back().indices.push_back(j);
         prim_lists.back().min = min(prim_lists.back().min, prims[j].bbox_min);
         prim_lists.back().max = max(prim_lists.back().max, prims[j].bbox_max);
     }
@@ -471,7 +455,7 @@ uint32_t Ray::PreprocessPrims_SAH(const prim_t *prims, size_t prims_count, const
                     root_max = prim_lists.back().max;
 
     while (!prim_lists.empty()) {
-        auto split_data = SplitPrimitives_SAH(prims, prim_lists.back().indices, positions, stride, prim_lists.back().min, prim_lists.back().max, root_min, root_max, s);
+        split_data_t split_data = SplitPrimitives_SAH(prims, prim_lists.back().indices, positions, stride, prim_lists.back().min, prim_lists.back().max, root_min, root_max, s);
         prim_lists.pop_back();
 
 #ifdef USE_STACKLESS_BVH_TRAVERSAL
@@ -496,7 +480,7 @@ uint32_t Ray::PreprocessPrims_SAH(const prim_t *prims, size_t prims_count, const
                             bbox_max = split_data.left_bounds[1];
 
             out_nodes.emplace_back();
-            auto &n = out_nodes.back();
+            bvh_node_t &n = out_nodes.back();
 
             n.prim_index = LEAF_NODE_BIT + (uint32_t)out_indices.size();
             n.prim_count = (uint32_t)split_data.left_indices.size();
@@ -507,7 +491,7 @@ uint32_t Ray::PreprocessPrims_SAH(const prim_t *prims, size_t prims_count, const
 #endif
             out_indices.insert(out_indices.end(), split_data.left_indices.begin(), split_data.left_indices.end());
         } else {
-            auto index = (uint32_t)num_nodes;
+            uint32_t index = static_cast<uint32_t>(num_nodes);
 
             uint32_t space_axis = 0;
             Ref::simd_fvec3 c_left = (split_data.left_bounds[0] + split_data.left_bounds[1]) / 2,
@@ -527,7 +511,7 @@ uint32_t Ray::PreprocessPrims_SAH(const prim_t *prims, size_t prims_count, const
                             bbox_max = max(split_data.left_bounds[1], split_data.right_bounds[1]);
 
             out_nodes.emplace_back();
-            auto &n = out_nodes.back();
+            bvh_node_t &n = out_nodes.back();
             n.left_child = index + 1;
             n.right_child = (space_axis << 30) + index + 2;
             memcpy(&n.bbox_min[0], &bbox_min[0], 3 * sizeof(float));
@@ -603,16 +587,16 @@ uint32_t Ray::PreprocessPrims_HLBVH(const prim_t *prims, size_t prims_count, std
 
     // Build bottom-level hierarchy from each treelet using LBVH
     const int start_bit = 29 - 12;
-    for (auto &tr : treelets) {
+    for (treelet_t &tr : treelets) {
         tr.node_index = EmitLBVH_NonRecursive(prims, indices, &morton_codes[0], tr.index, tr.count, indices_start, start_bit, bottom_nodes);
     }
 
     std::vector<prim_t> top_prims;
-    for (const auto &tr : treelets) {
-        const auto &node = bottom_nodes[tr.node_index];
+    for (const treelet_t &tr : treelets) {
+        const bvh_node_t &node = bottom_nodes[tr.node_index];
 
         top_prims.emplace_back();
-        auto &p = top_prims.back();
+        prim_t &p = top_prims.back();
         memcpy(&p.bbox_min[0], node.bbox_min, 3 * sizeof(float));
         memcpy(&p.bbox_max[0], node.bbox_max, 3 * sizeof(float));
     }
@@ -635,16 +619,16 @@ uint32_t Ray::PreprocessPrims_HLBVH(const prim_t *prims, size_t prims_count, std
 
     // Replace leaf nodes of top-level bvh with bottom level nodes
     for (uint32_t i = top_nodes_start; i < (uint32_t)out_nodes.size(); i++) {
-        auto &n = out_nodes[i];
+        bvh_node_t &n = out_nodes[i];
         if (!(n.prim_index & LEAF_NODE_BIT)) {
-            auto &left = out_nodes[n.left_child],
-                 &right = out_nodes[n.right_child & RIGHT_CHILD_BITS];
+            bvh_node_t &left = out_nodes[n.left_child],
+                       &right = out_nodes[n.right_child & RIGHT_CHILD_BITS];
 
             if (left.prim_index & LEAF_NODE_BIT) {
                 assert(left.prim_count == 1);
                 uint32_t index = (left.prim_index & PRIM_INDEX_BITS);
 
-                const auto &tr = treelets[top_indices[index]];
+                const treelet_t &tr = treelets[top_indices[index]];
                 n.left_child = bottom_nodes_start + tr.node_index;
             }
 
@@ -652,7 +636,7 @@ uint32_t Ray::PreprocessPrims_HLBVH(const prim_t *prims, size_t prims_count, std
                 assert(right.prim_count == 1);
                 uint32_t index = (right.prim_index & PRIM_INDEX_BITS);
 
-                const auto &tr = treelets[top_indices[index]];
+                const treelet_t &tr = treelets[top_indices[index]];
                 n.right_child = (n.right_child & SEP_AXIS_BITS) + bottom_nodes_start + tr.node_index;
             }
         }
@@ -661,7 +645,7 @@ uint32_t Ray::PreprocessPrims_HLBVH(const prim_t *prims, size_t prims_count, std
     // Remove top-level leaf nodes
     for (auto it = out_nodes.begin() + top_nodes_start; it != out_nodes.end(); ) {
         if (it->prim_index & LEAF_NODE_BIT) {
-            uint32_t index = (uint32_t)std::distance(out_nodes.begin(), it);
+            uint32_t index = static_cast<uint32_t>(std::distance(out_nodes.begin(), it));
 
             it = out_nodes.erase(it);
             bottom_nodes_start--;
@@ -684,7 +668,7 @@ uint32_t Ray::PreprocessPrims_HLBVH(const prim_t *prims, size_t prims_count, std
     uint32_t bottom_nodes_offset = bottom_nodes_start;
 
     // Offset nodes in bottom-level bvh
-    for (auto &n : bottom_nodes) {
+    for (bvh_node_t &n : bottom_nodes) {
         if (!(n.prim_index & LEAF_NODE_BIT)) {
             n.left_child += bottom_nodes_offset;
             n.right_child += bottom_nodes_offset;
@@ -696,7 +680,7 @@ uint32_t Ray::PreprocessPrims_HLBVH(const prim_t *prims, size_t prims_count, std
     return (uint32_t)(out_nodes.size() - top_nodes_start);
 }
 
-uint32_t Ray::FlattenBVH_Recursive(const bvh_node_t *nodes, uint32_t node_index, uint32_t parent_index, aligned_vector<bvh_node8_t> &out_nodes) {
+uint32_t Ray::FlattenBVH_Recursive(const bvh_node_t *nodes, uint32_t node_index, uint32_t parent_index, aligned_vector<mbvh_node_t> &out_nodes) {
     const bvh_node_t &cur_node = nodes[node_index];
 
     // allocate new node
@@ -704,7 +688,7 @@ uint32_t Ray::FlattenBVH_Recursive(const bvh_node_t *nodes, uint32_t node_index,
     out_nodes.emplace_back();
 
     if (cur_node.prim_index & LEAF_NODE_BIT) {
-        auto &new_node = out_nodes[new_node_index];
+        mbvh_node_t &new_node = out_nodes[new_node_index];
 
         new_node.bbox_min[0][0] = cur_node.bbox_min[0];
         new_node.bbox_min[1][0] = cur_node.bbox_min[1];
@@ -812,7 +796,7 @@ uint32_t Ray::FlattenBVH_Recursive(const bvh_node_t *nodes, uint32_t node_index,
         }
     }
 
-    auto &new_node = out_nodes[new_node_index];
+    mbvh_node_t &new_node = out_nodes[new_node_index];
     memcpy(new_node.child, new_children, sizeof(new_children));
 
     for (int i = 0; i < 8; i++) {
@@ -869,7 +853,7 @@ bool Ray::NaiivePluckerTest(const float p[9], const float o[3], const float d[3]
     return (t0 <= 0 && t1 <= 0 && t2 <= 0) || (t0 >= 0 && t1 >= 0 && t2 >= 0);
 }
 
-void Ray::ConstructCamera(eCamType type, eFilterType filter, const float origin[3], const float fwd[3], float fov, float gamma, float focus_distance, float focus_factor, camera_t *cam) {
+void Ray::ConstructCamera(eCamType type, eFilterType filter, eDeviceType dtype, const float origin[3], const float fwd[3], float fov, float gamma, float focus_distance, float focus_factor, camera_t *cam) {
     if (type == Persp) {
         Ref::simd_fvec3 o = { origin };
         Ref::simd_fvec3 f = { fwd };
@@ -880,6 +864,7 @@ void Ray::ConstructCamera(eCamType type, eFilterType filter, const float origin[
 
         cam->type = type;
         cam->filter = filter;
+        cam->dtype = dtype;
         cam->fov = fov;
         cam->gamma = gamma;
         cam->focus_distance = focus_distance;

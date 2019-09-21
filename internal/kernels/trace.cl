@@ -36,13 +36,14 @@ float TraceOcclusionRay_WithPrivateStack(const float3 ro, const float3 rd, float
 }
 
 __kernel
-void TracePrimaryRays(__global const ray_packet_t *rays, int w, 
+void TracePrimaryRays(__global const ray_packet_t *rays, int w, int h,
                       __global const mesh_instance_t *mesh_instances,
                       __global const uint *mi_indices, 
                       __global const mesh_t *meshes, __global const transform_t *transforms,
                       __global const bvh_node_t *nodes, uint node_index,
                       __global const tri_accel_t *tris, __global const uint *tri_indices, 
                       __global hit_data_t *out_prim_inters) {
+    if (get_global_id(0) >= w || get_global_id(1) >= h) return;
 
     const int index = get_global_id(1) * w + get_global_id(0);
 
@@ -67,13 +68,14 @@ void TracePrimaryRays(__global const ray_packet_t *rays, int w,
 }
 
 __kernel
-void TracePrimaryRaysImg(__global const ray_packet_t *rays, int w, 
+void TracePrimaryRaysImg(__global const ray_packet_t *rays, int w, int h,
                       __global const mesh_instance_t *mesh_instances,
                       __global const uint *mi_indices, 
                       __global const mesh_t *meshes, __global const transform_t *transforms,
                       __read_only image1d_buffer_t nodes, uint node_index,
                       __global const tri_accel_t *tris, __global const uint *tri_indices, 
                       __global hit_data_t *out_prim_inters) {
+    if (get_global_id(0) >= w || get_global_id(1) >= h) return;
 
     const int index = get_global_id(1) * w + get_global_id(0);
 
@@ -98,15 +100,15 @@ void TracePrimaryRaysImg(__global const ray_packet_t *rays, int w,
 }
 
 __kernel
-void TraceSecondaryRays(__global const ray_packet_t *rays,
+void TraceSecondaryRays(__global const ray_packet_t *rays, int rays_count,
                         __global const mesh_instance_t *mesh_instances,
                         __global const uint *mi_indices, 
                         __global const mesh_t *meshes, __global const transform_t *transforms,
                         __global const bvh_node_t *nodes, uint node_index,
                         __global const tri_accel_t *tris, __global const uint *tri_indices, 
                         __global hit_data_t *out_prim_inters) {
-
     const int index = get_global_id(0);
+    if (index >= rays_count) return;
 
     const float4 orig_r_o = rays[index].o;
     const float4 orig_r_d = rays[index].d;
@@ -129,15 +131,15 @@ void TraceSecondaryRays(__global const ray_packet_t *rays,
 }
 
 __kernel
-void TraceSecondaryRaysImg(__global const ray_packet_t *rays,
+void TraceSecondaryRaysImg(__global const ray_packet_t *rays, int rays_count,
                            __global const mesh_instance_t *mesh_instances,
                            __global const uint *mi_indices, 
                            __global const mesh_t *meshes, __global const transform_t *transforms,
                            __read_only image1d_buffer_t nodes, uint node_index,
                            __global const tri_accel_t *tris, __global const uint *tri_indices, 
                            __global hit_data_t *out_prim_inters) {
-
     const int index = get_global_id(0);
+    if (index >= rays_count) return;
 
     const float4 orig_r_o = rays[index].o;
     const float4 orig_r_d = rays[index].d;

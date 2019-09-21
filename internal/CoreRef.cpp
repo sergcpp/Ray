@@ -1,5 +1,6 @@
 #include "CoreRef.h"
 
+#include <cassert>
 #include <algorithm>
 #include <limits>
 
@@ -56,7 +57,7 @@ force_inline bool is_leaf_node(const bvh_node_t &node) {
     return (node.prim_index & LEAF_NODE_BIT) != 0;
 }
 
-force_inline bool is_leaf_node(const bvh_node8_t &node) {
+force_inline bool is_leaf_node(const mbvh_node_t &node) {
     return (node.child[0] & LEAF_NODE_BIT) != 0;
 }
 
@@ -98,13 +99,13 @@ force_inline bool bbox_test(const float p[3], const bvh_node_t &node) {
     return bbox_test(p, node.bbox_min, node.bbox_max);
 }
 
-force_inline bool bbox_test_oct(const float p[3], const bvh_node8_t &node, int i) {
+force_inline bool bbox_test_oct(const float p[3], const mbvh_node_t &node, int i) {
     return p[0] > node.bbox_min[0][i] && p[0] < node.bbox_max[0][i] &&
            p[1] > node.bbox_min[1][i] && p[1] < node.bbox_max[1][i] &&
            p[2] > node.bbox_min[2][i] && p[2] < node.bbox_max[2][i];
 }
 
-force_inline void bbox_test_oct(const float o[3], const float inv_d[3], const bvh_node8_t &node, int res[8], float dist[8]) {
+force_inline void bbox_test_oct(const float o[3], const float inv_d[3], const mbvh_node_t &node, int res[8], float dist[8]) {
     ITERATE_8({
         float lo_x = inv_d[0] * (node.bbox_min[0][i] - o[0]);
         float hi_x = inv_d[0] * (node.bbox_max[0][i] - o[0]);
@@ -129,7 +130,136 @@ force_inline void bbox_test_oct(const float o[3], const float inv_d[3], const bv
     })
 }
 
+force_inline int bbox_test_oct(const float o[3], const float inv_d[3], const float t, const mbvh_node_t &node, float dist[8]) {
+    int mask = 0;
+
+    ITERATE_8({
+        float lo_x = inv_d[0] * (node.bbox_min[0][i] - o[0]);
+        float hi_x = inv_d[0] * (node.bbox_max[0][i] - o[0]);
+        if (lo_x > hi_x) { float tmp = lo_x; lo_x = hi_x; hi_x = tmp; }
+
+        float lo_y = inv_d[1] * (node.bbox_min[1][i] - o[1]);
+        float hi_y = inv_d[1] * (node.bbox_max[1][i] - o[1]);
+        if (lo_y > hi_y) { float tmp = lo_y; lo_y = hi_y; hi_y = tmp; }
+
+        float lo_z = inv_d[2] * (node.bbox_min[2][i] - o[2]);
+        float hi_z = inv_d[2] * (node.bbox_max[2][i] - o[2]);
+        if (lo_z > hi_z) { float tmp = lo_z; lo_z = hi_z; hi_z = tmp; }
+
+        float tmin = lo_x > lo_y ? lo_x : lo_y;
+        if (lo_z > tmin) tmin = lo_z;
+        float tmax = hi_x < hi_y ? hi_x : hi_y;
+        if (hi_z < tmax) tmax = hi_z;
+        tmax *= 1.00000024f;
+
+        dist[i] = tmin;
+        mask |= ((tmin <= tmax && tmin <= t && tmax > 0) ? 1 : 0) << i;
+    })
+
+    return mask;
+}
+
 enum eTraversalSource { FromParent, FromChild, FromSibling };
+
+struct stack_entry_t {
+    uint32_t index;
+    float dist;
+};
+
+template<int StackSize>
+class TraversalStack {
+public:
+    stack_entry_t stack[StackSize];
+    uint32_t stack_size = 0;
+
+    force_inline void push(uint32_t index, float dist) {
+        stack[stack_size++] = { index, dist };
+        assert(stack_size < StackSize && "Traversal stack overflow!");
+    }
+
+    force_inline stack_entry_t pop() {
+        return stack[--stack_size];
+    }
+
+    force_inline uint32_t pop_index() {
+        return stack[--stack_size].index;
+    }
+
+    force_inline bool empty() const {
+        return stack_size == 0;
+    }
+
+    void sort_top3() {
+        assert(stack_size >= 3);
+        const uint32_t i = stack_size - 3;
+
+        if (stack[i].dist > stack[i + 1].dist) {
+            if (stack[i + 1].dist > stack[i + 2].dist) {
+                return;
+            } else if (stack[i].dist > stack[i + 2].dist) {
+                std::swap(stack[i + 1], stack[i + 2]);
+            } else {
+                stack_entry_t tmp = stack[i];
+                stack[i] = stack[i + 2];
+                stack[i + 2] = stack[i + 1];
+                stack[i + 1] = tmp;
+            }
+        } else {
+            if (stack[i].dist > stack[i + 2].dist) {
+                std::swap(stack[i], stack[i + 1]);
+            } else if (stack[i + 2].dist > stack[i + 1].dist) {
+                std::swap(stack[i], stack[i + 2]);
+            } else {
+                stack_entry_t tmp = stack[i];
+                stack[i] = stack[i + 1];
+                stack[i + 1] = stack[i + 2];
+                stack[i + 2] = tmp;
+            }
+        }
+
+        assert(stack[stack_size - 3].dist >= stack[stack_size - 2].dist &&
+               stack[stack_size - 2].dist >= stack[stack_size - 1].dist);
+    }
+
+    void sort_top4() {
+        assert(stack_size >= 4);
+        const uint32_t i = stack_size - 4;
+
+        if (stack[i + 0].dist < stack[i + 1].dist) std::swap(stack[i + 0], stack[i + 1]);
+        if (stack[i + 2].dist < stack[i + 3].dist) std::swap(stack[i + 2], stack[i + 3]);
+        if (stack[i + 0].dist < stack[i + 2].dist) std::swap(stack[i + 0], stack[i + 2]);
+        if (stack[i + 1].dist < stack[i + 3].dist) std::swap(stack[i + 1], stack[i + 3]);
+        if (stack[i + 1].dist < stack[i + 2].dist) std::swap(stack[i + 1], stack[i + 2]);
+
+        assert(stack[stack_size - 4].dist >= stack[stack_size - 3].dist &&
+               stack[stack_size - 3].dist >= stack[stack_size - 2].dist &&
+               stack[stack_size - 2].dist >= stack[stack_size - 1].dist);
+    }
+
+    void sort_topN(int count) {
+        assert(stack_size >= uint32_t(count));
+        const int start = int(stack_size - count);
+
+        for (int i = start + 1; i < int(stack_size); i++) {
+            const stack_entry_t key = stack[i];
+
+            int j = i - 1;
+
+            while (j >= start && stack[j].dist < key.dist) {
+                stack[j + 1] = stack[j];
+                j--;
+            }
+
+            stack[j + 1] = key;
+        }
+
+#ifndef NDEBUG
+        for (int j = 0; j < count - 1; j++) {
+            assert(stack[stack_size - count + j].dist >= stack[stack_size - count + j + 1].dist);
+        }
+#endif
+    }
+};
 
 force_inline int hash(int x) {
     unsigned ret = reinterpret_cast<const unsigned &>(x);
@@ -177,6 +307,10 @@ force_inline simd_fvec3 cross(const simd_fvec3 &v1, const simd_fvec3 &v2) {
 
 force_inline simd_fvec3 reflect(const simd_fvec3 &I, const simd_fvec3 &N) {
     return I - 2 * dot(N, I) * N;
+}
+
+force_inline float pow5(const float v) {
+    return (v * v) * (v * v) * v;
 }
 
 force_inline uint32_t get_ray_hash(const ray_packet_t &r, const float root_min[3], const float cell_size[3]) {
@@ -240,6 +374,47 @@ force_inline simd_fvec4 rgbe_to_rgb(const pixel_color8_t &rgbe) {
                        to_norm_float(rgbe.b) * f, 1.0f };
 }
 
+force_inline simd_fvec4 srgb_to_rgb(const simd_fvec4 &col) {
+    simd_fvec4 ret;
+    ITERATE_3({
+        if (col[i] > 0.04045f) {
+            ret[i] = std::pow((col[i] + 0.055f) / 1.055f, 2.4f);
+        } else {
+            ret[i] = col[i] / 12.92f;
+        }
+    })
+    ret[3] = col[3];
+
+    return ret;
+}
+
+force_inline float fast_log2(float val) {
+    // From https://stackoverflow.com/questions/9411823/fast-log2float-x-implementation-c
+
+    union { float val; int32_t x; } u = { val };
+    register float log_2 = (float)(((u.x >> 23) & 255) - 128);
+    u.x &= ~(255 << 23);
+    u.x += 127 << 23;
+    log_2 += ((-0.34484843f) * u.val + 2.02466578f) * u.val - 0.67487759f;
+    return (log_2);
+}
+
+float get_texture_lod(const texture_t &t, const simd_fvec2 &duv_dx, const simd_fvec2 &duv_dy) {
+    const simd_fvec2 sz = { (float)t.size[0], (float)t.size[1] };
+    const simd_fvec2 _duv_dx = duv_dx * sz, _duv_dy = duv_dy * sz;
+
+    // Find bounding box of ray footprint
+    const simd_fvec2
+        minuv = min(min(_duv_dx, _duv_dy), { 0.0f }),
+        maxuv = max(max(_duv_dx, _duv_dy), { 0.0f });
+
+    // Choose minimal side of bounds to choose lod
+    float lod = fast_log2(std::min(maxuv[0] - minuv[0], maxuv[1] - minuv[1]));
+    // Substruct 1 from lod to keep 4 texels for interpolation
+    lod = clamp(lod - 1.0f, 0.0f, float(MAX_MIP_LEVEL));
+
+    return lod;
+}
 
 }
 }
@@ -269,7 +444,7 @@ void Ray::Ref::GeneratePrimaryRays(int iteration, const camera_t &cam, const rec
 
     for (int y = r.y; y < r.y + r.h; y += RayPacketDimY) {
         for (int x = r.x; x < r.x + r.w; x += RayPacketDimX) {
-            auto &out_r = out_rays[i++];
+            ray_packet_t &out_r = out_rays[i++];
 
             const int index = y * w + x;
             const int hi = (iteration & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT;
@@ -340,8 +515,8 @@ void Ray::Ref::SampleMeshInTextureSpace(int iteration, int obj_index, int uv_lay
         for (int x = r.x; x < r.x + r.w; x += RayPacketDimX) {
             int i = (y - r.y) * r.w + (x - r.x);
 
-            auto &out_ray = out_rays[i];
-            auto &out_inter = out_inters[i];
+            ray_packet_t &out_ray = out_rays[i];
+            hit_data_t &out_inter = out_inters[i];
 
             out_ray.xy = (x << 16) | y;
             out_ray.c[0] = out_ray.c[1] = out_ray.c[2] = 1.0f;
@@ -354,13 +529,13 @@ void Ray::Ref::SampleMeshInTextureSpace(int iteration, int obj_index, int uv_lay
     simd_fvec2 size = { (float)width, (float)height };
     
     for (uint32_t tri = mesh.tris_index; tri < mesh.tris_index + mesh.tris_count; tri++) {
-        const auto &v0 = vertices[vtx_indices[tri * 3 + 0]];
-        const auto &v1 = vertices[vtx_indices[tri * 3 + 1]];
-        const auto &v2 = vertices[vtx_indices[tri * 3 + 2]];
+        const vertex_t &v0 = vertices[vtx_indices[tri * 3 + 0]];
+        const vertex_t &v1 = vertices[vtx_indices[tri * 3 + 1]];
+        const vertex_t &v2 = vertices[vtx_indices[tri * 3 + 2]];
 
-        const simd_fvec2 t0 = simd_fvec2{ v0.t[uv_layer][0], 1.0f - v0.t[uv_layer][1] } * size;
-        const simd_fvec2 t1 = simd_fvec2{ v1.t[uv_layer][0], 1.0f - v1.t[uv_layer][1] } * size;
-        const simd_fvec2 t2 = simd_fvec2{ v2.t[uv_layer][0], 1.0f - v2.t[uv_layer][1] } * size;
+        const auto t0 = simd_fvec2{ v0.t[uv_layer][0], 1.0f - v0.t[uv_layer][1] } * size;
+        const auto t1 = simd_fvec2{ v1.t[uv_layer][0], 1.0f - v1.t[uv_layer][1] } * size;
+        const auto t2 = simd_fvec2{ v2.t[uv_layer][0], 1.0f - v2.t[uv_layer][1] } * size;
 
         simd_fvec2 bbox_min = t0, bbox_max = t0;
 
@@ -389,8 +564,8 @@ void Ray::Ref::SampleMeshInTextureSpace(int iteration, int obj_index, int uv_lay
         for (int y = ibbox_min[1]; y <= ibbox_max[1]; y++) {
             for (int x = ibbox_min[0]; x <= ibbox_max[0]; x++) {
                 int i = (y - r.y) * r.w + (x - r.x);
-                auto &out_ray = out_rays[i];
-                auto &out_inter = out_inters[i];
+                ray_packet_t &out_ray = out_rays[i];
+                hit_data_t &out_inter = out_inters[i];
 
                 if (out_inter.mask_values[0]) continue;
 
@@ -687,9 +862,9 @@ bool Ray::Ref::Traverse_MacroTree_Stackless_CPU(const ray_packet_t &r, const bvh
             } else if (is_leaf_node(nodes[cur])) {
                 // process leaf
                 for (uint32_t i = nodes[cur].prim_index; i < nodes[cur].prim_index + nodes[cur].prim_count; i++) {
-                    const auto &mi = mesh_instances[mi_indices[i]];
-                    const auto &m = meshes[mi.mesh_index];
-                    const auto &tr = transforms[mi.tr_index];
+                    const mesh_instance_t &mi = mesh_instances[mi_indices[i]];
+                    const mesh_t &m = meshes[mi.mesh_index];
+                    const transform_t &tr = transforms[mi.tr_index];
 
                     if (!bbox_test(r.o, inv_d, inter.t, mi.bbox_min, mi.bbox_max)) continue;
 
@@ -715,9 +890,9 @@ bool Ray::Ref::Traverse_MacroTree_Stackless_CPU(const ray_packet_t &r, const bvh
             } else if (is_leaf_node(nodes[cur])) {
                 // process leaf
                 for (uint32_t i = nodes[cur].prim_index; i < nodes[cur].prim_index + nodes[cur].prim_count; i++) {
-                    const auto &mi = mesh_instances[mi_indices[i]];
-                    const auto &m = meshes[mi.mesh_index];
-                    const auto &tr = transforms[mi.tr_index];
+                    const mesh_instance_t &mi = mesh_instances[mi_indices[i]];
+                    const mesh_t &m = meshes[mi.mesh_index];
+                    const transform_t &tr = transforms[mi.tr_index];
 
                     if (!bbox_test(r.o, inv_d, inter.t, mi.bbox_min, mi.bbox_max)) continue;
 
@@ -762,9 +937,9 @@ bool Ray::Ref::Traverse_MacroTree_Stackless_GPU(const ray_packet_t &r, const bvh
 
         if (is_leaf_node(nodes[cur])) {
             for (uint32_t i = nodes[cur].prim_index; i < nodes[cur].prim_index + nodes[cur].prim_count; i++) {
-                const auto &mi = mesh_instances[mi_indices[i]];
-                const auto &m = meshes[mi.mesh_index];
-                const auto &tr = transforms[mi.tr_index];
+                const mesh_instance_t &mi = mesh_instances[mi_indices[i]];
+                const mesh_t &m = meshes[mi.mesh_index];
+                const transform_t &tr = transforms[mi.tr_index];
 
                 if (!bbox_test(r.o, inv_d, inter.t, mi.bbox_min, mi.bbox_max)) continue;
 
@@ -939,9 +1114,9 @@ bool Ray::Ref::Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t &r, co
         } else {
             uint32_t prim_index = (nodes[cur].prim_index & PRIM_INDEX_BITS);
             for (uint32_t i = prim_index; i < prim_index + nodes[cur].prim_count; i++) {
-                const auto &mi = mesh_instances[mi_indices[i]];
-                const auto &m = meshes[mi.mesh_index];
-                const auto &tr = transforms[mi.tr_index];
+                const mesh_instance_t &mi = mesh_instances[mi_indices[i]];
+                const mesh_t &m = meshes[mi.mesh_index];
+                const transform_t &tr = transforms[mi.tr_index];
 
                 if (!bbox_test(r.o, inv_d, inter.t, mi.bbox_min, mi.bbox_max)) continue;
 
@@ -957,51 +1132,83 @@ bool Ray::Ref::Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t &r, co
     return res;
 }
 
-bool Ray::Ref::Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t &r, const bvh_node8_t *nodes, uint32_t root_index,
+bool Ray::Ref::Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t &r, const mbvh_node_t *nodes, uint32_t root_index,
                                                        const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
                                                        const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t &inter) {
     bool res = false;
 
-    const int ray_dir_oct = ((r.d[2] > 0.0f) << 2) | ((r.d[1] > 0.0f) << 1) | (r.d[0] > 0.0f);
-
-    int child_order[8];
-    ITERATE_8({ child_order[i] = i ^ ray_dir_oct; })
-
     float inv_d[3];
     safe_invert(r.d, inv_d);
 
-    struct {
-        uint32_t index;
-        float dist;
-    } stack[MAX_STACK_SIZE];
-    uint32_t stack_size = 0;
+    TraversalStack<MAX_STACK_SIZE> st;
+    st.push(root_index, 0.0f);
 
-    stack[stack_size].index = root_index;
-    stack[stack_size++].dist = 0.0f;
+    while (!st.empty()) {
+        stack_entry_t cur = st.pop();
 
-    while (stack_size) {
-        uint32_t cur = stack[--stack_size].index;
-        float cur_dist = stack[stack_size].dist;
+        if (cur.dist > inter.t) continue;
 
-        if (cur_dist > inter.t) continue;
-
-        if (!is_leaf_node(nodes[cur])) {
-            int res[8];
+TRAVERSE:
+        if (!is_leaf_node(nodes[cur.index])) {
             float dist[8];
-            bbox_test_oct(r.o, inv_d, nodes[cur], res, dist);
+            long mask = bbox_test_oct(r.o, inv_d, inter.t, nodes[cur.index], dist);
+            if (mask) {
+                long i = GetFirstBit(mask); mask = ClearBit(mask, i);
+                if (mask == 0) { // only one box was hit
+                    cur.index = nodes[cur.index].child[i];
+                    goto TRAVERSE;
+                }
 
-            ITERATE_8({
-                int j = child_order[i];
-                stack[stack_size].index = nodes[cur].child[j];
-                stack[stack_size].dist = dist[j];
-                stack_size += res[j];
-            })
+                long i2 = GetFirstBit(mask); mask = ClearBit(mask, i2);
+                if (mask == 0) { // two boxes were hit
+                    if (dist[i] < dist[i2]) {
+                        st.push(nodes[cur.index].child[i2], dist[i2]);
+                        cur.index = nodes[cur.index].child[i];
+                    } else {
+                        st.push(nodes[cur.index].child[i], dist[i]);
+                        cur.index = nodes[cur.index].child[i2];
+                    }
+                    goto TRAVERSE;
+                }
+
+                st.push(nodes[cur.index].child[i], dist[i]);
+                st.push(nodes[cur.index].child[i2], dist[i2]);
+
+                i = GetFirstBit(mask); mask = ClearBit(mask, i);
+                st.push(nodes[cur.index].child[i], dist[i]);
+                if (mask == 0) { // three boxes were hit
+                    st.sort_top3();
+                    cur.index = st.pop_index();
+                    goto TRAVERSE;
+                }
+
+                i = GetFirstBit(mask); mask = ClearBit(mask, i);
+                st.push(nodes[cur.index].child[i], dist[i]);
+                if (mask == 0) { // four boxes were hit
+                    st.sort_top4();
+                    cur.index = st.pop_index();
+                    goto TRAVERSE;
+                }
+
+                uint32_t size_before = st.stack_size;
+
+                // from five to eight boxes were hit
+                do {
+                    i = GetFirstBit(mask); mask = ClearBit(mask, i);
+                    st.push(nodes[cur.index].child[i], dist[i]);
+                } while (mask != 0);
+
+                int count = int(st.stack_size - size_before + 4);
+                st.sort_topN(count);
+                cur.index = st.pop_index();
+                goto TRAVERSE;
+            }
         } else {
-            uint32_t prim_index = (nodes[cur].child[0] & PRIM_INDEX_BITS);
-            for (uint32_t i = prim_index; i < prim_index + nodes[cur].child[1]; i++) {
-                const auto &mi = mesh_instances[mi_indices[i]];
-                const auto &m = meshes[mi.mesh_index];
-                const auto &tr = transforms[mi.tr_index];
+            uint32_t prim_index = (nodes[cur.index].child[0] & PRIM_INDEX_BITS);
+            for (uint32_t i = prim_index; i < prim_index + nodes[cur.index].child[1]; i++) {
+                const mesh_instance_t &mi = mesh_instances[mi_indices[i]];
+                const mesh_t &m = meshes[mi.mesh_index];
+                const transform_t &tr = transforms[mi.tr_index];
 
                 if (!bbox_test(r.o, inv_d, inter.t, mi.bbox_min, mi.bbox_max)) continue;
 
@@ -1040,9 +1247,9 @@ bool Ray::Ref::Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t &r, const 
         } else {
             uint32_t prim_index = (nodes[cur].prim_index & PRIM_INDEX_BITS);
             for (uint32_t i = prim_index; i < prim_index + nodes[cur].prim_count; i++) {
-                const auto &mi = mesh_instances[mi_indices[i]];
-                const auto &m = meshes[mi.mesh_index];
-                const auto &tr = transforms[mi.tr_index];
+                const mesh_instance_t &mi = mesh_instances[mi_indices[i]];
+                const mesh_t &m = meshes[mi.mesh_index];
+                const transform_t &tr = transforms[mi.tr_index];
 
                 if (!bbox_test(r.o, inv_d, inter.t, mi.bbox_min, mi.bbox_max)) continue;
 
@@ -1050,7 +1257,7 @@ bool Ray::Ref::Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t &r, const 
 
                 float _inv_d[3] = { 1.0f / _r.d[0], 1.0f / _r.d[1], 1.0f / _r.d[2] };
 
-                bool hit_found = Traverse_MicroTree_WithStack_ClosestHit(_r, _inv_d, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter);
+                bool hit_found = Traverse_MicroTree_WithStack_AnyHit(_r, _inv_d, nodes, m.node_index, tris, tri_indices, (int)mi_indices[i], inter);
                 res |= hit_found;
                 if (hit_found && (tris[inter.prim_indices[0]].ci & TRI_SOLID_BIT)) {
                     return true;
@@ -1062,7 +1269,7 @@ bool Ray::Ref::Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t &r, const 
     return res;
 }
 
-bool Ray::Ref::Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t &r, const bvh_node8_t *nodes, uint32_t root_index,
+bool Ray::Ref::Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t &r, const mbvh_node_t *nodes, uint32_t root_index,
                                                    const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
                                                    const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t &inter) {
     bool res = false;
@@ -1075,38 +1282,75 @@ bool Ray::Ref::Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t &r, const 
     float inv_d[3];
     safe_invert(r.d, inv_d);
 
-    struct {
-        uint32_t index;
-        float dist;
-    } stack[MAX_STACK_SIZE];
-    uint32_t stack_size = 0;
+    TraversalStack<MAX_STACK_SIZE> st;
+    st.push(root_index, 0.0f);
 
-    stack[stack_size].index = root_index;
-    stack[stack_size++].dist = 0.0f;
+    while (!st.empty()) {
+        stack_entry_t cur = st.pop();
 
-    while (stack_size) {
-        uint32_t cur = stack[--stack_size].index;
-        float cur_dist = stack[stack_size].dist;
+        if (cur.dist > inter.t) continue;
 
-        if (cur_dist > inter.t) continue;
-
-        if (!is_leaf_node(nodes[cur])) {
-            int res[8];
+TRAVERSE:
+        if (!is_leaf_node(nodes[cur.index])) {
             float dist[8];
-            bbox_test_oct(r.o, inv_d, nodes[cur], res, dist);
+            long mask = bbox_test_oct(r.o, inv_d, inter.t, nodes[cur.index], dist);
+            if (mask) {
+                long i = GetFirstBit(mask); mask = ClearBit(mask, i);
+                if (mask == 0) { // only one box was hit
+                    cur.index = nodes[cur.index].child[i];
+                    goto TRAVERSE;
+                }
 
-            ITERATE_8({
-                int j = child_order[i];
-                stack[stack_size].index = nodes[cur].child[j];
-                stack[stack_size].dist = dist[j];
-                stack_size += res[j];
-            })
+                int i2 = GetFirstBit(mask); mask = ClearBit(mask, i2);
+                if (mask == 0) { // two boxes were hit
+                    if (dist[i] < dist[i2]) {
+                        st.push(nodes[cur.index].child[i2], dist[i2]);
+                        cur.index = nodes[cur.index].child[i];
+                    } else {
+                        st.push(nodes[cur.index].child[i], dist[i]);
+                        cur.index = nodes[cur.index].child[i2];
+                    }
+                    goto TRAVERSE;
+                }
+
+                st.push(nodes[cur.index].child[i], dist[i]);
+                st.push(nodes[cur.index].child[i2], dist[i2]);
+
+                i = GetFirstBit(mask); mask = ClearBit(mask, i);
+                st.push(nodes[cur.index].child[i], dist[i]);
+                if (mask == 0) { // three boxes were hit
+                    st.sort_top3();
+                    cur.index = st.pop_index();
+                    goto TRAVERSE;
+                }
+
+                i = GetFirstBit(mask); mask = ClearBit(mask, i);
+                st.push(nodes[cur.index].child[i], dist[i]);
+                if (mask == 0) { // four boxes were hit
+                    st.sort_top4();
+                    cur.index = st.pop_index();
+                    goto TRAVERSE;
+                }
+
+                uint32_t size_before = st.stack_size;
+
+                // from five to eight boxes were hit
+                do {
+                    i = GetFirstBit(mask); mask = ClearBit(mask, i);
+                    st.push(nodes[cur.index].child[i], dist[i]);
+                } while (mask != 0);
+
+                int count = int(st.stack_size - size_before + 4);
+                st.sort_topN(count);
+                cur.index = st.pop_index();
+                goto TRAVERSE;
+            }
         } else {
-            uint32_t prim_index = (nodes[cur].child[0] & PRIM_INDEX_BITS);
-            for (uint32_t i = prim_index; i < prim_index + nodes[cur].child[1]; i++) {
-                const auto &mi = mesh_instances[mi_indices[i]];
-                const auto &m = meshes[mi.mesh_index];
-                const auto &tr = transforms[mi.tr_index];
+            uint32_t prim_index = (nodes[cur.index].child[0] & PRIM_INDEX_BITS);
+            for (uint32_t i = prim_index; i < prim_index + nodes[cur.index].child[1]; i++) {
+                const mesh_instance_t &mi = mesh_instances[mi_indices[i]];
+                const mesh_t &m = meshes[mi.mesh_index];
+                const transform_t &tr = transforms[mi.tr_index];
 
                 if (!bbox_test(r.o, inv_d, inter.t, mi.bbox_min, mi.bbox_max)) continue;
 
@@ -1150,43 +1394,75 @@ bool Ray::Ref::Traverse_MicroTree_WithStack_ClosestHit(const ray_packet_t &r, co
     return res;
 }
 
-bool Ray::Ref::Traverse_MicroTree_WithStack_ClosestHit(const ray_packet_t &r, const float inv_d[3], const bvh_node8_t *nodes, uint32_t root_index,
+bool Ray::Ref::Traverse_MicroTree_WithStack_ClosestHit(const ray_packet_t &r, const float inv_d[3], const mbvh_node_t *nodes, uint32_t root_index,
                                                        const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, hit_data_t &inter) {
     bool res = false;
 
-    const int ray_dir_oct = ((r.d[2] > 0.0f) << 2) | ((r.d[1] > 0.0f) << 1) | (r.d[0] > 0.0f);
+    TraversalStack<MAX_STACK_SIZE> st;
+    st.push(root_index, 0.0f);
 
-    int child_order[8];
-    ITERATE_8({ child_order[i] = i ^ ray_dir_oct; })
+    while (!st.empty()) {
+        stack_entry_t cur = st.pop();
 
-    struct {
-        uint32_t index;
-        float dist;
-    } stack[MAX_STACK_SIZE];
-    uint32_t stack_size = 0;
+        if (cur.dist > inter.t) continue;
 
-    stack[stack_size].index = root_index;
-    stack[stack_size++].dist = 0.0f;
-
-    while (stack_size) {
-        uint32_t cur = stack[--stack_size].index;
-        float cur_dist = stack[stack_size].dist;
-
-        if (cur_dist > inter.t) continue;
-
-        if (!is_leaf_node(nodes[cur])) {
-            int res[8];
+TRAVERSE:
+        if (!is_leaf_node(nodes[cur.index])) {
             float dist[8];
-            bbox_test_oct(r.o, inv_d, nodes[cur], res, dist);
+            long mask = bbox_test_oct(r.o, inv_d, inter.t, nodes[cur.index], dist);
+            if (mask) {
+                long i = GetFirstBit(mask); mask = ClearBit(mask, i);
+                if (mask == 0) { // only one box was hit
+                    cur.index = nodes[cur.index].child[i];
+                    goto TRAVERSE;
+                }
 
-            ITERATE_8({
-                int j = child_order[i];
-                stack[stack_size].index = nodes[cur].child[j];
-                stack[stack_size].dist = dist[j];
-                stack_size += res[j];
-            })
+                long i2 = GetFirstBit(mask); mask = ClearBit(mask, i2);
+                if (mask == 0) { // two boxes were hit
+                    if (dist[i] < dist[i2]) {
+                        st.push(nodes[cur.index].child[i2], dist[i2]);
+                        cur.index = nodes[cur.index].child[i];
+                    } else {
+                        st.push(nodes[cur.index].child[i], dist[i]);
+                        cur.index = nodes[cur.index].child[i2];
+                    }
+                    goto TRAVERSE;
+                }
+
+                st.push(nodes[cur.index].child[i], dist[i]);
+                st.push(nodes[cur.index].child[i2], dist[i2]);
+
+                i = GetFirstBit(mask); mask = ClearBit(mask, i);
+                st.push(nodes[cur.index].child[i], dist[i]);
+                if (mask == 0) { // three boxes were hit
+                    st.sort_top3();
+                    cur.index = st.pop_index();
+                    goto TRAVERSE;
+                }
+
+                i = GetFirstBit(mask); mask = ClearBit(mask, i);
+                st.push(nodes[cur.index].child[i], dist[i]);
+                if (mask == 0) { // four boxes were hit
+                    st.sort_top4();
+                    cur.index = st.pop_index();
+                    goto TRAVERSE;
+                }
+
+                uint32_t size_before = st.stack_size;
+
+                // from five to eight boxes were hit
+                do {
+                    i = GetFirstBit(mask); mask = ClearBit(mask, i);
+                    st.push(nodes[cur.index].child[i], dist[i]);
+                } while (mask != 0);
+
+                int count = int(st.stack_size - size_before + 4);
+                st.sort_topN(count);
+                cur.index = st.pop_index();
+                goto TRAVERSE;
+            }
         } else {
-            res |= IntersectTris_ClosestHit(r, tris, &tri_indices[nodes[cur].child[0] & PRIM_INDEX_BITS], nodes[cur].child[1], obj_index, inter);
+            res |= IntersectTris_ClosestHit(r, tris, &tri_indices[nodes[cur.index].child[0] & PRIM_INDEX_BITS], nodes[cur.index].child[1], obj_index, inter);
         }
     }
 
@@ -1217,6 +1493,85 @@ bool Ray::Ref::Traverse_MicroTree_WithStack_AnyHit(const ray_packet_t &r, const 
                 break;
             }
             
+        }
+    }
+
+    return res;
+}
+
+bool Ray::Ref::Traverse_MicroTree_WithStack_AnyHit(const ray_packet_t &r, const float inv_d[3], const mbvh_node_t *nodes, uint32_t root_index,
+                                                   const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, hit_data_t &inter) {
+    bool res = false;
+
+    TraversalStack<MAX_STACK_SIZE> st;
+    st.push(root_index, 0.0f);
+
+    while (!st.empty()) {
+        stack_entry_t cur = st.pop();
+
+        if (cur.dist > inter.t) continue;
+
+TRAVERSE:
+        if (!is_leaf_node(nodes[cur.index])) {
+            float dist[8];
+            long mask = bbox_test_oct(r.o, inv_d, inter.t, nodes[cur.index], dist);
+            if (mask) {
+                long i = GetFirstBit(mask); mask = ClearBit(mask, i);
+                if (mask == 0) { // only one box was hit
+                    cur.index = nodes[cur.index].child[i];
+                    goto TRAVERSE;
+                }
+
+                long i2 = GetFirstBit(mask); mask = ClearBit(mask, i2);
+                if (mask == 0) { // two boxes were hit
+                    if (dist[i] < dist[i2]) {
+                        st.push(nodes[cur.index].child[i2], dist[i2]);
+                        cur.index = nodes[cur.index].child[i];
+                    } else {
+                        st.push(nodes[cur.index].child[i], dist[i]);
+                        cur.index = nodes[cur.index].child[i2];
+                    }
+                    goto TRAVERSE;
+                }
+
+                st.push(nodes[cur.index].child[i], dist[i]);
+                st.push(nodes[cur.index].child[i2], dist[i2]);
+
+                i = GetFirstBit(mask); mask = ClearBit(mask, i);
+                st.push(nodes[cur.index].child[i], dist[i]);
+                if (mask == 0) { // three boxes were hit
+                    st.sort_top3();
+                    cur.index = st.pop_index();
+                    goto TRAVERSE;
+                }
+
+                i = GetFirstBit(mask); mask = ClearBit(mask, i);
+                st.push(nodes[cur.index].child[i], dist[i]);
+                if (mask == 0) { // four boxes were hit
+                    st.sort_top4();
+                    cur.index = st.pop_index();
+                    goto TRAVERSE;
+                }
+
+                uint32_t size_before = st.stack_size;
+
+                // from five to eight boxes were hit
+                do {
+                    i = GetFirstBit(mask); mask = ClearBit(mask, i);
+                    st.push(nodes[cur.index].child[i], dist[i]);
+                } while (mask != 0);
+
+                int count = int(st.stack_size - size_before + 4);
+                st.sort_topN(count);
+                cur.index = st.pop_index();
+                goto TRAVERSE;
+            }
+        } else {
+            bool hit_found = IntersectTris_AnyHit(r, tris, &tri_indices[nodes[cur.index].child[0] & PRIM_INDEX_BITS], nodes[cur.index].child[1], obj_index, inter);
+            res |= hit_found;
+            if (hit_found && (tris[inter.prim_indices[0]].ci & TRI_SOLID_BIT)) {
+                break;
+            }
         }
     }
 
@@ -1284,34 +1639,29 @@ Ray::Ref::simd_fvec2 Ray::Ref::TransformUV(const simd_fvec2 &_uv, const simd_fve
     return res;
 }
 
-Ray::Ref::simd_fvec4 Ray::Ref::SampleNearest(const TextureAtlas &atlas, const texture_t &t, const simd_fvec2 &uvs, float lod) {
-    int _lod = (int)lod;
-
+Ray::Ref::simd_fvec4 Ray::Ref::SampleNearest(const TextureAtlas &atlas, const texture_t &t, const simd_fvec2 &uvs, int lod) {
     simd_fvec2 atlas_size = { atlas.size_x(), atlas.size_y() };
-    simd_fvec2 _uvs = TransformUV(uvs, atlas_size, t, _lod);
+    simd_fvec2 _uvs = TransformUV(uvs, atlas_size, t, lod);
+    _uvs = _uvs * atlas_size - 0.5f;
 
-    if (_lod > MAX_MIP_LEVEL) _lod = MAX_MIP_LEVEL;
+    int page = t.page[lod];
 
-    int page = t.page[_lod];
+    const pixel_color8_t &pix = atlas.Get(page, int(_uvs[0]), int(_uvs[1]));
 
-    const auto &pix = atlas.Get(page, _uvs[0], _uvs[1]);
-
-    const float k = 1.0f / 255.0f;
-    return simd_fvec4{ pix.r * k, pix.g * k, pix.b * k, pix.a * k };
+    return simd_fvec4{ to_norm_float(pix.r), to_norm_float(pix.g), to_norm_float(pix.b), to_norm_float(pix.a) };
 }
 
 Ray::Ref::simd_fvec4 Ray::Ref::SampleBilinear(const TextureAtlas &atlas, const texture_t &t, const simd_fvec2 &uvs, int lod) {
     simd_fvec2 atlas_size = { atlas.size_x(), atlas.size_y() };
     simd_fvec2 _uvs = TransformUV(uvs, atlas_size, t, lod);
+    _uvs = _uvs * atlas_size - 0.5f;
 
     int page = t.page[lod];
 
-    _uvs = _uvs * atlas_size - 0.5f;
-
-    const auto &p00 = atlas.Get(page, int(_uvs[0]), int(_uvs[1]));
-    const auto &p01 = atlas.Get(page, int(_uvs[0] + 1), int(_uvs[1]));
-    const auto &p10 = atlas.Get(page, int(_uvs[0]), int(_uvs[1] + 1));
-    const auto &p11 = atlas.Get(page, int(_uvs[0] + 1), int(_uvs[1] + 1));
+    const pixel_color8_t &p00 = atlas.Get(page, int(_uvs[0]) + 0, int(_uvs[1]) + 0);
+    const pixel_color8_t &p01 = atlas.Get(page, int(_uvs[0]) + 1, int(_uvs[1]) + 0);
+    const pixel_color8_t &p10 = atlas.Get(page, int(_uvs[0]) + 0, int(_uvs[1]) + 1);
+    const pixel_color8_t &p11 = atlas.Get(page, int(_uvs[0]) + 1, int(_uvs[1]) + 1);
 
     float kx = _uvs[0] - std::floor(_uvs[0]), ky = _uvs[1] - std::floor(_uvs[1]);
 
@@ -1326,14 +1676,14 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleBilinear(const TextureAtlas &atlas, const t
                                 p11.a * kx + p10.a * (1 - kx) };
 
     const float k = 1.0f / 255.0f;
-    return (p1 * ky + p0 * (1 - ky)) * k;
+    return (p1 * ky + p0 * (1.0f - ky)) * k;
 }
 
 Ray::Ref::simd_fvec4 Ray::Ref::SampleBilinear(const TextureAtlas &atlas, const simd_fvec2 &uvs, int page) {
-    const auto &p00 = atlas.Get(page, int(uvs[0] + 0), int(uvs[1] + 0));
-    const auto &p01 = atlas.Get(page, int(uvs[0] + 1), int(uvs[1] + 0));
-    const auto &p10 = atlas.Get(page, int(uvs[0] + 0), int(uvs[1] + 1));
-    const auto &p11 = atlas.Get(page, int(uvs[0] + 1), int(uvs[1] + 1));
+    const pixel_color8_t &p00 = atlas.Get(page, int(uvs[0]) + 0, int(uvs[1]) + 0);
+    const pixel_color8_t &p01 = atlas.Get(page, int(uvs[0]) + 1, int(uvs[1]) + 0);
+    const pixel_color8_t &p10 = atlas.Get(page, int(uvs[0]) + 0, int(uvs[1]) + 1);
+    const pixel_color8_t &p11 = atlas.Get(page, int(uvs[0]) + 1, int(uvs[1]) + 1);
 
     simd_fvec2 k = uvs - floor(uvs);
     
@@ -1342,15 +1692,15 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleBilinear(const TextureAtlas &atlas, const s
     const auto _p10 = simd_fvec4{ to_norm_float(p10.r), to_norm_float(p10.g), to_norm_float(p10.b), to_norm_float(p10.a) };
     const auto _p11 = simd_fvec4{ to_norm_float(p11.r), to_norm_float(p11.g), to_norm_float(p11.b), to_norm_float(p11.a) };
 
-    const auto p0X = _p01 * k[0] + _p00 * (1 - k[0]);
-    const auto p1X = _p11 * k[0] + _p10 * (1 - k[0]);
+    const simd_fvec4 p0X = _p01 * k[0] + _p00 * (1 - k[0]);
+    const simd_fvec4 p1X = _p11 * k[0] + _p10 * (1 - k[0]);
 
     return (p1X * k[1] + p0X * (1 - k[1]));
 }
 
 Ray::Ref::simd_fvec4 Ray::Ref::SampleTrilinear(const TextureAtlas &atlas, const texture_t &t, const simd_fvec2 &uvs, float lod) {
-    auto col1 = SampleBilinear(atlas, t, uvs, (int)std::floor(lod));
-    auto col2 = SampleBilinear(atlas, t, uvs, (int)std::ceil(lod));
+    simd_fvec4 col1 = SampleBilinear(atlas, t, uvs, (int)std::floor(lod));
+    simd_fvec4 col2 = SampleBilinear(atlas, t, uvs, (int)std::ceil(lod));
 
     const float k = lod - std::floor(lod);
     return col1 * (1 - k) + col2 * k;
@@ -1369,17 +1719,16 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleAnisotropic(const TextureAtlas &atlas, cons
     simd_fvec2 step;
 
     if (l1 <= l2) {
-        lod = std::log2(std::min(_duv_dx[0], _duv_dx[1]));
+        lod = fast_log2(std::min(_duv_dx[0], _duv_dx[1]));
         k = l1 / l2;
         step = duv_dy;
     } else {
-        lod = std::log2(std::min(_duv_dy[0], _duv_dy[1]));
+        lod = fast_log2(std::min(_duv_dy[0], _duv_dy[1]));
         k = l2 / l1;
         step = duv_dx;
     }
 
-    if (lod < 0.0f) lod = 0.0f;
-    else if (lod >(float)MAX_MIP_LEVEL) lod = (float)MAX_MIP_LEVEL;
+    lod = clamp(lod, 0.0f, float(MAX_MIP_LEVEL));
 
     simd_fvec2 _uvs = uvs - step * 0.5f;
 
@@ -1432,27 +1781,27 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleLatlong_RGBE(const TextureAtlas &atlas, con
 
     simd_fvec2 uvs = pos + simd_fvec2{ u, theta } * size + simd_fvec2{ 1.0f, 1.0f };
 
-    const auto &p00 = atlas.Get(t.page[0], int(uvs[0] + 0), int(uvs[1] + 0));
-    const auto &p01 = atlas.Get(t.page[0], int(uvs[0] + 1), int(uvs[1] + 0));
-    const auto &p10 = atlas.Get(t.page[0], int(uvs[0] + 0), int(uvs[1] + 1));
-    const auto &p11 = atlas.Get(t.page[0], int(uvs[0] + 1), int(uvs[1] + 1));
+    const pixel_color8_t &p00 = atlas.Get(t.page[0], int(uvs[0] + 0), int(uvs[1] + 0));
+    const pixel_color8_t &p01 = atlas.Get(t.page[0], int(uvs[0] + 1), int(uvs[1] + 0));
+    const pixel_color8_t &p10 = atlas.Get(t.page[0], int(uvs[0] + 0), int(uvs[1] + 1));
+    const pixel_color8_t &p11 = atlas.Get(t.page[0], int(uvs[0] + 1), int(uvs[1] + 1));
 
     simd_fvec2 k = uvs - floor(uvs);
 
-    const auto _p00 = rgbe_to_rgb(p00);
-    const auto _p01 = rgbe_to_rgb(p01);
-    const auto _p10 = rgbe_to_rgb(p10);
-    const auto _p11 = rgbe_to_rgb(p11);
+    const simd_fvec4 _p00 = rgbe_to_rgb(p00);
+    const simd_fvec4 _p01 = rgbe_to_rgb(p01);
+    const simd_fvec4 _p10 = rgbe_to_rgb(p10);
+    const simd_fvec4 _p11 = rgbe_to_rgb(p11);
 
-    const auto p0X = _p01 * k[0] + _p00 * (1 - k[0]);
-    const auto p1X = _p11 * k[0] + _p10 * (1 - k[0]);
+    const simd_fvec4 p0X = _p01 * k[0] + _p00 * (1 - k[0]);
+    const simd_fvec4 p1X = _p11 * k[0] + _p10 * (1 - k[0]);
 
     return (p1X * k[1] + p0X * (1 - k[1]));
 }
 
 float Ray::Ref::ComputeVisibility(const simd_fvec3 &p1, const simd_fvec3 &p2, const float *halton, const int hi, int rand_hash2,
                                   const scene_data_t &sc, uint32_t node_index, const TextureAtlas &tex_atlas) {
-    auto dir = p2 - p1;
+    simd_fvec3 dir = p2 - p1;
     float dist = length(dir);
     dir /= dist;
 
@@ -1467,26 +1816,26 @@ float Ray::Ref::ComputeVisibility(const simd_fvec3 &p1, const simd_fvec3 &p2, co
         hit_data_t sh_inter;
         sh_inter.t = dist;
 
-        if (sc.oct_nodes) {
-            Traverse_MacroTree_WithStack_AnyHit(r, sc.oct_nodes, node_index, sc.mesh_instances, sc.mi_indices, sc.meshes, sc.transforms, sc.tris, sc.tri_indices, sh_inter);
+        if (sc.mnodes) {
+            Traverse_MacroTree_WithStack_AnyHit(r, sc.mnodes, node_index, sc.mesh_instances, sc.mi_indices, sc.meshes, sc.transforms, sc.tris, sc.tri_indices, sh_inter);
         } else {
             Traverse_MacroTree_WithStack_AnyHit(r, sc.nodes, node_index, sc.mesh_instances, sc.mi_indices, sc.meshes, sc.transforms, sc.tris, sc.tri_indices, sh_inter);
         }
         if (!sh_inter.mask_values[0]) break;
 
-        const auto &tri = sc.tris[sh_inter.prim_indices[0]];
+        const tri_accel_t &tri = sc.tris[sh_inter.prim_indices[0]];
         if (tri.ci & TRI_SOLID_BIT) {
             visibility = 0;
             break;
         }
 
-        const auto *mat = &sc.materials[tri.mi];
+        const material_t *mat = &sc.materials[tri.mi];
 
-        const auto *tr = &sc.transforms[sc.mesh_instances[sh_inter.obj_indices[0]].tr_index];
+        const transform_t *tr = &sc.transforms[sc.mesh_instances[sh_inter.obj_indices[0]].tr_index];
 
-        const auto &v1 = sc.vertices[sc.vtx_indices[sh_inter.prim_indices[0] * 3 + 0]];
-        const auto &v2 = sc.vertices[sc.vtx_indices[sh_inter.prim_indices[0] * 3 + 1]];
-        const auto &v3 = sc.vertices[sc.vtx_indices[sh_inter.prim_indices[0] * 3 + 2]];
+        const vertex_t &v1 = sc.vertices[sc.vtx_indices[sh_inter.prim_indices[0] * 3 + 0]];
+        const vertex_t &v2 = sc.vertices[sc.vtx_indices[sh_inter.prim_indices[0] * 3 + 1]];
+        const vertex_t &v3 = sc.vertices[sc.vtx_indices[sh_inter.prim_indices[0] * 3 + 2]];
 
         const auto I = simd_fvec3(r.d);
 
@@ -1563,9 +1912,9 @@ void Ray::Ref::AcumulateLightContribution(const light_t &l, const simd_fvec3 &I,
 
     const float cos_phi = std::cos(phi), sin_phi = std::sin(phi);
 
-    auto TT = cross(L, B);
-    auto BB = cross(L, TT);
-    const auto V = dir * sin_phi * BB + std::sqrt(1.0f - dir) * L + dir * cos_phi * TT;
+    simd_fvec3 TT = cross(L, B);
+    simd_fvec3 BB = cross(L, TT);
+    const simd_fvec3 V = dir * sin_phi * BB + std::sqrt(1.0f - dir) * L + dir * cos_phi * TT;
 
     L = normalize(simd_fvec3(l.pos) + V * l.radius - P);
 
@@ -1598,23 +1947,23 @@ Ray::Ref::simd_fvec3 Ray::Ref::ComputeDirectLighting(const simd_fvec3 &I, const 
         stack[stack_size++] = light_node_index;
     }
 
-    if (sc.oct_nodes) {
+    if (sc.mnodes) {
         while (stack_size) {
             uint32_t cur = stack[--stack_size];
 
-            if (!is_leaf_node(sc.oct_nodes[cur])) {
+            if (!is_leaf_node(sc.mnodes[cur])) {
                 bool res[8];
                 for (int i = 0; i < 8; i++) {
-                    res[i] = bbox_test_oct(value_ptr(P), sc.oct_nodes[cur], i);
+                    res[i] = bbox_test_oct(value_ptr(P), sc.mnodes[cur], i);
                 }
 
                 for (int i = 0; i < 8; i++) {
                     if (!res[i]) continue;
-                    stack[stack_size++] = sc.oct_nodes[cur].child[i];
+                    stack[stack_size++] = sc.mnodes[cur].child[i];
                 }
             } else {
-                uint32_t prim_index = (sc.oct_nodes[cur].child[0] & PRIM_INDEX_BITS);
-                for (uint32_t i = prim_index; i < prim_index + sc.oct_nodes[cur].child[1]; i++) {
+                uint32_t prim_index = (sc.mnodes[cur].child[0] & PRIM_INDEX_BITS);
+                for (uint32_t i = prim_index; i < prim_index + sc.mnodes[cur].child[1]; i++) {
                     const light_t &l = sc.lights[sc.li_indices[i]];
                     AcumulateLightContribution(l, I, P, N, B, plane_N, sc, node_index, tex_atlas, sigma, halton, hi, rand_hash2, rand_offset, rand_offset2, col);
                 }
@@ -1646,51 +1995,55 @@ void Ray::Ref::ComputeDerivatives(const simd_fvec3 &I, float t, const simd_fvec3
                                   const vertex_t &v1, const vertex_t &v2, const vertex_t &v3, const simd_fvec3 &plane_N, derivatives_t &out_der) {
     // From 'Tracing Ray Differentials' [1999]
 
-    float dot_I_N = dot(-I, plane_N);
+    float dot_I_N = -dot(I, plane_N);
     float inv_dot = std::abs(dot_I_N) < FLT_EPS ? 0.0f : 1.0f / dot_I_N;
-    float dt_dx = -dot(simd_fvec3(do_dx) + t * simd_fvec3(dd_dx), plane_N) * inv_dot;
-    float dt_dy = -dot(simd_fvec3(do_dy) + t * simd_fvec3(dd_dy), plane_N) * inv_dot;
+    float dt_dx = dot(do_dx + t * dd_dx, plane_N) * inv_dot;
+    float dt_dy = dot(do_dy + t * dd_dy, plane_N) * inv_dot;
 
-    out_der.do_dx = (simd_fvec3(do_dx) + t * simd_fvec3(dd_dx)) + dt_dx * I;
-    out_der.do_dy = (simd_fvec3(do_dy) + t * simd_fvec3(dd_dy)) + dt_dy * I;
-    out_der.dd_dx = simd_fvec3(dd_dx);
-    out_der.dd_dy = simd_fvec3(dd_dy);
+    out_der.do_dx = (do_dx + t * dd_dx) + dt_dx * I;
+    out_der.do_dy = (do_dy + t * dd_dy) + dt_dy * I;
+    out_der.dd_dx = dd_dx;
+    out_der.dd_dy = dd_dy;
 
     // From 'Physically Based Rendering: ...' book
 
-    const simd_fvec2 duv13 = simd_fvec2(v1.t[0]) - simd_fvec2(v3.t[0]), duv23 = simd_fvec2(v2.t[0]) - simd_fvec2(v3.t[0]);
-    const simd_fvec3 dp13 = simd_fvec3(v1.p) - simd_fvec3(v3.p), dp23 = simd_fvec3(v2.p) - simd_fvec3(v3.p);
+    const simd_fvec2 duv13 = simd_fvec2(v1.t[0]) - simd_fvec2(v3.t[0]),
+                     duv23 = simd_fvec2(v2.t[0]) - simd_fvec2(v3.t[0]);
+    const simd_fvec3 dp13 = simd_fvec3(v1.p) - simd_fvec3(v3.p),
+                     dp23 = simd_fvec3(v2.p) - simd_fvec3(v3.p);
 
     const float det_uv = duv13[0] * duv23[1] - duv13[1] * duv23[0];
     const float inv_det_uv = std::abs(det_uv) < FLT_EPS ? 0 : 1.0f / det_uv;
     const simd_fvec3 dpdu = (duv23[1] * dp13 - duv13[1] * dp23) * inv_det_uv;
     const simd_fvec3 dpdv = (-duv23[0] * dp13 + duv13[0] * dp23) * inv_det_uv;
 
-    simd_fvec2 A[2] = { { dpdu[0], dpdu[1] },{ dpdv[0], dpdv[1] } };
-    simd_fvec2 Bx = { do_dx[0], do_dx[1] };
-    simd_fvec2 By = { do_dy[0], do_dy[1] };
+    // System of equations
+    simd_fvec2 A[2] = { { dpdu[0], dpdv[0] }, { dpdu[1], dpdv[1] } };
+    simd_fvec2 Bx = { out_der.do_dx[0], out_der.do_dx[1] };
+    simd_fvec2 By = { out_der.do_dy[0], out_der.do_dy[1] };
 
     if (std::abs(plane_N[0]) > std::abs(plane_N[1]) && std::abs(plane_N[0]) > std::abs(plane_N[2])) {
-        A[0] = { dpdu[1], dpdu[2] };
-        A[1] = { dpdv[1], dpdv[2] };
-        Bx = { do_dx[1], do_dx[2] };
-        By = { do_dy[1], do_dy[2] };
+        A[0] = { dpdu[1], dpdv[1] };
+        A[1] = { dpdu[2], dpdv[2] };
+        Bx = { out_der.do_dx[1], out_der.do_dx[2] };
+        By = { out_der.do_dy[1], out_der.do_dy[2] };
     } else if (std::abs(plane_N[1]) > std::abs(plane_N[2])) {
-        A[0] = { dpdu[0], dpdu[2] };
-        A[1] = { dpdv[0], dpdv[2] };
-        Bx = { do_dx[0], do_dx[2] };
-        By = { do_dy[0], do_dy[2] };
+        A[1] = { dpdu[2], dpdv[2] };
+        Bx = { out_der.do_dx[0], out_der.do_dx[2] };
+        By = { out_der.do_dy[0], out_der.do_dy[2] };
     }
 
-    const float det = A[0][0] * A[1][1] - A[1][0] * A[0][1];
+    // Kramer's rule
+    const float det = A[0][0] * A[1][1] - A[0][1] * A[1][0];
     const float inv_det = std::abs(det) < FLT_EPS ? 0 : 1.0f / det;
-    out_der.duv_dx = simd_fvec2{ A[0][0] * Bx[0] - A[0][1] * Bx[1], A[1][0] * Bx[0] - A[1][1] * Bx[1] } * inv_det;
-    out_der.duv_dy = simd_fvec2{ A[0][0] * By[0] - A[0][1] * By[1], A[1][0] * By[0] - A[1][1] * By[1] } * inv_det;
+    
+    out_der.duv_dx = simd_fvec2{ A[1][1] * Bx[0] - A[0][1] * Bx[1], A[0][0] * Bx[1] - A[1][0] * Bx[0] } * inv_det;
+    out_der.duv_dy = simd_fvec2{ A[1][1] * By[0] - A[0][1] * By[1], A[0][0] * By[1] - A[1][0] * By[0] } * inv_det;
 
     // Derivative for normal
-    const auto dn1 = simd_fvec3(v1.n) - simd_fvec3(v3.n), dn2 = simd_fvec3(v2.n) - simd_fvec3(v3.n);
-    const auto dndu = (duv23[1] * dn1 - duv13[1] * dn2) * inv_det_uv;
-    const auto dndv = (-duv23[0] * dn1 + duv13[0] * dn2) * inv_det_uv;
+    const simd_fvec3 dn1 = simd_fvec3(v1.n) - simd_fvec3(v3.n), dn2 = simd_fvec3(v2.n) - simd_fvec3(v3.n);
+    const simd_fvec3 dndu = (duv23[1] * dn1 - duv13[1] * dn2) * inv_det_uv;
+    const simd_fvec3 dndv = (-duv23[0] * dn1 + duv13[0] * dn2) * inv_det_uv;
 
     out_der.dndx = dndu * out_der.duv_dx[0] + dndv * out_der.duv_dx[1];
     out_der.dndy = dndu * out_der.duv_dy[0] + dndv * out_der.duv_dy[1];
@@ -1720,15 +2073,15 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
     const auto I = simd_fvec3(ray.d);
     const auto P = simd_fvec3(ray.o) + inter.t * I;
 
-    const auto &tri = sc.tris[inter.prim_indices[0]];
+    const tri_accel_t &tri = sc.tris[inter.prim_indices[0]];
 
-    const auto *mat = &sc.materials[tri.mi];
+    const material_t *mat = &sc.materials[tri.mi];
 
-    const auto *tr = &sc.transforms[sc.mesh_instances[inter.obj_indices[0]].tr_index];
+    const transform_t *tr = &sc.transforms[sc.mesh_instances[inter.obj_indices[0]].tr_index];
 
-    const auto &v1 = sc.vertices[sc.vtx_indices[inter.prim_indices[0] * 3 + 0]];
-    const auto &v2 = sc.vertices[sc.vtx_indices[inter.prim_indices[0] * 3 + 1]];
-    const auto &v3 = sc.vertices[sc.vtx_indices[inter.prim_indices[0] * 3 + 2]];
+    const vertex_t &v1 = sc.vertices[sc.vtx_indices[inter.prim_indices[0] * 3 + 0]];
+    const vertex_t &v2 = sc.vertices[sc.vtx_indices[inter.prim_indices[0] * 3 + 1]];
+    const vertex_t &v3 = sc.vertices[sc.vtx_indices[inter.prim_indices[0] * 3 + 2]];
 
     float w = 1.0f - inter.u - inter.v;
     simd_fvec3 N = simd_fvec3(v1.n) * w + simd_fvec3(v2.n) * inter.u + simd_fvec3(v3.n) * inter.v;
@@ -1786,12 +2139,12 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
             if (cost2 >= 0.0f) {
                 float m = eta * cosi - std::sqrt(cost2);
                 simd_fvec3 V = eta * I + m * N;
-                RR = R0 + (1.0f - R0) * std::pow(1.0f + dot(V, N), 5.0f);
+                RR = R0 + (1.0f - R0) * pow5(1.0f + dot(V, N));
             } else {
                 RR = 1.0f;
             }
         } else {
-            RR = R0 + (1.0f - R0) * std::pow(1.0f + dot(I, N), 5.0f);
+            RR = R0 + (1.0f - R0) * pow5(1.0f + dot(I, N));
         }
 
         mix_val *= clamp(RR, 0.0f, 1.0f);
@@ -1809,7 +2162,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
     simd_fvec3 B = simd_fvec3(v1.b) * w + simd_fvec3(v2.b) * inter.u + simd_fvec3(v3.b) * inter.v;
     simd_fvec3 T = cross(B, N);
 
-    auto normals = SampleBilinear(tex_atlas, sc.textures[mat->textures[NORMALS_TEXTURE]], uvs, 0);
+    simd_fvec4 normals = SampleBilinear(tex_atlas, sc.textures[mat->textures[NORMALS_TEXTURE]], uvs, 0);
     normals = normals * 2.0f - 1.0f;
     N = normals[0] * B + normals[2] * N + normals[1] * T;
 
@@ -1818,8 +2171,10 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
     T = TransformNormal(T, tr->inv_xform);
 
     // sample main texture
-    auto albedo = SampleAnisotropic(tex_atlas, sc.textures[mat->textures[MAIN_TEXTURE]], uvs, surf_der.duv_dx, surf_der.duv_dy);
-    albedo = pow(albedo, simd_fvec4(2.2f));
+    const texture_t &main_texture = sc.textures[mat->textures[MAIN_TEXTURE]];
+    const float albedo_lod = get_texture_lod(main_texture, surf_der.duv_dx, surf_der.duv_dy);
+    simd_fvec4 albedo = SampleBilinear(tex_atlas, main_texture, uvs, (int)albedo_lod);
+    albedo = srgb_to_rgb(albedo);
     albedo[0] *= mat->main_color[0];
     albedo[1] *= mat->main_color[1];
     albedo[2] *= mat->main_color[2];
@@ -1832,12 +2187,14 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
     int transp_depth = (ray.ray_depth >> 24) & 0x000000ff;
     int total_depth = diff_depth + gloss_depth + refr_depth + transp_depth;
 
+    const bool cant_terminate = total_depth < pi.settings.termination_start_depth;
+
     // Evaluate materials
     if (mat->type == DiffuseMaterial) {
         if (pi.should_add_direct_light()) {
             col = ComputeDirectLighting(I, P, N, B, plane_N, mat->roughness, halton, hi, rand_hash, rand_hash2, rand_offset, rand_offset2,
                                         sc, node_index, light_node_index, tex_atlas);
-            
+
             if (pi.should_consider_albedo()) {
                 col *= simd_fvec3(&albedo[0]);
             }
@@ -1887,12 +2244,11 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
             memcpy(&r.dd_dx[0], value_ptr(surf_der.dd_dx - 2 * (dot(I, plane_N) * surf_der.dndx + surf_der.ddn_dx * plane_N)), 3 * sizeof(float));
             memcpy(&r.dd_dy[0], value_ptr(surf_der.dd_dy - 2 * (dot(I, plane_N) * surf_der.dndy + surf_der.ddn_dy * plane_N)), 3 * sizeof(float));
 
-            const float thr = std::max(r.c[0], std::max(r.c[1], r.c[2]));
+            const float lum = std::max(r.c[0], std::max(r.c[1], r.c[2]));
             const float p = std::modf(halton[hi + 0] + rand_offset3, &_unused);
-            if (p > (1.0f - thr / RAY_TERM_THRES)) {
-                if (thr < RAY_TERM_THRES) {
-                    r.c[0] *= RAY_TERM_THRES / thr; r.c[1] *= RAY_TERM_THRES / thr; r.c[2] *= RAY_TERM_THRES / thr;
-                }
+            const float q = cant_terminate ? 0.0f : std::max(0.05f, 1.0f - lum);
+            if (p >= q) {
+                r.c[0] /= 1.0f - q; r.c[1] /= 1.0f - q; r.c[2] /= 1.0f - q;
                 const int index = (*out_secondary_rays_count)++;
                 out_secondary_rays[index] = r;
             }
@@ -1909,8 +2265,8 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
             const float cos_phi = std::cos(phi);
             const float sin_phi = std::sin(phi);
 
-            auto TT = cross(V, B);
-            auto BB = cross(V, TT);
+            simd_fvec3 TT = cross(V, B);
+            simd_fvec3 BB = cross(V, TT);
 
             if (dot(V, plane_N) > 0) {
                 V = dir * sin_phi * BB + std::sqrt(1.0f - dir) * V + dir * cos_phi * TT;
@@ -1938,12 +2294,11 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
             memcpy(&r.dd_dx[0], value_ptr(surf_der.dd_dx - 2 * (dot(I, plane_N) * surf_der.dndx + surf_der.ddn_dx * plane_N)), 3 * sizeof(float));
             memcpy(&r.dd_dy[0], value_ptr(surf_der.dd_dy - 2 * (dot(I, plane_N) * surf_der.dndy + surf_der.ddn_dy * plane_N)), 3 * sizeof(float));
 
-            const float thr = std::max(r.c[0], std::max(r.c[1], r.c[2]));
+            const float lum = std::max(r.c[0], std::max(r.c[1], r.c[2]));
             const float p = std::modf(halton[hi + 0] + rand_offset3, &_unused);
-            if (p < thr / RAY_TERM_THRES) {
-                if (thr < RAY_TERM_THRES) {
-                    r.c[0] *= RAY_TERM_THRES / thr; r.c[1] *= RAY_TERM_THRES / thr; r.c[2] *= RAY_TERM_THRES / thr;
-                }
+            const float q = cant_terminate ? 0.0f : std::max(0.05f, 1.0f - lum);
+            if (p >= q) {
+                r.c[0] /= 1.0f - q; r.c[1] /= 1.0f - q; r.c[2] /= 1.0f - q;
                 const int index = (*out_secondary_rays_count)++;
                 out_secondary_rays[index] = r;
             }
@@ -1956,7 +2311,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
             float cost2 = 1.0f - eta * eta * (1.0f - cosi * cosi);
             if (cost2 < 0) return pixel_color_t{ 0.0f, 0.0f, 0.0f, 1.0f };
             float m = eta * cosi - std::sqrt(cost2);
-            auto V = eta * I + m * N;
+            simd_fvec3 V = eta * I + m * N;
 
             const float z = 1.0f - halton[hi + 0] * mat->roughness;
             const float temp = std::sqrt(1.0f - z * z);
@@ -1965,8 +2320,8 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
             const float cos_phi = std::cos(phi);
             const float sin_phi = std::sin(phi);
 
-            auto TT = normalize(cross(V, B));
-            auto BB = normalize(cross(V, TT));
+            simd_fvec3 TT = normalize(cross(V, B));
+            simd_fvec3 BB = normalize(cross(V, TT));
             V = temp * sin_phi * BB + z * V + temp * cos_phi * TT;
 
             //////////////////
@@ -1991,12 +2346,11 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
             memcpy(&r.dd_dx[0], value_ptr(eta * surf_der.dd_dx - (m * surf_der.dndx + dmdx * plane_N)), 3 * sizeof(float));
             memcpy(&r.dd_dy[0], value_ptr(eta * surf_der.dd_dy - (m * surf_der.dndy + dmdy * plane_N)), 3 * sizeof(float));
 
-            const float thr = std::max(r.c[0], std::max(r.c[1], r.c[2]));
+            const float lum = std::max(r.c[0], std::max(r.c[1], r.c[2]));
             const float p = std::modf(halton[hi + 0] + rand_offset3, &_unused);
-            if (p < thr / RAY_TERM_THRES) {
-                if (thr < RAY_TERM_THRES) {
-                    r.c[0] *= RAY_TERM_THRES / thr; r.c[1] *= RAY_TERM_THRES / thr; r.c[2] *= RAY_TERM_THRES / thr;
-                }
+            const float q = cant_terminate ? 0.0f : std::max(0.05f, 1.0f - lum);
+            if (p >= q) {
+                r.c[0] /= 1.0f - q; r.c[1] /= 1.0f - q; r.c[2] /= 1.0f - q;
                 const int index = (*out_secondary_rays_count)++;
                 out_secondary_rays[index] = r;
             }
@@ -2021,12 +2375,11 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
             memcpy(&r.dd_dx[0], &ray.dd_dx[0], 3 * sizeof(float));
             memcpy(&r.dd_dy[0], &ray.dd_dy[0], 3 * sizeof(float));
 
-            const float thr = std::max(r.c[0], std::max(r.c[1], r.c[2]));
+            const float lum = std::max(r.c[0], std::max(r.c[1], r.c[2]));
             const float p = std::modf(halton[hi + 0] + rand_offset3, &_unused);
-            if (p < thr / RAY_TERM_THRES) {
-                if (thr < RAY_TERM_THRES) {
-                    r.c[0] *= RAY_TERM_THRES / thr; r.c[1] *= RAY_TERM_THRES / thr; r.c[2] *= RAY_TERM_THRES / thr;
-                }
+            const float q = cant_terminate ? 0.0f : std::max(0.05f, 1.0f - lum);
+            if (p >= q) {
+                r.c[0] /= 1.0f - q; r.c[1] /= 1.0f - q; r.c[2] /= 1.0f - q;
                 const int index = (*out_secondary_rays_count)++;
                 out_secondary_rays[index] = r;
             }

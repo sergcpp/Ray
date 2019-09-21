@@ -10,6 +10,11 @@
 #endif
 #ifdef _MSC_VER
 #define force_inline __forceinline
+
+#include <intrin.h>
+
+#pragma intrinsic(_BitScanForward)
+#pragma intrinsic(_bittestandcomplement)
 #endif
 
 #define unused(x) ((void)x)
@@ -30,6 +35,8 @@ struct tri_accel_t {
 };
 static_assert(sizeof(tri_accel_t) == 48, "!");
 
+extern const tri_accel_t InvalidTriangle;
+
 const uint8_t TRI_W_BITS = 0b00000011;
 const uint8_t TRI_AXIS_ALIGNED_BIT = 0b00000100;
 const uint8_t TRI_INV_NORMAL_BIT = 0b00001000;
@@ -44,8 +51,6 @@ const float PI = 3.141592653589793238463f;
 const float MAX_DIST = 3.402823466e+38F;
 
 const int MAX_BOUNCES = 10;
-
-const float RAY_TERM_THRES = 0.01f;
 
 const float LIGHT_ATTEN_CUTOFF = 0.001f;
 
@@ -79,16 +84,18 @@ static_assert(sizeof(bvh_node_t) == 36, "!");
 static_assert(sizeof(bvh_node_t) == 32, "!");
 #endif
 
-struct alignas(32) bvh_node8_t {
+struct alignas(32) mbvh_node_t {
     float bbox_min[3][8];
     float bbox_max[3][8];
     uint32_t child[8];
 };
-static_assert(sizeof(bvh_node8_t) == 224, "!");
+static_assert(sizeof(mbvh_node_t) == 224, "!");
 
 const int MAX_MIP_LEVEL = 11;
 const int NUM_MIP_LEVELS = MAX_MIP_LEVEL + 1;
 const int MAX_TEXTURE_SIZE = (1 << NUM_MIP_LEVELS);
+
+const int TEXTURE_ATLAS_SIZE = 8192;
 
 struct texture_t {
     uint16_t size[2];
@@ -138,13 +145,34 @@ struct bvh_settings_t {
 template <typename T>
 using aligned_vector = std::vector<T, aligned_allocator<T, alignof(T)>>;
 
+// bit scan forward
+force_inline long GetFirstBit(long mask) {
+#ifdef _MSC_VER
+    unsigned long ret;
+    _BitScanForward(&ret, (unsigned long)mask);
+    return long(ret);
+#else
+    return long(__builtin_ffsl(mask) - 1);
+#endif
+}
+
+// bit test and complement
+force_inline long ClearBit(long mask, long index) {
+#ifdef _MSC_VER
+    _bittestandcomplement(&mask, index);
+    return mask;
+#else
+    return (mask & ~(1 << index));
+#endif
+}
+
 // Creates struct of precomputed triangle data for faster Plucker intersection test
 bool PreprocessTri(const float *p, int stride, tri_accel_t *acc);
 // Extructs planar triangle normal from precomputed triangle data
 void ExtractPlaneNormal(const tri_accel_t &tri, float *out_normal);
 
 // Builds BVH for mesh and precomputes triangle data
-uint32_t PreprocessMesh(const float *attrs, const uint32_t *indices, size_t indices_count, eVertexLayout layout, int base_vertex,
+uint32_t PreprocessMesh(const float *attrs, const uint32_t *vtx_indices, size_t vtx_indices_count, eVertexLayout layout, int base_vertex,
                         const bvh_settings_t &s, std::vector<bvh_node_t> &out_nodes, std::vector<tri_accel_t> &out_tris, std::vector<uint32_t> &out_indices);
 
 // Recursively builds linear bvh for a set of primitives
@@ -159,11 +187,11 @@ uint32_t PreprocessPrims_SAH(const prim_t *prims, size_t prims_count, const floa
 // Builds linear BVH for a set of primitives, fast
 uint32_t PreprocessPrims_HLBVH(const prim_t *prims, size_t prims_count, std::vector<bvh_node_t> &out_nodes, std::vector<uint32_t> &out_indices);
 
-uint32_t FlattenBVH_Recursive(const bvh_node_t *nodes, uint32_t node_index, uint32_t parent_index, aligned_vector<bvh_node8_t> &out_nodes);
+uint32_t FlattenBVH_Recursive(const bvh_node_t *nodes, uint32_t node_index, uint32_t parent_index, aligned_vector<mbvh_node_t> &out_nodes);
 
 bool NaiivePluckerTest(const float p[9], const float o[3], const float d[3]);
 
-void ConstructCamera(eCamType type, eFilterType filter, const float origin[3], const float fwd[3], float fov, float gamma, float focus_distance, float focus_factor, camera_t *cam);
+void ConstructCamera(eCamType type, eFilterType filter, eDeviceType dtype, const float origin[3], const float fwd[3], float fov, float gamma, float focus_distance, float focus_factor, camera_t *cam);
 
 // Applies 4x4 matrix matrix transform to bounding box
 void TransformBoundingBox(const float bbox_min[3], const float bbox_max[3], const float *xform, float out_bbox_min[3], float out_bbox_max[3]);
@@ -213,10 +241,9 @@ struct environment_t {
     uint32_t env_map;
 };
 
-extern const float uint8_to_float_table[];
-
 force_inline float to_norm_float(uint8_t v) {
-    return uint8_to_float_table[v];
+    uint32_t val = 0x3f800000 + v * 0x8080 + (v + 1) / 2;
+    return (float &)val - 1;
 }
 
 extern const uint8_t morton_table_16[];
@@ -269,7 +296,7 @@ struct scene_data_t {
     const uint32_t          *vtx_indices;
     const vertex_t          *vertices;
     const bvh_node_t        *nodes;
-    const bvh_node8_t       *oct_nodes;
+    const mbvh_node_t       *mnodes;
     const tri_accel_t       *tris;
     const uint32_t          *tri_indices;
     const material_t        *materials;

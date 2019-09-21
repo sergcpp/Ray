@@ -66,7 +66,8 @@ struct derivatives_t {
     float ddn_dx, ddn_dy;
 };
 
-class TextureAtlas;
+class TextureAtlasTiled;
+using TextureAtlas = TextureAtlasTiled;
 
 // Generation of rays
 void GeneratePrimaryRays(int iteration, const camera_t &cam, const rect_t &r, int w, int h, const float *halton, aligned_vector<ray_packet_t> &out_rays);
@@ -108,21 +109,23 @@ bool Traverse_MicroTree_Stackless_GPU(const ray_packet_t &r, const float inv_d[3
 bool Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t &r, const bvh_node_t *nodes, uint32_t root_index,
                                              const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
                                              const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t &inter);
-bool Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t &r, const bvh_node8_t *oct_nodes, uint32_t root_index,
+bool Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t &r, const mbvh_node_t *oct_nodes, uint32_t root_index,
                                              const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
                                              const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t &inter);
 bool Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t &r, const bvh_node_t *nodes, uint32_t root_index,
                                          const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
                                          const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t &inter);
-bool Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t &r, const bvh_node8_t *nodes, uint32_t root_index,
+bool Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t &r, const mbvh_node_t *nodes, uint32_t root_index,
                                          const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
                                          const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t &inter);
 // traditional bvh traversal with stack for inner nodes
 bool Traverse_MicroTree_WithStack_ClosestHit(const ray_packet_t &r, const float inv_d[3], const bvh_node_t *nodes, uint32_t root_index,
                                              const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, hit_data_t &inter);
-bool Traverse_MicroTree_WithStack_ClosestHit(const ray_packet_t &r, const float inv_d[3], const bvh_node8_t *nodes, uint32_t root_index,
+bool Traverse_MicroTree_WithStack_ClosestHit(const ray_packet_t &r, const float inv_d[3], const mbvh_node_t *nodes, uint32_t root_index,
                                              const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, hit_data_t &inter);
 bool Traverse_MicroTree_WithStack_AnyHit(const ray_packet_t &r, const float inv_d[3], const bvh_node_t *nodes, uint32_t root_index,
+                                         const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, hit_data_t &inter);
+bool Traverse_MicroTree_WithStack_AnyHit(const ray_packet_t &r, const float inv_d[3], const mbvh_node_t *nodes, uint32_t root_index,
                                          const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index, hit_data_t &inter);
 
 // BRDFs
@@ -135,7 +138,7 @@ simd_fvec3 TransformNormal(const simd_fvec3 &n, const float *inv_xform);
 simd_fvec2 TransformUV(const simd_fvec2 &uv, const simd_fvec2 &tex_atlas_size, const texture_t &t, int mip_level);
 
 // Sample Texture
-simd_fvec4 SampleNearest(const TextureAtlas &atlas, const texture_t &t, const simd_fvec2 &uvs, float lod);
+simd_fvec4 SampleNearest(const TextureAtlas &atlas, const texture_t &t, const simd_fvec2 &uvs, int lod);
 simd_fvec4 SampleBilinear(const TextureAtlas &atlas, const texture_t &t, const simd_fvec2 &uvs, int lod);
 simd_fvec4 SampleBilinear(const TextureAtlas &atlas, const simd_fvec2 &uvs, int page);
 simd_fvec4 SampleTrilinear(const TextureAtlas &atlas, const texture_t &t, const simd_fvec2 &uvs, float lod);
