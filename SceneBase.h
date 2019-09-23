@@ -99,6 +99,7 @@ struct tex_desc_t {
     const pixel_color8_t *data;     ///< Single byte RGBA pixel data
     int w,                          ///< Texture width
         h;                          ///< Texture height
+    bool is_srgb = true;
     bool generate_mipmaps;
 };
 
@@ -122,7 +123,8 @@ struct camera_desc_t {
     eFilterType filter = Tent;          ///< Reconstruction filter
     eDeviceType dtype = SRGB;           ///< Device type
     float origin[3];                    ///< Camera origin
-    float fwd[3];                       ///< Camera forward unit vector
+    float fwd[3] = {};                  ///< Camera forward unit vector
+    float up[3];                        ///< Camera up vector (optional)
     float fov, gamma = 1.0f;            ///< Field of view in degrees, gamma
     float focus_distance = 1.0f;        ///< Distance to focus point
     float focus_factor = 0.0f;          ///< Depth of field strength (in non-physical units)

@@ -123,7 +123,7 @@ void test_mesh_lights() {
             // mode 1 - with additional SH generation, different sampling method is used, so should be tested separately
 
             for (int mode = 0; mode < 2; mode++) {
-                for (auto rt : renderer_types) {
+                for (Ray::eRendererType rt : renderer_types) {
                     s.use_wide_bvh = bvh_type == 0 ? false : true;
 
                     renderer = Ray::CreateRenderer(s, rt);

@@ -63,8 +63,12 @@ uint32_t Ray::Ref::Scene::AddTexture(const tex_desc_t &_t) {
     uint32_t tex_index = (uint32_t)textures_.size();
 
     texture_t t;
-    t.size[0] = (uint16_t)_t.w;
-    t.size[1] = (uint16_t)_t.h;
+    t.width = (uint16_t)_t.w;
+    t.height = (uint16_t)_t.h;
+
+    if (_t.is_srgb) {
+        t.width |= TEXTURE_SRGB_BIT;
+    }
 
     int mip = 0;
     int res[2] = { _t.w, _t.h };

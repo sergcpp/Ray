@@ -67,7 +67,8 @@ typedef struct _mesh_instance_t {
 } mesh_instance_t;
 
 typedef struct _texture_t {
-    ushort size[2];
+    ushort width;   // First bit is used as srgb flag
+    ushort height;
     uchar page[NUM_MIP_LEVELS];
     ushort pos[NUM_MIP_LEVELS][2];
 } texture_t;

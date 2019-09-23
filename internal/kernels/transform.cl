@@ -46,7 +46,7 @@ float3 TransformNormal(const float3 n, const __global float16 *inv_xform) {
 
 float2 TransformUVs(float2 uv, const float2 tex_atlas_size, __global const texture_t *t, int mip_level) {
     float2 pos = (float2)((float)t->pos[mip_level][0], (float)t->pos[mip_level][1]);
-    float2 size = (float2)((float)(t->size[0] >> mip_level), (float)(t->size[1] >> mip_level));
+    float2 size = (float2)((float)((t->width & TEXTURE_WIDTH_BITS) >> mip_level), (float)(t->height >> mip_level));
     uv = uv - floor(uv);
     float2 res = pos + uv * size + (float2)(1.0f, 1.0f);
     res /= tex_atlas_size;

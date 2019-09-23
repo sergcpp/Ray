@@ -10,7 +10,9 @@ add_executable(test_Ray main.cpp
                         test_simd.cpp
                         test_simd.ipp
                         test_primary_ray_gen.cpp
+                        test_texture.cpp
                         test_scene1.h
+                        test_scene2.h
                         )
 
 target_link_libraries(test_Ray Ray)

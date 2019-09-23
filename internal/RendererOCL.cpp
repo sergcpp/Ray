@@ -125,6 +125,8 @@ Ray::Ocl::Renderer::Renderer(int w, int h, int platform_index, int device_index)
         s << "#define TRI_INV_NORMAL_BIT "      << int(TRI_INV_NORMAL_BIT) << "\n";
         s << "#define HIT_BIAS "                << HIT_BIAS << "f\n";
         s << "#define TEXTURE_ATLAS_SIZE "      << TEXTURE_ATLAS_SIZE << "\n";
+        s << "#define TEXTURE_SRGB_BIT "        << TEXTURE_SRGB_BIT << "\n";
+        s << "#define TEXTURE_WIDTH_BITS "      << TEXTURE_WIDTH_BITS << "\n";
 
         s << "#define HIT_EPS "                 << HIT_EPS << "f\n";
         s << "#define FLT_EPS "                 << FLT_EPS << "f\n";
@@ -203,7 +205,7 @@ Ray::Ocl::Renderer::Renderer(int w, int h, int platform_index, int device_index)
         }
 
         if (error != CL_SUCCESS) {
-            std::string build_log = program_.getBuildInfo<CL_PROGRAM_BUILD_LOG>(device_);
+            const std::string build_log = program_.getBuildInfo<CL_PROGRAM_BUILD_LOG>(device_);
 #if defined(_MSC_VER)
             __debugbreak();
 #endif
