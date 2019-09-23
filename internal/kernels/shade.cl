@@ -356,17 +356,19 @@ float4 ShadeSurface(const pass_info_t *pi, __global const float *halton,
     __global const texture_t *main_texture = &textures[mat->textures[MAIN_TEXTURE]];
     float albedo_lod = get_texture_lod(main_texture, surf_der.duv_dx, surf_der.duv_dy);
     float4 albedo = SampleTextureBilinear(texture_atlas, main_texture, uvs, (int)(albedo_lod));
-    albedo = srgb_to_rgb(albedo);
+    if (main_texture->width & TEXTURE_SRGB_BIT) {
+        albedo = srgb_to_rgb(albedo);
+    }
     albedo.xyz *= mat->main_color;
 
 )" // workaround for 16k string literal limitation on msvc
 R"(
 
-    int diff_depth = as_int(orig_ray->do_dx.w);
-    int gloss_depth = as_int(orig_ray->do_dy.w);
-    int refr_depth = as_int(orig_ray->dd_dx.w);
-    int transp_depth = as_int(orig_ray->dd_dy.w);
-    int total_depth = diff_depth + gloss_depth + refr_depth + transp_depth;
+    const int diff_depth = as_int(orig_ray->do_dx.w);
+    const int gloss_depth = as_int(orig_ray->do_dy.w);
+    const int refr_depth = as_int(orig_ray->dd_dx.w);
+    const int transp_depth = as_int(orig_ray->dd_dy.w);
+    const int total_depth = diff_depth + gloss_depth + refr_depth + transp_depth;
 
     const int cant_terminate = total_depth < pi->settings.termination_start_depth;
 

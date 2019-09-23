@@ -400,18 +400,16 @@ force_inline float fast_log2(float val) {
 }
 
 float get_texture_lod(const texture_t &t, const simd_fvec2 &duv_dx, const simd_fvec2 &duv_dy) {
-    const simd_fvec2 sz = { (float)t.size[0], (float)t.size[1] };
+    const simd_fvec2 sz = { (float)(t.width & TEXTURE_WIDTH_BITS), (float)t.height };
     const simd_fvec2 _duv_dx = duv_dx * sz, _duv_dy = duv_dy * sz;
+    const simd_fvec2 _diagonal = _duv_dx + _duv_dy;
 
-    // Find bounding box of ray footprint
-    const simd_fvec2
-        minuv = min(min(_duv_dx, _duv_dy), { 0.0f }),
-        maxuv = max(max(_duv_dx, _duv_dy), { 0.0f });
-
-    // Choose minimal side of bounds to choose lod
-    float lod = fast_log2(std::min(maxuv[0] - minuv[0], maxuv[1] - minuv[1]));
+    // Find minimal dimention of parallelogram
+    const float min_length2 = std::min(std::min(_duv_dx.length2(), _duv_dy.length2()), _diagonal.length2());
+    // Find lod
+    float lod = fast_log2(min_length2);
     // Substruct 1 from lod to keep 4 texels for interpolation
-    lod = clamp(lod - 1.0f, 0.0f, float(MAX_MIP_LEVEL));
+    lod = clamp(0.5f * lod - 1.0f, 0.0f, float(MAX_MIP_LEVEL));
 
     return lod;
 }
@@ -1632,7 +1630,7 @@ Ray::Ref::simd_fvec3 Ray::Ref::TransformNormal(const simd_fvec3 &n, const float 
 
 Ray::Ref::simd_fvec2 Ray::Ref::TransformUV(const simd_fvec2 &_uv, const simd_fvec2 &tex_atlas_size, const texture_t &t, int mip_level) {
     simd_fvec2 pos = { (float)t.pos[mip_level][0], (float)t.pos[mip_level][1] };
-    simd_fvec2 size = { (float)(t.size[0] >> mip_level), (float)(t.size[1] >> mip_level) };
+    simd_fvec2 size = { (float)((t.width & TEXTURE_WIDTH_BITS) >> mip_level), (float)(t.height >> mip_level) };
     simd_fvec2 uv = _uv - floor(_uv);
     simd_fvec2 res = pos + uv * size + 1.0f;
     res /= tex_atlas_size;
@@ -1707,7 +1705,8 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleTrilinear(const TextureAtlas &atlas, const 
 }
 
 Ray::Ref::simd_fvec4 Ray::Ref::SampleAnisotropic(const TextureAtlas &atlas, const texture_t &t, const simd_fvec2 &uvs, const simd_fvec2 &duv_dx, const simd_fvec2 &duv_dy) {
-    simd_fvec2 sz = { (float)t.size[0], (float)t.size[1] };
+    int width = int(t.width & TEXTURE_WIDTH_BITS);
+    simd_fvec2 sz = { (float)width, (float)t.height };
 
     simd_fvec2 _duv_dx = abs(duv_dx * sz);
     simd_fvec2 _duv_dy = abs(duv_dy * sz);
@@ -1746,10 +1745,10 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleAnisotropic(const TextureAtlas &atlas, cons
     int page2 = t.page[lod2];
 
     simd_fvec2 pos1 = simd_fvec2{ (float)t.pos[lod1][0], (float)t.pos[lod1][1] } + 0.5f;
-    simd_fvec2 size1 = { (float)(t.size[0] >> lod1), (float)(t.size[1] >> lod1) };
+    simd_fvec2 size1 = { (float)(width >> lod1), (float)(t.height >> lod1) };
 
     simd_fvec2 pos2 = simd_fvec2{ (float)t.pos[lod2][0], (float)t.pos[lod2][1] } + 0.5f;
-    simd_fvec2 size2 = { (float)(t.size[0] >> lod2), (float)(t.size[1] >> lod2) };
+    simd_fvec2 size2 = { (float)(width >> lod2), (float)(t.height >> lod2) };
 
     const float kz = lod - std::floor(lod);
 
@@ -1777,7 +1776,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleLatlong_RGBE(const TextureAtlas &atlas, con
     if (dir[2] < 0.0f) u = 1.0f - u;
 
     simd_fvec2 pos = { (float)t.pos[0][0], (float)t.pos[0][1] },
-               size = { (float)(t.size[0] ), (float)(t.size[1]) };
+               size = { (float)((t.width & TEXTURE_WIDTH_BITS) ), (float)(t.height) };
 
     simd_fvec2 uvs = pos + simd_fvec2{ u, theta } * size + simd_fvec2{ 1.0f, 1.0f };
 
@@ -2174,18 +2173,20 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
     const texture_t &main_texture = sc.textures[mat->textures[MAIN_TEXTURE]];
     const float albedo_lod = get_texture_lod(main_texture, surf_der.duv_dx, surf_der.duv_dy);
     simd_fvec4 albedo = SampleBilinear(tex_atlas, main_texture, uvs, (int)albedo_lod);
-    albedo = srgb_to_rgb(albedo);
+    if (main_texture.width & TEXTURE_SRGB_BIT) {
+        albedo = srgb_to_rgb(albedo);
+    }
     albedo[0] *= mat->main_color[0];
     albedo[1] *= mat->main_color[1];
     albedo[2] *= mat->main_color[2];
 
     simd_fvec3 col = { 0.0f };
 
-    int diff_depth = ray.ray_depth & 0x000000ff;
-    int gloss_depth = (ray.ray_depth >> 8) & 0x000000ff;
-    int refr_depth = (ray.ray_depth >> 16) & 0x000000ff;
-    int transp_depth = (ray.ray_depth >> 24) & 0x000000ff;
-    int total_depth = diff_depth + gloss_depth + refr_depth + transp_depth;
+    const int diff_depth = ray.ray_depth & 0x000000ff;
+    const int gloss_depth = (ray.ray_depth >> 8) & 0x000000ff;
+    const int refr_depth = (ray.ray_depth >> 16) & 0x000000ff;
+    const int transp_depth = (ray.ray_depth >> 24) & 0x000000ff;
+    const int total_depth = diff_depth + gloss_depth + refr_depth + transp_depth;
 
     const bool cant_terminate = total_depth < pi.settings.termination_start_depth;
 

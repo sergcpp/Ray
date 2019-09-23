@@ -790,6 +790,11 @@ force_inline simd_fvec<S> length(const simd_fvec<S> v[3]) {
 }
 
 template <int S>
+force_inline simd_fvec<S> length2_2d(const simd_fvec<S> v[2]) {
+    return v[0] * v[0] + v[1] * v[1];
+}
+
+template <int S>
 force_inline simd_fvec<S> clamp(const simd_fvec<S> &v, float min, float max) {
     simd_fvec<S> ret = v;
     where(ret < min, ret) = min;
@@ -918,28 +923,31 @@ force_inline float fast_log2(float val) {
 
 template <int S>
 simd_fvec<S> get_texture_lod(const texture_t &t, const simd_fvec<S> duv_dx[2], const simd_fvec<S> duv_dy[2], const simd_ivec<S> &mask) {
+    const int width = int(t.width & TEXTURE_WIDTH_BITS),
+              height = int(t.height);
+
     const simd_fvec<S> _duv_dx[2] = {
-        duv_dx[0] * (float)t.size[0],
-        duv_dx[1] * (float)t.size[1]
+        duv_dx[0] * (float)width,
+        duv_dx[1] * (float)height
     };
 
     const simd_fvec<S> _duv_dy[2] = {
-        duv_dy[0] * (float)t.size[0],
-        duv_dy[1] * (float)t.size[1]
+        duv_dy[0] * (float)width,
+        duv_dy[1] * (float)height
     };
 
-    const simd_fvec<S>
-        minuv[2] = { min(min(_duv_dx[0], _duv_dy[0]), { 0.0f }), min(min(_duv_dx[1], _duv_dy[1]), { 0.0f }) },
-        maxuv[2] = { max(max(_duv_dx[0], _duv_dy[0]), { 0.0f }), max(max(_duv_dx[1], _duv_dy[1]), { 0.0f }) };
+    const simd_fvec<S> _diagonal[2] = {
+        _duv_dx[0] + _duv_dy[0],
+        _duv_dx[1] + _duv_dy[1]
+    };
 
-    const simd_fvec<S>
-        dimuv[2] = { maxuv[0] - minuv[0], maxuv[1] - minuv[1] };
+    const simd_fvec<S> dim = min(min(length2_2d(_duv_dx), length2_2d(_duv_dy)), length2_2d(_diagonal));
 
     simd_fvec<S> lod;
 
     ITERATE(S, {
         if (reinterpret_cast<const simd_ivec<S>&>(mask)[i]) {
-            lod[i] = fast_log2(std::min(dimuv[0][i], dimuv[1][i])) - 1.0f;
+            lod[i] = 0.5f * fast_log2(dim[i]) - 1.0f;
         } else {
             lod[i] = 0.0f;
         }
@@ -2454,7 +2462,7 @@ void Ray::NS::TransformUVs(const simd_fvec<S> uvs[2], float sx, float sy, const 
     ITERATE(S, { ipos[0][i] = (int)t.pos[mip_level[i]][0];
                  ipos[1][i] = (int)t.pos[mip_level[i]][1]; });
 
-    simd_ivec<S> isize[2] = { (int)t.size[0], (int)t.size[1] };
+    simd_ivec<S> isize[2] = { (int)(t.width & TEXTURE_WIDTH_BITS), (int)t.height };
 
     out_res[0] = (static_cast<simd_fvec<S>>(ipos[0]) + (uvs[0] - floor(uvs[0])) * static_cast<simd_fvec<S>>(isize[0] >> mip_level) + 1.0f) / sx;
     out_res[1] = (static_cast<simd_fvec<S>>(ipos[1]) + (uvs[1] - floor(uvs[1])) * static_cast<simd_fvec<S>>(isize[1] >> mip_level) + 1.0f) / sy;
@@ -2591,13 +2599,16 @@ void Ray::NS::SampleTrilinear(const Ref::TextureAtlas &atlas, const texture_t &t
 
 template <int S>
 void Ray::NS::SampleAnisotropic(const Ref::TextureAtlas &atlas, const texture_t &t, const simd_fvec<S> uvs[2], const simd_fvec<S> duv_dx[2], const simd_fvec<S> duv_dy[2], const simd_ivec<S> &mask, simd_fvec<S> out_rgba[4]) {
-    simd_fvec<S> _duv_dx[2] = { abs(duv_dx[0] * (float)t.size[0]),
-                                abs(duv_dx[1] * (float)t.size[1]) };
+    int width = int(t.width & TEXTURE_WIDTH_BITS),
+        height = int(t.height);
+    
+    simd_fvec<S> _duv_dx[2] = { abs(duv_dx[0] * (float)width),
+                                abs(duv_dx[1] * (float)height) };
 
     simd_fvec<S> l1 = sqrt(_duv_dx[0] * _duv_dx[0] + _duv_dx[1] * _duv_dx[1]);
 
-    simd_fvec<S> _duv_dy[2] = { abs(duv_dy[0] * (float)t.size[0]),
-                                abs(duv_dy[1] * (float)t.size[1]) };
+    simd_fvec<S> _duv_dy[2] = { abs(duv_dy[0] * (float)(t.width & TEXTURE_WIDTH_BITS)),
+                                abs(duv_dy[1] * (float)t.height) };
 
     simd_fvec<S> l2 = sqrt(_duv_dy[0] * _duv_dy[0] + _duv_dy[1] * _duv_dy[1]);
 
@@ -2649,10 +2660,10 @@ void Ray::NS::SampleAnisotropic(const Ref::TextureAtlas &atlas, const texture_t 
         pos1[1][i] = t.pos[lod1[i]][1] + 0.5f;
         pos2[0][i] = t.pos[lod2[i]][0] + 0.5f;
         pos2[1][i] = t.pos[lod2[i]][1] + 0.5f;
-        size1[0][i] = float(t.size[0] >> lod1[i]);
-        size1[1][i] = float(t.size[1] >> lod1[i]);
-        size2[0][i] = float(t.size[0] >> lod2[i]);
-        size2[1][i] = float(t.size[1] >> lod2[i]);
+        size1[0][i] = float(width >> lod1[i]);
+        size1[1][i] = float(height >> lod1[i]);
+        size2[0][i] = float(width >> lod2[i]);
+        size2[1][i] = float(height >> lod2[i]);
     })
 
     const simd_fvec<S> kz = lod - floor(lod);
@@ -2705,8 +2716,8 @@ void Ray::NS::SampleLatlong_RGBE(const Ref::TextureAtlas &atlas, const texture_t
 
     where(dir[2] < 0.0f, u) = 1.0f - u;
 
-    simd_fvec<S> uvs[2] = { u * t.size[0] + float(t.pos[0][0]) + 1.0f,
-                            theta * t.size[1] + float(t.pos[0][1]) + 1.0f };
+    simd_fvec<S> uvs[2] = { u * float(t.width & TEXTURE_WIDTH_BITS) + float(t.pos[0][0]) + 1.0f,
+                            theta * t.height + float(t.pos[0][1]) + 1.0f };
 
     const simd_fvec<S> k[2] = { uvs[0] - floor(uvs[0]), uvs[1] - floor(uvs[1]) };
 
@@ -3522,8 +3533,10 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
             ITERATE_3({
                 const simd_fvec<S> temp = tex_albedo[i];
 
-                tex_albedo[i] = tex_albedo[i] / 12.92f;
-                where(temp > 0.04045f, tex_albedo[i]) = pow((temp + 0.055f) / 1.055f, 2.4f);
+                if (main_texture.width & TEXTURE_SRGB_BIT) {
+                    tex_albedo[i] = tex_albedo[i] / 12.92f;
+                    where(temp > 0.04045f, tex_albedo[i]) = pow((temp + 0.055f) / 1.055f, 2.4f);
+                }
 
                 tex_albedo[i] *= mat->main_color[i];
             })

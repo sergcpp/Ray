@@ -97,8 +97,12 @@ const int MAX_TEXTURE_SIZE = (1 << NUM_MIP_LEVELS);
 
 const int TEXTURE_ATLAS_SIZE = 8192;
 
+const int TEXTURE_SRGB_BIT   = 0b1000000000000000;
+const int TEXTURE_WIDTH_BITS = 0b0111111111111111;
+
 struct texture_t {
-    uint16_t size[2];
+    uint16_t width;  // first bit is used as srgb flag
+    uint16_t height;
     uint8_t page[NUM_MIP_LEVELS];
     uint16_t pos[NUM_MIP_LEVELS][2];
 };
@@ -191,7 +195,8 @@ uint32_t FlattenBVH_Recursive(const bvh_node_t *nodes, uint32_t node_index, uint
 
 bool NaiivePluckerTest(const float p[9], const float o[3], const float d[3]);
 
-void ConstructCamera(eCamType type, eFilterType filter, eDeviceType dtype, const float origin[3], const float fwd[3], float fov, float gamma, float focus_distance, float focus_factor, camera_t *cam);
+void ConstructCamera(eCamType type, eFilterType filter, eDeviceType dtype, const float origin[3], const float fwd[3], const float up[3],
+                     float fov, float gamma, float focus_distance, float focus_factor, camera_t *cam);
 
 // Applies 4x4 matrix matrix transform to bounding box
 void TransformBoundingBox(const float bbox_min[3], const float bbox_max[3], const float *xform, float out_bbox_min[3], float out_bbox_max[3]);

@@ -174,11 +174,11 @@ bool Ray::PreprocessTri(const float *p, int stride, tri_accel_t *acc) {
                  };
 
     int w = 2, u = 0, v = 1;
-    if (std::abs(n[0]) > std::abs(n[1]) && std::abs(n[0]) > std::abs(n[2])) {
+    if (std::abs(n[0]) >= std::abs(n[1]) && std::abs(n[0]) >= std::abs(n[2])) {
         w = 0;
         u = 1;
         v = 2;
-    } else if (std::abs(n[1]) > std::abs(n[0]) && std::abs(n[1]) > std::abs(n[2])) {
+    } else if (std::abs(n[1]) >= std::abs(n[0]) && std::abs(n[1]) >= std::abs(n[2])) {
         w = 1;
         u = 0;
         v = 2;
@@ -853,13 +853,20 @@ bool Ray::NaiivePluckerTest(const float p[9], const float o[3], const float d[3]
     return (t0 <= 0 && t1 <= 0 && t2 <= 0) || (t0 >= 0 && t1 >= 0 && t2 >= 0);
 }
 
-void Ray::ConstructCamera(eCamType type, eFilterType filter, eDeviceType dtype, const float origin[3], const float fwd[3], float fov, float gamma, float focus_distance, float focus_factor, camera_t *cam) {
+void Ray::ConstructCamera(eCamType type, eFilterType filter, eDeviceType dtype, const float origin[3], const float fwd[3], const float up[3],
+                          float fov, float gamma, float focus_distance, float focus_factor, camera_t *cam) {
     if (type == Persp) {
-        Ref::simd_fvec3 o = { origin };
-        Ref::simd_fvec3 f = { fwd };
-        Ref::simd_fvec3 u = { 0, 1, 0 };
+        Ref::simd_fvec3 o = { origin }, f = { fwd }, u = { up };
 
-        Ref::simd_fvec3 s = normalize(cross(f, u));
+        if (u.length2() < FLT_EPS) {
+            if (std::abs(f[1]) >= 0.999f) {
+                u = { 1.0f, 0.0f, 0.0f };
+            } else {
+                u = { 0.0f, 1.0f, 0.0f };
+            }
+        }
+
+        const Ref::simd_fvec3 s = normalize(cross(f, u));
         u = cross(s, f);
 
         cam->type = type;
