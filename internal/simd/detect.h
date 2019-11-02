@@ -8,6 +8,7 @@
 inline void cpuid(int info[4], int InfoType) {
     __cpuid_count(InfoType, 0, info[0], info[1], info[2], info[3]);
 }
+#if defined(__GNUC__) && (__GNUC__ < 9)
 inline unsigned long long _xgetbv(unsigned int index) {
     unsigned int eax, edx;
     __asm__ __volatile__(
@@ -17,6 +18,7 @@ inline unsigned long long _xgetbv(unsigned int index) {
     );
     return ((unsigned long long)edx << 32) | eax;
 }
+#endif
 #else
 #define cpuid(info, x)    __cpuidex(info, x, 0)
 #endif
@@ -29,6 +31,7 @@ inline unsigned long long _xgetbv(unsigned int index) {
 inline void cpuid(int info[4], int InfoType) {
     __cpuid_count(InfoType, 0, info[0], info[1], info[2], info[3]);
 }
+#if defined(__GNUC__) && (__GNUC__ < 9)
 inline unsigned long long _xgetbv(unsigned int index) {
     unsigned int eax, edx;
     __asm__ __volatile__(
@@ -39,20 +42,20 @@ inline unsigned long long _xgetbv(unsigned int index) {
     return ((unsigned long long)edx << 32) | eax;
 }
 #endif
+#endif
 
 #endif
 
 namespace Ray {
     struct CpuFeatures {
-        bool sse2_supported, avx_supported, avx2_supported;
+        bool
+            sse2_supported = false,
+            avx_supported = false,
+            avx2_supported = false;
     };
 
     inline CpuFeatures GetCpuFeatures() {
         CpuFeatures ret;
-
-        ret.sse2_supported = false;
-        ret.avx_supported = false;
-        ret.avx2_supported = false;
 #if !defined(__ANDROID__)
         int info[4];
         cpuid(info, 0);
