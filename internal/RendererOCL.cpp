@@ -188,7 +188,7 @@ Ray::Ocl::Renderer::Renderer(int w, int h, int platform_index, int device_index)
         if (error != CL_SUCCESS) throw std::runtime_error("Cannot create OpenCL renderer!");
 
         //std::string build_opts = "-Werror -cl-strict-aliasing -cl-mad-enable -cl-no-signed-zeros -cl-fast-relaxed-math ";// = "-cl-opt-disable ";
-        std::string build_opts = "-cl-strict-aliasing -cl-mad-enable -cl-no-signed-zeros -cl-fast-relaxed-math ";// = "-cl-opt-disable ";
+        std::string build_opts = "-cl-mad-enable -cl-no-signed-zeros -cl-fast-relaxed-math ";// = "-cl-opt-disable ";
 
         struct stat info = { 0 };
         if (stat("./.dumps", &info) == 0 && info.st_mode & S_IFDIR) {
