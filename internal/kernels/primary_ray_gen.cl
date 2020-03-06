@@ -20,7 +20,7 @@ float construct_float(uint m) {
 }
 
 float3 get_cam_dir(const float x, const float y, float3 origin, __constant camera_t *cam, int w, int h, float prop) {
-    float k = native_tan(0.5f * cam->origin.w * PI / 180.0f) * cam->side.w;
+    float k = tan(0.5f * cam->origin.w * PI / 180.0f) * cam->side.w;
     float3 p = (float3)(2 * k * x / w - k, 2 * k * -y / h + k, cam->side.w);
     p = cam->origin.xyz + prop * p.x * cam->side.xyz + p.y * cam->up.xyz + p.z * cam->fwd.xyz;
     return fast_normalize(p - origin);
