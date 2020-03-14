@@ -149,7 +149,7 @@ void test_texture() {
                         uint8_t r = uint8_t(p.r * 255);
                         uint8_t g = uint8_t(p.g * 255);
                         uint8_t b = uint8_t(p.b * 255);
-                        uint8_t a = uint8_t(p.a * 255);
+                        //uint8_t a = uint8_t(p.a * 255);
 
                         img_data_u8[3 * ((ImgRes - j - 1) * ImgRes + i) + 0] = r;
                         img_data_u8[3 * ((ImgRes - j - 1) * ImgRes + i) + 1] = g;

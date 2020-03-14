@@ -437,9 +437,9 @@ void Ray::Ocl::Renderer::RenderScene(const std::shared_ptr<SceneBase> &_s, Regio
         s->nodes_.Get(macro_tree_root, root_node);
     }
 
-    cl_float3 root_min = { root_node.bbox_min[0], root_node.bbox_min[1], root_node.bbox_min[2] },
-              root_max = { root_node.bbox_max[0], root_node.bbox_max[1], root_node.bbox_max[2] };
-    cl_float3 cell_size = { (root_max.s[0] - root_min.s[0]) / 255, (root_max.s[1] - root_min.s[1]) / 255, (root_max.s[2] - root_min.s[2]) / 255 };
+    cl_float3 root_min = { { root_node.bbox_min[0], root_node.bbox_min[1], root_node.bbox_min[2] } },
+    root_max = { { root_node.bbox_max[0], root_node.bbox_max[1], root_node.bbox_max[2] } };
+    cl_float3 cell_size = { { (root_max.s[0] - root_min.s[0]) / 255, (root_max.s[1] - root_min.s[1]) / 255, (root_max.s[2] - root_min.s[2]) / 255 } };
 
     region.iteration++;
     if (!region.halton_seq || region.iteration % HALTON_SEQ_LEN == 0) {

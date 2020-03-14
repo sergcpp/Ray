@@ -863,8 +863,8 @@ force_inline simd_ivec<S> get_ray_hash(const ray_packet_t<S> &r, const simd_ivec
             x[i] = morton_table_256[x[i]];
             y[i] = morton_table_256[y[i]];
             z[i] = morton_table_256[z[i]];
-            o[i] = morton_table_16[omega_table[omega_index[i]]];
-            p[i] = morton_table_16[phi_table[phi_index_i[i]][phi_index_j[i]]];
+            o[i] = morton_table_16[(int)omega_table[omega_index[i]]];
+            p[i] = morton_table_16[(int)phi_table[phi_index_i[i]][phi_index_j[i]]];
         } else {
             o[i] = p[i] = 0xFFFFFFFF;
             x[i] = y[i] = z[i] = 0xFFFFFFFF;
@@ -914,7 +914,7 @@ force_inline float fast_log2(float val) {
     // From https://stackoverflow.com/questions/9411823/fast-log2float-x-implementation-c
 
     union { float val; int32_t x; } u = { val };
-    register float log_2 = (float)(((u.x >> 23) & 255) - 128);
+    float log_2 = (float)(((u.x >> 23) & 255) - 128);
     u.x &= ~(255 << 23);
     u.x += 127 << 23;
     log_2 += ((-0.34484843f) * u.val + 2.02466578f) * u.val - 0.67487759f;
@@ -2853,7 +2853,7 @@ Ray::NS::simd_fvec<S> Ray::NS::ComputeVisibility(const simd_fvec<S> p1[3], const
         sh_N[1] = n1[1] * w + n2[1] * sh_inter.u + n3[1] * sh_inter.v;
         sh_N[2] = n1[2] * w + n2[2] * sh_inter.u + n3[2] * sh_inter.v;
 
-        simd_fvec<S> _dot_I_N = dot(I, sh_N);
+        //simd_fvec<S> _dot_I_N = dot(I, sh_N);
 
         simd_fvec<S> sh_uvs[2] = { u1[0] * w + u2[0] * sh_inter.u + u3[0] * sh_inter.v,
             u1[1] * w + u2[1] * sh_inter.u + u3[1] * sh_inter.v };

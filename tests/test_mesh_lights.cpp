@@ -128,7 +128,7 @@ void test_mesh_lights() {
 
                     renderer = Ray::CreateRenderer(s, rt);
 
-                    auto scene = renderer->CreateScene();
+                    std::shared_ptr<Ray::SceneBase> scene = renderer->CreateScene();
 
                     Ray::camera_desc_t cam_desc;
                     cam_desc.type = Ray::Persp;
@@ -146,38 +146,41 @@ void test_mesh_lights() {
                         cam_desc.output_sh = true;
                     }
 
-                    uint32_t cam = scene->AddCamera(cam_desc);
+                    const uint32_t cam = scene->AddCamera(cam_desc);
                     scene->set_current_cam(cam);
 
                     scene->SetEnvironment(env_desc);
 
-                    uint32_t t1 = scene->AddTexture(tex_desc1);
+                    const uint32_t t1 = scene->AddTexture(tex_desc1);
 
                     mat_desc1.main_texture = t1;
-                    uint32_t m1 = scene->AddMaterial(mat_desc1);
+                    const uint32_t m1 = scene->AddMaterial(mat_desc1);
 
                     mat_desc2.main_texture = t1;
-                    uint32_t m2 = scene->AddMaterial(mat_desc2);
+                    const uint32_t m2 = scene->AddMaterial(mat_desc2);
 
                     mat_desc3.main_texture = t1;
-                    uint32_t m3 = scene->AddMaterial(mat_desc3);
+                    const uint32_t m3 = scene->AddMaterial(mat_desc3);
 
                     mat_desc4.main_texture = t1;
-                    uint32_t m4 = scene->AddMaterial(mat_desc4);
+                    const uint32_t m4 = scene->AddMaterial(mat_desc4);
 
                     mesh_desc.shapes.push_back({ m1, groups[0], groups[1] });
                     mesh_desc.shapes.push_back({ m2, groups[2], groups[3] });
                     mesh_desc.shapes.push_back({ m3, groups[4], groups[5] });
                     mesh_desc.shapes.push_back({ m4, groups[6], groups[7] });
 
-                    uint32_t mesh = scene->AddMesh(mesh_desc);
+                    const uint32_t mesh = scene->AddMesh(mesh_desc);
 
-                    float xform[16] = { 1.0f, 0.0f, 0.0f, 0.0f,
-                                        0.0f, 1.0f, 0.0f, 0.0f,
-                                        0.0f, 0.0f, 1.0f, 0.0f,
-                                        0.0f, 0.0f, 0.0f, 1.0f };
+                    const float xform[16] = {
+                        1.0f, 0.0f, 0.0f, 0.0f,
+                        0.0f, 1.0f, 0.0f, 0.0f,
+                        0.0f, 0.0f, 1.0f, 0.0f,
+                        0.0f, 0.0f, 0.0f, 1.0f
+                    };
 
-                    uint32_t mesh_instance = scene->AddMeshInstance(mesh, xform);
+                    const uint32_t mesh_instance = scene->AddMeshInstance(mesh, xform);
+                    (void)mesh_instance;
 
                     renderer->Clear();
 
@@ -214,7 +217,7 @@ void test_mesh_lights() {
                             uint8_t r = uint8_t(p.r * 255);
                             uint8_t g = uint8_t(p.g * 255);
                             uint8_t b = uint8_t(p.b * 255);
-                            uint8_t a = uint8_t(p.a * 255);
+                            //uint8_t a = uint8_t(p.a * 255);
 
                             img_data_u8[3 * ((img_h - j - 1) * img_w + i) + 0] = r;
                             img_data_u8[3 * ((img_h - j - 1) * img_w + i) + 1] = g;
@@ -226,7 +229,7 @@ void test_mesh_lights() {
                         }
                     }
 
-                    double d = double(diff) / (img_w * img_h * 3);
+                    const double d = double(diff) / (img_w * img_h * 3);
 
                     printf("Error: %f\n", d);
 

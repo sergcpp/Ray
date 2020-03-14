@@ -21,7 +21,7 @@ public:
         : Vector(cl::Context::getDefault(), cl::CommandQueue::getDefault(), flags, capacity) {
     }
     Vector(const cl::Context &context, const cl::CommandQueue &queue, cl_mem_flags flags, size_t capacity = 16, size_t max_img_buf_size = 0)
-        : context_(context), queue_(queue), flags_(flags), size_(0), cap_(capacity), max_img_buf_size_(max_img_buf_size){
+        : context_(context), queue_(queue), max_img_buf_size_(max_img_buf_size), flags_(flags), size_(0), cap_(capacity) {
         cl_int error = CL_SUCCESS;
         buf_ = cl::Buffer(context_, flags_, sizeof(T) * cap_, nullptr, &error);
         if (error != CL_SUCCESS) throw std::runtime_error("Cannot allocate OpenCL buffer!");

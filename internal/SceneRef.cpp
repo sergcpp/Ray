@@ -157,8 +157,8 @@ uint32_t Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
     meshes_.emplace_back();
     mesh_t &m = meshes_.back();
     
-    uint32_t tris_start = (uint32_t)tris_.size(),
-             tri_index_start = (uint32_t)tri_indices_.size();
+    const uint32_t tris_start = (uint32_t)tris_.size();
+    //const uint32_t tri_index_start = (uint32_t)tri_indices_.size();
 
     bvh_settings_t s;
     s.node_traversal_cost = 0.025f;

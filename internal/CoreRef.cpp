@@ -326,8 +326,8 @@ force_inline uint32_t get_ray_hash(const ray_packet_t &r, const float root_min[3
     y = morton_table_256[y];
     z = morton_table_256[z];
 
-    int o = morton_table_16[omega_table[clamp(int((1.0f + r.d[2]) / omega_step), 0, 32)]];
-    int p = morton_table_16[phi_table[clamp(int((1.0f + r.d[1]) / phi_step), 0, 16)][clamp(int((1.0f + r.d[0]) / phi_step), 0, 16)]];
+    int o = morton_table_16[(int)omega_table[clamp(int((1.0f + r.d[2]) / omega_step), 0, 32)]];
+    int p = morton_table_16[(int)phi_table[clamp(int((1.0f + r.d[1]) / phi_step), 0, 16)][clamp(int((1.0f + r.d[0]) / phi_step), 0, 16)]];
 
     return (o << 25) | (p << 24) | (y << 2) | (z << 1) | (x << 0);
 }
@@ -392,7 +392,7 @@ force_inline float fast_log2(float val) {
     // From https://stackoverflow.com/questions/9411823/fast-log2float-x-implementation-c
 
     union { float val; int32_t x; } u = { val };
-    register float log_2 = (float)(((u.x >> 23) & 255) - 128);
+    float log_2 = (float)(((u.x >> 23) & 255) - 128);
     u.x &= ~(255 << 23);
     u.x += 127 << 23;
     log_2 += ((-0.34484843f) * u.val + 2.02466578f) * u.val - 0.67487759f;
@@ -1839,7 +1839,7 @@ float Ray::Ref::ComputeVisibility(const simd_fvec3 &p1, const simd_fvec3 &p2, co
         const auto I = simd_fvec3(r.d);
 
         float w = 1.0f - sh_inter.u - sh_inter.v;
-        simd_fvec3 sh_N = simd_fvec3(v1.n) * w + simd_fvec3(v2.n) * sh_inter.u + simd_fvec3(v3.n) * sh_inter.v;
+        //simd_fvec3 sh_N = simd_fvec3(v1.n) * w + simd_fvec3(v2.n) * sh_inter.u + simd_fvec3(v3.n) * sh_inter.v;
         simd_fvec2 sh_uvs = simd_fvec2(v1.t[0]) * w + simd_fvec2(v2.t[0]) * sh_inter.u + simd_fvec2(v3.t[0]) * sh_inter.v;
 
         simd_fvec3 sh_plane_N;

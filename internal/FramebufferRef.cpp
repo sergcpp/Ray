@@ -13,7 +13,7 @@ void Ray::Ref::Framebuffer::Resize(int w, int h, bool alloc_sh) {
     if (alloc_sh) {
         size_t buf_size = (size_t)w * h;
         if (sh_data_.size() != buf_size) {
-            sh_data_.resize(buf_size, { 0 });
+            sh_data_.resize(buf_size, {});
         }
     } else {
         sh_data_.clear();
