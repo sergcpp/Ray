@@ -209,6 +209,17 @@ public:
         vec_ = vreinterpretq_f32_s32(vorrq_s32(temp1, temp2));
     }
 
+    force_inline int movemask() const {
+        // Taken from sse2neon
+        uint32x4_t input = vreinterpretq_u32_f32(vec_);
+        // Shift out everything but the sign bits with a 32-bit unsigned shift right.
+        uint64x2_t high_bits = vreinterpretq_u64_u32(vshrq_n_u32(input, 31));
+        // Merge the two pairs together with a 64-bit unsigned shift right + add.
+        uint8x16_t paired = vreinterpretq_u8_u64(vsraq_n_u64(high_bits, high_bits, 31));
+        // Extract the result.
+        return vgetq_lane_u8(paired, 0) | (vgetq_lane_u8(paired, 8) << 2);
+    }
+
     force_inline static simd_vec<float, 4> min(const simd_vec<float, 4> &v1, const simd_vec<float, 4> &v2) {
         simd_vec<float, 4> temp;
         temp.vec_ = vminq_f32(v1.vec_, v2.vec_);
@@ -526,6 +537,17 @@ public:
         int32x4_t temp1 = vandq_s32(vec_, mask.vec_);
         int32x4_t temp2 = vbicq_s32(v1.vec_, mask.vec_);
         vec_ = vorrq_s32(temp1, temp2);
+    }
+
+    force_inline int movemask() const {
+        // Taken from sse2neon
+        uint32x4_t input = vreinterpretq_u32_s32(vec_);
+        // Shift out everything but the sign bits with a 32-bit unsigned shift right.
+        uint64x2_t high_bits = vreinterpretq_u64_u32(vshrq_n_u32(input, 31));
+        // Merge the two pairs together with a 64-bit unsigned shift right + add.
+        uint8x16_t paired = vreinterpretq_u8_u64(vsraq_n_u64(high_bits, high_bits, 31));
+        // Extract the result.
+        return vgetq_lane_u8(paired, 0) | (vgetq_lane_u8(paired, 8) << 2);
     }
 
     force_inline bool all_zeros() const {
