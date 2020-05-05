@@ -91,9 +91,9 @@ struct alignas(32) mbvh_node_t {
 };
 static_assert(sizeof(mbvh_node_t) == 224, "!");
 
-const int MAX_MIP_LEVEL = 11;
-const int NUM_MIP_LEVELS = MAX_MIP_LEVEL + 1;
-const int MAX_TEXTURE_SIZE = (1 << NUM_MIP_LEVELS);
+const int NUM_MIP_LEVELS = 14;
+const int MAX_MIP_LEVEL = NUM_MIP_LEVELS - 1;
+const int MAX_TEXTURE_SIZE = (1 << MAX_MIP_LEVEL);
 
 const int TEXTURE_ATLAS_SIZE = 8192;
 
@@ -106,7 +106,7 @@ struct texture_t {
     uint8_t page[NUM_MIP_LEVELS];
     uint16_t pos[NUM_MIP_LEVELS][2];
 };
-static_assert(sizeof(texture_t) == 64, "!");
+static_assert(sizeof(texture_t) == 74, "!");
 
 const int MAX_MATERIAL_TEXTURES = 4;
 
