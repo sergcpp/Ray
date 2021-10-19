@@ -6,7 +6,7 @@
 
 namespace Ray {
 namespace NS {
-
+#ifndef vdivq_f32
 force_inline float32x4_t vdivq_f32(float32x4_t num, float32x4_t den) {
     const float32x4_t q_inv0 = vrecpeq_f32(den);
     const float32x4_t q_step0 = vrecpsq_f32(q_inv0, den);
@@ -14,7 +14,7 @@ force_inline float32x4_t vdivq_f32(float32x4_t num, float32x4_t den) {
     const float32x4_t q_inv1 = vmulq_f32(q_step0, q_inv0);
     return vmulq_f32(num, q_inv1);
 }
-
+#endif
 force_inline int32x4_t neon_cvt_f32_to_s32(float32x4_t a) {
 #if defined(__aarch64__)
     return vcvtnq_s32_f32(a);
@@ -52,7 +52,8 @@ public:
         vec_ = vdupq_n_f32(f);
     }
     force_inline simd_vec(float f1, float f2, float f3, float f4) {
-        vec_ = float32x4_t{ f1, f2, f3, f4 };
+        const float init[4] = {f1, f2, f3, f4};
+        vec_ = vld1q_f32(init);
     }
     force_inline simd_vec(const float *f) {
         vec_ = vld1q_f32(f);
@@ -63,7 +64,7 @@ public:
     }
 
     force_inline float &operator[](int i) { return comp_[i]; }
-    force_inline float operator[](int i) const { return comp_[i]; }
+    force_inline const float &operator[](int i) const { return comp_[i]; }
 
     force_inline simd_vec<float, 4> &operator+=(const simd_vec<float, 4> &rhs) {
         vec_ = vaddq_f32(vec_, rhs.vec_);
@@ -177,8 +178,12 @@ public:
 
     force_inline simd_vec<float, 4> sqrt() const {
         simd_vec<float, 4> temp;
-        float32x4_t recipsq = vrsqrteq_f32(vec_);
-        temp.vec_ = vrecpeq_f32(recipsq);
+        // This is not precise enough :(
+        //float32x4_t recipsq = vrsqrteq_f32(vec_);
+        //temp.vec_ = vrecpeq_f32(recipsq);
+
+        ITERATE(4, { temp.comp_[i] = std::sqrt(comp_[i]); })
+
         return temp;
     }
 
@@ -387,7 +392,8 @@ public:
         vec_ = vdupq_n_s32(f);
     }
     force_inline simd_vec(int i1, int i2, int i3, int i4) {
-        vec_ = int32x4_t{ i1, i2, i3, i4 };
+        const int init[4] = {i1, i2, i3, i4};
+        vec_ = vld1q_s32(init);
     }
     force_inline simd_vec(const int *f) {
         vec_ = vld1q_s32((const int32_t *)f);
@@ -398,7 +404,7 @@ public:
     }
 
     force_inline int &operator[](int i) { return comp_[i]; }
-    force_inline int operator[](int i) const { return comp_[i]; }
+    force_inline const int &operator[](int i) const { return comp_[i]; }
 
     force_inline simd_vec<int, 4> &operator+=(const simd_vec<int, 4> &rhs) {
         vec_ = vaddq_s32(vec_, rhs.vec_);
@@ -719,11 +725,6 @@ force_inline simd_vec<float, 4>::operator simd_vec<int, 4>() const {
     ret.vec_ = neon_cvt_f32_to_s32(vec_);
     return ret;
 }
-
-#if defined(USE_NEON)
-using native_simd_fvec = simd_vec<float, 4>;
-using native_simd_ivec = simd_vec<int, 4>;
-#endif
 
 }
 }

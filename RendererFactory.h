@@ -17,8 +17,8 @@ const uint32_t DefaultEnabledRenderTypes =
 /** @brief Creates renderer
     @return shared pointer to created renderer
 */
-std::shared_ptr<RendererBase> CreateRenderer(const settings_t &s, uint32_t enabled_types = DefaultEnabledRenderTypes,
-                                             std::ostream &log_stream = std::cout);
+RendererBase *CreateRenderer(const settings_t &s, uint32_t enabled_types = DefaultEnabledRenderTypes,
+                             std::ostream &log_stream = std::cout);
 
 #if !defined(DISABLE_OCL)
 namespace Ocl {

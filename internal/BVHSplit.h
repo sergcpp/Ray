@@ -2,8 +2,8 @@
 
 #include <vector>
 
-#include "CoreRef.h"
 #include "../SceneBase.h"
+#include "CoreRef.h"
 
 namespace Ray {
 struct prim_t {
@@ -16,8 +16,9 @@ struct split_data_t {
     Ref::simd_fvec3 left_bounds[2], right_bounds[2];
 };
 
-split_data_t SplitPrimitives_SAH(const prim_t *primitives, const std::vector<uint32_t> &prim_indices, const float *positions, size_t stride,
-                                 const Ref::simd_fvec3 &bbox_min, const Ref::simd_fvec3 &bbox_max,
-                                 const Ref::simd_fvec3 &root_min, const Ref::simd_fvec3 &root_max, const bvh_settings_t &s);
+split_data_t SplitPrimitives_SAH(const prim_t *primitives, const std::vector<uint32_t> &prim_indices,
+                                 const float *positions, size_t stride, const Ref::simd_fvec3 &bbox_min,
+                                 const Ref::simd_fvec3 &bbox_max, const Ref::simd_fvec3 &root_min,
+                                 const Ref::simd_fvec3 &root_max, const bvh_settings_t &s);
 
-}
+} // namespace Ray

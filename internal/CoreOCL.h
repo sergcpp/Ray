@@ -58,9 +58,9 @@ static_assert(sizeof(hit_data_t) == 32, "!");
 
 struct environment_t {
     cl_float4 env_col_and_clamp;
-    cl_uint   env_map;
-    cl_int    pad[3];
+    cl_uint env_map;
+    cl_int pad[3];
 };
 static_assert(sizeof(environment_t) == 32, "!");
-}
-}
+} // namespace Ocl
+} // namespace Ray

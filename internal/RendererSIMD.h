@@ -4,26 +4,25 @@
 #include <mutex>
 #include <random>
 
+#include "../RendererBase.h"
 #include "CoreSIMD.h"
 #include "FramebufferRef.h"
 #include "Halton.h"
-#include "../RendererBase.h"
 
 namespace Ray {
 namespace NS {
-template <int S>
-struct PassData {
+template <int S> struct PassData {
     aligned_vector<ray_packet_t<S>> primary_rays;
-    aligned_vector<simd_ivec<S>>    primary_masks;
+    aligned_vector<simd_ivec<S>> primary_masks;
     aligned_vector<ray_packet_t<S>> secondary_rays;
-    aligned_vector<simd_ivec<S>>    secondary_masks;
-    aligned_vector<hit_data_t<S>>   intersections;
+    aligned_vector<simd_ivec<S>> secondary_masks;
+    aligned_vector<hit_data_t<S>> intersections;
 
-    aligned_vector<simd_ivec<S>>    hash_values;
-    std::vector<int>                head_flags;
-    std::vector<uint32_t>           scan_values;
-    std::vector<ray_chunk_t>        chunks, chunks_temp;
-    std::vector<uint32_t>           skeleton;
+    aligned_vector<simd_ivec<S>> hash_values;
+    std::vector<int> head_flags;
+    std::vector<uint32_t> scan_values;
+    std::vector<ray_chunk_t> chunks, chunks_temp;
+    std::vector<uint32_t> skeleton;
 
     PassData() = default;
 
@@ -46,77 +45,72 @@ struct PassData {
     }
 };
 
-template <int DimX, int DimY>
-class RendererSIMD : public RendererBase {
+template <int DimX, int DimY> class RendererSIMD : public RendererBase {
     Ref::Framebuffer clean_buf_, final_buf_, temp_buf_;
 
     std::mutex pass_cache_mtx_;
     std::vector<PassData<DimX * DimY>> pass_cache_;
 
     bool use_wide_bvh_;
-    stats_t stats_ = { 0 };
+    stats_t stats_ = {0};
     int w_ = 0, h_ = 0;
 
     std::vector<uint16_t> permutations_;
     void UpdateHaltonSequence(int iteration, std::unique_ptr<float[]> &seq);
-public:
+
+  public:
     RendererSIMD(const settings_t &s);
 
-    std::pair<int, int> size() const override {
-        return std::make_pair(final_buf_.w(), final_buf_.h());
-    }
+    std::pair<int, int> size() const override { return std::make_pair(final_buf_.w(), final_buf_.h()); }
 
-    const pixel_color_t *get_pixels_ref() const override {
-        return final_buf_.get_pixels_ref();
-    }
+    const pixel_color_t *get_pixels_ref() const override { return final_buf_.get_pixels_ref(); }
 
-    const shl1_data_t *get_sh_data_ref() const override {
-        return clean_buf_.get_sh_data_ref();
-    }
+    const shl1_data_t *get_sh_data_ref() const override { return clean_buf_.get_sh_data_ref(); }
 
-    void Resize(int w, int h) override {
+    void Resize(const int w, const int h) override {
         if (w_ != w || h_ != h) {
             clean_buf_.Resize(w, h, false);
             final_buf_.Resize(w, h, false);
             temp_buf_.Resize(w, h, false);
 
-            w_ = w; h_ = h;
+            w_ = w;
+            h_ = h;
         }
     }
-    void Clear(const pixel_color_t &c) override {
-        clean_buf_.Clear(c);
-    }
+    void Clear(const pixel_color_t &c) override { clean_buf_.Clear(c); }
 
-    std::shared_ptr<SceneBase> CreateScene() override;
-    void RenderScene(const std::shared_ptr<SceneBase> &s, RegionContext &region) override;
+    SceneBase *CreateScene() override;
+    void RenderScene(const SceneBase *scene, RegionContext &region) override;
 
     virtual void GetStats(stats_t &st) override { st = stats_; }
-    virtual void ResetStats() override { stats_ = { 0 }; }
+    virtual void ResetStats() override { stats_ = {0}; }
 };
-}
-}
+} // namespace NS
+} // namespace Ray
 
 ////////////////////////////////////////////////////////////////////////////////////////////
 
 #include "SceneRef.h"
 
 template <int DimX, int DimY>
-Ray::NS::RendererSIMD<DimX, DimY>::RendererSIMD(const settings_t &s) : clean_buf_(s.w, s.h), final_buf_(s.w, s.h), temp_buf_(s.w, s.h), use_wide_bvh_(s.use_wide_bvh) {
+Ray::NS::RendererSIMD<DimX, DimY>::RendererSIMD(const settings_t &s)
+    : clean_buf_(s.w, s.h), final_buf_(s.w, s.h), temp_buf_(s.w, s.h), use_wide_bvh_(s.use_wide_bvh) {
     auto rand_func = std::bind(std::uniform_int_distribution<int>(), std::mt19937(0));
     permutations_ = Ray::ComputeRadicalInversePermutations(g_primes, PrimesCount, rand_func);
 }
 
-template <int DimX, int DimY>
-std::shared_ptr<Ray::SceneBase> Ray::NS::RendererSIMD<DimX, DimY>::CreateScene() {
-    return std::make_shared<Ref::Scene>(use_wide_bvh_);
+template <int DimX, int DimY> Ray::SceneBase *Ray::NS::RendererSIMD<DimX, DimY>::CreateScene() {
+    return new Ref::Scene(use_wide_bvh_);
 }
 
 template <int DimX, int DimY>
-void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneBase> &_s, RegionContext &region) {
+void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionContext &region) {
     const int S = DimX * DimY;
 
-    auto s = std::dynamic_pointer_cast<Ref::Scene>(_s);
-    if (!s) return;
+    const auto s = dynamic_cast<const Ref::Scene *>(_s);
+    if (!s) {
+        return;
+    }
 
     const camera_t &cam = s->cams_[s->current_cam()].cam;
 
@@ -158,7 +152,9 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
                 ITERATE_3({ root_max[i] = root_node.bbox_max[i][0]; })
             } else {
                 for (int j = 0; j < 8; j++) {
-                    if (root_node.child[j] == 0x7fffffff) continue;
+                    if (root_node.child[j] == 0x7fffffff) {
+                        continue;
+                    }
 
                     ITERATE_3({ root_min[i] = root_node.bbox_min[i][j]; })
                     ITERATE_3({ root_max[i] = root_node.bbox_max[i][j]; })
@@ -178,7 +174,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
 
     rect_t rect = region.rect();
     if (rect.w == 0 || rect.h == 0) {
-        rect = { 0, 0, w, h };
+        rect = {0, 0, w, h};
     }
 
     region.iteration++;
@@ -229,19 +225,22 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
 
             if (macro_tree_root != 0xffffffff) {
                 if (sc_data.mnodes) {
-                    NS::Traverse_MacroTree_WithStack_ClosestHit(r, { -1 }, sc_data.mnodes, macro_tree_root, sc_data.mesh_instances, sc_data.mi_indices,
-                                                                sc_data.meshes, sc_data.transforms, sc_data.tris, sc_data.tri_indices, inter);
+                    NS::Traverse_MacroTree_WithStack_ClosestHit(
+                        r, {-1}, sc_data.mnodes, macro_tree_root, sc_data.mesh_instances, sc_data.mi_indices,
+                        sc_data.meshes, sc_data.transforms, sc_data.tris, sc_data.tri_indices, inter);
                 } else {
-                    NS::Traverse_MacroTree_WithStack_ClosestHit(r, { -1 }, sc_data.nodes, macro_tree_root, sc_data.mesh_instances, sc_data.mi_indices,
-                                                                sc_data.meshes, sc_data.transforms, sc_data.tris, sc_data.tri_indices, inter);
+                    NS::Traverse_MacroTree_WithStack_ClosestHit(
+                        r, {-1}, sc_data.nodes, macro_tree_root, sc_data.mesh_instances, sc_data.mi_indices,
+                        sc_data.meshes, sc_data.transforms, sc_data.tris, sc_data.tri_indices, inter);
                 }
             }
         }
     } else {
         const mesh_instance_t &mi = sc_data.mesh_instances[cam.mi_index];
         SampleMeshInTextureSpace<DimX, DimY>(region.iteration, cam.mi_index, cam.uv_index,
-                                             sc_data.meshes[mi.mesh_index], sc_data.transforms[mi.tr_index], sc_data.vtx_indices, sc_data.vertices,
-                                             rect, w, h, &region.halton_seq[0], p.primary_rays, p.intersections);
+                                             sc_data.meshes[mi.mesh_index], sc_data.transforms[mi.tr_index],
+                                             sc_data.vtx_indices, sc_data.vertices, rect, w, h, &region.halton_seq[0],
+                                             p.primary_rays, p.intersections);
 
         p.primary_masks.resize(p.primary_rays.size());
 
@@ -258,28 +257,27 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
         const ray_packet_t<S> &r = p.primary_rays[i];
         const hit_data_t<S> &inter = p.intersections[i];
 
-        simd_ivec<S> x = inter.xy >> 16,
-                     y = inter.xy & 0x0000FFFF;
+        const simd_ivec<S> x = inter.xy >> 16, y = inter.xy & 0x0000FFFF;
 
         simd_ivec<S> index;
 
         if (cam.pass_settings.flags & UseCoherentSampling) {
             for (int j = 0; j < S; j++) {
-                const int blck_x = x[j] % 8, blck_y = y[j] % 8;
-                index[j] = sampling_pattern[blck_y * 8 + blck_x];
+                const int blck_x = (x[j] % 8), blck_y = (y[j] % 8);
+                index[j] = ray_packet_pixel_layout[blck_y * 8 + blck_x];
             }
         } else {
             index = y * w + x;
         }
 
-        p.secondary_masks[i] = { 0 };
+        p.secondary_masks[i] = {0};
 
-        simd_fvec<S> out_rgba[4] = { 0.0f };
+        simd_fvec<S> out_rgba[4] = {0.0f};
         NS::ShadeSurface(index, pass_info, &region.halton_seq[0], inter, r, sc_data, macro_tree_root, light_tree_root,
                          tex_atlas, out_rgba, &p.secondary_masks[0], &p.secondary_rays[0], &secondary_rays_count);
 
         for (int j = 0; j < S; j++) {
-            temp_buf_.SetPixel(x[j], y[j], { out_rgba[0][j], out_rgba[1][j], out_rgba[2][j], out_rgba[3][j] });
+            temp_buf_.SetPixel(x[j], y[j], {out_rgba[0][j], out_rgba[1][j], out_rgba[2][j], out_rgba[3][j]});
         }
     }
 
@@ -287,19 +285,18 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
     std::chrono::duration<double, std::micro> secondary_sort_time{}, secondary_trace_time{}, secondary_shade_time{};
 
     p.hash_values.resize(secondary_rays_count);
-    //p.head_flags.resize(secondary_rays_count * S);
+    // p.head_flags.resize(secondary_rays_count * S);
     p.scan_values.resize(secondary_rays_count * S);
     p.chunks.resize(secondary_rays_count * S);
     p.chunks_temp.resize(secondary_rays_count * S);
-    //p.skeleton.resize(secondary_rays_count * S);
+    // p.skeleton.resize(secondary_rays_count * S);
 
     if (cam.pass_settings.flags & OutputSH) {
         temp_buf_.ResetSampleData(rect);
         for (int i = 0; i < secondary_rays_count; i++) {
             const ray_packet_t<S> &r = p.secondary_rays[i];
 
-            simd_ivec<S> x = r.xy >> 16,
-                         y = r.xy & 0x0000FFFF;
+            const simd_ivec<S> x = (r.xy >> 16), y = (r.xy & 0x0000FFFF);
 
             for (int j = 0; j < S; j++) {
                 temp_buf_.SetSampleDir(x[j], y[j], r.d[0][j], r.d[1][j], r.d[2][j]);
@@ -309,7 +306,9 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
         }
     }
 
-    for (int bounce = 0; bounce < pass_info.settings.max_total_depth && secondary_rays_count && !(pass_info.settings.flags & SkipIndirectLight); bounce++) {
+    for (int bounce = 0; bounce < pass_info.settings.max_total_depth && secondary_rays_count &&
+                         !(pass_info.settings.flags & SkipIndirectLight);
+         bounce++) {
         auto time_secondary_sort_start = std::chrono::high_resolution_clock::now();
 
         SortRays_CPU(&p.secondary_rays[0], &p.secondary_masks[0], secondary_rays_count, root_min, cell_size,
@@ -325,11 +324,13 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
             inter.xy = r.xy;
 
             if (sc_data.mnodes) {
-                NS::Traverse_MacroTree_WithStack_ClosestHit(r, p.secondary_masks[i], sc_data.mnodes, macro_tree_root, sc_data.mesh_instances, sc_data.mi_indices,
-                                                            sc_data.meshes, sc_data.transforms, sc_data.tris, sc_data.tri_indices, inter);
+                NS::Traverse_MacroTree_WithStack_ClosestHit(
+                    r, p.secondary_masks[i], sc_data.mnodes, macro_tree_root, sc_data.mesh_instances,
+                    sc_data.mi_indices, sc_data.meshes, sc_data.transforms, sc_data.tris, sc_data.tri_indices, inter);
             } else {
-                NS::Traverse_MacroTree_WithStack_ClosestHit(r, p.secondary_masks[i], sc_data.nodes, macro_tree_root, sc_data.mesh_instances, sc_data.mi_indices,
-                                                            sc_data.meshes, sc_data.transforms, sc_data.tris, sc_data.tri_indices, inter);
+                NS::Traverse_MacroTree_WithStack_ClosestHit(
+                    r, p.secondary_masks[i], sc_data.nodes, macro_tree_root, sc_data.mesh_instances, sc_data.mi_indices,
+                    sc_data.meshes, sc_data.transforms, sc_data.tris, sc_data.tri_indices, inter);
             }
         }
 
@@ -346,45 +347,55 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
             const ray_packet_t<S> &r = p.primary_rays[i];
             const hit_data_t<S> &inter = p.intersections[i];
 
-            simd_ivec<S> x = inter.xy >> 16,
-                         y = inter.xy & 0x0000FFFF;
+            const simd_ivec<S> x = inter.xy >> 16, y = inter.xy & 0x0000FFFF;
 
             simd_ivec<S> index;
 
             if (cam.pass_settings.flags & UseCoherentSampling) {
                 for (int j = 0; j < S; j++) {
-                    const int blck_x = x[j] % 8, blck_y = y[j] % 8;
-                    index[j] = sampling_pattern[blck_y * 8 + blck_x];
+                    const int blck_x = (x[j] % 8), blck_y = (y[j] % 8);
+                    index[j] = ray_packet_pixel_layout[blck_y * 8 + blck_x];
                 }
             } else {
                 index = y * w + x;
             }
 
-            simd_fvec<S> out_rgba[4] = { 0.0f };
-            NS::ShadeSurface(index, pass_info, &region.halton_seq[0], inter, r, sc_data, macro_tree_root, light_tree_root,
-                             tex_atlas, out_rgba, &p.secondary_masks[0], &p.secondary_rays[0], &secondary_rays_count);
+            simd_fvec<S> out_rgba[4] = {0.0f};
+            NS::ShadeSurface(index, pass_info, &region.halton_seq[0], inter, r, sc_data, macro_tree_root,
+                             light_tree_root, tex_atlas, out_rgba, &p.secondary_masks[0], &p.secondary_rays[0],
+                             &secondary_rays_count);
             out_rgba[3] = 0.0f;
 
             for (int j = 0; j < S; j++) {
-                if (!p.primary_masks[i][j]) continue;
+                if (!p.primary_masks[i][j]) {
+                    continue;
+                }
 
-                temp_buf_.AddPixel(x[j], y[j], { out_rgba[0][j], out_rgba[1][j], out_rgba[2][j], out_rgba[3][j] });
+                temp_buf_.AddPixel(x[j], y[j], {out_rgba[0][j], out_rgba[1][j], out_rgba[2][j], out_rgba[3][j]});
             }
         }
 
         auto time_secondary_shade_end = std::chrono::high_resolution_clock::now();
-        secondary_sort_time += std::chrono::duration<double, std::micro>{ time_secondary_trace_start - time_secondary_sort_start };
-        secondary_trace_time += std::chrono::duration<double, std::micro>{ time_secondary_shade_start - time_secondary_trace_start };
-        secondary_shade_time += std::chrono::duration<double, std::micro>{ time_secondary_shade_end - time_secondary_shade_start };
+        secondary_sort_time +=
+            std::chrono::duration<double, std::micro>{time_secondary_trace_start - time_secondary_sort_start};
+        secondary_trace_time +=
+            std::chrono::duration<double, std::micro>{time_secondary_shade_start - time_secondary_trace_start};
+        secondary_shade_time +=
+            std::chrono::duration<double, std::micro>{time_secondary_shade_end - time_secondary_shade_start};
     }
 
     {
         std::lock_guard<std::mutex> _(pass_cache_mtx_);
         pass_cache_.emplace_back(std::move(p));
 
-        stats_.time_primary_ray_gen_us += (unsigned long long)std::chrono::duration<double, std::micro>{ time_after_ray_gen - time_start }.count();
-        stats_.time_primary_trace_us += (unsigned long long)std::chrono::duration<double, std::micro>{ time_after_prim_trace - time_after_ray_gen }.count();
-        stats_.time_primary_shade_us += (unsigned long long)std::chrono::duration<double, std::micro>{ time_after_prim_shade - time_after_prim_trace }.count();
+        stats_.time_primary_ray_gen_us +=
+            (unsigned long long)std::chrono::duration<double, std::micro>{time_after_ray_gen - time_start}.count();
+        stats_.time_primary_trace_us +=
+            (unsigned long long)std::chrono::duration<double, std::micro>{time_after_prim_trace - time_after_ray_gen}
+                .count();
+        stats_.time_primary_shade_us +=
+            (unsigned long long)std::chrono::duration<double, std::micro>{time_after_prim_shade - time_after_prim_trace}
+                .count();
         stats_.time_secondary_sort_us += (unsigned long long)secondary_sort_time.count();
         stats_.time_secondary_trace_us += (unsigned long long)secondary_trace_time.count();
         stats_.time_secondary_shade_us += (unsigned long long)secondary_shade_time.count();
@@ -400,61 +411,43 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const std::shared_ptr<SceneB
     }
 
     auto clamp_and_gamma_correct = [&cam](const pixel_color_t &p) {
-        auto c = simd_fvec4{ &p.r };
+        auto c = simd_fvec4{&p.r};
 
         if (cam.dtype == SRGB) {
             ITERATE_3({
-                if (c[i] > 0.0031308f) {
-                    c[i] = std::pow(1.055f * c[i], (1.0f / 2.4f)) - 0.055f;
-                } else {
+                if (c[i] < 0.0031308f) {
                     c[i] = 12.92f * c[i];
+                } else {
+                    c[i] = 1.055f * std::pow(c[i], (1.0f / 2.4f)) - 0.055f;
                 }
             })
         }
 
         if (cam.gamma != 1.0f) {
-            c = pow(c, simd_fvec4{ 1.0f / cam.gamma });
+            c = pow(c, simd_fvec4{1.0f / cam.gamma});
         }
 
         if (cam.pass_settings.flags & Clamp) {
             c = clamp(c, 0.0f, 1.0f);
         }
-        return pixel_color_t{ c[0], c[1], c[2], c[3] };
+        return pixel_color_t{c[0], c[1], c[2], c[3]};
     };
 
     final_buf_.CopyFrom(clean_buf_, rect, clamp_and_gamma_correct);
 }
 
 template <int DimX, int DimY>
-void Ray::NS::RendererSIMD<DimX, DimY>::UpdateHaltonSequence(int iteration, std::unique_ptr<float[]> &seq) {
+void Ray::NS::RendererSIMD<DimX, DimY>::UpdateHaltonSequence(const int iteration, std::unique_ptr<float[]> &seq) {
     if (!seq) {
         seq.reset(new float[HALTON_COUNT * HALTON_SEQ_LEN]);
     }
 
-    for (int i = 0; i < HALTON_SEQ_LEN; i++) {
-        seq[2 * (i * HALTON_2D_COUNT + 0 ) + 0] = Ray::ScrambledRadicalInverse<2 >(&permutations_[0  ], (uint64_t)(iteration + i));
-        seq[2 * (i * HALTON_2D_COUNT + 0 ) + 1] = Ray::ScrambledRadicalInverse<3 >(&permutations_[2  ], (uint64_t)(iteration + i));
-        seq[2 * (i * HALTON_2D_COUNT + 1 ) + 0] = Ray::ScrambledRadicalInverse<5 >(&permutations_[5  ], (uint64_t)(iteration + i));
-        seq[2 * (i * HALTON_2D_COUNT + 1 ) + 1] = Ray::ScrambledRadicalInverse<7 >(&permutations_[10 ], (uint64_t)(iteration + i));
-        seq[2 * (i * HALTON_2D_COUNT + 2 ) + 0] = Ray::ScrambledRadicalInverse<11>(&permutations_[17 ], (uint64_t)(iteration + i));
-        seq[2 * (i * HALTON_2D_COUNT + 2 ) + 1] = Ray::ScrambledRadicalInverse<13>(&permutations_[28 ], (uint64_t)(iteration + i));
-        seq[2 * (i * HALTON_2D_COUNT + 3 ) + 0] = Ray::ScrambledRadicalInverse<17>(&permutations_[41 ], (uint64_t)(iteration + i));
-        seq[2 * (i * HALTON_2D_COUNT + 3 ) + 1] = Ray::ScrambledRadicalInverse<19>(&permutations_[58 ], (uint64_t)(iteration + i));
-        seq[2 * (i * HALTON_2D_COUNT + 4 ) + 0] = Ray::ScrambledRadicalInverse<23>(&permutations_[77 ], (uint64_t)(iteration + i));
-        seq[2 * (i * HALTON_2D_COUNT + 4 ) + 1] = Ray::ScrambledRadicalInverse<29>(&permutations_[100], (uint64_t)(iteration + i));
-        seq[2 * (i * HALTON_2D_COUNT + 5 ) + 0] = Ray::ScrambledRadicalInverse<31>(&permutations_[129], (uint64_t)(iteration + i));
-        seq[2 * (i * HALTON_2D_COUNT + 5 ) + 1] = Ray::ScrambledRadicalInverse<37>(&permutations_[160], (uint64_t)(iteration + i));
-        seq[2 * (i * HALTON_2D_COUNT + 6 ) + 0] = Ray::ScrambledRadicalInverse<41>(&permutations_[197], (uint64_t)(iteration + i));
-        seq[2 * (i * HALTON_2D_COUNT + 6 ) + 1] = Ray::ScrambledRadicalInverse<43>(&permutations_[238], (uint64_t)(iteration + i));
-        seq[2 * (i * HALTON_2D_COUNT + 7 ) + 0] = Ray::ScrambledRadicalInverse<47>(&permutations_[281], (uint64_t)(iteration + i));
-        seq[2 * (i * HALTON_2D_COUNT + 7 ) + 1] = Ray::ScrambledRadicalInverse<53>(&permutations_[328], (uint64_t)(iteration + i));
-        seq[2 * (i * HALTON_2D_COUNT + 8 ) + 0] = Ray::ScrambledRadicalInverse<59>(&permutations_[381], (uint64_t)(iteration + i));
-        seq[2 * (i * HALTON_2D_COUNT + 8 ) + 1] = Ray::ScrambledRadicalInverse<61>(&permutations_[440], (uint64_t)(iteration + i));
-        seq[2 * (i * HALTON_2D_COUNT + 9 ) + 0] = Ray::ScrambledRadicalInverse<67>(&permutations_[501], (uint64_t)(iteration + i));
-        seq[2 * (i * HALTON_2D_COUNT + 9 ) + 1] = Ray::ScrambledRadicalInverse<71>(&permutations_[568], (uint64_t)(iteration + i));
-        seq[2 * (i * HALTON_2D_COUNT + 10) + 0] = Ray::ScrambledRadicalInverse<73>(&permutations_[639], (uint64_t)(iteration + i));
-        seq[2 * (i * HALTON_2D_COUNT + 10) + 1] = Ray::ScrambledRadicalInverse<79>(&permutations_[712], (uint64_t)(iteration + i));
-        seq[2 * (i * HALTON_2D_COUNT + 11) + 0] = Ray::ScrambledRadicalInverse<83>(&permutations_[791], (uint64_t)(iteration + i));
-        seq[2 * (i * HALTON_2D_COUNT + 11) + 1] = Ray::ScrambledRadicalInverse<89>(&permutations_[874], (uint64_t)(iteration + i));
+    for (int i = 0; i < HALTON_SEQ_LEN; ++i) {
+        uint32_t prime_sum = 0;
+        for (int j = 0; j < HALTON_COUNT; ++j) {
+            seq[i * HALTON_COUNT + j] =
+                Ray::ScrambledRadicalInverse(g_primes[j], &permutations_[prime_sum], uint64_t(iteration + i));
+            prime_sum += g_primes[j];
+        }
     }
 }

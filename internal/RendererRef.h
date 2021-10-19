@@ -2,9 +2,9 @@
 
 #include <mutex>
 
+#include "../RendererBase.h"
 #include "CoreRef.h"
 #include "FramebufferRef.h"
-#include "../RendererBase.h"
 
 namespace Ray {
 namespace Ref {
@@ -43,27 +43,22 @@ class Renderer : public RendererBase {
     std::mutex pass_cache_mtx_;
     std::vector<PassData> pass_cache_;
 
-    stats_t stats_ = { 0 };
+    stats_t stats_ = {0};
     int w_ = 0, h_ = 0;
 
     std::vector<uint16_t> permutations_;
     void UpdateHaltonSequence(int iteration, std::unique_ptr<float[]> &seq);
-public:
+
+  public:
     Renderer(const settings_t &s);
 
     eRendererType type() const override { return RendererRef; }
 
-    std::pair<int, int> size() const override {
-        return std::make_pair(final_buf_.w(), final_buf_.h());
-    }
+    std::pair<int, int> size() const override { return std::make_pair(final_buf_.w(), final_buf_.h()); }
 
-    const pixel_color_t *get_pixels_ref() const override {
-        return final_buf_.get_pixels_ref();
-    }
+    const pixel_color_t *get_pixels_ref() const override { return final_buf_.get_pixels_ref(); }
 
-    const shl1_data_t *get_sh_data_ref() const override {
-        return clean_buf_.get_sh_data_ref();
-    }
+    const shl1_data_t *get_sh_data_ref() const override { return clean_buf_.get_sh_data_ref(); }
 
     void Resize(int w, int h) override {
         if (w_ != w || h_ != h) {
@@ -71,19 +66,18 @@ public:
             final_buf_.Resize(w, h, false);
             temp_buf_.Resize(w, h, false);
 
-            w_ = w; h_ = h;
+            w_ = w;
+            h_ = h;
         }
     }
 
-    void Clear(const pixel_color_t &c) override {
-        clean_buf_.Clear(c);
-    }
+    void Clear(const pixel_color_t &c) override { clean_buf_.Clear(c); }
 
-    std::shared_ptr<SceneBase> CreateScene() override;
-    void RenderScene(const std::shared_ptr<SceneBase> &s, RegionContext &region) override;
+    SceneBase *CreateScene() override;
+    void RenderScene(const SceneBase *scene, RegionContext &region) override;
 
     void GetStats(stats_t &st) override { st = stats_; }
-    void ResetStats() override { stats_ = { 0 }; }
+    void ResetStats() override { stats_ = {0}; }
 };
-}
-}
+} // namespace Ref
+} // namespace Ray

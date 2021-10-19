@@ -7,22 +7,22 @@
 
 Ray::Ocl::Scene::Scene(const cl::Context &context, const cl::CommandQueue &queue, size_t max_img_buf_size)
     : context_(context), queue_(queue), max_img_buf_size_(max_img_buf_size),
-    nodes_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
-    tris_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
-    tri_indices_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
-    transforms_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
-    meshes_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
-    mesh_instances_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
-    mi_indices_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
-    vertices_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
-    vtx_indices_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
-    materials_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
-    textures_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
-    texture_atlas_(context_, queue_, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE),
-    lights_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
-    li_indices_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_) {
-    {   // add default environment map (white)
-        pixel_color8_t default_env_map = { 255, 255, 255, 128 };
+      nodes_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
+      tris_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
+      tri_indices_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
+      transforms_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
+      meshes_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
+      mesh_instances_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
+      mi_indices_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
+      vertices_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
+      vtx_indices_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
+      materials_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
+      textures_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
+      texture_atlas_(context_, queue_, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE),
+      lights_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_),
+      li_indices_(context, queue, CL_MEM_READ_ONLY, 16, max_img_buf_size_) {
+    { // add default environment map (white)
+        pixel_color8_t default_env_map = {255, 255, 255, 128};
 
         tex_desc_t t;
         t.data = &default_env_map;
@@ -42,8 +42,8 @@ Ray::Ocl::Scene::Scene(const cl::Context &context, const cl::CommandQueue &queue
         SetEnvironment(desc);
     }
 
-    {   // add default normal map (flat)
-        pixel_color8_t default_normalmap = { 127, 127, 255 };
+    { // add default normal map (flat)
+        pixel_color8_t default_normalmap = {127, 127, 255};
 
         tex_desc_t t;
         t.data = &default_normalmap;
@@ -75,7 +75,7 @@ void Ray::Ocl::Scene::SetEnvironment(const environment_desc_t &env) {
 }
 
 uint32_t Ray::Ocl::Scene::AddTexture(const tex_desc_t &_t) {
-    uint32_t tex_index = (uint32_t)textures_.size();
+    const auto tex_index = uint32_t(textures_.size());
 
     texture_t t;
     t.width = (uint16_t)_t.w;
@@ -86,7 +86,7 @@ uint32_t Ray::Ocl::Scene::AddTexture(const tex_desc_t &_t) {
     }
 
     int mip = 0;
-    int res[2] = { _t.w, _t.h };
+    int res[2] = {_t.w, _t.h};
 
     std::vector<pixel_color8_t> tex_data(_t.data, _t.data + _t.w * _t.h);
 
@@ -96,7 +96,7 @@ uint32_t Ray::Ocl::Scene::AddTexture(const tex_desc_t &_t) {
         if (page == -1) {
             // release allocated mip levels on fail
             for (int i = mip; i >= 0; i--) {
-                int _pos[2] = { t.pos[i][0], t.pos[i][1] };
+                int _pos[2] = {t.pos[i][0], t.pos[i][1]};
                 texture_atlas_.Free(t.page[i], _pos);
             }
             return 0xffffffff;
@@ -109,7 +109,7 @@ uint32_t Ray::Ocl::Scene::AddTexture(const tex_desc_t &_t) {
         mip++;
 
         if (_t.generate_mipmaps) {
-            tex_data = Ref::DownsampleTexture(tex_data, res);
+            tex_data = Ref::DownsampleTexture(tex_data.data(), res);
 
             res[0] /= 2;
             res[1] /= 2;
@@ -130,29 +130,28 @@ uint32_t Ray::Ocl::Scene::AddTexture(const tex_desc_t &_t) {
     return tex_index;
 }
 
-uint32_t Ray::Ocl::Scene::AddMaterial(const mat_desc_t &m) {
+uint32_t Ray::Ocl::Scene::AddMaterial(const shading_node_desc_t &m) {
     material_t mat;
 
     mat.type = m.type;
-    mat.textures[MAIN_TEXTURE] = m.main_texture;
-    memcpy(&mat.main_color[0], &m.main_color[0], 3 * sizeof(float));
+    mat.textures[BASE_TEXTURE] = m.base_texture;
+    memcpy(&mat.base_color[0], &m.base_color[0], 3 * sizeof(float));
     mat.int_ior = m.int_ior;
     mat.ext_ior = m.ext_ior;
 
-    if (m.type == DiffuseMaterial) {
-        mat.roughness = m.roughness;
-    } else if (m.type == GlossyMaterial) {
-        mat.roughness = m.roughness;
-    } else if (m.type == RefractiveMaterial) {
-        mat.roughness = m.roughness;
-    } else if (m.type == EmissiveMaterial) {
+    if (m.type == DiffuseNode) {
+        mat.alpha_x = mat.alpha_y = m.roughness;
+    } else if (m.type == GlossyNode) {
+        mat.alpha_x = mat.alpha_y = m.roughness;
+    } else if (m.type == RefractiveNode) {
+        mat.alpha_x = mat.alpha_y = m.roughness;
+    } else if (m.type == EmissiveNode) {
         mat.strength = m.strength;
-    } else if (m.type == MixMaterial) {
+    } else if (m.type == MixNode) {
         mat.strength = m.strength;
         mat.textures[MIX_MAT1] = m.mix_materials[0];
         mat.textures[MIX_MAT2] = m.mix_materials[1];
-    } else if (m.type == TransparentMaterial) {
-
+    } else if (m.type == TransparentNode) {
     }
 
     if (m.normal_map != 0xffffffff) {
@@ -161,7 +160,7 @@ uint32_t Ray::Ocl::Scene::AddMaterial(const mat_desc_t &m) {
         mat.textures[NORMALS_TEXTURE] = default_normals_texture_;
     }
 
-    uint32_t mat_index = (uint32_t)materials_.size();
+    const auto mat_index = uint32_t(materials_.size());
 
     materials_.PushBack(mat);
 
@@ -178,9 +177,12 @@ uint32_t Ray::Ocl::Scene::AddMesh(const mesh_desc_t &_m) {
     s.allow_spatial_splits = _m.allow_spatial_splits;
     s.use_fast_bvh_build = _m.use_fast_bvh_build;
 
-    PreprocessMesh(_m.vtx_attrs, _m.vtx_indices, _m.vtx_indices_count, _m.layout, _m.base_vertex, s, new_nodes, new_tris, new_tri_indices);
+    std::vector<tri_accel2_t> _unused;
+
+    PreprocessMesh(_m.vtx_attrs, _m.vtx_indices, _m.vtx_indices_count, _m.layout, _m.base_vertex, 0 /* temp value */, s,
+                   new_nodes, new_tris, _unused, new_tri_indices);
     for (size_t i = 0; i < _m.vtx_indices_count; i++) {
-        new_vtx_indices.push_back(_m.vtx_indices[i] + _m.base_vertex + (uint32_t)vertices_.size());
+        new_vtx_indices.push_back(_m.vtx_indices[i] + _m.base_vertex + uint32_t(vertices_.size()));
     }
 
     // set material index for triangles
@@ -194,29 +196,31 @@ uint32_t Ray::Ocl::Scene::AddMesh(const mesh_desc_t &_m) {
     // offset nodes and primitives
     for (bvh_node_t &n : new_nodes) {
 #ifdef USE_STACKLESS_BVH_TRAVERSAL
-        if (n.parent != 0xffffffff) n.parent += (uint32_t)nodes_.size();
+        if (n.parent != 0xffffffff) {
+            n.parent += uint32_t(nodes_.size());
+        }
 #endif
         if (n.prim_index & LEAF_NODE_BIT) {
-            n.prim_index += (uint32_t)tri_indices_.size();
+            n.prim_index += uint32_t(tri_indices_.size());
         } else {
-            n.left_child += (uint32_t)nodes_.size();
-            n.right_child += (uint32_t)nodes_.size();
+            n.left_child += uint32_t(nodes_.size());
+            n.right_child += uint32_t(nodes_.size());
         }
     }
 
     // offset triangle indices
     for (uint32_t &i : new_tri_indices) {
-        i += (uint32_t)tris_.size();
+        i += uint32_t(tris_.size());
     }
 
     // add mesh
     mesh_t m;
-    m.node_index = (uint32_t)nodes_.size();
-    m.node_count = (uint32_t)new_nodes.size();
-    m.tris_index = (uint32_t)tris_.size();
-    m.tris_count = (uint32_t)new_tris.size();
+    m.node_index = uint32_t(nodes_.size());
+    m.node_count = uint32_t(new_nodes.size());
+    m.tris_index = uint32_t(tris_.size());
+    m.tris_count = uint32_t(new_tris.size());
 
-    uint32_t mesh_index = (uint32_t)meshes_.size();
+    const auto mesh_index = uint32_t(meshes_.size());
     meshes_.PushBack(m);
 
     // add nodes
@@ -252,7 +256,8 @@ uint32_t Ray::Ocl::Scene::AddMesh(const mesh_desc_t &_m) {
     }
 
     if (_m.layout == PxyzNxyzTuv || _m.layout == PxyzNxyzTuvTuv) {
-        Ref::ComputeTangentBasis(vertices_.size(), 0, new_vertices, new_vtx_indices, _m.vtx_indices, _m.vtx_indices_count);
+        Ref::ComputeTangentBasis(vertices_.size(), 0, new_vertices, new_vtx_indices, _m.vtx_indices,
+                                 _m.vtx_indices_count);
     }
 
     vertices_.Append(&new_vertices[0], new_vertices.size());
@@ -316,7 +321,7 @@ uint32_t Ray::Ocl::Scene::AddLight(const light_desc_t &_l) {
 
     RebuildLightBVH();
 
-    return (uint32_t)(lights_.size() - 1);
+    return uint32_t(lights_.size() - 1);
 }
 
 void Ray::Ocl::Scene::RemoveLight(uint32_t i) {
@@ -324,12 +329,12 @@ void Ray::Ocl::Scene::RemoveLight(uint32_t i) {
     unused(i);
 }
 
-uint32_t Ray::Ocl::Scene::AddMeshInstance(uint32_t mesh_index, const float *xform) {
-    uint32_t mi_index = (uint32_t)mesh_instances_.size();
+uint32_t Ray::Ocl::Scene::AddMeshInstance(const uint32_t mesh_index, const float *xform) {
+    const auto mi_index = uint32_t(mesh_instances_.size());
 
     mesh_instance_t mi;
     mi.mesh_index = mesh_index;
-    mi.tr_index = (uint32_t)transforms_.size();
+    mi.tr_index = uint32_t(transforms_.size());
     mesh_instances_.PushBack(mi);
 
     transform_t tr;
@@ -344,7 +349,7 @@ uint32_t Ray::Ocl::Scene::AddMeshInstance(uint32_t mesh_index, const float *xfor
     return mi_index;
 }
 
-void Ray::Ocl::Scene::SetMeshInstanceTransform(uint32_t mi_index, const float *xform) {
+void Ray::Ocl::Scene::SetMeshInstanceTransform(const uint32_t mi_index, const float *xform) {
     transform_t tr;
 
     memcpy(tr.xform, xform, 16 * sizeof(float));
@@ -364,7 +369,7 @@ void Ray::Ocl::Scene::SetMeshInstanceTransform(uint32_t mi_index, const float *x
     mesh_instances_.Set(mi_index, mi);
     transforms_.Set(mi.tr_index, tr);
 
-    //if (mi_index == 10000 - 1)
+    // if (mi_index == 10000 - 1)
     RebuildMacroBVH();
 }
 
@@ -373,7 +378,9 @@ void Ray::Ocl::Scene::RemoveMeshInstance(uint32_t) {
 }
 
 void Ray::Ocl::Scene::RemoveNodes(uint32_t node_index, uint32_t node_count) {
-    if (!node_count) return;
+    if (!node_count) {
+        return;
+    }
 
     nodes_.Erase(node_index, node_count);
 
@@ -397,12 +404,18 @@ void Ray::Ocl::Scene::RemoveNodes(uint32_t node_index, uint32_t node_count) {
             bvh_node_t &n = nodes[i];
 
 #ifdef USE_STACKLESS_BVH_TRAVERSAL
-            if (n.parent != 0xffffffff && n.parent > node_index) n.parent -= node_count;
+            if (n.parent != 0xffffffff && n.parent > node_index) {
+                n.parent -= node_count;
+            }
 #endif
 
             if ((n.prim_index & LEAF_NODE_BIT) == 0) {
-                if (n.left_child > node_index) n.left_child -= node_count;
-                if ((n.right_child & RIGHT_CHILD_BITS) > node_index) n.right_child -= node_count;
+                if (n.left_child > node_index) {
+                    n.left_child -= node_count;
+                }
+                if ((n.right_child & RIGHT_CHILD_BITS) > node_index) {
+                    n.right_child -= node_count;
+                }
             }
         }
         nodes_.Set(&nodes[0], 0, nodes_count);
@@ -421,7 +434,7 @@ void Ray::Ocl::Scene::RebuildMacroBVH() {
     RemoveNodes(macro_nodes_start_, macro_nodes_count_);
     mi_indices_.Clear();
 
-    size_t mi_count = mesh_instances_.size();
+    const size_t mi_count = mesh_instances_.size();
 
     std::vector<prim_t> primitives;
     primitives.reserve(mi_count);
@@ -430,24 +443,26 @@ void Ray::Ocl::Scene::RebuildMacroBVH() {
     mesh_instances_.Get(&mesh_instances[0], 0, mi_count);
 
     for (const mesh_instance_t &mi : mesh_instances) {
-        primitives.push_back({ 0, 0, 0, Ref::simd_fvec3{ mi.bbox_min }, Ref::simd_fvec3{ mi.bbox_max } });
+        primitives.push_back({0, 0, 0, Ref::simd_fvec3{mi.bbox_min}, Ref::simd_fvec3{mi.bbox_max}});
     }
 
     std::vector<bvh_node_t> bvh_nodes;
     std::vector<uint32_t> mi_indices;
 
-    macro_nodes_start_ = (uint32_t)nodes_.size();
+    macro_nodes_start_ = uint32_t(nodes_.size());
     macro_nodes_count_ = PreprocessPrims_SAH(&primitives[0], primitives.size(), nullptr, 0, {}, bvh_nodes, mi_indices);
-    
+
     // offset nodes
     for (bvh_node_t &n : bvh_nodes) {
 #ifdef USE_STACKLESS_BVH_TRAVERSAL
-        if (n.parent != 0xffffffff) n.parent += (uint32_t)nodes_.size();
+        if (n.parent != 0xffffffff) {
+            n.parent += uint32_t(nodes_.size());
+        }
 #endif
 
         if ((n.prim_index & LEAF_NODE_BIT) == 0) {
-            n.left_child += (uint32_t)nodes_.size();
-            n.right_child += (uint32_t)nodes_.size();
+            n.left_child += uint32_t(nodes_.size());
+            n.right_child += uint32_t(nodes_.size());
         }
     }
 
@@ -466,46 +481,40 @@ void Ray::Ocl::Scene::RebuildLightBVH() {
     lights_.Get(&lights[0], 0, lights_.size());
 
     for (const light_t &l : lights) {
-        float influence = l.radius * (std::sqrt(l.brightness / LIGHT_ATTEN_CUTOFF) - 1.0f);
+        const float influence = l.radius * (std::sqrt(l.brightness / LIGHT_ATTEN_CUTOFF) - 1.0f);
 
-        Ref::simd_fvec3 bbox_min = { 0.0f }, bbox_max = { 0.0f };
+        Ref::simd_fvec3 bbox_min = {0.0f}, bbox_max = {0.0f};
 
-        Ref::simd_fvec3 p1 = { -l.dir[0] * influence,
-                               -l.dir[1] * influence,
-                               -l.dir[2] * influence };
+        const Ref::simd_fvec3 p1 = {-l.dir[0] * influence, -l.dir[1] * influence, -l.dir[2] * influence};
 
         bbox_min = min(bbox_min, p1);
         bbox_max = max(bbox_max, p1);
 
-        Ref::simd_fvec3 p2 = { -l.dir[0] * l.spot * influence,
-                               -l.dir[1] * l.spot * influence,
-                               -l.dir[2] * l.spot * influence };
+        const Ref::simd_fvec3 p2 = {-l.dir[0] * l.spot * influence, -l.dir[1] * l.spot * influence,
+                                    -l.dir[2] * l.spot * influence};
 
-        float d = std::sqrt(1.0f - l.spot * l.spot) * influence;
+        const float d = std::sqrt(1.0f - l.spot * l.spot) * influence;
 
-        bbox_min = min(bbox_min, p2 - Ref::simd_fvec3{ d, 0.0f, d });
-        bbox_max = max(bbox_max, p2 + Ref::simd_fvec3{ d, 0.0f, d });
+        bbox_min = min(bbox_min, p2 - Ref::simd_fvec3{d, 0.0f, d});
+        bbox_max = max(bbox_max, p2 + Ref::simd_fvec3{d, 0.0f, d});
 
         if (l.spot < 0.0f) {
-            bbox_min = min(bbox_min, p1 - Ref::simd_fvec3{ influence, 0.0f, influence });
-            bbox_max = max(bbox_max, p1 + Ref::simd_fvec3{ influence, 0.0f, influence });
+            bbox_min = min(bbox_min, p1 - Ref::simd_fvec3{influence, 0.0f, influence});
+            bbox_max = max(bbox_max, p1 + Ref::simd_fvec3{influence, 0.0f, influence});
         }
 
-        Ref::simd_fvec3 up = { 1.0f, 0.0f, 0.0f };
+        Ref::simd_fvec3 up = {1.0f, 0.0f, 0.0f};
         if (std::abs(l.dir[1]) < std::abs(l.dir[2]) && std::abs(l.dir[1]) < std::abs(l.dir[0])) {
-            up = { 0.0f, 1.0f, 0.0f };
+            up = {0.0f, 1.0f, 0.0f};
         } else if (std::abs(l.dir[2]) < std::abs(l.dir[0]) && std::abs(l.dir[2]) < std::abs(l.dir[1])) {
-            up = { 0.0f, 0.0f, 1.0f };
+            up = {0.0f, 0.0f, 1.0f};
         }
 
-        Ref::simd_fvec3 side = { -l.dir[1] * up[2] + l.dir[2] * up[1],
-                                 -l.dir[2] * up[0] + l.dir[0] * up[2],
-                                 -l.dir[0] * up[1] + l.dir[1] * up[0] };
+        Ref::simd_fvec3 side = {-l.dir[1] * up[2] + l.dir[2] * up[1], -l.dir[2] * up[0] + l.dir[0] * up[2],
+                                -l.dir[0] * up[1] + l.dir[1] * up[0]};
 
-        float xform[16] = { side[0],  l.dir[0], up[0],    0.0f,
-                            side[1],  l.dir[1], up[1],    0.0f,
-                            side[2],  l.dir[2], up[2],    0.0f,
-                            l.pos[0], l.pos[1], l.pos[2], 1.0f };
+        const float xform[16] = {side[0], l.dir[0], up[0], 0.0f, side[1],  l.dir[1], up[1],    0.0f,
+                                 side[2], l.dir[2], up[2], 0.0f, l.pos[0], l.pos[1], l.pos[2], 1.0f};
 
         primitives.emplace_back();
         prim_t &prim = primitives.back();
@@ -523,11 +532,13 @@ void Ray::Ocl::Scene::RebuildLightBVH() {
     // offset nodes
     for (bvh_node_t &n : bvh_nodes) {
 #ifdef USE_STACKLESS_BVH_TRAVERSAL
-        if (n.parent != 0xffffffff) n.parent += (uint32_t)nodes_.size();
+        if (n.parent != 0xffffffff) {
+            n.parent += uint32_t(nodes_.size());
+        }
 #endif
         if ((n.prim_index & LEAF_NODE_BIT) == 0) {
-            n.left_child += static_cast<uint32_t>(nodes_.size());
-            n.right_child += static_cast<uint32_t>(nodes_.size());
+            n.left_child += uint32_t(nodes_.size());
+            n.right_child += uint32_t(nodes_.size());
         }
     }
 

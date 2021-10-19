@@ -121,6 +121,24 @@
         { const int i = 6; exp }    \
         { const int i = 7; exp }
 
+#define ITERATE_16(exp)  \
+        { const int i = 0; exp }    \
+        { const int i = 1; exp }    \
+        { const int i = 2; exp }    \
+        { const int i = 3; exp }    \
+        { const int i = 4; exp }    \
+        { const int i = 5; exp }    \
+        { const int i = 6; exp }    \
+        { const int i = 7; exp }    \
+        { const int i = 8; exp }    \
+        { const int i = 9; exp }    \
+        { const int i = 10; exp }   \
+        { const int i = 11; exp }   \
+        { const int i = 12; exp }   \
+        { const int i = 13; exp }   \
+        { const int i = 14; exp }   \
+        { const int i = 15; exp }
+
 #ifdef __GNUC__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Warray-bounds"
@@ -640,6 +658,16 @@ force_inline simd_vec<T, S> fma(const float a, const simd_vec<T, S> &b, const fl
     return a * b + c;
 }
 
+template <typename T, int S>
+force_inline simd_vec<T, S> mix(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2, T k) {
+    return (1.0f - k) * v1 + k * v2;
+}
+
+template <typename T, int S>
+force_inline simd_vec<T, S> mix(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2, simd_vec<T, S> k) {
+    return (simd_vec<T, S>{1} - k) * v1 + k * v2;
+}
+
 template <typename T, int S, bool Inv>
 class simd_comp_where_helper {
     const simd_vec<T, S> &mask_;
@@ -673,6 +701,8 @@ force_inline simd_comp_where_helper<T, S, true> where_not(const simd_vec<T, S> &
 #include "simd_vec_sse.h"
 #elif defined(USE_AVX) || defined(USE_AVX2)
 #include "simd_vec_avx.h"
+#elif defined(USE_AVX512)
+#include "simd_vec_avx512.h"
 #elif defined(USE_NEON)
 #include "simd_vec_neon.h"
 #endif
@@ -704,15 +734,6 @@ using simd_dvec8 = simd_dvec<8>;
 using simd_dvec16 = simd_dvec<16>;
 }
 }
-
-#if !defined(USE_SSE2) && !defined(USE_AVX) && !defined(USE_AVX2) && !defined(USE_NEON)
-namespace Ray {
-namespace NS {
-using native_simd_fvec = simd_fvec<1>;
-using native_simd_ivec = simd_ivec<1>;
-}
-}
-#endif
 
 #ifdef __GNUC__
 #pragma GCC diagnostic pop

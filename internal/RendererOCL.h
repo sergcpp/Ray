@@ -180,8 +180,8 @@ public:
     void Resize(int w, int h) override;
     void Clear(const pixel_color_t &c) override;
 
-    std::shared_ptr<SceneBase> CreateScene() override;
-    void RenderScene(const std::shared_ptr<SceneBase> &s, RegionContext &region) override;
+    SceneBase *CreateScene() override;
+    void RenderScene(const SceneBase *scene, RegionContext &region) override;
 
     void GetStats(stats_t &st) override { st = stats_; }
     void ResetStats() override { stats_ = { 0 }; }

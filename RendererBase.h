@@ -12,13 +12,15 @@
 namespace Ray {
 /// Renderer flags used to choose backend
 enum eRendererType : uint32_t {
-    RendererRef     = (1 << 0),
-    RendererSSE2    = (1 << 1),
-    RendererAVX     = (1 << 2),
-    RendererAVX2    = (1 << 3),
-    RendererNEON    = (1 << 4),
-    RendererOCL     = (1 << 5),
+    RendererRef = (1 << 0),
+    RendererSSE2 = (1 << 1),
+    RendererAVX = (1 << 2),
+    RendererAVX2 = (1 << 3),
+    RendererNEON = (1 << 4),
+    RendererOCL = (1 << 5),
 };
+
+const char *RendererTypeName(const eRendererType rt);
 
 /// Renderer settings
 struct settings_t {
@@ -35,9 +37,10 @@ struct settings_t {
 class RegionContext {
     /// Rectangle on image
     rect_t rect_;
-public:
-    int iteration = 0;                      ///< Number of rendered samples per pixel
-    std::unique_ptr<float[]> halton_seq;    ///< Sequense of random 2D points
+
+  public:
+    int iteration = 0;                   ///< Number of rendered samples per pixel
+    std::unique_ptr<float[]> halton_seq; ///< Sequence of random 2D points
 
     explicit RegionContext(const rect_t &rect) : rect_(rect) {}
 
@@ -51,9 +54,9 @@ public:
 };
 
 /** Base class for all renderer backends
-*/
+ */
 class RendererBase {
-public:
+  public:
     virtual ~RendererBase() = default;
 
     /// Type of renderer
@@ -77,18 +80,18 @@ public:
     /** @brief Clear framebuffer
         @param c color used to fill image
     */
-    virtual void Clear(const pixel_color_t &c = { 0, 0, 0, 0 }) = 0;
+    virtual void Clear(const pixel_color_t &c = {0, 0, 0, 0}) = 0;
 
     /** @brief Create new scene
-        @return shared pointer to new scene for specific backend
+        @return pointer to new scene for specific backend
     */
-    virtual std::shared_ptr<SceneBase> CreateScene() = 0;
+    virtual SceneBase *CreateScene() = 0;
 
     /** @brief Render image region
-        @param s shared pointer to a scene
+        @param scene reference to a scene
         @param region image region to render
     */
-    virtual void RenderScene(const std::shared_ptr<SceneBase> &s, RegionContext &region) = 0;
+    virtual void RenderScene(const SceneBase *scene, RegionContext &region) = 0;
 
     struct stats_t {
         unsigned long long time_primary_ray_gen_us;
@@ -101,4 +104,4 @@ public:
     virtual void GetStats(stats_t &st) = 0;
     virtual void ResetStats() = 0;
 };
-}
+} // namespace Ray

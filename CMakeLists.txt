@@ -1,13 +1,8 @@
-cmake_minimum_required(VERSION 2.8.4)
+cmake_minimum_required(VERSION 2.8.12)
 project(Ray)
 
 OPTION(ENABLE_UNITYBUILD "Enable compilation of one large cpp file" ON)
-
-if(NOT CMAKE_SYSTEM_NAME MATCHES "Android")
-    OPTION(ENABLE_OPENCL "Enables OpenCL backend" ON)
-else()
-    OPTION(ENABLE_OPENCL "Enables OpenCL backend" OFF)
-endif()
+OPTION(ENABLE_OPENCL "Enables OpenCL backend" OFF)
 
 if(ENABLE_OPENCL)
     add_library(OpenCL STATIC IMPORTED)
@@ -56,14 +51,16 @@ set(INTERNAL_SOURCE_FILES internal/BVHSplit.h
                           internal/RendererSIMD.h
                           internal/SceneRef.h
                           internal/SceneRef.cpp
+                          internal/SparseStorage.h
                           internal/TextureAtlasRef.h
                           internal/TextureAtlasRef.cpp
                           internal/TextureSplitter.h
                           internal/TextureSplitter.cpp
                           internal/TextureUtilsRef.h
-                          internal/TextureUtilsRef.cpp)
+                          internal/TextureUtilsRef.cpp
+                          internal/UniformIntDistribution.h)
                           
-if(NOT CMAKE_SYSTEM_NAME MATCHES "Android")
+if(NOT CMAKE_SYSTEM_NAME MATCHES "Android" AND NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64")
 set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
                           internal/RendererAVX.h
                           internal/RendererAVX.cpp
@@ -85,14 +82,21 @@ set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
     endif()
 endif()
 
-if(MSVC)
+if("${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64")
+set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
+                          internal/RendererNEON.h
+                          internal/RendererNEON.cpp)
+endif()
+
+if(MSVC AND NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64")
     if(NOT CMAKE_CL_64)
         set_source_files_properties(internal/RendererSSE.cpp PROPERTIES COMPILE_FLAGS /arch:SSE2)
     endif()
     set_source_files_properties(internal/RendererAVX.cpp PROPERTIES COMPILE_FLAGS /arch:AVX)
-endif(MSVC)
+endif(MSVC AND NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64")
 
 set(SOURCE_FILES RendererBase.h
+                 RendererBase.cpp
                  RendererFactory.h
                  RendererFactory.cpp
                  SceneBase.h
@@ -115,9 +119,11 @@ endif()
 
 set(SIMD_FILES internal/simd/aligned_allocator.h
                internal/simd/detect.h
+               internal/simd/detect.cpp
                internal/simd/simd_vec.h
                internal/simd/simd_vec_sse.h
                internal/simd/simd_vec_avx.h
+               internal/simd/simd_vec_avx512.h
                internal/simd/simd_vec_neon.h)
 
 list(APPEND ALL_SOURCE_FILES ${INTERNAL_SOURCE_FILES})
@@ -151,13 +157,17 @@ if(ENABLE_UNITYBUILD)
     list(APPEND ALL_SOURCE_FILES _Ray_Avx2.cpp)
     source_group("src" FILES _Ray_Avx2.cpp)
 
-    if(MSVC)
+    list(APPEND ALL_SOURCE_FILES _Ray_Avx512.cpp)
+    source_group("src" FILES _Ray_Avx512.cpp)
+
+    if(MSVC AND NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64")
         if(NOT CMAKE_CL_64)
             set_source_files_properties(_Ray_Sse2.cpp PROPERTIES COMPILE_FLAGS /arch:SSE2)
         endif()
         set_source_files_properties(_Ray_Avx.cpp PROPERTIES COMPILE_FLAGS /arch:AVX)
         set_source_files_properties(_Ray_Avx2.cpp PROPERTIES COMPILE_FLAGS /arch:AVX2)
-    endif(MSVC)
+        set_source_files_properties(_Ray_Avx512.cpp PROPERTIES COMPILE_FLAGS /arch:AVX512)
+    endif(MSVC AND NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64")
 endif()
 
 add_library(Ray STATIC ${ALL_SOURCE_FILES})

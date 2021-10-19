@@ -1,15 +1,15 @@
 #pragma once
 
+#include "../SceneBase.h"
 #include "TextureAtlasOCL.h"
 #include "VectorOCL.h"
-#include "../SceneBase.h"
 
 namespace Ray {
 namespace Ocl {
 class Renderer;
 
 class Scene : public SceneBase {
-protected:
+  protected:
     friend class Ocl::Renderer;
 
     const cl::Context &context_;
@@ -44,7 +44,8 @@ protected:
     void RemoveNodes(uint32_t node_index, uint32_t node_count);
     void RebuildMacroBVH();
     void RebuildLightBVH();
-public:
+
+  public:
     Scene(const cl::Context &context, const cl::CommandQueue &queue, size_t max_img_buffer_size);
 
     void GetEnvironment(environment_desc_t &env) override;
@@ -53,7 +54,8 @@ public:
     uint32_t AddTexture(const tex_desc_t &t) override;
     void RemoveTexture(uint32_t) override {}
 
-    uint32_t AddMaterial(const mat_desc_t &m) override;
+    uint32_t AddMaterial(const shading_node_desc_t &m) override;
+    uint32_t AddMaterial(const principled_mat_desc_t &m) override { return 0xffffffff; }
     void RemoveMaterial(uint32_t) override {}
 
     uint32_t AddMesh(const mesh_desc_t &m) override;
@@ -66,12 +68,8 @@ public:
     void SetMeshInstanceTransform(uint32_t mi_index, const float *xform) override;
     void RemoveMeshInstance(uint32_t) override;
 
-    uint32_t triangle_count() override {
-        return (uint32_t)tris_.size();
-    }
-    uint32_t node_count() override {
-        return (uint32_t)nodes_.size();
-    }
+    uint32_t triangle_count() override { return (uint32_t)tris_.size(); }
+    uint32_t node_count() override { return (uint32_t)nodes_.size(); }
 };
-}
-}
+} // namespace Ocl
+} // namespace Ray
