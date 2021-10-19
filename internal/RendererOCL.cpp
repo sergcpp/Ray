@@ -63,7 +63,7 @@ Ray::Ocl::Renderer::Renderer(int w, int h, int platform_index, int device_index)
         platform_index = 0;
         for (size_t i = 0; i < platforms.size(); i++) {
             std::string s = platforms[i].getInfo<CL_PLATFORM_VENDOR>();
-            if (s.find("NVIDIA") != std::string::npos || s.find("AMD") != std::string::npos) {
+            if (s.find("NVIDIA") != std::string::npos || s.find("AMD") != std::string::npos || s.find("Advanced Micro Devices") != std::string::npos) {
                 platform_index = (int)i;
                 break;
             }
