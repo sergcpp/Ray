@@ -8,6 +8,7 @@
 #ifdef __GNUC__
 #pragma GCC push_options
 #pragma GCC target ("sse2")
+#pragma clang attribute push(__attribute__((target("sse2"))), apply_to = function)
 #endif
 
 namespace Ray {
@@ -712,4 +713,5 @@ force_inline simd_vec<float, 4>::operator simd_vec<int, 4>() const {
 
 #ifdef __GNUC__
 #pragma GCC pop_options
+#pragma clang attribute pop
 #endif

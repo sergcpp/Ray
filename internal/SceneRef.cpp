@@ -107,19 +107,12 @@ uint32_t Ray::Ref::Scene::AddMaterial(const shading_node_desc_t &m) {
     mat.flags = 0;
 
     if (m.type == DiffuseNode) {
-        mat.alpha_x = mat.alpha_y = m.roughness;
         mat.roughness = m.roughness;
         mat.sheen = m.sheen;
         mat.metallic = m.metallic;
         mat.textures[METALLIC_TEXTURE] = m.metallic_texture;
         mat.sheen_tint = m.tint;
     } else if (m.type == GlossyNode) {
-        // const float roughness = (0.65f * m.int_ior - 0.35f) * m.roughness; // thin refraction
-        const float roughness = m.roughness;
-        const float roughness2 = roughness * roughness;
-        const float aspect = std::sqrt(1.0f - 0.9f * m.anisotropic);
-        mat.alpha_x = roughness2 / aspect;
-        mat.alpha_y = roughness2 * aspect;
         mat.tangent_rotation = 2.0f * PI * m.anisotropic_rotation;
         mat.additional_weight = m.specular;
         mat.metallic = m.metallic;
@@ -129,7 +122,6 @@ uint32_t Ray::Ref::Scene::AddMaterial(const shading_node_desc_t &m) {
             mat.flags |= MAT_FLAG_GTR1;
         }
     } else if (m.type == RefractiveNode) {
-        mat.alpha_x = mat.alpha_y = (m.roughness * m.roughness);
     } else if (m.type == EmissiveNode) {
         mat.strength = m.strength;
         if (m.multiple_importance) {
@@ -154,7 +146,6 @@ uint32_t Ray::Ref::Scene::AddMaterial(const shading_node_desc_t &m) {
 }
 
 uint32_t Ray::Ref::Scene::AddMaterial(const principled_mat_desc_t &m) {
-#if 1
     material_t main_mat;
 
     main_mat.type = PrincipledNode;
@@ -239,243 +230,6 @@ uint32_t Ray::Ref::Scene::AddMaterial(const principled_mat_desc_t &m) {
     }
 
     return root_node;
-#else
-    uint32_t diffuse_node = 0xffffffff, glossy_node = 0xffffffff, clearcoat_node = 0xffffffff,
-             trans_refr_node = 0xffffffff, trans_refl_node = 0xffffffff, transmissive_node = 0xffffffff,
-             emissive_node = 0xffffffff, transparent_node = 0xffffffff;
-
-    const float base_color_lum =
-        0.212671f * m.base_color[0] + 0.715160f * m.base_color[1] + 0.072169f * m.base_color[2];
-    // 0.2989f * m.base_color[0] + 0.5870f * m.base_color[1] + 0.1140f * m.base_color[2];
-    float tint_color[3] = {};
-    if (base_color_lum > 0.0f) {
-        tint_color[0] = m.base_color[0] / base_color_lum;
-        tint_color[1] = m.base_color[1] / base_color_lum;
-        tint_color[2] = m.base_color[2] / base_color_lum;
-    }
-
-    // taken from Cycles
-    const float diffuse_weight = (1.0f - _CLAMP(m.metallic, 0.0f, 1.0f)) * (1.0f - _CLAMP(m.transmission, 0.0f, 1.0f));
-    const float final_transmission = _CLAMP(m.transmission, 0.0f, 1.0f) * (1.0f - _CLAMP(m.metallic, 0.0f, 1.0f));
-    const float specular_weight = 1.0f - final_transmission;
-
-    if ((base_color_lum != 0.0f && (diffuse_weight != 0.0f || m.metallic_texture != 0xffffffff)) ||
-        (m.specular == 0.0f && m.clearcoat == 0.0f && m.transmission == 0.0f)) {
-        shading_node_desc_t diffuse_desc;
-        diffuse_desc.type = DiffuseNode;
-        memcpy(diffuse_desc.base_color, m.base_color, 3 * sizeof(float));
-        diffuse_desc.base_texture = m.base_texture;
-        diffuse_desc.roughness = m.roughness;
-        diffuse_desc.roughness_texture = m.roughness_texture;
-        diffuse_desc.metallic = m.metallic;
-        diffuse_desc.metallic_texture = m.metallic_texture;
-        diffuse_desc.sheen = m.sheen;
-        diffuse_desc.tint = m.sheen_tint;
-        diffuse_desc.normal_map = m.normal_map;
-
-        diffuse_node = AddMaterial(diffuse_desc);
-    }
-
-    const float ior = (2.0f / (1.0f - std::sqrt(0.08f * m.specular))) - 1.0f;
-
-    if (m.specular > 0.0f || m.metallic != 0.0f) {
-        shading_node_desc_t glossy_desc;
-        glossy_desc.type = GlossyNode;
-        memcpy(glossy_desc.base_color, m.base_color, 3 * sizeof(float));
-        glossy_desc.base_texture = m.base_texture;
-        glossy_desc.tint = m.specular_tint;
-        glossy_desc.specular = m.specular;
-        glossy_desc.metallic = m.metallic;
-        glossy_desc.metallic_texture = m.metallic_texture;
-        glossy_desc.roughness = m.roughness;
-        glossy_desc.roughness_texture = m.roughness_texture;
-        glossy_desc.anisotropic = m.anisotropic;
-        glossy_desc.anisotropic_rotation = m.anisotropic_rotation;
-        glossy_desc.int_ior = ior;
-        glossy_desc.normal_map = m.normal_map;
-
-        glossy_node = AddMaterial(glossy_desc);
-    }
-
-    const float clearcoat_ior = (2.0f / (1.0f - std::sqrt(0.08f * m.clearcoat))) - 1.0f;
-
-    if (m.clearcoat > 0.0f) {
-        shading_node_desc_t clearcoat_desc;
-        clearcoat_desc.type = GlossyNode;
-        //clearcoat_desc.base_color[0] = clearcoat_desc.base_color[1] = clearcoat_desc.base_color[2] = 0.04f;
-        clearcoat_desc.tint = 0.0f;
-        clearcoat_desc.specular = 0.5f;
-        clearcoat_desc.base_texture = 0xffffffff;
-        clearcoat_desc.roughness = m.clearcoat_roughness;
-        clearcoat_desc.int_ior = 1.5f;
-        clearcoat_desc.weight = 0.25f * m.clearcoat;
-        clearcoat_desc.gtr1 = true;
-        clearcoat_node = AddMaterial(clearcoat_desc);
-    }
-
-    if (final_transmission > 0.0f) {
-        shading_node_desc_t trans_refr_desc;
-        trans_refr_desc.type = RefractiveNode;
-        memcpy(trans_refr_desc.base_color, m.base_color, 3 * sizeof(float));
-        trans_refr_desc.base_texture = 0xffffffff;
-        trans_refr_desc.roughness = 1.0f - (1.0f - m.roughness) * (1.0f - m.transmission_roughness);
-        trans_refr_desc.int_ior = m.ior;
-        trans_refr_node = AddMaterial(trans_refr_desc);
-
-        if (m.ior != 1.0f) {
-            shading_node_desc_t trans_refl_desc;
-            trans_refl_desc.type = GlossyNode;
-            trans_refl_desc.base_color[0] = trans_refl_desc.base_color[1] = trans_refl_desc.base_color[2] = 1.0f;
-            //memcpy(trans_refl_desc.base_color, m.base_color, 3 * sizeof(float));
-            trans_refl_desc.metallic = 1.0f;
-            trans_refl_desc.roughness = m.roughness;
-            trans_refl_desc.int_ior = 1.0f;
-            trans_refl_desc.weight = 1.0f;
-            trans_refl_node = AddMaterial(trans_refl_desc);
-
-            shading_node_desc_t mix_node;
-            mix_node.type = MixNode;
-            mix_node.base_texture = 0xffffffff;
-            mix_node.strength = 1.0f;
-            mix_node.int_ior = m.ior;
-
-            mix_node.mix_materials[0] = trans_refr_node;
-            mix_node.mix_materials[1] = trans_refl_node;
-
-            transmissive_node = AddMaterial(mix_node);
-        } else {
-            // fully refractive
-            transmissive_node = trans_refr_node;
-        }
-    }
-
-    if (m.emission_strength > 0.0f &&
-        (m.emission_color[0] > 0.0f || m.emission_color[1] > 0.0f || m.emission_color[2] > 0.0f)) {
-        shading_node_desc_t emissive_desc;
-        emissive_desc.type = EmissiveNode;
-
-        memcpy(emissive_desc.base_color, m.emission_color, 3 * sizeof(float));
-        emissive_desc.base_texture = m.emission_texture;
-        emissive_desc.strength = m.emission_strength;
-
-        emissive_node = AddMaterial(emissive_desc);
-    }
-
-    if (m.alpha != 1.0f) {
-        shading_node_desc_t transparent_desc;
-        transparent_desc.type = TransparentNode;
-
-        transparent_node = AddMaterial(transparent_desc);
-    }
-
-    uint32_t root_node = 0xffffffff;
-
-    // TODO: add generic node graph optimization instead of this
-    if (diffuse_node != 0xffffffff) {
-        root_node = diffuse_node;
-    }
-
-    if (glossy_node != 0xffffffff) {
-        if (root_node == 0xffffffff) {
-            root_node = glossy_node;
-        } else {
-            // TODO: use ratio_diff = (1 - metallic)/2
-
-            shading_node_desc_t mix_node;
-            mix_node.type = MixNode;
-            mix_node.base_texture = m.metallic_texture;
-            if (m.metallic == 0.0f) {
-                mix_node.strength = 1.0f;
-                mix_node.int_ior = ior;
-            } else {
-                mix_node.strength = m.metallic;
-                mix_node.int_ior = 0.0f;
-            }
-            mix_node.mix_add = true;
-            mix_node.normal_map = m.normal_map;
-
-            mix_node.mix_materials[0] = root_node;
-            mix_node.mix_materials[1] = glossy_node;
-
-            root_node = AddMaterial(mix_node);
-        }
-    }
-
-    if (clearcoat_node != 0xffffffff) {
-        if (root_node == 0xffffffff) {
-            root_node = clearcoat_node;
-        } else {
-            // TODO: use ratio (1/(1 + clearcoat)) to divide samples between glossy and clearcoat
-
-            shading_node_desc_t mix_node;
-            mix_node.type = MixNode;
-            mix_node.base_texture = 0xffffffff;
-            mix_node.strength = 1.0f;
-            mix_node.int_ior = clearcoat_ior;
-            mix_node.mix_add = true;
-
-            mix_node.mix_materials[0] = root_node;
-            mix_node.mix_materials[1] = clearcoat_node;
-
-            root_node = AddMaterial(mix_node);
-        }
-    }
-
-    if (transmissive_node != 0xffffffff) {
-        if (root_node == 0xffffffff) {
-            root_node = transmissive_node;
-        } else {
-            shading_node_desc_t mix_node;
-            mix_node.type = MixNode;
-            mix_node.base_texture = 0xffffffff;
-            mix_node.strength = 1.0f;
-            // mix_node.int_ior = clearcoat_ior;
-            mix_node.mix_add = true;
-
-            mix_node.mix_materials[0] = root_node;
-            mix_node.mix_materials[1] = transmissive_node;
-
-            root_node = AddMaterial(mix_node);
-        }
-    }
-
-    if (emissive_node != 0xffffffff) {
-        if (root_node == 0xffffffff) {
-            root_node = emissive_node;
-        } else {
-            shading_node_desc_t mix_node;
-            mix_node.type = MixNode;
-            mix_node.base_texture = 0xffffffff;
-            mix_node.strength = 0.5f;
-            mix_node.int_ior = mix_node.ext_ior = 0.0f;
-            mix_node.mix_add = true;
-
-            mix_node.mix_materials[0] = root_node;
-            mix_node.mix_materials[1] = emissive_node;
-
-            root_node = AddMaterial(mix_node);
-        }
-    }
-
-    if (transparent_node != 0xffffffff) {
-        if (root_node == 0xffffffff || m.alpha == 0.0f) {
-            root_node = transparent_node;
-        } else {
-            shading_node_desc_t mix_node;
-            mix_node.type = MixNode;
-            mix_node.base_texture = 0xffffffff;
-            mix_node.strength = 1.0f - m.alpha;
-            mix_node.int_ior = mix_node.ext_ior = 0.0f;
-
-            mix_node.mix_materials[0] = root_node;
-            mix_node.mix_materials[1] = transparent_node;
-
-            root_node = AddMaterial(mix_node);
-        }
-    }
-
-    return root_node;
-#endif
 }
 
 uint32_t Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {

@@ -4,7 +4,7 @@ namespace Ray {
 const char *RendererTypeName(const eRendererType rt) {
     if (rt == RendererRef) {
         return "ref";
-    } else if (rt == RendererSSE2) {
+    } /*else if (rt == RendererSSE2) {
         return "sse2";
     } else if (rt == RendererAVX) {
         return "avx";
@@ -14,7 +14,7 @@ const char *RendererTypeName(const eRendererType rt) {
         return "neon";
     } else if (rt == RendererOCL) {
         return "ocl";
-    }
+    }*/
     return "";
 }
 }

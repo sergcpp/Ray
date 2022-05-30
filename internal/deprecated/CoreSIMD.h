@@ -3845,7 +3845,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                     p[i] = std::modf(halton[hi + 0] + rand_offset3[i], &_unused);
                 }
 
-                simd_fvec<S> diff_k = BRDF_OrenNayar(V, I, __N, __B, {mat->alpha_x});
+                simd_fvec<S> diff_k = BRDF_OrenNayar(V, I, __N, __B, {mat->roughness});
                 ITERATE_3({ rc[i] *= diff_k; })
 
                 const simd_ivec<S> idiff_depth_mask = diff_depth < int(pi.settings.max_diff_depth);

@@ -42,13 +42,13 @@ set(INTERNAL_SOURCE_FILES internal/BVHSplit.h
                           internal/Core.cpp
                           internal/CoreRef.h
                           internal/CoreRef.cpp
-                          internal/CoreSIMD.h
+                          internal/deprecated/CoreSIMD.h
                           internal/FramebufferRef.h
                           internal/FramebufferRef.cpp
                           internal/Halton.h
                           internal/RendererRef.h
                           internal/RendererRef.cpp
-                          internal/RendererSIMD.h
+                          internal/deprecated/RendererSIMD.h
                           internal/SceneRef.h
                           internal/SceneRef.cpp
                           internal/SparseStorage.h
@@ -62,30 +62,30 @@ set(INTERNAL_SOURCE_FILES internal/BVHSplit.h
                           
 if(NOT CMAKE_SYSTEM_NAME MATCHES "Android" AND NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64")
 set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
-                          internal/RendererAVX.h
-                          internal/RendererAVX.cpp
-                          internal/RendererAVX2.h
-                          internal/RendererAVX2.cpp
-                          internal/RendererSSE2.h
-                          internal/RendererSSE2.cpp)
+                          internal/deprecated/RendererAVX.h
+                          internal/deprecated/RendererAVX.cpp
+                          internal/deprecated/RendererAVX2.h
+                          internal/deprecated/RendererAVX2.cpp
+                          internal/deprecated/RendererSSE2.h
+                          internal/deprecated/RendererSSE2.cpp)
 
     if (ENABLE_OPENCL)
         set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
-                          internal/CoreOCL.h
-                          internal/RendererOCL.h
-                          internal/RendererOCL.cpp
-                          internal/SceneOCL.h
-                          internal/SceneOCL.cpp
-                          internal/TextureAtlasOCL.h
-                          internal/TextureAtlasOCL.cpp
-                          internal/VectorOCL.h)
+                          internal/deprecated/CoreOCL.h
+                          internal/deprecated/RendererOCL.h
+                          internal/deprecated/RendererOCL.cpp
+                          internal/deprecated/SceneOCL.h
+                          internal/deprecated/SceneOCL.cpp
+                          internal/deprecated/TextureAtlasOCL.h
+                          internal/deprecated/TextureAtlasOCL.cpp
+                          internal/deprecated/VectorOCL.h)
     endif()
 endif()
 
 if("${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64")
 set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
-                          internal/RendererNEON.h
-                          internal/RendererNEON.cpp)
+                          internal/deprecated/RendererNEON.h
+                          internal/deprecated/RendererNEON.cpp)
 endif()
 
 if(MSVC AND NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64")

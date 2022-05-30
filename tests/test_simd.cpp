@@ -69,28 +69,28 @@ void test_simd() {
     if (features.sse2_supported) {
         test_simd_sse();
     } else {
-        puts("SKIPPING (NOT SUPORTED)");
+        puts("Skipping... (not supported)");
     }
 
     puts(" SIMD AVX:");
     if (features.avx_supported) {
         test_simd_avx();
     } else {
-        puts("SKIPPING (NOT SUPORTED)");
+        puts("Skipping... (not supported)");
     }
 
     puts(" SIMD AVX2:");
     if (features.avx2_supported) {
         test_simd_avx2();
     } else {
-        puts("SKIPPING (NOT SUPORTED)");
+        puts("Skipping... (not supported)");
     }
 
     puts(" SIMD AVX512:");
     if (features.avx512_supported) {
         test_simd_avx512();
     } else {
-        puts("SKIPPING (NOT SUPORTED)");
+        puts("Skipping... (not supported)");
     }
 #else
     puts(" SIMD NEON:");

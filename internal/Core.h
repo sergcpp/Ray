@@ -148,8 +148,6 @@ struct material_t {
     uint8_t type;
     union {
         struct {
-            float alpha_x;
-            float alpha_y;
             float tangent_rotation;
         };
         struct {

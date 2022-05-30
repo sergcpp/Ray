@@ -140,11 +140,11 @@ uint32_t Ray::Ocl::Scene::AddMaterial(const shading_node_desc_t &m) {
     mat.ext_ior = m.ext_ior;
 
     if (m.type == DiffuseNode) {
-        mat.alpha_x = mat.alpha_y = m.roughness;
+        mat.roughness = m.roughness;
     } else if (m.type == GlossyNode) {
-        mat.alpha_x = mat.alpha_y = m.roughness;
+        mat.roughness = m.roughness;
     } else if (m.type == RefractiveNode) {
-        mat.alpha_x = mat.alpha_y = m.roughness;
+        mat.roughness = m.roughness;
     } else if (m.type == EmissiveNode) {
         mat.strength = m.strength;
     } else if (m.type == MixNode) {

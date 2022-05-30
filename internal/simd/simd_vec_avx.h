@@ -8,8 +8,10 @@
 #pragma GCC push_options
 #if defined(USE_AVX2) || defined(USE_AVX512)
 #pragma GCC target("avx2")
+#pragma clang attribute push(__attribute__((target("avx2"))), apply_to = function)
 #else
 #pragma GCC target("avx")
+#pragma clang attribute push(__attribute__((target("avx"))), apply_to = function)
 #endif
 #endif
 
@@ -801,4 +803,5 @@ force_inline simd_vec<float, 8> fma(const float a, const simd_vec<float, 8> &b, 
 
 #ifdef __GNUC__
 #pragma GCC pop_options
+#pragma clang attribute pop
 #endif

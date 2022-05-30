@@ -16,12 +16,12 @@
 #include "internal/TextureUtilsRef.cpp"
 
 #if defined(__ARM_NEON__) || defined(__aarch64__) || defined(_M_ARM) || defined(_M_ARM64)
-#include "internal/RendererNEON.cpp"
+//#include "internal/RendererNEON.cpp"
 #endif
 
 #if !defined(__ANDROID__) && !defined(DISABLE_OCL)
-#include "internal/RendererOCL.cpp"
-#include "internal/SceneOCL.cpp"
-#include "internal/TextureAtlasOCL.cpp"
+//#include "internal/RendererOCL.cpp"
+//#include "internal/SceneOCL.cpp"
+//#include "internal/TextureAtlasOCL.cpp"
 #endif
 
