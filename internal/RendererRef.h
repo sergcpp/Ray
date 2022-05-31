@@ -37,6 +37,8 @@ struct PassData {
 };
 
 class Renderer : public RendererBase {
+    std::ostream &log_stream_;
+
     bool use_wide_bvh_;
     Ref::Framebuffer clean_buf_, final_buf_, temp_buf_;
 
@@ -50,7 +52,7 @@ class Renderer : public RendererBase {
     void UpdateHaltonSequence(int iteration, std::unique_ptr<float[]> &seq);
 
   public:
-    Renderer(const settings_t &s);
+    Renderer(const settings_t &s, std::ostream &log_stream);
 
     eRendererType type() const override { return RendererRef; }
 

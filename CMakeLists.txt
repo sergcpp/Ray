@@ -58,6 +58,8 @@ set(INTERNAL_SOURCE_FILES internal/BVHSplit.h
                           internal/TextureSplitter.cpp
                           internal/TextureUtilsRef.h
                           internal/TextureUtilsRef.cpp
+                          internal/Time_.h
+                          internal/Time.cpp
                           internal/UniformIntDistribution.h)
                           
 if(NOT CMAKE_SYSTEM_NAME MATCHES "Android" AND NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64")

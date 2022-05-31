@@ -347,25 +347,25 @@ uint32_t Ray::PreprocessMesh(const float *attrs, const uint32_t *vtx_indices, si
     const size_t attr_stride = AttrStrides[layout];
 
     for (size_t j = 0; j < vtx_indices_count; j += 3) {
-        float p[9];
+        Ref::simd_fvec4 p[3];
 
         const uint32_t i0 = vtx_indices[j + 0] + base_vertex, i1 = vtx_indices[j + 1] + base_vertex,
                        i2 = vtx_indices[j + 2] + base_vertex;
 
-        memcpy(&p[0], &positions[i0 * attr_stride], 3 * sizeof(float));
-        memcpy(&p[3], &positions[i1 * attr_stride], 3 * sizeof(float));
-        memcpy(&p[6], &positions[i2 * attr_stride], 3 * sizeof(float));
+        memcpy(&p[0][0], &positions[i0 * attr_stride], 3 * sizeof(float));
+        memcpy(&p[1][0], &positions[i1 * attr_stride], 3 * sizeof(float));
+        memcpy(&p[2][0], &positions[i2 * attr_stride], 3 * sizeof(float));
 
         tri_accel2_t tri;
-        if (PreprocessTri(&p[0], 0, &tri)) {
+        if (PreprocessTri(&p[0][0], 4, &tri)) {
             real_indices.push_back(uint32_t(j / 3));
             triangles.push_back(tri);
         } else {
             continue;
         }
 
-        const Ref::simd_fvec3 _min = min(Ref::simd_fvec3{&p[0]}, min(Ref::simd_fvec3{&p[3]}, Ref::simd_fvec3{&p[6]})),
-                              _max = max(Ref::simd_fvec3{&p[0]}, max(Ref::simd_fvec3{&p[3]}, Ref::simd_fvec3{&p[6]}));
+        const Ref::simd_fvec4 _min = min(p[0], min(p[1], p[2])),
+                              _max = max(p[0], max(p[1], p[2]));
 
         primitives.push_back({i0, i1, i2, _min, _max});
     }
@@ -396,7 +396,7 @@ uint32_t Ray::EmitLBVH_Recursive(const prim_t *prims, const uint32_t *indices, c
                                  uint32_t prim_index, uint32_t prim_count, uint32_t index_offset, int bit_index,
                                  std::vector<bvh_node_t> &out_nodes) {
     if (bit_index == -1 || prim_count < 8) {
-        Ref::simd_fvec3 bbox_min = {std::numeric_limits<float>::max()},
+        Ref::simd_fvec4 bbox_min = {std::numeric_limits<float>::max()},
                         bbox_max = {std::numeric_limits<float>::lowest()};
 
         for (uint32_t i = prim_index; i < prim_index + prim_count; i++) {
@@ -482,7 +482,7 @@ uint32_t Ray::EmitLBVH_NonRecursive(const prim_t *prims, const uint32_t *indices
         proc_item_t &cur = proc_stack[stack_size - 1];
 
         if (cur.bit_index == -1 || cur.prim_count < 8) {
-            Ref::simd_fvec3 bbox_min = {std::numeric_limits<float>::max()},
+            Ref::simd_fvec4 bbox_min = {std::numeric_limits<float>::max()},
                             bbox_max = {std::numeric_limits<float>::lowest()};
 
             for (uint32_t i = cur.prim_index; i < cur.prim_index + cur.prim_count; i++) {
@@ -562,9 +562,9 @@ uint32_t Ray::PreprocessPrims_SAH(const prim_t *prims, const size_t prims_count,
                                   std::vector<uint32_t> &out_indices) {
     struct prims_coll_t {
         std::vector<uint32_t> indices;
-        Ref::simd_fvec3 min = {std::numeric_limits<float>::max()}, max = {std::numeric_limits<float>::lowest()};
+        Ref::simd_fvec4 min = {std::numeric_limits<float>::max()}, max = {std::numeric_limits<float>::lowest()};
         prims_coll_t() {}
-        prims_coll_t(std::vector<uint32_t> &&_indices, const Ref::simd_fvec3 &_min, const Ref::simd_fvec3 &_max)
+        prims_coll_t(std::vector<uint32_t> &&_indices, const Ref::simd_fvec4 &_min, const Ref::simd_fvec4 &_max)
             : indices(std::move(_indices)), min(_min), max(_max) {}
     };
 
@@ -580,7 +580,7 @@ uint32_t Ray::PreprocessPrims_SAH(const prim_t *prims, const size_t prims_count,
         prim_lists.back().max = max(prim_lists.back().max, prims[j].bbox_max);
     }
 
-    Ref::simd_fvec3 root_min = prim_lists.back().min, root_max = prim_lists.back().max;
+    Ref::simd_fvec4 root_min = prim_lists.back().min, root_max = prim_lists.back().max;
 
     while (!prim_lists.empty()) {
         split_data_t split_data =
@@ -606,7 +606,7 @@ uint32_t Ray::PreprocessPrims_SAH(const prim_t *prims, const size_t prims_count,
 #endif
 
         if (split_data.right_indices.empty()) {
-            Ref::simd_fvec3 bbox_min = split_data.left_bounds[0], bbox_max = split_data.left_bounds[1];
+            Ref::simd_fvec4 bbox_min = split_data.left_bounds[0], bbox_max = split_data.left_bounds[1];
 
             out_nodes.emplace_back();
             bvh_node_t &n = out_nodes.back();
@@ -623,10 +623,10 @@ uint32_t Ray::PreprocessPrims_SAH(const prim_t *prims, const size_t prims_count,
             const auto index = uint32_t(num_nodes);
 
             uint32_t space_axis = 0;
-            const Ref::simd_fvec3 c_left = (split_data.left_bounds[0] + split_data.left_bounds[1]) / 2,
-                                  c_right = (split_data.right_bounds[0] + split_data.right_bounds[1]) / 2;
+            const Ref::simd_fvec4 c_left = (split_data.left_bounds[0] + split_data.left_bounds[1]) / 2.0f,
+                                  c_right = (split_data.right_bounds[0] + split_data.right_bounds[1]) / 2.0f;
 
-            const Ref::simd_fvec3 dist = abs(c_left - c_right);
+            const Ref::simd_fvec4 dist = abs(c_left - c_right);
 
             if (dist[0] > dist[1] && dist[0] > dist[2]) {
                 space_axis = 0;
@@ -636,7 +636,7 @@ uint32_t Ray::PreprocessPrims_SAH(const prim_t *prims, const size_t prims_count,
                 space_axis = 2;
             }
 
-            const Ref::simd_fvec3 bbox_min = min(split_data.left_bounds[0], split_data.right_bounds[0]),
+            const Ref::simd_fvec4 bbox_min = min(split_data.left_bounds[0], split_data.right_bounds[0]),
                                   bbox_max = max(split_data.left_bounds[1], split_data.right_bounds[1]);
 
             out_nodes.emplace_back();
@@ -664,7 +664,7 @@ uint32_t Ray::PreprocessPrims_HLBVH(const prim_t *prims, size_t prims_count, std
                                     std::vector<uint32_t> &out_indices) {
     std::vector<uint32_t> morton_codes(prims_count);
 
-    Ref::simd_fvec3 whole_min = {std::numeric_limits<float>::max()}, whole_max = {std::numeric_limits<float>::lowest()};
+    Ref::simd_fvec4 whole_min = {std::numeric_limits<float>::max()}, whole_max = {std::numeric_limits<float>::lowest()};
 
     const auto indices_start = uint32_t(out_indices.size());
     out_indices.reserve(out_indices.size() + prims_count);
@@ -678,12 +678,12 @@ uint32_t Ray::PreprocessPrims_HLBVH(const prim_t *prims, size_t prims_count, std
 
     uint32_t *indices = &out_indices[indices_start];
 
-    const Ref::simd_fvec3 scale = (1 << BitsPerDim) / (whole_max - whole_min);
+    const Ref::simd_fvec4 scale = float(1 << BitsPerDim) / (whole_max - whole_min);
 
     // compute morton codes
     for (size_t i = 0; i < prims_count; i++) {
-        const Ref::simd_fvec3 center = 0.5f * (prims[i].bbox_min + prims[i].bbox_max);
-        const Ref::simd_fvec3 code = (center - whole_min) * scale;
+        const Ref::simd_fvec4 center = 0.5f * (prims[i].bbox_min + prims[i].bbox_max);
+        const Ref::simd_fvec4 code = (center - whole_min) * scale;
 
         const uint32_t x = uint32_t(code[0]), y = uint32_t(code[1]), z = uint32_t(code[2]);
 

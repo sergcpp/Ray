@@ -14,6 +14,7 @@
 #include "internal/SceneRef.cpp"
 #include "internal/TextureAtlasRef.cpp"
 #include "internal/TextureUtilsRef.cpp"
+#include "internal/Time.cpp"
 
 #if defined(__ARM_NEON__) || defined(__aarch64__) || defined(_M_ARM) || defined(_M_ARM64)
 //#include "internal/RendererNEON.cpp"

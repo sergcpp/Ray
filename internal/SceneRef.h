@@ -37,6 +37,8 @@ class Scene : public SceneBase {
     template <int DimX, int DimY> friend class Avx2::RendererSIMD;
     template <int DimX, int DimY> friend class Neon::RendererSIMD;
 
+    std::ostream &log_stream_;
+
     bool use_wide_bvh_;
     std::vector<bvh_node_t> nodes_;
     aligned_vector<mbvh_node_t> mnodes_;
@@ -71,7 +73,7 @@ class Scene : public SceneBase {
     void RebuildLightBVH();
 
   public:
-    Scene(bool use_wide_bvh);
+    Scene(std::ostream &log_stream, bool use_wide_bvh);
     ~Scene() override;
 
     void GetEnvironment(environment_desc_t &env) override;

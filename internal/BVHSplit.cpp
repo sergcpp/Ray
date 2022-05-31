@@ -7,14 +7,14 @@ const float SpatialSplitAlpha = 0.00001f;
 const int NumSpatialSplitBins = 256;
 
 struct bbox_t {
-    Ref::simd_fvec3 min = {std::numeric_limits<float>::max()}, max = {std::numeric_limits<float>::lowest()};
+    Ref::simd_fvec4 min = {std::numeric_limits<float>::max()}, max = {std::numeric_limits<float>::lowest()};
     bbox_t() {}
-    bbox_t(const Ref::simd_fvec3 &_min, const Ref::simd_fvec3 &_max) : min(_min), max(_max) {}
+    bbox_t(const Ref::simd_fvec4 &_min, const Ref::simd_fvec4 &_max) : min(_min), max(_max) {}
 
     float surface_area() const { return surface_area(min, max); }
 
-    static float surface_area(const Ref::simd_fvec3 &min, const Ref::simd_fvec3 &max) {
-        Ref::simd_fvec3 d = max - min;
+    static float surface_area(const Ref::simd_fvec4 &min, const Ref::simd_fvec4 &max) {
+        Ref::simd_fvec4 d = max - min;
         return 2 * (d[0] + d[1] + d[2]);
         // return d[0] * d[1] + d[0] * d[2] + d[1] * d[2];
     }
@@ -126,9 +126,9 @@ bbox_t GetClippedAABB(const Ref::simd_fvec3 &_v0, const Ref::simd_fvec3 &_v1, co
 } // namespace Ray
 
 Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, const std::vector<uint32_t> &prim_indices,
-                                           const float *positions, const size_t stride, const Ref::simd_fvec3 &bbox_min,
-                                           const Ref::simd_fvec3 &bbox_max, const Ref::simd_fvec3 &root_min,
-                                           const Ref::simd_fvec3 &root_max, const bvh_settings_t &s) {
+                                           const float *positions, const size_t stride, const Ref::simd_fvec4 &bbox_min,
+                                           const Ref::simd_fvec4 &bbox_max, const Ref::simd_fvec4 &root_min,
+                                           const Ref::simd_fvec4 &root_max, const bvh_settings_t &s) {
     const size_t num_tris = prim_indices.size();
     const bbox_t whole_box = {bbox_min, bbox_max};
 
@@ -217,8 +217,10 @@ Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, const std::
 
     const bbox_t overlap = {max(res_left_bounds.min, res_right_bounds.min),
                             min(res_left_bounds.max, res_right_bounds.max)};
+    Ref::simd_ivec4 test = (overlap.max <= overlap.min);
+    test[3] = 0;
 
-    if (s.allow_spatial_splits && (overlap.max <= overlap.min).all_zeros() &&
+    if (s.allow_spatial_splits && test.all_zeros() &&
         overlap.surface_area() > SpatialSplitAlpha * bbox_t::surface_area(root_min, root_max)) {
         struct bin_t {
             bbox_t extends, limits;

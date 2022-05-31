@@ -4,12 +4,12 @@
 #include <cstring>
 
 #include "TextureUtilsRef.h"
+#include "Time_.h"
 
 #define _CLAMP(val, min, max) (val < min ? min : (val > max ? max : val))
 
-Ray::Ref::Scene::Scene(const bool use_wide_bvh)
-    : use_wide_bvh_(use_wide_bvh), texture_atlas_(TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE) {
-}
+Ray::Ref::Scene::Scene(std::ostream &log_stream, const bool use_wide_bvh)
+    : log_stream_(log_stream), use_wide_bvh_(use_wide_bvh), texture_atlas_(TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE) {}
 
 Ray::Ref::Scene::~Scene() {
     for (uint32_t i = 0; i < uint32_t(mesh_instances_.size()); ++i) {
@@ -242,11 +242,17 @@ uint32_t Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
     s.allow_spatial_splits = _m.allow_spatial_splits;
     s.use_fast_bvh_build = _m.use_fast_bvh_build;
 
+    const uint64_t t1 = Ray::GetTimeMs();
+
     m.node_index = uint32_t(nodes_.size());
     m.node_count = PreprocessMesh(_m.vtx_attrs, _m.vtx_indices, _m.vtx_indices_count, _m.layout, _m.base_vertex,
                                   uint32_t(tri_materials_.size()), s, nodes_, tris_, tris2_, tri_indices_);
 
+    log_stream_ << "Ray: Mesh preprocessed in " << (Ray::GetTimeMs() - t1) << "ms\n";
+
     if (use_wide_bvh_) {
+        const uint64_t t2 = Ray::GetTimeMs();
+
         const auto before_count = uint32_t(mnodes_.size());
         const uint32_t new_root = FlattenBVH_Recursive(nodes_.data(), m.node_index, 0xffffffff, mnodes_);
 
@@ -255,6 +261,8 @@ uint32_t Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
 
         // nodes_ variable is treated as temporary storage
         nodes_.clear();
+
+        log_stream_ << "Ray: BVH flattened in " << (Ray::GetTimeMs() - t2) << "ms\n";
     }
 
     const auto tri_materials_start = uint32_t(tri_materials_.size());
@@ -650,7 +658,7 @@ void Ray::Ref::Scene::RebuildTLAS() {
     primitives.reserve(mesh_instances_.size());
 
     for (const mesh_instance_t &mi : mesh_instances_) {
-        primitives.push_back({0, 0, 0, Ref::simd_fvec3{mi.bbox_min}, Ref::simd_fvec3{mi.bbox_max}});
+        primitives.push_back({0, 0, 0, Ref::simd_fvec4{mi.bbox_min}, Ref::simd_fvec4{mi.bbox_max}});
     }
 
     macro_nodes_root_ = uint32_t(nodes_.size());

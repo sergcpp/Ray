@@ -49,7 +49,7 @@ Ray::RendererBase *Ray::CreateRenderer(const settings_t &s, const uint32_t enabl
     }*/
     if (enabled_types & RendererRef) {
         log_stream << "Ray: Creating Ref renderer " << s.w << "x" << s.h << std::endl;
-        return new Ref::Renderer(s);
+        return new Ref::Renderer(s, log_stream);
     }
 #elif defined(__ARM_NEON__) || defined(__aarch64__) || defined(_M_ARM) || defined(_M_ARM64)
     /*if (enabled_types & RendererNEON) {
@@ -58,7 +58,7 @@ Ray::RendererBase *Ray::CreateRenderer(const settings_t &s, const uint32_t enabl
     }*/
     if (enabled_types & RendererRef) {
         log_stream << "Ray: Creating Ref renderer " << s.w << "x" << s.h << std::endl;
-        return new Ref::Renderer(s);
+        return new Ref::Renderer(s, log_stream);
     }
 #elif defined(__i386__) || defined(__x86_64__)
     /*if ((enabled_types & RendererSSE2) && features.sse2_supported) {
@@ -71,7 +71,7 @@ Ray::RendererBase *Ray::CreateRenderer(const settings_t &s, const uint32_t enabl
     }
 #endif
     log_stream << "Ray: Creating Ref renderer " << s.w << "x" << s.h << std::endl;
-    return new Ref::Renderer(s);
+    return new Ref::Renderer(s, log_stream);
 }
 
 #if !defined(DISABLE_OCL)
