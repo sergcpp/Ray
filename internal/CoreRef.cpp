@@ -3387,11 +3387,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
             r.c[0] = ray.c[0] * F[0] * mix_weight / F[3];
             r.c[1] = ray.c[1] * F[1] * mix_weight / F[3];
             r.c[2] = ray.c[2] * F[2] * mix_weight / F[3];
-#if USE_NEE == 1
             r.pdf = F[3];
-#else
-            r.pdf = -1.0f;
-#endif
 
             memcpy(&r.do_dx[0], value_ptr(surf_der.do_dx), 3 * sizeof(float));
             memcpy(&r.do_dy[0], value_ptr(surf_der.do_dy), 3 * sizeof(float));
@@ -3431,11 +3427,8 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
             r.c[0] = ray.c[0] * F[0] * mix_weight / F[3];
             r.c[1] = ray.c[1] * F[1] * mix_weight / F[3];
             r.c[2] = ray.c[2] * F[2] * mix_weight / F[3];
-#if USE_NEE == 1
             r.pdf = F[3];
-#else
-            r.pdf = -1.0f;
-#endif
+
             memcpy(&r.o[0], value_ptr(offset_ray(P, plane_N)), 3 * sizeof(float));
             memcpy(&r.d[0], value_ptr(V), 3 * sizeof(float));
 
@@ -3479,11 +3472,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
             r.c[0] = ray.c[0] * F[0] * mix_weight / F[3];
             r.c[1] = ray.c[1] * F[1] * mix_weight / F[3];
             r.c[2] = ray.c[2] * F[2] * mix_weight / F[3];
-#if USE_NEE == 1
             r.pdf = F[3];
-#else
-            r.pdf = -1.0f;
-#endif
 
             const float k = (eta - eta * eta * dot(I, plane_N) / dot(V, plane_N));
             const float dmdx = k * surf_der.ddn_dx;
@@ -3528,7 +3517,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
             base_color[2] *= sc.env->env_col[2];
         }
 
-        if (total_depth > 0 && (mat->flags & (MAT_FLAG_MULT_IMPORTANCE | MAT_FLAG_SKY_PORTAL)) && ray.pdf > 0.0f) {
+        if (total_depth > 0 && (mat->flags & (MAT_FLAG_MULT_IMPORTANCE | MAT_FLAG_SKY_PORTAL))) {
             const simd_fvec3 p1 = simd_fvec3(v1.p), p2 = simd_fvec3(v2.p), p3 = simd_fvec3(v3.p);
 
             simd_fvec3 light_forward = TransformDirection(cross(p2 - p1, p3 - p1), tr->xform);
@@ -3623,11 +3612,6 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
                 ray_packet_t r;
 
                 r.xy = ray.xy;
-#if USE_NEE == 1
-                r.pdf = pdf;
-#else
-                r.pdf = -1.0f;
-#endif
                 r.ray_depth = ray.ray_depth + 0x00000001;
 
                 memcpy(&r.o[0], value_ptr(offset_ray(P, plane_N)), 3 * sizeof(float));
@@ -3636,6 +3620,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
                 r.c[0] = ray.c[0] * diff_col[0] * mix_weight / diffuse_weight;
                 r.c[1] = ray.c[1] * diff_col[1] * mix_weight / diffuse_weight;
                 r.c[2] = ray.c[2] * diff_col[2] * mix_weight / diffuse_weight;
+                r.pdf = pdf;
 
                 memcpy(&r.do_dx[0], value_ptr(surf_der.do_dx), 3 * sizeof(float));
                 memcpy(&r.do_dy[0], value_ptr(surf_der.do_dy), 3 * sizeof(float));
@@ -3677,12 +3662,8 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
                 r.c[0] = ray.c[0] * F[0] * mix_weight / F[3];
                 r.c[1] = ray.c[1] * F[1] * mix_weight / F[3];
                 r.c[2] = ray.c[2] * F[2] * mix_weight / F[3];
-
-#if USE_NEE == 1
                 r.pdf = F[3];
-#else
-                r.pdf = -1.0f;
-#endif
+
                 memcpy(&r.o[0], value_ptr(offset_ray(P, plane_N)), 3 * sizeof(float));
                 memcpy(&r.d[0], value_ptr(V), 3 * sizeof(float));
 
@@ -3730,11 +3711,8 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
                 r.c[0] = ray.c[0] * F[0] * weight;
                 r.c[1] = ray.c[1] * F[1] * weight;
                 r.c[2] = ray.c[2] * F[2] * weight;
-#if USE_NEE == 1
                 r.pdf = F[3];
-#else
-                r.pdf = -1.0f;
-#endif
+
                 memcpy(&r.o[0], value_ptr(offset_ray(P, plane_N)), 3 * sizeof(float));
                 memcpy(&r.d[0], value_ptr(V), 3 * sizeof(float));
 
@@ -3823,11 +3801,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
                 r.c[0] = ray.c[0] * F[0] * mix_weight / F[3];
                 r.c[1] = ray.c[1] * F[1] * mix_weight / F[3];
                 r.c[2] = ray.c[2] * F[2] * mix_weight / F[3];
-#if USE_NEE == 1
                 r.pdf = F[3];
-#else
-                r.pdf = -1.0f;
-#endif
 
                 //////////////////
 

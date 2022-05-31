@@ -118,9 +118,6 @@ uint32_t Ray::Ref::Scene::AddMaterial(const shading_node_desc_t &m) {
         mat.metallic = m.metallic;
         mat.textures[METALLIC_TEXTURE] = m.metallic_texture;
         mat.tint = m.tint;
-        if (m.gtr1) {
-            mat.flags |= MAT_FLAG_GTR1;
-        }
     } else if (m.type == RefractiveNode) {
     } else if (m.type == EmissiveNode) {
         mat.strength = m.strength;

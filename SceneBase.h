@@ -75,7 +75,6 @@ struct shading_node_desc_t {
     uint32_t metallic_texture = 0xffffffff;
     bool multiple_importance = false;         ///< Enable explicit emissive geometry sampling
     bool sky_portal = false;
-    bool gtr1 = false;
     bool mix_add = false;
 };
 

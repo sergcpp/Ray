@@ -137,9 +137,8 @@ const int MATERIAL_SOLID_BIT = 0b1000000000000000;
 const int MATERIAL_INDEX_BITS = 0b0011111111111111;
 
 const uint32_t MAT_FLAG_MULT_IMPORTANCE = (1u << 0u);
-const uint32_t MAT_FLAG_GTR1 = (1u << 1u);
-const uint32_t MAT_FLAG_MIX_ADD = (1u << 2u);
-const uint32_t MAT_FLAG_SKY_PORTAL = (1u << 3u);
+const uint32_t MAT_FLAG_MIX_ADD = (1u << 1u);
+const uint32_t MAT_FLAG_SKY_PORTAL = (1u << 2u);
 
 struct material_t {
     uint32_t textures[MAX_MATERIAL_TEXTURES];
