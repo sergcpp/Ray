@@ -20,58 +20,62 @@
 
 #include "internal/simd/detect.h"
 
-Ray::RendererBase *Ray::CreateRenderer(const settings_t &s, const uint32_t enabled_types, std::ostream &log_stream) {
+namespace Ray {
+LogNull g_null_log;
+} // namespace Ray
+
+Ray::RendererBase *Ray::CreateRenderer(const settings_t &s, ILog *log, const uint32_t enabled_types) {
     CpuFeatures features = GetCpuFeatures();
 
 #if !defined(DISABLE_OCL)
     /*if (enabled_types & RendererOCL) {
-        log_stream << "Ray: Creating OpenCL renderer " << s.w << "x" << s.h << std::endl;
+        log->Info("Ray: Creating OpenCL renderer %ix%i", s.w, s.h);
         try {
             return new Ocl::Renderer(s.w, s.h, s.platform_index, s.device_index);
         } catch (std::exception &e) {
-            log_stream << "Ray: Creating OpenCL renderer failed, " << e.what() << std::endl;
+            log->Info("Ray: Creating OpenCL renderer failed, %s", e.what());
         }
     }*/
 #endif
 
 #if !defined(__aarch64__) && !defined(_M_ARM) && !defined(_M_ARM64)
     /*if ((enabled_types & RendererAVX2) && features.avx2_supported) {
-        log_stream << "Ray: Creating AVX2 renderer " << s.w << "x" << s.h << std::endl;
+        log->Info("Ray: Creating AVX2 renderer %ix%i", s.w, s.h);
         return new Avx2::Renderer(s);
     }
     if ((enabled_types & RendererAVX) && features.avx_supported) {
-        log_stream << "Ray: Creating AVX renderer " << s.w << "x" << s.h << std::endl;
+        log->Info("Ray: Creating AVX renderer %ix%i", s.w, s.h);
         return new Avx::Renderer(s);
     }
     if ((enabled_types & RendererSSE2) && features.sse2_supported) {
-        log_stream << "Ray: Creating SSE2 renderer " << s.w << "x" << s.h << std::endl;
+        log->Info("Ray: Creating SSE2 renderer %ix%i", s.w, s.h);
         return new Sse2::Renderer(s);
     }*/
     if (enabled_types & RendererRef) {
-        log_stream << "Ray: Creating Ref renderer " << s.w << "x" << s.h << std::endl;
-        return new Ref::Renderer(s, log_stream);
+        log->Info("Ray: Creating Ref renderer %ix%i", s.w, s.h);
+        return new Ref::Renderer(s, log);
     }
 #elif defined(__ARM_NEON__) || defined(__aarch64__) || defined(_M_ARM) || defined(_M_ARM64)
     /*if (enabled_types & RendererNEON) {
-        log_stream << "Ray: Creating NEON renderer " << s.w << "x" << s.h << std::endl;
+        log->Info("Ray: Creating NEON renderer %ix%i", s.w, s.h);
         return new Neon::Renderer(s);
     }*/
     if (enabled_types & RendererRef) {
-        log_stream << "Ray: Creating Ref renderer " << s.w << "x" << s.h << std::endl;
-        return new Ref::Renderer(s, log_stream);
+        log->Info("Ray: Creating Ref renderer %ix%i", s.w, s.h);
+        return new Ref::Renderer(s, log);
     }
 #elif defined(__i386__) || defined(__x86_64__)
     /*if ((enabled_types & RendererSSE2) && features.sse2_supported) {
-        log_stream << "Ray: Creating SSE2 renderer " << s.w << "x" << s.h << std::endl;
+        log->Info("Ray: Creating SSE2 renderer %ix%i", s.w, s.h);
         return new Sse2::Renderer(s);
     }*/
     if (enabled_types & RendererRef) {
-        log_stream << "Ray: Creating Ref renderer " << s.w << "x" << s.h << std::endl;
+        log->Info("Ray: Creating Ref renderer %ix%i", s.w, s.h;
         return new Ref::Renderer(s);
     }
 #endif
-    log_stream << "Ray: Creating Ref renderer " << s.w << "x" << s.h << std::endl;
-    return new Ref::Renderer(s, log_stream);
+    log->Info("Ray: Creating Ref renderer %ix%i", s.w, s.h);
+    return new Ref::Renderer(s, log);
 }
 
 #if !defined(DISABLE_OCL)

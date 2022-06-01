@@ -8,8 +8,8 @@
 
 #define _CLAMP(val, min, max) (val < min ? min : (val > max ? max : val))
 
-Ray::Ref::Scene::Scene(std::ostream &log_stream, const bool use_wide_bvh)
-    : log_stream_(log_stream), use_wide_bvh_(use_wide_bvh), texture_atlas_(TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE) {}
+Ray::Ref::Scene::Scene(ILog *log, const bool use_wide_bvh)
+    : log_(log), use_wide_bvh_(use_wide_bvh), texture_atlas_(TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE) {}
 
 Ray::Ref::Scene::~Scene() {
     for (uint32_t i = 0; i < uint32_t(mesh_instances_.size()); ++i) {
@@ -248,7 +248,7 @@ uint32_t Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
     m.node_count = PreprocessMesh(_m.vtx_attrs, _m.vtx_indices, _m.vtx_indices_count, _m.layout, _m.base_vertex,
                                   uint32_t(tri_materials_.size()), s, nodes_, tris_, tris2_, tri_indices_);
 
-    log_stream_ << "Ray: Mesh preprocessed in " << (Ray::GetTimeMs() - t1) << "ms\n";
+    log_->Info("Ray: Mesh preprocessed in %lldms", (Ray::GetTimeMs() - t1));
 
     if (use_wide_bvh_) {
         const uint64_t t2 = Ray::GetTimeMs();
@@ -262,7 +262,7 @@ uint32_t Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
         // nodes_ variable is treated as temporary storage
         nodes_.clear();
 
-        log_stream_ << "Ray: BVH flattened in " << (Ray::GetTimeMs() - t2) << "ms\n";
+        log_->Info("Ray: BVH flattened in %lldms", (Ray::GetTimeMs() - t2));
     }
 
     const auto tri_materials_start = uint32_t(tri_materials_.size());

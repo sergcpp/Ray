@@ -97,7 +97,8 @@ if(MSVC AND NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64")
     set_source_files_properties(internal/RendererAVX.cpp PROPERTIES COMPILE_FLAGS /arch:AVX)
 endif(MSVC AND NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64")
 
-set(SOURCE_FILES RendererBase.h
+set(SOURCE_FILES Log.h
+                 RendererBase.h
                  RendererBase.cpp
                  RendererFactory.h
                  RendererFactory.cpp

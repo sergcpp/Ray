@@ -1,8 +1,6 @@
 #pragma once
 
-#include <iostream>
-#include <memory>
-
+#include "Log.h"
 #include "RendererBase.h"
 
 /**
@@ -10,15 +8,17 @@
 */
 
 namespace Ray {
+extern LogNull g_null_log;
+
 /// Default renderer flags used to choose backend, by default tries to create gpu opencl renderer first
 const uint32_t DefaultEnabledRenderTypes =
     RendererRef /*| RendererSSE2 | RendererAVX | RendererAVX2 | RendererNEON | RendererOCL*/;
 
 /** @brief Creates renderer
-    @return shared pointer to created renderer
+    @return pointer to created renderer
 */
-RendererBase *CreateRenderer(const settings_t &s, uint32_t enabled_types = DefaultEnabledRenderTypes,
-                             std::ostream &log_stream = std::cout);
+RendererBase *CreateRenderer(const settings_t &s, ILog *log = &g_null_log,
+                             uint32_t enabled_types = DefaultEnabledRenderTypes);
 
 #if !defined(DISABLE_OCL)
 /*namespace Ocl {

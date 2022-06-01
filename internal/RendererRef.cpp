@@ -8,14 +8,14 @@
 #include "SceneRef.h"
 #include "UniformIntDistribution.h"
 
-Ray::Ref::Renderer::Renderer(const settings_t &s, std::ostream &log_stream)
-    : log_stream_(log_stream), use_wide_bvh_(s.use_wide_bvh), clean_buf_(s.w, s.h), final_buf_(s.w, s.h),
+Ray::Ref::Renderer::Renderer(const settings_t &s, ILog *log)
+    : log_(log), use_wide_bvh_(s.use_wide_bvh), clean_buf_(s.w, s.h), final_buf_(s.w, s.h),
       temp_buf_(s.w, s.h) {
     auto rand_func = std::bind(UniformIntDistribution<uint32_t>(), std::mt19937(0));
     permutations_ = Ray::ComputeRadicalInversePermutations(g_primes, PrimesCount, rand_func);
 }
 
-Ray::SceneBase *Ray::Ref::Renderer::CreateScene() { return new Ref::Scene(log_stream_, use_wide_bvh_); }
+Ray::SceneBase *Ray::Ref::Renderer::CreateScene() { return new Ref::Scene(log_, use_wide_bvh_); }
 
 void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &region) {
     const auto s = dynamic_cast<const Ref::Scene *>(scene);

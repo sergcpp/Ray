@@ -5,7 +5,6 @@
 
 #include <algorithm>
 #include <fstream>
-#include <sstream>
 
 #include "../RendererFactory.h"
 
@@ -488,13 +487,11 @@ Ray::RendererOCL
 #endif*/
         };
 
-        std::stringstream nullstream;
-
         for (const bool use_wide_bvh : {true}) {
             s.use_wide_bvh = use_wide_bvh;
             for (const bool output_sh : {false}) {
                 for (const Ray::eRendererType rt : renderer_types) {
-                    auto renderer = std::unique_ptr<Ray::RendererBase>(Ray::CreateRenderer(s, rt, nullstream));
+                    auto renderer = std::unique_ptr<Ray::RendererBase>(Ray::CreateRenderer(s, &Ray::g_null_log, rt));
                     auto scene = std::unique_ptr<Ray::SceneBase>(renderer->CreateScene());
 
                     setup_material_scene(*scene, output_sh, mat_desc, textures, main_model);

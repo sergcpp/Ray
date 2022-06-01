@@ -4,7 +4,6 @@
 #include <cstring>
 
 #include <fstream>
-#include <sstream>
 
 #include "../RendererFactory.h"
 
@@ -85,13 +84,11 @@ Ray::RendererOCL
 #endif*/
         };
 
-        std::stringstream nullstream;
-
         for (const bool use_wide_bvh : {false, true}) {
             s.use_wide_bvh = use_wide_bvh;
             for (const bool output_sh : {false, true}) {
                 for (const Ray::eRendererType rt : renderer_types) {
-                    auto renderer = std::unique_ptr<Ray::RendererBase>(Ray::CreateRenderer(s, rt, nullstream));
+                    auto renderer = std::unique_ptr<Ray::RendererBase>(Ray::CreateRenderer(s, &Ray::g_null_log, rt));
                     auto scene = std::unique_ptr<Ray::SceneBase>(renderer->CreateScene());
 
                     Ray::camera_desc_t cam_desc;

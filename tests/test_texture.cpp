@@ -4,12 +4,11 @@
 #include <cstring>
 
 #include <fstream>
-#include <sstream>
 
 #include "../RendererFactory.h"
 
-#include "utils.h"
 #include "test_scene2.h"
+#include "utils.h"
 
 void test_texture() {
     const int NUM_SAMPLES = 256;
@@ -92,12 +91,10 @@ void test_texture() {
 #endif*/
         };
 
-        std::stringstream nullstream;
-
         for (const bool use_wide_bvh : {false, true}) {
             s.use_wide_bvh = use_wide_bvh;
             for (const Ray::eRendererType rt : renderer_types) {
-                auto renderer = std::unique_ptr<Ray::RendererBase>(Ray::CreateRenderer(s, rt, nullstream));
+                auto renderer = std::unique_ptr<Ray::RendererBase>(Ray::CreateRenderer(s, &Ray::g_null_log, rt));
                 auto scene = std::unique_ptr<Ray::SceneBase>(renderer->CreateScene());
 
                 const uint32_t cam = scene->AddCamera(cam_desc);
