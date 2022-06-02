@@ -3087,6 +3087,8 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
                         float transmission = cur_mat->transmission;
                         float clearcoat = cur_mat->clearcoat;
                         float clearcoat_roughness = cur_mat->clearcoat_roughness;
+                        float sheen = unpack_unorm_16(cur_mat->sheen_unorm);
+                        float sheen_tint = unpack_unorm_16(cur_mat->sheen_tint_unorm);
 
                         simd_fvec4 spec_tmp_col = mix(simd_fvec4{1.0f}, tint_color, cur_mat->specular_tint);
                         spec_tmp_col = mix(specular * 0.08f * spec_tmp_col, base_color, metallic);
@@ -3101,7 +3103,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
                         const float spec_color_lum = lum(approx_spec_col);
 
                         float diffuse_weight, specular_weight, clearcoat_weight, refraction_weight;
-                        get_lobe_weights(mix(base_color_lum, 1.0f, cur_mat->sheen), spec_color_lum, specular, metallic,
+                        get_lobe_weights(mix(base_color_lum, 1.0f, sheen), spec_color_lum, specular, metallic,
                                          transmission, clearcoat, &diffuse_weight, &specular_weight, &clearcoat_weight,
                                          &refraction_weight);
 
@@ -3109,8 +3111,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
 
                         if (diffuse_weight > 0.0f && N_dot_L > 0.0f) {
                             const simd_fvec4 _base_color = pi.should_consider_albedo() ? base_color : simd_fvec4(1.0f);
-                            const simd_fvec4 sheen_color =
-                                cur_mat->sheen * mix(simd_fvec4{1.0f}, tint_color, cur_mat->sheen_tint);
+                            const simd_fvec4 sheen_color = sheen * mix(simd_fvec4{1.0f}, tint_color, sheen_tint);
 
                             simd_fvec4 diff_col = Evaluate_PrincipledDiffuse_BSDF(
                                 -I, N, L, roughness, _base_color, sheen_color, pi.use_uniform_sampling());
@@ -3494,6 +3495,8 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
         const float transmission = mat->transmission;
         const float clearcoat = mat->clearcoat;
         const float clearcoat_roughness = mat->clearcoat_roughness;
+        const float sheen = unpack_unorm_16(mat->sheen_unorm);
+        const float sheen_tint = unpack_unorm_16(mat->sheen_tint_unorm);
 
         simd_fvec4 spec_tmp_col = mix(simd_fvec4{1.0f}, tint_color, mat->specular_tint);
         spec_tmp_col = mix(specular * 0.08f * spec_tmp_col, base_color, metallic);
@@ -3508,7 +3511,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
         const float spec_color_lum = lum(approx_spec_col);
 
         float diffuse_weight, specular_weight, clearcoat_weight, refraction_weight;
-        get_lobe_weights(mix(base_color_lum, 1.0f, mat->sheen), spec_color_lum, specular, metallic, transmission,
+        get_lobe_weights(mix(base_color_lum, 1.0f, sheen), spec_color_lum, specular, metallic, transmission,
                          clearcoat, &diffuse_weight, &specular_weight, &clearcoat_weight, &refraction_weight);
 
         if (mix_rand < diffuse_weight) {
@@ -3517,7 +3520,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
             //
             if (diff_depth < pi.settings.max_diff_depth && total_depth < pi.settings.max_total_depth) {
                 const simd_fvec4 _base_color = pi.should_consider_albedo() ? base_color : simd_fvec4(1.0f);
-                const simd_fvec4 sheen_color = mat->sheen * mix(simd_fvec4{1.0f}, tint_color, mat->sheen_tint);
+                const simd_fvec4 sheen_color = sheen * mix(simd_fvec4{1.0f}, tint_color, sheen_tint);
 
                 simd_fvec3 V;
                 simd_fvec4 diff_col =

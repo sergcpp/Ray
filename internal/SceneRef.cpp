@@ -106,10 +106,10 @@ uint32_t Ray::Ref::Scene::AddMaterial(const shading_node_desc_t &m) {
     mat.flags = 0;
 
     if (m.type == DiffuseNode) {
-        mat.sheen = m.sheen;
+        mat.sheen_unorm = pack_unorm_16(_CLAMP(m.sheen, 0.0f, 1.0f));
+        mat.sheen_tint_unorm = pack_unorm_16(_CLAMP(m.tint, 0.0f, 1.0f));
         mat.metallic = m.metallic;
         mat.textures[METALLIC_TEXTURE] = m.metallic_texture;
-        mat.sheen_tint = m.tint;
     } else if (m.type == GlossyNode) {
         mat.tangent_rotation = 2.0f * PI * m.anisotropic_rotation;
         mat.metallic = m.metallic;
@@ -145,8 +145,8 @@ uint32_t Ray::Ref::Scene::AddMaterial(const principled_mat_desc_t &m) {
     main_mat.type = PrincipledNode;
     main_mat.textures[BASE_TEXTURE] = m.base_texture;
     memcpy(&main_mat.base_color[0], &m.base_color[0], 3 * sizeof(float));
-    main_mat.sheen = _CLAMP(m.sheen, 0.0f, 1.0f);
-    main_mat.sheen_tint = _CLAMP(m.sheen_tint, 0.0f, 1.0f);
+    main_mat.sheen_unorm = pack_unorm_16(_CLAMP(m.sheen, 0.0f, 1.0f));
+    main_mat.sheen_tint_unorm = pack_unorm_16(_CLAMP(m.sheen_tint, 0.0f, 1.0f));
     main_mat.roughness_unorm = pack_unorm_16(_CLAMP(m.roughness, 0.0f, 1.0f));
     main_mat.tangent_rotation = 2.0f * PI * _CLAMP(m.anisotropic_rotation, 0.0f, 1.0f);
     main_mat.textures[ROUGH_TEXTURE] = m.roughness_texture;

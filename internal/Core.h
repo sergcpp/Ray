@@ -161,8 +161,8 @@ struct material_t {
     float int_ior;
     float ext_ior;
     float tint;
-    float sheen;
-    float sheen_tint;
+    uint16_t sheen_unorm;
+    uint16_t sheen_tint_unorm;
     float metallic;
     float transmission;
     float transmission_roughness;
@@ -171,7 +171,7 @@ struct material_t {
     float clearcoat;
     float clearcoat_roughness;
 };
-static_assert(sizeof(material_t) == 96, "!");
+static_assert(sizeof(material_t) == 92, "!");
 
 struct light_t {
     float pos[3], radius;
