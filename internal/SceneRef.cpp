@@ -97,7 +97,7 @@ uint32_t Ray::Ref::Scene::AddMaterial(const shading_node_desc_t &m) {
 
     mat.type = m.type;
     mat.textures[BASE_TEXTURE] = m.base_texture;
-    mat.roughness = m.roughness;
+    mat.roughness_unorm = pack_unorm_16(m.roughness);
     mat.textures[ROUGH_TEXTURE] = m.roughness_texture;
     memcpy(&mat.base_color[0], &m.base_color[0], 3 * sizeof(float));
     mat.int_ior = m.int_ior;
@@ -106,7 +106,6 @@ uint32_t Ray::Ref::Scene::AddMaterial(const shading_node_desc_t &m) {
     mat.flags = 0;
 
     if (m.type == DiffuseNode) {
-        mat.roughness = m.roughness;
         mat.sheen = m.sheen;
         mat.metallic = m.metallic;
         mat.textures[METALLIC_TEXTURE] = m.metallic_texture;
@@ -148,7 +147,7 @@ uint32_t Ray::Ref::Scene::AddMaterial(const principled_mat_desc_t &m) {
     memcpy(&main_mat.base_color[0], &m.base_color[0], 3 * sizeof(float));
     main_mat.sheen = _CLAMP(m.sheen, 0.0f, 1.0f);
     main_mat.sheen_tint = _CLAMP(m.sheen_tint, 0.0f, 1.0f);
-    main_mat.roughness = _CLAMP(m.roughness, 0.0f, 1.0f);
+    main_mat.roughness_unorm = pack_unorm_16(_CLAMP(m.roughness, 0.0f, 1.0f));
     main_mat.tangent_rotation = 2.0f * PI * _CLAMP(m.anisotropic_rotation, 0.0f, 1.0f);
     main_mat.textures[ROUGH_TEXTURE] = m.roughness_texture;
     main_mat.metallic = _CLAMP(m.metallic, 0.0f, 1.0f);
@@ -159,7 +158,7 @@ uint32_t Ray::Ref::Scene::AddMaterial(const principled_mat_desc_t &m) {
     main_mat.transmission = m.transmission;
     main_mat.transmission_roughness = m.transmission_roughness;
     main_mat.textures[NORMALS_TEXTURE] = m.normal_map;
-    main_mat.anisotropic = _CLAMP(m.anisotropic, 0.0f, 1.0f);
+    main_mat.anisotropic_unorm = pack_unorm_16(_CLAMP(m.anisotropic, 0.0f, 1.0f));
     main_mat.specular = _CLAMP(m.specular, 0.0f, 1.0f);
     main_mat.specular_tint = _CLAMP(m.specular_tint, 0.0f, 1.0f);
     main_mat.clearcoat = _CLAMP(m.clearcoat, 0.0f, 1.0f);

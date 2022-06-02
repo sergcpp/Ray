@@ -21,6 +21,9 @@
 
 #include "simd/aligned_allocator.h"
 
+#define pack_unorm_16(x) uint16_t(x * 65535.0f)
+#define unpack_unorm_16(x) (float(x) / 65535.0f)
+
 namespace Ray {
 enum eUninitialize { Uninitialize };
 
@@ -153,8 +156,8 @@ struct material_t {
             float strength;
         };
     };
-    float roughness;
-    float anisotropic;
+    uint16_t roughness_unorm;
+    uint16_t anisotropic_unorm;
     float int_ior;
     float ext_ior;
     float tint;
@@ -168,7 +171,7 @@ struct material_t {
     float clearcoat;
     float clearcoat_roughness;
 };
-static_assert(sizeof(material_t) == 100, "!");
+static_assert(sizeof(material_t) == 96, "!");
 
 struct light_t {
     float pos[3], radius;

@@ -3018,7 +3018,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
                     }
 
                     // sample roughness texture
-                    float roughness = cur_mat->roughness;
+                    float roughness = unpack_unorm_16(cur_mat->roughness_unorm);
                     if (cur_mat->textures[ROUGH_TEXTURE] != 0xffffffff) {
                         const texture_t &roughness_tex = sc.textures[cur_mat->textures[ROUGH_TEXTURE]];
                         const float roughness_lod = get_texture_lod(roughness_tex, surf_der.duv_dx, surf_der.duv_dy);
@@ -3122,7 +3122,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
                         }
 
                         const float roughness2 = roughness * roughness;
-                        const float aspect = std::sqrt(1.0f - 0.9f * cur_mat->anisotropic);
+                        const float aspect = std::sqrt(1.0f - 0.9f * unpack_unorm_16(cur_mat->anisotropic_unorm));
 
                         const float alpha_x = roughness2 / aspect;
                         const float alpha_y = roughness2 * aspect;
@@ -3270,7 +3270,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
         tint_color = base_color / base_color_lum;
     }
 
-    float roughness = mat->roughness;
+    float roughness = unpack_unorm_16(mat->roughness_unorm);
     if (mat->textures[ROUGH_TEXTURE] != 0xffffffff) {
         const texture_t &roughness_tex = sc.textures[mat->textures[ROUGH_TEXTURE]];
         const float roughness_lod = get_texture_lod(roughness_tex, surf_der.duv_dx, surf_der.duv_dy);
@@ -3568,7 +3568,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
             if (spec_depth < pi.settings.max_spec_depth && total_depth < pi.settings.max_total_depth) {
                 simd_fvec3 V;
                 simd_fvec4 F =
-                    Sample_GGXSpecular_BSDF(world_from_tangent, tangent_from_world, N, I, roughness, mat->anisotropic,
+                    Sample_GGXSpecular_BSDF(world_from_tangent, tangent_from_world, N, I, roughness, unpack_unorm_16(mat->anisotropic_unorm),
                                             spec_ior, spec_F0, spec_tmp_col, rand_u, rand_v, V);
                 F[3] *= specular_weight;
 
