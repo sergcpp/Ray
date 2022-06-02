@@ -48,7 +48,7 @@ static_assert(sizeof(ray_packet_t) == 96, "!");
 
 const int RayPacketDimX = 1;
 const int RayPacketDimY = 1;
-const int RayPacketSize = 1;
+const int RayPacketSize = RayPacketDimX * RayPacketDimY;
 
 struct hit_data_t {
     int mask_values[RayPacketSize];
@@ -164,13 +164,6 @@ simd_fvec4 Sample_PrincipledDiffuse_BSDF(const simd_fvec3 world_from_tangent[3],
                                          const simd_fvec3 &I, const float roughness, const simd_fvec4 &base_color,
                                          const simd_fvec4 &sheen_color, const bool uniform_sampling, const float rand_u,
                                          const float rand_v, simd_fvec3 &out_V);
-
-simd_fvec4 BSDF_Specular1(const simd_fvec3 &Cspec0, const simd_fvec3 &V, const simd_fvec3 &N, const simd_fvec3 &L,
-                          const simd_fvec3 &H, float roughness);
-simd_fvec4 BSDF_Specular2(const simd_fvec3 &Cspec0, const simd_fvec3 &V, const simd_fvec3 &N, const simd_fvec3 &L,
-                          const simd_fvec3 &H, float roughness);
-simd_fvec3 BSDF_Specular(const simd_fvec3 &Cspec0, const simd_fvec3 &V, const simd_fvec3 &N, const simd_fvec3 &L,
-                         const simd_fvec3 &H, float roughness);
 
 simd_fvec4 Evaluate_GGXSpecular_BSDF(const simd_fvec3 &view_dir_ts, const simd_fvec3 &sampled_normal_ts,
                                      const simd_fvec3 &reflected_dir_ts, float alpha_x, float alpha_y, float spec_ior,

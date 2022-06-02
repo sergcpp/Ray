@@ -151,8 +151,6 @@ struct material_t {
         };
         struct {
             float strength;
-            float _pad0;
-            float _pad1;
         };
     };
     float roughness;
@@ -172,7 +170,7 @@ struct material_t {
     float clearcoat;
     float clearcoat_roughness;
 };
-static_assert(sizeof(material_t) == 116, "!");
+static_assert(sizeof(material_t) == 108, "!");
 
 struct light_t {
     float pos[3], radius;

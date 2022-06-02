@@ -566,7 +566,7 @@ simd_fvec3 sample_GTR1(const float rgh, const float r1, const float r2) {
     return simd_fvec3(sinTheta * cosPhi, sinTheta * sinPhi, cosTheta);
 }
 
-simd_fvec3 sample_GGX_NDF(const float rgh, const float r1, const float r2) {
+simd_fvec3 SampleGGX_NDF(const float rgh, const float r1, const float r2) {
     const float a = std::max(0.001f, rgh);
 
     const float phi = r1 * (2.0f * PI);
@@ -584,7 +584,7 @@ simd_fvec3 sample_GGX_NDF(const float rgh, const float r1, const float r2) {
 // Input alpha_x, alpha_y: roughness parameters
 // Input U1, U2: uniform random numbers
 // Output Ne: normal sampled with PDF D_Ve(Ne) = G1(Ve) * max(0, dot(Ve, Ne)) * D(Ne) / Ve.z
-simd_fvec3 sample_GGX_VNDF(const simd_fvec3 &Ve, float alpha_x, float alpha_y, float U1, float U2) {
+simd_fvec3 SampleGGX_VNDF(const simd_fvec3 &Ve, float alpha_x, float alpha_y, float U1, float U2) {
     // Section 3.2: transforming the view direction to the hemisphere configuration
     const simd_fvec3 Vh = normalize(simd_fvec3(alpha_x * Ve[0], alpha_y * Ve[1], Ve[2]));
     // Section 4.1: orthonormal basis (with special case if cross product is zero)
@@ -641,16 +641,6 @@ float D_GTR2(const float N_dot_H, const float a) {
     return a2 / (PI * t * t);
 }
 
-float D_GTR22(const float N_dot_H, const float a) {
-    const float a2 = a * a;
-
-    const float cos_theta_m2 = N_dot_H * N_dot_H;
-    const float cos_theta_m4 = cos_theta_m2 * cos_theta_m2;
-    const float tan_theta_m2 = 1.0f / cos_theta_m2 - 1.0f;
-
-    return a2 / (PI * cos_theta_m4 * (a2 + tan_theta_m2) * (a2 + tan_theta_m2));
-}
-
 float D_GGX(const simd_fvec3 &H, const float alpha_x, const float alpha_y) {
     if (H[2] == 0.0f) {
         return 0.0f;
@@ -660,17 +650,6 @@ float D_GGX(const simd_fvec3 &H, const float alpha_x, const float alpha_y) {
     const float s1 = 1.0f + sx * sx + sy * sy;
     const float cos_theta_h4 = H[2] * H[2] * H[2] * H[2];
     return 1.0f / ((s1 * s1) * PI * alpha_x * alpha_y * cos_theta_h4);
-}
-
-float G_smith(const simd_fvec3 &dir, const float ax2, const float ay2) {
-    const float cos2 = dir[2] * dir[2];
-    const float tan_theta2 = (1.0f - cos2) / cos2;
-    const float cos_phi2 = dir[0] * dir[0];
-    const float sin_phi2 = dir[1] * dir[1];
-
-    const float alpha2 = (cos_phi2 * ax2 + sin_phi2 * ay2) / (cos_phi2 + sin_phi2);
-
-    return 2.0f / (1.0f + std::sqrt(1.0f + alpha2 * tan_theta2));
 }
 
 void create_tbn_matrix(const simd_fvec3 &N, simd_fvec3 out_TBN[3]) {
@@ -995,14 +974,13 @@ void Ray::Ref::SortRays_CPU(ray_packet_t *rays, const size_t rays_count, const f
         }
     }
 
-    { // reorder rays
-        for (uint32_t i = 0; i < uint32_t(rays_count); ++i) {
-            uint32_t j;
-            while (i != (j = scan_values[i])) {
-                const int k = scan_values[j];
-                std::swap(rays[j], rays[k]);
-                std::swap(scan_values[i], scan_values[j]);
-            }
+    // reorder rays
+    for (uint32_t i = 0; i < uint32_t(rays_count); ++i) {
+        uint32_t j;
+        while (i != (j = scan_values[i])) {
+            const int k = scan_values[j];
+            std::swap(rays[j], rays[k]);
+            std::swap(scan_values[i], scan_values[j]);
         }
     }
 }
@@ -1080,14 +1058,13 @@ void Ray::Ref::SortRays_GPU(ray_packet_t *rays, const size_t rays_count, const f
         }
     }
 
-    { // reorder rays
-        for (uint32_t i = 0; i < uint32_t(rays_count); ++i) {
-            uint32_t j;
-            while (i != (j = scan_values[i])) {
-                const int k = scan_values[j];
-                std::swap(rays[j], rays[k]);
-                std::swap(scan_values[i], scan_values[j]);
-            }
+    // reorder rays
+    for (uint32_t i = 0; i < uint32_t(rays_count); ++i) {
+        uint32_t j;
+        while (i != (j = scan_values[i])) {
+            const int k = scan_values[j];
+            std::swap(rays[j], rays[k]);
+            std::swap(scan_values[i], scan_values[j]);
         }
     }
 }
@@ -2126,65 +2103,6 @@ Ray::Ref::simd_fvec4 Ray::Ref::Sample_PrincipledDiffuse_BSDF(const simd_fvec3 wo
     return Evaluate_PrincipledDiffuse_BSDF(-I, N, out_V, roughness, base_color, sheen_color, uniform_sampling);
 }
 
-Ray::Ref::simd_fvec4 Ray::Ref::BSDF_Specular1(const simd_fvec3 &Cspec0, const simd_fvec3 &V, const simd_fvec3 &N,
-                                              const simd_fvec3 &L, const simd_fvec3 &H, const float roughness) {
-    const float N_dot_L = dot(N, L);
-    if (N_dot_L <= 0.0f) {
-        return simd_fvec4(0.0f);
-    }
-
-    const float D = D_GTR2(dot(N, H), roughness);
-
-    const float FH = schlick_weight(dot(L, H));
-    const simd_fvec3 F = mix(Cspec0, simd_fvec3(1.0), FH);
-    const float G = SmithG_GGX(std::abs(dot(N, L)), roughness) * SmithG_GGX(std::abs(dot(N, V)), roughness);
-
-    simd_fvec4 ret = simd_fvec4(F[0], F[1], F[2], 0.0f);
-    ret *= D * G;
-    ret[3] = D * dot(N, H) / (4.0f * dot(V, H)); // pdf
-
-    return ret;
-}
-
-Ray::Ref::simd_fvec4 Ray::Ref::BSDF_Specular2(const simd_fvec3 &Cspec0, const simd_fvec3 &V, const simd_fvec3 &N,
-                                              const simd_fvec3 &L, const simd_fvec3 &H, const float roughness) {
-    const float N_dot_L = dot(N, L);
-    if (N_dot_L <= 0.0f) {
-        return simd_fvec4(0.0f);
-    }
-
-    return simd_fvec4(0.0f);
-
-    /*const float D = GTR2(dot(N, H), roughness);
-
-    const float FH = schlick_weight(dot(L, H));
-    const simd_fvec3 F = mix(Cspec0, simd_fvec3(1.0), FH);
-    const float G = SmithG_GGX(std::abs(dot(N, L)), roughness) * SmithG_GGX(std::abs(dot(N, V)), roughness);
-
-    simd_fvec4 ret = simd_fvec4(F[0], F[1], F[2], 0.0f);
-    ret *= D * G;
-    ret[3] = D * dot(N, H) / (4.0f * dot(V, H)); // pdf
-    */
-    // return ret;
-}
-
-Ray::Ref::simd_fvec3 Ray::Ref::BSDF_Specular(const simd_fvec3 &Cspec0, const simd_fvec3 &V, const simd_fvec3 &N,
-                                             const simd_fvec3 &L, const simd_fvec3 &H, const float roughness) {
-    const float N_dot_L = dot(N, L);
-    if (N_dot_L <= 0.0f) {
-        return simd_fvec3(0.0f);
-    }
-
-    const float D = D_GTR2(dot(N, H), roughness);
-
-    const float FH = schlick_weight(dot(L, H));
-    const simd_fvec3 F = mix(Cspec0, simd_fvec3(1.0f), FH);
-    const float G = 1.0f;
-    // SmithG_GGX(N_dot_L, roughness) * SmithG_GGX(std::abs(dot(N, V)), roughness);
-
-    return F * D * G;
-}
-
 Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_GGXSpecular_BSDF(const simd_fvec3 &view_dir_ts,
                                                          const simd_fvec3 &sampled_normal_ts,
                                                          const simd_fvec3 &reflected_dir_ts, const float alpha_x,
@@ -2243,7 +2161,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Sample_GGXSpecular_BSDF(const simd_fvec3 world_fr
 
     const simd_fvec3 view_dir_ts = normalize(mul(tangent_from_world, -I));
 #if USE_VNDF_GGX_SAMPLING == 1
-    const simd_fvec3 sampled_normal_ts = sample_GGX_VNDF(view_dir_ts, alpha_x, alpha_y, rand_u, rand_v);
+    const simd_fvec3 sampled_normal_ts = SampleGGX_VNDF(view_dir_ts, alpha_x, alpha_y, rand_u, rand_v);
 #else
     const simd_fvec3 sampled_normal_ts = sample_GGX_NDF(alpha_x, rand_u, rand_v);
 #endif
@@ -2312,7 +2230,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Sample_GGXRefraction_BSDF(const simd_fvec3 world_
 
     const simd_fvec3 view_dir_ts = normalize(mul(tangent_from_world, -I));
 #if USE_VNDF_GGX_SAMPLING == 1
-    const simd_fvec3 sampled_normal_ts = sample_GGX_VNDF(view_dir_ts, roughness2, roughness2, rand_u, rand_v);
+    const simd_fvec3 sampled_normal_ts = SampleGGX_VNDF(view_dir_ts, roughness2, roughness2, rand_u, rand_v);
 #else
     const simd_fvec3 sampled_normal_ts = sample_GGX_NDF(roughness2, rand_u, rand_v);
 #endif
@@ -2384,7 +2302,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Sample_PrincipledClearcoat_BSDF(
     // NOTE: GTR1 distribution is not used for sampling because Cycles does it this way (???!)
 #if USE_VNDF_GGX_SAMPLING == 1
     const simd_fvec3 sampled_normal_ts =
-        sample_GGX_VNDF(view_dir_ts, clearcoat_roughness2, clearcoat_roughness2, rand_u, rand_v);
+        SampleGGX_VNDF(view_dir_ts, clearcoat_roughness2, clearcoat_roughness2, rand_u, rand_v);
 #else
     const simd_fvec3 sampled_normal_ts = sample_GGX_NDF(clearcoat_roughness2, rand_u, rand_v);
 #endif
