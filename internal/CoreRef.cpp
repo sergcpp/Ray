@@ -3076,7 +3076,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
                                    simd_fvec3(cur_weight * mis_weight * float(sc.lights2_count) / light_pdf);
                         }
                     } else if (cur_mat->type == PrincipledNode) {
-                        float metallic = cur_mat->metallic;
+                        float metallic = unpack_unorm_16(cur_mat->metallic_unorm);
                         if (cur_mat->textures[METALLIC_TEXTURE] != 0xffffffff) {
                             const texture_t &metallic_tex = sc.textures[cur_mat->textures[METALLIC_TEXTURE]];
                             const float metallic_lod = get_texture_lod(metallic_tex, surf_der.duv_dx, surf_der.duv_dy);
@@ -3484,7 +3484,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
             }
         }
     } else if (mat->type == PrincipledNode) {
-        float metallic = mat->metallic;
+        float metallic = unpack_unorm_16(mat->metallic_unorm);
         if (mat->textures[METALLIC_TEXTURE] != 0xffffffff) {
             const texture_t &metallic_tex = sc.textures[mat->textures[METALLIC_TEXTURE]];
             const float metallic_lod = get_texture_lod(metallic_tex, surf_der.duv_dx, surf_der.duv_dy);

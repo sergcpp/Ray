@@ -108,13 +108,13 @@ uint32_t Ray::Ref::Scene::AddMaterial(const shading_node_desc_t &m) {
     if (m.type == DiffuseNode) {
         mat.sheen_unorm = pack_unorm_16(_CLAMP(m.sheen, 0.0f, 1.0f));
         mat.sheen_tint_unorm = pack_unorm_16(_CLAMP(m.tint, 0.0f, 1.0f));
-        mat.metallic = m.metallic;
+        mat.metallic_unorm = pack_unorm_16(_CLAMP(m.metallic, 0.0f, 1.0f));
         mat.textures[METALLIC_TEXTURE] = m.metallic_texture;
     } else if (m.type == GlossyNode) {
         mat.tangent_rotation = 2.0f * PI * m.anisotropic_rotation;
-        mat.metallic = m.metallic;
+        mat.metallic_unorm = pack_unorm_16(_CLAMP(m.metallic, 0.0f, 1.0f));
         mat.textures[METALLIC_TEXTURE] = m.metallic_texture;
-        mat.tint = m.tint;
+        mat.tint_unorm = pack_unorm_16(_CLAMP(m.tint, 0.0f, 1.0f));
     } else if (m.type == RefractiveNode) {
     } else if (m.type == EmissiveNode) {
         mat.strength = m.strength;
@@ -150,7 +150,7 @@ uint32_t Ray::Ref::Scene::AddMaterial(const principled_mat_desc_t &m) {
     main_mat.roughness_unorm = pack_unorm_16(_CLAMP(m.roughness, 0.0f, 1.0f));
     main_mat.tangent_rotation = 2.0f * PI * _CLAMP(m.anisotropic_rotation, 0.0f, 1.0f);
     main_mat.textures[ROUGH_TEXTURE] = m.roughness_texture;
-    main_mat.metallic = _CLAMP(m.metallic, 0.0f, 1.0f);
+    main_mat.metallic_unorm = pack_unorm_16(_CLAMP(m.metallic, 0.0f, 1.0f));
     main_mat.textures[METALLIC_TEXTURE] = m.metallic_texture;
     main_mat.int_ior = m.ior;
     main_mat.ext_ior = 1.0f;
