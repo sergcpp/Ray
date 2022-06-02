@@ -2281,7 +2281,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_PrincipledClearcoat_BSDF(const simd_fvec
 #endif
 
     F *= std::max(reflected_dir_ts[2], 0.0f);
-    return simd_fvec4{0.25f * F, 0.25f * F, 0.25f * F, pdf};
+    return simd_fvec4{F, F, F, pdf};
 }
 
 Ray::Ref::simd_fvec4 Ray::Ref::Sample_PrincipledClearcoat_BSDF(
@@ -2295,7 +2295,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Sample_PrincipledClearcoat_BSDF(
         const float F = mix(0.04f, 1.0f, FH);
 
         out_V = V;
-        return simd_fvec4{0.25f * F, 0.25f * F, 0.25f * F, -1.0f};
+        return simd_fvec4{F * 1e6f, F * 1e6f, F * 1e6f, 1e6f};
     }
 
     const simd_fvec3 view_dir_ts = normalize(mul(tangent_from_world, -I));
@@ -2310,14 +2310,8 @@ Ray::Ref::simd_fvec4 Ray::Ref::Sample_PrincipledClearcoat_BSDF(
 
     out_V = mul(world_from_tangent, reflected_dir_ts);
 
-    simd_fvec4 F = Evaluate_PrincipledClearcoat_BSDF(view_dir_ts, sampled_normal_ts, reflected_dir_ts,
+    return Evaluate_PrincipledClearcoat_BSDF(view_dir_ts, sampled_normal_ts, reflected_dir_ts,
                                                      clearcoat_roughness2, clearcoat_ior, clearcoat_F0);
-    if (F[3] != 0.0f) {
-        F[0] /= F[3];
-        F[1] /= F[3];
-        F[2] /= F[3];
-    }
-    return F;
 }
 
 Ray::Ref::ray_packet_t Ray::Ref::TransformRay(const ray_packet_t &r, const float *xform) {
@@ -3153,7 +3147,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
                                                                   clearcoat_roughness2, clearcoat_ior, clearcoat_F0);
                             bsdf_pdf += clearcoat_weight * clearcoat_col[3];
 
-                            col += simd_fvec3(&lcol[0]) * simd_fvec3(&clearcoat_col[0]) *
+                            col += 0.25f * simd_fvec3(&lcol[0]) * simd_fvec3(&clearcoat_col[0]) *
                                    simd_fvec3(cur_weight * float(sc.lights2_count) / light_pdf);
                         }
 
@@ -3621,19 +3615,19 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
                 const float clearcoat_roughness2 = clearcoat_roughness * clearcoat_roughness;
 
                 simd_fvec3 V;
-                const simd_fvec4 F =
+                simd_fvec4 F =
                     Sample_PrincipledClearcoat_BSDF(world_from_tangent, tangent_from_world, N, I, clearcoat_roughness2,
                                                     clearcoat_ior, clearcoat_F0, rand_u, rand_v, V);
+                F[3] *= clearcoat_weight;
 
                 ray_packet_t r;
 
                 r.xy = ray.xy;
                 r.ray_depth = ray.ray_depth + 0x00000100;
 
-                const float weight = (mix_weight / clearcoat_weight);
-                r.c[0] = ray.c[0] * F[0] * weight;
-                r.c[1] = ray.c[1] * F[1] * weight;
-                r.c[2] = ray.c[2] * F[2] * weight;
+                r.c[0] = 0.25f * ray.c[0] * F[0] * mix_weight / F[3];
+                r.c[1] = 0.25f * ray.c[1] * F[1] * mix_weight / F[3];
+                r.c[2] = 0.25f * ray.c[2] * F[2] * mix_weight / F[3];
                 r.pdf = F[3];
 
                 memcpy(&r.o[0], value_ptr(offset_ray(P, plane_N)), 3 * sizeof(float));
