@@ -3083,12 +3083,12 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
                             metallic *= SampleBilinear(tex_atlas, metallic_tex, uvs, int(metallic_lod))[0];
                         }
 
-                        float specular = cur_mat->specular;
-                        float transmission = cur_mat->transmission;
-                        float clearcoat = cur_mat->clearcoat;
-                        float clearcoat_roughness = cur_mat->clearcoat_roughness;
-                        float sheen = unpack_unorm_16(cur_mat->sheen_unorm);
-                        float sheen_tint = unpack_unorm_16(cur_mat->sheen_tint_unorm);
+                        const float specular = cur_mat->specular;
+                        const float transmission = unpack_unorm_16(cur_mat->transmission_unorm);
+                        const float clearcoat = cur_mat->clearcoat;
+                        const float clearcoat_roughness = cur_mat->clearcoat_roughness;
+                        const float sheen = unpack_unorm_16(cur_mat->sheen_unorm);
+                        const float sheen_tint = unpack_unorm_16(cur_mat->sheen_tint_unorm);
 
                         simd_fvec4 spec_tmp_col = mix(simd_fvec4{1.0f}, tint_color, cur_mat->specular_tint);
                         spec_tmp_col = mix(specular * 0.08f * spec_tmp_col, base_color, metallic);
@@ -3170,7 +3170,8 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
                             }
 
                             const float transmission_roughness =
-                                1.0f - (1.0f - roughness) * (1.0f - cur_mat->transmission_roughness);
+                                1.0f -
+                                (1.0f - roughness) * (1.0f - unpack_unorm_16(cur_mat->transmission_roughness_unorm));
                             const float transmission_roughness2 = transmission_roughness * transmission_roughness;
                             if (fresnel != 1.0f && transmission_roughness2 * transmission_roughness2 >= 1e-7f &&
                                 N_dot_L < 0.0f) {
@@ -3492,7 +3493,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
         }
 
         const float specular = mat->specular;
-        const float transmission = mat->transmission;
+        const float transmission = unpack_unorm_16(mat->transmission_unorm);
         const float clearcoat = mat->clearcoat;
         const float clearcoat_roughness = mat->clearcoat_roughness;
         const float sheen = unpack_unorm_16(mat->sheen_unorm);
@@ -3511,8 +3512,8 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
         const float spec_color_lum = lum(approx_spec_col);
 
         float diffuse_weight, specular_weight, clearcoat_weight, refraction_weight;
-        get_lobe_weights(mix(base_color_lum, 1.0f, sheen), spec_color_lum, specular, metallic, transmission,
-                         clearcoat, &diffuse_weight, &specular_weight, &clearcoat_weight, &refraction_weight);
+        get_lobe_weights(mix(base_color_lum, 1.0f, sheen), spec_color_lum, specular, metallic, transmission, clearcoat,
+                         &diffuse_weight, &specular_weight, &clearcoat_weight, &refraction_weight);
 
         if (mix_rand < diffuse_weight) {
             //
@@ -3570,9 +3571,9 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
             //
             if (spec_depth < pi.settings.max_spec_depth && total_depth < pi.settings.max_total_depth) {
                 simd_fvec3 V;
-                simd_fvec4 F =
-                    Sample_GGXSpecular_BSDF(world_from_tangent, tangent_from_world, N, I, roughness, unpack_unorm_16(mat->anisotropic_unorm),
-                                            spec_ior, spec_F0, spec_tmp_col, rand_u, rand_v, V);
+                simd_fvec4 F = Sample_GGXSpecular_BSDF(world_from_tangent, tangent_from_world, N, I, roughness,
+                                                       unpack_unorm_16(mat->anisotropic_unorm), spec_ior, spec_F0,
+                                                       spec_tmp_col, rand_u, rand_v, V);
                 F[3] *= specular_weight;
 
                 ray_packet_t r;
@@ -3696,7 +3697,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
                         3 * sizeof(float));
                 } else {
                     const float transmission_roughness =
-                        1.0f - (1.0f - roughness) * (1.0f - mat->transmission_roughness);
+                        1.0f - (1.0f - roughness) * (1.0f - unpack_unorm_16(mat->transmission_roughness_unorm));
 
                     simd_fvec4 _V;
                     F = Sample_GGXRefraction_BSDF(world_from_tangent, tangent_from_world, N, I, transmission_roughness,

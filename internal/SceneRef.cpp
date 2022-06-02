@@ -155,8 +155,8 @@ uint32_t Ray::Ref::Scene::AddMaterial(const principled_mat_desc_t &m) {
     main_mat.int_ior = m.ior;
     main_mat.ext_ior = 1.0f;
     main_mat.flags = 0;
-    main_mat.transmission = m.transmission;
-    main_mat.transmission_roughness = m.transmission_roughness;
+    main_mat.transmission_unorm = pack_unorm_16(_CLAMP(m.transmission, 0.0f, 1.0f));
+    main_mat.transmission_roughness_unorm = pack_unorm_16(_CLAMP(m.transmission_roughness, 0.0f, 1.0f));
     main_mat.textures[NORMALS_TEXTURE] = m.normal_map;
     main_mat.anisotropic_unorm = pack_unorm_16(_CLAMP(m.anisotropic, 0.0f, 1.0f));
     main_mat.specular = _CLAMP(m.specular, 0.0f, 1.0f);
