@@ -35,7 +35,7 @@ struct tri_accel_t {
 };
 static_assert(sizeof(tri_accel_t) == 48, "!");
 
-struct tri_accel2_t {
+struct alignas(16) tri_accel2_t {
     float n_plane[4];
     float u_plane[4];
     float v_plane[4];
@@ -157,11 +157,9 @@ struct material_t {
     float anisotropic;
     float int_ior;
     float ext_ior;
-    float weight;
     float tint;
     float sheen;
     float sheen_tint;
-    float additional_weight;
     float metallic;
     float transmission;
     float transmission_roughness;
@@ -170,7 +168,7 @@ struct material_t {
     float clearcoat;
     float clearcoat_roughness;
 };
-static_assert(sizeof(material_t) == 108, "!");
+static_assert(sizeof(material_t) == 100, "!");
 
 struct light_t {
     float pos[3], radius;

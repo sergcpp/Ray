@@ -69,7 +69,6 @@ struct shading_node_desc_t {
     float fresnel = 1;                        ///< Fresnel factor of mix material
     float int_ior = 1;                        ///< interior IOR for reflective or refractive material
     float ext_ior = 1;                        ///< exterior IOR for reflective or refractive material
-    float weight = 1;
     float tint = 0;
     float metallic = 0;
     uint32_t metallic_texture = 0xffffffff;

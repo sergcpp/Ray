@@ -102,7 +102,6 @@ uint32_t Ray::Ref::Scene::AddMaterial(const shading_node_desc_t &m) {
     memcpy(&mat.base_color[0], &m.base_color[0], 3 * sizeof(float));
     mat.int_ior = m.int_ior;
     mat.ext_ior = m.ext_ior;
-    mat.weight = m.weight;
     mat.tangent_rotation = 0.0f;
     mat.flags = 0;
 
@@ -114,7 +113,6 @@ uint32_t Ray::Ref::Scene::AddMaterial(const shading_node_desc_t &m) {
         mat.sheen_tint = m.tint;
     } else if (m.type == GlossyNode) {
         mat.tangent_rotation = 2.0f * PI * m.anisotropic_rotation;
-        mat.additional_weight = m.specular;
         mat.metallic = m.metallic;
         mat.textures[METALLIC_TEXTURE] = m.metallic_texture;
         mat.tint = m.tint;
@@ -157,7 +155,6 @@ uint32_t Ray::Ref::Scene::AddMaterial(const principled_mat_desc_t &m) {
     main_mat.textures[METALLIC_TEXTURE] = m.metallic_texture;
     main_mat.int_ior = m.ior;
     main_mat.ext_ior = 1.0f;
-    main_mat.weight = 1.0f;
     main_mat.flags = 0;
     main_mat.transmission = m.transmission;
     main_mat.transmission_roughness = m.transmission_roughness;
