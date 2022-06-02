@@ -3083,14 +3083,15 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
                             metallic *= SampleBilinear(tex_atlas, metallic_tex, uvs, int(metallic_lod))[0];
                         }
 
-                        const float specular = cur_mat->specular;
+                        const float specular = unpack_unorm_16(cur_mat->specular_unorm);
                         const float transmission = unpack_unorm_16(cur_mat->transmission_unorm);
                         const float clearcoat = cur_mat->clearcoat;
                         const float clearcoat_roughness = cur_mat->clearcoat_roughness;
                         const float sheen = unpack_unorm_16(cur_mat->sheen_unorm);
                         const float sheen_tint = unpack_unorm_16(cur_mat->sheen_tint_unorm);
 
-                        simd_fvec4 spec_tmp_col = mix(simd_fvec4{1.0f}, tint_color, cur_mat->specular_tint);
+                        simd_fvec4 spec_tmp_col =
+                            mix(simd_fvec4{1.0f}, tint_color, unpack_unorm_16(cur_mat->specular_tint_unorm));
                         spec_tmp_col = mix(specular * 0.08f * spec_tmp_col, base_color, metallic);
 
                         const float spec_ior = (2.0f / (1.0f - std::sqrt(0.08f * specular))) - 1.0f;
@@ -3492,14 +3493,14 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
             metallic *= SampleBilinear(tex_atlas, metallic_tex, uvs, int(metallic_lod))[0];
         }
 
-        const float specular = mat->specular;
+        const float specular = unpack_unorm_16(mat->specular_unorm);
         const float transmission = unpack_unorm_16(mat->transmission_unorm);
         const float clearcoat = mat->clearcoat;
         const float clearcoat_roughness = mat->clearcoat_roughness;
         const float sheen = unpack_unorm_16(mat->sheen_unorm);
         const float sheen_tint = unpack_unorm_16(mat->sheen_tint_unorm);
 
-        simd_fvec4 spec_tmp_col = mix(simd_fvec4{1.0f}, tint_color, mat->specular_tint);
+        simd_fvec4 spec_tmp_col = mix(simd_fvec4{1.0f}, tint_color, unpack_unorm_16(mat->specular_tint_unorm));
         spec_tmp_col = mix(specular * 0.08f * spec_tmp_col, base_color, metallic);
 
         const float spec_ior = (2.0f / (1.0f - std::sqrt(0.08f * specular))) - 1.0f;
