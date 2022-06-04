@@ -103,13 +103,13 @@ int main(int argc, char *argv[]) {
 
     const auto t1 = high_resolution_clock::now();
 
-    const bool minimal_tests = (argc > 1 && strcmp(argv[1], "--minimal") == 0);
+    const bool full_tests = (argc > 1 && strcmp(argv[1], "--full") == 0);
 
     // test_atlas();
     test_simd();
     // test_mesh_lights();
 
-    bool detailed_material_tests_needed = !minimal_tests;
+    bool detailed_material_tests_needed = full_tests;
     bool tests_success_final = g_tests_success;
 #if 1
     if (g_tests_success) {
