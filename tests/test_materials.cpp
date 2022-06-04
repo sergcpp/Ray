@@ -572,7 +572,8 @@ void assemble_material_test_images() {
         {"trans_mat0", "trans_mat1", "trans_mat2", "trans_mat3", "trans_mat4"},
         {"trans_mat5", "trans_mat6", "trans_mat7", "trans_mat8", "trans_mat9"},
         {"alpha_mat0", "alpha_mat1", "alpha_mat2", "alpha_mat3"},
-        {"complex_mat0", "complex_mat1", "complex_mat2", "complex_mat3", "complex_mat4"}};
+        {"complex_mat0", "complex_mat1", "complex_mat2", "complex_mat3", "complex_mat4"},
+        {"complex_mat5"}};
     const int ImgCountH = sizeof(test_names) / sizeof(test_names[0]);
 
     const int OutImageW = 256 * ImgCountW;
@@ -2085,4 +2086,20 @@ void test_complex_mat4() {
         "test_data/textures/gold-scuffed_roughness.tga", "test_data/textures/gold-scuffed_metallic.tga"};
 
     run_material_test("complex_mat4", metal_mat_desc, SampleCount, DiffThres, PixThres, textures);
+}
+
+void test_complex_mat5() {
+    const int SampleCount = 1024;
+    const int DiffThres = 16;
+    const int PixThres = 2177;
+
+    Ray::principled_mat_desc_t olive_mat_desc;
+    olive_mat_desc.base_color[0] = 0.836164f;
+    olive_mat_desc.base_color[1] = 0.836164f;
+    olive_mat_desc.base_color[2] = 0.656603f;
+    olive_mat_desc.roughness = 0.041667f;
+    olive_mat_desc.transmission = 1.0f;
+    olive_mat_desc.ior = 2.3f;
+
+    run_material_test("complex_mat5", olive_mat_desc, SampleCount, DiffThres, PixThres);
 }

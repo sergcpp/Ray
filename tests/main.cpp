@@ -89,6 +89,7 @@ void test_complex_mat1();
 void test_complex_mat2();
 void test_complex_mat3();
 void test_complex_mat4();
+void test_complex_mat5();
 void assemble_material_test_images();
 void test_simd();
 void test_mesh_lights();
@@ -119,6 +120,7 @@ int main(int argc, char *argv[]) {
         test_complex_mat2();
         test_complex_mat3();
         test_complex_mat4();
+        test_complex_mat5();
         printf("Finished complex_mat tests in %.2f minutes\n",
                duration<double>(high_resolution_clock::now() - t2).count() / 60.0);
 
