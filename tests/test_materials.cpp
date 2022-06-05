@@ -981,7 +981,7 @@ void test_glossy_mat4() {
 void test_spec_mat0() {
     const int SampleCount = 2048;
     const int DiffThres = 16;
-    const int PixThres = 381; // 393; // 381;
+    const int PixThres = 393; // 381;
 
     Ray::principled_mat_desc_t spec_mat_desc;
     spec_mat_desc.base_color[0] = 1.0f;
@@ -1011,7 +1011,7 @@ void test_spec_mat1() {
 void test_spec_mat2() {
     const int SampleCount = 1024;
     const int DiffThres = 16;
-    const int PixThres = 190;
+    const int PixThres = 192;
 
     Ray::principled_mat_desc_t spec_mat_desc;
     spec_mat_desc.base_color[0] = 1.0f;
