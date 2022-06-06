@@ -68,6 +68,7 @@ struct derivatives_t {
     float ddn_dx, ddn_dy;
 };
 
+class TextureAtlasLinear;
 class TextureAtlasTiled;
 using TextureAtlas = TextureAtlasTiled;
 

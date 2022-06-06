@@ -24,6 +24,8 @@ class TextureAtlasLinear {
     force_inline float size_x() const { return res_f_[0]; }
     force_inline float size_y() const { return res_f_[1]; }
 
+    force_inline int page_count() const { return int(pages_.size()); }
+
     force_inline pixel_color8_t Get(const int page, const int x, const int y) const {
         return pages_[page][res_[0] * y + x];
     }

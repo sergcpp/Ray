@@ -53,7 +53,7 @@ int Ray::Ref::TextureAtlasLinear::Allocate(const pixel_color8_t *data, const int
         }
     }
 
-    Resize(page_count_ * 2);
+    Resize(page_count_ + 1);
     return Allocate(data, _res, pos);
 }
 
