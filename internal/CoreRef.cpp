@@ -2805,7 +2805,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
                                           const uint32_t light_node_index, const TextureAtlas &tex_atlas,
                                           ray_packet_t *out_secondary_rays, int *out_secondary_rays_count) {
     if (!inter.mask_values[0]) {
-        simd_fvec4 env_col = {0.0f};
+        simd_fvec4 env_col = {1.0f};
         if (pi.should_add_environment()) {
             if (sc.env->env_map != 0xffffffff) {
                 env_col = SampleLatlong_RGBE(tex_atlas, sc.textures[sc.env->env_map], simd_fvec3{ray.d});
