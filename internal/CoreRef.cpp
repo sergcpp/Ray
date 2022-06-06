@@ -2847,6 +2847,9 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
     simd_fvec3 plane_N = {tri.n_plane};
     plane_N = TransformNormal(plane_N, tr->inv_xform);
 
+    simd_fvec3 B = simd_fvec3(v1.b) * w + simd_fvec3(v2.b) * inter.u + simd_fvec3(v3.b) * inter.v;
+    simd_fvec3 T = cross(B, N);
+
     if (is_backfacing) {
         if (sc.tri_materials[tri_index].back_mi == 0xffff) {
             return pixel_color_t{0.0f, 0.0f, 0.0f, 0.0f};
@@ -2854,6 +2857,8 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
             mat = &sc.materials[sc.tri_materials[tri_index].back_mi & MATERIAL_INDEX_BITS];
             plane_N = -plane_N;
             N = -N;
+            B = -B;
+            T = -T;
         }
     }
 
@@ -2861,9 +2866,6 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
     ComputeDerivatives(I, inter.t, ray.do_dx, ray.do_dy, ray.dd_dx, ray.dd_dy, v1, v2, v3, *tr, plane_N, surf_der);
 
     // apply normal map
-    simd_fvec3 B = simd_fvec3(v1.b) * w + simd_fvec3(v2.b) * inter.u + simd_fvec3(v3.b) * inter.v;
-    simd_fvec3 T = cross(B, N);
-
     if (mat->textures[NORMALS_TEXTURE] != 0xffffffff) {
         simd_fvec4 normals = SampleBilinear(tex_atlas, sc.textures[mat->textures[NORMALS_TEXTURE]], uvs, 0);
         normals = normals * 2.0f - 1.0f;
