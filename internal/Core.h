@@ -105,7 +105,7 @@ const int NUM_MIP_LEVELS = 14;
 const int MAX_MIP_LEVEL = NUM_MIP_LEVELS - 1;
 const int MAX_TEXTURE_SIZE = (1 << MAX_MIP_LEVEL);
 
-const int TEXTURE_ATLAS_SIZE = 8192;
+const int TEXTURE_ATLAS_SIZE = 8192 + 256; // small margin to account for borders
 
 const int TEXTURE_SRGB_BIT = 0b1000000000000000;
 const int TEXTURE_WIDTH_BITS = 0b0111111111111111;

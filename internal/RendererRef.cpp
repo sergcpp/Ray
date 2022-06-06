@@ -8,9 +8,10 @@
 #include "SceneRef.h"
 #include "UniformIntDistribution.h"
 
+#define DEBUG_ATLAS 0
+
 Ray::Ref::Renderer::Renderer(const settings_t &s, ILog *log)
-    : log_(log), use_wide_bvh_(s.use_wide_bvh), clean_buf_(s.w, s.h), final_buf_(s.w, s.h),
-      temp_buf_(s.w, s.h) {
+    : log_(log), use_wide_bvh_(s.use_wide_bvh), clean_buf_(s.w, s.h), final_buf_(s.w, s.h), temp_buf_(s.w, s.h) {
     auto rand_func = std::bind(UniformIntDistribution<uint32_t>(), std::mt19937(0));
     permutations_ = Ray::ComputeRadicalInversePermutations(g_primes, PrimesCount, rand_func);
 }
@@ -353,6 +354,25 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
     };
 
     final_buf_.CopyFrom(clean_buf_, rect, clamp_and_gamma_correct);
+
+#if DEBUG_ATLAS
+    for (int y = rect.y; y < rect.y + rect.h; ++y) {
+        const float v = float(y) / final_buf_.h();
+        for (int x = rect.x; x < rect.x + rect.w; ++x) {
+            const float u = float(x) / final_buf_.w();
+
+            const pixel_color8_t col8 = tex_atlas.Get(region.iteration % tex_atlas.page_count(), u, v);
+
+            pixel_color_t col;
+            col.r = float(col8.r) / 255.0f;
+            col.g = float(col8.g) / 255.0f;
+            col.b = float(col8.b) / 255.0f;
+            col.a = 1.0f;
+
+            final_buf_.SetPixel(x, y, col);
+        }
+    }
+#endif
 }
 
 void Ray::Ref::Renderer::UpdateHaltonSequence(int iteration, std::unique_ptr<float[]> &seq) {

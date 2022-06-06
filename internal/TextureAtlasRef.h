@@ -59,6 +59,8 @@ class TextureAtlasTiled {
     force_inline float size_x() const { return res_f_[0]; }
     force_inline float size_y() const { return res_f_[1]; }
 
+    force_inline int page_count() const { return int(pages_.size()); }
+
     force_inline pixel_color8_t Get(const int page, const int x, const int y) const {
         const int tilex = x / TileSize, tiley = y / TileSize;
         const int in_tilex = x % TileSize, in_tiley = y % TileSize;

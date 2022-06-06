@@ -89,6 +89,10 @@ uint32_t Ray::Ref::Scene::AddTexture(const tex_desc_t &_t) {
         t.pos[i][1] = t.pos[mip - 1][1];
     }
 
+    log_->Info("Ray: Texture loaded (%ix%i, %i mips)", _t.w, _t.h, mip);
+    log_->Info("Ray: Texture atlas is (%ix%i, %i pages)", int(texture_atlas_.size_x()), int(texture_atlas_.size_y()),
+               texture_atlas_.page_count());
+
     return textures_.push(t);
 }
 
