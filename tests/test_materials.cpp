@@ -1988,7 +1988,7 @@ void test_alpha_mat3() {
 void test_complex_mat0() {
     const int SampleCount = 1024;
     const int DiffThres = 16;
-    const int PixThres = 421; // 461; // 163;
+    const int PixThres = 422; // 461; // 163;
 
     Ray::principled_mat_desc_t wood_mat_desc;
     wood_mat_desc.base_texture = 0;
