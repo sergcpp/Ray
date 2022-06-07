@@ -165,9 +165,8 @@ uint32_t Ray::Ref::Scene::AddMaterial(const principled_mat_desc_t &m) {
     main_mat.anisotropic_unorm = pack_unorm_16(_CLAMP(m.anisotropic, 0.0f, 1.0f));
     main_mat.specular_unorm = pack_unorm_16(_CLAMP(m.specular, 0.0f, 1.0f));
     main_mat.specular_tint_unorm = pack_unorm_16(_CLAMP(m.specular_tint, 0.0f, 1.0f));
-    main_mat.clearcoat = _CLAMP(m.clearcoat, 0.0f, 1.0f);
-    main_mat.clearcoat_roughness = _CLAMP(m.clearcoat_roughness, 0.0f, 1.0f);
-    main_mat.flags = 0;
+    main_mat.clearcoat_unorm = pack_unorm_16(_CLAMP(m.clearcoat, 0.0f, 1.0f));
+    main_mat.clearcoat_roughness_unorm = pack_unorm_16(_CLAMP(m.clearcoat_roughness, 0.0f, 1.0f));
 
     uint32_t root_node = materials_.push(main_mat);
     uint32_t emissive_node = 0xffffffff, transparent_node = 0xffffffff;

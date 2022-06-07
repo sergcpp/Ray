@@ -168,10 +168,10 @@ struct material_t {
     uint16_t transmission_roughness_unorm;
     uint16_t specular_unorm;
     uint16_t specular_tint_unorm;
-    float clearcoat;
-    float clearcoat_roughness;
+    uint16_t clearcoat_unorm;
+    uint16_t clearcoat_roughness_unorm;
 };
-static_assert(sizeof(material_t) == 80, "!");
+static_assert(sizeof(material_t) == 76, "!");
 
 struct light_t {
     float pos[3], radius;

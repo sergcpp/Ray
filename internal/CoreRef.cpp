@@ -3081,8 +3081,8 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
 
                         const float specular = unpack_unorm_16(cur_mat->specular_unorm);
                         const float transmission = unpack_unorm_16(cur_mat->transmission_unorm);
-                        const float clearcoat = cur_mat->clearcoat;
-                        const float clearcoat_roughness = cur_mat->clearcoat_roughness;
+                        const float clearcoat = unpack_unorm_16(cur_mat->clearcoat_unorm);
+                        const float clearcoat_roughness = unpack_unorm_16(cur_mat->clearcoat_roughness_unorm);
                         const float sheen = unpack_unorm_16(cur_mat->sheen_unorm);
                         const float sheen_tint = unpack_unorm_16(cur_mat->sheen_tint_unorm);
 
@@ -3491,8 +3491,8 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
 
         const float specular = unpack_unorm_16(mat->specular_unorm);
         const float transmission = unpack_unorm_16(mat->transmission_unorm);
-        const float clearcoat = mat->clearcoat;
-        const float clearcoat_roughness = mat->clearcoat_roughness;
+        const float clearcoat = unpack_unorm_16(mat->clearcoat_unorm);
+        const float clearcoat_roughness = unpack_unorm_16(mat->clearcoat_roughness_unorm);
         const float sheen = unpack_unorm_16(mat->sheen_unorm);
         const float sheen_tint = unpack_unorm_16(mat->sheen_tint_unorm);
 
