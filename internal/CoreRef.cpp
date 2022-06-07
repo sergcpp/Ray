@@ -735,6 +735,106 @@ simd_fvec3 mul(const simd_fvec3 in_mat[3], const simd_fvec3 &in_vec) {
     return out_vec;
 }
 
+force_inline float safe_sqrtf(float f) { return std::sqrt(std::max(f, 0.0f)); }
+
+// Taken from Cycles
+simd_fvec3 ensure_valid_reflection(const simd_fvec3 &Ng, const simd_fvec3 &I, const simd_fvec3 &N) {
+    const simd_fvec3 R = 2 * dot(N, I) * N - I;
+
+    // Reflection rays may always be at least as shallow as the incoming ray.
+    const float threshold = std::min(0.9f * dot(Ng, I), 0.01f);
+    if (dot(Ng, R) >= threshold) {
+        return N;
+    }
+
+    // Form coordinate system with Ng as the Z axis and N inside the X-Z-plane.
+    // The X axis is found by normalizing the component of N that's orthogonal to Ng.
+    // The Y axis isn't actually needed.
+    const float NdotNg = dot(N, Ng);
+    const simd_fvec3 X = normalize(N - NdotNg * Ng);
+
+    // Calculate N.z and N.x in the local coordinate system.
+    //
+    // The goal of this computation is to find a N' that is rotated towards Ng just enough
+    // to lift R' above the threshold (here called t), therefore dot(R', Ng) = t.
+    //
+    // According to the standard reflection equation,
+    // this means that we want dot(2*dot(N', I)*N' - I, Ng) = t.
+    //
+    // Since the Z axis of our local coordinate system is Ng, dot(x, Ng) is just x.z, so we get
+    // 2*dot(N', I)*N'.z - I.z = t.
+    //
+    // The rotation is simple to express in the coordinate system we formed -
+    // since N lies in the X-Z-plane, we know that N' will also lie in the X-Z-plane,
+    // so N'.y = 0 and therefore dot(N', I) = N'.x*I.x + N'.z*I.z .
+    //
+    // Furthermore, we want N' to be normalized, so N'.x = sqrt(1 - N'.z^2).
+    //
+    // With these simplifications,
+    // we get the final equation 2*(sqrt(1 - N'.z^2)*I.x + N'.z*I.z)*N'.z - I.z = t.
+    //
+    // The only unknown here is N'.z, so we can solve for that.
+    //
+    // The equation has four solutions in general:
+    //
+    // N'.z = +-sqrt(0.5*(+-sqrt(I.x^2*(I.x^2 + I.z^2 - t^2)) + t*I.z + I.x^2 + I.z^2)/(I.x^2 + I.z^2))
+    // We can simplify this expression a bit by grouping terms:
+    //
+    // a = I.x^2 + I.z^2
+    // b = sqrt(I.x^2 * (a - t^2))
+    // c = I.z*t + a
+    // N'.z = +-sqrt(0.5*(+-b + c)/a)
+    //
+    // Two solutions can immediately be discarded because they're negative so N' would lie in the
+    // lower hemisphere.
+
+    const float Ix = dot(I, X), Iz = dot(I, Ng);
+    const float Ix2 = (Ix * Ix), Iz2 = (Iz * Iz);
+    const float a = Ix2 + Iz2;
+
+    const float b = safe_sqrtf(Ix2 * (a - (threshold * threshold)));
+    const float c = Iz * threshold + a;
+
+    // Evaluate both solutions.
+    // In many cases one can be immediately discarded (if N'.z would be imaginary or larger than
+    // one), so check for that first. If no option is viable (might happen in extreme cases like N
+    // being in the wrong hemisphere), give up and return Ng.
+    const float fac = 0.5f / a;
+    const float N1_z2 = fac * (b + c), N2_z2 = fac * (-b + c);
+    bool valid1 = (N1_z2 > 1e-5f) && (N1_z2 <= (1.0f + 1e-5f));
+    bool valid2 = (N2_z2 > 1e-5f) && (N2_z2 <= (1.0f + 1e-5f));
+
+    simd_fvec2 N_new;
+    if (valid1 && valid2) {
+        // If both are possible, do the expensive reflection-based check.
+        const simd_fvec2 N1 = simd_fvec2(safe_sqrtf(1.0f - N1_z2), safe_sqrtf(N1_z2));
+        const simd_fvec2 N2 = simd_fvec2(safe_sqrtf(1.0f - N2_z2), safe_sqrtf(N2_z2));
+
+        const float R1 = 2 * (N1[0] * Ix + N1[1] * Iz) * N1[1] - Iz;
+        const float R2 = 2 * (N2[0] * Ix + N2[1] * Iz) * N2[1] - Iz;
+
+        valid1 = (R1 >= 1e-5f);
+        valid2 = (R2 >= 1e-5f);
+        if (valid1 && valid2) {
+            // If both solutions are valid, return the one with the shallower reflection since it will be
+            // closer to the input (if the original reflection wasn't shallow, we would not be in this
+            // part of the function).
+            N_new = (R1 < R2) ? N1 : N2;
+        } else {
+            // If only one reflection is valid (= positive), pick that one.
+            N_new = (R1 > R2) ? N1 : N2;
+        }
+    } else if (valid1 || valid2) {
+        // Only one solution passes the N'.z criterium, so pick that one.
+        const float Nz2 = valid1 ? N1_z2 : N2_z2;
+        N_new = simd_fvec2(safe_sqrtf(1.0f - Nz2), safe_sqrtf(Nz2));
+    } else {
+        return Ng;
+    }
+
+    return N_new[0] * X + N_new[1] * Ng;
+}
+
 } // namespace Ref
 } // namespace Ray
 
@@ -2310,8 +2410,8 @@ Ray::Ref::simd_fvec4 Ray::Ref::Sample_PrincipledClearcoat_BSDF(
 
     out_V = mul(world_from_tangent, reflected_dir_ts);
 
-    return Evaluate_PrincipledClearcoat_BSDF(view_dir_ts, sampled_normal_ts, reflected_dir_ts,
-                                                     clearcoat_roughness2, clearcoat_ior, clearcoat_F0);
+    return Evaluate_PrincipledClearcoat_BSDF(view_dir_ts, sampled_normal_ts, reflected_dir_ts, clearcoat_roughness2,
+                                             clearcoat_ior, clearcoat_F0);
 }
 
 Ray::Ref::ray_packet_t Ray::Ref::TransformRay(const ray_packet_t &r, const float *xform) {
@@ -2865,6 +2965,10 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
     derivatives_t surf_der;
     ComputeDerivatives(I, inter.t, ray.do_dx, ray.do_dy, ray.dd_dx, ray.dd_dy, v1, v2, v3, *tr, plane_N, surf_der);
 
+    N = TransformNormal(N, tr->inv_xform);
+    B = TransformNormal(B, tr->inv_xform);
+    T = TransformNormal(T, tr->inv_xform);
+
     // apply normal map
     if (mat->textures[NORMALS_TEXTURE] != 0xffffffff) {
         simd_fvec4 normals = SampleBilinear(tex_atlas, sc.textures[mat->textures[NORMALS_TEXTURE]], uvs, 0);
@@ -2874,11 +2978,8 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
         if (mat->normal_map_strength_unorm != 0xffff) {
             N = normalize(in_normal + (N - in_normal) * unpack_unorm_16(mat->normal_map_strength_unorm));
         }
+        N = ensure_valid_reflection(plane_N, -I, N);
     }
-
-    N = TransformNormal(N, tr->inv_xform);
-    B = TransformNormal(B, tr->inv_xform);
-    T = TransformNormal(T, tr->inv_xform);
 
     // simd_fvec3 world_from_tangent[3] = {T, B, N}, tangent_from_world[3];
     // transpose(world_from_tangent, tangent_from_world);

@@ -1988,7 +1988,7 @@ void test_alpha_mat3() {
 void test_complex_mat0() {
     const int SampleCount = 1024;
     const int DiffThres = 16;
-    const int PixThres = 422; // 461; // 163;
+    const int PixThres = 424; // 422; // 461; // 163;
 
     Ray::principled_mat_desc_t wood_mat_desc;
     wood_mat_desc.base_texture = 0;
@@ -2008,7 +2008,7 @@ void test_complex_mat0() {
 void test_complex_mat1() {
     const int SampleCount = 1024;
     const int DiffThres = 16;
-    const int PixThres = 182; // 170;
+    const int PixThres = 194; // 182; // 170;
 
     Ray::principled_mat_desc_t wood_mat_desc;
     wood_mat_desc.base_texture = 0;
@@ -2028,7 +2028,7 @@ void test_complex_mat1() {
 void test_complex_mat2() {
     const int SampleCount = 1024;
     const int DiffThres = 16;
-    const int PixThres = 172;
+    const int PixThres = 175; // 172;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = 0;
@@ -2049,7 +2049,7 @@ void test_complex_mat2() {
 void test_complex_mat3() {
     const int SampleCount = 1024;
     const int DiffThres = 16;
-    const int PixThres = 258; // 254;
+    const int PixThres = 207; // 258; // 254;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = 0;
@@ -2070,7 +2070,7 @@ void test_complex_mat3() {
 void test_complex_mat4() {
     const int SampleCount = 1024;
     const int DiffThres = 16;
-    const int PixThres = 3123;
+    const int PixThres = 3095; // 3123;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = 0;
