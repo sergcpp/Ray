@@ -58,6 +58,7 @@ struct shading_node_desc_t {
     float base_color[3] = {1, 1, 1};          ///< Base color
     uint32_t base_texture = 0xffffffff;       ///< Base texture index
     uint32_t normal_map = 0xffffffff;         ///< Normal map index
+    float normal_map_intensity = 1.0f;        ///< Normal map intensity
     uint32_t mix_materials[2] = {0xffffffff}; ///< Indices for two materials for mixing
     float roughness = 0;
     uint32_t roughness_texture = 0xffffffff;
@@ -101,6 +102,7 @@ struct principled_mat_desc_t {
     float emission_strength = 0;
     float alpha = 1.0f;
     uint32_t normal_map = 0xffffffff;
+    float normal_map_intensity = 1.0f;
 };
 
 /// Defines mesh region with specific material

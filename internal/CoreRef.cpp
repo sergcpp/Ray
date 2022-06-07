@@ -2869,7 +2869,11 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
     if (mat->textures[NORMALS_TEXTURE] != 0xffffffff) {
         simd_fvec4 normals = SampleBilinear(tex_atlas, sc.textures[mat->textures[NORMALS_TEXTURE]], uvs, 0);
         normals = normals * 2.0f - 1.0f;
+        simd_fvec3 in_normal = N;
         N = normalize(normals[0] * T + normals[2] * N + normals[1] * B);
+        if (mat->normal_map_strength_unorm != 0xffff) {
+            N = normalize(in_normal + (N - in_normal) * unpack_unorm_16(mat->normal_map_strength_unorm));
+        }
     }
 
     N = TransformNormal(N, tr->inv_xform);

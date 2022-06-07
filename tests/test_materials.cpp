@@ -573,7 +573,7 @@ void assemble_material_test_images() {
         {"trans_mat5", "trans_mat6", "trans_mat7", "trans_mat8", "trans_mat9"},
         {"alpha_mat0", "alpha_mat1", "alpha_mat2", "alpha_mat3"},
         {"complex_mat0", "complex_mat1", "complex_mat2", "complex_mat3", "complex_mat4"},
-        {"complex_mat5"}};
+        {"complex_mat5", "complex_mat6"}};
     const int ImgCountH = sizeof(test_names) / sizeof(test_names[0]);
 
     const int OutImageW = 256 * ImgCountW;
@@ -2102,4 +2102,26 @@ void test_complex_mat5() {
     olive_mat_desc.ior = 2.3f;
 
     run_material_test("complex_mat5", olive_mat_desc, SampleCount, DiffThres, PixThres);
+}
+
+void test_complex_mat6() {
+    const int SampleCount = 256;
+    const int DiffThres = 8;
+    const int PixThres = 585;
+
+    Ray::principled_mat_desc_t metal_mat_desc;
+    metal_mat_desc.base_texture = 0;
+    metal_mat_desc.metallic = 1.0f;
+    metal_mat_desc.roughness = 1.0f;
+    metal_mat_desc.roughness_texture = 2;
+    metal_mat_desc.metallic = 1.0f;
+    metal_mat_desc.metallic_texture = 3;
+    metal_mat_desc.normal_map = 1;
+    metal_mat_desc.normal_map_intensity = 0.3f;
+
+    const char *textures[] = {
+        "test_data/textures/stone_trims_02_BaseColor.tga", "test_data/textures/stone_trims_02_Normal.tga",
+        "test_data/textures/stone_trims_02_Roughness.tga", "test_data/textures/stone_trims_02_Metallic.tga"};
+
+    run_material_test("complex_mat6", metal_mat_desc, SampleCount, DiffThres, PixThres, textures);
 }
