@@ -1145,7 +1145,7 @@ void test_aniso_mat4() {
 void test_aniso_mat5() {
     const int SampleCount = 2048;
     const int DiffThres = 16;
-    const int PixThres = 1717; // 1726;
+    const int PixThres = 1725; // 1717; // 1726;
 
     Ray::principled_mat_desc_t spec_mat_desc;
     spec_mat_desc.base_color[0] = 1.0f;
