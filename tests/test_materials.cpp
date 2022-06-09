@@ -1490,7 +1490,7 @@ void test_coat_mat0() {
 void test_coat_mat1() {
     const int SampleCount = 256;
     const int DiffThres = 16;
-    const int PixThres = 34;
+    const int PixThres = 35;
 
     Ray::principled_mat_desc_t mat_desc;
     mat_desc.base_color[0] = 0.0f;
