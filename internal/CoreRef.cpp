@@ -410,8 +410,8 @@ force_inline void radix_sort(ray_chunk_t *begin, ray_chunk_t *end, ray_chunk_t *
 }
 
 force_inline float construct_float(uint32_t m) {
-    const uint32_t ieeeMantissa = 0x007FFFFFu; // binary32 mantissa bitmask
-    const uint32_t ieeeOne = 0x3F800000u;      // 1.0 in IEEE binary32
+    static const uint32_t ieeeMantissa = 0x007FFFFFu; // binary32 mantissa bitmask
+    static const uint32_t ieeeOne = 0x3F800000u;      // 1.0 in IEEE binary32
 
     m &= ieeeMantissa; // Keep only mantissa bits (fractional part)
     m |= ieeeOne;      // Add fractional part to 1.0
@@ -420,9 +420,9 @@ force_inline float construct_float(uint32_t m) {
     return f - 1.0f;                              // Range [0:1]
 }
 
-force_inline simd_fvec4 rgbe_to_rgb(const pixel_color8_t &rgbe) {
-    const float f = std::exp2(float(rgbe.a) - 128.0f);
-    return simd_fvec4{to_norm_float(rgbe.r) * f, to_norm_float(rgbe.g) * f, to_norm_float(rgbe.b) * f, 1.0f};
+force_inline simd_fvec4 rgbe_to_rgb(const color_t<uint8_t, 4> &rgbe) {
+    const float f = std::exp2(float(rgbe.v[3]) - 128.0f);
+    return simd_fvec4{to_norm_float(rgbe.v[0]) * f, to_norm_float(rgbe.v[1]) * f, to_norm_float(rgbe.v[2]) * f, 1.0f};
 }
 
 force_inline simd_fvec4 srgb_to_rgb(const simd_fvec4 &col) {
@@ -2460,7 +2460,7 @@ Ray::Ref::simd_fvec2 Ray::Ref::TransformUV(const simd_fvec2 &_uv, const simd_fve
     return res;
 }
 
-Ray::Ref::simd_fvec4 Ray::Ref::SampleNearest(const TextureAtlas &atlas, const texture_t &t, const simd_fvec2 &uvs,
+Ray::Ref::simd_fvec4 Ray::Ref::SampleNearest(const TextureAtlasRGBA &atlas, const texture_t &t, const simd_fvec2 &uvs,
                                              const int lod) {
     const simd_fvec2 atlas_size = {atlas.size_x(), atlas.size_y()};
     simd_fvec2 _uvs = TransformUV(uvs, atlas_size, t, lod);
@@ -2468,12 +2468,13 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleNearest(const TextureAtlas &atlas, const te
 
     const int page = t.page[lod];
 
-    const pixel_color8_t &pix = atlas.Get(page, int(_uvs[0]), int(_uvs[1]));
+    const auto &pix = atlas.Get(page, int(_uvs[0]), int(_uvs[1]));
 
-    return simd_fvec4{to_norm_float(pix.r), to_norm_float(pix.g), to_norm_float(pix.b), to_norm_float(pix.a)};
+    return simd_fvec4{to_norm_float(pix.v[0]), to_norm_float(pix.v[1]), to_norm_float(pix.v[2]),
+                      to_norm_float(pix.v[3])};
 }
 
-Ray::Ref::simd_fvec4 Ray::Ref::SampleBilinear(const TextureAtlas &atlas, const texture_t &t, const simd_fvec2 &uvs,
+Ray::Ref::simd_fvec4 Ray::Ref::SampleBilinear(const TextureAtlasRGBA &atlas, const texture_t &t, const simd_fvec2 &uvs,
                                               const int lod) {
     const simd_fvec2 atlas_size = {atlas.size_x(), atlas.size_y()};
     simd_fvec2 _uvs = TransformUV(uvs, atlas_size, t, lod);
@@ -2481,39 +2482,39 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleBilinear(const TextureAtlas &atlas, const t
 
     const int page = t.page[lod];
 
-    const pixel_color8_t &p00 = atlas.Get(page, int(_uvs[0]) + 0, int(_uvs[1]) + 0);
-    const pixel_color8_t &p01 = atlas.Get(page, int(_uvs[0]) + 1, int(_uvs[1]) + 0);
-    const pixel_color8_t &p10 = atlas.Get(page, int(_uvs[0]) + 0, int(_uvs[1]) + 1);
-    const pixel_color8_t &p11 = atlas.Get(page, int(_uvs[0]) + 1, int(_uvs[1]) + 1);
+    const auto &p00 = atlas.Get(page, int(_uvs[0]) + 0, int(_uvs[1]) + 0);
+    const auto &p01 = atlas.Get(page, int(_uvs[0]) + 1, int(_uvs[1]) + 0);
+    const auto &p10 = atlas.Get(page, int(_uvs[0]) + 0, int(_uvs[1]) + 1);
+    const auto &p11 = atlas.Get(page, int(_uvs[0]) + 1, int(_uvs[1]) + 1);
 
     const float kx = _uvs[0] - std::floor(_uvs[0]), ky = _uvs[1] - std::floor(_uvs[1]);
 
-    const auto p0 = simd_fvec4{p01.r * kx + p00.r * (1 - kx), p01.g * kx + p00.g * (1 - kx),
-                               p01.b * kx + p00.b * (1 - kx), p01.a * kx + p00.a * (1 - kx)};
+    const auto p0 = simd_fvec4{p01.v[0] * kx + p00.v[0] * (1 - kx), p01.v[1] * kx + p00.v[1] * (1 - kx),
+                               p01.v[2] * kx + p00.v[2] * (1 - kx), p01.v[3] * kx + p00.v[3] * (1 - kx)};
 
-    const auto p1 = simd_fvec4{p11.r * kx + p10.r * (1 - kx), p11.g * kx + p10.g * (1 - kx),
-                               p11.b * kx + p10.b * (1 - kx), p11.a * kx + p10.a * (1 - kx)};
+    const auto p1 = simd_fvec4{p11.v[0] * kx + p10.v[0] * (1 - kx), p11.v[1] * kx + p10.v[1] * (1 - kx),
+                               p11.v[2] * kx + p10.v[2] * (1 - kx), p11.v[3] * kx + p10.v[3] * (1 - kx)};
 
     const float k = 1.0f / 255.0f;
     return (p1 * ky + p0 * (1.0f - ky)) * k;
 }
 
-Ray::Ref::simd_fvec4 Ray::Ref::SampleBilinear(const TextureAtlas &atlas, const simd_fvec2 &uvs, const int page) {
-    const pixel_color8_t &p00 = atlas.Get(page, int(uvs[0]) + 0, int(uvs[1]) + 0);
-    const pixel_color8_t &p01 = atlas.Get(page, int(uvs[0]) + 1, int(uvs[1]) + 0);
-    const pixel_color8_t &p10 = atlas.Get(page, int(uvs[0]) + 0, int(uvs[1]) + 1);
-    const pixel_color8_t &p11 = atlas.Get(page, int(uvs[0]) + 1, int(uvs[1]) + 1);
+Ray::Ref::simd_fvec4 Ray::Ref::SampleBilinear(const TextureAtlasRGBA &atlas, const simd_fvec2 &uvs, const int page) {
+    const auto &p00 = atlas.Get(page, int(uvs[0]) + 0, int(uvs[1]) + 0);
+    const auto &p01 = atlas.Get(page, int(uvs[0]) + 1, int(uvs[1]) + 0);
+    const auto &p10 = atlas.Get(page, int(uvs[0]) + 0, int(uvs[1]) + 1);
+    const auto &p11 = atlas.Get(page, int(uvs[0]) + 1, int(uvs[1]) + 1);
 
     const simd_fvec2 k = uvs - floor(uvs);
 
     const auto _p00 =
-        simd_fvec4{to_norm_float(p00.r), to_norm_float(p00.g), to_norm_float(p00.b), to_norm_float(p00.a)};
+        simd_fvec4{to_norm_float(p00.v[0]), to_norm_float(p00.v[1]), to_norm_float(p00.v[2]), to_norm_float(p00.v[3])};
     const auto _p01 =
-        simd_fvec4{to_norm_float(p01.r), to_norm_float(p01.g), to_norm_float(p01.b), to_norm_float(p01.a)};
+        simd_fvec4{to_norm_float(p01.v[0]), to_norm_float(p01.v[1]), to_norm_float(p01.v[2]), to_norm_float(p01.v[3])};
     const auto _p10 =
-        simd_fvec4{to_norm_float(p10.r), to_norm_float(p10.g), to_norm_float(p10.b), to_norm_float(p10.a)};
+        simd_fvec4{to_norm_float(p10.v[0]), to_norm_float(p10.v[1]), to_norm_float(p10.v[2]), to_norm_float(p10.v[3])};
     const auto _p11 =
-        simd_fvec4{to_norm_float(p11.r), to_norm_float(p11.g), to_norm_float(p11.b), to_norm_float(p11.a)};
+        simd_fvec4{to_norm_float(p11.v[0]), to_norm_float(p11.v[1]), to_norm_float(p11.v[2]), to_norm_float(p11.v[3])};
 
     const simd_fvec4 p0X = _p01 * k[0] + _p00 * (1 - k[0]);
     const simd_fvec4 p1X = _p11 * k[0] + _p10 * (1 - k[0]);
@@ -2521,7 +2522,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleBilinear(const TextureAtlas &atlas, const s
     return (p1X * k[1] + p0X * (1 - k[1]));
 }
 
-Ray::Ref::simd_fvec4 Ray::Ref::SampleTrilinear(const TextureAtlas &atlas, const texture_t &t, const simd_fvec2 &uvs,
+Ray::Ref::simd_fvec4 Ray::Ref::SampleTrilinear(const TextureAtlasRGBA &atlas, const texture_t &t, const simd_fvec2 &uvs,
                                                const float lod) {
     const simd_fvec4 col1 = SampleBilinear(atlas, t, uvs, (int)std::floor(lod));
     const simd_fvec4 col2 = SampleBilinear(atlas, t, uvs, (int)std::ceil(lod));
@@ -2530,8 +2531,9 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleTrilinear(const TextureAtlas &atlas, const 
     return col1 * (1 - k) + col2 * k;
 }
 
-Ray::Ref::simd_fvec4 Ray::Ref::SampleAnisotropic(const TextureAtlas &atlas, const texture_t &t, const simd_fvec2 &uvs,
-                                                 const simd_fvec2 &duv_dx, const simd_fvec2 &duv_dy) {
+Ray::Ref::simd_fvec4 Ray::Ref::SampleAnisotropic(const TextureAtlasRGBA &atlas, const texture_t &t,
+                                                 const simd_fvec2 &uvs, const simd_fvec2 &duv_dx,
+                                                 const simd_fvec2 &duv_dy) {
     const int width = int(t.width & TEXTURE_WIDTH_BITS);
     const int height = int(t.height & TEXTURE_HEIGHT_BITS);
     const simd_fvec2 sz = {float(width), float(height)};
@@ -2597,7 +2599,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleAnisotropic(const TextureAtlas &atlas, cons
     return res / float(num);
 }
 
-Ray::Ref::simd_fvec4 Ray::Ref::SampleLatlong_RGBE(const TextureAtlas &atlas, const texture_t &t,
+Ray::Ref::simd_fvec4 Ray::Ref::SampleLatlong_RGBE(const TextureAtlasRGBA &atlas, const texture_t &t,
                                                   const simd_fvec3 &dir) {
     const float theta = std::acos(clamp(dir[1], -1.0f, 1.0f)) / PI;
     const float r = std::sqrt(dir[0] * dir[0] + dir[2] * dir[2]);
@@ -2611,10 +2613,10 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleLatlong_RGBE(const TextureAtlas &atlas, con
 
     const simd_fvec2 uvs = pos + simd_fvec2{u, theta} * size + simd_fvec2{1.0f, 1.0f};
 
-    const pixel_color8_t &p00 = atlas.Get(t.page[0], int(uvs[0] + 0), int(uvs[1] + 0));
-    const pixel_color8_t &p01 = atlas.Get(t.page[0], int(uvs[0] + 1), int(uvs[1] + 0));
-    const pixel_color8_t &p10 = atlas.Get(t.page[0], int(uvs[0] + 0), int(uvs[1] + 1));
-    const pixel_color8_t &p11 = atlas.Get(t.page[0], int(uvs[0] + 1), int(uvs[1] + 1));
+    const auto &p00 = atlas.Get(t.page[0], int(uvs[0] + 0), int(uvs[1] + 0));
+    const auto &p01 = atlas.Get(t.page[0], int(uvs[0] + 1), int(uvs[1] + 0));
+    const auto &p10 = atlas.Get(t.page[0], int(uvs[0] + 0), int(uvs[1] + 1));
+    const auto &p11 = atlas.Get(t.page[0], int(uvs[0] + 1), int(uvs[1] + 1));
 
     const simd_fvec2 k = uvs - floor(uvs);
 
@@ -2629,7 +2631,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleLatlong_RGBE(const TextureAtlas &atlas, con
 
 float Ray::Ref::ComputeVisibility(const simd_fvec3 &p, const simd_fvec3 &d, float dist, const float rand_val,
                                   int rand_hash2, const scene_data_t &sc, const uint32_t node_index,
-                                  const TextureAtlas &tex_atlas) {
+                                  const TextureAtlasRGBA &tex_atlas) {
     ray_packet_t r;
 
     memcpy(&r.o[0], value_ptr(p), 3 * sizeof(float));
@@ -2728,113 +2730,6 @@ float Ray::Ref::ComputeVisibility(const simd_fvec3 &p, const simd_fvec3 &d, floa
     return visibility;
 }
 
-/*void Ray::Ref::AcumulateLightContribution(const light_t &l, const simd_fvec3 &I, const simd_fvec3 &P,
-                                          const simd_fvec3 &N, const simd_fvec3 &B, const simd_fvec3 &plane_N,
-                                          const scene_data_t &sc, uint32_t node_index, const TextureAtlas &tex_atlas,
-                                          float sigma, const float *halton, const int hi, int rand_hash2,
-                                          float rand_offset, float rand_offset2, simd_fvec3 &col) {
-    simd_fvec3 L = P - simd_fvec3(l.pos);
-    float distance = length(L);
-    float d = std::max(distance - l.radius, 0.0f);
-    L /= distance;
-
-    float _unused;
-    const float z = std::modf(halton[hi + 0] + rand_offset, &_unused);
-
-    const float dir = std::sqrt(z);
-    const float phi = 2 * PI * std::modf(halton[hi + 1] + rand_offset2, &_unused);
-
-    const float cos_phi = std::cos(phi), sin_phi = std::sin(phi);
-
-    simd_fvec3 TT = cross(L, B);
-    simd_fvec3 BB = cross(L, TT);
-    const simd_fvec3 V = dir * sin_phi * BB + std::sqrt(1.0f - dir) * L + dir * cos_phi * TT;
-
-    L = normalize(simd_fvec3(l.pos) + V * l.radius - P);
-
-    float denom = d / l.radius + 1.0f;
-    float atten = 1.0f / (denom * denom);
-
-    atten = (atten - LIGHT_ATTEN_CUTOFF / l.brightness) / (1.0f - LIGHT_ATTEN_CUTOFF);
-    atten = std::max(atten, 0.0f);
-
-    float _dot1 = std::max(dot(L, N), 0.0f);
-    float _dot2 = dot(L, simd_fvec3{l.dir});
-
-    if (_dot1 > FLT_EPS && _dot2 > l.spot && (l.brightness * atten) > FLT_EPS) {
-        float visibility = ComputeVisibility(P + HIT_BIAS * plane_N, simd_fvec3(l.pos), halton, hi, rand_hash2, sc,
-                                             node_index, tex_atlas);
-        col += simd_fvec3(l.col) * _dot1 * visibility * atten * BRDF_OrenNayar(L, I, N, B, sigma);
-    }
-}
-
-Ray::Ref::simd_fvec3 Ray::Ref::ComputeDirectLighting(const simd_fvec3 &I, const simd_fvec3 &P, const simd_fvec3 &N,
-                                                     const simd_fvec3 &B, const simd_fvec3 &plane_N, float sigma,
-                                                     const float *halton, const int hi, int rand_hash, int rand_hash2,
-                                                     float rand_offset, float rand_offset2, const scene_data_t &sc,
-                                                     uint32_t node_index, uint32_t light_node_index,
-                                                     const TextureAtlas &tex_atlas) {
-    unused(rand_hash);
-
-    simd_fvec3 col = {0.0f};
-
-    uint32_t stack[MAX_STACK_SIZE];
-    uint32_t stack_size = 0;
-
-    if (light_node_index != 0xffffffff) {
-        stack[stack_size++] = light_node_index;
-    }
-
-    if (sc.mnodes) {
-        while (stack_size) {
-            const uint32_t cur = stack[--stack_size];
-
-            if (!is_leaf_node(sc.mnodes[cur])) {
-                bool res[8];
-                for (int i = 0; i < 8; i++) {
-                    res[i] = bbox_test_oct(value_ptr(P), sc.mnodes[cur], i);
-                }
-
-                for (int i = 0; i < 8; i++) {
-                    if (!res[i]) {
-                        continue;
-                    }
-                    stack[stack_size++] = sc.mnodes[cur].child[i];
-                }
-            } else {
-                const uint32_t prim_index = (sc.mnodes[cur].child[0] & PRIM_INDEX_BITS);
-                for (uint32_t i = prim_index; i < prim_index + sc.mnodes[cur].child[1]; i++) {
-                    const light_t &l = sc.lights[sc.li_indices[i]];
-                    AcumulateLightContribution(l, I, P, N, B, plane_N, sc, node_index, tex_atlas, sigma, halton, hi,
-                                               rand_hash2, rand_offset, rand_offset2, col);
-                }
-            }
-        }
-    } else {
-        while (stack_size) {
-            const uint32_t cur = stack[--stack_size];
-
-            if (!bbox_test(value_ptr(P), sc.nodes[cur])) {
-                continue;
-            }
-
-            if (!is_leaf_node(sc.nodes[cur])) {
-                stack[stack_size++] = sc.nodes[cur].left_child;
-                stack[stack_size++] = (sc.nodes[cur].right_child & RIGHT_CHILD_BITS);
-            } else {
-                const uint32_t prim_index = (sc.nodes[cur].prim_index & PRIM_INDEX_BITS);
-                for (uint32_t i = prim_index; i < prim_index + sc.nodes[cur].prim_count; i++) {
-                    const light_t &l = sc.lights[sc.li_indices[i]];
-                    AcumulateLightContribution(l, I, P, N, B, plane_N, sc, node_index, tex_atlas, sigma, halton, hi,
-                                               rand_hash2, rand_offset, rand_offset2, col);
-                }
-            }
-        }
-    }
-
-    return col;
-}*/
-
 void Ray::Ref::ComputeDerivatives(const simd_fvec3 &I, const float t, const simd_fvec3 &do_dx, const simd_fvec3 &do_dy,
                                   const simd_fvec3 &dd_dx, const simd_fvec3 &dd_dy, const vertex_t &v1,
                                   const vertex_t &v2, const vertex_t &v3, const transform_t &tr,
@@ -2902,7 +2797,7 @@ void Ray::Ref::ComputeDerivatives(const simd_fvec3 &I, const float t, const simd
 
 Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_t &inter, const ray_packet_t &ray,
                                           const float *halton, const scene_data_t &sc, const uint32_t node_index,
-                                          const uint32_t light_node_index, const TextureAtlas &tex_atlas,
+                                          const uint32_t light_node_index, const TextureAtlasRGBA &tex_atlas,
                                           ray_packet_t *out_secondary_rays, int *out_secondary_rays_count) {
     if (!inter.mask_values[0]) {
         simd_fvec4 env_col = {1.0f};

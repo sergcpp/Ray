@@ -55,7 +55,7 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
     const uint32_t macro_tree_root = s->macro_nodes_root_;
     const uint32_t light_tree_root = s->light_nodes_root_;
 
-    const TextureAtlas &tex_atlas = s->texture_atlas_;
+    const TextureAtlasRGBA &tex_atlas = s->texture_atlas_;
 
     float root_min[3], cell_size[3];
     if (macro_tree_root != 0xffffffff) {
@@ -361,12 +361,12 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
         for (int x = rect.x; x < rect.x + rect.w; ++x) {
             const float u = float(x) / final_buf_.w();
 
-            const pixel_color8_t col8 = tex_atlas.Get(region.iteration % tex_atlas.page_count(), u, v);
+            const auto col8 = tex_atlas.Get(region.iteration % tex_atlas.page_count(), u, v);
 
             pixel_color_t col;
-            col.r = float(col8.r) / 255.0f;
-            col.g = float(col8.g) / 255.0f;
-            col.b = float(col8.b) / 255.0f;
+            col.r = float(col8.v[0]) / 255.0f;
+            col.g = float(col8.v[1]) / 255.0f;
+            col.b = float(col8.v[2]) / 255.0f;
             col.a = 1.0f;
 
             final_buf_.SetPixel(x, y, col);

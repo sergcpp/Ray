@@ -23,14 +23,14 @@ std::vector<Ray::pixel_color8_t> Ray::Ref::DownsampleTexture(const pixel_color8_
     for (j = 0; j < res[1] - 1; j += 2) {
         int i;
         for (i = 0; i < res[0] - 1; i += 2) {
-            const int r = tex[(j + 0) * res[0] + i].r + tex[(j + 0) * res[0] + i + 1].r + tex[(j + 1) * res[0] + i].r +
-                          tex[(j + 1) * res[0] + i + 1].r;
-            const int g = tex[(j + 0) * res[0] + i].g + tex[(j + 0) * res[0] + i + 1].g + tex[(j + 1) * res[0] + i].g +
-                          tex[(j + 1) * res[0] + i + 1].g;
-            const int b = tex[(j + 0) * res[0] + i].b + tex[(j + 0) * res[0] + i + 1].b + tex[(j + 1) * res[0] + i].b +
-                          tex[(j + 1) * res[0] + i + 1].b;
-            const int a = tex[(j + 0) * res[0] + i].a + tex[(j + 0) * res[0] + i + 1].a + tex[(j + 1) * res[0] + i].a +
-                          tex[(j + 1) * res[0] + i + 1].a;
+            const int r = tex[(j + 0) * res[0] + i].v[0] + tex[(j + 0) * res[0] + i + 1].v[0] + tex[(j + 1) * res[0] + i].v[0] +
+                          tex[(j + 1) * res[0] + i + 1].v[0];
+            const int g = tex[(j + 0) * res[0] + i].v[1] + tex[(j + 0) * res[0] + i + 1].v[1] + tex[(j + 1) * res[0] + i].v[1] +
+                          tex[(j + 1) * res[0] + i + 1].v[1];
+            const int b = tex[(j + 0) * res[0] + i].v[2] + tex[(j + 0) * res[0] + i + 1].v[2] + tex[(j + 1) * res[0] + i].v[2] +
+                          tex[(j + 1) * res[0] + i + 1].v[2];
+            const int a = tex[(j + 0) * res[0] + i].v[3] + tex[(j + 0) * res[0] + i + 1].v[3] + tex[(j + 1) * res[0] + i].v[3] +
+                          tex[(j + 1) * res[0] + i + 1].v[3];
             ret.push_back({uint8_t(r / 4), uint8_t(g / 4), uint8_t(b / 4), uint8_t(a / 4)});
         }
 

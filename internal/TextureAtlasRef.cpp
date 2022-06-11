@@ -4,7 +4,8 @@
 
 #include <algorithm> // for std::max
 
-Ray::Ref::TextureAtlasLinear::TextureAtlasLinear(const int resx, const int resy, const int initial_page_count)
+template <typename T, int N>
+Ray::Ref::TextureAtlasLinear<T, N>::TextureAtlasLinear(const int resx, const int resy, const int initial_page_count)
     : res_{resx, resy}, res_f_{float(resx), float(resy)}, page_count_(0) {
     if (!Resize(initial_page_count)) {
         throw std::runtime_error("TextureAtlas cannot be resized!");
@@ -14,7 +15,8 @@ Ray::Ref::TextureAtlasLinear::TextureAtlasLinear(const int resx, const int resy,
     temp_storage_.reserve(std::max(resx, resy));
 }
 
-int Ray::Ref::TextureAtlasLinear::Allocate(const pixel_color8_t *data, const int _res[2], int pos[2]) {
+template <typename T, int N>
+int Ray::Ref::TextureAtlasLinear<T, N>::Allocate(const ColorType *data, const int _res[2], int pos[2]) {
     int res[2] = {_res[0] + 2, _res[1] + 2};
 
     if (res[0] > res_[0] || res[1] > res_[1]) {
@@ -57,7 +59,7 @@ int Ray::Ref::TextureAtlasLinear::Allocate(const pixel_color8_t *data, const int
     return Allocate(data, _res, pos);
 }
 
-bool Ray::Ref::TextureAtlasLinear::Free(const int page, const int pos[2]) {
+template <typename T, int N> bool Ray::Ref::TextureAtlasLinear<T, N>::Free(const int page, const int pos[2]) {
     if (page < 0 || page > page_count_)
         return false;
 #ifndef NDEBUG // Fill region with zeros in debug
@@ -65,7 +67,7 @@ bool Ray::Ref::TextureAtlasLinear::Free(const int page, const int pos[2]) {
     int index = splitters_[page].FindNode(&pos[0], &size[0]);
     if (index != -1) {
         for (int j = pos[1]; j < pos[1] + size[1]; j++) {
-            memset(&pages_[page][j * res_[0] + pos[0]], 0, size[0] * sizeof(pixel_color8_t));
+            memset(&pages_[page][j * res_[0] + pos[0]], 0, size[0] * sizeof(ColorType));
         }
         return splitters_[page].Free(index);
     } else {
@@ -76,7 +78,7 @@ bool Ray::Ref::TextureAtlasLinear::Free(const int page, const int pos[2]) {
 #endif
 }
 
-bool Ray::Ref::TextureAtlasLinear::Resize(const int new_page_count) {
+template <typename T, int N> bool Ray::Ref::TextureAtlasLinear<T, N>::Resize(const int new_page_count) {
     // if we shrink atlas, all redundant pages required to be empty
     for (int i = new_page_count; i < page_count_; i++) {
         if (!splitters_[i].empty()) {
@@ -86,7 +88,7 @@ bool Ray::Ref::TextureAtlasLinear::Resize(const int new_page_count) {
 
     pages_.resize(new_page_count);
     for (PageData &p : pages_) {
-        p.resize(res_[0] * res_[1], {0, 0, 0, 0});
+        p.resize(res_[0] * res_[1], ColorType{});
     }
 
     splitters_.resize(new_page_count, TextureSplitter{&res_[0]});
@@ -95,16 +97,22 @@ bool Ray::Ref::TextureAtlasLinear::Resize(const int new_page_count) {
     return true;
 }
 
-void Ray::Ref::TextureAtlasLinear::WritePageData(int page, int posx, int posy, int sizex, int sizey,
-                                                 const pixel_color8_t *data) {
+template <typename T, int N>
+void Ray::Ref::TextureAtlasLinear<T, N>::WritePageData(int page, int posx, int posy, int sizex, int sizey,
+                                                       const ColorType *data) {
     for (int y = 0; y < sizey; y++) {
-        memcpy(&pages_[page][(posy + y) * res_[0] + posx], &data[y * sizex], sizex * sizeof(pixel_color8_t));
+        memcpy(&pages_[page][(posy + y) * res_[0] + posx], &data[y * sizex], sizex * sizeof(ColorType));
     }
 }
 
+template class Ray::Ref::TextureAtlasLinear<uint8_t, 4>;
+template class Ray::Ref::TextureAtlasLinear<uint8_t, 3>;
+template class Ray::Ref::TextureAtlasLinear<uint8_t, 1>;
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-Ray::Ref::TextureAtlasTiled::TextureAtlasTiled(int resx, int resy, int initial_page_count)
+template <typename T, int N>
+Ray::Ref::TextureAtlasTiled<T, N>::TextureAtlasTiled(int resx, int resy, int initial_page_count)
     : res_{resx, resy}, res_in_tiles_{resx / TileSize, resy / TileSize}, res_f_{(float)resx, (float)resy},
       page_count_(0) {
     if ((resx % TileSize) || (resy % TileSize)) {
@@ -119,7 +127,8 @@ Ray::Ref::TextureAtlasTiled::TextureAtlasTiled(int resx, int resy, int initial_p
     temp_storage_.reserve(std::max(resx, resy));
 }
 
-int Ray::Ref::TextureAtlasTiled::Allocate(const pixel_color8_t *data, const int _res[2], int pos[2]) {
+template <typename T, int N>
+int Ray::Ref::TextureAtlasTiled<T, N>::Allocate(const ColorType *data, const int _res[2], int pos[2]) {
     const int res[2] = {_res[0] + 2, _res[1] + 2};
 
     if (res[0] > res_[0] || res[1] > res_[1]) {
@@ -162,7 +171,7 @@ int Ray::Ref::TextureAtlasTiled::Allocate(const pixel_color8_t *data, const int 
     return Allocate(data, _res, pos);
 }
 
-bool Ray::Ref::TextureAtlasTiled::Free(int page, const int pos[2]) {
+template <typename T, int N> bool Ray::Ref::TextureAtlasTiled<T, N>::Free(int page, const int pos[2]) {
     if (page < 0 || page > page_count_) {
         return false;
     }
@@ -171,7 +180,7 @@ bool Ray::Ref::TextureAtlasTiled::Free(int page, const int pos[2]) {
     const int index = splitters_[page].FindNode(&pos[0], &size[0]);
     if (index != -1) {
         for (int j = pos[1]; j < pos[1] + size[1]; j++) {
-            memset(&pages_[page][j * res_[0] + pos[0]], 0, size[0] * sizeof(pixel_color8_t));
+            memset(&pages_[page][j * res_[0] + pos[0]], 0, size[0] * sizeof(ColorType));
         }
         return splitters_[page].Free(index);
     } else {
@@ -182,7 +191,7 @@ bool Ray::Ref::TextureAtlasTiled::Free(int page, const int pos[2]) {
 #endif
 }
 
-bool Ray::Ref::TextureAtlasTiled::Resize(int new_page_count) {
+template <typename T, int N> bool Ray::Ref::TextureAtlasTiled<T, N>::Resize(int new_page_count) {
     // if we shrink atlas, all redundant pages required to be empty
     for (int i = new_page_count; i < page_count_; i++) {
         if (!splitters_[i].empty()) {
@@ -192,7 +201,7 @@ bool Ray::Ref::TextureAtlasTiled::Resize(int new_page_count) {
 
     pages_.resize(new_page_count);
     for (PageData &p : pages_) {
-        p.resize(res_[0] * res_[1], {0, 0, 0, 0});
+        p.resize(res_[0] * res_[1], ColorType{});
     }
 
     splitters_.resize(new_page_count, TextureSplitter{&res_[0]});
@@ -201,8 +210,9 @@ bool Ray::Ref::TextureAtlasTiled::Resize(int new_page_count) {
     return true;
 }
 
-void Ray::Ref::TextureAtlasTiled::WritePageData(const int page, const int posx, const int posy, const int sizex,
-                                                const int sizey, const pixel_color8_t *data) {
+template <typename T, int N>
+void Ray::Ref::TextureAtlasTiled<T, N>::WritePageData(const int page, const int posx, const int posy, const int sizex,
+                                                      const int sizey, const ColorType *data) {
     for (int y = 0; y < sizey; y++) {
         const int tiley = (posy + y) / TileSize, in_tiley = (posy + y) % TileSize;
 
@@ -214,3 +224,7 @@ void Ray::Ref::TextureAtlasTiled::WritePageData(const int page, const int posx, 
         }
     }
 }
+
+template class Ray::Ref::TextureAtlasTiled<uint8_t, 4>;
+template class Ray::Ref::TextureAtlasTiled<uint8_t, 3>;
+template class Ray::Ref::TextureAtlasTiled<uint8_t, 1>;

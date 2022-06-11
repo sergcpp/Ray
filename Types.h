@@ -17,14 +17,11 @@ struct pixel_color_t {
 };
 static_assert(sizeof(pixel_color_t) == 16, "!");
 
+template <typename T, int N> struct color_t { T v[N]; };
+
 /// RGBA u8 color
 struct pixel_color8_t {
-    union {
-        struct {
-            uint8_t r, g, b, a;
-        };
-        uint8_t channels[4];
-    };
+    uint8_t v[4];
 };
 static_assert(sizeof(pixel_color8_t) == 4, "!");
 

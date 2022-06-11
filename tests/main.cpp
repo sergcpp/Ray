@@ -106,7 +106,7 @@ int main(int argc, char *argv[]) {
 
     const bool full_tests = (argc > 1 && strcmp(argv[1], "--full") == 0);
 
-    // test_atlas();
+    test_atlas();
     test_simd();
     // test_mesh_lights();
 

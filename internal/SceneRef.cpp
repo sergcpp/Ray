@@ -56,7 +56,7 @@ uint32_t Ray::Ref::Scene::AddTexture(const tex_desc_t &_t) {
 
     while (res[0] >= 1 && res[1] >= 1) {
         int pos[2];
-        const int page = texture_atlas_.Allocate(&tex_data[0], res, pos);
+        const int page = texture_atlas_.Allocate((color_t<uint8_t, 4> *)&tex_data[0], res, pos);
         if (page == -1) {
             // release allocated mip levels on fail
             for (int i = mip; i >= 0; i--) {

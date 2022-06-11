@@ -44,8 +44,8 @@ void test_texture() {
         for (int i = 0; i < TexRes; ++i) {
             Ray::pixel_color8_t &p = checker_texture[j * TexRes + i];
 
-            p.r = p.g = p.b = ((i + j) % 2) ? 255 : 0;
-            p.a = 255;
+            p.v[0] = p.v[1] = p.v[2] = ((i + j) % 2) ? 255 : 0;
+            p.v[3] = 255;
         }
     }
 
