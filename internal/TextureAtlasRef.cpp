@@ -6,7 +6,7 @@
 
 template <typename T, int N>
 Ray::Ref::TextureAtlasLinear<T, N>::TextureAtlasLinear(const int resx, const int resy, const int initial_page_count)
-    : res_{resx, resy}, res_f_{float(resx), float(resy)}, page_count_(0) {
+    : TextureAtlasBase(resx, resy) {
     if (!Resize(initial_page_count)) {
         throw std::runtime_error("TextureAtlas cannot be resized!");
     }
@@ -107,14 +107,14 @@ void Ray::Ref::TextureAtlasLinear<T, N>::WritePageData(int page, int posx, int p
 
 template class Ray::Ref::TextureAtlasLinear<uint8_t, 4>;
 template class Ray::Ref::TextureAtlasLinear<uint8_t, 3>;
+template class Ray::Ref::TextureAtlasLinear<uint8_t, 2>;
 template class Ray::Ref::TextureAtlasLinear<uint8_t, 1>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 template <typename T, int N>
 Ray::Ref::TextureAtlasTiled<T, N>::TextureAtlasTiled(int resx, int resy, int initial_page_count)
-    : res_{resx, resy}, res_in_tiles_{resx / TileSize, resy / TileSize}, res_f_{(float)resx, (float)resy},
-      page_count_(0) {
+    : TextureAtlasBase(resx, resy), res_in_tiles_{resx / TileSize, resy / TileSize} {
     if ((resx % TileSize) || (resy % TileSize)) {
         throw std::invalid_argument("TextureAtlas resolution should be multiple of tile size!");
     }
@@ -227,4 +227,5 @@ void Ray::Ref::TextureAtlasTiled<T, N>::WritePageData(const int page, const int 
 
 template class Ray::Ref::TextureAtlasTiled<uint8_t, 4>;
 template class Ray::Ref::TextureAtlasTiled<uint8_t, 3>;
+template class Ray::Ref::TextureAtlasTiled<uint8_t, 2>;
 template class Ray::Ref::TextureAtlasTiled<uint8_t, 1>;

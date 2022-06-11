@@ -2460,32 +2460,34 @@ Ray::Ref::simd_fvec2 Ray::Ref::TransformUV(const simd_fvec2 &_uv, const simd_fve
     return res;
 }
 
-Ray::Ref::simd_fvec4 Ray::Ref::SampleNearest(const TextureAtlasRGBA &atlas, const texture_t &t, const simd_fvec2 &uvs,
-                                             const int lod) {
+Ray::Ref::simd_fvec4 Ray::Ref::SampleNearest(const TextureAtlasBase *atlases[], const texture_t &t,
+                                             const simd_fvec2 &uvs, const int lod) {
+    const TextureAtlasBase &atlas = *atlases[t.atlas];
+
     const simd_fvec2 atlas_size = {atlas.size_x(), atlas.size_y()};
     simd_fvec2 _uvs = TransformUV(uvs, atlas_size, t, lod);
     _uvs = _uvs * atlas_size - 0.5f;
 
     const int page = t.page[lod];
 
-    const auto &pix = atlas.Get(page, int(_uvs[0]), int(_uvs[1]));
-
-    return simd_fvec4{to_norm_float(pix.v[0]), to_norm_float(pix.v[1]), to_norm_float(pix.v[2]),
-                      to_norm_float(pix.v[3])};
+    const auto &pix = atlas.Fetch(page, int(_uvs[0]), int(_uvs[1]));
+    return simd_fvec4{pix.v[0], pix.v[1], pix.v[2], pix.v[3]};
 }
 
-Ray::Ref::simd_fvec4 Ray::Ref::SampleBilinear(const TextureAtlasRGBA &atlas, const texture_t &t, const simd_fvec2 &uvs,
-                                              const int lod) {
+Ray::Ref::simd_fvec4 Ray::Ref::SampleBilinear(const TextureAtlasBase *atlases[], const texture_t &t,
+                                              const simd_fvec2 &uvs, const int lod) {
+    const TextureAtlasBase &atlas = *atlases[t.atlas];
+
     const simd_fvec2 atlas_size = {atlas.size_x(), atlas.size_y()};
     simd_fvec2 _uvs = TransformUV(uvs, atlas_size, t, lod);
     _uvs = _uvs * atlas_size - 0.5f;
 
     const int page = t.page[lod];
 
-    const auto &p00 = atlas.Get(page, int(_uvs[0]) + 0, int(_uvs[1]) + 0);
-    const auto &p01 = atlas.Get(page, int(_uvs[0]) + 1, int(_uvs[1]) + 0);
-    const auto &p10 = atlas.Get(page, int(_uvs[0]) + 0, int(_uvs[1]) + 1);
-    const auto &p11 = atlas.Get(page, int(_uvs[0]) + 1, int(_uvs[1]) + 1);
+    const auto &p00 = atlas.Fetch(page, int(_uvs[0]) + 0, int(_uvs[1]) + 0);
+    const auto &p01 = atlas.Fetch(page, int(_uvs[0]) + 1, int(_uvs[1]) + 0);
+    const auto &p10 = atlas.Fetch(page, int(_uvs[0]) + 0, int(_uvs[1]) + 1);
+    const auto &p11 = atlas.Fetch(page, int(_uvs[0]) + 1, int(_uvs[1]) + 1);
 
     const float kx = _uvs[0] - std::floor(_uvs[0]), ky = _uvs[1] - std::floor(_uvs[1]);
 
@@ -2495,26 +2497,21 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleBilinear(const TextureAtlasRGBA &atlas, con
     const auto p1 = simd_fvec4{p11.v[0] * kx + p10.v[0] * (1 - kx), p11.v[1] * kx + p10.v[1] * (1 - kx),
                                p11.v[2] * kx + p10.v[2] * (1 - kx), p11.v[3] * kx + p10.v[3] * (1 - kx)};
 
-    const float k = 1.0f / 255.0f;
-    return (p1 * ky + p0 * (1.0f - ky)) * k;
+    return (p1 * ky + p0 * (1.0f - ky));
 }
 
-Ray::Ref::simd_fvec4 Ray::Ref::SampleBilinear(const TextureAtlasRGBA &atlas, const simd_fvec2 &uvs, const int page) {
-    const auto &p00 = atlas.Get(page, int(uvs[0]) + 0, int(uvs[1]) + 0);
-    const auto &p01 = atlas.Get(page, int(uvs[0]) + 1, int(uvs[1]) + 0);
-    const auto &p10 = atlas.Get(page, int(uvs[0]) + 0, int(uvs[1]) + 1);
-    const auto &p11 = atlas.Get(page, int(uvs[0]) + 1, int(uvs[1]) + 1);
+Ray::Ref::simd_fvec4 Ray::Ref::SampleBilinear(const TextureAtlasBase &atlas, const simd_fvec2 &uvs, const int page) {
+    const auto &p00 = atlas.Fetch(page, int(uvs[0]) + 0, int(uvs[1]) + 0);
+    const auto &p01 = atlas.Fetch(page, int(uvs[0]) + 1, int(uvs[1]) + 0);
+    const auto &p10 = atlas.Fetch(page, int(uvs[0]) + 0, int(uvs[1]) + 1);
+    const auto &p11 = atlas.Fetch(page, int(uvs[0]) + 1, int(uvs[1]) + 1);
 
     const simd_fvec2 k = uvs - floor(uvs);
 
-    const auto _p00 =
-        simd_fvec4{to_norm_float(p00.v[0]), to_norm_float(p00.v[1]), to_norm_float(p00.v[2]), to_norm_float(p00.v[3])};
-    const auto _p01 =
-        simd_fvec4{to_norm_float(p01.v[0]), to_norm_float(p01.v[1]), to_norm_float(p01.v[2]), to_norm_float(p01.v[3])};
-    const auto _p10 =
-        simd_fvec4{to_norm_float(p10.v[0]), to_norm_float(p10.v[1]), to_norm_float(p10.v[2]), to_norm_float(p10.v[3])};
-    const auto _p11 =
-        simd_fvec4{to_norm_float(p11.v[0]), to_norm_float(p11.v[1]), to_norm_float(p11.v[2]), to_norm_float(p11.v[3])};
+    const auto _p00 = simd_fvec4{p00.v[0], p00.v[1], p00.v[2], p00.v[3]};
+    const auto _p01 = simd_fvec4{p01.v[0], p01.v[1], p01.v[2], p01.v[3]};
+    const auto _p10 = simd_fvec4{p10.v[0], p10.v[1], p10.v[2], p10.v[3]};
+    const auto _p11 = simd_fvec4{p11.v[0], p11.v[1], p11.v[2], p11.v[3]};
 
     const simd_fvec4 p0X = _p01 * k[0] + _p00 * (1 - k[0]);
     const simd_fvec4 p1X = _p11 * k[0] + _p10 * (1 - k[0]);
@@ -2522,18 +2519,20 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleBilinear(const TextureAtlasRGBA &atlas, con
     return (p1X * k[1] + p0X * (1 - k[1]));
 }
 
-Ray::Ref::simd_fvec4 Ray::Ref::SampleTrilinear(const TextureAtlasRGBA &atlas, const texture_t &t, const simd_fvec2 &uvs,
-                                               const float lod) {
-    const simd_fvec4 col1 = SampleBilinear(atlas, t, uvs, (int)std::floor(lod));
-    const simd_fvec4 col2 = SampleBilinear(atlas, t, uvs, (int)std::ceil(lod));
+Ray::Ref::simd_fvec4 Ray::Ref::SampleTrilinear(const TextureAtlasBase *atlases[], const texture_t &t,
+                                               const simd_fvec2 &uvs, const float lod) {
+    const simd_fvec4 col1 = SampleBilinear(atlases, t, uvs, (int)std::floor(lod));
+    const simd_fvec4 col2 = SampleBilinear(atlases, t, uvs, (int)std::ceil(lod));
 
     const float k = lod - std::floor(lod);
     return col1 * (1 - k) + col2 * k;
 }
 
-Ray::Ref::simd_fvec4 Ray::Ref::SampleAnisotropic(const TextureAtlasRGBA &atlas, const texture_t &t,
+Ray::Ref::simd_fvec4 Ray::Ref::SampleAnisotropic(const TextureAtlasBase *atlases[], const texture_t &t,
                                                  const simd_fvec2 &uvs, const simd_fvec2 &duv_dx,
                                                  const simd_fvec2 &duv_dy) {
+    const TextureAtlasBase &atlas = *atlases[t.atlas];
+
     const int width = int(t.width & TEXTURE_WIDTH_BITS);
     const int height = int(t.height & TEXTURE_HEIGHT_BITS);
     const simd_fvec2 sz = {float(width), float(height)};
@@ -2631,7 +2630,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleLatlong_RGBE(const TextureAtlasRGBA &atlas,
 
 float Ray::Ref::ComputeVisibility(const simd_fvec3 &p, const simd_fvec3 &d, float dist, const float rand_val,
                                   int rand_hash2, const scene_data_t &sc, const uint32_t node_index,
-                                  const TextureAtlasRGBA &tex_atlas) {
+                                  const TextureAtlasBase *tex_atlases[]) {
     ray_packet_t r;
 
     memcpy(&r.o[0], value_ptr(p), 3 * sizeof(float));
@@ -2702,7 +2701,7 @@ float Ray::Ref::ComputeVisibility(const simd_fvec3 &p, const simd_fvec3 &d, floa
             while (mat->type == MixNode) {
                 float mix_val = mat->strength;
                 if (mat->textures[BASE_TEXTURE] != 0xffffffff) {
-                    mix_val *= SampleBilinear(tex_atlas, sc.textures[mat->textures[BASE_TEXTURE]], sh_uvs, 0)[0];
+                    mix_val *= SampleBilinear(tex_atlases, sc.textures[mat->textures[BASE_TEXTURE]], sh_uvs, 0)[0];
                 }
 
                 if (sh_r > mix_val) {
@@ -2797,13 +2796,14 @@ void Ray::Ref::ComputeDerivatives(const simd_fvec3 &I, const float t, const simd
 
 Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_t &inter, const ray_packet_t &ray,
                                           const float *halton, const scene_data_t &sc, const uint32_t node_index,
-                                          const uint32_t light_node_index, const TextureAtlasRGBA &tex_atlas,
+                                          const uint32_t light_node_index, const TextureAtlasBase *tex_atlases[],
                                           ray_packet_t *out_secondary_rays, int *out_secondary_rays_count) {
     if (!inter.mask_values[0]) {
         simd_fvec4 env_col = {1.0f};
         if (pi.should_add_environment()) {
             if (sc.env->env_map != 0xffffffff) {
-                env_col = SampleLatlong_RGBE(tex_atlas, sc.textures[sc.env->env_map], simd_fvec3{ray.d});
+                env_col = SampleLatlong_RGBE(*static_cast<const TextureAtlasRGBA *>(tex_atlases[0]),
+                                             sc.textures[sc.env->env_map], simd_fvec3{ray.d});
                 if (sc.env->env_clamp > FLT_EPS) {
                     env_col = min(env_col, simd_fvec4{sc.env->env_clamp});
                 }
@@ -2866,7 +2866,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
 
     // apply normal map
     if (mat->textures[NORMALS_TEXTURE] != 0xffffffff) {
-        simd_fvec4 normals = SampleBilinear(tex_atlas, sc.textures[mat->textures[NORMALS_TEXTURE]], uvs, 0);
+        simd_fvec4 normals = SampleBilinear(tex_atlases, sc.textures[mat->textures[NORMALS_TEXTURE]], uvs, 0);
         normals = normals * 2.0f - 1.0f;
         simd_fvec3 in_normal = N;
         N = normalize(normals[0] * T + normals[2] * N + normals[1] * B);
@@ -2949,18 +2949,20 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
         if (/*N_dot_L > 0.0f &&*/ cos_theta > 0.0f) {
             const float visibility = ComputeVisibility(offset_ray(P, _is_backfacing ? -plane_N : plane_N), L,
                                                        to_light_dist - 10.0f * HIT_BIAS, halton[RAND_DIM_BSDF_PICK],
-                                                       hash(pi.rand_index), sc, node_index, tex_atlas);
+                                                       hash(pi.rand_index), sc, node_index, tex_atlases);
             if (visibility > 0.0f) {
                 const material_t &lmat = sc.materials[sc.tri_materials[ltri_index].front_mi & MATERIAL_INDEX_BITS];
                 simd_fvec4 lcol = simd_fvec4{sc.lights2[light_index].col[0], sc.lights2[light_index].col[1],
                                              sc.lights2[light_index].col[2], 0.0f};
                 if ((lmat.flags & MAT_FLAG_SKY_PORTAL) == 0) {
                     if (lmat.textures[BASE_TEXTURE] != 0xffffffff) {
-                        lcol *= SampleBilinear(tex_atlas, sc.textures[lmat.textures[BASE_TEXTURE]], luvs, 0 /* lod */);
+                        lcol *=
+                            SampleBilinear(tex_atlases, sc.textures[lmat.textures[BASE_TEXTURE]], luvs, 0 /* lod */);
                     }
                 } else {
                     if (sc.env->env_map != 0xffffffff) {
-                        lcol *= SampleLatlong_RGBE(tex_atlas, sc.textures[sc.env->env_map], L);
+                        lcol *= SampleLatlong_RGBE(*static_cast<const TextureAtlasRGBA *>(tex_atlases[0]),
+                                                   sc.textures[sc.env->env_map], L);
                         if (sc.env->env_clamp > FLT_EPS) {
                             lcol = min(lcol, simd_fvec4{sc.env->env_clamp});
                         }
@@ -2999,7 +3001,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
                     if (cur_mat->textures[BASE_TEXTURE] != 0xffffffff) {
                         const texture_t &base_texture = sc.textures[cur_mat->textures[BASE_TEXTURE]];
                         const float base_lod = get_texture_lod(base_texture, surf_der.duv_dx, surf_der.duv_dy);
-                        simd_fvec4 tex_color = SampleBilinear(tex_atlas, base_texture, uvs, int(base_lod));
+                        simd_fvec4 tex_color = SampleBilinear(tex_atlases, base_texture, uvs, int(base_lod));
                         if (base_texture.width & TEXTURE_SRGB_BIT) {
                             tex_color = srgb_to_rgb(tex_color);
                         }
@@ -3019,7 +3021,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
                         const texture_t &roughness_tex = sc.textures[cur_mat->textures[ROUGH_TEXTURE]];
                         const float roughness_lod = get_texture_lod(roughness_tex, surf_der.duv_dx, surf_der.duv_dy);
                         simd_fvec4 roughness_color =
-                            SampleBilinear(tex_atlas, roughness_tex, uvs, int(roughness_lod))[0];
+                            SampleBilinear(tex_atlases, roughness_tex, uvs, int(roughness_lod))[0];
                         if (roughness_tex.width & TEXTURE_SRGB_BIT) {
                             roughness_color = srgb_to_rgb(roughness_color);
                         }
@@ -3076,7 +3078,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
                         if (cur_mat->textures[METALLIC_TEXTURE] != 0xffffffff) {
                             const texture_t &metallic_tex = sc.textures[cur_mat->textures[METALLIC_TEXTURE]];
                             const float metallic_lod = get_texture_lod(metallic_tex, surf_der.duv_dx, surf_der.duv_dy);
-                            metallic *= SampleBilinear(tex_atlas, metallic_tex, uvs, int(metallic_lod))[0];
+                            metallic *= SampleBilinear(tex_atlases, metallic_tex, uvs, int(metallic_lod))[0];
                         }
 
                         const float specular = unpack_unorm_16(cur_mat->specular_unorm);
@@ -3194,7 +3196,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
                             float mix_val = cur_mat->strength;
                             if (cur_mat->textures[BASE_TEXTURE] != 0xffffffff) {
                                 mix_val *=
-                                    SampleBilinear(tex_atlas, sc.textures[cur_mat->textures[BASE_TEXTURE]], uvs, 0)[0];
+                                    SampleBilinear(tex_atlases, sc.textures[cur_mat->textures[BASE_TEXTURE]], uvs, 0)[0];
                             }
 
                             const float eta = is_backfacing ? (cur_mat->ext_ior / cur_mat->int_ior)
@@ -3224,7 +3226,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
     while (mat->type == MixNode) {
         float mix_val = mat->strength;
         if (mat->textures[BASE_TEXTURE] != 0xffffffff) {
-            mix_val *= SampleBilinear(tex_atlas, sc.textures[mat->textures[BASE_TEXTURE]], uvs, 0)[0];
+            mix_val *= SampleBilinear(tex_atlases, sc.textures[mat->textures[BASE_TEXTURE]], uvs, 0)[0];
         }
 
         // const float eta = is_backfacing ? (mat->int_ior / mat->ext_ior) : (mat->ext_ior / mat->int_ior);
@@ -3255,7 +3257,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
     if (mat->textures[BASE_TEXTURE] != 0xffffffff) {
         const texture_t &base_texture = sc.textures[mat->textures[BASE_TEXTURE]];
         const float base_lod = get_texture_lod(base_texture, surf_der.duv_dx, surf_der.duv_dy);
-        simd_fvec4 tex_color = SampleBilinear(tex_atlas, base_texture, uvs, int(base_lod));
+        simd_fvec4 tex_color = SampleBilinear(tex_atlases, base_texture, uvs, int(base_lod));
         if (base_texture.width & TEXTURE_SRGB_BIT) {
             tex_color = srgb_to_rgb(tex_color);
         }
@@ -3273,7 +3275,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
     if (mat->textures[ROUGH_TEXTURE] != 0xffffffff) {
         const texture_t &roughness_tex = sc.textures[mat->textures[ROUGH_TEXTURE]];
         const float roughness_lod = get_texture_lod(roughness_tex, surf_der.duv_dx, surf_der.duv_dy);
-        simd_fvec4 roughness_color = SampleBilinear(tex_atlas, roughness_tex, uvs, int(roughness_lod))[0];
+        simd_fvec4 roughness_color = SampleBilinear(tex_atlases, roughness_tex, uvs, int(roughness_lod))[0];
         if (roughness_tex.width & TEXTURE_SRGB_BIT) {
             roughness_color = srgb_to_rgb(roughness_color);
         }
@@ -3424,7 +3426,8 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
         if (mat->flags & MAT_FLAG_SKY_PORTAL) {
             base_color = simd_fvec4{1.0f};
             if (sc.env->env_map != 0xffffffff) {
-                base_color = SampleLatlong_RGBE(tex_atlas, sc.textures[sc.env->env_map], simd_fvec3{ray.d});
+                base_color = SampleLatlong_RGBE(*static_cast<const TextureAtlasRGBA *>(tex_atlases[0]),
+                                                sc.textures[sc.env->env_map], simd_fvec3{ray.d});
                 if (sc.env->env_clamp > FLT_EPS) {
                     base_color = min(base_color, simd_fvec4{sc.env->env_clamp});
                 }
@@ -3486,7 +3489,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
         if (mat->textures[METALLIC_TEXTURE] != 0xffffffff) {
             const texture_t &metallic_tex = sc.textures[mat->textures[METALLIC_TEXTURE]];
             const float metallic_lod = get_texture_lod(metallic_tex, surf_der.duv_dx, surf_der.duv_dy);
-            metallic *= SampleBilinear(tex_atlas, metallic_tex, uvs, int(metallic_lod))[0];
+            metallic *= SampleBilinear(tex_atlases, metallic_tex, uvs, int(metallic_lod))[0];
         }
 
         const float specular = unpack_unorm_16(mat->specular_unorm);

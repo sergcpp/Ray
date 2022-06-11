@@ -17,7 +17,7 @@ void test_mesh_lights() {
     const int DIFF_THRES = 4;
     const int PIX_THRES = 54;
 
-    const Ray::pixel_color8_t white = {255, 255, 255, 255};
+    const Ray::color_rgba8_t white = {255, 255, 255, 255};
 
     const float view_origin[] = {2.0f, 2.0f, 0.0f};
     const float view_dir[] = {-1.0f, 0.0f, 0.0f};

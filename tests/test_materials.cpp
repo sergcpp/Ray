@@ -25,7 +25,8 @@ void load_needed_textures(Ray::SceneBase &scene, Ray::shading_node_desc_t &mat_d
         require(!img_data.empty());
 
         Ray::tex_desc_t tex_desc;
-        tex_desc.data = reinterpret_cast<const Ray::pixel_color8_t *>(img_data.data());
+        tex_desc.format = Ray::eTextureFormat::RGBA8888;
+        tex_desc.data = img_data.data();
         tex_desc.w = img_w;
         tex_desc.h = img_h;
         tex_desc.generate_mipmaps = true;
@@ -47,7 +48,8 @@ void load_needed_textures(Ray::SceneBase &scene, Ray::principled_mat_desc_t &mat
         require(!img_data.empty());
 
         Ray::tex_desc_t tex_desc;
-        tex_desc.data = reinterpret_cast<const Ray::pixel_color8_t *>(img_data.data());
+        tex_desc.format = Ray::eTextureFormat::RGBA8888;
+        tex_desc.data = img_data.data();
         tex_desc.w = img_w;
         tex_desc.h = img_h;
         tex_desc.generate_mipmaps = true;
@@ -62,7 +64,8 @@ void load_needed_textures(Ray::SceneBase &scene, Ray::principled_mat_desc_t &mat
         require(!img_data.empty());
 
         Ray::tex_desc_t tex_desc;
-        tex_desc.data = reinterpret_cast<const Ray::pixel_color8_t *>(img_data.data());
+        tex_desc.format = Ray::eTextureFormat::RGBA8888;
+        tex_desc.data = img_data.data();
         tex_desc.w = img_w;
         tex_desc.h = img_h;
         tex_desc.generate_mipmaps = false;
@@ -77,7 +80,8 @@ void load_needed_textures(Ray::SceneBase &scene, Ray::principled_mat_desc_t &mat
         require(!img_data.empty());
 
         Ray::tex_desc_t tex_desc;
-        tex_desc.data = reinterpret_cast<const Ray::pixel_color8_t *>(img_data.data());
+        tex_desc.format = Ray::eTextureFormat::RGBA8888;
+        tex_desc.data = img_data.data();
         tex_desc.w = img_w;
         tex_desc.h = img_h;
         tex_desc.generate_mipmaps = true;
@@ -92,7 +96,8 @@ void load_needed_textures(Ray::SceneBase &scene, Ray::principled_mat_desc_t &mat
         require(!img_data.empty());
 
         Ray::tex_desc_t tex_desc;
-        tex_desc.data = reinterpret_cast<const Ray::pixel_color8_t *>(img_data.data());
+        tex_desc.format = Ray::eTextureFormat::RGBA8888;
+        tex_desc.data = img_data.data();
         tex_desc.w = img_w;
         tex_desc.h = img_h;
         tex_desc.generate_mipmaps = true;
@@ -2070,7 +2075,7 @@ void test_complex_mat3() {
 void test_complex_mat4() {
     const int SampleCount = 1024;
     const int DiffThres = 16;
-    const int PixThres = 3095; // 3123;
+    const int PixThres = 3097; // 3095; // 3123;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = 0;

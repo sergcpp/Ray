@@ -134,9 +134,17 @@ struct mesh_desc_t {
     bool use_fast_bvh_build = false;   ///< Use faster BVH construction with less tree quality
 };
 
+enum eTextureFormat {
+    RGBA8888,
+    RGB888,
+    RG88,
+    R8
+};
+
 /// Texture description
 struct tex_desc_t {
-    const pixel_color8_t *data; ///< Single byte RGBA pixel data
+    eTextureFormat format;
+    const void *data; ///< Single byte RGBA pixel data
     int w,                      ///< Texture width
         h;                      ///< Texture height
     bool is_srgb = true;

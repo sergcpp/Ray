@@ -9,7 +9,9 @@
 #define _CLAMP(val, min, max) (val < min ? min : (val > max ? max : val))
 
 Ray::Ref::Scene::Scene(ILog *log, const bool use_wide_bvh)
-    : log_(log), use_wide_bvh_(use_wide_bvh), texture_atlas_(TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE) {}
+    : log_(log), use_wide_bvh_(use_wide_bvh), tex_atlas_rgba_(TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE),
+      tex_atlas_rgb_(TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE), tex_atlas_rg_(TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE),
+      tex_atlas_r_(TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE) {}
 
 Ray::Ref::Scene::~Scene() {
     for (uint32_t i = 0; i < uint32_t(mesh_instances_.size()); ++i) {
@@ -52,16 +54,55 @@ uint32_t Ray::Ref::Scene::AddTexture(const tex_desc_t &_t) {
     int mip = 0;
     int res[2] = {_t.w, _t.h};
 
-    std::vector<pixel_color8_t> tex_data(_t.data, _t.data + _t.w * _t.h);
+    std::vector<color_rgba8_t> tex_data_rgba8;
+    std::vector<color_rgb8_t> tex_data_rgb8;
+    std::vector<color_rg8_t> tex_data_rg8;
+    std::vector<color_r8_t> tex_data_r8;
+
+    if (_t.format == eTextureFormat::RGBA8888) {
+        t.atlas = 0;
+        tex_data_rgba8.assign(reinterpret_cast<const color_rgba8_t *>(_t.data),
+                              reinterpret_cast<const color_rgba8_t *>(_t.data) + _t.w * _t.h);
+    } else if (_t.format == eTextureFormat::RGB888) {
+        t.atlas = 1;
+        tex_data_rgb8.assign(reinterpret_cast<const color_rgb8_t *>(_t.data),
+                             reinterpret_cast<const color_rgb8_t *>(_t.data) + _t.w * _t.h);
+    } else if (_t.format == eTextureFormat::RG88) {
+        t.atlas = 2;
+        tex_data_rg8.assign(reinterpret_cast<const color_rg8_t *>(_t.data),
+                            reinterpret_cast<const color_rg8_t *>(_t.data) + _t.w * _t.h);
+    } else if (_t.format == eTextureFormat::R8) {
+        t.atlas = 3;
+        tex_data_r8.assign(reinterpret_cast<const color_r8_t *>(_t.data),
+                           reinterpret_cast<const color_r8_t *>(_t.data) + _t.w * _t.h);
+    }
+
+    // std::vector<pixel_color8_t> tex_data(_t.data, _t.data + _t.w * _t.h);
 
     while (res[0] >= 1 && res[1] >= 1) {
-        int pos[2];
-        const int page = texture_atlas_.Allocate((color_t<uint8_t, 4> *)&tex_data[0], res, pos);
+        int page = -1, pos[2];
+        if (_t.format == eTextureFormat::RGBA8888) {
+            page = tex_atlas_rgba_.Allocate(&tex_data_rgba8[0], res, pos);
+        } else if (_t.format == eTextureFormat::RGB888) {
+            page = tex_atlas_rgb_.Allocate(&tex_data_rgb8[0], res, pos);
+        } else if (_t.format == eTextureFormat::RG88) {
+            page = tex_atlas_rg_.Allocate(&tex_data_rg8[0], res, pos);
+        } else if (_t.format == eTextureFormat::R8) {
+            page = tex_atlas_r_.Allocate(&tex_data_r8[0], res, pos);
+        }
         if (page == -1) {
             // release allocated mip levels on fail
             for (int i = mip; i >= 0; i--) {
                 const int _pos[2] = {t.pos[i][0], t.pos[i][1]};
-                texture_atlas_.Free(t.page[i], _pos);
+                if (_t.format == eTextureFormat::RGBA8888) {
+                    tex_atlas_rgba_.Free(t.page[i], _pos);
+                } else if (_t.format == eTextureFormat::RGB888) {
+                    tex_atlas_rgb_.Free(t.page[i], _pos);
+                } else if (_t.format == eTextureFormat::RG88) {
+                    tex_atlas_rg_.Free(t.page[i], _pos);
+                } else if (_t.format == eTextureFormat::R8) {
+                    tex_atlas_r_.Free(t.page[i], _pos);
+                }
             }
             return 0xffffffff;
         }
@@ -73,7 +114,15 @@ uint32_t Ray::Ref::Scene::AddTexture(const tex_desc_t &_t) {
         mip++;
 
         if (_t.generate_mipmaps) {
-            tex_data = Ref::DownsampleTexture(tex_data.data(), res);
+            if (_t.format == eTextureFormat::RGBA8888) {
+                tex_data_rgba8 = Ref::DownsampleTexture(tex_data_rgba8.data(), res);
+            } else if (_t.format == eTextureFormat::RGB888) {
+                tex_data_rgb8 = Ref::DownsampleTexture(tex_data_rgb8.data(), res);
+            } else if (_t.format == eTextureFormat::RG88) {
+                tex_data_rg8 = Ref::DownsampleTexture(tex_data_rg8.data(), res);
+            } else if (_t.format == eTextureFormat::R8) {
+                tex_data_r8 = Ref::DownsampleTexture(tex_data_r8.data(), res);
+            }
 
             res[0] /= 2;
             res[1] /= 2;
@@ -90,8 +139,8 @@ uint32_t Ray::Ref::Scene::AddTexture(const tex_desc_t &_t) {
     }
 
     log_->Info("Ray: Texture loaded (%ix%i, %i mips)", _t.w, _t.h, mip);
-    log_->Info("Ray: Texture atlas is (%ix%i, %i pages)", int(texture_atlas_.size_x()), int(texture_atlas_.size_y()),
-               texture_atlas_.page_count());
+    log_->Info("Ray: Atlasses are (RGBA %i pages, RGB %i pages, RG %i pages, R %i pages)", tex_atlas_rgba_.page_count(),
+               tex_atlas_rgb_.page_count(), tex_atlas_rg_.page_count(), tex_atlas_r_.page_count());
 
     return textures_.push(t);
 }

@@ -55,7 +55,11 @@ class Scene : public SceneBase {
 
     SparseStorage<material_t> materials_;
     SparseStorage<texture_t> textures_;
-    TextureAtlasRGBA texture_atlas_;
+
+    TextureAtlasRGBA tex_atlas_rgba_;
+    TextureAtlasRGB tex_atlas_rgb_;
+    TextureAtlasRG tex_atlas_rg_;
+    TextureAtlasR tex_atlas_r_;
 
     std::vector<light_t> lights_;
     std::vector<uint32_t> li_indices_;

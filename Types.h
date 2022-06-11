@@ -19,11 +19,15 @@ static_assert(sizeof(pixel_color_t) == 16, "!");
 
 template <typename T, int N> struct color_t { T v[N]; };
 
-/// RGBA u8 color
-struct pixel_color8_t {
-    uint8_t v[4];
-};
-static_assert(sizeof(pixel_color8_t) == 4, "!");
+using color_rgba8_t = color_t<uint8_t, 4>;
+using color_rgb8_t = color_t<uint8_t, 3>;
+using color_rg8_t = color_t<uint8_t, 2>;
+using color_r8_t = color_t<uint8_t, 1>;
+
+using color_rgba_t = color_t<float, 4>;
+using color_rgb_t = color_t<float, 3>;
+using color_rg_t = color_t<float, 2>;
+using color_r_t = color_t<float, 1>;
 
 struct shl1_data_t {
     float coeff_r[4], coeff_g[4], coeff_b[4];

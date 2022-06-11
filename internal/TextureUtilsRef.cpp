@@ -7,69 +7,41 @@
 
 #include <array>
 
-std::vector<Ray::pixel_color8_t> Ray::Ref::DownsampleTexture(const pixel_color8_t tex[], const int res[2]) {
+template<int N>
+std::vector<Ray::color_t<uint8_t, N>> Ray::Ref::DownsampleTexture(const color_t<uint8_t, N> tex[], const int res[2]) {
     if (res[0] == 1 || res[1] == 1) {
-        return std::vector<Ray::pixel_color8_t>{tex, tex + 1};
+        return std::vector<Ray::color_t<uint8_t, N>>{tex, tex + 1};
     }
 
     // TODO: properly downsample non-power-of-2 textures
 
     const int new_res[2] = {res[0] / 2, res[1] / 2};
 
-    std::vector<pixel_color8_t> ret;
+    std::vector<color_t<uint8_t, N>> ret;
     ret.reserve(new_res[0] * new_res[1]);
 
     int j;
     for (j = 0; j < res[1] - 1; j += 2) {
         int i;
         for (i = 0; i < res[0] - 1; i += 2) {
-            const int r = tex[(j + 0) * res[0] + i].v[0] + tex[(j + 0) * res[0] + i + 1].v[0] + tex[(j + 1) * res[0] + i].v[0] +
-                          tex[(j + 1) * res[0] + i + 1].v[0];
-            const int g = tex[(j + 0) * res[0] + i].v[1] + tex[(j + 0) * res[0] + i + 1].v[1] + tex[(j + 1) * res[0] + i].v[1] +
-                          tex[(j + 1) * res[0] + i + 1].v[1];
-            const int b = tex[(j + 0) * res[0] + i].v[2] + tex[(j + 0) * res[0] + i + 1].v[2] + tex[(j + 1) * res[0] + i].v[2] +
-                          tex[(j + 1) * res[0] + i + 1].v[2];
-            const int a = tex[(j + 0) * res[0] + i].v[3] + tex[(j + 0) * res[0] + i + 1].v[3] + tex[(j + 1) * res[0] + i].v[3] +
-                          tex[(j + 1) * res[0] + i + 1].v[3];
-            ret.push_back({uint8_t(r / 4), uint8_t(g / 4), uint8_t(b / 4), uint8_t(a / 4)});
+            ret.emplace_back();
+            auto &col = ret.back();
+            for (int k = 0; k < N; ++k) {
+                const int v = tex[(j + 0) * res[0] + i].v[k] + tex[(j + 0) * res[0] + i + 1].v[k] + tex[(j + 1) * res[0] + i].v[k] +
+                              tex[(j + 1) * res[0] + i + 1].v[k];
+                col.v[k] = uint8_t(v / 4);
+            }
         }
-
-        /*if (i != res[0]) {
-            --i;
-            const int r = tex[(j + 0) * res[0] + i].r + tex[(j + 1) * res[0] + i].r;
-            const int g = tex[(j + 0) * res[0] + i].g + tex[(j + 1) * res[0] + i].g;
-            const int b = tex[(j + 0) * res[0] + i].b + tex[(j + 1) * res[0] + i].b;
-            const int a = tex[(j + 0) * res[0] + i].a + tex[(j + 1) * res[0] + i].a;
-            ret.push_back({uint8_t(r / 2), uint8_t(g / 2), uint8_t(b / 2), uint8_t(a / 2)});
-        }*/
     }
-
-    /*if (j != res[1]) {
-        --j;
-
-        int i;
-        for (i = 0; i < res[0] - 1; i += 2) {
-            const int r = tex[(j + 0) * res[0] + i].r + tex[(j + 0) * res[0] + i + 1].r;
-            const int g = tex[(j + 0) * res[0] + i].g + tex[(j + 0) * res[0] + i + 1].g;
-            const int b = tex[(j + 0) * res[0] + i].b + tex[(j + 0) * res[0] + i + 1].b;
-            const int a = tex[(j + 0) * res[0] + i].a + tex[(j + 0) * res[0] + i + 1].a;
-            ret.push_back({uint8_t(r / 2), uint8_t(g / 2), uint8_t(b / 2), uint8_t(a / 2)});
-        }
-
-        if (i != res[0]) {
-            --i;
-            const uint8_t r = tex[(j + 0) * res[0] + i].r;
-            const uint8_t g = tex[(j + 0) * res[0] + i].g;
-            const uint8_t b = tex[(j + 0) * res[0] + i].b;
-            const uint8_t a = tex[(j + 0) * res[0] + i].a;
-            ret.push_back({r, g, b, a});
-        }
-    }*/
 
     assert(ret.size() == new_res[0] * new_res[1]);
 
     return ret;
 }
+
+template std::vector<Ray::color_t<uint8_t, 4>> Ray::Ref::DownsampleTexture<4>(const color_t<uint8_t, 4> tex[], const int res[2]);
+template std::vector<Ray::color_t<uint8_t, 3>> Ray::Ref::DownsampleTexture<3>(const color_t<uint8_t, 3> tex[], const int res[2]);
+template std::vector<Ray::color_t<uint8_t, 1>> Ray::Ref::DownsampleTexture<1>(const color_t<uint8_t, 1> tex[], const int res[2]);
 
 void Ray::Ref::ComputeTangentBasis(size_t vtx_offset, size_t vtx_start, std::vector<vertex_t> &vertices,
                                    std::vector<uint32_t> &new_vtx_indices, const uint32_t *indices,

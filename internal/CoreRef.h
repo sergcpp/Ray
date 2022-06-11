@@ -68,10 +68,12 @@ struct derivatives_t {
     float ddn_dx, ddn_dy;
 };
 
+class TextureAtlasBase;
 template <typename T, int N> class TextureAtlasLinear;
 template <typename T, int N> class TextureAtlasTiled;
 using TextureAtlasRGBA = TextureAtlasTiled<uint8_t, 4>;
 using TextureAtlasRGB = TextureAtlasTiled<uint8_t, 3>;
+using TextureAtlasRG = TextureAtlasTiled<uint8_t, 2>;
 using TextureAtlasR = TextureAtlasTiled<uint8_t, 1>;
 
 // Generation of rays
@@ -199,28 +201,17 @@ simd_fvec3 TransformNormal(const simd_fvec3 &n, const float *inv_xform);
 simd_fvec2 TransformUV(const simd_fvec2 &uv, const simd_fvec2 &tex_atlas_size, const texture_t &t, int mip_level);
 
 // Sample Texture
-simd_fvec4 SampleNearest(const TextureAtlasRGBA &atlas, const texture_t &t, const simd_fvec2 &uvs, int lod);
-simd_fvec4 SampleBilinear(const TextureAtlasRGBA &atlas, const texture_t &t, const simd_fvec2 &uvs, int lod);
-simd_fvec4 SampleBilinear(const TextureAtlasRGBA &atlas, const simd_fvec2 &uvs, int page);
-simd_fvec4 SampleTrilinear(const TextureAtlasRGBA &atlas, const texture_t &t, const simd_fvec2 &uvs, float lod);
-simd_fvec4 SampleAnisotropic(const TextureAtlasRGBA &atlas, const texture_t &t, const simd_fvec2 &uvs,
+simd_fvec4 SampleNearest(const TextureAtlasBase *atlases[], const texture_t &t, const simd_fvec2 &uvs, int lod);
+simd_fvec4 SampleBilinear(const TextureAtlasBase *atlases[], const texture_t &t, const simd_fvec2 &uvs, int lod);
+simd_fvec4 SampleBilinear(const TextureAtlasBase &atlas, const simd_fvec2 &uvs, int page);
+simd_fvec4 SampleTrilinear(const TextureAtlasBase *atlases[], const texture_t &t, const simd_fvec2 &uvs, float lod);
+simd_fvec4 SampleAnisotropic(const TextureAtlasBase *atlases[], const texture_t &t, const simd_fvec2 &uvs,
                              const simd_fvec2 &duv_dx, const simd_fvec2 &duv_dy);
 simd_fvec4 SampleLatlong_RGBE(const TextureAtlasRGBA &atlas, const texture_t &t, const simd_fvec3 &dir);
 
 // Get visibility between two points accounting for transparent materials
 float ComputeVisibility(const simd_fvec3 &p, const simd_fvec3 &d, float dist, float rand_val, int rand_hash2,
-                        const scene_data_t &sc, uint32_t node_index, const TextureAtlasRGBA &tex_atlas);
-
-// Compute punctual lights contribution
-/*void AcumulateLightContribution(const light_t &l, const simd_fvec3 &I, const simd_fvec3 &P, const simd_fvec3 &N,
-                                const simd_fvec3 &B, const simd_fvec3 &plane_N, const scene_data_t &sc,
-                                uint32_t node_index, const TextureAtlas &tex_atlas, float sigma, const float *halton,
-                                const int hi, int rand_hash2, float rand_offset, float rand_offset2, simd_fvec3 &col);
-simd_fvec3 ComputeDirectLighting(const simd_fvec3 &I, const simd_fvec3 &P, const simd_fvec3 &N, const simd_fvec3 &B,
-                                 const simd_fvec3 &plane_N, float sigma, const float *halton, const int hi,
-                                 int rand_hash, int rand_hash2, float rand_offset, float rand_offset2,
-                                 const scene_data_t &sc, uint32_t node_index, uint32_t light_node_index,
-                                 const TextureAtlas &tex_atlas);*/
+                        const scene_data_t &sc, uint32_t node_index, const TextureAtlasBase *tex_atlases[]);
 
 // Compute derivatives at hit point
 void ComputeDerivatives(const simd_fvec3 &I, float t, const simd_fvec3 &do_dx, const simd_fvec3 &do_dy,
@@ -230,7 +221,7 @@ void ComputeDerivatives(const simd_fvec3 &I, float t, const simd_fvec3 &do_dx, c
 // Shade
 Ray::pixel_color_t ShadeSurface(const pass_info_t &pi, const hit_data_t &inter, const ray_packet_t &ray,
                                 const float *halton, const scene_data_t &sc, uint32_t node_index,
-                                uint32_t light_node_index, const TextureAtlasRGBA &tex_atlas,
+                                uint32_t light_node_index, const TextureAtlasBase *tex_atlases[],
                                 ray_packet_t *out_secondary_rays, int *out_secondary_rays_count);
 } // namespace Ref
 } // namespace Ray

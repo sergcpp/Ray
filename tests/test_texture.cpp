@@ -38,11 +38,11 @@ void test_texture() {
 
     // Create texture
     const int TexRes = 512;
-    std::unique_ptr<Ray::pixel_color8_t[]> checker_texture(new Ray::pixel_color8_t[TexRes * TexRes]);
+    std::unique_ptr<Ray::color_rgba8_t[]> checker_texture(new Ray::color_rgba8_t[TexRes * TexRes]);
 
     for (int j = 0; j < TexRes; ++j) {
         for (int i = 0; i < TexRes; ++i) {
-            Ray::pixel_color8_t &p = checker_texture[j * TexRes + i];
+            Ray::color_rgba8_t &p = checker_texture[j * TexRes + i];
 
             p.v[0] = p.v[1] = p.v[2] = ((i + j) % 2) ? 255 : 0;
             p.v[3] = 255;
