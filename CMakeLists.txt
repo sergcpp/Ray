@@ -42,13 +42,11 @@ set(INTERNAL_SOURCE_FILES internal/BVHSplit.h
                           internal/Core.cpp
                           internal/CoreRef.h
                           internal/CoreRef.cpp
-                          internal/deprecated/CoreSIMD.h
                           internal/FramebufferRef.h
                           internal/FramebufferRef.cpp
                           internal/Halton.h
                           internal/RendererRef.h
                           internal/RendererRef.cpp
-                          internal/deprecated/RendererSIMD.h
                           internal/SceneRef.h
                           internal/SceneRef.cpp
                           internal/SparseStorage.h
@@ -61,33 +59,36 @@ set(INTERNAL_SOURCE_FILES internal/BVHSplit.h
                           internal/Time_.h
                           internal/Time.cpp
                           internal/UniformIntDistribution.h)
+
+set(INTERNAL_DEPRECATED_SOURCE_FILES internal/deprecated/CoreSIMD.h
+                                     internal/deprecated/RendererSIMD.h)
                           
 if(NOT CMAKE_SYSTEM_NAME MATCHES "Android" AND NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64")
-set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
-                          internal/deprecated/RendererAVX.h
-                          internal/deprecated/RendererAVX.cpp
-                          internal/deprecated/RendererAVX2.h
-                          internal/deprecated/RendererAVX2.cpp
-                          internal/deprecated/RendererSSE2.h
-                          internal/deprecated/RendererSSE2.cpp)
+set(INTERNAL_DEPRECATED_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
+                                     internal/deprecated/RendererAVX.h
+                                     internal/deprecated/RendererAVX.cpp
+                                     internal/deprecated/RendererAVX2.h
+                                     internal/deprecated/RendererAVX2.cpp
+                                     internal/deprecated/RendererSSE2.h
+                                     internal/deprecated/RendererSSE2.cpp)
 
     if (ENABLE_OPENCL)
-        set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
-                          internal/deprecated/CoreOCL.h
-                          internal/deprecated/RendererOCL.h
-                          internal/deprecated/RendererOCL.cpp
-                          internal/deprecated/SceneOCL.h
-                          internal/deprecated/SceneOCL.cpp
-                          internal/deprecated/TextureAtlasOCL.h
-                          internal/deprecated/TextureAtlasOCL.cpp
-                          internal/deprecated/VectorOCL.h)
+        set(INTERNAL_DEPRECATED_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
+                                             internal/deprecated/CoreOCL.h
+                                             internal/deprecated/RendererOCL.h
+                                             internal/deprecated/RendererOCL.cpp
+                                             internal/deprecated/SceneOCL.h
+                                             internal/deprecated/SceneOCL.cpp
+                                             internal/deprecated/TextureAtlasOCL.h
+                                             internal/deprecated/TextureAtlasOCL.cpp
+                                             internal/deprecated/VectorOCL.h)
     endif()
 endif()
 
 if("${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64")
-set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
-                          internal/deprecated/RendererNEON.h
-                          internal/deprecated/RendererNEON.cpp)
+set(INTERNAL_DEPRECATED_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
+                                     internal/deprecated/RendererNEON.h
+                                     internal/deprecated/RendererNEON.cpp)
 endif()
 
 if(MSVC AND NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64")
@@ -132,6 +133,9 @@ set(SIMD_FILES internal/simd/aligned_allocator.h
 list(APPEND ALL_SOURCE_FILES ${INTERNAL_SOURCE_FILES})
 source_group("src\\internal" FILES ${INTERNAL_SOURCE_FILES})
 
+list(APPEND ALL_SOURCE_FILES ${INTERNAL_DEPRECATED_SOURCE_FILES})
+source_group("src\\internal\\deprecated" FILES ${INTERNAL_DEPRECATED_SOURCE_FILES})
+
 list(APPEND ALL_SOURCE_FILES ${SOURCE_FILES})
 source_group("src" FILES ${SOURCE_FILES})
 
@@ -146,6 +150,7 @@ set_source_files_properties(${KERNEL_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
 # enable or disable unity build
 if(ENABLE_UNITYBUILD)
     set_source_files_properties(${INTERNAL_SOURCE_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
+    set_source_files_properties(${INTERNAL_DEPRECATED_SOURCE_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
     set_source_files_properties(${SOURCE_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
 
     list(APPEND ALL_SOURCE_FILES _Ray.cpp)
