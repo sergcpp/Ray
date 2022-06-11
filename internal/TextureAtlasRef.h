@@ -21,7 +21,7 @@ class TextureAtlasLinear {
     void WritePageData(int page, int posx, int posy, int sizex, int sizey, const ColorType *data);
 
   public:
-    TextureAtlasLinear(int resx, int resy, int initial_page_count = 1);
+    TextureAtlasLinear(int resx, int resy, int initial_page_count = 0);
 
     force_inline float size_x() const { return res_f_[0]; }
     force_inline float size_y() const { return res_f_[1]; }
@@ -63,7 +63,7 @@ template <typename T, int N> class TextureAtlasTiled {
     void WritePageData(int page, int posx, int posy, int sizex, int sizey, const ColorType *data);
 
   public:
-    TextureAtlasTiled(int resx, int resy, int initial_page_count = 1);
+    TextureAtlasTiled(int resx, int resy, int initial_page_count = 0);
 
     force_inline float size_x() const { return res_f_[0]; }
     force_inline float size_y() const { return res_f_[1]; }
