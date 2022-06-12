@@ -1,5 +1,7 @@
 #pragma once
 
+#include <memory>
+
 #include "Core.h"
 #include "TextureSplitter.h"
 
@@ -9,12 +11,9 @@ class TextureAtlasBase {
   protected:
     const int res_[2];
     const float res_f_[2];
-    int page_count_;
-
-    std::vector<TextureSplitter> splitters_;
 
   public:
-    TextureAtlasBase(int resx, int resy) : res_{resx, resy}, res_f_{float(resx), float(resy)}, page_count_(0) {}
+    TextureAtlasBase(int resx, int resy) : res_{resx, resy}, res_f_{float(resx), float(resy)} {}
     virtual ~TextureAtlasBase() {}
 
     force_inline float size_x() const { return res_f_[0]; }
@@ -26,8 +25,9 @@ class TextureAtlasBase {
 
 template <typename T, int N> class TextureAtlasLinear : public TextureAtlasBase {
     using ColorType = color_t<T, N>;
-    using PageData = std::vector<ColorType>;
+    using PageData = std::unique_ptr<ColorType[]>;
 
+    std::vector<TextureSplitter> splitters_;
     std::vector<PageData> pages_;
     std::vector<ColorType> temp_storage_;
 
@@ -99,10 +99,11 @@ template <typename T, int N> class TextureAtlasTiled : public TextureAtlasBase {
     const int res_in_tiles_[2];
 
     using ColorType = color_t<T, N>;
-    using PageData = std::vector<ColorType>;
+    using PageData = std::unique_ptr<ColorType[]>;
 
+    std::vector<TextureSplitter> splitters_;
     std::vector<PageData> pages_;
-    std::vector<ColorType> temp_storage_;
+    std::unique_ptr<ColorType[]> temp_storage_;
 
     void WritePageData(int page, int posx, int posy, int sizex, int sizey, const ColorType *data);
 
