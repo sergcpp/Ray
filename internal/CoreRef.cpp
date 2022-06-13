@@ -621,11 +621,6 @@ float SmithG_GGX(const float N_dot_V, const float alpha_g) {
     return 1.0f / (N_dot_V + std::sqrt(a + b - a * b));
 }
 
-float GGX_pdf(const simd_fvec3 &N, float alpha_x, float alpha_y) {
-    const float a = ((N[0] * N[0] / (alpha_x * alpha_x)) + (N[1] * N[1] / (alpha_y * alpha_y)) + N[2] * N[2]);
-    return 1.0f / (PI * alpha_x * alpha_y * a * a);
-}
-
 float D_GTR1(float NDotH, float a) {
     if (a >= 1.0f) {
         return 1.0f / PI;
