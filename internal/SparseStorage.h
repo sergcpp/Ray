@@ -261,6 +261,10 @@ template <typename T> class SparseStorage {
     force_inline T *data() { return data_; }
     force_inline const T *data() const { return data_; }
 
+    force_inline bool exists(const uint32_t index) const {
+        return bits_.IsSet(index);
+    }
+
     void reserve(uint32_t new_capacity) {
         if (new_capacity <= capacity_) {
             return;

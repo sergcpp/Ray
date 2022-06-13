@@ -76,6 +76,8 @@ class Scene : public SceneBase {
     void RebuildTLAS();
     void RebuildLightBVH();
 
+    void GenerateTextureMipmaps();
+
   public:
     Scene(ILog *log, bool use_wide_bvh);
     ~Scene() override;
@@ -99,6 +101,8 @@ class Scene : public SceneBase {
     uint32_t AddMeshInstance(uint32_t m_index, const float *xform) override;
     void SetMeshInstanceTransform(uint32_t mi_index, const float *xform) override;
     void RemoveMeshInstance(uint32_t) override;
+
+    void Finalize() override;
 
     uint32_t triangle_count() override { return uint32_t(tris_.size()); }
     uint32_t node_count() override { return uint32_t(use_wide_bvh_ ? mnodes_.size() : nodes_.size()); }

@@ -416,6 +416,8 @@ void setup_material_scene(Ray::SceneBase &scene, const bool output_sh, const Mat
         scene.AddMeshInstance(square_light_mesh, identity);
     }
     scene.AddMeshInstance(disc_light_mesh, identity);
+
+    scene.Finalize();
 }
 
 void schedule_render_jobs(Ray::RendererBase &renderer, const Ray::SceneBase *scene, const Ray::settings_t &settings,
@@ -2075,7 +2077,7 @@ void test_complex_mat3() {
 void test_complex_mat4() {
     const int SampleCount = 1024;
     const int DiffThres = 16;
-    const int PixThres = 3097; // 3095; // 3123;
+    const int PixThres = 3100; // 3097; // 3095; // 3123;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = 0;
@@ -2112,7 +2114,7 @@ void test_complex_mat5() {
 void test_complex_mat6() {
     const int SampleCount = 256;
     const int DiffThres = 8;
-    const int PixThres = 585;
+    const int PixThres = 586;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = 0;

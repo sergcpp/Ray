@@ -51,7 +51,6 @@ uint32_t Ray::Ref::Scene::AddTexture(const tex_desc_t &_t) {
         t.height |= TEXTURE_MIPS_BIT;
     }
 
-    int mip = 0;
     int res[2] = {_t.w, _t.h};
 
     std::vector<color_rgba8_t> tex_data_rgba8;
@@ -77,9 +76,7 @@ uint32_t Ray::Ref::Scene::AddTexture(const tex_desc_t &_t) {
                            reinterpret_cast<const color_r8_t *>(_t.data) + _t.w * _t.h);
     }
 
-    // std::vector<pixel_color8_t> tex_data(_t.data, _t.data + _t.w * _t.h);
-
-    while (res[0] >= 1 && res[1] >= 1) {
+    { // Allocate initial mip level
         int page = -1, pos[2];
         if (_t.format == eTextureFormat::RGBA8888) {
             page = tex_atlas_rgba_.Allocate(&tex_data_rgba8[0], res, pos);
@@ -91,54 +88,22 @@ uint32_t Ray::Ref::Scene::AddTexture(const tex_desc_t &_t) {
             page = tex_atlas_r_.Allocate(&tex_data_r8[0], res, pos);
         }
         if (page == -1) {
-            // release allocated mip levels on fail
-            for (int i = mip; i >= 0; i--) {
-                const int _pos[2] = {t.pos[i][0], t.pos[i][1]};
-                if (_t.format == eTextureFormat::RGBA8888) {
-                    tex_atlas_rgba_.Free(t.page[i], _pos);
-                } else if (_t.format == eTextureFormat::RGB888) {
-                    tex_atlas_rgb_.Free(t.page[i], _pos);
-                } else if (_t.format == eTextureFormat::RG88) {
-                    tex_atlas_rg_.Free(t.page[i], _pos);
-                } else if (_t.format == eTextureFormat::R8) {
-                    tex_atlas_r_.Free(t.page[i], _pos);
-                }
-            }
             return 0xffffffff;
         }
 
-        t.page[mip] = uint8_t(page);
-        t.pos[mip][0] = uint16_t(pos[0]);
-        t.pos[mip][1] = uint16_t(pos[1]);
-
-        mip++;
-
-        if (_t.generate_mipmaps) {
-            if (_t.format == eTextureFormat::RGBA8888) {
-                tex_data_rgba8 = Ref::DownsampleTexture(tex_data_rgba8.data(), res);
-            } else if (_t.format == eTextureFormat::RGB888) {
-                tex_data_rgb8 = Ref::DownsampleTexture(tex_data_rgb8.data(), res);
-            } else if (_t.format == eTextureFormat::RG88) {
-                tex_data_rg8 = Ref::DownsampleTexture(tex_data_rg8.data(), res);
-            } else if (_t.format == eTextureFormat::R8) {
-                tex_data_r8 = Ref::DownsampleTexture(tex_data_r8.data(), res);
-            }
-
-            res[0] /= 2;
-            res[1] /= 2;
-        } else {
-            break;
-        }
+        t.page[0] = uint8_t(page);
+        t.pos[0][0] = uint16_t(pos[0]);
+        t.pos[0][1] = uint16_t(pos[1]);
     }
 
-    // fill remaining mip levels with the last one
-    for (int i = mip; i < NUM_MIP_LEVELS; i++) {
-        t.page[i] = t.page[mip - 1];
-        t.pos[i][0] = t.pos[mip - 1][0];
-        t.pos[i][1] = t.pos[mip - 1][1];
+    // temporarily fill remaining mip levels with the last one (mips will be added later)
+    for (int i = 1; i < NUM_MIP_LEVELS; i++) {
+        t.page[i] = t.page[0];
+        t.pos[i][0] = t.pos[0][0];
+        t.pos[i][1] = t.pos[0][1];
     }
 
-    log_->Info("Ray: Texture loaded (%ix%i, %i mips)", _t.w, _t.h, mip);
+    log_->Info("Ray: Texture loaded (atlas = %i, %ix%i)", int(t.atlas), _t.w, _t.h);
     log_->Info("Ray: Atlasses are (RGBA %i pages, RGB %i pages, RG %i pages, R %i pages)", tex_atlas_rgba_.page_count(),
                tex_atlas_rgb_.page_count(), tex_atlas_rg_.page_count(), tex_atlas_r_.page_count());
 
@@ -600,6 +565,8 @@ void Ray::Ref::Scene::RemoveMeshInstance(uint32_t i) {
     RebuildTLAS();
 }
 
+void Ray::Ref::Scene::Finalize() { GenerateTextureMipmaps(); }
+
 void Ray::Ref::Scene::RemoveTris(uint32_t tris_index, uint32_t tris_count) {
     if (!tris_count) {
         return;
@@ -789,6 +756,141 @@ void Ray::Ref::Scene::RebuildLightBVH() {
         // nodes_ is temporary storage when wide BVH is used
         nodes_.clear();
     }
+}
+
+void Ray::Ref::Scene::GenerateTextureMipmaps() {
+    struct mip_gen_info {
+        uint32_t texture_index;
+        uint16_t size; // used for sorting
+        uint8_t dst_mip;
+        uint8_t atlas_index; // used for sorting
+    };
+
+    std::vector<mip_gen_info> mips_to_generate;
+    mips_to_generate.reserve(textures_.size());
+
+    for (uint32_t i = 0; i < textures_.capacity(); ++i) {
+        if (!textures_.exists(i)) {
+            continue;
+        }
+
+        const texture_t &t = textures_[i];
+        if ((t.height & TEXTURE_MIPS_BIT) == 0) {
+            continue;
+        }
+
+        int mip = 0;
+        int res[2] = {(t.width & TEXTURE_WIDTH_BITS), (t.height & TEXTURE_HEIGHT_BITS)};
+
+        res[0] /= 2;
+        res[1] /= 2;
+        ++mip;
+
+        while (res[0] >= 1 && res[1] >= 1) {
+            mips_to_generate.emplace_back();
+            auto &m = mips_to_generate.back();
+            m.texture_index = i;
+            m.size = std::max(res[0], res[1]);
+            m.dst_mip = mip;
+            m.atlas_index = t.atlas;
+
+            res[0] /= 2;
+            res[1] /= 2;
+            ++mip;
+        }
+    }
+
+    // Sort to optimize allocation
+    std::sort(std::begin(mips_to_generate), std::end(mips_to_generate),
+              [](const mip_gen_info &lhs, const mip_gen_info &rhs) {
+                  if (lhs.atlas_index == rhs.atlas_index) {
+                      return lhs.size > rhs.size;
+                  }
+                  return lhs.atlas_index < rhs.atlas_index;
+              });
+
+    std::vector<color_rgba8_t> tex_data_rgba8;
+    std::vector<color_rgb8_t> tex_data_rgb8;
+    std::vector<color_rg8_t> tex_data_rg8;
+    std::vector<color_r8_t> tex_data_r8;
+
+    for (const mip_gen_info &info : mips_to_generate) {
+        texture_t &t = textures_[info.texture_index];
+
+        const int dst_mip = info.dst_mip;
+        const int src_mip = dst_mip - 1;
+        int res[2] = {(t.width & TEXTURE_WIDTH_BITS) >> src_mip, (t.height & TEXTURE_HEIGHT_BITS) >> src_mip};
+        assert(res[0] != 0 && res[1] != 0);
+
+        tex_data_rgba8.clear();
+        tex_data_rgb8.clear();
+        tex_data_rg8.clear();
+        tex_data_r8.clear();
+        for (int y = 0; y < res[1]; ++y) {
+            for (int x = 0; x < res[0]; ++x) {
+                if (t.atlas == 0) {
+                    tex_data_rgba8.emplace_back(
+                        tex_atlas_rgba_.Get(t.page[src_mip], t.pos[src_mip][0] + x + 1, t.pos[src_mip][1] + y + 1));
+                } else if (t.atlas == 1) {
+                    tex_data_rgb8.emplace_back(
+                        tex_atlas_rgb_.Get(t.page[src_mip], t.pos[src_mip][0] + x + 1, t.pos[src_mip][1] + y + 1));
+                } else if (t.atlas == 2) {
+                    tex_data_rg8.emplace_back(
+                        tex_atlas_rg_.Get(t.page[src_mip], t.pos[src_mip][0] + x + 1, t.pos[src_mip][1] + y + 1));
+                } else if (t.atlas == 3) {
+                    tex_data_r8.emplace_back(
+                        tex_atlas_r_.Get(t.page[src_mip], t.pos[src_mip][0] + x + 1, t.pos[src_mip][1] + y + 1));
+                }
+            }
+        }
+
+        { // Allocate target mip level
+            if (t.atlas == 0) {
+                tex_data_rgba8 = Ref::DownsampleTexture(tex_data_rgba8.data(), res);
+            } else if (t.atlas == 1) {
+                tex_data_rgb8 = Ref::DownsampleTexture(tex_data_rgb8.data(), res);
+            } else if (t.atlas == 2) {
+                tex_data_rg8 = Ref::DownsampleTexture(tex_data_rg8.data(), res);
+            } else if (t.atlas == 3) {
+                tex_data_r8 = Ref::DownsampleTexture(tex_data_r8.data(), res);
+            }
+
+            res[0] /= 2;
+            res[1] /= 2;
+
+            int page = -1, pos[2];
+            if (t.atlas == 0) {
+                page = tex_atlas_rgba_.Allocate(&tex_data_rgba8[0], res, pos);
+            } else if (t.atlas == 1) {
+                page = tex_atlas_rgb_.Allocate(&tex_data_rgb8[0], res, pos);
+            } else if (t.atlas == 2) {
+                page = tex_atlas_rg_.Allocate(&tex_data_rg8[0], res, pos);
+            } else if (t.atlas == 3) {
+                page = tex_atlas_r_.Allocate(&tex_data_r8[0], res, pos);
+            }
+
+            if (page == -1) {
+                log_->Error("Failed to allocate texture!");
+                break;
+            }
+
+            t.page[dst_mip] = uint8_t(page);
+            t.pos[dst_mip][0] = uint16_t(pos[0]);
+            t.pos[dst_mip][1] = uint16_t(pos[1]);
+
+            if (res[0] == 1 || res[1] == 1) {
+                // fill remaining mip levels with the last one
+                for (int i = dst_mip + 1; i < NUM_MIP_LEVELS; i++) {
+                    t.page[i] = t.page[dst_mip];
+                    t.pos[i][0] = t.pos[dst_mip][0];
+                    t.pos[i][1] = t.pos[dst_mip][1];
+                }
+            }
+        }
+    }
+
+    log_->Info("Ray: Atlasses are (RGBA %i pages, RGB %i pages, RG %i pages, R %i pages)", tex_atlas_rgba_.page_count(),
+               tex_atlas_rgb_.page_count(), tex_atlas_rg_.page_count(), tex_atlas_r_.page_count());
 }
 
 #undef _CLAMP

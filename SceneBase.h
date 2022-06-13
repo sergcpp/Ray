@@ -293,6 +293,8 @@ class SceneBase {
     */
     virtual void RemoveMeshInstance(uint32_t mi_index) = 0;
 
+    virtual void Finalize() = 0;
+
     /** @brief Adds camera to a scene
         @param c camera description
         @return New camera index

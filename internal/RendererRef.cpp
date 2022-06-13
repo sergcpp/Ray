@@ -361,7 +361,7 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
         for (int x = rect.x; x < rect.x + rect.w; ++x) {
             const float u = float(x) / final_buf_.w();
 
-            const auto col8 = tex_atlas.Get(region.iteration % tex_atlas.page_count(), u, v);
+            const auto col8 = s->tex_atlas_rgb_.Get(region.iteration % s->tex_atlas_rgb_.page_count(), u, v);
 
             pixel_color_t col;
             col.r = float(col8.v[0]) / 255.0f;
