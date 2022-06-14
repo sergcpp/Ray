@@ -158,14 +158,14 @@ float BRDF_PrincipledDiffuse(const simd_fvec3 &V, const simd_fvec3 &N, const sim
 
 simd_fvec4 Evaluate_OrenDiffuse_BSDF(const simd_fvec3 &V, const simd_fvec3 &N, const simd_fvec3 &L,
                                      const float roughness, const simd_fvec4 &base_color);
-simd_fvec4 Sample_OrenDiffuse_BSDF(const simd_fvec3 world_from_tangent[3], const simd_fvec3 &N, const simd_fvec3 &I,
+simd_fvec4 Sample_OrenDiffuse_BSDF(const simd_fvec3 &T, const simd_fvec3 &B, const simd_fvec3 &N, const simd_fvec3 &I,
                                    const float roughness, const simd_fvec4 &base_color, const float rand_u,
                                    const float rand_v, simd_fvec3 &out_V);
 
 simd_fvec4 Evaluate_PrincipledDiffuse_BSDF(const simd_fvec3 &V, const simd_fvec3 &N, const simd_fvec3 &L,
                                            const float roughness, const simd_fvec4 &base_color,
                                            const simd_fvec4 &sheen_color, const bool uniform_sampling);
-simd_fvec4 Sample_PrincipledDiffuse_BSDF(const simd_fvec3 world_from_tangent[3], const simd_fvec3 &N,
+simd_fvec4 Sample_PrincipledDiffuse_BSDF(const simd_fvec3 &T, const simd_fvec3 &B, const simd_fvec3 &N,
                                          const simd_fvec3 &I, const float roughness, const simd_fvec4 &base_color,
                                          const simd_fvec4 &sheen_color, const bool uniform_sampling, const float rand_u,
                                          const float rand_v, simd_fvec3 &out_V);
@@ -173,23 +173,21 @@ simd_fvec4 Sample_PrincipledDiffuse_BSDF(const simd_fvec3 world_from_tangent[3],
 simd_fvec4 Evaluate_GGXSpecular_BSDF(const simd_fvec3 &view_dir_ts, const simd_fvec3 &sampled_normal_ts,
                                      const simd_fvec3 &reflected_dir_ts, float alpha_x, float alpha_y, float spec_ior,
                                      float spec_F0, const simd_fvec4 &spec_col);
-simd_fvec4 Sample_GGXSpecular_BSDF(const simd_fvec3 world_from_tangent[3], const simd_fvec3 tangent_from_world[3],
-                                   const simd_fvec3 &N, const simd_fvec3 &I, float roughness, float anisotropic,
-                                   float spec_ior, float spec_F0, const simd_fvec4 &spec_col, float rand_u,
-                                   float rand_v, simd_fvec3 &out_V);
+simd_fvec4 Sample_GGXSpecular_BSDF(const simd_fvec3 &T, const simd_fvec3 &B, const simd_fvec3 &N, const simd_fvec3 &I,
+                                   float roughness, float anisotropic, float spec_ior, float spec_F0,
+                                   const simd_fvec4 &spec_col, float rand_u, float rand_v, simd_fvec3 &out_V);
 
 simd_fvec4 Evaluate_GGXRefraction_BSDF(const simd_fvec3 &view_dir_ts, const simd_fvec3 &sampled_normal_ts,
                                        const simd_fvec3 &refr_dir_ts, float roughness2, float eta,
                                        const simd_fvec4 &spec_col);
-simd_fvec4 Sample_GGXRefraction_BSDF(const simd_fvec3 world_from_tangent[3], const simd_fvec3 tangent_from_world[3],
-                                     const simd_fvec3 &N, const simd_fvec3 &I, float roughness, float eta,
+simd_fvec4 Sample_GGXRefraction_BSDF(const simd_fvec3 &T, const simd_fvec3 &B, const simd_fvec3 &N, const simd_fvec3 &I,
+                                     float roughness, float eta,
                                      const simd_fvec4 &refr_col, float rand_u, float rand_v, simd_fvec4 &out_V);
 
 simd_fvec4 Evaluate_PrincipledClearcoat_BSDF(const simd_fvec3 &view_dir_ts, const simd_fvec3 &sampled_normal_ts,
                                              const simd_fvec3 &reflected_dir_ts, float clearcoat_roughness2,
                                              float clearcoat_ior, float clearcoat_F0);
-simd_fvec4 Sample_PrincipledClearcoat_BSDF(const simd_fvec3 world_from_tangent[3],
-                                           const simd_fvec3 tangent_from_world[3], const simd_fvec3 &N,
+simd_fvec4 Sample_PrincipledClearcoat_BSDF(const simd_fvec3 &T, const simd_fvec3 &B, const simd_fvec3 &N,
                                            const simd_fvec3 &I, float clearcoat_roughness2, float clearcoat_ior,
                                            float clearcoat_F0, float rand_u, float rand_v, simd_fvec3 &out_V);
 

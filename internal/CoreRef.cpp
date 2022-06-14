@@ -830,6 +830,16 @@ simd_fvec3 ensure_valid_reflection(const simd_fvec3 &Ng, const simd_fvec3 &I, co
     return N_new[0] * X + N_new[1] * Ng;
 }
 
+force_inline simd_fvec3 world_from_tangent(const simd_fvec3 &T, const simd_fvec3 &B, const simd_fvec3 &N,
+                                           const simd_fvec3 &V) {
+    return V[0] * T + V[1] * B + V[2] * N;
+}
+
+force_inline simd_fvec3 tangent_from_world(const simd_fvec3 &T, const simd_fvec3 &B, const simd_fvec3 &N,
+                                           const simd_fvec3 &V) {
+    return simd_fvec3{dot(V, T), dot(V, B), dot(V, N)};
+}
+
 } // namespace Ref
 } // namespace Ray
 
@@ -2125,7 +2135,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_OrenDiffuse_BSDF(const simd_fvec3 &V, co
     return diff_col;
 }
 
-Ray::Ref::simd_fvec4 Ray::Ref::Sample_OrenDiffuse_BSDF(const simd_fvec3 world_from_tangent[3], const simd_fvec3 &N,
+Ray::Ref::simd_fvec4 Ray::Ref::Sample_OrenDiffuse_BSDF(const simd_fvec3 &T, const simd_fvec3 &B, const simd_fvec3 &N,
                                                        const simd_fvec3 &I, const float roughness,
                                                        const simd_fvec4 &base_color, const float rand_u,
                                                        const float rand_v, simd_fvec3 &out_V) {
@@ -2141,7 +2151,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Sample_OrenDiffuse_BSDF(const simd_fvec3 world_fr
         V = simd_fvec3{dir * cos_phi, dir * sin_phi, rand_u}; // in tangent-space
     }
 
-    out_V = mul(world_from_tangent, V);
+    out_V = world_from_tangent(T, B, N, V);
     return Evaluate_OrenDiffuse_BSDF(-I, N, out_V, roughness, base_color);
 }
 
@@ -2173,7 +2183,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_PrincipledDiffuse_BSDF(const simd_fvec3 
     return diff_col;
 }
 
-Ray::Ref::simd_fvec4 Ray::Ref::Sample_PrincipledDiffuse_BSDF(const simd_fvec3 world_from_tangent[3],
+Ray::Ref::simd_fvec4 Ray::Ref::Sample_PrincipledDiffuse_BSDF(const simd_fvec3 &T, const simd_fvec3 &B,
                                                              const simd_fvec3 &N, const simd_fvec3 &I,
                                                              const float roughness, const simd_fvec4 &base_color,
                                                              const simd_fvec4 &sheen_color, const bool uniform_sampling,
@@ -2194,7 +2204,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Sample_PrincipledDiffuse_BSDF(const simd_fvec3 wo
         V = simd_fvec3{dir * cos_phi, dir * sin_phi, k}; // in tangent-space
     }
 
-    out_V = mul(world_from_tangent, V);
+    out_V = world_from_tangent(T, B, N, V);
     return Evaluate_PrincipledDiffuse_BSDF(-I, N, out_V, roughness, base_color, sheen_color, uniform_sampling);
 }
 
@@ -2234,8 +2244,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_GGXSpecular_BSDF(const simd_fvec3 &view_
     return F;
 }
 
-Ray::Ref::simd_fvec4 Ray::Ref::Sample_GGXSpecular_BSDF(const simd_fvec3 world_from_tangent[3],
-                                                       const simd_fvec3 tangent_from_world[3], const simd_fvec3 &N,
+Ray::Ref::simd_fvec4 Ray::Ref::Sample_GGXSpecular_BSDF(const simd_fvec3 &T, const simd_fvec3 &B, const simd_fvec3 &N,
                                                        const simd_fvec3 &I, const float roughness,
                                                        const float anisotropic, const float spec_ior,
                                                        const float spec_F0, const simd_fvec4 &spec_col,
@@ -2254,7 +2263,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Sample_GGXSpecular_BSDF(const simd_fvec3 world_fr
         return simd_fvec4{F[0] * 1e6f, F[1] * 1e6f, F[2] * 1e6f, 1e6f};
     }
 
-    const simd_fvec3 view_dir_ts = normalize(mul(tangent_from_world, -I));
+    const simd_fvec3 view_dir_ts = normalize(tangent_from_world(T, B, N, -I));
 #if USE_VNDF_GGX_SAMPLING == 1
     const simd_fvec3 sampled_normal_ts = SampleGGX_VNDF(view_dir_ts, alpha_x, alpha_y, rand_u, rand_v);
 #else
@@ -2262,7 +2271,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Sample_GGXSpecular_BSDF(const simd_fvec3 world_fr
 #endif
     const simd_fvec3 reflected_dir_ts = normalize(reflect(-view_dir_ts, sampled_normal_ts));
 
-    out_V = mul(world_from_tangent, reflected_dir_ts);
+    out_V = world_from_tangent(T, B, N, reflected_dir_ts);
     return Evaluate_GGXSpecular_BSDF(view_dir_ts, sampled_normal_ts, reflected_dir_ts, alpha_x, alpha_y, spec_ior,
                                      spec_F0, spec_col);
 };
@@ -2304,8 +2313,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_GGXRefraction_BSDF(const simd_fvec3 &vie
     return ret;
 }
 
-Ray::Ref::simd_fvec4 Ray::Ref::Sample_GGXRefraction_BSDF(const simd_fvec3 world_from_tangent[3],
-                                                         const simd_fvec3 tangent_from_world[3], const simd_fvec3 &N,
+Ray::Ref::simd_fvec4 Ray::Ref::Sample_GGXRefraction_BSDF(const simd_fvec3 &T, const simd_fvec3 &B, const simd_fvec3 &N,
                                                          const simd_fvec3 &I, float roughness, const float eta,
                                                          const simd_fvec4 &refr_col, const float rand_u,
                                                          const float rand_v, simd_fvec4 &out_V) {
@@ -2323,7 +2331,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Sample_GGXRefraction_BSDF(const simd_fvec3 world_
         return simd_fvec4{1e6f, 1e6f, 1e6f, 1e6f};
     }
 
-    const simd_fvec3 view_dir_ts = normalize(mul(tangent_from_world, -I));
+    const simd_fvec3 view_dir_ts = normalize(tangent_from_world(T, B, N, -I));
 #if USE_VNDF_GGX_SAMPLING == 1
     const simd_fvec3 sampled_normal_ts = SampleGGX_VNDF(view_dir_ts, roughness2, roughness2, rand_u, rand_v);
 #else
@@ -2341,7 +2349,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Sample_GGXRefraction_BSDF(const simd_fvec3 world_
     const simd_fvec4 F =
         Evaluate_GGXRefraction_BSDF(view_dir_ts, sampled_normal_ts, refr_dir_ts, roughness2, eta, refr_col);
 
-    const simd_fvec3 V = mul(world_from_tangent, refr_dir_ts);
+    const simd_fvec3 V = world_from_tangent(T, B, N, refr_dir_ts);
     out_V = simd_fvec4{V[0], V[1], V[2], m};
     return F;
 }
@@ -2379,10 +2387,12 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_PrincipledClearcoat_BSDF(const simd_fvec
     return simd_fvec4{F, F, F, pdf};
 }
 
-Ray::Ref::simd_fvec4 Ray::Ref::Sample_PrincipledClearcoat_BSDF(
-    const simd_fvec3 world_from_tangent[3], const simd_fvec3 tangent_from_world[3], const simd_fvec3 &N,
-    const simd_fvec3 &I, const float clearcoat_roughness2, const float clearcoat_ior, const float clearcoat_F0,
-    const float rand_u, const float rand_v, simd_fvec3 &out_V) {
+Ray::Ref::simd_fvec4 Ray::Ref::Sample_PrincipledClearcoat_BSDF(const simd_fvec3 &T, const simd_fvec3 &B,
+                                                               const simd_fvec3 &N, const simd_fvec3 &I,
+                                                               const float clearcoat_roughness2,
+                                                               const float clearcoat_ior, const float clearcoat_F0,
+                                                               const float rand_u, const float rand_v,
+                                                               simd_fvec3 &out_V) {
     if (clearcoat_roughness2 * clearcoat_roughness2 < 1e-7f) {
         const simd_fvec3 V = reflect(I, N);
 
@@ -2393,7 +2403,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Sample_PrincipledClearcoat_BSDF(
         return simd_fvec4{F * 1e6f, F * 1e6f, F * 1e6f, 1e6f};
     }
 
-    const simd_fvec3 view_dir_ts = normalize(mul(tangent_from_world, -I));
+    const simd_fvec3 view_dir_ts = normalize(tangent_from_world(T, B, N, -I));
     // NOTE: GTR1 distribution is not used for sampling because Cycles does it this way (???!)
 #if USE_VNDF_GGX_SAMPLING == 1
     const simd_fvec3 sampled_normal_ts =
@@ -2403,7 +2413,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Sample_PrincipledClearcoat_BSDF(
 #endif
     const simd_fvec3 reflected_dir_ts = normalize(reflect(-view_dir_ts, sampled_normal_ts));
 
-    out_V = mul(world_from_tangent, reflected_dir_ts);
+    out_V = world_from_tangent(T, B, N, reflected_dir_ts);
 
     return Evaluate_PrincipledClearcoat_BSDF(view_dir_ts, sampled_normal_ts, reflected_dir_ts, clearcoat_roughness2,
                                              clearcoat_ior, clearcoat_F0);
@@ -2871,13 +2881,8 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
         N = ensure_valid_reflection(plane_N, -I, N);
     }
 
-    // simd_fvec3 world_from_tangent[3] = {T, B, N}, tangent_from_world[3];
-    // transpose(world_from_tangent, tangent_from_world);
-
-    simd_fvec3 world_from_tangent[3], tangent_from_world[3];
-
 #if 0
-    create_tbn_matrix(N, tangent_from_world);
+    create_tbn_matrix(N, _tangent_from_world);
 #else
     // Find radial tangent in local space
     const simd_fvec3 P_ls = simd_fvec3(v1.p) * w + simd_fvec3(v2.p) * inter.u + simd_fvec3(v3.p) * inter.v;
@@ -2889,13 +2894,9 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
         tangent = rotate_around_axis(tangent, N, mat->tangent_rotation);
     }
 
-    create_tbn_matrix(N, tangent, tangent_from_world);
+    B = normalize(cross(tangent, N));
+    T = cross(N, B);
 #endif
-    transpose(tangent_from_world, world_from_tangent);
-
-    // TODO: simplify this!!!
-    T = world_from_tangent[0];
-    B = world_from_tangent[1];
 
     // used to randomize halton sequence among pixels
     const float sample_off[2] = {construct_float(hash(pi.rand_index)), construct_float(hash(hash(pi.rand_index)))};
@@ -3037,9 +3038,9 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
                         }
                     } else if (cur_mat->type == GlossyNode) {
                         if (roughness2 * roughness2 >= 1e-7f && N_dot_L > 0.0f) {
-                            const simd_fvec3 view_dir_ts = mul(tangent_from_world, -I);
-                            const simd_fvec3 light_dir_ts = mul(tangent_from_world, L);
-                            const simd_fvec3 sampled_normal_ts = mul(tangent_from_world, H);
+                            const simd_fvec3 view_dir_ts = tangent_from_world(T, B, N, -I);
+                            const simd_fvec3 light_dir_ts = tangent_from_world(T, B, N, L);
+                            const simd_fvec3 sampled_normal_ts = tangent_from_world(T, B, N, H);
 
                             const float specular = 0.5f;
                             const float spec_ior = (2.0f / (1.0f - std::sqrt(0.08f * specular))) - 1.0f;
@@ -3056,9 +3057,9 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
                         }
                     } else if (cur_mat->type == RefractiveNode) {
                         if (roughness2 * roughness2 >= 1e-7f && N_dot_L < 0.0f) {
-                            const simd_fvec3 view_dir_ts = mul(tangent_from_world, -I);
-                            const simd_fvec3 light_dir_ts = mul(tangent_from_world, L);
-                            const simd_fvec3 sampled_normal_ts = mul(tangent_from_world, H);
+                            const simd_fvec3 view_dir_ts = tangent_from_world(T, B, N, -I);
+                            const simd_fvec3 light_dir_ts = tangent_from_world(T, B, N, L);
+                            const simd_fvec3 sampled_normal_ts = tangent_from_world(T, B, N, H);
 
                             const simd_fvec4 refr_col = Evaluate_GGXRefraction_BSDF(
                                 view_dir_ts, sampled_normal_ts, light_dir_ts, roughness2, eta, base_color);
@@ -3122,9 +3123,9 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
                         const float alpha_x = roughness2 / aspect;
                         const float alpha_y = roughness2 * aspect;
 
-                        const simd_fvec3 view_dir_ts = mul(tangent_from_world, -I);
-                        const simd_fvec3 light_dir_ts = mul(tangent_from_world, L);
-                        const simd_fvec3 sampled_normal_ts = mul(tangent_from_world, H);
+                        const simd_fvec3 view_dir_ts = tangent_from_world(T, B, N, -I);
+                        const simd_fvec3 light_dir_ts = tangent_from_world(T, B, N, L);
+                        const simd_fvec3 sampled_normal_ts = tangent_from_world(T, B, N, H);
 
                         if (specular_weight > 0.0f && alpha_x * alpha_y >= 1e-7f && N_dot_L > 0.0f) {
                             const simd_fvec4 spec_col =
@@ -3190,8 +3191,8 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
                         } else {
                             float mix_val = cur_mat->strength;
                             if (cur_mat->textures[BASE_TEXTURE] != 0xffffffff) {
-                                mix_val *=
-                                    SampleBilinear(tex_atlases, sc.textures[cur_mat->textures[BASE_TEXTURE]], uvs, 0)[0];
+                                mix_val *= SampleBilinear(tex_atlases, sc.textures[cur_mat->textures[BASE_TEXTURE]],
+                                                          uvs, 0)[0];
                             }
 
                             const float eta = is_backfacing ? (cur_mat->ext_ior / cur_mat->int_ior)
@@ -3289,8 +3290,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
             const simd_fvec4 _base_color = pi.should_consider_albedo() ? base_color : simd_fvec4(1.0f);
 
             simd_fvec3 V;
-            const simd_fvec4 F =
-                Sample_OrenDiffuse_BSDF(world_from_tangent, N, I, roughness, _base_color, rand_u, rand_v, V);
+            const simd_fvec4 F = Sample_OrenDiffuse_BSDF(T, B, N, I, roughness, _base_color, rand_u, rand_v, V);
             ray_packet_t r;
             r.xy = ray.xy;
             r.ray_depth = ray.ray_depth + 0x00000001;
@@ -3331,8 +3331,8 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
             const float spec_F0 = fresnel_dielectric_cos(1.0f, spec_ior);
 
             simd_fvec3 V;
-            const simd_fvec4 F = Sample_GGXSpecular_BSDF(world_from_tangent, tangent_from_world, N, I, roughness, 0.0f,
-                                                         spec_ior, spec_F0, base_color, rand_u, rand_v, V);
+            const simd_fvec4 F =
+                Sample_GGXSpecular_BSDF(T, B, N, I, roughness, 0.0f, spec_ior, spec_F0, base_color, rand_u, rand_v, V);
 
             ray_packet_t r;
             r.xy = ray.xy;
@@ -3372,8 +3372,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
             const float eta = is_backfacing ? (mat->int_ior / mat->ext_ior) : (mat->ext_ior / mat->int_ior);
 
             simd_fvec4 _V;
-            const simd_fvec4 F = Sample_GGXRefraction_BSDF(world_from_tangent, tangent_from_world, N, I, roughness, eta,
-                                                           base_color, rand_u, rand_v, _V);
+            const simd_fvec4 F = Sample_GGXRefraction_BSDF(T, B, N, I, roughness, eta, base_color, rand_u, rand_v, _V);
 
             const simd_fvec3 V = {_V[0], _V[1], _V[2]};
             const float m = _V[3];
@@ -3519,9 +3518,8 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
                 const simd_fvec4 sheen_color = sheen * mix(simd_fvec4{1.0f}, tint_color, sheen_tint);
 
                 simd_fvec3 V;
-                simd_fvec4 diff_col =
-                    Sample_PrincipledDiffuse_BSDF(world_from_tangent, N, I, roughness, _base_color, sheen_color,
-                                                  pi.use_uniform_sampling(), rand_u, rand_v, V);
+                simd_fvec4 diff_col = Sample_PrincipledDiffuse_BSDF(T, B, N, I, roughness, _base_color, sheen_color,
+                                                                    pi.use_uniform_sampling(), rand_u, rand_v, V);
                 const float pdf = diff_col[3];
 
                 diff_col *= (1.0f - metallic);
@@ -3566,9 +3564,8 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
             //
             if (spec_depth < pi.settings.max_spec_depth && total_depth < pi.settings.max_total_depth) {
                 simd_fvec3 V;
-                simd_fvec4 F = Sample_GGXSpecular_BSDF(world_from_tangent, tangent_from_world, N, I, roughness,
-                                                       unpack_unorm_16(mat->anisotropic_unorm), spec_ior, spec_F0,
-                                                       spec_tmp_col, rand_u, rand_v, V);
+                simd_fvec4 F = Sample_GGXSpecular_BSDF(T, B, N, I, roughness, unpack_unorm_16(mat->anisotropic_unorm),
+                                                       spec_ior, spec_F0, spec_tmp_col, rand_u, rand_v, V);
                 F[3] *= specular_weight;
 
                 ray_packet_t r;
@@ -3615,9 +3612,8 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
                 const float clearcoat_roughness2 = clearcoat_roughness * clearcoat_roughness;
 
                 simd_fvec3 V;
-                simd_fvec4 F =
-                    Sample_PrincipledClearcoat_BSDF(world_from_tangent, tangent_from_world, N, I, clearcoat_roughness2,
-                                                    clearcoat_ior, clearcoat_F0, rand_u, rand_v, V);
+                simd_fvec4 F = Sample_PrincipledClearcoat_BSDF(T, B, N, I, clearcoat_roughness2, clearcoat_ior,
+                                                               clearcoat_F0, rand_u, rand_v, V);
                 F[3] *= clearcoat_weight;
 
                 ray_packet_t r;
@@ -3676,9 +3672,8 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
                 simd_fvec4 F;
                 simd_fvec3 V;
                 if (mix_rand < fresnel) {
-                    F = Sample_GGXSpecular_BSDF(world_from_tangent, tangent_from_world, N, I, roughness,
-                                                0.0f /* anisotropic */, 1.0f /* ior */, 0.0f /* F0 */, simd_fvec4{1.0f},
-                                                rand_u, rand_v, V);
+                    F = Sample_GGXSpecular_BSDF(T, B, N, I, roughness, 0.0f /* anisotropic */, 1.0f /* ior */,
+                                                0.0f /* F0 */, simd_fvec4{1.0f}, rand_u, rand_v, V);
 
                     r.ray_depth = ray.ray_depth + 0x00000100;
                     memcpy(&r.o[0], value_ptr(offset_ray(P, plane_N)), 3 * sizeof(float));
@@ -3695,8 +3690,8 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
                         1.0f - (1.0f - roughness) * (1.0f - unpack_unorm_16(mat->transmission_roughness_unorm));
 
                     simd_fvec4 _V;
-                    F = Sample_GGXRefraction_BSDF(world_from_tangent, tangent_from_world, N, I, transmission_roughness,
-                                                  eta, base_color, rand_u, rand_v, _V);
+                    F = Sample_GGXRefraction_BSDF(T, B, N, I, transmission_roughness, eta, base_color, rand_u, rand_v,
+                                                  _V);
 
                     V = {_V[0], _V[1], _V[2]};
                     const float m = _V[3];
