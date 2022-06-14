@@ -1118,7 +1118,7 @@ void test_aniso_mat2() {
 void test_aniso_mat3() {
     const int SampleCount = 2048;
     const int DiffThres = 16;
-    const int PixThres = 2072; // 2065;
+    const int PixThres = 2073; // 2072; // 2065;
 
     Ray::principled_mat_desc_t spec_mat_desc;
     spec_mat_desc.base_color[0] = 1.0f;
@@ -1135,7 +1135,7 @@ void test_aniso_mat3() {
 void test_aniso_mat4() {
     const int SampleCount = 2048;
     const int DiffThres = 16;
-    const int PixThres = 2096; // 2078;
+    const int PixThres = 2098; // 2096; // 2078;
 
     Ray::principled_mat_desc_t spec_mat_desc;
     spec_mat_desc.base_color[0] = 1.0f;
@@ -1186,7 +1186,7 @@ void test_aniso_mat6() {
 void test_aniso_mat7() {
     const int SampleCount = 2048;
     const int DiffThres = 16;
-    const int PixThres = 2074; // 2064; // 2061;
+    const int PixThres = 2075; // 2074; // 2064; // 2061;
 
     Ray::principled_mat_desc_t spec_mat_desc;
     spec_mat_desc.base_color[0] = 1.0f;
@@ -2098,7 +2098,7 @@ void test_complex_mat4() {
 void test_complex_mat5() {
     const int SampleCount = 1024;
     const int DiffThres = 16;
-    const int PixThres = 2177;
+    const int PixThres = 2182; // 2177;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;
