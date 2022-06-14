@@ -144,7 +144,7 @@ enum eTextureFormat {
 /// Texture description
 struct tex_desc_t {
     eTextureFormat format;
-    const void *data; ///< Single byte RGBA pixel data
+    const void *data;
     int w,                      ///< Texture width
         h;                      ///< Texture height
     bool is_srgb = true;
@@ -152,9 +152,11 @@ struct tex_desc_t {
 };
 
 enum eLightType {
-    PointLight,
+    SphereLight,
     SpotLight,
     DirectionalLight,
+    LineLight,
+    RectLight
 };
 
 // Light description

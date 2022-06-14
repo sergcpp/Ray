@@ -22,6 +22,7 @@ Ray::Ref::Scene::~Scene() {
     }
     materials_.clear();
     textures_.clear();
+    lights2_.clear();
 }
 
 void Ray::Ref::Scene::GetEnvironment(environment_desc_t &env) {
@@ -426,6 +427,7 @@ void Ray::Ref::Scene::RemoveMesh(const uint32_t i) {
 }
 
 uint32_t Ray::Ref::Scene::AddLight(const light_desc_t &_l) {
+#if 0
     light_t l;
     memcpy(&l.pos[0], &_l.position[0], 3 * sizeof(float));
     l.radius = _l.radius;
@@ -469,12 +471,24 @@ uint32_t Ray::Ref::Scene::AddLight(const light_desc_t &_l) {
     RebuildLightBVH();
 
     return uint32_t(lights_.size() - 1);
+#else
+    light2_t l;
+
+    memcpy(&l.col[0], &_l.color[0], 3 * sizeof(float));
+
+    if (_l.type == DirectionalLight) {
+        l.type = LIGHT_TYPE_DIR;
+        l.dir.dir[0] = -_l.direction[0];
+        l.dir.dir[1] = -_l.direction[1];
+        l.dir.dir[2] = -_l.direction[2];
+        l.dir.angle = _l.angle * PI / 360.0f;
+    }
+
+    return lights2_.push(l);
+#endif
 }
 
-void Ray::Ref::Scene::RemoveLight(const uint32_t i) {
-    // TODO!!!
-    unused(i);
-}
+void Ray::Ref::Scene::RemoveLight(const uint32_t i) { lights2_.erase(i); }
 
 uint32_t Ray::Ref::Scene::AddMeshInstance(const uint32_t mesh_index, const float *xform) {
     const auto mi_index = uint32_t(mesh_instances_.size());
@@ -495,14 +509,14 @@ uint32_t Ray::Ref::Scene::AddMeshInstance(const uint32_t mesh_index, const float
             const material_t &front_mat = materials_[tri_mat.front_mi & MATERIAL_INDEX_BITS];
             if (front_mat.type == EmissiveNode &&
                 (front_mat.flags & (MAT_FLAG_MULT_IMPORTANCE | MAT_FLAG_SKY_PORTAL))) {
-                lights2_.emplace_back();
-                light2_t &new_light = lights2_.back();
+                light2_t new_light;
                 new_light.type = LIGHT_TYPE_TRI;
                 new_light.xform = tr_index;
                 new_light.tri.index = tri;
                 new_light.col[0] = front_mat.base_color[0] * front_mat.strength;
                 new_light.col[1] = front_mat.base_color[1] * front_mat.strength;
                 new_light.col[2] = front_mat.base_color[2] * front_mat.strength;
+                lights2_.push(new_light);
             }
         }
     }

@@ -64,7 +64,7 @@ class Scene : public SceneBase {
     std::vector<light_t> lights_;
     std::vector<uint32_t> li_indices_;
 
-    std::vector<light2_t> lights2_;
+    SparseStorage<light2_t> lights2_;
 
     environment_t env_;
 

@@ -184,10 +184,13 @@ struct light_t {
 };
 static_assert(sizeof(light_t) == 48, "!");
 
+
 const int LIGHT_TYPE_SPHERE = 0;
-const int LIGHT_TYPE_LINE = 1;
-const int LIGHT_TYPE_RECT = 2;
-const int LIGHT_TYPE_TRI = 3;
+const int LIGHT_TYPE_SPOT = 1;
+const int LIGHT_TYPE_DIR = 2;
+const int LIGHT_TYPE_LINE = 3;
+const int LIGHT_TYPE_RECT = 4;
+const int LIGHT_TYPE_TRI = 5;
 
 struct light2_t {
     uint32_t type : 8;
@@ -201,6 +204,9 @@ struct light2_t {
             float _unused[3];
             uint32_t index;
         } tri;
+        struct {
+            float dir[3], angle;
+        } dir;
     };
 };
 static_assert(sizeof(light2_t) == 32, "!");
