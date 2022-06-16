@@ -1783,7 +1783,7 @@ void test_trans_mat1() {
 void test_trans_mat2() {
     const int SampleCount = 2048;
     const int DiffThres = 16;
-    const int PixThres = 4997; // 4995; // 2034; // 2793
+    const int PixThres = 5000; // 4997; // 4995; // 2034; // 2793
 
     Ray::principled_mat_desc_t mat_desc;
     mat_desc.base_color[0] = 1.0f;
