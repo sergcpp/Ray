@@ -14,11 +14,14 @@ Ray::Ref::Scene::Scene(ILog *log, const bool use_wide_bvh)
       tex_atlas_r_(TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE) {}
 
 Ray::Ref::Scene::~Scene() {
-    for (uint32_t i = 0; i < uint32_t(mesh_instances_.size()); ++i) {
-        RemoveMeshInstance(i);
+    while (!mesh_instances_.empty()) {
+        RemoveMeshInstance(mesh_instances_.size() - 1);
     }
-    for (uint32_t i = 0; i < uint32_t(meshes_.size()); ++i) {
-        RemoveMesh(i);
+    while (!meshes_.empty()) {
+        RemoveMesh(meshes_.size() - 1);
+    }
+    while (!lights2_.empty()) {
+        RemoveLight(lights2_.size() - 1);
     }
     materials_.clear();
     textures_.clear();
@@ -127,11 +130,9 @@ uint32_t Ray::Ref::Scene::AddMaterial(const shading_node_desc_t &m) {
     if (m.type == DiffuseNode) {
         mat.sheen_unorm = pack_unorm_16(_CLAMP(m.sheen, 0.0f, 1.0f));
         mat.sheen_tint_unorm = pack_unorm_16(_CLAMP(m.tint, 0.0f, 1.0f));
-        mat.metallic_unorm = pack_unorm_16(_CLAMP(m.metallic, 0.0f, 1.0f));
         mat.textures[METALLIC_TEXTURE] = m.metallic_texture;
     } else if (m.type == GlossyNode) {
         mat.tangent_rotation = 2.0f * PI * m.anisotropic_rotation;
-        mat.metallic_unorm = pack_unorm_16(_CLAMP(m.metallic, 0.0f, 1.0f));
         mat.textures[METALLIC_TEXTURE] = m.metallic_texture;
         mat.tint_unorm = pack_unorm_16(_CLAMP(m.tint, 0.0f, 1.0f));
     } else if (m.type == RefractiveNode) {
@@ -246,8 +247,8 @@ uint32_t Ray::Ref::Scene::AddMaterial(const principled_mat_desc_t &m) {
 }
 
 uint32_t Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
-    meshes_.emplace_back();
-    mesh_t &m = meshes_.back();
+    const uint32_t mesh_index = meshes_.emplace();
+    mesh_t &m = meshes_.at(mesh_index);
 
     const auto tris_start = uint32_t(tris2_.size());
     // const auto tri_index_start = uint32_t(tri_indices_.size());
@@ -386,30 +387,24 @@ uint32_t Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
 
     vtx_indices_.insert(vtx_indices_.end(), new_vtx_indices.begin(), new_vtx_indices.end());
 
-    return uint32_t(meshes_.size() - 1);
+    return mesh_index;
 }
 
 void Ray::Ref::Scene::RemoveMesh(const uint32_t i) {
+    if (!meshes_.exists(i)) {
+        return;
+    }
+
     const mesh_t &m = meshes_[i];
 
     const uint32_t node_index = m.node_index, node_count = m.node_count;
     const uint32_t tris_index = m.tris_index, tris_count = m.tris_count;
 
-    auto last_mesh_index = uint32_t(meshes_.size() - 1);
-
-    std::swap(meshes_[i], meshes_[last_mesh_index]);
-
-    meshes_.pop_back();
+    meshes_.erase(i);
 
     bool rebuild_needed = false;
-
     for (auto it = mesh_instances_.begin(); it != mesh_instances_.end();) {
         mesh_instance_t &mi = *it;
-
-        if (mi.mesh_index == last_mesh_index) {
-            mi.mesh_index = i;
-        }
-
         if (mi.mesh_index == i) {
             it = mesh_instances_.erase(it);
             rebuild_needed = true;
@@ -426,80 +421,90 @@ void Ray::Ref::Scene::RemoveMesh(const uint32_t i) {
     }
 }
 
-uint32_t Ray::Ref::Scene::AddLight(const light_desc_t &_l) {
-#if 0
-    light_t l;
-    memcpy(&l.pos[0], &_l.position[0], 3 * sizeof(float));
-    l.radius = _l.radius;
-    memcpy(&l.col[0], &_l.color[0], 3 * sizeof(float));
-    if (_l.type == SpotLight) {
-        l.dir[0] = -_l.direction[0];
-        l.dir[1] = -_l.direction[1];
-        l.dir[2] = -_l.direction[2];
-        l.spot = std::cos(_l.angle * PI / 180.0f);
-    } else if (_l.type == PointLight) {
-        l.dir[0] = l.dir[2] = 0.0f;
-        l.dir[1] = 1.0f;
-        l.spot = -1.0f;
-    } else if (_l.type == DirectionalLight) {
-        float dist = 9999999.0f;
-
-        l.dir[0] = -_l.direction[0];
-        l.dir[1] = -_l.direction[1];
-        l.dir[2] = -_l.direction[2];
-
-        l.pos[0] = l.dir[0] * dist;
-        l.pos[1] = l.dir[1] * dist;
-        l.pos[2] = l.dir[2] * dist;
-
-        l.radius = dist * std::tan(_l.angle * PI / 180.0f) + 1.0f;
-
-        float k = 1.0f + dist / l.radius;
-        k *= k;
-
-        l.col[0] = _l.color[0] * k;
-        l.col[1] = _l.color[1] * k;
-        l.col[2] = _l.color[2] * k;
-
-        l.spot = 0.0f;
-    }
-
-    l.brightness = std::max(l.col[0], std::max(l.col[1], l.col[2]));
-
-    lights_.push_back(l);
-
-    RebuildLightBVH();
-
-    return uint32_t(lights_.size() - 1);
-#else
+uint32_t Ray::Ref::Scene::AddLight(const directional_light_desc_t &_l) {
     light2_t l;
 
+    l.type = LIGHT_TYPE_DIR;
     memcpy(&l.col[0], &_l.color[0], 3 * sizeof(float));
-
-    if (_l.type == DirectionalLight) {
-        l.type = LIGHT_TYPE_DIR;
-        l.dir.dir[0] = -_l.direction[0];
-        l.dir.dir[1] = -_l.direction[1];
-        l.dir.dir[2] = -_l.direction[2];
-        l.dir.angle = _l.angle * PI / 360.0f;
-    }
+    l.dir.dir[0] = -_l.direction[0];
+    l.dir.dir[1] = -_l.direction[1];
+    l.dir.dir[2] = -_l.direction[2];
+    l.dir.angle = _l.angle * PI / 360.0f;
 
     return lights2_.push(l);
-#endif
 }
 
-void Ray::Ref::Scene::RemoveLight(const uint32_t i) { lights2_.erase(i); }
+uint32_t Ray::Ref::Scene::AddLight(const rect_light_desc_t &_l, const float *xform) {
+    light2_t l;
+
+    l.type = LIGHT_TYPE_RECT;
+    l.visible = _l.visible;
+    l.sky_portal = _l.sky_portal;
+
+    transform_t tr;
+    memcpy(tr.xform, xform, 16 * sizeof(float));
+
+    l.tr_index = transforms_.push(tr);
+
+    memcpy(&l.col[0], &_l.color[0], 3 * sizeof(float));
+    l.rect.width = _l.width;
+    l.rect.height = _l.height;
+
+    const uint32_t light_index = lights2_.push(l);
+    if (_l.visible) {
+        visible_lights_.push_back(light_index);
+    }
+    return light_index;
+}
+
+uint32_t Ray::Ref::Scene::AddLight(const disk_light_desc_t &_l, const float *xform) {
+    light2_t l;
+
+    l.type = LIGHT_TYPE_DISK;
+    l.visible = _l.visible;
+    l.sky_portal = _l.sky_portal;
+
+    transform_t tr;
+    memcpy(tr.xform, xform, 16 * sizeof(float));
+
+    l.tr_index = transforms_.push(tr);
+
+    memcpy(&l.col[0], &_l.color[0], 3 * sizeof(float));
+    l.disk.size_x = _l.size_x;
+    l.disk.size_y = _l.size_y;
+
+    const uint32_t light_index = lights2_.push(l);
+    if (_l.visible) {
+        visible_lights_.push_back(light_index);
+    }
+    return light_index;
+}
+
+void Ray::Ref::Scene::RemoveLight(const uint32_t i) {
+    if (!lights2_.exists(i)) {
+        return;
+    }
+
+    if (lights2_[i].type == LIGHT_TYPE_RECT) {
+        transforms_.erase(lights2_[i].tr_index);
+    }
+
+    if (lights2_[i].visible) {
+        auto it = std::find(std::begin(visible_lights_), std::end(visible_lights_), i);
+        if (it != std::end(visible_lights_)) {
+            visible_lights_.erase(it);
+        }
+    }
+
+    lights2_.erase(i);
+}
 
 uint32_t Ray::Ref::Scene::AddMeshInstance(const uint32_t mesh_index, const float *xform) {
-    const auto mi_index = uint32_t(mesh_instances_.size());
-    const auto tr_index = uint32_t(transforms_.size());
+    const uint32_t mi_index = mesh_instances_.emplace();
 
-    mesh_instances_.emplace_back();
-    mesh_instance_t &mi = mesh_instances_.back();
+    mesh_instance_t &mi = mesh_instances_.at(mi_index);
     mi.mesh_index = mesh_index;
-    mi.tr_index = tr_index;
-
-    transforms_.emplace_back();
+    mi.tr_index = transforms_.emplace();
 
     { // find emissive triangles and add them as emitters
         const mesh_t &m = meshes_[mesh_index];
@@ -511,7 +516,9 @@ uint32_t Ray::Ref::Scene::AddMeshInstance(const uint32_t mesh_index, const float
                 (front_mat.flags & (MAT_FLAG_MULT_IMPORTANCE | MAT_FLAG_SKY_PORTAL))) {
                 light2_t new_light;
                 new_light.type = LIGHT_TYPE_TRI;
-                new_light.xform = tr_index;
+                new_light.visible = 0;
+                new_light.sky_portal = 0;
+                new_light.tr_index = mi.tr_index;
                 new_light.tri.index = tri;
                 new_light.col[0] = front_mat.base_color[0] * front_mat.strength;
                 new_light.col[1] = front_mat.base_color[1] * front_mat.strength;
@@ -574,7 +581,8 @@ void Ray::Ref::Scene::SetMeshInstanceTransform(uint32_t mi_index, const float *x
 }
 
 void Ray::Ref::Scene::RemoveMeshInstance(uint32_t i) {
-    mesh_instances_.erase(mesh_instances_.begin() + i);
+    transforms_.erase(mesh_instances_[i].tr_index);
+    mesh_instances_.erase(i);
 
     RebuildTLAS();
 }

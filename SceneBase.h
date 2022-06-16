@@ -71,7 +71,6 @@ struct shading_node_desc_t {
     float int_ior = 1;                        ///< interior IOR for reflective or refractive material
     float ext_ior = 1;                        ///< exterior IOR for reflective or refractive material
     float tint = 0;
-    float metallic = 0;
     uint32_t metallic_texture = 0xffffffff;
     bool multiple_importance = false;         ///< Enable explicit emissive geometry sampling
     bool sky_portal = false;
@@ -160,6 +159,25 @@ enum eLightType {
 };
 
 // Light description
+struct directional_light_desc_t {
+    float color[3];
+    float direction[3], angle;
+};
+
+struct rect_light_desc_t {
+    float color[3] = {1.0f, 1.0f, 1.0f};
+    float width = 1.0f, height = 1.0f;
+    bool sky_portal = false;
+    bool visible = true; // visibility for secondary bounces
+};
+
+struct disk_light_desc_t {
+    float color[3] = {1.0f, 1.0f, 1.0f};
+    float size_x = 1.0f, size_y = 1.0f;
+    bool sky_portal = false;
+    bool visible = true; // visibility for secondary bounces
+};
+
 struct light_desc_t {
     eLightType type;
     float position[3], radius;
@@ -267,7 +285,9 @@ class SceneBase {
         @param l light description
         @return New light index
     */
-    virtual uint32_t AddLight(const light_desc_t &l) = 0;
+    virtual uint32_t AddLight(const directional_light_desc_t &l) = 0;
+    virtual uint32_t AddLight(const rect_light_desc_t &l, const float *xform) = 0;
+    virtual uint32_t AddLight(const disk_light_desc_t &l, const float *xform) = 0;
 
     /** @brief Removes light with specific index from scene
         @param i light index

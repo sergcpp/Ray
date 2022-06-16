@@ -46,9 +46,9 @@ class Scene : public SceneBase {
     std::vector<tri_accel2_t> tris2_;
     std::vector<uint32_t> tri_indices_;
     std::vector<tri_mat_data_t> tri_materials_;
-    std::vector<transform_t> transforms_;
-    std::vector<mesh_t> meshes_;
-    std::vector<mesh_instance_t> mesh_instances_;
+    SparseStorage<transform_t> transforms_;
+    SparseStorage<mesh_t> meshes_;
+    SparseStorage<mesh_instance_t> mesh_instances_;
     std::vector<uint32_t> mi_indices_;
     std::vector<vertex_t> vertices_;
     std::vector<uint32_t> vtx_indices_;
@@ -65,6 +65,7 @@ class Scene : public SceneBase {
     std::vector<uint32_t> li_indices_;
 
     SparseStorage<light2_t> lights2_;
+    std::vector<uint32_t> visible_lights_;
 
     environment_t env_;
 
@@ -95,7 +96,9 @@ class Scene : public SceneBase {
     uint32_t AddMesh(const mesh_desc_t &m) override;
     void RemoveMesh(uint32_t) override;
 
-    uint32_t AddLight(const light_desc_t &l) override;
+    uint32_t AddLight(const directional_light_desc_t &l) override;
+    uint32_t AddLight(const rect_light_desc_t &l, const float *xform) override;
+    uint32_t AddLight(const disk_light_desc_t &l, const float *xform) override;
     void RemoveLight(uint32_t i) override;
 
     uint32_t AddMeshInstance(uint32_t m_index, const float *xform) override;

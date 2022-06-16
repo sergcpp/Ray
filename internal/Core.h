@@ -190,16 +190,27 @@ const int LIGHT_TYPE_SPOT = 1;
 const int LIGHT_TYPE_DIR = 2;
 const int LIGHT_TYPE_LINE = 3;
 const int LIGHT_TYPE_RECT = 4;
-const int LIGHT_TYPE_TRI = 5;
+const int LIGHT_TYPE_DISK = 5;
+const int LIGHT_TYPE_TRI = 6;
 
 struct light2_t {
-    uint32_t type : 8;
-    uint32_t xform : 24;
+    uint32_t type : 6;
+    uint32_t visible : 1;
+    uint32_t sky_portal : 1;
+    uint32_t tr_index : 24;
     float col[3];
     union {
         struct {
             float pos[3], radius;
         } sph;
+        struct {
+            float width, height;
+            float _unused[2];
+        } rect;
+        struct {
+            float size_x, size_y;
+            float _unused[2];
+        } disk;
         struct {
             float _unused[3];
             uint32_t index;
@@ -434,6 +445,8 @@ struct scene_data_t {
     const uint32_t *li_indices;
     const light2_t *lights2;
     uint32_t lights2_count;
+    const uint32_t *visible_lights;
+    uint32_t visible_lights_count;
 };
 
 } // namespace Ray

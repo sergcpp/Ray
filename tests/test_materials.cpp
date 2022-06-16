@@ -109,7 +109,9 @@ void load_needed_textures(Ray::SceneBase &scene, Ray::principled_mat_desc_t &mat
 
 namespace {
 const int STANDARD_SCENE = 0;
-const int REFR_PLANE_SCENE = 1;
+const int STANDARD_SCENE_MESH_LIGHTS = 1;
+const int STANDARD_SCENE_NO_LIGHTS = 2;
+const int REFR_PLANE_SCENE = 3;
 } // namespace
 
 template <typename MatDesc>
@@ -126,7 +128,8 @@ void setup_material_scene(Ray::SceneBase &scene, const bool output_sh, const Mat
         cam_desc.type = Ray::Persp;
         cam_desc.filter = Ray::Box;
         cam_desc.dtype = Ray::SRGB;
-        if (scene_index == STANDARD_SCENE) {
+        if (scene_index == STANDARD_SCENE || scene_index == STANDARD_SCENE_MESH_LIGHTS ||
+            scene_index == STANDARD_SCENE_NO_LIGHTS) {
             memcpy(&cam_desc.origin[0], &view_origin_standard[0], 3 * sizeof(float));
             memcpy(&cam_desc.fwd[0], &view_dir_standard[0], 3 * sizeof(float));
             cam_desc.fov = 18.1806f;
@@ -258,7 +261,8 @@ void setup_material_scene(Ray::SceneBase &scene, const bool output_sh, const Mat
     {
         std::vector<float> model_attrs;
         std::vector<uint32_t> model_indices, model_groups;
-        if (scene_index == STANDARD_SCENE) {
+        if (scene_index == STANDARD_SCENE || scene_index == STANDARD_SCENE_MESH_LIGHTS ||
+            scene_index == STANDARD_SCENE_NO_LIGHTS) {
             std::tie(model_attrs, model_indices, model_groups) = LoadBIN("test_data/meshes/mat_test/model.bin");
         } else if (scene_index == REFR_PLANE_SCENE) {
             std::tie(model_attrs, model_indices, model_groups) = LoadBIN("test_data/meshes/mat_test/refr_plane.bin");
@@ -402,7 +406,8 @@ void setup_material_scene(Ray::SceneBase &scene, const bool output_sh, const Mat
                                           -0.707106769f, 0.0f,   0.707106769f, 0.0f, // NOLINT
                                           0.0f,          0.062f, 0.0f,         1.0f};
 
-    if (scene_index == STANDARD_SCENE) {
+    if (scene_index == STANDARD_SCENE || scene_index == STANDARD_SCENE_MESH_LIGHTS ||
+        scene_index == STANDARD_SCENE_NO_LIGHTS) {
         scene.AddMeshInstance(model_mesh, model_xform);
         scene.AddMeshInstance(base_mesh, identity);
         scene.AddMeshInstance(core_mesh, identity);
@@ -412,10 +417,61 @@ void setup_material_scene(Ray::SceneBase &scene, const bool output_sh, const Mat
         scene.AddMeshInstance(model_mesh, identity);
     }
     scene.AddMeshInstance(env_mesh, identity);
-    if (scene_index == STANDARD_SCENE) {
-        scene.AddMeshInstance(square_light_mesh, identity);
+    if (scene_index == STANDARD_SCENE_MESH_LIGHTS || scene_index == REFR_PLANE_SCENE) {
+        //
+        // Use mesh lights
+        //
+        if (scene_index != REFR_PLANE_SCENE) {
+            scene.AddMeshInstance(square_light_mesh, identity);
+        }
+        scene.AddMeshInstance(disc_light_mesh, identity);
+    } else if (scene_index == STANDARD_SCENE) {
+        //
+        // Use explicit lights sources
+        //
+        { // rect light
+            static const float xform[16] = {-0.425036609f, 2.24262476e-06f, -0.905176163f, 0.00000000f,
+                                            -0.876228273f, 0.250873595f,    0.411444396f,  0.00000000f,
+                                            0.227085724f,  0.968019843f,    -0.106628500f, 0.00000000f,
+                                            -0.436484009f, 0.187178999f,    0.204932004f,  1.00000000f};
+
+            Ray::rect_light_desc_t new_light;
+
+            new_light.color[0] = 20.3718f;
+            new_light.color[1] = 20.3718f;
+            new_light.color[2] = 20.3718f;
+
+            new_light.width = 0.162f;
+            new_light.height = 0.162f;
+
+            new_light.visible = true;
+            new_light.sky_portal = false;
+
+            scene.AddLight(new_light, xform);
+        }
+        { // disk light
+            static const float xform[16] = {0.813511789f,  -0.536388099f, -0.224691749f, 0.00000000f,
+                                            0.538244009f,  0.548162937f,  0.640164733f,  0.00000000f,
+                                            -0.220209062f, -0.641720533f, 0.734644651f,  0.00000000f,
+                                            0.360500991f,  0.461762011f,  0.431780994f,  1.00000000f};
+
+            Ray::disk_light_desc_t new_light;
+
+            new_light.color[0] = 81.4873f;
+            new_light.color[1] = 81.4873f;
+            new_light.color[2] = 81.4873f;
+
+            new_light.size_x = 0.1296f;
+            new_light.size_y = 0.1296f;
+
+            new_light.visible = true;
+            new_light.sky_portal = false;
+
+            scene.AddLight(new_light, xform);
+        }
+    } else if (scene_index == STANDARD_SCENE_NO_LIGHTS) {
+        // nothing
     }
-    scene.AddMeshInstance(disc_light_mesh, identity);
 
     scene.Finalize();
 }
@@ -457,8 +513,8 @@ void schedule_render_jobs(Ray::RendererBase &renderer, const Ray::SceneBase *sce
 
             // report progress percentage
             const float prog = 100.0f * float(i + std::min(SamplePortion, samples - i)) / samples;
-            printf("\r%s (%s, %c, %s): %.1f%% ", log_str, Ray::RendererTypeName(rt),
-                    settings.use_wide_bvh ? 'w' : 'n', output_sh ? "sh" : "co", prog);
+            printf("\r%s (%s, %c, %s): %.1f%% ", log_str, Ray::RendererTypeName(rt), settings.use_wide_bvh ? 'w' : 'n',
+                   output_sh ? "sh" : "co", prog);
             fflush(stdout);
         }
     } else {
@@ -471,7 +527,7 @@ void schedule_render_jobs(Ray::RendererBase &renderer, const Ray::SceneBase *sce
 
 template <typename MatDesc>
 void run_material_test(const char *test_name, const MatDesc &mat_desc, const int sample_count, const double min_psnr,
-                       const int pix_thres, const char *textures[] = nullptr, const int main_model = 0) {
+                       const int pix_thres, const char *textures[] = nullptr, const int scene_index = 0) {
     char name_buf[1024];
     snprintf(name_buf, sizeof(name_buf), "test_data/%s/ref.tga", test_name);
 
@@ -502,7 +558,7 @@ Ray::RendererOCL
                     auto renderer = std::unique_ptr<Ray::RendererBase>(Ray::CreateRenderer(s, &Ray::g_null_log, rt));
                     auto scene = std::unique_ptr<Ray::SceneBase>(renderer->CreateScene());
 
-                    setup_material_scene(*scene, output_sh, mat_desc, textures, main_model);
+                    setup_material_scene(*scene, output_sh, mat_desc, textures, scene_index);
 
                     snprintf(name_buf, sizeof(name_buf), "Test %s", test_name);
                     schedule_render_jobs(*renderer, scene.get(), s, output_sh, sample_count, name_buf);
@@ -692,8 +748,8 @@ void assemble_material_test_images() {
 
 void test_oren_mat0() {
     const int SampleCount = 256;
-    const double MinPSNR = 39.71;
-    const int PixThres = 4;
+    const double MinPSNR = 41.29;
+    const int PixThres = 0;
 
     Ray::shading_node_desc_t desc;
     desc.type = Ray::DiffuseNode;
@@ -706,8 +762,8 @@ void test_oren_mat0() {
 
 void test_oren_mat1() {
     const int SampleCount = 256;
-    const double MinPSNR = 39.86;
-    const int PixThres = 5;
+    const double MinPSNR = 41.39;
+    const int PixThres = 0;
 
     Ray::shading_node_desc_t desc;
     desc.type = Ray::DiffuseNode;
@@ -721,8 +777,8 @@ void test_oren_mat1() {
 
 void test_oren_mat2() {
     const int SampleCount = 256;
-    const double MinPSNR = 39.09;
-    const int PixThres = 6;
+    const double MinPSNR = 40.54;
+    const int PixThres = 0;
 
     Ray::shading_node_desc_t desc;
     desc.type = Ray::DiffuseNode;
@@ -736,8 +792,8 @@ void test_oren_mat2() {
 
 void test_oren_mat3() {
     const int SampleCount = 256;
-    const double MinPSNR = 39.14;
-    const int PixThres = 7;
+    const double MinPSNR = 40.57;
+    const int PixThres = 0;
 
     Ray::shading_node_desc_t desc;
     desc.type = Ray::DiffuseNode;
@@ -751,8 +807,8 @@ void test_oren_mat3() {
 
 void test_oren_mat4() {
     const int SampleCount = 256;
-    const double MinPSNR = 39.96;
-    const int PixThres = 7;
+    const double MinPSNR = 41.45;
+    const int PixThres = 0;
 
     Ray::shading_node_desc_t desc;
     desc.type = Ray::DiffuseNode;
@@ -770,8 +826,8 @@ void test_oren_mat4() {
 
 void test_diff_mat0() {
     const int SampleCount = 256;
-    const double MinPSNR = 40.08;
-    const int PixThres = 2;
+    const double MinPSNR = 41.52;
+    const int PixThres = 0;
 
     Ray::principled_mat_desc_t desc;
     desc.base_color[0] = 0.5f;
@@ -784,8 +840,8 @@ void test_diff_mat0() {
 
 void test_diff_mat1() {
     const int SampleCount = 256;
-    const double MinPSNR = 40.06;
-    const int PixThres = 2;
+    const double MinPSNR = 41.5;
+    const int PixThres = 0;
 
     Ray::principled_mat_desc_t desc;
     desc.base_color[0] = 0.0f;
@@ -799,8 +855,8 @@ void test_diff_mat1() {
 
 void test_diff_mat2() {
     const int SampleCount = 256;
-    const double MinPSNR = 39.27;
-    const int PixThres = 2;
+    const double MinPSNR = 40.61;
+    const int PixThres = 0;
 
     Ray::principled_mat_desc_t desc;
     desc.base_color[0] = 0.0f;
@@ -814,8 +870,8 @@ void test_diff_mat2() {
 
 void test_diff_mat3() {
     const int SampleCount = 256;
-    const double MinPSNR = 39.19;
-    const int PixThres = 2;
+    const double MinPSNR = 40.56;
+    const int PixThres = 0;
 
     Ray::principled_mat_desc_t desc;
     desc.base_color[0] = 0.5f;
@@ -829,8 +885,8 @@ void test_diff_mat3() {
 
 void test_diff_mat4() {
     const int SampleCount = 256;
-    const double MinPSNR = 39.94;
-    const int PixThres = 2;
+    const double MinPSNR = 41.41;
+    const int PixThres = 0;
 
     Ray::principled_mat_desc_t desc;
     desc.base_color[0] = 0.0f;
@@ -847,8 +903,8 @@ void test_diff_mat4() {
 //
 
 void test_sheen_mat0() {
-    const int SampleCount = 512;
-    const double MinPSNR = 43.04;
+    const int SampleCount = 256;
+    const double MinPSNR = 41.83;
     const int PixThres = 0;
 
     Ray::principled_mat_desc_t mat_desc;
@@ -863,8 +919,8 @@ void test_sheen_mat0() {
 }
 
 void test_sheen_mat1() {
-    const int SampleCount = 768;
-    const double MinPSNR = 43.95;
+    const int SampleCount = 256;
+    const double MinPSNR = 41.33;
     const int PixThres = 0;
 
     Ray::principled_mat_desc_t mat_desc;
@@ -879,8 +935,8 @@ void test_sheen_mat1() {
 }
 
 void test_sheen_mat2() {
-    const int SampleCount = 768;
-    const double MinPSNR = 44.52;
+    const int SampleCount = 256;
+    const double MinPSNR = 41.48;
     const int PixThres = 0;
 
     Ray::principled_mat_desc_t mat_desc;
@@ -895,8 +951,8 @@ void test_sheen_mat2() {
 }
 
 void test_sheen_mat3() {
-    const int SampleCount = 1024;
-    const double MinPSNR = 45.2;
+    const int SampleCount = 256;
+    const double MinPSNR = 41.34;
     const int PixThres = 0;
 
     Ray::principled_mat_desc_t mat_desc;
@@ -916,8 +972,8 @@ void test_sheen_mat3() {
 
 void test_glossy_mat0() {
     const int SampleCount = 2048;
-    const double MinPSNR = 35.97;
-    const int PixThres = 43;
+    const double MinPSNR = 35.07;
+    const int PixThres = 54;
 
     Ray::shading_node_desc_t node_desc;
     node_desc.type = Ray::GlossyNode;
@@ -925,15 +981,14 @@ void test_glossy_mat0() {
     node_desc.base_color[1] = 1.0f;
     node_desc.base_color[2] = 1.0f;
     node_desc.roughness = 0.0f;
-    node_desc.metallic = 1.0f;
 
     run_material_test("glossy_mat0", node_desc, SampleCount, MinPSNR, PixThres);
 }
 
 void test_glossy_mat1() {
-    const int SampleCount = 2048;
-    const double MinPSNR = 32.74;
-    const int PixThres = 137;
+    const int SampleCount = 1024;
+    const double MinPSNR = 33.63;
+    const int PixThres = 55;
 
     Ray::shading_node_desc_t node_desc;
     node_desc.type = Ray::GlossyNode;
@@ -941,15 +996,14 @@ void test_glossy_mat1() {
     node_desc.base_color[1] = 1.0f;
     node_desc.base_color[2] = 1.0f;
     node_desc.roughness = 0.25f;
-    node_desc.metallic = 1.0f;
 
     run_material_test("glossy_mat1", node_desc, SampleCount, MinPSNR, PixThres);
 }
 
 void test_glossy_mat2() {
-    const int SampleCount = 1024;
-    const double MinPSNR = 38.19;
-    const int PixThres = 2;
+    const int SampleCount = 512;
+    const double MinPSNR = 38.05;
+    const int PixThres = 0;
 
     Ray::shading_node_desc_t node_desc;
     node_desc.type = Ray::GlossyNode;
@@ -957,15 +1011,14 @@ void test_glossy_mat2() {
     node_desc.base_color[1] = 1.0f;
     node_desc.base_color[2] = 1.0f;
     node_desc.roughness = 0.5f;
-    node_desc.metallic = 1.0f;
 
     run_material_test("glossy_mat2", node_desc, SampleCount, MinPSNR, PixThres);
 }
 
 void test_glossy_mat3() {
     const int SampleCount = 256;
-    const double MinPSNR = 36.44;
-    const int PixThres = 6;
+    const double MinPSNR = 39.35;
+    const int PixThres = 0;
 
     Ray::shading_node_desc_t node_desc;
     node_desc.type = Ray::GlossyNode;
@@ -973,15 +1026,14 @@ void test_glossy_mat3() {
     node_desc.base_color[1] = 1.0f;
     node_desc.base_color[2] = 1.0f;
     node_desc.roughness = 0.75f;
-    node_desc.metallic = 1.0f;
 
     run_material_test("glossy_mat3", node_desc, SampleCount, MinPSNR, PixThres);
 }
 
 void test_glossy_mat4() {
     const int SampleCount = 256;
-    const double MinPSNR = 37.71;
-    const int PixThres = 7;
+    const double MinPSNR = 40.35;
+    const int PixThres = 0;
 
     Ray::shading_node_desc_t node_desc;
     node_desc.type = Ray::GlossyNode;
@@ -989,7 +1041,6 @@ void test_glossy_mat4() {
     node_desc.base_color[1] = 1.0f;
     node_desc.base_color[2] = 1.0f;
     node_desc.roughness = 1.0f;
-    node_desc.metallic = 1.0f;
 
     run_material_test("glossy_mat4", node_desc, SampleCount, MinPSNR, PixThres);
 }
@@ -1000,8 +1051,8 @@ void test_glossy_mat4() {
 
 void test_spec_mat0() {
     const int SampleCount = 2048;
-    const double MinPSNR = 35.70;
-    const int PixThres = 51;
+    const double MinPSNR = 35.07;
+    const int PixThres = 54;
 
     Ray::principled_mat_desc_t spec_mat_desc;
     spec_mat_desc.base_color[0] = 1.0f;
@@ -1014,9 +1065,9 @@ void test_spec_mat0() {
 }
 
 void test_spec_mat1() {
-    const int SampleCount = 2048;
-    const double MinPSNR = 32.49;
-    const int PixThres = 172;
+    const int SampleCount = 1024;
+    const double MinPSNR = 33.63;
+    const int PixThres = 55;
 
     Ray::principled_mat_desc_t spec_mat_desc;
     spec_mat_desc.base_color[0] = 1.0f;
@@ -1029,9 +1080,9 @@ void test_spec_mat1() {
 }
 
 void test_spec_mat2() {
-    const int SampleCount = 1024;
-    const double MinPSNR = 37.92;
-    const int PixThres = 5;
+    const int SampleCount = 512;
+    const double MinPSNR = 38.05;
+    const int PixThres = 0;
 
     Ray::principled_mat_desc_t spec_mat_desc;
     spec_mat_desc.base_color[0] = 1.0f;
@@ -1045,8 +1096,8 @@ void test_spec_mat2() {
 
 void test_spec_mat3() {
     const int SampleCount = 256;
-    const double MinPSNR = 36.32;
-    const int PixThres = 8;
+    const double MinPSNR = 39.35;
+    const int PixThres = 0;
 
     Ray::principled_mat_desc_t spec_mat_desc;
     spec_mat_desc.base_color[0] = 1.0f;
@@ -1060,8 +1111,8 @@ void test_spec_mat3() {
 
 void test_spec_mat4() {
     const int SampleCount = 256;
-    const double MinPSNR = 37.59;
-    const int PixThres = 8;
+    const double MinPSNR = 40.35;
+    const int PixThres = 0;
 
     Ray::principled_mat_desc_t spec_mat_desc;
     spec_mat_desc.base_color[0] = 1.0f;
@@ -1078,9 +1129,9 @@ void test_spec_mat4() {
 //
 
 void test_aniso_mat0() {
-    const int SampleCount = 2048;
-    const double MinPSNR = 32.44;
-    const int PixThres = 166;
+    const int SampleCount = 1024;
+    const double MinPSNR = 33.6;
+    const int PixThres = 69;
 
     Ray::principled_mat_desc_t spec_mat_desc;
     spec_mat_desc.base_color[0] = 1.0f;
@@ -1095,9 +1146,9 @@ void test_aniso_mat0() {
 }
 
 void test_aniso_mat1() {
-    const int SampleCount = 2048;
-    const double MinPSNR = 32.52;
-    const int PixThres = 165;
+    const int SampleCount = 1024;
+    const double MinPSNR = 33.59;
+    const int PixThres = 56;
 
     Ray::principled_mat_desc_t spec_mat_desc;
     spec_mat_desc.base_color[0] = 1.0f;
@@ -1112,9 +1163,9 @@ void test_aniso_mat1() {
 }
 
 void test_aniso_mat2() {
-    const int SampleCount = 2048;
-    const double MinPSNR = 32.40;
-    const int PixThres = 173;
+    const int SampleCount = 1024;
+    const double MinPSNR = 33.56;
+    const int PixThres = 54;
 
     Ray::principled_mat_desc_t spec_mat_desc;
     spec_mat_desc.base_color[0] = 1.0f;
@@ -1129,9 +1180,9 @@ void test_aniso_mat2() {
 }
 
 void test_aniso_mat3() {
-    const int SampleCount = 2048;
-    const double MinPSNR = 32.14;
-    const int PixThres = 179;
+    const int SampleCount = 1024;
+    const double MinPSNR = 33.39;
+    const int PixThres = 75;
 
     Ray::principled_mat_desc_t spec_mat_desc;
     spec_mat_desc.base_color[0] = 1.0f;
@@ -1146,9 +1197,9 @@ void test_aniso_mat3() {
 }
 
 void test_aniso_mat4() {
-    const int SampleCount = 2048;
-    const double MinPSNR = 31.98;
-    const int PixThres = 222;
+    const int SampleCount = 1024;
+    const double MinPSNR = 33.34;
+    const int PixThres = 72;
 
     Ray::principled_mat_desc_t spec_mat_desc;
     spec_mat_desc.base_color[0] = 1.0f;
@@ -1163,9 +1214,9 @@ void test_aniso_mat4() {
 }
 
 void test_aniso_mat5() {
-    const int SampleCount = 2048;
-    const double MinPSNR = 32.67;
-    const int PixThres = 160;
+    const int SampleCount = 1024;
+    const double MinPSNR = 33.85;
+    const int PixThres = 67;
 
     Ray::principled_mat_desc_t spec_mat_desc;
     spec_mat_desc.base_color[0] = 1.0f;
@@ -1180,9 +1231,9 @@ void test_aniso_mat5() {
 }
 
 void test_aniso_mat6() {
-    const int SampleCount = 2048;
-    const double MinPSNR = 32.09;
-    const int PixThres = 224;
+    const int SampleCount = 1024;
+    const double MinPSNR = 33.5;
+    const int PixThres = 85;
 
     Ray::principled_mat_desc_t spec_mat_desc;
     spec_mat_desc.base_color[0] = 1.0f;
@@ -1197,9 +1248,9 @@ void test_aniso_mat6() {
 }
 
 void test_aniso_mat7() {
-    const int SampleCount = 2048;
-    const double MinPSNR = 32.14;
-    const int PixThres = 178;
+    const int SampleCount = 1024;
+    const double MinPSNR = 33.39;
+    const int PixThres = 72;
 
     Ray::principled_mat_desc_t spec_mat_desc;
     spec_mat_desc.base_color[0] = 1.0f;
@@ -1214,13 +1265,87 @@ void test_aniso_mat7() {
 }
 
 //
+// Plastic material tests
+//
+
+void test_plastic_mat0() {
+    const int SampleCount = 1024;
+    const double MinPSNR = 39.75;
+    const int PixThres = 18;
+
+    Ray::principled_mat_desc_t plastic_mat_desc;
+    plastic_mat_desc.base_color[0] = 0.0f;
+    plastic_mat_desc.base_color[1] = 0.0f;
+    plastic_mat_desc.base_color[2] = 0.5f;
+    plastic_mat_desc.roughness = 0.0f;
+
+    run_material_test("plastic_mat0", plastic_mat_desc, SampleCount, MinPSNR, PixThres);
+}
+
+void test_plastic_mat1() {
+    const int SampleCount = 1024;
+    const double MinPSNR = 41.29;
+    const int PixThres = 1;
+
+    Ray::principled_mat_desc_t plastic_mat_desc;
+    plastic_mat_desc.base_color[0] = 0.5f;
+    plastic_mat_desc.base_color[1] = 0.0f;
+    plastic_mat_desc.base_color[2] = 0.0f;
+    plastic_mat_desc.roughness = 0.25f;
+
+    run_material_test("plastic_mat1", plastic_mat_desc, SampleCount, MinPSNR, PixThres);
+}
+
+void test_plastic_mat2() {
+    const int SampleCount = 512;
+    const double MinPSNR = 41.39;
+    const int PixThres = 0;
+
+    Ray::principled_mat_desc_t plastic_mat_desc;
+    plastic_mat_desc.base_color[0] = 0.0f;
+    plastic_mat_desc.base_color[1] = 0.5f;
+    plastic_mat_desc.base_color[2] = 0.0f;
+    plastic_mat_desc.roughness = 0.5f;
+
+    run_material_test("plastic_mat2", plastic_mat_desc, SampleCount, MinPSNR, PixThres);
+}
+
+void test_plastic_mat3() {
+    const int SampleCount = 512;
+    const double MinPSNR = 40.99;
+    const int PixThres = 0;
+
+    Ray::principled_mat_desc_t plastic_mat_desc;
+    plastic_mat_desc.base_color[0] = 0.5f;
+    plastic_mat_desc.base_color[1] = 0.0f;
+    plastic_mat_desc.base_color[2] = 0.5f;
+    plastic_mat_desc.roughness = 0.75f;
+
+    run_material_test("plastic_mat3", plastic_mat_desc, SampleCount, MinPSNR, PixThres);
+}
+
+void test_plastic_mat4() {
+    const int SampleCount = 512;
+    const double MinPSNR = 41.16;
+    const int PixThres = 0;
+
+    Ray::principled_mat_desc_t plastic_mat_desc;
+    plastic_mat_desc.base_color[0] = 0.0f;
+    plastic_mat_desc.base_color[1] = 0.5f;
+    plastic_mat_desc.base_color[2] = 0.5f;
+    plastic_mat_desc.roughness = 1.0f;
+
+    run_material_test("plastic_mat4", plastic_mat_desc, SampleCount, MinPSNR, PixThres);
+}
+
+//
 // Tint material tests
 //
 
 void test_tint_mat0() {
-    const int SampleCount = 2048;
-    const double MinPSNR = 40.73;
-    const int PixThres = 13;
+    const int SampleCount = 1024;
+    const double MinPSNR = 39.39;
+    const int PixThres = 20;
 
     Ray::principled_mat_desc_t spec_mat_desc;
     spec_mat_desc.base_color[0] = 0.5f;
@@ -1233,9 +1358,9 @@ void test_tint_mat0() {
 }
 
 void test_tint_mat1() {
-    const int SampleCount = 2048;
-    const double MinPSNR = 42.43;
-    const int PixThres = 5;
+    const int SampleCount = 1024;
+    const double MinPSNR = 40.82;
+    const int PixThres = 0;
 
     Ray::principled_mat_desc_t spec_mat_desc;
     spec_mat_desc.base_color[0] = 0.0f;
@@ -1248,9 +1373,9 @@ void test_tint_mat1() {
 }
 
 void test_tint_mat2() {
-    const int SampleCount = 2048;
-    const double MinPSNR = 34.01;
-    const int PixThres = 239;
+    const int SampleCount = 1024;
+    const double MinPSNR = 34.56;
+    const int PixThres = 187;
 
     Ray::principled_mat_desc_t spec_mat_desc;
     spec_mat_desc.base_color[0] = 0.0f;
@@ -1264,8 +1389,8 @@ void test_tint_mat2() {
 
 void test_tint_mat3() {
     const int SampleCount = 256;
-    const double MinPSNR = 38.09;
-    const int PixThres = 5;
+    const double MinPSNR = 39.66;
+    const int PixThres = 0;
 
     Ray::principled_mat_desc_t spec_mat_desc;
     spec_mat_desc.base_color[0] = 0.5f;
@@ -1279,8 +1404,8 @@ void test_tint_mat3() {
 
 void test_tint_mat4() {
     const int SampleCount = 256;
-    const double MinPSNR = 37.28;
-    const int PixThres = 15;
+    const double MinPSNR = 40.03;
+    const int PixThres = 4;
 
     Ray::principled_mat_desc_t spec_mat_desc;
     spec_mat_desc.base_color[0] = 0.5f;
@@ -1293,87 +1418,13 @@ void test_tint_mat4() {
 }
 
 //
-// Plastic material tests
-//
-
-void test_plastic_mat0() {
-    const int SampleCount = 1024;
-    const double MinPSNR = 40.34;
-    const int PixThres = 34;
-
-    Ray::principled_mat_desc_t plastic_mat_desc;
-    plastic_mat_desc.base_color[0] = 0.0f;
-    plastic_mat_desc.base_color[1] = 0.0f;
-    plastic_mat_desc.base_color[2] = 0.5f;
-    plastic_mat_desc.roughness = 0.0f;
-
-    run_material_test("plastic_mat0", plastic_mat_desc, SampleCount, MinPSNR, PixThres);
-}
-
-void test_plastic_mat1() {
-    const int SampleCount = 2048;
-    const double MinPSNR = 42.48;
-    const int PixThres = 7;
-
-    Ray::principled_mat_desc_t plastic_mat_desc;
-    plastic_mat_desc.base_color[0] = 0.5f;
-    plastic_mat_desc.base_color[1] = 0.0f;
-    plastic_mat_desc.base_color[2] = 0.0f;
-    plastic_mat_desc.roughness = 0.25f;
-
-    run_material_test("plastic_mat1", plastic_mat_desc, SampleCount, MinPSNR, PixThres);
-}
-
-void test_plastic_mat2() {
-    const int SampleCount = 512;
-    const double MinPSNR = 40.66;
-    const int PixThres = 1;
-
-    Ray::principled_mat_desc_t plastic_mat_desc;
-    plastic_mat_desc.base_color[0] = 0.0f;
-    plastic_mat_desc.base_color[1] = 0.5f;
-    plastic_mat_desc.base_color[2] = 0.0f;
-    plastic_mat_desc.roughness = 0.5f;
-
-    run_material_test("plastic_mat2", plastic_mat_desc, SampleCount, MinPSNR, PixThres);
-}
-
-void test_plastic_mat3() {
-    const int SampleCount = 512;
-    const double MinPSNR = 40.74;
-    const int PixThres = 2;
-
-    Ray::principled_mat_desc_t plastic_mat_desc;
-    plastic_mat_desc.base_color[0] = 0.5f;
-    plastic_mat_desc.base_color[1] = 0.0f;
-    plastic_mat_desc.base_color[2] = 0.5f;
-    plastic_mat_desc.roughness = 0.75f;
-
-    run_material_test("plastic_mat3", plastic_mat_desc, SampleCount, MinPSNR, PixThres);
-}
-
-void test_plastic_mat4() {
-    const int SampleCount = 512;
-    const double MinPSNR = 41.15;
-    const int PixThres = 0;
-
-    Ray::principled_mat_desc_t plastic_mat_desc;
-    plastic_mat_desc.base_color[0] = 0.0f;
-    plastic_mat_desc.base_color[1] = 0.5f;
-    plastic_mat_desc.base_color[2] = 0.5f;
-    plastic_mat_desc.roughness = 1.0f;
-
-    run_material_test("plastic_mat4", plastic_mat_desc, SampleCount, MinPSNR, PixThres);
-}
-
-//
 // Metal material tests
 //
 
 void test_metal_mat0() {
-    const int SampleCount = 768;
-    const double MinPSNR = 37.76;
-    const int PixThres = 20;
+    const int SampleCount = 512;
+    const double MinPSNR = 36.04;
+    const int PixThres = 29;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_color[0] = 0.0f;
@@ -1386,9 +1437,9 @@ void test_metal_mat0() {
 }
 
 void test_metal_mat1() {
-    const int SampleCount = 2048;
-    const double MinPSNR = 38.84;
-    const int PixThres = 10;
+    const int SampleCount = 512;
+    const double MinPSNR = 37.21;
+    const int PixThres = 9;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_color[0] = 0.5f;
@@ -1402,8 +1453,8 @@ void test_metal_mat1() {
 
 void test_metal_mat2() {
     const int SampleCount = 256;
-    const double MinPSNR = 37.09;
-    const int PixThres = 4;
+    const double MinPSNR = 39.92;
+    const int PixThres = 0;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_color[0] = 0.5f;
@@ -1417,8 +1468,8 @@ void test_metal_mat2() {
 
 void test_metal_mat3() {
     const int SampleCount = 256;
-    const double MinPSNR = 39.68;
-    const int PixThres = 3;
+    const double MinPSNR = 41.62;
+    const int PixThres = 0;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_color[0] = 0.0f;
@@ -1432,8 +1483,8 @@ void test_metal_mat3() {
 
 void test_metal_mat4() {
     const int SampleCount = 256;
-    const double MinPSNR = 40.02;
-    const int PixThres = 4;
+    const double MinPSNR = 41.86;
+    const int PixThres = 0;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_color[0] = 0.5f;
@@ -1451,8 +1502,8 @@ void test_metal_mat4() {
 
 void test_emit_mat0() {
     const int SampleCount = 512;
-    const double MinPSNR = 41.93;
-    const int PixThres = 0;
+    const double MinPSNR = 36.92;
+    const int PixThres = 10;
 
     Ray::principled_mat_desc_t mat_desc;
     mat_desc.base_color[0] = 1.0f;
@@ -1465,13 +1516,13 @@ void test_emit_mat0() {
     mat_desc.emission_color[2] = 1.0f;
     mat_desc.emission_strength = 0.5f;
 
-    run_material_test("emit_mat0", mat_desc, SampleCount, MinPSNR, PixThres);
+    run_material_test("emit_mat0", mat_desc, SampleCount, MinPSNR, PixThres, nullptr, STANDARD_SCENE_NO_LIGHTS);
 }
 
 void test_emit_mat1() {
     const int SampleCount = 512;
-    const double MinPSNR = 41.54;
-    const int PixThres = 0;
+    const double MinPSNR = 35.13;
+    const int PixThres = 9;
 
     Ray::principled_mat_desc_t mat_desc;
     mat_desc.base_color[0] = 0.0f;
@@ -1484,7 +1535,7 @@ void test_emit_mat1() {
     mat_desc.emission_color[2] = 1.0f;
     mat_desc.emission_strength = 1.0f;
 
-    run_material_test("emit_mat1", mat_desc, SampleCount, MinPSNR, PixThres);
+    run_material_test("emit_mat1", mat_desc, SampleCount, MinPSNR, PixThres, nullptr, STANDARD_SCENE_NO_LIGHTS);
 }
 
 //
@@ -1493,8 +1544,8 @@ void test_emit_mat1() {
 
 void test_coat_mat0() {
     const int SampleCount = 512;
-    const double MinPSNR = 42.98;
-    const int PixThres = 5;
+    const double MinPSNR = 42.95;
+    const int PixThres = 4;
 
     Ray::principled_mat_desc_t mat_desc;
     mat_desc.base_color[0] = 0.0f;
@@ -1509,8 +1560,8 @@ void test_coat_mat0() {
 
 void test_coat_mat1() {
     const int SampleCount = 256;
-    const double MinPSNR = 39.07;
-    const int PixThres = 2;
+    const double MinPSNR = 40.5;
+    const int PixThres = 0;
 
     Ray::principled_mat_desc_t mat_desc;
     mat_desc.base_color[0] = 0.0f;
@@ -1525,8 +1576,8 @@ void test_coat_mat1() {
 
 void test_coat_mat2() {
     const int SampleCount = 256;
-    const double MinPSNR = 39.52;
-    const int PixThres = 2;
+    const double MinPSNR = 40.91;
+    const int PixThres = 0;
 
     Ray::principled_mat_desc_t mat_desc;
     mat_desc.base_color[0] = 0.0f;
@@ -1541,8 +1592,8 @@ void test_coat_mat2() {
 
 void test_coat_mat3() {
     const int SampleCount = 256;
-    const double MinPSNR = 39.26;
-    const int PixThres = 2;
+    const double MinPSNR = 40.55;
+    const int PixThres = 0;
 
     Ray::principled_mat_desc_t mat_desc;
     mat_desc.base_color[0] = 0.0f;
@@ -1557,8 +1608,8 @@ void test_coat_mat3() {
 
 void test_coat_mat4() {
     const int SampleCount = 256;
-    const double MinPSNR = 38.69;
-    const int PixThres = 2;
+    const double MinPSNR = 39.79;
+    const int PixThres = 0;
 
     Ray::principled_mat_desc_t mat_desc;
     mat_desc.base_color[0] = 0.0f;
@@ -1670,13 +1721,13 @@ void test_refr_mat0() {
     mat_desc.int_ior = 1.001f;
     mat_desc.roughness = 1.0f;
 
-    run_material_test("refr_mat0", mat_desc, SampleCount, MinPSNR, PixThres);
+    run_material_test("refr_mat0", mat_desc, SampleCount, MinPSNR, PixThres, nullptr, STANDARD_SCENE_MESH_LIGHTS);
 }
 
 void test_refr_mat1() {
-    const int SampleCount = 2048;
-    const double MinPSNR = 36.32f;
-    const int PixThres = 73;
+    const int SampleCount = 1024;
+    const double MinPSNR = 33.48;
+    const int PixThres = 186;
 
     Ray::shading_node_desc_t mat_desc;
     mat_desc.type = Ray::RefractiveNode;
@@ -1686,13 +1737,13 @@ void test_refr_mat1() {
     mat_desc.int_ior = 1.45f;
     mat_desc.roughness = 0.0f;
 
-    run_material_test("refr_mat1", mat_desc, SampleCount, MinPSNR, PixThres);
+    run_material_test("refr_mat1", mat_desc, SampleCount, MinPSNR, PixThres, nullptr, STANDARD_SCENE_MESH_LIGHTS);
 }
 
 void test_refr_mat2() {
-    const int SampleCount = 2048;
-    const double MinPSNR = 33.82;
-    const int PixThres = 695;
+    const int SampleCount = 1024;
+    const double MinPSNR = 36.69;
+    const int PixThres = 163;
 
     Ray::shading_node_desc_t mat_desc;
     mat_desc.type = Ray::RefractiveNode;
@@ -1702,13 +1753,13 @@ void test_refr_mat2() {
     mat_desc.int_ior = 1.45f;
     mat_desc.roughness = 0.25f;
 
-    run_material_test("refr_mat2", mat_desc, SampleCount, MinPSNR, PixThres);
+    run_material_test("refr_mat2", mat_desc, SampleCount, MinPSNR, PixThres, nullptr, STANDARD_SCENE_MESH_LIGHTS);
 }
 
 void test_refr_mat3() {
-    const int SampleCount = 2048;
-    const double MinPSNR = 37.51;
-    const int PixThres = 6;
+    const int SampleCount = 1024;
+    const double MinPSNR = 38.89;
+    const int PixThres = 2;
 
     Ray::shading_node_desc_t mat_desc;
     mat_desc.type = Ray::RefractiveNode;
@@ -1718,13 +1769,13 @@ void test_refr_mat3() {
     mat_desc.int_ior = 1.45f;
     mat_desc.roughness = 0.5f;
 
-    run_material_test("refr_mat3", mat_desc, SampleCount, MinPSNR, PixThres);
+    run_material_test("refr_mat3", mat_desc, SampleCount, MinPSNR, PixThres, nullptr, STANDARD_SCENE_MESH_LIGHTS);
 }
 
 void test_refr_mat4() {
-    const int SampleCount = 2048;
-    const double MinPSNR = 38.99;
-    const int PixThres = 0;
+    const int SampleCount = 1024;
+    const double MinPSNR = 36.36;
+    const int PixThres = 337;
 
     Ray::shading_node_desc_t mat_desc;
     mat_desc.type = Ray::RefractiveNode;
@@ -1734,13 +1785,13 @@ void test_refr_mat4() {
     mat_desc.int_ior = 1.45f;
     mat_desc.roughness = 0.75f;
 
-    run_material_test("refr_mat4", mat_desc, SampleCount, MinPSNR, PixThres);
+    run_material_test("refr_mat4", mat_desc, SampleCount, MinPSNR, PixThres, nullptr, STANDARD_SCENE_MESH_LIGHTS);
 }
 
 void test_refr_mat5() {
-    const int SampleCount = 2048;
-    const double MinPSNR = 37.97;
-    const int PixThres = 0;
+    const int SampleCount = 1024;
+    const double MinPSNR = 29.78;
+    const int PixThres = 2062;
 
     Ray::shading_node_desc_t mat_desc;
     mat_desc.type = Ray::RefractiveNode;
@@ -1750,7 +1801,7 @@ void test_refr_mat5() {
     mat_desc.int_ior = 1.45f;
     mat_desc.roughness = 1.0f;
 
-    run_material_test("refr_mat5", mat_desc, SampleCount, MinPSNR, PixThres);
+    run_material_test("refr_mat5", mat_desc, SampleCount, MinPSNR, PixThres, nullptr, STANDARD_SCENE_MESH_LIGHTS);
 }
 
 //
@@ -1772,11 +1823,11 @@ void test_trans_mat0() {
     mat_desc.transmission = 1.0f;
     mat_desc.transmission_roughness = 1.0f;
 
-    run_material_test("trans_mat0", mat_desc, SampleCount, MinPSNR, PixThres);
+    run_material_test("trans_mat0", mat_desc, SampleCount, MinPSNR, PixThres, nullptr, STANDARD_SCENE_MESH_LIGHTS);
 }
 
 void test_trans_mat1() {
-    const int SampleCount = 2048;
+    const int SampleCount = 1024;
     const double MinPSNR = 30.34;
     const int PixThres = 364;
 
@@ -1790,11 +1841,11 @@ void test_trans_mat1() {
     mat_desc.transmission = 1.0f;
     mat_desc.transmission_roughness = 0.0f;
 
-    run_material_test("trans_mat1", mat_desc, SampleCount, MinPSNR, PixThres);
+    run_material_test("trans_mat1", mat_desc, SampleCount, MinPSNR, PixThres, nullptr, STANDARD_SCENE_MESH_LIGHTS);
 }
 
 void test_trans_mat2() {
-    const int SampleCount = 2048;
+    const int SampleCount = 1024;
     const double MinPSNR = 28.54;
     const int PixThres = 906;
 
@@ -1808,11 +1859,11 @@ void test_trans_mat2() {
     mat_desc.transmission = 1.0f;
     mat_desc.transmission_roughness = 0.25f;
 
-    run_material_test("trans_mat2", mat_desc, SampleCount, MinPSNR, PixThres);
+    run_material_test("trans_mat2", mat_desc, SampleCount, MinPSNR, PixThres, nullptr, STANDARD_SCENE_MESH_LIGHTS);
 }
 
 void test_trans_mat3() {
-    const int SampleCount = 2048;
+    const int SampleCount = 1024;
     const double MinPSNR = 32.48;
     const int PixThres = 71;
 
@@ -1826,11 +1877,11 @@ void test_trans_mat3() {
     mat_desc.transmission = 1.0f;
     mat_desc.transmission_roughness = 0.5f;
 
-    run_material_test("trans_mat3", mat_desc, SampleCount, MinPSNR, PixThres);
+    run_material_test("trans_mat3", mat_desc, SampleCount, MinPSNR, PixThres, nullptr, STANDARD_SCENE_MESH_LIGHTS);
 }
 
 void test_trans_mat4() {
-    const int SampleCount = 2048;
+    const int SampleCount = 1024;
     const double MinPSNR = 34.15;
     const int PixThres = 11;
 
@@ -1844,12 +1895,12 @@ void test_trans_mat4() {
     mat_desc.transmission = 1.0f;
     mat_desc.transmission_roughness = 0.75f;
 
-    run_material_test("trans_mat4", mat_desc, SampleCount, MinPSNR, PixThres);
+    run_material_test("trans_mat4", mat_desc, SampleCount, MinPSNR, PixThres, nullptr, STANDARD_SCENE_MESH_LIGHTS);
 }
 
 void test_trans_mat5() {
-    const int SampleCount = 2048;
-    const double MinPSNR = 34.77;
+    const int SampleCount = 1024;
+    const double MinPSNR = 34.78;
     const int PixThres = 11;
 
     Ray::principled_mat_desc_t mat_desc;
@@ -1862,11 +1913,11 @@ void test_trans_mat5() {
     mat_desc.transmission = 1.0f;
     mat_desc.transmission_roughness = 1.0f;
 
-    run_material_test("trans_mat5", mat_desc, SampleCount, MinPSNR, PixThres);
+    run_material_test("trans_mat5", mat_desc, SampleCount, MinPSNR, PixThres, nullptr, STANDARD_SCENE_MESH_LIGHTS);
 }
 
 void test_trans_mat6() {
-    const int SampleCount = 2048;
+    const int SampleCount = 1024;
     const double MinPSNR = 27.56;
     const int PixThres = 1280;
 
@@ -1880,11 +1931,11 @@ void test_trans_mat6() {
     mat_desc.transmission = 1.0f;
     mat_desc.transmission_roughness = 0.0f;
 
-    run_material_test("trans_mat6", mat_desc, SampleCount, MinPSNR, PixThres);
+    run_material_test("trans_mat6", mat_desc, SampleCount, MinPSNR, PixThres, nullptr, STANDARD_SCENE_MESH_LIGHTS);
 }
 
 void test_trans_mat7() {
-    const int SampleCount = 2048;
+    const int SampleCount = 1024;
     const double MinPSNR = 31.22;
     const int PixThres = 119;
 
@@ -1898,11 +1949,11 @@ void test_trans_mat7() {
     mat_desc.transmission = 1.0f;
     mat_desc.transmission_roughness = 0.0f;
 
-    run_material_test("trans_mat7", mat_desc, SampleCount, MinPSNR, PixThres);
+    run_material_test("trans_mat7", mat_desc, SampleCount, MinPSNR, PixThres, nullptr, STANDARD_SCENE_MESH_LIGHTS);
 }
 
 void test_trans_mat8() {
-    const int SampleCount = 2048;
+    const int SampleCount = 1024;
     const double MinPSNR = 34.30;
     const int PixThres = 1;
 
@@ -1916,11 +1967,11 @@ void test_trans_mat8() {
     mat_desc.transmission = 1.0f;
     mat_desc.transmission_roughness = 0.0f;
 
-    run_material_test("trans_mat8", mat_desc, SampleCount, MinPSNR, PixThres);
+    run_material_test("trans_mat8", mat_desc, SampleCount, MinPSNR, PixThres, nullptr, STANDARD_SCENE_MESH_LIGHTS);
 }
 
 void test_trans_mat9() {
-    const int SampleCount = 2048;
+    const int SampleCount = 1024;
     const double MinPSNR = 37.0;
     const int PixThres = 0;
 
@@ -1934,7 +1985,7 @@ void test_trans_mat9() {
     mat_desc.transmission = 1.0f;
     mat_desc.transmission_roughness = 0.0f;
 
-    run_material_test("trans_mat9", mat_desc, SampleCount, MinPSNR, PixThres);
+    run_material_test("trans_mat9", mat_desc, SampleCount, MinPSNR, PixThres, nullptr, STANDARD_SCENE_MESH_LIGHTS);
 }
 
 //
@@ -1942,9 +1993,9 @@ void test_trans_mat9() {
 //
 
 void test_alpha_mat0() {
-    const int SampleCount = 2048;
-    const double MinPSNR = 38.88;
-    const int PixThres = 10;
+    const int SampleCount = 1024;
+    const double MinPSNR = 38.74;
+    const int PixThres = 16;
 
     Ray::principled_mat_desc_t alpha_mat_desc;
     alpha_mat_desc.base_color[0] = 0.0f;
@@ -1957,9 +2008,9 @@ void test_alpha_mat0() {
 }
 
 void test_alpha_mat1() {
-    const int SampleCount = 2048;
-    const double MinPSNR = 35.22;
-    const int PixThres = 7;
+    const int SampleCount = 1024;
+    const double MinPSNR = 35.54;
+    const int PixThres = 8;
 
     Ray::principled_mat_desc_t alpha_mat_desc;
     alpha_mat_desc.base_color[0] = 0.0f;
@@ -1973,8 +2024,8 @@ void test_alpha_mat1() {
 
 void test_alpha_mat2() {
     const int SampleCount = 1024;
-    const double MinPSNR = 35.07;
-    const int PixThres = 8;
+    const double MinPSNR = 35.92;
+    const int PixThres = 5;
 
     Ray::principled_mat_desc_t alpha_mat_desc;
     alpha_mat_desc.base_color[0] = 0.0f;
@@ -1988,8 +2039,8 @@ void test_alpha_mat2() {
 
 void test_alpha_mat3() {
     const int SampleCount = 1024;
-    const double MinPSNR = 41.05;
-    const int PixThres = 28;
+    const double MinPSNR = 38.2;
+    const int PixThres = 24;
 
     Ray::principled_mat_desc_t alpha_mat_desc;
     alpha_mat_desc.base_color[0] = 0.0f;
@@ -2007,8 +2058,8 @@ void test_alpha_mat3() {
 
 void test_complex_mat0() {
     const int SampleCount = 1024;
-    const double MinPSNR = 37.47;
-    const int PixThres = 102;
+    const double MinPSNR = 38.7;
+    const int PixThres = 5;
 
     Ray::principled_mat_desc_t wood_mat_desc;
     wood_mat_desc.base_texture = 0;
@@ -2027,8 +2078,8 @@ void test_complex_mat0() {
 
 void test_complex_mat1() {
     const int SampleCount = 1024;
-    const double MinPSNR = 39.63;
-    const int PixThres = 22;
+    const double MinPSNR = 40.44;
+    const int PixThres = 1;
 
     Ray::principled_mat_desc_t wood_mat_desc;
     wood_mat_desc.base_texture = 0;
@@ -2047,8 +2098,8 @@ void test_complex_mat1() {
 
 void test_complex_mat2() {
     const int SampleCount = 1024;
-    const double MinPSNR = 39.68;
-    const int PixThres = 37;
+    const double MinPSNR = 40.26;
+    const int PixThres = 3;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = 0;
@@ -2068,8 +2119,8 @@ void test_complex_mat2() {
 
 void test_complex_mat3() {
     const int SampleCount = 1024;
-    const double MinPSNR = 39.61;
-    const int PixThres = 39;
+    const double MinPSNR = 40.58;
+    const int PixThres = 2;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = 0;
@@ -2089,8 +2140,8 @@ void test_complex_mat3() {
 
 void test_complex_mat4() {
     const int SampleCount = 1024;
-    const double MinPSNR = 32.36;
-    const int PixThres = 888;
+    const double MinPSNR = 34.88;
+    const int PixThres = 121;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = 0;
@@ -2108,10 +2159,32 @@ void test_complex_mat4() {
     run_material_test("complex_mat4", metal_mat_desc, SampleCount, MinPSNR, PixThres, textures);
 }
 
+void test_complex_mat4_mesh_lights() {
+    const int SampleCount = 1024;
+    const double MinPSNR = 32.36;
+    const int PixThres = 888;
+
+    Ray::principled_mat_desc_t metal_mat_desc;
+    metal_mat_desc.base_texture = 0;
+    metal_mat_desc.metallic = 1.0f;
+    metal_mat_desc.roughness = 1.0f;
+    metal_mat_desc.roughness_texture = 2;
+    metal_mat_desc.metallic = 1.0f;
+    metal_mat_desc.metallic_texture = 3;
+    metal_mat_desc.normal_map = 1;
+
+    const char *textures[] = {
+        "test_data/textures/gold-scuffed_basecolor-boosted.tga", "test_data/textures/gold-scuffed_normal.tga",
+        "test_data/textures/gold-scuffed_roughness.tga", "test_data/textures/gold-scuffed_metallic.tga"};
+
+    run_material_test("complex_mat4_mesh_lights", metal_mat_desc, SampleCount, MinPSNR, PixThres, textures,
+                      STANDARD_SCENE_MESH_LIGHTS);
+}
+
 void test_complex_mat5() {
     const int SampleCount = 1024;
-    const double MinPSNR = 30.80;
-    const int PixThres = 486;
+    const double MinPSNR = 31.65;
+    const int PixThres = 241;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;
@@ -2124,10 +2197,27 @@ void test_complex_mat5() {
     run_material_test("complex_mat5", olive_mat_desc, SampleCount, MinPSNR, PixThres);
 }
 
+void test_complex_mat5_mesh_lights() {
+    const int SampleCount = 1024;
+    const double MinPSNR = 30.80;
+    const int PixThres = 486;
+
+    Ray::principled_mat_desc_t olive_mat_desc;
+    olive_mat_desc.base_color[0] = 0.836164f;
+    olive_mat_desc.base_color[1] = 0.836164f;
+    olive_mat_desc.base_color[2] = 0.656603f;
+    olive_mat_desc.roughness = 0.041667f;
+    olive_mat_desc.transmission = 1.0f;
+    olive_mat_desc.ior = 2.3f;
+
+    run_material_test("complex_mat5_mesh_lights", olive_mat_desc, SampleCount, MinPSNR, PixThres, nullptr,
+                      STANDARD_SCENE_MESH_LIGHTS);
+}
+
 void test_complex_mat6() {
     const int SampleCount = 256;
-    const double MinPSNR = 39.3;
-    const int PixThres = 3;
+    const double MinPSNR = 39.74;
+    const int PixThres = 0;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = 0;
