@@ -557,7 +557,7 @@ Ray::RendererOCL
                     double psnr = -10.0 * std::log10(mse / (255.0f * 255.0f));
                     psnr = std::floor(psnr * 100.0) / 100.0;
 
-                    printf("(PSNR: %.2f/%.2f dB, Fireflies: %i/%i)\n", psnr, min_psnr, error_pixels, pix_thres);
+                    printf("(PSNR: %.3f/%.3f dB, Fireflies: %i/%i)\n", psnr, min_psnr, error_pixels, pix_thres);
 
                     snprintf(name_buf, sizeof(name_buf), "test_data/%s/out.tga", test_name);
                     WriteTGA(&img_data_u8[0], test_img_w, test_img_h, 3, name_buf);
@@ -1675,7 +1675,7 @@ void test_refr_mat0() {
 
 void test_refr_mat1() {
     const int SampleCount = 2048;
-    const double MinPSNR = 36.33f;
+    const double MinPSNR = 36.32f;
     const int PixThres = 73;
 
     Ray::shading_node_desc_t mat_desc;
