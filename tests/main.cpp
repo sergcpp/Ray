@@ -135,7 +135,7 @@ int main(int argc, char *argv[]) {
 
     if (detailed_material_tests_needed) {
 #if 1
-        if (g_tests_success) {
+        if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
             puts("---------------");
             test_oren_mat0();
@@ -148,7 +148,7 @@ int main(int argc, char *argv[]) {
         }
 #endif
 #if 1
-        if (g_tests_success) {
+        if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
             puts("---------------");
             test_diff_mat0();
@@ -161,7 +161,7 @@ int main(int argc, char *argv[]) {
         }
 #endif
 #if 1
-        if (g_tests_success) {
+        if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
             puts("---------------");
             test_sheen_mat0();
@@ -173,7 +173,7 @@ int main(int argc, char *argv[]) {
         }
 #endif
 #if 1
-        if (g_tests_success) {
+        if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
             puts("---------------");
             test_glossy_mat0();
@@ -186,7 +186,7 @@ int main(int argc, char *argv[]) {
         }
 #endif
 #if 1
-        if (g_tests_success) {
+        if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
             puts("---------------");
             test_spec_mat0();
@@ -199,7 +199,7 @@ int main(int argc, char *argv[]) {
         }
 #endif
 #if 1
-        if (g_tests_success) {
+        if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
             puts("---------------");
             test_aniso_mat0();
@@ -215,7 +215,7 @@ int main(int argc, char *argv[]) {
         }
 #endif
 #if 1
-        if (g_tests_success) {
+        if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
             puts("---------------");
             test_metal_mat0();
@@ -228,7 +228,7 @@ int main(int argc, char *argv[]) {
         }
 #endif
 #if 1
-        if (g_tests_success) {
+        if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
             puts("---------------");
             test_plastic_mat0();
@@ -241,7 +241,7 @@ int main(int argc, char *argv[]) {
         }
 #endif
 #if 1
-        if (g_tests_success) {
+        if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
             puts("---------------");
             test_tint_mat0();
@@ -254,7 +254,7 @@ int main(int argc, char *argv[]) {
         }
 #endif
 #if 1
-        if (g_tests_success) {
+        if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
             puts("---------------");
             test_emit_mat0();
@@ -264,7 +264,7 @@ int main(int argc, char *argv[]) {
         }
 #endif
 #if 1
-        if (g_tests_success) {
+        if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
             puts("---------------");
             test_coat_mat0();
@@ -277,7 +277,7 @@ int main(int argc, char *argv[]) {
         }
 #endif
 #if 1
-        if (g_tests_success) {
+        if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
             puts("---------------");
             test_refr_mis0();
@@ -290,7 +290,7 @@ int main(int argc, char *argv[]) {
         }
 #endif
 #if 1
-        if (g_tests_success) {
+        if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
             puts("---------------");
             test_refr_mat0();
@@ -304,7 +304,7 @@ int main(int argc, char *argv[]) {
         }
 #endif
 #if 1
-        if (g_tests_success) {
+        if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
             puts("---------------");
             test_trans_mat0();
@@ -322,7 +322,7 @@ int main(int argc, char *argv[]) {
         }
 #endif
 #if 1
-        if (g_tests_success) {
+        if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
             puts("---------------");
             test_alpha_mat0();
