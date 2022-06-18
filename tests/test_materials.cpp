@@ -1796,7 +1796,7 @@ void test_trans_mat1() {
 void test_trans_mat2() {
     const int SampleCount = 2048;
     const double MinPSNR = 28.54;
-    const int PixThres = 900;
+    const int PixThres = 906;
 
     Ray::principled_mat_desc_t mat_desc;
     mat_desc.base_color[0] = 1.0f;
@@ -1831,7 +1831,7 @@ void test_trans_mat3() {
 
 void test_trans_mat4() {
     const int SampleCount = 2048;
-    const double MinPSNR = 34.16;
+    const double MinPSNR = 34.15;
     const int PixThres = 10;
 
     Ray::principled_mat_desc_t mat_desc;
@@ -1868,7 +1868,7 @@ void test_trans_mat5() {
 void test_trans_mat6() {
     const int SampleCount = 2048;
     const double MinPSNR = 27.56;
-    const int PixThres = 1279;
+    const int PixThres = 1280;
 
     Ray::principled_mat_desc_t mat_desc;
     mat_desc.base_color[0] = 1.0f;
