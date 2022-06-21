@@ -1742,8 +1742,8 @@ void test_refr_mat1() {
 
 void test_refr_mat2() {
     const int SampleCount = 1024;
-    const double MinPSNR = 36.69;
-    const int PixThres = 163;
+    const double MinPSNR = 31.7;
+    const int PixThres = 1593;
 
     Ray::shading_node_desc_t mat_desc;
     mat_desc.type = Ray::RefractiveNode;
@@ -1758,8 +1758,8 @@ void test_refr_mat2() {
 
 void test_refr_mat3() {
     const int SampleCount = 1024;
-    const double MinPSNR = 38.89;
-    const int PixThres = 2;
+    const double MinPSNR = 35.92;
+    const int PixThres = 56;
 
     Ray::shading_node_desc_t mat_desc;
     mat_desc.type = Ray::RefractiveNode;
@@ -1774,8 +1774,8 @@ void test_refr_mat3() {
 
 void test_refr_mat4() {
     const int SampleCount = 1024;
-    const double MinPSNR = 36.36;
-    const int PixThres = 337;
+    const double MinPSNR = 38.11;
+    const int PixThres = 0;
 
     Ray::shading_node_desc_t mat_desc;
     mat_desc.type = Ray::RefractiveNode;
@@ -1790,8 +1790,8 @@ void test_refr_mat4() {
 
 void test_refr_mat5() {
     const int SampleCount = 1024;
-    const double MinPSNR = 29.78;
-    const int PixThres = 2062;
+    const double MinPSNR = 37.25;
+    const int PixThres = 0;
 
     Ray::shading_node_desc_t mat_desc;
     mat_desc.type = Ray::RefractiveNode;
@@ -1828,8 +1828,8 @@ void test_trans_mat0() {
 
 void test_trans_mat1() {
     const int SampleCount = 1024;
-    const double MinPSNR = 30.34;
-    const int PixThres = 364;
+    const double MinPSNR = 28.8;
+    const int PixThres = 587;
 
     Ray::principled_mat_desc_t mat_desc;
     mat_desc.base_color[0] = 1.0f;
@@ -1846,8 +1846,8 @@ void test_trans_mat1() {
 
 void test_trans_mat2() {
     const int SampleCount = 1024;
-    const double MinPSNR = 28.54;
-    const int PixThres = 906;
+    const double MinPSNR = 28.38;
+    const int PixThres = 1939;
 
     Ray::principled_mat_desc_t mat_desc;
     mat_desc.base_color[0] = 1.0f;
@@ -1864,8 +1864,8 @@ void test_trans_mat2() {
 
 void test_trans_mat3() {
     const int SampleCount = 1024;
-    const double MinPSNR = 32.48;
-    const int PixThres = 71;
+    const double MinPSNR = 30.12;
+    const int PixThres = 396;
 
     Ray::principled_mat_desc_t mat_desc;
     mat_desc.base_color[0] = 1.0f;
@@ -1882,8 +1882,8 @@ void test_trans_mat3() {
 
 void test_trans_mat4() {
     const int SampleCount = 1024;
-    const double MinPSNR = 34.15;
-    const int PixThres = 11;
+    const double MinPSNR = 32.22;
+    const int PixThres = 77;
 
     Ray::principled_mat_desc_t mat_desc;
     mat_desc.base_color[0] = 1.0f;
@@ -1900,8 +1900,8 @@ void test_trans_mat4() {
 
 void test_trans_mat5() {
     const int SampleCount = 1024;
-    const double MinPSNR = 34.78;
-    const int PixThres = 11;
+    const double MinPSNR = 33.17;
+    const int PixThres = 40;
 
     Ray::principled_mat_desc_t mat_desc;
     mat_desc.base_color[0] = 1.0f;
@@ -1918,8 +1918,8 @@ void test_trans_mat5() {
 
 void test_trans_mat6() {
     const int SampleCount = 1024;
-    const double MinPSNR = 27.56;
-    const int PixThres = 1280;
+    const double MinPSNR = 25.33;
+    const int PixThres = 2582;
 
     Ray::principled_mat_desc_t mat_desc;
     mat_desc.base_color[0] = 1.0f;
@@ -1936,8 +1936,8 @@ void test_trans_mat6() {
 
 void test_trans_mat7() {
     const int SampleCount = 1024;
-    const double MinPSNR = 31.22;
-    const int PixThres = 119;
+    const double MinPSNR = 28.84;
+    const int PixThres = 665;
 
     Ray::principled_mat_desc_t mat_desc;
     mat_desc.base_color[0] = 1.0f;
@@ -1954,8 +1954,8 @@ void test_trans_mat7() {
 
 void test_trans_mat8() {
     const int SampleCount = 1024;
-    const double MinPSNR = 34.30;
-    const int PixThres = 1;
+    const double MinPSNR = 32.21;
+    const int PixThres = 48;
 
     Ray::principled_mat_desc_t mat_desc;
     mat_desc.base_color[0] = 1.0f;
@@ -1972,8 +1972,8 @@ void test_trans_mat8() {
 
 void test_trans_mat9() {
     const int SampleCount = 1024;
-    const double MinPSNR = 37.0;
-    const int PixThres = 0;
+    const double MinPSNR = 35.34;
+    const int PixThres = 1;
 
     Ray::principled_mat_desc_t mat_desc;
     mat_desc.base_color[0] = 1.0f;
