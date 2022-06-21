@@ -2821,11 +2821,43 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
     simd_fvec3 out_col;
     for (uint32_t li = 0; li < sc.visible_lights_count && ray.ray_depth; ++li) {
         const light2_t &l = sc.lights2[sc.visible_lights[li]];
-        const transform_t &ltr = sc.transforms[l.tr_index];
 
         simd_fvec4 lcol = simd_fvec4{l.col[0], l.col[1], l.col[2], 0.0f};
 
-        if (l.type == LIGHT_TYPE_RECT) {
+        if (l.type == LIGHT_TYPE_SPHERE) {
+            const simd_fvec3 light_pos = simd_fvec3{l.sph.pos[0], l.sph.pos[1], l.sph.pos[2]};
+            const float light_area = 4.0f * PI * l.sph.radius * l.sph.radius;
+
+            const simd_fvec3 op = light_pos - simd_fvec3{ray.o};
+            const float b = dot(op, simd_fvec3{ray.d});
+            float det = b * b - dot(op, op) + l.sph.radius * l.sph.radius;
+            if (det >= 0.0f) {
+                det = std::sqrt(det);
+                const float t1 = b - det, t2 = b + det;
+                if (t1 > 0.001f && t1 < min_t) {
+                    const simd_fvec3 hit_p = simd_fvec3{ray.o} + t1 * simd_fvec3{ray.d};
+                    const float cos_theta = dot(simd_fvec3{ray.d}, normalize(simd_fvec3{l.sph.pos} - hit_p));
+
+                    const float light_pdf = (t1 * t1) / (0.5f * light_area * cos_theta);
+                    const float bsdf_pdf = ray.pdf;
+
+                    const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
+                    out_col = mis_weight * simd_fvec3(&lcol[0]);
+                    min_t = t1;
+                } else if (t2 > 0.001f && t2 < min_t) {
+                    const simd_fvec3 hit_p = simd_fvec3{ray.o} + t2 * simd_fvec3{ray.d};
+                    const float cos_theta = dot(simd_fvec3{ray.d}, normalize(simd_fvec3{l.sph.pos} - hit_p));
+
+                    const float light_pdf = (t2 * t2) / (0.5f * light_area * cos_theta);
+                    const float bsdf_pdf = ray.pdf;
+
+                    const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
+                    out_col = mis_weight * simd_fvec3(&lcol[0]);
+                    min_t = t2;
+                }
+            }
+        } else if (l.type == LIGHT_TYPE_RECT) {
+            const transform_t &ltr = sc.transforms[l.tr_index];
             const simd_fvec3 light_pos = simd_fvec3{ltr.xform[12], ltr.xform[13], ltr.xform[14]};
             simd_fvec3 light_u = l.rect.width * TransformDirection(simd_fvec3{1.0f, 0.0f, 0.0f}, ltr.xform);
             simd_fvec3 light_v = l.rect.height * TransformDirection(simd_fvec3{0.0f, 0.0f, 1.0f}, ltr.xform);
@@ -2857,6 +2889,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
                 }
             }
         } else if (l.type == LIGHT_TYPE_DISK) {
+            const transform_t &ltr = sc.transforms[l.tr_index];
             const simd_fvec3 light_pos = simd_fvec3{ltr.xform[12], ltr.xform[13], ltr.xform[14]};
             simd_fvec3 light_u = l.rect.width * TransformDirection(simd_fvec3{1.0f, 0.0f, 0.0f}, ltr.xform);
             simd_fvec3 light_v = l.rect.height * TransformDirection(simd_fvec3{0.0f, 0.0f, 1.0f}, ltr.xform);
@@ -3005,17 +3038,49 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
         const float u1 = std::modf(halton[RAND_DIM_LIGHT_PICK] + sample_off[0], &_unused);
         const auto light_index = std::min(uint32_t(u1 * sc.lights2_count), sc.lights2_count - 1);
 
-        const transform_t &ltr = sc.transforms[sc.lights2[light_index].tr_index];
+        const light2_t &l = sc.lights2[light_index];
+        const transform_t &ltr = sc.transforms[l.tr_index];
 
-        simd_fvec4 lcol = simd_fvec4{sc.lights2[light_index].col[0], sc.lights2[light_index].col[1],
-                                     sc.lights2[light_index].col[2], 0.0f};
+        simd_fvec4 lcol = simd_fvec4{l.col[0], l.col[1], l.col[2], 0.0f};
         lcol *= float(sc.lights2_count);
 
         simd_fvec3 L;
         float light_area, light_dist, light_pdf = 0.0f;
-        if (sc.lights2[light_index].type == LIGHT_TYPE_DIR) {
-            L = simd_fvec3{sc.lights2[light_index].dir.dir};
-            if (sc.lights2[light_index].dir.angle != 0.0f) {
+        if (l.type == LIGHT_TYPE_SPHERE) {
+            const float r1 = std::modf(halton[RAND_DIM_LIGHT_U] + sample_off[0], &_unused);
+            const float r2 = std::modf(halton[RAND_DIM_LIGHT_V] + sample_off[1], &_unused);
+
+            simd_fvec3 center_to_surface = P - simd_fvec3{l.sph.pos};
+            float dist_to_center = length(center_to_surface);
+
+            center_to_surface /= dist_to_center;
+
+            // sample hemisphere
+            const float r = std::sqrt(std::max(0.0f, 1.0f - r1 * r1));
+            const float phi = 2.0f * PI * r2;
+            auto sampled_dir = simd_fvec3{r * std::cos(phi), r * std::sin(phi), r1};
+
+            simd_fvec3 LT, LB;
+            create_tbn(center_to_surface, LT, LB);
+
+            sampled_dir = LT * sampled_dir[0] + LB * sampled_dir[1] + center_to_surface * sampled_dir[2];
+
+            const simd_fvec3 light_surf_pos = simd_fvec3{l.sph.pos} + sampled_dir * l.sph.radius;
+
+            L = light_surf_pos - P;
+            light_dist = length(L);
+            L /= light_dist;
+
+            light_area = 4.0f * PI * l.sph.radius * l.sph.radius;
+            const simd_fvec3 light_forward = normalize(light_surf_pos - simd_fvec3{l.sph.pos});
+
+            const float cos_theta = std::abs(dot(L, light_forward));
+            if (cos_theta > 0.0f) {
+                light_pdf = (light_dist * light_dist) / (0.5f * light_area * cos_theta);
+            }
+        } else if (l.type == LIGHT_TYPE_DIR) {
+            L = simd_fvec3{l.dir.dir};
+            if (l.dir.angle != 0.0f) {
                 const float r1 = std::modf(halton[RAND_DIM_LIGHT_U] + sample_off[0], &_unused);
                 const float r2 = std::modf(halton[RAND_DIM_LIGHT_V] + sample_off[1], &_unused);
 
@@ -3024,7 +3089,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
                 const float cos_phi = std::cos(phi);
                 const float sin_phi = std::sin(phi);
 
-                const float cos_angle = std::cos(sc.lights2[light_index].dir.angle);
+                const float cos_angle = std::cos(l.dir.angle);
                 const float z = cos_angle + (1.0f - cos_angle) * r1;
 
                 simd_fvec3 LT, LB;
@@ -3038,12 +3103,10 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
             light_area = 0.0f;
             light_dist = MAX_DIST;
             light_pdf = 1.0f;
-        } else if (sc.lights2[light_index].type == LIGHT_TYPE_RECT) {
+        } else if (l.type == LIGHT_TYPE_RECT) {
             const simd_fvec3 light_pos = simd_fvec3{ltr.xform[12], ltr.xform[13], ltr.xform[14]};
-            const simd_fvec3 light_u =
-                sc.lights2[light_index].rect.width * TransformDirection(simd_fvec3{1.0f, 0.0f, 0.0f}, ltr.xform);
-            const simd_fvec3 light_v =
-                sc.lights2[light_index].rect.height * TransformDirection(simd_fvec3{0.0f, 0.0f, 1.0f}, ltr.xform);
+            const simd_fvec3 light_u = l.rect.width * TransformDirection(simd_fvec3{1.0f, 0.0f, 0.0f}, ltr.xform);
+            const simd_fvec3 light_v = l.rect.height * TransformDirection(simd_fvec3{0.0f, 0.0f, 1.0f}, ltr.xform);
 
             const float r1 = std::modf(halton[RAND_DIM_LIGHT_U] + sample_off[0], &_unused) - 0.5f;
             const float r2 = std::modf(halton[RAND_DIM_LIGHT_V] + sample_off[1], &_unused) - 0.5f;
@@ -3053,7 +3116,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
             light_dist = length(to_light);
             L = (to_light / light_dist);
 
-            light_area = sc.lights2[light_index].rect.width * sc.lights2[light_index].rect.height;
+            light_area = l.rect.width * l.rect.height;
             simd_fvec3 light_forward = normalize(cross(light_u, light_v));
 
             const float cos_theta = dot(-L, light_forward);
@@ -3061,11 +3124,11 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
                 light_pdf = (light_dist * light_dist) / (light_area * cos_theta);
             }
 
-            if (!sc.lights2[light_index].visible) {
+            if (!l.visible) {
                 light_area = 0.0f;
             }
 
-            if (sc.lights2[light_index].sky_portal != 0) {
+            if (l.sky_portal != 0) {
                 if (sc.env->env_map != 0xffffffff) {
                     lcol *= SampleLatlong_RGBE(*static_cast<const TextureAtlasRGBA *>(tex_atlases[0]),
                                                sc.textures[sc.env->env_map], L);
@@ -3077,12 +3140,10 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
                 lcol[1] *= sc.env->env_col[1];
                 lcol[2] *= sc.env->env_col[2];
             }
-        } else if (sc.lights2[light_index].type == LIGHT_TYPE_DISK) {
+        } else if (l.type == LIGHT_TYPE_DISK) {
             const simd_fvec3 light_pos = simd_fvec3{ltr.xform[12], ltr.xform[13], ltr.xform[14]};
-            const simd_fvec3 light_u =
-                sc.lights2[light_index].disk.size_x * TransformDirection(simd_fvec3{1.0f, 0.0f, 0.0f}, ltr.xform);
-            const simd_fvec3 light_v =
-                sc.lights2[light_index].disk.size_y * TransformDirection(simd_fvec3{0.0f, 0.0f, 1.0f}, ltr.xform);
+            const simd_fvec3 light_u = l.disk.size_x * TransformDirection(simd_fvec3{1.0f, 0.0f, 0.0f}, ltr.xform);
+            const simd_fvec3 light_v = l.disk.size_y * TransformDirection(simd_fvec3{0.0f, 0.0f, 1.0f}, ltr.xform);
 
             const float r1 = std::modf(halton[RAND_DIM_LIGHT_U] + sample_off[0], &_unused);
             const float r2 = std::modf(halton[RAND_DIM_LIGHT_V] + sample_off[1], &_unused);
@@ -3108,7 +3169,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
             light_dist = length(to_light);
             L = (to_light / light_dist);
 
-            light_area = 0.25f * PI * sc.lights2[light_index].disk.size_x * sc.lights2[light_index].disk.size_y;
+            light_area = 0.25f * PI * l.disk.size_x * l.disk.size_y;
             simd_fvec3 light_forward = normalize(cross(light_u, light_v));
 
             const float cos_theta = dot(-L, light_forward);
@@ -3116,11 +3177,11 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
                 light_pdf = (light_dist * light_dist) / (light_area * cos_theta);
             }
 
-            if (!sc.lights2[light_index].visible) {
+            if (!l.visible) {
                 light_area = 0.0f;
             }
 
-            if (sc.lights2[light_index].sky_portal != 0) {
+            if (l.sky_portal != 0) {
                 if (sc.env->env_map != 0xffffffff) {
                     lcol *= SampleLatlong_RGBE(*static_cast<const TextureAtlasRGBA *>(tex_atlases[0]),
                                                sc.textures[sc.env->env_map], L);
@@ -3132,8 +3193,8 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
                 lcol[1] *= sc.env->env_col[1];
                 lcol[2] *= sc.env->env_col[2];
             }
-        } else if (sc.lights2[light_index].type == LIGHT_TYPE_TRI) {
-            const uint32_t ltri_index = sc.lights2[light_index].tri.index;
+        } else if (l.type == LIGHT_TYPE_TRI) {
+            const uint32_t ltri_index = l.tri.index;
 
             const vertex_t &v1 = sc.vertices[sc.vtx_indices[ltri_index * 3 + 0]];
             const vertex_t &v2 = sc.vertices[sc.vtx_indices[ltri_index * 3 + 1]];

@@ -434,6 +434,23 @@ uint32_t Ray::Ref::Scene::AddLight(const directional_light_desc_t &_l) {
     return lights2_.push(l);
 }
 
+uint32_t Ray::Ref::Scene::AddLight(const sphere_light_desc_t &_l) {
+    light2_t l;
+
+    l.type = LIGHT_TYPE_SPHERE;
+    l.visible = _l.visible;
+
+    memcpy(&l.col[0], &_l.color[0], 3 * sizeof(float));
+    memcpy(&l.sph.pos[0], &_l.position[0], 3 * sizeof(float));
+    l.sph.radius = _l.radius;
+
+    const uint32_t light_index = lights2_.push(l);
+    if (_l.visible) {
+        visible_lights_.push_back(light_index);
+    }
+    return light_index;
+}
+
 uint32_t Ray::Ref::Scene::AddLight(const rect_light_desc_t &_l, const float *xform) {
     light2_t l;
 

@@ -164,6 +164,13 @@ struct directional_light_desc_t {
     float direction[3], angle;
 };
 
+struct sphere_light_desc_t {
+    float color[3] = {1.0f, 1.0f, 1.0f};
+    float position[3] = {0.0f, 0.0f, 0.0f};
+    float radius = 1.0f;
+    bool visible = true; // visibility for secondary bounces
+};
+
 struct rect_light_desc_t {
     float color[3] = {1.0f, 1.0f, 1.0f};
     float width = 1.0f, height = 1.0f;
@@ -286,6 +293,7 @@ class SceneBase {
         @return New light index
     */
     virtual uint32_t AddLight(const directional_light_desc_t &l) = 0;
+    virtual uint32_t AddLight(const sphere_light_desc_t &l) = 0;
     virtual uint32_t AddLight(const rect_light_desc_t &l, const float *xform) = 0;
     virtual uint32_t AddLight(const disk_light_desc_t &l, const float *xform) = 0;
 

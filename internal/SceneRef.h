@@ -65,7 +65,7 @@ class Scene : public SceneBase {
     std::vector<uint32_t> li_indices_;
 
     SparseStorage<light2_t> lights2_;
-    std::vector<uint32_t> visible_lights_;
+    std::vector<uint32_t> visible_lights_; // compacted list of all visible lights
 
     environment_t env_;
 
@@ -97,6 +97,7 @@ class Scene : public SceneBase {
     void RemoveMesh(uint32_t) override;
 
     uint32_t AddLight(const directional_light_desc_t &l) override;
+    uint32_t AddLight(const sphere_light_desc_t &l) override;
     uint32_t AddLight(const rect_light_desc_t &l, const float *xform) override;
     uint32_t AddLight(const disk_light_desc_t &l, const float *xform) override;
     void RemoveLight(uint32_t i) override;
