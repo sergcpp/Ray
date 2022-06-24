@@ -3567,11 +3567,12 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
         roughness *= roughness_color[0];
     }
 
-    const bool cant_terminate = true;
-    // total_depth < pi.settings.termination_start_depth;
-
     const float rand_u = std::modf(halton[RAND_DIM_BSDF_U] + sample_off[0], &_unused);
     const float rand_v = std::modf(halton[RAND_DIM_BSDF_V] + sample_off[1], &_unused);
+
+    ray_packet_t new_ray;
+    new_ray.xy = ray.xy;
+    new_ray.pdf = 0.0f;
 
     // Sample materials
     if (mat->type == DiffuseNode) {
@@ -3580,38 +3581,26 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
 
             simd_fvec3 V;
             const simd_fvec4 F = Sample_OrenDiffuse_BSDF(T, B, N, I, roughness, _base_color, rand_u, rand_v, V);
-            ray_packet_t r;
-            r.xy = ray.xy;
-            r.ray_depth = ray.ray_depth + 0x00000001;
+            
+            new_ray.ray_depth = ray.ray_depth + 0x00000001;
 
-            memcpy(&r.o[0], value_ptr(offset_ray(P, plane_N)), 3 * sizeof(float));
-            memcpy(&r.d[0], value_ptr(V), 3 * sizeof(float));
+            memcpy(&new_ray.o[0], value_ptr(offset_ray(P, plane_N)), 3 * sizeof(float));
+            memcpy(&new_ray.d[0], value_ptr(V), 3 * sizeof(float));
 
-            r.c[0] = ray.c[0] * F[0] * mix_weight / F[3];
-            r.c[1] = ray.c[1] * F[1] * mix_weight / F[3];
-            r.c[2] = ray.c[2] * F[2] * mix_weight / F[3];
-            r.pdf = F[3];
+            new_ray.c[0] = ray.c[0] * F[0] * mix_weight / F[3];
+            new_ray.c[1] = ray.c[1] * F[1] * mix_weight / F[3];
+            new_ray.c[2] = ray.c[2] * F[2] * mix_weight / F[3];
+            new_ray.pdf = F[3];
 
-            memcpy(&r.do_dx[0], value_ptr(surf_der.do_dx), 3 * sizeof(float));
-            memcpy(&r.do_dy[0], value_ptr(surf_der.do_dy), 3 * sizeof(float));
+            memcpy(&new_ray.do_dx[0], value_ptr(surf_der.do_dx), 3 * sizeof(float));
+            memcpy(&new_ray.do_dy[0], value_ptr(surf_der.do_dy), 3 * sizeof(float));
 
-            memcpy(&r.dd_dx[0],
+            memcpy(&new_ray.dd_dx[0],
                    value_ptr(surf_der.dd_dx - 2 * (dot(I, plane_N) * surf_der.dndx + surf_der.ddn_dx * plane_N)),
                    3 * sizeof(float));
-            memcpy(&r.dd_dy[0],
+            memcpy(&new_ray.dd_dy[0],
                    value_ptr(surf_der.dd_dy - 2 * (dot(I, plane_N) * surf_der.dndy + surf_der.ddn_dy * plane_N)),
                    3 * sizeof(float));
-
-            const float lum = std::max(r.c[0], std::max(r.c[1], r.c[2]));
-            const float p = std::modf(halton[RAND_DIM_TERMINATE] + sample_off[0], &_unused);
-            const float q = cant_terminate ? 0.0f : std::max(0.05f, 1.0f - lum);
-            if (p >= q && lum > 0.0f) {
-                r.c[0] /= (1.0f - q);
-                r.c[1] /= (1.0f - q);
-                r.c[2] /= (1.0f - q);
-                const int index = (*out_secondary_rays_count)++;
-                out_secondary_rays[index] = r;
-            }
         }
     } else if (mat->type == GlossyNode) {
         if (spec_depth < pi.settings.max_spec_depth && total_depth < pi.settings.max_total_depth) {
@@ -3623,38 +3612,25 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
             const simd_fvec4 F =
                 Sample_GGXSpecular_BSDF(T, B, N, I, roughness, 0.0f, spec_ior, spec_F0, base_color, rand_u, rand_v, V);
 
-            ray_packet_t r;
-            r.xy = ray.xy;
-            r.ray_depth = ray.ray_depth + 0x00000100;
+            new_ray.ray_depth = ray.ray_depth + 0x00000100;
 
-            r.c[0] = ray.c[0] * F[0] * mix_weight / F[3];
-            r.c[1] = ray.c[1] * F[1] * mix_weight / F[3];
-            r.c[2] = ray.c[2] * F[2] * mix_weight / F[3];
-            r.pdf = F[3];
+            new_ray.c[0] = ray.c[0] * F[0] * mix_weight / F[3];
+            new_ray.c[1] = ray.c[1] * F[1] * mix_weight / F[3];
+            new_ray.c[2] = ray.c[2] * F[2] * mix_weight / F[3];
+            new_ray.pdf = F[3];
 
-            memcpy(&r.o[0], value_ptr(offset_ray(P, plane_N)), 3 * sizeof(float));
-            memcpy(&r.d[0], value_ptr(V), 3 * sizeof(float));
+            memcpy(&new_ray.o[0], value_ptr(offset_ray(P, plane_N)), 3 * sizeof(float));
+            memcpy(&new_ray.d[0], value_ptr(V), 3 * sizeof(float));
 
-            memcpy(&r.do_dx[0], value_ptr(surf_der.do_dx), 3 * sizeof(float));
-            memcpy(&r.do_dy[0], value_ptr(surf_der.do_dy), 3 * sizeof(float));
+            memcpy(&new_ray.do_dx[0], value_ptr(surf_der.do_dx), 3 * sizeof(float));
+            memcpy(&new_ray.do_dy[0], value_ptr(surf_der.do_dy), 3 * sizeof(float));
 
-            memcpy(&r.dd_dx[0],
+            memcpy(&new_ray.dd_dx[0],
                    value_ptr(surf_der.dd_dx - 2 * (dot(I, plane_N) * surf_der.dndx + surf_der.ddn_dx * plane_N)),
                    3 * sizeof(float));
-            memcpy(&r.dd_dy[0],
+            memcpy(&new_ray.dd_dy[0],
                    value_ptr(surf_der.dd_dy - 2 * (dot(I, plane_N) * surf_der.dndy + surf_der.ddn_dy * plane_N)),
                    3 * sizeof(float));
-
-            const float lum = std::max(r.c[0], std::max(r.c[1], r.c[2]));
-            const float p = std::modf(halton[RAND_DIM_TERMINATE] + sample_off[0], &_unused);
-            const float q = cant_terminate ? 0.0f : std::max(0.05f, 1.0f - lum);
-            if (p >= q && r.pdf != 0.0f && lum > 0.0f) {
-                r.c[0] /= 1.0f - q;
-                r.c[1] /= 1.0f - q;
-                r.c[2] /= 1.0f - q;
-                const int index = (*out_secondary_rays_count)++;
-                out_secondary_rays[index] = r;
-            }
         }
     } else if (mat->type == RefractiveNode) {
         if (refr_depth < pi.settings.max_refr_depth && total_depth < pi.settings.max_total_depth) {
@@ -3666,41 +3642,27 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
             const simd_fvec3 V = {_V[0], _V[1], _V[2]};
             const float m = _V[3];
 
-            ray_packet_t r;
+            new_ray.ray_depth = ray.ray_depth + 0x00010000;
 
-            r.xy = ray.xy;
-            r.ray_depth = ray.ray_depth + 0x00010000;
-
-            r.c[0] = ray.c[0] * F[0] * mix_weight / F[3];
-            r.c[1] = ray.c[1] * F[1] * mix_weight / F[3];
-            r.c[2] = ray.c[2] * F[2] * mix_weight / F[3];
-            r.pdf = F[3];
+            new_ray.c[0] = ray.c[0] * F[0] * mix_weight / F[3];
+            new_ray.c[1] = ray.c[1] * F[1] * mix_weight / F[3];
+            new_ray.c[2] = ray.c[2] * F[2] * mix_weight / F[3];
+            new_ray.pdf = F[3];
 
             const float k = (eta - eta * eta * dot(I, plane_N) / dot(V, plane_N));
             const float dmdx = k * surf_der.ddn_dx;
             const float dmdy = k * surf_der.ddn_dy;
 
-            memcpy(&r.o[0], value_ptr(offset_ray(P, -plane_N)), 3 * sizeof(float));
-            memcpy(&r.d[0], value_ptr(V), 3 * sizeof(float));
+            memcpy(&new_ray.o[0], value_ptr(offset_ray(P, -plane_N)), 3 * sizeof(float));
+            memcpy(&new_ray.d[0], value_ptr(V), 3 * sizeof(float));
 
-            memcpy(&r.do_dx[0], value_ptr(surf_der.do_dx), 3 * sizeof(float));
-            memcpy(&r.do_dy[0], value_ptr(surf_der.do_dy), 3 * sizeof(float));
+            memcpy(&new_ray.do_dx[0], value_ptr(surf_der.do_dx), 3 * sizeof(float));
+            memcpy(&new_ray.do_dy[0], value_ptr(surf_der.do_dy), 3 * sizeof(float));
 
-            memcpy(&r.dd_dx[0], value_ptr(eta * surf_der.dd_dx - (m * surf_der.dndx + dmdx * plane_N)),
+            memcpy(&new_ray.dd_dx[0], value_ptr(eta * surf_der.dd_dx - (m * surf_der.dndx + dmdx * plane_N)),
                    3 * sizeof(float));
-            memcpy(&r.dd_dy[0], value_ptr(eta * surf_der.dd_dy - (m * surf_der.dndy + dmdy * plane_N)),
+            memcpy(&new_ray.dd_dy[0], value_ptr(eta * surf_der.dd_dy - (m * surf_der.dndy + dmdy * plane_N)),
                    3 * sizeof(float));
-
-            const float lum = std::max(r.c[0], std::max(r.c[1], r.c[2]));
-            const float p = std::modf(halton[RAND_DIM_TERMINATE] + sample_off[0], &_unused);
-            const float q = cant_terminate ? 0.0f : std::max(0.05f, 1.0f - lum);
-            if (p >= q && lum > 0.0f && r.pdf != 0.0f) {
-                r.c[0] /= 1.0f - q;
-                r.c[1] /= 1.0f - q;
-                r.c[2] /= 1.0f - q;
-                const int index = (*out_secondary_rays_count)++;
-                out_secondary_rays[index] = r;
-            }
         }
     } else if (mat->type == EmissiveNode) {
         float mis_weight = 1.0f;
@@ -3740,32 +3702,18 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
         col += mis_weight * mat->strength * mix_weight * simd_fvec3(&base_color[0]);
     } else if (mat->type == TransparentNode) {
         if (transp_depth < pi.settings.max_transp_depth && total_depth < pi.settings.max_total_depth) {
-            ray_packet_t r;
+            new_ray.ray_depth = ray.ray_depth + 0x01000000;
+            new_ray.pdf = ray.pdf;
 
-            r.xy = ray.xy;
-            r.ray_depth = ray.ray_depth + 0x01000000;
-            r.pdf = ray.pdf;
+            memcpy(&new_ray.o[0], value_ptr(offset_ray(P, -plane_N)), 3 * sizeof(float));
+            memcpy(&new_ray.d[0], &ray.d[0], 3 * sizeof(float));
+            memcpy(&new_ray.c[0], &ray.c[0], 3 * sizeof(float));
 
-            memcpy(&r.o[0], value_ptr(offset_ray(P, -plane_N)), 3 * sizeof(float));
-            memcpy(&r.d[0], &ray.d[0], 3 * sizeof(float));
-            memcpy(&r.c[0], &ray.c[0], 3 * sizeof(float));
+            memcpy(&new_ray.do_dx[0], &ray.do_dx[0], 3 * sizeof(float));
+            memcpy(&new_ray.do_dy[0], &ray.do_dy[0], 3 * sizeof(float));
 
-            memcpy(&r.do_dx[0], &ray.do_dx[0], 3 * sizeof(float));
-            memcpy(&r.do_dy[0], &ray.do_dy[0], 3 * sizeof(float));
-
-            memcpy(&r.dd_dx[0], &ray.dd_dx[0], 3 * sizeof(float));
-            memcpy(&r.dd_dy[0], &ray.dd_dy[0], 3 * sizeof(float));
-
-            const float lum = std::max(r.c[0], std::max(r.c[1], r.c[2]));
-            const float p = std::modf(halton[RAND_DIM_TERMINATE] + sample_off[0], &_unused);
-            const float q = cant_terminate ? 0.0f : std::max(0.05f, 1.0f - lum);
-            if (p >= q && lum > 0.0f) {
-                r.c[0] /= 1.0f - q;
-                r.c[1] /= 1.0f - q;
-                r.c[2] /= 1.0f - q;
-                const int index = (*out_secondary_rays_count)++;
-                out_secondary_rays[index] = r;
-            }
+            memcpy(&new_ray.dd_dx[0], &ray.dd_dx[0], 3 * sizeof(float));
+            memcpy(&new_ray.dd_dy[0], &ray.dd_dy[0], 3 * sizeof(float));
         }
     } else if (mat->type == PrincipledNode) {
         float metallic = unpack_unorm_16(mat->metallic_unorm);
@@ -3813,39 +3761,25 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
 
                 diff_col *= (1.0f - metallic);
 
-                ray_packet_t r;
+                new_ray.ray_depth = ray.ray_depth + 0x00000001;
 
-                r.xy = ray.xy;
-                r.ray_depth = ray.ray_depth + 0x00000001;
+                memcpy(&new_ray.o[0], value_ptr(offset_ray(P, plane_N)), 3 * sizeof(float));
+                memcpy(&new_ray.d[0], value_ptr(V), 3 * sizeof(float));
 
-                memcpy(&r.o[0], value_ptr(offset_ray(P, plane_N)), 3 * sizeof(float));
-                memcpy(&r.d[0], value_ptr(V), 3 * sizeof(float));
+                new_ray.c[0] = ray.c[0] * diff_col[0] * mix_weight / diffuse_weight;
+                new_ray.c[1] = ray.c[1] * diff_col[1] * mix_weight / diffuse_weight;
+                new_ray.c[2] = ray.c[2] * diff_col[2] * mix_weight / diffuse_weight;
+                new_ray.pdf = pdf;
 
-                r.c[0] = ray.c[0] * diff_col[0] * mix_weight / diffuse_weight;
-                r.c[1] = ray.c[1] * diff_col[1] * mix_weight / diffuse_weight;
-                r.c[2] = ray.c[2] * diff_col[2] * mix_weight / diffuse_weight;
-                r.pdf = pdf;
+                memcpy(&new_ray.do_dx[0], value_ptr(surf_der.do_dx), 3 * sizeof(float));
+                memcpy(&new_ray.do_dy[0], value_ptr(surf_der.do_dy), 3 * sizeof(float));
 
-                memcpy(&r.do_dx[0], value_ptr(surf_der.do_dx), 3 * sizeof(float));
-                memcpy(&r.do_dy[0], value_ptr(surf_der.do_dy), 3 * sizeof(float));
-
-                memcpy(&r.dd_dx[0],
+                memcpy(&new_ray.dd_dx[0],
                        value_ptr(surf_der.dd_dx - 2 * (dot(I, plane_N) * surf_der.dndx + surf_der.ddn_dx * plane_N)),
                        3 * sizeof(float));
-                memcpy(&r.dd_dy[0],
+                memcpy(&new_ray.dd_dy[0],
                        value_ptr(surf_der.dd_dy - 2 * (dot(I, plane_N) * surf_der.dndy + surf_der.ddn_dy * plane_N)),
                        3 * sizeof(float));
-
-                const float lum = std::max(r.c[0], std::max(r.c[1], r.c[2]));
-                const float p = std::modf(halton[RAND_DIM_TERMINATE] + sample_off[0], &_unused);
-                const float q = cant_terminate ? 0.0f : std::max(0.05f, 1.0f - lum);
-                if (p >= q && lum > 0.0f && r.pdf != 0.0f) {
-                    r.c[0] /= (1.0f - q);
-                    r.c[1] /= (1.0f - q);
-                    r.c[2] /= (1.0f - q);
-                    const int index = (*out_secondary_rays_count)++;
-                    out_secondary_rays[index] = r;
-                }
             }
         } else if (mix_rand < diffuse_weight + specular_weight) {
             //
@@ -3857,39 +3791,25 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
                                                        spec_ior, spec_F0, spec_tmp_col, rand_u, rand_v, V);
                 F[3] *= specular_weight;
 
-                ray_packet_t r;
+                new_ray.ray_depth = ray.ray_depth + 0x00000100;
 
-                r.xy = ray.xy;
-                r.ray_depth = ray.ray_depth + 0x00000100;
+                new_ray.c[0] = ray.c[0] * F[0] * mix_weight / F[3];
+                new_ray.c[1] = ray.c[1] * F[1] * mix_weight / F[3];
+                new_ray.c[2] = ray.c[2] * F[2] * mix_weight / F[3];
+                new_ray.pdf = F[3];
 
-                r.c[0] = ray.c[0] * F[0] * mix_weight / F[3];
-                r.c[1] = ray.c[1] * F[1] * mix_weight / F[3];
-                r.c[2] = ray.c[2] * F[2] * mix_weight / F[3];
-                r.pdf = F[3];
+                memcpy(&new_ray.o[0], value_ptr(offset_ray(P, plane_N)), 3 * sizeof(float));
+                memcpy(&new_ray.d[0], value_ptr(V), 3 * sizeof(float));
 
-                memcpy(&r.o[0], value_ptr(offset_ray(P, plane_N)), 3 * sizeof(float));
-                memcpy(&r.d[0], value_ptr(V), 3 * sizeof(float));
+                memcpy(&new_ray.do_dx[0], value_ptr(surf_der.do_dx), 3 * sizeof(float));
+                memcpy(&new_ray.do_dy[0], value_ptr(surf_der.do_dy), 3 * sizeof(float));
 
-                memcpy(&r.do_dx[0], value_ptr(surf_der.do_dx), 3 * sizeof(float));
-                memcpy(&r.do_dy[0], value_ptr(surf_der.do_dy), 3 * sizeof(float));
-
-                memcpy(&r.dd_dx[0],
+                memcpy(&new_ray.dd_dx[0],
                        value_ptr(surf_der.dd_dx - 2 * (dot(I, plane_N) * surf_der.dndx + surf_der.ddn_dx * plane_N)),
                        3 * sizeof(float));
-                memcpy(&r.dd_dy[0],
+                memcpy(&new_ray.dd_dy[0],
                        value_ptr(surf_der.dd_dy - 2 * (dot(I, plane_N) * surf_der.dndy + surf_der.ddn_dy * plane_N)),
                        3 * sizeof(float));
-
-                const float lum = std::max(r.c[0], std::max(r.c[1], r.c[2]));
-                const float p = std::modf(halton[RAND_DIM_TERMINATE] + sample_off[0], &_unused);
-                const float q = cant_terminate ? 0.0f : std::max(0.05f, 1.0f - lum);
-                if (p >= q && r.pdf != 0.0f && lum > 0.0f) {
-                    r.c[0] /= 1.0f - q;
-                    r.c[1] /= 1.0f - q;
-                    r.c[2] /= 1.0f - q;
-                    const int index = (*out_secondary_rays_count)++;
-                    out_secondary_rays[index] = r;
-                }
             }
         } else if (mix_rand < diffuse_weight + specular_weight + clearcoat_weight) {
             //
@@ -3905,39 +3825,25 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
                                                                clearcoat_F0, rand_u, rand_v, V);
                 F[3] *= clearcoat_weight;
 
-                ray_packet_t r;
+                new_ray.ray_depth = ray.ray_depth + 0x00000100;
 
-                r.xy = ray.xy;
-                r.ray_depth = ray.ray_depth + 0x00000100;
+                new_ray.c[0] = 0.25f * ray.c[0] * F[0] * mix_weight / F[3];
+                new_ray.c[1] = 0.25f * ray.c[1] * F[1] * mix_weight / F[3];
+                new_ray.c[2] = 0.25f * ray.c[2] * F[2] * mix_weight / F[3];
+                new_ray.pdf = F[3];
 
-                r.c[0] = 0.25f * ray.c[0] * F[0] * mix_weight / F[3];
-                r.c[1] = 0.25f * ray.c[1] * F[1] * mix_weight / F[3];
-                r.c[2] = 0.25f * ray.c[2] * F[2] * mix_weight / F[3];
-                r.pdf = F[3];
+                memcpy(&new_ray.o[0], value_ptr(offset_ray(P, plane_N)), 3 * sizeof(float));
+                memcpy(&new_ray.d[0], value_ptr(V), 3 * sizeof(float));
 
-                memcpy(&r.o[0], value_ptr(offset_ray(P, plane_N)), 3 * sizeof(float));
-                memcpy(&r.d[0], value_ptr(V), 3 * sizeof(float));
+                memcpy(&new_ray.do_dx[0], value_ptr(surf_der.do_dx), 3 * sizeof(float));
+                memcpy(&new_ray.do_dy[0], value_ptr(surf_der.do_dy), 3 * sizeof(float));
 
-                memcpy(&r.do_dx[0], value_ptr(surf_der.do_dx), 3 * sizeof(float));
-                memcpy(&r.do_dy[0], value_ptr(surf_der.do_dy), 3 * sizeof(float));
-
-                memcpy(&r.dd_dx[0],
+                memcpy(&new_ray.dd_dx[0],
                        value_ptr(surf_der.dd_dx - 2 * (dot(I, plane_N) * surf_der.dndx + surf_der.ddn_dx * plane_N)),
                        3 * sizeof(float));
-                memcpy(&r.dd_dy[0],
+                memcpy(&new_ray.dd_dy[0],
                        value_ptr(surf_der.dd_dy - 2 * (dot(I, plane_N) * surf_der.dndy + surf_der.ddn_dy * plane_N)),
                        3 * sizeof(float));
-
-                const float lum = std::max(r.c[0], std::max(r.c[1], r.c[2]));
-                const float p = std::modf(halton[RAND_DIM_TERMINATE] + sample_off[0], &_unused);
-                const float q = cant_terminate ? 0.0f : std::max(0.05f, 1.0f - lum);
-                if (p >= q && r.pdf != 0.0f && lum > 0.0f) {
-                    r.c[0] /= 1.0f - q;
-                    r.c[1] /= 1.0f - q;
-                    r.c[2] /= 1.0f - q;
-                    const int index = (*out_secondary_rays_count)++;
-                    out_secondary_rays[index] = r;
-                }
             }
         } else /*if (mix_rand < diffuse_weight + specular_weight + clearcoat_weight + refraction_weight)*/ {
             //
@@ -3954,24 +3860,20 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
 
                 //////////////////
 
-                ray_packet_t r;
-
-                r.xy = ray.xy;
-
                 simd_fvec4 F;
                 simd_fvec3 V;
                 if (mix_rand < fresnel) {
                     F = Sample_GGXSpecular_BSDF(T, B, N, I, roughness, 0.0f /* anisotropic */, 1.0f /* ior */,
                                                 0.0f /* F0 */, simd_fvec4{1.0f}, rand_u, rand_v, V);
 
-                    r.ray_depth = ray.ray_depth + 0x00000100;
-                    memcpy(&r.o[0], value_ptr(offset_ray(P, plane_N)), 3 * sizeof(float));
+                    new_ray.ray_depth = ray.ray_depth + 0x00000100;
+                    memcpy(&new_ray.o[0], value_ptr(offset_ray(P, plane_N)), 3 * sizeof(float));
                     memcpy(
-                        &r.dd_dx[0],
+                        &new_ray.dd_dx[0],
                         value_ptr(surf_der.dd_dx - 2 * (dot(I, plane_N) * surf_der.dndx + surf_der.ddn_dx * plane_N)),
                         3 * sizeof(float));
                     memcpy(
-                        &r.dd_dy[0],
+                        &new_ray.dd_dy[0],
                         value_ptr(surf_der.dd_dy - 2 * (dot(I, plane_N) * surf_der.dndy + surf_der.ddn_dy * plane_N)),
                         3 * sizeof(float));
                 } else {
@@ -3989,40 +3891,42 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
                     const float dmdx = k * surf_der.ddn_dx;
                     const float dmdy = k * surf_der.ddn_dy;
 
-                    r.ray_depth = ray.ray_depth + 0x00010000;
-                    memcpy(&r.o[0], value_ptr(offset_ray(P, -plane_N)), 3 * sizeof(float));
-                    memcpy(&r.dd_dx[0], value_ptr(eta * surf_der.dd_dx - (m * surf_der.dndx + dmdx * plane_N)),
+                    new_ray.ray_depth = ray.ray_depth + 0x00010000;
+                    memcpy(&new_ray.o[0], value_ptr(offset_ray(P, -plane_N)), 3 * sizeof(float));
+                    memcpy(&new_ray.dd_dx[0], value_ptr(eta * surf_der.dd_dx - (m * surf_der.dndx + dmdx * plane_N)),
                            3 * sizeof(float));
-                    memcpy(&r.dd_dy[0], value_ptr(eta * surf_der.dd_dy - (m * surf_der.dndy + dmdy * plane_N)),
+                    memcpy(&new_ray.dd_dy[0], value_ptr(eta * surf_der.dd_dy - (m * surf_der.dndy + dmdy * plane_N)),
                            3 * sizeof(float));
                 }
 
                 F[3] *= refraction_weight;
 
-                r.c[0] = ray.c[0] * F[0] * mix_weight / F[3];
-                r.c[1] = ray.c[1] * F[1] * mix_weight / F[3];
-                r.c[2] = ray.c[2] * F[2] * mix_weight / F[3];
-                r.pdf = F[3];
+                new_ray.c[0] = ray.c[0] * F[0] * mix_weight / F[3];
+                new_ray.c[1] = ray.c[1] * F[1] * mix_weight / F[3];
+                new_ray.c[2] = ray.c[2] * F[2] * mix_weight / F[3];
+                new_ray.pdf = F[3];
 
                 //////////////////
 
-                memcpy(&r.d[0], value_ptr(V), 3 * sizeof(float));
+                memcpy(&new_ray.d[0], value_ptr(V), 3 * sizeof(float));
 
-                memcpy(&r.do_dx[0], value_ptr(surf_der.do_dx), 3 * sizeof(float));
-                memcpy(&r.do_dy[0], value_ptr(surf_der.do_dy), 3 * sizeof(float));
-
-                const float lum = std::max(r.c[0], std::max(r.c[1], r.c[2]));
-                const float p = std::modf(halton[RAND_DIM_TERMINATE] + sample_off[0], &_unused);
-                const float q = cant_terminate ? 0.0f : std::max(0.05f, 1.0f - lum);
-                if (p >= q && lum > 0.0f && r.pdf > 0.0f) {
-                    r.c[0] /= 1.0f - q;
-                    r.c[1] /= 1.0f - q;
-                    r.c[2] /= 1.0f - q;
-                    const int index = (*out_secondary_rays_count)++;
-                    out_secondary_rays[index] = r;
-                }
+                memcpy(&new_ray.do_dx[0], value_ptr(surf_der.do_dx), 3 * sizeof(float));
+                memcpy(&new_ray.do_dy[0], value_ptr(surf_der.do_dy), 3 * sizeof(float));
             }
         }
+    }
+
+    const bool cant_terminate = true; // total_depth < pi.settings.termination_start_depth;
+
+    const float lum = std::max(new_ray.c[0], std::max(new_ray.c[1], new_ray.c[2]));
+    const float p = std::modf(halton[RAND_DIM_TERMINATE] + sample_off[0], &_unused);
+    const float q = cant_terminate ? 0.0f : std::max(0.05f, 1.0f - lum);
+    if (p >= q && lum > 0.0f && new_ray.pdf > 0.0f) {
+        new_ray.c[0] /= (1.0f - q);
+        new_ray.c[1] /= (1.0f - q);
+        new_ray.c[2] /= (1.0f - q);
+        const int index = (*out_secondary_rays_count)++;
+        out_secondary_rays[index] = new_ray;
     }
 
     return pixel_color_t{ray.c[0] * col[0], ray.c[1] * col[1], ray.c[2] * col[2], 1.0f};
