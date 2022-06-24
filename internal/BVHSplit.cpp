@@ -151,8 +151,8 @@ Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, const std::
         for (size_t i = 0; i < prim_indices.size(); i++) {
             const prim_t &p = primitives[prim_indices[i]];
 
-            const Ref::simd_fvec3 v0 = {&positions[p.i0 * stride]}, v1 = {&positions[p.i1 * stride]},
-                                  v2 = {&positions[p.i2 * stride]};
+            const auto v0 = Ref::simd_fvec3{&positions[p.i0 * stride]}, v1 = Ref::simd_fvec3{&positions[p.i1 * stride]},
+                       v2 = Ref::simd_fvec3{&positions[p.i2 * stride]};
 
             modified_prim_bounds[i] = GetClippedAABB(v0, v1, v2, whole_box);
         }
@@ -281,8 +281,9 @@ Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, const std::
                 bins[exit_index].exit_counter++;
 
                 if (positions) {
-                    Ref::simd_fvec3 v0 = {&positions[p.i0 * stride]}, v1 = {&positions[p.i1 * stride]},
-                                    v2 = {&positions[p.i2 * stride]};
+                    auto v0 = Ref::simd_fvec3{&positions[p.i0 * stride]},
+                         v1 = Ref::simd_fvec3{&positions[p.i1 * stride]},
+                         v2 = Ref::simd_fvec3{&positions[p.i2 * stride]};
 
                     for (int j = enter_index; j <= exit_index; j++) {
                         bbox_t box = GetClippedAABB(v0, v1, v2, bins[j].limits);

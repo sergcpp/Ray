@@ -41,7 +41,7 @@ template <> class simd_vec<float, 16> {
                           float f9, float f10, float f11, float f12, float f13, float f14, float f15) {
         vec_ = _mm512_setr_ps(f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15);
     }
-    force_inline simd_vec(const float *f) { vec_ = _mm512_loadu_ps(f); }
+    force_inline explicit simd_vec(const float *f) { vec_ = _mm512_loadu_ps(f); }
     force_inline simd_vec(const float *f, simd_mem_aligned_tag) { vec_ = _mm512_load_ps(f); }
 
     force_inline float &operator[](int i) { return comp_[i]; }
@@ -192,7 +192,7 @@ template <> class simd_vec<int, 16> {
                           int i11, int i12, int i13, int i14, int i15) {
         vec_ = _mm512_setr_epi32(i0, i1, i2, i3, i4, i5, i6, i7, i8, i9, i10, i11, i12, i13, i14, i15);
     }
-    force_inline simd_vec(const int *f) { vec_ = _mm512_loadu_si512((const __m512i *)f); }
+    force_inline explicit simd_vec(const int *f) { vec_ = _mm512_loadu_si512((const __m512i *)f); }
     force_inline simd_vec(const int *f, simd_mem_aligned_tag) { vec_ = _mm512_load_si512((const __m512i *)f); }
 
     force_inline int &operator[](int i) { return comp_[i]; }

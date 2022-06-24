@@ -173,7 +173,7 @@ void Ray::Ref::ComputeTangentBasis(size_t vtx_offset, size_t vtx_start, std::vec
         vertex_t &v = vertices[i];
 
         if (std::abs(v.b[0]) > FLT_EPS || std::abs(v.b[1]) > FLT_EPS || std::abs(v.b[2]) > FLT_EPS) {
-            const simd_fvec3 tangent = {v.b};
+            const auto tangent = simd_fvec3{v.b};
             simd_fvec3 binormal = cross(simd_fvec3(v.n), tangent);
             const float l = length(binormal);
             if (l > FLT_EPS) {

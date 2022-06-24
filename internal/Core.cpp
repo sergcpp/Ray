@@ -986,7 +986,7 @@ void Ray::ConstructCamera(const eCamType type, const eFilterType filter, eDevice
                           const float fwd[3], const float up[3], const float fov, const float gamma,
                           const float focus_distance, const float focus_factor, camera_t *cam) {
     if (type == Persp) {
-        Ref::simd_fvec3 o = {origin}, f = {fwd}, u = {up};
+        auto o = Ref::simd_fvec3{origin}, f = Ref::simd_fvec3{fwd}, u = Ref::simd_fvec3{up};
 
         if (u.length2() < FLT_EPS) {
             if (std::abs(f[1]) >= 0.999f) {

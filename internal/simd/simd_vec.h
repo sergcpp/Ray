@@ -164,7 +164,7 @@ public:
     force_inline simd_vec(typename std::enable_if<sizeof...(Tail)+1 == S, T>::type head, Tail... tail)
         : comp_{ head, T(tail)... } {
     }
-    force_inline simd_vec(const T *f) {
+    force_inline explicit simd_vec(const T *f) {
         memcpy(&comp_, f, S * sizeof(T));
     }
     force_inline simd_vec(const T *f, simd_mem_aligned_tag) {

@@ -37,8 +37,7 @@ using namespace Ray::NS;
     float unaligned_array[] = { 0.0f, 2.0f, 30.0f, 14.0f };
     alignas(alignof(simd_fvec4)) float aligned_array[] = { 0.0f, 2.0f, 30.0f, 14.0f };
     
-    simd_fvec4 v7 = { &unaligned_array[0] },
-               v8 = { &aligned_array[0], simd_mem_aligned };
+    auto v7 = simd_fvec4{&unaligned_array[0]}, v8 = simd_fvec4{&aligned_array[0], simd_mem_aligned};
 
     require(v7[0] == 0.0f);
     require(v7[1] == 2.0f);
@@ -154,8 +153,7 @@ using namespace Ray::NS;
     int unaligned_array[] = { 0, 2, 30, 14 };
     alignas(alignof(simd_ivec4)) int aligned_array[] = { 0, 2, 30, 14 };
     
-    simd_ivec4 v7 = { &unaligned_array[0] },
-               v8 = { &aligned_array[0], simd_mem_aligned };
+    auto v7 = simd_ivec4{&unaligned_array[0]}, v8 = simd_ivec4{&aligned_array[0], simd_mem_aligned};
 
     require(v7[0] == 0);
     require(v7[1] == 2);

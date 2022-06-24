@@ -34,7 +34,7 @@ public:
     force_inline simd_vec(float f1, float f2, float f3, float f4) {
         vec_ = _mm_setr_ps(f1, f2, f3, f4);
     }
-    force_inline simd_vec(const float *f) {
+    force_inline explicit simd_vec(const float *f) {
         vec_ = _mm_loadu_ps(f);
     }
     force_inline simd_vec(const float *f, simd_mem_aligned_tag) {
@@ -375,7 +375,7 @@ public:
     force_inline simd_vec(int i1, int i2, int i3, int i4) {
         vec_ = _mm_setr_epi32(i1, i2, i3, i4);
     }
-    force_inline simd_vec(const int *f) {
+    force_inline explicit simd_vec(const int *f) {
         vec_ = _mm_loadu_si128((const __m128i *)f);
     }
     force_inline simd_vec(const int *f, simd_mem_aligned_tag) {

@@ -40,7 +40,7 @@ template <> class simd_vec<float, 8> {
     force_inline simd_vec(float f1, float f2, float f3, float f4, float f5, float f6, float f7, float f8) {
         vec_ = _mm256_setr_ps(f1, f2, f3, f4, f5, f6, f7, f8);
     }
-    force_inline simd_vec(const float *f) { vec_ = _mm256_loadu_ps(f); }
+    force_inline explicit simd_vec(const float *f) { vec_ = _mm256_loadu_ps(f); }
     force_inline simd_vec(const float *f, simd_mem_aligned_tag) { vec_ = _mm256_load_ps(f); }
 
     force_inline float &operator[](int i) { return comp_[i]; }
@@ -187,7 +187,7 @@ template <> class simd_vec<int, 8> {
     force_inline simd_vec(int i1, int i2, int i3, int i4, int i5, int i6, int i7, int i8) {
         vec_ = _mm256_setr_epi32(i1, i2, i3, i4, i5, i6, i7, i8);
     }
-    force_inline simd_vec(const int *f) { vec_ = _mm256_loadu_si256((const __m256i *)f); }
+    force_inline explicit simd_vec(const int *f) { vec_ = _mm256_loadu_si256((const __m256i *)f); }
     force_inline simd_vec(const int *f, simd_mem_aligned_tag) { vec_ = _mm256_load_si256((const __m256i *)f); }
 
     force_inline int &operator[](int i) { return comp_[i]; }

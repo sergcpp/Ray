@@ -333,7 +333,7 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
     }
 
     auto clamp_and_gamma_correct = [&cam](const pixel_color_t &p) {
-        simd_fvec4 c = {&p.r};
+        auto c = simd_fvec4{&p.r};
 
         if (cam.dtype == SRGB) {
             ITERATE_3({

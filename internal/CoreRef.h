@@ -62,9 +62,9 @@ struct hit_data_t {
 };
 
 struct derivatives_t {
-    simd_fvec3 do_dx, do_dy, dd_dx, dd_dy;
+    simd_fvec4 do_dx, do_dy, dd_dx, dd_dy;
     simd_fvec2 duv_dx, duv_dy;
-    simd_fvec3 dndx, dndy;
+    simd_fvec4 dndx, dndy;
     float ddn_dx, ddn_dy;
 };
 
@@ -153,49 +153,49 @@ bool Traverse_MicroTree_WithStack_AnyHit(const ray_packet_t &r, const float inv_
                                          const uint32_t *tri_indices, int obj_index, hit_data_t &inter);
 
 // BRDFs
-float BRDF_PrincipledDiffuse(const simd_fvec3 &V, const simd_fvec3 &N, const simd_fvec3 &L, const simd_fvec3 &H,
+float BRDF_PrincipledDiffuse(const simd_fvec4 &V, const simd_fvec4 &N, const simd_fvec4 &L, const simd_fvec4 &H,
                              float roughness);
 
-simd_fvec4 Evaluate_OrenDiffuse_BSDF(const simd_fvec3 &V, const simd_fvec3 &N, const simd_fvec3 &L,
+simd_fvec4 Evaluate_OrenDiffuse_BSDF(const simd_fvec4 &V, const simd_fvec4 &N, const simd_fvec4 &L,
                                      const float roughness, const simd_fvec4 &base_color);
-simd_fvec4 Sample_OrenDiffuse_BSDF(const simd_fvec3 &T, const simd_fvec3 &B, const simd_fvec3 &N, const simd_fvec3 &I,
+simd_fvec4 Sample_OrenDiffuse_BSDF(const simd_fvec4 &T, const simd_fvec4 &B, const simd_fvec4 &N, const simd_fvec4 &I,
                                    const float roughness, const simd_fvec4 &base_color, const float rand_u,
-                                   const float rand_v, simd_fvec3 &out_V);
+                                   const float rand_v, simd_fvec4 &out_V);
 
-simd_fvec4 Evaluate_PrincipledDiffuse_BSDF(const simd_fvec3 &V, const simd_fvec3 &N, const simd_fvec3 &L,
+simd_fvec4 Evaluate_PrincipledDiffuse_BSDF(const simd_fvec4 &V, const simd_fvec4 &N, const simd_fvec4 &L,
                                            const float roughness, const simd_fvec4 &base_color,
                                            const simd_fvec4 &sheen_color, const bool uniform_sampling);
-simd_fvec4 Sample_PrincipledDiffuse_BSDF(const simd_fvec3 &T, const simd_fvec3 &B, const simd_fvec3 &N,
-                                         const simd_fvec3 &I, const float roughness, const simd_fvec4 &base_color,
+simd_fvec4 Sample_PrincipledDiffuse_BSDF(const simd_fvec4 &T, const simd_fvec4 &B, const simd_fvec4 &N,
+                                         const simd_fvec4 &I, const float roughness, const simd_fvec4 &base_color,
                                          const simd_fvec4 &sheen_color, const bool uniform_sampling, const float rand_u,
-                                         const float rand_v, simd_fvec3 &out_V);
+                                         const float rand_v, simd_fvec4 &out_V);
 
-simd_fvec4 Evaluate_GGXSpecular_BSDF(const simd_fvec3 &view_dir_ts, const simd_fvec3 &sampled_normal_ts,
-                                     const simd_fvec3 &reflected_dir_ts, float alpha_x, float alpha_y, float spec_ior,
+simd_fvec4 Evaluate_GGXSpecular_BSDF(const simd_fvec4 &view_dir_ts, const simd_fvec4 &sampled_normal_ts,
+                                     const simd_fvec4 &reflected_dir_ts, float alpha_x, float alpha_y, float spec_ior,
                                      float spec_F0, const simd_fvec4 &spec_col);
-simd_fvec4 Sample_GGXSpecular_BSDF(const simd_fvec3 &T, const simd_fvec3 &B, const simd_fvec3 &N, const simd_fvec3 &I,
+simd_fvec4 Sample_GGXSpecular_BSDF(const simd_fvec4 &T, const simd_fvec4 &B, const simd_fvec4 &N, const simd_fvec4 &I,
                                    float roughness, float anisotropic, float spec_ior, float spec_F0,
-                                   const simd_fvec4 &spec_col, float rand_u, float rand_v, simd_fvec3 &out_V);
+                                   const simd_fvec4 &spec_col, float rand_u, float rand_v, simd_fvec4 &out_V);
 
-simd_fvec4 Evaluate_GGXRefraction_BSDF(const simd_fvec3 &view_dir_ts, const simd_fvec3 &sampled_normal_ts,
-                                       const simd_fvec3 &refr_dir_ts, float roughness2, float eta,
+simd_fvec4 Evaluate_GGXRefraction_BSDF(const simd_fvec4 &view_dir_ts, const simd_fvec4 &sampled_normal_ts,
+                                       const simd_fvec4 &refr_dir_ts, float roughness2, float eta,
                                        const simd_fvec4 &spec_col);
-simd_fvec4 Sample_GGXRefraction_BSDF(const simd_fvec3 &T, const simd_fvec3 &B, const simd_fvec3 &N, const simd_fvec3 &I,
+simd_fvec4 Sample_GGXRefraction_BSDF(const simd_fvec4 &T, const simd_fvec4 &B, const simd_fvec4 &N, const simd_fvec4 &I,
                                      float roughness, float eta,
                                      const simd_fvec4 &refr_col, float rand_u, float rand_v, simd_fvec4 &out_V);
 
-simd_fvec4 Evaluate_PrincipledClearcoat_BSDF(const simd_fvec3 &view_dir_ts, const simd_fvec3 &sampled_normal_ts,
-                                             const simd_fvec3 &reflected_dir_ts, float clearcoat_roughness2,
+simd_fvec4 Evaluate_PrincipledClearcoat_BSDF(const simd_fvec4 &view_dir_ts, const simd_fvec4 &sampled_normal_ts,
+                                             const simd_fvec4 &reflected_dir_ts, float clearcoat_roughness2,
                                              float clearcoat_ior, float clearcoat_F0);
-simd_fvec4 Sample_PrincipledClearcoat_BSDF(const simd_fvec3 &T, const simd_fvec3 &B, const simd_fvec3 &N,
-                                           const simd_fvec3 &I, float clearcoat_roughness2, float clearcoat_ior,
-                                           float clearcoat_F0, float rand_u, float rand_v, simd_fvec3 &out_V);
+simd_fvec4 Sample_PrincipledClearcoat_BSDF(const simd_fvec4 &T, const simd_fvec4 &B, const simd_fvec4 &N,
+                                           const simd_fvec4 &I, float clearcoat_roughness2, float clearcoat_ior,
+                                           float clearcoat_F0, float rand_u, float rand_v, simd_fvec4 &out_V);
 
 // Transform
 ray_packet_t TransformRay(const ray_packet_t &r, const float *xform);
-simd_fvec3 TransformPoint(const simd_fvec3 &p, const float *xform);
-simd_fvec3 TransformDirection(const simd_fvec3 &p, const float *xform);
-simd_fvec3 TransformNormal(const simd_fvec3 &n, const float *inv_xform);
+simd_fvec4 TransformPoint(const simd_fvec4 &p, const float *xform);
+simd_fvec4 TransformDirection(const simd_fvec4 &p, const float *xform);
+simd_fvec4 TransformNormal(const simd_fvec4 &n, const float *inv_xform);
 simd_fvec2 TransformUV(const simd_fvec2 &uv, const simd_fvec2 &tex_atlas_size, const texture_t &t, int mip_level);
 
 // Sample Texture
@@ -205,16 +205,16 @@ simd_fvec4 SampleBilinear(const TextureAtlasBase &atlas, const simd_fvec2 &uvs, 
 simd_fvec4 SampleTrilinear(const TextureAtlasBase *atlases[], const texture_t &t, const simd_fvec2 &uvs, float lod);
 simd_fvec4 SampleAnisotropic(const TextureAtlasBase *atlases[], const texture_t &t, const simd_fvec2 &uvs,
                              const simd_fvec2 &duv_dx, const simd_fvec2 &duv_dy);
-simd_fvec4 SampleLatlong_RGBE(const TextureAtlasRGBA &atlas, const texture_t &t, const simd_fvec3 &dir);
+simd_fvec4 SampleLatlong_RGBE(const TextureAtlasRGBA &atlas, const texture_t &t, const simd_fvec4 &dir);
 
 // Get visibility between two points accounting for transparent materials
-float ComputeVisibility(const simd_fvec3 &p, const simd_fvec3 &d, float dist, float rand_val, int rand_hash2,
+float ComputeVisibility(const simd_fvec4 &p, const simd_fvec4 &d, float dist, float rand_val, int rand_hash2,
                         const scene_data_t &sc, uint32_t node_index, const TextureAtlasBase *tex_atlases[]);
 
 // Compute derivatives at hit point
-void ComputeDerivatives(const simd_fvec3 &I, float t, const simd_fvec3 &do_dx, const simd_fvec3 &do_dy,
-                        const simd_fvec3 &dd_dx, const simd_fvec3 &dd_dy, const vertex_t &v1, const vertex_t &v2,
-                        const vertex_t &v3, const transform_t &tr, const simd_fvec3 &plane_N, derivatives_t &out_der);
+void ComputeDerivatives(const simd_fvec4 &I, float t, const simd_fvec4 &do_dx, const simd_fvec4 &do_dy,
+                        const simd_fvec4 &dd_dx, const simd_fvec4 &dd_dy, const vertex_t &v1, const vertex_t &v2,
+                        const vertex_t &v3, const transform_t &tr, const simd_fvec4 &plane_N, derivatives_t &out_der);
 
 // Shade
 Ray::pixel_color_t ShadeSurface(const pass_info_t &pi, const hit_data_t &inter, const ray_packet_t &ray,
