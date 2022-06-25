@@ -3936,7 +3936,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
         }
     }
 
-    const bool cant_terminate = true; // total_depth < pi.settings.termination_start_depth;
+    const bool cant_terminate = total_depth < pi.settings.termination_start_depth;
 
     const float lum = std::max(new_ray.c[0], std::max(new_ray.c[1], new_ray.c[2]));
     const float p = std::modf(halton[RAND_DIM_TERMINATE] + sample_off[0], &_unused);
