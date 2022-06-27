@@ -1216,7 +1216,7 @@ void test_aniso_mat3() {
 void test_aniso_mat4() {
     const int SampleCount = 1024;
     const double MinPSNR = 32.92;
-    const int PixThres = 104;
+    const int PixThres = 105;
 
     Ray::principled_mat_desc_t spec_mat_desc;
     spec_mat_desc.base_color[0] = 1.0f;
@@ -1267,7 +1267,7 @@ void test_aniso_mat6() {
 void test_aniso_mat7() {
     const int SampleCount = 1024;
     const double MinPSNR = 32.91;
-    const int PixThres = 98;
+    const int PixThres = 99;
 
     Ray::principled_mat_desc_t spec_mat_desc;
     spec_mat_desc.base_color[0] = 1.0f;
@@ -1456,7 +1456,7 @@ void test_metal_mat0() {
 void test_metal_mat1() {
     const int SampleCount = 512;
     const double MinPSNR = 36.39;
-    const int PixThres = 42;
+    const int PixThres = 43;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_color[0] = 0.5f;
@@ -1760,7 +1760,7 @@ void test_refr_mat1() {
 void test_refr_mat2() {
     const int SampleCount = 1024;
     const double MinPSNR = 28.0;
-    const int PixThres = 3912;
+    const int PixThres = 3913;
 
     Ray::shading_node_desc_t mat_desc;
     mat_desc.type = Ray::RefractiveNode;
@@ -1936,7 +1936,7 @@ void test_trans_mat5() {
 void test_trans_mat6() {
     const int SampleCount = 1024;
     const double MinPSNR = 22.86;
-    const int PixThres = 4491;
+    const int PixThres = 4493;
 
     Ray::principled_mat_desc_t mat_desc;
     mat_desc.base_color[0] = 1.0f;
