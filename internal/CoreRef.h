@@ -181,8 +181,8 @@ simd_fvec4 Evaluate_GGXRefraction_BSDF(const simd_fvec4 &view_dir_ts, const simd
                                        const simd_fvec4 &refr_dir_ts, float roughness2, float eta,
                                        const simd_fvec4 &spec_col);
 simd_fvec4 Sample_GGXRefraction_BSDF(const simd_fvec4 &T, const simd_fvec4 &B, const simd_fvec4 &N, const simd_fvec4 &I,
-                                     float roughness, float eta,
-                                     const simd_fvec4 &refr_col, float rand_u, float rand_v, simd_fvec4 &out_V);
+                                     float roughness, float eta, const simd_fvec4 &refr_col, float rand_u, float rand_v,
+                                     simd_fvec4 &out_V);
 
 simd_fvec4 Evaluate_PrincipledClearcoat_BSDF(const simd_fvec4 &view_dir_ts, const simd_fvec4 &sampled_normal_ts,
                                              const simd_fvec4 &reflected_dir_ts, float clearcoat_roughness2,
@@ -216,10 +216,17 @@ void ComputeDerivatives(const simd_fvec4 &I, float t, const simd_fvec4 &do_dx, c
                         const simd_fvec4 &dd_dx, const simd_fvec4 &dd_dy, const vertex_t &v1, const vertex_t &v2,
                         const vertex_t &v3, const transform_t &tr, const simd_fvec4 &plane_N, derivatives_t &out_der);
 
+// Evaluate direct light contribution
+simd_fvec4 EvaluateDirectLights(const simd_fvec4 &I, const simd_fvec4 &P, const simd_fvec4 &N, const simd_fvec4 &T,
+                                const simd_fvec4 &B, const simd_fvec4 &plane_N, const simd_fvec2 &uvs,
+                                const bool is_backfacing, const material_t *mat, const derivatives_t &surf_der,
+                                const pass_info_t &pi, const scene_data_t &sc, const TextureAtlasBase *tex_atlases[],
+                                const uint32_t node_index, const float halton[], const float sample_off[2]);
+
 // Shade
 Ray::pixel_color_t ShadeSurface(const pass_info_t &pi, const hit_data_t &inter, const ray_packet_t &ray,
                                 const float *halton, const scene_data_t &sc, uint32_t node_index,
-                                uint32_t light_node_index, const TextureAtlasBase *tex_atlases[],
-                                ray_packet_t *out_secondary_rays, int *out_secondary_rays_count);
+                                const TextureAtlasBase *tex_atlases[], ray_packet_t *out_secondary_rays,
+                                int *out_secondary_rays_count);
 } // namespace Ref
 } // namespace Ray

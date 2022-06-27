@@ -189,7 +189,7 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
 
         const pixel_color_t col =
             ShadeSurface(pass_info, inter, r, &region.halton_seq[hi + RAND_DIM_BASE_COUNT], sc_data, macro_tree_root,
-                         light_tree_root, tex_atlases, &p.secondary_rays[0], &secondary_rays_count);
+                         tex_atlases, &p.secondary_rays[0], &secondary_rays_count);
         temp_buf_.SetPixel(x, y, col);
     }
 
@@ -291,7 +291,7 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
 
             pixel_color_t col = ShadeSurface(
                 pass_info, inter, r, &region.halton_seq[hi + RAND_DIM_BASE_COUNT + bounce * RAND_DIM_BOUNCE_COUNT],
-                sc_data, macro_tree_root, light_tree_root, tex_atlases, &p.secondary_rays[0], &secondary_rays_count);
+                sc_data, macro_tree_root, tex_atlases, &p.secondary_rays[0], &secondary_rays_count);
             col.a = 0.0f;
 
             temp_buf_.AddPixel(x, y, col);

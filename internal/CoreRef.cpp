@@ -355,7 +355,6 @@ force_inline int clamp(const int val, const int min, const int max) {
     return val < min ? min : (val > max ? max : val);
 }
 
-
 force_inline simd_fvec4 cross(const simd_fvec4 &v1, const simd_fvec4 &v2) {
     return simd_fvec4{v1[1] * v2[2] - v1[2] * v2[1], v1[2] * v2[0] - v1[0] * v2[2], v1[0] * v2[1] - v1[1] * v2[0],
                       0.0f};
@@ -2765,7 +2764,8 @@ void Ray::Ref::ComputeDerivatives(const simd_fvec4 &I, const float t, const simd
 
     const simd_fvec2 duv13 = simd_fvec2(v1.t[0]) - simd_fvec2(v3.t[0]),
                      duv23 = simd_fvec2(v2.t[0]) - simd_fvec2(v3.t[0]);
-    simd_fvec4 dp13 = simd_fvec4(v1.p) - simd_fvec4(v3.p), dp23 = simd_fvec4(v2.p) - simd_fvec4(v3.p); // read out of bounds!
+    simd_fvec4 dp13 = simd_fvec4(v1.p) - simd_fvec4(v3.p),
+               dp23 = simd_fvec4(v2.p) - simd_fvec4(v3.p); // read out of bounds!
 
     dp13 = TransformDirection(dp13, tr.xform);
     dp23 = TransformDirection(dp23, tr.xform);
@@ -2799,7 +2799,8 @@ void Ray::Ref::ComputeDerivatives(const simd_fvec4 &I, const float t, const simd
     out_der.duv_dy = simd_fvec2{A[1][1] * By[0] - A[0][1] * By[1], A[0][0] * By[1] - A[1][0] * By[0]} * inv_det;
 
     // Derivative for normal
-    const auto dn1 = simd_fvec4(v1.n) - simd_fvec4(v3.n), dn2 = simd_fvec4(v2.n) - simd_fvec4(v3.n); // read out of bounds!
+    const auto dn1 = simd_fvec4(v1.n) - simd_fvec4(v3.n),
+               dn2 = simd_fvec4(v2.n) - simd_fvec4(v3.n); // read out of bounds!
     const simd_fvec4 dndu = (duv23[1] * dn1 - duv13[1] * dn2) * inv_det_uv;
     const simd_fvec4 dndv = (-duv23[0] * dn1 + duv13[0] * dn2) * inv_det_uv;
 
@@ -2810,10 +2811,477 @@ void Ray::Ref::ComputeDerivatives(const simd_fvec4 &I, const float t, const simd
     out_der.ddn_dy = dot(dd_dy, plane_N) + dot(I, out_der.dndy);
 }
 
+Ray::Ref::simd_fvec4 Ray::Ref::EvaluateDirectLights(const simd_fvec4 &I, const simd_fvec4 &P, const simd_fvec4 &N,
+                                                    const simd_fvec4 &T, const simd_fvec4 &B, const simd_fvec4 &plane_N,
+                                                    const simd_fvec2 &uvs, const bool is_backfacing,
+                                                    const material_t *mat, const derivatives_t &surf_der,
+                                                    const pass_info_t &pi, const scene_data_t &sc,
+                                                    const TextureAtlasBase *tex_atlases[], const uint32_t node_index,
+                                                    const float halton[], const float sample_off[2]) {
+    float _unused;
+    const float u1 = std::modf(halton[RAND_DIM_LIGHT_PICK] + sample_off[0], &_unused);
+    const auto light_index = std::min(uint32_t(u1 * sc.lights2_count), sc.lights2_count - 1);
+
+    const light2_t &l = sc.lights2[light_index];
+    const transform_t &ltr = sc.transforms[l.tr_index];
+
+    simd_fvec4 lcol = simd_fvec4{l.col[0], l.col[1], l.col[2], 0.0f};
+    lcol *= float(sc.lights2_count);
+
+    simd_fvec4 L;
+    float light_area, light_dist, light_pdf = 0.0f;
+    if (l.type == LIGHT_TYPE_SPHERE) {
+        const float r1 = std::modf(halton[RAND_DIM_LIGHT_U] + sample_off[0], &_unused);
+        const float r2 = std::modf(halton[RAND_DIM_LIGHT_V] + sample_off[1], &_unused);
+
+        simd_fvec4 center_to_surface = P - simd_fvec4{l.sph.pos[0], l.sph.pos[1], l.sph.pos[2], 0.0f};
+        float dist_to_center = length(center_to_surface);
+
+        center_to_surface /= dist_to_center;
+
+        // sample hemisphere
+        const float r = std::sqrt(std::max(0.0f, 1.0f - r1 * r1));
+        const float phi = 2.0f * PI * r2;
+        auto sampled_dir = simd_fvec4{r * std::cos(phi), r * std::sin(phi), r1, 0.0f};
+
+        simd_fvec4 LT, LB;
+        create_tbn(center_to_surface, LT, LB);
+
+        sampled_dir = LT * sampled_dir[0] + LB * sampled_dir[1] + center_to_surface * sampled_dir[2];
+
+        const simd_fvec4 light_surf_pos =
+            simd_fvec4{l.sph.pos[0], l.sph.pos[1], l.sph.pos[2], 0.0f} + sampled_dir * l.sph.radius;
+
+        L = light_surf_pos - P;
+        light_dist = length(L);
+        L /= light_dist;
+
+        light_area = 4.0f * PI * l.sph.radius * l.sph.radius;
+        const simd_fvec4 light_forward =
+            normalize(light_surf_pos - simd_fvec4{l.sph.pos[0], l.sph.pos[1], l.sph.pos[2], 0.0f});
+
+        const float cos_theta = std::abs(dot(L, light_forward));
+        if (cos_theta > 0.0f) {
+            light_pdf = (light_dist * light_dist) / (0.5f * light_area * cos_theta);
+        }
+    } else if (l.type == LIGHT_TYPE_DIR) {
+        L = simd_fvec4{l.dir.dir[0], l.dir.dir[1], l.dir.dir[2], 0.0f};
+        if (l.dir.angle != 0.0f) {
+            const float r1 = std::modf(halton[RAND_DIM_LIGHT_U] + sample_off[0], &_unused);
+            const float r2 = std::modf(halton[RAND_DIM_LIGHT_V] + sample_off[1], &_unused);
+
+            const float phi = 2 * PI * r2;
+
+            const float cos_phi = std::cos(phi);
+            const float sin_phi = std::sin(phi);
+
+            const float cos_angle = std::cos(l.dir.angle);
+            const float z = cos_angle + (1.0f - cos_angle) * r1;
+
+            simd_fvec4 LT, LB;
+            create_tbn(L, LT, LB);
+
+            const float dir = std::sqrt(1.0f - z * z);
+            const auto V = simd_fvec4{dir * cos_phi, dir * sin_phi, z, 0.0f};
+
+            L = world_from_tangent(LT, LB, L, V);
+        }
+        light_area = 0.0f;
+        light_dist = MAX_DIST;
+        light_pdf = 1.0f;
+    } else if (l.type == LIGHT_TYPE_RECT) {
+        const auto light_pos = simd_fvec4{ltr.xform[12], ltr.xform[13], ltr.xform[14], 0.0f};
+        const simd_fvec4 light_u = l.rect.width * TransformDirection(simd_fvec4{1.0f, 0.0f, 0.0f, 0.0f}, ltr.xform);
+        const simd_fvec4 light_v = l.rect.height * TransformDirection(simd_fvec4{0.0f, 0.0f, 1.0f, 0.0f}, ltr.xform);
+
+        const float r1 = std::modf(halton[RAND_DIM_LIGHT_U] + sample_off[0], &_unused) - 0.5f;
+        const float r2 = std::modf(halton[RAND_DIM_LIGHT_V] + sample_off[1], &_unused) - 0.5f;
+        const simd_fvec4 lp = light_pos + light_u * r1 + light_v * r2;
+
+        const simd_fvec4 to_light = lp - P;
+        light_dist = length(to_light);
+        L = (to_light / light_dist);
+
+        light_area = l.rect.width * l.rect.height;
+        simd_fvec4 light_forward = normalize(cross(light_u, light_v));
+
+        const float cos_theta = dot(-L, light_forward);
+        if (cos_theta > 0.0f) {
+            light_pdf = (light_dist * light_dist) / (light_area * cos_theta);
+        }
+
+        if (!l.visible) {
+            light_area = 0.0f;
+        }
+
+        if (l.sky_portal != 0) {
+            if (sc.env->env_map != 0xffffffff) {
+                lcol *= SampleLatlong_RGBE(*static_cast<const TextureAtlasRGBA *>(tex_atlases[0]),
+                                           sc.textures[sc.env->env_map], L);
+                if (sc.env->env_clamp > FLT_EPS) {
+                    lcol = min(lcol, simd_fvec4{sc.env->env_clamp});
+                }
+            }
+            lcol[0] *= sc.env->env_col[0];
+            lcol[1] *= sc.env->env_col[1];
+            lcol[2] *= sc.env->env_col[2];
+        }
+    } else if (l.type == LIGHT_TYPE_DISK) {
+        const auto light_pos = simd_fvec4{ltr.xform[12], ltr.xform[13], ltr.xform[14], 0.0f};
+        const simd_fvec4 light_u = l.disk.size_x * TransformDirection(simd_fvec4{1.0f, 0.0f, 0.0f, 0.0f}, ltr.xform);
+        const simd_fvec4 light_v = l.disk.size_y * TransformDirection(simd_fvec4{0.0f, 0.0f, 1.0f, 0.0f}, ltr.xform);
+
+        const float r1 = std::modf(halton[RAND_DIM_LIGHT_U] + sample_off[0], &_unused);
+        const float r2 = std::modf(halton[RAND_DIM_LIGHT_V] + sample_off[1], &_unused);
+
+        simd_fvec2 offset = 2.0f * simd_fvec2{r1, r2} - simd_fvec2{1.0f, 1.0f};
+        if (offset[0] != 0.0f && offset[1] != 0.0f) {
+            float theta, r;
+            if (std::abs(offset[0]) > std::abs(offset[1])) {
+                r = offset[0];
+                theta = 0.25f * PI * (offset[1] / offset[0]);
+            } else {
+                r = offset[1];
+                theta = 0.5f * PI - 0.25f * PI * (offset[0] / offset[1]);
+            }
+
+            offset[0] = 0.5f * r * std::cos(theta);
+            offset[1] = 0.5f * r * std::sin(theta);
+        }
+
+        const simd_fvec4 lp = light_pos + light_u * offset[0] + light_v * offset[1];
+
+        const simd_fvec4 to_light = lp - P;
+        light_dist = length(to_light);
+        L = (to_light / light_dist);
+
+        light_area = 0.25f * PI * l.disk.size_x * l.disk.size_y;
+        simd_fvec4 light_forward = normalize(cross(light_u, light_v));
+
+        const float cos_theta = dot(-L, light_forward);
+        if (cos_theta > 0.0f) {
+            light_pdf = (light_dist * light_dist) / (light_area * cos_theta);
+        }
+
+        if (!l.visible) {
+            light_area = 0.0f;
+        }
+
+        if (l.sky_portal != 0) {
+            if (sc.env->env_map != 0xffffffff) {
+                lcol *= SampleLatlong_RGBE(*static_cast<const TextureAtlasRGBA *>(tex_atlases[0]),
+                                           sc.textures[sc.env->env_map], L);
+                if (sc.env->env_clamp > FLT_EPS) {
+                    lcol = min(lcol, simd_fvec4{sc.env->env_clamp});
+                }
+            }
+            lcol[0] *= sc.env->env_col[0];
+            lcol[1] *= sc.env->env_col[1];
+            lcol[2] *= sc.env->env_col[2];
+        }
+    } else if (l.type == LIGHT_TYPE_TRI) {
+        const uint32_t ltri_index = l.tri.index;
+
+        const vertex_t &v1 = sc.vertices[sc.vtx_indices[ltri_index * 3 + 0]];
+        const vertex_t &v2 = sc.vertices[sc.vtx_indices[ltri_index * 3 + 1]];
+        const vertex_t &v3 = sc.vertices[sc.vtx_indices[ltri_index * 3 + 2]];
+
+        const simd_fvec4 p1 = simd_fvec4(v1.p[0], v1.p[1], v1.p[2], 0.0f),
+                         p2 = simd_fvec4(v2.p[0], v2.p[1], v2.p[2], 0.0f),
+                         p3 = simd_fvec4(v3.p[0], v3.p[1], v3.p[2], 0.0f);
+        const simd_fvec2 uv1 = simd_fvec2(v1.t[0]), uv2 = simd_fvec2(v2.t[0]), uv3 = simd_fvec2(v3.t[0]);
+
+        const float r1 = std::sqrt(std::modf(halton[RAND_DIM_LIGHT_U] + sample_off[0], &_unused));
+        const float r2 = std::modf(halton[RAND_DIM_LIGHT_V] + sample_off[1], &_unused);
+
+        const simd_fvec2 luvs = uv1 * (1.0f - r1) + r1 * (uv2 * (1.0f - r2) + uv3 * r2);
+        const simd_fvec4 lp = TransformPoint(p1 * (1.0f - r1) + r1 * (p2 * (1.0f - r2) + p3 * r2), ltr.xform);
+        simd_fvec4 light_forward = TransformDirection(cross(p2 - p1, p3 - p1), ltr.xform);
+        light_area = 0.5f * length(light_forward);
+        light_forward = normalize(light_forward);
+
+        const simd_fvec4 to_light = lp - P;
+        light_dist = length(to_light);
+        L = (to_light / light_dist);
+
+        const float cos_theta = std::abs(dot(-L, light_forward)); // abs for doublesided light
+        if (cos_theta > 0.0f) {
+            light_pdf = (light_dist * light_dist) / (light_area * cos_theta);
+        }
+
+        const material_t &lmat = sc.materials[sc.tri_materials[ltri_index].front_mi & MATERIAL_INDEX_BITS];
+        if ((lmat.flags & MAT_FLAG_SKY_PORTAL) == 0) {
+            if (lmat.textures[BASE_TEXTURE] != 0xffffffff) {
+                lcol *= SampleBilinear(tex_atlases, sc.textures[lmat.textures[BASE_TEXTURE]], luvs, 0 /* lod */);
+            }
+        } else {
+            if (sc.env->env_map != 0xffffffff) {
+                lcol *= SampleLatlong_RGBE(*static_cast<const TextureAtlasRGBA *>(tex_atlases[0]),
+                                           sc.textures[sc.env->env_map], L);
+                if (sc.env->env_clamp > FLT_EPS) {
+                    lcol = min(lcol, simd_fvec4{sc.env->env_clamp});
+                }
+            }
+            lcol[0] *= sc.env->env_col[0];
+            lcol[1] *= sc.env->env_col[1];
+            lcol[2] *= sc.env->env_col[2];
+        }
+    }
+
+    const float N_dot_L = dot(N, L);
+    const bool _is_backfacing = (N_dot_L < 0.0f);
+
+    simd_fvec4 col = {0.0f};
+    if (light_pdf > 0.0f) {
+        const float visibility =
+            ComputeVisibility(offset_ray(P, _is_backfacing ? -plane_N : plane_N), L, light_dist - 10.0f * HIT_BIAS,
+                              halton[RAND_DIM_BSDF_PICK], hash(pi.rand_index), sc, node_index, tex_atlases);
+        if (visibility > 0.0f) {
+            struct {
+                const Ray::material_t *mat;
+                float weight;
+            } materials_stack[16];
+
+            uint32_t materials_count = 0;
+            materials_stack[materials_count++] = {mat, 1.0f};
+
+            while (materials_count) {
+                const auto &cur = materials_stack[--materials_count];
+                const Ray::material_t *cur_mat = cur.mat;
+                const float cur_weight = cur.weight;
+
+                const float eta =
+                    is_backfacing ? (cur_mat->int_ior / cur_mat->ext_ior) : (cur_mat->ext_ior / cur_mat->int_ior);
+                simd_fvec4 H;
+                if (N_dot_L > 0.0f) {
+                    H = normalize(L - I);
+                } else {
+                    H = normalize(L - I * eta);
+                }
+
+                simd_fvec4 base_color =
+                    simd_fvec4(cur_mat->base_color[0], cur_mat->base_color[1], cur_mat->base_color[2], 1.0f);
+                if (cur_mat->textures[BASE_TEXTURE] != 0xffffffff) {
+                    const texture_t &base_texture = sc.textures[cur_mat->textures[BASE_TEXTURE]];
+                    const float base_lod = get_texture_lod(base_texture, surf_der.duv_dx, surf_der.duv_dy);
+                    simd_fvec4 tex_color = SampleBilinear(tex_atlases, base_texture, uvs, int(base_lod));
+                    if (base_texture.width & TEXTURE_SRGB_BIT) {
+                        tex_color = srgb_to_rgb(tex_color);
+                    }
+                    base_color *= tex_color;
+                }
+
+                simd_fvec4 tint_color = {0.0f};
+
+                const float base_color_lum = lum(base_color);
+                if (base_color_lum > 0.0f) {
+                    tint_color = base_color / base_color_lum;
+                }
+
+                // sample roughness texture
+                float roughness = unpack_unorm_16(cur_mat->roughness_unorm);
+                if (cur_mat->textures[ROUGH_TEXTURE] != 0xffffffff) {
+                    const texture_t &roughness_tex = sc.textures[cur_mat->textures[ROUGH_TEXTURE]];
+                    const float roughness_lod = get_texture_lod(roughness_tex, surf_der.duv_dx, surf_der.duv_dy);
+                    simd_fvec4 roughness_color = SampleBilinear(tex_atlases, roughness_tex, uvs, int(roughness_lod))[0];
+                    if (roughness_tex.width & TEXTURE_SRGB_BIT) {
+                        roughness_color = srgb_to_rgb(roughness_color);
+                    }
+                    roughness *= roughness_color[0];
+                }
+
+                const float roughness2 = roughness * roughness;
+
+                if (cur_mat->type == DiffuseNode) {
+                    if (N_dot_L > 0.0f) {
+                        const simd_fvec4 _base_color = pi.should_consider_albedo() ? base_color : simd_fvec4(1.0f);
+                        simd_fvec4 diff_col = Evaluate_OrenDiffuse_BSDF(-I, N, L, roughness, _base_color);
+                        float bsdf_pdf = diff_col[3];
+
+                        float mis_weight = 1.0f;
+                        if (light_area > 0.0f) {
+                            mis_weight = power_heuristic(light_pdf, bsdf_pdf);
+                        }
+                        col += lcol * diff_col * (cur_weight * mis_weight / light_pdf);
+                    }
+                } else if (cur_mat->type == GlossyNode) {
+                    if (roughness2 * roughness2 >= 1e-7f && N_dot_L > 0.0f) {
+                        const simd_fvec4 view_dir_ts = tangent_from_world(T, B, N, -I);
+                        const simd_fvec4 light_dir_ts = tangent_from_world(T, B, N, L);
+                        const simd_fvec4 sampled_normal_ts = tangent_from_world(T, B, N, H);
+
+                        const float specular = 0.5f;
+                        const float spec_ior = (2.0f / (1.0f - std::sqrt(0.08f * specular))) - 1.0f;
+                        const float F0 = fresnel_dielectric_cos(1.0f, spec_ior);
+
+                        const simd_fvec4 spec_col =
+                            Evaluate_GGXSpecular_BSDF(view_dir_ts, sampled_normal_ts, light_dir_ts, roughness2,
+                                                      roughness2, spec_ior, F0, base_color);
+                        const float bsdf_pdf = spec_col[3];
+
+                        float mis_weight = 1.0f;
+                        if (light_area > 0.0f) {
+                            mis_weight = power_heuristic(light_pdf, bsdf_pdf);
+                        }
+                        col += lcol * spec_col * (cur_weight * mis_weight / light_pdf);
+                    }
+                } else if (cur_mat->type == RefractiveNode) {
+                    if (roughness2 * roughness2 >= 1e-7f && N_dot_L < 0.0f) {
+                        const simd_fvec4 view_dir_ts = tangent_from_world(T, B, N, -I);
+                        const simd_fvec4 light_dir_ts = tangent_from_world(T, B, N, L);
+                        const simd_fvec4 sampled_normal_ts = tangent_from_world(T, B, N, H);
+
+                        const simd_fvec4 refr_col = Evaluate_GGXRefraction_BSDF(
+                            view_dir_ts, sampled_normal_ts, light_dir_ts, roughness2, eta, base_color);
+                        const float bsdf_pdf = refr_col[3];
+
+                        float mis_weight = 1.0f;
+                        if (light_area > 0.0f) {
+                            mis_weight = power_heuristic(light_pdf, bsdf_pdf);
+                        }
+                        col += lcol * refr_col * (cur_weight * mis_weight / light_pdf);
+                    }
+                } else if (cur_mat->type == PrincipledNode) {
+                    float metallic = unpack_unorm_16(cur_mat->metallic_unorm);
+                    if (cur_mat->textures[METALLIC_TEXTURE] != 0xffffffff) {
+                        const texture_t &metallic_tex = sc.textures[cur_mat->textures[METALLIC_TEXTURE]];
+                        const float metallic_lod = get_texture_lod(metallic_tex, surf_der.duv_dx, surf_der.duv_dy);
+                        metallic *= SampleBilinear(tex_atlases, metallic_tex, uvs, int(metallic_lod))[0];
+                    }
+
+                    const float specular = unpack_unorm_16(cur_mat->specular_unorm);
+                    const float transmission = unpack_unorm_16(cur_mat->transmission_unorm);
+                    const float clearcoat = unpack_unorm_16(cur_mat->clearcoat_unorm);
+                    const float clearcoat_roughness = unpack_unorm_16(cur_mat->clearcoat_roughness_unorm);
+                    const float sheen = unpack_unorm_16(cur_mat->sheen_unorm);
+                    const float sheen_tint = unpack_unorm_16(cur_mat->sheen_tint_unorm);
+
+                    simd_fvec4 spec_tmp_col =
+                        mix(simd_fvec4{1.0f}, tint_color, unpack_unorm_16(cur_mat->specular_tint_unorm));
+                    spec_tmp_col = mix(specular * 0.08f * spec_tmp_col, base_color, metallic);
+
+                    const float spec_ior = (2.0f / (1.0f - std::sqrt(0.08f * specular))) - 1.0f;
+                    const float F0 = fresnel_dielectric_cos(1.0f, spec_ior);
+
+                    // Approximation of FH (using shading normal)
+                    const float FN = (fresnel_dielectric_cos(dot(I, N), spec_ior) - F0) / (1.0f - F0);
+
+                    const simd_fvec4 approx_spec_col = mix(spec_tmp_col, simd_fvec4(1.0f), FN);
+                    const float spec_color_lum = lum(approx_spec_col);
+
+                    float diffuse_weight, specular_weight, clearcoat_weight, refraction_weight;
+                    get_lobe_weights(mix(base_color_lum, 1.0f, sheen), spec_color_lum, specular, metallic, transmission,
+                                     clearcoat, &diffuse_weight, &specular_weight, &clearcoat_weight,
+                                     &refraction_weight);
+
+                    float bsdf_pdf = 0.0f;
+
+                    if (diffuse_weight > 0.0f && N_dot_L > 0.0f) {
+                        const simd_fvec4 _base_color = pi.should_consider_albedo() ? base_color : simd_fvec4(1.0f);
+                        const simd_fvec4 sheen_color = sheen * mix(simd_fvec4{1.0f}, tint_color, sheen_tint);
+
+                        simd_fvec4 diff_col = Evaluate_PrincipledDiffuse_BSDF(-I, N, L, roughness, _base_color,
+                                                                              sheen_color, pi.use_uniform_sampling());
+                        bsdf_pdf += diffuse_weight * diff_col[3];
+                        diff_col *= (1.0f - metallic);
+
+                        col += lcol * N_dot_L * diff_col * cur_weight / (PI * light_pdf);
+                    }
+
+                    const float roughness2 = roughness * roughness;
+                    const float aspect = std::sqrt(1.0f - 0.9f * unpack_unorm_16(cur_mat->anisotropic_unorm));
+
+                    const float alpha_x = roughness2 / aspect;
+                    const float alpha_y = roughness2 * aspect;
+
+                    const simd_fvec4 view_dir_ts = tangent_from_world(T, B, N, -I);
+                    const simd_fvec4 light_dir_ts = tangent_from_world(T, B, N, L);
+                    const simd_fvec4 sampled_normal_ts = tangent_from_world(T, B, N, H);
+
+                    if (specular_weight > 0.0f && alpha_x * alpha_y >= 1e-7f && N_dot_L > 0.0f) {
+                        const simd_fvec4 spec_col = Evaluate_GGXSpecular_BSDF(
+                            view_dir_ts, sampled_normal_ts, light_dir_ts, alpha_x, alpha_y, spec_ior, F0, spec_tmp_col);
+                        bsdf_pdf += specular_weight * spec_col[3];
+
+                        col += lcol * spec_col * (cur_weight / light_pdf);
+                    }
+
+                    const float clearcoat_ior = (2.0f / (1.0f - std::sqrt(0.08f * clearcoat))) - 1.0f;
+                    const float clearcoat_F0 = fresnel_dielectric_cos(1.0f, clearcoat_ior);
+                    const float clearcoat_roughness2 = clearcoat_roughness * clearcoat_roughness;
+                    if (clearcoat_weight > 0.0f && clearcoat_roughness2 * clearcoat_roughness2 >= 1e-7f &&
+                        N_dot_L > 0.0f) {
+                        const simd_fvec4 clearcoat_col =
+                            Evaluate_PrincipledClearcoat_BSDF(view_dir_ts, sampled_normal_ts, light_dir_ts,
+                                                              clearcoat_roughness2, clearcoat_ior, clearcoat_F0);
+                        bsdf_pdf += clearcoat_weight * clearcoat_col[3];
+
+                        col += 0.25f * lcol * clearcoat_col * (cur_weight / light_pdf);
+                    }
+
+                    if (refraction_weight > 0.0f) {
+                        const float fresnel = fresnel_dielectric_cos(dot(I, N), 1.0f / eta);
+
+                        if (fresnel != 0.0f && roughness2 * roughness2 >= 1e-7f && N_dot_L > 0.0f) {
+                            const simd_fvec4 spec_col =
+                                Evaluate_GGXSpecular_BSDF(view_dir_ts, sampled_normal_ts, light_dir_ts, roughness2,
+                                                          roughness2, 1.0f /* ior */, 0.0f /* F0 */, simd_fvec4{1.0f});
+                            bsdf_pdf += refraction_weight * fresnel * spec_col[3];
+
+                            col += lcol * spec_col * (fresnel * cur_weight / light_pdf);
+                        }
+
+                        const float transmission_roughness =
+                            1.0f - (1.0f - roughness) * (1.0f - unpack_unorm_16(cur_mat->transmission_roughness_unorm));
+                        const float transmission_roughness2 = transmission_roughness * transmission_roughness;
+                        if (fresnel != 1.0f && transmission_roughness2 * transmission_roughness2 >= 1e-7f &&
+                            N_dot_L < 0.0f) {
+                            const simd_fvec4 refr_col = Evaluate_GGXRefraction_BSDF(
+                                view_dir_ts, sampled_normal_ts, light_dir_ts, transmission_roughness2, eta, base_color);
+                            bsdf_pdf += refraction_weight * (1.0f - fresnel) * refr_col[3];
+
+                            col += lcol * refr_col * ((1.0f - fresnel) * cur_weight / light_pdf);
+                        }
+                    }
+
+                    float mis_weight = 1.0f;
+                    if (light_area > 0.0f) {
+                        mis_weight = power_heuristic(light_pdf, bsdf_pdf);
+                    }
+                    col *= mis_weight;
+                } else if (cur_mat->type == MixNode) {
+                    if (cur_mat->flags & MAT_FLAG_MIX_ADD) {
+                        materials_stack[materials_count++] = {&sc.materials[cur_mat->textures[MIX_MAT1]], cur_weight};
+                        materials_stack[materials_count++] = {&sc.materials[cur_mat->textures[MIX_MAT2]], cur_weight};
+                    } else {
+                        float mix_val = cur_mat->strength;
+                        if (cur_mat->textures[BASE_TEXTURE] != 0xffffffff) {
+                            mix_val *=
+                                SampleBilinear(tex_atlases, sc.textures[cur_mat->textures[BASE_TEXTURE]], uvs, 0)[0];
+                        }
+
+                        const float eta = is_backfacing ? (cur_mat->ext_ior / cur_mat->int_ior)
+                                                        : (cur_mat->int_ior / cur_mat->ext_ior);
+                        const float RR = cur_mat->int_ior != 0.0f ? fresnel_dielectric_cos(dot(I, N), eta) : 1.0f;
+
+                        mix_val *= clamp(RR, 0.0f, 1.0f);
+
+                        materials_stack[materials_count++] = {&sc.materials[cur_mat->textures[MIX_MAT1]],
+                                                              (1.0f - mix_val) * cur_weight};
+                        materials_stack[materials_count++] = {&sc.materials[cur_mat->textures[MIX_MAT2]],
+                                                              mix_val * cur_weight};
+                    }
+                }
+            }
+        }
+    }
+    return col;
+}
+
 Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_t &inter, const ray_packet_t &ray,
                                           const float *halton, const scene_data_t &sc, const uint32_t node_index,
-                                          const uint32_t light_node_index, const TextureAtlasBase *tex_atlases[],
-                                          ray_packet_t *out_secondary_rays, int *out_secondary_rays_count) {
+                                          const TextureAtlasBase *tex_atlases[], ray_packet_t *out_secondary_rays,
+                                          int *out_secondary_rays_count) {
     // Intersect area lights
     float min_t = inter.t;
     simd_fvec4 out_col;
@@ -3051,471 +3519,8 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
 
 #if USE_NEE == 1
     if (pi.should_add_direct_light() && sc.lights2_count && mat->type != EmissiveNode) {
-        float _unused;
-        const float u1 = std::modf(halton[RAND_DIM_LIGHT_PICK] + sample_off[0], &_unused);
-        const auto light_index = std::min(uint32_t(u1 * sc.lights2_count), sc.lights2_count - 1);
-
-        const light2_t &l = sc.lights2[light_index];
-        const transform_t &ltr = sc.transforms[l.tr_index];
-
-        simd_fvec4 lcol = simd_fvec4{l.col[0], l.col[1], l.col[2], 0.0f};
-        lcol *= float(sc.lights2_count);
-
-        simd_fvec4 L;
-        float light_area, light_dist, light_pdf = 0.0f;
-        if (l.type == LIGHT_TYPE_SPHERE) {
-            const float r1 = std::modf(halton[RAND_DIM_LIGHT_U] + sample_off[0], &_unused);
-            const float r2 = std::modf(halton[RAND_DIM_LIGHT_V] + sample_off[1], &_unused);
-
-            simd_fvec4 center_to_surface = P - simd_fvec4{l.sph.pos[0], l.sph.pos[1], l.sph.pos[2], 0.0f};
-            float dist_to_center = length(center_to_surface);
-
-            center_to_surface /= dist_to_center;
-
-            // sample hemisphere
-            const float r = std::sqrt(std::max(0.0f, 1.0f - r1 * r1));
-            const float phi = 2.0f * PI * r2;
-            auto sampled_dir = simd_fvec4{r * std::cos(phi), r * std::sin(phi), r1, 0.0f};
-
-            simd_fvec4 LT, LB;
-            create_tbn(center_to_surface, LT, LB);
-
-            sampled_dir = LT * sampled_dir[0] + LB * sampled_dir[1] + center_to_surface * sampled_dir[2];
-
-            const simd_fvec4 light_surf_pos =
-                simd_fvec4{l.sph.pos[0], l.sph.pos[1], l.sph.pos[2], 0.0f} + sampled_dir * l.sph.radius;
-
-            L = light_surf_pos - P;
-            light_dist = length(L);
-            L /= light_dist;
-
-            light_area = 4.0f * PI * l.sph.radius * l.sph.radius;
-            const simd_fvec4 light_forward =
-                normalize(light_surf_pos - simd_fvec4{l.sph.pos[0], l.sph.pos[1], l.sph.pos[2], 0.0f});
-
-            const float cos_theta = std::abs(dot(L, light_forward));
-            if (cos_theta > 0.0f) {
-                light_pdf = (light_dist * light_dist) / (0.5f * light_area * cos_theta);
-            }
-        } else if (l.type == LIGHT_TYPE_DIR) {
-            L = simd_fvec4{l.dir.dir[0], l.dir.dir[1], l.dir.dir[2], 0.0f};
-            if (l.dir.angle != 0.0f) {
-                const float r1 = std::modf(halton[RAND_DIM_LIGHT_U] + sample_off[0], &_unused);
-                const float r2 = std::modf(halton[RAND_DIM_LIGHT_V] + sample_off[1], &_unused);
-
-                const float phi = 2 * PI * r2;
-
-                const float cos_phi = std::cos(phi);
-                const float sin_phi = std::sin(phi);
-
-                const float cos_angle = std::cos(l.dir.angle);
-                const float z = cos_angle + (1.0f - cos_angle) * r1;
-
-                simd_fvec4 LT, LB;
-                create_tbn(L, LT, LB);
-
-                const float dir = std::sqrt(1.0f - z * z);
-                const auto V = simd_fvec4{dir * cos_phi, dir * sin_phi, z, 0.0f};
-
-                L = world_from_tangent(LT, LB, L, V);
-            }
-            light_area = 0.0f;
-            light_dist = MAX_DIST;
-            light_pdf = 1.0f;
-        } else if (l.type == LIGHT_TYPE_RECT) {
-            const auto light_pos = simd_fvec4{ltr.xform[12], ltr.xform[13], ltr.xform[14], 0.0f};
-            const simd_fvec4 light_u = l.rect.width * TransformDirection(simd_fvec4{1.0f, 0.0f, 0.0f, 0.0f}, ltr.xform);
-            const simd_fvec4 light_v =
-                l.rect.height * TransformDirection(simd_fvec4{0.0f, 0.0f, 1.0f, 0.0f}, ltr.xform);
-
-            const float r1 = std::modf(halton[RAND_DIM_LIGHT_U] + sample_off[0], &_unused) - 0.5f;
-            const float r2 = std::modf(halton[RAND_DIM_LIGHT_V] + sample_off[1], &_unused) - 0.5f;
-            const simd_fvec4 lp = light_pos + light_u * r1 + light_v * r2;
-
-            const simd_fvec4 to_light = lp - P;
-            light_dist = length(to_light);
-            L = (to_light / light_dist);
-
-            light_area = l.rect.width * l.rect.height;
-            simd_fvec4 light_forward = normalize(cross(light_u, light_v));
-
-            const float cos_theta = dot(-L, light_forward);
-            if (cos_theta > 0.0f) {
-                light_pdf = (light_dist * light_dist) / (light_area * cos_theta);
-            }
-
-            if (!l.visible) {
-                light_area = 0.0f;
-            }
-
-            if (l.sky_portal != 0) {
-                if (sc.env->env_map != 0xffffffff) {
-                    lcol *= SampleLatlong_RGBE(*static_cast<const TextureAtlasRGBA *>(tex_atlases[0]),
-                                               sc.textures[sc.env->env_map], L);
-                    if (sc.env->env_clamp > FLT_EPS) {
-                        lcol = min(lcol, simd_fvec4{sc.env->env_clamp});
-                    }
-                }
-                lcol[0] *= sc.env->env_col[0];
-                lcol[1] *= sc.env->env_col[1];
-                lcol[2] *= sc.env->env_col[2];
-            }
-        } else if (l.type == LIGHT_TYPE_DISK) {
-            const auto light_pos = simd_fvec4{ltr.xform[12], ltr.xform[13], ltr.xform[14], 0.0f};
-            const simd_fvec4 light_u =
-                l.disk.size_x * TransformDirection(simd_fvec4{1.0f, 0.0f, 0.0f, 0.0f}, ltr.xform);
-            const simd_fvec4 light_v =
-                l.disk.size_y * TransformDirection(simd_fvec4{0.0f, 0.0f, 1.0f, 0.0f}, ltr.xform);
-
-            const float r1 = std::modf(halton[RAND_DIM_LIGHT_U] + sample_off[0], &_unused);
-            const float r2 = std::modf(halton[RAND_DIM_LIGHT_V] + sample_off[1], &_unused);
-
-            simd_fvec2 offset = 2.0f * simd_fvec2{r1, r2} - simd_fvec2{1.0f, 1.0f};
-            if (offset[0] != 0.0f && offset[1] != 0.0f) {
-                float theta, r;
-                if (std::abs(offset[0]) > std::abs(offset[1])) {
-                    r = offset[0];
-                    theta = 0.25f * PI * (offset[1] / offset[0]);
-                } else {
-                    r = offset[1];
-                    theta = 0.5f * PI - 0.25f * PI * (offset[0] / offset[1]);
-                }
-
-                offset[0] = 0.5f * r * std::cos(theta);
-                offset[1] = 0.5f * r * std::sin(theta);
-            }
-
-            const simd_fvec4 lp = light_pos + light_u * offset[0] + light_v * offset[1];
-
-            const simd_fvec4 to_light = lp - P;
-            light_dist = length(to_light);
-            L = (to_light / light_dist);
-
-            light_area = 0.25f * PI * l.disk.size_x * l.disk.size_y;
-            simd_fvec4 light_forward = normalize(cross(light_u, light_v));
-
-            const float cos_theta = dot(-L, light_forward);
-            if (cos_theta > 0.0f) {
-                light_pdf = (light_dist * light_dist) / (light_area * cos_theta);
-            }
-
-            if (!l.visible) {
-                light_area = 0.0f;
-            }
-
-            if (l.sky_portal != 0) {
-                if (sc.env->env_map != 0xffffffff) {
-                    lcol *= SampleLatlong_RGBE(*static_cast<const TextureAtlasRGBA *>(tex_atlases[0]),
-                                               sc.textures[sc.env->env_map], L);
-                    if (sc.env->env_clamp > FLT_EPS) {
-                        lcol = min(lcol, simd_fvec4{sc.env->env_clamp});
-                    }
-                }
-                lcol[0] *= sc.env->env_col[0];
-                lcol[1] *= sc.env->env_col[1];
-                lcol[2] *= sc.env->env_col[2];
-            }
-        } else if (l.type == LIGHT_TYPE_TRI) {
-            const uint32_t ltri_index = l.tri.index;
-
-            const vertex_t &v1 = sc.vertices[sc.vtx_indices[ltri_index * 3 + 0]];
-            const vertex_t &v2 = sc.vertices[sc.vtx_indices[ltri_index * 3 + 1]];
-            const vertex_t &v3 = sc.vertices[sc.vtx_indices[ltri_index * 3 + 2]];
-
-            const simd_fvec4 p1 = simd_fvec4(v1.p[0], v1.p[1], v1.p[2], 0.0f),
-                             p2 = simd_fvec4(v2.p[0], v2.p[1], v2.p[2], 0.0f),
-                             p3 = simd_fvec4(v3.p[0], v3.p[1], v3.p[2], 0.0f);
-            const simd_fvec2 uv1 = simd_fvec2(v1.t[0]), uv2 = simd_fvec2(v2.t[0]), uv3 = simd_fvec2(v3.t[0]);
-
-            const float r1 = std::sqrt(std::modf(halton[RAND_DIM_LIGHT_U] + sample_off[0], &_unused));
-            const float r2 = std::modf(halton[RAND_DIM_LIGHT_V] + sample_off[1], &_unused);
-
-            const simd_fvec2 luvs = uv1 * (1.0f - r1) + r1 * (uv2 * (1.0f - r2) + uv3 * r2);
-            const simd_fvec4 lp = TransformPoint(p1 * (1.0f - r1) + r1 * (p2 * (1.0f - r2) + p3 * r2), ltr.xform);
-            simd_fvec4 light_forward = TransformDirection(cross(p2 - p1, p3 - p1), ltr.xform);
-            light_area = 0.5f * length(light_forward);
-            light_forward = normalize(light_forward);
-
-            const simd_fvec4 to_light = lp - P;
-            light_dist = length(to_light);
-            L = (to_light / light_dist);
-
-            const float cos_theta = std::abs(dot(-L, light_forward)); // abs for doublesided light
-            if (cos_theta > 0.0f) {
-                light_pdf = (light_dist * light_dist) / (light_area * cos_theta);
-            }
-
-            const material_t &lmat = sc.materials[sc.tri_materials[ltri_index].front_mi & MATERIAL_INDEX_BITS];
-            if ((lmat.flags & MAT_FLAG_SKY_PORTAL) == 0) {
-                if (lmat.textures[BASE_TEXTURE] != 0xffffffff) {
-                    lcol *= SampleBilinear(tex_atlases, sc.textures[lmat.textures[BASE_TEXTURE]], luvs, 0 /* lod */);
-                }
-            } else {
-                if (sc.env->env_map != 0xffffffff) {
-                    lcol *= SampleLatlong_RGBE(*static_cast<const TextureAtlasRGBA *>(tex_atlases[0]),
-                                               sc.textures[sc.env->env_map], L);
-                    if (sc.env->env_clamp > FLT_EPS) {
-                        lcol = min(lcol, simd_fvec4{sc.env->env_clamp});
-                    }
-                }
-                lcol[0] *= sc.env->env_col[0];
-                lcol[1] *= sc.env->env_col[1];
-                lcol[2] *= sc.env->env_col[2];
-            }
-        }
-
-        const float N_dot_L = dot(N, L);
-        const bool _is_backfacing = (N_dot_L < 0.0f);
-
-        if (light_pdf > 0.0f) {
-            const float visibility =
-                ComputeVisibility(offset_ray(P, _is_backfacing ? -plane_N : plane_N), L, light_dist - 10.0f * HIT_BIAS,
-                                  halton[RAND_DIM_BSDF_PICK], hash(pi.rand_index), sc, node_index, tex_atlases);
-            if (visibility > 0.0f) {
-                struct {
-                    const Ray::material_t *mat;
-                    float weight;
-                } materials_stack[16];
-
-                uint32_t materials_count = 0;
-                materials_stack[materials_count++] = {mat, 1.0f};
-
-                while (materials_count) {
-                    const auto &cur = materials_stack[--materials_count];
-                    const Ray::material_t *cur_mat = cur.mat;
-                    const float cur_weight = cur.weight;
-
-                    const float eta =
-                        is_backfacing ? (cur_mat->int_ior / cur_mat->ext_ior) : (cur_mat->ext_ior / cur_mat->int_ior);
-                    simd_fvec4 H;
-                    if (N_dot_L > 0.0f) {
-                        H = normalize(L - I);
-                    } else {
-                        H = normalize(L - I * eta);
-                    }
-
-                    simd_fvec4 base_color =
-                        simd_fvec4(cur_mat->base_color[0], cur_mat->base_color[1], cur_mat->base_color[2], 1.0f);
-                    if (cur_mat->textures[BASE_TEXTURE] != 0xffffffff) {
-                        const texture_t &base_texture = sc.textures[cur_mat->textures[BASE_TEXTURE]];
-                        const float base_lod = get_texture_lod(base_texture, surf_der.duv_dx, surf_der.duv_dy);
-                        simd_fvec4 tex_color = SampleBilinear(tex_atlases, base_texture, uvs, int(base_lod));
-                        if (base_texture.width & TEXTURE_SRGB_BIT) {
-                            tex_color = srgb_to_rgb(tex_color);
-                        }
-                        base_color *= tex_color;
-                    }
-
-                    simd_fvec4 tint_color = {0.0f};
-
-                    const float base_color_lum = lum(base_color);
-                    if (base_color_lum > 0.0f) {
-                        tint_color = base_color / base_color_lum;
-                    }
-
-                    // sample roughness texture
-                    float roughness = unpack_unorm_16(cur_mat->roughness_unorm);
-                    if (cur_mat->textures[ROUGH_TEXTURE] != 0xffffffff) {
-                        const texture_t &roughness_tex = sc.textures[cur_mat->textures[ROUGH_TEXTURE]];
-                        const float roughness_lod = get_texture_lod(roughness_tex, surf_der.duv_dx, surf_der.duv_dy);
-                        simd_fvec4 roughness_color =
-                            SampleBilinear(tex_atlases, roughness_tex, uvs, int(roughness_lod))[0];
-                        if (roughness_tex.width & TEXTURE_SRGB_BIT) {
-                            roughness_color = srgb_to_rgb(roughness_color);
-                        }
-                        roughness *= roughness_color[0];
-                    }
-
-                    const float roughness2 = roughness * roughness;
-
-                    if (cur_mat->type == DiffuseNode) {
-                        if (N_dot_L > 0.0f) {
-                            const simd_fvec4 _base_color = pi.should_consider_albedo() ? base_color : simd_fvec4(1.0f);
-                            simd_fvec4 diff_col = Evaluate_OrenDiffuse_BSDF(-I, N, L, roughness, _base_color);
-                            float bsdf_pdf = diff_col[3];
-
-                            float mis_weight = 1.0f;
-                            if (light_area > 0.0f) {
-                                mis_weight = power_heuristic(light_pdf, bsdf_pdf);
-                            }
-                            col += lcol * diff_col * (cur_weight * mis_weight / light_pdf);
-                        }
-                    } else if (cur_mat->type == GlossyNode) {
-                        if (roughness2 * roughness2 >= 1e-7f && N_dot_L > 0.0f) {
-                            const simd_fvec4 view_dir_ts = tangent_from_world(T, B, N, -I);
-                            const simd_fvec4 light_dir_ts = tangent_from_world(T, B, N, L);
-                            const simd_fvec4 sampled_normal_ts = tangent_from_world(T, B, N, H);
-
-                            const float specular = 0.5f;
-                            const float spec_ior = (2.0f / (1.0f - std::sqrt(0.08f * specular))) - 1.0f;
-                            const float F0 = fresnel_dielectric_cos(1.0f, spec_ior);
-
-                            const simd_fvec4 spec_col =
-                                Evaluate_GGXSpecular_BSDF(view_dir_ts, sampled_normal_ts, light_dir_ts, roughness2,
-                                                          roughness2, spec_ior, F0, base_color);
-                            const float bsdf_pdf = spec_col[3];
-
-                            float mis_weight = 1.0f;
-                            if (light_area > 0.0f) {
-                                mis_weight = power_heuristic(light_pdf, bsdf_pdf);
-                            }
-                            col += lcol * spec_col * (cur_weight * mis_weight / light_pdf);
-                        }
-                    } else if (cur_mat->type == RefractiveNode) {
-                        if (roughness2 * roughness2 >= 1e-7f && N_dot_L < 0.0f) {
-                            const simd_fvec4 view_dir_ts = tangent_from_world(T, B, N, -I);
-                            const simd_fvec4 light_dir_ts = tangent_from_world(T, B, N, L);
-                            const simd_fvec4 sampled_normal_ts = tangent_from_world(T, B, N, H);
-
-                            const simd_fvec4 refr_col = Evaluate_GGXRefraction_BSDF(
-                                view_dir_ts, sampled_normal_ts, light_dir_ts, roughness2, eta, base_color);
-                            const float bsdf_pdf = refr_col[3];
-
-                            float mis_weight = 1.0f;
-                            if (light_area > 0.0f) {
-                                mis_weight = power_heuristic(light_pdf, bsdf_pdf);
-                            }
-                            col += lcol * refr_col * (cur_weight * mis_weight / light_pdf);
-                        }
-                    } else if (cur_mat->type == PrincipledNode) {
-                        float metallic = unpack_unorm_16(cur_mat->metallic_unorm);
-                        if (cur_mat->textures[METALLIC_TEXTURE] != 0xffffffff) {
-                            const texture_t &metallic_tex = sc.textures[cur_mat->textures[METALLIC_TEXTURE]];
-                            const float metallic_lod = get_texture_lod(metallic_tex, surf_der.duv_dx, surf_der.duv_dy);
-                            metallic *= SampleBilinear(tex_atlases, metallic_tex, uvs, int(metallic_lod))[0];
-                        }
-
-                        const float specular = unpack_unorm_16(cur_mat->specular_unorm);
-                        const float transmission = unpack_unorm_16(cur_mat->transmission_unorm);
-                        const float clearcoat = unpack_unorm_16(cur_mat->clearcoat_unorm);
-                        const float clearcoat_roughness = unpack_unorm_16(cur_mat->clearcoat_roughness_unorm);
-                        const float sheen = unpack_unorm_16(cur_mat->sheen_unorm);
-                        const float sheen_tint = unpack_unorm_16(cur_mat->sheen_tint_unorm);
-
-                        simd_fvec4 spec_tmp_col =
-                            mix(simd_fvec4{1.0f}, tint_color, unpack_unorm_16(cur_mat->specular_tint_unorm));
-                        spec_tmp_col = mix(specular * 0.08f * spec_tmp_col, base_color, metallic);
-
-                        const float spec_ior = (2.0f / (1.0f - std::sqrt(0.08f * specular))) - 1.0f;
-                        const float F0 = fresnel_dielectric_cos(1.0f, spec_ior);
-
-                        // Approximation of FH (using shading normal)
-                        const float FN = (fresnel_dielectric_cos(dot(I, N), spec_ior) - F0) / (1.0f - F0);
-
-                        const simd_fvec4 approx_spec_col = mix(spec_tmp_col, simd_fvec4(1.0f), FN);
-                        const float spec_color_lum = lum(approx_spec_col);
-
-                        float diffuse_weight, specular_weight, clearcoat_weight, refraction_weight;
-                        get_lobe_weights(mix(base_color_lum, 1.0f, sheen), spec_color_lum, specular, metallic,
-                                         transmission, clearcoat, &diffuse_weight, &specular_weight, &clearcoat_weight,
-                                         &refraction_weight);
-
-                        float bsdf_pdf = 0.0f;
-
-                        if (diffuse_weight > 0.0f && N_dot_L > 0.0f) {
-                            const simd_fvec4 _base_color = pi.should_consider_albedo() ? base_color : simd_fvec4(1.0f);
-                            const simd_fvec4 sheen_color = sheen * mix(simd_fvec4{1.0f}, tint_color, sheen_tint);
-
-                            simd_fvec4 diff_col = Evaluate_PrincipledDiffuse_BSDF(
-                                -I, N, L, roughness, _base_color, sheen_color, pi.use_uniform_sampling());
-                            bsdf_pdf += diffuse_weight * diff_col[3];
-                            diff_col *= (1.0f - metallic);
-
-                            col += lcol * N_dot_L * diff_col * cur_weight / (PI * light_pdf);
-                        }
-
-                        const float roughness2 = roughness * roughness;
-                        const float aspect = std::sqrt(1.0f - 0.9f * unpack_unorm_16(cur_mat->anisotropic_unorm));
-
-                        const float alpha_x = roughness2 / aspect;
-                        const float alpha_y = roughness2 * aspect;
-
-                        const simd_fvec4 view_dir_ts = tangent_from_world(T, B, N, -I);
-                        const simd_fvec4 light_dir_ts = tangent_from_world(T, B, N, L);
-                        const simd_fvec4 sampled_normal_ts = tangent_from_world(T, B, N, H);
-
-                        if (specular_weight > 0.0f && alpha_x * alpha_y >= 1e-7f && N_dot_L > 0.0f) {
-                            const simd_fvec4 spec_col =
-                                Evaluate_GGXSpecular_BSDF(view_dir_ts, sampled_normal_ts, light_dir_ts, alpha_x,
-                                                          alpha_y, spec_ior, F0, spec_tmp_col);
-                            bsdf_pdf += specular_weight * spec_col[3];
-
-                            col += lcol * spec_col * (cur_weight / light_pdf);
-                        }
-
-                        const float clearcoat_ior = (2.0f / (1.0f - std::sqrt(0.08f * clearcoat))) - 1.0f;
-                        const float clearcoat_F0 = fresnel_dielectric_cos(1.0f, clearcoat_ior);
-                        const float clearcoat_roughness2 = clearcoat_roughness * clearcoat_roughness;
-                        if (clearcoat_weight > 0.0f && clearcoat_roughness2 * clearcoat_roughness2 >= 1e-7f &&
-                            N_dot_L > 0.0f) {
-                            const simd_fvec4 clearcoat_col =
-                                Evaluate_PrincipledClearcoat_BSDF(view_dir_ts, sampled_normal_ts, light_dir_ts,
-                                                                  clearcoat_roughness2, clearcoat_ior, clearcoat_F0);
-                            bsdf_pdf += clearcoat_weight * clearcoat_col[3];
-
-                            col += 0.25f * lcol * clearcoat_col * (cur_weight / light_pdf);
-                        }
-
-                        if (refraction_weight > 0.0f) {
-                            const float fresnel = fresnel_dielectric_cos(dot(I, N), 1.0f / eta);
-
-                            if (fresnel != 0.0f && roughness2 * roughness2 >= 1e-7f && N_dot_L > 0.0f) {
-                                const simd_fvec4 spec_col = Evaluate_GGXSpecular_BSDF(
-                                    view_dir_ts, sampled_normal_ts, light_dir_ts, roughness2, roughness2,
-                                    1.0f /* ior */, 0.0f /* F0 */, simd_fvec4{1.0f});
-                                bsdf_pdf += refraction_weight * fresnel * spec_col[3];
-
-                                col += lcol * spec_col * (fresnel * cur_weight / light_pdf);
-                            }
-
-                            const float transmission_roughness =
-                                1.0f -
-                                (1.0f - roughness) * (1.0f - unpack_unorm_16(cur_mat->transmission_roughness_unorm));
-                            const float transmission_roughness2 = transmission_roughness * transmission_roughness;
-                            if (fresnel != 1.0f && transmission_roughness2 * transmission_roughness2 >= 1e-7f &&
-                                N_dot_L < 0.0f) {
-                                const simd_fvec4 refr_col =
-                                    Evaluate_GGXRefraction_BSDF(view_dir_ts, sampled_normal_ts, light_dir_ts,
-                                                                transmission_roughness2, eta, base_color);
-                                bsdf_pdf += refraction_weight * (1.0f - fresnel) * refr_col[3];
-
-                                col += lcol * refr_col * ((1.0f - fresnel) * cur_weight / light_pdf);
-                            }
-                        }
-
-                        float mis_weight = 1.0f;
-                        if (light_area > 0.0f) {
-                            mis_weight = power_heuristic(light_pdf, bsdf_pdf);
-                        }
-                        col *= mis_weight;
-                    } else if (cur_mat->type == MixNode) {
-                        if (cur_mat->flags & MAT_FLAG_MIX_ADD) {
-                            materials_stack[materials_count++] = {&sc.materials[cur_mat->textures[MIX_MAT1]],
-                                                                  cur_weight};
-                            materials_stack[materials_count++] = {&sc.materials[cur_mat->textures[MIX_MAT2]],
-                                                                  cur_weight};
-                        } else {
-                            float mix_val = cur_mat->strength;
-                            if (cur_mat->textures[BASE_TEXTURE] != 0xffffffff) {
-                                mix_val *= SampleBilinear(tex_atlases, sc.textures[cur_mat->textures[BASE_TEXTURE]],
-                                                          uvs, 0)[0];
-                            }
-
-                            const float eta = is_backfacing ? (cur_mat->ext_ior / cur_mat->int_ior)
-                                                            : (cur_mat->int_ior / cur_mat->ext_ior);
-                            const float RR = cur_mat->int_ior != 0.0f ? fresnel_dielectric_cos(dot(I, N), eta) : 1.0f;
-
-                            mix_val *= clamp(RR, 0.0f, 1.0f);
-
-                            materials_stack[materials_count++] = {&sc.materials[cur_mat->textures[MIX_MAT1]],
-                                                                  (1.0f - mix_val) * cur_weight};
-                            materials_stack[materials_count++] = {&sc.materials[cur_mat->textures[MIX_MAT2]],
-                                                                  mix_val * cur_weight};
-                        }
-                    }
-                }
-            }
-        }
+        col += EvaluateDirectLights(I, P, N, T, B, plane_N, uvs, is_backfacing, mat, surf_der, pi, sc, tex_atlases,
+                                    node_index, halton, sample_off);
     }
 #endif
 
