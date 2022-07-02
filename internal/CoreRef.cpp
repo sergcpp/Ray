@@ -696,6 +696,32 @@ void create_tbn(const simd_fvec4 &N, simd_fvec4 &out_T, simd_fvec4 &out_B) {
     out_B = cross(N, out_T);
 }
 
+simd_fvec4 MapToCone(float r1, float r2, simd_fvec4 N, float radius) {
+    const simd_fvec2 offset = 2.0f * simd_fvec2(r1, r2) - simd_fvec2(1.0f);
+
+    if (offset[0] == 0.0f && offset[1] == 0.0f) {
+        return N;
+    }
+
+    float theta, r;
+
+    if (std::abs(offset[0]) > std::abs(offset[1])) {
+        r = offset[0];
+        theta = 0.25f * PI * (offset[1] / offset[0]);
+    } else {
+        r = offset[1];
+        theta = 0.5f * PI * (1.0f - 0.5f * (offset[0] / offset[1]));
+    }
+
+    const simd_fvec2 uv = simd_fvec2(radius * r * std::cos(theta), radius * r * std::sin(theta));
+
+    simd_fvec4 LT, LB;
+    create_tbn(N, LT, LB);
+
+    return N + uv[0] * LT + uv[1] * LB;
+}
+
+
 simd_fvec4 rotate_around_axis(const simd_fvec4 &p, const simd_fvec4 &axis, const float angle) {
     const float costheta = std::cos(angle);
     const float sintheta = std::sin(angle);
@@ -2870,21 +2896,8 @@ Ray::Ref::simd_fvec4 Ray::Ref::EvaluateDirectLights(const simd_fvec4 &I, const s
             const float r1 = std::modf(halton[RAND_DIM_LIGHT_U] + sample_off[0], &_unused);
             const float r2 = std::modf(halton[RAND_DIM_LIGHT_V] + sample_off[1], &_unused);
 
-            const float phi = 2 * PI * r2;
-
-            const float cos_phi = std::cos(phi);
-            const float sin_phi = std::sin(phi);
-
-            const float cos_angle = std::cos(l.dir.angle);
-            const float z = cos_angle + (1.0f - cos_angle) * r1;
-
-            simd_fvec4 LT, LB;
-            create_tbn(L, LT, LB);
-
-            const float dir = std::sqrt(1.0f - z * z);
-            const auto V = simd_fvec4{dir * cos_phi, dir * sin_phi, z, 0.0f};
-
-            L = world_from_tangent(LT, LB, L, V);
+            const float radius = std::tan(l.dir.angle);
+            L = normalize(MapToCone(r1, r2, L, radius));
         }
         light_area = 0.0f;
         light_dist = MAX_DIST;
