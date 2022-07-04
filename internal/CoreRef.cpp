@@ -15,7 +15,7 @@
 
 namespace Ray {
 namespace Ref {
-force_inline void _IntersectTri(const ray_packet_t &r, const tri_accel2_t &tri, const uint32_t i, hit_data_t &inter) {
+force_inline void _IntersectTri(const ray_packet_t &r, const tri_accel_t &tri, const uint32_t i, hit_data_t &inter) {
 #define _sign_of(f) (((f) >= 0) ? 1 : -1)
 #define _dot(x, y) ((x)[0] * (y)[0] + (x)[1] * (y)[1] + (x)[2] * (y)[2])
 
@@ -1214,7 +1214,7 @@ void Ray::Ref::SortRays_GPU(ray_packet_t *rays, const size_t rays_count, const f
     }
 }
 
-bool Ray::Ref::IntersectTris_ClosestHit(const ray_packet_t &r, const tri_accel2_t *tris, const int tri_start,
+bool Ray::Ref::IntersectTris_ClosestHit(const ray_packet_t &r, const tri_accel_t *tris, const int tri_start,
                                         const int tri_end, const int obj_index, hit_data_t &out_inter) {
     hit_data_t inter{Uninitialize};
     inter.mask_values[0] = 0;
@@ -1235,7 +1235,7 @@ bool Ray::Ref::IntersectTris_ClosestHit(const ray_packet_t &r, const tri_accel2_
     return inter.mask_values[0] != 0;
 }
 
-bool Ray::Ref::IntersectTris_AnyHit(const ray_packet_t &r, const tri_accel2_t *tris, const tri_mat_data_t *materials,
+bool Ray::Ref::IntersectTris_AnyHit(const ray_packet_t &r, const tri_accel_t *tris, const tri_mat_data_t *materials,
                                     const uint32_t *indices, const int tri_start, const int tri_end,
                                     const int obj_index, hit_data_t &out_inter) {
     hit_data_t inter{Uninitialize};
@@ -1548,7 +1548,7 @@ bool Ray::Ref::Traverse_MicroTree_Stackless_GPU(const ray_packet_t &r, const flo
 bool Ray::Ref::Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t &r, const bvh_node_t *nodes,
                                                        uint32_t root_index, const mesh_instance_t *mesh_instances,
                                                        const uint32_t *mi_indices, const mesh_t *meshes,
-                                                       const transform_t *transforms, const tri_accel2_t *tris,
+                                                       const transform_t *transforms, const tri_accel_t *tris,
                                                        const uint32_t *tri_indices, hit_data_t &inter) {
     bool res = false;
 
@@ -1597,7 +1597,7 @@ bool Ray::Ref::Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t &r, co
 bool Ray::Ref::Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t &r, const mbvh_node_t *nodes,
                                                        uint32_t root_index, const mesh_instance_t *mesh_instances,
                                                        const uint32_t *mi_indices, const mesh_t *meshes,
-                                                       const transform_t *transforms, const tri_accel2_t *tris,
+                                                       const transform_t *transforms, const tri_accel_t *tris,
                                                        const uint32_t *tri_indices, hit_data_t &inter) {
     bool res = false;
 
@@ -1701,7 +1701,7 @@ bool Ray::Ref::Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t &r, co
 bool Ray::Ref::Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t &r, const bvh_node_t *nodes,
                                                    const uint32_t root_index, const mesh_instance_t *mesh_instances,
                                                    const uint32_t *mi_indices, const mesh_t *meshes,
-                                                   const transform_t *transforms, const tri_accel2_t *tris,
+                                                   const transform_t *transforms, const tri_accel_t *tris,
                                                    const tri_mat_data_t *materials, const uint32_t *tri_indices,
                                                    hit_data_t &inter) {
     bool res = false;
@@ -1762,7 +1762,7 @@ bool Ray::Ref::Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t &r, const 
 bool Ray::Ref::Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t &r, const mbvh_node_t *nodes,
                                                    const uint32_t root_index, const mesh_instance_t *mesh_instances,
                                                    const uint32_t *mi_indices, const mesh_t *meshes,
-                                                   const transform_t *transforms, const tri_accel2_t *tris,
+                                                   const transform_t *transforms, const tri_accel_t *tris,
                                                    const tri_mat_data_t *materials, const uint32_t *tri_indices,
                                                    hit_data_t &inter) {
     bool res = false;
@@ -1881,7 +1881,7 @@ bool Ray::Ref::Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t &r, const 
 
 bool Ray::Ref::Traverse_MicroTree_WithStack_ClosestHit(const ray_packet_t &r, const float inv_d[3],
                                                        const bvh_node_t *nodes, const uint32_t root_index,
-                                                       const tri_accel2_t *tris, const uint32_t *tri_indices,
+                                                       const tri_accel_t *tris, const uint32_t *tri_indices,
                                                        int obj_index, hit_data_t &inter) {
     bool res = false;
 
@@ -1910,7 +1910,7 @@ bool Ray::Ref::Traverse_MicroTree_WithStack_ClosestHit(const ray_packet_t &r, co
 
 bool Ray::Ref::Traverse_MicroTree_WithStack_ClosestHit(const ray_packet_t &r, const float inv_d[3],
                                                        const mbvh_node_t *nodes, const uint32_t root_index,
-                                                       const tri_accel2_t *tris, const uint32_t *tri_indices,
+                                                       const tri_accel_t *tris, const uint32_t *tri_indices,
                                                        int obj_index, hit_data_t &inter) {
     bool res = false;
 
@@ -1995,7 +1995,7 @@ bool Ray::Ref::Traverse_MicroTree_WithStack_ClosestHit(const ray_packet_t &r, co
 }
 
 bool Ray::Ref::Traverse_MicroTree_WithStack_AnyHit(const ray_packet_t &r, const float inv_d[3], const bvh_node_t *nodes,
-                                                   uint32_t root_index, const tri_accel2_t *tris,
+                                                   uint32_t root_index, const tri_accel_t *tris,
                                                    const tri_mat_data_t *materials, const uint32_t *tri_indices,
                                                    int obj_index, hit_data_t &inter) {
     bool res = false;
@@ -2037,7 +2037,7 @@ bool Ray::Ref::Traverse_MicroTree_WithStack_AnyHit(const ray_packet_t &r, const 
 
 bool Ray::Ref::Traverse_MicroTree_WithStack_AnyHit(const ray_packet_t &r, const float inv_d[3],
                                                    const mbvh_node_t *nodes, const uint32_t root_index,
-                                                   const tri_accel2_t *tris, const tri_mat_data_t *materials,
+                                                   const tri_accel_t *tris, const tri_mat_data_t *materials,
                                                    const uint32_t *tri_indices, int obj_index, hit_data_t &inter) {
     bool res = false;
 
@@ -2686,10 +2686,10 @@ float Ray::Ref::ComputeVisibility(const simd_fvec4 &p, const simd_fvec4 &d, floa
 
         if (sc.mnodes) {
             Traverse_MacroTree_WithStack_AnyHit(r, sc.mnodes, node_index, sc.mesh_instances, sc.mi_indices, sc.meshes,
-                                                sc.transforms, sc.tris2, sc.tri_materials, sc.tri_indices, sh_inter);
+                                                sc.transforms, sc.tris, sc.tri_materials, sc.tri_indices, sh_inter);
         } else {
             Traverse_MacroTree_WithStack_AnyHit(r, sc.nodes, node_index, sc.mesh_instances, sc.mi_indices, sc.meshes,
-                                                sc.transforms, sc.tris2, sc.tri_materials, sc.tri_indices, sh_inter);
+                                                sc.transforms, sc.tris, sc.tri_materials, sc.tri_indices, sh_inter);
         }
         if (!sh_inter.mask_values[0]) {
             break;
@@ -2722,7 +2722,7 @@ float Ray::Ref::ComputeVisibility(const simd_fvec4 &p, const simd_fvec4 &d, floa
         const simd_fvec2 sh_uvs =
             simd_fvec2(v1.t[0]) * w + simd_fvec2(v2.t[0]) * sh_inter.u + simd_fvec2(v3.t[0]) * sh_inter.v;
 
-        const tri_accel2_t &tri = sc.tris2[prim_index];
+        const tri_accel_t &tri = sc.tris[prim_index];
 
         auto sh_plane_N = simd_fvec4{tri.n_plane[0], tri.n_plane[1], tri.n_plane[2], 0.0f};
         sh_plane_N = TransformNormal(sh_plane_N, tr->inv_xform);
@@ -3439,7 +3439,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
     const bool is_backfacing = (inter.prim_indices[0] < 0);
     const uint32_t prim_index = is_backfacing ? -inter.prim_indices[0] : inter.prim_indices[0];
 
-    const tri_accel2_t &tri = sc.tris2[prim_index];
+    const tri_accel_t &tri = sc.tris[prim_index];
     const uint32_t tri_index = sc.tri_indices[prim_index];
 
     const material_t *mat = &sc.materials[sc.tri_materials[tri_index].front_mi & MATERIAL_INDEX_BITS];

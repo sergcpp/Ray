@@ -125,7 +125,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
     sc_data.vertices = s->vertices_.empty() ? nullptr : &s->vertices_[0];
     sc_data.nodes = s->nodes_.empty() ? nullptr : &s->nodes_[0];
     sc_data.mnodes = s->mnodes_.empty() ? nullptr : &s->mnodes_[0];
-    sc_data.tris = s->tris_.empty() ? nullptr : &s->tris_[0];
+    sc_data.tris2 = s->tris2_.empty() ? nullptr : &s->tris2_[0];
     sc_data.tri_indices = s->tri_indices_.empty() ? nullptr : &s->tri_indices_[0];
     sc_data.materials = s->materials_.empty() ? nullptr : &s->materials_[0];
     sc_data.textures = s->textures_.empty() ? nullptr : &s->textures_[0];
@@ -227,11 +227,11 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
                 if (sc_data.mnodes) {
                     NS::Traverse_MacroTree_WithStack_ClosestHit(
                         r, {-1}, sc_data.mnodes, macro_tree_root, sc_data.mesh_instances, sc_data.mi_indices,
-                        sc_data.meshes, sc_data.transforms, sc_data.tris, sc_data.tri_indices, inter);
+                        sc_data.meshes, sc_data.transforms, sc_data.tris2, sc_data.tri_indices, inter);
                 } else {
                     NS::Traverse_MacroTree_WithStack_ClosestHit(
                         r, {-1}, sc_data.nodes, macro_tree_root, sc_data.mesh_instances, sc_data.mi_indices,
-                        sc_data.meshes, sc_data.transforms, sc_data.tris, sc_data.tri_indices, inter);
+                        sc_data.meshes, sc_data.transforms, sc_data.tris2, sc_data.tri_indices, inter);
                 }
             }
         }
@@ -259,16 +259,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
 
         const simd_ivec<S> x = inter.xy >> 16, y = inter.xy & 0x0000FFFF;
 
-        simd_ivec<S> index;
-
-        if (cam.pass_settings.flags & UseCoherentSampling) {
-            for (int j = 0; j < S; j++) {
-                const int blck_x = (x[j] % 8), blck_y = (y[j] % 8);
-                index[j] = ray_packet_pixel_layout[blck_y * 8 + blck_x];
-            }
-        } else {
-            index = y * w + x;
-        }
+        const simd_ivec<S> index = y * w + x;
 
         p.secondary_masks[i] = {0};
 
@@ -349,16 +340,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
 
             const simd_ivec<S> x = inter.xy >> 16, y = inter.xy & 0x0000FFFF;
 
-            simd_ivec<S> index;
-
-            if (cam.pass_settings.flags & UseCoherentSampling) {
-                for (int j = 0; j < S; j++) {
-                    const int blck_x = (x[j] % 8), blck_y = (y[j] % 8);
-                    index[j] = ray_packet_pixel_layout[blck_y * 8 + blck_x];
-                }
-            } else {
-                index = y * w + x;
-            }
+            const simd_ivec<S> index = y * w + x;
 
             simd_fvec<S> out_rgba[4] = {0.0f};
             NS::ShadeSurface(index, pass_info, &region.halton_seq[0], inter, r, sc_data, macro_tree_root,

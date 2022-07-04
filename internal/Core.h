@@ -27,25 +27,12 @@
 namespace Ray {
 enum eUninitialize { Uninitialize };
 
-struct tri_accel_t {
-    float nu, nv;
-    float np;
-    float pu, pv;
-    int32_t ci;
-    float e0u, e0v;
-    float e1u, e1v;
-    uint32_t mi, back_mi;
-};
-static_assert(sizeof(tri_accel_t) == 48, "!");
-
-struct alignas(16) tri_accel2_t {
+struct alignas(16) tri_accel_t {
     float n_plane[4];
     float u_plane[4];
     float v_plane[4];
 };
-static_assert(sizeof(tri_accel2_t) == 48, "!");
-
-extern const tri_accel_t InvalidTriangle;
+static_assert(sizeof(tri_accel_t) == 48, "!");
 
 const uint8_t TRI_W_BITS = 0b00000011;
 const uint8_t TRI_AXIS_ALIGNED_BIT = 0b00000100;
@@ -184,7 +171,6 @@ struct light_t {
 };
 static_assert(sizeof(light_t) == 48, "!");
 
-
 const int LIGHT_TYPE_SPHERE = 0;
 const int LIGHT_TYPE_SPOT = 1;
 const int LIGHT_TYPE_DIR = 2;
@@ -256,7 +242,7 @@ force_inline bool GetFirstBit(const uint64_t mask, unsigned long *bit_index) {
 
 force_inline int CountTrailingZeroes(const uint64_t mask) {
 #ifdef _MSC_VER
-    //return int(_tzcnt_u64(mask));
+    // return int(_tzcnt_u64(mask));
     if (mask == 0) {
         return 64;
     }
@@ -280,15 +266,12 @@ force_inline long ClearBit(long mask, long index) {
 
 // Creates struct of precomputed triangle data for faster Plucker intersection test
 bool PreprocessTri(const float *p, int stride, tri_accel_t *out_acc);
-bool PreprocessTri(const float *p, int stride, tri_accel2_t *out_acc);
-// Extructs planar triangle normal from precomputed triangle data
-void ExtractPlaneNormal(const tri_accel_t &tri, float *out_normal);
 
 // Builds BVH for mesh and precomputes triangle data
 uint32_t PreprocessMesh(const float *attrs, const uint32_t *vtx_indices, size_t vtx_indices_count, eVertexLayout layout,
                         int base_vertex, uint32_t tris_start, const bvh_settings_t &s,
-                        std::vector<bvh_node_t> &out_nodes, std::vector<tri_accel_t> &out_tris,
-                        std::vector<tri_accel2_t> &out_tris2, std::vector<uint32_t> &out_indices);
+                        std::vector<bvh_node_t> &out_nodes, std::vector<tri_accel_t> &out_tris2,
+                        std::vector<uint32_t> &out_indices);
 
 // Recursively builds linear bvh for a set of primitives
 uint32_t EmitLBVH_Recursive(const prim_t *prims, const uint32_t *indices, const uint32_t *morton_codes,
@@ -436,7 +419,6 @@ struct scene_data_t {
     const bvh_node_t *nodes;
     const mbvh_node_t *mnodes;
     const tri_accel_t *tris;
-    const tri_accel2_t *tris2;
     const uint32_t *tri_indices;
     const tri_mat_data_t *tri_materials;
     const material_t *materials;

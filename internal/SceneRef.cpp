@@ -250,7 +250,7 @@ uint32_t Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
     const uint32_t mesh_index = meshes_.emplace();
     mesh_t &m = meshes_.at(mesh_index);
 
-    const auto tris_start = uint32_t(tris2_.size());
+    const auto tris_start = uint32_t(tris_.size());
     // const auto tri_index_start = uint32_t(tri_indices_.size());
 
     bvh_settings_t s;
@@ -263,7 +263,7 @@ uint32_t Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
 
     m.node_index = uint32_t(nodes_.size());
     m.node_count = PreprocessMesh(_m.vtx_attrs, _m.vtx_indices, _m.vtx_indices_count, _m.layout, _m.base_vertex,
-                                  uint32_t(tri_materials_.size()), s, nodes_, tris_, tris2_, tri_indices_);
+                                  uint32_t(tri_materials_.size()), s, nodes_, tris_, tri_indices_);
 
     log_->Info("Ray: Mesh preprocessed in %lldms", (Ray::GetTimeMs() - t1));
 
@@ -339,7 +339,7 @@ uint32_t Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
     }
 
     m.tris_index = tris_start;
-    m.tris_count = uint32_t(tris2_.size() - tris_start);
+    m.tris_count = uint32_t(tris_.size() - tris_start);
 
     std::vector<uint32_t> new_vtx_indices;
     new_vtx_indices.reserve(_m.vtx_indices_count);
@@ -611,9 +611,9 @@ void Ray::Ref::Scene::RemoveTris(uint32_t tris_index, uint32_t tris_count) {
         return;
     }
 
-    tris2_.erase(std::next(tris2_.begin(), tris_index), std::next(tris2_.begin(), tris_index + tris_count));
+    tris_.erase(std::next(tris_.begin(), tris_index), std::next(tris_.begin(), tris_index + tris_count));
 
-    if (tris_index != tris2_.size()) {
+    if (tris_index != tris_.size()) {
         for (mesh_t &m : meshes_) {
             if (m.tris_index > tris_index) {
                 m.tris_index -= tris_count;
