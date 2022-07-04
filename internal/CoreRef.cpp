@@ -3059,11 +3059,8 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
             mix_val *= SampleBilinear(tex_atlases, sc.textures[mat->textures[BASE_TEXTURE]], uvs, 0)[0];
         }
 
-        // const float eta = is_backfacing ? (mat->int_ior / mat->ext_ior) : (mat->ext_ior / mat->int_ior);
-        const float RR = mat->int_ior != 0.0f
-                             ? fresnel_dielectric_cos(dot(I, N), is_backfacing ? (mat->ext_ior / mat->int_ior)
-                                                                               : (mat->int_ior / mat->ext_ior))
-                             : 1.0f;
+        const float eta = is_backfacing ? (mat->ext_ior / mat->int_ior) : (mat->int_ior / mat->ext_ior);
+        const float RR = mat->int_ior != 0.0f ? fresnel_dielectric_cos(dot(I, N), eta) : 1.0f;
 
         mix_val *= clamp(RR, 0.0f, 1.0f);
 

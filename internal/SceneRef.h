@@ -12,6 +12,9 @@ namespace Ray {
 namespace Sse2 {
 template <int DimX, int DimY> class RendererSIMD;
 }
+namespace Sse41 {
+template <int DimX, int DimY> class RendererSIMD;
+}
 namespace Avx {
 template <int DimX, int DimY> class RendererSIMD;
 }
@@ -23,6 +26,8 @@ namespace Neon {
 template <int DimX, int DimY> class RendererSIMD;
 }
 
+class ILog;
+
 namespace Ref {
 class Renderer;
 
@@ -30,6 +35,7 @@ class Scene : public SceneBase {
   protected:
     friend class Ref::Renderer;
     template <int DimX, int DimY> friend class Sse2::RendererSIMD;
+    template <int DimX, int DimY> friend class Sse41::RendererSIMD;
     template <int DimX, int DimY> friend class Avx::RendererSIMD;
     template <int DimX, int DimY> friend class Avx2::RendererSIMD;
     template <int DimX, int DimY> friend class Neon::RendererSIMD;

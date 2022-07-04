@@ -14,9 +14,10 @@ namespace Ray {
 enum eRendererType : uint32_t {
     RendererRef = (1 << 0),
     RendererSSE2 = (1 << 1),
-    RendererAVX = (1 << 2),
-    RendererAVX2 = (1 << 3),
-    RendererNEON = (1 << 4),
+    RendererSSE41 = (1 << 2),
+    RendererAVX = (1 << 3),
+    RendererAVX2 = (1 << 4),
+    RendererNEON = (1 << 5),
     //RendererOCL = (1 << 5),
 };
 

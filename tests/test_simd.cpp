@@ -18,10 +18,20 @@ void test_simd_ref() {
 #define USE_SSE2
 #include "../internal/simd/simd_vec.h"
 
-void test_simd_sse() {
+void test_simd_sse2() {
 #include "test_simd.ipp"
 }
 #undef USE_SSE2
+#undef NS
+
+#define NS Sse41
+#define USE_SSE41
+#include "../internal/simd/simd_vec.h"
+
+void test_simd_sse41() {
+#include "test_simd.ipp"
+}
+#undef USE_SSE41
 #undef NS
 
 #define NS Avx
@@ -67,7 +77,14 @@ void test_simd() {
 
     puts(" SIMD SSE2:");
     if (features.sse2_supported) {
-        test_simd_sse();
+        test_simd_sse2();
+    } else {
+        puts("Skipping... (not supported)");
+    }
+
+    puts(" SIMD SSE41:");
+    if (features.sse41_supported) {
+        test_simd_sse41();
     } else {
         puts("Skipping... (not supported)");
     }

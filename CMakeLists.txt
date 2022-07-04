@@ -23,11 +23,13 @@ set(INTERNAL_SOURCE_FILES internal/BVHSplit.h
                           internal/Core.cpp
                           internal/CoreRef.h
                           internal/CoreRef.cpp
+                          internal/CoreSIMD.h
                           internal/FramebufferRef.h
                           internal/FramebufferRef.cpp
                           internal/Halton.h
                           internal/RendererRef.h
                           internal/RendererRef.cpp
+                          internal/RendererSIMD.h
                           internal/SceneRef.h
                           internal/SceneRef.cpp
                           internal/SparseStorage.h
@@ -41,18 +43,18 @@ set(INTERNAL_SOURCE_FILES internal/BVHSplit.h
                           internal/Time_.h
                           internal/Time.cpp
                           internal/UniformIntDistribution.h)
-
-set(INTERNAL_DEPRECATED_SOURCE_FILES internal/deprecated/CoreSIMD.h
-                                     internal/deprecated/RendererSIMD.h)
                           
 if(NOT CMAKE_SYSTEM_NAME MATCHES "Android" AND NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64")
-set(INTERNAL_DEPRECATED_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
-                                     internal/deprecated/RendererAVX.h
-                                     internal/deprecated/RendererAVX.cpp
-                                     internal/deprecated/RendererAVX2.h
-                                     internal/deprecated/RendererAVX2.cpp
-                                     internal/deprecated/RendererSSE2.h
-                                     internal/deprecated/RendererSSE2.cpp)
+
+set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
+                          internal/RendererSSE2.h
+                          internal/RendererSSE2.cpp
+                          internal/RendererSSE41.h
+                          internal/RendererSSE41.cpp
+                          internal/RendererAVX.h
+                          internal/RendererAVX.cpp
+                          internal/RendererAVX2.h
+                          internal/RendererAVX2.cpp)
 endif()
 
 if("${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64")
@@ -63,9 +65,11 @@ endif()
 
 if(MSVC AND NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64")
     if(NOT CMAKE_CL_64)
-        set_source_files_properties(internal/RendererSSE.cpp PROPERTIES COMPILE_FLAGS /arch:SSE2)
+        set_source_files_properties(internal/RendererSSE2.cpp PROPERTIES COMPILE_FLAGS /arch:SSE2)
+        set_source_files_properties(internal/RendererSSE41.cpp PROPERTIES COMPILE_FLAGS /arch:SSE2)
     endif()
     set_source_files_properties(internal/RendererAVX.cpp PROPERTIES COMPILE_FLAGS /arch:AVX)
+    set_source_files_properties(internal/RendererAVX2.cpp PROPERTIES COMPILE_FLAGS /arch:AVX)
 endif(MSVC AND NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64")
 
 set(SOURCE_FILES Log.h
@@ -115,6 +119,9 @@ if(ENABLE_UNITYBUILD)
     list(APPEND ALL_SOURCE_FILES _Ray_Sse2.cpp)
     source_group("src" FILES _Ray_Sse2.cpp)
 
+    list(APPEND ALL_SOURCE_FILES _Ray_Sse41.cpp)
+    source_group("src" FILES _Ray_Sse41.cpp)
+
     list(APPEND ALL_SOURCE_FILES _Ray_Avx.cpp)
     source_group("src" FILES _Ray_Avx.cpp)
 
@@ -127,6 +134,7 @@ if(ENABLE_UNITYBUILD)
     if(MSVC AND NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64")
         if(NOT CMAKE_CL_64)
             set_source_files_properties(_Ray_Sse2.cpp PROPERTIES COMPILE_FLAGS /arch:SSE2)
+            set_source_files_properties(_Ray_Sse41.cpp PROPERTIES COMPILE_FLAGS /arch:SSE2)
         endif()
         set_source_files_properties(_Ray_Avx.cpp PROPERTIES COMPILE_FLAGS /arch:AVX)
         set_source_files_properties(_Ray_Avx2.cpp PROPERTIES COMPILE_FLAGS /arch:AVX2)

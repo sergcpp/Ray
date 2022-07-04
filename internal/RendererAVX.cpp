@@ -1,12 +1,12 @@
-#include "RendererSSE2.h"
+#include "RendererAVX.h"
 
 #ifdef __GNUC__
 #pragma GCC push_options
-#pragma GCC target("sse2")
+#pragma GCC target("avx")
 #endif
 
 namespace Ray {
-namespace Sse2 {
+namespace Avx {
 template void GeneratePrimaryRays<RayPacketDimX, RayPacketDimY>(const int iteration, const camera_t &cam,
                                                                 const rect_t &r, int w, int h, const float *halton,
                                                                 aligned_vector<ray_packet_t<RayPacketSize>> &out_rays);
@@ -24,25 +24,6 @@ template void SortRays_GPU<RayPacketSize>(ray_packet_t<RayPacketSize> *rays, sim
                                           simd_ivec<RayPacketSize> *hash_values, int *head_flags, uint32_t *scan_values,
                                           ray_chunk_t *chunks, ray_chunk_t *chunks_temp, uint32_t *skeleton);
 
-template bool IntersectTris_ClosestHit<RayPacketSize>(const ray_packet_t<RayPacketSize> &r,
-                                                      const simd_ivec<RayPacketSize> &ray_mask, const tri_accel_t *tris,
-                                                      uint32_t num_tris, uint32_t obj_index,
-                                                      hit_data_t<RayPacketSize> &out_inter);
-template bool IntersectTris_ClosestHit<RayPacketSize>(const ray_packet_t<RayPacketSize> &r,
-                                                      const simd_ivec<RayPacketSize> &ray_mask, const tri_accel_t *tris,
-                                                      const uint32_t *indices, uint32_t num_tris, uint32_t obj_index,
-                                                      hit_data_t<RayPacketSize> &out_inter);
-template bool IntersectTris_AnyHit<RayPacketSize>(const ray_packet_t<RayPacketSize> &r,
-                                                  const simd_ivec<RayPacketSize> &ray_mask, const tri_accel_t *tris,
-                                                  uint32_t num_tris, uint32_t obj_index,
-                                                  hit_data_t<RayPacketSize> &out_inter,
-                                                  simd_ivec<RayPacketSize> &out_is_solid_hit);
-template bool IntersectTris_AnyHit<RayPacketSize>(const ray_packet_t<RayPacketSize> &r,
-                                                  const simd_ivec<RayPacketSize> &ray_mask, const tri_accel_t *tris,
-                                                  const uint32_t *indices, uint32_t num_tris, uint32_t obj_index,
-                                                  hit_data_t<RayPacketSize> &out_inter,
-                                                  simd_ivec<RayPacketSize> &out_is_solid_hit);
-
 template bool Traverse_MacroTree_WithStack_ClosestHit<RayPacketSize>(
     const ray_packet_t<RayPacketSize> &r, const simd_ivec<RayPacketSize> &ray_mask, const bvh_node_t *nodes,
     uint32_t node_index, const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes,
@@ -56,13 +37,13 @@ template bool Traverse_MacroTree_WithStack_ClosestHit<RayPacketSize>(
 template bool Traverse_MacroTree_WithStack_AnyHit<RayPacketSize>(
     const ray_packet_t<RayPacketSize> &r, const simd_ivec<RayPacketSize> &ray_mask, const bvh_node_t *nodes,
     uint32_t node_index, const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes,
-    const transform_t *transforms, const tri_accel_t *tris, const uint32_t *tri_indices,
-    hit_data_t<RayPacketSize> &inter, simd_ivec<RayPacketSize> &is_solid_hit);
+    const transform_t *transforms, const tri_accel_t *tris, const tri_mat_data_t *materials,
+    const uint32_t *tri_indices, hit_data_t<RayPacketSize> &inter);
 template bool Traverse_MacroTree_WithStack_AnyHit<RayPacketSize>(
     const ray_packet_t<RayPacketSize> &r, const simd_ivec<RayPacketSize> &ray_mask, const mbvh_node_t *oct_nodes,
     uint32_t node_index, const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes,
-    const transform_t *transforms, const tri_accel_t *tris, const uint32_t *tri_indices,
-    hit_data_t<RayPacketSize> &inter, simd_ivec<RayPacketSize> &is_solid_hit);
+    const transform_t *transforms, const tri_accel_t *tris, const tri_mat_data_t *materials,
+    const uint32_t *tri_indices, hit_data_t<RayPacketSize> &inter);
 template bool Traverse_MicroTree_WithStack_ClosestHit<RayPacketSize>(const ray_packet_t<RayPacketSize> &r,
                                                                      const simd_ivec<RayPacketSize> &ray_mask,
                                                                      const bvh_node_t *nodes, uint32_t node_index,
@@ -74,17 +55,15 @@ template bool Traverse_MicroTree_WithStack_ClosestHit<RayPacketSize>(const float
                                                                      const tri_accel_t *tris,
                                                                      const uint32_t *tri_indices, int obj_index,
                                                                      hit_data_t<RayPacketSize> &inter);
-template bool Traverse_MicroTree_WithStack_AnyHit<RayPacketSize>(const ray_packet_t<RayPacketSize> &r,
-                                                                 const simd_ivec<RayPacketSize> &ray_mask,
-                                                                 const bvh_node_t *nodes, uint32_t node_index,
-                                                                 const tri_accel_t *tris, const uint32_t *tri_indices,
-                                                                 int obj_index, hit_data_t<RayPacketSize> &inter,
-                                                                 simd_ivec<RayPacketSize> &is_solid_hit);
+template bool Traverse_MicroTree_WithStack_AnyHit<RayPacketSize>(
+    const ray_packet_t<RayPacketSize> &r, const simd_ivec<RayPacketSize> &ray_mask, const bvh_node_t *nodes,
+    uint32_t node_index, const tri_accel_t *tris, const tri_mat_data_t *materials, const uint32_t *tri_indices,
+    int obj_index, hit_data_t<RayPacketSize> &inter);
 template bool Traverse_MicroTree_WithStack_AnyHit(const float ro[3], const float rd[3], int i,
                                                   const mbvh_node_t *oct_nodes, uint32_t node_index,
-                                                  const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index,
-                                                  hit_data_t<RayPacketSize> &inter,
-                                                  simd_ivec<RayPacketSize> &is_solid_hit);
+                                                  const tri_accel_t *tris, const tri_mat_data_t *materials,
+                                                  const uint32_t *tri_indices, int obj_index,
+                                                  hit_data_t<RayPacketSize> &inter);
 
 template ray_packet_t<RayPacketSize> TransformRay<RayPacketSize>(const ray_packet_t<RayPacketSize> &r,
                                                                  const float *xform);
@@ -94,44 +73,44 @@ template void TransformUVs<RayPacketSize>(const simd_fvec<RayPacketSize> _uvs[2]
                                           const texture_t &t, const simd_ivec<RayPacketSize> &mip_level,
                                           simd_fvec<RayPacketSize> out_res[2]);
 
-template void SampleNearest<RayPacketSize>(const Ref::TextureAtlas &atlas, const texture_t &t,
+template void SampleNearest<RayPacketSize>(const Ref::TextureAtlasBase *atlases[], const texture_t &t,
                                            const simd_fvec<RayPacketSize> uvs[2], const simd_fvec<RayPacketSize> &lod,
                                            const simd_ivec<RayPacketSize> &mask, simd_fvec<RayPacketSize> out_rgba[4]);
-template void SampleBilinear<RayPacketSize>(const Ref::TextureAtlas &atlas, const texture_t &t,
+template void SampleBilinear<RayPacketSize>(const Ref::TextureAtlasBase *atlases[], const texture_t &t,
                                             const simd_fvec<RayPacketSize> uvs[2], const simd_ivec<RayPacketSize> &lod,
                                             const simd_ivec<RayPacketSize> &mask, simd_fvec<RayPacketSize> out_rgba[4]);
-template void SampleBilinear<RayPacketSize>(const Ref::TextureAtlas &atlas, const simd_fvec<RayPacketSize> uvs[2],
+template void SampleBilinear<RayPacketSize>(const Ref::TextureAtlasBase &atlas, const simd_fvec<RayPacketSize> uvs[2],
                                             const simd_ivec<RayPacketSize> &page, const simd_ivec<RayPacketSize> &mask,
                                             simd_fvec<RayPacketSize> out_rgba[4]);
-template void SampleTrilinear<RayPacketSize>(const Ref::TextureAtlas &atlas, const texture_t &t,
+template void SampleTrilinear<RayPacketSize>(const Ref::TextureAtlasBase *atlases[], const texture_t &t,
                                              const simd_fvec<RayPacketSize> uvs[2], const simd_fvec<RayPacketSize> &lod,
                                              const simd_ivec<RayPacketSize> &mask,
                                              simd_fvec<RayPacketSize> out_rgba[4]);
-template void SampleAnisotropic<RayPacketSize>(const Ref::TextureAtlas &atlas, const texture_t &t,
+template void SampleAnisotropic<RayPacketSize>(const Ref::TextureAtlasBase *atlases[], const texture_t &t,
                                                const simd_fvec<RayPacketSize> uvs[2],
                                                const simd_fvec<RayPacketSize> duv_dx[2],
                                                const simd_fvec<RayPacketSize> duv_dy[2],
                                                const simd_ivec<RayPacketSize> &mask,
                                                simd_fvec<RayPacketSize> out_rgba[4]);
-template void SampleLatlong_RGBE<RayPacketSize>(const Ref::TextureAtlas &atlas, const texture_t &t,
+template void SampleLatlong_RGBE<RayPacketSize>(const Ref::TextureAtlasRGBA &atlas, const texture_t &t,
                                                 const simd_fvec<RayPacketSize> dir[3],
                                                 const simd_ivec<RayPacketSize> &mask,
                                                 simd_fvec<RayPacketSize> out_rgb[3]);
 
 template simd_fvec<RayPacketSize>
-ComputeVisibility<RayPacketSize>(const simd_fvec<RayPacketSize> p1[3], const simd_fvec<RayPacketSize> p2[3],
-                                 const simd_ivec<RayPacketSize> &mask, const float *halton, const int hi,
-                                 const simd_ivec<RayPacketSize> &rand_hash2, const scene_data_t &sc,
-                                 uint32_t node_index, const Ref::TextureAtlas &tex_atlas);
+ComputeVisibility<RayPacketSize>(const simd_fvec<RayPacketSize> p[3], const simd_fvec<RayPacketSize> d[3],
+                                 simd_fvec<RayPacketSize> dist, const simd_ivec<RayPacketSize> &mask,
+                                 const float rand_val, const simd_ivec<RayPacketSize> &rand_hash2,
+                                 const scene_data_t &sc, uint32_t node_index, const Ref::TextureAtlasBase *atlases[]);
 
-template void ComputeDirectLighting<RayPacketSize>(
+/*template void ComputeDirectLighting<RayPacketSize>(
     const simd_fvec<RayPacketSize> I[3], const simd_fvec<RayPacketSize> P[3], const simd_fvec<RayPacketSize> N[3],
     const simd_fvec<RayPacketSize> B[3], const simd_fvec<RayPacketSize> plane_N[3],
     const simd_fvec<RayPacketSize> &sigma, const float *halton, const int hi, const simd_ivec<RayPacketSize> &rand_hash,
     const simd_ivec<RayPacketSize> &rand_hash2, const simd_fvec<RayPacketSize> &rand_offset,
     const simd_fvec<RayPacketSize> &rand_offset2, const scene_data_t &sc, uint32_t node_index,
     uint32_t light_node_index, const Ref::TextureAtlas &tex_atlas, const simd_ivec<RayPacketSize> &ray_mask,
-    simd_fvec<RayPacketSize> *out_col);
+    simd_fvec<RayPacketSize> *out_col);*/
 
 template void ComputeDerivatives<RayPacketSize>(
     const simd_fvec<RayPacketSize> I[3], const simd_fvec<RayPacketSize> &t, const simd_fvec<RayPacketSize> do_dx[3],
@@ -140,19 +119,17 @@ template void ComputeDerivatives<RayPacketSize>(
     const simd_fvec<RayPacketSize> p3[3], const simd_fvec<RayPacketSize> n1[3], const simd_fvec<RayPacketSize> n2[3],
     const simd_fvec<RayPacketSize> n3[3], const simd_fvec<RayPacketSize> u1[2], const simd_fvec<RayPacketSize> u2[2],
     const simd_fvec<RayPacketSize> u3[2], const simd_fvec<RayPacketSize> plane_N[3],
-    derivatives_t<RayPacketSize> &out_der);
+    const simd_fvec<RayPacketSize> xform[16], derivatives_t<RayPacketSize> &out_der);
 
-template void ShadeSurface<RayPacketSize>(const simd_ivec<RayPacketSize> &index, const pass_info_t &pi,
-                                          const float *halton, const hit_data_t<RayPacketSize> &inter,
-                                          const ray_packet_t<RayPacketSize> &ray, const scene_data_t &sc,
-                                          uint32_t node_index, uint32_t light_node_index,
-                                          const Ref::TextureAtlas &tex_atlas, simd_fvec<RayPacketSize> out_rgba[4],
-                                          simd_ivec<RayPacketSize> *out_secondary_masks,
-                                          ray_packet_t<RayPacketSize> *out_secondary_rays,
-                                          int *out_secondary_rays_count);
+template void
+ShadeSurface<RayPacketSize>(const simd_ivec<RayPacketSize> &index, const pass_info_t &pi, const float *halton,
+                            const hit_data_t<RayPacketSize> &inter, const ray_packet_t<RayPacketSize> &ray,
+                            const scene_data_t &sc, uint32_t node_index, const Ref::TextureAtlasBase *tex_atlases[],
+                            simd_fvec<RayPacketSize> out_rgba[4], simd_ivec<RayPacketSize> out_secondary_masks[],
+                            ray_packet_t<RayPacketSize> out_secondary_rays[], int out_secondary_rays_count[]);
 
 template class RendererSIMD<RayPacketDimX, RayPacketDimY>;
-} // namespace Sse2
+} // namespace Avx
 } // namespace Ray
 
 #ifdef __GNUC__

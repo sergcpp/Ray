@@ -360,7 +360,7 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
 #endif
 }
 
-void Ray::Ref::Renderer::UpdateHaltonSequence(int iteration, std::unique_ptr<float[]> &seq) {
+void Ray::Ref::Renderer::UpdateHaltonSequence(const int iteration, std::unique_ptr<float[]> &seq) {
     if (!seq) {
         seq.reset(new float[HALTON_COUNT * HALTON_SEQ_LEN]);
     }
@@ -369,7 +369,7 @@ void Ray::Ref::Renderer::UpdateHaltonSequence(int iteration, std::unique_ptr<flo
         uint32_t prime_sum = 0;
         for (int j = 0; j < HALTON_COUNT; ++j) {
             seq[i * HALTON_COUNT + j] =
-                Ray::ScrambledRadicalInverse(g_primes[j], &permutations_[prime_sum], uint64_t(iteration) + i);
+                Ray::ScrambledRadicalInverse(g_primes[j], &permutations_[prime_sum], uint64_t(iteration + i));
             prime_sum += g_primes[j];
         }
     }
