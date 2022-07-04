@@ -15,13 +15,13 @@ Ray::Ref::Scene::Scene(ILog *log, const bool use_wide_bvh)
 
 Ray::Ref::Scene::~Scene() {
     while (!mesh_instances_.empty()) {
-        RemoveMeshInstance(mesh_instances_.size() - 1);
+        RemoveMeshInstance(mesh_instances_.begin().index());
     }
     while (!meshes_.empty()) {
-        RemoveMesh(meshes_.size() - 1);
+        RemoveMesh(meshes_.begin().index());
     }
     while (!lights2_.empty()) {
-        RemoveLight(lights2_.size() - 1);
+        RemoveLight(lights2_.begin().index());
     }
     materials_.clear();
     textures_.clear();
@@ -502,7 +502,7 @@ void Ray::Ref::Scene::RemoveLight(const uint32_t i) {
         return;
     }
 
-    if (lights2_[i].type == LIGHT_TYPE_RECT) {
+    if (lights2_[i].type == LIGHT_TYPE_RECT || lights2_[i].type == LIGHT_TYPE_DISK) {
         transforms_.erase(lights2_[i].tr_index);
     }
 
