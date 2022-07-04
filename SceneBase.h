@@ -210,7 +210,6 @@ struct camera_desc_t {
     bool no_background = false;          ///< Do not render background
     bool clamp = false;                  ///< Clamp color values to [0..1] range
     bool output_sh = false;              ///< Output 2-band (4 coeff) spherical harmonics data
-    bool use_coherent_sampling = false;  ///< Use less random sampling (leads to patterns in noise but faster rendering)
     uint8_t max_diff_depth = 4;          ///< Maximum tracing depth of diffuse rays
     uint8_t max_spec_depth = 8;          ///< Maximum tracing depth of glossy rays
     uint8_t max_refr_depth = 8;          ///< Maximum tracing depth of glossy rays

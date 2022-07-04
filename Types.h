@@ -51,8 +51,7 @@ enum ePassFlags {
     LightingOnly = (1 << 2),
     NoBackground = (1 << 3),
     Clamp = (1 << 4),
-    OutputSH = (1 << 5),
-    UseCoherentSampling = (1 << 6)
+    OutputSH = (1 << 5)
 };
 
 struct pass_settings_t {

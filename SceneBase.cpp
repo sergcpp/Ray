@@ -45,7 +45,6 @@ void Ray::SceneBase::GetCamera(const uint32_t i, camera_desc_t &c) const {
     c.no_background = (cam.pass_settings.flags & NoBackground) != 0;
     c.clamp = (cam.pass_settings.flags & Clamp) != 0;
     c.output_sh = (cam.pass_settings.flags & OutputSH) != 0;
-    c.use_coherent_sampling = (cam.pass_settings.flags & UseCoherentSampling) != 0;
 
     c.max_diff_depth = cam.pass_settings.max_diff_depth;
     c.max_spec_depth = cam.pass_settings.max_spec_depth;
@@ -86,9 +85,6 @@ void Ray::SceneBase::SetCamera(const uint32_t i, const camera_desc_t &c) {
     }
     if (c.output_sh) {
         cam.pass_settings.flags |= OutputSH;
-    }
-    if (c.use_coherent_sampling) {
-        cam.pass_settings.flags |= UseCoherentSampling;
     }
 
     cam.pass_settings.max_diff_depth = c.max_diff_depth;
