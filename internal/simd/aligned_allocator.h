@@ -10,7 +10,9 @@
 
 namespace Ray {
 inline void *aligned_malloc(size_t size, size_t alignment) {
-    assert(alignment > sizeof(void *));
+    while (alignment < sizeof(void *)) {
+        alignment *= 2;
+    }
     size_t space = size + (alignment - 1);
 
     void *ptr = malloc(space + sizeof(void *));
