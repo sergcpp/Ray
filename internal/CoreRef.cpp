@@ -39,8 +39,8 @@ force_inline void _IntersectTri(const ray_packet_t &r, const tri_accel_t &tri, c
 
     const float rdet = (1.0f / det);
 
-    inter.mask_values[0] = 0xffffffff;
-    inter.prim_indices[0] = (det < 0.0f) ? int(i) : -int(i);
+    inter.mask = 0xffffffff;
+    inter.prim_index = (det < 0.0f) ? int(i) : -int(i);
     inter.t = dett * rdet;
     inter.u = detu * rdet;
     inter.v = detv * rdet;
@@ -721,7 +721,6 @@ simd_fvec4 MapToCone(float r1, float r2, simd_fvec4 N, float radius) {
     return N + uv[0] * LT + uv[1] * LB;
 }
 
-
 simd_fvec4 rotate_around_axis(const simd_fvec4 &p, const simd_fvec4 &axis, const float angle) {
     const float costheta = std::cos(angle);
     const float sintheta = std::sin(angle);
@@ -880,9 +879,9 @@ force_inline simd_fvec4 tangent_from_world(const simd_fvec4 &T, const simd_fvec4
 } // namespace Ray
 
 Ray::Ref::hit_data_t::hit_data_t() {
-    mask_values[0] = 0;
-    obj_indices[0] = -1;
-    prim_indices[0] = -1;
+    mask = 0;
+    obj_index = -1;
+    prim_index = -1;
     t = MAX_DIST;
 }
 
@@ -986,7 +985,7 @@ void Ray::Ref::SampleMeshInTextureSpace(const int iteration, const int obj_index
 
             out_ray.xy = (x << 16) | y;
             out_ray.c[0] = out_ray.c[1] = out_ray.c[2] = 1.0f;
-            out_inter.mask_values[0] = 0;
+            out_inter.mask = 0;
             out_inter.xy = out_ray.xy;
         }
     }
@@ -1037,7 +1036,7 @@ void Ray::Ref::SampleMeshInTextureSpace(const int iteration, const int obj_index
                 ray_packet_t &out_ray = out_rays[i];
                 hit_data_t &out_inter = out_inters[i];
 
-                if (out_inter.mask_values[0]) {
+                if (out_inter.mask) {
                     continue;
                 }
 
@@ -1075,9 +1074,9 @@ void Ray::Ref::SampleMeshInTextureSpace(const int iteration, const int obj_index
                     out_ray.dd_dy[0] = out_ray.dd_dy[1] = out_ray.dd_dy[2] = 0.0f;
                     out_ray.ray_depth = 0;
 
-                    out_inter.mask_values[0] = 0xffffffff;
-                    out_inter.prim_indices[0] = tri;
-                    out_inter.obj_indices[0] = obj_index;
+                    out_inter.mask = 0xffffffff;
+                    out_inter.prim_index = tri;
+                    out_inter.obj_index = obj_index;
                     out_inter.t = 1.0f;
                     out_inter.u = w;
                     out_inter.v = u;
@@ -1217,49 +1216,48 @@ void Ray::Ref::SortRays_GPU(ray_packet_t *rays, const size_t rays_count, const f
 bool Ray::Ref::IntersectTris_ClosestHit(const ray_packet_t &r, const tri_accel_t *tris, const int tri_start,
                                         const int tri_end, const int obj_index, hit_data_t &out_inter) {
     hit_data_t inter{Uninitialize};
-    inter.mask_values[0] = 0;
-    inter.obj_indices[0] = obj_index;
+    inter.mask = 0;
+    inter.obj_index = obj_index;
     inter.t = out_inter.t;
 
     for (int i = tri_start; i < tri_end; ++i) {
         _IntersectTri(r, tris[i], i, inter);
     }
 
-    out_inter.mask_values[0] |= inter.mask_values[0];
-    out_inter.obj_indices[0] = inter.mask_values[0] ? inter.obj_indices[0] : out_inter.obj_indices[0];
-    out_inter.prim_indices[0] = inter.mask_values[0] ? inter.prim_indices[0] : out_inter.prim_indices[0];
+    out_inter.mask |= inter.mask;
+    out_inter.obj_index = inter.mask ? inter.obj_index : out_inter.obj_index;
+    out_inter.prim_index = inter.mask ? inter.prim_index : out_inter.prim_index;
     out_inter.t = inter.t; // already contains min value
-    out_inter.u = inter.mask_values[0] ? inter.u : out_inter.u;
-    out_inter.v = inter.mask_values[0] ? inter.v : out_inter.v;
+    out_inter.u = inter.mask ? inter.u : out_inter.u;
+    out_inter.v = inter.mask ? inter.v : out_inter.v;
 
-    return inter.mask_values[0] != 0;
+    return inter.mask != 0;
 }
 
 bool Ray::Ref::IntersectTris_AnyHit(const ray_packet_t &r, const tri_accel_t *tris, const tri_mat_data_t *materials,
                                     const uint32_t *indices, const int tri_start, const int tri_end,
                                     const int obj_index, hit_data_t &out_inter) {
     hit_data_t inter{Uninitialize};
-    inter.mask_values[0] = 0;
-    inter.obj_indices[0] = obj_index;
+    inter.mask = 0;
+    inter.obj_index = obj_index;
     inter.t = out_inter.t;
 
     for (int i = tri_start; i < tri_end; ++i) {
         _IntersectTri(r, tris[i], i, inter);
-        if (inter.mask_values[0] &&
-            ((inter.prim_indices[0] > 0 && (materials[indices[i]].front_mi & MATERIAL_SOLID_BIT)) ||
-             (inter.prim_indices[0] < 0 && (materials[indices[i]].back_mi & MATERIAL_SOLID_BIT)))) {
+        if (inter.mask && ((inter.prim_index > 0 && (materials[indices[i]].front_mi & MATERIAL_SOLID_BIT)) ||
+                           (inter.prim_index < 0 && (materials[indices[i]].back_mi & MATERIAL_SOLID_BIT)))) {
             break;
         }
     }
 
-    out_inter.mask_values[0] |= inter.mask_values[0];
-    out_inter.obj_indices[0] = inter.mask_values[0] ? inter.obj_indices[0] : out_inter.obj_indices[0];
-    out_inter.prim_indices[0] = inter.mask_values[0] ? inter.prim_indices[0] : out_inter.prim_indices[0];
+    out_inter.mask |= inter.mask;
+    out_inter.obj_index = inter.mask ? inter.obj_index : out_inter.obj_index;
+    out_inter.prim_index = inter.mask ? inter.prim_index : out_inter.prim_index;
     out_inter.t = inter.t; // already contains min value
-    out_inter.u = inter.mask_values[0] ? inter.u : out_inter.u;
-    out_inter.v = inter.mask_values[0] ? inter.v : out_inter.v;
+    out_inter.u = inter.mask ? inter.u : out_inter.u;
+    out_inter.v = inter.mask ? inter.v : out_inter.v;
 
-    return inter.mask_values[0] != 0;
+    return inter.mask != 0;
 }
 
 #ifdef USE_STACKLESS_BVH_TRAVERSAL
@@ -1743,8 +1741,8 @@ bool Ray::Ref::Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t &r, const 
                 const bool hit_found = Traverse_MicroTree_WithStack_AnyHit(
                     _r, _inv_d, nodes, m.node_index, tris, materials, tri_indices, int(mi_indices[i]), inter);
                 if (hit_found) {
-                    const bool is_backfacing = inter.prim_indices[0] < 0;
-                    const uint32_t prim_index = is_backfacing ? -inter.prim_indices[0] : inter.prim_indices[0];
+                    const bool is_backfacing = inter.prim_index < 0;
+                    const uint32_t prim_index = is_backfacing ? -inter.prim_index : inter.prim_index;
 
                     if ((!is_backfacing && (materials[tri_indices[prim_index]].front_mi & MATERIAL_SOLID_BIT)) ||
                         (is_backfacing && (materials[tri_indices[prim_index]].back_mi & MATERIAL_SOLID_BIT))) {
@@ -1863,8 +1861,8 @@ bool Ray::Ref::Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t &r, const 
                 bool hit_found = Traverse_MicroTree_WithStack_AnyHit(_r, _inv_d, nodes, m.node_index, tris, materials,
                                                                      tri_indices, (int)mi_indices[i], inter);
                 if (hit_found) {
-                    const bool is_backfacing = inter.prim_indices[0] < 0;
-                    const uint32_t prim_index = is_backfacing ? -inter.prim_indices[0] : inter.prim_indices[0];
+                    const bool is_backfacing = inter.prim_index < 0;
+                    const uint32_t prim_index = is_backfacing ? -inter.prim_index : inter.prim_index;
 
                     if ((!is_backfacing && (materials[tri_indices[prim_index]].front_mi & MATERIAL_SOLID_BIT)) ||
                         (is_backfacing && (materials[tri_indices[prim_index]].back_mi & MATERIAL_SOLID_BIT))) {
@@ -2020,8 +2018,8 @@ bool Ray::Ref::Traverse_MicroTree_WithStack_AnyHit(const ray_packet_t &r, const 
             const bool hit_found =
                 IntersectTris_AnyHit(r, tris, materials, tri_indices, tri_start, tri_end, obj_index, inter);
             if (hit_found) {
-                const bool is_backfacing = inter.prim_indices[0] < 0;
-                const uint32_t prim_index = is_backfacing ? -inter.prim_indices[0] : inter.prim_indices[0];
+                const bool is_backfacing = inter.prim_index < 0;
+                const uint32_t prim_index = is_backfacing ? -inter.prim_index : inter.prim_index;
 
                 if ((!is_backfacing && (materials[tri_indices[prim_index]].front_mi & MATERIAL_SOLID_BIT)) ||
                     (is_backfacing && (materials[tri_indices[prim_index]].back_mi & MATERIAL_SOLID_BIT))) {
@@ -2117,8 +2115,8 @@ bool Ray::Ref::Traverse_MicroTree_WithStack_AnyHit(const ray_packet_t &r, const 
             const bool hit_found =
                 IntersectTris_AnyHit(r, tris, materials, tri_indices, tri_start, tri_end, obj_index, inter);
             if (hit_found) {
-                const bool is_backfacing = inter.prim_indices[0] < 0;
-                const uint32_t prim_index = is_backfacing ? -inter.prim_indices[0] : inter.prim_indices[0];
+                const bool is_backfacing = inter.prim_index < 0;
+                const uint32_t prim_index = is_backfacing ? -inter.prim_index : inter.prim_index;
 
                 if ((!is_backfacing && (materials[tri_indices[prim_index]].front_mi & MATERIAL_SOLID_BIT)) ||
                     (is_backfacing && (materials[tri_indices[prim_index]].back_mi & MATERIAL_SOLID_BIT))) {
@@ -2691,12 +2689,12 @@ float Ray::Ref::ComputeVisibility(const simd_fvec4 &p, const simd_fvec4 &d, floa
             Traverse_MacroTree_WithStack_AnyHit(r, sc.nodes, node_index, sc.mesh_instances, sc.mi_indices, sc.meshes,
                                                 sc.transforms, sc.tris, sc.tri_materials, sc.tri_indices, sh_inter);
         }
-        if (!sh_inter.mask_values[0]) {
+        if (!sh_inter.mask) {
             break;
         }
 
-        const bool is_backfacing = (sh_inter.prim_indices[0] < 0);
-        const uint32_t prim_index = is_backfacing ? -sh_inter.prim_indices[0] : sh_inter.prim_indices[0];
+        const bool is_backfacing = (sh_inter.prim_index < 0);
+        const uint32_t prim_index = is_backfacing ? -sh_inter.prim_index : sh_inter.prim_index;
 
         const uint32_t tri_index = sc.tri_indices[prim_index];
 
@@ -2710,7 +2708,7 @@ float Ray::Ref::ComputeVisibility(const simd_fvec4 &p, const simd_fvec4 &d, floa
                                     ? &sc.materials[sc.tri_materials[tri_index].back_mi & MATERIAL_INDEX_BITS]
                                     : &sc.materials[sc.tri_materials[tri_index].front_mi & MATERIAL_INDEX_BITS];
 
-        const transform_t *tr = &sc.transforms[sc.mesh_instances[sh_inter.obj_indices[0]].tr_index];
+        const transform_t *tr = &sc.transforms[sc.mesh_instances[sh_inter.obj_index].tr_index];
 
         const vertex_t &v1 = sc.vertices[sc.vtx_indices[tri_index * 3 + 0]];
         const vertex_t &v2 = sc.vertices[sc.vtx_indices[tri_index * 3 + 1]];
@@ -3415,7 +3413,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
         return Ray::pixel_color_t{ray.c[0] * out_col[0], ray.c[1] * out_col[1], ray.c[2] * out_col[2], 1.0f};
     }
 
-    if (!inter.mask_values[0]) {
+    if (!inter.mask) {
         simd_fvec4 env_col = {1.0f};
         if (pi.should_add_environment()) {
             if (sc.env->env_map != 0xffffffff) {
@@ -3436,15 +3434,15 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
     const auto I = simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f};
     const auto P = simd_fvec4{ray.o[0], ray.o[1], ray.o[2], 0.0f} + inter.t * I;
 
-    const bool is_backfacing = (inter.prim_indices[0] < 0);
-    const uint32_t prim_index = is_backfacing ? -inter.prim_indices[0] : inter.prim_indices[0];
+    const bool is_backfacing = (inter.prim_index < 0);
+    const uint32_t prim_index = is_backfacing ? -inter.prim_index : inter.prim_index;
 
     const tri_accel_t &tri = sc.tris[prim_index];
     const uint32_t tri_index = sc.tri_indices[prim_index];
 
     const material_t *mat = &sc.materials[sc.tri_materials[tri_index].front_mi & MATERIAL_INDEX_BITS];
 
-    const transform_t *tr = &sc.transforms[sc.mesh_instances[inter.obj_indices[0]].tr_index];
+    const transform_t *tr = &sc.transforms[sc.mesh_instances[inter.obj_index].tr_index];
 
     const vertex_t &v1 = sc.vertices[sc.vtx_indices[tri_index * 3 + 0]];
     const vertex_t &v2 = sc.vertices[sc.vtx_indices[tri_index * 3 + 1]];

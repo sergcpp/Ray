@@ -51,9 +51,9 @@ const int RayPacketDimY = 1;
 const int RayPacketSize = RayPacketDimX * RayPacketDimY;
 
 struct hit_data_t {
-    int mask_values[RayPacketSize];
-    int obj_indices[RayPacketSize];
-    int prim_indices[RayPacketSize];
+    int mask;
+    int obj_index;
+    int prim_index;
     float t, u, v;
     int xy;
 
