@@ -60,21 +60,16 @@ class Scene : public SceneBase {
     TextureAtlasRG tex_atlas_rg_;
     TextureAtlasR tex_atlas_r_;
 
-    std::vector<light_t> lights_;
-    std::vector<uint32_t> li_indices_;
-
-    SparseStorage<light2_t> lights2_;
+    SparseStorage<light_t> lights_;
     std::vector<uint32_t> visible_lights_; // compacted list of all visible lights
 
     environment_t env_;
 
     uint32_t macro_nodes_root_ = 0xffffffff, macro_nodes_count_ = 0;
-    uint32_t light_nodes_root_ = 0xffffffff, light_nodes_count_ = 0;
 
     void RemoveTris(uint32_t tris_index, uint32_t tris_count);
     void RemoveNodes(uint32_t node_index, uint32_t node_count);
     void RebuildTLAS();
-    void RebuildLightBVH();
 
     void GenerateTextureMipmaps();
 

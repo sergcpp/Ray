@@ -47,14 +47,11 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
     sc_data.materials = s->materials_.empty() ? nullptr : &s->materials_[0];
     sc_data.textures = s->textures_.empty() ? nullptr : &s->textures_[0];
     sc_data.lights = s->lights_.empty() ? nullptr : &s->lights_[0];
-    sc_data.li_indices = s->li_indices_.empty() ? nullptr : &s->li_indices_[0];
-    sc_data.lights2 = s->lights2_.empty() ? nullptr : &s->lights2_[0];
-    sc_data.lights2_count = uint32_t(s->lights2_.size());
+    sc_data.lights_count = uint32_t(s->lights_.size());
     sc_data.visible_lights = s->visible_lights_.empty() ? nullptr : &s->visible_lights_[0];
     sc_data.visible_lights_count = uint32_t(s->visible_lights_.size());
 
     const uint32_t macro_tree_root = s->macro_nodes_root_;
-    const uint32_t light_tree_root = s->light_nodes_root_;
 
     const TextureAtlasBase *tex_atlases[] = {&s->tex_atlas_rgba_, &s->tex_atlas_rgb_, &s->tex_atlas_rg_, &s->tex_atlas_r_};
 

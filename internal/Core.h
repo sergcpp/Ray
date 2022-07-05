@@ -164,13 +164,6 @@ struct material_t {
 };
 static_assert(sizeof(material_t) == 80, "!");
 
-struct light_t {
-    float pos[3], radius;
-    float col[3], brightness;
-    float dir[3], spot;
-};
-static_assert(sizeof(light_t) == 48, "!");
-
 const int LIGHT_TYPE_SPHERE = 0;
 const int LIGHT_TYPE_SPOT = 1;
 const int LIGHT_TYPE_DIR = 2;
@@ -179,7 +172,7 @@ const int LIGHT_TYPE_RECT = 4;
 const int LIGHT_TYPE_DISK = 5;
 const int LIGHT_TYPE_TRI = 6;
 
-struct light2_t {
+struct light_t {
     uint32_t type : 6;
     uint32_t visible : 1;
     uint32_t sky_portal : 1;
@@ -206,7 +199,7 @@ struct light2_t {
         } dir;
     };
 };
-static_assert(sizeof(light2_t) == 32, "!");
+static_assert(sizeof(light_t) == 32, "!");
 
 struct prim_t;
 
@@ -424,9 +417,7 @@ struct scene_data_t {
     const material_t *materials;
     const texture_t *textures;
     const light_t *lights;
-    const uint32_t *li_indices;
-    const light2_t *lights2;
-    uint32_t lights2_count;
+    uint32_t lights_count;
     const uint32_t *visible_lights;
     uint32_t visible_lights_count;
 };

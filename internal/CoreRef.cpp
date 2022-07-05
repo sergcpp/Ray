@@ -2844,13 +2844,13 @@ Ray::Ref::simd_fvec4 Ray::Ref::EvaluateDirectLights(const simd_fvec4 &I, const s
                                                     const float halton[], const float sample_off[2]) {
     float _unused;
     const float u1 = std::modf(halton[RAND_DIM_LIGHT_PICK] + sample_off[0], &_unused);
-    const auto light_index = std::min(uint32_t(u1 * sc.lights2_count), sc.lights2_count - 1);
+    const auto light_index = std::min(uint32_t(u1 * sc.lights_count), sc.lights_count - 1);
 
-    const light2_t &l = sc.lights2[light_index];
+    const light_t &l = sc.lights[light_index];
     const transform_t &ltr = sc.transforms[l.tr_index];
 
     simd_fvec4 lcol = simd_fvec4{l.col[0], l.col[1], l.col[2], 0.0f};
-    lcol *= float(sc.lights2_count);
+    lcol *= float(sc.lights_count);
 
     simd_fvec4 L;
     float light_area, light_dist, light_pdf = 0.0f;
@@ -3297,7 +3297,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
     float min_t = inter.t;
     simd_fvec4 out_col;
     for (uint32_t li = 0; li < sc.visible_lights_count && ray.ray_depth; ++li) {
-        const light2_t &l = sc.lights2[sc.visible_lights[li]];
+        const light_t &l = sc.lights[sc.visible_lights[li]];
 
         simd_fvec4 lcol = simd_fvec4{l.col[0], l.col[1], l.col[2], 0.0f};
 
@@ -3529,7 +3529,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
     const int total_depth = diff_depth + spec_depth + refr_depth + transp_depth;
 
 #if USE_NEE == 1
-    if (pi.should_add_direct_light() && sc.lights2_count && mat->type != EmissiveNode) {
+    if (pi.should_add_direct_light() && sc.lights_count && mat->type != EmissiveNode) {
         col += EvaluateDirectLights(I, P, N, T, B, plane_N, uvs, is_backfacing, mat, surf_der, pi, sc, tex_atlases,
                                     node_index, halton, sample_off);
     }

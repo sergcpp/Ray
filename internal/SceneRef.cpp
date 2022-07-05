@@ -20,12 +20,12 @@ Ray::Ref::Scene::~Scene() {
     while (!meshes_.empty()) {
         RemoveMesh(meshes_.begin().index());
     }
-    while (!lights2_.empty()) {
-        RemoveLight(lights2_.begin().index());
+    while (!lights_.empty()) {
+        RemoveLight(lights_.begin().index());
     }
     materials_.clear();
     textures_.clear();
-    lights2_.clear();
+    lights_.clear();
 }
 
 void Ray::Ref::Scene::GetEnvironment(environment_desc_t &env) {
@@ -422,7 +422,7 @@ void Ray::Ref::Scene::RemoveMesh(const uint32_t i) {
 }
 
 uint32_t Ray::Ref::Scene::AddLight(const directional_light_desc_t &_l) {
-    light2_t l;
+    light_t l;
 
     l.type = LIGHT_TYPE_DIR;
     memcpy(&l.col[0], &_l.color[0], 3 * sizeof(float));
@@ -431,11 +431,11 @@ uint32_t Ray::Ref::Scene::AddLight(const directional_light_desc_t &_l) {
     l.dir.dir[2] = -_l.direction[2];
     l.dir.angle = _l.angle * PI / 360.0f;
 
-    return lights2_.push(l);
+    return lights_.push(l);
 }
 
 uint32_t Ray::Ref::Scene::AddLight(const sphere_light_desc_t &_l) {
-    light2_t l;
+    light_t l;
 
     l.type = LIGHT_TYPE_SPHERE;
     l.visible = _l.visible;
@@ -444,7 +444,7 @@ uint32_t Ray::Ref::Scene::AddLight(const sphere_light_desc_t &_l) {
     memcpy(&l.sph.pos[0], &_l.position[0], 3 * sizeof(float));
     l.sph.radius = _l.radius;
 
-    const uint32_t light_index = lights2_.push(l);
+    const uint32_t light_index = lights_.push(l);
     if (_l.visible) {
         visible_lights_.push_back(light_index);
     }
@@ -452,7 +452,7 @@ uint32_t Ray::Ref::Scene::AddLight(const sphere_light_desc_t &_l) {
 }
 
 uint32_t Ray::Ref::Scene::AddLight(const rect_light_desc_t &_l, const float *xform) {
-    light2_t l;
+    light_t l;
 
     l.type = LIGHT_TYPE_RECT;
     l.visible = _l.visible;
@@ -467,7 +467,7 @@ uint32_t Ray::Ref::Scene::AddLight(const rect_light_desc_t &_l, const float *xfo
     l.rect.width = _l.width;
     l.rect.height = _l.height;
 
-    const uint32_t light_index = lights2_.push(l);
+    const uint32_t light_index = lights_.push(l);
     if (_l.visible) {
         visible_lights_.push_back(light_index);
     }
@@ -475,7 +475,7 @@ uint32_t Ray::Ref::Scene::AddLight(const rect_light_desc_t &_l, const float *xfo
 }
 
 uint32_t Ray::Ref::Scene::AddLight(const disk_light_desc_t &_l, const float *xform) {
-    light2_t l;
+    light_t l;
 
     l.type = LIGHT_TYPE_DISK;
     l.visible = _l.visible;
@@ -490,7 +490,7 @@ uint32_t Ray::Ref::Scene::AddLight(const disk_light_desc_t &_l, const float *xfo
     l.disk.size_x = _l.size_x;
     l.disk.size_y = _l.size_y;
 
-    const uint32_t light_index = lights2_.push(l);
+    const uint32_t light_index = lights_.push(l);
     if (_l.visible) {
         visible_lights_.push_back(light_index);
     }
@@ -498,22 +498,22 @@ uint32_t Ray::Ref::Scene::AddLight(const disk_light_desc_t &_l, const float *xfo
 }
 
 void Ray::Ref::Scene::RemoveLight(const uint32_t i) {
-    if (!lights2_.exists(i)) {
+    if (!lights_.exists(i)) {
         return;
     }
 
-    if (lights2_[i].type == LIGHT_TYPE_RECT || lights2_[i].type == LIGHT_TYPE_DISK) {
-        transforms_.erase(lights2_[i].tr_index);
+    if (lights_[i].type == LIGHT_TYPE_RECT || lights_[i].type == LIGHT_TYPE_DISK) {
+        transforms_.erase(lights_[i].tr_index);
     }
 
-    if (lights2_[i].visible) {
+    if (lights_[i].visible) {
         auto it = std::find(std::begin(visible_lights_), std::end(visible_lights_), i);
         if (it != std::end(visible_lights_)) {
             visible_lights_.erase(it);
         }
     }
 
-    lights2_.erase(i);
+    lights_.erase(i);
 }
 
 uint32_t Ray::Ref::Scene::AddMeshInstance(const uint32_t mesh_index, const float *xform) {
@@ -531,7 +531,7 @@ uint32_t Ray::Ref::Scene::AddMeshInstance(const uint32_t mesh_index, const float
             const material_t &front_mat = materials_[tri_mat.front_mi & MATERIAL_INDEX_BITS];
             if (front_mat.type == EmissiveNode &&
                 (front_mat.flags & (MAT_FLAG_MULT_IMPORTANCE | MAT_FLAG_SKY_PORTAL))) {
-                light2_t new_light;
+                light_t new_light;
                 new_light.type = LIGHT_TYPE_TRI;
                 new_light.visible = 0;
                 new_light.sky_portal = 0;
@@ -540,7 +540,7 @@ uint32_t Ray::Ref::Scene::AddMeshInstance(const uint32_t mesh_index, const float
                 new_light.col[0] = front_mat.base_color[0] * front_mat.strength;
                 new_light.col[1] = front_mat.base_color[1] * front_mat.strength;
                 new_light.col[2] = front_mat.base_color[2] * front_mat.strength;
-                lights2_.push(new_light);
+                lights_.push(new_light);
             }
         }
     }
@@ -692,10 +692,6 @@ void Ray::Ref::Scene::RemoveNodes(uint32_t node_index, uint32_t node_count) {
         if (macro_nodes_root_ > node_index) {
             macro_nodes_root_ -= node_count;
         }
-
-        if (light_nodes_root_ > node_index) {
-            light_nodes_root_ -= node_count;
-        }
     }
 }
 
@@ -726,71 +722,6 @@ void Ray::Ref::Scene::RebuildTLAS() {
 
         macro_nodes_root_ = new_root;
         macro_nodes_count_ = static_cast<uint32_t>(mnodes_.size() - before_count);
-
-        // nodes_ is temporary storage when wide BVH is used
-        nodes_.clear();
-    }
-}
-
-void Ray::Ref::Scene::RebuildLightBVH() {
-    RemoveNodes(light_nodes_root_, light_nodes_count_);
-    li_indices_.clear();
-
-    std::vector<prim_t> primitives;
-    primitives.reserve(lights_.size());
-
-    for (const light_t &l : lights_) {
-        const float influence = l.radius * (std::sqrt(l.brightness / LIGHT_ATTEN_CUTOFF) - 1.0f);
-
-        simd_fvec3 bbox_min = {0.0f}, bbox_max = {0.0f};
-
-        const simd_fvec3 p1 = {-l.dir[0] * influence, -l.dir[1] * influence, -l.dir[2] * influence};
-
-        bbox_min = min(bbox_min, p1);
-        bbox_max = max(bbox_max, p1);
-
-        const simd_fvec3 p2 = {-l.dir[0] * l.spot * influence, -l.dir[1] * l.spot * influence,
-                               -l.dir[2] * l.spot * influence};
-
-        const float d = std::sqrt(1.0f - l.spot * l.spot) * influence;
-
-        bbox_min = min(bbox_min, p2 - simd_fvec3{d, 0.0f, d});
-        bbox_max = max(bbox_max, p2 + simd_fvec3{d, 0.0f, d});
-
-        if (l.spot < 0.0f) {
-            bbox_min = min(bbox_min, p1 - simd_fvec3{influence, 0.0f, influence});
-            bbox_max = max(bbox_max, p1 + simd_fvec3{influence, 0.0f, influence});
-        }
-
-        simd_fvec3 up = {1.0f, 0.0f, 0.0f};
-        if (std::abs(l.dir[1]) < std::abs(l.dir[2]) && std::abs(l.dir[1]) < std::abs(l.dir[0])) {
-            up = {0.0f, 1.0f, 0.0f};
-        } else if (std::abs(l.dir[2]) < std::abs(l.dir[0]) && std::abs(l.dir[2]) < std::abs(l.dir[1])) {
-            up = {0.0f, 0.0f, 1.0f};
-        }
-
-        const simd_fvec3 side = {-l.dir[1] * up[2] + l.dir[2] * up[1], -l.dir[2] * up[0] + l.dir[0] * up[2],
-                                 -l.dir[0] * up[1] + l.dir[1] * up[0]};
-
-        const float xform[16] = {side[0], l.dir[0], up[0], 0.0f, side[1],  l.dir[1], up[1],    0.0f,
-                                 side[2], l.dir[2], up[2], 0.0f, l.pos[0], l.pos[1], l.pos[2], 1.0f};
-
-        primitives.emplace_back();
-        prim_t &prim = primitives.back();
-
-        prim.i0 = prim.i1 = prim.i2 = 0;
-        TransformBoundingBox(&bbox_min[0], &bbox_max[0], xform, &prim.bbox_min[0], &prim.bbox_max[0]);
-    }
-
-    light_nodes_root_ = uint32_t(nodes_.size());
-    light_nodes_count_ = PreprocessPrims_SAH(&primitives[0], primitives.size(), nullptr, 0, {}, nodes_, li_indices_);
-
-    if (use_wide_bvh_) {
-        const auto before_count = uint32_t(mnodes_.size());
-        const uint32_t new_root = FlattenBVH_Recursive(nodes_.data(), light_nodes_root_, 0xffffffff, mnodes_);
-
-        light_nodes_root_ = new_root;
-        light_nodes_count_ = uint32_t(mnodes_.size() - before_count);
 
         // nodes_ is temporary storage when wide BVH is used
         nodes_.clear();
