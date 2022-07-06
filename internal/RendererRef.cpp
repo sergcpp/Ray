@@ -140,7 +140,6 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
             hit_data_t &inter = p.intersections[i];
 
             inter = {};
-            inter.xy = r.xy;
 
             if (macro_tree_root != 0xffffffff) {
                 if (sc_data.mnodes) {
@@ -172,8 +171,8 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
         const ray_packet_t &r = p.primary_rays[i];
         const hit_data_t &inter = p.intersections[i];
 
-        const int x = (inter.xy >> 16) & 0x0000ffff;
-        const int y = inter.xy & 0x0000ffff;
+        const int x = (r.xy >> 16) & 0x0000ffff;
+        const int y = r.xy & 0x0000ffff;
 
         pass_info.index = y * w + x;
         pass_info.rand_index = pass_info.index;
@@ -244,7 +243,6 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
             hit_data_t &inter = p.intersections[i];
 
             inter = {};
-            inter.xy = r.xy;
 
             if (sc_data.mnodes) {
                 Traverse_MacroTree_WithStack_ClosestHit(r, sc_data.mnodes, macro_tree_root, sc_data.mesh_instances,
@@ -269,8 +267,8 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
             const ray_packet_t &r = p.primary_rays[i];
             const hit_data_t &inter = p.intersections[i];
 
-            const int x = (inter.xy >> 16) & 0x0000ffff;
-            const int y = inter.xy & 0x0000ffff;
+            const int x = (r.xy >> 16) & 0x0000ffff;
+            const int y = r.xy & 0x0000ffff;
 
             pass_info.index = y * w + x;
             pass_info.rand_index = pass_info.index;

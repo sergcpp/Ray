@@ -55,7 +55,6 @@ struct hit_data_t {
     int obj_index;
     int prim_index;
     float t, u, v;
-    int xy;
 
     explicit hit_data_t(eUninitialize) {}
     hit_data_t();

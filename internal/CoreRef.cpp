@@ -986,7 +986,6 @@ void Ray::Ref::SampleMeshInTextureSpace(const int iteration, const int obj_index
             out_ray.xy = (x << 16) | y;
             out_ray.c[0] = out_ray.c[1] = out_ray.c[2] = 1.0f;
             out_inter.mask = 0;
-            out_inter.xy = out_ray.xy;
         }
     }
 
