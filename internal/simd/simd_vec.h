@@ -139,6 +139,10 @@
         { const int i = 14; exp }   \
         { const int i = 15; exp }
 
+#define ITERATE_2_R(exp)  \
+        { const int i = 1; exp }    \
+        { const int i = 0; exp }
+
 #ifdef __GNUC__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Warray-bounds"

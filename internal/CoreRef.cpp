@@ -12,6 +12,7 @@
 //
 #define USE_VNDF_GGX_SAMPLING 1
 #define USE_NEE 1
+#define VECTORIZE_BBOX_INTERSECTION 1
 
 namespace Ray {
 namespace Ref {
@@ -123,50 +124,8 @@ force_inline bool bbox_test_oct(const float p[3], const mbvh_node_t &node, const
 }
 
 force_inline void bbox_test_oct(const float o[3], const float inv_d[3], const mbvh_node_t &node, int res[8],
-                                float dist[8]){ITERATE_8({
-    float lo_x = inv_d[0] * (node.bbox_min[0][i] - o[0]);
-    float hi_x = inv_d[0] * (node.bbox_max[0][i] - o[0]);
-    if (lo_x > hi_x) {
-        const float tmp = lo_x;
-        lo_x = hi_x;
-        hi_x = tmp;
-    }
-
-    float lo_y = inv_d[1] * (node.bbox_min[1][i] - o[1]);
-    float hi_y = inv_d[1] * (node.bbox_max[1][i] - o[1]);
-    if (lo_y > hi_y) {
-        const float tmp = lo_y;
-        lo_y = hi_y;
-        hi_y = tmp;
-    }
-
-    float lo_z = inv_d[2] * (node.bbox_min[2][i] - o[2]);
-    float hi_z = inv_d[2] * (node.bbox_max[2][i] - o[2]);
-    if (lo_z > hi_z) {
-        const float tmp = lo_z;
-        lo_z = hi_z;
-        hi_z = tmp;
-    }
-
-    float tmin = lo_x > lo_y ? lo_x : lo_y;
-    if (lo_z > tmin) {
-        tmin = lo_z;
-    }
-    float tmax = hi_x < hi_y ? hi_x : hi_y;
-    if (hi_z < tmax) {
-        tmax = hi_z;
-    }
-    tmax *= 1.00000024f;
-
-    dist[i] = tmin;
-    res[i] = (tmin <= tmax && tmax > 0) ? 1 : 0;
-})}
-
-force_inline
-    int bbox_test_oct(const float o[3], const float inv_d[3], const float t, const mbvh_node_t &node, float dist[8]) {
-    int mask = 0;
-
-    ITERATE_8({
+                                float dist[8]){
+    ITERATE_8({ // NOLINT
         float lo_x = inv_d[0] * (node.bbox_min[0][i] - o[0]);
         float hi_x = inv_d[0] * (node.bbox_max[0][i] - o[0]);
         if (lo_x > hi_x) {
@@ -202,9 +161,77 @@ force_inline
         tmax *= 1.00000024f;
 
         dist[i] = tmin;
-        mask |= ((tmin <= tmax && tmin <= t && tmax > 0) ? 1 : 0) << i;
-    })
+        res[i] = (tmin <= tmax && tmax > 0) ? 1 : 0;
+    }) // NOLINT
+}
 
+force_inline
+long bbox_test_oct(const float o[3], const float inv_d[3], const float t, const mbvh_node_t &node, float out_dist[8]) {
+    long mask = 0;
+#if VECTORIZE_BBOX_INTERSECTION
+    simd_fvec4 lo, hi, tmin, tmax;
+    ITERATE_2_R({ // NOLINT
+        lo = inv_d[0] * (simd_fvec4{&node.bbox_min[0][4 * i], simd_mem_aligned} - o[0]);
+        hi = inv_d[0] * (simd_fvec4{&node.bbox_max[0][4 * i], simd_mem_aligned} - o[0]);
+        tmin = min(lo, hi);
+        tmax = max(lo, hi);
+
+        lo = inv_d[1] * (simd_fvec4{&node.bbox_min[1][4 * i], simd_mem_aligned} - o[1]);
+        hi = inv_d[1] * (simd_fvec4{&node.bbox_max[1][4 * i], simd_mem_aligned} - o[1]);
+        tmin = max(tmin, min(lo, hi));
+        tmax = min(tmax, max(lo, hi));
+
+        lo = inv_d[2] * (simd_fvec4{&node.bbox_min[2][4 * i], simd_mem_aligned} - o[2]);
+        hi = inv_d[2] * (simd_fvec4{&node.bbox_max[2][4 * i], simd_mem_aligned} - o[2]);
+        tmin = max(tmin, min(lo, hi));
+        tmax = min(tmax, max(lo, hi));
+        tmax *= 1.00000024f;
+
+        const simd_fvec4 fmask = (tmin <= tmax) & (tmin <= t) & (tmax > 0.0f);
+        mask <<= 4;
+        mask |= simd_cast(fmask).movemask();
+        tmin.copy_to(&out_dist[4 * i], simd_mem_aligned);
+    }) // NOLINT
+#else
+    ITERATE_8({ // NOLINT
+        float lo_x = inv_d[0] * (node.bbox_min[0][i] - o[0]);
+        float hi_x = inv_d[0] * (node.bbox_max[0][i] - o[0]);
+        if (lo_x > hi_x) {
+            const float tmp = lo_x;
+            lo_x = hi_x;
+            hi_x = tmp;
+        }
+
+        float lo_y = inv_d[1] * (node.bbox_min[1][i] - o[1]);
+        float hi_y = inv_d[1] * (node.bbox_max[1][i] - o[1]);
+        if (lo_y > hi_y) {
+            const float tmp = lo_y;
+            lo_y = hi_y;
+            hi_y = tmp;
+        }
+
+        float lo_z = inv_d[2] * (node.bbox_min[2][i] - o[2]);
+        float hi_z = inv_d[2] * (node.bbox_max[2][i] - o[2]);
+        if (lo_z > hi_z) {
+            const float tmp = lo_z;
+            lo_z = hi_z;
+            hi_z = tmp;
+        }
+
+        float tmin = lo_x > lo_y ? lo_x : lo_y;
+        if (lo_z > tmin) {
+            tmin = lo_z;
+        }
+        float tmax = hi_x < hi_y ? hi_x : hi_y;
+        if (hi_z < tmax) {
+            tmax = hi_z;
+        }
+        tmax *= 1.00000024f;
+
+        out_dist[i] = tmin;
+        mask |= ((tmin <= tmax && tmin <= t && tmax > 0) ? 1 : 0) << i;
+    }) // NOLINT
+#endif
     return mask;
 }
 
@@ -1328,7 +1355,7 @@ bool Ray::Ref::Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t &r, co
 
     TRAVERSE:
         if (!is_leaf_node(nodes[cur.index])) {
-            float dist[8];
+            alignas(16) float dist[8];
             long mask = bbox_test_oct(r.o, inv_d, inter.t, nodes[cur.index], dist);
             if (mask) {
                 long i = GetFirstBit(mask);
@@ -1499,7 +1526,7 @@ bool Ray::Ref::Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t &r, const 
 
     TRAVERSE:
         if (!is_leaf_node(nodes[cur.index])) {
-            float dist[8];
+            alignas(16) float dist[8];
             long mask = bbox_test_oct(r.o, inv_d, inter.t, nodes[cur.index], dist);
             if (mask) {
                 long i = GetFirstBit(mask);
@@ -1638,7 +1665,7 @@ bool Ray::Ref::Traverse_MicroTree_WithStack_ClosestHit(const ray_packet_t &r, co
 
     TRAVERSE:
         if (!is_leaf_node(nodes[cur.index])) {
-            float dist[8];
+            alignas(16) float dist[8];
             long mask = bbox_test_oct(r.o, inv_d, inter.t, nodes[cur.index], dist);
             if (mask) {
                 long i = GetFirstBit(mask);
@@ -1765,7 +1792,7 @@ bool Ray::Ref::Traverse_MicroTree_WithStack_AnyHit(const ray_packet_t &r, const 
 
     TRAVERSE:
         if (!is_leaf_node(nodes[cur.index])) {
-            float dist[8];
+            alignas(16) float dist[8];
             long mask = bbox_test_oct(r.o, inv_d, inter.t, nodes[cur.index], dist);
             if (mask) {
                 long i = GetFirstBit(mask);
