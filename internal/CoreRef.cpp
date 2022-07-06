@@ -3003,11 +3003,14 @@ Ray::Ref::simd_fvec4 Ray::Ref::EvaluateDirectLights(const simd_fvec4 &I, const s
     return col;
 }
 
-void Ray::Ref::IntersectAreaLights(const light_t lights[], Span<const uint32_t> visible_lights,
+bool Ray::Ref::IntersectAreaLights(const light_t lights[], Span<const uint32_t> visible_lights,
                                    const transform_t transforms[], const ray_packet_t &ray, hit_data_t &inout_inter) {
+    bool res = false;
+
     // TODO: BVH for light geometry
     for (uint32_t li = 0; li < uint32_t(visible_lights.size()); ++li) {
-        const light_t &l = lights[visible_lights[li]];
+        const uint32_t light_index = visible_lights[li];
+        const light_t &l = lights[light_index];
         if (l.type == LIGHT_TYPE_SPHERE) {
             const auto light_pos = simd_fvec4{l.sph.pos[0], l.sph.pos[1], l.sph.pos[2], 0.0f};
             const simd_fvec4 op = light_pos - simd_fvec4{ray.o[0], ray.o[1], ray.o[2], 0.0f};
@@ -3018,12 +3021,14 @@ void Ray::Ref::IntersectAreaLights(const light_t lights[], Span<const uint32_t> 
                 const float t1 = b - det, t2 = b + det;
                 if (t1 > HIT_EPS && t1 < inout_inter.t) {
                     inout_inter.mask = -1;
-                    inout_inter.obj_index = -int(li) - 1;
+                    inout_inter.obj_index = -int(light_index) - 1;
                     inout_inter.t = t1;
+                    res = true;
                 } else if (t2 > 0.001f && t2 < inout_inter.t) {
                     inout_inter.mask = -1;
-                    inout_inter.obj_index = -int(li) - 1;
+                    inout_inter.obj_index = -int(light_index) - 1;
                     inout_inter.t = t2;
+                    res = true;
                 }
             }
         } else if (l.type == LIGHT_TYPE_RECT) {
@@ -3051,8 +3056,9 @@ void Ray::Ref::IntersectAreaLights(const light_t lights[], Span<const uint32_t> 
                     const float a2 = dot(light_v, vi);
                     if (a2 >= -0.5 && a2 <= 0.5) {
                         inout_inter.mask = -1;
-                        inout_inter.obj_index = -int(li) - 1;
+                        inout_inter.obj_index = -int(light_index) - 1;
                         inout_inter.t = t;
+                        res = true;
                     }
                 }
             }
@@ -3081,12 +3087,15 @@ void Ray::Ref::IntersectAreaLights(const light_t lights[], Span<const uint32_t> 
 
                 if (std::sqrt(a1 * a1 + a2 * a2) <= 0.5f) {
                     inout_inter.mask = -1;
-                    inout_inter.obj_index = -int(li) - 1;
+                    inout_inter.obj_index = -int(light_index) - 1;
                     inout_inter.t = t;
+                    res = true;
                 }
             }
         }
     }
+
+    return res;
 }
 
 Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_t &inter, const ray_packet_t &ray,
@@ -3112,7 +3121,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
     }
 
     if (inter.obj_index < 0) { // Area light intersection
-        const light_t &l = sc.lights[sc.visible_lights[-inter.obj_index - 1]];
+        const light_t &l = sc.lights[-inter.obj_index - 1];
 
         simd_fvec4 lcol = simd_fvec4{l.col[0], l.col[1], l.col[2], 0.0f};
 

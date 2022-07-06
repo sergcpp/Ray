@@ -9,9 +9,6 @@
 #include "TextureAtlasRef.h"
 
 namespace Ray {
-namespace ref2 {
-template <int DimX, int DimY> class RendererSIMD;
-}
 namespace Sse2 {
 template <int DimX, int DimY> class RendererSIMD;
 }
