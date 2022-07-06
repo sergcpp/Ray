@@ -648,18 +648,33 @@ force_inline simd_vec<T, S> abs(const simd_vec<T, S> &v) {
 }
 
 template <typename T, int S>
-force_inline simd_vec<T, S> fma(const simd_vec<T, S> &a, const simd_vec<T, S> &b, const simd_vec<T, S> &c) {
+force_inline simd_vec<T, S> fmadd(const simd_vec<T, S> &a, const simd_vec<T, S> &b, const simd_vec<T, S> &c) {
     return a * b + c;
 }
 
 template <typename T, int S>
-force_inline simd_vec<T, S> fma(const simd_vec<T, S> &a, const float b, const simd_vec<T, S> &c) {
+force_inline simd_vec<T, S> fmadd(const simd_vec<T, S> &a, const float b, const simd_vec<T, S> &c) {
     return a * b + c;
 }
 
 template <typename T, int S>
-force_inline simd_vec<T, S> fma(const float a, const simd_vec<T, S> &b, const float c) {
+force_inline simd_vec<T, S> fmadd(const float a, const simd_vec<T, S> &b, const float c) {
     return a * b + c;
+}
+
+template <typename T, int S>
+force_inline simd_vec<T, S> fmsub(const simd_vec<T, S> &a, const simd_vec<T, S> &b, const simd_vec<T, S> &c) {
+    return a * b - c;
+}
+
+template <typename T, int S>
+force_inline simd_vec<T, S> fmsub(const simd_vec<T, S> &a, const float b, const simd_vec<T, S> &c) {
+    return a * b - c;
+}
+
+template <typename T, int S>
+force_inline simd_vec<T, S> fmsub(const float a, const simd_vec<T, S> &b, const float c) {
+    return a * b - c;
 }
 
 template <typename T, int S>

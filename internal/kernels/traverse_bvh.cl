@@ -21,18 +21,18 @@ bool __bbox_test(const float3 o, const float3 inv_d, const float t, const float3
 }
 
 bool __bbox_test_fma(const float3 inv_d, const float3 neg_inv_d_o, const float t, const float3 bbox_min, const float3 bbox_max) {
-    float low = fma(inv_d.x, bbox_min.x, neg_inv_d_o.x);
-    float high = fma(inv_d.x, bbox_max.x, neg_inv_d_o.x);
+    float low = fmadd(inv_d.x, bbox_min.x, neg_inv_d_o.x);
+    float high = fmadd(inv_d.x, bbox_max.x, neg_inv_d_o.x);
     float tmin = fmin(low, high);
     float tmax = fmax(low, high);
 
-    low = fma(inv_d.y, bbox_min.y, neg_inv_d_o.y);
-    high = fma(inv_d.y, bbox_max.y, neg_inv_d_o.y);
+    low = fmadd(inv_d.y, bbox_min.y, neg_inv_d_o.y);
+    high = fmadd(inv_d.y, bbox_max.y, neg_inv_d_o.y);
     tmin = fmax(tmin, fmin(low, high));
     tmax = fmin(tmax, fmax(low, high));
 
-    low = fma(inv_d.z, bbox_min.z, neg_inv_d_o.z);
-    high = fma(inv_d.z, bbox_max.z, neg_inv_d_o.z);
+    low = fmadd(inv_d.z, bbox_min.z, neg_inv_d_o.z);
+    high = fmadd(inv_d.z, bbox_max.z, neg_inv_d_o.z);
     tmin = fmax(tmin, fmin(low, high));
     tmax = fmin(tmax, fmax(low, high));
     tmax *= 1.00000024f;
@@ -61,18 +61,18 @@ bool _bbox_test(const float3 o, const float3 inv_d, const float t, __global cons
 }
 
 bool _bbox_test_fma(const float3 inv_d, const float3 neg_inv_d_o, const float t, __global const float *bbox_min, __global const float *bbox_max) {
-    float low = fma(inv_d.x, bbox_min[0], neg_inv_d_o.x);
-    float high = fma(inv_d.x, bbox_max[0], neg_inv_d_o.x);
+    float low = fmadd(inv_d.x, bbox_min[0], neg_inv_d_o.x);
+    float high = fmadd(inv_d.x, bbox_max[0], neg_inv_d_o.x);
     float tmin = fmin(low, high);
     float tmax = fmax(low, high);
 
-    low = fma(inv_d.y, bbox_min[1], neg_inv_d_o.y);
-    high = fma(inv_d.y, bbox_max[1], neg_inv_d_o.y);
+    low = fmadd(inv_d.y, bbox_min[1], neg_inv_d_o.y);
+    high = fmadd(inv_d.y, bbox_max[1], neg_inv_d_o.y);
     tmin = fmax(tmin, fmin(low, high));
     tmax = fmin(tmax, fmax(low, high));
 
-    low = fma(inv_d.z, bbox_min[2], neg_inv_d_o.z);
-    high = fma(inv_d.z, bbox_max[2], neg_inv_d_o.z);
+    low = fmadd(inv_d.z, bbox_min[2], neg_inv_d_o.z);
+    high = fmadd(inv_d.z, bbox_max[2], neg_inv_d_o.z);
     tmin = fmax(tmin, fmin(low, high));
     tmax = fmin(tmax, fmax(low, high));
     tmax *= 1.00000024f;

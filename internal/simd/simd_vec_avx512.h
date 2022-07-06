@@ -165,10 +165,15 @@ template <> class simd_vec<float, 16> {
 
     friend force_inline simd_vec<float, 16> normalize(const simd_vec<float, 16> &v1);
 
-    friend force_inline simd_vec<float, 16> fma(const simd_vec<float, 16> &a, const simd_vec<float, 16> &b,
-                                                const simd_vec<float, 16> &c);
-    friend force_inline simd_vec<float, 16> fma(const simd_vec<float, 16> &a, const float b, const simd_vec<float, 16> &c);
-    friend force_inline simd_vec<float, 16> fma(const float a, const simd_vec<float, 16> &b, const float c);
+    friend force_inline simd_vec<float, 16> fmadd(const simd_vec<float, 16> &a, const simd_vec<float, 16> &b,
+                                                  const simd_vec<float, 16> &c);
+    friend force_inline simd_vec<float, 16> fmadd(const simd_vec<float, 16> &a, const float b, const simd_vec<float, 16> &c);
+    friend force_inline simd_vec<float, 16> fmadd(const float a, const simd_vec<float, 16> &b, const float c);
+
+    friend force_inline simd_vec<float, 16> fmsub(const simd_vec<float, 16> &a, const simd_vec<float, 16> &b,
+                                                  const simd_vec<float, 16> &c);
+    friend force_inline simd_vec<float, 16> fmsub(const simd_vec<float, 16> &a, const float b, const simd_vec<float, 16> &c);
+    friend force_inline simd_vec<float, 16> fmsub(const float a, const simd_vec<float, 16> &b, const float c);
 
     friend force_inline const float *value_ptr(const simd_vec<float, 16> &v1) { return &v1.comp_[0]; }
 
@@ -672,22 +677,41 @@ force_inline simd_vec<float, 16> pow(const simd_vec<float, 16> &v1, const simd_v
 
 force_inline simd_vec<float, 16> normalize(const simd_vec<float, 16> &v1) { return v1 / v1.length(); }
 
-force_inline simd_vec<float, 16> fma(const simd_vec<float, 16> &a, const simd_vec<float, 16> &b,
-                                     const simd_vec<float, 16> &c) {
+force_inline simd_vec<float, 16> fmadd(const simd_vec<float, 16> &a, const simd_vec<float, 16> &b,
+                                       const simd_vec<float, 16> &c) {
     simd_vec<float, 16> ret;
     ret.vec_ = _mm512_fmadd_ps(a.vec_, b.vec_, c.vec_);
     return ret;
 }
 
-force_inline simd_vec<float, 16> fma(const simd_vec<float, 16> &a, const float b, const simd_vec<float, 16> &c) {
+force_inline simd_vec<float, 16> fmadd(const simd_vec<float, 16> &a, const float b, const simd_vec<float, 16> &c) {
     simd_vec<float, 16> ret;
     ret.vec_ = _mm512_fmadd_ps(a.vec_, _mm512_set1_ps(b), c.vec_);
     return ret;
 }
 
-force_inline simd_vec<float, 16> fma(const float a, const simd_vec<float, 16> &b, const float c) {
+force_inline simd_vec<float, 16> fmadd(const float a, const simd_vec<float, 16> &b, const float c) {
     simd_vec<float, 16> ret;
     ret.vec_ = _mm512_fmadd_ps(_mm512_set1_ps(a), b.vec_, _mm512_set1_ps(c));
+    return ret;
+}
+
+force_inline simd_vec<float, 16> fmsub(const simd_vec<float, 16> &a, const simd_vec<float, 16> &b,
+                                       const simd_vec<float, 16> &c) {
+    simd_vec<float, 16> ret;
+    ret.vec_ = _mm512_fmsub_ps(a.vec_, b.vec_, c.vec_);
+    return ret;
+}
+
+force_inline simd_vec<float, 16> fmsub(const simd_vec<float, 16> &a, const float b, const simd_vec<float, 16> &c) {
+    simd_vec<float, 16> ret;
+    ret.vec_ = _mm512_fmsub_ps(a.vec_, _mm512_set1_ps(b), c.vec_);
+    return ret;
+}
+
+force_inline simd_vec<float, 16> fmsub(const float a, const simd_vec<float, 16> &b, const float c) {
+    simd_vec<float, 16> ret;
+    ret.vec_ = _mm512_fmsub_ps(_mm512_set1_ps(a), b.vec_, _mm512_set1_ps(c));
     return ret;
 }
 

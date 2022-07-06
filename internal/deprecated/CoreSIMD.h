@@ -353,18 +353,18 @@ force_inline simd_ivec<S> bbox_test_fma(const simd_fvec<S> inv_d[3], const simd_
                                         const simd_fvec<S> &t, const float _bbox_min[3], const float _bbox_max[3]) {
     simd_fvec<S> low, high, tmin, tmax;
 
-    low = fma(inv_d[0], _bbox_min[0], neg_inv_d_o[0]);
-    high = fma(inv_d[0], _bbox_max[0], neg_inv_d_o[0]);
+    low = fmadd(inv_d[0], _bbox_min[0], neg_inv_d_o[0]);
+    high = fmadd(inv_d[0], _bbox_max[0], neg_inv_d_o[0]);
     tmin = min(low, high);
     tmax = max(low, high);
 
-    low = fma(inv_d[1], _bbox_min[1], neg_inv_d_o[1]);
-    high = fma(inv_d[1], _bbox_max[1], neg_inv_d_o[1]);
+    low = fmadd(inv_d[1], _bbox_min[1], neg_inv_d_o[1]);
+    high = fmadd(inv_d[1], _bbox_max[1], neg_inv_d_o[1]);
     tmin = max(tmin, min(low, high));
     tmax = min(tmax, max(low, high));
 
-    low = fma(inv_d[2], _bbox_min[2], neg_inv_d_o[2]);
-    high = fma(inv_d[2], _bbox_max[2], neg_inv_d_o[2]);
+    low = fmadd(inv_d[2], _bbox_min[2], neg_inv_d_o[2]);
+    high = fmadd(inv_d[2], _bbox_max[2], neg_inv_d_o[2]);
     tmin = max(tmin, min(low, high));
     tmax = min(tmax, max(low, high));
     tmax *= 1.00000024f;
@@ -380,18 +380,18 @@ force_inline void bbox_test_oct(const float inv_d[3], const float neg_inv_d_o[3]
                                 simd_fvec<S> &out_dist) {
     simd_fvec<S> low, high, tmin, tmax;
 
-    low = fma(inv_d[0], bbox_min[0], neg_inv_d_o[0]);
-    high = fma(inv_d[0], bbox_max[0], neg_inv_d_o[0]);
+    low = fmadd(inv_d[0], bbox_min[0], neg_inv_d_o[0]);
+    high = fmadd(inv_d[0], bbox_max[0], neg_inv_d_o[0]);
     tmin = min(low, high);
     tmax = max(low, high);
 
-    low = fma(inv_d[1], bbox_min[1], neg_inv_d_o[1]);
-    high = fma(inv_d[1], bbox_max[1], neg_inv_d_o[1]);
+    low = fmadd(inv_d[1], bbox_min[1], neg_inv_d_o[1]);
+    high = fmadd(inv_d[1], bbox_max[1], neg_inv_d_o[1]);
     tmin = max(tmin, min(low, high));
     tmax = min(tmax, max(low, high));
 
-    low = fma(inv_d[2], bbox_min[2], neg_inv_d_o[2]);
-    high = fma(inv_d[2], bbox_max[2], neg_inv_d_o[2]);
+    low = fmadd(inv_d[2], bbox_min[2], neg_inv_d_o[2]);
+    high = fmadd(inv_d[2], bbox_max[2], neg_inv_d_o[2]);
     tmin = max(tmin, min(low, high));
     tmax = min(tmax, max(low, high));
     tmax *= 1.00000024f;
@@ -410,18 +410,18 @@ force_inline long bbox_test_oct(const float inv_d[3], const float neg_inv_d_o[3]
     static const int LanesCount = 8 / S;
 
     ITERATE_R(LanesCount, {
-        low = fma(inv_d[0], simd_fvec<S>{&bbox_min[0][S * i], simd_mem_aligned}, neg_inv_d_o[0]);
-        high = fma(inv_d[0], simd_fvec<S>{&bbox_max[0][S * i], simd_mem_aligned}, neg_inv_d_o[0]);
+        low = fmadd(inv_d[0], simd_fvec<S>{&bbox_min[0][S * i], simd_mem_aligned}, neg_inv_d_o[0]);
+        high = fmadd(inv_d[0], simd_fvec<S>{&bbox_max[0][S * i], simd_mem_aligned}, neg_inv_d_o[0]);
         tmin = min(low, high);
         tmax = max(low, high);
 
-        low = fma(inv_d[1], simd_fvec<S>{&bbox_min[1][S * i], simd_mem_aligned}, neg_inv_d_o[1]);
-        high = fma(inv_d[1], simd_fvec<S>{&bbox_max[1][S * i], simd_mem_aligned}, neg_inv_d_o[1]);
+        low = fmadd(inv_d[1], simd_fvec<S>{&bbox_min[1][S * i], simd_mem_aligned}, neg_inv_d_o[1]);
+        high = fmadd(inv_d[1], simd_fvec<S>{&bbox_max[1][S * i], simd_mem_aligned}, neg_inv_d_o[1]);
         tmin = max(tmin, min(low, high));
         tmax = min(tmax, max(low, high));
 
-        low = fma(inv_d[2], simd_fvec<S>{&bbox_min[2][S * i], simd_mem_aligned}, neg_inv_d_o[2]);
-        high = fma(inv_d[2], simd_fvec<S>{&bbox_max[2][S * i], simd_mem_aligned}, neg_inv_d_o[2]);
+        low = fmadd(inv_d[2], simd_fvec<S>{&bbox_min[2][S * i], simd_mem_aligned}, neg_inv_d_o[2]);
+        high = fmadd(inv_d[2], simd_fvec<S>{&bbox_max[2][S * i], simd_mem_aligned}, neg_inv_d_o[2]);
         tmin = max(tmin, min(low, high));
         tmax = min(tmax, max(low, high));
         tmax *= 1.00000024f;
