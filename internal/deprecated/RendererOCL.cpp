@@ -176,10 +176,6 @@ Ray::Ocl::Renderer::Renderer(const int w, const int h, int platform_index, int d
         s << "#define PRIM_COUNT_BITS " << PRIM_COUNT_BITS << "\n";
         s << "#define RIGHT_CHILD_BITS " << RIGHT_CHILD_BITS << "\n";
 
-#ifdef USE_STACKLESS_BVH_TRAVERSAL
-        s << "#define USE_STACKLESS_BVH_TRAVERSAL\n";
-#endif
-
         const std::string cl_src_defines = s.str();
 
         cl_int error = CL_SUCCESS;

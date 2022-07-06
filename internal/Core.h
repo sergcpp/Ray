@@ -70,16 +70,8 @@ struct bvh_node_t {
         uint32_t prim_count; // First two bits are used for separation axis (0, 1 or 2 - x, y or z)
         uint32_t right_child;
     };
-#ifdef USE_STACKLESS_BVH_TRAVERSAL
-    uint32_t parent;
-#endif
 };
-
-#ifdef USE_STACKLESS_BVH_TRAVERSAL
-static_assert(sizeof(bvh_node_t) == 36, "!");
-#else
 static_assert(sizeof(bvh_node_t) == 32, "!");
-#endif
 
 struct alignas(32) mbvh_node_t {
     float bbox_min[3][8];

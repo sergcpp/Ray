@@ -97,28 +97,6 @@ bool IntersectTris_ClosestHit(const ray_packet_t &r, const tri_accel_t *tris, in
 bool IntersectTris_AnyHit(const ray_packet_t &r, const tri_accel_t *tris, const tri_mat_data_t *materials,
                           const uint32_t *indices, int tri_start, int tri_end, int obj_index, hit_data_t &out_inter);
 
-#ifdef USE_STACKLESS_BVH_TRAVERSAL
-// Traverse acceleration structure
-// stack-less cpu-style traversal of outer nodes
-bool Traverse_MacroTree_Stackless_CPU(const ray_packet_t &r, const bvh_node_t *nodes, uint32_t root_index,
-                                      const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
-                                      const mesh_t *meshes, const transform_t *transforms, const tri_accel2_t *tris,
-                                      const uint32_t *tri_indices, hit_data_t &inter);
-// stack-less gpu-style traversal of outer nodes
-bool Traverse_MacroTree_Stackless_GPU(const ray_packet_t &r, const bvh_node_t *nodes, uint32_t root_index,
-                                      const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
-                                      const mesh_t *meshes, const transform_t *transforms, const tri_accel2_t *tris,
-                                      const uint32_t *tri_indices, hit_data_t &inter);
-// stack-less cpu-style traversal of inner nodes
-bool Traverse_MicroTree_Stackless_CPU(const ray_packet_t &r, const float inv_d[3], const bvh_node_t *nodes,
-                                      uint32_t root_index, const tri_accel2_t *tris, const uint32_t *tri_indices,
-                                      int obj_index, hit_data_t &inter);
-// stack-less gpu-style traversal of inner nodes
-bool Traverse_MicroTree_Stackless_GPU(const ray_packet_t &r, const float inv_d[3], const bvh_node_t *nodes,
-                                      uint32_t root_index, const tri_accel2_t *tris, const uint32_t *indices,
-                                      int obj_index, hit_data_t &inter);
-#endif
-
 // traditional bvh traversal with stack for outer nodes
 bool Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t &r, const bvh_node_t *nodes, uint32_t root_index,
                                              const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,

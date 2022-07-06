@@ -516,23 +516,6 @@ uint32_t Ray::PreprocessPrims_SAH(const prim_t *prims, const size_t prims_count,
                                 prim_lists.back().max, root_min, root_max, s);
         prim_lists.pop_back();
 
-#ifdef USE_STACKLESS_BVH_TRAVERSAL
-        uint32_t leaf_index = (uint32_t)out_nodes.size(), parent_index = 0xffffffff;
-
-        if (leaf_index) {
-            // skip bound checks in debug mode
-            const bvh_node_t *_out_nodes = &out_nodes[0];
-            for (uint32_t i = leaf_index - 1; i >= root_node_index; i--) {
-                if (!(_out_nodes[i].prim_index & LEAF_NODE_BIT) &&
-                    (_out_nodes[i].left_child == leaf_index ||
-                     (_out_nodes[i].right_child & RIGHT_CHILD_BITS) == leaf_index)) {
-                    parent_index = (uint32_t)i;
-                    break;
-                }
-            }
-        }
-#endif
-
         if (split_data.right_indices.empty()) {
             Ref::simd_fvec4 bbox_min = split_data.left_bounds[0], bbox_max = split_data.left_bounds[1];
 
@@ -543,9 +526,6 @@ uint32_t Ray::PreprocessPrims_SAH(const prim_t *prims, const size_t prims_count,
             n.prim_count = uint32_t(split_data.left_indices.size());
             memcpy(&n.bbox_min[0], &bbox_min[0], 3 * sizeof(float));
             memcpy(&n.bbox_max[0], &bbox_max[0], 3 * sizeof(float));
-#ifdef USE_STACKLESS_BVH_TRAVERSAL
-            n.parent_index = parent_index;
-#endif
             out_indices.insert(out_indices.end(), split_data.left_indices.begin(), split_data.left_indices.end());
         } else {
             const auto index = uint32_t(num_nodes);
@@ -573,9 +553,6 @@ uint32_t Ray::PreprocessPrims_SAH(const prim_t *prims, const size_t prims_count,
             n.right_child = (space_axis << 30) + index + 2;
             memcpy(&n.bbox_min[0], &bbox_min[0], 3 * sizeof(float));
             memcpy(&n.bbox_max[0], &bbox_max[0], 3 * sizeof(float));
-#ifdef USE_STACKLESS_BVH_TRAVERSAL
-            n.parent_index = parent_index;
-#endif
             prim_lists.emplace_front(std::move(split_data.left_indices), split_data.left_bounds[0],
                                      split_data.left_bounds[1]);
             prim_lists.emplace_front(std::move(split_data.right_indices), split_data.right_bounds[0],

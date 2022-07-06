@@ -642,12 +642,6 @@ void Ray::Ref::Scene::RemoveNodes(uint32_t node_index, uint32_t node_count) {
 
         for (uint32_t i = node_index; i < nodes_.size(); i++) {
             bvh_node_t &n = nodes_[i];
-
-#ifdef USE_STACKLESS_BVH_TRAVERSAL
-            if (n.parent != 0xffffffff && n.parent > node_index) {
-                n.parent -= node_count;
-            }
-#endif
             if ((n.prim_index & LEAF_NODE_BIT) == 0) {
                 if (n.left_child > node_index) {
                     n.left_child -= node_count;

@@ -195,11 +195,6 @@ uint32_t Ray::Ocl::Scene::AddMesh(const mesh_desc_t &_m) {
 
     // offset nodes and primitives
     for (bvh_node_t &n : new_nodes) {
-#ifdef USE_STACKLESS_BVH_TRAVERSAL
-        if (n.parent != 0xffffffff) {
-            n.parent += uint32_t(nodes_.size());
-        }
-#endif
         if (n.prim_index & LEAF_NODE_BIT) {
             n.prim_index += uint32_t(tri_indices_.size());
         } else {
@@ -402,13 +397,6 @@ void Ray::Ocl::Scene::RemoveNodes(uint32_t node_index, uint32_t node_count) {
 
         for (uint32_t i = node_index; i < nodes.size(); i++) {
             bvh_node_t &n = nodes[i];
-
-#ifdef USE_STACKLESS_BVH_TRAVERSAL
-            if (n.parent != 0xffffffff && n.parent > node_index) {
-                n.parent -= node_count;
-            }
-#endif
-
             if ((n.prim_index & LEAF_NODE_BIT) == 0) {
                 if (n.left_child > node_index) {
                     n.left_child -= node_count;
@@ -454,12 +442,6 @@ void Ray::Ocl::Scene::RebuildMacroBVH() {
 
     // offset nodes
     for (bvh_node_t &n : bvh_nodes) {
-#ifdef USE_STACKLESS_BVH_TRAVERSAL
-        if (n.parent != 0xffffffff) {
-            n.parent += uint32_t(nodes_.size());
-        }
-#endif
-
         if ((n.prim_index & LEAF_NODE_BIT) == 0) {
             n.left_child += uint32_t(nodes_.size());
             n.right_child += uint32_t(nodes_.size());
@@ -531,11 +513,6 @@ void Ray::Ocl::Scene::RebuildLightBVH() {
 
     // offset nodes
     for (bvh_node_t &n : bvh_nodes) {
-#ifdef USE_STACKLESS_BVH_TRAVERSAL
-        if (n.parent != 0xffffffff) {
-            n.parent += uint32_t(nodes_.size());
-        }
-#endif
         if ((n.prim_index & LEAF_NODE_BIT) == 0) {
             n.left_child += uint32_t(nodes_.size());
             n.right_child += uint32_t(nodes_.size());

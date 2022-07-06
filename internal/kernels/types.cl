@@ -41,9 +41,6 @@ typedef struct _bvh_node_t {
         uint prim_count;
         uint right_child;
     };
-#ifdef USE_STACKLESS_BVH_TRAVERSAL
-    uint parent;
-#endif
 } bvh_node_t;
 
 typedef struct _vertex_t {
