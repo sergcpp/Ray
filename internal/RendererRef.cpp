@@ -53,7 +53,8 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
 
     const uint32_t macro_tree_root = s->macro_nodes_root_;
 
-    const TextureAtlasBase *tex_atlases[] = {&s->tex_atlas_rgba_, &s->tex_atlas_rgb_, &s->tex_atlas_rg_, &s->tex_atlas_r_};
+    const TextureAtlasBase *tex_atlases[] = {&s->tex_atlas_rgba_, &s->tex_atlas_rgb_, &s->tex_atlas_rg_,
+                                             &s->tex_atlas_r_};
 
     float root_min[3], cell_size[3];
     if (macro_tree_root != 0xffffffff) {
@@ -138,7 +139,6 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
         for (size_t i = 0; i < p.primary_rays.size(); i++) {
             const ray_packet_t &r = p.primary_rays[i];
             hit_data_t &inter = p.intersections[i];
-
             inter = {};
 
             if (macro_tree_root != 0xffffffff) {
@@ -241,7 +241,6 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
         for (int i = 0; i < secondary_rays_count; i++) {
             const ray_packet_t &r = p.secondary_rays[i];
             hit_data_t &inter = p.intersections[i];
-
             inter = {};
 
             if (sc_data.mnodes) {
@@ -253,6 +252,9 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
                                                         sc_data.mi_indices, sc_data.meshes, sc_data.transforms,
                                                         sc_data.tris, sc_data.tri_indices, inter);
             }
+
+            IntersectAreaLights(sc_data.lights, sc_data.visible_lights, sc_data.visible_lights_count,
+                                sc_data.transforms, r, inter);
         }
 
         auto time_secondary_shade_start = std::chrono::high_resolution_clock::now();

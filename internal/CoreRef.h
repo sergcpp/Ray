@@ -91,8 +91,8 @@ void SortRays_GPU(ray_packet_t *rays, size_t rays_count, const float root_min[3]
                   ray_chunk_t *chunks_temp, uint32_t *skeleton);
 
 // Intersect primitives
-bool IntersectTris_ClosestHit(const ray_packet_t &r, const tri_accel_t *tris, int tri_start, int tri_end,
-                              int obj_index, hit_data_t &out_inter);
+bool IntersectTris_ClosestHit(const ray_packet_t &r, const tri_accel_t *tris, int tri_start, int tri_end, int obj_index,
+                              hit_data_t &out_inter);
 bool IntersectTris_AnyHit(const ray_packet_t &r, const tri_accel_t *tris, const tri_mat_data_t *materials,
                           const uint32_t *indices, int tri_start, int tri_end, int obj_index, hit_data_t &out_inter);
 
@@ -199,6 +199,10 @@ simd_fvec4 EvaluateDirectLights(const simd_fvec4 &I, const simd_fvec4 &P, const 
                                 const bool is_backfacing, const material_t *mat, const derivatives_t &surf_der,
                                 const pass_info_t &pi, const scene_data_t &sc, const TextureAtlasBase *tex_atlases[],
                                 const uint32_t node_index, const float halton[], const float sample_off[2]);
+
+// Account for visible lights contribution
+void IntersectAreaLights(const light_t lights[], const uint32_t visible_lights[], uint32_t visible_lights_count,
+                         const transform_t transforms[], const ray_packet_t &ray, hit_data_t &inout_inter);
 
 // Shade
 Ray::pixel_color_t ShadeSurface(const pass_info_t &pi, const hit_data_t &inter, const ray_packet_t &ray,

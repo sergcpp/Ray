@@ -208,8 +208,6 @@ force_inline
     return mask;
 }
 
-enum eTraversalSource { FromParent, FromChild, FromSibling };
-
 struct stack_entry_t {
     uint32_t index;
     float dist;
@@ -3005,71 +3003,44 @@ Ray::Ref::simd_fvec4 Ray::Ref::EvaluateDirectLights(const simd_fvec4 &I, const s
     return col;
 }
 
-Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_t &inter, const ray_packet_t &ray,
-                                          const float *halton, const scene_data_t &sc, const uint32_t node_index,
-                                          const TextureAtlasBase *tex_atlases[], ray_packet_t *out_secondary_rays,
-                                          int *out_secondary_rays_count) {
-    // Intersect area lights
-    float min_t = inter.t;
-    simd_fvec4 out_col;
-    for (uint32_t li = 0; li < sc.visible_lights_count && ray.ray_depth; ++li) {
-        const light_t &l = sc.lights[sc.visible_lights[li]];
-
-        simd_fvec4 lcol = simd_fvec4{l.col[0], l.col[1], l.col[2], 0.0f};
-
+void Ray::Ref::IntersectAreaLights(const light_t lights[], const uint32_t visible_lights[],
+                                   const uint32_t visible_lights_count, const transform_t transforms[],
+                                   const ray_packet_t &ray, hit_data_t &inout_inter) {
+    // TODO: BVH for light geometry
+    for (uint32_t li = 0; li < visible_lights_count; ++li) {
+        const light_t &l = lights[visible_lights[li]];
         if (l.type == LIGHT_TYPE_SPHERE) {
             const auto light_pos = simd_fvec4{l.sph.pos[0], l.sph.pos[1], l.sph.pos[2], 0.0f};
-            const float light_area = 4.0f * PI * l.sph.radius * l.sph.radius;
-
             const simd_fvec4 op = light_pos - simd_fvec4{ray.o[0], ray.o[1], ray.o[2], 0.0f};
             const float b = dot(op, simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f});
             float det = b * b - dot(op, op) + l.sph.radius * l.sph.radius;
             if (det >= 0.0f) {
                 det = std::sqrt(det);
                 const float t1 = b - det, t2 = b + det;
-                if (t1 > 0.001f && t1 < min_t) {
-                    const auto hit_p = simd_fvec4{ray.o[0], ray.o[1], ray.o[2], 0.0f} +
-                                       t1 * simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f};
-                    const float cos_theta =
-                        dot(simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f},
-                            normalize(simd_fvec4{l.sph.pos[0], l.sph.pos[1], l.sph.pos[2], 0.0f} - hit_p));
-
-                    const float light_pdf = (t1 * t1) / (0.5f * light_area * cos_theta);
-                    const float bsdf_pdf = ray.pdf;
-
-                    const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
-                    out_col = mis_weight * lcol;
-                    min_t = t1;
-                } else if (t2 > 0.001f && t2 < min_t) {
-                    const auto hit_p = simd_fvec4{ray.o[0], ray.o[1], ray.o[2], 0.0f} +
-                                       t2 * simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f};
-                    const float cos_theta =
-                        dot(simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f},
-                            normalize(simd_fvec4{l.sph.pos[0], l.sph.pos[1], l.sph.pos[2], 0.0f} - hit_p));
-
-                    const float light_pdf = (t2 * t2) / (0.5f * light_area * cos_theta);
-                    const float bsdf_pdf = ray.pdf;
-
-                    const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
-                    out_col = mis_weight * lcol;
-                    min_t = t2;
+                if (t1 > HIT_EPS && t1 < inout_inter.t) {
+                    inout_inter.mask = -1;
+                    inout_inter.obj_index = -int(li) - 1;
+                    inout_inter.t = t1;
+                } else if (t2 > 0.001f && t2 < inout_inter.t) {
+                    inout_inter.mask = -1;
+                    inout_inter.obj_index = -int(li) - 1;
+                    inout_inter.t = t2;
                 }
             }
         } else if (l.type == LIGHT_TYPE_RECT) {
-            const transform_t &ltr = sc.transforms[l.tr_index];
+            const transform_t &ltr = transforms[l.tr_index];
             const auto light_pos = simd_fvec4{ltr.xform[12], ltr.xform[13], ltr.xform[14], 0.0f};
             simd_fvec4 light_u = l.rect.width * TransformDirection(simd_fvec4{1.0f, 0.0f, 0.0f, 0.0f}, ltr.xform);
             simd_fvec4 light_v = l.rect.height * TransformDirection(simd_fvec4{0.0f, 0.0f, 1.0f, 0.0f}, ltr.xform);
 
             const simd_fvec4 light_forward = normalize(cross(light_u, light_v));
-            const float light_area = l.rect.width * l.rect.height;
 
             const float plane_dist = dot(light_forward, light_pos);
             const float cos_theta = dot(simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f}, light_forward);
             const float t =
                 (plane_dist - dot(light_forward, simd_fvec4{ray.o[0], ray.o[1], ray.o[2], 0.0f})) / cos_theta;
 
-            if (cos_theta < 0.0f && t > HIT_EPS && t < min_t) {
+            if (cos_theta < 0.0f && t > HIT_EPS && t < inout_inter.t) {
                 light_u /= dot(light_u, light_u);
                 light_v /= dot(light_v, light_v);
 
@@ -3080,30 +3051,26 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
                 if (a1 >= -0.5 && a1 <= 0.5) {
                     const float a2 = dot(light_v, vi);
                     if (a2 >= -0.5 && a2 <= 0.5) {
-                        const float light_pdf = (t * t) / (light_area * cos_theta);
-                        const float bsdf_pdf = ray.pdf;
-
-                        const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
-                        out_col = mis_weight * lcol;
-                        min_t = t;
+                        inout_inter.mask = -1;
+                        inout_inter.obj_index = -int(li) - 1;
+                        inout_inter.t = t;
                     }
                 }
             }
         } else if (l.type == LIGHT_TYPE_DISK) {
-            const transform_t &ltr = sc.transforms[l.tr_index];
+            const transform_t &ltr = transforms[l.tr_index];
             const simd_fvec4 light_pos = simd_fvec4{ltr.xform[12], ltr.xform[13], ltr.xform[14], 0.0f};
             simd_fvec4 light_u = l.rect.width * TransformDirection(simd_fvec4{1.0f, 0.0f, 0.0f, 0.0f}, ltr.xform);
             simd_fvec4 light_v = l.rect.height * TransformDirection(simd_fvec4{0.0f, 0.0f, 1.0f, 0.0f}, ltr.xform);
 
             const simd_fvec4 light_forward = normalize(cross(light_u, light_v));
-            const float light_area = l.rect.width * l.rect.height;
 
             const float plane_dist = dot(light_forward, light_pos);
             const float cos_theta = dot(simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f}, light_forward);
             const float t =
                 (plane_dist - dot(light_forward, simd_fvec4{ray.o[0], ray.o[1], ray.o[2], 0.0f})) / cos_theta;
 
-            if (cos_theta < 0.0f && t > HIT_EPS && t < min_t) {
+            if (cos_theta < 0.0f && t > HIT_EPS && t < inout_inter.t) {
                 light_u /= dot(light_u, light_u);
                 light_v /= dot(light_v, light_v);
 
@@ -3114,21 +3081,19 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
                 const float a2 = dot(light_v, vi);
 
                 if (std::sqrt(a1 * a1 + a2 * a2) <= 0.5f) {
-                    const float light_pdf = (t * t) / (light_area * cos_theta);
-                    const float bsdf_pdf = ray.pdf;
-
-                    const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
-                    out_col = mis_weight * lcol;
-                    min_t = t;
+                    inout_inter.mask = -1;
+                    inout_inter.obj_index = -int(li) - 1;
+                    inout_inter.t = t;
                 }
             }
         }
     }
+}
 
-    if (min_t < inter.t) {
-        return Ray::pixel_color_t{ray.c[0] * out_col[0], ray.c[1] * out_col[1], ray.c[2] * out_col[2], 1.0f};
-    }
-
+Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_t &inter, const ray_packet_t &ray,
+                                          const float *halton, const scene_data_t &sc, const uint32_t node_index,
+                                          const TextureAtlasBase *tex_atlases[], ray_packet_t *out_secondary_rays,
+                                          int *out_secondary_rays_count) {
     if (!inter.mask) {
         simd_fvec4 env_col = {1.0f};
         if (pi.should_add_environment()) {
@@ -3145,6 +3110,89 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
         return Ray::pixel_color_t{ray.c[0] * env_col[0] * sc.env->env_col[0],
                                   ray.c[1] * env_col[1] * sc.env->env_col[1],
                                   ray.c[2] * env_col[2] * sc.env->env_col[2], env_col[3]};
+    }
+
+    if (inter.obj_index < 0) { // Area light intersection
+        const light_t &l = sc.lights[sc.visible_lights[-inter.obj_index - 1]];
+
+        simd_fvec4 lcol = simd_fvec4{l.col[0], l.col[1], l.col[2], 0.0f};
+
+        if (l.type == LIGHT_TYPE_SPHERE) {
+            const auto light_pos = simd_fvec4{l.sph.pos[0], l.sph.pos[1], l.sph.pos[2], 0.0f};
+            const float light_area = 4.0f * PI * l.sph.radius * l.sph.radius;
+
+            const simd_fvec4 op = light_pos - simd_fvec4{ray.o[0], ray.o[1], ray.o[2], 0.0f};
+            const float b = dot(op, simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f});
+            float det = b * b - dot(op, op) + l.sph.radius * l.sph.radius;
+
+            det = std::sqrt(det);
+            const float t = inter.t;
+            const auto hit_p =
+                simd_fvec4{ray.o[0], ray.o[1], ray.o[2], 0.0f} + t * simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f};
+            const float cos_theta = dot(simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f},
+                                        normalize(simd_fvec4{l.sph.pos[0], l.sph.pos[1], l.sph.pos[2], 0.0f} - hit_p));
+
+            const float light_pdf = (t * t) / (0.5f * light_area * cos_theta);
+            const float bsdf_pdf = ray.pdf;
+
+            const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
+            lcol *= mis_weight;
+        } else if (l.type == LIGHT_TYPE_RECT) {
+            const transform_t &ltr = sc.transforms[l.tr_index];
+            const auto light_pos = simd_fvec4{ltr.xform[12], ltr.xform[13], ltr.xform[14], 0.0f};
+            simd_fvec4 light_u = l.rect.width * TransformDirection(simd_fvec4{1.0f, 0.0f, 0.0f, 0.0f}, ltr.xform);
+            simd_fvec4 light_v = l.rect.height * TransformDirection(simd_fvec4{0.0f, 0.0f, 1.0f, 0.0f}, ltr.xform);
+
+            const simd_fvec4 light_forward = normalize(cross(light_u, light_v));
+            const float light_area = l.rect.width * l.rect.height;
+
+            const float plane_dist = dot(light_forward, light_pos);
+            const float cos_theta = dot(simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f}, light_forward);
+            const float t = inter.t;
+
+            light_u /= dot(light_u, light_u);
+            light_v /= dot(light_v, light_v);
+
+            const auto p =
+                simd_fvec4{ray.o[0], ray.o[1], ray.o[2], 0.0f} + simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f} * t;
+            const simd_fvec4 vi = p - light_pos;
+            const float a1 = dot(light_u, vi);
+            const float a2 = dot(light_v, vi);
+            const float light_pdf = (t * t) / (light_area * cos_theta);
+            const float bsdf_pdf = ray.pdf;
+
+            const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
+            lcol *= mis_weight;
+        } else if (l.type == LIGHT_TYPE_DISK) {
+            const transform_t &ltr = sc.transforms[l.tr_index];
+            const simd_fvec4 light_pos = simd_fvec4{ltr.xform[12], ltr.xform[13], ltr.xform[14], 0.0f};
+            simd_fvec4 light_u = l.rect.width * TransformDirection(simd_fvec4{1.0f, 0.0f, 0.0f, 0.0f}, ltr.xform);
+            simd_fvec4 light_v = l.rect.height * TransformDirection(simd_fvec4{0.0f, 0.0f, 1.0f, 0.0f}, ltr.xform);
+
+            const simd_fvec4 light_forward = normalize(cross(light_u, light_v));
+            const float light_area = l.rect.width * l.rect.height;
+
+            const float plane_dist = dot(light_forward, light_pos);
+            const float cos_theta = dot(simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f}, light_forward);
+            const float t = inter.t;
+
+            light_u /= dot(light_u, light_u);
+            light_v /= dot(light_v, light_v);
+
+            const auto p =
+                simd_fvec4{ray.o[0], ray.o[1], ray.o[2], 0.0f} + simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f} * t;
+            const simd_fvec4 vi = p - light_pos;
+            const float a1 = dot(light_u, vi);
+            const float a2 = dot(light_v, vi);
+
+            const float light_pdf = (t * t) / (light_area * cos_theta);
+            const float bsdf_pdf = ray.pdf;
+
+            const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
+            lcol *= mis_weight;
+        }
+
+        return Ray::pixel_color_t{ray.c[0] * lcol[0], ray.c[1] * lcol[1], ray.c[2] * lcol[2], 1.0f};
     }
 
     const auto I = simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f};
