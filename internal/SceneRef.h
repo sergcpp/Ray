@@ -61,6 +61,7 @@ class Scene : public SceneBase {
     TextureAtlasR tex_atlas_r_;
 
     SparseStorage<light_t> lights_;
+    std::vector<uint32_t> li_indices_; // compacted list of all lights
     std::vector<uint32_t> visible_lights_; // compacted list of all visible lights
 
     environment_t env_;

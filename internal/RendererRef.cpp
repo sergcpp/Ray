@@ -47,9 +47,8 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
     sc_data.materials = s->materials_.empty() ? nullptr : &s->materials_[0];
     sc_data.textures = s->textures_.empty() ? nullptr : &s->textures_[0];
     sc_data.lights = s->lights_.empty() ? nullptr : &s->lights_[0];
-    sc_data.lights_count = uint32_t(s->lights_.size());
-    sc_data.visible_lights = s->visible_lights_.empty() ? nullptr : &s->visible_lights_[0];
-    sc_data.visible_lights_count = uint32_t(s->visible_lights_.size());
+    sc_data.li_indices = {s->li_indices_.data(), s->li_indices_.size()};
+    sc_data.visible_lights = {s->visible_lights_.data(), s->visible_lights_.size()};
 
     const uint32_t macro_tree_root = s->macro_nodes_root_;
 
@@ -253,8 +252,7 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
                                                         sc_data.tris, sc_data.tri_indices, inter);
             }
 
-            IntersectAreaLights(sc_data.lights, sc_data.visible_lights, sc_data.visible_lights_count,
-                                sc_data.transforms, r, inter);
+            IntersectAreaLights(sc_data.lights, sc_data.visible_lights, sc_data.transforms, r, inter);
         }
 
         auto time_secondary_shade_start = std::chrono::high_resolution_clock::now();

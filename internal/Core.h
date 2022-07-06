@@ -4,6 +4,7 @@
 
 #include "../SceneBase.h"
 #include "../Types.h"
+#include "Span.h"
 
 #ifdef __GNUC__
 #define force_inline __attribute__((always_inline)) inline
@@ -409,9 +410,8 @@ struct scene_data_t {
     const material_t *materials;
     const texture_t *textures;
     const light_t *lights;
-    uint32_t lights_count;
-    const uint32_t *visible_lights;
-    uint32_t visible_lights_count;
+    Span<const uint32_t> li_indices;
+    Span<const uint32_t> visible_lights;
 };
 
 } // namespace Ray

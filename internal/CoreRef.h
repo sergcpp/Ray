@@ -201,7 +201,7 @@ simd_fvec4 EvaluateDirectLights(const simd_fvec4 &I, const simd_fvec4 &P, const 
                                 const uint32_t node_index, const float halton[], const float sample_off[2]);
 
 // Account for visible lights contribution
-void IntersectAreaLights(const light_t lights[], const uint32_t visible_lights[], uint32_t visible_lights_count,
+void IntersectAreaLights(const light_t lights[], Span<const uint32_t> visible_lights,
                          const transform_t transforms[], const ray_packet_t &ray, hit_data_t &inout_inter);
 
 // Shade

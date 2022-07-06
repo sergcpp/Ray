@@ -445,6 +445,7 @@ uint32_t Ray::Ref::Scene::AddLight(const sphere_light_desc_t &_l) {
     l.sph.radius = _l.radius;
 
     const uint32_t light_index = lights_.push(l);
+    li_indices_.push_back(light_index);
     if (_l.visible) {
         visible_lights_.push_back(light_index);
     }
@@ -468,6 +469,7 @@ uint32_t Ray::Ref::Scene::AddLight(const rect_light_desc_t &_l, const float *xfo
     l.rect.height = _l.height;
 
     const uint32_t light_index = lights_.push(l);
+    li_indices_.push_back(light_index);
     if (_l.visible) {
         visible_lights_.push_back(light_index);
     }
@@ -491,6 +493,7 @@ uint32_t Ray::Ref::Scene::AddLight(const disk_light_desc_t &_l, const float *xfo
     l.disk.size_y = _l.size_y;
 
     const uint32_t light_index = lights_.push(l);
+    li_indices_.push_back(light_index);
     if (_l.visible) {
         visible_lights_.push_back(light_index);
     }
@@ -506,11 +509,16 @@ void Ray::Ref::Scene::RemoveLight(const uint32_t i) {
         transforms_.erase(lights_[i].tr_index);
     }
 
+    { // remove from compacted list
+        auto it = std::find(std::begin(li_indices_), std::end(li_indices_), i);
+        assert(it != std::end(li_indices_));
+        li_indices_.erase(it);
+    }
+
     if (lights_[i].visible) {
         auto it = std::find(std::begin(visible_lights_), std::end(visible_lights_), i);
-        if (it != std::end(visible_lights_)) {
-            visible_lights_.erase(it);
-        }
+        assert(it != std::end(visible_lights_));
+        visible_lights_.erase(it);
     }
 
     lights_.erase(i);
@@ -540,7 +548,8 @@ uint32_t Ray::Ref::Scene::AddMeshInstance(const uint32_t mesh_index, const float
                 new_light.col[0] = front_mat.base_color[0] * front_mat.strength;
                 new_light.col[1] = front_mat.base_color[1] * front_mat.strength;
                 new_light.col[2] = front_mat.base_color[2] * front_mat.strength;
-                lights_.push(new_light);
+                const uint32_t index = lights_.push(new_light);
+                li_indices_.push_back(index);
             }
         }
     }
