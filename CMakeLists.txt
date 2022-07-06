@@ -50,6 +50,7 @@ set(INTERNAL_SOURCE_FILES internal/BVHSplit.h
                           internal/SceneRef.h
                           internal/SceneRef.cpp
                           internal/SparseStorage.h
+                          internal/Span.h
                           internal/TextureAtlasRef.h
                           internal/TextureAtlasRef.cpp
                           internal/TextureSplitter.h
