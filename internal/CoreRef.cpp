@@ -40,7 +40,7 @@ force_inline void _IntersectTri(const ray_packet_t &r, const tri_accel_t &tri, c
     const float rdet = (1.0f / det);
 
     inter.mask = 0xffffffff;
-    inter.prim_index = (det < 0.0f) ? int(i) : -int(i);
+    inter.prim_index = (det < 0.0f) ? int(i) : -int(i) - 1;
     inter.t = dett * rdet;
     inter.u = detu * rdet;
     inter.v = detv * rdet;
@@ -1456,7 +1456,7 @@ bool Ray::Ref::Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t &r, const 
                     _r, _inv_d, nodes, m.node_index, tris, materials, tri_indices, int(mi_indices[i]), inter);
                 if (hit_found) {
                     const bool is_backfacing = inter.prim_index < 0;
-                    const uint32_t prim_index = is_backfacing ? -inter.prim_index : inter.prim_index;
+                    const uint32_t prim_index = is_backfacing ? -inter.prim_index - 1 : inter.prim_index;
 
                     if ((!is_backfacing && (materials[tri_indices[prim_index]].front_mi & MATERIAL_SOLID_BIT)) ||
                         (is_backfacing && (materials[tri_indices[prim_index]].back_mi & MATERIAL_SOLID_BIT))) {
@@ -1576,7 +1576,7 @@ bool Ray::Ref::Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t &r, const 
                                                                      tri_indices, (int)mi_indices[i], inter);
                 if (hit_found) {
                     const bool is_backfacing = inter.prim_index < 0;
-                    const uint32_t prim_index = is_backfacing ? -inter.prim_index : inter.prim_index;
+                    const uint32_t prim_index = is_backfacing ? -inter.prim_index - 1 : inter.prim_index;
 
                     if ((!is_backfacing && (materials[tri_indices[prim_index]].front_mi & MATERIAL_SOLID_BIT)) ||
                         (is_backfacing && (materials[tri_indices[prim_index]].back_mi & MATERIAL_SOLID_BIT))) {
@@ -1733,7 +1733,7 @@ bool Ray::Ref::Traverse_MicroTree_WithStack_AnyHit(const ray_packet_t &r, const 
                 IntersectTris_AnyHit(r, tris, materials, tri_indices, tri_start, tri_end, obj_index, inter);
             if (hit_found) {
                 const bool is_backfacing = inter.prim_index < 0;
-                const uint32_t prim_index = is_backfacing ? -inter.prim_index : inter.prim_index;
+                const uint32_t prim_index = is_backfacing ? -inter.prim_index - 1 : inter.prim_index;
 
                 if ((!is_backfacing && (materials[tri_indices[prim_index]].front_mi & MATERIAL_SOLID_BIT)) ||
                     (is_backfacing && (materials[tri_indices[prim_index]].back_mi & MATERIAL_SOLID_BIT))) {
@@ -1830,7 +1830,7 @@ bool Ray::Ref::Traverse_MicroTree_WithStack_AnyHit(const ray_packet_t &r, const 
                 IntersectTris_AnyHit(r, tris, materials, tri_indices, tri_start, tri_end, obj_index, inter);
             if (hit_found) {
                 const bool is_backfacing = inter.prim_index < 0;
-                const uint32_t prim_index = is_backfacing ? -inter.prim_index : inter.prim_index;
+                const uint32_t prim_index = is_backfacing ? -inter.prim_index - 1 : inter.prim_index;
 
                 if ((!is_backfacing && (materials[tri_indices[prim_index]].front_mi & MATERIAL_SOLID_BIT)) ||
                     (is_backfacing && (materials[tri_indices[prim_index]].back_mi & MATERIAL_SOLID_BIT))) {
@@ -2408,7 +2408,7 @@ float Ray::Ref::ComputeVisibility(const simd_fvec4 &p, const simd_fvec4 &d, floa
         }
 
         const bool is_backfacing = (sh_inter.prim_index < 0);
-        const uint32_t prim_index = is_backfacing ? -sh_inter.prim_index : sh_inter.prim_index;
+        const uint32_t prim_index = is_backfacing ? -sh_inter.prim_index - 1 : sh_inter.prim_index;
 
         const uint32_t tri_index = sc.tri_indices[prim_index];
 
@@ -3199,7 +3199,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
     const auto P = simd_fvec4{ray.o[0], ray.o[1], ray.o[2], 0.0f} + inter.t * I;
 
     const bool is_backfacing = (inter.prim_index < 0);
-    const uint32_t prim_index = is_backfacing ? -inter.prim_index : inter.prim_index;
+    const uint32_t prim_index = is_backfacing ? -inter.prim_index - 1 : inter.prim_index;
 
     const tri_accel_t &tri = sc.tris[prim_index];
     const uint32_t tri_index = sc.tri_indices[prim_index];
