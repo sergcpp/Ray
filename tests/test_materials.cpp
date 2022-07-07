@@ -111,8 +111,9 @@ namespace {
 const int STANDARD_SCENE = 0;
 const int STANDARD_SCENE_SPHERE_LIGHT = 1;
 const int STANDARD_SCENE_MESH_LIGHTS = 2;
-const int STANDARD_SCENE_NO_LIGHTS = 3;
-const int REFR_PLANE_SCENE = 4;
+const int STANDARD_SCENE_SUN_LIGHT = 3;
+const int STANDARD_SCENE_NO_LIGHTS = 4;
+const int REFR_PLANE_SCENE = 5;
 } // namespace
 
 template <typename MatDesc>
@@ -130,7 +131,8 @@ void setup_material_scene(Ray::SceneBase &scene, const bool output_sh, const Mat
         cam_desc.filter = Ray::Box;
         cam_desc.dtype = Ray::SRGB;
         if (scene_index == STANDARD_SCENE || scene_index == STANDARD_SCENE_SPHERE_LIGHT ||
-            scene_index == STANDARD_SCENE_MESH_LIGHTS || scene_index == STANDARD_SCENE_NO_LIGHTS) {
+            scene_index == STANDARD_SCENE_MESH_LIGHTS || scene_index == STANDARD_SCENE_SUN_LIGHT ||
+            scene_index == STANDARD_SCENE_NO_LIGHTS) {
             memcpy(&cam_desc.origin[0], &view_origin_standard[0], 3 * sizeof(float));
             memcpy(&cam_desc.fwd[0], &view_dir_standard[0], 3 * sizeof(float));
             cam_desc.fov = 18.1806f;
@@ -263,7 +265,8 @@ void setup_material_scene(Ray::SceneBase &scene, const bool output_sh, const Mat
         std::vector<float> model_attrs;
         std::vector<uint32_t> model_indices, model_groups;
         if (scene_index == STANDARD_SCENE || scene_index == STANDARD_SCENE_SPHERE_LIGHT ||
-            scene_index == STANDARD_SCENE_MESH_LIGHTS || scene_index == STANDARD_SCENE_NO_LIGHTS) {
+            scene_index == STANDARD_SCENE_MESH_LIGHTS || scene_index == STANDARD_SCENE_SUN_LIGHT ||
+            scene_index == STANDARD_SCENE_NO_LIGHTS) {
             std::tie(model_attrs, model_indices, model_groups) = LoadBIN("test_data/meshes/mat_test/model.bin");
         } else if (scene_index == REFR_PLANE_SCENE) {
             std::tie(model_attrs, model_indices, model_groups) = LoadBIN("test_data/meshes/mat_test/refr_plane.bin");
@@ -338,7 +341,11 @@ void setup_material_scene(Ray::SceneBase &scene, const bool output_sh, const Mat
     {
         std::vector<float> env_attrs;
         std::vector<uint32_t> env_indices, env_groups;
-        std::tie(env_attrs, env_indices, env_groups) = LoadBIN("test_data/meshes/mat_test/env.bin");
+        if (scene_index == STANDARD_SCENE_SUN_LIGHT) {
+            std::tie(env_attrs, env_indices, env_groups) = LoadBIN("test_data/meshes/mat_test/env_floor.bin");
+        } else {
+            std::tie(env_attrs, env_indices, env_groups) = LoadBIN("test_data/meshes/mat_test/env.bin");
+        }
 
         Ray::mesh_desc_t env_mesh_desc;
         env_mesh_desc.prim_type = Ray::TriangleList;
@@ -347,11 +354,17 @@ void setup_material_scene(Ray::SceneBase &scene, const bool output_sh, const Mat
         env_mesh_desc.vtx_attrs_count = uint32_t(env_attrs.size()) / 8;
         env_mesh_desc.vtx_indices = &env_indices[0];
         env_mesh_desc.vtx_indices_count = uint32_t(env_indices.size());
-        env_mesh_desc.shapes.push_back({floor_mat, floor_mat, env_groups[0], env_groups[1]});
-        env_mesh_desc.shapes.push_back({walls_mat, walls_mat, env_groups[2], env_groups[3]});
-        env_mesh_desc.shapes.push_back({dark_grey_mat, dark_grey_mat, env_groups[4], env_groups[5]});
-        env_mesh_desc.shapes.push_back({light_grey_mat, light_grey_mat, env_groups[6], env_groups[7]});
-        env_mesh_desc.shapes.push_back({mid_grey_mat, mid_grey_mat, env_groups[8], env_groups[9]});
+        if (scene_index == STANDARD_SCENE_SUN_LIGHT) {
+            env_mesh_desc.shapes.push_back({floor_mat, floor_mat, env_groups[0], env_groups[1]});
+            env_mesh_desc.shapes.push_back({dark_grey_mat, dark_grey_mat, env_groups[2], env_groups[3]});
+            env_mesh_desc.shapes.push_back({mid_grey_mat, mid_grey_mat, env_groups[4], env_groups[5]});
+        } else {
+            env_mesh_desc.shapes.push_back({floor_mat, floor_mat, env_groups[0], env_groups[1]});
+            env_mesh_desc.shapes.push_back({walls_mat, walls_mat, env_groups[2], env_groups[3]});
+            env_mesh_desc.shapes.push_back({dark_grey_mat, dark_grey_mat, env_groups[4], env_groups[5]});
+            env_mesh_desc.shapes.push_back({light_grey_mat, light_grey_mat, env_groups[6], env_groups[7]});
+            env_mesh_desc.shapes.push_back({mid_grey_mat, mid_grey_mat, env_groups[8], env_groups[9]});
+        }
         env_mesh = scene.AddMesh(env_mesh_desc);
     }
 
@@ -408,7 +421,8 @@ void setup_material_scene(Ray::SceneBase &scene, const bool output_sh, const Mat
                                           0.0f,          0.062f, 0.0f,         1.0f};
 
     if (scene_index == STANDARD_SCENE || scene_index == STANDARD_SCENE_SPHERE_LIGHT ||
-        scene_index == STANDARD_SCENE_MESH_LIGHTS || scene_index == STANDARD_SCENE_NO_LIGHTS) {
+        scene_index == STANDARD_SCENE_MESH_LIGHTS || scene_index == STANDARD_SCENE_SUN_LIGHT ||
+        scene_index == STANDARD_SCENE_NO_LIGHTS) {
         scene.AddMeshInstance(model_mesh, model_xform);
         scene.AddMeshInstance(base_mesh, identity);
         scene.AddMeshInstance(core_mesh, identity);
@@ -486,6 +500,17 @@ void setup_material_scene(Ray::SceneBase &scene, const bool output_sh, const Mat
 
             scene.AddLight(new_light, xform);
         }
+    } else if (scene_index == STANDARD_SCENE_SUN_LIGHT) {
+        Ray::directional_light_desc_t sun_desc;
+
+        sun_desc.direction[0] = 0.541675210f;
+        sun_desc.direction[1] = -0.541675210f;
+        sun_desc.direction[2] = -0.642787635f;
+
+        sun_desc.color[0] = sun_desc.color[1] = sun_desc.color[2] = 1.0f;
+        sun_desc.angle = 10.0f;
+
+        scene.AddLight(sun_desc);
     } else if (scene_index == STANDARD_SCENE_NO_LIGHTS) {
         // nothing
     }
@@ -627,7 +652,7 @@ Ray::RendererOCL
                     mse /= 3.0;
                     mse /= (test_img_w * test_img_h);
 
-                    double psnr = -10.0 * std::log10(mse / (255.0f * 255.0f));
+                    double psnr = -10.0 * std::log10(mse / (255.0 * 255.0));
                     psnr = std::floor(psnr * 100.0) / 100.0;
 
                     printf("(PSNR: %.3f/%.3f dB, Fireflies: %i/%i)\n", psnr, min_psnr, error_pixels, pix_thres);
@@ -666,7 +691,9 @@ void assemble_material_test_images() {
         {"trans_mat5", "trans_mat6", "trans_mat7", "trans_mat8", "trans_mat9"},
         {"alpha_mat0", "alpha_mat1", "alpha_mat2", "alpha_mat3"},
         {"complex_mat0", "complex_mat1", "complex_mat2", "complex_mat3", "complex_mat4"},
-        {"complex_mat5", "complex_mat6"}};
+        {"complex_mat4_mesh_lights", "complex_mat4_sphere_light", "complex_mat4_sun_light"},
+        {"complex_mat5", "complex_mat5_mesh_lights", "complex_mat5_sphere_light", "complex_mat5_sun_light"},
+        {"complex_mat6"}};
     const int ImgCountH = sizeof(test_names) / sizeof(test_names[0]);
 
     const int OutImageW = 256 * ImgCountW;
@@ -2220,6 +2247,28 @@ void test_complex_mat4_sphere_light() {
                       STANDARD_SCENE_SPHERE_LIGHT);
 }
 
+void test_complex_mat4_sun_light() {
+    const int SampleCount = 1024;
+    const double MinPSNR = 28.75;
+    const int PixThres = 1340;
+
+    Ray::principled_mat_desc_t metal_mat_desc;
+    metal_mat_desc.base_texture = 0;
+    metal_mat_desc.metallic = 1.0f;
+    metal_mat_desc.roughness = 1.0f;
+    metal_mat_desc.roughness_texture = 2;
+    metal_mat_desc.metallic = 1.0f;
+    metal_mat_desc.metallic_texture = 3;
+    metal_mat_desc.normal_map = 1;
+
+    const char *textures[] = {
+        "test_data/textures/gold-scuffed_basecolor-boosted.tga", "test_data/textures/gold-scuffed_normal.tga",
+        "test_data/textures/gold-scuffed_roughness.tga", "test_data/textures/gold-scuffed_metallic.tga"};
+
+    run_material_test("complex_mat4_sun_light", metal_mat_desc, SampleCount, MinPSNR, PixThres, textures,
+                      STANDARD_SCENE_SUN_LIGHT);
+}
+
 void test_complex_mat5() {
     const int SampleCount = 1024;
     const double MinPSNR = 28.66;
@@ -2268,6 +2317,23 @@ void test_complex_mat5_sphere_light() {
 
     run_material_test("complex_mat5_sphere_light", olive_mat_desc, SampleCount, MinPSNR, PixThres, nullptr,
                       STANDARD_SCENE_SPHERE_LIGHT);
+}
+
+void test_complex_mat5_sun_light() {
+    const int SampleCount = 1024;
+    const double MinPSNR = 26.08;
+    const int PixThres = 2290;
+
+    Ray::principled_mat_desc_t olive_mat_desc;
+    olive_mat_desc.base_color[0] = 0.836164f;
+    olive_mat_desc.base_color[1] = 0.836164f;
+    olive_mat_desc.base_color[2] = 0.656603f;
+    olive_mat_desc.roughness = 0.041667f;
+    olive_mat_desc.transmission = 1.0f;
+    olive_mat_desc.ior = 2.3f;
+
+    run_material_test("complex_mat5_sun_light", olive_mat_desc, SampleCount, MinPSNR, PixThres, nullptr,
+                      STANDARD_SCENE_SUN_LIGHT);
 }
 
 void test_complex_mat6() {
