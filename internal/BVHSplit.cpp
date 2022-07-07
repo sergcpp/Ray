@@ -125,7 +125,7 @@ bbox_t GetClippedAABB(const Ref::simd_fvec3 &_v0, const Ref::simd_fvec3 &_v1, co
 }
 } // namespace Ray
 
-Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, const std::vector<uint32_t> &prim_indices,
+Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, Span<const uint32_t> prim_indices,
                                            const float *positions, const size_t stride, const Ref::simd_fvec4 &bbox_min,
                                            const Ref::simd_fvec4 &bbox_max, const Ref::simd_fvec4 &root_min,
                                            const Ref::simd_fvec4 &root_max, const bvh_settings_t &s) {
@@ -148,7 +148,7 @@ Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, const std::
     if (s.allow_spatial_splits && positions) {
         modified_prim_bounds.resize(num_tris);
 
-        for (size_t i = 0; i < prim_indices.size(); i++) {
+        for (int i = 0; i < int(prim_indices.size()); i++) {
             const prim_t &p = primitives[prim_indices[i]];
 
             const auto v0 = Ref::simd_fvec3{&positions[p.i0 * stride]}, v1 = Ref::simd_fvec3{&positions[p.i1 * stride]},
@@ -391,7 +391,7 @@ Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, const std::
             right_indices.push_back(prim_indices[axis_lists[div_axis][i]]);
         }
     } else {
-        left_indices = prim_indices;
+        left_indices.assign(prim_indices.begin(), prim_indices.end());
         res_left_bounds = whole_box;
     }
 

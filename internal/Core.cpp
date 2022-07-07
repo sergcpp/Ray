@@ -511,9 +511,8 @@ uint32_t Ray::PreprocessPrims_SAH(const prim_t *prims, const size_t prims_count,
     Ref::simd_fvec4 root_min = prim_lists.back().min, root_max = prim_lists.back().max;
 
     while (!prim_lists.empty()) {
-        split_data_t split_data =
-            SplitPrimitives_SAH(prims, prim_lists.back().indices, positions, stride, prim_lists.back().min,
-                                prim_lists.back().max, root_min, root_max, s);
+        split_data_t split_data = SplitPrimitives_SAH(prims, prim_lists.back().indices, positions,
+            stride, prim_lists.back().min, prim_lists.back().max, root_min, root_max, s);
         prim_lists.pop_back();
 
         if (split_data.right_indices.empty()) {

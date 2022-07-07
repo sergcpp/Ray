@@ -4,6 +4,7 @@
 
 #include "../SceneBase.h"
 #include "CoreRef.h"
+#include "Span.h"
 
 namespace Ray {
 struct prim_t {
@@ -16,7 +17,7 @@ struct split_data_t {
     Ref::simd_fvec4 left_bounds[2], right_bounds[2];
 };
 
-split_data_t SplitPrimitives_SAH(const prim_t *primitives, const std::vector<uint32_t> &prim_indices,
+split_data_t SplitPrimitives_SAH(const prim_t *primitives, Span<const uint32_t> prim_indices,
                                  const float *positions, size_t stride, const Ref::simd_fvec4 &bbox_min,
                                  const Ref::simd_fvec4 &bbox_max, const Ref::simd_fvec4 &root_min,
                                  const Ref::simd_fvec4 &root_max, const bvh_settings_t &s);
