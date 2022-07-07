@@ -425,6 +425,7 @@ uint32_t Ray::Ref::Scene::AddLight(const directional_light_desc_t &_l) {
     light_t l;
 
     l.type = LIGHT_TYPE_DIR;
+    l.visible = false;
     memcpy(&l.col[0], &_l.color[0], 3 * sizeof(float));
     l.dir.dir[0] = -_l.direction[0];
     l.dir.dir[1] = -_l.direction[1];
