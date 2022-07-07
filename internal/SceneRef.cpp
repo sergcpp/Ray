@@ -431,7 +431,9 @@ uint32_t Ray::Ref::Scene::AddLight(const directional_light_desc_t &_l) {
     l.dir.dir[2] = -_l.direction[2];
     l.dir.angle = _l.angle * PI / 360.0f;
 
-    return lights_.push(l);
+    const uint32_t light_index = lights_.push(l);
+    li_indices_.push_back(light_index);
+    return light_index;
 }
 
 uint32_t Ray::Ref::Scene::AddLight(const sphere_light_desc_t &_l) {
