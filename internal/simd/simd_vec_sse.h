@@ -473,6 +473,12 @@ public:
         return ret;
     }
 
+    force_inline simd_vec<int, 4> operator&=(const simd_vec<int, 4> &rhs) const {
+        simd_vec<int, 4> ret;
+        ret.vec_ = _mm_and_si128(vec_, rhs.vec_);
+        return ret;
+    }
+
     force_inline simd_vec<int, 4> operator<(int rhs) const {
         simd_vec<int, 4> ret;
         ret.vec_ = _mm_cmplt_epi32(vec_, _mm_set1_epi32(rhs));
@@ -494,6 +500,12 @@ public:
     force_inline simd_vec<int, 4> operator>=(int rhs) const {
         simd_vec<int, 4> ret;
         ret.vec_ = _mm_andnot_si128(_mm_cmplt_epi32(vec_, _mm_set1_epi32(rhs)), _mm_set_epi32(~0, ~0, ~0, ~0));
+        return ret;
+    }
+
+    force_inline simd_vec<int, 4> operator~() const {
+        simd_vec<int, 4> ret;
+        ret.vec_ = _mm_andnot_si128(vec_, _mm_set1_epi32(~0));
         return ret;
     }
 

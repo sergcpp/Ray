@@ -294,6 +294,12 @@ template <> class simd_vec<int, 8> {
         return ret;
     }
 
+    force_inline simd_vec<int, 8> operator&=(const simd_vec<int, 8> &rhs) const {
+        simd_vec<int, 8> ret;
+        ret.vec_ = _mm256_and_si256(vec_, rhs.vec_);
+        return ret;
+    }
+
     force_inline operator simd_vec<float, 8>() const {
         simd_vec<float, 8> ret;
         ret.vec_ = _mm256_cvtepi32_ps(vec_);
@@ -555,6 +561,12 @@ template <> class simd_vec<int, 8> {
 #else
         ITERATE_8({ ret.comp_[i] = v1.comp_[i] << v2; })
 #endif
+        return ret;
+    }
+
+    force_inline simd_vec<int, 8> operator~() const {
+        simd_vec<int, 8> ret;
+        ret.vec_ = _mm256_andnot_si256(vec_, _mm256_set1_epi32(~0));
         return ret;
     }
 
