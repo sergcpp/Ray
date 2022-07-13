@@ -179,6 +179,10 @@ if(ENABLE_UNITYBUILD)
     endif(MSVC AND NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64")
 endif()
 
+if(MSVC)
+    list(APPEND ALL_SOURCE_FILES internal/_CustomTypes.natvis)
+endif(MSVC)
+
 add_library(Ray STATIC ${ALL_SOURCE_FILES})
 if(ENABLE_OPENCL)
     target_link_libraries(Ray OpenCL)
