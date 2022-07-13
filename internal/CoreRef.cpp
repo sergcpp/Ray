@@ -165,8 +165,8 @@ force_inline void bbox_test_oct(const float o[3], const float inv_d[3], const mb
     }) // NOLINT
 }
 
-force_inline
-long bbox_test_oct(const float o[3], const float inv_d[3], const float t, const mbvh_node_t &node, float out_dist[8]) {
+force_inline long bbox_test_oct(const float o[3], const float inv_d[3], const float t, const mbvh_node_t &node,
+                                float out_dist[8]) {
     long mask = 0;
 #if VECTORIZE_BBOX_INTERSECTION
     simd_fvec4 lo, hi, tmin, tmax;
@@ -2588,7 +2588,6 @@ Ray::Ref::simd_fvec4 Ray::Ref::EvaluateDirectLights(const simd_fvec4 &I, const s
     const auto light_index = std::min(uint32_t(u1 * sc.li_indices.size()), uint32_t(sc.li_indices.size() - 1));
 
     const light_t &l = sc.lights[sc.li_indices[light_index]];
-    const transform_t &ltr = sc.transforms[l.tr_index];
 
     simd_fvec4 lcol = simd_fvec4{l.col[0], l.col[1], l.col[2], 0.0f};
     lcol *= float(sc.li_indices.size());
@@ -2642,9 +2641,9 @@ Ray::Ref::simd_fvec4 Ray::Ref::EvaluateDirectLights(const simd_fvec4 &I, const s
         light_dist = MAX_DIST;
         light_pdf = 1.0f;
     } else if (l.type == LIGHT_TYPE_RECT) {
-        const auto light_pos = simd_fvec4{ltr.xform[12], ltr.xform[13], ltr.xform[14], 0.0f};
-        const simd_fvec4 light_u = l.rect.width * TransformDirection(simd_fvec4{1.0f, 0.0f, 0.0f, 0.0f}, ltr.xform);
-        const simd_fvec4 light_v = l.rect.height * TransformDirection(simd_fvec4{0.0f, 0.0f, 1.0f, 0.0f}, ltr.xform);
+        const auto light_pos = simd_fvec4{l.rect.pos[0], l.rect.pos[1], l.rect.pos[2], 0.0f};
+        const simd_fvec4 light_u = simd_fvec4{l.rect.u[0], l.rect.u[1], l.rect.u[2], 0.0f};
+        const simd_fvec4 light_v = simd_fvec4{l.rect.v[0], l.rect.v[1], l.rect.v[2], 0.0f};
 
         const float r1 = std::modf(halton[RAND_DIM_LIGHT_U] + sample_off[0], &_unused) - 0.5f;
         const float r2 = std::modf(halton[RAND_DIM_LIGHT_V] + sample_off[1], &_unused) - 0.5f;
@@ -2654,7 +2653,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::EvaluateDirectLights(const simd_fvec4 &I, const s
         light_dist = length(to_light);
         L = (to_light / light_dist);
 
-        light_area = l.rect.width * l.rect.height;
+        light_area = l.rect.area;
         simd_fvec4 light_forward = normalize(cross(light_u, light_v));
 
         const float cos_theta = dot(-L, light_forward);
@@ -2679,9 +2678,9 @@ Ray::Ref::simd_fvec4 Ray::Ref::EvaluateDirectLights(const simd_fvec4 &I, const s
             lcol[2] *= sc.env->env_col[2];
         }
     } else if (l.type == LIGHT_TYPE_DISK) {
-        const auto light_pos = simd_fvec4{ltr.xform[12], ltr.xform[13], ltr.xform[14], 0.0f};
-        const simd_fvec4 light_u = l.disk.size_x * TransformDirection(simd_fvec4{1.0f, 0.0f, 0.0f, 0.0f}, ltr.xform);
-        const simd_fvec4 light_v = l.disk.size_y * TransformDirection(simd_fvec4{0.0f, 0.0f, 1.0f, 0.0f}, ltr.xform);
+        const auto light_pos = simd_fvec4{l.disk.pos[0], l.disk.pos[1], l.disk.pos[2], 0.0f};
+        const simd_fvec4 light_u = simd_fvec4{l.disk.u[0], l.disk.u[1], l.disk.u[2], 0.0f};
+        const simd_fvec4 light_v = simd_fvec4{l.disk.v[0], l.disk.v[1], l.disk.v[2], 0.0f};
 
         const float r1 = std::modf(halton[RAND_DIM_LIGHT_U] + sample_off[0], &_unused);
         const float r2 = std::modf(halton[RAND_DIM_LIGHT_V] + sample_off[1], &_unused);
@@ -2707,7 +2706,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::EvaluateDirectLights(const simd_fvec4 &I, const s
         light_dist = length(to_light);
         L = (to_light / light_dist);
 
-        light_area = 0.25f * PI * l.disk.size_x * l.disk.size_y;
+        light_area = l.disk.area;
         simd_fvec4 light_forward = normalize(cross(light_u, light_v));
 
         const float cos_theta = dot(-L, light_forward);
@@ -2732,7 +2731,8 @@ Ray::Ref::simd_fvec4 Ray::Ref::EvaluateDirectLights(const simd_fvec4 &I, const s
             lcol[2] *= sc.env->env_col[2];
         }
     } else if (l.type == LIGHT_TYPE_TRI) {
-        const uint32_t ltri_index = l.tri.index;
+        const transform_t &ltr = sc.transforms[l.tri.xform_index];
+        const uint32_t ltri_index = l.tri.tri_index;
 
         const vertex_t &v1 = sc.vertices[sc.vtx_indices[ltri_index * 3 + 0]];
         const vertex_t &v2 = sc.vertices[sc.vtx_indices[ltri_index * 3 + 1]];
@@ -3059,10 +3059,9 @@ bool Ray::Ref::IntersectAreaLights(const ray_packet_t &ray, const light_t lights
                 }
             }
         } else if (l.type == LIGHT_TYPE_RECT) {
-            const transform_t &ltr = transforms[l.tr_index];
-            const auto light_pos = simd_fvec4{ltr.xform[12], ltr.xform[13], ltr.xform[14], 0.0f};
-            simd_fvec4 light_u = l.rect.width * TransformDirection(simd_fvec4{1.0f, 0.0f, 0.0f, 0.0f}, ltr.xform);
-            simd_fvec4 light_v = l.rect.height * TransformDirection(simd_fvec4{0.0f, 0.0f, 1.0f, 0.0f}, ltr.xform);
+            const auto light_pos = simd_fvec4{l.rect.pos[0], l.rect.pos[1], l.rect.pos[2], 0.0f};
+            simd_fvec4 light_u = simd_fvec4{l.rect.u[0], l.rect.u[1], l.rect.u[2], 0.0f};
+            simd_fvec4 light_v = simd_fvec4{l.rect.v[0], l.rect.v[1], l.rect.v[2], 0.0f};
 
             const simd_fvec4 light_forward = normalize(cross(light_u, light_v));
 
@@ -3090,10 +3089,9 @@ bool Ray::Ref::IntersectAreaLights(const ray_packet_t &ray, const light_t lights
                 }
             }
         } else if (l.type == LIGHT_TYPE_DISK) {
-            const transform_t &ltr = transforms[l.tr_index];
-            const simd_fvec4 light_pos = simd_fvec4{ltr.xform[12], ltr.xform[13], ltr.xform[14], 0.0f};
-            simd_fvec4 light_u = l.rect.width * TransformDirection(simd_fvec4{1.0f, 0.0f, 0.0f, 0.0f}, ltr.xform);
-            simd_fvec4 light_v = l.rect.height * TransformDirection(simd_fvec4{0.0f, 0.0f, 1.0f, 0.0f}, ltr.xform);
+            const auto light_pos = simd_fvec4{l.disk.pos[0], l.disk.pos[1], l.disk.pos[2], 0.0f};
+            simd_fvec4 light_u = simd_fvec4{l.disk.u[0], l.disk.u[1], l.disk.u[2], 0.0f};
+            simd_fvec4 light_v = simd_fvec4{l.disk.v[0], l.disk.v[1], l.disk.v[2], 0.0f};
 
             const simd_fvec4 light_forward = normalize(cross(light_u, light_v));
 
@@ -3173,13 +3171,12 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
             const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
             lcol *= mis_weight;
         } else if (l.type == LIGHT_TYPE_RECT) {
-            const transform_t &ltr = sc.transforms[l.tr_index];
-            const auto light_pos = simd_fvec4{ltr.xform[12], ltr.xform[13], ltr.xform[14], 0.0f};
-            simd_fvec4 light_u = l.rect.width * TransformDirection(simd_fvec4{1.0f, 0.0f, 0.0f, 0.0f}, ltr.xform);
-            simd_fvec4 light_v = l.rect.height * TransformDirection(simd_fvec4{0.0f, 0.0f, 1.0f, 0.0f}, ltr.xform);
+            const auto light_pos = simd_fvec4{l.rect.pos[0], l.rect.pos[1], l.rect.pos[2], 0.0f};
+            simd_fvec4 light_u = simd_fvec4{l.rect.u[0], l.rect.u[1], l.rect.u[2], 0.0f};
+            simd_fvec4 light_v = simd_fvec4{l.rect.v[0], l.rect.v[1], l.rect.v[2], 0.0f};
 
             const simd_fvec4 light_forward = normalize(cross(light_u, light_v));
-            const float light_area = l.rect.width * l.rect.height;
+            const float light_area = l.rect.area;
 
             const float plane_dist = dot(light_forward, light_pos);
             const float cos_theta = dot(simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f}, light_forward);
@@ -3199,13 +3196,12 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
             const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
             lcol *= mis_weight;
         } else if (l.type == LIGHT_TYPE_DISK) {
-            const transform_t &ltr = sc.transforms[l.tr_index];
-            const simd_fvec4 light_pos = simd_fvec4{ltr.xform[12], ltr.xform[13], ltr.xform[14], 0.0f};
-            simd_fvec4 light_u = l.rect.width * TransformDirection(simd_fvec4{1.0f, 0.0f, 0.0f, 0.0f}, ltr.xform);
-            simd_fvec4 light_v = l.rect.height * TransformDirection(simd_fvec4{0.0f, 0.0f, 1.0f, 0.0f}, ltr.xform);
+            const auto light_pos = simd_fvec4{l.disk.pos[0], l.disk.pos[1], l.disk.pos[2], 0.0f};
+            simd_fvec4 light_u = simd_fvec4{l.disk.u[0], l.disk.u[1], l.disk.u[2], 0.0f};
+            simd_fvec4 light_v = simd_fvec4{l.disk.v[0], l.disk.v[1], l.disk.v[2], 0.0f};
 
             const simd_fvec4 light_forward = normalize(cross(light_u, light_v));
-            const float light_area = l.rect.width * l.rect.height;
+            const float light_area = l.disk.area;
 
             const float plane_dist = dot(light_forward, light_pos);
             const float cos_theta = dot(simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f}, light_forward);

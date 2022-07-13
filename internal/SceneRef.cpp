@@ -462,14 +462,19 @@ uint32_t Ray::Ref::Scene::AddLight(const rect_light_desc_t &_l, const float *xfo
     l.visible = _l.visible;
     l.sky_portal = _l.sky_portal;
 
-    transform_t tr;
-    memcpy(tr.xform, xform, 16 * sizeof(float));
-
-    l.tr_index = transforms_.push(tr);
-
     memcpy(&l.col[0], &_l.color[0], 3 * sizeof(float));
-    l.rect.width = _l.width;
-    l.rect.height = _l.height;
+    
+    l.rect.pos[0] = xform[12];
+    l.rect.pos[1] = xform[13];
+    l.rect.pos[2] = xform[14];
+
+    l.rect.area = _l.width * _l.height;
+    
+    const simd_fvec4 uvec = _l.width * TransformDirection(simd_fvec4{1.0f, 0.0f, 0.0f, 0.0f}, xform);
+    const simd_fvec4 vvec = _l.height * TransformDirection(simd_fvec4{0.0f, 0.0f, 1.0f, 0.0f}, xform);
+    
+    memcpy(l.rect.u, value_ptr(uvec), 3 * sizeof(float));
+    memcpy(l.rect.v, value_ptr(vvec), 3 * sizeof(float));
 
     const uint32_t light_index = lights_.push(l);
     li_indices_.push_back(light_index);
@@ -486,14 +491,19 @@ uint32_t Ray::Ref::Scene::AddLight(const disk_light_desc_t &_l, const float *xfo
     l.visible = _l.visible;
     l.sky_portal = _l.sky_portal;
 
-    transform_t tr;
-    memcpy(tr.xform, xform, 16 * sizeof(float));
-
-    l.tr_index = transforms_.push(tr);
-
     memcpy(&l.col[0], &_l.color[0], 3 * sizeof(float));
-    l.disk.size_x = _l.size_x;
-    l.disk.size_y = _l.size_y;
+    
+    l.disk.pos[0] = xform[12];
+    l.disk.pos[1] = xform[13];
+    l.disk.pos[2] = xform[14];
+
+    l.disk.area = 0.25f * PI * _l.size_x * _l.size_y;
+    
+    const simd_fvec4 uvec = _l.size_x * TransformDirection(simd_fvec4{1.0f, 0.0f, 0.0f, 0.0f}, xform);
+    const simd_fvec4 vvec = _l.size_y * TransformDirection(simd_fvec4{0.0f, 0.0f, 1.0f, 0.0f}, xform);
+    
+    memcpy(l.disk.u, value_ptr(uvec), 3 * sizeof(float));
+    memcpy(l.disk.v, value_ptr(vvec), 3 * sizeof(float));
 
     const uint32_t light_index = lights_.push(l);
     li_indices_.push_back(light_index);
@@ -506,10 +516,6 @@ uint32_t Ray::Ref::Scene::AddLight(const disk_light_desc_t &_l, const float *xfo
 void Ray::Ref::Scene::RemoveLight(const uint32_t i) {
     if (!lights_.exists(i)) {
         return;
-    }
-
-    if (lights_[i].type == LIGHT_TYPE_RECT || lights_[i].type == LIGHT_TYPE_DISK) {
-        transforms_.erase(lights_[i].tr_index);
     }
 
     { // remove from compacted list
@@ -546,8 +552,8 @@ uint32_t Ray::Ref::Scene::AddMeshInstance(const uint32_t mesh_index, const float
                 new_light.type = LIGHT_TYPE_TRI;
                 new_light.visible = 0;
                 new_light.sky_portal = 0;
-                new_light.tr_index = mi.tr_index;
-                new_light.tri.index = tri;
+                new_light.tri.tri_index = tri;
+                new_light.tri.xform_index = mi.tr_index;
                 new_light.col[0] = front_mat.base_color[0] * front_mat.strength;
                 new_light.col[1] = front_mat.base_color[1] * front_mat.strength;
                 new_light.col[2] = front_mat.base_color[2] * front_mat.strength;

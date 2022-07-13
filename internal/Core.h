@@ -169,30 +169,33 @@ struct light_t {
     uint32_t type : 6;
     uint32_t visible : 1;
     uint32_t sky_portal : 1;
-    uint32_t tr_index : 24;
+    uint32_t _unused : 24;
     float col[3];
     union {
         struct {
             float pos[3], radius;
+            float _unused[6];
         } sph;
         struct {
-            float width, height;
-            float _unused[2];
+            float pos[3], area;
+            float u[3], v[3];
         } rect;
         struct {
-            float size_x, size_y;
-            float _unused[2];
+            float pos[3], area;
+            float u[3], v[3];
         } disk;
         struct {
-            float _unused[3];
-            uint32_t index;
+            uint32_t tri_index;
+            uint32_t xform_index;
+            float _unused[8];
         } tri;
         struct {
             float dir[3], angle;
+            float _unused[6];
         } dir;
     };
 };
-static_assert(sizeof(light_t) == 32, "!");
+static_assert(sizeof(light_t) == 56, "!");
 
 struct prim_t;
 
