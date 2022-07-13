@@ -986,7 +986,7 @@ void Ray::Ref::GeneratePrimaryRays(int iteration, const camera_t &cam, const rec
                 out_r.dd_dy[j] = _dy[j] - _d[j];
             }
 
-            out_r.pdf = 1.0f;
+            out_r.pdf = 1e6f;
             out_r.xy = (x << 16) | y;
             out_r.ray_depth = 0;
         }
@@ -3030,8 +3030,8 @@ Ray::Ref::simd_fvec4 Ray::Ref::EvaluateDirectLights(const simd_fvec4 &I, const s
     return col;
 }
 
-bool Ray::Ref::IntersectAreaLights(const light_t lights[], Span<const uint32_t> visible_lights,
-                                   const transform_t transforms[], const ray_packet_t &ray, hit_data_t &inout_inter) {
+bool Ray::Ref::IntersectAreaLights(const ray_packet_t &ray, const light_t lights[], Span<const uint32_t> visible_lights,
+                                   const transform_t transforms[], hit_data_t &inout_inter) {
     bool res = false;
 
     // TODO: BVH for light geometry
