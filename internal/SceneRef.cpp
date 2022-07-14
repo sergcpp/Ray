@@ -445,6 +445,8 @@ uint32_t Ray::Ref::Scene::AddLight(const sphere_light_desc_t &_l) {
 
     memcpy(&l.col[0], &_l.color[0], 3 * sizeof(float));
     memcpy(&l.sph.pos[0], &_l.position[0], 3 * sizeof(float));
+
+    l.sph.area = 4.0f * PI * _l.radius * _l.radius;
     l.sph.radius = _l.radius;
 
     const uint32_t light_index = lights_.push(l);

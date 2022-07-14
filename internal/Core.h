@@ -173,8 +173,9 @@ struct light_t {
     float col[3];
     union {
         struct {
-            float pos[3], radius;
-            float _unused[6];
+            float pos[3], area;
+            float radius;
+            float _unused[5];
         } sph;
         struct {
             float pos[3], area;

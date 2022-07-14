@@ -2620,7 +2620,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::EvaluateDirectLights(const simd_fvec4 &I, const s
         light_dist = length(L);
         L /= light_dist;
 
-        light_area = 4.0f * PI * l.sph.radius * l.sph.radius;
+        light_area = l.sph.area;
         const simd_fvec4 light_forward =
             normalize(light_surf_pos - simd_fvec4{l.sph.pos[0], l.sph.pos[1], l.sph.pos[2], 0.0f});
 
@@ -3051,7 +3051,7 @@ bool Ray::Ref::IntersectAreaLights(const ray_packet_t &ray, const light_t lights
                     inout_inter.obj_index = -int(light_index) - 1;
                     inout_inter.t = t1;
                     res = true;
-                } else if (t2 > 0.001f && t2 < inout_inter.t) {
+                } else if (t2 > HIT_EPS && t2 < inout_inter.t) {
                     inout_inter.mask = -1;
                     inout_inter.obj_index = -int(light_index) - 1;
                     inout_inter.t = t2;
@@ -3078,9 +3078,9 @@ bool Ray::Ref::IntersectAreaLights(const ray_packet_t &ray, const light_t lights
                     simd_fvec4{ray.o[0], ray.o[1], ray.o[2], 0.0f} + simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f} * t;
                 const simd_fvec4 vi = p - light_pos;
                 const float a1 = dot(light_u, vi);
-                if (a1 >= -0.5 && a1 <= 0.5) {
+                if (a1 >= -0.5f && a1 <= 0.5f) {
                     const float a2 = dot(light_v, vi);
-                    if (a2 >= -0.5 && a2 <= 0.5) {
+                    if (a2 >= -0.5f && a2 <= 0.5f) {
                         inout_inter.mask = -1;
                         inout_inter.obj_index = -int(light_index) - 1;
                         inout_inter.t = t;
@@ -3152,7 +3152,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
 
         if (l.type == LIGHT_TYPE_SPHERE) {
             const auto light_pos = simd_fvec4{l.sph.pos[0], l.sph.pos[1], l.sph.pos[2], 0.0f};
-            const float light_area = 4.0f * PI * l.sph.radius * l.sph.radius;
+            const float light_area = l.sph.area;
 
             const simd_fvec4 op = light_pos - simd_fvec4{ray.o[0], ray.o[1], ray.o[2], 0.0f};
             const float b = dot(op, simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f});
