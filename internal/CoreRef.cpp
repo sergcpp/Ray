@@ -3182,14 +3182,10 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
             const float cos_theta = dot(simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f}, light_forward);
             const float t = inter.t;
 
-            light_u /= dot(light_u, light_u);
-            light_v /= dot(light_v, light_v);
-
             const auto p =
                 simd_fvec4{ray.o[0], ray.o[1], ray.o[2], 0.0f} + simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f} * t;
             const simd_fvec4 vi = p - light_pos;
-            const float a1 = dot(light_u, vi);
-            const float a2 = dot(light_v, vi);
+
             const float light_pdf = (t * t) / (light_area * cos_theta);
             const float bsdf_pdf = ray.pdf;
 
@@ -3207,14 +3203,9 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
             const float cos_theta = dot(simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f}, light_forward);
             const float t = inter.t;
 
-            light_u /= dot(light_u, light_u);
-            light_v /= dot(light_v, light_v);
-
             const auto p =
                 simd_fvec4{ray.o[0], ray.o[1], ray.o[2], 0.0f} + simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f} * t;
             const simd_fvec4 vi = p - light_pos;
-            const float a1 = dot(light_u, vi);
-            const float a2 = dot(light_v, vi);
 
             const float light_pdf = (t * t) / (light_area * cos_theta);
             const float bsdf_pdf = ray.pdf;
