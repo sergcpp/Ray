@@ -253,7 +253,7 @@ template <> class simd_vec<int, 8> {
 
     force_inline simd_vec<int, 8> &operator*=(const simd_vec<int, 8> &rhs) {
 #if defined(USE_AVX2) || defined(USE_AVX512)
-        vec_ = _mm256_mul_epi32(vec_, rhs.vec_);
+        vec_ = _mm256_mullo_epi32(vec_, rhs.vec_);
 #else
         ITERATE_8({ comp_[i] = comp_[i] * rhs.comp_[i]; })
 #endif
@@ -262,7 +262,7 @@ template <> class simd_vec<int, 8> {
 
     force_inline simd_vec<int, 8> &operator*=(int rhs) {
 #if defined(USE_AVX2) || defined(USE_AVX512)
-        vec_ = _mm256_mul_epi32(vec_, _mm256_set1_epi32(rhs));
+        vec_ = _mm256_mullo_epi32(vec_, _mm256_set1_epi32(rhs));
 #else
         ITERATE_8({ comp_[i] = comp_[i] * rhs; })
 #endif
@@ -485,7 +485,7 @@ template <> class simd_vec<int, 8> {
     friend force_inline simd_vec<int, 8> operator*(const simd_vec<int, 8> &v1, int v2) {
         simd_vec<int, 8> temp;
 #if defined(USE_AVX2) || defined(USE_AVX512)
-        temp.vec_ = _mm256_mul_epi32(v1.vec_, _mm256_set1_epi32(v2));
+        temp.vec_ = _mm256_mullo_epi32(v1.vec_, _mm256_set1_epi32(v2));
 #else
         ITERATE_8({ temp.comp_[i] = v1.comp_[i] * v2; })
 #endif
@@ -521,7 +521,7 @@ template <> class simd_vec<int, 8> {
     friend force_inline simd_vec<int, 8> operator*(int v1, const simd_vec<int, 8> &v2) {
         simd_vec<int, 8> temp;
 #if defined(USE_AVX2) || defined(USE_AVX512)
-        temp.vec_ = _mm256_mul_epi32(_mm256_set1_epi32(v1), v2.vec_);
+        temp.vec_ = _mm256_mullo_epi32(_mm256_set1_epi32(v1), v2.vec_);
 #else
         ITERATE_8({ temp.comp_[i] = v1 * v2.comp_[i]; })
 #endif
