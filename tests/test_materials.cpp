@@ -555,7 +555,8 @@ void schedule_render_jobs(Ray::RendererBase &renderer, const Ray::SceneBase *sce
 
             // report progress percentage
             const float prog = 100.0f * float(i + std::min(SamplePortion, samples - i)) / samples;
-            printf("\r%s (%s, %c, %s): %.1f%% ", log_str, Ray::RendererTypeName(rt), settings.use_wide_bvh ? 'w' : 'n',
+            printf("\r%s (%s, %c, %s): %.1f%% ", log_str, Ray::g_RendererTypeNames[rt],
+                   settings.use_wide_bvh ? 'w' : 'n',
                    output_sh ? "sh" : "co", prog);
             fflush(stdout);
         }

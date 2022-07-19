@@ -191,7 +191,7 @@ float ComputeVisibility(const simd_fvec4 &p, const simd_fvec4 &d, float dist, fl
 // Compute derivatives at hit point
 void ComputeDerivatives(const simd_fvec4 &I, float t, const simd_fvec4 &do_dx, const simd_fvec4 &do_dy,
                         const simd_fvec4 &dd_dx, const simd_fvec4 &dd_dy, const vertex_t &v1, const vertex_t &v2,
-                        const vertex_t &v3, const transform_t &tr, const simd_fvec4 &plane_N, derivatives_t &out_der);
+                        const vertex_t &v3, const simd_fvec4 &plane_N, const transform_t &tr, derivatives_t &out_der);
 
 // Evaluate direct light contribution
 simd_fvec4 EvaluateDirectLights(const simd_fvec4 &I, const simd_fvec4 &P, const simd_fvec4 &N, const simd_fvec4 &T,

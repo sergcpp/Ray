@@ -119,7 +119,7 @@ void test_texture() {
                 for (int i = 0; i < NUM_SAMPLES; ++i) {
                     renderer->RenderScene(scene.get(), reg);
                     const float prog = 100.0f * float(i + 1) / NUM_SAMPLES;
-                    printf("\rTest texture (%s, %c): %.1f%% ", Ray::RendererTypeName(rt), use_wide_bvh ? 'w' : 'n',
+                    printf("\rTest texture (%s, %c): %.1f%% ", Ray::g_RendererTypeNames[rt], use_wide_bvh ? 'w' : 'n',
                            prog);
                     fflush(stdout);
                 }

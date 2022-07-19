@@ -2511,8 +2511,8 @@ float Ray::Ref::ComputeVisibility(const simd_fvec4 &p, const simd_fvec4 &d, floa
 
 void Ray::Ref::ComputeDerivatives(const simd_fvec4 &I, const float t, const simd_fvec4 &do_dx, const simd_fvec4 &do_dy,
                                   const simd_fvec4 &dd_dx, const simd_fvec4 &dd_dy, const vertex_t &v1,
-                                  const vertex_t &v2, const vertex_t &v3, const transform_t &tr,
-                                  const simd_fvec4 &plane_N, derivatives_t &out_der) {
+                                  const vertex_t &v2, const vertex_t &v3, const simd_fvec4 &plane_N,
+                                  const transform_t &tr, derivatives_t &out_der) {
     // From 'Tracing Ray Differentials' [1999]
 
     const float dot_I_N = -dot(I, plane_N);
@@ -3145,6 +3145,9 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
                                   ray.c[2] * env_col[2] * sc.env->env_col[2], env_col[3]};
     }
 
+    const auto I = simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f};
+    const auto P = simd_fvec4{ray.o[0], ray.o[1], ray.o[2], 0.0f} + inter.t * I;
+
     if (inter.obj_index < 0) { // Area light intersection
         const light_t &l = sc.lights[-inter.obj_index - 1];
 
@@ -3156,16 +3159,12 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
 
             const simd_fvec4 op = light_pos - simd_fvec4{ray.o[0], ray.o[1], ray.o[2], 0.0f};
             const float b = dot(op, simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f});
-            float det = b * b - dot(op, op) + l.sph.radius * l.sph.radius;
+            const float det = std::sqrt(b * b - dot(op, op) + l.sph.radius * l.sph.radius);
 
-            det = std::sqrt(det);
-            const float t = inter.t;
-            const auto hit_p =
-                simd_fvec4{ray.o[0], ray.o[1], ray.o[2], 0.0f} + t * simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f};
             const float cos_theta = dot(simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f},
-                                        normalize(simd_fvec4{l.sph.pos[0], l.sph.pos[1], l.sph.pos[2], 0.0f} - hit_p));
+                                        normalize(simd_fvec4{l.sph.pos[0], l.sph.pos[1], l.sph.pos[2], 0.0f} - P));
 
-            const float light_pdf = (t * t) / (0.5f * light_area * cos_theta);
+            const float light_pdf = (inter.t * inter.t) / (0.5f * light_area * cos_theta);
             const float bsdf_pdf = ray.pdf;
 
             const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
@@ -3180,13 +3179,8 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
 
             const float plane_dist = dot(light_forward, light_pos);
             const float cos_theta = dot(simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f}, light_forward);
-            const float t = inter.t;
 
-            const auto p =
-                simd_fvec4{ray.o[0], ray.o[1], ray.o[2], 0.0f} + simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f} * t;
-            const simd_fvec4 vi = p - light_pos;
-
-            const float light_pdf = (t * t) / (light_area * cos_theta);
+            const float light_pdf = (inter.t * inter.t) / (light_area * cos_theta);
             const float bsdf_pdf = ray.pdf;
 
             const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
@@ -3201,13 +3195,8 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
 
             const float plane_dist = dot(light_forward, light_pos);
             const float cos_theta = dot(simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f}, light_forward);
-            const float t = inter.t;
 
-            const auto p =
-                simd_fvec4{ray.o[0], ray.o[1], ray.o[2], 0.0f} + simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f} * t;
-            const simd_fvec4 vi = p - light_pos;
-
-            const float light_pdf = (t * t) / (light_area * cos_theta);
+            const float light_pdf = (inter.t * inter.t) / (light_area * cos_theta);
             const float bsdf_pdf = ray.pdf;
 
             const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
@@ -3216,9 +3205,6 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
 
         return Ray::pixel_color_t{ray.c[0] * lcol[0], ray.c[1] * lcol[1], ray.c[2] * lcol[2], 1.0f};
     }
-
-    const auto I = simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f};
-    const auto P = simd_fvec4{ray.o[0], ray.o[1], ray.o[2], 0.0f} + inter.t * I;
 
     const bool is_backfacing = (inter.prim_index < 0);
     const uint32_t prim_index = is_backfacing ? -inter.prim_index - 1 : inter.prim_index;
@@ -3241,7 +3227,6 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
     simd_fvec2 uvs = simd_fvec2(v1.t[0]) * w + simd_fvec2(v2.t[0]) * inter.u + simd_fvec2(v3.t[0]) * inter.v;
 
     auto plane_N = simd_fvec4{tri.n_plane[0], tri.n_plane[1], tri.n_plane[2], 0.0f};
-    plane_N = TransformNormal(plane_N, tr->inv_xform);
 
     simd_fvec4 B = simd_fvec4{v1.b[0], v1.b[1], v1.b[2], 0.0f} * w +
                    simd_fvec4{v2.b[0], v2.b[1], v2.b[2], 0.0f} * inter.u +
@@ -3260,17 +3245,18 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_info_t &pi, const hit_data_
         }
     }
 
+    plane_N = TransformNormal(plane_N, tr->inv_xform);
+    N = TransformNormal(N, tr->inv_xform);
+    B = TransformNormal(B, tr->inv_xform);
+    T = TransformNormal(T, tr->inv_xform);
+
     const auto do_dx = simd_fvec4{ray.do_dx[0], ray.do_dx[1], ray.do_dx[2], 0.0f};
     const auto do_dy = simd_fvec4{ray.do_dy[0], ray.do_dy[1], ray.do_dy[2], 0.0f};
     const auto dd_dx = simd_fvec4{ray.dd_dx[0], ray.dd_dx[1], ray.dd_dx[2], 0.0f};
     const auto dd_dy = simd_fvec4{ray.dd_dy[0], ray.dd_dy[1], ray.dd_dy[2], 0.0f};
 
     derivatives_t surf_der;
-    ComputeDerivatives(I, inter.t, do_dx, do_dy, dd_dx, dd_dy, v1, v2, v3, *tr, plane_N, surf_der);
-
-    N = TransformNormal(N, tr->inv_xform);
-    B = TransformNormal(B, tr->inv_xform);
-    T = TransformNormal(T, tr->inv_xform);
+    ComputeDerivatives(I, inter.t, do_dx, do_dy, dd_dx, dd_dy, v1, v2, v3, plane_N, *tr, surf_der);
 
     // apply normal map
     if (mat->textures[NORMALS_TEXTURE] != 0xffffffff) {

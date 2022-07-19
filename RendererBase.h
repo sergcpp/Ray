@@ -20,7 +20,7 @@ enum eRendererType : uint32_t {
     //RendererOCL = (1 << 5),
 };
 
-const char *RendererTypeName(const eRendererType rt);
+extern const char *g_RendererTypeNames[];
 
 /// Renderer settings
 struct settings_t {
