@@ -332,6 +332,11 @@ template <typename T, int S> class simd_vec {
         return ret;
     }
 
+    force_inline simd_vec<T, S> &operator&=(const T rhs) {
+        ITERATE(S, { comp_[i] &= rhs; })
+        return *this;
+    }
+
     force_inline simd_vec<T, S> operator~() const {
         simd_vec<T, S> ret;
         ITERATE(S, { ret.comp_[i] = ~comp_[i]; })

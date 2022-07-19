@@ -270,6 +270,30 @@ template <> class simd_vec<float, 4> {
         return ret;
     }
 
+    force_inline simd_vec<float, 4> operator==(float rhs) const {
+        simd_vec<float, 4> ret;
+        ret.vec_ = _mm_cmpeq_ps(vec_, _mm_set1_ps(rhs));
+        return ret;
+    }
+
+    force_inline simd_vec<float, 4> operator==(const simd_vec<float, 4> &rhs) const {
+        simd_vec<float, 4> ret;
+        ret.vec_ = _mm_cmpeq_ps(vec_, rhs.vec_);
+        return ret;
+    }
+
+    force_inline simd_vec<float, 4> operator!=(float rhs) const {
+        simd_vec<float, 4> ret;
+        ret.vec_ = _mm_cmpneq_ps(vec_, _mm_set1_ps(rhs));
+        return ret;
+    }
+
+    force_inline simd_vec<float, 4> operator!=(const simd_vec<float, 4> &rhs) const {
+        simd_vec<float, 4> ret;
+        ret.vec_ = _mm_cmpneq_ps(vec_, rhs.vec_);
+        return ret;
+    }
+
     friend force_inline simd_vec<float, 4> operator*(const simd_vec<float, 4> &v1, const simd_vec<float, 4> &v2) {
         simd_vec<float, 4> ret;
         ret.vec_ = _mm_mul_ps(v1.vec_, v2.vec_);
@@ -480,10 +504,9 @@ template <> class simd_vec<int, 4> {
         return ret;
     }
 
-    force_inline simd_vec<int, 4> operator&=(const simd_vec<int, 4> &rhs) const {
-        simd_vec<int, 4> ret;
-        ret.vec_ = _mm_and_si128(vec_, rhs.vec_);
-        return ret;
+    force_inline simd_vec<int, 4> &operator&=(const simd_vec<int, 4> &rhs) {
+        vec_ = _mm_and_si128(vec_, rhs.vec_);
+        return *this;
     }
 
     force_inline simd_vec<int, 4> operator<(int rhs) const {
@@ -508,6 +531,11 @@ template <> class simd_vec<int, 4> {
         simd_vec<int, 4> ret;
         ret.vec_ = _mm_andnot_si128(_mm_cmplt_epi32(vec_, _mm_set1_epi32(rhs)), _mm_set_epi32(~0, ~0, ~0, ~0));
         return ret;
+    }
+
+    force_inline simd_vec<int, 4> &operator&=(const int rhs) {
+        vec_ = _mm_and_si128(vec_, _mm_set1_epi32(rhs));
+        return *this;
     }
 
     force_inline simd_vec<int, 4> operator~() const {
