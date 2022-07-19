@@ -183,6 +183,9 @@ template <> class simd_vec<float, 8> {
     friend force_inline simd_vec<float, 8> fmsub(const simd_vec<float, 8> &a, const float b,
                                                  const simd_vec<float, 8> &c);
     friend force_inline simd_vec<float, 8> fmsub(const float a, const simd_vec<float, 8> &b, const float c);
+
+    template <int Scale>
+    friend force_inline simd_vec<float, 8> gather(const float *base_addr, const simd_vec<int, 8> &vindex);
 #endif
 
     friend force_inline const float *value_ptr(const simd_vec<float, 8> &v1) { return &v1.comp_[0]; }
@@ -638,6 +641,13 @@ template <> class simd_vec<int, 8> {
 #endif
     }
 
+#if defined(USE_AVX2) || defined(USE_AVX512)
+    template <int Scale>
+    friend force_inline simd_vec<float, 8> gather(const float *base_addr, const simd_vec<int, 8> &vindex);
+    template <int Scale>
+    friend force_inline simd_vec<int, 8> gather(const int *base_addr, const simd_vec<int, 8> &vindex);
+#endif
+
     static int size() { return 8; }
     static bool is_native() {
 #if defined(USE_AVX2) || defined(USE_AVX512)
@@ -894,6 +904,20 @@ force_inline simd_vec<float, 8> fmsub(const float a, const simd_vec<float, 8> &b
     ret.vec_ = _mm256_fmsub_ps(_mm256_set1_ps(a), b.vec_, _mm256_set1_ps(c));
     return ret;
 }
+
+template <int Scale>
+force_inline simd_vec<float, 8> gather(const float *base_addr, const simd_vec<int, 8> &vindex) {
+    simd_vec<float, 8> ret;
+    ret.vec_ = _mm256_i32gather_ps(base_addr, vindex.vec_, Scale * sizeof(float));
+    return ret;
+}
+
+template <int Scale> force_inline simd_vec<int, 8> gather(const int *base_addr, const simd_vec<int, 8> &vindex) {
+    simd_vec<int, 8> ret;
+    ret.vec_ = _mm256_i32gather_epi32(base_addr, vindex.vec_, Scale * sizeof(int));
+    return ret;
+}
+
 #endif
 
 } // namespace NS

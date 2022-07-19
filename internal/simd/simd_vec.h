@@ -698,6 +698,13 @@ force_inline simd_vec<T, S> fmsub(const simd_vec<T, S> &a, const float b, const 
     return a * b - c;
 }
 
+template <int Scale = 1, typename T, int S>
+force_inline simd_vec<T, S> gather(const T *base_addr, const simd_vec<int, S> &vindex) {
+    simd_vec<T, S> res;
+    ITERATE(S, { res[i] = base_addr[vindex[i] * Scale]; });
+    return res;
+}
+
 template <typename T, int S> force_inline simd_vec<T, S> fmsub(const float a, const simd_vec<T, S> &b, const float c) {
     return a * b - c;
 }
