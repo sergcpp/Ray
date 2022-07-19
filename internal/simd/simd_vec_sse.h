@@ -645,7 +645,7 @@ template <> class simd_vec<int, 4> {
     friend force_inline simd_vec<int, 4> operator*(const simd_vec<int, 4> &v1, const simd_vec<int, 4> &v2) {
         simd_vec<int, 4> ret;
 #if defined(USE_SSE41)
-        ret.vec_ = _mm_mul_epi32(v1.vec_, v2.vec_);
+        ret.vec_ = _mm_mullo_epi32(v1.vec_, v2.vec_);
 #else
         ITERATE_4({ ret.comp_[i] = v1.comp_[i] * v2.comp_[i]; })
 #endif
@@ -673,7 +673,7 @@ template <> class simd_vec<int, 4> {
     friend force_inline simd_vec<int, 4> operator*(const simd_vec<int, 4> &v1, int v2) {
         simd_vec<int, 4> ret;
 #if defined(USE_SSE41)
-        ret.vec_ = _mm_mul_epi32(v1.vec_, _mm_set1_epi32(v2));
+        ret.vec_ = _mm_mullo_epi32(v1.vec_, _mm_set1_epi32(v2));
 #else
         ITERATE_4({ ret.comp_[i] = v1.comp_[i] * v2; })
 #endif
@@ -697,7 +697,7 @@ template <> class simd_vec<int, 4> {
     friend force_inline simd_vec<int, 4> operator*(int v1, const simd_vec<int, 4> &v2) {
         simd_vec<int, 4> ret;
 #if defined(USE_SSE41)
-        ret.vec_ = _mm_mul_epi32(_mm_set1_epi32(v1), v2.vec_);
+        ret.vec_ = _mm_mullo_epi32(_mm_set1_epi32(v1), v2.vec_);
 #else
         ITERATE_4({ ret.comp_[i] = v1 * v2.comp_[i]; })
 #endif
