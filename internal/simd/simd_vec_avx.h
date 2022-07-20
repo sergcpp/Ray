@@ -130,7 +130,9 @@ template <> class simd_vec<float, 8> {
     }
 
     force_inline static simd_vec<float, 8> min(const simd_vec<float, 8> &v1, const simd_vec<float, 8> &v2);
+    force_inline static simd_vec<float, 8> min(const simd_vec<float, 8> &v1, float v2);
     force_inline static simd_vec<float, 8> max(const simd_vec<float, 8> &v1, const simd_vec<float, 8> &v2);
+    force_inline static simd_vec<float, 8> max(const simd_vec<float, 8> &v1, float v2);
 
     force_inline static simd_vec<float, 8> and_not(const simd_vec<float, 8> &v1, const simd_vec<float, 8> &v2);
 
@@ -400,12 +402,32 @@ template <> class simd_vec<int, 8> {
         return temp;
     }
 
+    force_inline static simd_vec<int, 8> min(const simd_vec<int, 8> &v1, const int v2) {
+        simd_vec<int, 8> temp;
+#if defined(USE_AVX2) || defined(USE_AVX512)
+        temp.vec_ = _mm256_min_epi32(v1.vec_, _mm256_set1_epi32(v2));
+#else
+        ITERATE_8({ temp.comp_[i] = std::min(v1.comp_[i], v2); })
+#endif
+        return temp;
+    }
+
     force_inline static simd_vec<int, 8> max(const simd_vec<int, 8> &v1, const simd_vec<int, 8> &v2) {
         simd_vec<int, 8> temp;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         temp.vec_ = _mm256_max_epi32(v1.vec_, v2.vec_);
 #else
         ITERATE_8({ temp.comp_[i] = std::max(v1.comp_[i], v2.comp_[i]); })
+#endif
+        return temp;
+    }
+
+    force_inline static simd_vec<int, 8> max(const simd_vec<int, 8> &v1, const int v2) {
+        simd_vec<int, 8> temp;
+#if defined(USE_AVX2) || defined(USE_AVX512)
+        temp.vec_ = _mm256_max_epi32(v1.vec_, _mm256_set1_epi32(v2));
+#else
+        ITERATE_8({ temp.comp_[i] = std::max(v1.comp_[i], v2); })
 #endif
         return temp;
     }
@@ -698,9 +720,21 @@ force_inline simd_vec<float, 8> simd_vec<float, 8>::min(const simd_vec<float, 8>
     return temp;
 }
 
+force_inline simd_vec<float, 8> simd_vec<float, 8>::min(const simd_vec<float, 8> &v1, const float v2) {
+    simd_vec<float, 8> temp;
+    temp.vec_ = _mm256_min_ps(v1.vec_, _mm256_set1_ps(v2));
+    return temp;
+}
+
 force_inline simd_vec<float, 8> simd_vec<float, 8>::max(const simd_vec<float, 8> &v1, const simd_vec<float, 8> &v2) {
     simd_vec<float, 8> temp;
     temp.vec_ = _mm256_max_ps(v1.vec_, v2.vec_);
+    return temp;
+}
+
+force_inline simd_vec<float, 8> simd_vec<float, 8>::max(const simd_vec<float, 8> &v1, const float v2) {
+    simd_vec<float, 8> temp;
+    temp.vec_ = _mm256_max_ps(v1.vec_, _mm256_set1_ps(v2));
     return temp;
 }
 

@@ -208,9 +208,21 @@ template <> class simd_vec<float, 4> {
         return temp;
     }
 
+    force_inline static simd_vec<float, 4> min(const simd_vec<float, 4> &v1, const float v2) {
+        simd_vec<float, 4> temp;
+        temp.vec_ = _mm_min_ps(v1.vec_, _mm_set1_ps(v2));
+        return temp;
+    }
+
     force_inline static simd_vec<float, 4> max(const simd_vec<float, 4> &v1, const simd_vec<float, 4> &v2) {
         simd_vec<float, 4> temp;
         temp.vec_ = _mm_max_ps(v1.vec_, v2.vec_);
+        return temp;
+    }
+
+    force_inline static simd_vec<float, 4> max(const simd_vec<float, 4> &v1, const float v2) {
+        simd_vec<float, 4> temp;
+        temp.vec_ = _mm_max_ps(v1.vec_, _mm_set1_ps(v2));
         return temp;
     }
 
@@ -599,9 +611,21 @@ template <> class simd_vec<int, 4> {
         return temp;
     }
 
+    force_inline static simd_vec<int, 4> min(const simd_vec<int, 4> &v1, const int v2) {
+        simd_vec<int, 4> temp;
+        temp.vec_ = _mm_min_epi32(v1.vec_, _mm_set1_epi32(v2));
+        return temp;
+    }
+
     force_inline static simd_vec<int, 4> max(const simd_vec<int, 4> &v1, const simd_vec<int, 4> &v2) {
         simd_vec<int, 4> temp;
         temp.vec_ = _mm_max_epi32(v1.vec_, v2.vec_);
+        return temp;
+    }
+
+    force_inline static simd_vec<int, 4> max(const simd_vec<int, 4> &v1, const int v2) {
+        simd_vec<int, 4> temp;
+        temp.vec_ = _mm_max_epi32(v1.vec_, _mm_set1_epi32(v2));
         return temp;
     }
 

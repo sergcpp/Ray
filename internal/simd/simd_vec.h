@@ -413,24 +413,29 @@ template <typename T, int S> class simd_vec {
     }
 
     force_inline void blend_to(const simd_vec<T, S> &mask,
-                               const simd_vec<T, S> &v1){ITERATE(S,
-                                                                 {
-                                                                     if (mask.comp_[i] != T(0))
-                                                                         comp_[i] = v1.comp_[i];
-                                                                 })}
+                               const simd_vec<T, S> &v1){
+        ITERATE(S, {
+            if (mask.comp_[i] != T(0)) {
+                comp_[i] = v1.comp_[i];
+            }
+        })
+    }
 
     force_inline
-        void blend_inv_to(const simd_vec<T, S> &mask, const simd_vec<T, S> &v1){ITERATE(S,
-                                                                                        {
-                                                                                            if (mask.comp_[i] == T(0))
-                                                                                                comp_[i] = v1.comp_[i];
-                                                                                        })}
+        void blend_inv_to(const simd_vec<T, S> &mask, const simd_vec<T, S> &v1){
+        ITERATE(S, {
+            if (mask.comp_[i] == T(0)) {
+                comp_[i] = v1.comp_[i];
+            }
+        })
+    }
 
     force_inline int movemask() const {
         int res = 0;
         ITERATE(S, {
-            if (comp_[i] != T(0))
+            if (comp_[i] != T(0)) {
                 res |= (1 << i);
+            }
         })
         return res;
     }
@@ -441,9 +446,21 @@ template <typename T, int S> class simd_vec {
         return temp;
     }
 
+    force_inline static simd_vec<T, S> min(const simd_vec<T, S> &v1, const T v2) {
+        simd_vec<T, S> temp;
+        ITERATE(S, { temp.comp_[i] = std::min(v1.comp_[i], v2); })
+        return temp;
+    }
+
     force_inline static simd_vec<T, S> max(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) {
         simd_vec<T, S> temp;
         ITERATE(S, { temp.comp_[i] = std::max(v1.comp_[i], v2.comp_[i]); })
+        return temp;
+    }
+
+    force_inline static simd_vec<T, S> max(const simd_vec<T, S> &v1, const T v2) {
+        simd_vec<T, S> temp;
+        ITERATE(S, { temp.comp_[i] = std::max(v1.comp_[i], v2); })
         return temp;
     }
 
@@ -670,7 +687,15 @@ template <typename T, int S> force_inline simd_vec<T, S> min(const simd_vec<T, S
     return simd_vec<T, S>::min(v1, v2);
 }
 
+template <typename T, int S> force_inline simd_vec<T, S> min(const simd_vec<T, S> &v1, const T v2) {
+    return simd_vec<T, S>::min(v1, v2);
+}
+
 template <typename T, int S> force_inline simd_vec<T, S> max(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) {
+    return simd_vec<T, S>::max(v1, v2);
+}
+
+template <typename T, int S> force_inline simd_vec<T, S> max(const simd_vec<T, S> &v1, const T v2) {
     return simd_vec<T, S>::max(v1, v2);
 }
 
