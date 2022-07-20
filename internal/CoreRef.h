@@ -198,14 +198,15 @@ simd_fvec4 EvaluateDirectLights(const simd_fvec4 &I, const simd_fvec4 &P, const 
                                 const simd_fvec4 &B, const simd_fvec4 &plane_N, const simd_fvec2 &uvs,
                                 const bool is_backfacing, const material_t *mat, const derivatives_t &surf_der,
                                 const pass_info_t &pi, const scene_data_t &sc, const TextureAtlasBase *tex_atlases[],
-                                const uint32_t node_index, const float halton[], const float sample_off[2]);
+                                const uint32_t node_index, const int rand_index, const float halton[],
+                                const float sample_off[2]);
 
 // Account for visible lights contribution
 bool IntersectAreaLights(const ray_packet_t &ray, const light_t lights[], Span<const uint32_t> visible_lights,
                          const transform_t transforms[], hit_data_t &inout_inter);
 
 // Shade
-Ray::pixel_color_t ShadeSurface(const pass_info_t &pi, const hit_data_t &inter, const ray_packet_t &ray,
+Ray::pixel_color_t ShadeSurface(int px_index, const pass_info_t &pi, const hit_data_t &inter, const ray_packet_t &ray,
                                 const float *halton, const scene_data_t &sc, uint32_t node_index,
                                 const TextureAtlasBase *tex_atlases[], ray_packet_t *out_secondary_rays,
                                 int *out_secondary_rays_count);

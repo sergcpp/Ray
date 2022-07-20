@@ -150,7 +150,6 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
                                                             sc_data.mi_indices, sc_data.meshes, sc_data.transforms,
                                                             sc_data.tris, sc_data.tri_indices, inter);
                 }
-
                 // IntersectAreaLights(r, sc_data.lights, sc_data.visible_lights, sc_data.transforms, inter);
             }
         }
@@ -175,12 +174,11 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
         const int x = (r.xy >> 16) & 0x0000ffff;
         const int y = r.xy & 0x0000ffff;
 
-        pass_info.index = y * w + x;
-        pass_info.rand_index = pass_info.index;
+        const int px_index = y * w + x;
 
         const pixel_color_t col =
-            ShadeSurface(pass_info, inter, r, &region.halton_seq[hi + RAND_DIM_BASE_COUNT], sc_data, macro_tree_root,
-                         tex_atlases, &p.secondary_rays[0], &secondary_rays_count);
+            ShadeSurface(px_index, pass_info, inter, r, &region.halton_seq[hi + RAND_DIM_BASE_COUNT], sc_data,
+                         macro_tree_root, tex_atlases, &p.secondary_rays[0], &secondary_rays_count);
         temp_buf_.SetPixel(x, y, col);
     }
 
@@ -253,7 +251,6 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
                                                         sc_data.mi_indices, sc_data.meshes, sc_data.transforms,
                                                         sc_data.tris, sc_data.tri_indices, inter);
             }
-
             IntersectAreaLights(r, sc_data.lights, sc_data.visible_lights, sc_data.transforms, inter);
         }
 
@@ -272,12 +269,12 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
             const int x = (r.xy >> 16) & 0x0000ffff;
             const int y = r.xy & 0x0000ffff;
 
-            pass_info.index = y * w + x;
-            pass_info.rand_index = pass_info.index;
+            const int px_index = y * w + x;
 
-            pixel_color_t col = ShadeSurface(
-                pass_info, inter, r, &region.halton_seq[hi + RAND_DIM_BASE_COUNT + bounce * RAND_DIM_BOUNCE_COUNT],
-                sc_data, macro_tree_root, tex_atlases, &p.secondary_rays[0], &secondary_rays_count);
+            pixel_color_t col =
+                ShadeSurface(px_index, pass_info, inter, r,
+                             &region.halton_seq[hi + RAND_DIM_BASE_COUNT + bounce * RAND_DIM_BOUNCE_COUNT], sc_data,
+                             macro_tree_root, tex_atlases, &p.secondary_rays[0], &secondary_rays_count);
             col.a = 0.0f;
 
             temp_buf_.AddPixel(x, y, col);

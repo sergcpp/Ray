@@ -370,7 +370,6 @@ struct ray_chunk_t {
 };
 
 struct pass_info_t {
-    int index, rand_index;
     int iteration, bounce;
     pass_settings_t settings;
 
@@ -391,7 +390,7 @@ struct pass_info_t {
         return ((settings.flags & OutputSH) && bounce <= 2);
     }
 };
-static_assert(sizeof(pass_info_t) == 28, "!");
+static_assert(sizeof(pass_info_t) == 20, "!");
 
 struct scene_data_t {
     const environment_t *env;
