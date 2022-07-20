@@ -145,7 +145,7 @@ Ray::RendererOCL
                     for (int i = 0; i < NUM_SAMPLES; ++i) {
                         renderer->RenderScene(scene.get(), reg);
                         const float prog = 100.0f * float(i + 1) / NUM_SAMPLES;
-                        printf("\rTest mesh lights (%s, %c, %s): %.1f%% ", Ray::g_RendererTypeNames[rt],
+                        printf("\rTest mesh lights (%s, %c, %s): %.1f%% ", Ray::RendererTypeName(rt),
                                use_wide_bvh ? 'w' : 'n', output_sh ? "sh" : "co", prog);
                         fflush(stdout);
                     }
