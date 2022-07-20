@@ -3741,3 +3741,4 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
 
 #undef USE_NEE
 #undef USE_VNDF_GGX_SAMPLING
+#undef VECTORIZE_BBOX_INTERSECTION
