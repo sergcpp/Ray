@@ -19,6 +19,10 @@
 #define _mm512_movemask_epi32(a)                                                                                       \
     (int)_mm512_cmpneq_epi32_mask(_mm512_setzero_si512(), _mm512_and_si512(_mm512_set1_epi32(0x80000000U), a))
 
+#ifndef NDEBUG
+#define VALIDATE_MASKS 1
+#endif
+
 #pragma warning(push)
 #pragma warning(disable : 4752)
 
@@ -110,6 +114,12 @@ template <> class simd_vec<float, 16> {
     force_inline void copy_to(float *f, simd_mem_aligned_tag) const { _mm512_store_ps(f, vec_); }
 
     force_inline void blend_to(const simd_vec<float, 16> &mask, const simd_vec<float, 16> &v1) {
+#if VALIDATE_MASKS
+        ITERATE_16({
+            assert(reinterpret_cast<const uint32_t &>(mask.comp_[i]) == 0 ||
+                   reinterpret_cast<const uint32_t &>(mask.comp_[i]) == 0xffffffff);
+        })
+#endif
         //__mmask16 msk =
         //    _mm512_fpclass_ps_mask(mask.vec_, 0x54); // 0x54 = Negative_Finite | Negative_Infinity | Negative_Zero
         //vec_ = _mm512_mask_blend_ps(msk, vec_, v1.vec_);
@@ -117,6 +127,12 @@ template <> class simd_vec<float, 16> {
     }
 
     force_inline void blend_inv_to(const simd_vec<float, 16> &mask, const simd_vec<float, 16> &v1) {
+#if VALIDATE_MASKS
+        ITERATE_16({
+            assert(reinterpret_cast<const uint32_t &>(mask.comp_[i]) == 0 ||
+                   reinterpret_cast<const uint32_t &>(mask.comp_[i]) == 0xffffffff);
+        })
+#endif
         //__mmask16 msk =
         //    _mm512_fpclass_ps_mask(mask.vec_, 0x54); // 0x54 = Negative_Finite | Negative_Infinity | Negative_Zero
         //vec_ = _mm512_mask_blend_ps(msk, v1.vec_, vec_);
@@ -283,10 +299,16 @@ template <> class simd_vec<int, 16> {
     force_inline void copy_to(int *f, simd_mem_aligned_tag) const { _mm512_store_si512((__m512i *)f, vec_); }
 
     force_inline void blend_to(const simd_vec<int, 16> &mask, const simd_vec<int, 16> &v1) {
+#if VALIDATE_MASKS
+        ITERATE_16({ assert(mask.comp_[i] == 0 || mask.comp_[i] == -1); })
+#endif
         vec_ = _mm512_ternarylogic_epi32(vec_, v1.vec_, _mm512_srai_epi32(mask.vec_, 31), 0xd8);
     }
 
     force_inline void blend_inv_to(const simd_vec<int, 16> &mask, const simd_vec<int, 16> &v1) {
+#if VALIDATE_MASKS
+        ITERATE_16({ assert(mask.comp_[i] == 0 || mask.comp_[i] == -1); })
+#endif
         vec_ = _mm512_ternarylogic_epi32(v1.vec_, vec_, _mm512_srai_epi32(mask.vec_, 31), 0xd8);
     }
 

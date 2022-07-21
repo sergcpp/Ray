@@ -19,6 +19,10 @@
 #define _mm256_test_all_zeros(mask, val) _mm256_testz_si256((mask), (val))
 #endif
 
+#ifndef NDEBUG
+#define VALIDATE_MASKS 1
+#endif
+
 #pragma warning(push)
 #pragma warning(disable : 4752)
 
@@ -124,10 +128,22 @@ template <> class simd_vec<float, 8> {
     force_inline void copy_to(float *f, simd_mem_aligned_tag) const { _mm256_store_ps(f, vec_); }
 
     force_inline void blend_to(const simd_vec<float, 8> &mask, const simd_vec<float, 8> &v1) {
+#if VALIDATE_MASKS
+        ITERATE_8({
+            assert(reinterpret_cast<const uint32_t &>(mask.comp_[i]) == 0 ||
+                   reinterpret_cast<const uint32_t &>(mask.comp_[i]) == 0xffffffff);
+        })
+#endif
         vec_ = _mm256_blendv_ps(vec_, v1.vec_, mask.vec_);
     }
 
     force_inline void blend_inv_to(const simd_vec<float, 8> &mask, const simd_vec<float, 8> &v1) {
+#if VALIDATE_MASKS
+        ITERATE_8({
+            assert(reinterpret_cast<const uint32_t &>(mask.comp_[i]) == 0 ||
+                   reinterpret_cast<const uint32_t &>(mask.comp_[i]) == 0xffffffff);
+        })
+#endif
         vec_ = _mm256_blendv_ps(v1.vec_, vec_, mask.vec_);
     }
 
@@ -372,11 +388,17 @@ template <> class simd_vec<int, 8> {
     force_inline void copy_to(int *f, simd_mem_aligned_tag) const { _mm256_store_si256((__m256i *)f, vec_); }
 
     force_inline void blend_to(const simd_vec<int, 8> &mask, const simd_vec<int, 8> &v1) {
+#if VALIDATE_MASKS
+        ITERATE_8({ assert(mask.comp_[i] == 0 || mask.comp_[i] == -1); })
+#endif
         vec_ = _mm256_castps_si256(
             _mm256_blendv_ps(_mm256_castsi256_ps(vec_), _mm256_castsi256_ps(v1.vec_), _mm256_castsi256_ps(mask.vec_)));
     }
 
     force_inline void blend_inv_to(const simd_vec<int, 8> &mask, const simd_vec<int, 8> &v1) {
+#if VALIDATE_MASKS
+        ITERATE_8({ assert(mask.comp_[i] == 0 || mask.comp_[i] == -1); })
+#endif
         vec_ = _mm256_castps_si256(
             _mm256_blendv_ps(_mm256_castsi256_ps(v1.vec_), _mm256_castsi256_ps(vec_), _mm256_castsi256_ps(mask.vec_)));
     }
@@ -916,7 +938,7 @@ force_inline simd_vec<float, 8> operator>=(const simd_vec<float, 8> &v1, float v
     return ret;
 }
 
-force_inline simd_vec<float, 8> operator==(const simd_vec<float, 8>& v1, float v2) {
+force_inline simd_vec<float, 8> operator==(const simd_vec<float, 8> &v1, float v2) {
     simd_vec<float, 8> ret;
     ret.vec_ = _mm256_cmp_ps(v1.vec_, _mm256_set1_ps(v2), _CMP_EQ_OS);
     return ret;
@@ -981,8 +1003,7 @@ force_inline simd_vec<float, 8> fmsub(const float a, const simd_vec<float, 8> &b
     return ret;
 }
 
-template <int Scale>
-force_inline simd_vec<float, 8> gather(const float *base_addr, const simd_vec<int, 8> &vindex) {
+template <int Scale> force_inline simd_vec<float, 8> gather(const float *base_addr, const simd_vec<int, 8> &vindex) {
     simd_vec<float, 8> ret;
     ret.vec_ = _mm256_i32gather_ps(base_addr, vindex.vec_, Scale * sizeof(float));
     return ret;
@@ -1000,6 +1021,8 @@ template <int Scale> force_inline simd_vec<int, 8> gather(const int *base_addr, 
 } // namespace Ray
 
 #pragma warning(pop)
+
+#undef VALIDATE_MASKS
 
 #ifdef __GNUC__
 #pragma GCC pop_options

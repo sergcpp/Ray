@@ -11,6 +11,10 @@
 #pragma clang attribute push(__attribute__((target("sse2"))), apply_to = function)
 #endif
 
+#ifndef NDEBUG
+#define VALIDATE_MASKS 1
+#endif
+
 namespace Ray {
 namespace NS {
 
@@ -194,6 +198,12 @@ template <> class simd_vec<float, 4> {
     force_inline void copy_to(float *f, simd_mem_aligned_tag) const { _mm_store_ps(f, vec_); }
 
     force_inline void blend_to(const simd_vec<float, 4> &mask, const simd_vec<float, 4> &v1) {
+#if VALIDATE_MASKS
+        ITERATE_4({
+            assert(reinterpret_cast<const uint32_t &>(mask.comp_[i]) == 0 ||
+                   reinterpret_cast<const uint32_t &>(mask.comp_[i]) == 0xffffffff);
+        })
+#endif
 #if defined(USE_SSE41)
         vec_ = _mm_blendv_ps(vec_, v1.vec_, mask.vec_);
 #else
@@ -204,6 +214,12 @@ template <> class simd_vec<float, 4> {
     }
 
     force_inline void blend_inv_to(const simd_vec<float, 4> &mask, const simd_vec<float, 4> &v1) {
+#if VALIDATE_MASKS
+        ITERATE_4({
+            assert(reinterpret_cast<const uint32_t &>(mask.comp_[i]) == 0 ||
+                   reinterpret_cast<const uint32_t &>(mask.comp_[i]) == 0xffffffff);
+        })
+#endif
 #if defined(USE_SSE41)
         vec_ = _mm_blendv_ps(v1.vec_, vec_, mask.vec_);
 #else
@@ -577,6 +593,9 @@ template <> class simd_vec<int, 4> {
     force_inline void copy_to(int *f, simd_mem_aligned_tag) const { _mm_store_si128((__m128i *)f, vec_); }
 
     force_inline void blend_to(const simd_vec<int, 4> &mask, const simd_vec<int, 4> &v1) {
+#if VALIDATE_MASKS
+        ITERATE_4({ assert(mask.comp_[i] == 0 || mask.comp_[i] == -1); })
+#endif
 #if defined(USE_SSE41)
         vec_ = _mm_blendv_epi8(vec_, v1.vec_, mask.vec_);
 #else
@@ -587,6 +606,9 @@ template <> class simd_vec<int, 4> {
     }
 
     force_inline void blend_inv_to(const simd_vec<int, 4> &mask, const simd_vec<int, 4> &v1) {
+#if VALIDATE_MASKS
+        ITERATE_4({ assert(mask.comp_[i] == 0 || mask.comp_[i] == -1); })
+#endif
 #if defined(USE_SSE41)
         vec_ = _mm_blendv_epi8(v1.vec_, vec_, mask.vec_);
 #else
@@ -794,6 +816,8 @@ force_inline simd_vec<float, 4>::operator simd_vec<int, 4>() const {
 
 } // namespace NS
 } // namespace Ray
+
+#undef VALIDATE_MASKS
 
 #ifdef __GNUC__
 #pragma GCC pop_options
