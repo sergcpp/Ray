@@ -217,7 +217,7 @@ Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, Span<const 
 
     const bbox_t overlap = {max(res_left_bounds.min, res_right_bounds.min),
                             min(res_left_bounds.max, res_right_bounds.max)};
-    Ref::simd_ivec4 test = (overlap.max <= overlap.min);
+    Ref::simd_ivec4 test = simd_cast(overlap.max <= overlap.min);
     test[3] = 0;
 
     if (s.allow_spatial_splits && test.all_zeros() &&

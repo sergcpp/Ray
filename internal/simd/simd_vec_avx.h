@@ -105,7 +105,7 @@ template <> class simd_vec<float, 8> {
 
     force_inline simd_vec<float, 8> operator~() const;
     force_inline simd_vec<float, 8> operator-() const;
-    force_inline operator simd_vec<int, 8>() const;
+    force_inline explicit operator simd_vec<int, 8>() const;
 
     force_inline simd_vec<float, 8> sqrt() const;
 
@@ -377,7 +377,7 @@ template <> class simd_vec<int, 8> {
         return *this;
     }
 
-    force_inline operator simd_vec<float, 8>() const {
+    force_inline explicit operator simd_vec<float, 8>() const {
         simd_vec<float, 8> ret;
         ret.vec_ = _mm256_cvtepi32_ps(vec_);
         return ret;
