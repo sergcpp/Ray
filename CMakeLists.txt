@@ -2,27 +2,8 @@ cmake_minimum_required(VERSION 2.8.12)
 project(Ray)
 
 OPTION(ENABLE_UNITYBUILD "Enable compilation of one large cpp file" ON)
-OPTION(ENABLE_OPENCL "Enables OpenCL backend" OFF)
-
-if(ENABLE_OPENCL)
-    add_library(OpenCL STATIC IMPORTED)
-    include_directories(ocl/include)
-else()
-    add_definitions(-DDISABLE_OCL)
-endif()
 
 IF(MSVC)
-    if(ENABLE_OPENCL)
-        if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-            set_target_properties(OpenCL PROPERTIES
-              IMPORTED_LOCATION "${CMAKE_CURRENT_LIST_DIR}/ocl/lib/x86_64/opencl.lib"
-            )
-        else(CMAKE_SIZEOF_VOID_P EQUAL 8)
-            set_target_properties(OpenCL PROPERTIES
-              IMPORTED_LOCATION "${CMAKE_CURRENT_LIST_DIR}/ocl/lib/x86/opencl.lib"
-            )
-        endif()
-    endif()
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /Ob1")
 ELSE(MSVC)
     set(CMAKE_CXX_STANDARD 11)
@@ -72,18 +53,6 @@ set(INTERNAL_DEPRECATED_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
                                      internal/deprecated/RendererAVX2.cpp
                                      internal/deprecated/RendererSSE2.h
                                      internal/deprecated/RendererSSE2.cpp)
-
-    if (ENABLE_OPENCL)
-        set(INTERNAL_DEPRECATED_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
-                                             internal/deprecated/CoreOCL.h
-                                             internal/deprecated/RendererOCL.h
-                                             internal/deprecated/RendererOCL.cpp
-                                             internal/deprecated/SceneOCL.h
-                                             internal/deprecated/SceneOCL.cpp
-                                             internal/deprecated/TextureAtlasOCL.h
-                                             internal/deprecated/TextureAtlasOCL.cpp
-                                             internal/deprecated/VectorOCL.h)
-    endif()
 endif()
 
 if("${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64")
@@ -107,20 +76,6 @@ set(SOURCE_FILES Log.h
                  SceneBase.h
                  SceneBase.cpp
                  Types.h)
-
-if (ENABLE_OPENCL)
-    set(KERNEL_FILES internal/kernels/intersect.cl
-                     internal/kernels/postprocess.cl
-                     internal/kernels/primary_ray_gen.cl
-                     internal/kernels/sh.cl
-                     internal/kernels/shade.cl
-                     internal/kernels/sort.cl
-                     internal/kernels/texture.cl
-                     internal/kernels/trace.cl
-                     internal/kernels/transform.cl
-                     internal/kernels/traverse_bvh.cl
-                     internal/kernels/types.cl)
-endif()
 
 set(SIMD_FILES internal/simd/aligned_allocator.h
                internal/simd/detect.h
@@ -184,8 +139,4 @@ if(MSVC)
 endif(MSVC)
 
 add_library(Ray STATIC ${ALL_SOURCE_FILES})
-if(ENABLE_OPENCL)
-    target_link_libraries(Ray OpenCL)
-endif()
-
 add_subdirectory(tests)
