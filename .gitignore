@@ -1,7 +1,7 @@
 build-*
-diff.tga
-mask.tga
-out.tga
-material_imgs.tga
-material_masks.tga
+*_diff.tga
+*_mask.tga
+*_out.tga
+material_*_imgs.tga
+material_*_masks.tga
 material_refs.tga

@@ -523,7 +523,7 @@ void schedule_render_jobs(Ray::RendererBase &renderer, const Ray::SceneBase *sce
     const auto rt = renderer.type();
     const auto sz = renderer.size();
 
-    if (rt == Ray::RendererRef /*|| rt == Ray::RendererSSE2 || rt == Ray::RendererAVX || rt == Ray::RendererAVX2*/) {
+    if (rt == Ray::RendererRef || rt == Ray::RendererSSE2 || rt == Ray::RendererAVX || rt == Ray::RendererAVX2) {
         const int BucketSize = 16;
 
         std::vector<Ray::RegionContext> region_contexts;
@@ -555,8 +555,7 @@ void schedule_render_jobs(Ray::RendererBase &renderer, const Ray::SceneBase *sce
 
             // report progress percentage
             const float prog = 100.0f * float(i + std::min(SamplePortion, samples - i)) / samples;
-            printf("\r%s (%s, %c, %s): %.1f%% ", log_str, Ray::RendererTypeName(rt),
-                   settings.use_wide_bvh ? 'w' : 'n',
+            printf("\r%s (%s, %c, %s): %.1f%% ", log_str, Ray::RendererTypeName(rt), settings.use_wide_bvh ? 'w' : 'n',
                    output_sh ? "sh" : "co", prog);
             fflush(stdout);
         }
@@ -585,7 +584,7 @@ void run_material_test(const char *test_name, const MatDesc &mat_desc, const int
 
         static const Ray::eRendererType renderer_types[] = {
             Ray::RendererRef, /*Ray::RendererSSE2, Ray::RendererAVX, Ray::RendererAVX2,
-#if defined(__ANDROID__)
+ #if defined(__ANDROID__)
 Ray::RendererNEON,
 #elif !defined(DISABLE_OCL)
 Ray::RendererOCL
@@ -658,11 +657,13 @@ Ray::RendererOCL
 
                     printf("(PSNR: %.3f/%.3f dB, Fireflies: %i/%i)\n", psnr, min_psnr, error_pixels, pix_thres);
 
-                    snprintf(name_buf, sizeof(name_buf), "test_data/%s/out.tga", test_name);
+                    const char *type = Ray::RendererTypeName(rt);
+
+                    snprintf(name_buf, sizeof(name_buf), "test_data/%s/%s_out.tga", test_name, type);
                     WriteTGA(&img_data_u8[0], test_img_w, test_img_h, 3, name_buf);
-                    snprintf(name_buf, sizeof(name_buf), "test_data/%s/diff.tga", test_name);
+                    snprintf(name_buf, sizeof(name_buf), "test_data/%s/%s_diff.tga", test_name, type);
                     WriteTGA(&diff_data_u8[0], test_img_w, test_img_h, 3, name_buf);
-                    snprintf(name_buf, sizeof(name_buf), "test_data/%s/mask.tga", test_name);
+                    snprintf(name_buf, sizeof(name_buf), "test_data/%s/%s_mask.tga", test_name, type);
                     WriteTGA(&mask_data_u8[0], test_img_w, test_img_h, 3, name_buf);
                     require((psnr >= min_psnr) && (error_pixels <= pix_thres) && "Images do not match!");
                 }
@@ -731,60 +732,75 @@ void assemble_material_test_images() {
 
     char name_buf[1024];
 
-    for (int j = 0; j < ImgCountH; ++j) {
-        const int top_down_j = ImgCountH - j - 1;
+    static const Ray::eRendererType renderer_types[] = {
+        Ray::RendererRef, /*Ray::RendererSSE2, Ray::RendererAVX, Ray::RendererAVX2,
+#if defined(__ANDROID__)
+Ray::RendererNEON,
+#elif !defined(DISABLE_OCL)
+Ray::RendererOCL
+#endif*/
+    };
 
-        for (int i = 0; i < ImgCountW && test_names[j][i]; ++i) {
-            { // reference image
-                snprintf(name_buf, sizeof(name_buf), "test_data/%s/ref.tga", test_names[j][i]);
+    for (const auto rt : renderer_types) {
+        const char *type = Ray::RendererTypeName(rt);
+        for (int j = 0; j < ImgCountH; ++j) {
+            const int top_down_j = ImgCountH - j - 1;
 
-                int test_img_w, test_img_h;
-                const auto img_ref = LoadTGA(name_buf, test_img_w, test_img_h);
-                if (!img_ref.empty()) {
-                    for (int k = 0; k < test_img_h; ++k) {
-                        memcpy(&material_refs[((top_down_j * 256 + k) * OutImageW + i * 256) * 4],
-                               &img_ref[k * test_img_w * 4], test_img_w * 4);
+            for (int i = 0; i < ImgCountW && test_names[j][i]; ++i) {
+                { // reference image
+                    snprintf(name_buf, sizeof(name_buf), "test_data/%s/ref.tga", test_names[j][i]);
+
+                    int test_img_w, test_img_h;
+                    const auto img_ref = LoadTGA(name_buf, test_img_w, test_img_h);
+                    if (!img_ref.empty()) {
+                        for (int k = 0; k < test_img_h; ++k) {
+                            memcpy(&material_refs[((top_down_j * 256 + k) * OutImageW + i * 256) * 4],
+                                   &img_ref[k * test_img_w * 4], test_img_w * 4);
+                        }
                     }
+
+                    blit_chars_to_alpha(material_refs.get(), i * 256, top_down_j * 256, test_names[j][i]);
                 }
 
-                blit_chars_to_alpha(material_refs.get(), i * 256, top_down_j * 256, test_names[j][i]);
-            }
+                { // test output
+                    snprintf(name_buf, sizeof(name_buf), "test_data/%s/%s_out.tga", test_names[j][i], type);
 
-            { // test output
-                snprintf(name_buf, sizeof(name_buf), "test_data/%s/out.tga", test_names[j][i]);
-
-                int test_img_w, test_img_h;
-                const auto test_img = LoadTGA(name_buf, test_img_w, test_img_h);
-                if (!test_img.empty()) {
-                    for (int k = 0; k < test_img_h; ++k) {
-                        memcpy(&material_imgs[((top_down_j * 256 + k) * OutImageW + i * 256) * 4],
-                               &test_img[k * test_img_w * 4], test_img_w * 4);
+                    int test_img_w, test_img_h;
+                    const auto test_img = LoadTGA(name_buf, test_img_w, test_img_h);
+                    if (!test_img.empty()) {
+                        for (int k = 0; k < test_img_h; ++k) {
+                            memcpy(&material_imgs[((top_down_j * 256 + k) * OutImageW + i * 256) * 4],
+                                   &test_img[k * test_img_w * 4], test_img_w * 4);
+                        }
                     }
+
+                    blit_chars_to_alpha(material_imgs.get(), i * 256, top_down_j * 256, test_names[j][i]);
                 }
 
-                blit_chars_to_alpha(material_imgs.get(), i * 256, top_down_j * 256, test_names[j][i]);
-            }
+                { // error mask
+                    snprintf(name_buf, sizeof(name_buf), "test_data/%s/%s_mask.tga", test_names[j][i], type);
 
-            { // error mask
-                snprintf(name_buf, sizeof(name_buf), "test_data/%s/mask.tga", test_names[j][i]);
-
-                int test_img_w, test_img_h;
-                const auto test_img = LoadTGA(name_buf, test_img_w, test_img_h);
-                if (!test_img.empty()) {
-                    for (int k = 0; k < test_img_h; ++k) {
-                        memcpy(&material_masks[((top_down_j * 256 + k) * OutImageW + i * 256) * 4],
-                               &test_img[k * test_img_w * 4], test_img_w * 4);
+                    int test_img_w, test_img_h;
+                    const auto test_img = LoadTGA(name_buf, test_img_w, test_img_h);
+                    if (!test_img.empty()) {
+                        for (int k = 0; k < test_img_h; ++k) {
+                            memcpy(&material_masks[((top_down_j * 256 + k) * OutImageW + i * 256) * 4],
+                                   &test_img[k * test_img_w * 4], test_img_w * 4);
+                        }
                     }
-                }
 
-                blit_chars_to_alpha(material_masks.get(), i * 256, top_down_j * 256, test_names[j][i]);
+                    blit_chars_to_alpha(material_masks.get(), i * 256, top_down_j * 256, test_names[j][i]);
+                }
             }
         }
+
+        snprintf(name_buf, sizeof(name_buf), "test_data/material_%s_imgs.tga", type);
+        WriteTGA(material_imgs.get(), OutImageW, OutImageH, 4, name_buf);
+        snprintf(name_buf, sizeof(name_buf), "test_data/material_%s_masks.tga", type);
+        WriteTGA(material_masks.get(), OutImageW, OutImageH, 4, name_buf);
     }
 
     WriteTGA(material_refs.get(), OutImageW, OutImageH, 4, "test_data/material_refs.tga");
-    WriteTGA(material_imgs.get(), OutImageW, OutImageH, 4, "test_data/material_imgs.tga");
-    WriteTGA(material_masks.get(), OutImageW, OutImageH, 4, "test_data/material_masks.tga");
 }
 
 //
