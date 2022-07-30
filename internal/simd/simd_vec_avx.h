@@ -23,6 +23,10 @@
 #define VALIDATE_MASKS 1
 #endif
 
+#if defined(USE_AVX2) || defined(USE_AVX512)
+#define USE_FMA
+#endif
+
 #pragma warning(push)
 #pragma warning(disable : 4752)
 
@@ -195,7 +199,7 @@ template <> class simd_vec<float, 8> {
 
     friend force_inline simd_vec<float, 8> normalize(const simd_vec<float, 8> &v1);
 
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#ifdef USE_FMA
     friend force_inline simd_vec<float, 8> fmadd(const simd_vec<float, 8> &a, const simd_vec<float, 8> &b,
                                                  const simd_vec<float, 8> &c);
     friend force_inline simd_vec<float, 8> fmadd(const simd_vec<float, 8> &a, const float b,
@@ -207,7 +211,8 @@ template <> class simd_vec<float, 8> {
     friend force_inline simd_vec<float, 8> fmsub(const simd_vec<float, 8> &a, const float b,
                                                  const simd_vec<float, 8> &c);
     friend force_inline simd_vec<float, 8> fmsub(const float a, const simd_vec<float, 8> &b, const float c);
-
+#endif // USE_FMA
+#if defined(USE_AVX2) || defined(USE_AVX512)
     template <int Scale>
     friend force_inline simd_vec<float, 8> gather(const float *base_addr, const simd_vec<int, 8> &vindex);
 #endif
@@ -964,7 +969,7 @@ force_inline simd_vec<float, 8> pow(const simd_vec<float, 8> &v1, const simd_vec
 
 force_inline simd_vec<float, 8> normalize(const simd_vec<float, 8> &v1) { return v1 / v1.length(); }
 
-#if defined(USE_AVX2) || defined(USE_AVX512)
+#ifdef USE_FMA
 force_inline simd_vec<float, 8> fmadd(const simd_vec<float, 8> &a, const simd_vec<float, 8> &b,
                                       const simd_vec<float, 8> &c) {
     simd_vec<float, 8> ret;
@@ -1002,7 +1007,9 @@ force_inline simd_vec<float, 8> fmsub(const float a, const simd_vec<float, 8> &b
     ret.vec_ = _mm256_fmsub_ps(_mm256_set1_ps(a), b.vec_, _mm256_set1_ps(c));
     return ret;
 }
+#endif // USE_FMA
 
+#if defined(USE_AVX2) || defined(USE_AVX512)
 template <int Scale> force_inline simd_vec<float, 8> gather(const float *base_addr, const simd_vec<int, 8> &vindex) {
     simd_vec<float, 8> ret;
     ret.vec_ = _mm256_i32gather_ps(base_addr, vindex.vec_, Scale * sizeof(float));
@@ -1014,7 +1021,6 @@ template <int Scale> force_inline simd_vec<int, 8> gather(const int *base_addr, 
     ret.vec_ = _mm256_i32gather_epi32(base_addr, vindex.vec_, Scale * sizeof(int));
     return ret;
 }
-
 #endif
 
 } // namespace NS
