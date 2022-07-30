@@ -452,6 +452,12 @@ template <typename T, int S> class simd_vec {
         return temp;
     }
 
+    force_inline static simd_vec<T, S> min(const T v1, const simd_vec<T, S> &v2) {
+        simd_vec<T, S> temp;
+        ITERATE(S, { temp.comp_[i] = std::min(v1, v2.comp_[i]); })
+        return temp;
+    }
+
     force_inline static simd_vec<T, S> max(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) {
         simd_vec<T, S> temp;
         ITERATE(S, { temp.comp_[i] = std::max(v1.comp_[i], v2.comp_[i]); })
@@ -461,6 +467,12 @@ template <typename T, int S> class simd_vec {
     force_inline static simd_vec<T, S> max(const simd_vec<T, S> &v1, const T v2) {
         simd_vec<T, S> temp;
         ITERATE(S, { temp.comp_[i] = std::max(v1.comp_[i], v2); })
+        return temp;
+    }
+
+    force_inline static simd_vec<T, S> max(const T v1, const simd_vec<T, S> &v2) {
+        simd_vec<T, S> temp;
+        ITERATE(S, { temp.comp_[i] = std::max(v1, v2.comp_[i]); })
         return temp;
     }
 
@@ -696,6 +708,10 @@ template <typename T, int S> force_inline simd_vec<T, S> max(const simd_vec<T, S
 }
 
 template <typename T, int S> force_inline simd_vec<T, S> max(const simd_vec<T, S> &v1, const T v2) {
+    return simd_vec<T, S>::max(v1, v2);
+}
+
+template <typename T, int S> force_inline simd_vec<T, S> max(const T v1, const simd_vec<T, S> &v2) {
     return simd_vec<T, S>::max(v1, v2);
 }
 
