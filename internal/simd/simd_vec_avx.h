@@ -669,7 +669,7 @@ template <> class simd_vec<int, 8> {
     friend force_inline simd_vec<int, 8> operator>=(const simd_vec<int, 8> &v1, int v2) {
         simd_vec<int, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
-        ret.vec_ = _mm256_cmpgt_epi32(v1.vec_, _mm256_set1_epi32(v2 + 1));
+        ret.vec_ = _mm256_cmpgt_epi32(v1.vec_, _mm256_set1_epi32(v2 - 1));
 #else
         ITERATE_8({ ret.comp_[i] = v1.comp_[i] >= v2 ? 0xFFFFFFFF : 0; })
 #endif
