@@ -12,6 +12,7 @@
 //
 #define USE_VNDF_GGX_SAMPLING 1
 #define USE_NEE 1
+#define USE_PATH_TERMINATION 1
 #define VECTORIZE_BBOX_INTERSECTION 1
 
 namespace Ray {
@@ -3723,11 +3724,15 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
         }
     }
 
-    const bool cant_terminate = total_depth < pi.settings.termination_start_depth;
+#if USE_PATH_TERMINATION
+    const bool can_terminate_path = total_depth >= pi.settings.termination_start_depth;
+#else
+    const bool can_terminate_path = false;
+#endif
 
     const float lum = std::max(new_ray.c[0], std::max(new_ray.c[1], new_ray.c[2]));
     const float p = fract(halton[RAND_DIM_TERMINATE] + sample_off[0]);
-    const float q = cant_terminate ? 0.0f : std::max(0.05f, 1.0f - lum);
+    const float q = can_terminate_path ? std::max(0.05f, 1.0f - lum) : 0.0f;
     if (p >= q && lum > 0.0f && new_ray.pdf > 0.0f) {
         new_ray.c[0] /= (1.0f - q);
         new_ray.c[1] /= (1.0f - q);
@@ -3739,6 +3744,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
     return pixel_color_t{ray.c[0] * col[0], ray.c[1] * col[1], ray.c[2] * col[2], 1.0f};
 }
 
-#undef USE_NEE
 #undef USE_VNDF_GGX_SAMPLING
+#undef USE_NEE
+#undef USE_PATH_TERMINATION
 #undef VECTORIZE_BBOX_INTERSECTION
