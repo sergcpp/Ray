@@ -386,7 +386,9 @@ force_inline simd_fvec4 cross(const simd_fvec4 &v1, const simd_fvec4 &v2) {
                       0.0f};
 }
 
-force_inline simd_fvec4 reflect(const simd_fvec4 &I, const simd_fvec4 &N) { return I - 2 * dot(N, I) * N; }
+force_inline simd_fvec4 reflect(const simd_fvec4 &I, const simd_fvec4 &N, const float dot_N_I) {
+    return I - 2 * dot_N_I * N;
+}
 
 force_inline float pow5(const float v) { return (v * v) * (v * v) * v; }
 
@@ -2036,7 +2038,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Sample_GGXSpecular_BSDF(const simd_fvec4 &T, cons
     const float alpha_y = roughness2 * aspect;
 
     if (alpha_x * alpha_y < 1e-7f) {
-        const simd_fvec4 V = reflect(I, N);
+        const simd_fvec4 V = reflect(I, N, dot(N, I));
         const float FH = (fresnel_dielectric_cos(dot(V, N), spec_ior) - spec_F0) / (1.0f - spec_F0);
         simd_fvec4 F = mix(spec_col, simd_fvec4(1.0f), FH);
         out_V = V;
@@ -2049,7 +2051,8 @@ Ray::Ref::simd_fvec4 Ray::Ref::Sample_GGXSpecular_BSDF(const simd_fvec4 &T, cons
 #else
     const simd_fvec4 sampled_normal_ts = sample_GGX_NDF(alpha_x, rand_u, rand_v);
 #endif
-    const simd_fvec4 reflected_dir_ts = normalize(reflect(-view_dir_ts, sampled_normal_ts));
+    const float dot_N_V = -dot(sampled_normal_ts, view_dir_ts);
+    const simd_fvec4 reflected_dir_ts = normalize(reflect(-view_dir_ts, sampled_normal_ts, dot_N_V));
 
     out_V = world_from_tangent(T, B, N, reflected_dir_ts);
     return Evaluate_GGXSpecular_BSDF(view_dir_ts, sampled_normal_ts, reflected_dir_ts, alpha_x, alpha_y, spec_ior,
@@ -2174,7 +2177,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Sample_PrincipledClearcoat_BSDF(const simd_fvec4 
                                                                const float rand_u, const float rand_v,
                                                                simd_fvec4 &out_V) {
     if (clearcoat_roughness2 * clearcoat_roughness2 < 1e-7f) {
-        const simd_fvec4 V = reflect(I, N);
+        const simd_fvec4 V = reflect(I, N, dot(N, I));
 
         const float FH = (fresnel_dielectric_cos(dot(V, N), clearcoat_ior) - clearcoat_F0) / (1.0f - clearcoat_F0);
         const float F = mix(0.04f, 1.0f, FH);
@@ -2191,7 +2194,8 @@ Ray::Ref::simd_fvec4 Ray::Ref::Sample_PrincipledClearcoat_BSDF(const simd_fvec4 
 #else
     const simd_fvec4 sampled_normal_ts = sample_GGX_NDF(clearcoat_roughness2, rand_u, rand_v);
 #endif
-    const simd_fvec4 reflected_dir_ts = normalize(reflect(-view_dir_ts, sampled_normal_ts));
+    const float dot_N_V = -dot(sampled_normal_ts, view_dir_ts);
+    const simd_fvec4 reflected_dir_ts = normalize(reflect(-view_dir_ts, sampled_normal_ts, dot_N_V));
 
     out_V = world_from_tangent(T, B, N, reflected_dir_ts);
 
@@ -3419,13 +3423,13 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
 
             new_ray.ray_depth = ray.ray_depth + 0x00000100;
 
+            memcpy(&new_ray.o[0], value_ptr(offset_ray(P, plane_N)), 3 * sizeof(float));
+            memcpy(&new_ray.d[0], value_ptr(V), 3 * sizeof(float));
+
             new_ray.c[0] = ray.c[0] * F[0] * mix_weight / F[3];
             new_ray.c[1] = ray.c[1] * F[1] * mix_weight / F[3];
             new_ray.c[2] = ray.c[2] * F[2] * mix_weight / F[3];
             new_ray.pdf = F[3];
-
-            memcpy(&new_ray.o[0], value_ptr(offset_ray(P, plane_N)), 3 * sizeof(float));
-            memcpy(&new_ray.d[0], value_ptr(V), 3 * sizeof(float));
 
             memcpy(&new_ray.do_dx[0], value_ptr(surf_der.do_dx), 3 * sizeof(float));
             memcpy(&new_ray.do_dy[0], value_ptr(surf_der.do_dy), 3 * sizeof(float));
