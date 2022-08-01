@@ -2762,7 +2762,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::EvaluateDirectLights(const simd_fvec4 &I, const s
         light_dist = length(to_light);
         L = (to_light / light_dist);
 
-        const float cos_theta = std::abs(dot(-L, light_forward)); // abs for doublesided light
+        const float cos_theta = std::abs(dot(L, light_forward)); // abs for doublesided light
         if (cos_theta > 0.0f) {
             light_pdf = (light_dist * light_dist) / (light_area * cos_theta);
         }

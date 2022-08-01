@@ -156,7 +156,7 @@ simd_fvec4 Sample_GGXSpecular_BSDF(const simd_fvec4 &T, const simd_fvec4 &B, con
 
 simd_fvec4 Evaluate_GGXRefraction_BSDF(const simd_fvec4 &view_dir_ts, const simd_fvec4 &sampled_normal_ts,
                                        const simd_fvec4 &refr_dir_ts, float roughness2, float eta,
-                                       const simd_fvec4 &spec_col);
+                                       const simd_fvec4 &refr_col);
 simd_fvec4 Sample_GGXRefraction_BSDF(const simd_fvec4 &T, const simd_fvec4 &B, const simd_fvec4 &N, const simd_fvec4 &I,
                                      float roughness, float eta, const simd_fvec4 &refr_col, float rand_u, float rand_v,
                                      simd_fvec4 &out_V);
