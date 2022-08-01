@@ -112,6 +112,7 @@ template <> class simd_vec<float, 8> {
     force_inline explicit operator simd_vec<int, 8>() const;
 
     force_inline simd_vec<float, 8> sqrt() const;
+    force_inline simd_vec<float, 8> log() const;
 
     force_inline float length() const {
         float temp = 0;
@@ -772,6 +773,12 @@ force_inline simd_vec<float, 8>::operator simd_vec<int, 8>() const {
 force_inline simd_vec<float, 8> simd_vec<float, 8>::sqrt() const {
     simd_vec<float, 8> temp;
     temp.vec_ = _mm256_sqrt_ps(vec_);
+    return temp;
+}
+
+force_inline simd_vec<float, 8> simd_vec<float, 8>::log() const {
+    simd_vec<float, 8> temp;
+    ITERATE_8({ temp.comp_[i] = std::log(comp_[i]); })
     return temp;
 }
 

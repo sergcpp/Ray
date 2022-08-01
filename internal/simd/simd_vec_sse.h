@@ -159,6 +159,12 @@ template <> class simd_vec<float, 4> {
         return temp;
     }
 
+    force_inline simd_vec<float, 4> log() const {
+        simd_vec<float, 4> temp;
+        ITERATE_4({ temp.comp_[i] = std::log(comp_[i]); })
+        return temp;
+    }
+
     force_inline float length() const {
         __m128 r1, r2;
         r1 = _mm_mul_ps(vec_, vec_);

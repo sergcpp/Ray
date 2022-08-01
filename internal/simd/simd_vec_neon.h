@@ -182,14 +182,20 @@ public:
         //float32x4_t recipsq = vrsqrteq_f32(vec_);
         //temp.vec_ = vrecpeq_f32(recipsq);
 
-        ITERATE(4, { temp.comp_[i] = std::sqrt(comp_[i]); })
+        ITERATE_4({ temp.comp_[i] = std::sqrt(comp_[i]); })
 
+        return temp;
+    }
+
+    force_inline simd_vec<float, 4> log() const {
+        simd_vec<float, 4> temp;
+        ITERATE_4({ temp.comp_[i] = std::log(comp_[i]); })
         return temp;
     }
 
     force_inline float length() const {
         float temp = 0.0f;
-        ITERATE(4, { temp += comp_[i] * comp_[i]; })
+        ITERATE_4({ temp += comp_[i] * comp_[i]; })
         return std::sqrt(temp);
     }
 

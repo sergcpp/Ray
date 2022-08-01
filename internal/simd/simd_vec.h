@@ -364,6 +364,12 @@ template <typename T, int S> class simd_vec {
         return temp;
     }
 
+    force_inline simd_vec<T, S> log() const {
+        simd_vec<T, S> temp;
+        ITERATE(S, { temp[i] = std::log(comp_[i]); })
+        return temp;
+    }
+
     force_inline T length() const {
         T temp = {0};
         ITERATE(S, { temp += comp_[i] * comp_[i]; })
@@ -691,6 +697,7 @@ template <typename T, int S> force_inline simd_vec<T, S> ceil(const simd_vec<T, 
 }
 
 template <typename T, int S> force_inline simd_vec<T, S> sqrt(const simd_vec<T, S> &v1) { return v1.sqrt(); }
+template <typename T, int S> force_inline simd_vec<T, S> log(const simd_vec<T, S> &v1) { return v1.log(); }
 
 template <typename T, int S> force_inline T length(const simd_vec<T, S> &v1) { return v1.length(); }
 
