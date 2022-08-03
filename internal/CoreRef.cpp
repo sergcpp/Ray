@@ -2583,13 +2583,11 @@ void Ray::Ref::ComputeDerivatives(const simd_fvec4 &I, const float t, const simd
     out_der.ddn_dy = dot(dd_dy, plane_N) + dot(I, out_der.dndy);
 }
 
-Ray::Ref::simd_fvec4 Ray::Ref::EvaluateDirectLights(const simd_fvec4 &I, const simd_fvec4 &P, const simd_fvec4 &N,
-                                                    const simd_fvec4 &T, const simd_fvec4 &B, const simd_fvec4 &plane_N,
-                                                    const simd_fvec2 &uvs, const bool is_backfacing,
-                                                    const material_t *mat, const derivatives_t &surf_der,
-                                                    const pass_info_t &pi, const scene_data_t &sc,
-                                                    const TextureAtlasBase *tex_atlases[], const uint32_t node_index,
-                                                    const int rand_index, const float halton[], const float sample_off[2]) {
+Ray::Ref::simd_fvec4 Ray::Ref::EvaluateDirectLights(
+    const simd_fvec4 &I, const simd_fvec4 &P, const simd_fvec4 &N, const simd_fvec4 &T, const simd_fvec4 &B,
+    const simd_fvec4 &plane_N, const simd_fvec2 &uvs, const bool is_backfacing, const material_t *mat,
+    const derivatives_t &surf_der, const pass_info_t &pi, const scene_data_t &sc, const TextureAtlasBase *tex_atlases[],
+    const uint32_t node_index, const int rand_index, const float halton[], const float sample_off[2]) {
     const float u1 = fract(halton[RAND_DIM_LIGHT_PICK] + sample_off[0]);
     const auto light_index = std::min(uint32_t(u1 * sc.li_indices.size()), uint32_t(sc.li_indices.size() - 1));
 
@@ -2788,6 +2786,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::EvaluateDirectLights(const simd_fvec4 &I, const s
 
     const float N_dot_L = dot(N, L);
     const bool _is_backfacing = (N_dot_L < 0.0f);
+    const bool _is_frontfacing = (N_dot_L > 0.0f);
 
     simd_fvec4 col = {0.0f};
     if (light_pdf > 0.0f) {
@@ -2810,8 +2809,9 @@ Ray::Ref::simd_fvec4 Ray::Ref::EvaluateDirectLights(const simd_fvec4 &I, const s
 
                 const float eta =
                     is_backfacing ? (cur_mat->int_ior / cur_mat->ext_ior) : (cur_mat->ext_ior / cur_mat->int_ior);
+
                 simd_fvec4 H;
-                if (N_dot_L > 0.0f) {
+                if (_is_frontfacing) {
                     H = normalize(L - I);
                 } else {
                     H = normalize(L - I * eta);
@@ -2850,55 +2850,48 @@ Ray::Ref::simd_fvec4 Ray::Ref::EvaluateDirectLights(const simd_fvec4 &I, const s
 
                 const float roughness2 = roughness * roughness;
 
-                if (cur_mat->type == DiffuseNode) {
-                    if (N_dot_L > 0.0f) {
-                        const simd_fvec4 _base_color = pi.should_consider_albedo() ? base_color : simd_fvec4(1.0f);
-                        simd_fvec4 diff_col = Evaluate_OrenDiffuse_BSDF(-I, N, L, roughness, _base_color);
-                        float bsdf_pdf = diff_col[3];
+                if (cur_mat->type == DiffuseNode && _is_frontfacing) {
+                    const simd_fvec4 _base_color = pi.should_consider_albedo() ? base_color : simd_fvec4(1.0f);
+                    simd_fvec4 diff_col = Evaluate_OrenDiffuse_BSDF(-I, N, L, roughness, _base_color);
+                    float bsdf_pdf = diff_col[3];
 
-                        float mis_weight = 1.0f;
-                        if (light_area > 0.0f) {
-                            mis_weight = power_heuristic(light_pdf, bsdf_pdf);
-                        }
-                        col += lcol * diff_col * (cur_weight * mis_weight / light_pdf);
+                    float mis_weight = 1.0f;
+                    if (light_area > 0.0f) {
+                        mis_weight = power_heuristic(light_pdf, bsdf_pdf);
                     }
-                } else if (cur_mat->type == GlossyNode) {
-                    if (roughness2 * roughness2 >= 1e-7f && N_dot_L > 0.0f) {
-                        const simd_fvec4 view_dir_ts = tangent_from_world(T, B, N, -I);
-                        const simd_fvec4 light_dir_ts = tangent_from_world(T, B, N, L);
-                        const simd_fvec4 sampled_normal_ts = tangent_from_world(T, B, N, H);
+                    col += lcol * diff_col * (cur_weight * mis_weight / light_pdf);
+                } else if (cur_mat->type == GlossyNode && roughness2 * roughness2 >= 1e-7f && _is_frontfacing) {
+                    const simd_fvec4 view_dir_ts = tangent_from_world(T, B, N, -I);
+                    const simd_fvec4 light_dir_ts = tangent_from_world(T, B, N, L);
+                    const simd_fvec4 sampled_normal_ts = tangent_from_world(T, B, N, H);
 
-                        const float specular = 0.5f;
-                        const float spec_ior = (2.0f / (1.0f - std::sqrt(0.08f * specular))) - 1.0f;
-                        const float F0 = fresnel_dielectric_cos(1.0f, spec_ior);
+                    const float specular = 0.5f;
+                    const float spec_ior = (2.0f / (1.0f - std::sqrt(0.08f * specular))) - 1.0f;
+                    const float F0 = fresnel_dielectric_cos(1.0f, spec_ior);
 
-                        const simd_fvec4 spec_col =
-                            Evaluate_GGXSpecular_BSDF(view_dir_ts, sampled_normal_ts, light_dir_ts, roughness2,
-                                                      roughness2, spec_ior, F0, base_color);
-                        const float bsdf_pdf = spec_col[3];
+                    const simd_fvec4 spec_col = Evaluate_GGXSpecular_BSDF(
+                        view_dir_ts, sampled_normal_ts, light_dir_ts, roughness2, roughness2, spec_ior, F0, base_color);
+                    const float bsdf_pdf = spec_col[3];
 
-                        float mis_weight = 1.0f;
-                        if (light_area > 0.0f) {
-                            mis_weight = power_heuristic(light_pdf, bsdf_pdf);
-                        }
-                        col += lcol * spec_col * (cur_weight * mis_weight / light_pdf);
+                    float mis_weight = 1.0f;
+                    if (light_area > 0.0f) {
+                        mis_weight = power_heuristic(light_pdf, bsdf_pdf);
                     }
-                } else if (cur_mat->type == RefractiveNode) {
-                    if (roughness2 * roughness2 >= 1e-7f && N_dot_L < 0.0f) {
-                        const simd_fvec4 view_dir_ts = tangent_from_world(T, B, N, -I);
-                        const simd_fvec4 light_dir_ts = tangent_from_world(T, B, N, L);
-                        const simd_fvec4 sampled_normal_ts = tangent_from_world(T, B, N, H);
+                    col += lcol * spec_col * (cur_weight * mis_weight / light_pdf);
+                } else if (cur_mat->type == RefractiveNode && roughness2 * roughness2 >= 1e-7f && _is_backfacing) {
+                    const simd_fvec4 view_dir_ts = tangent_from_world(T, B, N, -I);
+                    const simd_fvec4 light_dir_ts = tangent_from_world(T, B, N, L);
+                    const simd_fvec4 sampled_normal_ts = tangent_from_world(T, B, N, H);
 
-                        const simd_fvec4 refr_col = Evaluate_GGXRefraction_BSDF(
-                            view_dir_ts, sampled_normal_ts, light_dir_ts, roughness2, eta, base_color);
-                        const float bsdf_pdf = refr_col[3];
+                    const simd_fvec4 refr_col = Evaluate_GGXRefraction_BSDF(view_dir_ts, sampled_normal_ts,
+                                                                            light_dir_ts, roughness2, eta, base_color);
+                    const float bsdf_pdf = refr_col[3];
 
-                        float mis_weight = 1.0f;
-                        if (light_area > 0.0f) {
-                            mis_weight = power_heuristic(light_pdf, bsdf_pdf);
-                        }
-                        col += lcol * refr_col * (cur_weight * mis_weight / light_pdf);
+                    float mis_weight = 1.0f;
+                    if (light_area > 0.0f) {
+                        mis_weight = power_heuristic(light_pdf, bsdf_pdf);
                     }
+                    col += lcol * refr_col * (cur_weight * mis_weight / light_pdf);
                 } else if (cur_mat->type == PrincipledNode) {
                     float metallic = unpack_unorm_16(cur_mat->metallic_unorm);
                     if (cur_mat->textures[METALLIC_TEXTURE] != 0xffffffff) {
@@ -2934,7 +2927,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::EvaluateDirectLights(const simd_fvec4 &I, const s
 
                     float bsdf_pdf = 0.0f;
 
-                    if (diffuse_weight > 0.0f && N_dot_L > 0.0f) {
+                    if (diffuse_weight > 0.0f && _is_frontfacing) {
                         const simd_fvec4 _base_color = pi.should_consider_albedo() ? base_color : simd_fvec4(1.0f);
                         const simd_fvec4 sheen_color = sheen * mix(simd_fvec4{1.0f}, tint_color, sheen_tint);
 
@@ -2956,7 +2949,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::EvaluateDirectLights(const simd_fvec4 &I, const s
                     const simd_fvec4 light_dir_ts = tangent_from_world(T, B, N, L);
                     const simd_fvec4 sampled_normal_ts = tangent_from_world(T, B, N, H);
 
-                    if (specular_weight > 0.0f && alpha_x * alpha_y >= 1e-7f && N_dot_L > 0.0f) {
+                    if (specular_weight > 0.0f && alpha_x * alpha_y >= 1e-7f && _is_frontfacing) {
                         const simd_fvec4 spec_col = Evaluate_GGXSpecular_BSDF(
                             view_dir_ts, sampled_normal_ts, light_dir_ts, alpha_x, alpha_y, spec_ior, F0, spec_tmp_col);
                         bsdf_pdf += specular_weight * spec_col[3];
@@ -2968,7 +2961,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::EvaluateDirectLights(const simd_fvec4 &I, const s
                     const float clearcoat_F0 = fresnel_dielectric_cos(1.0f, clearcoat_ior);
                     const float clearcoat_roughness2 = clearcoat_roughness * clearcoat_roughness;
                     if (clearcoat_weight > 0.0f && clearcoat_roughness2 * clearcoat_roughness2 >= 1e-7f &&
-                        N_dot_L > 0.0f) {
+                        _is_frontfacing) {
                         const simd_fvec4 clearcoat_col =
                             Evaluate_PrincipledClearcoat_BSDF(view_dir_ts, sampled_normal_ts, light_dir_ts,
                                                               clearcoat_roughness2, clearcoat_ior, clearcoat_F0);
@@ -2980,7 +2973,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::EvaluateDirectLights(const simd_fvec4 &I, const s
                     if (refraction_weight > 0.0f) {
                         const float fresnel = fresnel_dielectric_cos(dot(I, N), 1.0f / eta);
 
-                        if (fresnel != 0.0f && roughness2 * roughness2 >= 1e-7f && N_dot_L > 0.0f) {
+                        if (fresnel != 0.0f && roughness2 * roughness2 >= 1e-7f && _is_frontfacing) {
                             const simd_fvec4 spec_col =
                                 Evaluate_GGXSpecular_BSDF(view_dir_ts, sampled_normal_ts, light_dir_ts, roughness2,
                                                           roughness2, 1.0f /* ior */, 0.0f /* F0 */, simd_fvec4{1.0f});
@@ -2993,7 +2986,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::EvaluateDirectLights(const simd_fvec4 &I, const s
                             1.0f - (1.0f - roughness) * (1.0f - unpack_unorm_16(cur_mat->transmission_roughness_unorm));
                         const float transmission_roughness2 = transmission_roughness * transmission_roughness;
                         if (fresnel != 1.0f && transmission_roughness2 * transmission_roughness2 >= 1e-7f &&
-                            N_dot_L < 0.0f) {
+                            _is_backfacing) {
                             const simd_fvec4 refr_col = Evaluate_GGXRefraction_BSDF(
                                 view_dir_ts, sampled_normal_ts, light_dir_ts, transmission_roughness2, eta, base_color);
                             bsdf_pdf += refraction_weight * (1.0f - fresnel) * refr_col[3];
