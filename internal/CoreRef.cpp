@@ -12,12 +12,13 @@
 //
 #define USE_VNDF_GGX_SAMPLING 1
 #define USE_NEE 1
+#define USE_SHADOW_RAYS 1
 #define USE_PATH_TERMINATION 1
 #define VECTORIZE_BBOX_INTERSECTION 1
 
 namespace Ray {
 namespace Ref {
-force_inline void _IntersectTri(const ray_packet_t &r, const tri_accel_t &tri, const uint32_t i, hit_data_t &inter) {
+force_inline void _IntersectTri(const ray_packet_t &r, const tri_accel_t &tri, const uint32_t prim_index, hit_data_t &inter) {
 #define _sign_of(f) (((f) >= 0) ? 1 : -1)
 #define _dot(x, y) ((x)[0] * (y)[0] + (x)[1] * (y)[1] + (x)[2] * (y)[2])
 
@@ -42,7 +43,7 @@ force_inline void _IntersectTri(const ray_packet_t &r, const tri_accel_t &tri, c
     const float rdet = (1.0f / det);
 
     inter.mask = 0xffffffff;
-    inter.prim_index = (det < 0.0f) ? int(i) : -int(i) - 1;
+    inter.prim_index = (det < 0.0f) ? int(prim_index) : -int(prim_index) - 1;
     inter.t = dett * rdet;
     inter.u = detu * rdet;
     inter.v = detv * rdet;
@@ -2791,8 +2792,12 @@ Ray::Ref::simd_fvec4 Ray::Ref::EvaluateDirectLights(
     simd_fvec4 col = {0.0f};
     if (light_pdf > 0.0f) {
         const float visibility =
+#if USE_SHADOW_RAYS
             ComputeVisibility(offset_ray(P, _is_backfacing ? -plane_N : plane_N), L, light_dist - 10.0f * HIT_BIAS,
                               halton[RAND_DIM_BSDF_PICK], hash(rand_index), sc, node_index, tex_atlases);
+#else
+            1.0f;
+#endif
         if (visibility > 0.0f) {
             struct {
                 const Ray::material_t *mat;
