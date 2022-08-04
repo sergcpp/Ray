@@ -3485,7 +3485,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
             base_color[2] *= sc.env->env_col[2];
         }
 
-        if (total_depth > 0 && (mat->flags & (MAT_FLAG_MULT_IMPORTANCE | MAT_FLAG_SKY_PORTAL))) {
+        if (pi.bounce > 0 && (mat->flags & (MAT_FLAG_MULT_IMPORTANCE | MAT_FLAG_SKY_PORTAL))) {
             const auto p1 = simd_fvec4{v1.p[0], v1.p[1], v1.p[2], 0.0f},
                        p2 = simd_fvec4{v2.p[0], v2.p[1], v2.p[2], 0.0f},
                        p3 = simd_fvec4{v3.p[0], v3.p[1], v3.p[2], 0.0f};
@@ -3495,7 +3495,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
             light_forward /= light_forward_len;
             const float tri_area = 0.5f * light_forward_len;
 
-            const float cos_theta = std::abs(dot(-I, light_forward)); // abs for doublesided light
+            const float cos_theta = std::abs(dot(I, light_forward)); // abs for doublesided light
             if (cos_theta > 0.0f) {
                 const float light_pdf = (inter.t * inter.t) / (tri_area * cos_theta);
                 const float bsdf_pdf = ray.pdf;
