@@ -513,7 +513,7 @@ force_inline simd_vec<float, 16> simd_vec<float, 16>::operator-() const {
 
 force_inline simd_vec<float, 16>::operator simd_vec<int, 16>() const {
     simd_vec<int, 16> ret;
-    ret.vec_ = _mm512_cvtps_epi32(vec_);
+    ret.vec_ = _mm512_cvttps_epi32(vec_);
     return ret;
 }
 

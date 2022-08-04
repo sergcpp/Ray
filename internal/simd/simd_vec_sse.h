@@ -840,7 +840,7 @@ template <> class simd_vec<int, 4> {
 
 force_inline simd_vec<float, 4>::operator simd_vec<int, 4>() const {
     simd_vec<int, 4> ret;
-    ret.vec_ = _mm_cvtps_epi32(vec_);
+    ret.vec_ = _mm_cvttps_epi32(vec_);
     return ret;
 }
 
