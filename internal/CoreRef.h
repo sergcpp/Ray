@@ -67,6 +67,11 @@ struct derivatives_t {
     float ddn_dx, ddn_dy;
 };
 
+struct light_sample_t {
+    simd_fvec4 col, L;
+    float light_area = 0.0f, light_dist, light_pdf = 0.0f;
+};
+
 class TextureAtlasBase;
 template <typename T, int N> class TextureAtlasLinear;
 template <typename T, int N> class TextureAtlasTiled;
@@ -193,13 +198,9 @@ void ComputeDerivatives(const simd_fvec4 &I, float t, const simd_fvec4 &do_dx, c
                         const simd_fvec4 &dd_dx, const simd_fvec4 &dd_dy, const vertex_t &v1, const vertex_t &v2,
                         const vertex_t &v3, const simd_fvec4 &plane_N, const transform_t &tr, derivatives_t &out_der);
 
-// Evaluate direct light contribution
-simd_fvec4 EvaluateDirectLights(const simd_fvec4 &I, const simd_fvec4 &P, const simd_fvec4 &N, const simd_fvec4 &T,
-                                const simd_fvec4 &B, const simd_fvec4 &plane_N, const simd_fvec2 &uvs,
-                                const bool is_backfacing, const material_t *mat, const derivatives_t &surf_der,
-                                const pass_info_t &pi, const scene_data_t &sc, const TextureAtlasBase *tex_atlases[],
-                                const uint32_t node_index, const int rand_index, const float halton[],
-                                const float sample_off[2]);
+// Pick point on any light source for evaluation
+void SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, const TextureAtlasBase *tex_atlases[],
+                       const float halton[], const float sample_off[2], light_sample_t &ls);
 
 // Account for visible lights contribution
 bool IntersectAreaLights(const ray_packet_t &ray, const light_t lights[], Span<const uint32_t> visible_lights,

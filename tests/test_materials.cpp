@@ -1804,7 +1804,7 @@ void test_refr_mat1() {
 void test_refr_mat2() {
     const int SampleCount = 1024;
     const double MinPSNR = 28.0;
-    const int PixThres = 3913;
+    const int PixThres = 3915;
 
     Ray::shading_node_desc_t mat_desc;
     mat_desc.type = Ray::RefractiveNode;
