@@ -18,7 +18,8 @@
 
 namespace Ray {
 namespace Ref {
-force_inline void _IntersectTri(const ray_packet_t &r, const tri_accel_t &tri, const uint32_t prim_index, hit_data_t &inter) {
+force_inline void _IntersectTri(const ray_packet_t &r, const tri_accel_t &tri, const uint32_t prim_index,
+                                hit_data_t &inter) {
 #define _sign_of(f) (((f) >= 0) ? 1 : -1)
 #define _dot(x, y) ((x)[0] * (y)[0] + (x)[1] * (y)[1] + (x)[2] * (y)[2])
 
@@ -2799,235 +2800,195 @@ Ray::Ref::simd_fvec4 Ray::Ref::EvaluateDirectLights(
             1.0f;
 #endif
         if (visibility > 0.0f) {
-            struct {
-                const Ray::material_t *mat;
-                float weight;
-            } materials_stack[16];
+            const float eta = is_backfacing ? (mat->int_ior / mat->ext_ior) : (mat->ext_ior / mat->int_ior);
 
-            uint32_t materials_count = 0;
-            materials_stack[materials_count++] = {mat, 1.0f};
+            simd_fvec4 H;
+            if (_is_frontfacing) {
+                H = normalize(L - I);
+            } else {
+                H = normalize(L - I * eta);
+            }
 
-            while (materials_count) {
-                const auto &cur = materials_stack[--materials_count];
-                const Ray::material_t *cur_mat = cur.mat;
-                const float cur_weight = cur.weight;
+            simd_fvec4 base_color = simd_fvec4(mat->base_color[0], mat->base_color[1], mat->base_color[2], 1.0f);
+            if (mat->textures[BASE_TEXTURE] != 0xffffffff) {
+                const texture_t &base_texture = sc.textures[mat->textures[BASE_TEXTURE]];
+                const float base_lod = get_texture_lod(base_texture, surf_der.duv_dx, surf_der.duv_dy);
+                simd_fvec4 tex_color = SampleBilinear(tex_atlases, base_texture, uvs, int(base_lod));
+                if (base_texture.width & TEXTURE_SRGB_BIT) {
+                    tex_color = srgb_to_rgb(tex_color);
+                }
+                base_color *= tex_color;
+            }
 
-                const float eta =
-                    is_backfacing ? (cur_mat->int_ior / cur_mat->ext_ior) : (cur_mat->ext_ior / cur_mat->int_ior);
+            simd_fvec4 tint_color = {0.0f};
 
-                simd_fvec4 H;
-                if (_is_frontfacing) {
-                    H = normalize(L - I);
-                } else {
-                    H = normalize(L - I * eta);
+            const float base_color_lum = lum(base_color);
+            if (base_color_lum > 0.0f) {
+                tint_color = base_color / base_color_lum;
+            }
+
+            // sample roughness texture
+            float roughness = unpack_unorm_16(mat->roughness_unorm);
+            if (mat->textures[ROUGH_TEXTURE] != 0xffffffff) {
+                const texture_t &roughness_tex = sc.textures[mat->textures[ROUGH_TEXTURE]];
+                const float roughness_lod = get_texture_lod(roughness_tex, surf_der.duv_dx, surf_der.duv_dy);
+                simd_fvec4 roughness_color = SampleBilinear(tex_atlases, roughness_tex, uvs, int(roughness_lod))[0];
+                if (roughness_tex.width & TEXTURE_SRGB_BIT) {
+                    roughness_color = srgb_to_rgb(roughness_color);
+                }
+                roughness *= roughness_color[0];
+            }
+
+            const float roughness2 = roughness * roughness;
+
+            if (mat->type == DiffuseNode && _is_frontfacing) {
+                const simd_fvec4 _base_color = pi.should_consider_albedo() ? base_color : simd_fvec4(1.0f);
+                simd_fvec4 diff_col = Evaluate_OrenDiffuse_BSDF(-I, N, L, roughness, _base_color);
+                float bsdf_pdf = diff_col[3];
+
+                float mis_weight = 1.0f;
+                if (light_area > 0.0f) {
+                    mis_weight = power_heuristic(light_pdf, bsdf_pdf);
+                }
+                col += lcol * diff_col * (mis_weight / light_pdf);
+            } else if (mat->type == GlossyNode && roughness2 * roughness2 >= 1e-7f && _is_frontfacing) {
+                const simd_fvec4 view_dir_ts = tangent_from_world(T, B, N, -I);
+                const simd_fvec4 light_dir_ts = tangent_from_world(T, B, N, L);
+                const simd_fvec4 sampled_normal_ts = tangent_from_world(T, B, N, H);
+
+                const float specular = 0.5f;
+                const float spec_ior = (2.0f / (1.0f - std::sqrt(0.08f * specular))) - 1.0f;
+                const float F0 = fresnel_dielectric_cos(1.0f, spec_ior);
+
+                const simd_fvec4 spec_col = Evaluate_GGXSpecular_BSDF(view_dir_ts, sampled_normal_ts, light_dir_ts,
+                                                                      roughness2, roughness2, spec_ior, F0, base_color);
+                const float bsdf_pdf = spec_col[3];
+
+                float mis_weight = 1.0f;
+                if (light_area > 0.0f) {
+                    mis_weight = power_heuristic(light_pdf, bsdf_pdf);
+                }
+                col += lcol * spec_col * (mis_weight / light_pdf);
+            } else if (mat->type == RefractiveNode && roughness2 * roughness2 >= 1e-7f && _is_backfacing) {
+                const simd_fvec4 view_dir_ts = tangent_from_world(T, B, N, -I);
+                const simd_fvec4 light_dir_ts = tangent_from_world(T, B, N, L);
+                const simd_fvec4 sampled_normal_ts = tangent_from_world(T, B, N, H);
+
+                const simd_fvec4 refr_col = Evaluate_GGXRefraction_BSDF(view_dir_ts, sampled_normal_ts, light_dir_ts,
+                                                                        roughness2, eta, base_color);
+                const float bsdf_pdf = refr_col[3];
+
+                float mis_weight = 1.0f;
+                if (light_area > 0.0f) {
+                    mis_weight = power_heuristic(light_pdf, bsdf_pdf);
+                }
+                col += lcol * refr_col * (mis_weight / light_pdf);
+            } else if (mat->type == PrincipledNode) {
+                float metallic = unpack_unorm_16(mat->metallic_unorm);
+                if (mat->textures[METALLIC_TEXTURE] != 0xffffffff) {
+                    const texture_t &metallic_tex = sc.textures[mat->textures[METALLIC_TEXTURE]];
+                    const float metallic_lod = get_texture_lod(metallic_tex, surf_der.duv_dx, surf_der.duv_dy);
+                    metallic *= SampleBilinear(tex_atlases, metallic_tex, uvs, int(metallic_lod))[0];
                 }
 
-                simd_fvec4 base_color =
-                    simd_fvec4(cur_mat->base_color[0], cur_mat->base_color[1], cur_mat->base_color[2], 1.0f);
-                if (cur_mat->textures[BASE_TEXTURE] != 0xffffffff) {
-                    const texture_t &base_texture = sc.textures[cur_mat->textures[BASE_TEXTURE]];
-                    const float base_lod = get_texture_lod(base_texture, surf_der.duv_dx, surf_der.duv_dy);
-                    simd_fvec4 tex_color = SampleBilinear(tex_atlases, base_texture, uvs, int(base_lod));
-                    if (base_texture.width & TEXTURE_SRGB_BIT) {
-                        tex_color = srgb_to_rgb(tex_color);
-                    }
-                    base_color *= tex_color;
-                }
+                const float specular = unpack_unorm_16(mat->specular_unorm);
+                const float transmission = unpack_unorm_16(mat->transmission_unorm);
+                const float clearcoat = unpack_unorm_16(mat->clearcoat_unorm);
+                const float clearcoat_roughness = unpack_unorm_16(mat->clearcoat_roughness_unorm);
+                const float sheen = unpack_unorm_16(mat->sheen_unorm);
+                const float sheen_tint = unpack_unorm_16(mat->sheen_tint_unorm);
 
-                simd_fvec4 tint_color = {0.0f};
+                simd_fvec4 spec_tmp_col = mix(simd_fvec4{1.0f}, tint_color, unpack_unorm_16(mat->specular_tint_unorm));
+                spec_tmp_col = mix(specular * 0.08f * spec_tmp_col, base_color, metallic);
 
-                const float base_color_lum = lum(base_color);
-                if (base_color_lum > 0.0f) {
-                    tint_color = base_color / base_color_lum;
-                }
+                const float spec_ior = (2.0f / (1.0f - std::sqrt(0.08f * specular))) - 1.0f;
+                const float F0 = fresnel_dielectric_cos(1.0f, spec_ior);
 
-                // sample roughness texture
-                float roughness = unpack_unorm_16(cur_mat->roughness_unorm);
-                if (cur_mat->textures[ROUGH_TEXTURE] != 0xffffffff) {
-                    const texture_t &roughness_tex = sc.textures[cur_mat->textures[ROUGH_TEXTURE]];
-                    const float roughness_lod = get_texture_lod(roughness_tex, surf_der.duv_dx, surf_der.duv_dy);
-                    simd_fvec4 roughness_color = SampleBilinear(tex_atlases, roughness_tex, uvs, int(roughness_lod))[0];
-                    if (roughness_tex.width & TEXTURE_SRGB_BIT) {
-                        roughness_color = srgb_to_rgb(roughness_color);
-                    }
-                    roughness *= roughness_color[0];
+                // Approximation of FH (using shading normal)
+                const float FN = (fresnel_dielectric_cos(dot(I, N), spec_ior) - F0) / (1.0f - F0);
+
+                const simd_fvec4 approx_spec_col = mix(spec_tmp_col, simd_fvec4(1.0f), FN);
+                const float spec_color_lum = lum(approx_spec_col);
+
+                float diffuse_weight, specular_weight, clearcoat_weight, refraction_weight;
+                get_lobe_weights(mix(base_color_lum, 1.0f, sheen), spec_color_lum, specular, metallic, transmission,
+                                 clearcoat, &diffuse_weight, &specular_weight, &clearcoat_weight, &refraction_weight);
+
+                float bsdf_pdf = 0.0f;
+
+                if (diffuse_weight > 0.0f && _is_frontfacing) {
+                    const simd_fvec4 _base_color = pi.should_consider_albedo() ? base_color : simd_fvec4(1.0f);
+                    const simd_fvec4 sheen_color = sheen * mix(simd_fvec4{1.0f}, tint_color, sheen_tint);
+
+                    simd_fvec4 diff_col = Evaluate_PrincipledDiffuse_BSDF(-I, N, L, roughness, _base_color, sheen_color,
+                                                                          pi.use_uniform_sampling());
+                    bsdf_pdf += diffuse_weight * diff_col[3];
+                    diff_col *= (1.0f - metallic);
+
+                    col += lcol * N_dot_L * diff_col / (PI * light_pdf);
                 }
 
                 const float roughness2 = roughness * roughness;
+                const float aspect = std::sqrt(1.0f - 0.9f * unpack_unorm_16(mat->anisotropic_unorm));
 
-                if (cur_mat->type == DiffuseNode && _is_frontfacing) {
-                    const simd_fvec4 _base_color = pi.should_consider_albedo() ? base_color : simd_fvec4(1.0f);
-                    simd_fvec4 diff_col = Evaluate_OrenDiffuse_BSDF(-I, N, L, roughness, _base_color);
-                    float bsdf_pdf = diff_col[3];
+                const float alpha_x = roughness2 / aspect;
+                const float alpha_y = roughness2 * aspect;
 
-                    float mis_weight = 1.0f;
-                    if (light_area > 0.0f) {
-                        mis_weight = power_heuristic(light_pdf, bsdf_pdf);
-                    }
-                    col += lcol * diff_col * (cur_weight * mis_weight / light_pdf);
-                } else if (cur_mat->type == GlossyNode && roughness2 * roughness2 >= 1e-7f && _is_frontfacing) {
-                    const simd_fvec4 view_dir_ts = tangent_from_world(T, B, N, -I);
-                    const simd_fvec4 light_dir_ts = tangent_from_world(T, B, N, L);
-                    const simd_fvec4 sampled_normal_ts = tangent_from_world(T, B, N, H);
+                const simd_fvec4 view_dir_ts = tangent_from_world(T, B, N, -I);
+                const simd_fvec4 light_dir_ts = tangent_from_world(T, B, N, L);
+                const simd_fvec4 sampled_normal_ts = tangent_from_world(T, B, N, H);
 
-                    const float specular = 0.5f;
-                    const float spec_ior = (2.0f / (1.0f - std::sqrt(0.08f * specular))) - 1.0f;
-                    const float F0 = fresnel_dielectric_cos(1.0f, spec_ior);
+                if (specular_weight > 0.0f && alpha_x * alpha_y >= 1e-7f && _is_frontfacing) {
+                    const simd_fvec4 spec_col = Evaluate_GGXSpecular_BSDF(view_dir_ts, sampled_normal_ts, light_dir_ts,
+                                                                          alpha_x, alpha_y, spec_ior, F0, spec_tmp_col);
+                    bsdf_pdf += specular_weight * spec_col[3];
 
-                    const simd_fvec4 spec_col = Evaluate_GGXSpecular_BSDF(
-                        view_dir_ts, sampled_normal_ts, light_dir_ts, roughness2, roughness2, spec_ior, F0, base_color);
-                    const float bsdf_pdf = spec_col[3];
+                    col += lcol * spec_col / light_pdf;
+                }
 
-                    float mis_weight = 1.0f;
-                    if (light_area > 0.0f) {
-                        mis_weight = power_heuristic(light_pdf, bsdf_pdf);
-                    }
-                    col += lcol * spec_col * (cur_weight * mis_weight / light_pdf);
-                } else if (cur_mat->type == RefractiveNode && roughness2 * roughness2 >= 1e-7f && _is_backfacing) {
-                    const simd_fvec4 view_dir_ts = tangent_from_world(T, B, N, -I);
-                    const simd_fvec4 light_dir_ts = tangent_from_world(T, B, N, L);
-                    const simd_fvec4 sampled_normal_ts = tangent_from_world(T, B, N, H);
+                const float clearcoat_ior = (2.0f / (1.0f - std::sqrt(0.08f * clearcoat))) - 1.0f;
+                const float clearcoat_F0 = fresnel_dielectric_cos(1.0f, clearcoat_ior);
+                const float clearcoat_roughness2 = clearcoat_roughness * clearcoat_roughness;
+                if (clearcoat_weight > 0.0f && clearcoat_roughness2 * clearcoat_roughness2 >= 1e-7f &&
+                    _is_frontfacing) {
+                    const simd_fvec4 clearcoat_col =
+                        Evaluate_PrincipledClearcoat_BSDF(view_dir_ts, sampled_normal_ts, light_dir_ts,
+                                                          clearcoat_roughness2, clearcoat_ior, clearcoat_F0);
+                    bsdf_pdf += clearcoat_weight * clearcoat_col[3];
 
-                    const simd_fvec4 refr_col = Evaluate_GGXRefraction_BSDF(view_dir_ts, sampled_normal_ts,
-                                                                            light_dir_ts, roughness2, eta, base_color);
-                    const float bsdf_pdf = refr_col[3];
+                    col += 0.25f * lcol * clearcoat_col / light_pdf;
+                }
 
-                    float mis_weight = 1.0f;
-                    if (light_area > 0.0f) {
-                        mis_weight = power_heuristic(light_pdf, bsdf_pdf);
-                    }
-                    col += lcol * refr_col * (cur_weight * mis_weight / light_pdf);
-                } else if (cur_mat->type == PrincipledNode) {
-                    float metallic = unpack_unorm_16(cur_mat->metallic_unorm);
-                    if (cur_mat->textures[METALLIC_TEXTURE] != 0xffffffff) {
-                        const texture_t &metallic_tex = sc.textures[cur_mat->textures[METALLIC_TEXTURE]];
-                        const float metallic_lod = get_texture_lod(metallic_tex, surf_der.duv_dx, surf_der.duv_dy);
-                        metallic *= SampleBilinear(tex_atlases, metallic_tex, uvs, int(metallic_lod))[0];
+                if (refraction_weight > 0.0f) {
+                    const float fresnel = fresnel_dielectric_cos(dot(I, N), 1.0f / eta);
+
+                    if (fresnel != 0.0f && roughness2 * roughness2 >= 1e-7f && _is_frontfacing) {
+                        const simd_fvec4 spec_col =
+                            Evaluate_GGXSpecular_BSDF(view_dir_ts, sampled_normal_ts, light_dir_ts, roughness2,
+                                                      roughness2, 1.0f /* ior */, 0.0f /* F0 */, simd_fvec4{1.0f});
+                        bsdf_pdf += refraction_weight * fresnel * spec_col[3];
+
+                        col += lcol * spec_col * (fresnel / light_pdf);
                     }
 
-                    const float specular = unpack_unorm_16(cur_mat->specular_unorm);
-                    const float transmission = unpack_unorm_16(cur_mat->transmission_unorm);
-                    const float clearcoat = unpack_unorm_16(cur_mat->clearcoat_unorm);
-                    const float clearcoat_roughness = unpack_unorm_16(cur_mat->clearcoat_roughness_unorm);
-                    const float sheen = unpack_unorm_16(cur_mat->sheen_unorm);
-                    const float sheen_tint = unpack_unorm_16(cur_mat->sheen_tint_unorm);
+                    const float transmission_roughness =
+                        1.0f - (1.0f - roughness) * (1.0f - unpack_unorm_16(mat->transmission_roughness_unorm));
+                    const float transmission_roughness2 = transmission_roughness * transmission_roughness;
+                    if (fresnel != 1.0f && transmission_roughness2 * transmission_roughness2 >= 1e-7f &&
+                        _is_backfacing) {
+                        const simd_fvec4 refr_col = Evaluate_GGXRefraction_BSDF(
+                            view_dir_ts, sampled_normal_ts, light_dir_ts, transmission_roughness2, eta, base_color);
+                        bsdf_pdf += refraction_weight * (1.0f - fresnel) * refr_col[3];
 
-                    simd_fvec4 spec_tmp_col =
-                        mix(simd_fvec4{1.0f}, tint_color, unpack_unorm_16(cur_mat->specular_tint_unorm));
-                    spec_tmp_col = mix(specular * 0.08f * spec_tmp_col, base_color, metallic);
-
-                    const float spec_ior = (2.0f / (1.0f - std::sqrt(0.08f * specular))) - 1.0f;
-                    const float F0 = fresnel_dielectric_cos(1.0f, spec_ior);
-
-                    // Approximation of FH (using shading normal)
-                    const float FN = (fresnel_dielectric_cos(dot(I, N), spec_ior) - F0) / (1.0f - F0);
-
-                    const simd_fvec4 approx_spec_col = mix(spec_tmp_col, simd_fvec4(1.0f), FN);
-                    const float spec_color_lum = lum(approx_spec_col);
-
-                    float diffuse_weight, specular_weight, clearcoat_weight, refraction_weight;
-                    get_lobe_weights(mix(base_color_lum, 1.0f, sheen), spec_color_lum, specular, metallic, transmission,
-                                     clearcoat, &diffuse_weight, &specular_weight, &clearcoat_weight,
-                                     &refraction_weight);
-
-                    float bsdf_pdf = 0.0f;
-
-                    if (diffuse_weight > 0.0f && _is_frontfacing) {
-                        const simd_fvec4 _base_color = pi.should_consider_albedo() ? base_color : simd_fvec4(1.0f);
-                        const simd_fvec4 sheen_color = sheen * mix(simd_fvec4{1.0f}, tint_color, sheen_tint);
-
-                        simd_fvec4 diff_col = Evaluate_PrincipledDiffuse_BSDF(-I, N, L, roughness, _base_color,
-                                                                              sheen_color, pi.use_uniform_sampling());
-                        bsdf_pdf += diffuse_weight * diff_col[3];
-                        diff_col *= (1.0f - metallic);
-
-                        col += lcol * N_dot_L * diff_col * cur_weight / (PI * light_pdf);
-                    }
-
-                    const float roughness2 = roughness * roughness;
-                    const float aspect = std::sqrt(1.0f - 0.9f * unpack_unorm_16(cur_mat->anisotropic_unorm));
-
-                    const float alpha_x = roughness2 / aspect;
-                    const float alpha_y = roughness2 * aspect;
-
-                    const simd_fvec4 view_dir_ts = tangent_from_world(T, B, N, -I);
-                    const simd_fvec4 light_dir_ts = tangent_from_world(T, B, N, L);
-                    const simd_fvec4 sampled_normal_ts = tangent_from_world(T, B, N, H);
-
-                    if (specular_weight > 0.0f && alpha_x * alpha_y >= 1e-7f && _is_frontfacing) {
-                        const simd_fvec4 spec_col = Evaluate_GGXSpecular_BSDF(
-                            view_dir_ts, sampled_normal_ts, light_dir_ts, alpha_x, alpha_y, spec_ior, F0, spec_tmp_col);
-                        bsdf_pdf += specular_weight * spec_col[3];
-
-                        col += lcol * spec_col * (cur_weight / light_pdf);
-                    }
-
-                    const float clearcoat_ior = (2.0f / (1.0f - std::sqrt(0.08f * clearcoat))) - 1.0f;
-                    const float clearcoat_F0 = fresnel_dielectric_cos(1.0f, clearcoat_ior);
-                    const float clearcoat_roughness2 = clearcoat_roughness * clearcoat_roughness;
-                    if (clearcoat_weight > 0.0f && clearcoat_roughness2 * clearcoat_roughness2 >= 1e-7f &&
-                        _is_frontfacing) {
-                        const simd_fvec4 clearcoat_col =
-                            Evaluate_PrincipledClearcoat_BSDF(view_dir_ts, sampled_normal_ts, light_dir_ts,
-                                                              clearcoat_roughness2, clearcoat_ior, clearcoat_F0);
-                        bsdf_pdf += clearcoat_weight * clearcoat_col[3];
-
-                        col += 0.25f * lcol * clearcoat_col * (cur_weight / light_pdf);
-                    }
-
-                    if (refraction_weight > 0.0f) {
-                        const float fresnel = fresnel_dielectric_cos(dot(I, N), 1.0f / eta);
-
-                        if (fresnel != 0.0f && roughness2 * roughness2 >= 1e-7f && _is_frontfacing) {
-                            const simd_fvec4 spec_col =
-                                Evaluate_GGXSpecular_BSDF(view_dir_ts, sampled_normal_ts, light_dir_ts, roughness2,
-                                                          roughness2, 1.0f /* ior */, 0.0f /* F0 */, simd_fvec4{1.0f});
-                            bsdf_pdf += refraction_weight * fresnel * spec_col[3];
-
-                            col += lcol * spec_col * (fresnel * cur_weight / light_pdf);
-                        }
-
-                        const float transmission_roughness =
-                            1.0f - (1.0f - roughness) * (1.0f - unpack_unorm_16(cur_mat->transmission_roughness_unorm));
-                        const float transmission_roughness2 = transmission_roughness * transmission_roughness;
-                        if (fresnel != 1.0f && transmission_roughness2 * transmission_roughness2 >= 1e-7f &&
-                            _is_backfacing) {
-                            const simd_fvec4 refr_col = Evaluate_GGXRefraction_BSDF(
-                                view_dir_ts, sampled_normal_ts, light_dir_ts, transmission_roughness2, eta, base_color);
-                            bsdf_pdf += refraction_weight * (1.0f - fresnel) * refr_col[3];
-
-                            col += lcol * refr_col * ((1.0f - fresnel) * cur_weight / light_pdf);
-                        }
-                    }
-
-                    float mis_weight = 1.0f;
-                    if (light_area > 0.0f) {
-                        mis_weight = power_heuristic(light_pdf, bsdf_pdf);
-                    }
-                    col *= mis_weight;
-                } else if (cur_mat->type == MixNode) {
-                    if (cur_mat->flags & MAT_FLAG_MIX_ADD) {
-                        materials_stack[materials_count++] = {&sc.materials[cur_mat->textures[MIX_MAT1]], cur_weight};
-                        materials_stack[materials_count++] = {&sc.materials[cur_mat->textures[MIX_MAT2]], cur_weight};
-                    } else {
-                        float mix_val = cur_mat->strength;
-                        if (cur_mat->textures[BASE_TEXTURE] != 0xffffffff) {
-                            mix_val *=
-                                SampleBilinear(tex_atlases, sc.textures[cur_mat->textures[BASE_TEXTURE]], uvs, 0)[0];
-                        }
-
-                        const float eta = is_backfacing ? (cur_mat->ext_ior / cur_mat->int_ior)
-                                                        : (cur_mat->int_ior / cur_mat->ext_ior);
-                        const float RR = cur_mat->int_ior != 0.0f ? fresnel_dielectric_cos(dot(I, N), eta) : 1.0f;
-
-                        mix_val *= clamp(RR, 0.0f, 1.0f);
-
-                        materials_stack[materials_count++] = {&sc.materials[cur_mat->textures[MIX_MAT1]],
-                                                              (1.0f - mix_val) * cur_weight};
-                        materials_stack[materials_count++] = {&sc.materials[cur_mat->textures[MIX_MAT2]],
-                                                              mix_val * cur_weight};
+                        col += lcol * refr_col * ((1.0f - fresnel) / light_pdf);
                     }
                 }
+
+                float mis_weight = 1.0f;
+                if (light_area > 0.0f) {
+                    mis_weight = power_heuristic(light_pdf, bsdf_pdf);
+                }
+                col *= mis_weight;
             }
         }
     }
@@ -3304,13 +3265,6 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
     const int transp_depth = (ray.ray_depth >> 24) & 0x000000ff;
     const int total_depth = diff_depth + spec_depth + refr_depth + transp_depth;
 
-#if USE_NEE == 1
-    if (pi.should_add_direct_light() && !sc.li_indices.empty() && mat->type != EmissiveNode) {
-        col += EvaluateDirectLights(I, P, N, T, B, plane_N, uvs, is_backfacing, mat, surf_der, pi, sc, tex_atlases,
-                                    node_index, px_index, halton, sample_off);
-    }
-#endif
-
     float mix_rand = fract(halton[RAND_DIM_BSDF_PICK] + sample_off[0]);
     float mix_weight = 1.0f;
 
@@ -3341,6 +3295,13 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
             mix_rand = mix_rand / mix_val;
         }
     }
+
+#if USE_NEE == 1
+    if (pi.should_add_direct_light() && !sc.li_indices.empty() && mat->type != EmissiveNode) {
+        col += mix_weight * EvaluateDirectLights(I, P, N, T, B, plane_N, uvs, is_backfacing, mat, surf_der, pi, sc,
+                                                 tex_atlases, node_index, px_index, halton, sample_off);
+    }
+#endif
 
     const float mat_ior = is_backfacing ? mat->ext_ior : mat->int_ior;
 
