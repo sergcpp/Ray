@@ -2055,8 +2055,8 @@ void test_trans_mat9() {
 
 void test_alpha_mat0() {
     const int SampleCount = 1024;
-    const double MinPSNR = 37.81;
-    const int PixThres = 42;
+    const double MinPSNR = 37.58;
+    const int PixThres = 46;
 
     Ray::principled_mat_desc_t alpha_mat_desc;
     alpha_mat_desc.base_color[0] = 0.0f;
@@ -2070,8 +2070,8 @@ void test_alpha_mat0() {
 
 void test_alpha_mat1() {
     const int SampleCount = 1024;
-    const double MinPSNR = 34.67;
-    const int PixThres = 86;
+    const double MinPSNR = 33.87;
+    const int PixThres = 134;
 
     Ray::principled_mat_desc_t alpha_mat_desc;
     alpha_mat_desc.base_color[0] = 0.0f;
@@ -2085,8 +2085,8 @@ void test_alpha_mat1() {
 
 void test_alpha_mat2() {
     const int SampleCount = 1024;
-    const double MinPSNR = 35.07;
-    const int PixThres = 75;
+    const double MinPSNR = 34.4;
+    const int PixThres = 78;
 
     Ray::principled_mat_desc_t alpha_mat_desc;
     alpha_mat_desc.base_color[0] = 0.0f;
