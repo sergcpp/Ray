@@ -69,7 +69,7 @@ struct derivatives_t {
 
 struct light_sample_t {
     simd_fvec4 col, L;
-    float light_area = 0.0f, light_dist, light_pdf = 0.0f;
+    float area = 0.0f, dist, pdf = 0.0f;
 };
 
 class TextureAtlasBase;

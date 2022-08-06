@@ -68,6 +68,11 @@ template <int S> struct derivatives_t {
     simd_fvec<S> ddn_dx, ddn_dy;
 };
 
+template <int S> struct light_sample_t {
+    simd_fvec<S> col[3], L[3];
+    simd_fvec<S> light_area = 0.0f, light_dist, light_pdf = 0.0f;
+};
+
 // Generating rays
 template <int DimX, int DimY>
 void GeneratePrimaryRays(const int iteration, const camera_t &cam, const rect_t &r, int w, int h, const float *halton,

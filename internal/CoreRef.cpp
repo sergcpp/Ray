@@ -2618,16 +2618,16 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, co
             simd_fvec4{l.sph.pos[0], l.sph.pos[1], l.sph.pos[2], 0.0f} + sampled_dir * l.sph.radius;
 
         ls.L = light_surf_pos - P;
-        ls.light_dist = length(ls.L);
-        ls.L /= ls.light_dist;
+        ls.dist = length(ls.L);
+        ls.L /= ls.dist;
 
-        ls.light_area = l.sph.area;
+        ls.area = l.sph.area;
         const simd_fvec4 light_forward =
             normalize(light_surf_pos - simd_fvec4{l.sph.pos[0], l.sph.pos[1], l.sph.pos[2], 0.0f});
 
         const float cos_theta = std::abs(dot(ls.L, light_forward));
         if (cos_theta > 0.0f) {
-            ls.light_pdf = (ls.light_dist * ls.light_dist) / (0.5f * ls.light_area * cos_theta);
+            ls.pdf = (ls.dist * ls.dist) / (0.5f * ls.area * cos_theta);
         }
     } else if (l.type == LIGHT_TYPE_DIR) {
         ls.L = simd_fvec4{l.dir.dir[0], l.dir.dir[1], l.dir.dir[2], 0.0f};
@@ -2638,9 +2638,9 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, co
             const float radius = std::tan(l.dir.angle);
             ls.L = normalize(MapToCone(r1, r2, ls.L, radius));
         }
-        ls.light_area = 0.0f;
-        ls.light_dist = MAX_DIST;
-        ls.light_pdf = 1.0f;
+        ls.area = 0.0f;
+        ls.dist = MAX_DIST;
+        ls.pdf = 1.0f;
     } else if (l.type == LIGHT_TYPE_RECT) {
         const auto light_pos = simd_fvec4{l.rect.pos[0], l.rect.pos[1], l.rect.pos[2], 0.0f};
         const simd_fvec4 light_u = simd_fvec4{l.rect.u[0], l.rect.u[1], l.rect.u[2], 0.0f};
@@ -2651,19 +2651,19 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, co
         const simd_fvec4 lp = light_pos + light_u * r1 + light_v * r2;
 
         const simd_fvec4 to_light = lp - P;
-        ls.light_dist = length(to_light);
-        ls.L = (to_light / ls.light_dist);
+        ls.dist = length(to_light);
+        ls.L = (to_light / ls.dist);
 
-        ls.light_area = l.rect.area;
+        ls.area = l.rect.area;
         simd_fvec4 light_forward = normalize(cross(light_u, light_v));
 
         const float cos_theta = dot(-ls.L, light_forward);
         if (cos_theta > 0.0f) {
-            ls.light_pdf = (ls.light_dist * ls.light_dist) / (ls.light_area * cos_theta);
+            ls.pdf = (ls.dist * ls.dist) / (ls.area * cos_theta);
         }
 
         if (!l.visible) {
-            ls.light_area = 0.0f;
+            ls.area = 0.0f;
         }
 
         if (l.sky_portal != 0) {
@@ -2704,19 +2704,19 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, co
         const simd_fvec4 lp = light_pos + light_u * offset[0] + light_v * offset[1];
 
         const simd_fvec4 to_light = lp - P;
-        ls.light_dist = length(to_light);
-        ls.L = (to_light / ls.light_dist);
+        ls.dist = length(to_light);
+        ls.L = (to_light / ls.dist);
 
-        ls.light_area = l.disk.area;
+        ls.area = l.disk.area;
         simd_fvec4 light_forward = normalize(cross(light_u, light_v));
 
         const float cos_theta = dot(-ls.L, light_forward);
         if (cos_theta > 0.0f) {
-            ls.light_pdf = (ls.light_dist * ls.light_dist) / (ls.light_area * cos_theta);
+            ls.pdf = (ls.dist * ls.dist) / (ls.area * cos_theta);
         }
 
         if (!l.visible) {
-            ls.light_area = 0.0f;
+            ls.area = 0.0f;
         }
 
         if (l.sky_portal != 0) {
@@ -2750,16 +2750,16 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, co
         const simd_fvec2 luvs = uv1 * (1.0f - r1) + r1 * (uv2 * (1.0f - r2) + uv3 * r2);
         const simd_fvec4 lp = TransformPoint(p1 * (1.0f - r1) + r1 * (p2 * (1.0f - r2) + p3 * r2), ltr.xform);
         simd_fvec4 light_forward = TransformDirection(cross(p2 - p1, p3 - p1), ltr.xform);
-        ls.light_area = 0.5f * length(light_forward);
+        ls.area = 0.5f * length(light_forward);
         light_forward = normalize(light_forward);
 
         const simd_fvec4 to_light = lp - P;
-        ls.light_dist = length(to_light);
-        ls.L = (to_light / ls.light_dist);
+        ls.dist = length(to_light);
+        ls.L = (to_light / ls.dist);
 
         const float cos_theta = std::abs(dot(ls.L, light_forward)); // abs for doublesided light
         if (cos_theta > 0.0f) {
-            ls.light_pdf = (ls.light_dist * ls.light_dist) / (ls.light_area * cos_theta);
+            ls.pdf = (ls.dist * ls.dist) / (ls.area * cos_theta);
         }
 
         const material_t &lmat = sc.materials[sc.tri_materials[ltri_index].front_mi & MATERIAL_INDEX_BITS];
@@ -3090,14 +3090,14 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
     if (pi.should_add_direct_light() && !sc.li_indices.empty() && mat->type != EmissiveNode) {
         SampleLightSource(P, sc, tex_atlases, halton, sample_off, ls);
 
-        if (ls.light_pdf > 0.0f) {
+        if (ls.pdf > 0.0f) {
             N_dot_L = dot(N, ls.L);
 #if USE_SHADOW_RAYS
             const float visibility = ComputeVisibility(offset_ray(P, (N_dot_L < 0.0f) ? -plane_N : plane_N), ls.L,
-                                                       ls.light_dist - 10.0f * HIT_BIAS, halton[RAND_DIM_BSDF_PICK],
+                                                       ls.dist - 10.0f * HIT_BIAS, halton[RAND_DIM_BSDF_PICK],
                                                        hash(px_index), sc, node_index, tex_atlases);
             if (visibility == 0.0f) {
-                ls.light_pdf = 0.0f;
+                ls.pdf = 0.0f;
             }
 #endif
         }
@@ -3148,16 +3148,16 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
         const simd_fvec4 _base_color = pi.should_consider_albedo() ? base_color : simd_fvec4(1.0f);
 
 #if USE_NEE
-        if (ls.light_pdf > 0.0f && N_dot_L > 0.0f) {
+        if (ls.pdf > 0.0f && N_dot_L > 0.0f) {
             simd_fvec4 diff_col = Evaluate_OrenDiffuse_BSDF(-I, N, ls.L, roughness, _base_color);
             const float bsdf_pdf = diff_col[3];
 
             float mis_weight = 1.0f;
-            if (ls.light_area > 0.0f) {
-                mis_weight = power_heuristic(ls.light_pdf, bsdf_pdf);
+            if (ls.area > 0.0f) {
+                mis_weight = power_heuristic(ls.pdf, bsdf_pdf);
             }
 
-            col += ls.col * diff_col * (mis_weight / ls.light_pdf);
+            col += ls.col * diff_col * (mis_weight / ls.pdf);
         }
 #endif
 
@@ -3192,7 +3192,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
         const float roughness2 = roughness * roughness;
 
 #if USE_NEE
-        if (ls.light_pdf > 0.0f && roughness2 * roughness2 >= 1e-7f && N_dot_L > 0.0f) {
+        if (ls.pdf > 0.0f && roughness2 * roughness2 >= 1e-7f && N_dot_L > 0.0f) {
             const simd_fvec4 H = normalize(ls.L - I);
 
             const simd_fvec4 view_dir_ts = tangent_from_world(T, B, N, -I);
@@ -3204,10 +3204,10 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
             const float bsdf_pdf = spec_col[3];
 
             float mis_weight = 1.0f;
-            if (ls.light_area > 0.0f) {
-                mis_weight = power_heuristic(ls.light_pdf, bsdf_pdf);
+            if (ls.area > 0.0f) {
+                mis_weight = power_heuristic(ls.pdf, bsdf_pdf);
             }
-            col += ls.col * spec_col * (mis_weight / ls.light_pdf);
+            col += ls.col * spec_col * (mis_weight / ls.pdf);
         }
 #endif
 
@@ -3241,7 +3241,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
         const float roughness2 = roughness * roughness;
 
 #if USE_NEE
-        if (ls.light_pdf > 0.0f && roughness2 * roughness2 >= 1e-7f && N_dot_L < 0.0f) {
+        if (ls.pdf > 0.0f && roughness2 * roughness2 >= 1e-7f && N_dot_L < 0.0f) {
             const simd_fvec4 H = normalize(ls.L - I * eta);
             const simd_fvec4 view_dir_ts = tangent_from_world(T, B, N, -I);
             const simd_fvec4 light_dir_ts = tangent_from_world(T, B, N, ls.L);
@@ -3252,10 +3252,10 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
             const float bsdf_pdf = refr_col[3];
 
             float mis_weight = 1.0f;
-            if (ls.light_area > 0.0f) {
-                mis_weight = power_heuristic(ls.light_pdf, bsdf_pdf);
+            if (ls.area > 0.0f) {
+                mis_weight = power_heuristic(ls.pdf, bsdf_pdf);
             }
-            col += ls.col * refr_col * (mis_weight / ls.light_pdf);
+            col += ls.col * refr_col * (mis_weight / ls.pdf);
         }
 #endif
 
@@ -3390,14 +3390,14 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
         float bsdf_pdf = 0.0f;
 
 #if USE_NEE
-        if (ls.light_pdf > 0.0f) {
+        if (ls.pdf > 0.0f) {
             if (diffuse_weight > 0.0f && N_dot_L > 0.0f) {
                 simd_fvec4 diff_col = Evaluate_PrincipledDiffuse_BSDF(-I, N, ls.L, roughness, _base_color, sheen_color,
                                                                       pi.use_uniform_sampling());
                 bsdf_pdf += diffuse_weight * diff_col[3];
                 diff_col *= (1.0f - metallic);
 
-                col += ls.col * N_dot_L * diff_col / (PI * ls.light_pdf);
+                col += ls.col * N_dot_L * diff_col / (PI * ls.pdf);
             }
 
             simd_fvec4 H;
@@ -3422,7 +3422,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
                                                                       alpha_x, alpha_y, spec_ior, spec_F0, spec_tmp_col);
                 bsdf_pdf += specular_weight * spec_col[3];
 
-                col += ls.col * spec_col / ls.light_pdf;
+                col += ls.col * spec_col / ls.pdf;
             }
 
             if (clearcoat_weight > 0.0f && clearcoat_roughness2 * clearcoat_roughness2 >= 1e-7f && N_dot_L > 0.0f) {
@@ -3430,7 +3430,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
                     view_dir_ts, sampled_normal_ts, light_dir_ts, clearcoat_roughness2, clearcoat_ior, clearcoat_F0);
                 bsdf_pdf += clearcoat_weight * clearcoat_col[3];
 
-                col += 0.25f * ls.col * clearcoat_col / ls.light_pdf;
+                col += 0.25f * ls.col * clearcoat_col / ls.pdf;
             }
 
             if (refraction_weight > 0.0f) {
@@ -3440,7 +3440,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
                                                   1.0f /* ior */, 0.0f /* F0 */, simd_fvec4{1.0f});
                     bsdf_pdf += refraction_weight * fresnel * spec_col[3];
 
-                    col += ls.col * spec_col * (fresnel / ls.light_pdf);
+                    col += ls.col * spec_col * (fresnel / ls.pdf);
                 }
 
                 if (fresnel != 1.0f && transmission_roughness2 * transmission_roughness2 >= 1e-7f && N_dot_L < 0.0f) {
@@ -3448,13 +3448,13 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
                         view_dir_ts, sampled_normal_ts, light_dir_ts, transmission_roughness2, eta, base_color);
                     bsdf_pdf += refraction_weight * (1.0f - fresnel) * refr_col[3];
 
-                    col += ls.col * refr_col * ((1.0f - fresnel) / ls.light_pdf);
+                    col += ls.col * refr_col * ((1.0f - fresnel) / ls.pdf);
                 }
             }
 
             float mis_weight = 1.0f;
-            if (ls.light_area > 0.0f) {
-                mis_weight = power_heuristic(ls.light_pdf, bsdf_pdf);
+            if (ls.area > 0.0f) {
+                mis_weight = power_heuristic(ls.pdf, bsdf_pdf);
             }
             col *= mis_weight;
         }
