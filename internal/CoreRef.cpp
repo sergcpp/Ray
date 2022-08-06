@@ -3157,7 +3157,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
                 mis_weight = power_heuristic(ls.pdf, bsdf_pdf);
             }
 
-            col += ls.col * diff_col * (mis_weight / ls.pdf);
+            col += ls.col * diff_col * (mix_weight * mis_weight / ls.pdf);
         }
 #endif
 
@@ -3207,7 +3207,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
             if (ls.area > 0.0f) {
                 mis_weight = power_heuristic(ls.pdf, bsdf_pdf);
             }
-            col += ls.col * spec_col * (mis_weight / ls.pdf);
+            col += ls.col * spec_col * (mix_weight * mis_weight / ls.pdf);
         }
 #endif
 
@@ -3255,7 +3255,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
             if (ls.area > 0.0f) {
                 mis_weight = power_heuristic(ls.pdf, bsdf_pdf);
             }
-            col += ls.col * refr_col * (mis_weight / ls.pdf);
+            col += ls.col * refr_col * (mix_weight * mis_weight / ls.pdf);
         }
 #endif
 
@@ -3326,7 +3326,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
             }
         }
 #endif
-        col += mis_weight * mat->strength * mix_weight * base_color;
+        col += mix_weight * mis_weight * mat->strength * base_color;
     } else if (mat->type == TransparentNode) {
         if (transp_depth < pi.settings.max_transp_depth && total_depth < pi.settings.max_total_depth) {
             new_ray.ray_depth = ray.ray_depth + 0x01000000;
@@ -3387,10 +3387,9 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
             1.0f - (1.0f - roughness) * (1.0f - unpack_unorm_16(mat->transmission_roughness_unorm));
         const float transmission_roughness2 = transmission_roughness * transmission_roughness;
 
-        float bsdf_pdf = 0.0f;
-
 #if USE_NEE
         if (ls.pdf > 0.0f) {
+            float bsdf_pdf = 0.0f;
             if (diffuse_weight > 0.0f && N_dot_L > 0.0f) {
                 simd_fvec4 diff_col = Evaluate_PrincipledDiffuse_BSDF(-I, N, ls.L, roughness, _base_color, sheen_color,
                                                                       pi.use_uniform_sampling());
@@ -3456,7 +3455,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
             if (ls.area > 0.0f) {
                 mis_weight = power_heuristic(ls.pdf, bsdf_pdf);
             }
-            col *= mis_weight;
+            col *= mix_weight * mis_weight;
         }
 #endif
 
