@@ -583,8 +583,10 @@ void run_material_test(const char *test_name, const MatDesc &mat_desc, const int
         s.w = test_img_w;
         s.h = test_img_h;
 
-        static const Ray::eRendererType renderer_types[] = {Ray::RendererRef, Ray::RendererSSE2, Ray::RendererSSE41,
-                                                            Ray::RendererAVX, Ray::RendererAVX2, Ray::RendererNEON};
+        static const Ray::eRendererType renderer_types[] = {Ray::RendererRef,
+                                      /*Ray::RendererSSE2,
+                                        Ray::RendererSSE41,
+                                        Ray::RendererAVX,*/ Ray::RendererAVX2, Ray::RendererNEON};
 
         const int DiffThres = 32;
 
