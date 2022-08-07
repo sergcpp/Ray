@@ -2667,16 +2667,15 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, co
         }
 
         if (l.sky_portal != 0) {
+            simd_fvec4 env_col = {sc.env->env_col[0], sc.env->env_col[1], sc.env->env_col[2], 0.0f};
             if (sc.env->env_map != 0xffffffff) {
-                ls.col *= SampleLatlong_RGBE(*static_cast<const TextureAtlasRGBA *>(tex_atlases[0]),
-                                             sc.textures[sc.env->env_map], ls.L);
+                env_col *= SampleLatlong_RGBE(*static_cast<const TextureAtlasRGBA *>(tex_atlases[0]),
+                                              sc.textures[sc.env->env_map], ls.L);
                 if (sc.env->env_clamp > FLT_EPS) {
-                    ls.col = min(ls.col, simd_fvec4{sc.env->env_clamp});
+                    env_col = min(env_col, sc.env->env_clamp);
                 }
             }
-            ls.col[0] *= sc.env->env_col[0];
-            ls.col[1] *= sc.env->env_col[1];
-            ls.col[2] *= sc.env->env_col[2];
+            ls.col *= env_col;
         }
     } else if (l.type == LIGHT_TYPE_DISK) {
         const auto light_pos = simd_fvec4{l.disk.pos[0], l.disk.pos[1], l.disk.pos[2], 0.0f};
@@ -2720,16 +2719,15 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, co
         }
 
         if (l.sky_portal != 0) {
+            simd_fvec4 env_col = {sc.env->env_col[0], sc.env->env_col[1], sc.env->env_col[2], 0.0f};
             if (sc.env->env_map != 0xffffffff) {
-                ls.col *= SampleLatlong_RGBE(*static_cast<const TextureAtlasRGBA *>(tex_atlases[0]),
-                                             sc.textures[sc.env->env_map], ls.L);
+                env_col *= SampleLatlong_RGBE(*static_cast<const TextureAtlasRGBA *>(tex_atlases[0]),
+                                              sc.textures[sc.env->env_map], ls.L);
                 if (sc.env->env_clamp > FLT_EPS) {
-                    ls.col = min(ls.col, simd_fvec4{sc.env->env_clamp});
+                    env_col = min(env_col, sc.env->env_clamp);
                 }
             }
-            ls.col[0] *= sc.env->env_col[0];
-            ls.col[1] *= sc.env->env_col[1];
-            ls.col[2] *= sc.env->env_col[2];
+            ls.col *= env_col;
         }
     } else if (l.type == LIGHT_TYPE_TRI) {
         const transform_t &ltr = sc.transforms[l.tri.xform_index];
@@ -2768,16 +2766,15 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, co
                 ls.col *= SampleBilinear(tex_atlases, sc.textures[lmat.textures[BASE_TEXTURE]], luvs, 0 /* lod */);
             }
         } else {
+            simd_fvec4 env_col = {sc.env->env_col[0], sc.env->env_col[1], sc.env->env_col[2], 0.0f};
             if (sc.env->env_map != 0xffffffff) {
-                ls.col *= SampleLatlong_RGBE(*static_cast<const TextureAtlasRGBA *>(tex_atlases[0]),
+                env_col *= SampleLatlong_RGBE(*static_cast<const TextureAtlasRGBA *>(tex_atlases[0]),
                                              sc.textures[sc.env->env_map], ls.L);
                 if (sc.env->env_clamp > FLT_EPS) {
-                    ls.col = min(ls.col, simd_fvec4{sc.env->env_clamp});
+                    env_col = min(env_col, sc.env->env_clamp);
                 }
             }
-            ls.col[0] *= sc.env->env_col[0];
-            ls.col[1] *= sc.env->env_col[1];
-            ls.col[2] *= sc.env->env_col[2];
+            ls.col *= env_col;
         }
     }
 }
