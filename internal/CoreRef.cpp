@@ -2769,7 +2769,7 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, co
             simd_fvec4 env_col = {sc.env->env_col[0], sc.env->env_col[1], sc.env->env_col[2], 0.0f};
             if (sc.env->env_map != 0xffffffff) {
                 env_col *= SampleLatlong_RGBE(*static_cast<const TextureAtlasRGBA *>(tex_atlases[0]),
-                                             sc.textures[sc.env->env_map], ls.L);
+                                              sc.textures[sc.env->env_map], ls.L);
                 if (sc.env->env_clamp > FLT_EPS) {
                     env_col = min(env_col, sc.env->env_clamp);
                 }
@@ -3285,20 +3285,18 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
     } else if (mat->type == EmissiveNode) {
         float mis_weight = 1.0f;
 #if USE_NEE == 1
-        // TODO: refactor this!
         if (mat->flags & MAT_FLAG_SKY_PORTAL) {
-            base_color = simd_fvec4{1.0f};
+            simd_fvec4 env_col = {sc.env->env_col[0], sc.env->env_col[1], sc.env->env_col[2], 0.0f};
             if (sc.env->env_map != 0xffffffff) {
-                base_color =
+                simd_fvec4 tex_col =
                     SampleLatlong_RGBE(*static_cast<const TextureAtlasRGBA *>(tex_atlases[0]),
                                        sc.textures[sc.env->env_map], simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f});
                 if (sc.env->env_clamp > FLT_EPS) {
-                    base_color = min(base_color, simd_fvec4{sc.env->env_clamp});
+                    tex_col = min(tex_col, simd_fvec4{sc.env->env_clamp});
                 }
+                env_col *= tex_col;
             }
-            base_color[0] *= sc.env->env_col[0];
-            base_color[1] *= sc.env->env_col[1];
-            base_color[2] *= sc.env->env_col[2];
+            base_color = env_col;
         }
 
         if (pi.bounce > 0 && (mat->flags & (MAT_FLAG_MULT_IMPORTANCE | MAT_FLAG_SKY_PORTAL))) {
@@ -3411,8 +3409,8 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
             const simd_fvec4 sampled_normal_ts = tangent_from_world(T, B, N, H);
 
             if (specular_weight > 0.0f && alpha_x * alpha_y >= 1e-7f && N_dot_L > 0.0f) {
-                const simd_fvec4 spec_col = Evaluate_GGXSpecular_BSDF(view_dir_ts, sampled_normal_ts, light_dir_ts,
-                                                                      alpha_x, alpha_y, spec_ior, spec_F0, spec_tmp_col);
+                const simd_fvec4 spec_col = Evaluate_GGXSpecular_BSDF(
+                    view_dir_ts, sampled_normal_ts, light_dir_ts, alpha_x, alpha_y, spec_ior, spec_F0, spec_tmp_col);
                 bsdf_pdf += specular_weight * spec_col[3];
 
                 col += ls.col * spec_col / ls.pdf;
