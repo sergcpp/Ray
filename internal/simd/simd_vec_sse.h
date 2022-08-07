@@ -191,7 +191,7 @@ template <> class simd_vec<float, 4> {
 
     force_inline simd_vec<float, 4> fract() const {
 #if defined(USE_SSE41)
-        __m128 integer = _mm_round_ps(vec_, _MM_FROUND_TRUNC);
+        __m128 integer = _mm_round_ps(vec_, _MM_FROUND_TRUNC | _MM_FROUND_NO_EXC);
 #else
         __m128 integer = _mm_cvtepi32_ps(_mm_cvttps_epi32(vec_));
 #endif

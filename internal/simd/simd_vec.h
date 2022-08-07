@@ -833,11 +833,11 @@ force_inline simd_comp_where_helper<T, U, S, true> where_not(const simd_vec<U, S
     return {mask, vec};
 }
 
-template <int S> const simd_vec<int, S> &simd_cast(const simd_vec<float, S> &vec) {
+template <int S> force_inline const simd_vec<int, S> &simd_cast(const simd_vec<float, S> &vec) {
     return reinterpret_cast<const simd_vec<int, S> &>(vec);
 }
 
-template <int S> const simd_vec<float, S> &simd_cast(const simd_vec<int, S> &vec) {
+template <int S> force_inline const simd_vec<float, S> &simd_cast(const simd_vec<int, S> &vec) {
     return reinterpret_cast<const simd_vec<float, S> &>(vec);
 }
 
