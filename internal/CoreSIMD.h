@@ -4037,12 +4037,12 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const scene_data_t &sc,
                     simd_fvec<S> tex_col[3];
                     SampleLatlong_RGBE(*static_cast<const Ref::TextureAtlasRGBA *>(tex_atlases[0]),
                                        sc.textures[sc.env->env_map], ls.L, ray_queue[index], tex_col);
-
                     if (sc.env->env_clamp > FLT_EPS) {
-                        ITERATE_3({ env_col[i] = min(env_col[i] * tex_col[i], sc.env->env_clamp); })
+                        ITERATE_3({ tex_col[i] = min(tex_col[i], sc.env->env_clamp); })
                     }
+                    ITERATE_3({ env_col[i] *= tex_col[i]; })
                 }
-                ITERATE_3({ where(ray_queue[index], ls.col[i]) *= sc.env->env_col[i]; })
+                ITERATE_3({ where(ray_queue[index], ls.col[i]) *= env_col[i]; })
             }
         }
 
@@ -4887,7 +4887,17 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                 simd_fvec<S> mis_weight = 1.0f;
 #if USE_NEE == 1
                 if (mat->flags & MAT_FLAG_SKY_PORTAL) {
-                    // TODO: add skyportal support
+                    simd_fvec<S> env_col[3] = {sc.env->env_col[0], sc.env->env_col[1], sc.env->env_col[2]};
+                    if (sc.env->env_map != 0xffffffff) {
+                        simd_fvec<S> tex_col[3];
+                        SampleLatlong_RGBE(*static_cast<const Ref::TextureAtlasRGBA *>(tex_atlases[0]),
+                                           sc.textures[sc.env->env_map], ls.L, ray_queue[index], tex_col);
+                        if (sc.env->env_clamp > FLT_EPS) {
+                            ITERATE_3({ tex_col[i] = min(tex_col[i], sc.env->env_clamp); })
+                        }
+                        ITERATE_3({ env_col[i] *= tex_col[i]; })
+                    }
+                    ITERATE_3({ where(ray_queue[index], base_color[i]) = env_col[i]; })
                 }
 
                 if (pi.bounce > 0 && (mat->flags & (MAT_FLAG_MULT_IMPORTANCE | MAT_FLAG_SKY_PORTAL))) {
@@ -5021,8 +5031,10 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                     }
 
                     simd_fvec<S> H[3];
-                    ITERATE_3({ H[i] = ls.L[i] - I[i] * eta; })
-                    ITERATE_3({ where(_is_frontfacing, H[i]) = ls.L[i] - I[i]; })
+                    ITERATE_3({
+                        H[i] = ls.L[i] - I[i] * eta;
+                        where(_is_frontfacing, H[i]) = ls.L[i] - I[i];
+                    })
                     normalize(H);
 
                     const simd_fvec<S> roughness2 = roughness * roughness;
