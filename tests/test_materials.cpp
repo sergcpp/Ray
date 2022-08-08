@@ -810,7 +810,7 @@ Ray::RendererOCL
 
 void test_oren_mat0() {
     const int SampleCount = 256;
-    const double MinPSNR = 40.86;
+    const double MinPSNR = 40.85;
     const int PixThres = 0;
 
     Ray::shading_node_desc_t desc;
@@ -824,7 +824,7 @@ void test_oren_mat0() {
 
 void test_oren_mat1() {
     const int SampleCount = 256;
-    const double MinPSNR = 40.96;
+    const double MinPSNR = 40.95;
     const int PixThres = 0;
 
     Ray::shading_node_desc_t desc;
@@ -839,7 +839,7 @@ void test_oren_mat1() {
 
 void test_oren_mat2() {
     const int SampleCount = 256;
-    const double MinPSNR = 40.12;
+    const double MinPSNR = 40.11;
     const int PixThres = 0;
 
     Ray::shading_node_desc_t desc;
@@ -869,7 +869,7 @@ void test_oren_mat3() {
 
 void test_oren_mat4() {
     const int SampleCount = 256;
-    const double MinPSNR = 41.04;
+    const double MinPSNR = 41.03;
     const int PixThres = 0;
 
     Ray::shading_node_desc_t desc;
@@ -2224,7 +2224,7 @@ void test_complex_mat4() {
 void test_complex_mat4_mesh_lights() {
     const int SampleCount = 1024;
     const double MinPSNR = 31.89;
-    const int PixThres = 974;
+    const int PixThres = 975;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = 0;
@@ -2267,8 +2267,8 @@ void test_complex_mat4_sphere_light() {
 
 void test_complex_mat4_sun_light() {
     const int SampleCount = 1024;
-    const double MinPSNR = 28.74;
-    const int PixThres = 1345;
+    const double MinPSNR = 28.72;
+    const int PixThres = 1346;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = 0;
@@ -2290,7 +2290,7 @@ void test_complex_mat4_sun_light() {
 void test_complex_mat5() {
     const int SampleCount = 1024;
     const double MinPSNR = 28.66;
-    const int PixThres = 934;
+    const int PixThres = 936;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;
