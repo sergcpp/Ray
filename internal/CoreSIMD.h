@@ -4910,7 +4910,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                         }
                         ITERATE_3({ env_col[i] *= tex_col[i]; })
                     }
-                    ITERATE_3({ where(ray_queue[index], base_color[i]) = env_col[i]; })
+                    ITERATE_3({ where(ray_queue[index], base_color[i]) *= env_col[i]; })
                 }
 
                 if (pi.bounce > 0 && (mat->flags & (MAT_FLAG_MULT_IMPORTANCE | MAT_FLAG_SKY_PORTAL))) {

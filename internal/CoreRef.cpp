@@ -3296,7 +3296,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
                 }
                 env_col *= tex_col;
             }
-            base_color = env_col;
+            base_color *= env_col;
         }
 
         if (pi.bounce > 0 && (mat->flags & (MAT_FLAG_MULT_IMPORTANCE | MAT_FLAG_SKY_PORTAL))) {
