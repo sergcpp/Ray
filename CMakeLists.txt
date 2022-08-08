@@ -57,13 +57,13 @@ set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
                           internal/RendererAVX2.cpp)
 endif()
 
-if("${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64")
-set(INTERNAL_DEPRECATED_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
-                                     internal/deprecated/RendererNEON.h
-                                     internal/deprecated/RendererNEON.cpp)
+if("${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64" OR "${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "arm64")
+set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
+                          internal/RendererNEON.h
+                          internal/RendererNEON.cpp)
 endif()
 
-if(MSVC AND NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64")
+if(MSVC AND NOT "${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "arm64")
     if(NOT CMAKE_CL_64)
         set_source_files_properties(internal/RendererSSE2.cpp PROPERTIES COMPILE_FLAGS /arch:SSE2)
         set_source_files_properties(internal/RendererSSE41.cpp PROPERTIES COMPILE_FLAGS /arch:SSE2)
@@ -130,6 +130,9 @@ if(ENABLE_UNITYBUILD)
 
     list(APPEND ALL_SOURCE_FILES _Ray_Avx512.cpp)
     source_group("src" FILES _Ray_Avx512.cpp)
+
+    list(APPEND ALL_SOURCE_FILES _Ray_Neon.cpp)
+    source_group("src" FILES _Ray_Neon.cpp)
 
     if(MSVC AND NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64")
         if(NOT CMAKE_CL_64)

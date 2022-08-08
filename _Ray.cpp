@@ -16,10 +16,6 @@
 #include "internal/TextureUtilsRef.cpp"
 #include "internal/Time.cpp"
 
-#if defined(__ARM_NEON__) || defined(__aarch64__) || defined(_M_ARM) || defined(_M_ARM64)
-//#include "internal/RendererNEON.cpp"
-#endif
-
 #if !defined(__ANDROID__) && !defined(DISABLE_OCL)
 //#include "internal/RendererOCL.cpp"
 //#include "internal/SceneOCL.cpp"

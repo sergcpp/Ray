@@ -8,7 +8,7 @@
 #include "internal/RendererSSE2.h"
 #include "internal/RendererSSE41.h"
 #elif defined(__ARM_NEON__) || defined(__aarch64__) || defined(_M_ARM) || defined(_M_ARM64)
-//#include "internal/RendererNEON.h"
+#include "internal/RendererNEON.h"
 #elif defined(__i386__) || defined(__x86_64__)
 #include "internal/RendererSSE2.h"
 #endif
@@ -61,10 +61,10 @@ Ray::RendererBase *Ray::CreateRenderer(const settings_t &s, ILog *log, const uin
         return new Ref::Renderer(s, log);
     }
 #elif defined(__ARM_NEON__) || defined(__aarch64__) || defined(_M_ARM) || defined(_M_ARM64)
-    /*if (enabled_types & RendererNEON) {
+    if (enabled_types & RendererNEON) {
         log->Info("Ray: Creating NEON renderer %ix%i", s.w, s.h);
-        return new Neon::Renderer(s);
-    }*/
+        return new Neon::Renderer(s, log);
+    }
     if (enabled_types & RendererRef) {
         log->Info("Ray: Creating Ref renderer %ix%i", s.w, s.h);
         return new Ref::Renderer(s, log);

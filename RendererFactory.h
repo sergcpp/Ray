@@ -12,7 +12,7 @@ extern LogNull g_null_log;
 
 /// Default renderer flags used to choose backend, by default tries to create gpu opencl renderer first
 const uint32_t DefaultEnabledRenderTypes =
-    RendererRef /*| RendererSSE2 | RendererAVX | RendererAVX2 | RendererNEON | RendererOCL*/;
+    RendererRef | RendererSSE2 | RendererAVX | RendererAVX2 | RendererNEON;
 
 /** @brief Creates renderer
     @return pointer to created renderer

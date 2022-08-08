@@ -524,7 +524,7 @@ void schedule_render_jobs(Ray::RendererBase &renderer, const Ray::SceneBase *sce
     const auto sz = renderer.size();
 
     if (rt == Ray::RendererRef || rt == Ray::RendererSSE2 || rt == Ray::RendererSSE41 || rt == Ray::RendererAVX ||
-        rt == Ray::RendererAVX2) {
+        rt == Ray::RendererAVX2 || rt == Ray::RendererNEON) {
         const int BucketSize = 16;
 
         std::vector<Ray::RegionContext> region_contexts;
