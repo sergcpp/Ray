@@ -4,6 +4,10 @@
 
 #include <arm_neon.h>
 
+#ifndef NDEBUG
+#define VALIDATE_MASKS 1
+#endif
+
 namespace Ray {
 namespace NS {
 #ifndef vdivq_f32
@@ -15,25 +19,6 @@ force_inline float32x4_t vdivq_f32(float32x4_t num, float32x4_t den) {
     return vmulq_f32(num, q_inv1);
 }
 #endif
-force_inline int32x4_t neon_cvt_f32_to_s32(float32x4_t a) {
-#if defined(__aarch64__)
-    return vcvtnq_s32_f32(a);
-#else
-    uint32x4_t signmask = vdupq_n_u32(0x80000000);
-    float32x4_t half = vbslq_f32(signmask, a, vdupq_n_f32(0.5f)); /* +/- 0.5 */
-    int32x4_t r_normal = vcvtq_s32_f32(vaddq_f32(a, half)); /* round to integer: [a + 0.5]*/
-    int32x4_t r_trunc = vcvtq_s32_f32(a); /* truncate to integer: [a] */
-    int32x4_t plusone = vreinterpretq_s32_u32(vshrq_n_u32(vreinterpretq_u32_s32(vnegq_s32(r_trunc)), 31)); /* 1 or 0 */
-    int32x4_t r_even = vbicq_s32(vaddq_s32(r_trunc, plusone), vdupq_n_s32(1)); /* ([a] + {0,1}) & ~1 */
-    float32x4_t delta = vsubq_f32(a, vcvtq_f32_s32(r_trunc)); /* compute delta: delta = (a - [a]) */
-    uint32x4_t is_delta_half = vceqq_f32(delta, half); /* delta == +/- 0.5 */
-    return vbslq_s32(is_delta_half, r_even, r_normal);
-#endif
-}
-
-force_inline float32x4_t neon_cvt_s32_to_f32(int32x4_t a) {
-    return vcvtq_f32_s32(a);
-}
 
 template <>
 class simd_vec<int, 4>;
@@ -110,6 +95,16 @@ public:
         return *this;
     }
 
+    force_inline simd_vec<float, 4> &operator|=(const simd_vec<float, 4> &rhs) {
+        vec_ = vorrq_u32(vreinterpretq_u32_f32(vec_), vreinterpretq_u32_f32(rhs.vec_));
+        return *this;
+    }
+
+    force_inline simd_vec<float, 4> &operator|=(const float rhs) {
+        vec_ = vorrq_u32(vreinterpretq_u32_f32(vec_), vreinterpretq_u32_f32(vdupq_n_f32(rhs)));
+        return *this;
+    }
+
     force_inline simd_vec<float, 4> operator-() const {
         simd_vec<float, 4> temp;
         float32x4_t m = vdupq_n_f32(-0.0f);
@@ -143,6 +138,12 @@ public:
         simd_vec<float, 4> ret;
         uint32x4_t res = vcgeq_f32(vec_, rhs.vec_);
         ret.vec_ = vreinterpretq_f32_u32(res);
+        return ret;
+    }
+
+    force_inline simd_vec<float, 4> operator~() const {
+        simd_vec<float, 4> ret;
+        ret.vec_ = vreinterpretq_f32_u32(vmvnq_u32(vreinterpretq_u32_f32(vec_)));
         return ret;
     }
 
@@ -199,6 +200,19 @@ public:
         return std::sqrt(temp);
     }
 
+    force_inline float length2() const {
+        float temp = 0.0f;
+        ITERATE_4({ temp += comp_[i] * comp_[i]; })
+        return temp;
+    }
+
+    force_inline simd_vec<float, 4> fract() const {
+        float32x4_t integer = vcvtq_f32_s32(vcvtq_s32_f32(vec_));
+        simd_vec<float, 4> temp;
+        temp.vec_ = vsubq_f32(vec_, integer);
+        return temp;
+    }
+
     force_inline void copy_to(float *f) const {
         vst1q_f32(f, vec_); f += 4;
     }
@@ -209,12 +223,24 @@ public:
     }
 
     force_inline void blend_to(const simd_vec<float, 4> &mask, const simd_vec<float, 4> &v1) {
+#if VALIDATE_MASKS
+        ITERATE_4({
+            assert(reinterpret_cast<const uint32_t &>(mask.comp_[i]) == 0 ||
+                   reinterpret_cast<const uint32_t &>(mask.comp_[i]) == 0xffffffff);
+        })
+#endif
         int32x4_t temp1 = vandq_s32(vreinterpretq_s32_f32(v1.vec_), vreinterpretq_s32_f32(mask.vec_));
         int32x4_t temp2 = vbicq_s32(vreinterpretq_s32_f32(vec_), vreinterpretq_s32_f32(mask.vec_));
         vec_ = vreinterpretq_f32_s32(vorrq_s32(temp1, temp2));
     }
 
     force_inline void blend_inv_to(const simd_vec<float, 4> &mask, const simd_vec<float, 4> &v1) {
+#if VALIDATE_MASKS
+        ITERATE_4({
+            assert(reinterpret_cast<const uint32_t &>(mask.comp_[i]) == 0 ||
+                   reinterpret_cast<const uint32_t &>(mask.comp_[i]) == 0xffffffff);
+        })
+#endif
         int32x4_t temp1 = vandq_s32(vreinterpretq_s32_f32(vec_), vreinterpretq_s32_f32(mask.vec_));
         int32x4_t temp2 = vbicq_s32(vreinterpretq_s32_f32(v1.vec_), vreinterpretq_s32_f32(mask.vec_));
         vec_ = vreinterpretq_f32_s32(vorrq_s32(temp1, temp2));
@@ -251,7 +277,7 @@ public:
 
     force_inline static simd_vec<float, 4> floor(const simd_vec<float, 4> &v1) {
         simd_vec<float, 4> temp;
-        float32x4_t t = neon_cvt_s32_to_f32(neon_cvt_f32_to_s32(v1.vec_));
+        float32x4_t t = vcvtq_f32_s32(vcvtq_s32_f32(v1.vec_));
         float32x4_t r = vsubq_f32(t, vandq_s32(vcltq_f32(v1.vec_, t), vdupq_n_f32(1.0f)));
         temp.vec_ = r;
         return temp;
@@ -259,7 +285,7 @@ public:
 
     force_inline static simd_vec<float, 4> ceil(const simd_vec<float, 4> &v1) {
         simd_vec<float, 4> temp;
-        float32x4_t t = neon_cvt_s32_to_f32(neon_cvt_f32_to_s32(v1.vec_));
+        float32x4_t t = vcvtq_f32_s32(vcvtq_s32_f32(v1.vec_));
         float32x4_t r = vaddq_f32(t, vandq_s32(vcgtq_f32(v1.vec_, t), vdupq_n_f32(1.0f)));
         temp.vec_ = r;
         return temp;
@@ -292,6 +318,30 @@ public:
     friend force_inline simd_vec<float, 4> operator-(const simd_vec<float, 4> &v1, const simd_vec<float, 4> &v2) {
         simd_vec<float, 4> ret;
         ret.vec_ = vsubq_f32(v1.vec_, v2.vec_);
+        return ret;
+    }
+
+    force_inline simd_vec<float, 4> operator==(float rhs) const {
+        simd_vec<float, 4> ret;
+        ret.vec_ = vceqq_f32(vec_, vdupq_n_f32(rhs));
+        return ret;
+    }
+
+    force_inline simd_vec<float, 4> operator==(const simd_vec<float, 4> &rhs) const {
+        simd_vec<float, 4> ret;
+        ret.vec_ = vceqq_f32(vec_, rhs.vec_);
+        return ret;
+    }
+
+    force_inline simd_vec<float, 4> operator!=(float rhs) const {
+        simd_vec<float, 4> ret;
+        ret.vec_ = vreinterpretq_f32_u32(vmvnq_u32(vceqq_f32(vec_, vdupq_n_f32(rhs))));
+        return ret;
+    }
+
+    force_inline simd_vec<float, 4> operator!=(const simd_vec<float, 4> &rhs) const {
+        simd_vec<float, 4> ret;
+        ret.vec_ = vreinterpretq_f32_u32(vmvnq_u32(vceqq_f32(vec_, rhs.vec_)));
         return ret;
     }
 
@@ -452,6 +502,22 @@ public:
         return *this;
     }
 
+    force_inline simd_vec<int, 4> &operator|=(const simd_vec<int, 4> &rhs) {
+        vec_ = vorrq_s32(vec_, rhs.vec_);
+        return *this;
+    }
+
+    force_inline simd_vec<int, 4> &operator|=(const int rhs) {
+        vec_ = vorrq_s32(vec_, vdupq_n_s32(rhs));
+        return *this;
+    }
+
+    force_inline simd_vec<int, 4> operator-() const {
+        simd_vec<int, 4> temp;
+        temp.vec_ = vsubq_s32(vdupq_n_s32(0), vec_);
+        return temp;
+    }
+
     force_inline simd_vec<int, 4> operator==(int rhs) const {
         simd_vec<int, 4> ret;
         ret.vec_ = vreinterpretq_s32_u32(vceqq_s32(vec_, vdupq_n_s32(rhs)));
@@ -500,6 +566,17 @@ public:
         return ret;
     }
 
+    force_inline simd_vec<int, 4> operator&=(const simd_vec<int, 4> &rhs) {
+        vec_ = vandq_s32(vec_, rhs.vec_);
+        return *this;
+    }
+
+    force_inline simd_vec<int, 4> operator~() const {
+        simd_vec<int, 4> ret;
+        ret.vec_ = vmvnq_u32(vec_);
+        return ret;
+    }
+
     force_inline simd_vec<int, 4> operator<(int rhs) const {
         simd_vec<int, 4> ret;
         ret.vec_ = vreinterpretq_s32_u32(vcltq_s32(vec_, vdupq_n_s32(rhs)));
@@ -524,6 +601,11 @@ public:
         return ret;
     }
 
+    force_inline simd_vec<int, 4> &operator&=(const int rhs) {
+        vec_ = vandq_u32(vec_, vdupq_n_s32(rhs));
+        return *this;
+    }
+
     force_inline operator simd_vec<float, 4>() const {
         simd_vec<float, 4> ret;
         ret.vec_ = vcvtq_f32_s32(vec_);
@@ -540,12 +622,24 @@ public:
     }
 
     force_inline void blend_to(const simd_vec<int, 4> &mask, const simd_vec<int, 4> &v1) {
+#if VALIDATE_MASKS
+        ITERATE_4({
+            assert(reinterpret_cast<const uint32_t &>(mask.comp_[i]) == 0 ||
+                   reinterpret_cast<const uint32_t &>(mask.comp_[i]) == 0xffffffff);
+        })
+#endif
         int32x4_t temp1 = vandq_s32(v1.vec_, mask.vec_);
         int32x4_t temp2 = vbicq_s32(vec_, mask.vec_);
         vec_ = vorrq_s32(temp1, temp2);
     }
 
     force_inline void blend_inv_to(const simd_vec<int, 4> &mask, const simd_vec<int, 4> &v1) {
+#if VALIDATE_MASKS
+        ITERATE_4({
+            assert(reinterpret_cast<const uint32_t &>(mask.comp_[i]) == 0 ||
+                   reinterpret_cast<const uint32_t &>(mask.comp_[i]) == 0xffffffff);
+        })
+#endif
         int32x4_t temp1 = vandq_s32(vec_, mask.vec_);
         int32x4_t temp2 = vbicq_s32(v1.vec_, mask.vec_);
         vec_ = vorrq_s32(temp1, temp2);
@@ -728,9 +822,12 @@ public:
 
 force_inline simd_vec<float, 4>::operator simd_vec<int, 4>() const {
     simd_vec<int, 4> ret;
-    ret.vec_ = neon_cvt_f32_to_s32(vec_);
+    ret.vec_ = vcvtq_s32_f32(vec_);
     return ret;
 }
 
+
 }
 }
+
+#undef VALIDATE_MASKS
