@@ -4145,7 +4145,7 @@ void Ray::NS::IntersectAreaLights(const ray_packet_t<S> &r, const simd_ivec<S> &
                 const simd_fvec<S> a1 = dot(l.disk.u, vi) / dot_u;
                 const simd_fvec<S> a2 = dot(l.disk.v, vi) / dot_v;
 
-                const simd_fvec<S> final_mask = sqrt(a1 * a1 + a2 * a2) <= 0.5f & simd_cast(imask);
+                const simd_fvec<S> final_mask = (sqrt(a1 * a1 + a2 * a2) <= 0.5f) & simd_cast(imask);
 
                 inout_inter.mask |= simd_cast(final_mask);
                 where(final_mask, inout_inter.obj_index) = -simd_ivec<S>(light_index) - 1;
@@ -5256,8 +5256,8 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
 
                 const simd_ivec<S> sample_trans_lobe =
                     simd_cast(mix_rand >= diffuse_weight + specular_weight + clearcoat_weight) &
-                    ((simd_cast(mix_rand >= fresnel) & refr_depth < pi.settings.max_refr_depth) |
-                     (simd_cast(mix_rand < fresnel) & spec_depth < pi.settings.max_spec_depth)) &
+                    ((simd_cast(mix_rand >= fresnel) & (refr_depth < pi.settings.max_refr_depth)) |
+                     (simd_cast(mix_rand < fresnel) & (spec_depth < pi.settings.max_spec_depth))) &
                     (total_depth < pi.settings.max_total_depth) & ray_queue[index];
                 if (sample_trans_lobe.not_all_zeros()) {
                     where(sample_trans_lobe, mix_rand) -= diffuse_weight + specular_weight + clearcoat_weight;
