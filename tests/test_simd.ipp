@@ -69,6 +69,7 @@ using namespace Ray::NS;
     v4 = v1 - v2;
     v5 = v1 * v2;
     auto v6 = v1 / v2;
+    auto v66 = -v1;
     
     require(v3[0] == Approx(5));
     require(v3[1] == Approx(7));
@@ -90,12 +91,24 @@ using namespace Ray::NS;
     require(v6[2] == Approx(0.5));
     require(v6[3] == Approx(0.57142));
 
+    require(v66[0] == Approx(-1.0));
+    require(v66[1] == Approx(-2.0));
+    require(v66[2] == Approx(-3.0));
+    require(v66[3] == Approx(-4.0));
+
     v5 = sqrt(v5);
 
     require(v5[0] == Approx(2));
     require(v5[1] == Approx(3.1623));
     require(v5[2] == Approx(4.2426));
     require(v5[3] == Approx(5.2915));
+
+    simd_fvec4 v55 = fract(v5);
+
+    require(v55[0] == Approx(0));
+    require(v55[1] == Approx(0.1623));
+    require(v55[2] == Approx(0.2426));
+    require(v55[3] == Approx(0.2915));
 
     simd_fvec4 v9 = { 3.0f, 6.0f, 7.0f, 6.0f };
 
@@ -130,6 +143,16 @@ using namespace Ray::NS;
     require(v13[1] == Approx(23));
     require(v13[2] == Approx(32));
     require(v13[3] == Approx(23));
+
+    const simd_fvec4 v14 = {42.0f, 0, 24.0f, 0};
+    simd_fvec4 v15 = {0, 12.0f, 0, 0};
+
+    v15 |= v14;
+
+    require(v15[0] == 42.0f);
+    require(v15[1] == 12.0f);
+    require(v15[2] == 24.0f);
+    require(v15[3] == 0);
 
     std::cout << "OK" << std::endl;
 }
@@ -203,6 +226,7 @@ using namespace Ray::NS;
     v4 = v1 - v2;
     v5 = v1 * v2;
     auto v6 = v1 / v2;
+    auto v66 = -v1;
     
     require(v3[0] == 5);
     require(v3[1] == 7);
@@ -224,6 +248,11 @@ using namespace Ray::NS;
     require(v6[2] == 0);
     require(v6[3] == 0);
 
+    require(v66[0] == -1);
+    require(v66[1] == -2);
+    require(v66[2] == -3);
+    require(v66[3] == -4);
+
     require(!v3.all_zeros());
     require(v6.all_zeros());
 
@@ -244,6 +273,26 @@ using namespace Ray::NS;
     require(v10[1] == 23);
     require(v10[2] == 32);
     require(v10[3] == 23);
+
+    const simd_ivec4 v11 = {-1, 0, -1, 0};
+    simd_ivec4 v12 = {0, -1, 0, 0};
+
+    v12 |= v11;
+
+    require(v12[0] == -1);
+    require(v12[1] == -1);
+    require(v12[2] == -1);
+    require(v12[3] == 0);
+
+    const simd_ivec4 v13 = {-1, 0, -1, 0};
+    simd_ivec4 v14 = {0, -1, 0, 0};
+
+    v14 &= v13;
+
+    require(v14[0] == 0);
+    require(v14[1] == 0);
+    require(v14[2] == 0);
+    require(v14[3] == 0);
 
     std::cout << "OK" << std::endl;
 }
@@ -302,13 +351,14 @@ using namespace Ray::NS;
     require(v1[6] == 7.0f);
     require(v1[7] == 8.0f);
 
-    v1 = { 1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 4.0f,  3.0f, 2.0f };
+    v1 = { 1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 4.0f, 3.0f, 2.0f };
     v2 = { 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 10.0f, 12.0f, 1.0f };
 
     v3 = v1 + v2;
     v4 = v1 - v2;
     v5 = v1 * v2;
     auto v6 = v1 / v2;
+    auto v66 = -v1;
     
     require(v3[0] == Approx(5));
     require(v3[1] == Approx(7));
@@ -346,6 +396,15 @@ using namespace Ray::NS;
     require(v6[6] == Approx(0.25));
     require(v6[7] == Approx(2.0));
 
+    require(v66[0] == Approx(-1.0));
+    require(v66[1] == Approx(-2.0));
+    require(v66[2] == Approx(-3.0));
+    require(v66[3] == Approx(-4.0));
+    require(v66[4] == Approx(-5.0));
+    require(v66[5] == Approx(-4.0));
+    require(v66[6] == Approx(-3.0));
+    require(v66[7] == Approx(-2.0));
+
     v5 = sqrt(v5);
 
     require(v5[0] == Approx(2));
@@ -356,6 +415,17 @@ using namespace Ray::NS;
     require(v5[5] == Approx(6.3246));
     require(v5[6] == Approx(6));
     require(v5[7] == Approx(1.4142));
+
+    simd_fvec8 v55 = fract(v5);
+
+    require(v55[0] == Approx(0));
+    require(v55[1] == Approx(0.1623));
+    require(v55[2] == Approx(0.2426));
+    require(v55[3] == Approx(0.2915));
+    require(v55[4] == Approx(0.3246));
+    require(v55[5] == Approx(0.3246));
+    require(v55[6] == Approx(0));
+    require(v55[7] == Approx(0.4142));
 
     simd_fvec8 v9 = { 3.0f, 6.0f, 7.0f, 6.0f, 2.0f, 12.0f, 18.0f, 0.0f };
 
@@ -407,6 +477,20 @@ using namespace Ray::NS;
     require(v13[5] == Approx(23));
     require(v13[6] == Approx(32));
     require(v13[7] == Approx(23));
+
+    const simd_fvec8 v14 = {42.0f, 0, 24.0f, 0, 42.0f, 0, 24.0f, 0};
+    simd_fvec8 v15 = {0, 12.0f, 0, 0, 0, 12.0f, 0, 0};
+
+    v15 |= v14;
+
+    require(v15[0] == 42.0f);
+    require(v15[1] == 12.0f);
+    require(v15[2] == 24.0f);
+    require(v15[3] == 0);
+    require(v15[4] == 42.0f);
+    require(v15[5] == 12.0f);
+    require(v15[6] == 24.0f);
+    require(v15[7] == 0);
 
     std::cout << "OK" << std::endl;
 }
@@ -465,13 +549,14 @@ using namespace Ray::NS;
     require(v1[6] == 7);
     require(v1[7] == 8);
 
-    v1 = { 1, 2, 3, 4, 5, 4,  3,  2 };
+    v1 = { 1, 2, 3, 4, 5, 4, 3,  2 };
     v2 = { 4, 5, 6, 7, 8, 10, 12, 1 };
 
     v3 = v1 + v2;
     v4 = v1 - v2;
     v5 = v1 * v2;
     auto v6 = v1 / v2;
+    auto v66 = -v1;
     
     require(v3[0] == 5);
     require(v3[1] == 7);
@@ -509,6 +594,15 @@ using namespace Ray::NS;
     require(v6[6] == 0);
     require(v6[7] == 2);
 
+    require(v66[0] == -1);
+    require(v66[1] == -2);
+    require(v66[2] == -3);
+    require(v66[3] == -4);
+    require(v66[4] == -5);
+    require(v66[5] == -4);
+    require(v66[6] == -3);
+    require(v66[7] == -2);
+
     static const int gather_source[] = {0, 42, 0, 0, 12, 0, 0, 0, 11, 0, 0, 0, 0, 0, 0, 23, 0, 32,
                                         0, 42, 0, 0, 12, 0, 0, 0, 11, 0, 0, 0, 0, 0, 0, 23, 0, 32};
 
@@ -535,6 +629,34 @@ using namespace Ray::NS;
     require(v10[5] == 23);
     require(v10[6] == 32);
     require(v10[7] == 23);
+
+    const simd_ivec8 v11 = {-1, 0, -1, 0, -1, 0, -1, 0};
+    simd_ivec8 v12 = {0, -1, 0, 0, 0, -1, 0, 0};
+
+    v12 |= v11;
+
+    require(v12[0] == -1);
+    require(v12[1] == -1);
+    require(v12[2] == -1);
+    require(v12[3] == 0);
+    require(v12[4] == -1);
+    require(v12[5] == -1);
+    require(v12[6] == -1);
+    require(v12[7] == 0);
+
+    const simd_ivec8 v13 = {-1, 0, -1, 0, -1, 0, -1, 0};
+    simd_ivec8 v14 = {0, -1, 0, 0, 0, -1, 0, 0};
+
+    v14 &= v13;
+
+    require(v14[0] == 0);
+    require(v14[1] == 0);
+    require(v14[2] == 0);
+    require(v14[3] == 0);
+    require(v14[4] == 0);
+    require(v14[5] == 0);
+    require(v14[6] == 0);
+    require(v14[7] == 0);
 
     std::cout << "OK" << std::endl;
 }
@@ -643,6 +765,7 @@ using namespace Ray::NS;
     v4 = v1 - v2;
     v5 = v1 * v2;
     auto v6 = v1 / v2;
+    auto v66 = -v1;
 
     require(v3[0] == Approx(5));
     require(v3[1] == Approx(7));
@@ -712,6 +835,23 @@ using namespace Ray::NS;
     require(v6[14] == Approx(0.25));
     require(v6[15] == Approx(2.0));
 
+    require(v66[0] == Approx(-1.0));
+    require(v66[1] == Approx(-2.0));
+    require(v66[2] == Approx(-3.0));
+    require(v66[3] == Approx(-4.0));
+    require(v66[4] == Approx(-5.0));
+    require(v66[5] == Approx(-4.0));
+    require(v66[6] == Approx(-3.0));
+    require(v66[7] == Approx(-2.0));
+    require(v66[8] == Approx(-1.0));
+    require(v66[9] == Approx(-2.0));
+    require(v66[10] == Approx(-3.0));
+    require(v66[11] == Approx(-4.0));
+    require(v66[12] == Approx(-5.0));
+    require(v66[13] == Approx(-4.0));
+    require(v66[14] == Approx(-3.0));
+    require(v66[15] == Approx(-2.0));
+
     v5 = sqrt(v5);
 
     require(v5[0] == Approx(2));
@@ -730,6 +870,25 @@ using namespace Ray::NS;
     require(v5[13] == Approx(6.3246));
     require(v5[14] == Approx(6));
     require(v5[15] == Approx(1.4142));
+
+    simd_fvec16 v55 = fract(v5);
+
+    require(v55[0] == Approx(0));
+    require(v55[1] == Approx(0.1623));
+    require(v55[2] == Approx(0.2426));
+    require(v55[3] == Approx(0.2915));
+    require(v55[4] == Approx(0.3246));
+    require(v55[5] == Approx(0.3246));
+    require(v55[6] == Approx(0));
+    require(v55[7] == Approx(0.4142));
+    require(v55[8] == Approx(0));
+    require(v55[9] == Approx(0.1623));
+    require(v55[10] == Approx(0.2426));
+    require(v55[11] == Approx(0.2915));
+    require(v55[12] == Approx(0.3246));
+    require(v55[13] == Approx(0.3246));
+    require(v55[14] == Approx(0));
+    require(v55[15] == Approx(0.4142));
 
     simd_fvec16 v9 = {3.0f, 6.0f, 7.0f, 6.0f, 2.0f, 12.0f, 18.0f, 0.0f,
                       3.0f, 6.0f, 7.0f, 6.0f, 2.0f, 12.0f, 18.0f, 0.0f};
@@ -800,6 +959,28 @@ using namespace Ray::NS;
     require(v13[13] == Approx(23));
     require(v13[14] == Approx(32));
     require(v13[15] == Approx(23));
+
+    const simd_fvec16 v14 = {42.0f, 0, 24.0f, 0, 42.0f, 0, 24.0f, 0, 42.0f, 0, 24.0f, 0, 42.0f, 0, 24.0f, 0};
+    simd_fvec16 v15 = {0, 12.0f, 0, 0, 0, 12.0f, 0, 0, 0, 12.0f, 0, 0, 0, 12.0f, 0, 0};
+
+    v15 |= v14;
+
+    require(v15[0] == 42.0f);
+    require(v15[1] == 12.0f);
+    require(v15[2] == 24.0f);
+    require(v15[3] == 0);
+    require(v15[4] == 42.0f);
+    require(v15[5] == 12.0f);
+    require(v15[6] == 24.0f);
+    require(v15[7] == 0);
+    require(v15[8] == 42.0f);
+    require(v15[9] == 12.0f);
+    require(v15[10] == 24.0f);
+    require(v15[11] == 0);
+    require(v15[12] == 42.0f);
+    require(v15[13] == 12.0f);
+    require(v15[14] == 24.0f);
+    require(v15[15] == 0);
 
     std::cout << "OK" << std::endl;
 }
@@ -905,6 +1086,7 @@ using namespace Ray::NS;
     v4 = v1 - v2;
     v5 = v1 * v2;
     auto v6 = v1 / v2;
+    auto v66 = -v1;
 
     require(v3[0] == 5);
     require(v3[1] == 7);
@@ -974,6 +1156,23 @@ using namespace Ray::NS;
     require(v6[14] == 0);
     require(v6[15] == 2);
 
+    require(v66[0] == -1);
+    require(v66[1] == -2);
+    require(v66[2] == -3);
+    require(v66[3] == -4);
+    require(v66[4] == -5);
+    require(v66[5] == -4);
+    require(v66[6] == -3);
+    require(v66[7] == -2);
+    require(v66[8] == -1);
+    require(v66[9] == -2);
+    require(v66[10] == -3);
+    require(v66[11] == -4);
+    require(v66[12] == -5);
+    require(v66[13] == -4);
+    require(v66[14] == -3);
+    require(v66[15] == -2);
+
     static const int gather_source[] = {0, 42, 0, 0, 12, 0, 0, 0, 11, 0, 0, 0, 0, 0, 0, 23, 0, 32,
                                         0, 42, 0, 0, 12, 0, 0, 0, 11, 0, 0, 0, 0, 0, 0, 23, 0, 32,
                                         0, 42, 0, 0, 12, 0, 0, 0, 11, 0, 0, 0, 0, 0, 0, 23, 0, 32,
@@ -1018,6 +1217,50 @@ using namespace Ray::NS;
     require(v10[13] == 23);
     require(v10[14] == 32);
     require(v10[15] == 23);
+
+    const simd_ivec16 v11 = {-1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0};
+    simd_ivec16 v12 = {0, -1, 0, 0, 0, -1, 0, 0, 0, -1, 0, 0, 0, -1, 0, 0};
+
+    v12 |= v11;
+
+    require(v12[0] == -1);
+    require(v12[1] == -1);
+    require(v12[2] == -1);
+    require(v12[3] == 0);
+    require(v12[4] == -1);
+    require(v12[5] == -1);
+    require(v12[6] == -1);
+    require(v12[7] == 0);
+    require(v12[8] == -1);
+    require(v12[9] == -1);
+    require(v12[10] == -1);
+    require(v12[11] == 0);
+    require(v12[12] == -1);
+    require(v12[13] == -1);
+    require(v12[14] == -1);
+    require(v12[15] == 0);
+
+    const simd_ivec16 v13 = {-1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0};
+    simd_ivec16 v14 = {0, -1, 0, 0, 0, -1, 0, 0, 0, -1, 0, 0, 0, -1, 0, 0};
+
+    v14 &= v13;
+
+    require(v14[0] == 0);
+    require(v14[1] == 0);
+    require(v14[2] == 0);
+    require(v14[3] == 0);
+    require(v14[4] == 0);
+    require(v14[5] == 0);
+    require(v14[6] == 0);
+    require(v14[7] == 0);
+    require(v14[8] == 0);
+    require(v14[9] == 0);
+    require(v14[10] == 0);
+    require(v14[11] == 0);
+    require(v14[12] == 0);
+    require(v14[13] == 0);
+    require(v14[14] == 0);
+    require(v14[15] == 0);
 
     std::cout << "OK" << std::endl;
 }
