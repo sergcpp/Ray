@@ -219,11 +219,11 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
     const uint32_t hi = (region.iteration & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT;
 
     if (cam.type != Geo) {
-        GeneratePrimaryRays<DimX, DimY>(region.iteration, cam, rect, w, h, &region.halton_seq[hi], p.primary_rays);
+        GeneratePrimaryRays<DimX, DimY>(region.iteration, cam, rect, w, h, &region.halton_seq[hi], p.primary_rays,
+                                        p.primary_masks);
 
         time_after_ray_gen = std::chrono::high_resolution_clock::now();
 
-        p.primary_masks.resize(p.primary_rays.size());
         p.intersections.resize(p.primary_rays.size());
 
         for (size_t i = 0; i < p.primary_rays.size(); i++) {
@@ -233,13 +233,15 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
 
             if (macro_tree_root != 0xffffffff) {
                 if (sc_data.mnodes) {
-                    NS::Traverse_MacroTree_WithStack_ClosestHit(
-                        r, {-1}, sc_data.mnodes, macro_tree_root, sc_data.mesh_instances, sc_data.mi_indices,
-                        sc_data.meshes, sc_data.transforms, sc_data.tris, sc_data.tri_indices, inter);
+                    NS::Traverse_MacroTree_WithStack_ClosestHit(r, p.primary_masks[i], sc_data.mnodes, macro_tree_root,
+                                                                sc_data.mesh_instances, sc_data.mi_indices,
+                                                                sc_data.meshes, sc_data.transforms, sc_data.tris,
+                                                                sc_data.tri_indices, inter);
                 } else {
-                    NS::Traverse_MacroTree_WithStack_ClosestHit(
-                        r, {-1}, sc_data.nodes, macro_tree_root, sc_data.mesh_instances, sc_data.mi_indices,
-                        sc_data.meshes, sc_data.transforms, sc_data.tris, sc_data.tri_indices, inter);
+                    NS::Traverse_MacroTree_WithStack_ClosestHit(r, p.primary_masks[i], sc_data.nodes, macro_tree_root,
+                                                                sc_data.mesh_instances, sc_data.mi_indices,
+                                                                sc_data.meshes, sc_data.transforms, sc_data.tris,
+                                                                sc_data.tri_indices, inter);
                 }
             }
             // NS::IntersectAreaLights(r, {-1}, sc_data.lights, sc_data.visible_lights, sc_data.transforms, inter);
@@ -276,6 +278,9 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
                          macro_tree_root, tex_atlases, out_rgba, p.secondary_masks.data(), p.secondary_rays.data(),
                          &secondary_rays_count);
         for (int j = 0; j < S; j++) {
+            if (!p.primary_masks[i][j]) {
+                continue;
+            }
             temp_buf_.SetPixel(x[j], y[j], {out_rgba[0][j], out_rgba[1][j], out_rgba[2][j], out_rgba[3][j]});
         }
     }
@@ -360,7 +365,6 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
                 if (!p.primary_masks[i][j]) {
                     continue;
                 }
-
                 temp_buf_.AddPixel(x[j], y[j], {out_rgba[0][j], out_rgba[1][j], out_rgba[2][j], out_rgba[3][j]});
             }
         }

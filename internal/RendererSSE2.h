@@ -12,10 +12,9 @@ const int RayPacketDimX = 2;
 const int RayPacketDimY = 2;
 const int RayPacketSize = RayPacketDimX * RayPacketDimY;
 
-extern template void
-GeneratePrimaryRays<RayPacketDimX, RayPacketDimY>(const int iteration, const camera_t &cam, const rect_t &r, int w,
-                                                  int h, const float *halton,
-                                                  aligned_vector<ray_packet_t<RayPacketSize>> &out_rays);
+extern template void GeneratePrimaryRays<RayPacketDimX, RayPacketDimY>(
+    const int iteration, const camera_t &cam, const rect_t &r, int w, int h, const float *halton,
+    aligned_vector<ray_packet_t<RayPacketSize>> &out_rays, aligned_vector<simd_ivec<RayPacketSize>> &out_masks);
 extern template void SampleMeshInTextureSpace<RayPacketDimX, RayPacketDimY>(
     int iteration, int obj_index, int uv_layer, const mesh_t &mesh, const transform_t &tr, const uint32_t *vtx_indices,
     const vertex_t *vertices, const rect_t &r, int w, int h, const float *halton,

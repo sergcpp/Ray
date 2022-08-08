@@ -90,7 +90,8 @@ template <int S> struct light_sample_t {
 // Generating rays
 template <int DimX, int DimY>
 void GeneratePrimaryRays(const int iteration, const camera_t &cam, const rect_t &r, int w, int h, const float *halton,
-                         aligned_vector<ray_packet_t<DimX * DimY>> &out_rays);
+                         aligned_vector<ray_packet_t<DimX * DimY>> &out_rays,
+                         aligned_vector<simd_ivec<DimX * DimY>> &out_masks);
 template <int DimX, int DimY>
 void SampleMeshInTextureSpace(int iteration, int obj_index, int uv_layer, const mesh_t &mesh, const transform_t &tr,
                               const uint32_t *vtx_indices, const vertex_t *vertices, const rect_t &r, int w, int h,
@@ -1398,7 +1399,8 @@ template <int S> force_inline simd_fvec<S> power_heuristic(const simd_fvec<S> &a
 
 template <int DimX, int DimY>
 void Ray::NS::GeneratePrimaryRays(const int iteration, const camera_t &cam, const rect_t &r, int w, int h,
-                                  const float *halton, aligned_vector<ray_packet_t<DimX * DimY>> &out_rays) {
+                                  const float *halton, aligned_vector<ray_packet_t<DimX * DimY>> &out_rays,
+                                  aligned_vector<simd_ivec<DimX * DimY>> &out_masks) {
     const int S = DimX * DimY;
     static_assert(S <= 16, "!");
 
@@ -1439,14 +1441,20 @@ void Ray::NS::GeneratePrimaryRays(const int iteration, const camera_t &cam, cons
     const auto off_x = simd_ivec<S>{ray_packet_layout_x, simd_mem_aligned},
                off_y = simd_ivec<S>{ray_packet_layout_y, simd_mem_aligned};
 
-    size_t i = 0;
-    out_rays.resize(r.w * r.h / S + ((r.w * r.h) % S != 0));
+    const int x_res = (r.w + DimX - 1) / DimX, y_res = (r.h + DimY - 1) / DimY;
 
-    for (int y = r.y; y < r.y + r.h - (r.h & (DimY - 1)); y += DimY) {
-        for (int x = r.x; x < r.x + r.w - (r.w & (DimX - 1)); x += DimX) {
+    size_t i = 0;
+    out_rays.resize(x_res * y_res);
+    out_masks.resize(x_res * y_res);
+
+    for (int y = r.y; y < r.y + r.h; y += DimY) {
+        for (int x = r.x; x < r.x + r.w; x += DimX) {
+            simd_ivec<S> &out_mask = out_masks[i];
             ray_packet_t<S> &out_r = out_rays[i++];
 
             const simd_ivec<S> ixx = x + off_x, iyy = y + off_y;
+
+            out_mask = (ixx < w) & (iyy < h);
 
             const simd_ivec<S> index = iyy * w + ixx;
 
