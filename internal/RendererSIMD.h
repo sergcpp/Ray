@@ -22,9 +22,6 @@ template <int S> struct PassData {
     aligned_vector<simd_ivec<S>> secondary_masks;
     aligned_vector<hit_data_t<S>> intersections;
 
-    // TODO: remove this!!!
-    std::vector<Ref::ray_packet_t> _test_secondary_rays;
-
     aligned_vector<simd_ivec<S>> hash_values;
     std::vector<int> head_flags;
     std::vector<uint32_t> scan_values;
@@ -264,8 +261,6 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
     p.secondary_rays.resize(p.intersections.size());
     p.secondary_masks.resize(p.intersections.size());
     int secondary_rays_count = 0;
-
-    p._test_secondary_rays.resize(p.intersections.size() * S);
 
     for (size_t i = 0; i < p.intersections.size(); i++) {
         const ray_packet_t<S> &r = p.primary_rays[i];

@@ -1354,8 +1354,8 @@ template <int S> simd_fvec<S> fresnel_dielectric_cos(const simd_fvec<S> &cosi, c
     simd_fvec<S> result = 1.0f; // TIR (no refracted component)
 
     g = sqrt(g);
-    simd_fvec<S> A = (g - c) / (g + c);
-    simd_fvec<S> B = (c * (g + c) - 1) / (c * (g - c) + 1);
+    const simd_fvec<S> A = (g - c) / (g + c);
+    const simd_fvec<S> B = (c * (g + c) - 1) / (c * (g - c) + 1);
     where(g > 0.0f, result) = 0.5f * A * A * (1 + B * B);
 
     return result;
@@ -2831,6 +2831,8 @@ void Ray::NS::Evaluate_GGXSpecular_BSDF(const simd_fvec<S> view_dir_ts[3], const
 #if USE_VNDF_GGX_SAMPLING == 1
     simd_fvec<S> pdf =
         D * G1(view_dir_ts, alpha_x, alpha_y) * max(dot(view_dir_ts, sampled_normal_ts), 0.0f) / abs(view_dir_ts[2]);
+    where(abs(view_dir_ts[2]) == 0.0f, pdf) = 0.0f;
+
     const simd_fvec<S> div = 4.0f * dot(view_dir_ts, sampled_normal_ts);
     where(div != 0.0f, pdf) = pdf / div;
 #else
@@ -2886,9 +2888,13 @@ void Ray::NS::Sample_GGXSpecular_BSDF(const simd_fvec<S> T[3], const simd_fvec<S
     reflect(_view_dir_ts, sampled_normal_ts, dot_N_V, reflected_dir_ts);
     normalize(reflected_dir_ts);
 
-    world_from_tangent(T, B, N, reflected_dir_ts, out_V);
+    simd_fvec<S> glossy_V[3], glossy_F[4];
+    world_from_tangent(T, B, N, reflected_dir_ts, glossy_V);
     Evaluate_GGXSpecular_BSDF(view_dir_ts, sampled_normal_ts, reflected_dir_ts, alpha_x, alpha_y, spec_ior, spec_F0,
-                              spec_col, out_color);
+                              spec_col, glossy_F);
+
+    ITERATE_3({ where(is_glossy, out_V[i]) = glossy_V[i]; })
+    ITERATE_4({ where(is_glossy, out_color[i]) = glossy_F[i]; })
 }
 
 template <int S>
@@ -2971,7 +2977,7 @@ void Ray::NS::Sample_GGXRefraction_BSDF(const simd_fvec<S> T[3], const simd_fvec
     const simd_fvec<S> cosi = dot(view_dir_ts, sampled_normal_ts);
     const simd_fvec<S> cost2 = 1.0f - eta * eta * (1.0f - cosi * cosi);
 
-    ITERATE_4({ out_color[i] = 0.0f; })
+    ITERATE_4({ where(is_glossy, out_color[i]) = 0.0f; })
 
     const simd_ivec<S> cost2_positive = simd_cast(cost2 >= 0.0f);
     if (cost2_positive.not_all_zeros()) {
@@ -2980,8 +2986,12 @@ void Ray::NS::Sample_GGXRefraction_BSDF(const simd_fvec<S> T[3], const simd_fvec
         ITERATE_3({ refr_dir_ts[i] = -eta * view_dir_ts[i] + m * sampled_normal_ts[i]; })
         normalize(refr_dir_ts);
 
-        world_from_tangent(T, B, N, refr_dir_ts, out_V);
-        Evaluate_GGXRefraction_BSDF(view_dir_ts, sampled_normal_ts, refr_dir_ts, roughness2, eta, refr_col, out_color);
+        simd_fvec<S> glossy_V[3], glossy_F[4];
+        world_from_tangent(T, B, N, refr_dir_ts, glossy_V);
+        Evaluate_GGXRefraction_BSDF(view_dir_ts, sampled_normal_ts, refr_dir_ts, roughness2, eta, refr_col, glossy_F);
+
+        ITERATE_3({ where(is_glossy & cost2_positive, out_V[i]) = glossy_V[i]; })
+        ITERATE_4({ where(is_glossy & cost2_positive, out_color[i]) = glossy_F[i]; })
     }
 }
 
@@ -4751,6 +4761,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                                                                                     surf_der.ddn_dy[i] * plane_N[i]);
                     })
 
+                    assert((secondary_mask & gen_ray).all_zeros());
                     secondary_mask |= gen_ray;
                 }
             } else if (mat->type == GlossyNode) {
@@ -4814,6 +4825,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                                                                                     surf_der.ddn_dy[i] * plane_N[i]);
                     })
 
+                    assert((secondary_mask & gen_ray).all_zeros());
                     secondary_mask |= gen_ray;
                 }
             } else if (mat->type == RefractiveNode) {
@@ -4881,6 +4893,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                             eta * surf_der.dd_dy[i] - (m * surf_der.dndy[i] + dmdx * plane_N[i]);
                     })
 
+                    assert((secondary_mask & gen_ray).all_zeros());
                     secondary_mask |= gen_ray;
                 }
             } else if (mat->type == EmissiveNode) {
@@ -4920,7 +4933,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                 }
 #endif
                 ITERATE_3(
-                    { where(ray_queue[index], col[i]) += mis_weight * mat->strength * mix_weight * base_color[i]; })
+                    { where(ray_queue[index], col[i]) += mix_weight * mis_weight * mat->strength * base_color[i]; })
             } else if (mat->type == TransparentNode) {
                 const simd_ivec<S> gen_ray =
                     (transp_depth < pi.settings.max_transp_depth & total_depth < pi.settings.max_total_depth) &
@@ -4946,6 +4959,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
 
                     where(gen_ray, new_ray.ray_depth) = ray.ray_depth + 0x01000000;
 
+                    assert((secondary_mask & gen_ray).all_zeros());
                     secondary_mask |= gen_ray;
                 }
             } else if (mat->type == PrincipledNode) {
@@ -5150,13 +5164,14 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                             2 * (dot(I, plane_N) * surf_der.dndy[i] + surf_der.ddn_dy[i] * plane_N[i]);
                     })
 
+                    assert((secondary_mask & sample_diff_lobe).all_zeros());
                     secondary_mask |= sample_diff_lobe;
                 }
 
-                const simd_ivec<S> sample_spec_lobe = ~sample_diff_lobe & (spec_depth < pi.settings.max_spec_depth) &
-                                                      (total_depth < pi.settings.max_total_depth) &
-                                                      simd_cast(mix_rand < diffuse_weight + specular_weight) &
-                                                      ray_queue[index];
+                const simd_ivec<S> sample_spec_lobe =
+                    (spec_depth < pi.settings.max_spec_depth) & (total_depth < pi.settings.max_total_depth) &
+                    simd_cast(mix_rand >= diffuse_weight) & simd_cast(mix_rand < diffuse_weight + specular_weight) &
+                    ray_queue[index];
                 if (sample_spec_lobe.not_all_zeros()) {
                     simd_fvec<S> V[3], F[4];
                     Sample_GGXSpecular_BSDF(
@@ -5188,12 +5203,14 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                             2 * (dot(I, plane_N) * surf_der.dndy[i] + surf_der.ddn_dy[i] * plane_N[i]);
                     })
 
+                    assert(((sample_spec_lobe & ray_queue[index]) != sample_spec_lobe).all_zeros());
+                    assert((secondary_mask & sample_spec_lobe).all_zeros());
                     secondary_mask |= sample_spec_lobe;
                 }
 
                 const simd_ivec<S> sample_coat_lobe =
-                    ~sample_diff_lobe & ~sample_spec_lobe & (spec_depth < pi.settings.max_spec_depth) &
-                    (total_depth < pi.settings.max_total_depth) &
+                    (spec_depth < pi.settings.max_spec_depth) & (total_depth < pi.settings.max_total_depth) &
+                    simd_cast(mix_rand >= diffuse_weight + specular_weight) &
                     simd_cast(mix_rand < diffuse_weight + specular_weight + clearcoat_weight) & ray_queue[index];
                 if (sample_coat_lobe.not_all_zeros()) {
                     simd_fvec<S> V[3], F[4];
@@ -5225,22 +5242,23 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                             2 * (dot(I, plane_N) * surf_der.dndy[i] + surf_der.ddn_dy[i] * plane_N[i]);
                     })
 
+                    assert((secondary_mask & sample_coat_lobe).all_zeros());
                     secondary_mask |= sample_coat_lobe;
                 }
 
                 const simd_ivec<S> sample_trans_lobe =
-                    ~sample_diff_lobe & ~sample_spec_lobe & ~sample_coat_lobe &
+                    simd_cast(mix_rand >= diffuse_weight + specular_weight + clearcoat_weight) &
                     ((simd_cast(mix_rand >= fresnel) & refr_depth < pi.settings.max_refr_depth) |
                      (simd_cast(mix_rand < fresnel) & spec_depth < pi.settings.max_spec_depth)) &
                     (total_depth < pi.settings.max_total_depth) & ray_queue[index];
                 if (sample_trans_lobe.not_all_zeros()) {
-                    mix_rand -= diffuse_weight + specular_weight + clearcoat_weight;
-                    mix_rand /= refraction_weight;
+                    where(sample_trans_lobe, mix_rand) -= diffuse_weight + specular_weight + clearcoat_weight;
+                    where(sample_trans_lobe, mix_rand) /= refraction_weight;
 
                     simd_fvec<S> F[4], V[3];
 
-                    const simd_ivec<S> use_trans_spec_lobe = simd_cast(mix_rand < fresnel) & sample_trans_lobe;
-                    if (use_trans_spec_lobe.not_all_zeros()) {
+                    const simd_ivec<S> sample_trans_spec_lobe = simd_cast(mix_rand < fresnel) & sample_trans_lobe;
+                    if (sample_trans_spec_lobe.not_all_zeros()) {
                         const simd_fvec<S> spec_tmp_col[3] = {{1.0f}, {1.0f}, {1.0f}};
                         Sample_GGXSpecular_BSDF(T, B, N, I, roughness, simd_fvec<S>{0.0f} /* anisotropic */,
                                                 simd_fvec<S>{1.0f} /* ior */, simd_fvec<S>{0.0f} /* F0 */, spec_tmp_col,
@@ -5249,24 +5267,24 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                         simd_fvec<S> new_p[3];
                         offset_ray(P, plane_N, new_p);
 
-                        where(use_trans_spec_lobe, new_ray.ray_depth) = ray.ray_depth + 0x00000100;
+                        where(sample_trans_spec_lobe, new_ray.ray_depth) = ray.ray_depth + 0x00000100;
 
-                        ITERATE_3({ where(use_trans_spec_lobe, new_ray.o[i]) = new_p[i]; })
+                        ITERATE_3({ where(sample_trans_spec_lobe, new_ray.o[i]) = new_p[i]; })
 
                         ITERATE_3({
-                            where(use_trans_spec_lobe, new_ray.dd_dx[i]) =
+                            where(sample_trans_spec_lobe, new_ray.dd_dx[i]) =
                                 surf_der.dd_dx[i] -
                                 2 * (dot(I, plane_N) * surf_der.dndx[i] + surf_der.ddn_dx[i] * plane_N[i]);
                         })
                         ITERATE_3({
-                            where(use_trans_spec_lobe, new_ray.dd_dy[i]) =
+                            where(sample_trans_spec_lobe, new_ray.dd_dy[i]) =
                                 surf_der.dd_dy[i] -
                                 2 * (dot(I, plane_N) * surf_der.dndy[i] + surf_der.ddn_dy[i] * plane_N[i]);
                         })
                     }
 
-                    const simd_ivec<S> use_trans_refr_lobe = ~use_trans_spec_lobe & sample_trans_lobe;
-                    if (use_trans_refr_lobe.not_all_zeros()) {
+                    const simd_ivec<S> sample_trans_refr_lobe = ~sample_trans_spec_lobe & sample_trans_lobe;
+                    if (sample_trans_refr_lobe.not_all_zeros()) {
                         simd_fvec<S> _F[4], _V[4];
                         Sample_GGXRefraction_BSDF(T, B, N, I, transmission_roughness, eta, base_color, rand_u, rand_v,
                                                   _V, _F);
@@ -5276,23 +5294,23 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                         simd_fvec<S> new_p[3];
                         offset_ray(P, _plane_N, new_p);
 
-                        where(use_trans_refr_lobe, new_ray.ray_depth) = ray.ray_depth + 0x00010000;
+                        where(sample_trans_refr_lobe, new_ray.ray_depth) = ray.ray_depth + 0x00010000;
 
-                        ITERATE_4({ where(use_trans_refr_lobe, F[i]) = _F[i]; })
-                        ITERATE_3({ where(use_trans_refr_lobe, V[i]) = _V[i]; })
+                        ITERATE_4({ where(sample_trans_refr_lobe, F[i]) = _F[i]; })
+                        ITERATE_3({ where(sample_trans_refr_lobe, V[i]) = _V[i]; })
 
-                        ITERATE_3({ where(use_trans_refr_lobe, new_ray.o[i]) = new_p[i]; })
+                        ITERATE_3({ where(sample_trans_refr_lobe, new_ray.o[i]) = new_p[i]; })
 
                         const simd_fvec<S> k = (eta - eta * eta * dot(I, plane_N) / dot(_V, plane_N));
                         const simd_fvec<S> dmdx = k * surf_der.ddn_dx;
                         const simd_fvec<S> dmdy = k * surf_der.ddn_dy;
 
                         ITERATE_3({
-                            where(use_trans_refr_lobe, new_ray.dd_dx[i]) =
+                            where(sample_trans_refr_lobe, new_ray.dd_dx[i]) =
                                 eta * surf_der.dd_dx[i] - (m * surf_der.dndx[i] + dmdx * plane_N[i]);
                         })
                         ITERATE_3({
-                            where(use_trans_refr_lobe, new_ray.dd_dy[i]) =
+                            where(sample_trans_refr_lobe, new_ray.dd_dy[i]) =
                                 eta * surf_der.dd_dy[i] - (m * surf_der.dndy[i] + dmdx * plane_N[i]);
                         })
                     }
@@ -5306,6 +5324,8 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                     ITERATE_3({ where(sample_trans_lobe, new_ray.do_dx[i]) = surf_der.do_dx[i]; })
                     ITERATE_3({ where(sample_trans_lobe, new_ray.do_dy[i]) = surf_der.do_dy[i]; })
 
+                    assert((sample_trans_spec_lobe & sample_trans_refr_lobe).all_zeros());
+                    assert((secondary_mask & sample_trans_lobe).all_zeros());
                     secondary_mask |= sample_trans_lobe;
                 }
             }
