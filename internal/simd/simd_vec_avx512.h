@@ -93,6 +93,16 @@ template <> class simd_vec<float, 16> {
         return *this;
     }
 
+    force_inline simd_vec<float, 16> &operator|=(const simd_vec<float, 16> &rhs) {
+        vec_ = _mm512_or_ps(vec_, rhs.vec_);
+        return *this;
+    }
+
+    force_inline simd_vec<float, 16> &operator|=(const float rhs) {
+        vec_ = _mm512_or_ps(vec_, _mm512_set1_ps(rhs));
+        return *this;
+    }
+
     force_inline simd_vec<float, 16> operator-() const;
     force_inline explicit operator simd_vec<int, 16>() const;
 
@@ -107,6 +117,14 @@ template <> class simd_vec<float, 16> {
     force_inline float length2() const {
         float temp = 0;
         ITERATE_16({ temp += comp_[i] * comp_[i]; })
+        return temp;
+    }
+
+    force_inline simd_vec<float, 16> fract() const {
+        __m512 integer = _mm512_roundscale_ps(vec_, _MM_FROUND_TO_ZERO);
+
+        simd_vec<float, 16> temp;
+        temp.vec_ = _mm512_sub_ps(vec_, integer);
         return temp;
     }
 
@@ -260,6 +278,32 @@ template <> class simd_vec<int, 16> {
     force_inline simd_vec<int, 16> &operator/=(int rhs) {
         ITERATE_16({ comp_[i] = comp_[i] / rhs; })
         return *this;
+    }
+
+    force_inline simd_vec<int, 16> &operator|=(const simd_vec<int, 16> &rhs) {
+        vec_ = _mm512_or_si512(vec_, rhs.vec_);
+        return *this;
+    }
+
+    force_inline simd_vec<int, 16> &operator|=(const int rhs) {
+        vec_ = _mm512_or_si512(vec_, _mm512_set1_epi32(rhs));
+        return *this;
+    }
+
+    force_inline simd_vec<int, 16> &operator&=(const simd_vec<int, 16> &rhs) {
+        vec_ = _mm512_and_si512(vec_, rhs.vec_);
+        return *this;
+    }
+
+    force_inline simd_vec<int, 16> &operator&=(const int rhs) {
+        vec_ = _mm512_and_si512(vec_, _mm512_set1_epi32(rhs));
+        return *this;
+    }
+
+    force_inline simd_vec<int, 16> operator-() const {
+        simd_vec<int, 16> temp;
+        temp.vec_ = _mm512_sub_epi32(_mm512_setzero_si512(), vec_);
+        return temp;
     }
 
     force_inline simd_vec<int, 16> operator==(int rhs) const {
@@ -447,6 +491,12 @@ template <> class simd_vec<int, 16> {
         return ret;
     }
 
+    friend force_inline simd_vec<int, 16> operator>=(const simd_vec<int, 16> &v1, const simd_vec<int, 16> &v2) {
+        simd_vec<int, 16> ret;
+        ret.vec_ = _mm512_movm_epi32(_mm512_cmpge_epi32_mask(v1.vec_, v2.vec_));
+        return ret;
+    }
+
     friend force_inline simd_vec<int, 16> operator<(const simd_vec<int, 16> &v1, int v2) {
         simd_vec<int, 16> ret;
         ret.vec_ = _mm512_movm_epi32(_mm512_cmpgt_epi32_mask(_mm512_set1_epi32(v2), v1.vec_));
@@ -462,6 +512,12 @@ template <> class simd_vec<int, 16> {
     friend force_inline simd_vec<int, 16> operator>(const simd_vec<int, 16> &v1, int v2) {
         simd_vec<int, 16> ret;
         ret.vec_ = _mm512_movm_epi32(_mm512_cmpgt_epi32_mask(v1.vec_, _mm512_set1_epi32(v2)));
+        return ret;
+    }
+
+    friend force_inline simd_vec<int, 16> operator>=(const simd_vec<int, 16> &v1, int v2) {
+        simd_vec<int, 16> ret;
+        ret.vec_ = _mm512_movm_epi32(_mm512_cmpge_epi32_mask(v1.vec_, _mm512_set1_epi32(v2)));
         return ret;
     }
 
