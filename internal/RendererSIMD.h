@@ -230,15 +230,15 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
 
             if (macro_tree_root != 0xffffffff) {
                 if (sc_data.mnodes) {
-                    NS::Traverse_MacroTree_WithStack_ClosestHit(r, p.primary_masks[i], sc_data.mnodes, macro_tree_root,
-                                                                sc_data.mesh_instances, sc_data.mi_indices,
-                                                                sc_data.meshes, sc_data.transforms, sc_data.tris,
-                                                                sc_data.tri_indices, inter);
+                    NS::Traverse_MacroTree_WithStack_ClosestHit(r.o, r.d, p.primary_masks[i], sc_data.mnodes,
+                                                                macro_tree_root, sc_data.mesh_instances,
+                                                                sc_data.mi_indices, sc_data.meshes, sc_data.transforms,
+                                                                sc_data.tris, sc_data.tri_indices, inter);
                 } else {
-                    NS::Traverse_MacroTree_WithStack_ClosestHit(r, p.primary_masks[i], sc_data.nodes, macro_tree_root,
-                                                                sc_data.mesh_instances, sc_data.mi_indices,
-                                                                sc_data.meshes, sc_data.transforms, sc_data.tris,
-                                                                sc_data.tri_indices, inter);
+                    NS::Traverse_MacroTree_WithStack_ClosestHit(r.o, r.d, p.primary_masks[i], sc_data.nodes,
+                                                                macro_tree_root, sc_data.mesh_instances,
+                                                                sc_data.mi_indices, sc_data.meshes, sc_data.transforms,
+                                                                sc_data.tris, sc_data.tri_indices, inter);
                 }
             }
             // NS::IntersectAreaLights(r, {-1}, sc_data.lights, sc_data.visible_lights, sc_data.transforms, inter);
@@ -324,12 +324,12 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
 
             if (sc_data.mnodes) {
                 NS::Traverse_MacroTree_WithStack_ClosestHit(
-                    r, p.secondary_masks[i], sc_data.mnodes, macro_tree_root, sc_data.mesh_instances,
+                    r.o, r.d, p.secondary_masks[i], sc_data.mnodes, macro_tree_root, sc_data.mesh_instances,
                     sc_data.mi_indices, sc_data.meshes, sc_data.transforms, sc_data.tris, sc_data.tri_indices, inter);
             } else {
                 NS::Traverse_MacroTree_WithStack_ClosestHit(
-                    r, p.secondary_masks[i], sc_data.nodes, macro_tree_root, sc_data.mesh_instances, sc_data.mi_indices,
-                    sc_data.meshes, sc_data.transforms, sc_data.tris, sc_data.tri_indices, inter);
+                    r.o, r.d, p.secondary_masks[i], sc_data.nodes, macro_tree_root, sc_data.mesh_instances,
+                    sc_data.mi_indices, sc_data.meshes, sc_data.transforms, sc_data.tris, sc_data.tri_indices, inter);
             }
             NS::IntersectAreaLights(r, p.secondary_masks[i], sc_data.lights, sc_data.visible_lights, sc_data.transforms,
                                     inter);

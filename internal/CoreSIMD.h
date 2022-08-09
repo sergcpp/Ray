@@ -110,20 +110,21 @@ void SortRays_GPU(ray_data_t<S> *rays, simd_ivec<S> *ray_masks, int &secondary_r
 
 // Intersect primitives
 template <int S>
-bool IntersectTris_ClosestHit(const ray_data_t<S> &r, const simd_ivec<S> &ray_mask, const tri_accel_t *tris,
-                              uint32_t num_tris, int obj_index, hit_data_t<S> &out_inter);
+bool IntersectTris_ClosestHit(const simd_fvec<S> ro[3], const simd_fvec<S> rd[3], const simd_ivec<S> &ray_mask,
+                              const tri_accel_t *tris, uint32_t num_tris, int obj_index, hit_data_t<S> &out_inter);
 template <int S>
-bool IntersectTris_ClosestHit(const ray_data_t<S> &r, const simd_ivec<S> &ray_mask, const tri_accel_t *tris,
-                              int tri_start, int tri_end, int obj_index, hit_data_t<S> &out_inter);
+bool IntersectTris_ClosestHit(const simd_fvec<S> ro[3], const simd_fvec<S> rd[3], const simd_ivec<S> &ray_mask,
+                              const tri_accel_t *tris, int tri_start, int tri_end, int obj_index,
+                              hit_data_t<S> &out_inter);
 template <int S>
 bool IntersectTris_ClosestHit(const float o[3], const float d[3], int i, const tri_accel_t *tris, int tri_start,
                               int tri_end, int obj_index, hit_data_t<S> &out_inter);
 template <int S>
-bool IntersectTris_AnyHit(const ray_data_t<S> &r, const simd_ivec<S> &ray_mask, const tri_accel_t *tris,
-                          uint32_t num_tris, int obj_index, hit_data_t<S> &out_inter);
+bool IntersectTris_AnyHit(const simd_fvec<S> ro[3], const simd_fvec<S> rd[3], const simd_ivec<S> &ray_mask,
+                          const tri_accel_t *tris, uint32_t num_tris, int obj_index, hit_data_t<S> &out_inter);
 template <int S>
-bool IntersectTris_AnyHit(const ray_data_t<S> &r, const simd_ivec<S> &ray_mask, const tri_accel_t *tris,
-                          int tri_start, int tri_end, int obj_index, hit_data_t<S> &out_inter);
+bool IntersectTris_AnyHit(const simd_fvec<S> ro[3], const simd_fvec<S> rd[3], const simd_ivec<S> &ray_mask,
+                          const tri_accel_t *tris, int tri_start, int tri_end, int obj_index, hit_data_t<S> &out_inter);
 template <int S>
 bool IntersectTris_AnyHit(const float o[3], const float d[3], int i, const tri_accel_t *tris,
                           const tri_mat_data_t *materials, const uint32_t *indices, int tri_start, int tri_end,
@@ -131,47 +132,48 @@ bool IntersectTris_AnyHit(const float o[3], const float d[3], int i, const tri_a
 
 // Traverse acceleration structure
 template <int S>
-bool Traverse_MacroTree_WithStack_ClosestHit(const ray_data_t<S> &r, const simd_ivec<S> &ray_mask,
-                                             const bvh_node_t *nodes, uint32_t node_index,
+bool Traverse_MacroTree_WithStack_ClosestHit(const simd_fvec<S> ro[3], const simd_fvec<S> rd[3],
+                                             const simd_ivec<S> &ray_mask, const bvh_node_t *nodes, uint32_t node_index,
                                              const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
                                              const mesh_t *meshes, const transform_t *transforms,
                                              const tri_accel_t *tris, const uint32_t *tri_indices,
                                              hit_data_t<S> &inter);
 template <int S>
-bool Traverse_MacroTree_WithStack_ClosestHit(const ray_data_t<S> &r, const simd_ivec<S> &ray_mask,
-                                             const mbvh_node_t *mnodes, uint32_t node_index,
-                                             const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
-                                             const mesh_t *meshes, const transform_t *transforms,
-                                             const tri_accel_t *tris, const uint32_t *tri_indices,
-                                             hit_data_t<S> &inter);
+bool Traverse_MacroTree_WithStack_ClosestHit(const simd_fvec<S> ro[3], const simd_fvec<S> rd[3],
+                                             const simd_ivec<S> &ray_mask, const mbvh_node_t *mnodes,
+                                             uint32_t node_index, const mesh_instance_t *mesh_instances,
+                                             const uint32_t *mi_indices, const mesh_t *meshes,
+                                             const transform_t *transforms, const tri_accel_t *tris,
+                                             const uint32_t *tri_indices, hit_data_t<S> &inter);
 template <int S>
-bool Traverse_MacroTree_WithStack_AnyHit(const ray_data_t<S> &r, const simd_ivec<S> &ray_mask,
-                                         const bvh_node_t *nodes, uint32_t node_index,
+bool Traverse_MacroTree_WithStack_AnyHit(const simd_fvec<S> ro[3], const simd_fvec<S> rd[3],
+                                         const simd_ivec<S> &ray_mask, const bvh_node_t *nodes, uint32_t node_index,
                                          const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
                                          const mesh_t *meshes, const transform_t *transforms, const tri_accel_t *tris,
                                          const tri_mat_data_t *materials, const uint32_t *tri_indices,
                                          hit_data_t<S> &inter);
 template <int S>
-bool Traverse_MacroTree_WithStack_AnyHit(const ray_data_t<S> &r, const simd_ivec<S> &ray_mask,
-                                         const mbvh_node_t *mnodes, uint32_t node_index,
+bool Traverse_MacroTree_WithStack_AnyHit(const simd_fvec<S> ro[3], const simd_fvec<S> rd[3],
+                                         const simd_ivec<S> &ray_mask, const mbvh_node_t *mnodes, uint32_t node_index,
                                          const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
                                          const mesh_t *meshes, const transform_t *transforms, const tri_accel_t *tris,
                                          const tri_mat_data_t *materials, const uint32_t *tri_indices,
                                          hit_data_t<S> &inter);
 // traditional bvh traversal with stack for inner nodes
 template <int S>
-bool Traverse_MicroTree_WithStack_ClosestHit(const ray_data_t<S> &r, const simd_ivec<S> &ray_mask,
-                                             const bvh_node_t *nodes, uint32_t node_index, const tri_accel_t *tris,
-                                             const uint32_t *tri_indices, int obj_index, hit_data_t<S> &inter);
+bool Traverse_MicroTree_WithStack_ClosestHit(const simd_fvec<S> ro[3], const simd_fvec<S> rd[3],
+                                             const simd_ivec<S> &ray_mask, const bvh_node_t *nodes, uint32_t node_index,
+                                             const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index,
+                                             hit_data_t<S> &inter);
 template <int S>
 bool Traverse_MicroTree_WithStack_ClosestHit(const float ro[3], const float rd[3], int i, const mbvh_node_t *mnodes,
                                              uint32_t node_index, const tri_accel_t *tris, const uint32_t *tri_indices,
                                              int obj_index, hit_data_t<S> &inter);
 template <int S>
-bool Traverse_MicroTree_WithStack_AnyHit(const ray_data_t<S> &r, const simd_ivec<S> &ray_mask,
-                                         const bvh_node_t *nodes, uint32_t node_index, const tri_accel_t *tris,
-                                         const tri_mat_data_t *materials, const uint32_t *tri_indices, int obj_index,
-                                         hit_data_t<S> &inter);
+bool Traverse_MicroTree_WithStack_AnyHit(const simd_fvec<S> ro[3], const simd_fvec<S> rd[3],
+                                         const simd_ivec<S> &ray_mask, const bvh_node_t *nodes, uint32_t node_index,
+                                         const tri_accel_t *tris, const tri_mat_data_t *materials,
+                                         const uint32_t *tri_indices, int obj_index, hit_data_t<S> &inter);
 template <int S>
 bool Traverse_MicroTree_WithStack_AnyHit(const float ro[3], const float rd[3], int i, const mbvh_node_t *mnodes,
                                          uint32_t node_index, const tri_accel_t *tris, const tri_mat_data_t *materials,
@@ -238,7 +240,9 @@ void Sample_PrincipledClearcoat_BSDF(const simd_fvec<S> T[3], const simd_fvec<S>
                                      simd_fvec<S> out_V[3], simd_fvec<S> out_color[4]);
 
 // Transform
-template <int S> ray_data_t<S> TransformRay(const ray_data_t<S> &r, const float *xform);
+template <int S>
+void TransformRay(const simd_fvec<S> ro[3], const simd_fvec<S> rd[3], const float *xform, simd_fvec<S> out_ro[3],
+                  simd_fvec<S> out_rd[3]);
 template <int S> void TransformPoint(const simd_fvec<S> p[3], const float *xform, simd_fvec<S> out_p[3]);
 template <int S> void TransformDirection(const simd_fvec<S> xform[16], simd_fvec<S> p[3]);
 template <int S> void TransformNormal(const simd_fvec<S> n[3], const float *inv_xform, simd_fvec<S> out_n[3]);
@@ -319,20 +323,20 @@ void ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, const flo
 namespace Ray {
 namespace NS {
 template <int S>
-force_inline simd_ivec<S> _IntersectTri(const ray_data_t<S> &r, const simd_ivec<S> &ray_mask, const tri_accel_t &tri,
-                                        uint32_t prim_index, hit_data_t<S> &inter) {
+force_inline simd_ivec<S> _IntersectTri(const simd_fvec<S> ro[3], const simd_fvec<S> rd[3],
+                                        const simd_ivec<S> &ray_mask, const tri_accel_t &tri, uint32_t prim_index,
+                                        hit_data_t<S> &inter) {
 #define _dot(x, y) ((x)[0] * (y)[0] + (x)[1] * (y)[1] + (x)[2] * (y)[2])
 
-    const simd_fvec<S> det = _dot(r.d, tri.n_plane);
-    const simd_fvec<S> dett = tri.n_plane[3] - _dot(r.o, tri.n_plane);
+    const simd_fvec<S> det = _dot(rd, tri.n_plane);
+    const simd_fvec<S> dett = tri.n_plane[3] - _dot(ro, tri.n_plane);
 
     const simd_ivec<S> imask = simd_cast(dett >= 0.0f) != simd_cast(det * inter.t - dett >= 0.0f);
     if (imask.all_zeros()) {
         return simd_ivec<S>{0};
     }
 
-    const simd_fvec<S> p[3] = {det * r.o[0] + dett * r.d[0], det * r.o[1] + dett * r.d[1],
-                               det * r.o[2] + dett * r.d[2]};
+    const simd_fvec<S> p[3] = {det * ro[0] + dett * rd[0], det * ro[1] + dett * rd[1], det * ro[2] + dett * rd[2]};
     const simd_fvec<S> detu = _dot(p, tri.u_plane) + det * tri.u_plane[3];
     const simd_ivec<S> imask1 = simd_cast(detu >= 0.0f) != simd_cast(det - detu >= 0.0f);
     if (imask1.all_zeros()) {
@@ -590,8 +594,8 @@ template <int S> force_inline simd_ivec<S> bbox_test(const simd_fvec<S> p[3], co
 }
 
 template <int S>
-force_inline uint32_t near_child(const ray_data_t<S> &r, const simd_ivec<S> &ray_mask, const bvh_node_t &node) {
-    const simd_fvec<S> dir_neg_fmask = r.d[node.prim_count >> 30] < 0.0f;
+force_inline uint32_t near_child(const simd_fvec<S> rd[3], const simd_ivec<S> &ray_mask, const bvh_node_t &node) {
+    const simd_fvec<S> dir_neg_fmask = rd[node.prim_count >> 30] < 0.0f;
     const auto dir_neg_imask = reinterpret_cast<const simd_ivec<S> &>(dir_neg_fmask);
     if (dir_neg_imask.all_zeros(ray_mask)) {
         return node.left_child;
@@ -615,8 +619,8 @@ template <int S, int StackSize> struct TraversalStateStack_Multi {
         uint32_t stack_size;
     } queue[S];
 
-    force_inline void push_children(const ray_data_t<S> &r, const bvh_node_t &node) {
-        const simd_fvec<S> dir_neg_mask = r.d[node.prim_count >> 30] < 0.0f;
+    force_inline void push_children(const simd_fvec<S> rd[3], const bvh_node_t &node) {
+        const simd_fvec<S> dir_neg_mask = rd[node.prim_count >> 30] < 0.0f;
         const auto mask1 = reinterpret_cast<const simd_ivec<S> &>(dir_neg_mask) & queue[index].mask;
         if (mask1.all_zeros()) {
             queue[index].stack[queue[index].stack_size++] = (node.right_child & RIGHT_CHILD_BITS);
@@ -1879,15 +1883,16 @@ void Ray::NS::SortRays_GPU(ray_data_t<S> *rays, simd_ivec<S> *ray_masks, int &ra
 }
 
 template <int S>
-bool Ray::NS::IntersectTris_ClosestHit(const ray_data_t<S> &r, const simd_ivec<S> &ray_mask, const tri_accel_t *tris,
-                                       uint32_t num_tris, int obj_index, hit_data_t<S> &out_inter) {
+bool Ray::NS::IntersectTris_ClosestHit(const simd_fvec<S> ro[3], const simd_fvec<S> rd[3], const simd_ivec<S> &ray_mask,
+                                       const tri_accel_t *tris, uint32_t num_tris, int obj_index,
+                                       hit_data_t<S> &out_inter) {
     hit_data_t<S> inter = {Uninitialize};
     inter.mask = {0};
     inter.obj_index = {reinterpret_cast<const int &>(obj_index)};
     inter.t = out_inter.t;
 
     for (uint32_t i = 0; i < num_tris; i++) {
-        _IntersectTri(r, ray_mask, tris[i], i, inter);
+        _IntersectTri(ro, rd, ray_mask, tris[i], i, inter);
     }
 
     out_inter.mask |= inter.mask;
@@ -1904,16 +1909,16 @@ bool Ray::NS::IntersectTris_ClosestHit(const ray_data_t<S> &r, const simd_ivec<S
 }
 
 template <int S>
-bool Ray::NS::IntersectTris_ClosestHit(const ray_data_t<S> &r, const simd_ivec<S> &ray_mask, const tri_accel_t *tris,
-                                       const int tri_start, const int tri_end, const int obj_index,
-                                       hit_data_t<S> &out_inter) {
+bool Ray::NS::IntersectTris_ClosestHit(const simd_fvec<S> ro[3], const simd_fvec<S> rd[3], const simd_ivec<S> &ray_mask,
+                                       const tri_accel_t *tris, const int tri_start, const int tri_end,
+                                       const int obj_index, hit_data_t<S> &out_inter) {
     hit_data_t<S> inter = {Uninitialize};
     inter.mask = {0};
     inter.obj_index = {reinterpret_cast<const int &>(obj_index)};
     inter.t = out_inter.t;
 
     for (int i = tri_start; i < tri_end; ++i) {
-        _IntersectTri(r, ray_mask, tris[i], i, inter);
+        _IntersectTri(ro, rd, ray_mask, tris[i], i, inter);
     }
 
     out_inter.mask |= inter.mask;
@@ -1947,15 +1952,16 @@ bool Ray::NS::IntersectTris_ClosestHit(const float o[3], const float d[3], int i
 }
 
 template <int S>
-bool Ray::NS::IntersectTris_AnyHit(const ray_data_t<S> &r, const simd_ivec<S> &ray_mask, const tri_accel_t *tris,
-                                   uint32_t num_tris, int obj_index, hit_data_t<S> &out_inter) {
+bool Ray::NS::IntersectTris_AnyHit(const simd_fvec<S> ro[3], const simd_fvec<S> rd[3], const simd_ivec<S> &ray_mask,
+                                   const tri_accel_t *tris, uint32_t num_tris, int obj_index,
+                                   hit_data_t<S> &out_inter) {
     hit_data_t<S> inter = {Uninitialize};
     inter.mask = {0};
     inter.obj_index = {reinterpret_cast<const int &>(obj_index)};
     inter.t = out_inter.t;
 
     for (uint32_t i = 0; i < num_tris; i++) {
-        _IntersectTri(r, ray_mask, tris[i], i, inter);
+        _IntersectTri(ro, rd, ray_mask, tris[i], i, inter);
     }
 
     out_inter.mask |= inter.mask;
@@ -1972,8 +1978,8 @@ bool Ray::NS::IntersectTris_AnyHit(const ray_data_t<S> &r, const simd_ivec<S> &r
 }
 
 template <int S>
-bool Ray::NS::IntersectTris_AnyHit(const ray_data_t<S> &r, const simd_ivec<S> &ray_mask, const tri_accel_t *tris,
-                                   const int tri_start, const int tri_end, const int obj_index,
+bool Ray::NS::IntersectTris_AnyHit(const simd_fvec<S> ro[3], const simd_fvec<S> rd[3], const simd_ivec<S> &ray_mask,
+                                   const tri_accel_t *tris, const int tri_start, const int tri_end, const int obj_index,
                                    hit_data_t<S> &out_inter) {
     hit_data_t<S> inter = {Uninitialize};
     inter.mask = {0};
@@ -1981,7 +1987,7 @@ bool Ray::NS::IntersectTris_AnyHit(const ray_data_t<S> &r, const simd_ivec<S> &r
     inter.t = out_inter.t;
 
     for (int i = tri_start; i < tri_end; ++i) {
-        _IntersectTri(r, ray_mask, tris[i], i, inter);
+        _IntersectTri(ro, rd, ray_mask, tris[i], i, inter);
     }
 
     out_inter.mask |= inter.mask;
@@ -2019,16 +2025,16 @@ bool Ray::NS::IntersectTris_AnyHit(const float o[3], const float d[3], int i, co
 }
 
 template <int S>
-bool Ray::NS::Traverse_MacroTree_WithStack_ClosestHit(const ray_data_t<S> &r, const simd_ivec<S> &ray_mask,
-                                                      const bvh_node_t *nodes, uint32_t node_index,
-                                                      const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
-                                                      const mesh_t *meshes, const transform_t *transforms,
-                                                      const tri_accel_t *tris, const uint32_t *tri_indices,
-                                                      hit_data_t<S> &inter) {
+bool Ray::NS::Traverse_MacroTree_WithStack_ClosestHit(const simd_fvec<S> ro[3], const simd_fvec<S> rd[3],
+                                                      const simd_ivec<S> &ray_mask, const bvh_node_t *nodes,
+                                                      uint32_t node_index, const mesh_instance_t *mesh_instances,
+                                                      const uint32_t *mi_indices, const mesh_t *meshes,
+                                                      const transform_t *transforms, const tri_accel_t *tris,
+                                                      const uint32_t *tri_indices, hit_data_t<S> &inter) {
     bool res = false;
 
     simd_fvec<S> inv_d[3], inv_d_o[3];
-    comp_aux_inv_values(r.o, r.d, inv_d, inv_d_o);
+    comp_aux_inv_values(ro, rd, inv_d, inv_d_o);
 
     TraversalStateStack_Multi<S, MAX_STACK_SIZE> st;
 
@@ -2057,7 +2063,7 @@ bool Ray::NS::Traverse_MacroTree_WithStack_ClosestHit(const ray_data_t<S> &r, co
             }
 
             if (!is_leaf_node(nodes[cur])) {
-                st.push_children(r, nodes[cur]);
+                st.push_children(rd, nodes[cur]);
             } else {
                 const uint32_t prim_index = (nodes[cur].prim_index & PRIM_INDEX_BITS);
                 for (uint32_t i = prim_index; i < prim_index + nodes[cur].prim_count; i++) {
@@ -2071,8 +2077,10 @@ bool Ray::NS::Traverse_MacroTree_WithStack_ClosestHit(const ray_data_t<S> &r, co
                         continue;
                     }
 
-                    const ray_data_t<S> _r = TransformRay(r, tr.inv_xform);
-                    res |= Traverse_MicroTree_WithStack_ClosestHit(_r, bbox_mask, nodes, m.node_index, tris,
+                    simd_fvec<S> _ro[3], _rd[3];
+                    TransformRay(ro, rd, tr.inv_xform, _ro, _rd);
+
+                    res |= Traverse_MicroTree_WithStack_ClosestHit(_ro, _rd, bbox_mask, nodes, m.node_index, tris,
                                                                    tri_indices, int(mi_indices[i]), inter);
                 }
             }
@@ -2084,16 +2092,16 @@ bool Ray::NS::Traverse_MacroTree_WithStack_ClosestHit(const ray_data_t<S> &r, co
 }
 
 template <int S>
-bool Ray::NS::Traverse_MacroTree_WithStack_ClosestHit(const ray_data_t<S> &r, const simd_ivec<S> &ray_mask,
-                                                      const mbvh_node_t *nodes, uint32_t node_index,
-                                                      const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
-                                                      const mesh_t *meshes, const transform_t *transforms,
-                                                      const tri_accel_t *tris, const uint32_t *tri_indices,
-                                                      hit_data_t<S> &inter) {
+bool Ray::NS::Traverse_MacroTree_WithStack_ClosestHit(const simd_fvec<S> ro[3], const simd_fvec<S> rd[3],
+                                                      const simd_ivec<S> &ray_mask, const mbvh_node_t *nodes,
+                                                      uint32_t node_index, const mesh_instance_t *mesh_instances,
+                                                      const uint32_t *mi_indices, const mesh_t *meshes,
+                                                      const transform_t *transforms, const tri_accel_t *tris,
+                                                      const uint32_t *tri_indices, hit_data_t<S> &inter) {
     bool res = false;
 
     simd_fvec<S> inv_d[3], inv_d_o[3];
-    comp_aux_inv_values(r.o, r.d, inv_d, inv_d_o);
+    comp_aux_inv_values(ro, rd, inv_d, inv_d_o);
 
     for (int ri = 0; ri < S; ri++) {
         if (!ray_mask[ri]) {
@@ -2101,7 +2109,7 @@ bool Ray::NS::Traverse_MacroTree_WithStack_ClosestHit(const ray_data_t<S> &r, co
         }
 
         // recombine in AoS layout
-        const float r_o[3] = {r.o[0][ri], r.o[1][ri], r.o[2][ri]}, r_d[3] = {r.d[0][ri], r.d[1][ri], r.d[2][ri]};
+        const float r_o[3] = {ro[0][ri], ro[1][ri], ro[2][ri]}, r_d[3] = {rd[0][ri], rd[1][ri], rd[2][ri]};
         const float _inv_d[3] = {inv_d[0][ri], inv_d[1][ri], inv_d[2][ri]},
                     _inv_d_o[3] = {inv_d_o[0][ri], inv_d_o[1][ri], inv_d_o[2][ri]};
 
@@ -2201,16 +2209,17 @@ bool Ray::NS::Traverse_MacroTree_WithStack_ClosestHit(const ray_data_t<S> &r, co
 }
 
 template <int S>
-bool Ray::NS::Traverse_MacroTree_WithStack_AnyHit(const ray_data_t<S> &r, const simd_ivec<S> &ray_mask,
-                                                  const bvh_node_t *nodes, uint32_t node_index,
-                                                  const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
-                                                  const mesh_t *meshes, const transform_t *transforms,
-                                                  const tri_accel_t *tris, const tri_mat_data_t *materials,
-                                                  const uint32_t *tri_indices, hit_data_t<S> &inter) {
+bool Ray::NS::Traverse_MacroTree_WithStack_AnyHit(const simd_fvec<S> ro[3], const simd_fvec<S> rd[3],
+                                                  const simd_ivec<S> &ray_mask, const bvh_node_t *nodes,
+                                                  uint32_t node_index, const mesh_instance_t *mesh_instances,
+                                                  const uint32_t *mi_indices, const mesh_t *meshes,
+                                                  const transform_t *transforms, const tri_accel_t *tris,
+                                                  const tri_mat_data_t *materials, const uint32_t *tri_indices,
+                                                  hit_data_t<S> &inter) {
     bool res = false;
 
     simd_fvec<S> inv_d[3], inv_d_o[3];
-    comp_aux_inv_values(r.o, r.d, inv_d, inv_d_o);
+    comp_aux_inv_values(ro, rd, inv_d, inv_d_o);
 
     TraversalStateStack_Multi<S, MAX_STACK_SIZE> st;
 
@@ -2239,7 +2248,7 @@ bool Ray::NS::Traverse_MacroTree_WithStack_AnyHit(const ray_data_t<S> &r, const 
             }
 
             if (!is_leaf_node(nodes[cur])) {
-                st.push_children(r, nodes[cur]);
+                st.push_children(rd, nodes[cur]);
             } else {
                 const uint32_t prim_index = (nodes[cur].prim_index & PRIM_INDEX_BITS);
                 for (uint32_t i = prim_index; i < prim_index + nodes[cur].prim_count; i++) {
@@ -2253,9 +2262,12 @@ bool Ray::NS::Traverse_MacroTree_WithStack_AnyHit(const ray_data_t<S> &r, const 
                         continue;
                     }
 
-                    const ray_data_t<S> _r = TransformRay(r, tr.inv_xform);
-                    const bool hit_found = Traverse_MicroTree_WithStack_AnyHit(
-                        _r, bbox_mask, nodes, m.node_index, tris, materials, tri_indices, int(mi_indices[i]), inter);
+                    simd_fvec<S> _ro[3], _rd[3];
+                    TransformRay(ro, rd, tr.inv_xform, _ro, _rd);
+
+                    const bool hit_found =
+                        Traverse_MicroTree_WithStack_AnyHit(_ro, _rd, bbox_mask, nodes, m.node_index, tris, materials,
+                                                            tri_indices, int(mi_indices[i]), inter);
                     res |= hit_found;
                 }
             }
@@ -2267,16 +2279,17 @@ bool Ray::NS::Traverse_MacroTree_WithStack_AnyHit(const ray_data_t<S> &r, const 
 }
 
 template <int S>
-bool Ray::NS::Traverse_MacroTree_WithStack_AnyHit(const ray_data_t<S> &r, const simd_ivec<S> &ray_mask,
-                                                  const mbvh_node_t *nodes, uint32_t node_index,
-                                                  const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
-                                                  const mesh_t *meshes, const transform_t *transforms,
-                                                  const tri_accel_t *tris, const tri_mat_data_t *materials,
-                                                  const uint32_t *tri_indices, hit_data_t<S> &inter) {
+bool Ray::NS::Traverse_MacroTree_WithStack_AnyHit(const simd_fvec<S> ro[3], const simd_fvec<S> rd[3],
+                                                  const simd_ivec<S> &ray_mask, const mbvh_node_t *nodes,
+                                                  uint32_t node_index, const mesh_instance_t *mesh_instances,
+                                                  const uint32_t *mi_indices, const mesh_t *meshes,
+                                                  const transform_t *transforms, const tri_accel_t *tris,
+                                                  const tri_mat_data_t *materials, const uint32_t *tri_indices,
+                                                  hit_data_t<S> &inter) {
     bool res = false;
 
     simd_fvec<S> inv_d[3], inv_d_o[3];
-    comp_aux_inv_values(r.o, r.d, inv_d, inv_d_o);
+    comp_aux_inv_values(ro, rd, inv_d, inv_d_o);
 
     for (int ri = 0; ri < S; ri++) {
         if (!ray_mask[ri]) {
@@ -2284,7 +2297,7 @@ bool Ray::NS::Traverse_MacroTree_WithStack_AnyHit(const ray_data_t<S> &r, const 
         }
 
         // recombine in AoS layout
-        const float r_o[3] = {r.o[0][ri], r.o[1][ri], r.o[2][ri]}, r_d[3] = {r.d[0][ri], r.d[1][ri], r.d[2][ri]};
+        const float r_o[3] = {ro[0][ri], ro[1][ri], ro[2][ri]}, r_d[3] = {rd[0][ri], rd[1][ri], rd[2][ri]};
         const float _inv_d[3] = {inv_d[0][ri], inv_d[1][ri], inv_d[2][ri]},
                     _inv_d_o[3] = {inv_d_o[0][ri], inv_d_o[1][ri], inv_d_o[2][ri]};
 
@@ -2385,14 +2398,15 @@ bool Ray::NS::Traverse_MacroTree_WithStack_AnyHit(const ray_data_t<S> &r, const 
 }
 
 template <int S>
-bool Ray::NS::Traverse_MicroTree_WithStack_ClosestHit(const ray_data_t<S> &r, const simd_ivec<S> &ray_mask,
-                                                      const bvh_node_t *nodes, uint32_t node_index,
-                                                      const tri_accel_t *tris, const uint32_t *tri_indices,
-                                                      int obj_index, hit_data_t<S> &inter) {
+bool Ray::NS::Traverse_MicroTree_WithStack_ClosestHit(const simd_fvec<S> ro[3], const simd_fvec<S> rd[3],
+                                                      const simd_ivec<S> &ray_mask, const bvh_node_t *nodes,
+                                                      uint32_t node_index, const tri_accel_t *tris,
+                                                      const uint32_t *tri_indices, int obj_index,
+                                                      hit_data_t<S> &inter) {
     bool res = false;
 
     simd_fvec<S> inv_d[3], inv_d_o[3];
-    comp_aux_inv_values(r.o, r.d, inv_d, inv_d_o);
+    comp_aux_inv_values(ro, rd, inv_d, inv_d_o);
 
     TraversalStateStack_Multi<S, MAX_STACK_SIZE> st;
 
@@ -2421,11 +2435,12 @@ bool Ray::NS::Traverse_MicroTree_WithStack_ClosestHit(const ray_data_t<S> &r, co
             }
 
             if (!is_leaf_node(nodes[cur])) {
-                st.push_children(r, nodes[cur]);
+                st.push_children(rd, nodes[cur]);
             } else {
                 const int tri_start = nodes[cur].prim_index & PRIM_INDEX_BITS,
                           tri_end = tri_start + nodes[cur].prim_count;
-                res |= IntersectTris_ClosestHit(r, st.queue[st.index].mask, tris, tri_start, tri_end, obj_index, inter);
+                res |= IntersectTris_ClosestHit(ro, rd, st.queue[st.index].mask, tris, tri_start, tri_end, obj_index,
+                                                inter);
             }
         }
         st.index++;
@@ -2526,14 +2541,15 @@ bool Ray::NS::Traverse_MicroTree_WithStack_ClosestHit(const float ro[3], const f
 }
 
 template <int S>
-bool Ray::NS::Traverse_MicroTree_WithStack_AnyHit(const ray_data_t<S> &r, const simd_ivec<S> &ray_mask,
-                                                  const bvh_node_t *nodes, uint32_t node_index, const tri_accel_t *tris,
+bool Ray::NS::Traverse_MicroTree_WithStack_AnyHit(const simd_fvec<S> ro[3], const simd_fvec<S> rd[3],
+                                                  const simd_ivec<S> &ray_mask, const bvh_node_t *nodes,
+                                                  uint32_t node_index, const tri_accel_t *tris,
                                                   const tri_mat_data_t *materials, const uint32_t *tri_indices,
                                                   int obj_index, hit_data_t<S> &inter) {
     bool res = false;
 
     simd_fvec<S> inv_d[3], inv_d_o[3];
-    comp_aux_inv_values(r.o, r.d, inv_d, inv_d_o);
+    comp_aux_inv_values(ro, rd, inv_d, inv_d_o);
 
     TraversalStateStack_Multi<S, MAX_STACK_SIZE> st;
 
@@ -2562,12 +2578,12 @@ bool Ray::NS::Traverse_MicroTree_WithStack_AnyHit(const ray_data_t<S> &r, const 
             }
 
             if (!is_leaf_node(nodes[cur])) {
-                st.push_children(r, nodes[cur]);
+                st.push_children(rd, nodes[cur]);
             } else {
                 const int tri_start = nodes[cur].prim_index & PRIM_INDEX_BITS,
                           tri_end = tri_start + nodes[cur].prim_count;
                 const bool hit_found =
-                    IntersectTris_AnyHit(r, st.queue[st.index].mask, tris, tri_start, tri_end, obj_index, inter);
+                    IntersectTris_AnyHit(ro, rd, st.queue[st.index].mask, tris, tri_start, tri_end, obj_index, inter);
                 /*if (hit_found) {
                     const bool is_backfacing = inter.prim_index < 0;
                     const uint32_t prim_index = is_backfacing ? -inter.prim_index - 1 : inter.prim_index;
@@ -3086,18 +3102,15 @@ void Ray::NS::Sample_PrincipledClearcoat_BSDF(const simd_fvec<S> T[3], const sim
 }
 
 template <int S>
-force_inline Ray::NS::ray_data_t<S> Ray::NS::TransformRay(const ray_data_t<S> &r, const float *xform) {
-    ray_data_t<S> _r = r;
+force_inline void Ray::NS::TransformRay(const simd_fvec<S> ro[3], const simd_fvec<S> rd[3], const float *xform,
+                                        simd_fvec<S> out_ro[3], simd_fvec<S> out_rd[3]) {
+    out_ro[0] = ro[0] * xform[0] + ro[1] * xform[4] + ro[2] * xform[8] + xform[12];
+    out_ro[1] = ro[0] * xform[1] + ro[1] * xform[5] + ro[2] * xform[9] + xform[13];
+    out_ro[2] = ro[0] * xform[2] + ro[1] * xform[6] + ro[2] * xform[10] + xform[14];
 
-    _r.o[0] = r.o[0] * xform[0] + r.o[1] * xform[4] + r.o[2] * xform[8] + xform[12];
-    _r.o[1] = r.o[0] * xform[1] + r.o[1] * xform[5] + r.o[2] * xform[9] + xform[13];
-    _r.o[2] = r.o[0] * xform[2] + r.o[1] * xform[6] + r.o[2] * xform[10] + xform[14];
-
-    _r.d[0] = r.d[0] * xform[0] + r.d[1] * xform[4] + r.d[2] * xform[8];
-    _r.d[1] = r.d[0] * xform[1] + r.d[1] * xform[5] + r.d[2] * xform[9];
-    _r.d[2] = r.d[0] * xform[2] + r.d[1] * xform[6] + r.d[2] * xform[10];
-
-    return _r;
+    out_rd[0] = rd[0] * xform[0] + rd[1] * xform[4] + rd[2] * xform[8];
+    out_rd[1] = rd[0] * xform[1] + rd[1] * xform[5] + rd[2] * xform[9];
+    out_rd[2] = rd[0] * xform[2] + rd[1] * xform[6] + rd[2] * xform[10];
 }
 
 force_inline void Ray::NS::TransformRay(const float ro[3], const float rd[3], const float *xform, float out_ro[3],
@@ -3501,10 +3514,8 @@ Ray::NS::simd_fvec<S> Ray::NS::ComputeVisibility(const simd_fvec<S> p[3], const 
                                                  const simd_ivec<S> &mask, const float rand_val,
                                                  const simd_ivec<S> &rand_hash2, const scene_data_t &sc,
                                                  uint32_t node_index, const Ref::TextureAtlasBase *atlases[]) {
-    ray_data_t<S> sh_r;
-
-    ITERATE_3({ sh_r.o[i] = p[i]; })
-    ITERATE_3({ sh_r.d[i] = d[i]; })
+    simd_fvec<S> sh_ro[3];
+    ITERATE_3({ sh_ro[i] = p[i]; })
 
     simd_fvec<S> visibility = 1.0f;
 
@@ -3514,19 +3525,20 @@ Ray::NS::simd_fvec<S> Ray::NS::ComputeVisibility(const simd_fvec<S> p[3], const 
         sh_inter.t = dist;
 
         if (sc.mnodes) {
-            Traverse_MacroTree_WithStack_AnyHit(sh_r, keep_going, sc.mnodes, node_index, sc.mesh_instances,
+            Traverse_MacroTree_WithStack_AnyHit(sh_ro, d, keep_going, sc.mnodes, node_index, sc.mesh_instances,
                                                 sc.mi_indices, sc.meshes, sc.transforms, sc.tris, sc.tri_materials,
                                                 sc.tri_indices, sh_inter);
         } else {
-            Traverse_MacroTree_WithStack_AnyHit(sh_r, keep_going, sc.nodes, node_index, sc.mesh_instances,
+            Traverse_MacroTree_WithStack_AnyHit(sh_ro, d, keep_going, sc.nodes, node_index, sc.mesh_instances,
                                                 sc.mi_indices, sc.meshes, sc.transforms, sc.tris, sc.tri_materials,
                                                 sc.tri_indices, sh_inter);
         }
 
-        if (sh_inter.mask.all_zeros())
+        if (sh_inter.mask.all_zeros()) {
             break;
+        }
 
-        const simd_fvec<S> *I = sh_r.d;
+        const simd_fvec<S> *I = d;
         const simd_fvec<S> w = 1.0f - sh_inter.u - sh_inter.v;
 
         simd_fvec<S> n1[3], n2[3], n3[3], u1[2], u2[2], u3[2];
@@ -3695,9 +3707,7 @@ Ray::NS::simd_fvec<S> Ray::NS::ComputeVisibility(const simd_fvec<S> p[3], const 
                 }
 
                 simd_fvec<S> t = sh_inter.t + HIT_BIAS;
-                sh_r.o[0] += sh_r.d[0] * t;
-                sh_r.o[1] += sh_r.d[1] * t;
-                sh_r.o[2] += sh_r.d[2] * t;
+                ITERATE_3({ sh_ro[i] += d[i] * t; })
                 dist -= t;
 
                 index++;
