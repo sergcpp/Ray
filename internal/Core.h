@@ -197,7 +197,6 @@ struct prim_t;
 
 struct bvh_settings_t {
     float oversplit_threshold = 0.95f;
-    float node_traversal_cost = 0.025f;
     bool allow_spatial_splits = false;
     bool use_fast_bvh_build = false;
 };

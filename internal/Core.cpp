@@ -500,9 +500,9 @@ uint32_t Ray::PreprocessPrims_SAH(const prim_t *prims, const size_t prims_count,
     prim_lists.emplace_back();
 
     size_t num_nodes = out_nodes.size();
-    const auto root_node_index = static_cast<uint32_t>(num_nodes);
+    const auto root_node_index = uint32_t(num_nodes);
 
-    for (uint32_t j = 0; j < static_cast<uint32_t>(prims_count); j++) {
+    for (uint32_t j = 0; j < uint32_t(prims_count); j++) {
         prim_lists.back().indices.push_back(j);
         prim_lists.back().min = min(prim_lists.back().min, prims[j].bbox_min);
         prim_lists.back().max = max(prim_lists.back().max, prims[j].bbox_max);
@@ -641,7 +641,6 @@ uint32_t Ray::PreprocessPrims_HLBVH(const prim_t *prims, size_t prims_count, std
     // Force spliting until each primitive will be in separate leaf node
     bvh_settings_t s;
     s.oversplit_threshold = std::numeric_limits<float>::max();
-    s.node_traversal_cost = 0.0f;
     s.allow_spatial_splits = false;
 
     // Build top level hierarchy using SAH
