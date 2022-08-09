@@ -20,7 +20,6 @@
 //
 #define USE_VNDF_GGX_SAMPLING 1
 #define USE_NEE 1
-#define USE_SHADOW_RAYS 1
 #define USE_PATH_TERMINATION 1
 
 namespace Ray {
@@ -58,6 +57,17 @@ template <int S> struct ray_data_t {
     simd_ivec<S> xy;
     // four 8-bit ray depth counters
     simd_ivec<S> ray_depth;
+};
+
+template <int S> struct shadow_ray_t {
+    // origins of rays in packet
+    simd_fvec<S> o[3];
+    // directions of rays in packet
+    simd_fvec<S> d[3], dist;
+    // throughput color of ray
+    simd_fvec<S> c[3];
+    // 16-bit pixel coordinates of rays in packet ((x << 16) | y)
+    simd_ivec<S> xy;
 };
 
 template <int S> struct hit_data_t {
@@ -311,8 +321,8 @@ template <int S>
 void ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, const float *halton, const hit_data_t<S> &inter,
                   const ray_data_t<S> &ray, const scene_data_t &sc, uint32_t node_index,
                   const Ref::TextureAtlasBase *tex_atlases[], simd_fvec<S> out_rgba[4],
-                  simd_ivec<S> out_secondary_masks[], ray_data_t<S> out_secondary_rays[],
-                  int out_secondary_rays_count[]);
+                  simd_ivec<S> out_secondary_masks[], ray_data_t<S> out_secondary_rays[], int *out_secondary_rays_count,
+                  simd_ivec<S> out_shadow_masks[], shadow_ray_t<S> out_shadow_rays[], int *out_shadow_rays_count);
 } // namespace NS
 } // namespace Ray
 
@@ -4170,7 +4180,8 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                            const hit_data_t<S> &inter, const ray_data_t<S> &ray, const scene_data_t &sc,
                            uint32_t node_index, const Ref::TextureAtlasBase *tex_atlases[], simd_fvec<S> out_rgba[4],
                            simd_ivec<S> out_secondary_masks[], ray_data_t<S> out_secondary_rays[],
-                           int out_secondary_rays_count[]) {
+                           int *out_secondary_rays_count, simd_ivec<S> out_shadow_masks[],
+                           shadow_ray_t<S> out_shadow_rays[], int *out_shadow_rays_count) {
     out_rgba[0] = {0.0f};
     out_rgba[1] = {0.0f};
     out_rgba[2] = {0.0f};
@@ -4586,33 +4597,12 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
         where(use_mat2, mix_rand) /= mix_val;
     }
 
-#if USE_NEE == 1
+#if USE_NEE
     light_sample_t<S> ls;
-    simd_fvec<S> N_dot_L = 0.0f;
-
     if (pi.should_add_direct_light() && !sc.li_indices.empty()) {
         SampleLightSource(P, sc, tex_atlases, halton, sample_off, is_active_lane, ls);
-        const simd_ivec<S> is_light_valid = simd_cast(ls.pdf > 0.0f) & is_active_lane;
-
-        if (is_light_valid.not_all_zeros()) {
-            N_dot_L = dot(N, ls.L);
-#if USE_SHADOW_RAYS
-            simd_fvec<S> P_biased[3];
-            offset_ray(P, plane_N, P_biased);
-
-            const simd_fvec<S> _plane_N[3] = {-plane_N[0], -plane_N[1], -plane_N[2]};
-            simd_fvec<S> _P_biased[3];
-            offset_ray(P, _plane_N, _P_biased);
-
-            ITERATE_3({ where(N_dot_L < 0.0f, P_biased[i]) = _P_biased[i]; })
-
-            const simd_fvec<S> visibility =
-                ComputeVisibility(P_biased, ls.L, ls.dist - 10.0f * HIT_BIAS, is_light_valid,
-                                  halton[RAND_DIM_BSDF_PICK], hash(px_index), sc, node_index, tex_atlases);
-            where(visibility == 0.0f, ls.pdf) = 0.0f;
-#endif
-        }
     }
+    const simd_fvec<S> N_dot_L = dot(N, ls.L);
 #endif
 
     simd_fvec<S> base_color[3];
@@ -4709,11 +4699,14 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
     const simd_fvec<S> rand_u = fract(halton[RAND_DIM_BSDF_U] + sample_off[0]);
     const simd_fvec<S> rand_v = fract(halton[RAND_DIM_BSDF_V] + sample_off[1]);
 
-    simd_ivec<S> secondary_mask = {0};
+    simd_ivec<S> secondary_mask = {0}, shadow_mask = {0};
 
     ray_data_t<S> new_ray;
     new_ray.xy = ray.xy;
     new_ray.pdf = 0.0f;
+
+    shadow_ray_t<S> sh_r;
+    sh_r.xy = ray.xy;
 
     { // Sample materials
         simd_ivec<S> ray_queue[S];
@@ -4733,8 +4726,9 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
             }
 
             const material_t *mat = &sc.materials[first_mi];
-
             if (mat->type == DiffuseNode) {
+                simd_fvec<S> P_biased[3];
+                offset_ray(P, plane_N, P_biased);
 #if USE_NEE
                 const simd_ivec<S> eval_light = simd_cast(ls.pdf > 0.0f) & simd_cast(N_dot_L > 0.0f) & ray_queue[index];
                 if (eval_light.not_all_zeros()) {
@@ -4747,8 +4741,15 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                     simd_fvec<S> mis_weight = 1.0f;
                     where(ls.area > 0.0f, mis_weight) = power_heuristic(ls.pdf, bsdf_pdf);
 
-                    ITERATE_3(
-                        { where(eval_light, col[i]) += ls.col[i] * diff_col[i] * (mix_weight * mis_weight / ls.pdf); })
+                    ITERATE_3({ where(eval_light, sh_r.o[i]) = P_biased[i]; })
+                    ITERATE_3({ where(eval_light, sh_r.d[i]) = ls.L[i]; })
+                    where(eval_light, sh_r.dist) = ls.dist - 10.0f * HIT_BIAS;
+                    ITERATE_3({
+                        where(eval_light, sh_r.c[i]) = ray.c[i] * ls.col[i] * diff_col[i] * (mix_weight * mis_weight / ls.pdf);
+                    })
+
+                    assert((shadow_mask & eval_light).all_zeros());
+                    shadow_mask |= eval_light;
                 }
 #endif
                 const simd_ivec<S> gen_ray = (diff_depth < pi.settings.max_diff_depth) &
@@ -4757,12 +4758,9 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                     simd_fvec<S> V[3], F[4];
                     Sample_OrenDiffuse_BSDF(T, B, N, I, roughness, base_color, rand_u, rand_v, V, F);
 
-                    simd_fvec<S> new_p[3];
-                    offset_ray(P, plane_N, new_p);
-
                     where(gen_ray, new_ray.ray_depth) = ray.ray_depth + 0x00000001;
 
-                    ITERATE_3({ where(gen_ray, new_ray.o[i]) = new_p[i]; })
+                    ITERATE_3({ where(gen_ray, new_ray.o[i]) = P_biased[i]; })
                     ITERATE_3({ where(gen_ray, new_ray.d[i]) = V[i]; })
                     ITERATE_3({ where(gen_ray, new_ray.c[i]) = ray.c[i] * F[i] * mix_weight / F[3]; })
                     where(gen_ray, new_ray.pdf) = F[3];
@@ -4788,6 +4786,9 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                 const float spec_F0 = fresnel_dielectric_cos(1.0f, spec_ior);
                 const simd_fvec<S> roughness2 = roughness * roughness;
 
+                simd_fvec<S> P_biased[3];
+                offset_ray(P, plane_N, P_biased);
+
 #if USE_NEE
                 const simd_ivec<S> eval_light = simd_cast(ls.pdf > 0.0f) & simd_cast(roughness2 * roughness2 >= 1e-7f) &
                                                 simd_cast(N_dot_L > 0.0f) & ray_queue[index];
@@ -4809,8 +4810,16 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                     simd_fvec<S> mis_weight = 1.0f;
                     where(ls.area > 0.0f, mis_weight) = power_heuristic(ls.pdf, bsdf_pdf);
 
-                    ITERATE_3(
-                        { where(eval_light, col[i]) += ls.col[i] * spec_col[i] * (mix_weight * mis_weight / ls.pdf); })
+                    ITERATE_3({ where(eval_light, sh_r.o[i]) = P_biased[i]; })
+                    ITERATE_3({ where(eval_light, sh_r.d[i]) = ls.L[i]; })
+                    where(eval_light, sh_r.dist) = ls.dist - 10.0f * HIT_BIAS;
+                    ITERATE_3({
+                        where(eval_light, sh_r.c[i]) =
+                            ray.c[i] * ls.col[i] * spec_col[i] * (mix_weight * mis_weight / ls.pdf);
+                    })
+
+                    assert((shadow_mask & eval_light).all_zeros());
+                    shadow_mask |= eval_light;
                 }
 #endif
 
@@ -4821,12 +4830,9 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                     Sample_GGXSpecular_BSDF(T, B, N, I, roughness, simd_fvec<S>{0.0f}, simd_fvec<S>{spec_ior},
                                             simd_fvec<S>{spec_F0}, base_color, rand_u, rand_v, V, F);
 
-                    simd_fvec<S> new_p[3];
-                    offset_ray(P, plane_N, new_p);
-
                     where(gen_ray, new_ray.ray_depth) = ray.ray_depth + 0x00000100;
 
-                    ITERATE_3({ where(gen_ray, new_ray.o[i]) = new_p[i]; })
+                    ITERATE_3({ where(gen_ray, new_ray.o[i]) = P_biased[i]; })
                     ITERATE_3({ where(gen_ray, new_ray.d[i]) = V[i]; })
                     ITERATE_3({ where(gen_ray, new_ray.c[i]) = ray.c[i] * F[i] * mix_weight / F[3]; })
                     where(gen_ray, new_ray.pdf) = F[3];
@@ -4851,6 +4857,10 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                 where(is_backfacing, eta) = (mat->int_ior / mat->ext_ior);
                 const simd_fvec<S> roughness2 = roughness * roughness;
 
+                simd_fvec<S> P_biased[3];
+                const simd_fvec<S> _plane_N[3] = {-plane_N[0], -plane_N[1], -plane_N[2]};
+                offset_ray(P, _plane_N, P_biased);
+
 #if USE_NEE
                 const simd_ivec<S> eval_light = simd_cast(ls.pdf > 0.0f) & simd_cast(roughness2 * roughness2 >= 1e-7f) &
                                                 simd_cast(N_dot_L < 0.0f) & ray_queue[index];
@@ -4872,8 +4882,16 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                     simd_fvec<S> mis_weight = 1.0f;
                     where(ls.area > 0.0f, mis_weight) = power_heuristic(ls.pdf, bsdf_pdf);
 
-                    ITERATE_3(
-                        { where(eval_light, col[i]) += ls.col[i] * refr_col[i] * (mix_weight * mis_weight / ls.pdf); })
+                    ITERATE_3({ where(eval_light, sh_r.o[i]) = P_biased[i]; })
+                    ITERATE_3({ where(eval_light, sh_r.d[i]) = ls.L[i]; })
+                    where(eval_light, sh_r.dist) = ls.dist - 10.0f * HIT_BIAS;
+                    ITERATE_3({
+                        where(eval_light, sh_r.c[i]) =
+                            ray.c[i] * ls.col[i] * refr_col[i] * (mix_weight * mis_weight / ls.pdf);
+                    })
+
+                    assert((shadow_mask & eval_light).all_zeros());
+                    shadow_mask |= eval_light;
                 }
 #endif
 
@@ -4884,13 +4902,9 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                     Sample_GGXRefraction_BSDF(T, B, N, I, roughness, eta, base_color, rand_u, rand_v, V, F);
                     const simd_fvec<S> m = V[3];
 
-                    const simd_fvec<S> _plane_N[3] = {-plane_N[0], -plane_N[1], -plane_N[2]};
-                    simd_fvec<S> new_p[3];
-                    offset_ray(P, _plane_N, new_p);
-
                     where(gen_ray, new_ray.ray_depth) = ray.ray_depth + 0x00010000;
 
-                    ITERATE_3({ where(gen_ray, new_ray.o[i]) = new_p[i]; })
+                    ITERATE_3({ where(gen_ray, new_ray.o[i]) = P_biased[i]; })
                     ITERATE_3({ where(gen_ray, new_ray.d[i]) = V[i]; })
                     ITERATE_3({ where(gen_ray, new_ray.c[i]) = ray.c[i] * F[i] * mix_weight / F[3]; })
                     where(gen_ray, new_ray.pdf) = F[3];
@@ -4916,7 +4930,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                 }
             } else if (mat->type == EmissiveNode) {
                 simd_fvec<S> mis_weight = 1.0f;
-#if USE_NEE == 1
+#if USE_NEE
                 if (mat->flags & MAT_FLAG_SKY_PORTAL) {
                     simd_fvec<S> env_col[3] = {sc.env->env_col[0], sc.env->env_col[1], sc.env->env_col[2]};
                     if (sc.env->env_map != 0xffffffff) {
@@ -5047,6 +5061,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                 if (eval_light.not_all_zeros()) {
                     const simd_fvec<S> _I[3] = {-I[0], -I[1], -I[2]};
 
+                    simd_fvec<S> lcol[3] = {0.0f, 0.0f, 0.0f};
                     simd_fvec<S> bsdf_pdf = 0.0f;
 
                     const simd_ivec<S> eval_diff_lobe = simd_cast(diffuse_weight > 0.0f) & _is_frontfacing & eval_light;
@@ -5059,7 +5074,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                         ITERATE_3({ diff_col[i] *= (1.0f - metallic); })
 
                         ITERATE_3(
-                            { where(eval_diff_lobe, col[i]) += ls.col[i] * N_dot_L * diff_col[i] / (PI * ls.pdf); })
+                            { where(eval_diff_lobe, lcol[i]) += ls.col[i] * N_dot_L * diff_col[i] / (PI * ls.pdf); })
                     }
 
                     simd_fvec<S> H[3];
@@ -5091,7 +5106,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
 
                         where(eval_spec_lobe, bsdf_pdf) += specular_weight * spec_col[3];
 
-                        ITERATE_3({ where(eval_spec_lobe, col[i]) += ls.col[i] * spec_col[i] / ls.pdf; })
+                        ITERATE_3({ where(eval_spec_lobe, lcol[i]) += ls.col[i] * spec_col[i] / ls.pdf; })
                     }
 
                     const simd_ivec<S> eval_coat_lobe =
@@ -5106,7 +5121,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
 
                         where(eval_coat_lobe, bsdf_pdf) += clearcoat_weight * clearcoat_col[3];
 
-                        ITERATE_3({ where(eval_coat_lobe, col[i]) += 0.25f * ls.col[i] * clearcoat_col[i] / ls.pdf; })
+                        ITERATE_3({ where(eval_coat_lobe, lcol[i]) += 0.25f * ls.col[i] * clearcoat_col[i] / ls.pdf; })
                     }
 
                     const simd_ivec<S> eval_refr_spec_lobe =
@@ -5120,7 +5135,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                         where(eval_refr_spec_lobe, bsdf_pdf) += refraction_weight * fresnel * spec_col[3];
 
                         ITERATE_3(
-                            { where(eval_refr_spec_lobe, col[i]) += ls.col[i] * spec_col[i] * (fresnel / ls.pdf); })
+                            { where(eval_refr_spec_lobe, lcol[i]) += ls.col[i] * spec_col[i] * (fresnel / ls.pdf); })
                     }
 
                     const simd_ivec<S> eval_refr_trans_lobe =
@@ -5134,15 +5149,33 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                         where(eval_refr_trans_lobe, bsdf_pdf) += refraction_weight * (1.0f - fresnel) * refr_col[3];
 
                         ITERATE_3({
-                            where(eval_refr_trans_lobe, col[i]) +=
+                            where(eval_refr_trans_lobe, lcol[i]) +=
                                 ls.col[i] * refr_col[i] * ((1.0f - fresnel) / ls.pdf);
                         })
                     }
 
                     simd_fvec<S> mis_weight = 1.0f;
                     where(ls.area > 0.0f, mis_weight) = power_heuristic(ls.pdf, bsdf_pdf);
+                    ITERATE_3({ where(eval_light, lcol[i]) *= mix_weight * mis_weight; })
 
-                    ITERATE_3({ where(eval_light, col[i]) *= mix_weight * mis_weight; })
+                    ///
+                    simd_fvec<S> P_biased[3];
+                    offset_ray(P, plane_N, P_biased);
+
+                    const simd_fvec<S> _plane_N[3] = {-plane_N[0], -plane_N[1], -plane_N[2]};
+                    simd_fvec<S> _P_biased[3];
+                    offset_ray(P, _plane_N, _P_biased);
+
+                    ITERATE_3({ where(N_dot_L < 0.0f, P_biased[i]) = _P_biased[i]; })
+                    ///
+
+                    ITERATE_3({ where(eval_light, sh_r.o[i]) = P_biased[i]; })
+                    ITERATE_3({ where(eval_light, sh_r.d[i]) = ls.L[i]; })
+                    where(eval_light, sh_r.dist) = ls.dist - 10.0f * HIT_BIAS;
+                    ITERATE_3({ where(eval_light, sh_r.c[i]) = ray.c[i] * lcol[i]; })
+
+                    assert((shadow_mask & eval_light).all_zeros());
+                    shadow_mask |= eval_light;
                 }
 #endif
 
@@ -5372,6 +5405,12 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
         out_secondary_rays[index] = new_ray;
     }
 
+    if (shadow_mask.not_all_zeros()) {
+        const int index = (*out_shadow_rays_count)++;
+        out_shadow_masks[index] = shadow_mask;
+        out_shadow_rays[index] = sh_r;
+    }
+
     where(is_active_lane, out_rgba[0]) = ray.c[0] * col[0];
     where(is_active_lane, out_rgba[1]) = ray.c[1] * col[1];
     where(is_active_lane, out_rgba[2]) = ray.c[2] * col[2];
@@ -5379,7 +5418,6 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
 }
 
 #undef USE_NEE
-#undef USE_SHADOW_RAYS
 #undef USE_PATH_TERMINATION
 
 #pragma warning(pop)

@@ -121,12 +121,15 @@ template void IntersectAreaLights<RayPacketSize>(const ray_data_t<RayPacketSize>
                                                  Span<const uint32_t> visible_lights, const transform_t transforms[],
                                                  hit_data_t<RayPacketSize> &inout_inter);
 
-template void
-ShadeSurface<RayPacketSize>(const simd_ivec<RayPacketSize> &index, const pass_info_t &pi, const float *halton,
-                            const hit_data_t<RayPacketSize> &inter, const ray_data_t<RayPacketSize> &ray,
-                            const scene_data_t &sc, uint32_t node_index, const Ref::TextureAtlasBase *tex_atlases[],
-                            simd_fvec<RayPacketSize> out_rgba[4], simd_ivec<RayPacketSize> out_secondary_masks[],
-                            ray_data_t<RayPacketSize> out_secondary_rays[], int out_secondary_rays_count[]);
+template void ShadeSurface<RayPacketSize>(const simd_ivec<RayPacketSize> &index, const pass_info_t &pi,
+                                          const float *halton, const hit_data_t<RayPacketSize> &inter,
+                                          const ray_data_t<RayPacketSize> &ray, const scene_data_t &sc,
+                                          uint32_t node_index, const Ref::TextureAtlasBase *tex_atlases[],
+                                          simd_fvec<RayPacketSize> out_rgba[4],
+                                          simd_ivec<RayPacketSize> out_secondary_masks[],
+                                          ray_data_t<RayPacketSize> out_secondary_rays[], int *out_secondary_rays_count,
+                                          simd_ivec<RayPacketSize> out_shadow_masks[],
+                                          shadow_ray_t<RayPacketSize> out_shadow_rays[], int *out_shadow_rays_count);
 
 template class RendererSIMD<RayPacketDimX, RayPacketDimY>;
 } // namespace Sse2

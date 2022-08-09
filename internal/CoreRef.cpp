@@ -12,7 +12,6 @@
 //
 #define USE_VNDF_GGX_SAMPLING 1
 #define USE_NEE 1
-#define USE_SHADOW_RAYS 1
 #define USE_PATH_TERMINATION 1
 #define VECTORIZE_BBOX_INTERSECTION 1
 
@@ -2421,22 +2420,23 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleLatlong_RGBE(const TextureAtlasRGBA &atlas,
     return (p1X * k[1] + p0X * (1 - k[1]));
 }
 
-float Ray::Ref::ComputeVisibility(const simd_fvec4 &p, const simd_fvec4 &d, float dist, const float rand_val,
-                                  int rand_hash2, const scene_data_t &sc, const uint32_t node_index,
+float Ray::Ref::ComputeVisibility(const float p[3], const float d[3], float dist, const float rand_val, int rand_hash2,
+                                  const scene_data_t &sc, const uint32_t node_index,
                                   const TextureAtlasBase *tex_atlases[]) {
     float visibility = 1.0f;
 
-    simd_fvec4 ro = p;
+    const simd_fvec4 rd = {d[0], d[1], d[2], 0.0f};
+    simd_fvec4 ro = {p[0], p[1], p[2], 0.0f};
     while (dist > HIT_BIAS) {
         hit_data_t sh_inter;
         sh_inter.t = dist;
 
         if (sc.mnodes) {
-            Traverse_MacroTree_WithStack_AnyHit(value_ptr(ro), value_ptr(d), sc.mnodes, node_index, sc.mesh_instances,
+            Traverse_MacroTree_WithStack_AnyHit(value_ptr(ro), value_ptr(rd), sc.mnodes, node_index, sc.mesh_instances,
                                                 sc.mi_indices, sc.meshes, sc.transforms, sc.tris, sc.tri_materials,
                                                 sc.tri_indices, sh_inter);
         } else {
-            Traverse_MacroTree_WithStack_AnyHit(value_ptr(ro), value_ptr(d), sc.nodes, node_index, sc.mesh_instances,
+            Traverse_MacroTree_WithStack_AnyHit(value_ptr(ro), value_ptr(rd), sc.nodes, node_index, sc.mesh_instances,
                                                 sc.mi_indices, sc.meshes, sc.transforms, sc.tris, sc.tri_materials,
                                                 sc.tri_indices, sh_inter);
         }
@@ -2465,7 +2465,7 @@ float Ray::Ref::ComputeVisibility(const simd_fvec4 &p, const simd_fvec4 &d, floa
         const vertex_t &v2 = sc.vertices[sc.vtx_indices[tri_index * 3 + 1]];
         const vertex_t &v3 = sc.vertices[sc.vtx_indices[tri_index * 3 + 2]];
 
-        const auto I = d;
+        const float *I = d;
 
         float w = 1.0f - sh_inter.u - sh_inter.v;
         const simd_fvec2 sh_uvs =
@@ -2509,7 +2509,7 @@ float Ray::Ref::ComputeVisibility(const simd_fvec4 &p, const simd_fvec4 &d, floa
         }
 
         const float t = sh_inter.t + HIT_BIAS;
-        ro += d * t;
+        ro += rd * t;
         dist -= t;
     }
 
@@ -3078,23 +3078,10 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
 
 #if USE_NEE == 1
     light_sample_t ls;
-    float N_dot_L = 0.0f;
-
     if (pi.should_add_direct_light() && !sc.li_indices.empty() && mat->type != EmissiveNode) {
         SampleLightSource(P, sc, tex_atlases, halton, sample_off, ls);
-
-        if (ls.pdf > 0.0f) {
-            N_dot_L = dot(N, ls.L);
-#if USE_SHADOW_RAYS
-            const float visibility = ComputeVisibility(offset_ray(P, (N_dot_L < 0.0f) ? -plane_N : plane_N), ls.L,
-                                                       ls.dist - 10.0f * HIT_BIAS, halton[RAND_DIM_BSDF_PICK],
-                                                       hash(px_index), sc, node_index, tex_atlases);
-            if (visibility == 0.0f) {
-                ls.pdf = 0.0f;
-            }
-#endif
-        }
     }
+    const float N_dot_L = dot(N, ls.L);
 #endif
 
     const float mat_ior = is_backfacing ? mat->ext_ior : mat->int_ior;
@@ -3142,7 +3129,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
 
 #if USE_NEE
         if (ls.pdf > 0.0f && N_dot_L > 0.0f) {
-            simd_fvec4 diff_col = Evaluate_OrenDiffuse_BSDF(-I, N, ls.L, roughness, _base_color);
+            const simd_fvec4 diff_col = Evaluate_OrenDiffuse_BSDF(-I, N, ls.L, roughness, _base_color);
             const float bsdf_pdf = diff_col[3];
 
             float mis_weight = 1.0f;
@@ -3150,7 +3137,17 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
                 mis_weight = power_heuristic(ls.pdf, bsdf_pdf);
             }
 
-            col += ls.col * diff_col * (mix_weight * mis_weight / ls.pdf);
+            const simd_fvec4 lcol = ls.col * diff_col * (mix_weight * mis_weight / ls.pdf);
+
+            // schedule shadow ray
+            shadow_ray_t &sh_r = out_shadow_rays[(*out_shadow_rays_count)++];
+            memcpy(&sh_r.o[0], value_ptr(offset_ray(P, plane_N)), 3 * sizeof(float));
+            memcpy(&sh_r.d[0], value_ptr(ls.L), 3 * sizeof(float));
+            sh_r.dist = ls.dist - 10.0f * HIT_BIAS;
+            sh_r.c[0] = ray.c[0] * lcol[0];
+            sh_r.c[1] = ray.c[1] * lcol[1];
+            sh_r.c[2] = ray.c[2] * lcol[2];
+            sh_r.xy = ray.xy;
         }
 #endif
 
@@ -3200,7 +3197,17 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
             if (ls.area > 0.0f) {
                 mis_weight = power_heuristic(ls.pdf, bsdf_pdf);
             }
-            col += ls.col * spec_col * (mix_weight * mis_weight / ls.pdf);
+            const simd_fvec4 lcol = ls.col * spec_col * (mix_weight * mis_weight / ls.pdf);
+
+            // schedule shadow ray
+            shadow_ray_t &sh_r = out_shadow_rays[(*out_shadow_rays_count)++];
+            memcpy(&sh_r.o[0], value_ptr(offset_ray(P, plane_N)), 3 * sizeof(float));
+            memcpy(&sh_r.d[0], value_ptr(ls.L), 3 * sizeof(float));
+            sh_r.dist = ls.dist - 10.0f * HIT_BIAS;
+            sh_r.c[0] = ray.c[0] * lcol[0];
+            sh_r.c[1] = ray.c[1] * lcol[1];
+            sh_r.c[2] = ray.c[2] * lcol[2];
+            sh_r.xy = ray.xy;
         }
 #endif
 
@@ -3248,7 +3255,17 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
             if (ls.area > 0.0f) {
                 mis_weight = power_heuristic(ls.pdf, bsdf_pdf);
             }
-            col += ls.col * refr_col * (mix_weight * mis_weight / ls.pdf);
+            const simd_fvec4 lcol = ls.col * refr_col * (mix_weight * mis_weight / ls.pdf);
+
+            // schedule shadow ray
+            shadow_ray_t &sh_r = out_shadow_rays[(*out_shadow_rays_count)++];
+            memcpy(&sh_r.o[0], value_ptr(offset_ray(P, -plane_N)), 3 * sizeof(float));
+            memcpy(&sh_r.d[0], value_ptr(ls.L), 3 * sizeof(float));
+            sh_r.dist = ls.dist - 10.0f * HIT_BIAS;
+            sh_r.c[0] = ray.c[0] * lcol[0];
+            sh_r.c[1] = ray.c[1] * lcol[1];
+            sh_r.c[2] = ray.c[2] * lcol[2];
+            sh_r.xy = ray.xy;
         }
 #endif
 
@@ -3283,7 +3300,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
         }
     } else if (mat->type == EmissiveNode) {
         float mis_weight = 1.0f;
-#if USE_NEE == 1
+#if USE_NEE
         if (mat->flags & MAT_FLAG_SKY_PORTAL) {
             simd_fvec4 env_col = {sc.env->env_col[0], sc.env->env_col[1], sc.env->env_col[2], 0.0f};
             if (sc.env->env_map != 0xffffffff) {
@@ -3380,14 +3397,16 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
 
 #if USE_NEE
         if (ls.pdf > 0.0f) {
+            simd_fvec4 lcol = 0.0f;
             float bsdf_pdf = 0.0f;
+
             if (diffuse_weight > 0.0f && N_dot_L > 0.0f) {
                 simd_fvec4 diff_col = Evaluate_PrincipledDiffuse_BSDF(-I, N, ls.L, roughness, _base_color, sheen_color,
                                                                       pi.use_uniform_sampling());
                 bsdf_pdf += diffuse_weight * diff_col[3];
                 diff_col *= (1.0f - metallic);
 
-                col += ls.col * N_dot_L * diff_col / (PI * ls.pdf);
+                lcol += ls.col * N_dot_L * diff_col / (PI * ls.pdf);
             }
 
             simd_fvec4 H;
@@ -3412,7 +3431,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
                     view_dir_ts, sampled_normal_ts, light_dir_ts, alpha_x, alpha_y, spec_ior, spec_F0, spec_tmp_col);
                 bsdf_pdf += specular_weight * spec_col[3];
 
-                col += ls.col * spec_col / ls.pdf;
+                lcol += ls.col * spec_col / ls.pdf;
             }
 
             if (clearcoat_weight > 0.0f && clearcoat_roughness2 * clearcoat_roughness2 >= 1e-7f && N_dot_L > 0.0f) {
@@ -3420,7 +3439,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
                     view_dir_ts, sampled_normal_ts, light_dir_ts, clearcoat_roughness2, clearcoat_ior, clearcoat_F0);
                 bsdf_pdf += clearcoat_weight * clearcoat_col[3];
 
-                col += 0.25f * ls.col * clearcoat_col / ls.pdf;
+                lcol += 0.25f * ls.col * clearcoat_col / ls.pdf;
             }
 
             if (refraction_weight > 0.0f) {
@@ -3430,7 +3449,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
                                                   1.0f /* ior */, 0.0f /* F0 */, simd_fvec4{1.0f});
                     bsdf_pdf += refraction_weight * fresnel * spec_col[3];
 
-                    col += ls.col * spec_col * (fresnel / ls.pdf);
+                    lcol += ls.col * spec_col * (fresnel / ls.pdf);
                 }
 
                 if (fresnel != 1.0f && transmission_roughness2 * transmission_roughness2 >= 1e-7f && N_dot_L < 0.0f) {
@@ -3438,7 +3457,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
                         view_dir_ts, sampled_normal_ts, light_dir_ts, transmission_roughness2, eta, base_color);
                     bsdf_pdf += refraction_weight * (1.0f - fresnel) * refr_col[3];
 
-                    col += ls.col * refr_col * ((1.0f - fresnel) / ls.pdf);
+                    lcol += ls.col * refr_col * ((1.0f - fresnel) / ls.pdf);
                 }
             }
 
@@ -3446,7 +3465,17 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
             if (ls.area > 0.0f) {
                 mis_weight = power_heuristic(ls.pdf, bsdf_pdf);
             }
-            col *= mix_weight * mis_weight;
+            lcol *= mix_weight * mis_weight;
+
+            // schedule shadow ray
+            shadow_ray_t &sh_r = out_shadow_rays[(*out_shadow_rays_count)++];
+            memcpy(&sh_r.o[0], value_ptr(offset_ray(P, N_dot_L < 0.0f ? -plane_N : plane_N)), 3 * sizeof(float));
+            memcpy(&sh_r.d[0], value_ptr(ls.L), 3 * sizeof(float));
+            sh_r.dist = ls.dist - 10.0f * HIT_BIAS;
+            sh_r.c[0] = ray.c[0] * lcol[0];
+            sh_r.c[1] = ray.c[1] * lcol[1];
+            sh_r.c[2] = ray.c[2] * lcol[2];
+            sh_r.xy = ray.xy;
         }
 #endif
 

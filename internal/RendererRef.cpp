@@ -185,7 +185,23 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
     }
 
     for (int i = 0; i < shadow_rays_count; ++i) {
-        //
+        const shadow_ray_t &sh_r = p.shadow_rays[i];
+
+        const int x = (sh_r.xy >> 16) & 0x0000ffff;
+        const int y = sh_r.xy & 0x0000ffff;
+
+        const int px_index = y * w + x;
+
+        const float visibility = ComputeVisibility(sh_r.o, sh_r.d, sh_r.dist,
+                                                   region.halton_seq[hi + RAND_DIM_BASE_COUNT + RAND_DIM_BSDF_PICK],
+                                                   hash(px_index), sc_data, macro_tree_root, tex_atlases);
+        pixel_color_t col;
+        col.r = visibility * sh_r.c[0];
+        col.g = visibility * sh_r.c[1];
+        col.b = visibility * sh_r.c[2];
+        col.a = 0.0f;
+
+        temp_buf_.AddPixel(x, y, col);
     }
 
     const auto time_after_prim_shade = std::chrono::high_resolution_clock::now();
@@ -288,7 +304,23 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
         }
 
         for (int i = 0; i < shadow_rays_count; ++i) {
-            //
+            const shadow_ray_t &sh_r = p.shadow_rays[i];
+
+            const int x = (sh_r.xy >> 16) & 0x0000ffff;
+            const int y = sh_r.xy & 0x0000ffff;
+
+            const int px_index = y * w + x;
+
+            const float visibility = ComputeVisibility(sh_r.o, sh_r.d, sh_r.dist,
+                                                       region.halton_seq[hi + RAND_DIM_BASE_COUNT + RAND_DIM_BSDF_PICK],
+                                                       hash(px_index), sc_data, macro_tree_root, tex_atlases);
+            pixel_color_t col;
+            col.r = visibility * sh_r.c[0];
+            col.g = visibility * sh_r.c[1];
+            col.b = visibility * sh_r.c[2];
+            col.a = 0.0f;
+
+            temp_buf_.AddPixel(x, y, col);
         }
 
         auto time_secondary_shade_end = std::chrono::high_resolution_clock::now();

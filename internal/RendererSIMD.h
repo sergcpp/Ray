@@ -17,6 +17,8 @@ template <int S> struct PassData {
     aligned_vector<simd_ivec<S>> primary_masks;
     aligned_vector<ray_data_t<S>> secondary_rays;
     aligned_vector<simd_ivec<S>> secondary_masks;
+    aligned_vector<shadow_ray_t<S>> shadow_rays;
+    aligned_vector<simd_ivec<S>> shadow_masks;
     aligned_vector<hit_data_t<S>> intersections;
 
     aligned_vector<simd_ivec<S>> hash_values;
@@ -35,6 +37,8 @@ template <int S> struct PassData {
         primary_rays = std::move(rhs.primary_rays);
         primary_masks = std::move(rhs.primary_masks);
         secondary_rays = std::move(rhs.secondary_rays);
+        secondary_masks = std::move(rhs.secondary_masks);
+        shadow_rays = std::move(rhs.shadow_rays);
         intersections = std::move(rhs.intersections);
         hash_values = std::move(rhs.hash_values);
         head_flags = std::move(rhs.head_flags);
@@ -257,9 +261,11 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
 
     const auto time_after_prim_trace = std::chrono::high_resolution_clock::now();
 
-    p.secondary_rays.resize(p.intersections.size());
-    p.secondary_masks.resize(p.intersections.size());
-    int secondary_rays_count = 0;
+    p.secondary_rays.resize(p.primary_rays.size());
+    p.secondary_masks.resize(p.primary_rays.size());
+    p.shadow_rays.resize(p.primary_rays.size());
+    p.shadow_masks.resize(p.primary_rays.size());
+    int secondary_rays_count = 0, shadow_rays_count = 0;
 
     for (size_t i = 0; i < p.intersections.size(); i++) {
         const ray_data_t<S> &r = p.primary_rays[i];
@@ -273,7 +279,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
         simd_fvec<S> out_rgba[4] = {0.0f};
         NS::ShadeSurface(px_index, pass_info, &region.halton_seq[hi + RAND_DIM_BASE_COUNT], inter, r, sc_data,
                          macro_tree_root, tex_atlases, out_rgba, p.secondary_masks.data(), p.secondary_rays.data(),
-                         &secondary_rays_count);
+                         &secondary_rays_count, p.shadow_masks.data(), p.shadow_rays.data(), &shadow_rays_count);
         for (int j = 0; j < S; j++) {
             if (!p.primary_masks[i][j]) {
                 continue;
@@ -282,15 +288,36 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
         }
     }
 
+    for (int i = 0; i < shadow_rays_count; ++i) {
+        const shadow_ray_t<S> &sh_r = p.shadow_rays[i];
+
+        const simd_ivec<S> x = sh_r.xy >> 16, y = sh_r.xy & 0x0000FFFF;
+        const simd_ivec<S> px_index = y * w + x;
+
+        const simd_fvec<S> visibility =
+            ComputeVisibility(sh_r.o, sh_r.d, sh_r.dist, p.shadow_masks[i],
+                              region.halton_seq[hi + RAND_DIM_BASE_COUNT + RAND_DIM_BSDF_PICK], hash(px_index), sc_data,
+                              macro_tree_root, tex_atlases);
+
+        for (int j = 0; j < S; j++) {
+            if (!p.shadow_masks[i][j]) {
+                continue;
+            }
+            temp_buf_.AddPixel(
+                x[j], y[j],
+                {visibility[j] * sh_r.c[0][j], visibility[j] * sh_r.c[1][j], visibility[j] * sh_r.c[2][j], 0.0f});
+        }
+    }
+
     const auto time_after_prim_shade = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::micro> secondary_sort_time{}, secondary_trace_time{}, secondary_shade_time{};
 
-    p.hash_values.resize(secondary_rays_count);
-    // p.head_flags.resize(secondary_rays_count * S);
-    p.scan_values.resize(secondary_rays_count * S);
-    p.chunks.resize(secondary_rays_count * S);
-    p.chunks_temp.resize(secondary_rays_count * S);
-    // p.skeleton.resize(secondary_rays_count * S);
+    p.hash_values.resize(p.primary_rays.size());
+    // p.head_flags.resize(p.primary_rays.size() * S);
+    p.scan_values.resize(p.primary_rays.size() * S);
+    p.chunks.resize(p.primary_rays.size() * S);
+    p.chunks_temp.resize(p.primary_rays.size() * S);
+    // p.skeleton.resize(p.primary_rays.size() * S);
 
     if (cam.pass_settings.flags & OutputSH) {
         temp_buf_.ResetSampleData(rect);
@@ -339,6 +366,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
 
         int rays_count = secondary_rays_count;
         secondary_rays_count = 0;
+        shadow_rays_count = 0;
         std::swap(p.primary_rays, p.secondary_rays);
         std::swap(p.primary_masks, p.secondary_masks);
 
@@ -352,10 +380,10 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
             const simd_ivec<S> index = y * w + x;
 
             simd_fvec<S> out_rgba[4] = {0.0f};
-            NS::ShadeSurface(index, pass_info,
-                             &region.halton_seq[hi + RAND_DIM_BASE_COUNT + bounce * RAND_DIM_BOUNCE_COUNT], inter, r,
-                             sc_data, macro_tree_root, tex_atlases, out_rgba, p.secondary_masks.data(),
-                             p.secondary_rays.data(), &secondary_rays_count);
+            NS::ShadeSurface(
+                index, pass_info, &region.halton_seq[hi + RAND_DIM_BASE_COUNT + bounce * RAND_DIM_BOUNCE_COUNT], inter,
+                r, sc_data, macro_tree_root, tex_atlases, out_rgba, p.secondary_masks.data(), p.secondary_rays.data(),
+                &secondary_rays_count, p.shadow_masks.data(), p.shadow_rays.data(), &shadow_rays_count);
             out_rgba[3] = 0.0f;
 
             for (int j = 0; j < S; j++) {
@@ -363,6 +391,27 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
                     continue;
                 }
                 temp_buf_.AddPixel(x[j], y[j], {out_rgba[0][j], out_rgba[1][j], out_rgba[2][j], out_rgba[3][j]});
+            }
+        }
+
+        for (int i = 0; i < shadow_rays_count; ++i) {
+            const shadow_ray_t<S> &sh_r = p.shadow_rays[i];
+
+            const simd_ivec<S> x = sh_r.xy >> 16, y = sh_r.xy & 0x0000FFFF;
+            const simd_ivec<S> px_index = y * w + x;
+
+            const simd_fvec<S> visibility = ComputeVisibility(
+                sh_r.o, sh_r.d, sh_r.dist, p.shadow_masks[i],
+                region.halton_seq[hi + RAND_DIM_BASE_COUNT + bounce * RAND_DIM_BOUNCE_COUNT + RAND_DIM_BSDF_PICK],
+                hash(px_index), sc_data, macro_tree_root, tex_atlases);
+
+            for (int j = 0; j < S; j++) {
+                if (!p.shadow_masks[i][j]) {
+                    continue;
+                }
+                temp_buf_.AddPixel(
+                    x[j], y[j],
+                    {visibility[j] * sh_r.c[0][j], visibility[j] * sh_r.c[1][j], visibility[j] * sh_r.c[2][j], 0.0f});
             }
         }
 

@@ -50,7 +50,9 @@ struct shadow_ray_t {
     // origin and direction
     float o[3], d[3], dist;
     // throughput color of ray
-    float c[3], pdf;
+    float c[3];
+    // 16-bit pixel coordinates of ray ((x << 16) | y)
+    int xy;
 };
 static_assert(sizeof(shadow_ray_t) == 44, "!");
 
@@ -205,7 +207,7 @@ simd_fvec4 SampleAnisotropic(const TextureAtlasBase *atlases[], const texture_t 
 simd_fvec4 SampleLatlong_RGBE(const TextureAtlasRGBA &atlas, const texture_t &t, const simd_fvec4 &dir);
 
 // Get visibility between two points accounting for transparent materials
-float ComputeVisibility(const simd_fvec4 &p, const simd_fvec4 &d, float dist, float rand_val, int rand_hash2,
+float ComputeVisibility(const float p[3], const float d[3], float dist, float rand_val, int rand_hash2,
                         const scene_data_t &sc, uint32_t node_index, const TextureAtlasBase *tex_atlases[]);
 
 // Compute derivatives at hit point
