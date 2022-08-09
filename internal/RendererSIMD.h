@@ -9,16 +9,13 @@
 #include "FramebufferRef.h"
 #include "Halton.h"
 
-// TODO: remove this!!!
-#include "CoreRef.h"
-
 namespace Ray {
 class ILog;
 namespace NS {
 template <int S> struct PassData {
-    aligned_vector<ray_packet_t<S>> primary_rays;
+    aligned_vector<ray_data_t<S>> primary_rays;
     aligned_vector<simd_ivec<S>> primary_masks;
-    aligned_vector<ray_packet_t<S>> secondary_rays;
+    aligned_vector<ray_data_t<S>> secondary_rays;
     aligned_vector<simd_ivec<S>> secondary_masks;
     aligned_vector<hit_data_t<S>> intersections;
 
@@ -227,7 +224,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
         p.intersections.resize(p.primary_rays.size());
 
         for (size_t i = 0; i < p.primary_rays.size(); i++) {
-            const ray_packet_t<S> &r = p.primary_rays[i];
+            const ray_data_t<S> &r = p.primary_rays[i];
             hit_data_t<S> &inter = p.intersections[i];
             inter = {};
 
@@ -265,7 +262,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
     int secondary_rays_count = 0;
 
     for (size_t i = 0; i < p.intersections.size(); i++) {
-        const ray_packet_t<S> &r = p.primary_rays[i];
+        const ray_data_t<S> &r = p.primary_rays[i];
         const hit_data_t<S> &inter = p.intersections[i];
 
         const simd_ivec<S> x = r.xy >> 16, y = r.xy & 0x0000FFFF;
@@ -298,7 +295,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
     if (cam.pass_settings.flags & OutputSH) {
         temp_buf_.ResetSampleData(rect);
         for (int i = 0; i < secondary_rays_count; i++) {
-            const ray_packet_t<S> &r = p.secondary_rays[i];
+            const ray_data_t<S> &r = p.secondary_rays[i];
 
             const simd_ivec<S> x = (r.xy >> 16), y = (r.xy & 0x0000FFFF);
 
@@ -321,7 +318,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
         auto time_secondary_trace_start = std::chrono::high_resolution_clock::now();
 
         for (int i = 0; i < secondary_rays_count; i++) {
-            const ray_packet_t<S> &r = p.secondary_rays[i];
+            const ray_data_t<S> &r = p.secondary_rays[i];
             hit_data_t<S> &inter = p.intersections[i];
             inter = {};
 
@@ -348,7 +345,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
         pass_info.bounce = bounce;
 
         for (int i = 0; i < rays_count; i++) {
-            const ray_packet_t<S> &r = p.primary_rays[i];
+            const ray_data_t<S> &r = p.primary_rays[i];
             const hit_data_t<S> &inter = p.intersections[i];
 
             const simd_ivec<S> x = r.xy >> 16, y = r.xy & 0x0000FFFF;

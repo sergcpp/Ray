@@ -45,7 +45,7 @@ alignas(64) const int ray_packet_layout_y[] = {0, 0, 1, 1,  // NOLINT
                                                2, 2, 3, 3,  // NOLINT
                                                2, 2, 3, 3}; // NOLINT
 
-template <int S> struct ray_packet_t {
+template <int S> struct ray_data_t {
     // origins of rays in packet
     simd_fvec<S> o[3];
     // directions of rays in packet
@@ -90,39 +90,39 @@ template <int S> struct light_sample_t {
 // Generating rays
 template <int DimX, int DimY>
 void GeneratePrimaryRays(const int iteration, const camera_t &cam, const rect_t &r, int w, int h, const float *halton,
-                         aligned_vector<ray_packet_t<DimX * DimY>> &out_rays,
+                         aligned_vector<ray_data_t<DimX * DimY>> &out_rays,
                          aligned_vector<simd_ivec<DimX * DimY>> &out_masks);
 template <int DimX, int DimY>
 void SampleMeshInTextureSpace(int iteration, int obj_index, int uv_layer, const mesh_t &mesh, const transform_t &tr,
                               const uint32_t *vtx_indices, const vertex_t *vertices, const rect_t &r, int w, int h,
-                              const float *halton, aligned_vector<ray_packet_t<DimX * DimY>> &out_rays,
+                              const float *halton, aligned_vector<ray_data_t<DimX * DimY>> &out_rays,
                               aligned_vector<hit_data_t<DimX * DimY>> &out_inters);
 
 // Sorting rays
 template <int S>
-void SortRays_CPU(ray_packet_t<S> *rays, simd_ivec<S> *ray_masks, int &secondary_rays_count, const float root_min[3],
+void SortRays_CPU(ray_data_t<S> *rays, simd_ivec<S> *ray_masks, int &secondary_rays_count, const float root_min[3],
                   const float cell_size[3], simd_ivec<S> *hash_values, uint32_t *scan_values, ray_chunk_t *chunks,
                   ray_chunk_t *chunks_temp);
 template <int S>
-void SortRays_GPU(ray_packet_t<S> *rays, simd_ivec<S> *ray_masks, int &secondary_rays_count, const float root_min[3],
+void SortRays_GPU(ray_data_t<S> *rays, simd_ivec<S> *ray_masks, int &secondary_rays_count, const float root_min[3],
                   const float cell_size[3], simd_ivec<S> *hash_values, int *head_flags, uint32_t *scan_values,
                   ray_chunk_t *chunks, ray_chunk_t *chunks_temp, uint32_t *skeleton);
 
 // Intersect primitives
 template <int S>
-bool IntersectTris_ClosestHit(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const tri_accel_t *tris,
+bool IntersectTris_ClosestHit(const ray_data_t<S> &r, const simd_ivec<S> &ray_mask, const tri_accel_t *tris,
                               uint32_t num_tris, int obj_index, hit_data_t<S> &out_inter);
 template <int S>
-bool IntersectTris_ClosestHit(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const tri_accel_t *tris,
+bool IntersectTris_ClosestHit(const ray_data_t<S> &r, const simd_ivec<S> &ray_mask, const tri_accel_t *tris,
                               int tri_start, int tri_end, int obj_index, hit_data_t<S> &out_inter);
 template <int S>
 bool IntersectTris_ClosestHit(const float o[3], const float d[3], int i, const tri_accel_t *tris, int tri_start,
                               int tri_end, int obj_index, hit_data_t<S> &out_inter);
 template <int S>
-bool IntersectTris_AnyHit(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const tri_accel_t *tris,
+bool IntersectTris_AnyHit(const ray_data_t<S> &r, const simd_ivec<S> &ray_mask, const tri_accel_t *tris,
                           uint32_t num_tris, int obj_index, hit_data_t<S> &out_inter);
 template <int S>
-bool IntersectTris_AnyHit(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const tri_accel_t *tris,
+bool IntersectTris_AnyHit(const ray_data_t<S> &r, const simd_ivec<S> &ray_mask, const tri_accel_t *tris,
                           int tri_start, int tri_end, int obj_index, hit_data_t<S> &out_inter);
 template <int S>
 bool IntersectTris_AnyHit(const float o[3], const float d[3], int i, const tri_accel_t *tris,
@@ -131,28 +131,28 @@ bool IntersectTris_AnyHit(const float o[3], const float d[3], int i, const tri_a
 
 // Traverse acceleration structure
 template <int S>
-bool Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask,
+bool Traverse_MacroTree_WithStack_ClosestHit(const ray_data_t<S> &r, const simd_ivec<S> &ray_mask,
                                              const bvh_node_t *nodes, uint32_t node_index,
                                              const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
                                              const mesh_t *meshes, const transform_t *transforms,
                                              const tri_accel_t *tris, const uint32_t *tri_indices,
                                              hit_data_t<S> &inter);
 template <int S>
-bool Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask,
+bool Traverse_MacroTree_WithStack_ClosestHit(const ray_data_t<S> &r, const simd_ivec<S> &ray_mask,
                                              const mbvh_node_t *mnodes, uint32_t node_index,
                                              const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
                                              const mesh_t *meshes, const transform_t *transforms,
                                              const tri_accel_t *tris, const uint32_t *tri_indices,
                                              hit_data_t<S> &inter);
 template <int S>
-bool Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask,
+bool Traverse_MacroTree_WithStack_AnyHit(const ray_data_t<S> &r, const simd_ivec<S> &ray_mask,
                                          const bvh_node_t *nodes, uint32_t node_index,
                                          const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
                                          const mesh_t *meshes, const transform_t *transforms, const tri_accel_t *tris,
                                          const tri_mat_data_t *materials, const uint32_t *tri_indices,
                                          hit_data_t<S> &inter);
 template <int S>
-bool Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask,
+bool Traverse_MacroTree_WithStack_AnyHit(const ray_data_t<S> &r, const simd_ivec<S> &ray_mask,
                                          const mbvh_node_t *mnodes, uint32_t node_index,
                                          const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
                                          const mesh_t *meshes, const transform_t *transforms, const tri_accel_t *tris,
@@ -160,7 +160,7 @@ bool Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t<S> &r, const simd_iv
                                          hit_data_t<S> &inter);
 // traditional bvh traversal with stack for inner nodes
 template <int S>
-bool Traverse_MicroTree_WithStack_ClosestHit(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask,
+bool Traverse_MicroTree_WithStack_ClosestHit(const ray_data_t<S> &r, const simd_ivec<S> &ray_mask,
                                              const bvh_node_t *nodes, uint32_t node_index, const tri_accel_t *tris,
                                              const uint32_t *tri_indices, int obj_index, hit_data_t<S> &inter);
 template <int S>
@@ -168,7 +168,7 @@ bool Traverse_MicroTree_WithStack_ClosestHit(const float ro[3], const float rd[3
                                              uint32_t node_index, const tri_accel_t *tris, const uint32_t *tri_indices,
                                              int obj_index, hit_data_t<S> &inter);
 template <int S>
-bool Traverse_MicroTree_WithStack_AnyHit(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask,
+bool Traverse_MicroTree_WithStack_AnyHit(const ray_data_t<S> &r, const simd_ivec<S> &ray_mask,
                                          const bvh_node_t *nodes, uint32_t node_index, const tri_accel_t *tris,
                                          const tri_mat_data_t *materials, const uint32_t *tri_indices, int obj_index,
                                          hit_data_t<S> &inter);
@@ -238,7 +238,7 @@ void Sample_PrincipledClearcoat_BSDF(const simd_fvec<S> T[3], const simd_fvec<S>
                                      simd_fvec<S> out_V[3], simd_fvec<S> out_color[4]);
 
 // Transform
-template <int S> ray_packet_t<S> TransformRay(const ray_packet_t<S> &r, const float *xform);
+template <int S> ray_data_t<S> TransformRay(const ray_data_t<S> &r, const float *xform);
 template <int S> void TransformPoint(const simd_fvec<S> p[3], const float *xform, simd_fvec<S> out_p[3]);
 template <int S> void TransformDirection(const simd_fvec<S> xform[16], simd_fvec<S> p[3]);
 template <int S> void TransformNormal(const simd_fvec<S> n[3], const float *inv_xform, simd_fvec<S> out_n[3]);
@@ -298,16 +298,16 @@ void SampleLightSource(const simd_fvec<S> P[3], const scene_data_t &sc, const Re
 
 // Account for visible lights contribution
 template <int S>
-void IntersectAreaLights(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const light_t lights[],
+void IntersectAreaLights(const ray_data_t<S> &r, const simd_ivec<S> &ray_mask, const light_t lights[],
                          Span<const uint32_t> visible_lights, const transform_t transforms[],
                          hit_data_t<S> &inout_inter);
 
 // Shade
 template <int S>
 void ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, const float *halton, const hit_data_t<S> &inter,
-                  const ray_packet_t<S> &ray, const scene_data_t &sc, uint32_t node_index,
+                  const ray_data_t<S> &ray, const scene_data_t &sc, uint32_t node_index,
                   const Ref::TextureAtlasBase *tex_atlases[], simd_fvec<S> out_rgba[4],
-                  simd_ivec<S> out_secondary_masks[], ray_packet_t<S> out_secondary_rays[],
+                  simd_ivec<S> out_secondary_masks[], ray_data_t<S> out_secondary_rays[],
                   int out_secondary_rays_count[]);
 } // namespace NS
 } // namespace Ray
@@ -319,7 +319,7 @@ void ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, const flo
 namespace Ray {
 namespace NS {
 template <int S>
-force_inline simd_ivec<S> _IntersectTri(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const tri_accel_t &tri,
+force_inline simd_ivec<S> _IntersectTri(const ray_data_t<S> &r, const simd_ivec<S> &ray_mask, const tri_accel_t &tri,
                                         uint32_t prim_index, hit_data_t<S> &inter) {
 #define _dot(x, y) ((x)[0] * (y)[0] + (x)[1] * (y)[1] + (x)[2] * (y)[2])
 
@@ -590,7 +590,7 @@ template <int S> force_inline simd_ivec<S> bbox_test(const simd_fvec<S> p[3], co
 }
 
 template <int S>
-force_inline uint32_t near_child(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const bvh_node_t &node) {
+force_inline uint32_t near_child(const ray_data_t<S> &r, const simd_ivec<S> &ray_mask, const bvh_node_t &node) {
     const simd_fvec<S> dir_neg_fmask = r.d[node.prim_count >> 30] < 0.0f;
     const auto dir_neg_imask = reinterpret_cast<const simd_ivec<S> &>(dir_neg_fmask);
     if (dir_neg_imask.all_zeros(ray_mask)) {
@@ -615,7 +615,7 @@ template <int S, int StackSize> struct TraversalStateStack_Multi {
         uint32_t stack_size;
     } queue[S];
 
-    force_inline void push_children(const ray_packet_t<S> &r, const bvh_node_t &node) {
+    force_inline void push_children(const ray_data_t<S> &r, const bvh_node_t &node) {
         const simd_fvec<S> dir_neg_mask = r.d[node.prim_count >> 30] < 0.0f;
         const auto mask1 = reinterpret_cast<const simd_ivec<S> &>(dir_neg_mask) & queue[index].mask;
         if (mask1.all_zeros()) {
@@ -949,7 +949,7 @@ force_inline void TransformDirection(const float d[3], const float *xform, float
 template <int S> force_inline simd_fvec<S> pow5(const simd_fvec<S> &v) { return (v * v) * (v * v) * v; }
 
 template <int S>
-force_inline simd_ivec<S> get_ray_hash(const ray_packet_t<S> &r, const simd_ivec<S> &mask, const float root_min[3],
+force_inline simd_ivec<S> get_ray_hash(const ray_data_t<S> &r, const simd_ivec<S> &mask, const float root_min[3],
                                        const float cell_size[3]) {
     simd_ivec<S> x = clamp((simd_ivec<S>)((r.o[0] - root_min[0]) / cell_size[0]), 0, 255),
                  y = clamp((simd_ivec<S>)((r.o[1] - root_min[1]) / cell_size[1]), 0, 255),
@@ -1399,7 +1399,7 @@ template <int S> force_inline simd_fvec<S> power_heuristic(const simd_fvec<S> &a
 
 template <int DimX, int DimY>
 void Ray::NS::GeneratePrimaryRays(const int iteration, const camera_t &cam, const rect_t &r, int w, int h,
-                                  const float *halton, aligned_vector<ray_packet_t<DimX * DimY>> &out_rays,
+                                  const float *halton, aligned_vector<ray_data_t<DimX * DimY>> &out_rays,
                                   aligned_vector<simd_ivec<DimX * DimY>> &out_masks) {
     const int S = DimX * DimY;
     static_assert(S <= 16, "!");
@@ -1450,7 +1450,7 @@ void Ray::NS::GeneratePrimaryRays(const int iteration, const camera_t &cam, cons
     for (int y = r.y; y < r.y + r.h; y += DimY) {
         for (int x = r.x; x < r.x + r.w; x += DimX) {
             simd_ivec<S> &out_mask = out_masks[i];
-            ray_packet_t<S> &out_r = out_rays[i++];
+            ray_data_t<S> &out_r = out_rays[i++];
 
             const simd_ivec<S> ixx = x + off_x, iyy = y + off_y;
 
@@ -1520,7 +1520,7 @@ template <int DimX, int DimY>
 void Ray::NS::SampleMeshInTextureSpace(int iteration, int obj_index, int uv_layer, const mesh_t &mesh,
                                        const transform_t &tr, const uint32_t *vtx_indices, const vertex_t *vertices,
                                        const rect_t &r, int width, int height, const float *halton,
-                                       aligned_vector<ray_packet_t<DimX * DimY>> &out_rays,
+                                       aligned_vector<ray_data_t<DimX * DimY>> &out_rays,
                                        aligned_vector<hit_data_t<DimX * DimY>> &out_inters) {
     const int S = DimX * DimY;
     static_assert(S <= 16, "!");
@@ -1535,7 +1535,7 @@ void Ray::NS::SampleMeshInTextureSpace(int iteration, int obj_index, int uv_laye
         for (int x = r.x; x < r.x + r.w - (r.w & (DimX - 1)); x += DimX) {
             const simd_ivec<S> ixx = x + off_x, iyy = simd_ivec<S>(y) + off_y;
 
-            ray_packet_t<S> &out_ray = out_rays[count];
+            ray_data_t<S> &out_ray = out_rays[count];
             hit_data_t<S> &out_inter = out_inters[count];
             count++;
 
@@ -1599,7 +1599,7 @@ void Ray::NS::SampleMeshInTextureSpace(int iteration, int obj_index, int uv_laye
                 const simd_ivec<S> ixx = x + off_x, iyy = simd_ivec<S>(y) + off_y;
 
                 const int ndx = ((y - r.y) / DimY) * (r.w / DimX) + (x - r.x) / DimX;
-                ray_packet_t<S> &out_ray = out_rays[ndx];
+                ray_data_t<S> &out_ray = out_rays[ndx];
                 hit_data_t<S> &out_inter = out_inters[ndx];
 
                 const simd_ivec<S> index = iyy * width + ixx;
@@ -1659,7 +1659,7 @@ void Ray::NS::SampleMeshInTextureSpace(int iteration, int obj_index, int uv_laye
 }
 
 template <int S>
-void Ray::NS::SortRays_CPU(ray_packet_t<S> *rays, simd_ivec<S> *ray_masks, int &rays_count, const float root_min[3],
+void Ray::NS::SortRays_CPU(ray_data_t<S> *rays, simd_ivec<S> *ray_masks, int &rays_count, const float root_min[3],
                            const float cell_size[3], simd_ivec<S> *hash_values, uint32_t *scan_values,
                            ray_chunk_t *chunks, ray_chunk_t *chunks_temp) {
     // From "Fast Ray Sorting and Breadth-First Packet Traversal for GPU Ray Tracing" [2010]
@@ -1750,7 +1750,7 @@ void Ray::NS::SortRays_CPU(ray_packet_t<S> *rays, simd_ivec<S> *ray_masks, int &
 }
 
 template <int S>
-void Ray::NS::SortRays_GPU(ray_packet_t<S> *rays, simd_ivec<S> *ray_masks, int &rays_count, const float root_min[3],
+void Ray::NS::SortRays_GPU(ray_data_t<S> *rays, simd_ivec<S> *ray_masks, int &rays_count, const float root_min[3],
                            const float cell_size[3], simd_ivec<S> *hash_values, int *head_flags, uint32_t *scan_values,
                            ray_chunk_t *chunks, ray_chunk_t *chunks_temp, uint32_t *skeleton) {
     // From "Fast Ray Sorting and Breadth-First Packet Traversal for GPU Ray Tracing" [2010]
@@ -1879,7 +1879,7 @@ void Ray::NS::SortRays_GPU(ray_packet_t<S> *rays, simd_ivec<S> *ray_masks, int &
 }
 
 template <int S>
-bool Ray::NS::IntersectTris_ClosestHit(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const tri_accel_t *tris,
+bool Ray::NS::IntersectTris_ClosestHit(const ray_data_t<S> &r, const simd_ivec<S> &ray_mask, const tri_accel_t *tris,
                                        uint32_t num_tris, int obj_index, hit_data_t<S> &out_inter) {
     hit_data_t<S> inter = {Uninitialize};
     inter.mask = {0};
@@ -1904,7 +1904,7 @@ bool Ray::NS::IntersectTris_ClosestHit(const ray_packet_t<S> &r, const simd_ivec
 }
 
 template <int S>
-bool Ray::NS::IntersectTris_ClosestHit(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const tri_accel_t *tris,
+bool Ray::NS::IntersectTris_ClosestHit(const ray_data_t<S> &r, const simd_ivec<S> &ray_mask, const tri_accel_t *tris,
                                        const int tri_start, const int tri_end, const int obj_index,
                                        hit_data_t<S> &out_inter) {
     hit_data_t<S> inter = {Uninitialize};
@@ -1947,7 +1947,7 @@ bool Ray::NS::IntersectTris_ClosestHit(const float o[3], const float d[3], int i
 }
 
 template <int S>
-bool Ray::NS::IntersectTris_AnyHit(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const tri_accel_t *tris,
+bool Ray::NS::IntersectTris_AnyHit(const ray_data_t<S> &r, const simd_ivec<S> &ray_mask, const tri_accel_t *tris,
                                    uint32_t num_tris, int obj_index, hit_data_t<S> &out_inter) {
     hit_data_t<S> inter = {Uninitialize};
     inter.mask = {0};
@@ -1972,7 +1972,7 @@ bool Ray::NS::IntersectTris_AnyHit(const ray_packet_t<S> &r, const simd_ivec<S> 
 }
 
 template <int S>
-bool Ray::NS::IntersectTris_AnyHit(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const tri_accel_t *tris,
+bool Ray::NS::IntersectTris_AnyHit(const ray_data_t<S> &r, const simd_ivec<S> &ray_mask, const tri_accel_t *tris,
                                    const int tri_start, const int tri_end, const int obj_index,
                                    hit_data_t<S> &out_inter) {
     hit_data_t<S> inter = {Uninitialize};
@@ -2019,7 +2019,7 @@ bool Ray::NS::IntersectTris_AnyHit(const float o[3], const float d[3], int i, co
 }
 
 template <int S>
-bool Ray::NS::Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask,
+bool Ray::NS::Traverse_MacroTree_WithStack_ClosestHit(const ray_data_t<S> &r, const simd_ivec<S> &ray_mask,
                                                       const bvh_node_t *nodes, uint32_t node_index,
                                                       const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
                                                       const mesh_t *meshes, const transform_t *transforms,
@@ -2071,7 +2071,7 @@ bool Ray::NS::Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t<S> &r, 
                         continue;
                     }
 
-                    const ray_packet_t<S> _r = TransformRay(r, tr.inv_xform);
+                    const ray_data_t<S> _r = TransformRay(r, tr.inv_xform);
                     res |= Traverse_MicroTree_WithStack_ClosestHit(_r, bbox_mask, nodes, m.node_index, tris,
                                                                    tri_indices, int(mi_indices[i]), inter);
                 }
@@ -2084,7 +2084,7 @@ bool Ray::NS::Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t<S> &r, 
 }
 
 template <int S>
-bool Ray::NS::Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask,
+bool Ray::NS::Traverse_MacroTree_WithStack_ClosestHit(const ray_data_t<S> &r, const simd_ivec<S> &ray_mask,
                                                       const mbvh_node_t *nodes, uint32_t node_index,
                                                       const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
                                                       const mesh_t *meshes, const transform_t *transforms,
@@ -2201,7 +2201,7 @@ bool Ray::NS::Traverse_MacroTree_WithStack_ClosestHit(const ray_packet_t<S> &r, 
 }
 
 template <int S>
-bool Ray::NS::Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask,
+bool Ray::NS::Traverse_MacroTree_WithStack_AnyHit(const ray_data_t<S> &r, const simd_ivec<S> &ray_mask,
                                                   const bvh_node_t *nodes, uint32_t node_index,
                                                   const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
                                                   const mesh_t *meshes, const transform_t *transforms,
@@ -2253,7 +2253,7 @@ bool Ray::NS::Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t<S> &r, cons
                         continue;
                     }
 
-                    const ray_packet_t<S> _r = TransformRay(r, tr.inv_xform);
+                    const ray_data_t<S> _r = TransformRay(r, tr.inv_xform);
                     const bool hit_found = Traverse_MicroTree_WithStack_AnyHit(
                         _r, bbox_mask, nodes, m.node_index, tris, materials, tri_indices, int(mi_indices[i]), inter);
                     res |= hit_found;
@@ -2267,7 +2267,7 @@ bool Ray::NS::Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t<S> &r, cons
 }
 
 template <int S>
-bool Ray::NS::Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask,
+bool Ray::NS::Traverse_MacroTree_WithStack_AnyHit(const ray_data_t<S> &r, const simd_ivec<S> &ray_mask,
                                                   const mbvh_node_t *nodes, uint32_t node_index,
                                                   const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
                                                   const mesh_t *meshes, const transform_t *transforms,
@@ -2385,7 +2385,7 @@ bool Ray::NS::Traverse_MacroTree_WithStack_AnyHit(const ray_packet_t<S> &r, cons
 }
 
 template <int S>
-bool Ray::NS::Traverse_MicroTree_WithStack_ClosestHit(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask,
+bool Ray::NS::Traverse_MicroTree_WithStack_ClosestHit(const ray_data_t<S> &r, const simd_ivec<S> &ray_mask,
                                                       const bvh_node_t *nodes, uint32_t node_index,
                                                       const tri_accel_t *tris, const uint32_t *tri_indices,
                                                       int obj_index, hit_data_t<S> &inter) {
@@ -2526,7 +2526,7 @@ bool Ray::NS::Traverse_MicroTree_WithStack_ClosestHit(const float ro[3], const f
 }
 
 template <int S>
-bool Ray::NS::Traverse_MicroTree_WithStack_AnyHit(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask,
+bool Ray::NS::Traverse_MicroTree_WithStack_AnyHit(const ray_data_t<S> &r, const simd_ivec<S> &ray_mask,
                                                   const bvh_node_t *nodes, uint32_t node_index, const tri_accel_t *tris,
                                                   const tri_mat_data_t *materials, const uint32_t *tri_indices,
                                                   int obj_index, hit_data_t<S> &inter) {
@@ -3086,8 +3086,8 @@ void Ray::NS::Sample_PrincipledClearcoat_BSDF(const simd_fvec<S> T[3], const sim
 }
 
 template <int S>
-force_inline Ray::NS::ray_packet_t<S> Ray::NS::TransformRay(const ray_packet_t<S> &r, const float *xform) {
-    ray_packet_t<S> _r = r;
+force_inline Ray::NS::ray_data_t<S> Ray::NS::TransformRay(const ray_data_t<S> &r, const float *xform) {
+    ray_data_t<S> _r = r;
 
     _r.o[0] = r.o[0] * xform[0] + r.o[1] * xform[4] + r.o[2] * xform[8] + xform[12];
     _r.o[1] = r.o[0] * xform[1] + r.o[1] * xform[5] + r.o[2] * xform[9] + xform[13];
@@ -3501,7 +3501,7 @@ Ray::NS::simd_fvec<S> Ray::NS::ComputeVisibility(const simd_fvec<S> p[3], const 
                                                  const simd_ivec<S> &mask, const float rand_val,
                                                  const simd_ivec<S> &rand_hash2, const scene_data_t &sc,
                                                  uint32_t node_index, const Ref::TextureAtlasBase *atlases[]) {
-    ray_packet_t<S> sh_r;
+    ray_data_t<S> sh_r;
 
     ITERATE_3({ sh_r.o[i] = p[i]; })
     ITERATE_3({ sh_r.d[i] = d[i]; })
@@ -4069,7 +4069,7 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const scene_data_t &sc,
 }
 
 template <int S>
-void Ray::NS::IntersectAreaLights(const ray_packet_t<S> &r, const simd_ivec<S> &ray_mask, const light_t lights[],
+void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, const simd_ivec<S> &ray_mask, const light_t lights[],
                                   Span<const uint32_t> visible_lights, const transform_t transforms[],
                                   hit_data_t<S> &inout_inter) {
     for (uint32_t li = 0; li < uint32_t(visible_lights.size()); ++li) {
@@ -4157,9 +4157,9 @@ void Ray::NS::IntersectAreaLights(const ray_packet_t<S> &r, const simd_ivec<S> &
 
 template <int S>
 void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, const float *halton,
-                           const hit_data_t<S> &inter, const ray_packet_t<S> &ray, const scene_data_t &sc,
+                           const hit_data_t<S> &inter, const ray_data_t<S> &ray, const scene_data_t &sc,
                            uint32_t node_index, const Ref::TextureAtlasBase *tex_atlases[], simd_fvec<S> out_rgba[4],
-                           simd_ivec<S> out_secondary_masks[], ray_packet_t<S> out_secondary_rays[],
+                           simd_ivec<S> out_secondary_masks[], ray_data_t<S> out_secondary_rays[],
                            int out_secondary_rays_count[]) {
     out_rgba[0] = {0.0f};
     out_rgba[1] = {0.0f};
@@ -4701,7 +4701,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
 
     simd_ivec<S> secondary_mask = {0};
 
-    ray_packet_t<S> new_ray;
+    ray_data_t<S> new_ray;
     new_ray.xy = ray.xy;
     new_ray.pdf = 0.0f;
 

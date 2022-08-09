@@ -353,7 +353,7 @@ Ray::Ocl::Renderer::Renderer(const int w, const int h, int platform_index, int d
 
         char buf[512];
         int argc = 0;
-        if (types_check.setArg(argc++, sizeof(ray_packet_t), buf) != CL_SUCCESS ||
+        if (types_check.setArg(argc++, sizeof(ray_data_t), buf) != CL_SUCCESS ||
             types_check.setArg(argc++, sizeof(Ocl::camera_t), buf) != CL_SUCCESS ||
             types_check.setArg(argc++, sizeof(tri_accel_t), buf) != CL_SUCCESS ||
             types_check.setArg(argc++, sizeof(hit_data_t), buf) != CL_SUCCESS ||
@@ -434,10 +434,10 @@ void Ray::Ocl::Renderer::Resize(int w, int h) {
     const int num_pixels = w * h;
 
     cl_int error = CL_SUCCESS;
-    prim_rays_buf_ = cl::Buffer(context_, CL_MEM_WRITE_ONLY | CL_MEM_HOST_NO_ACCESS, sizeof(ray_packet_t) * num_pixels,
+    prim_rays_buf_ = cl::Buffer(context_, CL_MEM_WRITE_ONLY | CL_MEM_HOST_NO_ACCESS, sizeof(ray_data_t) * num_pixels,
                                 nullptr, &error);
     secondary_rays_buf_ = cl::Buffer(context_, CL_MEM_READ_WRITE | CL_MEM_HOST_NO_ACCESS,
-                                     sizeof(ray_packet_t) * num_pixels, nullptr, &error);
+                                     sizeof(ray_data_t) * num_pixels, nullptr, &error);
     prim_inters_buf_ = cl::Buffer(context_, CL_MEM_READ_WRITE | CL_MEM_HOST_NO_ACCESS, sizeof(hit_data_t) * num_pixels,
                                   nullptr, &error);
 
@@ -1694,12 +1694,12 @@ bool Ray::Ocl::Renderer::InclusiveSegScan_GPU(const cl::Buffer &flags, const cl:
 
 bool Ray::Ocl::Renderer::ReorderRays_CPU(const cl::Buffer &scan_values, const cl::Buffer &rays, cl_int count) {
     std::vector<uint32_t> _scan_values(count);
-    std::vector<ray_packet_t> _rays(count);
+    std::vector<ray_data_t> _rays(count);
 
     if (queue_.enqueueReadBuffer(scan_values, CL_TRUE, 0, sizeof(uint32_t) * count, &_scan_values[0]) != CL_SUCCESS) {
         return false;
     }
-    if (queue_.enqueueReadBuffer(rays, CL_TRUE, 0, sizeof(ray_packet_t) * count, &_rays[0]) != CL_SUCCESS) {
+    if (queue_.enqueueReadBuffer(rays, CL_TRUE, 0, sizeof(ray_data_t) * count, &_rays[0]) != CL_SUCCESS) {
         return false;
     }
 
@@ -1712,7 +1712,7 @@ bool Ray::Ocl::Renderer::ReorderRays_CPU(const cl::Buffer &scan_values, const cl
         }
     }
 
-    return queue_.enqueueWriteBuffer(rays, CL_TRUE, 0, sizeof(ray_packet_t) * count, &_rays[0]) == CL_SUCCESS;
+    return queue_.enqueueWriteBuffer(rays, CL_TRUE, 0, sizeof(ray_data_t) * count, &_rays[0]) == CL_SUCCESS;
 }
 
 bool Ray::Ocl::Renderer::PerformRadixSort_CPU(const cl::Buffer &chunks, cl_int count) {

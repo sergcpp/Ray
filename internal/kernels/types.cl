@@ -6,7 +6,7 @@ typedef struct _ray_packet_t {
     float4 o, d;
     float4 c;
     float4 do_dx, dd_dx, do_dy, dd_dy;
-} ray_packet_t;
+} ray_data_t;
 
 typedef struct _camera_t {
     float4 origin, fwd;
@@ -125,7 +125,7 @@ typedef struct _shl1_data_t {
     float4 coeff_r, coeff_g, coeff_b;
 } shl1_data_t;
 
-__kernel void TypesCheck(ray_packet_t r, camera_t c, tri_accel_t t, hit_data_t i,
+__kernel void TypesCheck(ray_data_t r, camera_t c, tri_accel_t t, hit_data_t i,
                          bvh_node_t b, vertex_t v, mesh_t m, mesh_instance_t mi, transform_t tr,
                          texture_t tex, material_t mat, light_t l, environment_t env, ray_chunk_t ch,
                          pass_settings_t ps, pass_info_t pi, shl1_data_t sh) {}

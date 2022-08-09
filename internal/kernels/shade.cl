@@ -202,7 +202,7 @@ void ComputeDerivatives(const float3 I, float t, const float3 do_dx, const float
 }
 
 float4 ShadeSurface(const pass_info_t *pi, __global const float *halton,
-                    __global const hit_data_t *prim_inters, __global const ray_packet_t *prim_rays,
+                    __global const hit_data_t *prim_inters, __global const ray_data_t *prim_rays,
                     __global const mesh_instance_t *mesh_instances, __global const uint *mi_indices,
                     __global const mesh_t *meshes, __global const transform_t *transforms,
                     __global const uint *vtx_indices, __global const vertex_t *vertices,
@@ -210,9 +210,9 @@ float4 ShadeSurface(const pass_info_t *pi, __global const float *halton,
                     __global const tri_accel_t *tris, __global const uint *tri_indices, 
                     const environment_t env, __global const material_t *materials, __global const texture_t *textures, __read_only image2d_array_t texture_atlas,
                     __global const light_t *lights, __global const uint *li_indices, uint light_node_index,
-                    __local uint *stack, __global ray_packet_t *out_secondary_rays, __global int *out_secondary_rays_count) {
+                    __local uint *stack, __global ray_data_t *out_secondary_rays, __global int *out_secondary_rays_count) {
 
-    __global const ray_packet_t *orig_ray = &prim_rays[pi->index];
+    __global const ray_data_t *orig_ray = &prim_rays[pi->index];
     __global const hit_data_t *inter = &prim_inters[pi->index];
 
     const int2 px = (int2)(orig_ray->o.w, orig_ray->d.w);
@@ -408,7 +408,7 @@ R"(
 
             weight *= BRDF_OrenNayar(V, I, N, B, mat->roughness);
 
-            ray_packet_t r;
+            ray_data_t r;
             r.o = (float4)(P + HIT_BIAS * plane_N, (float)px.x);
             r.d = (float4)(V, (float)px.y);
             r.c = (float4)(orig_ray->c.xyz * weight, orig_ray->c.w);
@@ -455,7 +455,7 @@ R"(
                 V = -dir * sin_phi * BB + native_sqrt(1.0f - dir) * V - dir * cos_phi * TT;
             }
 
-            ray_packet_t r;
+            ray_data_t r;
             r.o = (float4)(P + HIT_BIAS * plane_N, (float)px.x);
             r.d = (float4)(V, (float)px.y);
             r.c = orig_ray->c;
@@ -505,7 +505,7 @@ R"(
             float dmdx = k * surf_der.ddn_dx;
             float dmdy = k * surf_der.ddn_dy;
 
-            ray_packet_t r;
+            ray_data_t r;
             r.o = (float4)(P + HIT_BIAS * I, (float)px.x);
             r.d = (float4)(V, (float)px.y);
             r.c = (float4)(orig_ray->c.xyz * z, ior);
@@ -533,7 +533,7 @@ R"(
         col = (float3)(0, 0, 0);
 
         if (transp_depth < pi->settings.max_transp_depth && total_depth < pi->settings.max_total_depth) {
-            ray_packet_t r;
+            ray_data_t r;
             r.o = (float4)(P + HIT_BIAS * I, (float)px.x);
             r.d = orig_ray->d;
             r.c = orig_ray->c;
@@ -560,7 +560,7 @@ R"(
 
 __kernel
 void ShadePrimary(pass_info_t pi, __global const float *halton, int w, int h,
-                  __global const hit_data_t *prim_inters, __global const ray_packet_t *prim_rays,
+                  __global const hit_data_t *prim_inters, __global const ray_data_t *prim_rays,
                   __global const mesh_instance_t *mesh_instances, __global const uint *mi_indices,
                   __global const mesh_t *meshes, __global const transform_t *transforms,
                   __global const uint *vtx_indices, __global const vertex_t *vertices,
@@ -568,7 +568,7 @@ void ShadePrimary(pass_info_t pi, __global const float *halton, int w, int h,
                   __global const tri_accel_t *tris, __global const uint *tri_indices, 
                   const environment_t env, __global const material_t *materials, __global const texture_t *textures, __read_only image2d_array_t texture_atlas,
                   __global const light_t *lights, __global const uint *li_indices, uint light_node_index, __write_only image2d_t frame_buf,
-                  __global ray_packet_t *out_secondary_rays, __global int *out_secondary_rays_count) {
+                  __global ray_data_t *out_secondary_rays, __global int *out_secondary_rays_count) {
     const int i = get_global_id(0), j = get_global_id(1);
     if (i >= w || j >= h) return;
     
@@ -594,16 +594,16 @@ void ShadePrimary(pass_info_t pi, __global const float *halton, int w, int h,
 }
 
 __kernel
-void ShadeSecondary(pass_info_t pi, __global const float *halton, __global const hit_data_t *prim_inters, __global const ray_packet_t *prim_rays, int prim_rays_count,
+void ShadeSecondary(pass_info_t pi, __global const float *halton, __global const hit_data_t *prim_inters, __global const ray_data_t *prim_rays, int prim_rays_count,
                     __global const mesh_instance_t *mesh_instances, __global const uint *mi_indices, __global const mesh_t *meshes, __global const transform_t *transforms,
                     __global const uint *vtx_indices, __global const vertex_t *vertices, __global const bvh_node_t *nodes, uint node_index, 
                     __global const tri_accel_t *tris, __global const uint *tri_indices, const environment_t env, __global const material_t *materials, __global const texture_t *textures, __read_only image2d_array_t texture_atlas,
                     __global const light_t *lights, __global const uint *li_indices, uint light_node_index,
-                    __write_only image2d_t frame_buf, __read_only image2d_t frame_buf2, __global ray_packet_t *out_secondary_rays, __global int *out_secondary_rays_count) {
+                    __write_only image2d_t frame_buf, __read_only image2d_t frame_buf2, __global ray_data_t *out_secondary_rays, __global int *out_secondary_rays_count) {
     const int index = get_global_id(0);
     if (index >= prim_rays_count) return;
 
-    __global const ray_packet_t *orig_ray = &prim_rays[index];
+    __global const ray_data_t *orig_ray = &prim_rays[index];
 
     const int2 px = (int2)(orig_ray->o.w, orig_ray->d.w);
 

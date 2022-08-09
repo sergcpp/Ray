@@ -10,8 +10,9 @@ namespace Ray {
 namespace Ref {
 
 struct PassData {
-    aligned_vector<ray_packet_t> primary_rays;
-    aligned_vector<ray_packet_t> secondary_rays;
+    aligned_vector<ray_data_t> primary_rays;
+    aligned_vector<ray_data_t> secondary_rays;
+    aligned_vector<shadow_ray_t> shadow_rays;
     aligned_vector<hit_data_t> intersections;
 
     std::vector<uint32_t> hash_values;

@@ -23,7 +23,7 @@ float TraceOcclusionRay_WithPrivateStack(const float3 ro, const float3 rd, float
 }
 
 __kernel
-void TracePrimaryRays(__global const ray_packet_t *rays, int w, int h,
+void TracePrimaryRays(__global const ray_data_t *rays, int w, int h,
                       __global const mesh_instance_t *mesh_instances,
                       __global const uint *mi_indices, 
                       __global const mesh_t *meshes, __global const transform_t *transforms,
@@ -55,7 +55,7 @@ void TracePrimaryRays(__global const ray_packet_t *rays, int w, int h,
 }
 
 __kernel
-void TracePrimaryRaysImg(__global const ray_packet_t *rays, int w, int h,
+void TracePrimaryRaysImg(__global const ray_data_t *rays, int w, int h,
                       __global const mesh_instance_t *mesh_instances,
                       __global const uint *mi_indices, 
                       __global const mesh_t *meshes, __global const transform_t *transforms,
@@ -87,7 +87,7 @@ void TracePrimaryRaysImg(__global const ray_packet_t *rays, int w, int h,
 }
 
 __kernel
-void TraceSecondaryRays(__global const ray_packet_t *rays, int rays_count,
+void TraceSecondaryRays(__global const ray_data_t *rays, int rays_count,
                         __global const mesh_instance_t *mesh_instances,
                         __global const uint *mi_indices, 
                         __global const mesh_t *meshes, __global const transform_t *transforms,
@@ -118,7 +118,7 @@ void TraceSecondaryRays(__global const ray_packet_t *rays, int rays_count,
 }
 
 __kernel
-void TraceSecondaryRaysImg(__global const ray_packet_t *rays, int rays_count,
+void TraceSecondaryRaysImg(__global const ray_data_t *rays, int rays_count,
                            __global const mesh_instance_t *mesh_instances,
                            __global const uint *mi_indices, 
                            __global const mesh_t *meshes, __global const transform_t *transforms,

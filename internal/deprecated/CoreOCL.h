@@ -10,7 +10,7 @@
 
 namespace Ray {
 namespace Ocl {
-struct ray_packet_t {
+struct ray_data_t {
     // origin and direction (o.w and d.w are used for pixel coordinates)
     cl_float4 o, d;
     // color of ray, determines secondary Ray influence
@@ -18,7 +18,7 @@ struct ray_packet_t {
     // derivatives
     cl_float4 do_dx, dd_dx, do_dy, dd_dy;
 };
-static_assert(sizeof(ray_packet_t) == 112, "!");
+static_assert(sizeof(ray_data_t) == 112, "!");
 
 const int RayPacketDimX = 1;
 const int RayPacketDimY = 1;

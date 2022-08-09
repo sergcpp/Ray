@@ -1,7 +1,7 @@
 R"(
 
-ray_packet_t TransformRay(const ray_packet_t *r, const __global float16 *xform) {
-    ray_packet_t _r = *r;
+ray_data_t TransformRay(const ray_data_t *r, const __global float16 *xform) {
+    ray_data_t _r = *r;
     
     _r.o.x = (*xform).s0 * r->o.x + (*xform).s4 * r->o.y + (*xform).s8 * r->o.z + (*xform).sc;
     _r.o.y = (*xform).s1 * r->o.x + (*xform).s5 * r->o.y + (*xform).s9 * r->o.z + (*xform).sd;
