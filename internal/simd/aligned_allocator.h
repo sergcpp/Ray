@@ -9,6 +9,7 @@
 #include <stdexcept>
 
 namespace Ray {
+#ifndef RAY_ALIGNED_MALLOC_DEFINED
 inline void *aligned_malloc(size_t size, size_t alignment) {
     while (alignment < sizeof(void *)) {
         alignment *= 2;
@@ -40,6 +41,9 @@ inline void aligned_free(void *p) {
         free(static_cast<void **>(p)[-1]);
     }
 }
+
+#define RAY_ALIGNED_MALLOC_DEFINED
+#endif
 
 template <typename T, size_t Alignment> class aligned_allocator {
   public:

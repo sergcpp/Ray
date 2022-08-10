@@ -32,6 +32,7 @@ set(INTERNAL_SOURCE_FILES internal/BVHSplit.h
                           internal/RendererSIMD.h
                           internal/SceneRef.h
                           internal/SceneRef.cpp
+                          internal/SmallVector.h
                           internal/SparseStorage.h
                           internal/Span.h
                           internal/TextureAtlasRef.h
