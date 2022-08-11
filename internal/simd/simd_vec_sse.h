@@ -829,6 +829,12 @@ template <> class simd_vec<int, 4> {
         return ret;
     }
 
+    friend force_inline simd_vec<int, 4> srai(const simd_vec<int, 4>& v1, int v2) {
+        simd_vec<int, 4> ret;
+        ret.vec_ = _mm_srai_epi32(v1.vec_, v2);
+        return ret;
+    }
+
     friend force_inline bool is_equal(const simd_vec<int, 4> &v1, const simd_vec<int, 4> &v2) {
         __m128i vcmp = _mm_cmpeq_epi32(v1.vec_, v2.vec_);
         return (_mm_movemask_epi8(vcmp) == 0xffff);

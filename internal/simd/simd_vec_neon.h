@@ -791,7 +791,7 @@ public:
         return ret;
     }
 
-    friend force_inline simd_vec<int, 4> operator>>(const simd_vec<int, 4> &v1, int v2) {
+    friend force_inline simd_vec<int, 4> operator>>(const simd_vec<int, 4> &v1, const int v2) {
         simd_vec<int, 4> ret;
         ITERATE_4({ ret.comp_[i] = reinterpret_cast<const unsigned &>(v1.comp_[i]) >> v2; })
         return ret;
@@ -803,9 +803,15 @@ public:
         return ret;
     }
 
-    friend force_inline simd_vec<int, 4> operator<<(const simd_vec<int, 4> &v1, int v2) {
+    friend force_inline simd_vec<int, 4> operator<<(const simd_vec<int, 4> &v1, const int v2) {
         simd_vec<int, 4> ret;
         ITERATE_4({ ret.comp_[i] = v1.comp_[i] << v2; })
+        return ret;
+    }
+
+    friend force_inline simd_vec<int, 4> srai(const simd_vec<int, 4> &v1, const int v2) {
+        simd_vec<int, 4> ret;
+        ret.vec_ = vshlq_s32(v1.vec_, vdupq_n_s32(-v2));
         return ret;
     }
 

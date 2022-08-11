@@ -723,6 +723,16 @@ template <> class simd_vec<int, 8> {
         return ret;
     }
 
+    friend force_inline simd_vec<int, 8> srai(const simd_vec<int, 8> &v1, int v2) {
+        simd_vec<int, 8> ret;
+#if defined(USE_AVX2) || defined(USE_AVX512)
+        ret.vec_ = _mm256_srai_epi32(v1.vec_, v2);
+#else
+        ITERATE_8({ ret.comp_[i] = v1.comp_[i] >> v2; })
+#endif
+        return ret;
+    }
+
     friend force_inline bool is_equal(const simd_vec<int, 8> &v1, const simd_vec<int, 8> &v2) {
 #if defined(USE_AVX2) || defined(USE_AVX512)
         __m256i vcmp = _mm256_cmpeq_epi32(v1.vec_, v2.vec_);

@@ -652,6 +652,12 @@ template <typename T, int S> class simd_vec {
         return ret;
     }
 
+    friend force_inline simd_vec<T, S> srai(const simd_vec<T, S> &v1, int v2) {
+        simd_vec<T, S> ret;
+        ITERATE(S, { ret.comp_[i] = v1.comp_[i] >> v2; })
+        return ret;
+    }
+
     friend force_inline T dot(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) {
         T ret = {0};
         ITERATE(S, { ret += v1.comp_[i] * v2.comp_[i]; })

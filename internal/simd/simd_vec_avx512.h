@@ -545,6 +545,12 @@ template <> class simd_vec<int, 16> {
         return ret;
     }
 
+    friend force_inline simd_vec<int, 16> srai(const simd_vec<int, 16> &v1, int v2) {
+        simd_vec<int, 16> ret;
+        ret.vec_ = _mm512_srai_epi32(v1.vec_, v2);
+        return ret;
+    }
+
     friend force_inline bool is_equal(const simd_vec<int, 16> &v1, const simd_vec<int, 16> &v2) {
         return _mm512_cmpeq_epi32_mask(v1.vec_, v2.vec_) == 0xFFFF;
     }

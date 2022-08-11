@@ -3,7 +3,7 @@ using namespace Ray::NS;
 {
     std::cout << "Test simd_fvec4  (" << (simd_fvec4::is_native() ? "hard" : "soft") << ") | ";
 
-    simd_fvec4 v1, v2 = { 42.0f }, v3 = { 1.0f, 2.0f, 3.0f, 4.0f };
+    simd_fvec4 v1, v2 = {42.0f}, v3 = {1.0f, 2.0f, 3.0f, 4.0f};
 
     require(v2[0] == 42.0f);
     require(v2[1] == 42.0f);
@@ -34,9 +34,9 @@ using namespace Ray::NS;
     require(v1[2] == 3.0f);
     require(v1[3] == 4.0f);
 
-    float unaligned_array[] = { 0.0f, 2.0f, 30.0f, 14.0f };
-    alignas(alignof(simd_fvec4)) float aligned_array[] = { 0.0f, 2.0f, 30.0f, 14.0f };
-    
+    float unaligned_array[] = {0.0f, 2.0f, 30.0f, 14.0f};
+    alignas(alignof(simd_fvec4)) float aligned_array[] = {0.0f, 2.0f, 30.0f, 14.0f};
+
     auto v7 = simd_fvec4{&unaligned_array[0]}, v8 = simd_fvec4{&aligned_array[0], simd_mem_aligned};
 
     require(v7[0] == 0.0f);
@@ -62,15 +62,15 @@ using namespace Ray::NS;
     require(aligned_array[2] == 3.0f);
     require(aligned_array[3] == 4.0f);
 
-    v1 = { 1.0f, 2.0f, 3.0f, 4.0f };
-    v2 = { 4.0f, 5.0f, 6.0f, 7.0f };
+    v1 = {1.0f, 2.0f, 3.0f, 4.0f};
+    v2 = {4.0f, 5.0f, 6.0f, 7.0f};
 
     v3 = v1 + v2;
     v4 = v1 - v2;
     v5 = v1 * v2;
     auto v6 = v1 / v2;
     auto v66 = -v1;
-    
+
     require(v3[0] == Approx(5));
     require(v3[1] == Approx(7));
     require(v3[2] == Approx(9));
@@ -110,21 +110,21 @@ using namespace Ray::NS;
     require(v55[2] == Approx(0.2426));
     require(v55[3] == Approx(0.2915));
 
-    simd_fvec4 v9 = { 3.0f, 6.0f, 7.0f, 6.0f };
+    simd_fvec4 v9 = {3.0f, 6.0f, 7.0f, 6.0f};
 
     auto v10 = v2 < v9;
 
     require(v10[0] == 0);
-    require(reinterpret_cast<const uint32_t&>(v10[1]) == 0xFFFFFFFF);
-    require(reinterpret_cast<const uint32_t&>(v10[2]) == 0xFFFFFFFF);
+    require(reinterpret_cast<const uint32_t &>(v10[1]) == 0xFFFFFFFF);
+    require(reinterpret_cast<const uint32_t &>(v10[2]) == 0xFFFFFFFF);
     require(v10[3] == 0);
 
     auto v11 = v2 > v9;
 
-    require(reinterpret_cast<const uint32_t&>(v11[0]) == 0xFFFFFFFF);
+    require(reinterpret_cast<const uint32_t &>(v11[0]) == 0xFFFFFFFF);
     require(v11[1] == 0);
     require(v11[2] == 0);
-    require(reinterpret_cast<const uint32_t&>(v11[3]) == 0xFFFFFFFF);
+    require(reinterpret_cast<const uint32_t &>(v11[3]) == 0xFFFFFFFF);
 
     static const float gather_source[] = {0, 42.0f, 0, 0, 12.0f, 0, 0, 0, 11.0f, 0, 0, 0, 0, 0, 0, 23.0f, 0, 32.0f};
 
@@ -160,7 +160,7 @@ using namespace Ray::NS;
 {
     std::cout << "Test simd_ivec4  (" << (simd_ivec4::is_native() ? "hard" : "soft") << ") | ";
 
-    simd_ivec4 v1, v2 = { 42 }, v3 = { 1, 2, 3, 4 };
+    simd_ivec4 v1, v2 = {42}, v3 = {1, 2, 3, 4};
 
     require(v2[0] == 42);
     require(v2[1] == 42);
@@ -191,9 +191,9 @@ using namespace Ray::NS;
     require(v1[2] == 3);
     require(v1[3] == 4);
 
-    int unaligned_array[] = { 0, 2, 30, 14 };
-    alignas(alignof(simd_ivec4)) int aligned_array[] = { 0, 2, 30, 14 };
-    
+    int unaligned_array[] = {0, 2, 30, 14};
+    alignas(alignof(simd_ivec4)) int aligned_array[] = {0, 2, 30, 14};
+
     auto v7 = simd_ivec4{&unaligned_array[0]}, v8 = simd_ivec4{&aligned_array[0], simd_mem_aligned};
 
     require(v7[0] == 0);
@@ -219,15 +219,15 @@ using namespace Ray::NS;
     require(aligned_array[2] == 3);
     require(aligned_array[3] == 4);
 
-    v1 = { 1, 2, 3, 4 };
-    v2 = { 4, 5, 6, 7 };
+    v1 = {1, 2, 3, 4};
+    v2 = {4, 5, 6, 7};
 
     v3 = v1 + v2;
     v4 = v1 - v2;
     v5 = v1 * v2;
     auto v6 = v1 / v2;
     auto v66 = -v1;
-    
+
     require(v3[0] == 5);
     require(v3[1] == 7);
     require(v3[2] == 9);
@@ -258,7 +258,7 @@ using namespace Ray::NS;
 
     static const int gather_source[] = {0, 42, 0, 0, 12, 0, 0, 0, 11, 0, 0, 0, 0, 0, 0, 23, 0, 32};
 
-    const simd_ivec4 v9i = { -1, 2, 6, 13 };
+    const simd_ivec4 v9i = {-1, 2, 6, 13};
     const simd_ivec4 v9 = gather(gather_source + 2, v9i);
 
     require(v9[0] == 42);
@@ -294,13 +294,17 @@ using namespace Ray::NS;
     require(v14[2] == 0);
     require(v14[3] == 0);
 
+    const simd_ivec4 v15 = {-2147483647, 1, -42, 42};
+    const simd_ivec4 v16 = srai(v15, 31);
+    require((v16 != simd_ivec4{-1, 0, -1, 0}).all_zeros());
+
     std::cout << "OK" << std::endl;
 }
 
 {
     std::cout << "Test simd_fvec8  (" << (simd_fvec8::is_native() ? "hard" : "soft") << ") | ";
 
-    simd_fvec8 v1, v2 = { 42.0f }, v3 = { 1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f };
+    simd_fvec8 v1, v2 = {42.0f}, v3 = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f};
 
     require(v2[0] == 42.0f);
     require(v2[1] == 42.0f);
@@ -351,15 +355,15 @@ using namespace Ray::NS;
     require(v1[6] == 7.0f);
     require(v1[7] == 8.0f);
 
-    v1 = { 1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 4.0f, 3.0f, 2.0f };
-    v2 = { 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 10.0f, 12.0f, 1.0f };
+    v1 = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 4.0f, 3.0f, 2.0f};
+    v2 = {4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 10.0f, 12.0f, 1.0f};
 
     v3 = v1 + v2;
     v4 = v1 - v2;
     v5 = v1 * v2;
     auto v6 = v1 / v2;
     auto v66 = -v1;
-    
+
     require(v3[0] == Approx(5));
     require(v3[1] == Approx(7));
     require(v3[2] == Approx(9));
@@ -427,29 +431,29 @@ using namespace Ray::NS;
     require(v55[6] == Approx(0));
     require(v55[7] == Approx(0.4142));
 
-    simd_fvec8 v9 = { 3.0f, 6.0f, 7.0f, 6.0f, 2.0f, 12.0f, 18.0f, 0.0f };
+    simd_fvec8 v9 = {3.0f, 6.0f, 7.0f, 6.0f, 2.0f, 12.0f, 18.0f, 0.0f};
 
     auto v10 = v2 < v9;
 
     require(v10[0] == 0);
-    require(reinterpret_cast<const uint32_t&>(v10[1]) == 0xFFFFFFFF);
-    require(reinterpret_cast<const uint32_t&>(v10[2]) == 0xFFFFFFFF);
+    require(reinterpret_cast<const uint32_t &>(v10[1]) == 0xFFFFFFFF);
+    require(reinterpret_cast<const uint32_t &>(v10[2]) == 0xFFFFFFFF);
     require(v10[3] == 0);
     require(v10[4] == 0);
-    require(reinterpret_cast<const uint32_t&>(v10[5]) == 0xFFFFFFFF);
-    require(reinterpret_cast<const uint32_t&>(v10[6]) == 0xFFFFFFFF);
+    require(reinterpret_cast<const uint32_t &>(v10[5]) == 0xFFFFFFFF);
+    require(reinterpret_cast<const uint32_t &>(v10[6]) == 0xFFFFFFFF);
     require(v10[7] == 0);
 
     auto v11 = v2 > v9;
 
-    require(reinterpret_cast<const uint32_t&>(v11[0]) == 0xFFFFFFFF);
+    require(reinterpret_cast<const uint32_t &>(v11[0]) == 0xFFFFFFFF);
     require(v11[1] == 0);
     require(v11[2] == 0);
-    require(reinterpret_cast<const uint32_t&>(v11[3]) == 0xFFFFFFFF);
-    require(reinterpret_cast<const uint32_t&>(v11[4]) == 0xFFFFFFFF);
+    require(reinterpret_cast<const uint32_t &>(v11[3]) == 0xFFFFFFFF);
+    require(reinterpret_cast<const uint32_t &>(v11[4]) == 0xFFFFFFFF);
     require(v11[5] == 0);
     require(v11[6] == 0);
-    require(reinterpret_cast<const uint32_t&>(v11[7]) == 0xFFFFFFFF);
+    require(reinterpret_cast<const uint32_t &>(v11[7]) == 0xFFFFFFFF);
 
     static const float gather_source[] = {0, 42.0f, 0, 0, 12.0f, 0, 0, 0, 11.0f, 0, 0, 0, 0, 0, 0, 23.0f, 0, 32.0f,
                                           0, 42.0f, 0, 0, 12.0f, 0, 0, 0, 11.0f, 0, 0, 0, 0, 0, 0, 23.0f, 0, 32.0f};
@@ -498,7 +502,7 @@ using namespace Ray::NS;
 {
     std::cout << "Test simd_ivec8  (" << (simd_ivec8::is_native() ? "hard" : "soft") << ") | ";
 
-    simd_ivec8 v1, v2 = { 42 }, v3 = { 1, 2, 3, 4, 5, 6, 7, 8 };
+    simd_ivec8 v1, v2 = {42}, v3 = {1, 2, 3, 4, 5, 6, 7, 8};
 
     require(v2[0] == 42);
     require(v2[1] == 42);
@@ -549,15 +553,15 @@ using namespace Ray::NS;
     require(v1[6] == 7);
     require(v1[7] == 8);
 
-    v1 = { 1, 2, 3, 4, 5, 4, 3,  2 };
-    v2 = { 4, 5, 6, 7, 8, 10, 12, 1 };
+    v1 = {1, 2, 3, 4, 5, 4, 3, 2};
+    v2 = {4, 5, 6, 7, 8, 10, 12, 1};
 
     v3 = v1 + v2;
     v4 = v1 - v2;
     v5 = v1 * v2;
     auto v6 = v1 / v2;
     auto v66 = -v1;
-    
+
     require(v3[0] == 5);
     require(v3[1] == 7);
     require(v3[2] == 9);
@@ -658,6 +662,10 @@ using namespace Ray::NS;
     require(v14[6] == 0);
     require(v14[7] == 0);
 
+    const simd_ivec8 v15 = {-2147483647, 1, -42, 42, -2147483647, 1, -42, 42};
+    const simd_ivec8 v16 = srai(v15, 31);
+    require((v16 != simd_ivec8{-1, 0, -1, 0, -1, 0, -1, 0}).all_zeros());
+
     std::cout << "OK" << std::endl;
 }
 
@@ -666,7 +674,7 @@ using namespace Ray::NS;
 {
     std::cout << "Test simd_fvec16 (" << (simd_fvec16::is_native() ? "hard" : "soft") << ") | ";
 
-    simd_fvec16 v1, v2 = {42.0f}, v3 = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f,
+    simd_fvec16 v1, v2 = {42.0f}, v3 = {1.0f, 2.0f,  3.0f,  4.0f,  5.0f,  6.0f,  7.0f,  8.0f,
                                         9.0f, 10.0f, 11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f};
 
     require(v2[0] == 42.0f);
@@ -1261,6 +1269,11 @@ using namespace Ray::NS;
     require(v14[13] == 0);
     require(v14[14] == 0);
     require(v14[15] == 0);
+
+    const simd_ivec16 v15 = {-2147483647, 1, -42, 42, -2147483647, 1, -42, 42,
+                             -2147483647, 1, -42, 42, -2147483647, 1, -42, 42};
+    const simd_ivec16 v16 = srai(v15, 31);
+    require((v16 != simd_ivec16{-1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0}).all_zeros());
 
     std::cout << "OK" << std::endl;
 }
