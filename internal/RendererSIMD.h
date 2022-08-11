@@ -134,6 +134,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
     sc_data.mnodes = s->mnodes_.empty() ? nullptr : &s->mnodes_[0];
     sc_data.tris = s->tris_.empty() ? nullptr : &s->tris_[0];
     sc_data.tri_indices = s->tri_indices_.empty() ? nullptr : &s->tri_indices_[0];
+    sc_data.mtris = s->mtris_.data();
     sc_data.tri_materials = s->tri_materials_.empty() ? nullptr : &s->tri_materials_[0];
     sc_data.materials = s->materials_.empty() ? nullptr : &s->materials_[0];
     sc_data.textures = s->textures_.empty() ? nullptr : &s->textures_[0];
@@ -237,7 +238,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
                     NS::Traverse_MacroTree_WithStack_ClosestHit(r.o, r.d, p.primary_masks[i], sc_data.mnodes,
                                                                 macro_tree_root, sc_data.mesh_instances,
                                                                 sc_data.mi_indices, sc_data.meshes, sc_data.transforms,
-                                                                sc_data.tris, sc_data.tri_indices, inter);
+                                                                sc_data.mtris, sc_data.tri_indices, inter);
                 } else {
                     NS::Traverse_MacroTree_WithStack_ClosestHit(r.o, r.d, p.primary_masks[i], sc_data.nodes,
                                                                 macro_tree_root, sc_data.mesh_instances,
@@ -352,7 +353,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
             if (sc_data.mnodes) {
                 NS::Traverse_MacroTree_WithStack_ClosestHit(
                     r.o, r.d, p.secondary_masks[i], sc_data.mnodes, macro_tree_root, sc_data.mesh_instances,
-                    sc_data.mi_indices, sc_data.meshes, sc_data.transforms, sc_data.tris, sc_data.tri_indices, inter);
+                    sc_data.mi_indices, sc_data.meshes, sc_data.transforms, sc_data.mtris, sc_data.tri_indices, inter);
             } else {
                 NS::Traverse_MacroTree_WithStack_ClosestHit(
                     r.o, r.d, p.secondary_masks[i], sc_data.nodes, macro_tree_root, sc_data.mesh_instances,

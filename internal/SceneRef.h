@@ -47,6 +47,7 @@ class Scene : public SceneBase {
     aligned_vector<mbvh_node_t> mnodes_;
     std::vector<tri_accel_t> tris_;
     std::vector<uint32_t> tri_indices_;
+    aligned_vector<mtri_accel_t> mtris_;
     std::vector<tri_mat_data_t> tri_materials_;
     SparseStorage<transform_t> transforms_;
     SparseStorage<mesh_t> meshes_;

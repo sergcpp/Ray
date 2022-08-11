@@ -35,6 +35,13 @@ struct alignas(16) tri_accel_t {
 };
 static_assert(sizeof(tri_accel_t) == 48, "!");
 
+struct alignas(32) mtri_accel_t {
+    float n_plane[4][8];
+    float u_plane[4][8];
+    float v_plane[4][8];
+};
+static_assert(sizeof(mtri_accel_t) == 384, "!");
+
 const float HIT_BIAS = 0.00001f;
 const float HIT_EPS = 0.000001f;
 const float FLT_EPS = 0.0000001f;
@@ -252,10 +259,10 @@ force_inline long ClearBit(long mask, long index) {
 bool PreprocessTri(const float *p, int stride, tri_accel_t *out_acc);
 
 // Builds BVH for mesh and precomputes triangle data
-uint32_t PreprocessMesh(const float *attrs, const uint32_t *vtx_indices, size_t vtx_indices_count, eVertexLayout layout,
-                        int base_vertex, uint32_t tris_start, const bvh_settings_t &s,
-                        std::vector<bvh_node_t> &out_nodes, std::vector<tri_accel_t> &out_tris2,
-                        std::vector<uint32_t> &out_indices);
+uint32_t PreprocessMesh(const float *attrs, Span<const uint32_t> vtx_indices, eVertexLayout layout, int base_vertex,
+                        uint32_t tris_start, const bvh_settings_t &s, std::vector<bvh_node_t> &out_nodes,
+                        std::vector<tri_accel_t> &out_tris, std::vector<uint32_t> &out_indices,
+                        aligned_vector<mtri_accel_t> &out_tris2);
 
 // Recursively builds linear bvh for a set of primitives
 uint32_t EmitLBVH_Recursive(const prim_t *prims, const uint32_t *indices, const uint32_t *morton_codes,
@@ -267,12 +274,11 @@ uint32_t EmitLBVH_NonRecursive(const prim_t *prims, const uint32_t *indices, con
                                std::vector<bvh_node_t> &out_nodes);
 
 // Builds SAH-based BVH for a set of primitives, slow
-uint32_t PreprocessPrims_SAH(const prim_t *prims, size_t prims_count, const float *positions, size_t stride,
-                             const bvh_settings_t &s, std::vector<bvh_node_t> &out_nodes,
-                             std::vector<uint32_t> &out_indices);
+uint32_t PreprocessPrims_SAH(Span<const prim_t> prims, const float *positions, size_t stride, const bvh_settings_t &s,
+                             std::vector<bvh_node_t> &out_nodes, std::vector<uint32_t> &out_indices);
 
 // Builds linear BVH for a set of primitives, fast
-uint32_t PreprocessPrims_HLBVH(const prim_t *prims, size_t prims_count, std::vector<bvh_node_t> &out_nodes,
+uint32_t PreprocessPrims_HLBVH(Span<const prim_t> prims, std::vector<bvh_node_t> &out_nodes,
                                std::vector<uint32_t> &out_indices);
 
 uint32_t FlattenBVH_Recursive(const bvh_node_t *nodes, uint32_t node_index, uint32_t parent_index,
@@ -403,6 +409,7 @@ struct scene_data_t {
     const mbvh_node_t *mnodes;
     const tri_accel_t *tris;
     const uint32_t *tri_indices;
+    const mtri_accel_t *mtris;
     const tri_mat_data_t *tri_materials;
     const material_t *materials;
     const texture_t *textures;

@@ -43,6 +43,7 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
     sc_data.mnodes = s->mnodes_.empty() ? nullptr : &s->mnodes_[0];
     sc_data.tris = s->tris_.empty() ? nullptr : &s->tris_[0];
     sc_data.tri_indices = s->tri_indices_.empty() ? nullptr : &s->tri_indices_[0];
+    sc_data.mtris = s->mtris_.data();
     sc_data.tri_materials = s->tri_materials_.empty() ? nullptr : &s->tri_materials_[0];
     sc_data.materials = s->materials_.empty() ? nullptr : &s->materials_[0];
     sc_data.textures = s->textures_.empty() ? nullptr : &s->textures_[0];
@@ -142,9 +143,9 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
 
             if (macro_tree_root != 0xffffffff) {
                 if (sc_data.mnodes) {
-                    Traverse_MacroTree_WithStack_ClosestHit(
-                        r.o, r.d, sc_data.mnodes, macro_tree_root, sc_data.mesh_instances, sc_data.mi_indices,
-                        sc_data.meshes, sc_data.transforms, sc_data.tris, sc_data.tri_indices, inter);
+                    Traverse_MacroTree_WithStack_ClosestHit(r.o, r.d, sc_data.mnodes, macro_tree_root,
+                                                            sc_data.mesh_instances, sc_data.mi_indices, sc_data.meshes,
+                                                            sc_data.transforms, sc_data.mtris, inter);
                 } else {
                     Traverse_MacroTree_WithStack_ClosestHit(
                         r.o, r.d, sc_data.nodes, macro_tree_root, sc_data.mesh_instances, sc_data.mi_indices,
@@ -267,7 +268,7 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
             if (sc_data.mnodes) {
                 Traverse_MacroTree_WithStack_ClosestHit(r.o, r.d, sc_data.mnodes, macro_tree_root,
                                                         sc_data.mesh_instances, sc_data.mi_indices, sc_data.meshes,
-                                                        sc_data.transforms, sc_data.tris, sc_data.tri_indices, inter);
+                                                        sc_data.transforms, sc_data.mtris, inter);
             } else {
                 Traverse_MacroTree_WithStack_ClosestHit(r.o, r.d, sc_data.nodes, macro_tree_root,
                                                         sc_data.mesh_instances, sc_data.mi_indices, sc_data.meshes,

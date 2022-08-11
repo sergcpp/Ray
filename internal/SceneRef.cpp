@@ -261,8 +261,8 @@ uint32_t Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
     const uint64_t t1 = Ray::GetTimeMs();
 
     m.node_index = uint32_t(nodes_.size());
-    m.node_count = PreprocessMesh(_m.vtx_attrs, _m.vtx_indices, _m.vtx_indices_count, _m.layout, _m.base_vertex,
-                                  uint32_t(tri_materials_.size()), s, nodes_, tris_, tri_indices_);
+    m.node_count = PreprocessMesh(_m.vtx_attrs, {_m.vtx_indices, _m.vtx_indices_count}, _m.layout, _m.base_vertex,
+                                  uint32_t(tri_materials_.size()), s, nodes_, tris_, tri_indices_, mtris_);
 
     log_->Info("Ray: Mesh preprocessed in %lldms", (Ray::GetTimeMs() - t1));
 
@@ -464,16 +464,16 @@ uint32_t Ray::Ref::Scene::AddLight(const rect_light_desc_t &_l, const float *xfo
     l.sky_portal = _l.sky_portal;
 
     memcpy(&l.col[0], &_l.color[0], 3 * sizeof(float));
-    
+
     l.rect.pos[0] = xform[12];
     l.rect.pos[1] = xform[13];
     l.rect.pos[2] = xform[14];
 
     l.rect.area = _l.width * _l.height;
-    
+
     const simd_fvec4 uvec = _l.width * TransformDirection(simd_fvec4{1.0f, 0.0f, 0.0f, 0.0f}, xform);
     const simd_fvec4 vvec = _l.height * TransformDirection(simd_fvec4{0.0f, 0.0f, 1.0f, 0.0f}, xform);
-    
+
     memcpy(l.rect.u, value_ptr(uvec), 3 * sizeof(float));
     memcpy(l.rect.v, value_ptr(vvec), 3 * sizeof(float));
 
@@ -493,16 +493,16 @@ uint32_t Ray::Ref::Scene::AddLight(const disk_light_desc_t &_l, const float *xfo
     l.sky_portal = _l.sky_portal;
 
     memcpy(&l.col[0], &_l.color[0], 3 * sizeof(float));
-    
+
     l.disk.pos[0] = xform[12];
     l.disk.pos[1] = xform[13];
     l.disk.pos[2] = xform[14];
 
     l.disk.area = 0.25f * PI * _l.size_x * _l.size_y;
-    
+
     const simd_fvec4 uvec = _l.size_x * TransformDirection(simd_fvec4{1.0f, 0.0f, 0.0f, 0.0f}, xform);
     const simd_fvec4 vvec = _l.size_y * TransformDirection(simd_fvec4{0.0f, 0.0f, 1.0f, 0.0f}, xform);
-    
+
     memcpy(l.disk.u, value_ptr(uvec), 3 * sizeof(float));
     memcpy(l.disk.v, value_ptr(vvec), 3 * sizeof(float));
 
@@ -727,7 +727,7 @@ void Ray::Ref::Scene::RebuildTLAS() {
     }
 
     macro_nodes_root_ = uint32_t(nodes_.size());
-    macro_nodes_count_ = PreprocessPrims_SAH(&primitives[0], primitives.size(), nullptr, 0, {}, nodes_, mi_indices_);
+    macro_nodes_count_ = PreprocessPrims_SAH({&primitives[0], primitives.size()}, nullptr, 0, {}, nodes_, mi_indices_);
 
     if (use_wide_bvh_) {
         const auto before_count = uint32_t(mnodes_.size());

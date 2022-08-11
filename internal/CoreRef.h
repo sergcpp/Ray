@@ -108,7 +108,12 @@ void SortRays_GPU(ray_data_t *rays, size_t rays_count, const float root_min[3], 
 // Intersect primitives
 bool IntersectTris_ClosestHit(const float ro[3], const float rd[3], const tri_accel_t *tris, int tri_start, int tri_end,
                               int obj_index, hit_data_t &out_inter);
+bool IntersectTris_ClosestHit(const float ro[3], const float rd[3], const mtri_accel_t *mtris, int tri_start,
+                              int tri_end, int obj_index, hit_data_t &out_inter);
 bool IntersectTris_AnyHit(const float ro[3], const float rd[3], const tri_accel_t *tris,
+                          const tri_mat_data_t *materials, const uint32_t *indices, int tri_start, int tri_end,
+                          int obj_index, hit_data_t &out_inter);
+bool IntersectTris_AnyHit(const float ro[3], const float rd[3], const mtri_accel_t *mtris,
                           const tri_mat_data_t *materials, const uint32_t *indices, int tri_start, int tri_end,
                           int obj_index, hit_data_t &out_inter);
 
@@ -121,12 +126,12 @@ bool Traverse_MacroTree_WithStack_ClosestHit(const float ro[3], const float rd[3
 bool Traverse_MacroTree_WithStack_ClosestHit(const float ro[3], const float rd[3], const mbvh_node_t *oct_nodes,
                                              uint32_t root_index, const mesh_instance_t *mesh_instances,
                                              const uint32_t *mi_indices, const mesh_t *meshes,
-                                             const transform_t *transforms, const tri_accel_t *tris,
-                                             const uint32_t *tri_indices, hit_data_t &inter);
+                                             const transform_t *transforms, const mtri_accel_t *mtris,
+                                             hit_data_t &inter);
 bool Traverse_MacroTree_WithStack_AnyHit(const float ro[3], const float rd[3], const bvh_node_t *nodes,
                                          uint32_t root_index, const mesh_instance_t *mesh_instances,
                                          const uint32_t *mi_indices, const mesh_t *meshes,
-                                         const transform_t *transforms, const tri_accel_t *tris,
+                                         const transform_t *transforms, const mtri_accel_t *mtris,
                                          const tri_mat_data_t *materials, const uint32_t *tri_indices,
                                          hit_data_t &inter);
 bool Traverse_MacroTree_WithStack_AnyHit(const float ro[3], const float rd[3], const mbvh_node_t *nodes,
@@ -140,10 +145,10 @@ bool Traverse_MicroTree_WithStack_ClosestHit(const float ro[3], const float rd[3
                                              const bvh_node_t *nodes, uint32_t root_index, const tri_accel_t *tris,
                                              const uint32_t *tri_indices, int obj_index, hit_data_t &inter);
 bool Traverse_MicroTree_WithStack_ClosestHit(const float ro[3], const float rd[3], const float inv_d[3],
-                                             const mbvh_node_t *nodes, uint32_t root_index, const tri_accel_t *tris,
-                                             const uint32_t *tri_indices, int obj_index, hit_data_t &inter);
+                                             const mbvh_node_t *nodes, uint32_t root_index, const mtri_accel_t *mtris,
+                                             int obj_index, hit_data_t &inter);
 bool Traverse_MicroTree_WithStack_AnyHit(const float ro[3], const float rd[3], const float inv_d[3],
-                                         const bvh_node_t *nodes, uint32_t root_index, const tri_accel_t *tris,
+                                         const bvh_node_t *nodes, uint32_t root_index, const mtri_accel_t *mtris,
                                          const tri_mat_data_t *materials, const uint32_t *tri_indices, int obj_index,
                                          hit_data_t &inter);
 bool Traverse_MicroTree_WithStack_AnyHit(const float ro[3], const float rd[3], const float inv_d[3],

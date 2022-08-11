@@ -258,24 +258,24 @@ bool Ray::PreprocessTri(const float *p, int stride, tri_accel_t *out_acc) {
     return true;
 }
 
-uint32_t Ray::PreprocessMesh(const float *attrs, const uint32_t *vtx_indices, size_t vtx_indices_count,
-                             eVertexLayout layout, int base_vertex, const uint32_t tris_start, const bvh_settings_t &s,
-                             std::vector<bvh_node_t> &out_nodes, std::vector<tri_accel_t> &out_tris2,
-                             std::vector<uint32_t> &out_tri_indices) {
-    assert(vtx_indices_count && vtx_indices_count % 3 == 0);
+uint32_t Ray::PreprocessMesh(const float *attrs, Span<const uint32_t> vtx_indices, const eVertexLayout layout,
+                             const int base_vertex, const uint32_t tris_start, const bvh_settings_t &s,
+                             std::vector<bvh_node_t> &out_nodes, std::vector<tri_accel_t> &out_tris,
+                             std::vector<uint32_t> &out_tri_indices, aligned_vector<mtri_accel_t> &out_tris2) {
+    assert(!vtx_indices.empty() && vtx_indices.size() % 3 == 0);
 
     std::vector<prim_t> primitives;
     std::vector<tri_accel_t> triangles;
     std::vector<uint32_t> real_indices;
 
-    primitives.reserve(vtx_indices_count / 3);
-    triangles.reserve(vtx_indices_count / 3);
-    real_indices.reserve(vtx_indices_count / 3);
+    primitives.reserve(vtx_indices.size() / 3);
+    triangles.reserve(vtx_indices.size() / 3);
+    real_indices.reserve(vtx_indices.size() / 3);
 
     const float *positions = attrs;
     const size_t attr_stride = AttrStrides[layout];
 
-    for (size_t j = 0; j < vtx_indices_count; j += 3) {
+    for (int j = 0; j < int(vtx_indices.size()); j += 3) {
         Ref::simd_fvec4 p[3];
 
         const uint32_t i0 = vtx_indices[j + 0] + base_vertex, i1 = vtx_indices[j + 1] + base_vertex,
@@ -301,19 +301,32 @@ uint32_t Ray::PreprocessMesh(const float *attrs, const uint32_t *vtx_indices, si
     const size_t indices_start = out_tri_indices.size();
     uint32_t num_out_nodes;
     if (!s.use_fast_bvh_build) {
-        num_out_nodes = PreprocessPrims_SAH(&primitives[0], primitives.size(), positions, attr_stride, s, out_nodes,
+        num_out_nodes = PreprocessPrims_SAH({&primitives[0], primitives.size()}, positions, attr_stride, s, out_nodes,
                                             out_tri_indices);
     } else {
-        num_out_nodes = PreprocessPrims_HLBVH(&primitives[0], primitives.size(), out_nodes, out_tri_indices);
+        num_out_nodes = PreprocessPrims_HLBVH({&primitives[0], primitives.size()}, out_nodes, out_tri_indices);
+    }
+
+    // make sure mesh occupies the whole 8-triangle slot
+    while (out_tri_indices.size() % 8) {
+        out_tri_indices.push_back(0);
     }
 
     // const uint32_t tris_start = out_tris2.size(), tris_count = out_tri_indices.size() - indices_start;
-    out_tris2.resize(out_tri_indices.size());
+    out_tris.resize(out_tri_indices.size());
+    out_tris2.resize(out_tri_indices.size() / 8);
 
     for (size_t i = indices_start; i < out_tri_indices.size(); i++) {
         const uint32_t j = out_tri_indices[i];
 
-        out_tris2[i] = triangles[j];
+        out_tris[i] = triangles[j];
+
+        for (int k = 0; k < 4; ++k) {
+            out_tris2[i / 8].n_plane[k][i % 8] = triangles[j].n_plane[k];
+            out_tris2[i / 8].u_plane[k][i % 8] = triangles[j].u_plane[k];
+            out_tris2[i / 8].v_plane[k][i % 8] = triangles[j].v_plane[k];
+        }
+
         out_tri_indices[i] = uint32_t(real_indices[j] + tris_start);
     }
 
@@ -485,8 +498,8 @@ uint32_t Ray::EmitLBVH_NonRecursive(const prim_t *prims, const uint32_t *indices
     return root_node_index;
 }
 
-uint32_t Ray::PreprocessPrims_SAH(const prim_t *prims, const size_t prims_count, const float *positions,
-                                  const size_t stride, const bvh_settings_t &s, std::vector<bvh_node_t> &out_nodes,
+uint32_t Ray::PreprocessPrims_SAH(Span<const prim_t> prims, const float *positions, const size_t stride,
+                                  const bvh_settings_t &s, std::vector<bvh_node_t> &out_nodes,
                                   std::vector<uint32_t> &out_indices) {
     struct prims_coll_t {
         std::vector<uint32_t> indices;
@@ -502,7 +515,7 @@ uint32_t Ray::PreprocessPrims_SAH(const prim_t *prims, const size_t prims_count,
     size_t num_nodes = out_nodes.size();
     const auto root_node_index = uint32_t(num_nodes);
 
-    for (uint32_t j = 0; j < uint32_t(prims_count); j++) {
+    for (uint32_t j = 0; j < uint32_t(prims.size()); j++) {
         prim_lists.back().indices.push_back(j);
         prim_lists.back().min = min(prim_lists.back().min, prims[j].bbox_min);
         prim_lists.back().max = max(prim_lists.back().max, prims[j].bbox_max);
@@ -511,8 +524,9 @@ uint32_t Ray::PreprocessPrims_SAH(const prim_t *prims, const size_t prims_count,
     Ref::simd_fvec4 root_min = prim_lists.back().min, root_max = prim_lists.back().max;
 
     while (!prim_lists.empty()) {
-        split_data_t split_data = SplitPrimitives_SAH(prims, prim_lists.back().indices, positions,
-            stride, prim_lists.back().min, prim_lists.back().max, root_min, root_max, s);
+        split_data_t split_data =
+            SplitPrimitives_SAH(prims.data(), prim_lists.back().indices, positions, stride, prim_lists.back().min,
+                                prim_lists.back().max, root_min, root_max, s);
         prim_lists.pop_back();
 
         if (split_data.right_indices.empty()) {
@@ -564,16 +578,16 @@ uint32_t Ray::PreprocessPrims_SAH(const prim_t *prims, const size_t prims_count,
     return uint32_t(out_nodes.size() - root_node_index);
 }
 
-uint32_t Ray::PreprocessPrims_HLBVH(const prim_t *prims, size_t prims_count, std::vector<bvh_node_t> &out_nodes,
+uint32_t Ray::PreprocessPrims_HLBVH(Span<const prim_t> prims, std::vector<bvh_node_t> &out_nodes,
                                     std::vector<uint32_t> &out_indices) {
-    std::vector<uint32_t> morton_codes(prims_count);
+    std::vector<uint32_t> morton_codes(prims.size());
 
     Ref::simd_fvec4 whole_min = {std::numeric_limits<float>::max()}, whole_max = {std::numeric_limits<float>::lowest()};
 
     const auto indices_start = uint32_t(out_indices.size());
-    out_indices.reserve(out_indices.size() + prims_count);
+    out_indices.reserve(out_indices.size() + prims.size());
 
-    for (uint32_t j = 0; j < prims_count; j++) {
+    for (uint32_t j = 0; j < prims.size(); j++) {
         whole_min = min(whole_min, prims[j].bbox_min);
         whole_max = max(whole_max, prims[j].bbox_max);
 
@@ -585,7 +599,7 @@ uint32_t Ray::PreprocessPrims_HLBVH(const prim_t *prims, size_t prims_count, std
     const Ref::simd_fvec4 scale = float(1 << BitsPerDim) / (whole_max - whole_min);
 
     // compute morton codes
-    for (size_t i = 0; i < prims_count; i++) {
+    for (int i = 0; i < int(prims.size()); i++) {
         const Ref::simd_fvec4 center = 0.5f * (prims[i].bbox_min + prims[i].bbox_max);
         const Ref::simd_fvec4 code = (center - whole_min) * scale;
 
@@ -620,8 +634,8 @@ uint32_t Ray::PreprocessPrims_HLBVH(const prim_t *prims, size_t prims_count, std
     // Build bottom-level hierarchy from each treelet using LBVH
     const int start_bit = 29 - 12;
     for (treelet_t &tr : treelets) {
-        tr.node_index = EmitLBVH_NonRecursive(prims, indices, &morton_codes[0], tr.index, tr.count, indices_start,
-                                              start_bit, bottom_nodes);
+        tr.node_index = EmitLBVH_NonRecursive(prims.data(), indices, &morton_codes[0], tr.index, tr.count,
+                                              indices_start, start_bit, bottom_nodes);
     }
 
     std::vector<prim_t> top_prims;
@@ -645,7 +659,7 @@ uint32_t Ray::PreprocessPrims_HLBVH(const prim_t *prims, size_t prims_count, std
 
     // Build top level hierarchy using SAH
     const uint32_t new_nodes_count =
-        PreprocessPrims_SAH(&top_prims[0], top_prims.size(), nullptr, 0, s, out_nodes, top_indices);
+        PreprocessPrims_SAH({&top_prims[0], top_prims.size()}, nullptr, 0, s, out_nodes, top_indices);
     unused(new_nodes_count);
 
     auto bottom_nodes_start = uint32_t(out_nodes.size());

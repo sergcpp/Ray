@@ -2160,8 +2160,8 @@ void test_complex_mat1() {
 
 void test_complex_mat2() {
     const int SampleCount = 1024;
-    const double MinPSNR = 39.53;
-    const int PixThres = 10;
+    const double MinPSNR = 39.52;
+    const int PixThres = 11;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = 0;
