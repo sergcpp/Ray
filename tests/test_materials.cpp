@@ -1333,7 +1333,7 @@ void test_aniso_mat7() {
 void test_metal_mat0() {
     const int SampleCount = 512;
     const double MinPSNR = 34.76;
-    const int PixThres = 146;
+    const int PixThres = 149;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_color[0] = 0.0f;
@@ -2141,7 +2141,7 @@ void test_complex_mat0() {
 void test_complex_mat1() {
     const int SampleCount = 1024;
     const double MinPSNR = 39.98;
-    const int PixThres = 9;
+    const int PixThres = 10;
 
     Ray::principled_mat_desc_t wood_mat_desc;
     wood_mat_desc.base_texture = 0;
@@ -2224,7 +2224,7 @@ void test_complex_mat4() {
 void test_complex_mat4_mesh_lights() {
     const int SampleCount = 1024;
     const double MinPSNR = 31.89;
-    const int PixThres = 975;
+    const int PixThres = 976;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = 0;
