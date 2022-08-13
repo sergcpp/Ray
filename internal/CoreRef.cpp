@@ -15,6 +15,7 @@
 #define USE_PATH_TERMINATION 1
 #define VECTORIZE_BBOX_INTERSECTION 1
 #define VECTORIZE_TRI_INTERSECTION 1
+#define FORCE_TEXTURE_LOD0 0
 
 namespace Ray {
 namespace Ref {
@@ -597,6 +598,9 @@ force_inline float lum(const simd_fvec4 &color) {
 }
 
 float get_texture_lod(const texture_t &t, const simd_fvec2 &duv_dx, const simd_fvec2 &duv_dy) {
+#if FORCE_TEXTURE_LOD0
+    const float lod = 0.0f;
+#else
     const simd_fvec2 sz = {float(t.width & TEXTURE_WIDTH_BITS), float(t.height & TEXTURE_HEIGHT_BITS)};
     const simd_fvec2 _duv_dx = duv_dx * sz, _duv_dy = duv_dy * sz;
     const simd_fvec2 _diagonal = _duv_dx + _duv_dy;
@@ -607,7 +611,21 @@ float get_texture_lod(const texture_t &t, const simd_fvec2 &duv_dx, const simd_f
     float lod = fast_log2(min_length2);
     // Substruct 1 from lod to always have 4 texels for interpolation
     lod = clamp(0.5f * lod - 1.0f, 0.0f, float(MAX_MIP_LEVEL));
+#endif
+    return lod;
+}
 
+float get_texture_lod(const texture_t &t, const float lambda) {
+#if FORCE_TEXTURE_LOD0
+    const float lod = 0.0f;
+#else
+    const float w = float(t.width & TEXTURE_WIDTH_BITS);
+    const float h = float(t.height & TEXTURE_HEIGHT_BITS);
+    // Find lod
+    float lod = lambda + 0.5f * fast_log2(w * h);
+    // Substruct 1 from lod to always have 4 texels for interpolation
+    lod = clamp(lod - 1.0f, 0.0f, float(MAX_MIP_LEVEL));
+#endif
     return lod;
 }
 
@@ -1034,7 +1052,9 @@ void Ray::Ref::GeneratePrimaryRays(int iteration, const camera_t &cam, const rec
     const float focus_distance = cam.focus_distance;
 
     const float k = float(w) / h;
-    const float fov_k = std::tan(0.5f * cam.fov * PI / 180.0f) * focus_distance;
+    const float temp = std::tan(0.5f * cam.fov * PI / 180.0f);
+    const float fov_k = temp * focus_distance;
+    const float spread_angle = std::atan(2.0f * temp / float(h));
 
     auto get_pix_dir = [k, fov_k, focus_distance, cam_origin, fwd, side, up, w, h](const float x, const float y,
                                                                                    const simd_fvec4 &origin) {
@@ -1094,11 +1114,18 @@ void Ray::Ref::GeneratePrimaryRays(int iteration, const camera_t &cam, const rec
                 out_r.d[j] = _d[j];
                 out_r.c[j] = 1.0f;
 
+#ifdef USE_RAY_DIFFERENTIALS
                 out_r.do_dx[j] = 0;
                 out_r.dd_dx[j] = _dx[j] - _d[j];
                 out_r.do_dy[j] = 0;
                 out_r.dd_dy[j] = _dy[j] - _d[j];
+#endif
             }
+
+#ifndef USE_RAY_DIFFERENTIALS
+            out_r.cone_width = 0.0f;
+            out_r.cone_spread = spread_angle;
+#endif
 
             out_r.pdf = 1e6f;
             out_r.xy = (x << 16) | y;
@@ -1205,10 +1232,15 @@ void Ray::Ref::SampleMeshInTextureSpace(const int iteration, const int obj_index
 
                     memcpy(&out_ray.o[0], value_ptr(o), 3 * sizeof(float));
                     memcpy(&out_ray.d[0], value_ptr(d), 3 * sizeof(float));
+#ifdef USE_RAY_DIFFERENTIALS
                     out_ray.do_dx[0] = out_ray.do_dx[1] = out_ray.do_dx[2] = 0.0f;
                     out_ray.dd_dx[0] = out_ray.dd_dx[1] = out_ray.dd_dx[2] = 0.0f;
                     out_ray.do_dy[0] = out_ray.do_dy[1] = out_ray.do_dy[2] = 0.0f;
                     out_ray.dd_dy[0] = out_ray.dd_dy[1] = out_ray.dd_dy[2] = 0.0f;
+#else
+                    out_ray.cone_width = 0;
+                    out_ray.cone_spread = 0;
+#endif
                     out_ray.ray_depth = 0;
 
                     out_inter.mask = 0xffffffff;
@@ -3110,7 +3142,6 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
     const bool is_backfacing = (inter.prim_index < 0);
     const uint32_t prim_index = is_backfacing ? -inter.prim_index - 1 : inter.prim_index;
 
-    const tri_accel_t &tri = sc.tris[prim_index];
     const uint32_t tri_index = sc.tri_indices[prim_index];
 
     const material_t *mat = &sc.materials[sc.tri_materials[tri_index].front_mi & MATERIAL_INDEX_BITS];
@@ -3127,7 +3158,9 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
                              simd_fvec4{v3.n[0], v3.n[1], v3.n[2], 0.0f} * inter.v);
     simd_fvec2 uvs = simd_fvec2(v1.t[0]) * w + simd_fvec2(v2.t[0]) * inter.u + simd_fvec2(v3.t[0]) * inter.v;
 
-    auto plane_N = simd_fvec4{tri.n_plane[0], tri.n_plane[1], tri.n_plane[2], 0.0f};
+    simd_fvec4 plane_N = cross(simd_fvec4{v2.p} - simd_fvec4{v1.p}, simd_fvec4{v3.p} - simd_fvec4{v1.p});
+    const float pa = length(plane_N);
+    plane_N /= pa;
 
     simd_fvec4 B = simd_fvec4{v1.b[0], v1.b[1], v1.b[2], 0.0f} * w +
                    simd_fvec4{v2.b[0], v2.b[1], v2.b[2], 0.0f} * inter.u +
@@ -3151,6 +3184,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
     B = TransformNormal(B, tr->inv_xform);
     T = TransformNormal(T, tr->inv_xform);
 
+#ifdef USE_RAY_DIFFERENTIALS
     const auto do_dx = simd_fvec4{ray.do_dx[0], ray.do_dx[1], ray.do_dx[2], 0.0f};
     const auto do_dy = simd_fvec4{ray.do_dy[0], ray.do_dy[1], ray.do_dy[2], 0.0f};
     const auto dd_dx = simd_fvec4{ray.dd_dx[0], ray.dd_dx[1], ray.dd_dx[2], 0.0f};
@@ -3158,6 +3192,17 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
 
     derivatives_t surf_der;
     ComputeDerivatives(I, inter.t, do_dx, do_dy, dd_dx, dd_dy, v1, v2, v3, plane_N, *tr, surf_der);
+#else
+    const float ta = std::abs((v2.t[0][0] - v1.t[0][0]) * (v3.t[0][1] - v1.t[0][1]) -
+                              (v3.t[0][0] - v1.t[0][0]) * (v2.t[0][1] - v1.t[0][1]));
+
+    const float cone_width = ray.cone_width + ray.cone_spread * inter.t;
+
+    float lambda = 0.5f * fast_log2(ta / pa);
+    lambda += fast_log2(cone_width);
+    // lambda += 0.5 * fast_log2(tex_res.x * tex_res.y);
+    // lambda -= fast_log2(std::abs(dot(I, plane_N)));
+#endif
 
     // apply normal map
     if (mat->textures[NORMALS_TEXTURE] != 0xffffffff) {
@@ -3243,7 +3288,11 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
     simd_fvec4 base_color = simd_fvec4{mat->base_color[0], mat->base_color[1], mat->base_color[2], 1.0f};
     if (mat->textures[BASE_TEXTURE] != 0xffffffff) {
         const texture_t &base_texture = sc.textures[mat->textures[BASE_TEXTURE]];
+#ifdef USE_RAY_DIFFERENTIALS
         const float base_lod = get_texture_lod(base_texture, surf_der.duv_dx, surf_der.duv_dy);
+#else
+        const float base_lod = get_texture_lod(base_texture, lambda);
+#endif
         simd_fvec4 tex_color = SampleBilinear(tex_atlases, base_texture, uvs, int(base_lod));
         if (base_texture.width & TEXTURE_SRGB_BIT) {
             tex_color = srgb_to_rgb(tex_color);
@@ -3261,7 +3310,11 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
     float roughness = unpack_unorm_16(mat->roughness_unorm);
     if (mat->textures[ROUGH_TEXTURE] != 0xffffffff) {
         const texture_t &roughness_tex = sc.textures[mat->textures[ROUGH_TEXTURE]];
+#ifdef USE_RAY_DIFFERENTIALS
         const float roughness_lod = get_texture_lod(roughness_tex, surf_der.duv_dx, surf_der.duv_dy);
+#else
+        const float roughness_lod = get_texture_lod(roughness_tex, lambda);
+#endif
         simd_fvec4 roughness_color = SampleBilinear(tex_atlases, roughness_tex, uvs, int(roughness_lod))[0];
         if (roughness_tex.width & TEXTURE_SRGB_BIT) {
             roughness_color = srgb_to_rgb(roughness_color);
@@ -3273,6 +3326,10 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
     const float rand_v = fract(halton[RAND_DIM_BSDF_V] + sample_off[1]);
 
     ray_data_t new_ray;
+#ifndef USE_RAY_DIFFERENTIALS
+    new_ray.cone_width = cone_width;
+    new_ray.cone_spread = ray.cone_spread;
+#endif
     new_ray.xy = ray.xy;
     new_ray.pdf = 0.0f;
 
@@ -3318,6 +3375,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
             new_ray.c[2] = ray.c[2] * F[2] * mix_weight / F[3];
             new_ray.pdf = F[3];
 
+#ifdef USE_RAY_DIFFERENTIALS
             memcpy(&new_ray.do_dx[0], value_ptr(surf_der.do_dx), 3 * sizeof(float));
             memcpy(&new_ray.do_dy[0], value_ptr(surf_der.do_dy), 3 * sizeof(float));
 
@@ -3327,6 +3385,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
             memcpy(&new_ray.dd_dy[0],
                    value_ptr(surf_der.dd_dy - 2 * (dot(I, plane_N) * surf_der.dndy + surf_der.ddn_dy * plane_N)),
                    3 * sizeof(float));
+#endif
         }
     } else if (mat->type == GlossyNode) {
         const float specular = 0.5f;
@@ -3379,6 +3438,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
             new_ray.c[2] = ray.c[2] * F[2] * mix_weight / F[3];
             new_ray.pdf = F[3];
 
+#ifdef USE_RAY_DIFFERENTIALS
             memcpy(&new_ray.do_dx[0], value_ptr(surf_der.do_dx), 3 * sizeof(float));
             memcpy(&new_ray.do_dy[0], value_ptr(surf_der.do_dy), 3 * sizeof(float));
 
@@ -3388,6 +3448,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
             memcpy(&new_ray.dd_dy[0],
                    value_ptr(surf_der.dd_dy - 2 * (dot(I, plane_N) * surf_der.dndy + surf_der.ddn_dy * plane_N)),
                    3 * sizeof(float));
+#endif
         }
     } else if (mat->type == RefractiveNode) {
         const float eta = is_backfacing ? (mat->int_ior / mat->ext_ior) : (mat->ext_ior / mat->int_ior);
@@ -3436,6 +3497,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
             new_ray.c[2] = ray.c[2] * F[2] * mix_weight / F[3];
             new_ray.pdf = F[3];
 
+#ifdef USE_RAY_DIFFERENTIALS
             const float k = (eta - eta * eta * dot(I, plane_N) / dot(V, plane_N));
             const float dmdx = k * surf_der.ddn_dx;
             const float dmdy = k * surf_der.ddn_dy;
@@ -3450,6 +3512,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
                    3 * sizeof(float));
             memcpy(&new_ray.dd_dy[0], value_ptr(eta * surf_der.dd_dy - (m * surf_der.dndy + dmdy * plane_N)),
                    3 * sizeof(float));
+#endif
         }
     } else if (mat->type == EmissiveNode) {
         float mis_weight = 1.0f;
@@ -3497,17 +3560,23 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
             memcpy(&new_ray.d[0], &ray.d[0], 3 * sizeof(float));
             memcpy(&new_ray.c[0], &ray.c[0], 3 * sizeof(float));
 
+#ifdef USE_RAY_DIFFERENTIALS
             memcpy(&new_ray.do_dx[0], &ray.do_dx[0], 3 * sizeof(float));
             memcpy(&new_ray.do_dy[0], &ray.do_dy[0], 3 * sizeof(float));
 
             memcpy(&new_ray.dd_dx[0], &ray.dd_dx[0], 3 * sizeof(float));
             memcpy(&new_ray.dd_dy[0], &ray.dd_dy[0], 3 * sizeof(float));
+#endif
         }
     } else if (mat->type == PrincipledNode) {
         float metallic = unpack_unorm_16(mat->metallic_unorm);
         if (mat->textures[METALLIC_TEXTURE] != 0xffffffff) {
             const texture_t &metallic_tex = sc.textures[mat->textures[METALLIC_TEXTURE]];
+#ifdef USE_RAY_DIFFERENTIALS
             const float metallic_lod = get_texture_lod(metallic_tex, surf_der.duv_dx, surf_der.duv_dy);
+#else
+            const float metallic_lod = get_texture_lod(metallic_tex, lambda);
+#endif
             metallic *= SampleBilinear(tex_atlases, metallic_tex, uvs, int(metallic_lod))[0];
         }
 
@@ -3654,6 +3723,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
                 new_ray.c[2] = ray.c[2] * diff_col[2] * mix_weight / diffuse_weight;
                 new_ray.pdf = pdf;
 
+#ifdef USE_RAY_DIFFERENTIALS
                 memcpy(&new_ray.do_dx[0], value_ptr(surf_der.do_dx), 3 * sizeof(float));
                 memcpy(&new_ray.do_dy[0], value_ptr(surf_der.do_dy), 3 * sizeof(float));
 
@@ -3663,6 +3733,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
                 memcpy(&new_ray.dd_dy[0],
                        value_ptr(surf_der.dd_dy - 2 * (dot(I, plane_N) * surf_der.dndy + surf_der.ddn_dy * plane_N)),
                        3 * sizeof(float));
+#endif
             }
         } else if (mix_rand < diffuse_weight + specular_weight) {
             //
@@ -3684,6 +3755,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
                 memcpy(&new_ray.o[0], value_ptr(offset_ray(P, plane_N)), 3 * sizeof(float));
                 memcpy(&new_ray.d[0], value_ptr(V), 3 * sizeof(float));
 
+#ifdef USE_RAY_DIFFERENTIALS
                 memcpy(&new_ray.do_dx[0], value_ptr(surf_der.do_dx), 3 * sizeof(float));
                 memcpy(&new_ray.do_dy[0], value_ptr(surf_der.do_dy), 3 * sizeof(float));
 
@@ -3693,6 +3765,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
                 memcpy(&new_ray.dd_dy[0],
                        value_ptr(surf_der.dd_dy - 2 * (dot(I, plane_N) * surf_der.dndy + surf_der.ddn_dy * plane_N)),
                        3 * sizeof(float));
+#endif
             }
         } else if (mix_rand < diffuse_weight + specular_weight + clearcoat_weight) {
             //
@@ -3714,6 +3787,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
                 memcpy(&new_ray.o[0], value_ptr(offset_ray(P, plane_N)), 3 * sizeof(float));
                 memcpy(&new_ray.d[0], value_ptr(V), 3 * sizeof(float));
 
+#ifdef USE_RAY_DIFFERENTIALS
                 memcpy(&new_ray.do_dx[0], value_ptr(surf_der.do_dx), 3 * sizeof(float));
                 memcpy(&new_ray.do_dy[0], value_ptr(surf_der.do_dy), 3 * sizeof(float));
 
@@ -3723,6 +3797,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
                 memcpy(&new_ray.dd_dy[0],
                        value_ptr(surf_der.dd_dy - 2 * (dot(I, plane_N) * surf_der.dndy + surf_der.ddn_dy * plane_N)),
                        3 * sizeof(float));
+#endif
             }
         } else /*if (mix_rand < diffuse_weight + specular_weight + clearcoat_weight + refraction_weight)*/ {
             //
@@ -3744,6 +3819,8 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
 
                     new_ray.ray_depth = ray.ray_depth + 0x00000100;
                     memcpy(&new_ray.o[0], value_ptr(offset_ray(P, plane_N)), 3 * sizeof(float));
+
+#ifdef USE_RAY_DIFFERENTIALS
                     memcpy(
                         &new_ray.dd_dx[0],
                         value_ptr(surf_der.dd_dx - 2 * (dot(I, plane_N) * surf_der.dndx + surf_der.ddn_dx * plane_N)),
@@ -3752,6 +3829,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
                         &new_ray.dd_dy[0],
                         value_ptr(surf_der.dd_dy - 2 * (dot(I, plane_N) * surf_der.dndy + surf_der.ddn_dy * plane_N)),
                         3 * sizeof(float));
+#endif
                 } else {
                     simd_fvec4 _V;
                     F = Sample_GGXRefraction_BSDF(T, B, N, I, transmission_roughness, eta, base_color, rand_u, rand_v,
@@ -3760,16 +3838,19 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
                     V = {_V[0], _V[1], _V[2], 0.0f};
                     const float m = _V[3];
 
+                    new_ray.ray_depth = ray.ray_depth + 0x00010000;
+                    memcpy(&new_ray.o[0], value_ptr(offset_ray(P, -plane_N)), 3 * sizeof(float));
+
+#ifdef USE_RAY_DIFFERENTIALS
                     const float k = (eta - eta * eta * dot(I, plane_N) / dot(V, plane_N[0]));
                     const float dmdx = k * surf_der.ddn_dx;
                     const float dmdy = k * surf_der.ddn_dy;
 
-                    new_ray.ray_depth = ray.ray_depth + 0x00010000;
-                    memcpy(&new_ray.o[0], value_ptr(offset_ray(P, -plane_N)), 3 * sizeof(float));
                     memcpy(&new_ray.dd_dx[0], value_ptr(eta * surf_der.dd_dx - (m * surf_der.dndx + dmdx * plane_N)),
                            3 * sizeof(float));
                     memcpy(&new_ray.dd_dy[0], value_ptr(eta * surf_der.dd_dy - (m * surf_der.dndy + dmdy * plane_N)),
                            3 * sizeof(float));
+#endif
                 }
 
                 F[3] *= refraction_weight;
@@ -3783,8 +3864,10 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
 
                 memcpy(&new_ray.d[0], value_ptr(V), 3 * sizeof(float));
 
+#ifdef USE_RAY_DIFFERENTIALS
                 memcpy(&new_ray.do_dx[0], value_ptr(surf_der.do_dx), 3 * sizeof(float));
                 memcpy(&new_ray.do_dy[0], value_ptr(surf_der.do_dy), 3 * sizeof(float));
+#endif
             }
         }
     }

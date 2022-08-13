@@ -6,6 +6,8 @@
 #include "../Types.h"
 #include "Span.h"
 
+//#define USE_RAY_DIFFERENTIALS
+
 #ifdef __GNUC__
 #define force_inline __attribute__((always_inline)) inline
 #endif

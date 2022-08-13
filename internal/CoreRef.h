@@ -37,14 +37,23 @@ struct ray_data_t {
     float o[3], d[3], pdf;
     // throughput color of ray
     float c[3];
+#ifdef USE_RAY_DIFFERENTIALS
     // derivatives
     float do_dx[3], dd_dx[3], do_dy[3], dd_dy[3];
+#else
+    // ray cone params
+    float cone_width, cone_spread;
+#endif
     // 16-bit pixel coordinates of ray ((x << 16) | y)
     int xy;
     // four 8-bit ray depth counters
     int ray_depth;
 };
+#ifdef USE_RAY_DIFFERENTIALS
 static_assert(sizeof(ray_data_t) == 96, "!");
+#else
+static_assert(sizeof(ray_data_t) == 56, "!");
+#endif
 
 struct shadow_ray_t {
     // origin and direction

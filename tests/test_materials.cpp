@@ -2230,8 +2230,8 @@ void test_complex_mat4(const char *arch_list[]) {
 
 void test_complex_mat4_mesh_lights(const char *arch_list[]) {
     const int SampleCount = 1024;
-    const double MinPSNR = 31.89;
-    const int PixThres = 976;
+    const double MinPSNR = 31.84;
+    const int PixThres = 985;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = 0;
