@@ -22,6 +22,7 @@ enum eRendererType : uint32_t {
 };
 
 const char *RendererTypeName(eRendererType rt);
+eRendererType RendererTypeFromName(const char *name);
 
 /// Renderer settings
 struct settings_t {

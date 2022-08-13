@@ -1,5 +1,7 @@
 #include "RendererBase.h"
 
+#include <cstring>
+
 namespace Ray {
 const char *RendererTypeName(const eRendererType rt) {
     if (rt == RendererRef) {
@@ -18,5 +20,22 @@ const char *RendererTypeName(const eRendererType rt) {
         return "ocl";
     }*/
     return "";
+}
+
+eRendererType RendererTypeFromName(const char *name) {
+    if (strcmp(name, "ref") == 0) {
+        return RendererRef;
+    } else if (strcmp(name, "sse2") == 0) {
+        return RendererSSE2;
+    } else if (strcmp(name, "sse41") == 0) {
+        return RendererSSE41;
+    } else if (strcmp(name, "avx") == 0) {
+        return RendererAVX;
+    } else if (strcmp(name, "avx2") == 0) {
+        return RendererAVX2;
+    } else if (strcmp(name, "neon") == 0) {
+        return RendererNEON;
+    }
+    return RendererRef;
 }
 }
