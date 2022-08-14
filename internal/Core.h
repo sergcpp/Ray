@@ -96,7 +96,7 @@ const int TEXTURE_WIDTH_BITS = 0b0111111111111111;
 const int TEXTURE_MIPS_BIT = 0b1000000000000000;
 const int TEXTURE_HEIGHT_BITS = 0b0111111111111111;
 
-struct texture_t {
+/*struct texture_t {
     uint16_t width;
     uint16_t height;
     uint8_t atlas;
@@ -104,7 +104,16 @@ struct texture_t {
     uint8_t page[NUM_MIP_LEVELS];
     uint16_t pos[NUM_MIP_LEVELS][2];
 };
-static_assert(sizeof(texture_t) == 76, "!");
+static_assert(sizeof(texture_t) == 76, "!");*/
+
+struct texture_t {
+    uint16_t width;
+    uint16_t height;
+    uint32_t atlas;
+    uint8_t page[NUM_MIP_LEVELS + 2];
+    uint16_t pos[NUM_MIP_LEVELS][2];
+};
+static_assert(sizeof(texture_t) == 80, "!");
 
 const int MAX_MATERIAL_TEXTURES = 5;
 

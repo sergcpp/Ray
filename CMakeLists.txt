@@ -64,6 +64,17 @@ set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
                           internal/RendererNEON.cpp)
 endif()
 
+set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
+                          internal/CoreVK.h
+                          internal/RendererVK.h
+                          internal/RendererVK.cpp
+                          internal/RendererVK_kernels.cpp
+                          internal/SceneVK.h
+                          internal/SceneVK.cpp
+                          internal/VectorVK.h)
+
+add_definitions(-DENABLE_OBJ_LABELS)
+
 if(MSVC AND NOT "${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "arm64")
     if(NOT CMAKE_CL_64)
         set_source_files_properties(internal/RendererSSE2.cpp PROPERTIES COMPILE_FLAGS /arch:SSE2)
@@ -91,6 +102,50 @@ set(SIMD_FILES internal/simd/aligned_allocator.h
                internal/simd/simd_vec_avx512.h
                internal/simd/simd_vec_neon.h)
 
+set(VK_FILES internal/Vk/AccStructure.h
+             internal/Vk/AccStructure.cpp
+             internal/Vk/Buffer.h
+             internal/Vk/Buffer.cpp
+             internal/Vk/Context.h
+             internal/Vk/Context.cpp
+             internal/Vk/DebugMarker.h
+             internal/Vk/DescriptorPool.h
+             internal/Vk/DescriptorPool.cpp
+             internal/Vk/DrawCall.h
+             internal/Vk/DrawCall.cpp
+             internal/Vk/Fence.h
+             internal/Vk/Fence.cpp
+             internal/Vk/Fixed.h
+             internal/Vk/LinearAlloc.h
+             internal/Vk/LinearAlloc.cpp
+             internal/Vk/MemoryAllocator.h
+             internal/Vk/MemoryAllocator.cpp
+             internal/Vk/Pipeline.h
+             internal/Vk/Pipeline.cpp
+             internal/Vk/Program.h
+             internal/Vk/Program.cpp
+             internal/Vk/RastState.h
+             internal/Vk/RenderPass.h
+             internal/Vk/RenderPass.cpp
+             internal/Vk/Resource.h
+             internal/Vk/Resource.cpp
+             internal/Vk/Sampler.h
+             internal/Vk/Sampler.cpp
+             internal/Vk/SamplingParams.h
+             internal/Vk/Shader.h
+             internal/Vk/Shader.cpp
+             internal/Vk/Texture.h
+             internal/Vk/Texture.cpp
+             internal/Vk/TextureAtlas.h
+             internal/Vk/TextureAtlas.cpp
+             internal/Vk/TextureParams.h
+             internal/Vk/Utils.h
+             internal/Vk/Utils.cpp
+             internal/Vk/VertexInput.h
+             internal/Vk/VertexInput.cpp
+             internal/Vk/VK.h
+             internal/Vk/VKExt.cpp)
+
 list(APPEND ALL_SOURCE_FILES ${INTERNAL_SOURCE_FILES})
 source_group("src\\internal" FILES ${INTERNAL_SOURCE_FILES})
 
@@ -106,6 +161,9 @@ source_group("src\\internal\\kernels" FILES ${KERNEL_FILES})
 list(APPEND ALL_SOURCE_FILES ${SIMD_FILES})
 source_group("src\\internal\\simd" FILES ${SIMD_FILES})
 
+list(APPEND ALL_SOURCE_FILES ${VK_FILES})
+source_group("src\\internal\\Vk" FILES ${VK_FILES})
+
 set_source_files_properties(${KERNEL_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
 
 # enable or disable unity build
@@ -113,6 +171,7 @@ if(ENABLE_UNITYBUILD)
     set_source_files_properties(${INTERNAL_SOURCE_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
     set_source_files_properties(${INTERNAL_DEPRECATED_SOURCE_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
     set_source_files_properties(${SOURCE_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
+    set_source_files_properties(${VK_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
 
     list(APPEND ALL_SOURCE_FILES _Ray.cpp)
     source_group("src" FILES _Ray.cpp)
@@ -135,6 +194,9 @@ if(ENABLE_UNITYBUILD)
     list(APPEND ALL_SOURCE_FILES _Ray_Neon.cpp)
     source_group("src" FILES _Ray_Neon.cpp)
 
+    list(APPEND ALL_SOURCE_FILES _Ray_Vk.cpp)
+    source_group("src" FILES _Ray_Vk.cpp)
+
     if(MSVC AND NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64")
         if(NOT CMAKE_CL_64)
             set_source_files_properties(_Ray_Sse2.cpp PROPERTIES COMPILE_FLAGS /arch:SSE2)
@@ -150,5 +212,9 @@ if(MSVC)
     list(APPEND ALL_SOURCE_FILES internal/_CustomTypes.natvis)
 endif(MSVC)
 
-add_library(Ray STATIC ${ALL_SOURCE_FILES})
+
+add_library(Ray STATIC ${ALL_SOURCE_FILES} SPIRV-Reflect)
+target_link_libraries(Ray SPIRV-Reflect)
+
+add_subdirectory(SPIRV-Reflect)
 add_subdirectory(tests)

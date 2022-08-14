@@ -16,9 +16,3 @@
 #include "internal/TextureUtilsRef.cpp"
 #include "internal/Time.cpp"
 
-#if !defined(__ANDROID__) && !defined(DISABLE_OCL)
-//#include "internal/RendererOCL.cpp"
-//#include "internal/SceneOCL.cpp"
-//#include "internal/TextureAtlasOCL.cpp"
-#endif
-

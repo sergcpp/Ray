@@ -18,7 +18,7 @@ enum eRendererType : uint32_t {
     RendererAVX = (1 << 3),
     RendererAVX2 = (1 << 4),
     RendererNEON = (1 << 5),
-    //RendererOCL = (1 << 5),
+    RendererVK = (1 << 6),
 };
 
 const char *RendererTypeName(eRendererType rt);
@@ -27,8 +27,9 @@ eRendererType RendererTypeFromName(const char *name);
 /// Renderer settings
 struct settings_t {
     int w, h;
-#if !defined(DISABLE_OCL)
-    int platform_index = -1, device_index = -1;
+#if !defined(DISABLE_GPU)
+    //int platform_index = -1, device_index = -1;
+    const char *preferred_device = nullptr;
 #endif
     bool use_wide_bvh = true;
 };

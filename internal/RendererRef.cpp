@@ -231,8 +231,8 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
 
     for (int bounce = 1; bounce <= pass_info.settings.max_total_depth && secondary_rays_count &&
                          !(pass_info.settings.flags & SkipIndirectLight);
-         bounce++) {
-        auto time_secondary_sort_start = std::chrono::high_resolution_clock::now();
+         ++bounce) {
+        const auto time_secondary_sort_start = std::chrono::high_resolution_clock::now();
 
         SortRays_CPU(&p.secondary_rays[0], size_t(secondary_rays_count), root_min, cell_size, &p.hash_values[0],
                      &p.scan_values[0], &p.chunks[0], &p.chunks_temp[0]);
@@ -258,7 +258,7 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
         }
 #endif
 
-        auto time_secondary_trace_start = std::chrono::high_resolution_clock::now();
+        const auto time_secondary_trace_start = std::chrono::high_resolution_clock::now();
 
         for (int i = 0; i < secondary_rays_count; i++) {
             const ray_data_t &r = p.secondary_rays[i];
@@ -277,7 +277,7 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
             IntersectAreaLights(r, sc_data.lights, sc_data.visible_lights, sc_data.transforms, inter);
         }
 
-        auto time_secondary_shade_start = std::chrono::high_resolution_clock::now();
+        const auto time_secondary_shade_start = std::chrono::high_resolution_clock::now();
 
         int rays_count = secondary_rays_count;
         secondary_rays_count = 0;
@@ -325,7 +325,7 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
             temp_buf_.AddPixel(x, y, col);
         }
 
-        auto time_secondary_shade_end = std::chrono::high_resolution_clock::now();
+        const auto time_secondary_shade_end = std::chrono::high_resolution_clock::now();
         secondary_sort_time +=
             std::chrono::duration<double, std::micro>{time_secondary_trace_start - time_secondary_sort_start};
         secondary_trace_time +=

@@ -185,13 +185,6 @@ struct disk_light_desc_t {
     bool visible = true; // visibility for secondary bounces
 };
 
-struct light_desc_t {
-    eLightType type;
-    float position[3], radius;
-    float color[3];
-    float direction[3], angle;
-};
-
 // Camera description
 struct camera_desc_t {
     eCamType type = Persp;               ///< Type of projection

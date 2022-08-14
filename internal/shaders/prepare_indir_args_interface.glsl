@@ -1,0 +1,13 @@
+#ifndef PREPARE_INDIR_ARGS_INTERFACE_GLSL
+#define PREPARE_INDIR_ARGS_INTERFACE_GLSL
+
+#include "_interface_common.glsl"
+
+INTERFACE_START(PrepareIndirectArgs)
+
+const int INOUT_COUNTERS_BUF_SLOT = 0;
+const int OUT_INDIR_ARGS_SLOT = 1;
+
+INTERFACE_END
+
+#endif // PREPARE_INDIR_ARGS_INTERFACE_GLSL

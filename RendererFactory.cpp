@@ -13,10 +13,10 @@
 #include "internal/RendererSSE2.h"
 #endif
 
-#if !defined(DISABLE_OCL)
-//#include "internal/RendererOCL.h"
+#if !defined(DISABLE_GPU)
+#include "internal/RendererVK.h"
 #else
-#pragma message("Compiling without OpenCL support")
+#pragma message("Compiling without GPU support")
 #endif
 
 #include "internal/simd/detect.h"
@@ -28,15 +28,15 @@ LogNull g_null_log;
 Ray::RendererBase *Ray::CreateRenderer(const settings_t &s, ILog *log, const uint32_t enabled_types) {
     CpuFeatures features = GetCpuFeatures();
 
-#if !defined(DISABLE_OCL)
-    /*if (enabled_types & RendererOCL) {
-        log->Info("Ray: Creating OpenCL renderer %ix%i", s.w, s.h);
+#if !defined(DISABLE_GPU)
+    if (enabled_types & RendererVK) {
+        log->Info("Ray: Creating Vulkan renderer %ix%i", s.w, s.h);
         try {
-            return new Ocl::Renderer(s.w, s.h, s.platform_index, s.device_index);
+            return new Vk::Renderer(s, log);
         } catch (std::exception &e) {
-            log->Info("Ray: Creating OpenCL renderer failed, %s", e.what());
+            log->Info("Ray: Creating Vulkan renderer failed, %s", e.what());
         }
-    }*/
+    }
 #endif
 
 #if !defined(__aarch64__) && !defined(_M_ARM) && !defined(_M_ARM64)
@@ -74,6 +74,6 @@ Ray::RendererBase *Ray::CreateRenderer(const settings_t &s, ILog *log, const uin
     return new Ref::Renderer(s, log);
 }
 
-#if !defined(DISABLE_OCL)
+#if !defined(DISABLE_GPU)
 //std::vector<Ray::Ocl::Platform> Ray::Ocl::QueryPlatforms() { return Renderer::QueryPlatforms(); }
 #endif

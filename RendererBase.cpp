@@ -16,9 +16,9 @@ const char *RendererTypeName(const eRendererType rt) {
         return "avx2";
     } else if (rt == RendererNEON) {
         return "neon";
-    } /*else if (rt == RendererOCL) {
-        return "ocl";
-    }*/
+    } else if (rt == RendererVK) {
+        return "vk";
+    }
     return "";
 }
 
@@ -35,6 +35,8 @@ eRendererType RendererTypeFromName(const char *name) {
         return RendererAVX2;
     } else if (strcmp(name, "neon") == 0) {
         return RendererNEON;
+    } else if (strcmp(name, "vk") == 0) {
+        return RendererVK;
     }
     return RendererRef;
 }
