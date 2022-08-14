@@ -238,232 +238,238 @@ Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, Span<const 
                 {res_right_bounds.min, res_right_bounds.max}};
     } else {
         SmallVector<uint32_t, 1024> axis_lists[3];
-        for (int axis = 0; axis < 3; axis++) {
-            axis_lists[axis].reserve(num_prims);
-        }
 
-        for (uint32_t i = 0; i < uint32_t(num_prims); ++i) {
-            axis_lists[0].push_back(i);
-            axis_lists[1].push_back(i);
-            axis_lists[2].push_back(i);
-        }
-
-        SmallVector<bbox_t, 1024> right_bounds(num_prims);
-
-        for (int axis = 0; axis < 3; ++axis) {
-            auto &list = axis_lists[axis];
-
-            if (modified_prim_bounds.empty()) {
-                std::sort(list.begin(), list.end(),
-                          [axis, primitives, &prim_indices](uint32_t p1, uint32_t p2) -> bool {
-                              return primitives[prim_indices[p1]].bbox_max[axis] <
-                                     primitives[prim_indices[p2]].bbox_max[axis];
-                          });
-            } else {
-                std::sort(list.begin(), list.end(), [axis, &modified_prim_bounds](uint32_t p1, uint32_t p2) -> bool {
-                    return modified_prim_bounds[p1].max[axis] < modified_prim_bounds[p2].max[axis];
-                });
+        if (num_prims > s.min_primitives_in_leaf) {
+            for (int axis = 0; axis < 3; axis++) {
+                axis_lists[axis].reserve(num_prims);
             }
 
-            bbox_t cur_right_bounds;
-            if (modified_prim_bounds.empty()) {
-                for (size_t i = list.size() - 1; i > 0; --i) {
-                    cur_right_bounds.min = min(cur_right_bounds.min, primitives[prim_indices[list[i]]].bbox_min);
-                    cur_right_bounds.max = max(cur_right_bounds.max, primitives[prim_indices[list[i]]].bbox_max);
-                    right_bounds[i - 1] = cur_right_bounds;
-                }
-            } else {
-                for (size_t i = list.size() - 1; i > 0; --i) {
-                    cur_right_bounds.min = min(cur_right_bounds.min, modified_prim_bounds[list[i]].min);
-                    cur_right_bounds.max = max(cur_right_bounds.max, modified_prim_bounds[list[i]].max);
-                    right_bounds[i - 1] = cur_right_bounds;
-                }
+            for (uint32_t i = 0; i < uint32_t(num_prims); ++i) {
+                axis_lists[0].push_back(i);
+                axis_lists[1].push_back(i);
+                axis_lists[2].push_back(i);
             }
 
-            bbox_t left_bounds;
-            for (size_t i = 1; i < list.size(); i++) {
+            SmallVector<bbox_t, 1024> right_bounds(num_prims);
+
+            for (int axis = 0; axis < 3; ++axis) {
+                auto &list = axis_lists[axis];
+
                 if (modified_prim_bounds.empty()) {
-                    left_bounds.min = min(left_bounds.min, primitives[prim_indices[list[i - 1]]].bbox_min);
-                    left_bounds.max = max(left_bounds.max, primitives[prim_indices[list[i - 1]]].bbox_max);
+                    std::sort(list.begin(), list.end(),
+                              [axis, primitives, &prim_indices](uint32_t p1, uint32_t p2) -> bool {
+                                  return primitives[prim_indices[p1]].bbox_max[axis] <
+                                         primitives[prim_indices[p2]].bbox_max[axis];
+                              });
                 } else {
-                    left_bounds.min = min(left_bounds.min, modified_prim_bounds[list[i - 1]].min);
-                    left_bounds.max = max(left_bounds.max, modified_prim_bounds[list[i - 1]].max);
+                    std::sort(list.begin(), list.end(),
+                              [axis, &modified_prim_bounds](uint32_t p1, uint32_t p2) -> bool {
+                                  return modified_prim_bounds[p1].max[axis] < modified_prim_bounds[p2].max[axis];
+                              });
                 }
 
-                const float sah =
-                    left_bounds.surface_area() * i + right_bounds[i - 1].surface_area() * (list.size() - i);
-                if (sah < res_sah) {
-                    res_sah = sah;
-                    div_axis = axis;
-                    div_index = uint32_t(i);
-                    res_left_bounds = left_bounds;
-                    res_right_bounds = right_bounds[i - 1];
-                }
-            }
-        }
-
-        const bbox_t overlap = {max(res_left_bounds.min, res_right_bounds.min),
-                                min(res_left_bounds.max, res_right_bounds.max)};
-        Ref::simd_ivec4 test = simd_cast(overlap.max <= overlap.min);
-        test[3] = 0;
-
-        if (s.allow_spatial_splits && test.all_zeros() &&
-            overlap.surface_area() > SpatialSplitAlpha * bbox_t::surface_area(root_min, root_max)) {
-            struct bin_t {
-                bbox_t extends, limits;
-                uint32_t enter_counter = 0, exit_counter = 0, prim_counter = 0;
-            };
-
-            int spatial_split = -1;
-
-            for (int split_axis = 0; split_axis < 3; split_axis++) {
-                bin_t bins[NumSpatialSplitBins];
-                const double bin_size =
-                    double(whole_box.max[split_axis] - whole_box.min[split_axis]) / NumSpatialSplitBins;
-
-                // skip this axis if bbox is flat
-                if (bin_size < FLT_EPS) {
-                    continue;
-                }
-
-                for (int i = 0; i < NumSpatialSplitBins; i++) {
-                    bins[i].limits.min = whole_box.min;
-                    bins[i].limits.max = whole_box.max;
-                    bins[i].limits.min[split_axis] = castflt_down(whole_box.min[split_axis] + i * bin_size);
-                    bins[i].limits.max[split_axis] = castflt_up(whole_box.min[split_axis] + (i + 1) * bin_size);
-                }
-
-                bins[NumSpatialSplitBins - 1].limits.max[split_axis] = whole_box.max[split_axis];
-
-                const auto &list = axis_lists[split_axis];
-
-                for (const uint32_t i : list) {
-                    const prim_t &p = primitives[prim_indices[i]];
-
-                    float prim_min = p.bbox_min[split_axis], prim_max = p.bbox_max[split_axis];
-
-                    if (!modified_prim_bounds.empty()) {
-                        prim_min = modified_prim_bounds[i].min[split_axis];
-                        prim_max = modified_prim_bounds[i].max[split_axis];
+                bbox_t cur_right_bounds;
+                if (modified_prim_bounds.empty()) {
+                    for (size_t i = list.size() - 1; i > 0; --i) {
+                        cur_right_bounds.min = min(cur_right_bounds.min, primitives[prim_indices[list[i]]].bbox_min);
+                        cur_right_bounds.max = max(cur_right_bounds.max, primitives[prim_indices[list[i]]].bbox_max);
+                        right_bounds[i - 1] = cur_right_bounds;
                     }
-
-                    int enter_index = 0, exit_index = 0;
-
-                    for (int j = 0; j < NumSpatialSplitBins; j++) {
-                        if (prim_min >= bins[j].limits.min[split_axis]) {
-                            enter_index = j;
-                        } else {
-                            break;
-                        }
+                } else {
+                    for (size_t i = list.size() - 1; i > 0; --i) {
+                        cur_right_bounds.min = min(cur_right_bounds.min, modified_prim_bounds[list[i]].min);
+                        cur_right_bounds.max = max(cur_right_bounds.max, modified_prim_bounds[list[i]].max);
+                        right_bounds[i - 1] = cur_right_bounds;
                     }
+                }
 
-                    for (int j = enter_index; j < NumSpatialSplitBins; j++) {
-                        if (prim_max >= bins[j].limits.min[split_axis]) {
-                            exit_index = j;
-                        } else {
-                            break;
-                        }
-                    }
-
-                    bins[enter_index].enter_counter++;
-                    bins[exit_index].exit_counter++;
-
-                    if (positions) {
-                        auto v0 = Ref::simd_fvec3{&positions[p.i0 * stride]},
-                             v1 = Ref::simd_fvec3{&positions[p.i1 * stride]},
-                             v2 = Ref::simd_fvec3{&positions[p.i2 * stride]};
-
-                        for (int j = enter_index; j <= exit_index; j++) {
-                            bbox_t box = GetClippedAABB(v0, v1, v2, bins[j].limits);
-
-                            bins[j].extends.min = min(bins[j].extends.min, box.min);
-                            bins[j].extends.max = max(bins[j].extends.max, box.max);
-                            bins[j].prim_counter++;
-                        }
+                bbox_t left_bounds;
+                for (size_t i = 1; i < list.size(); i++) {
+                    if (modified_prim_bounds.empty()) {
+                        left_bounds.min = min(left_bounds.min, primitives[prim_indices[list[i - 1]]].bbox_min);
+                        left_bounds.max = max(left_bounds.max, primitives[prim_indices[list[i - 1]]].bbox_max);
                     } else {
-                        for (int j = enter_index; j <= exit_index; j++) {
-                            bins[j].extends.min = min(bins[j].extends.min, p.bbox_min);
-                            bins[j].extends.max = max(bins[j].extends.max, p.bbox_max);
-                            bins[j].prim_counter++;
-                        }
-                    }
-                }
-
-                for (int i = 0; i < NumSpatialSplitBins; i++) {
-                    if (!bins[i].prim_counter) {
-                        bins[i].extends = bins[i].limits;
-                    } else {
-                        bins[i].extends.min = max(bins[i].extends.min, bins[i].limits.min);
-                        bins[i].extends.max = min(bins[i].extends.max, bins[i].limits.max);
-                    }
-                }
-
-                for (int split = 1; split < NumSpatialSplitBins; split++) {
-                    bbox_t ext_left, ext_right;
-                    int num_left = 0, num_right = 0;
-                    for (int i = 0; i < split; i++) {
-                        if (!bins[i].prim_counter)
-                            continue;
-
-                        ext_left.min = min(ext_left.min, bins[i].extends.min);
-                        ext_left.max = max(ext_left.max, bins[i].extends.max);
-                        num_left += bins[i].enter_counter;
-                    }
-                    for (int i = split; i < NumSpatialSplitBins; i++) {
-                        if (!bins[i].prim_counter)
-                            continue;
-
-                        ext_right.min = min(ext_right.min, bins[i].extends.min);
-                        ext_right.max = max(ext_right.max, bins[i].extends.max);
-                        num_right += bins[i].exit_counter;
+                        left_bounds.min = min(left_bounds.min, modified_prim_bounds[list[i - 1]].min);
+                        left_bounds.max = max(left_bounds.max, modified_prim_bounds[list[i - 1]].max);
                     }
 
-                    const float split_sah = ext_left.surface_area() * num_left + ext_right.surface_area() * num_right;
-                    if (split_sah < res_sah) {
-                        res_sah = split_sah;
-                        spatial_split = split;
-                        div_axis = split_axis;
-
-                        res_left_bounds = ext_left;
-                        res_right_bounds = ext_right;
+                    const float sah =
+                        left_bounds.surface_area() * i + right_bounds[i - 1].surface_area() * (list.size() - i);
+                    if (sah < res_sah) {
+                        res_sah = sah;
+                        div_axis = axis;
+                        div_index = uint32_t(i);
+                        res_left_bounds = left_bounds;
+                        res_right_bounds = right_bounds[i - 1];
                     }
                 }
             }
 
-            if (spatial_split != -1) {
-                std::vector<uint32_t> left_indices, right_indices;
+            const bbox_t overlap = {max(res_left_bounds.min, res_right_bounds.min),
+                                    min(res_left_bounds.max, res_right_bounds.max)};
+            Ref::simd_ivec4 test = simd_cast(overlap.max <= overlap.min);
+            test[3] = 0;
 
-                const bbox_t over = {max(res_left_bounds.min, res_right_bounds.min),
-                                     min(res_left_bounds.max, res_right_bounds.max)};
+            if (s.allow_spatial_splits && test.all_zeros() &&
+                overlap.surface_area() > SpatialSplitAlpha * bbox_t::surface_area(root_min, root_max)) {
+                struct bin_t {
+                    bbox_t extends, limits;
+                    uint32_t enter_counter = 0, exit_counter = 0, prim_counter = 0;
+                };
 
-                int num_in_both = 0;
+                int spatial_split = -1;
 
-                const auto &list = axis_lists[div_axis];
-                for (const uint32_t i : list) {
-                    bool b1 = false, b2 = false;
-                    if (modified_prim_bounds[i].min[div_axis] <= res_left_bounds.max[div_axis]) {
-                        left_indices.push_back(prim_indices[i]);
-                        b1 = true;
+                for (int split_axis = 0; split_axis < 3; split_axis++) {
+                    bin_t bins[NumSpatialSplitBins];
+                    const double bin_size =
+                        double(whole_box.max[split_axis] - whole_box.min[split_axis]) / NumSpatialSplitBins;
+
+                    // skip this axis if bbox is flat
+                    if (bin_size < FLT_EPS) {
+                        continue;
                     }
 
-                    if (modified_prim_bounds[i].max[div_axis] >= res_right_bounds.min[div_axis]) {
-                        right_indices.push_back(prim_indices[i]);
-                        b2 = true;
+                    for (int i = 0; i < NumSpatialSplitBins; i++) {
+                        bins[i].limits.min = whole_box.min;
+                        bins[i].limits.max = whole_box.max;
+                        bins[i].limits.min[split_axis] = castflt_down(whole_box.min[split_axis] + i * bin_size);
+                        bins[i].limits.max[split_axis] = castflt_up(whole_box.min[split_axis] + (i + 1) * bin_size);
                     }
 
-                    if (b1 && b2) {
-                        num_in_both++;
+                    bins[NumSpatialSplitBins - 1].limits.max[split_axis] = whole_box.max[split_axis];
+
+                    const auto &list = axis_lists[split_axis];
+
+                    for (const uint32_t i : list) {
+                        const prim_t &p = primitives[prim_indices[i]];
+
+                        float prim_min = p.bbox_min[split_axis], prim_max = p.bbox_max[split_axis];
+
+                        if (!modified_prim_bounds.empty()) {
+                            prim_min = modified_prim_bounds[i].min[split_axis];
+                            prim_max = modified_prim_bounds[i].max[split_axis];
+                        }
+
+                        int enter_index = 0, exit_index = 0;
+
+                        for (int j = 0; j < NumSpatialSplitBins; j++) {
+                            if (prim_min >= bins[j].limits.min[split_axis]) {
+                                enter_index = j;
+                            } else {
+                                break;
+                            }
+                        }
+
+                        for (int j = enter_index; j < NumSpatialSplitBins; j++) {
+                            if (prim_max >= bins[j].limits.min[split_axis]) {
+                                exit_index = j;
+                            } else {
+                                break;
+                            }
+                        }
+
+                        bins[enter_index].enter_counter++;
+                        bins[exit_index].exit_counter++;
+
+                        if (positions) {
+                            auto v0 = Ref::simd_fvec3{&positions[p.i0 * stride]},
+                                 v1 = Ref::simd_fvec3{&positions[p.i1 * stride]},
+                                 v2 = Ref::simd_fvec3{&positions[p.i2 * stride]};
+
+                            for (int j = enter_index; j <= exit_index; j++) {
+                                bbox_t box = GetClippedAABB(v0, v1, v2, bins[j].limits);
+
+                                bins[j].extends.min = min(bins[j].extends.min, box.min);
+                                bins[j].extends.max = max(bins[j].extends.max, box.max);
+                                bins[j].prim_counter++;
+                            }
+                        } else {
+                            for (int j = enter_index; j <= exit_index; j++) {
+                                bins[j].extends.min = min(bins[j].extends.min, p.bbox_min);
+                                bins[j].extends.max = max(bins[j].extends.max, p.bbox_max);
+                                bins[j].prim_counter++;
+                            }
+                        }
+                    }
+
+                    for (int i = 0; i < NumSpatialSplitBins; i++) {
+                        if (!bins[i].prim_counter) {
+                            bins[i].extends = bins[i].limits;
+                        } else {
+                            bins[i].extends.min = max(bins[i].extends.min, bins[i].limits.min);
+                            bins[i].extends.max = min(bins[i].extends.max, bins[i].limits.max);
+                        }
+                    }
+
+                    for (int split = 1; split < NumSpatialSplitBins; split++) {
+                        bbox_t ext_left, ext_right;
+                        int num_left = 0, num_right = 0;
+                        for (int i = 0; i < split; i++) {
+                            if (!bins[i].prim_counter)
+                                continue;
+
+                            ext_left.min = min(ext_left.min, bins[i].extends.min);
+                            ext_left.max = max(ext_left.max, bins[i].extends.max);
+                            num_left += bins[i].enter_counter;
+                        }
+                        for (int i = split; i < NumSpatialSplitBins; i++) {
+                            if (!bins[i].prim_counter)
+                                continue;
+
+                            ext_right.min = min(ext_right.min, bins[i].extends.min);
+                            ext_right.max = max(ext_right.max, bins[i].extends.max);
+                            num_right += bins[i].exit_counter;
+                        }
+
+                        const float split_sah =
+                            ext_left.surface_area() * num_left + ext_right.surface_area() * num_right;
+                        if (split_sah < res_sah) {
+                            res_sah = split_sah;
+                            spatial_split = split;
+                            div_axis = split_axis;
+
+                            res_left_bounds = ext_left;
+                            res_right_bounds = ext_right;
+                        }
                     }
                 }
 
-                printf("Spatial split: %i %i %i\n", (int)left_indices.size(), (int)right_indices.size(), num_in_both);
-                printf("Extends: %f..%f %f..%f\n", res_left_bounds.min[div_axis], res_left_bounds.max[div_axis],
-                       res_right_bounds.min[div_axis], res_right_bounds.max[div_axis]);
+                if (spatial_split != -1) {
+                    std::vector<uint32_t> left_indices, right_indices;
 
-                return {std::move(left_indices),
-                        std::move(right_indices),
-                        {res_left_bounds.min, res_left_bounds.max},
-                        {res_right_bounds.min, res_right_bounds.max}};
+                    const bbox_t over = {max(res_left_bounds.min, res_right_bounds.min),
+                                         min(res_left_bounds.max, res_right_bounds.max)};
+
+                    int num_in_both = 0;
+
+                    const auto &list = axis_lists[div_axis];
+                    for (const uint32_t i : list) {
+                        bool b1 = false, b2 = false;
+                        if (modified_prim_bounds[i].min[div_axis] <= res_left_bounds.max[div_axis]) {
+                            left_indices.push_back(prim_indices[i]);
+                            b1 = true;
+                        }
+
+                        if (modified_prim_bounds[i].max[div_axis] >= res_right_bounds.min[div_axis]) {
+                            right_indices.push_back(prim_indices[i]);
+                            b2 = true;
+                        }
+
+                        if (b1 && b2) {
+                            num_in_both++;
+                        }
+                    }
+
+                    printf("Spatial split: %i %i %i\n", (int)left_indices.size(), (int)right_indices.size(),
+                           num_in_both);
+                    printf("Extends: %f..%f %f..%f\n", res_left_bounds.min[div_axis], res_left_bounds.max[div_axis],
+                           res_right_bounds.min[div_axis], res_right_bounds.max[div_axis]);
+
+                    return {std::move(left_indices),
+                            std::move(right_indices),
+                            {res_left_bounds.min, res_left_bounds.max},
+                            {res_right_bounds.min, res_right_bounds.max}};
+                }
             }
         }
 

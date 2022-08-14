@@ -208,6 +208,7 @@ struct bvh_settings_t {
     float oversplit_threshold = 0.95f;
     bool allow_spatial_splits = false;
     bool use_fast_bvh_build = false;
+    int min_primitives_in_leaf = 8;
 };
 
 template <typename T> using aligned_vector = std::vector<T, aligned_allocator<T, alignof(T)>>;
