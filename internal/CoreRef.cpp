@@ -3497,13 +3497,13 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
             new_ray.c[2] = ray.c[2] * F[2] * mix_weight / F[3];
             new_ray.pdf = F[3];
 
+            memcpy(&new_ray.o[0], value_ptr(offset_ray(P, -plane_N)), 3 * sizeof(float));
+            memcpy(&new_ray.d[0], value_ptr(V), 3 * sizeof(float));
+
 #ifdef USE_RAY_DIFFERENTIALS
             const float k = (eta - eta * eta * dot(I, plane_N) / dot(V, plane_N));
             const float dmdx = k * surf_der.ddn_dx;
             const float dmdy = k * surf_der.ddn_dy;
-
-            memcpy(&new_ray.o[0], value_ptr(offset_ray(P, -plane_N)), 3 * sizeof(float));
-            memcpy(&new_ray.d[0], value_ptr(V), 3 * sizeof(float));
 
             memcpy(&new_ray.do_dx[0], value_ptr(surf_der.do_dx), 3 * sizeof(float));
             memcpy(&new_ray.do_dy[0], value_ptr(surf_der.do_dy), 3 * sizeof(float));
