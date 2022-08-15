@@ -656,6 +656,7 @@ uint32_t Ray::PreprocessPrims_HLBVH(Span<const prim_t> prims, std::vector<bvh_no
     bvh_settings_t s;
     s.oversplit_threshold = std::numeric_limits<float>::max();
     s.allow_spatial_splits = false;
+    s.min_primitives_in_leaf = 1;
 
     // Build top level hierarchy using SAH
     const uint32_t new_nodes_count =
