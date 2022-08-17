@@ -496,24 +496,40 @@ force_inline bool _IntersectTri(const float ro[3], const float rd[3], int j, con
         where(is_active_lane, _v) = detv * rdet;
     }
 
-    float min_t = _t[0];
-    ITERATE(S, { min_t = std::min(min_t, _t[i]); })
-    _mask &= simd_cast(_t == min_t);
+    long mask = _mask.movemask();
+    if (!mask) {
+        return false;
+    }
 
-    const long mask = _mask.movemask();
-    if (mask) {
-        const long i = GetFirstBit(mask);
+    inter.mask[j] = 0xffffffff;
 
-        inter.mask[j] = 0xffffffff;
-        inter.prim_index[j] = _prim_index[i];
-        inter.t[j] = _t[i];
-        inter.u[j] = _u[i];
-        inter.v[j] = _v[i];
+    const long i1 = GetFirstBit(mask);
+    mask = ClearBit(mask, i1);
 
+    long min_i = i1;
+    inter.prim_index[j] = _prim_index[i1];
+    inter.t[j] = _t[i1];
+    inter.u[j] = _u[i1];
+    inter.v[j] = _v[i1];
+
+    if (mask == 0) { // Only one triangle was hit
         return true;
     }
 
-    return false;
+    do {
+        const long i2 = GetFirstBit(mask);
+        mask = ClearBit(mask, i2);
+
+        if (_t[i2] < _t[min_i]) {
+            inter.prim_index[j] = _prim_index[i2];
+            inter.t[j] = _t[i2];
+            inter.u[j] = _u[i2];
+            inter.v[j] = _v[i2];
+            min_i = i2;
+        }
+    } while (mask != 0);
+
+    return true;
 }
 
 template <int S>
