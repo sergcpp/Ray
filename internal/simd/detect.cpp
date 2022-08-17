@@ -32,7 +32,7 @@ inline unsigned long long _xgetbv(unsigned int index) {
 inline void cpuid(int info[4], int InfoType) {
     __cpuid_count(InfoType, 0, info[0], info[1], info[2], info[3]);
 }
-#if defined(__GNUC__) && (__GNUC__ < 9) && !defined(__APPLE__)
+#if defined(__GNUC__) && (__GNUC__ < 9) && !defined(__APPLE__) && !defined(_xgetbv)
 inline unsigned long long _xgetbv(unsigned int index) {
     unsigned int eax, edx;
     __asm__ __volatile__(
