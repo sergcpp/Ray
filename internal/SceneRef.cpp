@@ -727,7 +727,7 @@ void Ray::Ref::Scene::RebuildTLAS() {
     }
 
     macro_nodes_root_ = uint32_t(nodes_.size());
-    macro_nodes_count_ = PreprocessPrims_SAH({&primitives[0], primitives.size()}, nullptr, 0, {}, nodes_, mi_indices_);
+    macro_nodes_count_ = PreprocessPrims_SAH(primitives, nullptr, 0, {}, nodes_, mi_indices_);
 
     if (use_wide_bvh_) {
         const auto before_count = uint32_t(mnodes_.size());
