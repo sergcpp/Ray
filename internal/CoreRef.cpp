@@ -3094,8 +3094,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
             const float b = dot(op, simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f});
             const float det = std::sqrt(b * b - dot(op, op) + l.sph.radius * l.sph.radius);
 
-            const float cos_theta = dot(simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f},
-                                        normalize(simd_fvec4{l.sph.pos[0], l.sph.pos[1], l.sph.pos[2], 0.0f} - P));
+            const float cos_theta = dot(simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f}, normalize(light_pos - P));
 
             const float light_pdf = (inter.t * inter.t) / (0.5f * light_area * cos_theta);
             const float bsdf_pdf = ray.pdf;

@@ -183,24 +183,26 @@ struct light_t {
         } sph;
         struct {
             float pos[3], area;
-            float u[3], v[3];
+            float u[3], _unused0;
+            float v[3], _unused1;
         } rect;
         struct {
             float pos[3], area;
-            float u[3], v[3];
+            float u[3], _unused0;
+            float v[3], _unused1;
         } disk;
         struct {
             uint32_t tri_index;
             uint32_t xform_index;
-            float _unused[8];
+            float _unused[10];
         } tri;
         struct {
             float dir[3], angle;
-            float _unused[6];
+            float _unused[8];
         } dir;
     };
 };
-static_assert(sizeof(light_t) == 56, "!");
+static_assert(sizeof(light_t) == 64, "!");
 
 struct prim_t;
 
