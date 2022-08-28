@@ -133,7 +133,7 @@ struct material_t {
     uint32_t textures[MAX_MATERIAL_TEXTURES];
     float base_color[3];
     uint32_t flags;
-    uint8_t type;
+    uint32_t type;
     union {
         struct {
             float tangent_rotation;

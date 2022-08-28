@@ -301,10 +301,9 @@ uint32_t Ray::PreprocessMesh(const float *attrs, Span<const uint32_t> vtx_indice
     const size_t indices_start = out_tri_indices.size();
     uint32_t num_out_nodes;
     if (!s.use_fast_bvh_build) {
-        num_out_nodes = PreprocessPrims_SAH({&primitives[0], primitives.size()}, positions, attr_stride, s, out_nodes,
-                                            out_tri_indices);
+        num_out_nodes = PreprocessPrims_SAH(primitives, positions, attr_stride, s, out_nodes, out_tri_indices);
     } else {
-        num_out_nodes = PreprocessPrims_HLBVH({&primitives[0], primitives.size()}, out_nodes, out_tri_indices);
+        num_out_nodes = PreprocessPrims_HLBVH(primitives, out_nodes, out_tri_indices);
     }
 
     // make sure mesh occupies the whole 8-triangle slot

@@ -293,7 +293,7 @@ uint32_t Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
         uint32_t material_count = 1;
 
         while (material_count) {
-            material_t &mat = materials_[material_stack[--material_count]];
+            const material_t &mat = materials_[material_stack[--material_count]];
 
             if (mat.type == MixNode) {
                 material_stack[material_count++] = mat.textures[MIX_MAT1];
@@ -308,7 +308,7 @@ uint32_t Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
         material_count = 1;
 
         while (material_count) {
-            material_t &mat = materials_[material_stack[--material_count]];
+            const material_t &mat = materials_[material_stack[--material_count]];
 
             if (mat.type == MixNode) {
                 material_stack[material_count++] = mat.textures[MIX_MAT1];
@@ -351,7 +351,7 @@ uint32_t Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
     // add attributes
     const size_t new_vertices_start = vertices_.size();
     vertices_.resize(new_vertices_start + _m.vtx_attrs_count);
-    for (size_t i = 0; i < _m.vtx_attrs_count; i++) {
+    for (size_t i = 0; i < _m.vtx_attrs_count; ++i) {
         vertex_t &v = vertices_[new_vertices_start + i];
 
         memcpy(&v.p[0], (_m.vtx_attrs + i * stride), 3 * sizeof(float));
