@@ -672,7 +672,7 @@ float fresnel_dielectric_cos(float cosi, float eta) {
         float B = (c * (g + c) - 1) / (c * (g - c) + 1);
         result = 0.5f * A * A * (1 + B * B);
     } else {
-        result = 1.0f; /* TIR (no refracted component) */
+        result = 1.0f; // TIR (no refracted component)
     }
 
     return result;
@@ -2248,7 +2248,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Sample_GGXSpecular_BSDF(const simd_fvec4 &T, cons
     out_V = world_from_tangent(T, B, N, reflected_dir_ts);
     return Evaluate_GGXSpecular_BSDF(view_dir_ts, sampled_normal_ts, reflected_dir_ts, alpha_x, alpha_y, spec_ior,
                                      spec_F0, spec_col);
-};
+}
 
 Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_GGXRefraction_BSDF(const simd_fvec4 &view_dir_ts,
                                                            const simd_fvec4 &sampled_normal_ts,
@@ -2302,7 +2302,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Sample_GGXRefraction_BSDF(const simd_fvec4 &T, co
         const simd_fvec4 V = normalize(eta * I + m * N);
 
         out_V = simd_fvec4{V[0], V[1], V[2], m};
-        return simd_fvec4{1e6f, 1e6f, 1e6f, 1e6f};
+        return simd_fvec4{1e6f};
     }
 
     const simd_fvec4 view_dir_ts = normalize(tangent_from_world(T, B, N, -I));
@@ -2650,20 +2650,11 @@ float Ray::Ref::ComputeVisibility(const float p[3], const float d[3], float dist
         const vertex_t &v2 = sc.vertices[sc.vtx_indices[tri_index * 3 + 1]];
         const vertex_t &v3 = sc.vertices[sc.vtx_indices[tri_index * 3 + 2]];
 
-        const float *I = d;
-
-        float w = 1.0f - sh_inter.u - sh_inter.v;
+        const float w = 1.0f - sh_inter.u - sh_inter.v;
         const simd_fvec2 sh_uvs =
             simd_fvec2(v1.t[0]) * w + simd_fvec2(v2.t[0]) * sh_inter.u + simd_fvec2(v3.t[0]) * sh_inter.v;
 
         const tri_accel_t &tri = sc.tris[prim_index];
-
-        auto sh_plane_N = simd_fvec4{tri.n_plane[0], tri.n_plane[1], tri.n_plane[2], 0.0f};
-        sh_plane_N = TransformNormal(sh_plane_N, tr->inv_xform);
-
-        if (is_backfacing) {
-            sh_plane_N = -sh_plane_N;
-        }
 
         {
             const int sh_rand_hash = hash(rand_hash2);
@@ -3580,13 +3571,14 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
         }
 
         const float specular = unpack_unorm_16(mat->specular_unorm);
+        const float specular_tint = unpack_unorm_16(mat->specular_tint_unorm);
         const float transmission = unpack_unorm_16(mat->transmission_unorm);
         const float clearcoat = unpack_unorm_16(mat->clearcoat_unorm);
         const float clearcoat_roughness = unpack_unorm_16(mat->clearcoat_roughness_unorm);
         const float sheen = unpack_unorm_16(mat->sheen_unorm);
         const float sheen_tint = unpack_unorm_16(mat->sheen_tint_unorm);
 
-        simd_fvec4 spec_tmp_col = mix(simd_fvec4{1.0f}, tint_color, unpack_unorm_16(mat->specular_tint_unorm));
+        simd_fvec4 spec_tmp_col = mix(simd_fvec4{1.0f}, tint_color, specular_tint);
         spec_tmp_col = mix(specular * 0.08f * spec_tmp_col, base_color, metallic);
 
         const float spec_ior = (2.0f / (1.0f - std::sqrt(0.08f * specular))) - 1.0f;
