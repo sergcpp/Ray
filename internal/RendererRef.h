@@ -43,8 +43,7 @@ class Renderer : public RendererBase {
     bool use_wide_bvh_;
     Ref::Framebuffer clean_buf_, final_buf_, temp_buf_;
 
-    std::mutex pass_cache_mtx_;
-    std::vector<PassData> pass_cache_;
+    std::mutex mtx_;
 
     stats_t stats_ = {0};
     int w_ = 0, h_ = 0;

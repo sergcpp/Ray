@@ -10,6 +10,10 @@
 
 #define DEBUG_ATLAS 0
 
+namespace Ray {
+thread_local Ray::Ref::PassData g_per_thread_pass_data;
+}
+
 Ray::Ref::Renderer::Renderer(const settings_t &s, ILog *log)
     : log_(log), use_wide_bvh_(s.use_wide_bvh), clean_buf_(s.w, s.h), final_buf_(s.w, s.h), temp_buf_(s.w, s.h) {
     auto rand_func = std::bind(UniformIntDistribution<uint32_t>(), std::mt19937(0));
@@ -101,14 +105,10 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
         UpdateHaltonSequence(region.iteration, region.halton_seq);
     }
 
-    PassData p;
+    PassData &p = g_per_thread_pass_data;
 
     {
-        std::lock_guard<std::mutex> _(pass_cache_mtx_);
-        if (!pass_cache_.empty()) {
-            p = std::move(pass_cache_.back());
-            pass_cache_.pop_back();
-        }
+        std::lock_guard<std::mutex> _(mtx_);
 
         // allocate sh data on demand
         if (cam.pass_settings.flags & OutputSH) {
@@ -335,8 +335,7 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
     }
 
     {
-        std::lock_guard<std::mutex> _(pass_cache_mtx_);
-        pass_cache_.emplace_back(std::move(p));
+        std::lock_guard<std::mutex> _(mtx_);
 
         stats_.time_primary_ray_gen_us +=
             (unsigned long long)std::chrono::duration<double, std::micro>{time_after_ray_gen - time_start}.count();
