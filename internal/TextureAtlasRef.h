@@ -167,10 +167,10 @@ template <typename T, int N> class TextureAtlasTiled : public TextureAtlasBase {
     bool Resize(int new_page_count);
 };
 
-extern template class Ray::Ref::TextureAtlasTiled<uint8_t, 4>;
-extern template class Ray::Ref::TextureAtlasTiled<uint8_t, 3>;
-extern template class Ray::Ref::TextureAtlasTiled<uint8_t, 2>;
-extern template class Ray::Ref::TextureAtlasTiled<uint8_t, 1>;
+extern template class TextureAtlasTiled<uint8_t, 4>;
+extern template class TextureAtlasTiled<uint8_t, 3>;
+extern template class TextureAtlasTiled<uint8_t, 2>;
+extern template class TextureAtlasTiled<uint8_t, 1>;
 
 } // namespace Ref
 } // namespace Ray
