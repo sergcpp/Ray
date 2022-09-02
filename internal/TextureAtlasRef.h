@@ -123,7 +123,7 @@ template <typename T, int N> class TextureAtlasTiled : public TextureAtlasBase {
         return Get(page, int(x * res_[0] - 0.5f), int(y * res_[1] - 0.5f));
     }
 
-    color_rgba_t Fetch(int page, int x, int y) const override {
+    color_rgba_t Fetch(const int page, const int x, const int y) const override {
         const ColorType col = Get(page, x, y);
 
         color_rgba_t ret;
@@ -142,7 +142,7 @@ template <typename T, int N> class TextureAtlasTiled : public TextureAtlasBase {
         return ret;
     }
 
-    color_rgba_t Fetch(int page, float x, float y) const override {
+    color_rgba_t Fetch(const int page, const float x, const float y) const override {
         const ColorType col = Get(page, x, y);
 
         color_rgba_t ret;

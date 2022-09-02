@@ -98,8 +98,8 @@ template <typename T, int N> bool Ray::Ref::TextureAtlasLinear<T, N>::Resize(con
 }
 
 template <typename T, int N>
-void Ray::Ref::TextureAtlasLinear<T, N>::WritePageData(int page, int posx, int posy, int sizex, int sizey,
-                                                       const ColorType *data) {
+void Ray::Ref::TextureAtlasLinear<T, N>::WritePageData(const int page, const int posx, const int posy, const int sizex,
+                                                       const int sizey, const ColorType *data) {
     for (int y = 0; y < sizey; y++) {
         memcpy(&pages_[page][(posy + y) * res_[0] + posx], &data[y * sizex], sizex * sizeof(ColorType));
     }
@@ -113,7 +113,7 @@ template class Ray::Ref::TextureAtlasLinear<uint8_t, 1>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 template <typename T, int N>
-Ray::Ref::TextureAtlasTiled<T, N>::TextureAtlasTiled(int resx, int resy, int initial_page_count)
+Ray::Ref::TextureAtlasTiled<T, N>::TextureAtlasTiled(const int resx, const int resy, const int initial_page_count)
     : TextureAtlasBase(resx, resy), res_in_tiles_{resx / TileSize, resy / TileSize} {
     if ((resx % TileSize) || (resy % TileSize)) {
         throw std::invalid_argument("TextureAtlas resolution should be multiple of tile size!");
@@ -170,7 +170,7 @@ int Ray::Ref::TextureAtlasTiled<T, N>::Allocate(const ColorType *data, const int
     return Allocate(data, _res, pos);
 }
 
-template <typename T, int N> bool Ray::Ref::TextureAtlasTiled<T, N>::Free(int page, const int pos[2]) {
+template <typename T, int N> bool Ray::Ref::TextureAtlasTiled<T, N>::Free(const int page, const int pos[2]) {
     if (page < 0 || page > splitters_.size()) {
         return false;
     }
@@ -190,7 +190,7 @@ template <typename T, int N> bool Ray::Ref::TextureAtlasTiled<T, N>::Free(int pa
 #endif
 }
 
-template <typename T, int N> bool Ray::Ref::TextureAtlasTiled<T, N>::Resize(int new_page_count) {
+template <typename T, int N> bool Ray::Ref::TextureAtlasTiled<T, N>::Resize(const int new_page_count) {
     // if we shrink atlas, all redundant pages required to be empty
     for (int i = new_page_count; i < int(splitters_.size()); i++) {
         if (!splitters_[i].empty()) {
