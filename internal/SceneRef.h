@@ -76,7 +76,7 @@ class Scene : public SceneBase {
     void RemoveNodes(uint32_t node_index, uint32_t node_count);
     void RebuildTLAS();
 
-    void GenerateTextureMipmaps();
+    void GenerateTextureMips();
 
   public:
     Scene(ILog *log, bool use_wide_bvh);

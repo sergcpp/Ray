@@ -210,6 +210,34 @@ template <typename T, int N> bool Ray::Ref::TextureAtlasTiled<T, N>::Resize(int 
 }
 
 template <typename T, int N>
+int Ray::Ref::TextureAtlasTiled<T, N>::DownsampleRegion(const int src_page, const int src_pos[2], const int src_res[2],
+                                                        int dst_pos[2]) {
+    const int dst_res[2] = {src_res[0] / 2, src_res[1] / 2};
+
+    // TODO: try to get rid of this allocation
+    std::vector<ColorType> temp_data;
+    temp_data.reserve(dst_res[0] * dst_res[1]);
+
+    for (int y = src_pos[1]; y < src_pos[1] + src_res[1]; y += 2) {
+        for (int x = src_pos[0]; x < src_pos[0] + src_res[0]; x += 2) {
+            const ColorType c00 = Get(src_page, x + 0, y + 0);
+            const ColorType c10 = Get(src_page, x + 1, y + 0);
+            const ColorType c11 = Get(src_page, x + 1, y + 1);
+            const ColorType c01 = Get(src_page, x + 0, y + 1);
+
+            ColorType res;
+            for (int i = 0; i < N; ++i) {
+                res.v[i] = (c00.v[i] + c10.v[i] + c11.v[i] + c01.v[i]) / 4;
+            }
+
+            temp_data.push_back(res);
+        }
+    }
+
+    return Allocate(&temp_data[0], dst_res, dst_pos);
+}
+
+template <typename T, int N>
 void Ray::Ref::TextureAtlasTiled<T, N>::WritePageData(const int page, const int posx, const int posy, const int sizex,
                                                       const int sizey, const ColorType *data) {
     for (int y = 0; y < sizey; y++) {
