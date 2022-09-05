@@ -697,10 +697,10 @@ void assemble_material_test_images(const char *arch_list[]) {
         {"trans_mat0", "trans_mat1", "trans_mat2", "trans_mat3", "trans_mat4"},
         {"trans_mat5", "trans_mat6", "trans_mat7", "trans_mat8", "trans_mat9"},
         {"alpha_mat0", "alpha_mat1", "alpha_mat2", "alpha_mat3"},
-        {"complex_mat0", "complex_mat1", "complex_mat2", "complex_mat3", "complex_mat4"},
-        {"complex_mat4_mesh_lights", "complex_mat4_sphere_light", "complex_mat4_sun_light"},
-        {"complex_mat5", "complex_mat5_mesh_lights", "complex_mat5_sphere_light", "complex_mat5_sun_light"},
-        {"complex_mat6"}};
+        {"complex_mat0", "complex_mat1", "complex_mat2" },
+        {"complex_mat3", "complex_mat3_mesh_lights", "complex_mat3_sphere_light", "complex_mat3_sun_light"},
+        {"complex_mat4", "complex_mat4_mesh_lights", "complex_mat4_sphere_light", "complex_mat4_sun_light"},
+        {"complex_mat5"}};
     const int ImgCountH = sizeof(test_names) / sizeof(test_names[0]);
 
     const int OutImageW = 256 * ImgCountW;
@@ -2139,27 +2139,6 @@ void test_alpha_mat3(const char *arch_list[], const char *preferred_device) {
 
 void test_complex_mat0(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 1024;
-    const double MinPSNR = 38.31;
-    const int PixThres = 14;
-
-    Ray::principled_mat_desc_t wood_mat_desc;
-    wood_mat_desc.base_texture = 0;
-    wood_mat_desc.roughness = 1.0f;
-    wood_mat_desc.roughness_texture = 2;
-    wood_mat_desc.normal_map = 1;
-
-    const char *textures[] = {
-        "test_data/textures/bamboo-wood-semigloss-albedo.tga",
-        "test_data/textures/bamboo-wood-semigloss-normal.tga",
-        "test_data/textures/bamboo-wood-semigloss-roughness.tga",
-    };
-
-    run_material_test(arch_list, preferred_device, "complex_mat0", wood_mat_desc, SampleCount, MinPSNR, PixThres,
-                      textures);
-}
-
-void test_complex_mat1(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 1024;
     const double MinPSNR = 39.98;
     const int PixThres = 10;
 
@@ -2175,11 +2154,11 @@ void test_complex_mat1(const char *arch_list[], const char *preferred_device) {
         "test_data/textures/older-wood-flooring_roughness.tga",
     };
 
-    run_material_test(arch_list, preferred_device, "complex_mat1", wood_mat_desc, SampleCount, MinPSNR, PixThres,
+    run_material_test(arch_list, preferred_device, "complex_mat0", wood_mat_desc, SampleCount, MinPSNR, PixThres,
                       textures);
 }
 
-void test_complex_mat2(const char *arch_list[], const char *preferred_device) {
+void test_complex_mat1(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 1024;
     const double MinPSNR = 39.52;
     const int PixThres = 11;
@@ -2197,11 +2176,11 @@ void test_complex_mat2(const char *arch_list[], const char *preferred_device) {
         "test_data/textures/streaky-metal1_roughness.tga",
     };
 
-    run_material_test(arch_list, preferred_device, "complex_mat2", metal_mat_desc, SampleCount, MinPSNR, PixThres,
+    run_material_test(arch_list, preferred_device, "complex_mat1", metal_mat_desc, SampleCount, MinPSNR, PixThres,
                       textures);
 }
 
-void test_complex_mat3(const char *arch_list[], const char *preferred_device) {
+void test_complex_mat2(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 1024;
     const double MinPSNR = 39.97;
     const int PixThres = 12;
@@ -2218,6 +2197,29 @@ void test_complex_mat3(const char *arch_list[], const char *preferred_device) {
     const char *textures[] = {
         "test_data/textures/rusting-lined-metal_albedo.tga", "test_data/textures/rusting-lined-metal_normal-ogl.tga",
         "test_data/textures/rusting-lined-metal_roughness.tga", "test_data/textures/rusting-lined-metal_metallic.tga"};
+
+    run_material_test(arch_list, preferred_device, "complex_mat2", metal_mat_desc, SampleCount, MinPSNR, PixThres,
+                      textures);
+}
+
+void test_complex_mat3(const char *arch_list[], const char *preferred_device) {
+    const int SampleCount = 256;
+    const double MinPSNR = 39.3;
+    const int PixThres = 1;
+
+    Ray::principled_mat_desc_t metal_mat_desc;
+    metal_mat_desc.base_texture = 0;
+    metal_mat_desc.metallic = 1.0f;
+    metal_mat_desc.roughness = 1.0f;
+    metal_mat_desc.roughness_texture = 2;
+    metal_mat_desc.metallic = 1.0f;
+    metal_mat_desc.metallic_texture = 3;
+    metal_mat_desc.normal_map = 1;
+    metal_mat_desc.normal_map_intensity = 0.3f;
+
+    const char *textures[] = {
+        "test_data/textures/stone_trims_02_BaseColor.tga", "test_data/textures/stone_trims_02_Normal.tga",
+        "test_data/textures/stone_trims_02_Roughness.tga", "test_data/textures/stone_trims_02_Metallic.tga"};
 
     run_material_test(arch_list, preferred_device, "complex_mat3", metal_mat_desc, SampleCount, MinPSNR, PixThres,
                       textures);
@@ -2378,25 +2380,3 @@ void test_complex_mat5_sun_light(const char *arch_list[], const char *preferred_
                       PixThres, nullptr, STANDARD_SCENE_SUN_LIGHT);
 }
 
-void test_complex_mat6(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 256;
-    const double MinPSNR = 39.3;
-    const int PixThres = 1;
-
-    Ray::principled_mat_desc_t metal_mat_desc;
-    metal_mat_desc.base_texture = 0;
-    metal_mat_desc.metallic = 1.0f;
-    metal_mat_desc.roughness = 1.0f;
-    metal_mat_desc.roughness_texture = 2;
-    metal_mat_desc.metallic = 1.0f;
-    metal_mat_desc.metallic_texture = 3;
-    metal_mat_desc.normal_map = 1;
-    metal_mat_desc.normal_map_intensity = 0.3f;
-
-    const char *textures[] = {
-        "test_data/textures/stone_trims_02_BaseColor.tga", "test_data/textures/stone_trims_02_Normal.tga",
-        "test_data/textures/stone_trims_02_Roughness.tga", "test_data/textures/stone_trims_02_Metallic.tga"};
-
-    run_material_test(arch_list, preferred_device, "complex_mat6", metal_mat_desc, SampleCount, MinPSNR, PixThres,
-                      textures);
-}

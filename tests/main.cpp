@@ -96,7 +96,6 @@ void test_complex_mat5(const char *arch_list[], const char *preferred_device);
 void test_complex_mat5_mesh_lights(const char *arch_list[], const char *preferred_device);
 void test_complex_mat5_sphere_light(const char *arch_list[], const char *preferred_device);
 void test_complex_mat5_sun_light(const char *arch_list[], const char *preferred_device);
-void test_complex_mat6(const char *arch_list[], const char *preferred_device);
 void assemble_material_test_images(const char *arch_list[]);
 void test_simd();
 void test_mesh_lights();
@@ -167,7 +166,6 @@ int main(int argc, char *argv[]) {
         test_complex_mat5_mesh_lights(arch_list, device_name);
         test_complex_mat5_sphere_light(arch_list, device_name);
         test_complex_mat5_sun_light(arch_list, device_name);
-        test_complex_mat6(arch_list, device_name);
         printf("Finished complex_mat tests in %.2f minutes\n",
                duration<double>(high_resolution_clock::now() - t2).count() / 60.0);
 
