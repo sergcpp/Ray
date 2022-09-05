@@ -2138,9 +2138,9 @@ void test_alpha_mat3(const char *arch_list[], const char *preferred_device) {
 //
 
 void test_complex_mat0(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 1024;
-    const double MinPSNR = 39.98;
-    const int PixThres = 10;
+    const int SampleCount = 512;
+    const double MinPSNR = 39.02;
+    const int PixThres = 14;
 
     Ray::principled_mat_desc_t wood_mat_desc;
     wood_mat_desc.base_texture = 0;
@@ -2159,9 +2159,9 @@ void test_complex_mat0(const char *arch_list[], const char *preferred_device) {
 }
 
 void test_complex_mat1(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 1024;
-    const double MinPSNR = 39.52;
-    const int PixThres = 11;
+    const int SampleCount = 512;
+    const double MinPSNR = 38.19;
+    const int PixThres = 20;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = 0;
@@ -2181,9 +2181,9 @@ void test_complex_mat1(const char *arch_list[], const char *preferred_device) {
 }
 
 void test_complex_mat2(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 1024;
-    const double MinPSNR = 39.97;
-    const int PixThres = 12;
+    const int SampleCount = 512;
+    const double MinPSNR = 38.92;
+    const int PixThres = 13;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = 0;
@@ -2226,9 +2226,9 @@ void test_complex_mat3(const char *arch_list[], const char *preferred_device) {
 }
 
 void test_complex_mat4(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 1024;
-    const double MinPSNR = 34.27;
-    const int PixThres = 223;
+    const int SampleCount = 768;
+    const double MinPSNR = 33.41;
+    const int PixThres = 330;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = 0;
@@ -2248,9 +2248,9 @@ void test_complex_mat4(const char *arch_list[], const char *preferred_device) {
 }
 
 void test_complex_mat4_mesh_lights(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 1024;
-    const double MinPSNR = 31.84;
-    const int PixThres = 998;
+    const int SampleCount = 768;
+    const double MinPSNR = 31.15;
+    const int PixThres = 1165;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = 0;
@@ -2270,9 +2270,9 @@ void test_complex_mat4_mesh_lights(const char *arch_list[], const char *preferre
 }
 
 void test_complex_mat4_sphere_light(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 1024;
-    const double MinPSNR = 34.46;
-    const int PixThres = 270;
+    const int SampleCount = 768;
+    const double MinPSNR = 33.51;
+    const int PixThres = 425;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = 0;
@@ -2292,8 +2292,8 @@ void test_complex_mat4_sphere_light(const char *arch_list[], const char *preferr
 }
 
 void test_complex_mat4_sun_light(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 1024;
-    const double MinPSNR = 28.72;
+    const int SampleCount = 768;
+    const double MinPSNR = 28.6;
     const int PixThres = 1353;
 
     Ray::principled_mat_desc_t metal_mat_desc;
