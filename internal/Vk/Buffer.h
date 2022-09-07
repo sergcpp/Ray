@@ -104,6 +104,8 @@ class Buffer : public LinearAlloc {
 
     uint32_t generation() const { return handle_.generation; }
 
+    operator bool() const { return handle_.buf != VK_NULL_HANDLE; }
+
     bool is_mapped() const { return mapped_ptr_ != nullptr; }
     uint8_t *mapped_ptr() const { return mapped_ptr_; }
 
@@ -118,10 +120,11 @@ class Buffer : public LinearAlloc {
     void FreeImmediate();
 
     uint32_t AlignMapOffset(uint32_t offset);
+    uint32_t AlignMapOffsetUp(uint32_t offset);
 
     uint8_t *Map(const uint8_t dir, const bool persistent = false) { return MapRange(dir, 0, size_, persistent); }
     uint8_t *MapRange(uint8_t dir, uint32_t offset, uint32_t size, bool persistent = false);
-    void FlushMappedRange(uint32_t offset, uint32_t size);
+    void FlushMappedRange(uint32_t offset, uint32_t size, bool autoalign = false);
     void Unmap();
 
     void Fill(uint32_t dst_offset, uint32_t size, uint32_t data, void *_cmd_buf);

@@ -78,12 +78,17 @@ class LinearAlloc {
         bitmap_ = new_bitmap;
     }
 
+    bool IsSet(const uint32_t block_index) const {
+        assert(int(block_index) < block_count_);
+        const int xword_index = block_index / BitmapGranularity;
+        const int bit_index = block_index % BitmapGranularity;
+        return (bitmap_[xword_index] & (1ull << bit_index)) == 0;
+    }
+
     uint32_t size() const { return block_size_ * block_count_; }
 
     uint32_t Alloc(uint32_t req_size, const char *tag);
     void Free(uint32_t offset, uint32_t size);
-
-    void PrintNode(int i, std::string prefix, bool is_tail, ILog *log) const;
 
     void Clear();
 };

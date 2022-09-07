@@ -332,6 +332,11 @@ uint32_t Ray::Vk::Buffer::AlignMapOffset(const uint32_t offset) {
     return offset - (offset % align_to);
 }
 
+uint32_t Ray::Vk::Buffer::AlignMapOffsetUp(uint32_t offset) {
+    const uint32_t align_to = uint32_t(ctx_->device_properties().limits.nonCoherentAtomSize);
+    return align_to * ((offset + align_to - 1) / align_to);
+}
+
 uint8_t *Ray::Vk::Buffer::MapRange(const uint8_t dir, const uint32_t offset, const uint32_t size,
                                    const bool persistent) {
     assert(mapped_offset_ == 0xffffffff && !mapped_ptr_);
@@ -372,8 +377,15 @@ uint8_t *Ray::Vk::Buffer::MapRange(const uint8_t dir, const uint32_t offset, con
     return reinterpret_cast<uint8_t *>(mapped);
 }
 
-void Ray::Vk::Buffer::FlushMappedRange(uint32_t offset, const uint32_t size) {
+void Ray::Vk::Buffer::FlushMappedRange(uint32_t offset, uint32_t size, const bool autoalign) {
+    if (autoalign && offset != AlignMapOffset(offset)) {
+        size += offset - AlignMapOffset(offset);
+        offset = AlignMapOffset(offset);
+    }
     assert(offset == AlignMapOffset(offset));
+    if (autoalign && (offset + size) != size_) {
+        size = AlignMapOffsetUp(offset + size) - offset;
+    }
     assert((offset + size) == size_ || (offset + size) == AlignMapOffset(offset + size));
 
     // offset argument is relative to mapped range

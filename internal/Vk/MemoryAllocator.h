@@ -79,9 +79,6 @@ class MemoryAllocator {
     void Free(uint32_t block_ndx, uint32_t alloc_off, uint32_t alloc_size);
 
     void Print(ILog *log) const {
-        for (const auto &block : blocks_) {
-            block.alloc.PrintNode(0, "", true, log);
-        }
     }
 };
 

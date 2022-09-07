@@ -18,13 +18,14 @@
 #define _CLAMP(x, lo, hi) (_MIN(_MAX((x), (lo)), (hi)))
 
 Ray::Vk::Scene::Scene(Context *ctx)
-    : ctx_(ctx), nodes_(ctx), tris_(ctx), tri_indices_(ctx), tri_materials_(ctx), transforms_(ctx), meshes_(ctx),
-      mesh_instances_(ctx), mi_indices_(ctx), vertices_(ctx), vtx_indices_(ctx), materials_(ctx),
-      textures_(ctx), tex_atlases_{{ctx, eTexFormat::RawRGBA8888, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
-                                   {ctx, eTexFormat::RawRGB888, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
-                                   {ctx, eTexFormat::RawRG88, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
-                                   {ctx, eTexFormat::RawR8, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE}},
-      lights_(ctx), li_indices_(ctx), visible_lights_(ctx) {}
+    : ctx_(ctx), nodes_(ctx), tris_(ctx), tri_indices_(ctx), tri_materials_(ctx), transforms_(ctx, "Transforms"),
+      meshes_(ctx, "Meshes"), mesh_instances_(ctx, "Mesh Instances"), mi_indices_(ctx), vertices_(ctx),
+      vtx_indices_(ctx), materials_(ctx, "Materials"),
+      textures_(ctx, "Textures"), tex_atlases_{{ctx, eTexFormat::RawRGBA8888, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
+                                               {ctx, eTexFormat::RawRGB888, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
+                                               {ctx, eTexFormat::RawRG88, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
+                                               {ctx, eTexFormat::RawR8, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE}},
+      lights_(ctx, "Lights"), li_indices_(ctx), visible_lights_(ctx) {}
 
 void Ray::Vk::Scene::GetEnvironment(environment_desc_t &env) {
     memcpy(&env.env_col[0], &env_.env_col, 3 * sizeof(float));
@@ -39,9 +40,6 @@ void Ray::Vk::Scene::SetEnvironment(const environment_desc_t &env) {
 }
 
 uint32_t Ray::Vk::Scene::AddTexture(const tex_desc_t &_t) {
-    const auto tex_index = uint32_t(textures_.size());
-    assert(textures_.size() == textures_cpu_.size());
-
     texture_t t;
     t.width = uint16_t(_t.w);
     t.height = uint16_t(_t.h);
@@ -54,7 +52,7 @@ uint32_t Ray::Vk::Scene::AddTexture(const tex_desc_t &_t) {
         t.height |= TEXTURE_MIPS_BIT;
     }
 
-    int res[2] = {_t.w, _t.h};
+    const int res[2] = {_t.w, _t.h};
 
     std::vector<color_rgba8_t> tex_data_rgba8;
     std::vector<color_rgb8_t> tex_data_rgb8;
@@ -105,10 +103,7 @@ uint32_t Ray::Vk::Scene::AddTexture(const tex_desc_t &_t) {
                       tex_atlases_[0].page_count(), tex_atlases_[1].page_count(), tex_atlases_[2].page_count(),
                       tex_atlases_[3].page_count());
 
-    const uint32_t ret = uint32_t(textures_.size());
-    textures_.PushBack(t);
-    textures_cpu_.push_back(t);
-    return ret;
+    return textures_.push(t);
 }
 
 uint32_t Ray::Vk::Scene::AddMaterial(const shading_node_desc_t &m) {
@@ -154,10 +149,7 @@ uint32_t Ray::Vk::Scene::AddMaterial(const shading_node_desc_t &m) {
     mat.textures[NORMALS_TEXTURE] = m.normal_map;
     mat.normal_map_strength_unorm = pack_unorm_16(_CLAMP(m.normal_map_intensity, 0.0f, 1.0f));
 
-    const auto ret = uint32_t(materials_.size());
-    materials_.PushBack(mat);
-    materials_cpu_.push_back(mat);
-    return ret;
+    return materials_.push(mat);
 }
 
 uint32_t Ray::Vk::Scene::AddMaterial(const principled_mat_desc_t &m) {
@@ -186,9 +178,7 @@ uint32_t Ray::Vk::Scene::AddMaterial(const principled_mat_desc_t &m) {
     main_mat.clearcoat_unorm = pack_unorm_16(_CLAMP(m.clearcoat, 0.0f, 1.0f));
     main_mat.clearcoat_roughness_unorm = pack_unorm_16(_CLAMP(m.clearcoat_roughness, 0.0f, 1.0f));
 
-    uint32_t root_node = uint32_t(materials_.size());
-    materials_.PushBack(main_mat);
-    materials_cpu_.push_back(main_mat);
+    uint32_t root_node = materials_.push(main_mat);
     uint32_t emissive_node = 0xffffffff, transparent_node = 0xffffffff;
 
     if (m.emission_strength > 0.0f &&
@@ -273,7 +263,7 @@ uint32_t Ray::Vk::Scene::AddMesh(const mesh_desc_t &_m) {
         uint32_t material_count = 1;
 
         while (material_count) {
-            const material_t &mat = materials_cpu_[material_stack[--material_count]];
+            const material_t &mat = materials_[material_stack[--material_count]];
 
             if (mat.type == MixNode) {
                 material_stack[material_count++] = mat.textures[MIX_MAT1];
@@ -288,7 +278,7 @@ uint32_t Ray::Vk::Scene::AddMesh(const mesh_desc_t &_m) {
         material_count = 1;
 
         while (material_count) {
-            const material_t &mat = materials_cpu_[material_stack[--material_count]];
+            const material_t &mat = materials_[material_stack[--material_count]];
 
             if (mat.type == MixNode) {
                 material_stack[material_count++] = mat.textures[MIX_MAT1];
@@ -349,9 +339,7 @@ uint32_t Ray::Vk::Scene::AddMesh(const mesh_desc_t &_m) {
     m.vert_index = uint32_t(vtx_indices_.size());
     m.vert_count = uint32_t(new_vtx_indices.size());
 
-    const auto mesh_index = uint32_t(meshes_.size());
-    meshes_.PushBack(m);
-    meshes_cpu_.push_back(m);
+    const uint32_t mesh_index = meshes_.push(m);
 
     // add nodes
     nodes_.Append(&new_nodes[0], new_nodes.size());
@@ -419,8 +407,7 @@ uint32_t Ray::Vk::Scene::AddLight(const directional_light_desc_t &_l) {
     l.dir.dir[2] = -_l.direction[2];
     l.dir.angle = _l.angle * PI / 360.0f;
 
-    const auto light_index = uint32_t(lights_.size());
-    lights_.PushBack(l);
+    const uint32_t light_index = lights_.push(l);
     li_indices_.PushBack(light_index);
     return light_index;
 }
@@ -437,9 +424,9 @@ uint32_t Ray::Vk::Scene::AddLight(const sphere_light_desc_t &_l) {
     l.sph.area = 4.0f * PI * _l.radius * _l.radius;
     l.sph.radius = _l.radius;
 
-    const auto light_index = uint32_t(lights_.size());
-    lights_.PushBack(l);
+    const uint32_t light_index = lights_.push(l);
     li_indices_.PushBack(light_index);
+
     if (_l.visible) {
         visible_lights_.PushBack(light_index);
     }
@@ -467,8 +454,7 @@ uint32_t Ray::Vk::Scene::AddLight(const rect_light_desc_t &_l, const float *xfor
     memcpy(l.rect.u, value_ptr(uvec), 3 * sizeof(float));
     memcpy(l.rect.v, value_ptr(vvec), 3 * sizeof(float));
 
-    const auto light_index = uint32_t(lights_.size());
-    lights_.PushBack(l);
+    const uint32_t light_index = lights_.push(l);
     li_indices_.PushBack(light_index);
     if (_l.visible) {
         visible_lights_.PushBack(light_index);
@@ -497,8 +483,7 @@ uint32_t Ray::Vk::Scene::AddLight(const disk_light_desc_t &_l, const float *xfor
     memcpy(l.disk.u, value_ptr(uvec), 3 * sizeof(float));
     memcpy(l.disk.v, value_ptr(vvec), 3 * sizeof(float));
 
-    const auto light_index = uint32_t(lights_.size());
-    lights_.PushBack(l);
+    const uint32_t light_index = lights_.push(l);
     li_indices_.PushBack(light_index);
     if (_l.visible) {
         visible_lights_.PushBack(light_index);
@@ -506,27 +491,39 @@ uint32_t Ray::Vk::Scene::AddLight(const disk_light_desc_t &_l, const float *xfor
     return light_index;
 }
 
-uint32_t Ray::Vk::Scene::AddMeshInstance(const uint32_t mesh_index, const float *xform) {
-    const auto mi_index = uint32_t(mesh_instances_.size());
+void Ray::Vk::Scene::RemoveLight(const uint32_t i) {
+    if (!lights_.exists(i)) {
+        return;
+    }
 
+    //{ // remove from compacted list
+    //    auto it = std::find(std::begin(li_indices_), std::end(li_indices_), i);
+    //    assert(it != std::end(li_indices_));
+    //    li_indices_.erase(it);
+    //}
+
+    // if (lights_[i].visible) {
+    //     auto it = std::find(std::begin(visible_lights_), std::end(visible_lights_), i);
+    //     assert(it != std::end(visible_lights_));
+    //     visible_lights_.erase(it);
+    // }
+
+    lights_.erase(i);
+}
+
+uint32_t Ray::Vk::Scene::AddMeshInstance(const uint32_t mesh_index, const float *xform) {
     mesh_instance_t mi;
     mi.mesh_index = mesh_index;
-    mi.tr_index = uint32_t(transforms_.size());
-    mesh_instances_.PushBack(mi);
+    mi.tr_index = transforms_.emplace();
 
-    transform_t tr;
-
-    memcpy(tr.xform, xform, 16 * sizeof(float));
-    InverseMatrix(tr.xform, tr.inv_xform);
-
-    transforms_.PushBack(tr);
+    const uint32_t mi_index = mesh_instances_.push(mi);
 
     { // find emissive triangles and add them as emitters
-        const mesh_t &m = meshes_cpu_[mesh_index];
+        const mesh_t &m = meshes_[mesh_index];
         for (uint32_t tri = (m.vert_index / 3); tri < (m.vert_index + m.vert_count) / 3; ++tri) {
             const tri_mat_data_t &tri_mat = tri_materials_cpu_[tri];
 
-            const material_t &front_mat = materials_cpu_[tri_mat.front_mi & MATERIAL_INDEX_BITS];
+            const material_t &front_mat = materials_[tri_mat.front_mi & MATERIAL_INDEX_BITS];
             if (front_mat.type == EmissiveNode &&
                 (front_mat.flags & (MAT_FLAG_MULT_IMPORTANCE | MAT_FLAG_SKY_PORTAL))) {
                 light_t new_light;
@@ -538,8 +535,7 @@ uint32_t Ray::Vk::Scene::AddMeshInstance(const uint32_t mesh_index, const float 
                 new_light.col[0] = front_mat.base_color[0] * front_mat.strength;
                 new_light.col[1] = front_mat.base_color[1] * front_mat.strength;
                 new_light.col[2] = front_mat.base_color[2] * front_mat.strength;
-                const uint32_t index = uint32_t(lights_.size());
-                lights_.PushBack(new_light);
+                const uint32_t index = lights_.push(new_light);
                 li_indices_.PushBack(index);
             }
         }
@@ -556,11 +552,9 @@ void Ray::Vk::Scene::SetMeshInstanceTransform(const uint32_t mi_index, const flo
     memcpy(tr.xform, xform, 16 * sizeof(float));
     InverseMatrix(tr.xform, tr.inv_xform);
 
-    mesh_instance_t mi;
-    mesh_instances_.Get(mi_index, mi);
+    mesh_instance_t mi = mesh_instances_[mi_index];
 
-    mesh_t m;
-    meshes_.Get(mi.mesh_index, m);
+    const mesh_t &m = meshes_[mi.mesh_index];
 
     bvh_node_t n;
     nodes_.Get(m.node_index, n);
@@ -582,7 +576,7 @@ void Ray::Vk::Scene::RemoveNodes(uint32_t node_index, uint32_t node_count) {
         return;
     }
 
-    nodes_.Erase(node_index, node_count);
+    /*nodes_.Erase(node_index, node_count);
 
     if (node_index != nodes_.size()) {
         size_t meshes_count = meshes_.size();
@@ -616,7 +610,7 @@ void Ray::Vk::Scene::RemoveNodes(uint32_t node_index, uint32_t node_count) {
         if (macro_nodes_start_ > node_index) {
             macro_nodes_start_ -= node_count;
         }
-    }
+    }*/
 }
 
 void Ray::Vk::Scene::RebuildTLAS() {
@@ -628,10 +622,7 @@ void Ray::Vk::Scene::RebuildTLAS() {
     std::vector<prim_t> primitives;
     primitives.reserve(mi_count);
 
-    std::vector<mesh_instance_t> mesh_instances(mi_count);
-    mesh_instances_.Get(&mesh_instances[0], 0, mi_count);
-
-    for (const mesh_instance_t &mi : mesh_instances) {
+    for (const mesh_instance_t &mi : mesh_instances_) {
         primitives.push_back({0, 0, 0, Ref::simd_fvec4{mi.bbox_min}, Ref::simd_fvec4{mi.bbox_max}});
     }
 
@@ -664,12 +655,12 @@ void Ray::Vk::Scene::GenerateTextureMips() {
     std::vector<mip_gen_info> mips_to_generate;
     mips_to_generate.reserve(textures_.size());
 
-    for (uint32_t i = 0; i < uint32_t(textures_cpu_.size()); ++i) {
+    for (uint32_t i = 0; i < uint32_t(textures_.size()); ++i) {
         // if (!textures_.exists(i)) {
         //     continue;
         // }
 
-        const texture_t &t = textures_cpu_[i];
+        const texture_t &t = textures_[i];
         if ((t.height & TEXTURE_MIPS_BIT) == 0) {
             continue;
         }
@@ -705,7 +696,7 @@ void Ray::Vk::Scene::GenerateTextureMips() {
               });
 
     for (const mip_gen_info &info : mips_to_generate) {
-        texture_t &t = textures_cpu_[info.texture_index];
+        texture_t t = textures_[info.texture_index];
 
         const int dst_mip = info.dst_mip;
         const int src_mip = dst_mip - 1;

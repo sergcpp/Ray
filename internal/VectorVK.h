@@ -9,10 +9,7 @@ namespace Ray {
 namespace Vk {
 template <typename T> class Vector {
     Context *ctx_ = nullptr;
-    // size_t max_img_buf_size_;
-    // cl_mem_flags flags_;
     mutable Buffer buf_;
-    // cl::Image1DBuffer img_buf_;
     size_t size_, cap_;
 
   public:
@@ -21,8 +18,6 @@ template <typename T> class Vector {
     }
 
     const Buffer &buf() const { return buf_; }
-
-    // const cl::Image1DBuffer &img_buf() const { return img_buf_; }
 
     size_t size() const { return size_; }
 

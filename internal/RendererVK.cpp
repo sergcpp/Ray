@@ -255,19 +255,19 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
     const Ray::camera_t &cam = s->cams_[s->current_cam()].cam;
 
     scene_data_t sc_data = {&s->env_,
-                            s->mesh_instances_.buf(),
+                            s->mesh_instances_.gpu_buf(),
                             s->mi_indices_.buf(),
-                            s->meshes_.buf(),
-                            s->transforms_.buf(),
+                            s->meshes_.gpu_buf(),
+                            s->transforms_.gpu_buf(),
                             s->vtx_indices_.buf(),
                             s->vertices_.buf(),
                             s->nodes_.buf(),
                             s->tris_.buf(),
                             s->tri_indices_.buf(),
                             s->tri_materials_.buf(),
-                            s->materials_.buf(),
-                            s->textures_.buf(),
-                            s->lights_.buf(),
+                            s->materials_.gpu_buf(),
+                            s->textures_.gpu_buf(),
+                            s->lights_.gpu_buf(),
                             s->li_indices_.buf(),
                             int(s->li_indices_.size()),
                             s->visible_lights_.buf(),
@@ -295,46 +295,46 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
             }
         }
 
-        if (sc_data.transforms.resource_state != eResState::UnorderedAccess) {
+        if (sc_data.mi_indices && sc_data.mi_indices.resource_state != eResState::UnorderedAccess) {
             res_transitions.emplace_back(&sc_data.mi_indices, eResState::UnorderedAccess);
         }
-        if (sc_data.transforms.resource_state != eResState::UnorderedAccess) {
+        if (sc_data.meshes && sc_data.meshes.resource_state != eResState::UnorderedAccess) {
             res_transitions.emplace_back(&sc_data.meshes, eResState::UnorderedAccess);
         }
-        if (sc_data.transforms.resource_state != eResState::UnorderedAccess) {
+        if (sc_data.transforms && sc_data.transforms.resource_state != eResState::UnorderedAccess) {
             res_transitions.emplace_back(&sc_data.transforms, eResState::UnorderedAccess);
         }
-        if (sc_data.vtx_indices.resource_state != eResState::UnorderedAccess) {
+        if (sc_data.vtx_indices && sc_data.vtx_indices.resource_state != eResState::UnorderedAccess) {
             res_transitions.emplace_back(&sc_data.vtx_indices, eResState::UnorderedAccess);
         }
-        if (sc_data.vertices.resource_state != eResState::UnorderedAccess) {
+        if (sc_data.vertices && sc_data.vertices.resource_state != eResState::UnorderedAccess) {
             res_transitions.emplace_back(&sc_data.vertices, eResState::UnorderedAccess);
         }
-        if (sc_data.nodes.resource_state != eResState::UnorderedAccess) {
+        if (sc_data.nodes && sc_data.nodes.resource_state != eResState::UnorderedAccess) {
             res_transitions.emplace_back(&sc_data.nodes, eResState::UnorderedAccess);
         }
-        if (sc_data.tris.resource_state != eResState::UnorderedAccess) {
+        if (sc_data.tris && sc_data.tris.resource_state != eResState::UnorderedAccess) {
             res_transitions.emplace_back(&sc_data.tris, eResState::UnorderedAccess);
         }
-        if (sc_data.tris.resource_state != eResState::UnorderedAccess) {
+        if (sc_data.tri_indices && sc_data.tri_indices.resource_state != eResState::UnorderedAccess) {
             res_transitions.emplace_back(&sc_data.tri_indices, eResState::UnorderedAccess);
         }
-        if (sc_data.tris.resource_state != eResState::UnorderedAccess) {
+        if (sc_data.tri_materials && sc_data.tri_materials.resource_state != eResState::UnorderedAccess) {
             res_transitions.emplace_back(&sc_data.tri_materials, eResState::UnorderedAccess);
         }
-        if (sc_data.tris.resource_state != eResState::UnorderedAccess) {
+        if (sc_data.materials && sc_data.materials.resource_state != eResState::UnorderedAccess) {
             res_transitions.emplace_back(&sc_data.materials, eResState::UnorderedAccess);
         }
-        if (sc_data.tris.resource_state != eResState::UnorderedAccess) {
+        if (sc_data.textures && sc_data.textures.resource_state != eResState::UnorderedAccess) {
             res_transitions.emplace_back(&sc_data.textures, eResState::UnorderedAccess);
         }
-        if (sc_data.tris.resource_state != eResState::UnorderedAccess) {
+        if (sc_data.lights && sc_data.lights.resource_state != eResState::UnorderedAccess) {
             res_transitions.emplace_back(&sc_data.lights, eResState::UnorderedAccess);
         }
-        if (sc_data.tris.resource_state != eResState::UnorderedAccess) {
+        if (sc_data.li_indices && sc_data.li_indices.resource_state != eResState::UnorderedAccess) {
             res_transitions.emplace_back(&sc_data.li_indices, eResState::UnorderedAccess);
         }
-        if (sc_data.tris.resource_state != eResState::UnorderedAccess) {
+        if (sc_data.visible_lights && sc_data.visible_lights.resource_state != eResState::UnorderedAccess) {
             res_transitions.emplace_back(&sc_data.visible_lights, eResState::UnorderedAccess);
         }
 

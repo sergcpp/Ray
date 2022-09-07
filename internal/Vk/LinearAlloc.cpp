@@ -113,43 +113,6 @@ void Ray::Vk::LinearAlloc::Free(const uint32_t offset, const uint32_t size) {
     }
 }
 
-void Ray::Vk::LinearAlloc::PrintNode(int i, std::string prefix, bool is_tail, ILog *log) const {
-#if 0
-    const auto &node = nodes_[i];
-    if (is_tail) {
-        if (!node.has_children() && node.is_free) {
-            log->Info("%s+- [0x%08x..0x%08x) <free>", prefix.c_str(), node.offset, node.offset + node.size);
-        } else {
-#ifndef NDEBUG
-            log->Info("%s+- [0x%08x..0x%08x) <%s>", prefix.c_str(), node.offset, node.offset + node.size, node.tag);
-#else
-            log->Info("%s+- [0x%08x..0x%08x) <occupied>", prefix.c_str(), node.offset, node.offset + node.size);
-#endif
-        }
-        prefix += "   ";
-    } else {
-        if (!node.has_children() && node.is_free) {
-            log->Info("%s|- [0x%08x..0x%08x) <free>", prefix.c_str(), node.offset, node.offset + node.size);
-        } else {
-#ifndef NDEBUG
-            log->Info("%s|- [0x%08x..0x%08x) <%s>", prefix.c_str(), node.offset, node.offset + node.size, node.tag);
-#else
-            log->Info("%s|- [0x%08x..0x%08x) <occupied>", prefix.c_str(), node.offset, node.offset + node.size);
-#endif
-        }
-        prefix += "|  ";
-    }
-
-    if (node.child[0] != -1) {
-        PrintNode(node.child[0], prefix, false, log);
-    }
-
-    if (node.child[1] != -1) {
-        PrintNode(node.child[1], prefix, true, log);
-    }
-#endif
-}
-
 void Ray::Vk::LinearAlloc::Clear() {
     // Mark all blocks as free
     for (uint32_t i = 0; i < block_count_; ++i) {

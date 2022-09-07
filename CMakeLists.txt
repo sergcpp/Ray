@@ -17,7 +17,8 @@ ELSE(MSVC)
     endif()
 ENDIF(MSVC)
 
-set(INTERNAL_SOURCE_FILES internal/BVHSplit.h
+set(INTERNAL_SOURCE_FILES internal/Bitmap.h
+                          internal/BVHSplit.h
                           internal/BVHSplit.cpp
                           internal/Core.h
                           internal/Core.cpp
@@ -71,6 +72,7 @@ set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
                           internal/RendererVK_kernels.cpp
                           internal/SceneVK.h
                           internal/SceneVK.cpp
+                          internal/SparseStorageVK.h
                           internal/VectorVK.h)
 
 add_definitions(-DENABLE_OBJ_LABELS)
