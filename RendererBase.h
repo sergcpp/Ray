@@ -30,6 +30,7 @@ struct settings_t {
 #if !defined(DISABLE_GPU)
     //int platform_index = -1, device_index = -1;
     const char *preferred_device = nullptr;
+    bool use_hwrt = true;
 #endif
     bool use_wide_bvh = true;
 };
@@ -64,6 +65,10 @@ class RendererBase {
 
     /// Type of renderer
     virtual eRendererType type() const = 0;
+
+#if !defined(DISABLE_GPU)
+    virtual bool is_hwrt() const { return false; }
+#endif
 
     /// Returns size of rendered image
     virtual std::pair<int, int> size() const = 0;

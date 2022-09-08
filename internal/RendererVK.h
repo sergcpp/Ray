@@ -13,6 +13,7 @@
 namespace Ray {
 namespace Vk {
 class TextureAtlas;
+class AccStructure;
 
 struct scene_data_t {
     const environment_t *env;
@@ -33,25 +34,27 @@ struct scene_data_t {
     int li_count;
     const Buffer &visible_lights;
     int visible_lights_count;
+    const AccStructure &rt_tlas;
 };
 
 class Renderer : public RendererBase {
   protected:
     std::unique_ptr<Context> ctx_;
 
-    Shader sh_prim_rays_gen_, sh_trace_primary_rays_, sh_trace_secondary_rays_, sh_intersect_area_lights_,
-        sh_shade_primary_hits_, sh_shade_secondary_hits_, sh_trace_shadow_, sh_prepare_indir_args_, sh_mix_incremental_,
-        sh_postprocess_;
+    Shader sh_prim_rays_gen_, sh_trace_primary_rays_[2], sh_trace_secondary_rays_[2], sh_intersect_area_lights_,
+        sh_shade_primary_hits_, sh_shade_secondary_hits_, sh_trace_shadow_[2], sh_prepare_indir_args_,
+        sh_mix_incremental_, sh_postprocess_, sh_debug_rt_;
 
-    Program prog_prim_rays_gen_, prog_trace_primary_rays_, prog_trace_secondary_rays_, prog_intersect_area_lights_,
-        prog_shade_primary_hits_, prog_shade_secondary_hits_, prog_trace_shadow_, prog_prepare_indir_args_,
-        prog_mix_incremental_, prog_postprocess_;
+    Program prog_prim_rays_gen_, prog_trace_primary_rays_[2], prog_trace_secondary_rays_[2],
+        prog_intersect_area_lights_, prog_shade_primary_hits_, prog_shade_secondary_hits_, prog_trace_shadow_[2],
+        prog_prepare_indir_args_, prog_mix_incremental_, prog_postprocess_, prog_debug_rt_;
 
-    Pipeline pi_prim_rays_gen_, pi_trace_primary_rays_, pi_trace_secondary_rays_, pi_intersect_area_lights_,
-        pi_shade_primary_hits_, pi_shade_secondary_hits_, pi_trace_shadow_, pi_prepare_indir_args_, pi_mix_incremental_,
-        pi_postprocess_;
+    Pipeline pi_prim_rays_gen_, pi_trace_primary_rays_[2], pi_trace_secondary_rays_[2], pi_intersect_area_lights_,
+        pi_shade_primary_hits_, pi_shade_secondary_hits_, pi_trace_shadow_[2], pi_prepare_indir_args_,
+        pi_mix_incremental_, pi_postprocess_, pi_debug_rt_;
 
     int w_ = 0, h_ = 0;
+    bool use_hwrt_ = false;
 
     std::vector<uint16_t> permutations_;
     int loaded_halton_;
@@ -95,6 +98,8 @@ class Renderer : public RendererBase {
                                const Texture2D &out_img);
     void kernel_Postprocess(VkCommandBuffer cmd_buf, const Texture2D &frame_buf, float inv_gamma, int clamp, int srgb,
                             const Texture2D &out_pixels);
+    void kernel_DebugRT(VkCommandBuffer cmd_buf, const scene_data_t &sc_data, uint32_t node_index, const Buffer &rays,
+                        const Texture2D &out_pixels);
 
     void UpdateHaltonSequence(int iteration, std::unique_ptr<float[]> &seq);
 
@@ -103,6 +108,8 @@ class Renderer : public RendererBase {
     ~Renderer() override = default;
 
     eRendererType type() const override { return RendererVK; }
+
+    bool is_hwrt() const override { return use_hwrt_; }
 
     std::pair<int, int> size() const override { return std::make_pair(w_, h_); }
 

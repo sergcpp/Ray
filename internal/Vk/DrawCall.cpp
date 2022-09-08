@@ -192,7 +192,7 @@ void Ray::Vk::DispatchComputeIndirect(VkCommandBuffer cmd_buf, const Pipeline &c
     vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, comp_pipeline.layout(), 0, 1, &descr_set, 0,
                             nullptr);
 
-    if (uniform_data) {
+    if (uniform_data && uniform_data_len) {
         vkCmdPushConstants(cmd_buf, comp_pipeline.layout(), VK_SHADER_STAGE_COMPUTE_BIT, 0, uniform_data_len,
                            uniform_data);
     }

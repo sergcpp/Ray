@@ -1,5 +1,8 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
+#if HWRT
+#extension GL_EXT_ray_query : require
+#endif
 
 #include "trace_shadow_interface.glsl"
 #include "types.glsl"
@@ -69,6 +72,10 @@ layout(std430, binding = COUNTERS_BUF_SLOT) readonly buffer Counters {
 layout(std430, binding = TEXTURES_BUF_SLOT) readonly buffer Textures {
     texture_t g_textures[];
 };
+
+#if HWRT
+layout(binding = TLAS_SLOT) uniform accelerationStructureEXT g_tlas;
+#endif
 
 layout(binding = TEXTURE_ATLASES_SLOT) uniform sampler2DArray g_atlases[4];
 
@@ -192,6 +199,7 @@ bool Traverse_MacroTree_WithStack(vec3 orig_ro, vec3 orig_rd, vec3 orig_inv_rd, 
 }
 
 bool ComputeVisibility(vec3 p, vec3 d, float dist, float rand_val, int rand_hash2) {
+#if !HWRT
     const vec3 inv_d = safe_invert(d);
 
     while (dist > HIT_BIAS) {
@@ -262,6 +270,80 @@ bool ComputeVisibility(vec3 p, vec3 d, float dist, float rand_val, int rand_hash
     }
 
     return true;
+#else
+    const uint ray_flags = 0;//gl_RayFlagsCullBackFacingTrianglesEXT;
+
+    rayQueryEXT rq;
+    rayQueryInitializeEXT(rq,               // rayQuery
+                          g_tlas,           // topLevel
+                          ray_flags,        // rayFlags
+                          0xff,             // cullMask
+                          p,                // origin
+                          0.0,              // tMin
+                          d,                // direction
+                          dist              // tMax
+                          );
+    while(rayQueryProceedEXT(rq)) {
+        if (rayQueryGetIntersectionTypeEXT(rq, false) == gl_RayQueryCandidateIntersectionTriangleEXT) {
+            // perform alpha test
+            const int primitive_offset = rayQueryGetIntersectionInstanceCustomIndexEXT(rq, false);
+            const int obj_index = rayQueryGetIntersectionInstanceIdEXT(rq, false);
+            const int tri_index = primitive_offset + rayQueryGetIntersectionPrimitiveIndexEXT(rq, false);
+            
+            const uint front_mi = (g_tri_materials[tri_index] >> 16u) & 0xffff;
+            const uint back_mi = (g_tri_materials[tri_index] & 0xffff);
+            
+            const bool is_backfacing = !rayQueryGetIntersectionFrontFaceEXT(rq, false);
+            if ((!is_backfacing && (front_mi & MATERIAL_SOLID_BIT) != 0 ||
+                (is_backfacing && (back_mi & MATERIAL_SOLID_BIT) != 0))) {
+                rayQueryConfirmIntersectionEXT(rq);
+                break;
+            }
+            
+            const uint mat_index = (is_backfacing ? back_mi : front_mi) & MATERIAL_INDEX_BITS;
+            material_t mat = g_materials[mat_index];
+
+            const transform_t tr = g_transforms[floatBitsToUint(g_mesh_instances[obj_index].bbox_min.w)];
+
+            const vertex_t v1 = g_vertices[g_vtx_indices[tri_index * 3 + 0]];
+            const vertex_t v2 = g_vertices[g_vtx_indices[tri_index * 3 + 1]];
+            const vertex_t v3 = g_vertices[g_vtx_indices[tri_index * 3 + 2]];
+
+            const vec2 uv = rayQueryGetIntersectionBarycentricsEXT(rq, false);
+            const float w = 1.0 - uv.x - uv.y;
+            const vec2 sh_uvs = vec2(v1.t[0][0], v1.t[0][1]) * w + vec2(v2.t[0][0], v2.t[0][1]) * uv.x + vec2(v3.t[0][0], v3.t[0][1]) * uv.y;
+            
+            {
+                const int sh_rand_hash = hash(rand_hash2);
+                const float sh_rand_offset = construct_float(sh_rand_hash);
+
+                float sh_r = fract(rand_val + sh_rand_offset);
+
+                // resolve mix material
+                while (mat.type == MixNode) {
+                    float mix_val = mat.tangent_rotation_or_strength;
+                    if (mat.textures[BASE_TEXTURE] != 0xffffffff) {
+                        mix_val *= SampleBilinear(g_atlases, g_textures[mat.textures[BASE_TEXTURE]], sh_uvs, 0).r;
+                    }
+
+                    if (sh_r > mix_val) {
+                        mat = g_materials[mat.textures[MIX_MAT1]];
+                        sh_r = (sh_r - mix_val) / (1.0 - mix_val);
+                    } else {
+                        mat = g_materials[mat.textures[MIX_MAT2]];
+                        sh_r = sh_r / mix_val;
+                    }
+                }
+
+                if (mat.type != TransparentNode) {
+                    rayQueryConfirmIntersectionEXT(rq);
+                    break;
+                }
+            }
+        }
+    }
+    return rayQueryGetIntersectionTypeEXT(rq, true) == gl_RayQueryCommittedIntersectionNoneEXT;
+#endif
 }
 
 void main() {

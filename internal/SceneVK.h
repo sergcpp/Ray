@@ -40,11 +40,21 @@ class Scene : public SceneBase {
 
     uint32_t macro_nodes_start_ = 0xffffffff, macro_nodes_count_ = 0;
 
+    Buffer rt_blas_buf_, rt_geo_data_buf_, rt_instance_buf_, rt_tlas_buf_;
+
+    struct MeshBlas {
+        AccStructure acc;
+        uint32_t geo_index, geo_count;
+    };
+    std::vector<MeshBlas> rt_mesh_blases_;
+    AccStructure rt_tlas_;
+
     void RemoveNodes(uint32_t node_index, uint32_t node_count);
     void RebuildTLAS();
     //void RebuildLightBVH();
 
     void GenerateTextureMips();
+    void RebuildHWAccStructures();
 
   public:
     Scene(Context *ctx);
@@ -72,7 +82,10 @@ class Scene : public SceneBase {
     void SetMeshInstanceTransform(uint32_t mi_index, const float *xform) override;
     void RemoveMeshInstance(uint32_t) override;
 
-    void Finalize() override { GenerateTextureMips(); }
+    void Finalize() override {
+        GenerateTextureMips();
+        RebuildHWAccStructures();
+    }
 
     uint32_t triangle_count() override { return (uint32_t)0; }
     uint32_t node_count() override { return (uint32_t)0; }

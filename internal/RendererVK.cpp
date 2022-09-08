@@ -15,6 +15,8 @@
 
 #include "shaders/types.glsl"
 
+#define DEBUG_HWRT 0
+
 static_assert(sizeof(Types::tri_accel_t) == sizeof(Ray::tri_accel_t), "!");
 static_assert(sizeof(Types::bvh_node_t) == sizeof(Ray::bvh_node_t), "!");
 static_assert(sizeof(Types::vertex_t) == sizeof(Ray::vertex_t), "!");
@@ -35,6 +37,7 @@ static_assert(Types::LIGHT_TYPE_TRI == Ray::LIGHT_TYPE_TRI, "!");
 
 namespace Ray {
 namespace Vk {
+#include "shaders/debug_rt.comp.inl"
 #include "shaders/intersect_area_lights.comp.inl"
 #include "shaders/mix_incremental.comp.inl"
 #include "shaders/postprocess.comp.inl"
@@ -42,9 +45,12 @@ namespace Vk {
 #include "shaders/primary_ray_gen.comp.inl"
 #include "shaders/shade_primary_hits.comp.inl"
 #include "shaders/shade_secondary_hits.comp.inl"
-#include "shaders/trace_primary_rays.comp.inl"
-#include "shaders/trace_secondary_rays.comp.inl"
-#include "shaders/trace_shadow.comp.inl"
+#include "shaders/trace_primary_rays_hwrt.comp.inl"
+#include "shaders/trace_primary_rays_swrt.comp.inl"
+#include "shaders/trace_secondary_rays_hwrt.comp.inl"
+#include "shaders/trace_secondary_rays_swrt.comp.inl"
+#include "shaders/trace_shadow_hwrt.comp.inl"
+#include "shaders/trace_shadow_swrt.comp.inl"
 } // namespace Vk
 } // namespace Ray
 
@@ -55,24 +61,43 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
         throw std::runtime_error("Error initializing vulkan context!");
     }
 
+    use_hwrt_ = (s.use_hwrt && ctx_->ray_query_supported());
+    log->Info("HWRT is %s", use_hwrt_ ? "enabled" : "disabled");
+
     sh_prim_rays_gen_ = Shader{"Primary Raygen",
                                ctx_.get(),
                                src_Ray_internal_shaders_primary_ray_gen_comp_spv,
                                src_Ray_internal_shaders_primary_ray_gen_comp_spv_size,
                                eShaderType::Comp,
                                log};
-    sh_trace_primary_rays_ = Shader{"Trace Primary Rays",
-                                    ctx_.get(),
-                                    src_Ray_internal_shaders_trace_primary_rays_comp_spv,
-                                    src_Ray_internal_shaders_trace_primary_rays_comp_spv_size,
-                                    eShaderType::Comp,
-                                    log};
-    sh_trace_secondary_rays_ = Shader{"Trace Secondary Rays",
-                                      ctx_.get(),
-                                      src_Ray_internal_shaders_trace_secondary_rays_comp_spv,
-                                      src_Ray_internal_shaders_trace_secondary_rays_comp_spv_size,
-                                      eShaderType::Comp,
-                                      log};
+    sh_trace_primary_rays_[0] = Shader{"Trace Primary Rays SWRT",
+                                       ctx_.get(),
+                                       src_Ray_internal_shaders_trace_primary_rays_swrt_comp_spv,
+                                       src_Ray_internal_shaders_trace_primary_rays_swrt_comp_spv_size,
+                                       eShaderType::Comp,
+                                       log};
+    if (use_hwrt_) {
+        sh_trace_primary_rays_[1] = Shader{"Trace Primary Rays HWRT",
+                                           ctx_.get(),
+                                           src_Ray_internal_shaders_trace_primary_rays_hwrt_comp_spv,
+                                           src_Ray_internal_shaders_trace_primary_rays_hwrt_comp_spv_size,
+                                           eShaderType::Comp,
+                                           log};
+    }
+    sh_trace_secondary_rays_[0] = Shader{"Trace Secondary Rays SWRT",
+                                         ctx_.get(),
+                                         src_Ray_internal_shaders_trace_secondary_rays_swrt_comp_spv,
+                                         src_Ray_internal_shaders_trace_secondary_rays_swrt_comp_spv_size,
+                                         eShaderType::Comp,
+                                         log};
+    if (use_hwrt_) {
+        sh_trace_secondary_rays_[1] = Shader{"Trace Secondary Rays HWRT",
+                                             ctx_.get(),
+                                             src_Ray_internal_shaders_trace_secondary_rays_hwrt_comp_spv,
+                                             src_Ray_internal_shaders_trace_secondary_rays_hwrt_comp_spv_size,
+                                             eShaderType::Comp,
+                                             log};
+    }
     sh_intersect_area_lights_ = Shader{"Intersect Area Lights",
                                        ctx_.get(),
                                        src_Ray_internal_shaders_intersect_area_lights_comp_spv,
@@ -91,12 +116,20 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
                                       src_Ray_internal_shaders_shade_secondary_hits_comp_spv_size,
                                       eShaderType::Comp,
                                       log};
-    sh_trace_shadow_ = Shader{"Trace Shadow",
-                              ctx_.get(),
-                              src_Ray_internal_shaders_trace_shadow_comp_spv,
-                              src_Ray_internal_shaders_trace_shadow_comp_spv_size,
-                              eShaderType::Comp,
-                              log};
+    sh_trace_shadow_[0] = Shader{"Trace Shadow SWRT",
+                                 ctx_.get(),
+                                 src_Ray_internal_shaders_trace_shadow_swrt_comp_spv,
+                                 src_Ray_internal_shaders_trace_shadow_swrt_comp_spv_size,
+                                 eShaderType::Comp,
+                                 log};
+    if (use_hwrt_) {
+        sh_trace_shadow_[1] = Shader{"Trace Shadow HWRT",
+                                     ctx_.get(),
+                                     src_Ray_internal_shaders_trace_shadow_hwrt_comp_spv,
+                                     src_Ray_internal_shaders_trace_shadow_hwrt_comp_spv_size,
+                                     eShaderType::Comp,
+                                     log};
+    }
     sh_prepare_indir_args_ = Shader{"Prepare Indir Args",
                                     ctx_.get(),
                                     src_Ray_internal_shaders_prepare_indir_args_comp_spv,
@@ -115,28 +148,44 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
                              src_Ray_internal_shaders_postprocess_comp_spv_size,
                              eShaderType::Comp,
                              log};
+    if (use_hwrt_) {
+        sh_debug_rt_ = Shader{"Debug RT",
+                              ctx_.get(),
+                              src_Ray_internal_shaders_debug_rt_comp_spv,
+                              src_Ray_internal_shaders_debug_rt_comp_spv_size,
+                              eShaderType::Comp,
+                              log};
+    }
 
     prog_prim_rays_gen_ = Program{"Primary Raygen", ctx_.get(), &sh_prim_rays_gen_, log};
-    prog_trace_primary_rays_ = Program{"Trace Primary Rays", ctx_.get(), &sh_trace_primary_rays_, log};
-    prog_trace_secondary_rays_ = Program{"Trace Secondary Rays", ctx_.get(), &sh_trace_secondary_rays_, log};
+    prog_trace_primary_rays_[0] = Program{"Trace Primary Rays SWRT", ctx_.get(), &sh_trace_primary_rays_[0], log};
+    prog_trace_primary_rays_[1] = Program{"Trace Primary Rays HWRT", ctx_.get(), &sh_trace_primary_rays_[1], log};
+    prog_trace_secondary_rays_[0] = Program{"Trace Secondary Rays SWRT", ctx_.get(), &sh_trace_secondary_rays_[0], log};
+    prog_trace_secondary_rays_[1] = Program{"Trace Secondary Rays HWRT", ctx_.get(), &sh_trace_secondary_rays_[1], log};
     prog_intersect_area_lights_ = Program{"Intersect Area Lights", ctx_.get(), &sh_intersect_area_lights_, log};
     prog_shade_primary_hits_ = Program{"Shade Primary Hits", ctx_.get(), &sh_shade_primary_hits_, log};
     prog_shade_secondary_hits_ = Program{"Shade Secondary Hits", ctx_.get(), &sh_shade_secondary_hits_, log};
-    prog_trace_shadow_ = Program{"Trace Shadow", ctx_.get(), &sh_trace_shadow_, log};
+    prog_trace_shadow_[0] = Program{"Trace Shadow SWRT", ctx_.get(), &sh_trace_shadow_[0], log};
+    prog_trace_shadow_[1] = Program{"Trace Shadow HWRT", ctx_.get(), &sh_trace_shadow_[1], log};
     prog_prepare_indir_args_ = Program{"Prepare Indir Args", ctx_.get(), &sh_prepare_indir_args_, log};
     prog_mix_incremental_ = Program{"Mix Incremental", ctx_.get(), &sh_mix_incremental_, log};
     prog_postprocess_ = Program{"Postprocess", ctx_.get(), &sh_postprocess_, log};
+    prog_debug_rt_ = Program{"Debug RT", ctx_.get(), &sh_debug_rt_, log};
 
     if (!pi_prim_rays_gen_.Init(ctx_.get(), &prog_prim_rays_gen_, log) ||
-        !pi_trace_primary_rays_.Init(ctx_.get(), &prog_trace_primary_rays_, log) ||
-        !pi_trace_secondary_rays_.Init(ctx_.get(), &prog_trace_secondary_rays_, log) ||
+        !pi_trace_primary_rays_[0].Init(ctx_.get(), &prog_trace_primary_rays_[0], log) ||
+        (use_hwrt_ && !pi_trace_primary_rays_[1].Init(ctx_.get(), &prog_trace_primary_rays_[1], log)) ||
+        !pi_trace_secondary_rays_[0].Init(ctx_.get(), &prog_trace_secondary_rays_[0], log) ||
+        (use_hwrt_ && !pi_trace_secondary_rays_[1].Init(ctx_.get(), &prog_trace_secondary_rays_[1], log)) ||
         !pi_intersect_area_lights_.Init(ctx_.get(), &prog_intersect_area_lights_, log) ||
         !pi_shade_primary_hits_.Init(ctx_.get(), &prog_shade_primary_hits_, log) ||
         !pi_shade_secondary_hits_.Init(ctx_.get(), &prog_shade_secondary_hits_, log) ||
-        !pi_trace_shadow_.Init(ctx_.get(), &prog_trace_shadow_, log) ||
+        !pi_trace_shadow_[0].Init(ctx_.get(), &prog_trace_shadow_[0], log) ||
+        (use_hwrt_ && !pi_trace_shadow_[1].Init(ctx_.get(), &prog_trace_shadow_[1], log)) ||
         !pi_prepare_indir_args_.Init(ctx_.get(), &prog_prepare_indir_args_, log) ||
         !pi_mix_incremental_.Init(ctx_.get(), &prog_mix_incremental_, log) ||
-        !pi_postprocess_.Init(ctx_.get(), &prog_postprocess_, log)) {
+        !pi_postprocess_.Init(ctx_.get(), &prog_postprocess_, log) ||
+        (use_hwrt_ && !pi_debug_rt_.Init(ctx_.get(), &prog_debug_rt_, log))) {
         throw std::runtime_error("Error initializing pipeline!");
     }
 
@@ -271,7 +320,8 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
                             s->li_indices_.buf(),
                             int(s->li_indices_.size()),
                             s->visible_lights_.buf(),
-                            int(s->visible_lights_.size())};
+                            int(s->visible_lights_.size()),
+                            s->rt_tlas_};
 
     //
 
@@ -346,6 +396,12 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         kernel_GeneratePrimaryRays(cmd_buf, cam, hi, region.rect(), halton_seq_buf_, prim_rays_buf_);
     }
 
+#if DEBUG_HWRT
+    { // debug
+        DebugMarker _(cmd_buf, "Debug HWRT");
+        kernel_DebugRT(cmd_buf, sc_data, macro_tree_root, prim_rays_buf_, temp_buf_);
+    }
+#else
     { // trace primary rays
         DebugMarker _(cmd_buf, "TracePrimaryRays");
         kernel_TracePrimaryRays(cmd_buf, sc_data, macro_tree_root, prim_rays_buf_, prim_hits_buf_);
@@ -409,7 +465,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         // std::swap(final_buf_, temp_buf_);
         std::swap(secondary_rays_buf_, prim_rays_buf_);
     }
-
+#endif
     { // prepare result
         DebugMarker _(cmd_buf, "Prepare Result");
 

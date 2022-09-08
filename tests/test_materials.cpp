@@ -572,7 +572,7 @@ void schedule_render_jobs(Ray::RendererBase &renderer, const Ray::SceneBase *sce
 
             // report progress percentage
             const float prog = 100.0f * float(i + std::min(SamplePortion, samples - i)) / samples;
-            printf("\r%s (%s, %c, %s): %.1f%% ", log_str, Ray::RendererTypeName(rt), settings.use_wide_bvh ? 'w' : 'n',
+            printf("\r%s (%s, %s, %s): %.1f%% ", log_str, Ray::RendererTypeName(rt), settings.use_hwrt ? "hw" : "sw",
                    output_sh ? "sh" : "co", prog);
             fflush(stdout);
         }
@@ -583,7 +583,7 @@ void schedule_render_jobs(Ray::RendererBase &renderer, const Ray::SceneBase *sce
 
             // report progress percentage
             const float prog = 100.0f * float(i + 1) / samples;
-            printf("\r%s (%s, %c, %s): %.1f%% ", log_str, Ray::RendererTypeName(rt), settings.use_wide_bvh ? 'w' : 'n',
+            printf("\r%s (%s, %s, %s): %.1f%% ", log_str, Ray::RendererTypeName(rt), settings.use_hwrt ? "hw" : "sw",
                    output_sh ? "sh" : "co", prog);
             fflush(stdout);
         }
@@ -606,16 +606,17 @@ void run_material_test(const char *arch_list[], const char *preferred_device, co
         s.w = test_img_w;
         s.h = test_img_h;
         s.preferred_device = preferred_device;
+        s.use_wide_bvh = true;
 
         const int DiffThres = 32;
 
-        for (const bool use_wide_bvh : {true}) {
-            s.use_wide_bvh = use_wide_bvh;
+        for (const bool use_hwrt : {false, true}) {
+            s.use_hwrt = use_hwrt;
             for (const bool output_sh : {false}) {
                 for (const char **arch = arch_list; *arch; ++arch) {
                     const auto rt = Ray::RendererTypeFromName(*arch);
                     auto renderer = std::unique_ptr<Ray::RendererBase>(Ray::CreateRenderer(s, &Ray::g_null_log, rt));
-                    if (renderer->type() != rt) {
+                    if (renderer->type() != rt || renderer->is_hwrt() != use_hwrt) {
                         // skip unsupported (we fell back to some other renderer)
                         continue;
                     }
@@ -2175,8 +2176,8 @@ void test_complex_mat0(const char *arch_list[], const char *preferred_device) {
 
 void test_complex_mat1(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 512;
-    const double MinPSNR = 38.19;
-    const int PixThres = 20;
+    const double MinPSNR = 38.17;
+    const int PixThres = 21;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = 0;
@@ -2310,7 +2311,7 @@ void test_complex_mat5_mesh_lights(const char *arch_list[], const char *preferre
 
 void test_complex_mat5_sphere_light(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 768;
-    const double MinPSNR = 33.51;
+    const double MinPSNR = 33.5;
     const int PixThres = 425;
 
     Ray::principled_mat_desc_t metal_mat_desc;
@@ -2355,7 +2356,7 @@ void test_complex_mat5_sun_light(const char *arch_list[], const char *preferred_
 void test_complex_mat6(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 1024;
     const double MinPSNR = 28.48;
-    const int PixThres = 937;
+    const int PixThres = 938;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;
@@ -2404,8 +2405,8 @@ void test_complex_mat6_sphere_light(const char *arch_list[], const char *preferr
 
 void test_complex_mat6_sun_light(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 1024;
-    const double MinPSNR = 25.98;
-    const int PixThres = 2294;
+    const double MinPSNR = 25.97;
+    const int PixThres = 2295;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;

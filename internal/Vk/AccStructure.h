@@ -14,16 +14,14 @@ class AccStructure {
     void Destroy();
 
   public:
-    uint32_t geo_index = 0, geo_count = 0;
-
     AccStructure() = default;
     ~AccStructure() { Destroy(); }
 
     AccStructure(const AccStructure &rhs) = delete;
-    AccStructure(AccStructure &&rhs) = delete;
+    AccStructure(AccStructure &&rhs);
 
     AccStructure &operator=(const AccStructure &rhs) = delete;
-    AccStructure &operator=(AccStructure &&rhs) = delete;
+    AccStructure &operator=(AccStructure &&rhs);
 
     const VkAccelerationStructureKHR &vk_handle() const {
         return handle_;

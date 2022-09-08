@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreVK.h"
+#include "Vk/Buffer.h"
 
 #pragma warning(push)
 #pragma warning(disable : 4127) // conditional expression is constant

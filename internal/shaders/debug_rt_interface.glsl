@@ -1,13 +1,14 @@
-#ifndef TRACE_RAYS_INTERFACE_GLSL
-#define TRACE_RAYS_INTERFACE_GLSL
+#ifndef DEBUG_RT_INTERFACE_GLSL
+#define DEBUG_RT_INTERFACE_GLSL
 
 #include "_interface_common.glsl"
 
-INTERFACE_START(TraceRays)
+INTERFACE_START(DebugRT)
 
 struct Params {
     UVEC2_TYPE img_size;
     UINT_TYPE node_index;
+    float halton;
 };
 
 const int LOCAL_GROUP_SIZE_X = 8;
@@ -22,10 +23,9 @@ const int MI_INDICES_BUF_SLOT = 6;
 const int TRANSFORMS_BUF_SLOT = 7;
 const int RAYS_BUF_SLOT = 8;
 const int TLAS_SLOT = 9;
-const int COUNTERS_BUF_SLOT = 10;
 
-const int OUT_HITS_BUF_SLOT = 0;
+const int OUT_IMG_SLOT = 0;
 
 INTERFACE_END
 
-#endif // TRACE_RAYS_INTERFACE_GLSL
+#endif // DEBUG_RT_INTERFACE_GLSL
