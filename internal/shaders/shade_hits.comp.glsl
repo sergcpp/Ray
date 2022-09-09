@@ -29,10 +29,6 @@ layout(std430, binding = TRIS_BUF_SLOT) readonly buffer Tris {
     tri_accel_t g_tris[];
 };
 
-layout(std430, binding = TRI_INDICES_BUF_SLOT) readonly buffer TriIndices {
-    uint g_tri_indices[];
-};
-
 layout(std430, binding = TRI_MATERIALS_BUF_SLOT) readonly buffer TriMaterials {
     uint g_tri_materials[];
 };
@@ -959,9 +955,7 @@ vec3 ShadeSurface(int px_index, hit_data_t inter, ray_data_t ray) {
     }
 
     const bool is_backfacing = (inter.prim_index < 0);
-    const uint prim_index = is_backfacing ? -inter.prim_index - 1 : inter.prim_index;
-
-    const uint tri_index = g_tri_indices[prim_index];
+    const uint tri_index = is_backfacing ? -inter.prim_index - 1 : inter.prim_index;
 
     material_t mat = g_materials[(g_tri_materials[tri_index] >> 16u) & MATERIAL_INDEX_BITS];
 

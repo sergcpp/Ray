@@ -14,13 +14,14 @@ const int LOCAL_GROUP_SIZE_X = 8;
 const int LOCAL_GROUP_SIZE_Y = 8;
 
 const int TRIS_BUF_SLOT = 1;
-const int NODES_BUF_SLOT = 2;
-const int MESHES_BUF_SLOT = 3;
-const int MESH_INSTANCES_BUF_SLOT = 4;
-const int MI_INDICES_BUF_SLOT = 5;
-const int TRANSFORMS_BUF_SLOT = 6;
-const int RAYS_BUF_SLOT = 7;
-const int COUNTERS_BUF_SLOT = 8;
+const int TRI_INDICES_BUF_SLOT = 2;
+const int NODES_BUF_SLOT = 3;
+const int MESHES_BUF_SLOT = 4;
+const int MESH_INSTANCES_BUF_SLOT = 5;
+const int MI_INDICES_BUF_SLOT = 6;
+const int TRANSFORMS_BUF_SLOT = 7;
+const int RAYS_BUF_SLOT = 8;
+const int COUNTERS_BUF_SLOT = 9;
 
 const int OUT_HITS_BUF_SLOT = 0;
 

@@ -2333,6 +2333,13 @@ bool Ray::NS::Traverse_MacroTree_WithStack_ClosestHit(const simd_fvec<S> ro[3], 
         st.index++;
     }
 
+    // resolve primitive index indirection
+    const simd_ivec<S> is_backfacing = (inter.prim_index < 0);
+    where(is_backfacing, inter.prim_index) = -inter.prim_index - 1;
+
+    inter.prim_index = gather(reinterpret_cast<const int *>(tri_indices), inter.prim_index);
+    where(is_backfacing, inter.prim_index) = -inter.prim_index - 1;
+
     return res;
 }
 
@@ -2450,6 +2457,13 @@ bool Ray::NS::Traverse_MacroTree_WithStack_ClosestHit(const simd_fvec<S> ro[3], 
         }
     }
 
+    // resolve primitive index indirection
+    const simd_ivec<S> is_backfacing = (inter.prim_index < 0);
+    where(is_backfacing, inter.prim_index) = -inter.prim_index - 1;
+
+    inter.prim_index = gather(reinterpret_cast<const int *>(tri_indices), inter.prim_index);
+    where(is_backfacing, inter.prim_index) = -inter.prim_index - 1;
+
     return res;
 }
 
@@ -2519,6 +2533,13 @@ bool Ray::NS::Traverse_MacroTree_WithStack_AnyHit(const simd_fvec<S> ro[3], cons
         }
         st.index++;
     }
+
+    // resolve primitive index indirection
+    const simd_ivec<S> is_backfacing = (inter.prim_index < 0);
+    where(is_backfacing, inter.prim_index) = -inter.prim_index - 1;
+
+    inter.prim_index = gather(reinterpret_cast<const int *>(tri_indices), inter.prim_index);
+    where(is_backfacing, inter.prim_index) = -inter.prim_index - 1;
 
     return res;
 }
@@ -2639,6 +2660,13 @@ bool Ray::NS::Traverse_MacroTree_WithStack_AnyHit(const simd_fvec<S> ro[3], cons
             }
         }
     }
+
+    // resolve primitive index indirection
+    const simd_ivec<S> is_backfacing = (inter.prim_index < 0);
+    where(is_backfacing, inter.prim_index) = -inter.prim_index - 1;
+
+    inter.prim_index = gather(reinterpret_cast<const int *>(tri_indices), inter.prim_index);
+    where(is_backfacing, inter.prim_index) = -inter.prim_index - 1;
 
     return res;
 }
@@ -3787,25 +3815,33 @@ Ray::NS::simd_fvec<S> Ray::NS::ComputeVisibility(const simd_fvec<S> p[3], const 
         const simd_fvec<S> *I = d;
         const simd_fvec<S> w = 1.0f - sh_inter.u - sh_inter.v;
 
-        simd_fvec<S> n1[3], n2[3], n3[3], u1[2], u2[2], u3[2];
+        simd_fvec<S> p1[3], p2[3], p3[3], n1[3], n2[3], n3[3], u1[2], u2[2], u3[2];
 
         simd_ivec<S> mat_index = {-1}, back_mat_index = {-1};
 
         simd_fvec<S> inv_xform1[3], inv_xform2[3], inv_xform3[3];
-        simd_fvec<S> sh_N[3];
-
+        
         for (int i = 0; i < S; i++) {
             if (!sh_inter.mask[i]) {
                 continue;
             }
 
             const bool is_backfacing = (sh_inter.prim_index[i] < 0);
-            const uint32_t prim_index = is_backfacing ? -sh_inter.prim_index[i] - 1 : sh_inter.prim_index[i];
-            const uint32_t tri_index = sc.tri_indices[prim_index];
+            const uint32_t tri_index = is_backfacing ? -sh_inter.prim_index[i] - 1 : sh_inter.prim_index[i];
 
             const vertex_t &v1 = sc.vertices[sc.vtx_indices[tri_index * 3 + 0]];
             const vertex_t &v2 = sc.vertices[sc.vtx_indices[tri_index * 3 + 1]];
             const vertex_t &v3 = sc.vertices[sc.vtx_indices[tri_index * 3 + 2]];
+
+            p1[0][i] = v1.p[0];
+            p1[1][i] = v1.p[1];
+            p1[2][i] = v1.p[2];
+            p2[0][i] = v2.p[0];
+            p2[1][i] = v2.p[1];
+            p2[2][i] = v2.p[2];
+            p3[0][i] = v3.p[0];
+            p3[1][i] = v3.p[1];
+            p3[2][i] = v3.p[2];
 
             n1[0][i] = v1.n[0];
             n1[1][i] = v1.n[1];
@@ -3824,13 +3860,8 @@ Ray::NS::simd_fvec<S> Ray::NS::ComputeVisibility(const simd_fvec<S> p[3], const 
             u3[0][i] = v3.t[0][0];
             u3[1][i] = v3.t[0][1];
 
-            const tri_accel_t &tri = sc.tris[prim_index];
             mat_index[i] = sc.tri_materials[tri_index].front_mi & MATERIAL_INDEX_BITS;
             back_mat_index[i] = sc.tri_materials[tri_index].back_mi & MATERIAL_INDEX_BITS;
-
-            sh_N[0][i] = tri.n_plane[0];
-            sh_N[1][i] = tri.n_plane[1];
-            sh_N[2][i] = tri.n_plane[2];
 
             const transform_t *tr = &sc.transforms[sc.mesh_instances[sh_inter.obj_index[i]].tr_index];
 
@@ -3845,10 +3876,21 @@ Ray::NS::simd_fvec<S> Ray::NS::ComputeVisibility(const simd_fvec<S> p[3], const 
             inv_xform3[2][i] = tr->inv_xform[10];
         }
 
+        simd_fvec<S> sh_N[3];
+        {
+            simd_fvec<S> e21[3], e31[3];
+            ITERATE_3({
+                e21[i] = p2[i] - p1[i];
+                e31[i] = p3[i] - p1[i];
+            })
+            cross(e21, e31, sh_N);
+        }
+        normalize(sh_N);
+
         const simd_fvec<S> sh_plane_N[3] = {dot(sh_N, inv_xform1), dot(sh_N, inv_xform2), dot(sh_N, inv_xform3)};
 
-        const simd_fvec<S> backfacing = dot(sh_plane_N, I) < 0.0f;
-        where(reinterpret_cast<const simd_ivec<S> &>(backfacing), mat_index) = back_mat_index;
+        const simd_ivec<S> backfacing = (sh_inter.prim_index < 0);
+        where(backfacing, mat_index) = back_mat_index;
 
         sh_N[0] = n1[0] * w + n2[0] * sh_inter.u + n3[0] * sh_inter.v;
         sh_N[1] = n1[1] * w + n2[1] * sh_inter.u + n3[1] * sh_inter.v;
@@ -4534,14 +4576,13 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
         return;
     }
 
-    simd_ivec<S> prim_index = inter.prim_index;
-    const simd_ivec<S> is_backfacing = (prim_index < 0);
-    where(is_backfacing, prim_index) = -prim_index - 1;
+    simd_ivec<S> tri_index = inter.prim_index;
+    const simd_ivec<S> is_backfacing = (tri_index < 0);
+    where(is_backfacing, tri_index) = -tri_index - 1;
 
     simd_ivec<S> obj_index = inter.obj_index;
     where(~is_active_lane, obj_index) = 0;
 
-    const simd_ivec<S> tri_index = gather(reinterpret_cast<const int *>(sc.tri_indices), prim_index);
     simd_ivec<S> mat_index = gather(reinterpret_cast<const int *>(sc.tri_materials), tri_index) &
                              simd_ivec<S>((MATERIAL_INDEX_BITS << 16) | MATERIAL_INDEX_BITS);
 

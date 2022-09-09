@@ -48,6 +48,7 @@ void Ray::Vk::Renderer::kernel_TracePrimaryRays(VkCommandBuffer cmd_buf, const s
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
     const Binding bindings[] = {{eBindTarget::SBuf, TraceRays::TRIS_BUF_SLOT, sc_data.tris},
+                                {eBindTarget::SBuf, TraceRays::TRI_INDICES_BUF_SLOT, sc_data.tri_indices},
                                 {eBindTarget::SBuf, TraceRays::NODES_BUF_SLOT, sc_data.nodes},
                                 {eBindTarget::SBuf, TraceRays::MESHES_BUF_SLOT, sc_data.meshes},
                                 {eBindTarget::SBuf, TraceRays::MESH_INSTANCES_BUF_SLOT, sc_data.mesh_instances},
@@ -78,6 +79,7 @@ void Ray::Vk::Renderer::kernel_TraceSecondaryRays(VkCommandBuffer cmd_buf, const
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
     const Binding bindings[] = {{eBindTarget::SBuf, TraceRays::TRIS_BUF_SLOT, sc_data.tris},
+                                {eBindTarget::SBuf, TraceRays::TRI_INDICES_BUF_SLOT, sc_data.tri_indices},
                                 {eBindTarget::SBuf, TraceRays::NODES_BUF_SLOT, sc_data.nodes},
                                 {eBindTarget::SBuf, TraceRays::MESHES_BUF_SLOT, sc_data.meshes},
                                 {eBindTarget::SBuf, TraceRays::MESH_INSTANCES_BUF_SLOT, sc_data.mesh_instances},
@@ -105,12 +107,13 @@ void Ray::Vk::Renderer::kernel_IntersectAreaLights(VkCommandBuffer cmd_buf, cons
                                               {&inout_hits, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
-    const Binding bindings[] = {{eBindTarget::SBuf, IntersectAreaLights::RAYS_BUF_SLOT, rays},
-                                {eBindTarget::SBuf, IntersectAreaLights::LIGHTS_BUF_SLOT, sc_data.lights},
-                                {eBindTarget::SBuf, IntersectAreaLights::VISIBLE_LIGHTS_BUF_SLOT, sc_data.visible_lights},
-                                {eBindTarget::SBuf, IntersectAreaLights::TRANSFORMS_BUF_SLOT, sc_data.transforms},
-                                {eBindTarget::SBuf, IntersectAreaLights::COUNTERS_BUF_SLOT, counters},
-                                {eBindTarget::SBuf, IntersectAreaLights::INOUT_HITS_BUF_SLOT, inout_hits}};
+    const Binding bindings[] = {
+        {eBindTarget::SBuf, IntersectAreaLights::RAYS_BUF_SLOT, rays},
+        {eBindTarget::SBuf, IntersectAreaLights::LIGHTS_BUF_SLOT, sc_data.lights},
+        {eBindTarget::SBuf, IntersectAreaLights::VISIBLE_LIGHTS_BUF_SLOT, sc_data.visible_lights},
+        {eBindTarget::SBuf, IntersectAreaLights::TRANSFORMS_BUF_SLOT, sc_data.transforms},
+        {eBindTarget::SBuf, IntersectAreaLights::COUNTERS_BUF_SLOT, counters},
+        {eBindTarget::SBuf, IntersectAreaLights::INOUT_HITS_BUF_SLOT, inout_hits}};
 
     IntersectAreaLights::Params uniform_params;
     uniform_params.img_size[0] = w_;
@@ -139,7 +142,6 @@ void Ray::Vk::Renderer::kernel_ShadePrimaryHits(VkCommandBuffer cmd_buf, const p
                                 {eBindTarget::SBuf, ShadeHits::LIGHTS_BUF_SLOT, sc_data.lights},
                                 {eBindTarget::SBuf, ShadeHits::LI_INDICES_BUF_SLOT, sc_data.li_indices},
                                 {eBindTarget::SBuf, ShadeHits::TRIS_BUF_SLOT, sc_data.tris},
-                                {eBindTarget::SBuf, ShadeHits::TRI_INDICES_BUF_SLOT, sc_data.tri_indices},
                                 {eBindTarget::SBuf, ShadeHits::TRI_MATERIALS_BUF_SLOT, sc_data.tri_materials},
                                 {eBindTarget::SBuf, ShadeHits::MATERIALS_BUF_SLOT, sc_data.materials},
                                 {eBindTarget::SBuf, ShadeHits::TRANSFORMS_BUF_SLOT, sc_data.transforms},
@@ -196,7 +198,6 @@ void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(VkCommandBuffer cmd_buf, const
                                 {eBindTarget::SBuf, ShadeHits::LIGHTS_BUF_SLOT, sc_data.lights},
                                 {eBindTarget::SBuf, ShadeHits::LI_INDICES_BUF_SLOT, sc_data.li_indices},
                                 {eBindTarget::SBuf, ShadeHits::TRIS_BUF_SLOT, sc_data.tris},
-                                {eBindTarget::SBuf, ShadeHits::TRI_INDICES_BUF_SLOT, sc_data.tri_indices},
                                 {eBindTarget::SBuf, ShadeHits::TRI_MATERIALS_BUF_SLOT, sc_data.tri_materials},
                                 {eBindTarget::SBuf, ShadeHits::MATERIALS_BUF_SLOT, sc_data.materials},
                                 {eBindTarget::SBuf, ShadeHits::TRANSFORMS_BUF_SLOT, sc_data.transforms},

@@ -143,9 +143,9 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
 
             if (macro_tree_root != 0xffffffff) {
                 if (sc_data.mnodes) {
-                    Traverse_MacroTree_WithStack_ClosestHit(r.o, r.d, sc_data.mnodes, macro_tree_root,
-                                                            sc_data.mesh_instances, sc_data.mi_indices, sc_data.meshes,
-                                                            sc_data.transforms, sc_data.mtris, inter);
+                    Traverse_MacroTree_WithStack_ClosestHit(
+                        r.o, r.d, sc_data.mnodes, macro_tree_root, sc_data.mesh_instances, sc_data.mi_indices,
+                        sc_data.meshes, sc_data.transforms, sc_data.mtris, sc_data.tri_indices, inter);
                 } else {
                     Traverse_MacroTree_WithStack_ClosestHit(
                         r.o, r.d, sc_data.nodes, macro_tree_root, sc_data.mesh_instances, sc_data.mi_indices,
@@ -268,7 +268,7 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
             if (sc_data.mnodes) {
                 Traverse_MacroTree_WithStack_ClosestHit(r.o, r.d, sc_data.mnodes, macro_tree_root,
                                                         sc_data.mesh_instances, sc_data.mi_indices, sc_data.meshes,
-                                                        sc_data.transforms, sc_data.mtris, inter);
+                                                        sc_data.transforms, sc_data.mtris, sc_data.tri_indices, inter);
             } else {
                 Traverse_MacroTree_WithStack_ClosestHit(r.o, r.d, sc_data.nodes, macro_tree_root,
                                                         sc_data.mesh_instances, sc_data.mi_indices, sc_data.meshes,

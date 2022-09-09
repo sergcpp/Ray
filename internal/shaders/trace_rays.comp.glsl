@@ -17,6 +17,10 @@ layout(std430, binding = TRIS_BUF_SLOT) readonly buffer Tris {
     tri_accel_t g_tris[];
 };
 
+layout(std430, binding = TRI_INDICES_BUF_SLOT) readonly buffer TriIndices {
+    uint g_tri_indices[];
+};
+
 layout(std430, binding = NODES_BUF_SLOT) readonly buffer Nodes {
     bvh_node_t g_nodes[];
 };
@@ -165,6 +169,11 @@ void main() {
     inter.u = inter.v = 0.0;
 
     Traverse_MacroTree_WithStack(ro, rd, inv_d, g_params.node_index, inter);
-    
+    if (inter.prim_index < 0) {
+        inter.prim_index = -int(g_tri_indices[-inter.prim_index - 1]) - 1;
+    } else {
+        inter.prim_index = int(g_tri_indices[inter.prim_index]);
+    }
+
     g_out_hits[index] = inter;
 }
