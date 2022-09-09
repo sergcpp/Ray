@@ -1025,35 +1025,6 @@ vec3 ShadeSurface(int px_index, hit_data_t inter, ray_data_t ray) {
     // lambda -= fast_log2(std::abs(dot(I, plane_N)));
 #endif
 
-    // apply normal map
-    [[dont_flatten]] if (mat.textures[NORMALS_TEXTURE] != 0xffffffff) {
-        vec3 normals = SampleBilinear(g_atlases, g_textures[mat.textures[NORMALS_TEXTURE]], uvs, 0).xyz;
-        normals = normals * 2.0 - 1.0;
-        vec3 in_normal = N;
-        N = normalize(normals[0] * T + normals[2] * N + normals[1] * B);
-        if ((mat.normal_map_strength_unorm & 0xffff) != 0xffff) {
-            N = normalize(in_normal + (N - in_normal) * unpack_unorm_16(mat.normal_map_strength_unorm & 0xffff));
-        }
-        N = ensure_valid_reflection(plane_N, -I, N);
-    }
-
-#if 0
-    //create_tbn_matrix(N, _tangent_from_world);
-#else
-    // Find radial tangent in local space
-    const vec3 P_ls = p1 * w + p2 * inter.u + p3 * inter.v;
-    // rotate around Y axis by 90 degrees in 2d
-    vec3 tangent = vec3(-P_ls[2], 0.0, P_ls[0]);
-    tangent = TransformNormal(tangent, tr.inv_xform);
-
-    if (mat.tangent_rotation_or_strength != 0.0) {
-        tangent = rotate_around_axis(tangent, N, mat.tangent_rotation_or_strength);
-    }
-
-    B = normalize(cross(tangent, N));
-    T = cross(N, B);
-#endif
-
     vec2 sample_off = vec2(construct_float(hash(px_index)), construct_float(hash(hash(px_index))));
 
     vec3 col = vec3(0.0);
@@ -1091,6 +1062,35 @@ vec3 ShadeSurface(int px_index, hit_data_t inter, ray_data_t ray) {
             mix_rand = mix_rand / mix_val;
         }
     }
+
+    // apply normal map
+    [[dont_flatten]] if (mat.textures[NORMALS_TEXTURE] != 0xffffffff) {
+        vec3 normals = SampleBilinear(g_atlases, g_textures[mat.textures[NORMALS_TEXTURE]], uvs, 0).xyz;
+        normals = normals * 2.0 - 1.0;
+        vec3 in_normal = N;
+        N = normalize(normals[0] * T + normals[2] * N + normals[1] * B);
+        if ((mat.normal_map_strength_unorm & 0xffff) != 0xffff) {
+            N = normalize(in_normal + (N - in_normal) * unpack_unorm_16(mat.normal_map_strength_unorm & 0xffff));
+        }
+        N = ensure_valid_reflection(plane_N, -I, N);
+    }
+
+#if 0
+    //create_tbn_matrix(N, _tangent_from_world);
+#else
+    // Find radial tangent in local space
+    const vec3 P_ls = p1 * w + p2 * inter.u + p3 * inter.v;
+    // rotate around Y axis by 90 degrees in 2d
+    vec3 tangent = vec3(-P_ls[2], 0.0, P_ls[0]);
+    tangent = TransformNormal(tangent, tr.inv_xform);
+
+    if (mat.tangent_rotation_or_strength != 0.0) {
+        tangent = rotate_around_axis(tangent, N, mat.tangent_rotation_or_strength);
+    }
+
+    B = normalize(cross(tangent, N));
+    T = cross(N, B);
+#endif
 
 #if USE_NEE
     light_sample_t ls;

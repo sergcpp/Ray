@@ -3208,37 +3208,6 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
     // lambda -= fast_log2(std::abs(dot(I, plane_N)));
 #endif
 
-    // apply normal map
-    if (mat->textures[NORMALS_TEXTURE] != 0xffffffff) {
-        simd_fvec4 normals = SampleBilinear(tex_atlases, sc.textures[mat->textures[NORMALS_TEXTURE]], uvs, 0);
-        normals = normals * 2.0f - 1.0f;
-        simd_fvec4 in_normal = N;
-        N = normalize(normals[0] * T + normals[2] * N + normals[1] * B);
-        if (mat->normal_map_strength_unorm != 0xffff) {
-            N = normalize(in_normal + (N - in_normal) * unpack_unorm_16(mat->normal_map_strength_unorm));
-        }
-        N = ensure_valid_reflection(plane_N, -I, N);
-    }
-
-#if 0
-    create_tbn_matrix(N, _tangent_from_world);
-#else
-    // Find radial tangent in local space
-    const simd_fvec4 P_ls = simd_fvec4{v1.p[0], v1.p[1], v1.p[2], 0.0f} * w +
-                            simd_fvec4{v2.p[0], v2.p[1], v2.p[2], 0.0f} * inter.u +
-                            simd_fvec4{v3.p[0], v3.p[1], v3.p[2], 0.0f} * inter.v;
-    // rotate around Y axis by 90 degrees in 2d
-    simd_fvec4 tangent = {-P_ls[2], 0.0f, P_ls[0], 0.0f};
-    tangent = TransformNormal(tangent, tr->inv_xform);
-
-    if (mat->tangent_rotation != 0.0f) {
-        tangent = rotate_around_axis(tangent, N, mat->tangent_rotation);
-    }
-
-    B = normalize(cross(tangent, N));
-    T = cross(N, B);
-#endif
-
     // used to randomize halton sequence among pixels
     const float sample_off[2] = {construct_float(hash(px_index)), construct_float(hash(hash(px_index)))};
 
@@ -3277,6 +3246,37 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
             mix_rand = mix_rand / mix_val;
         }
     }
+
+    // apply normal map
+    if (mat->textures[NORMALS_TEXTURE] != 0xffffffff) {
+        simd_fvec4 normals = SampleBilinear(tex_atlases, sc.textures[mat->textures[NORMALS_TEXTURE]], uvs, 0);
+        normals = normals * 2.0f - 1.0f;
+        simd_fvec4 in_normal = N;
+        N = normalize(normals[0] * T + normals[2] * N + normals[1] * B);
+        if (mat->normal_map_strength_unorm != 0xffff) {
+            N = normalize(in_normal + (N - in_normal) * unpack_unorm_16(mat->normal_map_strength_unorm));
+        }
+        N = ensure_valid_reflection(plane_N, -I, N);
+    }
+
+#if 0
+    create_tbn_matrix(N, _tangent_from_world);
+#else
+    // Find radial tangent in local space
+    const simd_fvec4 P_ls = simd_fvec4{v1.p[0], v1.p[1], v1.p[2], 0.0f} * w +
+                            simd_fvec4{v2.p[0], v2.p[1], v2.p[2], 0.0f} * inter.u +
+                            simd_fvec4{v3.p[0], v3.p[1], v3.p[2], 0.0f} * inter.v;
+    // rotate around Y axis by 90 degrees in 2d
+    simd_fvec4 tangent = {-P_ls[2], 0.0f, P_ls[0], 0.0f};
+    tangent = TransformNormal(tangent, tr->inv_xform);
+
+    if (mat->tangent_rotation != 0.0f) {
+        tangent = rotate_around_axis(tangent, N, mat->tangent_rotation);
+    }
+
+    B = normalize(cross(tangent, N));
+    T = cross(N, B);
+#endif
 
 #if USE_NEE == 1
     light_sample_t ls;

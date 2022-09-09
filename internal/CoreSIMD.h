@@ -4732,77 +4732,6 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
 
     static const int MatDWORDStride = sizeof(material_t) / sizeof(float);
 
-    { // apply normal map
-        const int *norm_textures = reinterpret_cast<const int *>(&sc.materials[0].textures[NORMALS_TEXTURE]);
-        const simd_ivec<S> normals_texture = gather(norm_textures, mat_index * MatDWORDStride);
-
-        const simd_ivec<S> has_texture = (normals_texture != -1) & is_active_lane;
-        if (has_texture.not_all_zeros()) {
-            simd_ivec<S> ray_queue[S];
-            ray_queue[0] = has_texture;
-
-            simd_fvec<S> normals_tex[4] = {{0.0f}, {1.0f}, {0.0f}, {0.0f}};
-
-            int index = 0, num = 1;
-            while (index != num) {
-                const long mask = ray_queue[index].movemask();
-                const uint32_t first_t = normals_texture[GetFirstBit(mask)];
-
-                const simd_ivec<S> same_t = (normals_texture == first_t);
-                const simd_ivec<S> diff_t = and_not(same_t, ray_queue[index]);
-
-                if (diff_t.not_all_zeros()) {
-                    ray_queue[index] &= same_t;
-                    ray_queue[num++] = diff_t;
-                }
-
-                const texture_t &t = sc.textures[first_t];
-                SampleBilinear(tex_atlases, t, uvs, simd_ivec<S>{0}, ray_queue[index], normals_tex);
-
-                ++index;
-            }
-
-            ITERATE_3({ normals_tex[i] = normals_tex[i] * 2.0f - 1.0f; })
-
-            simd_fvec<S> new_normal[3];
-            ITERATE_3({ new_normal[i] = normals_tex[0] * T[i] + normals_tex[2] * N[i] + normals_tex[1] * B[i]; })
-            normalize(new_normal);
-
-            const int *normalmap_strengths = reinterpret_cast<const int *>(&sc.materials[0].normal_map_strength_unorm);
-            const simd_ivec<S> normalmap_strength = gather(normalmap_strengths, mat_index * MatDWORDStride) & 0xffff;
-
-            const simd_fvec<S> fstrength = conv_unorm_16(normalmap_strength);
-            ITERATE_3({ new_normal[i] = N[i] + (new_normal[i] - N[i]) * fstrength; })
-            normalize(new_normal);
-
-            const simd_fvec<S> _I[3] = {-I[0], -I[1], -I[2]};
-            ensure_valid_reflection(plane_N, _I, new_normal);
-
-            where(has_texture, N[0]) = new_normal[0];
-            where(has_texture, N[1]) = new_normal[1];
-            where(has_texture, N[2]) = new_normal[2];
-        }
-    }
-
-#if 0
-
-#else
-    simd_fvec<S> tangent_rotation;
-    { // fetch anisotropic rotations
-        const float *tangent_rotations = &sc.materials[0].tangent_rotation;
-        tangent_rotation = gather(tangent_rotations, mat_index * MatDWORDStride);
-    }
-
-    const simd_ivec<S> has_rotation = simd_cast(tangent_rotation != 0.0f);
-    if (has_rotation.not_all_zeros()) {
-        rotate_around_axis(tangent, N, tangent_rotation, tangent);
-    }
-
-    cross(tangent, N, B);
-    normalize(B);
-    cross(N, B, T);
-#endif
-
     // used to randomize halton sequence among pixels
     const simd_fvec<S> sample_off[2] = {construct_float(hash(px_index)), construct_float(hash(hash(px_index)))};
 
@@ -4894,6 +4823,77 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
         where(use_mat2, mat_index) = mat2_index;
         where(use_mat2, mix_rand) /= mix_val;
     }
+
+    { // apply normal map
+        const int *norm_textures = reinterpret_cast<const int *>(&sc.materials[0].textures[NORMALS_TEXTURE]);
+        const simd_ivec<S> normals_texture = gather(norm_textures, mat_index * MatDWORDStride);
+
+        const simd_ivec<S> has_texture = (normals_texture != -1) & is_active_lane;
+        if (has_texture.not_all_zeros()) {
+            simd_ivec<S> ray_queue[S];
+            ray_queue[0] = has_texture;
+
+            simd_fvec<S> normals_tex[4] = {{0.0f}, {1.0f}, {0.0f}, {0.0f}};
+
+            int index = 0, num = 1;
+            while (index != num) {
+                const long mask = ray_queue[index].movemask();
+                const uint32_t first_t = normals_texture[GetFirstBit(mask)];
+
+                const simd_ivec<S> same_t = (normals_texture == first_t);
+                const simd_ivec<S> diff_t = and_not(same_t, ray_queue[index]);
+
+                if (diff_t.not_all_zeros()) {
+                    ray_queue[index] &= same_t;
+                    ray_queue[num++] = diff_t;
+                }
+
+                const texture_t &t = sc.textures[first_t];
+                SampleBilinear(tex_atlases, t, uvs, simd_ivec<S>{0}, ray_queue[index], normals_tex);
+
+                ++index;
+            }
+
+            ITERATE_3({ normals_tex[i] = normals_tex[i] * 2.0f - 1.0f; })
+
+            simd_fvec<S> new_normal[3];
+            ITERATE_3({ new_normal[i] = normals_tex[0] * T[i] + normals_tex[2] * N[i] + normals_tex[1] * B[i]; })
+            normalize(new_normal);
+
+            const int *normalmap_strengths = reinterpret_cast<const int *>(&sc.materials[0].normal_map_strength_unorm);
+            const simd_ivec<S> normalmap_strength = gather(normalmap_strengths, mat_index * MatDWORDStride) & 0xffff;
+
+            const simd_fvec<S> fstrength = conv_unorm_16(normalmap_strength);
+            ITERATE_3({ new_normal[i] = N[i] + (new_normal[i] - N[i]) * fstrength; })
+            normalize(new_normal);
+
+            const simd_fvec<S> _I[3] = {-I[0], -I[1], -I[2]};
+            ensure_valid_reflection(plane_N, _I, new_normal);
+
+            where(has_texture, N[0]) = new_normal[0];
+            where(has_texture, N[1]) = new_normal[1];
+            where(has_texture, N[2]) = new_normal[2];
+        }
+    }
+
+#if 0
+
+#else
+    simd_fvec<S> tangent_rotation;
+    { // fetch anisotropic rotations
+        const float *tangent_rotations = &sc.materials[0].tangent_rotation;
+        tangent_rotation = gather(tangent_rotations, mat_index * MatDWORDStride);
+    }
+
+    const simd_ivec<S> has_rotation = simd_cast(tangent_rotation != 0.0f);
+    if (has_rotation.not_all_zeros()) {
+        rotate_around_axis(tangent, N, tangent_rotation, tangent);
+    }
+
+    cross(tangent, N, B);
+    normalize(B);
+    cross(N, B, T);
+#endif
 
 #if USE_NEE
     light_sample_t<S> ls;

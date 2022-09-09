@@ -201,7 +201,7 @@ uint32_t Ray::Ref::Scene::AddMaterial(const principled_mat_desc_t &m) {
         emissive_node = AddMaterial(emissive_desc);
     }
 
-    if (m.alpha != 1.0f) {
+    if (m.alpha != 1.0f || m.alpha_texture != 0xffffffff) {
         shading_node_desc_t transparent_desc;
         transparent_desc.type = TransparentNode;
 
@@ -232,12 +232,12 @@ uint32_t Ray::Ref::Scene::AddMaterial(const principled_mat_desc_t &m) {
         } else {
             shading_node_desc_t mix_node;
             mix_node.type = MixNode;
-            mix_node.base_texture = 0xffffffff;
-            mix_node.strength = 1.0f - m.alpha;
+            mix_node.base_texture = m.alpha_texture;
+            mix_node.strength = m.alpha;
             mix_node.int_ior = mix_node.ext_ior = 0.0f;
 
-            mix_node.mix_materials[0] = root_node;
-            mix_node.mix_materials[1] = transparent_node;
+            mix_node.mix_materials[0] = transparent_node;
+            mix_node.mix_materials[1] = root_node;
 
             root_node = AddMaterial(mix_node);
         }

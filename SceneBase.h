@@ -100,6 +100,7 @@ struct principled_mat_desc_t {
     uint32_t emission_texture = 0xffffffff;
     float emission_strength = 0;
     float alpha = 1.0f;
+    uint32_t alpha_texture = 0xffffffff;
     uint32_t normal_map = 0xffffffff;
     float normal_map_intensity = 1.0f;
 };
