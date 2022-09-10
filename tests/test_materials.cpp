@@ -1576,7 +1576,7 @@ void test_tint_mat4(const char *arch_list[], const char *preferred_device) {
 void test_emit_mat0(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 512;
     const double MinPSNR = 36.74;
-    const int PixThres = 10;
+    const int PixThres = 14;
 
     Ray::principled_mat_desc_t mat_desc;
     mat_desc.base_color[0] = 1.0f;
@@ -2243,7 +2243,7 @@ void test_complex_mat3(const char *arch_list[], const char *preferred_device) {
 void test_complex_mat4(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 256;
     const double MinPSNR = 34.75;
-    const int PixThres = 30;
+    const int PixThres = 32;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = 0;
