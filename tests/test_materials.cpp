@@ -1920,7 +1920,7 @@ void test_trans_mat1(const char *arch_list[], const char *preferred_device) {
 void test_trans_mat2(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 1024;
     const double MinPSNR = 23.33;
-    const int PixThres = 3855;
+    const int PixThres = 3856;
 
     Ray::principled_mat_desc_t mat_desc;
     mat_desc.base_color[0] = 1.0f;
@@ -1996,7 +1996,7 @@ void test_trans_mat5(const char *arch_list[], const char *preferred_device) {
 void test_trans_mat6(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 1024;
     const double MinPSNR = 22.81;
-    const int PixThres = 4500;
+    const int PixThres = 4502;
 
     Ray::principled_mat_desc_t mat_desc;
     mat_desc.base_color[0] = 1.0f;
