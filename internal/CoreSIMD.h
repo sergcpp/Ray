@@ -1350,12 +1350,14 @@ void ensure_valid_reflection(const simd_fvec<S> Ng[3], const simd_fvec<S> I[3], 
     }
 
     if ((valid1 | valid2).not_all_zeros()) {
+        const simd_ivec<S> exclude = ~(valid1 & valid2);
+
         // Only one solution passes the N'.z criterium, so pick that one.
         simd_fvec<S> Nz2 = N2_z2;
         where(valid1, Nz2) = N1_z2;
 
-        where(valid1 | valid2, N_new[0]) = safe_sqrtf(1.0f - Nz2);
-        where(valid1 | valid2, N_new[1]) = safe_sqrtf(Nz2);
+        where(exclude & (valid1 | valid2), N_new[0]) = safe_sqrtf(1.0f - Nz2);
+        where(exclude & (valid1 | valid2), N_new[1]) = safe_sqrtf(Nz2);
     }
 
     ITERATE_3({ where(early_mask, inout_N[i]) = N_new[0] * X[i] + N_new[1] * Ng[i]; })
