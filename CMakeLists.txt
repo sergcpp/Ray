@@ -218,5 +218,5 @@ endif(MSVC)
 add_library(Ray STATIC ${ALL_SOURCE_FILES} SPIRV-Reflect)
 target_link_libraries(Ray SPIRV-Reflect)
 
-add_subdirectory(SPIRV-Reflect)
+add_subdirectory(third-party/SPIRV-Reflect)
 add_subdirectory(tests)

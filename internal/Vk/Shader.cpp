@@ -5,7 +5,7 @@
 #include "../../Log.h"
 #include "Context.h"
 
-#include "../../SPIRV-Reflect/spirv_reflect.h"
+#include "../../third-party/SPIRV-Reflect/spirv_reflect.h"
 
 namespace Ray {
 namespace Vk {
