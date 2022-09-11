@@ -4,7 +4,7 @@
 #include "DescriptorPool.h"
 #include "MemoryAllocator.h"
 
-#include <renderdoc/renderdoc_app.h>
+#include "../../renderdoc/renderdoc_app.h"
 
 namespace Ray {
 namespace Vk {
