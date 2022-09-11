@@ -66,95 +66,92 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
 
     sh_prim_rays_gen_ = Shader{"Primary Raygen",
                                ctx_.get(),
-                               src_Ray_internal_shaders_primary_ray_gen_comp_spv,
-                               src_Ray_internal_shaders_primary_ray_gen_comp_spv_size,
+                               internal_shaders_primary_ray_gen_comp_spv,
+                               internal_shaders_primary_ray_gen_comp_spv_size,
                                eShaderType::Comp,
                                log};
     sh_trace_primary_rays_[0] = Shader{"Trace Primary Rays SWRT",
                                        ctx_.get(),
-                                       src_Ray_internal_shaders_trace_primary_rays_swrt_comp_spv,
-                                       src_Ray_internal_shaders_trace_primary_rays_swrt_comp_spv_size,
+                                       internal_shaders_trace_primary_rays_swrt_comp_spv,
+                                       internal_shaders_trace_primary_rays_swrt_comp_spv_size,
                                        eShaderType::Comp,
                                        log};
     if (use_hwrt_) {
         sh_trace_primary_rays_[1] = Shader{"Trace Primary Rays HWRT",
                                            ctx_.get(),
-                                           src_Ray_internal_shaders_trace_primary_rays_hwrt_comp_spv,
-                                           src_Ray_internal_shaders_trace_primary_rays_hwrt_comp_spv_size,
+                                           internal_shaders_trace_primary_rays_hwrt_comp_spv,
+                                           internal_shaders_trace_primary_rays_hwrt_comp_spv_size,
                                            eShaderType::Comp,
                                            log};
     }
     sh_trace_secondary_rays_[0] = Shader{"Trace Secondary Rays SWRT",
                                          ctx_.get(),
-                                         src_Ray_internal_shaders_trace_secondary_rays_swrt_comp_spv,
-                                         src_Ray_internal_shaders_trace_secondary_rays_swrt_comp_spv_size,
+                                         internal_shaders_trace_secondary_rays_swrt_comp_spv,
+                                         internal_shaders_trace_secondary_rays_swrt_comp_spv_size,
                                          eShaderType::Comp,
                                          log};
     if (use_hwrt_) {
         sh_trace_secondary_rays_[1] = Shader{"Trace Secondary Rays HWRT",
                                              ctx_.get(),
-                                             src_Ray_internal_shaders_trace_secondary_rays_hwrt_comp_spv,
-                                             src_Ray_internal_shaders_trace_secondary_rays_hwrt_comp_spv_size,
+                                             internal_shaders_trace_secondary_rays_hwrt_comp_spv,
+                                             internal_shaders_trace_secondary_rays_hwrt_comp_spv_size,
                                              eShaderType::Comp,
                                              log};
     }
     sh_intersect_area_lights_ = Shader{"Intersect Area Lights",
                                        ctx_.get(),
-                                       src_Ray_internal_shaders_intersect_area_lights_comp_spv,
-                                       src_Ray_internal_shaders_intersect_area_lights_comp_spv_size,
+                                       internal_shaders_intersect_area_lights_comp_spv,
+                                       internal_shaders_intersect_area_lights_comp_spv_size,
                                        eShaderType::Comp,
                                        log};
     sh_shade_primary_hits_ = Shader{"Shade Primary Hits",
                                     ctx_.get(),
-                                    src_Ray_internal_shaders_shade_primary_hits_comp_spv,
-                                    src_Ray_internal_shaders_shade_primary_hits_comp_spv_size,
+                                    internal_shaders_shade_primary_hits_comp_spv,
+                                    internal_shaders_shade_primary_hits_comp_spv_size,
                                     eShaderType::Comp,
                                     log};
     sh_shade_secondary_hits_ = Shader{"Shade Secondary Hits",
                                       ctx_.get(),
-                                      src_Ray_internal_shaders_shade_secondary_hits_comp_spv,
-                                      src_Ray_internal_shaders_shade_secondary_hits_comp_spv_size,
+                                      internal_shaders_shade_secondary_hits_comp_spv,
+                                      internal_shaders_shade_secondary_hits_comp_spv_size,
                                       eShaderType::Comp,
                                       log};
     sh_trace_shadow_[0] = Shader{"Trace Shadow SWRT",
                                  ctx_.get(),
-                                 src_Ray_internal_shaders_trace_shadow_swrt_comp_spv,
-                                 src_Ray_internal_shaders_trace_shadow_swrt_comp_spv_size,
+                                 internal_shaders_trace_shadow_swrt_comp_spv,
+                                 internal_shaders_trace_shadow_swrt_comp_spv_size,
                                  eShaderType::Comp,
                                  log};
     if (use_hwrt_) {
         sh_trace_shadow_[1] = Shader{"Trace Shadow HWRT",
                                      ctx_.get(),
-                                     src_Ray_internal_shaders_trace_shadow_hwrt_comp_spv,
-                                     src_Ray_internal_shaders_trace_shadow_hwrt_comp_spv_size,
+                                     internal_shaders_trace_shadow_hwrt_comp_spv,
+                                     internal_shaders_trace_shadow_hwrt_comp_spv_size,
                                      eShaderType::Comp,
                                      log};
     }
     sh_prepare_indir_args_ = Shader{"Prepare Indir Args",
                                     ctx_.get(),
-                                    src_Ray_internal_shaders_prepare_indir_args_comp_spv,
-                                    src_Ray_internal_shaders_prepare_indir_args_comp_spv_size,
+                                    internal_shaders_prepare_indir_args_comp_spv,
+                                    internal_shaders_prepare_indir_args_comp_spv_size,
                                     eShaderType::Comp,
                                     log};
     sh_mix_incremental_ = Shader{"Mix Incremental",
                                  ctx_.get(),
-                                 src_Ray_internal_shaders_mix_incremental_comp_spv,
-                                 src_Ray_internal_shaders_mix_incremental_comp_spv_size,
+                                 internal_shaders_mix_incremental_comp_spv,
+                                 internal_shaders_mix_incremental_comp_spv_size,
                                  eShaderType::Comp,
                                  log};
     sh_postprocess_ = Shader{"Postprocess",
                              ctx_.get(),
-                             src_Ray_internal_shaders_postprocess_comp_spv,
-                             src_Ray_internal_shaders_postprocess_comp_spv_size,
+                             internal_shaders_postprocess_comp_spv,
+                             internal_shaders_postprocess_comp_spv_size,
                              eShaderType::Comp,
                              log};
     if (use_hwrt_) {
-        sh_debug_rt_ = Shader{"Debug RT",
-                              ctx_.get(),
-                              src_Ray_internal_shaders_debug_rt_comp_spv,
-                              src_Ray_internal_shaders_debug_rt_comp_spv_size,
-                              eShaderType::Comp,
-                              log};
+        sh_debug_rt_ = Shader{
+            "Debug RT",        ctx_.get(), internal_shaders_debug_rt_comp_spv, internal_shaders_debug_rt_comp_spv_size,
+            eShaderType::Comp, log};
     }
 
     prog_prim_rays_gen_ = Program{"Primary Raygen", ctx_.get(), &sh_prim_rays_gen_, log};
