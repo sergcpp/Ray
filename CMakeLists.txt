@@ -215,7 +215,7 @@ if(MSVC)
 endif(MSVC)
 
 
-add_library(Ray STATIC ${ALL_SOURCE_FILES} SPIRV-Reflect)
+add_library(Ray STATIC ${ALL_SOURCE_FILES})
 target_link_libraries(Ray SPIRV-Reflect)
 
 add_subdirectory(third-party/SPIRV-Reflect)
