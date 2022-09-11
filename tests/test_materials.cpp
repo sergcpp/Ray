@@ -572,8 +572,8 @@ void schedule_render_jobs(Ray::RendererBase &renderer, const Ray::SceneBase *sce
 
             // report progress percentage
             const float prog = 100.0f * float(i + std::min(SamplePortion, samples - i)) / samples;
-            printf("\r%s (%s, %s, %s): %.1f%% ", log_str, Ray::RendererTypeName(rt), settings.use_hwrt ? "hw" : "sw",
-                   output_sh ? "sh" : "co", prog);
+            printf("\r%s (%s, %s, %s): %.1f%% ", log_str, Ray::RendererTypeName(rt),
+                   settings.use_hwrt ? "hwrt" : "swrt", output_sh ? "sh" : "co", prog);
             fflush(stdout);
         }
     } else {
@@ -583,8 +583,8 @@ void schedule_render_jobs(Ray::RendererBase &renderer, const Ray::SceneBase *sce
 
             // report progress percentage
             const float prog = 100.0f * float(i + 1) / samples;
-            printf("\r%s (%s, %s, %s): %.1f%% ", log_str, Ray::RendererTypeName(rt), settings.use_hwrt ? "hw" : "sw",
-                   output_sh ? "sh" : "co", prog);
+            printf("\r%s (%s, %s, %s): %.1f%% ", log_str, Ray::RendererTypeName(rt),
+                   settings.use_hwrt ? "hwrt" : "swrt", output_sh ? "sh" : "co", prog);
             fflush(stdout);
         }
     }
@@ -2419,4 +2419,3 @@ void test_complex_mat6_sun_light(const char *arch_list[], const char *preferred_
     run_material_test(arch_list, preferred_device, "complex_mat6_sun_light", olive_mat_desc, SampleCount, MinPSNR,
                       PixThres, nullptr, STANDARD_SCENE_SUN_LIGHT);
 }
-
