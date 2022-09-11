@@ -2091,8 +2091,8 @@ void test_trans_mat9(const char *arch_list[], const char *preferred_device) {
 
 void test_alpha_mat0(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 1024;
-    const double MinPSNR = 37.58;
-    const int PixThres = 46;
+    const double MinPSNR = 37.4;
+    const int PixThres = 53;
 
     Ray::principled_mat_desc_t alpha_mat_desc;
     alpha_mat_desc.base_color[0] = 0.0f;
