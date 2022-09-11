@@ -262,6 +262,8 @@ windows-arm64-cpu-test-job:
     - windows-arm64-build-job
   tags:
     - windows,arm64
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
 
 linux-x86_64-cpu-test-job:
   variables:
@@ -273,6 +275,8 @@ linux-x86_64-cpu-test-job:
     - linux-x86_64-build-job
   tags:
     - linux,x86_64
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
 
 linux-x86_64-gpu-nv-test-job:
   variables:
@@ -331,8 +335,10 @@ deploy-job:
     - windows-x86_64-gpu-nv-test-job
     - windows-x86_64-gpu-xe-test-job
     - windows-x86_64-gpu-arc-test-job
-    - windows-arm64-cpu-test-job
-    - linux-x86_64-cpu-test-job
+    - job: windows-arm64-cpu-test-job
+      optional: true
+    - job: linux-x86_64-cpu-test-job
+      optional: true
     - linux-x86_64-gpu-nv-test-job
     - macos-x86_64-cpu-test-job
     - macos-arm64-cpu-test-job
