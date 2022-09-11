@@ -1,6 +1,6 @@
-# Ray [![Build status](https://ci.appveyor.com/api/projects/status/abtpdwpy4bvcpqia/branch/master?svg=true)](https://ci.appveyor.com/project/SerhiiY/ray/branch/master) [![Build Status](https://travis-ci.org/sergcpp/Ray.svg?branch=master)](https://travis-ci.org/sergcpp/Ray)
+# Ray [![pipeline status](https://gitlab.com/sergcpp/Ray/badges/master/pipeline.svg)](https://gitlab.com/sergcpp/Ray/-/commits/master)
 
-Small pathtracing library created for learning purposes. Includes CPU and GPU (OpenCL) backends.
+Small pathtracing library created for learning purposes. Includes CPU and GPU (Vulkan) backends.
 
   - Full application : <https://github.com/sergcpp/RayDemo>
   - Video : <https://www.youtube.com/watch?v=MHk9jXcdrZs>
