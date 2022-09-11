@@ -30,7 +30,7 @@ void ResetSampleData(__global shl1_data_t *out_sh_data) {
 }
 
 __kernel
-void StoreSHCoeffs(const __global ray_packet_t *rays, int w, __global shl1_data_t *out_sh_data) {
+void StoreSHCoeffs(const __global ray_data_t *rays, int w, __global shl1_data_t *out_sh_data) {
     const int i = get_global_id(0);
 
     const int2 px = (int2)(rays[i].o.w, rays[i].d.w);

@@ -19,9 +19,9 @@ float4 srgb_to_rgb(float4 col) {
 
 float4 rgb_to_srgb(float4 col) {
     return (float4)(
-            (col.x > 0.0031308f) ? (native_powr(1.055f * col.x, (1.0f / 2.4f)) - 0.055f) : (12.92f * col.x),
-            (col.y > 0.0031308f) ? (native_powr(1.055f * col.y, (1.0f / 2.4f)) - 0.055f) : (12.92f * col.y),
-            (col.z > 0.0031308f) ? (native_powr(1.055f * col.z, (1.0f / 2.4f)) - 0.055f) : (12.92f * col.z),
+            (col.x < 0.0031308f) ? (12.92f * col.x) : (1.055f * native_powr(col.x, (1.0f / 2.4f)) - 0.055f),
+            (col.y < 0.0031308f) ? (12.92f * col.y) : (1.055f * native_powr(col.y, (1.0f / 2.4f)) - 0.055f),
+            (col.z < 0.0031308f) ? (12.92f * col.z) : (1.055f * native_powr(col.z, (1.0f / 2.4f)) - 0.055f),
             col.w);
 }
 

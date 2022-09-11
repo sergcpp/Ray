@@ -27,14 +27,14 @@ float3 get_cam_dir(const float x, const float y, float3 origin, __constant camer
 }
 
 __kernel
-void GeneratePrimaryRays(const int iteration, __constant camera_t *cam, int w, int h, __global const float *halton, __global ray_packet_t *out_rays) {
+void GeneratePrimaryRays(const int iteration, __constant camera_t *cam, int w, int h, __global const float *halton, __global ray_data_t *out_rays) {
     const int i = get_global_id(0);
     const int j = get_global_id(1);
 
     const int index = j * w + i;
     const int hi = (iteration & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT;
 
-    __global ray_packet_t *r = &out_rays[index];
+    __global ray_data_t *r = &out_rays[index];
     r->do_dx = r->do_dy = (float4)((float3)(0.0f), as_float(0));
     r->c = (float4)(1.0f);
 
@@ -145,7 +145,7 @@ __kernel
 void SampleMeshInTextureSpace_RasterStage(int uv_layer, int iteration, uint tr_index, uint obj_index, __global const transform_t *transforms,
                                           __global const uint *vtx_indices, __global const vertex_t *vertices,
                                           int w, int h, __global const float *halton, __global const uint *tri_bins,
-                                          __global ray_packet_t *out_rays, __global hit_data_t *out_inters) {
+                                          __global ray_data_t *out_rays, __global hit_data_t *out_inters) {
     const int i = get_global_id(0);
     const int j = get_global_id(1);
 
@@ -163,7 +163,7 @@ void SampleMeshInTextureSpace_RasterStage(int uv_layer, int iteration, uint tr_i
     __global const uint *bins = &tri_bins[(by * tw + bx) * 1024];
     __global const transform_t *tr = &transforms[tr_index];
     
-    __global ray_packet_t *ray = &out_rays[index];
+    __global ray_data_t *ray = &out_rays[index];
     __global hit_data_t *inter = &out_inters[index];
 
     ray->d = 0.0f;

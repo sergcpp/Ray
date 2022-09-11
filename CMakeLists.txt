@@ -1,33 +1,10 @@
-cmake_minimum_required(VERSION 2.8.4)
+cmake_minimum_required(VERSION 2.8.12)
 project(Ray)
 
 OPTION(ENABLE_UNITYBUILD "Enable compilation of one large cpp file" ON)
 
-if(NOT CMAKE_SYSTEM_NAME MATCHES "Android")
-    OPTION(ENABLE_OPENCL "Enables OpenCL backend" ON)
-else()
-    OPTION(ENABLE_OPENCL "Enables OpenCL backend" OFF)
-endif()
-
-if(ENABLE_OPENCL)
-    add_library(OpenCL STATIC IMPORTED)
-    include_directories(ocl/include)
-else()
-    add_definitions(-DDISABLE_OCL)
-endif()
-
 IF(MSVC)
-    if(ENABLE_OPENCL)
-        if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-            set_target_properties(OpenCL PROPERTIES
-              IMPORTED_LOCATION "${CMAKE_CURRENT_LIST_DIR}/ocl/lib/x86_64/opencl.lib"
-            )
-        else(CMAKE_SIZEOF_VOID_P EQUAL 8)
-            set_target_properties(OpenCL PROPERTIES
-              IMPORTED_LOCATION "${CMAKE_CURRENT_LIST_DIR}/ocl/lib/x86/opencl.lib"
-            )
-        endif()
-    endif()
+    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /Ob1")
 ELSE(MSVC)
     set(CMAKE_CXX_STANDARD 11)
     set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -40,7 +17,8 @@ ELSE(MSVC)
     endif()
 ENDIF(MSVC)
 
-set(INTERNAL_SOURCE_FILES internal/BVHSplit.h
+set(INTERNAL_SOURCE_FILES internal/Bitmap.h
+                          internal/BVHSplit.h
                           internal/BVHSplit.cpp
                           internal/Core.h
                           internal/Core.cpp
@@ -55,72 +33,126 @@ set(INTERNAL_SOURCE_FILES internal/BVHSplit.h
                           internal/RendererSIMD.h
                           internal/SceneRef.h
                           internal/SceneRef.cpp
+                          internal/SmallVector.h
+                          internal/SparseStorage.h
+                          internal/Span.h
                           internal/TextureAtlasRef.h
                           internal/TextureAtlasRef.cpp
                           internal/TextureSplitter.h
                           internal/TextureSplitter.cpp
                           internal/TextureUtilsRef.h
-                          internal/TextureUtilsRef.cpp)
+                          internal/TextureUtilsRef.cpp
+                          internal/Time_.h
+                          internal/Time.cpp
+                          internal/UniformIntDistribution.h)
                           
-if(NOT CMAKE_SYSTEM_NAME MATCHES "Android")
+if(NOT CMAKE_SYSTEM_NAME MATCHES "Android" AND NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64")
+
 set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
+                          internal/RendererSSE2.h
+                          internal/RendererSSE2.cpp
+                          internal/RendererSSE41.h
+                          internal/RendererSSE41.cpp
                           internal/RendererAVX.h
                           internal/RendererAVX.cpp
                           internal/RendererAVX2.h
-                          internal/RendererAVX2.cpp
-                          internal/RendererSSE2.h
-                          internal/RendererSSE2.cpp)
-
-    if (ENABLE_OPENCL)
-        set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
-                          internal/CoreOCL.h
-                          internal/RendererOCL.h
-                          internal/RendererOCL.cpp
-                          internal/SceneOCL.h
-                          internal/SceneOCL.cpp
-                          internal/TextureAtlasOCL.h
-                          internal/TextureAtlasOCL.cpp
-                          internal/VectorOCL.h)
-    endif()
+                          internal/RendererAVX2.cpp)
 endif()
 
-if(MSVC)
+if("${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64" OR "${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "arm64")
+set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
+                          internal/RendererNEON.h
+                          internal/RendererNEON.cpp)
+endif()
+
+set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
+                          internal/CoreVK.h
+                          internal/RendererVK.h
+                          internal/RendererVK.cpp
+                          internal/RendererVK_kernels.cpp
+                          internal/SceneVK.h
+                          internal/SceneVK.cpp
+                          internal/SparseStorageVK.h
+                          internal/VectorVK.h)
+
+add_definitions(-DENABLE_OBJ_LABELS)
+
+if(MSVC AND NOT "${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "arm64")
     if(NOT CMAKE_CL_64)
-        set_source_files_properties(internal/RendererSSE.cpp PROPERTIES COMPILE_FLAGS /arch:SSE2)
+        set_source_files_properties(internal/RendererSSE2.cpp PROPERTIES COMPILE_FLAGS /arch:SSE2)
+        set_source_files_properties(internal/RendererSSE41.cpp PROPERTIES COMPILE_FLAGS /arch:SSE2)
     endif()
     set_source_files_properties(internal/RendererAVX.cpp PROPERTIES COMPILE_FLAGS /arch:AVX)
-endif(MSVC)
+    set_source_files_properties(internal/RendererAVX2.cpp PROPERTIES COMPILE_FLAGS /arch:AVX)
+endif(MSVC AND NOT "${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "arm64")
 
-set(SOURCE_FILES RendererBase.h
+set(SOURCE_FILES Log.h
+                 RendererBase.h
+                 RendererBase.cpp
                  RendererFactory.h
                  RendererFactory.cpp
                  SceneBase.h
                  SceneBase.cpp
                  Types.h)
 
-if (ENABLE_OPENCL)
-    set(KERNEL_FILES internal/kernels/intersect.cl
-                     internal/kernels/postprocess.cl
-                     internal/kernels/primary_ray_gen.cl
-                     internal/kernels/sh.cl
-                     internal/kernels/shade.cl
-                     internal/kernels/sort.cl
-                     internal/kernels/texture.cl
-                     internal/kernels/trace.cl
-                     internal/kernels/transform.cl
-                     internal/kernels/traverse_bvh.cl
-                     internal/kernels/types.cl)
-endif()
-
 set(SIMD_FILES internal/simd/aligned_allocator.h
                internal/simd/detect.h
+               internal/simd/detect.cpp
                internal/simd/simd_vec.h
                internal/simd/simd_vec_sse.h
                internal/simd/simd_vec_avx.h
+               internal/simd/simd_vec_avx512.h
                internal/simd/simd_vec_neon.h)
+
+set(VK_FILES internal/Vk/AccStructure.h
+             internal/Vk/AccStructure.cpp
+             internal/Vk/Buffer.h
+             internal/Vk/Buffer.cpp
+             internal/Vk/Context.h
+             internal/Vk/Context.cpp
+             internal/Vk/DebugMarker.h
+             internal/Vk/DescriptorPool.h
+             internal/Vk/DescriptorPool.cpp
+             internal/Vk/DrawCall.h
+             internal/Vk/DrawCall.cpp
+             internal/Vk/Fence.h
+             internal/Vk/Fence.cpp
+             internal/Vk/Fixed.h
+             internal/Vk/LinearAlloc.h
+             internal/Vk/LinearAlloc.cpp
+             internal/Vk/MemoryAllocator.h
+             internal/Vk/MemoryAllocator.cpp
+             internal/Vk/Pipeline.h
+             internal/Vk/Pipeline.cpp
+             internal/Vk/Program.h
+             internal/Vk/Program.cpp
+             internal/Vk/RastState.h
+             internal/Vk/RenderPass.h
+             internal/Vk/RenderPass.cpp
+             internal/Vk/Resource.h
+             internal/Vk/Resource.cpp
+             internal/Vk/Sampler.h
+             internal/Vk/Sampler.cpp
+             internal/Vk/SamplingParams.h
+             internal/Vk/Shader.h
+             internal/Vk/Shader.cpp
+             internal/Vk/Texture.h
+             internal/Vk/Texture.cpp
+             internal/Vk/TextureAtlas.h
+             internal/Vk/TextureAtlas.cpp
+             internal/Vk/TextureParams.h
+             internal/Vk/Utils.h
+             internal/Vk/Utils.cpp
+             internal/Vk/VertexInput.h
+             internal/Vk/VertexInput.cpp
+             internal/Vk/VK.h
+             internal/Vk/VKExt.cpp)
 
 list(APPEND ALL_SOURCE_FILES ${INTERNAL_SOURCE_FILES})
 source_group("src\\internal" FILES ${INTERNAL_SOURCE_FILES})
+
+list(APPEND ALL_SOURCE_FILES ${INTERNAL_DEPRECATED_SOURCE_FILES})
+source_group("src\\internal\\deprecated" FILES ${INTERNAL_DEPRECATED_SOURCE_FILES})
 
 list(APPEND ALL_SOURCE_FILES ${SOURCE_FILES})
 source_group("src" FILES ${SOURCE_FILES})
@@ -131,12 +163,17 @@ source_group("src\\internal\\kernels" FILES ${KERNEL_FILES})
 list(APPEND ALL_SOURCE_FILES ${SIMD_FILES})
 source_group("src\\internal\\simd" FILES ${SIMD_FILES})
 
+list(APPEND ALL_SOURCE_FILES ${VK_FILES})
+source_group("src\\internal\\Vk" FILES ${VK_FILES})
+
 set_source_files_properties(${KERNEL_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
 
 # enable or disable unity build
 if(ENABLE_UNITYBUILD)
     set_source_files_properties(${INTERNAL_SOURCE_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
+    set_source_files_properties(${INTERNAL_DEPRECATED_SOURCE_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
     set_source_files_properties(${SOURCE_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
+    set_source_files_properties(${VK_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
 
     list(APPEND ALL_SOURCE_FILES _Ray.cpp)
     source_group("src" FILES _Ray.cpp)
@@ -144,24 +181,42 @@ if(ENABLE_UNITYBUILD)
     list(APPEND ALL_SOURCE_FILES _Ray_Sse2.cpp)
     source_group("src" FILES _Ray_Sse2.cpp)
 
+    list(APPEND ALL_SOURCE_FILES _Ray_Sse41.cpp)
+    source_group("src" FILES _Ray_Sse41.cpp)
+
     list(APPEND ALL_SOURCE_FILES _Ray_Avx.cpp)
     source_group("src" FILES _Ray_Avx.cpp)
 
     list(APPEND ALL_SOURCE_FILES _Ray_Avx2.cpp)
     source_group("src" FILES _Ray_Avx2.cpp)
 
-    if(MSVC)
+    list(APPEND ALL_SOURCE_FILES _Ray_Avx512.cpp)
+    source_group("src" FILES _Ray_Avx512.cpp)
+
+    list(APPEND ALL_SOURCE_FILES _Ray_Neon.cpp)
+    source_group("src" FILES _Ray_Neon.cpp)
+
+    list(APPEND ALL_SOURCE_FILES _Ray_Vk.cpp)
+    source_group("src" FILES _Ray_Vk.cpp)
+
+    if(MSVC AND NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64")
         if(NOT CMAKE_CL_64)
             set_source_files_properties(_Ray_Sse2.cpp PROPERTIES COMPILE_FLAGS /arch:SSE2)
+            set_source_files_properties(_Ray_Sse41.cpp PROPERTIES COMPILE_FLAGS /arch:SSE2)
         endif()
         set_source_files_properties(_Ray_Avx.cpp PROPERTIES COMPILE_FLAGS /arch:AVX)
         set_source_files_properties(_Ray_Avx2.cpp PROPERTIES COMPILE_FLAGS /arch:AVX2)
-    endif(MSVC)
+        set_source_files_properties(_Ray_Avx512.cpp PROPERTIES COMPILE_FLAGS /arch:AVX512)
+    endif(MSVC AND NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64")
 endif()
 
-add_library(Ray STATIC ${ALL_SOURCE_FILES})
-if(ENABLE_OPENCL)
-    target_link_libraries(Ray OpenCL)
-endif()
+if(MSVC)
+    list(APPEND ALL_SOURCE_FILES internal/_CustomTypes.natvis)
+endif(MSVC)
 
+
+add_library(Ray STATIC ${ALL_SOURCE_FILES} SPIRV-Reflect)
+target_link_libraries(Ray SPIRV-Reflect)
+
+add_subdirectory(SPIRV-Reflect)
 add_subdirectory(tests)

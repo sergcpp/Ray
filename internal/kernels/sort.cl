@@ -51,7 +51,7 @@ int g_phi_table[][17] = { { 2,  2,  2,  2,  2,  3,  3,  3,  4,  4,  4,  4,  5,  
                           { 14, 14, 13, 13, 13, 13, 12, 12, 12, 11, 11, 10, 10, 10, 10, 10, 9  },
                           { 14, 13, 13, 13, 13, 12, 12, 12, 12, 11, 11, 11, 10, 10, 10, 10, 10 } };
 
-uint get_ray_hash(__global ray_packet_t *r, const float3 root_min, const float3 cell_size) {
+uint get_ray_hash(__global ray_data_t *r, const float3 root_min, const float3 cell_size) {
     int x = clamp((int)((r->o.x - root_min.x) / cell_size.x), 0, 255),
         y = clamp((int)((r->o.y - root_min.y) / cell_size.y), 0, 255),
         z = clamp((int)((r->o.z - root_min.z) / cell_size.z), 0, 255);
@@ -71,7 +71,7 @@ uint get_ray_hash(__global ray_packet_t *r, const float3 root_min, const float3 
 }
 
 __kernel
-void ComputeRayHashes(__global ray_packet_t *rays, float3 root_min, float3 cell_size, __global uint *out_hashes) {
+void ComputeRayHashes(__global ray_data_t *rays, float3 root_min, float3 cell_size, __global uint *out_hashes) {
     const int i = get_global_id(0);
     out_hashes[i] = get_ray_hash(&rays[i], root_min, cell_size);
 }
@@ -314,7 +314,7 @@ void AddSegPartialSums(__global uint *flags, __global uint *in_values, __global 
 }
 
 __kernel
-void ReorderRays(__global ray_packet_t *in_rays, __global uint *in_indices, __global ray_packet_t *out_rays) {
+void ReorderRays(__global ray_data_t *in_rays, __global uint *in_indices, __global ray_data_t *out_rays) {
     const int gi = get_global_id(0);
     out_rays[gi] = in_rays[in_indices[gi]];
 }

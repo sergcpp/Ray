@@ -1,0 +1,27 @@
+#ifndef PRIMARY_RAY_GEN_INTERFACE_GLSL
+#define PRIMARY_RAY_GEN_INTERFACE_GLSL
+
+#include "_interface_common.glsl"
+
+INTERFACE_START(PrimaryRayGen)
+
+struct Params {
+    UVEC2_TYPE img_size;
+    int hi;
+    float spread_angle;
+    VEC4_TYPE cam_origin;
+    VEC4_TYPE cam_fwd;
+    VEC4_TYPE cam_side;
+    VEC4_TYPE cam_up;
+};
+
+const int LOCAL_GROUP_SIZE_X = 8;
+const int LOCAL_GROUP_SIZE_Y = 8;
+
+const int HALTON_SEQ_BUF_SLOT = 1;
+
+const int OUT_RAYS_BUF_SLOT = 0;
+
+INTERFACE_END
+
+#endif // PRIMARY_RAY_GEN_INTERFACE_GLSL
