@@ -274,7 +274,9 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
                                                         sc_data.mesh_instances, sc_data.mi_indices, sc_data.meshes,
                                                         sc_data.transforms, sc_data.tris, sc_data.tri_indices, inter);
             }
-            IntersectAreaLights(r, sc_data.lights, sc_data.visible_lights, sc_data.transforms, inter);
+            if (r.ray_depth & 0x00ffffff) { // not only a transparency ray
+                IntersectAreaLights(r, sc_data.lights, sc_data.visible_lights, sc_data.transforms, inter);
+            }
         }
 
         const auto time_secondary_shade_start = std::chrono::high_resolution_clock::now();

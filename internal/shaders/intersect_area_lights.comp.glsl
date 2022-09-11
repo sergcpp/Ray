@@ -57,6 +57,10 @@ void main() {
 #endif
 
     ray_data_t ray = g_rays[index];
+    if ((ray.ray_depth & 0x00ffffff) == 0) {
+        // primary transparency ray, skip
+        return;
+    }
 
     vec3 ro = vec3(ray.o[0], ray.o[1], ray.o[2]);
     vec3 rd = vec3(ray.d[0], ray.d[1], ray.d[2]);

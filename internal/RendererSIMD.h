@@ -359,8 +359,9 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
                     r.o, r.d, p.secondary_masks[i], sc_data.nodes, macro_tree_root, sc_data.mesh_instances,
                     sc_data.mi_indices, sc_data.meshes, sc_data.transforms, sc_data.tris, sc_data.tri_indices, inter);
             }
-            NS::IntersectAreaLights(r, p.secondary_masks[i], sc_data.lights, sc_data.visible_lights, sc_data.transforms,
-                                    inter);
+            const simd_ivec<S> not_only_transparency_ray = (r.ray_depth & 0x00ffffff) != 0;
+            NS::IntersectAreaLights(r, p.secondary_masks[i] & not_only_transparency_ray, sc_data.lights,
+                                    sc_data.visible_lights, sc_data.transforms, inter);
         }
 
         auto time_secondary_shade_start = std::chrono::high_resolution_clock::now();
