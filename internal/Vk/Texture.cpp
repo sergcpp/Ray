@@ -304,7 +304,6 @@ uint32_t Ray::Vk::EstimateMemory(const Tex2DParams &params) {
 // All this is needed when reading KTX files
 //
 
-#if !defined(USE_GL_RENDER)
 #define GL_COMPRESSED_RGB_S3TC_DXT1_EXT 33776
 #define GL_COMPRESSED_RGBA_S3TC_DXT1_EXT 33777
 #define GL_COMPRESSED_RGBA_S3TC_DXT3_EXT 33778
@@ -343,7 +342,6 @@ uint32_t Ray::Vk::EstimateMemory(const Tex2DParams &params) {
 #define GL_COMPRESSED_SRGB8_ALPHA8_ASTC_10x10_KHR 0x93DB
 #define GL_COMPRESSED_SRGB8_ALPHA8_ASTC_12x10_KHR 0x93DC
 #define GL_COMPRESSED_SRGB8_ALPHA8_ASTC_12x12_KHR 0x93DD
-#endif
 
 Ray::Vk::eTexFormat Ray::Vk::FormatFromGLInternalFormat(const uint32_t gl_internal_format, eTexBlock *block,
                                                         bool *is_srgb) {
