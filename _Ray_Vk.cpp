@@ -23,4 +23,6 @@
 #include "internal/RendererVK.cpp"
 #include "internal/RendererVK_kernels.cpp"
 #include "internal/SceneVK.cpp"
+
+#include "third-party/SPIRV-Reflect/spirv_reflect.c"
 #endif

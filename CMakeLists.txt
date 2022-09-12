@@ -146,7 +146,9 @@ set(VK_FILES internal/Vk/AccStructure.h
              internal/Vk/VertexInput.h
              internal/Vk/VertexInput.cpp
              internal/Vk/VK.h
-             internal/Vk/VKExt.cpp)
+             internal/Vk/VKExt.cpp
+             third-party/SPIRV-Reflect/spirv_reflect.h
+             third-party/SPIRV-Reflect/spirv_reflect.c)
 
 list(APPEND ALL_SOURCE_FILES ${INTERNAL_SOURCE_FILES})
 source_group("src\\internal" FILES ${INTERNAL_SOURCE_FILES})
@@ -216,7 +218,5 @@ endif(MSVC)
 
 
 add_library(Ray STATIC ${ALL_SOURCE_FILES})
-target_link_libraries(Ray SPIRV-Reflect)
 
-add_subdirectory(third-party/SPIRV-Reflect)
 add_subdirectory(tests)
