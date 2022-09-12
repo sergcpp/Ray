@@ -577,15 +577,19 @@ void schedule_render_jobs(Ray::RendererBase &renderer, const Ray::SceneBase *sce
             fflush(stdout);
         }
     } else {
+        const int SamplePortion = 16;
+
         auto region = Ray::RegionContext{{0, 0, sz.first, sz.second}};
         for (int i = 0; i < samples; ++i) {
             renderer.RenderScene(scene, region);
 
-            // report progress percentage
-            const float prog = 100.0f * float(i + 1) / samples;
-            printf("\r%s (%s, %s, %s): %.1f%% ", log_str, Ray::RendererTypeName(rt),
-                   settings.use_hwrt ? "hwrt" : "swrt", output_sh ? "sh" : "co", prog);
-            fflush(stdout);
+            if ((i % SamplePortion) == 0 || i == samples - 1) {
+                // report progress percentage
+                const float prog = 100.0f * float(i + 1) / samples;
+                printf("\r%s (%s, %s, %s): %.1f%% ", log_str, Ray::RendererTypeName(rt),
+                       settings.use_hwrt ? "hwrt" : "swrt", output_sh ? "sh" : "co", prog);
+                fflush(stdout);
+            }
         }
     }
 }
