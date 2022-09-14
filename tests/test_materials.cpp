@@ -1050,7 +1050,7 @@ void test_sheen_mat3(const char *arch_list[], const char *preferred_device) {
 
 void test_glossy_mat0(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 2048;
-    const double MinPSNR = 34.15;
+    const double MinPSNR = 34.13;
     const int PixThres = 71;
 
     Ray::shading_node_desc_t node_desc;
@@ -1129,7 +1129,7 @@ void test_glossy_mat4(const char *arch_list[], const char *preferred_device) {
 
 void test_spec_mat0(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 2048;
-    const double MinPSNR = 34.15;
+    const double MinPSNR = 34.13;
     const int PixThres = 71;
 
     Ray::principled_mat_desc_t spec_mat_desc;
