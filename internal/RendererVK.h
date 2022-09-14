@@ -66,7 +66,7 @@ class Renderer : public RendererBase {
 
     Buffer pixel_stage_buf_;
 
-    std::vector<pixel_color_t> frame_pixels_;
+    const pixel_color_t *frame_pixels_ = nullptr;
     std::vector<shl1_data_t> sh_data_host_;
 
     stats_t stats_ = {0};
@@ -105,7 +105,7 @@ class Renderer : public RendererBase {
 
   public:
     Renderer(const settings_t &s, ILog *log);
-    ~Renderer() override = default;
+    ~Renderer() override;
 
     eRendererType type() const override { return RendererVK; }
 
@@ -113,7 +113,7 @@ class Renderer : public RendererBase {
 
     std::pair<int, int> size() const override { return std::make_pair(w_, h_); }
 
-    const pixel_color_t *get_pixels_ref() const override { return (const pixel_color_t *)&frame_pixels_[0]; }
+    const pixel_color_t *get_pixels_ref() const override;
 
     const shl1_data_t *get_sh_data_ref() const override { return &sh_data_host_[0]; }
 

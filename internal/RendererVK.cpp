@@ -208,6 +208,8 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
     // throw std::runtime_error("Not implemented yet!");
 }
 
+Ray::Vk::Renderer::~Renderer() { pixel_stage_buf_.Unmap(); }
+
 void Ray::Vk::Renderer::Resize(const int w, const int h) {
     if (w_ == w && h_ == h) {
         return;
@@ -226,8 +228,7 @@ void Ray::Vk::Renderer::Resize(const int w, const int h) {
     final_buf_ = Texture2D{"Final Image", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
 
     pixel_stage_buf_ = Buffer{"Px Stage Buf", ctx_.get(), eBufType::Stage, uint32_t(4 * w * h * sizeof(float))};
-
-    frame_pixels_.resize(num_pixels);
+    frame_pixels_ = (const pixel_color_t *)pixel_stage_buf_.Map(BufMapRead, true /* persistent */);
 
     prim_rays_buf_ =
         Buffer{"Primary Rays", ctx_.get(), eBufType::Storage, uint32_t(sizeof(Types::ray_data_t) * num_pixels)};
@@ -487,12 +488,6 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
     }
 
     EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
-
-    { // copy result
-        const uint8_t *pixels = pixel_stage_buf_.Map(BufMapRead);
-        memcpy(frame_pixels_.data(), pixels, frame_pixels_.size() * sizeof(pixel_color_t));
-        pixel_stage_buf_.Unmap();
-    }
 }
 
 void Ray::Vk::Renderer::UpdateHaltonSequence(const int iteration, std::unique_ptr<float[]> &seq) {
@@ -508,4 +503,8 @@ void Ray::Vk::Renderer::UpdateHaltonSequence(const int iteration, std::unique_pt
             prime_sum += g_primes[j];
         }
     }
+}
+
+const Ray::pixel_color_t *Ray::Vk::Renderer::get_pixels_ref() const {
+    return frame_pixels_;
 }
