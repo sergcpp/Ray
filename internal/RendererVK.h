@@ -65,6 +65,12 @@ class Renderer : public RendererBase {
     Buffer counters_buf_, indir_args_buf_;
 
     Buffer pixel_stage_buf_;
+    mutable bool frame_dirty_ = true;
+
+    struct {
+        int clamp, srgb;
+        float gamma;
+    } postprocess_params_;
 
     const pixel_color_t *frame_pixels_ = nullptr;
     std::vector<shl1_data_t> sh_data_host_;
@@ -97,7 +103,7 @@ class Renderer : public RendererBase {
     void kernel_MixIncremental(VkCommandBuffer cmd_buf, const Texture2D &fbuf1, const Texture2D &fbuf2, float k,
                                const Texture2D &out_img);
     void kernel_Postprocess(VkCommandBuffer cmd_buf, const Texture2D &frame_buf, float inv_gamma, int clamp, int srgb,
-                            const Texture2D &out_pixels);
+                            const Texture2D &out_pixels) const;
     void kernel_DebugRT(VkCommandBuffer cmd_buf, const scene_data_t &sc_data, uint32_t node_index, const Buffer &rays,
                         const Texture2D &out_pixels);
 

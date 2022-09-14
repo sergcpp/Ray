@@ -2250,7 +2250,7 @@ void Ray::Vk::Texture2D::DownloadTextureData(const eTexFormat format, void *out_
 #endif
 }
 
-void Ray::Vk::Texture2D::CopyTextureData(const Buffer &sbuf, void *_cmd_buf, int data_off) {
+void Ray::Vk::Texture2D::CopyTextureData(const Buffer &sbuf, void *_cmd_buf, int data_off) const {
     VkCommandBuffer cmd_buf = reinterpret_cast<VkCommandBuffer>(_cmd_buf);
 
     VkPipelineStageFlags src_stages = 0, dst_stages = 0;

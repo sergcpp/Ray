@@ -473,21 +473,14 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         kernel_MixIncremental(cmd_buf, clean_buf_, temp_buf_, mix_factor, final_buf_);
         std::swap(final_buf_, clean_buf_);
 
-        const int _clamp = (cam.pass_settings.flags & Clamp) ? 1 : 0, _srgb = (cam.dtype == SRGB) ? 1 : 0;
-        kernel_Postprocess(cmd_buf, clean_buf_, (1.0f / cam.gamma), _clamp, _srgb, final_buf_);
-    }
-
-    { // download result
-        DebugMarker _(cmd_buf, "Download Result");
-
-        const TransitionInfo res_transitions[] = {{&final_buf_, eResState::CopySrc},
-                                                  {&pixel_stage_buf_, eResState::CopyDst}};
-        TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
-
-        final_buf_.CopyTextureData(pixel_stage_buf_, cmd_buf, 0);
+        postprocess_params_.clamp = (cam.pass_settings.flags & Clamp) ? 1 : 0;
+        postprocess_params_.srgb = (cam.dtype == SRGB) ? 1 : 0;
+        postprocess_params_.gamma = (1.0f / cam.gamma);
     }
 
     EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+
+    frame_dirty_ = true;
 }
 
 void Ray::Vk::Renderer::UpdateHaltonSequence(const int iteration, std::unique_ptr<float[]> &seq) {
@@ -506,5 +499,29 @@ void Ray::Vk::Renderer::UpdateHaltonSequence(const int iteration, std::unique_pt
 }
 
 const Ray::pixel_color_t *Ray::Vk::Renderer::get_pixels_ref() const {
+    if (frame_dirty_) {
+        VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+
+        { // postprocess
+            DebugMarker _(cmd_buf, "Postprocess frame");
+
+            kernel_Postprocess(cmd_buf, clean_buf_, postprocess_params_.gamma, postprocess_params_.clamp,
+                               postprocess_params_.srgb, final_buf_);
+        }
+
+        { // download result
+            DebugMarker _(cmd_buf, "Download Result");
+
+            const TransitionInfo res_transitions[] = {{&final_buf_, eResState::CopySrc},
+                                                      {&pixel_stage_buf_, eResState::CopyDst}};
+            TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
+
+            final_buf_.CopyTextureData(pixel_stage_buf_, cmd_buf, 0);
+        }
+
+        EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+        frame_dirty_ = false;
+    }
+
     return frame_pixels_;
 }

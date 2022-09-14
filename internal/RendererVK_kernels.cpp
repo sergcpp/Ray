@@ -361,7 +361,7 @@ void Ray::Vk::Renderer::kernel_MixIncremental(VkCommandBuffer cmd_buf, const Tex
 }
 
 void Ray::Vk::Renderer::kernel_Postprocess(VkCommandBuffer cmd_buf, const Texture2D &frame_buf, const float inv_gamma,
-                                           const int clamp, const int srgb, const Texture2D &out_pixels) {
+                                           const int clamp, const int srgb, const Texture2D &out_pixels) const {
     const TransitionInfo res_transitions[] = {{&frame_buf, eResState::UnorderedAccess},
                                               {&out_pixels, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
