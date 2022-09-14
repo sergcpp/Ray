@@ -16,6 +16,7 @@
 #include "shaders/types.glsl"
 
 #define DEBUG_HWRT 0
+#define RUN_IN_LOCKSTEP 0
 
 static_assert(sizeof(Types::tri_accel_t) == sizeof(Ray::tri_accel_t), "!");
 static_assert(sizeof(Types::bvh_node_t) == sizeof(Ray::bvh_node_t), "!");
@@ -321,7 +322,21 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
                             int(s->visible_lights_.size()),
                             s->rt_tlas_};
 
-    //
+#if RUN_IN_LOCKSTEP
+    VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+#else
+    vkWaitForFences(ctx_->device(), 1, &ctx_->in_flight_fence(ctx_->backend_frame), VK_TRUE, UINT64_MAX);
+    vkResetFences(ctx_->device(), 1, &ctx_->in_flight_fence(ctx_->backend_frame));
+
+    VkCommandBufferBeginInfo begin_info = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+    begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+    vkBeginCommandBuffer(ctx_->draw_cmd_buf(ctx_->backend_frame), &begin_info);
+
+    VkCommandBuffer cmd_buf = ctx_->draw_cmd_buf(ctx_->backend_frame);
+#endif
+
+    //////////////////////////////////////////////////////////////////////////////////
 
     pass_info_t pass_info;
 
@@ -331,8 +346,6 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
     pass_info.settings.max_total_depth = std::min(pass_info.settings.max_total_depth, uint8_t(MAX_BOUNCES));
 
     const uint32_t hi = (region.iteration & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT;
-
-    VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
 
     { // transition resources
         SmallVector<TransitionInfo, 16> res_transitions;
@@ -478,8 +491,26 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         postprocess_params_.gamma = (1.0f / cam.gamma);
     }
 
+#if RUN_IN_LOCKSTEP
     EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+#else
+    vkEndCommandBuffer(cmd_buf);
 
+    //////////////////////////////////////////////////////////////////////////////////////////////////
+
+    VkSubmitInfo submit_info = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
+
+    submit_info.commandBufferCount = 1;
+    submit_info.pCommandBuffers = &ctx_->draw_cmd_buf(ctx_->backend_frame);
+
+    const VkResult res =
+        vkQueueSubmit(ctx_->graphics_queue(), 1, &submit_info, ctx_->in_flight_fence(ctx_->backend_frame));
+    if (res != VK_SUCCESS) {
+        ctx_->log()->Error("Failed to submit into a queue!");
+    }
+#endif
+
+    ctx_->backend_frame = (ctx_->backend_frame + 1) % MaxFramesInFlight;
     frame_dirty_ = true;
 }
 
@@ -492,7 +523,7 @@ void Ray::Vk::Renderer::UpdateHaltonSequence(const int iteration, std::unique_pt
         uint32_t prime_sum = 0;
         for (int j = 0; j < HALTON_COUNT; ++j) {
             seq[i * HALTON_COUNT + j] =
-                Ray::ScrambledRadicalInverse(g_primes[j], &permutations_[prime_sum], uint64_t(iteration + i));
+                ScrambledRadicalInverse(g_primes[j], &permutations_[prime_sum], uint64_t(iteration + i));
             prime_sum += g_primes[j];
         }
     }

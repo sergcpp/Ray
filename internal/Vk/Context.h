@@ -82,6 +82,10 @@ class Context {
     VkCommandPool command_pool() const { return command_pool_; }
     VkCommandPool temp_command_pool() const { return temp_command_pool_; }
 
+    const VkCommandBuffer &draw_cmd_buf(const int i) const { return draw_cmd_buf_[i]; }
+    const VkSemaphore &render_finished_semaphore(const int i) const { return render_finished_semaphores_[i]; }
+    const VkFence &in_flight_fence(const int i) const { return in_flight_fences_[i]; }
+
     MemoryAllocators *default_memory_allocs() { return default_memory_allocs_.get(); }
     DescrMultiPoolAlloc *default_descr_alloc() const { return default_descr_alloc_[backend_frame].get(); }
 
