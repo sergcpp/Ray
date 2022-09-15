@@ -205,8 +205,6 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
 
     auto rand_func = std::bind(UniformIntDistribution<uint32_t>(), std::mt19937(0));
     permutations_ = Ray::ComputeRadicalInversePermutations(g_primes, PrimesCount, rand_func);
-
-    // throw std::runtime_error("Not implemented yet!");
 }
 
 Ray::Vk::Renderer::~Renderer() { pixel_stage_buf_.Unmap(); }
@@ -496,8 +494,6 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
 #else
     vkEndCommandBuffer(cmd_buf);
 
-    //////////////////////////////////////////////////////////////////////////////////////////////////
-
     VkSubmitInfo submit_info = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
 
     submit_info.commandBufferCount = 1;
@@ -551,6 +547,8 @@ const Ray::pixel_color_t *Ray::Vk::Renderer::get_pixels_ref() const {
         }
 
         EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+
+        pixel_stage_buf_.FlushMappedRange(0, pixel_stage_buf_.size());
         frame_dirty_ = false;
     }
 

@@ -74,6 +74,7 @@ class Buffer : public LinearAlloc {
     uint32_t size_ = 0;
     uint8_t *mapped_ptr_ = nullptr;
     uint32_t mapped_offset_ = 0xffffffff;
+    uint8_t mapped_dir_ = 0;
 #ifndef NDEBUG
     SmallVector<RangeFence, 4> flushed_ranges_;
 #endif
@@ -119,12 +120,12 @@ class Buffer : public LinearAlloc {
     void Free();
     void FreeImmediate();
 
-    uint32_t AlignMapOffset(uint32_t offset);
-    uint32_t AlignMapOffsetUp(uint32_t offset);
+    uint32_t AlignMapOffset(uint32_t offset) const;
+    uint32_t AlignMapOffsetUp(uint32_t offset) const;
 
     uint8_t *Map(const uint8_t dir, const bool persistent = false) { return MapRange(dir, 0, size_, persistent); }
     uint8_t *MapRange(uint8_t dir, uint32_t offset, uint32_t size, bool persistent = false);
-    void FlushMappedRange(uint32_t offset, uint32_t size, bool autoalign = false);
+    void FlushMappedRange(uint32_t offset, uint32_t size, bool autoalign = false) const;
     void Unmap();
 
     void Fill(uint32_t dst_offset, uint32_t size, uint32_t data, void *_cmd_buf);

@@ -78,6 +78,7 @@ Ray::Vk::Buffer &Ray::Vk::Buffer::operator=(Buffer &&rhs) noexcept {
     size_ = exchange(rhs.size_, 0);
     mapped_ptr_ = exchange(rhs.mapped_ptr_, nullptr);
     mapped_offset_ = exchange(rhs.mapped_offset_, 0xffffffff);
+    mapped_dir_ = exchange(rhs.mapped_dir_, 0);
 
 #ifndef NDEBUG
     flushed_ranges_ = std::move(rhs.flushed_ranges_);
@@ -327,12 +328,12 @@ void Ray::Vk::Buffer::FreeImmediate() {
     }
 }
 
-uint32_t Ray::Vk::Buffer::AlignMapOffset(const uint32_t offset) {
+uint32_t Ray::Vk::Buffer::AlignMapOffset(const uint32_t offset) const {
     const uint32_t align_to = uint32_t(ctx_->device_properties().limits.nonCoherentAtomSize);
     return offset - (offset % align_to);
 }
 
-uint32_t Ray::Vk::Buffer::AlignMapOffsetUp(uint32_t offset) {
+uint32_t Ray::Vk::Buffer::AlignMapOffsetUp(uint32_t offset) const {
     const uint32_t align_to = uint32_t(ctx_->device_properties().limits.nonCoherentAtomSize);
     return align_to * ((offset + align_to - 1) / align_to);
 }
@@ -374,10 +375,11 @@ uint8_t *Ray::Vk::Buffer::MapRange(const uint8_t dir, const uint32_t offset, con
 
     mapped_ptr_ = reinterpret_cast<uint8_t *>(mapped);
     mapped_offset_ = offset;
+    mapped_dir_ = dir;
     return reinterpret_cast<uint8_t *>(mapped);
 }
 
-void Ray::Vk::Buffer::FlushMappedRange(uint32_t offset, uint32_t size, const bool autoalign) {
+void Ray::Vk::Buffer::FlushMappedRange(uint32_t offset, uint32_t size, const bool autoalign) const {
     if (autoalign && offset != AlignMapOffset(offset)) {
         size += offset - AlignMapOffset(offset);
         offset = AlignMapOffset(offset);
@@ -397,8 +399,15 @@ void Ray::Vk::Buffer::FlushMappedRange(uint32_t offset, uint32_t size, const boo
     range.size = VkDeviceSize(size);
     range.pNext = nullptr;
 
-    const VkResult res = vkFlushMappedMemoryRanges(ctx_->device(), 1, &range);
-    assert(res == VK_SUCCESS && "Failed to flush memory range!");
+     if (mapped_dir_ & BufMapWrite) {
+        const VkResult res = vkFlushMappedMemoryRanges(ctx_->device(), 1, &range);
+        assert(res == VK_SUCCESS && "Failed to flush memory range!");
+    }
+
+    if (mapped_dir_ & BufMapRead) {
+        const VkResult res = vkInvalidateMappedMemoryRanges(ctx_->device(), 1, &range);
+        assert(res == VK_SUCCESS && "Failed to invalidate memory range!");
+    }
 
 #ifndef NDEBUG
     // flushed_ranges_.emplace_back(std::make_pair(offset, size),
@@ -411,6 +420,7 @@ void Ray::Vk::Buffer::Unmap() {
     vkUnmapMemory(ctx_->device(), mem_);
     mapped_ptr_ = nullptr;
     mapped_offset_ = 0xffffffff;
+    mapped_dir_ = 0;
 }
 
 void Ray::Vk::Buffer::Fill(const uint32_t dst_offset, const uint32_t size, const uint32_t data, void *_cmd_buf) {
