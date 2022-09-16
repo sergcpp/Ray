@@ -12,7 +12,8 @@
 
 void Ray::Vk::Renderer::kernel_GeneratePrimaryRays(VkCommandBuffer cmd_buf, const camera_t &cam, const int hi,
                                                    const rect_t &rect, const Buffer &halton, const Buffer &out_rays) {
-    const TransitionInfo res_transitions[] = {{&prim_rays_buf_, eResState::UnorderedAccess}};
+    const TransitionInfo res_transitions[] = {{&halton, eResState::ShaderResource},
+                                              {&prim_rays_buf_, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
     const Binding bindings[] = {{eBindTarget::SBuf, PrimaryRayGen::HALTON_SEQ_BUF_SLOT, halton_seq_buf_},
@@ -44,7 +45,7 @@ void Ray::Vk::Renderer::kernel_GeneratePrimaryRays(VkCommandBuffer cmd_buf, cons
 
 void Ray::Vk::Renderer::kernel_TracePrimaryRays(VkCommandBuffer cmd_buf, const scene_data_t &sc_data,
                                                 const uint32_t node_index, const Buffer &rays, const Buffer &out_hits) {
-    const TransitionInfo res_transitions[] = {{&rays, eResState::UnorderedAccess},
+    const TransitionInfo res_transitions[] = {{&rays, eResState::ShaderResource},
                                               {&out_hits, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
@@ -88,8 +89,8 @@ void Ray::Vk::Renderer::kernel_TraceSecondaryRays(VkCommandBuffer cmd_buf, const
                                                   const Buffer &counters, const scene_data_t &sc_data,
                                                   uint32_t node_index, const Buffer &rays, const Buffer &out_hits) {
     const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
-                                              {&counters, eResState::UnorderedAccess},
-                                              {&rays, eResState::UnorderedAccess},
+                                              {&counters, eResState::ShaderResource},
+                                              {&rays, eResState::ShaderResource},
                                               {&out_hits, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
@@ -127,8 +128,8 @@ void Ray::Vk::Renderer::kernel_IntersectAreaLights(VkCommandBuffer cmd_buf, cons
                                                    const Buffer &indir_args, const Buffer &counters, const Buffer &rays,
                                                    const Buffer &inout_hits) {
     const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
-                                              {&counters, eResState::UnorderedAccess},
-                                              {&rays, eResState::UnorderedAccess},
+                                              {&counters, eResState::ShaderResource},
+                                              {&rays, eResState::ShaderResource},
                                               {&inout_hits, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
@@ -156,8 +157,8 @@ void Ray::Vk::Renderer::kernel_ShadePrimaryHits(VkCommandBuffer cmd_buf, const p
                                                 const Buffer &out_rays, const Buffer &out_sh_rays,
                                                 const Buffer &inout_counters) {
     const TransitionInfo res_transitions[] = {
-        {&hits, eResState::UnorderedAccess},          {&rays, eResState::UnorderedAccess},
-        {&halton, eResState::UnorderedAccess},        {&out_img, eResState::UnorderedAccess},
+        {&hits, eResState::ShaderResource},           {&rays, eResState::ShaderResource},
+        {&halton, eResState::ShaderResource},         {&out_img, eResState::UnorderedAccess},
         {&out_rays, eResState::UnorderedAccess},      {&out_sh_rays, eResState::UnorderedAccess},
         {&inout_counters, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
@@ -212,8 +213,8 @@ void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(VkCommandBuffer cmd_buf, const
                                                   const Texture2D &out_img, const Buffer &out_rays,
                                                   const Buffer &out_sh_rays, const Buffer &inout_counters) {
     const TransitionInfo res_transitions[] = {
-        {&indir_args, eResState::IndirectArgument}, {&hits, eResState::UnorderedAccess},
-        {&rays, eResState::UnorderedAccess},        {&halton, eResState::UnorderedAccess},
+        {&indir_args, eResState::IndirectArgument}, {&hits, eResState::ShaderResource},
+        {&rays, eResState::ShaderResource},         {&halton, eResState::ShaderResource},
         {&out_img, eResState::UnorderedAccess},     {&out_rays, eResState::UnorderedAccess},
         {&out_sh_rays, eResState::UnorderedAccess}, {&inout_counters, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
@@ -266,8 +267,8 @@ void Ray::Vk::Renderer::kernel_TraceShadow(VkCommandBuffer cmd_buf, const Buffer
                                            const TextureAtlas tex_atlases[], const Buffer &sh_rays,
                                            const Texture2D &out_img) {
     const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
-                                              {&counters, eResState::UnorderedAccess},
-                                              {&sh_rays, eResState::UnorderedAccess},
+                                              {&counters, eResState::ShaderResource},
+                                              {&sh_rays, eResState::ShaderResource},
                                               {&out_img, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 

@@ -353,47 +353,47 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
             }
         }
 
-        if (sc_data.mi_indices && sc_data.mi_indices.resource_state != eResState::UnorderedAccess) {
-            res_transitions.emplace_back(&sc_data.mi_indices, eResState::UnorderedAccess);
+        if (sc_data.mi_indices && sc_data.mi_indices.resource_state != eResState::ShaderResource) {
+            res_transitions.emplace_back(&sc_data.mi_indices, eResState::ShaderResource);
         }
-        if (sc_data.meshes && sc_data.meshes.resource_state != eResState::UnorderedAccess) {
-            res_transitions.emplace_back(&sc_data.meshes, eResState::UnorderedAccess);
+        if (sc_data.meshes && sc_data.meshes.resource_state != eResState::ShaderResource) {
+            res_transitions.emplace_back(&sc_data.meshes, eResState::ShaderResource);
         }
-        if (sc_data.transforms && sc_data.transforms.resource_state != eResState::UnorderedAccess) {
-            res_transitions.emplace_back(&sc_data.transforms, eResState::UnorderedAccess);
+        if (sc_data.transforms && sc_data.transforms.resource_state != eResState::ShaderResource) {
+            res_transitions.emplace_back(&sc_data.transforms, eResState::ShaderResource);
         }
-        if (sc_data.vtx_indices && sc_data.vtx_indices.resource_state != eResState::UnorderedAccess) {
-            res_transitions.emplace_back(&sc_data.vtx_indices, eResState::UnorderedAccess);
+        if (sc_data.vtx_indices && sc_data.vtx_indices.resource_state != eResState::ShaderResource) {
+            res_transitions.emplace_back(&sc_data.vtx_indices, eResState::ShaderResource);
         }
-        if (sc_data.vertices && sc_data.vertices.resource_state != eResState::UnorderedAccess) {
-            res_transitions.emplace_back(&sc_data.vertices, eResState::UnorderedAccess);
+        if (sc_data.vertices && sc_data.vertices.resource_state != eResState::ShaderResource) {
+            res_transitions.emplace_back(&sc_data.vertices, eResState::ShaderResource);
         }
-        if (sc_data.nodes && sc_data.nodes.resource_state != eResState::UnorderedAccess) {
-            res_transitions.emplace_back(&sc_data.nodes, eResState::UnorderedAccess);
+        if (sc_data.nodes && sc_data.nodes.resource_state != eResState::ShaderResource) {
+            res_transitions.emplace_back(&sc_data.nodes, eResState::ShaderResource);
         }
-        if (sc_data.tris && sc_data.tris.resource_state != eResState::UnorderedAccess) {
-            res_transitions.emplace_back(&sc_data.tris, eResState::UnorderedAccess);
+        if (sc_data.tris && sc_data.tris.resource_state != eResState::ShaderResource) {
+            res_transitions.emplace_back(&sc_data.tris, eResState::ShaderResource);
         }
-        if (sc_data.tri_indices && sc_data.tri_indices.resource_state != eResState::UnorderedAccess) {
-            res_transitions.emplace_back(&sc_data.tri_indices, eResState::UnorderedAccess);
+        if (sc_data.tri_indices && sc_data.tri_indices.resource_state != eResState::ShaderResource) {
+            res_transitions.emplace_back(&sc_data.tri_indices, eResState::ShaderResource);
         }
-        if (sc_data.tri_materials && sc_data.tri_materials.resource_state != eResState::UnorderedAccess) {
-            res_transitions.emplace_back(&sc_data.tri_materials, eResState::UnorderedAccess);
+        if (sc_data.tri_materials && sc_data.tri_materials.resource_state != eResState::ShaderResource) {
+            res_transitions.emplace_back(&sc_data.tri_materials, eResState::ShaderResource);
         }
-        if (sc_data.materials && sc_data.materials.resource_state != eResState::UnorderedAccess) {
-            res_transitions.emplace_back(&sc_data.materials, eResState::UnorderedAccess);
+        if (sc_data.materials && sc_data.materials.resource_state != eResState::ShaderResource) {
+            res_transitions.emplace_back(&sc_data.materials, eResState::ShaderResource);
         }
-        if (sc_data.textures && sc_data.textures.resource_state != eResState::UnorderedAccess) {
-            res_transitions.emplace_back(&sc_data.textures, eResState::UnorderedAccess);
+        if (sc_data.textures && sc_data.textures.resource_state != eResState::ShaderResource) {
+            res_transitions.emplace_back(&sc_data.textures, eResState::ShaderResource);
         }
-        if (sc_data.lights && sc_data.lights.resource_state != eResState::UnorderedAccess) {
-            res_transitions.emplace_back(&sc_data.lights, eResState::UnorderedAccess);
+        if (sc_data.lights && sc_data.lights.resource_state != eResState::ShaderResource) {
+            res_transitions.emplace_back(&sc_data.lights, eResState::ShaderResource);
         }
-        if (sc_data.li_indices && sc_data.li_indices.resource_state != eResState::UnorderedAccess) {
-            res_transitions.emplace_back(&sc_data.li_indices, eResState::UnorderedAccess);
+        if (sc_data.li_indices && sc_data.li_indices.resource_state != eResState::ShaderResource) {
+            res_transitions.emplace_back(&sc_data.li_indices, eResState::ShaderResource);
         }
-        if (sc_data.visible_lights && sc_data.visible_lights.resource_state != eResState::UnorderedAccess) {
-            res_transitions.emplace_back(&sc_data.visible_lights, eResState::UnorderedAccess);
+        if (sc_data.visible_lights && sc_data.visible_lights.resource_state != eResState::ShaderResource) {
+            res_transitions.emplace_back(&sc_data.visible_lights, eResState::ShaderResource);
         }
 
         TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
