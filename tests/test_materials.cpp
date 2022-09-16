@@ -1,5 +1,6 @@
 #include "test_common.h"
 
+#include <cstdarg>
 #include <cstdint>
 #include <cstring>
 
@@ -10,6 +11,29 @@
 
 #include "thread_pool.h"
 #include "utils.h"
+
+extern std::atomic_bool g_log_contains_errors;
+
+class LogErr : public Ray::ILog {
+    FILE *err_out_ = nullptr;
+  public:
+    LogErr() { err_out_ = fopen("test_data/errors.txt", "w"); }
+    ~LogErr() { fclose(err_out_); }
+
+    void Info(const char *fmt, ...) override {}
+    void Warning(const char *fmt, ...) override {}
+    void Error(const char *fmt, ...) override {
+        va_list vl;
+        va_start(vl, fmt);
+        vfprintf(err_out_, fmt, vl);
+        va_end(vl);
+        putc('\n', err_out_);
+        fflush(err_out_);
+        g_log_contains_errors = true;
+    }
+};
+
+LogErr g_log_err;
 
 template <typename MatDesc> void load_needed_textures(Ray::SceneBase &scene, MatDesc &mat_desc, const char *textures[]);
 
@@ -619,7 +643,7 @@ void run_material_test(const char *arch_list[], const char *preferred_device, co
             for (const bool output_sh : {false}) {
                 for (const char **arch = arch_list; *arch; ++arch) {
                     const auto rt = Ray::RendererTypeFromName(*arch);
-                    auto renderer = std::unique_ptr<Ray::RendererBase>(Ray::CreateRenderer(s, &Ray::g_null_log, rt));
+                    auto renderer = std::unique_ptr<Ray::RendererBase>(Ray::CreateRenderer(s, &g_log_err, rt));
                     if (renderer->type() != rt || renderer->is_hwrt() != use_hwrt) {
                         // skip unsupported (we fell back to some other renderer)
                         continue;

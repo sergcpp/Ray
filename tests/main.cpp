@@ -2,6 +2,7 @@
 #include <cstdio>
 #include <cstring>
 
+#include <atomic>
 #include <chrono>
 
 void test_atlas();
@@ -104,6 +105,7 @@ void test_texture();
 
 bool g_stop_on_fail = false;
 bool g_tests_success = true;
+std::atomic_bool g_log_contains_errors{false};
 
 int main(int argc, char *argv[]) {
     using namespace std::chrono;
@@ -384,6 +386,11 @@ int main(int argc, char *argv[]) {
 
     printf("FINISHED ALL TESTS in %.2f minutes\n", duration<double>(high_resolution_clock::now() - t1).count() / 60.0);
 
+    if (g_log_contains_errors) {
+        printf("LOG CONTAINS ERRORS!\n");
+    }
+
+    tests_success_final &= !g_log_contains_errors;
     tests_success_final &= g_tests_success;
     if (tests_success_final) {
         puts("SUCCESS");
