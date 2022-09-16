@@ -39,7 +39,7 @@ class Context {
     VkQueue graphics_queue_ = {};
 
     VkCommandPool command_pool_ = {}, temp_command_pool_ = {};
-    VkCommandBuffer setup_cmd_buf_, draw_cmd_buf_[MaxFramesInFlight];
+    VkCommandBuffer setup_cmd_buf_, draw_cmd_bufs_[MaxFramesInFlight];
 
     VkSemaphore image_avail_semaphores_[MaxFramesInFlight] = {};
     VkSemaphore render_finished_semaphores_[MaxFramesInFlight] = {};
@@ -49,7 +49,6 @@ class Context {
     uint32_t query_counts_[MaxFramesInFlight] = {};
     uint64_t query_results_[MaxFramesInFlight][MaxTimestampQueries] = {};
 
-    int backend_frame_ = 0;
     uint32_t max_combined_image_samplers_ = 0;
 
     std::unique_ptr<MemoryAllocators> default_memory_allocs_;
@@ -82,7 +81,7 @@ class Context {
     VkCommandPool command_pool() const { return command_pool_; }
     VkCommandPool temp_command_pool() const { return temp_command_pool_; }
 
-    const VkCommandBuffer &draw_cmd_buf(const int i) const { return draw_cmd_buf_[i]; }
+    const VkCommandBuffer &draw_cmd_buf(const int i) const { return draw_cmd_bufs_[i]; }
     const VkSemaphore &render_finished_semaphore(const int i) const { return render_finished_semaphores_[i]; }
     const VkFence &in_flight_fence(const int i) const { return in_flight_fences_[i]; }
 

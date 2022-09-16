@@ -39,6 +39,7 @@ void Ray::Vk::Context::Destroy() {
         vkDeviceWaitIdle(device_);
 
         for (int i = 0; i < MaxFramesInFlight; ++i) {
+            backend_frame = i; // default_descr_alloc_'s destructors rely on this
             default_descr_alloc_[i].reset();
             DestroyDeferredResources(i);
 
@@ -52,7 +53,7 @@ void Ray::Vk::Context::Destroy() {
         default_memory_allocs_.reset();
 
         vkFreeCommandBuffers(device_, command_pool_, 1, &setup_cmd_buf_);
-        vkFreeCommandBuffers(device_, command_pool_, MaxFramesInFlight, &draw_cmd_buf_[0]);
+        vkFreeCommandBuffers(device_, command_pool_, MaxFramesInFlight, draw_cmd_bufs_);
 
         // for (int i = 0; i < StageBufferCount; ++i) {
         //     default_stage_bufs_.fences[i].ClientWaitSync();
@@ -126,7 +127,7 @@ bool Ray::Vk::Context::Init(ILog *log, const char *preferred_device) {
         return false;
     }
 
-    if (!InitCommandBuffers(command_pool_, temp_command_pool_, setup_cmd_buf_, draw_cmd_buf_, image_avail_semaphores_,
+    if (!InitCommandBuffers(command_pool_, temp_command_pool_, setup_cmd_buf_, draw_cmd_bufs_, image_avail_semaphores_,
                             render_finished_semaphores_, in_flight_fences_, query_pools_, graphics_queue_, device_,
                             graphics_family_index_, log)) {
         return false;
