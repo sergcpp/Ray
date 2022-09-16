@@ -31,9 +31,9 @@ struct scene_data_t {
     const Buffer &textures;
     const Buffer &lights;
     const Buffer &li_indices;
-    int li_count;
+    const int li_count;
     const Buffer &visible_lights;
-    int visible_lights_count;
+    const int visible_lights_count;
     const AccStructure &rt_tlas;
 };
 

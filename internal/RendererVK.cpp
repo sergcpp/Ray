@@ -262,13 +262,6 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         return;
     }
 
-    ctx_->DestroyDeferredResources(ctx_->backend_frame);
-
-    const bool reset_result = ctx_->default_descr_alloc()->Reset();
-    assert(reset_result);
-
-    //
-
     const uint32_t macro_tree_root = s->macro_nodes_start_;
 
     region.iteration++;
@@ -320,17 +313,23 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
                             int(s->visible_lights_.size()),
                             s->rt_tlas_};
 
+#if !RUN_IN_LOCKSTEP
+    vkWaitForFences(ctx_->device(), 1, &ctx_->in_flight_fence(ctx_->backend_frame), VK_TRUE, UINT64_MAX);
+    vkResetFences(ctx_->device(), 1, &ctx_->in_flight_fence(ctx_->backend_frame));
+#endif
+
+    ctx_->DestroyDeferredResources(ctx_->backend_frame);
+
+    const bool reset_result = ctx_->default_descr_alloc()->Reset();
+    assert(reset_result);
+
 #if RUN_IN_LOCKSTEP
     VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
 #else
-    vkWaitForFences(ctx_->device(), 1, &ctx_->in_flight_fence(ctx_->backend_frame), VK_TRUE, UINT64_MAX);
-    vkResetFences(ctx_->device(), 1, &ctx_->in_flight_fence(ctx_->backend_frame));
-
     VkCommandBufferBeginInfo begin_info = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
     begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
     vkBeginCommandBuffer(ctx_->draw_cmd_buf(ctx_->backend_frame), &begin_info);
-
     VkCommandBuffer cmd_buf = ctx_->draw_cmd_buf(ctx_->backend_frame);
 #endif
 
@@ -504,9 +503,9 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
     if (res != VK_SUCCESS) {
         ctx_->log()->Error("Failed to submit into a queue!");
     }
-#endif
 
     ctx_->backend_frame = (ctx_->backend_frame + 1) % MaxFramesInFlight;
+#endif
     frame_dirty_ = true;
 }
 

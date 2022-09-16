@@ -170,6 +170,13 @@ Ray::Vk::DescrMultiPoolAlloc::DescrMultiPoolAlloc(Context *ctx, const uint32_t p
 }
 
 VkDescriptorSet Ray::Vk::DescrMultiPoolAlloc::Alloc(const DescrSizes &sizes, const VkDescriptorSetLayout layout) {
+    assert(sizes.acc_count <= max_acc_count_);
+    assert(sizes.img_sampler_count <= max_img_sampler_count_);
+    assert(sizes.sbuf_count <= max_sbuf_count_);
+    assert(sizes.store_img_count <= max_store_img_count_);
+    assert(sizes.tbuf_count <= max_tbuf_count_);
+    assert(sizes.ubuf_count <= max_ubuf_count_);
+
     const uint32_t img_sampler_based_index =
         sizes.img_sampler_count ? ((sizes.img_sampler_count + pool_step_ - 1) / pool_step_ - 1) : 0;
     const uint32_t store_img_based_index =
@@ -178,6 +185,8 @@ VkDescriptorSet Ray::Vk::DescrMultiPoolAlloc::Alloc(const DescrSizes &sizes, con
     const uint32_t sbuf_based_index = sizes.sbuf_count ? ((sizes.sbuf_count + pool_step_ - 1) / pool_step_ - 1) : 0;
     const uint32_t tbuf_based_index = sizes.tbuf_count ? ((sizes.tbuf_count + pool_step_ - 1) / pool_step_ - 1) : 0;
     const uint32_t acc_based_index = sizes.acc_count ? ((sizes.acc_count + pool_step_ - 1) / pool_step_ - 1) : 0;
+
+    assert(sizes.sbuf_count <= 20);
 
     uint32_t pool_index = img_sampler_based_index * store_img_based_count_ * ubuf_based_count_ * sbuf_based_count_ *
                           tbuf_based_count_ * acc_based_count_;

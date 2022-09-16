@@ -161,10 +161,18 @@ bool Ray::Vk::Context::Init(ILog *log, const char *preferred_device) {
                                                       1.5f /* growth_factor */));
 
     for (int i = 0; i < MaxFramesInFlight; ++i) {
-        default_descr_alloc_[i].reset(new DescrMultiPoolAlloc(this, 4 /* pool_step */, 32 /* max_img_sampler_count */,
-                                                              6 /* max_store_img_count */, 8 /* max_ubuf_count */,
-                                                              20 /* max_sbuf_count */, 16 /* max_tbuf_count */,
-                                                              1 /* max_acc_count */, 16 /* initial_sets_count */));
+        const int PoolStep = 4;
+        const int MaxImgSamplerCount = 32;
+        const int MaxStoreImgCount = 6;
+        const int MaxUBufCount = 8;
+        const int MaxSBufCount = 20;
+        const int MaxTBufCount = 16;
+        const int MaxAccCount = 1;
+        const int InitialSetsCount = 16;
+
+        default_descr_alloc_[i].reset(new DescrMultiPoolAlloc(this, PoolStep, MaxImgSamplerCount, MaxStoreImgCount,
+                                                              MaxUBufCount, MaxSBufCount, MaxTBufCount, MaxAccCount,
+                                                              InitialSetsCount));
     }
 
     rdoc_device = RENDERDOC_DEVICEPOINTER_FROM_VKINSTANCE(instance_);
