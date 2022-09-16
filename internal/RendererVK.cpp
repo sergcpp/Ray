@@ -493,16 +493,33 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
 #else
     vkEndCommandBuffer(cmd_buf);
 
+    const int prev_frame = (ctx_->backend_frame + MaxFramesInFlight - 1) % MaxFramesInFlight;
+
     VkSubmitInfo submit_info = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
+
+    const VkSemaphore wait_semaphores[] = {ctx_->render_finished_semaphore(prev_frame)};
+    const VkPipelineStageFlags wait_stages[] = {VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT};
+
+    if (ctx_->render_finished_semaphore_is_set[prev_frame]) {
+        submit_info.waitSemaphoreCount = 1;
+        submit_info.pWaitSemaphores = wait_semaphores;
+        submit_info.pWaitDstStageMask = wait_stages;
+    }
 
     submit_info.commandBufferCount = 1;
     submit_info.pCommandBuffers = &ctx_->draw_cmd_buf(ctx_->backend_frame);
+
+    submit_info.signalSemaphoreCount = 1;
+    submit_info.pSignalSemaphores = &ctx_->render_finished_semaphore(ctx_->backend_frame);
 
     const VkResult res =
         vkQueueSubmit(ctx_->graphics_queue(), 1, &submit_info, ctx_->in_flight_fence(ctx_->backend_frame));
     if (res != VK_SUCCESS) {
         ctx_->log()->Error("Failed to submit into a queue!");
     }
+
+    ctx_->render_finished_semaphore_is_set[ctx_->backend_frame] = true;
+    ctx_->render_finished_semaphore_is_set[prev_frame] = false;
 
     ctx_->backend_frame = (ctx_->backend_frame + 1) % MaxFramesInFlight;
 #endif
@@ -545,7 +562,40 @@ const Ray::pixel_color_t *Ray::Vk::Renderer::get_pixels_ref() const {
             final_buf_.CopyTextureData(pixel_stage_buf_, cmd_buf, 0);
         }
 
+#if RUN_IN_LOCKSTEP
         EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+#else
+        vkEndCommandBuffer(cmd_buf);
+
+        // Wait for all in-flight frames to not leave semaphores in unwaited state
+        SmallVector<VkSemaphore, MaxFramesInFlight> wait_semaphores;
+        SmallVector<VkPipelineStageFlags, MaxFramesInFlight> wait_stages;
+        for (int i = 0; i < MaxFramesInFlight; ++i) {
+            const bool is_set = ctx_->render_finished_semaphore_is_set[i];
+            if (is_set) {
+                wait_semaphores.push_back(ctx_->render_finished_semaphore(i));
+                wait_stages.push_back(VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT);
+            }
+        }
+
+        VkSubmitInfo submit_info = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
+
+        submit_info.waitSemaphoreCount = uint32_t(wait_semaphores.size());
+        submit_info.pWaitSemaphores = wait_semaphores.data();
+        submit_info.pWaitDstStageMask = wait_stages.data();
+
+        submit_info.commandBufferCount = 1;
+        submit_info.pCommandBuffers = &cmd_buf;
+
+        vkQueueSubmit(ctx_->graphics_queue(), 1, &submit_info, VK_NULL_HANDLE);
+        vkQueueWaitIdle(ctx_->graphics_queue());
+
+        vkFreeCommandBuffers(ctx_->device(), ctx_->temp_command_pool(), 1, &cmd_buf);
+#endif
+        // Can be reset after vkQueueWaitIdle
+        for (bool &is_set : ctx_->render_finished_semaphore_is_set) {
+            is_set = false;
+        }
 
         pixel_stage_buf_.FlushMappedRange(0, pixel_stage_buf_.size());
         frame_dirty_ = false;

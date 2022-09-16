@@ -91,6 +91,7 @@ class Context {
     void DestroyDeferredResources(const int i);
 
     int backend_frame = 0;
+    bool render_finished_semaphore_is_set[MaxFramesInFlight] = {};
 
     // resources scheduled for deferred destruction
     SmallVector<VkImage, 128> images_to_destroy[MaxFramesInFlight];
