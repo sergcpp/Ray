@@ -562,6 +562,13 @@ const Ray::pixel_color_t *Ray::Vk::Renderer::get_pixels_ref() const {
             final_buf_.CopyTextureData(pixel_stage_buf_, cmd_buf, 0);
         }
 
+        VkMemoryBarrier mem_barrier = {VK_STRUCTURE_TYPE_MEMORY_BARRIER};
+        mem_barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        mem_barrier.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
+
+        vkCmdPipelineBarrier(cmd_buf, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT, 0, 1, &mem_barrier, 0,
+                             nullptr, 0, nullptr);
+
 #if RUN_IN_LOCKSTEP
         EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 #else
