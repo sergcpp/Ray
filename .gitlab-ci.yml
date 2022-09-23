@@ -206,7 +206,7 @@ windows-x86_64-cpu-test-job:
   needs:
     - windows-x86_64-build-job
   tags:
-    - windows,x86_64,amd
+    - windows,x86_64
 
 windows-x86_64-gpu-amd-test-job:
   variables:
