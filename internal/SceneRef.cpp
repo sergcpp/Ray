@@ -260,9 +260,13 @@ uint32_t Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
 
     const uint64_t t1 = Ray::GetTimeMs();
 
+
     m.node_index = uint32_t(nodes_.size());
     m.node_count = PreprocessMesh(_m.vtx_attrs, {_m.vtx_indices, _m.vtx_indices_count}, _m.layout, _m.base_vertex,
                                   uint32_t(tri_materials_.size()), s, nodes_, tris_, tri_indices_, mtris_);
+
+    memcpy(m.bbox_min, nodes_[m.node_index].bbox_min, 3 * sizeof(float));
+    memcpy(m.bbox_max, nodes_[m.node_index].bbox_max, 3 * sizeof(float));
 
     log_->Info("Ray: Mesh preprocessed in %lldms", (Ray::GetTimeMs() - t1));
 
@@ -577,42 +581,8 @@ void Ray::Ref::Scene::SetMeshInstanceTransform(uint32_t mi_index, const float *x
     InverseMatrix(tr.xform, tr.inv_xform);
 
     const mesh_t &m = meshes_[mi.mesh_index];
-
-    if (!use_wide_bvh_) {
-        const bvh_node_t &n = nodes_[m.node_index];
-        TransformBoundingBox(n.bbox_min, n.bbox_max, xform, mi.bbox_min, mi.bbox_max);
-    } else {
-        const mbvh_node_t &n = mnodes_[m.node_index];
-
-        float bbox_min[3] = {MAX_DIST, MAX_DIST, MAX_DIST}, bbox_max[3] = {-MAX_DIST, -MAX_DIST, -MAX_DIST};
-
-        if (n.child[0] & LEAF_NODE_BIT) {
-            bbox_min[0] = n.bbox_min[0][0];
-            bbox_min[1] = n.bbox_min[1][0];
-            bbox_min[2] = n.bbox_min[2][0];
-
-            bbox_max[0] = n.bbox_max[0][0];
-            bbox_max[1] = n.bbox_max[1][0];
-            bbox_max[2] = n.bbox_max[2][0];
-        } else {
-            for (int i = 0; i < 8; i++) {
-                if (n.child[i] == 0x7fffffff) {
-                    continue;
-                }
-
-                bbox_min[0] = std::min(bbox_min[0], n.bbox_min[0][i]);
-                bbox_min[1] = std::min(bbox_min[1], n.bbox_min[1][i]);
-                bbox_min[2] = std::min(bbox_min[2], n.bbox_min[2][i]);
-
-                bbox_max[0] = std::max(bbox_max[0], n.bbox_max[0][i]);
-                bbox_max[1] = std::max(bbox_max[1], n.bbox_max[1][i]);
-                bbox_max[2] = std::max(bbox_max[2], n.bbox_max[2][i]);
-            }
-        }
-
-        TransformBoundingBox(bbox_min, bbox_max, xform, mi.bbox_min, mi.bbox_max);
-    }
-
+    TransformBoundingBox(m.bbox_min, m.bbox_max, xform, mi.bbox_min, mi.bbox_max);
+    
     RebuildTLAS();
 }
 

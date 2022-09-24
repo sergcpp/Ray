@@ -45,10 +45,10 @@ VkDeviceSize align_up(const VkDeviceSize size, const VkDeviceSize alignment) {
 } // namespace Vk
 } // namespace Ray
 
-Ray::Vk::Scene::Scene(Context *ctx)
-    : ctx_(ctx), nodes_(ctx), tris_(ctx), tri_indices_(ctx), tri_materials_(ctx), transforms_(ctx, "Transforms"),
-      meshes_(ctx, "Meshes"), mesh_instances_(ctx, "Mesh Instances"), mi_indices_(ctx), vertices_(ctx),
-      vtx_indices_(ctx), materials_(ctx, "Materials"),
+Ray::Vk::Scene::Scene(Context *ctx, const bool use_hwrt)
+    : ctx_(ctx), use_hwrt_(use_hwrt), nodes_(ctx), tris_(ctx), tri_indices_(ctx), tri_materials_(ctx),
+      transforms_(ctx, "Transforms"), meshes_(ctx, "Meshes"), mesh_instances_(ctx, "Mesh Instances"), mi_indices_(ctx),
+      vertices_(ctx), vtx_indices_(ctx), materials_(ctx, "Materials"),
       textures_(ctx, "Textures"), tex_atlases_{{ctx, eTexFormat::RawRGBA8888, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
                                                {ctx, eTexFormat::RawRGB888, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
                                                {ctx, eTexFormat::RawRG88, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
@@ -276,9 +276,30 @@ uint32_t Ray::Vk::Scene::AddMesh(const mesh_desc_t &_m) {
     s.allow_spatial_splits = _m.allow_spatial_splits;
     s.use_fast_bvh_build = _m.use_fast_bvh_build;
 
-    aligned_vector<mtri_accel_t> _unused;
-    PreprocessMesh(_m.vtx_attrs, {_m.vtx_indices, _m.vtx_indices_count}, _m.layout, _m.base_vertex, 0 /* temp value */,
-                   s, new_nodes, new_tris, new_tri_indices, _unused);
+    Ref::simd_fvec4 bbox_min{std::numeric_limits<float>::max()}, bbox_max{std::numeric_limits<float>::lowest()};
+
+    const size_t attr_stride = AttrStrides[_m.layout];
+    if (use_hwrt_) {
+        for (int j = 0; j < _m.vtx_indices_count; j += 3) {
+            Ref::simd_fvec4 p[3];
+
+            const uint32_t i0 = _m.vtx_indices[j + 0], i1 = _m.vtx_indices[j + 1], i2 = _m.vtx_indices[j + 2];
+
+            memcpy(&p[0][0], &_m.vtx_attrs[i0 * attr_stride], 3 * sizeof(float));
+            memcpy(&p[1][0], &_m.vtx_attrs[i1 * attr_stride], 3 * sizeof(float));
+            memcpy(&p[2][0], &_m.vtx_attrs[i2 * attr_stride], 3 * sizeof(float));
+
+            bbox_min = min(bbox_min, min(p[0], min(p[1], p[2])));
+            bbox_max = max(bbox_max, max(p[0], max(p[1], p[2])));
+        }
+    } else {
+        aligned_vector<mtri_accel_t> _unused;
+        PreprocessMesh(_m.vtx_attrs, {_m.vtx_indices, _m.vtx_indices_count}, _m.layout, _m.base_vertex,
+                       0 /* temp value */, s, new_nodes, new_tris, new_tri_indices, _unused);
+
+        memcpy(&bbox_min[0], new_nodes[0].bbox_min, 3 * sizeof(float));
+        memcpy(&bbox_max[0], new_nodes[0].bbox_max, 3 * sizeof(float));
+    }
 
     std::vector<tri_mat_data_t> new_tri_materials(_m.vtx_indices_count / 3);
 
@@ -360,6 +381,8 @@ uint32_t Ray::Vk::Scene::AddMesh(const mesh_desc_t &_m) {
 
     // add mesh
     mesh_t m;
+    memcpy(m.bbox_min, value_ptr(bbox_min), 3 * sizeof(float));
+    memcpy(m.bbox_max, value_ptr(bbox_max), 3 * sizeof(float));
     m.node_index = uint32_t(nodes_.size());
     m.node_count = uint32_t(new_nodes.size());
     m.tris_index = uint32_t(tris_.size());
@@ -369,8 +392,10 @@ uint32_t Ray::Vk::Scene::AddMesh(const mesh_desc_t &_m) {
 
     const uint32_t mesh_index = meshes_.push(m);
 
-    // add nodes
-    nodes_.Append(&new_nodes[0], new_nodes.size());
+    if (!use_hwrt_) {
+        // add nodes
+        nodes_.Append(&new_nodes[0], new_nodes.size());
+    }
 
     const size_t stride = AttrStrides[_m.layout];
 
@@ -411,11 +436,12 @@ uint32_t Ray::Vk::Scene::AddMesh(const mesh_desc_t &_m) {
     // add vertex indices
     vtx_indices_.Append(&new_vtx_indices[0], new_vtx_indices.size());
 
-    // add triangles
-    tris_.Append(&new_tris[0], new_tris.size());
-
-    // add triangle indices
-    tri_indices_.Append(&new_tri_indices[0], new_tri_indices.size());
+    if (!use_hwrt_) {
+        // add triangles
+        tris_.Append(&new_tris[0], new_tris.size());
+        // add triangle indices
+        tri_indices_.Append(&new_tri_indices[0], new_tri_indices.size());
+    }
 
     return mesh_index;
 }
@@ -583,11 +609,7 @@ void Ray::Vk::Scene::SetMeshInstanceTransform(const uint32_t mi_index, const flo
     mesh_instance_t mi = mesh_instances_[mi_index];
 
     const mesh_t &m = meshes_[mi.mesh_index];
-
-    bvh_node_t n;
-    nodes_.Get(m.node_index, n);
-
-    TransformBoundingBox(n.bbox_min, n.bbox_max, xform, mi.bbox_min, mi.bbox_max);
+    TransformBoundingBox(m.bbox_min, m.bbox_max, xform, mi.bbox_min, mi.bbox_max);
 
     mesh_instances_.Set(mi_index, mi);
     transforms_.Set(mi.tr_index, tr);
@@ -762,7 +784,7 @@ void Ray::Vk::Scene::GenerateTextureMips() {
 }
 
 void Ray::Vk::Scene::RebuildHWAccStructures() {
-    if (!ctx_->raytracing_supported()) {
+    if (!use_hwrt_) {
         return;
     }
 
@@ -808,7 +830,7 @@ void Ray::Vk::Scene::RebuildHWAccStructures() {
             new_geo.geometry.triangles = tri_data;
 
             auto &new_range = new_blas.build_ranges.emplace_back();
-            new_range.firstVertex = 0; //mesh.vert_index;
+            new_range.firstVertex = 0; // mesh.vert_index;
             new_range.primitiveCount = mesh.vert_count / 3;
             new_range.primitiveOffset = mesh.vert_index * sizeof(uint32_t);
             new_range.transformOffset = 0;
@@ -973,13 +995,6 @@ void Ray::Vk::Scene::RebuildHWAccStructures() {
     // Build TLAS
     //
 
-    // retrieve pointers to components for fast access
-    // const auto *transforms = (Transform *)scene_data_.comp_store[CompTransform]->SequentialData();
-    // const auto *acc_structs = (AccStructure *)scene_data_.comp_store[CompAccStructure]->SequentialData();
-    // const auto *lightmaps = (Lightmap *)scene_data_.comp_store[CompLightmap]->SequentialData();
-    // const auto *probes = (LightProbe *)scene_data_.comp_store[CompProbe]->SequentialData();
-    // const CompStorage *probe_store = scene_data_.comp_store[CompProbe];
-
     struct RTGeoInstance {
         uint32_t indices_start;
         uint32_t vertices_start;
@@ -1002,7 +1017,7 @@ void Ray::Vk::Scene::RebuildHWAccStructures() {
         auto &new_instance = tlas_instances.back();
         to_khr_xform(transforms_[instance.tr_index].xform, new_instance.transform.matrix);
         new_instance.instanceCustomIndex = meshes_[instance.mesh_index].vert_index / 3;
-        //blas.geo_index;
+        // blas.geo_index;
         new_instance.mask = 0xff;
         new_instance.instanceShaderBindingTableRecordOffset = 0;
         new_instance.flags = 0;

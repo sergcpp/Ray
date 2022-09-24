@@ -254,7 +254,7 @@ void Ray::Vk::Renderer::Clear(const pixel_color_t &c) {
     EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 }
 
-Ray::SceneBase *Ray::Vk::Renderer::CreateScene() { return new Vk::Scene(ctx_.get()); }
+Ray::SceneBase *Ray::Vk::Renderer::CreateScene() { return new Vk::Scene(ctx_.get(), use_hwrt_); }
 
 void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) {
     const auto s = dynamic_cast<const Vk::Scene *>(_s);

@@ -137,6 +137,7 @@ struct vertex_t {
 };
 
 struct mesh_t {
+    float bbox_min[3], bbox_max[3];
     UINT_TYPE node_index, node_count;
     UINT_TYPE tris_index, tris_count;
     UINT_TYPE vert_index, vert_count;

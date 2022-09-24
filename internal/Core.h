@@ -343,11 +343,12 @@ struct vertex_t {
 static_assert(sizeof(vertex_t) == 52, "!");
 
 struct mesh_t {
+    float bbox_min[3], bbox_max[3];
     uint32_t node_index, node_count;
     uint32_t tris_index, tris_count;
     uint32_t vert_index, vert_count;
 };
-static_assert(sizeof(mesh_t) == 24, "!");
+static_assert(sizeof(mesh_t) == 48, "!");
 
 struct transform_t {
     float xform[16], inv_xform[16];
