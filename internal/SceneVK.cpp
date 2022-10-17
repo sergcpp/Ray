@@ -715,13 +715,12 @@ void Ray::Vk::Scene::GenerateTextureMips() {
     }
 
     // Sort for more optimal allocation
-    std::sort(std::begin(mips_to_generate), std::end(mips_to_generate),
-              [](const mip_gen_info &lhs, const mip_gen_info &rhs) {
-                  if (lhs.atlas_index == rhs.atlas_index) {
-                      return lhs.size > rhs.size;
-                  }
-                  return lhs.atlas_index < rhs.atlas_index;
-              });
+    sort(begin(mips_to_generate), end(mips_to_generate), [](const mip_gen_info &lhs, const mip_gen_info &rhs) {
+        if (lhs.atlas_index == rhs.atlas_index) {
+            return lhs.size > rhs.size;
+        }
+        return lhs.atlas_index < rhs.atlas_index;
+    });
 
     for (const mip_gen_info &info : mips_to_generate) {
         texture_t t = textures_[info.texture_index];
@@ -808,7 +807,7 @@ void Ray::Vk::Scene::RebuildHWAccStructures() {
             new_geo.geometry.triangles = tri_data;
 
             auto &new_range = new_blas.build_ranges.emplace_back();
-            new_range.firstVertex = 0; //mesh.vert_index;
+            new_range.firstVertex = 0; // mesh.vert_index;
             new_range.primitiveCount = mesh.vert_count / 3;
             new_range.primitiveOffset = mesh.vert_index * sizeof(uint32_t);
             new_range.transformOffset = 0;
@@ -1002,7 +1001,7 @@ void Ray::Vk::Scene::RebuildHWAccStructures() {
         auto &new_instance = tlas_instances.back();
         to_khr_xform(transforms_[instance.tr_index].xform, new_instance.transform.matrix);
         new_instance.instanceCustomIndex = meshes_[instance.mesh_index].vert_index / 3;
-        //blas.geo_index;
+        // blas.geo_index;
         new_instance.mask = 0xff;
         new_instance.instanceShaderBindingTableRecordOffset = 0;
         new_instance.flags = 0;
