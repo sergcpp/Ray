@@ -139,9 +139,8 @@ bool Ray::Vk::Context::Init(ILog *log, const char *preferred_device) {
     log_->Info("\tVulkan version\t: %i.%i", VK_API_VERSION_MAJOR(device_properties_.apiVersion),
                VK_API_VERSION_MINOR(device_properties_.apiVersion));
 
-    auto it =
-        std::find_if(std::begin(KnownVendors), std::end(KnownVendors),
-                     [this](std::pair<uint32_t, const char *> v) { return device_properties_.vendorID == v.first; });
+    auto it = find_if(std::begin(KnownVendors), std::end(KnownVendors),
+                      [this](std::pair<uint32_t, const char *> v) { return device_properties_.vendorID == v.first; });
     if (it != std::end(KnownVendors)) {
         log_->Info("\tVendor\t\t: %s", it->second);
     }

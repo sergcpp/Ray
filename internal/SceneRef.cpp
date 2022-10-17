@@ -260,7 +260,6 @@ uint32_t Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
 
     const uint64_t t1 = Ray::GetTimeMs();
 
-
     m.node_index = uint32_t(nodes_.size());
     m.node_count = PreprocessMesh(_m.vtx_attrs, {_m.vtx_indices, _m.vtx_indices_count}, _m.layout, _m.base_vertex,
                                   uint32_t(tri_materials_.size()), s, nodes_, tris_, tri_indices_, mtris_);
@@ -524,14 +523,14 @@ void Ray::Ref::Scene::RemoveLight(const uint32_t i) {
     }
 
     { // remove from compacted list
-        auto it = std::find(std::begin(li_indices_), std::end(li_indices_), i);
-        assert(it != std::end(li_indices_));
+        auto it = find(begin(li_indices_), end(li_indices_), i);
+        assert(it != end(li_indices_));
         li_indices_.erase(it);
     }
 
     if (lights_[i].visible) {
-        auto it = std::find(std::begin(visible_lights_), std::end(visible_lights_), i);
-        assert(it != std::end(visible_lights_));
+        auto it = find(begin(visible_lights_), end(visible_lights_), i);
+        assert(it != end(visible_lights_));
         visible_lights_.erase(it);
     }
 
@@ -582,7 +581,7 @@ void Ray::Ref::Scene::SetMeshInstanceTransform(uint32_t mi_index, const float *x
 
     const mesh_t &m = meshes_[mi.mesh_index];
     TransformBoundingBox(m.bbox_min, m.bbox_max, xform, mi.bbox_min, mi.bbox_max);
-    
+
     RebuildTLAS();
 }
 
@@ -754,13 +753,12 @@ void Ray::Ref::Scene::GenerateTextureMips() {
     }
 
     // Sort for more optimal allocation
-    std::sort(std::begin(mips_to_generate), std::end(mips_to_generate),
-              [](const mip_gen_info &lhs, const mip_gen_info &rhs) {
-                  if (lhs.atlas_index == rhs.atlas_index) {
-                      return lhs.size > rhs.size;
-                  }
-                  return lhs.atlas_index < rhs.atlas_index;
-              });
+    sort(begin(mips_to_generate), end(mips_to_generate), [](const mip_gen_info &lhs, const mip_gen_info &rhs) {
+        if (lhs.atlas_index == rhs.atlas_index) {
+            return lhs.size > rhs.size;
+        }
+        return lhs.atlas_index < rhs.atlas_index;
+    });
 
     for (const mip_gen_info &info : mips_to_generate) {
         texture_t &t = textures_[info.texture_index];

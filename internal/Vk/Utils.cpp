@@ -754,14 +754,14 @@ void Ray::Vk::ReorderTriangleIndices(const uint32_t *indices, const uint32_t ind
     std::deque<uint32_t> lru_cache;
 
     auto use_vertex = [](std::deque<uint32_t> &lru_cache, uint32_t vtx_index) {
-        auto it = std::find(std::begin(lru_cache), std::end(lru_cache), vtx_index);
+        auto it = find(begin(lru_cache), end(lru_cache), vtx_index);
 
-        if (it == std::end(lru_cache)) {
+        if (it == end(lru_cache)) {
             lru_cache.push_back(vtx_index);
-            it = std::begin(lru_cache);
+            it = begin(lru_cache);
         }
 
-        if (it != std::begin(lru_cache)) {
+        if (it != begin(lru_cache)) {
             lru_cache.erase(it);
             lru_cache.push_front(vtx_index);
         }
@@ -784,8 +784,8 @@ void Ray::Vk::ReorderTriangleIndices(const uint32_t *indices, const uint32_t ind
             for (uint32_t j = 0; j < v.ref_count; j++) {
                 int tri_index = v.tris[j];
                 if (tri_index != -1) {
-                    auto it = std::find(std::begin(out_tris_to_update), std::end(out_tris_to_update), tri_index);
-                    if (it == std::end(out_tris_to_update)) {
+                    auto it = find(begin(out_tris_to_update), end(out_tris_to_update), tri_index);
+                    if (it == end(out_tris_to_update)) {
                         out_tris_to_update.push_back(tri_index);
                     }
                 }
