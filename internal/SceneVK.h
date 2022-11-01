@@ -14,6 +14,7 @@ class Scene : public SceneBase {
     friend class Vk::Renderer;
 
     Context *ctx_;
+    bool use_hwrt_ = false;
 
     Vector<bvh_node_t> nodes_;
     Vector<tri_accel_t> tris_;
@@ -57,7 +58,7 @@ class Scene : public SceneBase {
     void RebuildHWAccStructures();
 
   public:
-    Scene(Context *ctx);
+    Scene(Context *ctx, bool use_hwrt);
 
     void GetEnvironment(environment_desc_t &env) override;
     void SetEnvironment(const environment_desc_t &env) override;
