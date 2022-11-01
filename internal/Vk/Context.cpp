@@ -331,9 +331,6 @@ bool Ray::Vk::Context::ChooseVkPhysicalDevice(VkPhysicalDevice &physical_device,
                     dynamic_rendering_supported = true;
                 }
             }
-
-            VkPhysicalDeviceFeatures supported_features;
-            vkGetPhysicalDeviceFeatures(physical_devices[i], &supported_features);
         }
 
         uint32_t queue_family_count;
