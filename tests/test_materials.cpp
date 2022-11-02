@@ -1075,7 +1075,7 @@ void test_sheen_mat3(const char *arch_list[], const char *preferred_device) {
 void test_glossy_mat0(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 2048;
     const double MinPSNR = 34.13;
-    const int PixThres = 71;
+    const int PixThres = 73;
 
     Ray::shading_node_desc_t node_desc;
     node_desc.type = Ray::GlossyNode;
@@ -2399,8 +2399,8 @@ void test_complex_mat6(const char *arch_list[], const char *preferred_device) {
 
 void test_complex_mat6_mesh_lights(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 1024;
-    const double MinPSNR = 27.86;
-    const int PixThres = 1216;
+    const double MinPSNR = 27.84;
+    const int PixThres = 1217;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;
