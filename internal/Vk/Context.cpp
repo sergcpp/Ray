@@ -1,5 +1,7 @@
 #include "Context.h"
 
+#include <regex>
+
 #include "../SmallVector.h"
 #include "DescriptorPool.h"
 #include "MemoryAllocator.h"
@@ -370,9 +372,12 @@ bool Ray::Vk::Context::ChooseVkPhysicalDevice(VkPhysicalDevice &physical_device,
                 score += 100;
             }
 
-            if (preferred_device && strstr(device_properties.deviceName, preferred_device)) {
-                // preffered device found
-                score += 100000;
+            if (preferred_device) {
+                std::regex match_name(preferred_device);
+                if (std::regex_search(device_properties.deviceName, match_name)) {
+                    // preffered device found
+                    score += 100000;
+                }
             }
 
             if (score > best_score) {
