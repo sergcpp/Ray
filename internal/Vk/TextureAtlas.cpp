@@ -168,7 +168,10 @@ bool Ray::Vk::TextureAtlas::Resize(const int pages_count) {
         img_alloc_info.allocationSize = img_tex_mem_req.size;
 
         uint32_t img_tex_type_bits = img_tex_mem_req.memoryTypeBits;
-        const VkMemoryPropertyFlags img_tex_desired_mem_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+        VkMemoryPropertyFlags img_tex_desired_mem_flags = 0;
+        if (ctx_->device_properties().deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
+            img_tex_desired_mem_flags |= VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+        }
         for (uint32_t i = 0; i < 32; i++) {
             VkMemoryType mem_type = ctx_->mem_properties().memoryTypes[i];
             if (img_tex_type_bits & 1u) {

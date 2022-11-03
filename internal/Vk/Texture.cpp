@@ -664,9 +664,13 @@ bool Ray::Vk::Texture2D::Realloc(const int w, const int h, int mip_count, const 
         VkMemoryRequirements tex_mem_req;
         vkGetImageMemoryRequirements(ctx_->device(), new_image, &tex_mem_req);
 
+        VkMemoryPropertyFlags img_tex_desired_mem_flags = 0;
+        if (ctx_->device_properties().deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
+            img_tex_desired_mem_flags |= VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+        }
         new_alloc = mem_allocs->Allocate(
             uint32_t(tex_mem_req.size), uint32_t(tex_mem_req.alignment),
-            FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT),
+            FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits, img_tex_desired_mem_flags),
             name_.c_str());
 
         const VkDeviceSize aligned_offset = AlignTo(VkDeviceSize(new_alloc.alloc_off), tex_mem_req.alignment);
@@ -893,9 +897,13 @@ void Ray::Vk::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, void *_cmd_
         VkMemoryRequirements tex_mem_req;
         vkGetImageMemoryRequirements(ctx_->device(), handle_.img, &tex_mem_req);
 
+        VkMemoryPropertyFlags img_tex_desired_mem_flags = 0;
+        if (ctx_->device_properties().deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
+            img_tex_desired_mem_flags |= VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+        }
         alloc_ = mem_allocs->Allocate(
             uint32_t(tex_mem_req.size), uint32_t(tex_mem_req.alignment),
-            FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT),
+            FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits, img_tex_desired_mem_flags),
             name_.c_str());
 
         const VkDeviceSize aligned_offset = AlignTo(VkDeviceSize(alloc_.alloc_off), tex_mem_req.alignment);
@@ -1419,9 +1427,13 @@ void Ray::Vk::Texture2D::InitFromRAWData(Buffer &sbuf, int data_off[6], void *_c
         VkMemoryRequirements tex_mem_req;
         vkGetImageMemoryRequirements(ctx_->device(), handle_.img, &tex_mem_req);
 
+        VkMemoryPropertyFlags img_tex_desired_mem_flags = 0;
+        if (ctx_->device_properties().deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
+            img_tex_desired_mem_flags |= VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+        }
         alloc_ = mem_allocs->Allocate(
             uint32_t(tex_mem_req.size), uint32_t(tex_mem_req.alignment),
-            FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT),
+            FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits, img_tex_desired_mem_flags),
             name_.c_str());
 
         const VkDeviceSize aligned_offset = AlignTo(VkDeviceSize(alloc_.alloc_off), tex_mem_req.alignment);
@@ -1710,9 +1722,13 @@ void Ray::Vk::Texture2D::InitFromDDSFile(const void *data[6], const int size[6],
         VkMemoryRequirements tex_mem_req;
         vkGetImageMemoryRequirements(ctx_->device(), handle_.img, &tex_mem_req);
 
+        VkMemoryPropertyFlags img_tex_desired_mem_flags = 0;
+        if (ctx_->device_properties().deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
+            img_tex_desired_mem_flags |= VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+        }
         alloc_ = mem_allocs->Allocate(
             uint32_t(tex_mem_req.size), uint32_t(tex_mem_req.alignment),
-            FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT),
+            FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits, img_tex_desired_mem_flags),
             name_.c_str());
 
         const VkDeviceSize aligned_offset = AlignTo(VkDeviceSize(alloc_.alloc_off), tex_mem_req.alignment);
@@ -1937,9 +1953,13 @@ void Ray::Vk::Texture2D::InitFromKTXFile(const void *data[6], const int size[6],
         VkMemoryRequirements tex_mem_req;
         vkGetImageMemoryRequirements(ctx_->device(), handle_.img, &tex_mem_req);
 
+        VkMemoryPropertyFlags img_tex_desired_mem_flags = 0;
+        if (ctx_->device_properties().deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
+            img_tex_desired_mem_flags |= VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+        }
         alloc_ = mem_allocs->Allocate(
             uint32_t(tex_mem_req.size), uint32_t(tex_mem_req.alignment),
-            FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT),
+            FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits, img_tex_desired_mem_flags),
             name_.c_str());
 
         const VkDeviceSize aligned_offset = AlignTo(VkDeviceSize(alloc_.alloc_off), tex_mem_req.alignment);
