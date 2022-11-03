@@ -6,7 +6,7 @@
 
 #include "../../Log.h"
 
-#if defined(WIN32)
+#if defined(_WIN32)
 #include <Windows.h>
 #undef max
 #undef min
@@ -15,7 +15,7 @@
 #endif
 
 bool Ray::Vk::LoadVulkan(ILog *log) {
-#if defined(WIN32)
+#if defined(_WIN32)
     HMODULE vulkan_module = LoadLibrary("vulkan-1.dll");
     if (!vulkan_module) {
         log->Error("Failed to load vulkan-1.dll");
