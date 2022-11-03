@@ -248,7 +248,7 @@ windows-x86_64-gpu-xe-test-job:
 windows-x86_64-gpu-arc-test-job:
   variables:
     BIN_DIR: windows-x86_64
-    AUX_TEST_ARGS: '-d ARC --nocpu'
+    AUX_TEST_ARGS: '-d Arc --nocpu'
   extends:
     - .windows-test-job
   needs:
