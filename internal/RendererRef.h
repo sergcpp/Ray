@@ -56,6 +56,8 @@ class Renderer : public RendererBase {
 
     eRendererType type() const override { return RendererRef; }
 
+    const char *device_name() const override { return "CPU"; }
+
     std::pair<int, int> size() const override { return std::make_pair(final_buf_.w(), final_buf_.h()); }
 
     const pixel_color_t *get_pixels_ref() const override { return final_buf_.get_pixels_ref(); }

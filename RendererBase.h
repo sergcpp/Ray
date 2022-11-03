@@ -66,6 +66,9 @@ class RendererBase {
     /// Type of renderer
     virtual eRendererType type() const = 0;
 
+    /// Name of the device
+    virtual const char *device_name() const = 0;
+
 #if !defined(DISABLE_GPU)
     virtual bool is_hwrt() const { return false; }
 #endif

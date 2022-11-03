@@ -209,6 +209,8 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
 
 Ray::Vk::Renderer::~Renderer() { pixel_stage_buf_.Unmap(); }
 
+const char *Ray::Vk::Renderer::device_name() const { return ctx_->device_properties().deviceName; }
+
 void Ray::Vk::Renderer::Resize(const int w, const int h) {
     if (w_ == w && h_ == h) {
         return;

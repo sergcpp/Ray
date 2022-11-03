@@ -115,6 +115,8 @@ class Renderer : public RendererBase {
 
     eRendererType type() const override { return RendererVK; }
 
+    const char *device_name() const override;
+
     bool is_hwrt() const override { return use_hwrt_; }
 
     std::pair<int, int> size() const override { return std::make_pair(w_, h_); }
