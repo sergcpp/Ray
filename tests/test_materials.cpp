@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <fstream>
+#include <regex>
 
 #include "../RendererFactory.h"
 
@@ -647,6 +648,14 @@ void run_material_test(const char *arch_list[], const char *preferred_device, co
                     if (renderer->type() != rt || renderer->is_hwrt() != use_hwrt) {
                         // skip unsupported (we fell back to some other renderer)
                         continue;
+                    }
+                    if (preferred_device) {
+                        // make sure we use requested device
+                        std::regex match_name(preferred_device);
+                        if (!require(std::regex_search(renderer->device_name(), match_name))) {
+                            printf("Wrong device: %s (%s was requested)\n", renderer->device_name(), preferred_device);
+                            return;
+                        }
                     }
                     auto scene = std::unique_ptr<Ray::SceneBase>(renderer->CreateScene());
 

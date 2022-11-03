@@ -7,7 +7,7 @@
 extern bool g_stop_on_fail;
 extern bool g_tests_success;
 
-static void handle_assert(bool passed, const char* assert, const char* file, long line, bool fatal) {
+static bool handle_assert(bool passed, const char* assert, const char* file, long line, bool fatal) {
     if (!passed) {
         printf("Assertion failed %s in %s at line %d\n", assert, file, int(line));
         g_tests_success = false;
@@ -15,6 +15,7 @@ static void handle_assert(bool passed, const char* assert, const char* file, lon
             exit(-1);
         }
     }
+    return passed;
 }
 
 #define require(x) handle_assert(x, #x , __FILE__, __LINE__, g_stop_on_fail)
