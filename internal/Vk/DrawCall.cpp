@@ -40,7 +40,7 @@ VkDescriptorSet Ray::Vk::PrepareDescriptorSet(Context *ctx, VkDescriptorSetLayou
             new_write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
             new_write.descriptorCount = 1;
             new_write.pImageInfo = &info;
-        } else if (b.trg == eBindTarget::Tex2DArray && b.handle.tex_arr->page_count()) {
+        } else if (b.trg == eBindTarget::Tex2DArray) {
             const uint32_t start_pos = descr_sizes.img_sampler_count;
             for (int i = 0; i < b.handle.count; ++i) {
                 auto &info = img_sampler_infos[descr_sizes.img_sampler_count++];
