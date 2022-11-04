@@ -66,7 +66,9 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
     }
 
     use_hwrt_ = (s.use_hwrt && ctx_->ray_query_supported());
+    use_tex_compression_ = s.use_tex_compression;
     log->Info("HWRT is %s", use_hwrt_ ? "enabled" : "disabled");
+    log->Info("Tex compression is %s", use_tex_compression_ ? "enabled" : "disabled");
 
     sh_prim_rays_gen_ = Shader{"Primary Raygen",
                                ctx_.get(),
@@ -263,7 +265,7 @@ void Ray::Vk::Renderer::Clear(const pixel_color_t &c) {
     EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 }
 
-Ray::SceneBase *Ray::Vk::Renderer::CreateScene() { return new Vk::Scene(ctx_.get(), use_hwrt_); }
+Ray::SceneBase *Ray::Vk::Renderer::CreateScene() { return new Vk::Scene(ctx_.get(), use_hwrt_, use_tex_compression_); }
 
 void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) {
     const auto s = dynamic_cast<const Vk::Scene *>(_s);
@@ -356,9 +358,9 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
     { // transition resources
         SmallVector<TransitionInfo, 16> res_transitions;
 
-        for (int i = 0; i < 4; ++i) {
-            if (s->tex_atlases_[i].resource_state != eResState::ShaderResource) {
-                res_transitions.emplace_back(&s->tex_atlases_[i], eResState::ShaderResource);
+        for (const auto &tex_atlas : s->tex_atlases_) {
+            if (tex_atlas.resource_state != eResState::ShaderResource) {
+                res_transitions.emplace_back(&tex_atlas, eResState::ShaderResource);
             }
         }
 

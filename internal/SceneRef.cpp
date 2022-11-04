@@ -109,7 +109,7 @@ uint32_t Ray::Ref::Scene::AddTexture(const tex_desc_t &_t) {
     }
 
     log_->Info("Ray: Texture loaded (atlas = %i, %ix%i)", int(t.atlas), _t.w, _t.h);
-    log_->Info("Ray: Atlasses are (RGBA %i pages, RGB %i pages, RG %i pages, R %i pages)", tex_atlas_rgba_.page_count(),
+    log_->Info("Ray: Atlasses are (RGBA[%i], RGB[%i], RG[%i], R[%i])", tex_atlas_rgba_.page_count(),
                tex_atlas_rgb_.page_count(), tex_atlas_rg_.page_count(), tex_atlas_r_.page_count());
 
     return textures_.push(t);
@@ -740,12 +740,16 @@ void Ray::Ref::Scene::GenerateTextureMips() {
         ++mip;
 
         while (res[0] >= 1 && res[1] >= 1) {
-            mips_to_generate.emplace_back();
-            auto &m = mips_to_generate.back();
-            m.texture_index = i;
-            m.size = std::max(res[0], res[1]);
-            m.dst_mip = mip;
-            m.atlas_index = t.atlas;
+            const bool requires_generation =
+                t.page[mip] == t.page[0] && t.pos[mip][0] == t.pos[0][0] && t.pos[mip][1] == t.pos[0][1];
+            if (requires_generation) {
+                mips_to_generate.emplace_back();
+                auto &m = mips_to_generate.back();
+                m.texture_index = i;
+                m.size = std::max(res[0], res[1]);
+                m.dst_mip = mip;
+                m.atlas_index = t.atlas;
+            }
 
             res[0] /= 2;
             res[1] /= 2;
@@ -801,7 +805,7 @@ void Ray::Ref::Scene::GenerateTextureMips() {
         }
     }
 
-    log_->Info("Ray: Atlasses are (RGBA %i pages, RGB %i pages, RG %i pages, R %i pages)", tex_atlas_rgba_.page_count(),
+    log_->Info("Ray: Atlasses are (RGBA[%i], RGB[%i], RG[%i], R[%i])", tex_atlas_rgba_.page_count(),
                tex_atlas_rgb_.page_count(), tex_atlas_rg_.page_count(), tex_atlas_r_.page_count());
 }
 

@@ -18,13 +18,18 @@ vec2 TransformUV(const vec2 _uv, const vec2 tex_atlas_size, const texture_t t, c
     return res;
 }
 
-vec4 SampleBilinear(sampler2DArray g_atlases[4], const texture_t t, const vec2 uvs, const int lod) {
+vec4 SampleBilinear(sampler2DArray atlases[6], const texture_t t, const vec2 uvs, const int lod) {
     const vec2 atlas_size = vec2(TEXTURE_ATLAS_SIZE);
     vec2 _uvs = TransformUV(uvs, atlas_size, t, lod);
     //_uvs = _uvs * atlas_size - 0.5;
 
     const float page = float((t.page[lod / 4] >> (lod % 4) * 8) & 0xff);
-    return textureLod(g_atlases[nonuniformEXT(t.atlas)], vec3(_uvs, page), 0.0);
+    vec4 res = textureLod(atlases[nonuniformEXT(t.atlas)], vec3(_uvs, page), 0.0);
+    if (t.atlas == 4) {
+        res.rgb = YCoCg_to_RGB(res);
+        res.a = 1.0;
+    }
+    return res;
 }
 
 #endif // TEXTURE_GLSL

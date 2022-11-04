@@ -110,7 +110,7 @@ class Texture2D {
 
     Texture2D() = default;
     Texture2D(const char *name, Context *ctx, const Tex2DParams &params, MemoryAllocators *mem_allocs, ILog *log);
-    Texture2D(const char *name, Context *ctx, VkImage img, VkImageView view, VkSampler sampler,
+    Texture2D(const char *name, Context *ctx, const VkImage img, const VkImageView view, const VkSampler sampler,
               const Tex2DParams &_params, ILog *log)
         : handle_{img, view, VK_NULL_HANDLE, sampler, 0}, params(_params), ready_(true), name_(name) {}
     Texture2D(const char *name, Context *ctx, const void *data, const uint32_t size, const Tex2DParams &p,
@@ -125,7 +125,8 @@ class Texture2D {
     Texture2D &operator=(Texture2D &&rhs) noexcept;
 
     void Init(const Tex2DParams &params, MemoryAllocators *mem_allocs, ILog *log);
-    void Init(VkImage img, VkImageView view, VkSampler sampler, const Tex2DParams &_params, ILog *log) {
+    void Init(const VkImage img, const VkImageView view, const VkSampler sampler, const Tex2DParams &_params,
+              ILog *log) {
         handle_ = {img, view, VK_NULL_HANDLE, sampler, 0};
         params = _params;
         ready_ = true;
@@ -143,8 +144,9 @@ class Texture2D {
     VkSampler vk_sampler() const { return handle_.sampler; }
     uint16_t initialized_mips() const { return initialized_mips_; }
 
-    VkDescriptorImageInfo vk_desc_image_info(const int view_index = 0,
-                                             VkImageLayout layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) const {
+    VkDescriptorImageInfo
+    vk_desc_image_info(const int view_index = 0,
+                       const VkImageLayout layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) const {
         VkDescriptorImageInfo ret;
         ret.sampler = handle_.sampler;
         ret.imageView = handle_.views[view_index];
@@ -158,7 +160,7 @@ class Texture2D {
     const std::string &name() const { return name_; }
 
     void SetSampling(SamplingParams sampling);
-    void ApplySampling(SamplingParams sampling, ILog *log) { SetSampling(sampling); }
+    void ApplySampling(const SamplingParams sampling, ILog *log) { SetSampling(sampling); }
 
     void SetSubImage(int level, int offsetx, int offsety, int sizex, int sizey, eTexFormat format, const void *data,
                      int data_len);

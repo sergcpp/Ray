@@ -125,6 +125,9 @@ bool Ray::Vk::Context::Init(ILog *log, const char *preferred_device) {
         return false;
     }
 
+    // Disable as it is not needed for now
+    dynamic_rendering_supported_ = false;
+
     if (!InitVkDevice(device_, physical_device_, graphics_family_index_, raytracing_supported_, ray_query_supported_,
                       dynamic_rendering_supported_, enabled_layers, enabled_layers_count, log)) {
         return false;

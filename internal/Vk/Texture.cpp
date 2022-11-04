@@ -3,6 +3,7 @@
 #include <memory>
 
 #include "../../Log.h"
+#include "../Utils.h"
 #include "Context.h"
 #include "Utils.h"
 
@@ -53,10 +54,11 @@ extern const VkFormat g_vk_formats[] = {
 #ifndef __ANDROID__
     VK_FORMAT_D32_SFLOAT, // Depth32
 #endif
-    VK_FORMAT_BC1_RGBA_UNORM_BLOCK, // Compressed_DXT1
-    VK_FORMAT_BC2_UNORM_BLOCK,      // Compressed_DXT3
-    VK_FORMAT_BC3_UNORM_BLOCK,      // Compressed_DXT5
-    VK_FORMAT_UNDEFINED,            // Compressed_ASTC
+    VK_FORMAT_BC1_RGBA_UNORM_BLOCK, // BC1
+    VK_FORMAT_BC2_UNORM_BLOCK,      // BC2
+    VK_FORMAT_BC3_UNORM_BLOCK,      // BC3
+    VK_FORMAT_BC4_UNORM_BLOCK,      // BC4
+    VK_FORMAT_UNDEFINED,            // ASTC
     VK_FORMAT_UNDEFINED,            // None
 };
 static_assert(sizeof(g_vk_formats) / sizeof(g_vk_formats[0]) == size_t(eTexFormat::_Count), "!");
@@ -210,10 +212,11 @@ const int g_per_pixel_data_len[] = {
 #ifndef __ANDROID__
     4, // Depth32
 #endif
-    -1, // Compressed_DXT1
-    -1, // Compressed_DXT3
-    -1, // Compressed_DXT5
-    -1, // Compressed_ASTC
+    -1, // BC1
+    -1, // BC2
+    -1, // BC3
+    -1, // BC4
+    -1, // ASTC
     -1  // None
 };
 static_assert(sizeof(g_per_pixel_data_len) / sizeof(g_per_pixel_data_len[0]) == int(eTexFormat::_Count), "!");
@@ -233,10 +236,11 @@ bool EndsWith(const std::string &str1, const char *str2) {
 
 bool Ray::Vk::IsCompressedFormat(const eTexFormat format) {
     switch (format) {
-    case eTexFormat::Compressed_DXT1:
-    case eTexFormat::Compressed_DXT3:
-    case eTexFormat::Compressed_DXT5:
-    case eTexFormat::Compressed_ASTC:
+    case eTexFormat::BC1:
+    case eTexFormat::BC2:
+    case eTexFormat::BC3:
+    case eTexFormat::BC4:
+    case eTexFormat::ASTC:
         return true;
     default:
         return false;
@@ -261,14 +265,14 @@ int Ray::Vk::GetPerPixelDataLen(const eTexFormat format) { return g_per_pixel_da
 
 int Ray::Vk::GetBlockLenBytes(const eTexFormat format, const eTexBlock block) {
     switch (format) {
-    case eTexFormat::Compressed_DXT1:
+    case eTexFormat::BC1:
         assert(block == eTexBlock::_4x4);
         return 8;
-    case eTexFormat::Compressed_DXT3:
-    case eTexFormat::Compressed_DXT5:
+    case eTexFormat::BC2:
+    case eTexFormat::BC3:
         assert(block == eTexBlock::_4x4);
         return 16;
-    case eTexFormat::Compressed_ASTC:
+    case eTexFormat::ASTC:
         assert(false);
     default:
         return -1;
@@ -352,87 +356,87 @@ Ray::Vk::eTexFormat Ray::Vk::FormatFromGLInternalFormat(const uint32_t gl_intern
         (*is_srgb) = true;
     case GL_COMPRESSED_RGBA_S3TC_DXT1_EXT:
         (*block) = eTexBlock::_4x4;
-        return eTexFormat::Compressed_DXT1;
+        return eTexFormat::BC1;
     case GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT3_EXT:
         (*is_srgb) = true;
     case GL_COMPRESSED_RGBA_S3TC_DXT3_EXT:
         (*block) = eTexBlock::_4x4;
-        return eTexFormat::Compressed_DXT3;
+        return eTexFormat::BC2;
     case GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT:
         (*is_srgb) = true;
     case GL_COMPRESSED_RGBA_S3TC_DXT5_EXT:
         (*block) = eTexBlock::_4x4;
-        return eTexFormat::Compressed_DXT5;
+        return eTexFormat::BC3;
     case GL_COMPRESSED_SRGB8_ALPHA8_ASTC_4x4_KHR:
         (*is_srgb) = true;
     case GL_COMPRESSED_RGBA_ASTC_4x4_KHR:
         (*block) = eTexBlock::_4x4;
-        return eTexFormat::Compressed_ASTC;
+        return eTexFormat::ASTC;
     case GL_COMPRESSED_SRGB8_ALPHA8_ASTC_5x4_KHR:
         (*is_srgb) = true;
     case GL_COMPRESSED_RGBA_ASTC_5x4_KHR:
         (*block) = eTexBlock::_5x4;
-        return eTexFormat::Compressed_ASTC;
+        return eTexFormat::ASTC;
     case GL_COMPRESSED_SRGB8_ALPHA8_ASTC_5x5_KHR:
         (*is_srgb) = true;
     case GL_COMPRESSED_RGBA_ASTC_5x5_KHR:
         (*block) = eTexBlock::_5x5;
-        return eTexFormat::Compressed_ASTC;
+        return eTexFormat::ASTC;
     case GL_COMPRESSED_SRGB8_ALPHA8_ASTC_6x5_KHR:
         (*is_srgb) = true;
     case GL_COMPRESSED_RGBA_ASTC_6x5_KHR:
         (*block) = eTexBlock::_6x5;
-        return eTexFormat::Compressed_ASTC;
+        return eTexFormat::ASTC;
     case GL_COMPRESSED_SRGB8_ALPHA8_ASTC_6x6_KHR:
         (*is_srgb) = true;
     case GL_COMPRESSED_RGBA_ASTC_6x6_KHR:
         (*block) = eTexBlock::_6x6;
-        return eTexFormat::Compressed_ASTC;
+        return eTexFormat::ASTC;
     case GL_COMPRESSED_SRGB8_ALPHA8_ASTC_8x5_KHR:
         (*is_srgb) = true;
     case GL_COMPRESSED_RGBA_ASTC_8x5_KHR:
         (*block) = eTexBlock::_8x5;
-        return eTexFormat::Compressed_ASTC;
+        return eTexFormat::ASTC;
     case GL_COMPRESSED_SRGB8_ALPHA8_ASTC_8x6_KHR:
         (*is_srgb) = true;
     case GL_COMPRESSED_RGBA_ASTC_8x6_KHR:
         (*block) = eTexBlock::_8x6;
-        return eTexFormat::Compressed_ASTC;
+        return eTexFormat::ASTC;
     case GL_COMPRESSED_SRGB8_ALPHA8_ASTC_8x8_KHR:
         (*is_srgb) = true;
     case GL_COMPRESSED_RGBA_ASTC_8x8_KHR:
         (*block) = eTexBlock::_8x8;
-        return eTexFormat::Compressed_ASTC;
+        return eTexFormat::ASTC;
     case GL_COMPRESSED_SRGB8_ALPHA8_ASTC_10x5_KHR:
         (*is_srgb) = true;
     case GL_COMPRESSED_RGBA_ASTC_10x5_KHR:
         (*block) = eTexBlock::_10x5;
-        return eTexFormat::Compressed_ASTC;
+        return eTexFormat::ASTC;
     case GL_COMPRESSED_SRGB8_ALPHA8_ASTC_10x6_KHR:
         (*is_srgb) = true;
     case GL_COMPRESSED_RGBA_ASTC_10x6_KHR:
         (*block) = eTexBlock::_10x6;
-        return eTexFormat::Compressed_ASTC;
+        return eTexFormat::ASTC;
     case GL_COMPRESSED_SRGB8_ALPHA8_ASTC_10x8_KHR:
         (*is_srgb) = true;
     case GL_COMPRESSED_RGBA_ASTC_10x8_KHR:
         (*block) = eTexBlock::_10x8;
-        return eTexFormat::Compressed_ASTC;
+        return eTexFormat::ASTC;
     case GL_COMPRESSED_SRGB8_ALPHA8_ASTC_10x10_KHR:
         (*is_srgb) = true;
     case GL_COMPRESSED_RGBA_ASTC_10x10_KHR:
         (*block) = eTexBlock::_10x10;
-        return eTexFormat::Compressed_ASTC;
+        return eTexFormat::ASTC;
     case GL_COMPRESSED_SRGB8_ALPHA8_ASTC_12x10_KHR:
         (*is_srgb) = true;
     case GL_COMPRESSED_RGBA_ASTC_12x10_KHR:
         (*block) = eTexBlock::_12x10;
-        return eTexFormat::Compressed_ASTC;
+        return eTexFormat::ASTC;
     case GL_COMPRESSED_SRGB8_ALPHA8_ASTC_12x12_KHR:
         (*is_srgb) = true;
     case GL_COMPRESSED_RGBA_ASTC_12x12_KHR:
         (*block) = eTexBlock::_12x12;
-        return eTexFormat::Compressed_ASTC;
+        return eTexFormat::ASTC;
     default:
         assert(false && "Unsupported format!");
     }
@@ -1151,17 +1155,17 @@ void Ray::Vk::Texture2D::InitFromDDSFile(const void *data, const int size, Buffe
     const int px_format = int(header.sPixelFormat.dwFourCC >> 24u) - '0';
     switch (px_format) {
     case 1:
-        format = eTexFormat::Compressed_DXT1;
+        format = eTexFormat::BC1;
         block = eTexBlock::_4x4;
         block_size_bytes = 8;
         break;
     case 3:
-        format = eTexFormat::Compressed_DXT3;
+        format = eTexFormat::BC2;
         block = eTexBlock::_4x4;
         block_size_bytes = 16;
         break;
     case 5:
-        format = eTexFormat::Compressed_DXT5;
+        format = eTexFormat::BC3;
         block = eTexBlock::_4x4;
         block_size_bytes = 16;
         break;
@@ -1688,17 +1692,17 @@ void Ray::Vk::Texture2D::InitFromDDSFile(const void *data[6], const int size[6],
         const int px_format = int(header->sPixelFormat.dwFourCC >> 24u) - '0';
         switch (px_format) {
         case 1:
-            format = eTexFormat::Compressed_DXT1;
+            format = eTexFormat::BC1;
             block = eTexBlock::_4x4;
             block_size_bytes = 8;
             break;
         case 3:
-            format = eTexFormat::Compressed_DXT3;
+            format = eTexFormat::BC2;
             block = eTexBlock::_4x4;
             block_size_bytes = 16;
             break;
         case 5:
-            format = eTexFormat::Compressed_DXT5;
+            format = eTexFormat::BC3;
             block = eTexBlock::_4x4;
             block_size_bytes = 16;
             break;

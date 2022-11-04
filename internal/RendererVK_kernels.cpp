@@ -155,7 +155,7 @@ void Ray::Vk::Renderer::kernel_IntersectAreaLights(VkCommandBuffer cmd_buf, cons
 void Ray::Vk::Renderer::kernel_ShadePrimaryHits(VkCommandBuffer cmd_buf, const pass_settings_t &settings,
                                                 const environment_t &env, const Buffer &hits, const Buffer &rays,
                                                 const scene_data_t &sc_data, const Buffer &halton, const int hi,
-                                                const TextureAtlas tex_atlases[], const Texture2D &out_img,
+                                                Span<const TextureAtlas> tex_atlases, const Texture2D &out_img,
                                                 const Buffer &out_rays, const Buffer &out_sh_rays,
                                                 const Buffer &inout_counters) {
     const TransitionInfo res_transitions[] = {
@@ -178,7 +178,7 @@ void Ray::Vk::Renderer::kernel_ShadePrimaryHits(VkCommandBuffer cmd_buf, const p
                                 {eBindTarget::SBuf, ShadeHits::VTX_INDICES_BUF_SLOT, sc_data.vtx_indices},
                                 {eBindTarget::SBuf, ShadeHits::HALTON_SEQ_BUF_SLOT, halton},
                                 {eBindTarget::SBuf, ShadeHits::TEXTURES_BUF_SLOT, sc_data.textures},
-                                {eBindTarget::Tex2DArray, ShadeHits::TEXTURE_ATLASES_SLOT, {tex_atlases, 4}},
+                                {eBindTarget::Tex2DArray, ShadeHits::TEXTURE_ATLASES_SLOT, tex_atlases},
                                 {eBindTarget::Image, ShadeHits::OUT_IMG_SLOT, out_img},
                                 {eBindTarget::SBuf, ShadeHits::OUT_RAYS_BUF_SLOT, out_rays},
                                 {eBindTarget::SBuf, ShadeHits::OUT_SH_RAYS_BUF_SLOT, out_sh_rays},
@@ -211,9 +211,10 @@ void Ray::Vk::Renderer::kernel_ShadePrimaryHits(VkCommandBuffer cmd_buf, const p
 void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(VkCommandBuffer cmd_buf, const pass_settings_t &settings,
                                                   const environment_t &env, const Buffer &indir_args,
                                                   const Buffer &hits, const Buffer &rays, const scene_data_t &sc_data,
-                                                  const Buffer &halton, const int hi, const TextureAtlas tex_atlases[],
-                                                  const Texture2D &out_img, const Buffer &out_rays,
-                                                  const Buffer &out_sh_rays, const Buffer &inout_counters) {
+                                                  const Buffer &halton, const int hi,
+                                                  Span<const TextureAtlas> tex_atlases, const Texture2D &out_img,
+                                                  const Buffer &out_rays, const Buffer &out_sh_rays,
+                                                  const Buffer &inout_counters) {
     const TransitionInfo res_transitions[] = {
         {&indir_args, eResState::IndirectArgument}, {&hits, eResState::ShaderResource},
         {&rays, eResState::ShaderResource},         {&halton, eResState::ShaderResource},
@@ -234,7 +235,7 @@ void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(VkCommandBuffer cmd_buf, const
                                 {eBindTarget::SBuf, ShadeHits::VTX_INDICES_BUF_SLOT, sc_data.vtx_indices},
                                 {eBindTarget::SBuf, ShadeHits::HALTON_SEQ_BUF_SLOT, halton},
                                 {eBindTarget::SBuf, ShadeHits::TEXTURES_BUF_SLOT, sc_data.textures},
-                                {eBindTarget::Tex2DArray, ShadeHits::TEXTURE_ATLASES_SLOT, {tex_atlases, 4}},
+                                {eBindTarget::Tex2DArray, ShadeHits::TEXTURE_ATLASES_SLOT, tex_atlases},
                                 {eBindTarget::Image, ShadeHits::OUT_IMG_SLOT, out_img},
                                 {eBindTarget::SBuf, ShadeHits::OUT_RAYS_BUF_SLOT, out_rays},
                                 {eBindTarget::SBuf, ShadeHits::OUT_SH_RAYS_BUF_SLOT, out_sh_rays},
@@ -266,7 +267,7 @@ void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(VkCommandBuffer cmd_buf, const
 
 void Ray::Vk::Renderer::kernel_TraceShadow(VkCommandBuffer cmd_buf, const Buffer &indir_args, const Buffer &counters,
                                            const scene_data_t &sc_data, uint32_t node_index, const float halton,
-                                           const TextureAtlas tex_atlases[], const Buffer &sh_rays,
+                                           Span<const TextureAtlas> tex_atlases, const Buffer &sh_rays,
                                            const Texture2D &out_img) {
     const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
                                               {&counters, eResState::ShaderResource},
@@ -293,7 +294,7 @@ void Ray::Vk::Renderer::kernel_TraceShadow(VkCommandBuffer cmd_buf, const Buffer
                                     {eBindTarget::SBuf, TraceShadow::VERTICES_BUF_SLOT, sc_data.vertices},
                                     {eBindTarget::SBuf, TraceShadow::VTX_INDICES_BUF_SLOT, sc_data.vtx_indices},
                                     {eBindTarget::SBuf, TraceShadow::TEXTURES_BUF_SLOT, sc_data.textures},
-                                    {eBindTarget::Tex2DArray, TraceShadow::TEXTURE_ATLASES_SLOT, {tex_atlases, 4}},
+                                    {eBindTarget::Tex2DArray, TraceShadow::TEXTURE_ATLASES_SLOT, tex_atlases},
                                     {eBindTarget::SBuf, TraceShadow::SH_RAYS_BUF_SLOT, sh_rays},
                                     {eBindTarget::SBuf, TraceShadow::COUNTERS_BUF_SLOT, counters},
                                     {eBindTarget::AccStruct, TraceShadow::TLAS_SLOT, sc_data.rt_tlas},
@@ -314,7 +315,7 @@ void Ray::Vk::Renderer::kernel_TraceShadow(VkCommandBuffer cmd_buf, const Buffer
                                     {eBindTarget::SBuf, TraceShadow::VERTICES_BUF_SLOT, sc_data.vertices},
                                     {eBindTarget::SBuf, TraceShadow::VTX_INDICES_BUF_SLOT, sc_data.vtx_indices},
                                     {eBindTarget::SBuf, TraceShadow::TEXTURES_BUF_SLOT, sc_data.textures},
-                                    {eBindTarget::Tex2DArray, TraceShadow::TEXTURE_ATLASES_SLOT, {tex_atlases, 4}},
+                                    {eBindTarget::Tex2DArray, TraceShadow::TEXTURE_ATLASES_SLOT, tex_atlases},
                                     {eBindTarget::SBuf, TraceShadow::SH_RAYS_BUF_SLOT, sh_rays},
                                     {eBindTarget::SBuf, TraceShadow::COUNTERS_BUF_SLOT, counters},
                                     {eBindTarget::Image, TraceShadow::OUT_IMG_SLOT, out_img}};

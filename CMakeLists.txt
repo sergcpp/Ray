@@ -44,7 +44,9 @@ set(INTERNAL_SOURCE_FILES internal/Bitmap.h
                           internal/TextureUtilsRef.cpp
                           internal/Time_.h
                           internal/Time.cpp
-                          internal/UniformIntDistribution.h)
+                          internal/UniformIntDistribution.h
+                          internal/Utils.h
+                          internal/Utils.cpp)
                           
 if(NOT CMAKE_SYSTEM_NAME MATCHES "Android" AND NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64")
 
@@ -56,7 +58,8 @@ set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
                           internal/RendererAVX.h
                           internal/RendererAVX.cpp
                           internal/RendererAVX2.h
-                          internal/RendererAVX2.cpp)
+                          internal/RendererAVX2.cpp
+                          internal/UtilsSSE2.cpp)
 endif()
 
 if("${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64" OR "${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "arm64")

@@ -15,4 +15,5 @@
 #include "internal/TextureAtlasRef.cpp"
 #include "internal/TextureUtilsRef.cpp"
 #include "internal/Time.cpp"
+#include "internal/Utils.cpp"
 

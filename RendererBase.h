@@ -31,6 +31,7 @@ struct settings_t {
     //int platform_index = -1, device_index = -1;
     const char *preferred_device = nullptr;
     bool use_hwrt = true;
+    bool use_tex_compression = true; // temporarily GPU only
 #endif
     bool use_wide_bvh = true;
 };

@@ -23,7 +23,18 @@ class TextureAtlas;
 class Texture1D;
 class Texture2D;
 
-enum class eBindTarget : uint16_t { Tex2D, Tex2DMs, Tex2DArray, TexCubeArray, TBuf, UBuf, SBuf, Image, AccStruct, _Count };
+enum class eBindTarget : uint16_t {
+    Tex2D,
+    Tex2DMs,
+    Tex2DArray,
+    TexCubeArray,
+    TBuf,
+    UBuf,
+    SBuf,
+    Image,
+    AccStruct,
+    _Count
+};
 
 struct OpaqueHandle {
     union {
@@ -40,7 +51,8 @@ struct OpaqueHandle {
     OpaqueHandle(const Texture1D &_tex) : tex_buf(&_tex), count(1) {}
     OpaqueHandle(const TextureAtlas &_tex_arr) : tex_arr(&_tex_arr), count(1) {}
     OpaqueHandle(const TextureAtlas *_tex_arr, int _count = 1) : tex_arr(_tex_arr), count(_count) {}
-    OpaqueHandle(const AccStructure &_acc_struct, int _count = 1) : acc_struct(&_acc_struct), count(1) {}
+    OpaqueHandle(Span<const TextureAtlas> tex_arrs) : tex_arr(tex_arrs.data()), count(int(tex_arrs.size())) {}
+    OpaqueHandle(const AccStructure &_acc_struct) : acc_struct(&_acc_struct), count(1) {}
 };
 
 struct Binding {
