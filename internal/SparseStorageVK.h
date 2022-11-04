@@ -65,6 +65,8 @@ template <typename T> class SparseStorage {
             gpu_buf_ =
                 Buffer{name_.c_str(), ctx_, eBufType::Storage, uint32_t(new_capacity * sizeof(T)), uint32_t(sizeof(T))};
         } else {
+            cpu_buf_.Unmap();
+            cpu_data_ = nullptr;
             cpu_buf_.Resize(new_capacity * sizeof(T));
             gpu_buf_.Resize(new_capacity * sizeof(T));
         }
