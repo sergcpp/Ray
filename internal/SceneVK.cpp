@@ -1058,7 +1058,7 @@ void Ray::Vk::Scene::RebuildHWAccStructures() {
     }
 
     rt_instance_buf_ = Buffer{"RT Instance Buf", ctx_, eBufType::Storage,
-                              uint32_t(rt_mesh_blases_.size() * sizeof(VkAccelerationStructureInstanceKHR))};
+                              uint32_t(tlas_instances.size() * sizeof(VkAccelerationStructureInstanceKHR))};
     Buffer instance_stage_buf{"RT Instance Stage Buf", ctx_, eBufType::Stage,
                               uint32_t(tlas_instances.size() * sizeof(VkAccelerationStructureInstanceKHR))};
     {
