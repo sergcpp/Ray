@@ -46,8 +46,15 @@ void load_needed_textures(Ray::SceneBase &scene, Ray::shading_node_desc_t &mat_d
 
     if (mat_desc.base_texture != 0xffffffff && textures[0]) {
         int img_w, img_h;
-        const auto img_data = LoadTGA(textures[0], img_w, img_h);
+        auto img_data = LoadTGA(textures[0], img_w, img_h);
         require(!img_data.empty());
+
+        // drop alpha channel
+        for (int i = 0; i < img_w * img_h; ++i) {
+            img_data[3 * i + 0] = img_data[4 * i + 0];
+            img_data[3 * i + 1] = img_data[4 * i + 1];
+            img_data[3 * i + 2] = img_data[4 * i + 2];
+        }
 
         Ray::tex_desc_t tex_desc;
         tex_desc.format = Ray::eTextureFormat::RGBA8888;
@@ -69,11 +76,18 @@ void load_needed_textures(Ray::SceneBase &scene, Ray::principled_mat_desc_t &mat
 
     if (mat_desc.base_texture != 0xffffffff && textures[mat_desc.base_texture]) {
         int img_w, img_h;
-        const auto img_data = LoadTGA(textures[mat_desc.base_texture], img_w, img_h);
+        auto img_data = LoadTGA(textures[mat_desc.base_texture], img_w, img_h);
         require(!img_data.empty());
 
+        // drop alpha channel
+        for (int i = 0; i < img_w * img_h; ++i) {
+            img_data[3 * i + 0] = img_data[4 * i + 0];
+            img_data[3 * i + 1] = img_data[4 * i + 1];
+            img_data[3 * i + 2] = img_data[4 * i + 2];
+        }
+
         Ray::tex_desc_t tex_desc;
-        tex_desc.format = Ray::eTextureFormat::RGBA8888;
+        tex_desc.format = Ray::eTextureFormat::RGB888;
         tex_desc.data = img_data.data();
         tex_desc.w = img_w;
         tex_desc.h = img_h;
@@ -85,11 +99,18 @@ void load_needed_textures(Ray::SceneBase &scene, Ray::principled_mat_desc_t &mat
 
     if (mat_desc.normal_map != 0xffffffff && textures[mat_desc.normal_map]) {
         int img_w, img_h;
-        const auto img_data = LoadTGA(textures[mat_desc.normal_map], img_w, img_h);
+        auto img_data = LoadTGA(textures[mat_desc.normal_map], img_w, img_h);
         require(!img_data.empty());
 
+        // drop alpha channel
+        for (int i = 0; i < img_w * img_h; ++i) {
+            img_data[3 * i + 0] = img_data[4 * i + 0];
+            img_data[3 * i + 1] = img_data[4 * i + 1];
+            img_data[3 * i + 2] = img_data[4 * i + 2];
+        }
+
         Ray::tex_desc_t tex_desc;
-        tex_desc.format = Ray::eTextureFormat::RGBA8888;
+        tex_desc.format = Ray::eTextureFormat::RGB888;
         tex_desc.data = img_data.data();
         tex_desc.w = img_w;
         tex_desc.h = img_h;
@@ -101,11 +122,16 @@ void load_needed_textures(Ray::SceneBase &scene, Ray::principled_mat_desc_t &mat
 
     if (mat_desc.roughness_texture != 0xffffffff && textures[mat_desc.roughness_texture]) {
         int img_w, img_h;
-        const auto img_data = LoadTGA(textures[mat_desc.roughness_texture], img_w, img_h);
+        auto img_data = LoadTGA(textures[mat_desc.roughness_texture], img_w, img_h);
         require(!img_data.empty());
 
+        // use only red channel
+        for (int i = 0; i < img_w * img_h; ++i) {
+            img_data[i] = img_data[4 * i + 0];
+        }
+
         Ray::tex_desc_t tex_desc;
-        tex_desc.format = Ray::eTextureFormat::RGBA8888;
+        tex_desc.format = Ray::eTextureFormat::R8;
         tex_desc.data = img_data.data();
         tex_desc.w = img_w;
         tex_desc.h = img_h;
@@ -117,11 +143,16 @@ void load_needed_textures(Ray::SceneBase &scene, Ray::principled_mat_desc_t &mat
 
     if (mat_desc.metallic_texture != 0xffffffff && textures[mat_desc.metallic_texture]) {
         int img_w, img_h;
-        const auto img_data = LoadTGA(textures[mat_desc.metallic_texture], img_w, img_h);
+        auto img_data = LoadTGA(textures[mat_desc.metallic_texture], img_w, img_h);
         require(!img_data.empty());
 
+        // use only red channel
+        for (int i = 0; i < img_w * img_h; ++i) {
+            img_data[i] = img_data[4 * i + 0];
+        }
+
         Ray::tex_desc_t tex_desc;
-        tex_desc.format = Ray::eTextureFormat::RGBA8888;
+        tex_desc.format = Ray::eTextureFormat::R8;
         tex_desc.data = img_data.data();
         tex_desc.w = img_w;
         tex_desc.h = img_h;
@@ -133,11 +164,16 @@ void load_needed_textures(Ray::SceneBase &scene, Ray::principled_mat_desc_t &mat
 
     if (mat_desc.alpha_texture != 0xffffffff && textures[mat_desc.alpha_texture]) {
         int img_w, img_h;
-        const auto img_data = LoadTGA(textures[mat_desc.alpha_texture], img_w, img_h);
+        auto img_data = LoadTGA(textures[mat_desc.alpha_texture], img_w, img_h);
         require(!img_data.empty());
 
+        // use only red channel
+        for (int i = 0; i < img_w * img_h; ++i) {
+            img_data[i] = img_data[4 * i + 0];
+        }
+
         Ray::tex_desc_t tex_desc;
-        tex_desc.format = Ray::eTextureFormat::RGBA8888;
+        tex_desc.format = Ray::eTextureFormat::R8;
         tex_desc.data = img_data.data();
         tex_desc.w = img_w;
         tex_desc.h = img_h;
