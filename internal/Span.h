@@ -6,8 +6,6 @@
 #include <type_traits>
 #include <vector>
 
-#include "SmallVector.h"
-
 namespace Ray {
 template <typename T> class Span {
     T *p_data_ = nullptr;
@@ -19,7 +17,6 @@ template <typename T> class Span {
     Span(T *p_data, size_t size) : p_data_(p_data), size_(size) {}
     Span(T *p_begin, T *p_end) : p_data_(p_begin), size_(p_end - p_begin) {}
     Span(const std::vector<typename std::remove_const<T>::type> &v) : Span(v.data(), v.size()) {}
-    Span(const SmallVectorImpl<typename std::remove_const<T>::type> &v) : Span(v.data(), v.size()) {}
 
     template <size_t N> Span(T (&arr)[N]) : p_data_(arr), size_(N) {}
 
