@@ -1,7 +1,10 @@
 #include "DrawCall.h"
 
 #include "../../Log.h"
+#include "AccStructure.h"
 #include "Buffer.h"
+#include "Context.h"
+#include "DescriptorPool.h"
 #include "Pipeline.h"
 #include "Texture.h"
 #include "TextureAtlas.h"
@@ -45,7 +48,7 @@ VkDescriptorSet Ray::Vk::PrepareDescriptorSet(Context *ctx, VkDescriptorSetLayou
                 info.imageView = b.handle.tex_arr[i].vk_imgage_view();
                 info.imageLayout = VKImageLayoutForState(b.handle.tex_arr[i].resource_state);
             }
-            
+
             auto &new_write = descr_writes.emplace_back();
             new_write = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
             new_write.dstBinding = b.loc;

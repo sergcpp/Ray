@@ -2,6 +2,7 @@
 
 #include "../CoreVK.h"
 #include "../TextureSplitter.h"
+#include "Resource.h"
 #include "Sampler.h"
 
 namespace Ray {

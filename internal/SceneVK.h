@@ -3,6 +3,8 @@
 #include "../SceneBase.h"
 #include "SparseStorageVK.h"
 #include "VectorVK.h"
+#include "Vk/AccStructure.h"
+#include "Vk/TextureAtlas.h"
 
 namespace Ray {
 namespace Vk {
@@ -52,7 +54,7 @@ class Scene : public SceneBase {
 
     void RemoveNodes(uint32_t node_index, uint32_t node_count);
     void RebuildTLAS();
-    //void RebuildLightBVH();
+    // void RebuildLightBVH();
 
     void GenerateTextureMips();
     void RebuildHWAccStructures();
@@ -91,5 +93,5 @@ class Scene : public SceneBase {
     uint32_t triangle_count() override { return (uint32_t)0; }
     uint32_t node_count() override { return (uint32_t)0; }
 };
-} // namespace Ocl
+} // namespace Vk
 } // namespace Ray

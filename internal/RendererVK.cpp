@@ -10,8 +10,11 @@
 #include "UniformIntDistribution.h"
 
 #include "Vk/DebugMarker.h"
+#include "Vk/DescriptorPool.h"
 #include "Vk/DrawCall.h"
 #include "Vk/Shader.h"
+
+#include "../Log.h"
 
 #include "shaders/types.glsl"
 

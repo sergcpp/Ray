@@ -2,7 +2,8 @@
 
 #include <cassert>
 
-#include "TextureParams.h"
+#include "Context.h"
+#include "Texture.h"
 
 namespace Ray {
 namespace Vk {
@@ -12,6 +13,8 @@ template <> eTexFormat tex_format<uint8_t, 4>() { return eTexFormat::RawRGBA8888
 template <> eTexFormat tex_format<uint8_t, 3>() { return eTexFormat::RawRGB888; }
 template <> eTexFormat tex_format<uint8_t, 2>() { return eTexFormat::RawRG88; }
 template <> eTexFormat tex_format<uint8_t, 1>() { return eTexFormat::RawR8; }
+
+extern const VkFormat g_vk_formats[];
 } // namespace Vk
 } // namespace Ray
 
@@ -77,6 +80,11 @@ int Ray::Vk::TextureAtlas::Allocate(const color_t<T, N> *data, const int _res[2]
     Resize(int(splitters_.size()) + 1);
     return Allocate(data, _res, pos);
 }
+
+template int Ray::Vk::TextureAtlas::Allocate<uint8_t, 1>(const color_t<uint8_t, 1> *data, const int res[2], int pos[2]);
+template int Ray::Vk::TextureAtlas::Allocate<uint8_t, 2>(const color_t<uint8_t, 2> *data, const int res[2], int pos[2]);
+template int Ray::Vk::TextureAtlas::Allocate<uint8_t, 3>(const color_t<uint8_t, 3> *data, const int res[2], int pos[2]);
+template int Ray::Vk::TextureAtlas::Allocate<uint8_t, 4>(const color_t<uint8_t, 4> *data, const int res[2], int pos[2]);
 
 int Ray::Vk::TextureAtlas::Allocate(const int _res[2], int pos[2]) {
     // add 1px border

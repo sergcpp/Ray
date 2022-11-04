@@ -24,7 +24,7 @@ extern const VkCompareOp g_vk_compare_ops[];
 
 extern const float AnisotropyLevel;
 
-const VkFormat g_vk_formats[] = {
+extern const VkFormat g_vk_formats[] = {
     VK_FORMAT_UNDEFINED,                // Undefined
     VK_FORMAT_R8G8B8_UNORM,             // RawRGB888
     VK_FORMAT_R8G8B8A8_UNORM,           // RawRGBA8888

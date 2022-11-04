@@ -2,6 +2,7 @@
 
 #include "Bitmap.h"
 #include "CoreVK.h"
+#include "Vk/Buffer.h"
 
 #ifdef __GNUC__
 #define force_inline __attribute__((always_inline)) inline
@@ -59,8 +60,10 @@ template <typename T> class SparseStorage {
         }
 
         if (!cpu_buf_.ctx()) {
-            cpu_buf_ = Buffer{name_.c_str(), ctx_, eBufType::Stage, uint32_t(new_capacity * sizeof(T)), uint32_t(sizeof(T))};
-            gpu_buf_ = Buffer{name_.c_str(), ctx_, eBufType::Storage, uint32_t(new_capacity * sizeof(T)), uint32_t(sizeof(T))};
+            cpu_buf_ =
+                Buffer{name_.c_str(), ctx_, eBufType::Stage, uint32_t(new_capacity * sizeof(T)), uint32_t(sizeof(T))};
+            gpu_buf_ =
+                Buffer{name_.c_str(), ctx_, eBufType::Storage, uint32_t(new_capacity * sizeof(T)), uint32_t(sizeof(T))};
         } else {
             cpu_buf_.Resize(new_capacity * sizeof(T));
             gpu_buf_.Resize(new_capacity * sizeof(T));
@@ -124,7 +127,7 @@ template <typename T> class SparseStorage {
         --size_;
     }
 
-    void Set(const uint32_t index, const T& el) {
+    void Set(const uint32_t index, const T &el) {
         new (&cpu_data_[index]) T(el);
         cpu_buf_.FlushMappedRange(index * sizeof(T), sizeof(T), true /* align size */);
 
@@ -219,7 +222,7 @@ template <typename T> class SparseStorage {
         bool operator!=(const SparseStorageConstIterator &rhs) const { return index_ != rhs.index_; }
     };
 
-    //using iterator = SparseStorageIterator;
+    // using iterator = SparseStorageIterator;
     using const_iterator = SparseStorageConstIterator;
 
     const_iterator begin() const {

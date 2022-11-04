@@ -9,8 +9,11 @@
 #define force_inline __forceinline
 #endif
 
+#include "../Log.h"
 #include "BVHSplit.h"
 #include "TextureUtilsRef.h"
+#include "Vk/Context.h"
+#include "Vk/TextureParams.h"
 
 #define _MIN(x, y) ((x) < (y) ? (x) : (y))
 #define _MAX(x, y) ((x) < (y) ? (y) : (x))

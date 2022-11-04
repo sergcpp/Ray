@@ -2,6 +2,8 @@
 
 #include <cassert>
 
+#include <utility>
+
 namespace Ray {
 #ifndef RAY_EXCHANGE_DEFINED
 template <class T, class U = T> T exchange(T &obj, U &&new_value) {

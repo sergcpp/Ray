@@ -7,6 +7,7 @@
 #include "FramebufferRef.h"
 
 namespace Ray {
+class ILog;
 namespace Ref {
 
 struct PassData {

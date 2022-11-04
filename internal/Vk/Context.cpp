@@ -2,6 +2,7 @@
 
 #include <regex>
 
+#include "../../Log.h"
 #include "../SmallVector.h"
 #include "DescriptorPool.h"
 #include "MemoryAllocator.h"
