@@ -261,10 +261,12 @@ void Ray::Vk::Buffer::Resize(const uint32_t new_size, const bool keep_content) {
     VkMemoryRequirements memory_requirements = {};
     vkGetBufferMemoryRequirements(ctx_->device(), new_buf, &memory_requirements);
 
+    VkMemoryPropertyFlags memory_props = GetVkMemoryPropertyFlags(type_, ctx_->device_properties());
+
     VkMemoryAllocateInfo buf_alloc_info = {VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};
     buf_alloc_info.allocationSize = memory_requirements.size;
     buf_alloc_info.memoryTypeIndex =
-        FindMemoryType(&ctx_->mem_properties(), memory_requirements.memoryTypeBits, GetVkMemoryPropertyFlags(type_, ctx_->device_properties()));
+        FindMemoryType(&ctx_->mem_properties(), memory_requirements.memoryTypeBits, memory_props);
 
     VkMemoryAllocateFlagsInfoKHR additional_flags = {VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO_KHR};
     additional_flags.flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT_KHR;
@@ -275,6 +277,13 @@ void Ray::Vk::Buffer::Resize(const uint32_t new_size, const bool keep_content) {
 
     VkDeviceMemory buffer_mem = {};
     res = vkAllocateMemory(ctx_->device(), &buf_alloc_info, nullptr, &buffer_mem);
+    if (res == VK_ERROR_OUT_OF_DEVICE_MEMORY && (memory_props & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)) {
+        ctx_->log()->Warning("Not enough device memory, falling back to CPU RAM!");
+        memory_props &= ~VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
+        buf_alloc_info.memoryTypeIndex = FindMemoryType(&ctx_->mem_properties(), memory_requirements.memoryTypeBits, memory_props);
+        res = vkAllocateMemory(ctx_->device(), &buf_alloc_info, nullptr, &buffer_mem);
+    }
     assert(res == VK_SUCCESS && "Failed to allocate memory!");
 
     res = vkBindBufferMemory(ctx_->device(), new_buf, buffer_mem, 0 /* offset */);

@@ -905,6 +905,20 @@ void Ray::Vk::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, void *_cmd_
             uint32_t(tex_mem_req.size), uint32_t(tex_mem_req.alignment),
             FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits, img_tex_desired_mem_flags),
             name_.c_str());
+        if (!alloc_ && (img_tex_desired_mem_flags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)) {
+            ctx_->log()->Warning("Not enough device memory, falling back to CPU RAM!");
+            img_tex_desired_mem_flags &= ~VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
+            alloc_ = mem_allocs->Allocate(
+                uint32_t(tex_mem_req.size), uint32_t(tex_mem_req.alignment),
+                FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits, img_tex_desired_mem_flags),
+                name_.c_str());
+        }
+
+        if (!alloc_) {
+            log->Error("Failed to allocate memory!");
+            return;
+        }
 
         const VkDeviceSize aligned_offset = AlignTo(VkDeviceSize(alloc_.alloc_off), tex_mem_req.alignment);
 

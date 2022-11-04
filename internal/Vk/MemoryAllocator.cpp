@@ -84,7 +84,10 @@ Ray::Vk::MemAllocation Ray::Vk::MemoryAllocator::Allocate(const uint32_t size, c
         // allocation failed, add new buffer
         do {
             const bool res = AllocateNewBlock(uint32_t(blocks_.back().alloc.size() * growth_factor_));
-            assert(res);
+            if (!res) {
+                // allocation failed (out of memory)
+                return {};
+            }
         } while (blocks_.back().alloc.size() < size);
     }
 

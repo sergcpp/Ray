@@ -41,6 +41,8 @@ struct MemAllocation {
         return (*this);
     }
 
+    operator bool() const { return owner != nullptr; }
+
     ~MemAllocation() { Release(); }
 
     void Release();
