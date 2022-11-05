@@ -98,6 +98,10 @@ class MemoryAllocators {
     }
 
     MemAllocation Allocate(uint32_t size, uint32_t alignment, uint32_t mem_type_index, const char *tag) {
+        if (mem_type_index == 0xffffffff) {
+            return {};
+        }
+
         int alloc_index = -1;
         for (int i = 0; i < int(allocators_.size()); ++i) {
             if (allocators_[i].mem_type_index() == mem_type_index) {

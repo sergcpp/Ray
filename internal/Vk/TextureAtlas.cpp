@@ -173,16 +173,18 @@ bool Ray::Vk::TextureAtlas::Resize(const int pages_count) {
         uint32_t img_tex_type_bits = img_tex_mem_req.memoryTypeBits;
         VkMemoryPropertyFlags img_tex_desired_mem_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
-        img_alloc_info.memoryTypeIndex =
-            FindMemoryType(&ctx_->mem_properties(), img_tex_type_bits, img_tex_desired_mem_flags);
-
-        res = vkAllocateMemory(ctx_->device(), &img_alloc_info, nullptr, &new_mem);
+        img_alloc_info.memoryTypeIndex = FindMemoryType(&ctx_->mem_properties(), img_tex_type_bits,
+                                                        img_tex_desired_mem_flags, uint32_t(img_tex_mem_req.size));
+        res = VK_ERROR_OUT_OF_DEVICE_MEMORY;
+        if (img_alloc_info.memoryTypeIndex != 0xffffffff) {
+            res = vkAllocateMemory(ctx_->device(), &img_alloc_info, nullptr, &new_mem);
+        }
         if (res == VK_ERROR_OUT_OF_DEVICE_MEMORY) {
             ctx_->log()->Warning("Not enough device memory, falling back to CPU RAM!");
             img_tex_desired_mem_flags &= ~VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
-            img_alloc_info.memoryTypeIndex =
-                FindMemoryType(&ctx_->mem_properties(), img_tex_type_bits, img_tex_desired_mem_flags);
+            img_alloc_info.memoryTypeIndex = FindMemoryType(&ctx_->mem_properties(), img_tex_type_bits,
+                                                            img_tex_desired_mem_flags, uint32_t(img_tex_mem_req.size));
             res = vkAllocateMemory(ctx_->device(), &img_alloc_info, nullptr, &new_mem);
         }
         if (res != VK_SUCCESS) {
@@ -343,8 +345,8 @@ bool Ray::Vk::TextureAtlas::Resize(const int pages_count) {
         VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
 
         vkCmdPipelineBarrier(cmd_buf, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                             VKPipelineStagesForState(eResState::ShaderResource), 0, 0,
-                             nullptr, 0, nullptr, uint32_t(img_barriers.size()), img_barriers.cdata());
+                             VKPipelineStagesForState(eResState::ShaderResource), 0, 0, nullptr, 0, nullptr,
+                             uint32_t(img_barriers.size()), img_barriers.cdata());
 
         EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
     }

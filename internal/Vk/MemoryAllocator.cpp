@@ -8,11 +8,12 @@
 namespace Ray {
 namespace Vk {
 uint32_t FindMemoryType(const VkPhysicalDeviceMemoryProperties *mem_properties, uint32_t mem_type_bits,
-                        VkMemoryPropertyFlags desired_mem_flags) {
+                        VkMemoryPropertyFlags desired_mem_flags, VkDeviceSize desired_size) {
     for (uint32_t i = 0; i < 32; i++) {
         const VkMemoryType mem_type = mem_properties->memoryTypes[i];
         if (mem_type_bits & 1u) {
-            if ((mem_type.propertyFlags & desired_mem_flags) == desired_mem_flags) {
+            if ((mem_type.propertyFlags & desired_mem_flags) == desired_mem_flags &&
+                mem_properties->memoryHeaps[mem_type.heapIndex].size >= desired_size) {
                 return i;
             }
         }
