@@ -40,11 +40,11 @@ VkBufferUsageFlags GetVkBufferUsageFlags(const Context *ctx, const eBufType type
     return flags;
 }
 
-VkMemoryPropertyFlags GetVkMemoryPropertyFlags(const eBufType type, const VkPhysicalDeviceProperties device_properties) {
+VkMemoryPropertyFlags GetVkMemoryPropertyFlags(const eBufType type) {
     if (type == eBufType::Stage) {
         return (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT);
     }
-    return device_properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU ? VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT : 0;
+    return VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 }
 
 uint32_t FindMemoryType(const VkPhysicalDeviceMemoryProperties *mem_properties, uint32_t mem_type_bits,
@@ -261,7 +261,7 @@ void Ray::Vk::Buffer::Resize(const uint32_t new_size, const bool keep_content) {
     VkMemoryRequirements memory_requirements = {};
     vkGetBufferMemoryRequirements(ctx_->device(), new_buf, &memory_requirements);
 
-    VkMemoryPropertyFlags memory_props = GetVkMemoryPropertyFlags(type_, ctx_->device_properties());
+    VkMemoryPropertyFlags memory_props = GetVkMemoryPropertyFlags(type_);
 
     VkMemoryAllocateInfo buf_alloc_info = {VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};
     buf_alloc_info.allocationSize = memory_requirements.size;
