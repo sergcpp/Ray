@@ -7,6 +7,8 @@
 #include <algorithm>
 #include <new>
 
+#include "Span.h"
+
 namespace Ray {
 #ifndef RAY_EXCHANGE_DEFINED
 template <class T, class U = T> T exchange(T &obj, U &&new_value) {
@@ -185,6 +187,8 @@ template <typename T, int AlignmentOfT = alignof(T)> class SmallVectorImpl {
     bool empty() const noexcept { return end_ == begin_; }
     size_t size() const noexcept { return end_ - begin_; }
     size_t capacity() const noexcept { return (capacity_ & CapacityMask); }
+
+    operator Span<const T>() const { return Span<const T>(data(), size()); }
 
     template <typename IntType> const T &operator[](const IntType i) const {
         assert(i >= 0 && begin_ + i < end_);

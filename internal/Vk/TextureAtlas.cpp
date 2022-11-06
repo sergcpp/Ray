@@ -2,7 +2,8 @@
 
 #include <cassert>
 
-#include "TextureParams.h"
+#include "Context.h"
+#include "Texture.h"
 
 namespace Ray {
 namespace Vk {
@@ -12,6 +13,8 @@ template <> eTexFormat tex_format<uint8_t, 4>() { return eTexFormat::RawRGBA8888
 template <> eTexFormat tex_format<uint8_t, 3>() { return eTexFormat::RawRGB888; }
 template <> eTexFormat tex_format<uint8_t, 2>() { return eTexFormat::RawRG88; }
 template <> eTexFormat tex_format<uint8_t, 1>() { return eTexFormat::RawR8; }
+
+extern const VkFormat g_vk_formats[];
 } // namespace Vk
 } // namespace Ray
 
@@ -78,6 +81,11 @@ int Ray::Vk::TextureAtlas::Allocate(const color_t<T, N> *data, const int _res[2]
     return Allocate(data, _res, pos);
 }
 
+template int Ray::Vk::TextureAtlas::Allocate<uint8_t, 1>(const color_t<uint8_t, 1> *data, const int res[2], int pos[2]);
+template int Ray::Vk::TextureAtlas::Allocate<uint8_t, 2>(const color_t<uint8_t, 2> *data, const int res[2], int pos[2]);
+template int Ray::Vk::TextureAtlas::Allocate<uint8_t, 3>(const color_t<uint8_t, 3> *data, const int res[2], int pos[2]);
+template int Ray::Vk::TextureAtlas::Allocate<uint8_t, 4>(const color_t<uint8_t, 4> *data, const int res[2], int pos[2]);
+
 int Ray::Vk::TextureAtlas::Allocate(const int _res[2], int pos[2]) {
     // add 1px border
     const int res[2] = {_res[0] + 2, _res[1] + 2};
@@ -113,11 +121,6 @@ bool Ray::Vk::TextureAtlas::Resize(const int pages_count) {
         }
     }
 
-    if (!pages_count) {
-        return true;
-    }
-
-    // const int mip_count = CalcMipCount(res_[0], res_[1], 1, eTexFilter::Bilinear);
     real_format_ = format_;
 
     VkImage new_img = {};
@@ -127,11 +130,11 @@ bool Ray::Vk::TextureAtlas::Resize(const int pages_count) {
     { // create image
         VkImageCreateInfo img_info = {VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
         img_info.imageType = VK_IMAGE_TYPE_2D;
-        img_info.extent.width = uint32_t(res_[0]);
-        img_info.extent.height = uint32_t(res_[1]);
+        img_info.extent.width = pages_count ? uint32_t(res_[0]) : 1;
+        img_info.extent.height = pages_count ? uint32_t(res_[1]) : 1;
         img_info.extent.depth = 1;
         img_info.mipLevels = 1;
-        img_info.arrayLayers = uint32_t(pages_count);
+        img_info.arrayLayers = uint32_t(std::max(pages_count, 1));
         img_info.format = g_vk_formats[size_t(real_format_)];
         img_info.tiling = VK_IMAGE_TILING_OPTIMAL;
         img_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -168,19 +171,22 @@ bool Ray::Vk::TextureAtlas::Resize(const int pages_count) {
         img_alloc_info.allocationSize = img_tex_mem_req.size;
 
         uint32_t img_tex_type_bits = img_tex_mem_req.memoryTypeBits;
-        const VkMemoryPropertyFlags img_tex_desired_mem_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-        for (uint32_t i = 0; i < 32; i++) {
-            VkMemoryType mem_type = ctx_->mem_properties().memoryTypes[i];
-            if (img_tex_type_bits & 1u) {
-                if ((mem_type.propertyFlags & img_tex_desired_mem_flags) == img_tex_desired_mem_flags) {
-                    img_alloc_info.memoryTypeIndex = i;
-                    break;
-                }
-            }
-            img_tex_type_bits = img_tex_type_bits >> 1u;
-        }
+        VkMemoryPropertyFlags img_tex_desired_mem_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
-        res = vkAllocateMemory(ctx_->device(), &img_alloc_info, nullptr, &new_mem);
+        img_alloc_info.memoryTypeIndex = FindMemoryType(&ctx_->mem_properties(), img_tex_type_bits,
+                                                        img_tex_desired_mem_flags, uint32_t(img_tex_mem_req.size));
+        res = VK_ERROR_OUT_OF_DEVICE_MEMORY;
+        if (img_alloc_info.memoryTypeIndex != 0xffffffff) {
+            res = vkAllocateMemory(ctx_->device(), &img_alloc_info, nullptr, &new_mem);
+        }
+        if (res == VK_ERROR_OUT_OF_DEVICE_MEMORY) {
+            ctx_->log()->Warning("Not enough device memory, falling back to CPU RAM!");
+            img_tex_desired_mem_flags &= ~VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
+            img_alloc_info.memoryTypeIndex = FindMemoryType(&ctx_->mem_properties(), img_tex_type_bits,
+                                                            img_tex_desired_mem_flags, uint32_t(img_tex_mem_req.size));
+            res = vkAllocateMemory(ctx_->device(), &img_alloc_info, nullptr, &new_mem);
+        }
         if (res != VK_SUCCESS) {
             throw std::runtime_error("Failed to allocate memory!");
         }
@@ -200,7 +206,7 @@ bool Ray::Vk::TextureAtlas::Resize(const int pages_count) {
         view_info.subresourceRange.baseMipLevel = 0;
         view_info.subresourceRange.levelCount = 1;
         view_info.subresourceRange.baseArrayLayer = 0;
-        view_info.subresourceRange.layerCount = pages_count;
+        view_info.subresourceRange.layerCount = std::max(pages_count, 1);
 
         if (real_format_ == eTexFormat::RawR8) {
             view_info.components.r = VK_COMPONENT_SWIZZLE_R;
@@ -308,6 +314,41 @@ bool Ray::Vk::TextureAtlas::Resize(const int pages_count) {
         vkDestroyImageView(ctx_->device(), img_view_, nullptr);
         vkDestroyImage(ctx_->device(), img_, nullptr);
         vkFreeMemory(ctx_->device(), mem_, nullptr);
+    } else if (img_view_) {
+        // destroy temp dummy texture
+        vkDestroyImageView(ctx_->device(), img_view_, nullptr);
+        vkDestroyImage(ctx_->device(), img_, nullptr);
+        vkFreeMemory(ctx_->device(), mem_, nullptr);
+    }
+
+    if (new_resource_state == eResState::Undefined) {
+        SmallVector<VkImageMemoryBarrier, 1> img_barriers;
+        { // image
+            auto &new_barrier = img_barriers.emplace_back();
+            new_barrier = {VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
+            new_barrier.srcAccessMask = VKAccessFlagsForState(eResState::Undefined);
+            new_barrier.dstAccessMask = VKAccessFlagsForState(eResState::ShaderResource);
+            new_barrier.oldLayout = VKImageLayoutForState(eResState::Undefined);
+            new_barrier.newLayout = VKImageLayoutForState(eResState::ShaderResource);
+            new_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            new_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            new_barrier.image = new_img;
+            new_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            new_barrier.subresourceRange.baseMipLevel = 0;
+            new_barrier.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
+            new_barrier.subresourceRange.baseArrayLayer = 0;
+            new_barrier.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS; // transit whole image
+        }
+
+        new_resource_state = eResState::ShaderResource;
+
+        VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+
+        vkCmdPipelineBarrier(cmd_buf, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                             VKPipelineStagesForState(eResState::ShaderResource), 0, 0, nullptr, 0, nullptr,
+                             uint32_t(img_barriers.size()), img_barriers.cdata());
+
+        EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
     }
 
     img_ = new_img;

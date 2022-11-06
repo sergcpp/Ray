@@ -2,6 +2,7 @@
 
 #include "../CoreVK.h"
 #include "../TextureSplitter.h"
+#include "Resource.h"
 #include "Sampler.h"
 
 namespace Ray {
@@ -26,7 +27,7 @@ class TextureAtlas {
     void WritePageData(int page, int posx, int posy, int sizex, int sizey, const void *data);
 
   public:
-    TextureAtlas(Context *ctx, eTexFormat format, int resx, int resy, int page_count = 1);
+    TextureAtlas(Context *ctx, eTexFormat format, int resx, int resy, int page_count = 0);
     ~TextureAtlas();
 
     eTexFormat format() const { return format_; }

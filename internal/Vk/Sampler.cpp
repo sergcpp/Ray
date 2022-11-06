@@ -4,7 +4,7 @@
 
 namespace Ray {
 namespace Vk {
-const VkFilter g_vk_min_mag_filter[] = {
+extern const VkFilter g_vk_min_mag_filter[] = {
     VK_FILTER_NEAREST, // NoFilter
     VK_FILTER_LINEAR,  // Bilinear
     VK_FILTER_LINEAR,  // Trilinear
@@ -13,14 +13,14 @@ const VkFilter g_vk_min_mag_filter[] = {
 };
 static_assert(COUNT_OF(g_vk_min_mag_filter) == size_t(eTexFilter::_Count), "!");
 
-const VkSamplerAddressMode g_vk_wrap_mode[] = {
+extern const VkSamplerAddressMode g_vk_wrap_mode[] = {
     VK_SAMPLER_ADDRESS_MODE_REPEAT,          // Repeat
     VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,   // ClampToEdge
     VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER, // ClampToBorder
 };
 static_assert(COUNT_OF(g_vk_wrap_mode) == size_t(eTexWrap::_Count), "!");
 
-const VkSamplerMipmapMode g_vk_mipmap_mode[] = {
+extern const VkSamplerMipmapMode g_vk_mipmap_mode[] = {
     VK_SAMPLER_MIPMAP_MODE_NEAREST, // NoFilter
     VK_SAMPLER_MIPMAP_MODE_NEAREST, // Bilinear
     VK_SAMPLER_MIPMAP_MODE_LINEAR,  // Trilinear
@@ -29,7 +29,7 @@ const VkSamplerMipmapMode g_vk_mipmap_mode[] = {
 };
 static_assert(COUNT_OF(g_vk_mipmap_mode) == size_t(eTexFilter::_Count), "!");
 
-const VkCompareOp g_vk_compare_ops[] = {
+extern const VkCompareOp g_vk_compare_ops[] = {
     VK_COMPARE_OP_NEVER,            // None
     VK_COMPARE_OP_LESS_OR_EQUAL,    // LEqual
     VK_COMPARE_OP_GREATER_OR_EQUAL, // GEqual
@@ -42,7 +42,7 @@ const VkCompareOp g_vk_compare_ops[] = {
 };
 static_assert(COUNT_OF(g_vk_compare_ops) == size_t(eTexCompare::_Count), "!");
 
-const float AnisotropyLevel = 4.0f;
+extern const float AnisotropyLevel = 4.0f;
 } // namespace Vk
 } // namespace Ray
 

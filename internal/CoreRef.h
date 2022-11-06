@@ -99,6 +99,14 @@ using TextureAtlasRGB = TextureAtlasTiled<uint8_t, 3>;
 using TextureAtlasRG = TextureAtlasTiled<uint8_t, 2>;
 using TextureAtlasR = TextureAtlasTiled<uint8_t, 1>;
 
+force_inline int hash(int x) {
+    unsigned ret = reinterpret_cast<const unsigned &>(x);
+    ret = ((ret >> 16) ^ ret) * 0x45d9f3b;
+    ret = ((ret >> 16) ^ ret) * 0x45d9f3b;
+    ret = (ret >> 16) ^ ret;
+    return reinterpret_cast<const int &>(ret);
+}
+
 // Generation of rays
 void GeneratePrimaryRays(int iteration, const camera_t &cam, const rect_t &r, int w, int h, const float *halton,
                          aligned_vector<ray_data_t> &out_rays);

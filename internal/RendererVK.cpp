@@ -10,8 +10,11 @@
 #include "UniformIntDistribution.h"
 
 #include "Vk/DebugMarker.h"
+#include "Vk/DescriptorPool.h"
 #include "Vk/DrawCall.h"
 #include "Vk/Shader.h"
+
+#include "../Log.h"
 
 #include "shaders/types.glsl"
 
@@ -208,6 +211,8 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
 }
 
 Ray::Vk::Renderer::~Renderer() { pixel_stage_buf_.Unmap(); }
+
+const char *Ray::Vk::Renderer::device_name() const { return ctx_->device_properties().deviceName; }
 
 void Ray::Vk::Renderer::Resize(const int w, const int h) {
     if (w_ == w && h_ == h) {

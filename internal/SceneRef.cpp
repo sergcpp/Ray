@@ -3,6 +3,7 @@
 #include <cassert>
 #include <cstring>
 
+#include "../Log.h"
 #include "TextureUtilsRef.h"
 #include "Time_.h"
 

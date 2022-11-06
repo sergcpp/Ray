@@ -3,6 +3,7 @@
 #include <cstdint>
 
 #include "../Span.h"
+#include "VK.h"
 
 struct VkDescriptorSet_T;
 typedef VkDescriptorSet_T *VkDescriptorSet;

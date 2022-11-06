@@ -193,7 +193,7 @@ void main() {
                           rd,               // direction
                           inter.t           // tMax
                           );
-    while(rayQueryProceedEXT(rq)) {
+    while (rayQueryProceedEXT(rq)) {
         rayQueryConfirmIntersectionEXT(rq);
     }
 
@@ -203,7 +203,7 @@ void main() {
         inter.mask = -1;
         inter.obj_index = rayQueryGetIntersectionInstanceIdEXT(rq, true);
         inter.prim_index = primitive_offset + rayQueryGetIntersectionPrimitiveIndexEXT(rq, true);
-        [[flatten]] if (!rayQueryGetIntersectionFrontFaceEXT(rq, true)) {
+        [[flatten]] if (rayQueryGetIntersectionFrontFaceEXT(rq, true) == false) {
             inter.prim_index = -inter.prim_index - 1;
         }
         vec2 uv = rayQueryGetIntersectionBarycentricsEXT(rq, true);

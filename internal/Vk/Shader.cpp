@@ -9,7 +9,7 @@
 
 namespace Ray {
 namespace Vk {
-const VkShaderStageFlagBits g_shader_stages_vk[] = {
+extern const VkShaderStageFlagBits g_shader_stages_vk[] = {
     VK_SHADER_STAGE_VERTEX_BIT,                  // Vert
     VK_SHADER_STAGE_FRAGMENT_BIT,                // Frag
     VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT,    // Tesc

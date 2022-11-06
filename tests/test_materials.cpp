@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <fstream>
+#include <regex>
 
 #include "../RendererFactory.h"
 
@@ -45,8 +46,15 @@ void load_needed_textures(Ray::SceneBase &scene, Ray::shading_node_desc_t &mat_d
 
     if (mat_desc.base_texture != 0xffffffff && textures[0]) {
         int img_w, img_h;
-        const auto img_data = LoadTGA(textures[0], img_w, img_h);
+        auto img_data = LoadTGA(textures[0], img_w, img_h);
         require(!img_data.empty());
+
+        // drop alpha channel
+        for (int i = 0; i < img_w * img_h; ++i) {
+            img_data[3 * i + 0] = img_data[4 * i + 0];
+            img_data[3 * i + 1] = img_data[4 * i + 1];
+            img_data[3 * i + 2] = img_data[4 * i + 2];
+        }
 
         Ray::tex_desc_t tex_desc;
         tex_desc.format = Ray::eTextureFormat::RGBA8888;
@@ -68,11 +76,18 @@ void load_needed_textures(Ray::SceneBase &scene, Ray::principled_mat_desc_t &mat
 
     if (mat_desc.base_texture != 0xffffffff && textures[mat_desc.base_texture]) {
         int img_w, img_h;
-        const auto img_data = LoadTGA(textures[mat_desc.base_texture], img_w, img_h);
+        auto img_data = LoadTGA(textures[mat_desc.base_texture], img_w, img_h);
         require(!img_data.empty());
 
+        // drop alpha channel
+        for (int i = 0; i < img_w * img_h; ++i) {
+            img_data[3 * i + 0] = img_data[4 * i + 0];
+            img_data[3 * i + 1] = img_data[4 * i + 1];
+            img_data[3 * i + 2] = img_data[4 * i + 2];
+        }
+
         Ray::tex_desc_t tex_desc;
-        tex_desc.format = Ray::eTextureFormat::RGBA8888;
+        tex_desc.format = Ray::eTextureFormat::RGB888;
         tex_desc.data = img_data.data();
         tex_desc.w = img_w;
         tex_desc.h = img_h;
@@ -84,11 +99,18 @@ void load_needed_textures(Ray::SceneBase &scene, Ray::principled_mat_desc_t &mat
 
     if (mat_desc.normal_map != 0xffffffff && textures[mat_desc.normal_map]) {
         int img_w, img_h;
-        const auto img_data = LoadTGA(textures[mat_desc.normal_map], img_w, img_h);
+        auto img_data = LoadTGA(textures[mat_desc.normal_map], img_w, img_h);
         require(!img_data.empty());
 
+        // drop alpha channel
+        for (int i = 0; i < img_w * img_h; ++i) {
+            img_data[3 * i + 0] = img_data[4 * i + 0];
+            img_data[3 * i + 1] = img_data[4 * i + 1];
+            img_data[3 * i + 2] = img_data[4 * i + 2];
+        }
+
         Ray::tex_desc_t tex_desc;
-        tex_desc.format = Ray::eTextureFormat::RGBA8888;
+        tex_desc.format = Ray::eTextureFormat::RGB888;
         tex_desc.data = img_data.data();
         tex_desc.w = img_w;
         tex_desc.h = img_h;
@@ -100,11 +122,16 @@ void load_needed_textures(Ray::SceneBase &scene, Ray::principled_mat_desc_t &mat
 
     if (mat_desc.roughness_texture != 0xffffffff && textures[mat_desc.roughness_texture]) {
         int img_w, img_h;
-        const auto img_data = LoadTGA(textures[mat_desc.roughness_texture], img_w, img_h);
+        auto img_data = LoadTGA(textures[mat_desc.roughness_texture], img_w, img_h);
         require(!img_data.empty());
 
+        // use only red channel
+        for (int i = 0; i < img_w * img_h; ++i) {
+            img_data[i] = img_data[4 * i + 0];
+        }
+
         Ray::tex_desc_t tex_desc;
-        tex_desc.format = Ray::eTextureFormat::RGBA8888;
+        tex_desc.format = Ray::eTextureFormat::R8;
         tex_desc.data = img_data.data();
         tex_desc.w = img_w;
         tex_desc.h = img_h;
@@ -116,11 +143,16 @@ void load_needed_textures(Ray::SceneBase &scene, Ray::principled_mat_desc_t &mat
 
     if (mat_desc.metallic_texture != 0xffffffff && textures[mat_desc.metallic_texture]) {
         int img_w, img_h;
-        const auto img_data = LoadTGA(textures[mat_desc.metallic_texture], img_w, img_h);
+        auto img_data = LoadTGA(textures[mat_desc.metallic_texture], img_w, img_h);
         require(!img_data.empty());
 
+        // use only red channel
+        for (int i = 0; i < img_w * img_h; ++i) {
+            img_data[i] = img_data[4 * i + 0];
+        }
+
         Ray::tex_desc_t tex_desc;
-        tex_desc.format = Ray::eTextureFormat::RGBA8888;
+        tex_desc.format = Ray::eTextureFormat::R8;
         tex_desc.data = img_data.data();
         tex_desc.w = img_w;
         tex_desc.h = img_h;
@@ -132,11 +164,16 @@ void load_needed_textures(Ray::SceneBase &scene, Ray::principled_mat_desc_t &mat
 
     if (mat_desc.alpha_texture != 0xffffffff && textures[mat_desc.alpha_texture]) {
         int img_w, img_h;
-        const auto img_data = LoadTGA(textures[mat_desc.alpha_texture], img_w, img_h);
+        auto img_data = LoadTGA(textures[mat_desc.alpha_texture], img_w, img_h);
         require(!img_data.empty());
 
+        // use only red channel
+        for (int i = 0; i < img_w * img_h; ++i) {
+            img_data[i] = img_data[4 * i + 0];
+        }
+
         Ray::tex_desc_t tex_desc;
-        tex_desc.format = Ray::eTextureFormat::RGBA8888;
+        tex_desc.format = Ray::eTextureFormat::R8;
         tex_desc.data = img_data.data();
         tex_desc.w = img_w;
         tex_desc.h = img_h;
@@ -648,6 +685,14 @@ void run_material_test(const char *arch_list[], const char *preferred_device, co
                         // skip unsupported (we fell back to some other renderer)
                         continue;
                     }
+                    if (preferred_device) {
+                        // make sure we use requested device
+                        std::regex match_name(preferred_device);
+                        if (!require(std::regex_search(renderer->device_name(), match_name))) {
+                            printf("Wrong device: %s (%s was requested)\n", renderer->device_name(), preferred_device);
+                            return;
+                        }
+                    }
                     auto scene = std::unique_ptr<Ray::SceneBase>(renderer->CreateScene());
 
                     setup_material_scene(*scene, output_sh, mat_desc, textures, scene_index);
@@ -1075,7 +1120,7 @@ void test_sheen_mat3(const char *arch_list[], const char *preferred_device) {
 void test_glossy_mat0(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 2048;
     const double MinPSNR = 34.13;
-    const int PixThres = 71;
+    const int PixThres = 73;
 
     Ray::shading_node_desc_t node_desc;
     node_desc.type = Ray::GlossyNode;
@@ -1154,7 +1199,7 @@ void test_glossy_mat4(const char *arch_list[], const char *preferred_device) {
 void test_spec_mat0(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 2048;
     const double MinPSNR = 34.13;
-    const int PixThres = 71;
+    const int PixThres = 73;
 
     Ray::principled_mat_desc_t spec_mat_desc;
     spec_mat_desc.base_color[0] = 1.0f;
@@ -1945,7 +1990,7 @@ void test_trans_mat0(const char *arch_list[], const char *preferred_device) {
 void test_trans_mat1(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 1024;
     const double MinPSNR = 25.35;
-    const int PixThres = 2695;
+    const int PixThres = 2699;
 
     Ray::principled_mat_desc_t mat_desc;
     mat_desc.base_color[0] = 1.0f;
@@ -1963,7 +2008,7 @@ void test_trans_mat1(const char *arch_list[], const char *preferred_device) {
 
 void test_trans_mat2(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 1024;
-    const double MinPSNR = 23.33;
+    const double MinPSNR = 23.32;
     const int PixThres = 3856;
 
     Ray::principled_mat_desc_t mat_desc;
@@ -2021,7 +2066,7 @@ void test_trans_mat4(const char *arch_list[], const char *preferred_device) {
 void test_trans_mat5(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 1024;
     const double MinPSNR = 31.71;
-    const int PixThres = 107;
+    const int PixThres = 108;
 
     Ray::principled_mat_desc_t mat_desc;
     mat_desc.base_color[0] = 1.0f;
@@ -2040,7 +2085,7 @@ void test_trans_mat5(const char *arch_list[], const char *preferred_device) {
 void test_trans_mat6(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 1024;
     const double MinPSNR = 22.81;
-    const int PixThres = 4502;
+    const int PixThres = 4505;
 
     Ray::principled_mat_desc_t mat_desc;
     mat_desc.base_color[0] = 1.0f;
@@ -2318,7 +2363,7 @@ void test_complex_mat5(const char *arch_list[], const char *preferred_device) {
 void test_complex_mat5_mesh_lights(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 768;
     const double MinPSNR = 31.15;
-    const int PixThres = 1168;
+    const int PixThres = 1170;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = 0;
@@ -2340,7 +2385,7 @@ void test_complex_mat5_mesh_lights(const char *arch_list[], const char *preferre
 void test_complex_mat5_sphere_light(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 768;
     const double MinPSNR = 33.49;
-    const int PixThres = 429;
+    const int PixThres = 430;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = 0;
@@ -2399,8 +2444,8 @@ void test_complex_mat6(const char *arch_list[], const char *preferred_device) {
 
 void test_complex_mat6_mesh_lights(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 1024;
-    const double MinPSNR = 27.86;
-    const int PixThres = 1216;
+    const double MinPSNR = 27.84;
+    const int PixThres = 1217;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;

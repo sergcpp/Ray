@@ -41,12 +41,14 @@ VkBufferUsageFlags GetVkBufferUsageFlags(const Context *ctx, const eBufType type
 }
 
 VkMemoryPropertyFlags GetVkMemoryPropertyFlags(const eBufType type) {
-    return (type == eBufType::Stage) ? (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT)
-                                     : VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    if (type == eBufType::Stage) {
+        return (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT);
+    }
+    return VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 }
 
 uint32_t FindMemoryType(const VkPhysicalDeviceMemoryProperties *mem_properties, uint32_t mem_type_bits,
-                        VkMemoryPropertyFlags desired_mem_flags);
+                        VkMemoryPropertyFlags desired_mem_flags, VkDeviceSize desired_size);
 } // namespace Vk
 } // namespace Ray
 
@@ -259,10 +261,12 @@ void Ray::Vk::Buffer::Resize(const uint32_t new_size, const bool keep_content) {
     VkMemoryRequirements memory_requirements = {};
     vkGetBufferMemoryRequirements(ctx_->device(), new_buf, &memory_requirements);
 
+    VkMemoryPropertyFlags memory_props = GetVkMemoryPropertyFlags(type_);
+
     VkMemoryAllocateInfo buf_alloc_info = {VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};
     buf_alloc_info.allocationSize = memory_requirements.size;
-    buf_alloc_info.memoryTypeIndex =
-        FindMemoryType(&ctx_->mem_properties(), memory_requirements.memoryTypeBits, GetVkMemoryPropertyFlags(type_));
+    buf_alloc_info.memoryTypeIndex = FindMemoryType(&ctx_->mem_properties(), memory_requirements.memoryTypeBits,
+                                                    memory_props, buf_alloc_info.allocationSize);
 
     VkMemoryAllocateFlagsInfoKHR additional_flags = {VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO_KHR};
     additional_flags.flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT_KHR;
@@ -272,7 +276,19 @@ void Ray::Vk::Buffer::Resize(const uint32_t new_size, const bool keep_content) {
     }
 
     VkDeviceMemory buffer_mem = {};
-    res = vkAllocateMemory(ctx_->device(), &buf_alloc_info, nullptr, &buffer_mem);
+
+    res = VK_ERROR_OUT_OF_DEVICE_MEMORY;
+    if (buf_alloc_info.memoryTypeIndex != 0xffffffff) {
+        res = vkAllocateMemory(ctx_->device(), &buf_alloc_info, nullptr, &buffer_mem);
+    }
+    if (res == VK_ERROR_OUT_OF_DEVICE_MEMORY) {
+        ctx_->log()->Warning("Not enough device memory, falling back to CPU RAM!");
+        memory_props &= ~VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
+        buf_alloc_info.memoryTypeIndex = FindMemoryType(&ctx_->mem_properties(), memory_requirements.memoryTypeBits,
+                                                        memory_props, buf_alloc_info.allocationSize);
+        res = vkAllocateMemory(ctx_->device(), &buf_alloc_info, nullptr, &buffer_mem);
+    }
     assert(res == VK_SUCCESS && "Failed to allocate memory!");
 
     res = vkBindBufferMemory(ctx_->device(), new_buf, buffer_mem, 0 /* offset */);

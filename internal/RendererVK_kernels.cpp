@@ -1,5 +1,7 @@
 #include "RendererVK.h"
 
+#include "Vk/DrawCall.h"
+
 #include "shaders/debug_rt_interface.glsl"
 #include "shaders/intersect_area_lights_interface.glsl"
 #include "shaders/mix_incremental_interface.glsl"

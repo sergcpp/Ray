@@ -24,7 +24,7 @@ extern const VkCompareOp g_vk_compare_ops[];
 
 extern const float AnisotropyLevel;
 
-const VkFormat g_vk_formats[] = {
+extern const VkFormat g_vk_formats[] = {
     VK_FORMAT_UNDEFINED,                // Undefined
     VK_FORMAT_R8G8B8_UNORM,             // RawRGB888
     VK_FORMAT_R8G8B8A8_UNORM,           // RawRGBA8888
@@ -62,7 +62,7 @@ const VkFormat g_vk_formats[] = {
 static_assert(sizeof(g_vk_formats) / sizeof(g_vk_formats[0]) == size_t(eTexFormat::_Count), "!");
 
 uint32_t FindMemoryType(const VkPhysicalDeviceMemoryProperties *mem_properties, uint32_t mem_type_bits,
-                        VkMemoryPropertyFlags desired_mem_flags);
+                        VkMemoryPropertyFlags desired_mem_flags, VkDeviceSize desired_size);
 
 uint32_t TextureHandleCounter = 0;
 
@@ -664,10 +664,20 @@ bool Ray::Vk::Texture2D::Realloc(const int w, const int h, int mip_count, const 
         VkMemoryRequirements tex_mem_req;
         vkGetImageMemoryRequirements(ctx_->device(), new_image, &tex_mem_req);
 
-        new_alloc = mem_allocs->Allocate(
-            uint32_t(tex_mem_req.size), uint32_t(tex_mem_req.alignment),
-            FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT),
-            name_.c_str());
+        VkMemoryPropertyFlags img_tex_desired_mem_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+        new_alloc = mem_allocs->Allocate(uint32_t(tex_mem_req.size), uint32_t(tex_mem_req.alignment),
+                                         FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits,
+                                                        img_tex_desired_mem_flags, uint32_t(tex_mem_req.size)),
+                                         name_.c_str());
+        if (!alloc_) {
+            ctx_->log()->Warning("Not enough device memory, falling back to CPU RAM!");
+            img_tex_desired_mem_flags &= ~VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
+            alloc_ = mem_allocs->Allocate(uint32_t(tex_mem_req.size), uint32_t(tex_mem_req.alignment),
+                                          FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits,
+                                                         img_tex_desired_mem_flags, uint32_t(tex_mem_req.size)),
+                                          name_.c_str());
+        }
 
         const VkDeviceSize aligned_offset = AlignTo(VkDeviceSize(new_alloc.alloc_off), tex_mem_req.alignment);
 
@@ -893,10 +903,26 @@ void Ray::Vk::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, void *_cmd_
         VkMemoryRequirements tex_mem_req;
         vkGetImageMemoryRequirements(ctx_->device(), handle_.img, &tex_mem_req);
 
-        alloc_ = mem_allocs->Allocate(
-            uint32_t(tex_mem_req.size), uint32_t(tex_mem_req.alignment),
-            FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT),
-            name_.c_str());
+        VkMemoryPropertyFlags img_tex_desired_mem_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
+        alloc_ = mem_allocs->Allocate(uint32_t(tex_mem_req.size), uint32_t(tex_mem_req.alignment),
+                                      FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits,
+                                                     img_tex_desired_mem_flags, uint32_t(tex_mem_req.size)),
+                                      name_.c_str());
+        if (!alloc_) {
+            ctx_->log()->Warning("Not enough device memory, falling back to CPU RAM!");
+            img_tex_desired_mem_flags &= ~VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
+            alloc_ = mem_allocs->Allocate(uint32_t(tex_mem_req.size), uint32_t(tex_mem_req.alignment),
+                                          FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits,
+                                                         img_tex_desired_mem_flags, uint32_t(tex_mem_req.size)),
+                                          name_.c_str());
+        }
+
+        if (!alloc_) {
+            log->Error("Failed to allocate memory!");
+            return;
+        }
 
         const VkDeviceSize aligned_offset = AlignTo(VkDeviceSize(alloc_.alloc_off), tex_mem_req.alignment);
 
@@ -1419,10 +1445,21 @@ void Ray::Vk::Texture2D::InitFromRAWData(Buffer &sbuf, int data_off[6], void *_c
         VkMemoryRequirements tex_mem_req;
         vkGetImageMemoryRequirements(ctx_->device(), handle_.img, &tex_mem_req);
 
-        alloc_ = mem_allocs->Allocate(
-            uint32_t(tex_mem_req.size), uint32_t(tex_mem_req.alignment),
-            FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT),
-            name_.c_str());
+        VkMemoryPropertyFlags img_tex_desired_mem_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
+        alloc_ = mem_allocs->Allocate(uint32_t(tex_mem_req.size), uint32_t(tex_mem_req.alignment),
+                                      FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits,
+                                                     img_tex_desired_mem_flags, uint32_t(tex_mem_req.size)),
+                                      name_.c_str());
+        if (!alloc_) {
+            ctx_->log()->Warning("Not enough device memory, falling back to CPU RAM!");
+            img_tex_desired_mem_flags &= ~VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
+            alloc_ = mem_allocs->Allocate(uint32_t(tex_mem_req.size), uint32_t(tex_mem_req.alignment),
+                                          FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits,
+                                                         img_tex_desired_mem_flags, uint32_t(tex_mem_req.size)),
+                                          name_.c_str());
+        }
 
         const VkDeviceSize aligned_offset = AlignTo(VkDeviceSize(alloc_.alloc_off), tex_mem_req.alignment);
 
@@ -1710,10 +1747,21 @@ void Ray::Vk::Texture2D::InitFromDDSFile(const void *data[6], const int size[6],
         VkMemoryRequirements tex_mem_req;
         vkGetImageMemoryRequirements(ctx_->device(), handle_.img, &tex_mem_req);
 
-        alloc_ = mem_allocs->Allocate(
-            uint32_t(tex_mem_req.size), uint32_t(tex_mem_req.alignment),
-            FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT),
-            name_.c_str());
+        VkMemoryPropertyFlags img_tex_desired_mem_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
+        alloc_ = mem_allocs->Allocate(uint32_t(tex_mem_req.size), uint32_t(tex_mem_req.alignment),
+                                      FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits,
+                                                     img_tex_desired_mem_flags, uint32_t(tex_mem_req.size)),
+                                      name_.c_str());
+        if (!alloc_) {
+            ctx_->log()->Warning("Not enough device memory, falling back to CPU RAM!");
+            img_tex_desired_mem_flags &= ~VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
+            alloc_ = mem_allocs->Allocate(uint32_t(tex_mem_req.size), uint32_t(tex_mem_req.alignment),
+                                          FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits,
+                                                         img_tex_desired_mem_flags, uint32_t(tex_mem_req.size)),
+                                          name_.c_str());
+        }
 
         const VkDeviceSize aligned_offset = AlignTo(VkDeviceSize(alloc_.alloc_off), tex_mem_req.alignment);
 
@@ -1937,10 +1985,21 @@ void Ray::Vk::Texture2D::InitFromKTXFile(const void *data[6], const int size[6],
         VkMemoryRequirements tex_mem_req;
         vkGetImageMemoryRequirements(ctx_->device(), handle_.img, &tex_mem_req);
 
-        alloc_ = mem_allocs->Allocate(
-            uint32_t(tex_mem_req.size), uint32_t(tex_mem_req.alignment),
-            FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT),
-            name_.c_str());
+        VkMemoryPropertyFlags img_tex_desired_mem_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
+        alloc_ = mem_allocs->Allocate(uint32_t(tex_mem_req.size), uint32_t(tex_mem_req.alignment),
+                                      FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits,
+                                                     img_tex_desired_mem_flags, uint32_t(tex_mem_req.size)),
+                                      name_.c_str());
+        if (!alloc_ && (img_tex_desired_mem_flags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)) {
+            ctx_->log()->Warning("Not enough device memory, falling back to CPU RAM!");
+            img_tex_desired_mem_flags &= ~VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
+            alloc_ = mem_allocs->Allocate(uint32_t(tex_mem_req.size), uint32_t(tex_mem_req.alignment),
+                                          FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits,
+                                                         img_tex_desired_mem_flags, uint32_t(tex_mem_req.size)),
+                                          name_.c_str());
+        }
 
         const VkDeviceSize aligned_offset = AlignTo(VkDeviceSize(alloc_.alloc_off), tex_mem_req.alignment);
 

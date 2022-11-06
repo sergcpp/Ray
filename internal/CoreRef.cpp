@@ -447,14 +447,6 @@ template <int StackSize> class TraversalStack {
     }
 };
 
-force_inline int hash(int x) {
-    unsigned ret = reinterpret_cast<const unsigned &>(x);
-    ret = ((ret >> 16) ^ ret) * 0x45d9f3b;
-    ret = ((ret >> 16) ^ ret) * 0x45d9f3b;
-    ret = (ret >> 16) ^ ret;
-    return reinterpret_cast<const int &>(ret);
-}
-
 force_inline void safe_invert(const float v[3], float out_v[3]) {
     if (v[0] <= FLT_EPS && v[0] >= 0) {
         out_v[0] = std::numeric_limits<float>::max();
