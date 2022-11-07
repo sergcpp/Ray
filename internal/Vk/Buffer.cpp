@@ -288,6 +288,13 @@ void Ray::Vk::Buffer::Resize(const uint32_t new_size, const bool keep_content) {
         buf_alloc_info.memoryTypeIndex = FindMemoryType(&ctx_->mem_properties(), memory_requirements.memoryTypeBits,
                                                         memory_props, buf_alloc_info.allocationSize);
         res = vkAllocateMemory(ctx_->device(), &buf_alloc_info, nullptr, &buffer_mem);
+        if (res == VK_ERROR_OUT_OF_DEVICE_MEMORY) {
+            memory_props |= VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+
+            buf_alloc_info.memoryTypeIndex = FindMemoryType(&ctx_->mem_properties(), memory_requirements.memoryTypeBits,
+                                                            memory_props, buf_alloc_info.allocationSize);
+            res = vkAllocateMemory(ctx_->device(), &buf_alloc_info, nullptr, &buffer_mem);
+        }
     }
     assert(res == VK_SUCCESS && "Failed to allocate memory!");
 

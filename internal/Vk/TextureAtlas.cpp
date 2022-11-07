@@ -186,6 +186,14 @@ bool Ray::Vk::TextureAtlas::Resize(const int pages_count) {
             img_alloc_info.memoryTypeIndex = FindMemoryType(&ctx_->mem_properties(), img_tex_type_bits,
                                                             img_tex_desired_mem_flags, uint32_t(img_tex_mem_req.size));
             res = vkAllocateMemory(ctx_->device(), &img_alloc_info, nullptr, &new_mem);
+            if (res == VK_ERROR_OUT_OF_DEVICE_MEMORY) {
+                img_tex_desired_mem_flags |= VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+
+                img_alloc_info.memoryTypeIndex =
+                    FindMemoryType(&ctx_->mem_properties(), img_tex_type_bits, img_tex_desired_mem_flags,
+                                   uint32_t(img_tex_mem_req.size));
+                res = vkAllocateMemory(ctx_->device(), &img_alloc_info, nullptr, &new_mem);
+            }
         }
         if (res != VK_SUCCESS) {
             throw std::runtime_error("Failed to allocate memory!");

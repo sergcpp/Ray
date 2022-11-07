@@ -677,6 +677,14 @@ bool Ray::Vk::Texture2D::Realloc(const int w, const int h, int mip_count, const 
                                           FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits,
                                                          img_tex_desired_mem_flags, uint32_t(tex_mem_req.size)),
                                           name_.c_str());
+            if (!alloc_) {
+                img_tex_desired_mem_flags |= VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+
+                alloc_ = mem_allocs->Allocate(uint32_t(tex_mem_req.size), uint32_t(tex_mem_req.alignment),
+                                              FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits,
+                                                             img_tex_desired_mem_flags, uint32_t(tex_mem_req.size)),
+                                              name_.c_str());
+            }
         }
 
         const VkDeviceSize aligned_offset = AlignTo(VkDeviceSize(new_alloc.alloc_off), tex_mem_req.alignment);
@@ -917,6 +925,14 @@ void Ray::Vk::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, void *_cmd_
                                           FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits,
                                                          img_tex_desired_mem_flags, uint32_t(tex_mem_req.size)),
                                           name_.c_str());
+            if (!alloc_) {
+                img_tex_desired_mem_flags |= VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+
+                alloc_ = mem_allocs->Allocate(uint32_t(tex_mem_req.size), uint32_t(tex_mem_req.alignment),
+                                              FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits,
+                                                             img_tex_desired_mem_flags, uint32_t(tex_mem_req.size)),
+                                              name_.c_str());
+            }
         }
 
         if (!alloc_) {
@@ -1459,6 +1475,14 @@ void Ray::Vk::Texture2D::InitFromRAWData(Buffer &sbuf, int data_off[6], void *_c
                                           FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits,
                                                          img_tex_desired_mem_flags, uint32_t(tex_mem_req.size)),
                                           name_.c_str());
+            if (!alloc_) {
+                img_tex_desired_mem_flags |= VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+
+                alloc_ = mem_allocs->Allocate(uint32_t(tex_mem_req.size), uint32_t(tex_mem_req.alignment),
+                                              FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits,
+                                                             img_tex_desired_mem_flags, uint32_t(tex_mem_req.size)),
+                                              name_.c_str());
+            }
         }
 
         const VkDeviceSize aligned_offset = AlignTo(VkDeviceSize(alloc_.alloc_off), tex_mem_req.alignment);
@@ -1761,6 +1785,14 @@ void Ray::Vk::Texture2D::InitFromDDSFile(const void *data[6], const int size[6],
                                           FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits,
                                                          img_tex_desired_mem_flags, uint32_t(tex_mem_req.size)),
                                           name_.c_str());
+            if (!alloc_) {
+                img_tex_desired_mem_flags |= VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+
+                alloc_ = mem_allocs->Allocate(uint32_t(tex_mem_req.size), uint32_t(tex_mem_req.alignment),
+                                              FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits,
+                                                             img_tex_desired_mem_flags, uint32_t(tex_mem_req.size)),
+                                              name_.c_str());
+            }
         }
 
         const VkDeviceSize aligned_offset = AlignTo(VkDeviceSize(alloc_.alloc_off), tex_mem_req.alignment);
@@ -1999,6 +2031,14 @@ void Ray::Vk::Texture2D::InitFromKTXFile(const void *data[6], const int size[6],
                                           FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits,
                                                          img_tex_desired_mem_flags, uint32_t(tex_mem_req.size)),
                                           name_.c_str());
+            if (!alloc_) {
+                img_tex_desired_mem_flags |= VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+
+                alloc_ = mem_allocs->Allocate(uint32_t(tex_mem_req.size), uint32_t(tex_mem_req.alignment),
+                                              FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits,
+                                                             img_tex_desired_mem_flags, uint32_t(tex_mem_req.size)),
+                                              name_.c_str());
+            }
         }
 
         const VkDeviceSize aligned_offset = AlignTo(VkDeviceSize(alloc_.alloc_off), tex_mem_req.alignment);
