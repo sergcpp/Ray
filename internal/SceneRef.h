@@ -6,7 +6,7 @@
 #include "BVHSplit.h"
 #include "CoreRef.h"
 #include "SparseStorage.h"
-#include "TextureAtlasRef.h"
+#include "TextureStorageRef.h"
 
 namespace Ray {
 namespace Sse2 {

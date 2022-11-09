@@ -12,7 +12,7 @@
 #include "internal/FramebufferRef.cpp"
 #include "internal/RendererRef.cpp"
 #include "internal/SceneRef.cpp"
-#include "internal/TextureAtlasRef.cpp"
+#include "internal/TextureStorageRef.cpp"
 #include "internal/TextureUtilsRef.cpp"
 #include "internal/Time.cpp"
 #include "internal/Utils.cpp"

@@ -1,6 +1,6 @@
 #include "test_common.h"
 
-#include "../internal/TextureAtlasRef.h"
+#include "../internal/TextureStorageRef.h"
 
 #include <memory>
 #include <random>
@@ -8,8 +8,8 @@
 void test_atlas() {
     { // Test two types of atlas
         const int AtlasRes = 8192;
-        Ray::Ref::TextureAtlasLinear<uint8_t, 4> atlas_linear = {AtlasRes, AtlasRes};
-        Ray::Ref::TextureAtlasTiled<uint8_t, 4> atlas_tiled = {AtlasRes, AtlasRes};
+        Ray::Ref::TextureStorageLinear<uint8_t, 4> atlas_linear = {AtlasRes, AtlasRes};
+        Ray::Ref::TextureStorageTiled<uint8_t, 4> atlas_tiled = {AtlasRes, AtlasRes};
 
         const int TextureRes = 4096;
         auto test_pixels =

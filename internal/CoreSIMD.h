@@ -8,7 +8,7 @@
 
 #include <cfloat>
 
-#include "TextureAtlasRef.h"
+#include "TextureStorageRef.h"
 
 #include "simd/simd_vec.h"
 
@@ -25,14 +25,14 @@
 
 namespace Ray {
 namespace Ref {
-class TextureAtlasBase;
-template <typename T, int N> class TextureAtlasLinear;
-template <typename T, int N> class TextureAtlasTiled;
-template <typename T, int N> class TextureAtlasSwizzled;
-using TextureAtlasRGBA = TextureAtlasSwizzled<uint8_t, 4>;
-using TextureAtlasRGB = TextureAtlasSwizzled<uint8_t, 3>;
-using TextureAtlasRG = TextureAtlasSwizzled<uint8_t, 2>;
-using TextureAtlasR = TextureAtlasSwizzled<uint8_t, 1>;
+class TextureStorageBase;
+template <typename T, int N> class TextureStorageLinear;
+template <typename T, int N> class TextureStorageTiled;
+template <typename T, int N> class TextureStorageSwizzled;
+using TextureAtlasRGBA = TextureStorageSwizzled<uint8_t, 4>;
+using TextureAtlasRGB = TextureStorageSwizzled<uint8_t, 3>;
+using TextureAtlasRG = TextureStorageSwizzled<uint8_t, 2>;
+using TextureAtlasR = TextureStorageSwizzled<uint8_t, 1>;
 } // namespace Ref
 namespace NS {
 
@@ -287,19 +287,19 @@ void rotate_around_axis(const simd_fvec<S> p[3], const simd_fvec<S> axis[3], con
 
 // Sample texture
 template <int S>
-void SampleNearest(const Ref::TextureAtlasBase *atlases[], const texture_t &t, const simd_fvec<S> uvs[2],
+void SampleNearest(const Ref::TextureStorageBase *atlases[], const texture_t &t, const simd_fvec<S> uvs[2],
                    const simd_fvec<S> &lod, const simd_ivec<S> &mask, simd_fvec<S> out_rgba[4]);
 template <int S>
-void SampleBilinear(const Ref::TextureAtlasBase *atlases[], const texture_t &t, const simd_fvec<S> uvs[2],
+void SampleBilinear(const Ref::TextureStorageBase *atlases[], const texture_t &t, const simd_fvec<S> uvs[2],
                     const simd_ivec<S> &lod, const simd_ivec<S> &mask, simd_fvec<S> out_rgba[4]);
 template <int S>
-void SampleBilinear(const Ref::TextureAtlasBase &atlas, const simd_fvec<S> uvs[2], const simd_ivec<S> &page,
+void SampleBilinear(const Ref::TextureStorageBase &atlas, const simd_fvec<S> uvs[2], const simd_ivec<S> &page,
                     const simd_ivec<S> &mask, simd_fvec<S> out_rgba[4]);
 template <int S>
-void SampleTrilinear(const Ref::TextureAtlasBase *atlases[], const texture_t &t, const simd_fvec<S> uvs[2],
+void SampleTrilinear(const Ref::TextureStorageBase *atlases[], const texture_t &t, const simd_fvec<S> uvs[2],
                      const simd_fvec<S> &lod, const simd_ivec<S> &mask, simd_fvec<S> out_rgba[4]);
 template <int S>
-void SampleAnisotropic(const Ref::TextureAtlasBase *atlases[], const texture_t &t, const simd_fvec<S> uvs[2],
+void SampleAnisotropic(const Ref::TextureStorageBase *atlases[], const texture_t &t, const simd_fvec<S> uvs[2],
                        const simd_fvec<S> duv_dx[2], const simd_fvec<S> duv_dy[2], const simd_ivec<S> &mask,
                        simd_fvec<S> out_rgba[4]);
 template <int S>
@@ -310,7 +310,7 @@ void SampleLatlong_RGBE(const Ref::TextureAtlasRGBA &atlas, const texture_t &t, 
 template <int S>
 simd_fvec<S> ComputeVisibility(const simd_fvec<S> p1[3], const simd_fvec<S> d[3], simd_fvec<S> dist,
                                const simd_ivec<S> &mask, const float rand_val, const simd_ivec<S> &rand_hash2,
-                               const scene_data_t &sc, uint32_t node_index, const Ref::TextureAtlasBase *atlases[]);
+                               const scene_data_t &sc, uint32_t node_index, const Ref::TextureStorageBase *atlases[]);
 
 // Compute derivatives at hit point
 template <int S>
@@ -323,7 +323,7 @@ void ComputeDerivatives(const simd_fvec<S> I[3], const simd_fvec<S> &t, const si
 
 // Pick point on any light source for evaluation
 template <int S>
-void SampleLightSource(const simd_fvec<S> P[3], const scene_data_t &sc, const Ref::TextureAtlasBase *tex_atlases[],
+void SampleLightSource(const simd_fvec<S> P[3], const scene_data_t &sc, const Ref::TextureStorageBase *tex_atlases[],
                        const float halton[], const simd_fvec<S> sample_off[2], const simd_ivec<S> &ray_mask,
                        light_sample_t<S> &ls);
 
@@ -337,7 +337,7 @@ void IntersectAreaLights(const ray_data_t<S> &r, const simd_ivec<S> &ray_mask, c
 template <int S>
 void ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, const float *halton, const hit_data_t<S> &inter,
                   const ray_data_t<S> &ray, const scene_data_t &sc, uint32_t node_index,
-                  const Ref::TextureAtlasBase *tex_atlases[], simd_fvec<S> out_rgba[4],
+                  const Ref::TextureStorageBase *tex_atlases[], simd_fvec<S> out_rgba[4],
                   simd_ivec<S> out_secondary_masks[], ray_data_t<S> out_secondary_rays[], int *out_secondary_rays_count,
                   simd_ivec<S> out_shadow_masks[], shadow_ray_t<S> out_shadow_rays[], int *out_shadow_rays_count);
 } // namespace NS
@@ -3478,9 +3478,9 @@ void Ray::NS::rotate_around_axis(const simd_fvec<S> p[3], const simd_fvec<S> axi
 }
 
 template <int S>
-void Ray::NS::SampleNearest(const Ref::TextureAtlasBase *atlases[], const texture_t &t, const simd_fvec<S> uvs[2],
+void Ray::NS::SampleNearest(const Ref::TextureStorageBase *atlases[], const texture_t &t, const simd_fvec<S> uvs[2],
                             const simd_fvec<S> &lod, const simd_ivec<S> &mask, simd_fvec<S> out_rgba[4]) {
-    const Ref::TextureAtlasBase &atlas = *atlases[t.atlas];
+    const Ref::TextureStorageBase &atlas = *atlases[t.atlas];
     simd_ivec<S> _lod = (simd_ivec<S>)lod;
 
     simd_fvec<S> _uvs[2];
@@ -3505,9 +3505,9 @@ void Ray::NS::SampleNearest(const Ref::TextureAtlasBase *atlases[], const textur
 }
 
 template <int S>
-void Ray::NS::SampleBilinear(const Ref::TextureAtlasBase *atlases[], const texture_t &t, const simd_fvec<S> uvs[2],
+void Ray::NS::SampleBilinear(const Ref::TextureStorageBase *atlases[], const texture_t &t, const simd_fvec<S> uvs[2],
                              const simd_ivec<S> &lod, const simd_ivec<S> &mask, simd_fvec<S> out_rgba[4]) {
-    const Ref::TextureAtlasBase &atlas = *atlases[t.atlas];
+    const Ref::TextureStorageBase &atlas = *atlases[t.atlas];
 
     simd_fvec<S> _uvs[2];
     TransformUVs(uvs, atlas.size_x(), atlas.size_y(), t, lod, _uvs);
@@ -3549,7 +3549,7 @@ void Ray::NS::SampleBilinear(const Ref::TextureAtlasBase *atlases[], const textu
 }
 
 template <int S>
-void Ray::NS::SampleBilinear(const Ref::TextureAtlasBase &atlas, const simd_fvec<S> uvs[2], const simd_ivec<S> &page,
+void Ray::NS::SampleBilinear(const Ref::TextureStorageBase &atlas, const simd_fvec<S> uvs[2], const simd_ivec<S> &page,
                              const simd_ivec<S> &mask, simd_fvec<S> out_rgba[4]) {
     simd_fvec<S> _p00[4], _p01[4], _p10[4], _p11[4];
 
@@ -3598,7 +3598,7 @@ void Ray::NS::SampleBilinear(const Ref::TextureAtlasBase &atlas, const simd_fvec
 }
 
 template <int S>
-void Ray::NS::SampleTrilinear(const Ref::TextureAtlasBase *atlases[], const texture_t &t, const simd_fvec<S> uvs[2],
+void Ray::NS::SampleTrilinear(const Ref::TextureStorageBase *atlases[], const texture_t &t, const simd_fvec<S> uvs[2],
                               const simd_fvec<S> &lod, const simd_ivec<S> &mask, simd_fvec<S> out_rgba[4]) {
     simd_fvec<S> col1[4];
     SampleBilinear(atlases, t, uvs, (simd_ivec<S>)floor(lod), mask, col1);
@@ -3611,10 +3611,10 @@ void Ray::NS::SampleTrilinear(const Ref::TextureAtlasBase *atlases[], const text
 }
 
 template <int S>
-void Ray::NS::SampleAnisotropic(const Ref::TextureAtlasBase *atlases[], const texture_t &t, const simd_fvec<S> uvs[2],
+void Ray::NS::SampleAnisotropic(const Ref::TextureStorageBase *atlases[], const texture_t &t, const simd_fvec<S> uvs[2],
                                 const simd_fvec<S> duv_dx[2], const simd_fvec<S> duv_dy[2], const simd_ivec<S> &mask,
                                 simd_fvec<S> out_rgba[4]) {
-    const Ref::TextureAtlasBase &atlas = *atlases[t.atlas];
+    const Ref::TextureStorageBase &atlas = *atlases[t.atlas];
     const int width = int(t.width & TEXTURE_WIDTH_BITS), height = int(t.height & TEXTURE_HEIGHT_BITS);
 
     const simd_fvec<S> _duv_dx[2] = {abs(duv_dx[0] * float(width)), abs(duv_dx[1] * float(height))};
@@ -3782,7 +3782,7 @@ template <int S>
 Ray::NS::simd_fvec<S> Ray::NS::ComputeVisibility(const simd_fvec<S> p[3], const simd_fvec<S> d[3], simd_fvec<S> dist,
                                                  const simd_ivec<S> &mask, const float rand_val,
                                                  const simd_ivec<S> &rand_hash2, const scene_data_t &sc,
-                                                 uint32_t node_index, const Ref::TextureAtlasBase *atlases[]) {
+                                                 uint32_t node_index, const Ref::TextureStorageBase *atlases[]) {
     simd_fvec<S> sh_ro[3];
     ITERATE_3({ sh_ro[i] = p[i]; })
 
@@ -3815,7 +3815,7 @@ Ray::NS::simd_fvec<S> Ray::NS::ComputeVisibility(const simd_fvec<S> p[3], const 
         simd_ivec<S> mat_index = {-1}, back_mat_index = {-1};
 
         simd_fvec<S> inv_xform1[3], inv_xform2[3], inv_xform3[3];
-        
+
         for (int i = 0; i < S; i++) {
             if (!sh_inter.mask[i]) {
                 continue;
@@ -4104,7 +4104,7 @@ void Ray::NS::ComputeDerivatives(const simd_fvec<S> I[3], const simd_fvec<S> &t,
 // Pick point on any light source for evaluation
 template <int S>
 void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const scene_data_t &sc,
-                                const Ref::TextureAtlasBase *tex_atlases[], const float halton[],
+                                const Ref::TextureStorageBase *tex_atlases[], const float halton[],
                                 const simd_fvec<S> sample_off[2], const simd_ivec<S> &ray_mask, light_sample_t<S> &ls) {
     const simd_fvec<S> u1 = fract(halton[RAND_DIM_LIGHT_PICK] + sample_off[0]);
     const simd_ivec<S> light_index = min(simd_ivec<S>{u1 * float(sc.li_indices.size())}, int(sc.li_indices.size() - 1));
@@ -4451,7 +4451,7 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, const simd_ivec<S> &ra
 template <int S>
 void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, const float *halton,
                            const hit_data_t<S> &inter, const ray_data_t<S> &ray, const scene_data_t &sc,
-                           uint32_t node_index, const Ref::TextureAtlasBase *tex_atlases[], simd_fvec<S> out_rgba[4],
+                           uint32_t node_index, const Ref::TextureStorageBase *tex_atlases[], simd_fvec<S> out_rgba[4],
                            simd_ivec<S> out_secondary_masks[], ray_data_t<S> out_secondary_rays[],
                            int *out_secondary_rays_count, simd_ivec<S> out_shadow_masks[],
                            shadow_ray_t<S> out_shadow_rays[], int *out_shadow_rays_count) {

@@ -36,10 +36,10 @@ set(INTERNAL_SOURCE_FILES internal/Bitmap.h
                           internal/SmallVector.h
                           internal/SparseStorage.h
                           internal/Span.h
-                          internal/TextureAtlasRef.h
-                          internal/TextureAtlasRef.cpp
                           internal/TextureSplitter.h
                           internal/TextureSplitter.cpp
+                          internal/TextureStorageRef.h
+                          internal/TextureStorageRef.cpp
                           internal/TextureUtilsRef.h
                           internal/TextureUtilsRef.cpp
                           internal/Time_.h
