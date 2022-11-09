@@ -231,6 +231,10 @@ void Ray::Vk::Renderer::Resize(const int w, const int h) {
     clean_buf_ = Texture2D{"Clean Image", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
     final_buf_ = Texture2D{"Final Image", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
 
+    if (frame_pixels_) {
+        pixel_stage_buf_.Unmap();
+        frame_pixels_ = nullptr;
+    }
     pixel_stage_buf_ = Buffer{"Px Stage Buf", ctx_.get(), eBufType::Stage, uint32_t(4 * w * h * sizeof(float))};
     frame_pixels_ = (const pixel_color_t *)pixel_stage_buf_.Map(BufMapRead, true /* persistent */);
 
