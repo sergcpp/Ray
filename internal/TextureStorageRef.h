@@ -7,14 +7,14 @@
 
 namespace Ray {
 namespace Ref {
-class TextureStorageBase {
+class TexStorageBase {
   protected:
     const int res_[2];
     const float res_f_[2];
 
   public:
-    TextureStorageBase(int resx, int resy) : res_{resx, resy}, res_f_{float(resx), float(resy)} {}
-    virtual ~TextureStorageBase() {}
+    TexStorageBase(int resx, int resy) : res_{resx, resy}, res_f_{float(resx), float(resy)} {}
+    virtual ~TexStorageBase() {}
 
     force_inline float size_x() const { return res_f_[0]; }
     force_inline float size_y() const { return res_f_[1]; }
@@ -23,7 +23,7 @@ class TextureStorageBase {
     virtual color_rgba_t Fetch(int page, float x, float y) const = 0;
 };
 
-template <typename T, int N> class TextureStorageLinear : public TextureStorageBase {
+template <typename T, int N> class TexStorageLinear : public TexStorageBase {
     using ColorType = color_t<T, N>;
     using PageData = std::unique_ptr<ColorType[]>;
 
@@ -34,7 +34,7 @@ template <typename T, int N> class TextureStorageLinear : public TextureStorageB
     void WritePageData(int page, int posx, int posy, int sizex, int sizey, const ColorType *data);
 
   public:
-    TextureStorageLinear(int resx, int resy, int initial_page_count = 0);
+    TexStorageLinear(int resx, int resy, int initial_page_count = 0);
 
     force_inline int page_count() const { return int(pages_.size()); }
 
@@ -88,12 +88,12 @@ template <typename T, int N> class TextureStorageLinear : public TextureStorageB
     bool Resize(int new_page_count);
 };
 
-extern template class Ray::Ref::TextureStorageLinear<uint8_t, 4>;
-extern template class Ray::Ref::TextureStorageLinear<uint8_t, 3>;
-extern template class Ray::Ref::TextureStorageLinear<uint8_t, 2>;
-extern template class Ray::Ref::TextureStorageLinear<uint8_t, 1>;
+extern template class Ray::Ref::TexStorageLinear<uint8_t, 4>;
+extern template class Ray::Ref::TexStorageLinear<uint8_t, 3>;
+extern template class Ray::Ref::TexStorageLinear<uint8_t, 2>;
+extern template class Ray::Ref::TexStorageLinear<uint8_t, 1>;
 
-template <typename T, int N> class TextureStorageTiled : public TextureStorageBase {
+template <typename T, int N> class TexStorageTiled : public TexStorageBase {
     static const int TileSize = 4;
 
     const int res_in_tiles_[2];
@@ -108,7 +108,7 @@ template <typename T, int N> class TextureStorageTiled : public TextureStorageBa
     void WritePageData(int page, int posx, int posy, int sizex, int sizey, const ColorType *data);
 
   public:
-    TextureStorageTiled(int resx, int resy, int initial_page_count = 0);
+    TexStorageTiled(int resx, int resy, int initial_page_count = 0);
 
     force_inline int page_count() const { return int(pages_.size()); }
 
@@ -169,12 +169,12 @@ template <typename T, int N> class TextureStorageTiled : public TextureStorageBa
     int DownsampleRegion(int src_page, const int src_pos[2], const int src_res[2], int dst_pos[2]);
 };
 
-extern template class TextureStorageTiled<uint8_t, 4>;
-extern template class TextureStorageTiled<uint8_t, 3>;
-extern template class TextureStorageTiled<uint8_t, 2>;
-extern template class TextureStorageTiled<uint8_t, 1>;
+extern template class TexStorageTiled<uint8_t, 4>;
+extern template class TexStorageTiled<uint8_t, 3>;
+extern template class TexStorageTiled<uint8_t, 2>;
+extern template class TexStorageTiled<uint8_t, 1>;
 
-template <typename T, int N> class TextureStorageSwizzled : public TextureStorageBase {
+template <typename T, int N> class TexStorageSwizzled : public TexStorageBase {
     using ColorType = color_t<T, N>;
     using PageData = std::unique_ptr<ColorType[]>;
 
@@ -203,7 +203,7 @@ template <typename T, int N> class TextureStorageSwizzled : public TextureStorag
     }
 
   public:
-    TextureStorageSwizzled(int resx, int resy, int initial_page_count = 0);
+    TexStorageSwizzled(int resx, int resy, int initial_page_count = 0);
 
     force_inline int page_count() const { return int(pages_.size()); }
 
@@ -261,10 +261,10 @@ template <typename T, int N> class TextureStorageSwizzled : public TextureStorag
     int DownsampleRegion(int src_page, const int src_pos[2], const int src_res[2], int dst_pos[2]);
 };
 
-extern template class TextureStorageSwizzled<uint8_t, 4>;
-extern template class TextureStorageSwizzled<uint8_t, 3>;
-extern template class TextureStorageSwizzled<uint8_t, 2>;
-extern template class TextureStorageSwizzled<uint8_t, 1>;
+extern template class TexStorageSwizzled<uint8_t, 4>;
+extern template class TexStorageSwizzled<uint8_t, 3>;
+extern template class TexStorageSwizzled<uint8_t, 2>;
+extern template class TexStorageSwizzled<uint8_t, 1>;
 
 } // namespace Ref
 } // namespace Ray

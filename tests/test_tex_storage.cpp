@@ -8,9 +8,9 @@
 void test_atlas() {
     { // Test two types of atlas
         const int AtlasRes = 8192;
-        Ray::Ref::TextureStorageLinear<uint8_t, 4> storage_linear = {AtlasRes, AtlasRes};
-        Ray::Ref::TextureStorageTiled<uint8_t, 4> storage_tiled = {AtlasRes, AtlasRes};
-        Ray::Ref::TextureStorageSwizzled<uint8_t, 4> storage_swizzled = {AtlasRes, AtlasRes};
+        Ray::Ref::TexStorageLinear<uint8_t, 4> storage_linear = {AtlasRes, AtlasRes};
+        Ray::Ref::TexStorageTiled<uint8_t, 4> storage_tiled = {AtlasRes, AtlasRes};
+        Ray::Ref::TexStorageSwizzled<uint8_t, 4> storage_swizzled = {AtlasRes, AtlasRes};
 
         const int TextureRes = 4096;
         auto test_pixels =

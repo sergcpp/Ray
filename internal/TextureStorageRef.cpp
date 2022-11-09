@@ -5,8 +5,8 @@
 #include <algorithm> // for std::max
 
 template <typename T, int N>
-Ray::Ref::TextureStorageLinear<T, N>::TextureStorageLinear(const int resx, const int resy, const int initial_page_count)
-    : TextureStorageBase(resx, resy) {
+Ray::Ref::TexStorageLinear<T, N>::TexStorageLinear(const int resx, const int resy, const int initial_page_count)
+    : TexStorageBase(resx, resy) {
     if (!Resize(initial_page_count)) {
         throw std::runtime_error("TextureAtlas cannot be resized!");
     }
@@ -16,7 +16,7 @@ Ray::Ref::TextureStorageLinear<T, N>::TextureStorageLinear(const int resx, const
 }
 
 template <typename T, int N>
-int Ray::Ref::TextureStorageLinear<T, N>::Allocate(const ColorType *data, const int _res[2], int pos[2]) {
+int Ray::Ref::TexStorageLinear<T, N>::Allocate(const ColorType *data, const int _res[2], int pos[2]) {
     int res[2] = {_res[0] + 2, _res[1] + 2};
 
     if (res[0] > res_[0] || res[1] > res_[1]) {
@@ -59,7 +59,7 @@ int Ray::Ref::TextureStorageLinear<T, N>::Allocate(const ColorType *data, const 
     return Allocate(data, _res, pos);
 }
 
-template <typename T, int N> bool Ray::Ref::TextureStorageLinear<T, N>::Free(const int page, const int pos[2]) {
+template <typename T, int N> bool Ray::Ref::TexStorageLinear<T, N>::Free(const int page, const int pos[2]) {
     if (page < 0 || page > splitters_.size())
         return false;
 #ifndef NDEBUG // Fill region with zeros in debug
@@ -78,7 +78,7 @@ template <typename T, int N> bool Ray::Ref::TextureStorageLinear<T, N>::Free(con
 #endif
 }
 
-template <typename T, int N> bool Ray::Ref::TextureStorageLinear<T, N>::Resize(const int new_page_count) {
+template <typename T, int N> bool Ray::Ref::TexStorageLinear<T, N>::Resize(const int new_page_count) {
     // if we shrink atlas, all redundant pages required to be empty
     for (int i = new_page_count; i < splitters_.size(); i++) {
         if (!splitters_[i].empty()) {
@@ -98,23 +98,23 @@ template <typename T, int N> bool Ray::Ref::TextureStorageLinear<T, N>::Resize(c
 }
 
 template <typename T, int N>
-void Ray::Ref::TextureStorageLinear<T, N>::WritePageData(const int page, const int posx, const int posy, const int sizex,
+void Ray::Ref::TexStorageLinear<T, N>::WritePageData(const int page, const int posx, const int posy, const int sizex,
                                                        const int sizey, const ColorType *data) {
     for (int y = 0; y < sizey; y++) {
         memcpy(&pages_[page][(posy + y) * res_[0] + posx], &data[y * sizex], sizex * sizeof(ColorType));
     }
 }
 
-template class Ray::Ref::TextureStorageLinear<uint8_t, 4>;
-template class Ray::Ref::TextureStorageLinear<uint8_t, 3>;
-template class Ray::Ref::TextureStorageLinear<uint8_t, 2>;
-template class Ray::Ref::TextureStorageLinear<uint8_t, 1>;
+template class Ray::Ref::TexStorageLinear<uint8_t, 4>;
+template class Ray::Ref::TexStorageLinear<uint8_t, 3>;
+template class Ray::Ref::TexStorageLinear<uint8_t, 2>;
+template class Ray::Ref::TexStorageLinear<uint8_t, 1>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 template <typename T, int N>
-Ray::Ref::TextureStorageTiled<T, N>::TextureStorageTiled(const int resx, const int resy, const int initial_page_count)
-    : TextureStorageBase(resx, resy), res_in_tiles_{resx / TileSize, resy / TileSize} {
+Ray::Ref::TexStorageTiled<T, N>::TexStorageTiled(const int resx, const int resy, const int initial_page_count)
+    : TexStorageBase(resx, resy), res_in_tiles_{resx / TileSize, resy / TileSize} {
     if ((resx % TileSize) || (resy % TileSize)) {
         throw std::invalid_argument("TextureAtlas resolution should be multiple of tile size!");
     }
@@ -128,7 +128,7 @@ Ray::Ref::TextureStorageTiled<T, N>::TextureStorageTiled(const int resx, const i
 }
 
 template <typename T, int N>
-int Ray::Ref::TextureStorageTiled<T, N>::Allocate(const ColorType *data, const int _res[2], int pos[2]) {
+int Ray::Ref::TexStorageTiled<T, N>::Allocate(const ColorType *data, const int _res[2], int pos[2]) {
     const int res[2] = {_res[0] + 2, _res[1] + 2};
 
     if (res[0] > res_[0] || res[1] > res_[1]) {
@@ -170,7 +170,7 @@ int Ray::Ref::TextureStorageTiled<T, N>::Allocate(const ColorType *data, const i
     return Allocate(data, _res, pos);
 }
 
-template <typename T, int N> bool Ray::Ref::TextureStorageTiled<T, N>::Free(const int page, const int pos[2]) {
+template <typename T, int N> bool Ray::Ref::TexStorageTiled<T, N>::Free(const int page, const int pos[2]) {
     if (page < 0 || page > splitters_.size()) {
         return false;
     }
@@ -190,7 +190,7 @@ template <typename T, int N> bool Ray::Ref::TextureStorageTiled<T, N>::Free(cons
 #endif
 }
 
-template <typename T, int N> bool Ray::Ref::TextureStorageTiled<T, N>::Resize(const int new_page_count) {
+template <typename T, int N> bool Ray::Ref::TexStorageTiled<T, N>::Resize(const int new_page_count) {
     // if we shrink atlas, all redundant pages required to be empty
     for (int i = new_page_count; i < int(splitters_.size()); i++) {
         if (!splitters_[i].empty()) {
@@ -210,7 +210,7 @@ template <typename T, int N> bool Ray::Ref::TextureStorageTiled<T, N>::Resize(co
 }
 
 template <typename T, int N>
-int Ray::Ref::TextureStorageTiled<T, N>::DownsampleRegion(const int src_page, const int src_pos[2], const int src_res[2],
+int Ray::Ref::TexStorageTiled<T, N>::DownsampleRegion(const int src_page, const int src_pos[2], const int src_res[2],
                                                         int dst_pos[2]) {
     const int dst_res[2] = {src_res[0] / 2, src_res[1] / 2};
 
@@ -238,7 +238,7 @@ int Ray::Ref::TextureStorageTiled<T, N>::DownsampleRegion(const int src_page, co
 }
 
 template <typename T, int N>
-void Ray::Ref::TextureStorageTiled<T, N>::WritePageData(const int page, const int posx, const int posy, const int sizex,
+void Ray::Ref::TexStorageTiled<T, N>::WritePageData(const int page, const int posx, const int posy, const int sizex,
                                                       const int sizey, const ColorType *data) {
     for (int y = 0; y < sizey; y++) {
         const int tiley = (posy + y) / TileSize, in_tiley = (posy + y) % TileSize;
@@ -252,16 +252,16 @@ void Ray::Ref::TextureStorageTiled<T, N>::WritePageData(const int page, const in
     }
 }
 
-template class Ray::Ref::TextureStorageTiled<uint8_t, 4>;
-template class Ray::Ref::TextureStorageTiled<uint8_t, 3>;
-template class Ray::Ref::TextureStorageTiled<uint8_t, 2>;
-template class Ray::Ref::TextureStorageTiled<uint8_t, 1>;
+template class Ray::Ref::TexStorageTiled<uint8_t, 4>;
+template class Ray::Ref::TexStorageTiled<uint8_t, 3>;
+template class Ray::Ref::TexStorageTiled<uint8_t, 2>;
+template class Ray::Ref::TexStorageTiled<uint8_t, 1>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 template <typename T, int N>
-Ray::Ref::TextureStorageSwizzled<T, N>::TextureStorageSwizzled(const int resx, const int resy, const int initial_page_count)
-    : TextureStorageBase(resx, resy),
+Ray::Ref::TexStorageSwizzled<T, N>::TexStorageSwizzled(const int resx, const int resy, const int initial_page_count)
+    : TexStorageBase(resx, resy),
       tile_y_stride_(swizzle_x_tile(OuterTileW * ((res_[0] + OuterTileW - 1) / OuterTileW))) {
     if (!Resize(initial_page_count)) {
         throw std::runtime_error("TextureAtlas cannot be resized!");
@@ -272,7 +272,7 @@ Ray::Ref::TextureStorageSwizzled<T, N>::TextureStorageSwizzled(const int resx, c
 }
 
 template <typename T, int N>
-int Ray::Ref::TextureStorageSwizzled<T, N>::Allocate(const ColorType *data, const int _res[2], int pos[2]) {
+int Ray::Ref::TexStorageSwizzled<T, N>::Allocate(const ColorType *data, const int _res[2], int pos[2]) {
     const int res[2] = {_res[0] + 2, _res[1] + 2};
 
     if (res[0] > res_[0] || res[1] > res_[1]) {
@@ -314,7 +314,7 @@ int Ray::Ref::TextureStorageSwizzled<T, N>::Allocate(const ColorType *data, cons
     return Allocate(data, _res, pos);
 }
 
-template <typename T, int N> bool Ray::Ref::TextureStorageSwizzled<T, N>::Free(const int page, const int pos[2]) {
+template <typename T, int N> bool Ray::Ref::TexStorageSwizzled<T, N>::Free(const int page, const int pos[2]) {
     if (page < 0 || page > splitters_.size()) {
         return false;
     }
@@ -334,7 +334,7 @@ template <typename T, int N> bool Ray::Ref::TextureStorageSwizzled<T, N>::Free(c
 #endif
 }
 
-template <typename T, int N> bool Ray::Ref::TextureStorageSwizzled<T, N>::Resize(const int new_page_count) {
+template <typename T, int N> bool Ray::Ref::TexStorageSwizzled<T, N>::Resize(const int new_page_count) {
     // if we shrink atlas, all redundant pages required to be empty
     for (int i = new_page_count; i < int(splitters_.size()); i++) {
         if (!splitters_[i].empty()) {
@@ -357,7 +357,7 @@ template <typename T, int N> bool Ray::Ref::TextureStorageSwizzled<T, N>::Resize
 }
 
 template <typename T, int N>
-int Ray::Ref::TextureStorageSwizzled<T, N>::DownsampleRegion(const int src_page, const int src_pos[2],
+int Ray::Ref::TexStorageSwizzled<T, N>::DownsampleRegion(const int src_page, const int src_pos[2],
                                                            const int src_res[2], int dst_pos[2]) {
     const int dst_res[2] = {(src_res[0] + 1) / 2, (src_res[1] + 1) / 2};
 
@@ -385,7 +385,7 @@ int Ray::Ref::TextureStorageSwizzled<T, N>::DownsampleRegion(const int src_page,
 }
 
 template <typename T, int N>
-void Ray::Ref::TextureStorageSwizzled<T, N>::WritePageData(const int page, const int posx, const int posy,
+void Ray::Ref::TexStorageSwizzled<T, N>::WritePageData(const int page, const int posx, const int posy,
                                                          const int sizex, const int sizey, const ColorType *data) {
     for (int y = 0; y < sizey; y++) {
         const uint32_t y_off = ((posy + y) / OuterTileH) * tile_y_stride_ + swizzle_y(posy + y);
@@ -402,7 +402,7 @@ void Ray::Ref::TextureStorageSwizzled<T, N>::WritePageData(const int page, const
     }
 }
 
-template class Ray::Ref::TextureStorageSwizzled<uint8_t, 4>;
-template class Ray::Ref::TextureStorageSwizzled<uint8_t, 3>;
-template class Ray::Ref::TextureStorageSwizzled<uint8_t, 2>;
-template class Ray::Ref::TextureStorageSwizzled<uint8_t, 1>;
+template class Ray::Ref::TexStorageSwizzled<uint8_t, 4>;
+template class Ray::Ref::TexStorageSwizzled<uint8_t, 3>;
+template class Ray::Ref::TexStorageSwizzled<uint8_t, 2>;
+template class Ray::Ref::TexStorageSwizzled<uint8_t, 1>;

@@ -2449,9 +2449,9 @@ Ray::Ref::simd_fvec2 Ray::Ref::TransformUV(const simd_fvec2 &_uv, const simd_fve
     return res;
 }
 
-Ray::Ref::simd_fvec4 Ray::Ref::SampleNearest(const TextureStorageBase *atlases[], const texture_t &t,
+Ray::Ref::simd_fvec4 Ray::Ref::SampleNearest(const TexStorageBase *atlases[], const texture_t &t,
                                              const simd_fvec2 &uvs, const int lod) {
-    const TextureStorageBase &atlas = *atlases[t.atlas];
+    const TexStorageBase &atlas = *atlases[t.atlas];
 
     const simd_fvec2 atlas_size = {atlas.size_x(), atlas.size_y()};
     simd_fvec2 _uvs = TransformUV(uvs, atlas_size, t, lod);
@@ -2463,9 +2463,9 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleNearest(const TextureStorageBase *atlases[]
     return simd_fvec4{pix.v[0], pix.v[1], pix.v[2], pix.v[3]};
 }
 
-Ray::Ref::simd_fvec4 Ray::Ref::SampleBilinear(const TextureStorageBase *atlases[], const texture_t &t,
+Ray::Ref::simd_fvec4 Ray::Ref::SampleBilinear(const TexStorageBase *atlases[], const texture_t &t,
                                               const simd_fvec2 &uvs, const int lod) {
-    const TextureStorageBase &atlas = *atlases[t.atlas];
+    const TexStorageBase &atlas = *atlases[t.atlas];
 
     const simd_fvec2 atlas_size = {atlas.size_x(), atlas.size_y()};
     simd_fvec2 _uvs = TransformUV(uvs, atlas_size, t, lod);
@@ -2489,7 +2489,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleBilinear(const TextureStorageBase *atlases[
     return (p1 * ky + p0 * (1.0f - ky));
 }
 
-Ray::Ref::simd_fvec4 Ray::Ref::SampleBilinear(const TextureStorageBase &atlas, const simd_fvec2 &uvs, const int page) {
+Ray::Ref::simd_fvec4 Ray::Ref::SampleBilinear(const TexStorageBase &atlas, const simd_fvec2 &uvs, const int page) {
     const auto &p00 = atlas.Fetch(page, int(uvs[0]) + 0, int(uvs[1]) + 0);
     const auto &p01 = atlas.Fetch(page, int(uvs[0]) + 1, int(uvs[1]) + 0);
     const auto &p10 = atlas.Fetch(page, int(uvs[0]) + 0, int(uvs[1]) + 1);
@@ -2508,7 +2508,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleBilinear(const TextureStorageBase &atlas, c
     return (p1X * k[1] + p0X * (1 - k[1]));
 }
 
-Ray::Ref::simd_fvec4 Ray::Ref::SampleTrilinear(const TextureStorageBase *atlases[], const texture_t &t,
+Ray::Ref::simd_fvec4 Ray::Ref::SampleTrilinear(const TexStorageBase *atlases[], const texture_t &t,
                                                const simd_fvec2 &uvs, const float lod) {
     const simd_fvec4 col1 = SampleBilinear(atlases, t, uvs, (int)std::floor(lod));
     const simd_fvec4 col2 = SampleBilinear(atlases, t, uvs, (int)std::ceil(lod));
@@ -2517,10 +2517,10 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleTrilinear(const TextureStorageBase *atlases
     return col1 * (1 - k) + col2 * k;
 }
 
-Ray::Ref::simd_fvec4 Ray::Ref::SampleAnisotropic(const TextureStorageBase *atlases[], const texture_t &t,
+Ray::Ref::simd_fvec4 Ray::Ref::SampleAnisotropic(const TexStorageBase *atlases[], const texture_t &t,
                                                  const simd_fvec2 &uvs, const simd_fvec2 &duv_dx,
                                                  const simd_fvec2 &duv_dy) {
-    const TextureStorageBase &atlas = *atlases[t.atlas];
+    const TexStorageBase &atlas = *atlases[t.atlas];
 
     const int width = int(t.width & TEXTURE_WIDTH_BITS);
     const int height = int(t.height & TEXTURE_HEIGHT_BITS);
@@ -2619,7 +2619,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleLatlong_RGBE(const TextureAtlasRGBA &atlas,
 
 float Ray::Ref::ComputeVisibility(const float p[3], const float d[3], float dist, const float rand_val, int rand_hash2,
                                   const scene_data_t &sc, const uint32_t node_index,
-                                  const TextureStorageBase *tex_atlases[]) {
+                                  const TexStorageBase *tex_atlases[]) {
     float visibility = 1.0f;
 
     const simd_fvec4 rd = {d[0], d[1], d[2], 0.0f};
@@ -2767,7 +2767,7 @@ void Ray::Ref::ComputeDerivatives(const simd_fvec4 &I, const float t, const simd
     out_der.ddn_dy = dot(dd_dy, plane_N) + dot(I, out_der.dndy);
 }
 
-void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, const TextureStorageBase *tex_atlases[],
+void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, const TexStorageBase *tex_atlases[],
                                  const float halton[], const float sample_off[2], light_sample_t &ls) {
     const float u1 = fract(halton[RAND_DIM_LIGHT_PICK] + sample_off[0]);
     const auto light_index = std::min(uint32_t(u1 * sc.li_indices.size()), uint32_t(sc.li_indices.size() - 1));
@@ -3056,7 +3056,7 @@ bool Ray::Ref::IntersectAreaLights(const ray_data_t &ray, const light_t lights[]
 
 Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t &pi, const hit_data_t &inter,
                                           const ray_data_t &ray, const float *halton, const scene_data_t &sc,
-                                          const uint32_t node_index, const TextureStorageBase *tex_atlases[],
+                                          const uint32_t node_index, const TexStorageBase *tex_atlases[],
                                           ray_data_t *out_secondary_rays, int *out_secondary_rays_count,
                                           shadow_ray_t *out_shadow_rays, int *out_shadow_rays_count) {
     if (!inter.mask) {

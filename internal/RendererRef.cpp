@@ -57,7 +57,7 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
 
     const uint32_t macro_tree_root = s->macro_nodes_root_;
 
-    const TextureStorageBase *tex_atlases[] = {&s->tex_atlas_rgba_, &s->tex_atlas_rgb_, &s->tex_atlas_rg_,
+    const TexStorageBase *tex_atlases[] = {&s->tex_atlas_rgba_, &s->tex_atlas_rgb_, &s->tex_atlas_rg_,
                                              &s->tex_atlas_r_};
 
     float root_min[3], cell_size[3];
