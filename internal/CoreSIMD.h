@@ -28,10 +28,11 @@ namespace Ref {
 class TextureAtlasBase;
 template <typename T, int N> class TextureAtlasLinear;
 template <typename T, int N> class TextureAtlasTiled;
-using TextureAtlasRGBA = TextureAtlasTiled<uint8_t, 4>;
-using TextureAtlasRGB = TextureAtlasTiled<uint8_t, 3>;
-using TextureAtlasRG = TextureAtlasTiled<uint8_t, 2>;
-using TextureAtlasR = TextureAtlasTiled<uint8_t, 1>;
+template <typename T, int N> class TextureAtlasSwizzled;
+using TextureAtlasRGBA = TextureAtlasSwizzled<uint8_t, 4>;
+using TextureAtlasRGB = TextureAtlasSwizzled<uint8_t, 3>;
+using TextureAtlasRG = TextureAtlasSwizzled<uint8_t, 2>;
+using TextureAtlasR = TextureAtlasSwizzled<uint8_t, 1>;
 } // namespace Ref
 namespace NS {
 

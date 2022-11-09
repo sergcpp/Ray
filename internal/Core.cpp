@@ -81,7 +81,7 @@ force_inline uint32_t Part1By2(uint32_t x) {
     return x;
 }
 
-force_inline uint32_t EncodeMorton3(uint32_t x, uint32_t y, uint32_t z) {
+force_inline uint32_t EncodeMorton3(const uint32_t x, const uint32_t y, const uint32_t z) {
     return (Part1By2(z) << 2) + (Part1By2(y) << 1) + Part1By2(x);
 }
 
