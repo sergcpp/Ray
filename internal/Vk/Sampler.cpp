@@ -51,7 +51,7 @@ Ray::Vk::Sampler &Ray::Vk::Sampler::operator=(Sampler &&rhs) noexcept {
         return (*this);
     }
 
-    Destroy();
+    Free();
 
     ctx_ = exchange(rhs.ctx_, nullptr);
     handle_ = exchange(rhs.handle_, {});
@@ -60,15 +60,22 @@ Ray::Vk::Sampler &Ray::Vk::Sampler::operator=(Sampler &&rhs) noexcept {
     return (*this);
 }
 
-void Ray::Vk::Sampler::Destroy() {
+void Ray::Vk::Sampler::Free() {
     if (handle_) {
         ctx_->samplers_to_destroy[ctx_->backend_frame].emplace_back(handle_);
         handle_ = {};
     }
 }
 
+void Ray::Vk::Sampler::FreeImmediate() {
+    if (handle_) {
+        vkDestroySampler(ctx_->device(), handle_, nullptr);
+        handle_ = {};
+    }
+}
+
 void Ray::Vk::Sampler::Init(Context *ctx, const SamplingParams params) {
-    Destroy();
+    Free();
 
     VkSamplerCreateInfo sampler_info = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
     sampler_info.magFilter = g_vk_min_mag_filter[size_t(params.filter)];

@@ -351,7 +351,7 @@ bool Ray::Vk::TextureAtlas::Resize(const int pages_count) {
     SamplingParams params;
     params.filter = eTexFilter::Bilinear;
 
-    sampler_.Init(ctx_, params);
+    Sampler new_sampler(ctx_, params);
 
     auto new_resource_state = eResState::Undefined;
 
@@ -481,6 +481,9 @@ bool Ray::Vk::TextureAtlas::Resize(const int pages_count) {
     img_ = new_img;
     img_view_ = new_img_view;
     mem_ = new_mem;
+
+    sampler_.FreeImmediate();
+    sampler_ = std::move(new_sampler);
 
     splitters_.resize(pages_count, TextureSplitter{res_});
 

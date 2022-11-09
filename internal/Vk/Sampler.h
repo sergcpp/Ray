@@ -15,9 +15,10 @@ class Sampler {
 
   public:
     Sampler() = default;
+    Sampler(Context *ctx, SamplingParams params) { Init(ctx, params); }
     Sampler(const Sampler &rhs) = delete;
     Sampler(Sampler &&rhs) noexcept { (*this) = std::move(rhs); }
-    ~Sampler() { Destroy(); }
+    ~Sampler() { Free(); }
 
     VkSampler vk_handle() const { return handle_; }
     SamplingParams params() const { return params_; }
@@ -28,7 +29,8 @@ class Sampler {
     Sampler &operator=(Sampler &&rhs) noexcept;
 
     void Init(Context *ctx, SamplingParams params);
-    void Destroy();
+    void Free();
+    void FreeImmediate();
 };
 } // namespace Vk
 } // namespace Ray

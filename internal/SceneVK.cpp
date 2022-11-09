@@ -922,6 +922,9 @@ void Ray::Vk::Scene::RebuildHWAccStructures() {
         VkResult res = vkCreateQueryPool(ctx_->device(), &query_pool_create_info, nullptr, &query_pool);
         assert(res == VK_SUCCESS);
 
+        std::vector<AccStructure> blases_before_compaction;
+        blases_before_compaction.resize(all_blases.size());
+
         { // Submit build commands
             VkDeviceSize acc_buf_offset = 0;
             VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
@@ -943,8 +946,8 @@ void Ray::Vk::Scene::RebuildHWAccStructures() {
                     ctx_->log()->Error("Failed to create acceleration structure!");
                 }
 
-                auto &blas = rt_mesh_blases_[i];
-                if (!blas.acc.Init(ctx_, acc_struct)) {
+                auto &acc = blases_before_compaction[i];
+                if (!acc.Init(ctx_, acc_struct)) {
                     ctx_->log()->Error("Failed to init BLAS!");
                 }
 
@@ -1011,21 +1014,26 @@ void Ray::Vk::Scene::RebuildHWAccStructures() {
                     ctx_->log()->Error("Failed to create acceleration structure!");
                 }
 
-                auto &vk_blas = rt_mesh_blases_[i].acc;
-
                 VkCopyAccelerationStructureInfoKHR copy_info = {VK_STRUCTURE_TYPE_COPY_ACCELERATION_STRUCTURE_INFO_KHR};
                 copy_info.mode = VK_COPY_ACCELERATION_STRUCTURE_MODE_COMPACT_KHR;
-                copy_info.src = vk_blas.vk_handle();
+                copy_info.src = blases_before_compaction[i].vk_handle();
                 copy_info.dst = compact_acc_struct;
 
                 vkCmdCopyAccelerationStructureKHR(cmd_buf, &copy_info);
 
+                auto &vk_blas = rt_mesh_blases_[i].acc;
                 if (!vk_blas.Init(ctx_, compact_acc_struct)) {
                     ctx_->log()->Error("Blas compaction failed!");
                 }
             }
 
             EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+
+            for (auto &b : blases_before_compaction) {
+                b.FreeImmediate();
+            }
+            acc_structs_buf.FreeImmediate();
+            scratch_buf.FreeImmediate();
         }
     }
 
@@ -1124,6 +1132,8 @@ void Ray::Vk::Scene::RebuildHWAccStructures() {
                              nullptr);
     }
 
+    Buffer tlas_scratch_buf;
+
     { //
         VkAccelerationStructureGeometryInstancesDataKHR instances_data = {
             VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR};
@@ -1165,7 +1175,7 @@ void Ray::Vk::Scene::RebuildHWAccStructures() {
             ctx_->log()->Error("[SceneManager::InitHWAccStructures]: Failed to create acceleration structure!");
         }
 
-        Buffer tlas_scratch_buf =
+        tlas_scratch_buf =
             Buffer{"TLAS Scratch Buf", ctx_, eBufType::Storage, uint32_t(size_info.buildScratchSize)};
         VkDeviceAddress tlas_scratch_buf_addr = tlas_scratch_buf.vk_device_address();
 
@@ -1188,6 +1198,10 @@ void Ray::Vk::Scene::RebuildHWAccStructures() {
     }
 
     EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+
+    tlas_scratch_buf.FreeImmediate();
+    instance_stage_buf.FreeImmediate();
+    geo_data_stage_buf.FreeImmediate();
 }
 
 #undef _MIN

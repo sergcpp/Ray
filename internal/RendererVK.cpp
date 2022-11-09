@@ -299,6 +299,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
 
         EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 
+        temp_stage_buf.FreeImmediate();
         loaded_halton_ = region.iteration;
     }
 
