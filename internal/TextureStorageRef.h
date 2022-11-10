@@ -86,6 +86,8 @@ template <typename T, int N> class TexStorageLinear : public TexStorageBase {
     bool Free(int page, const int pos[2]);
 
     bool Resize(int new_page_count);
+
+    int DownsampleRegion(int src_page, const int src_pos[2], const int src_res[2], int dst_pos[2]);
 };
 
 extern template class Ray::Ref::TexStorageLinear<uint8_t, 4>;
