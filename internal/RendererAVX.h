@@ -60,8 +60,7 @@ extern template bool Traverse_MicroTree_WithStack_ClosestHit<RayPacketSize>(
     const uint32_t *tri_indices, int obj_index, hit_data_t<RayPacketSize> &inter);
 extern template bool Traverse_MicroTree_WithStack_ClosestHit<RayPacketSize>(
     const float ro[3], const float rd[3], int i, const mbvh_node_t *oct_nodes, uint32_t node_index,
-    const mtri_accel_t *mtris, const uint32_t *tri_indices, int obj_index,
-    hit_data_t<RayPacketSize> &inter);
+    const mtri_accel_t *mtris, const uint32_t *tri_indices, int obj_index, hit_data_t<RayPacketSize> &inter);
 extern template bool Traverse_MicroTree_WithStack_AnyHit<RayPacketSize>(
     const simd_fvec<RayPacketSize> ro[3], const simd_fvec<RayPacketSize> rd[3],
     const simd_ivec<RayPacketSize> &ray_mask, const bvh_node_t *nodes, uint32_t node_index, const tri_accel_t *tris,
@@ -72,33 +71,22 @@ extern template bool Traverse_MicroTree_WithStack_AnyHit(const float ro[3], cons
                                                          const uint32_t *tri_indices, int obj_index,
                                                          hit_data_t<RayPacketSize> &inter);
 
-extern template void SampleNearest<RayPacketSize>(const Ref::TexStorageBase *atlases[], const texture_t &t,
+extern template void SampleNearest<RayPacketSize>(const Ref::TexStorageBase *textures[], uint32_t index,
                                                   const simd_fvec<RayPacketSize> uvs[2],
                                                   const simd_fvec<RayPacketSize> &lod,
                                                   const simd_ivec<RayPacketSize> &mask,
                                                   simd_fvec<RayPacketSize> out_rgba[4]);
-extern template void SampleBilinear<RayPacketSize>(const Ref::TexStorageBase *atlases[], const texture_t &t,
+extern template void SampleBilinear<RayPacketSize>(const Ref::TexStorageBase *textures[], uint32_t index,
                                                    const simd_fvec<RayPacketSize> uvs[2],
                                                    const simd_ivec<RayPacketSize> &lod,
                                                    const simd_ivec<RayPacketSize> &mask,
                                                    simd_fvec<RayPacketSize> out_rgba[4]);
-extern template void SampleBilinear<RayPacketSize>(const Ref::TexStorageBase &atlas,
-                                                   const simd_fvec<RayPacketSize> uvs[2],
-                                                   const simd_ivec<RayPacketSize> &page,
-                                                   const simd_ivec<RayPacketSize> &mask,
-                                                   simd_fvec<RayPacketSize> out_rgba[4]);
-extern template void SampleTrilinear<RayPacketSize>(const Ref::TexStorageBase *atlases[], const texture_t &t,
+extern template void SampleTrilinear<RayPacketSize>(const Ref::TexStorageBase *textures[], uint32_t index,
                                                     const simd_fvec<RayPacketSize> uvs[2],
                                                     const simd_fvec<RayPacketSize> &lod,
                                                     const simd_ivec<RayPacketSize> &mask,
                                                     simd_fvec<RayPacketSize> out_rgba[4]);
-extern template void SampleAnisotropic<RayPacketSize>(const Ref::TexStorageBase *atlases[], const texture_t &t,
-                                                      const simd_fvec<RayPacketSize> uvs[2],
-                                                      const simd_fvec<RayPacketSize> duv_dx[2],
-                                                      const simd_fvec<RayPacketSize> duv_dy[2],
-                                                      const simd_ivec<RayPacketSize> &mask,
-                                                      simd_fvec<RayPacketSize> out_rgba[4]);
-extern template void SampleLatlong_RGBE<RayPacketSize>(const Ref::TextureAtlasRGBA &atlas, const texture_t &t,
+extern template void SampleLatlong_RGBE<RayPacketSize>(const Ref::TexStorageRGBA &storage, uint32_t index,
                                                        const simd_fvec<RayPacketSize> dir[3],
                                                        const simd_ivec<RayPacketSize> &mask,
                                                        simd_fvec<RayPacketSize> out_rgb[3]);

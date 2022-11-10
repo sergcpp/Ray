@@ -5,7 +5,7 @@
 #include <atomic>
 #include <chrono>
 
-void test_atlas();
+void test_tex_storage();
 void test_oren_mat0(const char *arch_list[], const char *preferred_device);
 void test_oren_mat1(const char *arch_list[], const char *preferred_device);
 void test_oren_mat2(const char *arch_list[], const char *preferred_device);
@@ -127,8 +127,8 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    test_atlas();
     test_simd();
+    test_tex_storage();
     // test_mesh_lights();
 
     static const char *ArchListFull[] = {"ref", "sse2", "sse41", "avx", "avx2", "neon", "vk", nullptr};

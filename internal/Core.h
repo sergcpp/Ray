@@ -91,29 +91,21 @@ const int MAX_TEXTURE_SIZE = (1 << MAX_MIP_LEVEL);
 
 const int TEXTURE_ATLAS_SIZE = 8192 + 256; // small margin to account for borders
 
-const int TEXTURE_SRGB_BIT = 0b1000000000000000;
-const int TEXTURE_WIDTH_BITS = 0b0111111111111111;
-const int TEXTURE_MIPS_BIT = 0b1000000000000000;
-const int TEXTURE_HEIGHT_BITS = 0b0111111111111111;
+const int ATLAS_TEX_SRGB_BIT    = 0b1000000000000000;
+const int ATLAS_TEX_WIDTH_BITS  = 0b0111111111111111;
+const int ATLAS_TEX_MIPS_BIT    = 0b1000000000000000;
+const int ATLAS_TEX_HEIGHT_BITS = 0b0111111111111111;
 
-/*struct texture_t {
-    uint16_t width;
-    uint16_t height;
-    uint8_t atlas;
-    uint8_t _pad;
-    uint8_t page[NUM_MIP_LEVELS];
-    uint16_t pos[NUM_MIP_LEVELS][2];
-};
-static_assert(sizeof(texture_t) == 76, "!");*/
-
-struct texture_t {
+struct atlas_texture_t {
     uint16_t width;
     uint16_t height;
     uint32_t atlas;
     uint8_t page[NUM_MIP_LEVELS + 2];
     uint16_t pos[NUM_MIP_LEVELS][2];
 };
-static_assert(sizeof(texture_t) == 80, "!");
+static_assert(sizeof(atlas_texture_t) == 80, "!");
+
+const int TEX_SRGB_BIT = 0b00000001;
 
 const int MAX_MATERIAL_TEXTURES = 5;
 
@@ -427,7 +419,6 @@ struct scene_data_t {
     const mtri_accel_t *mtris;
     const tri_mat_data_t *tri_materials;
     const material_t *materials;
-    const texture_t *textures;
     const light_t *lights;
     Span<const uint32_t> li_indices;
     Span<const uint32_t> visible_lights;

@@ -28,7 +28,7 @@ static_assert(sizeof(Types::transform_t) == sizeof(Ray::transform_t), "!");
 static_assert(sizeof(Types::mesh_instance_t) == sizeof(Ray::mesh_instance_t), "!");
 static_assert(sizeof(Types::light_t) == sizeof(Ray::light_t), "!");
 static_assert(sizeof(Types::material_t) == sizeof(Ray::material_t), "!");
-static_assert(sizeof(Types::texture_t) == sizeof(Ray::texture_t), "!");
+static_assert(sizeof(Types::atlas_texture_t) == sizeof(Ray::atlas_texture_t), "!");
 
 static_assert(Types::LIGHT_TYPE_SPHERE == Ray::LIGHT_TYPE_SPHERE, "!");
 static_assert(Types::LIGHT_TYPE_SPOT == Ray::LIGHT_TYPE_SPOT, "!");

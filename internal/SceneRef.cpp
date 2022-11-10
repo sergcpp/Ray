@@ -9,10 +9,8 @@
 
 #define _CLAMP(val, min, max) (val < min ? min : (val > max ? max : val))
 
-Ray::Ref::Scene::Scene(ILog *log, const bool use_wide_bvh)
-    : log_(log), use_wide_bvh_(use_wide_bvh), tex_atlas_rgba_(TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE),
-      tex_atlas_rgb_(TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE), tex_atlas_rg_(TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE),
-      tex_atlas_r_(TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE) {}
+Ray::Ref::Scene::Scene(ILog *log, const bool use_wide_bvh) : log_(log), use_wide_bvh_(use_wide_bvh) {
+}
 
 Ray::Ref::Scene::~Scene() {
     while (!mesh_instances_.empty()) {
@@ -25,7 +23,6 @@ Ray::Ref::Scene::~Scene() {
         Scene::RemoveLight(lights_.begin().index());
     }
     materials_.clear();
-    textures_.clear();
     lights_.clear();
 }
 
@@ -42,77 +39,40 @@ void Ray::Ref::Scene::SetEnvironment(const environment_desc_t &env) {
 }
 
 uint32_t Ray::Ref::Scene::AddTexture(const tex_desc_t &_t) {
-    const auto tex_index = uint32_t(textures_.size());
+    const int res[2] = {_t.w, _t.h};
 
-    texture_t t = {};
-    t.width = uint16_t(_t.w);
-    t.height = uint16_t(_t.h);
-
-    if (_t.is_srgb) {
-        t.width |= TEXTURE_SRGB_BIT;
-    }
-
-    if (_t.generate_mipmaps) {
-        t.height |= TEXTURE_MIPS_BIT;
-    }
-
-    int res[2] = {_t.w, _t.h};
-
-    std::vector<color_rgba8_t> tex_data_rgba8;
-    std::vector<color_rgb8_t> tex_data_rgb8;
-    std::vector<color_rg8_t> tex_data_rg8;
-    std::vector<color_r8_t> tex_data_r8;
-
+    int storage = -1, index = -1;
     if (_t.format == eTextureFormat::RGBA8888) {
-        t.atlas = 0;
-        tex_data_rgba8.assign(reinterpret_cast<const color_rgba8_t *>(_t.data),
-                              reinterpret_cast<const color_rgba8_t *>(_t.data) + _t.w * _t.h);
+        storage = 0;
+        index = tex_atlas_rgba_.Allocate(reinterpret_cast<const color_rgba8_t *>(_t.data), res, _t.generate_mipmaps);
     } else if (_t.format == eTextureFormat::RGB888) {
-        t.atlas = 1;
-        tex_data_rgb8.assign(reinterpret_cast<const color_rgb8_t *>(_t.data),
-                             reinterpret_cast<const color_rgb8_t *>(_t.data) + _t.w * _t.h);
+        storage = 1;
+        index = tex_atlas_rgb_.Allocate(reinterpret_cast<const color_rgb8_t *>(_t.data), res, _t.generate_mipmaps);
     } else if (_t.format == eTextureFormat::RG88) {
-        t.atlas = 2;
-        tex_data_rg8.assign(reinterpret_cast<const color_rg8_t *>(_t.data),
-                            reinterpret_cast<const color_rg8_t *>(_t.data) + _t.w * _t.h);
+        storage = 2;
+        index = tex_atlas_rg_.Allocate(reinterpret_cast<const color_rg8_t *>(_t.data), res, _t.generate_mipmaps);
     } else if (_t.format == eTextureFormat::R8) {
-        t.atlas = 3;
-        tex_data_r8.assign(reinterpret_cast<const color_r8_t *>(_t.data),
-                           reinterpret_cast<const color_r8_t *>(_t.data) + _t.w * _t.h);
+        storage = 3;
+        index = tex_atlas_r_.Allocate(reinterpret_cast<const color_r8_t *>(_t.data), res, _t.generate_mipmaps);
     }
 
-    { // Allocate initial mip level
-        int page = -1, pos[2];
-        if (_t.format == eTextureFormat::RGBA8888) {
-            page = tex_atlas_rgba_.Allocate(&tex_data_rgba8[0], res, pos);
-        } else if (_t.format == eTextureFormat::RGB888) {
-            page = tex_atlas_rgb_.Allocate(&tex_data_rgb8[0], res, pos);
-        } else if (_t.format == eTextureFormat::RG88) {
-            page = tex_atlas_rg_.Allocate(&tex_data_rg8[0], res, pos);
-        } else if (_t.format == eTextureFormat::R8) {
-            page = tex_atlas_r_.Allocate(&tex_data_r8[0], res, pos);
-        }
-        if (page == -1) {
-            return 0xffffffff;
-        }
-
-        t.page[0] = uint8_t(page);
-        t.pos[0][0] = uint16_t(pos[0]);
-        t.pos[0][1] = uint16_t(pos[1]);
+    if (storage == -1 || index == -1) {
+        return 0xffffffff;
     }
 
-    // temporarily fill remaining mip levels with the last one (mips will be added later)
-    for (int i = 1; i < NUM_MIP_LEVELS; i++) {
-        t.page[i] = t.page[0];
-        t.pos[i][0] = t.pos[0][0];
-        t.pos[i][1] = t.pos[0][1];
+    log_->Info("Ray: Texture loaded (storage = %i, %ix%i)", storage, _t.w, _t.h);
+    log_->Info("Ray: Storages are (RGBA[%i], RGB[%i], RG[%i], R[%i])", tex_atlas_rgba_.img_count(),
+               tex_atlas_rgb_.img_count(), tex_atlas_rg_.img_count(), tex_atlas_r_.img_count());
+
+    uint32_t ret = 0;
+
+    ret |= uint32_t(storage) << 28;
+    if (_t.is_srgb) {
+        ret |= uint32_t(TEX_SRGB_BIT) << 24;
     }
+    ret |= index;
 
-    log_->Info("Ray: Texture loaded (atlas = %i, %ix%i)", int(t.atlas), _t.w, _t.h);
-    log_->Info("Ray: Atlasses are (RGBA[%i], RGB[%i], RG[%i], R[%i])", tex_atlas_rgba_.page_count(),
-               tex_atlas_rgb_.page_count(), tex_atlas_rg_.page_count(), tex_atlas_r_.page_count());
-
-    return textures_.push(t);
+    return ret;
 }
 
 uint32_t Ray::Ref::Scene::AddMaterial(const shading_node_desc_t &m) {
@@ -593,7 +553,7 @@ void Ray::Ref::Scene::RemoveMeshInstance(uint32_t i) {
     RebuildTLAS();
 }
 
-void Ray::Ref::Scene::Finalize() { GenerateTextureMips(); }
+void Ray::Ref::Scene::Finalize() {  }
 
 void Ray::Ref::Scene::RemoveTris(uint32_t tris_index, uint32_t tris_count) {
     if (!tris_count) {
@@ -709,104 +669,6 @@ void Ray::Ref::Scene::RebuildTLAS() {
         // nodes_ is temporary storage when wide BVH is used
         nodes_.clear();
     }
-}
-
-void Ray::Ref::Scene::GenerateTextureMips() {
-    struct mip_gen_info {
-        uint32_t texture_index;
-        uint16_t size; // used for sorting
-        uint8_t dst_mip;
-        uint8_t atlas_index; // used for sorting
-    };
-
-    std::vector<mip_gen_info> mips_to_generate;
-    mips_to_generate.reserve(textures_.size());
-
-    for (uint32_t i = 0; i < textures_.capacity(); ++i) {
-        if (!textures_.exists(i)) {
-            continue;
-        }
-
-        const texture_t &t = textures_[i];
-        if ((t.height & TEXTURE_MIPS_BIT) == 0) {
-            continue;
-        }
-
-        int mip = 0;
-        int res[2] = {(t.width & TEXTURE_WIDTH_BITS), (t.height & TEXTURE_HEIGHT_BITS)};
-
-        res[0] /= 2;
-        res[1] /= 2;
-        ++mip;
-
-        while (res[0] >= 1 && res[1] >= 1) {
-            const bool requires_generation =
-                t.page[mip] == t.page[0] && t.pos[mip][0] == t.pos[0][0] && t.pos[mip][1] == t.pos[0][1];
-            if (requires_generation) {
-                mips_to_generate.emplace_back();
-                auto &m = mips_to_generate.back();
-                m.texture_index = i;
-                m.size = std::max(res[0], res[1]);
-                m.dst_mip = mip;
-                m.atlas_index = t.atlas;
-            }
-
-            res[0] /= 2;
-            res[1] /= 2;
-            ++mip;
-        }
-    }
-
-    // Sort for more optimal allocation
-    sort(begin(mips_to_generate), end(mips_to_generate), [](const mip_gen_info &lhs, const mip_gen_info &rhs) {
-        if (lhs.atlas_index == rhs.atlas_index) {
-            return lhs.size > rhs.size;
-        }
-        return lhs.atlas_index < rhs.atlas_index;
-    });
-
-    for (const mip_gen_info &info : mips_to_generate) {
-        texture_t &t = textures_[info.texture_index];
-
-        const int dst_mip = info.dst_mip;
-        const int src_mip = dst_mip - 1;
-        const int src_res[2] = {(t.width & TEXTURE_WIDTH_BITS) >> src_mip, (t.height & TEXTURE_HEIGHT_BITS) >> src_mip};
-        assert(src_res[0] != 0 && src_res[1] != 0);
-
-        const int src_pos[2] = {t.pos[src_mip][0] + 1, t.pos[src_mip][1] + 1};
-
-        int page = -1, pos[2];
-        if (t.atlas == 0) {
-            page = tex_atlas_rgba_.DownsampleRegion(t.page[src_mip], src_pos, src_res, pos);
-        } else if (t.atlas == 1) {
-            page = tex_atlas_rgb_.DownsampleRegion(t.page[src_mip], src_pos, src_res, pos);
-        } else if (t.atlas == 2) {
-            page = tex_atlas_rg_.DownsampleRegion(t.page[src_mip], src_pos, src_res, pos);
-        } else if (t.atlas == 3) {
-            page = tex_atlas_r_.DownsampleRegion(t.page[src_mip], src_pos, src_res, pos);
-        }
-
-        if (page == -1) {
-            log_->Error("Failed to allocate texture!");
-            break;
-        }
-
-        t.page[dst_mip] = uint8_t(page);
-        t.pos[dst_mip][0] = uint16_t(pos[0]);
-        t.pos[dst_mip][1] = uint16_t(pos[1]);
-
-        if (src_res[0] == 1 || src_res[1] == 1) {
-            // fill remaining mip levels with the last one
-            for (int i = dst_mip + 1; i < NUM_MIP_LEVELS; i++) {
-                t.page[i] = t.page[dst_mip];
-                t.pos[i][0] = t.pos[dst_mip][0];
-                t.pos[i][1] = t.pos[dst_mip][1];
-            }
-        }
-    }
-
-    log_->Info("Ray: Atlasses are (RGBA[%i], RGB[%i], RG[%i], R[%i])", tex_atlas_rgba_.page_count(),
-               tex_atlas_rgb_.page_count(), tex_atlas_rg_.page_count(), tex_atlas_r_.page_count());
 }
 
 #undef _CLAMP

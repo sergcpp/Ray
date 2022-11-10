@@ -70,7 +70,7 @@ layout(std430, binding = COUNTERS_BUF_SLOT) readonly buffer Counters {
 };
 
 layout(std430, binding = TEXTURES_BUF_SLOT) readonly buffer Textures {
-    texture_t g_textures[];
+    atlas_texture_t g_textures[];
 };
 
 #if HWRT

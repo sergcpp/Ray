@@ -68,26 +68,17 @@ template bool Traverse_MicroTree_WithStack_AnyHit(const float ro[3], const float
                                                   const uint32_t *tri_indices, int obj_index,
                                                   hit_data_t<RayPacketSize> &inter);
 
-template void SampleNearest<RayPacketSize>(const Ref::TexStorageBase *atlases[], const texture_t &t,
+template void SampleNearest<RayPacketSize>(const Ref::TexStorageBase *textures[], uint32_t index,
                                            const simd_fvec<RayPacketSize> uvs[2], const simd_fvec<RayPacketSize> &lod,
                                            const simd_ivec<RayPacketSize> &mask, simd_fvec<RayPacketSize> out_rgba[4]);
-template void SampleBilinear<RayPacketSize>(const Ref::TexStorageBase *atlases[], const texture_t &t,
+template void SampleBilinear<RayPacketSize>(const Ref::TexStorageBase *textures[], uint32_t index,
                                             const simd_fvec<RayPacketSize> uvs[2], const simd_ivec<RayPacketSize> &lod,
                                             const simd_ivec<RayPacketSize> &mask, simd_fvec<RayPacketSize> out_rgba[4]);
-template void SampleBilinear<RayPacketSize>(const Ref::TexStorageBase &atlas, const simd_fvec<RayPacketSize> uvs[2],
-                                            const simd_ivec<RayPacketSize> &page, const simd_ivec<RayPacketSize> &mask,
-                                            simd_fvec<RayPacketSize> out_rgba[4]);
-template void SampleTrilinear<RayPacketSize>(const Ref::TexStorageBase *atlases[], const texture_t &t,
+template void SampleTrilinear<RayPacketSize>(const Ref::TexStorageBase *textures[], uint32_t index,
                                              const simd_fvec<RayPacketSize> uvs[2], const simd_fvec<RayPacketSize> &lod,
                                              const simd_ivec<RayPacketSize> &mask,
                                              simd_fvec<RayPacketSize> out_rgba[4]);
-template void SampleAnisotropic<RayPacketSize>(const Ref::TexStorageBase *atlases[], const texture_t &t,
-                                               const simd_fvec<RayPacketSize> uvs[2],
-                                               const simd_fvec<RayPacketSize> duv_dx[2],
-                                               const simd_fvec<RayPacketSize> duv_dy[2],
-                                               const simd_ivec<RayPacketSize> &mask,
-                                               simd_fvec<RayPacketSize> out_rgba[4]);
-template void SampleLatlong_RGBE<RayPacketSize>(const Ref::TextureAtlasRGBA &atlas, const texture_t &t,
+template void SampleLatlong_RGBE<RayPacketSize>(const Ref::TexStorageRGBA &storage, uint32_t index,
                                                 const simd_fvec<RayPacketSize> dir[3],
                                                 const simd_ivec<RayPacketSize> &mask,
                                                 simd_fvec<RayPacketSize> out_rgb[3]);
@@ -112,7 +103,8 @@ template void IntersectAreaLights<RayPacketSize>(const ray_data_t<RayPacketSize>
                                                  Span<const uint32_t> visible_lights, const transform_t transforms[],
                                                  hit_data_t<RayPacketSize> &inout_inter);
 
-template void ShadeSurface<RayPacketSize>(const simd_ivec<RayPacketSize> &index, const pass_info_t &pi,
+template void
+ShadeSurface<RayPacketSize>(const simd_ivec<RayPacketSize> &index, const pass_info_t &pi,
                                           const float *halton, const hit_data_t<RayPacketSize> &inter,
                                           const ray_data_t<RayPacketSize> &ray, const scene_data_t &sc,
                                           uint32_t node_index, const Ref::TexStorageBase *tex_atlases[],

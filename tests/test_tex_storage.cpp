@@ -5,14 +5,13 @@
 #include <memory>
 #include <random>
 
-void test_atlas() {
-    { // Test two types of atlas
-        const int AtlasRes = 8192;
-        Ray::Ref::TexStorageLinear<uint8_t, 4> storage_linear = {AtlasRes, AtlasRes};
-        Ray::Ref::TexStorageTiled<uint8_t, 4> storage_tiled = {AtlasRes, AtlasRes};
-        Ray::Ref::TexStorageSwizzled<uint8_t, 4> storage_swizzled = {AtlasRes, AtlasRes};
+void test_tex_storage() {
+    { // Test three storage layouts
+        Ray::Ref::TexStorageLinear<uint8_t, 4> storage_linear;
+        Ray::Ref::TexStorageTiled<uint8_t, 4> storage_tiled;
+        Ray::Ref::TexStorageSwizzled<uint8_t, 4> storage_swizzled;
 
-        const int TextureRes = 4096;
+        const int TextureRes = 4093;
         auto test_pixels =
             std::unique_ptr<Ray::color_t<uint8_t, 4>[]> { new Ray::color_t<uint8_t, 4>[ TextureRes * TextureRes * 4 ] };
 
@@ -30,30 +29,27 @@ void test_atlas() {
             }
         }
 
-        int res[2] = {TextureRes, TextureRes}, pos_linear[2], pos_tiled[2];
-        require(storage_linear.Allocate(test_pixels.get(), res, pos_linear) == 0);
-        require(storage_tiled.Allocate(test_pixels.get(), res, pos_tiled) == 0);
-        require(storage_swizzled.Allocate(test_pixels.get(), res, pos_tiled) == 0);
+        int res[2] = {TextureRes, TextureRes};
+        require_fatal(storage_linear.Allocate(test_pixels.get(), res, false) == 0);
+        require_fatal(storage_tiled.Allocate(test_pixels.get(), res, false) == 0);
+        require_fatal(storage_swizzled.Allocate(test_pixels.get(), res, false) == 0);
 
-        for (int y = 0; y < TextureRes; y++) {
-            for (int x = 0; x < TextureRes; x++) {
-                const Ray::color_t<uint8_t, 4> sampled_color1 =
-                                                   storage_linear.Get(0, pos_linear[0] + x + 1, pos_linear[1] + y + 1),
-                                               sampled_color2 =
-                                                   storage_tiled.Get(0, pos_tiled[0] + x + 1, pos_tiled[1] + y + 1),
-                                               sampled_color3 =
-                                                   storage_swizzled.Get(0, pos_tiled[0] + x + 1, pos_tiled[1] + y + 1);
+        for (int y = 0; y < TextureRes; ++y) {
+            for (int x = 0; x < TextureRes; ++x) {
+                const Ray::color_t<uint8_t, 4> sampled_color1 = storage_linear.Get(0, x, y, 0),
+                                               sampled_color2 = storage_tiled.Get(0, x, y, 0),
+                                               sampled_color3 = storage_swizzled.Get(0, x, y, 0);
 
                 const Ray::color_t<uint8_t, 4> &test_color = test_pixels[y * TextureRes + x];
-                require(sampled_color1.v[0] == test_color.v[0]);
-                require(sampled_color1.v[1] == test_color.v[1]);
-                require(sampled_color1.v[2] == test_color.v[2]);
-                require(sampled_color1.v[3] == test_color.v[3]);
+                require_fatal(sampled_color1.v[0] == test_color.v[0]);
+                require_fatal(sampled_color1.v[1] == test_color.v[1]);
+                require_fatal(sampled_color1.v[2] == test_color.v[2]);
+                require_fatal(sampled_color1.v[3] == test_color.v[3]);
 
-                require(sampled_color2.v[0] == test_color.v[0]);
-                require(sampled_color2.v[1] == test_color.v[1]);
-                require(sampled_color2.v[2] == test_color.v[2]);
-                require(sampled_color2.v[3] == test_color.v[3]);
+                require_fatal(sampled_color2.v[0] == test_color.v[0]);
+                require_fatal(sampled_color2.v[1] == test_color.v[1]);
+                require_fatal(sampled_color2.v[2] == test_color.v[2]);
+                require_fatal(sampled_color2.v[3] == test_color.v[3]);
 
                 require(sampled_color3.v[0] == test_color.v[0]);
                 require(sampled_color3.v[1] == test_color.v[1]);

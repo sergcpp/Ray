@@ -58,7 +58,7 @@ layout(std430, binding = HALTON_SEQ_BUF_SLOT) readonly buffer Halton {
 };
 
 layout(std430, binding = TEXTURES_BUF_SLOT) readonly buffer Textures {
-    texture_t g_textures[];
+    atlas_texture_t g_textures[];
 };
 
 layout(binding = TEXTURE_ATLASES_SLOT) uniform sampler2DArray g_atlases[6];
@@ -1106,14 +1106,14 @@ vec3 ShadeSurface(int px_index, hit_data_t inter, ray_data_t ray) {
 
     vec3 base_color = vec3(mat.base_color[0], mat.base_color[1], mat.base_color[2]);
     [[dont_flatten]] if (mat.textures[BASE_TEXTURE] != 0xffffffff) {
-        const texture_t base_texture = g_textures[mat.textures[BASE_TEXTURE]];
+        const atlas_texture_t base_texture = g_textures[mat.textures[BASE_TEXTURE]];
 #ifdef USE_RAY_DIFFERENTIALS
         // ...
 #else
         const float base_lod = get_texture_lod(base_texture, lambda);
 #endif
         vec3 tex_color = SampleBilinear(g_atlases, base_texture, uvs, int(base_lod)).rgb;
-        if ((base_texture.size & TEXTURE_SRGB_BIT) != 0) {
+        if ((base_texture.size & ATLAS_TEX_SRGB_BIT) != 0) {
             tex_color = srgb_to_rgb(tex_color);
         }
         base_color *= tex_color;
@@ -1128,14 +1128,14 @@ vec3 ShadeSurface(int px_index, hit_data_t inter, ray_data_t ray) {
 
     float roughness = unpack_unorm_16(mat.roughness_and_anisotropic & 0xffff);
     [[dont_flatten]] if (mat.textures[ROUGH_TEXTURE] != 0xffffffff) {
-        const texture_t roughness_tex = g_textures[mat.textures[ROUGH_TEXTURE]];
+        const atlas_texture_t roughness_tex = g_textures[mat.textures[ROUGH_TEXTURE]];
 #ifdef USE_RAY_DIFFERENTIALS
         const float roughness_lod = get_texture_lod(roughness_tex, surf_der.duv_dx, surf_der.duv_dy);
 #else
         const float roughness_lod = get_texture_lod(roughness_tex, lambda);
 #endif
         vec3 roughness_color = vec3(SampleBilinear(g_atlases, roughness_tex, uvs, int(roughness_lod)).r);
-        if ((roughness_tex.size & TEXTURE_SRGB_BIT) != 0) {
+        if ((roughness_tex.size & ATLAS_TEX_SRGB_BIT) != 0) {
             roughness_color = srgb_to_rgb(roughness_color);
         }
         roughness *= roughness_color.r;
@@ -1380,7 +1380,7 @@ vec3 ShadeSurface(int px_index, hit_data_t inter, ray_data_t ray) {
     } else if (mat.type == PrincipledNode) {
         float metallic = unpack_unorm_16((mat.tint_and_metallic >> 16) & 0xffff);
         [[dont_flatten]] if (mat.textures[METALLIC_TEXTURE] != 0xffffffff) {
-            const texture_t metallic_tex = g_textures[mat.textures[METALLIC_TEXTURE]];
+            const atlas_texture_t metallic_tex = g_textures[mat.textures[METALLIC_TEXTURE]];
 #ifdef USE_RAY_DIFFERENTIALS
             const float metallic_lod = get_texture_lod(metallic_tex, surf_der.duv_dx, surf_der.duv_dy);
 #else

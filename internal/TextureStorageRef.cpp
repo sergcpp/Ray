@@ -5,132 +5,104 @@
 #include <algorithm> // for std::max
 
 template <typename T, int N>
-Ray::Ref::TexStorageLinear<T, N>::TexStorageLinear(const int resx, const int resy, const int initial_page_count)
-    : TexStorageBase(resx, resy) {
-    if (!Resize(initial_page_count)) {
-        throw std::runtime_error("TextureAtlas cannot be resized!");
-    }
-
-    // Allocate once
-    temp_storage_.reserve(std::max(resx, resy));
-}
-
-template <typename T, int N>
-int Ray::Ref::TexStorageLinear<T, N>::Allocate(const ColorType *data, const int _res[2], int pos[2]) {
-    int res[2] = {_res[0] + 2, _res[1] + 2};
-
-    if (res[0] > res_[0] || res[1] > res_[1]) {
-        return -1;
-    }
-
-    for (int page_index = 0; page_index < int(splitters_.size()); page_index++) {
-        int index = splitters_[page_index].Allocate(&res[0], &pos[0]);
-        if (index != -1) {
-            WritePageData(page_index, pos[0] + 1, pos[1] + 1, _res[0], _res[1], &data[0]);
-
-            // add 1px border
-            WritePageData(page_index, pos[0] + 1, pos[1], _res[0], 1, &data[(_res[1] - 1) * _res[0]]);
-
-            WritePageData(page_index, pos[0] + 1, pos[1] + res[1] - 1, _res[0], 1, &data[0]);
-
-            temp_storage_.resize(res[1]);
-            auto &vertical_border = temp_storage_;
-            vertical_border[0] = data[(_res[1] - 1) * _res[0] + _res[0] - 1];
-            for (int i = 0; i < _res[1]; i++) {
-                vertical_border[i + 1] = data[i * _res[0] + _res[0] - 1];
-            }
-            vertical_border[res[1] - 1] = data[0 * _res[0] + _res[0] - 1];
-
-            WritePageData(page_index, pos[0], pos[1], 1, res[1], &vertical_border[0]);
-
-            vertical_border[0] = data[(_res[1] - 1) * _res[0]];
-            for (int i = 0; i < _res[1]; i++) {
-                vertical_border[i + 1] = data[i * _res[0]];
-            }
-            vertical_border[res[1] - 1] = data[0];
-
-            WritePageData(page_index, pos[0] + res[0] - 1, pos[1], 1, res[1], &vertical_border[0]);
-
-            return page_index;
-        }
-    }
-
-    Resize(int(splitters_.size()) + 1);
-    return Allocate(data, _res, pos);
-}
-
-template <typename T, int N> bool Ray::Ref::TexStorageLinear<T, N>::Free(const int page, const int pos[2]) {
-    if (page < 0 || page > splitters_.size())
-        return false;
-#ifndef NDEBUG // Fill region with zeros in debug
-    int size[2];
-    int index = splitters_[page].FindNode(&pos[0], &size[0]);
-    if (index != -1) {
-        for (int j = pos[1]; j < pos[1] + size[1]; j++) {
-            memset(&pages_[page][j * res_[0] + pos[0]], 0, size[0] * sizeof(ColorType));
-        }
-        return splitters_[page].Free(index);
+int Ray::Ref::TexStorageLinear<T, N>::Allocate(const ColorType data[], const int _res[2], const bool mips) {
+    int index = -1;
+    if (!free_slots_.empty()) {
+        index = free_slots_.back();
+        free_slots_.pop_back();
     } else {
-        return false;
+        index = int(images_.size());
+        images_.resize(images_.size() + 1);
     }
-#else
-    return splitters_[page].Free(&pos[0]);
-#endif
-}
 
-template <typename T, int N> bool Ray::Ref::TexStorageLinear<T, N>::Resize(const int new_page_count) {
-    // if we shrink atlas, all redundant pages required to be empty
-    for (int i = new_page_count; i < splitters_.size(); i++) {
-        if (!splitters_[i].empty()) {
-            return false;
+    const int res[2] = {_res[0] + 1, _res[1] + 1};
+
+    ImgData &p = images_[index];
+
+    p.lod_offsets[0] = 0;
+    p.res[0][0] = res[0];
+    p.res[0][1] = res[1];
+
+    int total_size = (res[0] * res[1]);
+
+    for (int i = 1; i < NUM_MIP_LEVELS; ++i) {
+        if (mips && (p.res[i - 1][0] > 1 || p.res[i - 1][1] > 1)) {
+            p.lod_offsets[i] = total_size;
+            p.res[i][0] = p.res[i - 1][0] / 2 + 1;
+            p.res[i][1] = p.res[i - 1][1] / 2 + 1;
+            total_size += (p.res[i][0] * p.res[i][1]);
+        } else {
+            p.lod_offsets[i] = p.lod_offsets[i - 1];
+            p.res[i][0] = p.res[i - 1][0];
+            p.res[i][1] = p.res[i - 1][1];
         }
     }
 
-    const int old_page_count = int(pages_.size());
-    pages_.resize(new_page_count);
-    for (int i = old_page_count; i < new_page_count; ++i) {
-        pages_[i].reset(new ColorType[res_[0] * res_[1]]);
+    p.pixels.reset(new ColorType[total_size]);
+
+    for (int y = 0; y < _res[1]; ++y) {
+        memcpy(&p.pixels[y * res[0]], &data[y * _res[0]], _res[0] * sizeof(ColorType));
+        p.pixels[y * res[0] + _res[0]] = data[y * _res[0]];
     }
 
-    splitters_.resize(new_page_count, TextureSplitter{&res_[0]});
+    memcpy(&p.pixels[_res[1] * res[0]], data, _res[0] * sizeof(ColorType));
+    p.pixels[_res[1] * res[0] + _res[0]] = data[0];
+
+    p.lod_offsets[0] = 0;
+    p.res[0][0] = res[0];
+    p.res[0][1] = res[1];
+
+    for (int i = 1; i < NUM_MIP_LEVELS && mips; ++i) {
+        ColorType *out_pixels = &p.pixels[p.lod_offsets[i]];
+
+        for (int y = 0; y < p.res[i - 1][1] - 1; y += 2) {
+            for (int x = 0; x < p.res[i - 1][0] - 1; x += 2) {
+                const ColorType c00 = Get(index, x + 0, y + 0, i - 1);
+                const ColorType c10 = Get(index, x + 1, y + 0, i - 1);
+                const ColorType c11 = Get(index, x + 1, y + 1, i - 1);
+                const ColorType c01 = Get(index, x + 0, y + 1, i - 1);
+
+                ColorType res;
+                for (int i = 0; i < N; ++i) {
+                    res.v[i] = (c00.v[i] + c10.v[i] + c11.v[i] + c01.v[i]) / 4;
+                }
+
+                out_pixels[(y / 2) * p.res[i][0] + (x / 2)] = res;
+            }
+        }
+
+        for (int y = 0; y < p.res[i][1]; ++y) {
+            out_pixels[y * p.res[i][0] + p.res[i][0] - 1] = out_pixels[y * p.res[i][0]];
+        }
+
+        memcpy(&out_pixels[(p.res[i][1] - 1) * p.res[i][0]], out_pixels, p.res[i][0] * sizeof(ColorType));
+        out_pixels[(p.res[i][1] - 1) * p.res[i][0] + p.res[i][0] - 1] = out_pixels[0];
+    }
+
+    return index;
+}
+
+template <typename T, int N> bool Ray::Ref::TexStorageLinear<T, N>::Free(const int index) {
+    if (index < 0 || index > images_.size()) {
+        return false;
+    }
+
+#ifndef NDEBUG
+    memset(images_[index].res, 0, sizeof(images_[index].res));
+    memset(images_[index].lod_offsets, 0, sizeof(images_[index].lod_offsets));
+#endif
+
+    images_[index].pixels.reset();
+    free_slots_.push_back(index);
 
     return true;
 }
 
 template <typename T, int N>
-void Ray::Ref::TexStorageLinear<T, N>::WritePageData(const int page, const int posx, const int posy, const int sizex,
-                                                     const int sizey, const ColorType *data) {
-    for (int y = 0; y < sizey; y++) {
-        memcpy(&pages_[page][(posy + y) * res_[0] + posx], &data[y * sizex], sizex * sizeof(ColorType));
-    }
-}
-
-template <typename T, int N>
-int Ray::Ref::TexStorageLinear<T, N>::DownsampleRegion(const int src_page, const int src_pos[2], const int src_res[2],
-                                                       int dst_pos[2]) {
-    const int dst_res[2] = {src_res[0] / 2, src_res[1] / 2};
-
-    // TODO: try to get rid of this allocation
-    std::vector<ColorType> temp_data;
-    temp_data.reserve(dst_res[0] * dst_res[1]);
-
-    for (int y = src_pos[1]; y < src_pos[1] + src_res[1]; y += 2) {
-        for (int x = src_pos[0]; x < src_pos[0] + src_res[0]; x += 2) {
-            const ColorType c00 = Get(src_page, x + 0, y + 0);
-            const ColorType c10 = Get(src_page, x + 1, y + 0);
-            const ColorType c11 = Get(src_page, x + 1, y + 1);
-            const ColorType c01 = Get(src_page, x + 0, y + 1);
-
-            ColorType res;
-            for (int i = 0; i < N; ++i) {
-                res.v[i] = (c00.v[i] + c10.v[i] + c11.v[i] + c01.v[i]) / 4;
-            }
-
-            temp_data.push_back(res);
-        }
-    }
-
-    return Allocate(&temp_data[0], dst_res, dst_pos);
+void Ray::Ref::TexStorageLinear<T, N>::WriteImageData(const int index, const int lod, const ColorType data[]) {
+    const ImgData &p = images_[index];
+    const int w = p.res[lod][0], h = p.res[lod][1];
+    memcpy(&p.pixels[p.lod_offsets[lod]], data, w * h * sizeof(ColorType));
 }
 
 template class Ray::Ref::TexStorageLinear<uint8_t, 4>;
@@ -141,143 +113,154 @@ template class Ray::Ref::TexStorageLinear<uint8_t, 1>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 template <typename T, int N>
-Ray::Ref::TexStorageTiled<T, N>::TexStorageTiled(const int resx, const int resy, const int initial_page_count)
-    : TexStorageBase(resx, resy), res_in_tiles_{resx / TileSize, resy / TileSize} {
-    if ((resx % TileSize) || (resy % TileSize)) {
-        throw std::invalid_argument("TextureAtlas resolution should be multiple of tile size!");
-    }
-
-    if (!Resize(initial_page_count)) {
-        throw std::runtime_error("TextureAtlas cannot be resized!");
-    }
-
-    // Allocate once
-    temp_storage_.reset(new ColorType[std::max(resx, resy)]);
-}
-
-template <typename T, int N>
-int Ray::Ref::TexStorageTiled<T, N>::Allocate(const ColorType *data, const int _res[2], int pos[2]) {
-    const int res[2] = {_res[0] + 2, _res[1] + 2};
-
-    if (res[0] > res_[0] || res[1] > res_[1]) {
-        return -1;
-    }
-
-    for (int page_index = 0; page_index < int(splitters_.size()); page_index++) {
-        const int index = splitters_[page_index].Allocate(&res[0], &pos[0]);
-        if (index != -1) {
-            WritePageData(page_index, pos[0] + 1, pos[1] + 1, _res[0], _res[1], &data[0]);
-
-            // add 1px border
-            WritePageData(page_index, pos[0] + 1, pos[1], _res[0], 1, &data[(_res[1] - 1) * _res[0]]);
-
-            WritePageData(page_index, pos[0] + 1, pos[1] + res[1] - 1, _res[0], 1, &data[0]);
-
-            auto &vertical_border = temp_storage_;
-            vertical_border[0] = data[(_res[1] - 1) * _res[0] + _res[0] - 1];
-            for (int i = 0; i < _res[1]; i++) {
-                vertical_border[i + 1] = data[i * _res[0] + _res[0] - 1];
-            }
-            vertical_border[res[1] - 1] = data[0 * _res[0] + _res[0] - 1];
-
-            WritePageData(page_index, pos[0], pos[1], 1, res[1], &vertical_border[0]);
-
-            vertical_border[0] = data[(_res[1] - 1) * _res[0]];
-            for (int i = 0; i < _res[1]; i++) {
-                vertical_border[i + 1] = data[i * _res[0]];
-            }
-            vertical_border[res[1] - 1] = data[0];
-
-            WritePageData(page_index, pos[0] + res[0] - 1, pos[1], 1, res[1], &vertical_border[0]);
-
-            return page_index;
-        }
-    }
-
-    Resize(int(splitters_.size()) + 1);
-    return Allocate(data, _res, pos);
-}
-
-template <typename T, int N> bool Ray::Ref::TexStorageTiled<T, N>::Free(const int page, const int pos[2]) {
-    if (page < 0 || page > splitters_.size()) {
-        return false;
-    }
-#ifndef NDEBUG // Fill region with zeros in debug
-    int size[2];
-    const int index = splitters_[page].FindNode(&pos[0], &size[0]);
-    if (index != -1) {
-        // for (int j = pos[1]; j < pos[1] + size[1]; j++) {
-        //     memset(&pages_[page][j * res_[0] + pos[0]], 0, size[0] * sizeof(ColorType));
-        // }
-        return splitters_[page].Free(index);
+int Ray::Ref::TexStorageTiled<T, N>::Allocate(const ColorType *data, const int _res[2], bool mips) {
+    int index = -1;
+    if (!free_slots_.empty()) {
+        index = free_slots_.back();
+        free_slots_.pop_back();
     } else {
-        return false;
+        index = int(images_.size());
+        images_.resize(images_.size() + 1);
     }
-#else
-    return splitters_[page].Free(&pos[0]);
-#endif
-}
 
-template <typename T, int N> bool Ray::Ref::TexStorageTiled<T, N>::Resize(const int new_page_count) {
-    // if we shrink atlas, all redundant pages required to be empty
-    for (int i = new_page_count; i < int(splitters_.size()); i++) {
-        if (!splitters_[i].empty()) {
-            return false;
+    ImgData &p = images_[index];
+
+    p.lod_offsets[0] = 0;
+    p.res[0][0] = _res[0] + 1;
+    p.res[0][1] = _res[1] + 1;
+    p.res_in_tiles[0][0] = (p.res[0][0] + TileSize - 1) / TileSize;
+    p.res_in_tiles[0][1] = (p.res[0][1] + TileSize - 1) / TileSize;
+
+    int total_size = (p.res_in_tiles[0][0] * p.res_in_tiles[0][1]) * (TileSize * TileSize);
+
+    for (int i = 1; i < NUM_MIP_LEVELS; ++i) {
+        if (mips && (p.res[i - 1][0] > 1 || p.res[i - 1][1] > 1)) {
+            p.lod_offsets[i] = total_size;
+
+            p.res[i][0] = p.res[i - 1][0] / 2 + 1;
+            p.res[i][1] = p.res[i - 1][1] / 2 + 1;
+
+            p.res_in_tiles[i][0] = (p.res[i][0] + TileSize - 1) / TileSize;
+            p.res_in_tiles[i][1] = (p.res[i][1] + TileSize - 1) / TileSize;
+
+            total_size += (p.res_in_tiles[i][0] * p.res_in_tiles[i][1]) * (TileSize * TileSize);
+        } else {
+            p.lod_offsets[i] = p.lod_offsets[i - 1];
+            p.res[i][0] = p.res[i - 1][0];
+            p.res[i][1] = p.res[i - 1][1];
+            p.res_in_tiles[i][0] = p.res_in_tiles[i - 1][0];
+            p.res_in_tiles[i][1] = p.res_in_tiles[i - 1][1];
         }
     }
 
-    const int old_page_count = int(pages_.size());
-    pages_.resize(new_page_count);
-    for (int i = old_page_count; i < new_page_count; ++i) {
-        pages_[i].reset(new ColorType[res_[0] * res_[1]]);
+    p.pixels.reset(new ColorType[total_size]);
+
+    for (int y = 0; y < _res[1]; ++y) {
+        const int tiley = y / TileSize, in_tiley = y % TileSize;
+
+        for (int x = 0; x < _res[0]; ++x) {
+            const int tilex = x / TileSize, in_tilex = x % TileSize;
+
+            p.pixels[(tiley * p.res_in_tiles[0][0] + tilex) * TileSize * TileSize + in_tiley * TileSize + in_tilex] =
+                data[y * _res[0] + x];
+        }
+
+        { // write additional row to the right
+            const int tilex = _res[0] / TileSize, in_tilex = _res[0] % TileSize;
+            p.pixels[(tiley * p.res_in_tiles[0][0] + tilex) * TileSize * TileSize + in_tiley * TileSize + in_tilex] =
+                data[y * _res[0] + _res[0]];
+        }
     }
 
-    splitters_.resize(new_page_count, TextureSplitter{&res_[0]});
+    { // write additional line at the bottom
+        const int tiley = _res[1] / TileSize, in_tiley = _res[1] % TileSize;
+
+        for (int x = 0; x < _res[0]; ++x) {
+            const int tilex = x / TileSize, in_tilex = x % TileSize;
+
+            p.pixels[(tiley * p.res_in_tiles[0][0] + tilex) * TileSize * TileSize + in_tiley * TileSize + in_tilex] =
+                data[x];
+        }
+    }
+
+    { // write additional corner pixel
+        const int tiley = _res[1] / TileSize, in_tiley = _res[1] % TileSize;
+        const int tilex = _res[0] / TileSize, in_tilex = _res[0] % TileSize;
+
+        p.pixels[(tiley * p.res_in_tiles[0][0] + tilex) * TileSize * TileSize + in_tiley * TileSize + in_tilex] =
+            data[0];
+    }
+
+    for (int i = 1; i < NUM_MIP_LEVELS && mips; ++i) {
+        ColorType *out_pixels = &p.pixels[p.lod_offsets[i]];
+
+        for (int y = 0; y < p.res[i - 1][1] - 1; y += 2) {
+            const int tiley = (y / 2) / TileSize, in_tiley = (y / 2) % TileSize;
+
+            for (int x = 0; x < p.res[i - 1][0] - 1; x += 2) {
+                const ColorType c00 = Get(index, x + 0, y + 0, i - 1);
+                const ColorType c10 = Get(index, x + 1, y + 0, i - 1);
+                const ColorType c11 = Get(index, x + 1, y + 1, i - 1);
+                const ColorType c01 = Get(index, x + 0, y + 1, i - 1);
+
+                ColorType res;
+                for (int i = 0; i < N; ++i) {
+                    res.v[i] = (c00.v[i] + c10.v[i] + c11.v[i] + c01.v[i]) / 4;
+                }
+
+                const int tilex = (x / 2) / TileSize, in_tilex = (x / 2) % TileSize;
+
+                out_pixels[(tiley * p.res_in_tiles[i][0] + tilex) * TileSize * TileSize + in_tiley * TileSize +
+                           in_tilex] = res;
+            }
+        }
+
+        // write additional row to the right
+        for (int y = 0; y < p.res[i][1]; ++y) {
+            const int tiley = y / TileSize, in_tiley = y % TileSize;
+            const int tilex = (p.res[i][0] - 1) / TileSize, in_tilex = (p.res[i][0] - 1) % TileSize;
+            out_pixels[(tiley * p.res_in_tiles[i][0] + tilex) * TileSize * TileSize + in_tiley * TileSize + in_tilex] =
+                Get(index, 0, y, i);
+        }
+
+        { // write additional line at the bottom
+            const int tiley = (p.res[i][1] - 1) / TileSize, in_tiley = (p.res[i][1] - 1) % TileSize;
+
+            for (int x = 0; x < p.res[i][0]; ++x) {
+                const int tilex = x / TileSize, in_tilex = x % TileSize;
+
+                out_pixels[(tiley * p.res_in_tiles[i][0] + tilex) * TileSize * TileSize + in_tiley * TileSize +
+                           in_tilex] = Get(index, x, 0, i);
+            }
+        }
+
+        { // write additional corner pixel
+            const int tiley = (p.res[i][1] - 1) / TileSize, in_tiley = (p.res[i][1] - 1) % TileSize;
+            const int tilex = (p.res[i][0] - 1) / TileSize, in_tilex = (p.res[i][0] - 1) % TileSize;
+
+            out_pixels[(tiley * p.res_in_tiles[i][0] + tilex) * TileSize * TileSize + in_tiley * TileSize + in_tilex] =
+                Get(index, 0, 0, i);
+        }
+    }
+
+    return index;
+}
+
+template <typename T, int N> bool Ray::Ref::TexStorageTiled<T, N>::Free(const int index) {
+    if (index < 0 || index > images_.size()) {
+        return false;
+    }
+
+#ifndef NDEBUG
+    memset(images_[index].res, 0, sizeof(images_[index].res));
+    memset(images_[index].res_in_tiles, 0, sizeof(images_[index].res_in_tiles));
+    memset(images_[index].lod_offsets, 0, sizeof(images_[index].lod_offsets));
+#endif
+
+    images_[index].pixels.reset();
+    free_slots_.push_back(index);
 
     return true;
-}
-
-template <typename T, int N>
-int Ray::Ref::TexStorageTiled<T, N>::DownsampleRegion(const int src_page, const int src_pos[2], const int src_res[2],
-                                                      int dst_pos[2]) {
-    const int dst_res[2] = {src_res[0] / 2, src_res[1] / 2};
-
-    // TODO: try to get rid of this allocation
-    std::vector<ColorType> temp_data;
-    temp_data.reserve(dst_res[0] * dst_res[1]);
-
-    for (int y = src_pos[1]; y < src_pos[1] + src_res[1]; y += 2) {
-        for (int x = src_pos[0]; x < src_pos[0] + src_res[0]; x += 2) {
-            const ColorType c00 = Get(src_page, x + 0, y + 0);
-            const ColorType c10 = Get(src_page, x + 1, y + 0);
-            const ColorType c11 = Get(src_page, x + 1, y + 1);
-            const ColorType c01 = Get(src_page, x + 0, y + 1);
-
-            ColorType res;
-            for (int i = 0; i < N; ++i) {
-                res.v[i] = (c00.v[i] + c10.v[i] + c11.v[i] + c01.v[i]) / 4;
-            }
-
-            temp_data.push_back(res);
-        }
-    }
-
-    return Allocate(&temp_data[0], dst_res, dst_pos);
-}
-
-template <typename T, int N>
-void Ray::Ref::TexStorageTiled<T, N>::WritePageData(const int page, const int posx, const int posy, const int sizex,
-                                                    const int sizey, const ColorType *data) {
-    for (int y = 0; y < sizey; y++) {
-        const int tiley = (posy + y) / TileSize, in_tiley = (posy + y) % TileSize;
-
-        for (int x = 0; x < sizex; x++) {
-            const int tilex = (posx + x) / TileSize, in_tilex = (posx + x) % TileSize;
-
-            pages_[page][(tiley * res_in_tiles_[0] + tilex) * TileSize * TileSize + in_tiley * TileSize + in_tilex] =
-                data[y * sizex + x];
-        }
-    }
 }
 
 template class Ray::Ref::TexStorageTiled<uint8_t, 4>;
@@ -288,146 +271,146 @@ template class Ray::Ref::TexStorageTiled<uint8_t, 1>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 template <typename T, int N>
-Ray::Ref::TexStorageSwizzled<T, N>::TexStorageSwizzled(const int resx, const int resy, const int initial_page_count)
-    : TexStorageBase(resx, resy),
-      tile_y_stride_(swizzle_x_tile(OuterTileW * ((res_[0] + OuterTileW - 1) / OuterTileW))) {
-    if (!Resize(initial_page_count)) {
-        throw std::runtime_error("TextureAtlas cannot be resized!");
-    }
-
-    // Allocate once
-    temp_storage_.reset(new ColorType[std::max(resx, resy)]);
-}
-
-template <typename T, int N>
-int Ray::Ref::TexStorageSwizzled<T, N>::Allocate(const ColorType *data, const int _res[2], int pos[2]) {
-    const int res[2] = {_res[0] + 2, _res[1] + 2};
-
-    if (res[0] > res_[0] || res[1] > res_[1]) {
-        return -1;
-    }
-
-    for (int page_index = 0; page_index < int(splitters_.size()); page_index++) {
-        const int index = splitters_[page_index].Allocate(&res[0], &pos[0]);
-        if (index != -1) {
-            WritePageData(page_index, pos[0] + 1, pos[1] + 1, _res[0], _res[1], &data[0]);
-
-            // add 1px border
-            WritePageData(page_index, pos[0] + 1, pos[1], _res[0], 1, &data[(_res[1] - 1) * _res[0]]);
-
-            WritePageData(page_index, pos[0] + 1, pos[1] + res[1] - 1, _res[0], 1, &data[0]);
-
-            auto &vertical_border = temp_storage_;
-            vertical_border[0] = data[(_res[1] - 1) * _res[0] + _res[0] - 1];
-            for (int i = 0; i < _res[1]; i++) {
-                vertical_border[i + 1] = data[i * _res[0] + _res[0] - 1];
-            }
-            vertical_border[res[1] - 1] = data[0 * _res[0] + _res[0] - 1];
-
-            WritePageData(page_index, pos[0], pos[1], 1, res[1], &vertical_border[0]);
-
-            vertical_border[0] = data[(_res[1] - 1) * _res[0]];
-            for (int i = 0; i < _res[1]; i++) {
-                vertical_border[i + 1] = data[i * _res[0]];
-            }
-            vertical_border[res[1] - 1] = data[0];
-
-            WritePageData(page_index, pos[0] + res[0] - 1, pos[1], 1, res[1], &vertical_border[0]);
-
-            return page_index;
-        }
-    }
-
-    Resize(int(splitters_.size()) + 1);
-    return Allocate(data, _res, pos);
-}
-
-template <typename T, int N> bool Ray::Ref::TexStorageSwizzled<T, N>::Free(const int page, const int pos[2]) {
-    if (page < 0 || page > splitters_.size()) {
-        return false;
-    }
-#ifndef NDEBUG // Fill region with zeros in debug
-    int size[2];
-    const int index = splitters_[page].FindNode(&pos[0], &size[0]);
-    if (index != -1) {
-        // for (int j = pos[1]; j < pos[1] + size[1]; j++) {
-        //     memset(&pages_[page][j * res_[0] + pos[0]], 0, size[0] * sizeof(ColorType));
-        // }
-        return splitters_[page].Free(index);
+int Ray::Ref::TexStorageSwizzled<T, N>::Allocate(const ColorType *data, const int _res[2], bool mips) {
+    int index = -1;
+    if (!free_slots_.empty()) {
+        index = free_slots_.back();
+        free_slots_.pop_back();
     } else {
-        return false;
+        index = int(images_.size());
+        images_.resize(images_.size() + 1);
     }
-#else
-    return splitters_[page].Free(&pos[0]);
-#endif
-}
 
-template <typename T, int N> bool Ray::Ref::TexStorageSwizzled<T, N>::Resize(const int new_page_count) {
-    // if we shrink atlas, all redundant pages required to be empty
-    for (int i = new_page_count; i < int(splitters_.size()); i++) {
-        if (!splitters_[i].empty()) {
-            return false;
+    ImgData &p = images_[index];
+
+    p.lod_offsets[0] = 0;
+    p.res[0][0] = _res[0] + 1;
+    p.res[0][1] = _res[1] + 1;
+    p.tile_y_stride[0] = swizzle_x_tile(OuterTileW * ((p.res[0][0] + OuterTileW - 1) / OuterTileW));
+
+    int total_size = p.tile_y_stride[0] * ((p.res[0][1] + OuterTileH - 1) / OuterTileH);
+
+    mips = false;
+
+    for (int i = 1; i < NUM_MIP_LEVELS; ++i) {
+        if (mips && (p.res[i - 1][0] > 1 || p.res[i - 1][1] > 1)) {
+            p.lod_offsets[i] = total_size;
+
+            p.res[i][0] = (p.res[i - 1][0] / 2) + 1;
+            p.res[i][1] = (p.res[i - 1][1] / 2) + 1;
+
+            p.tile_y_stride[i] = swizzle_x_tile(OuterTileW * ((p.res[i][0] + OuterTileW - 1) / OuterTileW));
+
+            total_size += p.tile_y_stride[i] * ((p.res[i][1] + OuterTileH - 1) / OuterTileH);
+        } else {
+            p.lod_offsets[i] = p.lod_offsets[i - 1];
+            p.res[i][0] = p.res[i - 1][0];
+            p.res[i][1] = p.res[i - 1][1];
+            p.tile_y_stride[i] = p.tile_y_stride[i - 1];
         }
     }
 
-    const int old_page_count = int(pages_.size());
-    pages_.resize(new_page_count);
+    p.pixels.reset(new ColorType[total_size]);
 
-    const uint32_t px_count = tile_y_stride_ * ((res_[1] + OuterTileH - 1) / OuterTileH);
+    for (int y = 0; y < _res[1]; ++y) {
+        const uint32_t y_off = (y / OuterTileH) * p.tile_y_stride[0] + swizzle_y(y);
 
-    for (int i = old_page_count; i < new_page_count; ++i) {
-        pages_[i].reset(new ColorType[px_count]);
+        for (int x = 0; x < _res[0]; ++x) {
+            const uint32_t x_off = swizzle_x_tile(x);
+
+            p.pixels[y_off + x_off] = data[y * _res[0] + x];
+        }
+
+        { // write additional row to the right
+            const uint32_t x_off = swizzle_x_tile(_res[0]);
+            p.pixels[y_off + x_off] = data[y * _res[0] + _res[0]];
+        }
     }
 
-    splitters_.resize(new_page_count, TextureSplitter{&res_[0]});
+    { // write additional line at the bottom
+        const uint32_t y_off = (_res[1] / OuterTileH) * p.tile_y_stride[0] + swizzle_y(_res[1]);
+
+        for (int x = 0; x < _res[0]; ++x) {
+            const uint32_t x_off = swizzle_x_tile(x);
+
+            p.pixels[y_off + x_off] = data[x];
+        }
+    }
+
+    { // write additional corner pixel
+        const uint32_t y_off = (_res[1] / OuterTileH) * p.tile_y_stride[0] + swizzle_y(_res[1]);
+        const uint32_t x_off = swizzle_x_tile(_res[0]);
+
+        p.pixels[y_off + x_off] = data[0];
+    }
+
+    for (int i = 1; i < NUM_MIP_LEVELS && mips; ++i) {
+        ColorType *out_pixels = &p.pixels[p.lod_offsets[i]];
+
+        for (int y = 0; y < p.res[i - 1][1] - 1; y += 2) {
+            const uint32_t y_off = ((y / 2) / OuterTileH) * p.tile_y_stride[i] + swizzle_y(y / 2);
+
+            for (int x = 0; x < p.res[i - 1][0] - 1; x += 2) {
+                const ColorType c00 = Get(index, x + 0, y + 0, i - 1);
+                const ColorType c10 = Get(index, x + 1, y + 0, i - 1);
+                const ColorType c11 = Get(index, x + 1, y + 1, i - 1);
+                const ColorType c01 = Get(index, x + 0, y + 1, i - 1);
+
+                ColorType res;
+                for (int i = 0; i < N; ++i) {
+                    res.v[i] = (c00.v[i] + c10.v[i] + c11.v[i] + c01.v[i]) / 4;
+                }
+
+                const uint32_t x_off = swizzle_x_tile(x / 2);
+
+                out_pixels[y_off + x_off] = res;
+            }
+        }
+
+        // write additional row to the right
+        for (int y = 0; y < p.res[i][1]; ++y) {
+            const uint32_t y_off = (y / OuterTileH) * p.tile_y_stride[i] + swizzle_y(y);
+            const uint32_t x_off = swizzle_x_tile(p.res[i][0] - 1);
+
+            out_pixels[y_off + x_off] = Get(index, 0, y, i);
+        }
+
+        { // write additional line at the bottom
+            const uint32_t y_off = ((p.res[i][1] - 1) / OuterTileH) * p.tile_y_stride[i] + swizzle_y(p.res[i][1] - 1);
+
+            for (int x = 0; x < p.res[i][0]; ++x) {
+                const uint32_t x_off = swizzle_x_tile(x);
+
+                out_pixels[y_off + x_off] = Get(index, x, 0, i);
+            }
+        }
+
+        { // write additional corner pixel
+            const uint32_t y_off = ((p.res[i][1] - 1) / OuterTileH) * p.tile_y_stride[i] + swizzle_y((p.res[i][1] - 1));
+            const uint32_t x_off = swizzle_x_tile(p.res[i][0] - 1);
+
+            out_pixels[y_off + x_off] = Get(index, 0, 0, i);
+        }
+    }
+
+    return index;
+}
+
+template <typename T, int N> bool Ray::Ref::TexStorageSwizzled<T, N>::Free(const int index) {
+    if (index < 0 || index > images_.size()) {
+        return false;
+    }
+
+#ifndef NDEBUG
+    memset(images_[index].res, 0, sizeof(images_[index].res));
+    memset(images_[index].tile_y_stride, 0, sizeof(images_[index].tile_y_stride));
+    memset(images_[index].lod_offsets, 0, sizeof(images_[index].lod_offsets));
+#endif
+
+    images_[index].pixels.reset();
+    free_slots_.push_back(index);
 
     return true;
-}
-
-template <typename T, int N>
-int Ray::Ref::TexStorageSwizzled<T, N>::DownsampleRegion(const int src_page, const int src_pos[2], const int src_res[2],
-                                                         int dst_pos[2]) {
-    const int dst_res[2] = {(src_res[0] + 1) / 2, (src_res[1] + 1) / 2};
-
-    // TODO: try to get rid of this allocation
-    std::vector<ColorType> temp_data;
-    temp_data.reserve(dst_res[0] * dst_res[1]);
-
-    for (int y = src_pos[1]; y < src_pos[1] + src_res[1]; y += 2) {
-        for (int x = src_pos[0]; x < src_pos[0] + src_res[0]; x += 2) {
-            const ColorType c00 = Get(src_page, x + 0, y + 0);
-            const ColorType c10 = Get(src_page, x + 1, y + 0);
-            const ColorType c11 = Get(src_page, x + 1, y + 1);
-            const ColorType c01 = Get(src_page, x + 0, y + 1);
-
-            ColorType res;
-            for (int i = 0; i < N; ++i) {
-                res.v[i] = (c00.v[i] + c10.v[i] + c11.v[i] + c01.v[i]) / 4;
-            }
-
-            temp_data.push_back(res);
-        }
-    }
-
-    return Allocate(&temp_data[0], dst_res, dst_pos);
-}
-
-template <typename T, int N>
-void Ray::Ref::TexStorageSwizzled<T, N>::WritePageData(const int page, const int posx, const int posy, const int sizex,
-                                                       const int sizey, const ColorType *data) {
-    for (int y = 0; y < sizey; y++) {
-        const uint32_t y_off = ((posy + y) / OuterTileH) * tile_y_stride_ + swizzle_y(posy + y);
-        ColorType *dst_page = &pages_[page][y_off];
-
-        for (int x = 0; x < sizex; x++) {
-            const uint32_t x_off = swizzle_x_tile(posx + x);
-
-            dst_page[x_off] = data[y * sizex + x];
-            for (int i = 0; i < N; ++i) {
-                assert(Get(page, posx + x, posy + y).v[i] == data[y * sizex + x].v[i]);
-            }
-        }
-    }
 }
 
 template class Ray::Ref::TexStorageSwizzled<uint8_t, 4>;

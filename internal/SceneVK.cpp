@@ -75,16 +75,16 @@ void Ray::Vk::Scene::SetEnvironment(const environment_desc_t &env) {
 }
 
 uint32_t Ray::Vk::Scene::AddTexture(const tex_desc_t &_t) {
-    texture_t t;
+    atlas_texture_t t;
     t.width = uint16_t(_t.w);
     t.height = uint16_t(_t.h);
 
     if (_t.is_srgb) {
-        t.width |= TEXTURE_SRGB_BIT;
+        t.width |= ATLAS_TEX_SRGB_BIT;
     }
 
     if (_t.generate_mipmaps) {
-        t.height |= TEXTURE_MIPS_BIT;
+        t.height |= ATLAS_TEX_MIPS_BIT;
     }
 
     int res[2] = {_t.w, _t.h};
@@ -745,13 +745,13 @@ void Ray::Vk::Scene::GenerateTextureMips() {
     mips_to_generate.reserve(textures_.size());
 
     for (uint32_t i = 0; i < uint32_t(textures_.size()); ++i) {
-        const texture_t &t = textures_[i];
-        if ((t.height & TEXTURE_MIPS_BIT) == 0) {
+        const atlas_texture_t &t = textures_[i];
+        if ((t.height & ATLAS_TEX_MIPS_BIT) == 0) {
             continue;
         }
 
         int mip = 0;
-        int res[2] = {(t.width & TEXTURE_WIDTH_BITS), (t.height & TEXTURE_HEIGHT_BITS)};
+        int res[2] = {(t.width & ATLAS_TEX_WIDTH_BITS), (t.height & ATLAS_TEX_HEIGHT_BITS)};
 
         res[0] /= 2;
         res[1] /= 2;
@@ -784,11 +784,11 @@ void Ray::Vk::Scene::GenerateTextureMips() {
     });
 
     for (const mip_gen_info &info : mips_to_generate) {
-        texture_t t = textures_[info.texture_index];
+        atlas_texture_t t = textures_[info.texture_index];
 
         const int dst_mip = info.dst_mip;
         const int src_mip = dst_mip - 1;
-        const int src_res[2] = {(t.width & TEXTURE_WIDTH_BITS) >> src_mip, (t.height & TEXTURE_HEIGHT_BITS) >> src_mip};
+        const int src_res[2] = {(t.width & ATLAS_TEX_WIDTH_BITS) >> src_mip, (t.height & ATLAS_TEX_HEIGHT_BITS) >> src_mip};
         assert(src_res[0] != 0 && src_res[1] != 0);
 
         const int src_pos[2] = {t.pos[src_mip][0] + 1, t.pos[src_mip][1] + 1};

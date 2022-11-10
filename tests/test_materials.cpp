@@ -17,6 +17,7 @@ extern std::atomic_bool g_log_contains_errors;
 
 class LogErr : public Ray::ILog {
     FILE *err_out_ = nullptr;
+
   public:
     LogErr() { err_out_ = fopen("test_data/errors.txt", "w"); }
     ~LogErr() { fclose(err_out_); }
@@ -670,7 +671,9 @@ void run_material_test(const char *arch_list[], const char *preferred_device, co
         Ray::settings_t s;
         s.w = test_img_w;
         s.h = test_img_h;
+#ifdef ENABLE_GPU_IMPL
         s.preferred_device = preferred_device;
+#endif
         s.use_wide_bvh = true;
 
         const int DiffThres = 32;

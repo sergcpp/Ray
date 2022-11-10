@@ -86,12 +86,12 @@ vec3 YCoCg_to_RGB(vec4 col) {
     return col_rgb;
 }
 
-float get_texture_lod(const texture_t t, const float lambda) {
+float get_texture_lod(const atlas_texture_t t, const float lambda) {
 #if FORCE_TEXTURE_LOD0
     const float lod = 0.0;
 #else
-    const float w = float(t.size & TEXTURE_WIDTH_BITS);
-    const float h = float((t.size >> 16) & TEXTURE_HEIGHT_BITS);
+    const float w = float(t.size & ATLAS_TEX_WIDTH_BITS);
+    const float h = float((t.size >> 16) & ATLAS_TEX_HEIGHT_BITS);
     // Find lod
     float lod = lambda + 0.5 * log2(w * h);
     // Substruct 1 from lod to always have 4 texels for interpolation
