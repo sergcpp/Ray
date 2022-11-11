@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Config.h"
 #include "Log.h"
 #include "RendererBase.h"
 
@@ -19,10 +20,4 @@ const uint32_t DefaultEnabledRenderTypes =
 */
 RendererBase *CreateRenderer(const settings_t &s, ILog *log = &g_null_log,
                              uint32_t enabled_types = DefaultEnabledRenderTypes);
-
-#if !defined(DISABLE_GPU)
-/*namespace Ocl {
-std::vector<Platform> QueryPlatforms();
-}*/
-#endif
 } // namespace Ray

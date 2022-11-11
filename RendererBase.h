@@ -2,6 +2,7 @@
 
 #include <memory>
 
+#include "Config.h"
 #include "SceneBase.h"
 #include "Types.h"
 
@@ -27,12 +28,11 @@ eRendererType RendererTypeFromName(const char *name);
 /// Renderer settings
 struct settings_t {
     int w, h;
-#if !defined(DISABLE_GPU)
-    //int platform_index = -1, device_index = -1;
+#ifdef ENABLE_GPU_IMPL
     const char *preferred_device = nullptr;
     bool use_hwrt = true;
     bool use_tex_compression = true; // temporarily GPU only
-#endif
+#endif // ENABLE_GPU_IMPL
     bool use_wide_bvh = true;
 };
 
@@ -70,9 +70,7 @@ class RendererBase {
     /// Name of the device
     virtual const char *device_name() const = 0;
 
-#if !defined(DISABLE_GPU)
     virtual bool is_hwrt() const { return false; }
-#endif
 
     /// Returns size of rendered image
     virtual std::pair<int, int> size() const = 0;

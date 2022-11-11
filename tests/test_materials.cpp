@@ -681,7 +681,7 @@ void run_material_test(const char *arch_list[], const char *preferred_device, co
                 for (const char **arch = arch_list; *arch; ++arch) {
                     const auto rt = Ray::RendererTypeFromName(*arch);
                     auto renderer = std::unique_ptr<Ray::RendererBase>(Ray::CreateRenderer(s, &g_log_err, rt));
-                    if (renderer->type() != rt || renderer->is_hwrt() != use_hwrt) {
+                    if (!renderer || renderer->type() != rt || renderer->is_hwrt() != use_hwrt) {
                         // skip unsupported (we fell back to some other renderer)
                         continue;
                     }
