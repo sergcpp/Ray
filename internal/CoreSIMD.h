@@ -21,7 +21,7 @@
 #define USE_VNDF_GGX_SAMPLING 1
 #define USE_NEE 1
 #define USE_PATH_TERMINATION 1
-#define FORCE_TEXTURE_LOD0 1
+#define FORCE_TEXTURE_LOD0 0
 
 namespace Ray {
 namespace Ref {
@@ -1191,15 +1191,7 @@ simd_fvec<S> get_texture_lod(const texture_t &t, const simd_fvec<S> duv_dx[2], c
 
     const simd_fvec<S> dim = min(min(length2_2d(_duv_dx), length2_2d(_duv_dy)), length2_2d(_diagonal));
 
-    simd_fvec<S> lod = 0.5f * fast_log2(dim[i]) - 1.0f;
-
-    /*ITERATE(S, {
-        if (reinterpret_cast<const simd_ivec<S> &>(mask)[i]) {
-            lod[i] = 0.5f * fast_log2(dim[i]) - 1.0f;
-        } else {
-            lod[i] = 0.0f;
-        }
-    })*/
+    simd_fvec<S> lod = 0.5f * fast_log2(dim) - 1.0f;
 
     where(lod < 0.0f, lod) = 0.0f;
     where(lod > float(MAX_MIP_LEVEL), lod) = float(MAX_MIP_LEVEL);
