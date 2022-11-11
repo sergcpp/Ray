@@ -359,7 +359,7 @@ template <typename T, int N> bool Ray::Ref::TextureAtlasSwizzled<T, N>::Resize(c
 template <typename T, int N>
 int Ray::Ref::TextureAtlasSwizzled<T, N>::DownsampleRegion(const int src_page, const int src_pos[2],
                                                            const int src_res[2], int dst_pos[2]) {
-    const int dst_res[2] = {src_res[0] / 2, src_res[1] / 2};
+    const int dst_res[2] = {(src_res[0] + 1) / 2, (src_res[1] + 1) / 2};
 
     // TODO: try to get rid of this allocation
     std::vector<ColorType> temp_data;
