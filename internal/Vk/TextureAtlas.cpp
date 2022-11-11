@@ -2,6 +2,7 @@
 
 #include <cassert>
 
+#include "../../Log.h"
 #include "../Utils.h"
 #include "Context.h"
 #include "Texture.h"
@@ -14,6 +15,9 @@ template <> eTexFormat tex_format<uint8_t, 4>() { return eTexFormat::RawRGBA8888
 template <> eTexFormat tex_format<uint8_t, 3>() { return eTexFormat::RawRGB888; }
 template <> eTexFormat tex_format<uint8_t, 2>() { return eTexFormat::RawRG88; }
 template <> eTexFormat tex_format<uint8_t, 1>() { return eTexFormat::RawR8; }
+
+uint32_t FindMemoryType(const VkPhysicalDeviceMemoryProperties *mem_properties, uint32_t mem_type_bits,
+                        VkMemoryPropertyFlags desired_mem_flags, VkDeviceSize desired_size);
 
 extern const VkFormat g_vk_formats[];
 } // namespace Vk

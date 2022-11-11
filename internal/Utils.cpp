@@ -4,6 +4,8 @@
 
 #include "CoreRef.h"
 
+#include "simd/detect.h"
+
 #define _MIN(x, y) ((x) < (y) ? (x) : (y))
 #define _MAX(x, y) ((x) < (y) ? (y) : (x))
 #define _ABS(x) ((x) < 0 ? -(x) : (x))
