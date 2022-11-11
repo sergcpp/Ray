@@ -21,7 +21,7 @@
 #define USE_VNDF_GGX_SAMPLING 1
 #define USE_NEE 1
 #define USE_PATH_TERMINATION 1
-#define FORCE_TEXTURE_LOD0 0
+//#define FORCE_TEXTURE_LOD 0
 
 namespace Ray {
 namespace Ref {
@@ -1179,8 +1179,8 @@ template <int S> force_inline void srgb_to_rgb(const simd_fvec<S> in_col[4], sim
 template <int S>
 simd_fvec<S> get_texture_lod(const texture_t &t, const simd_fvec<S> duv_dx[2], const simd_fvec<S> duv_dy[2],
                              const simd_ivec<S> &mask) {
-#if FORCE_TEXTURE_LOD0
-    const simd_fvec<S> lod = 0.0f;
+#if FORCE_TEXTURE_LOD
+    const simd_fvec<S> lod = float(FORCE_TEXTURE_LOD);
 #else
     const int width = int(t.width & TEXTURE_WIDTH_BITS), height = int(t.height & TEXTURE_HEIGHT_BITS);
 
@@ -1201,8 +1201,8 @@ simd_fvec<S> get_texture_lod(const texture_t &t, const simd_fvec<S> duv_dx[2], c
 
 template <int S>
 simd_fvec<S> get_texture_lod(const texture_t &t, const simd_fvec<S> &lambda, const simd_ivec<S> &mask) {
-#if FORCE_TEXTURE_LOD0
-    const simd_fvec<S> lod = 0.0f;
+#if FORCE_TEXTURE_LOD
+    const simd_fvec<S> lod = float(FORCE_TEXTURE_LOD);
 #else
     const float width = float(t.width & TEXTURE_WIDTH_BITS), height = float(t.height & TEXTURE_HEIGHT_BITS);
 
@@ -1225,8 +1225,8 @@ simd_fvec<S> get_texture_lod(const texture_t &t, const simd_fvec<S> &lambda, con
 template <int S>
 simd_fvec<S> get_texture_lod(const simd_ivec<S> &width, const simd_ivec<S> &height, const simd_fvec<S> duv_dx[2],
                              const simd_fvec<S> duv_dy[2], const simd_ivec<S> &mask) {
-#if FORCE_TEXTURE_LOD0
-    const simd_fvec<S> lod = 0.0f;
+#if FORCE_TEXTURE_LOD
+    const simd_fvec<S> lod = float(FORCE_TEXTURE_LOD);
 #else
     const simd_fvec<S> _duv_dx[2] = {duv_dx[0] * simd_fvec<S>(width), duv_dx[1] * simd_fvec<S>(height)};
     const simd_fvec<S> _duv_dy[2] = {duv_dy[0] * simd_fvec<S>(width), duv_dy[1] * simd_fvec<S>(height)};
@@ -1254,8 +1254,8 @@ simd_fvec<S> get_texture_lod(const simd_ivec<S> &width, const simd_ivec<S> &heig
 template <int S>
 simd_fvec<S> get_texture_lod(const simd_ivec<S> &width, const simd_ivec<S> &height, const simd_fvec<S> &lambda,
                              const simd_ivec<S> &mask) {
-#if FORCE_TEXTURE_LOD0
-    const simd_fvec<S> lod = 0.0f;
+#if FORCE_TEXTURE_LOD
+    const simd_fvec<S> lod = float(FORCE_TEXTURE_LOD);
 #else
     simd_fvec<S> lod;
 
@@ -5749,6 +5749,6 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
 #undef USE_VNDF_GGX_SAMPLING
 #undef USE_NEE
 #undef USE_PATH_TERMINATION
-#undef FORCE_TEXTURE_LOD0
+#undef FORCE_TEXTURE_LOD
 
 #pragma warning(pop)

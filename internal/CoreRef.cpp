@@ -15,7 +15,7 @@
 #define USE_PATH_TERMINATION 1
 #define VECTORIZE_BBOX_INTERSECTION 1
 #define VECTORIZE_TRI_INTERSECTION 1
-#define FORCE_TEXTURE_LOD0 0
+//#define FORCE_TEXTURE_LOD 1
 
 namespace Ray {
 namespace Ref {
@@ -590,8 +590,8 @@ force_inline float lum(const simd_fvec4 &color) {
 }
 
 float get_texture_lod(const texture_t &t, const simd_fvec2 &duv_dx, const simd_fvec2 &duv_dy) {
-#if FORCE_TEXTURE_LOD0
-    const float lod = 0.0f;
+#ifdef FORCE_TEXTURE_LOD
+    const float lod = float(FORCE_TEXTURE_LOD);
 #else
     const simd_fvec2 sz = {float(t.width & TEXTURE_WIDTH_BITS), float(t.height & TEXTURE_HEIGHT_BITS)};
     const simd_fvec2 _duv_dx = duv_dx * sz, _duv_dy = duv_dy * sz;
@@ -608,8 +608,8 @@ float get_texture_lod(const texture_t &t, const simd_fvec2 &duv_dx, const simd_f
 }
 
 float get_texture_lod(const texture_t &t, const float lambda) {
-#if FORCE_TEXTURE_LOD0
-    const float lod = 0.0f;
+#ifdef FORCE_TEXTURE_LOD
+    const float lod = float(FORCE_TEXTURE_LOD);
 #else
     const float w = float(t.width & TEXTURE_WIDTH_BITS);
     const float h = float(t.height & TEXTURE_HEIGHT_BITS);
@@ -3893,3 +3893,4 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
 #undef USE_NEE
 #undef USE_PATH_TERMINATION
 #undef VECTORIZE_BBOX_INTERSECTION
+#undef FORCE_TEXTURE_LOD
