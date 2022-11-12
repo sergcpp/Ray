@@ -10,7 +10,6 @@ ELSE()
 ENDIF()
 
 add_executable(test_Ray main.cpp
-                        test_atlas.cpp
                         test_common.h
                         test_data.cpp
                         test_img1.h
@@ -20,6 +19,7 @@ add_executable(test_Ray main.cpp
                         test_simd_avx512.cpp
                         test_simd.ipp
                         test_texture.cpp
+                        test_tex_storage.cpp
                         test_scene1.h
                         test_scene2.h
                         thread_pool.h

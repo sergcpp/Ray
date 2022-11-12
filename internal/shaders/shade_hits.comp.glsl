@@ -61,7 +61,7 @@ layout(std430, binding = TEXTURES_BUF_SLOT) readonly buffer Textures {
     texture_t g_textures[];
 };
 
-layout(binding = TEXTURE_ATLASES_SLOT) uniform sampler2DArray g_atlases[4];
+layout(binding = TEXTURE_ATLASES_SLOT) uniform sampler2DArray g_atlases[6];
 
 #if PRIMARY
 layout(binding = OUT_IMG_SLOT, rgba32f) uniform writeonly image2D g_out_img;

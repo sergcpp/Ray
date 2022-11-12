@@ -12,7 +12,7 @@ stages:
     - echo "Compiling the code..."
     - mkdir build
     - cd build
-    - cmake .. -G "Visual Studio 17 2022" -A x64 -DENABLE_UNITYBUILD=ON
+    - cmake .. -G "Visual Studio 17 2022" -A x64 -DENABLE_UNITYBUILD=ON -DENABLE_REF_IMPL=ON
     - cd ..
     - cmake --build build --target ALL_BUILD --config Release --parallel 8
     - cmake --build build --target ALL_BUILD --config Debug --parallel 8
@@ -34,7 +34,7 @@ stages:
     - echo "Compiling the code..."
     - mkdir build
     - cd build
-    - cmake .. -G "Visual Studio 17 2022" -A ARM64 -DENABLE_UNITYBUILD=ON
+    - cmake .. -G "Visual Studio 17 2022" -A ARM64 -DENABLE_UNITYBUILD=ON -DENABLE_REF_IMPL=ON
     - cd ..
     - cmake --build build --target ALL_BUILD --config Release --parallel 8
     - cmake --build build --target ALL_BUILD --config Debug --parallel 8
@@ -56,15 +56,15 @@ stages:
     - echo "Compiling the code..."
     - mkdir build
     - cd build
-    - cmake .. -DCMAKE_BUILD_TYPE=Release -DENABLE_UNITYBUILD=ON
+    - cmake .. -DCMAKE_BUILD_TYPE=Release -DENABLE_UNITYBUILD=ON -DENABLE_REF_IMPL=ON
     - cd ..
     - mkdir build_dbg
     - cd build_dbg
-    - cmake .. -DCMAKE_BUILD_TYPE=Debug -DENABLE_UNITYBUILD=ON
+    - cmake .. -DCMAKE_BUILD_TYPE=Debug -DENABLE_UNITYBUILD=ON -DENABLE_REF_IMPL=ON
     - cd ..
     - mkdir build_dev
     - cd build_dev
-    - cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo -DENABLE_UNITYBUILD=ON
+    - cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo -DENABLE_UNITYBUILD=ON -DENABLE_REF_IMPL=ON
     - cd ..
     - cmake --build build --target all --parallel 8
     - cmake --build build_dbg --target all --parallel 8
@@ -85,15 +85,15 @@ stages:
     - echo "Compiling the code..."
     - mkdir build
     - cd build
-    - cmake .. -DCMAKE_APPLE_SILICON_PROCESSOR=x86_64 -DCMAKE_BUILD_TYPE=Release -DENABLE_UNITYBUILD=ON
+    - cmake .. -DCMAKE_APPLE_SILICON_PROCESSOR=x86_64 -DCMAKE_BUILD_TYPE=Release -DENABLE_UNITYBUILD=ON -DENABLE_REF_IMPL=ON
     - cd ..
     - mkdir build_dbg
     - cd build_dbg
-    - cmake .. -DCMAKE_APPLE_SILICON_PROCESSOR=x86_64 -DCMAKE_BUILD_TYPE=Debug -DENABLE_UNITYBUILD=ON
+    - cmake .. -DCMAKE_APPLE_SILICON_PROCESSOR=x86_64 -DCMAKE_BUILD_TYPE=Debug -DENABLE_UNITYBUILD=ON -DENABLE_REF_IMPL=ON
     - cd ..
     - mkdir build_dev
     - cd build_dev
-    - cmake .. -DCMAKE_APPLE_SILICON_PROCESSOR=x86_64 -DCMAKE_BUILD_TYPE=RelWithDebInfo -DENABLE_UNITYBUILD=ON
+    - cmake .. -DCMAKE_APPLE_SILICON_PROCESSOR=x86_64 -DCMAKE_BUILD_TYPE=RelWithDebInfo -DENABLE_UNITYBUILD=ON -DENABLE_REF_IMPL=ON
     - cd ..
     - cmake --build build --target all --parallel 8
     - cmake --build build_dbg --target all --parallel 8
@@ -114,15 +114,15 @@ stages:
     - echo "Compiling the code..."
     - mkdir build
     - cd build
-    - cmake .. -DCMAKE_APPLE_SILICON_PROCESSOR=arm64 -DCMAKE_BUILD_TYPE=Release -DENABLE_UNITYBUILD=ON
+    - cmake .. -DCMAKE_APPLE_SILICON_PROCESSOR=arm64 -DCMAKE_BUILD_TYPE=Release -DENABLE_UNITYBUILD=ON -DENABLE_REF_IMPL=ON
     - cd ..
     - mkdir build_dbg
     - cd build_dbg
-    - cmake .. -DCMAKE_APPLE_SILICON_PROCESSOR=arm64 -DCMAKE_BUILD_TYPE=Debug -DENABLE_UNITYBUILD=ON
+    - cmake .. -DCMAKE_APPLE_SILICON_PROCESSOR=arm64 -DCMAKE_BUILD_TYPE=Debug -DENABLE_UNITYBUILD=ON -DENABLE_REF_IMPL=ON
     - cd ..
     - mkdir build_dev
     - cd build_dev
-    - cmake .. -DCMAKE_APPLE_SILICON_PROCESSOR=arm64 -DCMAKE_BUILD_TYPE=RelWithDebInfo -DENABLE_UNITYBUILD=ON
+    - cmake .. -DCMAKE_APPLE_SILICON_PROCESSOR=arm64 -DCMAKE_BUILD_TYPE=RelWithDebInfo -DENABLE_UNITYBUILD=ON -DENABLE_REF_IMPL=ON
     - cd ..
     - cmake --build build --target all --parallel 8
     - cmake --build build_dbg --target all --parallel 8
@@ -291,16 +291,16 @@ linux-x86_64-gpu-nv-test-job:
   tags:
     - linux,x86_64,nv
 
-linux-x86_64-gpu-amd-test-job:
-  variables:
-    BIN_DIR: linux-x86_64
-    AUX_TEST_ARGS: '-d AMD --nocpu'
-  extends:
-    - .test-job
-  needs:
-    - linux-x86_64-build-job
-  tags:
-    - linux,x86_64,amd
+#linux-x86_64-gpu-amd-test-job:
+#  variables:
+#    BIN_DIR: linux-x86_64
+#    AUX_TEST_ARGS: '-d AMD --nocpu'
+#  extends:
+#    - .test-job
+#  needs:
+#    - linux-x86_64-build-job
+#  tags:
+#    - linux,x86_64,amd
 
 macos-x86_64-cpu-test-job:
   variables:
@@ -352,7 +352,7 @@ deploy-job:
       optional: true
     - linux-x86_64-cpu-test-job
     - linux-x86_64-gpu-nv-test-job
-    - linux-x86_64-gpu-amd-test-job
+    #- linux-x86_64-gpu-amd-test-job
     - macos-x86_64-cpu-test-job
     - macos-arm64-cpu-test-job
     - macos-arm64-gpu-m1-test-job

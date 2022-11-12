@@ -68,20 +68,20 @@ template bool Traverse_MicroTree_WithStack_AnyHit(const float ro[3], const float
                                                   const uint32_t *tri_indices, int obj_index,
                                                   hit_data_t<RayPacketSize> &inter);
 
-template void SampleNearest<RayPacketSize>(const Ref::TextureAtlasBase *atlases[], const texture_t &t,
+template void SampleNearest<RayPacketSize>(const Ref::TexStorageBase *atlases[], const texture_t &t,
                                            const simd_fvec<RayPacketSize> uvs[2], const simd_fvec<RayPacketSize> &lod,
                                            const simd_ivec<RayPacketSize> &mask, simd_fvec<RayPacketSize> out_rgba[4]);
-template void SampleBilinear<RayPacketSize>(const Ref::TextureAtlasBase *atlases[], const texture_t &t,
+template void SampleBilinear<RayPacketSize>(const Ref::TexStorageBase *atlases[], const texture_t &t,
                                             const simd_fvec<RayPacketSize> uvs[2], const simd_ivec<RayPacketSize> &lod,
                                             const simd_ivec<RayPacketSize> &mask, simd_fvec<RayPacketSize> out_rgba[4]);
-template void SampleBilinear<RayPacketSize>(const Ref::TextureAtlasBase &atlas, const simd_fvec<RayPacketSize> uvs[2],
+template void SampleBilinear<RayPacketSize>(const Ref::TexStorageBase &atlas, const simd_fvec<RayPacketSize> uvs[2],
                                             const simd_ivec<RayPacketSize> &page, const simd_ivec<RayPacketSize> &mask,
                                             simd_fvec<RayPacketSize> out_rgba[4]);
-template void SampleTrilinear<RayPacketSize>(const Ref::TextureAtlasBase *atlases[], const texture_t &t,
+template void SampleTrilinear<RayPacketSize>(const Ref::TexStorageBase *atlases[], const texture_t &t,
                                              const simd_fvec<RayPacketSize> uvs[2], const simd_fvec<RayPacketSize> &lod,
                                              const simd_ivec<RayPacketSize> &mask,
                                              simd_fvec<RayPacketSize> out_rgba[4]);
-template void SampleAnisotropic<RayPacketSize>(const Ref::TextureAtlasBase *atlases[], const texture_t &t,
+template void SampleAnisotropic<RayPacketSize>(const Ref::TexStorageBase *atlases[], const texture_t &t,
                                                const simd_fvec<RayPacketSize> uvs[2],
                                                const simd_fvec<RayPacketSize> duv_dx[2],
                                                const simd_fvec<RayPacketSize> duv_dy[2],
@@ -96,7 +96,7 @@ template simd_fvec<RayPacketSize>
 ComputeVisibility<RayPacketSize>(const simd_fvec<RayPacketSize> p[3], const simd_fvec<RayPacketSize> d[3],
                                  simd_fvec<RayPacketSize> dist, const simd_ivec<RayPacketSize> &mask,
                                  const float rand_val, const simd_ivec<RayPacketSize> &rand_hash2,
-                                 const scene_data_t &sc, uint32_t node_index, const Ref::TextureAtlasBase *atlases[]);
+                                 const scene_data_t &sc, uint32_t node_index, const Ref::TexStorageBase *atlases[]);
 
 template void ComputeDerivatives<RayPacketSize>(
     const simd_fvec<RayPacketSize> I[3], const simd_fvec<RayPacketSize> &t, const simd_fvec<RayPacketSize> do_dx[3],
@@ -110,7 +110,7 @@ template void ComputeDerivatives<RayPacketSize>(
 template void ShadeSurface<RayPacketSize>(const simd_ivec<RayPacketSize> &index, const pass_info_t &pi,
                                           const float *halton, const hit_data_t<RayPacketSize> &inter,
                                           const ray_data_t<RayPacketSize> &ray, const scene_data_t &sc,
-                                          uint32_t node_index, const Ref::TextureAtlasBase *tex_atlases[],
+                                          uint32_t node_index, const Ref::TexStorageBase *tex_atlases[],
                                           simd_fvec<RayPacketSize> out_rgba[4],
                                           simd_ivec<RayPacketSize> out_secondary_masks[],
                                           ray_data_t<RayPacketSize> out_secondary_rays[], int *out_secondary_rays_count,

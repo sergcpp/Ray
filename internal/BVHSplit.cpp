@@ -13,7 +13,7 @@ const int NumSpatialSplitBins = 256;
 
 struct bbox_t {
     Ref::simd_fvec4 min = {std::numeric_limits<float>::max()}, max = {std::numeric_limits<float>::lowest()};
-    bbox_t() {}
+    bbox_t() = default;
     bbox_t(const Ref::simd_fvec4 &_min, const Ref::simd_fvec4 &_max) : min(_min), max(_max) {}
 
     float surface_area() const { return surface_area(min, max); }
@@ -74,7 +74,7 @@ static int sutherland_hodgman(const Ref::simd_dvec3 *input, const int in_count, 
 
 force_inline float castflt_down(const double val) {
     int32_t b;
-    float a = float(val);
+    auto a = float(val);
 
     memcpy(&b, &a, sizeof(float));
 
@@ -89,7 +89,7 @@ force_inline float castflt_down(const double val) {
 
 force_inline float castflt_up(const double val) {
     int32_t b;
-    float a = float(val);
+    auto a = float(val);
 
     memcpy(&b, &a, sizeof(float));
 
@@ -152,7 +152,7 @@ Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, Span<const 
         }
     }
 
-    float res_sah = s.oversplit_threshold * whole_box.surface_area() * num_prims;
+    float res_sah = s.oversplit_threshold * whole_box.surface_area() * float(num_prims);
     int div_axis = -1;
     float div_pos = 0.0f;
     uint32_t div_index = 0;
@@ -204,7 +204,7 @@ Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, Span<const 
 
             const float scale = (bounds_max - bounds_min) / float(BinsCount);
             for (int i = 0; i < BinsCount - 1; ++i) {
-                const float sah = count_left[i] * area_left[i] + count_right[i] * area_right[i];
+                const float sah = float(count_left[i]) * area_left[i] + float(count_right[i]) * area_right[i];
                 if (sah < res_sah) {
                     res_sah = sah;
                     div_axis = axis;
@@ -240,8 +240,8 @@ Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, Span<const 
         SmallVector<uint32_t, 1024> axis_lists[3];
 
         if (num_prims > s.min_primitives_in_leaf) {
-            for (int axis = 0; axis < 3; axis++) {
-                axis_lists[axis].reserve(num_prims);
+            for (auto &list : axis_lists) {
+                list.reserve(num_prims);
             }
 
             for (uint32_t i = 0; i < uint32_t(num_prims); ++i) {
@@ -294,7 +294,7 @@ Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, Span<const 
                     }
 
                     const float sah =
-                        left_bounds.surface_area() * i + right_bounds[i - 1].surface_area() * (list.size() - i);
+                        left_bounds.surface_area() * float(i) + right_bounds[i - 1].surface_area() * float(list.size() - i);
                     if (sah < res_sah) {
                         res_sah = sah;
                         div_axis = axis;
@@ -403,7 +403,7 @@ Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, Span<const 
 
                     for (int split = 1; split < NumSpatialSplitBins; split++) {
                         bbox_t ext_left, ext_right;
-                        int num_left = 0, num_right = 0;
+                        uint32_t num_left = 0, num_right = 0;
                         for (int i = 0; i < split; i++) {
                             if (!bins[i].prim_counter)
                                 continue;
@@ -422,7 +422,7 @@ Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, Span<const 
                         }
 
                         const float split_sah =
-                            ext_left.surface_area() * num_left + ext_right.surface_area() * num_right;
+                            ext_left.surface_area() * float(num_left) + ext_right.surface_area() * float(num_right);
                         if (split_sah < res_sah) {
                             res_sah = split_sah;
                             spatial_split = split;
@@ -436,9 +436,6 @@ Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, Span<const 
 
                 if (spatial_split != -1) {
                     std::vector<uint32_t> left_indices, right_indices;
-
-                    const bbox_t over = {max(res_left_bounds.min, res_right_bounds.min),
-                                         min(res_left_bounds.max, res_right_bounds.max)};
 
                     int num_in_both = 0;
 

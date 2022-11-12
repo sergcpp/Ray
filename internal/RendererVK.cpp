@@ -2,7 +2,6 @@
 
 #include <functional>
 #include <random>
-#include <string>
 #include <utility>
 
 #include "Halton.h"
@@ -66,7 +65,9 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
     }
 
     use_hwrt_ = (s.use_hwrt && ctx_->ray_query_supported());
+    use_tex_compression_ = s.use_tex_compression;
     log->Info("HWRT is %s", use_hwrt_ ? "enabled" : "disabled");
+    log->Info("Tex compression is %s", use_tex_compression_ ? "enabled" : "disabled");
 
     sh_prim_rays_gen_ = Shader{"Primary Raygen",
                                ctx_.get(),
@@ -204,7 +205,7 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
         EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
     }
 
-    Resize(s.w, s.h);
+    Renderer::Resize(s.w, s.h);
 
     auto rand_func = std::bind(UniformIntDistribution<uint32_t>(), std::mt19937(0));
     permutations_ = Ray::ComputeRadicalInversePermutations(g_primes, PrimesCount, rand_func);
@@ -231,6 +232,10 @@ void Ray::Vk::Renderer::Resize(const int w, const int h) {
     clean_buf_ = Texture2D{"Clean Image", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
     final_buf_ = Texture2D{"Final Image", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
 
+    if (frame_pixels_) {
+        pixel_stage_buf_.Unmap();
+        frame_pixels_ = nullptr;
+    }
     pixel_stage_buf_ = Buffer{"Px Stage Buf", ctx_.get(), eBufType::Stage, uint32_t(4 * w * h * sizeof(float))};
     frame_pixels_ = (const pixel_color_t *)pixel_stage_buf_.Map(BufMapRead, true /* persistent */);
 
@@ -259,7 +264,7 @@ void Ray::Vk::Renderer::Clear(const pixel_color_t &c) {
     EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 }
 
-Ray::SceneBase *Ray::Vk::Renderer::CreateScene() { return new Vk::Scene(ctx_.get(), use_hwrt_); }
+Ray::SceneBase *Ray::Vk::Renderer::CreateScene() { return new Vk::Scene(ctx_.get(), use_hwrt_, use_tex_compression_); }
 
 void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) {
     const auto s = dynamic_cast<const Vk::Scene *>(_s);
@@ -293,6 +298,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
 
         EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 
+        temp_stage_buf.FreeImmediate();
         loaded_halton_ = region.iteration;
     }
 
@@ -324,9 +330,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
 #endif
 
     ctx_->DestroyDeferredResources(ctx_->backend_frame);
-
-    const bool reset_result = ctx_->default_descr_alloc()->Reset();
-    assert(reset_result);
+    ctx_->default_descr_alloc()->Reset();
 
 #if RUN_IN_LOCKSTEP
     VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
@@ -340,21 +344,21 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
 
     //////////////////////////////////////////////////////////////////////////////////
 
-    pass_info_t pass_info;
+    pass_info_t pass_info = {};
 
     pass_info.iteration = region.iteration;
     pass_info.bounce = 0;
     pass_info.settings = cam.pass_settings;
     pass_info.settings.max_total_depth = std::min(pass_info.settings.max_total_depth, uint8_t(MAX_BOUNCES));
 
-    const uint32_t hi = (region.iteration & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT;
+    const int hi = (region.iteration & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT;
 
     { // transition resources
         SmallVector<TransitionInfo, 16> res_transitions;
 
-        for (int i = 0; i < 4; ++i) {
-            if (s->tex_atlases_[i].resource_state != eResState::ShaderResource) {
-                res_transitions.emplace_back(&s->tex_atlases_[i], eResState::ShaderResource);
+        for (const auto &tex_atlas : s->tex_atlases_) {
+            if (tex_atlas.resource_state != eResState::ShaderResource) {
+                res_transitions.emplace_back(&tex_atlas, eResState::ShaderResource);
             }
         }
 
@@ -483,7 +487,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         DebugMarker _(cmd_buf, "Prepare Result");
 
         // factor used to compute incremental average
-        const float mix_factor = 1.0f / region.iteration;
+        const float mix_factor = 1.0f / float(region.iteration);
 
         kernel_MixIncremental(cmd_buf, clean_buf_, temp_buf_, mix_factor, final_buf_);
         std::swap(final_buf_, clean_buf_);
@@ -540,7 +544,7 @@ void Ray::Vk::Renderer::UpdateHaltonSequence(const int iteration, std::unique_pt
         uint32_t prime_sum = 0;
         for (int j = 0; j < HALTON_COUNT; ++j) {
             seq[i * HALTON_COUNT + j] =
-                ScrambledRadicalInverse(g_primes[j], &permutations_[prime_sum], uint64_t(iteration + i));
+                ScrambledRadicalInverse(g_primes[j], &permutations_[prime_sum], uint64_t(iteration) + i);
             prime_sum += g_primes[j];
         }
     }

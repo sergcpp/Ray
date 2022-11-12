@@ -2,6 +2,9 @@ cmake_minimum_required(VERSION 2.8.12)
 project(Ray)
 
 OPTION(ENABLE_UNITYBUILD "Enable compilation of one large cpp file" ON)
+OPTION(ENABLE_REF_IMPL "Enable reference CPU implementation" OFF)
+OPTION(ENABLE_SIMD_IMPL "Enable SIMD CPU implementations" ON)
+OPTION(ENABLE_GPU_IMPL "Enable Vulkan GPU implementation" ON)
 
 IF(MSVC)
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /Ob1")
@@ -28,54 +31,69 @@ set(INTERNAL_SOURCE_FILES internal/Bitmap.h
                           internal/FramebufferRef.h
                           internal/FramebufferRef.cpp
                           internal/Halton.h
-                          internal/RendererRef.h
-                          internal/RendererRef.cpp
                           internal/RendererSIMD.h
                           internal/SceneRef.h
                           internal/SceneRef.cpp
                           internal/SmallVector.h
                           internal/SparseStorage.h
                           internal/Span.h
-                          internal/TextureAtlasRef.h
-                          internal/TextureAtlasRef.cpp
                           internal/TextureSplitter.h
                           internal/TextureSplitter.cpp
+                          internal/TextureStorageRef.h
+                          internal/TextureStorageRef.cpp
                           internal/TextureUtilsRef.h
                           internal/TextureUtilsRef.cpp
                           internal/Time_.h
                           internal/Time.cpp
-                          internal/UniformIntDistribution.h)
+                          internal/UniformIntDistribution.h
+                          internal/Utils.h
+                          internal/Utils.cpp)
+
+if (ENABLE_REF_IMPL)
+    set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
+                              internal/RendererRef.h
+                              internal/RendererRef.cpp)
+endif()
                           
 if(NOT CMAKE_SYSTEM_NAME MATCHES "Android" AND NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64")
 
-set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
-                          internal/RendererSSE2.h
-                          internal/RendererSSE2.cpp
-                          internal/RendererSSE41.h
-                          internal/RendererSSE41.cpp
-                          internal/RendererAVX.h
-                          internal/RendererAVX.cpp
-                          internal/RendererAVX2.h
-                          internal/RendererAVX2.cpp)
+if (ENABLE_SIMD_IMPL)
+    set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
+                              internal/RendererSSE2.h
+                              internal/RendererSSE2.cpp
+                              internal/RendererSSE41.h
+                              internal/RendererSSE41.cpp
+                              internal/RendererAVX.h
+                              internal/RendererAVX.cpp
+                              internal/RendererAVX2.h
+                              internal/RendererAVX2.cpp
+                              internal/UtilsSSE2.cpp)
 endif()
 
-if("${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64" OR "${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "arm64")
-set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
-                          internal/RendererNEON.h
-                          internal/RendererNEON.cpp)
+
+elseif("${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64" OR "${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "arm64")
+
+if (ENABLE_SIMD_IMPL)
+    set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
+                              internal/RendererNEON.h
+                              internal/RendererNEON.cpp)
 endif()
 
-set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
-                          internal/CoreVK.h
-                          internal/RendererVK.h
-                          internal/RendererVK.cpp
-                          internal/RendererVK_kernels.cpp
-                          internal/SceneVK.h
-                          internal/SceneVK.cpp
-                          internal/SparseStorageVK.h
-                          internal/VectorVK.h)
 
-add_definitions(-DENABLE_OBJ_LABELS)
+endif()
+
+if (ENABLE_GPU_IMPL)
+    add_definitions(-DENABLE_OBJ_LABELS)
+    set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
+                              internal/CoreVK.h
+                              internal/RendererVK.h
+                              internal/RendererVK.cpp
+                              internal/RendererVK_kernels.cpp
+                              internal/SceneVK.h
+                              internal/SceneVK.cpp
+                              internal/SparseStorageVK.h
+                              internal/VectorVK.h)
+endif()
 
 if(MSVC AND NOT "${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "arm64")
     if(NOT CMAKE_CL_64)
@@ -86,7 +104,10 @@ if(MSVC AND NOT "${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "arm64")
     set_source_files_properties(internal/RendererAVX2.cpp PROPERTIES COMPILE_FLAGS /arch:AVX)
 endif(MSVC AND NOT "${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "arm64")
 
-set(SOURCE_FILES Log.h
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/Config.h.in ${CMAKE_CURRENT_SOURCE_DIR}/Config.h)
+
+set(SOURCE_FILES Config.h
+                 Log.h
                  RendererBase.h
                  RendererBase.cpp
                  RendererFactory.h
@@ -150,17 +171,38 @@ set(VK_FILES internal/Vk/AccStructure.h
              third-party/SPIRV-Reflect/spirv_reflect.h
              third-party/SPIRV-Reflect/spirv_reflect.c)
 
+set(SHADER_FILES    internal/shaders/_interface_common.glsl
+                    internal/shaders/common.glsl
+                    internal/shaders/debug_rt.comp.glsl
+                    internal/shaders/intersect.glsl
+                    internal/shaders/intersect_area_lights.comp.glsl
+                    internal/shaders/intersect_area_lights_interface.glsl
+                    internal/shaders/mix_incremental.comp.glsl
+                    internal/shaders/mix_incremental_interface.glsl
+                    internal/shaders/postprocess.comp.glsl
+                    internal/shaders/postprocess_interface.glsl
+                    internal/shaders/prepare_indir_args.comp.glsl
+                    internal/shaders/prepare_indir_args_interface.glsl
+                    internal/shaders/primary_ray_gen.comp.glsl
+                    internal/shaders/primary_ray_gen_interface.glsl
+                    internal/shaders/shade_hits.comp.glsl
+                    internal/shaders/shade_hits_interface.glsl
+                    internal/shaders/texture.glsl
+                    internal/shaders/trace_rays.comp.glsl
+                    internal/shaders/trace_rays_interface.glsl
+                    internal/shaders/trace_shadow.comp.glsl
+                    internal/shaders/trace_shadow_interface.glsl
+                    internal/shaders/traverse_bvh.glsl
+                    internal/shaders/types.glsl)
+
 list(APPEND ALL_SOURCE_FILES ${INTERNAL_SOURCE_FILES})
 source_group("src\\internal" FILES ${INTERNAL_SOURCE_FILES})
-
-list(APPEND ALL_SOURCE_FILES ${INTERNAL_DEPRECATED_SOURCE_FILES})
-source_group("src\\internal\\deprecated" FILES ${INTERNAL_DEPRECATED_SOURCE_FILES})
 
 list(APPEND ALL_SOURCE_FILES ${SOURCE_FILES})
 source_group("src" FILES ${SOURCE_FILES})
 
-list(APPEND ALL_SOURCE_FILES ${KERNEL_FILES})
-source_group("src\\internal\\kernels" FILES ${KERNEL_FILES})
+list(APPEND ALL_SOURCE_FILES ${SHADER_FILES})
+source_group("src\\internal\\shaders" FILES ${SHADER_FILES})
 
 list(APPEND ALL_SOURCE_FILES ${SIMD_FILES})
 source_group("src\\internal\\simd" FILES ${SIMD_FILES})
@@ -168,7 +210,7 @@ source_group("src\\internal\\simd" FILES ${SIMD_FILES})
 list(APPEND ALL_SOURCE_FILES ${VK_FILES})
 source_group("src\\internal\\Vk" FILES ${VK_FILES})
 
-set_source_files_properties(${KERNEL_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
+set_source_files_properties(${SHADER_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
 
 # enable or disable unity build
 if(ENABLE_UNITYBUILD)

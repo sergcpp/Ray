@@ -145,9 +145,10 @@ enum eTextureFormat {
 struct tex_desc_t {
     eTextureFormat format;
     const void *data;
-    int w,                      ///< Texture width
-        h;                      ///< Texture height
+    int w,                              ///< Texture width
+        h;                              ///< Texture height
     bool is_srgb = true;
+    bool force_no_compression = false;  ///< Make sure texture will have best quality
     bool generate_mipmaps;
 };
 

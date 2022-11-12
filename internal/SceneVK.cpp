@@ -12,6 +12,7 @@
 #include "../Log.h"
 #include "BVHSplit.h"
 #include "TextureUtilsRef.h"
+#include "Utils.h"
 #include "Vk/Context.h"
 #include "Vk/TextureParams.h"
 
@@ -48,14 +49,17 @@ VkDeviceSize align_up(const VkDeviceSize size, const VkDeviceSize alignment) {
 } // namespace Vk
 } // namespace Ray
 
-Ray::Vk::Scene::Scene(Context *ctx, const bool use_hwrt)
-    : ctx_(ctx), use_hwrt_(use_hwrt), nodes_(ctx), tris_(ctx), tri_indices_(ctx), tri_materials_(ctx),
-      transforms_(ctx, "Transforms"), meshes_(ctx, "Meshes"), mesh_instances_(ctx, "Mesh Instances"), mi_indices_(ctx),
-      vertices_(ctx), vtx_indices_(ctx), materials_(ctx, "Materials"),
+Ray::Vk::Scene::Scene(Context *ctx, const bool use_hwrt, const bool use_tex_compression)
+    : ctx_(ctx), use_hwrt_(use_hwrt), use_tex_compression_(use_tex_compression), nodes_(ctx), tris_(ctx),
+      tri_indices_(ctx), tri_materials_(ctx), transforms_(ctx, "Transforms"), meshes_(ctx, "Meshes"),
+      mesh_instances_(ctx, "Mesh Instances"), mi_indices_(ctx), vertices_(ctx), vtx_indices_(ctx),
+      materials_(ctx, "Materials"),
       textures_(ctx, "Textures"), tex_atlases_{{ctx, eTexFormat::RawRGBA8888, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
                                                {ctx, eTexFormat::RawRGB888, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
                                                {ctx, eTexFormat::RawRG88, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
-                                               {ctx, eTexFormat::RawR8, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE}},
+                                               {ctx, eTexFormat::RawR8, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
+                                               {ctx, eTexFormat::BC3, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
+                                               {ctx, eTexFormat::BC4, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE}},
       lights_(ctx, "Lights"), li_indices_(ctx), visible_lights_(ctx) {}
 
 void Ray::Vk::Scene::GetEnvironment(environment_desc_t &env) {
@@ -83,21 +87,31 @@ uint32_t Ray::Vk::Scene::AddTexture(const tex_desc_t &_t) {
         t.height |= TEXTURE_MIPS_BIT;
     }
 
-    const int res[2] = {_t.w, _t.h};
+    int res[2] = {_t.w, _t.h};
 
     std::vector<color_rgba8_t> tex_data_rgba8;
     std::vector<color_rgb8_t> tex_data_rgb8;
     std::vector<color_rg8_t> tex_data_rg8;
     std::vector<color_r8_t> tex_data_r8;
 
+    const bool use_compression = use_tex_compression_ && !_t.force_no_compression;
+
     if (_t.format == eTextureFormat::RGBA8888) {
         t.atlas = 0;
     } else if (_t.format == eTextureFormat::RGB888) {
-        t.atlas = 1;
+        if (use_compression && _t.is_srgb) {
+            t.atlas = 4;
+        } else {
+            t.atlas = 1;
+        }
     } else if (_t.format == eTextureFormat::RG88) {
         t.atlas = 2;
     } else if (_t.format == eTextureFormat::R8) {
-        t.atlas = 3;
+        if (use_compression) {
+            t.atlas = 5;
+        } else {
+            t.atlas = 3;
+        }
     }
 
     { // Allocate initial mip level
@@ -106,11 +120,12 @@ uint32_t Ray::Vk::Scene::AddTexture(const tex_desc_t &_t) {
         if (_t.format == eTextureFormat::RGBA8888) {
             page = tex_atlases_[0].Allocate<uint8_t, 4>(reinterpret_cast<const color_rgba8_t *>(_t.data), res, pos);
         } else if (_t.format == eTextureFormat::RGB888) {
-            page = tex_atlases_[1].Allocate<uint8_t, 3>(reinterpret_cast<const color_rgb8_t *>(_t.data), res, pos);
+            page =
+                tex_atlases_[t.atlas].Allocate<uint8_t, 3>(reinterpret_cast<const color_rgb8_t *>(_t.data), res, pos);
         } else if (_t.format == eTextureFormat::RG88) {
             page = tex_atlases_[2].Allocate<uint8_t, 2>(reinterpret_cast<const color_rg8_t *>(_t.data), res, pos);
         } else if (_t.format == eTextureFormat::R8) {
-            page = tex_atlases_[3].Allocate<uint8_t, 1>(reinterpret_cast<const color_r8_t *>(_t.data), res, pos);
+            page = tex_atlases_[t.atlas].Allocate<uint8_t, 1>(reinterpret_cast<const color_r8_t *>(_t.data), res, pos);
         }
 
         if (page == -1) {
@@ -122,17 +137,38 @@ uint32_t Ray::Vk::Scene::AddTexture(const tex_desc_t &_t) {
         t.pos[0][1] = uint16_t(pos[1]);
     }
 
-    // temporarily fill remaining mip levels with the last one (mips will be added later)
+    // Temporarily fill remaining mip levels with the last one (mips will be added later)
     for (int i = 1; i < NUM_MIP_LEVELS; i++) {
         t.page[i] = t.page[0];
         t.pos[i][0] = t.pos[0][0];
         t.pos[i][1] = t.pos[0][1];
     }
 
+    if (_t.generate_mipmaps && use_compression) {
+        // We have to generate mips here as uncompressed data will be lost
+
+        int pages[16], positions[16][2];
+        if (_t.format == eTextureFormat::RGB888) {
+            tex_atlases_[t.atlas].AllocateMips<uint8_t, 3>(reinterpret_cast<const color_rgb8_t *>(_t.data), res,
+                                                           NUM_MIP_LEVELS - 1, pages, positions);
+        } else if (_t.format == eTextureFormat::R8) {
+            tex_atlases_[t.atlas].AllocateMips<uint8_t, 1>(reinterpret_cast<const color_r8_t *>(_t.data), res,
+                                                           NUM_MIP_LEVELS - 1, pages, positions);
+        } else {
+            return 0xffffffff;
+        }
+
+        for (int i = 1; i < NUM_MIP_LEVELS; i++) {
+            t.page[i] = uint8_t(pages[i - 1]);
+            t.pos[i][0] = uint16_t(positions[i - 1][0]);
+            t.pos[i][1] = uint16_t(positions[i - 1][1]);
+        }
+    }
+
     ctx_->log()->Info("Ray: Texture loaded (atlas = %i, %ix%i)", int(t.atlas), _t.w, _t.h);
-    ctx_->log()->Info("Ray: Atlasses are (RGBA %i pages, RGB %i pages, RG %i pages, R %i pages)",
+    ctx_->log()->Info("Ray: Atlasses are (RGBA[%i], RGB[%i], RG[%i], R[%i], BC3[%i], BC4[%i])",
                       tex_atlases_[0].page_count(), tex_atlases_[1].page_count(), tex_atlases_[2].page_count(),
-                      tex_atlases_[3].page_count());
+                      tex_atlases_[3].page_count(), tex_atlases_[4].page_count(), tex_atlases_[5].page_count());
 
     return textures_.push(t);
 }
@@ -307,11 +343,11 @@ uint32_t Ray::Vk::Scene::AddMesh(const mesh_desc_t &_m) {
     std::vector<tri_mat_data_t> new_tri_materials(_m.vtx_indices_count / 3);
 
     // init triangle materials
-    for (const shape_desc_t &s : _m.shapes) {
+    for (const shape_desc_t &sh : _m.shapes) {
         bool is_front_solid = true, is_back_solid = true;
 
         uint32_t material_stack[32];
-        material_stack[0] = s.mat_index;
+        material_stack[0] = sh.mat_index;
         uint32_t material_count = 1;
 
         while (material_count) {
@@ -326,7 +362,7 @@ uint32_t Ray::Vk::Scene::AddMesh(const mesh_desc_t &_m) {
             }
         }
 
-        material_stack[0] = s.back_mat_index;
+        material_stack[0] = sh.back_mat_index;
         material_count = 1;
 
         while (material_count) {
@@ -341,18 +377,18 @@ uint32_t Ray::Vk::Scene::AddMesh(const mesh_desc_t &_m) {
             }
         }
 
-        for (size_t i = s.vtx_start; i < s.vtx_start + s.vtx_count; i += 3) {
+        for (size_t i = sh.vtx_start; i < sh.vtx_start + sh.vtx_count; i += 3) {
             tri_mat_data_t &tri_mat = new_tri_materials[i / 3];
 
-            assert(s.mat_index < (1 << 14) && "Not enough bits to reference material!");
-            assert(s.back_mat_index < (1 << 14) && "Not enough bits to reference material!");
+            assert(sh.mat_index < (1 << 14) && "Not enough bits to reference material!");
+            assert(sh.back_mat_index < (1 << 14) && "Not enough bits to reference material!");
 
-            tri_mat.front_mi = uint16_t(s.mat_index);
+            tri_mat.front_mi = uint16_t(sh.mat_index);
             if (is_front_solid) {
                 tri_mat.front_mi |= MATERIAL_SOLID_BIT;
             }
 
-            tri_mat.back_mi = uint16_t(s.back_mat_index);
+            tri_mat.back_mi = uint16_t(sh.back_mat_index);
             if (is_back_solid) {
                 tri_mat.back_mi |= MATERIAL_SOLID_BIT;
             }
@@ -383,7 +419,7 @@ uint32_t Ray::Vk::Scene::AddMesh(const mesh_desc_t &_m) {
                               &new_tri_materials[0] + new_tri_materials.size());
 
     // add mesh
-    mesh_t m;
+    mesh_t m = {};
     memcpy(m.bbox_min, value_ptr(bbox_min), 3 * sizeof(float));
     memcpy(m.bbox_max, value_ptr(bbox_max), 3 * sizeof(float));
     m.node_index = uint32_t(nodes_.size());
@@ -454,7 +490,7 @@ void Ray::Vk::Scene::RemoveMesh(uint32_t) {
 }
 
 uint32_t Ray::Vk::Scene::AddLight(const directional_light_desc_t &_l) {
-    light_t l;
+    light_t l = {};
 
     l.type = LIGHT_TYPE_DIR;
     l.visible = false;
@@ -470,7 +506,7 @@ uint32_t Ray::Vk::Scene::AddLight(const directional_light_desc_t &_l) {
 }
 
 uint32_t Ray::Vk::Scene::AddLight(const sphere_light_desc_t &_l) {
-    light_t l;
+    light_t l = {};
 
     l.type = LIGHT_TYPE_SPHERE;
     l.visible = _l.visible;
@@ -491,7 +527,7 @@ uint32_t Ray::Vk::Scene::AddLight(const sphere_light_desc_t &_l) {
 }
 
 uint32_t Ray::Vk::Scene::AddLight(const rect_light_desc_t &_l, const float *xform) {
-    light_t l;
+    light_t l = {};
 
     l.type = LIGHT_TYPE_RECT;
     l.visible = _l.visible;
@@ -520,7 +556,7 @@ uint32_t Ray::Vk::Scene::AddLight(const rect_light_desc_t &_l, const float *xfor
 }
 
 uint32_t Ray::Vk::Scene::AddLight(const disk_light_desc_t &_l, const float *xform) {
-    light_t l;
+    light_t l = {};
 
     l.type = LIGHT_TYPE_DISK;
     l.visible = _l.visible;
@@ -569,7 +605,7 @@ void Ray::Vk::Scene::RemoveLight(const uint32_t i) {
 }
 
 uint32_t Ray::Vk::Scene::AddMeshInstance(const uint32_t mesh_index, const float *xform) {
-    mesh_instance_t mi;
+    mesh_instance_t mi = {};
     mi.mesh_index = mesh_index;
     mi.tr_index = transforms_.emplace();
 
@@ -604,7 +640,7 @@ uint32_t Ray::Vk::Scene::AddMeshInstance(const uint32_t mesh_index, const float 
 }
 
 void Ray::Vk::Scene::SetMeshInstanceTransform(const uint32_t mi_index, const float *xform) {
-    transform_t tr;
+    transform_t tr = {};
 
     memcpy(tr.xform, xform, 16 * sizeof(float));
     InverseMatrix(tr.xform, tr.inv_xform);
@@ -709,10 +745,6 @@ void Ray::Vk::Scene::GenerateTextureMips() {
     mips_to_generate.reserve(textures_.size());
 
     for (uint32_t i = 0; i < uint32_t(textures_.size()); ++i) {
-        // if (!textures_.exists(i)) {
-        //     continue;
-        // }
-
         const texture_t &t = textures_[i];
         if ((t.height & TEXTURE_MIPS_BIT) == 0) {
             continue;
@@ -726,12 +758,16 @@ void Ray::Vk::Scene::GenerateTextureMips() {
         ++mip;
 
         while (res[0] >= 1 && res[1] >= 1) {
-            mips_to_generate.emplace_back();
-            auto &m = mips_to_generate.back();
-            m.texture_index = i;
-            m.size = std::max(res[0], res[1]);
-            m.dst_mip = mip;
-            m.atlas_index = t.atlas;
+            const bool requires_generation =
+                t.page[mip] == t.page[0] && t.pos[mip][0] == t.pos[0][0] && t.pos[mip][1] == t.pos[0][1];
+            if (requires_generation) {
+                mips_to_generate.emplace_back();
+                auto &m = mips_to_generate.back();
+                m.texture_index = i;
+                m.size = std::max(res[0], res[1]);
+                m.dst_mip = mip;
+                m.atlas_index = t.atlas;
+            }
 
             res[0] /= 2;
             res[1] /= 2;
@@ -780,9 +816,9 @@ void Ray::Vk::Scene::GenerateTextureMips() {
         textures_.Set(info.texture_index, t);
     }
 
-    ctx_->log()->Info("Ray: Atlasses are (RGBA %i pages, RGB %i pages, RG %i pages, R %i pages)",
+    ctx_->log()->Info("Ray: Atlasses are (RGBA[%i], RGB[%i], RG[%i], R[%i], BC3[%i], BC4[%i])",
                       tex_atlases_[0].page_count(), tex_atlases_[1].page_count(), tex_atlases_[2].page_count(),
-                      tex_atlases_[3].page_count());
+                      tex_atlases_[3].page_count(), tex_atlases_[4].page_count(), tex_atlases_[5].page_count());
 }
 
 void Ray::Vk::Scene::RebuildHWAccStructures() {
@@ -796,8 +832,8 @@ void Ray::Vk::Scene::RebuildHWAccStructures() {
         SmallVector<VkAccelerationStructureGeometryKHR, 16> geometries;
         SmallVector<VkAccelerationStructureBuildRangeInfoKHR, 16> build_ranges;
         SmallVector<uint32_t, 16> prim_counts;
-        VkAccelerationStructureBuildSizesInfoKHR size_info;
-        VkAccelerationStructureBuildGeometryInfoKHR build_info;
+        VkAccelerationStructureBuildSizesInfoKHR size_info = {};
+        VkAccelerationStructureBuildGeometryInfoKHR build_info = {};
     };
     std::vector<Blas> all_blases;
 
@@ -886,6 +922,9 @@ void Ray::Vk::Scene::RebuildHWAccStructures() {
         VkResult res = vkCreateQueryPool(ctx_->device(), &query_pool_create_info, nullptr, &query_pool);
         assert(res == VK_SUCCESS);
 
+        std::vector<AccStructure> blases_before_compaction;
+        blases_before_compaction.resize(all_blases.size());
+
         { // Submit build commands
             VkDeviceSize acc_buf_offset = 0;
             VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
@@ -907,8 +946,8 @@ void Ray::Vk::Scene::RebuildHWAccStructures() {
                     ctx_->log()->Error("Failed to create acceleration structure!");
                 }
 
-                auto &blas = rt_mesh_blases_[i];
-                if (!blas.acc.Init(ctx_, acc_struct)) {
+                auto &acc = blases_before_compaction[i];
+                if (!acc.Init(ctx_, acc_struct)) {
                     ctx_->log()->Error("Failed to init BLAS!");
                 }
 
@@ -975,21 +1014,26 @@ void Ray::Vk::Scene::RebuildHWAccStructures() {
                     ctx_->log()->Error("Failed to create acceleration structure!");
                 }
 
-                auto &vk_blas = rt_mesh_blases_[i].acc;
-
                 VkCopyAccelerationStructureInfoKHR copy_info = {VK_STRUCTURE_TYPE_COPY_ACCELERATION_STRUCTURE_INFO_KHR};
                 copy_info.mode = VK_COPY_ACCELERATION_STRUCTURE_MODE_COMPACT_KHR;
-                copy_info.src = vk_blas.vk_handle();
+                copy_info.src = blases_before_compaction[i].vk_handle();
                 copy_info.dst = compact_acc_struct;
 
                 vkCmdCopyAccelerationStructureKHR(cmd_buf, &copy_info);
 
+                auto &vk_blas = rt_mesh_blases_[i].acc;
                 if (!vk_blas.Init(ctx_, compact_acc_struct)) {
                     ctx_->log()->Error("Blas compaction failed!");
                 }
             }
 
             EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+
+            for (auto &b : blases_before_compaction) {
+                b.FreeImmediate();
+            }
+            acc_structs_buf.FreeImmediate();
+            scratch_buf.FreeImmediate();
         }
     }
 
@@ -1088,6 +1132,8 @@ void Ray::Vk::Scene::RebuildHWAccStructures() {
                              nullptr);
     }
 
+    Buffer tlas_scratch_buf;
+
     { //
         VkAccelerationStructureGeometryInstancesDataKHR instances_data = {
             VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR};
@@ -1107,7 +1153,7 @@ void Ray::Vk::Scene::RebuildHWAccStructures() {
         tlas_build_info.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
         tlas_build_info.srcAccelerationStructure = VK_NULL_HANDLE;
 
-        const uint32_t instance_count = uint32_t(tlas_instances.size());
+        const auto instance_count = uint32_t(tlas_instances.size());
         const uint32_t max_instance_count = instance_count;
 
         VkAccelerationStructureBuildSizesInfoKHR size_info = {
@@ -1129,7 +1175,7 @@ void Ray::Vk::Scene::RebuildHWAccStructures() {
             ctx_->log()->Error("[SceneManager::InitHWAccStructures]: Failed to create acceleration structure!");
         }
 
-        Buffer tlas_scratch_buf =
+        tlas_scratch_buf =
             Buffer{"TLAS Scratch Buf", ctx_, eBufType::Storage, uint32_t(size_info.buildScratchSize)};
         VkDeviceAddress tlas_scratch_buf_addr = tlas_scratch_buf.vk_device_address();
 
@@ -1152,6 +1198,10 @@ void Ray::Vk::Scene::RebuildHWAccStructures() {
     }
 
     EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+
+    tlas_scratch_buf.FreeImmediate();
+    instance_stage_buf.FreeImmediate();
+    geo_data_stage_buf.FreeImmediate();
 }
 
 #undef _MIN

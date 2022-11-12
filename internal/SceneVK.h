@@ -16,7 +16,7 @@ class Scene : public SceneBase {
     friend class Vk::Renderer;
 
     Context *ctx_;
-    bool use_hwrt_ = false;
+    bool use_hwrt_ = false, use_tex_compression_ = false;
 
     Vector<bvh_node_t> nodes_;
     Vector<tri_accel_t> tris_;
@@ -33,7 +33,7 @@ class Scene : public SceneBase {
     SparseStorage<material_t> materials_;
     SparseStorage<texture_t> textures_;
 
-    TextureAtlas tex_atlases_[4];
+    TextureAtlas tex_atlases_[6];
 
     SparseStorage<light_t> lights_;
     Vector<uint32_t> li_indices_;
@@ -60,7 +60,7 @@ class Scene : public SceneBase {
     void RebuildHWAccStructures();
 
   public:
-    Scene(Context *ctx, bool use_hwrt);
+    Scene(Context *ctx, bool use_hwrt, bool use_tex_compression);
 
     void GetEnvironment(environment_desc_t &env) override;
     void SetEnvironment(const environment_desc_t &env) override;

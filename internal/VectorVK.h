@@ -28,17 +28,7 @@ template <typename T> class Vector {
                 cap_ *= 2;
             }
 
-            Buffer new_buf = Buffer("Vector Buf", ctx_, eBufType::Storage, uint32_t(sizeof(T) * cap_), sizeof(T));
-
-            if (size_) {
-                VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
-
-                CopyBufferToBuffer(buf_, 0, new_buf, 0, uint32_t(sizeof(T) * size_), cmd_buf);
-
-                EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
-            }
-
-            buf_ = std::move(new_buf);
+            buf_.Resize(uint32_t(sizeof(T) * cap_));
         }
     }
 
@@ -65,6 +55,8 @@ template <typename T> class Vector {
                                cmd_buf);
 
             EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+
+            temp_stage_buf.FreeImmediate();
         }
 
         size_ += num;

@@ -1,7 +1,12 @@
 #include "RendererFactory.h"
 
+#ifdef ENABLE_REF_IMPL
 #include "internal/RendererRef.h"
+#else // ENABLE_REF_IMPL
+#pragma message("Compiling without reference backend")
+#endif // ENABLE_REF_IMPL
 
+#ifdef ENABLE_SIMD_IMPL
 #if !defined(__aarch64__) && !defined(_M_ARM) && !defined(_M_ARM64)
 #include "internal/RendererAVX.h"
 #include "internal/RendererAVX2.h"
@@ -12,12 +17,15 @@
 #elif defined(__i386__) || defined(__x86_64__)
 #include "internal/RendererSSE2.h"
 #endif
+#else // ENABLE_SIMD_IMPL
+#pragma message("Compiling without SIMD support")
+#endif // #ifdef ENABLE_SIMD_IMPL
 
-#if !defined(DISABLE_GPU)
+#ifdef ENABLE_GPU_IMPL
 #include "internal/RendererVK.h"
-#else
+#else // ENABLE_GPU_IMPL
 #pragma message("Compiling without GPU support")
-#endif
+#endif // ENABLE_GPU_IMPL
 
 #include "internal/simd/detect.h"
 
@@ -28,7 +36,7 @@ LogNull g_null_log;
 Ray::RendererBase *Ray::CreateRenderer(const settings_t &s, ILog *log, const uint32_t enabled_types) {
     CpuFeatures features = GetCpuFeatures();
 
-#if !defined(DISABLE_GPU)
+#ifdef ENABLE_GPU_IMPL
     if (enabled_types & RendererVK) {
         log->Info("Ray: Creating Vulkan renderer %ix%i", s.w, s.h);
         try {
@@ -37,9 +45,10 @@ Ray::RendererBase *Ray::CreateRenderer(const settings_t &s, ILog *log, const uin
             log->Info("Ray: Creating Vulkan renderer failed, %s", e.what());
         }
     }
-#endif
+#endif // ENABLE_GPU_IMPL
 
 #if !defined(__aarch64__) && !defined(_M_ARM) && !defined(_M_ARM64)
+#ifdef ENABLE_SIMD_IMPL
     if ((enabled_types & RendererAVX2) && features.avx2_supported) {
         log->Info("Ray: Creating AVX2 renderer %ix%i", s.w, s.h);
         return new Avx2::Renderer(s, log);
@@ -56,24 +65,31 @@ Ray::RendererBase *Ray::CreateRenderer(const settings_t &s, ILog *log, const uin
         log->Info("Ray: Creating SSE2 renderer %ix%i", s.w, s.h);
         return new Sse2::Renderer(s, log);
     }
+#endif
+#ifdef ENABLE_REF_IMPL
     if (enabled_types & RendererRef) {
         log->Info("Ray: Creating Ref renderer %ix%i", s.w, s.h);
         return new Ref::Renderer(s, log);
     }
+#endif
 #elif defined(__ARM_NEON__) || defined(__aarch64__) || defined(_M_ARM) || defined(_M_ARM64)
+#ifdef ENABLE_SIMD_IMPL
     if (enabled_types & RendererNEON) {
         log->Info("Ray: Creating NEON renderer %ix%i", s.w, s.h);
         return new Neon::Renderer(s, log);
     }
+#endif
+#ifdef ENABLE_REF_IMPL
     if (enabled_types & RendererRef) {
         log->Info("Ray: Creating Ref renderer %ix%i", s.w, s.h);
         return new Ref::Renderer(s, log);
     }
 #endif
+#endif
+#ifdef ENABLE_REF_IMPL
     log->Info("Ray: Creating Ref renderer %ix%i", s.w, s.h);
     return new Ref::Renderer(s, log);
-}
-
-#if !defined(DISABLE_GPU)
-//std::vector<Ray::Ocl::Platform> Ray::Ocl::QueryPlatforms() { return Renderer::QueryPlatforms(); }
+#else
+    return nullptr;
 #endif
+}

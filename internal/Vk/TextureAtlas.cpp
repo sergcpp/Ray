@@ -2,6 +2,8 @@
 
 #include <cassert>
 
+#include "../../Log.h"
+#include "../Utils.h"
 #include "Context.h"
 #include "Texture.h"
 
@@ -14,9 +16,14 @@ template <> eTexFormat tex_format<uint8_t, 3>() { return eTexFormat::RawRGB888; 
 template <> eTexFormat tex_format<uint8_t, 2>() { return eTexFormat::RawRG88; }
 template <> eTexFormat tex_format<uint8_t, 1>() { return eTexFormat::RawR8; }
 
+uint32_t FindMemoryType(const VkPhysicalDeviceMemoryProperties *mem_properties, uint32_t mem_type_bits,
+                        VkMemoryPropertyFlags desired_mem_flags, VkDeviceSize desired_size);
+
 extern const VkFormat g_vk_formats[];
 } // namespace Vk
 } // namespace Ray
+
+#define _MIN(x, y) ((x) < (y) ? (x) : (y))
 
 Ray::Vk::TextureAtlas::TextureAtlas(Context *ctx, const eTexFormat format, const int resx, const int resy,
                                     const int pages_count)
@@ -37,43 +44,94 @@ Ray::Vk::TextureAtlas::~TextureAtlas() {
 template <typename T, int N>
 int Ray::Vk::TextureAtlas::Allocate(const color_t<T, N> *data, const int _res[2], int pos[2]) {
     // add 1px border
-    const int res[2] = {_res[0] + 2, _res[1] + 2};
+    int res[2] = {_res[0] + 2, _res[1] + 2};
     if (res[0] > res_[0] || res[1] > res_[1]) {
         return -1;
     }
 
-    std::vector<color_t<T, N>> temp_storage;
+    if (!IsCompressedFormat(format_)) {
+        std::vector<color_t<T, N>> temp_storage;
+        for (int page_index = 0; page_index < int(splitters_.size()); page_index++) {
+            const int index = splitters_[page_index].Allocate(&res[0], &pos[0]);
+            if (index != -1) {
+                if (data) {
+                    WritePageData(page_index, pos[0] + 1, pos[1] + 1, _res[0], _res[1], &data[0]);
 
-    for (int page_index = 0; page_index < int(splitters_.size()); page_index++) {
-        const int index = splitters_[page_index].Allocate(&res[0], &pos[0]);
-        if (index != -1) {
-            if (data) {
-                WritePageData(page_index, pos[0] + 1, pos[1] + 1, _res[0], _res[1], &data[0]);
+                    // add 1px border
+                    WritePageData(page_index, pos[0] + 1, pos[1], _res[0], 1, &data[(_res[1] - 1) * _res[0]]);
 
-                // add 1px border
-                WritePageData(page_index, pos[0] + 1, pos[1], _res[0], 1, &data[(_res[1] - 1) * _res[0]]);
+                    WritePageData(page_index, pos[0] + 1, pos[1] + res[1] - 1, _res[0], 1, &data[0]);
 
-                WritePageData(page_index, pos[0] + 1, pos[1] + res[1] - 1, _res[0], 1, &data[0]);
+                    temp_storage.resize(res[1]);
+                    auto &vertical_border = temp_storage;
+                    vertical_border[0] = data[(_res[1] - 1) * _res[0] + _res[0] - 1];
+                    for (int i = 0; i < _res[1]; i++) {
+                        vertical_border[i + 1] = data[i * _res[0] + _res[0] - 1];
+                    }
+                    vertical_border[res[1] - 1] = data[0 * _res[0] + _res[0] - 1];
 
-                temp_storage.resize(res[1]);
-                auto &vertical_border = temp_storage;
-                vertical_border[0] = data[(_res[1] - 1) * _res[0] + _res[0] - 1];
-                for (int i = 0; i < _res[1]; i++) {
-                    vertical_border[i + 1] = data[i * _res[0] + _res[0] - 1];
+                    WritePageData(page_index, pos[0], pos[1], 1, res[1], &vertical_border[0]);
+
+                    vertical_border[0] = data[(_res[1] - 1) * _res[0]];
+                    for (int i = 0; i < _res[1]; i++) {
+                        vertical_border[i + 1] = data[i * _res[0]];
+                    }
+                    vertical_border[res[1] - 1] = data[0];
+
+                    WritePageData(page_index, pos[0] + res[0] - 1, pos[1], 1, res[1], &vertical_border[0]);
                 }
-                vertical_border[res[1] - 1] = data[0 * _res[0] + _res[0] - 1];
-
-                WritePageData(page_index, pos[0], pos[1], 1, res[1], &vertical_border[0]);
-
-                vertical_border[0] = data[(_res[1] - 1) * _res[0]];
-                for (int i = 0; i < _res[1]; i++) {
-                    vertical_border[i + 1] = data[i * _res[0]];
-                }
-                vertical_border[res[1] - 1] = data[0];
-
-                WritePageData(page_index, pos[0] + res[0] - 1, pos[1], 1, res[1], &vertical_border[0]);
+                return page_index;
             }
-            return page_index;
+        }
+    } else {
+        // round resolution up to block size
+        res[0] = 4 * ((res[0] + 3) / 4);
+        res[1] = 4 * ((res[1] + 3) / 4);
+
+        std::vector<color_t<T, N>> temp_storage;
+        for (int page_index = 0; page_index < int(splitters_.size()); page_index++) {
+            const int index = splitters_[page_index].Allocate(&res[0], &pos[0]);
+            if (index != -1) {
+                if (data) {
+                    temp_storage.resize(res[0] * res[1], {});
+
+                    for (int y = 0; y < _res[1]; ++y) {
+                        memcpy(&temp_storage[(1 + y) * res[0] + 1], &data[y * _res[0]],
+                               _res[0] * sizeof(color_t<T, N>));
+                    }
+
+                    memcpy(&temp_storage[1], &data[(_res[1] - 1) * _res[0]], _res[0] * sizeof(color_t<T, N>));
+                    memcpy(&temp_storage[(1 + _res[1]) * res[0] + 1], &data[0], _res[0] * sizeof(color_t<T, N>));
+
+                    temp_storage[0] = data[(_res[1] - 1) * _res[0] + _res[0] - 1];
+                    for (int y = 0; y < _res[1]; ++y) {
+                        temp_storage[(y + 1) * res[0]] = data[y * _res[0] + _res[0] - 1];
+                    }
+                    temp_storage[(1 + _res[1]) * res[0]] = data[0 * _res[0] + _res[0] - 1];
+
+                    temp_storage[1 + _res[0]] = data[(_res[1] - 1) * _res[0]];
+                    for (int y = 0; y < _res[1]; ++y) {
+                        temp_storage[(y + 1) * res[0] + 1 + _res[0]] = data[y * _res[0]];
+                    }
+                    temp_storage[(1 + _res[1]) * res[0] + 1 + _res[0]] = data[0];
+
+                    std::unique_ptr<uint8_t[]> compressed_data;
+                    if (format_ == eTexFormat::BC3) {
+                        auto temp_YCoCg = ConvertRGB_to_CoCgxY(&temp_storage[0].v[0], res[0], res[1]);
+
+                        const int req_size = GetRequiredMemory_BC3(res[0], res[1]);
+                        compressed_data.reset(new uint8_t[req_size]);
+                        CompressImage_BC3<true /* Is_YCoCg */>(temp_YCoCg.get(), res[0], res[1], compressed_data.get());
+                    } else if (format_ == eTexFormat::BC4) {
+                        const int req_size = GetRequiredMemory_BC4(res[0], res[1]);
+                        compressed_data.reset(new uint8_t[req_size]);
+                        CompressImage_BC4<N>(&temp_storage[0].v[0], res[0], res[1], compressed_data.get());
+                    }
+
+                    WritePageData(page_index, pos[0], pos[1], res[0], res[1], compressed_data.get());
+                }
+                return page_index;
+            }
         }
     }
 
@@ -85,6 +143,71 @@ template int Ray::Vk::TextureAtlas::Allocate<uint8_t, 1>(const color_t<uint8_t, 
 template int Ray::Vk::TextureAtlas::Allocate<uint8_t, 2>(const color_t<uint8_t, 2> *data, const int res[2], int pos[2]);
 template int Ray::Vk::TextureAtlas::Allocate<uint8_t, 3>(const color_t<uint8_t, 3> *data, const int res[2], int pos[2]);
 template int Ray::Vk::TextureAtlas::Allocate<uint8_t, 4>(const color_t<uint8_t, 4> *data, const int res[2], int pos[2]);
+
+template <typename T, int N>
+void Ray::Vk::TextureAtlas::AllocateMips(const color_t<T, N> *data, const int _res[2], const int mip_count,
+                                         int page[16], int pos[16][2]) {
+    int src_res[2] = {_res[0], _res[1]};
+
+    // TODO: try to get rid of these allocations
+    std::vector<color_t<T, N>> _src_data, dst_data;
+    for (int i = 0; i < mip_count; ++i) {
+        const int dst_res[2] = {(src_res[0] + 1) / 2, (src_res[1] + 1) / 2};
+
+        dst_data.clear();
+        dst_data.reserve(dst_res[0] * dst_res[1]);
+
+        const color_t<T, N> *src_data = (i == 0) ? data : _src_data.data();
+
+        for (int y = 0; y < src_res[1]; y += 2) {
+            for (int x = 0; x < src_res[0]; x += 2) {
+                const color_t<T, N> c00 = src_data[(y + 0) * src_res[0] + (x + 0)];
+                const color_t<T, N> c10 = src_data[(y + 0) * src_res[0] + _MIN(x + 1, src_res[0] - 1)];
+                const color_t<T, N> c11 =
+                    src_data[_MIN(y + 1, src_res[1] - 1) * src_res[0] + _MIN(x + 1, src_res[0] - 1)];
+                const color_t<T, N> c01 = src_data[_MIN(y + 1, src_res[1] - 1) * src_res[0] + (x + 0)];
+
+                color_t<T, N> res;
+                for (int i = 0; i < N; ++i) {
+                    res.v[i] = (c00.v[i] + c10.v[i] + c11.v[i] + c01.v[i]) / 4;
+                }
+
+                dst_data.push_back(res);
+            }
+        }
+
+        assert(dst_data.size() == (dst_res[0] * dst_res[1]));
+
+        page[i] = Allocate(dst_data.data(), dst_res, pos[i]);
+
+        src_res[0] = dst_res[0];
+        src_res[1] = dst_res[1];
+        std::swap(_src_data, dst_data);
+    }
+}
+
+template void Ray::Vk::TextureAtlas::AllocateMips<uint8_t, 1>(const color_t<uint8_t, 1> *data, const int res[2],
+                                                              int mip_count, int page[16], int pos[16][2]);
+template void Ray::Vk::TextureAtlas::AllocateMips<uint8_t, 2>(const color_t<uint8_t, 2> *data, const int res[2],
+                                                              int mip_count, int page[16], int pos[16][2]);
+template void Ray::Vk::TextureAtlas::AllocateMips<uint8_t, 3>(const color_t<uint8_t, 3> *data, const int res[2],
+                                                              int mip_count, int page[16], int pos[16][2]);
+template void Ray::Vk::TextureAtlas::AllocateMips<uint8_t, 4>(const color_t<uint8_t, 4> *data, const int res[2],
+                                                              int mip_count, int page[16], int pos[16][2]);
+
+int Ray::Vk::TextureAtlas::AllocateRaw(void *data, const int res[2], int pos[2]) {
+    for (int page_index = 0; page_index < int(splitters_.size()); page_index++) {
+        const int index = splitters_[page_index].Allocate(&res[0], &pos[0]);
+        if (index != -1) {
+            if (data) {
+                WritePageData(page_index, pos[0], pos[1], res[0], res[1], data);
+            }
+            return page_index;
+        }
+    }
+    Resize(int(splitters_.size()) + 1);
+    return AllocateRaw(data, res, pos);
+}
 
 int Ray::Vk::TextureAtlas::Allocate(const int _res[2], int pos[2]) {
     // add 1px border
@@ -186,6 +309,14 @@ bool Ray::Vk::TextureAtlas::Resize(const int pages_count) {
             img_alloc_info.memoryTypeIndex = FindMemoryType(&ctx_->mem_properties(), img_tex_type_bits,
                                                             img_tex_desired_mem_flags, uint32_t(img_tex_mem_req.size));
             res = vkAllocateMemory(ctx_->device(), &img_alloc_info, nullptr, &new_mem);
+            if (res == VK_ERROR_OUT_OF_DEVICE_MEMORY) {
+                img_tex_desired_mem_flags |= VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+
+                img_alloc_info.memoryTypeIndex =
+                    FindMemoryType(&ctx_->mem_properties(), img_tex_type_bits, img_tex_desired_mem_flags,
+                                   uint32_t(img_tex_mem_req.size));
+                res = vkAllocateMemory(ctx_->device(), &img_alloc_info, nullptr, &new_mem);
+            }
         }
         if (res != VK_SUCCESS) {
             throw std::runtime_error("Failed to allocate memory!");
@@ -208,7 +339,7 @@ bool Ray::Vk::TextureAtlas::Resize(const int pages_count) {
         view_info.subresourceRange.baseArrayLayer = 0;
         view_info.subresourceRange.layerCount = std::max(pages_count, 1);
 
-        if (real_format_ == eTexFormat::RawR8) {
+        if (real_format_ == eTexFormat::RawR8 || real_format_ == eTexFormat::BC4) {
             view_info.components.r = VK_COMPONENT_SWIZZLE_R;
             view_info.components.g = VK_COMPONENT_SWIZZLE_R;
             view_info.components.b = VK_COMPONENT_SWIZZLE_R;
@@ -224,7 +355,7 @@ bool Ray::Vk::TextureAtlas::Resize(const int pages_count) {
     SamplingParams params;
     params.filter = eTexFilter::Bilinear;
 
-    sampler_.Init(ctx_, params);
+    Sampler new_sampler(ctx_, params);
 
     auto new_resource_state = eResState::Undefined;
 
@@ -354,6 +485,9 @@ bool Ray::Vk::TextureAtlas::Resize(const int pages_count) {
     img_ = new_img;
     img_view_ = new_img_view;
     mem_ = new_mem;
+
+    sampler_.FreeImmediate();
+    sampler_ = std::move(new_sampler);
 
     splitters_.resize(pages_count, TextureSplitter{res_});
 
@@ -627,7 +761,18 @@ int Ray::Vk::TextureAtlas::DownsampleRegion(const int src_page, const int src_po
 
 void Ray::Vk::TextureAtlas::WritePageData(const int page, const int posx, const int posy, const int sizex,
                                           const int sizey, const void *data) {
-    const uint32_t data_size = sizex * sizey * GetPerPixelDataLen(format_);
+    uint32_t data_size;
+    if (!IsCompressedFormat(format_)) {
+        data_size = sizex * sizey * GetPerPixelDataLen(format_);
+    } else {
+        if (format_ == eTexFormat::BC1) {
+            data_size = GetRequiredMemory_BC1(sizex, sizey);
+        } else if (format_ == eTexFormat::BC3) {
+            data_size = GetRequiredMemory_BC3(sizex, sizey);
+        } else if (format_ == eTexFormat::BC4) {
+            data_size = GetRequiredMemory_BC4(sizex, sizey);
+        }
+    }
 
     const bool rgb_as_rgba = (format_ == eTexFormat::RawRGB888 && real_format_ == eTexFormat::RawRGBA8888);
     const uint32_t buf_size = rgb_as_rgba ? sizex * sizey * sizeof(color_t<uint8_t, 4>) : data_size;
@@ -716,3 +861,5 @@ void Ray::Vk::TextureAtlas::WritePageData(const int page, const int posx, const 
 
     temp_sbuf.FreeImmediate();
 }
+
+#undef _MIN

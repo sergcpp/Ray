@@ -38,6 +38,9 @@ class TextureAtlas {
     int page_count() const { return int(splitters_.size()); }
 
     template <typename T, int N> int Allocate(const color_t<T, N> *data, const int res[2], int pos[2]);
+    template <typename T, int N>
+    void AllocateMips(const color_t<T, N> *data, const int res[2], int mip_count, int page[16], int pos[16][2]);
+    int AllocateRaw(void *data, const int res[2], int pos[2]);
     int Allocate(const int res[2], int pos[2]);
     bool Free(int page, const int pos[2]);
 

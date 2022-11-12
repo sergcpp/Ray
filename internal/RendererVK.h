@@ -54,7 +54,7 @@ class Renderer : public RendererBase {
         pi_mix_incremental_, pi_postprocess_, pi_debug_rt_;
 
     int w_ = 0, h_ = 0;
-    bool use_hwrt_ = false;
+    bool use_hwrt_ = false, use_tex_compression_ = false;
 
     std::vector<uint16_t> permutations_;
     int loaded_halton_;
@@ -70,7 +70,7 @@ class Renderer : public RendererBase {
     struct {
         int clamp, srgb;
         float gamma;
-    } postprocess_params_;
+    } postprocess_params_ = {};
 
     const pixel_color_t *frame_pixels_ = nullptr;
     std::vector<shl1_data_t> sh_data_host_;
@@ -88,17 +88,17 @@ class Renderer : public RendererBase {
                                     const Buffer &counters, const Buffer &rays, const Buffer &inout_hits);
     void kernel_ShadePrimaryHits(VkCommandBuffer cmd_buf, const pass_settings_t &settings, const environment_t &env,
                                  const Buffer &hits, const Buffer &rays, const scene_data_t &sc_data,
-                                 const Buffer &halton, int hi, const TextureAtlas tex_atlases[],
+                                 const Buffer &halton, int hi, Span<const TextureAtlas> tex_atlases,
                                  const Texture2D &out_img, const Buffer &out_rays, const Buffer &out_sh_rays,
                                  const Buffer &inout_counters);
     void kernel_ShadeSecondaryHits(VkCommandBuffer cmd_buf, const pass_settings_t &settings, const environment_t &env,
                                    const Buffer &indir_args, const Buffer &hits, const Buffer &rays,
                                    const scene_data_t &sc_data, const Buffer &halton, int hi,
-                                   const TextureAtlas tex_atlases[], const Texture2D &out_img, const Buffer &out_rays,
-                                   const Buffer &out_sh_rays, const Buffer &inout_counters);
+                                   Span<const TextureAtlas> tex_atlases, const Texture2D &out_img,
+                                   const Buffer &out_rays, const Buffer &out_sh_rays, const Buffer &inout_counters);
     void kernel_TraceShadow(VkCommandBuffer cmd_buf, const Buffer &indir_args, const Buffer &counters,
                             const scene_data_t &sc_data, uint32_t node_index, float halton,
-                            const TextureAtlas tex_atlases[], const Buffer &sh_rays, const Texture2D &out_img);
+                            Span<const TextureAtlas> tex_atlases, const Buffer &sh_rays, const Texture2D &out_img);
     void kernel_PrepareIndirArgs(VkCommandBuffer cmd_buf, const Buffer &inout_counters, const Buffer &out_indir_args);
     void kernel_MixIncremental(VkCommandBuffer cmd_buf, const Texture2D &fbuf1, const Texture2D &fbuf2, float k,
                                const Texture2D &out_img);

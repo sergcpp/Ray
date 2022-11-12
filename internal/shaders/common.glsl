@@ -72,6 +72,20 @@ vec3 srgb_to_rgb(vec3 col) {
     return ret;
 }
 
+vec3 YCoCg_to_RGB(vec4 col) {
+    float scale = (col.b * (255.0 / 8.0)) + 1.0;
+    float Y = col.a;
+    float Co = (col.r - (0.5 * 256.0 / 255.0)) / scale;
+    float Cg = (col.g - (0.5 * 256.0 / 255.0)) / scale;
+
+    vec3 col_rgb;
+    col_rgb.r = Y + Co - Cg;
+    col_rgb.g = Y + Cg;
+    col_rgb.b = Y - Co - Cg;
+
+    return col_rgb;
+}
+
 float get_texture_lod(const texture_t t, const float lambda) {
 #if FORCE_TEXTURE_LOD0
     const float lod = 0.0;

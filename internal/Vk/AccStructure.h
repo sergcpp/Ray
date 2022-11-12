@@ -11,11 +11,9 @@ class AccStructure {
     Context *ctx_ = nullptr;
     VkAccelerationStructureKHR handle_ = VK_NULL_HANDLE;
 
-    void Destroy();
-
   public:
     AccStructure() = default;
-    ~AccStructure() { Destroy(); }
+    ~AccStructure() { Free(); }
 
     AccStructure(const AccStructure &rhs) = delete;
     AccStructure(AccStructure &&rhs);
@@ -29,6 +27,9 @@ class AccStructure {
     VkDeviceAddress vk_device_address() const;
 
     bool Init(Context *ctx, VkAccelerationStructureKHR handle);
+
+    void Free();
+    void FreeImmediate();
 
     eResState resource_state = eResState::Undefined;
 };

@@ -5,3 +5,4 @@ build-*
 material_*_imgs.tga
 material_*_masks.tga
 material_refs.tga
+Config.h

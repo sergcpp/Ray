@@ -35,10 +35,11 @@ enum class eTexFormat : uint8_t {
 #ifndef __ANDROID__
     Depth32,
 #endif
-    Compressed_DXT1,
-    Compressed_DXT3,
-    Compressed_DXT5,
-    Compressed_ASTC,
+    BC1,
+    BC2,
+    BC3,
+    BC4,
+    ASTC,
     None,
     _Count
 };

@@ -1,5 +1,7 @@
 
-#if !defined(DISABLE_GPU)
+#include "Config.h"
+
+#ifdef ENABLE_GPU_IMPL
 #include "internal/Vk/VKExt.cpp"
 #include "internal/Vk/AccStructure.cpp"
 #include "internal/Vk/Buffer.cpp"
@@ -25,4 +27,12 @@
 #include "internal/SceneVK.cpp"
 
 #include "third-party/SPIRV-Reflect/spirv_reflect.c"
-#endif
+#else // ENABLE_GPU_IMPL
+
+namespace Ray {
+namespace Vk {
+void *rdoc_device = {};
+} // namespace Vk
+} // namespace Ray
+
+#endif // ENABLE_GPU_IMPL
