@@ -343,11 +343,11 @@ uint32_t Ray::Vk::Scene::AddMesh(const mesh_desc_t &_m) {
     std::vector<tri_mat_data_t> new_tri_materials(_m.vtx_indices_count / 3);
 
     // init triangle materials
-    for (const shape_desc_t &s : _m.shapes) {
+    for (const shape_desc_t &sh : _m.shapes) {
         bool is_front_solid = true, is_back_solid = true;
 
         uint32_t material_stack[32];
-        material_stack[0] = s.mat_index;
+        material_stack[0] = sh.mat_index;
         uint32_t material_count = 1;
 
         while (material_count) {
@@ -362,7 +362,7 @@ uint32_t Ray::Vk::Scene::AddMesh(const mesh_desc_t &_m) {
             }
         }
 
-        material_stack[0] = s.back_mat_index;
+        material_stack[0] = sh.back_mat_index;
         material_count = 1;
 
         while (material_count) {
@@ -377,18 +377,18 @@ uint32_t Ray::Vk::Scene::AddMesh(const mesh_desc_t &_m) {
             }
         }
 
-        for (size_t i = s.vtx_start; i < s.vtx_start + s.vtx_count; i += 3) {
+        for (size_t i = sh.vtx_start; i < sh.vtx_start + sh.vtx_count; i += 3) {
             tri_mat_data_t &tri_mat = new_tri_materials[i / 3];
 
-            assert(s.mat_index < (1 << 14) && "Not enough bits to reference material!");
-            assert(s.back_mat_index < (1 << 14) && "Not enough bits to reference material!");
+            assert(sh.mat_index < (1 << 14) && "Not enough bits to reference material!");
+            assert(sh.back_mat_index < (1 << 14) && "Not enough bits to reference material!");
 
-            tri_mat.front_mi = uint16_t(s.mat_index);
+            tri_mat.front_mi = uint16_t(sh.mat_index);
             if (is_front_solid) {
                 tri_mat.front_mi |= MATERIAL_SOLID_BIT;
             }
 
-            tri_mat.back_mi = uint16_t(s.back_mat_index);
+            tri_mat.back_mi = uint16_t(sh.back_mat_index);
             if (is_back_solid) {
                 tri_mat.back_mi |= MATERIAL_SOLID_BIT;
             }
@@ -419,7 +419,7 @@ uint32_t Ray::Vk::Scene::AddMesh(const mesh_desc_t &_m) {
                               &new_tri_materials[0] + new_tri_materials.size());
 
     // add mesh
-    mesh_t m;
+    mesh_t m = {};
     memcpy(m.bbox_min, value_ptr(bbox_min), 3 * sizeof(float));
     memcpy(m.bbox_max, value_ptr(bbox_max), 3 * sizeof(float));
     m.node_index = uint32_t(nodes_.size());
@@ -490,7 +490,7 @@ void Ray::Vk::Scene::RemoveMesh(uint32_t) {
 }
 
 uint32_t Ray::Vk::Scene::AddLight(const directional_light_desc_t &_l) {
-    light_t l;
+    light_t l = {};
 
     l.type = LIGHT_TYPE_DIR;
     l.visible = false;
@@ -506,7 +506,7 @@ uint32_t Ray::Vk::Scene::AddLight(const directional_light_desc_t &_l) {
 }
 
 uint32_t Ray::Vk::Scene::AddLight(const sphere_light_desc_t &_l) {
-    light_t l;
+    light_t l = {};
 
     l.type = LIGHT_TYPE_SPHERE;
     l.visible = _l.visible;
@@ -527,7 +527,7 @@ uint32_t Ray::Vk::Scene::AddLight(const sphere_light_desc_t &_l) {
 }
 
 uint32_t Ray::Vk::Scene::AddLight(const rect_light_desc_t &_l, const float *xform) {
-    light_t l;
+    light_t l = {};
 
     l.type = LIGHT_TYPE_RECT;
     l.visible = _l.visible;
@@ -556,7 +556,7 @@ uint32_t Ray::Vk::Scene::AddLight(const rect_light_desc_t &_l, const float *xfor
 }
 
 uint32_t Ray::Vk::Scene::AddLight(const disk_light_desc_t &_l, const float *xform) {
-    light_t l;
+    light_t l = {};
 
     l.type = LIGHT_TYPE_DISK;
     l.visible = _l.visible;
@@ -605,7 +605,7 @@ void Ray::Vk::Scene::RemoveLight(const uint32_t i) {
 }
 
 uint32_t Ray::Vk::Scene::AddMeshInstance(const uint32_t mesh_index, const float *xform) {
-    mesh_instance_t mi;
+    mesh_instance_t mi = {};
     mi.mesh_index = mesh_index;
     mi.tr_index = transforms_.emplace();
 
@@ -640,7 +640,7 @@ uint32_t Ray::Vk::Scene::AddMeshInstance(const uint32_t mesh_index, const float 
 }
 
 void Ray::Vk::Scene::SetMeshInstanceTransform(const uint32_t mi_index, const float *xform) {
-    transform_t tr;
+    transform_t tr = {};
 
     memcpy(tr.xform, xform, 16 * sizeof(float));
     InverseMatrix(tr.xform, tr.inv_xform);
@@ -832,8 +832,8 @@ void Ray::Vk::Scene::RebuildHWAccStructures() {
         SmallVector<VkAccelerationStructureGeometryKHR, 16> geometries;
         SmallVector<VkAccelerationStructureBuildRangeInfoKHR, 16> build_ranges;
         SmallVector<uint32_t, 16> prim_counts;
-        VkAccelerationStructureBuildSizesInfoKHR size_info;
-        VkAccelerationStructureBuildGeometryInfoKHR build_info;
+        VkAccelerationStructureBuildSizesInfoKHR size_info = {};
+        VkAccelerationStructureBuildGeometryInfoKHR build_info = {};
     };
     std::vector<Blas> all_blases;
 
@@ -1153,7 +1153,7 @@ void Ray::Vk::Scene::RebuildHWAccStructures() {
         tlas_build_info.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
         tlas_build_info.srcAccelerationStructure = VK_NULL_HANDLE;
 
-        const uint32_t instance_count = uint32_t(tlas_instances.size());
+        const auto instance_count = uint32_t(tlas_instances.size());
         const uint32_t max_instance_count = instance_count;
 
         VkAccelerationStructureBuildSizesInfoKHR size_info = {

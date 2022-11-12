@@ -79,8 +79,8 @@ template <typename T> class SparseStorage {
             reserve(std::max(capacity() * 2, InitialNonZeroCapacity));
         }
 
-        const uint32_t cpu_index = uint32_t(cpu_buf_.AllocSubRegion(sizeof(T), nullptr) / sizeof(T));
-        const uint32_t gpu_index = uint32_t(gpu_buf_.AllocSubRegion(sizeof(T), nullptr) / sizeof(T));
+        const auto cpu_index = uint32_t(cpu_buf_.AllocSubRegion(sizeof(T), nullptr) / sizeof(T));
+        const auto gpu_index = uint32_t(gpu_buf_.AllocSubRegion(sizeof(T), nullptr) / sizeof(T));
         assert(cpu_index == gpu_index);
 
         T *el = cpu_data_ + cpu_index;

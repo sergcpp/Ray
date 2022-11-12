@@ -2,7 +2,6 @@
 
 #include <functional>
 #include <random>
-#include <string>
 #include <utility>
 
 #include "Halton.h"
@@ -206,7 +205,7 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
         EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
     }
 
-    Resize(s.w, s.h);
+    Renderer::Resize(s.w, s.h);
 
     auto rand_func = std::bind(UniformIntDistribution<uint32_t>(), std::mt19937(0));
     permutations_ = Ray::ComputeRadicalInversePermutations(g_primes, PrimesCount, rand_func);
@@ -331,9 +330,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
 #endif
 
     ctx_->DestroyDeferredResources(ctx_->backend_frame);
-
-    const bool reset_result = ctx_->default_descr_alloc()->Reset();
-    assert(reset_result);
+    ctx_->default_descr_alloc()->Reset();
 
 #if RUN_IN_LOCKSTEP
     VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
@@ -347,14 +344,14 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
 
     //////////////////////////////////////////////////////////////////////////////////
 
-    pass_info_t pass_info;
+    pass_info_t pass_info = {};
 
     pass_info.iteration = region.iteration;
     pass_info.bounce = 0;
     pass_info.settings = cam.pass_settings;
     pass_info.settings.max_total_depth = std::min(pass_info.settings.max_total_depth, uint8_t(MAX_BOUNCES));
 
-    const uint32_t hi = (region.iteration & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT;
+    const int hi = (region.iteration & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT;
 
     { // transition resources
         SmallVector<TransitionInfo, 16> res_transitions;
@@ -490,7 +487,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         DebugMarker _(cmd_buf, "Prepare Result");
 
         // factor used to compute incremental average
-        const float mix_factor = 1.0f / region.iteration;
+        const float mix_factor = 1.0f / float(region.iteration);
 
         kernel_MixIncremental(cmd_buf, clean_buf_, temp_buf_, mix_factor, final_buf_);
         std::swap(final_buf_, clean_buf_);
@@ -547,7 +544,7 @@ void Ray::Vk::Renderer::UpdateHaltonSequence(const int iteration, std::unique_pt
         uint32_t prime_sum = 0;
         for (int j = 0; j < HALTON_COUNT; ++j) {
             seq[i * HALTON_COUNT + j] =
-                ScrambledRadicalInverse(g_primes[j], &permutations_[prime_sum], uint64_t(iteration + i));
+                ScrambledRadicalInverse(g_primes[j], &permutations_[prime_sum], uint64_t(iteration) + i);
             prime_sum += g_primes[j];
         }
     }

@@ -70,7 +70,7 @@ class Renderer : public RendererBase {
     struct {
         int clamp, srgb;
         float gamma;
-    } postprocess_params_;
+    } postprocess_params_ = {};
 
     const pixel_color_t *frame_pixels_ = nullptr;
     std::vector<shl1_data_t> sh_data_host_;

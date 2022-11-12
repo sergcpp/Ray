@@ -17,7 +17,7 @@ template <typename T> class SparseStorage {
     static const uint32_t InitialNonZeroCapacity = 8;
 
   public:
-    explicit SparseStorage(uint32_t initial_capacity = 0) : bits_(initial_capacity) {
+    explicit SparseStorage(uint32_t initial_capacity = 0) : bits_(int(initial_capacity)) {
         if (initial_capacity) {
             reserve(initial_capacity);
         }
@@ -40,7 +40,7 @@ template <typename T> class SparseStorage {
             return;
         }
 
-        bits_.Resize(new_capacity);
+        bits_.Resize(int(new_capacity));
 
         T *new_data = (T *)aligned_malloc(new_capacity * sizeof(T), alignof(T));
 
@@ -95,7 +95,7 @@ template <typename T> class SparseStorage {
         assert(bits_.IsSet(index) && "Invalid index!");
 
         data_[index].~T();
-        bits_.Free(index, 1);
+        bits_.Free(int(index), 1);
 
         --size_;
     }

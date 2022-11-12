@@ -10,8 +10,6 @@
 #include "BVHSplit.h"
 
 namespace Ray {
-const float axis_aligned_normal_eps = 0.000001f;
-
 const int g_primes[] = {
     2,    3,    5,    7,    11,   13,   17,   19,   23,   29,   31,   37,   41,   43,   47,   53,   59,   61,   67,
     71,   73,   79,   83,   89,   97,   101,  103,  107,  109,  113,  127,  131,  137,  139,  149,  151,  157,  163,
@@ -285,7 +283,7 @@ uint32_t Ray::PreprocessMesh(const float *attrs, Span<const uint32_t> vtx_indice
         memcpy(&p[1][0], &positions[i1 * attr_stride], 3 * sizeof(float));
         memcpy(&p[2][0], &positions[i2 * attr_stride], 3 * sizeof(float));
 
-        tri_accel_t tri;
+        tri_accel_t tri = {};
         if (PreprocessTri(&p[0][0], 4, &tri)) {
             real_indices.push_back(uint32_t(j / 3));
             triangles.push_back(tri);
@@ -376,7 +374,7 @@ uint32_t Ray::EmitLBVH_Recursive(const prim_t *prims, const uint32_t *indices, c
 
         const uint32_t split_offset = search_end - prim_index;
 
-        const uint32_t node_index = uint32_t(out_nodes.size());
+        const auto node_index = uint32_t(out_nodes.size());
         out_nodes.emplace_back();
 
         uint32_t child0 = EmitLBVH_Recursive(prims, indices, morton_codes, prim_index, split_offset, index_offset,
@@ -414,7 +412,7 @@ uint32_t Ray::EmitLBVH_NonRecursive(const prim_t *prims, const uint32_t *indices
     proc_item_t proc_stack[256];
     uint32_t stack_size = 0;
 
-    const uint32_t root_node_index = uint32_t(out_nodes.size());
+    const auto root_node_index = uint32_t(out_nodes.size());
     out_nodes.emplace_back();
     proc_stack[stack_size++] = {bit_index, prim_index, prim_count, 0xffffffff, root_node_index};
 
@@ -459,10 +457,10 @@ uint32_t Ray::EmitLBVH_NonRecursive(const prim_t *prims, const uint32_t *indices
 
                 cur.split_offset = search_end - cur.prim_index;
 
-                const uint32_t child0 = uint32_t(out_nodes.size());
+                const auto child0 = uint32_t(out_nodes.size());
                 out_nodes.emplace_back();
 
-                const uint32_t child1 = uint32_t(out_nodes.size());
+                const auto child1 = uint32_t(out_nodes.size());
                 out_nodes.emplace_back();
 
                 out_nodes[cur.node_index].left_child = child0;
@@ -503,7 +501,7 @@ uint32_t Ray::PreprocessPrims_SAH(Span<const prim_t> prims, const float *positio
     struct prims_coll_t {
         std::vector<uint32_t> indices;
         Ref::simd_fvec4 min = {std::numeric_limits<float>::max()}, max = {std::numeric_limits<float>::lowest()};
-        prims_coll_t() {}
+        prims_coll_t() = default;
         prims_coll_t(std::vector<uint32_t> &&_indices, const Ref::simd_fvec4 &_min, const Ref::simd_fvec4 &_max)
             : indices(std::move(_indices)), min(_min), max(_max) {}
     };
@@ -602,7 +600,7 @@ uint32_t Ray::PreprocessPrims_HLBVH(Span<const prim_t> prims, std::vector<bvh_no
         const Ref::simd_fvec4 center = 0.5f * (prims[i].bbox_min + prims[i].bbox_max);
         const Ref::simd_fvec4 code = (center - whole_min) * scale;
 
-        const uint32_t x = uint32_t(code[0]), y = uint32_t(code[1]), z = uint32_t(code[2]);
+        const auto x = uint32_t(code[0]), y = uint32_t(code[1]), z = uint32_t(code[2]);
 
         morton_codes[i] = EncodeMorton3(x, y, z);
     }

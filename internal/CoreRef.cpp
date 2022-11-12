@@ -19,8 +19,8 @@
 
 namespace Ray {
 namespace Ref {
-force_inline void _IntersectTri(const float ro[3], const float rd[3], const tri_accel_t &tri, const uint32_t prim_index,
-                                hit_data_t &inter) {
+force_inline void IntersectTri(const float ro[3], const float rd[3], const tri_accel_t &tri, const uint32_t prim_index,
+                               hit_data_t &inter) {
 #define _sign_of(f) (((f) >= 0) ? 1 : -1)
 #define _dot(x, y) ((x)[0] * (y)[0] + (x)[1] * (y)[1] + (x)[2] * (y)[2])
 
@@ -54,8 +54,8 @@ force_inline void _IntersectTri(const float ro[3], const float rd[3], const tri_
 #undef _sign_of
 }
 
-force_inline void _IntersectTri(const float ro[3], const float rd[3], const mtri_accel_t &tri,
-                                const uint32_t prim_index, hit_data_t &inter) {
+force_inline void IntersectTri(const float ro[3], const float rd[3], const mtri_accel_t &tri,
+                               const uint32_t prim_index, hit_data_t &inter) {
 #if VECTORIZE_TRI_INTERSECTION
     simd_ivec4 _mask = 0, _prim_index;
     simd_fvec4 _t = inter.t, _u, _v;
@@ -117,7 +117,7 @@ force_inline void _IntersectTri(const float ro[3], const float rd[3], const mtri
     if (mask) {
         const long i = GetFirstBit(mask);
 
-        inter.mask = 0xffffffff;
+        inter.mask = -1;
         inter.prim_index = _prim_index[i];
         inter.t = _t[i];
         inter.u = _u[i];
@@ -574,7 +574,7 @@ force_inline float fast_log2(float val) {
         float val;
         int32_t x;
     } u = {val};
-    float log_2 = float(((u.x >> 23) & 255) - 128);
+    auto log_2 = float(((u.x >> 23) & 255) - 128);
     u.x &= ~(255 << 23);
     u.x += 127 << 23;
     log_2 += ((-0.34484843f) * u.val + 2.02466578f) * u.val - 0.67487759f;
@@ -611,8 +611,8 @@ float get_texture_lod(const texture_t &t, const float lambda) {
 #ifdef FORCE_TEXTURE_LOD
     const float lod = float(FORCE_TEXTURE_LOD);
 #else
-    const float w = float(t.width & TEXTURE_WIDTH_BITS);
-    const float h = float(t.height & TEXTURE_HEIGHT_BITS);
+    const auto w = float(t.width & TEXTURE_WIDTH_BITS);
+    const auto h = float(t.height & TEXTURE_HEIGHT_BITS);
     // Find lod
     float lod = lambda + 0.5f * fast_log2(w * h);
     // Substruct 1 from lod to always have 4 texels for interpolation
@@ -688,9 +688,9 @@ simd_fvec4 offset_ray(const simd_fvec4 &p, const simd_fvec4 &n) {
                          int_as_float(float_as_int(p[1]) + ((p[1] < 0.0f) ? -of_i[1] : of_i[1])),
                          int_as_float(float_as_int(p[2]) + ((p[2] < 0.0f) ? -of_i[2] : of_i[2])), 0.0f);
 
-    return simd_fvec4(std::abs(p[0]) < Origin ? (p[0] + FloatScale * n[0]) : p_i[0],
+    return simd_fvec4{std::abs(p[0]) < Origin ? (p[0] + FloatScale * n[0]) : p_i[0],
                       std::abs(p[1]) < Origin ? (p[1] + FloatScale * n[1]) : p_i[1],
-                      std::abs(p[2]) < Origin ? (p[2] + FloatScale * n[2]) : p_i[2], 0.0f);
+                      std::abs(p[2]) < Origin ? (p[2] + FloatScale * n[2]) : p_i[2], 0.0f};
 }
 
 simd_fvec3 sample_GTR1(const float rgh, const float r1, const float r2) {
@@ -704,7 +704,7 @@ simd_fvec3 sample_GTR1(const float rgh, const float r1, const float r2) {
     const float sinPhi = std::sin(phi);
     const float cosPhi = std::cos(phi);
 
-    return simd_fvec3(sinTheta * cosPhi, sinTheta * sinPhi, cosTheta);
+    return simd_fvec3{sinTheta * cosPhi, sinTheta * sinPhi, cosTheta};
 }
 
 simd_fvec3 SampleGGX_NDF(const float rgh, const float r1, const float r2) {
@@ -717,7 +717,7 @@ simd_fvec3 SampleGGX_NDF(const float rgh, const float r1, const float r2) {
     const float sinPhi = std::sin(phi);
     const float cosPhi = std::cos(phi);
 
-    return simd_fvec3(sinTheta * cosPhi, sinTheta * sinPhi, cosTheta);
+    return simd_fvec3{sinTheta * cosPhi, sinTheta * sinPhi, cosTheta};
 }
 
 // http://jcgt.org/published/0007/04/01/paper.pdf by Eric Heitz
@@ -1043,14 +1043,14 @@ void Ray::Ref::GeneratePrimaryRays(int iteration, const camera_t &cam, const rec
                up = simd_fvec4{cam.up[0], cam.up[1], cam.up[2], 0.0f};
     const float focus_distance = cam.focus_distance;
 
-    const float k = float(w) / h;
+    const float k = float(w) / float(h);
     const float temp = std::tan(0.5f * cam.fov * PI / 180.0f);
     const float fov_k = temp * focus_distance;
     const float spread_angle = std::atan(2.0f * temp / float(h));
 
     auto get_pix_dir = [k, fov_k, focus_distance, cam_origin, fwd, side, up, w, h](const float x, const float y,
                                                                                    const simd_fvec4 &origin) {
-        simd_fvec4 p(2 * fov_k * float(x) / w - fov_k, 2 * fov_k * float(-y) / h + fov_k, focus_distance, 0.0f);
+        simd_fvec4 p(2 * fov_k * float(x) / float(w) - fov_k, 2 * fov_k * float(-y) / float(h) + fov_k, focus_distance, 0.0f);
         p = cam_origin + k * p[0] * side + p[1] * up + p[2] * fwd;
         return normalize(p - origin);
     };
@@ -1062,8 +1062,8 @@ void Ray::Ref::GeneratePrimaryRays(int iteration, const camera_t &cam, const rec
         for (int x = r.x; x < r.x + r.w; x += RayPacketDimX) {
             ray_data_t &out_r = out_rays[i++];
 
-            float _x = float(x);
-            float _y = float(y);
+            auto _x = float(x);
+            auto _y = float(y);
 
             const int index = y * w + x;
             const int hash_val = hash(index);
@@ -1235,8 +1235,8 @@ void Ray::Ref::SampleMeshInTextureSpace(const int iteration, const int obj_index
 #endif
                     out_ray.ray_depth = 0;
 
-                    out_inter.mask = 0xffffffff;
-                    out_inter.prim_index = tri;
+                    out_inter.mask = -1;
+                    out_inter.prim_index = int(tri);
                     out_inter.obj_index = obj_index;
                     out_inter.t = 1.0f;
                     out_inter.u = w;
@@ -1283,7 +1283,7 @@ void Ray::Ref::SortRays_CPU(ray_data_t *rays, const size_t rays_count, const flo
     for (uint32_t i = 0; i < uint32_t(rays_count); ++i) {
         uint32_t j;
         while (i != (j = scan_values[i])) {
-            const int k = scan_values[j];
+            const uint32_t k = scan_values[j];
             std::swap(rays[j], rays[k]);
             std::swap(scan_values[i], scan_values[j]);
         }
@@ -1367,7 +1367,7 @@ void Ray::Ref::SortRays_GPU(ray_data_t *rays, const size_t rays_count, const flo
     for (uint32_t i = 0; i < uint32_t(rays_count); ++i) {
         uint32_t j;
         while (i != (j = scan_values[i])) {
-            const int k = scan_values[j];
+            const uint32_t k = scan_values[j];
             std::swap(rays[j], rays[k]);
             std::swap(scan_values[i], scan_values[j]);
         }
@@ -1383,7 +1383,7 @@ bool Ray::Ref::IntersectTris_ClosestHit(const float ro[3], const float rd[3], co
     inter.t = out_inter.t;
 
     for (int i = tri_start; i < tri_end; ++i) {
-        _IntersectTri(ro, rd, tris[i], i, inter);
+        IntersectTri(ro, rd, tris[i], i, inter);
     }
 
     out_inter.mask |= inter.mask;
@@ -1405,7 +1405,7 @@ bool Ray::Ref::IntersectTris_ClosestHit(const float ro[3], const float rd[3], co
     inter.t = out_inter.t;
 
     for (int i = tri_start / 8; i < (tri_end + 7) / 8; ++i) {
-        _IntersectTri(ro, rd, mtris[i], i * 8, inter);
+        IntersectTri(ro, rd, mtris[i], i * 8, inter);
     }
 
     out_inter.mask |= inter.mask;
@@ -1427,7 +1427,7 @@ bool Ray::Ref::IntersectTris_AnyHit(const float ro[3], const float rd[3], const 
     inter.t = out_inter.t;
 
     for (int i = tri_start; i < tri_end; ++i) {
-        _IntersectTri(ro, rd, tris[i], i, inter);
+        IntersectTri(ro, rd, tris[i], i, inter);
         if (inter.mask && ((inter.prim_index > 0 && (materials[indices[i]].front_mi & MATERIAL_SOLID_BIT)) ||
                            (inter.prim_index < 0 && (materials[indices[i]].back_mi & MATERIAL_SOLID_BIT)))) {
             break;
@@ -1453,7 +1453,7 @@ bool Ray::Ref::IntersectTris_AnyHit(const float ro[3], const float rd[3], const 
     inter.t = out_inter.t;
 
     for (int i = tri_start / 8; i < (tri_end + 7) / 8; ++i) {
-        _IntersectTri(ro, rd, mtris[i], i * 8, inter);
+        IntersectTri(ro, rd, mtris[i], i * 8, inter);
         if (inter.mask && ((inter.prim_index > 0 && (materials[indices[i]].front_mi & MATERIAL_SOLID_BIT)) ||
                            (inter.prim_index < 0 && (materials[indices[i]].back_mi & MATERIAL_SOLID_BIT)))) {
             break;
@@ -1678,11 +1678,11 @@ bool Ray::Ref::Traverse_MacroTree_WithStack_AnyHit(const float ro[3], const floa
                 const bool hit_found = Traverse_MicroTree_WithStack_AnyHit(
                     _ro, _rd, _inv_d, nodes, m.node_index, mtris, materials, tri_indices, int(mi_indices[i]), inter);
                 if (hit_found) {
-                    const bool is_backfacing = inter.prim_index < 0;
-                    const uint32_t prim_index = is_backfacing ? -inter.prim_index - 1 : inter.prim_index;
+                    const bool is_backfacing = (inter.prim_index < 0);
+                    const uint32_t _prim_index = is_backfacing ? -inter.prim_index - 1 : inter.prim_index;
 
-                    if ((!is_backfacing && (materials[tri_indices[prim_index]].front_mi & MATERIAL_SOLID_BIT)) ||
-                        (is_backfacing && (materials[tri_indices[prim_index]].back_mi & MATERIAL_SOLID_BIT))) {
+                    if ((!is_backfacing && (materials[tri_indices[_prim_index]].front_mi & MATERIAL_SOLID_BIT)) ||
+                        (is_backfacing && (materials[tri_indices[_prim_index]].back_mi & MATERIAL_SOLID_BIT))) {
                         return true;
                     }
                 }
@@ -1739,7 +1739,7 @@ bool Ray::Ref::Traverse_MacroTree_WithStack_AnyHit(const float ro[3], const floa
                     goto TRAVERSE;
                 }
 
-                int i2 = GetFirstBit(mask);
+                long i2 = GetFirstBit(mask);
                 mask = ClearBit(mask, i2);
                 if (mask == 0) { // two boxes were hit
                     if (dist[i] < dist[i2]) {
@@ -1807,10 +1807,10 @@ bool Ray::Ref::Traverse_MacroTree_WithStack_AnyHit(const float ro[3], const floa
                                                                      materials, tri_indices, (int)mi_indices[i], inter);
                 if (hit_found) {
                     const bool is_backfacing = inter.prim_index < 0;
-                    const uint32_t prim_index = is_backfacing ? -inter.prim_index - 1 : inter.prim_index;
+                    const uint32_t _prim_index = is_backfacing ? -inter.prim_index - 1 : inter.prim_index;
 
-                    if ((!is_backfacing && (materials[tri_indices[prim_index]].front_mi & MATERIAL_SOLID_BIT)) ||
-                        (is_backfacing && (materials[tri_indices[prim_index]].back_mi & MATERIAL_SOLID_BIT))) {
+                    if ((!is_backfacing && (materials[tri_indices[_prim_index]].front_mi & MATERIAL_SOLID_BIT)) ||
+                        (is_backfacing && (materials[tri_indices[_prim_index]].back_mi & MATERIAL_SOLID_BIT))) {
                         return true;
                     }
                 }

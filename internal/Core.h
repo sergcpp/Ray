@@ -239,7 +239,7 @@ force_inline bool GetFirstBit(const uint64_t mask, unsigned long *bit_index) {
 #ifdef _MSC_VER
     return _BitScanForward64(bit_index, mask);
 #else
-    const int ret = __builtin_ffsll(mask);
+    const int ret = __builtin_ffsll((long long)mask);
     (*bit_index) = ret - 1;
     return ret != 0;
 #endif

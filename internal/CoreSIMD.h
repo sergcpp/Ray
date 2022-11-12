@@ -350,9 +350,9 @@ void ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, const flo
 namespace Ray {
 namespace NS {
 template <int S>
-force_inline simd_ivec<S> _IntersectTri(const simd_fvec<S> ro[3], const simd_fvec<S> rd[3],
-                                        const simd_ivec<S> &ray_mask, const tri_accel_t &tri, uint32_t prim_index,
-                                        hit_data_t<S> &inter) {
+force_inline simd_ivec<S> IntersectTri(const simd_fvec<S> ro[3], const simd_fvec<S> rd[3],
+                                       const simd_ivec<S> &ray_mask, const tri_accel_t &tri, uint32_t prim_index,
+                                       hit_data_t<S> &inter) {
 #define _dot(x, y) ((x)[0] * (y)[0] + (x)[1] * (y)[1] + (x)[2] * (y)[2])
 
     const simd_fvec<S> det = _dot(rd, tri.n_plane);
@@ -396,8 +396,8 @@ force_inline simd_ivec<S> _IntersectTri(const simd_fvec<S> ro[3], const simd_fve
 }
 
 template <int S>
-force_inline bool _IntersectTri(const float o[3], const float d[3], int i, const tri_accel_t &tri,
-                                const uint32_t prim_index, hit_data_t<S> &inter) {
+force_inline bool IntersectTri(const float o[3], const float d[3], int i, const tri_accel_t &tri,
+                               const uint32_t prim_index, hit_data_t<S> &inter) {
 #define _sign_of(f) (((f) >= 0) ? 1 : -1)
 #define _dot(x, y) ((x)[0] * (y)[0] + (x)[1] * (y)[1] + (x)[2] * (y)[2])
 
@@ -439,8 +439,8 @@ force_inline bool _IntersectTri(const float o[3], const float d[3], int i, const
 }
 
 template <int S>
-force_inline bool _IntersectTri(const float ro[3], const float rd[3], int j, const mtri_accel_t &tri,
-                                const uint32_t prim_index, hit_data_t<S> &inter) {
+force_inline bool IntersectTri(const float ro[3], const float rd[3], int j, const mtri_accel_t &tri,
+                               const uint32_t prim_index, hit_data_t<S> &inter) {
     static const int LanesCount = 8 / S;
 
     simd_ivec<S> _mask = 0, _prim_index;
@@ -2120,7 +2120,7 @@ bool Ray::NS::IntersectTris_ClosestHit(const simd_fvec<S> ro[3], const simd_fvec
     inter.t = out_inter.t;
 
     for (int i = tri_start; i < tri_end; ++i) {
-        _IntersectTri(ro, rd, ray_mask, tris[i], i, inter);
+        IntersectTri(ro, rd, ray_mask, tris[i], i, inter);
     }
 
     out_inter.mask |= inter.mask;
@@ -2160,7 +2160,7 @@ bool Ray::NS::IntersectTris_ClosestHit(const float o[3], const float d[3], int i
     bool res = false;
 
     for (int j = tri_start / 8; j < (tri_end + 7) / 8; ++j) {
-        res |= _IntersectTri(o, d, i, mtris[j], j * 8, out_inter);
+        res |= IntersectTri(o, d, i, mtris[j], j * 8, out_inter);
     }
 
     if (res) {
@@ -2206,7 +2206,7 @@ bool Ray::NS::IntersectTris_AnyHit(const simd_fvec<S> ro[3], const simd_fvec<S> 
     inter.t = out_inter.t;
 
     for (int i = tri_start; i < tri_end; ++i) {
-        _IntersectTri(ro, rd, ray_mask, tris[i], i, inter);
+        IntersectTri(ro, rd, ray_mask, tris[i], i, inter);
     }
 
     out_inter.mask |= inter.mask;
@@ -2250,7 +2250,7 @@ bool Ray::NS::IntersectTris_AnyHit(const float o[3], const float d[3], int i, co
     bool res = false;
 
     for (int j = tri_start / 8; j < (tri_end + 7) / 8; j++) {
-        res |= _IntersectTri(o, d, i, mtris[j], j * 8, out_inter);
+        res |= IntersectTri(o, d, i, mtris[j], j * 8, out_inter);
         // if (res && ((inter.prim_index > 0 && (materials[indices[i]].front_mi & MATERIAL_SOLID_BIT)) ||
         //             (inter.prim_index < 0 && (materials[indices[i]].back_mi & MATERIAL_SOLID_BIT)))) {
         //     break;
@@ -3029,8 +3029,8 @@ void Ray::NS::Sample_OrenDiffuse_BSDF(const simd_fvec<S> T[3], const simd_fvec<S
     const simd_fvec<S> V[3] = {dir * cos_phi, dir * sin_phi, rand_u}; // in tangent-space
     world_from_tangent(T, B, N, V, out_V);
 
-    const simd_fvec<S> _I[3] = {-I[0], -I[1], -I[2]};
-    Evaluate_OrenDiffuse_BSDF(_I, N, out_V, roughness, base_color, out_color);
+    const simd_fvec<S> neg_I[3] = {-I[0], -I[1], -I[2]};
+    Evaluate_OrenDiffuse_BSDF(neg_I, N, out_V, roughness, base_color, out_color);
 }
 
 template <int S>
@@ -3091,8 +3091,8 @@ void Ray::NS::Sample_PrincipledDiffuse_BSDF(const simd_fvec<S> T[3], const simd_
 
     world_from_tangent(T, B, N, V, out_V);
 
-    const simd_fvec<S> _I[3] = {-I[0], -I[1], -I[2]};
-    Evaluate_PrincipledDiffuse_BSDF(_I, N, out_V, roughness, base_color, sheen_color, uniform_sampling, out_color);
+    const simd_fvec<S> neg_I[3] = {-I[0], -I[1], -I[2]};
+    Evaluate_PrincipledDiffuse_BSDF(neg_I, N, out_V, roughness, base_color, sheen_color, uniform_sampling, out_color);
 }
 
 template <int S>
@@ -3254,10 +3254,10 @@ void Ray::NS::Sample_GGXRefraction_BSDF(const simd_fvec<S> T[3], const simd_fvec
         return;
     }
 
-    const simd_fvec<S> _I[3] = {-I[0], -I[1], -I[2]};
+    const simd_fvec<S> neg_I[3] = {-I[0], -I[1], -I[2]};
 
     simd_fvec<S> view_dir_ts[3];
-    tangent_from_world(T, B, N, _I, view_dir_ts);
+    tangent_from_world(T, B, N, neg_I, view_dir_ts);
     normalize(view_dir_ts);
 
     simd_fvec<S> sampled_normal_ts[3];
@@ -3343,10 +3343,10 @@ void Ray::NS::Sample_PrincipledClearcoat_BSDF(const simd_fvec<S> T[3], const sim
         return;
     }
 
-    const simd_fvec<S> _I[3] = {-I[0], -I[1], -I[2]};
+    const simd_fvec<S> neg_I[3] = {-I[0], -I[1], -I[2]};
 
     simd_fvec<S> view_dir_ts[3];
-    tangent_from_world(T, B, N, _I, view_dir_ts);
+    tangent_from_world(T, B, N, neg_I, view_dir_ts);
     normalize(view_dir_ts);
 
     // NOTE: GTR1 distribution is not used for sampling because Cycles does it this way (???!)
@@ -3481,7 +3481,7 @@ template <int S>
 void Ray::NS::SampleNearest(const Ref::TexStorageBase *atlases[], const texture_t &t, const simd_fvec<S> uvs[2],
                             const simd_fvec<S> &lod, const simd_ivec<S> &mask, simd_fvec<S> out_rgba[4]) {
     const Ref::TexStorageBase &atlas = *atlases[t.atlas];
-    simd_ivec<S> _lod = (simd_ivec<S>)lod;
+    auto _lod = (simd_ivec<S>)lod;
 
     simd_fvec<S> _uvs[2];
     TransformUVs(uvs, atlas.size_x(), atlas.size_y(), t, _lod, _uvs);
@@ -3649,7 +3649,7 @@ void Ray::NS::SampleAnisotropic(const Ref::TexStorageBase *atlases[], const text
 
     simd_fvec<S> _uvs[2] = {uvs[0] - step[0] * 0.5f, uvs[1] - step[1] * 0.5f};
 
-    simd_ivec<S> num = static_cast<simd_ivec<S>>(2.0f / k);
+    auto num = static_cast<simd_ivec<S>>(2.0f / k);
     where(num < 1, num) = 1;
     where(num > 2, num) = 4;
 
@@ -5633,9 +5633,9 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
 
                     const simd_ivec<S> sample_trans_spec_lobe = simd_cast(mix_rand < fresnel) & sample_trans_lobe;
                     if (sample_trans_spec_lobe.not_all_zeros()) {
-                        const simd_fvec<S> spec_tmp_col[3] = {{1.0f}, {1.0f}, {1.0f}};
+                        const simd_fvec<S> _spec_tmp_col[3] = {{1.0f}, {1.0f}, {1.0f}};
                         Sample_GGXSpecular_BSDF(T, B, N, I, roughness, simd_fvec<S>{0.0f} /* anisotropic */,
-                                                simd_fvec<S>{1.0f} /* ior */, simd_fvec<S>{0.0f} /* F0 */, spec_tmp_col,
+                                                simd_fvec<S>{1.0f} /* ior */, simd_fvec<S>{0.0f} /* F0 */, _spec_tmp_col,
                                                 rand_u, rand_v, V, F);
 
                         simd_fvec<S> new_p[3];

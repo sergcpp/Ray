@@ -16,13 +16,13 @@ Ray::Ref::Scene::Scene(ILog *log, const bool use_wide_bvh)
 
 Ray::Ref::Scene::~Scene() {
     while (!mesh_instances_.empty()) {
-        RemoveMeshInstance(mesh_instances_.begin().index());
+        Scene::RemoveMeshInstance(mesh_instances_.begin().index());
     }
     while (!meshes_.empty()) {
-        RemoveMesh(meshes_.begin().index());
+        Scene::RemoveMesh(meshes_.begin().index());
     }
     while (!lights_.empty()) {
-        RemoveLight(lights_.begin().index());
+        Scene::RemoveLight(lights_.begin().index());
     }
     materials_.clear();
     textures_.clear();
@@ -44,7 +44,7 @@ void Ray::Ref::Scene::SetEnvironment(const environment_desc_t &env) {
 uint32_t Ray::Ref::Scene::AddTexture(const tex_desc_t &_t) {
     const auto tex_index = uint32_t(textures_.size());
 
-    texture_t t;
+    texture_t t = {};
     t.width = uint16_t(_t.w);
     t.height = uint16_t(_t.h);
 
@@ -116,7 +116,7 @@ uint32_t Ray::Ref::Scene::AddTexture(const tex_desc_t &_t) {
 }
 
 uint32_t Ray::Ref::Scene::AddMaterial(const shading_node_desc_t &m) {
-    material_t mat;
+    material_t mat = {};
 
     mat.type = m.type;
     mat.textures[BASE_TEXTURE] = m.base_texture;
@@ -162,7 +162,7 @@ uint32_t Ray::Ref::Scene::AddMaterial(const shading_node_desc_t &m) {
 }
 
 uint32_t Ray::Ref::Scene::AddMaterial(const principled_mat_desc_t &m) {
-    material_t main_mat;
+    material_t main_mat = {};
 
     main_mat.type = PrincipledNode;
     main_mat.textures[BASE_TEXTURE] = m.base_texture;
@@ -289,11 +289,11 @@ uint32_t Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
     tri_materials_.resize(tri_materials_start + (_m.vtx_indices_count / 3));
 
     // init triangle materials
-    for (const shape_desc_t &s : _m.shapes) {
+    for (const shape_desc_t &sh : _m.shapes) {
         bool is_front_solid = true, is_back_solid = true;
 
         uint32_t material_stack[32];
-        material_stack[0] = s.mat_index;
+        material_stack[0] = sh.mat_index;
         uint32_t material_count = 1;
 
         while (material_count) {
@@ -308,7 +308,7 @@ uint32_t Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
             }
         }
 
-        material_stack[0] = s.back_mat_index;
+        material_stack[0] = sh.back_mat_index;
         material_count = 1;
 
         while (material_count) {
@@ -323,18 +323,18 @@ uint32_t Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
             }
         }
 
-        for (size_t i = s.vtx_start; i < s.vtx_start + s.vtx_count; i += 3) {
+        for (size_t i = sh.vtx_start; i < sh.vtx_start + sh.vtx_count; i += 3) {
             tri_mat_data_t &tri_mat = tri_materials_[tri_materials_start + (i / 3)];
 
-            assert(s.mat_index < (1 << 14) && "Not enough bits to reference material!");
-            assert(s.back_mat_index < (1 << 14) && "Not enough bits to reference material!");
+            assert(sh.mat_index < (1 << 14) && "Not enough bits to reference material!");
+            assert(sh.back_mat_index < (1 << 14) && "Not enough bits to reference material!");
 
-            tri_mat.front_mi = uint16_t(s.mat_index);
+            tri_mat.front_mi = uint16_t(sh.mat_index);
             if (is_front_solid) {
                 tri_mat.front_mi |= MATERIAL_SOLID_BIT;
             }
 
-            tri_mat.back_mi = uint16_t(s.back_mat_index);
+            tri_mat.back_mi = uint16_t(sh.back_mat_index);
             if (is_back_solid) {
                 tri_mat.back_mi |= MATERIAL_SOLID_BIT;
             }
@@ -425,7 +425,7 @@ void Ray::Ref::Scene::RemoveMesh(const uint32_t i) {
 }
 
 uint32_t Ray::Ref::Scene::AddLight(const directional_light_desc_t &_l) {
-    light_t l;
+    light_t l = {};
 
     l.type = LIGHT_TYPE_DIR;
     l.visible = false;
@@ -441,7 +441,7 @@ uint32_t Ray::Ref::Scene::AddLight(const directional_light_desc_t &_l) {
 }
 
 uint32_t Ray::Ref::Scene::AddLight(const sphere_light_desc_t &_l) {
-    light_t l;
+    light_t l = {};
 
     l.type = LIGHT_TYPE_SPHERE;
     l.visible = _l.visible;
@@ -461,7 +461,7 @@ uint32_t Ray::Ref::Scene::AddLight(const sphere_light_desc_t &_l) {
 }
 
 uint32_t Ray::Ref::Scene::AddLight(const rect_light_desc_t &_l, const float *xform) {
-    light_t l;
+    light_t l = {};
 
     l.type = LIGHT_TYPE_RECT;
     l.visible = _l.visible;
@@ -490,7 +490,7 @@ uint32_t Ray::Ref::Scene::AddLight(const rect_light_desc_t &_l, const float *xfo
 }
 
 uint32_t Ray::Ref::Scene::AddLight(const disk_light_desc_t &_l, const float *xform) {
-    light_t l;
+    light_t l = {};
 
     l.type = LIGHT_TYPE_DISK;
     l.visible = _l.visible;
@@ -553,7 +553,7 @@ uint32_t Ray::Ref::Scene::AddMeshInstance(const uint32_t mesh_index, const float
             const material_t &front_mat = materials_[tri_mat.front_mi & MATERIAL_INDEX_BITS];
             if (front_mat.type == EmissiveNode &&
                 (front_mat.flags & (MAT_FLAG_MULT_IMPORTANCE | MAT_FLAG_SKY_PORTAL))) {
-                light_t new_light;
+                light_t new_light = {};
                 new_light.type = LIGHT_TYPE_TRI;
                 new_light.visible = 0;
                 new_light.sky_portal = 0;

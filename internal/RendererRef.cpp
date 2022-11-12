@@ -117,7 +117,7 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
         }
     }
 
-    pass_info_t pass_info;
+    pass_info_t pass_info = {};
 
     pass_info.iteration = region.iteration;
     pass_info.bounce = 0;
@@ -156,7 +156,7 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
         }
     } else {
         const mesh_instance_t &mi = sc_data.mesh_instances[cam.mi_index];
-        SampleMeshInTextureSpace(region.iteration, cam.mi_index, cam.uv_index, sc_data.meshes[mi.mesh_index],
+        SampleMeshInTextureSpace(region.iteration, int(cam.mi_index), int(cam.uv_index), sc_data.meshes[mi.mesh_index],
                                  sc_data.transforms[mi.tr_index], sc_data.vtx_indices, sc_data.vertices, rect, w, h,
                                  &region.halton_seq[hi], p.primary_rays, p.intersections);
 
@@ -196,7 +196,7 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
         const float visibility = ComputeVisibility(sh_r.o, sh_r.d, sh_r.dist,
                                                    region.halton_seq[hi + RAND_DIM_BASE_COUNT + RAND_DIM_BSDF_PICK],
                                                    hash(px_index), sc_data, macro_tree_root, tex_atlases);
-        pixel_color_t col;
+        pixel_color_t col = {};
         col.r = visibility * sh_r.c[0];
         col.g = visibility * sh_r.c[1];
         col.b = visibility * sh_r.c[2];
@@ -318,7 +318,7 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
                 sh_r.o, sh_r.d, sh_r.dist,
                 region.halton_seq[hi + RAND_DIM_BASE_COUNT + bounce * RAND_DIM_BOUNCE_COUNT + RAND_DIM_BSDF_PICK],
                 hash(px_index), sc_data, macro_tree_root, tex_atlases);
-            pixel_color_t col;
+            pixel_color_t col = {};
             col.r = visibility * sh_r.c[0];
             col.g = visibility * sh_r.c[1];
             col.b = visibility * sh_r.c[2];
@@ -353,7 +353,7 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
     }
 
     // factor used to compute incremental average
-    const float mix_factor = 1.0f / region.iteration;
+    const float mix_factor = 1.0f / float(region.iteration);
 
     clean_buf_.MixWith(temp_buf_, rect, mix_factor);
     if (cam.pass_settings.flags & OutputSH) {
@@ -415,7 +415,7 @@ void Ray::Ref::Renderer::UpdateHaltonSequence(const int iteration, std::unique_p
         uint32_t prime_sum = 0;
         for (int j = 0; j < HALTON_COUNT; ++j) {
             seq[i * HALTON_COUNT + j] =
-                Ray::ScrambledRadicalInverse(g_primes[j], &permutations_[prime_sum], uint64_t(iteration + i));
+                Ray::ScrambledRadicalInverse(g_primes[j], &permutations_[prime_sum], uint64_t(iteration) + i);
             prime_sum += g_primes[j];
         }
     }

@@ -25,7 +25,7 @@ void Ray::Vk::Renderer::kernel_GeneratePrimaryRays(VkCommandBuffer cmd_buf, cons
         uint32_t((w_ + PrimaryRayGen::LOCAL_GROUP_SIZE_X) / PrimaryRayGen::LOCAL_GROUP_SIZE_X),
         uint32_t((h_ + PrimaryRayGen::LOCAL_GROUP_SIZE_Y) / PrimaryRayGen::LOCAL_GROUP_SIZE_Y), 1u};
 
-    PrimaryRayGen::Params uniform_params;
+    PrimaryRayGen::Params uniform_params = {};
     uniform_params.img_size[0] = w_;
     uniform_params.img_size[1] = h_;
     uniform_params.hi = hi;
@@ -51,7 +51,7 @@ void Ray::Vk::Renderer::kernel_TracePrimaryRays(VkCommandBuffer cmd_buf, const s
                                               {&out_hits, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
-    TraceRays::Params uniform_params;
+    TraceRays::Params uniform_params = {};
     uniform_params.img_size[0] = w_;
     uniform_params.img_size[1] = h_;
     uniform_params.node_index = node_index;
@@ -116,7 +116,7 @@ void Ray::Vk::Renderer::kernel_TraceSecondaryRays(VkCommandBuffer cmd_buf, const
                                     {eBindTarget::SBuf, TraceRays::COUNTERS_BUF_SLOT, counters},
                                     {eBindTarget::SBuf, TraceRays::OUT_HITS_BUF_SLOT, out_hits}};
 
-        TraceRays::Params uniform_params;
+        TraceRays::Params uniform_params = {};
         uniform_params.img_size[0] = w_;
         uniform_params.img_size[1] = h_;
         uniform_params.node_index = node_index;
@@ -143,7 +143,7 @@ void Ray::Vk::Renderer::kernel_IntersectAreaLights(VkCommandBuffer cmd_buf, cons
         {eBindTarget::SBuf, IntersectAreaLights::COUNTERS_BUF_SLOT, counters},
         {eBindTarget::SBuf, IntersectAreaLights::INOUT_HITS_BUF_SLOT, inout_hits}};
 
-    IntersectAreaLights::Params uniform_params;
+    IntersectAreaLights::Params uniform_params = {};
     uniform_params.img_size[0] = w_;
     uniform_params.img_size[1] = h_;
     uniform_params.visible_lights_count = sc_data.visible_lights_count;
@@ -187,7 +187,7 @@ void Ray::Vk::Renderer::kernel_ShadePrimaryHits(VkCommandBuffer cmd_buf, const p
     const uint32_t grp_count[3] = {uint32_t((w_ + ShadeHits::LOCAL_GROUP_SIZE_X) / ShadeHits::LOCAL_GROUP_SIZE_X),
                                    uint32_t((h_ + ShadeHits::LOCAL_GROUP_SIZE_Y) / ShadeHits::LOCAL_GROUP_SIZE_Y), 1u};
 
-    ShadeHits::Params uniform_params;
+    ShadeHits::Params uniform_params = {};
     uniform_params.img_size[0] = w_;
     uniform_params.img_size[1] = h_;
     uniform_params.hi = hi;
@@ -241,10 +241,7 @@ void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(VkCommandBuffer cmd_buf, const
                                 {eBindTarget::SBuf, ShadeHits::OUT_SH_RAYS_BUF_SLOT, out_sh_rays},
                                 {eBindTarget::SBuf, ShadeHits::INOUT_COUNTERS_BUF_SLOT, inout_counters}};
 
-    const uint32_t grp_count[3] = {uint32_t((w_ + ShadeHits::LOCAL_GROUP_SIZE_X) / ShadeHits::LOCAL_GROUP_SIZE_X),
-                                   uint32_t((h_ + ShadeHits::LOCAL_GROUP_SIZE_Y) / ShadeHits::LOCAL_GROUP_SIZE_Y), 1u};
-
-    ShadeHits::Params uniform_params;
+    ShadeHits::Params uniform_params = {};
     uniform_params.img_size[0] = w_;
     uniform_params.img_size[1] = h_;
     uniform_params.hi = hi;
@@ -275,7 +272,7 @@ void Ray::Vk::Renderer::kernel_TraceShadow(VkCommandBuffer cmd_buf, const Buffer
                                               {&out_img, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
-    TraceShadow::Params uniform_params;
+    TraceShadow::Params uniform_params = {};
     uniform_params.img_size[0] = w_;
     uniform_params.img_size[1] = h_;
     uniform_params.node_index = node_index;
@@ -355,7 +352,7 @@ void Ray::Vk::Renderer::kernel_MixIncremental(VkCommandBuffer cmd_buf, const Tex
         uint32_t((w_ + MixIncremental::LOCAL_GROUP_SIZE_X) / MixIncremental::LOCAL_GROUP_SIZE_X),
         uint32_t((h_ + MixIncremental::LOCAL_GROUP_SIZE_Y) / MixIncremental::LOCAL_GROUP_SIZE_Y), 1u};
 
-    MixIncremental::Params uniform_params;
+    MixIncremental::Params uniform_params = {};
     uniform_params.img_size[0] = w_;
     uniform_params.img_size[1] = h_;
     uniform_params.k = k;
@@ -364,7 +361,7 @@ void Ray::Vk::Renderer::kernel_MixIncremental(VkCommandBuffer cmd_buf, const Tex
                     ctx_->default_descr_alloc(), ctx_->log());
 }
 
-void Ray::Vk::Renderer::kernel_Postprocess(VkCommandBuffer cmd_buf, const Texture2D &frame_buf, const float inv_gamma,
+void Ray::Vk::Renderer::kernel_Postprocess(VkCommandBuffer cmd_buf, const Texture2D &frame_buf, const float /*inv_gamma*/,
                                            const int clamp, const int srgb, const Texture2D &out_pixels) const {
     const TransitionInfo res_transitions[] = {{&frame_buf, eResState::UnorderedAccess},
                                               {&out_pixels, eResState::UnorderedAccess}};
@@ -377,7 +374,7 @@ void Ray::Vk::Renderer::kernel_Postprocess(VkCommandBuffer cmd_buf, const Textur
                                    uint32_t((h_ + Postprocess::LOCAL_GROUP_SIZE_Y) / Postprocess::LOCAL_GROUP_SIZE_Y),
                                    1u};
 
-    Postprocess::Params uniform_params;
+    Postprocess::Params uniform_params = {};
     uniform_params.img_size[0] = w_;
     uniform_params.img_size[1] = h_;
     uniform_params.srgb = srgb;
@@ -407,7 +404,7 @@ void Ray::Vk::Renderer::kernel_DebugRT(VkCommandBuffer cmd_buf, const scene_data
     const uint32_t grp_count[3] = {uint32_t((w_ + DebugRT::LOCAL_GROUP_SIZE_X) / DebugRT::LOCAL_GROUP_SIZE_X),
                                    uint32_t((h_ + DebugRT::LOCAL_GROUP_SIZE_Y) / DebugRT::LOCAL_GROUP_SIZE_Y), 1u};
 
-    DebugRT::Params uniform_params;
+    DebugRT::Params uniform_params = {};
     uniform_params.img_size[0] = w_;
     uniform_params.img_size[1] = h_;
     uniform_params.node_index = node_index;
