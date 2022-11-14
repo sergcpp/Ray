@@ -19,8 +19,6 @@ template <typename T> class SparseStorage {
     Context *ctx_ = nullptr;
     std::string name_;
     mutable Buffer cpu_buf_;
-    // TODO: remove this pointer
-    T *cpu_data_ = nullptr; // persistently mapped pointer
     mutable Buffer gpu_buf_;
     uint32_t size_ = 0;
 
@@ -46,8 +44,8 @@ template <typename T> class SparseStorage {
 
     force_inline bool empty() const { return size_ == 0; }
 
-    force_inline T *data() { return cpu_data_; }
-    force_inline const T *data() const { return cpu_data_; }
+    force_inline T *data() { return cpu_buf_.mapped_ptr<T>(); }
+    force_inline const T *data() const { return cpu_buf_.mapped_ptr<T>(); }
 
     force_inline bool exists(const uint32_t index) const { return cpu_buf_.IsSet(index); }
 
@@ -66,12 +64,11 @@ template <typename T> class SparseStorage {
                 Buffer{name_.c_str(), ctx_, eBufType::Storage, uint32_t(new_capacity * sizeof(T)), uint32_t(sizeof(T))};
         } else {
             cpu_buf_.Unmap();
-            cpu_data_ = nullptr;
             cpu_buf_.Resize(new_capacity * sizeof(T));
             gpu_buf_.Resize(new_capacity * sizeof(T));
         }
 
-        cpu_data_ = (T *)cpu_buf_.Map(BufMapRead | BufMapWrite, true /* persistent */);
+        cpu_buf_.Map(BufMapRead | BufMapWrite, true /* persistent */);
     }
 
     template <class... Args> uint32_t emplace(Args &&...args) {
@@ -83,7 +80,7 @@ template <typename T> class SparseStorage {
         const auto gpu_index = uint32_t(gpu_buf_.AllocSubRegion(sizeof(T), nullptr) / sizeof(T));
         assert(cpu_index == gpu_index);
 
-        T *el = cpu_data_ + cpu_index;
+        T *el = cpu_buf_.mapped_ptr<T>() + cpu_index;
         new (el) T(std::forward<Args>(args)...);
 
         VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
@@ -103,7 +100,7 @@ template <typename T> class SparseStorage {
         const uint32_t gpu_index = gpu_buf_.AllocSubRegion(sizeof(T), nullptr) / sizeof(T);
         assert(cpu_index == gpu_index);
 
-        new (&cpu_data_[cpu_index]) T(el);
+        new (cpu_buf_.mapped_ptr<T>() + cpu_index) T(el);
         cpu_buf_.FlushMappedRange(cpu_index * sizeof(T), sizeof(T), true /* align size */);
 
         VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
@@ -130,7 +127,7 @@ template <typename T> class SparseStorage {
     }
 
     void Set(const uint32_t index, const T &el) {
-        new (&cpu_data_[index]) T(el);
+        new (cpu_buf_.mapped_ptr<T>() + index) T(el);
         cpu_buf_.FlushMappedRange(index * sizeof(T), sizeof(T), true /* align size */);
 
         VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
@@ -147,7 +144,7 @@ template <typename T> class SparseStorage {
 
     force_inline const T &at(const uint32_t index) const {
         assert(cpu_buf_.IsSet(index) && "Invalid index!");
-        return cpu_data_[index];
+        return *(cpu_buf_.mapped_ptr<T>() + index);
     }
 
     // force_inline T &operator[](const uint32_t index) {
@@ -157,7 +154,7 @@ template <typename T> class SparseStorage {
 
     force_inline const T &operator[](const uint32_t index) const {
         assert(cpu_buf_.IsSet(index) && "Invalid index!");
-        return cpu_data_[index];
+        return *(cpu_buf_.mapped_ptr<T>() + index);
     }
 
     class SparseStorageIterator : public std::iterator<std::forward_iterator_tag, T> {

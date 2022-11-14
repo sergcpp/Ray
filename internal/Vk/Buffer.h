@@ -2,10 +2,10 @@
 
 #include <vector>
 
+#include "../SmallVector.h"
 #include "Fence.h"
 #include "LinearAlloc.h"
 #include "Resource.h"
-#include "../SmallVector.h"
 
 #include "VK.h"
 
@@ -47,14 +47,10 @@ struct BufHandle {
     VkBuffer buf = VK_NULL_HANDLE;
     uint32_t generation = 0;
 
-    operator bool() const {
-        return buf != VK_NULL_HANDLE;
-    }
+    operator bool() const { return buf != VK_NULL_HANDLE; }
 };
 inline bool operator==(const BufHandle lhs, const BufHandle rhs) {
-    return
-        lhs.buf == rhs.buf &&
-        lhs.generation == rhs.generation;
+    return lhs.buf == rhs.buf && lhs.generation == rhs.generation;
 }
 
 struct RangeFence {
@@ -83,8 +79,7 @@ class Buffer : public LinearAlloc {
 
   public:
     Buffer() = default;
-    explicit Buffer(const char *name, Context *ctx, eBufType type, uint32_t initial_size,
-                    uint32_t suballoc_align = 1);
+    explicit Buffer(const char *name, Context *ctx, eBufType type, uint32_t initial_size, uint32_t suballoc_align = 1);
     Buffer(const Buffer &rhs) = delete;
     Buffer(Buffer &&rhs) noexcept { (*this) = std::move(rhs); }
     ~Buffer();
@@ -108,7 +103,7 @@ class Buffer : public LinearAlloc {
     operator bool() const { return handle_.buf != VK_NULL_HANDLE; }
 
     bool is_mapped() const { return mapped_ptr_ != nullptr; }
-    uint8_t *mapped_ptr() const { return mapped_ptr_; }
+    template <typename T = uint8_t> T *mapped_ptr() const { return reinterpret_cast<T *>(mapped_ptr_); }
 
     uint32_t AllocSubRegion(uint32_t size, const char *tag, const Buffer *init_buf = nullptr, void *cmd_buf = nullptr,
                             uint32_t init_off = 0);
