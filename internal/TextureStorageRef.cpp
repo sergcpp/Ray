@@ -168,7 +168,7 @@ int Ray::Ref::TexStorageTiled<T, N>::Allocate(const ColorType *data, const int _
         { // write additional row to the right
             const int tilex = _res[0] / TileSize, in_tilex = _res[0] % TileSize;
             p.pixels[(tiley * p.res_in_tiles[0][0] + tilex) * TileSize * TileSize + in_tiley * TileSize + in_tilex] =
-                data[y * _res[0] + _res[0]];
+                data[y * _res[0]];
         }
     }
 
@@ -323,7 +323,7 @@ int Ray::Ref::TexStorageSwizzled<T, N>::Allocate(const ColorType *data, const in
 
         { // write additional row to the right
             const uint32_t x_off = swizzle_x_tile(_res[0]);
-            p.pixels[y_off + x_off] = data[y * _res[0] + _res[0]];
+            p.pixels[y_off + x_off] = data[y * _res[0]];
         }
     }
 
