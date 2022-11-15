@@ -18,7 +18,7 @@ vec2 TransformUV(const vec2 _uv, const vec2 tex_atlas_size, const atlas_texture_
     return res;
 }
 
-vec4 SampleBilinear(sampler2DArray atlases[6], const atlas_texture_t t, const vec2 uvs, const int lod) {
+vec4 SampleBilinear(sampler2DArray atlases[7], const atlas_texture_t t, const vec2 uvs, const int lod) {
     const vec2 atlas_size = vec2(TEXTURE_ATLAS_SIZE);
     vec2 _uvs = TransformUV(uvs, atlas_size, t, lod);
     //_uvs = _uvs * atlas_size - 0.5;

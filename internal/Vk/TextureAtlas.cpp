@@ -126,6 +126,10 @@ int Ray::Vk::TextureAtlas::Allocate(const color_t<T, N> *data, const int _res[2]
                         const int req_size = GetRequiredMemory_BC4(res[0], res[1]);
                         compressed_data.reset(new uint8_t[req_size]);
                         CompressImage_BC4<N>(&temp_storage[0].v[0], res[0], res[1], compressed_data.get());
+                    } else if (format_ == eTexFormat::BC5) {
+                        const int req_size = GetRequiredMemory_BC5(res[0], res[1]);
+                        compressed_data.reset(new uint8_t[req_size]);
+                        CompressImage_BC5<2>(&temp_storage[0].v[0], res[0], res[1], compressed_data.get());
                     }
 
                     WritePageData(page_index, pos[0], pos[1], res[0], res[1], compressed_data.get());
@@ -771,6 +775,8 @@ void Ray::Vk::TextureAtlas::WritePageData(const int page, const int posx, const 
             data_size = GetRequiredMemory_BC3(sizex, sizey);
         } else if (format_ == eTexFormat::BC4) {
             data_size = GetRequiredMemory_BC4(sizex, sizey);
+        } else if (format_ == eTexFormat::BC5) {
+            data_size = GetRequiredMemory_BC5(sizex, sizey);
         }
     }
 

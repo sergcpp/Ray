@@ -59,7 +59,8 @@ Ray::Vk::Scene::Scene(Context *ctx, const bool use_hwrt, const bool use_tex_comp
                                                {ctx, eTexFormat::RawRG88, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
                                                {ctx, eTexFormat::RawR8, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
                                                {ctx, eTexFormat::BC3, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
-                                               {ctx, eTexFormat::BC4, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE}},
+                                               {ctx, eTexFormat::BC4, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
+                                               {ctx, eTexFormat::BC5, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE}},
       lights_(ctx, "Lights"), li_indices_(ctx), visible_lights_(ctx) {}
 
 void Ray::Vk::Scene::GetEnvironment(environment_desc_t &env) {
@@ -115,11 +116,7 @@ uint32_t Ray::Vk::Scene::AddTexture(const tex_desc_t &_t) {
         }
     } else if (_t.format == eTextureFormat::RGB888) {
         if (!_t.is_normalmap) {
-            if (use_compression) {
-                t.atlas = 4;
-            } else {
-                t.atlas = 1;
-            }
+            t.atlas = use_compression ? 4 : 1;
         } else {
             // TODO: get rid of this allocation
             repacked_normalmap.reset(new color_rg8_t[res[0] * res[1]]);
@@ -132,16 +129,12 @@ uint32_t Ray::Vk::Scene::AddTexture(const tex_desc_t &_t) {
             }
 
             tex_data = repacked_normalmap.get();
-            t.atlas = 2;
+            t.atlas = use_compression ? 6 : 2;
         }
     } else if (_t.format == eTextureFormat::RG88) {
-        t.atlas = 2;
+        t.atlas = use_compression ? 6 : 2;
     } else if (_t.format == eTextureFormat::R8) {
-        if (use_compression) {
-            t.atlas = 5;
-        } else {
-            t.atlas = 3;
-        }
+        t.atlas = use_compression ? 5 : 3;
     }
 
     if (recostruct_z) {
@@ -155,7 +148,9 @@ uint32_t Ray::Vk::Scene::AddTexture(const tex_desc_t &_t) {
         } else if (t.atlas == 1 || t.atlas == 4) {
             page =
                 tex_atlases_[t.atlas].Allocate<uint8_t, 3>(reinterpret_cast<const color_rgb8_t *>(tex_data), res, pos);
-        } else if (t.atlas == 2) {
+        } else if (t.atlas == 2 || t.atlas == 6) {
+            page =
+                tex_atlases_[t.atlas].Allocate<uint8_t, 2>(reinterpret_cast<const color_rg8_t *>(tex_data), res, pos);
             page = tex_atlases_[2].Allocate<uint8_t, 2>(reinterpret_cast<const color_rg8_t *>(tex_data), res, pos);
         } else if (t.atlas == 3 || t.atlas == 5) {
             page = tex_atlases_[t.atlas].Allocate<uint8_t, 1>(reinterpret_cast<const color_r8_t *>(tex_data), res, pos);
@@ -184,6 +179,9 @@ uint32_t Ray::Vk::Scene::AddTexture(const tex_desc_t &_t) {
         if (_t.format == eTextureFormat::RGB888) {
             tex_atlases_[t.atlas].AllocateMips<uint8_t, 3>(reinterpret_cast<const color_rgb8_t *>(_t.data), res,
                                                            NUM_MIP_LEVELS - 1, pages, positions);
+        } else if (_t.format == eTextureFormat::RG88) {
+            tex_atlases_[t.atlas].AllocateMips<uint8_t, 2>(reinterpret_cast<const color_rg8_t *>(_t.data), res,
+                                                           NUM_MIP_LEVELS - 1, pages, positions);
         } else if (_t.format == eTextureFormat::R8) {
             tex_atlases_[t.atlas].AllocateMips<uint8_t, 1>(reinterpret_cast<const color_r8_t *>(_t.data), res,
                                                            NUM_MIP_LEVELS - 1, pages, positions);
@@ -199,9 +197,10 @@ uint32_t Ray::Vk::Scene::AddTexture(const tex_desc_t &_t) {
     }
 
     ctx_->log()->Info("Ray: Texture loaded (atlas = %i, %ix%i)", int(t.atlas), _t.w, _t.h);
-    ctx_->log()->Info("Ray: Atlasses are (RGBA[%i], RGB[%i], RG[%i], R[%i], BC3[%i], BC4[%i])",
+    ctx_->log()->Info("Ray: Atlasses are (RGBA[%i], RGB[%i], RG[%i], R[%i], BC3[%i], BC4[%i], BC5[%i])",
                       tex_atlases_[0].page_count(), tex_atlases_[1].page_count(), tex_atlases_[2].page_count(),
-                      tex_atlases_[3].page_count(), tex_atlases_[4].page_count(), tex_atlases_[5].page_count());
+                      tex_atlases_[3].page_count(), tex_atlases_[4].page_count(), tex_atlases_[5].page_count(),
+                      tex_atlases_[6].page_count());
 
     return textures_.push(t);
 }
@@ -850,9 +849,10 @@ void Ray::Vk::Scene::GenerateTextureMips() {
         textures_.Set(info.texture_index, t);
     }
 
-    ctx_->log()->Info("Ray: Atlasses are (RGBA[%i], RGB[%i], RG[%i], R[%i], BC3[%i], BC4[%i])",
+    ctx_->log()->Info("Ray: Atlasses are (RGBA[%i], RGB[%i], RG[%i], R[%i], BC3[%i], BC4[%i], BC5[%i])",
                       tex_atlases_[0].page_count(), tex_atlases_[1].page_count(), tex_atlases_[2].page_count(),
-                      tex_atlases_[3].page_count(), tex_atlases_[4].page_count(), tex_atlases_[5].page_count());
+                      tex_atlases_[3].page_count(), tex_atlases_[4].page_count(), tex_atlases_[5].page_count(),
+                      tex_atlases_[6].page_count());
 }
 
 void Ray::Vk::Scene::RebuildHWAccStructures() {

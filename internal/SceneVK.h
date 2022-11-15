@@ -33,7 +33,7 @@ class Scene : public SceneBase {
     SparseStorage<material_t> materials_;
     SparseStorage<atlas_texture_t> textures_;
 
-    TextureAtlas tex_atlases_[6];
+    TextureAtlas tex_atlases_[7];
 
     SparseStorage<light_t> lights_;
     Vector<uint32_t> li_indices_;

@@ -58,6 +58,7 @@ extern const VkFormat g_vk_formats[] = {
     VK_FORMAT_BC2_UNORM_BLOCK,      // BC2
     VK_FORMAT_BC3_UNORM_BLOCK,      // BC3
     VK_FORMAT_BC4_UNORM_BLOCK,      // BC4
+    VK_FORMAT_BC5_UNORM_BLOCK,      // BC5
     VK_FORMAT_UNDEFINED,            // ASTC
     VK_FORMAT_UNDEFINED,            // None
 };
@@ -216,6 +217,7 @@ const int g_per_pixel_data_len[] = {
     -1, // BC2
     -1, // BC3
     -1, // BC4
+    -1, // BC5
     -1, // ASTC
     -1  // None
 };
@@ -250,13 +252,14 @@ int Ray::Vk::CalcMipCount(const int w, const int h, const int min_res, const eTe
 int Ray::Vk::GetPerPixelDataLen(const eTexFormat format) { return g_per_pixel_data_len[int(format)]; }
 
 int Ray::Vk::GetBlockLenBytes(const eTexFormat format, const eTexBlock block) {
-    static_assert(int(eTexFormat::_Count) == 32, "Update the list below!");
+    static_assert(int(eTexFormat::_Count) == 33, "Update the list below!");
     switch (format) {
     case eTexFormat::BC1:
         assert(block == eTexBlock::_4x4);
         return 8;
     case eTexFormat::BC2:
     case eTexFormat::BC3:
+    case eTexFormat::BC5:
         assert(block == eTexBlock::_4x4);
         return 16;
     case eTexFormat::BC4:
