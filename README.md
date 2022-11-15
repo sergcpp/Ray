@@ -8,7 +8,7 @@ Small pathtracing library created for learning purposes. Includes CPU and GPU (V
 <div>
 <div float="left" >
   <img src="scene1.jpg" width="49%" />
-  <img src="scene2.jpg" width="49%" /> 
+  <img src="scene2.jpg" width="49%" />
 </div>
 <div float="left">
   <img src="scene3.jpg" width="98.5%" />
@@ -120,7 +120,7 @@ int main() {
                             1.0f, 0.0f, -1.0f,      0.0f, 1.0f, 0.0f,   0.0f, 0.0f,
                             1.0f, 0.0f, 1.0f,       0.0f, 1.0f, 0.0f,   0.0f, 1.0f,
                             -1.0f, 0.0f, 1.0f,      0.0f, 1.0f, 0.0f,   1.0f, 1.0f,
-    
+
                             -1.0f, 0.5f, -1.0f,     0.0f, 1.0f, 0.0f,   1.0f, 1.0f,
                             -0.33f, 0.5f, -1.0f,    0.0f, 1.0f, 0.0f,   1.0f, 1.0f,
                             -0.33f, 0.0f, -1.0f,    0.0f, 1.0f, 0.0f,   1.0f, 1.0f,
@@ -139,7 +139,7 @@ int main() {
     mesh_desc.vtx_attrs_count = 10;
     mesh_desc.vtx_indices = &indices[0];
     mesh_desc.vtx_indices_count = 24;
-    
+
     // Setup material groups
     mesh_desc.shapes.push_back({ mat1_id, 0, 6 });
     mesh_desc.shapes.push_back({ mat2_id, 6, 6 });
@@ -166,7 +166,7 @@ int main() {
     memcpy(&cam_desc.fwd[0], &view_dir[0], 3 * sizeof(float));
     cam_desc.fov = 45.0f;
     cam_desc.gamma = 2.2f;
-    
+
     uint32_t cam_id = scene->AddCamera(cam_desc);
     scene->set_current_cam(cam_id);
 
@@ -245,24 +245,24 @@ With 'output_sh' set to true renderer additionally outputs lightmap in 2-band (4
 ```c++
 ...
     const auto *sh_data = renderer->get_sh_data_ref();
-    
+
     for (int y = 0; y < IMG_H; y++) {
         for (int x = 0; x < IMG_W; x++) {
             int i = y * IMG_W + x;
             const auto &sh = sh_data[i];
-            
+
             const float SH_A0 = 0.886226952f; // PI / sqrt(4.0f * Pi)
             const float SH_A1 = 1.02332675f;  // sqrt(PI / 3.0f)
-            
+
             // Apply diffuse convolution (for example)
             float L00_r = sh.coeff_r[0] * SH_A0;
             float L10_r = sh.coeff_r[1] * SH_A1;
             float L11_r = sh.coeff_r[2] * SH_A1;
             float L12_r = sh.coeff_r[3] * SH_A1;
-            
+
             float L00_g = sh.coeff_g[0] * SH_A0;
             ...
-            
+
             // Save or convert to different representation
         }
     }
@@ -281,4 +281,4 @@ With 'output_sh' set to true renderer additionally outputs lightmap in 2-band (4
   - Punctual light sources organized in separate BVH tree to accelerate light culling.
   - (Random path termination) When Ray influence falls certain threshold, path gets randomly terminated by probability inversely proportional to that influence. Weight of non-terminated Ray adjusted appropriately.
   - (Lightmapping) Special 'Geo' camera type can be used for sampling meshes in texture space to produce direct and indirect lightmaps for realtime rendering. Simple color map and 2-band spherical harmonics representation available as output. Latter can be used for creating lightmaps that interact with surface normal maps.
-  
+

@@ -16,4 +16,4 @@ class LogNull : public ILog {
     virtual void Warning(const char *fmt, ...) override {}
     virtual void Error(const char *fmt, ...) override {}
 };
-} // namespace Ren
+} // namespace Ray
