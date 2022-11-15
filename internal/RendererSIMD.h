@@ -145,9 +145,6 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
 
     const uint32_t macro_tree_root = s->macro_nodes_root_;
 
-    const Ref::TexStorageBase *tex_atlases[] = {&s->tex_atlas_rgba_, &s->tex_atlas_rgb_, &s->tex_atlas_rg_,
-                                                  &s->tex_atlas_r_};
-
     float root_min[3], cell_size[3];
     if (macro_tree_root != 0xffffffff) {
         float root_max[3];
@@ -280,7 +277,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
 
         simd_fvec<S> out_rgba[4] = {0.0f};
         NS::ShadeSurface(px_index, pass_info, &region.halton_seq[hi + RAND_DIM_BASE_COUNT], inter, r, sc_data,
-                         macro_tree_root, tex_atlases, out_rgba, p.secondary_masks.data(), p.secondary_rays.data(),
+                         macro_tree_root, s->tex_storages_, out_rgba, p.secondary_masks.data(), p.secondary_rays.data(),
                          &secondary_rays_count, p.shadow_masks.data(), p.shadow_rays.data(), &shadow_rays_count);
         for (int j = 0; j < S; j++) {
             if (!p.primary_masks[i][j]) {
@@ -299,7 +296,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
         const simd_fvec<S> visibility =
             ComputeVisibility(sh_r.o, sh_r.d, sh_r.dist, p.shadow_masks[i],
                               region.halton_seq[hi + RAND_DIM_BASE_COUNT + RAND_DIM_BSDF_PICK], hash(px_index), sc_data,
-                              macro_tree_root, tex_atlases);
+                              macro_tree_root, s->tex_storages_);
 
         for (int j = 0; j < S; j++) {
             if (!p.shadow_masks[i][j]) {
@@ -383,10 +380,11 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
             const simd_ivec<S> index = y * w + x;
 
             simd_fvec<S> out_rgba[4] = {0.0f};
-            NS::ShadeSurface(
-                index, pass_info, &region.halton_seq[hi + RAND_DIM_BASE_COUNT + bounce * RAND_DIM_BOUNCE_COUNT], inter,
-                r, sc_data, macro_tree_root, tex_atlases, out_rgba, p.secondary_masks.data(), p.secondary_rays.data(),
-                &secondary_rays_count, p.shadow_masks.data(), p.shadow_rays.data(), &shadow_rays_count);
+            NS::ShadeSurface(index, pass_info,
+                             &region.halton_seq[hi + RAND_DIM_BASE_COUNT + bounce * RAND_DIM_BOUNCE_COUNT], inter, r,
+                             sc_data, macro_tree_root, s->tex_storages_, out_rgba, p.secondary_masks.data(),
+                             p.secondary_rays.data(), &secondary_rays_count, p.shadow_masks.data(),
+                             p.shadow_rays.data(), &shadow_rays_count);
             out_rgba[3] = 0.0f;
 
             for (int j = 0; j < S; j++) {
@@ -406,7 +404,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
             const simd_fvec<S> visibility = ComputeVisibility(
                 sh_r.o, sh_r.d, sh_r.dist, p.shadow_masks[i],
                 region.halton_seq[hi + RAND_DIM_BASE_COUNT + bounce * RAND_DIM_BOUNCE_COUNT + RAND_DIM_BSDF_PICK],
-                hash(px_index), sc_data, macro_tree_root, tex_atlases);
+                hash(px_index), sc_data, macro_tree_root, s->tex_storages_);
 
             for (int j = 0; j < S; j++) {
                 if (!p.shadow_masks[i][j]) {

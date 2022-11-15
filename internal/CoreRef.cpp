@@ -15,7 +15,7 @@
 #define USE_PATH_TERMINATION 1
 #define VECTORIZE_BBOX_INTERSECTION 1
 #define VECTORIZE_TRI_INTERSECTION 1
-//#define FORCE_TEXTURE_LOD 1
+// #define FORCE_TEXTURE_LOD 0
 
 namespace Ray {
 namespace Ref {
@@ -589,7 +589,7 @@ force_inline float lum(const simd_fvec4 &color) {
     return 0.212671f * color[0] + 0.715160f * color[1] + 0.072169f * color[2];
 }
 
-float get_texture_lod(const TexStorageBase *textures[], const uint32_t index, const simd_fvec2 &duv_dx,
+float get_texture_lod(const TexStorageBase *const textures[], const uint32_t index, const simd_fvec2 &duv_dx,
                       const simd_fvec2 &duv_dy) {
 #ifdef FORCE_TEXTURE_LOD
     const float lod = float(FORCE_TEXTURE_LOD);
@@ -609,7 +609,7 @@ float get_texture_lod(const TexStorageBase *textures[], const uint32_t index, co
     return lod;
 }
 
-float get_texture_lod(const TexStorageBase *textures[], const uint32_t index, const float lambda) {
+float get_texture_lod(const TexStorageBase *const textures[], const uint32_t index, const float lambda) {
 #ifdef FORCE_TEXTURE_LOD
     const float lod = float(FORCE_TEXTURE_LOD);
 #else
@@ -2439,14 +2439,14 @@ Ray::Ref::simd_fvec4 Ray::Ref::TransformNormal(const simd_fvec4 &n, const float 
                       inv_xform[8] * n[0] + inv_xform[9] * n[1] + inv_xform[10] * n[2], 0.0f};
 }
 
-Ray::Ref::simd_fvec4 Ray::Ref::SampleNearest(const TexStorageBase *textures[], const uint32_t index,
+Ray::Ref::simd_fvec4 Ray::Ref::SampleNearest(const TexStorageBase *const textures[], const uint32_t index,
                                              const simd_fvec2 &uvs, const int lod) {
     const TexStorageBase &storage = *textures[index >> 28];
     const auto &pix = storage.Fetch(index & 0x00ffffff, uvs[0], uvs[1], lod);
     return simd_fvec4{pix.v[0], pix.v[1], pix.v[2], pix.v[3]};
 }
 
-Ray::Ref::simd_fvec4 Ray::Ref::SampleBilinear(const TexStorageBase *textures[], const uint32_t index,
+Ray::Ref::simd_fvec4 Ray::Ref::SampleBilinear(const TexStorageBase *const textures[], const uint32_t index,
                                               const simd_fvec2 &uvs, const int lod) {
     const TexStorageBase &storage = *textures[index >> 28];
 
@@ -2494,8 +2494,8 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleBilinear(const TexStorageBase &storage, con
     return (p1X * k[1] + p0X * (1 - k[1]));
 }
 
-Ray::Ref::simd_fvec4 Ray::Ref::SampleTrilinear(const TexStorageBase *textures[], const uint32_t index,
-                                               const simd_fvec2 &uvs, float lod) {
+Ray::Ref::simd_fvec4 Ray::Ref::SampleTrilinear(const TexStorageBase *const textures[], const uint32_t index,
+                                               const simd_fvec2 &uvs, const float lod) {
     const simd_fvec4 col1 = SampleBilinear(textures, index, uvs, (int)std::floor(lod));
     const simd_fvec4 col2 = SampleBilinear(textures, index, uvs, (int)std::ceil(lod));
 
@@ -2503,7 +2503,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleTrilinear(const TexStorageBase *textures[],
     return col1 * (1 - k) + col2 * k;
 }
 
-Ray::Ref::simd_fvec4 Ray::Ref::SampleAnisotropic(const TexStorageBase *textures[], const uint32_t index,
+Ray::Ref::simd_fvec4 Ray::Ref::SampleAnisotropic(const TexStorageBase *const textures[], const uint32_t index,
                                                  const simd_fvec2 &uvs, const simd_fvec2 &duv_dx,
                                                  const simd_fvec2 &duv_dy) {
     const TexStorageBase &storage = *textures[index >> 28];
@@ -2600,7 +2600,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleLatlong_RGBE(const TexStorageRGBA &storage,
 }
 
 float Ray::Ref::ComputeVisibility(const float p[3], const float d[3], float dist, const float rand_val, int rand_hash2,
-                                  const scene_data_t &sc, const uint32_t node_index, const TexStorageBase *textures[]) {
+                                  const scene_data_t &sc, const uint32_t node_index, const TexStorageBase *const textures[]) {
     float visibility = 1.0f;
 
     const simd_fvec4 rd = {d[0], d[1], d[2], 0.0f};
@@ -2748,7 +2748,7 @@ void Ray::Ref::ComputeDerivatives(const simd_fvec4 &I, const float t, const simd
     out_der.ddn_dy = dot(dd_dy, plane_N) + dot(I, out_der.dndy);
 }
 
-void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, const TexStorageBase *textures[],
+void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, const TexStorageBase *const textures[],
                                  const float halton[], const float sample_off[2], light_sample_t &ls) {
     const float u1 = fract(halton[RAND_DIM_LIGHT_PICK] + sample_off[0]);
     const auto light_index = std::min(uint32_t(u1 * sc.li_indices.size()), uint32_t(sc.li_indices.size() - 1));
@@ -3034,7 +3034,7 @@ bool Ray::Ref::IntersectAreaLights(const ray_data_t &ray, const light_t lights[]
 
 Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t &pi, const hit_data_t &inter,
                                           const ray_data_t &ray, const float *halton, const scene_data_t &sc,
-                                          const uint32_t node_index, const TexStorageBase *textures[],
+                                          const uint32_t node_index, const TexStorageBase *const textures[],
                                           ray_data_t *out_secondary_rays, int *out_secondary_rays_count,
                                           shadow_ray_t *out_shadow_rays, int *out_shadow_rays_count) {
     if (!inter.mask) {

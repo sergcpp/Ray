@@ -9,8 +9,7 @@
 
 #define _CLAMP(val, min, max) (val < min ? min : (val > max ? max : val))
 
-Ray::Ref::Scene::Scene(ILog *log, const bool use_wide_bvh) : log_(log), use_wide_bvh_(use_wide_bvh) {
-}
+Ray::Ref::Scene::Scene(ILog *log, const bool use_wide_bvh) : log_(log), use_wide_bvh_(use_wide_bvh) {}
 
 Ray::Ref::Scene::~Scene() {
     while (!mesh_instances_.empty()) {
@@ -44,16 +43,16 @@ uint32_t Ray::Ref::Scene::AddTexture(const tex_desc_t &_t) {
     int storage = -1, index = -1;
     if (_t.format == eTextureFormat::RGBA8888) {
         storage = 0;
-        index = tex_atlas_rgba_.Allocate(reinterpret_cast<const color_rgba8_t *>(_t.data), res, _t.generate_mipmaps);
+        index = tex_storage_rgba_.Allocate(reinterpret_cast<const color_rgba8_t *>(_t.data), res, _t.generate_mipmaps);
     } else if (_t.format == eTextureFormat::RGB888) {
         storage = 1;
-        index = tex_atlas_rgb_.Allocate(reinterpret_cast<const color_rgb8_t *>(_t.data), res, _t.generate_mipmaps);
+        index = tex_storage_rgb_.Allocate(reinterpret_cast<const color_rgb8_t *>(_t.data), res, _t.generate_mipmaps);
     } else if (_t.format == eTextureFormat::RG88) {
         storage = 2;
-        index = tex_atlas_rg_.Allocate(reinterpret_cast<const color_rg8_t *>(_t.data), res, _t.generate_mipmaps);
+        index = tex_storage_rg_.Allocate(reinterpret_cast<const color_rg8_t *>(_t.data), res, _t.generate_mipmaps);
     } else if (_t.format == eTextureFormat::R8) {
         storage = 3;
-        index = tex_atlas_r_.Allocate(reinterpret_cast<const color_r8_t *>(_t.data), res, _t.generate_mipmaps);
+        index = tex_storage_r_.Allocate(reinterpret_cast<const color_r8_t *>(_t.data), res, _t.generate_mipmaps);
     }
 
     if (storage == -1 || index == -1) {
@@ -61,8 +60,8 @@ uint32_t Ray::Ref::Scene::AddTexture(const tex_desc_t &_t) {
     }
 
     log_->Info("Ray: Texture loaded (storage = %i, %ix%i)", storage, _t.w, _t.h);
-    log_->Info("Ray: Storages are (RGBA[%i], RGB[%i], RG[%i], R[%i])", tex_atlas_rgba_.img_count(),
-               tex_atlas_rgb_.img_count(), tex_atlas_rg_.img_count(), tex_atlas_r_.img_count());
+    log_->Info("Ray: Storages are (RGBA[%i], RGB[%i], RG[%i], R[%i])", tex_storage_rgba_.img_count(),
+               tex_storage_rgb_.img_count(), tex_storage_rg_.img_count(), tex_storage_r_.img_count());
 
     uint32_t ret = 0;
 
@@ -553,7 +552,7 @@ void Ray::Ref::Scene::RemoveMeshInstance(uint32_t i) {
     RebuildTLAS();
 }
 
-void Ray::Ref::Scene::Finalize() {  }
+void Ray::Ref::Scene::Finalize() {}
 
 void Ray::Ref::Scene::RemoveTris(uint32_t tris_index, uint32_t tris_count) {
     if (!tris_count) {

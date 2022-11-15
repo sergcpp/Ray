@@ -1,8 +1,8 @@
-//#pragma once
-// This file is compiled many times for different simd architectures (SSE, NEON...).
-// Macro 'NS' defines a namespace in which everything will be located, so it should be set before including this file.
-// Macros 'USE_XXX' define template instantiation of simd_fvec, simd_ivec classes.
-// Template parameter S defines width of vectors used. Usualy it is equal to ray packet size.
+// #pragma once
+//  This file is compiled many times for different simd architectures (SSE, NEON...).
+//  Macro 'NS' defines a namespace in which everything will be located, so it should be set before including this file.
+//  Macros 'USE_XXX' define template instantiation of simd_fvec, simd_ivec classes.
+//  Template parameter S defines width of vectors used. Usualy it is equal to ray packet size.
 
 #include <vector>
 
@@ -21,7 +21,7 @@
 #define USE_VNDF_GGX_SAMPLING 1
 #define USE_NEE 1
 #define USE_PATH_TERMINATION 1
-//#define FORCE_TEXTURE_LOD 0
+// #define FORCE_TEXTURE_LOD 0
 
 namespace Ray {
 namespace Ref {
@@ -284,13 +284,13 @@ void rotate_around_axis(const simd_fvec<S> p[3], const simd_fvec<S> axis[3], con
 
 // Sample texture
 template <int S>
-void SampleNearest(const Ref::TexStorageBase *textures[], uint32_t index, const simd_fvec<S> uvs[2],
+void SampleNearest(const Ref::TexStorageBase *const textures[], uint32_t index, const simd_fvec<S> uvs[2],
                    const simd_fvec<S> &lod, const simd_ivec<S> &mask, simd_fvec<S> out_rgba[4]);
 template <int S>
-void SampleBilinear(const Ref::TexStorageBase *textures[], uint32_t index, const simd_fvec<S> uvs[2],
+void SampleBilinear(const Ref::TexStorageBase *const textures[], uint32_t index, const simd_fvec<S> uvs[2],
                     const simd_ivec<S> &lod, const simd_ivec<S> &mask, simd_fvec<S> out_rgba[4]);
 template <int S>
-void SampleTrilinear(const Ref::TexStorageBase *textures[], uint32_t index, const simd_fvec<S> uvs[2],
+void SampleTrilinear(const Ref::TexStorageBase *const textures[], uint32_t index, const simd_fvec<S> uvs[2],
                      const simd_fvec<S> &lod, const simd_ivec<S> &mask, simd_fvec<S> out_rgba[4]);
 template <int S>
 void SampleLatlong_RGBE(const Ref::TexStorageRGBA &storage, uint32_t index, const simd_fvec<S> dir[3],
@@ -300,7 +300,7 @@ void SampleLatlong_RGBE(const Ref::TexStorageRGBA &storage, uint32_t index, cons
 template <int S>
 simd_fvec<S> ComputeVisibility(const simd_fvec<S> p1[3], const simd_fvec<S> d[3], simd_fvec<S> dist,
                                const simd_ivec<S> &mask, const float rand_val, const simd_ivec<S> &rand_hash2,
-                               const scene_data_t &sc, uint32_t node_index, const Ref::TexStorageBase *atlases[]);
+                               const scene_data_t &sc, uint32_t node_index, const Ref::TexStorageBase *const textures[]);
 
 // Compute derivatives at hit point
 template <int S>
@@ -313,7 +313,7 @@ void ComputeDerivatives(const simd_fvec<S> I[3], const simd_fvec<S> &t, const si
 
 // Pick point on any light source for evaluation
 template <int S>
-void SampleLightSource(const simd_fvec<S> P[3], const scene_data_t &sc, const Ref::TexStorageBase *tex_atlases[],
+void SampleLightSource(const simd_fvec<S> P[3], const scene_data_t &sc, const Ref::TexStorageBase *const tex_atlases[],
                        const float halton[], const simd_fvec<S> sample_off[2], const simd_ivec<S> &ray_mask,
                        light_sample_t<S> &ls);
 
@@ -327,7 +327,7 @@ void IntersectAreaLights(const ray_data_t<S> &r, const simd_ivec<S> &ray_mask, c
 template <int S>
 void ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, const float *halton, const hit_data_t<S> &inter,
                   const ray_data_t<S> &ray, const scene_data_t &sc, uint32_t node_index,
-                  const Ref::TexStorageBase *tex_atlases[], simd_fvec<S> out_rgba[4],
+                  const Ref::TexStorageBase *const tex_atlases[], simd_fvec<S> out_rgba[4],
                   simd_ivec<S> out_secondary_masks[], ray_data_t<S> out_secondary_rays[], int *out_secondary_rays_count,
                   simd_ivec<S> out_shadow_masks[], shadow_ray_t<S> out_shadow_rays[], int *out_shadow_rays_count);
 } // namespace NS
@@ -1190,8 +1190,8 @@ simd_fvec<S> get_texture_lod(const Ref::TexStorageBase *textures[], const uint32
 }
 
 template <int S>
-simd_fvec<S> get_texture_lod(const Ref::TexStorageBase *textures[], const uint32_t index, const simd_fvec<S> &lambda,
-                             const simd_ivec<S> &mask) {
+simd_fvec<S> get_texture_lod(const Ref::TexStorageBase *const textures[], const uint32_t index,
+                             const simd_fvec<S> &lambda, const simd_ivec<S> &mask) {
 #if FORCE_TEXTURE_LOD
     const simd_fvec<S> lod = float(FORCE_TEXTURE_LOD);
 #else
@@ -3447,8 +3447,9 @@ void Ray::NS::rotate_around_axis(const simd_fvec<S> p[3], const simd_fvec<S> axi
 }
 
 template <int S>
-void Ray::NS::SampleNearest(const Ref::TexStorageBase *textures[], const uint32_t index, const simd_fvec<S> uvs[2],
-                            const simd_fvec<S> &lod, const simd_ivec<S> &mask, simd_fvec<S> out_rgba[4]) {
+void Ray::NS::SampleNearest(const Ref::TexStorageBase *const textures[], const uint32_t index,
+                            const simd_fvec<S> uvs[2], const simd_fvec<S> &lod, const simd_ivec<S> &mask,
+                            simd_fvec<S> out_rgba[4]) {
     const Ref::TexStorageBase &storage = *textures[index >> 28];
     auto _lod = (simd_ivec<S>)lod;
 
@@ -3469,8 +3470,9 @@ void Ray::NS::SampleNearest(const Ref::TexStorageBase *textures[], const uint32_
 }
 
 template <int S>
-void Ray::NS::SampleBilinear(const Ref::TexStorageBase *textures[], const uint32_t index, const simd_fvec<S> uvs[2],
-                             const simd_ivec<S> &lod, const simd_ivec<S> &mask, simd_fvec<S> out_rgba[4]) {
+void Ray::NS::SampleBilinear(const Ref::TexStorageBase *const textures[], const uint32_t index,
+                             const simd_fvec<S> uvs[2], const simd_ivec<S> &lod, const simd_ivec<S> &mask,
+                             simd_fvec<S> out_rgba[4]) {
     const Ref::TexStorageBase &storage = *textures[index >> 28];
 
     const int tex = (index & 0x00ffffff);
@@ -3523,8 +3525,9 @@ void Ray::NS::SampleBilinear(const Ref::TexStorageBase *textures[], const uint32
 }
 
 template <int S>
-void Ray::NS::SampleTrilinear(const Ref::TexStorageBase *textures[], const uint32_t index, const simd_fvec<S> uvs[2],
-                              const simd_fvec<S> &lod, const simd_ivec<S> &mask, simd_fvec<S> out_rgba[4]) {
+void Ray::NS::SampleTrilinear(const Ref::TexStorageBase *const textures[], const uint32_t index,
+                              const simd_fvec<S> uvs[2], const simd_fvec<S> &lod, const simd_ivec<S> &mask,
+                              simd_fvec<S> out_rgba[4]) {
     simd_fvec<S> col1[4];
     SampleBilinear(textures, index, uvs, (simd_ivec<S>)floor(lod), mask, col1);
     simd_fvec<S> col2[4];
@@ -3606,7 +3609,7 @@ template <int S>
 Ray::NS::simd_fvec<S> Ray::NS::ComputeVisibility(const simd_fvec<S> p[3], const simd_fvec<S> d[3], simd_fvec<S> dist,
                                                  const simd_ivec<S> &mask, const float rand_val,
                                                  const simd_ivec<S> &rand_hash2, const scene_data_t &sc,
-                                                 uint32_t node_index, const Ref::TexStorageBase *textures[]) {
+                                                 uint32_t node_index, const Ref::TexStorageBase *const textures[]) {
     simd_fvec<S> sh_ro[3];
     ITERATE_3({ sh_ro[i] = p[i]; })
 
@@ -3926,9 +3929,9 @@ void Ray::NS::ComputeDerivatives(const simd_fvec<S> I[3], const simd_fvec<S> &t,
 
 // Pick point on any light source for evaluation
 template <int S>
-void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const scene_data_t &sc, const Ref::TexStorageBase *textures[],
-                                const float halton[], const simd_fvec<S> sample_off[2], const simd_ivec<S> &ray_mask,
-                                light_sample_t<S> &ls) {
+void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const scene_data_t &sc,
+                                const Ref::TexStorageBase *const textures[], const float halton[],
+                                const simd_fvec<S> sample_off[2], const simd_ivec<S> &ray_mask, light_sample_t<S> &ls) {
     const simd_fvec<S> u1 = fract(halton[RAND_DIM_LIGHT_PICK] + sample_off[0]);
     const simd_ivec<S> light_index = min(simd_ivec<S>{u1 * float(sc.li_indices.size())}, int(sc.li_indices.size() - 1));
 
@@ -4273,7 +4276,7 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, const simd_ivec<S> &ra
 template <int S>
 void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, const float *halton,
                            const hit_data_t<S> &inter, const ray_data_t<S> &ray, const scene_data_t &sc,
-                           uint32_t node_index, const Ref::TexStorageBase *textures[], simd_fvec<S> out_rgba[4],
+                           uint32_t node_index, const Ref::TexStorageBase *const textures[], simd_fvec<S> out_rgba[4],
                            simd_ivec<S> out_secondary_masks[], ray_data_t<S> out_secondary_rays[],
                            int *out_secondary_rays_count, simd_ivec<S> out_shadow_masks[],
                            shadow_ray_t<S> out_shadow_rays[], int *out_shadow_rays_count) {

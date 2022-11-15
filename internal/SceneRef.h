@@ -58,12 +58,12 @@ class Scene : public SceneBase {
 
     SparseStorage<material_t> materials_;
 
-    TexStorageRGBA tex_atlas_rgba_;
-    TexStorageRGB tex_atlas_rgb_;
-    TexStorageRG tex_atlas_rg_;
-    TexStorageR tex_atlas_r_;
+    TexStorageRGBA tex_storage_rgba_;
+    TexStorageRGB tex_storage_rgb_;
+    TexStorageRG tex_storage_rg_;
+    TexStorageR tex_storage_r_;
 
-    TexStorageBase *tex_storages_[4] = {&tex_atlas_rgba_, &tex_atlas_rgb_, &tex_atlas_rg_, &tex_atlas_r_};
+    TexStorageBase *tex_storages_[4] = {&tex_storage_rgba_, &tex_storage_rgb_, &tex_storage_rg_, &tex_storage_r_};
 
     SparseStorage<light_t> lights_;
     std::vector<uint32_t> li_indices_;     // compacted list of all lights
