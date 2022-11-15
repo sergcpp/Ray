@@ -272,6 +272,9 @@ int Ray::Vk::GetBlockLenBytes(const eTexFormat format, const eTexBlock block) {
     case eTexFormat::BC3:
         assert(block == eTexBlock::_4x4);
         return 16;
+    case eTexFormat::BC4:
+        assert(block == eTexBlock::_4x4);
+        return 8;
     case eTexFormat::ASTC:
         assert(false);
     default:
