@@ -89,17 +89,12 @@ uint32_t Ray::Vk::Scene::AddTexture(const tex_desc_t &_t) {
 
     int res[2] = {_t.w, _t.h};
 
-    std::vector<color_rgba8_t> tex_data_rgba8;
-    std::vector<color_rgb8_t> tex_data_rgb8;
-    std::vector<color_rg8_t> tex_data_rg8;
-    std::vector<color_r8_t> tex_data_r8;
-
     const bool use_compression = use_tex_compression_ && !_t.force_no_compression;
 
     if (_t.format == eTextureFormat::RGBA8888) {
         t.atlas = 0;
     } else if (_t.format == eTextureFormat::RGB888) {
-        if (use_compression && _t.is_srgb) {
+        if (use_compression && !_t.is_normalmap) {
             t.atlas = 4;
         } else {
             t.atlas = 1;
@@ -116,7 +111,6 @@ uint32_t Ray::Vk::Scene::AddTexture(const tex_desc_t &_t) {
 
     { // Allocate initial mip level
         int page = -1, pos[2];
-
         if (_t.format == eTextureFormat::RGBA8888) {
             page = tex_atlases_[0].Allocate<uint8_t, 4>(reinterpret_cast<const color_rgba8_t *>(_t.data), res, pos);
         } else if (_t.format == eTextureFormat::RGB888) {

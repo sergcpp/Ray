@@ -115,6 +115,7 @@ void load_needed_textures(Ray::SceneBase &scene, Ray::principled_mat_desc_t &mat
         tex_desc.data = img_data.data();
         tex_desc.w = img_w;
         tex_desc.h = img_h;
+        tex_desc.is_normalmap = true;
         tex_desc.generate_mipmaps = false;
         tex_desc.is_srgb = false;
 
