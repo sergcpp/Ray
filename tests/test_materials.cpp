@@ -2320,7 +2320,7 @@ void test_complex_mat3(const char *arch_list[], const char *preferred_device) {
 
 void test_complex_mat4(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 256;
-    const double MinPSNR = 34.75;
+    const double MinPSNR = 34.64;
     const int PixThres = 32;
 
     Ray::principled_mat_desc_t metal_mat_desc;
