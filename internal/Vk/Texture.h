@@ -15,7 +15,6 @@
 namespace Ray {
 class ILog;
 namespace Vk {
-bool IsCompressedFormat(eTexFormat format);
 int CalcMipCount(int w, int h, int min_res, eTexFilter filter);
 int GetPerPixelDataLen(eTexFormat format);
 int GetBlockLenBytes(eTexFormat format, eTexBlock block);

@@ -234,20 +234,6 @@ bool EndsWith(const std::string &str1, const char *str2) {
 }
 } // namespace Ray
 
-bool Ray::Vk::IsCompressedFormat(const eTexFormat format) {
-    switch (format) {
-    case eTexFormat::BC1:
-    case eTexFormat::BC2:
-    case eTexFormat::BC3:
-    case eTexFormat::BC4:
-    case eTexFormat::ASTC:
-        return true;
-    default:
-        return false;
-    }
-    return false;
-}
-
 int Ray::Vk::CalcMipCount(const int w, const int h, const int min_res, const eTexFilter filter) {
     int mip_count = 0;
     if (filter == eTexFilter::Trilinear || filter == eTexFilter::Bilinear) {
@@ -264,6 +250,7 @@ int Ray::Vk::CalcMipCount(const int w, const int h, const int min_res, const eTe
 int Ray::Vk::GetPerPixelDataLen(const eTexFormat format) { return g_per_pixel_data_len[int(format)]; }
 
 int Ray::Vk::GetBlockLenBytes(const eTexFormat format, const eTexBlock block) {
+    static_assert(int(eTexFormat::_Count) == 32, "Update the list below!");
     switch (format) {
     case eTexFormat::BC1:
         assert(block == eTexBlock::_4x4);
