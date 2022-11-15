@@ -2265,7 +2265,7 @@ void test_complex_mat1(const char *arch_list[], const char *preferred_device) {
 
     const char *textures[] = {
         "test_data/textures/streaky-metal1_albedo.tga",
-        "test_data/textures/streaky-metal1_normal-ogl.tga",
+        "test_data/textures/streaky-metal1_normal-ogl_rgba.tga",
         "test_data/textures/streaky-metal1_roughness.tga",
     };
 
