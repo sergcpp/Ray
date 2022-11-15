@@ -40,13 +40,41 @@ void Ray::Ref::Scene::SetEnvironment(const environment_desc_t &env) {
 uint32_t Ray::Ref::Scene::AddTexture(const tex_desc_t &_t) {
     const int res[2] = {_t.w, _t.h};
 
+    bool recostruct_z = false;
+
     int storage = -1, index = -1;
     if (_t.format == eTextureFormat::RGBA8888) {
-        storage = 0;
-        index = tex_storage_rgba_.Allocate(reinterpret_cast<const color_rgba8_t *>(_t.data), res, _t.generate_mipmaps);
+        const auto *rgba_data = reinterpret_cast<const color_rgba8_t *>(_t.data);
+        if (!_t.is_normalmap) {
+            storage = 0;
+            index = tex_storage_rgba_.Allocate(rgba_data, res, _t.generate_mipmaps);
+        } else {
+            // TODO: get rid of this allocation
+            std::unique_ptr<color_rg8_t[]> repacked_data(new color_rg8_t[res[0] * res[1]]);
+            for (int i = 0; i < res[0] * res[1]; ++i) {
+                repacked_data[i].v[0] = rgba_data[i].v[0];
+                repacked_data[i].v[1] = rgba_data[i].v[1];
+                recostruct_z |= (rgba_data[i].v[2] < 250);
+            }
+            storage = 2;
+            index = tex_storage_rg_.Allocate(repacked_data.get(), res, _t.generate_mipmaps);
+        }
     } else if (_t.format == eTextureFormat::RGB888) {
-        storage = 1;
-        index = tex_storage_rgb_.Allocate(reinterpret_cast<const color_rgb8_t *>(_t.data), res, _t.generate_mipmaps);
+        const auto *rgb_data = reinterpret_cast<const color_rgb8_t *>(_t.data);
+        if (!_t.is_normalmap) {
+            storage = 1;
+            index = tex_storage_rgb_.Allocate(rgb_data, res, _t.generate_mipmaps);
+        } else {
+            // TODO: get rid of this allocation
+            std::unique_ptr<color_rg8_t[]> repacked_data(new color_rg8_t[res[0] * res[1]]);
+            for (int i = 0; i < res[0] * res[1]; ++i) {
+                repacked_data[i].v[0] = rgb_data[i].v[0];
+                repacked_data[i].v[1] = rgb_data[i].v[1];
+                recostruct_z |= (rgb_data[i].v[2] < 250);
+            }
+            storage = 2;
+            index = tex_storage_rg_.Allocate(repacked_data.get(), res, _t.generate_mipmaps);
+        }
     } else if (_t.format == eTextureFormat::RG88) {
         storage = 2;
         index = tex_storage_rg_.Allocate(reinterpret_cast<const color_rg8_t *>(_t.data), res, _t.generate_mipmaps);
@@ -68,6 +96,9 @@ uint32_t Ray::Ref::Scene::AddTexture(const tex_desc_t &_t) {
     ret |= uint32_t(storage) << 28;
     if (_t.is_srgb) {
         ret |= uint32_t(TEX_SRGB_BIT) << 24;
+    }
+    if (recostruct_z) {
+        ret |= uint32_t(TEX_RECONSTRUCT_Z_BIT) << 24;
     }
     ret |= index;
 

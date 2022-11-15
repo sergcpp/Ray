@@ -1065,8 +1065,11 @@ vec3 ShadeSurface(int px_index, hit_data_t inter, ray_data_t ray) {
 
     // apply normal map
     [[dont_flatten]] if (mat.textures[NORMALS_TEXTURE] != 0xffffffff) {
-        vec3 normals = SampleBilinear(g_atlases, g_textures[mat.textures[NORMALS_TEXTURE]], uvs, 0).xyz;
+        vec3 normals = vec3(SampleBilinear(g_atlases, g_textures[mat.textures[NORMALS_TEXTURE]], uvs, 0).xy, 1.0);
         normals = normals * 2.0 - 1.0;
+        if ((g_textures[mat.textures[NORMALS_TEXTURE]].size & ATLAS_TEX_RECONSTRUCT_Z_BIT) != 0) {
+            normals.z = sqrt(1.0 - dot(normals.xy, normals.xy));
+        }
         vec3 in_normal = N;
         N = normalize(normals[0] * T + normals[2] * N + normals[1] * B);
         if ((mat.normal_map_strength_unorm & 0xffff) != 0xffff) {

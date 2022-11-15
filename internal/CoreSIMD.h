@@ -4652,6 +4652,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
             ray_queue[0] = has_texture;
 
             simd_fvec<S> normals_tex[4] = {{0.0f}, {1.0f}, {0.0f}, {0.0f}};
+            simd_ivec<S> reconstruct_z = 0;
 
             int index = 0, num = 1;
             while (index != num) {
@@ -4667,11 +4668,19 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                 }
 
                 SampleBilinear(textures, first_t, uvs, simd_ivec<S>{0}, ray_queue[index], normals_tex);
+                if ((first_t >> 24) & TEX_RECONSTRUCT_Z_BIT) {
+                    reconstruct_z |= ray_queue[index];
+                }
 
                 ++index;
             }
 
-            ITERATE_3({ normals_tex[i] = normals_tex[i] * 2.0f - 1.0f; })
+            ITERATE_2({ normals_tex[i] = normals_tex[i] * 2.0f - 1.0f; })
+            normals_tex[2] = 1.0f;
+            if (reconstruct_z.not_all_zeros()) {
+                where(reconstruct_z, normals_tex[2]) =
+                    sqrt(1.0f - normals_tex[0] * normals_tex[0] - normals_tex[1] * normals_tex[1]);
+            }
 
             simd_fvec<S> new_normal[3];
             ITERATE_3({ new_normal[i] = normals_tex[0] * T[i] + normals_tex[2] * N[i] + normals_tex[1] * B[i]; })

@@ -91,13 +91,48 @@ uint32_t Ray::Vk::Scene::AddTexture(const tex_desc_t &_t) {
 
     const bool use_compression = use_tex_compression_ && !_t.force_no_compression;
 
+    std::unique_ptr<color_rg8_t[]> repacked_normalmap(new color_rg8_t[res[0] * res[1]]);
+    bool recostruct_z = false;
+
+    const void *tex_data = _t.data;
+
     if (_t.format == eTextureFormat::RGBA8888) {
-        t.atlas = 0;
-    } else if (_t.format == eTextureFormat::RGB888) {
-        if (use_compression && !_t.is_normalmap) {
-            t.atlas = 4;
+        if (!_t.is_normalmap) {
+            t.atlas = 0;
         } else {
-            t.atlas = 1;
+            // TODO: get rid of this allocation
+            repacked_normalmap.reset(new color_rg8_t[res[0] * res[1]]);
+
+            const auto *rgba_data = reinterpret_cast<const color_rgba8_t *>(_t.data);
+            for (int i = 0; i < res[0] * res[1]; ++i) {
+                repacked_normalmap[i].v[0] = rgba_data[i].v[0];
+                repacked_normalmap[i].v[1] = rgba_data[i].v[1];
+                recostruct_z |= (rgba_data[i].v[2] < 250);
+            }
+
+            tex_data = repacked_normalmap.get();
+            t.atlas = 2;
+        }
+    } else if (_t.format == eTextureFormat::RGB888) {
+        if (!_t.is_normalmap) {
+            if (use_compression) {
+                t.atlas = 4;
+            } else {
+                t.atlas = 1;
+            }
+        } else {
+            // TODO: get rid of this allocation
+            repacked_normalmap.reset(new color_rg8_t[res[0] * res[1]]);
+
+            const auto *rgb_data = reinterpret_cast<const color_rgb8_t *>(_t.data);
+            for (int i = 0; i < res[0] * res[1]; ++i) {
+                repacked_normalmap[i].v[0] = rgb_data[i].v[0];
+                repacked_normalmap[i].v[1] = rgb_data[i].v[1];
+                recostruct_z |= (rgb_data[i].v[2] < 250);
+            }
+
+            tex_data = repacked_normalmap.get();
+            t.atlas = 2;
         }
     } else if (_t.format == eTextureFormat::RG88) {
         t.atlas = 2;
@@ -109,17 +144,21 @@ uint32_t Ray::Vk::Scene::AddTexture(const tex_desc_t &_t) {
         }
     }
 
+    if (recostruct_z) {
+        t.width |= uint32_t(ATLAS_TEX_RECONSTRUCT_Z_BIT);
+    }
+
     { // Allocate initial mip level
         int page = -1, pos[2];
-        if (_t.format == eTextureFormat::RGBA8888) {
-            page = tex_atlases_[0].Allocate<uint8_t, 4>(reinterpret_cast<const color_rgba8_t *>(_t.data), res, pos);
-        } else if (_t.format == eTextureFormat::RGB888) {
+        if (t.atlas == 0) {
+            page = tex_atlases_[0].Allocate<uint8_t, 4>(reinterpret_cast<const color_rgba8_t *>(tex_data), res, pos);
+        } else if (t.atlas == 1 || t.atlas == 4) {
             page =
-                tex_atlases_[t.atlas].Allocate<uint8_t, 3>(reinterpret_cast<const color_rgb8_t *>(_t.data), res, pos);
-        } else if (_t.format == eTextureFormat::RG88) {
-            page = tex_atlases_[2].Allocate<uint8_t, 2>(reinterpret_cast<const color_rg8_t *>(_t.data), res, pos);
-        } else if (_t.format == eTextureFormat::R8) {
-            page = tex_atlases_[t.atlas].Allocate<uint8_t, 1>(reinterpret_cast<const color_r8_t *>(_t.data), res, pos);
+                tex_atlases_[t.atlas].Allocate<uint8_t, 3>(reinterpret_cast<const color_rgb8_t *>(tex_data), res, pos);
+        } else if (t.atlas == 2) {
+            page = tex_atlases_[2].Allocate<uint8_t, 2>(reinterpret_cast<const color_rg8_t *>(tex_data), res, pos);
+        } else if (t.atlas == 3 || t.atlas == 5) {
+            page = tex_atlases_[t.atlas].Allocate<uint8_t, 1>(reinterpret_cast<const color_r8_t *>(tex_data), res, pos);
         }
 
         if (page == -1) {
@@ -782,7 +821,8 @@ void Ray::Vk::Scene::GenerateTextureMips() {
 
         const int dst_mip = info.dst_mip;
         const int src_mip = dst_mip - 1;
-        const int src_res[2] = {(t.width & ATLAS_TEX_WIDTH_BITS) >> src_mip, (t.height & ATLAS_TEX_HEIGHT_BITS) >> src_mip};
+        const int src_res[2] = {(t.width & ATLAS_TEX_WIDTH_BITS) >> src_mip,
+                                (t.height & ATLAS_TEX_HEIGHT_BITS) >> src_mip};
         assert(src_res[0] != 0 && src_res[1] != 0);
 
         const int src_pos[2] = {t.pos[src_mip][0] + 1, t.pos[src_mip][1] + 1};
@@ -1169,8 +1209,7 @@ void Ray::Vk::Scene::RebuildHWAccStructures() {
             ctx_->log()->Error("[SceneManager::InitHWAccStructures]: Failed to create acceleration structure!");
         }
 
-        tlas_scratch_buf =
-            Buffer{"TLAS Scratch Buf", ctx_, eBufType::Storage, uint32_t(size_info.buildScratchSize)};
+        tlas_scratch_buf = Buffer{"TLAS Scratch Buf", ctx_, eBufType::Storage, uint32_t(size_info.buildScratchSize)};
         VkDeviceAddress tlas_scratch_buf_addr = tlas_scratch_buf.vk_device_address();
 
         tlas_build_info.srcAccelerationStructure = VK_NULL_HANDLE;

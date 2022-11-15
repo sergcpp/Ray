@@ -3220,6 +3220,10 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
     if (mat->textures[NORMALS_TEXTURE] != 0xffffffff) {
         simd_fvec4 normals = SampleBilinear(textures, mat->textures[NORMALS_TEXTURE], uvs, 0);
         normals = normals * 2.0f - 1.0f;
+        normals[2] = 1.0f;
+        if ((mat->textures[NORMALS_TEXTURE] >> 24) & TEX_RECONSTRUCT_Z_BIT) {
+            normals[2] = std::sqrt(1.0f - normals[0] * normals[0] - normals[1] * normals[1]);
+        }
         simd_fvec4 in_normal = N;
         N = normalize(normals[0] * T + normals[2] * N + normals[1] * B);
         if (mat->normal_map_strength_unorm != 0xffff) {

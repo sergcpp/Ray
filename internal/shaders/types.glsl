@@ -88,10 +88,11 @@ const int MAX_TEXTURE_SIZE = (1 << MAX_MIP_LEVEL);
 
 const int TEXTURE_ATLAS_SIZE = 8192 + 256; // small margin to account for borders
 
-const int ATLAS_TEX_SRGB_BIT = 32768;     // 0b1000000000000000
-const int ATLAS_TEX_WIDTH_BITS = 32767;   // 0b0111111111111111
-const int ATLAS_TEX_MIPS_BIT = 32768;     // 0b1000000000000000
-const int ATLAS_TEX_HEIGHT_BITS = 32767;  // 0b0111111111111111
+const int ATLAS_TEX_SRGB_BIT            = 32768; // 0b1000000000000000
+const int ATLAS_TEX_RECONSTRUCT_Z_BIT   = 16384; // 0b0100000000000000
+const int ATLAS_TEX_WIDTH_BITS          = 16383; // 0b0011111111111111
+const int ATLAS_TEX_MIPS_BIT            = 32768; // 0b1000000000000000
+const int ATLAS_TEX_HEIGHT_BITS         = 16383; // 0b0011111111111111
 
 struct ray_data_t {
 	float o[3], d[3], pdf;

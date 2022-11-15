@@ -91,10 +91,11 @@ const int MAX_TEXTURE_SIZE = (1 << MAX_MIP_LEVEL);
 
 const int TEXTURE_ATLAS_SIZE = 8192 + 256; // small margin to account for borders
 
-const int ATLAS_TEX_SRGB_BIT    = 0b1000000000000000;
-const int ATLAS_TEX_WIDTH_BITS  = 0b0111111111111111;
-const int ATLAS_TEX_MIPS_BIT    = 0b1000000000000000;
-const int ATLAS_TEX_HEIGHT_BITS = 0b0111111111111111;
+const int ATLAS_TEX_SRGB_BIT            = 0b1000000000000000;
+const int ATLAS_TEX_RECONSTRUCT_Z_BIT   = 0b0100000000000000;
+const int ATLAS_TEX_WIDTH_BITS          = 0b0011111111111111;
+const int ATLAS_TEX_MIPS_BIT            = 0b1000000000000000;
+const int ATLAS_TEX_HEIGHT_BITS         = 0b0011111111111111;
 
 struct atlas_texture_t {
     uint16_t width;
@@ -106,6 +107,7 @@ struct atlas_texture_t {
 static_assert(sizeof(atlas_texture_t) == 80, "!");
 
 const int TEX_SRGB_BIT = 0b00000001;
+const int TEX_RECONSTRUCT_Z_BIT = 0b00000010;
 
 const int MAX_MATERIAL_TEXTURES = 5;
 
