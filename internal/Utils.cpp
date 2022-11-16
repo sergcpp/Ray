@@ -798,7 +798,7 @@ void ExtractIncomplete4x4Block_Ref(const uint8_t src[], const int stride, const 
             dst += 4 * 4;
             src += stride;
         }
-    } else if (SrcChannels == 3) {
+    } else {
         for (int j = 0; j < blck_h; j++) {
             for (int i = 0; i < blck_w; i++) {
                 memcpy(&dst[i * DstChannels], &src[i * SrcChannels],

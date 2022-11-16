@@ -69,15 +69,17 @@ layout(std430, binding = COUNTERS_BUF_SLOT) readonly buffer Counters {
     uint g_counters[];
 };
 
+#if !BINDLESS
 layout(std430, binding = TEXTURES_BUF_SLOT) readonly buffer Textures {
     atlas_texture_t g_textures[];
 };
 
+layout(binding = TEXTURE_ATLASES_SLOT) uniform sampler2DArray g_atlases[7];
+#endif
+
 #if HWRT
 layout(binding = TLAS_SLOT) uniform accelerationStructureEXT g_tlas;
 #endif
-
-layout(binding = TEXTURE_ATLASES_SLOT) uniform sampler2DArray g_atlases[7];
 
 layout(binding = OUT_IMG_SLOT, rgba32f) uniform image2D g_out_img;
 
@@ -247,7 +249,11 @@ bool ComputeVisibility(vec3 p, vec3 d, float dist, float rand_val, int rand_hash
             while (mat.type == MixNode) {
                 float mix_val = mat.tangent_rotation_or_strength;
                 if (mat.textures[BASE_TEXTURE] != 0xffffffff) {
+#if BINDLESS
+                    mix_val *= SampleBilinear(mat.textures[BASE_TEXTURE], sh_uvs, 0).r;
+#else
                     mix_val *= SampleBilinear(g_atlases, g_textures[mat.textures[BASE_TEXTURE]], sh_uvs, 0).r;
+#endif
                 }
 
                 if (sh_r > mix_val) {
@@ -289,17 +295,17 @@ bool ComputeVisibility(vec3 p, vec3 d, float dist, float rand_val, int rand_hash
             const int primitive_offset = rayQueryGetIntersectionInstanceCustomIndexEXT(rq, false);
             const int obj_index = rayQueryGetIntersectionInstanceIdEXT(rq, false);
             const int tri_index = primitive_offset + rayQueryGetIntersectionPrimitiveIndexEXT(rq, false);
-            
+
             const uint front_mi = (g_tri_materials[tri_index] >> 16u) & 0xffff;
             const uint back_mi = (g_tri_materials[tri_index] & 0xffff);
-            
+
             const bool is_backfacing = !rayQueryGetIntersectionFrontFaceEXT(rq, false);
             if ((!is_backfacing && (front_mi & MATERIAL_SOLID_BIT) != 0 ||
                 (is_backfacing && (back_mi & MATERIAL_SOLID_BIT) != 0))) {
                 rayQueryConfirmIntersectionEXT(rq);
                 break;
             }
-            
+
             const uint mat_index = (is_backfacing ? back_mi : front_mi) & MATERIAL_INDEX_BITS;
             material_t mat = g_materials[mat_index];
 
@@ -312,7 +318,7 @@ bool ComputeVisibility(vec3 p, vec3 d, float dist, float rand_val, int rand_hash
             const vec2 uv = rayQueryGetIntersectionBarycentricsEXT(rq, false);
             const float w = 1.0 - uv.x - uv.y;
             const vec2 sh_uvs = vec2(v1.t[0][0], v1.t[0][1]) * w + vec2(v2.t[0][0], v2.t[0][1]) * uv.x + vec2(v3.t[0][0], v3.t[0][1]) * uv.y;
-            
+
             {
                 const int sh_rand_hash = hash(rand_hash2);
                 const float sh_rand_offset = construct_float(sh_rand_hash);
@@ -323,7 +329,11 @@ bool ComputeVisibility(vec3 p, vec3 d, float dist, float rand_val, int rand_hash
                 while (mat.type == MixNode) {
                     float mix_val = mat.tangent_rotation_or_strength;
                     if (mat.textures[BASE_TEXTURE] != 0xffffffff) {
+#if BINDLESS
+                        mix_val *= SampleBilinear(mat.textures[BASE_TEXTURE], sh_uvs, 0).r;
+#else
                         mix_val *= SampleBilinear(g_atlases, g_textures[mat.textures[BASE_TEXTURE]], sh_uvs, 0).r;
+#endif
                     }
 
                     if (sh_r > mix_val) {

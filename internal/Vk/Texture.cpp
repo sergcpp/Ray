@@ -13,7 +13,7 @@
 #endif
 
 #ifndef NDEBUG
-//#define TEX_VERBOSE_LOGGING
+// #define TEX_VERBOSE_LOGGING
 #endif
 
 namespace Ray {
@@ -77,6 +77,10 @@ static_assert(VkSampleCountFlagBits::VK_SAMPLE_COUNT_8_BIT == 8, "!");
 
 VkFormat ToSRGBFormat(const VkFormat format) {
     switch (format) {
+    case VK_FORMAT_R8_UNORM:
+        return VK_FORMAT_R8_SRGB;
+    case VK_FORMAT_R8G8_UNORM:
+        return VK_FORMAT_R8G8_SRGB;
     case VK_FORMAT_R8G8B8_UNORM:
         return VK_FORMAT_R8G8B8_SRGB;
     case VK_FORMAT_R8G8B8A8_UNORM:
@@ -118,7 +122,7 @@ VkFormat ToSRGBFormat(const VkFormat format) {
     case VK_FORMAT_ASTC_12x12_UNORM_BLOCK:
         return VK_FORMAT_ASTC_12x12_SRGB_BLOCK;
     default:
-        assert(false && "Unsupported format!");
+        return format;
     }
     return VK_FORMAT_UNDEFINED;
 }
@@ -247,6 +251,51 @@ int Ray::Vk::CalcMipCount(const int w, const int h, const int min_res, const eTe
         mip_count = 1;
     }
     return mip_count;
+}
+
+int Ray::Vk::GetColorChannelCount(const eTexFormat format) {
+    static_assert(int(eTexFormat::_Count) == 33, "Update the list below!");
+    switch (format) {
+    case eTexFormat::RawRGBA8888:
+    case eTexFormat::RawRGBA8888Snorm:
+    case eTexFormat::RawBGRA8888:
+    case eTexFormat::RawRGBA32F:
+    case eTexFormat::RawRGBE8888:
+    case eTexFormat::RawRGBA16F:
+    case eTexFormat::RawRGB10_A2:
+    case eTexFormat::BC2:
+    case eTexFormat::BC3:
+        return 4;
+    case eTexFormat::RawRGB888:
+    case eTexFormat::RawRGB32F:
+    case eTexFormat::RawRGB16F:
+    case eTexFormat::RawRG11F_B10F:
+    case eTexFormat::BC1:
+        return 3;
+    case eTexFormat::RawRG88:
+    case eTexFormat::RawRG16:
+    case eTexFormat::RawRG16Snorm:
+    case eTexFormat::RawRG16F:
+    case eTexFormat::RawRG32F:
+    case eTexFormat::RawRG32UI:
+    case eTexFormat::BC5:
+        return 2;
+    case eTexFormat::RawR32F:
+    case eTexFormat::RawR16F:
+    case eTexFormat::RawR8:
+    case eTexFormat::RawR32UI:
+    case eTexFormat::BC4:
+        return 1;
+    case eTexFormat::Depth16:
+    case eTexFormat::Depth24Stencil8:
+    case eTexFormat::Depth32Stencil8:
+#ifndef __ANDROID__
+    case eTexFormat::Depth32:
+#endif
+    case eTexFormat::Undefined:
+    default:
+        return 0;
+    }
 }
 
 int Ray::Vk::GetPerPixelDataLen(const eTexFormat format) { return g_per_pixel_data_len[int(format)]; }
@@ -707,6 +756,13 @@ bool Ray::Vk::Texture2D::Realloc(const int w, const int h, int mip_count, const 
         view_info.subresourceRange.baseArrayLayer = 0;
         view_info.subresourceRange.layerCount = 1;
 
+        if (GetColorChannelCount(format) == 1) {
+            view_info.components.r = VK_COMPONENT_SWIZZLE_R;
+            view_info.components.g = VK_COMPONENT_SWIZZLE_R;
+            view_info.components.b = VK_COMPONENT_SWIZZLE_R;
+            view_info.components.a = VK_COMPONENT_SWIZZLE_R;
+        }
+
         const VkResult res = vkCreateImageView(ctx_->device(), &view_info, nullptr, &new_image_view);
         if (res != VK_SUCCESS) {
             log->Error("Failed to create image view!");
@@ -965,6 +1021,13 @@ void Ray::Vk::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, void *_cmd_
         view_info.subresourceRange.levelCount = mip_count;
         view_info.subresourceRange.baseArrayLayer = 0;
         view_info.subresourceRange.layerCount = 1;
+
+        if (GetColorChannelCount(p.format) == 1) {
+            view_info.components.r = VK_COMPONENT_SWIZZLE_R;
+            view_info.components.g = VK_COMPONENT_SWIZZLE_R;
+            view_info.components.b = VK_COMPONENT_SWIZZLE_R;
+            view_info.components.a = VK_COMPONENT_SWIZZLE_R;
+        }
 
         const VkResult res = vkCreateImageView(ctx_->device(), &view_info, nullptr, &handle_.views[0]);
         if (res != VK_SUCCESS) {
@@ -1505,6 +1568,13 @@ void Ray::Vk::Texture2D::InitFromRAWData(Buffer &sbuf, int data_off[6], void *_c
         view_info.subresourceRange.baseArrayLayer = 0;
         view_info.subresourceRange.layerCount = 1;
 
+        if (GetColorChannelCount(p.format) == 1) {
+            view_info.components.r = VK_COMPONENT_SWIZZLE_R;
+            view_info.components.g = VK_COMPONENT_SWIZZLE_R;
+            view_info.components.b = VK_COMPONENT_SWIZZLE_R;
+            view_info.components.a = VK_COMPONENT_SWIZZLE_R;
+        }
+
         const VkResult res = vkCreateImageView(ctx_->device(), &view_info, nullptr, &handle_.views[0]);
         if (res != VK_SUCCESS) {
             log->Error("Failed to create image view!");
@@ -1815,6 +1885,13 @@ void Ray::Vk::Texture2D::InitFromDDSFile(const void *data[6], const int size[6],
         view_info.subresourceRange.baseArrayLayer = 0;
         view_info.subresourceRange.layerCount = 6;
 
+        if (GetColorChannelCount(p.format) == 1) {
+            view_info.components.r = VK_COMPONENT_SWIZZLE_R;
+            view_info.components.g = VK_COMPONENT_SWIZZLE_R;
+            view_info.components.b = VK_COMPONENT_SWIZZLE_R;
+            view_info.components.a = VK_COMPONENT_SWIZZLE_R;
+        }
+
         const VkResult res = vkCreateImageView(ctx_->device(), &view_info, nullptr, &handle_.views[0]);
         if (res != VK_SUCCESS) {
             log->Error("Failed to create image view!");
@@ -2060,6 +2137,13 @@ void Ray::Vk::Texture2D::InitFromKTXFile(const void *data[6], const int size[6],
         view_info.subresourceRange.levelCount = first_header->mipmap_levels_count;
         view_info.subresourceRange.baseArrayLayer = 0;
         view_info.subresourceRange.layerCount = 6;
+
+        if (GetColorChannelCount(p.format) == 1) {
+            view_info.components.r = VK_COMPONENT_SWIZZLE_R;
+            view_info.components.g = VK_COMPONENT_SWIZZLE_R;
+            view_info.components.b = VK_COMPONENT_SWIZZLE_R;
+            view_info.components.a = VK_COMPONENT_SWIZZLE_R;
+        }
 
         const VkResult res = vkCreateImageView(ctx_->device(), &view_info, nullptr, &handle_.views[0]);
         if (res != VK_SUCCESS) {

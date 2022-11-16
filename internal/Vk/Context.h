@@ -36,6 +36,8 @@ class Context {
 
     bool dynamic_rendering_supported_ = false;
 
+    bool rgb8_unorm_is_supported_ = false;
+
     VkQueue graphics_queue_ = {};
 
     VkCommandPool command_pool_ = {}, temp_command_pool_ = {};
@@ -69,6 +71,8 @@ class Context {
 
     bool raytracing_supported() const { return raytracing_supported_; }
     bool ray_query_supported() const { return ray_query_supported_; }
+
+    bool rgb8_unorm_is_supported() const { return rgb8_unorm_is_supported_; }
 
     const VkPhysicalDeviceLimits &phys_device_limits() const { return phys_device_limits_; }
     const VkPhysicalDeviceProperties &device_properties() const { return device_properties_; }

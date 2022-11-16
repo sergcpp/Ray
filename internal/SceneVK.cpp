@@ -49,19 +49,24 @@ VkDeviceSize align_up(const VkDeviceSize size, const VkDeviceSize alignment) {
 } // namespace Vk
 } // namespace Ray
 
-Ray::Vk::Scene::Scene(Context *ctx, const bool use_hwrt, const bool use_tex_compression)
-    : ctx_(ctx), use_hwrt_(use_hwrt), use_tex_compression_(use_tex_compression), nodes_(ctx), tris_(ctx),
-      tri_indices_(ctx), tri_materials_(ctx), transforms_(ctx, "Transforms"), meshes_(ctx, "Meshes"),
-      mesh_instances_(ctx, "Mesh Instances"), mi_indices_(ctx), vertices_(ctx), vtx_indices_(ctx),
-      materials_(ctx, "Materials"),
-      textures_(ctx, "Textures"), tex_atlases_{{ctx, eTexFormat::RawRGBA8888, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
-                                               {ctx, eTexFormat::RawRGB888, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
-                                               {ctx, eTexFormat::RawRG88, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
-                                               {ctx, eTexFormat::RawR8, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
-                                               {ctx, eTexFormat::BC3, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
-                                               {ctx, eTexFormat::BC4, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
-                                               {ctx, eTexFormat::BC5, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE}},
-      lights_(ctx, "Lights"), li_indices_(ctx), visible_lights_(ctx) {}
+Ray::Vk::Scene::Scene(Context *ctx, const bool use_hwrt, const bool use_bindless, const bool use_tex_compression)
+    : ctx_(ctx), use_hwrt_(use_hwrt), use_bindless_(use_bindless), use_tex_compression_(use_tex_compression),
+      nodes_(ctx), tris_(ctx), tri_indices_(ctx), tri_materials_(ctx), transforms_(ctx, "Transforms"),
+      meshes_(ctx, "Meshes"), mesh_instances_(ctx, "Mesh Instances"), mi_indices_(ctx), vertices_(ctx),
+      vtx_indices_(ctx), materials_(ctx, "Materials"), atlas_textures_(ctx, "Atlas Textures"),
+      tex_atlases_{{ctx, eTexFormat::RawRGBA8888, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
+                   {ctx, eTexFormat::RawRGB888, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
+                   {ctx, eTexFormat::RawRG88, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
+                   {ctx, eTexFormat::RawR8, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
+                   {ctx, eTexFormat::BC3, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
+                   {ctx, eTexFormat::BC4, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
+                   {ctx, eTexFormat::BC5, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE}},
+      bindless_tex_data_{ctx}, lights_(ctx, "Lights"), li_indices_(ctx), visible_lights_(ctx) {}
+
+Ray::Vk::Scene::~Scene() {
+    bindless_textures_.clear();
+    vkDestroyDescriptorSetLayout(ctx_->device(), bindless_tex_data_.descr_layout, nullptr);
+}
 
 void Ray::Vk::Scene::GetEnvironment(environment_desc_t &env) {
     memcpy(&env.env_col[0], &env_.env_col, 3 * sizeof(float));
@@ -75,7 +80,7 @@ void Ray::Vk::Scene::SetEnvironment(const environment_desc_t &env) {
     env_.env_map = env.env_map;
 }
 
-uint32_t Ray::Vk::Scene::AddTexture(const tex_desc_t &_t) {
+uint32_t Ray::Vk::Scene::AddAtlasTexture(const tex_desc_t &_t) {
     atlas_texture_t t;
     t.width = uint16_t(_t.w);
     t.height = uint16_t(_t.h);
@@ -202,8 +207,260 @@ uint32_t Ray::Vk::Scene::AddTexture(const tex_desc_t &_t) {
                       tex_atlases_[3].page_count(), tex_atlases_[4].page_count(), tex_atlases_[5].page_count(),
                       tex_atlases_[6].page_count());
 
-    return textures_.push(t);
+    return atlas_textures_.push(t);
 }
+
+uint32_t Ray::Vk::Scene::AddBindlessTexture(const tex_desc_t &_t) {
+    eTexFormat src_fmt = eTexFormat::Undefined, fmt = eTexFormat::Undefined;
+
+    Buffer temp_stage_buf("Temp stage buf", ctx_, eBufType::Stage, 2 * _t.w * _t.h * 4,
+                          4096); // allocate for worst case
+    uint8_t *stage_data = temp_stage_buf.Map(BufMapWrite);
+
+    const bool use_compression = use_tex_compression_ && !_t.force_no_compression;
+
+    uint32_t data_size[16] = {};
+
+    std::unique_ptr<uint8_t[]> repacked_data;
+    bool recostruct_z = false, is_YCoCg = false;
+
+    if (_t.format == eTextureFormat::RGBA8888) {
+        const auto *rgba_data = reinterpret_cast<const color_rgba8_t *>(_t.data);
+        if (!_t.is_normalmap) {
+            src_fmt = fmt = eTexFormat::RawRGBA8888;
+            data_size[0] = _t.w * _t.h * 4;
+            memcpy(stage_data, _t.data, data_size[0]);
+        } else {
+            // TODO: get rid of this allocation
+            repacked_data.reset(new uint8_t[2 * _t.w * _t.h]);
+
+            const auto *rgba_data = reinterpret_cast<const color_rgba8_t *>(_t.data);
+            for (int i = 0; i < _t.w * _t.h; ++i) {
+                repacked_data[i * 2 + 0] = rgba_data[i].v[0];
+                repacked_data[i * 2 + 1] = rgba_data[i].v[1];
+                recostruct_z |= (rgba_data[i].v[2] < 250);
+            }
+
+            if (use_compression) {
+                src_fmt = eTexFormat::RawRG88;
+                fmt = eTexFormat::BC5;
+                data_size[0] = GetRequiredMemory_BC5(_t.w, _t.h);
+                CompressImage_BC5<2>(&repacked_data[0], _t.w, _t.h, stage_data);
+            } else {
+                src_fmt = fmt = eTexFormat::RawRG88;
+                data_size[0] = _t.w * _t.h * 2;
+                memcpy(stage_data, _t.data, data_size[0]);
+            }
+        }
+    } else if (_t.format == eTextureFormat::RGB888) {
+        if (!_t.is_normalmap) {
+            if (use_compression) {
+                auto temp_YCoCg = ConvertRGB_to_CoCgxY(reinterpret_cast<const uint8_t *>(_t.data), _t.w, _t.h);
+                is_YCoCg = true;
+                src_fmt = eTexFormat::RawRGB888;
+                fmt = eTexFormat::BC3;
+                data_size[0] = GetRequiredMemory_BC3(_t.w, _t.h);
+                CompressImage_BC3<true /* Is_YCoCg */>(temp_YCoCg.get(), _t.w, _t.h, stage_data);
+            } else if (ctx_->rgb8_unorm_is_supported()) {
+                src_fmt = fmt = eTexFormat::RawRGB888;
+                data_size[0] = _t.w * _t.h * 3;
+                memcpy(stage_data, _t.data, data_size[0]);
+            } else {
+                // Fallback to 4-component texture
+                src_fmt = fmt = eTexFormat::RawRGBA8888;
+                data_size[0] = _t.w * _t.h * 4;
+
+                const auto *rgb_data = reinterpret_cast<const uint8_t *>(_t.data);
+                for (int i = 0; i < _t.w * _t.h; ++i) {
+                    stage_data[i * 4 + 0] = rgb_data[i * 3 + 0];
+                    stage_data[i * 4 + 1] = rgb_data[i * 3 + 1];
+                    stage_data[i * 4 + 2] = rgb_data[i * 3 + 2];
+                    stage_data[i * 4 + 3] = 255;
+                }
+            }
+        } else {
+            // TODO: get rid of this allocation
+            repacked_data.reset(new uint8_t[2 * _t.w * _t.h]);
+
+            const auto *rgb_data = reinterpret_cast<const color_rgb8_t *>(_t.data);
+            for (int i = 0; i < _t.w * _t.h; ++i) {
+                repacked_data[i * 2 + 0] = rgb_data[i].v[0];
+                repacked_data[i * 2 + 1] = rgb_data[i].v[1];
+                recostruct_z |= (rgb_data[i].v[2] < 250);
+            }
+
+            if (use_compression) {
+                src_fmt = eTexFormat::RawRG88;
+                fmt = eTexFormat::BC5;
+                data_size[0] = GetRequiredMemory_BC5(_t.w, _t.h);
+                CompressImage_BC5<2>(&repacked_data[0], _t.w, _t.h, stage_data);
+            } else {
+                src_fmt = fmt = eTexFormat::RawRG88;
+                data_size[0] = _t.w * _t.h * 2;
+                memcpy(stage_data, _t.data, data_size[0]);
+            }
+        }
+    } else if (_t.format == eTextureFormat::RG88) {
+        src_fmt = fmt = eTexFormat::RawRG88;
+        data_size[0] = _t.w * _t.h * 2;
+        memcpy(stage_data, _t.data, data_size[0]);
+    } else if (_t.format == eTextureFormat::R8) {
+        if (use_compression) {
+            src_fmt = eTexFormat::RawR8;
+            fmt = eTexFormat::BC4;
+            data_size[0] = GetRequiredMemory_BC4(_t.w, _t.h);
+            CompressImage_BC4<1>(reinterpret_cast<const uint8_t *>(_t.data), _t.w, _t.h, stage_data);
+        } else {
+            src_fmt = fmt = eTexFormat::RawR8;
+            data_size[0] = _t.w * _t.h;
+            memcpy(stage_data, _t.data, data_size[0]);
+        }
+    }
+
+    int mip_count = 1;
+    if (_t.generate_mipmaps) {
+        mip_count = CalcMipCount(_t.w, _t.h, 1, eTexFilter::Bilinear);
+
+        const int res[2] = {_t.w, _t.h};
+        if (src_fmt == eTexFormat::RawRGBA8888) {
+            const auto *rgba_data =
+                reinterpret_cast<const color_rgba8_t *>(repacked_data ? repacked_data.get() : _t.data);
+            WriteTextureMips(rgba_data, res, mip_count, use_compression, stage_data, data_size);
+        } else if (src_fmt == eTexFormat::RawRGB888) {
+            const auto *rgb_data =
+                reinterpret_cast<const color_rgb8_t *>(repacked_data ? repacked_data.get() : _t.data);
+            WriteTextureMips(rgb_data, res, mip_count, use_compression, stage_data, data_size);
+        } else if (src_fmt == eTexFormat::RawRG88) {
+            const auto *rg_data = reinterpret_cast<const color_rg8_t *>(repacked_data ? repacked_data.get() : _t.data);
+            WriteTextureMips(rg_data, res, mip_count, use_compression, stage_data, data_size);
+        } else if (src_fmt == eTexFormat::RawR8) {
+            const auto *r_data = reinterpret_cast<const color_r8_t *>(repacked_data ? repacked_data.get() : _t.data);
+            WriteTextureMips(r_data, res, mip_count, use_compression, stage_data, data_size);
+        }
+    }
+
+    temp_stage_buf.FlushMappedRange(0, temp_stage_buf.size(), true);
+    temp_stage_buf.Unmap();
+
+    Tex2DParams p = {};
+    p.w = _t.w;
+    p.h = _t.h;
+    if (_t.is_srgb && !is_YCoCg && fmt != eTexFormat::BC4) {
+        p.flags |= eTexFlagBits::SRGB;
+    }
+    p.mip_count = mip_count;
+    p.usage = eTexUsageBits::Transfer | eTexUsageBits::Sampled;
+    p.format = fmt;
+    p.sampling.filter = eTexFilter::Bilinear;
+
+    uint32_t ret = bindless_textures_.emplace("Bindless Tex", ctx_, p, ctx_->default_memory_allocs(), ctx_->log());
+
+    { // Submit GPU commands
+        VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+
+        int res[2] = {_t.w, _t.h};
+        uint32_t data_offset = 0;
+        for (int i = 0; i < p.mip_count; ++i) {
+            bindless_textures_[ret].SetSubImage(i, 0, 0, res[0], res[1], fmt, temp_stage_buf, cmd_buf, data_offset,
+                                                data_size[i]);
+            res[0] = _MAX(res[0] / 2, 1);
+            res[1] = _MAX(res[1] / 2, 1);
+            data_offset += 4096 * ((data_size[i] + 4095) / 4096);
+        }
+
+        EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+    }
+
+    temp_stage_buf.FreeImmediate();
+
+    ctx_->log()->Info("Ray: Texture loaded (%ix%i)", _t.w, _t.h);
+
+    assert(ret <= 0x00ffffffff);
+
+    if (_t.is_srgb && (is_YCoCg || fmt == eTexFormat::BC4)) {
+        ret |= TEX_SRGB_BIT;
+    }
+    if (recostruct_z) {
+        ret |= TEX_RECONSTRUCT_Z_BIT;
+    }
+    if (is_YCoCg) {
+        ret |= TEX_YCOCG_BIT;
+    }
+
+    return ret;
+}
+
+template <typename T, int N>
+void Ray::Vk::Scene::WriteTextureMips(const color_t<T, N> data[], const int _res[2], const int mip_count,
+                                      const bool compress, uint8_t out_data[], uint32_t out_size[16]) {
+    int src_res[2] = {_res[0], _res[1]};
+
+    // TODO: try to get rid of these allocations
+    std::vector<color_t<T, N>> _src_data, dst_data;
+    for (int i = 1; i < mip_count; ++i) {
+        const int dst_res[2] = {_MAX(src_res[0] / 2, 1), _MAX(src_res[1] / 2, 1)};
+
+        dst_data.clear();
+        dst_data.reserve(dst_res[0] * dst_res[1]);
+
+        const color_t<T, N> *src_data = (i == 1) ? data : _src_data.data();
+
+        for (int y = 0; y < dst_res[1]; ++y) {
+            for (int x = 0; x < dst_res[0]; ++x) {
+                const color_t<T, N> c00 = src_data[(2 * y + 0) * src_res[0] + (2 * x + 0)];
+                const color_t<T, N> c10 = src_data[(2 * y + 0) * src_res[0] + _MIN(2 * x + 1, src_res[0] - 1)];
+                const color_t<T, N> c11 =
+                    src_data[_MIN(2 * y + 1, src_res[1] - 1) * src_res[0] + _MIN(2 * x + 1, src_res[0] - 1)];
+                const color_t<T, N> c01 = src_data[_MIN(2 * y + 1, src_res[1] - 1) * src_res[0] + (2 * x + 0)];
+
+                color_t<T, N> res;
+                for (int i = 0; i < N; ++i) {
+                    res.v[i] = (c00.v[i] + c10.v[i] + c11.v[i] + c01.v[i]) / 4;
+                }
+
+                dst_data.push_back(res);
+            }
+        }
+
+        assert(dst_data.size() == (dst_res[0] * dst_res[1]));
+
+        out_data += 4096 * ((out_size[i - 1] + 4095) / 4096);
+        if (compress) {
+            if (N == 3) {
+                auto temp_YCoCg = ConvertRGB_to_CoCgxY(&dst_data[0].v[0], dst_res[0], dst_res[1]);
+
+                out_size[i] = GetRequiredMemory_BC3(dst_res[0], dst_res[1]);
+                CompressImage_BC3<true /* Is_YCoCg */>(temp_YCoCg.get(), dst_res[0], dst_res[1], out_data);
+            } else if (N == 1) {
+                out_size[i] = GetRequiredMemory_BC4(dst_res[0], dst_res[1]);
+                CompressImage_BC4<N>(&dst_data[0].v[0], dst_res[0], dst_res[1], out_data);
+            } else if (N == 2) {
+                out_size[i] = GetRequiredMemory_BC5(dst_res[0], dst_res[1]);
+                CompressImage_BC5<2>(&dst_data[0].v[0], dst_res[0], dst_res[1], out_data);
+            }
+        } else {
+            out_size[i] = int(dst_data.size() * sizeof(color_t<T, N>));
+            memcpy(out_data, dst_data.data(), out_size[i]);
+        }
+
+        src_res[0] = dst_res[0];
+        src_res[1] = dst_res[1];
+        std::swap(_src_data, dst_data);
+    }
+}
+
+template void Ray::Vk::Scene::WriteTextureMips<uint8_t, 1>(const color_t<uint8_t, 1> data[], const int _res[2],
+                                                           int mip_count, bool compress, uint8_t out_data[],
+                                                           uint32_t out_size[16]);
+template void Ray::Vk::Scene::WriteTextureMips<uint8_t, 2>(const color_t<uint8_t, 2> data[], const int _res[2],
+                                                           int mip_count, bool compress, uint8_t out_data[],
+                                                           uint32_t out_size[16]);
+template void Ray::Vk::Scene::WriteTextureMips<uint8_t, 3>(const color_t<uint8_t, 3> data[], const int _res[2],
+                                                           int mip_count, bool compress, uint8_t out_data[],
+                                                           uint32_t out_size[16]);
+template void Ray::Vk::Scene::WriteTextureMips<uint8_t, 4>(const color_t<uint8_t, 4> data[], const int _res[2],
+                                                           int mip_count, bool compress, uint8_t out_data[],
+                                                           uint32_t out_size[16]);
 
 uint32_t Ray::Vk::Scene::AddMaterial(const shading_node_desc_t &m) {
     material_t mat;
@@ -774,10 +1031,10 @@ void Ray::Vk::Scene::GenerateTextureMips() {
     };
 
     std::vector<mip_gen_info> mips_to_generate;
-    mips_to_generate.reserve(textures_.size());
+    mips_to_generate.reserve(atlas_textures_.size());
 
-    for (uint32_t i = 0; i < uint32_t(textures_.size()); ++i) {
-        const atlas_texture_t &t = textures_[i];
+    for (uint32_t i = 0; i < uint32_t(atlas_textures_.size()); ++i) {
+        const atlas_texture_t &t = atlas_textures_[i];
         if ((t.height & ATLAS_TEX_MIPS_BIT) == 0) {
             continue;
         }
@@ -816,7 +1073,7 @@ void Ray::Vk::Scene::GenerateTextureMips() {
     });
 
     for (const mip_gen_info &info : mips_to_generate) {
-        atlas_texture_t t = textures_[info.texture_index];
+        atlas_texture_t t = atlas_textures_[info.texture_index];
 
         const int dst_mip = info.dst_mip;
         const int src_mip = dst_mip - 1;
@@ -846,13 +1103,84 @@ void Ray::Vk::Scene::GenerateTextureMips() {
             }
         }
 
-        textures_.Set(info.texture_index, t);
+        atlas_textures_.Set(info.texture_index, t);
     }
 
     ctx_->log()->Info("Ray: Atlasses are (RGBA[%i], RGB[%i], RG[%i], R[%i], BC3[%i], BC4[%i], BC5[%i])",
                       tex_atlases_[0].page_count(), tex_atlases_[1].page_count(), tex_atlases_[2].page_count(),
                       tex_atlases_[3].page_count(), tex_atlases_[4].page_count(), tex_atlases_[5].page_count(),
                       tex_atlases_[6].page_count());
+}
+
+void Ray::Vk::Scene::PrepareBindlessTextures() {
+    assert(bindless_textures_.capacity() <= ctx_->max_combined_image_samplers());
+
+    DescrSizes descr_sizes;
+    descr_sizes.img_sampler_count = ctx_->max_combined_image_samplers();
+
+    const bool bres = bindless_tex_data_.descr_pool.Init(descr_sizes, 1 /* sets_count */);
+    assert(bres && "Failed to init descriptor pool!");
+
+    if (!bindless_tex_data_.descr_layout) {
+        VkDescriptorSetLayoutBinding textures_binding = {};
+        textures_binding.binding = 0;
+        textures_binding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        textures_binding.descriptorCount = ctx_->max_combined_image_samplers();
+        textures_binding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+
+        VkDescriptorSetLayoutCreateInfo layout_info = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+        layout_info.bindingCount = 1;
+        layout_info.pBindings = &textures_binding;
+
+        VkDescriptorBindingFlagsEXT bind_flag = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT_EXT;
+
+        VkDescriptorSetLayoutBindingFlagsCreateInfoEXT extended_info = {
+            VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO_EXT};
+        extended_info.bindingCount = 1u;
+        extended_info.pBindingFlags = &bind_flag;
+        layout_info.pNext = &extended_info;
+
+        const VkResult res =
+            vkCreateDescriptorSetLayout(ctx_->device(), &layout_info, nullptr, &bindless_tex_data_.descr_layout);
+        assert(res == VK_SUCCESS);
+    }
+
+    bindless_tex_data_.descr_pool.Reset();
+    bindless_tex_data_.descr_set = bindless_tex_data_.descr_pool.Alloc(bindless_tex_data_.descr_layout);
+
+    { // Transition resources
+        std::vector<TransitionInfo> img_transitions;
+        img_transitions.reserve(bindless_textures_.size());
+
+        for (const auto &tex : bindless_textures_) {
+            img_transitions.emplace_back(&tex, eResState::ShaderResource);
+        }
+
+        VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+        TransitionResourceStates(cmd_buf, AllStages, AllStages, img_transitions);
+        EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+    }
+
+    for (uint32_t i = 0; i < bindless_textures_.capacity(); ++i) {
+        if (!bindless_textures_.exists(i)) {
+            continue;
+        }
+
+        VkDescriptorImageInfo img_info = bindless_textures_[i].vk_desc_image_info();
+
+        VkWriteDescriptorSet descr_write = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+        descr_write.dstSet = bindless_tex_data_.descr_set;
+        descr_write.dstBinding = 0;
+        descr_write.dstArrayElement = i;
+        descr_write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        descr_write.descriptorCount = 1;
+        descr_write.pBufferInfo = nullptr;
+        descr_write.pImageInfo = &img_info;
+        descr_write.pTexelBufferView = nullptr;
+        descr_write.pNext = nullptr;
+
+        vkUpdateDescriptorSets(ctx_->device(), 1, &descr_write, 0, nullptr);
+    }
 }
 
 void Ray::Vk::Scene::RebuildHWAccStructures() {

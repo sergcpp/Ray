@@ -270,20 +270,10 @@ bool Ray::Vk::TextureAtlas::Resize(const int pages_count) {
         img_info.samples = VK_SAMPLE_COUNT_1_BIT;
         img_info.flags = 0;
 
-        if (format_ == eTexFormat::RawRGB888) { // check if 3-component images are supported
-            VkImageFormatProperties props;
-            const VkResult res =
-                vkGetPhysicalDeviceImageFormatProperties(ctx_->physical_device(), img_info.format, img_info.imageType,
-                                                         img_info.tiling, img_info.usage, img_info.flags, &props);
-
-            VkFormatProperties format_properties;
-            vkGetPhysicalDeviceFormatProperties(ctx_->physical_device(), img_info.format, &format_properties);
-
-            // TODO: try to not require blitting
-            if (res != VK_SUCCESS || !(format_properties.optimalTilingFeatures & VK_FORMAT_FEATURE_BLIT_DST_BIT)) {
-                img_info.format = VK_FORMAT_R8G8B8A8_UNORM;
-                real_format_ = eTexFormat::RawRGBA8888;
-            }
+        if (format_ == eTexFormat::RawRGB888 && !ctx_->rgb8_unorm_is_supported()) {
+            // Fallback to 4-component texture
+            img_info.format = VK_FORMAT_R8G8B8A8_UNORM;
+            real_format_ = eTexFormat::RawRGBA8888;
         }
 
         VkResult res = vkCreateImage(ctx_->device(), &img_info, nullptr, &new_img);

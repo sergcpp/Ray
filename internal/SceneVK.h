@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../SceneBase.h"
+#include "SparseStorage.h"
 #include "SparseStorageVK.h"
 #include "VectorVK.h"
 #include "Vk/AccStructure.h"
@@ -16,7 +17,7 @@ class Scene : public SceneBase {
     friend class Vk::Renderer;
 
     Context *ctx_;
-    bool use_hwrt_ = false, use_tex_compression_ = false;
+    bool use_hwrt_ = false, use_bindless_ = false, use_tex_compression_ = false;
 
     Vector<bvh_node_t> nodes_;
     Vector<tri_accel_t> tris_;
@@ -31,7 +32,20 @@ class Scene : public SceneBase {
     Vector<uint32_t> vtx_indices_;
 
     SparseStorage<material_t> materials_;
-    SparseStorage<atlas_texture_t> textures_;
+    SparseStorage<atlas_texture_t> atlas_textures_;
+    Ref::SparseStorage<Texture2D> bindless_textures_;
+
+    struct BindlessTexData {
+        DescrPool descr_pool;
+        VkDescriptorSetLayout descr_layout = {};
+        VkDescriptorSet descr_set = {};
+
+        BindlessTexData(Context *ctx) : descr_pool(ctx) {}
+    };
+
+    BindlessTexData bindless_tex_data_;
+
+    SmallVector<VkDescriptorSet, 1024> textures_descr_sets_;
 
     TextureAtlas tex_atlases_[7];
 
@@ -57,15 +71,30 @@ class Scene : public SceneBase {
     // void RebuildLightBVH();
 
     void GenerateTextureMips();
+    void PrepareBindlessTextures();
     void RebuildHWAccStructures();
 
+    uint32_t AddAtlasTexture(const tex_desc_t &t);
+    uint32_t AddBindlessTexture(const tex_desc_t &t);
+
+    template <typename T, int N>
+    void WriteTextureMips(const color_t<T, N> data[], const int _res[2], int mip_count, bool compress,
+                          uint8_t out_data[], uint32_t out_size[16]);
+
   public:
-    Scene(Context *ctx, bool use_hwrt, bool use_tex_compression);
+    Scene(Context *ctx, bool use_hwrt, bool use_bindless, bool use_tex_compression);
+    ~Scene() override;
 
     void GetEnvironment(environment_desc_t &env) override;
     void SetEnvironment(const environment_desc_t &env) override;
 
-    uint32_t AddTexture(const tex_desc_t &t) override;
+    uint32_t AddTexture(const tex_desc_t &t) override {
+        if (use_bindless_) {
+            return AddBindlessTexture(t);
+        } else {
+            return AddAtlasTexture(t);
+        }
+    }
     void RemoveTexture(uint32_t) override {}
 
     uint32_t AddMaterial(const shading_node_desc_t &m) override;
@@ -87,6 +116,7 @@ class Scene : public SceneBase {
 
     void Finalize() override {
         GenerateTextureMips();
+        PrepareBindlessTextures();
         RebuildHWAccStructures();
     }
 

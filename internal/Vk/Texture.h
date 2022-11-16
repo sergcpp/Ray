@@ -16,6 +16,7 @@ namespace Ray {
 class ILog;
 namespace Vk {
 int CalcMipCount(int w, int h, int min_res, eTexFilter filter);
+int GetColorChannelCount(eTexFormat format);
 int GetPerPixelDataLen(eTexFormat format);
 int GetBlockLenBytes(eTexFormat format, eTexBlock block);
 int GetBlockCount(int w, int h, eTexBlock block);

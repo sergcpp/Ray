@@ -94,6 +94,10 @@ const int ATLAS_TEX_WIDTH_BITS          = 16383; // 0b0011111111111111
 const int ATLAS_TEX_MIPS_BIT            = 32768; // 0b1000000000000000
 const int ATLAS_TEX_HEIGHT_BITS         = 16383; // 0b0011111111111111
 
+const UINT_TYPE TEX_SRGB_BIT          = (1u << 24); // 0b00000001
+const UINT_TYPE TEX_RECONSTRUCT_Z_BIT = (2u << 24); // 0b00000010
+const UINT_TYPE TEX_YCOCG_BIT         = (4u << 24); // 0b00000100
+
 struct ray_data_t {
 	float o[3], d[3], pdf;
 	float c[3];
