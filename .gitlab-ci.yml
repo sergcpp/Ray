@@ -238,6 +238,7 @@ windows-x86_64-gpu-xe-test-job:
   variables:
     BIN_DIR: windows-x86_64
     AUX_TEST_ARGS: '-d Xe --nocpu'
+  allow_failure: true
   extends:
     - .windows-test-job
   needs:
