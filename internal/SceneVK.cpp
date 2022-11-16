@@ -112,7 +112,7 @@ uint32_t Ray::Vk::Scene::AddTexture(const tex_desc_t &_t) {
             }
 
             tex_data = repacked_normalmap.get();
-            t.atlas = 2;
+            t.atlas = use_compression ? 6 : 2;
         }
     } else if (_t.format == eTextureFormat::RGB888) {
         if (!_t.is_normalmap) {
