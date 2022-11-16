@@ -1,3 +1,5 @@
+find internal/shaders -name "*.spv" -type f -delete
+find internal/shaders -name "*.inl" -type f -delete
 
 ./third-party/spirv/linux/glslangValidator -V --target-env spirv1.3 internal/shaders/primary_ray_gen.comp.glsl -o internal/shaders/primary_ray_gen.comp.spv
 ./third-party/spirv/linux/spirv-opt.sh internal/shaders/primary_ray_gen.comp.spv -o internal/shaders/primary_ray_gen.comp.spv

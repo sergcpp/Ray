@@ -1,3 +1,5 @@
+del "internal/shaders*.spv" /S
+del "internal/shaders*.inl" /S
 
 third-party\spirv\win32\glslangValidator -V --target-env spirv1.3 internal/shaders/primary_ray_gen.comp.glsl -o internal/shaders/primary_ray_gen.comp.spv
 if %errorlevel% neq 0 exit /b %errorlevel%
