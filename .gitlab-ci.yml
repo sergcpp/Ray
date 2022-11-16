@@ -292,16 +292,17 @@ linux-x86_64-gpu-nv-test-job:
   tags:
     - linux,x86_64,nv
 
-#linux-x86_64-gpu-amd-test-job:
-#  variables:
-#    BIN_DIR: linux-x86_64
-#    AUX_TEST_ARGS: '-d AMD --nocpu'
-#  extends:
-#    - .test-job
-#  needs:
-#    - linux-x86_64-build-job
-#  tags:
-#    - linux,x86_64,amd
+linux-x86_64-gpu-amd-test-job:
+  variables:
+    BIN_DIR: linux-x86_64
+    AUX_TEST_ARGS: '-d AMD --nocpu'
+  extends:
+    - .test-job
+  allow_failure: true
+  needs:
+    - linux-x86_64-build-job
+  tags:
+    - linux,x86_64,amd
 
 macos-x86_64-cpu-test-job:
   variables:
@@ -353,7 +354,7 @@ deploy-job:
       optional: true
     - linux-x86_64-cpu-test-job
     - linux-x86_64-gpu-nv-test-job
-    #- linux-x86_64-gpu-amd-test-job
+    - linux-x86_64-gpu-amd-test-job
     - macos-x86_64-cpu-test-job
     - macos-arm64-cpu-test-job
     - macos-arm64-gpu-m1-test-job
