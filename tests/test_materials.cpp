@@ -2232,7 +2232,7 @@ void test_alpha_mat3(const char *arch_list[], const char *preferred_device) {
 
 void test_complex_mat0(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 512;
-    const double MinPSNR = 39.02;
+    const double MinPSNR = 38.99;
     const int PixThres = 14;
 
     Ray::principled_mat_desc_t wood_mat_desc;
@@ -2253,8 +2253,8 @@ void test_complex_mat0(const char *arch_list[], const char *preferred_device) {
 
 void test_complex_mat1(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 512;
-    const double MinPSNR = 38.17;
-    const int PixThres = 21;
+    const double MinPSNR = 37.89;
+    const int PixThres = 26;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = 0;
@@ -2320,7 +2320,7 @@ void test_complex_mat3(const char *arch_list[], const char *preferred_device) {
 
 void test_complex_mat4(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 256;
-    const double MinPSNR = 34.64;
+    const double MinPSNR = 34.63;
     const int PixThres = 32;
 
     Ray::principled_mat_desc_t metal_mat_desc;
