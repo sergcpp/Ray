@@ -106,8 +106,9 @@ struct atlas_texture_t {
 };
 static_assert(sizeof(atlas_texture_t) == 80, "!");
 
-const int TEX_SRGB_BIT = 0b00000001;
-const int TEX_RECONSTRUCT_Z_BIT = 0b00000010;
+const uint32_t TEX_SRGB_BIT = (0b00000001u << 24);
+const uint32_t TEX_RECONSTRUCT_Z_BIT = (0b00000010u << 24);
+const uint32_t TEX_YCOCG_BIT = (0b00000100u << 24);
 
 const int MAX_MATERIAL_TEXTURES = 5;
 

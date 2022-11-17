@@ -95,10 +95,10 @@ uint32_t Ray::Ref::Scene::AddTexture(const tex_desc_t &_t) {
 
     ret |= uint32_t(storage) << 28;
     if (_t.is_srgb) {
-        ret |= uint32_t(TEX_SRGB_BIT) << 24;
+        ret |= TEX_SRGB_BIT;
     }
     if (recostruct_z) {
-        ret |= uint32_t(TEX_RECONSTRUCT_Z_BIT) << 24;
+        ret |= TEX_RECONSTRUCT_Z_BIT;
     }
     ret |= index;
 

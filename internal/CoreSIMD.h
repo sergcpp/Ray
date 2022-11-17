@@ -4668,7 +4668,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                 }
 
                 SampleBilinear(textures, first_t, uvs, simd_ivec<S>{0}, ray_queue[index], normals_tex);
-                if ((first_t >> 24) & TEX_RECONSTRUCT_Z_BIT) {
+                if (first_t & TEX_RECONSTRUCT_Z_BIT) {
                     reconstruct_z |= ray_queue[index];
                 }
 
@@ -4764,7 +4764,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
 
                 simd_fvec<S> tex_color[4];
                 SampleBilinear(textures, first_t, uvs, simd_ivec<S>(base_lod), ray_queue[index], tex_color);
-                if (((first_t >> 24) & 0xf) & TEX_SRGB_BIT) {
+                if (first_t & TEX_SRGB_BIT) {
                     srgb_to_rgb(tex_color, tex_color);
                 }
 
@@ -4815,7 +4815,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
 
                 simd_fvec<S> roughness_color[4];
                 SampleBilinear(textures, first_t, uvs, simd_ivec<S>(roughness_lod), ray_queue[index], roughness_color);
-                if (((first_t >> 24) & 0xf) & TEX_SRGB_BIT) {
+                if (first_t & TEX_SRGB_BIT) {
                     srgb_to_rgb(roughness_color, roughness_color);
                 }
                 where(ray_queue[index], roughness) *= roughness_color[0];

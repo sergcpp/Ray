@@ -3221,7 +3221,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
         simd_fvec4 normals = SampleBilinear(textures, mat->textures[NORMALS_TEXTURE], uvs, 0);
         normals = normals * 2.0f - 1.0f;
         normals[2] = 1.0f;
-        if ((mat->textures[NORMALS_TEXTURE] >> 24) & TEX_RECONSTRUCT_Z_BIT) {
+        if (mat->textures[NORMALS_TEXTURE] & TEX_RECONSTRUCT_Z_BIT) {
             normals[2] = std::sqrt(1.0f - normals[0] * normals[0] - normals[1] * normals[1]);
         }
         simd_fvec4 in_normal = N;
@@ -3271,7 +3271,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
         const float base_lod = get_texture_lod(textures, base_texture, lambda);
 #endif
         simd_fvec4 tex_color = SampleBilinear(textures, base_texture, uvs, int(base_lod));
-        if (((base_texture >> 24) & 0xf) & TEX_SRGB_BIT) {
+        if (base_texture & TEX_SRGB_BIT) {
             tex_color = srgb_to_rgb(tex_color);
         }
         base_color *= tex_color;
@@ -3293,7 +3293,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
         const float roughness_lod = get_texture_lod(textures, roughness_tex, lambda);
 #endif
         simd_fvec4 roughness_color = SampleBilinear(textures, roughness_tex, uvs, int(roughness_lod))[0];
-        if (((roughness_tex >> 24) & 0xf) & TEX_SRGB_BIT) {
+        if (roughness_tex & TEX_SRGB_BIT) {
             roughness_color = srgb_to_rgb(roughness_color);
         }
         roughness *= roughness_color[0];
