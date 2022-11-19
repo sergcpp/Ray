@@ -42,13 +42,13 @@ extern template bool Traverse_MacroTree_WithStack_ClosestHit<RayPacketSize>(
     const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes,
     const transform_t *transforms, const mtri_accel_t *mtris, const uint32_t *tri_indices,
     hit_data_t<RayPacketSize> &inter);
-extern template bool Traverse_MacroTree_WithStack_AnyHit<RayPacketSize>(
+extern template simd_ivec<RayPacketSize> Traverse_MacroTree_WithStack_AnyHit<RayPacketSize>(
     const simd_fvec<RayPacketSize> ro[3], const simd_fvec<RayPacketSize> rd[3],
     const simd_ivec<RayPacketSize> &ray_mask, const bvh_node_t *nodes, uint32_t node_index,
     const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes,
     const transform_t *transforms, const tri_accel_t *tris, const tri_mat_data_t *materials,
     const uint32_t *tri_indices, hit_data_t<RayPacketSize> &inter);
-extern template bool Traverse_MacroTree_WithStack_AnyHit<RayPacketSize>(
+extern template simd_ivec<RayPacketSize> Traverse_MacroTree_WithStack_AnyHit<RayPacketSize>(
     const simd_fvec<RayPacketSize> ro[3], const simd_fvec<RayPacketSize> rd[3],
     const simd_ivec<RayPacketSize> &ray_mask, const mbvh_node_t *oct_nodes, uint32_t node_index,
     const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes,
@@ -61,7 +61,7 @@ extern template bool Traverse_MicroTree_WithStack_ClosestHit<RayPacketSize>(
 extern template bool Traverse_MicroTree_WithStack_ClosestHit<RayPacketSize>(
     const float ro[3], const float rd[3], int i, const mbvh_node_t *oct_nodes, uint32_t node_index,
     const mtri_accel_t *mtris, const uint32_t *tri_indices, int obj_index, hit_data_t<RayPacketSize> &inter);
-extern template bool Traverse_MicroTree_WithStack_AnyHit<RayPacketSize>(
+extern template simd_ivec<RayPacketSize> Traverse_MicroTree_WithStack_AnyHit<RayPacketSize>(
     const simd_fvec<RayPacketSize> ro[3], const simd_fvec<RayPacketSize> rd[3],
     const simd_ivec<RayPacketSize> &ray_mask, const bvh_node_t *nodes, uint32_t node_index, const tri_accel_t *tris,
     const tri_mat_data_t *materials, const uint32_t *tri_indices, int obj_index, hit_data_t<RayPacketSize> &inter);
