@@ -88,10 +88,15 @@ const int MAX_TEXTURE_SIZE = (1 << MAX_MIP_LEVEL);
 
 const int TEXTURE_ATLAS_SIZE = 8192 + 256; // small margin to account for borders
 
-const int TEXTURE_SRGB_BIT = 32768;     // 0b1000000000000000
-const int TEXTURE_WIDTH_BITS = 32767;   // 0b0111111111111111
-const int TEXTURE_MIPS_BIT = 32768;     // 0b1000000000000000
-const int TEXTURE_HEIGHT_BITS = 32767;  // 0b0111111111111111
+const int ATLAS_TEX_SRGB_BIT            = 32768; // 0b1000000000000000
+const int ATLAS_TEX_RECONSTRUCT_Z_BIT   = 16384; // 0b0100000000000000
+const int ATLAS_TEX_WIDTH_BITS          = 16383; // 0b0011111111111111
+const int ATLAS_TEX_MIPS_BIT            = 32768; // 0b1000000000000000
+const int ATLAS_TEX_HEIGHT_BITS         = 16383; // 0b0011111111111111
+
+const UINT_TYPE TEX_SRGB_BIT          = (1u << 24); // 0b00000001
+const UINT_TYPE TEX_RECONSTRUCT_Z_BIT = (2u << 24); // 0b00000010
+const UINT_TYPE TEX_YCOCG_BIT         = (4u << 24); // 0b00000100
 
 struct ray_data_t {
 	float o[3], d[3], pdf;
@@ -196,7 +201,7 @@ struct material_t {
     UINT_TYPE normal_map_strength_unorm;
 };
 
-struct texture_t {
+struct atlas_texture_t {
     UINT_TYPE size;
     UINT_TYPE atlas;
     UINT_TYPE page[(NUM_MIP_LEVELS + 3) / 4];

@@ -11,7 +11,7 @@
 #define USE_VNDF_GGX_SAMPLING 1
 #define USE_NEE 1
 #define USE_PATH_TERMINATION 1
-#define FORCE_TEXTURE_LOD0 0
+// #define FORCE_TEXTURE_LOD 0
 
 int hash(const int x) {
     uint ret = uint(x);
@@ -86,18 +86,24 @@ vec3 YCoCg_to_RGB(vec4 col) {
     return col_rgb;
 }
 
-float get_texture_lod(const texture_t t, const float lambda) {
-#if FORCE_TEXTURE_LOD0
-    const float lod = 0.0;
+float get_texture_lod(const ivec2 res, const float lambda) {
+#ifdef FORCE_TEXTURE_LOD
+    const float lod = float(FORCE_TEXTURE_LOD);
 #else
-    const float w = float(t.size & TEXTURE_WIDTH_BITS);
-    const float h = float((t.size >> 16) & TEXTURE_HEIGHT_BITS);
+    const float w = float(res.x);
+    const float h = float(res.y);
     // Find lod
     float lod = lambda + 0.5 * log2(w * h);
     // Substruct 1 from lod to always have 4 texels for interpolation
     lod = clamp(lod - 1.0, 0.0, float(MAX_MIP_LEVEL));
 #endif
     return lod;
+}
+
+float get_texture_lod(const atlas_texture_t t, const float lambda) {
+    const int w = int(t.size & ATLAS_TEX_WIDTH_BITS);
+    const int h = int((t.size >> 16) & ATLAS_TEX_HEIGHT_BITS);
+    return get_texture_lod(ivec2(w, h), lambda);
 }
 
 vec3 TransformNormal(vec3 n, mat4 inv_xform) {

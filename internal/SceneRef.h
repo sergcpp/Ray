@@ -57,15 +57,16 @@ class Scene : public SceneBase {
     std::vector<uint32_t> vtx_indices_;
 
     SparseStorage<material_t> materials_;
-    SparseStorage<texture_t> textures_;
 
-    TextureAtlasRGBA tex_atlas_rgba_;
-    TextureAtlasRGB tex_atlas_rgb_;
-    TextureAtlasRG tex_atlas_rg_;
-    TextureAtlasR tex_atlas_r_;
+    TexStorageRGBA tex_storage_rgba_;
+    TexStorageRGB tex_storage_rgb_;
+    TexStorageRG tex_storage_rg_;
+    TexStorageR tex_storage_r_;
+
+    TexStorageBase *tex_storages_[4] = {&tex_storage_rgba_, &tex_storage_rgb_, &tex_storage_rg_, &tex_storage_r_};
 
     SparseStorage<light_t> lights_;
-    std::vector<uint32_t> li_indices_; // compacted list of all lights
+    std::vector<uint32_t> li_indices_;     // compacted list of all lights
     std::vector<uint32_t> visible_lights_; // compacted list of all visible lights
 
     environment_t env_;
@@ -76,8 +77,6 @@ class Scene : public SceneBase {
     void RemoveNodes(uint32_t node_index, uint32_t node_count);
     void RebuildTLAS();
 
-    void GenerateTextureMips();
-
   public:
     Scene(ILog *log, bool use_wide_bvh);
     ~Scene() override;
@@ -86,7 +85,7 @@ class Scene : public SceneBase {
     void SetEnvironment(const environment_desc_t &env) override;
 
     uint32_t AddTexture(const tex_desc_t &t) override;
-    void RemoveTexture(const uint32_t i) override { textures_.erase(i); }
+    void RemoveTexture(const uint32_t i) override { tex_storages_[i >> 24]->Free(i & 0x00ffffff); }
 
     uint32_t AddMaterial(const shading_node_desc_t &m) override;
     uint32_t AddMaterial(const principled_mat_desc_t &m) override;

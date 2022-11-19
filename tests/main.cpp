@@ -5,7 +5,7 @@
 #include <atomic>
 #include <chrono>
 
-void test_atlas();
+void test_tex_storage();
 void test_oren_mat0(const char *arch_list[], const char *preferred_device);
 void test_oren_mat1(const char *arch_list[], const char *preferred_device);
 void test_oren_mat2(const char *arch_list[], const char *preferred_device);
@@ -112,7 +112,7 @@ int main(int argc, char *argv[]) {
 
     const auto t1 = high_resolution_clock::now();
 
-    bool full_tests = false, nogpu = false, nocpu = false;
+    bool full_tests = false, nogpu = false, nocpu = false, run_detail_tests_on_fail = false;
     const char *device_name = nullptr;
 
     for (size_t i = 1; i < argc; i++) {
@@ -124,11 +124,13 @@ int main(int argc, char *argv[]) {
             full_tests = true;
         } else if ((strcmp(argv[i], "--device") == 0 || strcmp(argv[i], "-d") == 0) && (++i != argc)) {
             device_name = argv[i];
+        } else if (strcmp(argv[i], "--detail_on_fail") == 0) {
+            run_detail_tests_on_fail = true;
         }
     }
 
-    test_atlas();
     test_simd();
+    test_tex_storage();
     // test_mesh_lights();
 
     static const char *ArchListFull[] = {"ref", "sse2", "sse41", "avx", "avx2", "neon", "vk", nullptr};
@@ -174,7 +176,9 @@ int main(int argc, char *argv[]) {
                duration<double>(high_resolution_clock::now() - t2).count() / 60.0);
 
         // schedule detailed material tests if complex tests failed (to find out the reason)
-        detailed_material_tests_needed |= !g_tests_success;
+        if (run_detail_tests_on_fail) {
+            detailed_material_tests_needed |= !g_tests_success;
+        }
         tests_success_final &= g_tests_success;
         g_tests_success = true;
     }

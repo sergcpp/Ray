@@ -5,6 +5,7 @@
 #include <cstring>
 
 #include <algorithm>
+#include <initializer_list>
 #include <new>
 
 #include "Span.h"
@@ -349,6 +350,11 @@ class SmallVector : public SmallVectorImpl<T, AlignmentOfT> {
         SmallVectorImpl<T, AlignmentOfT>::operator=(std::move(rhs));
     }
 
+    SmallVector(std::initializer_list<T> l) : SmallVectorImpl<T, AlignmentOfT>((T *)buffer_, (T *)buffer_, N) {
+        SmallVectorImpl<T, AlignmentOfT>::reserve(l.size());
+        SmallVectorImpl<T, AlignmentOfT>::assign(l.begin(), l.end());
+    }
+
     SmallVector &operator=(const SmallVectorImpl<T, AlignmentOfT> &rhs) {
         SmallVectorImpl<T, AlignmentOfT>::operator=(rhs);
         return (*this);
@@ -364,4 +370,4 @@ class SmallVector : public SmallVectorImpl<T, AlignmentOfT> {
 
     bool is_on_heap() const { return uintptr_t(this->begin()) != uintptr_t(&buffer_[0]); }
 };
-} // namespace Ren
+} // namespace Ray

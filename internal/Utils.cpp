@@ -776,7 +776,8 @@ void Extract4x4Block_Ref(const uint8_t src[], const int stride, uint8_t dst[16 *
     } else {
         for (int j = 0; j < 4; j++) {
             for (int i = 0; i < 4; i++) {
-                memcpy(&dst[i * DstChannels], &src[i * SrcChannels], SrcChannels);
+                memcpy(&dst[i * DstChannels], &src[i * SrcChannels],
+                       SrcChannels < DstChannels ? SrcChannels : DstChannels);
             }
             dst += 4 * DstChannels;
             src += stride;
@@ -797,10 +798,11 @@ void ExtractIncomplete4x4Block_Ref(const uint8_t src[], const int stride, const 
             dst += 4 * 4;
             src += stride;
         }
-    } else if (SrcChannels == 3) {
+    } else {
         for (int j = 0; j < blck_h; j++) {
             for (int i = 0; i < blck_w; i++) {
-                memcpy(&dst[i * DstChannels], &src[i * SrcChannels], SrcChannels);
+                memcpy(&dst[i * DstChannels], &src[i * SrcChannels],
+                       SrcChannels < DstChannels ? SrcChannels : DstChannels);
             }
             for (int i = blck_w; i < 4; i++) {
                 memcpy(&dst[i * DstChannels], &dst[(blck_w - 1) * DstChannels], DstChannels);
@@ -1352,6 +1354,7 @@ const int BlockSize_BC1 = 2 * sizeof(uint16_t) + sizeof(uint32_t);
 const int BlockSize_BC4 = 2 * sizeof(uint8_t) + 6 * sizeof(uint8_t);
 //                        \_ low/high alpha_/     \_ 16 x 3-bit _/
 const int BlockSize_BC3 = BlockSize_BC1 + BlockSize_BC4;
+const int BlockSize_BC5 = BlockSize_BC4 + BlockSize_BC4;
 
 // clang-format on
 
@@ -1360,6 +1363,7 @@ const int BlockSize_BC3 = BlockSize_BC1 + BlockSize_BC4;
 int Ray::GetRequiredMemory_BC1(const int w, const int h) { return BlockSize_BC1 * ((w + 3) / 4) * ((h + 3) / 4); }
 int Ray::GetRequiredMemory_BC3(const int w, const int h) { return BlockSize_BC3 * ((w + 3) / 4) * ((h + 3) / 4); }
 int Ray::GetRequiredMemory_BC4(const int w, const int h) { return BlockSize_BC4 * ((w + 3) / 4) * ((h + 3) / 4); }
+int Ray::GetRequiredMemory_BC5(const int w, const int h) { return BlockSize_BC5 * ((w + 3) / 4) * ((h + 3) / 4); }
 
 template <int SrcChannels>
 void Ray::CompressImage_BC1(const uint8_t img_src[], const int w, const int h, uint8_t img_dst[]) {
@@ -1514,6 +1518,51 @@ template void Ray::CompressImage_BC4<4 /* SrcChannels */>(const uint8_t img_src[
 template void Ray::CompressImage_BC4<3 /* SrcChannels */>(const uint8_t img_src[], int w, int h, uint8_t img_dst[]);
 template void Ray::CompressImage_BC4<2 /* SrcChannels */>(const uint8_t img_src[], int w, int h, uint8_t img_dst[]);
 template void Ray::CompressImage_BC4<1 /* SrcChannels */>(const uint8_t img_src[], int w, int h, uint8_t img_dst[]);
+
+template <int SrcChannels>
+void Ray::CompressImage_BC5(const uint8_t img_src[], const int w, const int h, uint8_t img_dst[]) {
+    alignas(16) uint8_t block1[16] = {}, block2[16] = {};
+    uint8_t *p_out = img_dst;
+
+    const int w_aligned = w - (w % 4);
+    const int h_aligned = h - (h % 4);
+
+#if 0
+    // TODO: SIMD implementation
+#endif
+    {
+        for (int j = 0; j < h_aligned; j += 4, img_src += w * 4 * SrcChannels) {
+            for (int i = 0; i < w_aligned; i += 4) {
+                Extract4x4Block_Ref<SrcChannels, 1>(&img_src[i * SrcChannels + 0], w * SrcChannels, block1);
+                Extract4x4Block_Ref<SrcChannels, 1>(&img_src[i * SrcChannels + 1], w * SrcChannels, block2);
+                Emit_BC4_Block_Ref(block1, p_out);
+                Emit_BC4_Block_Ref(block2, p_out);
+            }
+            // process last (incomplete) column
+            if (w_aligned != w) {
+                ExtractIncomplete4x4Block_Ref<SrcChannels, 1>(&img_src[w_aligned * SrcChannels + 0], w * SrcChannels,
+                                                              w % 4, 4, block1);
+                ExtractIncomplete4x4Block_Ref<SrcChannels, 1>(&img_src[w_aligned * SrcChannels + 1], w * SrcChannels,
+                                                              w % 4, 4, block2);
+                Emit_BC4_Block_Ref(block1, p_out);
+                Emit_BC4_Block_Ref(block2, p_out);
+            }
+        }
+        // process last (incomplete) row
+        for (int i = 0; i < w && h_aligned != h; i += 4) {
+            ExtractIncomplete4x4Block_Ref<SrcChannels, 1>(&img_src[i * SrcChannels + 0], w * SrcChannels,
+                                                          _MIN(4, w - i), h % 4, block1);
+            ExtractIncomplete4x4Block_Ref<SrcChannels, 1>(&img_src[i * SrcChannels + 1], w * SrcChannels,
+                                                          _MIN(4, w - i), h % 4, block2);
+            Emit_BC4_Block_Ref(block1, p_out);
+            Emit_BC4_Block_Ref(block2, p_out);
+        }
+    }
+}
+
+template void Ray::CompressImage_BC5<4 /* SrcChannels */>(const uint8_t img_src[], int w, int h, uint8_t img_dst[]);
+template void Ray::CompressImage_BC5<3 /* SrcChannels */>(const uint8_t img_src[], int w, int h, uint8_t img_dst[]);
+template void Ray::CompressImage_BC5<2 /* SrcChannels */>(const uint8_t img_src[], int w, int h, uint8_t img_dst[]);
 
 #undef _MIN
 #undef _MAX

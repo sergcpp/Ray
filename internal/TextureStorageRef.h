@@ -1,51 +1,77 @@
 #pragma once
 
+#include <cmath>
 #include <memory>
 
 #include "Core.h"
 #include "TextureSplitter.h"
 
+#define _MAX(x, y) ((x) < (y) ? (y) : (x))
+
 namespace Ray {
 namespace Ref {
 class TexStorageBase {
-  protected:
-    const int res_[2];
-    const float res_f_[2];
-
   public:
-    TexStorageBase(int resx, int resy) : res_{resx, resy}, res_f_{float(resx), float(resy)} {}
     virtual ~TexStorageBase() {}
 
-    force_inline float size_x() const { return res_f_[0]; }
-    force_inline float size_y() const { return res_f_[1]; }
+    virtual void GetIRes(int index, int lod, int res[2]) const = 0;
+    virtual void GetFRes(int index, int lod, float res[2]) const = 0;
 
-    virtual color_rgba_t Fetch(int page, int x, int y) const = 0;
-    virtual color_rgba_t Fetch(int page, float x, float y) const = 0;
+    virtual color_rgba_t Fetch(int index, int x, int y, int lod) const = 0;
+    virtual color_rgba_t Fetch(int index, float x, float y, int lod) const = 0;
+
+    virtual bool Free(int index) = 0;
 };
 
 template <typename T, int N> class TexStorageLinear : public TexStorageBase {
     using ColorType = color_t<T, N>;
-    using PageData = std::unique_ptr<ColorType[]>;
+    struct ImgData {
+        int res[NUM_MIP_LEVELS][2];
+        int lod_offsets[NUM_MIP_LEVELS];
+        std::unique_ptr<ColorType[]> pixels;
+    };
 
-    std::vector<TextureSplitter> splitters_;
-    std::vector<PageData> pages_;
-    std::vector<ColorType> temp_storage_;
+    std::vector<ImgData> images_;
+    std::vector<int> free_slots_;
 
-    void WritePageData(int page, int posx, int posy, int sizex, int sizey, const ColorType *data);
+    void WriteImageData(int index, int lod, const ColorType data[]);
 
   public:
-    TexStorageLinear(int resx, int resy, int initial_page_count = 0);
+    force_inline int img_count() const { return int(images_.size() - free_slots_.size()); }
 
-    force_inline int page_count() const { return int(pages_.size()); }
-
-    force_inline ColorType Get(const int page, const int x, const int y) const { return pages_[page][res_[0] * y + x]; }
-
-    force_inline ColorType Get(const int page, const float x, const float y) const {
-        return Get(page, int(x * res_[0] - 0.5f), int(y * res_[1] - 0.5f));
+    force_inline ColorType Get(const int index, const int x, const int y, const int lod) const {
+        const ImgData &p = images_[index];
+        const int w = p.res[lod][0];
+        return p.pixels[p.lod_offsets[lod] + w * y + x];
     }
 
-    color_rgba_t Fetch(int page, int x, int y) const override {
-        const ColorType col = Get(page, x, y);
+    force_inline ColorType Get(const int index, float x, float y, const int lod) const {
+        const ImgData &p = images_[index];
+        const int w = p.res[lod][0];
+        const int h = p.res[lod][1];
+
+        x -= std::floor(x);
+        y -= std::floor(y);
+
+        return p.pixels[p.lod_offsets[lod] + w * int(y * h - 0.5f) + int(x * w - 0.5f)];
+    }
+
+    void GetIRes(const int index, const int lod, int res[2]) const override {
+        const ImgData &p = images_[index];
+
+        res[0] = p.res[lod][0] - 1;
+        res[1] = p.res[lod][1] - 1;
+    }
+
+    void GetFRes(const int index, const int lod, float res[2]) const override {
+        const ImgData &p = images_[index];
+
+        res[0] = float(p.res[lod][0] - 1);
+        res[1] = float(p.res[lod][1] - 1);
+    }
+
+    color_rgba_t Fetch(const int index, const int x, const int y, const int lod) const override {
+        const ColorType col = Get(index, x, y, lod);
 
         color_rgba_t ret;
         for (int i = 0; i < N; ++i) {
@@ -63,8 +89,8 @@ template <typename T, int N> class TexStorageLinear : public TexStorageBase {
         return ret;
     }
 
-    color_rgba_t Fetch(int page, float x, float y) const override {
-        const ColorType col = Get(page, x, y);
+    color_rgba_t Fetch(const int index, const float x, const float y, const int lod) const override {
+        const ColorType col = Get(index, x, y, lod);
 
         color_rgba_t ret;
         for (int i = 0; i < N; ++i) {
@@ -82,12 +108,8 @@ template <typename T, int N> class TexStorageLinear : public TexStorageBase {
         return ret;
     }
 
-    int Allocate(const ColorType *data, const int res[2], int pos[2]);
-    bool Free(int page, const int pos[2]);
-
-    bool Resize(int new_page_count);
-
-    int DownsampleRegion(int src_page, const int src_pos[2], const int src_res[2], int dst_pos[2]);
+    int Allocate(const ColorType *data, const int res[2], bool mips);
+    bool Free(int index) override final;
 };
 
 extern template class Ray::Ref::TexStorageLinear<uint8_t, 4>;
@@ -98,35 +120,57 @@ extern template class Ray::Ref::TexStorageLinear<uint8_t, 1>;
 template <typename T, int N> class TexStorageTiled : public TexStorageBase {
     static const int TileSize = 4;
 
-    const int res_in_tiles_[2];
-
     using ColorType = color_t<T, N>;
-    using PageData = std::unique_ptr<ColorType[]>;
+    struct ImgData {
+        int res[NUM_MIP_LEVELS][2], res_in_tiles[NUM_MIP_LEVELS][2];
+        int lod_offsets[NUM_MIP_LEVELS];
+        std::unique_ptr<ColorType[]> pixels;
+    };
 
-    std::vector<TextureSplitter> splitters_;
-    std::vector<PageData> pages_;
-    std::unique_ptr<ColorType[]> temp_storage_;
-
-    void WritePageData(int page, int posx, int posy, int sizex, int sizey, const ColorType *data);
+    std::vector<ImgData> images_;
+    std::vector<int> free_slots_;
 
   public:
-    TexStorageTiled(int resx, int resy, int initial_page_count = 0);
+    force_inline int img_count() const { return int(images_.size() - free_slots_.size()); }
 
-    force_inline int page_count() const { return int(pages_.size()); }
+    force_inline ColorType Get(const int index, const int x, const int y, const int lod) const {
+        const ImgData &p = images_[index];
 
-    force_inline ColorType Get(const int page, const int x, const int y) const {
         const int tilex = x / TileSize, tiley = y / TileSize;
         const int in_tilex = x % TileSize, in_tiley = y % TileSize;
 
-        return pages_[page][(tiley * res_in_tiles_[0] + tilex) * TileSize * TileSize + in_tiley * TileSize + in_tilex];
+        const int w_in_tiles = p.res_in_tiles[lod][0];
+        return p.pixels[p.lod_offsets[lod] + (tiley * w_in_tiles + tilex) * TileSize * TileSize + in_tiley * TileSize +
+                        in_tilex];
     }
 
-    force_inline ColorType Get(const int page, const float x, const float y) const {
-        return Get(page, int(x * res_[0] - 0.5f), int(y * res_[1] - 0.5f));
+    force_inline ColorType Get(const int index, float x, float y, const int lod) const {
+        const ImgData &p = images_[index];
+        const int w = p.res[lod][0] - 1;
+        const int h = p.res[lod][1] - 1;
+
+        x -= std::floor(x);
+        y -= std::floor(y);
+
+        return Get(index, int(x * w - 0.5f), int(y * h - 0.5f), lod);
     }
 
-    color_rgba_t Fetch(const int page, const int x, const int y) const override {
-        const ColorType col = Get(page, x, y);
+    void GetIRes(const int index, const int lod, int res[2]) const override {
+        const ImgData &p = images_[index];
+
+        res[0] = p.res[lod][0] - 1;
+        res[1] = p.res[lod][1] - 1;
+    }
+
+    void GetFRes(const int index, const int lod, float res[2]) const override {
+        const ImgData &p = images_[index];
+
+        res[0] = float(p.res[lod][0] - 1);
+        res[1] = float(p.res[lod][1] - 1);
+    }
+
+    color_rgba_t Fetch(const int index, const int x, const int y, const int lod) const override {
+        const ColorType col = Get(index, x, y, lod);
 
         color_rgba_t ret;
         for (int i = 0; i < N; ++i) {
@@ -144,8 +188,8 @@ template <typename T, int N> class TexStorageTiled : public TexStorageBase {
         return ret;
     }
 
-    color_rgba_t Fetch(const int page, const float x, const float y) const override {
-        const ColorType col = Get(page, x, y);
+    color_rgba_t Fetch(const int index, const float x, const float y, const int lod) const override {
+        const ColorType col = Get(index, x, y, lod);
 
         color_rgba_t ret;
         for (int i = 0; i < N; ++i) {
@@ -163,12 +207,8 @@ template <typename T, int N> class TexStorageTiled : public TexStorageBase {
         return ret;
     }
 
-    int Allocate(const ColorType *data, const int res[2], int pos[2]);
-    bool Free(int page, const int pos[2]);
-
-    bool Resize(int new_page_count);
-
-    int DownsampleRegion(int src_page, const int src_pos[2], const int src_res[2], int dst_pos[2]);
+    int Allocate(const ColorType *data, const int res[2], bool mips);
+    bool Free(int index);
 };
 
 extern template class TexStorageTiled<uint8_t, 4>;
@@ -178,15 +218,14 @@ extern template class TexStorageTiled<uint8_t, 1>;
 
 template <typename T, int N> class TexStorageSwizzled : public TexStorageBase {
     using ColorType = color_t<T, N>;
-    using PageData = std::unique_ptr<ColorType[]>;
+    struct ImgData {
+        int res[NUM_MIP_LEVELS][2], tile_y_stride[NUM_MIP_LEVELS];
+        int lod_offsets[NUM_MIP_LEVELS];
+        std::unique_ptr<ColorType[]> pixels;
+    };
 
-    std::vector<TextureSplitter> splitters_;
-    std::vector<PageData> pages_;
-    std::unique_ptr<ColorType[]> temp_storage_;
-
-    uint32_t tile_y_stride_;
-
-    void WritePageData(int page, int posx, int posy, int sizex, int sizey, const ColorType *data);
+    std::vector<ImgData> images_;
+    std::vector<int> free_slots_;
 
     static const uint32_t OuterTileW = 64;
     static const uint32_t OuterTileH = 64;
@@ -198,27 +237,47 @@ template <typename T, int N> class TexStorageSwizzled : public TexStorageBase {
         return ((y & 0x03) << 2) | ((y & 0x0c) << 3) | ((y & 0x30) << 6);
     }
 
-    force_inline uint32_t EncodeSwizzle(const uint32_t x, const uint32_t y) const {
-        const uint32_t y_off = (y / OuterTileH) * tile_y_stride_ + swizzle_y(y);
+    force_inline uint32_t EncodeSwizzle(const uint32_t x, const uint32_t y, const uint32_t tile_y_stride) const {
+        const uint32_t y_off = (y / OuterTileH) * tile_y_stride + swizzle_y(y);
         const uint32_t x_off = swizzle_x_tile(x);
         return y_off + x_off;
     }
 
   public:
-    TexStorageSwizzled(int resx, int resy, int initial_page_count = 0);
+    force_inline int img_count() const { return int(images_.size() - free_slots_.size()); }
 
-    force_inline int page_count() const { return int(pages_.size()); }
-
-    force_inline ColorType Get(const int page, const int x, const int y) const {
-        return pages_[page][EncodeSwizzle(x, y)];
+    force_inline ColorType Get(const int index, const int x, const int y, const int lod) const {
+        const ImgData &p = images_[index];
+        return p.pixels[p.lod_offsets[lod] + EncodeSwizzle(x, y, p.tile_y_stride[lod])];
     }
 
-    force_inline ColorType Get(const int page, const float x, const float y) const {
-        return Get(page, int(x * res_[0] - 0.5f), int(y * res_[1] - 0.5f));
+    force_inline ColorType Get(const int index, float x, float y, const int lod) const {
+        const ImgData &p = images_[index];
+        const int w = p.res[lod][0] - 1;
+        const int h = p.res[lod][1] - 1;
+
+        x -= std::floor(x);
+        y -= std::floor(y);
+
+        return Get(index, int(x * w - 0.5f), int(y * h - 0.5f), lod);
     }
 
-    color_rgba_t Fetch(const int page, const int x, const int y) const override {
-        const ColorType col = Get(page, x, y);
+    void GetIRes(const int index, const int lod, int res[2]) const override {
+        const ImgData &p = images_[index];
+
+        res[0] = p.res[lod][0] - 1;
+        res[1] = p.res[lod][1] - 1;
+    }
+
+    void GetFRes(const int index, const int lod, float res[2]) const override {
+        const ImgData &p = images_[index];
+
+        res[0] = float(p.res[lod][0] - 1);
+        res[1] = float(p.res[lod][1] - 1);
+    }
+
+    color_rgba_t Fetch(const int index, const int x, const int y, const int lod) const override {
+        const ColorType col = Get(index, x, y, lod);
 
         color_rgba_t ret;
         for (int i = 0; i < N; ++i) {
@@ -236,8 +295,8 @@ template <typename T, int N> class TexStorageSwizzled : public TexStorageBase {
         return ret;
     }
 
-    color_rgba_t Fetch(const int page, const float x, const float y) const override {
-        const ColorType col = Get(page, x, y);
+    color_rgba_t Fetch(const int index, const float x, const float y, const int lod) const override {
+        const ColorType col = Get(index, x, y, lod);
 
         color_rgba_t ret;
         for (int i = 0; i < N; ++i) {
@@ -255,12 +314,8 @@ template <typename T, int N> class TexStorageSwizzled : public TexStorageBase {
         return ret;
     }
 
-    int Allocate(const ColorType *data, const int res[2], int pos[2]);
-    bool Free(int page, const int pos[2]);
-
-    bool Resize(int new_page_count);
-
-    int DownsampleRegion(int src_page, const int src_pos[2], const int src_res[2], int dst_pos[2]);
+    int Allocate(const ColorType *data, const int res[2], bool mips);
+    bool Free(int index);
 };
 
 extern template class TexStorageSwizzled<uint8_t, 4>;
@@ -270,3 +325,5 @@ extern template class TexStorageSwizzled<uint8_t, 1>;
 
 } // namespace Ref
 } // namespace Ray
+
+#undef _MAX

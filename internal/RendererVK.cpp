@@ -28,7 +28,7 @@ static_assert(sizeof(Types::transform_t) == sizeof(Ray::transform_t), "!");
 static_assert(sizeof(Types::mesh_instance_t) == sizeof(Ray::mesh_instance_t), "!");
 static_assert(sizeof(Types::light_t) == sizeof(Ray::light_t), "!");
 static_assert(sizeof(Types::material_t) == sizeof(Ray::material_t), "!");
-static_assert(sizeof(Types::texture_t) == sizeof(Ray::texture_t), "!");
+static_assert(sizeof(Types::atlas_texture_t) == sizeof(Ray::atlas_texture_t), "!");
 
 static_assert(Types::LIGHT_TYPE_SPHERE == Ray::LIGHT_TYPE_SPHERE, "!");
 static_assert(Types::LIGHT_TYPE_SPOT == Ray::LIGHT_TYPE_SPOT, "!");
@@ -46,14 +46,18 @@ namespace Vk {
 #include "shaders/postprocess.comp.inl"
 #include "shaders/prepare_indir_args.comp.inl"
 #include "shaders/primary_ray_gen.comp.inl"
-#include "shaders/shade_primary_hits.comp.inl"
-#include "shaders/shade_secondary_hits.comp.inl"
+#include "shaders/shade_primary_hits_atlas.comp.inl"
+#include "shaders/shade_primary_hits_bindless.comp.inl"
+#include "shaders/shade_secondary_hits_atlas.comp.inl"
+#include "shaders/shade_secondary_hits_bindless.comp.inl"
 #include "shaders/trace_primary_rays_hwrt.comp.inl"
 #include "shaders/trace_primary_rays_swrt.comp.inl"
 #include "shaders/trace_secondary_rays_hwrt.comp.inl"
 #include "shaders/trace_secondary_rays_swrt.comp.inl"
-#include "shaders/trace_shadow_hwrt.comp.inl"
-#include "shaders/trace_shadow_swrt.comp.inl"
+#include "shaders/trace_shadow_hwrt_atlas.comp.inl"
+#include "shaders/trace_shadow_hwrt_bindless.comp.inl"
+#include "shaders/trace_shadow_swrt_atlas.comp.inl"
+#include "shaders/trace_shadow_swrt_bindless.comp.inl"
 } // namespace Vk
 } // namespace Ray
 
@@ -61,13 +65,15 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
     ctx_.reset(new Context);
     const bool res = ctx_->Init(log, s.preferred_device);
     if (!res) {
-        throw std::runtime_error("Error initializing vulkan context!");
+        throw std::runtime_error("Error initializings vulkan context!");
     }
 
     use_hwrt_ = (s.use_hwrt && ctx_->ray_query_supported());
+    use_bindless_ = s.use_bindless && ctx_->max_combined_image_samplers() >= 16384u;
     use_tex_compression_ = s.use_tex_compression;
-    log->Info("HWRT is %s", use_hwrt_ ? "enabled" : "disabled");
-    log->Info("Tex compression is %s", use_tex_compression_ ? "enabled" : "disabled");
+    log->Info("HWRT        is %s", use_hwrt_ ? "enabled" : "disabled");
+    log->Info("Bindless    is %s", use_bindless_ ? "enabled" : "disabled");
+    log->Info("Compression is %s", use_tex_compression_ ? "enabled" : "disabled");
 
     sh_prim_rays_gen_ = Shader{"Primary Raygen",
                                ctx_.get(),
@@ -109,31 +115,63 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
                                        internal_shaders_intersect_area_lights_comp_spv_size,
                                        eShaderType::Comp,
                                        log};
-    sh_shade_primary_hits_ = Shader{"Shade Primary Hits",
-                                    ctx_.get(),
-                                    internal_shaders_shade_primary_hits_comp_spv,
-                                    internal_shaders_shade_primary_hits_comp_spv_size,
-                                    eShaderType::Comp,
-                                    log};
-    sh_shade_secondary_hits_ = Shader{"Shade Secondary Hits",
+    sh_shade_primary_hits_[0] = Shader{"Shade Primary Hits (Atlas)",
+                                       ctx_.get(),
+                                       internal_shaders_shade_primary_hits_atlas_comp_spv,
+                                       internal_shaders_shade_primary_hits_atlas_comp_spv_size,
+                                       eShaderType::Comp,
+                                       log};
+    if (use_bindless_) {
+        sh_shade_primary_hits_[1] = Shader{"Shade Primary Hits (Bindless)",
+                                           ctx_.get(),
+                                           internal_shaders_shade_primary_hits_bindless_comp_spv,
+                                           internal_shaders_shade_primary_hits_bindless_comp_spv_size,
+                                           eShaderType::Comp,
+                                           log};
+    }
+    sh_shade_secondary_hits_[0] = Shader{"Shade Secondary Hits (Atlas)",
+                                         ctx_.get(),
+                                         internal_shaders_shade_secondary_hits_atlas_comp_spv,
+                                         internal_shaders_shade_secondary_hits_atlas_comp_spv_size,
+                                         eShaderType::Comp,
+                                         log};
+    if (use_bindless_) {
+        sh_shade_secondary_hits_[1] = Shader{"Shade Secondary Hits (Bindless)",
+                                             ctx_.get(),
+                                             internal_shaders_shade_secondary_hits_bindless_comp_spv,
+                                             internal_shaders_shade_secondary_hits_bindless_comp_spv_size,
+                                             eShaderType::Comp,
+                                             log};
+    }
+    sh_trace_shadow_swrt_[0] = Shader{"Trace Shadow SWRT (Atlas)",
                                       ctx_.get(),
-                                      internal_shaders_shade_secondary_hits_comp_spv,
-                                      internal_shaders_shade_secondary_hits_comp_spv_size,
+                                      internal_shaders_trace_shadow_swrt_atlas_comp_spv,
+                                      internal_shaders_trace_shadow_swrt_atlas_comp_spv_size,
                                       eShaderType::Comp,
                                       log};
-    sh_trace_shadow_[0] = Shader{"Trace Shadow SWRT",
-                                 ctx_.get(),
-                                 internal_shaders_trace_shadow_swrt_comp_spv,
-                                 internal_shaders_trace_shadow_swrt_comp_spv_size,
-                                 eShaderType::Comp,
-                                 log};
+    if (use_bindless_) {
+        sh_trace_shadow_swrt_[1] = Shader{"Trace Shadow SWRT (Bindless)",
+                                          ctx_.get(),
+                                          internal_shaders_trace_shadow_swrt_bindless_comp_spv,
+                                          internal_shaders_trace_shadow_swrt_bindless_comp_spv_size,
+                                          eShaderType::Comp,
+                                          log};
+    }
     if (use_hwrt_) {
-        sh_trace_shadow_[1] = Shader{"Trace Shadow HWRT",
-                                     ctx_.get(),
-                                     internal_shaders_trace_shadow_hwrt_comp_spv,
-                                     internal_shaders_trace_shadow_hwrt_comp_spv_size,
-                                     eShaderType::Comp,
-                                     log};
+        sh_trace_shadow_hwrt_[0] = Shader{"Trace Shadow HWRT (Atlas)",
+                                          ctx_.get(),
+                                          internal_shaders_trace_shadow_hwrt_atlas_comp_spv,
+                                          internal_shaders_trace_shadow_hwrt_atlas_comp_spv_size,
+                                          eShaderType::Comp,
+                                          log};
+        if (use_bindless_) {
+            sh_trace_shadow_hwrt_[1] = Shader{"Trace Shadow HWRT (Bindless)",
+                                              ctx_.get(),
+                                              internal_shaders_trace_shadow_hwrt_bindless_comp_spv,
+                                              internal_shaders_trace_shadow_hwrt_bindless_comp_spv_size,
+                                              eShaderType::Comp,
+                                              log};
+        }
     }
     sh_prepare_indir_args_ = Shader{"Prepare Indir Args",
                                     ctx_.get(),
@@ -165,10 +203,16 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
     prog_trace_secondary_rays_[0] = Program{"Trace Secondary Rays SWRT", ctx_.get(), &sh_trace_secondary_rays_[0], log};
     prog_trace_secondary_rays_[1] = Program{"Trace Secondary Rays HWRT", ctx_.get(), &sh_trace_secondary_rays_[1], log};
     prog_intersect_area_lights_ = Program{"Intersect Area Lights", ctx_.get(), &sh_intersect_area_lights_, log};
-    prog_shade_primary_hits_ = Program{"Shade Primary Hits", ctx_.get(), &sh_shade_primary_hits_, log};
-    prog_shade_secondary_hits_ = Program{"Shade Secondary Hits", ctx_.get(), &sh_shade_secondary_hits_, log};
-    prog_trace_shadow_[0] = Program{"Trace Shadow SWRT", ctx_.get(), &sh_trace_shadow_[0], log};
-    prog_trace_shadow_[1] = Program{"Trace Shadow HWRT", ctx_.get(), &sh_trace_shadow_[1], log};
+    prog_shade_primary_hits_[0] = Program{"Shade Primary Hits (Atlas)", ctx_.get(), &sh_shade_primary_hits_[0], log};
+    prog_shade_primary_hits_[1] = Program{"Shade Primary Hits (Bindless)", ctx_.get(), &sh_shade_primary_hits_[1], log};
+    prog_shade_secondary_hits_[0] =
+        Program{"Shade Secondary Hits (Atlas)", ctx_.get(), &sh_shade_secondary_hits_[0], log};
+    prog_shade_secondary_hits_[1] =
+        Program{"Shade Secondary Hits (Bindless)", ctx_.get(), &sh_shade_secondary_hits_[1], log};
+    prog_trace_shadow_swrt_[0] = Program{"Trace Shadow SWRT (Atlas)", ctx_.get(), &sh_trace_shadow_swrt_[0], log};
+    prog_trace_shadow_swrt_[1] = Program{"Trace Shadow SWRT (Bindless)", ctx_.get(), &sh_trace_shadow_swrt_[1], log};
+    prog_trace_shadow_hwrt_[0] = Program{"Trace Shadow HWRT (Atlas)", ctx_.get(), &sh_trace_shadow_hwrt_[0], log};
+    prog_trace_shadow_hwrt_[1] = Program{"Trace Shadow HWRT (Bindless)", ctx_.get(), &sh_trace_shadow_hwrt_[1], log};
     prog_prepare_indir_args_ = Program{"Prepare Indir Args", ctx_.get(), &sh_prepare_indir_args_, log};
     prog_mix_incremental_ = Program{"Mix Incremental", ctx_.get(), &sh_mix_incremental_, log};
     prog_postprocess_ = Program{"Postprocess", ctx_.get(), &sh_postprocess_, log};
@@ -180,10 +224,14 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
         !pi_trace_secondary_rays_[0].Init(ctx_.get(), &prog_trace_secondary_rays_[0], log) ||
         (use_hwrt_ && !pi_trace_secondary_rays_[1].Init(ctx_.get(), &prog_trace_secondary_rays_[1], log)) ||
         !pi_intersect_area_lights_.Init(ctx_.get(), &prog_intersect_area_lights_, log) ||
-        !pi_shade_primary_hits_.Init(ctx_.get(), &prog_shade_primary_hits_, log) ||
-        !pi_shade_secondary_hits_.Init(ctx_.get(), &prog_shade_secondary_hits_, log) ||
-        !pi_trace_shadow_[0].Init(ctx_.get(), &prog_trace_shadow_[0], log) ||
-        (use_hwrt_ && !pi_trace_shadow_[1].Init(ctx_.get(), &prog_trace_shadow_[1], log)) ||
+        !pi_shade_primary_hits_[0].Init(ctx_.get(), &prog_shade_primary_hits_[0], log) ||
+        (use_bindless_ && !pi_shade_primary_hits_[1].Init(ctx_.get(), &prog_shade_primary_hits_[1], log)) ||
+        !pi_shade_secondary_hits_[0].Init(ctx_.get(), &prog_shade_secondary_hits_[0], log) ||
+        (use_bindless_ && !pi_shade_secondary_hits_[1].Init(ctx_.get(), &prog_shade_secondary_hits_[1], log)) ||
+        !pi_trace_shadow_swrt_[0].Init(ctx_.get(), &prog_trace_shadow_swrt_[0], log) ||
+        (use_bindless_ && !pi_trace_shadow_swrt_[1].Init(ctx_.get(), &prog_trace_shadow_swrt_[1], log)) ||
+        (use_hwrt_ && !pi_trace_shadow_hwrt_[0].Init(ctx_.get(), &prog_trace_shadow_hwrt_[0], log)) ||
+        (use_hwrt_ && use_bindless_ && !pi_trace_shadow_hwrt_[1].Init(ctx_.get(), &prog_trace_shadow_hwrt_[1], log)) ||
         !pi_prepare_indir_args_.Init(ctx_.get(), &prog_prepare_indir_args_, log) ||
         !pi_mix_incremental_.Init(ctx_.get(), &prog_mix_incremental_, log) ||
         !pi_postprocess_.Init(ctx_.get(), &prog_postprocess_, log) ||
@@ -264,7 +312,9 @@ void Ray::Vk::Renderer::Clear(const pixel_color_t &c) {
     EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 }
 
-Ray::SceneBase *Ray::Vk::Renderer::CreateScene() { return new Vk::Scene(ctx_.get(), use_hwrt_, use_tex_compression_); }
+Ray::SceneBase *Ray::Vk::Renderer::CreateScene() {
+    return new Vk::Scene(ctx_.get(), use_hwrt_, use_bindless_, use_tex_compression_);
+}
 
 void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) {
     const auto s = dynamic_cast<const Vk::Scene *>(_s);
@@ -316,7 +366,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
                             s->tri_indices_.buf(),
                             s->tri_materials_.buf(),
                             s->materials_.gpu_buf(),
-                            s->textures_.gpu_buf(),
+                            s->atlas_textures_.gpu_buf(),
                             s->lights_.gpu_buf(),
                             s->li_indices_.buf(),
                             int(s->li_indices_.size()),
@@ -392,8 +442,8 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         if (sc_data.materials && sc_data.materials.resource_state != eResState::ShaderResource) {
             res_transitions.emplace_back(&sc_data.materials, eResState::ShaderResource);
         }
-        if (sc_data.textures && sc_data.textures.resource_state != eResState::ShaderResource) {
-            res_transitions.emplace_back(&sc_data.textures, eResState::ShaderResource);
+        if (sc_data.atlas_textures && sc_data.atlas_textures.resource_state != eResState::ShaderResource) {
+            res_transitions.emplace_back(&sc_data.atlas_textures, eResState::ShaderResource);
         }
         if (sc_data.lights && sc_data.lights.resource_state != eResState::ShaderResource) {
             res_transitions.emplace_back(&sc_data.lights, eResState::ShaderResource);
@@ -427,8 +477,9 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
     { // shade primary hits
         DebugMarker _(cmd_buf, "ShadePrimaryHits");
         kernel_ShadePrimaryHits(cmd_buf, pass_info.settings, s->env_, prim_hits_buf_, prim_rays_buf_, sc_data,
-                                halton_seq_buf_, hi + RAND_DIM_BASE_COUNT, s->tex_atlases_, temp_buf_,
-                                secondary_rays_buf_, shadow_rays_buf_, counters_buf_);
+                                halton_seq_buf_, hi + RAND_DIM_BASE_COUNT, s->tex_atlases_,
+                                s->bindless_tex_data_.descr_set, temp_buf_, secondary_rays_buf_, shadow_rays_buf_,
+                                counters_buf_);
     }
 
     { // prepare indirect args
@@ -440,7 +491,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         DebugMarker _(cmd_buf, "TraceShadow");
         kernel_TraceShadow(cmd_buf, indir_args_buf_, counters_buf_, sc_data, macro_tree_root,
                            region.halton_seq[hi + RAND_DIM_BASE_COUNT + RAND_DIM_BSDF_PICK], s->tex_atlases_,
-                           shadow_rays_buf_, temp_buf_);
+                           s->bindless_tex_data_.descr_set, shadow_rays_buf_, temp_buf_);
     }
 
     for (int bounce = 1;
@@ -460,10 +511,10 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
 
         { // shade secondary hits
             DebugMarker _(cmd_buf, "ShadeSecondaryHits");
-            kernel_ShadeSecondaryHits(cmd_buf, pass_info.settings, s->env_, indir_args_buf_, prim_hits_buf_,
-                                      secondary_rays_buf_, sc_data, halton_seq_buf_,
-                                      hi + RAND_DIM_BASE_COUNT + bounce * RAND_DIM_BOUNCE_COUNT, s->tex_atlases_,
-                                      temp_buf_, prim_rays_buf_, shadow_rays_buf_, counters_buf_);
+            kernel_ShadeSecondaryHits(
+                cmd_buf, pass_info.settings, s->env_, indir_args_buf_, prim_hits_buf_, secondary_rays_buf_, sc_data,
+                halton_seq_buf_, hi + RAND_DIM_BASE_COUNT + bounce * RAND_DIM_BOUNCE_COUNT, s->tex_atlases_,
+                s->bindless_tex_data_.descr_set, temp_buf_, prim_rays_buf_, shadow_rays_buf_, counters_buf_);
         }
 
         { // prepare indirect args
@@ -476,7 +527,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
             kernel_TraceShadow(
                 cmd_buf, indir_args_buf_, counters_buf_, sc_data, macro_tree_root,
                 region.halton_seq[hi + RAND_DIM_BASE_COUNT + bounce * RAND_DIM_BOUNCE_COUNT + RAND_DIM_BSDF_PICK],
-                s->tex_atlases_, shadow_rays_buf_, temp_buf_);
+                s->tex_atlases_, s->bindless_tex_data_.descr_set, shadow_rays_buf_, temp_buf_);
         }
 
         // std::swap(final_buf_, temp_buf_);

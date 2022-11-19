@@ -17,6 +17,7 @@ extern std::atomic_bool g_log_contains_errors;
 
 class LogErr : public Ray::ILog {
     FILE *err_out_ = nullptr;
+
   public:
     LogErr() { err_out_ = fopen("test_data/errors.txt", "w"); }
     ~LogErr() { fclose(err_out_); }
@@ -114,6 +115,7 @@ void load_needed_textures(Ray::SceneBase &scene, Ray::principled_mat_desc_t &mat
         tex_desc.data = img_data.data();
         tex_desc.w = img_w;
         tex_desc.h = img_h;
+        tex_desc.is_normalmap = true;
         tex_desc.generate_mipmaps = false;
         tex_desc.is_srgb = false;
 
@@ -670,7 +672,9 @@ void run_material_test(const char *arch_list[], const char *preferred_device, co
         Ray::settings_t s;
         s.w = test_img_w;
         s.h = test_img_h;
+#ifdef ENABLE_GPU_IMPL
         s.preferred_device = preferred_device;
+#endif
         s.use_wide_bvh = true;
 
         const int DiffThres = 32;
@@ -2228,7 +2232,7 @@ void test_alpha_mat3(const char *arch_list[], const char *preferred_device) {
 
 void test_complex_mat0(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 512;
-    const double MinPSNR = 39.02;
+    const double MinPSNR = 38.99;
     const int PixThres = 14;
 
     Ray::principled_mat_desc_t wood_mat_desc;
@@ -2249,8 +2253,8 @@ void test_complex_mat0(const char *arch_list[], const char *preferred_device) {
 
 void test_complex_mat1(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 512;
-    const double MinPSNR = 38.17;
-    const int PixThres = 21;
+    const double MinPSNR = 37.89;
+    const int PixThres = 26;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = 0;
@@ -2261,7 +2265,7 @@ void test_complex_mat1(const char *arch_list[], const char *preferred_device) {
 
     const char *textures[] = {
         "test_data/textures/streaky-metal1_albedo.tga",
-        "test_data/textures/streaky-metal1_normal-ogl.tga",
+        "test_data/textures/streaky-metal1_normal-ogl_rgba.tga",
         "test_data/textures/streaky-metal1_roughness.tga",
     };
 
@@ -2293,7 +2297,7 @@ void test_complex_mat2(const char *arch_list[], const char *preferred_device) {
 
 void test_complex_mat3(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 256;
-    const double MinPSNR = 39.15;
+    const double MinPSNR = 39.13;
     const int PixThres = 1;
 
     Ray::principled_mat_desc_t metal_mat_desc;
@@ -2316,8 +2320,8 @@ void test_complex_mat3(const char *arch_list[], const char *preferred_device) {
 
 void test_complex_mat4(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 256;
-    const double MinPSNR = 34.75;
-    const int PixThres = 32;
+    const double MinPSNR = 34.58;
+    const int PixThres = 34;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = 0;
@@ -2341,7 +2345,7 @@ void test_complex_mat4(const char *arch_list[], const char *preferred_device) {
 void test_complex_mat5(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 768;
     const double MinPSNR = 33.23;
-    const int PixThres = 348;
+    const int PixThres = 351;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = 0;
@@ -2385,7 +2389,7 @@ void test_complex_mat5_mesh_lights(const char *arch_list[], const char *preferre
 void test_complex_mat5_sphere_light(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 768;
     const double MinPSNR = 33.35;
-    const int PixThres = 454;
+    const int PixThres = 455;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = 0;

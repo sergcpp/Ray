@@ -56,7 +56,6 @@ if (ENABLE_REF_IMPL)
 endif()
                           
 if(NOT CMAKE_SYSTEM_NAME MATCHES "Android" AND NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64")
-
 if (ENABLE_SIMD_IMPL)
     set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
                               internal/RendererSSE2.h

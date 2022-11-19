@@ -148,8 +148,9 @@ struct tex_desc_t {
     int w,                              ///< Texture width
         h;                              ///< Texture height
     bool is_srgb = true;
-    bool force_no_compression = false;  ///< Make sure texture will have best quality
-    bool generate_mipmaps;
+    bool is_normalmap = false;
+    bool force_no_compression = false;  ///< Make sure texture will have the best quality
+    bool generate_mipmaps = false;
 };
 
 enum eLightType {

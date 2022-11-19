@@ -163,6 +163,20 @@ bool Ray::Vk::Context::Init(ILog *log, const char *preferred_device) {
                                                 10,
                                             16384u);
 
+    { // check if 3-component images are supported
+        VkImageFormatProperties props;
+        const VkResult res = vkGetPhysicalDeviceImageFormatProperties(
+            physical_device_, VK_FORMAT_R8G8B8_UNORM, VK_IMAGE_TYPE_2D, VK_IMAGE_TILING_OPTIMAL,
+            (VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT), 0,
+            &props);
+
+        VkFormatProperties format_properties;
+        vkGetPhysicalDeviceFormatProperties(physical_device_, VK_FORMAT_R8G8B8_UNORM, &format_properties);
+
+        rgb8_unorm_is_supported_ =
+            (res == VK_SUCCESS) && (format_properties.optimalTilingFeatures & VK_FORMAT_FEATURE_BLIT_DST_BIT);
+    }
+
     default_memory_allocs_.reset(new MemoryAllocators("Default Allocs", this, 32 * 1024 * 1024 /* initial_block_size */,
                                                       1.5f /* growth_factor */));
 

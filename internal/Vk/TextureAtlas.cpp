@@ -126,6 +126,10 @@ int Ray::Vk::TextureAtlas::Allocate(const color_t<T, N> *data, const int _res[2]
                         const int req_size = GetRequiredMemory_BC4(res[0], res[1]);
                         compressed_data.reset(new uint8_t[req_size]);
                         CompressImage_BC4<N>(&temp_storage[0].v[0], res[0], res[1], compressed_data.get());
+                    } else if (format_ == eTexFormat::BC5) {
+                        const int req_size = GetRequiredMemory_BC5(res[0], res[1]);
+                        compressed_data.reset(new uint8_t[req_size]);
+                        CompressImage_BC5<2>(&temp_storage[0].v[0], res[0], res[1], compressed_data.get());
                     }
 
                     WritePageData(page_index, pos[0], pos[1], res[0], res[1], compressed_data.get());
@@ -266,20 +270,10 @@ bool Ray::Vk::TextureAtlas::Resize(const int pages_count) {
         img_info.samples = VK_SAMPLE_COUNT_1_BIT;
         img_info.flags = 0;
 
-        if (format_ == eTexFormat::RawRGB888) { // check if 3-component images are supported
-            VkImageFormatProperties props;
-            const VkResult res =
-                vkGetPhysicalDeviceImageFormatProperties(ctx_->physical_device(), img_info.format, img_info.imageType,
-                                                         img_info.tiling, img_info.usage, img_info.flags, &props);
-
-            VkFormatProperties format_properties;
-            vkGetPhysicalDeviceFormatProperties(ctx_->physical_device(), img_info.format, &format_properties);
-
-            // TODO: try to not require blitting
-            if (res != VK_SUCCESS || !(format_properties.optimalTilingFeatures & VK_FORMAT_FEATURE_BLIT_DST_BIT)) {
-                img_info.format = VK_FORMAT_R8G8B8A8_UNORM;
-                real_format_ = eTexFormat::RawRGBA8888;
-            }
+        if (format_ == eTexFormat::RawRGB888 && !ctx_->rgb8_unorm_is_supported()) {
+            // Fallback to 4-component texture
+            img_info.format = VK_FORMAT_R8G8B8A8_UNORM;
+            real_format_ = eTexFormat::RawRGBA8888;
         }
 
         VkResult res = vkCreateImage(ctx_->device(), &img_info, nullptr, &new_img);
@@ -771,6 +765,8 @@ void Ray::Vk::TextureAtlas::WritePageData(const int page, const int posx, const 
             data_size = GetRequiredMemory_BC3(sizex, sizey);
         } else if (format_ == eTexFormat::BC4) {
             data_size = GetRequiredMemory_BC4(sizex, sizey);
+        } else if (format_ == eTexFormat::BC5) {
+            data_size = GetRequiredMemory_BC5(sizex, sizey);
         }
     }
 

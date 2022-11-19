@@ -30,9 +30,10 @@ struct settings_t {
     int w, h;
 #ifdef ENABLE_GPU_IMPL
     const char *preferred_device = nullptr;
-    bool use_hwrt = true;
     bool use_tex_compression = true; // temporarily GPU only
 #endif // ENABLE_GPU_IMPL
+    bool use_hwrt = true;
+    bool use_bindless = true;
     bool use_wide_bvh = true;
 };
 

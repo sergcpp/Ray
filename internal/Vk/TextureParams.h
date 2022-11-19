@@ -39,12 +39,14 @@ enum class eTexFormat : uint8_t {
     BC2,
     BC3,
     BC4,
+    BC5,
     ASTC,
     None,
     _Count
 };
 
 inline bool IsDepthFormat(const eTexFormat format) {
+    static_assert(int(eTexFormat::_Count) == 33, "Update the list below!");
     return format == eTexFormat::Depth16 || format == eTexFormat::Depth24Stencil8 ||
            format == eTexFormat::Depth32Stencil8
 #ifndef __ANDROID__
@@ -55,7 +57,24 @@ inline bool IsDepthFormat(const eTexFormat format) {
 }
 
 inline bool IsDepthStencilFormat(const eTexFormat format) {
+    static_assert(int(eTexFormat::_Count) == 33, "Update the list below!");
     return format == eTexFormat::Depth24Stencil8 || format == eTexFormat::Depth32Stencil8;
+}
+
+inline bool IsCompressedFormat(const eTexFormat format) {
+    static_assert(int(eTexFormat::_Count) == 33, "Update the list below!");
+    switch (format) {
+    case eTexFormat::BC1:
+    case eTexFormat::BC2:
+    case eTexFormat::BC3:
+    case eTexFormat::BC4:
+    case eTexFormat::BC5:
+    case eTexFormat::ASTC:
+        return true;
+    default:
+        return false;
+    }
+    return false;
 }
 
 enum class eTexBlock : uint8_t {

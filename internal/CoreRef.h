@@ -11,13 +11,13 @@
 #if defined(_M_AMD64) || defined(_M_X64) || (!defined(__ANDROID__) && defined(__x86_64__)) ||                          \
     (defined(_M_IX86_FP) && _M_IX86_FP == 2)
 #define USE_SSE2
-//#pragma message("Ray::Ref::simd_vec will use SSE2")
+// #pragma message("Ray::Ref::simd_vec will use SSE2")
 #elif defined(__ARM_NEON__) || defined(__aarch64__) || defined(_M_ARM) || defined(_M_ARM64)
 #define USE_NEON
-//#pragma message("Ray::Ref::simd_vec will use NEON")
+// #pragma message("Ray::Ref::simd_vec will use NEON")
 #elif defined(__ANDROID__) && (defined(__i386__) || defined(__x86_64__))
 #define USE_SSE2
-//#pragma message("Ray::Ref::simd_vec will use SSE2")
+// #pragma message("Ray::Ref::simd_vec will use SSE2")
 #else
 #pragma message("Ray::Ref::simd_vec will not use SIMD")
 #endif
@@ -95,10 +95,10 @@ class TexStorageBase;
 template <typename T, int N> class TexStorageLinear;
 template <typename T, int N> class TexStorageTiled;
 template <typename T, int N> class TexStorageSwizzled;
-using TextureAtlasRGBA = TexStorageSwizzled<uint8_t, 4>;
-using TextureAtlasRGB = TexStorageSwizzled<uint8_t, 3>;
-using TextureAtlasRG = TexStorageSwizzled<uint8_t, 2>;
-using TextureAtlasR = TexStorageSwizzled<uint8_t, 1>;
+using TexStorageRGBA = TexStorageSwizzled<uint8_t, 4>;
+using TexStorageRGB = TexStorageSwizzled<uint8_t, 3>;
+using TexStorageRG = TexStorageSwizzled<uint8_t, 2>;
+using TexStorageR = TexStorageSwizzled<uint8_t, 1>;
 
 force_inline int hash(int x) {
     unsigned ret = reinterpret_cast<const unsigned &>(x);
@@ -218,20 +218,19 @@ void TransformRay(const float ro[3], const float rd[3], const float *xform, floa
 simd_fvec4 TransformPoint(const simd_fvec4 &p, const float *xform);
 simd_fvec4 TransformDirection(const simd_fvec4 &p, const float *xform);
 simd_fvec4 TransformNormal(const simd_fvec4 &n, const float *inv_xform);
-simd_fvec2 TransformUV(const simd_fvec2 &uv, const simd_fvec2 &tex_atlas_size, const texture_t &t, int mip_level);
 
 // Sample Texture
-simd_fvec4 SampleNearest(const TexStorageBase *atlases[], const texture_t &t, const simd_fvec2 &uvs, int lod);
-simd_fvec4 SampleBilinear(const TexStorageBase *atlases[], const texture_t &t, const simd_fvec2 &uvs, int lod);
-simd_fvec4 SampleBilinear(const TexStorageBase &atlas, const simd_fvec2 &uvs, int page);
-simd_fvec4 SampleTrilinear(const TexStorageBase *atlases[], const texture_t &t, const simd_fvec2 &uvs, float lod);
-simd_fvec4 SampleAnisotropic(const TexStorageBase *atlases[], const texture_t &t, const simd_fvec2 &uvs,
+simd_fvec4 SampleNearest(const TexStorageBase *const textures[], uint32_t index, const simd_fvec2 &uvs, int lod);
+simd_fvec4 SampleBilinear(const TexStorageBase *const textures[], uint32_t index, const simd_fvec2 &uvs, int lod);
+simd_fvec4 SampleBilinear(const TexStorageBase &storage, uint32_t tex, const simd_fvec2 &iuvs, int lod);
+simd_fvec4 SampleTrilinear(const TexStorageBase *const textures[], uint32_t index, const simd_fvec2 &uvs, float lod);
+simd_fvec4 SampleAnisotropic(const TexStorageBase *const textures[], uint32_t index, const simd_fvec2 &uvs,
                              const simd_fvec2 &duv_dx, const simd_fvec2 &duv_dy);
-simd_fvec4 SampleLatlong_RGBE(const TextureAtlasRGBA &atlas, const texture_t &t, const simd_fvec4 &dir);
+simd_fvec4 SampleLatlong_RGBE(const TexStorageRGBA &storage, uint32_t index, const simd_fvec4 &dir);
 
 // Get visibility between two points accounting for transparent materials
 float ComputeVisibility(const float p[3], const float d[3], float dist, float rand_val, int rand_hash2,
-                        const scene_data_t &sc, uint32_t node_index, const TexStorageBase *tex_atlases[]);
+                        const scene_data_t &sc, uint32_t node_index, const TexStorageBase *const textures[]);
 
 // Compute derivatives at hit point
 void ComputeDerivatives(const simd_fvec4 &I, float t, const simd_fvec4 &do_dx, const simd_fvec4 &do_dy,
@@ -239,7 +238,7 @@ void ComputeDerivatives(const simd_fvec4 &I, float t, const simd_fvec4 &do_dx, c
                         const vertex_t &v3, const simd_fvec4 &plane_N, const transform_t &tr, derivatives_t &out_der);
 
 // Pick point on any light source for evaluation
-void SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, const TexStorageBase *tex_atlases[],
+void SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, const TexStorageBase *const textures[],
                        const float halton[], const float sample_off[2], light_sample_t &ls);
 
 // Account for visible lights contribution
@@ -249,7 +248,7 @@ bool IntersectAreaLights(const ray_data_t &ray, const light_t lights[], Span<con
 // Shade
 Ray::pixel_color_t ShadeSurface(int px_index, const pass_info_t &pi, const hit_data_t &inter, const ray_data_t &ray,
                                 const float *halton, const scene_data_t &sc, uint32_t node_index,
-                                const TexStorageBase *tex_atlases[], ray_data_t *out_secondary_rays,
+                                const TexStorageBase *const textures[], ray_data_t *out_secondary_rays,
                                 int *out_secondary_rays_count, shadow_ray_t *out_shadow_rays,
                                 int *out_shadow_rays_count);
 } // namespace Ref

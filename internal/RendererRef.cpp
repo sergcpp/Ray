@@ -50,15 +50,11 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
     sc_data.mtris = s->mtris_.data();
     sc_data.tri_materials = s->tri_materials_.empty() ? nullptr : &s->tri_materials_[0];
     sc_data.materials = s->materials_.empty() ? nullptr : &s->materials_[0];
-    sc_data.textures = s->textures_.empty() ? nullptr : &s->textures_[0];
     sc_data.lights = s->lights_.empty() ? nullptr : &s->lights_[0];
     sc_data.li_indices = {s->li_indices_.data(), s->li_indices_.size()};
     sc_data.visible_lights = {s->visible_lights_.data(), s->visible_lights_.size()};
 
     const uint32_t macro_tree_root = s->macro_nodes_root_;
-
-    const TexStorageBase *tex_atlases[] = {&s->tex_atlas_rgba_, &s->tex_atlas_rgb_, &s->tex_atlas_rg_,
-                                             &s->tex_atlas_r_};
 
     float root_min[3], cell_size[3];
     if (macro_tree_root != 0xffffffff) {
@@ -181,7 +177,7 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
 
         const pixel_color_t col = ShadeSurface(
             px_index, pass_info, inter, r, &region.halton_seq[hi + RAND_DIM_BASE_COUNT], sc_data, macro_tree_root,
-            tex_atlases, &p.secondary_rays[0], &secondary_rays_count, &p.shadow_rays[0], &shadow_rays_count);
+            s->tex_storages_, &p.secondary_rays[0], &secondary_rays_count, &p.shadow_rays[0], &shadow_rays_count);
         temp_buf_.SetPixel(x, y, col);
     }
 
@@ -195,7 +191,7 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
 
         const float visibility = ComputeVisibility(sh_r.o, sh_r.d, sh_r.dist,
                                                    region.halton_seq[hi + RAND_DIM_BASE_COUNT + RAND_DIM_BSDF_PICK],
-                                                   hash(px_index), sc_data, macro_tree_root, tex_atlases);
+                                                   hash(px_index), sc_data, macro_tree_root, s->tex_storages_);
         pixel_color_t col = {};
         col.r = visibility * sh_r.c[0];
         col.g = visibility * sh_r.c[1];
@@ -300,7 +296,7 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
             pixel_color_t col = ShadeSurface(
                 px_index, pass_info, inter, r,
                 &region.halton_seq[hi + RAND_DIM_BASE_COUNT + bounce * RAND_DIM_BOUNCE_COUNT], sc_data, macro_tree_root,
-                tex_atlases, &p.secondary_rays[0], &secondary_rays_count, &p.shadow_rays[0], &shadow_rays_count);
+                s->tex_storages_, &p.secondary_rays[0], &secondary_rays_count, &p.shadow_rays[0], &shadow_rays_count);
             col.a = 0.0f;
 
             temp_buf_.AddPixel(x, y, col);
@@ -317,7 +313,7 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
             const float visibility = ComputeVisibility(
                 sh_r.o, sh_r.d, sh_r.dist,
                 region.halton_seq[hi + RAND_DIM_BASE_COUNT + bounce * RAND_DIM_BOUNCE_COUNT + RAND_DIM_BSDF_PICK],
-                hash(px_index), sc_data, macro_tree_root, tex_atlases);
+                hash(px_index), sc_data, macro_tree_root, s->tex_storages_);
             pixel_color_t col = {};
             col.r = visibility * sh_r.c[0];
             col.g = visibility * sh_r.c[1];

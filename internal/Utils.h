@@ -137,9 +137,11 @@ extern const int _blank_ASTC_block_4x4_len;
 int GetRequiredMemory_BC1(int w, int h);
 int GetRequiredMemory_BC3(int w, int h);
 int GetRequiredMemory_BC4(int w, int h);
+int GetRequiredMemory_BC5(int w, int h);
 
 // NOTE: intended for realtime compression, quality may be not the best
 template <int SrcChannels> void CompressImage_BC1(const uint8_t img_src[], int w, int h, uint8_t img_dst[]);
 template <bool Is_YCoCg = false> void CompressImage_BC3(const uint8_t img_src[], int w, int h, uint8_t img_dst[]);
 template <int SrcChannels = 1> void CompressImage_BC4(const uint8_t img_src[], int w, int h, uint8_t img_dst[]);
+template <int SrcChannels = 2> void CompressImage_BC5(const uint8_t img_src[], int w, int h, uint8_t img_dst[]);
 }
