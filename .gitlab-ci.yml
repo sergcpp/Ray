@@ -162,12 +162,12 @@ stages:
   stage: test
   script:
     - echo "Running tests..."
-    - cd src/Ray/tests
+    - cd tests
     - '& "../$BIN_DIR/test_Ray-dbg" $AUX_TEST_ARGS.split(" ")'
     - cd ../
   after_script:
-    - cp src/Ray/tests/test_data/material_*.tga ./
-    - cp src/Ray/tests/test_data/errors.txt ./
+    - cp tests/test_data/material_*.tga ./
+    - cp tests/test_data/errors.txt ./
   artifacts:
     when: always
     name: "$env:CI_JOB_NAME"
