@@ -103,8 +103,6 @@ bool Traverse_MicroTree_WithStack(vec3 ro, vec3 rd, vec3 inv_d, int obj_index, u
     uint initial_stack_size = stack_size;
     g_stack[gl_LocalInvocationIndex][stack_size++] = node_index;
 
-    bool res = false;
-
     while (stack_size != initial_stack_size) {
         uint cur = g_stack[gl_LocalInvocationIndex][--stack_size];
 
@@ -135,11 +133,10 @@ bool Traverse_MicroTree_WithStack(vec3 ro, vec3 rd, vec3 inv_d, int obj_index, u
                     return true;
                 }
             }
-            res = (res || hit_found);
         }
     }
 
-    return res;
+    return false;
 }
 
 bool Traverse_MacroTree_WithStack(vec3 orig_ro, vec3 orig_rd, vec3 orig_inv_rd, uint node_index, inout hit_data_t inter) {
@@ -147,8 +144,6 @@ bool Traverse_MacroTree_WithStack(vec3 orig_ro, vec3 orig_rd, vec3 orig_inv_rd, 
 
     uint stack_size = 0;
     g_stack[gl_LocalInvocationIndex][stack_size++] = node_index;
-
-    bool res = false;
 
     while (stack_size != 0) {
         uint cur = g_stack[gl_LocalInvocationIndex][--stack_size];
@@ -178,26 +173,15 @@ bool Traverse_MacroTree_WithStack(vec3 orig_ro, vec3 orig_rd, vec3 orig_inv_rd, 
                 const vec3 rd = (tr.inv_xform * vec4(orig_rd, 0.0)).xyz;
                 const vec3 inv_d = safe_invert(rd);
 
-                const bool hit_found = Traverse_MicroTree_WithStack(ro, rd, inv_d, int(g_mi_indices[i]), m.node_index, stack_size, inter);
-                if (hit_found) {
-                    const bool is_backfacing = (inter.prim_index < 0);
-                    const uint prim_index = is_backfacing ? -inter.prim_index - 1 : inter.prim_index;
-                    const uint tri_index = g_tri_indices[prim_index];
-
-                    const uint front_mi = (g_tri_materials[tri_index] >> 16u) & 0xffff;
-                    const uint back_mi = (g_tri_materials[tri_index] & 0xffff);
-
-                    if ((!is_backfacing && (front_mi & MATERIAL_SOLID_BIT) != 0) ||
-                        (is_backfacing && (back_mi & MATERIAL_SOLID_BIT) != 0)) {
-                        return true;
-                    }
+                const bool solid_hit_found = Traverse_MicroTree_WithStack(ro, rd, inv_d, int(g_mi_indices[i]), m.node_index, stack_size, inter);
+                if (solid_hit_found) {
+                    return true;
                 }
-                res = (res || hit_found);
             }
         }
     }
 
-    return res;
+    return false;
 }
 
 bool ComputeVisibility(vec3 p, vec3 d, float dist, float rand_val, int rand_hash2) {
@@ -209,7 +193,12 @@ bool ComputeVisibility(vec3 p, vec3 d, float dist, float rand_val, int rand_hash
         sh_inter.mask = 0;
         sh_inter.t = dist;
 
-        if (!Traverse_MacroTree_WithStack(p, d, inv_d, g_params.node_index, sh_inter)) {
+        const bool solid_hit = Traverse_MacroTree_WithStack(p, d, inv_d, g_params.node_index, sh_inter);
+        if (solid_hit) {
+            return false;
+        }
+
+        if (sh_inter.mask == 0) {
             return true;
         }
 
@@ -220,11 +209,6 @@ bool ComputeVisibility(vec3 p, vec3 d, float dist, float rand_val, int rand_hash
 
         const uint front_mi = (g_tri_materials[tri_index] >> 16u) & 0xffff;
         const uint back_mi = (g_tri_materials[tri_index] & 0xffff);
-
-        if ((!is_backfacing && (front_mi & MATERIAL_SOLID_BIT) != 0 ||
-            (is_backfacing && (back_mi & MATERIAL_SOLID_BIT) != 0))) {
-            return false;
-        }
 
         const uint mat_index = (is_backfacing ? back_mi : front_mi) & MATERIAL_INDEX_BITS;
         material_t mat = g_materials[mat_index];
@@ -319,36 +303,34 @@ bool ComputeVisibility(vec3 p, vec3 d, float dist, float rand_val, int rand_hash
             const float w = 1.0 - uv.x - uv.y;
             const vec2 sh_uvs = vec2(v1.t[0][0], v1.t[0][1]) * w + vec2(v2.t[0][0], v2.t[0][1]) * uv.x + vec2(v3.t[0][0], v3.t[0][1]) * uv.y;
 
-            {
-                const int sh_rand_hash = hash(rand_hash2);
-                const float sh_rand_offset = construct_float(sh_rand_hash);
+            const int sh_rand_hash = hash(rand_hash2);
+            const float sh_rand_offset = construct_float(sh_rand_hash);
 
-                float sh_r = fract(rand_val + sh_rand_offset);
+            float sh_r = fract(rand_val + sh_rand_offset);
 
-                // resolve mix material
-                while (mat.type == MixNode) {
-                    float mix_val = mat.tangent_rotation_or_strength;
-                    if (mat.textures[BASE_TEXTURE] != 0xffffffff) {
+            // resolve mix material
+            while (mat.type == MixNode) {
+                float mix_val = mat.tangent_rotation_or_strength;
+                if (mat.textures[BASE_TEXTURE] != 0xffffffff) {
 #if BINDLESS
-                        mix_val *= SampleBilinear(mat.textures[BASE_TEXTURE], sh_uvs, 0).r;
+                    mix_val *= SampleBilinear(mat.textures[BASE_TEXTURE], sh_uvs, 0).r;
 #else
-                        mix_val *= SampleBilinear(g_atlases, g_textures[mat.textures[BASE_TEXTURE]], sh_uvs, 0).r;
+                    mix_val *= SampleBilinear(g_atlases, g_textures[mat.textures[BASE_TEXTURE]], sh_uvs, 0).r;
 #endif
-                    }
-
-                    if (sh_r > mix_val) {
-                        mat = g_materials[mat.textures[MIX_MAT1]];
-                        sh_r = (sh_r - mix_val) / (1.0 - mix_val);
-                    } else {
-                        mat = g_materials[mat.textures[MIX_MAT2]];
-                        sh_r = sh_r / mix_val;
-                    }
                 }
 
-                if (mat.type != TransparentNode) {
-                    rayQueryConfirmIntersectionEXT(rq);
-                    break;
+                if (sh_r > mix_val) {
+                    mat = g_materials[mat.textures[MIX_MAT1]];
+                    sh_r = (sh_r - mix_val) / (1.0 - mix_val);
+                } else {
+                    mat = g_materials[mat.textures[MIX_MAT2]];
+                    sh_r = sh_r / mix_val;
                 }
+            }
+
+            if (mat.type != TransparentNode) {
+                rayQueryConfirmIntersectionEXT(rq);
+                break;
             }
         }
     }
