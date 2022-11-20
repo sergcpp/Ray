@@ -2,12 +2,16 @@ cmake_minimum_required(VERSION 2.8.12)
 project(Ray)
 
 OPTION(ENABLE_UNITYBUILD "Enable compilation of one large cpp file" ON)
+OPTION(ENABLE_ASAN "Enable Address Sanitizer Build" OFF)
 OPTION(ENABLE_REF_IMPL "Enable reference CPU implementation" OFF)
 OPTION(ENABLE_SIMD_IMPL "Enable SIMD CPU implementations" ON)
 OPTION(ENABLE_GPU_IMPL "Enable Vulkan GPU implementation" ON)
 
 IF(MSVC)
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /Ob1")
+    if (ENABLE_ASAN)
+        set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /fsanitize=address")
+    endif()
 ELSE(MSVC)
     set(CMAKE_CXX_STANDARD 11)
     set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -54,7 +58,7 @@ if (ENABLE_REF_IMPL)
                               internal/RendererRef.h
                               internal/RendererRef.cpp)
 endif()
-                          
+
 if(NOT CMAKE_SYSTEM_NAME MATCHES "Android" AND NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64")
 if (ENABLE_SIMD_IMPL)
     set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
