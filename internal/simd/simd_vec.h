@@ -382,13 +382,6 @@ template <typename T, int S> class simd_vec {
         return temp;
     }
 
-    force_inline simd_vec<T, S> fract() const {
-        simd_vec<T, S> temp;
-        T _unused;
-        ITERATE(S, { temp[i] = std::modf(comp_[i], &_unused); })
-        return temp;
-    }
-
     force_inline void copy_to(T *f) const { memcpy(f, &comp_[0], S * sizeof(T)); }
 
     force_inline void copy_to(T *f, simd_mem_aligned_tag) const { memcpy(f, &comp_[0], S * sizeof(T)); }
@@ -709,7 +702,7 @@ template <typename T, int S> force_inline T length(const simd_vec<T, S> &v1) { r
 
 template <typename T, int S> force_inline T length2(const simd_vec<T, S> &v1) { return v1.length2(); }
 
-template <typename T, int S> force_inline simd_vec<T, S> fract(const simd_vec<T, S> &v1) { return v1.fract(); }
+template <typename T, int S> force_inline simd_vec<T, S> fract(const simd_vec<T, S> &v1) { return v1 - floor(v1); }
 
 template <typename T, int S> force_inline simd_vec<T, S> min(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) {
     return simd_vec<T, S>::min(v1, v2);

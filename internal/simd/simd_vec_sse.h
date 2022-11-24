@@ -189,17 +189,6 @@ template <> class simd_vec<float, 4> {
         return _mm_cvtss_f32(r1);
     }
 
-    force_inline simd_vec<float, 4> fract() const {
-#if defined(USE_SSE41)
-        __m128 integer = _mm_round_ps(vec_, _MM_FROUND_TRUNC | _MM_FROUND_NO_EXC);
-#else
-        __m128 integer = _mm_cvtepi32_ps(_mm_cvttps_epi32(vec_));
-#endif
-        simd_vec<float, 4> temp;
-        temp.vec_ = _mm_sub_ps(vec_, integer);
-        return temp;
-    }
-
     force_inline void copy_to(float *f) const { _mm_storeu_ps(f, vec_); }
     force_inline void copy_to(float *f, simd_mem_aligned_tag) const { _mm_store_ps(f, vec_); }
 

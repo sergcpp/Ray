@@ -126,8 +126,6 @@ template <> class simd_vec<float, 8> {
         return temp;
     }
 
-    force_inline simd_vec<float, 8> fract() const;
-
     force_inline void copy_to(float *f) const { _mm256_storeu_ps(f, vec_); }
 
     force_inline void copy_to(float *f, simd_mem_aligned_tag) const { _mm256_store_ps(f, vec_); }
@@ -789,14 +787,6 @@ force_inline simd_vec<float, 8> simd_vec<float, 8>::sqrt() const {
 force_inline simd_vec<float, 8> simd_vec<float, 8>::log() const {
     simd_vec<float, 8> temp;
     ITERATE_8({ temp.comp_[i] = std::log(comp_[i]); })
-    return temp;
-}
-
-force_inline simd_vec<float, 8> simd_vec<float, 8>::fract() const {
-    __m256 integer = _mm256_round_ps(vec_, _MM_FROUND_TRUNC);
-
-    simd_vec<float, 8> temp;
-    temp.vec_ = _mm256_sub_ps(vec_, integer);
     return temp;
 }
 
