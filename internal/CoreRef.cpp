@@ -2555,18 +2555,21 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleLatlong_RGBE(const TexStorageRGBA &storage,
         u = 1.0f - u;
     }
 
+    // TODO: +0.5f is a temporary hack, pass actual hdr orientation here!
+    u = fract(u + 0.5f);
+
     const int tex = (index & 0x00ffffff);
     simd_fvec2 size;
     storage.GetFRes(tex, 0, &size[0]);
 
-    const simd_fvec2 uvs = simd_fvec2{u, theta} * size + simd_fvec2{1.0f, 1.0f};
+    const simd_fvec2 uvs = simd_fvec2{u, theta} * size;
 
     const auto &p00 = storage.Get(tex, int(uvs[0] + 0), int(uvs[1] + 0), 0);
     const auto &p01 = storage.Get(tex, int(uvs[0] + 1), int(uvs[1] + 0), 0);
     const auto &p10 = storage.Get(tex, int(uvs[0] + 0), int(uvs[1] + 1), 0);
     const auto &p11 = storage.Get(tex, int(uvs[0] + 1), int(uvs[1] + 1), 0);
 
-    const simd_fvec2 k = uvs - floor(uvs);
+    const simd_fvec2 k = fract(uvs);
 
     const simd_fvec4 _p00 = rgbe_to_rgb(p00), _p01 = rgbe_to_rgb(p01);
     const simd_fvec4 _p10 = rgbe_to_rgb(p10), _p11 = rgbe_to_rgb(p11);
@@ -2812,9 +2815,6 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, co
             simd_fvec4 env_col = {sc.env->env_col[0], sc.env->env_col[1], sc.env->env_col[2], 0.0f};
             if (sc.env->env_map != 0xffffffff) {
                 env_col *= SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), sc.env->env_map, ls.L);
-                if (sc.env->env_clamp > FLT_EPS) {
-                    env_col = min(env_col, sc.env->env_clamp);
-                }
             }
             ls.col *= env_col;
         }
@@ -2863,9 +2863,6 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, co
             simd_fvec4 env_col = {sc.env->env_col[0], sc.env->env_col[1], sc.env->env_col[2], 0.0f};
             if (sc.env->env_map != 0xffffffff) {
                 env_col *= SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), sc.env->env_map, ls.L);
-                if (sc.env->env_clamp > FLT_EPS) {
-                    env_col = min(env_col, sc.env->env_clamp);
-                }
             }
             ls.col *= env_col;
         }
@@ -2909,9 +2906,6 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, co
             simd_fvec4 env_col = {sc.env->env_col[0], sc.env->env_col[1], sc.env->env_col[2], 0.0f};
             if (sc.env->env_map != 0xffffffff) {
                 env_col *= SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), sc.env->env_map, ls.L);
-                if (sc.env->env_clamp > FLT_EPS) {
-                    env_col = min(env_col, sc.env->env_clamp);
-                }
             }
             ls.col *= env_col;
         }
@@ -3022,9 +3016,6 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
             if (sc.env->env_map != 0xffffffff) {
                 env_col = SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), sc.env->env_map,
                                              simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f});
-                if (sc.env->env_clamp > FLT_EPS) {
-                    env_col = min(env_col, simd_fvec4{sc.env->env_clamp});
-                }
             }
             env_col[3] = 1.0f;
         }
@@ -3476,13 +3467,8 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
         if (mat->flags & MAT_FLAG_SKY_PORTAL) {
             simd_fvec4 env_col = {sc.env->env_col[0], sc.env->env_col[1], sc.env->env_col[2], 0.0f};
             if (sc.env->env_map != 0xffffffff) {
-                simd_fvec4 tex_col =
-                    SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), sc.env->env_map,
-                                       simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f});
-                if (sc.env->env_clamp > FLT_EPS) {
-                    tex_col = min(tex_col, simd_fvec4{sc.env->env_clamp});
-                }
-                env_col *= tex_col;
+                env_col *= SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), sc.env->env_map,
+                                              simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f});
             }
             base_color *= env_col;
         }

@@ -191,7 +191,8 @@ const int STANDARD_SCENE = 0;
 const int STANDARD_SCENE_SPHERE_LIGHT = 1;
 const int STANDARD_SCENE_MESH_LIGHTS = 2;
 const int STANDARD_SCENE_SUN_LIGHT = 3;
-const int STANDARD_SCENE_NO_LIGHTS = 4;
+const int STANDARD_SCENE_HDR_LIGHT = 4;
+const int STANDARD_SCENE_NO_LIGHT = 5;
 const int REFR_PLANE_SCENE = 5;
 } // namespace
 
@@ -209,16 +210,14 @@ void setup_material_scene(Ray::SceneBase &scene, const bool output_sh, const Mat
         cam_desc.type = Ray::Persp;
         cam_desc.filter = Ray::Box;
         cam_desc.dtype = Ray::SRGB;
-        if (scene_index == STANDARD_SCENE || scene_index == STANDARD_SCENE_SPHERE_LIGHT ||
-            scene_index == STANDARD_SCENE_MESH_LIGHTS || scene_index == STANDARD_SCENE_SUN_LIGHT ||
-            scene_index == STANDARD_SCENE_NO_LIGHTS) {
-            memcpy(&cam_desc.origin[0], &view_origin_standard[0], 3 * sizeof(float));
-            memcpy(&cam_desc.fwd[0], &view_dir_standard[0], 3 * sizeof(float));
-            cam_desc.fov = 18.1806f;
-        } else if (scene_index == REFR_PLANE_SCENE) {
+        if (scene_index == REFR_PLANE_SCENE) {
             memcpy(&cam_desc.origin[0], &view_origin_refr[0], 3 * sizeof(float));
             memcpy(&cam_desc.fwd[0], &view_dir_refr[0], 3 * sizeof(float));
             cam_desc.fov = 45.1806f;
+        } else {
+            memcpy(&cam_desc.origin[0], &view_origin_standard[0], 3 * sizeof(float));
+            memcpy(&cam_desc.fwd[0], &view_dir_standard[0], 3 * sizeof(float));
+            cam_desc.fov = 18.1806f;
         }
         memcpy(&cam_desc.up[0], &view_up[0], 3 * sizeof(float));
         cam_desc.clamp = true;
@@ -226,12 +225,6 @@ void setup_material_scene(Ray::SceneBase &scene, const bool output_sh, const Mat
 
         const uint32_t cam = scene.AddCamera(cam_desc);
         scene.set_current_cam(cam);
-    }
-
-    { // setup environment
-        Ray::environment_desc_t env_desc;
-        env_desc.env_col[0] = env_desc.env_col[1] = env_desc.env_col[2] = 0.0f;
-        scene.SetEnvironment(env_desc);
     }
 
     MatDesc main_mat_desc_copy = main_mat_desc;
@@ -345,7 +338,7 @@ void setup_material_scene(Ray::SceneBase &scene, const bool output_sh, const Mat
         std::vector<uint32_t> model_indices, model_groups;
         if (scene_index == STANDARD_SCENE || scene_index == STANDARD_SCENE_SPHERE_LIGHT ||
             scene_index == STANDARD_SCENE_MESH_LIGHTS || scene_index == STANDARD_SCENE_SUN_LIGHT ||
-            scene_index == STANDARD_SCENE_NO_LIGHTS) {
+            STANDARD_SCENE_HDR_LIGHT || scene_index == STANDARD_SCENE_NO_LIGHT) {
             std::tie(model_attrs, model_indices, model_groups) = LoadBIN("test_data/meshes/mat_test/model.bin");
         } else if (scene_index == REFR_PLANE_SCENE) {
             std::tie(model_attrs, model_indices, model_groups) = LoadBIN("test_data/meshes/mat_test/refr_plane.bin");
@@ -420,7 +413,7 @@ void setup_material_scene(Ray::SceneBase &scene, const bool output_sh, const Mat
     {
         std::vector<float> env_attrs;
         std::vector<uint32_t> env_indices, env_groups;
-        if (scene_index == STANDARD_SCENE_SUN_LIGHT) {
+        if (scene_index == STANDARD_SCENE_SUN_LIGHT || scene_index == STANDARD_SCENE_HDR_LIGHT) {
             std::tie(env_attrs, env_indices, env_groups) = LoadBIN("test_data/meshes/mat_test/env_floor.bin");
         } else {
             std::tie(env_attrs, env_indices, env_groups) = LoadBIN("test_data/meshes/mat_test/env.bin");
@@ -433,7 +426,7 @@ void setup_material_scene(Ray::SceneBase &scene, const bool output_sh, const Mat
         env_mesh_desc.vtx_attrs_count = uint32_t(env_attrs.size()) / 8;
         env_mesh_desc.vtx_indices = &env_indices[0];
         env_mesh_desc.vtx_indices_count = uint32_t(env_indices.size());
-        if (scene_index == STANDARD_SCENE_SUN_LIGHT) {
+        if (scene_index == STANDARD_SCENE_SUN_LIGHT || scene_index == STANDARD_SCENE_HDR_LIGHT) {
             env_mesh_desc.shapes.push_back({floor_mat, floor_mat, env_groups[0], env_groups[1]});
             env_mesh_desc.shapes.push_back({dark_grey_mat, dark_grey_mat, env_groups[2], env_groups[3]});
             env_mesh_desc.shapes.push_back({mid_grey_mat, mid_grey_mat, env_groups[4], env_groups[5]});
@@ -499,16 +492,17 @@ void setup_material_scene(Ray::SceneBase &scene, const bool output_sh, const Mat
                                           -0.707106769f, 0.0f,   0.707106769f, 0.0f, // NOLINT
                                           0.0f,          0.062f, 0.0f,         1.0f};
 
-    if (scene_index == STANDARD_SCENE || scene_index == STANDARD_SCENE_SPHERE_LIGHT ||
-        scene_index == STANDARD_SCENE_MESH_LIGHTS || scene_index == STANDARD_SCENE_SUN_LIGHT ||
-        scene_index == STANDARD_SCENE_NO_LIGHTS) {
+    Ray::environment_desc_t env_desc;
+    env_desc.env_col[0] = env_desc.env_col[1] = env_desc.env_col[2] = 0.0f;
+
+    if (scene_index == REFR_PLANE_SCENE) {
+        scene.AddMeshInstance(model_mesh, identity);
+    } else {
         scene.AddMeshInstance(model_mesh, model_xform);
         scene.AddMeshInstance(base_mesh, identity);
         scene.AddMeshInstance(core_mesh, identity);
         scene.AddMeshInstance(subsurf_bar_mesh, identity);
         scene.AddMeshInstance(text_mesh, identity);
-    } else if (scene_index == REFR_PLANE_SCENE) {
-        scene.AddMeshInstance(model_mesh, identity);
     }
     scene.AddMeshInstance(env_mesh, identity);
     if (scene_index == STANDARD_SCENE_MESH_LIGHTS || scene_index == REFR_PLANE_SCENE) {
@@ -590,9 +584,28 @@ void setup_material_scene(Ray::SceneBase &scene, const bool output_sh, const Mat
         sun_desc.angle = 10.0f;
 
         scene.AddLight(sun_desc);
-    } else if (scene_index == STANDARD_SCENE_NO_LIGHTS) {
+    } else if (scene_index == STANDARD_SCENE_HDR_LIGHT) {
+        int img_w, img_h;
+        auto img_data = LoadHDR("test_data/textures/studio_small_03_2k.hdr", img_w, img_h);
+        require(!img_data.empty());
+
+        Ray::tex_desc_t tex_desc;
+        tex_desc.format = Ray::eTextureFormat::RGBA8888;
+        tex_desc.data = img_data.data();
+        tex_desc.w = img_w;
+        tex_desc.h = img_h;
+        tex_desc.generate_mipmaps = false;
+        tex_desc.is_srgb = false;
+        tex_desc.force_no_compression = true;
+
+        env_desc.env_col[0] = env_desc.env_col[1] = env_desc.env_col[2] = 0.25f;
+
+        env_desc.env_map = scene.AddTexture(tex_desc);
+    } else if (scene_index == STANDARD_SCENE_NO_LIGHT) {
         // nothing
     }
+
+    scene.SetEnvironment(env_desc);
 
     scene.Finalize();
 }
@@ -792,8 +805,10 @@ void assemble_material_test_images(const char *arch_list[]) {
         {"trans_mat5", "trans_mat6", "trans_mat7", "trans_mat8", "trans_mat9"},
         {"alpha_mat0", "alpha_mat1", "alpha_mat2", "alpha_mat3"},
         {"complex_mat0", "complex_mat1", "complex_mat2", "complex_mat3"},
-        {"complex_mat5", "complex_mat5_mesh_lights", "complex_mat5_sphere_light", "complex_mat5_sun_light"},
-        {"complex_mat6", "complex_mat6_mesh_lights", "complex_mat6_sphere_light", "complex_mat6_sun_light"}};
+        {"complex_mat5", "complex_mat5_mesh_lights", "complex_mat5_sphere_light", "complex_mat5_sun_light",
+         "complex_mat5_hdr_light"},
+        {"complex_mat6", "complex_mat6_mesh_lights", "complex_mat6_sphere_light", "complex_mat6_sun_light",
+         "complex_mat6_hdr_light"}};
     const int ImgCountH = sizeof(test_names) / sizeof(test_names[0]);
 
     const int OutImageW = 256 * ImgCountW;
@@ -1668,7 +1683,7 @@ void test_emit_mat0(const char *arch_list[], const char *preferred_device) {
     mat_desc.emission_strength = 0.5f;
 
     run_material_test(arch_list, preferred_device, "emit_mat0", mat_desc, SampleCount, MinPSNR, PixThres, nullptr,
-                      STANDARD_SCENE_NO_LIGHTS);
+                      STANDARD_SCENE_NO_LIGHT);
 }
 
 void test_emit_mat1(const char *arch_list[], const char *preferred_device) {
@@ -1688,7 +1703,7 @@ void test_emit_mat1(const char *arch_list[], const char *preferred_device) {
     mat_desc.emission_strength = 1.0f;
 
     run_material_test(arch_list, preferred_device, "emit_mat1", mat_desc, SampleCount, MinPSNR, PixThres, nullptr,
-                      STANDARD_SCENE_NO_LIGHTS);
+                      STANDARD_SCENE_NO_LIGHT);
 }
 
 //
@@ -2430,6 +2445,28 @@ void test_complex_mat5_sun_light(const char *arch_list[], const char *preferred_
                       PixThres, textures, STANDARD_SCENE_SUN_LIGHT);
 }
 
+void test_complex_mat5_hdr_light(const char *arch_list[], const char *preferred_device) {
+    const int SampleCount = 1024;
+    const double MinPSNR = 16.13;
+    const int PixThres = 19671;
+
+    Ray::principled_mat_desc_t metal_mat_desc;
+    metal_mat_desc.base_texture = 0;
+    metal_mat_desc.metallic = 1.0f;
+    metal_mat_desc.roughness = 1.0f;
+    metal_mat_desc.roughness_texture = 2;
+    metal_mat_desc.metallic = 1.0f;
+    metal_mat_desc.metallic_texture = 3;
+    metal_mat_desc.normal_map = 1;
+
+    const char *textures[] = {
+        "test_data/textures/gold-scuffed_basecolor-boosted.tga", "test_data/textures/gold-scuffed_normal.tga",
+        "test_data/textures/gold-scuffed_roughness.tga", "test_data/textures/gold-scuffed_metallic.tga"};
+
+    run_material_test(arch_list, preferred_device, "complex_mat5_hdr_light", metal_mat_desc, SampleCount, MinPSNR,
+                      PixThres, textures, STANDARD_SCENE_HDR_LIGHT);
+}
+
 void test_complex_mat6(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 1024;
     const double MinPSNR = 28.48;
@@ -2495,4 +2532,21 @@ void test_complex_mat6_sun_light(const char *arch_list[], const char *preferred_
 
     run_material_test(arch_list, preferred_device, "complex_mat6_sun_light", olive_mat_desc, SampleCount, MinPSNR,
                       PixThres, nullptr, STANDARD_SCENE_SUN_LIGHT);
+}
+
+void test_complex_mat6_hdr_light(const char *arch_list[], const char *preferred_device) {
+    const int SampleCount = 1024;
+    const double MinPSNR = 14.56;
+    const int PixThres = 24921;
+
+    Ray::principled_mat_desc_t olive_mat_desc;
+    olive_mat_desc.base_color[0] = 0.836164f;
+    olive_mat_desc.base_color[1] = 0.836164f;
+    olive_mat_desc.base_color[2] = 0.656603f;
+    olive_mat_desc.roughness = 0.041667f;
+    olive_mat_desc.transmission = 1.0f;
+    olive_mat_desc.ior = 2.3f;
+
+    run_material_test(arch_list, preferred_device, "complex_mat6_hdr_light", olive_mat_desc, SampleCount, MinPSNR,
+                      PixThres, nullptr, STANDARD_SCENE_HDR_LIGHT);
 }
