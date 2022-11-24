@@ -3480,8 +3480,8 @@ void Ray::NS::SampleBilinear(const Ref::TexStorageBase *const textures[], const 
     const int tex = (index & 0x00ffffff);
 
     simd_fvec<S> _uvs[2];
-    _uvs[0] = uvs[0] - floor(uvs[0]);
-    _uvs[1] = uvs[1] - floor(uvs[1]);
+    _uvs[0] = fract(uvs[0]);
+    _uvs[1] = fract(uvs[1]);
 
     for (int i = 0; i < S; i++) {
         if (!mask[i]) {
@@ -3495,7 +3495,7 @@ void Ray::NS::SampleBilinear(const Ref::TexStorageBase *const textures[], const 
         _uvs[1][i] = _uvs[1][i] * img_size[1] - 0.5f;
     }
 
-    const simd_fvec<S> k[2] = {_uvs[0] - floor(_uvs[0]), _uvs[1] - floor(_uvs[1])};
+    const simd_fvec<S> k[2] = {fract(_uvs[0]), fract(_uvs[1])};
 
     simd_fvec<S> p0[4], p1[4];
 
@@ -3535,8 +3535,7 @@ void Ray::NS::SampleTrilinear(const Ref::TexStorageBase *const textures[], const
     simd_fvec<S> col2[4];
     SampleBilinear(textures, index, uvs, (simd_ivec<S>)ceil(lod), mask, col2);
 
-    const simd_fvec<S> k = lod - floor(lod);
-
+    const simd_fvec<S> k = fract(lod);
     ITERATE_4({ out_rgba[i] = col1[i] * (1.0f - k) + col2[i] * k; })
 }
 
@@ -3562,7 +3561,7 @@ void Ray::NS::SampleLatlong_RGBE(const Ref::TexStorageRGBA &storage, const uint3
 
     const simd_fvec<S> uvs[2] = {u * sz[0] + 1.0f, theta * sz[1] + 1.0f};
 
-    const simd_fvec<S> k[2] = {uvs[0] - floor(uvs[0]), uvs[1] - floor(uvs[1])};
+    const simd_fvec<S> k[2] = {fract(uvs[0]), fract(uvs[1])};
 
     simd_fvec<S> _p00[3], _p01[3], _p10[3], _p11[3];
 

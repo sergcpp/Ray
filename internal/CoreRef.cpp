@@ -501,7 +501,7 @@ force_inline uint32_t get_ray_hash(const ray_data_t &r, const float root_min[3],
 
     // float omega = omega_table[int(r.d[2] / 0.0625f)];
     // float std::atan2(r.d[1], r.d[0]);
-    // int o = (int)(16 * omega / (PI)), p = (int)(16 * (phi + PI) / (2 * PI));
+    // int o = int(16 * omega / (PI)), p = int(16 * (phi + PI) / (2 * PI));
 
     x = morton_table_256[x];
     y = morton_table_256[y];
@@ -2433,8 +2433,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleBilinear(const TexStorageBase *const textur
     simd_fvec2 img_size;
     storage.GetFRes(tex, lod, &img_size[0]);
 
-    simd_fvec2 _uvs = uvs;
-    _uvs -= floor(_uvs);
+    simd_fvec2 _uvs = fract(uvs);
     _uvs = _uvs * img_size - 0.5f;
 
     const auto &p00 = storage.Fetch(tex, int(_uvs[0]) + 0, int(_uvs[1]) + 0, lod);
@@ -2442,7 +2441,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleBilinear(const TexStorageBase *const textur
     const auto &p10 = storage.Fetch(tex, int(_uvs[0]) + 0, int(_uvs[1]) + 1, lod);
     const auto &p11 = storage.Fetch(tex, int(_uvs[0]) + 1, int(_uvs[1]) + 1, lod);
 
-    const float kx = _uvs[0] - std::floor(_uvs[0]), ky = _uvs[1] - std::floor(_uvs[1]);
+    const float kx = fract(_uvs[0]), ky = fract(_uvs[1]);
 
     const auto p0 = simd_fvec4{p01.v[0] * kx + p00.v[0] * (1 - kx), p01.v[1] * kx + p00.v[1] * (1 - kx),
                                p01.v[2] * kx + p00.v[2] * (1 - kx), p01.v[3] * kx + p00.v[3] * (1 - kx)};
@@ -2460,7 +2459,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleBilinear(const TexStorageBase &storage, con
     const auto &p10 = storage.Fetch(tex, int(iuvs[0]) + 0, int(iuvs[1]) + 1, lod);
     const auto &p11 = storage.Fetch(tex, int(iuvs[0]) + 1, int(iuvs[1]) + 1, lod);
 
-    const simd_fvec2 k = iuvs - floor(iuvs);
+    const simd_fvec2 k = fract(iuvs);
 
     const auto _p00 = simd_fvec4{p00.v[0], p00.v[1], p00.v[2], p00.v[3]};
     const auto _p01 = simd_fvec4{p01.v[0], p01.v[1], p01.v[2], p01.v[3]};
@@ -2475,10 +2474,10 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleBilinear(const TexStorageBase &storage, con
 
 Ray::Ref::simd_fvec4 Ray::Ref::SampleTrilinear(const TexStorageBase *const textures[], const uint32_t index,
                                                const simd_fvec2 &uvs, const float lod) {
-    const simd_fvec4 col1 = SampleBilinear(textures, index, uvs, (int)std::floor(lod));
-    const simd_fvec4 col2 = SampleBilinear(textures, index, uvs, (int)std::ceil(lod));
+    const simd_fvec4 col1 = SampleBilinear(textures, index, uvs, int(std::floor(lod)));
+    const simd_fvec4 col2 = SampleBilinear(textures, index, uvs, int(std::ceil(lod)));
 
-    const float k = lod - std::floor(lod);
+    const float k = fract(lod);
     return col1 * (1 - k) + col2 * k;
 }
 
@@ -2528,10 +2527,10 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleAnisotropic(const TexStorageBase *const tex
     storage.GetFRes(tex, lod1, &size1[0]);
     storage.GetFRes(tex, lod2, &size2[0]);
 
-    const float kz = lod - std::floor(lod);
+    const float kz = fract(lod);
 
     for (int i = 0; i < num; ++i) {
-        _uvs = _uvs - floor(_uvs);
+        _uvs = fract(_uvs);
 
         const simd_fvec2 _uvs1 = _uvs * size1;
         res += (1 - kz) * SampleBilinear(storage, tex, _uvs1, lod1);
