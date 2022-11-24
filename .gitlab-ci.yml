@@ -303,8 +303,6 @@ windows-arm64-cpu-test-job:
     - windows-arm64-build-job
   tags:
     - windows,arm64,fastcpu
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "schedule"
 
 linux-x86_64-cpu-test-job:
   variables:
@@ -388,8 +386,7 @@ deploy-job:
     - windows-x86_64-gpu-nv-test-job
     - windows-x86_64-gpu-xe-test-job
     - windows-x86_64-gpu-arc-test-job
-    - job: windows-arm64-cpu-test-job
-      optional: true
+    - windows-arm64-cpu-test-job
     - linux-x86_64-cpu-test-job
     - linux-x86_64-gpu-nv-test-job
     - linux-x86_64-gpu-amd-test-job
