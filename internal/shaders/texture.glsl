@@ -3,7 +3,7 @@
 
 #extension GL_EXT_nonuniform_qualifier : require
 
-#include "types.glsl"
+#include "types.h"
 
 #if BINDLESS
 

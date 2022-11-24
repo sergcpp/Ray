@@ -1,7 +1,7 @@
-#ifndef MIX_INCREMENTAL_INTERFACE_GLSL
-#define MIX_INCREMENTAL_INTERFACE_GLSL
+#ifndef MIX_INCREMENTAL_INTERFACE_H
+#define MIX_INCREMENTAL_INTERFACE_H
 
-#include "_interface_common.glsl"
+#include "_interface_common.h"
 
 INTERFACE_START(MixIncremental)
 
@@ -20,4 +20,4 @@ const int OUT_IMG_SLOT = 0;
 
 INTERFACE_END
 
-#endif // MIX_INCREMENTAL_INTERFACE_GLSL
+#endif // MIX_INCREMENTAL_INTERFACE_H

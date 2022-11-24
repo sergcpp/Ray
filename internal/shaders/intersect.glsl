@@ -1,7 +1,7 @@
 #ifndef INTERSECT_GLSL
 #define INTERSECT_GLSL
 
-#include "types.glsl"
+#include "types.h"
 
 void IntersectTri(vec3 ro, vec3 rd, tri_accel_t tri, uint prim_index, inout hit_data_t inter) {
     float det = dot(rd, tri.n_plane.xyz);

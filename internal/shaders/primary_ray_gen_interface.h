@@ -1,7 +1,7 @@
-#ifndef PRIMARY_RAY_GEN_INTERFACE_GLSL
-#define PRIMARY_RAY_GEN_INTERFACE_GLSL
+#ifndef PRIMARY_RAY_GEN_INTERFACE_H
+#define PRIMARY_RAY_GEN_INTERFACE_H
 
-#include "_interface_common.glsl"
+#include "_interface_common.h"
 
 INTERFACE_START(PrimaryRayGen)
 
@@ -24,4 +24,4 @@ const int OUT_RAYS_BUF_SLOT = 0;
 
 INTERFACE_END
 
-#endif // PRIMARY_RAY_GEN_INTERFACE_GLSL
+#endif // PRIMARY_RAY_GEN_INTERFACE_H

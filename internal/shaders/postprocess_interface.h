@@ -1,7 +1,7 @@
-#ifndef POSTPROCESS_INTERFACE_GLSL
-#define POSTPROCESS_INTERFACE_GLSL
+#ifndef POSTPROCESS_INTERFACE_H
+#define POSTPROCESS_INTERFACE_H
 
-#include "_interface_common.glsl"
+#include "_interface_common.h"
 
 INTERFACE_START(Postprocess)
 
@@ -19,4 +19,4 @@ const int OUT_IMG_SLOT = 0;
 
 INTERFACE_END
 
-#endif // POSTPROCESS_INTERFACE_GLSL
+#endif // POSTPROCESS_INTERFACE_H

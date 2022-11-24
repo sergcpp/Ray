@@ -1,8 +1,7 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
 
-#include "primary_ray_gen_interface.glsl"
-#include "types.glsl"
+#include "primary_ray_gen_interface.h"
 #include "common.glsl"
 
 LAYOUT_PARAMS uniform UniformParams {

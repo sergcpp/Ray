@@ -1,7 +1,7 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
 
-#include "shade_hits_interface.glsl"
+#include "shade_hits_interface.h"
 #include "common.glsl"
 #include "texture.glsl"
 

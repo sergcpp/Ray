@@ -1,7 +1,7 @@
-#ifndef TRACE_SHADOW_INTERFACE_GLSL
-#define TRACE_SHADOW_INTERFACE_GLSL
+#ifndef TRACE_SHADOW_INTERFACE_H
+#define TRACE_SHADOW_INTERFACE_H
 
-#include "_interface_common.glsl"
+#include "_interface_common.h"
 
 INTERFACE_START(TraceShadow)
 
@@ -35,4 +35,4 @@ const int OUT_IMG_SLOT = 0;
 
 INTERFACE_END
 
-#endif // TRACE_SHADOW_INTERFACE_GLSL
+#endif // TRACE_SHADOW_INTERFACE_H

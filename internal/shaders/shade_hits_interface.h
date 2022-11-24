@@ -1,7 +1,7 @@
-#ifndef SHADE_HITS_INTERFACE_GLSL
-#define SHADE_HITS_INTERFACE_GLSL
+#ifndef SHADE_HITS_INTERFACE_H
+#define SHADE_HITS_INTERFACE_H
 
-#include "_interface_common.glsl"
+#include "_interface_common.h"
 
 INTERFACE_START(ShadeHits)
 
@@ -44,4 +44,4 @@ const int INOUT_COUNTERS_BUF_SLOT = 3;
 
 INTERFACE_END
 
-#endif // SHADE_HITS_INTERFACE_GLSL
+#endif // SHADE_HITS_INTERFACE_H

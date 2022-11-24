@@ -2,15 +2,15 @@
 
 #include "Vk/DrawCall.h"
 
-#include "shaders/debug_rt_interface.glsl"
-#include "shaders/intersect_area_lights_interface.glsl"
-#include "shaders/mix_incremental_interface.glsl"
-#include "shaders/postprocess_interface.glsl"
-#include "shaders/prepare_indir_args_interface.glsl"
-#include "shaders/primary_ray_gen_interface.glsl"
-#include "shaders/shade_hits_interface.glsl"
-#include "shaders/trace_rays_interface.glsl"
-#include "shaders/trace_shadow_interface.glsl"
+#include "shaders/debug_rt_interface.h"
+#include "shaders/intersect_area_lights_interface.h"
+#include "shaders/mix_incremental_interface.h"
+#include "shaders/postprocess_interface.h"
+#include "shaders/prepare_indir_args_interface.h"
+#include "shaders/primary_ray_gen_interface.h"
+#include "shaders/shade_hits_interface.h"
+#include "shaders/trace_rays_interface.h"
+#include "shaders/trace_shadow_interface.h"
 
 void Ray::Vk::Renderer::kernel_GeneratePrimaryRays(VkCommandBuffer cmd_buf, const camera_t &cam, const int hi,
                                                    const rect_t &rect, const Buffer &halton, const Buffer &out_rays) {

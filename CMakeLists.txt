@@ -174,29 +174,29 @@ set(VK_FILES internal/Vk/AccStructure.h
              third-party/SPIRV-Reflect/spirv_reflect.h
              third-party/SPIRV-Reflect/spirv_reflect.c)
 
-set(SHADER_FILES    internal/shaders/_interface_common.glsl
+set(SHADER_FILES    internal/shaders/_interface_common.h
                     internal/shaders/common.glsl
                     internal/shaders/debug_rt.comp.glsl
                     internal/shaders/intersect.glsl
                     internal/shaders/intersect_area_lights.comp.glsl
-                    internal/shaders/intersect_area_lights_interface.glsl
+                    internal/shaders/intersect_area_lights_interface.h
                     internal/shaders/mix_incremental.comp.glsl
-                    internal/shaders/mix_incremental_interface.glsl
+                    internal/shaders/mix_incremental_interface.h
                     internal/shaders/postprocess.comp.glsl
-                    internal/shaders/postprocess_interface.glsl
+                    internal/shaders/postprocess_interface.h
                     internal/shaders/prepare_indir_args.comp.glsl
-                    internal/shaders/prepare_indir_args_interface.glsl
+                    internal/shaders/prepare_indir_args_interface.h
                     internal/shaders/primary_ray_gen.comp.glsl
-                    internal/shaders/primary_ray_gen_interface.glsl
+                    internal/shaders/primary_ray_gen_interface.h
                     internal/shaders/shade_hits.comp.glsl
-                    internal/shaders/shade_hits_interface.glsl
+                    internal/shaders/shade_hits_interface.h
                     internal/shaders/texture.glsl
                     internal/shaders/trace_rays.comp.glsl
-                    internal/shaders/trace_rays_interface.glsl
+                    internal/shaders/trace_rays_interface.h
                     internal/shaders/trace_shadow.comp.glsl
-                    internal/shaders/trace_shadow_interface.glsl
+                    internal/shaders/trace_shadow_interface.h
                     internal/shaders/traverse_bvh.glsl
-                    internal/shaders/types.glsl)
+                    internal/shaders/types.h)
 
 list(APPEND ALL_SOURCE_FILES ${INTERNAL_SOURCE_FILES})
 source_group("src\\internal" FILES ${INTERNAL_SOURCE_FILES})

@@ -6,7 +6,7 @@
     precision highp float;
 #endif
 
-#include "prepare_indir_args_interface.glsl"
+#include "prepare_indir_args_interface.h"
 
 layout(std430, binding = INOUT_COUNTERS_BUF_SLOT) buffer Counters {
     uint g_counters[];

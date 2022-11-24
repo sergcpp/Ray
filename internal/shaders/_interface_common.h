@@ -1,6 +1,6 @@
 
-#ifndef INTERFACE_COMMON_GLSL
-#define INTERFACE_COMMON_GLSL
+#ifndef INTERFACE_COMMON_H
+#define INTERFACE_COMMON_H
 
 #ifdef __cplusplus
 #define VEC2_TYPE std::array<float, 2>
@@ -54,4 +54,4 @@
 #endif
 #endif // __cplusplus
 
-#endif // INTERFACE_COMMON_GLSL
+#endif // INTERFACE_COMMON_H
