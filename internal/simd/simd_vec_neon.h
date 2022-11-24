@@ -205,13 +205,6 @@ public:
         return temp;
     }
 
-    force_inline simd_vec<float, 4> fract() const {
-        float32x4_t integer = vcvtq_f32_s32(vcvtq_s32_f32(vec_));
-        simd_vec<float, 4> temp;
-        temp.vec_ = vsubq_f32(vec_, integer);
-        return temp;
-    }
-
     force_inline void copy_to(float *f) const {
         vst1q_f32(f, vec_); f += 4;
     }

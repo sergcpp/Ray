@@ -501,7 +501,7 @@ force_inline uint32_t get_ray_hash(const ray_data_t &r, const float root_min[3],
 
     // float omega = omega_table[int(r.d[2] / 0.0625f)];
     // float std::atan2(r.d[1], r.d[0]);
-    // int o = (int)(16 * omega / (PI)), p = (int)(16 * (phi + PI) / (2 * PI));
+    // int o = int(16 * omega / (PI)), p = int(16 * (phi + PI) / (2 * PI));
 
     x = morton_table_256[x];
     y = morton_table_256[y];
@@ -2433,8 +2433,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleBilinear(const TexStorageBase *const textur
     simd_fvec2 img_size;
     storage.GetFRes(tex, lod, &img_size[0]);
 
-    simd_fvec2 _uvs = uvs;
-    _uvs -= floor(_uvs);
+    simd_fvec2 _uvs = fract(uvs);
     _uvs = _uvs * img_size - 0.5f;
 
     const auto &p00 = storage.Fetch(tex, int(_uvs[0]) + 0, int(_uvs[1]) + 0, lod);
@@ -2442,7 +2441,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleBilinear(const TexStorageBase *const textur
     const auto &p10 = storage.Fetch(tex, int(_uvs[0]) + 0, int(_uvs[1]) + 1, lod);
     const auto &p11 = storage.Fetch(tex, int(_uvs[0]) + 1, int(_uvs[1]) + 1, lod);
 
-    const float kx = _uvs[0] - std::floor(_uvs[0]), ky = _uvs[1] - std::floor(_uvs[1]);
+    const float kx = fract(_uvs[0]), ky = fract(_uvs[1]);
 
     const auto p0 = simd_fvec4{p01.v[0] * kx + p00.v[0] * (1 - kx), p01.v[1] * kx + p00.v[1] * (1 - kx),
                                p01.v[2] * kx + p00.v[2] * (1 - kx), p01.v[3] * kx + p00.v[3] * (1 - kx)};
@@ -2460,7 +2459,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleBilinear(const TexStorageBase &storage, con
     const auto &p10 = storage.Fetch(tex, int(iuvs[0]) + 0, int(iuvs[1]) + 1, lod);
     const auto &p11 = storage.Fetch(tex, int(iuvs[0]) + 1, int(iuvs[1]) + 1, lod);
 
-    const simd_fvec2 k = iuvs - floor(iuvs);
+    const simd_fvec2 k = fract(iuvs);
 
     const auto _p00 = simd_fvec4{p00.v[0], p00.v[1], p00.v[2], p00.v[3]};
     const auto _p01 = simd_fvec4{p01.v[0], p01.v[1], p01.v[2], p01.v[3]};
@@ -2475,10 +2474,10 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleBilinear(const TexStorageBase &storage, con
 
 Ray::Ref::simd_fvec4 Ray::Ref::SampleTrilinear(const TexStorageBase *const textures[], const uint32_t index,
                                                const simd_fvec2 &uvs, const float lod) {
-    const simd_fvec4 col1 = SampleBilinear(textures, index, uvs, (int)std::floor(lod));
-    const simd_fvec4 col2 = SampleBilinear(textures, index, uvs, (int)std::ceil(lod));
+    const simd_fvec4 col1 = SampleBilinear(textures, index, uvs, int(std::floor(lod)));
+    const simd_fvec4 col2 = SampleBilinear(textures, index, uvs, int(std::ceil(lod)));
 
-    const float k = lod - std::floor(lod);
+    const float k = fract(lod);
     return col1 * (1 - k) + col2 * k;
 }
 
@@ -2528,10 +2527,10 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleAnisotropic(const TexStorageBase *const tex
     storage.GetFRes(tex, lod1, &size1[0]);
     storage.GetFRes(tex, lod2, &size2[0]);
 
-    const float kz = lod - std::floor(lod);
+    const float kz = fract(lod);
 
     for (int i = 0; i < num; ++i) {
-        _uvs = _uvs - floor(_uvs);
+        _uvs = fract(_uvs);
 
         const simd_fvec2 _uvs1 = _uvs * size1;
         res += (1 - kz) * SampleBilinear(storage, tex, _uvs1, lod1);
@@ -2556,18 +2555,21 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleLatlong_RGBE(const TexStorageRGBA &storage,
         u = 1.0f - u;
     }
 
+    // TODO: +0.5f is a temporary hack, pass actual hdr orientation here!
+    u = fract(u + 0.5f);
+
     const int tex = (index & 0x00ffffff);
     simd_fvec2 size;
     storage.GetFRes(tex, 0, &size[0]);
 
-    const simd_fvec2 uvs = simd_fvec2{u, theta} * size + simd_fvec2{1.0f, 1.0f};
+    const simd_fvec2 uvs = simd_fvec2{u, theta} * size;
 
     const auto &p00 = storage.Get(tex, int(uvs[0] + 0), int(uvs[1] + 0), 0);
     const auto &p01 = storage.Get(tex, int(uvs[0] + 1), int(uvs[1] + 0), 0);
     const auto &p10 = storage.Get(tex, int(uvs[0] + 0), int(uvs[1] + 1), 0);
     const auto &p11 = storage.Get(tex, int(uvs[0] + 1), int(uvs[1] + 1), 0);
 
-    const simd_fvec2 k = uvs - floor(uvs);
+    const simd_fvec2 k = fract(uvs);
 
     const simd_fvec4 _p00 = rgbe_to_rgb(p00), _p01 = rgbe_to_rgb(p01);
     const simd_fvec4 _p10 = rgbe_to_rgb(p10), _p11 = rgbe_to_rgb(p11);
@@ -2813,9 +2815,6 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, co
             simd_fvec4 env_col = {sc.env->env_col[0], sc.env->env_col[1], sc.env->env_col[2], 0.0f};
             if (sc.env->env_map != 0xffffffff) {
                 env_col *= SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), sc.env->env_map, ls.L);
-                if (sc.env->env_clamp > FLT_EPS) {
-                    env_col = min(env_col, sc.env->env_clamp);
-                }
             }
             ls.col *= env_col;
         }
@@ -2864,9 +2863,6 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, co
             simd_fvec4 env_col = {sc.env->env_col[0], sc.env->env_col[1], sc.env->env_col[2], 0.0f};
             if (sc.env->env_map != 0xffffffff) {
                 env_col *= SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), sc.env->env_map, ls.L);
-                if (sc.env->env_clamp > FLT_EPS) {
-                    env_col = min(env_col, sc.env->env_clamp);
-                }
             }
             ls.col *= env_col;
         }
@@ -2910,9 +2906,6 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, co
             simd_fvec4 env_col = {sc.env->env_col[0], sc.env->env_col[1], sc.env->env_col[2], 0.0f};
             if (sc.env->env_map != 0xffffffff) {
                 env_col *= SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), sc.env->env_map, ls.L);
-                if (sc.env->env_clamp > FLT_EPS) {
-                    env_col = min(env_col, sc.env->env_clamp);
-                }
             }
             ls.col *= env_col;
         }
@@ -3023,9 +3016,6 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
             if (sc.env->env_map != 0xffffffff) {
                 env_col = SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), sc.env->env_map,
                                              simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f});
-                if (sc.env->env_clamp > FLT_EPS) {
-                    env_col = min(env_col, simd_fvec4{sc.env->env_clamp});
-                }
             }
             env_col[3] = 1.0f;
         }
@@ -3477,13 +3467,8 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
         if (mat->flags & MAT_FLAG_SKY_PORTAL) {
             simd_fvec4 env_col = {sc.env->env_col[0], sc.env->env_col[1], sc.env->env_col[2], 0.0f};
             if (sc.env->env_map != 0xffffffff) {
-                simd_fvec4 tex_col =
-                    SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), sc.env->env_map,
-                                       simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f});
-                if (sc.env->env_clamp > FLT_EPS) {
-                    tex_col = min(tex_col, simd_fvec4{sc.env->env_clamp});
-                }
-                env_col *= tex_col;
+                env_col *= SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), sc.env->env_map,
+                                              simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f});
             }
             base_color *= env_col;
         }

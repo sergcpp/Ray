@@ -1,8 +1,8 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
 
-#include "intersect_area_lights_interface.glsl"
-#include "types.glsl"
+#include "intersect_area_lights_interface.h"
+#include "common.glsl"
 
 LAYOUT_PARAMS uniform UniformParams {
     Params g_params;

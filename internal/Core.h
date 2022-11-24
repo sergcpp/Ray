@@ -360,7 +360,6 @@ static_assert(sizeof(mesh_instance_t) == 32, "!");
 
 struct environment_t {
     float env_col[3];
-    float env_clamp;
     uint32_t env_map;
 };
 

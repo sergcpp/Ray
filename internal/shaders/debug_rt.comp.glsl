@@ -2,8 +2,7 @@
 #extension GL_GOOGLE_include_directive : require
 #extension GL_EXT_ray_query : require
 
-#include "debug_rt_interface.glsl"
-#include "types.glsl"
+#include "debug_rt_interface.h"
 #include "common.glsl"
 
 LAYOUT_PARAMS uniform UniformParams {

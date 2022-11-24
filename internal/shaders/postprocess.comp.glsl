@@ -1,7 +1,7 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
 
-#include "postprocess_interface.glsl"
+#include "postprocess_interface.h"
 #include "common.glsl"
 
 LAYOUT_PARAMS uniform UniformParams {

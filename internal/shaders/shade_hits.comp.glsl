@@ -1,7 +1,7 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
 
-#include "shade_hits_interface.glsl"
+#include "shade_hits_interface.h"
 #include "common.glsl"
 #include "texture.glsl"
 
@@ -759,12 +759,13 @@ void SampleLightSource(vec3 P, vec2 sample_off, inout light_sample_t ls) {
 
         [[dont_flatten]] if ((l.type_and_param0.w & (1 << 7)) != 0) { // sky portal
             vec3 env_col = g_params.env_col.xyz;
-            if (floatBitsToUint(g_params.env_col.w) != 0xffffffff) {
-                //env_col *= SampleLatlong_RGBE(*static_cast<const TextureAtlasRGBA *>(tex_atlases[0]),
-                //                              sc.textures[sc.env->env_map], ls.L);
-                //if (sc.env->env_clamp > FLT_EPS) {
-                //    env_col = min(env_col, sc.env->env_clamp);
-                //}
+            const uint env_map = floatBitsToUint(g_params.env_col.w);
+            if (env_map != 0xffffffff) {
+#if BINDLESS
+                env_col *= SampleLatlong_RGBE(env_map, ls.L);
+#else
+                env_col *= SampleLatlong_RGBE(g_atlases, g_textures[env_map], ls.L);
+#endif
             }
             ls.col *= env_col;
         }
@@ -811,12 +812,13 @@ void SampleLightSource(vec3 P, vec2 sample_off, inout light_sample_t ls) {
 
         [[dont_flatten]] if ((l.type_and_param0.w & (1 << 7)) != 0) { // sky portal
             vec3 env_col = g_params.env_col.xyz;
-            if (floatBitsToUint(g_params.env_col.w) != 0xffffffff) {
-                //env_col *= SampleLatlong_RGBE(*static_cast<const TextureAtlasRGBA *>(tex_atlases[0]),
-                //                              sc.textures[sc.env->env_map], ls.L);
-                //if (sc.env->env_clamp > FLT_EPS) {
-                //    env_col = min(env_col, sc.env->env_clamp);
-                //}
+            const uint env_map = floatBitsToUint(g_params.env_col.w);
+            if (env_map != 0xffffffff) {
+#if BINDLESS
+                env_col *= SampleLatlong_RGBE(env_map, ls.L);
+#else
+                env_col *= SampleLatlong_RGBE(g_atlases, g_textures[env_map], ls.L);
+#endif
             }
             ls.col *= env_col;
         }
@@ -865,12 +867,13 @@ void SampleLightSource(vec3 P, vec2 sample_off, inout light_sample_t ls) {
             }
         } else {
             vec3 env_col = g_params.env_col.xyz;
-            if (floatBitsToUint(g_params.env_col.w) != 0xffffffff) {
-                //env_col *= SampleLatlong_RGBE(*static_cast<const TextureAtlasRGBA *>(tex_atlases[0]),
-                //                              sc.textures[sc.env->env_map], ls.L);
-                //if (sc.env->env_clamp > FLT_EPS) {
-                //    env_col = min(env_col, sc.env->env_clamp);
-                //}
+            const uint env_map = floatBitsToUint(g_params.env_col.w);
+            if (env_map != 0xffffffff) {
+#if BINDLESS
+                env_col *= SampleLatlong_RGBE(env_map, ls.L);
+#else
+                env_col *= SampleLatlong_RGBE(g_atlases, g_textures[env_map], ls.L);
+#endif
             }
             ls.col *= env_col;
         }
@@ -878,26 +881,21 @@ void SampleLightSource(vec3 P, vec2 sample_off, inout light_sample_t ls) {
 }
 
 vec3 ShadeSurface(int px_index, hit_data_t inter, ray_data_t ray) {
-    [[dont_flatten]] if (inter.mask == 0) {
-        vec3 env_col = vec3(1.0);
-        /*if (pi.should_add_environment()) {
-            if (sc.env->env_map != 0xffffffff) {
-                env_col =
-                    SampleLatlong_RGBE(*static_cast<const TextureAtlasRGBA *>(tex_atlases[0]),
-                                       sc.textures[sc.env->env_map], simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f});
-                if (sc.env->env_clamp > FLT_EPS) {
-                    env_col = min(env_col, simd_fvec4{sc.env->env_clamp});
-                }
-            }
-            env_col[3] = 1.0f;
-        }*/
-        return vec3(ray.c[0] * env_col[0] * g_params.env_col[0],
-                    ray.c[1] * env_col[1] * g_params.env_col[1],
-                    ray.c[2] * env_col[2] * g_params.env_col[2]);
-    }
-
     const vec3 ro = vec3(ray.o[0], ray.o[1], ray.o[2]);
     const vec3 rd = vec3(ray.d[0], ray.d[1], ray.d[2]);
+
+    [[dont_flatten]] if (inter.mask == 0) {
+        vec3 env_col = g_params.env_col.xyz;
+        const uint env_map = floatBitsToUint(g_params.env_col[3]);
+        if (env_map != 0xffffffff) {
+#if BINDLESS
+            env_col *= SampleLatlong_RGBE(env_map, rd);
+#else
+            env_col *= SampleLatlong_RGBE(g_atlases, g_textures[env_map], rd);
+#endif
+        }
+        return vec3(ray.c[0] * env_col[0], ray.c[1] * env_col[1], ray.c[2] * env_col[2]);
+    }
 
     const vec3 I = rd;
     const vec3 P = ro + inter.t * rd;
@@ -1358,14 +1356,13 @@ vec3 ShadeSurface(int px_index, hit_data_t inter, ray_data_t ray) {
 #if USE_NEE
         if ((mat.flags & MAT_FLAG_SKY_PORTAL) != 0) {
             vec3 env_col = g_params.env_col.xyz;
-            if (floatBitsToUint(g_params.env_col.w) != 0xffffffff) {
-                //simd_fvec4 tex_col =
-                //    SampleLatlong_RGBE(*static_cast<const TextureAtlasRGBA *>(tex_atlases[0]),
-                //                       sc.textures[sc.env->env_map], simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0});
-                //if (sc.env->env_clamp > FLT_EPS) {
-                //    tex_col = min(tex_col, simd_fvec4{sc.env->env_clamp});
-                //}
-                //env_col *= tex_col;
+            const uint env_map = floatBitsToUint(g_params.env_col.w);
+            if (env_map != 0xffffffff) {
+#if BINDLESS
+                env_col *= SampleLatlong_RGBE(env_map, rd);
+#else
+                env_col *= SampleLatlong_RGBE(g_atlases, g_textures[env_map], rd);
+#endif
             }
             base_color *= env_col;
         }

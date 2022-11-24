@@ -15,7 +15,7 @@
 
 #include "../Log.h"
 
-#include "shaders/types.glsl"
+#include "shaders/types.h"
 
 #define DEBUG_HWRT 0
 #define RUN_IN_LOCKSTEP 0

@@ -3,7 +3,7 @@
 
 #extension GL_EXT_control_flow_attributes :  require
 
-#include "types.glsl"
+#include "types.h"
 
 //
 // Useful macros for debugging

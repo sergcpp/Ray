@@ -3480,8 +3480,8 @@ void Ray::NS::SampleBilinear(const Ref::TexStorageBase *const textures[], const 
     const int tex = (index & 0x00ffffff);
 
     simd_fvec<S> _uvs[2];
-    _uvs[0] = uvs[0] - floor(uvs[0]);
-    _uvs[1] = uvs[1] - floor(uvs[1]);
+    _uvs[0] = fract(uvs[0]);
+    _uvs[1] = fract(uvs[1]);
 
     for (int i = 0; i < S; i++) {
         if (!mask[i]) {
@@ -3495,7 +3495,7 @@ void Ray::NS::SampleBilinear(const Ref::TexStorageBase *const textures[], const 
         _uvs[1][i] = _uvs[1][i] * img_size[1] - 0.5f;
     }
 
-    const simd_fvec<S> k[2] = {_uvs[0] - floor(_uvs[0]), _uvs[1] - floor(_uvs[1])};
+    const simd_fvec<S> k[2] = {fract(_uvs[0]), fract(_uvs[1])};
 
     simd_fvec<S> p0[4], p1[4];
 
@@ -3535,8 +3535,7 @@ void Ray::NS::SampleTrilinear(const Ref::TexStorageBase *const textures[], const
     simd_fvec<S> col2[4];
     SampleBilinear(textures, index, uvs, (simd_ivec<S>)ceil(lod), mask, col2);
 
-    const simd_fvec<S> k = lod - floor(lod);
-
+    const simd_fvec<S> k = fract(lod);
     ITERATE_4({ out_rgba[i] = col1[i] * (1.0f - k) + col2[i] * k; })
 }
 
@@ -3556,13 +3555,16 @@ void Ray::NS::SampleLatlong_RGBE(const Ref::TexStorageRGBA &storage, const uint3
 
     where(dir[2] < 0.0f, u) = 1.0f - u;
 
+    // TODO: +0.5f is a temporary hack, pass actual hdr orientation here!
+    u = fract(u + 0.5f);
+
     const int tex = (index & 0x00ffffff);
     float sz[2];
     storage.GetFRes(tex, 0, sz);
 
-    const simd_fvec<S> uvs[2] = {u * sz[0] + 1.0f, theta * sz[1] + 1.0f};
+    const simd_fvec<S> uvs[2] = {u * sz[0], theta * sz[1]};
 
-    const simd_fvec<S> k[2] = {uvs[0] - floor(uvs[0]), uvs[1] - floor(uvs[1])};
+    const simd_fvec<S> k[2] = {fract(uvs[0]), fract(uvs[1])};
 
     simd_fvec<S> _p00[3], _p01[3], _p10[3], _p11[3];
 
@@ -4065,10 +4067,7 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const scene_data_t &sc,
                     simd_fvec<S> tex_col[3];
                     SampleLatlong_RGBE(*static_cast<const Ref::TexStorageRGBA *>(textures[0]), sc.env->env_map, ls.L,
                                        ray_queue[index], tex_col);
-
-                    if (sc.env->env_clamp > FLT_EPS) {
-                        ITERATE_3({ env_col[i] = min(env_col[i] * tex_col[i], sc.env->env_clamp); })
-                    }
+                    ITERATE_3({ env_col[i] *= tex_col[i]; })
                 }
                 ITERATE_3({ where(ray_queue[index], ls.col[i]) *= sc.env->env_col[i]; })
             }
@@ -4121,10 +4120,7 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const scene_data_t &sc,
                     simd_fvec<S> tex_col[3];
                     SampleLatlong_RGBE(*static_cast<const Ref::TexStorageRGBA *>(textures[0]), sc.env->env_map, ls.L,
                                        ray_queue[index], tex_col);
-
-                    if (sc.env->env_clamp > FLT_EPS) {
-                        ITERATE_3({ env_col[i] = min(env_col[i] * tex_col[i], sc.env->env_clamp); })
-                    }
+                    ITERATE_3({ env_col[i] *= tex_col[i]; })
                 }
                 ITERATE_3({ where(ray_queue[index], ls.col[i]) *= sc.env->env_col[i]; })
             }
@@ -4181,9 +4177,6 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const scene_data_t &sc,
                     simd_fvec<S> tex_col[3];
                     SampleLatlong_RGBE(*static_cast<const Ref::TexStorageRGBA *>(textures[0]), sc.env->env_map, ls.L,
                                        ray_queue[index], tex_col);
-                    if (sc.env->env_clamp > FLT_EPS) {
-                        ITERATE_3({ tex_col[i] = min(tex_col[i], sc.env->env_clamp); })
-                    }
                     ITERATE_3({ env_col[i] *= tex_col[i]; })
                 }
                 ITERATE_3({ where(ray_queue[index], ls.col[i]) *= env_col[i]; })
@@ -4300,10 +4293,6 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
             if (sc.env->env_map != 0xffffffff) {
                 SampleLatlong_RGBE(*static_cast<const Ref::TexStorageRGBA *>(textures[0]), sc.env->env_map, ray.d,
                                    ino_hit, env_col);
-
-                if (sc.env->env_clamp > FLT_EPS) {
-                    ITERATE_3({ env_col[i] = min(env_col[i], simd_fvec<S>{sc.env->env_clamp}); })
-                }
             }
             env_col[3] = 1.0f;
         }
@@ -5088,9 +5077,6 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                         simd_fvec<S> tex_col[3];
                         SampleLatlong_RGBE(*static_cast<const Ref::TexStorageRGBA *>(textures[0]), sc.env->env_map,
                                            ls.L, ray_queue[index], tex_col);
-                        if (sc.env->env_clamp > FLT_EPS) {
-                            ITERATE_3({ tex_col[i] = min(tex_col[i], sc.env->env_clamp); })
-                        }
                         ITERATE_3({ env_col[i] *= tex_col[i]; })
                     }
                     ITERATE_3({ where(ray_queue[index], base_color[i]) *= env_col[i]; })

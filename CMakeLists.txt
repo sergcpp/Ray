@@ -2,12 +2,16 @@ cmake_minimum_required(VERSION 2.8.12)
 project(Ray)
 
 OPTION(ENABLE_UNITYBUILD "Enable compilation of one large cpp file" ON)
+OPTION(ENABLE_ASAN "Enable Address Sanitizer Build" OFF)
 OPTION(ENABLE_REF_IMPL "Enable reference CPU implementation" OFF)
 OPTION(ENABLE_SIMD_IMPL "Enable SIMD CPU implementations" ON)
 OPTION(ENABLE_GPU_IMPL "Enable Vulkan GPU implementation" ON)
 
 IF(MSVC)
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /Ob1")
+    if (ENABLE_ASAN)
+        set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /fsanitize=address")
+    endif()
 ELSE(MSVC)
     set(CMAKE_CXX_STANDARD 11)
     set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -54,7 +58,7 @@ if (ENABLE_REF_IMPL)
                               internal/RendererRef.h
                               internal/RendererRef.cpp)
 endif()
-                          
+
 if(NOT CMAKE_SYSTEM_NAME MATCHES "Android" AND NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64")
 if (ENABLE_SIMD_IMPL)
     set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
@@ -170,29 +174,29 @@ set(VK_FILES internal/Vk/AccStructure.h
              third-party/SPIRV-Reflect/spirv_reflect.h
              third-party/SPIRV-Reflect/spirv_reflect.c)
 
-set(SHADER_FILES    internal/shaders/_interface_common.glsl
+set(SHADER_FILES    internal/shaders/_interface_common.h
                     internal/shaders/common.glsl
                     internal/shaders/debug_rt.comp.glsl
                     internal/shaders/intersect.glsl
                     internal/shaders/intersect_area_lights.comp.glsl
-                    internal/shaders/intersect_area_lights_interface.glsl
+                    internal/shaders/intersect_area_lights_interface.h
                     internal/shaders/mix_incremental.comp.glsl
-                    internal/shaders/mix_incremental_interface.glsl
+                    internal/shaders/mix_incremental_interface.h
                     internal/shaders/postprocess.comp.glsl
-                    internal/shaders/postprocess_interface.glsl
+                    internal/shaders/postprocess_interface.h
                     internal/shaders/prepare_indir_args.comp.glsl
-                    internal/shaders/prepare_indir_args_interface.glsl
+                    internal/shaders/prepare_indir_args_interface.h
                     internal/shaders/primary_ray_gen.comp.glsl
-                    internal/shaders/primary_ray_gen_interface.glsl
+                    internal/shaders/primary_ray_gen_interface.h
                     internal/shaders/shade_hits.comp.glsl
-                    internal/shaders/shade_hits_interface.glsl
+                    internal/shaders/shade_hits_interface.h
                     internal/shaders/texture.glsl
                     internal/shaders/trace_rays.comp.glsl
-                    internal/shaders/trace_rays_interface.glsl
+                    internal/shaders/trace_rays_interface.h
                     internal/shaders/trace_shadow.comp.glsl
-                    internal/shaders/trace_shadow_interface.glsl
+                    internal/shaders/trace_shadow_interface.h
                     internal/shaders/traverse_bvh.glsl
-                    internal/shaders/types.glsl)
+                    internal/shaders/types.h)
 
 list(APPEND ALL_SOURCE_FILES ${INTERNAL_SOURCE_FILES})
 source_group("src\\internal" FILES ${INTERNAL_SOURCE_FILES})

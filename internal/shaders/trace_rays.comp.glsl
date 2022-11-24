@@ -4,8 +4,7 @@
 #extension GL_EXT_ray_query : require
 #endif
 
-#include "trace_rays_interface.glsl"
-#include "types.glsl"
+#include "trace_rays_interface.h"
 #include "common.glsl"
 
 LAYOUT_PARAMS uniform UniformParams {
