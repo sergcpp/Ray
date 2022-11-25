@@ -12,6 +12,8 @@
 #include "shaders/trace_rays_interface.h"
 #include "shaders/trace_shadow_interface.h"
 
+#include "shaders/types.h"
+
 void Ray::Vk::Renderer::kernel_GeneratePrimaryRays(VkCommandBuffer cmd_buf, const camera_t &cam, const int hi,
                                                    const rect_t &rect, const Buffer &halton, const Buffer &out_rays) {
     const TransitionInfo res_transitions[] = {{&halton, eResState::ShaderResource},
@@ -211,8 +213,8 @@ void Ray::Vk::Renderer::kernel_ShadePrimaryHits(VkCommandBuffer cmd_buf, const p
         DispatchCompute(cmd_buf, pi_shade_primary_hits_[1], grp_count, bindings, &uniform_params,
                         sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
     } else {
-        bindings.emplace_back(eBindTarget::SBuf, ShadeHits::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
-        bindings.emplace_back(eBindTarget::Tex2DArray, ShadeHits::TEXTURE_ATLASES_SLOT, tex_atlases);
+        bindings.emplace_back(eBindTarget::SBuf, Types::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
+        bindings.emplace_back(eBindTarget::Tex2DArray, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
 
         DispatchCompute(cmd_buf, pi_shade_primary_hits_[0], grp_count, bindings, &uniform_params,
                         sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
@@ -276,8 +278,8 @@ void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(VkCommandBuffer cmd_buf, const
         DispatchComputeIndirect(cmd_buf, pi_shade_secondary_hits_[1], indir_args, 0, bindings, &uniform_params,
                                 sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
     } else {
-        bindings.emplace_back(eBindTarget::SBuf, ShadeHits::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
-        bindings.emplace_back(eBindTarget::Tex2DArray, ShadeHits::TEXTURE_ATLASES_SLOT, tex_atlases);
+        bindings.emplace_back(eBindTarget::SBuf, Types::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
+        bindings.emplace_back(eBindTarget::Tex2DArray, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
 
         DispatchComputeIndirect(cmd_buf, pi_shade_secondary_hits_[0], indir_args, 0, bindings, &uniform_params,
                                 sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
@@ -327,8 +329,8 @@ void Ray::Vk::Renderer::kernel_TraceShadow(VkCommandBuffer cmd_buf, const Buffer
                                     bindings, &uniform_params, sizeof(uniform_params), ctx_->default_descr_alloc(),
                                     ctx_->log());
         } else {
-            bindings.emplace_back(eBindTarget::SBuf, TraceShadow::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
-            bindings.emplace_back(eBindTarget::Tex2DArray, TraceShadow::TEXTURE_ATLASES_SLOT, tex_atlases);
+            bindings.emplace_back(eBindTarget::SBuf, Types::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
+            bindings.emplace_back(eBindTarget::Tex2DArray, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
 
             DispatchComputeIndirect(cmd_buf, pi_trace_shadow_hwrt_[0], indir_args, sizeof(DispatchIndirectCommand),
                                     bindings, &uniform_params, sizeof(uniform_params), ctx_->default_descr_alloc(),
@@ -360,8 +362,8 @@ void Ray::Vk::Renderer::kernel_TraceShadow(VkCommandBuffer cmd_buf, const Buffer
                                     bindings, &uniform_params, sizeof(uniform_params), ctx_->default_descr_alloc(),
                                     ctx_->log());
         } else {
-            bindings.emplace_back(eBindTarget::SBuf, TraceShadow::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
-            bindings.emplace_back(eBindTarget::Tex2DArray, TraceShadow::TEXTURE_ATLASES_SLOT, tex_atlases);
+            bindings.emplace_back(eBindTarget::SBuf, Types::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
+            bindings.emplace_back(eBindTarget::Tex2DArray, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
 
             DispatchComputeIndirect(cmd_buf, pi_trace_shadow_swrt_[0], indir_args, sizeof(DispatchIndirectCommand),
                                     bindings, &uniform_params, sizeof(uniform_params), ctx_->default_descr_alloc(),

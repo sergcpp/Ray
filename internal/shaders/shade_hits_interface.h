@@ -34,8 +34,6 @@ const int MESH_INSTANCES_BUF_SLOT = 12;
 const int VERTICES_BUF_SLOT = 13;
 const int VTX_INDICES_BUF_SLOT = 14;
 const int HALTON_SEQ_BUF_SLOT = 15;
-const int TEXTURES_BUF_SLOT = 16;
-const int TEXTURE_ATLASES_SLOT = 17;
 
 const int OUT_IMG_SLOT = 0;
 const int OUT_RAYS_BUF_SLOT = 1;

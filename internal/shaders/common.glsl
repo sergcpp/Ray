@@ -100,12 +100,6 @@ float get_texture_lod(const ivec2 res, const float lambda) {
     return lod;
 }
 
-float get_texture_lod(const atlas_texture_t t, const float lambda) {
-    const int w = int(t.size & ATLAS_TEX_WIDTH_BITS);
-    const int h = int((t.size >> 16) & ATLAS_TEX_HEIGHT_BITS);
-    return get_texture_lod(ivec2(w, h), lambda);
-}
-
 vec3 TransformNormal(vec3 n, mat4 inv_xform) {
     return (transpose(inv_xform) * vec4(n, 0.0)).xyz;
 }

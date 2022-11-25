@@ -57,14 +57,6 @@ layout(std430, binding = HALTON_SEQ_BUF_SLOT) readonly buffer Halton {
     float g_halton[];
 };
 
-#if !BINDLESS
-layout(std430, binding = TEXTURES_BUF_SLOT) readonly buffer Textures {
-    atlas_texture_t g_textures[];
-};
-
-layout(binding = TEXTURE_ATLASES_SLOT) uniform sampler2DArray g_atlases[7];
-#endif
-
 #if PRIMARY
 layout(binding = OUT_IMG_SLOT, rgba32f) uniform writeonly image2D g_out_img;
 #else
@@ -764,7 +756,7 @@ void SampleLightSource(vec3 P, vec2 sample_off, inout light_sample_t ls) {
 #if BINDLESS
                 env_col *= SampleLatlong_RGBE(env_map, ls.L);
 #else
-                env_col *= SampleLatlong_RGBE(g_atlases, g_textures[env_map], ls.L);
+                env_col *= SampleLatlong_RGBE(g_textures[env_map], ls.L);
 #endif
             }
             ls.col *= env_col;
@@ -817,7 +809,7 @@ void SampleLightSource(vec3 P, vec2 sample_off, inout light_sample_t ls) {
 #if BINDLESS
                 env_col *= SampleLatlong_RGBE(env_map, ls.L);
 #else
-                env_col *= SampleLatlong_RGBE(g_atlases, g_textures[env_map], ls.L);
+                env_col *= SampleLatlong_RGBE(g_textures[env_map], ls.L);
 #endif
             }
             ls.col *= env_col;
@@ -859,11 +851,7 @@ void SampleLightSource(vec3 P, vec2 sample_off, inout light_sample_t ls) {
         const material_t lmat = g_materials[(g_tri_materials[ltri_index] >> 16u) & MATERIAL_INDEX_BITS];
         if ((lmat.flags & MAT_FLAG_SKY_PORTAL) == 0) {
             if (lmat.textures[BASE_TEXTURE] != 0xffffffff) {
-#if BINDLESS
                 ls.col *= SampleBilinear(lmat.textures[BASE_TEXTURE], luvs, 0 /* lod */).xyz;
-#else
-                ls.col *= SampleBilinear(g_atlases, g_textures[lmat.textures[BASE_TEXTURE]], luvs, 0 /* lod */).xyz;
-#endif
             }
         } else {
             vec3 env_col = g_params.env_col.xyz;
@@ -872,7 +860,7 @@ void SampleLightSource(vec3 P, vec2 sample_off, inout light_sample_t ls) {
 #if BINDLESS
                 env_col *= SampleLatlong_RGBE(env_map, ls.L);
 #else
-                env_col *= SampleLatlong_RGBE(g_atlases, g_textures[env_map], ls.L);
+                env_col *= SampleLatlong_RGBE(g_textures[env_map], ls.L);
 #endif
             }
             ls.col *= env_col;
@@ -891,7 +879,7 @@ vec3 ShadeSurface(int px_index, hit_data_t inter, ray_data_t ray) {
 #if BINDLESS
             env_col *= SampleLatlong_RGBE(env_map, rd);
 #else
-            env_col *= SampleLatlong_RGBE(g_atlases, g_textures[env_map], rd);
+            env_col *= SampleLatlong_RGBE(g_textures[env_map], rd);
 #endif
         }
         return vec3(ray.c[0] * env_col[0], ray.c[1] * env_col[1], ray.c[2] * env_col[2]);
@@ -1046,11 +1034,7 @@ vec3 ShadeSurface(int px_index, hit_data_t inter, ray_data_t ray) {
     while (mat.type == MixNode) {
         float mix_val = mat.tangent_rotation_or_strength;
         if (mat.textures[BASE_TEXTURE] != 0xffffffff) {
-#if BINDLESS
             mix_val *= SampleBilinear(mat.textures[BASE_TEXTURE], uvs, 0).r;
-#else
-            mix_val *= SampleBilinear(g_atlases, g_textures[mat.textures[BASE_TEXTURE]], uvs, 0).r;
-#endif
         }
 
         const float eta = is_backfacing ? (mat.ext_ior / mat.int_ior) : (mat.int_ior / mat.ext_ior);
@@ -1073,14 +1057,13 @@ vec3 ShadeSurface(int px_index, hit_data_t inter, ray_data_t ray) {
 
     // apply normal map
     [[dont_flatten]] if (mat.textures[NORMALS_TEXTURE] != 0xffffffff) {
-#if BINDLESS
         vec3 normals = vec3(SampleBilinear(mat.textures[NORMALS_TEXTURE], uvs, 0).xy, 1.0);
+#if BINDLESS
         normals = normals * 2.0 - 1.0;
         if ((mat.textures[NORMALS_TEXTURE] & TEX_RECONSTRUCT_Z_BIT) != 0) {
             normals.z = sqrt(1.0 - dot(normals.xy, normals.xy));
         }
 #else
-        vec3 normals = vec3(SampleBilinear(g_atlases, g_textures[mat.textures[NORMALS_TEXTURE]], uvs, 0).xy, 1.0);
         normals = normals * 2.0 - 1.0;
         if ((g_textures[mat.textures[NORMALS_TEXTURE]].size & ATLAS_TEX_RECONSTRUCT_Z_BIT) != 0) {
             normals.z = sqrt(1.0 - dot(normals.xy, normals.xy));
@@ -1125,21 +1108,8 @@ vec3 ShadeSurface(int px_index, hit_data_t inter, ray_data_t ray) {
 
     vec3 base_color = vec3(mat.base_color[0], mat.base_color[1], mat.base_color[2]);
     [[dont_flatten]] if (mat.textures[BASE_TEXTURE] != 0xffffffff) {
-#if BINDLESS
         const float base_lod = get_texture_lod(texSize(mat.textures[BASE_TEXTURE]), lambda);
-        vec3 tex_color = SampleBilinear(mat.textures[BASE_TEXTURE], uvs, int(base_lod)).rgb;
-        if ((mat.textures[BASE_TEXTURE] & TEX_SRGB_BIT) != 0) {
-            tex_color = srgb_to_rgb(tex_color);
-        }
-#else
-        const atlas_texture_t base_texture = g_textures[mat.textures[BASE_TEXTURE]];
-        const float base_lod = get_texture_lod(base_texture, lambda);
-        vec3 tex_color = SampleBilinear(g_atlases, base_texture, uvs, int(base_lod)).rgb;
-        if ((base_texture.size & ATLAS_TEX_SRGB_BIT) != 0) {
-            tex_color = srgb_to_rgb(tex_color);
-        }
-#endif
-        base_color *= tex_color;
+        base_color *= SampleBilinear(mat.textures[BASE_TEXTURE], uvs, int(base_lod), true /* YCoCg */, true /* SRGB */).rgb;
     }
 
     vec3 tint_color = vec3(0.0);
@@ -1151,21 +1121,8 @@ vec3 ShadeSurface(int px_index, hit_data_t inter, ray_data_t ray) {
 
     float roughness = unpack_unorm_16(mat.roughness_and_anisotropic & 0xffff);
     [[dont_flatten]] if (mat.textures[ROUGH_TEXTURE] != 0xffffffff) {
-#if BINDLESS
         const float roughness_lod = get_texture_lod(texSize(mat.textures[ROUGH_TEXTURE]), lambda);
-        vec3 roughness_color = vec3(SampleBilinear(mat.textures[ROUGH_TEXTURE], uvs, int(roughness_lod)).r);
-        if ((mat.textures[ROUGH_TEXTURE] & TEX_SRGB_BIT) != 0) {
-            roughness_color = srgb_to_rgb(roughness_color);
-        }
-#else
-        const atlas_texture_t roughness_tex = g_textures[mat.textures[ROUGH_TEXTURE]];
-        const float roughness_lod = get_texture_lod(roughness_tex, lambda);
-        vec3 roughness_color = vec3(SampleBilinear(g_atlases, roughness_tex, uvs, int(roughness_lod)).r);
-        if ((roughness_tex.size & ATLAS_TEX_SRGB_BIT) != 0) {
-            roughness_color = srgb_to_rgb(roughness_color);
-        }
-#endif
-        roughness *= roughness_color.r;
+        roughness *= SampleBilinear(mat.textures[ROUGH_TEXTURE], uvs, int(roughness_lod), false /* YCoCg */, true /* SRGB */).r;
     }
 
     const float rand_u = fract(g_halton[g_params.hi + RAND_DIM_BSDF_U] + sample_off[0]);
@@ -1361,7 +1318,7 @@ vec3 ShadeSurface(int px_index, hit_data_t inter, ray_data_t ray) {
 #if BINDLESS
                 env_col *= SampleLatlong_RGBE(env_map, rd);
 #else
-                env_col *= SampleLatlong_RGBE(g_atlases, g_textures[env_map], rd);
+                env_col *= SampleLatlong_RGBE(g_textures[env_map], rd);
 #endif
             }
             base_color *= env_col;
@@ -1406,14 +1363,8 @@ vec3 ShadeSurface(int px_index, hit_data_t inter, ray_data_t ray) {
     } else if (mat.type == PrincipledNode) {
         float metallic = unpack_unorm_16((mat.tint_and_metallic >> 16) & 0xffff);
         [[dont_flatten]] if (mat.textures[METALLIC_TEXTURE] != 0xffffffff) {
-#if BINDLESS
             const float metallic_lod = get_texture_lod(texSize(mat.textures[METALLIC_TEXTURE]), lambda);
             metallic *= SampleBilinear(mat.textures[METALLIC_TEXTURE], uvs, int(metallic_lod)).r;
-#else
-            const atlas_texture_t metallic_tex = g_textures[mat.textures[METALLIC_TEXTURE]];
-            const float metallic_lod = get_texture_lod(metallic_tex, lambda);
-            metallic *= SampleBilinear(g_atlases, metallic_tex, uvs, int(metallic_lod)).r;
-#endif
         }
 
         const float specular = unpack_unorm_16(mat.specular_and_specular_tint & 0xffff);

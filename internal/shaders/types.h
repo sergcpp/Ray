@@ -98,6 +98,9 @@ const UINT_TYPE TEX_SRGB_BIT          = (1u << 24); // 0b00000001
 const UINT_TYPE TEX_RECONSTRUCT_Z_BIT = (2u << 24); // 0b00000010
 const UINT_TYPE TEX_YCOCG_BIT         = (4u << 24); // 0b00000100
 
+const UINT_TYPE TEXTURES_BUF_SLOT = 20;
+const UINT_TYPE TEXTURE_ATLASES_SLOT = 21;
+
 struct ray_data_t {
 	float o[3], d[3], pdf;
 	float c[3];
