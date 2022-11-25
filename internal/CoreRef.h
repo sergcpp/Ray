@@ -244,7 +244,7 @@ void SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, const TexSto
                        const float halton[], const float sample_off[2], light_sample_t &ls);
 
 // Account for visible lights contribution
-bool IntersectAreaLights(const ray_data_t &ray, const light_t lights[], Span<const uint32_t> visible_lights,
+void IntersectAreaLights(const ray_data_t &ray, const light_t lights[], Span<const uint32_t> visible_lights,
                          const transform_t transforms[], hit_data_t &inout_inter);
 
 // Shade

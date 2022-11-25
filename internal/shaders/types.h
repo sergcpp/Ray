@@ -181,6 +181,13 @@ struct light_t {
 #define DISK_U param2.xyz
 #define DISK_V param3.xyz
 
+#define LINE_POS param1.xyz
+#define LINE_AREA param1.w
+#define LINE_U param2.xyz
+#define LINE_RADIUS param2.w
+#define LINE_V param3.xyz
+#define LINE_HEIGHT param3.w
+
 #define TRI_TRI_INDEX param1.x
 #define TRI_XFORM_INDEX param1.y
 

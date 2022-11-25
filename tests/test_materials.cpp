@@ -517,62 +517,87 @@ void setup_material_scene(Ray::SceneBase &scene, const bool output_sh, const Mat
         //
         // Use explicit lights sources
         //
-        if (scene_index == STANDARD_SCENE) { // rect light
-            static const float xform[16] = {-0.425036609f, 2.24262476e-06f, -0.905176163f, 0.00000000f,
-                                            -0.876228273f, 0.250873595f,    0.411444396f,  0.00000000f,
-                                            0.227085724f,  0.968019843f,    -0.106628500f, 0.00000000f,
-                                            -0.436484009f, 0.187178999f,    0.204932004f,  1.00000000f};
+        if (scene_index == STANDARD_SCENE) {
+            { // rect light
+                static const float xform[16] = {-0.425036609f, 2.24262476e-06f, -0.905176163f, 0.00000000f,
+                                                -0.876228273f, 0.250873595f,    0.411444396f,  0.00000000f,
+                                                0.227085724f,  0.968019843f,    -0.106628500f, 0.00000000f,
+                                                -0.436484009f, 0.187178999f,    0.204932004f,  1.00000000f};
 
-            Ray::rect_light_desc_t new_light;
+                Ray::rect_light_desc_t new_light;
 
-            new_light.color[0] = 20.3718f;
-            new_light.color[1] = 20.3718f;
-            new_light.color[2] = 20.3718f;
+                new_light.color[0] = 20.3718f;
+                new_light.color[1] = 20.3718f;
+                new_light.color[2] = 20.3718f;
 
-            new_light.width = 0.162f;
-            new_light.height = 0.162f;
+                new_light.width = 0.162f;
+                new_light.height = 0.162f;
 
-            new_light.visible = true;
-            new_light.sky_portal = false;
+                new_light.visible = true;
+                new_light.sky_portal = false;
 
-            scene.AddLight(new_light, xform);
-        } else if (scene_index == STANDARD_SCENE_SPHERE_LIGHT) { // sphere light
-            Ray::sphere_light_desc_t new_light;
+                scene.AddLight(new_light, xform);
+            }
+            { // disk light
+                static const float xform[16] = {0.813511789f,  -0.536388099f, -0.224691749f, 0.00000000f,
+                                                0.538244009f,  0.548162937f,  0.640164733f,  0.00000000f,
+                                                -0.220209062f, -0.641720533f, 0.734644651f,  0.00000000f,
+                                                0.360500991f,  0.461762011f,  0.431780994f,  1.00000000f};
 
-            new_light.color[0] = 7.95775f;
-            new_light.color[1] = 7.95775f;
-            new_light.color[2] = 7.95775f;
+                Ray::disk_light_desc_t new_light;
 
-            new_light.position[0] = -0.436484f;
-            new_light.position[1] = 0.187179f;
-            new_light.position[2] = 0.204932f;
+                new_light.color[0] = 81.4873f;
+                new_light.color[1] = 81.4873f;
+                new_light.color[2] = 81.4873f;
 
-            new_light.radius = 0.05f;
+                new_light.size_x = 0.1296f;
+                new_light.size_y = 0.1296f;
 
-            new_light.visible = true;
+                new_light.visible = true;
+                new_light.sky_portal = false;
 
-            scene.AddLight(new_light);
+                scene.AddLight(new_light, xform);
+            }
+        } else if (scene_index == STANDARD_SCENE_SPHERE_LIGHT) {
+            { // sphere light
+                Ray::sphere_light_desc_t new_light;
+
+                new_light.color[0] = 7.95775f;
+                new_light.color[1] = 7.95775f;
+                new_light.color[2] = 7.95775f;
+
+                new_light.position[0] = -0.436484f;
+                new_light.position[1] = 0.187179f;
+                new_light.position[2] = 0.204932f;
+
+                new_light.radius = 0.05f;
+
+                new_light.visible = true;
+
+                scene.AddLight(new_light);
+            }
+            { // line light
+                static const float xform[16] = {0.813511789f,  -0.536388099f, -0.224691749f, 0.00000000f,
+                                                0.538244009f,  0.548162937f,  0.640164733f,  0.00000000f,
+                                                -0.220209062f, -0.641720533f, 0.734644651f,  0.00000000f,
+                                                0.0f,          0.461762f,     0.0f,          1.00000000f};
+
+                Ray::line_light_desc_t new_light;
+
+                new_light.color[0] = 80.0f;
+                new_light.color[1] = 80.0f;
+                new_light.color[2] = 80.0f;
+
+                new_light.radius = 0.005f;
+                new_light.height = 0.2592f;
+
+                new_light.visible = true;
+                new_light.sky_portal = false;
+
+                scene.AddLight(new_light, xform);
+            }
         }
-        { // disk light
-            static const float xform[16] = {0.813511789f,  -0.536388099f, -0.224691749f, 0.00000000f,
-                                            0.538244009f,  0.548162937f,  0.640164733f,  0.00000000f,
-                                            -0.220209062f, -0.641720533f, 0.734644651f,  0.00000000f,
-                                            0.360500991f,  0.461762011f,  0.431780994f,  1.00000000f};
 
-            Ray::disk_light_desc_t new_light;
-
-            new_light.color[0] = 81.4873f;
-            new_light.color[1] = 81.4873f;
-            new_light.color[2] = 81.4873f;
-
-            new_light.size_x = 0.1296f;
-            new_light.size_y = 0.1296f;
-
-            new_light.visible = true;
-            new_light.sky_portal = false;
-
-            scene.AddLight(new_light, xform);
-        }
     } else if (scene_index == STANDARD_SCENE_SUN_LIGHT) {
         Ray::directional_light_desc_t sun_desc;
 
@@ -2403,8 +2428,8 @@ void test_complex_mat5_mesh_lights(const char *arch_list[], const char *preferre
 
 void test_complex_mat5_sphere_light(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 768;
-    const double MinPSNR = 33.35;
-    const int PixThres = 455;
+    const double MinPSNR = 24.96;
+    const int PixThres = 284;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = 0;
@@ -2502,8 +2527,8 @@ void test_complex_mat6_mesh_lights(const char *arch_list[], const char *preferre
 
 void test_complex_mat6_sphere_light(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 1024;
-    const double MinPSNR = 28.28;
-    const int PixThres = 1080;
+    const double MinPSNR = 24.22;
+    const int PixThres = 509;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;

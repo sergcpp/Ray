@@ -814,6 +814,51 @@ void SampleLightSource(vec3 P, vec2 sample_off, inout light_sample_t ls) {
             }
             ls.col *= env_col;
         }
+    } else [[dont_flatten]] if (l_type == LIGHT_TYPE_LINE) {
+        const vec3 light_pos = l.LINE_POS;
+        const vec3 light_dir = l.LINE_V;
+
+        const float r1 = fract(g_halton[g_params.hi + RAND_DIM_LIGHT_U] + sample_off[0]);
+        const float r2 = fract(g_halton[g_params.hi + RAND_DIM_LIGHT_V] + sample_off[1]);
+
+        const vec3 center_to_surface = P - light_pos;
+
+        vec3 light_u = normalize(cross(center_to_surface, light_dir));
+        vec3 light_v = cross(light_u, light_dir);
+
+        const float phi = PI * r1;
+        const vec3 normal = cos(phi) * light_u + sin(phi) * light_v;
+
+        const vec3 lp = light_pos + normal * l.LINE_RADIUS + (r2 - 0.5) * light_dir * l.LINE_HEIGHT;
+
+        const vec3 to_light = lp - P;
+        ls.dist = length(to_light);
+        ls.L = (to_light / ls.dist);
+
+        ls.area = l.LINE_AREA;
+
+        const float cos_theta = 1.0 - abs(dot(ls.L, light_dir));
+        [[flatten]] if (cos_theta != 0.0) {
+            ls.pdf = (ls.dist * ls.dist) / (ls.area * cos_theta);
+        }
+
+        if ((l.type_and_param0.x & 0x3f) == 0) { // !visible
+            ls.area = 0.0;
+        }
+
+        // probably can not be a portal, but still..
+        [[dont_flatten]] if ((l.type_and_param0.w & (1 << 7)) != 0) { // sky portal
+            vec3 env_col = g_params.env_col.xyz;
+            const uint env_map = floatBitsToUint(g_params.env_col.w);
+            if (env_map != 0xffffffff) {
+#if BINDLESS
+                env_col *= SampleLatlong_RGBE(env_map, ls.L);
+#else
+                env_col *= SampleLatlong_RGBE(g_textures[env_map], ls.L);
+#endif
+            }
+            ls.col *= env_col;
+        }
     } else [[dont_flatten]] if (l_type == LIGHT_TYPE_TRI) {
         const uint ltri_index = floatBitsToUint(l.TRI_TRI_INDEX);
         const transform_t ltr = g_transforms[floatBitsToUint(l.TRI_XFORM_INDEX)];
@@ -935,6 +980,17 @@ vec3 ShadeSurface(int px_index, hit_data_t inter, ray_data_t ray) {
 
             const float plane_dist = dot(light_forward, light_pos);
             const float cos_theta = dot(rd, light_forward);
+
+            const float light_pdf = (inter.t * inter.t) / (light_area * cos_theta);
+            const float bsdf_pdf = ray.pdf;
+
+            const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
+            lcol *= mis_weight;
+        } else if (l_type == LIGHT_TYPE_LINE) {
+            const vec3 light_dir = l.LINE_V;
+            const float light_area = l.LINE_AREA;
+
+            const float cos_theta = 1.0 - abs(dot(rd, light_dir));
 
             const float light_pdf = (inter.t * inter.t) / (light_area * cos_theta);
             const float bsdf_pdf = ray.pdf;

@@ -108,6 +108,7 @@ class Scene : public SceneBase {
     uint32_t AddLight(const sphere_light_desc_t &l) override;
     uint32_t AddLight(const rect_light_desc_t &l, const float *xform) override;
     uint32_t AddLight(const disk_light_desc_t &l, const float *xform) override;
+    uint32_t AddLight(const line_light_desc_t &l, const float *xform) override;
     void RemoveLight(uint32_t i) override;
 
     uint32_t AddMeshInstance(uint32_t m_index, const float *xform) override;

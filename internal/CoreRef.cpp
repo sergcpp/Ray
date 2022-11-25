@@ -1027,6 +1027,23 @@ force_inline float fract(const float v) {
     return std::modf(v, &_unused);
 }
 
+force_inline bool quadratic(float a, float b, float c, float &t0, float &t1) {
+    const float d = b * b - 4.0f * a * c;
+    if (d < 0.0f) {
+        return false;
+    }
+    const float sqrt_d = std::sqrt(d);
+    float q;
+    if (b < 0.0f) {
+        q = -0.5f * (b - sqrt_d);
+    } else {
+        q = -0.5f * (b + sqrt_d);
+    }
+    t0 = q / a;
+    t1 = c / q;
+    return true;
+}
+
 } // namespace Ref
 } // namespace Ray
 
@@ -2866,6 +2883,46 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, co
             }
             ls.col *= env_col;
         }
+    } else if (l.type == LIGHT_TYPE_LINE) {
+        const auto light_pos = simd_fvec4{l.line.pos[0], l.line.pos[1], l.line.pos[2], 0.0f};
+        const simd_fvec4 light_dir = simd_fvec4{l.line.v[0], l.line.v[1], l.line.v[2], 0.0f};
+
+        const float r1 = fract(halton[RAND_DIM_LIGHT_U] + sample_off[0]);
+        const float r2 = fract(halton[RAND_DIM_LIGHT_V] + sample_off[1]);
+
+        const simd_fvec4 center_to_surface = P - light_pos;
+
+        simd_fvec4 light_u = normalize(cross(center_to_surface, light_dir));
+        simd_fvec4 light_v = cross(light_u, light_dir);
+
+        const float phi = PI * r1;
+        const simd_fvec4 normal = std::cos(phi) * light_u + std::sin(phi) * light_v;
+
+        const simd_fvec4 lp = light_pos + normal * l.line.radius + (r2 - 0.5f) * light_dir * l.line.height;
+
+        const simd_fvec4 to_light = lp - P;
+        ls.dist = length(to_light);
+        ls.L = (to_light / ls.dist);
+
+        ls.area = l.line.area;
+
+        const float cos_theta = 1.0f - std::abs(dot(ls.L, light_dir));
+        if (cos_theta != 0.0f) {
+            ls.pdf = (ls.dist * ls.dist) / (ls.area * cos_theta);
+        }
+
+        if (!l.visible) {
+            ls.area = 0.0f;
+        }
+
+        // probably can not be a portal, but still..
+        if (l.sky_portal != 0) {
+            simd_fvec4 env_col = {sc.env->env_col[0], sc.env->env_col[1], sc.env->env_col[2], 0.0f};
+            if (sc.env->env_map != 0xffffffff) {
+                env_col *= SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), sc.env->env_map, ls.L);
+            }
+            ls.col *= env_col;
+        }
     } else if (l.type == LIGHT_TYPE_TRI) {
         const transform_t &ltr = sc.transforms[l.tri.xform_index];
         const uint32_t ltri_index = l.tri.tri_index;
@@ -2912,10 +2969,8 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, co
     }
 }
 
-bool Ray::Ref::IntersectAreaLights(const ray_data_t &ray, const light_t lights[], Span<const uint32_t> visible_lights,
+void Ray::Ref::IntersectAreaLights(const ray_data_t &ray, const light_t lights[], Span<const uint32_t> visible_lights,
                                    const transform_t transforms[], hit_data_t &inout_inter) {
-    bool res = false;
-
     // TODO: BVH for light geometry
     for (uint32_t li = 0; li < uint32_t(visible_lights.size()); ++li) {
         const uint32_t light_index = visible_lights[li];
@@ -2932,12 +2987,10 @@ bool Ray::Ref::IntersectAreaLights(const ray_data_t &ray, const light_t lights[]
                     inout_inter.mask = -1;
                     inout_inter.obj_index = -int(light_index) - 1;
                     inout_inter.t = t1;
-                    res = true;
                 } else if (t2 > HIT_EPS && t2 < inout_inter.t) {
                     inout_inter.mask = -1;
                     inout_inter.obj_index = -int(light_index) - 1;
                     inout_inter.t = t2;
-                    res = true;
                 }
             }
         } else if (l.type == LIGHT_TYPE_RECT) {
@@ -2966,7 +3019,6 @@ bool Ray::Ref::IntersectAreaLights(const ray_data_t &ray, const light_t lights[]
                         inout_inter.mask = -1;
                         inout_inter.obj_index = -int(light_index) - 1;
                         inout_inter.t = t;
-                        res = true;
                     }
                 }
             }
@@ -2996,13 +3048,36 @@ bool Ray::Ref::IntersectAreaLights(const ray_data_t &ray, const light_t lights[]
                     inout_inter.mask = -1;
                     inout_inter.obj_index = -int(light_index) - 1;
                     inout_inter.t = t;
-                    res = true;
+                }
+            }
+        } else if (l.type == LIGHT_TYPE_LINE) {
+            const auto light_pos = simd_fvec4{l.line.pos[0], l.line.pos[1], l.line.pos[2], 0.0f};
+            const simd_fvec4 light_u = simd_fvec4{l.line.u[0], l.line.u[1], l.line.u[2], 0.0f};
+            const simd_fvec4 light_dir = simd_fvec4{l.line.v[0], l.line.v[1], l.line.v[2], 0.0f};
+            const simd_fvec4 light_v = cross(light_u, light_dir);
+
+            simd_fvec4 ro = simd_fvec4{ray.o[0], ray.o[1], ray.o[2], 0.0f} - light_pos;
+            ro = simd_fvec4{dot(ro, light_dir), dot(ro, light_u), dot(ro, light_v), 0.0f};
+
+            simd_fvec4 rd = simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f};
+            rd = simd_fvec4{dot(rd, light_dir), dot(rd, light_u), dot(rd, light_v), 0.0f};
+
+            const float A = rd[2] * rd[2] + rd[1] * rd[1];
+            const float B = 2.0f * (rd[2] * ro[2] + rd[1] * ro[1]);
+            const float C = ro[2] * ro[2] + ro[1] * ro[1] - l.line.radius * l.line.radius;
+
+            float t0, t1;
+            if (quadratic(A, B, C, t0, t1) && t0 > HIT_EPS && t1 > HIT_EPS) {
+                const float t = std::min(t0, t1);
+                const simd_fvec4 p = ro + t * rd;
+                if (std::abs(p[0]) < 0.5f * l.line.height && t < inout_inter.t) {
+                    inout_inter.mask = -1;
+                    inout_inter.obj_index = -int(light_index) - 1;
+                    inout_inter.t = t;
                 }
             }
         }
     }
-
-    return res;
 }
 
 Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t &pi, const hit_data_t &inter,
@@ -3031,7 +3106,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
         const light_t &l = sc.lights[-inter.obj_index - 1];
 
         simd_fvec4 lcol = simd_fvec4{l.col[0], l.col[1], l.col[2], 0.0f};
-
+#if USE_NEE
         if (l.type == LIGHT_TYPE_SPHERE) {
             const auto light_pos = simd_fvec4{l.sph.pos[0], l.sph.pos[1], l.sph.pos[2], 0.0f};
             const float light_area = l.sph.area;
@@ -3055,7 +3130,6 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
             const simd_fvec4 light_forward = normalize(cross(light_u, light_v));
             const float light_area = l.rect.area;
 
-            const float plane_dist = dot(light_forward, light_pos);
             const float cos_theta = dot(simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f}, light_forward);
 
             const float light_pdf = (inter.t * inter.t) / (light_area * cos_theta);
@@ -3071,7 +3145,6 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
             const simd_fvec4 light_forward = normalize(cross(light_u, light_v));
             const float light_area = l.disk.area;
 
-            const float plane_dist = dot(light_forward, light_pos);
             const float cos_theta = dot(simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f}, light_forward);
 
             const float light_pdf = (inter.t * inter.t) / (light_area * cos_theta);
@@ -3079,8 +3152,19 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
 
             const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
             lcol *= mis_weight;
-        }
+        } else if (l.type == LIGHT_TYPE_LINE) {
+            const simd_fvec4 light_dir = simd_fvec4{l.line.v[0], l.line.v[1], l.line.v[2], 0.0f};
+            const float light_area = l.line.area;
 
+            const float cos_theta = 1.0f - std::abs(dot(simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f}, light_dir));
+
+            const float light_pdf = (inter.t * inter.t) / (light_area * cos_theta);
+            const float bsdf_pdf = ray.pdf;
+
+            const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
+            lcol *= mis_weight;
+        }
+#endif
         return Ray::pixel_color_t{ray.c[0] * lcol[0], ray.c[1] * lcol[1], ray.c[2] * lcol[2], 1.0f};
     }
 

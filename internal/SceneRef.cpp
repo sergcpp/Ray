@@ -506,6 +506,37 @@ uint32_t Ray::Ref::Scene::AddLight(const disk_light_desc_t &_l, const float *xfo
     return light_index;
 }
 
+uint32_t Ray::Ref::Scene::AddLight(const line_light_desc_t &_l, const float *xform) {
+    light_t l = {};
+
+    l.type = LIGHT_TYPE_LINE;
+    l.visible = _l.visible;
+    l.sky_portal = _l.sky_portal;
+
+    memcpy(&l.col[0], &_l.color[0], 3 * sizeof(float));
+
+    l.line.pos[0] = xform[12];
+    l.line.pos[1] = xform[13];
+    l.line.pos[2] = xform[14];
+
+    l.line.area = 2.0f * PI * _l.radius * _l.height;
+
+    const simd_fvec4 uvec = TransformDirection(simd_fvec4{1.0f, 0.0f, 0.0f, 0.0f}, xform);
+    const simd_fvec4 vvec = TransformDirection(simd_fvec4{0.0f, 1.0f, 0.0f, 0.0f}, xform);
+
+    memcpy(l.line.u, value_ptr(uvec), 3 * sizeof(float));
+    l.line.radius = _l.radius;
+    memcpy(l.line.v, value_ptr(vvec), 3 * sizeof(float));
+    l.line.height = _l.height;
+
+    const uint32_t light_index = lights_.push(l);
+    li_indices_.push_back(light_index);
+    if (_l.visible) {
+        visible_lights_.push_back(light_index);
+    }
+    return light_index;
+}
+
 void Ray::Ref::Scene::RemoveLight(const uint32_t i) {
     if (!lights_.exists(i)) {
         return;

@@ -196,6 +196,11 @@ struct light_t {
             float v[3], _unused1;
         } disk;
         struct {
+            float pos[3], area;
+            float u[3], radius;
+            float v[3], height;
+        } line;
+        struct {
             uint32_t tri_index;
             uint32_t xform_index;
             float _unused[10];
