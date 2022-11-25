@@ -144,6 +144,7 @@ enum eTextureFormat {
 /// Texture description
 struct tex_desc_t {
     eTextureFormat format;
+    const char *name = nullptr;         ///< Debug name
     const void *data;
     int w,                              ///< Texture width
         h;                              ///< Texture height

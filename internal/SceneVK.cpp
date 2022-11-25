@@ -351,7 +351,8 @@ uint32_t Ray::Vk::Scene::AddBindlessTexture(const tex_desc_t &_t) {
     p.format = fmt;
     p.sampling.filter = eTexFilter::Bilinear;
 
-    uint32_t ret = bindless_textures_.emplace("Bindless Tex", ctx_, p, ctx_->default_memory_allocs(), ctx_->log());
+    uint32_t ret = bindless_textures_.emplace(_t.name ? _t.name : "Bindless Tex", ctx_, p,
+                                              ctx_->default_memory_allocs(), ctx_->log());
 
     { // Submit GPU commands
         VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
