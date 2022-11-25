@@ -193,7 +193,7 @@ const int STANDARD_SCENE_MESH_LIGHTS = 2;
 const int STANDARD_SCENE_SUN_LIGHT = 3;
 const int STANDARD_SCENE_HDR_LIGHT = 4;
 const int STANDARD_SCENE_NO_LIGHT = 5;
-const int REFR_PLANE_SCENE = 5;
+const int REFR_PLANE_SCENE = 6;
 } // namespace
 
 template <typename MatDesc>
