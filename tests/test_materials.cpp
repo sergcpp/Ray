@@ -338,7 +338,7 @@ void setup_material_scene(Ray::SceneBase &scene, const bool output_sh, const Mat
         std::vector<uint32_t> model_indices, model_groups;
         if (scene_index == STANDARD_SCENE || scene_index == STANDARD_SCENE_SPHERE_LIGHT ||
             scene_index == STANDARD_SCENE_MESH_LIGHTS || scene_index == STANDARD_SCENE_SUN_LIGHT ||
-            STANDARD_SCENE_HDR_LIGHT || scene_index == STANDARD_SCENE_NO_LIGHT) {
+            scene_index == STANDARD_SCENE_HDR_LIGHT || scene_index == STANDARD_SCENE_NO_LIGHT) {
             std::tie(model_attrs, model_indices, model_groups) = LoadBIN("test_data/meshes/mat_test/model.bin");
         } else if (scene_index == REFR_PLANE_SCENE) {
             std::tie(model_attrs, model_indices, model_groups) = LoadBIN("test_data/meshes/mat_test/refr_plane.bin");
