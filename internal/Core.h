@@ -7,7 +7,7 @@
 #include "../Types.h"
 #include "Span.h"
 
-//#define USE_RAY_DIFFERENTIALS
+// #define USE_RAY_DIFFERENTIALS
 
 #ifdef __GNUC__
 #define force_inline __attribute__((always_inline)) inline
@@ -22,7 +22,7 @@
 #endif
 
 #define unused(x) ((void)x)
-#define countof(x) (sizeof(x)/sizeof(x[0]))
+#define countof(x) (sizeof(x) / sizeof(x[0]))
 
 #include "simd/aligned_allocator.h"
 
@@ -93,11 +93,11 @@ const int MAX_TEXTURE_SIZE = (1 << MAX_MIP_LEVEL);
 
 const int TEXTURE_ATLAS_SIZE = 8192 + 256; // small margin to account for borders
 
-const int ATLAS_TEX_SRGB_BIT            = 0b1000000000000000;
-const int ATLAS_TEX_RECONSTRUCT_Z_BIT   = 0b0100000000000000;
-const int ATLAS_TEX_WIDTH_BITS          = 0b0011111111111111;
-const int ATLAS_TEX_MIPS_BIT            = 0b1000000000000000;
-const int ATLAS_TEX_HEIGHT_BITS         = 0b0011111111111111;
+const int ATLAS_TEX_SRGB_BIT = 0b1000000000000000;
+const int ATLAS_TEX_RECONSTRUCT_Z_BIT = 0b0100000000000000;
+const int ATLAS_TEX_WIDTH_BITS = 0b0011111111111111;
+const int ATLAS_TEX_MIPS_BIT = 0b1000000000000000;
+const int ATLAS_TEX_HEIGHT_BITS = 0b0011111111111111;
 
 struct atlas_texture_t {
     uint16_t width;
@@ -304,8 +304,8 @@ uint32_t FlattenBVH_Recursive(const bvh_node_t *nodes, uint32_t node_index, uint
 bool NaiivePluckerTest(const float p[9], const float o[3], const float d[3]);
 
 void ConstructCamera(eCamType type, eFilterType filter, eDeviceType dtype, const float origin[3], const float fwd[3],
-                     const float up[3], float fov, float gamma, float focus_distance, float focus_factor,
-                     camera_t *cam);
+                     const float up[3], float fov, float sensor_height, float gamma, float focus_distance, float fstop,
+                     float lens_rotation, float lens_ratio, int lens_blades, camera_t *cam);
 
 // Applies 4x4 matrix matrix transform to bounding box
 void TransformBoundingBox(const float bbox_min[3], const float bbox_max[3], const float *xform, float out_bbox_min[3],

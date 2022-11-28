@@ -193,7 +193,9 @@ const int STANDARD_SCENE_MESH_LIGHTS = 2;
 const int STANDARD_SCENE_SUN_LIGHT = 3;
 const int STANDARD_SCENE_HDR_LIGHT = 4;
 const int STANDARD_SCENE_NO_LIGHT = 5;
-const int REFR_PLANE_SCENE = 6;
+const int STANDARD_SCENE_DOF0 = 6;
+const int STANDARD_SCENE_DOF1 = 7;
+const int REFR_PLANE_SCENE = 8;
 } // namespace
 
 template <typename MatDesc>
@@ -222,6 +224,22 @@ void setup_material_scene(Ray::SceneBase &scene, const bool output_sh, const Mat
         memcpy(&cam_desc.up[0], &view_up[0], 3 * sizeof(float));
         cam_desc.clamp = true;
         cam_desc.output_sh = output_sh;
+
+        if (scene_index == STANDARD_SCENE_DOF0) {
+            cam_desc.sensor_height = 0.018f;
+            cam_desc.focus_distance = 0.1f;
+            cam_desc.fstop = 0.1f;
+            cam_desc.lens_blades = 6;
+            cam_desc.lens_rotation = 30.0f * 3.141592653589f / 180.0f;
+            cam_desc.lens_ratio = 2.0f;
+        } else if (scene_index == STANDARD_SCENE_DOF1) {
+            cam_desc.sensor_height = 0.018f;
+            cam_desc.focus_distance = 0.4f;
+            cam_desc.fstop = 0.1f;
+            cam_desc.lens_blades = 0;
+            cam_desc.lens_rotation = 30.0f * 3.141592653589f / 180.0f;
+            cam_desc.lens_ratio = 2.0f;
+        }
 
         const uint32_t cam = scene.AddCamera(cam_desc);
         scene.set_current_cam(cam);
@@ -336,12 +354,10 @@ void setup_material_scene(Ray::SceneBase &scene, const bool output_sh, const Mat
     {
         std::vector<float> model_attrs;
         std::vector<uint32_t> model_indices, model_groups;
-        if (scene_index == STANDARD_SCENE || scene_index == STANDARD_SCENE_SPHERE_LIGHT ||
-            scene_index == STANDARD_SCENE_MESH_LIGHTS || scene_index == STANDARD_SCENE_SUN_LIGHT ||
-            scene_index == STANDARD_SCENE_HDR_LIGHT || scene_index == STANDARD_SCENE_NO_LIGHT) {
-            std::tie(model_attrs, model_indices, model_groups) = LoadBIN("test_data/meshes/mat_test/model.bin");
-        } else if (scene_index == REFR_PLANE_SCENE) {
+        if (scene_index == REFR_PLANE_SCENE) {
             std::tie(model_attrs, model_indices, model_groups) = LoadBIN("test_data/meshes/mat_test/refr_plane.bin");
+        } else {
+            std::tie(model_attrs, model_indices, model_groups) = LoadBIN("test_data/meshes/mat_test/model.bin");
         }
 
         Ray::mesh_desc_t model_mesh_desc;
@@ -513,11 +529,12 @@ void setup_material_scene(Ray::SceneBase &scene, const bool output_sh, const Mat
             scene.AddMeshInstance(square_light_mesh, identity);
         }
         scene.AddMeshInstance(disc_light_mesh, identity);
-    } else if (scene_index == STANDARD_SCENE || scene_index == STANDARD_SCENE_SPHERE_LIGHT) {
+    } else if (scene_index == STANDARD_SCENE || scene_index == STANDARD_SCENE_SPHERE_LIGHT ||
+               scene_index == STANDARD_SCENE_DOF0 || scene_index == STANDARD_SCENE_DOF1) {
         //
         // Use explicit lights sources
         //
-        if (scene_index == STANDARD_SCENE) {
+        if (scene_index == STANDARD_SCENE || scene_index == STANDARD_SCENE_DOF0 || scene_index == STANDARD_SCENE_DOF1) {
             { // rect light
                 static const float xform[16] = {-0.425036609f, 2.24262476e-06f, -0.905176163f, 0.00000000f,
                                                 -0.876228273f, 0.250873595f,    0.411444396f,  0.00000000f,
@@ -833,7 +850,8 @@ void assemble_material_test_images(const char *arch_list[]) {
         {"complex_mat5", "complex_mat5_mesh_lights", "complex_mat5_sphere_light", "complex_mat5_sun_light",
          "complex_mat5_hdr_light"},
         {"complex_mat6", "complex_mat6_mesh_lights", "complex_mat6_sphere_light", "complex_mat6_sun_light",
-         "complex_mat6_hdr_light"}};
+         "complex_mat6_hdr_light"},
+        {"complex_mat5_dof", "complex_mat6_dof"}};
     const int ImgCountH = sizeof(test_names) / sizeof(test_names[0]);
 
     const int OutImageW = 256 * ImgCountW;
@@ -2404,6 +2422,28 @@ void test_complex_mat5(const char *arch_list[], const char *preferred_device) {
                       textures);
 }
 
+void test_complex_mat5_dof(const char *arch_list[], const char *preferred_device) {
+    const int SampleCount = 1024;
+    const double MinPSNR = 30.33;
+    const int PixThres = 1000;
+
+    Ray::principled_mat_desc_t metal_mat_desc;
+    metal_mat_desc.base_texture = 0;
+    metal_mat_desc.metallic = 1.0f;
+    metal_mat_desc.roughness = 1.0f;
+    metal_mat_desc.roughness_texture = 2;
+    metal_mat_desc.metallic = 1.0f;
+    metal_mat_desc.metallic_texture = 3;
+    metal_mat_desc.normal_map = 1;
+
+    const char *textures[] = {
+        "test_data/textures/gold-scuffed_basecolor-boosted.tga", "test_data/textures/gold-scuffed_normal.tga",
+        "test_data/textures/gold-scuffed_roughness.tga", "test_data/textures/gold-scuffed_metallic.tga"};
+
+    run_material_test(arch_list, preferred_device, "complex_mat5_dof", metal_mat_desc, SampleCount, MinPSNR, PixThres,
+                      textures, STANDARD_SCENE_DOF0);
+}
+
 void test_complex_mat5_mesh_lights(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 768;
     const double MinPSNR = 31.12;
@@ -2506,6 +2546,23 @@ void test_complex_mat6(const char *arch_list[], const char *preferred_device) {
     olive_mat_desc.ior = 2.3f;
 
     run_material_test(arch_list, preferred_device, "complex_mat6", olive_mat_desc, SampleCount, MinPSNR, PixThres);
+}
+
+void test_complex_mat6_dof(const char *arch_list[], const char *preferred_device) {
+    const int SampleCount = 1024;
+    const double MinPSNR = 28.51;
+    const int PixThres = 896;
+
+    Ray::principled_mat_desc_t olive_mat_desc;
+    olive_mat_desc.base_color[0] = 0.836164f;
+    olive_mat_desc.base_color[1] = 0.836164f;
+    olive_mat_desc.base_color[2] = 0.656603f;
+    olive_mat_desc.roughness = 0.041667f;
+    olive_mat_desc.transmission = 1.0f;
+    olive_mat_desc.ior = 2.3f;
+
+    run_material_test(arch_list, preferred_device, "complex_mat6_dof", olive_mat_desc, SampleCount, MinPSNR, PixThres,
+                      nullptr, STANDARD_SCENE_DOF1);
 }
 
 void test_complex_mat6_mesh_lights(const char *arch_list[], const char *preferred_device) {

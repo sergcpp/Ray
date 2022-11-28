@@ -1593,6 +1593,15 @@ force_inline simd_ivec<S> quadratic(const simd_fvec<S> &a, const simd_fvec<S> &b
     return simd_cast(d >= 0.0f);
 }
 
+template <int S> force_inline simd_fvec<S> ngon_rad(const simd_fvec<S> &theta, const float n) {
+    simd_fvec<S> ret;
+    ITERATE(S, {
+        ret[i] =
+            std::cos(PI / n) / std::cos(theta[i] - (2.0f * PI / n) * std::floor((n * theta[i] + PI) / (2.0f * PI)));
+    })
+    return ret;
+}
+
 } // namespace NS
 } // namespace Ray
 
@@ -1662,16 +1671,35 @@ void Ray::NS::GeneratePrimaryRays(const int iteration, const camera_t &cam, cons
             simd_fvec<S> fxx = (simd_fvec<S>)ixx, fyy = (simd_fvec<S>)iyy;
 
             const simd_ivec<S> hash_val = hash(index);
-            simd_fvec<S> rxx = construct_float(hash_val);
-            simd_fvec<S> ryy = construct_float(hash(hash_val));
-            simd_fvec<S> sxx, syy;
+            const simd_fvec<S> sample_off[2] = {construct_float(hash_val), construct_float(hash(hash_val))};
 
-            for (int j = 0; j < S; j++) {
-                float _unused;
-                sxx[j] = cam.focus_factor * (-0.5f + std::modf(halton[RAND_DIM_LENS_U] + rxx[j], &_unused));
-                syy[j] = cam.focus_factor * (-0.5f + std::modf(halton[RAND_DIM_LENS_V] + ryy[j], &_unused));
-                rxx[j] = std::modf(halton[RAND_DIM_FILTER_U] + rxx[j], &_unused);
-                ryy[j] = std::modf(halton[RAND_DIM_FILTER_V] + ryy[j], &_unused);
+            simd_fvec<S> rxx = fract(halton[RAND_DIM_FILTER_U] + sample_off[0]),
+                         ryy = fract(halton[RAND_DIM_FILTER_V] + sample_off[1]);
+
+            simd_fvec<S> offset[2] = {0.0f, 0.0f};
+            if (cam.fstop > 0.0f) {
+                const simd_fvec<S> r1 = fract(halton[RAND_DIM_LENS_U] + sample_off[0]);
+                const simd_fvec<S> r2 = fract(halton[RAND_DIM_LENS_V] + sample_off[1]);
+
+                offset[0] = 2.0f * r1 - 1.0f;
+                offset[1] = 2.0f * r2 - 1.0f;
+
+                simd_fvec<S> r = offset[1], theta = 0.5f * PI - 0.25f * PI * (offset[0] / offset[1]);
+                where(abs(offset[0]) > abs(offset[1]), r) = offset[0];
+                where(abs(offset[0]) > abs(offset[1]), theta) = 0.25f * PI * (offset[1] / offset[0]);
+
+                if (cam.lens_blades) {
+                    r *= ngon_rad(theta, float(cam.lens_blades));
+                }
+
+                theta += cam.lens_rotation;
+
+                where(offset[0] != 0.0f & offset[1] != 0.0f, offset[0]) = 0.5f * r * cos(theta) / cam.lens_ratio;
+                where(offset[0] != 0.0f & offset[1] != 0.0f, offset[1]) = 0.5f * r * sin(theta);
+
+                const float coc = 0.5f * (cam.focal_length / cam.fstop);
+                offset[0] *= coc * cam.sensor_height;
+                offset[1] *= coc * cam.sensor_height;
             }
 
             if (cam.filter == Tent) {
@@ -1690,9 +1718,9 @@ void Ray::NS::GeneratePrimaryRays(const int iteration, const camera_t &cam, cons
             fxx += rxx;
             fyy += ryy;
 
-            const simd_fvec<S> _origin[3] = {{cam_origin[0] + side[0] * sxx + up[0] * syy},
-                                             {cam_origin[1] + side[1] * sxx + up[1] * syy},
-                                             {cam_origin[2] + side[2] * sxx + up[2] * syy}};
+            const simd_fvec<S> _origin[3] = {{cam_origin[0] + side[0] * offset[0] + up[0] * offset[1]},
+                                             {cam_origin[1] + side[1] * offset[0] + up[1] * offset[1]},
+                                             {cam_origin[2] + side[2] * offset[0] + up[2] * offset[1]}};
 
             simd_fvec<S> _d[3], _dx[3], _dy[3];
             get_pix_dirs(fxx, fyy, _origin, _d);

@@ -201,12 +201,18 @@ struct camera_desc_t {
     eCamType type = Persp;               ///< Type of projection
     eFilterType filter = Tent;           ///< Reconstruction filter
     eDeviceType dtype = SRGB;            ///< Device type
+    eLensUnits ltype = FOV;              ///< Lens units type
     float origin[3];                     ///< Camera origin
     float fwd[3] = {};                   ///< Camera forward unit vector
     float up[3];                         ///< Camera up vector (optional)
     float fov, gamma = 1.0f;             ///< Field of view in degrees, gamma
+    float sensor_height = 0.036f;        ///< Camera sensor height
     float focus_distance = 1.0f;         ///< Distance to focus point
-    float focus_factor = 0.0f;           ///< Depth of field strength (in non-physical units)
+    float focal_length = 0.0f;           ///< Focal length
+    float fstop = 0.0f;                  ///< Focal fstop
+    float lens_rotation = 0.0f;          ///< Bokeh rotation
+    float lens_ratio = 1.0f;             ///< Bokeh distortion
+    int lens_blades = 0;                 ///< Bokeh shape
     uint32_t mi_index, uv_index = 0;     ///< Index of mesh instance and uv layer used by geometry cam
     bool lighting_only = false;          ///< Render lightmap only
     bool skip_direct_lighting = false;   ///< Render indirect light contribution only

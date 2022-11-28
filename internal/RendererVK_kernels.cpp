@@ -41,7 +41,12 @@ void Ray::Vk::Renderer::kernel_GeneratePrimaryRays(VkCommandBuffer cmd_buf, cons
     memcpy(&uniform_params.cam_side[0], cam.side, 3 * sizeof(float));
     uniform_params.cam_side[3] = cam.focus_distance;
     memcpy(&uniform_params.cam_up[0], cam.up, 3 * sizeof(float));
-    uniform_params.cam_up[3] = cam.focus_factor;
+    uniform_params.cam_up[3] = cam.sensor_height;
+    uniform_params.cam_fstop = cam.fstop;
+    uniform_params.cam_focal_length = cam.focal_length;
+    uniform_params.cam_lens_rotation = cam.lens_rotation;
+    uniform_params.cam_lens_ratio = cam.lens_ratio;
+    uniform_params.cam_lens_blades = cam.lens_blades;
 
     DispatchCompute(cmd_buf, pi_prim_rays_gen_, grp_count, bindings, &uniform_params, sizeof(uniform_params),
                     ctx_->default_descr_alloc(), ctx_->log());

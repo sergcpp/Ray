@@ -1044,6 +1044,10 @@ force_inline bool quadratic(float a, float b, float c, float &t0, float &t1) {
     return true;
 }
 
+force_inline float ngon_rad(const float theta, const float n) {
+    return std::cos(PI / n) / std::cos(theta - (2.0f * PI / n) * std::floor((n * theta + PI) / (2.0f * PI)));
+}
+
 } // namespace Ref
 } // namespace Ray
 
@@ -1054,7 +1058,7 @@ Ray::Ref::hit_data_t::hit_data_t() {
     t = MAX_DIST;
 }
 
-void Ray::Ref::GeneratePrimaryRays(int iteration, const camera_t &cam, const rect_t &r, const int w, const int h,
+void Ray::Ref::GeneratePrimaryRays(const int iteration, const camera_t &cam, const rect_t &r, const int w, const int h,
                                    const float *halton, aligned_vector<ray_data_t> &out_rays) {
     const auto cam_origin = simd_fvec4{cam.origin[0], cam.origin[1], cam.origin[2], 0.0f},
                fwd = simd_fvec4{cam.fwd[0], cam.fwd[1], cam.fwd[2], 0.0f},
@@ -1112,13 +1116,40 @@ void Ray::Ref::GeneratePrimaryRays(int iteration, const camera_t &cam, const rec
                 _y += fract(halton[RAND_DIM_FILTER_V] + sample_off[1]);
             }
 
-            const float ff1 = cam.focus_factor * (-0.5f + fract(halton[RAND_DIM_LENS_U] + sample_off[0]));
-            const float ff2 = cam.focus_factor * (-0.5f + fract(halton[RAND_DIM_LENS_V] + sample_off[1]));
+            simd_fvec2 offset = 0.0f;
 
-            const simd_fvec4 _origin = cam_origin + side * ff1 + up * ff2;
+            if (cam.fstop > 0.0f) {
+                const float r1 = fract(halton[RAND_DIM_LENS_U] + sample_off[0]);
+                const float r2 = fract(halton[RAND_DIM_LENS_V] + sample_off[1]);
+
+                offset = 2.0f * simd_fvec2{r1, r2} - simd_fvec2{1.0f, 1.0f};
+                if (offset[0] != 0.0f && offset[1] != 0.0f) {
+                    float theta, r;
+                    if (std::abs(offset[0]) > std::abs(offset[1])) {
+                        r = offset[0];
+                        theta = 0.25f * PI * (offset[1] / offset[0]);
+                    } else {
+                        r = offset[1];
+                        theta = 0.5f * PI - 0.25f * PI * (offset[0] / offset[1]);
+                    }
+
+                    if (cam.lens_blades) {
+                        r *= ngon_rad(theta, float(cam.lens_blades));
+                    }
+
+                    theta += cam.lens_rotation;
+
+                    offset[0] = 0.5f * r * std::cos(theta) / cam.lens_ratio;
+                    offset[1] = 0.5f * r * std::sin(theta);
+                }
+
+                const float coc = 0.5f * (cam.focal_length / cam.fstop);
+                offset *= coc * cam.sensor_height;
+            }
+
+            const simd_fvec4 _origin = cam_origin + side * offset[0] + up * offset[1];
 
             const simd_fvec4 _d = get_pix_dir(_x, _y, _origin);
-
             const simd_fvec4 _dx = get_pix_dir(_x + 1, _y, _origin), _dy = get_pix_dir(_x, _y + 1, _origin);
 
             for (int j = 0; j < 3; j++) {

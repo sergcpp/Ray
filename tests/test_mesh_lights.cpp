@@ -101,7 +101,6 @@ Ray::RendererOCL
                     cam_desc.fov = 45.0f;
                     cam_desc.gamma = 1.0f;
                     cam_desc.focus_distance = 1.0f;
-                    cam_desc.focus_factor = 0.0f;
                     cam_desc.output_sh = output_sh;
                     cam_desc.clamp = true;
 

@@ -25,6 +25,10 @@ vec3 get_pix_dir(float x, float y, vec3 _origin, float prop) {
     return normalize(p - _origin);
 }
 
+float ngon_rad(const float theta, const float n) {
+    return cos(PI / n) / cos(theta - (2.0 * PI / n) * floor((n * theta + PI) / (2.0 * PI)));
+}
+
 void main() {
     if (gl_GlobalInvocationID.x >= g_params.img_size.x || gl_GlobalInvocationID.y >= g_params.img_size.y) {
         return;
@@ -50,10 +54,38 @@ void main() {
         _y += fract(g_halton[g_params.hi + RAND_DIM_FILTER_V] + sample_off.y);
     }
 
-    float ff1 = g_params.cam_up.w * (-0.5 + fract(g_halton[g_params.hi + RAND_DIM_LENS_U] + sample_off.x));
-    float ff2 = g_params.cam_up.w * (-0.5 + fract(g_halton[g_params.hi + RAND_DIM_LENS_V] + sample_off.y));
+    vec2 offset = vec2(0.0);
 
-    vec3 _origin = g_params.cam_origin.xyz + g_params.cam_side.xyz * ff1 + g_params.cam_up.xyz * ff2;
+    if (g_params.cam_fstop > 0) {
+        const float r1 = fract(g_halton[g_params.hi + RAND_DIM_LENS_U] + sample_off.x);
+        const float r2 = fract(g_halton[g_params.hi + RAND_DIM_LENS_V] + sample_off.y);
+
+        offset = 2.0 * vec2(r1, r2) - vec2(1.0);
+        if (offset.x != 0.0 && offset.y != 0.0) {
+            float theta, r;
+            if (abs(offset[0]) > abs(offset[1])) {
+                r = offset[0];
+                theta = 0.25 * PI * (offset[1] / offset[0]);
+            } else {
+                r = offset[1];
+                theta = 0.5 * PI - 0.25 * PI * (offset[0] / offset[1]);
+            }
+
+            if (g_params.cam_lens_blades > 0) {
+                r *= ngon_rad(theta, float(g_params.cam_lens_blades));
+            }
+
+            theta += g_params.cam_lens_rotation;
+
+            offset.x = 0.5 * r * cos(theta) / g_params.cam_lens_ratio;
+            offset.y = 0.5 * r * sin(theta);
+        }
+
+        const float coc = 0.5 * (g_params.cam_focal_length / g_params.cam_fstop);
+        offset *= coc * g_params.cam_up[3];
+    }
+
+    vec3 _origin = g_params.cam_origin.xyz + g_params.cam_side.xyz * offset.x + g_params.cam_up.xyz * offset.y;
     vec3 _d = get_pix_dir(_x, _y, _origin, k);
 
     ray_data_t new_ray;
