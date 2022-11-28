@@ -248,6 +248,19 @@ windows-x86_64-cpu-test-asan-job:
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
 
+windows-x86_64-gpu-nv-test-asan-job:
+  variables:
+    BIN_DIR: windows-x86_64
+    AUX_TEST_ARGS: '-d NV --nocpu'
+  extends:
+    - .windows-test-asan-job
+  needs:
+    - windows-x86_64-build-job
+  tags:
+    - windows,x86_64,nv
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+
 windows-x86_64-gpu-amd-test-job:
   variables:
     BIN_DIR: windows-x86_64
@@ -381,6 +394,8 @@ deploy-job:
   needs:
     - windows-x86_64-cpu-test-job
     - job: windows-x86_64-cpu-test-asan-job
+      optional: true
+    - job: windows-x86_64-gpu-nv-test-asan-job
       optional: true
     - windows-x86_64-gpu-amd-test-job
     - windows-x86_64-gpu-nv-test-job
