@@ -3249,10 +3249,12 @@ void Ray::NS::Sample_GGXRefraction_BSDF(const simd_fvec<S> T[3], const simd_fvec
         normalize(out_V);
 
         out_V[3] = m;
-        ITERATE_4({
-            out_color[i] = 1e6f;
+        ITERATE_3({
+            out_color[i] = refr_col[i] * 1e6f;
             where(cost2 < 0, out_color[i]) = 0.0f;
         })
+        out_color[3] = 1e6f;
+        where(cost2 < 0, out_color[3]) = 0.0f;
     }
 
     const simd_ivec<S> is_glossy = ~is_mirror;

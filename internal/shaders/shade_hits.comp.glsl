@@ -602,7 +602,7 @@ vec4 Sample_GGXRefraction_BSDF(vec3 T, vec3 B, vec3 N, vec3 I, float roughness, 
         const vec3 V = normalize(eta * I + m * N);
 
         out_V = vec4(V[0], V[1], V[2], m);
-        return vec4(1e6f);
+        return vec4(refr_col[0] * 1e6f, refr_col[1] * 1e6f, refr_col[2] * 1e6f, 1e6f);
     }
 
     const vec3 view_dir_ts = normalize(tangent_from_world(T, B, N, -I));

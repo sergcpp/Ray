@@ -2314,7 +2314,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Sample_GGXRefraction_BSDF(const simd_fvec4 &T, co
         const simd_fvec4 V = normalize(eta * I + m * N);
 
         out_V = simd_fvec4{V[0], V[1], V[2], m};
-        return simd_fvec4{1e6f};
+        return simd_fvec4{refr_col[0] * 1e6f, refr_col[1] * 1e6f, refr_col[2] * 1e6f, 1e6f};
     }
 
     const simd_fvec4 view_dir_ts = normalize(tangent_from_world(T, B, N, -I));
