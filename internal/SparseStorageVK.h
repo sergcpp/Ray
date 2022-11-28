@@ -27,7 +27,7 @@ template <typename T> class SparseStorage {
     static_assert(std::is_trivially_copyable<T>::value, "!");
 
   public:
-    SparseStorage(Context *ctx, const char *name, const uint32_t initial_capacity = 0) : ctx_(ctx), name_(name) {
+    SparseStorage(Context *ctx, const char *name, const uint32_t initial_capacity = 8) : ctx_(ctx), name_(name) {
         if (initial_capacity) {
             reserve(initial_capacity);
         }
