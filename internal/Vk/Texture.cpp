@@ -2277,34 +2277,6 @@ void Ray::Vk::Texture2D::InitFromKTXFile(const void *data[6], const int size[6],
 }
 
 void Ray::Vk::Texture2D::SetSubImage(const int level, const int offsetx, const int offsety, const int sizex,
-                                     const int sizey, const eTexFormat format, const void *data, const int data_len) {
-    assert(format == params.format);
-    assert(params.samples == 1);
-    assert(offsetx >= 0 && offsetx + sizex <= std::max(params.w >> level, 1));
-    assert(offsety >= 0 && offsety + sizey <= std::max(params.h >> level, 1));
-
-#if 0
-    if (IsCompressedFormat(format)) {
-        ren_glCompressedTextureSubImage2D_Comp(
-            GL_TEXTURE_2D, GLuint(handle_.id), GLint(level), GLint(offsetx),
-            GLint(offsety), GLsizei(sizex), GLsizei(sizey),
-            GLInternalFormatFromTexFormat(format, (params_.flags & TexSRGB) != 0),
-            GLsizei(data_len), data);
-    } else {
-        ren_glTextureSubImage2D_Comp(GL_TEXTURE_2D, GLuint(handle_.id), level, offsetx,
-                                     offsety, sizex, sizey, GLFormatFromTexFormat(format),
-                                     GLTypeFromTexFormat(format), data);
-    }
-#endif
-
-    if (offsetx == 0 && offsety == 0 && sizex == std::max(params.w >> level, 1) &&
-        sizey == std::max(params.h >> level, 1)) {
-        // consider this level initialized
-        initialized_mips_ |= (1u << level);
-    }
-}
-
-void Ray::Vk::Texture2D::SetSubImage(const int level, const int offsetx, const int offsety, const int sizex,
                                      const int sizey, const eTexFormat format, const Buffer &sbuf, void *_cmd_buf,
                                      const int data_off, const int data_len) {
     assert(format == params.format);
@@ -2414,90 +2386,6 @@ void Ray::Vk::Texture2D::SetSampling(const SamplingParams s) {
     params.sampling = s;
 }
 
-void Ray::Vk::Texture2D::DownloadTextureData(const eTexFormat format, void *out_data) const {
-#if defined(__ANDROID__)
-#else
-#if 0
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, GLuint(handle_.id));
-
-    if (format == eTexFormat::RawRGBA8888) {
-        glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, out_data);
-    }
-
-    glBindTexture(GL_TEXTURE_2D, 0);
-#endif
-#endif
-}
-
-void Ray::Vk::Texture2D::CopyTextureData(const Buffer &sbuf, void *_cmd_buf, int data_off) const {
-    VkCommandBuffer cmd_buf = reinterpret_cast<VkCommandBuffer>(_cmd_buf);
-
-    VkPipelineStageFlags src_stages = 0, dst_stages = 0;
-    SmallVector<VkBufferMemoryBarrier, 1> buf_barriers;
-    SmallVector<VkImageMemoryBarrier, 1> img_barriers;
-
-    if (this->resource_state != eResState::CopySrc) {
-        auto &new_barrier = img_barriers.emplace_back();
-        new_barrier = {VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
-        new_barrier.srcAccessMask = VKAccessFlagsForState(this->resource_state);
-        new_barrier.dstAccessMask = VKAccessFlagsForState(eResState::CopySrc);
-        new_barrier.oldLayout = VKImageLayoutForState(this->resource_state);
-        new_barrier.newLayout = VKImageLayoutForState(eResState::CopySrc);
-        new_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        new_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        new_barrier.image = handle_.img;
-        new_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        new_barrier.subresourceRange.baseMipLevel = 0;
-        new_barrier.subresourceRange.levelCount = params.mip_count; // transit whole image
-        new_barrier.subresourceRange.baseArrayLayer = 0;
-        new_barrier.subresourceRange.layerCount = 1;
-
-        src_stages |= VKPipelineStagesForState(this->resource_state);
-        dst_stages |= VKPipelineStagesForState(eResState::CopySrc);
-    }
-
-    if (sbuf.resource_state != eResState::Undefined && sbuf.resource_state != eResState::CopyDst) {
-        auto &new_barrier = buf_barriers.emplace_back();
-        new_barrier = {VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER};
-        new_barrier.srcAccessMask = VKAccessFlagsForState(sbuf.resource_state);
-        new_barrier.dstAccessMask = VKAccessFlagsForState(eResState::CopyDst);
-        new_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        new_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        new_barrier.buffer = sbuf.vk_handle();
-        new_barrier.offset = VkDeviceSize(0);
-        new_barrier.size = VkDeviceSize(sbuf.size());
-
-        src_stages |= VKPipelineStagesForState(sbuf.resource_state);
-        dst_stages |= VKPipelineStagesForState(eResState::CopyDst);
-    }
-
-    if (!buf_barriers.empty() || !img_barriers.empty()) {
-        vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, dst_stages, 0, 0,
-                             nullptr, uint32_t(buf_barriers.size()), buf_barriers.cdata(),
-                             uint32_t(img_barriers.size()), img_barriers.cdata());
-    }
-
-    this->resource_state = eResState::CopySrc;
-    sbuf.resource_state = eResState::CopyDst;
-
-    VkBufferImageCopy region = {};
-
-    region.bufferOffset = VkDeviceSize(data_off);
-    region.bufferRowLength = 0;
-    region.bufferImageHeight = 0;
-
-    region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    region.imageSubresource.mipLevel = uint32_t(0);
-    region.imageSubresource.baseArrayLayer = 0;
-    region.imageSubresource.layerCount = 1;
-
-    region.imageOffset = {int32_t(0), int32_t(0), 0};
-    region.imageExtent = {uint32_t(params.w), uint32_t(params.h), 1};
-
-    vkCmdCopyImageToBuffer(cmd_buf, handle_.img, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, sbuf.vk_handle(), 1, &region);
-}
-
 void Ray::Vk::CopyImageToImage(void *_cmd_buf, Texture2D &src_tex, const uint32_t src_level, const uint32_t src_x,
                                const uint32_t src_y, Texture2D &dst_tex, const uint32_t dst_level, const uint32_t dst_x,
                                const uint32_t dst_y, const uint32_t width, const uint32_t height) {
@@ -2529,6 +2417,76 @@ void Ray::Vk::CopyImageToImage(void *_cmd_buf, Texture2D &src_tex, const uint32_
 
     vkCmdCopyImage(cmd_buf, src_tex.handle().img, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dst_tex.handle().img,
                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &reg);
+}
+
+void Ray::Vk::CopyImageToBuffer(const Texture2D &src_tex, const int level, const int x, const int y, const int w,
+                                const int h, const Buffer &dst_buf, void *_cmd_buf, const int data_off) {
+    VkCommandBuffer cmd_buf = reinterpret_cast<VkCommandBuffer>(_cmd_buf);
+
+    VkPipelineStageFlags src_stages = 0, dst_stages = 0;
+    SmallVector<VkBufferMemoryBarrier, 1> buf_barriers;
+    SmallVector<VkImageMemoryBarrier, 1> img_barriers;
+
+    if (src_tex.resource_state != eResState::CopySrc) {
+        auto &new_barrier = img_barriers.emplace_back();
+        new_barrier = {VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
+        new_barrier.srcAccessMask = VKAccessFlagsForState(src_tex.resource_state);
+        new_barrier.dstAccessMask = VKAccessFlagsForState(eResState::CopySrc);
+        new_barrier.oldLayout = VKImageLayoutForState(src_tex.resource_state);
+        new_barrier.newLayout = VKImageLayoutForState(eResState::CopySrc);
+        new_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        new_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        new_barrier.image = src_tex.handle().img;
+        new_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        new_barrier.subresourceRange.baseMipLevel = 0;
+        new_barrier.subresourceRange.levelCount = src_tex.params.mip_count; // transit whole image
+        new_barrier.subresourceRange.baseArrayLayer = 0;
+        new_barrier.subresourceRange.layerCount = 1;
+
+        src_stages |= VKPipelineStagesForState(src_tex.resource_state);
+        dst_stages |= VKPipelineStagesForState(eResState::CopySrc);
+    }
+
+    if (dst_buf.resource_state != eResState::Undefined && dst_buf.resource_state != eResState::CopyDst) {
+        auto &new_barrier = buf_barriers.emplace_back();
+        new_barrier = {VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER};
+        new_barrier.srcAccessMask = VKAccessFlagsForState(dst_buf.resource_state);
+        new_barrier.dstAccessMask = VKAccessFlagsForState(eResState::CopyDst);
+        new_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        new_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        new_barrier.buffer = dst_buf.vk_handle();
+        new_barrier.offset = VkDeviceSize(0);
+        new_barrier.size = VkDeviceSize(dst_buf.size());
+
+        src_stages |= VKPipelineStagesForState(dst_buf.resource_state);
+        dst_stages |= VKPipelineStagesForState(eResState::CopyDst);
+    }
+
+    if (!buf_barriers.empty() || !img_barriers.empty()) {
+        vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, dst_stages, 0, 0,
+                             nullptr, uint32_t(buf_barriers.size()), buf_barriers.cdata(),
+                             uint32_t(img_barriers.size()), img_barriers.cdata());
+    }
+
+    src_tex.resource_state = eResState::CopySrc;
+    dst_buf.resource_state = eResState::CopyDst;
+
+    VkBufferImageCopy region = {};
+
+    region.bufferOffset = VkDeviceSize(data_off);
+    region.bufferRowLength = 0;
+    region.bufferImageHeight = 0;
+
+    region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    region.imageSubresource.mipLevel = uint32_t(level);
+    region.imageSubresource.baseArrayLayer = 0;
+    region.imageSubresource.layerCount = 1;
+
+    region.imageOffset = {int32_t(x), int32_t(y), 0};
+    region.imageExtent = {uint32_t(w), uint32_t(h), 1};
+
+    vkCmdCopyImageToBuffer(cmd_buf, src_tex.handle().img, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dst_buf.vk_handle(), 1,
+                           &region);
 }
 
 void Ray::Vk::ClearColorImage(Texture2D &tex, const float rgba[4], void *_cmd_buf) {

@@ -372,7 +372,9 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
                             int(s->li_indices_.size()),
                             s->visible_lights_.buf(),
                             int(s->visible_lights_.size()),
-                            s->rt_tlas_};
+                            s->rt_tlas_,
+                            s->env_map_qtree_.tex,
+                            int(s->env_map_qtree_.mips.size())};
 
 #if !RUN_IN_LOCKSTEP
     vkWaitForFences(ctx_->device(), 1, &ctx_->in_flight_fence(ctx_->backend_frame), VK_TRUE, UINT64_MAX);
@@ -453,6 +455,9 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         }
         if (sc_data.visible_lights && sc_data.visible_lights.resource_state != eResState::ShaderResource) {
             res_transitions.emplace_back(&sc_data.visible_lights, eResState::ShaderResource);
+        }
+        if (sc_data.env_qtree.resource_state != eResState::ShaderResource) {
+            res_transitions.emplace_back(&sc_data.env_qtree, eResState::ShaderResource);
         }
 
         TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
@@ -619,7 +624,7 @@ const Ray::pixel_color_t *Ray::Vk::Renderer::get_pixels_ref() const {
                                                       {&pixel_stage_buf_, eResState::CopyDst}};
             TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
-            final_buf_.CopyTextureData(pixel_stage_buf_, cmd_buf, 0);
+            CopyImageToBuffer(final_buf_, 0, 0, 0, w_, h_, pixel_stage_buf_, cmd_buf, 0);
         }
 
         VkMemoryBarrier mem_barrier = {VK_STRUCTURE_TYPE_MEMORY_BARRIER};

@@ -142,6 +142,41 @@ void sort_mort_codes(uint32_t *morton_codes, size_t prims_count, uint32_t *out_i
 }
 } // namespace Ray
 
+void Ray::CanonicalToDir(const float p[2], const float y_rotation, float out_d[3]) {
+    const float cos_theta = 2 * p[0] - 1;
+    float phi = 2 * PI * p[1] + y_rotation;
+    if (phi < 0) {
+        phi += 2 * PI;
+    }
+    if (phi > 2 * PI) {
+        phi -= 2 * PI;
+    }
+
+    const float sin_theta = std::sqrt(1 - cos_theta * cos_theta);
+
+    const float sin_phi = std::sin(phi);
+    const float cos_phi = std::cos(phi);
+
+    out_d[0] = sin_theta * cos_phi;
+    out_d[1] = cos_theta;
+    out_d[2] = -sin_theta * sin_phi;
+}
+
+void Ray::DirToCanonical(const float d[3], const float y_rotation, float out_p[2]) {
+    const float cos_theta = std::min(std::max(d[1], -1.0f), 1.0f);
+
+    float phi = -std::atan2(d[2], d[0]) + y_rotation;
+    if (phi < 0) {
+        phi += 2 * PI;
+    }
+    if (phi > 2 * PI) {
+        phi -= 2 * PI;
+    }
+
+    out_p[0] = (cos_theta + 1.0f) / 2.0f;
+    out_p[1] = phi / (2.0f * PI);
+}
+
 // Used to convert 16x16 sphere sector coordinates to single value
 const uint8_t Ray::morton_table_16[] = {0, 1, 4, 5, 16, 17, 20, 21, 64, 65, 68, 69, 80, 81, 84, 85};
 

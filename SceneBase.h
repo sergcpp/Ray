@@ -224,8 +224,9 @@ struct camera_desc_t {
 
 /// Environment description
 struct environment_desc_t {
-    float env_col[3] = {0.0f};     ///< Environment color
-    uint32_t env_map = 0xffffffff; ///< Environment texture
+    float env_col[3] = {0.0f};          ///< Environment color
+    uint32_t env_map = 0xffffffff;      ///< Environment texture
+    bool multiple_importance = true;    ///< Enable explicit env map sampling
 };
 
 /** Base Scene class,

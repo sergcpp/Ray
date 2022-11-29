@@ -178,6 +178,7 @@ set(VK_FILES internal/Vk/AccStructure.h
 set(SHADER_FILES    internal/shaders/_interface_common.h
                     internal/shaders/common.glsl
                     internal/shaders/debug_rt.comp.glsl
+                    internal/shaders/envmap.glsl
                     internal/shaders/intersect.glsl
                     internal/shaders/intersect_area_lights.comp.glsl
                     internal/shaders/intersect_area_lights_interface.h

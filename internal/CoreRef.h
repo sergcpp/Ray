@@ -215,6 +215,10 @@ simd_fvec4 Sample_PrincipledClearcoat_BSDF(const simd_fvec4 &T, const simd_fvec4
                                            const simd_fvec4 &I, float clearcoat_roughness2, float clearcoat_ior,
                                            float clearcoat_F0, float rand_u, float rand_v, simd_fvec4 &out_V);
 
+float Evaluate_EnvQTree(float y_rotation, const simd_fvec4 *const *qtree_mips, int qtree_levels, const simd_fvec4 &L);
+simd_fvec4 Sample_EnvQTree(float y_rotation, const simd_fvec4 *const *qtree_mips, int qtree_levels, float rand,
+                           float rx, float ry);
+
 // Transform
 void TransformRay(const float ro[3], const float rd[3], const float *xform, float out_ro[3], float out_rd[3]);
 simd_fvec4 TransformPoint(const simd_fvec4 &p, const float *xform);
@@ -228,7 +232,7 @@ simd_fvec4 SampleBilinear(const TexStorageBase &storage, uint32_t tex, const sim
 simd_fvec4 SampleTrilinear(const TexStorageBase *const textures[], uint32_t index, const simd_fvec2 &uvs, float lod);
 simd_fvec4 SampleAnisotropic(const TexStorageBase *const textures[], uint32_t index, const simd_fvec2 &uvs,
                              const simd_fvec2 &duv_dx, const simd_fvec2 &duv_dy);
-simd_fvec4 SampleLatlong_RGBE(const TexStorageRGBA &storage, uint32_t index, const simd_fvec4 &dir);
+simd_fvec4 SampleLatlong_RGBE(const TexStorageRGBA &storage, uint32_t index, const simd_fvec4 &dir, float y_rotation);
 
 // Get visibility between two points accounting for transparent materials
 float ComputeVisibility(const float p[3], const float d[3], float dist, float rand_val, int rand_hash2,

@@ -268,6 +268,13 @@ void Sample_PrincipledClearcoat_BSDF(const simd_fvec<S> T[3], const simd_fvec<S>
                                      float clearcoat_F0, const simd_fvec<S> &rand_u, const simd_fvec<S> &rand_v,
                                      simd_fvec<S> out_V[3], simd_fvec<S> out_color[4]);
 
+template <int S>
+simd_fvec<S> Evaluate_EnvQTree(float y_rotation, const simd_fvec4 *const *qtree_mips, int qtree_levels,
+                               const simd_fvec<S> L[3]);
+template <int S>
+void Sample_EnvQTree(float y_rotation, const simd_fvec4 *const *qtree_mips, int qtree_levels, const simd_fvec<S> &rand,
+                     const simd_fvec<S> &rx, const simd_fvec<S> &ry, simd_fvec<S> out_V[4]);
+
 // Transform
 template <int S>
 void TransformRay(const simd_fvec<S> ro[3], const simd_fvec<S> rd[3], const float *xform, simd_fvec<S> out_ro[3],
@@ -279,6 +286,9 @@ template <int S> void TransformNormal(const simd_fvec<S> n[3], const simd_fvec<S
 template <int S> void TransformNormal(const simd_fvec<S> inv_xform[16], simd_fvec<S> inout_n[3]);
 
 void TransformRay(const float ro[3], const float rd[3], const float *xform, float out_ro[3], float out_rd[3]);
+
+template <int S> void CanonicalToDir(const simd_fvec<S> p[2], float y_rotation, simd_fvec<S> out_d[3]);
+template <int S> void DirToCanonical(const simd_fvec<S> d[3], float y_rotation, simd_fvec<S> out_p[2]);
 
 template <int S>
 void rotate_around_axis(const simd_fvec<S> p[3], const simd_fvec<S> axis[3], const simd_fvec<S> &angle,
@@ -3379,6 +3389,132 @@ void Ray::NS::Sample_PrincipledClearcoat_BSDF(const simd_fvec<S> T[3], const sim
 }
 
 template <int S>
+Ray::NS::simd_fvec<S> Ray::NS::Evaluate_EnvQTree(const float y_rotation, const simd_fvec4 *const *qtree_mips,
+                                                 const int qtree_levels, const simd_fvec<S> L[3]) {
+    int res = 2;
+    int lod = qtree_levels - 1;
+
+    simd_fvec<S> p[2];
+    DirToCanonical(L, y_rotation, p);
+    simd_fvec<S> factor = 1.0f;
+
+    while (lod >= 0) {
+        const simd_ivec<S> x = clamp(simd_ivec<S>(p[0] * float(res)), 0, res - 1);
+        const simd_ivec<S> y = clamp(simd_ivec<S>(p[1] * float(res)), 0, res - 1);
+
+        simd_ivec<S> index = 0;
+        index |= (x & 1) << 0;
+        index |= (y & 1) << 1;
+
+        const simd_ivec<S> qx = x / 2;
+        const simd_ivec<S> qy = y / 2;
+
+        simd_fvec<S> quad[4];
+        ITERATE(S, {
+            const simd_fvec4 q = qtree_mips[lod][qy[i] * res / 2 + qx[i]];
+
+            quad[0][i] = q[0];
+            quad[1][i] = q[1];
+            quad[2][i] = q[2];
+            quad[3][i] = q[3];
+        })
+        const simd_fvec<S> total = quad[0] + quad[1] + quad[2] + quad[3];
+
+        const simd_ivec<S> mask = simd_cast(total > 0.0f);
+        if (mask.all_zeros()) {
+            break;
+        }
+
+        where(mask, factor) *=
+            4.0f * gather(&quad[0][0], index * S + simd_ivec<S>(ascending_counter, simd_mem_aligned)) / total;
+
+        --lod;
+        res *= 2;
+    }
+
+    return factor / (4.0f * PI);
+}
+
+template <int S>
+void Ray::NS::Sample_EnvQTree(float y_rotation, const simd_fvec4 *const *qtree_mips, int qtree_levels,
+                              const simd_fvec<S> &rand, const simd_fvec<S> &rx, const simd_fvec<S> &ry,
+                              simd_fvec<S> out_V[4]) {
+    int res = 2;
+    float step = 1.0f / float(res);
+
+    simd_fvec<S> sample = rand;
+    int lod = qtree_levels - 1;
+
+    simd_fvec<S> origin[2] = {{0.0f}, {0.0f}};
+    simd_fvec<S> factor = 1.0f;
+
+    while (lod >= 0) {
+        const simd_ivec<S> qx = simd_ivec<S>(origin[0] * float(res)) / 2;
+        const simd_ivec<S> qy = simd_ivec<S>(origin[1] * float(res)) / 2;
+
+        simd_fvec<S> quad[4];
+        ITERATE(S, {
+            const simd_fvec4 q = qtree_mips[lod][qy[i] * res / 2 + qx[i]];
+
+            quad[0][i] = q[0];
+            quad[1][i] = q[1];
+            quad[2][i] = q[2];
+            quad[3][i] = q[3];
+        })
+
+        const simd_fvec<S> top_left = quad[0];
+        const simd_fvec<S> top_right = quad[1];
+        simd_fvec<S> partial = top_left + quad[2];
+        const simd_fvec<S> total = partial + top_right + quad[3];
+
+        const simd_ivec<S> mask = simd_cast(total > 0.0f);
+        if (mask.all_zeros()) {
+            break;
+        }
+
+        simd_fvec<S> boundary = partial / total;
+
+        simd_ivec<S> index = 0;
+
+        { // left or right decision
+            const simd_ivec<S> left_mask = simd_cast(sample < boundary);
+
+            where(left_mask, sample) /= boundary;
+            where(left_mask, boundary) = top_left / partial;
+
+            partial = total - partial;
+            where(~left_mask & mask, origin[0]) += step;
+            where(~left_mask, sample) = (sample - boundary) / (1.0f - boundary);
+            where(~left_mask, boundary) = top_right / partial;
+            where(~left_mask, index) |= (1 << 0);
+        }
+
+        { // bottom or up decision
+            const simd_ivec<S> bottom_mask = simd_cast(sample < boundary);
+
+            where(bottom_mask, sample) /= boundary;
+
+            where(~bottom_mask & mask, origin[1]) += step;
+            where(~bottom_mask, sample) = (sample - boundary) / (1.0f - boundary);
+            where(~bottom_mask, index) |= (1 << 1);
+        }
+
+        where(mask, factor) *=
+            4.0f * gather(&quad[0][0], index * S + simd_ivec<S>(ascending_counter, simd_mem_aligned)) / total;
+
+        --lod;
+        res *= 2;
+        step *= 0.5f;
+    }
+
+    origin[0] += 2.0f * step * rx;
+    origin[1] += 2.0f * step * ry;
+
+    CanonicalToDir(origin, y_rotation, out_V);
+    out_V[3] = factor / (4.0f * PI);
+}
+
+template <int S>
 force_inline void Ray::NS::TransformRay(const simd_fvec<S> ro[3], const simd_fvec<S> rd[3], const float *xform,
                                         simd_fvec<S> out_ro[3], simd_fvec<S> out_rd[3]) {
     out_ro[0] = ro[0] * xform[0] + ro[1] * xform[4] + ro[2] * xform[8] + xform[12];
@@ -3438,6 +3574,36 @@ template <int S> void Ray::NS::TransformNormal(const simd_fvec<S> inv_xform[16],
     inout_n[0] = temp0;
     inout_n[1] = temp1;
     inout_n[2] = temp2;
+}
+
+template <int S> void Ray::NS::CanonicalToDir(const simd_fvec<S> p[2], float y_rotation, simd_fvec<S> out_d[3]) {
+    const simd_fvec<S> cos_theta = 2 * p[0] - 1;
+    simd_fvec<S> phi = 2 * PI * p[1] + y_rotation;
+    where(phi < 0, phi) += 2 * PI;
+    where(phi > 2 * PI, phi) -= 2 * PI;
+
+    const simd_fvec<S> sin_theta = sqrt(1 - cos_theta * cos_theta);
+
+    const simd_fvec<S> sin_phi = sin(phi);
+    const simd_fvec<S> cos_phi = cos(phi);
+
+    out_d[0] = sin_theta * cos_phi;
+    out_d[1] = cos_theta;
+    out_d[2] = -sin_theta * sin_phi;
+}
+
+template <int S> void Ray::NS::DirToCanonical(const simd_fvec<S> d[3], float y_rotation, simd_fvec<S> out_p[2]) {
+    const simd_fvec<S> cos_theta = clamp(d[1], -1.0f, 1.0f);
+
+    simd_fvec<S> phi;
+    ITERATE(S, { phi[i] = -std::atan2(d[2][i], d[0][i]); })
+
+    phi += y_rotation;
+    where(phi < 0, phi) += 2 * PI;
+    where(phi > 2 * PI, phi) -= 2 * PI;
+
+    out_p[0] = (cos_theta + 1.0f) / 2.0f;
+    out_p[1] = phi / (2.0f * PI);
 }
 
 template <int S>
@@ -4254,6 +4420,29 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const scene_data_t &sc,
                 }
                 ITERATE_3({ where(ray_queue[index], ls.col[i]) *= env_col[i]; })
             }
+        } else if (l.type == LIGHT_TYPE_ENV) {
+            assert(sc.env->qtree_levels);
+            const auto *qtree_mips = reinterpret_cast<const simd_fvec4 *const *>(sc.env->qtree_mips);
+
+            const simd_fvec<S> rand = u1 * float(sc.li_indices.size()) - simd_fvec<S>(light_index);
+
+            const simd_fvec<S> rx = fract(halton[RAND_DIM_LIGHT_U] + sample_off[0]);
+            const simd_fvec<S> ry = fract(halton[RAND_DIM_LIGHT_V] + sample_off[1]);
+
+            simd_fvec<S> dir_and_pdf[4];
+            Sample_EnvQTree(PI, qtree_mips, sc.env->qtree_levels, rand, rx, ry, dir_and_pdf);
+
+            ITERATE_3({ where(ray_queue[index], ls.L[i]) = dir_and_pdf[i]; })
+
+            simd_fvec<S> tex_col[3];
+            assert(sc.env->env_map != 0xffffffff);
+            SampleLatlong_RGBE(*static_cast<const Ref::TexStorageRGBA *>(textures[0]), sc.env->env_map, ls.L,
+                               ray_queue[index], tex_col);
+            ITERATE_3({ where(ray_queue[index], ls.col[i]) *= sc.env->env_col[i] * tex_col[i]; })
+
+            where(ray_queue[index], ls.area) = 1.0f;
+            where(ray_queue[index], ls.dist) = MAX_DIST;
+            where(ray_queue[index], ls.pdf) = dir_and_pdf[3];
         }
 
         ++index;
@@ -4392,6 +4581,15 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
             if (sc.env->env_map != 0xffffffff) {
                 SampleLatlong_RGBE(*static_cast<const Ref::TexStorageRGBA *>(textures[0]), sc.env->env_map, ray.d,
                                    ino_hit, env_col);
+                if (sc.env->qtree_levels) {
+                    const auto *qtree_mips = reinterpret_cast<const simd_fvec4 *const *>(sc.env->qtree_mips);
+
+                    const simd_fvec<S> light_pdf = Evaluate_EnvQTree(PI, qtree_mips, sc.env->qtree_levels, ray.d);
+                    const simd_fvec<S> bsdf_pdf = ray.pdf;
+
+                    const simd_fvec<S> mis_weight = power_heuristic(bsdf_pdf, light_pdf);
+                    ITERATE_3({ env_col[i] *= mis_weight; })
+                }
             }
             env_col[3] = 1.0f;
         }

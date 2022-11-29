@@ -34,16 +34,22 @@ vec4 SampleBilinear(const uint index, const vec2 uvs, const int lod) {
     return SampleBilinear(index, uvs, lod, false, false);
 }
 
-vec3 SampleLatlong_RGBE(const uint index, const vec3 dir) {
+vec3 SampleLatlong_RGBE(const uint index, const vec3 dir, const float y_rotation) {
     const float theta = acos(clamp(dir[1], -1.0, 1.0)) / PI;
     const float r = sqrt(dir[0] * dir[0] + dir[2] * dir[2]);
-    float u = 0.5 * acos(r > FLT_EPS ? clamp(dir[0] / r, -1.0, 1.0) : 0.0) / PI;
+
+    float phi = acos(r > FLT_EPS ? clamp(dir[0] / r, -1.0, 1.0) : 0.0) + y_rotation;
+    if (phi < 0) {
+        phi += 2 * PI;
+    }
+    if (phi > 2 * PI) {
+        phi -= 2 * PI;
+    }
+
+    float u = 0.5 * phi / PI;
     [[flatten]] if (dir[2] < 0.0) {
         u = 1.0 - u;
     }
-
-    // TODO: +0.5f is a temporary hack, pass actual hdr orientation here!
-    u = fract(u + 0.5f);
 
     const uint tex = (index & 0x00ffffff);
     ivec2 size = textureSize(g_textures[tex], 0);
@@ -111,16 +117,22 @@ vec4 SampleBilinear(const uint index, const vec2 uvs, const int lod) {
     return SampleBilinear(index, uvs, lod, false, false);
 }
 
-vec3 SampleLatlong_RGBE(const atlas_texture_t t, const vec3 dir) {
+vec3 SampleLatlong_RGBE(const atlas_texture_t t, const vec3 dir, float y_rotation) {
     const float theta = acos(clamp(dir[1], -1.0, 1.0)) / PI;
     const float r = sqrt(dir[0] * dir[0] + dir[2] * dir[2]);
-    float u = 0.5 * acos(r > FLT_EPS ? clamp(dir[0] / r, -1.0, 1.0) : 0.0) / PI;
+
+    float phi = acos(r > FLT_EPS ? clamp(dir[0] / r, -1.0, 1.0) : 0.0) + y_rotation;
+    if (phi < 0) {
+        phi += 2 * PI;
+    }
+    if (phi > 2 * PI) {
+        phi -= 2 * PI;
+    }
+
+    float u = 0.5 * phi / PI;
     [[flatten]] if (dir[2] < 0.0) {
         u = 1.0 - u;
     }
-
-    // TODO: +0.5f is a temporary hack, pass actual hdr orientation here!
-    u = fract(u + 0.5f);
 
     vec2 uvs = TransformUV(vec2(u, theta), t, 0) + 1.0;
 

@@ -71,11 +71,13 @@ Ray::Vk::Scene::~Scene() {
 void Ray::Vk::Scene::GetEnvironment(environment_desc_t &env) {
     memcpy(&env.env_col[0], &env_.env_col, 3 * sizeof(float));
     env.env_map = env_.env_map;
+    env.multiple_importance = env_.multiple_importance;
 }
 
 void Ray::Vk::Scene::SetEnvironment(const environment_desc_t &env) {
     memcpy(&env_.env_col, &env.env_col[0], 3 * sizeof(float));
     env_.env_map = env.env_map;
+    env_.multiple_importance = env.multiple_importance;
 }
 
 uint32_t Ray::Vk::Scene::AddAtlasTexture(const tex_desc_t &_t) {
@@ -979,6 +981,40 @@ void Ray::Vk::Scene::RemoveMeshInstance(uint32_t) {
     // TODO!!
 }
 
+void Ray::Vk::Scene::Finalize() {
+    if (env_map_light_ != 0xffffffff) {
+        RemoveLight(env_map_light_);
+    }
+    env_map_qtree_ = {};
+    env_.qtree_levels = 0;
+
+    if (env_.env_map != 0xffffffff && env_.multiple_importance) {
+        PrepareEnvMapQTree();
+        { // add env light source
+            light_t l = {};
+
+            l.type = LIGHT_TYPE_ENV;
+            l.col[0] = l.col[1] = l.col[2] = 1.0f;
+
+            env_map_light_ = lights_.push(l);
+            li_indices_.PushBack(env_map_light_);
+        }
+    } else {
+        // Dummy
+        Tex2DParams p;
+        p.w = p.h = 1;
+        p.format = eTexFormat::RawRGBA32F;
+        p.mip_count = 1;
+        p.usage = eTexUsageBits::Sampled | eTexUsageBits::Transfer;
+
+        env_map_qtree_.tex = Texture2D("Env map qtree", ctx_, p, ctx_->default_memory_allocs(), ctx_->log());
+    }
+
+    GenerateTextureMips();
+    PrepareBindlessTextures();
+    RebuildHWAccStructures();
+}
+
 void Ray::Vk::Scene::RemoveNodes(uint32_t node_index, uint32_t node_count) {
     if (!node_count) {
         return;
@@ -1050,6 +1086,223 @@ void Ray::Vk::Scene::RebuildTLAS() {
 
     nodes_.Append(&bvh_nodes[0], bvh_nodes.size());
     mi_indices_.Append(&mi_indices[0], mi_indices.size());
+}
+
+void Ray::Vk::Scene::PrepareEnvMapQTree() {
+    const int tex = (env_.env_map & 0x00ffffff);
+
+    Buffer temp_stage_buf;
+    std::unique_ptr<uint8_t[]> temp_atlas_data;
+
+    simd_ivec2 size;
+
+    if (use_bindless_) {
+        const Texture2D &t = bindless_textures_[tex];
+        size[0] = t.params.w;
+        size[1] = t.params.h;
+
+        assert(t.params.format == eTexFormat::RawRGBA8888);
+        const uint32_t data_size = t.params.w * t.params.h * GetPerPixelDataLen(eTexFormat::RawRGBA8888);
+
+        temp_stage_buf = Buffer("Temp stage buf", ctx_, eBufType::Stage, data_size);
+
+        VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+
+        CopyImageToBuffer(t, 0, 0, 0, t.params.w, t.params.h, temp_stage_buf, cmd_buf, 0);
+
+        EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+    } else {
+        const atlas_texture_t &t = atlas_textures_[tex];
+        size[0] = (t.width & ATLAS_TEX_WIDTH_BITS);
+        size[1] = (t.height & ATLAS_TEX_HEIGHT_BITS);
+
+        const TextureAtlas &atlas = tex_atlases_[t.atlas];
+
+        assert(atlas.format() == eTexFormat::RawRGBA8888);
+        const uint32_t data_size = atlas.res_x() * atlas.res_y() * GetPerPixelDataLen(atlas.format());
+
+        temp_stage_buf = Buffer("Temp stage buf", ctx_, eBufType::Stage, data_size);
+
+        VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+
+        atlas.CopyRegionTo(t.page[0], t.pos[0][0] + 1, t.pos[0][1] + 1, (t.width & ATLAS_TEX_WIDTH_BITS),
+                           (t.height & ATLAS_TEX_HEIGHT_BITS), temp_stage_buf, cmd_buf, 0);
+
+        EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+    }
+
+    const uint8_t *rgbe_data = temp_stage_buf.Map(BufMapRead);
+
+    const int lowest_dim = std::min(size[0], size[1]);
+
+    env_map_qtree_.res = 1;
+    while (2 * env_map_qtree_.res < lowest_dim) {
+        env_map_qtree_.res *= 2;
+    }
+
+    assert(env_map_qtree_.mips.empty());
+
+    int cur_res = env_map_qtree_.res;
+    float total_lum = 0.0f;
+
+    { // initialize the first quadtree level
+        env_map_qtree_.mips.emplace_back(cur_res * cur_res / 4, 0.0f);
+
+        for (int y = 0; y < size[1]; ++y) {
+            const float theta = PI * float(y) / size[1];
+            for (int x = 0; x < size[0]; ++x) {
+                const float phi = 2.0f * PI * float(x) / size[0];
+
+                const uint8_t *col_rgbe = &rgbe_data[4 * (y * size[0] + x)];
+                simd_fvec4 col_rgb;
+                rgbe_to_rgb(col_rgbe, &col_rgb[0]);
+
+                const float cur_lum = (col_rgb[0] + col_rgb[1] + col_rgb[2]);
+
+                simd_fvec4 dir;
+                dir[0] = std::sin(theta) * std::cos(phi);
+                dir[1] = std::cos(theta);
+                dir[2] = std::sin(theta) * std::sin(phi);
+
+                simd_fvec2 q;
+                DirToCanonical(value_ptr(dir), 0.0f, &q[0]);
+
+                int qx = _CLAMP(int(cur_res * q[0]), 0, cur_res - 1);
+                int qy = _CLAMP(int(cur_res * q[1]), 0, cur_res - 1);
+
+                int index = 0;
+                index |= (qx & 1) << 0;
+                index |= (qy & 1) << 1;
+
+                qx /= 2;
+                qy /= 2;
+
+                float &q_lum = env_map_qtree_.mips[0][qy * cur_res / 2 + qx][index];
+                q_lum = std::max(q_lum, cur_lum);
+            }
+        }
+
+        for (const simd_fvec4 &v : env_map_qtree_.mips[0]) {
+            total_lum += (v[0] + v[1] + v[2] + v[3]);
+        }
+
+        cur_res /= 2;
+    }
+
+    temp_stage_buf.Unmap();
+    temp_stage_buf.FreeImmediate();
+
+    while (cur_res > 1) {
+        env_map_qtree_.mips.emplace_back(cur_res * cur_res / 4, 0.0f);
+        const auto &prev_mip = env_map_qtree_.mips[env_map_qtree_.mips.size() - 2];
+
+        for (int y = 0; y < cur_res; ++y) {
+            for (int x = 0; x < cur_res; ++x) {
+                const float res_lum = prev_mip[y * cur_res + x][0] + prev_mip[y * cur_res + x][1] +
+                                      prev_mip[y * cur_res + x][2] + prev_mip[y * cur_res + x][3];
+
+                int index = 0;
+                index |= (x & 1) << 0;
+                index |= (y & 1) << 1;
+
+                const int qx = (x / 2);
+                const int qy = (y / 2);
+
+                env_map_qtree_.mips.back()[qy * cur_res / 2 + qx][index] = res_lum;
+            }
+        }
+
+        cur_res /= 2;
+    }
+
+    //
+    // Determine how many levels was actually required
+    //
+
+    const float LumFractThreshold = 0.01f;
+
+    cur_res = 2;
+    int the_last_required_lod;
+    for (int lod = int(env_map_qtree_.mips.size()) - 1; lod >= 0; --lod) {
+        the_last_required_lod = lod;
+        const auto &cur_mip = env_map_qtree_.mips[lod];
+
+        bool subdivision_required = false;
+        for (int y = 0; y < (cur_res / 2) && !subdivision_required; ++y) {
+            for (int x = 0; x < (cur_res / 2) && !subdivision_required; ++x) {
+                const simd_ivec4 mask = simd_cast(cur_mip[y * cur_res / 2 + x] > LumFractThreshold * total_lum);
+                subdivision_required |= mask.not_all_zeros();
+            }
+        }
+
+        if (!subdivision_required) {
+            break;
+        }
+
+        cur_res *= 2;
+    }
+
+    //
+    // Drop not needed levels
+    //
+
+    while (the_last_required_lod != 0) {
+        for (int i = 1; i < int(env_map_qtree_.mips.size()); ++i) {
+            env_map_qtree_.mips[i - 1] = std::move(env_map_qtree_.mips[i]);
+        }
+        env_map_qtree_.res /= 2;
+        env_map_qtree_.mips.pop_back();
+        --the_last_required_lod;
+    }
+
+    env_.qtree_levels = int(env_map_qtree_.mips.size());
+    for (int i = 0; i < env_.qtree_levels; ++i) {
+        env_.qtree_mips[i] = value_ptr(env_map_qtree_.mips[i][0]);
+    }
+    for (int i = env_.qtree_levels; i < countof(env_.qtree_mips); ++i) {
+        env_.qtree_mips[i] = nullptr;
+    }
+
+    //
+    // Upload texture
+    //
+
+    int req_size = 0, mip_offsets[16] = {};
+    for (int i = 0; i < env_.qtree_levels; ++i) {
+        mip_offsets[i] = req_size;
+        req_size += 4096 * int((env_map_qtree_.mips[i].size() * sizeof(simd_fvec4) + 4096 - 1) / 4096);
+    }
+
+    temp_stage_buf = Buffer("Temp upload buf", ctx_, eBufType::Stage, req_size);
+    uint8_t *stage_data = temp_stage_buf.Map(BufMapWrite);
+
+    for (int i = 0; i < env_.qtree_levels; ++i) {
+        memcpy(&stage_data[mip_offsets[i]], env_map_qtree_.mips[i].data(),
+               env_map_qtree_.mips[i].size() * sizeof(simd_fvec4));
+    }
+
+    Tex2DParams p;
+    p.w = p.h = (env_map_qtree_.res / 2);
+    p.format = eTexFormat::RawRGBA32F;
+    p.mip_count = env_.qtree_levels;
+    p.usage = eTexUsageBits::Sampled | eTexUsageBits::Transfer;
+
+    env_map_qtree_.tex = Texture2D("Env map qtree", ctx_, p, ctx_->default_memory_allocs(), ctx_->log());
+
+    VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+
+    for (int i = 0; i < env_.qtree_levels; ++i) {
+        env_map_qtree_.tex.SetSubImage(i, 0, 0, (env_map_qtree_.res >> i) / 2, (env_map_qtree_.res >> i) / 2,
+                                       eTexFormat::RawRGBA32F, temp_stage_buf, cmd_buf, mip_offsets[i],
+                                       int(env_map_qtree_.mips[i].size() * sizeof(simd_fvec4)));
+    }
+
+    EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+
+    temp_stage_buf.Unmap();
+    temp_stage_buf.FreeImmediate();
+
+    ctx_->log()->Info("Env map qtree res is %i", env_map_qtree_.res);
 }
 
 void Ray::Vk::Scene::GenerateTextureMips() {

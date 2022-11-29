@@ -3,6 +3,7 @@
 
 #include "shade_hits_interface.h"
 #include "common.glsl"
+#include "envmap.glsl"
 #include "texture.glsl"
 
 LAYOUT_PARAMS uniform UniformParams {
@@ -56,6 +57,8 @@ layout(std430, binding = VTX_INDICES_BUF_SLOT) readonly buffer VtxIndices {
 layout(std430, binding = HALTON_SEQ_BUF_SLOT) readonly buffer Halton {
     float g_halton[];
 };
+
+layout(binding = ENV_QTREE_TEX_SLOT) uniform sampler2D g_env_qtree;
 
 #if PRIMARY
 layout(binding = OUT_IMG_SLOT, rgba32f) uniform writeonly image2D g_out_img;
@@ -754,9 +757,9 @@ void SampleLightSource(vec3 P, vec2 sample_off, inout light_sample_t ls) {
             const uint env_map = floatBitsToUint(g_params.env_col.w);
             if (env_map != 0xffffffff) {
 #if BINDLESS
-                env_col *= SampleLatlong_RGBE(env_map, ls.L);
+                env_col *= SampleLatlong_RGBE(env_map, ls.L, g_params.env_rotation);
 #else
-                env_col *= SampleLatlong_RGBE(g_textures[env_map], ls.L);
+                env_col *= SampleLatlong_RGBE(g_textures[env_map], ls.L, g_params.env_rotation);
 #endif
             }
             ls.col *= env_col;
@@ -807,9 +810,9 @@ void SampleLightSource(vec3 P, vec2 sample_off, inout light_sample_t ls) {
             const uint env_map = floatBitsToUint(g_params.env_col.w);
             if (env_map != 0xffffffff) {
 #if BINDLESS
-                env_col *= SampleLatlong_RGBE(env_map, ls.L);
+                env_col *= SampleLatlong_RGBE(env_map, ls.L, g_params.env_rotation);
 #else
-                env_col *= SampleLatlong_RGBE(g_textures[env_map], ls.L);
+                env_col *= SampleLatlong_RGBE(g_textures[env_map], ls.L, g_params.env_rotation);
 #endif
             }
             ls.col *= env_col;
@@ -852,9 +855,9 @@ void SampleLightSource(vec3 P, vec2 sample_off, inout light_sample_t ls) {
             const uint env_map = floatBitsToUint(g_params.env_col.w);
             if (env_map != 0xffffffff) {
 #if BINDLESS
-                env_col *= SampleLatlong_RGBE(env_map, ls.L);
+                env_col *= SampleLatlong_RGBE(env_map, ls.L, g_params.env_rotation);
 #else
-                env_col *= SampleLatlong_RGBE(g_textures[env_map], ls.L);
+                env_col *= SampleLatlong_RGBE(g_textures[env_map], ls.L, g_params.env_rotation);
 #endif
             }
             ls.col *= env_col;
@@ -903,13 +906,34 @@ void SampleLightSource(vec3 P, vec2 sample_off, inout light_sample_t ls) {
             const uint env_map = floatBitsToUint(g_params.env_col.w);
             if (env_map != 0xffffffff) {
 #if BINDLESS
-                env_col *= SampleLatlong_RGBE(env_map, ls.L);
+                env_col *= SampleLatlong_RGBE(env_map, ls.L, g_params.env_rotation);
 #else
-                env_col *= SampleLatlong_RGBE(g_textures[env_map], ls.L);
+                env_col *= SampleLatlong_RGBE(g_textures[env_map], ls.L, g_params.env_rotation);
 #endif
             }
             ls.col *= env_col;
         }
+    } else [[dont_flatten]] if (l_type == LIGHT_TYPE_ENV) {
+        const float rand = u1 * float(g_params.li_count) - float(light_index);
+
+        const float rx = fract(g_halton[g_params.hi + RAND_DIM_LIGHT_U] + sample_off[0]);
+        const float ry = fract(g_halton[g_params.hi + RAND_DIM_LIGHT_V] + sample_off[1]);
+
+        const vec4 dir_and_pdf = Sample_EnvQTree(g_params.env_rotation, g_env_qtree, g_params.env_qtree_levels, rand, rx, ry);
+
+        ls.L = dir_and_pdf.xyz;
+        ls.col *= g_params.env_col.xyz;
+
+        const uint env_map = floatBitsToUint(g_params.env_col.w);
+#if BINDLESS
+        ls.col *= SampleLatlong_RGBE(env_map, ls.L, g_params.env_rotation);
+#else
+        ls.col *= SampleLatlong_RGBE(g_textures[env_map], ls.L, g_params.env_rotation);
+#endif
+
+        ls.area = 1.0;
+        ls.dist = MAX_DIST;
+        ls.pdf = dir_and_pdf.w;
     }
 }
 
@@ -919,13 +943,21 @@ vec3 ShadeSurface(int px_index, hit_data_t inter, ray_data_t ray) {
 
     [[dont_flatten]] if (inter.mask == 0) {
         vec3 env_col = g_params.env_col.xyz;
-        const uint env_map = floatBitsToUint(g_params.env_col[3]);
+        const uint env_map = floatBitsToUint(g_params.env_col.w);
         if (env_map != 0xffffffff) {
 #if BINDLESS
-            env_col *= SampleLatlong_RGBE(env_map, rd);
+            env_col *= SampleLatlong_RGBE(env_map, rd, g_params.env_rotation);
 #else
-            env_col *= SampleLatlong_RGBE(g_textures[env_map], rd);
+            env_col *= SampleLatlong_RGBE(g_textures[env_map], rd, g_params.env_rotation);
 #endif
+            if (g_params.env_qtree_levels > 0) {
+                const float light_pdf = Evaluate_EnvQTree(g_params.env_rotation, g_env_qtree,
+                                        g_params.env_qtree_levels, rd);
+                const float bsdf_pdf = ray.pdf;
+
+                const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
+                env_col *= mis_weight;
+            }
         }
         return vec3(ray.c[0] * env_col[0], ray.c[1] * env_col[1], ray.c[2] * env_col[2]);
     }
@@ -1372,9 +1404,9 @@ vec3 ShadeSurface(int px_index, hit_data_t inter, ray_data_t ray) {
             const uint env_map = floatBitsToUint(g_params.env_col.w);
             if (env_map != 0xffffffff) {
 #if BINDLESS
-                env_col *= SampleLatlong_RGBE(env_map, rd);
+                env_col *= SampleLatlong_RGBE(env_map, rd, g_params.env_rotation);
 #else
-                env_col *= SampleLatlong_RGBE(g_textures[env_map], rd);
+                env_col *= SampleLatlong_RGBE(g_textures[env_map], rd, g_params.env_rotation);
 #endif
             }
             base_color *= env_col;

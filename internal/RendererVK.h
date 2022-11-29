@@ -35,6 +35,8 @@ struct scene_data_t {
     const Buffer &visible_lights;
     const int visible_lights_count;
     const AccStructure &rt_tlas;
+    const Texture2D &env_qtree;
+    int env_qtree_levels;
 };
 
 class Renderer : public RendererBase {

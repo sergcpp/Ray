@@ -2406,6 +2406,110 @@ Ray::Ref::simd_fvec4 Ray::Ref::Sample_PrincipledClearcoat_BSDF(const simd_fvec4 
                                              clearcoat_ior, clearcoat_F0);
 }
 
+float Ray::Ref::Evaluate_EnvQTree(const float y_rotation, const simd_fvec4 *const *qtree_mips, const int qtree_levels,
+                                  const simd_fvec4 &L) {
+    int res = 2;
+    int lod = qtree_levels - 1;
+
+    simd_fvec2 p;
+    DirToCanonical(value_ptr(L), y_rotation, &p[0]);
+    float factor = 1.0f;
+
+    while (lod >= 0) {
+        const int x = clamp(int(p[0] * res), 0, res - 1);
+        const int y = clamp(int(p[1] * res), 0, res - 1);
+
+        int index = 0;
+        index |= (x & 1) << 0;
+        index |= (y & 1) << 1;
+
+        const int qx = x / 2;
+        const int qy = y / 2;
+
+        const simd_fvec4 quad = qtree_mips[lod][qy * res / 2 + qx];
+        const float total = quad[0] + quad[1] + quad[2] + quad[3];
+        if (total <= 0.0f) {
+            break;
+        }
+
+        factor *= 4.0f * quad[index] / total;
+
+        --lod;
+        res *= 2;
+    }
+
+    return factor / (4.0f * PI);
+}
+
+Ray::Ref::simd_fvec4 Ray::Ref::Sample_EnvQTree(const float y_rotation, const simd_fvec4 *const *qtree_mips,
+                                               const int qtree_levels, const float rand, const float rx,
+                                               const float ry) {
+    int res = 2;
+    float step = 1.0f / float(res);
+
+    float sample = rand;
+    int lod = qtree_levels - 1;
+
+    simd_fvec2 origin = {0.0f, 0.0f};
+    float factor = 1.0f;
+
+    while (lod >= 0) {
+        const int qx = int(origin[0] * res) / 2;
+        const int qy = int(origin[1] * res) / 2;
+
+        const simd_fvec4 quad = qtree_mips[lod][qy * res / 2 + qx];
+
+        const float top_left = quad[0];
+        const float top_right = quad[1];
+        float partial = top_left + quad[2];
+        const float total = partial + top_right + quad[3];
+        if (total <= 0.0f) {
+            break;
+        }
+
+        float boundary = partial / total;
+
+        int index = 0;
+        if (sample < boundary) {
+            assert(partial > 0.0f);
+            sample /= boundary;
+            boundary = top_left / partial;
+        } else {
+            partial = total - partial;
+            assert(partial > 0.0f);
+            origin[0] += step;
+            sample = (sample - boundary) / (1.0f - boundary);
+            boundary = top_right / partial;
+            index |= (1 << 0);
+        }
+
+        if (sample < boundary) {
+            sample /= boundary;
+        } else {
+            origin[1] += step;
+            sample = (sample - boundary) / (1.0f - boundary);
+            index |= (1 << 1);
+        }
+
+        factor *= 4.0f * quad[index] / total;
+
+        --lod;
+        res *= 2;
+        step *= 0.5f;
+    }
+
+    origin += 2 * step * simd_fvec2{rx, ry};
+
+    // origin = simd_fvec2{rx, ry};
+    // factor = 1.0f;
+
+    simd_fvec4 dir_and_pdf;
+    CanonicalToDir(value_ptr(origin), y_rotation, &dir_and_pdf[0]);
+    dir_and_pdf[3] = factor / (4.0f * PI);
+
+    return dir_and_pdf;
+}
+
 void Ray::Ref::TransformRay(const float ro[3], const float rd[3], const float *xform, float out_ro[3],
                             float out_rd[3]) {
     out_ro[0] = xform[0] * ro[0] + xform[4] * ro[1] + xform[8] * ro[2] + xform[12];
@@ -2564,16 +2668,22 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleAnisotropic(const TexStorageBase *const tex
 }
 
 Ray::Ref::simd_fvec4 Ray::Ref::SampleLatlong_RGBE(const TexStorageRGBA &storage, const uint32_t index,
-                                                  const simd_fvec4 &dir) {
+                                                  const simd_fvec4 &dir, float y_rotation) {
     const float theta = std::acos(clamp(dir[1], -1.0f, 1.0f)) / PI;
     const float r = std::sqrt(dir[0] * dir[0] + dir[2] * dir[2]);
-    float u = 0.5f * std::acos(r > FLT_EPS ? clamp(dir[0] / r, -1.0f, 1.0f) : 0.0f) / PI;
+
+    float phi = std::acos(r > FLT_EPS ? clamp(dir[0] / r, -1.0f, 1.0f) : 0.0f) + y_rotation;
+    if (phi < 0) {
+        phi += 2 * PI;
+    }
+    if (phi > 2 * PI) {
+        phi -= 2 * PI;
+    }
+
+    float u = 0.5f * phi / PI;
     if (dir[2] < 0.0f) {
         u = 1.0f - u;
     }
-
-    // TODO: +0.5f is a temporary hack, pass actual hdr orientation here!
-    u = fract(u + 0.5f);
 
     const int tex = (index & 0x00ffffff);
     simd_fvec2 size;
@@ -2750,8 +2860,8 @@ void Ray::Ref::ComputeDerivatives(const simd_fvec4 &I, const float t, const simd
 void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, const TexStorageBase *const textures[],
                                  const float halton[], const float sample_off[2], light_sample_t &ls) {
     const float u1 = fract(halton[RAND_DIM_LIGHT_PICK] + sample_off[0]);
-    const auto light_index = std::min(uint32_t(u1 * sc.li_indices.size()), uint32_t(sc.li_indices.size() - 1));
 
+    const auto light_index = std::min(uint32_t(u1 * sc.li_indices.size()), uint32_t(sc.li_indices.size() - 1));
     const light_t &l = sc.lights[sc.li_indices[light_index]];
 
     ls.col = simd_fvec4{l.col[0], l.col[1], l.col[2], 0.0f};
@@ -2831,7 +2941,8 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, co
         if (l.sky_portal != 0) {
             simd_fvec4 env_col = {sc.env->env_col[0], sc.env->env_col[1], sc.env->env_col[2], 0.0f};
             if (sc.env->env_map != 0xffffffff) {
-                env_col *= SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), sc.env->env_map, ls.L);
+                env_col *=
+                    SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), sc.env->env_map, ls.L, PI);
             }
             ls.col *= env_col;
         }
@@ -2879,7 +2990,8 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, co
         if (l.sky_portal != 0) {
             simd_fvec4 env_col = {sc.env->env_col[0], sc.env->env_col[1], sc.env->env_col[2], 0.0f};
             if (sc.env->env_map != 0xffffffff) {
-                env_col *= SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), sc.env->env_map, ls.L);
+                env_col *=
+                    SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), sc.env->env_map, ls.L, PI);
             }
             ls.col *= env_col;
         }
@@ -2919,7 +3031,8 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, co
         if (l.sky_portal != 0) {
             simd_fvec4 env_col = {sc.env->env_col[0], sc.env->env_col[1], sc.env->env_col[2], 0.0f};
             if (sc.env->env_map != 0xffffffff) {
-                env_col *= SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), sc.env->env_map, ls.L);
+                env_col *=
+                    SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), sc.env->env_map, ls.L, PI);
             }
             ls.col *= env_col;
         }
@@ -2962,10 +3075,31 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, co
         } else {
             simd_fvec4 env_col = {sc.env->env_col[0], sc.env->env_col[1], sc.env->env_col[2], 0.0f};
             if (sc.env->env_map != 0xffffffff) {
-                env_col *= SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), sc.env->env_map, ls.L);
+                env_col *=
+                    SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), sc.env->env_map, ls.L, PI);
             }
             ls.col *= env_col;
         }
+    } else if (l.type == LIGHT_TYPE_ENV) {
+        assert(sc.env->qtree_levels);
+        const auto *qtree_mips = reinterpret_cast<const simd_fvec4 *const *>(sc.env->qtree_mips);
+
+        const float rand = u1 * float(sc.li_indices.size()) - float(light_index);
+
+        const float rx = fract(halton[RAND_DIM_LIGHT_U] + sample_off[0]);
+        const float ry = fract(halton[RAND_DIM_LIGHT_V] + sample_off[1]);
+
+        const simd_fvec4 dir_and_pdf = Sample_EnvQTree(PI, qtree_mips, sc.env->qtree_levels, rand, rx, ry);
+
+        ls.L = simd_fvec4{dir_and_pdf[0], dir_and_pdf[1], dir_and_pdf[2], 0.0f};
+        ls.col *= {sc.env->env_col[0], sc.env->env_col[1], sc.env->env_col[2], 0.0f};
+
+        assert(sc.env->env_map != 0xffffffff);
+        ls.col *= SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), sc.env->env_map, ls.L, PI);
+
+        ls.area = 1.0f;
+        ls.dist = MAX_DIST;
+        ls.pdf = dir_and_pdf[3];
     }
 }
 
@@ -3085,12 +3219,23 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
                                           const uint32_t node_index, const TexStorageBase *const textures[],
                                           ray_data_t *out_secondary_rays, int *out_secondary_rays_count,
                                           shadow_ray_t *out_shadow_rays, int *out_shadow_rays_count) {
+    const auto I = simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f};
+
     if (!inter.mask) {
         simd_fvec4 env_col = {1.0f};
         if (pi.should_add_environment()) {
             if (sc.env->env_map != 0xffffffff) {
                 env_col = SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), sc.env->env_map,
-                                             simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f});
+                                             simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f}, PI);
+                if (sc.env->qtree_levels) {
+                    const auto *qtree_mips = reinterpret_cast<const simd_fvec4 *const *>(sc.env->qtree_mips);
+
+                    const float light_pdf = Evaluate_EnvQTree(PI, qtree_mips, sc.env->qtree_levels, I);
+                    const float bsdf_pdf = ray.pdf;
+
+                    const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
+                    env_col *= mis_weight;
+                }
             }
             env_col[3] = 1.0f;
         }
@@ -3099,7 +3244,6 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
                                   ray.c[2] * env_col[2] * sc.env->env_col[2], env_col[3]};
     }
 
-    const auto I = simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f};
     const auto P = simd_fvec4{ray.o[0], ray.o[1], ray.o[2], 0.0f} + inter.t * I;
 
     if (inter.obj_index < 0) { // Area light intersection
@@ -3552,7 +3696,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
             simd_fvec4 env_col = {sc.env->env_col[0], sc.env->env_col[1], sc.env->env_col[2], 0.0f};
             if (sc.env->env_map != 0xffffffff) {
                 env_col *= SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), sc.env->env_map,
-                                              simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f});
+                                              simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f}, PI);
             }
             base_color *= env_col;
         }

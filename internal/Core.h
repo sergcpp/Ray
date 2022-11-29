@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cmath>
 #include <cstdint>
 
 #include "../SceneBase.h"
@@ -21,6 +22,7 @@
 #endif
 
 #define unused(x) ((void)x)
+#define countof(x) (sizeof(x)/sizeof(x[0]))
 
 #include "simd/aligned_allocator.h"
 
@@ -172,6 +174,7 @@ const int LIGHT_TYPE_LINE = 3;
 const int LIGHT_TYPE_RECT = 4;
 const int LIGHT_TYPE_DISK = 5;
 const int LIGHT_TYPE_TRI = 6;
+const int LIGHT_TYPE_ENV = 7;
 
 struct light_t {
     uint32_t type : 6;
@@ -366,12 +369,25 @@ static_assert(sizeof(mesh_instance_t) == 32, "!");
 struct environment_t {
     float env_col[3];
     uint32_t env_map;
+    const float *qtree_mips[16];
+    int qtree_levels;
+    bool multiple_importance;
 };
 
 force_inline float to_norm_float(uint8_t v) {
     uint32_t val = 0x3f800000 + v * 0x8080 + (v + 1) / 2;
     return (float &)val - 1;
 }
+
+force_inline void rgbe_to_rgb(const uint8_t rgbe[4], float out_rgb[3]) {
+    const float f = std::exp2(float(rgbe[3]) - 128.0f);
+    out_rgb[0] = to_norm_float(rgbe[0]) * f;
+    out_rgb[1] = to_norm_float(rgbe[1]) * f;
+    out_rgb[2] = to_norm_float(rgbe[2]) * f;
+}
+
+void CanonicalToDir(const float p[2], float y_rotation, float out_d[3]);
+void DirToCanonical(const float d[3], float y_rotation, float out_p[2]);
 
 extern const uint8_t morton_table_16[];
 extern const int morton_table_256[];

@@ -35,6 +35,8 @@ class TextureAtlas {
     VkImageView vk_imgage_view() const { return img_view_; }
     VkSampler vk_sampler() const { return sampler_.vk_handle(); }
 
+    int res_x() const { return res_[0]; }
+    int res_y() const { return res_[1]; }
     int page_count() const { return int(splitters_.size()); }
 
     template <typename T, int N> int Allocate(const color_t<T, N> *data, const int res[2], int pos[2]);
@@ -47,6 +49,8 @@ class TextureAtlas {
     bool Resize(int pages_count);
 
     int DownsampleRegion(int src_page, const int src_pos[2], const int src_res[2], int dst_pos[2]);
+
+    void CopyRegionTo(int page, int x, int y, int w, int h, const Buffer &dst_buf, void *_cmd_buf, int data_off) const;
 
     mutable eResState resource_state = eResState::Undefined;
 };

@@ -69,6 +69,7 @@ const int LIGHT_TYPE_LINE = 3;
 const int LIGHT_TYPE_RECT = 4;
 const int LIGHT_TYPE_DISK = 5;
 const int LIGHT_TYPE_TRI = 6;
+const int LIGHT_TYPE_ENV = 7;
 
 const int DiffuseNode = 0;
 const int GlossyNode = 1;
