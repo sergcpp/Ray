@@ -2690,11 +2690,12 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleLatlong_RGBE(const TexStorageRGBA &storage,
     storage.GetFRes(tex, 0, &size[0]);
 
     const simd_fvec2 uvs = simd_fvec2{u, theta} * size;
+    const simd_ivec2 iuvs = simd_ivec2(uvs);
 
-    const auto &p00 = storage.Get(tex, int(uvs[0] + 0), int(uvs[1] + 0), 0);
-    const auto &p01 = storage.Get(tex, int(uvs[0] + 1), int(uvs[1] + 0), 0);
-    const auto &p10 = storage.Get(tex, int(uvs[0] + 0), int(uvs[1] + 1), 0);
-    const auto &p11 = storage.Get(tex, int(uvs[0] + 1), int(uvs[1] + 1), 0);
+    const auto &p00 = storage.Get(tex, iuvs[0] + 0, iuvs[1] + 0, 0);
+    const auto &p01 = storage.Get(tex, iuvs[0] + 1, iuvs[1] + 0, 0);
+    const auto &p10 = storage.Get(tex, iuvs[0] + 0, iuvs[1] + 1, 0);
+    const auto &p11 = storage.Get(tex, iuvs[0] + 1, iuvs[1] + 1, 0);
 
     const simd_fvec2 k = fract(uvs);
 
