@@ -255,6 +255,7 @@ void setup_material_scene(Ray::SceneBase &scene, const bool output_sh, const Mat
         floor_mat_desc.base_color[0] = 0.75f;
         floor_mat_desc.base_color[1] = 0.75f;
         floor_mat_desc.base_color[2] = 0.75f;
+        floor_mat_desc.roughness = 0.0f;
         floor_mat_desc.specular = 0.0f;
         floor_mat = scene.AddMaterial(floor_mat_desc);
     }
@@ -265,6 +266,7 @@ void setup_material_scene(Ray::SceneBase &scene, const bool output_sh, const Mat
         walls_mat_desc.base_color[0] = 0.5f;
         walls_mat_desc.base_color[1] = 0.5f;
         walls_mat_desc.base_color[2] = 0.5f;
+        walls_mat_desc.roughness = 0.0f;
         walls_mat_desc.specular = 0.0f;
         walls_mat = scene.AddMaterial(walls_mat_desc);
     }
@@ -275,6 +277,7 @@ void setup_material_scene(Ray::SceneBase &scene, const bool output_sh, const Mat
         white_mat_desc.base_color[0] = 0.64f;
         white_mat_desc.base_color[1] = 0.64f;
         white_mat_desc.base_color[2] = 0.64f;
+        white_mat_desc.roughness = 0.0f;
         white_mat_desc.specular = 0.0f;
         white_mat = scene.AddMaterial(white_mat_desc);
     }
@@ -285,6 +288,7 @@ void setup_material_scene(Ray::SceneBase &scene, const bool output_sh, const Mat
         light_grey_mat_desc.base_color[0] = 0.32f;
         light_grey_mat_desc.base_color[1] = 0.32f;
         light_grey_mat_desc.base_color[2] = 0.32f;
+        light_grey_mat_desc.roughness = 0.0f;
         light_grey_mat_desc.specular = 0.0f;
         light_grey_mat = scene.AddMaterial(light_grey_mat_desc);
     }
@@ -295,6 +299,7 @@ void setup_material_scene(Ray::SceneBase &scene, const bool output_sh, const Mat
         mid_grey_mat_desc.base_color[0] = 0.16f;
         mid_grey_mat_desc.base_color[1] = 0.16f;
         mid_grey_mat_desc.base_color[2] = 0.16f;
+        mid_grey_mat_desc.roughness = 0.0f;
         mid_grey_mat_desc.specular = 0.0f;
         mid_grey_mat = scene.AddMaterial(mid_grey_mat_desc);
     }
@@ -305,6 +310,7 @@ void setup_material_scene(Ray::SceneBase &scene, const bool output_sh, const Mat
         dark_grey_mat_desc.base_color[0] = 0.08f;
         dark_grey_mat_desc.base_color[1] = 0.08f;
         dark_grey_mat_desc.base_color[2] = 0.08f;
+        dark_grey_mat_desc.roughness = 0.0f;
         dark_grey_mat_desc.specular = 0.0f;
         dark_grey_mat = scene.AddMaterial(dark_grey_mat_desc);
     }
@@ -1042,6 +1048,7 @@ void test_diff_mat0(const char *arch_list[], const char *preferred_device) {
     desc.base_color[0] = 0.5f;
     desc.base_color[1] = 0.0f;
     desc.base_color[2] = 0.0f;
+    desc.roughness = 0.0f;
     desc.specular = 0.0f;
 
     run_material_test(arch_list, preferred_device, "diff_mat0", desc, SampleCount, MinPSNR, PixThres);
@@ -1120,6 +1127,7 @@ void test_sheen_mat0(const char *arch_list[], const char *preferred_device) {
     mat_desc.base_color[0] = 0.0f;
     mat_desc.base_color[1] = 0.0f;
     mat_desc.base_color[2] = 0.0f;
+    mat_desc.roughness = 0.0f;
     mat_desc.specular = 0.0f;
     mat_desc.sheen = 0.5f;
     mat_desc.sheen_tint = 0.0f;
@@ -1136,6 +1144,7 @@ void test_sheen_mat1(const char *arch_list[], const char *preferred_device) {
     mat_desc.base_color[0] = 0.0f;
     mat_desc.base_color[1] = 0.0f;
     mat_desc.base_color[2] = 0.0f;
+    mat_desc.roughness = 0.0f;
     mat_desc.specular = 0.0f;
     mat_desc.sheen = 1.0f;
     mat_desc.sheen_tint = 0.0f;
@@ -1152,6 +1161,7 @@ void test_sheen_mat2(const char *arch_list[], const char *preferred_device) {
     mat_desc.base_color[0] = 0.1f;
     mat_desc.base_color[1] = 0.0f;
     mat_desc.base_color[2] = 0.1f;
+    mat_desc.roughness = 0.0f;
     mat_desc.specular = 0.0f;
     mat_desc.sheen = 1.0f;
     mat_desc.sheen_tint = 0.0f;
@@ -1168,6 +1178,7 @@ void test_sheen_mat3(const char *arch_list[], const char *preferred_device) {
     mat_desc.base_color[0] = 0.1f;
     mat_desc.base_color[1] = 0.0f;
     mat_desc.base_color[2] = 0.1f;
+    mat_desc.roughness = 0.0f;
     mat_desc.specular = 0.0f;
     mat_desc.sheen = 1.0f;
     mat_desc.sheen_tint = 1.0f;

@@ -86,7 +86,7 @@ struct principled_mat_desc_t {
     float specular = 0.5f;
     uint32_t specular_texture = 0xffffffff;
     float specular_tint = 0;
-    float roughness = 0;
+    float roughness = 0.5f;
     uint32_t roughness_texture = 0xffffffff;
     float anisotropic = 0;
     float anisotropic_rotation = 0;

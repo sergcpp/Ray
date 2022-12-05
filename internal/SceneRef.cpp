@@ -109,7 +109,7 @@ uint32_t Ray::Ref::Scene::AddMaterial(const shading_node_desc_t &m) {
 
     mat.type = m.type;
     mat.textures[BASE_TEXTURE] = m.base_texture;
-    mat.roughness_unorm = pack_unorm_16(m.roughness);
+    mat.roughness_unorm = pack_unorm_16(_CLAMP(m.roughness, 0.0f, 1.0f));
     mat.textures[ROUGH_TEXTURE] = m.roughness_texture;
     memcpy(&mat.base_color[0], &m.base_color[0], 3 * sizeof(float));
     mat.int_ior = m.int_ior;
