@@ -1455,7 +1455,12 @@ vec3 ShadeSurface(int px_index, hit_data_t inter, ray_data_t ray) {
             metallic *= SampleBilinear(mat.textures[METALLIC_TEXTURE], uvs, int(metallic_lod)).r;
         }
 
-        const float specular = unpack_unorm_16(mat.specular_and_specular_tint & 0xffff);
+        float specular = unpack_unorm_16(mat.specular_and_specular_tint & 0xffff);
+        [[dont_flatten]] if (mat.textures[SPECULAR_TEXTURE] != 0xffffffff) {
+            const float specular_lod = get_texture_lod(texSize(mat.textures[SPECULAR_TEXTURE]), lambda);
+            specular *= SampleBilinear(mat.textures[SPECULAR_TEXTURE], uvs, int(specular_lod)).r;
+        }
+
         const float specular_tint = unpack_unorm_16((mat.specular_and_specular_tint >> 16) & 0xffff);
         const float transmission = unpack_unorm_16(mat.transmission_and_transmission_roughness & 0xffff);
         const float clearcoat = unpack_unorm_16(mat.clearcoat_and_clearcoat_roughness & 0xffff);

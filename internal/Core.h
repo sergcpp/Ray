@@ -118,6 +118,7 @@ const int NORMALS_TEXTURE = 0;
 const int BASE_TEXTURE = 1;
 const int ROUGH_TEXTURE = 2;
 const int METALLIC_TEXTURE = 3;
+const int SPECULAR_TEXTURE = 4;
 
 const int MIX_MAT1 = 3;
 const int MIX_MAT2 = 4;

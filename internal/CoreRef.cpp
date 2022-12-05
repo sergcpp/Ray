@@ -3781,7 +3781,17 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
             metallic *= SampleBilinear(textures, metallic_tex, uvs, int(metallic_lod))[0];
         }
 
-        const float specular = unpack_unorm_16(mat->specular_unorm);
+        float specular = unpack_unorm_16(mat->specular_unorm);
+        if (mat->textures[SPECULAR_TEXTURE] != 0xffffffff) {
+            const uint32_t specular_tex = mat->textures[SPECULAR_TEXTURE];
+#ifdef USE_RAY_DIFFERENTIALS
+            const float specular_lod = get_texture_lod(textures, spec_tex, surf_der.duv_dx, surf_der.duv_dy);
+#else
+            const float specular_lod = get_texture_lod(textures, specular_tex, lambda);
+#endif
+            specular *= SampleBilinear(textures, specular_tex, uvs, int(specular_lod))[0];
+        }
+
         const float specular_tint = unpack_unorm_16(mat->specular_tint_unorm);
         const float transmission = unpack_unorm_16(mat->transmission_unorm);
         const float clearcoat = unpack_unorm_16(mat->clearcoat_unorm);

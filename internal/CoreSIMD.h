@@ -1550,9 +1550,9 @@ template <int S> simd_fvec<S> fresnel_dielectric_cos(const simd_fvec<S> &cosi, c
 }
 
 template <int S>
-void get_lobe_weights(const simd_fvec<S> &base_color_lum, const simd_fvec<S> &spec_color_lum, const float specular,
-                      const simd_fvec<S> &metallic, const float transmission, const float clearcoat,
-                      simd_fvec<S> *out_diffuse_weight, simd_fvec<S> *out_specular_weight,
+void get_lobe_weights(const simd_fvec<S> &base_color_lum, const simd_fvec<S> &spec_color_lum,
+                      const simd_fvec<S> &specular, const simd_fvec<S> &metallic, const float transmission,
+                      const float clearcoat, simd_fvec<S> *out_diffuse_weight, simd_fvec<S> *out_specular_weight,
                       simd_fvec<S> *out_clearcoat_weight, simd_fvec<S> *out_refraction_weight) {
     // taken from Cycles
     (*out_diffuse_weight) = base_color_lum * (1.0f - metallic) * (1.0f - transmission);
@@ -1561,7 +1561,7 @@ void get_lobe_weights(const simd_fvec<S> &base_color_lum, const simd_fvec<S> &sp
     //    (specular != 0.0f || metallic != 0.0f) ? spec_color_lum * (1.0f - final_transmission) : 0.0f;
     (*out_specular_weight) = 0.0f;
 
-    auto temp_mask = simd_fvec<S>{specular} != 0.0f | metallic != 0.0f;
+    auto temp_mask = (specular != 0.0f | metallic != 0.0f);
     where(temp_mask, *out_specular_weight) = spec_color_lum * (1.0f - final_transmission);
 
     (*out_clearcoat_weight) = 0.25f * clearcoat * (1.0f - metallic);
@@ -5490,7 +5490,23 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                     metallic *= metallic_color[0];
                 }
 
-                const float specular = unpack_unorm_16(mat->specular_unorm);
+                simd_fvec<S> specular = unpack_unorm_16(mat->specular_unorm);
+                if (mat->textures[SPECULAR_TEXTURE] != 0xffffffff) {
+                    const uint32_t specular_tex = mat->textures[SPECULAR_TEXTURE];
+#ifdef USE_RAY_DIFFERENTIALS
+                    const simd_fvec<S> specular_lod =
+                        get_texture_lod(textures, specular_tex, surf_der.duv_dx, surf_der.duv_dy, ray_queue[index]);
+#else
+                    const simd_fvec<S> specular_lod = get_texture_lod(textures, specular_tex, lambda, ray_queue[index]);
+#endif
+
+                    simd_fvec<S> specular_color[4];
+                    SampleBilinear(textures, specular_tex, uvs, simd_ivec<S>(specular_lod), ray_queue[index],
+                                   specular_color);
+
+                    specular *= specular_color[0];
+                }
+
                 const float transmission = unpack_unorm_16(mat->transmission_unorm);
                 const float clearcoat = unpack_unorm_16(mat->clearcoat_unorm);
                 const float clearcoat_roughness = unpack_unorm_16(mat->clearcoat_roughness_unorm);
@@ -5503,8 +5519,8 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                     spec_tmp_col[i] = mix(specular * 0.08f * spec_tmp_col[i], base_color[i], metallic);
                 })
 
-                const float spec_ior = (2.0f / (1.0f - std::sqrt(0.08f * specular))) - 1.0f;
-                const float spec_F0 = fresnel_dielectric_cos(1.0f, spec_ior);
+                const simd_fvec<S> spec_ior = (2.0f / (1.0f - sqrt(0.08f * specular))) - 1.0f;
+                const simd_fvec<S> spec_F0 = fresnel_dielectric_cos(simd_fvec<S>{1.0f}, spec_ior);
 
                 // Approximation of FH (using shading normal)
                 const simd_fvec<S> FN =
