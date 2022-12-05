@@ -88,6 +88,8 @@ void main() {
     vec3 _origin = g_params.cam_origin.xyz + g_params.cam_side.xyz * offset.x + g_params.cam_up.xyz * offset.y;
     vec3 _d = get_pix_dir(_x, _y, _origin, k);
 
+    _origin += _d * g_params.cam_clip_start;
+
     ray_data_t new_ray;
     new_ray.o[0] = _origin[0];
     new_ray.o[1] = _origin[1];

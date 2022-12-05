@@ -476,7 +476,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
 #else
     { // trace primary rays
         DebugMarker _(cmd_buf, "TracePrimaryRays");
-        kernel_TracePrimaryRays(cmd_buf, sc_data, macro_tree_root, prim_rays_buf_, prim_hits_buf_);
+        kernel_TracePrimaryRays(cmd_buf, sc_data, macro_tree_root, cam.clip_end, prim_rays_buf_, prim_hits_buf_);
     }
 
     { // shade primary hits

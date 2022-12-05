@@ -213,6 +213,8 @@ struct camera_desc_t {
     float lens_rotation = 0.0f;          ///< Bokeh rotation
     float lens_ratio = 1.0f;             ///< Bokeh distortion
     int lens_blades = 0;                 ///< Bokeh shape
+    float clip_start = 0;                ///< Clip start
+    float clip_end = 3.402823466e+30F;   ///< Clip end
     uint32_t mi_index, uv_index = 0;     ///< Index of mesh instance and uv layer used by geometry cam
     bool lighting_only = false;          ///< Render lightmap only
     bool skip_direct_lighting = false;   ///< Render indirect light contribution only

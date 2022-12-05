@@ -136,6 +136,7 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
             const ray_data_t &r = p.primary_rays[i];
             hit_data_t &inter = p.intersections[i];
             inter = {};
+            inter.t = cam.clip_end;
 
             if (macro_tree_root != 0xffffffff) {
                 if (sc_data.mnodes) {

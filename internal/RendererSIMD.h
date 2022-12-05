@@ -230,6 +230,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
             const ray_data_t<S> &r = p.primary_rays[i];
             hit_data_t<S> &inter = p.intersections[i];
             inter = {};
+            inter.t = cam.clip_end;
 
             if (macro_tree_root != 0xffffffff) {
                 if (sc_data.mnodes) {

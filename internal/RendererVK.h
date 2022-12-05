@@ -83,7 +83,7 @@ class Renderer : public RendererBase {
     void kernel_GeneratePrimaryRays(VkCommandBuffer cmd_buf, const camera_t &cam, int hi, const rect_t &rect,
                                     const Buffer &halton, const Buffer &out_rays);
     void kernel_TracePrimaryRays(VkCommandBuffer cmd_buf, const scene_data_t &sc_data, uint32_t node_index,
-                                 const Buffer &rays, const Buffer &out_hits);
+                                 float cam_clip_end, const Buffer &rays, const Buffer &out_hits);
     void kernel_TraceSecondaryRays(VkCommandBuffer cmd_buf, const Buffer &indir_args, const Buffer &counters,
                                    const scene_data_t &sc_data, uint32_t node_index, const Buffer &rays,
                                    const Buffer &out_hits);

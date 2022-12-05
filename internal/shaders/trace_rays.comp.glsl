@@ -169,7 +169,11 @@ void main() {
     hit_data_t inter;
     inter.mask = 0;
     inter.obj_index = inter.prim_index = 0;
+#if PRIMARY
+    inter.t = g_params.cam_clip_end;
+#else
     inter.t = MAX_DIST;
+#endif
     inter.u = inter.v = 0.0;
 
 #if !HWRT

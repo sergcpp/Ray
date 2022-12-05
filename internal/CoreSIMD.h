@@ -1626,9 +1626,8 @@ void Ray::NS::GeneratePrimaryRays(const int iteration, const camera_t &cam, cons
                        up[3] = {{cam.up[0]}, {cam.up[1]}, {cam.up[2]}},
                        cam_origin[3] = {{cam.origin[0]}, {cam.origin[1]}, {cam.origin[2]}};
 
-    auto get_pix_dirs = [k, fov_k, focus_distance, &fwd, &side, &up, &cam_origin, &ww,
-                         &hh](const simd_fvec<S> &x, const simd_fvec<S> &y, const simd_fvec<S> origin[3],
-                              simd_fvec<S> d[3]) {
+    auto get_pix_dirs = [&](const simd_fvec<S> &x, const simd_fvec<S> &y, const simd_fvec<S> origin[3],
+                            simd_fvec<S> d[3]) {
         const int S = DimX * DimY;
 
         simd_fvec<S> _dx = 2 * fov_k * x / ww - fov_k;
@@ -1729,7 +1728,7 @@ void Ray::NS::GeneratePrimaryRays(const int iteration, const camera_t &cam, cons
 
             for (int j = 0; j < 3; j++) {
                 out_r.d[j] = _d[j];
-                out_r.o[j] = _origin[j];
+                out_r.o[j] = _origin[j] + _d[j] * cam.clip_start;
                 out_r.c[j] = {1.0f};
 
 #ifdef USE_RAY_DIFFERENTIALS

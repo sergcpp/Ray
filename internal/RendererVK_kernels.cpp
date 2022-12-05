@@ -47,13 +47,15 @@ void Ray::Vk::Renderer::kernel_GeneratePrimaryRays(VkCommandBuffer cmd_buf, cons
     uniform_params.cam_lens_rotation = cam.lens_rotation;
     uniform_params.cam_lens_ratio = cam.lens_ratio;
     uniform_params.cam_lens_blades = cam.lens_blades;
+    uniform_params.cam_clip_start = cam.clip_start;
 
     DispatchCompute(cmd_buf, pi_prim_rays_gen_, grp_count, bindings, &uniform_params, sizeof(uniform_params),
                     ctx_->default_descr_alloc(), ctx_->log());
 }
 
 void Ray::Vk::Renderer::kernel_TracePrimaryRays(VkCommandBuffer cmd_buf, const scene_data_t &sc_data,
-                                                const uint32_t node_index, const Buffer &rays, const Buffer &out_hits) {
+                                                const uint32_t node_index, const float cam_clip_end, const Buffer &rays,
+                                                const Buffer &out_hits) {
     const TransitionInfo res_transitions[] = {{&rays, eResState::ShaderResource},
                                               {&out_hits, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
@@ -62,6 +64,7 @@ void Ray::Vk::Renderer::kernel_TracePrimaryRays(VkCommandBuffer cmd_buf, const s
     uniform_params.img_size[0] = w_;
     uniform_params.img_size[1] = h_;
     uniform_params.node_index = node_index;
+    uniform_params.cam_clip_end = cam_clip_end;
 
     if (use_hwrt_) {
         const Binding bindings[] = {{eBindTarget::SBuf, TraceRays::RAYS_BUF_SLOT, rays},

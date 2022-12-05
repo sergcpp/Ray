@@ -305,7 +305,7 @@ bool NaiivePluckerTest(const float p[9], const float o[3], const float d[3]);
 
 void ConstructCamera(eCamType type, eFilterType filter, eDeviceType dtype, const float origin[3], const float fwd[3],
                      const float up[3], float fov, float sensor_height, float gamma, float focus_distance, float fstop,
-                     float lens_rotation, float lens_ratio, int lens_blades, camera_t *cam);
+                     float lens_rotation, float lens_ratio, int lens_blades, float clip_start, float clip_end, camera_t *cam);
 
 // Applies 4x4 matrix matrix transform to bounding box
 void TransformBoundingBox(const float bbox_min[3], const float bbox_max[3], const float *xform, float out_bbox_min[3],
