@@ -1395,7 +1395,7 @@ template <int S> force_inline simd_fvec<S> sin(const simd_fvec<S> &v) {
 template <int S> void offset_ray(const simd_fvec<S> p[3], const simd_fvec<S> n[3], simd_fvec<S> out_p[3]) {
     static const float Origin = 1.0f / 32.0f;
     static const float FloatScale = 1.0f / 65536.0f;
-    static const float IntScale = 256.0f;
+    static const float IntScale = 128.0f; // 256.0f;
 
     simd_ivec<S> of_i[3] = {simd_ivec<S>{IntScale * n[0]}, simd_ivec<S>{IntScale * n[1]},
                             simd_ivec<S>{IntScale * n[2]}};

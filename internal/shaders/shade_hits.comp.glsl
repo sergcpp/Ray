@@ -252,7 +252,7 @@ vec3 rotate_around_axis(vec3 p, vec3 axis, float angle) {
 vec3 offset_ray(vec3 p, vec3 n) {
     const float Origin = 1.0 / 32.0;
     const float FloatScale = 1.0 / 65536.0;
-    const float IntScale = 256.0;
+    const float IntScale = 128.0; // 256.0;
 
     const ivec3 of_i = ivec3(IntScale * n);
 

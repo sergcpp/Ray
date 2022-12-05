@@ -2390,7 +2390,7 @@ void test_complex_mat3(const char *arch_list[], const char *preferred_device) {
 void test_complex_mat4(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 256;
     const double MinPSNR = 34.58;
-    const int PixThres = 34;
+    const int PixThres = 37;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = 0;
@@ -2413,7 +2413,7 @@ void test_complex_mat4(const char *arch_list[], const char *preferred_device) {
 
 void test_complex_mat5(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 768;
-    const double MinPSNR = 33.23;
+    const double MinPSNR = 33.22;
     const int PixThres = 351;
 
     Ray::principled_mat_desc_t metal_mat_desc;
@@ -2436,7 +2436,7 @@ void test_complex_mat5(const char *arch_list[], const char *preferred_device) {
 void test_complex_mat5_dof(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 1024;
     const double MinPSNR = 30.33;
-    const int PixThres = 1000;
+    const int PixThres = 1001;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = 0;
@@ -2480,7 +2480,7 @@ void test_complex_mat5_mesh_lights(const char *arch_list[], const char *preferre
 void test_complex_mat5_sphere_light(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 768;
     const double MinPSNR = 24.96;
-    const int PixThres = 284;
+    const int PixThres = 288;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = 0;
@@ -2546,7 +2546,7 @@ void test_complex_mat5_hdr_light(const char *arch_list[], const char *preferred_
 void test_complex_mat6(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 1024;
     const double MinPSNR = 28.48;
-    const int PixThres = 938;
+    const int PixThres = 939;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;
@@ -2562,7 +2562,7 @@ void test_complex_mat6(const char *arch_list[], const char *preferred_device) {
 void test_complex_mat6_dof(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 1024;
     const double MinPSNR = 28.51;
-    const int PixThres = 896;
+    const int PixThres = 901;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;
@@ -2595,8 +2595,8 @@ void test_complex_mat6_mesh_lights(const char *arch_list[], const char *preferre
 
 void test_complex_mat6_sphere_light(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 1024;
-    const double MinPSNR = 24.22;
-    const int PixThres = 509;
+    const double MinPSNR = 24.21;
+    const int PixThres = 515;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;

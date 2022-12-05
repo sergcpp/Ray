@@ -682,7 +682,7 @@ force_inline float int_as_float(const int32_t v) { return reinterpret_cast<const
 simd_fvec4 offset_ray(const simd_fvec4 &p, const simd_fvec4 &n) {
     const float Origin = 1.0f / 32.0f;
     const float FloatScale = 1.0f / 65536.0f;
-    const float IntScale = 256.0f;
+    const float IntScale = 128.0f; // 256.0f;
 
     const simd_ivec4 of_i(IntScale * n);
 
