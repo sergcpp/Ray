@@ -104,6 +104,7 @@ template <int S> struct derivatives_t {
 template <int S> struct light_sample_t {
     simd_fvec<S> col[3], L[3];
     simd_fvec<S> area = 0.0f, dist, pdf = 0.0f;
+    simd_ivec<S> cast_shadow = -1;
 };
 
 // Generating rays
@@ -4171,6 +4172,7 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const scene_data_t &sc,
         const light_t &l = sc.lights[sc.li_indices[first_li]];
 
         ITERATE_3({ where(ray_queue[index], ls.col[i]) = l.col[i] * float(sc.li_indices.size()); })
+        where(ray_queue[index], ls.cast_shadow) = l.cast_shadow ? -1 : 0;
 
         if (l.type == LIGHT_TYPE_SPHERE) {
             const simd_fvec<S> r1 = fract(halton[RAND_DIM_LIGHT_U] + sample_off[0]);
@@ -4483,6 +4485,7 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, const simd_ivec<S> &ra
     for (uint32_t li = 0; li < uint32_t(visible_lights.size()); ++li) {
         const uint32_t light_index = visible_lights[li];
         const light_t &l = lights[light_index];
+        const simd_fvec<S> no_shadow = simd_cast(l.cast_shadow ? simd_ivec<S>{0} : simd_ivec<S>{-1});
         if (l.type == LIGHT_TYPE_SPHERE) {
             const simd_fvec<S> op[3] = {l.sph.pos[0] - r.o[0], l.sph.pos[1] - r.o[1], l.sph.pos[2] - r.o[2]};
             const simd_fvec<S> b = dot3(op, r.d);
@@ -4493,8 +4496,9 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, const simd_ivec<S> &ra
                 det = sqrt(det);
                 const simd_fvec<S> t1 = b - det, t2 = b + det;
 
-                const simd_fvec<S> mask1 = (t1 > HIT_EPS & t1 < inout_inter.t) & simd_cast(imask);
-                const simd_fvec<S> mask2 = (t2 > HIT_EPS & t2 < inout_inter.t) & simd_cast(imask) & ~mask1;
+                const simd_fvec<S> mask1 = (t1 > HIT_EPS & (t1 < inout_inter.t | no_shadow)) & simd_cast(imask);
+                const simd_fvec<S> mask2 =
+                    (t2 > HIT_EPS & (t2 < inout_inter.t | no_shadow)) & simd_cast(imask) & ~mask1;
 
                 inout_inter.mask |= simd_cast(mask1 | mask2);
 
@@ -4512,7 +4516,8 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, const simd_ivec<S> &ra
             const simd_fvec<S> cos_theta = dot3(r.d, light_fwd);
             const simd_fvec<S> t = (plane_dist - dot3(light_fwd, r.o)) / cos_theta;
 
-            const simd_ivec<S> imask = simd_cast(cos_theta<0.0f & t> HIT_EPS & t < inout_inter.t) & ray_mask;
+            const simd_ivec<S> imask =
+                simd_cast(cos_theta<0.0f & t> HIT_EPS & (t < inout_inter.t | no_shadow)) & ray_mask;
             if (imask.not_all_zeros()) {
                 const float dot_u = dot3(l.rect.u, l.rect.u);
                 const float dot_v = dot3(l.rect.v, l.rect.v);
@@ -4541,7 +4546,8 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, const simd_ivec<S> &ra
             const simd_fvec<S> cos_theta = dot3(r.d, light_fwd);
             const simd_fvec<S> t = (plane_dist - dot3(light_fwd, r.o)) / cos_theta;
 
-            const simd_ivec<S> imask = simd_cast(cos_theta<0.0f & t> HIT_EPS & t < inout_inter.t) & ray_mask;
+            const simd_ivec<S> imask =
+                simd_cast(cos_theta<0.0f & t> HIT_EPS & (t < inout_inter.t | no_shadow)) & ray_mask;
             if (imask.not_all_zeros()) {
                 const float dot_u = dot3(l.disk.u, l.disk.u);
                 const float dot_v = dot3(l.disk.v, l.disk.v);
@@ -4580,7 +4586,7 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, const simd_ivec<S> &ra
             const simd_fvec<S> t = min(t0, t1);
             const simd_fvec<S> p[3] = {fmadd(rd[0], t, ro[0]), fmadd(rd[1], t, ro[1]), fmadd(rd[2], t, ro[2])};
 
-            imask &= simd_cast(abs(p[0]) < 0.5f * l.line.height) & simd_cast(t < inout_inter.t);
+            imask &= simd_cast(abs(p[0]) < 0.5f * l.line.height) & simd_cast(t < inout_inter.t | no_shadow);
 
             inout_inter.mask |= imask;
             where(imask, inout_inter.obj_index) = -simd_ivec<S>(light_index) - 1;
@@ -5212,12 +5218,13 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                     ITERATE_3({ where(eval_light, sh_r.d[i]) = ls.L[i]; })
                     where(eval_light, sh_r.dist) = ls.dist - 10.0f * HIT_BIAS;
                     ITERATE_3({
-                        where(eval_light, sh_r.c[i]) =
-                            ray.c[i] * ls.col[i] * diff_col[i] * (mix_weight * mis_weight / ls.pdf);
+                        const simd_fvec<S> temp = ls.col[i] * diff_col[i] * (mix_weight * mis_weight / ls.pdf);
+                        where(eval_light, sh_r.c[i]) = ray.c[i] * temp;
+                        where(eval_light & ~ls.cast_shadow, col[i]) += temp;
                     })
 
                     assert((shadow_mask & eval_light).all_zeros());
-                    shadow_mask |= eval_light;
+                    shadow_mask |= (eval_light & ls.cast_shadow);
                 }
 #endif
                 const simd_ivec<S> gen_ray = (diff_depth < pi.settings.max_diff_depth) &
@@ -5286,12 +5293,13 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                     ITERATE_3({ where(eval_light, sh_r.d[i]) = ls.L[i]; })
                     where(eval_light, sh_r.dist) = ls.dist - 10.0f * HIT_BIAS;
                     ITERATE_3({
-                        where(eval_light, sh_r.c[i]) =
-                            ray.c[i] * ls.col[i] * spec_col[i] * (mix_weight * mis_weight / ls.pdf);
+                        const simd_fvec<S> temp = ls.col[i] * spec_col[i] * (mix_weight * mis_weight / ls.pdf);
+                        where(eval_light, sh_r.c[i]) = ray.c[i] * temp;
+                        where(eval_light & ~ls.cast_shadow, col[i]) += temp;
                     })
 
                     assert((shadow_mask & eval_light).all_zeros());
-                    shadow_mask |= eval_light;
+                    shadow_mask |= (eval_light & ls.cast_shadow);
                 }
 #endif
 
@@ -5362,12 +5370,13 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                     ITERATE_3({ where(eval_light, sh_r.d[i]) = ls.L[i]; })
                     where(eval_light, sh_r.dist) = ls.dist - 10.0f * HIT_BIAS;
                     ITERATE_3({
-                        where(eval_light, sh_r.c[i]) =
-                            ray.c[i] * ls.col[i] * refr_col[i] * (mix_weight * mis_weight / ls.pdf);
+                        const simd_fvec<S> temp = ls.col[i] * refr_col[i] * (mix_weight * mis_weight / ls.pdf);
+                        where(eval_light, sh_r.c[i]) = ray.c[i] * temp;
+                        where(eval_light & ~ls.cast_shadow, col[i]) += temp;
                     })
 
                     assert((shadow_mask & eval_light).all_zeros());
-                    shadow_mask |= eval_light;
+                    shadow_mask |= (eval_light & ls.cast_shadow);
                 }
 #endif
 
@@ -5671,10 +5680,13 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                     ITERATE_3({ where(eval_light, sh_r.o[i]) = P_biased[i]; })
                     ITERATE_3({ where(eval_light, sh_r.d[i]) = ls.L[i]; })
                     where(eval_light, sh_r.dist) = ls.dist - 10.0f * HIT_BIAS;
-                    ITERATE_3({ where(eval_light, sh_r.c[i]) = ray.c[i] * lcol[i]; })
+                    ITERATE_3({
+                        where(eval_light, sh_r.c[i]) = ray.c[i] * lcol[i];
+                        where(eval_light & ~ls.cast_shadow, col[i]) += lcol[i];
+                    })
 
                     assert((shadow_mask & eval_light).all_zeros());
-                    shadow_mask |= eval_light;
+                    shadow_mask |= (eval_light & ls.cast_shadow);
                 }
 #endif
 

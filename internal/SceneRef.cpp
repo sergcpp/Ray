@@ -418,7 +418,9 @@ uint32_t Ray::Ref::Scene::AddLight(const directional_light_desc_t &_l) {
     light_t l = {};
 
     l.type = LIGHT_TYPE_DIR;
+    l.cast_shadow = _l.cast_shadow;
     l.visible = false;
+  
     memcpy(&l.col[0], &_l.color[0], 3 * sizeof(float));
     l.dir.dir[0] = -_l.direction[0];
     l.dir.dir[1] = -_l.direction[1];
@@ -434,6 +436,7 @@ uint32_t Ray::Ref::Scene::AddLight(const sphere_light_desc_t &_l) {
     light_t l = {};
 
     l.type = LIGHT_TYPE_SPHERE;
+    l.cast_shadow = _l.cast_shadow;
     l.visible = _l.visible;
 
     memcpy(&l.col[0], &_l.color[0], 3 * sizeof(float));
@@ -454,9 +457,10 @@ uint32_t Ray::Ref::Scene::AddLight(const rect_light_desc_t &_l, const float *xfo
     light_t l = {};
 
     l.type = LIGHT_TYPE_RECT;
+    l.cast_shadow = _l.cast_shadow;
     l.visible = _l.visible;
     l.sky_portal = _l.sky_portal;
-
+    
     memcpy(&l.col[0], &_l.color[0], 3 * sizeof(float));
 
     l.rect.pos[0] = xform[12];
@@ -483,9 +487,10 @@ uint32_t Ray::Ref::Scene::AddLight(const disk_light_desc_t &_l, const float *xfo
     light_t l = {};
 
     l.type = LIGHT_TYPE_DISK;
+    l.cast_shadow = _l.cast_shadow;
     l.visible = _l.visible;
     l.sky_portal = _l.sky_portal;
-
+    
     memcpy(&l.col[0], &_l.color[0], 3 * sizeof(float));
 
     l.disk.pos[0] = xform[12];
@@ -512,9 +517,10 @@ uint32_t Ray::Ref::Scene::AddLight(const line_light_desc_t &_l, const float *xfo
     light_t l = {};
 
     l.type = LIGHT_TYPE_LINE;
+    l.cast_shadow = _l.cast_shadow;
     l.visible = _l.visible;
     l.sky_portal = _l.sky_portal;
-
+    
     memcpy(&l.col[0], &_l.color[0], 3 * sizeof(float));
 
     l.line.pos[0] = xform[12];
@@ -575,6 +581,7 @@ uint32_t Ray::Ref::Scene::AddMeshInstance(const uint32_t mesh_index, const float
             if (front_mat.type == EmissiveNode &&
                 (front_mat.flags & (MAT_FLAG_MULT_IMPORTANCE | MAT_FLAG_SKY_PORTAL))) {
                 light_t new_light = {};
+                new_light.cast_shadow = 1;
                 new_light.type = LIGHT_TYPE_TRI;
                 new_light.visible = 0;
                 new_light.sky_portal = 0;
@@ -627,6 +634,7 @@ void Ray::Ref::Scene::Finalize() {
             light_t l = {};
 
             l.type = LIGHT_TYPE_ENV;
+            l.cast_shadow = 1;
             l.col[0] = l.col[1] = l.col[2] = 1.0f;
 
             env_map_light_ = lights_.push(l);

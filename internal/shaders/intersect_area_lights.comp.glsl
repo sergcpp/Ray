@@ -88,7 +88,9 @@ void main() {
         uint light_index = g_visible_lights[li];
         light_t l = g_lights[light_index];
 
-        uint light_type = (l.type_and_param0.x & 0x3f);
+        bool no_shadow = (l.type_and_param0.x & (1 << 5)) == 0;
+
+        uint light_type = (l.type_and_param0.x & 0x1f);
         if (light_type == LIGHT_TYPE_SPHERE) {
             vec3 light_pos = l.SPH_POS;
             vec3 op = light_pos - ro;
@@ -97,11 +99,11 @@ void main() {
             if (det >= 0.0) {
                 det = sqrt(det);
                 float t1 = b - det, t2 = b + det;
-                if (t1 > HIT_EPS && t1 < inter.t) {
+                if (t1 > HIT_EPS && (t1 < inter.t || no_shadow)) {
                     inter.mask = -1;
                     inter.obj_index = -int(light_index) - 1;
                     inter.t = t1;
-                } else if (t2 > HIT_EPS && t2 < inter.t) {
+                } else if (t2 > HIT_EPS && (t2 < inter.t || no_shadow)) {
                     inter.mask = -1;
                     inter.obj_index = -int(light_index) - 1;
                     inter.t = t2;
@@ -118,7 +120,7 @@ void main() {
             float cos_theta = dot(rd, light_forward);
             float t = (plane_dist - dot(light_forward, ro)) / cos_theta;
 
-            if (cos_theta < 0.0 && t > HIT_EPS && t < inter.t) {
+            if (cos_theta < 0.0 && t > HIT_EPS && (t < inter.t || no_shadow)) {
                 light_u /= dot(light_u, light_u);
                 light_v /= dot(light_v, light_v);
 
@@ -145,7 +147,7 @@ void main() {
             float cos_theta = dot(rd, light_forward);
             float t = (plane_dist - dot(light_forward, ro)) / cos_theta;
 
-            if (cos_theta < 0.0 && t > HIT_EPS && t < inter.t) {
+            if (cos_theta < 0.0 && t > HIT_EPS && (t < inter.t || no_shadow)) {
                 light_u /= dot(light_u, light_u);
                 light_v /= dot(light_v, light_v);
 
@@ -179,7 +181,7 @@ void main() {
             if (quadratic(A, B, C, t0, t1) && t0 > HIT_EPS && t1 > HIT_EPS) {
                 const float t = min(t0, t1);
                 const vec3 p = _ro + t * _rd;
-                if (abs(p[0]) < 0.5 * l.LINE_HEIGHT && t < inter.t) {
+                if (abs(p[0]) < 0.5 * l.LINE_HEIGHT && (t < inter.t || no_shadow)) {
                     inter.mask = -1;
                     inter.obj_index = -int(light_index) - 1;
                     inter.t = t;

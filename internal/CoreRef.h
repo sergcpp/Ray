@@ -88,8 +88,9 @@ struct derivatives_t {
 
 struct light_sample_t {
     simd_fvec4 col, L;
-    float area = 0.0f, dist, pdf = 0.0f;
+    float area = 0.0f, dist, pdf = 0.0f, cast_shadow = 1.0f;
 };
+static_assert(sizeof(light_sample_t) == 48, "!");
 
 class TexStorageBase;
 template <typename T, int N> class TexStorageLinear;

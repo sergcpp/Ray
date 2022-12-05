@@ -167,6 +167,7 @@ enum eLightType {
 struct directional_light_desc_t {
     float color[3];
     float direction[3], angle;
+    bool cast_shadow = true;
 };
 
 struct sphere_light_desc_t {
@@ -174,6 +175,7 @@ struct sphere_light_desc_t {
     float position[3] = {0.0f, 0.0f, 0.0f};
     float radius = 1.0f;
     bool visible = true; // visibility for secondary bounces
+    bool cast_shadow = true;
 };
 
 struct rect_light_desc_t {
@@ -181,6 +183,7 @@ struct rect_light_desc_t {
     float width = 1.0f, height = 1.0f;
     bool sky_portal = false;
     bool visible = true; // visibility for secondary bounces
+    bool cast_shadow = true;
 };
 
 struct disk_light_desc_t {
@@ -188,6 +191,7 @@ struct disk_light_desc_t {
     float size_x = 1.0f, size_y = 1.0f;
     bool sky_portal = false;
     bool visible = true; // visibility for secondary bounces
+    bool cast_shadow = true;
 };
 
 struct line_light_desc_t {
@@ -195,6 +199,7 @@ struct line_light_desc_t {
     float radius = 1.0f, height = 1.0f;
     bool sky_portal = false;
     bool visible = true; // visibility for secondary bounces
+    bool cast_shadow = true;
 };
 
 // Camera description

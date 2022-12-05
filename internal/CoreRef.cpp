@@ -2897,6 +2897,7 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, co
 
     ls.col = simd_fvec4{l.col[0], l.col[1], l.col[2], 0.0f};
     ls.col *= float(sc.li_indices.size());
+    ls.cast_shadow = l.cast_shadow ? 1.0f : 0.0f;
 
     if (l.type == LIGHT_TYPE_SPHERE) {
         const float r1 = fract(halton[RAND_DIM_LIGHT_U] + sample_off[0]);
@@ -3140,6 +3141,7 @@ void Ray::Ref::IntersectAreaLights(const ray_data_t &ray, const light_t lights[]
     for (uint32_t li = 0; li < uint32_t(visible_lights.size()); ++li) {
         const uint32_t light_index = visible_lights[li];
         const light_t &l = lights[light_index];
+        const bool no_shadow = (l.cast_shadow == 0);
         if (l.type == LIGHT_TYPE_SPHERE) {
             const auto light_pos = simd_fvec4{l.sph.pos[0], l.sph.pos[1], l.sph.pos[2], 0.0f};
             const simd_fvec4 op = light_pos - simd_fvec4{ray.o[0], ray.o[1], ray.o[2], 0.0f};
@@ -3148,7 +3150,7 @@ void Ray::Ref::IntersectAreaLights(const ray_data_t &ray, const light_t lights[]
             if (det >= 0.0f) {
                 det = std::sqrt(det);
                 const float t1 = b - det, t2 = b + det;
-                if (t1 > HIT_EPS && t1 < inout_inter.t) {
+                if (t1 > HIT_EPS && (t1 < inout_inter.t || no_shadow)) {
                     inout_inter.mask = -1;
                     inout_inter.obj_index = -int(light_index) - 1;
                     inout_inter.t = t1;
@@ -3170,7 +3172,7 @@ void Ray::Ref::IntersectAreaLights(const ray_data_t &ray, const light_t lights[]
             const float t =
                 (plane_dist - dot(light_forward, simd_fvec4{ray.o[0], ray.o[1], ray.o[2], 0.0f})) / cos_theta;
 
-            if (cos_theta < 0.0f && t > HIT_EPS && t < inout_inter.t) {
+            if (cos_theta < 0.0f && t > HIT_EPS && (t < inout_inter.t || no_shadow)) {
                 light_u /= dot(light_u, light_u);
                 light_v /= dot(light_v, light_v);
 
@@ -3199,7 +3201,7 @@ void Ray::Ref::IntersectAreaLights(const ray_data_t &ray, const light_t lights[]
             const float t =
                 (plane_dist - dot(light_forward, simd_fvec4{ray.o[0], ray.o[1], ray.o[2], 0.0f})) / cos_theta;
 
-            if (cos_theta < 0.0f && t > HIT_EPS && t < inout_inter.t) {
+            if (cos_theta < 0.0f && t > HIT_EPS && (t < inout_inter.t || no_shadow)) {
                 light_u /= dot(light_u, light_u);
                 light_v /= dot(light_v, light_v);
 
@@ -3235,7 +3237,7 @@ void Ray::Ref::IntersectAreaLights(const ray_data_t &ray, const light_t lights[]
             if (quadratic(A, B, C, t0, t1) && t0 > HIT_EPS && t1 > HIT_EPS) {
                 const float t = std::min(t0, t1);
                 const simd_fvec4 p = ro + t * rd;
-                if (std::abs(p[0]) < 0.5f * l.line.height && t < inout_inter.t) {
+                if (std::abs(p[0]) < 0.5f * l.line.height && (t < inout_inter.t || no_shadow)) {
                     inout_inter.mask = -1;
                     inout_inter.obj_index = -int(light_index) - 1;
                     inout_inter.t = t;
@@ -3555,15 +3557,20 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
 
             const simd_fvec4 lcol = ls.col * diff_col * (mix_weight * mis_weight / ls.pdf);
 
-            // schedule shadow ray
-            shadow_ray_t &sh_r = out_shadow_rays[(*out_shadow_rays_count)++];
-            memcpy(&sh_r.o[0], value_ptr(offset_ray(P, plane_N)), 3 * sizeof(float));
-            memcpy(&sh_r.d[0], value_ptr(ls.L), 3 * sizeof(float));
-            sh_r.dist = ls.dist - 10.0f * HIT_BIAS;
-            sh_r.c[0] = ray.c[0] * lcol[0];
-            sh_r.c[1] = ray.c[1] * lcol[1];
-            sh_r.c[2] = ray.c[2] * lcol[2];
-            sh_r.xy = ray.xy;
+            if (ls.cast_shadow > 0.5f) {
+                // schedule shadow ray
+                shadow_ray_t &sh_r = out_shadow_rays[(*out_shadow_rays_count)++];
+                memcpy(&sh_r.o[0], value_ptr(offset_ray(P, plane_N)), 3 * sizeof(float));
+                memcpy(&sh_r.d[0], value_ptr(ls.L), 3 * sizeof(float));
+                sh_r.dist = ls.dist - 10.0f * HIT_BIAS;
+                sh_r.c[0] = ray.c[0] * lcol[0];
+                sh_r.c[1] = ray.c[1] * lcol[1];
+                sh_r.c[2] = ray.c[2] * lcol[2];
+                sh_r.xy = ray.xy;
+            } else {
+                // apply light immediately
+                col += lcol;
+            }
         }
 #endif
 
@@ -3617,15 +3624,20 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
             }
             const simd_fvec4 lcol = ls.col * spec_col * (mix_weight * mis_weight / ls.pdf);
 
-            // schedule shadow ray
-            shadow_ray_t &sh_r = out_shadow_rays[(*out_shadow_rays_count)++];
-            memcpy(&sh_r.o[0], value_ptr(offset_ray(P, plane_N)), 3 * sizeof(float));
-            memcpy(&sh_r.d[0], value_ptr(ls.L), 3 * sizeof(float));
-            sh_r.dist = ls.dist - 10.0f * HIT_BIAS;
-            sh_r.c[0] = ray.c[0] * lcol[0];
-            sh_r.c[1] = ray.c[1] * lcol[1];
-            sh_r.c[2] = ray.c[2] * lcol[2];
-            sh_r.xy = ray.xy;
+            if (ls.cast_shadow > 0.5f) {
+                // schedule shadow ray
+                shadow_ray_t &sh_r = out_shadow_rays[(*out_shadow_rays_count)++];
+                memcpy(&sh_r.o[0], value_ptr(offset_ray(P, plane_N)), 3 * sizeof(float));
+                memcpy(&sh_r.d[0], value_ptr(ls.L), 3 * sizeof(float));
+                sh_r.dist = ls.dist - 10.0f * HIT_BIAS;
+                sh_r.c[0] = ray.c[0] * lcol[0];
+                sh_r.c[1] = ray.c[1] * lcol[1];
+                sh_r.c[2] = ray.c[2] * lcol[2];
+                sh_r.xy = ray.xy;
+            } else {
+                // apply light immediately
+                col += lcol;
+            }
         }
 #endif
 
@@ -3677,15 +3689,20 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
             }
             const simd_fvec4 lcol = ls.col * refr_col * (mix_weight * mis_weight / ls.pdf);
 
-            // schedule shadow ray
-            shadow_ray_t &sh_r = out_shadow_rays[(*out_shadow_rays_count)++];
-            memcpy(&sh_r.o[0], value_ptr(offset_ray(P, -plane_N)), 3 * sizeof(float));
-            memcpy(&sh_r.d[0], value_ptr(ls.L), 3 * sizeof(float));
-            sh_r.dist = ls.dist - 10.0f * HIT_BIAS;
-            sh_r.c[0] = ray.c[0] * lcol[0];
-            sh_r.c[1] = ray.c[1] * lcol[1];
-            sh_r.c[2] = ray.c[2] * lcol[2];
-            sh_r.xy = ray.xy;
+            if (ls.cast_shadow > 0.5f) {
+                // schedule shadow ray
+                shadow_ray_t &sh_r = out_shadow_rays[(*out_shadow_rays_count)++];
+                memcpy(&sh_r.o[0], value_ptr(offset_ray(P, -plane_N)), 3 * sizeof(float));
+                memcpy(&sh_r.d[0], value_ptr(ls.L), 3 * sizeof(float));
+                sh_r.dist = ls.dist - 10.0f * HIT_BIAS;
+                sh_r.c[0] = ray.c[0] * lcol[0];
+                sh_r.c[1] = ray.c[1] * lcol[1];
+                sh_r.c[2] = ray.c[2] * lcol[2];
+                sh_r.xy = ray.xy;
+            } else {
+                // apply light immediately
+                col += lcol;
+            }
         }
 #endif
 
@@ -3901,15 +3918,20 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
             }
             lcol *= mix_weight * mis_weight;
 
-            // schedule shadow ray
-            shadow_ray_t &sh_r = out_shadow_rays[(*out_shadow_rays_count)++];
-            memcpy(&sh_r.o[0], value_ptr(offset_ray(P, N_dot_L < 0.0f ? -plane_N : plane_N)), 3 * sizeof(float));
-            memcpy(&sh_r.d[0], value_ptr(ls.L), 3 * sizeof(float));
-            sh_r.dist = ls.dist - 10.0f * HIT_BIAS;
-            sh_r.c[0] = ray.c[0] * lcol[0];
-            sh_r.c[1] = ray.c[1] * lcol[1];
-            sh_r.c[2] = ray.c[2] * lcol[2];
-            sh_r.xy = ray.xy;
+            if (ls.cast_shadow > 0.5f) {
+                // schedule shadow ray
+                shadow_ray_t &sh_r = out_shadow_rays[(*out_shadow_rays_count)++];
+                memcpy(&sh_r.o[0], value_ptr(offset_ray(P, N_dot_L < 0.0f ? -plane_N : plane_N)), 3 * sizeof(float));
+                memcpy(&sh_r.d[0], value_ptr(ls.L), 3 * sizeof(float));
+                sh_r.dist = ls.dist - 10.0f * HIT_BIAS;
+                sh_r.c[0] = ray.c[0] * lcol[0];
+                sh_r.c[1] = ray.c[1] * lcol[1];
+                sh_r.c[2] = ray.c[2] * lcol[2];
+                sh_r.xy = ray.xy;
+            } else {
+                // apply light immediately
+                col += lcol;
+            }
         }
 #endif
 

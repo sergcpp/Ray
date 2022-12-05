@@ -633,7 +633,7 @@ vec4 Sample_GGXRefraction_BSDF(vec3 T, vec3 B, vec3 N, vec3 I, float roughness, 
 
 struct light_sample_t {
     vec3 col, L;
-    float area, dist, pdf;
+    float area, dist, pdf, cast_shadow;
 };
 
 void create_tbn(const vec3 N, out vec3 out_T, out vec3 out_B) {
@@ -681,8 +681,9 @@ void SampleLightSource(vec3 P, vec2 sample_off, inout light_sample_t ls) {
 
     ls.col = uintBitsToFloat(l.type_and_param0.yzw);
     ls.col *= float(g_params.li_count);
+    ls.cast_shadow = (l.type_and_param0.x & (1 << 5)) != 0 ? 1.0 : 0.0;
 
-    const uint l_type = (l.type_and_param0.x & 0x3f);
+    const uint l_type = (l.type_and_param0.x & 0x1f);
     [[dont_flatten]] if (l_type == LIGHT_TYPE_SPHERE) {
         const float r1 = fract(g_halton[g_params.hi + RAND_DIM_LIGHT_U] + sample_off[0]);
         const float r2 = fract(g_halton[g_params.hi + RAND_DIM_LIGHT_V] + sample_off[1]);
@@ -748,7 +749,7 @@ void SampleLightSource(vec3 P, vec2 sample_off, inout light_sample_t ls) {
             ls.pdf = (ls.dist * ls.dist) / (ls.area * cos_theta);
         }
 
-        if ((l.type_and_param0.x & 0x3f) == 0) { // !visible
+        if ((l.type_and_param0.x & (1 << 6)) == 0) { // !visible
             ls.area = 0.0;
         }
 
@@ -801,7 +802,7 @@ void SampleLightSource(vec3 P, vec2 sample_off, inout light_sample_t ls) {
             ls.pdf = (ls.dist * ls.dist) / (ls.area * cos_theta);
         }
 
-        if ((l.type_and_param0.x & 0x3f) == 0) { // !visible
+        if ((l.type_and_param0.x & (1 << 6)) == 0) { // !visible
             ls.area = 0.0;
         }
 
@@ -845,7 +846,7 @@ void SampleLightSource(vec3 P, vec2 sample_off, inout light_sample_t ls) {
             ls.pdf = (ls.dist * ls.dist) / (ls.area * cos_theta);
         }
 
-        if ((l.type_and_param0.x & 0x3f) == 0) { // !visible
+        if ((l.type_and_param0.x & (1 << 6)) == 0) { // !visible
             ls.area = 0.0;
         }
 
@@ -970,7 +971,7 @@ vec3 ShadeSurface(int px_index, hit_data_t inter, ray_data_t ray) {
 
         vec3 lcol = uintBitsToFloat(l.type_and_param0.yzw);
 
-        const uint l_type = (l.type_and_param0.x & 0x3f);
+        const uint l_type = (l.type_and_param0.x & 0x1f);
         if (l_type == LIGHT_TYPE_SPHERE) {
             const vec3 light_pos = l.SPH_POS;
             const float light_area = l.SPH_AREA;
@@ -1240,20 +1241,25 @@ vec3 ShadeSurface(int px_index, hit_data_t inter, ray_data_t ray) {
 
             const vec3 lcol = ls.col * diff_col.xyz * (mix_weight * mis_weight / ls.pdf);
 
-            // schedule shadow ray
-            shadow_ray_t sh_r;
+            [[dont_flatten]] if (ls.cast_shadow > 0.5) {
+                // schedule shadow ray
+                shadow_ray_t sh_r;
 
-            vec3 new_o = offset_ray(P, plane_N);
-            sh_r.o[0] = new_o[0]; sh_r.o[1] = new_o[1]; sh_r.o[2] = new_o[2];
-            sh_r.d[0] = ls.L[0]; sh_r.d[1] = ls.L[1]; sh_r.d[2] = ls.L[2];
-            sh_r.dist = ls.dist - 10.0 * HIT_BIAS;
-            sh_r.c[0] = ray.c[0] * lcol[0];
-            sh_r.c[1] = ray.c[1] * lcol[1];
-            sh_r.c[2] = ray.c[2] * lcol[2];
-            sh_r.xy = ray.xy;
+                vec3 new_o = offset_ray(P, plane_N);
+                sh_r.o[0] = new_o[0]; sh_r.o[1] = new_o[1]; sh_r.o[2] = new_o[2];
+                sh_r.d[0] = ls.L[0]; sh_r.d[1] = ls.L[1]; sh_r.d[2] = ls.L[2];
+                sh_r.dist = ls.dist - 10.0 * HIT_BIAS;
+                sh_r.c[0] = ray.c[0] * lcol[0];
+                sh_r.c[1] = ray.c[1] * lcol[1];
+                sh_r.c[2] = ray.c[2] * lcol[2];
+                sh_r.xy = ray.xy;
 
-            const uint index = atomicAdd(g_inout_counters[2], 1);
-            g_out_sh_rays[index] = sh_r;
+                const uint index = atomicAdd(g_inout_counters[2], 1);
+                g_out_sh_rays[index] = sh_r;
+            } else {
+                // apply light immediately
+                col += lcol;
+            }
         }
 #endif
 
@@ -1300,20 +1306,25 @@ vec3 ShadeSurface(int px_index, hit_data_t inter, ray_data_t ray) {
             }
             const vec3 lcol = ls.col * spec_col.rgb * (mix_weight * mis_weight / ls.pdf);
 
-            // schedule shadow ray
-            shadow_ray_t sh_r;
+            [[dont_flatten]] if (ls.cast_shadow > 0.5) {
+                // schedule shadow ray
+                shadow_ray_t sh_r;
 
-            vec3 new_o = offset_ray(P, plane_N);
-            sh_r.o[0] = new_o[0]; sh_r.o[1] = new_o[1]; sh_r.o[2] = new_o[2];
-            sh_r.d[0] = ls.L[0]; sh_r.d[1] = ls.L[1]; sh_r.d[2] = ls.L[2];
-            sh_r.dist = ls.dist - 10.0 * HIT_BIAS;
-            sh_r.c[0] = ray.c[0] * lcol[0];
-            sh_r.c[1] = ray.c[1] * lcol[1];
-            sh_r.c[2] = ray.c[2] * lcol[2];
-            sh_r.xy = ray.xy;
+                vec3 new_o = offset_ray(P, plane_N);
+                sh_r.o[0] = new_o[0]; sh_r.o[1] = new_o[1]; sh_r.o[2] = new_o[2];
+                sh_r.d[0] = ls.L[0]; sh_r.d[1] = ls.L[1]; sh_r.d[2] = ls.L[2];
+                sh_r.dist = ls.dist - 10.0 * HIT_BIAS;
+                sh_r.c[0] = ray.c[0] * lcol[0];
+                sh_r.c[1] = ray.c[1] * lcol[1];
+                sh_r.c[2] = ray.c[2] * lcol[2];
+                sh_r.xy = ray.xy;
 
-            const uint index = atomicAdd(g_inout_counters[2], 1);
-            g_out_sh_rays[index] = sh_r;
+                const uint index = atomicAdd(g_inout_counters[2], 1);
+                g_out_sh_rays[index] = sh_r;
+            } else {
+                // apply light immediately
+                col += lcol;
+            }
         }
 #endif
 
@@ -1358,20 +1369,25 @@ vec3 ShadeSurface(int px_index, hit_data_t inter, ray_data_t ray) {
             }
             const vec3 lcol = ls.col * refr_col.rgb * (mix_weight * mis_weight / ls.pdf);
 
-            /// schedule shadow ray
-            shadow_ray_t sh_r;
+            [[dont_flatten]] if (ls.cast_shadow > 0.5) {
+                // schedule shadow ray
+                shadow_ray_t sh_r;
 
-            vec3 new_o = offset_ray(P, -plane_N);
-            sh_r.o[0] = new_o[0]; sh_r.o[1] = new_o[1]; sh_r.o[2] = new_o[2];
-            sh_r.d[0] = ls.L[0]; sh_r.d[1] = ls.L[1]; sh_r.d[2] = ls.L[2];
-            sh_r.dist = ls.dist - 10.0 * HIT_BIAS;
-            sh_r.c[0] = ray.c[0] * lcol[0];
-            sh_r.c[1] = ray.c[1] * lcol[1];
-            sh_r.c[2] = ray.c[2] * lcol[2];
-            sh_r.xy = ray.xy;
+                vec3 new_o = offset_ray(P, -plane_N);
+                sh_r.o[0] = new_o[0]; sh_r.o[1] = new_o[1]; sh_r.o[2] = new_o[2];
+                sh_r.d[0] = ls.L[0]; sh_r.d[1] = ls.L[1]; sh_r.d[2] = ls.L[2];
+                sh_r.dist = ls.dist - 10.0 * HIT_BIAS;
+                sh_r.c[0] = ray.c[0] * lcol[0];
+                sh_r.c[1] = ray.c[1] * lcol[1];
+                sh_r.c[2] = ray.c[2] * lcol[2];
+                sh_r.xy = ray.xy;
 
-            const uint index = atomicAdd(g_inout_counters[2], 1);
-            g_out_sh_rays[index] = sh_r;
+                const uint index = atomicAdd(g_inout_counters[2], 1);
+                g_out_sh_rays[index] = sh_r;
+            } else {
+                // apply light immediately
+                col += lcol;
+            }
         }
 #endif
 
@@ -1566,20 +1582,25 @@ vec3 ShadeSurface(int px_index, hit_data_t inter, ray_data_t ray) {
             }
             lcol *= mix_weight * mis_weight;
 
-            // schedule shadow ray
-            shadow_ray_t sh_r;
+            [[dont_flatten]] if (ls.cast_shadow > 0.5) {
+                // schedule shadow ray
+                shadow_ray_t sh_r;
 
-            vec3 new_o = offset_ray(P, N_dot_L < 0.0 ? -plane_N : plane_N);
-            sh_r.o[0] = new_o[0]; sh_r.o[1] = new_o[1]; sh_r.o[2] = new_o[2];
-            sh_r.d[0] = ls.L[0]; sh_r.d[1] = ls.L[1]; sh_r.d[2] = ls.L[2];
-            sh_r.dist = ls.dist - 10.0 * HIT_BIAS;
-            sh_r.c[0] = ray.c[0] * lcol[0];
-            sh_r.c[1] = ray.c[1] * lcol[1];
-            sh_r.c[2] = ray.c[2] * lcol[2];
-            sh_r.xy = ray.xy;
+                vec3 new_o = offset_ray(P, N_dot_L < 0.0 ? -plane_N : plane_N);
+                sh_r.o[0] = new_o[0]; sh_r.o[1] = new_o[1]; sh_r.o[2] = new_o[2];
+                sh_r.d[0] = ls.L[0]; sh_r.d[1] = ls.L[1]; sh_r.d[2] = ls.L[2];
+                sh_r.dist = ls.dist - 10.0 * HIT_BIAS;
+                sh_r.c[0] = ray.c[0] * lcol[0];
+                sh_r.c[1] = ray.c[1] * lcol[1];
+                sh_r.c[2] = ray.c[2] * lcol[2];
+                sh_r.xy = ray.xy;
 
-            const uint index = atomicAdd(g_inout_counters[2], 1);
-            g_out_sh_rays[index] = sh_r;
+                const uint index = atomicAdd(g_inout_counters[2], 1);
+                g_out_sh_rays[index] = sh_r;
+            } else {
+                // apply light immediately
+                col += lcol;
+            }
         }
 #endif
 
