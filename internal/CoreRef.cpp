@@ -2933,6 +2933,10 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, co
         if (cos_theta > 0.0f) {
             ls.pdf = (ls.dist * ls.dist) / (0.5f * ls.area * cos_theta);
         }
+
+        if (!l.visible) {
+            ls.area = 0.0f;
+        }
     } else if (l.type == LIGHT_TYPE_DIR) {
         ls.L = simd_fvec4{l.dir.dir[0], l.dir.dir[1], l.dir.dir[2], 0.0f};
         if (l.dir.angle != 0.0f) {

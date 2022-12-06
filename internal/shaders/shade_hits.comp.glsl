@@ -728,6 +728,10 @@ void SampleLightSource(vec3 P, vec2 sample_off, inout light_sample_t ls) {
         ls.area = 0.0;
         ls.dist = MAX_DIST;
         ls.pdf = 1.0;
+
+        if ((l.type_and_param0.x & (1 << 6)) == 0) { // !visible
+            ls.area = 0.0;
+        }
     } else [[dont_flatten]] if (l_type == LIGHT_TYPE_RECT) {
         const vec3 light_pos = l.RECT_POS;
         const vec3 light_u = l.RECT_U;
