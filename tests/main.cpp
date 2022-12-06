@@ -1,4 +1,5 @@
 
+#include <cfloat>
 #include <cstdio>
 #include <cstring>
 
@@ -132,6 +133,13 @@ int main(int argc, char *argv[]) {
             run_detail_tests_on_fail = true;
         }
     }
+
+#if defined(_WIN32)
+    const bool enable_fp_exceptions = !nocpu || full_tests;
+    if (enable_fp_exceptions) {
+        _controlfp(_EM_INEXACT, _MCW_EM);
+    }
+#endif
 
     test_simd();
     test_tex_storage();

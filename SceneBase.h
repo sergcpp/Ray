@@ -211,7 +211,7 @@ struct camera_desc_t {
     float origin[3];                     ///< Camera origin
     float fwd[3] = {};                   ///< Camera forward unit vector
     float up[3];                         ///< Camera up vector (optional)
-    float fov, gamma = 1.0f;             ///< Field of view in degrees, gamma
+    float fov = 45.0f, gamma = 1.0f;     ///< Field of view in degrees, gamma
     float sensor_height = 0.036f;        ///< Camera sensor height
     float focus_distance = 1.0f;         ///< Distance to focus point
     float focal_length = 0.0f;           ///< Focal length

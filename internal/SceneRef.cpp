@@ -420,7 +420,7 @@ uint32_t Ray::Ref::Scene::AddLight(const directional_light_desc_t &_l) {
     l.type = LIGHT_TYPE_DIR;
     l.cast_shadow = _l.cast_shadow;
     l.visible = false;
-  
+
     memcpy(&l.col[0], &_l.color[0], 3 * sizeof(float));
     l.dir.dir[0] = -_l.direction[0];
     l.dir.dir[1] = -_l.direction[1];
@@ -460,7 +460,7 @@ uint32_t Ray::Ref::Scene::AddLight(const rect_light_desc_t &_l, const float *xfo
     l.cast_shadow = _l.cast_shadow;
     l.visible = _l.visible;
     l.sky_portal = _l.sky_portal;
-    
+
     memcpy(&l.col[0], &_l.color[0], 3 * sizeof(float));
 
     l.rect.pos[0] = xform[12];
@@ -490,7 +490,7 @@ uint32_t Ray::Ref::Scene::AddLight(const disk_light_desc_t &_l, const float *xfo
     l.cast_shadow = _l.cast_shadow;
     l.visible = _l.visible;
     l.sky_portal = _l.sky_portal;
-    
+
     memcpy(&l.col[0], &_l.color[0], 3 * sizeof(float));
 
     l.disk.pos[0] = xform[12];
@@ -520,7 +520,7 @@ uint32_t Ray::Ref::Scene::AddLight(const line_light_desc_t &_l, const float *xfo
     l.cast_shadow = _l.cast_shadow;
     l.visible = _l.visible;
     l.sky_portal = _l.sky_portal;
-    
+
     memcpy(&l.col[0], &_l.color[0], 3 * sizeof(float));
 
     l.line.pos[0] = xform[12];
@@ -741,7 +741,8 @@ void Ray::Ref::Scene::RebuildTLAS() {
     primitives.reserve(mesh_instances_.size());
 
     for (const mesh_instance_t &mi : mesh_instances_) {
-        primitives.push_back({0, 0, 0, Ref::simd_fvec4{mi.bbox_min}, Ref::simd_fvec4{mi.bbox_max}});
+        primitives.push_back({0, 0, 0, Ref::simd_fvec4{mi.bbox_min[0], mi.bbox_min[1], mi.bbox_min[2], 0.0f},
+                              Ref::simd_fvec4{mi.bbox_max[0], mi.bbox_max[1], mi.bbox_max[2], 0.0f}});
     }
 
     macro_nodes_root_ = uint32_t(nodes_.size());

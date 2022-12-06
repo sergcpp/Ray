@@ -193,13 +193,13 @@ Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, Span<const 
                 count_left[i] = prims_left;
                 box_left.min = min(box_left.min, bins[i].bounds.min);
                 box_left.max = max(box_left.max, bins[i].bounds.max);
-                area_left[i] = box_left.surface_area();
+                area_left[i] = prims_left ? box_left.surface_area() : 0.0f;
 
                 prims_right += bins[BinsCount - i - 1].prim_count;
                 count_right[BinsCount - i - 2] = prims_right;
                 box_right.min = min(box_right.min, bins[BinsCount - i - 1].bounds.min);
                 box_right.max = max(box_right.max, bins[BinsCount - i - 1].bounds.max);
-                area_right[BinsCount - i - 2] = box_right.surface_area();
+                area_right[BinsCount - i - 2] = prims_right ? box_right.surface_area() : 0.0f;
             }
 
             const float scale = (bounds_max - bounds_min) / float(BinsCount);

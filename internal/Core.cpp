@@ -309,7 +309,7 @@ uint32_t Ray::PreprocessMesh(const float *attrs, Span<const uint32_t> vtx_indice
     const size_t attr_stride = AttrStrides[layout];
 
     for (int j = 0; j < int(vtx_indices.size()); j += 3) {
-        Ref::simd_fvec4 p[3];
+        Ref::simd_fvec4 p[3] = {{0.0f}, {0.0f}, {0.0f}};
 
         const uint32_t i0 = vtx_indices[j + 0] + base_vertex, i1 = vtx_indices[j + 1] + base_vertex,
                        i2 = vtx_indices[j + 2] + base_vertex;
@@ -535,7 +535,10 @@ uint32_t Ray::PreprocessPrims_SAH(Span<const prim_t> prims, const float *positio
                                   std::vector<uint32_t> &out_indices) {
     struct prims_coll_t {
         std::vector<uint32_t> indices;
-        Ref::simd_fvec4 min = {std::numeric_limits<float>::max()}, max = {std::numeric_limits<float>::lowest()};
+        Ref::simd_fvec4 min = {std::numeric_limits<float>::max(), std::numeric_limits<float>::max(),
+                               std::numeric_limits<float>::max(), 0.0f},
+                        max = {std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest(),
+                               std::numeric_limits<float>::lowest(), 0.0f};
         prims_coll_t() = default;
         prims_coll_t(std::vector<uint32_t> &&_indices, const Ref::simd_fvec4 &_min, const Ref::simd_fvec4 &_max)
             : indices(std::move(_indices)), min(_min), max(_max) {}

@@ -28,10 +28,6 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
         return;
     }
 
-#ifndef NDEBUG
-    // unsigned int fp_control_state = _controlfp(_EM_INEXACT, _MCW_EM);
-#endif
-
     const camera_t &cam = s->cams_[s->current_cam()].cam;
 
     scene_data_t sc_data;

@@ -786,7 +786,7 @@ uint32_t Ray::Vk::Scene::AddLight(const directional_light_desc_t &_l) {
     l.type = LIGHT_TYPE_DIR;
     l.cast_shadow = _l.cast_shadow;
     l.visible = false;
-    
+
     memcpy(&l.col[0], &_l.color[0], 3 * sizeof(float));
     l.dir.dir[0] = -_l.direction[0];
     l.dir.dir[1] = -_l.direction[1];
@@ -1076,7 +1076,8 @@ void Ray::Vk::Scene::RebuildTLAS() {
     primitives.reserve(mi_count);
 
     for (const mesh_instance_t &mi : mesh_instances_) {
-        primitives.push_back({0, 0, 0, Ref::simd_fvec4{mi.bbox_min}, Ref::simd_fvec4{mi.bbox_max}});
+        primitives.push_back({0, 0, 0, Ref::simd_fvec4{mi.bbox_min[0], mi.bbox_min[1], mi.bbox_min[2], 0.0f},
+                              Ref::simd_fvec4{mi.bbox_max[0], mi.bbox_max[1], mi.bbox_max[2], 0.0f}});
     }
 
     std::vector<bvh_node_t> bvh_nodes;
