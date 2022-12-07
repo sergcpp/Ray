@@ -36,7 +36,7 @@ void Ray::Vk::Renderer::kernel_GeneratePrimaryRays(VkCommandBuffer cmd_buf, cons
     uniform_params.spread_angle = std::atan(2.0f * temp / float(h_));
 
     memcpy(&uniform_params.cam_origin[0], cam.origin, 3 * sizeof(float));
-    uniform_params.cam_origin[3] = cam.fov;
+    uniform_params.cam_origin[3] = temp;
     memcpy(&uniform_params.cam_fwd[0], cam.fwd, 3 * sizeof(float));
     memcpy(&uniform_params.cam_side[0], cam.side, 3 * sizeof(float));
     uniform_params.cam_side[3] = cam.focus_distance;

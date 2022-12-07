@@ -19,7 +19,7 @@ layout(std430, binding = OUT_RAYS_BUF_SLOT) writeonly buffer OutRays {
 layout (local_size_x = LOCAL_GROUP_SIZE_X, local_size_y = LOCAL_GROUP_SIZE_Y, local_size_z = 1) in;
 
 vec3 get_pix_dir(float x, float y, vec3 _origin, float prop) {
-    float k = tan(radians(0.5 * g_params.cam_origin.w)) * g_params.cam_side.w;
+    float k = g_params.cam_origin.w * g_params.cam_side.w;
     vec3 p = vec3(2 * k * x / float(g_params.img_size.x) - k, 2 * k * -y / float(g_params.img_size.y) + k, g_params.cam_side.w);
     p = g_params.cam_origin.xyz + prop * p.x * g_params.cam_side.xyz + p.y * g_params.cam_up.xyz + p.z * g_params.cam_fwd.xyz;
     return normalize(p - _origin);
