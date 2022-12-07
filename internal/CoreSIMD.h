@@ -5516,7 +5516,9 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                     simd_fvec<S> specular_color[4];
                     SampleBilinear(textures, specular_tex, uvs, simd_ivec<S>(specular_lod), ray_queue[index],
                                    specular_color);
-
+                    if (specular_tex & TEX_SRGB_BIT) {
+                        srgb_to_rgb(specular_color, specular_color);
+                    }
                     specular *= specular_color[0];
                 }
 

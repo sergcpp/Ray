@@ -3810,7 +3810,11 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
 #else
             const float specular_lod = get_texture_lod(textures, specular_tex, lambda);
 #endif
-            specular *= SampleBilinear(textures, specular_tex, uvs, int(specular_lod))[0];
+            simd_fvec4 specular_color = SampleBilinear(textures, specular_tex, uvs, int(specular_lod));
+            if (specular_tex & TEX_SRGB_BIT) {
+                specular_color = srgb_to_rgb(specular_color);
+            }
+            specular *= specular_color[0];
         }
 
         const float specular_tint = unpack_unorm_16(mat->specular_tint_unorm);
