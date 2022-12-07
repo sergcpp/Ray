@@ -19,7 +19,8 @@ struct Params {
     float cam_lens_ratio;
     int cam_lens_blades;
     float cam_clip_start;
-    float _pad[3];
+    int cam_filter;
+    float _pad[2];
 };
 
 const int LOCAL_GROUP_SIZE_X = 8;

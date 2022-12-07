@@ -47,8 +47,23 @@ void main() {
 
     vec2 sample_off = vec2(construct_float(hash_val), construct_float(hash(hash_val)));
 
-    if (false) {
+    if (g_params.cam_filter == FILTER_TENT) {
+        float rx = fract(g_halton[g_params.hi + RAND_DIM_FILTER_U] + sample_off.x);
+        [[flatten]] if (rx < 0.5) {
+            rx = sqrt(2.0 * rx) - 1.0;
+        } else {
+            rx = 1.0 - sqrt(2.0 - 2 * rx);
+        }
 
+        float ry = fract(g_halton[g_params.hi + RAND_DIM_FILTER_V] + sample_off.y);
+        [[flatten]] if (ry < 0.5) {
+            ry = sqrt(2.0 * ry) - 1.0;
+        } else {
+            ry = 1.0 - sqrt(2.0 - 2.0 * ry);
+        }
+
+        _x += 0.5f + rx;
+        _y += 0.5f + ry;
     } else {
         _x += fract(g_halton[g_params.hi + RAND_DIM_FILTER_U] + sample_off.x);
         _y += fract(g_halton[g_params.hi + RAND_DIM_FILTER_V] + sample_off.y);

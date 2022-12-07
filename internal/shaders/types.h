@@ -103,6 +103,9 @@ const UINT_TYPE TEX_YCOCG_BIT         = (4u << 24); // 0b00000100
 const UINT_TYPE TEXTURES_BUF_SLOT = 20;
 const UINT_TYPE TEXTURE_ATLASES_SLOT = 21;
 
+const int FILTER_BOX = 0;
+const int FILTER_TENT = 1;
+
 struct ray_data_t {
 	float o[3], d[3], pdf;
 	float c[3];
