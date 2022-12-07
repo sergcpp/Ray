@@ -270,13 +270,18 @@ uint32_t Ray::Vk::Scene::AddBindlessTexture(const tex_desc_t &_t) {
                 src_fmt = fmt = eTexFormat::RawRGBA8888;
                 data_size[0] = _t.w * _t.h * 4;
 
+                // TODO: get rid of this allocation
+                repacked_data.reset(new uint8_t[4 * _t.w * _t.h]);
+
                 const auto *rgb_data = reinterpret_cast<const uint8_t *>(_t.data);
                 for (int i = 0; i < _t.w * _t.h; ++i) {
-                    stage_data[i * 4 + 0] = rgb_data[i * 3 + 0];
-                    stage_data[i * 4 + 1] = rgb_data[i * 3 + 1];
-                    stage_data[i * 4 + 2] = rgb_data[i * 3 + 2];
-                    stage_data[i * 4 + 3] = 255;
+                    repacked_data[i * 4 + 0] = rgb_data[i * 3 + 0];
+                    repacked_data[i * 4 + 1] = rgb_data[i * 3 + 1];
+                    repacked_data[i * 4 + 2] = rgb_data[i * 3 + 2];
+                    repacked_data[i * 4 + 3] = 255;
                 }
+
+                memcpy(stage_data, repacked_data.get(), data_size[0]);
             }
         } else {
             // TODO: get rid of this allocation
@@ -297,7 +302,7 @@ uint32_t Ray::Vk::Scene::AddBindlessTexture(const tex_desc_t &_t) {
             } else {
                 src_fmt = fmt = eTexFormat::RawRG88;
                 data_size[0] = _t.w * _t.h * 2;
-                memcpy(stage_data, _t.data, data_size[0]);
+                memcpy(stage_data, repacked_data.get(), data_size[0]);
             }
         }
     } else if (_t.format == eTextureFormat::RG88) {
@@ -415,8 +420,8 @@ void Ray::Vk::Scene::WriteTextureMips(const color_t<T, N> data[], const int _res
                 const color_t<T, N> c01 = src_data[_MIN(2 * y + 1, src_res[1] - 1) * src_res[0] + (2 * x + 0)];
 
                 color_t<T, N> res;
-                for (int i = 0; i < N; ++i) {
-                    res.v[i] = (c00.v[i] + c10.v[i] + c11.v[i] + c01.v[i]) / 4;
+                for (int j = 0; j < N; ++j) {
+                    res.v[j] = (c00.v[j] + c10.v[j] + c11.v[j] + c01.v[j]) / 4;
                 }
 
                 dst_data.push_back(res);
