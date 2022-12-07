@@ -617,7 +617,10 @@ uint32_t Ray::PreprocessPrims_HLBVH(Span<const prim_t> prims, std::vector<bvh_no
                                     std::vector<uint32_t> &out_indices) {
     std::vector<uint32_t> morton_codes(prims.size());
 
-    Ref::simd_fvec4 whole_min = {std::numeric_limits<float>::max()}, whole_max = {std::numeric_limits<float>::lowest()};
+    Ref::simd_fvec4 whole_min = {std::numeric_limits<float>::max(), std::numeric_limits<float>::max(),
+                                 std::numeric_limits<float>::max(), 0.0f},
+                    whole_max = {std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest(),
+                                 std::numeric_limits<float>::lowest(), 0.0f};
 
     const auto indices_start = uint32_t(out_indices.size());
     out_indices.reserve(out_indices.size() + prims.size());
@@ -631,7 +634,8 @@ uint32_t Ray::PreprocessPrims_HLBVH(Span<const prim_t> prims, std::vector<bvh_no
 
     uint32_t *indices = &out_indices[indices_start];
 
-    const Ref::simd_fvec4 scale = float(1 << BitsPerDim) / (whole_max - whole_min);
+    const Ref::simd_fvec4 scale =
+        float(1 << BitsPerDim) / (whole_max - whole_min + std::numeric_limits<float>::epsilon());
 
     // compute morton codes
     for (int i = 0; i < int(prims.size()); i++) {
@@ -689,7 +693,7 @@ uint32_t Ray::PreprocessPrims_HLBVH(Span<const prim_t> prims, std::vector<bvh_no
 
     // Force spliting until each primitive will be in separate leaf node
     bvh_settings_t s;
-    s.oversplit_threshold = std::numeric_limits<float>::max();
+    s.oversplit_threshold = -1.0f;
     s.allow_spatial_splits = false;
     s.min_primitives_in_leaf = 1;
 

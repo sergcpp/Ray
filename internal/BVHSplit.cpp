@@ -152,7 +152,10 @@ Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, Span<const 
         }
     }
 
-    float res_sah = s.oversplit_threshold * whole_box.surface_area() * float(num_prims);
+    float res_sah = std::numeric_limits<float>::max();
+    if (s.oversplit_threshold > 0.0f) {
+        res_sah = s.oversplit_threshold *whole_box.surface_area() * float(num_prims);
+    }
     int div_axis = -1;
     float div_pos = 0.0f;
     uint32_t div_index = 0;
