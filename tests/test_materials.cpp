@@ -1938,7 +1938,7 @@ void test_refr_mis4(const char *arch_list[], const char *preferred_device) {
 void test_refr_mat0(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 1024;
     const double MinPSNR = 24.97;
-    const int PixThres = 3844;
+    const int PixThres = 3846;
 
     Ray::shading_node_desc_t mat_desc;
     mat_desc.type = Ray::RefractiveNode;
