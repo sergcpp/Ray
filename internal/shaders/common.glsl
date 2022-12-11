@@ -105,6 +105,6 @@ vec3 TransformNormal(vec3 n, mat4 inv_xform) {
 }
 
 #define pack_unorm_16(x) uint(x * 65535.0)
-#define unpack_unorm_16(x) (float(x) / 65535.0)
+#define unpack_unorm_16(x) clamp(float(x) / 65535.0, 0.0, 1.0)
 
 #endif // COMMON_GLSL
