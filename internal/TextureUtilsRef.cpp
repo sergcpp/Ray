@@ -90,6 +90,10 @@ void Ray::Ref::ComputeTangentBasis(size_t vtx_offset, size_t vtx_start, std::vec
             if (std::abs(plane_N[w]) > FLT_EPS) {
                 binormal = normalize(cross(simd_fvec3(plane_N), tangent));
                 tangent = normalize(cross(simd_fvec3(plane_N), binormal));
+
+                // avoid floating-point underflow
+                where(abs(binormal) < FLT_EPS, binormal) = 0.0f;
+                where(abs(tangent) < FLT_EPS, tangent) = 0.0f;
             } else {
                 binormal = {0.0f};
                 tangent = {0.0f};
