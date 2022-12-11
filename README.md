@@ -7,11 +7,11 @@ Small pathtracing library created for learning purposes. Includes CPU and GPU (V
 
 <div>
 <div float="left" >
-  <img src="scene1.jpg" width="49%" />
-  <img src="scene2.jpg" width="49%" />
+  <img src="scene1.jpg" width="48.65%" />
+  <img src="scene2.jpg" width="50%" />
 </div>
 <div float="left">
-  <img src="scene3.jpg" width="98.5%" />
+  <img src="scene3.jpg" width="98.8%" />
 </div>
 </div>
 
