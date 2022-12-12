@@ -162,18 +162,16 @@ class Texture2D {
     void SetSampling(SamplingParams sampling);
     void ApplySampling(const SamplingParams sampling, ILog *log) { SetSampling(sampling); }
 
-    void SetSubImage(int level, int offsetx, int offsety, int sizex, int sizey, eTexFormat format, const void *data,
-                     int data_len);
     void SetSubImage(int level, int offsetx, int offsety, int sizex, int sizey, eTexFormat format, const Buffer &sbuf,
                      void *_cmd_buf, int data_off, int data_len);
-
-    void DownloadTextureData(eTexFormat format, void *out_data) const;
-    void CopyTextureData(const Buffer &sbuf, void *_cmd_buf, int data_off) const;
 };
 
 void CopyImageToImage(void *_cmd_buf, Texture2D &src_tex, uint32_t src_level, uint32_t src_x, uint32_t src_y,
                       Texture2D &dst_tex, uint32_t dst_level, uint32_t dst_x, uint32_t dst_y, uint32_t width,
                       uint32_t height);
+
+void CopyImageToBuffer(const Texture2D &src_tex, int level, int x, int y, int w, int h, const Buffer &dst_buf,
+                       void *_cmd_buf, int data_off);
 
 void ClearColorImage(Texture2D &tex, const float rgba[4], void *_cmd_buf);
 

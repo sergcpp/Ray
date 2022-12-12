@@ -36,6 +36,7 @@ const int NORMALS_TEXTURE = 0;
 const int BASE_TEXTURE = 1;
 const int ROUGH_TEXTURE = 2;
 const int METALLIC_TEXTURE = 3;
+const int SPECULAR_TEXTURE = 4;
 
 const int MIX_MAT1 = 3;
 const int MIX_MAT2 = 4;
@@ -69,6 +70,7 @@ const int LIGHT_TYPE_LINE = 3;
 const int LIGHT_TYPE_RECT = 4;
 const int LIGHT_TYPE_DISK = 5;
 const int LIGHT_TYPE_TRI = 6;
+const int LIGHT_TYPE_ENV = 7;
 
 const int DiffuseNode = 0;
 const int GlossyNode = 1;
@@ -97,6 +99,12 @@ const int ATLAS_TEX_HEIGHT_BITS         = 16383; // 0b0011111111111111
 const UINT_TYPE TEX_SRGB_BIT          = (1u << 24); // 0b00000001
 const UINT_TYPE TEX_RECONSTRUCT_Z_BIT = (2u << 24); // 0b00000010
 const UINT_TYPE TEX_YCOCG_BIT         = (4u << 24); // 0b00000100
+
+const UINT_TYPE TEXTURES_BUF_SLOT = 20;
+const UINT_TYPE TEXTURE_ATLASES_SLOT = 21;
+
+const int FILTER_BOX = 0;
+const int FILTER_TENT = 1;
 
 struct ray_data_t {
 	float o[3], d[3], pdf;
@@ -177,6 +185,13 @@ struct light_t {
 #define DISK_AREA param1.w
 #define DISK_U param2.xyz
 #define DISK_V param3.xyz
+
+#define LINE_POS param1.xyz
+#define LINE_AREA param1.w
+#define LINE_U param2.xyz
+#define LINE_RADIUS param2.w
+#define LINE_V param3.xyz
+#define LINE_HEIGHT param3.w
 
 #define TRI_TRI_INDEX param1.x
 #define TRI_XFORM_INDEX param1.y

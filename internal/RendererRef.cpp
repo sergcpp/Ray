@@ -28,10 +28,6 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
         return;
     }
 
-#ifndef NDEBUG
-    // unsigned int fp_control_state = _controlfp(_EM_INEXACT, _MCW_EM);
-#endif
-
     const camera_t &cam = s->cams_[s->current_cam()].cam;
 
     scene_data_t sc_data;
@@ -136,6 +132,7 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
             const ray_data_t &r = p.primary_rays[i];
             hit_data_t &inter = p.intersections[i];
             inter = {};
+            inter.t = cam.clip_end;
 
             if (macro_tree_root != 0xffffffff) {
                 if (sc_data.mnodes) {

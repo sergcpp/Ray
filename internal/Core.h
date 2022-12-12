@@ -1,12 +1,13 @@
 #pragma once
 
+#include <cmath>
 #include <cstdint>
 
 #include "../SceneBase.h"
 #include "../Types.h"
 #include "Span.h"
 
-//#define USE_RAY_DIFFERENTIALS
+// #define USE_RAY_DIFFERENTIALS
 
 #ifdef __GNUC__
 #define force_inline __attribute__((always_inline)) inline
@@ -21,6 +22,7 @@
 #endif
 
 #define unused(x) ((void)x)
+#define countof(x) (sizeof(x) / sizeof(x[0]))
 
 #include "simd/aligned_allocator.h"
 
@@ -91,11 +93,11 @@ const int MAX_TEXTURE_SIZE = (1 << MAX_MIP_LEVEL);
 
 const int TEXTURE_ATLAS_SIZE = 8192 + 256; // small margin to account for borders
 
-const int ATLAS_TEX_SRGB_BIT            = 0b1000000000000000;
-const int ATLAS_TEX_RECONSTRUCT_Z_BIT   = 0b0100000000000000;
-const int ATLAS_TEX_WIDTH_BITS          = 0b0011111111111111;
-const int ATLAS_TEX_MIPS_BIT            = 0b1000000000000000;
-const int ATLAS_TEX_HEIGHT_BITS         = 0b0011111111111111;
+const int ATLAS_TEX_SRGB_BIT = 0b1000000000000000;
+const int ATLAS_TEX_RECONSTRUCT_Z_BIT = 0b0100000000000000;
+const int ATLAS_TEX_WIDTH_BITS = 0b0011111111111111;
+const int ATLAS_TEX_MIPS_BIT = 0b1000000000000000;
+const int ATLAS_TEX_HEIGHT_BITS = 0b0011111111111111;
 
 struct atlas_texture_t {
     uint16_t width;
@@ -116,6 +118,7 @@ const int NORMALS_TEXTURE = 0;
 const int BASE_TEXTURE = 1;
 const int ROUGH_TEXTURE = 2;
 const int METALLIC_TEXTURE = 3;
+const int SPECULAR_TEXTURE = 4;
 
 const int MIX_MAT1 = 3;
 const int MIX_MAT2 = 4;
@@ -172,9 +175,11 @@ const int LIGHT_TYPE_LINE = 3;
 const int LIGHT_TYPE_RECT = 4;
 const int LIGHT_TYPE_DISK = 5;
 const int LIGHT_TYPE_TRI = 6;
+const int LIGHT_TYPE_ENV = 7;
 
 struct light_t {
-    uint32_t type : 6;
+    uint32_t type : 5;
+    uint32_t cast_shadow : 1;
     uint32_t visible : 1;
     uint32_t sky_portal : 1;
     uint32_t _unused : 24;
@@ -195,6 +200,11 @@ struct light_t {
             float u[3], _unused0;
             float v[3], _unused1;
         } disk;
+        struct {
+            float pos[3], area;
+            float u[3], radius;
+            float v[3], height;
+        } line;
         struct {
             uint32_t tri_index;
             uint32_t xform_index;
@@ -296,8 +306,8 @@ uint32_t FlattenBVH_Recursive(const bvh_node_t *nodes, uint32_t node_index, uint
 bool NaiivePluckerTest(const float p[9], const float o[3], const float d[3]);
 
 void ConstructCamera(eCamType type, eFilterType filter, eDeviceType dtype, const float origin[3], const float fwd[3],
-                     const float up[3], float fov, float gamma, float focus_distance, float focus_factor,
-                     camera_t *cam);
+                     const float up[3], float fov, float sensor_height, float gamma, float focus_distance, float fstop,
+                     float lens_rotation, float lens_ratio, int lens_blades, float clip_start, float clip_end, camera_t *cam);
 
 // Applies 4x4 matrix matrix transform to bounding box
 void TransformBoundingBox(const float bbox_min[3], const float bbox_max[3], const float *xform, float out_bbox_min[3],
@@ -361,12 +371,25 @@ static_assert(sizeof(mesh_instance_t) == 32, "!");
 struct environment_t {
     float env_col[3];
     uint32_t env_map;
+    const float *qtree_mips[16];
+    int qtree_levels;
+    bool multiple_importance;
 };
 
 force_inline float to_norm_float(uint8_t v) {
     uint32_t val = 0x3f800000 + v * 0x8080 + (v + 1) / 2;
     return (float &)val - 1;
 }
+
+force_inline void rgbe_to_rgb(const uint8_t rgbe[4], float out_rgb[3]) {
+    const float f = std::exp2(float(rgbe[3]) - 128.0f);
+    out_rgb[0] = to_norm_float(rgbe[0]) * f;
+    out_rgb[1] = to_norm_float(rgbe[1]) * f;
+    out_rgb[2] = to_norm_float(rgbe[2]) * f;
+}
+
+void CanonicalToDir(const float p[2], float y_rotation, float out_d[3]);
+void DirToCanonical(const float d[3], float y_rotation, float out_p[2]);
 
 extern const uint8_t morton_table_16[];
 extern const int morton_table_256[];

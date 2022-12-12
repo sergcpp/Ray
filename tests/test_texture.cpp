@@ -30,7 +30,6 @@ void test_texture() {
     cam_desc.fov = 90.0f;
     cam_desc.gamma = 1.0f;
     cam_desc.focus_distance = 1.0f;
-    cam_desc.focus_factor = 0.0f;
 
     // Setup environment
     Ray::environment_desc_t env_desc;

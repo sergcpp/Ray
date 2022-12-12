@@ -12,15 +12,15 @@ stages:
     - echo "Compiling the code..."
     - mkdir build
     - cd build
-    - cmake .. -G "Visual Studio 17 2022" -A x64 -DENABLE_UNITYBUILD=ON -DENABLE_REF_IMPL=ON -DENABLE_ASAN=ON
+    - cmake .. -G "Visual Studio 17 2022" -A x64 -DENABLE_UNITYBUILD=ON -DENABLE_REF_IMPL=ON
     - cd ..
-    - cmake --build build --target ALL_BUILD --config Release --parallel 8
-    - cmake --build build --target ALL_BUILD --config Debug --parallel 8
-    - cmake --build build --target ALL_BUILD --config RelWithDebInfo --parallel 8
+    - cmake --build build --target ALL_BUILD --config Release --parallel 16
+    - cmake --build build --target ALL_BUILD --config Asan --parallel 16
+    - cmake --build build --target ALL_BUILD --config RelWithDebInfo --parallel 16
     - echo "Compile complete."
     - mkdir windows-x86_64
     - copy build/tests/Release/test_Ray.exe windows-x86_64
-    - copy build/tests/Debug/test_Ray-dbg.exe windows-x86_64
+    - copy build/tests/Asan/test_Ray-asan.exe windows-x86_64
   artifacts:
     name: windows-x86_64
     paths:
@@ -35,11 +35,11 @@ stages:
     - echo "Compiling the code..."
     - mkdir build
     - cd build
-    - cmake .. -G "Visual Studio 17 2022" -A ARM64 -DENABLE_UNITYBUILD=ON -DENABLE_REF_IMPL=ON -DENABLE_ASAN=ON
+    - cmake .. -G "Visual Studio 17 2022" -A ARM64 -DENABLE_UNITYBUILD=ON -DENABLE_REF_IMPL=ON
     - cd ..
-    - cmake --build build --target ALL_BUILD --config Release --parallel 8
-    - cmake --build build --target ALL_BUILD --config Debug --parallel 8
-    - cmake --build build --target ALL_BUILD --config RelWithDebInfo --parallel 8
+    - cmake --build build --target ALL_BUILD --config Release --parallel 16
+    - cmake --build build --target ALL_BUILD --config Debug --parallel 16
+    - cmake --build build --target ALL_BUILD --config RelWithDebInfo --parallel 16
     - echo "Compile complete."
     - mkdir windows-arm64
     - copy build/tests/Release/test_Ray.exe windows-arm64
@@ -62,15 +62,15 @@ stages:
     - cd ..
     - mkdir build_dbg
     - cd build_dbg
-    - cmake .. -DCMAKE_BUILD_TYPE=Debug -DENABLE_UNITYBUILD=ON -DENABLE_REF_IMPL=ON -DENABLE_ASAN=ON
+    - cmake .. -DCMAKE_BUILD_TYPE=Debug -DENABLE_UNITYBUILD=ON -DENABLE_REF_IMPL=ON
     - cd ..
     - mkdir build_dev
     - cd build_dev
     - cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo -DENABLE_UNITYBUILD=ON -DENABLE_REF_IMPL=ON
     - cd ..
-    - cmake --build build --target all --parallel 8
-    - cmake --build build_dbg --target all --parallel 8
-    - cmake --build build_dev --target all --parallel 8
+    - cmake --build build --target all --parallel 16
+    - cmake --build build_dbg --target all --parallel 16
+    - cmake --build build_dev --target all --parallel 16
     - echo "Compile complete."
     - mkdir linux-x86_64
     - cp build/tests/test_Ray linux-x86_64
@@ -92,15 +92,15 @@ stages:
     - cd ..
     - mkdir build_dbg
     - cd build_dbg
-    - cmake .. -DCMAKE_APPLE_SILICON_PROCESSOR=x86_64 -DCMAKE_BUILD_TYPE=Debug -DENABLE_UNITYBUILD=ON -DENABLE_REF_IMPL=ON -DENABLE_ASAN=ON
+    - cmake .. -DCMAKE_APPLE_SILICON_PROCESSOR=x86_64 -DCMAKE_BUILD_TYPE=Debug -DENABLE_UNITYBUILD=ON -DENABLE_REF_IMPL=ON
     - cd ..
     - mkdir build_dev
     - cd build_dev
     - cmake .. -DCMAKE_APPLE_SILICON_PROCESSOR=x86_64 -DCMAKE_BUILD_TYPE=RelWithDebInfo -DENABLE_UNITYBUILD=ON -DENABLE_REF_IMPL=ON
     - cd ..
-    - cmake --build build --target all --parallel 8
-    - cmake --build build_dbg --target all --parallel 8
-    - cmake --build build_dev --target all --parallel 8
+    - cmake --build build --target all --parallel 16
+    - cmake --build build_dbg --target all --parallel 16
+    - cmake --build build_dev --target all --parallel 16
     - echo "Compile complete."
     - mkdir macos-x86_64
     - cp build/tests/test_Ray macos-x86_64
@@ -122,15 +122,15 @@ stages:
     - cd ..
     - mkdir build_dbg
     - cd build_dbg
-    - cmake .. -DCMAKE_APPLE_SILICON_PROCESSOR=arm64 -DCMAKE_BUILD_TYPE=Debug -DENABLE_UNITYBUILD=ON -DENABLE_REF_IMPL=ON -DENABLE_ASAN=ON
+    - cmake .. -DCMAKE_APPLE_SILICON_PROCESSOR=arm64 -DCMAKE_BUILD_TYPE=Debug -DENABLE_UNITYBUILD=ON -DENABLE_REF_IMPL=ON
     - cd ..
     - mkdir build_dev
     - cd build_dev
     - cmake .. -DCMAKE_APPLE_SILICON_PROCESSOR=arm64 -DCMAKE_BUILD_TYPE=RelWithDebInfo -DENABLE_UNITYBUILD=ON -DENABLE_REF_IMPL=ON
     - cd ..
-    - cmake --build build --target all --parallel 8
-    - cmake --build build_dbg --target all --parallel 8
-    - cmake --build build_dev --target all --parallel 8
+    - cmake --build build --target all --parallel 16
+    - cmake --build build_dbg --target all --parallel 16
+    - cmake --build build_dev --target all --parallel 16
     - echo "Compile complete."
     - mkdir macos-arm64
     - cp build/tests/test_Ray macos-arm64
@@ -163,7 +163,7 @@ stages:
   script:
     - echo "Running tests..."
     - cd tests
-    - '& "../$BIN_DIR/test_Ray-dbg" $AUX_TEST_ARGS.split(" ")'
+    - '& "../$BIN_DIR/test_Ray-asan" $AUX_TEST_ARGS.split(" ")'
     - cd ../
   after_script:
     - cp tests/test_data/material_*.tga ./
@@ -245,6 +245,19 @@ windows-x86_64-cpu-test-asan-job:
     - windows-x86_64-build-job
   tags:
     - windows,x86_64,fastcpu
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+
+windows-x86_64-gpu-nv-test-asan-job:
+  variables:
+    BIN_DIR: windows-x86_64
+    AUX_TEST_ARGS: '-d NV --nocpu'
+  extends:
+    - .windows-test-asan-job
+  needs:
+    - windows-x86_64-build-job
+  tags:
+    - windows,x86_64,nv
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
 
@@ -381,6 +394,8 @@ deploy-job:
   needs:
     - windows-x86_64-cpu-test-job
     - job: windows-x86_64-cpu-test-asan-job
+      optional: true
+    - job: windows-x86_64-gpu-nv-test-asan-job
       optional: true
     - windows-x86_64-gpu-amd-test-job
     - windows-x86_64-gpu-nv-test-job

@@ -54,6 +54,12 @@ class Scene : public SceneBase {
     Vector<uint32_t> visible_lights_;
 
     environment_t env_;
+    uint32_t env_map_light_ = 0xffffffff;
+    struct {
+        int res = -1;
+        SmallVector<aligned_vector<simd_fvec4>, 16> mips;
+        Texture2D tex;
+    } env_map_qtree_;
 
     uint32_t macro_nodes_start_ = 0xffffffff, macro_nodes_count_ = 0;
 
@@ -70,6 +76,7 @@ class Scene : public SceneBase {
     void RebuildTLAS();
     // void RebuildLightBVH();
 
+    void PrepareEnvMapQTree();
     void GenerateTextureMips();
     void PrepareBindlessTextures();
     void RebuildHWAccStructures();
@@ -108,17 +115,14 @@ class Scene : public SceneBase {
     uint32_t AddLight(const sphere_light_desc_t &l) override;
     uint32_t AddLight(const rect_light_desc_t &l, const float *xform) override;
     uint32_t AddLight(const disk_light_desc_t &l, const float *xform) override;
+    uint32_t AddLight(const line_light_desc_t &l, const float *xform) override;
     void RemoveLight(uint32_t i) override;
 
     uint32_t AddMeshInstance(uint32_t m_index, const float *xform) override;
     void SetMeshInstanceTransform(uint32_t mi_index, const float *xform) override;
     void RemoveMeshInstance(uint32_t) override;
 
-    void Finalize() override {
-        GenerateTextureMips();
-        PrepareBindlessTextures();
-        RebuildHWAccStructures();
-    }
+    void Finalize() override;
 
     uint32_t triangle_count() override { return (uint32_t)0; }
     uint32_t node_count() override { return (uint32_t)0; }

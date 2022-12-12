@@ -33,6 +33,7 @@ void Ray::Ref::Scene::GetEnvironment(environment_desc_t &env) {
 void Ray::Ref::Scene::SetEnvironment(const environment_desc_t &env) {
     memcpy(&env_.env_col, &env.env_col[0], 3 * sizeof(float));
     env_.env_map = env.env_map;
+    env_.multiple_importance = env.multiple_importance;
 }
 
 uint32_t Ray::Ref::Scene::AddTexture(const tex_desc_t &_t) {
@@ -108,7 +109,7 @@ uint32_t Ray::Ref::Scene::AddMaterial(const shading_node_desc_t &m) {
 
     mat.type = m.type;
     mat.textures[BASE_TEXTURE] = m.base_texture;
-    mat.roughness_unorm = pack_unorm_16(m.roughness);
+    mat.roughness_unorm = pack_unorm_16(_CLAMP(m.roughness, 0.0f, 1.0f));
     mat.textures[ROUGH_TEXTURE] = m.roughness_texture;
     memcpy(&mat.base_color[0], &m.base_color[0], 3 * sizeof(float));
     mat.int_ior = m.int_ior;
@@ -171,6 +172,7 @@ uint32_t Ray::Ref::Scene::AddMaterial(const principled_mat_desc_t &m) {
     main_mat.normal_map_strength_unorm = pack_unorm_16(_CLAMP(m.normal_map_intensity, 0.0f, 1.0f));
     main_mat.anisotropic_unorm = pack_unorm_16(_CLAMP(m.anisotropic, 0.0f, 1.0f));
     main_mat.specular_unorm = pack_unorm_16(_CLAMP(m.specular, 0.0f, 1.0f));
+    main_mat.textures[SPECULAR_TEXTURE] = m.specular_texture;
     main_mat.specular_tint_unorm = pack_unorm_16(_CLAMP(m.specular_tint, 0.0f, 1.0f));
     main_mat.clearcoat_unorm = pack_unorm_16(_CLAMP(m.clearcoat, 0.0f, 1.0f));
     main_mat.clearcoat_roughness_unorm = pack_unorm_16(_CLAMP(m.clearcoat_roughness, 0.0f, 1.0f));
@@ -416,7 +418,9 @@ uint32_t Ray::Ref::Scene::AddLight(const directional_light_desc_t &_l) {
     light_t l = {};
 
     l.type = LIGHT_TYPE_DIR;
+    l.cast_shadow = _l.cast_shadow;
     l.visible = false;
+
     memcpy(&l.col[0], &_l.color[0], 3 * sizeof(float));
     l.dir.dir[0] = -_l.direction[0];
     l.dir.dir[1] = -_l.direction[1];
@@ -432,6 +436,7 @@ uint32_t Ray::Ref::Scene::AddLight(const sphere_light_desc_t &_l) {
     light_t l = {};
 
     l.type = LIGHT_TYPE_SPHERE;
+    l.cast_shadow = _l.cast_shadow;
     l.visible = _l.visible;
 
     memcpy(&l.col[0], &_l.color[0], 3 * sizeof(float));
@@ -452,6 +457,7 @@ uint32_t Ray::Ref::Scene::AddLight(const rect_light_desc_t &_l, const float *xfo
     light_t l = {};
 
     l.type = LIGHT_TYPE_RECT;
+    l.cast_shadow = _l.cast_shadow;
     l.visible = _l.visible;
     l.sky_portal = _l.sky_portal;
 
@@ -481,6 +487,7 @@ uint32_t Ray::Ref::Scene::AddLight(const disk_light_desc_t &_l, const float *xfo
     light_t l = {};
 
     l.type = LIGHT_TYPE_DISK;
+    l.cast_shadow = _l.cast_shadow;
     l.visible = _l.visible;
     l.sky_portal = _l.sky_portal;
 
@@ -497,6 +504,38 @@ uint32_t Ray::Ref::Scene::AddLight(const disk_light_desc_t &_l, const float *xfo
 
     memcpy(l.disk.u, value_ptr(uvec), 3 * sizeof(float));
     memcpy(l.disk.v, value_ptr(vvec), 3 * sizeof(float));
+
+    const uint32_t light_index = lights_.push(l);
+    li_indices_.push_back(light_index);
+    if (_l.visible) {
+        visible_lights_.push_back(light_index);
+    }
+    return light_index;
+}
+
+uint32_t Ray::Ref::Scene::AddLight(const line_light_desc_t &_l, const float *xform) {
+    light_t l = {};
+
+    l.type = LIGHT_TYPE_LINE;
+    l.cast_shadow = _l.cast_shadow;
+    l.visible = _l.visible;
+    l.sky_portal = _l.sky_portal;
+
+    memcpy(&l.col[0], &_l.color[0], 3 * sizeof(float));
+
+    l.line.pos[0] = xform[12];
+    l.line.pos[1] = xform[13];
+    l.line.pos[2] = xform[14];
+
+    l.line.area = 2.0f * PI * _l.radius * _l.height;
+
+    const simd_fvec4 uvec = TransformDirection(simd_fvec4{1.0f, 0.0f, 0.0f, 0.0f}, xform);
+    const simd_fvec4 vvec = TransformDirection(simd_fvec4{0.0f, 1.0f, 0.0f, 0.0f}, xform);
+
+    memcpy(l.line.u, value_ptr(uvec), 3 * sizeof(float));
+    l.line.radius = _l.radius;
+    memcpy(l.line.v, value_ptr(vvec), 3 * sizeof(float));
+    l.line.height = _l.height;
 
     const uint32_t light_index = lights_.push(l);
     li_indices_.push_back(light_index);
@@ -542,6 +581,7 @@ uint32_t Ray::Ref::Scene::AddMeshInstance(const uint32_t mesh_index, const float
             if (front_mat.type == EmissiveNode &&
                 (front_mat.flags & (MAT_FLAG_MULT_IMPORTANCE | MAT_FLAG_SKY_PORTAL))) {
                 light_t new_light = {};
+                new_light.cast_shadow = 1;
                 new_light.type = LIGHT_TYPE_TRI;
                 new_light.visible = 0;
                 new_light.sky_portal = 0;
@@ -581,7 +621,27 @@ void Ray::Ref::Scene::RemoveMeshInstance(uint32_t i) {
     RebuildTLAS();
 }
 
-void Ray::Ref::Scene::Finalize() {}
+void Ray::Ref::Scene::Finalize() {
+    if (env_map_light_ != 0xffffffff) {
+        RemoveLight(env_map_light_);
+    }
+    env_map_qtree_ = {};
+    env_.qtree_levels = 0;
+
+    if (env_.env_map != 0xffffffff && env_.multiple_importance) {
+        PrepareEnvMapQTree();
+        { // add env light source
+            light_t l = {};
+
+            l.type = LIGHT_TYPE_ENV;
+            l.cast_shadow = 1;
+            l.col[0] = l.col[1] = l.col[2] = 1.0f;
+
+            env_map_light_ = lights_.push(l);
+            li_indices_.push_back(env_map_light_);
+        }
+    }
+}
 
 void Ray::Ref::Scene::RemoveTris(uint32_t tris_index, uint32_t tris_count) {
     if (!tris_count) {
@@ -681,7 +741,8 @@ void Ray::Ref::Scene::RebuildTLAS() {
     primitives.reserve(mesh_instances_.size());
 
     for (const mesh_instance_t &mi : mesh_instances_) {
-        primitives.push_back({0, 0, 0, Ref::simd_fvec4{mi.bbox_min}, Ref::simd_fvec4{mi.bbox_max}});
+        primitives.push_back({0, 0, 0, Ref::simd_fvec4{mi.bbox_min[0], mi.bbox_min[1], mi.bbox_min[2], 0.0f},
+                              Ref::simd_fvec4{mi.bbox_max[0], mi.bbox_max[1], mi.bbox_max[2], 0.0f}});
     }
 
     macro_nodes_root_ = uint32_t(nodes_.size());
@@ -697,6 +758,140 @@ void Ray::Ref::Scene::RebuildTLAS() {
         // nodes_ is temporary storage when wide BVH is used
         nodes_.clear();
     }
+}
+
+void Ray::Ref::Scene::PrepareEnvMapQTree() {
+    const int tex = (env_.env_map & 0x00ffffff);
+    simd_ivec2 size;
+    tex_storage_rgba_.GetIRes(tex, 0, &size[0]);
+
+    const int lowest_dim = std::min(size[0], size[1]);
+
+    env_map_qtree_.res = 1;
+    while (2 * env_map_qtree_.res < lowest_dim) {
+        env_map_qtree_.res *= 2;
+    }
+
+    assert(env_map_qtree_.mips.empty());
+
+    int cur_res = env_map_qtree_.res;
+    float total_lum = 0.0f;
+
+    { // initialize the first quadtree level
+        env_map_qtree_.mips.emplace_back(cur_res * cur_res / 4, 0.0f);
+
+        for (int y = 0; y < size[1]; ++y) {
+            const float theta = PI * float(y) / size[1];
+            for (int x = 0; x < size[0]; ++x) {
+                const float phi = 2.0f * PI * float(x) / size[0];
+
+                const color_rgba8_t col_rgbe = tex_storage_rgba_.Get(tex, x, y, 0);
+                const simd_fvec4 col_rgb = rgbe_to_rgb(col_rgbe);
+
+                const float cur_lum = (col_rgb[0] + col_rgb[1] + col_rgb[2]);
+
+                simd_fvec4 dir;
+                dir[0] = std::sin(theta) * std::cos(phi);
+                dir[1] = std::cos(theta);
+                dir[2] = std::sin(theta) * std::sin(phi);
+
+                simd_fvec2 q;
+                DirToCanonical(value_ptr(dir), 0.0f, &q[0]);
+
+                int qx = _CLAMP(int(cur_res * q[0]), 0, cur_res - 1);
+                int qy = _CLAMP(int(cur_res * q[1]), 0, cur_res - 1);
+
+                int index = 0;
+                index |= (qx & 1) << 0;
+                index |= (qy & 1) << 1;
+
+                qx /= 2;
+                qy /= 2;
+
+                float &q_lum = env_map_qtree_.mips[0][qy * cur_res / 2 + qx][index];
+                q_lum = std::max(q_lum, cur_lum);
+            }
+        }
+
+        for (const simd_fvec4 &v : env_map_qtree_.mips[0]) {
+            total_lum += (v[0] + v[1] + v[2] + v[3]);
+        }
+
+        cur_res /= 2;
+    }
+
+    while (cur_res > 1) {
+        env_map_qtree_.mips.emplace_back(cur_res * cur_res / 4, 0.0f);
+        const auto &prev_mip = env_map_qtree_.mips[env_map_qtree_.mips.size() - 2];
+
+        for (int y = 0; y < cur_res; ++y) {
+            for (int x = 0; x < cur_res; ++x) {
+                const float res_lum = prev_mip[y * cur_res + x][0] + prev_mip[y * cur_res + x][1] +
+                                      prev_mip[y * cur_res + x][2] + prev_mip[y * cur_res + x][3];
+
+                int index = 0;
+                index |= (x & 1) << 0;
+                index |= (y & 1) << 1;
+
+                const int qx = (x / 2);
+                const int qy = (y / 2);
+
+                env_map_qtree_.mips.back()[qy * cur_res / 2 + qx][index] = res_lum;
+            }
+        }
+
+        cur_res /= 2;
+    }
+
+    //
+    // Determine how many levels was actually required
+    //
+
+    const float LumFractThreshold = 0.01f;
+
+    cur_res = 2;
+    int the_last_required_lod;
+    for (int lod = int(env_map_qtree_.mips.size()) - 1; lod >= 0; --lod) {
+        the_last_required_lod = lod;
+        const auto &cur_mip = env_map_qtree_.mips[lod];
+
+        bool subdivision_required = false;
+        for (int y = 0; y < (cur_res / 2) && !subdivision_required; ++y) {
+            for (int x = 0; x < (cur_res / 2) && !subdivision_required; ++x) {
+                const simd_ivec4 mask = simd_cast(cur_mip[y * cur_res / 2 + x] > LumFractThreshold * total_lum);
+                subdivision_required |= mask.not_all_zeros();
+            }
+        }
+
+        if (!subdivision_required) {
+            break;
+        }
+
+        cur_res *= 2;
+    }
+
+    //
+    // Drop not needed levels
+    //
+
+    while (the_last_required_lod != 0) {
+        for (int i = 1; i < int(env_map_qtree_.mips.size()); ++i) {
+            env_map_qtree_.mips[i - 1] = std::move(env_map_qtree_.mips[i]);
+        }
+        env_map_qtree_.res /= 2;
+        env_map_qtree_.mips.pop_back();
+        --the_last_required_lod;
+    }
+
+    env_.qtree_levels = int(env_map_qtree_.mips.size());
+    for (int i = 0; i < env_.qtree_levels; ++i) {
+        env_.qtree_mips[i] = value_ptr(env_map_qtree_.mips[i][0]);
+    }
+    for (int i = env_.qtree_levels; i < countof(env_.qtree_mips); ++i) {
+        env_.qtree_mips[i] = nullptr;
+    }
+
+    log_->Info("Env map qtree res is %i", env_map_qtree_.res);
 }
 
 #undef _CLAMP

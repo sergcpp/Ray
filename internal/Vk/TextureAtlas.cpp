@@ -858,4 +858,73 @@ void Ray::Vk::TextureAtlas::WritePageData(const int page, const int posx, const 
     temp_sbuf.FreeImmediate();
 }
 
+void Ray::Vk::TextureAtlas::CopyRegionTo(const int page, const int x, const int y, const int w, const int h,
+                                         const Buffer &dst_buf, void *_cmd_buf, const int data_off) const {
+    VkCommandBuffer cmd_buf = reinterpret_cast<VkCommandBuffer>(_cmd_buf);
+
+    VkPipelineStageFlags src_stages = 0, dst_stages = 0;
+    SmallVector<VkBufferMemoryBarrier, 1> buf_barriers;
+    SmallVector<VkImageMemoryBarrier, 1> img_barriers;
+
+    if (resource_state != eResState::CopySrc) {
+        auto &new_barrier = img_barriers.emplace_back();
+        new_barrier = {VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
+        new_barrier.srcAccessMask = VKAccessFlagsForState(resource_state);
+        new_barrier.dstAccessMask = VKAccessFlagsForState(eResState::CopySrc);
+        new_barrier.oldLayout = VKImageLayoutForState(resource_state);
+        new_barrier.newLayout = VKImageLayoutForState(eResState::CopySrc);
+        new_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        new_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        new_barrier.image = vk_image();
+        new_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        new_barrier.subresourceRange.baseMipLevel = 0;
+        new_barrier.subresourceRange.levelCount = 1;
+        new_barrier.subresourceRange.baseArrayLayer = 0;
+        new_barrier.subresourceRange.layerCount = 1;
+
+        src_stages |= VKPipelineStagesForState(resource_state);
+        dst_stages |= VKPipelineStagesForState(eResState::CopySrc);
+    }
+
+    if (dst_buf.resource_state != eResState::Undefined && dst_buf.resource_state != eResState::CopyDst) {
+        auto &new_barrier = buf_barriers.emplace_back();
+        new_barrier = {VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER};
+        new_barrier.srcAccessMask = VKAccessFlagsForState(dst_buf.resource_state);
+        new_barrier.dstAccessMask = VKAccessFlagsForState(eResState::CopyDst);
+        new_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        new_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        new_barrier.buffer = dst_buf.vk_handle();
+        new_barrier.offset = VkDeviceSize(0);
+        new_barrier.size = VkDeviceSize(dst_buf.size());
+
+        src_stages |= VKPipelineStagesForState(dst_buf.resource_state);
+        dst_stages |= VKPipelineStagesForState(eResState::CopyDst);
+    }
+
+    if (!buf_barriers.empty() || !img_barriers.empty()) {
+        vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, dst_stages, 0, 0,
+                             nullptr, uint32_t(buf_barriers.size()), buf_barriers.cdata(),
+                             uint32_t(img_barriers.size()), img_barriers.cdata());
+    }
+
+    resource_state = eResState::CopySrc;
+    dst_buf.resource_state = eResState::CopyDst;
+
+    VkBufferImageCopy region = {};
+
+    region.bufferOffset = VkDeviceSize(data_off);
+    region.bufferRowLength = 0;
+    region.bufferImageHeight = 0;
+
+    region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    region.imageSubresource.mipLevel = 0;
+    region.imageSubresource.baseArrayLayer = page;
+    region.imageSubresource.layerCount = 1;
+
+    region.imageOffset = {int32_t(x), int32_t(y), 0};
+    region.imageExtent = {uint32_t(w), uint32_t(h), 1};
+
+    vkCmdCopyImageToBuffer(cmd_buf, vk_image(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dst_buf.vk_handle(), 1, &region);
+}
+
 #undef _MIN

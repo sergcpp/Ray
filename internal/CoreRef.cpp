@@ -682,7 +682,7 @@ force_inline float int_as_float(const int32_t v) { return reinterpret_cast<const
 simd_fvec4 offset_ray(const simd_fvec4 &p, const simd_fvec4 &n) {
     const float Origin = 1.0f / 32.0f;
     const float FloatScale = 1.0f / 65536.0f;
-    const float IntScale = 256.0f;
+    const float IntScale = 128.0f; // 256.0f;
 
     const simd_ivec4 of_i(IntScale * n);
 
@@ -1027,6 +1027,27 @@ force_inline float fract(const float v) {
     return std::modf(v, &_unused);
 }
 
+force_inline bool quadratic(float a, float b, float c, float &t0, float &t1) {
+    const float d = b * b - 4.0f * a * c;
+    if (d < 0.0f) {
+        return false;
+    }
+    const float sqrt_d = std::sqrt(d);
+    float q;
+    if (b < 0.0f) {
+        q = -0.5f * (b - sqrt_d);
+    } else {
+        q = -0.5f * (b + sqrt_d);
+    }
+    t0 = q / a;
+    t1 = c / q;
+    return true;
+}
+
+force_inline float ngon_rad(const float theta, const float n) {
+    return std::cos(PI / n) / std::cos(theta - (2.0f * PI / n) * std::floor((n * theta + PI) / (2.0f * PI)));
+}
+
 } // namespace Ref
 } // namespace Ray
 
@@ -1037,7 +1058,7 @@ Ray::Ref::hit_data_t::hit_data_t() {
     t = MAX_DIST;
 }
 
-void Ray::Ref::GeneratePrimaryRays(int iteration, const camera_t &cam, const rect_t &r, const int w, const int h,
+void Ray::Ref::GeneratePrimaryRays(const int iteration, const camera_t &cam, const rect_t &r, const int w, const int h,
                                    const float *halton, aligned_vector<ray_data_t> &out_rays) {
     const auto cam_origin = simd_fvec4{cam.origin[0], cam.origin[1], cam.origin[2], 0.0f},
                fwd = simd_fvec4{cam.fwd[0], cam.fwd[1], cam.fwd[2], 0.0f},
@@ -1050,8 +1071,7 @@ void Ray::Ref::GeneratePrimaryRays(int iteration, const camera_t &cam, const rec
     const float fov_k = temp * focus_distance;
     const float spread_angle = std::atan(2.0f * temp / float(h));
 
-    auto get_pix_dir = [k, fov_k, focus_distance, cam_origin, fwd, side, up, w, h](const float x, const float y,
-                                                                                   const simd_fvec4 &origin) {
+    auto get_pix_dir = [&](const float x, const float y, const simd_fvec4 &origin) {
         simd_fvec4 p(2 * fov_k * float(x) / float(w) - fov_k, 2 * fov_k * float(-y) / float(h) + fov_k, focus_distance,
                      0.0f);
         p = cam_origin + k * p[0] * side + p[1] * up + p[2] * fwd;
@@ -1095,17 +1115,44 @@ void Ray::Ref::GeneratePrimaryRays(int iteration, const camera_t &cam, const rec
                 _y += fract(halton[RAND_DIM_FILTER_V] + sample_off[1]);
             }
 
-            const float ff1 = cam.focus_factor * (-0.5f + fract(halton[RAND_DIM_LENS_U] + sample_off[0]));
-            const float ff2 = cam.focus_factor * (-0.5f + fract(halton[RAND_DIM_LENS_V] + sample_off[1]));
+            simd_fvec2 offset = 0.0f;
 
-            const simd_fvec4 _origin = cam_origin + side * ff1 + up * ff2;
+            if (cam.fstop > 0.0f) {
+                const float r1 = fract(halton[RAND_DIM_LENS_U] + sample_off[0]);
+                const float r2 = fract(halton[RAND_DIM_LENS_V] + sample_off[1]);
+
+                offset = 2.0f * simd_fvec2{r1, r2} - simd_fvec2{1.0f, 1.0f};
+                if (offset[0] != 0.0f && offset[1] != 0.0f) {
+                    float theta, r;
+                    if (std::abs(offset[0]) > std::abs(offset[1])) {
+                        r = offset[0];
+                        theta = 0.25f * PI * (offset[1] / offset[0]);
+                    } else {
+                        r = offset[1];
+                        theta = 0.5f * PI - 0.25f * PI * (offset[0] / offset[1]);
+                    }
+
+                    if (cam.lens_blades) {
+                        r *= ngon_rad(theta, float(cam.lens_blades));
+                    }
+
+                    theta += cam.lens_rotation;
+
+                    offset[0] = 0.5f * r * std::cos(theta) / cam.lens_ratio;
+                    offset[1] = 0.5f * r * std::sin(theta);
+                }
+
+                const float coc = 0.5f * (cam.focal_length / cam.fstop);
+                offset *= coc * cam.sensor_height;
+            }
+
+            const simd_fvec4 _origin = cam_origin + side * offset[0] + up * offset[1];
 
             const simd_fvec4 _d = get_pix_dir(_x, _y, _origin);
-
             const simd_fvec4 _dx = get_pix_dir(_x + 1, _y, _origin), _dy = get_pix_dir(_x, _y + 1, _origin);
 
             for (int j = 0; j < 3; j++) {
-                out_r.o[j] = _origin[j];
+                out_r.o[j] = _origin[j] + _d[j] * cam.clip_start;
                 out_r.d[j] = _d[j];
                 out_r.c[j] = 1.0f;
 
@@ -2297,7 +2344,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Sample_GGXRefraction_BSDF(const simd_fvec4 &T, co
         const simd_fvec4 V = normalize(eta * I + m * N);
 
         out_V = simd_fvec4{V[0], V[1], V[2], m};
-        return simd_fvec4{1e6f};
+        return simd_fvec4{refr_col[0] * 1e6f, refr_col[1] * 1e6f, refr_col[2] * 1e6f, 1e6f};
     }
 
     const simd_fvec4 view_dir_ts = normalize(tangent_from_world(T, B, N, -I));
@@ -2387,6 +2434,110 @@ Ray::Ref::simd_fvec4 Ray::Ref::Sample_PrincipledClearcoat_BSDF(const simd_fvec4 
 
     return Evaluate_PrincipledClearcoat_BSDF(view_dir_ts, sampled_normal_ts, reflected_dir_ts, clearcoat_roughness2,
                                              clearcoat_ior, clearcoat_F0);
+}
+
+float Ray::Ref::Evaluate_EnvQTree(const float y_rotation, const simd_fvec4 *const *qtree_mips, const int qtree_levels,
+                                  const simd_fvec4 &L) {
+    int res = 2;
+    int lod = qtree_levels - 1;
+
+    simd_fvec2 p;
+    DirToCanonical(value_ptr(L), y_rotation, &p[0]);
+    float factor = 1.0f;
+
+    while (lod >= 0) {
+        const int x = clamp(int(p[0] * res), 0, res - 1);
+        const int y = clamp(int(p[1] * res), 0, res - 1);
+
+        int index = 0;
+        index |= (x & 1) << 0;
+        index |= (y & 1) << 1;
+
+        const int qx = x / 2;
+        const int qy = y / 2;
+
+        const simd_fvec4 quad = qtree_mips[lod][qy * res / 2 + qx];
+        const float total = quad[0] + quad[1] + quad[2] + quad[3];
+        if (total <= 0.0f) {
+            break;
+        }
+
+        factor *= 4.0f * quad[index] / total;
+
+        --lod;
+        res *= 2;
+    }
+
+    return factor / (4.0f * PI);
+}
+
+Ray::Ref::simd_fvec4 Ray::Ref::Sample_EnvQTree(const float y_rotation, const simd_fvec4 *const *qtree_mips,
+                                               const int qtree_levels, const float rand, const float rx,
+                                               const float ry) {
+    int res = 2;
+    float step = 1.0f / float(res);
+
+    float sample = rand;
+    int lod = qtree_levels - 1;
+
+    simd_fvec2 origin = {0.0f, 0.0f};
+    float factor = 1.0f;
+
+    while (lod >= 0) {
+        const int qx = int(origin[0] * res) / 2;
+        const int qy = int(origin[1] * res) / 2;
+
+        const simd_fvec4 quad = qtree_mips[lod][qy * res / 2 + qx];
+
+        const float top_left = quad[0];
+        const float top_right = quad[1];
+        float partial = top_left + quad[2];
+        const float total = partial + top_right + quad[3];
+        if (total <= 0.0f) {
+            break;
+        }
+
+        float boundary = partial / total;
+
+        int index = 0;
+        if (sample < boundary) {
+            assert(partial > 0.0f);
+            sample /= boundary;
+            boundary = top_left / partial;
+        } else {
+            partial = total - partial;
+            assert(partial > 0.0f);
+            origin[0] += step;
+            sample = (sample - boundary) / (1.0f - boundary);
+            boundary = top_right / partial;
+            index |= (1 << 0);
+        }
+
+        if (sample < boundary) {
+            sample /= boundary;
+        } else {
+            origin[1] += step;
+            sample = (sample - boundary) / (1.0f - boundary);
+            index |= (1 << 1);
+        }
+
+        factor *= 4.0f * quad[index] / total;
+
+        --lod;
+        res *= 2;
+        step *= 0.5f;
+    }
+
+    origin += 2 * step * simd_fvec2{rx, ry};
+
+    // origin = simd_fvec2{rx, ry};
+    // factor = 1.0f;
+
+    simd_fvec4 dir_and_pdf;
+    CanonicalToDir(value_ptr(origin), y_rotation, &dir_and_pdf[0]);
+    dir_and_pdf[3] = factor / (4.0f * PI);
+
+    return dir_and_pdf;
 }
 
 void Ray::Ref::TransformRay(const float ro[3], const float rd[3], const float *xform, float out_ro[3],
@@ -2547,27 +2698,34 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleAnisotropic(const TexStorageBase *const tex
 }
 
 Ray::Ref::simd_fvec4 Ray::Ref::SampleLatlong_RGBE(const TexStorageRGBA &storage, const uint32_t index,
-                                                  const simd_fvec4 &dir) {
+                                                  const simd_fvec4 &dir, float y_rotation) {
     const float theta = std::acos(clamp(dir[1], -1.0f, 1.0f)) / PI;
     const float r = std::sqrt(dir[0] * dir[0] + dir[2] * dir[2]);
-    float u = 0.5f * std::acos(r > FLT_EPS ? clamp(dir[0] / r, -1.0f, 1.0f) : 0.0f) / PI;
+
+    float phi = std::acos(r > FLT_EPS ? clamp(dir[0] / r, -1.0f, 1.0f) : 0.0f) + y_rotation;
+    if (phi < 0) {
+        phi += 2 * PI;
+    }
+    if (phi > 2 * PI) {
+        phi -= 2 * PI;
+    }
+
+    float u = 0.5f * phi / PI;
     if (dir[2] < 0.0f) {
         u = 1.0f - u;
     }
-
-    // TODO: +0.5f is a temporary hack, pass actual hdr orientation here!
-    u = fract(u + 0.5f);
 
     const int tex = (index & 0x00ffffff);
     simd_fvec2 size;
     storage.GetFRes(tex, 0, &size[0]);
 
     const simd_fvec2 uvs = simd_fvec2{u, theta} * size;
+    const simd_ivec2 iuvs = simd_ivec2(uvs);
 
-    const auto &p00 = storage.Get(tex, int(uvs[0] + 0), int(uvs[1] + 0), 0);
-    const auto &p01 = storage.Get(tex, int(uvs[0] + 1), int(uvs[1] + 0), 0);
-    const auto &p10 = storage.Get(tex, int(uvs[0] + 0), int(uvs[1] + 1), 0);
-    const auto &p11 = storage.Get(tex, int(uvs[0] + 1), int(uvs[1] + 1), 0);
+    const auto &p00 = storage.Get(tex, iuvs[0] + 0, iuvs[1] + 0, 0);
+    const auto &p01 = storage.Get(tex, iuvs[0] + 1, iuvs[1] + 0, 0);
+    const auto &p10 = storage.Get(tex, iuvs[0] + 0, iuvs[1] + 1, 0);
+    const auto &p11 = storage.Get(tex, iuvs[0] + 1, iuvs[1] + 1, 0);
 
     const simd_fvec2 k = fract(uvs);
 
@@ -2733,12 +2891,13 @@ void Ray::Ref::ComputeDerivatives(const simd_fvec4 &I, const float t, const simd
 void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, const TexStorageBase *const textures[],
                                  const float halton[], const float sample_off[2], light_sample_t &ls) {
     const float u1 = fract(halton[RAND_DIM_LIGHT_PICK] + sample_off[0]);
-    const auto light_index = std::min(uint32_t(u1 * sc.li_indices.size()), uint32_t(sc.li_indices.size() - 1));
 
+    const auto light_index = std::min(uint32_t(u1 * sc.li_indices.size()), uint32_t(sc.li_indices.size() - 1));
     const light_t &l = sc.lights[sc.li_indices[light_index]];
 
     ls.col = simd_fvec4{l.col[0], l.col[1], l.col[2], 0.0f};
     ls.col *= float(sc.li_indices.size());
+    ls.cast_shadow = l.cast_shadow ? 1.0f : 0.0f;
 
     if (l.type == LIGHT_TYPE_SPHERE) {
         const float r1 = fract(halton[RAND_DIM_LIGHT_U] + sample_off[0]);
@@ -2773,6 +2932,10 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, co
         const float cos_theta = std::abs(dot(ls.L, light_forward));
         if (cos_theta > 0.0f) {
             ls.pdf = (ls.dist * ls.dist) / (0.5f * ls.area * cos_theta);
+        }
+
+        if (!l.visible) {
+            ls.area = 0.0f;
         }
     } else if (l.type == LIGHT_TYPE_DIR) {
         ls.L = simd_fvec4{l.dir.dir[0], l.dir.dir[1], l.dir.dir[2], 0.0f};
@@ -2814,7 +2977,8 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, co
         if (l.sky_portal != 0) {
             simd_fvec4 env_col = {sc.env->env_col[0], sc.env->env_col[1], sc.env->env_col[2], 0.0f};
             if (sc.env->env_map != 0xffffffff) {
-                env_col *= SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), sc.env->env_map, ls.L);
+                env_col *=
+                    SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), sc.env->env_map, ls.L, PI);
             }
             ls.col *= env_col;
         }
@@ -2862,7 +3026,49 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, co
         if (l.sky_portal != 0) {
             simd_fvec4 env_col = {sc.env->env_col[0], sc.env->env_col[1], sc.env->env_col[2], 0.0f};
             if (sc.env->env_map != 0xffffffff) {
-                env_col *= SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), sc.env->env_map, ls.L);
+                env_col *=
+                    SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), sc.env->env_map, ls.L, PI);
+            }
+            ls.col *= env_col;
+        }
+    } else if (l.type == LIGHT_TYPE_LINE) {
+        const auto light_pos = simd_fvec4{l.line.pos[0], l.line.pos[1], l.line.pos[2], 0.0f};
+        const simd_fvec4 light_dir = simd_fvec4{l.line.v[0], l.line.v[1], l.line.v[2], 0.0f};
+
+        const float r1 = fract(halton[RAND_DIM_LIGHT_U] + sample_off[0]);
+        const float r2 = fract(halton[RAND_DIM_LIGHT_V] + sample_off[1]);
+
+        const simd_fvec4 center_to_surface = P - light_pos;
+
+        simd_fvec4 light_u = normalize(cross(center_to_surface, light_dir));
+        simd_fvec4 light_v = cross(light_u, light_dir);
+
+        const float phi = PI * r1;
+        const simd_fvec4 normal = std::cos(phi) * light_u + std::sin(phi) * light_v;
+
+        const simd_fvec4 lp = light_pos + normal * l.line.radius + (r2 - 0.5f) * light_dir * l.line.height;
+
+        const simd_fvec4 to_light = lp - P;
+        ls.dist = length(to_light);
+        ls.L = (to_light / ls.dist);
+
+        ls.area = l.line.area;
+
+        const float cos_theta = 1.0f - std::abs(dot(ls.L, light_dir));
+        if (cos_theta != 0.0f) {
+            ls.pdf = (ls.dist * ls.dist) / (ls.area * cos_theta);
+        }
+
+        if (!l.visible) {
+            ls.area = 0.0f;
+        }
+
+        // probably can not be a portal, but still..
+        if (l.sky_portal != 0) {
+            simd_fvec4 env_col = {sc.env->env_col[0], sc.env->env_col[1], sc.env->env_col[2], 0.0f};
+            if (sc.env->env_map != 0xffffffff) {
+                env_col *=
+                    SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), sc.env->env_map, ls.L, PI);
             }
             ls.col *= env_col;
         }
@@ -2905,21 +3111,41 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, co
         } else {
             simd_fvec4 env_col = {sc.env->env_col[0], sc.env->env_col[1], sc.env->env_col[2], 0.0f};
             if (sc.env->env_map != 0xffffffff) {
-                env_col *= SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), sc.env->env_map, ls.L);
+                env_col *=
+                    SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), sc.env->env_map, ls.L, PI);
             }
             ls.col *= env_col;
         }
+    } else if (l.type == LIGHT_TYPE_ENV) {
+        assert(sc.env->qtree_levels);
+        const auto *qtree_mips = reinterpret_cast<const simd_fvec4 *const *>(sc.env->qtree_mips);
+
+        const float rand = u1 * float(sc.li_indices.size()) - float(light_index);
+
+        const float rx = fract(halton[RAND_DIM_LIGHT_U] + sample_off[0]);
+        const float ry = fract(halton[RAND_DIM_LIGHT_V] + sample_off[1]);
+
+        const simd_fvec4 dir_and_pdf = Sample_EnvQTree(PI, qtree_mips, sc.env->qtree_levels, rand, rx, ry);
+
+        ls.L = simd_fvec4{dir_and_pdf[0], dir_and_pdf[1], dir_and_pdf[2], 0.0f};
+        ls.col *= {sc.env->env_col[0], sc.env->env_col[1], sc.env->env_col[2], 0.0f};
+
+        assert(sc.env->env_map != 0xffffffff);
+        ls.col *= SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), sc.env->env_map, ls.L, PI);
+
+        ls.area = 1.0f;
+        ls.dist = MAX_DIST;
+        ls.pdf = dir_and_pdf[3];
     }
 }
 
-bool Ray::Ref::IntersectAreaLights(const ray_data_t &ray, const light_t lights[], Span<const uint32_t> visible_lights,
+void Ray::Ref::IntersectAreaLights(const ray_data_t &ray, const light_t lights[], Span<const uint32_t> visible_lights,
                                    const transform_t transforms[], hit_data_t &inout_inter) {
-    bool res = false;
-
     // TODO: BVH for light geometry
     for (uint32_t li = 0; li < uint32_t(visible_lights.size()); ++li) {
         const uint32_t light_index = visible_lights[li];
         const light_t &l = lights[light_index];
+        const bool no_shadow = (l.cast_shadow == 0);
         if (l.type == LIGHT_TYPE_SPHERE) {
             const auto light_pos = simd_fvec4{l.sph.pos[0], l.sph.pos[1], l.sph.pos[2], 0.0f};
             const simd_fvec4 op = light_pos - simd_fvec4{ray.o[0], ray.o[1], ray.o[2], 0.0f};
@@ -2928,16 +3154,14 @@ bool Ray::Ref::IntersectAreaLights(const ray_data_t &ray, const light_t lights[]
             if (det >= 0.0f) {
                 det = std::sqrt(det);
                 const float t1 = b - det, t2 = b + det;
-                if (t1 > HIT_EPS && t1 < inout_inter.t) {
+                if (t1 > HIT_EPS && (t1 < inout_inter.t || no_shadow)) {
                     inout_inter.mask = -1;
                     inout_inter.obj_index = -int(light_index) - 1;
                     inout_inter.t = t1;
-                    res = true;
                 } else if (t2 > HIT_EPS && t2 < inout_inter.t) {
                     inout_inter.mask = -1;
                     inout_inter.obj_index = -int(light_index) - 1;
                     inout_inter.t = t2;
-                    res = true;
                 }
             }
         } else if (l.type == LIGHT_TYPE_RECT) {
@@ -2952,7 +3176,7 @@ bool Ray::Ref::IntersectAreaLights(const ray_data_t &ray, const light_t lights[]
             const float t =
                 (plane_dist - dot(light_forward, simd_fvec4{ray.o[0], ray.o[1], ray.o[2], 0.0f})) / cos_theta;
 
-            if (cos_theta < 0.0f && t > HIT_EPS && t < inout_inter.t) {
+            if (cos_theta < 0.0f && t > HIT_EPS && (t < inout_inter.t || no_shadow)) {
                 light_u /= dot(light_u, light_u);
                 light_v /= dot(light_v, light_v);
 
@@ -2966,7 +3190,6 @@ bool Ray::Ref::IntersectAreaLights(const ray_data_t &ray, const light_t lights[]
                         inout_inter.mask = -1;
                         inout_inter.obj_index = -int(light_index) - 1;
                         inout_inter.t = t;
-                        res = true;
                     }
                 }
             }
@@ -2982,7 +3205,7 @@ bool Ray::Ref::IntersectAreaLights(const ray_data_t &ray, const light_t lights[]
             const float t =
                 (plane_dist - dot(light_forward, simd_fvec4{ray.o[0], ray.o[1], ray.o[2], 0.0f})) / cos_theta;
 
-            if (cos_theta < 0.0f && t > HIT_EPS && t < inout_inter.t) {
+            if (cos_theta < 0.0f && t > HIT_EPS && (t < inout_inter.t || no_shadow)) {
                 light_u /= dot(light_u, light_u);
                 light_v /= dot(light_v, light_v);
 
@@ -2996,13 +3219,36 @@ bool Ray::Ref::IntersectAreaLights(const ray_data_t &ray, const light_t lights[]
                     inout_inter.mask = -1;
                     inout_inter.obj_index = -int(light_index) - 1;
                     inout_inter.t = t;
-                    res = true;
+                }
+            }
+        } else if (l.type == LIGHT_TYPE_LINE) {
+            const auto light_pos = simd_fvec4{l.line.pos[0], l.line.pos[1], l.line.pos[2], 0.0f};
+            const simd_fvec4 light_u = simd_fvec4{l.line.u[0], l.line.u[1], l.line.u[2], 0.0f};
+            const simd_fvec4 light_dir = simd_fvec4{l.line.v[0], l.line.v[1], l.line.v[2], 0.0f};
+            const simd_fvec4 light_v = cross(light_u, light_dir);
+
+            simd_fvec4 ro = simd_fvec4{ray.o[0], ray.o[1], ray.o[2], 0.0f} - light_pos;
+            ro = simd_fvec4{dot(ro, light_dir), dot(ro, light_u), dot(ro, light_v), 0.0f};
+
+            simd_fvec4 rd = simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f};
+            rd = simd_fvec4{dot(rd, light_dir), dot(rd, light_u), dot(rd, light_v), 0.0f};
+
+            const float A = rd[2] * rd[2] + rd[1] * rd[1];
+            const float B = 2.0f * (rd[2] * ro[2] + rd[1] * ro[1]);
+            const float C = ro[2] * ro[2] + ro[1] * ro[1] - l.line.radius * l.line.radius;
+
+            float t0, t1;
+            if (quadratic(A, B, C, t0, t1) && t0 > HIT_EPS && t1 > HIT_EPS) {
+                const float t = std::min(t0, t1);
+                const simd_fvec4 p = ro + t * rd;
+                if (std::abs(p[0]) < 0.5f * l.line.height && (t < inout_inter.t || no_shadow)) {
+                    inout_inter.mask = -1;
+                    inout_inter.obj_index = -int(light_index) - 1;
+                    inout_inter.t = t;
                 }
             }
         }
     }
-
-    return res;
 }
 
 Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t &pi, const hit_data_t &inter,
@@ -3010,12 +3256,23 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
                                           const uint32_t node_index, const TexStorageBase *const textures[],
                                           ray_data_t *out_secondary_rays, int *out_secondary_rays_count,
                                           shadow_ray_t *out_shadow_rays, int *out_shadow_rays_count) {
+    const auto I = simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f};
+
     if (!inter.mask) {
         simd_fvec4 env_col = {1.0f};
         if (pi.should_add_environment()) {
             if (sc.env->env_map != 0xffffffff) {
                 env_col = SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), sc.env->env_map,
-                                             simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f});
+                                             simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f}, PI);
+                if (sc.env->qtree_levels) {
+                    const auto *qtree_mips = reinterpret_cast<const simd_fvec4 *const *>(sc.env->qtree_mips);
+
+                    const float light_pdf = Evaluate_EnvQTree(PI, qtree_mips, sc.env->qtree_levels, I);
+                    const float bsdf_pdf = ray.pdf;
+
+                    const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
+                    env_col *= mis_weight;
+                }
             }
             env_col[3] = 1.0f;
         }
@@ -3024,14 +3281,13 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
                                   ray.c[2] * env_col[2] * sc.env->env_col[2], env_col[3]};
     }
 
-    const auto I = simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f};
     const auto P = simd_fvec4{ray.o[0], ray.o[1], ray.o[2], 0.0f} + inter.t * I;
 
     if (inter.obj_index < 0) { // Area light intersection
         const light_t &l = sc.lights[-inter.obj_index - 1];
 
         simd_fvec4 lcol = simd_fvec4{l.col[0], l.col[1], l.col[2], 0.0f};
-
+#if USE_NEE
         if (l.type == LIGHT_TYPE_SPHERE) {
             const auto light_pos = simd_fvec4{l.sph.pos[0], l.sph.pos[1], l.sph.pos[2], 0.0f};
             const float light_area = l.sph.area;
@@ -3055,7 +3311,6 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
             const simd_fvec4 light_forward = normalize(cross(light_u, light_v));
             const float light_area = l.rect.area;
 
-            const float plane_dist = dot(light_forward, light_pos);
             const float cos_theta = dot(simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f}, light_forward);
 
             const float light_pdf = (inter.t * inter.t) / (light_area * cos_theta);
@@ -3071,7 +3326,6 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
             const simd_fvec4 light_forward = normalize(cross(light_u, light_v));
             const float light_area = l.disk.area;
 
-            const float plane_dist = dot(light_forward, light_pos);
             const float cos_theta = dot(simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f}, light_forward);
 
             const float light_pdf = (inter.t * inter.t) / (light_area * cos_theta);
@@ -3079,8 +3333,19 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
 
             const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
             lcol *= mis_weight;
-        }
+        } else if (l.type == LIGHT_TYPE_LINE) {
+            const simd_fvec4 light_dir = simd_fvec4{l.line.v[0], l.line.v[1], l.line.v[2], 0.0f};
+            const float light_area = l.line.area;
 
+            const float cos_theta = 1.0f - std::abs(dot(simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f}, light_dir));
+
+            const float light_pdf = (inter.t * inter.t) / (light_area * cos_theta);
+            const float bsdf_pdf = ray.pdf;
+
+            const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
+            lcol *= mis_weight;
+        }
+#endif
         return Ray::pixel_color_t{ray.c[0] * lcol[0], ray.c[1] * lcol[1], ray.c[2] * lcol[2], 1.0f};
     }
 
@@ -3296,15 +3561,20 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
 
             const simd_fvec4 lcol = ls.col * diff_col * (mix_weight * mis_weight / ls.pdf);
 
-            // schedule shadow ray
-            shadow_ray_t &sh_r = out_shadow_rays[(*out_shadow_rays_count)++];
-            memcpy(&sh_r.o[0], value_ptr(offset_ray(P, plane_N)), 3 * sizeof(float));
-            memcpy(&sh_r.d[0], value_ptr(ls.L), 3 * sizeof(float));
-            sh_r.dist = ls.dist - 10.0f * HIT_BIAS;
-            sh_r.c[0] = ray.c[0] * lcol[0];
-            sh_r.c[1] = ray.c[1] * lcol[1];
-            sh_r.c[2] = ray.c[2] * lcol[2];
-            sh_r.xy = ray.xy;
+            if (ls.cast_shadow > 0.5f) {
+                // schedule shadow ray
+                shadow_ray_t &sh_r = out_shadow_rays[(*out_shadow_rays_count)++];
+                memcpy(&sh_r.o[0], value_ptr(offset_ray(P, plane_N)), 3 * sizeof(float));
+                memcpy(&sh_r.d[0], value_ptr(ls.L), 3 * sizeof(float));
+                sh_r.dist = ls.dist - 10.0f * HIT_BIAS;
+                sh_r.c[0] = ray.c[0] * lcol[0];
+                sh_r.c[1] = ray.c[1] * lcol[1];
+                sh_r.c[2] = ray.c[2] * lcol[2];
+                sh_r.xy = ray.xy;
+            } else {
+                // apply light immediately
+                col += lcol;
+            }
         }
 #endif
 
@@ -3358,15 +3628,20 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
             }
             const simd_fvec4 lcol = ls.col * spec_col * (mix_weight * mis_weight / ls.pdf);
 
-            // schedule shadow ray
-            shadow_ray_t &sh_r = out_shadow_rays[(*out_shadow_rays_count)++];
-            memcpy(&sh_r.o[0], value_ptr(offset_ray(P, plane_N)), 3 * sizeof(float));
-            memcpy(&sh_r.d[0], value_ptr(ls.L), 3 * sizeof(float));
-            sh_r.dist = ls.dist - 10.0f * HIT_BIAS;
-            sh_r.c[0] = ray.c[0] * lcol[0];
-            sh_r.c[1] = ray.c[1] * lcol[1];
-            sh_r.c[2] = ray.c[2] * lcol[2];
-            sh_r.xy = ray.xy;
+            if (ls.cast_shadow > 0.5f) {
+                // schedule shadow ray
+                shadow_ray_t &sh_r = out_shadow_rays[(*out_shadow_rays_count)++];
+                memcpy(&sh_r.o[0], value_ptr(offset_ray(P, plane_N)), 3 * sizeof(float));
+                memcpy(&sh_r.d[0], value_ptr(ls.L), 3 * sizeof(float));
+                sh_r.dist = ls.dist - 10.0f * HIT_BIAS;
+                sh_r.c[0] = ray.c[0] * lcol[0];
+                sh_r.c[1] = ray.c[1] * lcol[1];
+                sh_r.c[2] = ray.c[2] * lcol[2];
+                sh_r.xy = ray.xy;
+            } else {
+                // apply light immediately
+                col += lcol;
+            }
         }
 #endif
 
@@ -3418,15 +3693,20 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
             }
             const simd_fvec4 lcol = ls.col * refr_col * (mix_weight * mis_weight / ls.pdf);
 
-            // schedule shadow ray
-            shadow_ray_t &sh_r = out_shadow_rays[(*out_shadow_rays_count)++];
-            memcpy(&sh_r.o[0], value_ptr(offset_ray(P, -plane_N)), 3 * sizeof(float));
-            memcpy(&sh_r.d[0], value_ptr(ls.L), 3 * sizeof(float));
-            sh_r.dist = ls.dist - 10.0f * HIT_BIAS;
-            sh_r.c[0] = ray.c[0] * lcol[0];
-            sh_r.c[1] = ray.c[1] * lcol[1];
-            sh_r.c[2] = ray.c[2] * lcol[2];
-            sh_r.xy = ray.xy;
+            if (ls.cast_shadow > 0.5f) {
+                // schedule shadow ray
+                shadow_ray_t &sh_r = out_shadow_rays[(*out_shadow_rays_count)++];
+                memcpy(&sh_r.o[0], value_ptr(offset_ray(P, -plane_N)), 3 * sizeof(float));
+                memcpy(&sh_r.d[0], value_ptr(ls.L), 3 * sizeof(float));
+                sh_r.dist = ls.dist - 10.0f * HIT_BIAS;
+                sh_r.c[0] = ray.c[0] * lcol[0];
+                sh_r.c[1] = ray.c[1] * lcol[1];
+                sh_r.c[2] = ray.c[2] * lcol[2];
+                sh_r.xy = ray.xy;
+            } else {
+                // apply light immediately
+                col += lcol;
+            }
         }
 #endif
 
@@ -3468,7 +3748,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
             simd_fvec4 env_col = {sc.env->env_col[0], sc.env->env_col[1], sc.env->env_col[2], 0.0f};
             if (sc.env->env_map != 0xffffffff) {
                 env_col *= SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), sc.env->env_map,
-                                              simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f});
+                                              simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f}, PI);
             }
             base_color *= env_col;
         }
@@ -3522,7 +3802,21 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
             metallic *= SampleBilinear(textures, metallic_tex, uvs, int(metallic_lod))[0];
         }
 
-        const float specular = unpack_unorm_16(mat->specular_unorm);
+        float specular = unpack_unorm_16(mat->specular_unorm);
+        if (mat->textures[SPECULAR_TEXTURE] != 0xffffffff) {
+            const uint32_t specular_tex = mat->textures[SPECULAR_TEXTURE];
+#ifdef USE_RAY_DIFFERENTIALS
+            const float specular_lod = get_texture_lod(textures, spec_tex, surf_der.duv_dx, surf_der.duv_dy);
+#else
+            const float specular_lod = get_texture_lod(textures, specular_tex, lambda);
+#endif
+            simd_fvec4 specular_color = SampleBilinear(textures, specular_tex, uvs, int(specular_lod));
+            if (specular_tex & TEX_SRGB_BIT) {
+                specular_color = srgb_to_rgb(specular_color);
+            }
+            specular *= specular_color[0];
+        }
+
         const float specular_tint = unpack_unorm_16(mat->specular_tint_unorm);
         const float transmission = unpack_unorm_16(mat->transmission_unorm);
         const float clearcoat = unpack_unorm_16(mat->clearcoat_unorm);
@@ -3632,15 +3926,20 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
             }
             lcol *= mix_weight * mis_weight;
 
-            // schedule shadow ray
-            shadow_ray_t &sh_r = out_shadow_rays[(*out_shadow_rays_count)++];
-            memcpy(&sh_r.o[0], value_ptr(offset_ray(P, N_dot_L < 0.0f ? -plane_N : plane_N)), 3 * sizeof(float));
-            memcpy(&sh_r.d[0], value_ptr(ls.L), 3 * sizeof(float));
-            sh_r.dist = ls.dist - 10.0f * HIT_BIAS;
-            sh_r.c[0] = ray.c[0] * lcol[0];
-            sh_r.c[1] = ray.c[1] * lcol[1];
-            sh_r.c[2] = ray.c[2] * lcol[2];
-            sh_r.xy = ray.xy;
+            if (ls.cast_shadow > 0.5f) {
+                // schedule shadow ray
+                shadow_ray_t &sh_r = out_shadow_rays[(*out_shadow_rays_count)++];
+                memcpy(&sh_r.o[0], value_ptr(offset_ray(P, N_dot_L < 0.0f ? -plane_N : plane_N)), 3 * sizeof(float));
+                memcpy(&sh_r.d[0], value_ptr(ls.L), 3 * sizeof(float));
+                sh_r.dist = ls.dist - 10.0f * HIT_BIAS;
+                sh_r.c[0] = ray.c[0] * lcol[0];
+                sh_r.c[1] = ray.c[1] * lcol[1];
+                sh_r.c[2] = ray.c[2] * lcol[2];
+                sh_r.xy = ray.xy;
+            } else {
+                // apply light immediately
+                col += lcol;
+            }
         }
 #endif
 

@@ -12,6 +12,8 @@
 #include "shaders/trace_rays_interface.h"
 #include "shaders/trace_shadow_interface.h"
 
+#include "shaders/types.h"
+
 void Ray::Vk::Renderer::kernel_GeneratePrimaryRays(VkCommandBuffer cmd_buf, const camera_t &cam, const int hi,
                                                    const rect_t &rect, const Buffer &halton, const Buffer &out_rays) {
     const TransitionInfo res_transitions[] = {{&halton, eResState::ShaderResource},
@@ -34,19 +36,27 @@ void Ray::Vk::Renderer::kernel_GeneratePrimaryRays(VkCommandBuffer cmd_buf, cons
     uniform_params.spread_angle = std::atan(2.0f * temp / float(h_));
 
     memcpy(&uniform_params.cam_origin[0], cam.origin, 3 * sizeof(float));
-    uniform_params.cam_origin[3] = cam.fov;
+    uniform_params.cam_origin[3] = temp;
     memcpy(&uniform_params.cam_fwd[0], cam.fwd, 3 * sizeof(float));
     memcpy(&uniform_params.cam_side[0], cam.side, 3 * sizeof(float));
     uniform_params.cam_side[3] = cam.focus_distance;
     memcpy(&uniform_params.cam_up[0], cam.up, 3 * sizeof(float));
-    uniform_params.cam_up[3] = cam.focus_factor;
+    uniform_params.cam_up[3] = cam.sensor_height;
+    uniform_params.cam_fstop = cam.fstop;
+    uniform_params.cam_focal_length = cam.focal_length;
+    uniform_params.cam_lens_rotation = cam.lens_rotation;
+    uniform_params.cam_lens_ratio = cam.lens_ratio;
+    uniform_params.cam_lens_blades = cam.lens_blades;
+    uniform_params.cam_clip_start = cam.clip_start;
+    uniform_params.cam_filter = cam.filter;
 
     DispatchCompute(cmd_buf, pi_prim_rays_gen_, grp_count, bindings, &uniform_params, sizeof(uniform_params),
                     ctx_->default_descr_alloc(), ctx_->log());
 }
 
 void Ray::Vk::Renderer::kernel_TracePrimaryRays(VkCommandBuffer cmd_buf, const scene_data_t &sc_data,
-                                                const uint32_t node_index, const Buffer &rays, const Buffer &out_hits) {
+                                                const uint32_t node_index, const float cam_clip_end, const Buffer &rays,
+                                                const Buffer &out_hits) {
     const TransitionInfo res_transitions[] = {{&rays, eResState::ShaderResource},
                                               {&out_hits, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
@@ -55,6 +65,7 @@ void Ray::Vk::Renderer::kernel_TracePrimaryRays(VkCommandBuffer cmd_buf, const s
     uniform_params.img_size[0] = w_;
     uniform_params.img_size[1] = h_;
     uniform_params.node_index = node_index;
+    uniform_params.cam_clip_end = cam_clip_end;
 
     if (use_hwrt_) {
         const Binding bindings[] = {{eBindTarget::SBuf, TraceRays::RAYS_BUF_SLOT, rays},
@@ -178,6 +189,7 @@ void Ray::Vk::Renderer::kernel_ShadePrimaryHits(VkCommandBuffer cmd_buf, const p
         {eBindTarget::SBuf, ShadeHits::VERTICES_BUF_SLOT, sc_data.vertices},
         {eBindTarget::SBuf, ShadeHits::VTX_INDICES_BUF_SLOT, sc_data.vtx_indices},
         {eBindTarget::SBuf, ShadeHits::HALTON_SEQ_BUF_SLOT, halton},
+        {eBindTarget::Tex2D, ShadeHits::ENV_QTREE_TEX_SLOT, sc_data.env_qtree},
         {eBindTarget::Image, ShadeHits::OUT_IMG_SLOT, out_img},
         {eBindTarget::SBuf, ShadeHits::OUT_RAYS_BUF_SLOT, out_rays},
         {eBindTarget::SBuf, ShadeHits::OUT_SH_RAYS_BUF_SLOT, out_sh_rays},
@@ -191,6 +203,8 @@ void Ray::Vk::Renderer::kernel_ShadePrimaryHits(VkCommandBuffer cmd_buf, const p
     uniform_params.img_size[1] = h_;
     uniform_params.hi = hi;
     uniform_params.li_count = sc_data.li_count;
+    uniform_params.env_rotation = PI;
+    uniform_params.env_qtree_levels = sc_data.env_qtree_levels;
 
     uniform_params.max_diff_depth = settings.max_diff_depth;
     uniform_params.max_spec_depth = settings.max_spec_depth;
@@ -211,8 +225,8 @@ void Ray::Vk::Renderer::kernel_ShadePrimaryHits(VkCommandBuffer cmd_buf, const p
         DispatchCompute(cmd_buf, pi_shade_primary_hits_[1], grp_count, bindings, &uniform_params,
                         sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
     } else {
-        bindings.emplace_back(eBindTarget::SBuf, ShadeHits::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
-        bindings.emplace_back(eBindTarget::Tex2DArray, ShadeHits::TEXTURE_ATLASES_SLOT, tex_atlases);
+        bindings.emplace_back(eBindTarget::SBuf, Types::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
+        bindings.emplace_back(eBindTarget::Tex2DArray, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
 
         DispatchCompute(cmd_buf, pi_shade_primary_hits_[0], grp_count, bindings, &uniform_params,
                         sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
@@ -246,6 +260,7 @@ void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(VkCommandBuffer cmd_buf, const
         {eBindTarget::SBuf, ShadeHits::VERTICES_BUF_SLOT, sc_data.vertices},
         {eBindTarget::SBuf, ShadeHits::VTX_INDICES_BUF_SLOT, sc_data.vtx_indices},
         {eBindTarget::SBuf, ShadeHits::HALTON_SEQ_BUF_SLOT, halton},
+        {eBindTarget::Tex2D, ShadeHits::ENV_QTREE_TEX_SLOT, sc_data.env_qtree},
         {eBindTarget::Image, ShadeHits::OUT_IMG_SLOT, out_img},
         {eBindTarget::SBuf, ShadeHits::OUT_RAYS_BUF_SLOT, out_rays},
         {eBindTarget::SBuf, ShadeHits::OUT_SH_RAYS_BUF_SLOT, out_sh_rays},
@@ -256,6 +271,8 @@ void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(VkCommandBuffer cmd_buf, const
     uniform_params.img_size[1] = h_;
     uniform_params.hi = hi;
     uniform_params.li_count = sc_data.li_count;
+    uniform_params.env_rotation = PI;
+    uniform_params.env_qtree_levels = sc_data.env_qtree_levels;
 
     uniform_params.max_diff_depth = settings.max_diff_depth;
     uniform_params.max_spec_depth = settings.max_spec_depth;
@@ -276,8 +293,8 @@ void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(VkCommandBuffer cmd_buf, const
         DispatchComputeIndirect(cmd_buf, pi_shade_secondary_hits_[1], indir_args, 0, bindings, &uniform_params,
                                 sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
     } else {
-        bindings.emplace_back(eBindTarget::SBuf, ShadeHits::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
-        bindings.emplace_back(eBindTarget::Tex2DArray, ShadeHits::TEXTURE_ATLASES_SLOT, tex_atlases);
+        bindings.emplace_back(eBindTarget::SBuf, Types::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
+        bindings.emplace_back(eBindTarget::Tex2DArray, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
 
         DispatchComputeIndirect(cmd_buf, pi_shade_secondary_hits_[0], indir_args, 0, bindings, &uniform_params,
                                 sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
@@ -327,8 +344,8 @@ void Ray::Vk::Renderer::kernel_TraceShadow(VkCommandBuffer cmd_buf, const Buffer
                                     bindings, &uniform_params, sizeof(uniform_params), ctx_->default_descr_alloc(),
                                     ctx_->log());
         } else {
-            bindings.emplace_back(eBindTarget::SBuf, TraceShadow::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
-            bindings.emplace_back(eBindTarget::Tex2DArray, TraceShadow::TEXTURE_ATLASES_SLOT, tex_atlases);
+            bindings.emplace_back(eBindTarget::SBuf, Types::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
+            bindings.emplace_back(eBindTarget::Tex2DArray, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
 
             DispatchComputeIndirect(cmd_buf, pi_trace_shadow_hwrt_[0], indir_args, sizeof(DispatchIndirectCommand),
                                     bindings, &uniform_params, sizeof(uniform_params), ctx_->default_descr_alloc(),
@@ -360,8 +377,8 @@ void Ray::Vk::Renderer::kernel_TraceShadow(VkCommandBuffer cmd_buf, const Buffer
                                     bindings, &uniform_params, sizeof(uniform_params), ctx_->default_descr_alloc(),
                                     ctx_->log());
         } else {
-            bindings.emplace_back(eBindTarget::SBuf, TraceShadow::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
-            bindings.emplace_back(eBindTarget::Tex2DArray, TraceShadow::TEXTURE_ATLASES_SLOT, tex_atlases);
+            bindings.emplace_back(eBindTarget::SBuf, Types::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
+            bindings.emplace_back(eBindTarget::Tex2DArray, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
 
             DispatchComputeIndirect(cmd_buf, pi_trace_shadow_swrt_[0], indir_args, sizeof(DispatchIndirectCommand),
                                     bindings, &uniform_params, sizeof(uniform_params), ctx_->default_descr_alloc(),

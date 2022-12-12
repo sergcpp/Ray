@@ -142,6 +142,41 @@ void sort_mort_codes(uint32_t *morton_codes, size_t prims_count, uint32_t *out_i
 }
 } // namespace Ray
 
+void Ray::CanonicalToDir(const float p[2], const float y_rotation, float out_d[3]) {
+    const float cos_theta = 2 * p[0] - 1;
+    float phi = 2 * PI * p[1] + y_rotation;
+    if (phi < 0) {
+        phi += 2 * PI;
+    }
+    if (phi > 2 * PI) {
+        phi -= 2 * PI;
+    }
+
+    const float sin_theta = std::sqrt(1 - cos_theta * cos_theta);
+
+    const float sin_phi = std::sin(phi);
+    const float cos_phi = std::cos(phi);
+
+    out_d[0] = sin_theta * cos_phi;
+    out_d[1] = cos_theta;
+    out_d[2] = -sin_theta * sin_phi;
+}
+
+void Ray::DirToCanonical(const float d[3], const float y_rotation, float out_p[2]) {
+    const float cos_theta = std::min(std::max(d[1], -1.0f), 1.0f);
+
+    float phi = -std::atan2(d[2], d[0]) + y_rotation;
+    if (phi < 0) {
+        phi += 2 * PI;
+    }
+    if (phi > 2 * PI) {
+        phi -= 2 * PI;
+    }
+
+    out_p[0] = (cos_theta + 1.0f) / 2.0f;
+    out_p[1] = phi / (2.0f * PI);
+}
+
 // Used to convert 16x16 sphere sector coordinates to single value
 const uint8_t Ray::morton_table_16[] = {0, 1, 4, 5, 16, 17, 20, 21, 64, 65, 68, 69, 80, 81, 84, 85};
 
@@ -274,7 +309,7 @@ uint32_t Ray::PreprocessMesh(const float *attrs, Span<const uint32_t> vtx_indice
     const size_t attr_stride = AttrStrides[layout];
 
     for (int j = 0; j < int(vtx_indices.size()); j += 3) {
-        Ref::simd_fvec4 p[3];
+        Ref::simd_fvec4 p[3] = {{0.0f}, {0.0f}, {0.0f}};
 
         const uint32_t i0 = vtx_indices[j + 0] + base_vertex, i1 = vtx_indices[j + 1] + base_vertex,
                        i2 = vtx_indices[j + 2] + base_vertex;
@@ -500,7 +535,10 @@ uint32_t Ray::PreprocessPrims_SAH(Span<const prim_t> prims, const float *positio
                                   std::vector<uint32_t> &out_indices) {
     struct prims_coll_t {
         std::vector<uint32_t> indices;
-        Ref::simd_fvec4 min = {std::numeric_limits<float>::max()}, max = {std::numeric_limits<float>::lowest()};
+        Ref::simd_fvec4 min = {std::numeric_limits<float>::max(), std::numeric_limits<float>::max(),
+                               std::numeric_limits<float>::max(), 0.0f},
+                        max = {std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest(),
+                               std::numeric_limits<float>::lowest(), 0.0f};
         prims_coll_t() = default;
         prims_coll_t(std::vector<uint32_t> &&_indices, const Ref::simd_fvec4 &_min, const Ref::simd_fvec4 &_max)
             : indices(std::move(_indices)), min(_min), max(_max) {}
@@ -579,7 +617,10 @@ uint32_t Ray::PreprocessPrims_HLBVH(Span<const prim_t> prims, std::vector<bvh_no
                                     std::vector<uint32_t> &out_indices) {
     std::vector<uint32_t> morton_codes(prims.size());
 
-    Ref::simd_fvec4 whole_min = {std::numeric_limits<float>::max()}, whole_max = {std::numeric_limits<float>::lowest()};
+    Ref::simd_fvec4 whole_min = {std::numeric_limits<float>::max(), std::numeric_limits<float>::max(),
+                                 std::numeric_limits<float>::max(), 0.0f},
+                    whole_max = {std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest(),
+                                 std::numeric_limits<float>::lowest(), 0.0f};
 
     const auto indices_start = uint32_t(out_indices.size());
     out_indices.reserve(out_indices.size() + prims.size());
@@ -593,7 +634,8 @@ uint32_t Ray::PreprocessPrims_HLBVH(Span<const prim_t> prims, std::vector<bvh_no
 
     uint32_t *indices = &out_indices[indices_start];
 
-    const Ref::simd_fvec4 scale = float(1 << BitsPerDim) / (whole_max - whole_min);
+    const Ref::simd_fvec4 scale =
+        float(1 << BitsPerDim) / (whole_max - whole_min + std::numeric_limits<float>::epsilon());
 
     // compute morton codes
     for (int i = 0; i < int(prims.size()); i++) {
@@ -651,7 +693,7 @@ uint32_t Ray::PreprocessPrims_HLBVH(Span<const prim_t> prims, std::vector<bvh_no
 
     // Force spliting until each primitive will be in separate leaf node
     bvh_settings_t s;
-    s.oversplit_threshold = std::numeric_limits<float>::max();
+    s.oversplit_threshold = -1.0f;
     s.allow_spatial_splits = false;
     s.min_primitives_in_leaf = 1;
 
@@ -898,8 +940,10 @@ bool Ray::NaiivePluckerTest(const float p[9], const float o[3], const float d[3]
 }
 
 void Ray::ConstructCamera(const eCamType type, const eFilterType filter, eDeviceType dtype, const float origin[3],
-                          const float fwd[3], const float up[3], const float fov, const float gamma,
-                          const float focus_distance, const float focus_factor, camera_t *cam) {
+                          const float fwd[3], const float up[3], const float fov, const float sensor_height,
+                          const float gamma, const float focus_distance, const float fstop, const float lens_rotation,
+                          const float lens_ratio, const int lens_blades, const float clip_start, const float clip_end,
+                          camera_t *cam) {
     if (type == Persp) {
         auto o = Ref::simd_fvec3{origin}, f = Ref::simd_fvec3{fwd}, u = Ref::simd_fvec3{up};
 
@@ -917,10 +961,18 @@ void Ray::ConstructCamera(const eCamType type, const eFilterType filter, eDevice
         cam->type = type;
         cam->filter = filter;
         cam->dtype = dtype;
+        cam->ltype = eLensUnits::FOV;
         cam->fov = fov;
         cam->gamma = gamma;
+        cam->sensor_height = sensor_height;
         cam->focus_distance = focus_distance;
-        cam->focus_factor = focus_factor;
+        cam->focal_length = 0.5f * sensor_height / std::tan(0.5f * fov * PI / 180.0f);
+        cam->fstop = fstop;
+        cam->lens_rotation = lens_rotation;
+        cam->lens_ratio = lens_ratio;
+        cam->lens_blades = lens_blades;
+        cam->clip_start = clip_start;
+        cam->clip_end = clip_end;
         memcpy(&cam->origin[0], &o[0], 3 * sizeof(float));
         memcpy(&cam->fwd[0], &f[0], 3 * sizeof(float));
         memcpy(&cam->side[0], &s[0], 3 * sizeof(float));

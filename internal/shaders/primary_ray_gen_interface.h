@@ -13,6 +13,14 @@ struct Params {
     VEC4_TYPE cam_fwd;
     VEC4_TYPE cam_side;
     VEC4_TYPE cam_up;
+    float cam_fstop;
+    float cam_focal_length;
+    float cam_lens_rotation;
+    float cam_lens_ratio;
+    int cam_lens_blades;
+    float cam_clip_start;
+    int cam_filter;
+    float _pad;
 };
 
 const int LOCAL_GROUP_SIZE_X = 8;

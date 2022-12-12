@@ -820,6 +820,22 @@ template <typename T, typename U, int S, bool Inv> class simd_comp_where_helper 
             comp_.blend_inv_to(mask_, comp_ / vec);
         }
     }
+
+    force_inline void operator|=(const simd_vec<T, S> &vec) {
+        if (!Inv) {
+            comp_.blend_to(mask_, comp_ | vec);
+        } else {
+            comp_.blend_inv_to(mask_, comp_ | vec);
+        }
+    }
+
+    force_inline void operator&=(const simd_vec<T, S> &vec) {
+        if (!Inv) {
+            comp_.blend_to(mask_, comp_ & vec);
+        } else {
+            comp_.blend_inv_to(mask_, comp_ & vec);
+        }
+    }
 };
 
 template <typename T, typename U, int S>

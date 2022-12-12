@@ -68,14 +68,6 @@ layout(std430, binding = COUNTERS_BUF_SLOT) readonly buffer Counters {
     uint g_counters[];
 };
 
-#if !BINDLESS
-layout(std430, binding = TEXTURES_BUF_SLOT) readonly buffer Textures {
-    atlas_texture_t g_textures[];
-};
-
-layout(binding = TEXTURE_ATLASES_SLOT) uniform sampler2DArray g_atlases[7];
-#endif
-
 #if HWRT
 layout(binding = TLAS_SLOT) uniform accelerationStructureEXT g_tlas;
 #endif
@@ -232,11 +224,7 @@ bool ComputeVisibility(vec3 p, vec3 d, float dist, float rand_val, int rand_hash
             while (mat.type == MixNode) {
                 float mix_val = mat.tangent_rotation_or_strength;
                 if (mat.textures[BASE_TEXTURE] != 0xffffffff) {
-#if BINDLESS
                     mix_val *= SampleBilinear(mat.textures[BASE_TEXTURE], sh_uvs, 0).r;
-#else
-                    mix_val *= SampleBilinear(g_atlases, g_textures[mat.textures[BASE_TEXTURE]], sh_uvs, 0).r;
-#endif
                 }
 
                 if (sh_r > mix_val) {
@@ -311,11 +299,7 @@ bool ComputeVisibility(vec3 p, vec3 d, float dist, float rand_val, int rand_hash
             while (mat.type == MixNode) {
                 float mix_val = mat.tangent_rotation_or_strength;
                 if (mat.textures[BASE_TEXTURE] != 0xffffffff) {
-#if BINDLESS
                     mix_val *= SampleBilinear(mat.textures[BASE_TEXTURE], sh_uvs, 0).r;
-#else
-                    mix_val *= SampleBilinear(g_atlases, g_textures[mat.textures[BASE_TEXTURE]], sh_uvs, 0).r;
-#endif
                 }
 
                 if (sh_r > mix_val) {

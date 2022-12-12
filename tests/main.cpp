@@ -1,4 +1,5 @@
 
+#include <cfloat>
 #include <cstdio>
 #include <cstring>
 
@@ -91,11 +92,13 @@ void test_complex_mat2(const char *arch_list[], const char *preferred_device);
 void test_complex_mat3(const char *arch_list[], const char *preferred_device);
 void test_complex_mat4(const char *arch_list[], const char *preferred_device);
 void test_complex_mat5(const char *arch_list[], const char *preferred_device);
+void test_complex_mat5_dof(const char *arch_list[], const char *preferred_device);
 void test_complex_mat5_mesh_lights(const char *arch_list[], const char *preferred_device);
 void test_complex_mat5_sphere_light(const char *arch_list[], const char *preferred_device);
 void test_complex_mat5_sun_light(const char *arch_list[], const char *preferred_device);
 void test_complex_mat5_hdr_light(const char *arch_list[], const char *preferred_device);
 void test_complex_mat6(const char *arch_list[], const char *preferred_device);
+void test_complex_mat6_dof(const char *arch_list[], const char *preferred_device);
 void test_complex_mat6_mesh_lights(const char *arch_list[], const char *preferred_device);
 void test_complex_mat6_sphere_light(const char *arch_list[], const char *preferred_device);
 void test_complex_mat6_sun_light(const char *arch_list[], const char *preferred_device);
@@ -130,6 +133,13 @@ int main(int argc, char *argv[]) {
             run_detail_tests_on_fail = true;
         }
     }
+
+#if defined(_WIN32)
+    const bool enable_fp_exceptions = !nocpu || full_tests;
+    if (enable_fp_exceptions) {
+        _controlfp(_EM_INEXACT, _MCW_EM);
+    }
+#endif
 
     test_simd();
     test_tex_storage();
@@ -167,11 +177,13 @@ int main(int argc, char *argv[]) {
         test_complex_mat3(arch_list, device_name);
         test_complex_mat4(arch_list, device_name);
         test_complex_mat5(arch_list, device_name);
+        test_complex_mat5_dof(arch_list, device_name);
         test_complex_mat5_mesh_lights(arch_list, device_name);
         test_complex_mat5_sphere_light(arch_list, device_name);
         test_complex_mat5_sun_light(arch_list, device_name);
         test_complex_mat5_hdr_light(arch_list, device_name);
         test_complex_mat6(arch_list, device_name);
+        test_complex_mat6_dof(arch_list, device_name);
         test_complex_mat6_mesh_lights(arch_list, device_name);
         test_complex_mat6_sphere_light(arch_list, device_name);
         test_complex_mat6_sun_light(arch_list, device_name);

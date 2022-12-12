@@ -45,6 +45,8 @@ enum eFilterType { Box, Tent };
 
 enum eDeviceType { None, SRGB };
 
+enum eLensUnits { FOV, FLength };
+
 enum ePassFlags {
     SkipDirectLight = (1 << 0),
     SkipIndirectLight = (1 << 1),
@@ -65,8 +67,11 @@ struct camera_t {
     eCamType type;
     eFilterType filter;
     eDeviceType dtype;
-    float fov, gamma;
-    float focus_distance, focus_factor;
+    eLensUnits ltype;
+    float fov, gamma, sensor_height;
+    float focus_distance, focal_length, fstop, lens_rotation, lens_ratio;
+    int lens_blades;
+    float clip_start, clip_end;
     float origin[3], fwd[3], side[3], up[3];
     uint32_t mi_index, uv_index;
     pass_settings_t pass_settings;

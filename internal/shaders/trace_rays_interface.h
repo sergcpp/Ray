@@ -8,6 +8,7 @@ INTERFACE_START(TraceRays)
 struct Params {
     UVEC2_TYPE img_size;
     UINT_TYPE node_index;
+    float cam_clip_end;
 };
 
 const int LOCAL_GROUP_SIZE_X = 8;

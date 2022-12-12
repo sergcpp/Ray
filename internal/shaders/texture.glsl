@@ -18,25 +18,38 @@ ivec2 texSize(const uint index) {
     return textureSize(g_textures[nonuniformEXT(index & 0x00ffffff)], 0);
 }
 
-vec4 SampleBilinear(const uint index, const vec2 uvs, const int lod) {
+vec4 SampleBilinear(const uint index, const vec2 uvs, const int lod, const bool maybe_YCoCg, const bool maybe_SRGB) {
     vec4 res = textureLod(g_textures[nonuniformEXT(index & 0x00ffffff)], uvs, float(lod));
-    if ((index & TEX_YCOCG_BIT) != 0) {
+    if (maybe_YCoCg && (index & TEX_YCOCG_BIT) != 0) {
         res.rgb = YCoCg_to_RGB(res);
         res.a = 1.0;
+    }
+    if (maybe_SRGB && (index & TEX_SRGB_BIT) != 0) {
+        res.rgb = srgb_to_rgb(res.rgb);
     }
     return res;
 }
 
-vec3 SampleLatlong_RGBE(const uint index, const vec3 dir) {
+vec4 SampleBilinear(const uint index, const vec2 uvs, const int lod) {
+    return SampleBilinear(index, uvs, lod, false, false);
+}
+
+vec3 SampleLatlong_RGBE(const uint index, const vec3 dir, const float y_rotation) {
     const float theta = acos(clamp(dir[1], -1.0, 1.0)) / PI;
     const float r = sqrt(dir[0] * dir[0] + dir[2] * dir[2]);
-    float u = 0.5 * acos(r > FLT_EPS ? clamp(dir[0] / r, -1.0, 1.0) : 0.0) / PI;
+
+    float phi = acos(r > FLT_EPS ? clamp(dir[0] / r, -1.0, 1.0) : 0.0) + y_rotation;
+    if (phi < 0) {
+        phi += 2 * PI;
+    }
+    if (phi > 2 * PI) {
+        phi -= 2 * PI;
+    }
+
+    float u = 0.5 * phi / PI;
     [[flatten]] if (dir[2] < 0.0) {
         u = 1.0 - u;
     }
-
-    // TODO: +0.5f is a temporary hack, pass actual hdr orientation here!
-    u = fract(u + 0.5f);
 
     const uint tex = (index & 0x00ffffff);
     ivec2 size = textureSize(g_textures[tex], 0);
@@ -60,6 +73,19 @@ vec3 SampleLatlong_RGBE(const uint index, const vec3 dir) {
 
 #else // BINDLESS
 
+layout(std430, binding = TEXTURES_BUF_SLOT) readonly buffer Textures {
+    atlas_texture_t g_textures[];
+};
+
+layout(binding = TEXTURE_ATLASES_SLOT) uniform sampler2DArray g_atlases[7];
+
+ivec2 texSize(const uint index) {
+    const atlas_texture_t t = g_textures[index];
+    const int w = int(t.size & ATLAS_TEX_WIDTH_BITS);
+    const int h = int((t.size >> 16) & ATLAS_TEX_HEIGHT_BITS);
+    return ivec2(w, h);
+}
+
 vec2 TransformUV(const vec2 _uv, const atlas_texture_t t, const int mip_level) {
     const vec2 pos = vec2(float(t.pos[mip_level] & 0xffff), float((t.pos[mip_level] >> 16) & 0xffff));
     vec2 size = {float(t.size & ATLAS_TEX_WIDTH_BITS), float((t.size >> 16) & ATLAS_TEX_HEIGHT_BITS)};
@@ -71,36 +97,50 @@ vec2 TransformUV(const vec2 _uv, const atlas_texture_t t, const int mip_level) {
     return pos + uv * size + 1.0;
 }
 
-vec4 SampleBilinear(sampler2DArray atlases[7], const atlas_texture_t t, const vec2 uvs, const int lod) {
+vec4 SampleBilinear(const uint index, const vec2 uvs, const int lod, const bool maybe_YCoCg, const bool maybe_SRGB) {
+    const atlas_texture_t t = g_textures[index];
     vec2 _uvs = TransformUV(uvs, t, lod) / vec2(TEXTURE_ATLAS_SIZE);
 
     const float page = float((t.page[lod / 4] >> (lod % 4) * 8) & 0xff);
-    vec4 res = textureLod(atlases[nonuniformEXT(t.atlas)], vec3(_uvs, page), 0.0);
-    if (t.atlas == 4) {
+    vec4 res = textureLod(g_atlases[nonuniformEXT(t.atlas)], vec3(_uvs, page), 0.0);
+    if (maybe_YCoCg && t.atlas == 4) {
         res.rgb = YCoCg_to_RGB(res);
         res.a = 1.0;
+    }
+    if (maybe_SRGB && (t.size & ATLAS_TEX_SRGB_BIT) != 0) {
+        res.rgb = srgb_to_rgb(res.rgb);
     }
     return res;
 }
 
-vec3 SampleLatlong_RGBE(sampler2DArray atlases[7], const atlas_texture_t t, const vec3 dir) {
+vec4 SampleBilinear(const uint index, const vec2 uvs, const int lod) {
+    return SampleBilinear(index, uvs, lod, false, false);
+}
+
+vec3 SampleLatlong_RGBE(const atlas_texture_t t, const vec3 dir, float y_rotation) {
     const float theta = acos(clamp(dir[1], -1.0, 1.0)) / PI;
     const float r = sqrt(dir[0] * dir[0] + dir[2] * dir[2]);
-    float u = 0.5 * acos(r > FLT_EPS ? clamp(dir[0] / r, -1.0, 1.0) : 0.0) / PI;
+
+    float phi = acos(r > FLT_EPS ? clamp(dir[0] / r, -1.0, 1.0) : 0.0) + y_rotation;
+    if (phi < 0) {
+        phi += 2 * PI;
+    }
+    if (phi > 2 * PI) {
+        phi -= 2 * PI;
+    }
+
+    float u = 0.5 * phi / PI;
     [[flatten]] if (dir[2] < 0.0) {
         u = 1.0 - u;
     }
 
-    // TODO: +0.5f is a temporary hack, pass actual hdr orientation here!
-    u = fract(u + 0.5f);
-
     vec2 uvs = TransformUV(vec2(u, theta), t, 0) + 1.0;
 
     const int page = int(t.page[0] & 0xff);
-    const vec4 p00 = texelFetchOffset(atlases[nonuniformEXT(t.atlas)], ivec3(uvs, page), 0, ivec2(0, 0));
-    const vec4 p01 = texelFetchOffset(atlases[nonuniformEXT(t.atlas)], ivec3(uvs, page), 0, ivec2(1, 0));
-    const vec4 p10 = texelFetchOffset(atlases[nonuniformEXT(t.atlas)], ivec3(uvs, page), 0, ivec2(0, 1));
-    const vec4 p11 = texelFetchOffset(atlases[nonuniformEXT(t.atlas)], ivec3(uvs, page), 0, ivec2(1, 1));
+    const vec4 p00 = texelFetchOffset(g_atlases[nonuniformEXT(t.atlas)], ivec3(uvs, page), 0, ivec2(0, 0));
+    const vec4 p01 = texelFetchOffset(g_atlases[nonuniformEXT(t.atlas)], ivec3(uvs, page), 0, ivec2(1, 0));
+    const vec4 p10 = texelFetchOffset(g_atlases[nonuniformEXT(t.atlas)], ivec3(uvs, page), 0, ivec2(0, 1));
+    const vec4 p11 = texelFetchOffset(g_atlases[nonuniformEXT(t.atlas)], ivec3(uvs, page), 0, ivec2(1, 1));
 
     const vec2 k = fract(uvs);
 

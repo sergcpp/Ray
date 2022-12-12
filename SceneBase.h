@@ -84,8 +84,9 @@ struct principled_mat_desc_t {
     float metallic = 0;
     uint32_t metallic_texture = 0xffffffff;
     float specular = 0.5f;
+    uint32_t specular_texture = 0xffffffff;
     float specular_tint = 0;
-    float roughness = 0;
+    float roughness = 0.5f;
     uint32_t roughness_texture = 0xffffffff;
     float anisotropic = 0;
     float anisotropic_rotation = 0;
@@ -144,6 +145,7 @@ enum eTextureFormat {
 /// Texture description
 struct tex_desc_t {
     eTextureFormat format;
+    const char *name = nullptr;         ///< Debug name
     const void *data;
     int w,                              ///< Texture width
         h;                              ///< Texture height
@@ -165,6 +167,7 @@ enum eLightType {
 struct directional_light_desc_t {
     float color[3];
     float direction[3], angle;
+    bool cast_shadow = true;
 };
 
 struct sphere_light_desc_t {
@@ -172,6 +175,7 @@ struct sphere_light_desc_t {
     float position[3] = {0.0f, 0.0f, 0.0f};
     float radius = 1.0f;
     bool visible = true; // visibility for secondary bounces
+    bool cast_shadow = true;
 };
 
 struct rect_light_desc_t {
@@ -179,6 +183,7 @@ struct rect_light_desc_t {
     float width = 1.0f, height = 1.0f;
     bool sky_portal = false;
     bool visible = true; // visibility for secondary bounces
+    bool cast_shadow = true;
 };
 
 struct disk_light_desc_t {
@@ -186,6 +191,15 @@ struct disk_light_desc_t {
     float size_x = 1.0f, size_y = 1.0f;
     bool sky_portal = false;
     bool visible = true; // visibility for secondary bounces
+    bool cast_shadow = true;
+};
+
+struct line_light_desc_t {
+    float color[3] = {1.0f, 1.0f, 1.0f};
+    float radius = 1.0f, height = 1.0f;
+    bool sky_portal = false;
+    bool visible = true; // visibility for secondary bounces
+    bool cast_shadow = true;
 };
 
 // Camera description
@@ -193,12 +207,20 @@ struct camera_desc_t {
     eCamType type = Persp;               ///< Type of projection
     eFilterType filter = Tent;           ///< Reconstruction filter
     eDeviceType dtype = SRGB;            ///< Device type
+    eLensUnits ltype = FOV;              ///< Lens units type
     float origin[3];                     ///< Camera origin
     float fwd[3] = {};                   ///< Camera forward unit vector
     float up[3];                         ///< Camera up vector (optional)
-    float fov, gamma = 1.0f;             ///< Field of view in degrees, gamma
+    float fov = 45.0f, gamma = 1.0f;     ///< Field of view in degrees, gamma
+    float sensor_height = 0.036f;        ///< Camera sensor height
     float focus_distance = 1.0f;         ///< Distance to focus point
-    float focus_factor = 0.0f;           ///< Depth of field strength (in non-physical units)
+    float focal_length = 0.0f;           ///< Focal length
+    float fstop = 0.0f;                  ///< Focal fstop
+    float lens_rotation = 0.0f;          ///< Bokeh rotation
+    float lens_ratio = 1.0f;             ///< Bokeh distortion
+    int lens_blades = 0;                 ///< Bokeh shape
+    float clip_start = 0;                ///< Clip start
+    float clip_end = 3.402823466e+30F;   ///< Clip end
     uint32_t mi_index, uv_index = 0;     ///< Index of mesh instance and uv layer used by geometry cam
     bool lighting_only = false;          ///< Render lightmap only
     bool skip_direct_lighting = false;   ///< Render indirect light contribution only
@@ -216,8 +238,9 @@ struct camera_desc_t {
 
 /// Environment description
 struct environment_desc_t {
-    float env_col[3] = {0.0f};     ///< Environment color
-    uint32_t env_map = 0xffffffff; ///< Environment texture
+    float env_col[3] = {0.0f};          ///< Environment color
+    uint32_t env_map = 0xffffffff;      ///< Environment texture
+    bool multiple_importance = true;    ///< Enable explicit env map sampling
 };
 
 /** Base Scene class,
@@ -290,6 +313,7 @@ class SceneBase {
     virtual uint32_t AddLight(const sphere_light_desc_t &l) = 0;
     virtual uint32_t AddLight(const rect_light_desc_t &l, const float *xform) = 0;
     virtual uint32_t AddLight(const disk_light_desc_t &l, const float *xform) = 0;
+    virtual uint32_t AddLight(const line_light_desc_t &l, const float *xform) = 0;
 
     /** @brief Removes light with specific index from scene
         @param i light index

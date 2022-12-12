@@ -208,7 +208,7 @@ template <typename T, int N> class TexStorageTiled : public TexStorageBase {
     }
 
     int Allocate(const ColorType *data, const int res[2], bool mips);
-    bool Free(int index);
+    bool Free(int index) override;
 };
 
 extern template class TexStorageTiled<uint8_t, 4>;
@@ -315,7 +315,7 @@ template <typename T, int N> class TexStorageSwizzled : public TexStorageBase {
     }
 
     int Allocate(const ColorType *data, const int res[2], bool mips);
-    bool Free(int index);
+    bool Free(int index) override;
 };
 
 extern template class TexStorageSwizzled<uint8_t, 4>;

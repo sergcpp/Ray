@@ -317,7 +317,6 @@ int Ray::Ref::TexStorageSwizzled<T, N>::Allocate(const ColorType *data, const in
 
         for (int x = 0; x < _res[0]; ++x) {
             const uint32_t x_off = swizzle_x_tile(x);
-
             p.pixels[y_off + x_off] = data[y * _res[0] + x];
         }
 
@@ -332,7 +331,6 @@ int Ray::Ref::TexStorageSwizzled<T, N>::Allocate(const ColorType *data, const in
 
         for (int x = 0; x < _res[0]; ++x) {
             const uint32_t x_off = swizzle_x_tile(x);
-
             p.pixels[y_off + x_off] = data[x];
         }
     }

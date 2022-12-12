@@ -3,6 +3,7 @@
 
 #include "shade_hits_interface.h"
 #include "common.glsl"
+#include "envmap.glsl"
 #include "texture.glsl"
 
 LAYOUT_PARAMS uniform UniformParams {
@@ -57,13 +58,7 @@ layout(std430, binding = HALTON_SEQ_BUF_SLOT) readonly buffer Halton {
     float g_halton[];
 };
 
-#if !BINDLESS
-layout(std430, binding = TEXTURES_BUF_SLOT) readonly buffer Textures {
-    atlas_texture_t g_textures[];
-};
-
-layout(binding = TEXTURE_ATLASES_SLOT) uniform sampler2DArray g_atlases[7];
-#endif
+layout(binding = ENV_QTREE_TEX_SLOT) uniform sampler2D g_env_qtree;
 
 #if PRIMARY
 layout(binding = OUT_IMG_SLOT, rgba32f) uniform writeonly image2D g_out_img;
@@ -257,7 +252,7 @@ vec3 rotate_around_axis(vec3 p, vec3 axis, float angle) {
 vec3 offset_ray(vec3 p, vec3 n) {
     const float Origin = 1.0 / 32.0;
     const float FloatScale = 1.0 / 65536.0;
-    const float IntScale = 256.0;
+    const float IntScale = 128.0; // 256.0;
 
     const ivec3 of_i = ivec3(IntScale * n);
 
@@ -610,7 +605,7 @@ vec4 Sample_GGXRefraction_BSDF(vec3 T, vec3 B, vec3 N, vec3 I, float roughness, 
         const vec3 V = normalize(eta * I + m * N);
 
         out_V = vec4(V[0], V[1], V[2], m);
-        return vec4(1e6f);
+        return vec4(refr_col[0] * 1e6f, refr_col[1] * 1e6f, refr_col[2] * 1e6f, 1e6f);
     }
 
     const vec3 view_dir_ts = normalize(tangent_from_world(T, B, N, -I));
@@ -638,7 +633,7 @@ vec4 Sample_GGXRefraction_BSDF(vec3 T, vec3 B, vec3 N, vec3 I, float roughness, 
 
 struct light_sample_t {
     vec3 col, L;
-    float area, dist, pdf;
+    float area, dist, pdf, cast_shadow;
 };
 
 void create_tbn(const vec3 N, out vec3 out_T, out vec3 out_B) {
@@ -686,8 +681,9 @@ void SampleLightSource(vec3 P, vec2 sample_off, inout light_sample_t ls) {
 
     ls.col = uintBitsToFloat(l.type_and_param0.yzw);
     ls.col *= float(g_params.li_count);
+    ls.cast_shadow = (l.type_and_param0.x & (1 << 5)) != 0 ? 1.0 : 0.0;
 
-    const uint l_type = (l.type_and_param0.x & 0x3f);
+    const uint l_type = (l.type_and_param0.x & 0x1f);
     [[dont_flatten]] if (l_type == LIGHT_TYPE_SPHERE) {
         const float r1 = fract(g_halton[g_params.hi + RAND_DIM_LIGHT_U] + sample_off[0]);
         const float r2 = fract(g_halton[g_params.hi + RAND_DIM_LIGHT_V] + sample_off[1]);
@@ -732,6 +728,10 @@ void SampleLightSource(vec3 P, vec2 sample_off, inout light_sample_t ls) {
         ls.area = 0.0;
         ls.dist = MAX_DIST;
         ls.pdf = 1.0;
+
+        if ((l.type_and_param0.x & (1 << 6)) == 0) { // !visible
+            ls.area = 0.0;
+        }
     } else [[dont_flatten]] if (l_type == LIGHT_TYPE_RECT) {
         const vec3 light_pos = l.RECT_POS;
         const vec3 light_u = l.RECT_U;
@@ -753,7 +753,7 @@ void SampleLightSource(vec3 P, vec2 sample_off, inout light_sample_t ls) {
             ls.pdf = (ls.dist * ls.dist) / (ls.area * cos_theta);
         }
 
-        if ((l.type_and_param0.x & 0x3f) == 0) { // !visible
+        if ((l.type_and_param0.x & (1 << 6)) == 0) { // !visible
             ls.area = 0.0;
         }
 
@@ -762,9 +762,9 @@ void SampleLightSource(vec3 P, vec2 sample_off, inout light_sample_t ls) {
             const uint env_map = floatBitsToUint(g_params.env_col.w);
             if (env_map != 0xffffffff) {
 #if BINDLESS
-                env_col *= SampleLatlong_RGBE(env_map, ls.L);
+                env_col *= SampleLatlong_RGBE(env_map, ls.L, g_params.env_rotation);
 #else
-                env_col *= SampleLatlong_RGBE(g_atlases, g_textures[env_map], ls.L);
+                env_col *= SampleLatlong_RGBE(g_textures[env_map], ls.L, g_params.env_rotation);
 #endif
             }
             ls.col *= env_col;
@@ -806,7 +806,7 @@ void SampleLightSource(vec3 P, vec2 sample_off, inout light_sample_t ls) {
             ls.pdf = (ls.dist * ls.dist) / (ls.area * cos_theta);
         }
 
-        if ((l.type_and_param0.x & 0x3f) == 0) { // !visible
+        if ((l.type_and_param0.x & (1 << 6)) == 0) { // !visible
             ls.area = 0.0;
         }
 
@@ -815,9 +815,54 @@ void SampleLightSource(vec3 P, vec2 sample_off, inout light_sample_t ls) {
             const uint env_map = floatBitsToUint(g_params.env_col.w);
             if (env_map != 0xffffffff) {
 #if BINDLESS
-                env_col *= SampleLatlong_RGBE(env_map, ls.L);
+                env_col *= SampleLatlong_RGBE(env_map, ls.L, g_params.env_rotation);
 #else
-                env_col *= SampleLatlong_RGBE(g_atlases, g_textures[env_map], ls.L);
+                env_col *= SampleLatlong_RGBE(g_textures[env_map], ls.L, g_params.env_rotation);
+#endif
+            }
+            ls.col *= env_col;
+        }
+    } else [[dont_flatten]] if (l_type == LIGHT_TYPE_LINE) {
+        const vec3 light_pos = l.LINE_POS;
+        const vec3 light_dir = l.LINE_V;
+
+        const float r1 = fract(g_halton[g_params.hi + RAND_DIM_LIGHT_U] + sample_off[0]);
+        const float r2 = fract(g_halton[g_params.hi + RAND_DIM_LIGHT_V] + sample_off[1]);
+
+        const vec3 center_to_surface = P - light_pos;
+
+        vec3 light_u = normalize(cross(center_to_surface, light_dir));
+        vec3 light_v = cross(light_u, light_dir);
+
+        const float phi = PI * r1;
+        const vec3 normal = cos(phi) * light_u + sin(phi) * light_v;
+
+        const vec3 lp = light_pos + normal * l.LINE_RADIUS + (r2 - 0.5) * light_dir * l.LINE_HEIGHT;
+
+        const vec3 to_light = lp - P;
+        ls.dist = length(to_light);
+        ls.L = (to_light / ls.dist);
+
+        ls.area = l.LINE_AREA;
+
+        const float cos_theta = 1.0 - abs(dot(ls.L, light_dir));
+        [[flatten]] if (cos_theta != 0.0) {
+            ls.pdf = (ls.dist * ls.dist) / (ls.area * cos_theta);
+        }
+
+        if ((l.type_and_param0.x & (1 << 6)) == 0) { // !visible
+            ls.area = 0.0;
+        }
+
+        // probably can not be a portal, but still..
+        [[dont_flatten]] if ((l.type_and_param0.w & (1 << 7)) != 0) { // sky portal
+            vec3 env_col = g_params.env_col.xyz;
+            const uint env_map = floatBitsToUint(g_params.env_col.w);
+            if (env_map != 0xffffffff) {
+#if BINDLESS
+                env_col *= SampleLatlong_RGBE(env_map, ls.L, g_params.env_rotation);
+#else
+                env_col *= SampleLatlong_RGBE(g_textures[env_map], ls.L, g_params.env_rotation);
 #endif
             }
             ls.col *= env_col;
@@ -859,24 +904,41 @@ void SampleLightSource(vec3 P, vec2 sample_off, inout light_sample_t ls) {
         const material_t lmat = g_materials[(g_tri_materials[ltri_index] >> 16u) & MATERIAL_INDEX_BITS];
         if ((lmat.flags & MAT_FLAG_SKY_PORTAL) == 0) {
             if (lmat.textures[BASE_TEXTURE] != 0xffffffff) {
-#if BINDLESS
                 ls.col *= SampleBilinear(lmat.textures[BASE_TEXTURE], luvs, 0 /* lod */).xyz;
-#else
-                ls.col *= SampleBilinear(g_atlases, g_textures[lmat.textures[BASE_TEXTURE]], luvs, 0 /* lod */).xyz;
-#endif
             }
         } else {
             vec3 env_col = g_params.env_col.xyz;
             const uint env_map = floatBitsToUint(g_params.env_col.w);
             if (env_map != 0xffffffff) {
 #if BINDLESS
-                env_col *= SampleLatlong_RGBE(env_map, ls.L);
+                env_col *= SampleLatlong_RGBE(env_map, ls.L, g_params.env_rotation);
 #else
-                env_col *= SampleLatlong_RGBE(g_atlases, g_textures[env_map], ls.L);
+                env_col *= SampleLatlong_RGBE(g_textures[env_map], ls.L, g_params.env_rotation);
 #endif
             }
             ls.col *= env_col;
         }
+    } else [[dont_flatten]] if (l_type == LIGHT_TYPE_ENV) {
+        const float rand = u1 * float(g_params.li_count) - float(light_index);
+
+        const float rx = fract(g_halton[g_params.hi + RAND_DIM_LIGHT_U] + sample_off[0]);
+        const float ry = fract(g_halton[g_params.hi + RAND_DIM_LIGHT_V] + sample_off[1]);
+
+        const vec4 dir_and_pdf = Sample_EnvQTree(g_params.env_rotation, g_env_qtree, g_params.env_qtree_levels, rand, rx, ry);
+
+        ls.L = dir_and_pdf.xyz;
+        ls.col *= g_params.env_col.xyz;
+
+        const uint env_map = floatBitsToUint(g_params.env_col.w);
+#if BINDLESS
+        ls.col *= SampleLatlong_RGBE(env_map, ls.L, g_params.env_rotation);
+#else
+        ls.col *= SampleLatlong_RGBE(g_textures[env_map], ls.L, g_params.env_rotation);
+#endif
+
+        ls.area = 1.0;
+        ls.dist = MAX_DIST;
+        ls.pdf = dir_and_pdf.w;
     }
 }
 
@@ -886,13 +948,21 @@ vec3 ShadeSurface(int px_index, hit_data_t inter, ray_data_t ray) {
 
     [[dont_flatten]] if (inter.mask == 0) {
         vec3 env_col = g_params.env_col.xyz;
-        const uint env_map = floatBitsToUint(g_params.env_col[3]);
+        const uint env_map = floatBitsToUint(g_params.env_col.w);
         if (env_map != 0xffffffff) {
 #if BINDLESS
-            env_col *= SampleLatlong_RGBE(env_map, rd);
+            env_col *= SampleLatlong_RGBE(env_map, rd, g_params.env_rotation);
 #else
-            env_col *= SampleLatlong_RGBE(g_atlases, g_textures[env_map], rd);
+            env_col *= SampleLatlong_RGBE(g_textures[env_map], rd, g_params.env_rotation);
 #endif
+            if (g_params.env_qtree_levels > 0) {
+                const float light_pdf = Evaluate_EnvQTree(g_params.env_rotation, g_env_qtree,
+                                        g_params.env_qtree_levels, rd);
+                const float bsdf_pdf = ray.pdf;
+
+                const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
+                env_col *= mis_weight;
+            }
         }
         return vec3(ray.c[0] * env_col[0], ray.c[1] * env_col[1], ray.c[2] * env_col[2]);
     }
@@ -905,7 +975,7 @@ vec3 ShadeSurface(int px_index, hit_data_t inter, ray_data_t ray) {
 
         vec3 lcol = uintBitsToFloat(l.type_and_param0.yzw);
 
-        const uint l_type = (l.type_and_param0.x & 0x3f);
+        const uint l_type = (l.type_and_param0.x & 0x1f);
         if (l_type == LIGHT_TYPE_SPHERE) {
             const vec3 light_pos = l.SPH_POS;
             const float light_area = l.SPH_AREA;
@@ -947,6 +1017,17 @@ vec3 ShadeSurface(int px_index, hit_data_t inter, ray_data_t ray) {
 
             const float plane_dist = dot(light_forward, light_pos);
             const float cos_theta = dot(rd, light_forward);
+
+            const float light_pdf = (inter.t * inter.t) / (light_area * cos_theta);
+            const float bsdf_pdf = ray.pdf;
+
+            const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
+            lcol *= mis_weight;
+        } else if (l_type == LIGHT_TYPE_LINE) {
+            const vec3 light_dir = l.LINE_V;
+            const float light_area = l.LINE_AREA;
+
+            const float cos_theta = 1.0 - abs(dot(rd, light_dir));
 
             const float light_pdf = (inter.t * inter.t) / (light_area * cos_theta);
             const float bsdf_pdf = ray.pdf;
@@ -1046,11 +1127,7 @@ vec3 ShadeSurface(int px_index, hit_data_t inter, ray_data_t ray) {
     while (mat.type == MixNode) {
         float mix_val = mat.tangent_rotation_or_strength;
         if (mat.textures[BASE_TEXTURE] != 0xffffffff) {
-#if BINDLESS
             mix_val *= SampleBilinear(mat.textures[BASE_TEXTURE], uvs, 0).r;
-#else
-            mix_val *= SampleBilinear(g_atlases, g_textures[mat.textures[BASE_TEXTURE]], uvs, 0).r;
-#endif
         }
 
         const float eta = is_backfacing ? (mat.ext_ior / mat.int_ior) : (mat.int_ior / mat.ext_ior);
@@ -1073,14 +1150,13 @@ vec3 ShadeSurface(int px_index, hit_data_t inter, ray_data_t ray) {
 
     // apply normal map
     [[dont_flatten]] if (mat.textures[NORMALS_TEXTURE] != 0xffffffff) {
-#if BINDLESS
         vec3 normals = vec3(SampleBilinear(mat.textures[NORMALS_TEXTURE], uvs, 0).xy, 1.0);
+#if BINDLESS
         normals = normals * 2.0 - 1.0;
         if ((mat.textures[NORMALS_TEXTURE] & TEX_RECONSTRUCT_Z_BIT) != 0) {
             normals.z = sqrt(1.0 - dot(normals.xy, normals.xy));
         }
 #else
-        vec3 normals = vec3(SampleBilinear(g_atlases, g_textures[mat.textures[NORMALS_TEXTURE]], uvs, 0).xy, 1.0);
         normals = normals * 2.0 - 1.0;
         if ((g_textures[mat.textures[NORMALS_TEXTURE]].size & ATLAS_TEX_RECONSTRUCT_Z_BIT) != 0) {
             normals.z = sqrt(1.0 - dot(normals.xy, normals.xy));
@@ -1125,21 +1201,8 @@ vec3 ShadeSurface(int px_index, hit_data_t inter, ray_data_t ray) {
 
     vec3 base_color = vec3(mat.base_color[0], mat.base_color[1], mat.base_color[2]);
     [[dont_flatten]] if (mat.textures[BASE_TEXTURE] != 0xffffffff) {
-#if BINDLESS
         const float base_lod = get_texture_lod(texSize(mat.textures[BASE_TEXTURE]), lambda);
-        vec3 tex_color = SampleBilinear(mat.textures[BASE_TEXTURE], uvs, int(base_lod)).rgb;
-        if ((mat.textures[BASE_TEXTURE] & TEX_SRGB_BIT) != 0) {
-            tex_color = srgb_to_rgb(tex_color);
-        }
-#else
-        const atlas_texture_t base_texture = g_textures[mat.textures[BASE_TEXTURE]];
-        const float base_lod = get_texture_lod(base_texture, lambda);
-        vec3 tex_color = SampleBilinear(g_atlases, base_texture, uvs, int(base_lod)).rgb;
-        if ((base_texture.size & ATLAS_TEX_SRGB_BIT) != 0) {
-            tex_color = srgb_to_rgb(tex_color);
-        }
-#endif
-        base_color *= tex_color;
+        base_color *= SampleBilinear(mat.textures[BASE_TEXTURE], uvs, int(base_lod), true /* YCoCg */, true /* SRGB */).rgb;
     }
 
     vec3 tint_color = vec3(0.0);
@@ -1151,21 +1214,8 @@ vec3 ShadeSurface(int px_index, hit_data_t inter, ray_data_t ray) {
 
     float roughness = unpack_unorm_16(mat.roughness_and_anisotropic & 0xffff);
     [[dont_flatten]] if (mat.textures[ROUGH_TEXTURE] != 0xffffffff) {
-#if BINDLESS
         const float roughness_lod = get_texture_lod(texSize(mat.textures[ROUGH_TEXTURE]), lambda);
-        vec3 roughness_color = vec3(SampleBilinear(mat.textures[ROUGH_TEXTURE], uvs, int(roughness_lod)).r);
-        if ((mat.textures[ROUGH_TEXTURE] & TEX_SRGB_BIT) != 0) {
-            roughness_color = srgb_to_rgb(roughness_color);
-        }
-#else
-        const atlas_texture_t roughness_tex = g_textures[mat.textures[ROUGH_TEXTURE]];
-        const float roughness_lod = get_texture_lod(roughness_tex, lambda);
-        vec3 roughness_color = vec3(SampleBilinear(g_atlases, roughness_tex, uvs, int(roughness_lod)).r);
-        if ((roughness_tex.size & ATLAS_TEX_SRGB_BIT) != 0) {
-            roughness_color = srgb_to_rgb(roughness_color);
-        }
-#endif
-        roughness *= roughness_color.r;
+        roughness *= SampleBilinear(mat.textures[ROUGH_TEXTURE], uvs, int(roughness_lod), false /* YCoCg */, true /* SRGB */).r;
     }
 
     const float rand_u = fract(g_halton[g_params.hi + RAND_DIM_BSDF_U] + sample_off[0]);
@@ -1195,20 +1245,25 @@ vec3 ShadeSurface(int px_index, hit_data_t inter, ray_data_t ray) {
 
             const vec3 lcol = ls.col * diff_col.xyz * (mix_weight * mis_weight / ls.pdf);
 
-            // schedule shadow ray
-            shadow_ray_t sh_r;
+            [[dont_flatten]] if (ls.cast_shadow > 0.5) {
+                // schedule shadow ray
+                shadow_ray_t sh_r;
 
-            vec3 new_o = offset_ray(P, plane_N);
-            sh_r.o[0] = new_o[0]; sh_r.o[1] = new_o[1]; sh_r.o[2] = new_o[2];
-            sh_r.d[0] = ls.L[0]; sh_r.d[1] = ls.L[1]; sh_r.d[2] = ls.L[2];
-            sh_r.dist = ls.dist - 10.0 * HIT_BIAS;
-            sh_r.c[0] = ray.c[0] * lcol[0];
-            sh_r.c[1] = ray.c[1] * lcol[1];
-            sh_r.c[2] = ray.c[2] * lcol[2];
-            sh_r.xy = ray.xy;
+                vec3 new_o = offset_ray(P, plane_N);
+                sh_r.o[0] = new_o[0]; sh_r.o[1] = new_o[1]; sh_r.o[2] = new_o[2];
+                sh_r.d[0] = ls.L[0]; sh_r.d[1] = ls.L[1]; sh_r.d[2] = ls.L[2];
+                sh_r.dist = ls.dist - 10.0 * HIT_BIAS;
+                sh_r.c[0] = ray.c[0] * lcol[0];
+                sh_r.c[1] = ray.c[1] * lcol[1];
+                sh_r.c[2] = ray.c[2] * lcol[2];
+                sh_r.xy = ray.xy;
 
-            const uint index = atomicAdd(g_inout_counters[2], 1);
-            g_out_sh_rays[index] = sh_r;
+                const uint index = atomicAdd(g_inout_counters[2], 1);
+                g_out_sh_rays[index] = sh_r;
+            } else {
+                // apply light immediately
+                col += lcol;
+            }
         }
 #endif
 
@@ -1255,20 +1310,25 @@ vec3 ShadeSurface(int px_index, hit_data_t inter, ray_data_t ray) {
             }
             const vec3 lcol = ls.col * spec_col.rgb * (mix_weight * mis_weight / ls.pdf);
 
-            // schedule shadow ray
-            shadow_ray_t sh_r;
+            [[dont_flatten]] if (ls.cast_shadow > 0.5) {
+                // schedule shadow ray
+                shadow_ray_t sh_r;
 
-            vec3 new_o = offset_ray(P, plane_N);
-            sh_r.o[0] = new_o[0]; sh_r.o[1] = new_o[1]; sh_r.o[2] = new_o[2];
-            sh_r.d[0] = ls.L[0]; sh_r.d[1] = ls.L[1]; sh_r.d[2] = ls.L[2];
-            sh_r.dist = ls.dist - 10.0 * HIT_BIAS;
-            sh_r.c[0] = ray.c[0] * lcol[0];
-            sh_r.c[1] = ray.c[1] * lcol[1];
-            sh_r.c[2] = ray.c[2] * lcol[2];
-            sh_r.xy = ray.xy;
+                vec3 new_o = offset_ray(P, plane_N);
+                sh_r.o[0] = new_o[0]; sh_r.o[1] = new_o[1]; sh_r.o[2] = new_o[2];
+                sh_r.d[0] = ls.L[0]; sh_r.d[1] = ls.L[1]; sh_r.d[2] = ls.L[2];
+                sh_r.dist = ls.dist - 10.0 * HIT_BIAS;
+                sh_r.c[0] = ray.c[0] * lcol[0];
+                sh_r.c[1] = ray.c[1] * lcol[1];
+                sh_r.c[2] = ray.c[2] * lcol[2];
+                sh_r.xy = ray.xy;
 
-            const uint index = atomicAdd(g_inout_counters[2], 1);
-            g_out_sh_rays[index] = sh_r;
+                const uint index = atomicAdd(g_inout_counters[2], 1);
+                g_out_sh_rays[index] = sh_r;
+            } else {
+                // apply light immediately
+                col += lcol;
+            }
         }
 #endif
 
@@ -1313,20 +1373,25 @@ vec3 ShadeSurface(int px_index, hit_data_t inter, ray_data_t ray) {
             }
             const vec3 lcol = ls.col * refr_col.rgb * (mix_weight * mis_weight / ls.pdf);
 
-            /// schedule shadow ray
-            shadow_ray_t sh_r;
+            [[dont_flatten]] if (ls.cast_shadow > 0.5) {
+                // schedule shadow ray
+                shadow_ray_t sh_r;
 
-            vec3 new_o = offset_ray(P, -plane_N);
-            sh_r.o[0] = new_o[0]; sh_r.o[1] = new_o[1]; sh_r.o[2] = new_o[2];
-            sh_r.d[0] = ls.L[0]; sh_r.d[1] = ls.L[1]; sh_r.d[2] = ls.L[2];
-            sh_r.dist = ls.dist - 10.0 * HIT_BIAS;
-            sh_r.c[0] = ray.c[0] * lcol[0];
-            sh_r.c[1] = ray.c[1] * lcol[1];
-            sh_r.c[2] = ray.c[2] * lcol[2];
-            sh_r.xy = ray.xy;
+                vec3 new_o = offset_ray(P, -plane_N);
+                sh_r.o[0] = new_o[0]; sh_r.o[1] = new_o[1]; sh_r.o[2] = new_o[2];
+                sh_r.d[0] = ls.L[0]; sh_r.d[1] = ls.L[1]; sh_r.d[2] = ls.L[2];
+                sh_r.dist = ls.dist - 10.0 * HIT_BIAS;
+                sh_r.c[0] = ray.c[0] * lcol[0];
+                sh_r.c[1] = ray.c[1] * lcol[1];
+                sh_r.c[2] = ray.c[2] * lcol[2];
+                sh_r.xy = ray.xy;
 
-            const uint index = atomicAdd(g_inout_counters[2], 1);
-            g_out_sh_rays[index] = sh_r;
+                const uint index = atomicAdd(g_inout_counters[2], 1);
+                g_out_sh_rays[index] = sh_r;
+            } else {
+                // apply light immediately
+                col += lcol;
+            }
         }
 #endif
 
@@ -1359,9 +1424,9 @@ vec3 ShadeSurface(int px_index, hit_data_t inter, ray_data_t ray) {
             const uint env_map = floatBitsToUint(g_params.env_col.w);
             if (env_map != 0xffffffff) {
 #if BINDLESS
-                env_col *= SampleLatlong_RGBE(env_map, rd);
+                env_col *= SampleLatlong_RGBE(env_map, rd, g_params.env_rotation);
 #else
-                env_col *= SampleLatlong_RGBE(g_atlases, g_textures[env_map], rd);
+                env_col *= SampleLatlong_RGBE(g_textures[env_map], rd, g_params.env_rotation);
 #endif
             }
             base_color *= env_col;
@@ -1406,17 +1471,16 @@ vec3 ShadeSurface(int px_index, hit_data_t inter, ray_data_t ray) {
     } else if (mat.type == PrincipledNode) {
         float metallic = unpack_unorm_16((mat.tint_and_metallic >> 16) & 0xffff);
         [[dont_flatten]] if (mat.textures[METALLIC_TEXTURE] != 0xffffffff) {
-#if BINDLESS
             const float metallic_lod = get_texture_lod(texSize(mat.textures[METALLIC_TEXTURE]), lambda);
             metallic *= SampleBilinear(mat.textures[METALLIC_TEXTURE], uvs, int(metallic_lod)).r;
-#else
-            const atlas_texture_t metallic_tex = g_textures[mat.textures[METALLIC_TEXTURE]];
-            const float metallic_lod = get_texture_lod(metallic_tex, lambda);
-            metallic *= SampleBilinear(g_atlases, metallic_tex, uvs, int(metallic_lod)).r;
-#endif
         }
 
-        const float specular = unpack_unorm_16(mat.specular_and_specular_tint & 0xffff);
+        float specular = unpack_unorm_16(mat.specular_and_specular_tint & 0xffff);
+        [[dont_flatten]] if (mat.textures[SPECULAR_TEXTURE] != 0xffffffff) {
+            const float specular_lod = get_texture_lod(texSize(mat.textures[SPECULAR_TEXTURE]), lambda);
+            specular *= SampleBilinear(mat.textures[SPECULAR_TEXTURE], uvs, int(specular_lod)).r;
+        }
+
         const float specular_tint = unpack_unorm_16((mat.specular_and_specular_tint >> 16) & 0xffff);
         const float transmission = unpack_unorm_16(mat.transmission_and_transmission_roughness & 0xffff);
         const float clearcoat = unpack_unorm_16(mat.clearcoat_and_clearcoat_roughness & 0xffff);
@@ -1522,20 +1586,25 @@ vec3 ShadeSurface(int px_index, hit_data_t inter, ray_data_t ray) {
             }
             lcol *= mix_weight * mis_weight;
 
-            // schedule shadow ray
-            shadow_ray_t sh_r;
+            [[dont_flatten]] if (ls.cast_shadow > 0.5) {
+                // schedule shadow ray
+                shadow_ray_t sh_r;
 
-            vec3 new_o = offset_ray(P, N_dot_L < 0.0 ? -plane_N : plane_N);
-            sh_r.o[0] = new_o[0]; sh_r.o[1] = new_o[1]; sh_r.o[2] = new_o[2];
-            sh_r.d[0] = ls.L[0]; sh_r.d[1] = ls.L[1]; sh_r.d[2] = ls.L[2];
-            sh_r.dist = ls.dist - 10.0 * HIT_BIAS;
-            sh_r.c[0] = ray.c[0] * lcol[0];
-            sh_r.c[1] = ray.c[1] * lcol[1];
-            sh_r.c[2] = ray.c[2] * lcol[2];
-            sh_r.xy = ray.xy;
+                vec3 new_o = offset_ray(P, N_dot_L < 0.0 ? -plane_N : plane_N);
+                sh_r.o[0] = new_o[0]; sh_r.o[1] = new_o[1]; sh_r.o[2] = new_o[2];
+                sh_r.d[0] = ls.L[0]; sh_r.d[1] = ls.L[1]; sh_r.d[2] = ls.L[2];
+                sh_r.dist = ls.dist - 10.0 * HIT_BIAS;
+                sh_r.c[0] = ray.c[0] * lcol[0];
+                sh_r.c[1] = ray.c[1] * lcol[1];
+                sh_r.c[2] = ray.c[2] * lcol[2];
+                sh_r.xy = ray.xy;
 
-            const uint index = atomicAdd(g_inout_counters[2], 1);
-            g_out_sh_rays[index] = sh_r;
+                const uint index = atomicAdd(g_inout_counters[2], 1);
+                g_out_sh_rays[index] = sh_r;
+            } else {
+                // apply light immediately
+                col += lcol;
+            }
         }
 #endif
 

@@ -34,6 +34,23 @@ layout(std430, binding = INOUT_HITS_BUF_SLOT) buffer Hits {
     hit_data_t g_inout_hits[];
 };
 
+bool quadratic(float a, float b, float c, out float t0, out float t1) {
+    const float d = b * b - 4.0 * a * c;
+    if (d < 0.0) {
+        return false;
+    }
+    const float sqrt_d = sqrt(d);
+    float q;
+    if (b < 0.0) {
+        q = -0.5 * (b - sqrt_d);
+    } else {
+        q = -0.5 * (b + sqrt_d);
+    }
+    t0 = q / a;
+    t1 = c / q;
+    return true;
+}
+
 layout (local_size_x = LOCAL_GROUP_SIZE_X, local_size_y = LOCAL_GROUP_SIZE_Y, local_size_z = 1) in;
 
 void main() {
@@ -71,7 +88,9 @@ void main() {
         uint light_index = g_visible_lights[li];
         light_t l = g_lights[light_index];
 
-        uint light_type = (l.type_and_param0.x & 0x3f);
+        bool no_shadow = (l.type_and_param0.x & (1 << 5)) == 0;
+
+        uint light_type = (l.type_and_param0.x & 0x1f);
         if (light_type == LIGHT_TYPE_SPHERE) {
             vec3 light_pos = l.SPH_POS;
             vec3 op = light_pos - ro;
@@ -80,11 +99,11 @@ void main() {
             if (det >= 0.0) {
                 det = sqrt(det);
                 float t1 = b - det, t2 = b + det;
-                if (t1 > HIT_EPS && t1 < inter.t) {
+                if (t1 > HIT_EPS && (t1 < inter.t || no_shadow)) {
                     inter.mask = -1;
                     inter.obj_index = -int(light_index) - 1;
                     inter.t = t1;
-                } else if (t2 > HIT_EPS && t2 < inter.t) {
+                } else if (t2 > HIT_EPS && (t2 < inter.t || no_shadow)) {
                     inter.mask = -1;
                     inter.obj_index = -int(light_index) - 1;
                     inter.t = t2;
@@ -101,7 +120,7 @@ void main() {
             float cos_theta = dot(rd, light_forward);
             float t = (plane_dist - dot(light_forward, ro)) / cos_theta;
 
-            if (cos_theta < 0.0 && t > HIT_EPS && t < inter.t) {
+            if (cos_theta < 0.0 && t > HIT_EPS && (t < inter.t || no_shadow)) {
                 light_u /= dot(light_u, light_u);
                 light_v /= dot(light_v, light_v);
 
@@ -128,7 +147,7 @@ void main() {
             float cos_theta = dot(rd, light_forward);
             float t = (plane_dist - dot(light_forward, ro)) / cos_theta;
 
-            if (cos_theta < 0.0 && t > HIT_EPS && t < inter.t) {
+            if (cos_theta < 0.0 && t > HIT_EPS && (t < inter.t || no_shadow)) {
                 light_u /= dot(light_u, light_u);
                 light_v /= dot(light_v, light_v);
 
@@ -138,6 +157,31 @@ void main() {
                 float a2 = dot(light_v, vi);
 
                 if (sqrt(a1 * a1 + a2 * a2) <= 0.5) {
+                    inter.mask = -1;
+                    inter.obj_index = -int(light_index) - 1;
+                    inter.t = t;
+                }
+            }
+        } else if (light_type == LIGHT_TYPE_LINE) {
+            vec3 light_pos = l.LINE_POS;
+            vec3 light_u = l.LINE_U;
+            vec3 light_dir = l.LINE_V;
+            vec3 light_v = cross(light_u, light_dir);
+
+            vec3 _ro = ro - light_pos;
+            _ro = vec3(dot(_ro, light_dir), dot(_ro, light_u), dot(_ro, light_v));
+
+            vec3 _rd = vec3(dot(rd, light_dir), dot(rd, light_u), dot(rd, light_v));
+
+            float A = _rd[2] * _rd[2] + _rd[1] * _rd[1];
+            float B = 2.0 * (_rd[2] * _ro[2] + _rd[1] * _ro[1]);
+            float C = _ro[2] * _ro[2] + _ro[1] * _ro[1] - l.LINE_RADIUS * l.LINE_RADIUS;
+
+            float t0, t1;
+            if (quadratic(A, B, C, t0, t1) && t0 > HIT_EPS && t1 > HIT_EPS) {
+                const float t = min(t0, t1);
+                const vec3 p = _ro + t * _rd;
+                if (abs(p[0]) < 0.5 * l.LINE_HEIGHT && (t < inter.t || no_shadow)) {
                     inter.mask = -1;
                     inter.obj_index = -int(light_index) - 1;
                     inter.t = t;

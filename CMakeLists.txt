@@ -2,20 +2,21 @@ cmake_minimum_required(VERSION 2.8.12)
 project(Ray)
 
 OPTION(ENABLE_UNITYBUILD "Enable compilation of one large cpp file" ON)
-OPTION(ENABLE_ASAN "Enable Address Sanitizer Build" OFF)
 OPTION(ENABLE_REF_IMPL "Enable reference CPU implementation" OFF)
 OPTION(ENABLE_SIMD_IMPL "Enable SIMD CPU implementations" ON)
 OPTION(ENABLE_GPU_IMPL "Enable Vulkan GPU implementation" ON)
 
+set(CMAKE_CONFIGURATION_TYPES "Debug;Release;RelWithDebInfo;Asan" CACHE STRING "" FORCE)
+
 IF(MSVC)
-    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /Ob1")
-    if (ENABLE_ASAN)
-        set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /fsanitize=address")
-    endif()
+    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /Ob1 /fp:except")
+    set(CMAKE_CXX_FLAGS_ASAN "${CMAKE_CXX_FLAGS_DEBUG} /MTd /fsanitize=address")
+    set(CMAKE_EXE_LINKER_FLAGS_ASAN "${CMAKE_EXE_LINKER_FLAGS_DEBUG} /INCREMENTAL:NO")
 ELSE(MSVC)
     set(CMAKE_CXX_STANDARD 11)
     set(CMAKE_CXX_STANDARD_REQUIRED ON)
-    if(NOT CMAKE_SYSTEM_NAME MATCHES "Android")
+    if(NOT CMAKE_SYSTEM_NAME MATCHES "Android" AND NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64" AND
+       NOT "${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "arm64")
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mavx2 -msse2 -mfma")
         IF(WIN32)
         ELSE(WIN32)
@@ -177,6 +178,7 @@ set(VK_FILES internal/Vk/AccStructure.h
 set(SHADER_FILES    internal/shaders/_interface_common.h
                     internal/shaders/common.glsl
                     internal/shaders/debug_rt.comp.glsl
+                    internal/shaders/envmap.glsl
                     internal/shaders/intersect.glsl
                     internal/shaders/intersect_area_lights.comp.glsl
                     internal/shaders/intersect_area_lights_interface.h
