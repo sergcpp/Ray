@@ -28,7 +28,7 @@ void main() {
         g_counters[0] = 0;
         g_counters[1] = ray_count;
     }
-    
+
     { // shadow rays
         uint sh_ray_count = g_counters[2];
 
