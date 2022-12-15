@@ -151,6 +151,11 @@ template <> class simd_vec<float, 4> {
         return ret;
     }
 
+    force_inline simd_vec<float, 4> &operator&=(const simd_vec<float, 4> &rhs) {
+        vec_ = _mm_and_ps(vec_, rhs.vec_);
+        return *this;
+    }
+
     force_inline explicit operator simd_vec<int, 4>() const;
 
     force_inline simd_vec<float, 4> sqrt() const {

@@ -140,6 +140,11 @@ public:
         return ret;
     }
 
+    force_inline simd_vec<float, 4> operator&=(const simd_vec<float, 4> &rhs) {
+        vec_ = vandq_u32(vreinterpretq_u32_f32(vec_), vreinterpretq_u32_f32(rhs.vec_));
+        return *this;
+    }
+
     force_inline simd_vec<float, 4> operator~() const {
         simd_vec<float, 4> ret;
         ret.vec_ = vreinterpretq_f32_u32(vmvnq_u32(vreinterpretq_u32_f32(vec_)));
