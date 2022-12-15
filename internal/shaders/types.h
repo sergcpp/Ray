@@ -174,7 +174,10 @@ struct light_t {
 
 #define SPH_POS param1.xyz
 #define SPH_AREA param1.w
-#define SPH_RADIUS param2.x
+#define SPH_DIR param2.xyz
+#define SPH_RADIUS param2.w
+#define SPH_SPOT param3.x
+#define SPH_BLEND param3.y
 
 #define RECT_POS param1.xyz
 #define RECT_AREA param1.w

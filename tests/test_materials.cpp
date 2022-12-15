@@ -189,13 +189,14 @@ void load_needed_textures(Ray::SceneBase &scene, Ray::principled_mat_desc_t &mat
 namespace {
 const int STANDARD_SCENE = 0;
 const int STANDARD_SCENE_SPHERE_LIGHT = 1;
-const int STANDARD_SCENE_MESH_LIGHTS = 2;
-const int STANDARD_SCENE_SUN_LIGHT = 3;
-const int STANDARD_SCENE_HDR_LIGHT = 4;
-const int STANDARD_SCENE_NO_LIGHT = 5;
-const int STANDARD_SCENE_DOF0 = 6;
-const int STANDARD_SCENE_DOF1 = 7;
-const int REFR_PLANE_SCENE = 8;
+const int STANDARD_SCENE_SPOT_LIGHT = 2;
+const int STANDARD_SCENE_MESH_LIGHTS = 3;
+const int STANDARD_SCENE_SUN_LIGHT = 4;
+const int STANDARD_SCENE_HDR_LIGHT = 5;
+const int STANDARD_SCENE_NO_LIGHT = 6;
+const int STANDARD_SCENE_DOF0 = 7;
+const int STANDARD_SCENE_DOF1 = 8;
+const int REFR_PLANE_SCENE = 9;
 } // namespace
 
 template <typename MatDesc>
@@ -536,7 +537,8 @@ void setup_material_scene(Ray::SceneBase &scene, const bool output_sh, const Mat
         }
         scene.AddMeshInstance(disc_light_mesh, identity);
     } else if (scene_index == STANDARD_SCENE || scene_index == STANDARD_SCENE_SPHERE_LIGHT ||
-               scene_index == STANDARD_SCENE_DOF0 || scene_index == STANDARD_SCENE_DOF1) {
+               scene_index == STANDARD_SCENE_SPOT_LIGHT || scene_index == STANDARD_SCENE_DOF0 ||
+               scene_index == STANDARD_SCENE_DOF1) {
         //
         // Use explicit lights sources
         //
@@ -619,8 +621,31 @@ void setup_material_scene(Ray::SceneBase &scene, const bool output_sh, const Mat
 
                 scene.AddLight(new_light, xform);
             }
-        }
+        } else if (scene_index == STANDARD_SCENE_SPOT_LIGHT) {
+            { // spot light
+                Ray::spot_light_desc_t new_light;
 
+                new_light.color[0] = 10.1321182f;
+                new_light.color[1] = 10.1321182f;
+                new_light.color[2] = 10.1321182f;
+
+                new_light.position[0] = -0.436484f;
+                new_light.position[1] = 0.187179f;
+                new_light.position[2] = 0.204932f;
+
+                new_light.direction[0] = 0.699538708f;
+                new_light.direction[1] = -0.130918920f;
+                new_light.direction[2] = -0.702499688f;
+
+                new_light.radius = 0.05f;
+                new_light.spot_size = 45.0f;
+                new_light.spot_blend = 0.15f;
+
+                new_light.visible = true;
+
+                scene.AddLight(new_light);
+            }
+        }
     } else if (scene_index == STANDARD_SCENE_SUN_LIGHT) {
         Ray::directional_light_desc_t sun_desc;
 
@@ -857,7 +882,7 @@ void assemble_material_test_images(const char *arch_list[]) {
          "complex_mat5_hdr_light"},
         {"complex_mat6", "complex_mat6_mesh_lights", "complex_mat6_sphere_light", "complex_mat6_sun_light",
          "complex_mat6_hdr_light"},
-        {"complex_mat5_dof", "complex_mat6_dof"}};
+        {"complex_mat5_dof", "complex_mat5_spot_light", "complex_mat6_dof", "complex_mat6_spot_light"}};
     const int ImgCountH = sizeof(test_names) / sizeof(test_names[0]);
 
     const int OutImageW = 256 * ImgCountW;
@@ -2499,6 +2524,28 @@ void test_complex_mat5_sphere_light(const char *arch_list[], const char *preferr
                       PixThres, textures, STANDARD_SCENE_SPHERE_LIGHT);
 }
 
+void test_complex_mat5_spot_light(const char *arch_list[], const char *preferred_device) {
+    const int SampleCount = 768;
+    const double MinPSNR = 39.25;
+    const int PixThres = 86;
+
+    Ray::principled_mat_desc_t metal_mat_desc;
+    metal_mat_desc.base_texture = 0;
+    metal_mat_desc.metallic = 1.0f;
+    metal_mat_desc.roughness = 1.0f;
+    metal_mat_desc.roughness_texture = 2;
+    metal_mat_desc.metallic = 1.0f;
+    metal_mat_desc.metallic_texture = 3;
+    metal_mat_desc.normal_map = 1;
+
+    const char *textures[] = {
+        "test_data/textures/gold-scuffed_basecolor-boosted.tga", "test_data/textures/gold-scuffed_normal.tga",
+        "test_data/textures/gold-scuffed_roughness.tga", "test_data/textures/gold-scuffed_metallic.tga"};
+
+    run_material_test(arch_list, preferred_device, "complex_mat5_spot_light", metal_mat_desc, SampleCount, MinPSNR,
+                      PixThres, textures, STANDARD_SCENE_SPOT_LIGHT);
+}
+
 void test_complex_mat5_sun_light(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 768;
     const double MinPSNR = 28.64;
@@ -2608,6 +2655,23 @@ void test_complex_mat6_sphere_light(const char *arch_list[], const char *preferr
 
     run_material_test(arch_list, preferred_device, "complex_mat6_sphere_light", olive_mat_desc, SampleCount, MinPSNR,
                       PixThres, nullptr, STANDARD_SCENE_SPHERE_LIGHT);
+}
+
+void test_complex_mat6_spot_light(const char *arch_list[], const char *preferred_device) {
+    const int SampleCount = 1024;
+    const double MinPSNR = 37.62;
+    const int PixThres = 40;
+
+    Ray::principled_mat_desc_t olive_mat_desc;
+    olive_mat_desc.base_color[0] = 0.836164f;
+    olive_mat_desc.base_color[1] = 0.836164f;
+    olive_mat_desc.base_color[2] = 0.656603f;
+    olive_mat_desc.roughness = 0.041667f;
+    olive_mat_desc.transmission = 1.0f;
+    olive_mat_desc.ior = 2.3f;
+
+    run_material_test(arch_list, preferred_device, "complex_mat6_spot_light", olive_mat_desc, SampleCount, MinPSNR,
+                      PixThres, nullptr, STANDARD_SCENE_SPOT_LIGHT);
 }
 
 void test_complex_mat6_sun_light(const char *arch_list[], const char *preferred_device) {

@@ -100,9 +100,21 @@ void main() {
                 det = sqrt(det);
                 float t1 = b - det, t2 = b + det;
                 if (t1 > HIT_EPS && (t1 < inter.t || no_shadow)) {
-                    inter.mask = -1;
-                    inter.obj_index = -int(light_index) - 1;
-                    inter.t = t1;
+                    bool accept = true;
+                    if (l.SPH_SPOT > 0.0) {
+                        const float _dot = -dot(rd, l.SPH_DIR);
+                        if (_dot > 0.0) {
+                            const float _angle = acos(clamp(_dot, 0.0, 1.0));
+                            accept = accept && (_angle <= l.SPH_SPOT);
+                        } else {
+                            accept = false;
+                        }
+                    }
+                    if (accept) {
+                        inter.mask = -1;
+                        inter.obj_index = -int(light_index) - 1;
+                        inter.t = t1;
+                    }
                 } else if (t2 > HIT_EPS && (t2 < inter.t || no_shadow)) {
                     inter.mask = -1;
                     inter.obj_index = -int(light_index) - 1;

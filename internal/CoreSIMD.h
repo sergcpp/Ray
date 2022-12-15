@@ -4225,6 +4225,24 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const scene_data_t &sc,
             if (!l.visible) {
                 where(ray_queue[index], ls.area) = 0.0f;
             }
+
+            if (l.sph.spot > 0.0f) {
+                simd_fvec<S> _dot =
+                    min(-(ls.L[0] * l.sph.dir[0] + ls.L[1] * l.sph.dir[1] + ls.L[2] * l.sph.dir[2]), 1.0f);
+                simd_ivec<S> mask = simd_cast(_dot > 0.0f);
+                if (mask.not_all_zeros()) {
+                    simd_fvec<S> _angle;
+                    ITERATE(S, {
+                        if (mask[i]) {
+                            _angle[i] = std::acos(_dot[i]);
+                        }
+                    })
+                    ITERATE_3({
+                        where(ray_queue[index], ls.col[i]) *= clamp((l.sph.spot - _angle) / l.sph.blend, 0.0f, 1.0f);
+                    })
+                }
+                ITERATE_3({ where(~mask & ray_queue[index], ls.col[i]) = 0.0f; })
+            }
         } else if (l.type == LIGHT_TYPE_DIR) {
             ITERATE_3({ where(ray_queue[index], ls.L[i]) = l.dir.dir[i]; })
             if (l.dir.angle != 0.0f) {
@@ -4500,9 +4518,25 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, const simd_ivec<S> &ra
                 det = sqrt(det);
                 const simd_fvec<S> t1 = b - det, t2 = b + det;
 
-                const simd_fvec<S> mask1 = (t1 > HIT_EPS & (t1 < inout_inter.t | no_shadow)) & simd_cast(imask);
+                simd_fvec<S> mask1 = (t1 > HIT_EPS & (t1 < inout_inter.t | no_shadow)) & simd_cast(imask);
                 const simd_fvec<S> mask2 =
                     (t2 > HIT_EPS & (t2 < inout_inter.t | no_shadow)) & simd_cast(imask) & ~mask1;
+
+                if (l.sph.spot > 0.0f) {
+                    const simd_fvec<S> _dot =
+                        min(-(r.d[0] * l.sph.dir[0] + r.d[1] * l.sph.dir[1] + r.d[2] * l.sph.dir[2]), 1.0f);
+                    mask1 &= (_dot > 0.0f);
+                    const simd_ivec<S> imask1 = simd_cast(mask1);
+                    if (imask1.not_all_zeros()) {
+                        simd_fvec<S> _angle = 0.0f;
+                        ITERATE(S, {
+                            if (imask1[i]) {
+                                _angle[i] = std::acos(_dot[i]);
+                            }
+                        })
+                        mask1 &= (_angle <= l.sph.spot);
+                    }
+                }
 
                 inout_inter.mask |= simd_cast(mask1 | mask2);
 
@@ -4685,6 +4719,23 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
 
                 const simd_fvec<S> mis_weight = power_heuristic(bsdf_pdf, light_pdf);
                 ITERATE_3({ lcol[i] *= mis_weight; });
+
+                if (l.sph.spot > 0.0f && l.sph.blend > 0.0f) {
+                    const simd_fvec<S> _dot = -(I[0] * l.sph.dir[0] + I[1] * l.sph.dir[1] + I[2] * l.sph.dir[2]);
+                    assert(simd_cast(_dot <= 0.0f).all_zeros());
+
+                    simd_fvec<S> _angle = 0.0f;
+                    ITERATE(S, {
+                        if (ray_queue[index][i]) {
+                            _angle[i] = std::acos(_dot[i]);
+                        }
+                    })
+                    assert(simd_cast(_angle > l.sph.spot).all_zeros());
+                    if (l.sph.blend > 0.0f) {
+                        const simd_fvec<S> spot_weight = clamp((l.sph.spot - _angle) / l.sph.blend, 0.0f, 1.0f);
+                        ITERATE_3({ lcol[i] *= spot_weight; })
+                    }
+                }
             } else if (l.type == LIGHT_TYPE_RECT) {
                 float light_fwd[3];
                 cross(l.rect.u, l.rect.v, light_fwd);

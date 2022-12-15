@@ -47,7 +47,7 @@ ByteAddressBuffer _102 : register(t4, space0);
 RWByteAddressBuffer _191 : register(u0, space0);
 ByteAddressBuffer _229 : register(t2, space0);
 ByteAddressBuffer _242 : register(t1, space0);
-ByteAddressBuffer _760 : register(t3, space0);
+ByteAddressBuffer _794 : register(t3, space0);
 cbuffer UniformParams
 {
     Params _220_g_params : packoffset(c0);
@@ -64,13 +64,13 @@ struct SPIRV_Cross_Input
 
 bool quadratic(float a, float b, float c, inout float t0, inout float t1)
 {
-    bool _767;
+    bool _801;
     do
     {
         float _26 = mad(b, b, -((4.0f * a) * c));
         if (_26 < 0.0f)
         {
-            _767 = false;
+            _801 = false;
             break;
         }
         float _36 = sqrt(_26);
@@ -85,10 +85,10 @@ bool quadratic(float a, float b, float c, inout float t0, inout float t1)
         }
         t0 = q / a;
         t1 = c / q;
-        _767 = true;
+        _801 = true;
         break;
     } while(false);
-    return _767;
+    return _801;
 }
 
 void comp_main()
@@ -134,9 +134,9 @@ void comp_main()
         _195.t = asfloat(_191.Load(_77 * 24 + 12));
         _195.u = asfloat(_191.Load(_77 * 24 + 16));
         _195.v = asfloat(_191.Load(_77 * 24 + 20));
-        int _786 = _195.mask;
-        int _787 = _195.obj_index;
-        float _789 = _195.t;
+        int _820 = _195.mask;
+        int _821 = _195.obj_index;
+        float _823 = _195.t;
         float param_3;
         float param_4;
         for (uint li = 0u; li < _220_g_params.visible_lights_count; li++)
@@ -152,7 +152,7 @@ void comp_main()
             {
                 float3 _280 = _246.param1.xyz - _175;
                 float _284 = dot(_280, _183);
-                float _298 = mad(_246.param2.x, _246.param2.x, mad(_284, _284, -dot(_280, _280)));
+                float _298 = mad(_246.param2.w, _246.param2.w, mad(_284, _284, -dot(_280, _280)));
                 float det = _298;
                 if (_298 >= 0.0f)
                 {
@@ -165,7 +165,7 @@ void comp_main()
                     bool _324;
                     if (_315)
                     {
-                        _324 = (_308 < _789) || _263;
+                        _324 = (_308 < _823) || _263;
                     }
                     else
                     {
@@ -173,27 +173,52 @@ void comp_main()
                     }
                     if (_324)
                     {
-                        _786 = -1;
-                        _787 = (-1) - int(_229.Load(li * 4 + 0));
-                        _789 = _308;
+                        bool accept = true;
+                        if (_246.param3.x > 0.0f)
+                        {
+                            float _339 = -dot(_183, _246.param2.xyz);
+                            if (_339 > 0.0f)
+                            {
+                                bool _356;
+                                if (accept)
+                                {
+                                    _356 = acos(clamp(_339, 0.0f, 1.0f)) <= _246.param3.x;
+                                }
+                                else
+                                {
+                                    _356 = accept;
+                                }
+                                accept = _356;
+                            }
+                            else
+                            {
+                                accept = false;
+                            }
+                        }
+                        if (accept)
+                        {
+                            _820 = -1;
+                            _821 = (-1) - int(_229.Load(li * 4 + 0));
+                            _823 = _308;
+                        }
                     }
                     else
                     {
-                        bool _338 = _312 > 9.9999999747524270787835121154785e-07f;
-                        bool _347;
-                        if (_338)
+                        bool _372 = _312 > 9.9999999747524270787835121154785e-07f;
+                        bool _381;
+                        if (_372)
                         {
-                            _347 = (_312 < _789) || _263;
+                            _381 = (_312 < _823) || _263;
                         }
                         else
                         {
-                            _347 = _338;
+                            _381 = _372;
                         }
-                        if (_347)
+                        if (_381)
                         {
-                            _786 = -1;
-                            _787 = (-1) - int(_229.Load(li * 4 + 0));
-                            _789 = _312;
+                            _820 = -1;
+                            _821 = (-1) - int(_229.Load(li * 4 + 0));
+                            _823 = _312;
                         }
                     }
                 }
@@ -204,35 +229,35 @@ void comp_main()
                 {
                     float3 light_u = _246.param2.xyz;
                     float3 light_v = _246.param3.xyz;
-                    float3 _380 = normalize(cross(_246.param2.xyz, _246.param3.xyz));
-                    float _388 = dot(_183, _380);
-                    float _396 = (dot(_380, _246.param1.xyz) - dot(_380, _175)) / _388;
-                    bool _401 = (_388 < 0.0f) && (_396 > 9.9999999747524270787835121154785e-07f);
-                    bool _410;
-                    if (_401)
+                    float3 _414 = normalize(cross(_246.param2.xyz, _246.param3.xyz));
+                    float _422 = dot(_183, _414);
+                    float _430 = (dot(_414, _246.param1.xyz) - dot(_414, _175)) / _422;
+                    bool _435 = (_422 < 0.0f) && (_430 > 9.9999999747524270787835121154785e-07f);
+                    bool _444;
+                    if (_435)
                     {
-                        _410 = (_396 < _789) || _263;
+                        _444 = (_430 < _823) || _263;
                     }
                     else
                     {
-                        _410 = _401;
+                        _444 = _435;
                     }
-                    if (_410)
+                    if (_444)
                     {
-                        float3 _413 = light_u;
-                        float3 _418 = _413 / dot(_413, _413).xxx;
-                        light_u = _418;
+                        float3 _447 = light_u;
+                        float3 _452 = _447 / dot(_447, _447).xxx;
+                        light_u = _452;
                         light_v /= dot(light_v, light_v).xxx;
-                        float3 _434 = (_175 + (_183 * _396)) - _246.param1.xyz;
-                        float _438 = dot(_418, _434);
-                        if ((_438 >= (-0.5f)) && (_438 <= 0.5f))
+                        float3 _468 = (_175 + (_183 * _430)) - _246.param1.xyz;
+                        float _472 = dot(_452, _468);
+                        if ((_472 >= (-0.5f)) && (_472 <= 0.5f))
                         {
-                            float _450 = dot(light_v, _434);
-                            if ((_450 >= (-0.5f)) && (_450 <= 0.5f))
+                            float _484 = dot(light_v, _468);
+                            if ((_484 >= (-0.5f)) && (_484 <= 0.5f))
                             {
-                                _786 = -1;
-                                _787 = (-1) - int(_229.Load(li * 4 + 0));
-                                _789 = _396;
+                                _820 = -1;
+                                _821 = (-1) - int(_229.Load(li * 4 + 0));
+                                _823 = _430;
                             }
                         }
                     }
@@ -243,35 +268,35 @@ void comp_main()
                     {
                         float3 light_u_1 = _246.param2.xyz;
                         float3 light_v_1 = _246.param3.xyz;
-                        float3 _488 = normalize(cross(_246.param2.xyz, _246.param3.xyz));
-                        float _496 = dot(_183, _488);
-                        float _504 = (dot(_488, _246.param1.xyz) - dot(_488, _175)) / _496;
-                        bool _509 = (_496 < 0.0f) && (_504 > 9.9999999747524270787835121154785e-07f);
-                        bool _518;
-                        if (_509)
+                        float3 _522 = normalize(cross(_246.param2.xyz, _246.param3.xyz));
+                        float _530 = dot(_183, _522);
+                        float _538 = (dot(_522, _246.param1.xyz) - dot(_522, _175)) / _530;
+                        bool _543 = (_530 < 0.0f) && (_538 > 9.9999999747524270787835121154785e-07f);
+                        bool _552;
+                        if (_543)
                         {
-                            _518 = (_504 < _789) || _263;
+                            _552 = (_538 < _823) || _263;
                         }
                         else
                         {
-                            _518 = _509;
+                            _552 = _543;
                         }
-                        if (_518)
+                        if (_552)
                         {
-                            float3 _521 = light_u_1;
-                            float3 _526 = _521 / dot(_521, _521).xxx;
-                            light_u_1 = _526;
-                            float3 _527 = light_v_1;
-                            float3 _532 = _527 / dot(_527, _527).xxx;
-                            light_v_1 = _532;
-                            float3 _542 = (_175 + (_183 * _504)) - _246.param1.xyz;
-                            float _546 = dot(_526, _542);
-                            float _550 = dot(_532, _542);
-                            if (sqrt(mad(_546, _546, _550 * _550)) <= 0.5f)
+                            float3 _555 = light_u_1;
+                            float3 _560 = _555 / dot(_555, _555).xxx;
+                            light_u_1 = _560;
+                            float3 _561 = light_v_1;
+                            float3 _566 = _561 / dot(_561, _561).xxx;
+                            light_v_1 = _566;
+                            float3 _576 = (_175 + (_183 * _538)) - _246.param1.xyz;
+                            float _580 = dot(_560, _576);
+                            float _584 = dot(_566, _576);
+                            if (sqrt(mad(_580, _580, _584 * _584)) <= 0.5f)
                             {
-                                _786 = -1;
-                                _787 = (-1) - int(_229.Load(li * 4 + 0));
-                                _789 = _504;
+                                _820 = -1;
+                                _821 = (-1) - int(_229.Load(li * 4 + 0));
+                                _823 = _538;
                             }
                         }
                     }
@@ -279,34 +304,34 @@ void comp_main()
                     {
                         if (_268 == 3u)
                         {
-                            float3 _590 = cross(_246.param2.xyz, _246.param3.xyz);
-                            float3 _594 = _175 - _246.param1.xyz;
-                            float _600 = dot(_594, _246.param2.xyz);
-                            float _603 = dot(_594, _590);
-                            float _611 = dot(_183, _246.param2.xyz);
-                            float _614 = dot(_183, _590);
-                            float param = mad(_614, _614, _611 * _611);
-                            float param_1 = 2.0f * mad(_614, _603, _611 * _600);
-                            float param_2 = mad(-_246.param2.w, _246.param2.w, mad(_603, _603, _600 * _600));
-                            bool _672 = quadratic(param, param_1, param_2, param_3, param_4);
-                            if ((_672 && (param_3 > 9.9999999747524270787835121154785e-07f)) && (param_4 > 9.9999999747524270787835121154785e-07f))
+                            float3 _624 = cross(_246.param2.xyz, _246.param3.xyz);
+                            float3 _628 = _175 - _246.param1.xyz;
+                            float _634 = dot(_628, _246.param2.xyz);
+                            float _637 = dot(_628, _624);
+                            float _645 = dot(_183, _246.param2.xyz);
+                            float _648 = dot(_183, _624);
+                            float param = mad(_648, _648, _645 * _645);
+                            float param_1 = 2.0f * mad(_648, _637, _645 * _634);
+                            float param_2 = mad(-_246.param2.w, _246.param2.w, mad(_637, _637, _634 * _634));
+                            bool _706 = quadratic(param, param_1, param_2, param_3, param_4);
+                            if ((_706 && (param_3 > 9.9999999747524270787835121154785e-07f)) && (param_4 > 9.9999999747524270787835121154785e-07f))
                             {
-                                float _686 = min(param_3, param_4);
-                                bool _699 = abs((float3(dot(_594, _246.param3.xyz), _600, _603) + (float3(dot(_183, _246.param3.xyz), _611, _614) * _686)).x) < (0.5f * _246.param3.w);
-                                bool _708;
-                                if (_699)
+                                float _720 = min(param_3, param_4);
+                                bool _733 = abs((float3(dot(_628, _246.param3.xyz), _634, _637) + (float3(dot(_183, _246.param3.xyz), _645, _648) * _720)).x) < (0.5f * _246.param3.w);
+                                bool _742;
+                                if (_733)
                                 {
-                                    _708 = (_686 < _789) || _263;
+                                    _742 = (_720 < _823) || _263;
                                 }
                                 else
                                 {
-                                    _708 = _699;
+                                    _742 = _733;
                                 }
-                                if (_708)
+                                if (_742)
                                 {
-                                    _786 = -1;
-                                    _787 = (-1) - int(_229.Load(li * 4 + 0));
-                                    _789 = _686;
+                                    _820 = -1;
+                                    _821 = (-1) - int(_229.Load(li * 4 + 0));
+                                    _823 = _720;
                                 }
                             }
                         }
@@ -314,10 +339,10 @@ void comp_main()
                 }
             }
         }
-        _191.Store(_77 * 24 + 0, uint(_786));
-        _191.Store(_77 * 24 + 4, uint(_787));
+        _191.Store(_77 * 24 + 0, uint(_820));
+        _191.Store(_77 * 24 + 4, uint(_821));
         _191.Store(_77 * 24 + 8, uint(_195.prim_index));
-        _191.Store(_77 * 24 + 12, asuint(_789));
+        _191.Store(_77 * 24 + 12, asuint(_823));
         _191.Store(_77 * 24 + 16, asuint(_195.u));
         _191.Store(_77 * 24 + 20, asuint(_195.v));
         break;

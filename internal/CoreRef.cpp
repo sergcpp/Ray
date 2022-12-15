@@ -2892,6 +2892,7 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, co
                                  const float halton[], const float sample_off[2], light_sample_t &ls) {
     const float u1 = fract(halton[RAND_DIM_LIGHT_PICK] + sample_off[0]);
 
+    // TODO: Hierarchical NEE
     const auto light_index = std::min(uint32_t(u1 * sc.li_indices.size()), uint32_t(sc.li_indices.size() - 1));
     const light_t &l = sc.lights[sc.li_indices[light_index]];
 
@@ -2936,6 +2937,16 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, co
 
         if (!l.visible) {
             ls.area = 0.0f;
+        }
+
+        if (l.sph.spot > 0.0f) {
+            const float _dot = -dot(ls.L, simd_fvec4{l.sph.dir});
+            if (_dot > 0.0f) {
+                const float _angle = std::acos(clamp(_dot, 0.0f, 1.0f));
+                ls.col *= clamp((l.sph.spot - _angle) / l.sph.blend, 0.0f, 1.0f);
+            } else {
+                ls.col *= 0.0f;
+            }
         }
     } else if (l.type == LIGHT_TYPE_DIR) {
         ls.L = simd_fvec4{l.dir.dir[0], l.dir.dir[1], l.dir.dir[2], 0.0f};
@@ -3141,6 +3152,9 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, co
 
 void Ray::Ref::IntersectAreaLights(const ray_data_t &ray, const light_t lights[], Span<const uint32_t> visible_lights,
                                    const transform_t transforms[], hit_data_t &inout_inter) {
+    const simd_fvec4 ro = simd_fvec4{ray.o[0], ray.o[1], ray.o[2], 0.0f};
+    const simd_fvec4 rd = simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f};
+
     // TODO: BVH for light geometry
     for (uint32_t li = 0; li < uint32_t(visible_lights.size()); ++li) {
         const uint32_t light_index = visible_lights[li];
@@ -3148,17 +3162,29 @@ void Ray::Ref::IntersectAreaLights(const ray_data_t &ray, const light_t lights[]
         const bool no_shadow = (l.cast_shadow == 0);
         if (l.type == LIGHT_TYPE_SPHERE) {
             const auto light_pos = simd_fvec4{l.sph.pos[0], l.sph.pos[1], l.sph.pos[2], 0.0f};
-            const simd_fvec4 op = light_pos - simd_fvec4{ray.o[0], ray.o[1], ray.o[2], 0.0f};
-            const float b = dot(op, simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f});
+            const simd_fvec4 op = light_pos - ro;
+            const float b = dot(op, rd);
             float det = b * b - dot(op, op) + l.sph.radius * l.sph.radius;
             if (det >= 0.0f) {
                 det = std::sqrt(det);
                 const float t1 = b - det, t2 = b + det;
                 if (t1 > HIT_EPS && (t1 < inout_inter.t || no_shadow)) {
-                    inout_inter.mask = -1;
-                    inout_inter.obj_index = -int(light_index) - 1;
-                    inout_inter.t = t1;
-                } else if (t2 > HIT_EPS && t2 < inout_inter.t) {
+                    bool accept = true;
+                    if (l.sph.spot > 0.0f) {
+                        const float _dot = -dot(rd, simd_fvec4{l.sph.dir});
+                        if (_dot > 0.0f) {
+                            const float _angle = std::acos(clamp(_dot, 0.0f, 1.0f));
+                            accept &= (_angle <= l.sph.spot);
+                        } else {
+                            accept = false;
+                        }
+                    }
+                    if (accept) {
+                        inout_inter.mask = -1;
+                        inout_inter.obj_index = -int(light_index) - 1;
+                        inout_inter.t = t1;
+                    }
+                } else if (t2 > HIT_EPS && (t2 < inout_inter.t || no_shadow)) {
                     inout_inter.mask = -1;
                     inout_inter.obj_index = -int(light_index) - 1;
                     inout_inter.t = t2;
@@ -3172,16 +3198,14 @@ void Ray::Ref::IntersectAreaLights(const ray_data_t &ray, const light_t lights[]
             const simd_fvec4 light_forward = normalize(cross(light_u, light_v));
 
             const float plane_dist = dot(light_forward, light_pos);
-            const float cos_theta = dot(simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f}, light_forward);
-            const float t =
-                (plane_dist - dot(light_forward, simd_fvec4{ray.o[0], ray.o[1], ray.o[2], 0.0f})) / cos_theta;
+            const float cos_theta = dot(rd, light_forward);
+            const float t = (plane_dist - dot(light_forward, ro)) / cos_theta;
 
             if (cos_theta < 0.0f && t > HIT_EPS && (t < inout_inter.t || no_shadow)) {
                 light_u /= dot(light_u, light_u);
                 light_v /= dot(light_v, light_v);
 
-                const auto p =
-                    simd_fvec4{ray.o[0], ray.o[1], ray.o[2], 0.0f} + simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f} * t;
+                const auto p = ro + rd * t;
                 const simd_fvec4 vi = p - light_pos;
                 const float a1 = dot(light_u, vi);
                 if (a1 >= -0.5f && a1 <= 0.5f) {
@@ -3201,16 +3225,14 @@ void Ray::Ref::IntersectAreaLights(const ray_data_t &ray, const light_t lights[]
             const simd_fvec4 light_forward = normalize(cross(light_u, light_v));
 
             const float plane_dist = dot(light_forward, light_pos);
-            const float cos_theta = dot(simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f}, light_forward);
-            const float t =
-                (plane_dist - dot(light_forward, simd_fvec4{ray.o[0], ray.o[1], ray.o[2], 0.0f})) / cos_theta;
+            const float cos_theta = dot(rd, light_forward);
+            const float t = (plane_dist - dot(light_forward, ro)) / cos_theta;
 
             if (cos_theta < 0.0f && t > HIT_EPS && (t < inout_inter.t || no_shadow)) {
                 light_u /= dot(light_u, light_u);
                 light_v /= dot(light_v, light_v);
 
-                const auto p =
-                    simd_fvec4{ray.o[0], ray.o[1], ray.o[2], 0.0f} + simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f} * t;
+                const auto p = ro + rd * t;
                 const simd_fvec4 vi = p - light_pos;
                 const float a1 = dot(light_u, vi);
                 const float a2 = dot(light_v, vi);
@@ -3227,20 +3249,20 @@ void Ray::Ref::IntersectAreaLights(const ray_data_t &ray, const light_t lights[]
             const simd_fvec4 light_dir = simd_fvec4{l.line.v[0], l.line.v[1], l.line.v[2], 0.0f};
             const simd_fvec4 light_v = cross(light_u, light_dir);
 
-            simd_fvec4 ro = simd_fvec4{ray.o[0], ray.o[1], ray.o[2], 0.0f} - light_pos;
-            ro = simd_fvec4{dot(ro, light_dir), dot(ro, light_u), dot(ro, light_v), 0.0f};
+            simd_fvec4 _ro = ro - light_pos;
+            _ro = simd_fvec4{dot(_ro, light_dir), dot(_ro, light_u), dot(_ro, light_v), 0.0f};
 
-            simd_fvec4 rd = simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f};
-            rd = simd_fvec4{dot(rd, light_dir), dot(rd, light_u), dot(rd, light_v), 0.0f};
+            simd_fvec4 _rd = rd;
+            _rd = simd_fvec4{dot(_rd, light_dir), dot(_rd, light_u), dot(_rd, light_v), 0.0f};
 
-            const float A = rd[2] * rd[2] + rd[1] * rd[1];
-            const float B = 2.0f * (rd[2] * ro[2] + rd[1] * ro[1]);
-            const float C = ro[2] * ro[2] + ro[1] * ro[1] - l.line.radius * l.line.radius;
+            const float A = _rd[2] * _rd[2] + _rd[1] * _rd[1];
+            const float B = 2.0f * (_rd[2] * _ro[2] + _rd[1] * _ro[1]);
+            const float C = _ro[2] * _ro[2] + _ro[1] * _ro[1] - l.line.radius * l.line.radius;
 
             float t0, t1;
             if (quadratic(A, B, C, t0, t1) && t0 > HIT_EPS && t1 > HIT_EPS) {
                 const float t = std::min(t0, t1);
-                const simd_fvec4 p = ro + t * rd;
+                const simd_fvec4 p = _ro + t * _rd;
                 if (std::abs(p[0]) < 0.5f * l.line.height && (t < inout_inter.t || no_shadow)) {
                     inout_inter.mask = -1;
                     inout_inter.obj_index = -int(light_index) - 1;
@@ -3303,6 +3325,16 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
 
             const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
             lcol *= mis_weight;
+
+            if (l.sph.spot > 0.0f && l.sph.blend > 0.0f) {
+                const float _dot = -dot(I, simd_fvec4{l.sph.dir});
+                assert(_dot > 0.0f);
+                const float _angle = std::acos(clamp(_dot, 0.0f, 1.0f));
+                assert(_angle <= l.sph.spot);
+                if (l.sph.blend > 0.0f) {
+                    lcol *= clamp((l.sph.spot - _angle) / l.sph.blend, 0.0f, 1.0f);
+                }
+            }
         } else if (l.type == LIGHT_TYPE_RECT) {
             const auto light_pos = simd_fvec4{l.rect.pos[0], l.rect.pos[1], l.rect.pos[2], 0.0f};
             simd_fvec4 light_u = simd_fvec4{l.rect.u[0], l.rect.u[1], l.rect.u[2], 0.0f};

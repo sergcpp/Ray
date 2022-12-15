@@ -178,6 +178,17 @@ struct sphere_light_desc_t {
     bool cast_shadow = true;
 };
 
+struct spot_light_desc_t {
+    float color[3] = {1.0f, 1.0f, 1.0f};
+    float position[3] = {0.0f, 0.0f, 0.0f};
+    float direction[3] = {0.0f, -1.0f, 0.0f};
+    float spot_size = 45.0f;
+    float spot_blend = 0.15f;
+    float radius = 1.0f;
+    bool visible = true; // visibility for secondary bounces
+    bool cast_shadow = true;
+};
+
 struct rect_light_desc_t {
     float color[3] = {1.0f, 1.0f, 1.0f};
     float width = 1.0f, height = 1.0f;
@@ -311,6 +322,7 @@ class SceneBase {
     */
     virtual uint32_t AddLight(const directional_light_desc_t &l) = 0;
     virtual uint32_t AddLight(const sphere_light_desc_t &l) = 0;
+    virtual uint32_t AddLight(const spot_light_desc_t &l) = 0;
     virtual uint32_t AddLight(const rect_light_desc_t &l, const float *xform) = 0;
     virtual uint32_t AddLight(const disk_light_desc_t &l, const float *xform) = 0;
     virtual uint32_t AddLight(const line_light_desc_t &l, const float *xform) = 0;

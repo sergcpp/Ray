@@ -815,10 +815,35 @@ uint32_t Ray::Vk::Scene::AddLight(const sphere_light_desc_t &_l) {
 
     l.sph.area = 4.0f * PI * _l.radius * _l.radius;
     l.sph.radius = _l.radius;
+    l.sph.spot = l.sph.blend = -1.0f;
 
     const uint32_t light_index = lights_.push(l);
     li_indices_.PushBack(light_index);
 
+    if (_l.visible) {
+        visible_lights_.PushBack(light_index);
+    }
+    return light_index;
+}
+
+uint32_t Ray::Vk::Scene::AddLight(const spot_light_desc_t &_l) {
+    light_t l = {};
+
+    l.type = LIGHT_TYPE_SPHERE;
+    l.cast_shadow = _l.cast_shadow;
+    l.visible = _l.visible;
+
+    memcpy(&l.col[0], &_l.color[0], 3 * sizeof(float));
+    memcpy(&l.sph.pos[0], &_l.position[0], 3 * sizeof(float));
+    memcpy(&l.sph.dir[0], &_l.direction[0], 3 * sizeof(float));
+
+    l.sph.area = 4.0f * PI * _l.radius * _l.radius;
+    l.sph.radius = _l.radius;
+    l.sph.spot = 0.5f * PI * _l.spot_size / 180.0f;
+    l.sph.blend = _l.spot_blend * _l.spot_blend;
+
+    const uint32_t light_index = lights_.push(l);
+    li_indices_.PushBack(light_index);
     if (_l.visible) {
         visible_lights_.PushBack(light_index);
     }

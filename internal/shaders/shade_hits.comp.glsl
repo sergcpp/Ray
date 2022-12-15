@@ -716,6 +716,16 @@ void SampleLightSource(vec3 P, vec2 sample_off, inout light_sample_t ls) {
         [[flatten]] if (cos_theta > 0.0) {
             ls.pdf = (ls.dist * ls.dist) / (0.5 * ls.area * cos_theta);
         }
+
+        [[dont_flatten]] if (l.SPH_SPOT > 0.0) {
+            const float _dot = -dot(ls.L, l.SPH_DIR);
+            if (_dot > 0.0) {
+                const float _angle = acos(clamp(_dot, 0.0, 1.0));
+                ls.col *= clamp((l.SPH_SPOT - _angle) / l.SPH_BLEND, 0.0, 1.0);
+            } else {
+                ls.col *= 0.0;
+            }
+        }
     } else [[dont_flatten]] if (l_type == LIGHT_TYPE_DIR) {
         ls.L = l.DIR_DIR;
         if (l.DIR_ANGLE != 0.0){
@@ -991,6 +1001,14 @@ vec3 ShadeSurface(int px_index, hit_data_t inter, ray_data_t ray) {
 
             float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
             lcol *= mis_weight;
+
+            [[dont_flatten]] if (l.SPH_SPOT > 0.0 && l.SPH_BLEND > 0.0) {
+                const float _dot = -dot(I, l.SPH_DIR);
+                const float _angle = acos(clamp(_dot, 0.0, 1.0));
+                [[flatten]] if (l.SPH_BLEND > 0.0) {
+                    lcol *= clamp((l.SPH_SPOT - _angle) / l.SPH_BLEND, 0.0, 1.0);
+                }
+            }
         } else if (l_type == LIGHT_TYPE_RECT) {
             const vec3 light_pos = l.RECT_POS;
             const vec3 light_u = l.RECT_U;
