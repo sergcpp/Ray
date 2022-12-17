@@ -549,11 +549,6 @@ force_inline float construct_float(uint32_t m) {
     return f - 1.0f;                              // Range [0:1]
 }
 
-force_inline simd_fvec4 rgbe_to_rgb(const color_t<uint8_t, 4> &rgbe) {
-    const float f = std::exp2(float(rgbe.v[3]) - 128.0f);
-    return simd_fvec4{to_norm_float(rgbe.v[0]) * f, to_norm_float(rgbe.v[1]) * f, to_norm_float(rgbe.v[2]) * f, 1.0f};
-}
-
 force_inline simd_fvec4 srgb_to_rgb(const simd_fvec4 &col) {
     simd_fvec4 ret;
     ITERATE_3({

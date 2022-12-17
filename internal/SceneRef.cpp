@@ -4,6 +4,7 @@
 #include <cstring>
 
 #include "../Log.h"
+#include "CoreRef.h"
 #include "TextureUtilsRef.h"
 #include "Time_.h"
 

@@ -16,6 +16,7 @@ add_executable(test_Ray main.cpp
                         test_materials.cpp
                         test_mesh_lights.cpp
                         test_simd.cpp
+                        test_simd_avx2.cpp
                         test_simd_avx512.cpp
                         test_simd.ipp
                         test_texture.cpp

@@ -5,6 +5,8 @@
 #include "SparseStorageVK.h"
 #include "VectorVK.h"
 #include "Vk/AccStructure.h"
+#include "Vk/DescriptorPool.h"
+#include "Vk/Texture.h"
 #include "Vk/TextureAtlas.h"
 
 namespace Ray {

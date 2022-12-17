@@ -3,6 +3,7 @@
 #include "Bitmap.h"
 #include "CoreVK.h"
 #include "Vk/Buffer.h"
+#include "Vk/Context.h"
 
 #ifdef __GNUC__
 #define force_inline __attribute__((always_inline)) inline

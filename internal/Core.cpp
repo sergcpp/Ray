@@ -5,6 +5,7 @@
 #include <cstring>
 
 #include <deque>
+#include <limits>
 #include <vector>
 
 #include "BVHSplit.h"

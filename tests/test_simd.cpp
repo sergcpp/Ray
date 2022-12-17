@@ -44,16 +44,7 @@ void test_simd_avx() {
 #undef USE_AVX
 #undef NS
 
-#define NS Avx2
-#define USE_AVX2
-#include "../internal/simd/simd_vec.h"
-
-void test_simd_avx2() {
-#include "test_simd.ipp"
-}
-#undef USE_AVX2
-#undef NS
-
+void test_simd_avx2();
 void test_simd_avx512();
 
 #else // !defined(__aarch64__)

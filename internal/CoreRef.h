@@ -109,6 +109,11 @@ force_inline int hash(int x) {
     return reinterpret_cast<const int &>(ret);
 }
 
+force_inline simd_fvec4 rgbe_to_rgb(const color_t<uint8_t, 4> &rgbe) {
+    const float f = std::exp2(float(rgbe.v[3]) - 128.0f);
+    return simd_fvec4{to_norm_float(rgbe.v[0]) * f, to_norm_float(rgbe.v[1]) * f, to_norm_float(rgbe.v[2]) * f, 1.0f};
+}
+
 // Generation of rays
 void GeneratePrimaryRays(int iteration, const camera_t &cam, const rect_t &r, int w, int h, const float *halton,
                          aligned_vector<ray_data_t> &out_rays);

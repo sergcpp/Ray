@@ -1,6 +1,7 @@
 #include "Utils.h"
 
 #include <deque>
+#include <limits>
 
 #include "CoreRef.h"
 

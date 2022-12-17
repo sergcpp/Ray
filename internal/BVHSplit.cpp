@@ -1,6 +1,7 @@
 #include "BVHSplit.h"
 
 #include <algorithm>
+#include <limits>
 
 #include "SmallVector.h"
 

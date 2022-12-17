@@ -1,5 +1,7 @@
 #include "Utils.h"
 
+#include <cstring>
+
 #include "TextureParams.h"
 
 std::unique_ptr<uint8_t[]> Ray::Vk::ReadTGAFile(const void *data, int &w, int &h, eTexFormat &format) {
@@ -20,11 +22,11 @@ bool Ray::Vk::ReadTGAFile(const void *data, int &w, int &h, eTexFormat &format, 
 
     if (memcmp(tga_header, tga_compare, sizeof(tga_header)) != 0) {
         if (tga_compare[2] == 1) {
-            fprintf(stderr, "Image cannot be indexed color.");
+            //fprintf(stderr, "Image cannot be indexed color.");
             return false;
         }
         if (tga_compare[2] == 3) {
-            fprintf(stderr, "Image cannot be greyscale color.");
+            //fprintf(stderr, "Image cannot be greyscale color.");
             return false;
         }
         if (tga_compare[2] == 9 || tga_compare[2] == 10) {
@@ -37,10 +39,10 @@ bool Ray::Vk::ReadTGAFile(const void *data, int &w, int &h, eTexFormat &format, 
 
     if (w <= 0 || h <= 0 || (img_header[4] != 24 && img_header[4] != 32)) {
         if (w <= 0 || h <= 0) {
-            fprintf(stderr, "Image must have a width and height greater than 0");
+            //fprintf(stderr, "Image must have a width and height greater than 0");
         }
         if (img_header[4] != 24 && img_header[4] != 32) {
-            fprintf(stderr, "Image must be 24 or 32 bit");
+            //fprintf(stderr, "Image must be 24 or 32 bit");
         }
         return false;
     }
