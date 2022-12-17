@@ -1,4 +1,4 @@
-//#pragma once
+// #pragma once
 
 #include "simd_vec_sse.h"
 
@@ -107,6 +107,11 @@ template <> class simd_vec<float, 8> {
         return *this;
     }
 
+    force_inline simd_vec<float, 8> &operator&=(const simd_vec<float, 8> &rhs) {
+        vec_ = _mm256_and_ps(vec_, rhs.vec_);
+        return *this;
+    }
+
     force_inline simd_vec<float, 8> operator~() const;
     force_inline simd_vec<float, 8> operator-() const;
     force_inline explicit operator simd_vec<int, 8>() const;
@@ -187,7 +192,6 @@ template <> class simd_vec<float, 8> {
     friend force_inline simd_vec<float, 8> operator>=(const simd_vec<float, 8> &v1, const simd_vec<float, 8> &v2);
     friend force_inline simd_vec<float, 8> operator==(const simd_vec<float, 8> &v1, const simd_vec<float, 8> &v2);
     friend force_inline simd_vec<float, 8> operator!=(const simd_vec<float, 8> &v1, const simd_vec<float, 8> &v2);
-    friend force_inline simd_vec<float, 8> operator&=(const simd_vec<float, 8> &v1, const simd_vec<float, 8> &v2);
 
     friend force_inline simd_vec<float, 8> operator<(const simd_vec<float, 8> &v1, float v2);
     friend force_inline simd_vec<float, 8> operator<=(const simd_vec<float, 8> &v1, float v2);
@@ -968,12 +972,6 @@ force_inline simd_vec<float, 8> operator==(const simd_vec<float, 8> &v1, const s
 force_inline simd_vec<float, 8> operator!=(const simd_vec<float, 8> &v1, const simd_vec<float, 8> &v2) {
     simd_vec<float, 8> ret;
     ret.vec_ = _mm256_cmp_ps(v1.vec_, v2.vec_, _CMP_NEQ_OS);
-    return ret;
-}
-
-force_inline simd_vec<float, 8> operator&=(const simd_vec<float, 8>& v1, const simd_vec<float, 8>& v2) {
-    simd_vec<float, 8> ret;
-    ret.vec_ = _mm256_and_ps(v1.vec_, v2.vec_);
     return ret;
 }
 
