@@ -48,7 +48,7 @@ Ray::Vk::MemoryAllocator::~MemoryAllocator() {
 
 bool Ray::Vk::MemoryAllocator::AllocateNewBlock(const uint32_t size) {
     char buf_name[48];
-    sprintf(buf_name, "%s block %i", name_, int(blocks_.size()));
+    snprintf(buf_name, sizeof(buf_name), "%s block %i", name_, int(blocks_.size()));
 
     blocks_.emplace_back();
     MemBlock &new_block = blocks_.back();

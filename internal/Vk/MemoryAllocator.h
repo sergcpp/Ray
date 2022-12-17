@@ -112,7 +112,7 @@ class MemoryAllocators {
 
         if (alloc_index == -1) {
             char name[32];
-            sprintf(name, "%s (type %i)", name_, int(mem_type_index));
+            snprintf(name, sizeof(name), "%s (type %i)", name_, int(mem_type_index));
             alloc_index = int(allocators_.size());
             allocators_.emplace_back(name, ctx_, initial_block_size_, mem_type_index, growth_factor_);
         }
