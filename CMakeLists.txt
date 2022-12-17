@@ -73,6 +73,8 @@ if (ENABLE_SIMD_IMPL)
                               internal/RendererAVX.cpp
                               internal/RendererAVX2.h
                               internal/RendererAVX2.cpp
+                              internal/RendererAVX512.h
+                              internal/RendererAVX512.cpp
                               internal/UtilsSSE2.cpp)
 endif()
 
@@ -109,11 +111,13 @@ if(NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64")
         endif()
         set_source_files_properties(internal/RendererAVX.cpp PROPERTIES COMPILE_FLAGS /arch:AVX)
         set_source_files_properties(internal/RendererAVX2.cpp PROPERTIES COMPILE_FLAGS /arch:AVX)
+        set_source_files_properties(internal/RendererAVX512.cpp PROPERTIES COMPILE_FLAGS /arch:AVX512)
     else(MSVC)
         set_source_files_properties(internal/RendererSSE2.cpp PROPERTIES COMPILE_FLAGS -msse2)
         set_source_files_properties(internal/RendererSSE41.cpp PROPERTIES COMPILE_FLAGS -msse4.1)
         set_source_files_properties(internal/RendererAVX.cpp PROPERTIES COMPILE_FLAGS -mavx)
         set_source_files_properties(internal/RendererAVX2.cpp PROPERTIES COMPILE_FLAGS -mavx2)
+        set_source_files_properties(internal/RendererAVX512.cpp PROPERTIES COMPILE_FLAGS "-mavx512f -mavx512bw -mavx512dq")
     endif(MSVC)
 endif(NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64")
 
@@ -271,7 +275,7 @@ if(ENABLE_UNITYBUILD)
             set_source_files_properties(_Ray_SSE41.cpp PROPERTIES COMPILE_FLAGS -msse4.1)
             set_source_files_properties(_Ray_AVX.cpp PROPERTIES COMPILE_FLAGS -mavx)
             set_source_files_properties(_Ray_AVX2.cpp PROPERTIES COMPILE_FLAGS -mavx2)
-            set_source_files_properties(_Ray_AVX512.cpp PROPERTIES COMPILE_FLAGS -mavx512f -mavx512bw -mavx512dq)
+            set_source_files_properties(_Ray_AVX512.cpp PROPERTIES COMPILE_FLAGS "-mavx512f -mavx512bw -mavx512dq")
         endif(MSVC)
     endif(NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64")
 endif()

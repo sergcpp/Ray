@@ -444,8 +444,6 @@ force_inline bool IntersectTri(const float o[3], const float d[3], int i, const 
 template <int S>
 force_inline bool IntersectTri(const float ro[3], const float rd[3], int j, const mtri_accel_t &tri,
                                const uint32_t prim_index, hit_data_t<S> &inter) {
-    static const int LanesCount = 8 / S;
-
     simd_ivec<S> _mask = 0, _prim_index;
     simd_fvec<S> _t = inter.t[j], _u, _v;
 
@@ -498,6 +496,94 @@ force_inline bool IntersectTri(const float ro[3], const float rd[3], int j, cons
         where(is_active_lane, _t) = dett * rdet;
         where(is_active_lane, _u) = detu * rdet;
         where(is_active_lane, _v) = detv * rdet;
+    }
+
+    long mask = _mask.movemask();
+    if (!mask) {
+        return false;
+    }
+
+    inter.mask[j] = 0xffffffff;
+
+    const long i1 = GetFirstBit(mask);
+    mask = ClearBit(mask, i1);
+
+    long min_i = i1;
+    inter.prim_index[j] = _prim_index[i1];
+    inter.t[j] = _t[i1];
+    inter.u[j] = _u[i1];
+    inter.v[j] = _v[i1];
+
+    if (mask == 0) { // Only one triangle was hit
+        return true;
+    }
+
+    do {
+        const long i2 = GetFirstBit(mask);
+        mask = ClearBit(mask, i2);
+
+        if (_t[i2] < _t[min_i]) {
+            inter.prim_index[j] = _prim_index[i2];
+            inter.t[j] = _t[i2];
+            inter.u[j] = _u[i2];
+            inter.v[j] = _v[i2];
+            min_i = i2;
+        }
+    } while (mask != 0);
+
+    return true;
+}
+
+template <>
+force_inline bool IntersectTri<16>(const float ro[3], const float rd[3], int j, const mtri_accel_t &tri,
+                                   const uint32_t prim_index, hit_data_t<16> &inter) {
+    simd_ivec<8> _mask = 0, _prim_index;
+    simd_fvec<8> _t = inter.t[j], _u, _v;
+
+    { // intersect 8 triangles
+        const simd_fvec<8> det = rd[0] * simd_fvec<8>{&tri.n_plane[0][0], simd_mem_aligned} +
+                                 rd[1] * simd_fvec<8>{&tri.n_plane[1][0], simd_mem_aligned} +
+                                 rd[2] * simd_fvec<8>{&tri.n_plane[2][0], simd_mem_aligned};
+        const simd_fvec<8> dett = simd_fvec<8>{&tri.n_plane[3][0], simd_mem_aligned} -
+                                  ro[0] * simd_fvec<8>{&tri.n_plane[0][0], simd_mem_aligned} -
+                                  ro[1] * simd_fvec<8>{&tri.n_plane[1][0], simd_mem_aligned} -
+                                  ro[2] * simd_fvec<8>{&tri.n_plane[2][0], simd_mem_aligned};
+
+        // compare sign bits
+        simd_ivec<8> is_active_lane = ~srai(simd_cast(dett ^ (det * _t - dett)), 31);
+        if (!is_active_lane.all_zeros()) {
+            const simd_fvec<8> p[3] = {det * ro[0] + dett * rd[0], det * ro[1] + dett * rd[1],
+                                       det * ro[2] + dett * rd[2]};
+
+            const simd_fvec<8> detu = p[0] * simd_fvec<8>{&tri.u_plane[0][0], simd_mem_aligned} +
+                                      p[1] * simd_fvec<8>{&tri.u_plane[1][0], simd_mem_aligned} +
+                                      p[2] * simd_fvec<8>{&tri.u_plane[2][0], simd_mem_aligned} +
+                                      det * simd_fvec<8>{&tri.u_plane[3][0], simd_mem_aligned};
+
+            // compare sign bits
+            is_active_lane &= ~srai(simd_cast(detu ^ (det - detu)), 31);
+            if (!is_active_lane.all_zeros()) {
+                const simd_fvec<8> detv = p[0] * simd_fvec<8>{&tri.v_plane[0][0], simd_mem_aligned} +
+                                          p[1] * simd_fvec<8>{&tri.v_plane[1][0], simd_mem_aligned} +
+                                          p[2] * simd_fvec<8>{&tri.v_plane[2][0], simd_mem_aligned} +
+                                          det * simd_fvec<8>{&tri.v_plane[3][0], simd_mem_aligned};
+
+                // compare sign bits
+                is_active_lane &= ~srai(simd_cast(detv ^ (det - detu - detv)), 31);
+                if (!is_active_lane.all_zeros()) {
+                    const simd_fvec<8> rdet = (1.0f / det);
+
+                    simd_ivec<8> prim = -(int(prim_index) + simd_ivec<8>{&ascending_counter[0], simd_mem_aligned}) - 1;
+                    where(det < 0.0f, prim) = int(prim_index) + simd_ivec<8>{&ascending_counter[0], simd_mem_aligned};
+
+                    _mask |= is_active_lane;
+                    where(is_active_lane, _prim_index) = prim;
+                    where(is_active_lane, _t) = dett * rdet;
+                    where(is_active_lane, _u) = detu * rdet;
+                    where(is_active_lane, _v) = detv * rdet;
+                }
+            }
+        }
     }
 
     long mask = _mask.movemask();
@@ -620,7 +706,7 @@ force_inline long bbox_test_oct(const float inv_d[3], const float inv_d_o[3], co
     simd_fvec<S> low, high, tmin, tmax;
     long res = 0;
 
-    static const int LanesCount = 8 / S;
+    static const int LanesCount = (8 / S);
 
     ITERATE_R(LanesCount, {
         low = fmsub(inv_d[0], simd_fvec<S>{&bbox_min[0][S * i], simd_mem_aligned}, inv_d_o[0]);
@@ -644,6 +730,33 @@ force_inline long bbox_test_oct(const float inv_d[3], const float inv_d_o[3], co
         res |= simd_cast(fmask).movemask();
         tmin.copy_to(&out_dist[S * i], simd_mem_aligned);
     })
+
+    return res;
+}
+
+template <>
+force_inline long bbox_test_oct<16>(const float inv_d[3], const float inv_d_o[3], const float t,
+                                    const float bbox_min[3][8], const float bbox_max[3][8], float out_dist[8]) {
+    simd_fvec<8> low = fmsub(inv_d[0], simd_fvec<8>{&bbox_min[0][0], simd_mem_aligned}, inv_d_o[0]);
+    simd_fvec<8> high = fmsub(inv_d[0], simd_fvec<8>{&bbox_max[0][0], simd_mem_aligned}, inv_d_o[0]);
+    simd_fvec<8> tmin = min(low, high);
+    simd_fvec<8> tmax = max(low, high);
+
+    low = fmsub(inv_d[1], simd_fvec<8>{&bbox_min[1][0], simd_mem_aligned}, inv_d_o[1]);
+    high = fmsub(inv_d[1], simd_fvec<8>{&bbox_max[1][0], simd_mem_aligned}, inv_d_o[1]);
+    tmin = max(tmin, min(low, high));
+    tmax = min(tmax, max(low, high));
+
+    low = fmsub(inv_d[2], simd_fvec<8>{&bbox_min[2][0], simd_mem_aligned}, inv_d_o[2]);
+    high = fmsub(inv_d[2], simd_fvec<8>{&bbox_max[2][0], simd_mem_aligned}, inv_d_o[2]);
+    tmin = max(tmin, min(low, high));
+    tmax = min(tmax, max(low, high));
+    tmax *= 1.00000024f;
+
+    const simd_fvec<8> fmask = (tmin <= tmax) & (tmin <= t) & (tmax > 0.0f);
+
+    long res = simd_cast(fmask).movemask();
+    tmin.copy_to(&out_dist[0], simd_mem_aligned);
 
     return res;
 }
@@ -2417,7 +2530,7 @@ bool Ray::NS::Traverse_MacroTree_WithStack_ClosestHit(const simd_fvec<S> ro[3], 
 
         TRAVERSE:
             if (!is_leaf_node(nodes[cur.index])) {
-                alignas(S * 4) float res_dist[8];
+                alignas(32) float res_dist[8];
                 long mask = bbox_test_oct<S>(_inv_d, _inv_d_o, inter.t[ri], nodes[cur.index].bbox_min,
                                              nodes[cur.index].bbox_max, res_dist);
                 if (mask) {
@@ -2614,7 +2727,7 @@ Ray::NS::simd_ivec<S> Ray::NS::Traverse_MacroTree_WithStack_AnyHit(
 
         TRAVERSE:
             if (!is_leaf_node(nodes[cur.index])) {
-                alignas(S * 4) float res_dist[8];
+                alignas(32) float res_dist[8];
                 long mask = bbox_test_oct<S>(_inv_d, _inv_d_o, inter.t[ri], nodes[cur.index].bbox_min,
                                              nodes[cur.index].bbox_max, res_dist);
                 if (mask) {
@@ -2787,7 +2900,7 @@ bool Ray::NS::Traverse_MicroTree_WithStack_ClosestHit(const float ro[3], const f
 
     TRAVERSE:
         if (!is_leaf_node(nodes[cur.index])) {
-            alignas(S * 4) float res_dist[8];
+            alignas(32) float res_dist[8];
             long mask = bbox_test_oct<S>(_inv_d, _inv_d_o, inter.t[ri], nodes[cur.index].bbox_min,
                                          nodes[cur.index].bbox_max, res_dist);
             if (mask) {
@@ -2938,7 +3051,7 @@ bool Ray::NS::Traverse_MicroTree_WithStack_AnyHit(const float ro[3], const float
 
     TRAVERSE:
         if (!is_leaf_node(nodes[cur.index])) {
-            alignas(S * 4) float res_dist[8];
+            alignas(32) float res_dist[8];
             long mask = bbox_test_oct<S>(_inv_d, _inv_d_o, inter.t[ri], nodes[cur.index].bbox_min,
                                          nodes[cur.index].bbox_max, res_dist);
             if (mask) {
@@ -4238,9 +4351,7 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const scene_data_t &sc,
                         }
                     })
                     const simd_fvec<S> k = clamp((l.sph.spot - _angle) / l.sph.blend, 0.0f, 1.0f);
-                    ITERATE_3({
-                        where(ray_queue[index], ls.col[i]) *= k;
-                    })
+                    ITERATE_3({ where(ray_queue[index], ls.col[i]) *= k; })
                 }
                 ITERATE_3({ where(~mask & ray_queue[index], ls.col[i]) = 0.0f; })
             }
@@ -4905,23 +5016,25 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
 
     simd_fvec<S> tangent[3] = {-P_ls[2], {0.0f}, P_ls[0]};
 
-    simd_fvec<S> transform[16], inv_transform[16];
+    simd_fvec<S> transform[16];
 
     { // fetch transformation matrices
         const float *transforms = &sc.transforms[0].xform[0];
         const float *inv_transforms = &sc.transforms[0].inv_xform[0];
         const int transforms_stride = sizeof(transform_t) / sizeof(float);
 
+        simd_fvec<S> inv_transform[16];
+
         ITERATE_16({ transform[i] = gather(transforms, tr_index * transforms_stride + i); })
         ITERATE_16({ inv_transform[i] = gather(inv_transforms, tr_index * transforms_stride + i); })
+
+        TransformNormal(inv_transform, plane_N);
+        TransformNormal(inv_transform, N);
+        TransformNormal(inv_transform, B);
+        TransformNormal(inv_transform, T);
+
+        TransformNormal(inv_transform, tangent);
     }
-
-    TransformNormal(inv_transform, plane_N);
-    TransformNormal(inv_transform, N);
-    TransformNormal(inv_transform, B);
-    TransformNormal(inv_transform, T);
-
-    TransformNormal(inv_transform, tangent);
 
     //////////////////////////////////
 

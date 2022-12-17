@@ -1,10 +1,5 @@
 #include "RendererAVX2.h"
 
-#ifdef __GNUC__
-#pragma GCC push_options
-#pragma GCC target("avx2")
-#endif
-
 namespace Ray {
 namespace Avx2 {
 template void GeneratePrimaryRays<RayPacketDimX, RayPacketDimY>(const int iteration, const camera_t &cam,
@@ -110,7 +105,3 @@ template void ShadeSurface<RayPacketSize>(const simd_ivec<RayPacketSize> &index,
 template class RendererSIMD<RayPacketDimX, RayPacketDimY>;
 } // namespace Avx2
 } // namespace Ray
-
-#ifdef __GNUC__
-#pragma GCC pop_options
-#endif

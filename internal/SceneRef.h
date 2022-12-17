@@ -22,7 +22,9 @@ template <int DimX, int DimY> class RendererSIMD;
 namespace Avx2 {
 template <int DimX, int DimY> class RendererSIMD;
 }
-
+namespace Avx512 {
+template <int DimX, int DimY> class RendererSIMD;
+}
 namespace Neon {
 template <int DimX, int DimY> class RendererSIMD;
 }
@@ -39,6 +41,7 @@ class Scene : public SceneBase {
     template <int DimX, int DimY> friend class Sse41::RendererSIMD;
     template <int DimX, int DimY> friend class Avx::RendererSIMD;
     template <int DimX, int DimY> friend class Avx2::RendererSIMD;
+    template <int DimX, int DimY> friend class Avx512::RendererSIMD;
     template <int DimX, int DimY> friend class Neon::RendererSIMD;
 
     ILog *log_;

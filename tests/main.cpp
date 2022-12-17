@@ -147,8 +147,8 @@ int main(int argc, char *argv[]) {
     test_tex_storage();
     // test_mesh_lights();
 
-    static const char *ArchListFull[] = {"ref", "sse2", "sse41", "avx", "avx2", "neon", "vk", nullptr};
-    static const char *ArchListFullNoGPU[] = {"ref", "sse2", "sse41", "avx", "avx2", "neon", nullptr};
+    static const char *ArchListFull[] = {"ref", "sse2", "sse41", "avx", "avx2", "avx512", "neon", "vk", nullptr};
+    static const char *ArchListFullNoGPU[] = {"ref", "sse2", "sse41", "avx", "avx2", "avx512", "neon", nullptr};
     static const char *ArchListDefault[] = {"avx2", "neon", "vk", nullptr};
     static const char *ArchListDefaultNoGPU[] = {"avx2", "neon", nullptr};
     static const char *ArchListGPUOnly[] = {"vk", nullptr};

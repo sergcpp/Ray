@@ -10,6 +10,7 @@
 #if !defined(__aarch64__) && !defined(_M_ARM) && !defined(_M_ARM64)
 #include "internal/RendererAVX.h"
 #include "internal/RendererAVX2.h"
+#include "internal/RendererAVX512.h"
 #include "internal/RendererSSE2.h"
 #include "internal/RendererSSE41.h"
 #elif defined(__ARM_NEON__) || defined(__aarch64__) || defined(_M_ARM) || defined(_M_ARM64)
@@ -49,6 +50,10 @@ Ray::RendererBase *Ray::CreateRenderer(const settings_t &s, ILog *log, const uin
 
 #if !defined(__aarch64__) && !defined(_M_ARM) && !defined(_M_ARM64)
 #ifdef ENABLE_SIMD_IMPL
+    if ((enabled_types & RendererAVX512) && features.avx512_supported) {
+        log->Info("Ray: Creating AVX512 renderer %ix%i", s.w, s.h);
+        return new Avx512::Renderer(s, log);
+    }
     if ((enabled_types & RendererAVX2) && features.avx2_supported) {
         log->Info("Ray: Creating AVX2 renderer %ix%i", s.w, s.h);
         return new Avx2::Renderer(s, log);

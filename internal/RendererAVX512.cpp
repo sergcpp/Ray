@@ -1,7 +1,7 @@
-#include "RendererAVX.h"
+#include "RendererAVX512.h"
 
 namespace Ray {
-namespace Avx {
+namespace Avx512 {
 template void GeneratePrimaryRays<RayPacketDimX, RayPacketDimY>(const int iteration, const camera_t &cam,
                                                                 const rect_t &r, int w, int h, const float *halton,
                                                                 aligned_vector<ray_data_t<RayPacketSize>> &out_rays,
@@ -63,17 +63,17 @@ template bool Traverse_MicroTree_WithStack_AnyHit(const float ro[3], const float
                                                   const uint32_t *tri_indices, int obj_index,
                                                   hit_data_t<RayPacketSize> &inter);
 
-template void SampleNearest<RayPacketSize>(const Ref::TexStorageBase *const textures[], const uint32_t index,
+template void SampleNearest<RayPacketSize>(const Ref::TexStorageBase *const textures[], uint32_t index,
                                            const simd_fvec<RayPacketSize> uvs[2], const simd_fvec<RayPacketSize> &lod,
                                            const simd_ivec<RayPacketSize> &mask, simd_fvec<RayPacketSize> out_rgba[4]);
-template void SampleBilinear<RayPacketSize>(const Ref::TexStorageBase *const textures[], const uint32_t index,
+template void SampleBilinear<RayPacketSize>(const Ref::TexStorageBase *const textures[], uint32_t index,
                                             const simd_fvec<RayPacketSize> uvs[2], const simd_ivec<RayPacketSize> &lod,
                                             const simd_ivec<RayPacketSize> &mask, simd_fvec<RayPacketSize> out_rgba[4]);
-template void SampleTrilinear<RayPacketSize>(const Ref::TexStorageBase *const textures[], const uint32_t index,
+template void SampleTrilinear<RayPacketSize>(const Ref::TexStorageBase *const textures[], uint32_t index,
                                              const simd_fvec<RayPacketSize> uvs[2], const simd_fvec<RayPacketSize> &lod,
                                              const simd_ivec<RayPacketSize> &mask,
                                              simd_fvec<RayPacketSize> out_rgba[4]);
-template void SampleLatlong_RGBE<RayPacketSize>(const Ref::TexStorageRGBA &storage, const uint32_t index,
+template void SampleLatlong_RGBE<RayPacketSize>(const Ref::TexStorageRGBA &storage, uint32_t index,
                                                 const simd_fvec<RayPacketSize> dir[3],
                                                 const simd_ivec<RayPacketSize> &mask,
                                                 simd_fvec<RayPacketSize> out_rgb[3]);
@@ -103,7 +103,6 @@ template void ShadeSurface<RayPacketSize>(const simd_ivec<RayPacketSize> &index,
                                           shadow_ray_t<RayPacketSize> out_shadow_rays[], int *out_shadow_rays_count);
 
 template class RendererSIMD<RayPacketDimX, RayPacketDimY>;
-} // namespace Avx
+} // namespace Avx512
 } // namespace Ray
-
 

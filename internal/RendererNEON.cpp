@@ -1,10 +1,5 @@
 #include "RendererNEON.h"
 
-#ifdef __GNUC__
-// #pragma GCC push_options
-// #pragma GCC target("sse2")
-#endif
-
 namespace Ray {
 namespace Neon {
 template void GeneratePrimaryRays<RayPacketDimX, RayPacketDimY>(const int iteration, const camera_t &cam,
