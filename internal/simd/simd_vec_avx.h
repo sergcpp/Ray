@@ -334,7 +334,11 @@ template <> class simd_vec<int, 8> {
 
     force_inline simd_vec<int, 8> operator-() const {
         simd_vec<int, 8> temp;
+#if defined(USE_AVX2) || defined(USE_AVX512)
         temp.vec_ = _mm256_sub_epi32(_mm256_setzero_si256(), vec_);
+#else
+        ITERATE_8({ temp.comp_[i] = -comp_[i]; })
+#endif
         return temp;
     }
 
@@ -379,12 +383,20 @@ template <> class simd_vec<int, 8> {
     }
 
     force_inline simd_vec<int, 8> &operator&=(const simd_vec<int, 8> &rhs) {
+#if defined(USE_AVX2) || defined(USE_AVX512)
         vec_ = _mm256_and_si256(vec_, rhs.vec_);
+#else
+        ITERATE_8({ comp_[i] &= rhs.comp_[i]; })
+#endif
         return *this;
     }
 
     force_inline simd_vec<int, 8> &operator&=(const int rhs) {
+#if defined(USE_AVX2) || defined(USE_AVX512)
         vec_ = _mm256_and_si256(vec_, _mm256_set1_epi32(rhs));
+#else
+        ITERATE_8({ comp_[i] &= rhs; })
+#endif
         return *this;
     }
 
@@ -722,7 +734,11 @@ template <> class simd_vec<int, 8> {
 
     force_inline simd_vec<int, 8> operator~() const {
         simd_vec<int, 8> ret;
+#if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_andnot_si256(vec_, _mm256_set1_epi32(~0));
+#else
+        ITERATE_8({ ret.comp_[i] = ~comp_[i]; })
+#endif
         return ret;
     }
 
@@ -766,7 +782,14 @@ template <> class simd_vec<int, 8> {
 
 force_inline simd_vec<float, 8> simd_vec<float, 8>::operator~() const {
     simd_vec<float, 8> ret;
+#if defined(USE_AVX2) || defined(USE_AVX512)
     ret.vec_ = _mm256_castsi256_ps(_mm256_andnot_si256(_mm256_castps_si256(vec_), _mm256_set1_epi32(~0)));
+#else
+    ITERATE_8({
+        const uint32_t temp = ~reinterpret_cast<const uint32_t&>(comp_[i]);
+        ret.comp_[i] = reinterpret_cast<const float&>(temp);
+    })
+#endif
     return ret;
 }
 
