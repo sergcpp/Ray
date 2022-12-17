@@ -229,26 +229,26 @@ if(ENABLE_UNITYBUILD)
     list(APPEND ALL_SOURCE_FILES _Ray.cpp)
     source_group("src" FILES _Ray.cpp)
 
-    list(APPEND ALL_SOURCE_FILES _Ray_Sse2.cpp)
-    source_group("src" FILES _Ray_Sse2.cpp)
+    list(APPEND ALL_SOURCE_FILES _Ray_SSE2.cpp)
+    source_group("src" FILES _Ray_SSE2.cpp)
 
-    list(APPEND ALL_SOURCE_FILES _Ray_Sse41.cpp)
-    source_group("src" FILES _Ray_Sse41.cpp)
+    list(APPEND ALL_SOURCE_FILES _Ray_SSE41.cpp)
+    source_group("src" FILES _Ray_SSE41.cpp)
 
-    list(APPEND ALL_SOURCE_FILES _Ray_Avx.cpp)
-    source_group("src" FILES _Ray_Avx.cpp)
+    list(APPEND ALL_SOURCE_FILES _Ray_AVX.cpp)
+    source_group("src" FILES _Ray_AVX.cpp)
 
-    list(APPEND ALL_SOURCE_FILES _Ray_Avx2.cpp)
-    source_group("src" FILES _Ray_Avx2.cpp)
+    list(APPEND ALL_SOURCE_FILES _Ray_AVX2.cpp)
+    source_group("src" FILES _Ray_AVX2.cpp)
 
-    list(APPEND ALL_SOURCE_FILES _Ray_Avx512.cpp)
-    source_group("src" FILES _Ray_Avx512.cpp)
+    list(APPEND ALL_SOURCE_FILES _Ray_AVX512.cpp)
+    source_group("src" FILES _Ray_AVX512.cpp)
 
-    list(APPEND ALL_SOURCE_FILES _Ray_Neon.cpp)
-    source_group("src" FILES _Ray_Neon.cpp)
+    list(APPEND ALL_SOURCE_FILES _Ray_NEON.cpp)
+    source_group("src" FILES _Ray_NEON.cpp)
 
-    list(APPEND ALL_SOURCE_FILES _Ray_Vk.cpp)
-    source_group("src" FILES _Ray_Vk.cpp)
+    list(APPEND ALL_SOURCE_FILES _Ray_VK.cpp)
+    source_group("src" FILES _Ray_VK.cpp)
 
     if(MSVC AND NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64")
         if(NOT CMAKE_CL_64)
