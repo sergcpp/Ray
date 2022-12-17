@@ -4519,9 +4519,9 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, const simd_ivec<S> &ra
                 det = sqrt(det);
                 const simd_fvec<S> t1 = b - det, t2 = b + det;
 
-                simd_fvec<S> mask1 = (t1 > HIT_EPS & (t1 < inout_inter.t | no_shadow)) & simd_cast(imask);
+                simd_fvec<S> mask1 = (t1 > HIT_EPS) & ((t1 < inout_inter.t) | no_shadow) & simd_cast(imask);
                 const simd_fvec<S> mask2 =
-                    (t2 > HIT_EPS & (t2 < inout_inter.t | no_shadow)) & simd_cast(imask) & ~mask1;
+                    (t2 > HIT_EPS) & ((t2 < inout_inter.t) | no_shadow) & simd_cast(imask) & ~mask1;
 
                 if (l.sph.spot > 0.0f) {
                     const simd_fvec<S> _dot =
@@ -4556,7 +4556,7 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, const simd_ivec<S> &ra
             const simd_fvec<S> t = (plane_dist - dot3(light_fwd, r.o)) / cos_theta;
 
             const simd_ivec<S> imask =
-                simd_cast(cos_theta<0.0f & t> HIT_EPS & (t < inout_inter.t | no_shadow)) & ray_mask;
+                simd_cast((cos_theta < 0.0f) & (t > HIT_EPS) & ((t < inout_inter.t) | no_shadow)) & ray_mask;
             if (imask.not_all_zeros()) {
                 const float dot_u = dot3(l.rect.u, l.rect.u);
                 const float dot_v = dot3(l.rect.v, l.rect.v);
@@ -4586,7 +4586,7 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, const simd_ivec<S> &ra
             const simd_fvec<S> t = (plane_dist - dot3(light_fwd, r.o)) / cos_theta;
 
             const simd_ivec<S> imask =
-                simd_cast(cos_theta<0.0f & t> HIT_EPS & (t < inout_inter.t | no_shadow)) & ray_mask;
+                simd_cast((cos_theta < 0.0f) & (t > HIT_EPS) & ((t < inout_inter.t) | no_shadow)) & ray_mask;
             if (imask.not_all_zeros()) {
                 const float dot_u = dot3(l.disk.u, l.disk.u);
                 const float dot_v = dot3(l.disk.v, l.disk.v);
@@ -4625,7 +4625,7 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, const simd_ivec<S> &ra
             const simd_fvec<S> t = min(t0, t1);
             const simd_fvec<S> p[3] = {fmadd(rd[0], t, ro[0]), fmadd(rd[1], t, ro[1]), fmadd(rd[2], t, ro[2])};
 
-            imask &= simd_cast(abs(p[0]) < 0.5f * l.line.height) & simd_cast(t < inout_inter.t | no_shadow);
+            imask &= simd_cast(abs(p[0]) < 0.5f * l.line.height) & simd_cast((t < inout_inter.t) | no_shadow);
 
             inout_inter.mask |= imask;
             where(imask, inout_inter.obj_index) = -simd_ivec<S>(light_index) - 1;
