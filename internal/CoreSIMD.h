@@ -22,6 +22,7 @@
 #define USE_NEE 1
 #define USE_PATH_TERMINATION 1
 // #define FORCE_TEXTURE_LOD 0
+#define USE_SAFE_MATH 1
 
 namespace Ray {
 namespace Ref {
@@ -90,7 +91,8 @@ template <int S> struct hit_data_t {
         mask = {0};
         obj_index = {-1};
         prim_index = {-1};
-        t = {MAX_DIST};
+        t = MAX_DIST;
+        u = v = 0.0f;
     }
 };
 
@@ -102,7 +104,7 @@ template <int S> struct derivatives_t {
 };
 
 template <int S> struct light_sample_t {
-    simd_fvec<S> col[3], L[3];
+    simd_fvec<S> col[3], L[3] = {0.0f, 0.0f, 0.0f};
     simd_fvec<S> area = 0.0f, dist, pdf = 0.0f;
     simd_ivec<S> cast_shadow = -1;
 };
@@ -353,6 +355,74 @@ void ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, const flo
 
 namespace Ray {
 namespace NS {
+template <int S> force_inline simd_fvec<S> safe_inv(const simd_fvec<S> &a) {
+#if USE_SAFE_MATH
+    simd_fvec<S> denom = a;
+    where(denom == 0.0f, denom) = FLT_EPS;
+    return 1.0f / denom;
+#else
+    return 1.0f / a;
+#endif
+}
+
+template <int S> force_inline simd_fvec<S> safe_inv_pos(const simd_fvec<S> &a) {
+#if USE_SAFE_MATH
+    return 1.0f / max(a, FLT_EPS);
+#else
+    return 1.0f / a;
+#endif
+}
+
+template <int S> force_inline simd_fvec<S> safe_div(const simd_fvec<S> &a, const simd_fvec<S> &b) {
+#if USE_SAFE_MATH
+    simd_fvec<S> denom = b;
+    where(denom == 0.0f, denom) = FLT_EPS;
+    return a / denom;
+#else
+    return a / b;
+#endif
+}
+
+template <int S> force_inline simd_fvec<S> safe_div_pos(const simd_fvec<S> &a, const simd_fvec<S> &b) {
+#if USE_SAFE_MATH
+    return a / max(b, FLT_EPS);
+#else
+    return a / b;
+#endif
+}
+
+template <int S> force_inline simd_fvec<S> safe_div_neg(const simd_fvec<S> &a, const simd_fvec<S> &b) {
+#if USE_SAFE_MATH
+    return a / min(b, -FLT_EPS);
+#else
+    return a / b;
+#endif
+}
+
+template <int S> force_inline simd_fvec<S> safe_sqrt(const simd_fvec<S> &a) {
+#if USE_SAFE_MATH
+    return sqrt(max(a, 0.0f));
+#else
+    return sqrt(a);
+#endif
+}
+
+template <int S> force_inline void safe_normalize(simd_fvec<S> v[3]) {
+    simd_fvec<S> l = safe_sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+#if USE_SAFE_MATH
+    const simd_fvec<S> mask = (l != 0.0f);
+    where(~mask, l) = FLT_EPS;
+
+    where(mask, v[0]) /= l;
+    where(mask, v[1]) /= l;
+    where(mask, v[2]) /= l;
+#else
+    v[0] /= l;
+    v[1] /= l;
+    v[2] /= l;
+#endif
+}
+
 template <int S>
 force_inline simd_ivec<S> IntersectTri(const simd_fvec<S> ro[3], const simd_fvec<S> rd[3], const simd_ivec<S> &ray_mask,
                                        const tri_accel_t &tri, uint32_t prim_index, hit_data_t<S> &inter) {
@@ -486,7 +556,7 @@ force_inline bool IntersectTri(const float ro[3], const float rd[3], int j, cons
             continue;
         }
 
-        const simd_fvec<S> rdet = (1.0f / det);
+        const simd_fvec<S> rdet = safe_inv(det);
 
         simd_ivec<S> prim = -(int(prim_index) + simd_ivec<S>{&ascending_counter[i], simd_mem_aligned}) - 1;
         where(det < 0.0f, prim) = int(prim_index) + simd_ivec<S>{&ascending_counter[i], simd_mem_aligned};
@@ -571,7 +641,7 @@ force_inline bool IntersectTri<16>(const float ro[3], const float rd[3], int j, 
                 // compare sign bits
                 is_active_lane &= ~srai(simd_cast(detv ^ (det - detu - detv)), 31);
                 if (!is_active_lane.all_zeros()) {
-                    const simd_fvec<8> rdet = (1.0f / det);
+                    const simd_fvec<8> rdet = safe_inv(det);
 
                     simd_ivec<8> prim = -(int(prim_index) + simd_ivec<8>{&ascending_counter[0], simd_mem_aligned}) - 1;
                     where(det < 0.0f, prim) = int(prim_index) + simd_ivec<8>{&ascending_counter[0], simd_mem_aligned};
@@ -1039,7 +1109,10 @@ template <int S>
 force_inline void comp_aux_inv_values(const simd_fvec<S> o[3], const simd_fvec<S> d[3], simd_fvec<S> inv_d[3],
                                       simd_fvec<S> inv_d_o[3]) {
     for (int i = 0; i < 3; i++) {
-        inv_d[i] = {1.0f / d[i]};
+        simd_fvec<S> denom = d[i];
+        where(denom == 0.0f, denom) = FLT_EPS;
+
+        inv_d[i] = 1.0f / denom;
         inv_d_o[i] = o[i] * inv_d[i];
 
         const simd_fvec<S> d_is_plus_zero = (d[i] <= FLT_EPS) & (d[i] >= 0);
@@ -1053,20 +1126,15 @@ force_inline void comp_aux_inv_values(const simd_fvec<S> o[3], const simd_fvec<S
 }
 
 force_inline void comp_aux_inv_values(const float o[3], const float d[3], float inv_d[3], float inv_d_o[3]) {
-    inv_d[0] = 1.0f / d[0];
-    inv_d[1] = 1.0f / d[1];
-    inv_d[2] = 1.0f / d[2];
-
-    inv_d_o[0] = inv_d[0] * o[0];
-    inv_d_o[1] = inv_d[1] * o[1];
-    inv_d_o[2] = inv_d[2] * o[2];
-
     if (d[0] <= FLT_EPS && d[0] >= 0) {
         inv_d[0] = MAX_DIST;
         inv_d_o[0] = MAX_DIST;
     } else if (d[0] >= -FLT_EPS && d[0] < 0) {
         inv_d[0] = -MAX_DIST;
         inv_d_o[0] = -MAX_DIST;
+    } else {
+        inv_d[0] = 1.0f / d[0];
+        inv_d_o[0] = inv_d[0] * o[0];
     }
 
     if (d[1] <= FLT_EPS && d[1] >= 0) {
@@ -1075,6 +1143,9 @@ force_inline void comp_aux_inv_values(const float o[3], const float d[3], float 
     } else if (d[1] >= -FLT_EPS && d[1] < 0) {
         inv_d[1] = -MAX_DIST;
         inv_d_o[1] = -MAX_DIST;
+    } else {
+        inv_d[1] = 1.0f / d[1];
+        inv_d_o[1] = inv_d[1] * o[1];
     }
 
     if (d[2] <= FLT_EPS && d[2] >= 0) {
@@ -1083,6 +1154,9 @@ force_inline void comp_aux_inv_values(const float o[3], const float d[3], float 
     } else if (d[2] >= -FLT_EPS && d[2] < 0) {
         inv_d[2] = -MAX_DIST;
         inv_d_o[2] = -MAX_DIST;
+    } else {
+        inv_d[2] = 1.0f / d[2];
+        inv_d_o[2] = inv_d[2] * o[2];
     }
 }
 
@@ -1429,7 +1503,7 @@ void ensure_valid_reflection(const simd_fvec<S> Ng[3], const simd_fvec<S> I[3], 
     // In many cases one can be immediately discarded (if N'.z would be imaginary or larger than
     // one), so check for that first. If no option is viable (might happen in extreme cases like N
     // being in the wrong hemisphere), give up and return Ng.
-    const simd_fvec<S> fac = 0.5f / a;
+    const simd_fvec<S> fac = safe_div(simd_fvec<S>{0.5f}, a);
     const simd_fvec<S> N1_z2 = fac * (b + c), N2_z2 = fac * (-b + c);
 
     simd_ivec<S> valid1 = simd_cast((N1_z2 > 1e-5f) & (N1_z2 <= (1.0f + 1e-5f)));
@@ -1531,13 +1605,14 @@ void SampleGGX_VNDF(const simd_fvec<S> Ve[3], const simd_fvec<S> &alpha_x, const
                     const simd_fvec<S> &U1, const simd_fvec<S> &U2, simd_fvec<S> out_V[3]) {
     // Section 3.2: transforming the view direction to the hemisphere configuration
     simd_fvec<S> Vh[3] = {alpha_x * Ve[0], alpha_y * Ve[1], Ve[2]};
-    normalize(Vh);
+    safe_normalize(Vh);
     // Section 4.1: orthonormal basis (with special case if cross product is zero)
     const simd_fvec<S> lensq = Vh[0] * Vh[0] + Vh[1] * Vh[1];
 
     simd_fvec<S> T1[3] = {{1.0f}, {0.0f}, {0.0f}};
-    where(lensq > 0.0f, T1[0]) = -Vh[1] / sqrt(lensq);
-    where(lensq > 0.0f, T1[1]) = Vh[0] / sqrt(lensq);
+    const simd_fvec<S> denom = safe_sqrt(lensq);
+    where(lensq > 0.0f, T1[0]) = -safe_div_pos(Vh[1], denom);
+    where(lensq > 0.0f, T1[1]) = safe_div_pos(Vh[0], denom);
 
     simd_fvec<S> T2[3];
     cross(Vh, T1, T2);
@@ -1557,7 +1632,7 @@ void SampleGGX_VNDF(const simd_fvec<S> Ve[3], const simd_fvec<S> &alpha_x, const
     out_V[0] = alpha_x * Nh[0];
     out_V[1] = alpha_y * Nh[1];
     out_V[2] = max(0.0f, Nh[2]);
-    normalize(out_V);
+    safe_normalize(out_V);
 }
 
 // Smith shadowing function
@@ -1565,7 +1640,8 @@ template <int S> force_inline simd_fvec<S> G1(const simd_fvec<S> Ve[3], simd_fve
     alpha_x *= alpha_x;
     alpha_y *= alpha_y;
     const simd_fvec<S> delta =
-        (-1.0f + sqrt(1.0f + (alpha_x * Ve[0] * Ve[0] + alpha_y * Ve[1] * Ve[1]) / (Ve[2] * Ve[2]))) / 2.0f;
+        (-1.0f + safe_sqrt(1.0f + safe_div_pos(alpha_x * Ve[0] * Ve[0] + alpha_y * Ve[1] * Ve[1], Ve[2] * Ve[2]))) /
+        2.0f;
     return 1.0f / (1.0f + delta);
 }
 
@@ -1580,23 +1656,22 @@ template <int S> simd_fvec<S> D_GTR1(const simd_fvec<S> &NDotH, const simd_fvec<
 template <int S> simd_fvec<S> D_GGX(const simd_fvec<S> H[3], const simd_fvec<S> &alpha_x, const simd_fvec<S> &alpha_y) {
     simd_fvec<S> ret = 0.0f;
 
-    const simd_fvec<S> sx = -H[0] / (H[2] * alpha_x);
-    const simd_fvec<S> sy = -H[1] / (H[2] * alpha_y);
+    const simd_fvec<S> sx = -safe_div(H[0], H[2] * alpha_x);
+    const simd_fvec<S> sy = -safe_div(H[1], H[2] * alpha_y);
     const simd_fvec<S> s1 = 1.0f + sx * sx + sy * sy;
     const simd_fvec<S> cos_theta_h4 = H[2] * H[2] * H[2] * H[2];
 
-    where(H[2] != 0.0f, ret) = 1.0f / ((s1 * s1) * PI * alpha_x * alpha_y * cos_theta_h4);
+    where(H[2] != 0.0f, ret) = safe_inv_pos((s1 * s1) * PI * alpha_x * alpha_y * cos_theta_h4);
     return ret;
 }
 
 template <int S> void create_tbn(const simd_fvec<S> N[3], simd_fvec<S> out_T[3], simd_fvec<S> out_B[3]) {
-
     simd_fvec<S> U[3] = {1.0f, 0.0f, 0.0f};
     where(N[1] < 0.999f, U[0]) = 0.0f;
     where(N[1] < 0.999f, U[1]) = 1.0f;
 
     cross(U, N, out_T);
-    normalize(out_T);
+    safe_normalize(out_T);
 
     cross(N, out_T, out_B);
 }
@@ -1609,10 +1684,10 @@ void MapToCone(const simd_fvec<S> &r1, const simd_fvec<S> &r2, const simd_fvec<S
     ITERATE_3({ out_V[i] = N[i]; })
 
     simd_fvec<S> r = offset[1];
-    simd_fvec<S> theta = 0.5f * PI * (1.0f - 0.5f * (offset[0] / offset[1]));
+    simd_fvec<S> theta = 0.5f * PI * (1.0f - 0.5f * safe_div(offset[0], offset[1]));
 
     where(abs(offset[0]) > abs(offset[1]), r) = offset[0];
-    where(abs(offset[0]) > abs(offset[1]), theta) = 0.25f * PI * (offset[1] / offset[0]);
+    where(abs(offset[0]) > abs(offset[1]), theta) = 0.25f * PI * safe_div(offset[1], offset[0]);
 
     const simd_fvec<S> uv[2] = {radius * r * cos(theta), radius * r * sin(theta)};
 
@@ -1652,13 +1727,14 @@ template <int S> simd_fvec<S> fresnel_dielectric_cos(const simd_fvec<S> &cosi, c
     // compute fresnel reflectance without explicitly computing the refracted direction
     simd_fvec<S> c = abs(cosi);
     simd_fvec<S> g = eta * eta - 1 + c * c;
+    const simd_fvec<S> mask = (g > 0.0f);
 
     simd_fvec<S> result = 1.0f; // TIR (no refracted component)
 
-    g = sqrt(g);
-    const simd_fvec<S> A = (g - c) / (g + c);
-    const simd_fvec<S> B = (c * (g + c) - 1) / (c * (g - c) + 1);
-    where(g > 0.0f, result) = 0.5f * A * A * (1 + B * B);
+    g = safe_sqrt(g);
+    const simd_fvec<S> A = safe_div(g - c, g + c);
+    const simd_fvec<S> B = safe_div(c * (g + c) - 1, c * (g - c) + 1);
+    where(mask, result) = 0.5f * A * A * (1 + B * B);
 
     return result;
 }
@@ -1692,18 +1768,18 @@ void get_lobe_weights(const simd_fvec<S> &base_color_lum, const simd_fvec<S> &sp
 
 template <int S> force_inline simd_fvec<S> power_heuristic(const simd_fvec<S> &a, const simd_fvec<S> &b) {
     const simd_fvec<S> t = a * a;
-    return t / (b * b + t);
+    return safe_div_pos(t, b * b + t);
 }
 
 template <int S>
 force_inline simd_ivec<S> quadratic(const simd_fvec<S> &a, const simd_fvec<S> &b, const simd_fvec<S> &c,
                                     simd_fvec<S> &t0, simd_fvec<S> &t1) {
     const simd_fvec<S> d = b * b - 4.0f * a * c;
-    const simd_fvec<S> sqrt_d = sqrt(d);
+    const simd_fvec<S> sqrt_d = safe_sqrt(d);
     simd_fvec<S> q = -0.5f * (b + sqrt_d);
     where(b < 0.0f, q) = -0.5f * (b - sqrt_d);
-    t0 = q / a;
-    t1 = c / q;
+    t0 = safe_div(q, a);
+    t1 = safe_div(c, q);
     return simd_cast(d >= 0.0f);
 }
 
@@ -1797,9 +1873,9 @@ void Ray::NS::GeneratePrimaryRays(const int iteration, const camera_t &cam, cons
                 offset[0] = 2.0f * r1 - 1.0f;
                 offset[1] = 2.0f * r2 - 1.0f;
 
-                simd_fvec<S> r = offset[1], theta = 0.5f * PI - 0.25f * PI * (offset[0] / offset[1]);
+                simd_fvec<S> r = offset[1], theta = 0.5f * PI - 0.25f * PI * safe_div(offset[0], offset[1]);
                 where(abs(offset[0]) > abs(offset[1]), r) = offset[0];
-                where(abs(offset[0]) > abs(offset[1]), theta) = 0.25f * PI * (offset[1] / offset[0]);
+                where(abs(offset[0]) > abs(offset[1]), theta) = 0.25f * PI * safe_div(offset[1], offset[0]);
 
                 if (cam.lens_blades) {
                     r *= ngon_rad(theta, float(cam.lens_blades));
@@ -3205,7 +3281,7 @@ void Ray::NS::Evaluate_PrincipledDiffuse_BSDF(const simd_fvec<S> V[3], const sim
     }
 
     simd_fvec<S> H[3] = {L[0] + V[0], L[1] + V[1], L[2] + V[2]};
-    normalize(H);
+    safe_normalize(H);
 
     const simd_fvec<S> dot_VH = dot3(V, H);
     ITERATE_3({ where(dot_VH < 0.0f, H[i]) = -H[i]; })
@@ -3274,17 +3350,17 @@ void Ray::NS::Evaluate_GGXSpecular_BSDF(const simd_fvec<S> view_dir_ts[3], const
 
     const simd_fvec<S> denom = 4.0f * abs(view_dir_ts[2] * reflected_dir_ts[2]);
     ITERATE_3({
-        F[i] *= (D * G / denom);
+        F[i] *= safe_div_pos(D * G, denom);
         where(denom == 0.0f, F[i]) = 0.0f;
     })
 
 #if USE_VNDF_GGX_SAMPLING == 1
-    simd_fvec<S> pdf =
-        D * G1(view_dir_ts, alpha_x, alpha_y) * max(dot3(view_dir_ts, sampled_normal_ts), 0.0f) / abs(view_dir_ts[2]);
+    simd_fvec<S> pdf = safe_div_pos(
+        D * G1(view_dir_ts, alpha_x, alpha_y) * max(dot3(view_dir_ts, sampled_normal_ts), 0.0f), abs(view_dir_ts[2]));
     where(abs(view_dir_ts[2]) == 0.0f, pdf) = 0.0f;
 
     const simd_fvec<S> div = 4.0f * dot3(view_dir_ts, sampled_normal_ts);
-    where(div != 0.0f, pdf) = pdf / div;
+    where(div != 0.0f, pdf) = safe_div(pdf, div);
 #else
     const float pdf = D * sampled_normal_ts[2] / (4.0f * dot3(view_dir_ts, sampled_normal_ts));
 #endif
@@ -3323,11 +3399,11 @@ void Ray::NS::Sample_GGXSpecular_BSDF(const simd_fvec<S> T[3], const simd_fvec<S
 
     simd_fvec<S> view_dir_ts[3];
     tangent_from_world(T, B, N, _I, view_dir_ts);
-    normalize(view_dir_ts);
+    safe_normalize(view_dir_ts);
 
     simd_fvec<S> sampled_normal_ts[3];
 #if USE_VNDF_GGX_SAMPLING == 1
-    SampleGGX_VNDF(view_dir_ts, alpha_x, alpha_y, rand_u, rand_v, sampled_normal_ts);
+    SampleGGX_VNDF(view_dir_ts, max(alpha_x, FLT_EPS), max(alpha_y, FLT_EPS), rand_u, rand_v, sampled_normal_ts);
 #else
     const simd_fvec4 sampled_normal_ts = sample_GGX_NDF(alpha_x, rand_u, rand_v);
 #endif
@@ -3336,12 +3412,12 @@ void Ray::NS::Sample_GGXSpecular_BSDF(const simd_fvec<S> T[3], const simd_fvec<S
     simd_fvec<S> reflected_dir_ts[3];
     const simd_fvec<S> _view_dir_ts[3] = {-view_dir_ts[0], -view_dir_ts[1], -view_dir_ts[2]};
     reflect(_view_dir_ts, sampled_normal_ts, dot_N_V, reflected_dir_ts);
-    normalize(reflected_dir_ts);
+    safe_normalize(reflected_dir_ts);
 
     simd_fvec<S> glossy_V[3], glossy_F[4];
     world_from_tangent(T, B, N, reflected_dir_ts, glossy_V);
-    Evaluate_GGXSpecular_BSDF(view_dir_ts, sampled_normal_ts, reflected_dir_ts, alpha_x, alpha_y, spec_ior, spec_F0,
-                              spec_col, glossy_F);
+    Evaluate_GGXSpecular_BSDF(view_dir_ts, sampled_normal_ts, reflected_dir_ts, max(alpha_x, 1e-7f),
+                              max(alpha_y, 1e-7f), spec_ior, spec_F0, spec_col, glossy_F);
 
     ITERATE_3({ where(is_glossy, out_V[i]) = glossy_V[i]; })
     ITERATE_4({ where(is_glossy, out_color[i]) = glossy_F[i]; })
@@ -3362,19 +3438,19 @@ void Ray::NS::Evaluate_GGXRefraction_BSDF(const simd_fvec<S> view_dir_ts[3], con
     const simd_fvec<S> G1i = G1(view_dir_ts, roughness2, roughness2);
 
     const simd_fvec<S> denom = dot3(refr_dir_ts, sampled_normal_ts) + dot3(view_dir_ts, sampled_normal_ts) * eta;
-    const simd_fvec<S> jacobian = max(-dot3(refr_dir_ts, sampled_normal_ts), 0.0f) / (denom * denom);
+    const simd_fvec<S> jacobian = safe_div_pos(max(-dot3(refr_dir_ts, sampled_normal_ts), 0.0f), denom * denom);
 
-    simd_fvec<S> F = D * G1i * G1o * max(dot3(view_dir_ts, sampled_normal_ts), 0.0f) * jacobian /
-                     (/*-refr_dir_ts[2] */ view_dir_ts[2]);
+    simd_fvec<S> F = safe_div(D * G1i * G1o * max(dot3(view_dir_ts, sampled_normal_ts), 0.0f) * jacobian,
+                              (/*-refr_dir_ts[2] */ view_dir_ts[2]));
 
 #if USE_VNDF_GGX_SAMPLING == 1
-    simd_fvec<S> pdf = D * G1o * max(dot3(view_dir_ts, sampled_normal_ts), 0.0f) * jacobian / view_dir_ts[2];
+    simd_fvec<S> pdf = safe_div(D * G1o * max(dot3(view_dir_ts, sampled_normal_ts), 0.0f) * jacobian, view_dir_ts[2]);
 #else
     // const float pdf = D * std::max(sampled_normal_ts[2], 0.0f) * jacobian;
-    const float pdf = D * sampled_normal_ts[2] * std::max(-dot3(refr_dir_ts, sampled_normal_ts), 0.0f) / denom;
+    const float pdf = safe_div(D * sampled_normal_ts[2] * std::max(-dot3(refr_dir_ts, sampled_normal_ts), 0.0f), denom);
 #endif
 
-    const simd_fvec<S> is_valid = (refr_dir_ts[2]<0.0f & view_dir_ts[2]> 0.0f);
+    const simd_fvec<S> is_valid = (refr_dir_ts[2] < 0.0f) & (view_dir_ts[2] > 0.0f);
 
     ITERATE_3({
         out_color[i] = 0.0f;
@@ -3395,9 +3471,9 @@ void Ray::NS::Sample_GGXRefraction_BSDF(const simd_fvec<S> T[3], const simd_fvec
         const simd_fvec<S> cosi = -dot3(I, N);
         const simd_fvec<S> cost2 = 1.0f - eta * eta * (1.0f - cosi * cosi);
 
-        const simd_fvec<S> m = eta * cosi - sqrt(cost2);
+        const simd_fvec<S> m = eta * cosi - safe_sqrt(cost2);
         ITERATE_3({ out_V[i] = eta * I[i] + m * N[i]; })
-        normalize(out_V);
+        safe_normalize(out_V);
 
         out_V[3] = m;
         ITERATE_3({
@@ -3417,7 +3493,7 @@ void Ray::NS::Sample_GGXRefraction_BSDF(const simd_fvec<S> T[3], const simd_fvec
 
     simd_fvec<S> view_dir_ts[3];
     tangent_from_world(T, B, N, neg_I, view_dir_ts);
-    normalize(view_dir_ts);
+    safe_normalize(view_dir_ts);
 
     simd_fvec<S> sampled_normal_ts[3];
 #if USE_VNDF_GGX_SAMPLING == 1
@@ -3432,11 +3508,11 @@ void Ray::NS::Sample_GGXRefraction_BSDF(const simd_fvec<S> T[3], const simd_fvec
     ITERATE_4({ where(is_glossy, out_color[i]) = 0.0f; })
 
     const simd_ivec<S> cost2_positive = simd_cast(cost2 >= 0.0f);
-    if (cost2_positive.not_all_zeros()) {
-        const simd_fvec<S> m = eta * cosi - sqrt(cost2);
+    if ((is_glossy & cost2_positive).not_all_zeros()) {
+        const simd_fvec<S> m = eta * cosi - safe_sqrt(cost2);
         simd_fvec<S> refr_dir_ts[3];
         ITERATE_3({ refr_dir_ts[i] = -eta * view_dir_ts[i] + m * sampled_normal_ts[i]; })
-        normalize(refr_dir_ts);
+        safe_normalize(refr_dir_ts);
 
         simd_fvec<S> glossy_V[3], glossy_F[4];
         world_from_tangent(T, B, N, refr_dir_ts, glossy_V);
@@ -3818,7 +3894,7 @@ void Ray::NS::SampleBilinear(const Ref::TexStorageBase *const textures[], const 
 
     const simd_fvec<S> k[2] = {fract(_uvs[0]), fract(_uvs[1])};
 
-    simd_fvec<S> p0[4], p1[4];
+    simd_fvec<S> p0[4] = {}, p1[4] = {};
 
     for (int i = 0; i < S; i++) {
         if (!mask[i]) {
@@ -3867,7 +3943,7 @@ void Ray::NS::SampleLatlong_RGBE(const Ref::TexStorageRGBA &storage, const uint3
     const simd_fvec<S> y = clamp(dir[1], -1.0f, 1.0f);
     simd_fvec<S> theta, u = 0.0f;
 
-    where(r > FLT_EPS, u) = clamp(dir[0] / r, -1.0f, 1.0f);
+    where(r > FLT_EPS, u) = clamp(safe_div_pos(dir[0], r), -1.0f, 1.0f);
 
     ITERATE(S, {
         theta[i] = std::acos(y[i]) / PI;
@@ -3968,11 +4044,12 @@ Ray::NS::simd_fvec<S> Ray::NS::ComputeVisibility(const simd_fvec<S> p[3], const 
         const simd_fvec<S> *I = d;
         const simd_fvec<S> w = 1.0f - sh_inter.u - sh_inter.v;
 
-        simd_fvec<S> p1[3], p2[3], p3[3], n1[3], n2[3], n3[3], u1[2], u2[2], u3[2];
+        simd_fvec<S> p1[3] = {0.0f, 0.0f, 0.0f}, p2[3] = {1.0f, 0.0f, 0.0f}, p3[3] = {0.0f, 0.0f, 1.0f}, n1[3] = {},
+                     n2[3] = {}, n3[3] = {}, u1[2] = {}, u2[2] = {}, u3[2] = {};
 
         simd_ivec<S> mat_index = {-1}, back_mat_index = {-1};
 
-        simd_fvec<S> inv_xform1[3], inv_xform2[3], inv_xform3[3];
+        simd_fvec<S> inv_xform1[3] = {}, inv_xform2[3] = {}, inv_xform3[3] = {};
 
         for (int i = 0; i < S; i++) {
             if (!sh_inter.mask[i]) {
@@ -4038,7 +4115,7 @@ Ray::NS::simd_fvec<S> Ray::NS::ComputeVisibility(const simd_fvec<S> p[3], const 
             })
             cross(e21, e31, sh_N);
         }
-        normalize(sh_N);
+        safe_normalize(sh_N);
 
         const simd_fvec<S> sh_plane_N[3] = {dot3(sh_N, inv_xform1), dot3(sh_N, inv_xform2), dot3(sh_N, inv_xform3)};
 
@@ -4119,7 +4196,9 @@ Ray::NS::simd_fvec<S> Ray::NS::ComputeVisibility(const simd_fvec<S> p[3], const 
                                 sh_rand[i] = (sh_rand[i] - mix_val) / (1.0f - mix_val);
                             } else {
                                 mat_index[i] = mat->textures[MIX_MAT2];
-                                sh_rand[i] = sh_rand[i] / mix_val;
+                                if (mix_val != 0.0f) {
+                                    sh_rand[i] = sh_rand[i] / mix_val;
+                                }
                             }
 
                             if (first_mi == 0xffffffff) {
@@ -4331,7 +4410,7 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const scene_data_t &sc,
 
             const simd_fvec<S> cos_theta = abs(dot3(ls.L, light_forward));
 
-            simd_fvec<S> pdf = (ls.dist * ls.dist) / (0.5f * ls.area * cos_theta);
+            simd_fvec<S> pdf = safe_div_pos(ls.dist * ls.dist, 0.5f * ls.area * cos_theta);
             where(cos_theta <= 0.0f, pdf) = 0.0f;
             where(ray_queue[index], ls.pdf) = pdf;
 
@@ -4365,7 +4444,7 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const scene_data_t &sc,
 
                 simd_fvec<S> V[3];
                 MapToCone(r1, r2, ls.L, radius, V);
-                normalize(V);
+                safe_normalize(V);
 
                 ITERATE_3({ where(ray_queue[index], ls.L[i]) = V[i]; })
             }
@@ -4396,7 +4475,7 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const scene_data_t &sc,
 
             const simd_fvec<S> cos_theta =
                 -ls.L[0] * light_forward[0] - ls.L[1] * light_forward[1] - ls.L[2] * light_forward[2];
-            simd_fvec<S> pdf = (ls.dist * ls.dist) / (ls.area * cos_theta);
+            simd_fvec<S> pdf = safe_div_pos(ls.dist * ls.dist, ls.area * cos_theta);
             where(cos_theta <= 0.0f, pdf) = 0.0f;
             where(ray_queue[index], ls.pdf) = pdf;
 
@@ -4421,10 +4500,10 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const scene_data_t &sc,
             simd_fvec<S> offset[2] = {2.0f * r1 - 1.0f, 2.0f * r2 - 1.0f};
             const simd_ivec<S> mask = simd_cast(offset[0] != 0.0f & offset[1] != 0.0f);
             if (mask.not_all_zeros()) {
-                simd_fvec<S> theta = 0.5f * PI - 0.25f * PI * (offset[0] / offset[1]), r = offset[1];
+                simd_fvec<S> theta = 0.5f * PI - 0.25f * PI * safe_div(offset[0], offset[1]), r = offset[1];
 
                 where(abs(offset[0]) > abs(offset[1]), r) = offset[0];
-                where(abs(offset[0]) > abs(offset[1]), theta) = 0.25f * PI * (offset[1] / offset[0]);
+                where(abs(offset[0]) > abs(offset[1]), theta) = 0.25f * PI * safe_div(offset[1], offset[0]);
 
                 where(mask, offset[0]) = 0.5f * r * cos(theta);
                 where(mask, offset[1]) = 0.5f * r * sin(theta);
@@ -4449,7 +4528,7 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const scene_data_t &sc,
 
             const simd_fvec<S> cos_theta =
                 -ls.L[0] * light_forward[0] - ls.L[1] * light_forward[1] - ls.L[2] * light_forward[2];
-            simd_fvec<S> pdf = (ls.dist * ls.dist) / (ls.area * cos_theta);
+            simd_fvec<S> pdf = safe_div_pos(ls.dist * ls.dist, ls.area * cos_theta);
             where(cos_theta <= 0.0f, pdf) = 0.0f;
             where(ray_queue[index], ls.pdf) = pdf;
 
@@ -4507,7 +4586,7 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const scene_data_t &sc,
             where(ray_queue[index], ls.area) = l.line.area;
 
             const simd_fvec<S> cos_theta = 1.0f - abs(dot3(ls.L, light_dir));
-            simd_fvec<S> pdf = (ls.dist * ls.dist) / (ls.area * cos_theta);
+            simd_fvec<S> pdf = safe_div_pos(ls.dist * ls.dist, ls.area * cos_theta);
             where(cos_theta == 0.0f, pdf) = 0.0f;
             where(ray_queue[index], ls.pdf) = pdf;
 
@@ -4561,10 +4640,11 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const scene_data_t &sc,
 
             const simd_fvec<S> to_light[3] = {lp[0] - P[0], lp[1] - P[1], lp[2] - P[2]};
             where(ray_queue[index], ls.dist) = length(to_light);
-            ITERATE_3({ where(ray_queue[index], ls.L[i]) = (to_light[i] / ls.dist); })
+            ITERATE_3({ where(ray_queue[index], ls.L[i]) = safe_div_pos(to_light[i], ls.dist); })
 
             const simd_fvec<S> cos_theta = abs(dot3(ls.L, light_forward));
-            where(simd_cast(cos_theta > 0.0f) & ray_queue[index], ls.pdf) = (ls.dist * ls.dist) / (ls.area * cos_theta);
+            where(simd_cast(cos_theta > 0.0f) & ray_queue[index], ls.pdf) =
+                safe_div_pos(ls.dist * ls.dist, ls.area * cos_theta);
 
             const material_t &lmat = sc.materials[sc.tri_materials[ltri_index].front_mi & MATERIAL_INDEX_BITS];
             if ((lmat.flags & MAT_FLAG_SKY_PORTAL) == 0) {
@@ -4627,7 +4707,7 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, const simd_ivec<S> &ra
 
             simd_ivec<S> imask = simd_cast(det >= 0.0f) & ray_mask;
             if (imask.not_all_zeros()) {
-                det = sqrt(det);
+                det = safe_sqrt(det);
                 const simd_fvec<S> t1 = b - det, t2 = b + det;
 
                 simd_fvec<S> mask1 = (t1 > HIT_EPS) & ((t1 < inout_inter.t) | no_shadow) & simd_cast(imask);
@@ -4664,7 +4744,7 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, const simd_ivec<S> &ra
             const float plane_dist = dot3(light_fwd, l.rect.pos);
 
             const simd_fvec<S> cos_theta = dot3(r.d, light_fwd);
-            const simd_fvec<S> t = (plane_dist - dot3(light_fwd, r.o)) / cos_theta;
+            const simd_fvec<S> t = safe_div_neg(plane_dist - dot3(light_fwd, r.o), cos_theta);
 
             const simd_ivec<S> imask =
                 simd_cast((cos_theta < 0.0f) & (t > HIT_EPS) & ((t < inout_inter.t) | no_shadow)) & ray_mask;
@@ -4694,7 +4774,7 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, const simd_ivec<S> &ra
             const float plane_dist = dot3(light_fwd, l.disk.pos);
 
             const simd_fvec<S> cos_theta = dot3(r.d, light_fwd);
-            const simd_fvec<S> t = (plane_dist - dot3(light_fwd, r.o)) / cos_theta;
+            const simd_fvec<S> t = safe_div_neg(plane_dist - dot3(light_fwd, r.o), cos_theta);
 
             const simd_ivec<S> imask =
                 simd_cast((cos_theta < 0.0f) & (t > HIT_EPS) & ((t < inout_inter.t) | no_shadow)) & ray_mask;
@@ -4777,12 +4857,10 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
             env_col[3] = 1.0f;
         }
 
-        const simd_fvec<S> &fno_hit = simd_cast(ino_hit);
-
-        where(fno_hit, out_rgba[0]) = ray.c[0] * env_col[0] * sc.env->env_col[0];
-        where(fno_hit, out_rgba[1]) = ray.c[1] * env_col[1] * sc.env->env_col[1];
-        where(fno_hit, out_rgba[2]) = ray.c[2] * env_col[2] * sc.env->env_col[2];
-        where(fno_hit, out_rgba[3]) = env_col[3];
+        where(ino_hit, out_rgba[0]) = ray.c[0] * env_col[0] * sc.env->env_col[0];
+        where(ino_hit, out_rgba[1]) = ray.c[1] * env_col[1] * sc.env->env_col[1];
+        where(ino_hit, out_rgba[2]) = ray.c[2] * env_col[2] * sc.env->env_col[2];
+        where(ino_hit, out_rgba[3]) = env_col[3];
     }
 
     simd_ivec<S> is_active_lane = inter.mask;
@@ -4791,8 +4869,10 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
     }
 
     const simd_fvec<S> *I = ray.d;
-    const simd_fvec<S> P[3] = {fmadd(inter.t, ray.d[0], ray.o[0]), fmadd(inter.t, ray.d[1], ray.o[1]),
-                               fmadd(inter.t, ray.d[2], ray.o[2])};
+    simd_fvec<S> P[3] = {};
+    where(inter.mask, P[0]) = fmadd(inter.t, ray.d[0], ray.o[0]);
+    where(inter.mask, P[1]) = fmadd(inter.t, ray.d[1], ray.o[1]);
+    where(inter.mask, P[2]) = fmadd(inter.t, ray.d[2], ray.o[2]);
 
     const simd_ivec<S> is_light_hit = is_active_lane & (inter.obj_index < 0); // Area light intersection
     if (is_light_hit.not_all_zeros()) {
@@ -4819,14 +4899,14 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
             if (l.type == LIGHT_TYPE_SPHERE) {
                 const simd_fvec<S> op[3] = {l.sph.pos[0] - ray.o[0], l.sph.pos[1] - ray.o[1], l.sph.pos[2] - ray.o[2]};
                 const simd_fvec<S> b = dot3(op, ray.d);
-                const simd_fvec<S> det = sqrt(b * b - dot3(op, op) + l.sph.radius * l.sph.radius);
+                const simd_fvec<S> det = safe_sqrt(b * b - dot3(op, op) + l.sph.radius * l.sph.radius);
 
                 simd_fvec<S> dd[3] = {l.sph.pos[0] - P[0], l.sph.pos[1] - P[1], l.sph.pos[2] - P[2]};
                 normalize(dd);
 
                 const simd_fvec<S> cos_theta = dot3(ray.d, dd);
 
-                const simd_fvec<S> light_pdf = (inter.t * inter.t) / (0.5f * l.sph.area * cos_theta);
+                const simd_fvec<S> light_pdf = safe_div(inter.t * inter.t, 0.5f * l.sph.area * cos_theta);
                 const simd_fvec<S> bsdf_pdf = ray.pdf;
 
                 const simd_fvec<S> mis_weight = power_heuristic(bsdf_pdf, light_pdf);
@@ -4856,7 +4936,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                 const float plane_dist = dot3(light_fwd, l.rect.pos);
                 const simd_fvec<S> cos_theta = dot3(ray.d, light_fwd);
 
-                const simd_fvec<S> light_pdf = (inter.t * inter.t) / (l.rect.area * cos_theta);
+                const simd_fvec<S> light_pdf = safe_div(inter.t * inter.t, l.rect.area * cos_theta);
                 const simd_fvec<S> bsdf_pdf = ray.pdf;
 
                 const simd_fvec<S> mis_weight = power_heuristic(bsdf_pdf, light_pdf);
@@ -4869,7 +4949,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                 const float plane_dist = dot3(light_fwd, l.disk.pos);
                 const simd_fvec<S> cos_theta = dot3(ray.d, light_fwd);
 
-                const simd_fvec<S> light_pdf = (inter.t * inter.t) / (l.disk.area * cos_theta);
+                const simd_fvec<S> light_pdf = safe_div(inter.t * inter.t, l.disk.area * cos_theta);
                 const simd_fvec<S> bsdf_pdf = ray.pdf;
 
                 const simd_fvec<S> mis_weight = power_heuristic(bsdf_pdf, light_pdf);
@@ -4880,7 +4960,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
 
                 const simd_fvec<S> cos_theta = 1.0f - abs(dot3(ray.d, light_dir));
 
-                const simd_fvec<S> light_pdf = (inter.t * inter.t) / (l.line.area * cos_theta);
+                const simd_fvec<S> light_pdf = safe_div(inter.t * inter.t, l.line.area * cos_theta);
                 const simd_fvec<S> bsdf_pdf = ray.pdf;
 
                 const simd_fvec<S> mis_weight = power_heuristic(bsdf_pdf, light_pdf);
@@ -5122,8 +5202,8 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
         const simd_fvec<S> int_ior = gather(int_iors, mat_index * MatDWORDStride);
         const simd_fvec<S> ext_ior = gather(ext_iors, mat_index * MatDWORDStride);
 
-        simd_fvec<S> eta = ext_ior / int_ior;
-        where(is_backfacing, eta) = int_ior / ext_ior;
+        simd_fvec<S> eta = safe_div_pos(ext_ior, int_ior);
+        where(is_backfacing, eta) = safe_div_pos(int_ior, ext_ior);
 
         simd_fvec<S> RR = fresnel_dielectric_cos(dot3(I, N), eta);
         where(int_ior == 0.0f, RR) = 1.0f;
@@ -5140,13 +5220,13 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
         const simd_ivec<S> mat1_index = gather(&all_mat_textures[MIX_MAT1], mat_index * MatDWORDStride);
         const simd_ivec<S> mat2_index = gather(&all_mat_textures[MIX_MAT2], mat_index * MatDWORDStride);
 
-        where(is_add & use_mat1, mix_weight) /= (1.0f - mix_val);
+        where(is_add & use_mat1, mix_weight) = safe_div_pos(mix_weight, 1.0f - mix_val);
         where(use_mat1, mat_index) = mat1_index;
-        where(use_mat1, mix_rand) = (mix_rand - mix_val) / (1.0f - mix_val);
+        where(use_mat1, mix_rand) = safe_div_pos(mix_rand - mix_val, 1.0f - mix_val);
 
-        where(is_add & use_mat2, mix_weight) /= mix_val;
+        where(is_add & use_mat2, mix_weight) = safe_div_pos(mix_weight, mix_val);
         where(use_mat2, mat_index) = mat2_index;
-        where(use_mat2, mix_rand) /= mix_val;
+        where(use_mat2, mix_rand) = safe_div_pos(mix_rand, mix_val);
     }
 
     { // apply normal map
@@ -5186,7 +5266,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
             normals_tex[2] = 1.0f;
             if (reconstruct_z.not_all_zeros()) {
                 where(reconstruct_z, normals_tex[2]) =
-                    sqrt(1.0f - normals_tex[0] * normals_tex[0] - normals_tex[1] * normals_tex[1]);
+                    safe_sqrt(1.0f - normals_tex[0] * normals_tex[0] - normals_tex[1] * normals_tex[1]);
             }
 
             simd_fvec<S> new_normal[3];
@@ -5269,7 +5349,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                 const simd_fvec<S> base_lod = get_texture_lod(textures, first_t, lambda, ray_queue[index]);
 #endif
 
-                simd_fvec<S> tex_color[4];
+                simd_fvec<S> tex_color[4] = {};
                 SampleBilinear(textures, first_t, uvs, simd_ivec<S>(base_lod), ray_queue[index], tex_color);
                 if (first_t & TEX_SRGB_BIT) {
                     srgb_to_rgb(tex_color, tex_color);
@@ -5340,6 +5420,9 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
     simd_ivec<S> secondary_mask = {0}, shadow_mask = {0};
 
     ray_data_t<S> new_ray;
+    new_ray.o[0] = new_ray.o[1] = new_ray.o[2] = 0.0f;
+    new_ray.d[0] = new_ray.d[1] = new_ray.d[2] = 0.0f;
+    new_ray.c[0] = new_ray.c[1] = new_ray.c[2] = 0.0f;
 #ifndef USE_RAY_DIFFERENTIALS
     new_ray.cone_width = cone_width;
     new_ray.cone_spread = ray.cone_spread;
@@ -5347,7 +5430,8 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
     new_ray.xy = ray.xy;
     new_ray.pdf = 0.0f;
 
-    shadow_ray_t<S> sh_r;
+    shadow_ray_t<S> sh_r = {};
+    sh_r.dist = MAX_DIST;
     sh_r.xy = ray.xy;
 
     { // Sample materials
@@ -5387,7 +5471,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                     ITERATE_3({ where(eval_light, sh_r.d[i]) = ls.L[i]; })
                     where(eval_light, sh_r.dist) = ls.dist - 10.0f * HIT_BIAS;
                     ITERATE_3({
-                        const simd_fvec<S> temp = ls.col[i] * diff_col[i] * (mix_weight * mis_weight / ls.pdf);
+                        const simd_fvec<S> temp = ls.col[i] * diff_col[i] * safe_div(mix_weight * mis_weight, ls.pdf);
                         where(eval_light, sh_r.c[i]) = ray.c[i] * temp;
                         where(eval_light & ~ls.cast_shadow, col[i]) += temp;
                     })
@@ -5751,9 +5835,10 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
 
                         where(eval_diff_lobe, bsdf_pdf) += diffuse_weight * diff_col[3];
                         ITERATE_3({ diff_col[i] *= (1.0f - metallic); })
-
-                        ITERATE_3(
-                            { where(eval_diff_lobe, lcol[i]) += ls.col[i] * N_dot_L * diff_col[i] / (PI * ls.pdf); })
+                        ITERATE_3({
+                            where(eval_diff_lobe, lcol[i]) +=
+                                safe_div_pos(ls.col[i] * N_dot_L * diff_col[i], PI * ls.pdf);
+                        })
                     }
 
                     simd_fvec<S> H[3];
@@ -5761,7 +5846,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                         H[i] = ls.L[i] - I[i] * eta;
                         where(_is_frontfacing, H[i]) = ls.L[i] - I[i];
                     })
-                    normalize(H);
+                    safe_normalize(H);
 
                     const simd_fvec<S> roughness2 = roughness * roughness;
                     const simd_fvec<S> aspect = std::sqrt(1.0f - 0.9f * unpack_unorm_16(mat->anisotropic_unorm));
@@ -5779,13 +5864,13 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                                                         eval_light;
                     if (eval_spec_lobe.not_all_zeros()) {
                         simd_fvec<S> spec_col[4];
-                        Evaluate_GGXSpecular_BSDF(view_dir_ts, sampled_normal_ts, light_dir_ts, alpha_x, alpha_y,
-                                                  simd_fvec<S>{spec_ior}, simd_fvec<S>{spec_F0}, spec_tmp_col,
-                                                  spec_col);
+                        Evaluate_GGXSpecular_BSDF(view_dir_ts, sampled_normal_ts, light_dir_ts, max(alpha_x, 1e-7f),
+                                                  max(alpha_y, 1e-7f), simd_fvec<S>{spec_ior}, simd_fvec<S>{spec_F0},
+                                                  spec_tmp_col, spec_col);
 
                         where(eval_spec_lobe, bsdf_pdf) += specular_weight * spec_col[3];
 
-                        ITERATE_3({ where(eval_spec_lobe, lcol[i]) += ls.col[i] * spec_col[i] / ls.pdf; })
+                        ITERATE_3({ where(eval_spec_lobe, lcol[i]) += safe_div_pos(ls.col[i] * spec_col[i], ls.pdf); })
                     }
 
                     const simd_ivec<S> eval_coat_lobe =
@@ -5800,7 +5885,10 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
 
                         where(eval_coat_lobe, bsdf_pdf) += clearcoat_weight * clearcoat_col[3];
 
-                        ITERATE_3({ where(eval_coat_lobe, lcol[i]) += 0.25f * ls.col[i] * clearcoat_col[i] / ls.pdf; })
+                        ITERATE_3({
+                            where(eval_coat_lobe, lcol[i]) +=
+                                safe_div_pos(0.25f * ls.col[i] * clearcoat_col[i], ls.pdf);
+                        })
                     }
 
                     const simd_ivec<S> eval_refr_spec_lobe =
@@ -5813,8 +5901,10 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                                                   spec_temp_col, spec_col);
                         where(eval_refr_spec_lobe, bsdf_pdf) += refraction_weight * fresnel * spec_col[3];
 
-                        ITERATE_3(
-                            { where(eval_refr_spec_lobe, lcol[i]) += ls.col[i] * spec_col[i] * (fresnel / ls.pdf); })
+                        ITERATE_3({
+                            where(eval_refr_spec_lobe, lcol[i]) +=
+                                ls.col[i] * spec_col[i] * safe_div_pos(fresnel, ls.pdf);
+                        })
                     }
 
                     const simd_ivec<S> eval_refr_trans_lobe =
@@ -5829,7 +5919,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
 
                         ITERATE_3({
                             where(eval_refr_trans_lobe, lcol[i]) +=
-                                ls.col[i] * refr_col[i] * ((1.0f - fresnel) / ls.pdf);
+                                ls.col[i] * refr_col[i] * safe_div_pos(1.0f - fresnel, ls.pdf);
                         })
                     }
 
@@ -5879,7 +5969,8 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                     ITERATE_3({ where(sample_diff_lobe, new_ray.o[i]) = new_p[i]; })
                     ITERATE_3({ where(sample_diff_lobe, new_ray.d[i]) = V[i]; })
                     ITERATE_3({
-                        where(sample_diff_lobe, new_ray.c[i]) = ray.c[i] * diff_col[i] * mix_weight / diffuse_weight;
+                        where(sample_diff_lobe, new_ray.c[i]) =
+                            safe_div_pos(ray.c[i] * diff_col[i] * mix_weight, diffuse_weight);
                     })
                     where(sample_diff_lobe, new_ray.pdf) = diff_col[3];
 
@@ -5921,7 +6012,8 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
 
                     ITERATE_3({ where(sample_spec_lobe, new_ray.o[i]) = new_p[i]; })
                     ITERATE_3({ where(sample_spec_lobe, new_ray.d[i]) = V[i]; })
-                    ITERATE_3({ where(sample_spec_lobe, new_ray.c[i]) = ray.c[i] * F[i] * mix_weight / F[3]; })
+                    ITERATE_3(
+                        { where(sample_spec_lobe, new_ray.c[i]) = safe_div_pos(ray.c[i] * F[i] * mix_weight, F[3]); })
                     where(sample_spec_lobe, new_ray.pdf) = F[3];
 
 #ifdef USE_RAY_DIFFERENTIALS
@@ -5994,7 +6086,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                     where(sample_trans_lobe, mix_rand) -= diffuse_weight + specular_weight + clearcoat_weight;
                     where(sample_trans_lobe, mix_rand) /= refraction_weight;
 
-                    simd_fvec<S> F[4], V[3];
+                    simd_fvec<S> F[4] = {}, V[3] = {};
 
                     const simd_ivec<S> sample_trans_spec_lobe = simd_cast(mix_rand < fresnel) & sample_trans_lobe;
                     if (sample_trans_spec_lobe.not_all_zeros()) {
@@ -6061,7 +6153,8 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                     F[3] *= refraction_weight;
 
                     ITERATE_3({ where(sample_trans_lobe, new_ray.d[i]) = V[i]; })
-                    ITERATE_3({ where(sample_trans_lobe, new_ray.c[i]) = ray.c[i] * F[i] * mix_weight / F[3]; })
+                    ITERATE_3(
+                        { where(sample_trans_lobe, new_ray.c[i]) = safe_div_pos(ray.c[i] * F[i] * mix_weight, F[3]); })
                     where(sample_trans_lobe, new_ray.pdf) = F[3];
 
 #ifdef USE_RAY_DIFFERENTIALS
@@ -6092,7 +6185,10 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
 
     secondary_mask &= simd_cast(p >= q) & simd_cast(lum > 0.0f) & simd_cast(new_ray.pdf > 0.0f);
     if (secondary_mask.not_all_zeros()) {
-        ITERATE_3({ new_ray.c[i] /= (1.0f - q); })
+        ITERATE_3({ new_ray.c[i] = safe_div_pos(new_ray.c[i], 1.0f - q); })
+
+        // TODO: get rid of this!
+        ITERATE_3({ where(~secondary_mask, new_ray.d[i]) = 0.0f; })
 
         const int index = (*out_secondary_rays_count)++;
         out_secondary_masks[index] = secondary_mask;

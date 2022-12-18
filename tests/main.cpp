@@ -113,6 +113,7 @@ void test_texture();
 bool g_stop_on_fail = false;
 bool g_tests_success = true;
 std::atomic_bool g_log_contains_errors{false};
+bool g_catch_flt_exceptions = false;
 
 int main(int argc, char *argv[]) {
     using namespace std::chrono;
@@ -140,6 +141,7 @@ int main(int argc, char *argv[]) {
     const bool enable_fp_exceptions = !nocpu || full_tests;
     if (enable_fp_exceptions) {
         _controlfp(_EM_INEXACT, _MCW_EM);
+        g_catch_flt_exceptions = true;
     }
 #endif
 

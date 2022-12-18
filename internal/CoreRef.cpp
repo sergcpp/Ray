@@ -60,7 +60,7 @@ force_inline void IntersectTri(const float ro[3], const float rd[3], const mtri_
     simd_ivec4 _mask = 0, _prim_index;
     simd_fvec4 _t = inter.t, _u, _v;
     for (int i = 0; i < 8; i += 4) {
-        const simd_fvec4 det = rd[0] * simd_fvec4{&tri.n_plane[0][i], simd_mem_aligned} +
+        simd_fvec4 det = rd[0] * simd_fvec4{&tri.n_plane[0][i], simd_mem_aligned} +
                                rd[1] * simd_fvec4{&tri.n_plane[1][i], simd_mem_aligned} +
                                rd[2] * simd_fvec4{&tri.n_plane[2][i], simd_mem_aligned};
         const simd_fvec4 dett = simd_fvec4{&tri.n_plane[3][i], simd_mem_aligned} -
@@ -98,6 +98,7 @@ force_inline void IntersectTri(const float ro[3], const float rd[3], const mtri_
             continue;
         }
 
+        where(~is_active_lane, det) = FLT_EPS;
         const simd_fvec4 rdet = (1.0f / det);
 
         simd_ivec4 prim = -(int(prim_index) + i + simd_ivec4{0, 1, 2, 3}) - 1;
@@ -3194,7 +3195,7 @@ void Ray::Ref::IntersectAreaLights(const ray_data_t &ray, const light_t lights[]
 
             const float plane_dist = dot(light_forward, light_pos);
             const float cos_theta = dot(rd, light_forward);
-            const float t = (plane_dist - dot(light_forward, ro)) / cos_theta;
+            const float t = (plane_dist - dot(light_forward, ro)) / std::min(cos_theta, -FLT_EPS);
 
             if (cos_theta < 0.0f && t > HIT_EPS && (t < inout_inter.t || no_shadow)) {
                 light_u /= dot(light_u, light_u);

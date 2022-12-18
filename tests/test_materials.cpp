@@ -14,6 +14,7 @@
 #include "utils.h"
 
 extern std::atomic_bool g_log_contains_errors;
+extern bool g_catch_flt_exceptions;
 
 class LogErr : public Ray::ILog {
     FILE *err_out_ = nullptr;
@@ -704,6 +705,11 @@ void schedule_render_jobs(Ray::RendererBase &renderer, const Ray::SceneBase *sce
         ThreadPool threads(std::thread::hardware_concurrency());
 
         auto render_job = [&](int j, int portion) {
+#if defined(_WIN32)
+            if (g_catch_flt_exceptions) {
+                _controlfp(_EM_INEXACT | _EM_UNDERFLOW | _EM_OVERFLOW, _MCW_EM);
+            }
+#endif
             for (int i = 0; i < portion; ++i) {
                 renderer.RenderScene(scene, region_contexts[j]);
             }
