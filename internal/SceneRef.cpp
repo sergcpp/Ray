@@ -27,13 +27,18 @@ Ray::Ref::Scene::~Scene() {
 }
 
 void Ray::Ref::Scene::GetEnvironment(environment_desc_t &env) {
-    memcpy(&env.env_col[0], &env_.env_col, 3 * sizeof(float));
+    memcpy(env.env_col, env_.env_col, 3 * sizeof(float));
     env.env_map = env_.env_map;
+    memcpy(env.back_col, env_.back_col, 3 * sizeof(float));
+    env.back_map = env_.back_map;
+    env.multiple_importance = env_.multiple_importance;
 }
 
 void Ray::Ref::Scene::SetEnvironment(const environment_desc_t &env) {
-    memcpy(&env_.env_col, &env.env_col[0], 3 * sizeof(float));
+    memcpy(env_.env_col, env.env_col, 3 * sizeof(float));
     env_.env_map = env.env_map;
+    memcpy(env_.back_col, env.back_col, 3 * sizeof(float));
+    env_.back_map = env.back_map;
     env_.multiple_importance = env.multiple_importance;
 }
 

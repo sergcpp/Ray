@@ -4841,9 +4841,10 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
     if (ino_hit.not_all_zeros()) {
         simd_fvec<S> env_col[4] = {{1.0f}, {1.0f}, {1.0f}, {1.0f}};
         if (pi.should_add_environment()) {
-            if (sc.env->env_map != 0xffffffff) {
-                SampleLatlong_RGBE(*static_cast<const Ref::TexStorageRGBA *>(textures[0]), sc.env->env_map, ray.d,
-                                   ino_hit, env_col);
+            const uint32_t env_map = pi.bounce ? sc.env->env_map : sc.env->back_map;
+            if (env_map != 0xffffffff) {
+                SampleLatlong_RGBE(*static_cast<const Ref::TexStorageRGBA *>(textures[0]), env_map, ray.d, ino_hit,
+                                   env_col);
                 if (sc.env->qtree_levels) {
                     const auto *qtree_mips = reinterpret_cast<const simd_fvec4 *const *>(sc.env->qtree_mips);
 
@@ -4854,12 +4855,13 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                     ITERATE_3({ env_col[i] *= mis_weight; })
                 }
             }
+            ITERATE_3({ env_col[i] *= pi.bounce ? sc.env->env_col[i] : sc.env->back_col[i]; })
             env_col[3] = 1.0f;
         }
 
-        where(ino_hit, out_rgba[0]) = ray.c[0] * env_col[0] * sc.env->env_col[0];
-        where(ino_hit, out_rgba[1]) = ray.c[1] * env_col[1] * sc.env->env_col[1];
-        where(ino_hit, out_rgba[2]) = ray.c[2] * env_col[2] * sc.env->env_col[2];
+        where(ino_hit, out_rgba[0]) = ray.c[0] * env_col[0];
+        where(ino_hit, out_rgba[1]) = ray.c[1] * env_col[1];
+        where(ino_hit, out_rgba[2]) = ray.c[2] * env_col[2];
         where(ino_hit, out_rgba[3]) = env_col[3];
     }
 

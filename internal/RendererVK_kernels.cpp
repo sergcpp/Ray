@@ -216,6 +216,8 @@ void Ray::Vk::Renderer::kernel_ShadePrimaryHits(VkCommandBuffer cmd_buf, const p
 
     memcpy(&uniform_params.env_col[0], env.env_col, 3 * sizeof(float));
     memcpy(&uniform_params.env_col[3], &env.env_map, sizeof(uint32_t));
+    memcpy(&uniform_params.back_col[0], env.back_col, 3 * sizeof(float));
+    memcpy(&uniform_params.back_col[3], &env.back_map, sizeof(uint32_t));
 
     if (use_bindless_) {
         assert(tex_descr_set);
@@ -284,6 +286,8 @@ void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(VkCommandBuffer cmd_buf, const
 
     memcpy(&uniform_params.env_col[0], env.env_col, 3 * sizeof(float));
     memcpy(&uniform_params.env_col[3], &env.env_map, sizeof(uint32_t));
+    memcpy(&uniform_params.back_col[0], env.back_col, 3 * sizeof(float));
+    memcpy(&uniform_params.back_col[3], &env.back_map, sizeof(uint32_t));
 
     if (use_bindless_) {
         assert(tex_descr_set);

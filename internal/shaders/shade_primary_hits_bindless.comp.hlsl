@@ -44,6 +44,7 @@ struct Params
     float env_rotation;
     int env_qtree_levels;
     float4 env_col;
+    float4 back_col;
 };
 
 struct light_t
@@ -1544,8 +1545,8 @@ float3 ShadeSurface(int px_index, hit_data_t inter, ray_data_t ray)
         [branch]
         if (inter.mask == 0)
         {
-            float3 env_col = _3000_g_params.env_col.xyz;
-            uint _4361 = asuint(_3000_g_params.env_col.w);
+            float3 env_col = _3000_g_params.back_col.xyz;
+            uint _4361 = asuint(_3000_g_params.back_col.w);
             if (_4361 != 4294967295u)
             {
                 env_col *= SampleLatlong_RGBE(_4361, _4348, _3000_g_params.env_rotation);

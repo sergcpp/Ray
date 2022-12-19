@@ -61,8 +61,8 @@ force_inline void IntersectTri(const float ro[3], const float rd[3], const mtri_
     simd_fvec4 _t = inter.t, _u, _v;
     for (int i = 0; i < 8; i += 4) {
         simd_fvec4 det = rd[0] * simd_fvec4{&tri.n_plane[0][i], simd_mem_aligned} +
-                               rd[1] * simd_fvec4{&tri.n_plane[1][i], simd_mem_aligned} +
-                               rd[2] * simd_fvec4{&tri.n_plane[2][i], simd_mem_aligned};
+                         rd[1] * simd_fvec4{&tri.n_plane[1][i], simd_mem_aligned} +
+                         rd[2] * simd_fvec4{&tri.n_plane[2][i], simd_mem_aligned};
         const simd_fvec4 dett = simd_fvec4{&tri.n_plane[3][i], simd_mem_aligned} -
                                 ro[0] * simd_fvec4{&tri.n_plane[0][i], simd_mem_aligned} -
                                 ro[1] * simd_fvec4{&tri.n_plane[1][i], simd_mem_aligned} -
@@ -3279,8 +3279,9 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
     if (!inter.mask) {
         simd_fvec4 env_col = {1.0f};
         if (pi.should_add_environment()) {
-            if (sc.env->env_map != 0xffffffff) {
-                env_col = SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), sc.env->env_map,
+            const uint32_t env_map = pi.bounce ? sc.env->env_map : sc.env->back_map;
+            if (env_map != 0xffffffff) {
+                env_col = SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), env_map,
                                              simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f}, PI);
                 if (sc.env->qtree_levels) {
                     const auto *qtree_mips = reinterpret_cast<const simd_fvec4 *const *>(sc.env->qtree_mips);
@@ -3292,11 +3293,11 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
                     env_col *= mis_weight;
                 }
             }
+            env_col *= pi.bounce ? simd_fvec4{sc.env->env_col[0], sc.env->env_col[1], sc.env->env_col[2], 1.0f}
+                                 : simd_fvec4{sc.env->back_col[0], sc.env->back_col[1], sc.env->back_col[2], 1.0f};
             env_col[3] = 1.0f;
         }
-        return Ray::pixel_color_t{ray.c[0] * env_col[0] * sc.env->env_col[0],
-                                  ray.c[1] * env_col[1] * sc.env->env_col[1],
-                                  ray.c[2] * env_col[2] * sc.env->env_col[2], env_col[3]};
+        return Ray::pixel_color_t{ray.c[0] * env_col[0], ray.c[1] * env_col[1], ray.c[2] * env_col[2], env_col[3]};
     }
 
     const auto P = simd_fvec4{ray.o[0], ray.o[1], ray.o[2], 0.0f} + inter.t * I;

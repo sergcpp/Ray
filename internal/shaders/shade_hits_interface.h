@@ -18,6 +18,7 @@ struct Params {
     float env_rotation;
     int env_qtree_levels;
     VEC4_TYPE env_col;
+    VEC4_TYPE back_col;
 };
 
 const int LOCAL_GROUP_SIZE_X = 8;

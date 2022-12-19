@@ -957,8 +957,13 @@ vec3 ShadeSurface(int px_index, hit_data_t inter, ray_data_t ray) {
     const vec3 rd = vec3(ray.d[0], ray.d[1], ray.d[2]);
 
     [[dont_flatten]] if (inter.mask == 0) {
+#if PRIMARY
+        vec3 env_col = g_params.back_col.xyz;
+        const uint env_map = floatBitsToUint(g_params.back_col.w);
+#else
         vec3 env_col = g_params.env_col.xyz;
         const uint env_map = floatBitsToUint(g_params.env_col.w);
+#endif
         if (env_map != 0xffffffff) {
 #if BINDLESS
             env_col *= SampleLatlong_RGBE(env_map, rd, g_params.env_rotation);

@@ -371,6 +371,8 @@ static_assert(sizeof(mesh_instance_t) == 32, "!");
 struct environment_t {
     float env_col[3];
     uint32_t env_map;
+    float back_col[3];
+    uint32_t back_map;
     const float *qtree_mips[16];
     int qtree_levels;
     bool multiple_importance;

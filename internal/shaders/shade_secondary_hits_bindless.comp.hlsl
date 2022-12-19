@@ -44,6 +44,7 @@ struct Params
     float env_rotation;
     int env_qtree_levels;
     float4 env_col;
+    float4 back_col;
 };
 
 struct light_t

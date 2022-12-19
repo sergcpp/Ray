@@ -249,8 +249,10 @@ struct camera_desc_t {
 
 /// Environment description
 struct environment_desc_t {
-    float env_col[3] = {0.0f};          ///< Environment color
+    float env_col[3] = {};              ///< Environment color
     uint32_t env_map = 0xffffffff;      ///< Environment texture
+    float back_col[3] = {};             ///< Background color
+    uint32_t back_map = 0xffffffff;     ///< Background texture
     bool multiple_importance = true;    ///< Enable explicit env map sampling
 };
 

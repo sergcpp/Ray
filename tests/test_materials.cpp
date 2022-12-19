@@ -518,6 +518,7 @@ void setup_material_scene(Ray::SceneBase &scene, const bool output_sh, const Mat
 
     Ray::environment_desc_t env_desc;
     env_desc.env_col[0] = env_desc.env_col[1] = env_desc.env_col[2] = 0.0f;
+    env_desc.back_col[0] = env_desc.back_col[1] = env_desc.back_col[2] = 0.0f;
 
     if (scene_index == REFR_PLANE_SCENE) {
         scene.AddMeshInstance(model_mesh, identity);
@@ -673,8 +674,9 @@ void setup_material_scene(Ray::SceneBase &scene, const bool output_sh, const Mat
         tex_desc.force_no_compression = true;
 
         env_desc.env_col[0] = env_desc.env_col[1] = env_desc.env_col[2] = 0.25f;
+        env_desc.back_col[0] = env_desc.back_col[1] = env_desc.back_col[2] = 0.25f;
 
-        env_desc.env_map = scene.AddTexture(tex_desc);
+        env_desc.env_map = env_desc.back_map = scene.AddTexture(tex_desc);
     } else if (scene_index == STANDARD_SCENE_NO_LIGHT) {
         // nothing
     }
