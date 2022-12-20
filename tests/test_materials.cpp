@@ -729,8 +729,8 @@ void schedule_render_jobs(Ray::RendererBase &renderer, const Ray::SceneBase *sce
 
             // report progress percentage
             const float prog = 100.0f * float(i + std::min(SamplePortion, samples - i)) / samples;
-            printf("\r%s (%s, %s, %s): %.1f%% ", log_str, Ray::RendererTypeName(rt),
-                   settings.use_hwrt ? "hwrt" : "swrt", output_sh ? "sh" : "co", prog);
+            printf("\r%s (%6s, %s): %.1f%% ", log_str, Ray::RendererTypeName(rt), settings.use_hwrt ? "HWRT" : "SWRT",
+                   prog);
             fflush(stdout);
         }
     } else {
@@ -743,8 +743,8 @@ void schedule_render_jobs(Ray::RendererBase &renderer, const Ray::SceneBase *sce
             if ((i % SamplePortion) == 0 || i == samples - 1) {
                 // report progress percentage
                 const float prog = 100.0f * float(i + 1) / samples;
-                printf("\r%s (%s, %s, %s): %.1f%% ", log_str, Ray::RendererTypeName(rt),
-                       settings.use_hwrt ? "hwrt" : "swrt", output_sh ? "sh" : "co", prog);
+                printf("\r%s (%6s, %s): %.1f%% ", log_str, Ray::RendererTypeName(rt),
+                       settings.use_hwrt ? "HWRT" : "SWRT", prog);
                 fflush(stdout);
             }
         }
