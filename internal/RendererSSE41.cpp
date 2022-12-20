@@ -78,8 +78,8 @@ template void SampleTrilinear<RayPacketSize>(const Ref::TexStorageBase *const te
                                              const simd_fvec<RayPacketSize> uvs[2], const simd_fvec<RayPacketSize> &lod,
                                              const simd_ivec<RayPacketSize> &mask,
                                              simd_fvec<RayPacketSize> out_rgba[4]);
-template void SampleLatlong_RGBE<RayPacketSize>(const Ref::TexStorageRGBA &atlas, const uint32_t index,
-                                                const simd_fvec<RayPacketSize> dir[3],
+template void SampleLatlong_RGBE<RayPacketSize>(const Ref::TexStorageRGBA &atlas, uint32_t index,
+                                                const simd_fvec<RayPacketSize> dir[3], float y_rotation,
                                                 const simd_ivec<RayPacketSize> &mask,
                                                 simd_fvec<RayPacketSize> out_rgb[3]);
 

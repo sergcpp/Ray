@@ -2731,7 +2731,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleLatlong_RGBE(const TexStorageRGBA &storage,
         phi -= 2 * PI;
     }
 
-    float u = 0.5f * phi / PI;
+    float u = fract(0.5f * phi / PI);
     if (dir[2] < 0.0f) {
         u = 1.0f - u;
     }
@@ -2740,7 +2740,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleLatlong_RGBE(const TexStorageRGBA &storage,
     simd_fvec2 size;
     storage.GetFRes(tex, 0, &size[0]);
 
-    const simd_fvec2 uvs = simd_fvec2{u, theta} * size;
+    simd_fvec2 uvs = simd_fvec2{u, theta} * size;
     const simd_ivec2 iuvs = simd_ivec2(uvs);
 
     const auto &p00 = storage.Get(tex, iuvs[0] + 0, iuvs[1] + 0, 0);

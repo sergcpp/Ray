@@ -46,7 +46,7 @@ vec3 SampleLatlong_RGBE(const uint index, const vec3 dir, const float y_rotation
         phi -= 2 * PI;
     }
 
-    float u = 0.5 * phi / PI;
+    float u = fract(0.5 * phi / PI);
     [[flatten]] if (dir[2] < 0.0) {
         u = 1.0 - u;
     }
@@ -129,12 +129,12 @@ vec3 SampleLatlong_RGBE(const atlas_texture_t t, const vec3 dir, float y_rotatio
         phi -= 2 * PI;
     }
 
-    float u = 0.5 * phi / PI;
+    float u = fract(0.5 * phi / PI);
     [[flatten]] if (dir[2] < 0.0) {
         u = 1.0 - u;
     }
 
-    vec2 uvs = TransformUV(vec2(u, theta), t, 0) + 1.0;
+    vec2 uvs = TransformUV(vec2(u, theta), t, 0);
 
     const int page = int(t.page[0] & 0xff);
     const vec4 p00 = texelFetchOffset(g_atlases[nonuniformEXT(t.atlas)], ivec3(uvs, page), 0, ivec2(0, 0));
