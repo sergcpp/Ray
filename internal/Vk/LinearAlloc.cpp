@@ -7,6 +7,9 @@
 
 uint32_t Ray::Vk::LinearAlloc::Alloc(const uint32_t req_size, const char *tag) {
     const uint32_t blocks_required = (req_size + block_size_ - 1) / block_size_;
+    if (blocks_required > block_count_) {
+        return 0xffffffff;
+    }
 
     uint32_t best_blocks_available = block_count_ + 1;
     uint32_t best_loc = 0xffffffff;
