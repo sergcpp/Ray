@@ -1640,7 +1640,7 @@ template <int S> force_inline simd_fvec<S> G1(const simd_fvec<S> Ve[3], simd_fve
     alpha_x *= alpha_x;
     alpha_y *= alpha_y;
     const simd_fvec<S> delta =
-        (-1.0f + safe_sqrt(1.0f + safe_div_pos(alpha_x * Ve[0] * Ve[0] + alpha_y * Ve[1] * Ve[1], Ve[2] * Ve[2]))) /
+        (-1.0f + safe_sqrt(1.0f + safe_div(alpha_x * Ve[0] * Ve[0] + alpha_y * Ve[1] * Ve[1], Ve[2] * Ve[2]))) /
         2.0f;
     return 1.0f / (1.0f + delta);
 }
@@ -5529,7 +5529,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                 if (eval_light.not_all_zeros()) {
                     const simd_fvec<S> _I[3] = {-I[0], -I[1], -I[2]};
                     simd_fvec<S> H[3] = {ls.L[0] - I[0], ls.L[1] - I[1], ls.L[2] - I[2]};
-                    normalize(H);
+                    safe_normalize(H);
 
                     simd_fvec<S> view_dir_ts[3], light_dir_ts[3], sampled_normal_ts[3];
                     tangent_from_world(T, B, N, _I, view_dir_ts);
@@ -5548,7 +5548,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                     ITERATE_3({ where(eval_light, sh_r.d[i]) = ls.L[i]; })
                     where(eval_light, sh_r.dist) = ls.dist - 10.0f * HIT_BIAS;
                     ITERATE_3({
-                        const simd_fvec<S> temp = ls.col[i] * spec_col[i] * (mix_weight * mis_weight / ls.pdf);
+                        const simd_fvec<S> temp = ls.col[i] * spec_col[i] * safe_div_pos(mix_weight * mis_weight, ls.pdf);
                         where(eval_light, sh_r.c[i]) = ray.c[i] * temp;
                         where(eval_light & ~ls.cast_shadow, col[i]) += temp;
                     })

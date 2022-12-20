@@ -16,6 +16,7 @@
 #define VECTORIZE_BBOX_INTERSECTION 1
 #define VECTORIZE_TRI_INTERSECTION 1
 // #define FORCE_TEXTURE_LOD 0
+#define USE_SAFE_MATH 1
 
 namespace Ray {
 namespace Ref {
@@ -575,6 +576,30 @@ force_inline float fast_log2(float val) {
     u.x += 127 << 23;
     log_2 += ((-0.34484843f) * u.val + 2.02466578f) * u.val - 0.67487759f;
     return (log_2);
+}
+
+force_inline float safe_sqrt(float val) {
+#if USE_SAFE_MATH
+    return std::sqrt(std::max(val, 0.0f));
+#else
+    return std::sqrt(val);
+#endif
+}
+
+force_inline float safe_div_pos(const float a, const float b) {
+#if USE_SAFE_MATH
+    return a / std::max(b, FLT_EPS);
+#else
+    return (a / b)
+#endif
+}
+
+force_inline float safe_div_neg(const float a, const float b) {
+#if USE_SAFE_MATH
+    return a / std::min(b, -FLT_EPS);
+#else
+    return (a / b)
+#endif
 }
 
 force_inline float lum(const simd_fvec3 &color) {
@@ -2799,7 +2824,7 @@ float Ray::Ref::ComputeVisibility(const float p[3], const float d[3], float dist
                     sh_r = (sh_r - mix_val) / (1.0f - mix_val);
                 } else {
                     mat = &sc.materials[mat->textures[MIX_MAT2]];
-                    sh_r = sh_r / mix_val;
+                    sh_r = safe_div_pos(sh_r, mix_val);
                 }
             }
 
@@ -3222,7 +3247,7 @@ void Ray::Ref::IntersectAreaLights(const ray_data_t &ray, const light_t lights[]
 
             const float plane_dist = dot(light_forward, light_pos);
             const float cos_theta = dot(rd, light_forward);
-            const float t = (plane_dist - dot(light_forward, ro)) / cos_theta;
+            const float t = safe_div_neg(plane_dist - dot(light_forward, ro), cos_theta);
 
             if (cos_theta < 0.0f && t > HIT_EPS && (t < inout_inter.t || no_shadow)) {
                 light_u /= dot(light_u, light_u);
@@ -3462,7 +3487,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
             mix_val *= SampleBilinear(textures, mat->textures[BASE_TEXTURE], uvs, 0)[0];
         }
 
-        const float eta = is_backfacing ? (mat->ext_ior / mat->int_ior) : (mat->int_ior / mat->ext_ior);
+        const float eta = is_backfacing ? safe_div_pos(mat->ext_ior, mat->int_ior) : safe_div_pos(mat->int_ior, mat->ext_ior);
         const float RR = mat->int_ior != 0.0f ? fresnel_dielectric_cos(dot(I, N), eta) : 1.0f;
 
         mix_val *= clamp(RR, 0.0f, 1.0f);
@@ -3476,7 +3501,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
             mix_weight *= (mat->flags & MAT_FLAG_MIX_ADD) ? 1.0f / mix_val : 1.0f;
 
             mat = &sc.materials[mat->textures[MIX_MAT2]];
-            mix_rand = mix_rand / mix_val;
+            mix_rand = safe_div_pos(mix_rand, mix_val);
         }
     }
 
@@ -3486,7 +3511,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
         normals = normals * 2.0f - 1.0f;
         normals[2] = 1.0f;
         if (mat->textures[NORMALS_TEXTURE] & TEX_RECONSTRUCT_Z_BIT) {
-            normals[2] = std::sqrt(1.0f - normals[0] * normals[0] - normals[1] * normals[1]);
+            normals[2] = safe_sqrt(1.0f - normals[0] * normals[0] - normals[1] * normals[1]);
         }
         simd_fvec4 in_normal = N;
         N = normalize(normals[0] * T + normals[2] * N + normals[1] * B);
@@ -4018,9 +4043,9 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
 
                 new_ray.ray_depth = ray.ray_depth + 0x00000100;
 
-                new_ray.c[0] = ray.c[0] * F[0] * mix_weight / F[3];
-                new_ray.c[1] = ray.c[1] * F[1] * mix_weight / F[3];
-                new_ray.c[2] = ray.c[2] * F[2] * mix_weight / F[3];
+                new_ray.c[0] = ray.c[0] * F[0] * mix_weight / std::max(F[3], FLT_EPS);
+                new_ray.c[1] = ray.c[1] * F[1] * mix_weight / std::max(F[3], FLT_EPS);
+                new_ray.c[2] = ray.c[2] * F[2] * mix_weight / std::max(F[3], FLT_EPS);
                 new_ray.pdf = F[3];
 
                 memcpy(&new_ray.o[0], value_ptr(offset_ray(P, plane_N)), 3 * sizeof(float));
@@ -4126,9 +4151,9 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
 
                 F[3] *= refraction_weight;
 
-                new_ray.c[0] = ray.c[0] * F[0] * mix_weight / F[3];
-                new_ray.c[1] = ray.c[1] * F[1] * mix_weight / F[3];
-                new_ray.c[2] = ray.c[2] * F[2] * mix_weight / F[3];
+                new_ray.c[0] = ray.c[0] * F[0] * mix_weight / std::max(F[3], FLT_EPS);
+                new_ray.c[1] = ray.c[1] * F[1] * mix_weight / std::max(F[3], FLT_EPS);
+                new_ray.c[2] = ray.c[2] * F[2] * mix_weight / std::max(F[3], FLT_EPS);
                 new_ray.pdf = F[3];
 
                 //////////////////
