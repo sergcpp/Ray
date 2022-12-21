@@ -203,7 +203,6 @@ void Ray::Vk::Renderer::kernel_ShadePrimaryHits(VkCommandBuffer cmd_buf, const p
     uniform_params.img_size[1] = h_;
     uniform_params.hi = hi;
     uniform_params.li_count = sc_data.li_count;
-    uniform_params.env_rotation = PI;
     uniform_params.env_qtree_levels = sc_data.env_qtree_levels;
 
     uniform_params.max_diff_depth = settings.max_diff_depth;
@@ -218,6 +217,9 @@ void Ray::Vk::Renderer::kernel_ShadePrimaryHits(VkCommandBuffer cmd_buf, const p
     memcpy(&uniform_params.env_col[3], &env.env_map, sizeof(uint32_t));
     memcpy(&uniform_params.back_col[0], env.back_col, 3 * sizeof(float));
     memcpy(&uniform_params.back_col[3], &env.back_map, sizeof(uint32_t));
+
+    uniform_params.env_rotation = env.env_map_rotation;
+    uniform_params.back_rotation = env.back_map_rotation;
 
     if (use_bindless_) {
         assert(tex_descr_set);
@@ -273,7 +275,6 @@ void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(VkCommandBuffer cmd_buf, const
     uniform_params.img_size[1] = h_;
     uniform_params.hi = hi;
     uniform_params.li_count = sc_data.li_count;
-    uniform_params.env_rotation = PI;
     uniform_params.env_qtree_levels = sc_data.env_qtree_levels;
 
     uniform_params.max_diff_depth = settings.max_diff_depth;
@@ -288,6 +289,9 @@ void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(VkCommandBuffer cmd_buf, const
     memcpy(&uniform_params.env_col[3], &env.env_map, sizeof(uint32_t));
     memcpy(&uniform_params.back_col[0], env.back_col, 3 * sizeof(float));
     memcpy(&uniform_params.back_col[3], &env.back_map, sizeof(uint32_t));
+
+    uniform_params.env_rotation = env.env_map_rotation;
+    uniform_params.back_rotation = env.back_map_rotation;
 
     if (use_bindless_) {
         assert(tex_descr_set);

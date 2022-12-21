@@ -38,7 +38,7 @@ vec3 SampleLatlong_RGBE(const uint index, const vec3 dir, const float y_rotation
     const float theta = acos(clamp(dir[1], -1.0, 1.0)) / PI;
     const float r = sqrt(dir[0] * dir[0] + dir[2] * dir[2]);
 
-    float phi = acos(r > FLT_EPS ? clamp(dir[0] / r, -1.0, 1.0) : 0.0) + y_rotation;
+    float phi = atan(dir[2], dir[0]) + y_rotation;
     if (phi < 0) {
         phi += 2 * PI;
     }
@@ -46,10 +46,7 @@ vec3 SampleLatlong_RGBE(const uint index, const vec3 dir, const float y_rotation
         phi -= 2 * PI;
     }
 
-    float u = fract(0.5 * phi / PI);
-    [[flatten]] if (dir[2] < 0.0) {
-        u = 1.0 - u;
-    }
+    const float u = fract(0.5 * phi / PI);
 
     const uint tex = (index & 0x00ffffff);
     ivec2 size = textureSize(g_textures[tex], 0);
@@ -119,9 +116,7 @@ vec4 SampleBilinear(const uint index, const vec2 uvs, const int lod) {
 
 vec3 SampleLatlong_RGBE(const atlas_texture_t t, const vec3 dir, float y_rotation) {
     const float theta = acos(clamp(dir[1], -1.0, 1.0)) / PI;
-    const float r = sqrt(dir[0] * dir[0] + dir[2] * dir[2]);
-
-    float phi = acos(r > FLT_EPS ? clamp(dir[0] / r, -1.0, 1.0) : 0.0) + y_rotation;
+    float phi = atan(dir[2], dir[0]) + y_rotation;
     if (phi < 0) {
         phi += 2 * PI;
     }
@@ -129,12 +124,8 @@ vec3 SampleLatlong_RGBE(const atlas_texture_t t, const vec3 dir, float y_rotatio
         phi -= 2 * PI;
     }
 
-    float u = fract(0.5 * phi / PI);
-    [[flatten]] if (dir[2] < 0.0) {
-        u = 1.0 - u;
-    }
-
-    vec2 uvs = TransformUV(vec2(u, theta), t, 0);
+    const float u = fract(0.5 * phi / PI);
+    const vec2 uvs = TransformUV(vec2(u, theta), t, 0);
 
     const int page = int(t.page[0] & 0xff);
     const vec4 p00 = texelFetchOffset(g_atlases[nonuniformEXT(t.atlas)], ivec3(uvs, page), 0, ivec2(0, 0));

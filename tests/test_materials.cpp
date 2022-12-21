@@ -677,6 +677,7 @@ void setup_material_scene(Ray::SceneBase &scene, const bool output_sh, const Mat
         env_desc.back_col[0] = env_desc.back_col[1] = env_desc.back_col[2] = 0.25f;
 
         env_desc.env_map = env_desc.back_map = scene.AddTexture(tex_desc);
+        env_desc.env_map_rotation = env_desc.back_map_rotation = 2.35619449019f;
     } else if (scene_index == STANDARD_SCENE_NO_LIGHT) {
         // nothing
     }
@@ -2578,8 +2579,8 @@ void test_complex_mat5_sun_light(const char *arch_list[], const char *preferred_
 
 void test_complex_mat5_hdr_light(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 1024;
-    const double MinPSNR = 30.47;
-    const int PixThres = 1140;
+    const double MinPSNR = 30.28;
+    const int PixThres = 1261;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = 0;
@@ -2701,8 +2702,8 @@ void test_complex_mat6_sun_light(const char *arch_list[], const char *preferred_
 
 void test_complex_mat6_hdr_light(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 1024;
-    const double MinPSNR = 23.7;
-    const int PixThres = 3578;
+    const double MinPSNR = 24.18;
+    const int PixThres = 3266;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;

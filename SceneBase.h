@@ -253,6 +253,8 @@ struct environment_desc_t {
     uint32_t env_map = 0xffffffff;      ///< Environment texture
     float back_col[3] = {};             ///< Background color
     uint32_t back_map = 0xffffffff;     ///< Background texture
+    float env_map_rotation = 0.0f;
+    float back_map_rotation = 0.0f;
     bool multiple_importance = true;    ///< Enable explicit env map sampling
 };
 

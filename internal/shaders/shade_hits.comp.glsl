@@ -960,18 +960,20 @@ vec3 ShadeSurface(int px_index, hit_data_t inter, ray_data_t ray) {
 #if PRIMARY
         vec3 env_col = g_params.back_col.xyz;
         const uint env_map = floatBitsToUint(g_params.back_col.w);
+        const float env_map_rotation = g_params.back_rotation;
 #else
         vec3 env_col = g_params.env_col.xyz;
         const uint env_map = floatBitsToUint(g_params.env_col.w);
+        const float env_map_rotation = g_params.env_rotation;
 #endif
         if (env_map != 0xffffffff) {
 #if BINDLESS
-            env_col *= SampleLatlong_RGBE(env_map, rd, g_params.env_rotation);
+            env_col *= SampleLatlong_RGBE(env_map, rd, env_map_rotation);
 #else
-            env_col *= SampleLatlong_RGBE(g_textures[env_map], rd, g_params.env_rotation);
+            env_col *= SampleLatlong_RGBE(g_textures[env_map], rd, env_map_rotation);
 #endif
             if (g_params.env_qtree_levels > 0) {
-                const float light_pdf = Evaluate_EnvQTree(g_params.env_rotation, g_env_qtree,
+                const float light_pdf = Evaluate_EnvQTree(env_map_rotation, g_env_qtree,
                                         g_params.env_qtree_levels, rd);
                 const float bsdf_pdf = ray.pdf;
 

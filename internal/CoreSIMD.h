@@ -3611,7 +3611,7 @@ Ray::NS::simd_fvec<S> Ray::NS::Evaluate_EnvQTree(const float y_rotation, const s
     int lod = qtree_levels - 1;
 
     simd_fvec<S> p[2];
-    DirToCanonical(L, y_rotation, p);
+    DirToCanonical(L, -y_rotation, p);
     simd_fvec<S> factor = 1.0f;
 
     while (lod >= 0) {
@@ -3938,21 +3938,19 @@ void Ray::NS::SampleTrilinear(const Ref::TexStorageBase *const textures[], const
 template <int S>
 void Ray::NS::SampleLatlong_RGBE(const Ref::TexStorageRGBA &storage, const uint32_t index, const simd_fvec<S> dir[3],
                                  const float y_rotation, const simd_ivec<S> &mask, simd_fvec<S> out_rgb[3]) {
-    const simd_fvec<S> r = sqrt(dir[0] * dir[0] + dir[2] * dir[2]);
     const simd_fvec<S> y = clamp(dir[1], -1.0f, 1.0f);
-    simd_fvec<S> theta, phi = 0.0f;
 
-    where(r > FLT_EPS, phi) = clamp(safe_div_pos(dir[0], r), -1.0f, 1.0f);
-
+    simd_fvec<S> theta = 0.0f, phi = 0.0f;
     ITERATE(S, {
-        theta[i] = std::acos(y[i]) / PI;
-        phi[i] = std::acos(phi[i]) + y_rotation;
+        if (mask[i]) {
+            theta[i] = std::acos(y[i]) / PI;
+            phi[i] = std::atan2(dir[2][i], dir[0][i]) + y_rotation;
+        }
     })
     where(phi < 0.0f, phi) += 2 * PI;
     where(phi > 2 * PI, phi) -= 2 * PI;
 
-    simd_fvec<S> u = 0.5f * phi / PI;
-    where(dir[2] < 0.0f, u) = 1.0f - u;
+    const simd_fvec<S> u = 0.5f * phi / PI;
 
     const int tex = (index & 0x00ffffff);
     float sz[2];
@@ -4487,7 +4485,7 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const scene_data_t &sc,
                 if (sc.env->env_map != 0xffffffff) {
                     simd_fvec<S> tex_col[3];
                     SampleLatlong_RGBE(*static_cast<const Ref::TexStorageRGBA *>(textures[0]), sc.env->env_map, ls.L,
-                                       PI, ray_queue[index], tex_col);
+                                       sc.env->env_map_rotation, ray_queue[index], tex_col);
                     ITERATE_3({ env_col[i] *= tex_col[i]; })
                 }
                 ITERATE_3({ where(ray_queue[index], ls.col[i]) *= sc.env->env_col[i]; })
@@ -4540,7 +4538,7 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const scene_data_t &sc,
                 if (sc.env->env_map != 0xffffffff) {
                     simd_fvec<S> tex_col[3];
                     SampleLatlong_RGBE(*static_cast<const Ref::TexStorageRGBA *>(textures[0]), sc.env->env_map, ls.L,
-                                       PI, ray_queue[index], tex_col);
+                                       sc.env->env_map_rotation, ray_queue[index], tex_col);
                     ITERATE_3({ env_col[i] *= tex_col[i]; })
                 }
                 ITERATE_3({ where(ray_queue[index], ls.col[i]) *= sc.env->env_col[i]; })
@@ -4599,7 +4597,7 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const scene_data_t &sc,
                 if (sc.env->env_map != 0xffffffff) {
                     simd_fvec<S> tex_col[3];
                     SampleLatlong_RGBE(*static_cast<const Ref::TexStorageRGBA *>(textures[0]), sc.env->env_map, ls.L,
-                                       PI, ray_queue[index], tex_col);
+                                       sc.env->env_map_rotation, ray_queue[index], tex_col);
                     ITERATE_3({ env_col[i] *= tex_col[i]; })
                 }
                 ITERATE_3({ where(ray_queue[index], ls.col[i]) *= sc.env->env_col[i]; })
@@ -4657,7 +4655,7 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const scene_data_t &sc,
                 if (sc.env->env_map != 0xffffffff) {
                     simd_fvec<S> tex_col[3];
                     SampleLatlong_RGBE(*static_cast<const Ref::TexStorageRGBA *>(textures[0]), sc.env->env_map, ls.L,
-                                       PI, ray_queue[index], tex_col);
+                                       sc.env->env_map_rotation, ray_queue[index], tex_col);
                     ITERATE_3({ env_col[i] *= tex_col[i]; })
                 }
                 ITERATE_3({ where(ray_queue[index], ls.col[i]) *= env_col[i]; })
@@ -4672,14 +4670,14 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const scene_data_t &sc,
             const simd_fvec<S> ry = fract(halton[RAND_DIM_LIGHT_V] + sample_off[1]);
 
             simd_fvec<S> dir_and_pdf[4];
-            Sample_EnvQTree(PI, qtree_mips, sc.env->qtree_levels, rand, rx, ry, dir_and_pdf);
+            Sample_EnvQTree(sc.env->env_map_rotation, qtree_mips, sc.env->qtree_levels, rand, rx, ry, dir_and_pdf);
 
             ITERATE_3({ where(ray_queue[index], ls.L[i]) = dir_and_pdf[i]; })
 
             simd_fvec<S> tex_col[3];
             assert(sc.env->env_map != 0xffffffff);
-            SampleLatlong_RGBE(*static_cast<const Ref::TexStorageRGBA *>(textures[0]), sc.env->env_map, ls.L, PI,
-                               ray_queue[index], tex_col);
+            SampleLatlong_RGBE(*static_cast<const Ref::TexStorageRGBA *>(textures[0]), sc.env->env_map, ls.L,
+                               sc.env->env_map_rotation, ray_queue[index], tex_col);
             ITERATE_3({ where(ray_queue[index], ls.col[i]) *= sc.env->env_col[i] * tex_col[i]; })
 
             where(ray_queue[index], ls.area) = 1.0f;
@@ -4841,13 +4839,15 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
         simd_fvec<S> env_col[4] = {{1.0f}, {1.0f}, {1.0f}, {1.0f}};
         if (pi.should_add_environment()) {
             const uint32_t env_map = pi.bounce ? sc.env->env_map : sc.env->back_map;
+            const float env_map_rotation = pi.bounce ? sc.env->env_map_rotation : sc.env->back_map_rotation;
             if (env_map != 0xffffffff) {
-                SampleLatlong_RGBE(*static_cast<const Ref::TexStorageRGBA *>(textures[0]), env_map, ray.d, PI, ino_hit,
-                                   env_col);
+                SampleLatlong_RGBE(*static_cast<const Ref::TexStorageRGBA *>(textures[0]), env_map, ray.d,
+                                   env_map_rotation, ino_hit, env_col);
                 if (sc.env->qtree_levels) {
                     const auto *qtree_mips = reinterpret_cast<const simd_fvec4 *const *>(sc.env->qtree_mips);
 
-                    const simd_fvec<S> light_pdf = Evaluate_EnvQTree(PI, qtree_mips, sc.env->qtree_levels, ray.d);
+                    const simd_fvec<S> light_pdf =
+                        Evaluate_EnvQTree(env_map_rotation, qtree_mips, sc.env->qtree_levels, ray.d);
                     const simd_fvec<S> bsdf_pdf = ray.pdf;
 
                     const simd_fvec<S> mis_weight = power_heuristic(bsdf_pdf, light_pdf);
@@ -5679,7 +5679,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                     if (sc.env->env_map != 0xffffffff) {
                         simd_fvec<S> tex_col[3];
                         SampleLatlong_RGBE(*static_cast<const Ref::TexStorageRGBA *>(textures[0]), sc.env->env_map,
-                                           ls.L, PI, ray_queue[index], tex_col);
+                                           ls.L, sc.env->env_map_rotation, ray_queue[index], tex_col);
                         ITERATE_3({ env_col[i] *= tex_col[i]; })
                     }
                     ITERATE_3({ where(ray_queue[index], base_color[i]) *= env_col[i]; })

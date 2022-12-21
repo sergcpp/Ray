@@ -37,7 +37,7 @@ float Evaluate_EnvQTree(const float y_rotation, sampler2D qtree_tex, const int q
     int res = 2;
     int lod = qtree_levels - 1;
 
-    vec2 p = DirToCanonical(L, y_rotation);
+    vec2 p = DirToCanonical(L, -y_rotation);
 
     float factor = 1.0;
 
