@@ -14,6 +14,7 @@ IF(MSVC)
         set(CMAKE_CXX_FLAGS_ASAN "${CMAKE_CXX_FLAGS_DEBUG} /MTd /fsanitize=address")
         set(CMAKE_EXE_LINKER_FLAGS_ASAN "${CMAKE_EXE_LINKER_FLAGS_DEBUG} /INCREMENTAL:NO")
     endif()
+    add_compile_definitions(VK_USE_PLATFORM_WIN32_KHR)
 ELSE(MSVC)
     set(CMAKE_CXX_STANDARD 11)
     set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -25,6 +26,11 @@ ELSE(MSVC)
             set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
         ENDIF(WIN32)
     endif()
+    if(APPLE)
+        add_compile_definitions(VK_USE_PLATFORM_MACOS_MVK)
+    else(APPLE)
+        add_compile_definitions(VK_USE_PLATFORM_XLIB_KHR)
+    endif(APPLE)
 ENDIF(MSVC)
 
 set(INTERNAL_SOURCE_FILES internal/Bitmap.h
@@ -283,7 +289,6 @@ endif()
 if(MSVC)
     list(APPEND ALL_SOURCE_FILES internal/_CustomTypes.natvis)
 endif(MSVC)
-
 
 add_library(Ray STATIC ${ALL_SOURCE_FILES})
 
