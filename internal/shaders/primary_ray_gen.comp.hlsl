@@ -32,7 +32,7 @@ struct ray_data_t
 static const uint3 gl_WorkGroupSize = uint3(8u, 8u, 1u);
 
 ByteAddressBuffer _247 : register(t1, space0);
-RWByteAddressBuffer _533 : register(u0, space0);
+RWByteAddressBuffer _539 : register(u0, space0);
 cbuffer UniformParams
 {
     Params _75_g_params : packoffset(c0);
@@ -179,23 +179,23 @@ void comp_main()
         float3 param_4 = _471;
         float param_5 = float(_75_g_params.img_size.x) / float(_75_g_params.img_size.y);
         float3 _481 = get_pix_dir(param_2, param_3, param_4, param_5);
-        float3 _487 = _origin;
-        float3 _488 = _487 + (_481 * _75_g_params.cam_clip_start);
-        _origin = _488;
-        _533.Store(_212 * 56 + 0, asuint(_488.x));
-        _533.Store(_212 * 56 + 4, asuint(_488.y));
-        _533.Store(_212 * 56 + 8, asuint(_488.z));
-        _533.Store(_212 * 56 + 12, asuint(_481.x));
-        _533.Store(_212 * 56 + 16, asuint(_481.y));
-        _533.Store(_212 * 56 + 20, asuint(_481.z));
-        _533.Store(_212 * 56 + 24, asuint(1000000.0f));
-        _533.Store(_212 * 56 + 28, asuint(1.0f));
-        _533.Store(_212 * 56 + 32, asuint(1.0f));
-        _533.Store(_212 * 56 + 36, asuint(1.0f));
-        _533.Store(_212 * 56 + 40, asuint(0.0f));
-        _533.Store(_212 * 56 + 44, asuint(_75_g_params.spread_angle));
-        _533.Store(_212 * 56 + 48, uint((_200 << 16) | _204));
-        _533.Store(_212 * 56 + 52, uint(0));
+        float3 _493 = _origin;
+        float3 _494 = _493 + (_481 * (_75_g_params.cam_clip_start / dot(_481, _75_g_params.cam_fwd.xyz)));
+        _origin = _494;
+        _539.Store(_212 * 56 + 0, asuint(_494.x));
+        _539.Store(_212 * 56 + 4, asuint(_494.y));
+        _539.Store(_212 * 56 + 8, asuint(_494.z));
+        _539.Store(_212 * 56 + 12, asuint(_481.x));
+        _539.Store(_212 * 56 + 16, asuint(_481.y));
+        _539.Store(_212 * 56 + 20, asuint(_481.z));
+        _539.Store(_212 * 56 + 24, asuint(1000000.0f));
+        _539.Store(_212 * 56 + 28, asuint(1.0f));
+        _539.Store(_212 * 56 + 32, asuint(1.0f));
+        _539.Store(_212 * 56 + 36, asuint(1.0f));
+        _539.Store(_212 * 56 + 40, asuint(0.0f));
+        _539.Store(_212 * 56 + 44, asuint(_75_g_params.spread_angle));
+        _539.Store(_212 * 56 + 48, uint((_200 << 16) | _204));
+        _539.Store(_212 * 56 + 52, uint(0));
         break;
     } while(false);
 }

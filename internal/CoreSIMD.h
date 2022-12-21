@@ -1915,9 +1915,11 @@ void Ray::NS::GeneratePrimaryRays(const int iteration, const camera_t &cam, cons
             get_pix_dirs(fxx + 1.0f, fyy, _origin, _dx);
             get_pix_dirs(fxx, fyy + 1.0f, _origin, _dy);
 
+            const simd_fvec<S> clip_start = cam.clip_start / dot3(_d, fwd);
+
             for (int j = 0; j < 3; j++) {
                 out_r.d[j] = _d[j];
-                out_r.o[j] = _origin[j] + _d[j] * cam.clip_start;
+                out_r.o[j] = _origin[j] + _d[j] * clip_start;
                 out_r.c[j] = {1.0f};
 
 #ifdef USE_RAY_DIFFERENTIALS

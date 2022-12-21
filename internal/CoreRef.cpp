@@ -1172,8 +1172,10 @@ void Ray::Ref::GeneratePrimaryRays(const int iteration, const camera_t &cam, con
             const simd_fvec4 _d = get_pix_dir(_x, _y, _origin);
             const simd_fvec4 _dx = get_pix_dir(_x + 1, _y, _origin), _dy = get_pix_dir(_x, _y + 1, _origin);
 
+            const float clip_start = cam.clip_start / dot(_d, fwd);
+
             for (int j = 0; j < 3; j++) {
-                out_r.o[j] = _origin[j] + _d[j] * cam.clip_start;
+                out_r.o[j] = _origin[j] + _d[j] * clip_start;
                 out_r.d[j] = _d[j];
                 out_r.c[j] = 1.0f;
 
