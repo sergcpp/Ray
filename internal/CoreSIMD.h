@@ -1759,10 +1759,10 @@ void get_lobe_weights(const simd_fvec<S> &base_color_lum, const simd_fvec<S> &sp
     const simd_fvec<S> total_weight =
         (*out_diffuse_weight) + (*out_specular_weight) + (*out_clearcoat_weight) + (*out_refraction_weight);
 
-    where(total_weight != 0.0f, *out_diffuse_weight) = (*out_diffuse_weight) / total_weight;
-    where(total_weight != 0.0f, *out_specular_weight) = (*out_specular_weight) / total_weight;
-    where(total_weight != 0.0f, *out_clearcoat_weight) = (*out_clearcoat_weight) / total_weight;
-    where(total_weight != 0.0f, *out_refraction_weight) = (*out_refraction_weight) / total_weight;
+    where(total_weight != 0.0f, *out_diffuse_weight) = safe_div_pos((*out_diffuse_weight), total_weight);
+    where(total_weight != 0.0f, *out_specular_weight) = safe_div_pos((*out_specular_weight), total_weight);
+    where(total_weight != 0.0f, *out_clearcoat_weight) = safe_div_pos((*out_clearcoat_weight), total_weight);
+    where(total_weight != 0.0f, *out_refraction_weight) = safe_div_pos((*out_refraction_weight), total_weight);
 }
 
 template <int S> force_inline simd_fvec<S> power_heuristic(const simd_fvec<S> &a, const simd_fvec<S> &b) {
@@ -5366,7 +5366,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
     simd_fvec<S> tint_color[3] = {{0.0f}, {0.0f}, {0.0f}};
 
     const simd_fvec<S> base_color_lum = lum(base_color);
-    ITERATE_3({ where(base_color_lum > 0.0f, tint_color[i]) = base_color[i] / base_color_lum; })
+    ITERATE_3({ where(base_color_lum > 0.0f, tint_color[i]) = safe_div_pos(base_color[i], base_color_lum); })
 
     simd_fvec<S> roughness;
     { // fetch material roughness
