@@ -1202,7 +1202,10 @@ vec3 ShadeSurface(int px_index, hit_data_t inter, ray_data_t ray) {
     const vec3 P_ls = p1 * w + p2 * inter.u + p3 * inter.v;
     // rotate around Y axis by 90 degrees in 2d
     vec3 tangent = vec3(-P_ls[2], 0.0, P_ls[0]);
-    tangent = TransformNormal(tangent, tr.inv_xform);
+    tangent = normalize(TransformNormal(tangent, tr.inv_xform));
+    if (abs(dot(tangent, N)) > 0.999) {
+        tangent = TransformNormal(P_ls, tr.inv_xform);
+    }
 
     if (mat.tangent_rotation_or_strength != 0.0) {
         tangent = rotate_around_axis(tangent, N, mat.tangent_rotation_or_strength);

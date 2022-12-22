@@ -602,6 +602,15 @@ force_inline float safe_div_neg(const float a, const float b) {
 #endif
 }
 
+force_inline simd_fvec4 safe_normalize(const simd_fvec4 &a) {
+#if USE_SAFE_MATH
+    const float l = length(a);
+    return l > 0.0f ? (a / l) : a;
+#else
+    return normalize(a);
+#endif
+}
+
 force_inline float lum(const simd_fvec3 &color) {
     return 0.212671f * color[0] + 0.715160f * color[1] + 0.072169f * color[2];
 }
@@ -3311,8 +3320,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
                 if (sc.env->qtree_levels) {
                     const auto *qtree_mips = reinterpret_cast<const simd_fvec4 *const *>(sc.env->qtree_mips);
 
-                    const float light_pdf =
-                        Evaluate_EnvQTree(env_map_rotation, qtree_mips, sc.env->qtree_levels, I);
+                    const float light_pdf = Evaluate_EnvQTree(env_map_rotation, qtree_mips, sc.env->qtree_levels, I);
                     const float bsdf_pdf = ray.pdf;
 
                     const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
@@ -3532,7 +3540,10 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
                             simd_fvec4{v3.p[0], v3.p[1], v3.p[2], 0.0f} * inter.v;
     // rotate around Y axis by 90 degrees in 2d
     simd_fvec4 tangent = {-P_ls[2], 0.0f, P_ls[0], 0.0f};
-    tangent = TransformNormal(tangent, tr->inv_xform);
+    tangent = normalize(TransformNormal(tangent, tr->inv_xform));
+    if (std::abs(dot(tangent, N)) > 0.999f) {
+        tangent = TransformNormal(P_ls, tr->inv_xform);
+    }
 
     if (mat->tangent_rotation != 0.0f) {
         tangent = rotate_around_axis(tangent, N, mat->tangent_rotation);

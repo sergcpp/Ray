@@ -5098,6 +5098,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
     ITERATE_3({ where(is_backfacing, T[i]) = -T[i]; });
 
     simd_fvec<S> tangent[3] = {-P_ls[2], {0.0f}, P_ls[0]};
+    normalize(tangent);
 
     simd_fvec<S> transform[16];
 
@@ -5110,6 +5111,9 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
 
         ITERATE_16({ transform[i] = gather(transforms, tr_index * transforms_stride + i); })
         ITERATE_16({ inv_transform[i] = gather(inv_transforms, tr_index * transforms_stride + i); })
+
+        const simd_fvec<S> mask = abs(dot3(tangent, N)) > 0.999f;
+        ITERATE_3({ where(mask, tangent[i]) = P_ls[i]; })
 
         TransformNormal(inv_transform, plane_N);
         TransformNormal(inv_transform, N);
