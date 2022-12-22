@@ -5194,7 +5194,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                 const simd_fvec<S> base_lod = get_texture_lod(textures, first_t, lambda, ray_queue[index]);
 #endif
 
-                simd_fvec<S> tex_color[4];
+                simd_fvec<S> tex_color[4] = {};
                 SampleBilinear(textures, first_t, uvs, simd_ivec<S>(base_lod), ray_queue[index], tex_color);
 
                 where(ray_queue[index], mix_val) *= tex_color[0];
@@ -6092,7 +6092,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                     (total_depth < pi.settings.max_total_depth) & ray_queue[index];
                 if (sample_trans_lobe.not_all_zeros()) {
                     where(sample_trans_lobe, mix_rand) -= diffuse_weight + specular_weight + clearcoat_weight;
-                    where(sample_trans_lobe, mix_rand) /= refraction_weight;
+                    where(sample_trans_lobe, mix_rand) = safe_div_pos(mix_rand, refraction_weight);
 
                     simd_fvec<S> F[4] = {}, V[3] = {};
 
