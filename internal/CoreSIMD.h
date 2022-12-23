@@ -1490,7 +1490,7 @@ void ensure_valid_reflection(const simd_fvec<S> Ng[3], const simd_fvec<S> I[3], 
 
     simd_fvec<S> X[3];
     ITERATE_3({ X[i] = inout_N[i] - NdotNg * Ng[i]; })
-    normalize(X);
+    safe_normalize(X);
 
     const simd_fvec<S> Ix = dot3(I, X), Iz = dot3(I, Ng);
     const simd_fvec<S> Ix2 = (Ix * Ix), Iz2 = (Iz * Iz);
@@ -4840,11 +4840,13 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
     if (ino_hit.not_all_zeros()) {
         simd_fvec<S> env_col[4] = {{1.0f}, {1.0f}, {1.0f}, {1.0f}};
         if (pi.should_add_environment()) {
-            const uint32_t env_map = pi.bounce ? sc.env->env_map : sc.env->back_map;
-            const float env_map_rotation = pi.bounce ? sc.env->env_map_rotation : sc.env->back_map_rotation;
-            if (env_map != 0xffffffff) {
+            const uint32_t env_map = sc.env->env_map;
+            const float env_map_rotation = sc.env->env_map_rotation;
+            const simd_ivec<S> env_map_mask = (ray.ray_depth & 0x00ffffff) != 0;
+
+            if (env_map != 0xffffffff && (ino_hit & env_map_mask).not_all_zeros()) {
                 SampleLatlong_RGBE(*static_cast<const Ref::TexStorageRGBA *>(textures[0]), env_map, ray.d,
-                                   env_map_rotation, ino_hit, env_col);
+                                   env_map_rotation, (ino_hit & env_map_mask), env_col);
                 if (sc.env->qtree_levels) {
                     const auto *qtree_mips = reinterpret_cast<const simd_fvec4 *const *>(sc.env->qtree_mips);
 
@@ -4856,8 +4858,19 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                     ITERATE_3({ env_col[i] *= mis_weight; })
                 }
             }
-            ITERATE_3({ env_col[i] *= pi.bounce ? sc.env->env_col[i] : sc.env->back_col[i]; })
-            env_col[3] = 1.0f;
+            ITERATE_3({ where(env_map_mask, env_col[i]) *= sc.env->env_col[i]; })
+
+            const uint32_t back_map = sc.env->back_map;
+            const float back_map_rotation = sc.env->back_map_rotation;
+            const simd_ivec<S> back_map_mask = ~env_map_mask;
+
+            if (back_map != 0xffffffff && (ino_hit & back_map_mask).not_all_zeros()) {
+                simd_fvec<S> back_col[3];
+                SampleLatlong_RGBE(*static_cast<const Ref::TexStorageRGBA *>(textures[0]), back_map, ray.d,
+                                   back_map_rotation, (ino_hit & back_map_mask), back_col);
+                ITERATE_3({ where(back_map_mask, env_col[i]) = back_col[i]; })
+            }
+            ITERATE_3({ where(back_map_mask, env_col[i]) *= sc.env->back_col[i]; })
         }
 
         where(ino_hit, out_rgba[0]) = ray.c[0] * env_col[0];
@@ -5407,7 +5420,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                 const simd_fvec<S> roughness_lod = get_texture_lod(textures, first_t, lambda, ray_queue[index]);
 #endif
 
-                simd_fvec<S> roughness_color[4];
+                simd_fvec<S> roughness_color[4] = {};
                 SampleBilinear(textures, first_t, uvs, simd_ivec<S>(roughness_lod), ray_queue[index], roughness_color);
                 if (first_t & TEX_SRGB_BIT) {
                     srgb_to_rgb(roughness_color, roughness_color);
@@ -5770,7 +5783,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                     const simd_fvec<S> specular_lod = get_texture_lod(textures, specular_tex, lambda, ray_queue[index]);
 #endif
 
-                    simd_fvec<S> specular_color[4];
+                    simd_fvec<S> specular_color[4] = {};
                     SampleBilinear(textures, specular_tex, uvs, simd_ivec<S>(specular_lod), ray_queue[index],
                                    specular_color);
                     if (specular_tex & TEX_SRGB_BIT) {

@@ -3312,8 +3312,9 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
     if (!inter.mask) {
         simd_fvec4 env_col = {1.0f};
         if (pi.should_add_environment()) {
-            const uint32_t env_map = pi.bounce ? sc.env->env_map : sc.env->back_map;
-            const float env_map_rotation = pi.bounce ? sc.env->env_map_rotation : sc.env->back_map_rotation;
+            const uint32_t env_map = (ray.ray_depth & 0x00ffffff) ? sc.env->env_map : sc.env->back_map;
+            const float env_map_rotation =
+                (ray.ray_depth & 0x00ffffff) ? sc.env->env_map_rotation : sc.env->back_map_rotation;
             if (env_map != 0xffffffff) {
                 env_col = SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), env_map,
                                              simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f}, env_map_rotation);
@@ -3327,8 +3328,9 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
                     env_col *= mis_weight;
                 }
             }
-            env_col *= pi.bounce ? simd_fvec4{sc.env->env_col[0], sc.env->env_col[1], sc.env->env_col[2], 1.0f}
-                                 : simd_fvec4{sc.env->back_col[0], sc.env->back_col[1], sc.env->back_col[2], 1.0f};
+            env_col *= (ray.ray_depth & 0x00ffffff)
+                           ? simd_fvec4{sc.env->env_col[0], sc.env->env_col[1], sc.env->env_col[2], 1.0f}
+                           : simd_fvec4{sc.env->back_col[0], sc.env->back_col[1], sc.env->back_col[2], 1.0f};
             env_col[3] = 1.0f;
         }
         return Ray::pixel_color_t{ray.c[0] * env_col[0], ray.c[1] * env_col[1], ray.c[2] * env_col[2], env_col[3]};
