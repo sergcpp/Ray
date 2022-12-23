@@ -54,8 +54,7 @@ template <int DimX, int DimY> class RendererSIMD : public RendererBase {
     ILog *log_;
     Ref::Framebuffer clean_buf_, final_buf_, temp_buf_;
 
-    std::mutex pass_cache_mtx_;
-    std::vector<PassData<DimX * DimY>> pass_cache_;
+    std::mutex mtx_;
 
     bool use_wide_bvh_;
     stats_t stats_ = {0};
@@ -93,6 +92,8 @@ template <int DimX, int DimY> class RendererSIMD : public RendererBase {
     virtual void GetStats(stats_t &st) override { st = stats_; }
     virtual void ResetStats() override { stats_ = {0}; }
 };
+
+template <int S> thread_local Ray::NS::PassData<S> g_per_thread_pass_data;
 } // namespace NS
 } // namespace Ray
 
@@ -190,14 +191,10 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
         UpdateHaltonSequence(region.iteration, region.halton_seq);
     }
 
-    PassData<S> p;
+    PassData<S> &p = g_per_thread_pass_data<S>;
 
     {
-        std::lock_guard<std::mutex> _(pass_cache_mtx_);
-        if (!pass_cache_.empty()) {
-            p = std::move(pass_cache_.back());
-            pass_cache_.pop_back();
-        }
+        std::lock_guard<std::mutex> _(mtx_);
 
         // allocate sh data on demand
         if (cam.pass_settings.flags & OutputSH) {
@@ -427,8 +424,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
     }
 
     {
-        std::lock_guard<std::mutex> _(pass_cache_mtx_);
-        pass_cache_.emplace_back(std::move(p));
+        std::lock_guard<std::mutex> _(mtx_);
 
         stats_.time_primary_ray_gen_us +=
             (unsigned long long)std::chrono::duration<double, std::micro>{time_after_ray_gen - time_start}.count();
