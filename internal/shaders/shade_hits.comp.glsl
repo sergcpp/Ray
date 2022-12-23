@@ -767,7 +767,7 @@ void SampleLightSource(vec3 P, vec2 sample_off, inout light_sample_t ls) {
             ls.area = 0.0;
         }
 
-        [[dont_flatten]] if ((l.type_and_param0.w & (1 << 7)) != 0) { // sky portal
+        [[dont_flatten]] if ((l.type_and_param0.x & (1 << 7)) != 0) { // sky portal
             vec3 env_col = g_params.env_col.xyz;
             const uint env_map = floatBitsToUint(g_params.env_col.w);
             if (env_map != 0xffffffff) {
@@ -820,7 +820,7 @@ void SampleLightSource(vec3 P, vec2 sample_off, inout light_sample_t ls) {
             ls.area = 0.0;
         }
 
-        [[dont_flatten]] if ((l.type_and_param0.w & (1 << 7)) != 0) { // sky portal
+        [[dont_flatten]] if ((l.type_and_param0.x & (1 << 7)) != 0) { // sky portal
             vec3 env_col = g_params.env_col.xyz;
             const uint env_map = floatBitsToUint(g_params.env_col.w);
             if (env_map != 0xffffffff) {
@@ -865,7 +865,7 @@ void SampleLightSource(vec3 P, vec2 sample_off, inout light_sample_t ls) {
         }
 
         // probably can not be a portal, but still..
-        [[dont_flatten]] if ((l.type_and_param0.w & (1 << 7)) != 0) { // sky portal
+        [[dont_flatten]] if ((l.type_and_param0.x & (1 << 7)) != 0) { // sky portal
             vec3 env_col = g_params.env_col.xyz;
             const uint env_map = floatBitsToUint(g_params.env_col.w);
             if (env_map != 0xffffffff) {
