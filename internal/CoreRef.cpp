@@ -3019,6 +3019,7 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, co
                                               sc.env->env_map_rotation);
             }
             ls.col *= env_col;
+            ls.dist = MAX_DIST;
         }
     } else if (l.type == LIGHT_TYPE_DISK) {
         const auto light_pos = simd_fvec4{l.disk.pos[0], l.disk.pos[1], l.disk.pos[2], 0.0f};
@@ -3068,6 +3069,7 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, co
                                               sc.env->env_map_rotation);
             }
             ls.col *= env_col;
+            ls.dist = MAX_DIST;
         }
     } else if (l.type == LIGHT_TYPE_LINE) {
         const auto light_pos = simd_fvec4{l.line.pos[0], l.line.pos[1], l.line.pos[2], 0.0f};
@@ -3109,6 +3111,7 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, co
                                               sc.env->env_map_rotation);
             }
             ls.col *= env_col;
+            ls.dist = MAX_DIST;
         }
     } else if (l.type == LIGHT_TYPE_TRI) {
         const transform_t &ltr = sc.transforms[l.tri.xform_index];
@@ -3153,6 +3156,7 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, co
                                               sc.env->env_map_rotation);
             }
             ls.col *= env_col;
+            ls.dist = MAX_DIST;
         }
     } else if (l.type == LIGHT_TYPE_ENV) {
         assert(sc.env->qtree_levels);
@@ -3188,6 +3192,10 @@ void Ray::Ref::IntersectAreaLights(const ray_data_t &ray, const light_t lights[]
     for (uint32_t li = 0; li < uint32_t(visible_lights.size()); ++li) {
         const uint32_t light_index = visible_lights[li];
         const light_t &l = lights[light_index];
+        if (l.sky_portal && inout_inter.mask != 0) {
+            // Portal lights affect only missed rays
+            continue;
+        }
         const bool no_shadow = (l.cast_shadow == 0);
         if (l.type == LIGHT_TYPE_SPHERE) {
             const auto light_pos = simd_fvec4{l.sph.pos[0], l.sph.pos[1], l.sph.pos[2], 0.0f};
@@ -3342,6 +3350,14 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
         const light_t &l = sc.lights[-inter.obj_index - 1];
 
         simd_fvec4 lcol = simd_fvec4{l.col[0], l.col[1], l.col[2], 0.0f};
+        if (l.sky_portal != 0) {
+            simd_fvec4 env_col = {sc.env->env_col[0], sc.env->env_col[1], sc.env->env_col[2], 0.0f};
+            if (sc.env->env_map != 0xffffffff) {
+                env_col *= SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), sc.env->env_map, I,
+                                              sc.env->env_map_rotation);
+            }
+            lcol *= env_col;
+        }
 #if USE_NEE
         if (l.type == LIGHT_TYPE_SPHERE) {
             const auto light_pos = simd_fvec4{l.sph.pos[0], l.sph.pos[1], l.sph.pos[2], 0.0f};

@@ -87,6 +87,10 @@ void main() {
     for (uint li = 0; li < g_params.visible_lights_count; ++li) {
         uint light_index = g_visible_lights[li];
         light_t l = g_lights[light_index];
+        [[dont_flatten]] if (inter.mask != 0 && (l.type_and_param0.x & (1 << 7)) != 0) {
+            // Portal lights affect only missed rays
+            continue;
+        }
 
         bool no_shadow = (l.type_and_param0.x & (1 << 5)) == 0;
 

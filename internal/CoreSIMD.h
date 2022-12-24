@@ -4491,6 +4491,7 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const scene_data_t &sc,
                     ITERATE_3({ env_col[i] *= tex_col[i]; })
                 }
                 ITERATE_3({ where(ray_queue[index], ls.col[i]) *= sc.env->env_col[i]; })
+                where(ray_queue[index], ls.dist) = MAX_DIST;
             }
         } else if (l.type == LIGHT_TYPE_DISK) {
             const simd_fvec<S> r1 = fract(halton[RAND_DIM_LIGHT_U] + sample_off[0]);
@@ -4544,6 +4545,7 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const scene_data_t &sc,
                     ITERATE_3({ env_col[i] *= tex_col[i]; })
                 }
                 ITERATE_3({ where(ray_queue[index], ls.col[i]) *= sc.env->env_col[i]; })
+                where(ray_queue[index], ls.dist) = MAX_DIST;
             }
         } else if (l.type == LIGHT_TYPE_LINE) {
             const simd_fvec<S> r1 = fract(halton[RAND_DIM_LIGHT_U] + sample_off[0]);
@@ -4603,6 +4605,7 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const scene_data_t &sc,
                     ITERATE_3({ env_col[i] *= tex_col[i]; })
                 }
                 ITERATE_3({ where(ray_queue[index], ls.col[i]) *= sc.env->env_col[i]; })
+                where(ray_queue[index], ls.dist) = MAX_DIST;
             }
         } else if (l.type == LIGHT_TYPE_TRI) {
             const transform_t &ltr = sc.transforms[l.tri.xform_index];
@@ -4661,6 +4664,7 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const scene_data_t &sc,
                     ITERATE_3({ env_col[i] *= tex_col[i]; })
                 }
                 ITERATE_3({ where(ray_queue[index], ls.col[i]) *= env_col[i]; })
+                where(ray_queue[index], ls.dist) = MAX_DIST;
             }
         } else if (l.type == LIGHT_TYPE_ENV) {
             assert(sc.env->qtree_levels);
@@ -4692,12 +4696,19 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const scene_data_t &sc,
 }
 
 template <int S>
-void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, const simd_ivec<S> &ray_mask, const light_t lights[],
+void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, const simd_ivec<S> &_ray_mask, const light_t lights[],
                                   Span<const uint32_t> visible_lights, const transform_t transforms[],
                                   hit_data_t<S> &inout_inter) {
     for (uint32_t li = 0; li < uint32_t(visible_lights.size()); ++li) {
         const uint32_t light_index = visible_lights[li];
         const light_t &l = lights[light_index];
+        // Portal lights affect only missed rays
+        const simd_ivec<S> ray_mask =
+            _ray_mask & ~((l.sky_portal ? simd_ivec<S>{-1} : simd_ivec<S>{0}) & ~inout_inter.mask);
+        if (ray_mask.all_zeros()) {
+            continue;
+        }
+
         const simd_fvec<S> no_shadow = simd_cast(l.cast_shadow ? simd_ivec<S>{0} : simd_ivec<S>{-1});
         if (l.type == LIGHT_TYPE_SPHERE) {
             const simd_fvec<S> op[3] = {l.sph.pos[0] - r.o[0], l.sph.pos[1] - r.o[1], l.sph.pos[2] - r.o[2]};

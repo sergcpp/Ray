@@ -778,6 +778,7 @@ void SampleLightSource(vec3 P, vec2 sample_off, inout light_sample_t ls) {
 #endif
             }
             ls.col *= env_col;
+            ls.dist = MAX_DIST;
         }
     } else [[dont_flatten]] if (l_type == LIGHT_TYPE_DISK) {
         const vec3 light_pos = l.DISK_POS;
@@ -831,6 +832,7 @@ void SampleLightSource(vec3 P, vec2 sample_off, inout light_sample_t ls) {
 #endif
             }
             ls.col *= env_col;
+            ls.dist = MAX_DIST;
         }
     } else [[dont_flatten]] if (l_type == LIGHT_TYPE_LINE) {
         const vec3 light_pos = l.LINE_POS;
@@ -876,6 +878,7 @@ void SampleLightSource(vec3 P, vec2 sample_off, inout light_sample_t ls) {
 #endif
             }
             ls.col *= env_col;
+            ls.dist = MAX_DIST;
         }
     } else [[dont_flatten]] if (l_type == LIGHT_TYPE_TRI) {
         const uint ltri_index = floatBitsToUint(l.TRI_TRI_INDEX);
@@ -927,6 +930,7 @@ void SampleLightSource(vec3 P, vec2 sample_off, inout light_sample_t ls) {
 #endif
             }
             ls.col *= env_col;
+            ls.dist = MAX_DIST;
         }
     } else [[dont_flatten]] if (l_type == LIGHT_TYPE_ENV) {
         const float rand = u1 * float(g_params.li_count) - float(light_index);
@@ -973,8 +977,7 @@ vec3 ShadeSurface(int px_index, hit_data_t inter, ray_data_t ray) {
             env_col *= SampleLatlong_RGBE(g_textures[env_map], rd, env_map_rotation);
 #endif
             if (g_params.env_qtree_levels > 0) {
-                const float light_pdf = Evaluate_EnvQTree(env_map_rotation, g_env_qtree,
-                                        g_params.env_qtree_levels, rd);
+                const float light_pdf = Evaluate_EnvQTree(env_map_rotation, g_env_qtree, g_params.env_qtree_levels, rd);
                 const float bsdf_pdf = ray.pdf;
 
                 const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
