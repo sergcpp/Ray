@@ -240,6 +240,10 @@ simd_fvec4 SampleAnisotropic(const TexStorageBase *const textures[], uint32_t in
                              const simd_fvec2 &duv_dx, const simd_fvec2 &duv_dy);
 simd_fvec4 SampleLatlong_RGBE(const TexStorageRGBA &storage, uint32_t index, const simd_fvec4 &dir, float y_rotation);
 
+// Trace main rays through scene hierarchy
+bool IntersectScene(const float ro[3], const float rd[3], const scene_data_t &sc, const uint32_t root_index,
+                    hit_data_t &inter);
+
 // Get visibility between two points accounting for transparent materials
 float ComputeVisibility(const float p[3], const float d[3], float dist, float rand_val, int rand_hash2,
                         const scene_data_t &sc, uint32_t node_index, const TexStorageBase *const textures[]);

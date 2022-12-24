@@ -135,15 +135,7 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
             inter.t = cam.clip_end;
 
             if (macro_tree_root != 0xffffffff) {
-                if (sc_data.mnodes) {
-                    Traverse_MacroTree_WithStack_ClosestHit(
-                        r.o, r.d, sc_data.mnodes, macro_tree_root, sc_data.mesh_instances, sc_data.mi_indices,
-                        sc_data.meshes, sc_data.transforms, sc_data.mtris, sc_data.tri_indices, inter);
-                } else {
-                    Traverse_MacroTree_WithStack_ClosestHit(
-                        r.o, r.d, sc_data.nodes, macro_tree_root, sc_data.mesh_instances, sc_data.mi_indices,
-                        sc_data.meshes, sc_data.transforms, sc_data.tris, sc_data.tri_indices, inter);
-                }
+                IntersectScene(r.o, r.d, sc_data, macro_tree_root, inter);
                 // IntersectAreaLights(r, sc_data.lights, sc_data.visible_lights, sc_data.transforms, inter);
             }
         }
@@ -258,15 +250,7 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
             hit_data_t &inter = p.intersections[i];
             inter = {};
 
-            if (sc_data.mnodes) {
-                Traverse_MacroTree_WithStack_ClosestHit(r.o, r.d, sc_data.mnodes, macro_tree_root,
-                                                        sc_data.mesh_instances, sc_data.mi_indices, sc_data.meshes,
-                                                        sc_data.transforms, sc_data.mtris, sc_data.tri_indices, inter);
-            } else {
-                Traverse_MacroTree_WithStack_ClosestHit(r.o, r.d, sc_data.nodes, macro_tree_root,
-                                                        sc_data.mesh_instances, sc_data.mi_indices, sc_data.meshes,
-                                                        sc_data.transforms, sc_data.tris, sc_data.tri_indices, inter);
-            }
+            IntersectScene(r.o, r.d, sc_data, macro_tree_root, inter);
             if (r.ray_depth & 0x00ffffff) { // not only a transparency ray
                 IntersectAreaLights(r, sc_data.lights, sc_data.visible_lights, sc_data.transforms, inter);
             }

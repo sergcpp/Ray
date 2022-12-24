@@ -230,17 +230,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
             inter.t = cam.clip_end;
 
             if (macro_tree_root != 0xffffffff) {
-                if (sc_data.mnodes) {
-                    NS::Traverse_MacroTree_WithStack_ClosestHit(r.o, r.d, p.primary_masks[i], sc_data.mnodes,
-                                                                macro_tree_root, sc_data.mesh_instances,
-                                                                sc_data.mi_indices, sc_data.meshes, sc_data.transforms,
-                                                                sc_data.mtris, sc_data.tri_indices, inter);
-                } else {
-                    NS::Traverse_MacroTree_WithStack_ClosestHit(r.o, r.d, p.primary_masks[i], sc_data.nodes,
-                                                                macro_tree_root, sc_data.mesh_instances,
-                                                                sc_data.mi_indices, sc_data.meshes, sc_data.transforms,
-                                                                sc_data.tris, sc_data.tri_indices, inter);
-                }
+                NS::IntersectScene(r.o, r.d, p.primary_masks[i], sc_data, macro_tree_root, inter);
             }
             // NS::IntersectAreaLights(r, {-1}, sc_data.lights, sc_data.visible_lights, sc_data.transforms, inter);
         }
@@ -346,15 +336,8 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
             hit_data_t<S> &inter = p.intersections[i];
             inter = {};
 
-            if (sc_data.mnodes) {
-                NS::Traverse_MacroTree_WithStack_ClosestHit(
-                    r.o, r.d, p.secondary_masks[i], sc_data.mnodes, macro_tree_root, sc_data.mesh_instances,
-                    sc_data.mi_indices, sc_data.meshes, sc_data.transforms, sc_data.mtris, sc_data.tri_indices, inter);
-            } else {
-                NS::Traverse_MacroTree_WithStack_ClosestHit(
-                    r.o, r.d, p.secondary_masks[i], sc_data.nodes, macro_tree_root, sc_data.mesh_instances,
-                    sc_data.mi_indices, sc_data.meshes, sc_data.transforms, sc_data.tris, sc_data.tri_indices, inter);
-            }
+            NS::IntersectScene(r.o, r.d, p.secondary_masks[i], sc_data, macro_tree_root, inter);
+
             const simd_ivec<S> not_only_transparency_ray = (r.ray_depth & 0x00ffffff) != 0;
             NS::IntersectAreaLights(r, p.secondary_masks[i] & not_only_transparency_ray, sc_data.lights,
                                     sc_data.visible_lights, sc_data.transforms, inter);
@@ -383,7 +366,6 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
                              sc_data, macro_tree_root, s->tex_storages_, out_rgba, p.secondary_masks.data(),
                              p.secondary_rays.data(), &secondary_rays_count, p.shadow_masks.data(),
                              p.shadow_rays.data(), &shadow_rays_count);
-            out_rgba[3] = 0.0f;
 
             for (int j = 0; j < S; j++) {
                 if (!p.primary_masks[i][j]) {

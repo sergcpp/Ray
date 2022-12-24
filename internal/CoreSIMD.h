@@ -311,6 +311,11 @@ template <int S>
 void SampleLatlong_RGBE(const Ref::TexStorageRGBA &storage, uint32_t index, const simd_fvec<S> dir[3], float y_rotation,
                         const simd_ivec<S> &mask, simd_fvec<S> out_rgb[3]);
 
+// Trace main rays through scene hierarchy
+template <int S>
+bool IntersectScene(const simd_fvec<S> ro[3], const simd_fvec<S> rd[3], const simd_ivec<S> &ray_mask,
+                    const scene_data_t &sc, uint32_t root_index, hit_data_t<S> &inter);
+
 // Get visibility between two points accounting for transparent materials
 template <int S>
 simd_fvec<S> ComputeVisibility(const simd_fvec<S> p1[3], const simd_fvec<S> d[3], simd_fvec<S> dist,
@@ -4003,6 +4008,20 @@ void Ray::NS::SampleLatlong_RGBE(const Ref::TexStorageRGBA &storage, const uint3
     out_rgb[0] = p1X[0] * k[1] + p0X[0] * (1.0f - k[1]);
     out_rgb[1] = p1X[1] * k[1] + p0X[1] * (1.0f - k[1]);
     out_rgb[2] = p1X[2] * k[1] + p0X[2] * (1.0f - k[1]);
+}
+
+template <int S>
+bool Ray::NS::IntersectScene(const simd_fvec<S> ro[3], const simd_fvec<S> rd[3], const simd_ivec<S> &ray_mask,
+                             const scene_data_t &sc, uint32_t root_index, hit_data_t<S> &inter) {
+    if (sc.mnodes) {
+        return NS::Traverse_MacroTree_WithStack_ClosestHit(ro, rd, ray_mask, sc.mnodes, root_index, sc.mesh_instances,
+                                                           sc.mi_indices, sc.meshes, sc.transforms, sc.mtris,
+                                                           sc.tri_indices, inter);
+    } else {
+        return NS::Traverse_MacroTree_WithStack_ClosestHit(ro, rd, ray_mask, sc.nodes, root_index, sc.mesh_instances,
+                                                           sc.mi_indices, sc.meshes, sc.transforms, sc.tris,
+                                                           sc.tri_indices, inter);
+    }
 }
 
 template <int S>

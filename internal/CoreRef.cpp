@@ -2765,8 +2765,19 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleLatlong_RGBE(const TexStorageRGBA &storage,
     return (p1X * k[1] + p0X * (1 - k[1]));
 }
 
+bool Ray::Ref::IntersectScene(const float ro[3], const float rd[3], const scene_data_t &sc, const uint32_t root_index,
+                              hit_data_t &inter) {
+    if (sc.mnodes) {
+        return Traverse_MacroTree_WithStack_ClosestHit(ro, rd, sc.mnodes, root_index, sc.mesh_instances, sc.mi_indices,
+                                                       sc.meshes, sc.transforms, sc.mtris, sc.tri_indices, inter);
+    } else {
+        return Traverse_MacroTree_WithStack_ClosestHit(ro, rd, sc.nodes, root_index, sc.mesh_instances, sc.mi_indices,
+                                                       sc.meshes, sc.transforms, sc.tris, sc.tri_indices, inter);
+    }
+}
+
 float Ray::Ref::ComputeVisibility(const float p[3], const float d[3], float dist, const float rand_val, int rand_hash2,
-                                  const scene_data_t &sc, const uint32_t node_index,
+                                  const scene_data_t &sc, const uint32_t root_index,
                                   const TexStorageBase *const textures[]) {
     float visibility = 1.0f;
 
@@ -2778,11 +2789,11 @@ float Ray::Ref::ComputeVisibility(const float p[3], const float d[3], float dist
 
         bool solid_hit = false;
         if (sc.mnodes) {
-            solid_hit = Traverse_MacroTree_WithStack_AnyHit(value_ptr(ro), value_ptr(rd), sc.mnodes, node_index,
+            solid_hit = Traverse_MacroTree_WithStack_AnyHit(value_ptr(ro), value_ptr(rd), sc.mnodes, root_index,
                                                             sc.mesh_instances, sc.mi_indices, sc.meshes, sc.transforms,
                                                             sc.tris, sc.tri_materials, sc.tri_indices, sh_inter);
         } else {
-            solid_hit = Traverse_MacroTree_WithStack_AnyHit(value_ptr(ro), value_ptr(rd), sc.nodes, node_index,
+            solid_hit = Traverse_MacroTree_WithStack_AnyHit(value_ptr(ro), value_ptr(rd), sc.nodes, root_index,
                                                             sc.mesh_instances, sc.mi_indices, sc.meshes, sc.transforms,
                                                             sc.mtris, sc.tri_materials, sc.tri_indices, sh_inter);
         }
