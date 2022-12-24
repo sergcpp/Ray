@@ -4115,7 +4115,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
                  (mix_rand < fresnel && spec_depth < pi.settings.max_spec_depth)) &&
                 total_depth < pi.settings.max_total_depth) {
                 mix_rand -= diffuse_weight + specular_weight + clearcoat_weight;
-                mix_rand /= refraction_weight;
+                mix_rand = safe_div_pos(mix_rand, refraction_weight);
 
                 //////////////////
 
