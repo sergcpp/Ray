@@ -4649,22 +4649,10 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const scene_data_t &sc,
                 safe_div_pos(ls.dist * ls.dist, ls.area * cos_theta);
 
             const material_t &lmat = sc.materials[sc.tri_materials[ltri_index].front_mi & MATERIAL_INDEX_BITS];
-            if ((lmat.flags & MAT_FLAG_SKY_PORTAL) == 0) {
-                if (lmat.textures[BASE_TEXTURE] != 0xffffffff) {
-                    simd_fvec<S> tex_col[4];
-                    SampleBilinear(textures, lmat.textures[BASE_TEXTURE], luvs, simd_ivec<S>{0}, ray_mask, tex_col);
-                    ITERATE_3({ where(ray_queue[index], ls.col[i]) *= tex_col[i]; })
-                }
-            } else {
-                simd_fvec<S> env_col[3] = {sc.env->env_col[0], sc.env->env_col[1], sc.env->env_col[2]};
-                if (sc.env->env_map != 0xffffffff) {
-                    simd_fvec<S> tex_col[3];
-                    SampleLatlong_RGBE(*static_cast<const Ref::TexStorageRGBA *>(textures[0]), sc.env->env_map, ls.L,
-                                       sc.env->env_map_rotation, ray_queue[index], tex_col);
-                    ITERATE_3({ env_col[i] *= tex_col[i]; })
-                }
-                ITERATE_3({ where(ray_queue[index], ls.col[i]) *= env_col[i]; })
-                where(ray_queue[index], ls.dist) = MAX_DIST;
+            if (lmat.textures[BASE_TEXTURE] != 0xffffffff) {
+                simd_fvec<S> tex_col[4];
+                SampleBilinear(textures, lmat.textures[BASE_TEXTURE], luvs, simd_ivec<S>{0}, ray_mask, tex_col);
+                ITERATE_3({ where(ray_queue[index], ls.col[i]) *= tex_col[i]; })
             }
         } else if (l.type == LIGHT_TYPE_ENV) {
             assert(sc.env->qtree_levels);
@@ -4704,7 +4692,7 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, const simd_ivec<S> &_r
         const light_t &l = lights[light_index];
         // Portal lights affect only missed rays
         const simd_ivec<S> ray_mask =
-            _ray_mask & ~((l.sky_portal ? simd_ivec<S>{-1} : simd_ivec<S>{0}) & ~inout_inter.mask);
+            _ray_mask & ~((l.sky_portal ? simd_ivec<S>{-1} : simd_ivec<S>{0}) & inout_inter.mask);
         if (ray_mask.all_zeros()) {
             continue;
         }
@@ -4922,6 +4910,15 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
             const light_t &l = sc.lights[-int(first_li) - 1];
 
             simd_fvec<S> lcol[3] = {l.col[0], l.col[1], l.col[2]};
+            if (l.sky_portal) {
+                ITERATE_3({ lcol[i] *= sc.env->env_col[i]; })
+                if (sc.env->env_map != 0xffffffff) {
+                    simd_fvec<S> tex_col[3];
+                    SampleLatlong_RGBE(*static_cast<const Ref::TexStorageRGBA *>(textures[0]), sc.env->env_map, ray.d,
+                                       sc.env->env_map_rotation, ray_queue[index], tex_col);
+                    ITERATE_3({ lcol[i] *= tex_col[i]; })
+                }
+            }
 
             if (l.type == LIGHT_TYPE_SPHERE) {
                 const simd_fvec<S> op[3] = {l.sph.pos[0] - ray.o[0], l.sph.pos[1] - ray.o[1], l.sph.pos[2] - ray.o[2]};
@@ -5704,18 +5701,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
             } else if (mat->type == EmissiveNode) {
                 simd_fvec<S> mis_weight = 1.0f;
 #if USE_NEE
-                if (mat->flags & MAT_FLAG_SKY_PORTAL) {
-                    simd_fvec<S> env_col[3] = {sc.env->env_col[0], sc.env->env_col[1], sc.env->env_col[2]};
-                    if (sc.env->env_map != 0xffffffff) {
-                        simd_fvec<S> tex_col[3];
-                        SampleLatlong_RGBE(*static_cast<const Ref::TexStorageRGBA *>(textures[0]), sc.env->env_map,
-                                           ls.L, sc.env->env_map_rotation, ray_queue[index], tex_col);
-                        ITERATE_3({ env_col[i] *= tex_col[i]; })
-                    }
-                    ITERATE_3({ where(ray_queue[index], base_color[i]) *= env_col[i]; })
-                }
-
-                if (pi.bounce > 0 && (mat->flags & (MAT_FLAG_MULT_IMPORTANCE | MAT_FLAG_SKY_PORTAL))) {
+                if (pi.bounce > 0 && (mat->flags & MAT_FLAG_MULT_IMPORTANCE)) {
                     const simd_fvec<S> v1[3] = {p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2]},
                                        v2[3] = {p3[0] - p1[0], p3[1] - p1[1], p3[2] - p1[2]};
 

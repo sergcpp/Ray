@@ -503,9 +503,6 @@ uint32_t Ray::Vk::Scene::AddMaterial(const shading_node_desc_t &m) {
         if (m.multiple_importance) {
             mat.flags |= MAT_FLAG_MULT_IMPORTANCE;
         }
-        if (m.sky_portal) {
-            mat.flags |= MAT_FLAG_SKY_PORTAL;
-        }
     } else if (m.type == MixNode) {
         mat.strength = m.strength;
         mat.textures[MIX_MAT1] = m.mix_materials[0];
@@ -984,7 +981,7 @@ uint32_t Ray::Vk::Scene::AddMeshInstance(const uint32_t mesh_index, const float 
 
             const material_t &front_mat = materials_[tri_mat.front_mi & MATERIAL_INDEX_BITS];
             if (front_mat.type == EmissiveNode &&
-                (front_mat.flags & (MAT_FLAG_MULT_IMPORTANCE | MAT_FLAG_SKY_PORTAL))) {
+                (front_mat.flags & MAT_FLAG_MULT_IMPORTANCE)) {
                 light_t new_light;
                 new_light.type = LIGHT_TYPE_TRI;
                 new_light.cast_shadow = 1;

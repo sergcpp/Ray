@@ -3145,18 +3145,8 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, co
         }
 
         const material_t &lmat = sc.materials[sc.tri_materials[ltri_index].front_mi & MATERIAL_INDEX_BITS];
-        if ((lmat.flags & MAT_FLAG_SKY_PORTAL) == 0) {
-            if (lmat.textures[BASE_TEXTURE] != 0xffffffff) {
-                ls.col *= SampleBilinear(textures, lmat.textures[BASE_TEXTURE], luvs, 0 /* lod */);
-            }
-        } else {
-            simd_fvec4 env_col = {sc.env->env_col[0], sc.env->env_col[1], sc.env->env_col[2], 0.0f};
-            if (sc.env->env_map != 0xffffffff) {
-                env_col *= SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), sc.env->env_map, ls.L,
-                                              sc.env->env_map_rotation);
-            }
-            ls.col *= env_col;
-            ls.dist = MAX_DIST;
+        if (lmat.textures[BASE_TEXTURE] != 0xffffffff) {
+            ls.col *= SampleBilinear(textures, lmat.textures[BASE_TEXTURE], luvs, 0 /* lod */);
         }
     } else if (l.type == LIGHT_TYPE_ENV) {
         assert(sc.env->qtree_levels);
@@ -3829,16 +3819,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
     } else if (mat->type == EmissiveNode) {
         float mis_weight = 1.0f;
 #if USE_NEE
-        if (mat->flags & MAT_FLAG_SKY_PORTAL) {
-            simd_fvec4 env_col = {sc.env->env_col[0], sc.env->env_col[1], sc.env->env_col[2], 0.0f};
-            if (sc.env->env_map != 0xffffffff) {
-                env_col *= SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), sc.env->env_map,
-                                              simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f}, sc.env->env_map_rotation);
-            }
-            base_color *= env_col;
-        }
-
-        if (pi.bounce > 0 && (mat->flags & (MAT_FLAG_MULT_IMPORTANCE | MAT_FLAG_SKY_PORTAL))) {
+        if (pi.bounce > 0 && (mat->flags & MAT_FLAG_MULT_IMPORTANCE)) {
             const auto p1 = simd_fvec4{v1.p[0], v1.p[1], v1.p[2], 0.0f},
                        p2 = simd_fvec4{v2.p[0], v2.p[1], v2.p[2], 0.0f},
                        p3 = simd_fvec4{v3.p[0], v3.p[1], v3.p[2], 0.0f};

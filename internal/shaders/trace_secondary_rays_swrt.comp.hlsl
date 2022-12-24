@@ -66,7 +66,7 @@ struct Params
 
 static const uint3 gl_WorkGroupSize = uint3(8u, 8u, 1u);
 
-static const hit_data_t _1203 = { 0, 0, 0, 3402823346297367662189621542912.0f, 0.0f, 0.0f };
+static const hit_data_t _1202 = { 0, 0, 0, 3402823346297367662189621542912.0f, 0.0f, 0.0f };
 
 ByteAddressBuffer _298 : register(t1, space0);
 ByteAddressBuffer _513 : register(t3, space0);
@@ -109,9 +109,9 @@ float3 safe_invert(float3 v)
     }
     if (_83)
     {
-        float3 _1172 = inv_v;
-        _1172.x = 3.4028234663852885981170418348452e+38f;
-        inv_v = _1172;
+        float3 _1171 = inv_v;
+        _1171.x = 3.4028234663852885981170418348452e+38f;
+        inv_v = _1171;
     }
     else
     {
@@ -127,9 +127,9 @@ float3 safe_invert(float3 v)
         }
         if (_98)
         {
-            float3 _1174 = inv_v;
-            _1174.x = -3.4028234663852885981170418348452e+38f;
-            inv_v = _1174;
+            float3 _1173 = inv_v;
+            _1173.x = -3.4028234663852885981170418348452e+38f;
+            inv_v = _1173;
         }
     }
     bool _106 = v.y <= 1.0000000116860974230803549289703e-07f;
@@ -144,9 +144,9 @@ float3 safe_invert(float3 v)
     }
     if (_112)
     {
-        float3 _1176 = inv_v;
-        _1176.y = 3.4028234663852885981170418348452e+38f;
-        inv_v = _1176;
+        float3 _1175 = inv_v;
+        _1175.y = 3.4028234663852885981170418348452e+38f;
+        inv_v = _1175;
     }
     else
     {
@@ -162,9 +162,9 @@ float3 safe_invert(float3 v)
         }
         if (_125)
         {
-            float3 _1178 = inv_v;
-            _1178.y = -3.4028234663852885981170418348452e+38f;
-            inv_v = _1178;
+            float3 _1177 = inv_v;
+            _1177.y = -3.4028234663852885981170418348452e+38f;
+            inv_v = _1177;
         }
     }
     bool _132 = v.z <= 1.0000000116860974230803549289703e-07f;
@@ -179,9 +179,9 @@ float3 safe_invert(float3 v)
     }
     if (_138)
     {
-        float3 _1180 = inv_v;
-        _1180.z = 3.4028234663852885981170418348452e+38f;
-        inv_v = _1180;
+        float3 _1179 = inv_v;
+        _1179.z = 3.4028234663852885981170418348452e+38f;
+        inv_v = _1179;
     }
     else
     {
@@ -197,9 +197,9 @@ float3 safe_invert(float3 v)
         }
         if (_151)
         {
-            float3 _1182 = inv_v;
-            _1182.z = -3.4028234663852885981170418348452e+38f;
-            inv_v = _1182;
+            float3 _1181 = inv_v;
+            _1181.z = -3.4028234663852885981170418348452e+38f;
+            inv_v = _1181;
         }
     }
     return inv_v;
@@ -261,17 +261,17 @@ void IntersectTri(float3 ro, float3 rd, tri_accel_t tri, uint prim_index, inout 
 
 void IntersectTris_ClosestHit(float3 ro, float3 rd, int tri_start, int tri_end, int obj_index, inout hit_data_t out_inter)
 {
-    int _1110 = 0;
-    int _1111 = obj_index;
-    float _1113 = out_inter.t;
+    int _1109 = 0;
+    int _1110 = obj_index;
+    float _1112 = out_inter.t;
     float3 param;
     float3 param_1;
     tri_accel_t param_2;
     uint param_3;
     hit_data_t param_4;
-    int _1112;
+    int _1111;
+    float _1113;
     float _1114;
-    float _1115;
     for (int i = tri_start; i < tri_end; )
     {
         param = ro;
@@ -284,23 +284,23 @@ void IntersectTris_ClosestHit(float3 ro, float3 rd, int tri_start, int tri_end, 
         param_2.u_plane = _309.u_plane;
         param_2.v_plane = _309.v_plane;
         param_3 = uint(i);
-        hit_data_t _1122 = { _1110, _1111, _1112, _1113, _1114, _1115 };
-        param_4 = _1122;
+        hit_data_t _1121 = { _1109, _1110, _1111, _1112, _1113, _1114 };
+        param_4 = _1121;
         IntersectTri(param, param_1, param_2, param_3, param_4);
-        _1110 = param_4.mask;
-        _1111 = param_4.obj_index;
-        _1112 = param_4.prim_index;
-        _1113 = param_4.t;
-        _1114 = param_4.u;
-        _1115 = param_4.v;
+        _1109 = param_4.mask;
+        _1110 = param_4.obj_index;
+        _1111 = param_4.prim_index;
+        _1112 = param_4.t;
+        _1113 = param_4.u;
+        _1114 = param_4.v;
         i++;
         continue;
     }
-    out_inter.mask |= _1110;
+    out_inter.mask |= _1109;
     int _332;
-    if (_1110 != 0)
+    if (_1109 != 0)
     {
-        _332 = _1111;
+        _332 = _1110;
     }
     else
     {
@@ -308,20 +308,20 @@ void IntersectTris_ClosestHit(float3 ro, float3 rd, int tri_start, int tri_end, 
     }
     out_inter.obj_index = _332;
     int _345;
-    if (_1110 != 0)
+    if (_1109 != 0)
     {
-        _345 = _1112;
+        _345 = _1111;
     }
     else
     {
         _345 = out_inter.prim_index;
     }
     out_inter.prim_index = _345;
-    out_inter.t = _1113;
+    out_inter.t = _1112;
     float _361;
-    if (_1110 != 0)
+    if (_1109 != 0)
     {
-        _361 = _1114;
+        _361 = _1113;
     }
     else
     {
@@ -329,9 +329,9 @@ void IntersectTris_ClosestHit(float3 ro, float3 rd, int tri_start, int tri_end, 
     }
     out_inter.u = _361;
     float _374;
-    if (_1110 != 0)
+    if (_1109 != 0)
     {
-        _374 = _1115;
+        _374 = _1114;
     }
     else
     {
@@ -526,38 +526,38 @@ void comp_main()
         }
         float3 _976 = float3(asfloat(_940.Load(_919 * 56 + 12)), asfloat(_940.Load(_919 * 56 + 16)), asfloat(_940.Load(_919 * 56 + 20)));
         float3 param = _976;
-        int _1084 = 0;
-        int _1086 = 0;
+        int _1083 = 0;
         int _1085 = 0;
-        float _1087 = 3402823346297367662189621542912.0f;
-        float _1089 = 0.0f;
+        int _1084 = 0;
+        float _1086 = 3402823346297367662189621542912.0f;
         float _1088 = 0.0f;
+        float _1087 = 0.0f;
         float3 param_1 = float3(asfloat(_940.Load(_919 * 56 + 0)), asfloat(_940.Load(_919 * 56 + 4)), asfloat(_940.Load(_919 * 56 + 8)));
         float3 param_2 = _976;
         float3 param_3 = safe_invert(param);
         uint param_4 = _993_g_params.node_index;
-        hit_data_t param_5 = _1203;
+        hit_data_t param_5 = _1202;
         Traverse_MacroTree_WithStack(param_1, param_2, param_3, param_4, param_5);
-        _1084 = param_5.mask;
-        _1085 = param_5.obj_index;
-        _1086 = param_5.prim_index;
-        _1087 = param_5.t;
-        _1088 = param_5.u;
-        _1089 = param_5.v;
+        _1083 = param_5.mask;
+        _1084 = param_5.obj_index;
+        _1085 = param_5.prim_index;
+        _1086 = param_5.t;
+        _1087 = param_5.u;
+        _1088 = param_5.v;
         if (param_5.prim_index < 0)
         {
-            _1086 = (-1) - int(_1016.Load(((-1) - _1086) * 4 + 0));
+            _1085 = (-1) - int(_1016.Load(((-1) - _1085) * 4 + 0));
         }
         else
         {
-            _1086 = int(_1016.Load(_1086 * 4 + 0));
+            _1085 = int(_1016.Load(_1085 * 4 + 0));
         }
-        _1038.Store(_919 * 24 + 0, uint(_1084));
-        _1038.Store(_919 * 24 + 4, uint(_1085));
-        _1038.Store(_919 * 24 + 8, uint(_1086));
-        _1038.Store(_919 * 24 + 12, asuint(_1087));
-        _1038.Store(_919 * 24 + 16, asuint(_1088));
-        _1038.Store(_919 * 24 + 20, asuint(_1089));
+        _1038.Store(_919 * 24 + 0, uint(_1083));
+        _1038.Store(_919 * 24 + 4, uint(_1084));
+        _1038.Store(_919 * 24 + 8, uint(_1085));
+        _1038.Store(_919 * 24 + 12, asuint(_1086));
+        _1038.Store(_919 * 24 + 16, asuint(_1087));
+        _1038.Store(_919 * 24 + 20, asuint(_1088));
         break;
     } while(false);
 }

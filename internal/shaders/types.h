@@ -82,7 +82,6 @@ const int PrincipledNode = 6;
 
 const UINT_TYPE MAT_FLAG_MULT_IMPORTANCE = (1u << 0u);
 const UINT_TYPE MAT_FLAG_MIX_ADD = (1u << 1u);
-const UINT_TYPE MAT_FLAG_SKY_PORTAL = (1u << 2u);
 
 const int NUM_MIP_LEVELS = 14;
 const int MAX_MIP_LEVEL = NUM_MIP_LEVELS - 1;

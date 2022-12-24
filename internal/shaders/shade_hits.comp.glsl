@@ -915,22 +915,8 @@ void SampleLightSource(vec3 P, vec2 sample_off, inout light_sample_t ls) {
         }
 
         const material_t lmat = g_materials[(g_tri_materials[ltri_index] >> 16u) & MATERIAL_INDEX_BITS];
-        if ((lmat.flags & MAT_FLAG_SKY_PORTAL) == 0) {
-            if (lmat.textures[BASE_TEXTURE] != 0xffffffff) {
-                ls.col *= SampleBilinear(lmat.textures[BASE_TEXTURE], luvs, 0 /* lod */).xyz;
-            }
-        } else {
-            vec3 env_col = g_params.env_col.xyz;
-            const uint env_map = floatBitsToUint(g_params.env_col.w);
-            if (env_map != 0xffffffff) {
-#if BINDLESS
-                env_col *= SampleLatlong_RGBE(env_map, ls.L, g_params.env_rotation);
-#else
-                env_col *= SampleLatlong_RGBE(g_textures[env_map], ls.L, g_params.env_rotation);
-#endif
-            }
-            ls.col *= env_col;
-            ls.dist = MAX_DIST;
+        if (lmat.textures[BASE_TEXTURE] != 0xffffffff) {
+            ls.col *= SampleBilinear(lmat.textures[BASE_TEXTURE], luvs, 0 /* lod */).xyz;
         }
     } else [[dont_flatten]] if (l_type == LIGHT_TYPE_ENV) {
         const float rand = u1 * float(g_params.li_count) - float(light_index);
@@ -994,6 +980,18 @@ vec3 ShadeSurface(int px_index, hit_data_t inter, ray_data_t ray) {
         const light_t l = g_lights[-inter.obj_index - 1];
 
         vec3 lcol = uintBitsToFloat(l.type_and_param0.yzw);
+        [[dont_flatten]] if ((l.type_and_param0.x & (1 << 7)) != 0) { // sky portal
+            vec3 env_col = g_params.env_col.xyz;
+            const uint env_map = floatBitsToUint(g_params.env_col.w);
+            if (env_map != 0xffffffff) {
+#if BINDLESS
+                env_col *= SampleLatlong_RGBE(env_map, I, g_params.env_rotation);
+#else
+                env_col *= SampleLatlong_RGBE(g_textures[env_map], I, g_params.env_rotation);
+#endif
+            }
+            lcol *= env_col;
+        }
 
         const uint l_type = (l.type_and_param0.x & 0x1f);
         if (l_type == LIGHT_TYPE_SPHERE) {
@@ -1449,22 +1447,8 @@ vec3 ShadeSurface(int px_index, hit_data_t inter, ray_data_t ray) {
         }
     } else [[dont_flatten]] if (mat.type == EmissiveNode) {
         float mis_weight = 1.0;
-#if USE_NEE
-        if ((mat.flags & MAT_FLAG_SKY_PORTAL) != 0) {
-            vec3 env_col = g_params.env_col.xyz;
-            const uint env_map = floatBitsToUint(g_params.env_col.w);
-            if (env_map != 0xffffffff) {
-#if BINDLESS
-                env_col *= SampleLatlong_RGBE(env_map, rd, g_params.env_rotation);
-#else
-                env_col *= SampleLatlong_RGBE(g_textures[env_map], rd, g_params.env_rotation);
-#endif
-            }
-            base_color *= env_col;
-        }
-
-#if !PRIMARY
-        [[dont_flatten]] if ((mat.flags & (MAT_FLAG_MULT_IMPORTANCE | MAT_FLAG_SKY_PORTAL)) != 0) {
+#if USE_NEE && !PRIMARY
+        [[dont_flatten]] if ((mat.flags & MAT_FLAG_MULT_IMPORTANCE) != 0) {
             const vec3 p1 = vec3(v1.p[0], v1.p[1], v1.p[2]),
                        p2 = vec3(v2.p[0], v2.p[1], v2.p[2]),
                        p3 = vec3(v3.p[0], v3.p[1], v3.p[2]);
@@ -1482,7 +1466,6 @@ vec3 ShadeSurface(int px_index, hit_data_t inter, ray_data_t ray) {
                 mis_weight = power_heuristic(bsdf_pdf, light_pdf);
             }
         }
-#endif
 #endif
         col += mix_weight * mis_weight * mat.tangent_rotation_or_strength * base_color;
     } else [[dont_flatten]] if (mat.type == TransparentNode) {
