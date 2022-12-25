@@ -93,7 +93,10 @@ template <int DimX, int DimY> class RendererSIMD : public RendererBase {
     virtual void ResetStats() override { stats_ = {0}; }
 };
 
-template <int S> thread_local Ray::NS::PassData<S> g_per_thread_pass_data;
+template <int S> Ray::NS::PassData<S> &get_per_thread_pass_data() {
+    static thread_local Ray::NS::PassData<S> per_thread_pass_data;
+    return per_thread_pass_data;
+}
 } // namespace NS
 } // namespace Ray
 
@@ -191,7 +194,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
         UpdateHaltonSequence(region.iteration, region.halton_seq);
     }
 
-    PassData<S> &p = g_per_thread_pass_data<S>;
+    PassData<S> &p = get_per_thread_pass_data<S>();
 
     {
         std::lock_guard<std::mutex> _(mtx_);
