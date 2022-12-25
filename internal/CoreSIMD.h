@@ -1211,9 +1211,11 @@ force_inline void normalize(float v[3]) {
     v[2] /= l;
 }
 
-template <int S> force_inline simd_fvec<S> length(const simd_fvec<S> v[3]) {
-    return sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+template <int S> force_inline simd_fvec<S> length2(const simd_fvec<S> v[3]) {
+    return (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
 }
+
+template <int S> force_inline simd_fvec<S> length(const simd_fvec<S> v[3]) { return sqrt(length2(v)); }
 
 template <int S> force_inline simd_fvec<S> length2_2d(const simd_fvec<S> v[2]) { return v[0] * v[0] + v[1] * v[1]; }
 
@@ -5137,7 +5139,6 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_settings_t &
     ITERATE_3({ where(is_backfacing, T[i]) = -T[i]; });
 
     simd_fvec<S> tangent[3] = {-P_ls[2], {0.0f}, P_ls[0]};
-    normalize(tangent);
 
     simd_fvec<S> transform[16];
 
@@ -5151,7 +5152,9 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_settings_t &
         ITERATE_16({ transform[i] = gather(transforms, tr_index * transforms_stride + i); })
         ITERATE_16({ inv_transform[i] = gather(inv_transforms, tr_index * transforms_stride + i); })
 
-        const simd_fvec<S> mask = abs(dot3(tangent, N)) > 0.999f;
+        simd_fvec<S> temp[3];
+        cross(tangent, N, temp);
+        const simd_fvec<S> mask = length2(temp) == 0.0f;
         ITERATE_3({ where(mask, tangent[i]) = P_ls[i]; })
 
         TransformNormal(inv_transform, plane_N);
@@ -5160,6 +5163,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_settings_t &
         TransformNormal(inv_transform, T);
 
         TransformNormal(inv_transform, tangent);
+        normalize(tangent);
     }
 
     //////////////////////////////////

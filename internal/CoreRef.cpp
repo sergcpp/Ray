@@ -3559,11 +3559,11 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_setting
                             simd_fvec4{v3.p[0], v3.p[1], v3.p[2], 0.0f} * inter.v;
     // rotate around Y axis by 90 degrees in 2d
     simd_fvec4 tangent = {-P_ls[2], 0.0f, P_ls[0], 0.0f};
-    tangent = normalize(TransformNormal(tangent, tr->inv_xform));
-    if (std::abs(dot(tangent, N)) > 0.999f) {
+    tangent = TransformNormal(tangent, tr->inv_xform);
+    if (length2(cross(tangent, N)) == 0.0f) {
         tangent = TransformNormal(P_ls, tr->inv_xform);
     }
-
+    tangent = normalize(tangent);
     if (mat->tangent_rotation != 0.0f) {
         tangent = rotate_around_axis(tangent, N, mat->tangent_rotation);
     }
