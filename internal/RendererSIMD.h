@@ -218,13 +218,16 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
         p.intersections.resize(p.primary_rays.size());
 
         for (size_t i = 0; i < p.primary_rays.size(); i++) {
-            const ray_data_t<S> &r = p.primary_rays[i];
+            ray_data_t<S> &r = p.primary_rays[i];
+
             hit_data_t<S> &inter = p.intersections[i];
             inter = {};
             inter.t = cam.clip_end;
 
             if (macro_tree_root != 0xffffffff) {
-                NS::IntersectScene(r.o, r.d, p.primary_masks[i], sc_data, macro_tree_root, inter);
+                NS::IntersectScene(r, p.primary_masks[i], cam.pass_settings.min_transp_depth,
+                                   cam.pass_settings.max_transp_depth, &region.halton_seq[hi + RAND_DIM_BASE_COUNT],
+                                   sc_data, macro_tree_root, s->tex_storages_, inter);
             }
             // NS::IntersectAreaLights(r, {-1}, sc_data.lights, sc_data.visible_lights, sc_data.transforms, inter);
         }
@@ -272,20 +275,16 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
         const shadow_ray_t<S> &sh_r = p.shadow_rays[i];
 
         const simd_ivec<S> x = sh_r.xy >> 16, y = sh_r.xy & 0x0000FFFF;
-        const simd_ivec<S> px_index = y * w + x;
 
-        const simd_fvec<S> visibility =
-            ComputeVisibility(sh_r.o, sh_r.d, sh_r.dist, p.shadow_masks[i],
-                              region.halton_seq[hi + RAND_DIM_BASE_COUNT + RAND_DIM_BSDF_PICK], hash(px_index), sc_data,
-                              macro_tree_root, s->tex_storages_);
+        simd_fvec<S> rc[3];
+        NS::IntersectScene(sh_r, p.shadow_masks[i], cam.pass_settings.max_transp_depth, sc_data, macro_tree_root,
+                           s->tex_storages_, rc);
 
         for (int j = 0; j < S; j++) {
             if (!p.shadow_masks[i][j]) {
                 continue;
             }
-            temp_buf_.AddPixel(
-                x[j], y[j],
-                {visibility[j] * sh_r.c[0][j], visibility[j] * sh_r.c[1][j], visibility[j] * sh_r.c[2][j], 0.0f});
+            temp_buf_.AddPixel(x[j], y[j], {rc[0][j], rc[1][j], rc[2][j], 0.0f});
         }
     }
 
@@ -323,11 +322,16 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
         auto time_secondary_trace_start = std::chrono::high_resolution_clock::now();
 
         for (int i = 0; i < secondary_rays_count; i++) {
-            const ray_data_t<S> &r = p.secondary_rays[i];
+            ray_data_t<S> &r = p.secondary_rays[i];
+
+            const simd_ivec<S> x = r.xy >> 16, y = r.xy & 0x0000FFFF;
+
             hit_data_t<S> &inter = p.intersections[i];
             inter = {};
 
-            NS::IntersectScene(r.o, r.d, p.secondary_masks[i], sc_data, macro_tree_root, inter);
+            NS::IntersectScene(r, p.secondary_masks[i], cam.pass_settings.min_transp_depth,
+                               cam.pass_settings.max_transp_depth, &region.halton_seq[hi + RAND_DIM_BASE_COUNT],
+                               sc_data, macro_tree_root, s->tex_storages_, inter);
 
             const simd_ivec<S> not_only_transparency_ray = (r.depth & 0x00ffffff) != 0;
             NS::IntersectAreaLights(r, p.secondary_masks[i] & not_only_transparency_ray, sc_data.lights,
@@ -349,9 +353,8 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
             const simd_ivec<S> x = r.xy >> 16, y = r.xy & 0x0000FFFF;
 
             simd_fvec<S> out_rgba[4] = {0.0f};
-            NS::ShadeSurface(cam.pass_settings,
-                             &region.halton_seq[hi + RAND_DIM_BASE_COUNT + bounce * RAND_DIM_BOUNCE_COUNT], inter, r,
-                             sc_data, macro_tree_root, s->tex_storages_, out_rgba, p.secondary_masks.data(),
+            NS::ShadeSurface(cam.pass_settings, &region.halton_seq[hi + RAND_DIM_BASE_COUNT], inter, r, sc_data,
+                             macro_tree_root, s->tex_storages_, out_rgba, p.secondary_masks.data(),
                              p.secondary_rays.data(), &secondary_rays_count, p.shadow_masks.data(),
                              p.shadow_rays.data(), &shadow_rays_count);
 
@@ -367,20 +370,16 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
             const shadow_ray_t<S> &sh_r = p.shadow_rays[i];
 
             const simd_ivec<S> x = sh_r.xy >> 16, y = sh_r.xy & 0x0000FFFF;
-            const simd_ivec<S> px_index = y * w + x;
 
-            const simd_fvec<S> visibility = ComputeVisibility(
-                sh_r.o, sh_r.d, sh_r.dist, p.shadow_masks[i],
-                region.halton_seq[hi + RAND_DIM_BASE_COUNT + bounce * RAND_DIM_BOUNCE_COUNT + RAND_DIM_BSDF_PICK],
-                hash(px_index), sc_data, macro_tree_root, s->tex_storages_);
+            simd_fvec<S> rc[3];
+            IntersectScene(sh_r, p.shadow_masks[i], cam.pass_settings.max_transp_depth, sc_data, macro_tree_root,
+                           s->tex_storages_, rc);
 
             for (int j = 0; j < S; j++) {
                 if (!p.shadow_masks[i][j]) {
                     continue;
                 }
-                temp_buf_.AddPixel(
-                    x[j], y[j],
-                    {visibility[j] * sh_r.c[0][j], visibility[j] * sh_r.c[1][j], visibility[j] * sh_r.c[2][j], 0.0f});
+                temp_buf_.AddPixel(x[j], y[j], {rc[0][j], rc[1][j], rc[2][j], 0.0f});
             }
         }
 

@@ -13,21 +13,37 @@ $BASE_PATH/glslangValidator -V --target-env spirv1.3 internal/shaders/primary_ra
 $BASE_PATH/spirv-opt.sh internal/shaders/primary_ray_gen.comp.spv -o internal/shaders/primary_ray_gen.comp.spv
 $BASE_PATH/bin2c -o internal/shaders/primary_ray_gen.comp.inl internal/shaders/primary_ray_gen.comp.spv
 
-$BASE_PATH/glslangValidator -V --target-env spirv1.3 internal/shaders/intersect_scene.comp.glsl -DPRIMARY=1 -DHWRT=0 -o internal/shaders/intersect_scene_primary_swrt.comp.spv
-$BASE_PATH/spirv-opt.sh internal/shaders/intersect_scene_primary_swrt.comp.spv -o internal/shaders/intersect_scene_primary_swrt.comp.spv
-$BASE_PATH/bin2c -o internal/shaders/intersect_scene_primary_swrt.comp.inl internal/shaders/intersect_scene_primary_swrt.comp.spv
+$BASE_PATH/glslangValidator -V --target-env spirv1.3 internal/shaders/intersect_scene.comp.glsl -DPRIMARY=1 -DHWRT=0 -DBINDLESS=0 -o internal/shaders/intersect_scene_primary_swrt_atlas.comp.spv
+$BASE_PATH/spirv-opt.sh internal/shaders/intersect_scene_primary_swrt_atlas.comp.spv -o internal/shaders/intersect_scene_primary_swrt_atlas.comp.spv
+$BASE_PATH/bin2c -o internal/shaders/intersect_scene_primary_swrt_atlas.comp.inl internal/shaders/intersect_scene_primary_swrt_atlas.comp.spv
 
-$BASE_PATH/glslangValidator -V --target-env spirv1.4 --glsl-version 460 internal/shaders/intersect_scene.comp.glsl -DPRIMARY=1 -DHWRT=1 -o internal/shaders/intersect_scene_primary_hwrt.comp.spv
-$BASE_PATH/spirv-opt.sh internal/shaders/intersect_scene_primary_hwrt.comp.spv -o internal/shaders/intersect_scene_primary_hwrt.comp.spv
-$BASE_PATH/bin2c -o internal/shaders/intersect_scene_primary_hwrt.comp.inl internal/shaders/intersect_scene_primary_hwrt.comp.spv
+$BASE_PATH/glslangValidator -V --target-env spirv1.3 internal/shaders/intersect_scene.comp.glsl -DPRIMARY=1 -DHWRT=0 -DBINDLESS=1 -o internal/shaders/intersect_scene_primary_swrt_bindless.comp.spv
+$BASE_PATH/spirv-opt.sh internal/shaders/intersect_scene_primary_swrt_bindless.comp.spv -o internal/shaders/intersect_scene_primary_swrt_bindless.comp.spv
+$BASE_PATH/bin2c -o internal/shaders/intersect_scene_primary_swrt_bindless.comp.inl internal/shaders/intersect_scene_primary_swrt_bindless.comp.spv
 
-$BASE_PATH/glslangValidator -V --target-env spirv1.3 internal/shaders/intersect_scene.comp.glsl -DPRIMARY=0 -DHWRT=0 -o internal/shaders/intersect_scene_secondary_swrt.comp.spv
-$BASE_PATH/spirv-opt.sh internal/shaders/intersect_scene_secondary_swrt.comp.spv -o internal/shaders/intersect_scene_secondary_swrt.comp.spv
-$BASE_PATH/bin2c -o internal/shaders/intersect_scene_secondary_swrt.comp.inl internal/shaders/intersect_scene_secondary_swrt.comp.spv
+$BASE_PATH/glslangValidator -V --target-env spirv1.4 --glsl-version 460 internal/shaders/intersect_scene.comp.glsl -DPRIMARY=1 -DHWRT=1 -DBINDLESS=0 -o internal/shaders/intersect_scene_primary_hwrt_atlas.comp.spv
+$BASE_PATH/spirv-opt.sh internal/shaders/intersect_scene_primary_hwrt_atlas.comp.spv -o internal/shaders/intersect_scene_primary_hwrt_atlas.comp.spv
+$BASE_PATH/bin2c -o internal/shaders/intersect_scene_primary_hwrt_atlas.comp.inl internal/shaders/intersect_scene_primary_hwrt_atlas.comp.spv
 
-$BASE_PATH/glslangValidator -V --target-env spirv1.4 --glsl-version 460 internal/shaders/intersect_scene.comp.glsl -DPRIMARY=0 -DHWRT=1 -o internal/shaders/intersect_scene_secondary_hwrt.comp.spv
-$BASE_PATH/spirv-opt.sh internal/shaders/intersect_scene_secondary_hwrt.comp.spv -o internal/shaders/intersect_scene_secondary_hwrt.comp.spv
-$BASE_PATH/bin2c -o internal/shaders/intersect_scene_secondary_hwrt.comp.inl internal/shaders/intersect_scene_secondary_hwrt.comp.spv
+$BASE_PATH/glslangValidator -V --target-env spirv1.4 --glsl-version 460 internal/shaders/intersect_scene.comp.glsl -DPRIMARY=1 -DHWRT=1 -DBINDLESS=1 -o internal/shaders/intersect_scene_primary_hwrt_bindless.comp.spv
+$BASE_PATH/spirv-opt.sh internal/shaders/intersect_scene_primary_hwrt_bindless.comp.spv -o internal/shaders/intersect_scene_primary_hwrt_bindless.comp.spv
+$BASE_PATH/bin2c -o internal/shaders/intersect_scene_primary_hwrt_bindless.comp.inl internal/shaders/intersect_scene_primary_hwrt_bindless.comp.spv
+
+$BASE_PATH/glslangValidator -V --target-env spirv1.3 internal/shaders/intersect_scene.comp.glsl -DPRIMARY=0 -DHWRT=0 -DBINDLESS=0 -o internal/shaders/intersect_scene_secondary_swrt_atlas.comp.spv
+$BASE_PATH/spirv-opt.sh internal/shaders/intersect_scene_secondary_swrt_atlas.comp.spv -o internal/shaders/intersect_scene_secondary_swrt_atlas.comp.spv
+$BASE_PATH/bin2c -o internal/shaders/intersect_scene_secondary_swrt_atlas.comp.inl internal/shaders/intersect_scene_secondary_swrt_atlas.comp.spv
+
+$BASE_PATH/glslangValidator -V --target-env spirv1.3 internal/shaders/intersect_scene.comp.glsl -DPRIMARY=0 -DHWRT=0 -DBINDLESS=1 -o internal/shaders/intersect_scene_secondary_swrt_bindless.comp.spv
+$BASE_PATH/spirv-opt.sh internal/shaders/intersect_scene_secondary_swrt_bindless.comp.spv -o internal/shaders/intersect_scene_secondary_swrt_bindless.comp.spv
+$BASE_PATH/bin2c -o internal/shaders/intersect_scene_secondary_swrt_bindless.comp.inl internal/shaders/intersect_scene_secondary_swrt_bindless.comp.spv
+
+$BASE_PATH/glslangValidator -V --target-env spirv1.4 --glsl-version 460 internal/shaders/intersect_scene.comp.glsl -DPRIMARY=0 -DHWRT=1 -DBINDLESS=0 -o internal/shaders/intersect_scene_secondary_hwrt_atlas.comp.spv
+$BASE_PATH/spirv-opt.sh internal/shaders/intersect_scene_secondary_hwrt_atlas.comp.spv -o internal/shaders/intersect_scene_secondary_hwrt_atlas.comp.spv
+$BASE_PATH/bin2c -o internal/shaders/intersect_scene_secondary_hwrt_atlas.comp.inl internal/shaders/intersect_scene_secondary_hwrt_atlas.comp.spv
+
+$BASE_PATH/glslangValidator -V --target-env spirv1.4 --glsl-version 460 internal/shaders/intersect_scene.comp.glsl -DPRIMARY=0 -DHWRT=1 -DBINDLESS=1 -o internal/shaders/intersect_scene_secondary_hwrt_bindless.comp.spv
+$BASE_PATH/spirv-opt.sh internal/shaders/intersect_scene_secondary_hwrt_bindless.comp.spv -o internal/shaders/intersect_scene_secondary_hwrt_bindless.comp.spv
+$BASE_PATH/bin2c -o internal/shaders/intersect_scene_secondary_hwrt_bindless.comp.inl internal/shaders/intersect_scene_secondary_hwrt_bindless.comp.spv
 
 $BASE_PATH/glslangValidator -V --target-env spirv1.3 internal/shaders/intersect_area_lights.comp.glsl -DPRIMARY=0 -o internal/shaders/intersect_area_lights.comp.spv
 $BASE_PATH/spirv-opt.sh internal/shaders/intersect_area_lights.comp.spv -o internal/shaders/intersect_area_lights.comp.spv

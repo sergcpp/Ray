@@ -2128,7 +2128,6 @@ bool Ray::Ref::Traverse_MicroTree_WithStack_AnyHit(const float ro[3], const floa
 
                 if ((!is_backfacing && (materials[tri_indices[prim_index]].front_mi & MATERIAL_SOLID_BIT)) ||
                     (is_backfacing && (materials[tri_indices[prim_index]].back_mi & MATERIAL_SOLID_BIT))) {
-
                     return true;
                 }
             }
@@ -2761,98 +2760,198 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleLatlong_RGBE(const TexStorageRGBA &storage,
     return (p1X * k[1] + p0X * (1 - k[1]));
 }
 
-bool Ray::Ref::IntersectScene(const float ro[3], const float rd[3], const scene_data_t &sc, const uint32_t root_index,
-                              hit_data_t &inter) {
-    if (sc.mnodes) {
-        return Traverse_MacroTree_WithStack_ClosestHit(ro, rd, sc.mnodes, root_index, sc.mesh_instances, sc.mi_indices,
-                                                       sc.meshes, sc.transforms, sc.mtris, sc.tri_indices, inter);
-    } else {
-        return Traverse_MacroTree_WithStack_ClosestHit(ro, rd, sc.nodes, root_index, sc.mesh_instances, sc.mi_indices,
-                                                       sc.meshes, sc.transforms, sc.tris, sc.tri_indices, inter);
-    }
-}
+void Ray::Ref::IntersectScene(ray_data_t &r, const int min_transp_depth, const int max_transp_depth,
+                              const float *random_seq, const scene_data_t &sc, const uint32_t root_index,
+                              const TexStorageBase *const textures[], hit_data_t &inter) {
+    const simd_fvec4 rd = {r.d[0], r.d[1], r.d[2], 0.0f};
+    simd_fvec4 ro = {r.o[0], r.o[1], r.o[2], 0.0f};
 
-float Ray::Ref::ComputeVisibility(const float p[3], const float d[3], float dist, const float rand_val, int rand_hash2,
-                                  const scene_data_t &sc, const uint32_t root_index,
-                                  const TexStorageBase *const textures[]) {
-    float visibility = 1.0f;
+    const float rand_offset = construct_float(hash(r.xy));
+    random_seq += total_depth(r) * RAND_DIM_BOUNCE_COUNT;
 
-    const simd_fvec4 rd = {d[0], d[1], d[2], 0.0f};
-    simd_fvec4 ro = {p[0], p[1], p[2], 0.0f};
-    while (dist > HIT_BIAS) {
-        hit_data_t sh_inter;
-        sh_inter.t = dist;
+    while (true) {
+        const float t_val = inter.t;
 
-        bool solid_hit = false;
+        bool hit_found = false;
         if (sc.mnodes) {
-            solid_hit = Traverse_MacroTree_WithStack_AnyHit(value_ptr(ro), value_ptr(rd), sc.mnodes, root_index,
-                                                            sc.mesh_instances, sc.mi_indices, sc.meshes, sc.transforms,
-                                                            sc.tris, sc.tri_materials, sc.tri_indices, sh_inter);
+            hit_found = Traverse_MacroTree_WithStack_ClosestHit(value_ptr(ro), value_ptr(rd), sc.mnodes, root_index,
+                                                                sc.mesh_instances, sc.mi_indices, sc.meshes,
+                                                                sc.transforms, sc.mtris, sc.tri_indices, inter);
         } else {
-            solid_hit = Traverse_MacroTree_WithStack_AnyHit(value_ptr(ro), value_ptr(rd), sc.nodes, root_index,
-                                                            sc.mesh_instances, sc.mi_indices, sc.meshes, sc.transforms,
-                                                            sc.mtris, sc.tri_materials, sc.tri_indices, sh_inter);
+            hit_found = Traverse_MacroTree_WithStack_ClosestHit(value_ptr(ro), value_ptr(rd), sc.nodes, root_index,
+                                                                sc.mesh_instances, sc.mi_indices, sc.meshes,
+                                                                sc.transforms, sc.tris, sc.tri_indices, inter);
         }
 
-        if (solid_hit) {
-            visibility = 0.0f;
-        }
-
-        if (solid_hit || !sh_inter.mask) {
+        if (!hit_found) {
             break;
         }
 
-        const bool is_backfacing = (sh_inter.prim_index < 0);
-        const uint32_t tri_index = is_backfacing ? -sh_inter.prim_index - 1 : sh_inter.prim_index;
+        const bool is_backfacing = (inter.prim_index < 0);
+        const uint32_t tri_index = is_backfacing ? -inter.prim_index - 1 : inter.prim_index;
+
+        if ((!is_backfacing && (sc.tri_materials[tri_index].front_mi & MATERIAL_SOLID_BIT)) ||
+            (is_backfacing && (sc.tri_materials[tri_index].back_mi & MATERIAL_SOLID_BIT))) {
+            // solid hit found
+            break;
+        }
 
         const material_t *mat = is_backfacing
                                     ? &sc.materials[sc.tri_materials[tri_index].back_mi & MATERIAL_INDEX_BITS]
                                     : &sc.materials[sc.tri_materials[tri_index].front_mi & MATERIAL_INDEX_BITS];
 
-        const transform_t *tr = &sc.transforms[sc.mesh_instances[sh_inter.obj_index].tr_index];
+        const vertex_t &v1 = sc.vertices[sc.vtx_indices[tri_index * 3 + 0]];
+        const vertex_t &v2 = sc.vertices[sc.vtx_indices[tri_index * 3 + 1]];
+        const vertex_t &v3 = sc.vertices[sc.vtx_indices[tri_index * 3 + 2]];
+
+        const float w = 1.0f - inter.u - inter.v;
+        const simd_fvec2 uvs = simd_fvec2(v1.t[0]) * w + simd_fvec2(v2.t[0]) * inter.u + simd_fvec2(v3.t[0]) * inter.v;
+
+        float trans_r = fract(random_seq[RAND_DIM_BSDF_PICK] + rand_offset);
+
+        // resolve mix material
+        while (mat->type == MixNode) {
+            float mix_val = mat->strength;
+            if (mat->textures[BASE_TEXTURE] != 0xffffffff) {
+                mix_val *= SampleBilinear(textures, mat->textures[BASE_TEXTURE], uvs, 0)[0];
+            }
+
+            if (trans_r > mix_val) {
+                mat = &sc.materials[mat->textures[MIX_MAT1]];
+                trans_r = safe_div_pos(trans_r - mix_val, 1.0f - mix_val);
+            } else {
+                mat = &sc.materials[mat->textures[MIX_MAT2]];
+                trans_r = safe_div_pos(trans_r, mix_val);
+            }
+        }
+
+        if (mat->type != TransparentNode) {
+            break;
+        }
+
+#if USE_PATH_TERMINATION
+        const bool can_terminate_path = (r.depth >> 24) > min_transp_depth;
+#else
+        const bool can_terminate_path = false;
+#endif
+
+        const float lum = std::max(r.c[0], std::max(r.c[1], r.c[2]));
+        const float p = fract(random_seq[RAND_DIM_TERMINATE] + rand_offset);
+        const float q = can_terminate_path ? std::max(0.05f, 1.0f - lum) : 0.0f;
+        if (p < q || lum == 0.0f || (r.depth >> 24) + 1 >= max_transp_depth) {
+            // terminate ray
+            r.c[0] = r.c[1] = r.c[2] = 0.0f;
+            break;
+        }
+
+        r.c[0] *= mat->base_color[0] / (1.0f - q);
+        r.c[1] *= mat->base_color[1] / (1.0f - q);
+        r.c[2] *= mat->base_color[2] / (1.0f - q);
+
+        const float t = inter.t + HIT_BIAS;
+        ro += rd * t;
+
+        // discard current intersection
+        inter.mask = 0;
+        inter.t = t_val - inter.t;
+
+        r.depth += 0x01000000;
+        random_seq += RAND_DIM_BOUNCE_COUNT;
+    }
+
+    inter.t += length(simd_fvec4{r.o[0], r.o[1], r.o[2], 0.0f} - ro);
+}
+
+Ray::Ref::simd_fvec4 Ray::Ref::IntersectScene(const shadow_ray_t &r, const int max_transp_depth, const scene_data_t &sc,
+                                              const uint32_t root_index, const TexStorageBase *const textures[]) {
+    const simd_fvec4 rd = {r.d[0], r.d[1], r.d[2], 0.0f};
+    simd_fvec4 ro = {r.o[0], r.o[1], r.o[2], 0.0f};
+    simd_fvec4 rc = {r.c[0], r.c[1], r.c[2], 0.0f};
+    int depth = (r.depth >> 24);
+
+    float dist = r.dist;
+    while (dist > HIT_BIAS) {
+        hit_data_t inter;
+        inter.t = dist;
+
+        bool solid_hit = false;
+        if (sc.mnodes) {
+            solid_hit = Traverse_MacroTree_WithStack_AnyHit(value_ptr(ro), value_ptr(rd), sc.mnodes, root_index,
+                                                            sc.mesh_instances, sc.mi_indices, sc.meshes, sc.transforms,
+                                                            sc.tris, sc.tri_materials, sc.tri_indices, inter);
+        } else {
+            solid_hit = Traverse_MacroTree_WithStack_AnyHit(value_ptr(ro), value_ptr(rd), sc.nodes, root_index,
+                                                            sc.mesh_instances, sc.mi_indices, sc.meshes, sc.transforms,
+                                                            sc.mtris, sc.tri_materials, sc.tri_indices, inter);
+        }
+
+        if (solid_hit || depth > max_transp_depth) {
+            rc = 0.0f;
+        }
+
+        if (solid_hit || depth > max_transp_depth || !inter.mask) {
+            break;
+        }
+
+        const bool is_backfacing = (inter.prim_index < 0);
+        const uint32_t tri_index = is_backfacing ? -inter.prim_index - 1 : inter.prim_index;
+
+        const uint32_t mat_index = is_backfacing ? (sc.tri_materials[tri_index].back_mi & MATERIAL_INDEX_BITS)
+                                                 : (sc.tri_materials[tri_index].front_mi & MATERIAL_INDEX_BITS);
+
+        const transform_t *tr = &sc.transforms[sc.mesh_instances[inter.obj_index].tr_index];
 
         const vertex_t &v1 = sc.vertices[sc.vtx_indices[tri_index * 3 + 0]];
         const vertex_t &v2 = sc.vertices[sc.vtx_indices[tri_index * 3 + 1]];
         const vertex_t &v3 = sc.vertices[sc.vtx_indices[tri_index * 3 + 2]];
 
-        const float w = 1.0f - sh_inter.u - sh_inter.v;
+        const float w = 1.0f - inter.u - inter.v;
         const simd_fvec2 sh_uvs =
-            simd_fvec2(v1.t[0]) * w + simd_fvec2(v2.t[0]) * sh_inter.u + simd_fvec2(v3.t[0]) * sh_inter.v;
+            simd_fvec2(v1.t[0]) * w + simd_fvec2(v2.t[0]) * inter.u + simd_fvec2(v3.t[0]) * inter.v;
 
-        {
-            const int sh_rand_hash = hash(rand_hash2);
-            const float sh_rand_offset = construct_float(sh_rand_hash);
+        struct {
+            uint32_t index;
+            float weight;
+        } stack[16];
+        int stack_size = 0;
 
-            float sh_r = fract(rand_val + sh_rand_offset);
+        stack[stack_size++] = {mat_index, 1.0f};
+
+        simd_fvec4 throughput = 0.0f;
+
+        while (stack_size--) {
+            const material_t *mat = &sc.materials[stack[stack_size].index];
+            const float weight = stack[stack_size].weight;
 
             // resolve mix material
-            while (mat->type == MixNode) {
+            if (mat->type == MixNode) {
                 float mix_val = mat->strength;
                 if (mat->textures[BASE_TEXTURE] != 0xffffffff) {
                     mix_val *= SampleBilinear(textures, mat->textures[BASE_TEXTURE], sh_uvs, 0)[0];
                 }
 
-                if (sh_r > mix_val) {
-                    mat = &sc.materials[mat->textures[MIX_MAT1]];
-                    sh_r = (sh_r - mix_val) / (1.0f - mix_val);
-                } else {
-                    mat = &sc.materials[mat->textures[MIX_MAT2]];
-                    sh_r = safe_div_pos(sh_r, mix_val);
-                }
-            }
-
-            if (mat->type != TransparentNode) {
-                visibility = 0.0f;
-                break;
+                stack[stack_size++] = {mat->textures[MIX_MAT1], weight * (1.0f - mix_val)};
+                stack[stack_size++] = {mat->textures[MIX_MAT2], weight * mix_val};
+            } else if (mat->type == TransparentNode) {
+                throughput[0] += weight * mat->base_color[0];
+                throughput[1] += weight * mat->base_color[1];
+                throughput[2] += weight * mat->base_color[2];
             }
         }
 
-        const float t = sh_inter.t + HIT_BIAS;
+        rc *= throughput;
+        if (lum(rc) < FLT_EPS) {
+            break;
+        }
+
+        const float t = inter.t + HIT_BIAS;
         ro += rd * t;
         dist -= t;
+
+        ++depth;
     }
 
-    return visibility;
+    return rc;
 }
 
 void Ray::Ref::ComputeDerivatives(const simd_fvec4 &I, const float t, const simd_fvec4 &do_dx, const simd_fvec4 &do_dy,
@@ -3318,8 +3417,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
         simd_fvec4 env_col = {1.0f};
 
         const uint32_t env_map = (ray.depth & 0x00ffffff) ? sc.env->env_map : sc.env->back_map;
-        const float env_map_rotation =
-            (ray.depth & 0x00ffffff) ? sc.env->env_map_rotation : sc.env->back_map_rotation;
+        const float env_map_rotation = (ray.depth & 0x00ffffff) ? sc.env->env_map_rotation : sc.env->back_map_rotation;
         if (env_map != 0xffffffff) {
             env_col = SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), env_map,
                                          simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f}, env_map_rotation);
@@ -3489,7 +3587,8 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
     // lambda += 0.5 * fast_log2(tex_res.x * tex_res.y);
     // lambda -= fast_log2(std::abs(dot(I, plane_N)));
 #endif
-
+    // offset sequence
+    random_seq += total_depth(ray) * RAND_DIM_BOUNCE_COUNT;
     // used to randomize random sequence among pixels
     const float sample_off[2] = {construct_float(hash(ray.xy)), construct_float(hash(hash(ray.xy)))};
 
@@ -3498,8 +3597,8 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
     const int diff_depth = ray.depth & 0x000000ff;
     const int spec_depth = (ray.depth >> 8) & 0x000000ff;
     const int refr_depth = (ray.depth >> 16) & 0x000000ff;
-    const int transp_depth = (ray.depth >> 24) & 0x000000ff;
-    const int total_depth = diff_depth + spec_depth + refr_depth + transp_depth;
+    // NOTE: transparency depth is not accounted here
+    const int total_depth = diff_depth + spec_depth + refr_depth;
 
     float mix_rand = fract(random_seq[RAND_DIM_BSDF_PICK] + sample_off[0]);
     float mix_weight = 1.0f;
@@ -3521,7 +3620,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
             mix_weight *= (mat->flags & MAT_FLAG_MIX_ADD) ? 1.0f / (1.0f - mix_val) : 1.0f;
 
             mat = &sc.materials[mat->textures[MIX_MAT1]];
-            mix_rand = (mix_rand - mix_val) / (1.0f - mix_val);
+            mix_rand = safe_div_pos(mix_rand - mix_val, 1.0f - mix_val);
         } else {
             mix_weight *= (mat->flags & MAT_FLAG_MIX_ADD) ? 1.0f / mix_val : 1.0f;
 
@@ -3644,6 +3743,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
                 // schedule shadow ray
                 shadow_ray_t &sh_r = out_shadow_rays[(*out_shadow_rays_count)++];
                 memcpy(&sh_r.o[0], value_ptr(offset_ray(P, plane_N)), 3 * sizeof(float));
+                sh_r.depth = ray.depth;
                 memcpy(&sh_r.d[0], value_ptr(ls.L), 3 * sizeof(float));
                 sh_r.dist = ls.dist - 10.0f * HIT_BIAS;
                 sh_r.c[0] = ray.c[0] * lcol[0];
@@ -3711,6 +3811,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
                 // schedule shadow ray
                 shadow_ray_t &sh_r = out_shadow_rays[(*out_shadow_rays_count)++];
                 memcpy(&sh_r.o[0], value_ptr(offset_ray(P, plane_N)), 3 * sizeof(float));
+                sh_r.depth = ray.depth;
                 memcpy(&sh_r.d[0], value_ptr(ls.L), 3 * sizeof(float));
                 sh_r.dist = ls.dist - 10.0f * HIT_BIAS;
                 sh_r.c[0] = ray.c[0] * lcol[0];
@@ -3734,9 +3835,9 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
             memcpy(&new_ray.o[0], value_ptr(offset_ray(P, plane_N)), 3 * sizeof(float));
             memcpy(&new_ray.d[0], value_ptr(V), 3 * sizeof(float));
 
-            new_ray.c[0] = ray.c[0] * F[0] * mix_weight / F[3];
-            new_ray.c[1] = ray.c[1] * F[1] * mix_weight / F[3];
-            new_ray.c[2] = ray.c[2] * F[2] * mix_weight / F[3];
+            new_ray.c[0] = ray.c[0] * F[0] * safe_div_pos(mix_weight, F[3]);
+            new_ray.c[1] = ray.c[1] * F[1] * safe_div_pos(mix_weight, F[3]);
+            new_ray.c[2] = ray.c[2] * F[2] * safe_div_pos(mix_weight, F[3]);
             new_ray.pdf = F[3];
 
 #ifdef USE_RAY_DIFFERENTIALS
@@ -3776,6 +3877,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
                 // schedule shadow ray
                 shadow_ray_t &sh_r = out_shadow_rays[(*out_shadow_rays_count)++];
                 memcpy(&sh_r.o[0], value_ptr(offset_ray(P, -plane_N)), 3 * sizeof(float));
+                sh_r.depth = ray.depth;
                 memcpy(&sh_r.d[0], value_ptr(ls.L), 3 * sizeof(float));
                 sh_r.dist = ls.dist - 10.0f * HIT_BIAS;
                 sh_r.c[0] = ray.c[0] * lcol[0];
@@ -3844,23 +3946,6 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
         }
 #endif
         col += mix_weight * mis_weight * mat->strength * base_color;
-    } else if (mat->type == TransparentNode) {
-        if (transp_depth < ps.max_transp_depth && total_depth < ps.max_total_depth) {
-            new_ray.depth = ray.depth + 0x01000000;
-            new_ray.pdf = ray.pdf;
-
-            memcpy(&new_ray.o[0], value_ptr(offset_ray(P, -plane_N)), 3 * sizeof(float));
-            memcpy(&new_ray.d[0], &ray.d[0], 3 * sizeof(float));
-            memcpy(&new_ray.c[0], &ray.c[0], 3 * sizeof(float));
-
-#ifdef USE_RAY_DIFFERENTIALS
-            memcpy(&new_ray.do_dx[0], &ray.do_dx[0], 3 * sizeof(float));
-            memcpy(&new_ray.do_dy[0], &ray.do_dy[0], 3 * sizeof(float));
-
-            memcpy(&new_ray.dd_dx[0], &ray.dd_dx[0], 3 * sizeof(float));
-            memcpy(&new_ray.dd_dy[0], &ray.dd_dy[0], 3 * sizeof(float));
-#endif
-        }
     } else if (mat->type == PrincipledNode) {
         float metallic = unpack_unorm_16(mat->metallic_unorm);
         if (mat->textures[METALLIC_TEXTURE] != 0xffffffff) {
@@ -4000,6 +4085,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
                 // schedule shadow ray
                 shadow_ray_t &sh_r = out_shadow_rays[(*out_shadow_rays_count)++];
                 memcpy(&sh_r.o[0], value_ptr(offset_ray(P, N_dot_L < 0.0f ? -plane_N : plane_N)), 3 * sizeof(float));
+                sh_r.depth = ray.depth;
                 memcpy(&sh_r.d[0], value_ptr(ls.L), 3 * sizeof(float));
                 sh_r.dist = ls.dist - 10.0f * HIT_BIAS;
                 sh_r.c[0] = ray.c[0] * lcol[0];
@@ -4091,9 +4177,9 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
 
                 new_ray.depth = ray.depth + 0x00000100;
 
-                new_ray.c[0] = 0.25f * ray.c[0] * F[0] * mix_weight / F[3];
-                new_ray.c[1] = 0.25f * ray.c[1] * F[1] * mix_weight / F[3];
-                new_ray.c[2] = 0.25f * ray.c[2] * F[2] * mix_weight / F[3];
+                new_ray.c[0] = 0.25f * ray.c[0] * F[0] * safe_div_pos(mix_weight, F[3]);
+                new_ray.c[1] = 0.25f * ray.c[1] * F[1] * safe_div_pos(mix_weight, F[3]);
+                new_ray.c[2] = 0.25f * ray.c[2] * F[2] * safe_div_pos(mix_weight, F[3]);
                 new_ray.pdf = F[3];
 
                 memcpy(&new_ray.o[0], value_ptr(offset_ray(P, plane_N)), 3 * sizeof(float));
@@ -4182,10 +4268,12 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
 #endif
             }
         }
-    }
+    } /*else if (mat->type == TransparentNode) {
+        assert(false);
+    }*/
 
 #if USE_PATH_TERMINATION
-    const bool can_terminate_path = total_depth >= ps.termination_start_depth;
+    const bool can_terminate_path = total_depth > ps.min_total_depth;
 #else
     const bool can_terminate_path = false;
 #endif

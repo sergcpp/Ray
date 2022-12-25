@@ -59,7 +59,8 @@ void Ray::SceneBase::GetCamera(const uint32_t i, camera_desc_t &c) const {
     c.max_refr_depth = cam.pass_settings.max_refr_depth;
     c.max_transp_depth = cam.pass_settings.max_transp_depth;
     c.max_total_depth = cam.pass_settings.max_total_depth;
-    c.termination_start_depth = cam.pass_settings.termination_start_depth;
+    c.min_total_depth = cam.pass_settings.min_total_depth;
+    c.min_transp_depth = cam.pass_settings.min_transp_depth;
 }
 
 void Ray::SceneBase::SetCamera(const uint32_t i, const camera_desc_t &c) {
@@ -104,7 +105,14 @@ void Ray::SceneBase::SetCamera(const uint32_t i, const camera_desc_t &c) {
     cam.pass_settings.max_refr_depth = c.max_refr_depth;
     cam.pass_settings.max_transp_depth = c.max_transp_depth;
     cam.pass_settings.max_total_depth = c.max_total_depth;
-    cam.pass_settings.termination_start_depth = c.termination_start_depth;
+    cam.pass_settings.min_total_depth = c.min_total_depth;
+    cam.pass_settings.min_transp_depth = c.min_transp_depth;
+
+    // make sure to not exceed allowed bounces
+    while (cam.pass_settings.max_transp_depth + cam.pass_settings.max_total_depth > MAX_BOUNCES) {
+        cam.pass_settings.max_transp_depth = std::max(cam.pass_settings.max_transp_depth - 1, 0);
+        cam.pass_settings.max_total_depth = std::max(cam.pass_settings.max_total_depth - 1, 0);
+    }
 }
 
 void Ray::SceneBase::RemoveCamera(const uint32_t i) {

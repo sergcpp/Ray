@@ -915,7 +915,7 @@ void assemble_material_test_images(const char *arch_list[]) {
         {"refr_mat5"},
         {"trans_mat0", "trans_mat1", "trans_mat2", "trans_mat3", "trans_mat4"},
         {"trans_mat5", "trans_mat6", "trans_mat7", "trans_mat8", "trans_mat9"},
-        {"alpha_mat0", "alpha_mat1", "alpha_mat2", "alpha_mat3"},
+        {"alpha_mat0", "alpha_mat1", "alpha_mat2", "alpha_mat3", "alpha_mat4"},
         {"complex_mat0", "complex_mat1", "complex_mat2", "complex_mat3", "complex_mat4"},
         {"complex_mat5", "complex_mat5_mesh_lights", "complex_mat5_sphere_light", "complex_mat5_sun_light",
          "complex_mat5_hdr_light"},
@@ -1382,7 +1382,7 @@ void test_spec_mat4(const char *arch_list[], const char *preferred_device) {
 //
 
 void test_aniso_mat0(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 840;
+    const int SampleCount = 850;
     const int PixThres = 100;
 
     Ray::principled_mat_desc_t spec_mat_desc;
@@ -2270,8 +2270,7 @@ void test_alpha_mat2(const char *arch_list[], const char *preferred_device) {
 }
 
 void test_alpha_mat3(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 130;
-    const int PixThres = 25;
+    const int SampleCount = 190;
 
     Ray::principled_mat_desc_t alpha_mat_desc;
     alpha_mat_desc.base_color[0] = 0.0f;
@@ -2280,7 +2279,21 @@ void test_alpha_mat3(const char *arch_list[], const char *preferred_device) {
     alpha_mat_desc.roughness = 0.0f;
     alpha_mat_desc.alpha = 0.0f;
 
-    run_material_test(arch_list, preferred_device, "alpha_mat3", alpha_mat_desc, SampleCount, DefaultMinPSNR, PixThres);
+    run_material_test(arch_list, preferred_device, "alpha_mat3", alpha_mat_desc, SampleCount, DefaultMinPSNR,
+                      DefaultPixThres);
+}
+
+void test_alpha_mat4(const char *arch_list[], const char *preferred_device) {
+    const int SampleCount = 130;
+
+    Ray::shading_node_desc_t alpha_mat_desc;
+    alpha_mat_desc.type = Ray::TransparentNode;
+    alpha_mat_desc.base_color[0] = 0.75f;
+    alpha_mat_desc.base_color[1] = 0.0f;
+    alpha_mat_desc.base_color[2] = 0.0f;
+
+    run_material_test(arch_list, preferred_device, "alpha_mat4", alpha_mat_desc, SampleCount, DefaultMinPSNR,
+                      DefaultPixThres);
 }
 
 //

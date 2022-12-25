@@ -966,7 +966,7 @@ void Ray::ConstructCamera(const eCamType type, const eFilterType filter, eDevice
         cam->fov = fov;
         cam->gamma = gamma;
         cam->sensor_height = sensor_height;
-        cam->focus_distance = focus_distance;
+        cam->focus_distance = std::max(focus_distance, 0.0f);
         cam->focal_length = 0.5f * sensor_height / std::tan(0.5f * fov * PI / 180.0f);
         cam->fstop = fstop;
         cam->lens_rotation = lens_rotation;

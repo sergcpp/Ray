@@ -58,7 +58,7 @@ enum ePassFlags {
 
 struct pass_settings_t {
     uint8_t max_diff_depth, max_spec_depth, max_refr_depth, max_transp_depth, max_total_depth;
-    uint8_t termination_start_depth;
+    uint8_t min_total_depth, min_transp_depth;
     uint8_t pad[2];
     uint32_t flags;
 };

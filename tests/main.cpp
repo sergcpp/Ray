@@ -86,6 +86,7 @@ void test_alpha_mat0(const char *arch_list[], const char *preferred_device);
 void test_alpha_mat1(const char *arch_list[], const char *preferred_device);
 void test_alpha_mat2(const char *arch_list[], const char *preferred_device);
 void test_alpha_mat3(const char *arch_list[], const char *preferred_device);
+void test_alpha_mat4(const char *arch_list[], const char *preferred_device);
 void test_complex_mat0(const char *arch_list[], const char *preferred_device);
 void test_complex_mat1(const char *arch_list[], const char *preferred_device);
 void test_complex_mat2(const char *arch_list[], const char *preferred_device);
@@ -272,7 +273,7 @@ int main(int argc, char *argv[]) {
                    duration<double>(high_resolution_clock::now() - t2).count() / 60.0);
         }
 #endif
-#if 0
+#if 1
         if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
             puts("---------------");
@@ -301,7 +302,7 @@ int main(int argc, char *argv[]) {
                    duration<double>(high_resolution_clock::now() - t2).count() / 60.0);
         }
 #endif
-#if 0
+#if 1
         if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
             puts("---------------");
@@ -403,6 +404,7 @@ int main(int argc, char *argv[]) {
             test_alpha_mat1(arch_list, device_name);
             test_alpha_mat2(arch_list, device_name);
             test_alpha_mat3(arch_list, device_name);
+            test_alpha_mat4(arch_list, device_name);
             printf("Finished alpha_mat tests in %.2f minutes\n",
                    duration<double>(high_resolution_clock::now() - t2).count() / 60.0);
         }

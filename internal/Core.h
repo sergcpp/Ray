@@ -54,7 +54,7 @@ const float PI = 3.141592653589793238463f;
 
 const float MAX_DIST = 3.402823466e+30F; // 3.402823466e+38F
 
-const int MAX_BOUNCES = 16;
+const int MAX_BOUNCES = 32;
 
 const float LIGHT_ATTEN_CUTOFF = 0.001f;
 
@@ -316,7 +316,7 @@ void TransformBoundingBox(const float bbox_min[3], const float bbox_max[3], cons
 void InverseMatrix(const float mat[16], float out_mat[16]);
 
 // Arrays of prime numbers, used to generate halton sequence for sampling
-const int PrimesCount = 128;
+const int PrimesCount = 228;
 extern const int g_primes[];
 
 const int HALTON_COUNT = PrimesCount;

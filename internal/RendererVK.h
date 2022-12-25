@@ -81,11 +81,19 @@ class Renderer : public RendererBase {
 
     void kernel_GeneratePrimaryRays(VkCommandBuffer cmd_buf, const camera_t &cam, int hi, const rect_t &rect,
                                     const Buffer &random_seq, const Buffer &out_rays);
-    void kernel_IntersectScenePrimary(VkCommandBuffer cmd_buf, const scene_data_t &sc_data, uint32_t node_index,
-                                      float cam_clip_end, const Buffer &rays, const Buffer &out_hits);
+    void kernel_IntersectScenePrimary(VkCommandBuffer cmd_buf, const pass_settings_t &settings,
+                                      const scene_data_t &sc_data, const Buffer &random_seq, int hi,
+                                      uint32_t node_index, float cam_clip_end, Span<const TextureAtlas> tex_atlases,
+                                      VkDescriptorSet tex_descr_set, const Buffer &rays, const Buffer &out_hits);
     void kernel_IntersectSceneSecondary(VkCommandBuffer cmd_buf, const Buffer &indir_args, const Buffer &counters,
-                                        const scene_data_t &sc_data, uint32_t node_index, const Buffer &rays,
-                                        const Buffer &out_hits);
+                                        const pass_settings_t &settings, const scene_data_t &sc_data,
+                                        const Buffer &random_seq, int hi, uint32_t node_index,
+                                        Span<const TextureAtlas> tex_atlases, VkDescriptorSet tex_descr_set,
+                                        const Buffer &rays, const Buffer &out_hits);
+    void kernel_IntersectSceneShadow(VkCommandBuffer cmd_buf, const pass_settings_t &settings, const Buffer &indir_args,
+                                     const Buffer &counters, const scene_data_t &sc_data, uint32_t node_index,
+                                     Span<const TextureAtlas> tex_atlases, VkDescriptorSet tex_descr_set,
+                                     const Buffer &sh_rays, const Texture2D &out_img);
     void kernel_IntersectAreaLights(VkCommandBuffer cmd_buf, const scene_data_t &sc_data, const Buffer &indir_args,
                                     const Buffer &counters, const Buffer &rays, const Buffer &inout_hits);
     void kernel_ShadePrimaryHits(VkCommandBuffer cmd_buf, const pass_settings_t &settings, const environment_t &env,
@@ -99,10 +107,6 @@ class Renderer : public RendererBase {
                                    Span<const TextureAtlas> tex_atlases, VkDescriptorSet tex_descr_set,
                                    const Texture2D &out_img, const Buffer &out_rays, const Buffer &out_sh_rays,
                                    const Buffer &inout_counters);
-    void kernel_TraceShadow(VkCommandBuffer cmd_buf, const Buffer &indir_args, const Buffer &counters,
-                            const scene_data_t &sc_data, uint32_t node_index, float random_val,
-                            Span<const TextureAtlas> tex_atlases, VkDescriptorSet tex_descr_set, const Buffer &sh_rays,
-                            const Texture2D &out_img);
     void kernel_PrepareIndirArgs(VkCommandBuffer cmd_buf, const Buffer &inout_counters, const Buffer &out_indir_args);
     void kernel_MixIncremental(VkCommandBuffer cmd_buf, const Texture2D &fbuf1, const Texture2D &fbuf2, float k,
                                const Texture2D &out_img);

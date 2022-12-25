@@ -1,14 +1,14 @@
-#ifndef TRACE_SHADOW_INTERFACE_H
-#define TRACE_SHADOW_INTERFACE_H
+#ifndef INTERSECT_SCENE_SHADOW_INTERFACE_H
+#define INTERSECT_SCENE_SHADOW_INTERFACE_H
 
 #include "_interface_common.h"
 
-INTERFACE_START(TraceShadow)
+INTERFACE_START(IntersectSceneShadow)
 
 struct Params {
     UVEC2_TYPE img_size;
     UINT_TYPE node_index;
-    float random_val;
+    int max_transp_depth;
 };
 
 const int LOCAL_GROUP_SIZE_X = 8;
@@ -33,4 +33,4 @@ const int OUT_IMG_SLOT = 0;
 
 INTERFACE_END
 
-#endif // TRACE_SHADOW_INTERFACE_H
+#endif // INTERSECT_SCENE_SHADOW_INTERFACE_H

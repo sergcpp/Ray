@@ -242,9 +242,10 @@ struct camera_desc_t {
     uint8_t max_diff_depth = 4;          ///< Maximum tracing depth of diffuse rays
     uint8_t max_spec_depth = 8;          ///< Maximum tracing depth of glossy rays
     uint8_t max_refr_depth = 8;          ///< Maximum tracing depth of glossy rays
-    uint8_t max_transp_depth = 8;        ///< Maximum tracing depth of transparency rays
-    uint8_t max_total_depth = 8;         ///< Maximum tracing depth of all rays
-    uint8_t termination_start_depth = 3; ///< Depth at which random rays termination starts
+    uint8_t max_transp_depth = 8;        ///< Maximum tracing depth of transparency rays (note: does not obey total depth)
+    uint8_t max_total_depth = 8;         ///< Maximum tracing depth of all rays (except transparency)
+    uint8_t min_total_depth = 2;         ///< Depth after which random rays termination starts
+    uint8_t min_transp_depth = 2;        ///< Depth after which random rays termination starts
 };
 
 /// Environment description

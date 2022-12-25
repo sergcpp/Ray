@@ -118,8 +118,12 @@ struct ray_data_t {
 };
 
 struct shadow_ray_t {
-    // origin and direction
-    float o[3], d[3], dist;
+    // origin
+    float o[3];
+    // four 8-bit ray depth counters
+    int depth;
+    // direction and distance
+    float d[3], dist;
     // throughput color of ray
     float c[3];
     // 16-bit pixel coordinates of ray ((x << 16) | y)

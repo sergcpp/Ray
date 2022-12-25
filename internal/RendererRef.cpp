@@ -120,13 +120,16 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
         p.intersections.resize(p.primary_rays.size());
 
         for (size_t i = 0; i < p.primary_rays.size(); i++) {
-            const ray_data_t &r = p.primary_rays[i];
+            ray_data_t &r = p.primary_rays[i];
+
             hit_data_t &inter = p.intersections[i];
             inter = {};
             inter.t = cam.clip_end;
 
             if (macro_tree_root != 0xffffffff) {
-                IntersectScene(r.o, r.d, sc_data, macro_tree_root, inter);
+                IntersectScene(r, cam.pass_settings.min_transp_depth, cam.pass_settings.max_transp_depth,
+                               &region.halton_seq[hi + RAND_DIM_BASE_COUNT], sc_data, macro_tree_root, s->tex_storages_,
+                               inter);
                 // IntersectAreaLights(r, sc_data.lights, sc_data.visible_lights, sc_data.transforms, inter);
             }
         }
@@ -165,15 +168,12 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
         const int x = (sh_r.xy >> 16) & 0x0000ffff;
         const int y = sh_r.xy & 0x0000ffff;
 
-        const int px_index = y * w + x;
-
-        const float visibility = ComputeVisibility(sh_r.o, sh_r.d, sh_r.dist,
-                                                   region.halton_seq[hi + RAND_DIM_BASE_COUNT + RAND_DIM_BSDF_PICK],
-                                                   hash(px_index), sc_data, macro_tree_root, s->tex_storages_);
+        const simd_fvec4 rc =
+            IntersectScene(sh_r, cam.pass_settings.max_transp_depth, sc_data, macro_tree_root, s->tex_storages_);
         pixel_color_t col = {};
-        col.r = visibility * sh_r.c[0];
-        col.g = visibility * sh_r.c[1];
-        col.b = visibility * sh_r.c[2];
+        col.r = rc[0];
+        col.g = rc[1];
+        col.b = rc[2];
         col.a = 0.0f;
 
         temp_buf_.AddPixel(x, y, col);
@@ -233,11 +233,17 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
         const auto time_secondary_trace_start = std::chrono::high_resolution_clock::now();
 
         for (int i = 0; i < secondary_rays_count; i++) {
-            const ray_data_t &r = p.secondary_rays[i];
+            ray_data_t &r = p.secondary_rays[i];
+
+            const int x = (r.xy >> 16) & 0x0000ffff;
+            const int y = r.xy & 0x0000ffff;
+
             hit_data_t &inter = p.intersections[i];
             inter = {};
 
-            IntersectScene(r.o, r.d, sc_data, macro_tree_root, inter);
+            IntersectScene(r, cam.pass_settings.min_transp_depth, cam.pass_settings.max_transp_depth,
+                           &region.halton_seq[hi + RAND_DIM_BASE_COUNT], sc_data, macro_tree_root, s->tex_storages_,
+                           inter);
             if (r.depth & 0x00ffffff) { // not only a transparency ray
                 IntersectAreaLights(r, sc_data.lights, sc_data.visible_lights, sc_data.transforms, inter);
             }
@@ -257,10 +263,9 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
             const int x = (r.xy >> 16) & 0x0000ffff;
             const int y = r.xy & 0x0000ffff;
 
-            pixel_color_t col = ShadeSurface(
-                cam.pass_settings, inter, r,
-                &region.halton_seq[hi + RAND_DIM_BASE_COUNT + bounce * RAND_DIM_BOUNCE_COUNT], sc_data, macro_tree_root,
-                s->tex_storages_, &p.secondary_rays[0], &secondary_rays_count, &p.shadow_rays[0], &shadow_rays_count);
+            pixel_color_t col = ShadeSurface(cam.pass_settings, inter, r, &region.halton_seq[hi + RAND_DIM_BASE_COUNT],
+                                             sc_data, macro_tree_root, s->tex_storages_, &p.secondary_rays[0],
+                                             &secondary_rays_count, &p.shadow_rays[0], &shadow_rays_count);
             col.a = 0.0f;
 
             temp_buf_.AddPixel(x, y, col);
@@ -272,16 +277,12 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
             const int x = (sh_r.xy >> 16) & 0x0000ffff;
             const int y = sh_r.xy & 0x0000ffff;
 
-            const int px_index = y * w + x;
-
-            const float visibility = ComputeVisibility(
-                sh_r.o, sh_r.d, sh_r.dist,
-                region.halton_seq[hi + RAND_DIM_BASE_COUNT + bounce * RAND_DIM_BOUNCE_COUNT + RAND_DIM_BSDF_PICK],
-                hash(px_index), sc_data, macro_tree_root, s->tex_storages_);
+            const simd_fvec4 rc =
+                IntersectScene(sh_r, cam.pass_settings.max_transp_depth, sc_data, macro_tree_root, s->tex_storages_);
             pixel_color_t col = {};
-            col.r = visibility * sh_r.c[0];
-            col.g = visibility * sh_r.c[1];
-            col.b = visibility * sh_r.c[2];
+            col.r = rc[0];
+            col.g = rc[1];
+            col.b = rc[2];
             col.a = 0.0f;
 
             temp_buf_.AddPixel(x, y, col);

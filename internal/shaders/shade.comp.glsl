@@ -673,8 +673,8 @@ vec3 MapToCone(float r1, float r2, vec3 N, float radius) {
     return N + uv[0] * LT + uv[1] * LB;
 }
 
-void SampleLightSource(vec3 P, vec2 sample_off, inout light_sample_t ls) {
-    const float u1 = fract(g_random_seq[g_params.hi + RAND_DIM_LIGHT_PICK] + sample_off[0]);
+void SampleLightSource(vec3 P, int hi, vec2 sample_off, inout light_sample_t ls) {
+    const float u1 = fract(g_random_seq[hi + RAND_DIM_LIGHT_PICK] + sample_off[0]);
     const uint light_index = min(uint(u1 * g_params.li_count), uint(g_params.li_count - 1));
 
     const light_t l = g_lights[g_li_indices[light_index]];
@@ -685,8 +685,8 @@ void SampleLightSource(vec3 P, vec2 sample_off, inout light_sample_t ls) {
 
     const uint l_type = (l.type_and_param0.x & 0x1f);
     [[dont_flatten]] if (l_type == LIGHT_TYPE_SPHERE) {
-        const float r1 = fract(g_random_seq[g_params.hi + RAND_DIM_LIGHT_U] + sample_off[0]);
-        const float r2 = fract(g_random_seq[g_params.hi + RAND_DIM_LIGHT_V] + sample_off[1]);
+        const float r1 = fract(g_random_seq[hi + RAND_DIM_LIGHT_U] + sample_off[0]);
+        const float r2 = fract(g_random_seq[hi + RAND_DIM_LIGHT_V] + sample_off[1]);
 
         vec3 center_to_surface = P - l.SPH_POS;
         float dist_to_center = length(center_to_surface);
@@ -729,8 +729,8 @@ void SampleLightSource(vec3 P, vec2 sample_off, inout light_sample_t ls) {
     } else [[dont_flatten]] if (l_type == LIGHT_TYPE_DIR) {
         ls.L = l.DIR_DIR;
         if (l.DIR_ANGLE != 0.0){
-            const float r1 = fract(g_random_seq[g_params.hi + RAND_DIM_LIGHT_U] + sample_off[0]);
-            const float r2 = fract(g_random_seq[g_params.hi + RAND_DIM_LIGHT_V] + sample_off[1]);
+            const float r1 = fract(g_random_seq[hi + RAND_DIM_LIGHT_U] + sample_off[0]);
+            const float r2 = fract(g_random_seq[hi + RAND_DIM_LIGHT_V] + sample_off[1]);
 
             const float radius = tan(l.DIR_ANGLE);
             ls.L = normalize(MapToCone(r1, r2, ls.L, radius));
@@ -747,8 +747,8 @@ void SampleLightSource(vec3 P, vec2 sample_off, inout light_sample_t ls) {
         const vec3 light_u = l.RECT_U;
         const vec3 light_v = l.RECT_V;
 
-        const float r1 = fract(g_random_seq[g_params.hi + RAND_DIM_LIGHT_U] + sample_off[0]) - 0.5;
-        const float r2 = fract(g_random_seq[g_params.hi + RAND_DIM_LIGHT_V] + sample_off[1]) - 0.5;
+        const float r1 = fract(g_random_seq[hi + RAND_DIM_LIGHT_U] + sample_off[0]) - 0.5;
+        const float r2 = fract(g_random_seq[hi + RAND_DIM_LIGHT_V] + sample_off[1]) - 0.5;
         const vec3 lp = light_pos + light_u * r1 + light_v * r2;
 
         const vec3 to_light = lp - P;
@@ -785,8 +785,8 @@ void SampleLightSource(vec3 P, vec2 sample_off, inout light_sample_t ls) {
         const vec3 light_u = l.DISK_U;
         const vec3 light_v = l.DISK_V;
 
-        const float r1 = fract(g_random_seq[g_params.hi + RAND_DIM_LIGHT_U] + sample_off[0]);
-        const float r2 = fract(g_random_seq[g_params.hi + RAND_DIM_LIGHT_V] + sample_off[1]);
+        const float r1 = fract(g_random_seq[hi + RAND_DIM_LIGHT_U] + sample_off[0]);
+        const float r2 = fract(g_random_seq[hi + RAND_DIM_LIGHT_V] + sample_off[1]);
 
         vec2 offset = 2.0 * vec2(r1, r2) - vec2(1.0);
         if (offset[0] != 0.0 && offset[1] != 0.0) {
@@ -838,8 +838,8 @@ void SampleLightSource(vec3 P, vec2 sample_off, inout light_sample_t ls) {
         const vec3 light_pos = l.LINE_POS;
         const vec3 light_dir = l.LINE_V;
 
-        const float r1 = fract(g_random_seq[g_params.hi + RAND_DIM_LIGHT_U] + sample_off[0]);
-        const float r2 = fract(g_random_seq[g_params.hi + RAND_DIM_LIGHT_V] + sample_off[1]);
+        const float r1 = fract(g_random_seq[hi + RAND_DIM_LIGHT_U] + sample_off[0]);
+        const float r2 = fract(g_random_seq[hi + RAND_DIM_LIGHT_V] + sample_off[1]);
 
         const vec3 center_to_surface = P - light_pos;
 
@@ -895,8 +895,8 @@ void SampleLightSource(vec3 P, vec2 sample_off, inout light_sample_t ls) {
                    uv2 = vec2(v2.t[0][0], v2.t[0][1]),
                    uv3 = vec2(v3.t[0][0], v3.t[0][1]);
 
-        const float r1 = sqrt(fract(g_random_seq[g_params.hi + RAND_DIM_LIGHT_U] + sample_off[0]));
-        const float r2 = fract(g_random_seq[g_params.hi + RAND_DIM_LIGHT_V] + sample_off[1]);
+        const float r1 = sqrt(fract(g_random_seq[hi + RAND_DIM_LIGHT_U] + sample_off[0]));
+        const float r2 = fract(g_random_seq[hi + RAND_DIM_LIGHT_V] + sample_off[1]);
 
         const vec2 luvs = uv1 * (1.0 - r1) + r1 * (uv2 * (1.0 - r2) + uv3 * r2);
         const vec3 lp = (ltr.xform * vec4(p1 * (1.0 - r1) + r1 * (p2 * (1.0 - r2) + p3 * r2), 1.0)).xyz;
@@ -921,8 +921,8 @@ void SampleLightSource(vec3 P, vec2 sample_off, inout light_sample_t ls) {
     } else [[dont_flatten]] if (l_type == LIGHT_TYPE_ENV) {
         const float rand = u1 * float(g_params.li_count) - float(light_index);
 
-        const float rx = fract(g_random_seq[g_params.hi + RAND_DIM_LIGHT_U] + sample_off[0]);
-        const float ry = fract(g_random_seq[g_params.hi + RAND_DIM_LIGHT_V] + sample_off[1]);
+        const float rx = fract(g_random_seq[hi + RAND_DIM_LIGHT_U] + sample_off[0]);
+        const float ry = fract(g_random_seq[hi + RAND_DIM_LIGHT_V] + sample_off[1]);
 
         const vec4 dir_and_pdf = Sample_EnvQTree(g_params.env_rotation, g_env_qtree, g_params.env_qtree_levels, rand, rx, ry);
 
@@ -1144,9 +1144,12 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
     const int spec_depth = (ray.depth >> 8) & 0x000000ff;
     const int refr_depth = (ray.depth >> 16) & 0x000000ff;
     const int transp_depth = (ray.depth >> 24) & 0x000000ff;
-    const int total_depth = diff_depth + spec_depth + refr_depth + transp_depth;
+    // NOTE: transparency depth is not accounted here
+    const int total_depth = diff_depth + spec_depth + refr_depth;
 
-    float mix_rand = fract(g_random_seq[g_params.hi + RAND_DIM_BSDF_PICK] + sample_off[0]);
+    const int hi = g_params.hi + (total_depth + transp_depth) * RAND_DIM_BOUNCE_COUNT;
+
+    float mix_rand = fract(g_random_seq[hi + RAND_DIM_BSDF_PICK] + sample_off[0]);
     float mix_weight = 1.0;
 
     // resolve mix material
@@ -1220,7 +1223,7 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
     ls.col = ls.L = vec3(0.0);
     ls.area = ls.pdf = ls.dist = 0;
     if (/*pi.should_add_direct_light() &&*/ g_params.li_count != 0 && mat.type != EmissiveNode) {
-        SampleLightSource(P, sample_off, ls);
+        SampleLightSource(P, hi, sample_off, ls);
     }
     const float N_dot_L = dot(N, ls.L);
 #endif
@@ -1246,8 +1249,8 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
         roughness *= SampleBilinear(mat.textures[ROUGH_TEXTURE], uvs, int(roughness_lod), false /* YCoCg */, true /* SRGB */).r;
     }
 
-    const float rand_u = fract(g_random_seq[g_params.hi + RAND_DIM_BSDF_U] + sample_off[0]);
-    const float rand_v = fract(g_random_seq[g_params.hi + RAND_DIM_BSDF_V] + sample_off[1]);
+    const float rand_u = fract(g_random_seq[hi + RAND_DIM_BSDF_U] + sample_off[0]);
+    const float rand_v = fract(g_random_seq[hi + RAND_DIM_BSDF_V] + sample_off[1]);
 
     ray_data_t new_ray;
     new_ray.c[0] = new_ray.c[1] = new_ray.c[2] = 0.0;
@@ -1285,6 +1288,7 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
                 sh_r.c[1] = ray.c[1] * lcol[1];
                 sh_r.c[2] = ray.c[2] * lcol[2];
                 sh_r.xy = ray.xy;
+                sh_r.depth = ray.depth;
 
                 const uint index = atomicAdd(g_inout_counters[2], 1);
                 g_out_sh_rays[index] = sh_r;
@@ -1350,6 +1354,7 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
                 sh_r.c[1] = ray.c[1] * lcol[1];
                 sh_r.c[2] = ray.c[2] * lcol[2];
                 sh_r.xy = ray.xy;
+                sh_r.depth = ray.depth;
 
                 const uint index = atomicAdd(g_inout_counters[2], 1);
                 g_out_sh_rays[index] = sh_r;
@@ -1413,6 +1418,7 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
                 sh_r.c[1] = ray.c[1] * lcol[1];
                 sh_r.c[2] = ray.c[2] * lcol[2];
                 sh_r.xy = ray.xy;
+                sh_r.depth = ray.depth;
 
                 const uint index = atomicAdd(g_inout_counters[2], 1);
                 g_out_sh_rays[index] = sh_r;
@@ -1467,21 +1473,7 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
         }
 #endif
         col += mix_weight * mis_weight * mat.tangent_rotation_or_strength * base_color;
-    } else [[dont_flatten]] if (mat.type == TransparentNode) {
-        [[dont_flatten]] if (transp_depth < g_params.max_transp_depth && total_depth < g_params.max_total_depth) {
-            new_ray.depth = ray.depth + 0x01000000;
-            new_ray.pdf = ray.pdf;
-
-            const vec3 new_o = offset_ray(P, -plane_N);
-            new_ray.o[0] = new_o[0]; new_ray.o[1] = new_o[1]; new_ray.o[2] = new_o[2];
-            new_ray.d[0] = ray.d[0]; new_ray.d[1] = ray.d[1]; new_ray.d[2] = ray.d[2];
-            new_ray.c[0] = ray.c[0]; new_ray.c[1] = ray.c[1]; new_ray.c[2] = ray.c[2];
-
-#ifdef USE_RAY_DIFFERENTIALS
-            // TODO: ...
-#endif
-        }
-    } else if (mat.type == PrincipledNode) {
+    } else [[dont_flatten]] if (mat.type == PrincipledNode) {
         float metallic = unpack_unorm_16((mat.tint_and_metallic >> 16) & 0xffff);
         [[dont_flatten]] if (mat.textures[METALLIC_TEXTURE] != 0xffffffff) {
             const float metallic_lod = get_texture_lod(texSize(mat.textures[METALLIC_TEXTURE]), lambda);
@@ -1611,6 +1603,7 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
                 sh_r.c[1] = ray.c[1] * lcol[1];
                 sh_r.c[2] = ray.c[2] * lcol[2];
                 sh_r.xy = ray.xy;
+                sh_r.depth = ray.depth;
 
                 const uint index = atomicAdd(g_inout_counters[2], 1);
                 g_out_sh_rays[index] = sh_r;
@@ -1752,16 +1745,30 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
 #endif
             }
         }
-    }
+    } /*else [[dont_flatten]] if (mat.type == TransparentNode) {
+        [[dont_flatten]] if (transp_depth < g_params.max_transp_depth && total_depth < g_params.max_total_depth) {
+            new_ray.depth = ray.depth + 0x01000000;
+            new_ray.pdf = ray.pdf;
+
+            const vec3 new_o = offset_ray(P, -plane_N);
+            new_ray.o[0] = new_o[0]; new_ray.o[1] = new_o[1]; new_ray.o[2] = new_o[2];
+            new_ray.d[0] = ray.d[0]; new_ray.d[1] = ray.d[1]; new_ray.d[2] = ray.d[2];
+            new_ray.c[0] = ray.c[0]; new_ray.c[1] = ray.c[1]; new_ray.c[2] = ray.c[2];
+
+#ifdef USE_RAY_DIFFERENTIALS
+            // TODO: ...
+#endif
+        }
+    }*/
 
 #if USE_PATH_TERMINATION
-    const bool can_terminate_path = total_depth >= g_params.termination_start_depth;
+    const bool can_terminate_path = total_depth > g_params.min_total_depth;
 #else
     const bool can_terminate_path = false;
 #endif
 
     const float lum = max(new_ray.c[0], max(new_ray.c[1], new_ray.c[2]));
-    const float p = fract(g_random_seq[g_params.hi + RAND_DIM_TERMINATE] + sample_off[0]);
+    const float p = fract(g_random_seq[hi + RAND_DIM_TERMINATE] + sample_off[0]);
     const float q = can_terminate_path ? max(0.05, 1.0 - lum) : 0.0;
     [[dont_flatten]] if (p >= q && lum > 0.0 && new_ray.pdf > 0.0) {
         new_ray.c[0] /= (1.0 - q);

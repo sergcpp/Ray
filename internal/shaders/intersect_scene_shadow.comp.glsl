@@ -12,10 +12,6 @@ LAYOUT_PARAMS uniform UniformParams {
     Params g_params;
 };
 
-//layout(std430, binding = HALTON_SEQ_BUF_SLOT) readonly buffer Halton {
-//    float g_halton[];
-//};
-
 layout(std430, binding = TRIS_BUF_SLOT) readonly buffer Tris {
     tri_accel_t g_tris[];
 };
@@ -175,22 +171,26 @@ bool Traverse_MacroTree_WithStack(vec3 orig_ro, vec3 orig_rd, vec3 orig_inv_rd, 
     return false;
 }
 
-bool ComputeVisibility(vec3 p, vec3 d, float dist, float rand_val, int rand_hash2) {
+vec3 IntersectSceneShadow(shadow_ray_t r, float dist) {
+    vec3 ro = vec3(r.o[0], r.o[1], r.o[2]);
+    vec3 rd = vec3(r.d[0], r.d[1], r.d[2]);
+    vec3 rc = vec3(r.c[0], r.c[1], r.c[2]);
+    int depth = (r.depth >> 24);
 #if !HWRT
-    const vec3 inv_d = safe_invert(d);
+    const vec3 inv_d = safe_invert(rd);
 
     while (dist > HIT_BIAS) {
         hit_data_t sh_inter;
         sh_inter.mask = 0;
         sh_inter.t = dist;
 
-        const bool solid_hit = Traverse_MacroTree_WithStack(p, d, inv_d, g_params.node_index, sh_inter);
-        if (solid_hit) {
-            return false;
+        const bool solid_hit = Traverse_MacroTree_WithStack(ro, rd, inv_d, g_params.node_index, sh_inter);
+        if (solid_hit || depth > g_params.max_transp_depth) {
+            return vec3(0.0);
         }
 
         if (sh_inter.mask == 0) {
-            return true;
+            return rc;
         }
 
         const bool is_backfacing = (sh_inter.prim_index < 0);
@@ -202,9 +202,6 @@ bool ComputeVisibility(vec3 p, vec3 d, float dist, float rand_val, int rand_hash
         const uint back_mi = (g_tri_materials[tri_index] & 0xffff);
 
         const uint mat_index = (is_backfacing ? back_mi : front_mi) & MATERIAL_INDEX_BITS;
-        material_t mat = g_materials[mat_index];
-
-        const transform_t tr = g_transforms[floatBitsToUint(g_mesh_instances[sh_inter.obj_index].bbox_min.w)];
 
         const vertex_t v1 = g_vertices[g_vtx_indices[tri_index * 3 + 0]];
         const vertex_t v2 = g_vertices[g_vtx_indices[tri_index * 3 + 1]];
@@ -214,39 +211,48 @@ bool ComputeVisibility(vec3 p, vec3 d, float dist, float rand_val, int rand_hash
         const vec2 sh_uvs =
             vec2(v1.t[0][0], v1.t[0][1]) * w + vec2(v2.t[0][0], v2.t[0][1]) * sh_inter.u + vec2(v3.t[0][0], v3.t[0][1]) * sh_inter.v;
 
-        {
-            const int sh_rand_hash = hash(rand_hash2);
-            const float sh_rand_offset = construct_float(sh_rand_hash);
+        // reuse traversal stack
+        g_stack[gl_LocalInvocationIndex][0] = mat_index;
+        g_stack[gl_LocalInvocationIndex][1] = floatBitsToUint(1.0);
+        int stack_size = 1;
 
-            float sh_r = fract(rand_val + sh_rand_offset);
+        vec3 throughput = vec3(0.0);
+
+        while (stack_size-- != 0) {
+            material_t mat = g_materials[g_stack[gl_LocalInvocationIndex][2 * stack_size + 0]];
+            float weight = uintBitsToFloat(g_stack[gl_LocalInvocationIndex][2 * stack_size + 1]);
 
             // resolve mix material
-            while (mat.type == MixNode) {
+            if (mat.type == MixNode) {
                 float mix_val = mat.tangent_rotation_or_strength;
                 if (mat.textures[BASE_TEXTURE] != 0xffffffff) {
                     mix_val *= SampleBilinear(mat.textures[BASE_TEXTURE], sh_uvs, 0).r;
                 }
 
-                if (sh_r > mix_val) {
-                    mat = g_materials[mat.textures[MIX_MAT1]];
-                    sh_r = (sh_r - mix_val) / (1.0 - mix_val);
-                } else {
-                    mat = g_materials[mat.textures[MIX_MAT2]];
-                    sh_r = sh_r / mix_val;
-                }
-            }
-
-            if (mat.type != TransparentNode) {
-                return false;
+                g_stack[gl_LocalInvocationIndex][2 * stack_size + 0] = mat.textures[MIX_MAT1];
+                g_stack[gl_LocalInvocationIndex][2 * stack_size + 1] = floatBitsToUint(weight * (1.0 - mix_val));
+                ++stack_size;
+                g_stack[gl_LocalInvocationIndex][2 * stack_size + 0] = mat.textures[MIX_MAT2];
+                g_stack[gl_LocalInvocationIndex][2 * stack_size + 1] = floatBitsToUint(weight * mix_val);
+                ++stack_size;
+            } else if (mat.type == TransparentNode) {
+                throughput +=weight * vec3(mat.base_color[0], mat.base_color[1], mat.base_color[2]);
             }
         }
 
+        rc *= throughput;
+        if (lum(rc) < FLT_EPS) {
+            break;
+        }
+
         const float t = sh_inter.t + HIT_BIAS;
-        p += d * t;
+        ro += rd * t;
         dist -= t;
+
+        ++depth;
     }
 
-    return true;
+    return rc;
 #else
     const uint ray_flags = 0;//gl_RayFlagsCullBackFacingTrianglesEXT;
 
@@ -255,9 +261,9 @@ bool ComputeVisibility(vec3 p, vec3 d, float dist, float rand_val, int rand_hash
                           g_tlas,           // topLevel
                           ray_flags,        // rayFlags
                           0xff,             // cullMask
-                          p,                // origin
+                          ro,               // origin
                           0.0,              // tMin
-                          d,                // direction
+                          rd,               // direction
                           dist              // tMax
                           );
     while(rayQueryProceedEXT(rq)) {
@@ -271,16 +277,13 @@ bool ComputeVisibility(vec3 p, vec3 d, float dist, float rand_val, int rand_hash
             const uint back_mi = (g_tri_materials[tri_index] & 0xffff);
 
             const bool is_backfacing = !rayQueryGetIntersectionFrontFaceEXT(rq, false);
-            if ((!is_backfacing && (front_mi & MATERIAL_SOLID_BIT) != 0 ||
-                (is_backfacing && (back_mi & MATERIAL_SOLID_BIT) != 0))) {
-                rayQueryConfirmIntersectionEXT(rq);
-                break;
+            const bool solid_hit = (!is_backfacing && (front_mi & MATERIAL_SOLID_BIT) != 0) ||
+                                   (is_backfacing && (back_mi & MATERIAL_SOLID_BIT) != 0);
+            if (solid_hit || depth > g_params.max_transp_depth) {
+                return vec3(0.0);
             }
 
             const uint mat_index = (is_backfacing ? back_mi : front_mi) & MATERIAL_INDEX_BITS;
-            material_t mat = g_materials[mat_index];
-
-            const transform_t tr = g_transforms[floatBitsToUint(g_mesh_instances[obj_index].bbox_min.w)];
 
             const vertex_t v1 = g_vertices[g_vtx_indices[tri_index * 3 + 0]];
             const vertex_t v2 = g_vertices[g_vtx_indices[tri_index * 3 + 1]];
@@ -290,34 +293,45 @@ bool ComputeVisibility(vec3 p, vec3 d, float dist, float rand_val, int rand_hash
             const float w = 1.0 - uv.x - uv.y;
             const vec2 sh_uvs = vec2(v1.t[0][0], v1.t[0][1]) * w + vec2(v2.t[0][0], v2.t[0][1]) * uv.x + vec2(v3.t[0][0], v3.t[0][1]) * uv.y;
 
-            const int sh_rand_hash = hash(rand_hash2);
-            const float sh_rand_offset = construct_float(sh_rand_hash);
+            // reuse traversal stack
+            g_stack[gl_LocalInvocationIndex][0] = mat_index;
+            g_stack[gl_LocalInvocationIndex][1] = floatBitsToUint(1.0);
+            int stack_size = 1;
 
-            float sh_r = fract(rand_val + sh_rand_offset);
+            vec3 throughput = vec3(0.0);
 
-            // resolve mix material
-            while (mat.type == MixNode) {
-                float mix_val = mat.tangent_rotation_or_strength;
-                if (mat.textures[BASE_TEXTURE] != 0xffffffff) {
-                    mix_val *= SampleBilinear(mat.textures[BASE_TEXTURE], sh_uvs, 0).r;
-                }
+            while (stack_size-- != 0) {
+                material_t mat = g_materials[g_stack[gl_LocalInvocationIndex][2 * stack_size + 0]];
+                float weight = uintBitsToFloat(g_stack[gl_LocalInvocationIndex][2 * stack_size + 1]);
 
-                if (sh_r > mix_val) {
-                    mat = g_materials[mat.textures[MIX_MAT1]];
-                    sh_r = (sh_r - mix_val) / (1.0 - mix_val);
-                } else {
-                    mat = g_materials[mat.textures[MIX_MAT2]];
-                    sh_r = sh_r / mix_val;
+                // resolve mix material
+                if (mat.type == MixNode) {
+                    float mix_val = mat.tangent_rotation_or_strength;
+                    if (mat.textures[BASE_TEXTURE] != 0xffffffff) {
+                        mix_val *= SampleBilinear(mat.textures[BASE_TEXTURE], sh_uvs, 0).r;
+                    }
+
+                    g_stack[gl_LocalInvocationIndex][2 * stack_size + 0] = mat.textures[MIX_MAT1];
+                    g_stack[gl_LocalInvocationIndex][2 * stack_size + 1] = floatBitsToUint(weight * (1.0 - mix_val));
+                    ++stack_size;
+                    g_stack[gl_LocalInvocationIndex][2 * stack_size + 0] = mat.textures[MIX_MAT2];
+                    g_stack[gl_LocalInvocationIndex][2 * stack_size + 1] = floatBitsToUint(weight * mix_val);
+                    ++stack_size;
+                } else if (mat.type == TransparentNode) {
+                    throughput +=weight * vec3(mat.base_color[0], mat.base_color[1], mat.base_color[2]);
                 }
             }
 
-            if (mat.type != TransparentNode) {
-                rayQueryConfirmIntersectionEXT(rq);
+            rc *= throughput;
+            if (lum(rc) < FLT_EPS) {
                 break;
             }
+
+            ++depth;
         }
     }
-    return rayQueryGetIntersectionTypeEXT(rq, true) == gl_RayQueryCommittedIntersectionNoneEXT;
+
+    return rc;
 #endif
 }
 
@@ -329,15 +343,13 @@ void main() {
 
     shadow_ray_t sh_ray = g_sh_rays[index];
 
-    const int x = (sh_ray.xy >> 16) & 0xffff;
-    const int y = (sh_ray.xy & 0xffff);
+    const vec3 rc = IntersectSceneShadow(sh_ray, sh_ray.dist);
+    if (lum(rc) > 0.0) {
+        const int x = (sh_ray.xy >> 16) & 0xffff;
+        const int y = (sh_ray.xy & 0xffff);
 
-    vec3 ro = vec3(g_sh_rays[index].o[0], g_sh_rays[index].o[1], g_sh_rays[index].o[2]);
-    vec3 rd = vec3(g_sh_rays[index].d[0], g_sh_rays[index].d[1], g_sh_rays[index].d[2]);
-
-    if (ComputeVisibility(ro, rd, sh_ray.dist, g_params.random_val, hash((x << 16) | y))) {
         vec3 col = imageLoad(g_out_img, ivec2(x, y)).rgb;
-        col += vec3(sh_ray.c[0], sh_ray.c[1], sh_ray.c[2]);
+        col += rc;
         imageStore(g_out_img, ivec2(x, y), vec4(col, 1.0));
     }
 }

@@ -56,14 +56,18 @@ static_assert(sizeof(ray_data_t) == 56, "!");
 #endif
 
 struct shadow_ray_t {
-    // origin and direction
-    float o[3], d[3], dist;
+    // origin
+    float o[3];
+    // four 8-bit ray depth counters
+    int depth;
+    // direction and distance
+    float d[3], dist;
     // throughput color of ray
     float c[3];
     // 16-bit pixel coordinates of ray ((x << 16) | y)
     int xy;
 };
-static_assert(sizeof(shadow_ray_t) == 44, "!");
+static_assert(sizeof(shadow_ray_t) == 48, "!");
 
 const int RayPacketDimX = 1;
 const int RayPacketDimY = 1;
@@ -112,6 +116,22 @@ force_inline int hash(int x) {
 force_inline simd_fvec4 rgbe_to_rgb(const color_t<uint8_t, 4> &rgbe) {
     const float f = std::exp2(float(rgbe.v[3]) - 128.0f);
     return simd_fvec4{to_norm_float(rgbe.v[0]) * f, to_norm_float(rgbe.v[1]) * f, to_norm_float(rgbe.v[2]) * f, 1.0f};
+}
+
+force_inline int total_depth(const ray_data_t &r) {
+    const int diff_depth = r.depth & 0x000000ff;
+    const int spec_depth = (r.depth >> 8) & 0x000000ff;
+    const int refr_depth = (r.depth >> 16) & 0x000000ff;
+    const int transp_depth = (r.depth >> 24) & 0x000000ff;
+    return diff_depth + spec_depth + refr_depth + transp_depth;
+}
+
+force_inline int total_depth(const shadow_ray_t &r) {
+    const int diff_depth = r.depth & 0x000000ff;
+    const int spec_depth = (r.depth >> 8) & 0x000000ff;
+    const int refr_depth = (r.depth >> 16) & 0x000000ff;
+    const int transp_depth = (r.depth >> 24) & 0x000000ff;
+    return diff_depth + spec_depth + refr_depth + transp_depth;
 }
 
 // Generation of rays
@@ -240,13 +260,12 @@ simd_fvec4 SampleAnisotropic(const TexStorageBase *const textures[], uint32_t in
                              const simd_fvec2 &duv_dx, const simd_fvec2 &duv_dy);
 simd_fvec4 SampleLatlong_RGBE(const TexStorageRGBA &storage, uint32_t index, const simd_fvec4 &dir, float y_rotation);
 
-// Trace main rays through scene hierarchy
-bool IntersectScene(const float ro[3], const float rd[3], const scene_data_t &sc, const uint32_t root_index,
+// Trace rays through scene hierarchy
+void IntersectScene(ray_data_t &r, int min_transp_depth, int max_transp_depth, const float *random_seq,
+                    const scene_data_t &sc, uint32_t root_index, const TexStorageBase *const textures[],
                     hit_data_t &inter);
-
-// Get visibility between two points accounting for transparent materials
-float ComputeVisibility(const float p[3], const float d[3], float dist, float rand_val, int rand_hash2,
-                        const scene_data_t &sc, uint32_t node_index, const TexStorageBase *const textures[]);
+simd_fvec4 IntersectScene(const shadow_ray_t &r, int max_transp_depth, const scene_data_t &sc, uint32_t node_index,
+                          const TexStorageBase *const textures[]);
 
 // Compute derivatives at hit point
 void ComputeDerivatives(const simd_fvec4 &I, float t, const simd_fvec4 &do_dx, const simd_fvec4 &do_dy,

@@ -14,9 +14,9 @@ struct Params {
     int max_refr_depth;
     int max_transp_depth;
     int max_total_depth;
-    int termination_start_depth;
+    int min_total_depth;
+    int min_transp_depth;
     int env_qtree_levels;
-    int _pad0;
     VEC4_TYPE env_col;
     VEC4_TYPE back_col;
     float env_rotation;

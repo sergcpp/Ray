@@ -104,6 +104,22 @@ vec3 TransformNormal(vec3 n, mat4 inv_xform) {
     return (transpose(inv_xform) * vec4(n, 0.0)).xyz;
 }
 
+int total_depth(const ray_data_t r) {
+    const int diff_depth = r.depth & 0x000000ff;
+    const int spec_depth = (r.depth >> 8) & 0x000000ff;
+    const int refr_depth = (r.depth >> 16) & 0x000000ff;
+    const int transp_depth = (r.depth >> 24) & 0x000000ff;
+    return diff_depth + spec_depth + refr_depth + transp_depth;
+}
+
+int total_depth(const shadow_ray_t r) {
+    const int diff_depth = r.depth & 0x000000ff;
+    const int spec_depth = (r.depth >> 8) & 0x000000ff;
+    const int refr_depth = (r.depth >> 16) & 0x000000ff;
+    const int transp_depth = (r.depth >> 24) & 0x000000ff;
+    return diff_depth + spec_depth + refr_depth + transp_depth;
+}
+
 #define pack_unorm_16(x) uint(x * 65535.0)
 #define unpack_unorm_16(x) clamp(float(x) / 65535.0, 0.0, 1.0)
 
