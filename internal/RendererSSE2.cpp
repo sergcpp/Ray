@@ -102,7 +102,7 @@ template void IntersectAreaLights<RayPacketSize>(const ray_data_t<RayPacketSize>
                                                  Span<const uint32_t> visible_lights, const transform_t transforms[],
                                                  hit_data_t<RayPacketSize> &inout_inter);
 
-template void ShadeSurface<RayPacketSize>(const simd_ivec<RayPacketSize> &index, const pass_info_t &pi,
+template void ShadeSurface<RayPacketSize>(const simd_ivec<RayPacketSize> &index, const pass_settings_t &ps,
                                           const float *halton, const hit_data_t<RayPacketSize> &inter,
                                           const ray_data_t<RayPacketSize> &ray, const scene_data_t &sc,
                                           uint32_t node_index, const Ref::TexStorageBase *const tex_atlases[],

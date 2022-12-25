@@ -262,7 +262,7 @@ void IntersectAreaLights(const ray_data_t &ray, const light_t lights[], Span<con
                          const transform_t transforms[], hit_data_t &inout_inter);
 
 // Shade
-Ray::pixel_color_t ShadeSurface(int px_index, const pass_info_t &pi, const hit_data_t &inter, const ray_data_t &ray,
+Ray::pixel_color_t ShadeSurface(int px_index, const pass_settings_t &ps, const hit_data_t &inter, const ray_data_t &ray,
                                 const float *halton, const scene_data_t &sc, uint32_t node_index,
                                 const TexStorageBase *const textures[], ray_data_t *out_secondary_rays,
                                 int *out_secondary_rays_count, shadow_ray_t *out_shadow_rays,

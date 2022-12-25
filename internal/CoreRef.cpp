@@ -3311,7 +3311,7 @@ void Ray::Ref::IntersectAreaLights(const ray_data_t &ray, const light_t lights[]
     }
 }
 
-Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t &pi, const hit_data_t &inter,
+Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_settings_t &ps, const hit_data_t &inter,
                                           const ray_data_t &ray, const float *halton, const scene_data_t &sc,
                                           const uint32_t node_index, const TexStorageBase *const textures[],
                                           ray_data_t *out_secondary_rays, int *out_secondary_rays_count,
@@ -3320,28 +3320,28 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
 
     if (!inter.mask) {
         simd_fvec4 env_col = {1.0f};
-        if (pi.should_add_environment()) {
-            const uint32_t env_map = (ray.ray_depth & 0x00ffffff) ? sc.env->env_map : sc.env->back_map;
-            const float env_map_rotation =
-                (ray.ray_depth & 0x00ffffff) ? sc.env->env_map_rotation : sc.env->back_map_rotation;
-            if (env_map != 0xffffffff) {
-                env_col = SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), env_map,
-                                             simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f}, env_map_rotation);
-                if (sc.env->qtree_levels) {
-                    const auto *qtree_mips = reinterpret_cast<const simd_fvec4 *const *>(sc.env->qtree_mips);
 
-                    const float light_pdf = Evaluate_EnvQTree(env_map_rotation, qtree_mips, sc.env->qtree_levels, I);
-                    const float bsdf_pdf = ray.pdf;
+        const uint32_t env_map = (ray.ray_depth & 0x00ffffff) ? sc.env->env_map : sc.env->back_map;
+        const float env_map_rotation =
+            (ray.ray_depth & 0x00ffffff) ? sc.env->env_map_rotation : sc.env->back_map_rotation;
+        if (env_map != 0xffffffff) {
+            env_col = SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), env_map,
+                                         simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f}, env_map_rotation);
+            if (sc.env->qtree_levels) {
+                const auto *qtree_mips = reinterpret_cast<const simd_fvec4 *const *>(sc.env->qtree_mips);
 
-                    const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
-                    env_col *= mis_weight;
-                }
+                const float light_pdf = Evaluate_EnvQTree(env_map_rotation, qtree_mips, sc.env->qtree_levels, I);
+                const float bsdf_pdf = ray.pdf;
+
+                const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
+                env_col *= mis_weight;
             }
-            env_col *= (ray.ray_depth & 0x00ffffff)
-                           ? simd_fvec4{sc.env->env_col[0], sc.env->env_col[1], sc.env->env_col[2], 1.0f}
-                           : simd_fvec4{sc.env->back_col[0], sc.env->back_col[1], sc.env->back_col[2], 1.0f};
-            env_col[3] = 1.0f;
         }
+        env_col *= (ray.ray_depth & 0x00ffffff)
+                       ? simd_fvec4{sc.env->env_col[0], sc.env->env_col[1], sc.env->env_col[2], 1.0f}
+                       : simd_fvec4{sc.env->back_col[0], sc.env->back_col[1], sc.env->back_col[2], 1.0f};
+        env_col[3] = 1.0f;
+
         return Ray::pixel_color_t{ray.c[0] * env_col[0], ray.c[1] * env_col[1], ray.c[2] * env_col[2], env_col[3]};
     }
 
@@ -3574,7 +3574,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
 
 #if USE_NEE == 1
     light_sample_t ls;
-    if (pi.should_add_direct_light() && !sc.li_indices.empty() && mat->type != EmissiveNode) {
+    if (!sc.li_indices.empty() && mat->type != EmissiveNode) {
         SampleLightSource(P, sc, textures, halton, sample_off, ls);
     }
     const float N_dot_L = dot(N, ls.L);
@@ -3633,11 +3633,9 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
 
     // Sample materials
     if (mat->type == DiffuseNode) {
-        const simd_fvec4 _base_color = pi.should_consider_albedo() ? base_color : simd_fvec4(1.0f);
-
 #if USE_NEE
         if (ls.pdf > 0.0f && N_dot_L > 0.0f) {
-            const simd_fvec4 diff_col = Evaluate_OrenDiffuse_BSDF(-I, N, ls.L, roughness, _base_color);
+            const simd_fvec4 diff_col = Evaluate_OrenDiffuse_BSDF(-I, N, ls.L, roughness, base_color);
             const float bsdf_pdf = diff_col[3];
 
             float mis_weight = 1.0f;
@@ -3664,9 +3662,9 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
         }
 #endif
 
-        if (diff_depth < pi.settings.max_diff_depth && total_depth < pi.settings.max_total_depth) {
+        if (diff_depth < ps.max_diff_depth && total_depth < ps.max_total_depth) {
             simd_fvec4 V;
-            const simd_fvec4 F = Sample_OrenDiffuse_BSDF(T, B, N, I, roughness, _base_color, rand_u, rand_v, V);
+            const simd_fvec4 F = Sample_OrenDiffuse_BSDF(T, B, N, I, roughness, base_color, rand_u, rand_v, V);
 
             new_ray.ray_depth = ray.ray_depth + 0x00000001;
 
@@ -3731,7 +3729,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
         }
 #endif
 
-        if (spec_depth < pi.settings.max_spec_depth && total_depth < pi.settings.max_total_depth) {
+        if (spec_depth < ps.max_spec_depth && total_depth < ps.max_total_depth) {
             simd_fvec4 V;
             const simd_fvec4 F =
                 Sample_GGXSpecular_BSDF(T, B, N, I, roughness, 0.0f, spec_ior, spec_F0, base_color, rand_u, rand_v, V);
@@ -3796,7 +3794,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
         }
 #endif
 
-        if (refr_depth < pi.settings.max_refr_depth && total_depth < pi.settings.max_total_depth) {
+        if (refr_depth < ps.max_refr_depth && total_depth < ps.max_total_depth) {
             simd_fvec4 _V;
             const simd_fvec4 F = Sample_GGXRefraction_BSDF(T, B, N, I, roughness, eta, base_color, rand_u, rand_v, _V);
 
@@ -3830,7 +3828,8 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
     } else if (mat->type == EmissiveNode) {
         float mis_weight = 1.0f;
 #if USE_NEE
-        if (pi.bounce > 0 && (mat->flags & MAT_FLAG_MULT_IMPORTANCE)) {
+        // TODO: consider removing ray_depth check (rely on high pdf)
+        if (ray.ray_depth && (mat->flags & MAT_FLAG_MULT_IMPORTANCE)) {
             const auto p1 = simd_fvec4{v1.p[0], v1.p[1], v1.p[2], 0.0f},
                        p2 = simd_fvec4{v2.p[0], v2.p[1], v2.p[2], 0.0f},
                        p3 = simd_fvec4{v3.p[0], v3.p[1], v3.p[2], 0.0f};
@@ -3851,7 +3850,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
 #endif
         col += mix_weight * mis_weight * mat->strength * base_color;
     } else if (mat->type == TransparentNode) {
-        if (transp_depth < pi.settings.max_transp_depth && total_depth < pi.settings.max_total_depth) {
+        if (transp_depth < ps.max_transp_depth && total_depth < ps.max_total_depth) {
             new_ray.ray_depth = ray.ray_depth + 0x01000000;
             new_ray.pdf = ray.pdf;
 
@@ -3917,7 +3916,6 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
         get_lobe_weights(mix(base_color_lum, 1.0f, sheen), spec_color_lum, specular, metallic, transmission, clearcoat,
                          &diffuse_weight, &specular_weight, &clearcoat_weight, &refraction_weight);
 
-        const simd_fvec4 _base_color = pi.should_consider_albedo() ? base_color : simd_fvec4(1.0f);
         const simd_fvec4 sheen_color = sheen * mix(simd_fvec4{1.0f}, tint_color, sheen_tint);
 
         const float eta = is_backfacing ? (mat->int_ior / mat->ext_ior) : (mat->ext_ior / mat->int_ior);
@@ -3937,8 +3935,8 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
             float bsdf_pdf = 0.0f;
 
             if (diffuse_weight > 0.0f && N_dot_L > 0.0f) {
-                simd_fvec4 diff_col = Evaluate_PrincipledDiffuse_BSDF(-I, N, ls.L, roughness, _base_color, sheen_color,
-                                                                      pi.use_uniform_sampling());
+                simd_fvec4 diff_col =
+                    Evaluate_PrincipledDiffuse_BSDF(-I, N, ls.L, roughness, base_color, sheen_color, false);
                 bsdf_pdf += diffuse_weight * diff_col[3];
                 diff_col *= (1.0f - metallic);
 
@@ -4024,10 +4022,10 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
             //
             // Diffuse lobe
             //
-            if (diff_depth < pi.settings.max_diff_depth && total_depth < pi.settings.max_total_depth) {
+            if (diff_depth < ps.max_diff_depth && total_depth < ps.max_total_depth) {
                 simd_fvec4 V;
-                simd_fvec4 diff_col = Sample_PrincipledDiffuse_BSDF(T, B, N, I, roughness, _base_color, sheen_color,
-                                                                    pi.use_uniform_sampling(), rand_u, rand_v, V);
+                simd_fvec4 diff_col = Sample_PrincipledDiffuse_BSDF(T, B, N, I, roughness, base_color, sheen_color,
+                                                                    false, rand_u, rand_v, V);
                 const float pdf = diff_col[3];
 
                 diff_col *= (1.0f - metallic);
@@ -4058,7 +4056,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
             //
             // Main specular lobe
             //
-            if (spec_depth < pi.settings.max_spec_depth && total_depth < pi.settings.max_total_depth) {
+            if (spec_depth < ps.max_spec_depth && total_depth < ps.max_total_depth) {
                 simd_fvec4 V;
                 simd_fvec4 F = Sample_GGXSpecular_BSDF(T, B, N, I, roughness, unpack_unorm_16(mat->anisotropic_unorm),
                                                        spec_ior, spec_F0, spec_tmp_col, rand_u, rand_v, V);
@@ -4090,7 +4088,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
             //
             // Clearcoat lobe (secondary specular)
             //
-            if (spec_depth < pi.settings.max_spec_depth && total_depth < pi.settings.max_total_depth) {
+            if (spec_depth < ps.max_spec_depth && total_depth < ps.max_total_depth) {
                 simd_fvec4 V;
                 simd_fvec4 F = Sample_PrincipledClearcoat_BSDF(T, B, N, I, clearcoat_roughness2, clearcoat_ior,
                                                                clearcoat_F0, rand_u, rand_v, V);
@@ -4122,9 +4120,9 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
             //
             // Refraction/reflection lobes
             //
-            if (((mix_rand >= fresnel && refr_depth < pi.settings.max_refr_depth) ||
-                 (mix_rand < fresnel && spec_depth < pi.settings.max_spec_depth)) &&
-                total_depth < pi.settings.max_total_depth) {
+            if (((mix_rand >= fresnel && refr_depth < ps.max_refr_depth) ||
+                 (mix_rand < fresnel && spec_depth < ps.max_spec_depth)) &&
+                total_depth < ps.max_total_depth) {
                 mix_rand -= diffuse_weight + specular_weight + clearcoat_weight;
                 mix_rand = safe_div_pos(mix_rand, refraction_weight);
 
@@ -4192,7 +4190,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_info_t 
     }
 
 #if USE_PATH_TERMINATION
-    const bool can_terminate_path = total_depth >= pi.settings.termination_start_depth;
+    const bool can_terminate_path = total_depth >= ps.termination_start_depth;
 #else
     const bool can_terminate_path = false;
 #endif

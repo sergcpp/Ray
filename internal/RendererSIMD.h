@@ -203,13 +203,6 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
         }
     }
 
-    pass_info_t pass_info;
-
-    pass_info.iteration = region.iteration;
-    pass_info.bounce = 0;
-    pass_info.settings = cam.pass_settings;
-    pass_info.settings.max_total_depth = std::min(pass_info.settings.max_total_depth, (uint8_t)MAX_BOUNCES);
-
     const auto time_start = std::chrono::high_resolution_clock::now();
     std::chrono::time_point<std::chrono::high_resolution_clock> time_after_ray_gen;
 
@@ -264,7 +257,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
         p.secondary_masks[i] = {0};
 
         simd_fvec<S> out_rgba[4] = {0.0f};
-        NS::ShadeSurface(px_index, pass_info, &region.halton_seq[hi + RAND_DIM_BASE_COUNT], inter, r, sc_data,
+        NS::ShadeSurface(px_index, cam.pass_settings, &region.halton_seq[hi + RAND_DIM_BASE_COUNT], inter, r, sc_data,
                          macro_tree_root, s->tex_storages_, out_rgba, p.secondary_masks.data(), p.secondary_rays.data(),
                          &secondary_rays_count, p.shadow_masks.data(), p.shadow_rays.data(), &shadow_rays_count);
         for (int j = 0; j < S; j++) {
@@ -321,9 +314,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
         }
     }
 
-    for (int bounce = 1; bounce <= pass_info.settings.max_total_depth && secondary_rays_count &&
-                         !(pass_info.settings.flags & SkipIndirectLight);
-         bounce++) {
+    for (int bounce = 1; bounce <= cam.pass_settings.max_total_depth && secondary_rays_count; bounce++) {
         auto time_secondary_sort_start = std::chrono::high_resolution_clock::now();
 
         SortRays_CPU(&p.secondary_rays[0], &p.secondary_masks[0], secondary_rays_count, root_min, cell_size,
@@ -351,8 +342,6 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
         std::swap(p.primary_rays, p.secondary_rays);
         std::swap(p.primary_masks, p.secondary_masks);
 
-        pass_info.bounce = bounce;
-
         for (int i = 0; i < rays_count; i++) {
             const ray_data_t<S> &r = p.primary_rays[i];
             const hit_data_t<S> &inter = p.intersections[i];
@@ -361,7 +350,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
             const simd_ivec<S> index = y * w + x;
 
             simd_fvec<S> out_rgba[4] = {0.0f};
-            NS::ShadeSurface(index, pass_info,
+            NS::ShadeSurface(index, cam.pass_settings,
                              &region.halton_seq[hi + RAND_DIM_BASE_COUNT + bounce * RAND_DIM_BOUNCE_COUNT], inter, r,
                              sc_data, macro_tree_root, s->tex_storages_, out_rgba, p.secondary_masks.data(),
                              p.secondary_rays.data(), &secondary_rays_count, p.shadow_masks.data(),

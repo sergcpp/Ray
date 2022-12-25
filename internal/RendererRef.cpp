@@ -109,13 +109,6 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
         }
     }
 
-    pass_info_t pass_info = {};
-
-    pass_info.iteration = region.iteration;
-    pass_info.bounce = 0;
-    pass_info.settings = cam.pass_settings;
-    pass_info.settings.max_total_depth = std::min(pass_info.settings.max_total_depth, uint8_t(MAX_BOUNCES));
-
     const auto time_start = std::chrono::high_resolution_clock::now();
     std::chrono::time_point<std::chrono::high_resolution_clock> time_after_ray_gen;
 
@@ -164,9 +157,10 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
 
         const int px_index = y * w + x;
 
-        const pixel_color_t col = ShadeSurface(
-            px_index, pass_info, inter, r, &region.halton_seq[hi + RAND_DIM_BASE_COUNT], sc_data, macro_tree_root,
-            s->tex_storages_, &p.secondary_rays[0], &secondary_rays_count, &p.shadow_rays[0], &shadow_rays_count);
+        const pixel_color_t col =
+            ShadeSurface(px_index, cam.pass_settings, inter, r, &region.halton_seq[hi + RAND_DIM_BASE_COUNT], sc_data,
+                         macro_tree_root, s->tex_storages_, &p.secondary_rays[0], &secondary_rays_count,
+                         &p.shadow_rays[0], &shadow_rays_count);
         temp_buf_.SetPixel(x, y, col);
     }
 
@@ -214,9 +208,7 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
         }
     }
 
-    for (int bounce = 1; bounce <= pass_info.settings.max_total_depth && secondary_rays_count &&
-                         !(pass_info.settings.flags & SkipIndirectLight);
-         ++bounce) {
+    for (int bounce = 1; bounce <= cam.pass_settings.max_total_depth && secondary_rays_count; ++bounce) {
         const auto time_secondary_sort_start = std::chrono::high_resolution_clock::now();
 
         SortRays_CPU(&p.secondary_rays[0], size_t(secondary_rays_count), root_min, cell_size, &p.hash_values[0],
@@ -263,8 +255,6 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
         shadow_rays_count = 0;
         std::swap(p.primary_rays, p.secondary_rays);
 
-        pass_info.bounce = bounce;
-
         for (int i = 0; i < rays_count; ++i) {
             const ray_data_t &r = p.primary_rays[i];
             const hit_data_t &inter = p.intersections[i];
@@ -275,7 +265,7 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
             const int px_index = y * w + x;
 
             pixel_color_t col = ShadeSurface(
-                px_index, pass_info, inter, r,
+                px_index, cam.pass_settings, inter, r,
                 &region.halton_seq[hi + RAND_DIM_BASE_COUNT + bounce * RAND_DIM_BOUNCE_COUNT], sc_data, macro_tree_root,
                 s->tex_storages_, &p.secondary_rays[0], &secondary_rays_count, &p.shadow_rays[0], &shadow_rays_count);
             col.a = 0.0f;

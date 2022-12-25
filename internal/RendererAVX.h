@@ -115,7 +115,7 @@ extern template void ComputeDerivatives<RayPacketSize>(
     const simd_fvec<RayPacketSize> xform[16], derivatives_t<RayPacketSize> &out_der);
 
 extern template void
-ShadeSurface<RayPacketSize>(const simd_ivec<RayPacketSize> &index, const pass_info_t &pi, const float *halton,
+ShadeSurface<RayPacketSize>(const simd_ivec<RayPacketSize> &index, const pass_settings_t &ps, const float *halton,
                             const hit_data_t<RayPacketSize> &inter, const ray_data_t<RayPacketSize> &ray,
                             const scene_data_t &sc, uint32_t node_index, const Ref::TexStorageBase *const tex_atlases[],
                             simd_fvec<RayPacketSize> out_rgba[4], simd_ivec<RayPacketSize> out_secondary_masks[],

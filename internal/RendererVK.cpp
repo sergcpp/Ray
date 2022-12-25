@@ -396,13 +396,6 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
 
     //////////////////////////////////////////////////////////////////////////////////
 
-    pass_info_t pass_info = {};
-
-    pass_info.iteration = region.iteration;
-    pass_info.bounce = 0;
-    pass_info.settings = cam.pass_settings;
-    pass_info.settings.max_total_depth = std::min(pass_info.settings.max_total_depth, uint8_t(MAX_BOUNCES));
-
     const int hi = (region.iteration & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT;
 
     { // transition resources
@@ -481,7 +474,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
 
     { // shade primary hits
         DebugMarker _(cmd_buf, "ShadePrimaryHits");
-        kernel_ShadePrimaryHits(cmd_buf, pass_info.settings, s->env_, prim_hits_buf_, prim_rays_buf_, sc_data,
+        kernel_ShadePrimaryHits(cmd_buf, cam.pass_settings, s->env_, prim_hits_buf_, prim_rays_buf_, sc_data,
                                 halton_seq_buf_, hi + RAND_DIM_BASE_COUNT, s->tex_atlases_,
                                 s->bindless_tex_data_.descr_set, temp_buf_, secondary_rays_buf_, shadow_rays_buf_,
                                 counters_buf_);
@@ -499,9 +492,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
                            s->bindless_tex_data_.descr_set, shadow_rays_buf_, temp_buf_);
     }
 
-    for (int bounce = 1;
-         bounce <= pass_info.settings.max_total_depth && !(pass_info.settings.flags & SkipIndirectLight); ++bounce) {
-
+    for (int bounce = 1; bounce <= cam.pass_settings.max_total_depth; ++bounce) {
         { // trace secondary rays
             DebugMarker _(cmd_buf, "TraceSecondaryRays");
             kernel_TraceSecondaryRays(cmd_buf, indir_args_buf_, counters_buf_, sc_data, macro_tree_root,
@@ -517,7 +508,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         { // shade secondary hits
             DebugMarker _(cmd_buf, "ShadeSecondaryHits");
             kernel_ShadeSecondaryHits(
-                cmd_buf, pass_info.settings, s->env_, indir_args_buf_, prim_hits_buf_, secondary_rays_buf_, sc_data,
+                cmd_buf, cam.pass_settings, s->env_, indir_args_buf_, prim_hits_buf_, secondary_rays_buf_, sc_data,
                 halton_seq_buf_, hi + RAND_DIM_BASE_COUNT + bounce * RAND_DIM_BOUNCE_COUNT, s->tex_atlases_,
                 s->bindless_tex_data_.descr_set, temp_buf_, prim_rays_buf_, shadow_rays_buf_, counters_buf_);
         }

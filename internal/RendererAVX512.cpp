@@ -92,7 +92,7 @@ template void ComputeDerivatives<RayPacketSize>(
     const simd_fvec<RayPacketSize> u3[2], const simd_fvec<RayPacketSize> plane_N[3],
     const simd_fvec<RayPacketSize> xform[16], derivatives_t<RayPacketSize> &out_der);
 
-template void ShadeSurface<RayPacketSize>(const simd_ivec<RayPacketSize> &index, const pass_info_t &pi,
+template void ShadeSurface<RayPacketSize>(const simd_ivec<RayPacketSize> &index, const pass_settings_t &ps,
                                           const float *halton, const hit_data_t<RayPacketSize> &inter,
                                           const ray_data_t<RayPacketSize> &ray, const scene_data_t &sc,
                                           uint32_t node_index, const Ref::TexStorageBase *const textures[],

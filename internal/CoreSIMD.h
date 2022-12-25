@@ -346,8 +346,8 @@ void IntersectAreaLights(const ray_data_t<S> &r, const simd_ivec<S> &ray_mask, c
 
 // Shade
 template <int S>
-void ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, const float *halton, const hit_data_t<S> &inter,
-                  const ray_data_t<S> &ray, const scene_data_t &sc, uint32_t node_index,
+void ShadeSurface(const simd_ivec<S> &px_index, const pass_settings_t &ps, const float *halton,
+                  const hit_data_t<S> &inter, const ray_data_t<S> &ray, const scene_data_t &sc, uint32_t node_index,
                   const Ref::TexStorageBase *const tex_atlases[], simd_fvec<S> out_rgba[4],
                   simd_ivec<S> out_secondary_masks[], ray_data_t<S> out_secondary_rays[], int *out_secondary_rays_count,
                   simd_ivec<S> out_shadow_masks[], shadow_ray_t<S> out_shadow_rays[], int *out_shadow_rays_count);
@@ -4843,7 +4843,7 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, const simd_ivec<S> &_r
 }
 
 template <int S>
-void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, const float *halton,
+void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_settings_t &ps, const float *halton,
                            const hit_data_t<S> &inter, const ray_data_t<S> &ray, const scene_data_t &sc,
                            uint32_t node_index, const Ref::TexStorageBase *const textures[], simd_fvec<S> out_rgba[4],
                            simd_ivec<S> out_secondary_masks[], ray_data_t<S> out_secondary_rays[],
@@ -4857,39 +4857,38 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
     const simd_ivec<S> ino_hit = ~inter.mask;
     if (ino_hit.not_all_zeros()) {
         simd_fvec<S> env_col[4] = {{1.0f}, {1.0f}, {1.0f}, {1.0f}};
-        if (pi.should_add_environment()) {
-            const uint32_t env_map = sc.env->env_map;
-            const float env_map_rotation = sc.env->env_map_rotation;
-            const simd_ivec<S> env_map_mask = (ray.ray_depth & 0x00ffffff) != 0;
 
-            if (env_map != 0xffffffff && (ino_hit & env_map_mask).not_all_zeros()) {
-                SampleLatlong_RGBE(*static_cast<const Ref::TexStorageRGBA *>(textures[0]), env_map, ray.d,
-                                   env_map_rotation, (ino_hit & env_map_mask), env_col);
-                if (sc.env->qtree_levels) {
-                    const auto *qtree_mips = reinterpret_cast<const simd_fvec4 *const *>(sc.env->qtree_mips);
+        const uint32_t env_map = sc.env->env_map;
+        const float env_map_rotation = sc.env->env_map_rotation;
+        const simd_ivec<S> env_map_mask = (ray.ray_depth & 0x00ffffff) != 0;
 
-                    const simd_fvec<S> light_pdf =
-                        Evaluate_EnvQTree(env_map_rotation, qtree_mips, sc.env->qtree_levels, ray.d);
-                    const simd_fvec<S> bsdf_pdf = ray.pdf;
+        if (env_map != 0xffffffff && (ino_hit & env_map_mask).not_all_zeros()) {
+            SampleLatlong_RGBE(*static_cast<const Ref::TexStorageRGBA *>(textures[0]), env_map, ray.d, env_map_rotation,
+                               (ino_hit & env_map_mask), env_col);
+            if (sc.env->qtree_levels) {
+                const auto *qtree_mips = reinterpret_cast<const simd_fvec4 *const *>(sc.env->qtree_mips);
 
-                    const simd_fvec<S> mis_weight = power_heuristic(bsdf_pdf, light_pdf);
-                    ITERATE_3({ env_col[i] *= mis_weight; })
-                }
+                const simd_fvec<S> light_pdf =
+                    Evaluate_EnvQTree(env_map_rotation, qtree_mips, sc.env->qtree_levels, ray.d);
+                const simd_fvec<S> bsdf_pdf = ray.pdf;
+
+                const simd_fvec<S> mis_weight = power_heuristic(bsdf_pdf, light_pdf);
+                ITERATE_3({ env_col[i] *= mis_weight; })
             }
-            ITERATE_3({ where(env_map_mask, env_col[i]) *= sc.env->env_col[i]; })
-
-            const uint32_t back_map = sc.env->back_map;
-            const float back_map_rotation = sc.env->back_map_rotation;
-            const simd_ivec<S> back_map_mask = ~env_map_mask;
-
-            if (back_map != 0xffffffff && (ino_hit & back_map_mask).not_all_zeros()) {
-                simd_fvec<S> back_col[3];
-                SampleLatlong_RGBE(*static_cast<const Ref::TexStorageRGBA *>(textures[0]), back_map, ray.d,
-                                   back_map_rotation, (ino_hit & back_map_mask), back_col);
-                ITERATE_3({ where(back_map_mask, env_col[i]) = back_col[i]; })
-            }
-            ITERATE_3({ where(back_map_mask, env_col[i]) *= sc.env->back_col[i]; })
         }
+        ITERATE_3({ where(env_map_mask, env_col[i]) *= sc.env->env_col[i]; })
+
+        const uint32_t back_map = sc.env->back_map;
+        const float back_map_rotation = sc.env->back_map_rotation;
+        const simd_ivec<S> back_map_mask = ~env_map_mask;
+
+        if (back_map != 0xffffffff && (ino_hit & back_map_mask).not_all_zeros()) {
+            simd_fvec<S> back_col[3];
+            SampleLatlong_RGBE(*static_cast<const Ref::TexStorageRGBA *>(textures[0]), back_map, ray.d,
+                               back_map_rotation, (ino_hit & back_map_mask), back_col);
+            ITERATE_3({ where(back_map_mask, env_col[i]) = back_col[i]; })
+        }
+        ITERATE_3({ where(back_map_mask, env_col[i]) *= sc.env->back_col[i]; })
 
         where(ino_hit, out_rgba[0]) = ray.c[0] * env_col[0];
         where(ino_hit, out_rgba[1]) = ray.c[1] * env_col[1];
@@ -5357,7 +5356,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
 
 #if USE_NEE
     light_sample_t<S> ls;
-    if (pi.should_add_direct_light() && !sc.li_indices.empty()) {
+    if (!sc.li_indices.empty()) {
         SampleLightSource(P, sc, textures, halton, sample_off, is_active_lane, ls);
     }
     const simd_fvec<S> N_dot_L = dot3(N, ls.L);
@@ -5527,8 +5526,8 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                     shadow_mask |= (eval_light & ls.cast_shadow);
                 }
 #endif
-                const simd_ivec<S> gen_ray = (diff_depth < pi.settings.max_diff_depth) &
-                                             (total_depth < pi.settings.max_total_depth) & ray_queue[index];
+                const simd_ivec<S> gen_ray =
+                    (diff_depth < ps.max_diff_depth) & (total_depth < ps.max_total_depth) & ray_queue[index];
                 if (gen_ray.not_all_zeros()) {
                     simd_fvec<S> V[3], F[4];
                     Sample_OrenDiffuse_BSDF(T, B, N, I, roughness, base_color, rand_u, rand_v, V, F);
@@ -5604,8 +5603,8 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                 }
 #endif
 
-                const simd_ivec<S> gen_ray = (spec_depth < pi.settings.max_spec_depth) &
-                                             (total_depth < pi.settings.max_total_depth) & ray_queue[index];
+                const simd_ivec<S> gen_ray =
+                    (spec_depth < ps.max_spec_depth) & (total_depth < ps.max_total_depth) & ray_queue[index];
                 if (gen_ray.not_all_zeros()) {
                     simd_fvec<S> V[3], F[4];
                     Sample_GGXSpecular_BSDF(T, B, N, I, roughness, simd_fvec<S>{0.0f}, simd_fvec<S>{spec_ior},
@@ -5681,8 +5680,8 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                 }
 #endif
 
-                const simd_ivec<S> gen_ray = (refr_depth < pi.settings.max_refr_depth) &
-                                             (total_depth < pi.settings.max_total_depth) & ray_queue[index];
+                const simd_ivec<S> gen_ray =
+                    (refr_depth < ps.max_refr_depth) & (total_depth < ps.max_total_depth) & ray_queue[index];
                 if (gen_ray.not_all_zeros()) {
                     simd_fvec<S> V[4], F[4];
                     Sample_GGXRefraction_BSDF(T, B, N, I, roughness, eta, base_color, rand_u, rand_v, V, F);
@@ -5720,7 +5719,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
             } else if (mat->type == EmissiveNode) {
                 simd_fvec<S> mis_weight = 1.0f;
 #if USE_NEE
-                if (pi.bounce > 0 && (mat->flags & MAT_FLAG_MULT_IMPORTANCE)) {
+                if (ray.ray_depth.not_all_zeros() && (mat->flags & MAT_FLAG_MULT_IMPORTANCE)) {
                     const simd_fvec<S> v1[3] = {p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2]},
                                        v2[3] = {p3[0] - p1[0], p3[1] - p1[1], p3[2] - p1[2]};
 
@@ -5736,15 +5735,15 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                     const simd_fvec<S> light_pdf = (inter.t * inter.t) / (tri_area * cos_theta);
                     const simd_fvec<S> &bsdf_pdf = ray.pdf;
 
-                    where(cos_theta > 0.0f, mis_weight) = power_heuristic(bsdf_pdf, light_pdf);
+                    where(cos_theta > 0.0f & simd_cast(ray.ray_depth != 0), mis_weight) =
+                        power_heuristic(bsdf_pdf, light_pdf);
                 }
 #endif
                 ITERATE_3(
                     { where(ray_queue[index], col[i]) += mix_weight * mis_weight * mat->strength * base_color[i]; })
             } else if (mat->type == TransparentNode) {
                 const simd_ivec<S> gen_ray =
-                    (transp_depth < pi.settings.max_transp_depth & total_depth < pi.settings.max_total_depth) &
-                    ray_queue[index];
+                    (transp_depth < ps.max_transp_depth & total_depth < ps.max_total_depth) & ray_queue[index];
                 if (gen_ray.not_all_zeros()) {
                     const simd_fvec<S> _plane_N[3] = {-plane_N[0], -plane_N[1], -plane_N[2]};
 
@@ -5867,8 +5866,8 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                     const simd_ivec<S> eval_diff_lobe = simd_cast(diffuse_weight > 0.0f) & _is_frontfacing & eval_light;
                     if (eval_diff_lobe.not_all_zeros()) {
                         simd_fvec<S> diff_col[4];
-                        Evaluate_PrincipledDiffuse_BSDF(_I, N, ls.L, roughness, base_color, sheen_color,
-                                                        pi.use_uniform_sampling(), diff_col);
+                        Evaluate_PrincipledDiffuse_BSDF(_I, N, ls.L, roughness, base_color, sheen_color, false,
+                                                        diff_col);
 
                         where(eval_diff_lobe, bsdf_pdf) += diffuse_weight * diff_col[3];
                         ITERATE_3({ diff_col[i] *= (1.0f - metallic); })
@@ -5988,13 +5987,13 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                 }
 #endif
 
-                const simd_ivec<S> sample_diff_lobe = (diff_depth < pi.settings.max_diff_depth) &
-                                                      (total_depth < pi.settings.max_total_depth) &
+                const simd_ivec<S> sample_diff_lobe = (diff_depth < ps.max_diff_depth) &
+                                                      (total_depth < ps.max_total_depth) &
                                                       simd_cast(mix_rand < diffuse_weight) & ray_queue[index];
                 if (sample_diff_lobe.not_all_zeros()) {
                     simd_fvec<S> V[3], diff_col[4];
-                    Sample_PrincipledDiffuse_BSDF(T, B, N, I, roughness, base_color, sheen_color,
-                                                  pi.use_uniform_sampling(), rand_u, rand_v, V, diff_col);
+                    Sample_PrincipledDiffuse_BSDF(T, B, N, I, roughness, base_color, sheen_color, false, rand_u, rand_v,
+                                                  V, diff_col);
 
                     ITERATE_3({ diff_col[i] *= (1.0f - metallic); })
 
@@ -6032,7 +6031,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                 }
 
                 const simd_ivec<S> sample_spec_lobe =
-                    (spec_depth < pi.settings.max_spec_depth) & (total_depth < pi.settings.max_total_depth) &
+                    (spec_depth < ps.max_spec_depth) & (total_depth < ps.max_total_depth) &
                     simd_cast(mix_rand >= diffuse_weight) & simd_cast(mix_rand < diffuse_weight + specular_weight) &
                     ray_queue[index];
                 if (sample_spec_lobe.not_all_zeros()) {
@@ -6075,7 +6074,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
                 }
 
                 const simd_ivec<S> sample_coat_lobe =
-                    (spec_depth < pi.settings.max_spec_depth) & (total_depth < pi.settings.max_total_depth) &
+                    (spec_depth < ps.max_spec_depth) & (total_depth < ps.max_total_depth) &
                     simd_cast(mix_rand >= diffuse_weight + specular_weight) &
                     simd_cast(mix_rand < diffuse_weight + specular_weight + clearcoat_weight) & ray_queue[index];
                 if (sample_coat_lobe.not_all_zeros()) {
@@ -6116,9 +6115,9 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
 
                 const simd_ivec<S> sample_trans_lobe =
                     simd_cast(mix_rand >= diffuse_weight + specular_weight + clearcoat_weight) &
-                    ((simd_cast(mix_rand >= fresnel) & (refr_depth < pi.settings.max_refr_depth)) |
-                     (simd_cast(mix_rand < fresnel) & (spec_depth < pi.settings.max_spec_depth))) &
-                    (total_depth < pi.settings.max_total_depth) & ray_queue[index];
+                    ((simd_cast(mix_rand >= fresnel) & (refr_depth < ps.max_refr_depth)) |
+                     (simd_cast(mix_rand < fresnel) & (spec_depth < ps.max_spec_depth))) &
+                    (total_depth < ps.max_total_depth) & ray_queue[index];
                 if (sample_trans_lobe.not_all_zeros()) {
                     where(sample_trans_lobe, mix_rand) -= diffuse_weight + specular_weight + clearcoat_weight;
                     where(sample_trans_lobe, mix_rand) = safe_div_pos(mix_rand, refraction_weight);
@@ -6210,7 +6209,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_info_t &pi, 
     }
 
 #if USE_PATH_TERMINATION
-    const simd_ivec<S> can_terminate_path = total_depth >= int(pi.settings.termination_start_depth);
+    const simd_ivec<S> can_terminate_path = total_depth >= int(ps.termination_start_depth);
 #else
     const simd_ivec<S> can_terminate_path = {0};
 #endif
