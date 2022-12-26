@@ -1207,7 +1207,6 @@ vec3 ShadeSurface(int px_index, hit_data_t inter, ray_data_t ray) {
     if (length2(cross(tangent, N)) == 0.0) {
         tangent = TransformNormal(P_ls, tr.inv_xform);
     }
-    tangent = normalize(tangent);
     if (mat.tangent_rotation_or_strength != 0.0) {
         tangent = rotate_around_axis(tangent, N, mat.tangent_rotation_or_strength);
     }

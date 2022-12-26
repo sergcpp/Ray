@@ -3563,7 +3563,6 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_setting
     if (length2(cross(tangent, N)) == 0.0f) {
         tangent = TransformNormal(P_ls, tr->inv_xform);
     }
-    tangent = normalize(tangent);
     if (mat->tangent_rotation != 0.0f) {
         tangent = rotate_around_axis(tangent, N, mat->tangent_rotation);
     }

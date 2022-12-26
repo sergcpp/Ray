@@ -5163,7 +5163,6 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_settings_t &
         TransformNormal(inv_transform, T);
 
         TransformNormal(inv_transform, tangent);
-        normalize(tangent);
     }
 
     //////////////////////////////////
