@@ -1826,8 +1826,8 @@ void Ray::NS::GeneratePrimaryRays(const int iteration, const camera_t &cam, cons
                             simd_fvec<S> d[3]) {
         const int S = DimX * DimY;
 
-        simd_fvec<S> _dx = 2 * fov_k * x / ww - fov_k;
-        simd_fvec<S> _dy = 2 * fov_k * -y / hh + fov_k;
+        simd_fvec<S> _dx = 2 * fov_k * (x / ww + cam.shift[0] / k) - fov_k;
+        simd_fvec<S> _dy = 2 * fov_k * (-y / hh + cam.shift[1]) + fov_k;
 
         d[0] = cam_origin[0] + k * _dx * side[0] + _dy * up[0] + fwd[0] * focus_distance;
         d[1] = cam_origin[1] + k * _dx * side[1] + _dy * up[1] + fwd[1] * focus_distance;

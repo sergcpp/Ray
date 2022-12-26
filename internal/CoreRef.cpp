@@ -1102,8 +1102,8 @@ void Ray::Ref::GeneratePrimaryRays(const int iteration, const camera_t &cam, con
     const float spread_angle = std::atan(2.0f * temp / float(h));
 
     auto get_pix_dir = [&](const float x, const float y, const simd_fvec4 &origin) {
-        simd_fvec4 p(2 * fov_k * float(x) / float(w) - fov_k, 2 * fov_k * float(-y) / float(h) + fov_k, focus_distance,
-                     0.0f);
+        simd_fvec4 p(2 * fov_k * (float(x) / float(w) + cam.shift[0] / k) - fov_k,
+                     2 * fov_k * (float(-y) / float(h) + cam.shift[1]) + fov_k, focus_distance, 0.0f);
         p = cam_origin + k * p[0] * side + p[1] * up + p[2] * fwd;
         return normalize(p - origin);
     };

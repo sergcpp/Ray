@@ -72,7 +72,7 @@ struct camera_t {
     float focus_distance, focal_length, fstop, lens_rotation, lens_ratio;
     int lens_blades;
     float clip_start, clip_end;
-    float origin[3], fwd[3], side[3], up[3];
+    float origin[3], fwd[3], side[3], up[3], shift[2];
     uint32_t mi_index, uv_index;
     pass_settings_t pass_settings;
 };

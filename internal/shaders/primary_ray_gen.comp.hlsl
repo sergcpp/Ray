@@ -14,7 +14,11 @@ struct Params
     int cam_lens_blades;
     float cam_clip_start;
     int cam_filter;
-    float _pad;
+    float shift_x;
+    float shift_y;
+    float _pad0;
+    float _pad1;
+    float _pad2;
 };
 
 struct ray_data_t
@@ -31,8 +35,8 @@ struct ray_data_t
 
 static const uint3 gl_WorkGroupSize = uint3(8u, 8u, 1u);
 
-ByteAddressBuffer _247 : register(t1, space0);
-RWByteAddressBuffer _539 : register(u0, space0);
+ByteAddressBuffer _257 : register(t1, space0);
+RWByteAddressBuffer _549 : register(u0, space0);
 cbuffer UniformParams
 {
     Params _75_g_params : packoffset(c0);
@@ -67,44 +71,45 @@ float ngon_rad(float theta, float n)
 
 float3 get_pix_dir(float x, float y, float3 _origin, float prop)
 {
-    float _89 = 2.0f * (_75_g_params.cam_origin.w * _75_g_params.cam_side.w);
-    return normalize((((_75_g_params.cam_origin.xyz + (_75_g_params.cam_side.xyz * (prop * mad(-_75_g_params.cam_origin.w, _75_g_params.cam_side.w, (_89 * x) / float(_75_g_params.img_size.x))))) + (_75_g_params.cam_up.xyz * mad(_75_g_params.cam_origin.w, _75_g_params.cam_side.w, (_89 * (-y)) / float(_75_g_params.img_size.y)))) + (_75_g_params.cam_fwd.xyz * _75_g_params.cam_side.w)) - _origin);
+    float _85 = _75_g_params.cam_origin.w * _75_g_params.cam_side.w;
+    float _89 = 2.0f * _85;
+    return normalize((((_75_g_params.cam_origin.xyz + (_75_g_params.cam_side.xyz * (prop * mad(_89, (x / float(_75_g_params.img_size.x)) + (_75_g_params.shift_x / prop), -_85)))) + (_75_g_params.cam_up.xyz * mad(_89, ((-y) / float(_75_g_params.img_size.y)) + _75_g_params.shift_y, _85))) + (_75_g_params.cam_fwd.xyz * _75_g_params.cam_side.w)) - _origin);
 }
 
 void comp_main()
 {
     do
     {
-        bool _175 = gl_GlobalInvocationID.x >= _75_g_params.img_size.x;
-        bool _184;
-        if (!_175)
+        bool _185 = gl_GlobalInvocationID.x >= _75_g_params.img_size.x;
+        bool _194;
+        if (!_185)
         {
-            _184 = gl_GlobalInvocationID.y >= _75_g_params.img_size.y;
+            _194 = gl_GlobalInvocationID.y >= _75_g_params.img_size.y;
         }
         else
         {
-            _184 = _175;
+            _194 = _185;
         }
-        if (_184)
+        if (_194)
         {
             break;
         }
-        int _200 = int(gl_GlobalInvocationID.x);
-        int _204 = int(gl_GlobalInvocationID.y);
-        int _212 = (_204 * int(_75_g_params.img_size.x)) + _200;
-        int _215 = hash(_212);
-        float _x = float(_200);
-        float _y = float(_204);
-        uint param = uint(_215);
-        float _228 = construct_float(param);
-        uint param_1 = uint(hash(_215));
-        float _233 = construct_float(param_1);
+        int _210 = int(gl_GlobalInvocationID.x);
+        int _214 = int(gl_GlobalInvocationID.y);
+        int _222 = (_214 * int(_75_g_params.img_size.x)) + _210;
+        int _225 = hash(_222);
+        float _x = float(_210);
+        float _y = float(_214);
+        uint param = uint(_225);
+        float _238 = construct_float(param);
+        uint param_1 = uint(hash(_225));
+        float _243 = construct_float(param_1);
         if (_75_g_params.cam_filter == 1)
         {
-            float _257 = frac(asfloat(_247.Load(_75_g_params.hi * 4 + 0)) + _228);
-            float rx = _257;
+            float _267 = frac(asfloat(_257.Load(_75_g_params.hi * 4 + 0)) + _238);
+            float rx = _267;
             [flatten]
-            if (_257 < 0.5f)
+            if (_267 < 0.5f)
             {
                 rx = sqrt(2.0f * rx) - 1.0f;
             }
@@ -112,10 +117,10 @@ void comp_main()
             {
                 rx = 1.0f - sqrt(mad(-2.0f, rx, 2.0f));
             }
-            float _282 = frac(asfloat(_247.Load((_75_g_params.hi + 1) * 4 + 0)) + _233);
-            float ry = _282;
+            float _292 = frac(asfloat(_257.Load((_75_g_params.hi + 1) * 4 + 0)) + _243);
+            float ry = _292;
             [flatten]
-            if (_282 < 0.5f)
+            if (_292 < 0.5f)
             {
                 ry = sqrt(2.0f * ry) - 1.0f;
             }
@@ -128,25 +133,25 @@ void comp_main()
         }
         else
         {
-            _x += frac(asfloat(_247.Load(_75_g_params.hi * 4 + 0)) + _228);
-            _y += frac(asfloat(_247.Load((_75_g_params.hi + 1) * 4 + 0)) + _233);
+            _x += frac(asfloat(_257.Load(_75_g_params.hi * 4 + 0)) + _238);
+            _y += frac(asfloat(_257.Load((_75_g_params.hi + 1) * 4 + 0)) + _243);
         }
         float2 offset = 0.0f.xx;
         if (_75_g_params.cam_fstop > 0.0f)
         {
-            float2 _363 = (float2(frac(asfloat(_247.Load((_75_g_params.hi + 2) * 4 + 0)) + _228), frac(asfloat(_247.Load((_75_g_params.hi + 3) * 4 + 0)) + _233)) * 2.0f) - 1.0f.xx;
-            offset = _363;
-            bool _366 = _363.x != 0.0f;
-            bool _372;
-            if (_366)
+            float2 _373 = (float2(frac(asfloat(_257.Load((_75_g_params.hi + 2) * 4 + 0)) + _238), frac(asfloat(_257.Load((_75_g_params.hi + 3) * 4 + 0)) + _243)) * 2.0f) - 1.0f.xx;
+            offset = _373;
+            bool _376 = _373.x != 0.0f;
+            bool _382;
+            if (_376)
             {
-                _372 = offset.y != 0.0f;
+                _382 = offset.y != 0.0f;
             }
             else
             {
-                _372 = _366;
+                _382 = _376;
             }
-            if (_372)
+            if (_382)
             {
                 float r;
                 float theta;
@@ -164,38 +169,38 @@ void comp_main()
                 {
                     r *= ngon_rad(theta, float(_75_g_params.cam_lens_blades));
                 }
-                float _422 = theta;
-                float _423 = _422 + _75_g_params.cam_lens_rotation;
-                theta = _423;
-                float _425 = 0.5f * r;
-                offset = float2((_425 * cos(_423)) / _75_g_params.cam_lens_ratio, _425 * sin(_423));
+                float _432 = theta;
+                float _433 = _432 + _75_g_params.cam_lens_rotation;
+                theta = _433;
+                float _435 = 0.5f * r;
+                offset = float2((_435 * cos(_433)) / _75_g_params.cam_lens_ratio, _435 * sin(_433));
             }
             offset *= ((0.5f * (_75_g_params.cam_focal_length / _75_g_params.cam_fstop)) * _75_g_params.cam_up.w);
         }
-        float3 _471 = (_75_g_params.cam_origin.xyz + (_75_g_params.cam_side.xyz * offset.x)) + (_75_g_params.cam_up.xyz * offset.y);
-        float3 _origin = _471;
+        float3 _481 = (_75_g_params.cam_origin.xyz + (_75_g_params.cam_side.xyz * offset.x)) + (_75_g_params.cam_up.xyz * offset.y);
+        float3 _origin = _481;
         float param_2 = _x;
         float param_3 = _y;
-        float3 param_4 = _471;
+        float3 param_4 = _481;
         float param_5 = float(_75_g_params.img_size.x) / float(_75_g_params.img_size.y);
-        float3 _481 = get_pix_dir(param_2, param_3, param_4, param_5);
-        float3 _493 = _origin;
-        float3 _494 = _493 + (_481 * (_75_g_params.cam_clip_start / dot(_481, _75_g_params.cam_fwd.xyz)));
-        _origin = _494;
-        _539.Store(_212 * 56 + 0, asuint(_494.x));
-        _539.Store(_212 * 56 + 4, asuint(_494.y));
-        _539.Store(_212 * 56 + 8, asuint(_494.z));
-        _539.Store(_212 * 56 + 12, asuint(_481.x));
-        _539.Store(_212 * 56 + 16, asuint(_481.y));
-        _539.Store(_212 * 56 + 20, asuint(_481.z));
-        _539.Store(_212 * 56 + 24, asuint(1000000.0f));
-        _539.Store(_212 * 56 + 28, asuint(1.0f));
-        _539.Store(_212 * 56 + 32, asuint(1.0f));
-        _539.Store(_212 * 56 + 36, asuint(1.0f));
-        _539.Store(_212 * 56 + 40, asuint(0.0f));
-        _539.Store(_212 * 56 + 44, asuint(_75_g_params.spread_angle));
-        _539.Store(_212 * 56 + 48, uint((_200 << 16) | _204));
-        _539.Store(_212 * 56 + 52, uint(0));
+        float3 _491 = get_pix_dir(param_2, param_3, param_4, param_5);
+        float3 _503 = _origin;
+        float3 _504 = _503 + (_491 * (_75_g_params.cam_clip_start / dot(_491, _75_g_params.cam_fwd.xyz)));
+        _origin = _504;
+        _549.Store(_222 * 56 + 0, asuint(_504.x));
+        _549.Store(_222 * 56 + 4, asuint(_504.y));
+        _549.Store(_222 * 56 + 8, asuint(_504.z));
+        _549.Store(_222 * 56 + 12, asuint(_491.x));
+        _549.Store(_222 * 56 + 16, asuint(_491.y));
+        _549.Store(_222 * 56 + 20, asuint(_491.z));
+        _549.Store(_222 * 56 + 24, asuint(1000000.0f));
+        _549.Store(_222 * 56 + 28, asuint(1.0f));
+        _549.Store(_222 * 56 + 32, asuint(1.0f));
+        _549.Store(_222 * 56 + 36, asuint(1.0f));
+        _549.Store(_222 * 56 + 40, asuint(0.0f));
+        _549.Store(_222 * 56 + 44, asuint(_75_g_params.spread_angle));
+        _549.Store(_222 * 56 + 48, uint((_210 << 16) | _214));
+        _549.Store(_222 * 56 + 52, uint(0));
         break;
     } while(false);
 }

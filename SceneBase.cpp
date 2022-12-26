@@ -31,6 +31,7 @@ void Ray::SceneBase::GetCamera(const uint32_t i, camera_desc_t &c) const {
         memcpy(&c.origin[0], &cam.origin[0], 3 * sizeof(float));
         memcpy(&c.fwd[0], &cam.fwd[0], 3 * sizeof(float));
         memcpy(&c.up[0], &cam.up[0], 3 * sizeof(float));
+        memcpy(&c.shift[0], &cam.shift[0], 2 * sizeof(float));
         c.fov = cam.fov;
         c.focus_distance = cam.focus_distance;
         c.focal_length = cam.focal_length;
@@ -66,7 +67,7 @@ void Ray::SceneBase::SetCamera(const uint32_t i, const camera_desc_t &c) {
     camera_t &cam = cams_[i].cam;
     if (c.type != Geo) {
         if (c.ltype == eLensUnits::FOV) {
-            ConstructCamera(c.type, c.filter, c.dtype, c.origin, c.fwd, c.up, c.fov, c.sensor_height, c.gamma,
+            ConstructCamera(c.type, c.filter, c.dtype, c.origin, c.fwd, c.up, c.shift, c.fov, c.sensor_height, c.gamma,
                             c.focus_distance, c.fstop, c.lens_rotation, c.lens_ratio, c.lens_blades, c.clip_start,
                             c.clip_end, &cam);
         } else if (c.ltype == eLensUnits::FLength) {

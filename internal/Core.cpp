@@ -941,10 +941,10 @@ bool Ray::NaiivePluckerTest(const float p[9], const float o[3], const float d[3]
 }
 
 void Ray::ConstructCamera(const eCamType type, const eFilterType filter, eDeviceType dtype, const float origin[3],
-                          const float fwd[3], const float up[3], const float fov, const float sensor_height,
-                          const float gamma, const float focus_distance, const float fstop, const float lens_rotation,
-                          const float lens_ratio, const int lens_blades, const float clip_start, const float clip_end,
-                          camera_t *cam) {
+                          const float fwd[3], const float up[3], const float shift[2], const float fov,
+                          const float sensor_height, const float gamma, const float focus_distance, const float fstop,
+                          const float lens_rotation, const float lens_ratio, const int lens_blades,
+                          const float clip_start, const float clip_end, camera_t *cam) {
     if (type == Persp) {
         auto o = Ref::simd_fvec3{origin}, f = Ref::simd_fvec3{fwd}, u = Ref::simd_fvec3{up};
 
@@ -978,6 +978,7 @@ void Ray::ConstructCamera(const eCamType type, const eFilterType filter, eDevice
         memcpy(&cam->fwd[0], &f[0], 3 * sizeof(float));
         memcpy(&cam->side[0], &s[0], 3 * sizeof(float));
         memcpy(&cam->up[0], &u[0], 3 * sizeof(float));
+        memcpy(&cam->shift[0], shift, 2 * sizeof(float));
     } else if (type == Ortho) {
         // TODO!
     }
