@@ -2470,7 +2470,7 @@ void test_complex_mat5(const char *arch_list[], const char *preferred_device) {
 void test_complex_mat5_dof(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 1024;
     const double MinPSNR = 30.33;
-    const int PixThres = 999;
+    const int PixThres = 1001;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = 0;
@@ -2492,7 +2492,7 @@ void test_complex_mat5_dof(const char *arch_list[], const char *preferred_device
 void test_complex_mat5_mesh_lights(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 768;
     const double MinPSNR = 31.13;
-    const int PixThres = 1165;
+    const int PixThres = 1167;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = 0;
@@ -2557,7 +2557,7 @@ void test_complex_mat5_spot_light(const char *arch_list[], const char *preferred
 
 void test_complex_mat5_sun_light(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 768;
-    const double MinPSNR = 28.64;
+    const double MinPSNR = 28.63;
     const int PixThres = 1340;
 
     Ray::principled_mat_desc_t metal_mat_desc;
@@ -2579,8 +2579,8 @@ void test_complex_mat5_sun_light(const char *arch_list[], const char *preferred_
 
 void test_complex_mat5_hdr_light(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 1024;
-    const double MinPSNR = 30.28;
-    const int PixThres = 1261;
+    const double MinPSNR = 30.26;
+    const int PixThres = 1262;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = 0;
@@ -2652,7 +2652,7 @@ void test_complex_mat6_mesh_lights(const char *arch_list[], const char *preferre
 void test_complex_mat6_sphere_light(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 1024;
     const double MinPSNR = 24.31;
-    const int PixThres = 504;
+    const int PixThres = 505;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;
