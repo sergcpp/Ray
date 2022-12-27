@@ -1227,7 +1227,7 @@ void test_sheen_mat3(const char *arch_list[], const char *preferred_device) {
 void test_glossy_mat0(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 2048;
     const double MinPSNR = 34.14;
-    const int PixThres = 69;
+    const int PixThres = 71;
 
     Ray::shading_node_desc_t node_desc;
     node_desc.type = Ray::GlossyNode;
@@ -1306,7 +1306,7 @@ void test_glossy_mat4(const char *arch_list[], const char *preferred_device) {
 void test_spec_mat0(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 2048;
     const double MinPSNR = 34.14;
-    const int PixThres = 69;
+    const int PixThres = 71;
 
     Ray::principled_mat_desc_t spec_mat_desc;
     spec_mat_desc.base_color[0] = 1.0f;
@@ -1453,7 +1453,7 @@ void test_aniso_mat3(const char *arch_list[], const char *preferred_device) {
 void test_aniso_mat4(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 1024;
     const double MinPSNR = 33.05;
-    const int PixThres = 91;
+    const int PixThres = 92;
 
     Ray::principled_mat_desc_t spec_mat_desc;
     spec_mat_desc.base_color[0] = 1.0f;
@@ -1470,7 +1470,7 @@ void test_aniso_mat4(const char *arch_list[], const char *preferred_device) {
 void test_aniso_mat5(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 1024;
     const double MinPSNR = 33.6;
-    const int PixThres = 75;
+    const int PixThres = 76;
 
     Ray::principled_mat_desc_t spec_mat_desc;
     spec_mat_desc.base_color[0] = 1.0f;
@@ -1487,7 +1487,7 @@ void test_aniso_mat5(const char *arch_list[], const char *preferred_device) {
 void test_aniso_mat6(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 1024;
     const double MinPSNR = 33.2;
-    const int PixThres = 104;
+    const int PixThres = 105;
 
     Ray::principled_mat_desc_t spec_mat_desc;
     spec_mat_desc.base_color[0] = 1.0f;
@@ -2336,7 +2336,7 @@ void test_alpha_mat3(const char *arch_list[], const char *preferred_device) {
 void test_complex_mat0(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 512;
     const double MinPSNR = 38.97;
-    const int PixThres = 9;
+    const int PixThres = 10;
 
     Ray::principled_mat_desc_t wood_mat_desc;
     wood_mat_desc.base_texture = 0;
