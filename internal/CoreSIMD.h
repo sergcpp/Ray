@@ -1655,7 +1655,7 @@ template <int S> simd_fvec<S> D_GTR1(const simd_fvec<S> &NDotH, const simd_fvec<
     simd_fvec<S> ret = 1.0f / PI;
     const simd_fvec<S> a2 = a * a;
     const simd_fvec<S> t = 1.0f + (a2 - 1.0f) * NDotH * NDotH;
-    where(a < 1.0f, ret) = (a2 - 1.0f) / (PI * log(a2) * t);
+    where(a < 1.0f, ret) = safe_div_pos(a2 - 1.0f, PI * log(a2) * t);
     return ret;
 }
 
@@ -3550,14 +3550,15 @@ void Ray::NS::Evaluate_PrincipledClearcoat_BSDF(const simd_fvec<S> view_dir_ts[3
     simd_fvec<S> F = mix(simd_fvec<S>{0.04f}, simd_fvec<S>{1.0f}, FH);
 
     const simd_fvec<S> denom = 4.0f * abs(view_dir_ts[2]) * abs(reflected_dir_ts[2]);
-    F *= (D * G / denom);
+    F *= safe_div_pos(D * G, denom);
     where(denom == 0.0f, F) = 0.0f;
 
 #if USE_VNDF_GGX_SAMPLING == 1
-    simd_fvec<S> pdf = D * G1(view_dir_ts, clearcoat_alpha, clearcoat_alpha) *
-                       max(dot3(view_dir_ts, sampled_normal_ts), 0.0f) / abs(view_dir_ts[2]);
+    simd_fvec<S> pdf = safe_div_pos(D * G1(view_dir_ts, clearcoat_alpha, clearcoat_alpha) *
+                                        max(dot3(view_dir_ts, sampled_normal_ts), 0.0f),
+                                    abs(view_dir_ts[2]));
     const simd_fvec<S> div = 4.0f * dot3(view_dir_ts, sampled_normal_ts);
-    where(div != 0.0f, pdf) = pdf / div;
+    where(div != 0.0f, pdf) = safe_div_pos(pdf, div);
 #else
     float pdf = D * sampled_normal_ts[2] / (4.0f * dot3(view_dir_ts, sampled_normal_ts));
 #endif
@@ -3590,7 +3591,7 @@ void Ray::NS::Sample_PrincipledClearcoat_BSDF(const simd_fvec<S> T[3], const sim
 
     simd_fvec<S> view_dir_ts[3];
     tangent_from_world(T, B, N, neg_I, view_dir_ts);
-    normalize(view_dir_ts);
+    safe_normalize(view_dir_ts);
 
     // NOTE: GTR1 distribution is not used for sampling because Cycles does it this way (???!)
     simd_fvec<S> sampled_normal_ts[3];
@@ -3605,7 +3606,7 @@ void Ray::NS::Sample_PrincipledClearcoat_BSDF(const simd_fvec<S> T[3], const sim
     simd_fvec<S> reflected_dir_ts[3];
     const simd_fvec<S> _view_dir_ts[3] = {-view_dir_ts[0], -view_dir_ts[1], -view_dir_ts[2]};
     reflect(_view_dir_ts, sampled_normal_ts, dot_N_V, reflected_dir_ts);
-    normalize(reflected_dir_ts);
+    safe_normalize(reflected_dir_ts);
 
     world_from_tangent(T, B, N, reflected_dir_ts, out_V);
     Evaluate_PrincipledClearcoat_BSDF(view_dir_ts, sampled_normal_ts, reflected_dir_ts,
@@ -5654,7 +5655,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_settings_t &
                 if (eval_light.not_all_zeros()) {
                     const simd_fvec<S> _I[3] = {-I[0], -I[1], -I[2]};
                     simd_fvec<S> H[3] = {ls.L[0] - I[0] * eta, ls.L[1] - I[1] * eta, ls.L[2] - I[2] * eta};
-                    normalize(H);
+                    safe_normalize(H);
 
                     simd_fvec<S> view_dir_ts[3], light_dir_ts[3], sampled_normal_ts[3];
                     tangent_from_world(T, B, N, _I, view_dir_ts);
@@ -5673,7 +5674,8 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_settings_t &
                     ITERATE_3({ where(eval_light, sh_r.d[i]) = ls.L[i]; })
                     where(eval_light, sh_r.dist) = ls.dist - 10.0f * HIT_BIAS;
                     ITERATE_3({
-                        const simd_fvec<S> temp = ls.col[i] * refr_col[i] * (mix_weight * mis_weight / ls.pdf);
+                        const simd_fvec<S> temp =
+                            ls.col[i] * refr_col[i] * safe_div_pos(mix_weight * mis_weight, ls.pdf);
                         where(eval_light, sh_r.c[i]) = ray.c[i] * temp;
                         where(eval_light & ~ls.cast_shadow, col[i]) += temp;
                     })
@@ -5694,7 +5696,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_settings_t &
 
                     ITERATE_3({ where(gen_ray, new_ray.o[i]) = P_biased[i]; })
                     ITERATE_3({ where(gen_ray, new_ray.d[i]) = V[i]; })
-                    ITERATE_3({ where(gen_ray, new_ray.c[i]) = ray.c[i] * F[i] * mix_weight / F[3]; })
+                    ITERATE_3({ where(gen_ray, new_ray.c[i]) = ray.c[i] * F[i] * safe_div_pos(mix_weight, F[3]); })
                     where(gen_ray, new_ray.pdf) = F[3];
 
                     const simd_fvec<S> k = (eta - eta * eta * dot3(I, plane_N) / dot3(V, plane_N));
@@ -6093,7 +6095,10 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_settings_t &
 
                     ITERATE_3({ where(sample_coat_lobe, new_ray.o[i]) = new_p[i]; })
                     ITERATE_3({ where(sample_coat_lobe, new_ray.d[i]) = V[i]; })
-                    ITERATE_3({ where(sample_coat_lobe, new_ray.c[i]) = 0.25f * ray.c[i] * F[i] * mix_weight / F[3]; })
+                    ITERATE_3({
+                        where(sample_coat_lobe, new_ray.c[i]) =
+                            0.25f * ray.c[i] * F[i] * safe_div_pos(mix_weight, F[3]);
+                    })
                     where(sample_coat_lobe, new_ray.pdf) = F[3];
 
 #ifdef USE_RAY_DIFFERENTIALS
