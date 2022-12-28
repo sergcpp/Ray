@@ -1655,7 +1655,7 @@ template <int S> simd_fvec<S> D_GTR1(const simd_fvec<S> &NDotH, const simd_fvec<
     simd_fvec<S> ret = 1.0f / PI;
     const simd_fvec<S> a2 = a * a;
     const simd_fvec<S> t = 1.0f + (a2 - 1.0f) * NDotH * NDotH;
-    where(a < 1.0f, ret) = safe_div_pos(a2 - 1.0f, PI * log(a2) * t);
+    where(a < 1.0f, ret) = safe_div(a2 - 1.0f, PI * log(a2) * t);
     return ret;
 }
 
