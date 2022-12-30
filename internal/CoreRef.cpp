@@ -3802,9 +3802,9 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_setting
 
             new_ray.ray_depth = ray.ray_depth + 0x00010000;
 
-            new_ray.c[0] = ray.c[0] * F[0] * mix_weight / F[3];
-            new_ray.c[1] = ray.c[1] * F[1] * mix_weight / F[3];
-            new_ray.c[2] = ray.c[2] * F[2] * mix_weight / F[3];
+            new_ray.c[0] = ray.c[0] * F[0] * safe_div_pos(mix_weight, F[3]);
+            new_ray.c[1] = ray.c[1] * F[1] * safe_div_pos(mix_weight, F[3]);
+            new_ray.c[2] = ray.c[2] * F[2] * safe_div_pos(mix_weight, F[3]);
             new_ray.pdf = F[3];
 
             memcpy(&new_ray.o[0], value_ptr(offset_ray(P, -plane_N)), 3 * sizeof(float));
@@ -4063,9 +4063,9 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_setting
 
                 new_ray.ray_depth = ray.ray_depth + 0x00000100;
 
-                new_ray.c[0] = ray.c[0] * F[0] * mix_weight / std::max(F[3], FLT_EPS);
-                new_ray.c[1] = ray.c[1] * F[1] * mix_weight / std::max(F[3], FLT_EPS);
-                new_ray.c[2] = ray.c[2] * F[2] * mix_weight / std::max(F[3], FLT_EPS);
+                new_ray.c[0] = ray.c[0] * F[0] * safe_div_pos(mix_weight, F[3]);
+                new_ray.c[1] = ray.c[1] * F[1] * safe_div_pos(mix_weight, F[3]);
+                new_ray.c[2] = ray.c[2] * F[2] * safe_div_pos(mix_weight, F[3]);
                 new_ray.pdf = F[3];
 
                 memcpy(&new_ray.o[0], value_ptr(offset_ray(P, plane_N)), 3 * sizeof(float));
@@ -4171,9 +4171,9 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_setting
 
                 F[3] *= refraction_weight;
 
-                new_ray.c[0] = ray.c[0] * F[0] * mix_weight / std::max(F[3], FLT_EPS);
-                new_ray.c[1] = ray.c[1] * F[1] * mix_weight / std::max(F[3], FLT_EPS);
-                new_ray.c[2] = ray.c[2] * F[2] * mix_weight / std::max(F[3], FLT_EPS);
+                new_ray.c[0] = ray.c[0] * F[0] * safe_div_pos(mix_weight, F[3]);
+                new_ray.c[1] = ray.c[1] * F[1] * safe_div_pos(mix_weight, F[3]);
+                new_ray.c[2] = ray.c[2] * F[2] * safe_div_pos(mix_weight, F[3]);
                 new_ray.pdf = F[3];
 
                 //////////////////
