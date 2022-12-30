@@ -1089,7 +1089,7 @@ Ray::Ref::hit_data_t::hit_data_t() {
 }
 
 void Ray::Ref::GeneratePrimaryRays(const int iteration, const camera_t &cam, const rect_t &r, const int w, const int h,
-                                   const float *halton, aligned_vector<ray_data_t> &out_rays) {
+                                   const float *random_seq, aligned_vector<ray_data_t> &out_rays) {
     const auto cam_origin = simd_fvec4{cam.origin[0], cam.origin[1], cam.origin[2], 0.0f},
                fwd = simd_fvec4{cam.fwd[0], cam.fwd[1], cam.fwd[2], 0.0f},
                side = simd_fvec4{cam.side[0], cam.side[1], cam.side[2], 0.0f},
@@ -1124,14 +1124,14 @@ void Ray::Ref::GeneratePrimaryRays(const int iteration, const camera_t &cam, con
             const float sample_off[2] = {construct_float(hash_val), construct_float(hash(hash_val))};
 
             if (cam.filter == Tent) {
-                float rx = fract(halton[RAND_DIM_FILTER_U] + sample_off[0]);
+                float rx = fract(random_seq[RAND_DIM_FILTER_U] + sample_off[0]);
                 if (rx < 0.5f) {
                     rx = std::sqrt(2.0f * rx) - 1.0f;
                 } else {
                     rx = 1.0f - std::sqrt(2.0f - 2 * rx);
                 }
 
-                float ry = fract(halton[RAND_DIM_FILTER_V] + sample_off[1]);
+                float ry = fract(random_seq[RAND_DIM_FILTER_V] + sample_off[1]);
                 if (ry < 0.5f) {
                     ry = std::sqrt(2.0f * ry) - 1.0f;
                 } else {
@@ -1141,15 +1141,15 @@ void Ray::Ref::GeneratePrimaryRays(const int iteration, const camera_t &cam, con
                 _x += 0.5f + rx;
                 _y += 0.5f + ry;
             } else {
-                _x += fract(halton[RAND_DIM_FILTER_U] + sample_off[0]);
-                _y += fract(halton[RAND_DIM_FILTER_V] + sample_off[1]);
+                _x += fract(random_seq[RAND_DIM_FILTER_U] + sample_off[0]);
+                _y += fract(random_seq[RAND_DIM_FILTER_V] + sample_off[1]);
             }
 
             simd_fvec2 offset = 0.0f;
 
             if (cam.fstop > 0.0f) {
-                const float r1 = fract(halton[RAND_DIM_LENS_U] + sample_off[0]);
-                const float r2 = fract(halton[RAND_DIM_LENS_V] + sample_off[1]);
+                const float r1 = fract(random_seq[RAND_DIM_LENS_U] + sample_off[0]);
+                const float r2 = fract(random_seq[RAND_DIM_LENS_V] + sample_off[1]);
 
                 offset = 2.0f * simd_fvec2{r1, r2} - simd_fvec2{1.0f, 1.0f};
                 if (offset[0] != 0.0f && offset[1] != 0.0f) {
@@ -1211,7 +1211,7 @@ void Ray::Ref::GeneratePrimaryRays(const int iteration, const camera_t &cam, con
 void Ray::Ref::SampleMeshInTextureSpace(const int iteration, const int obj_index, const int uv_layer,
                                         const mesh_t &mesh, const transform_t &tr, const uint32_t *vtx_indices,
                                         const vertex_t *vertices, const rect_t &r, const int width, const int height,
-                                        const float *halton, aligned_vector<ray_data_t> &out_rays,
+                                        const float *random_seq, aligned_vector<ray_data_t> &out_rays,
                                         aligned_vector<hit_data_t> &out_inters) {
     out_rays.resize(size_t(r.w) * r.h);
     out_inters.resize(out_rays.size());
@@ -1279,13 +1279,9 @@ void Ray::Ref::SampleMeshInTextureSpace(const int iteration, const int obj_index
                     continue;
                 }
 
-                const int index = y * width + x;
-                const int hi = (iteration & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT;
-
-                const int hash_val = hash(index);
-
-                const float _x = float(x) + fract(halton[hi + 0] + construct_float(hash_val));
-                const float _y = float(y) + fract(halton[hi + 1] + construct_float(hash(hash_val)));
+                const float _x = float(x) + fract(random_seq[RAND_DIM_FILTER_U] + construct_float(hash(out_ray.xy)));
+                const float _y =
+                    float(y) + fract(random_seq[RAND_DIM_FILTER_V] + construct_float(hash(hash(out_ray.xy))));
 
                 float u = d01[0] * (_y - t0[1]) - d01[1] * (_x - t0[0]),
                       v = d12[0] * (_y - t1[1]) - d12[1] * (_x - t1[0]),
@@ -2927,8 +2923,8 @@ void Ray::Ref::ComputeDerivatives(const simd_fvec4 &I, const float t, const simd
 }
 
 void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, const TexStorageBase *const textures[],
-                                 const float halton[], const float sample_off[2], light_sample_t &ls) {
-    const float u1 = fract(halton[RAND_DIM_LIGHT_PICK] + sample_off[0]);
+                                 const float random_seq[], const float sample_off[2], light_sample_t &ls) {
+    const float u1 = fract(random_seq[RAND_DIM_LIGHT_PICK] + sample_off[0]);
 
     // TODO: Hierarchical NEE
     const auto light_index = std::min(uint32_t(u1 * sc.li_indices.size()), uint32_t(sc.li_indices.size() - 1));
@@ -2939,8 +2935,8 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, co
     ls.cast_shadow = l.cast_shadow ? 1.0f : 0.0f;
 
     if (l.type == LIGHT_TYPE_SPHERE) {
-        const float r1 = fract(halton[RAND_DIM_LIGHT_U] + sample_off[0]);
-        const float r2 = fract(halton[RAND_DIM_LIGHT_V] + sample_off[1]);
+        const float r1 = fract(random_seq[RAND_DIM_LIGHT_U] + sample_off[0]);
+        const float r2 = fract(random_seq[RAND_DIM_LIGHT_V] + sample_off[1]);
 
         simd_fvec4 center_to_surface = P - simd_fvec4{l.sph.pos[0], l.sph.pos[1], l.sph.pos[2], 0.0f};
         float dist_to_center = length(center_to_surface);
@@ -2989,8 +2985,8 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, co
     } else if (l.type == LIGHT_TYPE_DIR) {
         ls.L = simd_fvec4{l.dir.dir[0], l.dir.dir[1], l.dir.dir[2], 0.0f};
         if (l.dir.angle != 0.0f) {
-            const float r1 = fract(halton[RAND_DIM_LIGHT_U] + sample_off[0]);
-            const float r2 = fract(halton[RAND_DIM_LIGHT_V] + sample_off[1]);
+            const float r1 = fract(random_seq[RAND_DIM_LIGHT_U] + sample_off[0]);
+            const float r2 = fract(random_seq[RAND_DIM_LIGHT_V] + sample_off[1]);
 
             const float radius = std::tan(l.dir.angle);
             ls.L = normalize(MapToCone(r1, r2, ls.L, radius));
@@ -3003,8 +2999,8 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, co
         const simd_fvec4 light_u = simd_fvec4{l.rect.u[0], l.rect.u[1], l.rect.u[2], 0.0f};
         const simd_fvec4 light_v = simd_fvec4{l.rect.v[0], l.rect.v[1], l.rect.v[2], 0.0f};
 
-        const float r1 = fract(halton[RAND_DIM_LIGHT_U] + sample_off[0]) - 0.5f;
-        const float r2 = fract(halton[RAND_DIM_LIGHT_V] + sample_off[1]) - 0.5f;
+        const float r1 = fract(random_seq[RAND_DIM_LIGHT_U] + sample_off[0]) - 0.5f;
+        const float r2 = fract(random_seq[RAND_DIM_LIGHT_V] + sample_off[1]) - 0.5f;
         const simd_fvec4 lp = light_pos + light_u * r1 + light_v * r2;
 
         const simd_fvec4 to_light = lp - P;
@@ -3037,8 +3033,8 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, co
         const simd_fvec4 light_u = simd_fvec4{l.disk.u[0], l.disk.u[1], l.disk.u[2], 0.0f};
         const simd_fvec4 light_v = simd_fvec4{l.disk.v[0], l.disk.v[1], l.disk.v[2], 0.0f};
 
-        const float r1 = fract(halton[RAND_DIM_LIGHT_U] + sample_off[0]);
-        const float r2 = fract(halton[RAND_DIM_LIGHT_V] + sample_off[1]);
+        const float r1 = fract(random_seq[RAND_DIM_LIGHT_U] + sample_off[0]);
+        const float r2 = fract(random_seq[RAND_DIM_LIGHT_V] + sample_off[1]);
 
         simd_fvec2 offset = 2.0f * simd_fvec2{r1, r2} - simd_fvec2{1.0f, 1.0f};
         if (offset[0] != 0.0f && offset[1] != 0.0f) {
@@ -3086,8 +3082,8 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, co
         const auto light_pos = simd_fvec4{l.line.pos[0], l.line.pos[1], l.line.pos[2], 0.0f};
         const simd_fvec4 light_dir = simd_fvec4{l.line.v[0], l.line.v[1], l.line.v[2], 0.0f};
 
-        const float r1 = fract(halton[RAND_DIM_LIGHT_U] + sample_off[0]);
-        const float r2 = fract(halton[RAND_DIM_LIGHT_V] + sample_off[1]);
+        const float r1 = fract(random_seq[RAND_DIM_LIGHT_U] + sample_off[0]);
+        const float r2 = fract(random_seq[RAND_DIM_LIGHT_V] + sample_off[1]);
 
         const simd_fvec4 center_to_surface = P - light_pos;
 
@@ -3137,8 +3133,8 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, co
                          p3 = simd_fvec4(v3.p[0], v3.p[1], v3.p[2], 0.0f);
         const simd_fvec2 uv1 = simd_fvec2(v1.t[0]), uv2 = simd_fvec2(v2.t[0]), uv3 = simd_fvec2(v3.t[0]);
 
-        const float r1 = std::sqrt(fract(halton[RAND_DIM_LIGHT_U] + sample_off[0]));
-        const float r2 = fract(halton[RAND_DIM_LIGHT_V] + sample_off[1]);
+        const float r1 = std::sqrt(fract(random_seq[RAND_DIM_LIGHT_U] + sample_off[0]));
+        const float r2 = fract(random_seq[RAND_DIM_LIGHT_V] + sample_off[1]);
 
         const simd_fvec2 luvs = uv1 * (1.0f - r1) + r1 * (uv2 * (1.0f - r2) + uv3 * r2);
         const simd_fvec4 lp = TransformPoint(p1 * (1.0f - r1) + r1 * (p2 * (1.0f - r2) + p3 * r2), ltr.xform);
@@ -3165,8 +3161,8 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, co
 
         const float rand = u1 * float(sc.li_indices.size()) - float(light_index);
 
-        const float rx = fract(halton[RAND_DIM_LIGHT_U] + sample_off[0]);
-        const float ry = fract(halton[RAND_DIM_LIGHT_V] + sample_off[1]);
+        const float rx = fract(random_seq[RAND_DIM_LIGHT_U] + sample_off[0]);
+        const float ry = fract(random_seq[RAND_DIM_LIGHT_V] + sample_off[1]);
 
         const simd_fvec4 dir_and_pdf =
             Sample_EnvQTree(sc.env->env_map_rotation, qtree_mips, sc.env->qtree_levels, rand, rx, ry);
@@ -3311,11 +3307,11 @@ void Ray::Ref::IntersectAreaLights(const ray_data_t &ray, const light_t lights[]
     }
 }
 
-Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_settings_t &ps, const hit_data_t &inter,
-                                          const ray_data_t &ray, const float *halton, const scene_data_t &sc,
-                                          const uint32_t node_index, const TexStorageBase *const textures[],
-                                          ray_data_t *out_secondary_rays, int *out_secondary_rays_count,
-                                          shadow_ray_t *out_shadow_rays, int *out_shadow_rays_count) {
+Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_data_t &inter, const ray_data_t &ray,
+                                          const float *random_seq, const scene_data_t &sc, const uint32_t node_index,
+                                          const TexStorageBase *const textures[], ray_data_t *out_secondary_rays,
+                                          int *out_secondary_rays_count, shadow_ray_t *out_shadow_rays,
+                                          int *out_shadow_rays_count) {
     const auto I = simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f};
 
     if (!inter.mask) {
@@ -3494,8 +3490,8 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_setting
     // lambda -= fast_log2(std::abs(dot(I, plane_N)));
 #endif
 
-    // used to randomize halton sequence among pixels
-    const float sample_off[2] = {construct_float(hash(px_index)), construct_float(hash(hash(px_index)))};
+    // used to randomize random sequence among pixels
+    const float sample_off[2] = {construct_float(hash(ray.xy)), construct_float(hash(hash(ray.xy)))};
 
     simd_fvec4 col = {0.0f};
 
@@ -3505,7 +3501,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_setting
     const int transp_depth = (ray.ray_depth >> 24) & 0x000000ff;
     const int total_depth = diff_depth + spec_depth + refr_depth + transp_depth;
 
-    float mix_rand = fract(halton[RAND_DIM_BSDF_PICK] + sample_off[0]);
+    float mix_rand = fract(random_seq[RAND_DIM_BSDF_PICK] + sample_off[0]);
     float mix_weight = 1.0f;
 
     // resolve mix material
@@ -3574,7 +3570,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_setting
 #if USE_NEE == 1
     light_sample_t ls;
     if (!sc.li_indices.empty() && mat->type != EmissiveNode) {
-        SampleLightSource(P, sc, textures, halton, sample_off, ls);
+        SampleLightSource(P, sc, textures, random_seq, sample_off, ls);
     }
     const float N_dot_L = dot(N, ls.L);
 #endif
@@ -3619,8 +3615,8 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_setting
         roughness *= roughness_color[0];
     }
 
-    const float rand_u = fract(halton[RAND_DIM_BSDF_U] + sample_off[0]);
-    const float rand_v = fract(halton[RAND_DIM_BSDF_V] + sample_off[1]);
+    const float rand_u = fract(random_seq[RAND_DIM_BSDF_U] + sample_off[0]);
+    const float rand_v = fract(random_seq[RAND_DIM_BSDF_V] + sample_off[1]);
 
     ray_data_t new_ray;
 #ifndef USE_RAY_DIFFERENTIALS
@@ -4195,7 +4191,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const int px_index, const pass_setting
 #endif
 
     const float lum = std::max(new_ray.c[0], std::max(new_ray.c[1], new_ray.c[2]));
-    const float p = fract(halton[RAND_DIM_TERMINATE] + sample_off[0]);
+    const float p = fract(random_seq[RAND_DIM_TERMINATE] + sample_off[0]);
     const float q = can_terminate_path ? std::max(0.05f, 1.0f - lum) : 0.0f;
     if (p >= q && lum > 0.0f && new_ray.pdf > 0.0f) {
         new_ray.c[0] /= (1.0f - q);

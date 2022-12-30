@@ -111,13 +111,13 @@ template <int S> struct light_sample_t {
 
 // Generating rays
 template <int DimX, int DimY>
-void GeneratePrimaryRays(const int iteration, const camera_t &cam, const rect_t &r, int w, int h, const float *halton,
-                         aligned_vector<ray_data_t<DimX * DimY>> &out_rays,
+void GeneratePrimaryRays(const int iteration, const camera_t &cam, const rect_t &r, int w, int h,
+                         const float random_seq[], aligned_vector<ray_data_t<DimX * DimY>> &out_rays,
                          aligned_vector<simd_ivec<DimX * DimY>> &out_masks);
 template <int DimX, int DimY>
 void SampleMeshInTextureSpace(int iteration, int obj_index, int uv_layer, const mesh_t &mesh, const transform_t &tr,
                               const uint32_t *vtx_indices, const vertex_t *vertices, const rect_t &r, int w, int h,
-                              const float *halton, aligned_vector<ray_data_t<DimX * DimY>> &out_rays,
+                              const float random_seq[], aligned_vector<ray_data_t<DimX * DimY>> &out_rays,
                               aligned_vector<hit_data_t<DimX * DimY>> &out_inters);
 
 // Sorting rays
@@ -335,7 +335,7 @@ void ComputeDerivatives(const simd_fvec<S> I[3], const simd_fvec<S> &t, const si
 // Pick point on any light source for evaluation
 template <int S>
 void SampleLightSource(const simd_fvec<S> P[3], const scene_data_t &sc, const Ref::TexStorageBase *const tex_atlases[],
-                       const float halton[], const simd_fvec<S> sample_off[2], const simd_ivec<S> &ray_mask,
+                       const float random_seq[], const simd_fvec<S> sample_off[2], const simd_ivec<S> &ray_mask,
                        light_sample_t<S> &ls);
 
 // Account for visible lights contribution
@@ -346,8 +346,8 @@ void IntersectAreaLights(const ray_data_t<S> &r, const simd_ivec<S> &ray_mask, c
 
 // Shade
 template <int S>
-void ShadeSurface(const simd_ivec<S> &px_index, const pass_settings_t &ps, const float *halton,
-                  const hit_data_t<S> &inter, const ray_data_t<S> &ray, const scene_data_t &sc, uint32_t node_index,
+void ShadeSurface(const pass_settings_t &ps, const float *random_seq, const hit_data_t<S> &inter,
+                  const ray_data_t<S> &ray, const scene_data_t &sc, uint32_t node_index,
                   const Ref::TexStorageBase *const tex_atlases[], simd_fvec<S> out_rgba[4],
                   simd_ivec<S> out_secondary_masks[], ray_data_t<S> out_secondary_rays[], int *out_secondary_rays_count,
                   simd_ivec<S> out_shadow_masks[], shadow_ray_t<S> out_shadow_rays[], int *out_shadow_rays_count);
@@ -1803,7 +1803,7 @@ template <int S> force_inline simd_fvec<S> ngon_rad(const simd_fvec<S> &theta, c
 
 template <int DimX, int DimY>
 void Ray::NS::GeneratePrimaryRays(const int iteration, const camera_t &cam, const rect_t &r, int w, int h,
-                                  const float *halton, aligned_vector<ray_data_t<DimX * DimY>> &out_rays,
+                                  const float random_seq[], aligned_vector<ray_data_t<DimX * DimY>> &out_rays,
                                   aligned_vector<simd_ivec<DimX * DimY>> &out_masks) {
     const int S = DimX * DimY;
     static_assert(S <= 16, "!");
@@ -1868,13 +1868,13 @@ void Ray::NS::GeneratePrimaryRays(const int iteration, const camera_t &cam, cons
             const simd_ivec<S> hash_val = hash(index);
             const simd_fvec<S> sample_off[2] = {construct_float(hash_val), construct_float(hash(hash_val))};
 
-            simd_fvec<S> rxx = fract(halton[RAND_DIM_FILTER_U] + sample_off[0]),
-                         ryy = fract(halton[RAND_DIM_FILTER_V] + sample_off[1]);
+            simd_fvec<S> rxx = fract(random_seq[RAND_DIM_FILTER_U] + sample_off[0]),
+                         ryy = fract(random_seq[RAND_DIM_FILTER_V] + sample_off[1]);
 
             simd_fvec<S> offset[2] = {0.0f, 0.0f};
             if (cam.fstop > 0.0f) {
-                const simd_fvec<S> r1 = fract(halton[RAND_DIM_LENS_U] + sample_off[0]);
-                const simd_fvec<S> r2 = fract(halton[RAND_DIM_LENS_V] + sample_off[1]);
+                const simd_fvec<S> r1 = fract(random_seq[RAND_DIM_LENS_U] + sample_off[0]);
+                const simd_fvec<S> r2 = fract(random_seq[RAND_DIM_LENS_V] + sample_off[1]);
 
                 offset[0] = 2.0f * r1 - 1.0f;
                 offset[1] = 2.0f * r2 - 1.0f;
@@ -1952,7 +1952,7 @@ void Ray::NS::GeneratePrimaryRays(const int iteration, const camera_t &cam, cons
 template <int DimX, int DimY>
 void Ray::NS::SampleMeshInTextureSpace(int iteration, int obj_index, int uv_layer, const mesh_t &mesh,
                                        const transform_t &tr, const uint32_t *vtx_indices, const vertex_t *vertices,
-                                       const rect_t &r, int width, int height, const float *halton,
+                                       const rect_t &r, int width, int height, const float random_seq[],
                                        aligned_vector<ray_data_t<DimX * DimY>> &out_rays,
                                        aligned_vector<hit_data_t<DimX * DimY>> &out_inters) {
     const int S = DimX * DimY;
@@ -2040,17 +2040,13 @@ void Ray::NS::SampleMeshInTextureSpace(int iteration, int obj_index, int uv_laye
                 ray_data_t<S> &out_ray = out_rays[ndx];
                 hit_data_t<S> &out_inter = out_inters[ndx];
 
-                const simd_ivec<S> index = iyy * width + ixx;
-                const int hi = (iteration & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT;
-
-                const simd_ivec<S> hash_val = hash(index);
-                simd_fvec<S> rxx = construct_float(hash_val);
-                simd_fvec<S> ryy = construct_float(hash(hash_val));
+                simd_fvec<S> rxx = construct_float(hash(out_ray.xy));
+                simd_fvec<S> ryy = construct_float(hash(hash(out_ray.xy)));
 
                 for (int i = 0; i < S; i++) {
                     float _unused;
-                    rxx[i] = std::modf(halton[hi + 0] + rxx[i], &_unused);
-                    ryy[i] = std::modf(halton[hi + 1] + ryy[i], &_unused);
+                    rxx[i] = std::modf(random_seq[RAND_DIM_FILTER_U] + rxx[i], &_unused);
+                    ryy[i] = std::modf(random_seq[RAND_DIM_FILTER_V] + ryy[i], &_unused);
                 }
 
                 const simd_fvec<S> fxx = simd_fvec<S>{ixx} + rxx, fyy = simd_fvec<S>{iyy} + ryy;
@@ -4361,9 +4357,9 @@ void Ray::NS::ComputeDerivatives(const simd_fvec<S> I[3], const simd_fvec<S> &t,
 // Pick point on any light source for evaluation
 template <int S>
 void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const scene_data_t &sc,
-                                const Ref::TexStorageBase *const textures[], const float halton[],
+                                const Ref::TexStorageBase *const textures[], const float random_seq[],
                                 const simd_fvec<S> sample_off[2], const simd_ivec<S> &ray_mask, light_sample_t<S> &ls) {
-    const simd_fvec<S> u1 = fract(halton[RAND_DIM_LIGHT_PICK] + sample_off[0]);
+    const simd_fvec<S> u1 = fract(random_seq[RAND_DIM_LIGHT_PICK] + sample_off[0]);
     const simd_ivec<S> light_index = min(simd_ivec<S>{u1 * float(sc.li_indices.size())}, int(sc.li_indices.size() - 1));
 
     simd_ivec<S> ray_queue[S];
@@ -4388,8 +4384,8 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const scene_data_t &sc,
         where(ray_queue[index], ls.cast_shadow) = l.cast_shadow ? -1 : 0;
 
         if (l.type == LIGHT_TYPE_SPHERE) {
-            const simd_fvec<S> r1 = fract(halton[RAND_DIM_LIGHT_U] + sample_off[0]);
-            const simd_fvec<S> r2 = fract(halton[RAND_DIM_LIGHT_V] + sample_off[1]);
+            const simd_fvec<S> r1 = fract(random_seq[RAND_DIM_LIGHT_U] + sample_off[0]);
+            const simd_fvec<S> r2 = fract(random_seq[RAND_DIM_LIGHT_V] + sample_off[1]);
 
             simd_fvec<S> center_to_surface[3];
             ITERATE_3({ center_to_surface[i] = P[i] - l.sph.pos[i]; })
@@ -4458,8 +4454,8 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const scene_data_t &sc,
         } else if (l.type == LIGHT_TYPE_DIR) {
             ITERATE_3({ where(ray_queue[index], ls.L[i]) = l.dir.dir[i]; })
             if (l.dir.angle != 0.0f) {
-                const simd_fvec<S> r1 = fract(halton[RAND_DIM_LIGHT_U] + sample_off[0]);
-                const simd_fvec<S> r2 = fract(halton[RAND_DIM_LIGHT_V] + sample_off[1]);
+                const simd_fvec<S> r1 = fract(random_seq[RAND_DIM_LIGHT_U] + sample_off[0]);
+                const simd_fvec<S> r2 = fract(random_seq[RAND_DIM_LIGHT_V] + sample_off[1]);
 
                 const float radius = std::tan(l.dir.angle);
 
@@ -4474,8 +4470,8 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const scene_data_t &sc,
             where(ray_queue[index], ls.dist) = MAX_DIST;
             where(ray_queue[index], ls.pdf) = 1.0f;
         } else if (l.type == LIGHT_TYPE_RECT) {
-            const simd_fvec<S> r1 = fract(halton[RAND_DIM_LIGHT_U] + sample_off[0]) - 0.5f;
-            const simd_fvec<S> r2 = fract(halton[RAND_DIM_LIGHT_V] + sample_off[1]) - 0.5f;
+            const simd_fvec<S> r1 = fract(random_seq[RAND_DIM_LIGHT_U] + sample_off[0]) - 0.5f;
+            const simd_fvec<S> r2 = fract(random_seq[RAND_DIM_LIGHT_V] + sample_off[1]) - 0.5f;
 
             const simd_fvec<S> lp[3] = {l.rect.pos[0] + l.rect.u[0] * r1 + l.rect.v[0] * r2,
                                         l.rect.pos[1] + l.rect.u[1] * r1 + l.rect.v[1] * r2,
@@ -4516,8 +4512,8 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const scene_data_t &sc,
                 where(ray_queue[index], ls.dist) = MAX_DIST;
             }
         } else if (l.type == LIGHT_TYPE_DISK) {
-            const simd_fvec<S> r1 = fract(halton[RAND_DIM_LIGHT_U] + sample_off[0]);
-            const simd_fvec<S> r2 = fract(halton[RAND_DIM_LIGHT_V] + sample_off[1]);
+            const simd_fvec<S> r1 = fract(random_seq[RAND_DIM_LIGHT_U] + sample_off[0]);
+            const simd_fvec<S> r2 = fract(random_seq[RAND_DIM_LIGHT_V] + sample_off[1]);
 
             simd_fvec<S> offset[2] = {2.0f * r1 - 1.0f, 2.0f * r2 - 1.0f};
             const simd_ivec<S> mask = simd_cast(offset[0] != 0.0f & offset[1] != 0.0f);
@@ -4570,8 +4566,8 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const scene_data_t &sc,
                 where(ray_queue[index], ls.dist) = MAX_DIST;
             }
         } else if (l.type == LIGHT_TYPE_LINE) {
-            const simd_fvec<S> r1 = fract(halton[RAND_DIM_LIGHT_U] + sample_off[0]);
-            const simd_fvec<S> r2 = fract(halton[RAND_DIM_LIGHT_V] + sample_off[1]);
+            const simd_fvec<S> r1 = fract(random_seq[RAND_DIM_LIGHT_U] + sample_off[0]);
+            const simd_fvec<S> r2 = fract(random_seq[RAND_DIM_LIGHT_V] + sample_off[1]);
 
             simd_fvec<S> center_to_surface[3];
             ITERATE_3({ center_to_surface[i] = P[i] - l.line.pos[i]; })
@@ -4637,8 +4633,8 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const scene_data_t &sc,
             const vertex_t &v2 = sc.vertices[sc.vtx_indices[ltri_index * 3 + 1]];
             const vertex_t &v3 = sc.vertices[sc.vtx_indices[ltri_index * 3 + 2]];
 
-            const simd_fvec<S> r1 = sqrt(fract(halton[RAND_DIM_LIGHT_U] + sample_off[0]));
-            const simd_fvec<S> r2 = fract(halton[RAND_DIM_LIGHT_V] + sample_off[1]);
+            const simd_fvec<S> r1 = sqrt(fract(random_seq[RAND_DIM_LIGHT_U] + sample_off[0]));
+            const simd_fvec<S> r2 = fract(random_seq[RAND_DIM_LIGHT_V] + sample_off[1]);
 
             const simd_fvec<S> luvs[2] = {v1.t[0][0] * (1.0f - r1) + r1 * (v2.t[0][0] * (1.0f - r2) + v3.t[0][0] * r2),
                                           v1.t[0][1] * (1.0f - r1) + r1 * (v2.t[0][1] * (1.0f - r2) + v3.t[0][1] * r2)};
@@ -4682,8 +4678,8 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const scene_data_t &sc,
 
             const simd_fvec<S> rand = u1 * float(sc.li_indices.size()) - simd_fvec<S>(light_index);
 
-            const simd_fvec<S> rx = fract(halton[RAND_DIM_LIGHT_U] + sample_off[0]);
-            const simd_fvec<S> ry = fract(halton[RAND_DIM_LIGHT_V] + sample_off[1]);
+            const simd_fvec<S> rx = fract(random_seq[RAND_DIM_LIGHT_U] + sample_off[0]);
+            const simd_fvec<S> ry = fract(random_seq[RAND_DIM_LIGHT_V] + sample_off[1]);
 
             simd_fvec<S> dir_and_pdf[4];
             Sample_EnvQTree(sc.env->env_map_rotation, qtree_mips, sc.env->qtree_levels, rand, rx, ry, dir_and_pdf);
@@ -4846,9 +4842,9 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, const simd_ivec<S> &_r
 }
 
 template <int S>
-void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_settings_t &ps, const float *halton,
-                           const hit_data_t<S> &inter, const ray_data_t<S> &ray, const scene_data_t &sc,
-                           uint32_t node_index, const Ref::TexStorageBase *const textures[], simd_fvec<S> out_rgba[4],
+void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, const hit_data_t<S> &inter,
+                           const ray_data_t<S> &ray, const scene_data_t &sc, uint32_t node_index,
+                           const Ref::TexStorageBase *const textures[], simd_fvec<S> out_rgba[4],
                            simd_ivec<S> out_secondary_masks[], ray_data_t<S> out_secondary_rays[],
                            int *out_secondary_rays_count, simd_ivec<S> out_shadow_masks[],
                            shadow_ray_t<S> out_shadow_rays[], int *out_shadow_rays_count) {
@@ -5187,8 +5183,8 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_settings_t &
 
     static const int MatDWORDStride = sizeof(material_t) / sizeof(float);
 
-    // used to randomize halton sequence among pixels
-    const simd_fvec<S> sample_off[2] = {construct_float(hash(px_index)), construct_float(hash(hash(px_index)))};
+    // used to randomize random sequence among pixels
+    const simd_fvec<S> sample_off[2] = {construct_float(hash(ray.xy)), construct_float(hash(hash(ray.xy)))};
 
     const simd_ivec<S> diff_depth = ray.ray_depth & 0x000000ff;
     const simd_ivec<S> spec_depth = (ray.ray_depth >> 8) & 0x000000ff;
@@ -5200,7 +5196,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_settings_t &
         gather(reinterpret_cast<const int *>(&sc.materials[0].type), mat_index * sizeof(material_t) / sizeof(int)) &
         0xff;
 
-    simd_fvec<S> mix_rand = fract(halton[RAND_DIM_BSDF_PICK] + sample_off[0]);
+    simd_fvec<S> mix_rand = fract(random_seq[RAND_DIM_BSDF_PICK] + sample_off[0]);
     simd_fvec<S> mix_weight = 1.0f;
 
     // resolve mix material
@@ -5361,7 +5357,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_settings_t &
 #if USE_NEE
     light_sample_t<S> ls;
     if (!sc.li_indices.empty()) {
-        SampleLightSource(P, sc, textures, halton, sample_off, is_active_lane, ls);
+        SampleLightSource(P, sc, textures, random_seq, sample_off, is_active_lane, ls);
     }
     const simd_fvec<S> N_dot_L = dot3(N, ls.L);
 #endif
@@ -5464,8 +5460,8 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_settings_t &
 
     simd_fvec<S> col[3] = {0.0f, 0.0f, 0.0f};
 
-    const simd_fvec<S> rand_u = fract(halton[RAND_DIM_BSDF_U] + sample_off[0]);
-    const simd_fvec<S> rand_v = fract(halton[RAND_DIM_BSDF_V] + sample_off[1]);
+    const simd_fvec<S> rand_u = fract(random_seq[RAND_DIM_BSDF_U] + sample_off[0]);
+    const simd_fvec<S> rand_v = fract(random_seq[RAND_DIM_BSDF_V] + sample_off[1]);
 
     simd_ivec<S> secondary_mask = {0}, shadow_mask = {0};
 
@@ -6223,7 +6219,7 @@ void Ray::NS::ShadeSurface(const simd_ivec<S> &px_index, const pass_settings_t &
 #endif
 
     const simd_fvec<S> lum = max(new_ray.c[0], max(new_ray.c[1], new_ray.c[2]));
-    const simd_fvec<S> p = fract(halton[RAND_DIM_TERMINATE] + sample_off[0]);
+    const simd_fvec<S> p = fract(random_seq[RAND_DIM_TERMINATE] + sample_off[0]);
     simd_fvec<S> q = {0.0f};
     where(can_terminate_path, q) = max(0.05f, 1.0f - lum);
 

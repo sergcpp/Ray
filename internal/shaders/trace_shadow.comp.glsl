@@ -332,12 +332,10 @@ void main() {
     const int x = (sh_ray.xy >> 16) & 0xffff;
     const int y = (sh_ray.xy & 0xffff);
 
-    const int px_index = y * int(g_params.img_size.x) + x;
-
     vec3 ro = vec3(g_sh_rays[index].o[0], g_sh_rays[index].o[1], g_sh_rays[index].o[2]);
     vec3 rd = vec3(g_sh_rays[index].d[0], g_sh_rays[index].d[1], g_sh_rays[index].d[2]);
 
-    if (ComputeVisibility(ro, rd, sh_ray.dist, g_params.halton, hash(px_index))) {
+    if (ComputeVisibility(ro, rd, sh_ray.dist, g_params.random_val, hash((x << 16) | y))) {
         vec3 col = imageLoad(g_out_img, ivec2(x, y)).rgb;
         col += vec3(sh_ray.c[0], sh_ray.c[1], sh_ray.c[2]);
         imageStore(g_out_img, ivec2(x, y), vec4(col, 1.0));

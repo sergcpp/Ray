@@ -81,7 +81,7 @@ class Renderer : public RendererBase {
     stats_t stats_ = {0};
 
     void kernel_GeneratePrimaryRays(VkCommandBuffer cmd_buf, const camera_t &cam, int hi, const rect_t &rect,
-                                    const Buffer &halton, const Buffer &out_rays);
+                                    const Buffer &random_seq, const Buffer &out_rays);
     void kernel_TracePrimaryRays(VkCommandBuffer cmd_buf, const scene_data_t &sc_data, uint32_t node_index,
                                  float cam_clip_end, const Buffer &rays, const Buffer &out_hits);
     void kernel_TraceSecondaryRays(VkCommandBuffer cmd_buf, const Buffer &indir_args, const Buffer &counters,
@@ -91,17 +91,17 @@ class Renderer : public RendererBase {
                                     const Buffer &counters, const Buffer &rays, const Buffer &inout_hits);
     void kernel_ShadePrimaryHits(VkCommandBuffer cmd_buf, const pass_settings_t &settings, const environment_t &env,
                                  const Buffer &hits, const Buffer &rays, const scene_data_t &sc_data,
-                                 const Buffer &halton, int hi, Span<const TextureAtlas> tex_atlases,
+                                 const Buffer &random_seq, int hi, Span<const TextureAtlas> tex_atlases,
                                  VkDescriptorSet tex_descr_set, const Texture2D &out_img, const Buffer &out_rays,
                                  const Buffer &out_sh_rays, const Buffer &inout_counters);
     void kernel_ShadeSecondaryHits(VkCommandBuffer cmd_buf, const pass_settings_t &settings, const environment_t &env,
                                    const Buffer &indir_args, const Buffer &hits, const Buffer &rays,
-                                   const scene_data_t &sc_data, const Buffer &halton, int hi,
+                                   const scene_data_t &sc_data, const Buffer &random_seq, int hi,
                                    Span<const TextureAtlas> tex_atlases, VkDescriptorSet tex_descr_set,
                                    const Texture2D &out_img, const Buffer &out_rays, const Buffer &out_sh_rays,
                                    const Buffer &inout_counters);
     void kernel_TraceShadow(VkCommandBuffer cmd_buf, const Buffer &indir_args, const Buffer &counters,
-                            const scene_data_t &sc_data, uint32_t node_index, float halton,
+                            const scene_data_t &sc_data, uint32_t node_index, float random_val,
                             Span<const TextureAtlas> tex_atlases, VkDescriptorSet tex_descr_set, const Buffer &sh_rays,
                             const Texture2D &out_img);
     void kernel_PrepareIndirArgs(VkCommandBuffer cmd_buf, const Buffer &inout_counters, const Buffer &out_indir_args);

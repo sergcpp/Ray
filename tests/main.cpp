@@ -114,6 +114,7 @@ bool g_stop_on_fail = false;
 bool g_tests_success = true;
 std::atomic_bool g_log_contains_errors{false};
 bool g_catch_flt_exceptions = false;
+bool g_determine_sample_count = false;
 
 int main(int argc, char *argv[]) {
     using namespace std::chrono;
@@ -271,7 +272,7 @@ int main(int argc, char *argv[]) {
                    duration<double>(high_resolution_clock::now() - t2).count() / 60.0);
         }
 #endif
-#if 1
+#if 0
         if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
             puts("---------------");
@@ -300,7 +301,7 @@ int main(int argc, char *argv[]) {
                    duration<double>(high_resolution_clock::now() - t2).count() / 60.0);
         }
 #endif
-#if 1
+#if 0
         if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
             puts("---------------");

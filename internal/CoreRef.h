@@ -115,11 +115,11 @@ force_inline simd_fvec4 rgbe_to_rgb(const color_t<uint8_t, 4> &rgbe) {
 }
 
 // Generation of rays
-void GeneratePrimaryRays(int iteration, const camera_t &cam, const rect_t &r, int w, int h, const float *halton,
+void GeneratePrimaryRays(int iteration, const camera_t &cam, const rect_t &r, int w, int h, const float *random_seq,
                          aligned_vector<ray_data_t> &out_rays);
 void SampleMeshInTextureSpace(int iteration, int obj_index, int uv_layer, const mesh_t &mesh, const transform_t &tr,
                               const uint32_t *vtx_indices, const vertex_t *vertices, const rect_t &r, int w, int h,
-                              const float *halton, aligned_vector<ray_data_t> &out_rays,
+                              const float *random_seq, aligned_vector<ray_data_t> &out_rays,
                               aligned_vector<hit_data_t> &out_inters);
 
 // Sorting of rays
@@ -255,15 +255,15 @@ void ComputeDerivatives(const simd_fvec4 &I, float t, const simd_fvec4 &do_dx, c
 
 // Pick point on any light source for evaluation
 void SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, const TexStorageBase *const textures[],
-                       const float halton[], const float sample_off[2], light_sample_t &ls);
+                       const float random_seq[], const float sample_off[2], light_sample_t &ls);
 
 // Account for visible lights contribution
 void IntersectAreaLights(const ray_data_t &ray, const light_t lights[], Span<const uint32_t> visible_lights,
                          const transform_t transforms[], hit_data_t &inout_inter);
 
 // Shade
-Ray::pixel_color_t ShadeSurface(int px_index, const pass_settings_t &ps, const hit_data_t &inter, const ray_data_t &ray,
-                                const float *halton, const scene_data_t &sc, uint32_t node_index,
+Ray::pixel_color_t ShadeSurface(const pass_settings_t &ps, const hit_data_t &inter, const ray_data_t &ray,
+                                const float *random_seq, const scene_data_t &sc, uint32_t node_index,
                                 const TexStorageBase *const textures[], ray_data_t *out_secondary_rays,
                                 int *out_secondary_rays_count, shadow_ray_t *out_shadow_rays,
                                 int *out_shadow_rays_count);

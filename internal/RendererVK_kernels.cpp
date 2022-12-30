@@ -15,12 +15,13 @@
 #include "shaders/types.h"
 
 void Ray::Vk::Renderer::kernel_GeneratePrimaryRays(VkCommandBuffer cmd_buf, const camera_t &cam, const int hi,
-                                                   const rect_t &rect, const Buffer &halton, const Buffer &out_rays) {
-    const TransitionInfo res_transitions[] = {{&halton, eResState::ShaderResource},
+                                                   const rect_t &rect, const Buffer &random_seq,
+                                                   const Buffer &out_rays) {
+    const TransitionInfo res_transitions[] = {{&random_seq, eResState::ShaderResource},
                                               {&prim_rays_buf_, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
-    const Binding bindings[] = {{eBindTarget::SBuf, PrimaryRayGen::HALTON_SEQ_BUF_SLOT, halton_seq_buf_},
+    const Binding bindings[] = {{eBindTarget::SBuf, PrimaryRayGen::HALTON_SEQ_BUF_SLOT, random_seq},
                                 {eBindTarget::SBuf, PrimaryRayGen::OUT_RAYS_BUF_SLOT, prim_rays_buf_}};
 
     const uint32_t grp_count[3] = {
@@ -167,13 +168,13 @@ void Ray::Vk::Renderer::kernel_IntersectAreaLights(VkCommandBuffer cmd_buf, cons
 
 void Ray::Vk::Renderer::kernel_ShadePrimaryHits(VkCommandBuffer cmd_buf, const pass_settings_t &settings,
                                                 const environment_t &env, const Buffer &hits, const Buffer &rays,
-                                                const scene_data_t &sc_data, const Buffer &halton, const int hi,
+                                                const scene_data_t &sc_data, const Buffer &random_seq, const int hi,
                                                 Span<const TextureAtlas> tex_atlases, VkDescriptorSet tex_descr_set,
                                                 const Texture2D &out_img, const Buffer &out_rays,
                                                 const Buffer &out_sh_rays, const Buffer &inout_counters) {
     const TransitionInfo res_transitions[] = {
         {&hits, eResState::ShaderResource},           {&rays, eResState::ShaderResource},
-        {&halton, eResState::ShaderResource},         {&out_img, eResState::UnorderedAccess},
+        {&random_seq, eResState::ShaderResource},     {&out_img, eResState::UnorderedAccess},
         {&out_rays, eResState::UnorderedAccess},      {&out_sh_rays, eResState::UnorderedAccess},
         {&inout_counters, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
@@ -190,7 +191,7 @@ void Ray::Vk::Renderer::kernel_ShadePrimaryHits(VkCommandBuffer cmd_buf, const p
         {eBindTarget::SBuf, ShadeHits::MESH_INSTANCES_BUF_SLOT, sc_data.mesh_instances},
         {eBindTarget::SBuf, ShadeHits::VERTICES_BUF_SLOT, sc_data.vertices},
         {eBindTarget::SBuf, ShadeHits::VTX_INDICES_BUF_SLOT, sc_data.vtx_indices},
-        {eBindTarget::SBuf, ShadeHits::HALTON_SEQ_BUF_SLOT, halton},
+        {eBindTarget::SBuf, ShadeHits::RANDOM_SEQ_BUF_SLOT, random_seq},
         {eBindTarget::Tex2D, ShadeHits::ENV_QTREE_TEX_SLOT, sc_data.env_qtree},
         {eBindTarget::Image, ShadeHits::OUT_IMG_SLOT, out_img},
         {eBindTarget::SBuf, ShadeHits::OUT_RAYS_BUF_SLOT, out_rays},
@@ -242,13 +243,13 @@ void Ray::Vk::Renderer::kernel_ShadePrimaryHits(VkCommandBuffer cmd_buf, const p
 void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(VkCommandBuffer cmd_buf, const pass_settings_t &settings,
                                                   const environment_t &env, const Buffer &indir_args,
                                                   const Buffer &hits, const Buffer &rays, const scene_data_t &sc_data,
-                                                  const Buffer &halton, const int hi,
+                                                  const Buffer &random_seq, const int hi,
                                                   Span<const TextureAtlas> tex_atlases, VkDescriptorSet tex_descr_set,
                                                   const Texture2D &out_img, const Buffer &out_rays,
                                                   const Buffer &out_sh_rays, const Buffer &inout_counters) {
     const TransitionInfo res_transitions[] = {
         {&indir_args, eResState::IndirectArgument}, {&hits, eResState::ShaderResource},
-        {&rays, eResState::ShaderResource},         {&halton, eResState::ShaderResource},
+        {&rays, eResState::ShaderResource},         {&random_seq, eResState::ShaderResource},
         {&out_img, eResState::UnorderedAccess},     {&out_rays, eResState::UnorderedAccess},
         {&out_sh_rays, eResState::UnorderedAccess}, {&inout_counters, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
@@ -265,7 +266,7 @@ void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(VkCommandBuffer cmd_buf, const
         {eBindTarget::SBuf, ShadeHits::MESH_INSTANCES_BUF_SLOT, sc_data.mesh_instances},
         {eBindTarget::SBuf, ShadeHits::VERTICES_BUF_SLOT, sc_data.vertices},
         {eBindTarget::SBuf, ShadeHits::VTX_INDICES_BUF_SLOT, sc_data.vtx_indices},
-        {eBindTarget::SBuf, ShadeHits::HALTON_SEQ_BUF_SLOT, halton},
+        {eBindTarget::SBuf, ShadeHits::RANDOM_SEQ_BUF_SLOT, random_seq},
         {eBindTarget::Tex2D, ShadeHits::ENV_QTREE_TEX_SLOT, sc_data.env_qtree},
         {eBindTarget::Image, ShadeHits::OUT_IMG_SLOT, out_img},
         {eBindTarget::SBuf, ShadeHits::OUT_RAYS_BUF_SLOT, out_rays},
@@ -312,7 +313,7 @@ void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(VkCommandBuffer cmd_buf, const
 }
 
 void Ray::Vk::Renderer::kernel_TraceShadow(VkCommandBuffer cmd_buf, const Buffer &indir_args, const Buffer &counters,
-                                           const scene_data_t &sc_data, uint32_t node_index, const float halton,
+                                           const scene_data_t &sc_data, uint32_t node_index, const float random_val,
                                            Span<const TextureAtlas> tex_atlases, VkDescriptorSet tex_descr_set,
                                            const Buffer &sh_rays, const Texture2D &out_img) {
     const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
@@ -325,7 +326,7 @@ void Ray::Vk::Renderer::kernel_TraceShadow(VkCommandBuffer cmd_buf, const Buffer
     uniform_params.img_size[0] = w_;
     uniform_params.img_size[1] = h_;
     uniform_params.node_index = node_index;
-    uniform_params.halton = halton;
+    uniform_params.random_val = random_val;
 
     if (use_hwrt_) {
         SmallVector<Binding, 32> bindings = {

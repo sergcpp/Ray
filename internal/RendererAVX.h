@@ -12,14 +12,6 @@ const int RayPacketDimX = 4;
 const int RayPacketDimY = 2;
 const int RayPacketSize = RayPacketDimX * RayPacketDimY;
 
-extern template void GeneratePrimaryRays<RayPacketDimX, RayPacketDimY>(
-    const int iteration, const camera_t &cam, const rect_t &r, int w, int h, const float *halton,
-    aligned_vector<ray_data_t<RayPacketSize>> &out_rays, aligned_vector<simd_ivec<RayPacketSize>> &out_masks);
-extern template void SampleMeshInTextureSpace<RayPacketDimX, RayPacketDimY>(
-    int iteration, int obj_index, int uv_layer, const mesh_t &mesh, const transform_t &tr, const uint32_t *vtx_indices,
-    const vertex_t *vertices, const rect_t &r, int w, int h, const float *halton,
-    aligned_vector<ray_data_t<RayPacketSize>> &out_rays, aligned_vector<hit_data_t<RayPacketSize>> &out_inters);
-
 extern template void SortRays_CPU<RayPacketSize>(ray_data_t<RayPacketSize> *rays, simd_ivec<RayPacketSize> *ray_masks,
                                                  int &secondary_rays_count, const float root_min[3],
                                                  const float cell_size[3], simd_ivec<RayPacketSize> *hash_values,
@@ -96,15 +88,6 @@ extern template simd_fvec<RayPacketSize> ComputeVisibility<RayPacketSize>(
     const simd_ivec<RayPacketSize> &mask, const float rand_val, const simd_ivec<RayPacketSize> &rand_hash2,
     const scene_data_t &sc, uint32_t node_index, const Ref::TexStorageBase *const atlases[]);
 
-/*extern template void ComputeDirectLighting<RayPacketSize>(
-    const simd_fvec<RayPacketSize> I[3], const simd_fvec<RayPacketSize> P[3], const simd_fvec<RayPacketSize> N[3],
-    const simd_fvec<RayPacketSize> B[3], const simd_fvec<RayPacketSize> plane_N[3],
-    const simd_fvec<RayPacketSize> &sigma, const float *halton, const int hi, const simd_ivec<RayPacketSize> &rand_hash,
-    const simd_ivec<RayPacketSize> &rand_hash2, const simd_fvec<RayPacketSize> &rand_offset,
-    const simd_fvec<RayPacketSize> &rand_offset2, const scene_data_t &sc, uint32_t node_index,
-    uint32_t light_node_index, const Ref::TextureAtlas &tex_atlas, const simd_ivec<RayPacketSize> &ray_mask,
-    simd_fvec<RayPacketSize> *out_col);*/
-
 extern template void ComputeDerivatives<RayPacketSize>(
     const simd_fvec<RayPacketSize> I[3], const simd_fvec<RayPacketSize> &t, const simd_fvec<RayPacketSize> do_dx[3],
     const simd_fvec<RayPacketSize> do_dy[3], const simd_fvec<RayPacketSize> dd_dx[3],
@@ -113,15 +96,6 @@ extern template void ComputeDerivatives<RayPacketSize>(
     const simd_fvec<RayPacketSize> n3[3], const simd_fvec<RayPacketSize> u1[2], const simd_fvec<RayPacketSize> u2[2],
     const simd_fvec<RayPacketSize> u3[2], const simd_fvec<RayPacketSize> plane_N[3],
     const simd_fvec<RayPacketSize> xform[16], derivatives_t<RayPacketSize> &out_der);
-
-extern template void
-ShadeSurface<RayPacketSize>(const simd_ivec<RayPacketSize> &index, const pass_settings_t &ps, const float *halton,
-                            const hit_data_t<RayPacketSize> &inter, const ray_data_t<RayPacketSize> &ray,
-                            const scene_data_t &sc, uint32_t node_index, const Ref::TexStorageBase *const tex_atlases[],
-                            simd_fvec<RayPacketSize> out_rgba[4], simd_ivec<RayPacketSize> out_secondary_masks[],
-                            ray_data_t<RayPacketSize> out_secondary_rays[], int *out_secondary_rays_count,
-                            simd_ivec<RayPacketSize> out_shadow_masks[], shadow_ray_t<RayPacketSize> out_shadow_rays[],
-                            int *out_shadow_rays_count);
 
 extern template class RendererSIMD<RayPacketDimX, RayPacketDimY>;
 

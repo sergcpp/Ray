@@ -196,14 +196,12 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
 
     PassData<S> &p = get_per_thread_pass_data<S>();
 
-    {
+    // allocate sh data on demand
+    if (cam.pass_settings.flags & OutputSH) {
         std::lock_guard<std::mutex> _(mtx_);
 
-        // allocate sh data on demand
-        if (cam.pass_settings.flags & OutputSH) {
-            temp_buf_.Resize(w, h, true);
-            clean_buf_.Resize(w, h, true);
-        }
+        temp_buf_.Resize(w, h, true);
+        clean_buf_.Resize(w, h, true);
     }
 
     const auto time_start = std::chrono::high_resolution_clock::now();
@@ -255,12 +253,11 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
         const hit_data_t<S> &inter = p.intersections[i];
 
         const simd_ivec<S> x = r.xy >> 16, y = r.xy & 0x0000FFFF;
-        const simd_ivec<S> px_index = y * w + x;
 
         p.secondary_masks[i] = {0};
 
         simd_fvec<S> out_rgba[4] = {0.0f};
-        NS::ShadeSurface(px_index, cam.pass_settings, &region.halton_seq[hi + RAND_DIM_BASE_COUNT], inter, r, sc_data,
+        NS::ShadeSurface(cam.pass_settings, &region.halton_seq[hi + RAND_DIM_BASE_COUNT], inter, r, sc_data,
                          macro_tree_root, s->tex_storages_, out_rgba, p.secondary_masks.data(), p.secondary_rays.data(),
                          &secondary_rays_count, p.shadow_masks.data(), p.shadow_rays.data(), &shadow_rays_count);
         for (int j = 0; j < S; j++) {
@@ -350,10 +347,9 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
             const hit_data_t<S> &inter = p.intersections[i];
 
             const simd_ivec<S> x = r.xy >> 16, y = r.xy & 0x0000FFFF;
-            const simd_ivec<S> index = y * w + x;
 
             simd_fvec<S> out_rgba[4] = {0.0f};
-            NS::ShadeSurface(index, cam.pass_settings,
+            NS::ShadeSurface(cam.pass_settings,
                              &region.halton_seq[hi + RAND_DIM_BASE_COUNT + bounce * RAND_DIM_BOUNCE_COUNT], inter, r,
                              sc_data, macro_tree_root, s->tex_storages_, out_rgba, p.secondary_masks.data(),
                              p.secondary_rays.data(), &secondary_rays_count, p.shadow_masks.data(),

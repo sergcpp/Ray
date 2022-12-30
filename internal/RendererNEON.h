@@ -12,14 +12,6 @@ const int RayPacketDimX = 2;
 const int RayPacketDimY = 2;
 const int RayPacketSize = RayPacketDimX * RayPacketDimY;
 
-extern template void GeneratePrimaryRays<RayPacketDimX, RayPacketDimY>(
-    const int iteration, const camera_t &cam, const rect_t &r, int w, int h, const float *halton,
-    aligned_vector<ray_data_t<RayPacketSize>> &out_rays, aligned_vector<simd_ivec<RayPacketSize>> &out_masks);
-extern template void SampleMeshInTextureSpace<RayPacketDimX, RayPacketDimY>(
-    int iteration, int obj_index, int uv_layer, const mesh_t &mesh, const transform_t &tr, const uint32_t *vtx_indices,
-    const vertex_t *vertices, const rect_t &r, int w, int h, const float *halton,
-    aligned_vector<ray_data_t<RayPacketSize>> &out_rays, aligned_vector<hit_data_t<RayPacketSize>> &out_inters);
-
 extern template void SortRays_CPU<RayPacketSize>(ray_data_t<RayPacketSize> *rays, simd_ivec<RayPacketSize> *ray_masks,
                                                  int &secondary_rays_count, const float root_min[3],
                                                  const float cell_size[3], simd_ivec<RayPacketSize> *hash_values,
@@ -110,15 +102,6 @@ extern template void IntersectAreaLights<RayPacketSize>(const ray_data_t<RayPack
                                                         const light_t lights[], Span<const uint32_t> visible_lights,
                                                         const transform_t transforms[],
                                                         hit_data_t<RayPacketSize> &inout_inter);
-
-extern template void
-ShadeSurface<RayPacketSize>(const simd_ivec<RayPacketSize> &index, const pass_settings_t &ps, const float *halton,
-                            const hit_data_t<RayPacketSize> &inter, const ray_data_t<RayPacketSize> &ray,
-                            const scene_data_t &sc, uint32_t node_index, const Ref::TexStorageBase *const textures[],
-                            simd_fvec<RayPacketSize> out_rgba[4], simd_ivec<RayPacketSize> out_secondary_masks[],
-                            ray_data_t<RayPacketSize> out_secondary_rays[], int *out_secondary_rays_count,
-                            simd_ivec<RayPacketSize> out_shadow_masks[], shadow_ray_t<RayPacketSize> out_shadow_rays[],
-                            int *out_shadow_rays_count);
 
 extern template class RendererSIMD<RayPacketDimX, RayPacketDimY>;
 

@@ -38,7 +38,7 @@ const int TRANSFORMS_BUF_SLOT = 11;
 const int MESH_INSTANCES_BUF_SLOT = 12;
 const int VERTICES_BUF_SLOT = 13;
 const int VTX_INDICES_BUF_SLOT = 14;
-const int HALTON_SEQ_BUF_SLOT = 15;
+const int RANDOM_SEQ_BUF_SLOT = 15;
 const int ENV_QTREE_TEX_SLOT = 16;
 
 const int OUT_IMG_SLOT = 0;

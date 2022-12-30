@@ -8,7 +8,7 @@ INTERFACE_START(DebugRT)
 struct Params {
     UVEC2_TYPE img_size;
     UINT_TYPE node_index;
-    float halton;
+    float random_val;
 };
 
 const int LOCAL_GROUP_SIZE_X = 8;

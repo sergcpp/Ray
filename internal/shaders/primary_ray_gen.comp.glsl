@@ -41,7 +41,7 @@ void main() {
     int y = int(gl_GlobalInvocationID.y);
 
     int index = y * int(g_params.img_size.x) + x;
-    int hash_val = hash(index);
+    int hash_val = hash((x << 16) | y);
 
     float _x = float(x);
     float _y = float(y);

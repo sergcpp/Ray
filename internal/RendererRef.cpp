@@ -99,14 +99,12 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
 
     PassData &p = g_per_thread_pass_data;
 
-    {
+    // allocate sh data on demand
+    if (cam.pass_settings.flags & OutputSH) {
         std::lock_guard<std::mutex> _(mtx_);
 
-        // allocate sh data on demand
-        if (cam.pass_settings.flags & OutputSH) {
-            temp_buf_.Resize(w, h, true);
-            clean_buf_.Resize(w, h, true);
-        }
+        temp_buf_.Resize(w, h, true);
+        clean_buf_.Resize(w, h, true);
     }
 
     const auto time_start = std::chrono::high_resolution_clock::now();
@@ -155,12 +153,9 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
         const int x = (r.xy >> 16) & 0x0000ffff;
         const int y = r.xy & 0x0000ffff;
 
-        const int px_index = y * w + x;
-
-        const pixel_color_t col =
-            ShadeSurface(px_index, cam.pass_settings, inter, r, &region.halton_seq[hi + RAND_DIM_BASE_COUNT], sc_data,
-                         macro_tree_root, s->tex_storages_, &p.secondary_rays[0], &secondary_rays_count,
-                         &p.shadow_rays[0], &shadow_rays_count);
+        const pixel_color_t col = ShadeSurface(
+            cam.pass_settings, inter, r, &region.halton_seq[hi + RAND_DIM_BASE_COUNT], sc_data, macro_tree_root,
+            s->tex_storages_, &p.secondary_rays[0], &secondary_rays_count, &p.shadow_rays[0], &shadow_rays_count);
         temp_buf_.SetPixel(x, y, col);
     }
 
@@ -262,10 +257,8 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
             const int x = (r.xy >> 16) & 0x0000ffff;
             const int y = r.xy & 0x0000ffff;
 
-            const int px_index = y * w + x;
-
             pixel_color_t col = ShadeSurface(
-                px_index, cam.pass_settings, inter, r,
+                cam.pass_settings, inter, r,
                 &region.halton_seq[hi + RAND_DIM_BASE_COUNT + bounce * RAND_DIM_BOUNCE_COUNT], sc_data, macro_tree_root,
                 s->tex_storages_, &p.secondary_rays[0], &secondary_rays_count, &p.shadow_rays[0], &shadow_rays_count);
             col.a = 0.0f;
