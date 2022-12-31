@@ -114,7 +114,7 @@ bool g_stop_on_fail = false;
 bool g_tests_success = true;
 std::atomic_bool g_log_contains_errors{false};
 bool g_catch_flt_exceptions = false;
-bool g_determine_sample_count = false;
+bool g_determine_sample_count = true;
 
 int main(int argc, char *argv[]) {
     using namespace std::chrono;

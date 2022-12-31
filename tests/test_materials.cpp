@@ -1322,7 +1322,7 @@ void test_spec_mat0(const char *arch_list[], const char *preferred_device) {
 }
 
 void test_spec_mat1(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 2000;
+    const int SampleCount = 2130;
     const int PixThres = 10;
 
     Ray::principled_mat_desc_t spec_mat_desc;
@@ -1896,7 +1896,7 @@ void test_refr_mis2(const char *arch_list[], const char *preferred_device) {
 }
 
 void test_refr_mis3(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 70;
+    const int SampleCount = 80;
     const int PixThres = 10;
 
     Ray::shading_node_desc_t mat_desc;
@@ -1912,7 +1912,7 @@ void test_refr_mis3(const char *arch_list[], const char *preferred_device) {
 }
 
 void test_refr_mis4(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 550;
+    const int SampleCount = 600;
     const int PixThres = 10;
 
     Ray::shading_node_desc_t mat_desc;
