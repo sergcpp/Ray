@@ -1687,7 +1687,7 @@ void test_tint_mat1(const char *arch_list[], const char *preferred_device) {
 }
 
 void test_tint_mat2(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 2190;
+    const int SampleCount = 2200;
     const int PixThres = 100;
 
     Ray::principled_mat_desc_t spec_mat_desc;
@@ -1896,7 +1896,7 @@ void test_refr_mis2(const char *arch_list[], const char *preferred_device) {
 }
 
 void test_refr_mis3(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 80;
+    const int SampleCount = 90;
     const int PixThres = 10;
 
     Ray::shading_node_desc_t mat_desc;
@@ -2242,7 +2242,7 @@ void test_alpha_mat0(const char *arch_list[], const char *preferred_device) {
 }
 
 void test_alpha_mat1(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 1510;
+    const int SampleCount = 1530;
     const int PixThres = 100;
 
     Ray::principled_mat_desc_t alpha_mat_desc;
