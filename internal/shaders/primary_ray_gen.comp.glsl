@@ -123,7 +123,7 @@ void main() {
 
     new_ray.pdf = 1e6;
     new_ray.xy = (x << 16) | y;
-    new_ray.ray_depth = 0;
+    new_ray.depth = 0;
 
     g_out_rays[index] = new_ray;
 }

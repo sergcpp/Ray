@@ -54,7 +54,7 @@ struct ray_data_t
     float cone_width;
     float cone_spread;
     int xy;
-    int ray_depth;
+    int depth;
 };
 
 struct Params

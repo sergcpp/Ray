@@ -238,7 +238,7 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
             inter = {};
 
             IntersectScene(r.o, r.d, sc_data, macro_tree_root, inter);
-            if (r.ray_depth & 0x00ffffff) { // not only a transparency ray
+            if (r.depth & 0x00ffffff) { // not only a transparency ray
                 IntersectAreaLights(r, sc_data.lights, sc_data.visible_lights, sc_data.transforms, inter);
             }
         }

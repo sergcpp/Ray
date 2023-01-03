@@ -61,7 +61,7 @@ struct ray_data_t
     float cone_width;
     float cone_spread;
     int xy;
-    int ray_depth;
+    int depth;
 };
 
 static const uint3 gl_WorkGroupSize = uint3(8u, 8u, 1u);

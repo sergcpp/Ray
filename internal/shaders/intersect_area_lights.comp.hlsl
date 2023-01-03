@@ -7,7 +7,7 @@ struct ray_data_t
     float cone_width;
     float cone_spread;
     int xy;
-    int ray_depth;
+    int depth;
 };
 
 struct hit_data_t
@@ -120,8 +120,8 @@ void comp_main()
         _123.cone_width = asfloat(_102.Load(_77 * 56 + 40));
         _123.cone_spread = asfloat(_102.Load(_77 * 56 + 44));
         _123.xy = int(_102.Load(_77 * 56 + 48));
-        _123.ray_depth = int(_102.Load(_77 * 56 + 52));
-        if ((_123.ray_depth & 16777215) == 0)
+        _123.depth = int(_102.Load(_77 * 56 + 52));
+        if ((_123.depth & 16777215) == 0)
         {
             break;
         }

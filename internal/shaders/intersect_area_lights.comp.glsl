@@ -74,7 +74,7 @@ void main() {
 #endif
 
     ray_data_t ray = g_rays[index];
-    if ((ray.ray_depth & 0x00ffffff) == 0) {
+    if ((ray.depth & 0x00ffffff) == 0) {
         // primary transparency ray, skip
         return;
     }

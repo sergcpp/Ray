@@ -66,7 +66,7 @@ template <int S> struct ray_data_t {
     // 16-bit pixel coordinates of rays in packet ((x << 16) | y)
     simd_ivec<S> xy;
     // four 8-bit ray depth counters
-    simd_ivec<S> ray_depth;
+    simd_ivec<S> depth;
 };
 
 template <int S> struct shadow_ray_t {
@@ -1944,7 +1944,7 @@ void Ray::NS::GeneratePrimaryRays(const int iteration, const camera_t &cam, cons
 
             out_r.pdf = {1e6f};
             out_r.xy = (ixx << 16) | iyy;
-            out_r.ray_depth = {0};
+            out_r.depth = 0;
         }
     }
 }
@@ -2078,7 +2078,7 @@ void Ray::NS::SampleMeshInTextureSpace(int iteration, int obj_index, int uv_laye
                     ITERATE_3({ where(fmask, out_ray.o[i]) = p[i] + n[i]; })
                     ITERATE_3({ where(fmask, out_ray.d[i]) = -n[i]; })
                     // where(fmask, out_ray.ior) = 1.0f;
-                    where(reinterpret_cast<const simd_ivec<S> &>(fmask), out_ray.ray_depth) = {0};
+                    where(fmask, out_ray.depth) = {0};
 
                     out_inter.mask = (out_inter.mask | imask);
                     where(imask, out_inter.prim_index) = tri;
@@ -2172,7 +2172,7 @@ void Ray::NS::SortRays_CPU(ray_data_t<S> *rays, simd_ivec<S> *ray_masks, int &ra
 #endif
 
                     std::swap(rays[jj].xy[_jj], rays[kk].xy[_kk]);
-                    std::swap(rays[jj].ray_depth[_jj], rays[kk].ray_depth[_kk]);
+                    std::swap(rays[jj].depth[_jj], rays[kk].depth[_kk]);
 
                     std::swap(ray_masks[jj][_jj], ray_masks[kk][_kk]);
                 }
@@ -4859,7 +4859,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
 
         const uint32_t env_map = sc.env->env_map;
         const float env_map_rotation = sc.env->env_map_rotation;
-        const simd_ivec<S> env_map_mask = (ray.ray_depth & 0x00ffffff) != 0;
+        const simd_ivec<S> env_map_mask = (ray.depth & 0x00ffffff) != 0;
 
         if (env_map != 0xffffffff && (ino_hit & env_map_mask).not_all_zeros()) {
             SampleLatlong_RGBE(*static_cast<const Ref::TexStorageRGBA *>(textures[0]), env_map, ray.d, env_map_rotation,
@@ -5186,10 +5186,10 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
     // used to randomize random sequence among pixels
     const simd_fvec<S> sample_off[2] = {construct_float(hash(ray.xy)), construct_float(hash(hash(ray.xy)))};
 
-    const simd_ivec<S> diff_depth = ray.ray_depth & 0x000000ff;
-    const simd_ivec<S> spec_depth = (ray.ray_depth >> 8) & 0x000000ff;
-    const simd_ivec<S> refr_depth = (ray.ray_depth >> 16) & 0x000000ff;
-    const simd_ivec<S> transp_depth = (ray.ray_depth >> 24) & 0x000000ff;
+    const simd_ivec<S> diff_depth = ray.depth & 0x000000ff;
+    const simd_ivec<S> spec_depth = (ray.depth >> 8) & 0x000000ff;
+    const simd_ivec<S> refr_depth = (ray.depth >> 16) & 0x000000ff;
+    const simd_ivec<S> transp_depth = (ray.depth >> 24) & 0x000000ff;
     const simd_ivec<S> total_depth = diff_depth + spec_depth + refr_depth + transp_depth;
 
     const simd_ivec<S> mat_type =
@@ -5532,7 +5532,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                     simd_fvec<S> V[3], F[4];
                     Sample_OrenDiffuse_BSDF(T, B, N, I, roughness, base_color, rand_u, rand_v, V, F);
 
-                    where(gen_ray, new_ray.ray_depth) = ray.ray_depth + 0x00000001;
+                    where(gen_ray, new_ray.depth) = ray.depth + 0x00000001;
 
                     ITERATE_3({ where(gen_ray, new_ray.o[i]) = P_biased[i]; })
                     ITERATE_3({ where(gen_ray, new_ray.d[i]) = V[i]; })
@@ -5610,7 +5610,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                     Sample_GGXSpecular_BSDF(T, B, N, I, roughness, simd_fvec<S>{0.0f}, simd_fvec<S>{spec_ior},
                                             simd_fvec<S>{spec_F0}, base_color, rand_u, rand_v, V, F);
 
-                    where(gen_ray, new_ray.ray_depth) = ray.ray_depth + 0x00000100;
+                    where(gen_ray, new_ray.depth) = ray.depth + 0x00000100;
 
                     ITERATE_3({ where(gen_ray, new_ray.o[i]) = P_biased[i]; })
                     ITERATE_3({ where(gen_ray, new_ray.d[i]) = V[i]; })
@@ -5688,7 +5688,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                     Sample_GGXRefraction_BSDF(T, B, N, I, roughness, eta, base_color, rand_u, rand_v, V, F);
                     const simd_fvec<S> m = V[3];
 
-                    where(gen_ray, new_ray.ray_depth) = ray.ray_depth + 0x00010000;
+                    where(gen_ray, new_ray.depth) = ray.depth + 0x00010000;
 
                     ITERATE_3({ where(gen_ray, new_ray.o[i]) = P_biased[i]; })
                     ITERATE_3({ where(gen_ray, new_ray.d[i]) = V[i]; })
@@ -5720,7 +5720,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
             } else if (mat->type == EmissiveNode) {
                 simd_fvec<S> mis_weight = 1.0f;
 #if USE_NEE
-                if (ray.ray_depth.not_all_zeros() && (mat->flags & MAT_FLAG_MULT_IMPORTANCE)) {
+                if ((ray.depth & 0x00ffffff).not_all_zeros() && (mat->flags & MAT_FLAG_MULT_IMPORTANCE)) {
                     const simd_fvec<S> v1[3] = {p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2]},
                                        v2[3] = {p3[0] - p1[0], p3[1] - p1[1], p3[2] - p1[2]};
 
@@ -5736,7 +5736,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                     const simd_fvec<S> light_pdf = (inter.t * inter.t) / (tri_area * cos_theta);
                     const simd_fvec<S> &bsdf_pdf = ray.pdf;
 
-                    where(cos_theta > 0.0f & simd_cast(ray.ray_depth != 0), mis_weight) =
+                    where(cos_theta > 0.0f & simd_cast((ray.depth & 0x00ffffff) != 0), mis_weight) =
                         power_heuristic(bsdf_pdf, light_pdf);
                 }
 #endif
@@ -5751,7 +5751,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                     simd_fvec<S> new_p[3];
                     offset_ray(P, _plane_N, new_p);
 
-                    where(gen_ray, new_ray.ray_depth) = ray.ray_depth + 0x01000000;
+                    where(gen_ray, new_ray.depth) = ray.depth + 0x01000000;
 
                     ITERATE_3({ where(gen_ray, new_ray.o[i]) = new_p[i]; })
                     ITERATE_3({ where(gen_ray, new_ray.d[i]) = ray.d[i]; })
@@ -5766,7 +5766,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                     ITERATE_3({ where(gen_ray, new_ray.dd_dy[i]) = ray.dd_dy[i]; })
 #endif
 
-                    where(gen_ray, new_ray.ray_depth) = ray.ray_depth + 0x01000000;
+                    where(gen_ray, new_ray.depth) = ray.depth + 0x01000000;
 
                     assert((secondary_mask & gen_ray).all_zeros());
                     secondary_mask |= gen_ray;
@@ -6001,7 +6001,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                     simd_fvec<S> new_p[3];
                     offset_ray(P, plane_N, new_p);
 
-                    where(sample_diff_lobe, new_ray.ray_depth) = ray.ray_depth + 0x00000001;
+                    where(sample_diff_lobe, new_ray.depth) = ray.depth + 0x00000001;
 
                     ITERATE_3({ where(sample_diff_lobe, new_ray.o[i]) = new_p[i]; })
                     ITERATE_3({ where(sample_diff_lobe, new_ray.d[i]) = V[i]; })
@@ -6045,7 +6045,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                     simd_fvec<S> new_p[3];
                     offset_ray(P, plane_N, new_p);
 
-                    where(sample_spec_lobe, new_ray.ray_depth) = ray.ray_depth + 0x00000100;
+                    where(sample_spec_lobe, new_ray.depth) = ray.depth + 0x00000100;
 
                     ITERATE_3({ where(sample_spec_lobe, new_ray.o[i]) = new_p[i]; })
                     ITERATE_3({ where(sample_spec_lobe, new_ray.d[i]) = V[i]; })
@@ -6087,7 +6087,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                     simd_fvec<S> new_p[3];
                     offset_ray(P, plane_N, new_p);
 
-                    where(sample_coat_lobe, new_ray.ray_depth) = ray.ray_depth + 0x00000100;
+                    where(sample_coat_lobe, new_ray.depth) = ray.depth + 0x00000100;
 
                     ITERATE_3({ where(sample_coat_lobe, new_ray.o[i]) = new_p[i]; })
                     ITERATE_3({ where(sample_coat_lobe, new_ray.d[i]) = V[i]; })
@@ -6138,7 +6138,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                         simd_fvec<S> new_p[3];
                         offset_ray(P, plane_N, new_p);
 
-                        where(sample_trans_spec_lobe, new_ray.ray_depth) = ray.ray_depth + 0x00000100;
+                        where(sample_trans_spec_lobe, new_ray.depth) = ray.depth + 0x00000100;
 
                         ITERATE_3({ where(sample_trans_spec_lobe, new_ray.o[i]) = new_p[i]; })
 
@@ -6167,7 +6167,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                         simd_fvec<S> new_p[3];
                         offset_ray(P, _plane_N, new_p);
 
-                        where(sample_trans_refr_lobe, new_ray.ray_depth) = ray.ray_depth + 0x00010000;
+                        where(sample_trans_refr_lobe, new_ray.depth) = ray.depth + 0x00010000;
 
                         ITERATE_4({ where(sample_trans_refr_lobe, F[i]) = _F[i]; })
                         ITERATE_3({ where(sample_trans_refr_lobe, V[i]) = _V[i]; })

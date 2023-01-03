@@ -1203,7 +1203,7 @@ void Ray::Ref::GeneratePrimaryRays(const int iteration, const camera_t &cam, con
 
             out_r.pdf = 1e6f;
             out_r.xy = (x << 16) | y;
-            out_r.ray_depth = 0;
+            out_r.depth = 0;
         }
     }
 }
@@ -1311,7 +1311,7 @@ void Ray::Ref::SampleMeshInTextureSpace(const int iteration, const int obj_index
                     out_ray.cone_width = 0;
                     out_ray.cone_spread = 0;
 #endif
-                    out_ray.ray_depth = 0;
+                    out_ray.depth = 0;
 
                     out_inter.mask = -1;
                     out_inter.prim_index = int(tri);
@@ -3317,9 +3317,9 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
     if (!inter.mask) {
         simd_fvec4 env_col = {1.0f};
 
-        const uint32_t env_map = (ray.ray_depth & 0x00ffffff) ? sc.env->env_map : sc.env->back_map;
+        const uint32_t env_map = (ray.depth & 0x00ffffff) ? sc.env->env_map : sc.env->back_map;
         const float env_map_rotation =
-            (ray.ray_depth & 0x00ffffff) ? sc.env->env_map_rotation : sc.env->back_map_rotation;
+            (ray.depth & 0x00ffffff) ? sc.env->env_map_rotation : sc.env->back_map_rotation;
         if (env_map != 0xffffffff) {
             env_col = SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), env_map,
                                          simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f}, env_map_rotation);
@@ -3333,7 +3333,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
                 env_col *= mis_weight;
             }
         }
-        env_col *= (ray.ray_depth & 0x00ffffff)
+        env_col *= (ray.depth & 0x00ffffff)
                        ? simd_fvec4{sc.env->env_col[0], sc.env->env_col[1], sc.env->env_col[2], 1.0f}
                        : simd_fvec4{sc.env->back_col[0], sc.env->back_col[1], sc.env->back_col[2], 1.0f};
         env_col[3] = 1.0f;
@@ -3495,10 +3495,10 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
 
     simd_fvec4 col = {0.0f};
 
-    const int diff_depth = ray.ray_depth & 0x000000ff;
-    const int spec_depth = (ray.ray_depth >> 8) & 0x000000ff;
-    const int refr_depth = (ray.ray_depth >> 16) & 0x000000ff;
-    const int transp_depth = (ray.ray_depth >> 24) & 0x000000ff;
+    const int diff_depth = ray.depth & 0x000000ff;
+    const int spec_depth = (ray.depth >> 8) & 0x000000ff;
+    const int refr_depth = (ray.depth >> 16) & 0x000000ff;
+    const int transp_depth = (ray.depth >> 24) & 0x000000ff;
     const int total_depth = diff_depth + spec_depth + refr_depth + transp_depth;
 
     float mix_rand = fract(random_seq[RAND_DIM_BSDF_PICK] + sample_off[0]);
@@ -3661,7 +3661,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
             simd_fvec4 V;
             const simd_fvec4 F = Sample_OrenDiffuse_BSDF(T, B, N, I, roughness, base_color, rand_u, rand_v, V);
 
-            new_ray.ray_depth = ray.ray_depth + 0x00000001;
+            new_ray.depth = ray.depth + 0x00000001;
 
             memcpy(&new_ray.o[0], value_ptr(offset_ray(P, plane_N)), 3 * sizeof(float));
             memcpy(&new_ray.d[0], value_ptr(V), 3 * sizeof(float));
@@ -3729,7 +3729,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
             const simd_fvec4 F =
                 Sample_GGXSpecular_BSDF(T, B, N, I, roughness, 0.0f, spec_ior, spec_F0, base_color, rand_u, rand_v, V);
 
-            new_ray.ray_depth = ray.ray_depth + 0x00000100;
+            new_ray.depth = ray.depth + 0x00000100;
 
             memcpy(&new_ray.o[0], value_ptr(offset_ray(P, plane_N)), 3 * sizeof(float));
             memcpy(&new_ray.d[0], value_ptr(V), 3 * sizeof(float));
@@ -3796,7 +3796,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
             const simd_fvec4 V = {_V[0], _V[1], _V[2], 0.0f};
             const float m = _V[3];
 
-            new_ray.ray_depth = ray.ray_depth + 0x00010000;
+            new_ray.depth = ray.depth + 0x00010000;
 
             new_ray.c[0] = ray.c[0] * F[0] * safe_div_pos(mix_weight, F[3]);
             new_ray.c[1] = ray.c[1] * F[1] * safe_div_pos(mix_weight, F[3]);
@@ -3823,8 +3823,8 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
     } else if (mat->type == EmissiveNode) {
         float mis_weight = 1.0f;
 #if USE_NEE
-        // TODO: consider removing ray_depth check (rely on high pdf)
-        if (ray.ray_depth && (mat->flags & MAT_FLAG_MULT_IMPORTANCE)) {
+        // TODO: consider removing ray depth check (rely on high pdf)
+        if ((ray.depth & 0x00ffffff) != 0 && (mat->flags & MAT_FLAG_MULT_IMPORTANCE)) {
             const auto p1 = simd_fvec4{v1.p[0], v1.p[1], v1.p[2], 0.0f},
                        p2 = simd_fvec4{v2.p[0], v2.p[1], v2.p[2], 0.0f},
                        p3 = simd_fvec4{v3.p[0], v3.p[1], v3.p[2], 0.0f};
@@ -3846,7 +3846,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
         col += mix_weight * mis_weight * mat->strength * base_color;
     } else if (mat->type == TransparentNode) {
         if (transp_depth < ps.max_transp_depth && total_depth < ps.max_total_depth) {
-            new_ray.ray_depth = ray.ray_depth + 0x01000000;
+            new_ray.depth = ray.depth + 0x01000000;
             new_ray.pdf = ray.pdf;
 
             memcpy(&new_ray.o[0], value_ptr(offset_ray(P, -plane_N)), 3 * sizeof(float));
@@ -4025,7 +4025,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
 
                 diff_col *= (1.0f - metallic);
 
-                new_ray.ray_depth = ray.ray_depth + 0x00000001;
+                new_ray.depth = ray.depth + 0x00000001;
 
                 memcpy(&new_ray.o[0], value_ptr(offset_ray(P, plane_N)), 3 * sizeof(float));
                 memcpy(&new_ray.d[0], value_ptr(V), 3 * sizeof(float));
@@ -4057,7 +4057,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
                                                        spec_ior, spec_F0, spec_tmp_col, rand_u, rand_v, V);
                 F[3] *= specular_weight;
 
-                new_ray.ray_depth = ray.ray_depth + 0x00000100;
+                new_ray.depth = ray.depth + 0x00000100;
 
                 new_ray.c[0] = ray.c[0] * F[0] * safe_div_pos(mix_weight, F[3]);
                 new_ray.c[1] = ray.c[1] * F[1] * safe_div_pos(mix_weight, F[3]);
@@ -4089,7 +4089,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
                                                                clearcoat_F0, rand_u, rand_v, V);
                 F[3] *= clearcoat_weight;
 
-                new_ray.ray_depth = ray.ray_depth + 0x00000100;
+                new_ray.depth = ray.depth + 0x00000100;
 
                 new_ray.c[0] = 0.25f * ray.c[0] * F[0] * mix_weight / F[3];
                 new_ray.c[1] = 0.25f * ray.c[1] * F[1] * mix_weight / F[3];
@@ -4129,7 +4129,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
                     F = Sample_GGXSpecular_BSDF(T, B, N, I, roughness, 0.0f /* anisotropic */, 1.0f /* ior */,
                                                 0.0f /* F0 */, simd_fvec4{1.0f}, rand_u, rand_v, V);
 
-                    new_ray.ray_depth = ray.ray_depth + 0x00000100;
+                    new_ray.depth = ray.depth + 0x00000100;
                     memcpy(&new_ray.o[0], value_ptr(offset_ray(P, plane_N)), 3 * sizeof(float));
 
 #ifdef USE_RAY_DIFFERENTIALS
@@ -4150,7 +4150,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
                     V = {_V[0], _V[1], _V[2], 0.0f};
                     const float m = _V[3];
 
-                    new_ray.ray_depth = ray.ray_depth + 0x00010000;
+                    new_ray.depth = ray.depth + 0x00010000;
                     memcpy(&new_ray.o[0], value_ptr(offset_ray(P, -plane_N)), 3 * sizeof(float));
 
 #ifdef USE_RAY_DIFFERENTIALS

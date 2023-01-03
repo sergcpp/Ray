@@ -114,7 +114,7 @@ struct ray_data_t {
 	float cone_width, cone_spread;
 #endif
 	int xy;
-	int ray_depth;
+	int depth;
 };
 
 struct shadow_ray_t {
