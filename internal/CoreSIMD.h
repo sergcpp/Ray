@@ -5033,9 +5033,9 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                              simd_ivec<S>((MATERIAL_INDEX_BITS << 16) | MATERIAL_INDEX_BITS);
 
     const int *tr_indices = reinterpret_cast<const int *>(&sc.mesh_instances[0].tr_index);
-    const int tr_indices_stride = sizeof(mesh_instance_t) / sizeof(int);
+    const int TrIndicesStride = sizeof(mesh_instance_t) / sizeof(int);
 
-    const simd_ivec<S> tr_index = gather(tr_indices, obj_index * tr_indices_stride);
+    const simd_ivec<S> tr_index = gather(tr_indices, obj_index * TrIndicesStride);
 
     const simd_ivec<S> vtx_indices[3] = {gather(reinterpret_cast<const int *>(sc.vtx_indices), tri_index * 3),
                                          gather(reinterpret_cast<const int *>(sc.vtx_indices), tri_index * 3 + 1),
@@ -5046,11 +5046,11 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
     simd_fvec<S> p1[3], p2[3], p3[3], P_ls[3];
     { // Fetch vertex positions
         const float *vtx_positions = &sc.vertices[0].p[0];
-        const int vtx_positions_stride = sizeof(vertex_t) / sizeof(float);
+        const int VtxPositionsStride = sizeof(vertex_t) / sizeof(float);
 
-        ITERATE_3({ p1[i] = gather(vtx_positions, vtx_indices[0] * vtx_positions_stride + i); });
-        ITERATE_3({ p2[i] = gather(vtx_positions, vtx_indices[1] * vtx_positions_stride + i); });
-        ITERATE_3({ p3[i] = gather(vtx_positions, vtx_indices[2] * vtx_positions_stride + i); });
+        ITERATE_3({ p1[i] = gather(vtx_positions, vtx_indices[0] * VtxPositionsStride + i); });
+        ITERATE_3({ p2[i] = gather(vtx_positions, vtx_indices[1] * VtxPositionsStride + i); });
+        ITERATE_3({ p3[i] = gather(vtx_positions, vtx_indices[2] * VtxPositionsStride + i); });
 
         ITERATE_3({ P_ls[i] = p1[i] * w + p2[i] * inter.u + p3[i] * inter.v; });
     }
@@ -5058,11 +5058,11 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
     simd_fvec<S> n1[3], n2[3], n3[3], N[3];
     { // Fetch vertex normals
         const float *vtx_normals = &sc.vertices[0].n[0];
-        const int vtx_normals_stride = sizeof(vertex_t) / sizeof(float);
+        const int VtxNormalsStride = sizeof(vertex_t) / sizeof(float);
 
-        ITERATE_3({ n1[i] = gather(vtx_normals, vtx_indices[0] * vtx_normals_stride + i); });
-        ITERATE_3({ n2[i] = gather(vtx_normals, vtx_indices[1] * vtx_normals_stride + i); });
-        ITERATE_3({ n3[i] = gather(vtx_normals, vtx_indices[2] * vtx_normals_stride + i); });
+        ITERATE_3({ n1[i] = gather(vtx_normals, vtx_indices[0] * VtxNormalsStride + i); });
+        ITERATE_3({ n2[i] = gather(vtx_normals, vtx_indices[1] * VtxNormalsStride + i); });
+        ITERATE_3({ n3[i] = gather(vtx_normals, vtx_indices[2] * VtxNormalsStride + i); });
 
         ITERATE_3({ N[i] = n1[i] * w + n2[i] * inter.u + n3[i] * inter.v; });
         normalize(N);
@@ -5071,11 +5071,11 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
     simd_fvec<S> u1[2], u2[2], u3[2], uvs[2];
     { // Fetch vertex uvs
         const float *vtx_uvs = &sc.vertices[0].t[0][0];
-        const int vtx_normals_stride = sizeof(vertex_t) / sizeof(float);
+        const int VtxUVStride = sizeof(vertex_t) / sizeof(float);
 
-        ITERATE_2({ u1[i] = gather(vtx_uvs, vtx_indices[0] * vtx_normals_stride + i); })
-        ITERATE_2({ u2[i] = gather(vtx_uvs, vtx_indices[1] * vtx_normals_stride + i); })
-        ITERATE_2({ u3[i] = gather(vtx_uvs, vtx_indices[2] * vtx_normals_stride + i); })
+        ITERATE_2({ u1[i] = gather(vtx_uvs, vtx_indices[0] * VtxUVStride + i); })
+        ITERATE_2({ u2[i] = gather(vtx_uvs, vtx_indices[1] * VtxUVStride + i); })
+        ITERATE_2({ u3[i] = gather(vtx_uvs, vtx_indices[2] * VtxUVStride + i); })
 
         ITERATE_2({ uvs[i] = u1[i] * w + u2[i] * inter.u + u3[i] * inter.v; })
     }
@@ -5095,17 +5095,17 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
     simd_fvec<S> B[3];
     { // Fetch vertex binormal
         const float *vtx_binormals = &sc.vertices[0].b[0];
-        const int vtx_binormals_stride = sizeof(vertex_t) / sizeof(float);
+        const int VtxBinormalsStride = sizeof(vertex_t) / sizeof(float);
 
-        const simd_fvec<S> B1[3] = {gather(vtx_binormals, vtx_indices[0] * vtx_binormals_stride),
-                                    gather(vtx_binormals, vtx_indices[0] * vtx_binormals_stride + 1),
-                                    gather(vtx_binormals, vtx_indices[0] * vtx_binormals_stride + 2)};
-        const simd_fvec<S> B2[3] = {gather(vtx_binormals, vtx_indices[1] * vtx_binormals_stride),
-                                    gather(vtx_binormals, vtx_indices[1] * vtx_binormals_stride + 1),
-                                    gather(vtx_binormals, vtx_indices[1] * vtx_binormals_stride + 2)};
-        const simd_fvec<S> B3[3] = {gather(vtx_binormals, vtx_indices[2] * vtx_binormals_stride),
-                                    gather(vtx_binormals, vtx_indices[2] * vtx_binormals_stride + 1),
-                                    gather(vtx_binormals, vtx_indices[2] * vtx_binormals_stride + 2)};
+        const simd_fvec<S> B1[3] = {gather(vtx_binormals, vtx_indices[0] * VtxBinormalsStride),
+                                    gather(vtx_binormals, vtx_indices[0] * VtxBinormalsStride + 1),
+                                    gather(vtx_binormals, vtx_indices[0] * VtxBinormalsStride + 2)};
+        const simd_fvec<S> B2[3] = {gather(vtx_binormals, vtx_indices[1] * VtxBinormalsStride),
+                                    gather(vtx_binormals, vtx_indices[1] * VtxBinormalsStride + 1),
+                                    gather(vtx_binormals, vtx_indices[1] * VtxBinormalsStride + 2)};
+        const simd_fvec<S> B3[3] = {gather(vtx_binormals, vtx_indices[2] * VtxBinormalsStride),
+                                    gather(vtx_binormals, vtx_indices[2] * VtxBinormalsStride + 1),
+                                    gather(vtx_binormals, vtx_indices[2] * VtxBinormalsStride + 2)};
 
         ITERATE_3({ B[i] = B1[i] * w + B2[i] * inter.u + B3[i] * inter.v; });
     }
@@ -5142,12 +5142,12 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
     { // fetch transformation matrices
         const float *transforms = &sc.transforms[0].xform[0];
         const float *inv_transforms = &sc.transforms[0].inv_xform[0];
-        const int transforms_stride = sizeof(transform_t) / sizeof(float);
+        const int TransformsStride = sizeof(transform_t) / sizeof(float);
 
         simd_fvec<S> inv_transform[16];
 
-        ITERATE_16({ transform[i] = gather(transforms, tr_index * transforms_stride + i); })
-        ITERATE_16({ inv_transform[i] = gather(inv_transforms, tr_index * transforms_stride + i); })
+        ITERATE_16({ transform[i] = gather(transforms, tr_index * TransformsStride + i); })
+        ITERATE_16({ inv_transform[i] = gather(inv_transforms, tr_index * TransformsStride + i); })
 
         simd_fvec<S> temp[3];
         cross(tangent, N, temp);
