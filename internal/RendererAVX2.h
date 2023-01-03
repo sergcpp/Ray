@@ -83,11 +83,6 @@ extern template void SampleLatlong_RGBE<RayPacketSize>(const Ref::TexStorageRGBA
                                                        const simd_ivec<RayPacketSize> &mask,
                                                        simd_fvec<RayPacketSize> out_rgb[3]);
 
-extern template simd_fvec<RayPacketSize> ComputeVisibility<RayPacketSize>(
-    const simd_fvec<RayPacketSize> p[3], const simd_fvec<RayPacketSize> d[3], simd_fvec<RayPacketSize> dist,
-    const simd_ivec<RayPacketSize> &mask, const float rand_val, const simd_ivec<RayPacketSize> &rand_hash2,
-    const scene_data_t &sc, uint32_t node_index, const Ref::TexStorageBase *const textures[]);
-
 extern template void ComputeDerivatives<RayPacketSize>(
     const simd_fvec<RayPacketSize> I[3], const simd_fvec<RayPacketSize> &t, const simd_fvec<RayPacketSize> do_dx[3],
     const simd_fvec<RayPacketSize> do_dy[3], const simd_fvec<RayPacketSize> dd_dx[3],
