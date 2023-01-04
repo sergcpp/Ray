@@ -4,7 +4,7 @@
 #extension GL_EXT_ray_query : require
 #endif
 
-#include "trace_shadow_interface.h"
+#include "intersect_scene_shadow_interface.h"
 #include "common.glsl"
 #include "texture.glsl"
 

@@ -1,6 +1,8 @@
 #ifndef ENVMAP_GLSL
 #define ENVMAP_GLSL
 
+#include "types.h"
+
 vec3 CanonicalToDir(const vec2 p, const float y_rotation) {
     const float cos_theta = 2 * p[0] - 1;
     float phi = 2 * PI * p[1] + y_rotation;

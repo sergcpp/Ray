@@ -43,18 +43,18 @@ class Renderer : public RendererBase {
   protected:
     std::unique_ptr<Context> ctx_;
 
-    Shader sh_prim_rays_gen_, sh_trace_primary_rays_[2], sh_trace_secondary_rays_[2], sh_intersect_area_lights_,
-        sh_shade_primary_hits_[2], sh_shade_secondary_hits_[2], sh_trace_shadow_swrt_[2], sh_trace_shadow_hwrt_[2],
-        sh_prepare_indir_args_, sh_mix_incremental_, sh_postprocess_, sh_debug_rt_;
+    Shader sh_prim_rays_gen_, sh_intersect_scene_primary_[2], sh_intersect_scene_secondary_[2],
+        sh_intersect_area_lights_, sh_shade_primary_[2], sh_shade_secondary_[2], sh_intersect_scene_shadow_swrt_[2],
+        sh_intersect_scene_shadow_hwrt_[2], sh_prepare_indir_args_, sh_mix_incremental_, sh_postprocess_, sh_debug_rt_;
 
-    Program prog_prim_rays_gen_, prog_trace_primary_rays_[2], prog_trace_secondary_rays_[2],
-        prog_intersect_area_lights_, prog_shade_primary_hits_[2], prog_shade_secondary_hits_[2],
-        prog_trace_shadow_swrt_[2], prog_trace_shadow_hwrt_[2], prog_prepare_indir_args_, prog_mix_incremental_,
-        prog_postprocess_, prog_debug_rt_;
+    Program prog_prim_rays_gen_, prog_intersect_scene_primary_[2], prog_intersect_scene_secondary_[2],
+        prog_intersect_area_lights_, prog_shade_primary_[2], prog_shade_secondary_[2],
+        prog_intersect_scene_shadow_swrt_[2], prog_intersect_scene_shadow_hwrt_[2], prog_prepare_indir_args_,
+        prog_mix_incremental_, prog_postprocess_, prog_debug_rt_;
 
-    Pipeline pi_prim_rays_gen_, pi_trace_primary_rays_[2], pi_trace_secondary_rays_[2], pi_intersect_area_lights_,
-        pi_shade_primary_hits_[2], pi_shade_secondary_hits_[2], pi_trace_shadow_swrt_[2], pi_trace_shadow_hwrt_[2],
-        pi_prepare_indir_args_, pi_mix_incremental_, pi_postprocess_, pi_debug_rt_;
+    Pipeline pi_prim_rays_gen_, pi_intersect_scene_primary_[2], pi_intersect_scene_secondary_[2],
+        pi_intersect_area_lights_, pi_shade_primary_[2], pi_shade_secondary_[2], pi_intersect_scene_shadow_swrt_[2],
+        pi_intersect_scene_shadow_hwrt_[2], pi_prepare_indir_args_, pi_mix_incremental_, pi_postprocess_, pi_debug_rt_;
 
     int w_ = 0, h_ = 0;
     bool use_hwrt_ = false, use_bindless_ = false, use_tex_compression_ = false;
@@ -82,11 +82,11 @@ class Renderer : public RendererBase {
 
     void kernel_GeneratePrimaryRays(VkCommandBuffer cmd_buf, const camera_t &cam, int hi, const rect_t &rect,
                                     const Buffer &random_seq, const Buffer &out_rays);
-    void kernel_TracePrimaryRays(VkCommandBuffer cmd_buf, const scene_data_t &sc_data, uint32_t node_index,
-                                 float cam_clip_end, const Buffer &rays, const Buffer &out_hits);
-    void kernel_TraceSecondaryRays(VkCommandBuffer cmd_buf, const Buffer &indir_args, const Buffer &counters,
-                                   const scene_data_t &sc_data, uint32_t node_index, const Buffer &rays,
-                                   const Buffer &out_hits);
+    void kernel_IntersectScenePrimary(VkCommandBuffer cmd_buf, const scene_data_t &sc_data, uint32_t node_index,
+                                      float cam_clip_end, const Buffer &rays, const Buffer &out_hits);
+    void kernel_IntersectSceneSecondary(VkCommandBuffer cmd_buf, const Buffer &indir_args, const Buffer &counters,
+                                        const scene_data_t &sc_data, uint32_t node_index, const Buffer &rays,
+                                        const Buffer &out_hits);
     void kernel_IntersectAreaLights(VkCommandBuffer cmd_buf, const scene_data_t &sc_data, const Buffer &indir_args,
                                     const Buffer &counters, const Buffer &rays, const Buffer &inout_hits);
     void kernel_ShadePrimaryHits(VkCommandBuffer cmd_buf, const pass_settings_t &settings, const environment_t &env,

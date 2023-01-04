@@ -4,13 +4,13 @@
 
 #include "shaders/debug_rt_interface.h"
 #include "shaders/intersect_area_lights_interface.h"
+#include "shaders/intersect_scene_interface.h"
+#include "shaders/intersect_scene_shadow_interface.h"
 #include "shaders/mix_incremental_interface.h"
 #include "shaders/postprocess_interface.h"
 #include "shaders/prepare_indir_args_interface.h"
 #include "shaders/primary_ray_gen_interface.h"
-#include "shaders/shade_hits_interface.h"
-#include "shaders/trace_rays_interface.h"
-#include "shaders/trace_shadow_interface.h"
+#include "shaders/shade_interface.h"
 
 #include "shaders/types.h"
 
@@ -57,53 +57,55 @@ void Ray::Vk::Renderer::kernel_GeneratePrimaryRays(VkCommandBuffer cmd_buf, cons
                     ctx_->default_descr_alloc(), ctx_->log());
 }
 
-void Ray::Vk::Renderer::kernel_TracePrimaryRays(VkCommandBuffer cmd_buf, const scene_data_t &sc_data,
-                                                const uint32_t node_index, const float cam_clip_end, const Buffer &rays,
-                                                const Buffer &out_hits) {
+void Ray::Vk::Renderer::kernel_IntersectScenePrimary(VkCommandBuffer cmd_buf, const scene_data_t &sc_data,
+                                                     const uint32_t node_index, const float cam_clip_end,
+                                                     const Buffer &rays, const Buffer &out_hits) {
     const TransitionInfo res_transitions[] = {{&rays, eResState::ShaderResource},
                                               {&out_hits, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
-    TraceRays::Params uniform_params = {};
+    IntersectScene::Params uniform_params = {};
     uniform_params.img_size[0] = w_;
     uniform_params.img_size[1] = h_;
     uniform_params.node_index = node_index;
     uniform_params.cam_clip_end = cam_clip_end;
 
     if (use_hwrt_) {
-        const Binding bindings[] = {{eBindTarget::SBuf, TraceRays::RAYS_BUF_SLOT, rays},
-                                    {eBindTarget::AccStruct, TraceRays::TLAS_SLOT, sc_data.rt_tlas},
-                                    {eBindTarget::SBuf, TraceRays::OUT_HITS_BUF_SLOT, out_hits}};
+        const Binding bindings[] = {{eBindTarget::SBuf, IntersectScene::RAYS_BUF_SLOT, rays},
+                                    {eBindTarget::AccStruct, IntersectScene::TLAS_SLOT, sc_data.rt_tlas},
+                                    {eBindTarget::SBuf, IntersectScene::OUT_HITS_BUF_SLOT, out_hits}};
 
-        const uint32_t grp_count[3] = {uint32_t((w_ + TraceRays::LOCAL_GROUP_SIZE_X) / TraceRays::LOCAL_GROUP_SIZE_X),
-                                       uint32_t((h_ + TraceRays::LOCAL_GROUP_SIZE_Y) / TraceRays::LOCAL_GROUP_SIZE_Y),
-                                       1u};
+        const uint32_t grp_count[3] = {
+            uint32_t((w_ + IntersectScene::LOCAL_GROUP_SIZE_X) / IntersectScene::LOCAL_GROUP_SIZE_X),
+            uint32_t((h_ + IntersectScene::LOCAL_GROUP_SIZE_Y) / IntersectScene::LOCAL_GROUP_SIZE_Y), 1u};
 
-        DispatchCompute(cmd_buf, pi_trace_primary_rays_[1], grp_count, bindings, &uniform_params,
+        DispatchCompute(cmd_buf, pi_intersect_scene_primary_[1], grp_count, bindings, &uniform_params,
                         sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
     } else {
-        const Binding bindings[] = {{eBindTarget::SBuf, TraceRays::TRIS_BUF_SLOT, sc_data.tris},
-                                    {eBindTarget::SBuf, TraceRays::TRI_INDICES_BUF_SLOT, sc_data.tri_indices},
-                                    {eBindTarget::SBuf, TraceRays::NODES_BUF_SLOT, sc_data.nodes},
-                                    {eBindTarget::SBuf, TraceRays::MESHES_BUF_SLOT, sc_data.meshes},
-                                    {eBindTarget::SBuf, TraceRays::MESH_INSTANCES_BUF_SLOT, sc_data.mesh_instances},
-                                    {eBindTarget::SBuf, TraceRays::MI_INDICES_BUF_SLOT, sc_data.mi_indices},
-                                    {eBindTarget::SBuf, TraceRays::TRANSFORMS_BUF_SLOT, sc_data.transforms},
-                                    {eBindTarget::SBuf, TraceRays::RAYS_BUF_SLOT, rays},
-                                    {eBindTarget::SBuf, TraceRays::OUT_HITS_BUF_SLOT, out_hits}};
+        const Binding bindings[] = {
+            {eBindTarget::SBuf, IntersectScene::TRIS_BUF_SLOT, sc_data.tris},
+            {eBindTarget::SBuf, IntersectScene::TRI_INDICES_BUF_SLOT, sc_data.tri_indices},
+            {eBindTarget::SBuf, IntersectScene::NODES_BUF_SLOT, sc_data.nodes},
+            {eBindTarget::SBuf, IntersectScene::MESHES_BUF_SLOT, sc_data.meshes},
+            {eBindTarget::SBuf, IntersectScene::MESH_INSTANCES_BUF_SLOT, sc_data.mesh_instances},
+            {eBindTarget::SBuf, IntersectScene::MI_INDICES_BUF_SLOT, sc_data.mi_indices},
+            {eBindTarget::SBuf, IntersectScene::TRANSFORMS_BUF_SLOT, sc_data.transforms},
+            {eBindTarget::SBuf, IntersectScene::RAYS_BUF_SLOT, rays},
+            {eBindTarget::SBuf, IntersectScene::OUT_HITS_BUF_SLOT, out_hits}};
 
-        const uint32_t grp_count[3] = {uint32_t((w_ + TraceRays::LOCAL_GROUP_SIZE_X) / TraceRays::LOCAL_GROUP_SIZE_X),
-                                       uint32_t((h_ + TraceRays::LOCAL_GROUP_SIZE_Y) / TraceRays::LOCAL_GROUP_SIZE_Y),
-                                       1u};
+        const uint32_t grp_count[3] = {
+            uint32_t((w_ + IntersectScene::LOCAL_GROUP_SIZE_X) / IntersectScene::LOCAL_GROUP_SIZE_X),
+            uint32_t((h_ + IntersectScene::LOCAL_GROUP_SIZE_Y) / IntersectScene::LOCAL_GROUP_SIZE_Y), 1u};
 
-        DispatchCompute(cmd_buf, pi_trace_primary_rays_[0], grp_count, bindings, &uniform_params,
+        DispatchCompute(cmd_buf, pi_intersect_scene_primary_[0], grp_count, bindings, &uniform_params,
                         sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
     }
 }
 
-void Ray::Vk::Renderer::kernel_TraceSecondaryRays(VkCommandBuffer cmd_buf, const Buffer &indir_args,
-                                                  const Buffer &counters, const scene_data_t &sc_data,
-                                                  uint32_t node_index, const Buffer &rays, const Buffer &out_hits) {
+void Ray::Vk::Renderer::kernel_IntersectSceneSecondary(VkCommandBuffer cmd_buf, const Buffer &indir_args,
+                                                       const Buffer &counters, const scene_data_t &sc_data,
+                                                       uint32_t node_index, const Buffer &rays,
+                                                       const Buffer &out_hits) {
     const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
                                               {&counters, eResState::ShaderResource},
                                               {&rays, eResState::ShaderResource},
@@ -111,31 +113,32 @@ void Ray::Vk::Renderer::kernel_TraceSecondaryRays(VkCommandBuffer cmd_buf, const
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
     if (use_hwrt_) {
-        const Binding bindings[] = {{eBindTarget::SBuf, TraceRays::RAYS_BUF_SLOT, rays},
-                                    {eBindTarget::AccStruct, TraceRays::TLAS_SLOT, sc_data.rt_tlas},
-                                    {eBindTarget::SBuf, TraceRays::COUNTERS_BUF_SLOT, counters},
-                                    {eBindTarget::SBuf, TraceRays::OUT_HITS_BUF_SLOT, out_hits}};
+        const Binding bindings[] = {{eBindTarget::SBuf, IntersectScene::RAYS_BUF_SLOT, rays},
+                                    {eBindTarget::AccStruct, IntersectScene::TLAS_SLOT, sc_data.rt_tlas},
+                                    {eBindTarget::SBuf, IntersectScene::COUNTERS_BUF_SLOT, counters},
+                                    {eBindTarget::SBuf, IntersectScene::OUT_HITS_BUF_SLOT, out_hits}};
 
-        DispatchComputeIndirect(cmd_buf, pi_trace_secondary_rays_[1], indir_args, 0, bindings, nullptr, 0,
+        DispatchComputeIndirect(cmd_buf, pi_intersect_scene_secondary_[1], indir_args, 0, bindings, nullptr, 0,
                                 ctx_->default_descr_alloc(), ctx_->log());
     } else {
-        const Binding bindings[] = {{eBindTarget::SBuf, TraceRays::TRIS_BUF_SLOT, sc_data.tris},
-                                    {eBindTarget::SBuf, TraceRays::TRI_INDICES_BUF_SLOT, sc_data.tri_indices},
-                                    {eBindTarget::SBuf, TraceRays::NODES_BUF_SLOT, sc_data.nodes},
-                                    {eBindTarget::SBuf, TraceRays::MESHES_BUF_SLOT, sc_data.meshes},
-                                    {eBindTarget::SBuf, TraceRays::MESH_INSTANCES_BUF_SLOT, sc_data.mesh_instances},
-                                    {eBindTarget::SBuf, TraceRays::MI_INDICES_BUF_SLOT, sc_data.mi_indices},
-                                    {eBindTarget::SBuf, TraceRays::TRANSFORMS_BUF_SLOT, sc_data.transforms},
-                                    {eBindTarget::SBuf, TraceRays::RAYS_BUF_SLOT, rays},
-                                    {eBindTarget::SBuf, TraceRays::COUNTERS_BUF_SLOT, counters},
-                                    {eBindTarget::SBuf, TraceRays::OUT_HITS_BUF_SLOT, out_hits}};
+        const Binding bindings[] = {
+            {eBindTarget::SBuf, IntersectScene::TRIS_BUF_SLOT, sc_data.tris},
+            {eBindTarget::SBuf, IntersectScene::TRI_INDICES_BUF_SLOT, sc_data.tri_indices},
+            {eBindTarget::SBuf, IntersectScene::NODES_BUF_SLOT, sc_data.nodes},
+            {eBindTarget::SBuf, IntersectScene::MESHES_BUF_SLOT, sc_data.meshes},
+            {eBindTarget::SBuf, IntersectScene::MESH_INSTANCES_BUF_SLOT, sc_data.mesh_instances},
+            {eBindTarget::SBuf, IntersectScene::MI_INDICES_BUF_SLOT, sc_data.mi_indices},
+            {eBindTarget::SBuf, IntersectScene::TRANSFORMS_BUF_SLOT, sc_data.transforms},
+            {eBindTarget::SBuf, IntersectScene::RAYS_BUF_SLOT, rays},
+            {eBindTarget::SBuf, IntersectScene::COUNTERS_BUF_SLOT, counters},
+            {eBindTarget::SBuf, IntersectScene::OUT_HITS_BUF_SLOT, out_hits}};
 
-        TraceRays::Params uniform_params = {};
+        IntersectScene::Params uniform_params = {};
         uniform_params.img_size[0] = w_;
         uniform_params.img_size[1] = h_;
         uniform_params.node_index = node_index;
 
-        DispatchComputeIndirect(cmd_buf, pi_trace_secondary_rays_[0], indir_args, 0, bindings, &uniform_params,
+        DispatchComputeIndirect(cmd_buf, pi_intersect_scene_secondary_[0], indir_args, 0, bindings, &uniform_params,
                                 sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
     }
 }
@@ -179,29 +182,28 @@ void Ray::Vk::Renderer::kernel_ShadePrimaryHits(VkCommandBuffer cmd_buf, const p
         {&inout_counters, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
-    SmallVector<Binding, 32> bindings = {
-        {eBindTarget::SBuf, ShadeHits::HITS_BUF_SLOT, hits},
-        {eBindTarget::SBuf, ShadeHits::RAYS_BUF_SLOT, rays},
-        {eBindTarget::SBuf, ShadeHits::LIGHTS_BUF_SLOT, sc_data.lights},
-        {eBindTarget::SBuf, ShadeHits::LI_INDICES_BUF_SLOT, sc_data.li_indices},
-        {eBindTarget::SBuf, ShadeHits::TRIS_BUF_SLOT, sc_data.tris},
-        {eBindTarget::SBuf, ShadeHits::TRI_MATERIALS_BUF_SLOT, sc_data.tri_materials},
-        {eBindTarget::SBuf, ShadeHits::MATERIALS_BUF_SLOT, sc_data.materials},
-        {eBindTarget::SBuf, ShadeHits::TRANSFORMS_BUF_SLOT, sc_data.transforms},
-        {eBindTarget::SBuf, ShadeHits::MESH_INSTANCES_BUF_SLOT, sc_data.mesh_instances},
-        {eBindTarget::SBuf, ShadeHits::VERTICES_BUF_SLOT, sc_data.vertices},
-        {eBindTarget::SBuf, ShadeHits::VTX_INDICES_BUF_SLOT, sc_data.vtx_indices},
-        {eBindTarget::SBuf, ShadeHits::RANDOM_SEQ_BUF_SLOT, random_seq},
-        {eBindTarget::Tex2D, ShadeHits::ENV_QTREE_TEX_SLOT, sc_data.env_qtree},
-        {eBindTarget::Image, ShadeHits::OUT_IMG_SLOT, out_img},
-        {eBindTarget::SBuf, ShadeHits::OUT_RAYS_BUF_SLOT, out_rays},
-        {eBindTarget::SBuf, ShadeHits::OUT_SH_RAYS_BUF_SLOT, out_sh_rays},
-        {eBindTarget::SBuf, ShadeHits::INOUT_COUNTERS_BUF_SLOT, inout_counters}};
+    SmallVector<Binding, 32> bindings = {{eBindTarget::SBuf, Shade::HITS_BUF_SLOT, hits},
+                                         {eBindTarget::SBuf, Shade::RAYS_BUF_SLOT, rays},
+                                         {eBindTarget::SBuf, Shade::LIGHTS_BUF_SLOT, sc_data.lights},
+                                         {eBindTarget::SBuf, Shade::LI_INDICES_BUF_SLOT, sc_data.li_indices},
+                                         {eBindTarget::SBuf, Shade::TRIS_BUF_SLOT, sc_data.tris},
+                                         {eBindTarget::SBuf, Shade::TRI_MATERIALS_BUF_SLOT, sc_data.tri_materials},
+                                         {eBindTarget::SBuf, Shade::MATERIALS_BUF_SLOT, sc_data.materials},
+                                         {eBindTarget::SBuf, Shade::TRANSFORMS_BUF_SLOT, sc_data.transforms},
+                                         {eBindTarget::SBuf, Shade::MESH_INSTANCES_BUF_SLOT, sc_data.mesh_instances},
+                                         {eBindTarget::SBuf, Shade::VERTICES_BUF_SLOT, sc_data.vertices},
+                                         {eBindTarget::SBuf, Shade::VTX_INDICES_BUF_SLOT, sc_data.vtx_indices},
+                                         {eBindTarget::SBuf, Shade::RANDOM_SEQ_BUF_SLOT, random_seq},
+                                         {eBindTarget::Tex2D, Shade::ENV_QTREE_TEX_SLOT, sc_data.env_qtree},
+                                         {eBindTarget::Image, Shade::OUT_IMG_SLOT, out_img},
+                                         {eBindTarget::SBuf, Shade::OUT_RAYS_BUF_SLOT, out_rays},
+                                         {eBindTarget::SBuf, Shade::OUT_SH_RAYS_BUF_SLOT, out_sh_rays},
+                                         {eBindTarget::SBuf, Shade::INOUT_COUNTERS_BUF_SLOT, inout_counters}};
 
-    const uint32_t grp_count[3] = {uint32_t((w_ + ShadeHits::LOCAL_GROUP_SIZE_X) / ShadeHits::LOCAL_GROUP_SIZE_X),
-                                   uint32_t((h_ + ShadeHits::LOCAL_GROUP_SIZE_Y) / ShadeHits::LOCAL_GROUP_SIZE_Y), 1u};
+    const uint32_t grp_count[3] = {uint32_t((w_ + Shade::LOCAL_GROUP_SIZE_X) / Shade::LOCAL_GROUP_SIZE_X),
+                                   uint32_t((h_ + Shade::LOCAL_GROUP_SIZE_Y) / Shade::LOCAL_GROUP_SIZE_Y), 1u};
 
-    ShadeHits::Params uniform_params = {};
+    Shade::Params uniform_params = {};
     uniform_params.img_size[0] = w_;
     uniform_params.img_size[1] = h_;
     uniform_params.hi = hi;
@@ -226,17 +228,17 @@ void Ray::Vk::Renderer::kernel_ShadePrimaryHits(VkCommandBuffer cmd_buf, const p
 
     if (use_bindless_) {
         assert(tex_descr_set);
-        vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, pi_shade_primary_hits_[1].layout(), 1, 1,
+        vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, pi_shade_primary_[1].layout(), 1, 1,
                                 &tex_descr_set, 0, nullptr);
 
-        DispatchCompute(cmd_buf, pi_shade_primary_hits_[1], grp_count, bindings, &uniform_params,
-                        sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
+        DispatchCompute(cmd_buf, pi_shade_primary_[1], grp_count, bindings, &uniform_params, sizeof(uniform_params),
+                        ctx_->default_descr_alloc(), ctx_->log());
     } else {
         bindings.emplace_back(eBindTarget::SBuf, Types::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
         bindings.emplace_back(eBindTarget::Tex2DArray, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
 
-        DispatchCompute(cmd_buf, pi_shade_primary_hits_[0], grp_count, bindings, &uniform_params,
-                        sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
+        DispatchCompute(cmd_buf, pi_shade_primary_[0], grp_count, bindings, &uniform_params, sizeof(uniform_params),
+                        ctx_->default_descr_alloc(), ctx_->log());
     }
 }
 
@@ -254,26 +256,25 @@ void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(VkCommandBuffer cmd_buf, const
         {&out_sh_rays, eResState::UnorderedAccess}, {&inout_counters, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
-    SmallVector<Binding, 32> bindings = {
-        {eBindTarget::SBuf, ShadeHits::HITS_BUF_SLOT, hits},
-        {eBindTarget::SBuf, ShadeHits::RAYS_BUF_SLOT, rays},
-        {eBindTarget::SBuf, ShadeHits::LIGHTS_BUF_SLOT, sc_data.lights},
-        {eBindTarget::SBuf, ShadeHits::LI_INDICES_BUF_SLOT, sc_data.li_indices},
-        {eBindTarget::SBuf, ShadeHits::TRIS_BUF_SLOT, sc_data.tris},
-        {eBindTarget::SBuf, ShadeHits::TRI_MATERIALS_BUF_SLOT, sc_data.tri_materials},
-        {eBindTarget::SBuf, ShadeHits::MATERIALS_BUF_SLOT, sc_data.materials},
-        {eBindTarget::SBuf, ShadeHits::TRANSFORMS_BUF_SLOT, sc_data.transforms},
-        {eBindTarget::SBuf, ShadeHits::MESH_INSTANCES_BUF_SLOT, sc_data.mesh_instances},
-        {eBindTarget::SBuf, ShadeHits::VERTICES_BUF_SLOT, sc_data.vertices},
-        {eBindTarget::SBuf, ShadeHits::VTX_INDICES_BUF_SLOT, sc_data.vtx_indices},
-        {eBindTarget::SBuf, ShadeHits::RANDOM_SEQ_BUF_SLOT, random_seq},
-        {eBindTarget::Tex2D, ShadeHits::ENV_QTREE_TEX_SLOT, sc_data.env_qtree},
-        {eBindTarget::Image, ShadeHits::OUT_IMG_SLOT, out_img},
-        {eBindTarget::SBuf, ShadeHits::OUT_RAYS_BUF_SLOT, out_rays},
-        {eBindTarget::SBuf, ShadeHits::OUT_SH_RAYS_BUF_SLOT, out_sh_rays},
-        {eBindTarget::SBuf, ShadeHits::INOUT_COUNTERS_BUF_SLOT, inout_counters}};
+    SmallVector<Binding, 32> bindings = {{eBindTarget::SBuf, Shade::HITS_BUF_SLOT, hits},
+                                         {eBindTarget::SBuf, Shade::RAYS_BUF_SLOT, rays},
+                                         {eBindTarget::SBuf, Shade::LIGHTS_BUF_SLOT, sc_data.lights},
+                                         {eBindTarget::SBuf, Shade::LI_INDICES_BUF_SLOT, sc_data.li_indices},
+                                         {eBindTarget::SBuf, Shade::TRIS_BUF_SLOT, sc_data.tris},
+                                         {eBindTarget::SBuf, Shade::TRI_MATERIALS_BUF_SLOT, sc_data.tri_materials},
+                                         {eBindTarget::SBuf, Shade::MATERIALS_BUF_SLOT, sc_data.materials},
+                                         {eBindTarget::SBuf, Shade::TRANSFORMS_BUF_SLOT, sc_data.transforms},
+                                         {eBindTarget::SBuf, Shade::MESH_INSTANCES_BUF_SLOT, sc_data.mesh_instances},
+                                         {eBindTarget::SBuf, Shade::VERTICES_BUF_SLOT, sc_data.vertices},
+                                         {eBindTarget::SBuf, Shade::VTX_INDICES_BUF_SLOT, sc_data.vtx_indices},
+                                         {eBindTarget::SBuf, Shade::RANDOM_SEQ_BUF_SLOT, random_seq},
+                                         {eBindTarget::Tex2D, Shade::ENV_QTREE_TEX_SLOT, sc_data.env_qtree},
+                                         {eBindTarget::Image, Shade::OUT_IMG_SLOT, out_img},
+                                         {eBindTarget::SBuf, Shade::OUT_RAYS_BUF_SLOT, out_rays},
+                                         {eBindTarget::SBuf, Shade::OUT_SH_RAYS_BUF_SLOT, out_sh_rays},
+                                         {eBindTarget::SBuf, Shade::INOUT_COUNTERS_BUF_SLOT, inout_counters}};
 
-    ShadeHits::Params uniform_params = {};
+    Shade::Params uniform_params = {};
     uniform_params.img_size[0] = w_;
     uniform_params.img_size[1] = h_;
     uniform_params.hi = hi;
@@ -298,16 +299,16 @@ void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(VkCommandBuffer cmd_buf, const
 
     if (use_bindless_) {
         assert(tex_descr_set);
-        vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, pi_shade_secondary_hits_[1].layout(), 1, 1,
+        vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, pi_shade_secondary_[1].layout(), 1, 1,
                                 &tex_descr_set, 0, nullptr);
 
-        DispatchComputeIndirect(cmd_buf, pi_shade_secondary_hits_[1], indir_args, 0, bindings, &uniform_params,
+        DispatchComputeIndirect(cmd_buf, pi_shade_secondary_[1], indir_args, 0, bindings, &uniform_params,
                                 sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
     } else {
         bindings.emplace_back(eBindTarget::SBuf, Types::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
         bindings.emplace_back(eBindTarget::Tex2DArray, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
 
-        DispatchComputeIndirect(cmd_buf, pi_shade_secondary_hits_[0], indir_args, 0, bindings, &uniform_params,
+        DispatchComputeIndirect(cmd_buf, pi_shade_secondary_[0], indir_args, 0, bindings, &uniform_params,
                                 sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
     }
 }
@@ -348,19 +349,19 @@ void Ray::Vk::Renderer::kernel_TraceShadow(VkCommandBuffer cmd_buf, const Buffer
 
         if (use_bindless_) {
             assert(tex_descr_set);
-            vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, pi_trace_shadow_hwrt_[1].layout(), 1, 1,
-                                    &tex_descr_set, 0, nullptr);
+            vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE,
+                                    pi_intersect_scene_shadow_hwrt_[1].layout(), 1, 1, &tex_descr_set, 0, nullptr);
 
-            DispatchComputeIndirect(cmd_buf, pi_trace_shadow_hwrt_[1], indir_args, sizeof(DispatchIndirectCommand),
-                                    bindings, &uniform_params, sizeof(uniform_params), ctx_->default_descr_alloc(),
-                                    ctx_->log());
+            DispatchComputeIndirect(cmd_buf, pi_intersect_scene_shadow_hwrt_[1], indir_args,
+                                    sizeof(DispatchIndirectCommand), bindings, &uniform_params, sizeof(uniform_params),
+                                    ctx_->default_descr_alloc(), ctx_->log());
         } else {
             bindings.emplace_back(eBindTarget::SBuf, Types::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
             bindings.emplace_back(eBindTarget::Tex2DArray, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
 
-            DispatchComputeIndirect(cmd_buf, pi_trace_shadow_hwrt_[0], indir_args, sizeof(DispatchIndirectCommand),
-                                    bindings, &uniform_params, sizeof(uniform_params), ctx_->default_descr_alloc(),
-                                    ctx_->log());
+            DispatchComputeIndirect(cmd_buf, pi_intersect_scene_shadow_hwrt_[0], indir_args,
+                                    sizeof(DispatchIndirectCommand), bindings, &uniform_params, sizeof(uniform_params),
+                                    ctx_->default_descr_alloc(), ctx_->log());
         }
     } else {
         SmallVector<Binding, 32> bindings = {
@@ -381,19 +382,19 @@ void Ray::Vk::Renderer::kernel_TraceShadow(VkCommandBuffer cmd_buf, const Buffer
 
         if (use_bindless_) {
             assert(tex_descr_set);
-            vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, pi_trace_shadow_swrt_[1].layout(), 1, 1,
-                                    &tex_descr_set, 0, nullptr);
+            vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE,
+                                    pi_intersect_scene_shadow_swrt_[1].layout(), 1, 1, &tex_descr_set, 0, nullptr);
 
-            DispatchComputeIndirect(cmd_buf, pi_trace_shadow_swrt_[1], indir_args, sizeof(DispatchIndirectCommand),
-                                    bindings, &uniform_params, sizeof(uniform_params), ctx_->default_descr_alloc(),
-                                    ctx_->log());
+            DispatchComputeIndirect(cmd_buf, pi_intersect_scene_shadow_swrt_[1], indir_args,
+                                    sizeof(DispatchIndirectCommand), bindings, &uniform_params, sizeof(uniform_params),
+                                    ctx_->default_descr_alloc(), ctx_->log());
         } else {
             bindings.emplace_back(eBindTarget::SBuf, Types::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
             bindings.emplace_back(eBindTarget::Tex2DArray, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
 
-            DispatchComputeIndirect(cmd_buf, pi_trace_shadow_swrt_[0], indir_args, sizeof(DispatchIndirectCommand),
-                                    bindings, &uniform_params, sizeof(uniform_params), ctx_->default_descr_alloc(),
-                                    ctx_->log());
+            DispatchComputeIndirect(cmd_buf, pi_intersect_scene_shadow_swrt_[0], indir_args,
+                                    sizeof(DispatchIndirectCommand), bindings, &uniform_params, sizeof(uniform_params),
+                                    ctx_->default_descr_alloc(), ctx_->log());
         }
     }
 }

@@ -1,9 +1,9 @@
-#ifndef TRACE_RAYS_INTERFACE_H
-#define TRACE_RAYS_INTERFACE_H
+#ifndef INTERSECT_SCENE_INTERFACE_H
+#define INTERSECT_SCENE_INTERFACE_H
 
 #include "_interface_common.h"
 
-INTERFACE_START(TraceRays)
+INTERFACE_START(IntersectScene)
 
 struct Params {
     UVEC2_TYPE img_size;
@@ -29,4 +29,4 @@ const int OUT_HITS_BUF_SLOT = 0;
 
 INTERFACE_END
 
-#endif // TRACE_RAYS_INTERFACE_H
+#endif // INTERSECT_SCENE_INTERFACE_H

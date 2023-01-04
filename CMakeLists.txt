@@ -201,6 +201,10 @@ set(SHADER_FILES    internal/shaders/_interface_common.h
                     internal/shaders/intersect.glsl
                     internal/shaders/intersect_area_lights.comp.glsl
                     internal/shaders/intersect_area_lights_interface.h
+                    internal/shaders/intersect_scene.comp.glsl
+                    internal/shaders/intersect_scene_interface.h
+                    internal/shaders/intersect_scene_shadow.comp.glsl
+                    internal/shaders/intersect_scene_shadow_interface.h
                     internal/shaders/mix_incremental.comp.glsl
                     internal/shaders/mix_incremental_interface.h
                     internal/shaders/postprocess.comp.glsl
@@ -209,13 +213,9 @@ set(SHADER_FILES    internal/shaders/_interface_common.h
                     internal/shaders/prepare_indir_args_interface.h
                     internal/shaders/primary_ray_gen.comp.glsl
                     internal/shaders/primary_ray_gen_interface.h
-                    internal/shaders/shade_hits.comp.glsl
-                    internal/shaders/shade_hits_interface.h
+                    internal/shaders/shade.comp.glsl
+                    internal/shaders/shade_interface.h
                     internal/shaders/texture.glsl
-                    internal/shaders/trace_rays.comp.glsl
-                    internal/shaders/trace_rays_interface.h
-                    internal/shaders/trace_shadow.comp.glsl
-                    internal/shaders/trace_shadow_interface.h
                     internal/shaders/traverse_bvh.glsl
                     internal/shaders/types.h)
 

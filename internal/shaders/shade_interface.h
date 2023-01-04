@@ -1,9 +1,9 @@
-#ifndef SHADE_HITS_INTERFACE_H
-#define SHADE_HITS_INTERFACE_H
+#ifndef SHADE_INTERFACE_H
+#define SHADE_INTERFACE_H
 
 #include "_interface_common.h"
 
-INTERFACE_START(ShadeHits)
+INTERFACE_START(Shade)
 
 struct Params {
     UVEC2_TYPE img_size;
@@ -48,4 +48,4 @@ const int INOUT_COUNTERS_BUF_SLOT = 3;
 
 INTERFACE_END
 
-#endif // SHADE_HITS_INTERFACE_H
+#endif // SHADE_INTERFACE_H
