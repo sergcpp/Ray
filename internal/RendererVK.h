@@ -43,18 +43,17 @@ class Renderer : public RendererBase {
   protected:
     std::unique_ptr<Context> ctx_;
 
-    Shader sh_prim_rays_gen_, sh_intersect_scene_primary_[2], sh_intersect_scene_secondary_[2],
-        sh_intersect_area_lights_, sh_shade_primary_[2], sh_shade_secondary_[2], sh_intersect_scene_shadow_swrt_[2],
-        sh_intersect_scene_shadow_hwrt_[2], sh_prepare_indir_args_, sh_mix_incremental_, sh_postprocess_, sh_debug_rt_;
+    Shader sh_prim_rays_gen_, sh_intersect_scene_primary_, sh_intersect_scene_secondary_, sh_intersect_area_lights_,
+        sh_shade_primary_, sh_shade_secondary_, sh_intersect_scene_shadow_, sh_prepare_indir_args_, sh_mix_incremental_,
+        sh_postprocess_, sh_debug_rt_;
 
-    Program prog_prim_rays_gen_, prog_intersect_scene_primary_[2], prog_intersect_scene_secondary_[2],
-        prog_intersect_area_lights_, prog_shade_primary_[2], prog_shade_secondary_[2],
-        prog_intersect_scene_shadow_swrt_[2], prog_intersect_scene_shadow_hwrt_[2], prog_prepare_indir_args_,
-        prog_mix_incremental_, prog_postprocess_, prog_debug_rt_;
+    Program prog_prim_rays_gen_, prog_intersect_scene_primary_, prog_intersect_scene_secondary_,
+        prog_intersect_area_lights_, prog_shade_primary_, prog_shade_secondary_, prog_intersect_scene_shadow_,
+        prog_prepare_indir_args_, prog_mix_incremental_, prog_postprocess_, prog_debug_rt_;
 
-    Pipeline pi_prim_rays_gen_, pi_intersect_scene_primary_[2], pi_intersect_scene_secondary_[2],
-        pi_intersect_area_lights_, pi_shade_primary_[2], pi_shade_secondary_[2], pi_intersect_scene_shadow_swrt_[2],
-        pi_intersect_scene_shadow_hwrt_[2], pi_prepare_indir_args_, pi_mix_incremental_, pi_postprocess_, pi_debug_rt_;
+    Pipeline pi_prim_rays_gen_, pi_intersect_scene_primary_, pi_intersect_scene_secondary_, pi_intersect_area_lights_,
+        pi_shade_primary_, pi_shade_secondary_, pi_intersect_scene_shadow_, pi_prepare_indir_args_, pi_mix_incremental_,
+        pi_postprocess_, pi_debug_rt_;
 
     int w_ = 0, h_ = 0;
     bool use_hwrt_ = false, use_bindless_ = false, use_tex_compression_ = false;

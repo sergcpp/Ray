@@ -79,7 +79,7 @@ void Ray::Vk::Renderer::kernel_IntersectScenePrimary(VkCommandBuffer cmd_buf, co
             uint32_t((w_ + IntersectScene::LOCAL_GROUP_SIZE_X) / IntersectScene::LOCAL_GROUP_SIZE_X),
             uint32_t((h_ + IntersectScene::LOCAL_GROUP_SIZE_Y) / IntersectScene::LOCAL_GROUP_SIZE_Y), 1u};
 
-        DispatchCompute(cmd_buf, pi_intersect_scene_primary_[1], grp_count, bindings, &uniform_params,
+        DispatchCompute(cmd_buf, pi_intersect_scene_primary_, grp_count, bindings, &uniform_params,
                         sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
     } else {
         const Binding bindings[] = {
@@ -97,7 +97,7 @@ void Ray::Vk::Renderer::kernel_IntersectScenePrimary(VkCommandBuffer cmd_buf, co
             uint32_t((w_ + IntersectScene::LOCAL_GROUP_SIZE_X) / IntersectScene::LOCAL_GROUP_SIZE_X),
             uint32_t((h_ + IntersectScene::LOCAL_GROUP_SIZE_Y) / IntersectScene::LOCAL_GROUP_SIZE_Y), 1u};
 
-        DispatchCompute(cmd_buf, pi_intersect_scene_primary_[0], grp_count, bindings, &uniform_params,
+        DispatchCompute(cmd_buf, pi_intersect_scene_primary_, grp_count, bindings, &uniform_params,
                         sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
     }
 }
@@ -118,7 +118,7 @@ void Ray::Vk::Renderer::kernel_IntersectSceneSecondary(VkCommandBuffer cmd_buf, 
                                     {eBindTarget::SBuf, IntersectScene::COUNTERS_BUF_SLOT, counters},
                                     {eBindTarget::SBuf, IntersectScene::OUT_HITS_BUF_SLOT, out_hits}};
 
-        DispatchComputeIndirect(cmd_buf, pi_intersect_scene_secondary_[1], indir_args, 0, bindings, nullptr, 0,
+        DispatchComputeIndirect(cmd_buf, pi_intersect_scene_secondary_, indir_args, 0, bindings, nullptr, 0,
                                 ctx_->default_descr_alloc(), ctx_->log());
     } else {
         const Binding bindings[] = {
@@ -138,7 +138,7 @@ void Ray::Vk::Renderer::kernel_IntersectSceneSecondary(VkCommandBuffer cmd_buf, 
         uniform_params.img_size[1] = h_;
         uniform_params.node_index = node_index;
 
-        DispatchComputeIndirect(cmd_buf, pi_intersect_scene_secondary_[0], indir_args, 0, bindings, &uniform_params,
+        DispatchComputeIndirect(cmd_buf, pi_intersect_scene_secondary_, indir_args, 0, bindings, &uniform_params,
                                 sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
     }
 }
@@ -228,18 +228,15 @@ void Ray::Vk::Renderer::kernel_ShadePrimaryHits(VkCommandBuffer cmd_buf, const p
 
     if (use_bindless_) {
         assert(tex_descr_set);
-        vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, pi_shade_primary_[1].layout(), 1, 1,
+        vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, pi_shade_primary_.layout(), 1, 1,
                                 &tex_descr_set, 0, nullptr);
-
-        DispatchCompute(cmd_buf, pi_shade_primary_[1], grp_count, bindings, &uniform_params, sizeof(uniform_params),
-                        ctx_->default_descr_alloc(), ctx_->log());
     } else {
         bindings.emplace_back(eBindTarget::SBuf, Types::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
         bindings.emplace_back(eBindTarget::Tex2DArray, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
-
-        DispatchCompute(cmd_buf, pi_shade_primary_[0], grp_count, bindings, &uniform_params, sizeof(uniform_params),
-                        ctx_->default_descr_alloc(), ctx_->log());
     }
+
+    DispatchCompute(cmd_buf, pi_shade_primary_, grp_count, bindings, &uniform_params, sizeof(uniform_params),
+                    ctx_->default_descr_alloc(), ctx_->log());
 }
 
 void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(VkCommandBuffer cmd_buf, const pass_settings_t &settings,
@@ -299,18 +296,15 @@ void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(VkCommandBuffer cmd_buf, const
 
     if (use_bindless_) {
         assert(tex_descr_set);
-        vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, pi_shade_secondary_[1].layout(), 1, 1,
+        vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, pi_shade_secondary_.layout(), 1, 1,
                                 &tex_descr_set, 0, nullptr);
-
-        DispatchComputeIndirect(cmd_buf, pi_shade_secondary_[1], indir_args, 0, bindings, &uniform_params,
-                                sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
     } else {
         bindings.emplace_back(eBindTarget::SBuf, Types::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
         bindings.emplace_back(eBindTarget::Tex2DArray, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
-
-        DispatchComputeIndirect(cmd_buf, pi_shade_secondary_[0], indir_args, 0, bindings, &uniform_params,
-                                sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
     }
+
+    DispatchComputeIndirect(cmd_buf, pi_shade_secondary_, indir_args, 0, bindings, &uniform_params,
+                            sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
 }
 
 void Ray::Vk::Renderer::kernel_TraceShadow(VkCommandBuffer cmd_buf, const Buffer &indir_args, const Buffer &counters,
@@ -349,20 +343,16 @@ void Ray::Vk::Renderer::kernel_TraceShadow(VkCommandBuffer cmd_buf, const Buffer
 
         if (use_bindless_) {
             assert(tex_descr_set);
-            vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE,
-                                    pi_intersect_scene_shadow_hwrt_[1].layout(), 1, 1, &tex_descr_set, 0, nullptr);
-
-            DispatchComputeIndirect(cmd_buf, pi_intersect_scene_shadow_hwrt_[1], indir_args,
-                                    sizeof(DispatchIndirectCommand), bindings, &uniform_params, sizeof(uniform_params),
-                                    ctx_->default_descr_alloc(), ctx_->log());
+            vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, pi_intersect_scene_shadow_.layout(), 1, 1,
+                                    &tex_descr_set, 0, nullptr);
         } else {
             bindings.emplace_back(eBindTarget::SBuf, Types::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
             bindings.emplace_back(eBindTarget::Tex2DArray, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
-
-            DispatchComputeIndirect(cmd_buf, pi_intersect_scene_shadow_hwrt_[0], indir_args,
-                                    sizeof(DispatchIndirectCommand), bindings, &uniform_params, sizeof(uniform_params),
-                                    ctx_->default_descr_alloc(), ctx_->log());
         }
+
+        DispatchComputeIndirect(cmd_buf, pi_intersect_scene_shadow_, indir_args, sizeof(DispatchIndirectCommand),
+                                bindings, &uniform_params, sizeof(uniform_params), ctx_->default_descr_alloc(),
+                                ctx_->log());
     } else {
         SmallVector<Binding, 32> bindings = {
             {eBindTarget::SBuf, TraceShadow::TRIS_BUF_SLOT, sc_data.tris},
@@ -382,20 +372,16 @@ void Ray::Vk::Renderer::kernel_TraceShadow(VkCommandBuffer cmd_buf, const Buffer
 
         if (use_bindless_) {
             assert(tex_descr_set);
-            vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE,
-                                    pi_intersect_scene_shadow_swrt_[1].layout(), 1, 1, &tex_descr_set, 0, nullptr);
-
-            DispatchComputeIndirect(cmd_buf, pi_intersect_scene_shadow_swrt_[1], indir_args,
-                                    sizeof(DispatchIndirectCommand), bindings, &uniform_params, sizeof(uniform_params),
-                                    ctx_->default_descr_alloc(), ctx_->log());
+            vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, pi_intersect_scene_shadow_.layout(), 1, 1,
+                                    &tex_descr_set, 0, nullptr);
         } else {
             bindings.emplace_back(eBindTarget::SBuf, Types::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
             bindings.emplace_back(eBindTarget::Tex2DArray, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
-
-            DispatchComputeIndirect(cmd_buf, pi_intersect_scene_shadow_swrt_[0], indir_args,
-                                    sizeof(DispatchIndirectCommand), bindings, &uniform_params, sizeof(uniform_params),
-                                    ctx_->default_descr_alloc(), ctx_->log());
         }
+
+        DispatchComputeIndirect(cmd_buf, pi_intersect_scene_shadow_, indir_args, sizeof(DispatchIndirectCommand),
+                                bindings, &uniform_params, sizeof(uniform_params), ctx_->default_descr_alloc(),
+                                ctx_->log());
     }
 }
 
