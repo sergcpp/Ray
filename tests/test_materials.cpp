@@ -1382,7 +1382,7 @@ void test_spec_mat4(const char *arch_list[], const char *preferred_device) {
 //
 
 void test_aniso_mat0(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 850;
+    const int SampleCount = 900;
     const int PixThres = 100;
 
     Ray::principled_mat_desc_t spec_mat_desc;
@@ -1398,7 +1398,7 @@ void test_aniso_mat0(const char *arch_list[], const char *preferred_device) {
 }
 
 void test_aniso_mat1(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 870;
+    const int SampleCount = 920;
     const int PixThres = 100;
 
     Ray::principled_mat_desc_t spec_mat_desc;
@@ -1430,7 +1430,7 @@ void test_aniso_mat2(const char *arch_list[], const char *preferred_device) {
 }
 
 void test_aniso_mat3(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 910;
+    const int SampleCount = 950;
     const int PixThres = 100;
 
     Ray::principled_mat_desc_t spec_mat_desc;
@@ -1462,7 +1462,7 @@ void test_aniso_mat4(const char *arch_list[], const char *preferred_device) {
 }
 
 void test_aniso_mat5(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 880;
+    const int SampleCount = 920;
     const int PixThres = 100;
 
     Ray::principled_mat_desc_t spec_mat_desc;
@@ -1478,7 +1478,7 @@ void test_aniso_mat5(const char *arch_list[], const char *preferred_device) {
 }
 
 void test_aniso_mat6(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 1060;
+    const int SampleCount = 1110;
     const int PixThres = 100;
 
     Ray::principled_mat_desc_t spec_mat_desc;
@@ -1494,7 +1494,7 @@ void test_aniso_mat6(const char *arch_list[], const char *preferred_device) {
 }
 
 void test_aniso_mat7(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 910;
+    const int SampleCount = 950;
     const int PixThres = 100;
 
     Ray::principled_mat_desc_t spec_mat_desc;
@@ -1602,7 +1602,7 @@ void test_plastic_mat0(const char *arch_list[], const char *preferred_device) {
 }
 
 void test_plastic_mat1(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 1010;
+    const int SampleCount = 1210;
     const int PixThres = 1;
 
     Ray::principled_mat_desc_t plastic_mat_desc;
