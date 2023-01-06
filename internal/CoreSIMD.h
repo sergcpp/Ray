@@ -5748,7 +5748,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
 
                     ITERATE_3({ where(gen_ray, new_ray.o[i]) = P_biased[i]; })
                     ITERATE_3({ where(gen_ray, new_ray.d[i]) = V[i]; })
-                    ITERATE_3({ where(gen_ray, new_ray.c[i]) = ray.c[i] * F[i] * mix_weight / F[3]; })
+                    ITERATE_3({ where(gen_ray, new_ray.c[i]) = ray.c[i] * F[i] * safe_div_pos(mix_weight, F[3]); })
                     where(gen_ray, new_ray.pdf) = F[3];
 
 #ifdef USE_RAY_DIFFERENTIALS

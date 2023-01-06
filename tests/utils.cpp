@@ -31,12 +31,16 @@ std::tuple<std::vector<float>, std::vector<uint32_t>, std::vector<uint32_t>> Loa
     return std::make_tuple(std::move(attrs), std::move(indices), std::move(groups));
 }
 
-std::unique_ptr<uint8_t[]> ReadTGAFile(const void *data, int &w, int &h, int &bpp) {
+std::unique_ptr<uint8_t[]> ReadTGAFile(const void *data, const int data_len, int &w, int &h, int &bpp) {
     uint8_t tga_header[12] = {0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     const uint8_t *tga_compare = (const uint8_t *)data;
     const uint8_t *img_header = (const uint8_t *)data + sizeof(tga_header);
     uint32_t img_size;
     bool compressed = false;
+
+    if (data_len < sizeof(tga_header)) {
+        return {};
+    }
 
     if (memcmp(tga_header, tga_compare, sizeof(tga_header)) != 0) {
         if (tga_compare[2] == 1) {
@@ -134,7 +138,10 @@ std::vector<uint8_t> LoadTGA(const char file_name[], int &w, int &h) {
     in_file.read(&in_file_data[0], in_file_size);
 
     int bpp;
-    auto pixels = ReadTGAFile(&in_file_data[0], w, h, bpp);
+    auto pixels = ReadTGAFile(&in_file_data[0], int(in_file_size), w, h, bpp);
+    if (!pixels) {
+        return {};
+    }
 
     if (bpp == 24) {
         for (int y = 0; y < h; y++) {
