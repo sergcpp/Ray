@@ -51,8 +51,8 @@ template <> class simd_vec<float, 8> {
     force_inline explicit simd_vec(const float *f) { vec_ = _mm256_loadu_ps(f); }
     force_inline simd_vec(const float *f, simd_mem_aligned_tag) { vec_ = _mm256_load_ps(f); }
 
-    force_inline float &operator[](int i) { return comp_[i]; }
-    force_inline const float &operator[](int i) const { return comp_[i]; }
+    force_inline float &operator[](const int i) { return comp_[i]; }
+    force_inline float operator[](const int i) const { return comp_[i]; }
 
     force_inline simd_vec<float, 8> &operator+=(const simd_vec<float, 8> &rhs) {
         vec_ = _mm256_add_ps(vec_, rhs.vec_);
@@ -247,8 +247,8 @@ template <> class simd_vec<int, 8> {
     force_inline explicit simd_vec(const int *f) { vec_ = _mm256_loadu_si256((const __m256i *)f); }
     force_inline simd_vec(const int *f, simd_mem_aligned_tag) { vec_ = _mm256_load_si256((const __m256i *)f); }
 
-    force_inline int &operator[](int i) { return comp_[i]; }
-    force_inline const int &operator[](int i) const { return comp_[i]; }
+    force_inline int &operator[](const int i) { return comp_[i]; }
+    force_inline int operator[](const int i) const { return comp_[i]; }
 
     force_inline simd_vec<int, 8> &operator+=(const simd_vec<int, 8> &rhs) {
 #if defined(USE_AVX2) || defined(USE_AVX512)

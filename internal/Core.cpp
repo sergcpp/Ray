@@ -600,8 +600,8 @@ uint32_t Ray::PreprocessPrims_SAH(Span<const prim_t> prims, const float *positio
             bvh_node_t &n = out_nodes.back();
             n.left_child = index + 1;
             n.right_child = (space_axis << 30) + index + 2;
-            memcpy(&n.bbox_min[0], &bbox_min[0], 3 * sizeof(float));
-            memcpy(&n.bbox_max[0], &bbox_max[0], 3 * sizeof(float));
+            memcpy(&n.bbox_min[0], value_ptr(bbox_min), 3 * sizeof(float));
+            memcpy(&n.bbox_max[0], value_ptr(bbox_max), 3 * sizeof(float));
             prim_lists.emplace_front(std::move(split_data.left_indices), split_data.left_bounds[0],
                                      split_data.left_bounds[1]);
             prim_lists.emplace_front(std::move(split_data.right_indices), split_data.right_bounds[0],
@@ -976,7 +976,7 @@ void Ray::ConstructCamera(const eCamType type, const eFilterType filter, eDevice
         cam->clip_end = clip_end;
         memcpy(&cam->origin[0], &o[0], 3 * sizeof(float));
         memcpy(&cam->fwd[0], &f[0], 3 * sizeof(float));
-        memcpy(&cam->side[0], &s[0], 3 * sizeof(float));
+        memcpy(&cam->side[0], value_ptr(s), 3 * sizeof(float));
         memcpy(&cam->up[0], &u[0], 3 * sizeof(float));
         memcpy(&cam->shift[0], shift, 2 * sizeof(float));
     } else if (type == Ortho) {

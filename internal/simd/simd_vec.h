@@ -170,8 +170,8 @@ template <typename T, int S> class simd_vec {
     force_inline explicit simd_vec(const T *f) { memcpy(&comp_, f, S * sizeof(T)); }
     force_inline simd_vec(const T *f, simd_mem_aligned_tag) { memcpy(&comp_, f, S * sizeof(T)); }
 
-    force_inline T &operator[](int i) { return comp_[i]; }
-    force_inline const T &operator[](int i) const { return comp_[i]; }
+    force_inline T &operator[](const int i) { return comp_[i]; }
+    force_inline T operator[](const int i) const { return comp_[i]; }
 
     force_inline simd_vec<T, S> &operator+=(const simd_vec<T, S> &rhs) {
         ITERATE(S, { comp_[i] += rhs.comp_[i]; })

@@ -38,7 +38,7 @@ template <> class simd_vec<float, 4> {
     force_inline simd_vec(const float *f, simd_mem_aligned_tag) { vec_ = _mm_load_ps(f); }
 
     force_inline float &operator[](const int i) { return comp_[i]; }
-    force_inline const float &operator[](const int i) const { return comp_[i]; }
+    force_inline float operator[](const int i) const { return comp_[i]; }
 
     force_inline simd_vec<float, 4> &operator+=(const simd_vec<float, 4> &rhs) {
         vec_ = _mm_add_ps(vec_, rhs.vec_);
@@ -448,8 +448,8 @@ template <> class simd_vec<int, 4> {
     force_inline explicit simd_vec(const int *f) { vec_ = _mm_loadu_si128((const __m128i *)f); }
     force_inline simd_vec(const int *f, simd_mem_aligned_tag) { vec_ = _mm_load_si128((const __m128i *)f); }
 
-    force_inline int &operator[](int i) { return comp_[i]; }
-    force_inline const int &operator[](int i) const { return comp_[i]; }
+    force_inline int &operator[](const int i) { return comp_[i]; }
+    force_inline int operator[](const int i) const { return comp_[i]; }
 
     force_inline simd_vec<int, 4> &operator+=(const simd_vec<int, 4> &rhs) {
         vec_ = _mm_add_epi32(vec_, rhs.vec_);
