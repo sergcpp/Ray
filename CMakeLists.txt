@@ -20,7 +20,7 @@ ELSE(MSVC)
     set(CMAKE_CXX_STANDARD_REQUIRED ON)
     if(NOT CMAKE_SYSTEM_NAME MATCHES "Android" AND NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64" AND
        NOT "${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "arm64")
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse2 -mfma")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse2 -mfma -fno-strict-aliasing")
         IF(WIN32)
         ELSE(WIN32)
             set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
