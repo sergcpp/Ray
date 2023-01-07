@@ -15,6 +15,16 @@ using namespace Ray::NS;
     require(v3[2] == 3.0f);
     require(v3[3] == 4.0f);
 
+    require(v2.get<0>() == 42.0f);
+    require(v2.get<1>() == 42.0f);
+    require(v2.get<2>() == 42.0f);
+    require(v2.get<3>() == 42.0f);
+
+    require(v3.get<0>() == 1.0f);
+    require(v3.get<1>() == 2.0f);
+    require(v3.get<2>() == 3.0f);
+    require(v3.get<3>() == 4.0f);
+
     simd_fvec4 v4(v2), v5 = v3;
 
     require(v4[0] == 42.0f);
@@ -172,6 +182,16 @@ using namespace Ray::NS;
     require(v3[2] == 3);
     require(v3[3] == 4);
 
+    require(v2.get<0>() == 42);
+    require(v2.get<1>() == 42);
+    require(v2.get<2>() == 42);
+    require(v2.get<3>() == 42);
+
+    require(v3.get<0>() == 1);
+    require(v3.get<1>() == 2);
+    require(v3.get<2>() == 3);
+    require(v3.get<3>() == 4);
+
     simd_ivec4 v4(v2), v5 = v3;
 
     require(v4[0] == 42);
@@ -323,6 +343,24 @@ using namespace Ray::NS;
     require(v3[5] == 6.0f);
     require(v3[6] == 7.0f);
     require(v3[7] == 8.0f);
+
+    require(v2.get<0>() == 42.0f);
+    require(v2.get<1>() == 42.0f);
+    require(v2.get<2>() == 42.0f);
+    require(v2.get<3>() == 42.0f);
+    require(v2.get<4>() == 42.0f);
+    require(v2.get<5>() == 42.0f);
+    require(v2.get<6>() == 42.0f);
+    require(v2.get<7>() == 42.0f);
+
+    require(v3.get<0>() == 1.0f);
+    require(v3.get<1>() == 2.0f);
+    require(v3.get<2>() == 3.0f);
+    require(v3.get<3>() == 4.0f);
+    require(v3.get<4>() == 5.0f);
+    require(v3.get<5>() == 6.0f);
+    require(v3.get<6>() == 7.0f);
+    require(v3.get<7>() == 8.0f);
 
     simd_fvec8 v4(v2), v5 = v3;
 
@@ -522,6 +560,24 @@ using namespace Ray::NS;
     require(v3[6] == 7);
     require(v3[7] == 8);
 
+    require(v2.get<0>() == 42);
+    require(v2.get<1>() == 42);
+    require(v2.get<2>() == 42);
+    require(v2.get<3>() == 42);
+    require(v2.get<4>() == 42);
+    require(v2.get<5>() == 42);
+    require(v2.get<6>() == 42);
+    require(v2.get<7>() == 42);
+
+    require(v3.get<0>() == 1);
+    require(v3.get<1>() == 2);
+    require(v3.get<2>() == 3);
+    require(v3.get<3>() == 4);
+    require(v3.get<4>() == 5);
+    require(v3.get<5>() == 6);
+    require(v3.get<6>() == 7);
+    require(v3.get<7>() == 8);
+
     simd_ivec8 v4(v2), v5 = v3;
 
     require(v4[0] == 42);
@@ -710,6 +766,40 @@ using namespace Ray::NS;
     require(v3[13] == 14.0f);
     require(v3[14] == 15.0f);
     require(v3[15] == 16.0f);
+
+    require(v2.get<0>() == 42.0f);
+    require(v2.get<1>() == 42.0f);
+    require(v2.get<2>() == 42.0f);
+    require(v2.get<3>() == 42.0f);
+    require(v2.get<4>() == 42.0f);
+    require(v2.get<5>() == 42.0f);
+    require(v2.get<6>() == 42.0f);
+    require(v2.get<7>() == 42.0f);
+    require(v2.get<8>() == 42.0f);
+    require(v2.get<9>() == 42.0f);
+    require(v2.get<10>() == 42.0f);
+    require(v2.get<11>() == 42.0f);
+    require(v2.get<12>() == 42.0f);
+    require(v2.get<13>() == 42.0f);
+    require(v2.get<14>() == 42.0f);
+    require(v2.get<15>() == 42.0f);
+
+    require(v3.get<0>() == 1.0f);
+    require(v3.get<1>() == 2.0f);
+    require(v3.get<2>() == 3.0f);
+    require(v3.get<3>() == 4.0f);
+    require(v3.get<4>() == 5.0f);
+    require(v3.get<5>() == 6.0f);
+    require(v3.get<6>() == 7.0f);
+    require(v3.get<7>() == 8.0f);
+    require(v3.get<8>() == 9.0f);
+    require(v3.get<9>() == 10.0f);
+    require(v3.get<10>() == 11.0f);
+    require(v3.get<11>() == 12.0f);
+    require(v3.get<12>() == 13.0f);
+    require(v3.get<13>() == 14.0f);
+    require(v3.get<14>() == 15.0f);
+    require(v3.get<15>() == 16.0f);
 
     simd_fvec16 v4(v2), v5 = v3;
 
@@ -1031,6 +1121,40 @@ using namespace Ray::NS;
     require(v3[13] == 14);
     require(v3[14] == 15);
     require(v3[15] == 16);
+
+    require(v2.get<0>() == 42);
+    require(v2.get<1>() == 42);
+    require(v2.get<2>() == 42);
+    require(v2.get<3>() == 42);
+    require(v2.get<4>() == 42);
+    require(v2.get<5>() == 42);
+    require(v2.get<6>() == 42);
+    require(v2.get<7>() == 42);
+    require(v2.get<8>() == 42);
+    require(v2.get<9>() == 42);
+    require(v2.get<10>() == 42);
+    require(v2.get<11>() == 42);
+    require(v2.get<12>() == 42);
+    require(v2.get<13>() == 42);
+    require(v2.get<14>() == 42);
+    require(v2.get<15>() == 42);
+
+    require(v3.get<0>() == 1);
+    require(v3.get<1>() == 2);
+    require(v3.get<2>() == 3);
+    require(v3.get<3>() == 4);
+    require(v3.get<4>() == 5);
+    require(v3.get<5>() == 6);
+    require(v3.get<6>() == 7);
+    require(v3.get<7>() == 8);
+    require(v3.get<8>() == 9);
+    require(v3.get<9>() == 10);
+    require(v3.get<10>() == 11);
+    require(v3.get<11>() == 12);
+    require(v3.get<12>() == 13);
+    require(v3.get<13>() == 14);
+    require(v3.get<14>() == 15);
+    require(v3.get<15>() == 16);
 
     simd_ivec16 v4(v2), v5 = v3;
 

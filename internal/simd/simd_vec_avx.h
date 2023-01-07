@@ -54,7 +54,10 @@ template <> class simd_vec<float, 8> {
     force_inline float &operator[](const int i) { return comp_[i]; }
     force_inline float operator[](const int i) const { return comp_[i]; }
 
-    force_inline simd_vec<float, 8> &operator+=(const simd_vec<float, 8> &rhs) {
+    template <int i> force_inline float get() const { return comp_[i]; }
+
+    force_inline simd_vec<float, 8> &
+    operator+=(const simd_vec<float, 8> &rhs) {
         vec_ = _mm256_add_ps(vec_, rhs.vec_);
         return *this;
     }
@@ -249,6 +252,8 @@ template <> class simd_vec<int, 8> {
 
     force_inline int &operator[](const int i) { return comp_[i]; }
     force_inline int operator[](const int i) const { return comp_[i]; }
+
+    template <int i> force_inline int get() const { return comp_[i]; }
 
     force_inline simd_vec<int, 8> &operator+=(const simd_vec<int, 8> &rhs) {
 #if defined(USE_AVX2) || defined(USE_AVX512)
@@ -786,8 +791,8 @@ force_inline simd_vec<float, 8> simd_vec<float, 8>::operator~() const {
     ret.vec_ = _mm256_castsi256_ps(_mm256_andnot_si256(_mm256_castps_si256(vec_), _mm256_set1_epi32(~0)));
 #else
     ITERATE_8({
-        const uint32_t temp = ~reinterpret_cast<const uint32_t&>(comp_[i]);
-        ret.comp_[i] = reinterpret_cast<const float&>(temp);
+        const uint32_t temp = ~reinterpret_cast<const uint32_t &>(comp_[i]);
+        ret.comp_[i] = reinterpret_cast<const float &>(temp);
     })
 #endif
     return ret;

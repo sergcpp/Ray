@@ -9,9 +9,33 @@
 #pragma warning(disable : 4127) // conditional expression is constant
 
 // Used to force loop unroll in release mode
+// clang-format off
+#define ITERATE_2(exp)  \
+        { const int i = 0; exp }    \
+        { const int i = 1; exp }
 
-#define ITERATE(n, exp)  \
-    if ((n) == 16) {                \
+#define ITERATE_3(exp)  \
+        { const int i = 0; exp }    \
+        { const int i = 1; exp }    \
+        { const int i = 2; exp }
+
+#define ITERATE_4(exp)  \
+        { const int i = 0; exp }    \
+        { const int i = 1; exp }    \
+        { const int i = 2; exp }    \
+        { const int i = 3; exp }
+
+#define ITERATE_8(exp)  \
+        { const int i = 0; exp }    \
+        { const int i = 1; exp }    \
+        { const int i = 2; exp }    \
+        { const int i = 3; exp }    \
+        { const int i = 4; exp }    \
+        { const int i = 5; exp }    \
+        { const int i = 6; exp }    \
+        { const int i = 7; exp }
+
+#define ITERATE_16(exp)  \
         { const int i = 0; exp }    \
         { const int i = 1; exp }    \
         { const int i = 2; exp }    \
@@ -27,28 +51,19 @@
         { const int i = 12; exp }   \
         { const int i = 13; exp }   \
         { const int i = 14; exp }   \
-        { const int i = 15; exp }   \
+        { const int i = 15; exp }
+
+#define ITERATE(n, exp)  \
+    if ((n) == 16) {                \
+        ITERATE_16(exp)             \
     } else if ((n) == 8) {          \
-        { const int i = 0; exp }    \
-        { const int i = 1; exp }    \
-        { const int i = 2; exp }    \
-        { const int i = 3; exp }    \
-        { const int i = 4; exp }    \
-        { const int i = 5; exp }    \
-        { const int i = 6; exp }    \
-        { const int i = 7; exp }    \
+        ITERATE_8(exp)              \
     } else if ((n) == 4) {          \
-        { const int i = 0; exp }    \
-        { const int i = 1; exp }    \
-        { const int i = 2; exp }    \
-        { const int i = 3; exp }    \
+        ITERATE_4(exp)              \
     } else if ((n) == 3) {          \
-        { const int i = 0; exp }    \
-        { const int i = 1; exp }    \
-        { const int i = 2; exp }    \
+        ITERATE_3(exp)              \
     } else if ((n) == 2) {          \
-        { const int i = 0; exp }    \
-        { const int i = 1; exp }    \
+        ITERATE_2(exp)              \
     } else if ((n) == 1) {          \
         { const int i = 0; exp }    \
     }
@@ -96,52 +111,10 @@
         { const int i = 0; exp }    \
     }
 
-#define ITERATE_2(exp)  \
-        { const int i = 0; exp }    \
-        { const int i = 1; exp }
-
-#define ITERATE_3(exp)  \
-        { const int i = 0; exp }    \
-        { const int i = 1; exp }    \
-        { const int i = 2; exp }
-
-#define ITERATE_4(exp)  \
-        { const int i = 0; exp }    \
-        { const int i = 1; exp }    \
-        { const int i = 2; exp }    \
-        { const int i = 3; exp }
-
-#define ITERATE_8(exp)  \
-        { const int i = 0; exp }    \
-        { const int i = 1; exp }    \
-        { const int i = 2; exp }    \
-        { const int i = 3; exp }    \
-        { const int i = 4; exp }    \
-        { const int i = 5; exp }    \
-        { const int i = 6; exp }    \
-        { const int i = 7; exp }
-
-#define ITERATE_16(exp)  \
-        { const int i = 0; exp }    \
-        { const int i = 1; exp }    \
-        { const int i = 2; exp }    \
-        { const int i = 3; exp }    \
-        { const int i = 4; exp }    \
-        { const int i = 5; exp }    \
-        { const int i = 6; exp }    \
-        { const int i = 7; exp }    \
-        { const int i = 8; exp }    \
-        { const int i = 9; exp }    \
-        { const int i = 10; exp }   \
-        { const int i = 11; exp }   \
-        { const int i = 12; exp }   \
-        { const int i = 13; exp }   \
-        { const int i = 14; exp }   \
-        { const int i = 15; exp }
-
 #define ITERATE_2_R(exp)  \
         { const int i = 1; exp }    \
         { const int i = 0; exp }
+// clang-format on
 
 #ifdef __GNUC__
 #pragma GCC diagnostic push
@@ -172,6 +145,8 @@ template <typename T, int S> class simd_vec {
 
     force_inline T &operator[](const int i) { return comp_[i]; }
     force_inline T operator[](const int i) const { return comp_[i]; }
+
+    template <int i> force_inline T get() const { return comp_[i]; }
 
     force_inline simd_vec<T, S> &operator+=(const simd_vec<T, S> &rhs) {
         ITERATE(S, { comp_[i] += rhs.comp_[i]; })
@@ -414,8 +389,8 @@ template <typename T, int S> class simd_vec {
         return false;
     }
 
-    force_inline void blend_to(const simd_vec<T, S> &mask,
-                               const simd_vec<T, S> &v1){
+    // clang-format off
+    force_inline void blend_to(const simd_vec<T, S> &mask, const simd_vec<T, S> &v1) {
         ITERATE(S, {
             if (mask.comp_[i] != T(0)) {
                 comp_[i] = v1.comp_[i];
@@ -424,13 +399,13 @@ template <typename T, int S> class simd_vec {
     }
 
     force_inline
-        void blend_inv_to(const simd_vec<T, S> &mask, const simd_vec<T, S> &v1){
+        void blend_inv_to(const simd_vec<T, S> &mask, const simd_vec<T, S> &v1) {
         ITERATE(S, {
             if (mask.comp_[i] == T(0)) {
                 comp_[i] = v1.comp_[i];
             }
         })
-    }
+    } // clang-format on
 
     force_inline int movemask() const {
         int res = 0;
@@ -900,4 +875,4 @@ using simd_dvec16 = simd_dvec<16>;
 
 #pragma warning(pop)
 
-//#undef ITERATE
+// #undef ITERATE

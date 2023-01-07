@@ -21,7 +21,7 @@ struct bbox_t {
 
     static float surface_area(const Ref::simd_fvec4 &min, const Ref::simd_fvec4 &max) {
         const Ref::simd_fvec4 e = max - min;
-        return 2 * (e[0] + e[1] + e[2]);
+        return 2 * (e.get<0>() + e.get<1>() + e.get<2>());
         // return e[0] * e[1] + e[0] * e[2] + e[1] * e[2];
     }
 };
@@ -112,10 +112,10 @@ bbox_t GetClippedAABB(const Ref::simd_fvec3 &_v0, const Ref::simd_fvec3 &_v1, co
     vertices1[1] = {double(_v1[0]), double(_v1[1]), double(_v1[2])};
     vertices1[2] = {double(_v2[0]), double(_v2[1]), double(_v2[2])};
 
-    for (int axis = 0; axis < 3; axis++) {
-        vertex_count = sutherland_hodgman(vertices1, vertex_count, vertices2, axis, limits.min[axis], true);
-        vertex_count = sutherland_hodgman(vertices2, vertex_count, vertices1, axis, limits.max[axis], false);
-    }
+    ITERATE_3({
+        vertex_count = sutherland_hodgman(vertices1, vertex_count, vertices2, i, limits.min.get<i>(), true);
+        vertex_count = sutherland_hodgman(vertices2, vertex_count, vertices1, i, limits.max.get<i>(), false);
+    })
 
     bbox_t extends;
 

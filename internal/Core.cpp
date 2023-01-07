@@ -585,9 +585,9 @@ uint32_t Ray::PreprocessPrims_SAH(Span<const prim_t> prims, const float *positio
 
             const Ref::simd_fvec4 dist = abs(c_left - c_right);
 
-            if (dist[0] > dist[1] && dist[0] > dist[2]) {
+            if (dist.get<0>() > dist.get<1>() && dist.get<0>() > dist.get<2>()) {
                 space_axis = 0;
-            } else if (dist[1] > dist[0] && dist[1] > dist[2]) {
+            } else if (dist.get<1>() > dist.get<0>() && dist.get<1>() > dist.get<2>()) {
                 space_axis = 1;
             } else {
                 space_axis = 2;
@@ -643,7 +643,7 @@ uint32_t Ray::PreprocessPrims_HLBVH(Span<const prim_t> prims, std::vector<bvh_no
         const Ref::simd_fvec4 center = 0.5f * (prims[i].bbox_min + prims[i].bbox_max);
         const Ref::simd_fvec4 code = (center - whole_min) * scale;
 
-        const auto x = uint32_t(code[0]), y = uint32_t(code[1]), z = uint32_t(code[2]);
+        const auto x = uint32_t(code.get<0>()), y = uint32_t(code.get<1>()), z = uint32_t(code.get<2>());
 
         morton_codes[i] = EncodeMorton3(x, y, z);
     }

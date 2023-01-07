@@ -50,6 +50,8 @@ public:
     force_inline float &operator[](const int i) { return comp_[i]; }
     force_inline float operator[](const int i) const { return comp_[i]; }
 
+    template <int i> force_inline float get() const { return comp_[i]; }
+
     force_inline simd_vec<float, 4> &operator+=(const simd_vec<float, 4> &rhs) {
         vec_ = vaddq_f32(vec_, rhs.vec_);
         return *this;
@@ -458,6 +460,8 @@ public:
 
     force_inline int &operator[](const int i) { return comp_[i]; }
     force_inline int operator[](const int i) const { return comp_[i]; }
+
+    template <int i> force_inline int get() const { return comp_[i]; }
 
     force_inline simd_vec<int, 4> &operator+=(const simd_vec<int, 4> &rhs) {
         vec_ = vaddq_s32(vec_, rhs.vec_);

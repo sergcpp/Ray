@@ -15,6 +15,9 @@
 #define VALIDATE_MASKS 1
 #endif
 
+#pragma warning(push)
+#pragma warning(disable : 4556)
+
 namespace Ray {
 namespace NS {
 
@@ -39,6 +42,8 @@ template <> class simd_vec<float, 4> {
 
     force_inline float &operator[](const int i) { return comp_[i]; }
     force_inline float operator[](const int i) const { return comp_[i]; }
+
+    template <int i> force_inline float get() const { return comp_[i]; }
 
     force_inline simd_vec<float, 4> &operator+=(const simd_vec<float, 4> &rhs) {
         vec_ = _mm_add_ps(vec_, rhs.vec_);
@@ -451,6 +456,9 @@ template <> class simd_vec<int, 4> {
     force_inline int &operator[](const int i) { return comp_[i]; }
     force_inline int operator[](const int i) const { return comp_[i]; }
 
+    template <int i> force_inline int get() const { return comp_[i]; }
+    template <int i> force_inline void set(const float f) const { comp_[i] = f; }
+
     force_inline simd_vec<int, 4> &operator+=(const simd_vec<int, 4> &rhs) {
         vec_ = _mm_add_epi32(vec_, rhs.vec_);
         return *this;
@@ -848,6 +856,8 @@ force_inline simd_vec<float, 4>::operator simd_vec<int, 4>() const {
 } // namespace Ray
 
 #undef VALIDATE_MASKS
+
+#pragma warning(pop)
 
 #ifdef __GNUC__
 #pragma GCC pop_options

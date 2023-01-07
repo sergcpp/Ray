@@ -1330,11 +1330,11 @@ force_inline simd_ivec<S> get_ray_hash(const ray_data_t<S> &r, const simd_ivec<S
 
     ITERATE(S, {
         if (mask[i]) {
-            x[i] = morton_table_256[x[i]];
-            y[i] = morton_table_256[y[i]];
-            z[i] = morton_table_256[z[i]];
-            o[i] = morton_table_16[int(omega_table[omega_index[i]])];
-            p[i] = morton_table_16[int(phi_table[phi_index_i[i]][phi_index_j[i]])];
+            x[i] = morton_table_256[x.template get<i>()];
+            y[i] = morton_table_256[y.template get<i>()];
+            z[i] = morton_table_256[z.template get<i>()];
+            o[i] = morton_table_16[int(omega_table[omega_index.template get<i>()])];
+            p[i] = morton_table_16[int(phi_table[phi_index_i.template get<i>()][phi_index_j.template get<i>()])];
         } else {
             o[i] = p[i] = 0xFFFFFFFF;
             x[i] = y[i] = z[i] = 0xFFFFFFFF;
@@ -1453,8 +1453,8 @@ simd_fvec<S> get_texture_lod(const Ref::TexStorageBase *const textures[], const 
     simd_fvec<S> lod;
 
     ITERATE(S, {
-        if (reinterpret_cast<const simd_ivec<S> &>(mask)[i]) {
-            lod[i] = lambda[i] + 0.5f * fast_log2(sz[0] * sz[1]) - 1.0f;
+        if (reinterpret_cast<const simd_ivec<S> &>(mask).template get<i>()) {
+            lod[i] = lambda.template get<i>() + 0.5f * fast_log2(sz[0] * sz[1]) - 1.0f;
         } else {
             lod[i] = 0.0f;
         }
@@ -1482,8 +1482,8 @@ simd_fvec<S> get_texture_lod(const simd_ivec<S> &width, const simd_ivec<S> &heig
     simd_fvec<S> lod;
 
     ITERATE(S, {
-        if (reinterpret_cast<const simd_ivec<S> &>(mask)[i]) {
-            lod[i] = 0.5f * fast_log2(dim[i]) - 1.0f;
+        if (reinterpret_cast<const simd_ivec<S> &>(mask).template get<i>()) {
+            lod[i] = 0.5f * fast_log2(dim.template get<i>()) - 1.0f;
         } else {
             lod[i] = 0.0f;
         }
@@ -1504,8 +1504,8 @@ simd_fvec<S> get_texture_lod(const simd_ivec<S> &width, const simd_ivec<S> &heig
     simd_fvec<S> lod;
 
     ITERATE(S, {
-        if (reinterpret_cast<const simd_ivec<S> &>(mask)[i]) {
-            lod[i] = lambda[i] + 0.5f * fast_log2(width * height) - 1.0f;
+        if (reinterpret_cast<const simd_ivec<S> &>(mask).template get<i>()) {
+            lod[i] = lambda.template get<i>() + 0.5f * fast_log2(width * height) - 1.0f;
         } else {
             lod[i] = 0.0f;
         }
@@ -1617,13 +1617,13 @@ force_inline void tangent_from_world(const simd_fvec<S> T[3], const simd_fvec<S>
 
 template <int S> force_inline simd_fvec<S> cos(const simd_fvec<S> &v) {
     simd_fvec<S> ret;
-    ITERATE(S, { ret[i] = std::cos(v[i]); })
+    ITERATE(S, { ret[i] = std::cos(v.template get<i>()); })
     return ret;
 }
 
 template <int S> force_inline simd_fvec<S> sin(const simd_fvec<S> &v) {
     simd_fvec<S> ret;
-    ITERATE(S, { ret[i] = std::sin(v[i]); })
+    ITERATE(S, { ret[i] = std::sin(v.template get<i>()); })
     return ret;
 }
 
@@ -1671,9 +1671,9 @@ void SampleGGX_VNDF(const simd_fvec<S> Ve[3], const simd_fvec<S> &alpha_x, const
     const simd_fvec<S> r = sqrt(U1);
     const simd_fvec<S> phi = 2.0f * PI * U2;
     simd_fvec<S> t1;
-    ITERATE(S, { t1[i] = r[i] * std::cos(phi[i]); })
+    ITERATE(S, { t1[i] = r.template get<i>() * std::cos(phi.template get<i>()); })
     simd_fvec<S> t2;
-    ITERATE(S, { t2[i] = r[i] * std::sin(phi[i]); })
+    ITERATE(S, { t2[i] = r.template get<i>() * std::sin(phi.template get<i>()); })
     const simd_fvec<S> s = 0.5f * (1.0f + Vh[2]);
     t2 = (1.0f - s) * sqrt(1.0f - t1 * t1) + s * t2;
     // Section 4.3: reprojection onto hemisphere
@@ -1837,7 +1837,8 @@ template <int S> force_inline simd_fvec<S> ngon_rad(const simd_fvec<S> &theta, c
     simd_fvec<S> ret;
     ITERATE(S, {
         ret[i] =
-            std::cos(PI / n) / std::cos(theta[i] - (2.0f * PI / n) * std::floor((n * theta[i] + PI) / (2.0f * PI)));
+            std::cos(PI / n) / std::cos(theta.template get<i>() -
+                                        (2.0f * PI / n) * std::floor((n * theta.template get<i>() + PI) / (2.0f * PI)));
     })
     return ret;
 }
@@ -3681,12 +3682,12 @@ Ray::NS::simd_fvec<S> Ray::NS::Evaluate_EnvQTree(const float y_rotation, const s
 
         simd_fvec<S> quad[4];
         ITERATE(S, {
-            const simd_fvec4 q = qtree_mips[lod][qy[i] * res / 2 + qx[i]];
+            const simd_fvec4 q = qtree_mips[lod][qy.template get<i>() * res / 2 + qx.template get<i>()];
 
-            quad[0][i] = q[0];
-            quad[1][i] = q[1];
-            quad[2][i] = q[2];
-            quad[3][i] = q[3];
+            quad[0][i] = q.get<0>();
+            quad[1][i] = q.get<1>();
+            quad[2][i] = q.get<2>();
+            quad[3][i] = q.get<3>();
         })
         const simd_fvec<S> total = quad[0] + quad[1] + quad[2] + quad[3];
 
@@ -3724,12 +3725,12 @@ void Ray::NS::Sample_EnvQTree(float y_rotation, const simd_fvec4 *const *qtree_m
 
         simd_fvec<S> quad[4];
         ITERATE(S, {
-            const simd_fvec4 q = qtree_mips[lod][qy[i] * res / 2 + qx[i]];
+            const simd_fvec4 q = qtree_mips[lod][qy.template get<i>() * res / 2 + qx.template get<i>()];
 
-            quad[0][i] = q[0];
-            quad[1][i] = q[1];
-            quad[2][i] = q[2];
-            quad[3][i] = q[3];
+            quad[0][i] = q.get<0>();
+            quad[1][i] = q.get<1>();
+            quad[2][i] = q.get<2>();
+            quad[3][i] = q.get<3>();
         })
 
         const simd_fvec<S> top_left = quad[0];
@@ -3866,7 +3867,7 @@ template <int S> void Ray::NS::DirToCanonical(const simd_fvec<S> d[3], float y_r
     const simd_fvec<S> cos_theta = clamp(d[1], -1.0f, 1.0f);
 
     simd_fvec<S> phi;
-    ITERATE(S, { phi[i] = -std::atan2(d[2][i], d[0][i]); })
+    ITERATE(S, { phi[i] = -std::atan2(d[2].template get<i>(), d[0].template get<i>()); })
 
     phi += y_rotation;
     where(phi < 0, phi) += 2 * PI;
@@ -3996,9 +3997,9 @@ void Ray::NS::SampleLatlong_RGBE(const Ref::TexStorageRGBA &storage, const uint3
 
     simd_fvec<S> theta = 0.0f, phi = 0.0f;
     ITERATE(S, {
-        if (mask[i]) {
-            theta[i] = std::acos(y[i]) / PI;
-            phi[i] = std::atan2(dir[2][i], dir[0][i]) + y_rotation;
+        if (mask.template get<i>()) {
+            theta[i] = std::acos(y.template get<i>()) / PI;
+            phi[i] = std::atan2(dir[2].template get<i>(), dir[0].template get<i>()) + y_rotation;
         }
     })
     where(phi < 0.0f, phi) += 2 * PI;
@@ -4139,15 +4140,12 @@ void Ray::NS::IntersectScene(ray_data_t<S> &r, const simd_ivec<S> &mask, const i
             while (index != num) {
                 uint32_t first_mi = 0xffff;
 
-                for (int i = 0; i < S; i++) {
-                    if (!ray_queue[index][i]) {
-                        continue;
+                // TODO: simplify this!
+                ITERATE(S, {
+                    if (first_mi == 0xffff && ray_queue[index].template get<i>()) {
+                        first_mi = mat_index.template get<i>();
                     }
-
-                    if (first_mi == 0xffff) {
-                        first_mi = mat_index[i];
-                    }
-                }
+                })
 
                 simd_ivec<S> same_mi = (mat_index == first_mi);
                 simd_ivec<S> diff_mi = and_not(same_mi, ray_queue[index]);
@@ -4578,8 +4576,8 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const scene_data_t &sc,
                 if (mask.not_all_zeros()) {
                     simd_fvec<S> _angle = 0.0f;
                     ITERATE(S, {
-                        if (mask[i]) {
-                            _angle[i] = std::acos(_dot[i]);
+                        if (mask.template get<i>()) {
+                            _angle[i] = std::acos(_dot.template get<i>());
                         }
                     })
                     const simd_fvec<S> k = clamp((l.sph.spot - _angle) / l.sph.blend, 0.0f, 1.0f);
@@ -4861,8 +4859,8 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, const simd_ivec<S> &_r
                     if (imask1.not_all_zeros()) {
                         simd_fvec<S> _angle = 0.0f;
                         ITERATE(S, {
-                            if (imask1[i]) {
-                                _angle[i] = std::acos(_dot[i]);
+                            if (imask1.template get<i>()) {
+                                _angle[i] = std::acos(_dot.template get<i>());
                             }
                         })
                         mask1 &= (_angle <= l.sph.spot);
@@ -5082,8 +5080,8 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
 
                     simd_fvec<S> _angle = 0.0f;
                     ITERATE(S, {
-                        if (ray_queue[index][i]) {
-                            _angle[i] = std::acos(_dot[i]);
+                        if (ray_queue[index].template get<i>()) {
+                            _angle[i] = std::acos(_dot.template get<i>());
                         }
                     })
                     assert((ray_queue[index] & simd_cast(_angle > l.sph.spot)).all_zeros());
@@ -5870,7 +5868,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                     const simd_fvec<S> light_pdf = (inter.t * inter.t) / (tri_area * cos_theta);
                     const simd_fvec<S> &bsdf_pdf = ray.pdf;
 
-                    where(cos_theta > 0.0f & simd_cast((ray.depth & 0x00ffffff) != 0), mis_weight) =
+                    where((cos_theta > 0.0f) & simd_cast((ray.depth & 0x00ffffff) != 0), mis_weight) =
                         power_heuristic(bsdf_pdf, light_pdf);
                 }
 #endif
