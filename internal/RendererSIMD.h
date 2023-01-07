@@ -422,10 +422,10 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
 
         if (cam.dtype == SRGB) {
             ITERATE_3({
-                if (c[i] < 0.0031308f) {
-                    c[i] = 12.92f * c[i];
+                if (c.get<i>() < 0.0031308f) {
+                    c.set<i>(12.92f * c.get<i>());
                 } else {
-                    c[i] = 1.055f * std::pow(c[i], (1.0f / 2.4f)) - 0.055f;
+                    c.set<i>(1.055f * std::pow(c.get<i>(), (1.0f / 2.4f)) - 0.055f);
                 }
             })
         }

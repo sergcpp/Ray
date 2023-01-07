@@ -47,10 +47,11 @@ public:
         vec_ = vld1q_f32(_f);
     }
 
-    force_inline float &operator[](const int i) { return comp_[i]; }
     force_inline float operator[](const int i) const { return comp_[i]; }
 
     template <int i> force_inline float get() const { return comp_[i]; }
+    template <int i> force_inline void set(const float f) { comp_[i] = f; }
+    force_inline void set(const int i, const float f) { comp_[i] = f; }
 
     force_inline simd_vec<float, 4> &operator+=(const simd_vec<float, 4> &rhs) {
         vec_ = vaddq_f32(vec_, rhs.vec_);
@@ -429,6 +430,8 @@ public:
         return &v1.comp_[0];
     }
 
+    friend force_inline float *value_ptr(simd_vec<float, 4> &v1) { return &v1.comp_[0]; }
+
     static int size() { return 4; }
     static bool is_native() { return true; }
 };
@@ -458,10 +461,11 @@ public:
         vec_ = vld1q_s32((const int32_t *)_f);
     }
 
-    force_inline int &operator[](const int i) { return comp_[i]; }
     force_inline int operator[](const int i) const { return comp_[i]; }
 
     template <int i> force_inline int get() const { return comp_[i]; }
+    template <int i> force_inline void set(const int f) { comp_[i] = f; }
+    force_inline void set(const int i, const int f) { comp_[i] = f; }
 
     force_inline simd_vec<int, 4> &operator+=(const simd_vec<int, 4> &rhs) {
         vec_ = vaddq_s32(vec_, rhs.vec_);

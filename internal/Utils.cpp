@@ -221,22 +221,20 @@ std::unique_ptr<uint8_t[]> Ray::ConvertRGB32F_to_RGBE(const float image_data[], 
             Ref::simd_fvec4 val;
 
             if (channels == 3) {
-                val[0] = image_data[3 * (y * w + x) + 0];
-                val[1] = image_data[3 * (y * w + x) + 1];
-                val[2] = image_data[3 * (y * w + x) + 2];
+                val = Ref::simd_fvec4{image_data[3 * (y * w + x) + 0], image_data[3 * (y * w + x) + 1],
+                                      image_data[3 * (y * w + x) + 2], 0.0f};
             } else if (channels == 4) {
-                val[0] = image_data[4 * (y * w + x) + 0];
-                val[1] = image_data[4 * (y * w + x) + 1];
-                val[2] = image_data[4 * (y * w + x) + 2];
+                val = Ref::simd_fvec4{image_data[4 * (y * w + x) + 0], image_data[4 * (y * w + x) + 1],
+                                      image_data[4 * (y * w + x) + 2], 0.0f};
             }
 
             auto exp = Ref::simd_fvec4{std::log2(val[0]), std::log2(val[1]), std::log2(val[2]), 0.0f};
             for (int i = 0; i < 3; i++) {
-                exp[i] = std::ceil(exp[i]);
+                exp.set(i, std::ceil(exp[i]));
                 if (exp[i] < -128.0f) {
-                    exp[i] = -128.0f;
+                    exp.set(i, -128.0f);
                 } else if (exp[i] > 127.0f) {
-                    exp[i] = 127.0f;
+                    exp.set(i, 127.0f);
                 }
             }
 
@@ -245,10 +243,11 @@ std::unique_ptr<uint8_t[]> Ray::ConvertRGB32F_to_RGBE(const float image_data[], 
 
             Ref::simd_fvec4 mantissa = val / range;
             for (int i = 0; i < 3; i++) {
-                if (mantissa[i] < 0.0f)
-                    mantissa[i] = 0.0f;
-                else if (mantissa[i] > 1.0f)
-                    mantissa[i] = 1.0f;
+                if (mantissa[i] < 0.0f) {
+                    mantissa.set(i, 0.0f);
+                } else if (mantissa[i] > 1.0f) {
+                    mantissa.set(i, 1.0f);
+                }
             }
 
             const auto res = Ref::simd_fvec4{mantissa[0], mantissa[1], mantissa[2], common_exp + 128.0f};

@@ -315,12 +315,12 @@ uint32_t Ray::PreprocessMesh(const float *attrs, Span<const uint32_t> vtx_indice
         const uint32_t i0 = vtx_indices[j + 0] + base_vertex, i1 = vtx_indices[j + 1] + base_vertex,
                        i2 = vtx_indices[j + 2] + base_vertex;
 
-        memcpy(&p[0][0], &positions[i0 * attr_stride], 3 * sizeof(float));
-        memcpy(&p[1][0], &positions[i1 * attr_stride], 3 * sizeof(float));
-        memcpy(&p[2][0], &positions[i2 * attr_stride], 3 * sizeof(float));
+        memcpy(value_ptr(p[0]), &positions[i0 * attr_stride], 3 * sizeof(float));
+        memcpy(value_ptr(p[1]), &positions[i1 * attr_stride], 3 * sizeof(float));
+        memcpy(value_ptr(p[2]), &positions[i2 * attr_stride], 3 * sizeof(float));
 
         tri_accel_t tri = {};
-        if (PreprocessTri(&p[0][0], 4, &tri)) {
+        if (PreprocessTri(value_ptr(p[0]), 4, &tri)) {
             real_indices.push_back(uint32_t(j / 3));
             triangles.push_back(tri);
         } else {
@@ -386,8 +386,8 @@ uint32_t Ray::EmitLBVH_Recursive(const prim_t *prims, const uint32_t *indices, c
         node.prim_index = LEAF_NODE_BIT + prim_index + index_offset;
         node.prim_count = prim_count;
 
-        memcpy(&node.bbox_min[0], &bbox_min[0], 3 * sizeof(float));
-        memcpy(&node.bbox_max[0], &bbox_max[0], 3 * sizeof(float));
+        memcpy(&node.bbox_min[0], value_ptr(bbox_min), 3 * sizeof(float));
+        memcpy(&node.bbox_max[0], value_ptr(bbox_max), 3 * sizeof(float));
 
         return node_index;
     } else {
@@ -469,8 +469,8 @@ uint32_t Ray::EmitLBVH_NonRecursive(const prim_t *prims, const uint32_t *indices
             node.prim_index = LEAF_NODE_BIT + cur.prim_index + index_offset;
             node.prim_count = cur.prim_count;
 
-            memcpy(&node.bbox_min[0], &bbox_min[0], 3 * sizeof(float));
-            memcpy(&node.bbox_max[0], &bbox_max[0], 3 * sizeof(float));
+            memcpy(&node.bbox_min[0], value_ptr(bbox_min), 3 * sizeof(float));
+            memcpy(&node.bbox_max[0], value_ptr(bbox_max), 3 * sizeof(float));
         } else {
             if (cur.split_offset == 0xffffffff) {
                 const uint32_t mask = (1u << cur.bit_index);
@@ -573,8 +573,8 @@ uint32_t Ray::PreprocessPrims_SAH(Span<const prim_t> prims, const float *positio
 
             n.prim_index = LEAF_NODE_BIT + uint32_t(out_indices.size());
             n.prim_count = uint32_t(split_data.left_indices.size());
-            memcpy(&n.bbox_min[0], &bbox_min[0], 3 * sizeof(float));
-            memcpy(&n.bbox_max[0], &bbox_max[0], 3 * sizeof(float));
+            memcpy(&n.bbox_min[0], value_ptr(bbox_min), 3 * sizeof(float));
+            memcpy(&n.bbox_max[0], value_ptr(bbox_max), 3 * sizeof(float));
             out_indices.insert(out_indices.end(), split_data.left_indices.begin(), split_data.left_indices.end());
         } else {
             const auto index = uint32_t(num_nodes);
@@ -684,8 +684,8 @@ uint32_t Ray::PreprocessPrims_HLBVH(Span<const prim_t> prims, std::vector<bvh_no
 
         top_prims.emplace_back();
         prim_t &p = top_prims.back();
-        memcpy(&p.bbox_min[0], node.bbox_min, 3 * sizeof(float));
-        memcpy(&p.bbox_max[0], node.bbox_max, 3 * sizeof(float));
+        memcpy(value_ptr(p.bbox_min), node.bbox_min, 3 * sizeof(float));
+        memcpy(value_ptr(p.bbox_max), node.bbox_max, 3 * sizeof(float));
     }
 
     const auto top_nodes_start = uint32_t(out_nodes.size());
@@ -974,10 +974,10 @@ void Ray::ConstructCamera(const eCamType type, const eFilterType filter, eDevice
         cam->lens_blades = lens_blades;
         cam->clip_start = clip_start;
         cam->clip_end = clip_end;
-        memcpy(&cam->origin[0], &o[0], 3 * sizeof(float));
-        memcpy(&cam->fwd[0], &f[0], 3 * sizeof(float));
+        memcpy(&cam->origin[0], value_ptr(o), 3 * sizeof(float));
+        memcpy(&cam->fwd[0], value_ptr(f), 3 * sizeof(float));
         memcpy(&cam->side[0], value_ptr(s), 3 * sizeof(float));
-        memcpy(&cam->up[0], &u[0], 3 * sizeof(float));
+        memcpy(&cam->up[0], value_ptr(u), 3 * sizeof(float));
         memcpy(&cam->shift[0], shift, 2 * sizeof(float));
     } else if (type == Ortho) {
         // TODO!

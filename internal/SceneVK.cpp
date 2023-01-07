@@ -625,9 +625,9 @@ uint32_t Ray::Vk::Scene::AddMesh(const mesh_desc_t &_m) {
 
             const uint32_t i0 = _m.vtx_indices[j + 0], i1 = _m.vtx_indices[j + 1], i2 = _m.vtx_indices[j + 2];
 
-            memcpy(&p[0][0], &_m.vtx_attrs[i0 * attr_stride], 3 * sizeof(float));
-            memcpy(&p[1][0], &_m.vtx_attrs[i1 * attr_stride], 3 * sizeof(float));
-            memcpy(&p[2][0], &_m.vtx_attrs[i2 * attr_stride], 3 * sizeof(float));
+            memcpy(value_ptr(p[0]), &_m.vtx_attrs[i0 * attr_stride], 3 * sizeof(float));
+            memcpy(value_ptr(p[1]), &_m.vtx_attrs[i1 * attr_stride], 3 * sizeof(float));
+            memcpy(value_ptr(p[2]), &_m.vtx_attrs[i2 * attr_stride], 3 * sizeof(float));
 
             bbox_min = min(bbox_min, min(p[0], min(p[1], p[2])));
             bbox_max = max(bbox_max, max(p[0], max(p[1], p[2])));
@@ -637,8 +637,8 @@ uint32_t Ray::Vk::Scene::AddMesh(const mesh_desc_t &_m) {
         PreprocessMesh(_m.vtx_attrs, {_m.vtx_indices, _m.vtx_indices_count}, _m.layout, _m.base_vertex,
                        0 /* temp value */, s, new_nodes, new_tris, new_tri_indices, _unused);
 
-        memcpy(&bbox_min[0], new_nodes[0].bbox_min, 3 * sizeof(float));
-        memcpy(&bbox_max[0], new_nodes[0].bbox_max, 3 * sizeof(float));
+        memcpy(value_ptr(bbox_min), new_nodes[0].bbox_min, 3 * sizeof(float));
+        memcpy(value_ptr(bbox_max), new_nodes[0].bbox_max, 3 * sizeof(float));
     }
 
     std::vector<tri_mat_data_t> new_tri_materials(_m.vtx_indices_count / 3);
@@ -980,8 +980,7 @@ uint32_t Ray::Vk::Scene::AddMeshInstance(const uint32_t mesh_index, const float 
             const tri_mat_data_t &tri_mat = tri_materials_cpu_[tri];
 
             const material_t &front_mat = materials_[tri_mat.front_mi & MATERIAL_INDEX_BITS];
-            if (front_mat.type == EmissiveNode &&
-                (front_mat.flags & MAT_FLAG_MULT_IMPORTANCE)) {
+            if (front_mat.type == EmissiveNode && (front_mat.flags & MAT_FLAG_MULT_IMPORTANCE)) {
                 light_t new_light;
                 new_light.type = LIGHT_TYPE_TRI;
                 new_light.cast_shadow = 1;
@@ -1143,8 +1142,8 @@ void Ray::Vk::Scene::PrepareEnvMapQTree() {
 
     if (use_bindless_) {
         const Texture2D &t = bindless_textures_[tex];
-        size[0] = t.params.w;
-        size[1] = t.params.h;
+        size.template set<0>(t.params.w);
+        size.template set<1>(t.params.h);
 
         assert(t.params.format == eTexFormat::RawRGBA8888);
         const uint32_t data_size = t.params.w * t.params.h * GetPerPixelDataLen(eTexFormat::RawRGBA8888);
@@ -1158,8 +1157,8 @@ void Ray::Vk::Scene::PrepareEnvMapQTree() {
         EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
     } else {
         const atlas_texture_t &t = atlas_textures_[tex];
-        size[0] = (t.width & ATLAS_TEX_WIDTH_BITS);
-        size[1] = (t.height & ATLAS_TEX_HEIGHT_BITS);
+        size.template set<0>(t.width & ATLAS_TEX_WIDTH_BITS);
+        size.template set<1>(t.height & ATLAS_TEX_HEIGHT_BITS);
 
         const TextureAtlas &atlas = tex_atlases_[t.atlas];
 
@@ -1200,17 +1199,15 @@ void Ray::Vk::Scene::PrepareEnvMapQTree() {
 
                 const uint8_t *col_rgbe = &rgbe_data[4 * (y * size[0] + x)];
                 simd_fvec4 col_rgb;
-                rgbe_to_rgb(col_rgbe, &col_rgb[0]);
+                rgbe_to_rgb(col_rgbe, value_ptr(col_rgb));
 
                 const float cur_lum = (col_rgb[0] + col_rgb[1] + col_rgb[2]);
 
-                simd_fvec4 dir;
-                dir[0] = std::sin(theta) * std::cos(phi);
-                dir[1] = std::cos(theta);
-                dir[2] = std::sin(theta) * std::sin(phi);
+                auto dir =
+                    simd_fvec4{std::sin(theta) * std::cos(phi), std::cos(theta), std::sin(theta) * std::sin(phi), 0.0f};
 
                 simd_fvec2 q;
-                DirToCanonical(value_ptr(dir), 0.0f, &q[0]);
+                DirToCanonical(value_ptr(dir), 0.0f, value_ptr(q));
 
                 int qx = _CLAMP(int(cur_res * q[0]), 0, cur_res - 1);
                 int qy = _CLAMP(int(cur_res * q[1]), 0, cur_res - 1);
@@ -1222,8 +1219,8 @@ void Ray::Vk::Scene::PrepareEnvMapQTree() {
                 qx /= 2;
                 qy /= 2;
 
-                float &q_lum = env_map_qtree_.mips[0][qy * cur_res / 2 + qx][index];
-                q_lum = std::max(q_lum, cur_lum);
+                simd_fvec4 &qvec = env_map_qtree_.mips[0][qy * cur_res / 2 + qx];
+                qvec.set(index, std::max(qvec[index], cur_lum));
             }
         }
 
@@ -1253,7 +1250,7 @@ void Ray::Vk::Scene::PrepareEnvMapQTree() {
                 const int qx = (x / 2);
                 const int qy = (y / 2);
 
-                env_map_qtree_.mips.back()[qy * cur_res / 2 + qx][index] = res_lum;
+                env_map_qtree_.mips.back()[qy * cur_res / 2 + qx].set(index, res_lum);
             }
         }
 

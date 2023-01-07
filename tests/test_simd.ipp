@@ -122,19 +122,19 @@ using namespace Ray::NS;
 
     simd_fvec4 v9 = {3.0f, 6.0f, 7.0f, 6.0f};
 
-    auto v10 = v2 < v9;
+    auto v10 = simd_cast(v2 < v9);
 
     require(v10[0] == 0);
-    require(reinterpret_cast<const uint32_t &>(v10[1]) == 0xFFFFFFFF);
-    require(reinterpret_cast<const uint32_t &>(v10[2]) == 0xFFFFFFFF);
+    require(v10[1] == -1);
+    require(v10[2] == -1);
     require(v10[3] == 0);
 
-    auto v11 = v2 > v9;
+    auto v11 = simd_cast(v2 > v9);
 
-    require(reinterpret_cast<const uint32_t &>(v11[0]) == 0xFFFFFFFF);
+    require(v11[0] == -1);
     require(v11[1] == 0);
     require(v11[2] == 0);
-    require(reinterpret_cast<const uint32_t &>(v11[3]) == 0xFFFFFFFF);
+    require(v11[3] == -1);
 
     static const float gather_source[] = {0, 42.0f, 0, 0, 12.0f, 0, 0, 0, 11.0f, 0, 0, 0, 0, 0, 0, 23.0f, 0, 32.0f};
 
@@ -471,27 +471,27 @@ using namespace Ray::NS;
 
     simd_fvec8 v9 = {3.0f, 6.0f, 7.0f, 6.0f, 2.0f, 12.0f, 18.0f, 0.0f};
 
-    auto v10 = v2 < v9;
+    auto v10 = simd_cast(v2 < v9);
 
     require(v10[0] == 0);
-    require(reinterpret_cast<const uint32_t &>(v10[1]) == 0xFFFFFFFF);
-    require(reinterpret_cast<const uint32_t &>(v10[2]) == 0xFFFFFFFF);
+    require(v10[1] == -1);
+    require(v10[2] == -1);
     require(v10[3] == 0);
     require(v10[4] == 0);
-    require(reinterpret_cast<const uint32_t &>(v10[5]) == 0xFFFFFFFF);
-    require(reinterpret_cast<const uint32_t &>(v10[6]) == 0xFFFFFFFF);
+    require(v10[5] == -1);
+    require(v10[6] == -1);
     require(v10[7] == 0);
 
-    auto v11 = v2 > v9;
+    auto v11 = simd_cast(v2 > v9);
 
-    require(reinterpret_cast<const uint32_t &>(v11[0]) == 0xFFFFFFFF);
+    require(v11[0] == -1);
     require(v11[1] == 0);
     require(v11[2] == 0);
-    require(reinterpret_cast<const uint32_t &>(v11[3]) == 0xFFFFFFFF);
-    require(reinterpret_cast<const uint32_t &>(v11[4]) == 0xFFFFFFFF);
+    require(v11[3] == -1);
+    require(v11[4] == -1);
     require(v11[5] == 0);
     require(v11[6] == 0);
-    require(reinterpret_cast<const uint32_t &>(v11[7]) == 0xFFFFFFFF);
+    require(v11[7] == -1);
 
     static const float gather_source[] = {0, 42.0f, 0, 0, 12.0f, 0, 0, 0, 11.0f, 0, 0, 0, 0, 0, 0, 23.0f, 0, 32.0f,
                                           0, 42.0f, 0, 0, 12.0f, 0, 0, 0, 11.0f, 0, 0, 0, 0, 0, 0, 23.0f, 0, 32.0f};
@@ -991,27 +991,27 @@ using namespace Ray::NS;
     simd_fvec16 v9 = {3.0f, 6.0f, 7.0f, 6.0f, 2.0f, 12.0f, 18.0f, 0.0f,
                       3.0f, 6.0f, 7.0f, 6.0f, 2.0f, 12.0f, 18.0f, 0.0f};
 
-    auto v10 = v2 < v9;
+    auto v10 = simd_cast(v2 < v9);
 
     require(v10[0] == 0);
-    require(reinterpret_cast<const uint32_t &>(v10[1]) == 0xFFFFFFFF);
-    require(reinterpret_cast<const uint32_t &>(v10[2]) == 0xFFFFFFFF);
+    require(v10[1] == -1);
+    require(v10[2] == -1);
     require(v10[3] == 0);
     require(v10[4] == 0);
-    require(reinterpret_cast<const uint32_t &>(v10[5]) == 0xFFFFFFFF);
-    require(reinterpret_cast<const uint32_t &>(v10[6]) == 0xFFFFFFFF);
+    require(v10[5] == -1);
+    require(v10[6] == -1);
     require(v10[7] == 0);
 
-    auto v11 = v2 > v9;
+    auto v11 = simd_cast(v2 > v9);
 
-    require(reinterpret_cast<const uint32_t &>(v11[0]) == 0xFFFFFFFF);
+    require(v11[0] == -1);
     require(v11[1] == 0);
     require(v11[2] == 0);
-    require(reinterpret_cast<const uint32_t &>(v11[3]) == 0xFFFFFFFF);
-    require(reinterpret_cast<const uint32_t &>(v11[4]) == 0xFFFFFFFF);
+    require(v11[3] == -1);
+    require(v11[4] == -1);
     require(v11[5] == 0);
     require(v11[6] == 0);
-    require(reinterpret_cast<const uint32_t &>(v11[7]) == 0xFFFFFFFF);
+    require(v11[7] == -1);
 
     static const float gather_source[] = {0, 42.0f, 0, 0, 12.0f, 0, 0, 0, 11.0f, 0, 0, 0, 0, 0, 0, 23.0f, 0, 32.0f,
                                           0, 42.0f, 0, 0, 12.0f, 0, 0, 0, 11.0f, 0, 0, 0, 0, 0, 0, 23.0f, 0, 32.0f,

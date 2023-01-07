@@ -55,14 +55,14 @@ static int sutherland_hodgman(const Ref::simd_dvec3 *input, const int in_count, 
             // Going outside -- add the intersection
             double t = (split_pos - cur[axis]) / (next[axis] - cur[axis]);
             Ref::simd_dvec3 p = cur + (next - cur) * t;
-            p[axis] = split_pos; // Avoid roundoff errors
+            p.set(axis, split_pos); // Avoid roundoff errors
             output[out_count++] = p;
         } else if (!cur_is_inside && next_is_inside) {
             // Coming back inside -- add the intersection + next vertex
             double t = (split_pos - cur[axis]) / (next[axis] - cur[axis]);
             Ref::simd_dvec3 &p = output[out_count++];
             p = cur + (next - cur) * t;
-            p[axis] = split_pos; // Avoid roundoff errors
+            p.set(axis, split_pos); // Avoid roundoff errors
             output[out_count++] = next;
         } else {
             // Entirely outside - do not add anything
@@ -122,8 +122,8 @@ bbox_t GetClippedAABB(const Ref::simd_fvec3 &_v0, const Ref::simd_fvec3 &_v1, co
     for (int i = 0; i < vertex_count; ++i) {
         for (int j = 0; j < 3; ++j) {
             const double pos = vertices1[i][j];
-            extends.min[j] = std::min(extends.min[j], castflt_down(pos));
-            extends.max[j] = std::max(extends.max[j], castflt_up(pos));
+            extends.min.set(j, std::min(extends.min[j], castflt_down(pos)));
+            extends.max.set(j, std::max(extends.max[j], castflt_up(pos)));
         }
     }
 
@@ -312,7 +312,7 @@ Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, Span<const 
             const bbox_t overlap = {max(res_left_bounds.min, res_right_bounds.min),
                                     min(res_left_bounds.max, res_right_bounds.max)};
             Ref::simd_ivec4 test = simd_cast(overlap.max <= overlap.min);
-            test[3] = 0;
+            test.set<3>(0);
 
             if (s.allow_spatial_splits && test.all_zeros() &&
                 overlap.surface_area() > SpatialSplitAlpha * bbox_t::surface_area(root_min, root_max)) {
@@ -336,11 +336,11 @@ Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, Span<const 
                     for (int i = 0; i < NumSpatialSplitBins; i++) {
                         bins[i].limits.min = whole_box.min;
                         bins[i].limits.max = whole_box.max;
-                        bins[i].limits.min[split_axis] = castflt_down(whole_box.min[split_axis] + i * bin_size);
-                        bins[i].limits.max[split_axis] = castflt_up(whole_box.min[split_axis] + (i + 1) * bin_size);
+                        bins[i].limits.min.set(split_axis, castflt_down(whole_box.min[split_axis] + i * bin_size));
+                        bins[i].limits.max.set(split_axis, castflt_up(whole_box.min[split_axis] + (i + 1) * bin_size));
                     }
 
-                    bins[NumSpatialSplitBins - 1].limits.max[split_axis] = whole_box.max[split_axis];
+                    bins[NumSpatialSplitBins - 1].limits.max.set(split_axis, whole_box.max[split_axis]);
 
                     const auto &list = axis_lists[split_axis];
 

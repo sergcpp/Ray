@@ -146,7 +146,7 @@ void Ray::Ref::ComputeTangentBasis(size_t vtx_offset, size_t vtx_start, std::vec
             const float l = length(binormal);
             if (l > FLT_EPS) {
                 binormal /= l;
-                memcpy(&v.b[0], &binormal[0], 3 * sizeof(float));
+                memcpy(&v.b[0], value_ptr(binormal), 3 * sizeof(float));
             }
         }
     }

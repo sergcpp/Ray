@@ -610,8 +610,7 @@ uint32_t Ray::Ref::Scene::AddMeshInstance(const uint32_t mesh_index, const float
             const tri_mat_data_t &tri_mat = tri_materials_[tri];
 
             const material_t &front_mat = materials_[tri_mat.front_mi & MATERIAL_INDEX_BITS];
-            if (front_mat.type == EmissiveNode &&
-                (front_mat.flags & MAT_FLAG_MULT_IMPORTANCE)) {
+            if (front_mat.type == EmissiveNode && (front_mat.flags & MAT_FLAG_MULT_IMPORTANCE)) {
                 light_t new_light = {};
                 new_light.cast_shadow = 1;
                 new_light.type = LIGHT_TYPE_TRI;
@@ -795,7 +794,7 @@ void Ray::Ref::Scene::RebuildTLAS() {
 void Ray::Ref::Scene::PrepareEnvMapQTree() {
     const int tex = (env_.env_map & 0x00ffffff);
     simd_ivec2 size;
-    tex_storage_rgba_.GetIRes(tex, 0, &size[0]);
+    tex_storage_rgba_.GetIRes(tex, 0, value_ptr(size));
 
     const int lowest_dim = std::min(size[0], size[1]);
 
@@ -822,13 +821,11 @@ void Ray::Ref::Scene::PrepareEnvMapQTree() {
 
                 const float cur_lum = (col_rgb[0] + col_rgb[1] + col_rgb[2]);
 
-                simd_fvec4 dir;
-                dir[0] = std::sin(theta) * std::cos(phi);
-                dir[1] = std::cos(theta);
-                dir[2] = std::sin(theta) * std::sin(phi);
+                auto dir =
+                    simd_fvec4{std::sin(theta) * std::cos(phi), std::cos(theta), std::sin(theta) * std::sin(phi), 0.0f};
 
                 simd_fvec2 q;
-                DirToCanonical(value_ptr(dir), 0.0f, &q[0]);
+                DirToCanonical(value_ptr(dir), 0.0f, value_ptr(q));
 
                 int qx = _CLAMP(int(cur_res * q[0]), 0, cur_res - 1);
                 int qy = _CLAMP(int(cur_res * q[1]), 0, cur_res - 1);
@@ -840,8 +837,8 @@ void Ray::Ref::Scene::PrepareEnvMapQTree() {
                 qx /= 2;
                 qy /= 2;
 
-                float &q_lum = env_map_qtree_.mips[0][qy * cur_res / 2 + qx][index];
-                q_lum = std::max(q_lum, cur_lum);
+                simd_fvec4 &qvec = env_map_qtree_.mips[0][qy * cur_res / 2 + qx];
+                qvec.set(index, std::max(qvec[index], cur_lum));
             }
         }
 
@@ -868,7 +865,7 @@ void Ray::Ref::Scene::PrepareEnvMapQTree() {
                 const int qx = (x / 2);
                 const int qy = (y / 2);
 
-                env_map_qtree_.mips.back()[qy * cur_res / 2 + qx][index] = res_lum;
+                env_map_qtree_.mips.back()[qy * cur_res / 2 + qx].set(index, res_lum);
             }
         }
 

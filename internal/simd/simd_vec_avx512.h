@@ -48,10 +48,11 @@ template <> class simd_vec<float, 16> {
     force_inline explicit simd_vec(const float *f) { vec_ = _mm512_loadu_ps(f); }
     force_inline simd_vec(const float *f, simd_mem_aligned_tag) { vec_ = _mm512_load_ps(f); }
 
-    force_inline float &operator[](const int i) { return comp_[i]; }
     force_inline float operator[](const int i) const { return comp_[i]; }
 
     template <int i> force_inline float get() const { return comp_[i]; }
+    template <int i> force_inline void set(const float f) { comp_[i] = f; }
+    force_inline void set(const int i, const float f) { comp_[i] = f; }
 
     force_inline simd_vec<float, 16> &operator+=(const simd_vec<float, 16> &rhs) {
         vec_ = _mm512_add_ps(vec_, rhs.vec_);
@@ -242,10 +243,11 @@ template <> class simd_vec<int, 16> {
     force_inline explicit simd_vec(const int *f) { vec_ = _mm512_loadu_si512((const __m512i *)f); }
     force_inline simd_vec(const int *f, simd_mem_aligned_tag) { vec_ = _mm512_load_si512((const __m512i *)f); }
 
-    force_inline int &operator[](const int i) { return comp_[i]; }
     force_inline int operator[](const int i) const { return comp_[i]; }
 
     template <int i> force_inline int get() const { return comp_[i]; }
+    template <int i> force_inline void set(const int f) { comp_[i] = f; }
+    force_inline void set(const int i, const int f) { comp_[i] = f; }
 
     force_inline simd_vec<int, 16> &operator+=(const simd_vec<int, 16> &rhs) {
         vec_ = _mm512_add_epi32(vec_, rhs.vec_);

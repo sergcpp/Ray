@@ -467,6 +467,14 @@ template <int S> force_inline void safe_normalize(simd_fvec<S> v[3]) {
 #endif
 }
 
+template <typename T, int S>
+force_inline void swap_elements(simd_vec<T, S> &v1, const int i1, simd_vec<T, S> &v2, const int i2) {
+    const T temp1 = v1[i1];
+    const T temp2 = v2[i2];
+    v1.set(i1, temp2);
+    v2.set(i2, temp1);
+}
+
 template <int S>
 force_inline simd_ivec<S> IntersectTri(const simd_fvec<S> ro[3], const simd_fvec<S> rd[3], const simd_ivec<S> &ray_mask,
                                        const tri_accel_t &tri, uint32_t prim_index, hit_data_t<S> &inter) {
@@ -617,16 +625,16 @@ force_inline bool IntersectTri(const float ro[3], const float rd[3], int j, cons
         return false;
     }
 
-    inter.mask[j] = 0xffffffff;
+    inter.mask.set(j, -1);
 
     const long i1 = GetFirstBit(mask);
     mask = ClearBit(mask, i1);
 
     long min_i = i1;
-    inter.prim_index[j] = _prim_index[i1];
-    inter.t[j] = _t[i1];
-    inter.u[j] = _u[i1];
-    inter.v[j] = _v[i1];
+    inter.prim_index.set(j, _prim_index[i1]);
+    inter.t.set(j, _t[i1]);
+    inter.u.set(j, _u[i1]);
+    inter.v.set(j, _v[i1]);
 
     if (mask == 0) { // Only one triangle was hit
         return true;
@@ -637,10 +645,10 @@ force_inline bool IntersectTri(const float ro[3], const float rd[3], int j, cons
         mask = ClearBit(mask, i2);
 
         if (_t[i2] < _t[min_i]) {
-            inter.prim_index[j] = _prim_index[i2];
-            inter.t[j] = _t[i2];
-            inter.u[j] = _u[i2];
-            inter.v[j] = _v[i2];
+            inter.prim_index.set(j, _prim_index[i2]);
+            inter.t.set(j, _t[i2]);
+            inter.u.set(j, _u[i2]);
+            inter.v.set(j, _v[i2]);
             min_i = i2;
         }
     } while (mask != 0);
@@ -705,16 +713,16 @@ force_inline bool IntersectTri<16>(const float ro[3], const float rd[3], int j, 
         return false;
     }
 
-    inter.mask[j] = 0xffffffff;
+    inter.mask.set(j, -1);
 
     const long i1 = GetFirstBit(mask);
     mask = ClearBit(mask, i1);
 
     long min_i = i1;
-    inter.prim_index[j] = _prim_index[i1];
-    inter.t[j] = _t[i1];
-    inter.u[j] = _u[i1];
-    inter.v[j] = _v[i1];
+    inter.prim_index.set(j, _prim_index[i1]);
+    inter.t.set(j, _t[i1]);
+    inter.u.set(j, _u[i1]);
+    inter.v.set(j, _v[i1]);
 
     if (mask == 0) { // Only one triangle was hit
         return true;
@@ -725,10 +733,10 @@ force_inline bool IntersectTri<16>(const float ro[3], const float rd[3], int j, 
         mask = ClearBit(mask, i2);
 
         if (_t[i2] < _t[min_i]) {
-            inter.prim_index[j] = _prim_index[i2];
-            inter.t[j] = _t[i2];
-            inter.u[j] = _u[i2];
-            inter.v[j] = _v[i2];
+            inter.prim_index.set(j, _prim_index[i2]);
+            inter.t.set(j, _t[i2]);
+            inter.u.set(j, _u[i2]);
+            inter.v.set(j, _v[i2]);
             min_i = i2;
         }
     } while (mask != 0);
@@ -1330,14 +1338,17 @@ force_inline simd_ivec<S> get_ray_hash(const ray_data_t<S> &r, const simd_ivec<S
 
     ITERATE(S, {
         if (mask[i]) {
-            x[i] = morton_table_256[x.template get<i>()];
-            y[i] = morton_table_256[y.template get<i>()];
-            z[i] = morton_table_256[z.template get<i>()];
-            o[i] = morton_table_16[int(omega_table[omega_index.template get<i>()])];
-            p[i] = morton_table_16[int(phi_table[phi_index_i.template get<i>()][phi_index_j.template get<i>()])];
+            x.template set<i>(morton_table_256[x.template get<i>()]);
+            y.template set<i>(morton_table_256[y.template get<i>()]);
+            z.template set<i>(morton_table_256[z.template get<i>()]);
+            o.template set<i>(morton_table_16[int(omega_table[omega_index.template get<i>()])]);
+            p.template set<i>(morton_table_16[int(phi_table[phi_index_i.template get<i>()][phi_index_j.template get<i>()])]);
         } else {
-            o[i] = p[i] = 0xFFFFFFFF;
-            x[i] = y[i] = z[i] = 0xFFFFFFFF;
+            o.template set<i>(0xFFFFFFFF);
+            p.template set<i>(0xFFFFFFFF);
+            x.template set<i>(0xFFFFFFFF);
+            y.template set<i>(0xFFFFFFFF);
+            z.template set<i>(0xFFFFFFFF);
         }
     });
 
@@ -1450,13 +1461,11 @@ simd_fvec<S> get_texture_lod(const Ref::TexStorageBase *const textures[], const 
     float sz[2];
     textures[index >> 28]->GetFRes(index & 0x00ffffff, 0, sz);
 
-    simd_fvec<S> lod;
+    simd_fvec<S> lod = 0.0f;
 
     ITERATE(S, {
         if (reinterpret_cast<const simd_ivec<S> &>(mask).template get<i>()) {
-            lod[i] = lambda.template get<i>() + 0.5f * fast_log2(sz[0] * sz[1]) - 1.0f;
-        } else {
-            lod[i] = 0.0f;
+            lod.template set<i>(lambda.template get<i>() + 0.5f * fast_log2(sz[0] * sz[1]) - 1.0f);
         }
     })
 
@@ -1617,13 +1626,13 @@ force_inline void tangent_from_world(const simd_fvec<S> T[3], const simd_fvec<S>
 
 template <int S> force_inline simd_fvec<S> cos(const simd_fvec<S> &v) {
     simd_fvec<S> ret;
-    ITERATE(S, { ret[i] = std::cos(v.template get<i>()); })
+    ITERATE(S, { ret.template set<i>(std::cos(v.template get<i>())); })
     return ret;
 }
 
 template <int S> force_inline simd_fvec<S> sin(const simd_fvec<S> &v) {
     simd_fvec<S> ret;
-    ITERATE(S, { ret[i] = std::sin(v.template get<i>()); })
+    ITERATE(S, { ret.template set<i>(std::sin(v.template get<i>())); })
     return ret;
 }
 
@@ -1671,9 +1680,9 @@ void SampleGGX_VNDF(const simd_fvec<S> Ve[3], const simd_fvec<S> &alpha_x, const
     const simd_fvec<S> r = sqrt(U1);
     const simd_fvec<S> phi = 2.0f * PI * U2;
     simd_fvec<S> t1;
-    ITERATE(S, { t1[i] = r.template get<i>() * std::cos(phi.template get<i>()); })
+    ITERATE(S, { t1.template set<i>(r.template get<i>() * std::cos(phi.template get<i>())); })
     simd_fvec<S> t2;
-    ITERATE(S, { t2[i] = r.template get<i>() * std::sin(phi.template get<i>()); })
+    ITERATE(S, { t2.template set<i>(r.template get<i>() * std::sin(phi.template get<i>())); })
     const simd_fvec<S> s = 0.5f * (1.0f + Vh[2]);
     t2 = (1.0f - s) * sqrt(1.0f - t1 * t1) + s * t2;
     // Section 4.3: reprojection onto hemisphere
@@ -1836,9 +1845,9 @@ force_inline simd_ivec<S> quadratic(const simd_fvec<S> &a, const simd_fvec<S> &b
 template <int S> force_inline simd_fvec<S> ngon_rad(const simd_fvec<S> &theta, const float n) {
     simd_fvec<S> ret;
     ITERATE(S, {
-        ret[i] =
-            std::cos(PI / n) / std::cos(theta.template get<i>() -
-                                        (2.0f * PI / n) * std::floor((n * theta.template get<i>() + PI) / (2.0f * PI)));
+        ret.template set<i>(std::cos(PI / n) /
+                   std::cos(theta.template get<i>() -
+                            (2.0f * PI / n) * std::floor((n * theta.template get<i>() + PI) / (2.0f * PI))));
     })
     return ret;
 }
@@ -2063,10 +2072,10 @@ void Ray::NS::SampleMeshInTextureSpace(int iteration, int obj_index, int uv_laye
         ibbox_min = max(ibbox_min, irect_min);
         ibbox_max = min(ibbox_max, irect_max);
 
-        ibbox_min[0] -= ibbox_min[0] % DimX;
-        ibbox_min[1] -= ibbox_min[1] % DimY;
-        ibbox_max[0] += ((ibbox_max[0] + 1) % DimX) ? (DimX - (ibbox_max[0] + 1) % DimX) : 0;
-        ibbox_max[1] += ((ibbox_max[1] + 1) % DimY) ? (DimY - (ibbox_max[1] + 1) % DimY) : 0;
+        ibbox_min.set<0>(ibbox_min[0] - (ibbox_min[0] % DimX));
+        ibbox_min.set<1>(ibbox_min[1] - (ibbox_min[1] % DimY));
+        ibbox_max.set<0>(ibbox_max[0] + (((ibbox_max[0] + 1) % DimX) ? (DimX - (ibbox_max[0] + 1) % DimX) : 0));
+        ibbox_max.set<1>(ibbox_max[1] + (((ibbox_max[1] + 1) % DimY) ? (DimY - (ibbox_max[1] + 1) % DimY) : 0));
 
         const simd_fvec2 d01 = t0 - t1, d12 = t1 - t2, d20 = t2 - t0;
 
@@ -2088,11 +2097,11 @@ void Ray::NS::SampleMeshInTextureSpace(int iteration, int obj_index, int uv_laye
                 simd_fvec<S> rxx = construct_float(hash(out_ray.xy));
                 simd_fvec<S> ryy = construct_float(hash(hash(out_ray.xy)));
 
-                for (int i = 0; i < S; i++) {
+                ITERATE(S, {
                     float _unused;
-                    rxx[i] = std::modf(random_seq[RAND_DIM_FILTER_U] + rxx[i], &_unused);
-                    ryy[i] = std::modf(random_seq[RAND_DIM_FILTER_V] + ryy[i], &_unused);
-                }
+                    rxx.template set<i>(std::modf(random_seq[RAND_DIM_FILTER_U] + rxx.template get<i>(), &_unused));
+                    ryy.template set<i>(std::modf(random_seq[RAND_DIM_FILTER_V] + ryy.template get<i>(), &_unused));
+                })
 
                 const simd_fvec<S> fxx = simd_fvec<S>{ixx} + rxx, fyy = simd_fvec<S>{iyy} + ryy;
 
@@ -2179,47 +2188,47 @@ void Ray::NS::SortRays_CPU(ray_data_t<S> *rays, simd_ivec<S> *ray_masks, int &ra
                 {
                     const int jj = j / S, _jj = j % S, kk = k / S, _kk = k % S;
 
-                    std::swap(hash_values[jj][_jj], hash_values[kk][_kk]);
+                    swap_elements(hash_values[jj], _jj, hash_values[kk], _kk);
 
-                    std::swap(rays[jj].o[0][_jj], rays[kk].o[0][_kk]);
-                    std::swap(rays[jj].o[1][_jj], rays[kk].o[1][_kk]);
-                    std::swap(rays[jj].o[2][_jj], rays[kk].o[2][_kk]);
+                    swap_elements(rays[jj].o[0], _jj, rays[kk].o[0], _kk);
+                    swap_elements(rays[jj].o[1], _jj, rays[kk].o[1], _kk);
+                    swap_elements(rays[jj].o[2], _jj, rays[kk].o[2], _kk);
 
-                    std::swap(rays[jj].d[0][_jj], rays[kk].d[0][_kk]);
-                    std::swap(rays[jj].d[1][_jj], rays[kk].d[1][_kk]);
-                    std::swap(rays[jj].d[2][_jj], rays[kk].d[2][_kk]);
+                    swap_elements(rays[jj].d[0], _jj, rays[kk].d[0], _kk);
+                    swap_elements(rays[jj].d[1], _jj, rays[kk].d[1], _kk);
+                    swap_elements(rays[jj].d[2], _jj, rays[kk].d[2], _kk);
 
-                    std::swap(rays[jj].pdf[_jj], rays[kk].pdf[_kk]);
+                    swap_elements(rays[jj].pdf, _jj, rays[kk].pdf, _kk);
 
-                    std::swap(rays[jj].c[0][_jj], rays[kk].c[0][_kk]);
-                    std::swap(rays[jj].c[1][_jj], rays[kk].c[1][_kk]);
-                    std::swap(rays[jj].c[2][_jj], rays[kk].c[2][_kk]);
+                    swap_elements(rays[jj].c[0], _jj, rays[kk].c[0], _kk);
+                    swap_elements(rays[jj].c[1], _jj, rays[kk].c[1], _kk);
+                    swap_elements(rays[jj].c[2], _jj, rays[kk].c[2], _kk);
 
 #ifdef USE_RAY_DIFFERENTIALS
-                    std::swap(rays[jj].do_dx[0][_jj], rays[kk].do_dx[0][_kk]);
-                    std::swap(rays[jj].do_dx[1][_jj], rays[kk].do_dx[1][_kk]);
-                    std::swap(rays[jj].do_dx[2][_jj], rays[kk].do_dx[2][_kk]);
+                    swap_elements(rays[jj].do_dx[0], _jj, rays[kk].do_dx[0], _kk);
+                    swap_elements(rays[jj].do_dx[1], _jj, rays[kk].do_dx[1], _kk);
+                    swap_elements(rays[jj].do_dx[2], _jj, rays[kk].do_dx[2], _kk);
 
-                    std::swap(rays[jj].dd_dx[0][_jj], rays[kk].dd_dx[0][_kk]);
-                    std::swap(rays[jj].dd_dx[1][_jj], rays[kk].dd_dx[1][_kk]);
-                    std::swap(rays[jj].dd_dx[2][_jj], rays[kk].dd_dx[2][_kk]);
+                    swap_elements(rays[jj].dd_dx[0], _jj, rays[kk].dd_dx[0], _kk);
+                    swap_elements(rays[jj].dd_dx[1], _jj, rays[kk].dd_dx[1], _kk);
+                    swap_elements(rays[jj].dd_dx[2], _jj, rays[kk].dd_dx[2], _kk);
 
-                    std::swap(rays[jj].do_dy[0][_jj], rays[kk].do_dy[0][_kk]);
-                    std::swap(rays[jj].do_dy[1][_jj], rays[kk].do_dy[1][_kk]);
-                    std::swap(rays[jj].do_dy[2][_jj], rays[kk].do_dy[2][_kk]);
+                    swap_elements(rays[jj].do_dy[0], _jj, rays[kk].do_dy[0], _kk);
+                    swap_elements(rays[jj].do_dy[1], _jj, rays[kk].do_dy[1], _kk);
+                    swap_elements(rays[jj].do_dy[2], _jj, rays[kk].do_dy[2], _kk);
 
-                    std::swap(rays[jj].dd_dy[0][_jj], rays[kk].dd_dy[0][_kk]);
-                    std::swap(rays[jj].dd_dy[1][_jj], rays[kk].dd_dy[1][_kk]);
-                    std::swap(rays[jj].dd_dy[2][_jj], rays[kk].dd_dy[2][_kk]);
+                    swap_elements(rays[jj].dd_dy[0], _jj, rays[kk].dd_dy[0], _kk);
+                    swap_elements(rays[jj].dd_dy[1], _jj, rays[kk].dd_dy[1], _kk);
+                    swap_elements(rays[jj].dd_dy[2], _jj, rays[kk].dd_dy[2], _kk);
 #else
-                    std::swap(rays[jj].cone_width[_jj], rays[kk].cone_width[_kk]);
-                    std::swap(rays[jj].cone_spread[_jj], rays[kk].cone_spread[_kk]);
+                    swap_elements(rays[jj].cone_width, _jj, rays[kk].cone_width, _kk);
+                    swap_elements(rays[jj].cone_spread, _jj, rays[kk].cone_spread, _kk);
 #endif
 
-                    std::swap(rays[jj].xy[_jj], rays[kk].xy[_kk]);
-                    std::swap(rays[jj].depth[_jj], rays[kk].depth[_kk]);
+                    swap_elements(rays[jj].xy, _jj, rays[kk].xy, _kk);
+                    swap_elements(rays[jj].depth, _jj, rays[kk].depth, _kk);
 
-                    std::swap(ray_masks[jj][_jj], ray_masks[kk][_kk]);
+                    swap_elements(ray_masks[jj], _jj, ray_masks[kk], _kk);
                 }
 
                 std::swap(scan_values[i], scan_values[j]);
@@ -2264,8 +2273,8 @@ void Ray::NS::SortRays_GPU(ray_data_t<S> *rays, simd_ivec<S> *ray_masks, int &ra
     // init ray chunks hash and base index
     for (int i = 0; i < rays_count * S; i++) {
         if (head_flags[i]) {
-            chunks[scan_values[i]].hash = reinterpret_cast<const uint32_t &>(hash_values[i / S][i % S]);
-            chunks[scan_values[i]].base = (uint32_t)i;
+            chunks[scan_values[i]].hash = uint32_t(hash_values[i / S][i % S]);
+            chunks[scan_values[i]].base = uint32_t(i);
         }
     }
 
@@ -2314,46 +2323,45 @@ void Ray::NS::SortRays_GPU(ray_data_t<S> *rays, simd_ivec<S> *ray_masks, int &ra
                 {
                     const int jj = j / S, _jj = j % S, kk = k / S, _kk = k % S;
 
-                    std::swap(hash_values[jj][_jj], hash_values[kk][_kk]);
+                    swap_elements(hash_values[jj], _jj, hash_values[kk], _kk);
 
-                    std::swap(rays[jj].o[0][_jj], rays[kk].o[0][_kk]);
-                    std::swap(rays[jj].o[1][_jj], rays[kk].o[1][_kk]);
-                    std::swap(rays[jj].o[2][_jj], rays[kk].o[2][_kk]);
+                    swap_elements(rays[jj].o[0], _jj, rays[kk].o[0], _kk);
+                    swap_elements(rays[jj].o[1], _jj, rays[kk].o[1], _kk);
+                    swap_elements(rays[jj].o[2], _jj, rays[kk].o[2], _kk);
 
-                    std::swap(rays[jj].d[0][_jj], rays[kk].d[0][_kk]);
-                    std::swap(rays[jj].d[1][_jj], rays[kk].d[1][_kk]);
-                    std::swap(rays[jj].d[2][_jj], rays[kk].d[2][_kk]);
+                    swap_elements(rays[jj].d[0], _jj, rays[kk].d[0], _kk);
+                    swap_elements(rays[jj].d[1], _jj, rays[kk].d[1], _kk);
+                    swap_elements(rays[jj].d[2], _jj, rays[kk].d[2], _kk);
 
-                    std::swap(rays[jj].pdf[_jj], rays[kk].pdf[_kk]);
+                    swap_elements(rays[jj].pdf, _jj, rays[kk].pdf, _kk);
 
-                    std::swap(rays[jj].c[0][_jj], rays[kk].c[0][_kk]);
-                    std::swap(rays[jj].c[1][_jj], rays[kk].c[1][_kk]);
-                    std::swap(rays[jj].c[2][_jj], rays[kk].c[2][_kk]);
+                    swap_elements(rays[jj].c[0], _jj, rays[kk].c[0], _kk);
+                    swap_elements(rays[jj].c[1], _jj, rays[kk].c[1], _kk);
+                    swap_elements(rays[jj].c[2], _jj, rays[kk].c[2], _kk);
 
 #ifdef USE_RAY_DIFFERENTIALS
-                    std::swap(rays[jj].do_dx[0][_jj], rays[kk].do_dx[0][_kk]);
-                    std::swap(rays[jj].do_dx[1][_jj], rays[kk].do_dx[1][_kk]);
-                    std::swap(rays[jj].do_dx[2][_jj], rays[kk].do_dx[2][_kk]);
+                    swap_elements(rays[jj].do_dx[0], _jj, rays[kk].do_dx[0], _kk);
+                    swap_elements(rays[jj].do_dx[1], _jj, rays[kk].do_dx[1], _kk);
+                    swap_elements(rays[jj].do_dx[2], _jj, rays[kk].do_dx[2], _kk);
 
-                    std::swap(rays[jj].dd_dx[0][_jj], rays[kk].dd_dx[0][_kk]);
-                    std::swap(rays[jj].dd_dx[1][_jj], rays[kk].dd_dx[1][_kk]);
-                    std::swap(rays[jj].dd_dx[2][_jj], rays[kk].dd_dx[2][_kk]);
+                    swap_elements(rays[jj].dd_dx[0], _jj, rays[kk].dd_dx[0], _kk);
+                    swap_elements(rays[jj].dd_dx[1], _jj, rays[kk].dd_dx[1], _kk);
+                    swap_elements(rays[jj].dd_dx[2], _jj, rays[kk].dd_dx[2], _kk);
 
-                    std::swap(rays[jj].do_dy[0][_jj], rays[kk].do_dy[0][_kk]);
-                    std::swap(rays[jj].do_dy[1][_jj], rays[kk].do_dy[1][_kk]);
-                    std::swap(rays[jj].do_dy[2][_jj], rays[kk].do_dy[2][_kk]);
+                    swap_elements(rays[jj].do_dy[0], _jj, rays[kk].do_dy[0], _kk);
+                    swap_elements(rays[jj].do_dy[1], _jj, rays[kk].do_dy[1], _kk);
+                    swap_elements(rays[jj].do_dy[2], _jj, rays[kk].do_dy[2], _kk);
 
-                    std::swap(rays[jj].dd_dy[0][_jj], rays[kk].dd_dy[0][_kk]);
-                    std::swap(rays[jj].dd_dy[1][_jj], rays[kk].dd_dy[1][_kk]);
-                    std::swap(rays[jj].dd_dy[2][_jj], rays[kk].dd_dy[2][_kk]);
+                    swap_elements(rays[jj].dd_dy[0], _jj, rays[kk].dd_dy[0], _kk);
+                    swap_elements(rays[jj].dd_dy[1], _jj, rays[kk].dd_dy[1], _kk);
+                    swap_elements(rays[jj].dd_dy[2], _jj, rays[kk].dd_dy[2], _kk);
 #else
-                    std::swap(rays[jj].cone_width[_jj], rays[kk].cone_width[_kk]);
-                    std::swap(rays[jj].cone_spread[_jj], rays[kk].cone_spread[_kk]);
+                    swap_elements(rays[jj].cone_width, _jj, rays[kk].cone_width, _kk);
+                    swap_elements(rays[jj].cone_spread, _jj, rays[kk].cone_spread, _kk);
 #endif
+                    swap_elements(rays[jj].xy, _jj, rays[kk].xy, _kk);
 
-                    std::swap(rays[jj].xy[_jj], rays[kk].xy[_kk]);
-
-                    std::swap(ray_masks[jj][_jj], ray_masks[kk][_kk]);
+                    swap_elements(ray_masks[jj], _jj, ray_masks[kk], _kk);
                 }
 
                 std::swap(scan_values[i], scan_values[j]);
@@ -2437,7 +2445,7 @@ bool Ray::NS::IntersectTris_ClosestHit(const float o[3], const float d[3], int i
 }
 
 template <int S>
-bool Ray::NS::IntersectTris_ClosestHit(const float o[3], const float d[3], int i, const mtri_accel_t *mtris,
+bool Ray::NS::IntersectTris_ClosestHit(const float o[3], const float d[3], const int i, const mtri_accel_t *mtris,
                                        const int tri_start, const int tri_end, const int obj_index,
                                        hit_data_t<S> &out_inter) {
     bool res = false;
@@ -2447,7 +2455,7 @@ bool Ray::NS::IntersectTris_ClosestHit(const float o[3], const float d[3], int i
     }
 
     if (res) {
-        out_inter.obj_index[i] = obj_index;
+        out_inter.obj_index.set(i, obj_index);
     }
 
     return res;
@@ -2527,7 +2535,7 @@ bool Ray::NS::IntersectTris_AnyHit(const float o[3], const float d[3], int i, co
 }
 
 template <int S>
-bool Ray::NS::IntersectTris_AnyHit(const float o[3], const float d[3], int i, const mtri_accel_t *mtris,
+bool Ray::NS::IntersectTris_AnyHit(const float o[3], const float d[3], const int i, const mtri_accel_t *mtris,
                                    const tri_mat_data_t *materials, const uint32_t *indices, const int tri_start,
                                    const int tri_end, const int obj_index, hit_data_t<S> &out_inter) {
     bool res = false;
@@ -2541,7 +2549,7 @@ bool Ray::NS::IntersectTris_AnyHit(const float o[3], const float d[3], int i, co
     }
 
     if (res) {
-        out_inter.obj_index[i] = obj_index;
+        out_inter.obj_index.set(i, obj_index);
     }
 
     return res;
@@ -2933,7 +2941,7 @@ Ray::NS::simd_ivec<S> Ray::NS::Traverse_MacroTree_WithStack_AnyHit(
                         Traverse_MicroTree_WithStack_AnyHit(tr_ro, tr_rd, ri, nodes, m.node_index, mtris, materials,
                                                             tri_indices, int(mi_indices[j]), inter);
                     if (solid_hit_found) {
-                        solid_hit_mask[ri] = -1;
+                        solid_hit_mask.set(ri, -1);
                         break;
                     }
                 }
@@ -3684,10 +3692,10 @@ Ray::NS::simd_fvec<S> Ray::NS::Evaluate_EnvQTree(const float y_rotation, const s
         ITERATE(S, {
             const simd_fvec4 q = qtree_mips[lod][qy.template get<i>() * res / 2 + qx.template get<i>()];
 
-            quad[0][i] = q.get<0>();
-            quad[1][i] = q.get<1>();
-            quad[2][i] = q.get<2>();
-            quad[3][i] = q.get<3>();
+            quad[0].template set<i>(q.template get<0>());
+            quad[1].template set<i>(q.template get<1>());
+            quad[2].template set<i>(q.template get<2>());
+            quad[3].template set<i>(q.template get<3>());
         })
         const simd_fvec<S> total = quad[0] + quad[1] + quad[2] + quad[3];
 
@@ -3697,7 +3705,7 @@ Ray::NS::simd_fvec<S> Ray::NS::Evaluate_EnvQTree(const float y_rotation, const s
         }
 
         where(mask, factor) *=
-            4.0f * gather(&quad[0][0], index * S + simd_ivec<S>(ascending_counter, simd_mem_aligned)) / total;
+            4.0f * gather(value_ptr(quad[0]), index * S + simd_ivec<S>(ascending_counter, simd_mem_aligned)) / total;
 
         --lod;
         res *= 2;
@@ -3727,10 +3735,10 @@ void Ray::NS::Sample_EnvQTree(float y_rotation, const simd_fvec4 *const *qtree_m
         ITERATE(S, {
             const simd_fvec4 q = qtree_mips[lod][qy.template get<i>() * res / 2 + qx.template get<i>()];
 
-            quad[0][i] = q.get<0>();
-            quad[1][i] = q.get<1>();
-            quad[2][i] = q.get<2>();
-            quad[3][i] = q.get<3>();
+            quad[0].template set<i>(q.template get<0>());
+            quad[1].template set<i>(q.template get<1>());
+            quad[2].template set<i>(q.template get<2>());
+            quad[3].template set<i>(q.template get<3>());
         })
 
         const simd_fvec<S> top_left = quad[0];
@@ -3771,7 +3779,7 @@ void Ray::NS::Sample_EnvQTree(float y_rotation, const simd_fvec4 *const *qtree_m
         }
 
         where(mask, factor) *=
-            4.0f * gather(&quad[0][0], index * S + simd_ivec<S>(ascending_counter, simd_mem_aligned)) / total;
+            4.0f * gather(value_ptr(quad[0]), index * S + simd_ivec<S>(ascending_counter, simd_mem_aligned)) / total;
 
         --lod;
         res *= 2;
@@ -3867,7 +3875,7 @@ template <int S> void Ray::NS::DirToCanonical(const simd_fvec<S> d[3], float y_r
     const simd_fvec<S> cos_theta = clamp(d[1], -1.0f, 1.0f);
 
     simd_fvec<S> phi;
-    ITERATE(S, { phi[i] = -std::atan2(d[2].template get<i>(), d[0].template get<i>()); })
+    ITERATE(S, { phi.template set<i>(-std::atan2(d[2].template get<i>(), d[0].template get<i>())); })
 
     phi += y_rotation;
     where(phi < 0, phi) += 2 * PI;
@@ -3915,7 +3923,7 @@ void Ray::NS::SampleNearest(const Ref::TexStorageBase *const textures[], const u
 
         const auto &pix = storage.Fetch(index & 0x00ffffff, uvs[0][j], uvs[1][j], _lod[j]);
 
-        ITERATE_4({ out_rgba[i][j] = static_cast<float>(pix.v[i]); });
+        ITERATE_4({ out_rgba[i].set(j, static_cast<float>(pix.v[i])); });
     }
 
     const float k = 1.0f / 255.0f;
@@ -3942,8 +3950,8 @@ void Ray::NS::SampleBilinear(const Ref::TexStorageBase *const textures[], const 
         float img_size[2];
         storage.GetFRes(tex, lod[i], img_size);
 
-        _uvs[0][i] = _uvs[0][i] * img_size[0] - 0.5f;
-        _uvs[1][i] = _uvs[1][i] * img_size[1] - 0.5f;
+        _uvs[0].set(i, _uvs[0][i] * img_size[0] - 0.5f);
+        _uvs[1].set(i, _uvs[1][i] * img_size[1] - 0.5f);
     }
 
     const simd_fvec<S> k[2] = {fract(_uvs[0]), fract(_uvs[1])};
@@ -3960,15 +3968,15 @@ void Ray::NS::SampleBilinear(const Ref::TexStorageBase *const textures[], const 
         const auto &p10 = storage.Fetch(tex, int(_uvs[0][i]), int(_uvs[1][i] + 1), lod[i]);
         const auto &p11 = storage.Fetch(tex, int(_uvs[0][i] + 1), int(_uvs[1][i] + 1), lod[i]);
 
-        p0[0][i] = p01.v[0] * k[0][i] + p00.v[0] * (1 - k[0][i]);
-        p0[1][i] = p01.v[1] * k[0][i] + p00.v[1] * (1 - k[0][i]);
-        p0[2][i] = p01.v[2] * k[0][i] + p00.v[2] * (1 - k[0][i]);
-        p0[3][i] = p01.v[3] * k[0][i] + p00.v[3] * (1 - k[0][i]);
+        p0[0].set(i, p01.v[0] * k[0][i] + p00.v[0] * (1 - k[0][i]));
+        p0[1].set(i, p01.v[1] * k[0][i] + p00.v[1] * (1 - k[0][i]));
+        p0[2].set(i, p01.v[2] * k[0][i] + p00.v[2] * (1 - k[0][i]));
+        p0[3].set(i, p01.v[3] * k[0][i] + p00.v[3] * (1 - k[0][i]));
 
-        p1[0][i] = p11.v[0] * k[0][i] + p10.v[0] * (1 - k[0][i]);
-        p1[1][i] = p11.v[1] * k[0][i] + p10.v[1] * (1 - k[0][i]);
-        p1[2][i] = p11.v[2] * k[0][i] + p10.v[2] * (1 - k[0][i]);
-        p1[3][i] = p11.v[3] * k[0][i] + p10.v[3] * (1 - k[0][i]);
+        p1[0].set(i, p11.v[0] * k[0][i] + p10.v[0] * (1 - k[0][i]));
+        p1[1].set(i, p11.v[1] * k[0][i] + p10.v[1] * (1 - k[0][i]));
+        p1[2].set(i, p11.v[2] * k[0][i] + p10.v[2] * (1 - k[0][i]));
+        p1[3].set(i, p11.v[3] * k[0][i] + p10.v[3] * (1 - k[0][i]));
     }
 
     where(mask, out_rgba[0]) = (p1[0] * k[1] + p0[0] * (1.0f - k[1]));
@@ -3998,8 +4006,8 @@ void Ray::NS::SampleLatlong_RGBE(const Ref::TexStorageRGBA &storage, const uint3
     simd_fvec<S> theta = 0.0f, phi = 0.0f;
     ITERATE(S, {
         if (mask.template get<i>()) {
-            theta[i] = std::acos(y.template get<i>()) / PI;
-            phi[i] = std::atan2(dir[2].template get<i>(), dir[0].template get<i>()) + y_rotation;
+            theta.template set<i>(std::acos(y.template get<i>()) / PI);
+            phi.template set<i>(std::atan2(dir[2].template get<i>(), dir[0].template get<i>()) + y_rotation);
         }
     })
     where(phi < 0.0f, phi) += 2 * PI;
@@ -4028,24 +4036,24 @@ void Ray::NS::SampleLatlong_RGBE(const Ref::TexStorageRGBA &storage, const uint3
         const auto &p11 = storage.Get(tex, int(uvs[0][i] + 1), int(uvs[1][i] + 1), 0);
 
         float f = std::exp2(float(p00.v[3]) - 128.0f);
-        _p00[0][i] = to_norm_float(p00.v[0]) * f;
-        _p00[1][i] = to_norm_float(p00.v[1]) * f;
-        _p00[2][i] = to_norm_float(p00.v[2]) * f;
+        _p00[0].set(i, to_norm_float(p00.v[0]) * f);
+        _p00[1].set(i, to_norm_float(p00.v[1]) * f);
+        _p00[2].set(i, to_norm_float(p00.v[2]) * f);
 
         f = std::exp2(float(p01.v[3]) - 128.0f);
-        _p01[0][i] = to_norm_float(p01.v[0]) * f;
-        _p01[1][i] = to_norm_float(p01.v[1]) * f;
-        _p01[2][i] = to_norm_float(p01.v[2]) * f;
+        _p01[0].set(i, to_norm_float(p01.v[0]) * f);
+        _p01[1].set(i, to_norm_float(p01.v[1]) * f);
+        _p01[2].set(i, to_norm_float(p01.v[2]) * f);
 
         f = std::exp2(float(p10.v[3]) - 128.0f);
-        _p10[0][i] = to_norm_float(p10.v[0]) * f;
-        _p10[1][i] = to_norm_float(p10.v[1]) * f;
-        _p10[2][i] = to_norm_float(p10.v[2]) * f;
+        _p10[0].set(i, to_norm_float(p10.v[0]) * f);
+        _p10[1].set(i, to_norm_float(p10.v[1]) * f);
+        _p10[2].set(i, to_norm_float(p10.v[2]) * f);
 
         f = std::exp2(float(p11.v[3]) - 128.0f);
-        _p11[0][i] = to_norm_float(p11.v[0]) * f;
-        _p11[1][i] = to_norm_float(p11.v[1]) * f;
-        _p11[2][i] = to_norm_float(p11.v[2]) * f;
+        _p11[0].set(i, to_norm_float(p11.v[0]) * f);
+        _p11[1].set(i, to_norm_float(p11.v[1]) * f);
+        _p11[2].set(i, to_norm_float(p11.v[2]) * f);
     }
 
     const simd_fvec<S> p0X[3] = {_p01[0] * k[0] + _p00[0] * (1 - k[0]), _p01[1] * k[0] + _p00[1] * (1 - k[0]),
@@ -4179,11 +4187,11 @@ void Ray::NS::IntersectScene(ray_data_t<S> &r, const simd_ivec<S> &mask, const i
                             float mix_val = _mix_val[i];
 
                             if (rand_pick[i] > mix_val) {
-                                mat_index[i] = mat->textures[MIX_MAT1];
-                                rand_pick[i] = safe_div_pos(rand_pick[i] - mix_val, 1.0f - mix_val);
+                                mat_index.set(i, mat->textures[MIX_MAT1]);
+                                rand_pick.set(i, safe_div_pos(rand_pick[i] - mix_val, 1.0f - mix_val));
                             } else {
-                                mat_index[i] = mat->textures[MIX_MAT2];
-                                rand_pick[i] = safe_div_pos(rand_pick[i], mix_val);
+                                mat_index.set(i, mat->textures[MIX_MAT2]);
+                                rand_pick.set(i, safe_div_pos(rand_pick[i], mix_val));
                             }
 
                             if (first_mi == 0xffff) {
@@ -4577,7 +4585,7 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const scene_data_t &sc,
                     simd_fvec<S> _angle = 0.0f;
                     ITERATE(S, {
                         if (mask.template get<i>()) {
-                            _angle[i] = std::acos(_dot.template get<i>());
+                            _angle.template set<i>(std::acos(_dot.template get<i>()));
                         }
                     })
                     const simd_fvec<S> k = clamp((l.sph.spot - _angle) / l.sph.blend, 0.0f, 1.0f);
@@ -4860,7 +4868,7 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, const simd_ivec<S> &_r
                         simd_fvec<S> _angle = 0.0f;
                         ITERATE(S, {
                             if (imask1.template get<i>()) {
-                                _angle[i] = std::acos(_dot.template get<i>());
+                                _angle.template set<i>(std::acos(_dot.template get<i>()));
                             }
                         })
                         mask1 &= (_angle <= l.sph.spot);
@@ -5081,7 +5089,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                     simd_fvec<S> _angle = 0.0f;
                     ITERATE(S, {
                         if (ray_queue[index].template get<i>()) {
-                            _angle[i] = std::acos(_dot.template get<i>());
+                            _angle.template set<i>(std::acos(_dot.template get<i>()));
                         }
                     })
                     assert((ray_queue[index] & simd_cast(_angle > l.sph.spot)).all_zeros());

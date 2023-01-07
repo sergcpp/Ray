@@ -554,13 +554,13 @@ force_inline float construct_float(uint32_t m) {
 force_inline simd_fvec4 srgb_to_rgb(const simd_fvec4 &col) {
     simd_fvec4 ret;
     ITERATE_3({
-        if (col[i] > 0.04045f) {
-            ret[i] = std::pow((col[i] + 0.055f) / 1.055f, 2.4f);
+        if (col.get<i>() > 0.04045f) {
+            ret.set<i>(std::pow((col.get<i>() + 0.055f) / 1.055f, 2.4f));
         } else {
-            ret[i] = col[i] / 12.92f;
+            ret.set<i>(col.get<i>() / 12.92f);
         }
     })
-    ret[3] = col[3];
+    ret.set<3>(col[3]);
 
     return ret;
 }
@@ -625,7 +625,7 @@ float get_texture_lod(const TexStorageBase *const textures[], const uint32_t ind
     const float lod = float(FORCE_TEXTURE_LOD);
 #else
     simd_fvec2 sz;
-    textures[index >> 28]->GetFRes(index & 0x00ffffff, 0, &sz[0]);
+    textures[index >> 28]->GetFRes(index & 0x00ffffff, 0, value_ptr(sz));
     const simd_fvec2 _duv_dx = duv_dx * sz, _duv_dy = duv_dy * sz;
     const simd_fvec2 _diagonal = _duv_dx + _duv_dy;
 
@@ -644,7 +644,7 @@ float get_texture_lod(const TexStorageBase *const textures[], const uint32_t ind
     const float lod = float(FORCE_TEXTURE_LOD);
 #else
     simd_fvec2 res;
-    textures[index >> 28]->GetFRes(index & 0x00ffffff, 0, &res[0]);
+    textures[index >> 28]->GetFRes(index & 0x00ffffff, 0, value_ptr(res));
     // Find lod
     float lod = lambda + 0.5f * fast_log2(res[0] * res[1]);
     // Substruct 1 from lod to always have 4 texels for interpolation
@@ -831,34 +831,34 @@ void create_tbn_matrix(const simd_fvec4 &N, simd_fvec4 out_TBN[3]) {
     simd_fvec4 T = normalize(cross(U, N));
     U = cross(N, T);
 
-    out_TBN[0][0] = T[0];
-    out_TBN[1][0] = T[1];
-    out_TBN[2][0] = T[2];
+    out_TBN[0].set<0>(T[0]);
+    out_TBN[1].set<0>(T[1]);
+    out_TBN[2].set<0>(T[2]);
 
-    out_TBN[0][1] = U[0];
-    out_TBN[1][1] = U[1];
-    out_TBN[2][1] = U[2];
+    out_TBN[0].set<1>(U[0]);
+    out_TBN[1].set<1>(U[1]);
+    out_TBN[2].set<1>(U[2]);
 
-    out_TBN[0][2] = N[0];
-    out_TBN[1][2] = N[1];
-    out_TBN[2][2] = N[2];
+    out_TBN[0].set<2>(N[0]);
+    out_TBN[1].set<2>(N[1]);
+    out_TBN[2].set<2>(N[2]);
 }
 
 void create_tbn_matrix(const simd_fvec4 &N, simd_fvec4 &T, simd_fvec4 out_TBN[3]) {
     simd_fvec4 U = normalize(cross(T, N));
     T = cross(N, U);
 
-    out_TBN[0][0] = T[0];
-    out_TBN[1][0] = T[1];
-    out_TBN[2][0] = T[2];
+    out_TBN[0].set<0>(T[0]);
+    out_TBN[1].set<0>(T[1]);
+    out_TBN[2].set<0>(T[2]);
 
-    out_TBN[0][1] = U[0];
-    out_TBN[1][1] = U[1];
-    out_TBN[2][1] = U[2];
+    out_TBN[0].set<1>(U[0]);
+    out_TBN[1].set<1>(U[1]);
+    out_TBN[2].set<1>(U[2]);
 
-    out_TBN[0][2] = N[0];
-    out_TBN[1][2] = N[1];
-    out_TBN[2][2] = N[2];
+    out_TBN[0].set<2>(N[0]);
+    out_TBN[1].set<2>(N[1]);
+    out_TBN[2].set<2>(N[2]);
 }
 
 void create_tbn(const simd_fvec4 &N, simd_fvec4 &out_T, simd_fvec4 &out_B) {
@@ -903,42 +903,42 @@ simd_fvec4 rotate_around_axis(const simd_fvec4 &p, const simd_fvec4 &axis, const
     const float sintheta = std::sin(angle);
     simd_fvec4 r;
 
-    r[0] = ((costheta + (1.0f - costheta) * axis[0] * axis[0]) * p[0]) +
-           (((1.0f - costheta) * axis[0] * axis[1] - axis[2] * sintheta) * p[1]) +
-           (((1.0f - costheta) * axis[0] * axis[2] + axis[1] * sintheta) * p[2]);
-
-    r[1] = (((1.0f - costheta) * axis[0] * axis[1] + axis[2] * sintheta) * p[0]) +
-           ((costheta + (1.0f - costheta) * axis[1] * axis[1]) * p[1]) +
-           (((1.0f - costheta) * axis[1] * axis[2] - axis[0] * sintheta) * p[2]);
-
-    r[2] = (((1.0f - costheta) * axis[0] * axis[2] - axis[1] * sintheta) * p[0]) +
-           (((1.0f - costheta) * axis[1] * axis[2] + axis[0] * sintheta) * p[1]) +
-           ((costheta + (1.0f - costheta) * axis[2] * axis[2]) * p[2]);
-
-    r[3] = 0.0f;
+    r.set<0>(((costheta + (1.0f - costheta) * axis[0] * axis[0]) * p[0]) +
+             (((1.0f - costheta) * axis[0] * axis[1] - axis[2] * sintheta) * p[1]) +
+             (((1.0f - costheta) * axis[0] * axis[2] + axis[1] * sintheta) * p[2]));
+    r.set<1>((((1.0f - costheta) * axis[0] * axis[1] + axis[2] * sintheta) * p[0]) +
+             ((costheta + (1.0f - costheta) * axis[1] * axis[1]) * p[1]) +
+             (((1.0f - costheta) * axis[1] * axis[2] - axis[0] * sintheta) * p[2]));
+    r.set<2>((((1.0f - costheta) * axis[0] * axis[2] - axis[1] * sintheta) * p[0]) +
+             (((1.0f - costheta) * axis[1] * axis[2] + axis[0] * sintheta) * p[1]) +
+             ((costheta + (1.0f - costheta) * axis[2] * axis[2]) * p[2]));
+    r.set<3>(0.0f);
 
     return r;
 }
 
 void transpose(const simd_fvec3 in_3x3[3], simd_fvec3 out_3x3[3]) {
-    out_3x3[0][0] = in_3x3[0][0];
-    out_3x3[0][1] = in_3x3[1][0];
-    out_3x3[0][2] = in_3x3[2][0];
+    out_3x3[0].set<0>(in_3x3[0].get<0>());
+    out_3x3[0].set<1>(in_3x3[1].get<0>());
+    out_3x3[0].set<2>(in_3x3[2].get<0>());
 
-    out_3x3[1][0] = in_3x3[0][1];
-    out_3x3[1][1] = in_3x3[1][1];
-    out_3x3[1][2] = in_3x3[2][1];
+    out_3x3[1].set<0>(in_3x3[0].get<1>());
+    out_3x3[1].set<1>(in_3x3[1].get<1>());
+    out_3x3[1].set<2>(in_3x3[2].get<1>());
 
-    out_3x3[2][0] = in_3x3[0][2];
-    out_3x3[2][1] = in_3x3[1][2];
-    out_3x3[2][2] = in_3x3[2][2];
+    out_3x3[2].set<0>(in_3x3[0].get<2>());
+    out_3x3[2].set<1>(in_3x3[1].get<2>());
+    out_3x3[2].set<2>(in_3x3[2].get<2>());
 }
 
 simd_fvec3 mul(const simd_fvec3 in_mat[3], const simd_fvec3 &in_vec) {
     simd_fvec3 out_vec;
-    out_vec[0] = in_mat[0][0] * in_vec[0] + in_mat[1][0] * in_vec[1] + in_mat[2][0] * in_vec[2];
-    out_vec[1] = in_mat[0][1] * in_vec[0] + in_mat[1][1] * in_vec[1] + in_mat[2][1] * in_vec[2];
-    out_vec[2] = in_mat[0][2] * in_vec[0] + in_mat[1][2] * in_vec[1] + in_mat[2][2] * in_vec[2];
+    out_vec.set<0>(in_mat[0].get<0>() * in_vec.get<0>() + in_mat[1].get<0>() * in_vec.get<1>() +
+                   in_mat[2].get<0>() * in_vec.get<2>());
+    out_vec.set<1>(in_mat[0].get<1>() * in_vec.get<0>() + in_mat[1].get<1>() * in_vec.get<1>() +
+                   in_mat[2].get<1>() * in_vec.get<2>());
+    out_vec.set<2>(in_mat[0].get<2>() * in_vec.get<0>() + in_mat[1].get<2>() * in_vec.get<1>() +
+                   in_mat[2].get<2>() * in_vec.get<2>());
     return out_vec;
 }
 
@@ -1168,8 +1168,8 @@ void Ray::Ref::GeneratePrimaryRays(const int iteration, const camera_t &cam, con
 
                     theta += cam.lens_rotation;
 
-                    offset[0] = 0.5f * r * std::cos(theta) / cam.lens_ratio;
-                    offset[1] = 0.5f * r * std::sin(theta);
+                    offset.set<0>(0.5f * r * std::cos(theta) / cam.lens_ratio);
+                    offset.set<1>(0.5f * r * std::sin(theta));
                 }
 
                 const float coc = 0.5f * (cam.focal_length / cam.fstop);
@@ -2175,7 +2175,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_OrenDiffuse_BSDF(const simd_fvec4 &V, co
     const float is = nl * (a + b * t);
 
     simd_fvec4 diff_col = is * base_color;
-    diff_col[3] = 0.5f / PI;
+    diff_col.set<3>(0.5f / PI);
 
     return diff_col;
 }
@@ -2220,8 +2220,8 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_PrincipledDiffuse_BSDF(const simd_fvec4 
 
     const float FH = PI * schlick_weight(dot(L, H));
     diff_col += FH * sheen_color;
+    diff_col.set<3>(pdf);
 
-    diff_col[3] = pdf;
     return diff_col;
 }
 
@@ -2282,7 +2282,8 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_GGXSpecular_BSDF(const simd_fvec4 &view_
 #endif
 
     F *= std::max(reflected_dir_ts[2], 0.0f);
-    F[3] = pdf;
+    F.set<3>(pdf);
+
     return F;
 }
 
@@ -2352,7 +2353,8 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_GGXRefraction_BSDF(const simd_fvec4 &vie
 
     simd_fvec4 ret = F * refr_col;
     // ret *= (-refr_dir_ts[2]);
-    ret[3] = pdf;
+    ret.set<3>(pdf);
+
     return ret;
 }
 
@@ -2469,7 +2471,7 @@ float Ray::Ref::Evaluate_EnvQTree(const float y_rotation, const simd_fvec4 *cons
     int lod = qtree_levels - 1;
 
     simd_fvec2 p;
-    DirToCanonical(value_ptr(L), -y_rotation, &p[0]);
+    DirToCanonical(value_ptr(L), -y_rotation, value_ptr(p));
     float factor = 1.0f;
 
     while (lod >= 0) {
@@ -2534,7 +2536,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Sample_EnvQTree(const float y_rotation, const sim
         } else {
             partial = total - partial;
             assert(partial > 0.0f);
-            origin[0] += step;
+            origin.set<0>(origin.get<0>() + step);
             sample = (sample - boundary) / (1.0f - boundary);
             boundary = top_right / partial;
             index |= (1 << 0);
@@ -2543,7 +2545,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Sample_EnvQTree(const float y_rotation, const sim
         if (sample < boundary) {
             sample /= boundary;
         } else {
-            origin[1] += step;
+            origin.set<1>(origin.get<1>() + step);
             sample = (sample - boundary) / (1.0f - boundary);
             index |= (1 << 1);
         }
@@ -2561,8 +2563,8 @@ Ray::Ref::simd_fvec4 Ray::Ref::Sample_EnvQTree(const float y_rotation, const sim
     // factor = 1.0f;
 
     simd_fvec4 dir_and_pdf;
-    CanonicalToDir(value_ptr(origin), y_rotation, &dir_and_pdf[0]);
-    dir_and_pdf[3] = factor / (4.0f * PI);
+    CanonicalToDir(value_ptr(origin), y_rotation, value_ptr(dir_and_pdf));
+    dir_and_pdf.set<3>(factor / (4.0f * PI));
 
     return dir_and_pdf;
 }
@@ -2609,7 +2611,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleBilinear(const TexStorageBase *const textur
 
     const int tex = (index & 0x00ffffff);
     simd_fvec2 img_size;
-    storage.GetFRes(tex, lod, &img_size[0]);
+    storage.GetFRes(tex, lod, value_ptr(img_size));
 
     simd_fvec2 _uvs = fract(uvs);
     _uvs = _uvs * img_size - 0.5f;
@@ -2666,7 +2668,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleAnisotropic(const TexStorageBase *const tex
     const uint32_t tex = (index & 0x00ffffff);
 
     simd_fvec2 sz;
-    storage.GetFRes(tex, 0, &sz[0]);
+    storage.GetFRes(tex, 0, value_ptr(sz));
 
     const simd_fvec2 _duv_dx = abs(duv_dx * sz);
     const simd_fvec2 _duv_dy = abs(duv_dy * sz);
@@ -2702,8 +2704,8 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleAnisotropic(const TexStorageBase *const tex
     const int lod2 = int(std::ceil(lod));
 
     simd_fvec2 size1, size2;
-    storage.GetFRes(tex, lod1, &size1[0]);
-    storage.GetFRes(tex, lod2, &size2[0]);
+    storage.GetFRes(tex, lod1, value_ptr(size1));
+    storage.GetFRes(tex, lod2, value_ptr(size2));
 
     const float kz = fract(lod);
 
@@ -2739,7 +2741,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleLatlong_RGBE(const TexStorageRGBA &storage,
 
     const int tex = (index & 0x00ffffff);
     simd_fvec2 size;
-    storage.GetFRes(tex, 0, &size[0]);
+    storage.GetFRes(tex, 0, value_ptr(size));
 
     simd_fvec2 uvs = simd_fvec2{u, theta} * size;
     const simd_ivec2 iuvs = simd_ivec2(uvs);
@@ -2933,9 +2935,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::IntersectScene(const shadow_ray_t &r, const int m
                 stack[stack_size++] = {mat->textures[MIX_MAT1], weight * (1.0f - mix_val)};
                 stack[stack_size++] = {mat->textures[MIX_MAT2], weight * mix_val};
             } else if (mat->type == TransparentNode) {
-                throughput[0] += weight * mat->base_color[0];
-                throughput[1] += weight * mat->base_color[1];
-                throughput[2] += weight * mat->base_color[2];
+                throughput += weight * simd_fvec4{mat->base_color[0], mat->base_color[1], mat->base_color[2], 0.0f};
             }
         }
 
@@ -3146,8 +3146,8 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, co
                 theta = 0.5f * PI - 0.25f * PI * (offset[0] / offset[1]);
             }
 
-            offset[0] = 0.5f * r * std::cos(theta);
-            offset[1] = 0.5f * r * std::sin(theta);
+            offset.set(0, 0.5f * r * std::cos(theta));
+            offset.set(1, 0.5f * r * std::sin(theta));
         }
 
         const simd_fvec4 lp = light_pos + light_u * offset[0] + light_v * offset[1];
@@ -3434,7 +3434,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
         env_col *= (ray.depth & 0x00ffffff)
                        ? simd_fvec4{sc.env->env_col[0], sc.env->env_col[1], sc.env->env_col[2], 1.0f}
                        : simd_fvec4{sc.env->back_col[0], sc.env->back_col[1], sc.env->back_col[2], 1.0f};
-        env_col[3] = 1.0f;
+        env_col.set<3>(1.0f);
 
         return Ray::pixel_color_t{ray.c[0] * env_col[0], ray.c[1] * env_col[1], ray.c[2] * env_col[2], env_col[3]};
     }
@@ -3633,9 +3633,9 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
     if (mat->textures[NORMALS_TEXTURE] != 0xffffffff) {
         simd_fvec4 normals = SampleBilinear(textures, mat->textures[NORMALS_TEXTURE], uvs, 0);
         normals = normals * 2.0f - 1.0f;
-        normals[2] = 1.0f;
+        normals.set<2>(1.0f);
         if (mat->textures[NORMALS_TEXTURE] & TEX_RECONSTRUCT_Z_BIT) {
-            normals[2] = safe_sqrt(1.0f - normals[0] * normals[0] - normals[1] * normals[1]);
+            normals.set<2>(safe_sqrt(1.0f - normals[0] * normals[0] - normals[1] * normals[1]));
         }
         simd_fvec4 in_normal = N;
         N = normalize(normals[0] * T + normals[2] * N + normals[1] * B);
@@ -4141,7 +4141,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
                 simd_fvec4 V;
                 simd_fvec4 F = Sample_GGXSpecular_BSDF(T, B, N, I, roughness, unpack_unorm_16(mat->anisotropic_unorm),
                                                        spec_ior, spec_F0, spec_tmp_col, rand_u, rand_v, V);
-                F[3] *= specular_weight;
+                F.set<3>(F.get<3>() * specular_weight);
 
                 new_ray.depth = ray.depth + 0x00000100;
 
@@ -4173,7 +4173,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
                 simd_fvec4 V;
                 simd_fvec4 F = Sample_PrincipledClearcoat_BSDF(T, B, N, I, clearcoat_roughness2, clearcoat_ior,
                                                                clearcoat_F0, rand_u, rand_v, V);
-                F[3] *= clearcoat_weight;
+                F.set<3>(F.get<3>() * clearcoat_weight);
 
                 new_ray.depth = ray.depth + 0x00000100;
 
@@ -4251,7 +4251,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
 #endif
                 }
 
-                F[3] *= refraction_weight;
+                F.set<3>(F.get<3>() * refraction_weight);
 
                 new_ray.c[0] = ray.c[0] * F[0] * safe_div_pos(mix_weight, F[3]);
                 new_ray.c[1] = ray.c[1] * F[1] * safe_div_pos(mix_weight, F[3]);

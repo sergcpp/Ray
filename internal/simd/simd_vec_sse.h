@@ -1,4 +1,4 @@
-//#pragma once
+// #pragma once
 
 #include <type_traits>
 
@@ -40,10 +40,11 @@ template <> class simd_vec<float, 4> {
     force_inline explicit simd_vec(const float *f) { vec_ = _mm_loadu_ps(f); }
     force_inline simd_vec(const float *f, simd_mem_aligned_tag) { vec_ = _mm_load_ps(f); }
 
-    force_inline float &operator[](const int i) { return comp_[i]; }
     force_inline float operator[](const int i) const { return comp_[i]; }
 
     template <int i> force_inline float get() const { return comp_[i]; }
+    template <int i> force_inline void set(const float f) { comp_[i] = f; }
+    force_inline void set(const int i, const float f) { comp_[i] = f; }
 
     force_inline simd_vec<float, 4> &operator+=(const simd_vec<float, 4> &rhs) {
         vec_ = _mm_add_ps(vec_, rhs.vec_);
@@ -433,6 +434,7 @@ template <> class simd_vec<float, 4> {
     friend force_inline simd_vec<float, 4> normalize(const simd_vec<float, 4> &v1) { return v1 / v1.length(); }
 
     friend force_inline const float *value_ptr(const simd_vec<float, 4> &v1) { return &v1.comp_[0]; }
+    friend force_inline float *value_ptr(simd_vec<float, 4> &v1) { return &v1.comp_[0]; }
 
     static int size() { return 4; }
     static bool is_native() { return true; }
@@ -453,11 +455,11 @@ template <> class simd_vec<int, 4> {
     force_inline explicit simd_vec(const int *f) { vec_ = _mm_loadu_si128((const __m128i *)f); }
     force_inline simd_vec(const int *f, simd_mem_aligned_tag) { vec_ = _mm_load_si128((const __m128i *)f); }
 
-    force_inline int &operator[](const int i) { return comp_[i]; }
     force_inline int operator[](const int i) const { return comp_[i]; }
 
     template <int i> force_inline int get() const { return comp_[i]; }
-    template <int i> force_inline void set(const float f) const { comp_[i] = f; }
+    template <int i> force_inline void set(const int f) { comp_[i] = f; }
+    force_inline void set(const int i, const int f) { comp_[i] = f; }
 
     force_inline simd_vec<int, 4> &operator+=(const simd_vec<int, 4> &rhs) {
         vec_ = _mm_add_epi32(vec_, rhs.vec_);
@@ -831,7 +833,7 @@ template <> class simd_vec<int, 4> {
         return ret;
     }
 
-    friend force_inline simd_vec<int, 4> srai(const simd_vec<int, 4>& v1, int v2) {
+    friend force_inline simd_vec<int, 4> srai(const simd_vec<int, 4> &v1, int v2) {
         simd_vec<int, 4> ret;
         ret.vec_ = _mm_srai_epi32(v1.vec_, v2);
         return ret;

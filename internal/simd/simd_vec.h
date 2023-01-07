@@ -143,10 +143,11 @@ template <typename T, int S> class simd_vec {
     force_inline explicit simd_vec(const T *f) { memcpy(&comp_, f, S * sizeof(T)); }
     force_inline simd_vec(const T *f, simd_mem_aligned_tag) { memcpy(&comp_, f, S * sizeof(T)); }
 
-    force_inline T &operator[](const int i) { return comp_[i]; }
     force_inline T operator[](const int i) const { return comp_[i]; }
 
     template <int i> force_inline T get() const { return comp_[i]; }
+    template <int i> force_inline void set(const T f) { comp_[i] = f; }
+    force_inline void set(const int i, const T f) { comp_[i] = f; }
 
     force_inline simd_vec<T, S> &operator+=(const simd_vec<T, S> &rhs) {
         ITERATE(S, { comp_[i] += rhs.comp_[i]; })
@@ -323,25 +324,25 @@ template <typename T, int S> class simd_vec {
 
     force_inline explicit operator simd_vec<int, S>() const {
         simd_vec<int, S> ret;
-        ITERATE(S, { ret.comp_[i] = (int)comp_[i]; })
+        ITERATE(S, { ret.comp_[i] = int(comp_[i]); })
         return ret;
     }
 
     force_inline explicit operator simd_vec<float, S>() const {
         simd_vec<float, S> ret;
-        ITERATE(S, { ret.comp_[i] = (float)comp_[i]; })
+        ITERATE(S, { ret.comp_[i] = float(comp_[i]); })
         return ret;
     }
 
     force_inline simd_vec<T, S> sqrt() const {
         simd_vec<T, S> temp;
-        ITERATE(S, { temp[i] = std::sqrt(comp_[i]); })
+        ITERATE(S, { temp.set<i>(std::sqrt(comp_[i])); })
         return temp;
     }
 
     force_inline simd_vec<T, S> log() const {
         simd_vec<T, S> temp;
-        ITERATE(S, { temp[i] = std::log(comp_[i]); })
+        ITERATE(S, { temp.set<i>(std::log(comp_[i])); })
         return temp;
     }
 
@@ -470,15 +471,15 @@ template <typename T, int S> class simd_vec {
 
     force_inline static simd_vec<float, S> floor(const simd_vec<float, S> &v1) {
         simd_vec<float, S> temp;
-        ITERATE(S, { temp.comp_[i] = (float)((int)v1.comp_[i] - (v1.comp_[i] < 0.0f)); })
+        ITERATE(S, { temp.comp_[i] = float(int(v1.comp_[i]) - (v1.comp_[i] < 0.0f)); })
         return temp;
     }
 
     force_inline static simd_vec<float, S> ceil(const simd_vec<float, S> &v1) {
         simd_vec<float, S> temp;
         ITERATE(S, {
-            int _v = (int)v1.comp_[i];
-            temp.comp_[i] = (float)(_v + (v1.comp_[i] != _v));
+            int _v = int(v1.comp_[i]);
+            temp.comp_[i] = float(_v + (v1.comp_[i] != _v));
         })
         return temp;
     }
@@ -653,6 +654,7 @@ template <typename T, int S> class simd_vec {
     }
 
     friend force_inline const T *value_ptr(const simd_vec<T, S> &v1) { return &v1.comp_[0]; }
+    friend force_inline T *value_ptr(simd_vec<T, S> &v1) { return &v1.comp_[0]; }
 
     static int size() { return S; }
     static bool is_native() { return false; }
@@ -731,7 +733,7 @@ force_inline simd_vec<T, S> fmsub(const simd_vec<T, S> &a, const float b, const 
 template <int Scale = 1, typename T, int S>
 force_inline simd_vec<T, S> gather(const T *base_addr, const simd_vec<int, S> &vindex) {
     simd_vec<T, S> res;
-    ITERATE(S, { res[i] = base_addr[vindex[i] * Scale]; });
+    ITERATE(S, { res.template set<i>(base_addr[vindex[i] * Scale]); });
     return res;
 }
 
