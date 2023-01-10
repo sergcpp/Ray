@@ -321,7 +321,7 @@ bool Ray::Vk::Context::ChooseVkPhysicalDevice(VkPhysicalDevice &physical_device,
     SmallVector<VkPhysicalDevice, 4> physical_devices(physical_device_count);
     vkEnumeratePhysicalDevices(instance, &physical_device_count, &physical_devices[0]);
 
-    int best_device = -1, best_score = 0;
+    int best_score = 0;
 
     for (uint32_t i = 0; i < physical_device_count; i++) {
         VkPhysicalDeviceProperties device_properties = {};
@@ -399,7 +399,6 @@ bool Ray::Vk::Context::ChooseVkPhysicalDevice(VkPhysicalDevice &physical_device,
             }
 
             if (score > best_score) {
-                best_device = int(i);
                 best_score = score;
 
                 physical_device = physical_devices[i];

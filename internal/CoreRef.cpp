@@ -1193,6 +1193,9 @@ void Ray::Ref::GeneratePrimaryRays(const int iteration, const camera_t &cam, con
                 out_r.dd_dx[j] = _dx[j] - _d[j];
                 out_r.do_dy[j] = 0;
                 out_r.dd_dy[j] = _dy[j] - _d[j];
+#else
+                unused(_dx);
+                unused(_dy);
 #endif
             }
 
@@ -2045,8 +2048,6 @@ bool Ray::Ref::Traverse_MicroTree_WithStack_AnyHit(const float ro[3], const floa
                                                    const mbvh_node_t *nodes, const uint32_t root_index,
                                                    const tri_accel_t *tris, const tri_mat_data_t *materials,
                                                    const uint32_t *tri_indices, int obj_index, hit_data_t &inter) {
-    bool res = false;
-
     TraversalStack<MAX_STACK_SIZE> st;
     st.push(root_index, 0.0f);
 
@@ -2901,8 +2902,6 @@ Ray::Ref::simd_fvec4 Ray::Ref::IntersectScene(const shadow_ray_t &r, const int m
         const uint32_t mat_index = is_backfacing ? (sc.tri_materials[tri_index].back_mi & MATERIAL_INDEX_BITS)
                                                  : (sc.tri_materials[tri_index].front_mi & MATERIAL_INDEX_BITS);
 
-        const transform_t *tr = &sc.transforms[sc.mesh_instances[inter.obj_index].tr_index];
-
         const vertex_t &v1 = sc.vertices[sc.vtx_indices[tri_index * 3 + 0]];
         const vertex_t &v2 = sc.vertices[sc.vtx_indices[tri_index * 3 + 1]];
         const vertex_t &v3 = sc.vertices[sc.vtx_indices[tri_index * 3 + 2]];
@@ -3458,10 +3457,6 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
             const auto light_pos = simd_fvec4{l.sph.pos[0], l.sph.pos[1], l.sph.pos[2], 0.0f};
             const float light_area = l.sph.area;
 
-            const simd_fvec4 op = light_pos - simd_fvec4{ray.o[0], ray.o[1], ray.o[2], 0.0f};
-            const float b = dot(op, simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f});
-            const float det = std::sqrt(b * b - dot(op, op) + l.sph.radius * l.sph.radius);
-
             const float cos_theta = dot(simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f}, normalize(light_pos - P));
 
             const float light_pdf = (inter.t * inter.t) / (0.5f * light_area * cos_theta);
@@ -3480,7 +3475,6 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
                 }
             }
         } else if (l.type == LIGHT_TYPE_RECT) {
-            const auto light_pos = simd_fvec4{l.rect.pos[0], l.rect.pos[1], l.rect.pos[2], 0.0f};
             simd_fvec4 light_u = simd_fvec4{l.rect.u[0], l.rect.u[1], l.rect.u[2], 0.0f};
             simd_fvec4 light_v = simd_fvec4{l.rect.v[0], l.rect.v[1], l.rect.v[2], 0.0f};
 
@@ -3495,7 +3489,6 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
             const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
             lcol *= mis_weight;
         } else if (l.type == LIGHT_TYPE_DISK) {
-            const auto light_pos = simd_fvec4{l.disk.pos[0], l.disk.pos[1], l.disk.pos[2], 0.0f};
             simd_fvec4 light_u = simd_fvec4{l.disk.u[0], l.disk.u[1], l.disk.u[2], 0.0f};
             simd_fvec4 light_v = simd_fvec4{l.disk.v[0], l.disk.v[1], l.disk.v[2], 0.0f};
 
@@ -3673,8 +3666,6 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
     }
     const float N_dot_L = dot(N, ls.L);
 #endif
-
-    const float mat_ior = is_backfacing ? mat->ext_ior : mat->int_ior;
 
     // sample base texture
     simd_fvec4 base_color = simd_fvec4{mat->base_color[0], mat->base_color[1], mat->base_color[2], 1.0f};
@@ -3920,6 +3911,8 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
                    3 * sizeof(float));
             memcpy(&new_ray.dd_dy[0], value_ptr(eta * surf_der.dd_dy - (m * surf_der.dndy + dmdy * plane_N)),
                    3 * sizeof(float));
+#else
+            unused(m);
 #endif
         }
     } else if (mat->type == EmissiveNode) {
@@ -4248,6 +4241,8 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
                            3 * sizeof(float));
                     memcpy(&new_ray.dd_dy[0], value_ptr(eta * surf_der.dd_dy - (m * surf_der.dndy + dmdy * plane_N)),
                            3 * sizeof(float));
+#else
+                    unused(m);
 #endif
                 }
 
