@@ -112,7 +112,7 @@ class Texture2D {
     Texture2D(const char *name, Context *ctx, const Tex2DParams &params, MemoryAllocators *mem_allocs, ILog *log);
     Texture2D(const char *name, Context *ctx, const VkImage img, const VkImageView view, const VkSampler sampler,
               const Tex2DParams &_params, ILog *log)
-        : handle_{img, view, VK_NULL_HANDLE, sampler, 0}, params(_params), ready_(true), name_(name) {}
+        : handle_{img, view, VK_NULL_HANDLE, sampler, 0}, ready_(true), name_(name), params(_params) {}
     Texture2D(const char *name, Context *ctx, const void *data, const uint32_t size, const Tex2DParams &p,
               Buffer &stage_buf, void *_cmd_buf, MemoryAllocators *mem_allocs, eTexLoadStatus *load_status, ILog *log);
     Texture2D(const char *name, Context *ctx, const void *data[6], const int size[6], const Tex2DParams &p,

@@ -54,6 +54,7 @@ Ray::Vk::Scene::Scene(Context *ctx, const bool use_hwrt, const bool use_bindless
       nodes_(ctx), tris_(ctx), tri_indices_(ctx), tri_materials_(ctx), transforms_(ctx, "Transforms"),
       meshes_(ctx, "Meshes"), mesh_instances_(ctx, "Mesh Instances"), mi_indices_(ctx), vertices_(ctx),
       vtx_indices_(ctx), materials_(ctx, "Materials"), atlas_textures_(ctx, "Atlas Textures"),
+      bindless_tex_data_{ctx},
       tex_atlases_{{ctx, eTexFormat::RawRGBA8888, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
                    {ctx, eTexFormat::RawRGB888, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
                    {ctx, eTexFormat::RawRG88, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
@@ -61,7 +62,7 @@ Ray::Vk::Scene::Scene(Context *ctx, const bool use_hwrt, const bool use_bindless
                    {ctx, eTexFormat::BC3, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
                    {ctx, eTexFormat::BC4, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
                    {ctx, eTexFormat::BC5, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE}},
-      bindless_tex_data_{ctx}, lights_(ctx, "Lights"), li_indices_(ctx), visible_lights_(ctx) {}
+      lights_(ctx, "Lights"), li_indices_(ctx), visible_lights_(ctx) {}
 
 Ray::Vk::Scene::~Scene() {
     bindless_textures_.clear();
@@ -233,7 +234,6 @@ uint32_t Ray::Vk::Scene::AddBindlessTexture(const tex_desc_t &_t) {
     bool recostruct_z = false, is_YCoCg = false;
 
     if (_t.format == eTextureFormat::RGBA8888) {
-        const auto *rgba_data = reinterpret_cast<const color_rgba8_t *>(_t.data);
         if (!_t.is_normalmap) {
             src_fmt = fmt = eTexFormat::RawRGBA8888;
             data_size[0] = _t.w * _t.h * 4;
