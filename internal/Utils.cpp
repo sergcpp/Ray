@@ -532,9 +532,9 @@ void Ray::ReorderTriangleIndices(const uint32_t *indices, const uint32_t indices
         std::unique_ptr<int32_t[]> tris;
     };
 
-    const int MaxSizeVertexCache = 32;
+    static const int MaxSizeVertexCache = 32;
 
-    auto get_vertex_score = [MaxSizeVertexCache](int32_t cache_pos, uint32_t active_tris_count) -> float {
+    auto get_vertex_score = [](int32_t cache_pos, uint32_t active_tris_count) -> float {
         const float CacheDecayPower = 1.5f;
         const float LastTriScore = 0.75f;
         const float ValenceBoostScale = 2.0f;
