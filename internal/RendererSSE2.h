@@ -51,17 +51,16 @@ extern template bool Traverse_MicroTree_WithStack_ClosestHit<RayPacketSize>(
     const simd_ivec<RayPacketSize> &ray_mask, const bvh_node_t *nodes, uint32_t node_index, const tri_accel_t *tris,
     const uint32_t *tri_indices, int obj_index, hit_data_t<RayPacketSize> &inter);
 extern template bool Traverse_MicroTree_WithStack_ClosestHit<RayPacketSize>(
-    const float ro[3], const float rd[3], int i, const mbvh_node_t *oct_nodes, uint32_t node_index,
-    const mtri_accel_t *mtris, const uint32_t *tri_indices, int obj_index, hit_data_t<RayPacketSize> &inter);
+    const float ro[3], const float rd[3], const mbvh_node_t *mnodes, uint32_t node_index, const mtri_accel_t *mtris,
+    const uint32_t *tri_indices, int &inter_prim_index, float &inter_t, float &inter_u, float &inter_v);
 extern template simd_ivec<RayPacketSize> Traverse_MicroTree_WithStack_AnyHit<RayPacketSize>(
     const simd_fvec<RayPacketSize> ro[3], const simd_fvec<RayPacketSize> rd[3],
     const simd_ivec<RayPacketSize> &ray_mask, const bvh_node_t *nodes, uint32_t node_index, const tri_accel_t *tris,
     const tri_mat_data_t *materials, const uint32_t *tri_indices, int obj_index, hit_data_t<RayPacketSize> &inter);
-extern template bool Traverse_MicroTree_WithStack_AnyHit(const float ro[3], const float rd[3], int i,
-                                                         const mbvh_node_t *oct_nodes, uint32_t node_index,
-                                                         const mtri_accel_t *mtris, const tri_mat_data_t *materials,
-                                                         const uint32_t *tri_indices, int obj_index,
-                                                         hit_data_t<RayPacketSize> &inter);
+extern template int Traverse_MicroTree_WithStack_AnyHit<RayPacketSize>(
+    const float ro[3], const float rd[3], const mbvh_node_t *mnodes, uint32_t node_index, const mtri_accel_t *mtris,
+    const tri_mat_data_t *materials, const uint32_t *tri_indices, int &inter_prim_index, float &inter_t, float &inter_u,
+    float &inter_v);
 
 extern template void SampleNearest<RayPacketSize>(const Ref::TexStorageBase *const textures[], uint32_t index,
                                                   const simd_fvec<RayPacketSize> uvs[2],

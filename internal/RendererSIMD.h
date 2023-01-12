@@ -251,41 +251,45 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
     p.shadow_masks.resize(p.primary_rays.size());
     int secondary_rays_count = 0, shadow_rays_count = 0;
 
-    for (size_t i = 0; i < p.intersections.size(); i++) {
-        const ray_data_t<S> &r = p.primary_rays[i];
-        const hit_data_t<S> &inter = p.intersections[i];
+    for (size_t ri = 0; ri < p.intersections.size(); ri++) {
+        const ray_data_t<S> &r = p.primary_rays[ri];
+        const hit_data_t<S> &inter = p.intersections[ri];
 
         const simd_ivec<S> x = r.xy >> 16, y = r.xy & 0x0000FFFF;
 
-        p.secondary_masks[i] = {0};
+        p.secondary_masks[ri] = {0};
 
         simd_fvec<S> out_rgba[4] = {0.0f};
         NS::ShadeSurface(cam.pass_settings, &region.halton_seq[hi + RAND_DIM_BASE_COUNT], inter, r, sc_data,
                          macro_tree_root, s->tex_storages_, out_rgba, p.secondary_masks.data(), p.secondary_rays.data(),
                          &secondary_rays_count, p.shadow_masks.data(), p.shadow_rays.data(), &shadow_rays_count);
-        for (int j = 0; j < S; j++) {
-            if (!p.primary_masks[i][j]) {
-                continue;
+
+        // TODO: vectorize this
+        ITERATE(S, {
+            if (p.primary_masks[ri].template get<i>()) {
+                temp_buf_.SetPixel(x.template get<i>(), y.template get<i>(),
+                                   {out_rgba[0].template get<i>(), out_rgba[1].template get<i>(),
+                                    out_rgba[2].template get<i>(), out_rgba[3].template get<i>()});
             }
-            temp_buf_.SetPixel(x[j], y[j], {out_rgba[0][j], out_rgba[1][j], out_rgba[2][j], out_rgba[3][j]});
-        }
+        })
     }
 
-    for (int i = 0; i < shadow_rays_count; ++i) {
-        const shadow_ray_t<S> &sh_r = p.shadow_rays[i];
+    for (int ri = 0; ri < shadow_rays_count; ++ri) {
+        const shadow_ray_t<S> &sh_r = p.shadow_rays[ri];
 
         const simd_ivec<S> x = sh_r.xy >> 16, y = sh_r.xy & 0x0000FFFF;
 
         simd_fvec<S> rc[3];
-        NS::IntersectScene(sh_r, p.shadow_masks[i], cam.pass_settings.max_transp_depth, sc_data, macro_tree_root,
+        NS::IntersectScene(sh_r, p.shadow_masks[ri], cam.pass_settings.max_transp_depth, sc_data, macro_tree_root,
                            s->tex_storages_, rc);
 
-        for (int j = 0; j < S; j++) {
-            if (!p.shadow_masks[i][j]) {
-                continue;
+        // TODO: vectorize this
+        ITERATE(S, {
+            if (p.shadow_masks[ri].template get<i>()) {
+                temp_buf_.AddPixel(x.template get<i>(), y.template get<i>(),
+                                   {rc[0].template get<i>(), rc[1].template get<i>(), rc[2].template get<i>(), 0.0f});
             }
-            temp_buf_.AddPixel(x[j], y[j], {rc[0][j], rc[1][j], rc[2][j], 0.0f});
-        }
+        })
     }
 
     const auto time_after_prim_shade = std::chrono::high_resolution_clock::now();
@@ -346,9 +350,9 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
         std::swap(p.primary_rays, p.secondary_rays);
         std::swap(p.primary_masks, p.secondary_masks);
 
-        for (int i = 0; i < rays_count; i++) {
-            const ray_data_t<S> &r = p.primary_rays[i];
-            const hit_data_t<S> &inter = p.intersections[i];
+        for (int ri = 0; ri < rays_count; ri++) {
+            const ray_data_t<S> &r = p.primary_rays[ri];
+            const hit_data_t<S> &inter = p.intersections[ri];
 
             const simd_ivec<S> x = r.xy >> 16, y = r.xy & 0x0000FFFF;
 
@@ -358,29 +362,33 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
                              p.secondary_rays.data(), &secondary_rays_count, p.shadow_masks.data(),
                              p.shadow_rays.data(), &shadow_rays_count);
 
-            for (int j = 0; j < S; j++) {
-                if (!p.primary_masks[i][j]) {
-                    continue;
+            // TODO: vectorize this
+            ITERATE(S, {
+                if (p.primary_masks[ri].template get<i>()) {
+                    temp_buf_.AddPixel(x.template get<i>(), y.template get<i>(),
+                                       {out_rgba[0].template get<i>(), out_rgba[1].template get<i>(),
+                                        out_rgba[2].template get<i>(), out_rgba[3].template get<i>()});
                 }
-                temp_buf_.AddPixel(x[j], y[j], {out_rgba[0][j], out_rgba[1][j], out_rgba[2][j], out_rgba[3][j]});
-            }
+            })
         }
 
-        for (int i = 0; i < shadow_rays_count; ++i) {
-            const shadow_ray_t<S> &sh_r = p.shadow_rays[i];
+        for (int ri = 0; ri < shadow_rays_count; ++ri) {
+            const shadow_ray_t<S> &sh_r = p.shadow_rays[ri];
 
             const simd_ivec<S> x = sh_r.xy >> 16, y = sh_r.xy & 0x0000FFFF;
 
             simd_fvec<S> rc[3];
-            IntersectScene(sh_r, p.shadow_masks[i], cam.pass_settings.max_transp_depth, sc_data, macro_tree_root,
+            IntersectScene(sh_r, p.shadow_masks[ri], cam.pass_settings.max_transp_depth, sc_data, macro_tree_root,
                            s->tex_storages_, rc);
 
-            for (int j = 0; j < S; j++) {
-                if (!p.shadow_masks[i][j]) {
-                    continue;
+            // TODO: vectorize this
+            ITERATE(S, {
+                if (p.shadow_masks[ri].template get<i>()) {
+                    temp_buf_.AddPixel(
+                        x.template get<i>(), y.template get<i>(),
+                        {rc[0].template get<i>(), rc[1].template get<i>(), rc[2].template get<i>(), 0.0f});
                 }
-                temp_buf_.AddPixel(x[j], y[j], {rc[0][j], rc[1][j], rc[2][j], 0.0f});
-            }
+            })
         }
 
         auto time_secondary_shade_end = std::chrono::high_resolution_clock::now();

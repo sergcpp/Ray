@@ -228,6 +228,7 @@ template <> class simd_vec<float, 8> {
 #endif
 
     friend force_inline const float *value_ptr(const simd_vec<float, 8> &v1) { return &v1.comp_[0]; }
+    friend force_inline float *value_ptr(simd_vec<float, 8> &v1) { return &v1.comp_[0]; }
 
     static int size() { return 8; }
     static bool is_native() { return true; }
@@ -775,6 +776,9 @@ template <> class simd_vec<int, 8> {
     template <int Scale>
     friend force_inline simd_vec<int, 8> gather(const int *base_addr, const simd_vec<int, 8> &vindex);
 #endif
+
+    friend force_inline const int *value_ptr(const simd_vec<int, 8> &v1) { return &v1.comp_[0]; }
+    friend force_inline int *value_ptr(simd_vec<int, 8> &v1) { return &v1.comp_[0]; }
 
     static int size() { return 8; }
     static bool is_native() {

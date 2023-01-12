@@ -1,4 +1,4 @@
-//#pragma once
+// #pragma once
 
 #include "simd_vec_avx.h"
 
@@ -7,14 +7,14 @@
 #ifdef __GNUC__
 #pragma GCC push_options
 #pragma GCC target("avx512f", "avx512bw", "avx512dq")
-#pragma clang attribute push (__attribute__((target("avx512f,avx512bw,avx512dq"))), apply_to=function)
+#pragma clang attribute push(__attribute__((target("avx512f,avx512bw,avx512dq"))), apply_to = function)
 #endif
 
 #define _mm512_cmp_ps(a, b, c) _mm512_castsi512_ps(_mm512_movm_epi32(_mm512_cmp_ps_mask(a, b, c)))
 
 #define _mm512_blendv_ps(a, b, m)                                                                                      \
-    _mm512_castsi512_ps(_mm512_ternarylogic_epi32(_mm512_castps_si512(a), _mm512_castps_si512(b),                                 \
-                                       _mm512_srai_epi32(_mm512_castps_si512(m), 31), 0xd8))
+    _mm512_castsi512_ps(_mm512_ternarylogic_epi32(_mm512_castps_si512(a), _mm512_castps_si512(b),                      \
+                                                  _mm512_srai_epi32(_mm512_castps_si512(m), 31), 0xd8))
 
 #define _mm512_movemask_epi32(a)                                                                                       \
     (int)_mm512_cmpneq_epi32_mask(_mm512_setzero_si512(), _mm512_and_si512(_mm512_set1_epi32(0x80000000U), a))
@@ -142,7 +142,7 @@ template <> class simd_vec<float, 16> {
 #endif
         //__mmask16 msk =
         //    _mm512_fpclass_ps_mask(mask.vec_, 0x54); // 0x54 = Negative_Finite | Negative_Infinity | Negative_Zero
-        //vec_ = _mm512_mask_blend_ps(msk, vec_, v1.vec_);
+        // vec_ = _mm512_mask_blend_ps(msk, vec_, v1.vec_);
         vec_ = _mm512_blendv_ps(vec_, v1.vec_, mask.vec_);
     }
 
@@ -155,7 +155,7 @@ template <> class simd_vec<float, 16> {
 #endif
         //__mmask16 msk =
         //    _mm512_fpclass_ps_mask(mask.vec_, 0x54); // 0x54 = Negative_Finite | Negative_Infinity | Negative_Zero
-        //vec_ = _mm512_mask_blend_ps(msk, v1.vec_, vec_);
+        // vec_ = _mm512_mask_blend_ps(msk, v1.vec_, vec_);
         vec_ = _mm512_blendv_ps(v1.vec_, vec_, mask.vec_);
     }
 
@@ -207,18 +207,21 @@ template <> class simd_vec<float, 16> {
 
     friend force_inline simd_vec<float, 16> fmadd(const simd_vec<float, 16> &a, const simd_vec<float, 16> &b,
                                                   const simd_vec<float, 16> &c);
-    friend force_inline simd_vec<float, 16> fmadd(const simd_vec<float, 16> &a, const float b, const simd_vec<float, 16> &c);
+    friend force_inline simd_vec<float, 16> fmadd(const simd_vec<float, 16> &a, const float b,
+                                                  const simd_vec<float, 16> &c);
     friend force_inline simd_vec<float, 16> fmadd(const float a, const simd_vec<float, 16> &b, const float c);
 
     friend force_inline simd_vec<float, 16> fmsub(const simd_vec<float, 16> &a, const simd_vec<float, 16> &b,
                                                   const simd_vec<float, 16> &c);
-    friend force_inline simd_vec<float, 16> fmsub(const simd_vec<float, 16> &a, const float b, const simd_vec<float, 16> &c);
+    friend force_inline simd_vec<float, 16> fmsub(const simd_vec<float, 16> &a, const float b,
+                                                  const simd_vec<float, 16> &c);
     friend force_inline simd_vec<float, 16> fmsub(const float a, const simd_vec<float, 16> &b, const float c);
 
     template <int Scale>
     friend force_inline simd_vec<float, 16> gather(const float *base_addr, const simd_vec<int, 16> &vindex);
 
     friend force_inline const float *value_ptr(const simd_vec<float, 16> &v1) { return &v1.comp_[0]; }
+    friend force_inline float *value_ptr(simd_vec<float, 16> &v1) { return &v1.comp_[0]; }
 
     static int size() { return 16; }
     static bool is_native() { return true; }
@@ -319,9 +322,8 @@ template <> class simd_vec<int, 16> {
 
     force_inline simd_vec<int, 16> operator!=(int rhs) const {
         simd_vec<int, 16> ret;
-        ret.vec_ = 
-            _mm512_andnot_si512(_mm512_movm_epi32(_mm512_cmpeq_epi32_mask(vec_, _mm512_set1_epi32(rhs))),
-                                                        _mm512_set1_epi32(~0));
+        ret.vec_ = _mm512_andnot_si512(_mm512_movm_epi32(_mm512_cmpeq_epi32_mask(vec_, _mm512_set1_epi32(rhs))),
+                                       _mm512_set1_epi32(~0));
         return ret;
     }
 
@@ -365,20 +367,15 @@ template <> class simd_vec<int, 16> {
         vec_ = _mm512_ternarylogic_epi32(v1.vec_, vec_, _mm512_srai_epi32(mask.vec_, 31), 0xd8);
     }
 
-    force_inline int movemask() const { return _mm512_movemask_epi32(vec_);
-    }
+    force_inline int movemask() const { return _mm512_movemask_epi32(vec_); }
 
-    force_inline bool all_zeros() const {
-        return _mm512_cmpeq_epi32_mask(vec_, _mm512_setzero_si512()) == 0xFFFF;
-    }
+    force_inline bool all_zeros() const { return _mm512_cmpeq_epi32_mask(vec_, _mm512_setzero_si512()) == 0xFFFF; }
 
     force_inline bool all_zeros(const simd_vec<int, 16> &mask) const {
         return _mm512_cmpeq_epi32_mask(_mm512_and_si512(vec_, mask.vec_), _mm512_setzero_si512()) == 0xFFFF;
     }
 
-    force_inline bool not_all_zeros() const {
-        return !all_zeros();
-    }
+    force_inline bool not_all_zeros() const { return !all_zeros(); }
 
     force_inline static simd_vec<int, 16> min(const simd_vec<int, 16> &v1, const simd_vec<int, 16> &v2) {
         simd_vec<int, 16> temp;
@@ -575,10 +572,11 @@ template <> class simd_vec<int, 16> {
     template <int Scale>
     friend force_inline simd_vec<int, 16> gather(const int *base_addr, const simd_vec<int, 16> &vindex);
 
+    friend force_inline const int *value_ptr(const simd_vec<int, 16> &v1) { return &v1.comp_[0]; }
+    friend force_inline int *value_ptr(simd_vec<int, 16> &v1) { return &v1.comp_[0]; }
+
     static int size() { return 16; }
-    static bool is_native() {
-        return true;
-    }
+    static bool is_native() { return true; }
 };
 
 force_inline simd_vec<float, 16> simd_vec<float, 16>::operator~() const {
@@ -858,8 +856,7 @@ force_inline simd_vec<float, 16> fmsub(const float a, const simd_vec<float, 16> 
     return ret;
 }
 
-template <int Scale>
-force_inline simd_vec<float, 16> gather(const float *base_addr, const simd_vec<int, 16> &vindex) {
+template <int Scale> force_inline simd_vec<float, 16> gather(const float *base_addr, const simd_vec<int, 16> &vindex) {
     simd_vec<float, 16> ret;
     ret.vec_ = _mm512_i32gather_ps(vindex.vec_, base_addr, Scale * sizeof(float));
     return ret;
