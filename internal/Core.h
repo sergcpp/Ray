@@ -11,9 +11,11 @@
 
 #ifdef __GNUC__
 #define force_inline __attribute__((always_inline)) inline
+#define assume_aligned(ptr, sz) (__builtin_assume_aligned((const void *)ptr, sz))
 #endif
 #ifdef _MSC_VER
 #define force_inline __forceinline
+#define assume_aligned(ptr, sz) (__assume((((const char *)ptr) - ((const char *)0)) % (sz) == 0), (ptr))
 
 #include <intrin.h>
 
@@ -382,7 +384,8 @@ struct environment_t {
 
 force_inline float to_norm_float(uint8_t v) {
     uint32_t val = 0x3f800000 + v * 0x8080 + (v + 1) / 2;
-    return (float &)val - 1;
+    union { uint32_t i; float f; } ret = {val};
+    return ret.f - 1.0f;
 }
 
 force_inline void rgbe_to_rgb(const uint8_t rgbe[4], float out_rgb[3]) {

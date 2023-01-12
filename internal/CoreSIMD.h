@@ -107,7 +107,7 @@ template <int S> struct derivatives_t {
 
 template <int S> struct light_sample_t {
     simd_fvec<S> col[3], L[3] = {0.0f, 0.0f, 0.0f};
-    simd_fvec<S> area = 0.0f, dist, pdf = 0.0f;
+    simd_fvec<S> area = 0.0f, dist = 0.0f, pdf = 0.0f;
     simd_ivec<S> cast_shadow = -1;
 };
 
@@ -452,7 +452,7 @@ template <int S> force_inline simd_fvec<S> safe_sqrt(const simd_fvec<S> &a) {
 }
 
 template <int S> force_inline void safe_normalize(simd_fvec<S> v[3]) {
-    simd_fvec<S> l = safe_sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+    simd_fvec<S> l = sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
 #if USE_SAFE_MATH
     const simd_fvec<S> mask = (l != 0.0f);
     where(~mask, l) = FLT_EPS;
@@ -469,10 +469,9 @@ template <int S> force_inline void safe_normalize(simd_fvec<S> v[3]) {
 
 template <typename T, int S>
 force_inline void swap_elements(simd_vec<T, S> &v1, const int i1, simd_vec<T, S> &v2, const int i2) {
-    const T temp1 = v1[i1];
-    const T temp2 = v2[i2];
-    v1.set(i1, temp2);
-    v2.set(i2, temp1);
+    const T temp = v1[i1];
+    v1.set(i1, v2[i2]);
+    v2.set(i2, temp);
 }
 
 template <int S>
@@ -792,7 +791,7 @@ force_inline simd_ivec<S> bbox_test_fma(const simd_fvec<S> inv_d[3], const simd_
 
     simd_fvec<S> mask = (tmin <= tmax) & (tmin <= t) & (tmax > 0.0f);
 
-    return reinterpret_cast<const simd_ivec<S> &>(mask);
+    return simd_cast(mask);
 }
 
 template <int S>
@@ -981,7 +980,7 @@ template <int S, int StackSize> struct TraversalStateStack_Multi {
 
     force_inline void push_children(const simd_fvec<S> rd[3], const bvh_node_t &node) {
         const simd_fvec<S> dir_neg_mask = rd[node.prim_count >> 30] < 0.0f;
-        const auto mask1 = reinterpret_cast<const simd_ivec<S> &>(dir_neg_mask) & queue[index].mask;
+        const auto mask1 = simd_cast(dir_neg_mask) & queue[index].mask;
         if (mask1.all_zeros()) {
             queue[index].stack[queue[index].stack_size++] = (node.right_child & RIGHT_CHILD_BITS);
             queue[index].stack[queue[index].stack_size++] = node.left_child;
@@ -1386,8 +1385,8 @@ template <int S> force_inline simd_fvec<S> construct_float(const simd_ivec<S> &_
     simd_ivec<S> m = _m & ieeeMantissa; // Keep only mantissa bits (fractional part)
     m = m | ieeeOne;                    // Add fractional part to 1.0
 
-    const simd_fvec<S> f = reinterpret_cast<simd_fvec<S> &>(m); // Range [1:2]
-    return f - simd_fvec<S>{1.0f};                              // Range [0:1]
+    const simd_fvec<S> f = simd_cast(m);    // Range [1:2]
+    return f - simd_fvec<S>{1.0f};          // Range [0:1]
 }
 
 force_inline float fast_log2(float val) {
@@ -2110,7 +2109,7 @@ void Ray::NS::SampleMeshInTextureSpace(int iteration, int obj_index, int uv_laye
                              w = d20[0] * (fyy - t2[1]) - d20[1] * (fxx - t2[0]);
 
                 const simd_fvec<S> fmask = (u >= -FLT_EPS) & (v >= -FLT_EPS) & (w >= -FLT_EPS);
-                const auto &imask = reinterpret_cast<const simd_ivec<S> &>(fmask);
+                const simd_ivec<S> imask = simd_cast(fmask);
 
                 if (imask.not_all_zeros()) {
                     u *= inv_area;
@@ -4171,7 +4170,7 @@ void Ray::NS::IntersectScene(ray_data_t<S> &r, const simd_ivec<S> &mask, const i
                         simd_fvec<S> _mix_val = 1.0f;
 
                         if (mat->textures[BASE_TEXTURE] != 0xffffffff) {
-                            simd_fvec<S> mix[4];
+                            simd_fvec<S> mix[4] = {};
                             SampleBilinear(textures, mat->textures[BASE_TEXTURE], uvs, {0}, same_mi, mix);
                             _mix_val *= mix[0];
                         }
@@ -4800,7 +4799,7 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const scene_data_t &sc,
 
             const material_t &lmat = sc.materials[sc.tri_materials[ltri_index].front_mi & MATERIAL_INDEX_BITS];
             if (lmat.textures[BASE_TEXTURE] != 0xffffffff) {
-                simd_fvec<S> tex_col[4];
+                simd_fvec<S> tex_col[4] = {};
                 SampleBilinear(textures, lmat.textures[BASE_TEXTURE], luvs, simd_ivec<S>{0}, ray_mask, tex_col);
                 ITERATE_3({ where(ray_queue[index], ls.col[i]) *= tex_col[i]; })
             }

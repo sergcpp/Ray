@@ -547,8 +547,8 @@ force_inline float construct_float(uint32_t m) {
     m &= ieeeMantissa; // Keep only mantissa bits (fractional part)
     m |= ieeeOne;      // Add fractional part to 1.0
 
-    const float f = reinterpret_cast<float &>(m); // Range [1:2]
-    return f - 1.0f;                              // Range [0:1]
+    union { uint32_t i; float f; } ret = {m};   // Range [1:2]
+    return ret.f - 1.0f;                        // Range [0:1]
 }
 
 force_inline simd_fvec4 srgb_to_rgb(const simd_fvec4 &col) {
@@ -706,8 +706,14 @@ float fresnel_dielectric_cos(float cosi, float eta) {
 // From "A Fast and Robust Method for Avoiding Self-Intersection"
 //
 
-force_inline int32_t float_as_int(const float v) { return reinterpret_cast<const int32_t &>(v); }
-force_inline float int_as_float(const int32_t v) { return reinterpret_cast<const float &>(v); }
+force_inline int32_t float_as_int(const float v) {
+    union { float f; int32_t i; } ret = {v};
+    return ret.i;
+}
+force_inline float int_as_float(const int32_t v) {
+    union { int32_t i; float f; } ret = {v};
+    return ret.f;
+}
 
 simd_fvec4 offset_ray(const simd_fvec4 &p, const simd_fvec4 &n) {
     const float Origin = 1.0f / 32.0f;
