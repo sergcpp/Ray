@@ -8,7 +8,7 @@
 #pragma warning(disable : 4789) // buffer overrun
 #pragma warning(disable : 4127) // conditional expression is constant
 
-// Used to force loop unroll in release mode
+// Used to force loop unroll and make index compile-time constant
 // clang-format off
 #define ITERATE_2(exp)  \
         { const int i = 0; exp }    \
@@ -141,7 +141,10 @@ template <typename T, int S> class simd_vec {
     force_inline simd_vec(typename std::enable_if<sizeof...(Tail) + 1 == S, T>::type head, Tail... tail)
         : comp_{head, T(tail)...} {}
     force_inline explicit simd_vec(const T *f) { memcpy(&comp_, f, S * sizeof(T)); }
-    force_inline simd_vec(const T *f, simd_mem_aligned_tag) { memcpy(&comp_, f, S * sizeof(T)); }
+    force_inline simd_vec(const T *_f, simd_mem_aligned_tag) {
+        const auto *f = (const T *)assume_aligned(_f, sizeof(T));
+        memcpy(&comp_, f, S * sizeof(T));
+    }
 
     force_inline T operator[](const int i) const { return comp_[i]; }
 
@@ -208,103 +211,151 @@ template <typename T, int S> class simd_vec {
     }
 
     force_inline simd_vec<T, S> operator==(T rhs) const {
-        T set, not_set = T(0);
-        memset(&set, 0xFF, sizeof(T));
+        simd_vec<int, S> temp;
+        ITERATE(S, { temp.comp_[i] = comp_[i] == rhs ? -1 : 0; })
+
+        static_assert(sizeof(simd_vec<T, S>) == sizeof(simd_vec<int, S>), "!");
+
         simd_vec<T, S> ret;
-        ITERATE(S, { ret.comp_[i] = comp_[i] == rhs ? set : not_set; })
+        memcpy(&ret, &temp, sizeof(simd_vec<T, S>));
+
         return ret;
     }
 
     force_inline simd_vec<T, S> operator==(const simd_vec<T, S> &rhs) const {
-        T set, not_set = T(0);
-        memset(&set, 0xFF, sizeof(T));
+        simd_vec<int, S> temp;
+        ITERATE(S, { temp.comp_[i] = comp_[i] == rhs.comp_[i] ? -1 : 0; })
+
+        static_assert(sizeof(simd_vec<T, S>) == sizeof(simd_vec<int, S>), "!");
+
         simd_vec<T, S> ret;
-        ITERATE(S, { ret.comp_[i] = comp_[i] == rhs.comp_[i] ? set : not_set; })
+        memcpy(&ret, &temp, sizeof(simd_vec<T, S>));
+
         return ret;
     }
 
     force_inline simd_vec<T, S> operator!=(T rhs) const {
-        T set, not_set = T(0);
-        memset(&set, 0xFF, sizeof(T));
+        simd_vec<int, S> temp;
+        ITERATE(S, { temp.comp_[i] = comp_[i] != rhs ? -1 : 0; })
+
+        static_assert(sizeof(simd_vec<T, S>) == sizeof(simd_vec<int, S>), "!");
+
         simd_vec<T, S> ret;
-        ITERATE(S, { ret.comp_[i] = comp_[i] != rhs ? set : not_set; })
+        memcpy(&ret, &temp, sizeof(simd_vec<T, S>));
+
         return ret;
     }
 
     force_inline simd_vec<T, S> operator!=(const simd_vec<T, S> &rhs) const {
-        T set, not_set = T(0);
-        memset(&set, 0xFF, sizeof(T));
+        simd_vec<int, S> temp;
+        ITERATE(S, { temp.comp_[i] = comp_[i] != rhs.comp_[i] ? -1 : 0; })
+
+        static_assert(sizeof(simd_vec<T, S>) == sizeof(simd_vec<int, S>), "!");
+
         simd_vec<T, S> ret;
-        ITERATE(S, { ret.comp_[i] = comp_[i] != rhs.comp_[i] ? set : not_set; })
+        memcpy(&ret, &temp, sizeof(simd_vec<T, S>));
+
         return ret;
     }
 
     force_inline simd_vec<T, S> operator<(const simd_vec<T, S> &rhs) const {
-        T set, not_set = T(0);
-        memset(&set, 0xFF, sizeof(T));
+        simd_vec<int, S> temp;
+        ITERATE(S, { temp.comp_[i] = comp_[i] < rhs.comp_[i] ? -1 : 0; })
+
+        static_assert(sizeof(simd_vec<T, S>) == sizeof(simd_vec<int, S>), "!");
+
         simd_vec<T, S> ret;
-        ITERATE(S, { ret.comp_[i] = comp_[i] < rhs.comp_[i] ? set : not_set; })
+        memcpy(&ret, &temp, sizeof(simd_vec<T, S>));
+
         return ret;
     }
 
     force_inline simd_vec<T, S> operator<=(const simd_vec<T, S> &rhs) const {
-        T set, not_set = T(0);
-        memset(&set, 0xFF, sizeof(T));
+        simd_vec<int, S> temp;
+        ITERATE(S, { temp.comp_[i] = comp_[i] <= rhs.comp_[i] ? -1 : 0; })
+
+        static_assert(sizeof(simd_vec<T, S>) == sizeof(simd_vec<int, S>), "!");
+
         simd_vec<T, S> ret;
-        ITERATE(S, { ret.comp_[i] = comp_[i] <= rhs.comp_[i] ? set : not_set; })
+        memcpy(&ret, &temp, sizeof(simd_vec<T, S>));
+
         return ret;
     }
 
     force_inline simd_vec<T, S> operator>(const simd_vec<T, S> &rhs) const {
-        T set, not_set = T(0);
-        memset(&set, 0xFF, sizeof(T));
+        simd_vec<int, S> temp;
+        ITERATE(S, { temp.comp_[i] = comp_[i] > rhs.comp_[i] ? -1 : 0; })
+
+        static_assert(sizeof(simd_vec<T, S>) == sizeof(simd_vec<int, S>), "!");
+
         simd_vec<T, S> ret;
-        ITERATE(S, { ret.comp_[i] = comp_[i] > rhs.comp_[i] ? set : not_set; })
+        memcpy(&ret, &temp, sizeof(simd_vec<T, S>));
+
         return ret;
     }
 
     force_inline simd_vec<T, S> operator>=(const simd_vec<T, S> &rhs) const {
-        T set, not_set = T(0);
-        memset(&set, 0xFF, sizeof(T));
+        simd_vec<int, S> temp;
+        ITERATE(S, { temp.comp_[i] = comp_[i] >= rhs.comp_[i] ? -1 : 0; })
+
+        static_assert(sizeof(simd_vec<T, S>) == sizeof(simd_vec<int, S>), "!");
+
         simd_vec<T, S> ret;
-        ITERATE(S, { ret.comp_[i] = comp_[i] >= rhs.comp_[i] ? set : not_set; })
+        memcpy(&ret, &temp, sizeof(simd_vec<T, S>));
+
         return ret;
     }
 
     force_inline simd_vec<T, S> &operator&=(const simd_vec<T, S> &rhs) {
-        ITERATE(S, { comp_[i] &= rhs.comp_[i]; })
+        ITERATE(S, { reinterpret_cast<uint32_t &>(comp_[i]) &= reinterpret_cast<const uint32_t &>(rhs.comp_[i]); })
         return *this;
     }
 
     force_inline simd_vec<T, S> operator<(T rhs) const {
-        T set, not_set = T(0);
-        memset(&set, 0xFF, sizeof(T));
+        simd_vec<int, S> temp;
+        ITERATE(S, { temp.comp_[i] = comp_[i] < rhs ? -1 : 0; })
+
+        static_assert(sizeof(simd_vec<T, S>) == sizeof(simd_vec<int, S>), "!");
+
         simd_vec<T, S> ret;
-        ITERATE(S, { ret.comp_[i] = comp_[i] < rhs ? set : not_set; })
+        memcpy(&ret, &temp, sizeof(simd_vec<T, S>));
+
         return ret;
     }
 
     force_inline simd_vec<T, S> operator<=(T rhs) const {
-        T set, not_set = T(0);
-        memset(&set, 0xFF, sizeof(T));
+        simd_vec<int, S> temp;
+        ITERATE(S, { temp.comp_[i] = comp_[i] <= rhs ? -1 : 0; })
+
+        static_assert(sizeof(simd_vec<T, S>) == sizeof(simd_vec<int, S>), "!");
+
         simd_vec<T, S> ret;
-        ITERATE(S, { ret.comp_[i] = comp_[i] <= rhs ? set : not_set; })
+        memcpy(&ret, &temp, sizeof(simd_vec<T, S>));
+
         return ret;
     }
 
     force_inline simd_vec<T, S> operator>(T rhs) const {
-        T set, not_set = T(0);
-        memset(&set, 0xFF, sizeof(T));
+        simd_vec<int, S> temp;
+        ITERATE(S, { temp.comp_[i] = comp_[i] > rhs ? -1 : 0; })
+
+        static_assert(sizeof(simd_vec<T, S>) == sizeof(simd_vec<int, S>), "!");
+
         simd_vec<T, S> ret;
-        ITERATE(S, { ret.comp_[i] = comp_[i] > rhs ? set : not_set; })
+        memcpy(&ret, &temp, sizeof(simd_vec<T, S>));
+
         return ret;
     }
 
     force_inline simd_vec<T, S> operator>=(T rhs) const {
-        T set, not_set = T(0);
-        memset(&set, 0xFF, sizeof(T));
+        simd_vec<int, S> temp;
+        ITERATE(S, { temp.comp_[i] = comp_[i] >= rhs ? -1 : 0; })
+
+        static_assert(sizeof(simd_vec<T, S>) == sizeof(simd_vec<int, S>), "!");
+
         simd_vec<T, S> ret;
-        ITERATE(S, { ret.comp_[i] = comp_[i] >= rhs ? set : not_set; })
+        memcpy(&ret, &temp, sizeof(simd_vec<T, S>));
+
         return ret;
     }
 
@@ -360,12 +411,16 @@ template <typename T, int S> class simd_vec {
 
     force_inline void copy_to(T *f) const { memcpy(f, &comp_[0], S * sizeof(T)); }
 
-    force_inline void copy_to(T *f, simd_mem_aligned_tag) const { memcpy(f, &comp_[0], S * sizeof(T)); }
+    force_inline void copy_to(T *_f, simd_mem_aligned_tag) const {
+        auto *f = (T *)assume_aligned(_f, sizeof(T));
+        memcpy(f, &comp_[0], S * sizeof(T));
+    }
 
     force_inline bool all_zeros() const {
         ITERATE(S, {
-            if (comp_[i] != 0)
+            if (comp_[i] != 0) {
                 return false;
+            }
         })
         return true;
     }
@@ -375,8 +430,9 @@ template <typename T, int S> class simd_vec {
         const auto *src2 = reinterpret_cast<const uint8_t *>(&mask.comp_[0]);
 
         for (int i = 0; i < S * sizeof(T); i++) {
-            if ((src1[i] & src2[i]) != 0)
+            if ((src1[i] & src2[i]) != 0) {
                 return false;
+            }
         }
 
         return true;
@@ -384,8 +440,9 @@ template <typename T, int S> class simd_vec {
 
     force_inline bool not_all_zeros() const {
         ITERATE(S, {
-            if (comp_[i] != 0)
+            if (comp_[i] != 0) {
                 return true;
+            }
         })
         return false;
     }
@@ -399,8 +456,7 @@ template <typename T, int S> class simd_vec {
         })
     }
 
-    force_inline
-        void blend_inv_to(const simd_vec<T, S> &mask, const simd_vec<T, S> &v1) {
+    force_inline void blend_inv_to(const simd_vec<T, S> &mask, const simd_vec<T, S> &v1) {
         ITERATE(S, {
             if (mask.comp_[i] == T(0)) {
                 comp_[i] = v1.comp_[i];
@@ -825,12 +881,16 @@ force_inline simd_comp_where_helper<T, U, S, true> where_not(const simd_vec<U, S
     return {mask, vec};
 }
 
-template <int S> force_inline const simd_vec<int, S> &simd_cast(const simd_vec<float, S> &vec) {
-    return reinterpret_cast<const simd_vec<int, S> &>(vec);
+template <int S> force_inline simd_vec<int, S> simd_cast(const simd_vec<float, S> &vec) {
+    simd_vec<int, S> ret;
+    memcpy(&ret, &vec, sizeof(simd_vec<int, S>));
+    return ret;
 }
 
-template <int S> force_inline const simd_vec<float, S> &simd_cast(const simd_vec<int, S> &vec) {
-    return reinterpret_cast<const simd_vec<float, S> &>(vec);
+template <int S> force_inline const simd_vec<float, S> simd_cast(const simd_vec<int, S> &vec) {
+    simd_vec<float, S> ret;
+    memcpy(&ret, &vec, sizeof(simd_vec<float, S>));
+    return ret;
 }
 
 } // namespace NS
@@ -876,5 +936,3 @@ using simd_dvec16 = simd_dvec<16>;
 #endif
 
 #pragma warning(pop)
-
-// #undef ITERATE
