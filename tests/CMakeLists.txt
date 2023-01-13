@@ -16,8 +16,10 @@ add_executable(test_Ray main.cpp
                         test_materials.cpp
                         test_mesh_lights.cpp
                         test_simd.cpp
+                        test_simd_avx.cpp
                         test_simd_avx2.cpp
                         test_simd_avx512.cpp
+                        test_simd_sse41.cpp
                         test_simd.ipp
                         test_texture.cpp
                         test_tex_storage.cpp
@@ -28,6 +30,8 @@ add_executable(test_Ray main.cpp
                         utils.cpp)
 
 if(MSVC AND NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64")
+    set_source_files_properties(test_simd_avx.cpp PROPERTIES COMPILE_FLAGS /arch:AVX)
+    set_source_files_properties(test_simd_avx2.cpp PROPERTIES COMPILE_FLAGS /arch:AVX2)
     set_source_files_properties(test_simd_avx512.cpp PROPERTIES COMPILE_FLAGS /arch:AVX512)
 endif(MSVC AND NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64")
 

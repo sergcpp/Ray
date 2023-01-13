@@ -960,7 +960,7 @@ void assemble_material_test_images(const char *arch_list[]) {
 
     for (const char **arch = arch_list; *arch; ++arch) {
         const char *type = *arch;
-        const auto rt = Ray::RendererTypeFromName(type);
+        //const auto rt = Ray::RendererTypeFromName(type);
         for (int j = 0; j < ImgCountH; ++j) {
             const int top_down_j = ImgCountH - j - 1;
 

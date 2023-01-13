@@ -15,7 +15,7 @@
 #endif
 #endif
 
-#if defined(__GNUC__)
+#if defined(__GNUC__) || defined(__clang__)
 #define _mm256_test_all_zeros(mask, val) _mm256_testz_si256((mask), (val))
 #endif
 
@@ -953,8 +953,14 @@ template <> class simd_vec<int, 8> {
         __m256i vcmp = _mm256_cmpeq_epi32(v1.vec_, v2.vec_);
         return (_mm256_movemask_epi8(vcmp) == 0xffffffff);
 #else
-        __m256i vcmp = _mm256_cmpeq_epi16(v1.vec_, v2.vec_);
-        return (_mm256_movemask_ps(reinterpret_cast<const __m256 &>(vcmp)) == 0xffffffff);
+        bool ret = true;
+
+        alignas(32) int comp1[8], comp2[8];
+        _mm256_store_si256((__m256i *)comp1, v1.vec_);
+        _mm256_store_si256((__m256i *)comp2, v2.vec_);
+        ITERATE_8({ ret &= (comp1[i] == comp2[i]); })
+
+        return ret;
 #endif
     }
 

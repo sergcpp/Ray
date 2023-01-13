@@ -34,6 +34,14 @@ static const __m128i RGB_to_RGBA = _mm_set_epi8(-1 /* Insert zero */, 11, 10, 9,
     -1 /* Insert zero */, 2, 1, 0);
 // clang-format on
 
+#ifdef __GNUC__
+#pragma GCC push_options
+#pragma GCC target("avx")
+#endif
+#ifdef __clang__
+#pragma clang attribute push(__attribute__((target("ssse3"))), apply_to = function)
+#endif
+
 template <int Channels> void Extract4x4Block_SSSE3(const uint8_t src[], const int stride, uint8_t dst[64]) {
     for (int j = 0; j < 4; j++) {
         __m128i rgba;
@@ -53,6 +61,13 @@ template <int Channels> void Extract4x4Block_SSSE3(const uint8_t src[], const in
 
 template void Extract4x4Block_SSSE3<4 /* Channels */>(const uint8_t src[], const int stride, uint8_t dst[64]);
 template void Extract4x4Block_SSSE3<3 /* Channels */>(const uint8_t src[], const int stride, uint8_t dst[64]);
+
+#ifdef __GNUC__
+#pragma GCC pop_options
+#endif
+#ifdef __clang__
+#pragma clang attribute pop
+#endif
 
 static const __m128i CoCgInsetMul = _mm_set_epi16(1, 2, 2, 2, 1, 2, 2, 2);
 

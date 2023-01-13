@@ -4,10 +4,10 @@
 
 #ifdef __GNUC__
 #pragma GCC push_options
-#pragma GCC target("avx2")
+#pragma GCC target("sse4.1")
 #endif
 #ifdef __clang__
-#pragma clang attribute push (__attribute__((target("avx2"))), apply_to=function)
+#pragma clang attribute push (__attribute__((target("sse4.1"))), apply_to=function)
 #endif
 
 #include "../internal/Core.h"
@@ -15,14 +15,14 @@
 
 #if !defined(__aarch64__) && !defined(_M_ARM) && !defined(_M_ARM64)
 
-#define NS Avx2
-#define USE_AVX2
+#define NS Sse41
+#define USE_SSE41
 #include "../internal/simd/simd_vec.h"
 
-void test_simd_avx2() {
+void test_simd_sse41() {
 #include "test_simd.ipp"
 }
-#undef USE_AVX2
+#undef USE_SSE41
 #undef NS
 
 #endif

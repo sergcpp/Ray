@@ -69,9 +69,9 @@ struct shadow_ray_t {
 };
 static_assert(sizeof(shadow_ray_t) == 48, "!");
 
-const int RayPacketDimX = 1;
-const int RayPacketDimY = 1;
-const int RayPacketSize = RayPacketDimX * RayPacketDimY;
+const int RPDimX = 1;
+const int RPDimY = 1;
+const int RPSize = RPDimX * RPDimY;
 
 struct hit_data_t {
     int mask;

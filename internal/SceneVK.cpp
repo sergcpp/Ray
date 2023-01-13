@@ -1758,7 +1758,7 @@ void Ray::Vk::Scene::RebuildHWAccStructures() {
         // VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR;
         new_instance.accelerationStructureReference = static_cast<uint64_t>(vk_blas.vk_device_address());
 
-        const mesh_t &mesh = meshes_[instance.mesh_index];
+        //const mesh_t &mesh = meshes_[instance.mesh_index];
         {
             ++blas.geo_count;
 

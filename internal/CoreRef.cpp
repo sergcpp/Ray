@@ -1117,8 +1117,8 @@ void Ray::Ref::GeneratePrimaryRays(const int iteration, const camera_t &cam, con
     size_t i = 0;
     out_rays.resize(size_t(r.w) * r.h);
 
-    for (int y = r.y; y < r.y + r.h; y += RayPacketDimY) {
-        for (int x = r.x; x < r.x + r.w; x += RayPacketDimX) {
+    for (int y = r.y; y < r.y + r.h; y += RPDimY) {
+        for (int x = r.x; x < r.x + r.w; x += RPDimX) {
             ray_data_t &out_r = out_rays[i++];
 
             auto _x = float(x);
@@ -1225,8 +1225,8 @@ void Ray::Ref::SampleMeshInTextureSpace(const int iteration, const int obj_index
     out_rays.resize(size_t(r.w) * r.h);
     out_inters.resize(out_rays.size());
 
-    for (int y = r.y; y < r.y + r.h; y += RayPacketDimY) {
-        for (int x = r.x; x < r.x + r.w; x += RayPacketDimX) {
+    for (int y = r.y; y < r.y + r.h; y += RPDimY) {
+        for (int x = r.x; x < r.x + r.w; x += RPDimX) {
             const int i = (y - r.y) * r.w + (x - r.x);
 
             ray_data_t &out_ray = out_rays[i];

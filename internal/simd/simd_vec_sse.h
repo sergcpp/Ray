@@ -3,6 +3,7 @@
 #include <type_traits>
 
 #include <immintrin.h>
+#include <smmintrin.h>
 #include <xmmintrin.h>
 
 #ifdef __GNUC__
@@ -744,15 +745,30 @@ template <> class simd_vec<int, 4> {
     force_inline bool not_all_zeros() const { return !all_zeros(); }
 
     force_inline static simd_vec<int, 4> min(const simd_vec<int, 4> &v1, const simd_vec<int, 4> &v2) {
+#if defined(USE_SSE41)
         simd_vec<int, 4> temp;
         temp.vec_ = _mm_min_epi32(v1.vec_, v2.vec_);
         return temp;
+#else
+        alignas(16) int comp1[4], comp2[4];
+        _mm_store_si128((__m128i *)comp1, v1.vec_);
+        _mm_store_si128((__m128i *)comp2, v2.vec_);
+        ITERATE_4({ comp1[i] = (comp1[i] < comp2[i]) ? comp1[i] : comp2[i]; })
+        return simd_vec<int, 4>{comp1, simd_mem_aligned};
+#endif
     }
 
     force_inline static simd_vec<int, 4> min(const simd_vec<int, 4> &v1, const int v2) {
+#if defined(USE_SSE41)
         simd_vec<int, 4> temp;
         temp.vec_ = _mm_min_epi32(v1.vec_, _mm_set1_epi32(v2));
         return temp;
+#else
+        alignas(16) int comp[4];
+        _mm_store_si128((__m128i *)comp, v1.vec_);
+        ITERATE_4({ comp[i] = (comp[i] < v2) ? comp[i] : v2; })
+        return simd_vec<int, 4>{comp, simd_mem_aligned};
+#endif
     }
 
     force_inline static simd_vec<int, 4> min(const int v1, const simd_vec<int, 4> &v2) {

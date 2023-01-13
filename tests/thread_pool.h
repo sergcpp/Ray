@@ -40,7 +40,7 @@ class ThreadPool {
 // the constructor just launches some amount of workers_
 inline ThreadPool::ThreadPool(const size_t threads_count) : stop_(false) {
     for (size_t i = 0; i < threads_count; ++i)
-        workers_.emplace_back([this, i] {
+        workers_.emplace_back([this] {
             for (;;) {
                 std::function<void()> task;
 
@@ -123,14 +123,14 @@ inline QThreadPool::QThreadPool(const int threads_count, const int q_count, cons
         q_active_[i] = false;
     }
     for (int i = 0; i < threads_count; ++i) {
-        workers_.emplace_back([this, i, threads_name] {
+        workers_.emplace_back([this] {
             for (;;) {
                 std::function<void()> task;
                 int q_index = -1;
 
                 {
                     std::unique_lock<std::mutex> lock(q_mtx_);
-                    condition_.wait(lock, [this, i, &q_index] {
+                    condition_.wait(lock, [this, &q_index] {
                         for (int j = 0; j < int(tasks_.size()); j++) {
                             if (!q_active_[j] && !tasks_[j].empty()) {
                                 q_index = j;

@@ -4,6 +4,15 @@
 
 #include "Config.h"
 
+// This is needed only with clang on windows
+#ifdef __clang__
+#pragma clang attribute push(__attribute__((target("sse4.1"))), apply_to = function)
+#endif
+
 #if defined(ENABLE_SIMD_IMPL) && (defined(_M_X86) || defined(_M_X64) || defined(__i386__) || defined(__x86_64__))
 #include "internal/RendererSSE41.cpp"
+#endif
+
+#ifdef __clang__
+#pragma clang attribute pop
 #endif

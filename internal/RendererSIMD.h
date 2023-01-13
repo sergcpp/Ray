@@ -97,6 +97,29 @@ template <int S> Ray::NS::PassData<S> &get_per_thread_pass_data() {
     static thread_local Ray::NS::PassData<S> per_thread_pass_data;
     return per_thread_pass_data;
 }
+
+pixel_color_t clamp_and_gamma_correct(const pixel_color_t &p, const camera_t &cam) {
+    auto c = simd_fvec4{&p.r};
+
+    if (cam.dtype == SRGB) {
+        ITERATE_3({
+            if (c.get<i>() < 0.0031308f) {
+                c.set<i>(12.92f * c.get<i>());
+            } else {
+                c.set<i>(1.055f * std::pow(c.get<i>(), (1.0f / 2.4f)) - 0.055f);
+            }
+        })
+    }
+
+    if (cam.gamma != 1.0f) {
+        c = pow(c, simd_fvec4{1.0f / cam.gamma});
+    }
+
+    if (cam.pass_settings.flags & Clamp) {
+        c = clamp(c, 0.0f, 1.0f);
+    }
+    return pixel_color_t{c[0], c[1], c[2], c[3]};
+};
 } // namespace NS
 } // namespace Ray
 
@@ -328,8 +351,6 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
         for (int i = 0; i < secondary_rays_count; i++) {
             ray_data_t<S> &r = p.secondary_rays[i];
 
-            const simd_ivec<S> x = r.xy >> 16, y = r.xy & 0x0000FFFF;
-
             hit_data_t<S> &inter = p.intersections[i];
             inter = {};
 
@@ -425,30 +446,11 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
         clean_buf_.MixWith_SH(temp_buf_, rect, mix_factor);
     }
 
-    auto clamp_and_gamma_correct = [&cam](const pixel_color_t &p) {
-        auto c = simd_fvec4{&p.r};
-
-        if (cam.dtype == SRGB) {
-            ITERATE_3({
-                if (c.get<i>() < 0.0031308f) {
-                    c.set<i>(12.92f * c.get<i>());
-                } else {
-                    c.set<i>(1.055f * std::pow(c.get<i>(), (1.0f / 2.4f)) - 0.055f);
-                }
-            })
-        }
-
-        if (cam.gamma != 1.0f) {
-            c = pow(c, simd_fvec4{1.0f / cam.gamma});
-        }
-
-        if (cam.pass_settings.flags & Clamp) {
-            c = clamp(c, 0.0f, 1.0f);
-        }
-        return pixel_color_t{c[0], c[1], c[2], c[3]};
+    auto _clamp_and_gamma_correct = [&cam](const pixel_color_t &p) {
+        return clamp_and_gamma_correct(p, cam);
     };
 
-    final_buf_.CopyFrom(clean_buf_, rect, clamp_and_gamma_correct);
+    final_buf_.CopyFrom(clean_buf_, rect, _clamp_and_gamma_correct);
 }
 
 template <int DimX, int DimY>

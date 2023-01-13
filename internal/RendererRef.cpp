@@ -235,9 +235,6 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
         for (int i = 0; i < secondary_rays_count; i++) {
             ray_data_t &r = p.secondary_rays[i];
 
-            const int x = (r.xy >> 16) & 0x0000ffff;
-            const int y = r.xy & 0x0000ffff;
-
             hit_data_t &inter = p.intersections[i];
             inter = {};
 

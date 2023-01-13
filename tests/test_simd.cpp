@@ -24,26 +24,8 @@ void test_simd_sse2() {
 #undef USE_SSE2
 #undef NS
 
-#define NS Sse41
-#define USE_SSE41
-#include "../internal/simd/simd_vec.h"
-
-void test_simd_sse41() {
-#include "test_simd.ipp"
-}
-#undef USE_SSE41
-#undef NS
-
-#define NS Avx
-#define USE_AVX
-#include "../internal/simd/simd_vec.h"
-
-void test_simd_avx() {
-#include "test_simd.ipp"
-}
-#undef USE_AVX
-#undef NS
-
+void test_simd_sse41();
+void test_simd_avx();
 void test_simd_avx2();
 void test_simd_avx512();
 

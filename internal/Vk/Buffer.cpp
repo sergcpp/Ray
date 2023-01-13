@@ -56,7 +56,7 @@ int Ray::Vk::Buffer::g_GenCounter = 0;
 
 Ray::Vk::Buffer::Buffer(const char *name, Context *ctx, const eBufType type, const uint32_t initial_size,
                         const uint32_t suballoc_align)
-    : LinearAlloc(std::min(suballoc_align, initial_size), initial_size), name_(name), ctx_(ctx), type_(type), size_(0) {
+    : LinearAlloc(std::min(suballoc_align, initial_size), initial_size), ctx_(ctx), name_(name), type_(type), size_(0) {
     Resize(size());
 }
 
