@@ -1163,11 +1163,21 @@ void Ray::Vk::Texture2D::InitFromTGAFile(const void *data, Buffer &sbuf, void *_
     eTexFormat format = eTexFormat::Undefined;
     uint32_t img_size = 0;
     const bool res1 = ReadTGAFile(data, w, h, format, nullptr, img_size);
-    assert(res1 && img_size <= sbuf.size());
+    if (!res1 || img_size <= sbuf.size()) {
+        ctx_->log()->Error("Failed to read tga data!");
+        return;
+    }
 
     uint8_t *stage_data = sbuf.Map(BufMapWrite);
+    if (!stage_data) {
+        ctx_->log()->Error("Failed to map stage buffer!");
+        return;
+    }
+
     const bool res2 = ReadTGAFile(data, w, h, format, stage_data, img_size);
-    assert(res2);
+    if (!res2) {
+        ctx_->log()->Error("Failed to read tga data!");
+    }
     sbuf.FlushMappedRange(0, sbuf.AlignMapOffset(img_size));
     sbuf.Unmap();
 
@@ -1678,11 +1688,17 @@ void Ray::Vk::Texture2D::InitFromTGAFile(const void *data[6], Buffer &sbuf, void
         if (data[i]) {
             uint32_t data_size;
             const bool res1 = ReadTGAFile(data[i], w, h, format, nullptr, data_size);
-            assert(res1);
+            if (!res1) {
+                ctx_->log()->Error("Failed to read tga data!");
+                break;
+            }
 
             assert(stage_off + data_size < sbuf.size());
             const bool res2 = ReadTGAFile(data[i], w, h, format, &stage_data[stage_off], data_size);
-            assert(res2);
+            if (!res2) {
+                ctx_->log()->Error("Failed to read tga data!");
+                break;
+            }
 
             data_off[i] = int(stage_off);
             stage_off += data_size;
@@ -2381,7 +2397,9 @@ void Ray::Vk::Texture2D::SetSampling(const SamplingParams s) {
     sampler_info.maxLod = s.max_lod.to_float();
 
     const VkResult res = vkCreateSampler(ctx_->device(), &sampler_info, nullptr, &handle_.sampler);
-    assert(res == VK_SUCCESS && "Failed to create sampler!");
+    if (res != VK_SUCCESS) {
+        ctx_->log()->Error("Failed to create sampler!");
+    }
 
     params.sampling = s;
 }
@@ -2540,7 +2558,9 @@ void Ray::Vk::Texture1D::Init(Buffer *buf, const eTexFormat format, const uint32
     view_info.range = VkDeviceSize(size);
 
     const VkResult res = vkCreateBufferView(buf->ctx()->device(), &view_info, nullptr, &buf_view_);
-    assert(res == VK_SUCCESS);
+    if (res != VK_SUCCESS) {
+        buf_->ctx()->log()->Error("Failed to create buffer view!");
+    }
 
     buf_ = std::move(buf);
     params_.offset = offset;

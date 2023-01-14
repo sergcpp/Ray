@@ -383,7 +383,10 @@ uint8_t *Ray::Vk::Buffer::MapRange(const uint8_t dir, const uint32_t offset, con
 
     void *mapped = nullptr;
     const VkResult res = vkMapMemory(ctx_->device(), mem_, VkDeviceSize(offset), VkDeviceSize(size), 0, &mapped);
-    assert(res == VK_SUCCESS && "Failed to map memory!");
+    if (res != VK_SUCCESS) {
+        ctx_->log()->Error("Failed to map memory!");
+        return nullptr;
+    }
 
     if (dir & BufMapRead) {
         VkMappedMemoryRange range = {VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE};
@@ -393,7 +396,9 @@ uint8_t *Ray::Vk::Buffer::MapRange(const uint8_t dir, const uint32_t offset, con
         range.pNext = nullptr;
 
         const VkResult res = vkInvalidateMappedMemoryRanges(ctx_->device(), 1, &range);
-        assert(res == VK_SUCCESS && "Failed to invalidate memory range!");
+        if (res != VK_SUCCESS) {
+            ctx_->log()->Error("Failed to invalidate memory range!");
+        }
     }
 
     mapped_ptr_ = reinterpret_cast<uint8_t *>(mapped);
@@ -422,14 +427,18 @@ void Ray::Vk::Buffer::FlushMappedRange(uint32_t offset, uint32_t size, const boo
     range.size = VkDeviceSize(size);
     range.pNext = nullptr;
 
-     if (mapped_dir_ & BufMapWrite) {
+    if (mapped_dir_ & BufMapWrite) {
         const VkResult res = vkFlushMappedMemoryRanges(ctx_->device(), 1, &range);
-        assert(res == VK_SUCCESS && "Failed to flush memory range!");
+        if (res != VK_SUCCESS) {
+            ctx_->log()->Error("Failed to flush memory range!");
+        }
     }
 
     if (mapped_dir_ & BufMapRead) {
         const VkResult res = vkInvalidateMappedMemoryRanges(ctx_->device(), 1, &range);
-        assert(res == VK_SUCCESS && "Failed to invalidate memory range!");
+        if (res != VK_SUCCESS) {
+            ctx_->log()->Error("Failed to invalidate memory range!");
+        }
     }
 
 #ifndef NDEBUG

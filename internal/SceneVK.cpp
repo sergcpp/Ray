@@ -1444,7 +1444,9 @@ void Ray::Vk::Scene::PrepareBindlessTextures() {
     descr_sizes.img_sampler_count = ctx_->max_combined_image_samplers();
 
     const bool bres = bindless_tex_data_.descr_pool.Init(descr_sizes, 1 /* sets_count */);
-    assert(bres && "Failed to init descriptor pool!");
+    if (!bres) {
+        ctx_->log()->Error("Failed to init descriptor pool!");
+    }
 
     if (!bindless_tex_data_.descr_layout) {
         VkDescriptorSetLayoutBinding textures_binding = {};
@@ -1467,7 +1469,9 @@ void Ray::Vk::Scene::PrepareBindlessTextures() {
 
         const VkResult res =
             vkCreateDescriptorSetLayout(ctx_->device(), &layout_info, nullptr, &bindless_tex_data_.descr_layout);
-        assert(res == VK_SUCCESS);
+        if (res != VK_SUCCESS) {
+            ctx_->log()->Error("Failed to create descriptor set layout!");
+        }
     }
 
     bindless_tex_data_.descr_pool.Reset();
@@ -1607,7 +1611,9 @@ void Ray::Vk::Scene::RebuildHWAccStructures() {
 
         VkQueryPool query_pool;
         VkResult res = vkCreateQueryPool(ctx_->device(), &query_pool_create_info, nullptr, &query_pool);
-        assert(res == VK_SUCCESS);
+        if (res != VK_SUCCESS) {
+            ctx_->log()->Error("Failed to create query pool!");
+        }
 
         std::vector<AccStructure> blases_before_compaction;
         blases_before_compaction.resize(all_blases.size());

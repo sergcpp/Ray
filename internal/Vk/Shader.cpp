@@ -112,7 +112,7 @@ bool Ray::Vk::Shader::InitFromSPIRV(const uint8_t *shader_code, const int code_s
 
     for (uint32_t i = 0; i < module.input_variable_count; i++) {
         const auto *var = module.input_variables[i];
-        if (var->built_in == -1) {
+        if (int(var->built_in) == -1) {
             Descr &new_item = attr_bindings.emplace_back();
             new_item.name = var->name;
             new_item.loc = var->location;

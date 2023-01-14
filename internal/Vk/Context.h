@@ -48,8 +48,8 @@ class Context {
     VkFence in_flight_fences_[MaxFramesInFlight] = {};
 
     VkQueryPool query_pools_[MaxFramesInFlight] = {};
-    uint32_t query_counts_[MaxFramesInFlight] = {};
-    uint64_t query_results_[MaxFramesInFlight][MaxTimestampQueries] = {};
+    // uint32_t query_counts_[MaxFramesInFlight] = {};
+    // uint64_t query_results_[MaxFramesInFlight][MaxTimestampQueries] = {};
 
     uint32_t max_combined_image_samplers_ = 0;
 

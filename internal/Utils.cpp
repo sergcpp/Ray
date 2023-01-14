@@ -998,7 +998,11 @@ void SelectYCoCgDiagonal_Ref(const uint8_t block[64], uint8_t min_color[3], uint
     uint8_t c0 = min_color[1];
     uint8_t c1 = max_color[1];
 
-    c0 ^= c1 ^= mask &= c0 ^= c1; // WTF?
+    //c0 ^= c1 ^= mask &= c0 ^= c1;
+    c0 ^= c1;
+    mask &= c0;
+    c1 ^= mask;
+    c0 ^= c1;
 
     min_color[1] = c0;
     max_color[1] = c1;

@@ -95,7 +95,9 @@ void Ray::Vk::Sampler::Init(Context *ctx, const SamplingParams params) {
     sampler_info.maxLod = params.max_lod.to_float();
 
     const VkResult res = vkCreateSampler(ctx->device(), &sampler_info, nullptr, &handle_);
-    assert(res == VK_SUCCESS && "Failed to create sampler!");
+    if (res != VK_SUCCESS) {
+        ctx->log()->Error("Failed to create sampler!");
+    }
 
     ctx_ = ctx;
     params_ = params;
