@@ -26,6 +26,9 @@ enum eRendererType : uint32_t {
 const char *RendererTypeName(eRendererType rt);
 eRendererType RendererTypeFromName(const char *name);
 
+/// Returns whether it is safe to call Render function for non-overlaping regions from different threads
+bool RendererSupportsMultithreading(eRendererType rt);
+
 /// Renderer settings
 struct settings_t {
     int w, h;

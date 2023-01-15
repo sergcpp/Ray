@@ -4,24 +4,26 @@
 
 namespace Ray {
 const char *RendererTypeName(const eRendererType rt) {
-    if (rt == RendererRef) {
+    switch (rt) {
+    case RendererRef:
         return "REF";
-    } else if (rt == RendererSSE2) {
+    case RendererSSE2:
         return "SSE2";
-    } else if (rt == RendererSSE41) {
+    case RendererSSE41:
         return "SSE41";
-    } else if (rt == RendererAVX) {
+    case RendererAVX:
         return "AVX";
-    } else if (rt == RendererAVX2) {
+    case RendererAVX2:
         return "AVX2";
-    } else if (rt == RendererAVX512) {
+    case RendererAVX512:
         return "AVX512";
-    } else if (rt == RendererNEON) {
+    case RendererNEON:
         return "NEON";
-    } else if (rt == RendererVK) {
+    case RendererVK:
         return "VK";
+    default:
+        return "";
     }
-    return "";
 }
 
 eRendererType RendererTypeFromName(const char *name) {
@@ -44,4 +46,19 @@ eRendererType RendererTypeFromName(const char *name) {
     }
     return RendererRef;
 }
+
+bool RendererSupportsMultithreading(const eRendererType rt) {
+    switch (rt) {
+    case RendererRef:
+    case RendererSSE2:
+    case RendererSSE41:
+    case RendererAVX:
+    case RendererAVX2:
+    case RendererAVX512:
+    case RendererNEON:
+        return true;
+    default:
+        return false;
+    }
 }
+} // namespace Ray
