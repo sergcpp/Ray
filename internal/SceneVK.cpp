@@ -490,7 +490,7 @@ uint32_t Ray::Vk::Scene::AddMaterial(const shading_node_desc_t &m) {
     mat.flags = 0;
 
     if (m.type == DiffuseNode) {
-        mat.sheen_unorm = pack_unorm_16(_CLAMP(m.sheen, 0.0f, 1.0f));
+        mat.sheen_unorm = pack_unorm_16(_CLAMP(0.5f * m.sheen, 0.0f, 1.0f));
         mat.sheen_tint_unorm = pack_unorm_16(_CLAMP(m.tint, 0.0f, 1.0f));
         mat.textures[METALLIC_TEXTURE] = m.metallic_texture;
     } else if (m.type == GlossyNode) {
@@ -525,7 +525,7 @@ uint32_t Ray::Vk::Scene::AddMaterial(const principled_mat_desc_t &m) {
     main_mat.type = PrincipledNode;
     main_mat.textures[BASE_TEXTURE] = m.base_texture;
     memcpy(&main_mat.base_color[0], &m.base_color[0], 3 * sizeof(float));
-    main_mat.sheen_unorm = pack_unorm_16(_CLAMP(m.sheen, 0.0f, 1.0f));
+    main_mat.sheen_unorm = pack_unorm_16(_CLAMP(0.5f * m.sheen, 0.0f, 1.0f));
     main_mat.sheen_tint_unorm = pack_unorm_16(_CLAMP(m.sheen_tint, 0.0f, 1.0f));
     main_mat.roughness_unorm = pack_unorm_16(_CLAMP(m.roughness, 0.0f, 1.0f));
     main_mat.tangent_rotation = 2.0f * PI * _CLAMP(m.anisotropic_rotation, 0.0f, 1.0f);

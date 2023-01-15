@@ -5954,7 +5954,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                 const float transmission = unpack_unorm_16(mat->transmission_unorm);
                 const float clearcoat = unpack_unorm_16(mat->clearcoat_unorm);
                 const float clearcoat_roughness = unpack_unorm_16(mat->clearcoat_roughness_unorm);
-                const float sheen = unpack_unorm_16(mat->sheen_unorm);
+                const float sheen = 2.0f * unpack_unorm_16(mat->sheen_unorm);
                 const float sheen_tint = unpack_unorm_16(mat->sheen_tint_unorm);
 
                 simd_fvec<S> spec_tmp_col[3];

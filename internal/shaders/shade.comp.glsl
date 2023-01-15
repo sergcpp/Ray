@@ -1490,7 +1490,7 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
         const float transmission = unpack_unorm_16(mat.transmission_and_transmission_roughness & 0xffff);
         const float clearcoat = unpack_unorm_16(mat.clearcoat_and_clearcoat_roughness & 0xffff);
         const float clearcoat_roughness = unpack_unorm_16((mat.clearcoat_and_clearcoat_roughness >> 16) & 0xffff);
-        const float sheen = unpack_unorm_16(mat.sheen_and_sheen_tint & 0xffff);
+        const float sheen = 2.0 * unpack_unorm_16(mat.sheen_and_sheen_tint & 0xffff);
         const float sheen_tint = unpack_unorm_16((mat.sheen_and_sheen_tint >> 16) & 0xffff);
 
         vec3 spec_tmp_col = mix(vec3(1.0), tint_color, specular_tint);

@@ -3976,7 +3976,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
         const float transmission = unpack_unorm_16(mat->transmission_unorm);
         const float clearcoat = unpack_unorm_16(mat->clearcoat_unorm);
         const float clearcoat_roughness = unpack_unorm_16(mat->clearcoat_roughness_unorm);
-        const float sheen = unpack_unorm_16(mat->sheen_unorm);
+        const float sheen = 2.0f * unpack_unorm_16(mat->sheen_unorm);
         const float sheen_tint = unpack_unorm_16(mat->sheen_tint_unorm);
 
         simd_fvec4 spec_tmp_col = mix(simd_fvec4{1.0f}, tint_color, specular_tint);
