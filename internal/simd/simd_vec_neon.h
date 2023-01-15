@@ -40,18 +40,26 @@ template <> class simd_vec<float, 4> {
     }
 
     force_inline float operator[](const int i) const {
+#if defined(_MSC_VER) && !defined(__clang__)
+        return vec_.n128_f32[i];
+#else
         alignas(16) float temp[4];
         vst1q_f32(temp, vec_);
         return temp[i];
+#endif
     }
 
     template <int i> force_inline float get() const { return vgetq_lane_f32(vec_, i & 3); }
     template <int i> force_inline void set(const float f) { vec_ = vsetq_lane_f32(f, vec_, i & 3); }
-    force_inline void set(const int i, const float f) {
+    force_inline void set(const int i, const float v) {
+#if defined(_MSC_VER) && !defined(__clang__)
+        vec_.n128_f32[i] = v;
+#else
         alignas(16) float temp[4];
         vst1q_f32(temp, vec_);
-        temp[i] = f;
+        temp[i] = v;
         vec_ = vld1q_f32(temp);
+#endif
     }
 
     force_inline simd_vec<float, 4> &operator+=(const simd_vec<float, 4> &rhs) {
@@ -59,7 +67,7 @@ template <> class simd_vec<float, 4> {
         return *this;
     }
 
-    force_inline simd_vec<float, 4> &operator+=(float rhs) {
+    force_inline simd_vec<float, 4> &operator+=(const float rhs) {
         float32x4_t _rhs = vdupq_n_f32(rhs);
         vec_ = vaddq_f32(vec_, _rhs);
         return *this;
@@ -70,7 +78,7 @@ template <> class simd_vec<float, 4> {
         return *this;
     }
 
-    force_inline simd_vec<float, 4> &operator-=(float rhs) {
+    force_inline simd_vec<float, 4> &operator-=(const float rhs) {
         float32x4_t _rhs = vdupq_n_f32(rhs);
         vec_ = vsubq_f32(vec_, _rhs);
         return *this;
@@ -81,7 +89,7 @@ template <> class simd_vec<float, 4> {
         return *this;
     }
 
-    force_inline simd_vec<float, 4> &operator*=(float rhs) {
+    force_inline simd_vec<float, 4> &operator*=(const float rhs) {
         float32x4_t _rhs = vdupq_n_f32(rhs);
         vec_ = vmulq_f32(vec_, _rhs);
         return *this;
@@ -92,7 +100,7 @@ template <> class simd_vec<float, 4> {
         return *this;
     }
 
-    force_inline simd_vec<float, 4> &operator/=(float rhs) {
+    force_inline simd_vec<float, 4> &operator/=(const float rhs) {
         float32x4_t _rhs = vdupq_n_f32(rhs);
         vec_ = vdivq_f32(vec_, _rhs);
         return *this;
@@ -155,28 +163,28 @@ template <> class simd_vec<float, 4> {
         return ret;
     }
 
-    force_inline simd_vec<float, 4> operator<(float rhs) const {
+    force_inline simd_vec<float, 4> operator<(const float rhs) const {
         simd_vec<float, 4> ret;
         uint32x4_t res = vcltq_f32(vec_, vdupq_n_f32(rhs));
         ret.vec_ = vreinterpretq_f32_u32(res);
         return ret;
     }
 
-    force_inline simd_vec<float, 4> operator<=(float rhs) const {
+    force_inline simd_vec<float, 4> operator<=(const float rhs) const {
         simd_vec<float, 4> ret;
         uint32x4_t res = vcleq_f32(vec_, vdupq_n_f32(rhs));
         ret.vec_ = vreinterpretq_f32_u32(res);
         return ret;
     }
 
-    force_inline simd_vec<float, 4> operator>(float rhs) const {
+    force_inline simd_vec<float, 4> operator>(const float rhs) const {
         simd_vec<float, 4> ret;
         uint32x4_t res = vcgtq_f32(vec_, vdupq_n_f32(rhs));
         ret.vec_ = vreinterpretq_f32_u32(res);
         return ret;
     }
 
-    force_inline simd_vec<float, 4> operator>=(float rhs) const {
+    force_inline simd_vec<float, 4> operator>=(const float rhs) const {
         simd_vec<float, 4> ret;
         uint32x4_t res = vcgeq_f32(vec_, vdupq_n_f32(rhs));
         ret.vec_ = vreinterpretq_f32_u32(res);
@@ -323,7 +331,7 @@ template <> class simd_vec<float, 4> {
         return ret;
     }
 
-    force_inline simd_vec<float, 4> operator==(float rhs) const {
+    force_inline simd_vec<float, 4> operator==(const float rhs) const {
         simd_vec<float, 4> ret;
         ret.vec_ = vceqq_f32(vec_, vdupq_n_f32(rhs));
         return ret;
@@ -335,7 +343,7 @@ template <> class simd_vec<float, 4> {
         return ret;
     }
 
-    force_inline simd_vec<float, 4> operator!=(float rhs) const {
+    force_inline simd_vec<float, 4> operator!=(const float rhs) const {
         simd_vec<float, 4> ret;
         ret.vec_ = vreinterpretq_f32_u32(vmvnq_u32(vceqq_f32(vec_, vdupq_n_f32(rhs))));
         return ret;
@@ -359,47 +367,47 @@ template <> class simd_vec<float, 4> {
         return ret;
     }
 
-    friend force_inline simd_vec<float, 4> operator+(const simd_vec<float, 4> &v1, float v2) {
+    friend force_inline simd_vec<float, 4> operator+(const simd_vec<float, 4> &v1, const float v2) {
         simd_vec<float, 4> ret;
         ret.vec_ = vaddq_f32(v1.vec_, vdupq_n_f32(v2));
         return ret;
     }
 
-    friend force_inline simd_vec<float, 4> operator-(const simd_vec<float, 4> &v1, float v2) {
+    friend force_inline simd_vec<float, 4> operator-(const simd_vec<float, 4> &v1, const float v2) {
         simd_vec<float, 4> ret;
         ret.vec_ = vsubq_f32(v1.vec_, vdupq_n_f32(v2));
         return ret;
     }
 
-    friend force_inline simd_vec<float, 4> operator*(const simd_vec<float, 4> &v1, float v2) {
+    friend force_inline simd_vec<float, 4> operator*(const simd_vec<float, 4> &v1, const float v2) {
         simd_vec<float, 4> ret;
         ret.vec_ = vmulq_f32(v1.vec_, vdupq_n_f32(v2));
         return ret;
     }
 
-    friend force_inline simd_vec<float, 4> operator/(const simd_vec<float, 4> &v1, float v2) {
+    friend force_inline simd_vec<float, 4> operator/(const simd_vec<float, 4> &v1, const float v2) {
         simd_vec<float, 4> ret;
         ret.vec_ = vdivq_f32(v1.vec_, vdupq_n_f32(v2));
         return ret;
     }
 
-    friend force_inline simd_vec<float, 4> operator+(float v1, const simd_vec<float, 4> &v2) {
+    friend force_inline simd_vec<float, 4> operator+(const float v1, const simd_vec<float, 4> &v2) {
         return operator+(v2, v1);
     }
 
-    friend force_inline simd_vec<float, 4> operator-(float v1, const simd_vec<float, 4> &v2) {
+    friend force_inline simd_vec<float, 4> operator-(const float v1, const simd_vec<float, 4> &v2) {
         simd_vec<float, 4> ret;
         ret.vec_ = vsubq_f32(vdupq_n_f32(v1), v2.vec_);
         return ret;
     }
 
-    friend force_inline simd_vec<float, 4> operator*(float v1, const simd_vec<float, 4> &v2) {
+    friend force_inline simd_vec<float, 4> operator*(const float v1, const simd_vec<float, 4> &v2) {
         simd_vec<float, 4> ret;
         ret.vec_ = vmulq_f32(vdupq_n_f32(v1), v2.vec_);
         return ret;
     }
 
-    friend force_inline simd_vec<float, 4> operator/(float v1, const simd_vec<float, 4> &v2) {
+    friend force_inline simd_vec<float, 4> operator/(const float v1, const simd_vec<float, 4> &v2) {
         simd_vec<float, 4> ret;
         ret.vec_ = vdivq_f32(vdupq_n_f32(v1), v2.vec_);
         return ret;
@@ -411,7 +419,7 @@ template <> class simd_vec<float, 4> {
         return vget_lane_f32(vpadd_f32(r2, r2), 0);
     }
 
-    friend force_inline simd_vec<float, 4> clamp(const simd_vec<float, 4> &v1, float min, float max) {
+    friend force_inline simd_vec<float, 4> clamp(const simd_vec<float, 4> &v1, const float min, const float max) {
         simd_vec<float, 4> ret;
         ret.vec_ = vmaxq_f32(vdupq_n_f32(min), vminq_f32(v1.vec_, vdupq_n_f32(max)));
         return ret;
@@ -443,9 +451,9 @@ template <> class simd_vec<int, 4> {
 
   public:
     force_inline simd_vec() = default;
-    force_inline simd_vec(int f) { vec_ = vdupq_n_s32(f); }
-    force_inline simd_vec(int i1, int i2, int i3, int i4) {
-        const int init[4] = {i1, i2, i3, i4};
+    force_inline simd_vec(const int f) { vec_ = vdupq_n_s32(f); }
+    force_inline simd_vec(const int i1, const int i2, const int i3, const int i4) {
+        alignas(16) const int init[4] = {i1, i2, i3, i4};
         vec_ = vld1q_s32(init);
     }
     force_inline simd_vec(const int *f) { vec_ = vld1q_s32((const int32_t *)f); }
@@ -455,18 +463,26 @@ template <> class simd_vec<int, 4> {
     }
 
     force_inline int operator[](const int i) const {
+#if defined(_MSC_VER) && !defined(__clang__)
+        return vec_.n128_i32[i];
+#else
         alignas(16) int temp[4];
         vst1q_s32(temp, vec_);
         return temp[i];
+#endif
     }
 
     template <int i> force_inline int get() const { return vgetq_lane_s32(vec_, i & 3); }
     template <int i> force_inline void set(const int f) { vec_ = vsetq_lane_s32(f, vec_, i & 3); }
-    force_inline void set(const int i, const int f) {
+    force_inline void set(const int i, const int v) {
+#if defined(_MSC_VER) && !defined(__clang__)
+        vec_.n128_i32[i] = v;
+#else
         alignas(16) int temp[4];
         vst1q_s32(temp, vec_);
-        temp[i] = f;
+        temp[i] = v;
         vec_ = vld1q_s32(temp);
+#endif
     }
 
     force_inline simd_vec<int, 4> &operator+=(const simd_vec<int, 4> &rhs) {
@@ -500,19 +516,27 @@ template <> class simd_vec<int, 4> {
     }
 
     force_inline simd_vec<int, 4> &operator/=(const simd_vec<int, 4> &rhs) {
+#if defined(_MSC_VER) && !defined(__clang__)
+        ITERATE_4({ vec_.n128_i32[i] /= rhs.vec_.n128_i32[i]; })
+#else
         alignas(16) int comp[4], rhs_comp[4];
         vst1q_s32(comp, vec_);
         vst1q_s32(rhs_comp, rhs.vec_);
         ITERATE_4({ comp[i] = comp[i] / rhs_comp[i]; })
         vec_ = vld1q_s32(comp);
+#endif
         return *this;
     }
 
-    force_inline simd_vec<int, 4> &operator/=(int rhs) {
+    force_inline simd_vec<int, 4> &operator/=(const int rhs) {
+#if defined(_MSC_VER) && !defined(__clang__)
+        ITERATE_4({ vec_.n128_i32[i] /= rhs; })
+#else
         alignas(16) int comp[4];
         vst1q_s32(comp, vec_);
         ITERATE_4({ comp[i] = comp[i] / rhs; })
         vec_ = vld1q_s32(comp);
+#endif
         return *this;
     }
 
@@ -532,7 +556,7 @@ template <> class simd_vec<int, 4> {
         return temp;
     }
 
-    force_inline simd_vec<int, 4> operator==(int rhs) const {
+    force_inline simd_vec<int, 4> operator==(const int rhs) const {
         simd_vec<int, 4> ret;
         ret.vec_ = vreinterpretq_s32_u32(vceqq_s32(vec_, vdupq_n_s32(rhs)));
         return ret;
@@ -544,7 +568,7 @@ template <> class simd_vec<int, 4> {
         return ret;
     }
 
-    force_inline simd_vec<int, 4> operator!=(int rhs) const {
+    force_inline simd_vec<int, 4> operator!=(const int rhs) const {
         simd_vec<int, 4> ret;
         ret.vec_ = vreinterpretq_s32_u32(vmvnq_u32(vceqq_s32(vec_, vdupq_n_s32(rhs))));
         return ret;
@@ -591,25 +615,25 @@ template <> class simd_vec<int, 4> {
         return ret;
     }
 
-    force_inline simd_vec<int, 4> operator<(int rhs) const {
+    force_inline simd_vec<int, 4> operator<(const int rhs) const {
         simd_vec<int, 4> ret;
         ret.vec_ = vreinterpretq_s32_u32(vcltq_s32(vec_, vdupq_n_s32(rhs)));
         return ret;
     }
 
-    force_inline simd_vec<int, 4> operator<=(int rhs) const {
+    force_inline simd_vec<int, 4> operator<=(const int rhs) const {
         simd_vec<int, 4> ret;
         ret.vec_ = vreinterpretq_s32_u32(vcleq_s32(vec_, vdupq_n_s32(rhs)));
         return ret;
     }
 
-    force_inline simd_vec<int, 4> operator>(int rhs) const {
+    force_inline simd_vec<int, 4> operator>(const int rhs) const {
         simd_vec<int, 4> ret;
         ret.vec_ = vreinterpretq_s32_u32(vcgtq_s32(vec_, vdupq_n_s32(rhs)));
         return ret;
     }
 
-    force_inline simd_vec<int, 4> operator>=(int rhs) const {
+    force_inline simd_vec<int, 4> operator>=(const int rhs) const {
         simd_vec<int, 4> ret;
         ret.vec_ = vreinterpretq_s32_u32(vcgeq_s32(vec_, vdupq_n_s32(rhs)));
         return ret;
@@ -732,7 +756,6 @@ template <> class simd_vec<int, 4> {
     friend force_inline simd_vec<int, 4> operator^(const simd_vec<int, 4> &v1, const simd_vec<int, 4> &v2) {
         simd_vec<int, 4> temp;
         temp.vec_ = veorq_s32(v1.vec_, v2.vec_);
-        ;
         return temp;
     }
 
@@ -749,97 +772,159 @@ template <> class simd_vec<int, 4> {
     }
 
     friend force_inline simd_vec<int, 4> operator*(const simd_vec<int, 4> &v1, const simd_vec<int, 4> &v2) {
+        simd_vec<int, 4> ret;
+#if defined(_MSC_VER) && !defined(__clang__)
+        ITERATE_4({ ret.vec_.n128_i32[i] = v1.vec_.n128_i32[i] * v2.vec_.n128_i32[i]; })
+#else
         alignas(16) int comp1[4], comp2[4];
         vst1q_s32(comp1, v1.vec_);
         vst1q_s32(comp2, v2.vec_);
         ITERATE_4({ comp1[i] = comp1[i] * comp2[i]; })
-        return simd_vec<int, 4>{comp1, simd_mem_aligned};
+        ret.vec_ = vld1q_s32(comp1);
+#endif
+        return ret;
     }
 
     friend force_inline simd_vec<int, 4> operator/(const simd_vec<int, 4> &v1, const simd_vec<int, 4> &v2) {
+        simd_vec<int, 4> ret;
+#if defined(_MSC_VER) && !defined(__clang__)
+        ITERATE_4({ ret.vec_.n128_i32[i] = v1.vec_.n128_i32[i] / v2.vec_.n128_i32[i]; })
+#else
         alignas(16) int comp1[4], comp2[4];
         vst1q_s32(comp1, v1.vec_);
         vst1q_s32(comp2, v2.vec_);
         ITERATE_4({ comp1[i] = comp1[i] / comp2[i]; })
-        return simd_vec<int, 4>{comp1, simd_mem_aligned};
+        ret.vec_ = vld1q_s32(comp1);
+#endif
+        return ret;
     }
 
-    friend force_inline simd_vec<int, 4> operator+(const simd_vec<int, 4> &v1, int v2) {
+    friend force_inline simd_vec<int, 4> operator+(const simd_vec<int, 4> &v1, const int v2) {
         simd_vec<int, 4> ret;
         ret.vec_ = vaddq_s32(v1.vec_, vdupq_n_s32(v2));
         return ret;
     }
 
-    friend force_inline simd_vec<int, 4> operator-(const simd_vec<int, 4> &v1, int v2) {
+    friend force_inline simd_vec<int, 4> operator-(const simd_vec<int, 4> &v1, const int v2) {
         simd_vec<int, 4> ret;
         ret.vec_ = vsubq_s32(v1.vec_, vdupq_n_s32(v2));
         return ret;
     }
 
-    friend force_inline simd_vec<int, 4> operator*(const simd_vec<int, 4> &v1, int v2) {
+    friend force_inline simd_vec<int, 4> operator*(const simd_vec<int, 4> &v1, const int v2) {
+        simd_vec<int, 4> ret;
+#if defined(_MSC_VER) && !defined(__clang__)
+        ITERATE_4({ ret.vec_.n128_i32[i] = v1.vec_.n128_i32[i] * v2; })
+#else
         alignas(16) int comp[4];
         vst1q_s32(comp, v1.vec_);
         ITERATE_4({ comp[i] *= v2; })
-        return simd_vec<int, 4>{comp, simd_mem_aligned};
+        ret.vec_ = vld1q_s32(comp);
+#endif
+        return ret;
     }
 
-    friend force_inline simd_vec<int, 4> operator/(const simd_vec<int, 4> &v1, int v2) {
+    friend force_inline simd_vec<int, 4> operator/(const simd_vec<int, 4> &v1, const int v2) {
+        simd_vec<int, 4> ret;
+#if defined(_MSC_VER) && !defined(__clang__)
+        ITERATE_4({ ret.vec_.n128_i32[i] = v1.vec_.n128_i32[i] / v2; })
+#else
         alignas(16) int comp[4];
         vst1q_s32(comp, v1.vec_);
         ITERATE_4({ comp[i] /= v2; })
-        return simd_vec<int, 4>{comp, simd_mem_aligned};
+        ret.vec_ = vld1q_s32(comp);
+#endif
+        return ret;
     }
 
-    friend force_inline simd_vec<int, 4> operator+(int v1, const simd_vec<int, 4> &v2) { return operator+(v2, v1); }
+    friend force_inline simd_vec<int, 4> operator+(const int v1, const simd_vec<int, 4> &v2) {
+        return operator+(v2, v1);
+    }
 
-    friend force_inline simd_vec<int, 4> operator-(int v1, const simd_vec<int, 4> &v2) {
+    friend force_inline simd_vec<int, 4> operator-(const int v1, const simd_vec<int, 4> &v2) {
         simd_vec<int, 4> ret;
         ret.vec_ = vsubq_s32(vdupq_n_s32(v1), v2.vec_);
         return ret;
     }
 
-    friend force_inline simd_vec<int, 4> operator*(int v1, const simd_vec<int, 4> &v2) {
+    friend force_inline simd_vec<int, 4> operator*(const int v1, const simd_vec<int, 4> &v2) {
+        simd_vec<int, 4> ret;
+#if defined(_MSC_VER) && !defined(__clang__)
+        ITERATE_4({ ret.vec_.n128_i32[i] = v1 * v2.vec_.n128_i32[i]; })
+#else
         alignas(16) int comp[4];
         vst1q_s32(comp, v2.vec_);
         ITERATE_4({ comp[i] *= v1; })
-        return simd_vec<int, 4>{comp, simd_mem_aligned};
+        ret.vec_ = vld1q_s32(comp);
+#endif
+        return ret;
     }
 
-    friend force_inline simd_vec<int, 4> operator/(int v1, const simd_vec<int, 4> &v2) {
+    friend force_inline simd_vec<int, 4> operator/(const int v1, const simd_vec<int, 4> &v2) {
+        simd_vec<int, 4> ret;
+#if defined(_MSC_VER) && !defined(__clang__)
+        ITERATE_4({ ret.vec_.n128_i32[i] = v1 / v2.vec_.n128_i32[i]; })
+#else
         alignas(16) int comp[4];
         vst1q_s32(comp, v2.vec_);
         ITERATE_4({ comp[i] = v1 / comp[i]; })
-        return simd_vec<int, 4>{comp, simd_mem_aligned};
+        ret.vec_ = vld1q_s32(comp);
+#endif
+        return ret;
     }
 
     friend force_inline simd_vec<int, 4> operator>>(const simd_vec<int, 4> &v1, const simd_vec<int, 4> &v2) {
+        simd_vec<int, 4> ret;
+#if defined(_MSC_VER) && !defined(__clang__)
+        ITERATE_4({ ret.vec_.n128_u32[i] = v1.vec_.n128_u32[i] >> v2.vec_.n128_u32[i]; })
+#else
         alignas(16) int comp1[4], comp2[4];
         vst1q_s32(comp1, v1.vec_);
         vst1q_s32(comp2, v2.vec_);
         ITERATE_4({ comp1[i] = reinterpret_cast<const unsigned &>(comp1[i]) >> comp2[i]; })
-        return simd_vec<int, 4>{comp1, simd_mem_aligned};
+        ret.vec_ = vld1q_s32(comp1);
+#endif
+        return ret;
     }
 
     friend force_inline simd_vec<int, 4> operator>>(const simd_vec<int, 4> &v1, const int v2) {
+        simd_vec<int, 4> ret;
+#if defined(_MSC_VER) && !defined(__clang__)
+        ITERATE_4({ ret.vec_.n128_u32[i] = v1.vec_.n128_u32[i] >> v2; })
+#else
         alignas(16) int comp[4];
         vst1q_s32(comp, v1.vec_);
         ITERATE_4({ comp[i] = reinterpret_cast<const unsigned &>(comp[i]) >> v2; })
-        return simd_vec<int, 4>{comp, simd_mem_aligned};
+        ret.vec_ = vld1q_s32(comp);
+#endif
+        return ret;
     }
 
     friend force_inline simd_vec<int, 4> operator<<(const simd_vec<int, 4> &v1, const simd_vec<int, 4> &v2) {
+        simd_vec<int, 4> ret;
+#if defined(_MSC_VER) && !defined(__clang__)
+        ITERATE_4({ ret.vec_.n128_u32[i] = v1.vec_.n128_u32[i] << v2.vec_.n128_u32[i]; })
+#else
         alignas(16) int comp1[4], comp2[4];
         vst1q_s32(comp1, v1.vec_);
         vst1q_s32(comp2, v2.vec_);
         ITERATE_4({ comp1[i] = comp1[i] << comp2[i]; })
-        return simd_vec<int, 4>{comp1, simd_mem_aligned};
+        ret.vec_ = vld1q_s32(comp1);
+#endif
+        return ret;
     }
 
     friend force_inline simd_vec<int, 4> operator<<(const simd_vec<int, 4> &v1, const int v2) {
+        simd_vec<int, 4> ret;
+#if defined(_MSC_VER) && !defined(__clang__)
+        ITERATE_4({ ret.vec_.n128_u32[i] = v1.vec_.n128_u32[i] << v2; })
+#else
         alignas(16) int comp[4];
         vst1q_s32(comp, v1.vec_);
         ITERATE_4({ comp[i] = comp[i] << v2; })
-        return simd_vec<int, 4>{comp, simd_mem_aligned};
+        ret.vec_ = vld1q_s32(comp);
+#endif
+        return ret;
     }
 
     friend force_inline simd_vec<int, 4> srai(const simd_vec<int, 4> &v1, const int v2) {
@@ -849,6 +934,11 @@ template <> class simd_vec<int, 4> {
     }
 
     friend force_inline bool is_equal(const simd_vec<int, 4> &v1, const simd_vec<int, 4> &v2) {
+#if defined(_MSC_VER) && !defined(__clang__)
+        bool res = true;
+        ITERATE_4({ res &= (v1.vec_.n128_i32[i] == v2.vec_.n128_i32[i]); })
+        return res;
+#else
         alignas(16) int comp1[4], comp2[4];
         vst1q_s32(comp1, v1.vec_);
         vst1q_s32(comp2, v2.vec_);
@@ -856,6 +946,7 @@ template <> class simd_vec<int, 4> {
         bool res = true;
         ITERATE_4({ res &= (comp1[i] == comp2[i]); })
         return res;
+#endif
     }
 
     friend force_inline const int *value_ptr(const simd_vec<int, 4> &v1) {

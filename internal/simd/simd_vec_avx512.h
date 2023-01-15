@@ -297,36 +297,52 @@ template <> class simd_vec<int, 16> {
     }
 
     force_inline simd_vec<int, 16> &operator*=(const simd_vec<int, 16> &rhs) {
+#if defined(_MSC_VER) && !defined(__clang__)
+        ITERATE_16({ vec_.m512i_i32[i] *= rhs.vec_.m512i_i32[i]; })
+#else
         alignas(64) int comp[16], rhs_comp[16];
         _mm512_store_epi32(comp, vec_);
         _mm512_store_epi32(rhs_comp, rhs.vec_);
-        ITERATE_16({ comp[i] = comp[i] * rhs_comp[i]; })
+        ITERATE_16({ comp[i] *= rhs_comp[i]; })
         vec_ = _mm512_load_epi32(comp);
+#endif
         return *this;
     }
 
     force_inline simd_vec<int, 16> &operator*=(const int rhs) {
+#if defined(_MSC_VER) && !defined(__clang__)
+        ITERATE_16({ vec_.m512i_i32[i] *= rhs; })
+#else
         alignas(64) int comp[16];
         _mm512_store_epi32(comp, vec_);
         ITERATE_16({ comp[i] *= rhs; })
         vec_ = _mm512_load_epi32(comp);
+#endif
         return *this;
     }
 
     force_inline simd_vec<int, 16> &operator/=(const simd_vec<int, 16> &rhs) {
+#if defined(_MSC_VER) && !defined(__clang__)
+        ITERATE_16({ vec_.m512i_i32[i] /= rhs.vec_.m512i_i32[i]; })
+#else
         alignas(64) int comp[16], rhs_comp[16];
         _mm512_store_epi32(comp, vec_);
         _mm512_store_epi32(rhs_comp, rhs.vec_);
         ITERATE_16({ comp[i] /= rhs_comp[i]; })
         vec_ = _mm512_load_epi32(comp);
+#endif
         return *this;
     }
 
     force_inline simd_vec<int, 16> &operator/=(const int rhs) {
+#if defined(_MSC_VER) && !defined(__clang__)
+        ITERATE_16({ vec_.m512i_i32[i] /= rhs; })
+#else
         alignas(64) int comp[16];
         _mm512_store_epi32(comp, vec_);
         ITERATE_16({ comp[i] /= rhs; })
         vec_ = _mm512_load_epi32(comp);
+#endif
         return *this;
     }
 
@@ -468,19 +484,31 @@ template <> class simd_vec<int, 16> {
     }
 
     friend force_inline simd_vec<int, 16> operator*(const simd_vec<int, 16> &v1, const simd_vec<int, 16> &v2) {
+        simd_vec<int, 16> ret;
+#if defined(_MSC_VER) && !defined(__clang__)
+        ITERATE_16({ ret.vec_.m512i_i32[i] = v1.vec_.m512i_i32[i] * v2.vec_.m512i_i32[i]; })
+#else
         alignas(64) int comp1[16], comp2[16];
         _mm512_store_epi32(comp1, v1.vec_);
         _mm512_store_epi32(comp2, v2.vec_);
         ITERATE_16({ comp1[i] *= comp2[i]; })
-        return simd_vec<int, 16>{comp1, simd_mem_aligned};
+        ret.vec_ = _mm512_load_epi32(comp1);
+#endif
+        return ret;
     }
 
     friend force_inline simd_vec<int, 16> operator/(const simd_vec<int, 16> &v1, const simd_vec<int, 16> &v2) {
+        simd_vec<int, 16> ret;
+#if defined(_MSC_VER) && !defined(__clang__)
+        ITERATE_16({ ret.vec_.m512i_i32[i] = v1.vec_.m512i_i32[i] / v2.vec_.m512i_i32[i]; })
+#else
         alignas(64) int comp1[16], comp2[16];
         _mm512_store_epi32(comp1, v1.vec_);
         _mm512_store_epi32(comp2, v2.vec_);
         ITERATE_16({ comp1[i] /= comp2[i]; })
-        return simd_vec<int, 16>{comp1, simd_mem_aligned};
+        ret.vec_ = _mm512_load_epi32(comp1);
+#endif
+        return ret;
     }
 
     friend force_inline simd_vec<int, 16> operator+(const simd_vec<int, 16> &v1, const int v2) {
@@ -496,17 +524,29 @@ template <> class simd_vec<int, 16> {
     }
 
     friend force_inline simd_vec<int, 16> operator*(const simd_vec<int, 16> &v1, const int v2) {
+        simd_vec<int, 16> ret;
+#if defined(_MSC_VER) && !defined(__clang__)
+        ITERATE_16({ ret.vec_.m512i_i32[i] = v1.vec_.m512i_i32[i] * v2; })
+#else
         alignas(64) int comp[16];
         _mm512_store_epi32(comp, v1.vec_);
         ITERATE_16({ comp[i] *= v2; })
-        return simd_vec<int, 16>{comp, simd_mem_aligned};
+        ret.vec_ = _mm512_load_epi32(comp);
+#endif
+        return ret;
     }
 
     friend force_inline simd_vec<int, 16> operator/(const simd_vec<int, 16> &v1, const int v2) {
+        simd_vec<int, 16> ret;
+#if defined(_MSC_VER) && !defined(__clang__)
+        ITERATE_16({ ret.vec_.m512i_i32[i] = v1.vec_.m512i_i32[i] / v2; })
+#else
         alignas(64) int comp[16];
         _mm512_store_epi32(comp, v1.vec_);
         ITERATE_16({ comp[i] /= v2; })
-        return simd_vec<int, 16>{comp, simd_mem_aligned};
+        ret.vec_ = _mm512_load_epi32(comp);
+#endif
+        return ret;
     }
 
     friend force_inline simd_vec<int, 16> operator+(const int v1, const simd_vec<int, 16> &v2) {
@@ -522,17 +562,29 @@ template <> class simd_vec<int, 16> {
     }
 
     friend force_inline simd_vec<int, 16> operator*(const int v1, const simd_vec<int, 16> &v2) {
+        simd_vec<int, 16> ret;
+#if defined(_MSC_VER) && !defined(__clang__)
+        ITERATE_16({ ret.vec_.m512i_i32[i] = v1 * v2.vec_.m512i_i32[i]; })
+#else
         alignas(64) int comp[16];
         _mm512_store_epi32(comp, v2.vec_);
         ITERATE_16({ comp[i] *= v1; })
-        return simd_vec<int, 16>{comp, simd_mem_aligned};
+        ret.vec_ = _mm512_load_epi32(comp);
+#endif
+        return ret;
     }
 
     friend force_inline simd_vec<int, 16> operator/(const int v1, const simd_vec<int, 16> &v2) {
+        simd_vec<int, 16> ret;
+#if defined(_MSC_VER) && !defined(__clang__)
+        ITERATE_16({ ret.vec_.m512i_i32[i] = v1 / v2.vec_.m512i_i32[i]; })
+#else
         alignas(64) int comp[16];
         _mm512_store_epi32(comp, v2.vec_);
         ITERATE_16({ comp[i] = v1 / comp[i]; })
-        return simd_vec<int, 16>{comp, simd_mem_aligned};
+        ret.vec_ = _mm512_load_epi32(comp);
+#endif
+        return ret;
     }
 
     friend force_inline simd_vec<int, 16> operator<(const simd_vec<int, 16> &v1, const simd_vec<int, 16> &v2) {
