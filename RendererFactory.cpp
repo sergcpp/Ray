@@ -35,8 +35,6 @@ LogNull g_null_log;
 } // namespace Ray
 
 Ray::RendererBase *Ray::CreateRenderer(const settings_t &s, ILog *log, const uint32_t enabled_types) {
-    CpuFeatures features = GetCpuFeatures();
-
 #ifdef ENABLE_GPU_IMPL
     if (enabled_types & RendererVK) {
         log->Info("Ray: Creating Vulkan renderer %ix%i", s.w, s.h);
@@ -50,6 +48,7 @@ Ray::RendererBase *Ray::CreateRenderer(const settings_t &s, ILog *log, const uin
 
 #if !defined(__aarch64__) && !defined(_M_ARM) && !defined(_M_ARM64)
 #ifdef ENABLE_SIMD_IMPL
+    const CpuFeatures features = GetCpuFeatures();
     if ((enabled_types & RendererAVX512) && features.avx512_supported) {
         log->Info("Ray: Creating AVX512 renderer %ix%i", s.w, s.h);
         return Avx512::CreateRenderer(s, log);

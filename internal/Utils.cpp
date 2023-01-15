@@ -1377,9 +1377,8 @@ void Ray::CompressImage_BC1(const uint8_t img_src[], const int w, const int h, u
     const int w_aligned = w - (w % 4);
     const int h_aligned = h - (h % 4);
 
-    const CpuFeatures cpu = GetCpuFeatures();
-
 #if !defined(__aarch64__) && !defined(_M_ARM) && !defined(_M_ARM64)
+    const CpuFeatures cpu = GetCpuFeatures();
     if (cpu.sse2_supported && cpu.ssse3_supported) {
         for (int j = 0; j < h_aligned; j += 4, img_src += 4 * w * SrcChannels) {
             const int w_limited =
@@ -1441,9 +1440,8 @@ void Ray::CompressImage_BC3(const uint8_t img_src[], const int w, const int h, u
     const int w_aligned = w - (w % 4);
     const int h_aligned = h - (h % 4);
 
-    const CpuFeatures cpu = GetCpuFeatures();
-
 #if !defined(__aarch64__) && !defined(_M_ARM) && !defined(_M_ARM64)
+    const CpuFeatures cpu = GetCpuFeatures();
     if (cpu.sse2_supported && cpu.ssse3_supported) {
         for (int j = 0; j < h_aligned; j += 4, img_src += w * 4 * 4) {
             for (int i = 0; i < w_aligned; i += 4) {
