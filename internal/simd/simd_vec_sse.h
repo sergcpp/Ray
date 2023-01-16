@@ -816,13 +816,35 @@ template <> class simd_vec<int, 4> {
 
     force_inline static simd_vec<int, 4> min(const int v1, const simd_vec<int, 4> &v2) {
         simd_vec<int, 4> temp;
+#if defined(USE_SSE41)
         temp.vec_ = _mm_min_epi32(_mm_set1_epi32(v1), v2.vec_);
+#elif defined(_MSC_VER) && !defined(__clang__)
+        ITERATE_4({ temp.vec_.m128i_i32[i] = (v1 < v2.vec_.m128i_i32[i]) ? v1 : v2.vec_.m128i_i32[i]; })
+#else
+        alignas(16) int comp[4];
+        _mm_store_si128((__m128i *)comp, v2.vec_);
+        ITERATE_4({ comp[i] = (comp[i] < v1) ? v1 : comp[i]; })
+        temp.vec_ = _mm_load_si128((const __m128i *)comp);
+#endif
         return temp;
     }
 
     force_inline static simd_vec<int, 4> max(const simd_vec<int, 4> &v1, const simd_vec<int, 4> &v2) {
         simd_vec<int, 4> temp;
+#if defined(USE_SSE41)
         temp.vec_ = _mm_max_epi32(v1.vec_, v2.vec_);
+#elif defined(_MSC_VER) && !defined(__clang__)
+        ITERATE_4({
+            temp.vec_.m128i_i32[i] =
+                (v1.vec_.m128i_i32[i] < v2.vec_.m128i_i32[i]) ? v1.vec_.m128i_i32[i] : v2.vec_.m128i_i32[i];
+        })
+#else
+        alignas(16) int comp1[4], comp2[4];
+        _mm_store_si128((__m128i *)comp1, v1.vec_);
+        _mm_store_si128((__m128i *)comp2, v2.vec_);
+        ITERATE_4({ comp1[i] = (comp1[i] > comp2[i]) ? comp1[i] : comp2[i]; })
+        temp.vec_ = _mm_load_si128((const __m128i *)comp1);
+#endif
         return temp;
     }
 
