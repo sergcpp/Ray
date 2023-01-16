@@ -1300,8 +1300,6 @@ template <int S> force_inline simd_ivec<S> hash(const simd_ivec<S> &x) {
     return ret;
 }
 
-force_inline float length(const simd_fvec2 &x) { return sqrtf(x[0] * x[0] + x[1] * x[1]); }
-
 force_inline float floor(float x) { return float(int(x) - (x < 0.0f)); }
 
 template <int S>
@@ -2029,19 +2027,19 @@ void Ray::NS::SampleMeshInTextureSpace(int iteration, int obj_index, int uv_laye
         }
     }
 
-    const simd_ivec2 irect_min = {r.x, r.y}, irect_max = {r.x + r.w - 1, r.y + r.h - 1};
-    const simd_fvec2 size = {float(width), float(height)};
+    const simd_ivec4 irect_min = {r.x, r.y, 0, 0}, irect_max = {r.x + r.w - 1, r.y + r.h - 1, 0, 0};
+    const simd_fvec4 size = {float(width), float(height), 0.0f, 0.0f};
 
     for (uint32_t tri = mesh.tris_index; tri < mesh.tris_index + mesh.tris_count; tri++) {
         const vertex_t &v0 = vertices[vtx_indices[tri * 3 + 0]];
         const vertex_t &v1 = vertices[vtx_indices[tri * 3 + 1]];
         const vertex_t &v2 = vertices[vtx_indices[tri * 3 + 2]];
 
-        const auto t0 = simd_fvec2{v0.t[uv_layer][0], 1.0f - v0.t[uv_layer][1]} * size;
-        const auto t1 = simd_fvec2{v1.t[uv_layer][0], 1.0f - v1.t[uv_layer][1]} * size;
-        const auto t2 = simd_fvec2{v2.t[uv_layer][0], 1.0f - v2.t[uv_layer][1]} * size;
+        const auto t0 = simd_fvec4{v0.t[uv_layer][0], 1.0f - v0.t[uv_layer][1], 0.0f, 0.0f} * size;
+        const auto t1 = simd_fvec4{v1.t[uv_layer][0], 1.0f - v1.t[uv_layer][1], 0.0f, 0.0f} * size;
+        const auto t2 = simd_fvec4{v2.t[uv_layer][0], 1.0f - v2.t[uv_layer][1], 0.0f, 0.0f} * size;
 
-        simd_fvec2 bbox_min = t0, bbox_max = t0;
+        simd_fvec4 bbox_min = t0, bbox_max = t0;
 
         bbox_min = min(bbox_min, t1);
         bbox_min = min(bbox_min, t2);
@@ -2049,8 +2047,8 @@ void Ray::NS::SampleMeshInTextureSpace(int iteration, int obj_index, int uv_laye
         bbox_max = max(bbox_max, t1);
         bbox_max = max(bbox_max, t2);
 
-        simd_ivec2 ibbox_min = (simd_ivec2)(bbox_min),
-                   ibbox_max = simd_ivec2{int(std::round(bbox_max[0])), int(std::round(bbox_max[1]))};
+        simd_ivec4 ibbox_min = (simd_ivec4)(bbox_min),
+                   ibbox_max = simd_ivec4{int(std::round(bbox_max[0])), int(std::round(bbox_max[1])), 0, 0};
 
         if (ibbox_max[0] < irect_min[0] || ibbox_max[1] < irect_min[1] || ibbox_min[0] > irect_max[0] ||
             ibbox_min[1] > irect_max[1]) {
@@ -2065,7 +2063,7 @@ void Ray::NS::SampleMeshInTextureSpace(int iteration, int obj_index, int uv_laye
         ibbox_max.set<0>(ibbox_max[0] + (((ibbox_max[0] + 1) % DimX) ? (DimX - (ibbox_max[0] + 1) % DimX) : 0));
         ibbox_max.set<1>(ibbox_max[1] + (((ibbox_max[1] + 1) % DimY) ? (DimY - (ibbox_max[1] + 1) % DimY) : 0));
 
-        const simd_fvec2 d01 = t0 - t1, d12 = t1 - t2, d20 = t2 - t0;
+        const simd_fvec4 d01 = t0 - t1, d12 = t1 - t2, d20 = t2 - t0;
 
         float area = d01[0] * d20[1] - d20[0] * d01[1];
         if (area < FLT_EPS) {

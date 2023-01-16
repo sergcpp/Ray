@@ -407,8 +407,6 @@ extern const char omega_table[];
 extern const float phi_step;
 extern const char phi_table[][17];
 
-extern const int ray_packet_pixel_layout[];
-
 struct ray_chunk_t {
     uint32_t hash, base, size;
 };
