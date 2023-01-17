@@ -228,7 +228,7 @@ struct bvh_settings_t {
     int min_primitives_in_leaf = 8;
 };
 
-template <typename T> using aligned_vector = std::vector<T, aligned_allocator<T, alignof(T)>>;
+template <typename T, size_t Alignment = alignof(T)> using aligned_vector = std::vector<T, aligned_allocator<T, Alignment>>;
 
 // bit scan forward
 force_inline long GetFirstBit(long mask) {
