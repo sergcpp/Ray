@@ -5290,10 +5290,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
     { // return black for non-existing backfacing material
         simd_ivec<S> no_back_mi = (mat_index >> 16) == 0xffff;
         no_back_mi &= is_backfacing & is_active_lane;
-        where(no_back_mi, out_rgba[0]) = 0.0f;
-        where(no_back_mi, out_rgba[1]) = 0.0f;
-        where(no_back_mi, out_rgba[2]) = 0.0f;
-        where(no_back_mi, out_rgba[3]) = 0.0f;
+        ITERATE_4({ where(no_back_mi, out_rgba[i]) = 0.0f; })
         is_active_lane &= ~no_back_mi;
     }
 
@@ -5507,9 +5504,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
             const simd_fvec<S> _I[3] = {-I[0], -I[1], -I[2]};
             ensure_valid_reflection(plane_N, _I, new_normal);
 
-            where(has_texture, N[0]) = new_normal[0];
-            where(has_texture, N[1]) = new_normal[1];
-            where(has_texture, N[2]) = new_normal[2];
+            ITERATE_3({ where(has_texture, N[i]) = new_normal[i]; })
         }
     }
 
@@ -6399,9 +6394,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
         out_shadow_rays[index] = sh_r;
     }
 
-    where(is_active_lane, out_rgba[0]) = ray.c[0] * col[0];
-    where(is_active_lane, out_rgba[1]) = ray.c[1] * col[1];
-    where(is_active_lane, out_rgba[2]) = ray.c[2] * col[2];
+    ITERATE_3({ where(is_active_lane, out_rgba[i]) = ray.c[i] * col[i]; })
     where(is_active_lane, out_rgba[3]) = 1.0f;
 }
 
