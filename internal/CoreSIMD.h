@@ -1851,8 +1851,8 @@ template <int S> force_inline simd_fvec<S> ngon_rad(const simd_fvec<S> &theta, c
 }
 
 template <int S>
-void get_pix_dirs(const float w, const float h, const camera_t &cam, const float k, const float fov_k, const simd_fvec<S> &x,
-                  const simd_fvec<S> &y, const simd_fvec<S> origin[3], simd_fvec<S> d[3]) {
+void get_pix_dirs(const float w, const float h, const camera_t &cam, const float k, const float fov_k,
+                  const simd_fvec<S> &x, const simd_fvec<S> &y, const simd_fvec<S> origin[3], simd_fvec<S> d[3]) {
     simd_fvec<S> _dx = 2 * fov_k * (x / w + cam.shift[0] / k) - fov_k;
     simd_fvec<S> _dy = 2 * fov_k * (-y / h + cam.shift[1]) + fov_k;
 
@@ -4669,14 +4669,14 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const scene_data_t &sc,
             }
 
             if (l.sky_portal != 0) {
-                simd_fvec<S> env_col[3] = {sc.env->env_col[0], sc.env->env_col[1], sc.env->env_col[2]};
-                if (sc.env->env_map != 0xffffffff) {
+                simd_fvec<S> env_col[3] = {sc.env.env_col[0], sc.env.env_col[1], sc.env.env_col[2]};
+                if (sc.env.env_map != 0xffffffff) {
                     simd_fvec<S> tex_col[3];
-                    SampleLatlong_RGBE(*static_cast<const Ref::TexStorageRGBA *>(textures[0]), sc.env->env_map, ls.L,
-                                       sc.env->env_map_rotation, ray_queue[index], tex_col);
+                    SampleLatlong_RGBE(*static_cast<const Ref::TexStorageRGBA *>(textures[0]), sc.env.env_map, ls.L,
+                                       sc.env.env_map_rotation, ray_queue[index], tex_col);
                     ITERATE_3({ env_col[i] *= tex_col[i]; })
                 }
-                ITERATE_3({ where(ray_queue[index], ls.col[i]) *= sc.env->env_col[i]; })
+                ITERATE_3({ where(ray_queue[index], ls.col[i]) *= sc.env.env_col[i]; })
                 where(ray_queue[index], ls.dist) = MAX_DIST;
             }
         } else if (l.type == LIGHT_TYPE_DISK) {
@@ -4720,14 +4720,14 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const scene_data_t &sc,
             }
 
             if (l.sky_portal != 0) {
-                simd_fvec<S> env_col[3] = {sc.env->env_col[0], sc.env->env_col[1], sc.env->env_col[2]};
-                if (sc.env->env_map != 0xffffffff) {
+                simd_fvec<S> env_col[3] = {sc.env.env_col[0], sc.env.env_col[1], sc.env.env_col[2]};
+                if (sc.env.env_map != 0xffffffff) {
                     simd_fvec<S> tex_col[3];
-                    SampleLatlong_RGBE(*static_cast<const Ref::TexStorageRGBA *>(textures[0]), sc.env->env_map, ls.L,
-                                       sc.env->env_map_rotation, ray_queue[index], tex_col);
+                    SampleLatlong_RGBE(*static_cast<const Ref::TexStorageRGBA *>(textures[0]), sc.env.env_map, ls.L,
+                                       sc.env.env_map_rotation, ray_queue[index], tex_col);
                     ITERATE_3({ env_col[i] *= tex_col[i]; })
                 }
-                ITERATE_3({ where(ray_queue[index], ls.col[i]) *= sc.env->env_col[i]; })
+                ITERATE_3({ where(ray_queue[index], ls.col[i]) *= sc.env.env_col[i]; })
                 where(ray_queue[index], ls.dist) = MAX_DIST;
             }
         } else if (l.type == LIGHT_TYPE_LINE) {
@@ -4777,14 +4777,14 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const scene_data_t &sc,
 
             // probably can not be a portal, but still..
             if (l.sky_portal != 0) {
-                simd_fvec<S> env_col[3] = {sc.env->env_col[0], sc.env->env_col[1], sc.env->env_col[2]};
-                if (sc.env->env_map != 0xffffffff) {
+                simd_fvec<S> env_col[3] = {sc.env.env_col[0], sc.env.env_col[1], sc.env.env_col[2]};
+                if (sc.env.env_map != 0xffffffff) {
                     simd_fvec<S> tex_col[3];
-                    SampleLatlong_RGBE(*static_cast<const Ref::TexStorageRGBA *>(textures[0]), sc.env->env_map, ls.L,
-                                       sc.env->env_map_rotation, ray_queue[index], tex_col);
+                    SampleLatlong_RGBE(*static_cast<const Ref::TexStorageRGBA *>(textures[0]), sc.env.env_map, ls.L,
+                                       sc.env.env_map_rotation, ray_queue[index], tex_col);
                     ITERATE_3({ env_col[i] *= tex_col[i]; })
                 }
-                ITERATE_3({ where(ray_queue[index], ls.col[i]) *= sc.env->env_col[i]; })
+                ITERATE_3({ where(ray_queue[index], ls.col[i]) *= sc.env.env_col[i]; })
                 where(ray_queue[index], ls.dist) = MAX_DIST;
             }
         } else if (l.type == LIGHT_TYPE_TRI) {
@@ -4835,21 +4835,21 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const scene_data_t &sc,
                 ITERATE_3({ where(ray_queue[index], ls.col[i]) *= tex_col[i]; })
             }
         } else if (l.type == LIGHT_TYPE_ENV) {
-            assert(sc.env->qtree_levels);
-            const auto *qtree_mips = reinterpret_cast<const simd_fvec4 *const *>(sc.env->qtree_mips);
+            assert(sc.env.qtree_levels);
+            const auto *qtree_mips = reinterpret_cast<const simd_fvec4 *const *>(sc.env.qtree_mips);
 
             const simd_fvec<S> rand = ri * float(sc.li_indices.size()) - simd_fvec<S>(light_index);
 
             simd_fvec<S> dir_and_pdf[4];
-            Sample_EnvQTree(sc.env->env_map_rotation, qtree_mips, sc.env->qtree_levels, rand, ru, rv, dir_and_pdf);
+            Sample_EnvQTree(sc.env.env_map_rotation, qtree_mips, sc.env.qtree_levels, rand, ru, rv, dir_and_pdf);
 
             ITERATE_3({ where(ray_queue[index], ls.L[i]) = dir_and_pdf[i]; })
 
             simd_fvec<S> tex_col[3];
-            assert(sc.env->env_map != 0xffffffff);
-            SampleLatlong_RGBE(*static_cast<const Ref::TexStorageRGBA *>(textures[0]), sc.env->env_map, ls.L,
-                               sc.env->env_map_rotation, ray_queue[index], tex_col);
-            ITERATE_3({ where(ray_queue[index], ls.col[i]) *= sc.env->env_col[i] * tex_col[i]; })
+            assert(sc.env.env_map != 0xffffffff);
+            SampleLatlong_RGBE(*static_cast<const Ref::TexStorageRGBA *>(textures[0]), sc.env.env_map, ls.L,
+                               sc.env.env_map_rotation, ray_queue[index], tex_col);
+            ITERATE_3({ where(ray_queue[index], ls.col[i]) *= sc.env.env_col[i] * tex_col[i]; })
 
             where(ray_queue[index], ls.area) = 1.0f;
             where(ray_queue[index], ls.dist) = MAX_DIST;
@@ -5016,28 +5016,28 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
     if (ino_hit.not_all_zeros()) {
         simd_fvec<S> env_col[4] = {{1.0f}, {1.0f}, {1.0f}, {1.0f}};
 
-        const uint32_t env_map = sc.env->env_map;
-        const float env_map_rotation = sc.env->env_map_rotation;
+        const uint32_t env_map = sc.env.env_map;
+        const float env_map_rotation = sc.env.env_map_rotation;
         const simd_ivec<S> env_map_mask = (ray.depth & 0x00ffffff) != 0;
 
         if (env_map != 0xffffffff && (ino_hit & env_map_mask).not_all_zeros()) {
             SampleLatlong_RGBE(*static_cast<const Ref::TexStorageRGBA *>(textures[0]), env_map, ray.d, env_map_rotation,
                                (ino_hit & env_map_mask), env_col);
-            if (sc.env->qtree_levels) {
-                const auto *qtree_mips = reinterpret_cast<const simd_fvec4 *const *>(sc.env->qtree_mips);
+            if (sc.env.qtree_levels) {
+                const auto *qtree_mips = reinterpret_cast<const simd_fvec4 *const *>(sc.env.qtree_mips);
 
                 const simd_fvec<S> light_pdf =
-                    Evaluate_EnvQTree(env_map_rotation, qtree_mips, sc.env->qtree_levels, ray.d);
+                    Evaluate_EnvQTree(env_map_rotation, qtree_mips, sc.env.qtree_levels, ray.d);
                 const simd_fvec<S> bsdf_pdf = ray.pdf;
 
                 const simd_fvec<S> mis_weight = power_heuristic(bsdf_pdf, light_pdf);
                 ITERATE_3({ env_col[i] *= mis_weight; })
             }
         }
-        ITERATE_3({ where(env_map_mask, env_col[i]) *= sc.env->env_col[i]; })
+        ITERATE_3({ where(env_map_mask, env_col[i]) *= sc.env.env_col[i]; })
 
-        const uint32_t back_map = sc.env->back_map;
-        const float back_map_rotation = sc.env->back_map_rotation;
+        const uint32_t back_map = sc.env.back_map;
+        const float back_map_rotation = sc.env.back_map_rotation;
         const simd_ivec<S> back_map_mask = ~env_map_mask;
 
         if (back_map != 0xffffffff && (ino_hit & back_map_mask).not_all_zeros()) {
@@ -5046,7 +5046,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                                back_map_rotation, (ino_hit & back_map_mask), back_col);
             ITERATE_3({ where(back_map_mask, env_col[i]) = back_col[i]; })
         }
-        ITERATE_3({ where(back_map_mask, env_col[i]) *= sc.env->back_col[i]; })
+        ITERATE_3({ where(back_map_mask, env_col[i]) *= sc.env.back_col[i]; })
 
         where(ino_hit, out_rgba[0]) = ray.c[0] * env_col[0];
         where(ino_hit, out_rgba[1]) = ray.c[1] * env_col[1];
@@ -5087,11 +5087,11 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
 
             simd_fvec<S> lcol[3] = {l.col[0], l.col[1], l.col[2]};
             if (l.sky_portal) {
-                ITERATE_3({ lcol[i] *= sc.env->env_col[i]; })
-                if (sc.env->env_map != 0xffffffff) {
+                ITERATE_3({ lcol[i] *= sc.env.env_col[i]; })
+                if (sc.env.env_map != 0xffffffff) {
                     simd_fvec<S> tex_col[3];
-                    SampleLatlong_RGBE(*static_cast<const Ref::TexStorageRGBA *>(textures[0]), sc.env->env_map, ray.d,
-                                       sc.env->env_map_rotation, ray_queue[index], tex_col);
+                    SampleLatlong_RGBE(*static_cast<const Ref::TexStorageRGBA *>(textures[0]), sc.env.env_map, ray.d,
+                                       sc.env.env_map_rotation, ray_queue[index], tex_col);
                     ITERATE_3({ lcol[i] *= tex_col[i]; })
                 }
             }

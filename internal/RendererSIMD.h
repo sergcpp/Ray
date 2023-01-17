@@ -150,25 +150,23 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
 
     const camera_t &cam = s->cams_[s->current_cam()].cam;
 
-    scene_data_t sc_data;
-
-    sc_data.env = &s->env_;
-    sc_data.mesh_instances = s->mesh_instances_.empty() ? nullptr : &s->mesh_instances_[0];
-    sc_data.mi_indices = s->mi_indices_.empty() ? nullptr : &s->mi_indices_[0];
-    sc_data.meshes = s->meshes_.empty() ? nullptr : &s->meshes_[0];
-    sc_data.transforms = s->transforms_.empty() ? nullptr : &s->transforms_[0];
-    sc_data.vtx_indices = s->vtx_indices_.empty() ? nullptr : &s->vtx_indices_[0];
-    sc_data.vertices = s->vertices_.empty() ? nullptr : &s->vertices_[0];
-    sc_data.nodes = s->nodes_.empty() ? nullptr : &s->nodes_[0];
-    sc_data.mnodes = s->mnodes_.empty() ? nullptr : &s->mnodes_[0];
-    sc_data.tris = s->tris_.empty() ? nullptr : &s->tris_[0];
-    sc_data.tri_indices = s->tri_indices_.empty() ? nullptr : &s->tri_indices_[0];
-    sc_data.mtris = s->mtris_.data();
-    sc_data.tri_materials = s->tri_materials_.empty() ? nullptr : &s->tri_materials_[0];
-    sc_data.materials = s->materials_.empty() ? nullptr : &s->materials_[0];
-    sc_data.lights = s->lights_.empty() ? nullptr : &s->lights_[0];
-    sc_data.li_indices = {s->li_indices_.data(), s->li_indices_.size()};
-    sc_data.visible_lights = {s->visible_lights_.data(), s->visible_lights_.size()};
+    const scene_data_t sc_data = {s->env_,
+                                  s->mesh_instances_.data(),
+                                  s->mi_indices_.empty() ? nullptr : &s->mi_indices_[0],
+                                  s->meshes_.empty() ? nullptr : &s->meshes_[0],
+                                  s->transforms_.empty() ? nullptr : &s->transforms_[0],
+                                  s->vtx_indices_.empty() ? nullptr : &s->vtx_indices_[0],
+                                  s->vertices_.empty() ? nullptr : &s->vertices_[0],
+                                  s->nodes_.empty() ? nullptr : &s->nodes_[0],
+                                  s->mnodes_.empty() ? nullptr : &s->mnodes_[0],
+                                  s->tris_.empty() ? nullptr : &s->tris_[0],
+                                  s->tri_indices_.empty() ? nullptr : &s->tri_indices_[0],
+                                  s->mtris_.data(),
+                                  s->tri_materials_.empty() ? nullptr : &s->tri_materials_[0],
+                                  s->materials_.empty() ? nullptr : &s->materials_[0],
+                                  s->lights_.empty() ? nullptr : &s->lights_[0],
+                                  {s->li_indices_.data(), s->li_indices_.size()},
+                                  {s->visible_lights_.data(), s->visible_lights_.size()}};
 
     const uint32_t macro_tree_root = s->macro_nodes_root_;
 
@@ -446,9 +444,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
         clean_buf_.MixWith_SH(temp_buf_, rect, mix_factor);
     }
 
-    auto _clamp_and_gamma_correct = [&cam](const pixel_color_t &p) {
-        return clamp_and_gamma_correct(p, cam);
-    };
+    auto _clamp_and_gamma_correct = [&cam](const pixel_color_t &p) { return clamp_and_gamma_correct(p, cam); };
 
     final_buf_.CopyFrom(clean_buf_, rect, _clamp_and_gamma_correct);
 }

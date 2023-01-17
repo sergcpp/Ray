@@ -547,8 +547,11 @@ force_inline float construct_float(uint32_t m) {
     m &= ieeeMantissa; // Keep only mantissa bits (fractional part)
     m |= ieeeOne;      // Add fractional part to 1.0
 
-    union { uint32_t i; float f; } ret = {m};   // Range [1:2]
-    return ret.f - 1.0f;                        // Range [0:1]
+    union {
+        uint32_t i;
+        float f;
+    } ret = {m};         // Range [1:2]
+    return ret.f - 1.0f; // Range [0:1]
 }
 
 force_inline simd_fvec4 srgb_to_rgb(const simd_fvec4 &col) {
@@ -707,11 +710,17 @@ float fresnel_dielectric_cos(float cosi, float eta) {
 //
 
 force_inline int32_t float_as_int(const float v) {
-    union { float f; int32_t i; } ret = {v};
+    union {
+        float f;
+        int32_t i;
+    } ret = {v};
     return ret.i;
 }
 force_inline float int_as_float(const int32_t v) {
-    union { int32_t i; float f; } ret = {v};
+    union {
+        int32_t i;
+        float f;
+    } ret = {v};
     return ret.f;
 }
 
@@ -3124,10 +3133,10 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, co
         }
 
         if (l.sky_portal != 0) {
-            simd_fvec4 env_col = {sc.env->env_col[0], sc.env->env_col[1], sc.env->env_col[2], 0.0f};
-            if (sc.env->env_map != 0xffffffff) {
-                env_col *= SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), sc.env->env_map, ls.L,
-                                              sc.env->env_map_rotation);
+            simd_fvec4 env_col = {sc.env.env_col[0], sc.env.env_col[1], sc.env.env_col[2], 0.0f};
+            if (sc.env.env_map != 0xffffffff) {
+                env_col *= SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), sc.env.env_map, ls.L,
+                                              sc.env.env_map_rotation);
             }
             ls.col *= env_col;
             ls.dist = MAX_DIST;
@@ -3174,10 +3183,10 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, co
         }
 
         if (l.sky_portal != 0) {
-            simd_fvec4 env_col = {sc.env->env_col[0], sc.env->env_col[1], sc.env->env_col[2], 0.0f};
-            if (sc.env->env_map != 0xffffffff) {
-                env_col *= SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), sc.env->env_map, ls.L,
-                                              sc.env->env_map_rotation);
+            simd_fvec4 env_col = {sc.env.env_col[0], sc.env.env_col[1], sc.env.env_col[2], 0.0f};
+            if (sc.env.env_map != 0xffffffff) {
+                env_col *= SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), sc.env.env_map, ls.L,
+                                              sc.env.env_map_rotation);
             }
             ls.col *= env_col;
             ls.dist = MAX_DIST;
@@ -3216,10 +3225,10 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, co
 
         // probably can not be a portal, but still..
         if (l.sky_portal != 0) {
-            simd_fvec4 env_col = {sc.env->env_col[0], sc.env->env_col[1], sc.env->env_col[2], 0.0f};
-            if (sc.env->env_map != 0xffffffff) {
-                env_col *= SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), sc.env->env_map, ls.L,
-                                              sc.env->env_map_rotation);
+            simd_fvec4 env_col = {sc.env.env_col[0], sc.env.env_col[1], sc.env.env_col[2], 0.0f};
+            if (sc.env.env_map != 0xffffffff) {
+                env_col *= SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), sc.env.env_map, ls.L,
+                                              sc.env.env_map_rotation);
             }
             ls.col *= env_col;
             ls.dist = MAX_DIST;
@@ -3260,8 +3269,8 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, co
             ls.col *= SampleBilinear(textures, lmat.textures[BASE_TEXTURE], luvs, 0 /* lod */);
         }
     } else if (l.type == LIGHT_TYPE_ENV) {
-        assert(sc.env->qtree_levels);
-        const auto *qtree_mips = reinterpret_cast<const simd_fvec4 *const *>(sc.env->qtree_mips);
+        assert(sc.env.qtree_levels);
+        const auto *qtree_mips = reinterpret_cast<const simd_fvec4 *const *>(sc.env.qtree_mips);
 
         const float rand = u1 * float(sc.li_indices.size()) - float(light_index);
 
@@ -3269,14 +3278,14 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, co
         const float ry = fract(random_seq[RAND_DIM_LIGHT_V] + sample_off[1]);
 
         const simd_fvec4 dir_and_pdf =
-            Sample_EnvQTree(sc.env->env_map_rotation, qtree_mips, sc.env->qtree_levels, rand, rx, ry);
+            Sample_EnvQTree(sc.env.env_map_rotation, qtree_mips, sc.env.qtree_levels, rand, rx, ry);
 
         ls.L = simd_fvec4{dir_and_pdf[0], dir_and_pdf[1], dir_and_pdf[2], 0.0f};
-        ls.col *= {sc.env->env_col[0], sc.env->env_col[1], sc.env->env_col[2], 0.0f};
+        ls.col *= {sc.env.env_col[0], sc.env.env_col[1], sc.env.env_col[2], 0.0f};
 
-        assert(sc.env->env_map != 0xffffffff);
-        ls.col *= SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), sc.env->env_map, ls.L,
-                                     sc.env->env_map_rotation);
+        assert(sc.env.env_map != 0xffffffff);
+        ls.col *= SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), sc.env.env_map, ls.L,
+                                     sc.env.env_map_rotation);
 
         ls.area = 1.0f;
         ls.dist = MAX_DIST;
@@ -3421,15 +3430,15 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
     if (!inter.mask) {
         simd_fvec4 env_col = {1.0f};
 
-        const uint32_t env_map = (ray.depth & 0x00ffffff) ? sc.env->env_map : sc.env->back_map;
-        const float env_map_rotation = (ray.depth & 0x00ffffff) ? sc.env->env_map_rotation : sc.env->back_map_rotation;
+        const uint32_t env_map = (ray.depth & 0x00ffffff) ? sc.env.env_map : sc.env.back_map;
+        const float env_map_rotation = (ray.depth & 0x00ffffff) ? sc.env.env_map_rotation : sc.env.back_map_rotation;
         if (env_map != 0xffffffff) {
             env_col = SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), env_map,
                                          simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f}, env_map_rotation);
-            if (sc.env->qtree_levels) {
-                const auto *qtree_mips = reinterpret_cast<const simd_fvec4 *const *>(sc.env->qtree_mips);
+            if (sc.env.qtree_levels) {
+                const auto *qtree_mips = reinterpret_cast<const simd_fvec4 *const *>(sc.env.qtree_mips);
 
-                const float light_pdf = Evaluate_EnvQTree(env_map_rotation, qtree_mips, sc.env->qtree_levels, I);
+                const float light_pdf = Evaluate_EnvQTree(env_map_rotation, qtree_mips, sc.env.qtree_levels, I);
                 const float bsdf_pdf = ray.pdf;
 
                 const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
@@ -3437,8 +3446,8 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
             }
         }
         env_col *= (ray.depth & 0x00ffffff)
-                       ? simd_fvec4{sc.env->env_col[0], sc.env->env_col[1], sc.env->env_col[2], 1.0f}
-                       : simd_fvec4{sc.env->back_col[0], sc.env->back_col[1], sc.env->back_col[2], 1.0f};
+                       ? simd_fvec4{sc.env.env_col[0], sc.env.env_col[1], sc.env.env_col[2], 1.0f}
+                       : simd_fvec4{sc.env.back_col[0], sc.env.back_col[1], sc.env.back_col[2], 1.0f};
         env_col.set<3>(1.0f);
 
         return Ray::pixel_color_t{ray.c[0] * env_col[0], ray.c[1] * env_col[1], ray.c[2] * env_col[2], env_col[3]};
@@ -3451,10 +3460,10 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
 
         simd_fvec4 lcol = simd_fvec4{l.col[0], l.col[1], l.col[2], 0.0f};
         if (l.sky_portal != 0) {
-            simd_fvec4 env_col = {sc.env->env_col[0], sc.env->env_col[1], sc.env->env_col[2], 0.0f};
-            if (sc.env->env_map != 0xffffffff) {
-                env_col *= SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), sc.env->env_map, I,
-                                              sc.env->env_map_rotation);
+            simd_fvec4 env_col = {sc.env.env_col[0], sc.env.env_col[1], sc.env.env_col[2], 0.0f};
+            if (sc.env.env_map != 0xffffffff) {
+                env_col *= SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), sc.env.env_map, I,
+                                              sc.env.env_map_rotation);
             }
             lcol *= env_col;
         }

@@ -435,7 +435,7 @@ struct ray_chunk_t {
 static_assert(sizeof(pass_info_t) == 20, "!");*/
 
 struct scene_data_t {
-    const environment_t *env;
+    const environment_t &env;
     const mesh_instance_t *mesh_instances;
     const uint32_t *mi_indices;
     const mesh_t *meshes;
