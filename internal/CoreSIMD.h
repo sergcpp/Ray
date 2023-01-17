@@ -5067,6 +5067,8 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
 
     const simd_ivec<S> is_light_hit = is_active_lane & (inter.obj_index < 0); // Area light intersection
     if (is_light_hit.not_all_zeros()) {
+        simd_fvec<S> light_col[3] = {};
+
         simd_ivec<S> ray_queue[S];
         ray_queue[0] = is_light_hit;
 
@@ -5097,10 +5099,6 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
             }
 
             if (l.type == LIGHT_TYPE_SPHERE) {
-                // const simd_fvec<S> op[3] = {l.sph.pos[0] - ray.o[0], l.sph.pos[1] - ray.o[1], l.sph.pos[2] -
-                // ray.o[2]}; const simd_fvec<S> b = dot3(op, ray.d); const simd_fvec<S> det = safe_sqrt(b * b -
-                // dot3(op, op) + l.sph.radius * l.sph.radius);
-
                 simd_fvec<S> dd[3] = {l.sph.pos[0] - P[0], l.sph.pos[1] - P[1], l.sph.pos[2] - P[2]};
                 normalize(dd);
 
@@ -5133,7 +5131,6 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                 cross(l.rect.u, l.rect.v, light_fwd);
                 normalize(light_fwd);
 
-                // const float plane_dist = dot3(light_fwd, l.rect.pos);
                 const simd_fvec<S> cos_theta = dot3(ray.d, light_fwd);
 
                 const simd_fvec<S> light_pdf = safe_div(inter.t * inter.t, l.rect.area * cos_theta);
@@ -5146,7 +5143,6 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                 cross(l.disk.u, l.disk.v, light_fwd);
                 normalize(light_fwd);
 
-                // const float plane_dist = dot3(light_fwd, l.disk.pos);
                 const simd_fvec<S> cos_theta = dot3(ray.d, light_fwd);
 
                 const simd_fvec<S> light_pdf = safe_div(inter.t * inter.t, l.disk.area * cos_theta);
@@ -5156,7 +5152,6 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                 ITERATE_3({ lcol[i] *= mis_weight; });
             } else if (l.type == LIGHT_TYPE_LINE) {
                 const float *light_dir = l.line.v;
-                // const float light_area = l.line.area;
 
                 const simd_fvec<S> cos_theta = 1.0f - abs(dot3(ray.d, light_dir));
 
@@ -5167,13 +5162,18 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                 ITERATE_3({ lcol[i] *= mis_weight; });
             }
 
-            where(ray_queue[index], out_rgba[0]) = ray.c[0] * lcol[0];
-            where(ray_queue[index], out_rgba[1]) = ray.c[1] * lcol[1];
-            where(ray_queue[index], out_rgba[2]) = ray.c[2] * lcol[2];
-            where(ray_queue[index], out_rgba[3]) = 1.0f;
+            where(ray_queue[index], light_col[0]) = lcol[0];
+            where(ray_queue[index], light_col[1]) = lcol[1];
+            where(ray_queue[index], light_col[2]) = lcol[2];
 
             ++index;
         }
+
+        where(ray_queue[index], out_rgba[0]) = ray.c[0] * light_col[0];
+        where(ray_queue[index], out_rgba[1]) = ray.c[1] * light_col[1];
+        where(ray_queue[index], out_rgba[2]) = ray.c[2] * light_col[2];
+        where(ray_queue[index], out_rgba[3]) = 1.0f;
+
         is_active_lane &= ~is_light_hit;
     }
 
