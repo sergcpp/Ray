@@ -4187,14 +4187,8 @@ void Ray::NS::IntersectScene(ray_data_t<S> &r, const simd_ivec<S> &mask, const i
             ray_queue[0] = keep_going;
 
             while (index != num) {
-                uint32_t first_mi = 0xffff;
-
-                // TODO: simplify this!
-                ITERATE(S, {
-                    if (first_mi == 0xffff && ray_queue[index].template get<i>()) {
-                        first_mi = mat_index.template get<i>();
-                    }
-                })
+                const long mask = ray_queue[index].movemask();
+                uint32_t first_mi = mat_index[GetFirstBit(mask)];
 
                 simd_ivec<S> same_mi = (mat_index == first_mi);
                 simd_ivec<S> diff_mi = and_not(same_mi, ray_queue[index]);
@@ -4369,17 +4363,8 @@ void Ray::NS::IntersectScene(const shadow_ray_t<S> &r, const simd_ivec<S> &mask,
             ray_queue[0] = inter.mask;
 
             while (index != num) {
-                uint32_t first_mi = 0xffff;
-
-                for (int i = 0; i < S; i++) {
-                    if (!ray_queue[index][i]) {
-                        continue;
-                    }
-
-                    if (first_mi == 0xffff) {
-                        first_mi = mat_index[i];
-                    }
-                }
+                const long mask = ray_queue[index].movemask();
+                const uint32_t first_mi = mat_index[GetFirstBit(mask)];
 
                 simd_ivec<S> same_mi = (mat_index == first_mi);
                 simd_ivec<S> diff_mi = and_not(same_mi, ray_queue[index]);
