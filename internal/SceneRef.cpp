@@ -809,7 +809,7 @@ void Ray::Ref::Scene::PrepareEnvMapQTree() {
     float total_lum = 0.0f;
 
     { // initialize the first quadtree level
-        env_map_qtree_.mips.emplace_back(cur_res * cur_res / 4, 0.0f);
+        env_map_qtree_.mips.emplace_back(cur_res * cur_res, 0.0f);
 
         for (int y = 0; y < size[1]; ++y) {
             const float theta = PI * float(y) / size[1];
@@ -837,21 +837,22 @@ void Ray::Ref::Scene::PrepareEnvMapQTree() {
                 qx /= 2;
                 qy /= 2;
 
-                simd_fvec4 &qvec = env_map_qtree_.mips[0][qy * cur_res / 2 + qx];
+                auto &qvec = reinterpret_cast<simd_fvec4 &>(env_map_qtree_.mips[0][4 * (qy * cur_res / 2 + qx)]);
                 qvec.set(index, std::max(qvec[index], cur_lum));
             }
         }
 
-        for (const simd_fvec4 &v : env_map_qtree_.mips[0]) {
-            total_lum += (v[0] + v[1] + v[2] + v[3]);
+        for (const float v : env_map_qtree_.mips[0]) {
+            total_lum += v;
         }
 
         cur_res /= 2;
     }
 
     while (cur_res > 1) {
-        env_map_qtree_.mips.emplace_back(cur_res * cur_res / 4, 0.0f);
-        const auto &prev_mip = env_map_qtree_.mips[env_map_qtree_.mips.size() - 2];
+        env_map_qtree_.mips.emplace_back(cur_res * cur_res, 0.0f);
+        const auto *prev_mip =
+            reinterpret_cast<const simd_fvec4 *>(env_map_qtree_.mips[env_map_qtree_.mips.size() - 2].data());
 
         for (int y = 0; y < cur_res; ++y) {
             for (int x = 0; x < cur_res; ++x) {
@@ -865,7 +866,7 @@ void Ray::Ref::Scene::PrepareEnvMapQTree() {
                 const int qx = (x / 2);
                 const int qy = (y / 2);
 
-                env_map_qtree_.mips.back()[qy * cur_res / 2 + qx].set(index, res_lum);
+                env_map_qtree_.mips.back()[4 * (qy * cur_res / 2 + qx) + index] = res_lum;
             }
         }
 
@@ -882,7 +883,7 @@ void Ray::Ref::Scene::PrepareEnvMapQTree() {
     int the_last_required_lod;
     for (int lod = int(env_map_qtree_.mips.size()) - 1; lod >= 0; --lod) {
         the_last_required_lod = lod;
-        const auto &cur_mip = env_map_qtree_.mips[lod];
+        const auto *cur_mip = reinterpret_cast<const simd_fvec4 *>(env_map_qtree_.mips[lod].data());
 
         bool subdivision_required = false;
         for (int y = 0; y < (cur_res / 2) && !subdivision_required; ++y) {
@@ -914,7 +915,7 @@ void Ray::Ref::Scene::PrepareEnvMapQTree() {
 
     env_.qtree_levels = int(env_map_qtree_.mips.size());
     for (int i = 0; i < env_.qtree_levels; ++i) {
-        env_.qtree_mips[i] = value_ptr(env_map_qtree_.mips[i][0]);
+        env_.qtree_mips[i] = env_map_qtree_.mips[i].data();
     }
     for (int i = env_.qtree_levels; i < countof(env_.qtree_mips); ++i) {
         env_.qtree_mips[i] = nullptr;
