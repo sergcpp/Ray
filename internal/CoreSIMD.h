@@ -4845,7 +4845,7 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const scene_data_t &sc,
 
             ITERATE_3({ where(ray_queue[index], ls.L[i]) = dir_and_pdf[i]; })
 
-            simd_fvec<S> tex_col[3];
+            simd_fvec<S> tex_col[3] = {};
             assert(sc.env.env_map != 0xffffffff);
             SampleLatlong_RGBE(*static_cast<const Ref::TexStorageRGBA *>(textures[0]), sc.env.env_map, ls.L,
                                sc.env.env_map_rotation, ray_queue[index], tex_col);
