@@ -362,6 +362,11 @@ void IntersectAreaLights(const ray_data_t<S> &r, const simd_ivec<S> &ray_mask, c
                          Span<const uint32_t> visible_lights, const transform_t transforms[],
                          hit_data_t<S> &inout_inter);
 
+// Get environment collor at direction
+template <int S>
+void Evaluate_EnvColor(const ray_data_t<S> &ray, const simd_ivec<S> &mask, const environment_t &env,
+                       const Ref::TexStorageRGBA &tex_storage, simd_fvec<S> env_col[4]);
+
 // Shade
 template <int S>
 void ShadeSurface(const pass_settings_t &ps, const float *random_seq, const hit_data_t<S> &inter,
@@ -5001,6 +5006,39 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, const simd_ivec<S> &_r
 }
 
 template <int S>
+void Ray::NS::Evaluate_EnvColor(const ray_data_t<S> &ray, const simd_ivec<S> &mask, const environment_t &env,
+                                const Ref::TexStorageRGBA &tex_storage, simd_fvec<S> env_col[4]) {
+    const uint32_t env_map = env.env_map;
+    const float env_map_rotation = env.env_map_rotation;
+    const simd_ivec<S> env_map_mask = (ray.depth & 0x00ffffff) != 0;
+
+    if (env_map != 0xffffffff && (mask & env_map_mask).not_all_zeros()) {
+        SampleLatlong_RGBE(tex_storage, env_map, ray.d, env_map_rotation, (mask & env_map_mask), env_col);
+        if (env.qtree_levels) {
+            const auto *qtree_mips = reinterpret_cast<const simd_fvec4 *const *>(env.qtree_mips);
+
+            const simd_fvec<S> light_pdf = Evaluate_EnvQTree(env_map_rotation, qtree_mips, env.qtree_levels, ray.d);
+            const simd_fvec<S> bsdf_pdf = ray.pdf;
+
+            const simd_fvec<S> mis_weight = power_heuristic(bsdf_pdf, light_pdf);
+            ITERATE_3({ env_col[i] *= mis_weight; })
+        }
+    }
+    ITERATE_3({ where(env_map_mask, env_col[i]) *= env.env_col[i]; })
+
+    const uint32_t back_map = env.back_map;
+    const float back_map_rotation = env.back_map_rotation;
+    const simd_ivec<S> back_map_mask = ~env_map_mask;
+
+    if (back_map != 0xffffffff && (mask & back_map_mask).not_all_zeros()) {
+        simd_fvec<S> back_col[3];
+        SampleLatlong_RGBE(tex_storage, back_map, ray.d, back_map_rotation, (mask & back_map_mask), back_col);
+        ITERATE_3({ where(back_map_mask, env_col[i]) = back_col[i]; })
+    }
+    ITERATE_3({ where(back_map_mask, env_col[i]) *= env.back_col[i]; })
+}
+
+template <int S>
 void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, const hit_data_t<S> &inter,
                            const ray_data_t<S> &ray, const scene_data_t &sc, uint32_t node_index,
                            const Ref::TexStorageBase *const textures[], simd_fvec<S> out_rgba[4],
@@ -5015,38 +5053,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
     const simd_ivec<S> ino_hit = ~inter.mask;
     if (ino_hit.not_all_zeros()) {
         simd_fvec<S> env_col[4] = {{1.0f}, {1.0f}, {1.0f}, {1.0f}};
-
-        const uint32_t env_map = sc.env.env_map;
-        const float env_map_rotation = sc.env.env_map_rotation;
-        const simd_ivec<S> env_map_mask = (ray.depth & 0x00ffffff) != 0;
-
-        if (env_map != 0xffffffff && (ino_hit & env_map_mask).not_all_zeros()) {
-            SampleLatlong_RGBE(*static_cast<const Ref::TexStorageRGBA *>(textures[0]), env_map, ray.d, env_map_rotation,
-                               (ino_hit & env_map_mask), env_col);
-            if (sc.env.qtree_levels) {
-                const auto *qtree_mips = reinterpret_cast<const simd_fvec4 *const *>(sc.env.qtree_mips);
-
-                const simd_fvec<S> light_pdf =
-                    Evaluate_EnvQTree(env_map_rotation, qtree_mips, sc.env.qtree_levels, ray.d);
-                const simd_fvec<S> bsdf_pdf = ray.pdf;
-
-                const simd_fvec<S> mis_weight = power_heuristic(bsdf_pdf, light_pdf);
-                ITERATE_3({ env_col[i] *= mis_weight; })
-            }
-        }
-        ITERATE_3({ where(env_map_mask, env_col[i]) *= sc.env.env_col[i]; })
-
-        const uint32_t back_map = sc.env.back_map;
-        const float back_map_rotation = sc.env.back_map_rotation;
-        const simd_ivec<S> back_map_mask = ~env_map_mask;
-
-        if (back_map != 0xffffffff && (ino_hit & back_map_mask).not_all_zeros()) {
-            simd_fvec<S> back_col[3];
-            SampleLatlong_RGBE(*static_cast<const Ref::TexStorageRGBA *>(textures[0]), back_map, ray.d,
-                               back_map_rotation, (ino_hit & back_map_mask), back_col);
-            ITERATE_3({ where(back_map_mask, env_col[i]) = back_col[i]; })
-        }
-        ITERATE_3({ where(back_map_mask, env_col[i]) *= sc.env.back_col[i]; })
+        Evaluate_EnvColor(ray, ino_hit, sc.env, *static_cast<const Ref::TexStorageRGBA *>(textures[0]), env_col);
 
         where(ino_hit, out_rgba[0]) = ray.c[0] * env_col[0];
         where(ino_hit, out_rgba[1]) = ray.c[1] * env_col[1];

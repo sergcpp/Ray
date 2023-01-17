@@ -3420,6 +3420,32 @@ void Ray::Ref::IntersectAreaLights(const ray_data_t &ray, const light_t lights[]
     }
 }
 
+Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_EnvColor(const ray_data_t &ray, const environment_t &env,
+                                                 const TexStorageRGBA &tex_storage) {
+    const auto I = simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f};
+    simd_fvec4 env_col = {1.0f};
+
+    const uint32_t env_map = (ray.depth & 0x00ffffff) ? env.env_map : env.back_map;
+    const float env_map_rotation = (ray.depth & 0x00ffffff) ? env.env_map_rotation : env.back_map_rotation;
+    if (env_map != 0xffffffff) {
+        env_col = SampleLatlong_RGBE(tex_storage, env_map, I, env_map_rotation);
+        if (env.qtree_levels) {
+            const auto *qtree_mips = reinterpret_cast<const simd_fvec4 *const *>(env.qtree_mips);
+
+            const float light_pdf = Evaluate_EnvQTree(env_map_rotation, qtree_mips, env.qtree_levels, I);
+            const float bsdf_pdf = ray.pdf;
+
+            const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
+            env_col *= mis_weight;
+        }
+    }
+    env_col *= (ray.depth & 0x00ffffff) ? simd_fvec4{env.env_col[0], env.env_col[1], env.env_col[2], 1.0f}
+                                        : simd_fvec4{env.back_col[0], env.back_col[1], env.back_col[2], 1.0f};
+    env_col.set<3>(1.0f);
+
+    return env_col;
+}
+
 Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_data_t &inter, const ray_data_t &ray,
                                           const float *random_seq, const scene_data_t &sc, const uint32_t node_index,
                                           const TexStorageBase *const textures[], ray_data_t *out_secondary_rays,
@@ -3428,28 +3454,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
     const auto I = simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f};
 
     if (!inter.mask) {
-        simd_fvec4 env_col = {1.0f};
-
-        const uint32_t env_map = (ray.depth & 0x00ffffff) ? sc.env.env_map : sc.env.back_map;
-        const float env_map_rotation = (ray.depth & 0x00ffffff) ? sc.env.env_map_rotation : sc.env.back_map_rotation;
-        if (env_map != 0xffffffff) {
-            env_col = SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), env_map,
-                                         simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f}, env_map_rotation);
-            if (sc.env.qtree_levels) {
-                const auto *qtree_mips = reinterpret_cast<const simd_fvec4 *const *>(sc.env.qtree_mips);
-
-                const float light_pdf = Evaluate_EnvQTree(env_map_rotation, qtree_mips, sc.env.qtree_levels, I);
-                const float bsdf_pdf = ray.pdf;
-
-                const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
-                env_col *= mis_weight;
-            }
-        }
-        env_col *= (ray.depth & 0x00ffffff)
-                       ? simd_fvec4{sc.env.env_col[0], sc.env.env_col[1], sc.env.env_col[2], 1.0f}
-                       : simd_fvec4{sc.env.back_col[0], sc.env.back_col[1], sc.env.back_col[2], 1.0f};
-        env_col.set<3>(1.0f);
-
+        const simd_fvec4 env_col = Evaluate_EnvColor(ray, sc.env, *static_cast<const TexStorageRGBA *>(textures[0]));
         return Ray::pixel_color_t{ray.c[0] * env_col[0], ray.c[1] * env_col[1], ray.c[2] * env_col[2], env_col[3]};
     }
 

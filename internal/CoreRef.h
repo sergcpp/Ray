@@ -280,6 +280,9 @@ void SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, const TexSto
 void IntersectAreaLights(const ray_data_t &ray, const light_t lights[], Span<const uint32_t> visible_lights,
                          const transform_t transforms[], hit_data_t &inout_inter);
 
+// Get environment collor at direction
+simd_fvec4 Evaluate_EnvColor(const ray_data_t &ray, const environment_t &env, const TexStorageRGBA &tex_storage);
+
 // Shade
 Ray::pixel_color_t ShadeSurface(const pass_settings_t &ps, const hit_data_t &inter, const ray_data_t &ray,
                                 const float *random_seq, const scene_data_t &sc, uint32_t node_index,
