@@ -942,34 +942,133 @@ void SampleLightSource(vec3 P, int hi, vec2 sample_off, inout light_sample_t ls)
     }
 }
 
+vec3 Evaluate_EnvColor(ray_data_t ray) {
+    const vec3 rd = vec3(ray.d[0], ray.d[1], ray.d[2]);
+#if PRIMARY
+    vec3 env_col = g_params.back_col.xyz;
+    const uint env_map = floatBitsToUint(g_params.back_col.w);
+    const float env_map_rotation = g_params.back_rotation;
+#else
+    vec3 env_col = (ray.depth & 0x00ffffff) != 0 ? g_params.env_col.xyz : g_params.back_col.xyz;
+    const uint env_map = (ray.depth & 0x00ffffff) != 0 ? floatBitsToUint(g_params.env_col.w) : floatBitsToUint(g_params.back_col.w);
+    const float env_map_rotation = (ray.depth & 0x00ffffff) != 0 ? g_params.env_rotation : g_params.back_rotation;
+#endif
+    if (env_map != 0xffffffff) {
+#if BINDLESS
+        env_col *= SampleLatlong_RGBE(env_map, rd, env_map_rotation);
+#else
+        env_col *= SampleLatlong_RGBE(g_textures[env_map], rd, env_map_rotation);
+#endif
+        if (g_params.env_qtree_levels > 0) {
+            const float light_pdf = Evaluate_EnvQTree(env_map_rotation, g_env_qtree, g_params.env_qtree_levels, rd);
+            const float bsdf_pdf = ray.pdf;
+
+            const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
+            env_col *= mis_weight;
+        }
+    }
+    return env_col;
+}
+
+vec3 Evaluate_LightColor(ray_data_t ray, hit_data_t inter) {
+    const vec3 ro = vec3(ray.o[0], ray.o[1], ray.o[2]);
+    const vec3 rd = vec3(ray.d[0], ray.d[1], ray.d[2]);
+
+    const vec3 P = ro + inter.t * rd;
+
+    const light_t l = g_lights[-inter.obj_index - 1];
+
+    vec3 lcol = uintBitsToFloat(l.type_and_param0.yzw);
+    [[dont_flatten]] if ((l.type_and_param0.x & (1 << 7)) != 0) { // sky portal
+        vec3 env_col = g_params.env_col.xyz;
+        const uint env_map = floatBitsToUint(g_params.env_col.w);
+        if (env_map != 0xffffffff) {
+#if BINDLESS
+            env_col *= SampleLatlong_RGBE(env_map, rd, g_params.env_rotation);
+#else
+            env_col *= SampleLatlong_RGBE(g_textures[env_map], rd, g_params.env_rotation);
+#endif
+        }
+        lcol *= env_col;
+    }
+
+    const uint l_type = (l.type_and_param0.x & 0x1f);
+    if (l_type == LIGHT_TYPE_SPHERE) {
+        const vec3 light_pos = l.SPH_POS;
+        const float light_area = l.SPH_AREA;
+
+        const vec3 op = light_pos - ro;
+        const float b = dot(op, rd);
+        const float det = sqrt(b * b - dot(op, op) + l.SPH_RADIUS * l.SPH_RADIUS);
+
+        const float cos_theta = dot(rd, normalize(light_pos - P));
+
+        const float light_pdf = (inter.t * inter.t) / (0.5 * light_area * cos_theta);
+        const float bsdf_pdf = ray.pdf;
+
+        float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
+        lcol *= mis_weight;
+
+        [[dont_flatten]] if (l.SPH_SPOT > 0.0 && l.SPH_BLEND > 0.0) {
+            const float _dot = -dot(rd, l.SPH_DIR);
+            const float _angle = acos(clamp(_dot, 0.0, 1.0));
+            [[flatten]] if (l.SPH_BLEND > 0.0) {
+                lcol *= clamp((l.SPH_SPOT - _angle) / l.SPH_BLEND, 0.0, 1.0);
+            }
+        }
+    } else if (l_type == LIGHT_TYPE_RECT) {
+        const vec3 light_pos = l.RECT_POS;
+        const vec3 light_u = l.RECT_U;
+        const vec3 light_v = l.RECT_V;
+
+        const vec3 light_forward = normalize(cross(light_u, light_v));
+        const float light_area = l.RECT_AREA;
+
+        const float plane_dist = dot(light_forward, light_pos);
+        const float cos_theta = dot(rd, light_forward);
+
+        const float light_pdf = (inter.t * inter.t) / (light_area * cos_theta);
+        const float bsdf_pdf = ray.pdf;
+
+        const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
+        lcol *= mis_weight;
+    } else if (l_type == LIGHT_TYPE_DISK) {
+        const vec3 light_pos = l.DISK_POS;
+        const vec3 light_u = l.DISK_U;
+        const vec3 light_v = l.DISK_V;
+
+        const vec3 light_forward = normalize(cross(light_u, light_v));
+        const float light_area = l.DISK_AREA;
+
+        const float plane_dist = dot(light_forward, light_pos);
+        const float cos_theta = dot(rd, light_forward);
+
+        const float light_pdf = (inter.t * inter.t) / (light_area * cos_theta);
+        const float bsdf_pdf = ray.pdf;
+
+        const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
+        lcol *= mis_weight;
+    } else if (l_type == LIGHT_TYPE_LINE) {
+        const vec3 light_dir = l.LINE_V;
+        const float light_area = l.LINE_AREA;
+
+        const float cos_theta = 1.0 - abs(dot(rd, light_dir));
+
+        const float light_pdf = (inter.t * inter.t) / (light_area * cos_theta);
+        const float bsdf_pdf = ray.pdf;
+
+        const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
+        lcol *= mis_weight;
+    }
+    return lcol;
+}
+
 vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
     const vec3 ro = vec3(ray.o[0], ray.o[1], ray.o[2]);
     const vec3 rd = vec3(ray.d[0], ray.d[1], ray.d[2]);
 
     [[dont_flatten]] if (inter.mask == 0) {
-#if PRIMARY
-        vec3 env_col = g_params.back_col.xyz;
-        const uint env_map = floatBitsToUint(g_params.back_col.w);
-        const float env_map_rotation = g_params.back_rotation;
-#else
-        vec3 env_col = (ray.depth & 0x00ffffff) != 0 ? g_params.env_col.xyz : g_params.back_col.xyz;
-        const uint env_map = (ray.depth & 0x00ffffff) != 0 ? floatBitsToUint(g_params.env_col.w) : floatBitsToUint(g_params.back_col.w);
-        const float env_map_rotation = (ray.depth & 0x00ffffff) != 0 ? g_params.env_rotation : g_params.back_rotation;
-#endif
-        if (env_map != 0xffffffff) {
-#if BINDLESS
-            env_col *= SampleLatlong_RGBE(env_map, rd, env_map_rotation);
-#else
-            env_col *= SampleLatlong_RGBE(g_textures[env_map], rd, env_map_rotation);
-#endif
-            if (g_params.env_qtree_levels > 0) {
-                const float light_pdf = Evaluate_EnvQTree(env_map_rotation, g_env_qtree, g_params.env_qtree_levels, rd);
-                const float bsdf_pdf = ray.pdf;
-
-                const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
-                env_col *= mis_weight;
-            }
-        }
+        const vec3 env_col = Evaluate_EnvColor(ray);
         return vec3(ray.c[0] * env_col[0], ray.c[1] * env_col[1], ray.c[2] * env_col[2]);
     }
 
@@ -977,91 +1076,7 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
     const vec3 P = ro + inter.t * rd;
 
     [[dont_flatten]] if (inter.obj_index < 0) { // Area light intersection
-        const light_t l = g_lights[-inter.obj_index - 1];
-
-        vec3 lcol = uintBitsToFloat(l.type_and_param0.yzw);
-        [[dont_flatten]] if ((l.type_and_param0.x & (1 << 7)) != 0) { // sky portal
-            vec3 env_col = g_params.env_col.xyz;
-            const uint env_map = floatBitsToUint(g_params.env_col.w);
-            if (env_map != 0xffffffff) {
-#if BINDLESS
-                env_col *= SampleLatlong_RGBE(env_map, I, g_params.env_rotation);
-#else
-                env_col *= SampleLatlong_RGBE(g_textures[env_map], I, g_params.env_rotation);
-#endif
-            }
-            lcol *= env_col;
-        }
-
-        const uint l_type = (l.type_and_param0.x & 0x1f);
-        if (l_type == LIGHT_TYPE_SPHERE) {
-            const vec3 light_pos = l.SPH_POS;
-            const float light_area = l.SPH_AREA;
-
-            const vec3 op = light_pos - ro;
-            const float b = dot(op, rd);
-            const float det = sqrt(b * b - dot(op, op) + l.SPH_RADIUS * l.SPH_RADIUS);
-
-            const float cos_theta = dot(rd, normalize(light_pos - P));
-
-            const float light_pdf = (inter.t * inter.t) / (0.5 * light_area * cos_theta);
-            const float bsdf_pdf = ray.pdf;
-
-            float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
-            lcol *= mis_weight;
-
-            [[dont_flatten]] if (l.SPH_SPOT > 0.0 && l.SPH_BLEND > 0.0) {
-                const float _dot = -dot(I, l.SPH_DIR);
-                const float _angle = acos(clamp(_dot, 0.0, 1.0));
-                [[flatten]] if (l.SPH_BLEND > 0.0) {
-                    lcol *= clamp((l.SPH_SPOT - _angle) / l.SPH_BLEND, 0.0, 1.0);
-                }
-            }
-        } else if (l_type == LIGHT_TYPE_RECT) {
-            const vec3 light_pos = l.RECT_POS;
-            const vec3 light_u = l.RECT_U;
-            const vec3 light_v = l.RECT_V;
-
-            const vec3 light_forward = normalize(cross(light_u, light_v));
-            const float light_area = l.RECT_AREA;
-
-            const float plane_dist = dot(light_forward, light_pos);
-            const float cos_theta = dot(rd, light_forward);
-
-            const float light_pdf = (inter.t * inter.t) / (light_area * cos_theta);
-            const float bsdf_pdf = ray.pdf;
-
-            const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
-            lcol *= mis_weight;
-        } else if (l_type == LIGHT_TYPE_DISK) {
-            const vec3 light_pos = l.DISK_POS;
-            const vec3 light_u = l.DISK_U;
-            const vec3 light_v = l.DISK_V;
-
-            const vec3 light_forward = normalize(cross(light_u, light_v));
-            const float light_area = l.DISK_AREA;
-
-            const float plane_dist = dot(light_forward, light_pos);
-            const float cos_theta = dot(rd, light_forward);
-
-            const float light_pdf = (inter.t * inter.t) / (light_area * cos_theta);
-            const float bsdf_pdf = ray.pdf;
-
-            const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
-            lcol *= mis_weight;
-        } else if (l_type == LIGHT_TYPE_LINE) {
-            const vec3 light_dir = l.LINE_V;
-            const float light_area = l.LINE_AREA;
-
-            const float cos_theta = 1.0 - abs(dot(rd, light_dir));
-
-            const float light_pdf = (inter.t * inter.t) / (light_area * cos_theta);
-            const float bsdf_pdf = ray.pdf;
-
-            const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
-            lcol *= mis_weight;
-        }
-
+        const vec3 lcol = Evaluate_LightColor(ray, inter);
         return vec3(ray.c[0] * lcol[0], ray.c[1] * lcol[1], ray.c[2] * lcol[2]);
     }
 
