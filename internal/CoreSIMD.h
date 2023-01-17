@@ -366,6 +366,11 @@ void IntersectAreaLights(const ray_data_t<S> &r, const simd_ivec<S> &ray_mask, c
 template <int S>
 void Evaluate_EnvColor(const ray_data_t<S> &ray, const simd_ivec<S> &mask, const environment_t &env,
                        const Ref::TexStorageRGBA &tex_storage, simd_fvec<S> env_col[4]);
+// Get light color at intersection point
+template <int S>
+void Evaluate_LightColor(const simd_fvec<S> P[3], const ray_data_t<S> &ray, const simd_ivec<S> &mask,
+                         const hit_data_t<S> &inter, const environment_t &env, const light_t *lights,
+                         const Ref::TexStorageRGBA &tex_storage, simd_fvec<S> light_col[3]);
 
 // Shade
 template <int S>
@@ -5039,6 +5044,111 @@ void Ray::NS::Evaluate_EnvColor(const ray_data_t<S> &ray, const simd_ivec<S> &ma
 }
 
 template <int S>
+void Ray::NS::Evaluate_LightColor(const simd_fvec<S> P[3], const ray_data_t<S> &ray, const simd_ivec<S> &mask,
+                                  const hit_data_t<S> &inter, const environment_t &env, const light_t *lights,
+                                  const Ref::TexStorageRGBA &tex_storage, simd_fvec<S> light_col[3]) {
+    simd_ivec<S> ray_queue[S];
+    ray_queue[0] = mask;
+
+    int index = 0, num = 1;
+    while (index != num) {
+        const long mask = ray_queue[index].movemask();
+        const uint32_t first_li = inter.obj_index[GetFirstBit(mask)];
+
+        const simd_ivec<S> same_li = (inter.obj_index == first_li);
+        const simd_ivec<S> diff_li = and_not(same_li, ray_queue[index]);
+
+        if (diff_li.not_all_zeros()) {
+            ray_queue[index] &= same_li;
+            ray_queue[num++] = diff_li;
+        }
+
+        const light_t &l = lights[-int(first_li) - 1];
+
+        simd_fvec<S> lcol[3] = {l.col[0], l.col[1], l.col[2]};
+        if (l.sky_portal) {
+            ITERATE_3({ lcol[i] *= env.env_col[i]; })
+            if (env.env_map != 0xffffffff) {
+                simd_fvec<S> tex_col[3];
+                SampleLatlong_RGBE(tex_storage, env.env_map, ray.d, env.env_map_rotation, ray_queue[index], tex_col);
+                ITERATE_3({ lcol[i] *= tex_col[i]; })
+            }
+        }
+
+        if (l.type == LIGHT_TYPE_SPHERE) {
+            simd_fvec<S> dd[3] = {l.sph.pos[0] - P[0], l.sph.pos[1] - P[1], l.sph.pos[2] - P[2]};
+            normalize(dd);
+
+            const simd_fvec<S> cos_theta = dot3(ray.d, dd);
+
+            const simd_fvec<S> light_pdf = safe_div(inter.t * inter.t, 0.5f * l.sph.area * cos_theta);
+            const simd_fvec<S> bsdf_pdf = ray.pdf;
+
+            const simd_fvec<S> mis_weight = power_heuristic(bsdf_pdf, light_pdf);
+            ITERATE_3({ lcol[i] *= mis_weight; });
+
+            if (l.sph.spot > 0.0f && l.sph.blend > 0.0f) {
+                const simd_fvec<S> _dot =
+                    -(ray.d[0] * l.sph.dir[0] + ray.d[1] * l.sph.dir[1] + ray.d[2] * l.sph.dir[2]);
+                assert((ray_queue[index] & simd_cast(_dot <= 0.0f)).all_zeros());
+
+                simd_fvec<S> _angle = 0.0f;
+                ITERATE(S, {
+                    if (ray_queue[index].template get<i>()) {
+                        _angle.template set<i>(std::acos(_dot.template get<i>()));
+                    }
+                })
+                assert((ray_queue[index] & simd_cast(_angle > l.sph.spot)).all_zeros());
+                if (l.sph.blend > 0.0f) {
+                    const simd_fvec<S> spot_weight = clamp((l.sph.spot - _angle) / l.sph.blend, 0.0f, 1.0f);
+                    ITERATE_3({ lcol[i] *= spot_weight; })
+                }
+            }
+        } else if (l.type == LIGHT_TYPE_RECT) {
+            float light_fwd[3];
+            cross(l.rect.u, l.rect.v, light_fwd);
+            normalize(light_fwd);
+
+            const simd_fvec<S> cos_theta = dot3(ray.d, light_fwd);
+
+            const simd_fvec<S> light_pdf = safe_div(inter.t * inter.t, l.rect.area * cos_theta);
+            const simd_fvec<S> bsdf_pdf = ray.pdf;
+
+            const simd_fvec<S> mis_weight = power_heuristic(bsdf_pdf, light_pdf);
+            ITERATE_3({ lcol[i] *= mis_weight; });
+        } else if (l.type == LIGHT_TYPE_DISK) {
+            float light_fwd[3];
+            cross(l.disk.u, l.disk.v, light_fwd);
+            normalize(light_fwd);
+
+            const simd_fvec<S> cos_theta = dot3(ray.d, light_fwd);
+
+            const simd_fvec<S> light_pdf = safe_div(inter.t * inter.t, l.disk.area * cos_theta);
+            const simd_fvec<S> bsdf_pdf = ray.pdf;
+
+            const simd_fvec<S> mis_weight = power_heuristic(bsdf_pdf, light_pdf);
+            ITERATE_3({ lcol[i] *= mis_weight; });
+        } else if (l.type == LIGHT_TYPE_LINE) {
+            const float *light_dir = l.line.v;
+
+            const simd_fvec<S> cos_theta = 1.0f - abs(dot3(ray.d, light_dir));
+
+            const simd_fvec<S> light_pdf = safe_div(inter.t * inter.t, l.line.area * cos_theta);
+            const simd_fvec<S> bsdf_pdf = ray.pdf;
+
+            const simd_fvec<S> mis_weight = power_heuristic(bsdf_pdf, light_pdf);
+            ITERATE_3({ lcol[i] *= mis_weight; });
+        }
+
+        where(ray_queue[index], light_col[0]) = lcol[0];
+        where(ray_queue[index], light_col[1]) = lcol[1];
+        where(ray_queue[index], light_col[2]) = lcol[2];
+
+        ++index;
+    }
+};
+
+template <int S>
 void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, const hit_data_t<S> &inter,
                            const ray_data_t<S> &ray, const scene_data_t &sc, uint32_t node_index,
                            const Ref::TexStorageBase *const textures[], simd_fvec<S> out_rgba[4],
@@ -5068,118 +5178,16 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
 
     const simd_fvec<S> *I = ray.d;
     simd_fvec<S> P[3] = {};
-    where(inter.mask, P[0]) = fmadd(inter.t, ray.d[0], ray.o[0]);
-    where(inter.mask, P[1]) = fmadd(inter.t, ray.d[1], ray.o[1]);
-    where(inter.mask, P[2]) = fmadd(inter.t, ray.d[2], ray.o[2]);
+    ITERATE_3({ where(inter.mask, P[i]) = fmadd(inter.t, ray.d[i], ray.o[i]); })
 
     const simd_ivec<S> is_light_hit = is_active_lane & (inter.obj_index < 0); // Area light intersection
     if (is_light_hit.not_all_zeros()) {
         simd_fvec<S> light_col[3] = {};
+        Evaluate_LightColor(P, ray, is_light_hit, inter, sc.env, sc.lights,
+                            *static_cast<const Ref::TexStorageRGBA *>(textures[0]), light_col);
 
-        simd_ivec<S> ray_queue[S];
-        ray_queue[0] = is_light_hit;
-
-        int index = 0, num = 1;
-        while (index != num) {
-            const long mask = ray_queue[index].movemask();
-            const uint32_t first_li = inter.obj_index[GetFirstBit(mask)];
-
-            const simd_ivec<S> same_li = (inter.obj_index == first_li);
-            const simd_ivec<S> diff_li = and_not(same_li, ray_queue[index]);
-
-            if (diff_li.not_all_zeros()) {
-                ray_queue[index] &= same_li;
-                ray_queue[num++] = diff_li;
-            }
-
-            const light_t &l = sc.lights[-int(first_li) - 1];
-
-            simd_fvec<S> lcol[3] = {l.col[0], l.col[1], l.col[2]};
-            if (l.sky_portal) {
-                ITERATE_3({ lcol[i] *= sc.env.env_col[i]; })
-                if (sc.env.env_map != 0xffffffff) {
-                    simd_fvec<S> tex_col[3];
-                    SampleLatlong_RGBE(*static_cast<const Ref::TexStorageRGBA *>(textures[0]), sc.env.env_map, ray.d,
-                                       sc.env.env_map_rotation, ray_queue[index], tex_col);
-                    ITERATE_3({ lcol[i] *= tex_col[i]; })
-                }
-            }
-
-            if (l.type == LIGHT_TYPE_SPHERE) {
-                simd_fvec<S> dd[3] = {l.sph.pos[0] - P[0], l.sph.pos[1] - P[1], l.sph.pos[2] - P[2]};
-                normalize(dd);
-
-                const simd_fvec<S> cos_theta = dot3(ray.d, dd);
-
-                const simd_fvec<S> light_pdf = safe_div(inter.t * inter.t, 0.5f * l.sph.area * cos_theta);
-                const simd_fvec<S> bsdf_pdf = ray.pdf;
-
-                const simd_fvec<S> mis_weight = power_heuristic(bsdf_pdf, light_pdf);
-                ITERATE_3({ lcol[i] *= mis_weight; });
-
-                if (l.sph.spot > 0.0f && l.sph.blend > 0.0f) {
-                    const simd_fvec<S> _dot = -(I[0] * l.sph.dir[0] + I[1] * l.sph.dir[1] + I[2] * l.sph.dir[2]);
-                    assert((ray_queue[index] & simd_cast(_dot <= 0.0f)).all_zeros());
-
-                    simd_fvec<S> _angle = 0.0f;
-                    ITERATE(S, {
-                        if (ray_queue[index].template get<i>()) {
-                            _angle.template set<i>(std::acos(_dot.template get<i>()));
-                        }
-                    })
-                    assert((ray_queue[index] & simd_cast(_angle > l.sph.spot)).all_zeros());
-                    if (l.sph.blend > 0.0f) {
-                        const simd_fvec<S> spot_weight = clamp((l.sph.spot - _angle) / l.sph.blend, 0.0f, 1.0f);
-                        ITERATE_3({ lcol[i] *= spot_weight; })
-                    }
-                }
-            } else if (l.type == LIGHT_TYPE_RECT) {
-                float light_fwd[3];
-                cross(l.rect.u, l.rect.v, light_fwd);
-                normalize(light_fwd);
-
-                const simd_fvec<S> cos_theta = dot3(ray.d, light_fwd);
-
-                const simd_fvec<S> light_pdf = safe_div(inter.t * inter.t, l.rect.area * cos_theta);
-                const simd_fvec<S> bsdf_pdf = ray.pdf;
-
-                const simd_fvec<S> mis_weight = power_heuristic(bsdf_pdf, light_pdf);
-                ITERATE_3({ lcol[i] *= mis_weight; });
-            } else if (l.type == LIGHT_TYPE_DISK) {
-                float light_fwd[3];
-                cross(l.disk.u, l.disk.v, light_fwd);
-                normalize(light_fwd);
-
-                const simd_fvec<S> cos_theta = dot3(ray.d, light_fwd);
-
-                const simd_fvec<S> light_pdf = safe_div(inter.t * inter.t, l.disk.area * cos_theta);
-                const simd_fvec<S> bsdf_pdf = ray.pdf;
-
-                const simd_fvec<S> mis_weight = power_heuristic(bsdf_pdf, light_pdf);
-                ITERATE_3({ lcol[i] *= mis_weight; });
-            } else if (l.type == LIGHT_TYPE_LINE) {
-                const float *light_dir = l.line.v;
-
-                const simd_fvec<S> cos_theta = 1.0f - abs(dot3(ray.d, light_dir));
-
-                const simd_fvec<S> light_pdf = safe_div(inter.t * inter.t, l.line.area * cos_theta);
-                const simd_fvec<S> bsdf_pdf = ray.pdf;
-
-                const simd_fvec<S> mis_weight = power_heuristic(bsdf_pdf, light_pdf);
-                ITERATE_3({ lcol[i] *= mis_weight; });
-            }
-
-            where(ray_queue[index], light_col[0]) = lcol[0];
-            where(ray_queue[index], light_col[1]) = lcol[1];
-            where(ray_queue[index], light_col[2]) = lcol[2];
-
-            ++index;
-        }
-
-        where(ray_queue[index], out_rgba[0]) = ray.c[0] * light_col[0];
-        where(ray_queue[index], out_rgba[1]) = ray.c[1] * light_col[1];
-        where(ray_queue[index], out_rgba[2]) = ray.c[2] * light_col[2];
-        where(ray_queue[index], out_rgba[3]) = 1.0f;
+        ITERATE_3({ where(is_light_hit, out_rgba[i]) = ray.c[i] * light_col[i]; })
+        where(is_light_hit, out_rgba[3]) = 1.0f;
 
         is_active_lane &= ~is_light_hit;
     }

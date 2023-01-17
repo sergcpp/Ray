@@ -3446,6 +3446,88 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_EnvColor(const ray_data_t &ray, const en
     return env_col;
 }
 
+Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_LightColor(const ray_data_t &ray, const hit_data_t &inter,
+                                                   const environment_t &env, const TexStorageRGBA &tex_storage,
+                                                   const light_t *lights) {
+    const auto I = simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f};
+    const auto P = simd_fvec4{ray.o[0], ray.o[1], ray.o[2], 0.0f} + inter.t * I;
+
+    const light_t &l = lights[-inter.obj_index - 1];
+
+    simd_fvec4 lcol = simd_fvec4{l.col[0], l.col[1], l.col[2], 0.0f};
+    if (l.sky_portal != 0) {
+        simd_fvec4 env_col = {env.env_col[0], env.env_col[1], env.env_col[2], 0.0f};
+        if (env.env_map != 0xffffffff) {
+            env_col *= SampleLatlong_RGBE(tex_storage, env.env_map, I, env.env_map_rotation);
+        }
+        lcol *= env_col;
+    }
+#if USE_NEE
+    if (l.type == LIGHT_TYPE_SPHERE) {
+        const auto light_pos = simd_fvec4{l.sph.pos[0], l.sph.pos[1], l.sph.pos[2], 0.0f};
+        const float light_area = l.sph.area;
+
+        const float cos_theta = dot(simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f}, normalize(light_pos - P));
+
+        const float light_pdf = (inter.t * inter.t) / (0.5f * light_area * cos_theta);
+        const float bsdf_pdf = ray.pdf;
+
+        const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
+        lcol *= mis_weight;
+
+        if (l.sph.spot > 0.0f && l.sph.blend > 0.0f) {
+            const float _dot = -dot(I, simd_fvec4{l.sph.dir});
+            assert(_dot > 0.0f);
+            const float _angle = std::acos(clamp(_dot, 0.0f, 1.0f));
+            assert(_angle <= l.sph.spot);
+            if (l.sph.blend > 0.0f) {
+                lcol *= clamp((l.sph.spot - _angle) / l.sph.blend, 0.0f, 1.0f);
+            }
+        }
+    } else if (l.type == LIGHT_TYPE_RECT) {
+        simd_fvec4 light_u = simd_fvec4{l.rect.u[0], l.rect.u[1], l.rect.u[2], 0.0f};
+        simd_fvec4 light_v = simd_fvec4{l.rect.v[0], l.rect.v[1], l.rect.v[2], 0.0f};
+
+        const simd_fvec4 light_forward = normalize(cross(light_u, light_v));
+        const float light_area = l.rect.area;
+
+        const float cos_theta = dot(simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f}, light_forward);
+
+        const float light_pdf = (inter.t * inter.t) / (light_area * cos_theta);
+        const float bsdf_pdf = ray.pdf;
+
+        const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
+        lcol *= mis_weight;
+    } else if (l.type == LIGHT_TYPE_DISK) {
+        simd_fvec4 light_u = simd_fvec4{l.disk.u[0], l.disk.u[1], l.disk.u[2], 0.0f};
+        simd_fvec4 light_v = simd_fvec4{l.disk.v[0], l.disk.v[1], l.disk.v[2], 0.0f};
+
+        const simd_fvec4 light_forward = normalize(cross(light_u, light_v));
+        const float light_area = l.disk.area;
+
+        const float cos_theta = dot(simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f}, light_forward);
+
+        const float light_pdf = (inter.t * inter.t) / (light_area * cos_theta);
+        const float bsdf_pdf = ray.pdf;
+
+        const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
+        lcol *= mis_weight;
+    } else if (l.type == LIGHT_TYPE_LINE) {
+        const simd_fvec4 light_dir = simd_fvec4{l.line.v[0], l.line.v[1], l.line.v[2], 0.0f};
+        const float light_area = l.line.area;
+
+        const float cos_theta = 1.0f - std::abs(dot(simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f}, light_dir));
+
+        const float light_pdf = (inter.t * inter.t) / (light_area * cos_theta);
+        const float bsdf_pdf = ray.pdf;
+
+        const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
+        lcol *= mis_weight;
+    }
+#endif
+    return lcol;
+}
+
 Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_data_t &inter, const ray_data_t &ray,
                                           const float *random_seq, const scene_data_t &sc, const uint32_t node_index,
                                           const TexStorageBase *const textures[], ray_data_t *out_secondary_rays,
@@ -3461,80 +3543,8 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
     const auto P = simd_fvec4{ray.o[0], ray.o[1], ray.o[2], 0.0f} + inter.t * I;
 
     if (inter.obj_index < 0) { // Area light intersection
-        const light_t &l = sc.lights[-inter.obj_index - 1];
-
-        simd_fvec4 lcol = simd_fvec4{l.col[0], l.col[1], l.col[2], 0.0f};
-        if (l.sky_portal != 0) {
-            simd_fvec4 env_col = {sc.env.env_col[0], sc.env.env_col[1], sc.env.env_col[2], 0.0f};
-            if (sc.env.env_map != 0xffffffff) {
-                env_col *= SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), sc.env.env_map, I,
-                                              sc.env.env_map_rotation);
-            }
-            lcol *= env_col;
-        }
-#if USE_NEE
-        if (l.type == LIGHT_TYPE_SPHERE) {
-            const auto light_pos = simd_fvec4{l.sph.pos[0], l.sph.pos[1], l.sph.pos[2], 0.0f};
-            const float light_area = l.sph.area;
-
-            const float cos_theta = dot(simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f}, normalize(light_pos - P));
-
-            const float light_pdf = (inter.t * inter.t) / (0.5f * light_area * cos_theta);
-            const float bsdf_pdf = ray.pdf;
-
-            const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
-            lcol *= mis_weight;
-
-            if (l.sph.spot > 0.0f && l.sph.blend > 0.0f) {
-                const float _dot = -dot(I, simd_fvec4{l.sph.dir});
-                assert(_dot > 0.0f);
-                const float _angle = std::acos(clamp(_dot, 0.0f, 1.0f));
-                assert(_angle <= l.sph.spot);
-                if (l.sph.blend > 0.0f) {
-                    lcol *= clamp((l.sph.spot - _angle) / l.sph.blend, 0.0f, 1.0f);
-                }
-            }
-        } else if (l.type == LIGHT_TYPE_RECT) {
-            simd_fvec4 light_u = simd_fvec4{l.rect.u[0], l.rect.u[1], l.rect.u[2], 0.0f};
-            simd_fvec4 light_v = simd_fvec4{l.rect.v[0], l.rect.v[1], l.rect.v[2], 0.0f};
-
-            const simd_fvec4 light_forward = normalize(cross(light_u, light_v));
-            const float light_area = l.rect.area;
-
-            const float cos_theta = dot(simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f}, light_forward);
-
-            const float light_pdf = (inter.t * inter.t) / (light_area * cos_theta);
-            const float bsdf_pdf = ray.pdf;
-
-            const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
-            lcol *= mis_weight;
-        } else if (l.type == LIGHT_TYPE_DISK) {
-            simd_fvec4 light_u = simd_fvec4{l.disk.u[0], l.disk.u[1], l.disk.u[2], 0.0f};
-            simd_fvec4 light_v = simd_fvec4{l.disk.v[0], l.disk.v[1], l.disk.v[2], 0.0f};
-
-            const simd_fvec4 light_forward = normalize(cross(light_u, light_v));
-            const float light_area = l.disk.area;
-
-            const float cos_theta = dot(simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f}, light_forward);
-
-            const float light_pdf = (inter.t * inter.t) / (light_area * cos_theta);
-            const float bsdf_pdf = ray.pdf;
-
-            const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
-            lcol *= mis_weight;
-        } else if (l.type == LIGHT_TYPE_LINE) {
-            const simd_fvec4 light_dir = simd_fvec4{l.line.v[0], l.line.v[1], l.line.v[2], 0.0f};
-            const float light_area = l.line.area;
-
-            const float cos_theta = 1.0f - std::abs(dot(simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f}, light_dir));
-
-            const float light_pdf = (inter.t * inter.t) / (light_area * cos_theta);
-            const float bsdf_pdf = ray.pdf;
-
-            const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
-            lcol *= mis_weight;
-        }
-#endif
+        const simd_fvec4 lcol =
+            Evaluate_LightColor(ray, inter, sc.env, *static_cast<const TexStorageRGBA *>(textures[0]), sc.lights);
         return Ray::pixel_color_t{ray.c[0] * lcol[0], ray.c[1] * lcol[1], ray.c[2] * lcol[2], 1.0f};
     }
 

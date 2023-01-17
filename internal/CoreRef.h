@@ -282,6 +282,9 @@ void IntersectAreaLights(const ray_data_t &ray, const light_t lights[], Span<con
 
 // Get environment collor at direction
 simd_fvec4 Evaluate_EnvColor(const ray_data_t &ray, const environment_t &env, const TexStorageRGBA &tex_storage);
+// Get light color at intersection point
+simd_fvec4 Evaluate_LightColor(const ray_data_t &ray, const hit_data_t &inter, const environment_t &env,
+                               const TexStorageRGBA &tex_storage, const light_t *lights);
 
 // Shade
 Ray::pixel_color_t ShadeSurface(const pass_settings_t &ps, const hit_data_t &inter, const ray_data_t &ray,
