@@ -1496,13 +1496,11 @@ simd_fvec<S> get_texture_lod(const simd_ivec<S> &width, const simd_ivec<S> &heig
 
     const simd_fvec<S> dim = min(min(length2_2d(_duv_dx), length2_2d(_duv_dy)), length2_2d(_diagonal));
 
-    simd_fvec<S> lod;
+    simd_fvec<S> lod = 0.0f;
 
     ITERATE(S, {
         if (reinterpret_cast<const simd_ivec<S> &>(mask).template get<i>()) {
-            lod[i] = 0.5f * fast_log2(dim.template get<i>()) - 1.0f;
-        } else {
-            lod[i] = 0.0f;
+            lod.template set<i>(0.5f * fast_log2(dim.template get<i>()) - 1.0f);
         }
     })
 
@@ -1614,8 +1612,10 @@ void ensure_valid_reflection(const simd_fvec<S> Ng[3], const simd_fvec<S> I[3], 
         where(exclude & (valid1 | valid2), N_new[1]) = safe_sqrtf(Nz2);
     }
 
-    ITERATE_3({ where(early_mask, inout_N[i]) = N_new[0] * X[i] + N_new[1] * Ng[i]; })
-    ITERATE_3({ where(early_mask & ~valid1 & ~valid2, inout_N[i]) = Ng[i]; })
+    ITERATE_3({
+        where(early_mask, inout_N[i]) = N_new[0] * X[i] + N_new[1] * Ng[i];
+        where(early_mask & ~valid1 & ~valid2, inout_N[i]) = Ng[i];
+    })
 }
 
 template <int S>
@@ -1659,8 +1659,10 @@ template <int S> void offset_ray(const simd_fvec<S> p[3], const simd_fvec<S> n[3
     const simd_fvec<S> p_i[3] = {simd_cast(simd_cast(p[0]) + of_i[0]), simd_cast(simd_cast(p[1]) + of_i[1]),
                                  simd_cast(simd_cast(p[2]) + of_i[2])};
 
-    ITERATE_3({ out_p[i] = p_i[i]; })
-    ITERATE_3({ where(abs(p[i]) < Origin, out_p[i]) = fmadd(simd_fvec<S>{FloatScale}, n[i], p[i]); })
+    ITERATE_3({
+        out_p[i] = p_i[i];
+        where(abs(p[i]) < Origin, out_p[i]) = fmadd(simd_fvec<S>{FloatScale}, n[i], p[i]);
+    })
 }
 
 // http://jcgt.org/published/0007/04/01/paper.pdf by Eric Heitz
@@ -5286,10 +5288,12 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
     where(~is_backfacing, mat_index) = mat_index & 0xffff; // use front material index
     where(is_backfacing, mat_index) = mat_index >> 16;     // use back material index
 
-    ITERATE_3({ where(is_backfacing, plane_N[i]) = -plane_N[i]; });
-    ITERATE_3({ where(is_backfacing, N[i]) = -N[i]; });
-    ITERATE_3({ where(is_backfacing, B[i]) = -B[i]; });
-    ITERATE_3({ where(is_backfacing, T[i]) = -T[i]; });
+    ITERATE_3({
+        where(is_backfacing, plane_N[i]) = -plane_N[i];
+        where(is_backfacing, N[i]) = -N[i];
+        where(is_backfacing, B[i]) = -B[i];
+        where(is_backfacing, T[i]) = -T[i];
+    });
 
     simd_fvec<S> tangent[3] = {-P_ls[2], {0.0f}, P_ls[0]};
 
@@ -5302,8 +5306,10 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
 
         simd_fvec<S> inv_transform[16];
 
-        ITERATE_16({ transform[i] = gather(transforms, tr_index * TransformsStride + i); })
-        ITERATE_16({ inv_transform[i] = gather(inv_transforms, tr_index * TransformsStride + i); })
+        ITERATE_16({
+            transform[i] = gather(transforms, tr_index * TransformsStride + i);
+            inv_transform[i] = gather(inv_transforms, tr_index * TransformsStride + i);
+        })
 
         simd_fvec<S> temp[3];
         cross(tangent, N, temp);
@@ -5678,8 +5684,10 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                     simd_fvec<S> mis_weight = 1.0f;
                     where(ls.area > 0.0f, mis_weight) = power_heuristic(ls.pdf, bsdf_pdf);
 
-                    ITERATE_3({ where(eval_light, sh_r.o[i]) = P_biased[i]; })
-                    ITERATE_3({ where(eval_light, sh_r.d[i]) = ls.L[i]; })
+                    ITERATE_3({
+                        where(eval_light, sh_r.o[i]) = P_biased[i];
+                        where(eval_light, sh_r.d[i]) = ls.L[i];
+                    })
                     where(eval_light, sh_r.dist) = ls.dist - 10.0f * HIT_BIAS;
                     ITERATE_3({
                         const simd_fvec<S> temp = ls.col[i] * diff_col[i] * safe_div(mix_weight * mis_weight, ls.pdf);
@@ -5699,21 +5707,21 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
 
                     where(gen_ray, new_ray.depth) = ray.depth + 0x00000001;
 
-                    ITERATE_3({ where(gen_ray, new_ray.o[i]) = P_biased[i]; })
-                    ITERATE_3({ where(gen_ray, new_ray.d[i]) = V[i]; })
-                    ITERATE_3({ where(gen_ray, new_ray.c[i]) = ray.c[i] * F[i] * mix_weight / F[3]; })
+                    ITERATE_3({
+                        where(gen_ray, new_ray.o[i]) = P_biased[i];
+                        where(gen_ray, new_ray.d[i]) = V[i];
+                        where(gen_ray, new_ray.c[i]) = ray.c[i] * F[i] * mix_weight / F[3];
+                    })
                     where(gen_ray, new_ray.pdf) = F[3];
 
 #ifdef USE_RAY_DIFFERENTIALS
-                    ITERATE_3({ where(gen_ray, new_ray.do_dx[i]) = surf_der.do_dx[i]; })
-                    ITERATE_3({ where(gen_ray, new_ray.do_dy[i]) = surf_der.do_dy[i]; })
-
                     ITERATE_3({
+                        where(gen_ray, new_ray.do_dx[i]) = surf_der.do_dx[i];
+                        where(gen_ray, new_ray.do_dy[i]) = surf_der.do_dy[i];
+
                         where(gen_ray, new_ray.dd_dx[i]) =
                             surf_der.dd_dx[i] -
                             2 * (dot3(I, plane_N) * surf_der.dndx[i] + surf_der.ddn_dx[i] * plane_N[i]);
-                    })
-                    ITERATE_3({
                         where(gen_ray, new_ray.dd_dy[i]) =
                             surf_der.dd_dy[i] -
                             2 * (dot3(I, plane_N) * surf_der.dndy[i] + surf_der.ddn_dy[i] * plane_N[i]);
@@ -5753,8 +5761,10 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                     simd_fvec<S> mis_weight = 1.0f;
                     where(ls.area > 0.0f, mis_weight) = power_heuristic(ls.pdf, bsdf_pdf);
 
-                    ITERATE_3({ where(eval_light, sh_r.o[i]) = P_biased[i]; })
-                    ITERATE_3({ where(eval_light, sh_r.d[i]) = ls.L[i]; })
+                    ITERATE_3({
+                        where(eval_light, sh_r.o[i]) = P_biased[i];
+                        where(eval_light, sh_r.d[i]) = ls.L[i];
+                    })
                     where(eval_light, sh_r.dist) = ls.dist - 10.0f * HIT_BIAS;
                     ITERATE_3({
                         const simd_fvec<S> temp =
@@ -5777,21 +5787,21 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
 
                     where(gen_ray, new_ray.depth) = ray.depth + 0x00000100;
 
-                    ITERATE_3({ where(gen_ray, new_ray.o[i]) = P_biased[i]; })
-                    ITERATE_3({ where(gen_ray, new_ray.d[i]) = V[i]; })
-                    ITERATE_3({ where(gen_ray, new_ray.c[i]) = ray.c[i] * F[i] * safe_div_pos(mix_weight, F[3]); })
+                    ITERATE_3({
+                        where(gen_ray, new_ray.o[i]) = P_biased[i];
+                        where(gen_ray, new_ray.d[i]) = V[i];
+                        where(gen_ray, new_ray.c[i]) = ray.c[i] * F[i] * safe_div_pos(mix_weight, F[3]);
+                    })
                     where(gen_ray, new_ray.pdf) = F[3];
 
 #ifdef USE_RAY_DIFFERENTIALS
-                    ITERATE_3({ where(gen_ray, new_ray.do_dx[i]) = surf_der.do_dx[i]; })
-                    ITERATE_3({ where(gen_ray, new_ray.do_dy[i]) = surf_der.do_dy[i]; })
-
                     ITERATE_3({
+                        where(gen_ray, new_ray.do_dx[i]) = surf_der.do_dx[i];
+                        where(gen_ray, new_ray.do_dy[i]) = surf_der.do_dy[i];
+
                         where(gen_ray, new_ray.dd_dx[i]) =
                             surf_der.dd_dx[i] -
                             2 * (dot3(I, plane_N) * surf_der.dndx[i] + surf_der.ddn_dx[i] * plane_N[i]);
-                    })
-                    ITERATE_3({
                         where(gen_ray, new_ray.dd_dy[i]) =
                             surf_der.dd_dy[i] -
                             2 * (dot3(I, plane_N) * surf_der.dndy[i] + surf_der.ddn_dy[i] * plane_N[i]);
@@ -5831,8 +5841,10 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                     simd_fvec<S> mis_weight = 1.0f;
                     where(ls.area > 0.0f, mis_weight) = power_heuristic(ls.pdf, bsdf_pdf);
 
-                    ITERATE_3({ where(eval_light, sh_r.o[i]) = P_biased[i]; })
-                    ITERATE_3({ where(eval_light, sh_r.d[i]) = ls.L[i]; })
+                    ITERATE_3({
+                        where(eval_light, sh_r.o[i]) = P_biased[i];
+                        where(eval_light, sh_r.d[i]) = ls.L[i];
+                    })
                     where(eval_light, sh_r.dist) = ls.dist - 10.0f * HIT_BIAS;
                     ITERATE_3({
                         const simd_fvec<S> temp =
@@ -5854,9 +5866,11 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
 
                     where(gen_ray, new_ray.depth) = ray.depth + 0x00010000;
 
-                    ITERATE_3({ where(gen_ray, new_ray.o[i]) = P_biased[i]; })
-                    ITERATE_3({ where(gen_ray, new_ray.d[i]) = V[i]; })
-                    ITERATE_3({ where(gen_ray, new_ray.c[i]) = ray.c[i] * F[i] * safe_div_pos(mix_weight, F[3]); })
+                    ITERATE_3({
+                        where(gen_ray, new_ray.o[i]) = P_biased[i];
+                        where(gen_ray, new_ray.d[i]) = V[i];
+                        where(gen_ray, new_ray.c[i]) = ray.c[i] * F[i] * safe_div_pos(mix_weight, F[3]);
+                    })
                     where(gen_ray, new_ray.pdf) = F[3];
 
 #ifdef USE_RAY_DIFFERENTIALS
@@ -5866,14 +5880,12 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                     const simd_fvec<S> dmdx = k * surf_der.ddn_dx;
                     const simd_fvec<S> dmdy = k * surf_der.ddn_dy;
 
-                    ITERATE_3({ where(gen_ray, new_ray.do_dx[i]) = surf_der.do_dx[i]; })
-                    ITERATE_3({ where(gen_ray, new_ray.do_dy[i]) = surf_der.do_dy[i]; })
-
                     ITERATE_3({
+                        where(gen_ray, new_ray.do_dx[i]) = surf_der.do_dx[i];
+                        where(gen_ray, new_ray.do_dy[i]) = surf_der.do_dy[i];
+
                         where(gen_ray, new_ray.dd_dx[i]) =
                             eta * surf_der.dd_dx[i] - (m * surf_der.dndx[i] + dmdx * plane_N[i]);
-                    })
-                    ITERATE_3({
                         where(gen_ray, new_ray.dd_dy[i]) =
                             eta * surf_der.dd_dy[i] - (m * surf_der.dndy[i] + dmdx * plane_N[i]);
                     })
@@ -6007,8 +6019,8 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                                                         diff_col);
 
                         where(eval_diff_lobe, bsdf_pdf) += diffuse_weight * diff_col[3];
-                        ITERATE_3({ diff_col[i] *= (1.0f - metallic); })
                         ITERATE_3({
+                            diff_col[i] *= (1.0f - metallic);
                             where(eval_diff_lobe, lcol[i]) +=
                                 safe_div_pos(ls.col[i] * N_dot_L * diff_col[i], PI * ls.pdf);
                         })
@@ -6108,11 +6120,11 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                     simd_fvec<S> _P_biased[3];
                     offset_ray(P, _plane_N, _P_biased);
 
-                    ITERATE_3({ where(N_dot_L < 0.0f, P_biased[i]) = _P_biased[i]; })
-                    ///
-
-                    ITERATE_3({ where(eval_light, sh_r.o[i]) = P_biased[i]; })
-                    ITERATE_3({ where(eval_light, sh_r.d[i]) = ls.L[i]; })
+                    ITERATE_3({
+                        where(N_dot_L < 0.0f, P_biased[i]) = _P_biased[i];
+                        where(eval_light, sh_r.o[i]) = P_biased[i];
+                        where(eval_light, sh_r.d[i]) = ls.L[i];
+                    })
                     where(eval_light, sh_r.dist) = ls.dist - 10.0f * HIT_BIAS;
                     ITERATE_3({
                         where(eval_light, sh_r.c[i]) = ray.c[i] * lcol[i];
@@ -6139,24 +6151,22 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
 
                     where(sample_diff_lobe, new_ray.depth) = ray.depth + 0x00000001;
 
-                    ITERATE_3({ where(sample_diff_lobe, new_ray.o[i]) = new_p[i]; })
-                    ITERATE_3({ where(sample_diff_lobe, new_ray.d[i]) = V[i]; })
                     ITERATE_3({
+                        where(sample_diff_lobe, new_ray.o[i]) = new_p[i];
+                        where(sample_diff_lobe, new_ray.d[i]) = V[i];
                         where(sample_diff_lobe, new_ray.c[i]) =
                             safe_div_pos(ray.c[i] * diff_col[i] * mix_weight, diffuse_weight);
                     })
                     where(sample_diff_lobe, new_ray.pdf) = diff_col[3];
 
 #ifdef USE_RAY_DIFFERENTIALS
-                    ITERATE_3({ where(sample_diff_lobe, new_ray.do_dx[i]) = surf_der.do_dx[i]; })
-                    ITERATE_3({ where(sample_diff_lobe, new_ray.do_dy[i]) = surf_der.do_dy[i]; })
-
                     ITERATE_3({
+                        where(sample_diff_lobe, new_ray.do_dx[i]) = surf_der.do_dx[i];
+                        where(sample_diff_lobe, new_ray.do_dy[i]) = surf_der.do_dy[i];
+
                         where(sample_diff_lobe, new_ray.dd_dx[i]) =
                             surf_der.dd_dx[i] -
                             2 * (dot3(I, plane_N) * surf_der.dndx[i] + surf_der.ddn_dx[i] * plane_N[i]);
-                    })
-                    ITERATE_3({
                         where(sample_diff_lobe, new_ray.dd_dy[i]) =
                             surf_der.dd_dy[i] -
                             2 * (dot3(I, plane_N) * surf_der.dndy[i] + surf_der.ddn_dy[i] * plane_N[i]);
@@ -6183,22 +6193,21 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
 
                     where(sample_spec_lobe, new_ray.depth) = ray.depth + 0x00000100;
 
-                    ITERATE_3({ where(sample_spec_lobe, new_ray.o[i]) = new_p[i]; })
-                    ITERATE_3({ where(sample_spec_lobe, new_ray.d[i]) = V[i]; })
-                    ITERATE_3(
-                        { where(sample_spec_lobe, new_ray.c[i]) = safe_div_pos(ray.c[i] * F[i] * mix_weight, F[3]); })
+                    ITERATE_3({
+                        where(sample_spec_lobe, new_ray.o[i]) = new_p[i];
+                        where(sample_spec_lobe, new_ray.d[i]) = V[i];
+                        where(sample_spec_lobe, new_ray.c[i]) = safe_div_pos(ray.c[i] * F[i] * mix_weight, F[3]);
+                    })
                     where(sample_spec_lobe, new_ray.pdf) = F[3];
 
 #ifdef USE_RAY_DIFFERENTIALS
-                    ITERATE_3({ where(sample_spec_lobe, new_ray.do_dx[i]) = surf_der.do_dx[i]; })
-                    ITERATE_3({ where(sample_spec_lobe, new_ray.do_dy[i]) = surf_der.do_dy[i]; })
-
                     ITERATE_3({
+                        where(sample_spec_lobe, new_ray.do_dx[i]) = surf_der.do_dx[i];
+                        where(sample_spec_lobe, new_ray.do_dy[i]) = surf_der.do_dy[i];
+
                         where(sample_spec_lobe, new_ray.dd_dx[i]) =
                             surf_der.dd_dx[i] -
                             2 * (dot3(I, plane_N) * surf_der.dndx[i] + surf_der.ddn_dx[i] * plane_N[i]);
-                    })
-                    ITERATE_3({
                         where(sample_spec_lobe, new_ray.dd_dy[i]) =
                             surf_der.dd_dy[i] -
                             2 * (dot3(I, plane_N) * surf_der.dndy[i] + surf_der.ddn_dy[i] * plane_N[i]);
@@ -6225,24 +6234,22 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
 
                     where(sample_coat_lobe, new_ray.depth) = ray.depth + 0x00000100;
 
-                    ITERATE_3({ where(sample_coat_lobe, new_ray.o[i]) = new_p[i]; })
-                    ITERATE_3({ where(sample_coat_lobe, new_ray.d[i]) = V[i]; })
                     ITERATE_3({
+                        where(sample_coat_lobe, new_ray.o[i]) = new_p[i];
+                        where(sample_coat_lobe, new_ray.d[i]) = V[i];
                         where(sample_coat_lobe, new_ray.c[i]) =
                             0.25f * ray.c[i] * F[i] * safe_div_pos(mix_weight, F[3]);
                     })
                     where(sample_coat_lobe, new_ray.pdf) = F[3];
 
 #ifdef USE_RAY_DIFFERENTIALS
-                    ITERATE_3({ where(sample_coat_lobe, new_ray.do_dx[i]) = surf_der.do_dx[i]; })
-                    ITERATE_3({ where(sample_coat_lobe, new_ray.do_dy[i]) = surf_der.do_dy[i]; })
-
                     ITERATE_3({
+                        where(sample_coat_lobe, new_ray.do_dx[i]) = surf_der.do_dx[i];
+                        where(sample_coat_lobe, new_ray.do_dy[i]) = surf_der.do_dy[i];
+
                         where(sample_coat_lobe, new_ray.dd_dx[i]) =
                             surf_der.dd_dx[i] -
                             2 * (dot3(I, plane_N) * surf_der.dndx[i] + surf_der.ddn_dx[i] * plane_N[i]);
-                    })
-                    ITERATE_3({
                         where(sample_coat_lobe, new_ray.dd_dy[i]) =
                             surf_der.dd_dy[i] -
                             2 * (dot3(I, plane_N) * surf_der.dndy[i] + surf_der.ddn_dy[i] * plane_N[i]);
@@ -6283,8 +6290,6 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                             where(sample_trans_spec_lobe, new_ray.dd_dx[i]) =
                                 surf_der.dd_dx[i] -
                                 2 * (dot3(I, plane_N) * surf_der.dndx[i] + surf_der.ddn_dx[i] * plane_N[i]);
-                        })
-                        ITERATE_3({
                             where(sample_trans_spec_lobe, new_ray.dd_dy[i]) =
                                 surf_der.dd_dy[i] -
                                 2 * (dot3(I, plane_N) * surf_der.dndy[i] + surf_der.ddn_dy[i] * plane_N[i]);
@@ -6305,9 +6310,10 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                         where(sample_trans_refr_lobe, new_ray.depth) = ray.depth + 0x00010000;
 
                         ITERATE_4({ where(sample_trans_refr_lobe, F[i]) = _F[i]; })
-                        ITERATE_3({ where(sample_trans_refr_lobe, V[i]) = _V[i]; })
-
-                        ITERATE_3({ where(sample_trans_refr_lobe, new_ray.o[i]) = new_p[i]; })
+                        ITERATE_3({
+                            where(sample_trans_refr_lobe, V[i]) = _V[i];
+                            where(sample_trans_refr_lobe, new_ray.o[i]) = new_p[i];
+                        })
 
 #ifdef USE_RAY_DIFFERENTIALS
                         const simd_fvec<S> m = _V[3];
@@ -6318,8 +6324,6 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                         ITERATE_3({
                             where(sample_trans_refr_lobe, new_ray.dd_dx[i]) =
                                 eta * surf_der.dd_dx[i] - (m * surf_der.dndx[i] + dmdx * plane_N[i]);
-                        })
-                        ITERATE_3({
                             where(sample_trans_refr_lobe, new_ray.dd_dy[i]) =
                                 eta * surf_der.dd_dy[i] - (m * surf_der.dndy[i] + dmdx * plane_N[i]);
                         })
@@ -6328,14 +6332,17 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
 
                     F[3] *= refraction_weight;
 
-                    ITERATE_3({ where(sample_trans_lobe, new_ray.d[i]) = V[i]; })
-                    ITERATE_3(
-                        { where(sample_trans_lobe, new_ray.c[i]) = safe_div_pos(ray.c[i] * F[i] * mix_weight, F[3]); })
+                    ITERATE_3({
+                        where(sample_trans_lobe, new_ray.d[i]) = V[i];
+                        where(sample_trans_lobe, new_ray.c[i]) = safe_div_pos(ray.c[i] * F[i] * mix_weight, F[3]);
+                    })
                     where(sample_trans_lobe, new_ray.pdf) = F[3];
 
 #ifdef USE_RAY_DIFFERENTIALS
-                    ITERATE_3({ where(sample_trans_lobe, new_ray.do_dx[i]) = surf_der.do_dx[i]; })
-                    ITERATE_3({ where(sample_trans_lobe, new_ray.do_dy[i]) = surf_der.do_dy[i]; })
+                    ITERATE_3({
+                        where(sample_trans_lobe, new_ray.do_dx[i]) = surf_der.do_dx[i];
+                        where(sample_trans_lobe, new_ray.do_dy[i]) = surf_der.do_dy[i];
+                    })
 #endif
 
                     assert((sample_trans_spec_lobe & sample_trans_refr_lobe).all_zeros());
