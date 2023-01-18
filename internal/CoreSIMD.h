@@ -2614,7 +2614,7 @@ bool Ray::NS::Traverse_MacroTree_WithStack_ClosestHit(const simd_fvec<S> ro[3], 
     const simd_ivec<S> is_backfacing = (inter.prim_index < 0);
     where(is_backfacing, inter.prim_index) = -inter.prim_index - 1;
 
-    inter.prim_index = gather(reinterpret_cast<const int *>(tri_indices), inter.prim_index);
+    inter.prim_index = gather<1>(reinterpret_cast<const int *>(tri_indices), inter.prim_index);
     where(is_backfacing, inter.prim_index) = -inter.prim_index - 1;
 
     return res;
@@ -2771,7 +2771,7 @@ bool Ray::NS::Traverse_MacroTree_WithStack_ClosestHit(const simd_fvec<S> ro[3], 
     const simd_ivec<S> is_backfacing = (prim_index < 0);
     where(is_backfacing, prim_index) = -prim_index - 1;
 
-    where(ray_mask, inter.prim_index) = gather(reinterpret_cast<const int *>(tri_indices), prim_index);
+    where(ray_mask, inter.prim_index) = gather<1>(reinterpret_cast<const int *>(tri_indices), prim_index);
     where(ray_mask & is_backfacing, inter.prim_index) = -inter.prim_index - 1;
 
     return res;
@@ -2847,7 +2847,7 @@ Ray::NS::simd_ivec<S> Ray::NS::Traverse_MacroTree_WithStack_AnyHit(
     const simd_ivec<S> is_backfacing = (prim_index < 0);
     where(is_backfacing, prim_index) = -prim_index - 1;
 
-    where(ray_mask, inter.prim_index) = gather(reinterpret_cast<const int *>(tri_indices), prim_index);
+    where(ray_mask, inter.prim_index) = gather<1>(reinterpret_cast<const int *>(tri_indices), prim_index);
     where(ray_mask & is_backfacing, inter.prim_index) = -inter.prim_index - 1;
 
     return solid_hit_mask;
@@ -2996,7 +2996,7 @@ Ray::NS::simd_ivec<S> Ray::NS::Traverse_MacroTree_WithStack_AnyHit(
     const simd_ivec<S> is_backfacing = (inter.prim_index < 0);
     where(is_backfacing, inter.prim_index) = -inter.prim_index - 1;
 
-    inter.prim_index = gather(reinterpret_cast<const int *>(tri_indices), inter.prim_index);
+    inter.prim_index = gather<1>(reinterpret_cast<const int *>(tri_indices), inter.prim_index);
     where(is_backfacing, inter.prim_index) = -inter.prim_index - 1;
 
     return solid_hit_mask;
@@ -3750,7 +3750,7 @@ Ray::NS::simd_fvec<S> Ray::NS::Evaluate_EnvQTree(const float y_rotation, const s
         }
 
         where(mask, factor) *=
-            4.0f * gather(value_ptr(quad[0]), index * S + simd_ivec<S>(ascending_counter, simd_mem_aligned)) / total;
+            4.0f * gather<1>(value_ptr(quad[0]), index * S + simd_ivec<S>(ascending_counter, simd_mem_aligned)) / total;
 
         --lod;
         res *= 2;
@@ -3824,7 +3824,7 @@ void Ray::NS::Sample_EnvQTree(float y_rotation, const simd_fvec4 *const *qtree_m
         }
 
         where(mask, factor) *=
-            4.0f * gather(value_ptr(quad[0]), index * S + simd_ivec<S>(ascending_counter, simd_mem_aligned)) / total;
+            4.0f * gather<1>(value_ptr(quad[0]), index * S + simd_ivec<S>(ascending_counter, simd_mem_aligned)) / total;
 
         --lod;
         res *= 2;
@@ -4144,7 +4144,7 @@ void Ray::NS::IntersectScene(ray_data_t<S> &r, const simd_ivec<S> &mask, const i
         const simd_ivec<S> is_backfacing = (tri_index < 0);
         where(is_backfacing, tri_index) = -tri_index - 1;
 
-        simd_ivec<S> mat_index = gather(reinterpret_cast<const int *>(sc.tri_materials), tri_index);
+        simd_ivec<S> mat_index = gather<1>(reinterpret_cast<const int *>(sc.tri_materials), tri_index);
 
         where(~is_backfacing, mat_index) = mat_index & 0xffff; // use front material index
         where(is_backfacing, mat_index) = mat_index >> 16;     // use back material index
@@ -4160,9 +4160,10 @@ void Ray::NS::IntersectScene(ray_data_t<S> &r, const simd_ivec<S> &mask, const i
 
         const simd_fvec<S> w = 1.0f - inter.u - inter.v;
 
-        const simd_ivec<S> vtx_indices[3] = {gather(reinterpret_cast<const int *>(sc.vtx_indices), tri_index * 3),
-                                             gather(reinterpret_cast<const int *>(sc.vtx_indices), tri_index * 3 + 1),
-                                             gather(reinterpret_cast<const int *>(sc.vtx_indices), tri_index * 3 + 2)};
+        const simd_ivec<S> vtx_indices[3] = {
+            gather<1>(reinterpret_cast<const int *>(sc.vtx_indices), tri_index * 3),
+            gather<1>(reinterpret_cast<const int *>(sc.vtx_indices), tri_index * 3 + 1),
+            gather<1>(reinterpret_cast<const int *>(sc.vtx_indices), tri_index * 3 + 2)};
 
         simd_fvec<S> uvs[2];
 
@@ -4171,16 +4172,16 @@ void Ray::NS::IntersectScene(ray_data_t<S> &r, const simd_ivec<S> &mask, const i
             const int VtxUVsStride = sizeof(vertex_t) / sizeof(float);
 
             ITERATE_2({
-                const simd_fvec<S> temp1 = gather(vtx_uvs, vtx_indices[0] * VtxUVsStride + i);
-                const simd_fvec<S> temp2 = gather(vtx_uvs, vtx_indices[1] * VtxUVsStride + i);
-                const simd_fvec<S> temp3 = gather(vtx_uvs, vtx_indices[2] * VtxUVsStride + i);
+                const simd_fvec<S> temp1 = gather<1>(vtx_uvs, vtx_indices[0] * VtxUVsStride + i);
+                const simd_fvec<S> temp2 = gather<1>(vtx_uvs, vtx_indices[1] * VtxUVsStride + i);
+                const simd_fvec<S> temp3 = gather<1>(vtx_uvs, vtx_indices[2] * VtxUVsStride + i);
 
                 uvs[i] = temp1 * w + temp2 * inter.u + temp3 * inter.v;
             })
         }
 
-        simd_fvec<S> rand_pick = fract(gather(random_seq, rand_index + RAND_DIM_BSDF_PICK) + rand_offset);
-        const simd_fvec<S> rand_term = fract(gather(random_seq, rand_index + RAND_DIM_TERMINATE) + rand_offset);
+        simd_fvec<S> rand_pick = fract(gather<1>(random_seq, rand_index + RAND_DIM_BSDF_PICK) + rand_offset);
+        const simd_fvec<S> rand_term = fract(gather<1>(random_seq, rand_index + RAND_DIM_TERMINATE) + rand_offset);
 
         { // resolve material
             simd_ivec<S> ray_queue[S];
@@ -4332,9 +4333,10 @@ void Ray::NS::IntersectScene(const shadow_ray_t<S> &r, const simd_ivec<S> &mask,
         const simd_ivec<S> is_backfacing = (tri_index < 0);
         where(is_backfacing, tri_index) = -tri_index - 1;
 
-        const simd_ivec<S> vtx_indices[3] = {gather(reinterpret_cast<const int *>(sc.vtx_indices), tri_index * 3),
-                                             gather(reinterpret_cast<const int *>(sc.vtx_indices), tri_index * 3 + 1),
-                                             gather(reinterpret_cast<const int *>(sc.vtx_indices), tri_index * 3 + 2)};
+        const simd_ivec<S> vtx_indices[3] = {
+            gather<1>(reinterpret_cast<const int *>(sc.vtx_indices), tri_index * 3),
+            gather<1>(reinterpret_cast<const int *>(sc.vtx_indices), tri_index * 3 + 1),
+            gather<1>(reinterpret_cast<const int *>(sc.vtx_indices), tri_index * 3 + 2)};
 
         simd_fvec<S> sh_uvs[2];
 
@@ -4343,15 +4345,15 @@ void Ray::NS::IntersectScene(const shadow_ray_t<S> &r, const simd_ivec<S> &mask,
             const int VtxUVsStride = sizeof(vertex_t) / sizeof(float);
 
             ITERATE_2({
-                const simd_fvec<S> temp1 = gather(vtx_uvs, vtx_indices[0] * VtxUVsStride + i);
-                const simd_fvec<S> temp2 = gather(vtx_uvs, vtx_indices[1] * VtxUVsStride + i);
-                const simd_fvec<S> temp3 = gather(vtx_uvs, vtx_indices[2] * VtxUVsStride + i);
+                const simd_fvec<S> temp1 = gather<1>(vtx_uvs, vtx_indices[0] * VtxUVsStride + i);
+                const simd_fvec<S> temp2 = gather<1>(vtx_uvs, vtx_indices[1] * VtxUVsStride + i);
+                const simd_fvec<S> temp3 = gather<1>(vtx_uvs, vtx_indices[2] * VtxUVsStride + i);
 
                 sh_uvs[i] = temp1 * w + temp2 * inter.u + temp3 * inter.v;
             })
         }
 
-        simd_ivec<S> mat_index = gather(reinterpret_cast<const int *>(sc.tri_materials), tri_index) &
+        simd_ivec<S> mat_index = gather<1>(reinterpret_cast<const int *>(sc.tri_materials), tri_index) &
                                  simd_ivec<S>((MATERIAL_INDEX_BITS << 16) | MATERIAL_INDEX_BITS);
 
         where(~is_backfacing, mat_index) = mat_index & 0xffff; // use front material index
@@ -4528,9 +4530,9 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const scene_data_t &sc,
                                 const Ref::TexStorageBase *const textures[], const float random_seq[],
                                 const simd_ivec<S> &rand_index, const simd_fvec<S> sample_off[2],
                                 const simd_ivec<S> &ray_mask, light_sample_t<S> &ls) {
-    const simd_fvec<S> ri = fract(gather(random_seq, rand_index + RAND_DIM_LIGHT_PICK) + sample_off[0]);
-    const simd_fvec<S> ru = fract(gather(random_seq, rand_index + RAND_DIM_LIGHT_U) + sample_off[0]);
-    const simd_fvec<S> rv = fract(gather(random_seq, rand_index + RAND_DIM_LIGHT_V) + sample_off[1]);
+    const simd_fvec<S> ri = fract(gather<1>(random_seq, rand_index + RAND_DIM_LIGHT_PICK) + sample_off[0]);
+    const simd_fvec<S> ru = fract(gather<1>(random_seq, rand_index + RAND_DIM_LIGHT_U) + sample_off[0]);
+    const simd_fvec<S> rv = fract(gather<1>(random_seq, rand_index + RAND_DIM_LIGHT_V) + sample_off[1]);
 
     const simd_ivec<S> light_index = min(simd_ivec<S>{ri * float(sc.li_indices.size())}, int(sc.li_indices.size() - 1));
 
@@ -5190,17 +5192,17 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
     simd_ivec<S> obj_index = inter.obj_index;
     where(~is_active_lane, obj_index) = 0;
 
-    simd_ivec<S> mat_index = gather(reinterpret_cast<const int *>(sc.tri_materials), tri_index) &
+    simd_ivec<S> mat_index = gather<1>(reinterpret_cast<const int *>(sc.tri_materials), tri_index) &
                              simd_ivec<S>((MATERIAL_INDEX_BITS << 16) | MATERIAL_INDEX_BITS);
 
     const int *tr_indices = reinterpret_cast<const int *>(&sc.mesh_instances[0].tr_index);
     const int TrIndicesStride = sizeof(mesh_instance_t) / sizeof(int);
 
-    const simd_ivec<S> tr_index = gather(tr_indices, obj_index * TrIndicesStride);
+    const simd_ivec<S> tr_index = gather<1>(tr_indices, obj_index * TrIndicesStride);
 
-    const simd_ivec<S> vtx_indices[3] = {gather(reinterpret_cast<const int *>(sc.vtx_indices), tri_index * 3),
-                                         gather(reinterpret_cast<const int *>(sc.vtx_indices), tri_index * 3 + 1),
-                                         gather(reinterpret_cast<const int *>(sc.vtx_indices), tri_index * 3 + 2)};
+    const simd_ivec<S> vtx_indices[3] = {gather<1>(reinterpret_cast<const int *>(sc.vtx_indices + 0), tri_index * 3),
+                                         gather<1>(reinterpret_cast<const int *>(sc.vtx_indices + 1), tri_index * 3),
+                                         gather<1>(reinterpret_cast<const int *>(sc.vtx_indices + 2), tri_index * 3)};
 
     const simd_fvec<S> w = 1.0f - inter.u - inter.v;
 
@@ -5209,9 +5211,9 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
         const float *vtx_positions = &sc.vertices[0].p[0];
         const int VtxPositionsStride = sizeof(vertex_t) / sizeof(float);
 
-        ITERATE_3({ p1[i] = gather(vtx_positions, vtx_indices[0] * VtxPositionsStride + i); });
-        ITERATE_3({ p2[i] = gather(vtx_positions, vtx_indices[1] * VtxPositionsStride + i); });
-        ITERATE_3({ p3[i] = gather(vtx_positions, vtx_indices[2] * VtxPositionsStride + i); });
+        ITERATE_3({ p1[i] = gather<1>(vtx_positions + i, vtx_indices[0] * VtxPositionsStride); });
+        ITERATE_3({ p2[i] = gather<1>(vtx_positions + i, vtx_indices[1] * VtxPositionsStride); });
+        ITERATE_3({ p3[i] = gather<1>(vtx_positions + i, vtx_indices[2] * VtxPositionsStride); });
 
         ITERATE_3({ P_ls[i] = p1[i] * w + p2[i] * inter.u + p3[i] * inter.v; });
     }
@@ -5221,9 +5223,9 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
         const float *vtx_normals = &sc.vertices[0].n[0];
         const int VtxNormalsStride = sizeof(vertex_t) / sizeof(float);
 
-        ITERATE_3({ n1[i] = gather(vtx_normals, vtx_indices[0] * VtxNormalsStride + i); });
-        ITERATE_3({ n2[i] = gather(vtx_normals, vtx_indices[1] * VtxNormalsStride + i); });
-        ITERATE_3({ n3[i] = gather(vtx_normals, vtx_indices[2] * VtxNormalsStride + i); });
+        ITERATE_3({ n1[i] = gather<1>(vtx_normals + i, vtx_indices[0] * VtxNormalsStride); });
+        ITERATE_3({ n2[i] = gather<1>(vtx_normals + i, vtx_indices[1] * VtxNormalsStride); });
+        ITERATE_3({ n3[i] = gather<1>(vtx_normals + i, vtx_indices[2] * VtxNormalsStride); });
 
         ITERATE_3({ N[i] = n1[i] * w + n2[i] * inter.u + n3[i] * inter.v; });
         normalize(N);
@@ -5234,9 +5236,9 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
         const float *vtx_uvs = &sc.vertices[0].t[0][0];
         const int VtxUVStride = sizeof(vertex_t) / sizeof(float);
 
-        ITERATE_2({ u1[i] = gather(vtx_uvs, vtx_indices[0] * VtxUVStride + i); })
-        ITERATE_2({ u2[i] = gather(vtx_uvs, vtx_indices[1] * VtxUVStride + i); })
-        ITERATE_2({ u3[i] = gather(vtx_uvs, vtx_indices[2] * VtxUVStride + i); })
+        ITERATE_2({ u1[i] = gather<1>(vtx_uvs + i, vtx_indices[0] * VtxUVStride); })
+        ITERATE_2({ u2[i] = gather<1>(vtx_uvs + i, vtx_indices[1] * VtxUVStride); })
+        ITERATE_2({ u3[i] = gather<1>(vtx_uvs + i, vtx_indices[2] * VtxUVStride); })
 
         ITERATE_2({ uvs[i] = u1[i] * w + u2[i] * inter.u + u3[i] * inter.v; })
     }
@@ -5258,15 +5260,15 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
         const float *vtx_binormals = &sc.vertices[0].b[0];
         const int VtxBinormalsStride = sizeof(vertex_t) / sizeof(float);
 
-        const simd_fvec<S> B1[3] = {gather(vtx_binormals, vtx_indices[0] * VtxBinormalsStride),
-                                    gather(vtx_binormals, vtx_indices[0] * VtxBinormalsStride + 1),
-                                    gather(vtx_binormals, vtx_indices[0] * VtxBinormalsStride + 2)};
-        const simd_fvec<S> B2[3] = {gather(vtx_binormals, vtx_indices[1] * VtxBinormalsStride),
-                                    gather(vtx_binormals, vtx_indices[1] * VtxBinormalsStride + 1),
-                                    gather(vtx_binormals, vtx_indices[1] * VtxBinormalsStride + 2)};
-        const simd_fvec<S> B3[3] = {gather(vtx_binormals, vtx_indices[2] * VtxBinormalsStride),
-                                    gather(vtx_binormals, vtx_indices[2] * VtxBinormalsStride + 1),
-                                    gather(vtx_binormals, vtx_indices[2] * VtxBinormalsStride + 2)};
+        const simd_fvec<S> B1[3] = {gather<1>(vtx_binormals + 0, vtx_indices[0] * VtxBinormalsStride),
+                                    gather<1>(vtx_binormals + 1, vtx_indices[0] * VtxBinormalsStride),
+                                    gather<1>(vtx_binormals + 2, vtx_indices[0] * VtxBinormalsStride)};
+        const simd_fvec<S> B2[3] = {gather<1>(vtx_binormals + 0, vtx_indices[1] * VtxBinormalsStride),
+                                    gather<1>(vtx_binormals + 1, vtx_indices[1] * VtxBinormalsStride),
+                                    gather<1>(vtx_binormals + 2, vtx_indices[1] * VtxBinormalsStride)};
+        const simd_fvec<S> B3[3] = {gather<1>(vtx_binormals + 0, vtx_indices[2] * VtxBinormalsStride),
+                                    gather<1>(vtx_binormals + 1, vtx_indices[2] * VtxBinormalsStride),
+                                    gather<1>(vtx_binormals + 2, vtx_indices[2] * VtxBinormalsStride)};
 
         ITERATE_3({ B[i] = B1[i] * w + B2[i] * inter.u + B3[i] * inter.v; });
     }
@@ -5307,8 +5309,8 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
         simd_fvec<S> inv_transform[16];
 
         ITERATE_16({
-            transform[i] = gather(transforms, tr_index * TransformsStride + i);
-            inv_transform[i] = gather(inv_transforms, tr_index * TransformsStride + i);
+            transform[i] = gather<1>(transforms + i, tr_index * TransformsStride);
+            inv_transform[i] = gather<1>(inv_transforms + i, tr_index * TransformsStride);
         })
 
         simd_fvec<S> temp[3];
@@ -5359,20 +5361,20 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
     const simd_ivec<S> rand_index = (total_depth + transp_depth) * RAND_DIM_BOUNCE_COUNT;
 
     const simd_ivec<S> mat_type =
-        gather(reinterpret_cast<const int *>(&sc.materials[0].type), mat_index * sizeof(material_t) / sizeof(int)) &
+        gather<1>(reinterpret_cast<const int *>(&sc.materials[0].type), mat_index * sizeof(material_t) / sizeof(int)) &
         0xff;
 
-    simd_fvec<S> mix_rand = fract(gather(random_seq, rand_index + RAND_DIM_BSDF_PICK) + sample_off[0]);
+    simd_fvec<S> mix_rand = fract(gather<1>(random_seq + RAND_DIM_BSDF_PICK, rand_index) + sample_off[0]);
     simd_fvec<S> mix_weight = 1.0f;
 
     // resolve mix material
     const simd_ivec<S> is_mix_mat = mat_type == MixNode;
     if (is_mix_mat.not_all_zeros()) {
         const float *mix_values = &sc.materials[0].strength;
-        simd_fvec<S> mix_val = gather(mix_values, mat_index * MatDWORDStride);
+        simd_fvec<S> mix_val = gather<1>(mix_values, mat_index * MatDWORDStride);
 
         const int *base_textures = reinterpret_cast<const int *>(&sc.materials[0].textures[BASE_TEXTURE]);
-        const simd_ivec<S> base_texture = gather(base_textures, mat_index * MatDWORDStride);
+        const simd_ivec<S> base_texture = gather<1>(base_textures, mat_index * MatDWORDStride);
 
         const simd_ivec<S> has_texture = (base_texture != -1) & is_active_lane;
         if (has_texture.not_all_zeros()) {
@@ -5411,8 +5413,8 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
         const float *int_iors = &sc.materials[0].int_ior;
         const float *ext_iors = &sc.materials[0].ext_ior;
 
-        const simd_fvec<S> int_ior = gather(int_iors, mat_index * MatDWORDStride);
-        const simd_fvec<S> ext_ior = gather(ext_iors, mat_index * MatDWORDStride);
+        const simd_fvec<S> int_ior = gather<1>(int_iors, mat_index * MatDWORDStride);
+        const simd_fvec<S> ext_ior = gather<1>(ext_iors, mat_index * MatDWORDStride);
 
         simd_fvec<S> eta = safe_div_pos(ext_ior, int_ior);
         where(is_backfacing, eta) = safe_div_pos(int_ior, ext_ior);
@@ -5426,11 +5428,11 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
         const simd_ivec<S> use_mat2 = ~use_mat1 & is_mix_mat;
 
         const int *all_mat_flags = reinterpret_cast<const int *>(&sc.materials[0].flags);
-        const simd_ivec<S> is_add = (gather(all_mat_flags, mat_index * MatDWORDStride) & MAT_FLAG_MIX_ADD) != 0;
+        const simd_ivec<S> is_add = (gather<1>(all_mat_flags, mat_index * MatDWORDStride) & MAT_FLAG_MIX_ADD) != 0;
 
         const int *all_mat_textures = reinterpret_cast<const int *>(&sc.materials[0].textures[0]);
-        const simd_ivec<S> mat1_index = gather(&all_mat_textures[MIX_MAT1], mat_index * MatDWORDStride);
-        const simd_ivec<S> mat2_index = gather(&all_mat_textures[MIX_MAT2], mat_index * MatDWORDStride);
+        const simd_ivec<S> mat1_index = gather<1>(&all_mat_textures[MIX_MAT1], mat_index * MatDWORDStride);
+        const simd_ivec<S> mat2_index = gather<1>(&all_mat_textures[MIX_MAT2], mat_index * MatDWORDStride);
 
         where(is_add & use_mat1, mix_weight) = safe_div_pos(mix_weight, 1.0f - mix_val);
         where(use_mat1, mat_index) = mat1_index;
@@ -5443,7 +5445,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
 
     { // apply normal map
         const int *norm_textures = reinterpret_cast<const int *>(&sc.materials[0].textures[NORMALS_TEXTURE]);
-        const simd_ivec<S> normals_texture = gather(norm_textures, mat_index * MatDWORDStride);
+        const simd_ivec<S> normals_texture = gather<1>(norm_textures, mat_index * MatDWORDStride);
 
         const simd_ivec<S> has_texture = (normals_texture != -1) & is_active_lane;
         if (has_texture.not_all_zeros()) {
@@ -5486,7 +5488,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
             normalize(new_normal);
 
             const int *normalmap_strengths = reinterpret_cast<const int *>(&sc.materials[0].normal_map_strength_unorm);
-            const simd_ivec<S> normalmap_strength = gather(normalmap_strengths, mat_index * MatDWORDStride) & 0xffff;
+            const simd_ivec<S> normalmap_strength = gather<1>(normalmap_strengths, mat_index * MatDWORDStride) & 0xffff;
 
             const simd_fvec<S> fstrength = conv_unorm_16(normalmap_strength);
             ITERATE_3({ new_normal[i] = N[i] + (new_normal[i] - N[i]) * fstrength; })
@@ -5505,7 +5507,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
     simd_fvec<S> tangent_rotation;
     { // fetch anisotropic rotations
         const float *tangent_rotations = &sc.materials[0].tangent_rotation;
-        tangent_rotation = gather(tangent_rotations, mat_index * MatDWORDStride);
+        tangent_rotation = gather<1>(tangent_rotations, mat_index * MatDWORDStride);
     }
 
     const simd_ivec<S> has_rotation = simd_cast(tangent_rotation != 0.0f);
@@ -5529,10 +5531,10 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
     simd_fvec<S> base_color[3];
     { // Fetch material base color
         const float *base_colors = &sc.materials[0].base_color[0];
-        ITERATE_3({ base_color[i] = gather(base_colors + i, mat_index * MatDWORDStride); })
+        ITERATE_3({ base_color[i] = gather<1>(base_colors + i, mat_index * MatDWORDStride); })
 
         const int *base_textures = reinterpret_cast<const int *>(&sc.materials[0].textures[BASE_TEXTURE]);
-        const simd_ivec<S> base_texture = gather(base_textures, mat_index * MatDWORDStride);
+        const simd_ivec<S> base_texture = gather<1>(base_textures, mat_index * MatDWORDStride);
 
         const simd_ivec<S> has_texture = (base_texture != -1) & is_active_lane;
         if (has_texture.not_all_zeros()) {
@@ -5580,10 +5582,10 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
     simd_fvec<S> roughness;
     { // fetch material roughness
         const int *roughnesses = reinterpret_cast<const int *>(&sc.materials[0].roughness_unorm);
-        roughness = conv_unorm_16(gather(roughnesses, mat_index * MatDWORDStride) & 0xffff);
+        roughness = conv_unorm_16(gather<1>(roughnesses, mat_index * MatDWORDStride) & 0xffff);
 
         const int *roughness_textures = reinterpret_cast<const int *>(&sc.materials[0].textures[ROUGH_TEXTURE]);
-        const simd_ivec<S> roughness_texture = gather(roughness_textures, mat_index * MatDWORDStride);
+        const simd_ivec<S> roughness_texture = gather<1>(roughness_textures, mat_index * MatDWORDStride);
 
         const simd_ivec<S> has_texture = (roughness_texture != -1) & is_active_lane;
         if (has_texture.not_all_zeros()) {
@@ -5624,8 +5626,8 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
 
     simd_fvec<S> col[3] = {0.0f, 0.0f, 0.0f};
 
-    const simd_fvec<S> rand_u = fract(gather(random_seq, rand_index + RAND_DIM_BSDF_U) + sample_off[0]);
-    const simd_fvec<S> rand_v = fract(gather(random_seq, rand_index + RAND_DIM_BSDF_V) + sample_off[1]);
+    const simd_fvec<S> rand_u = fract(gather<1>(random_seq, rand_index + RAND_DIM_BSDF_U) + sample_off[0]);
+    const simd_fvec<S> rand_v = fract(gather<1>(random_seq, rand_index + RAND_DIM_BSDF_V) + sample_off[1]);
 
     simd_ivec<S> secondary_mask = {0}, shadow_mask = {0};
 
@@ -6364,7 +6366,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
 #endif
 
     const simd_fvec<S> lum = max(new_ray.c[0], max(new_ray.c[1], new_ray.c[2]));
-    const simd_fvec<S> p = fract(gather(random_seq, rand_index + RAND_DIM_TERMINATE) + sample_off[0]);
+    const simd_fvec<S> p = fract(gather<1>(random_seq, rand_index + RAND_DIM_TERMINATE) + sample_off[0]);
     simd_fvec<S> q = 0.0f;
     where(can_terminate_path, q) = max(0.05f, 1.0f - lum);
 

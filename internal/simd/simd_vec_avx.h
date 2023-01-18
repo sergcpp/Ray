@@ -87,38 +87,38 @@ template <> class simd_vec<float, 8> {
 #endif
     }
 
-    force_inline simd_vec<float, 8> &operator+=(const simd_vec<float, 8> &rhs) {
+    force_inline simd_vec<float, 8> &vectorcall operator+=(const simd_vec<float, 8> rhs) {
         vec_ = _mm256_add_ps(vec_, rhs.vec_);
         return *this;
     }
 
-    force_inline simd_vec<float, 8> &operator+=(const float rhs) {
+    force_inline simd_vec<float, 8> &vectorcall operator+=(const float rhs) {
         __m256 _rhs = _mm256_set1_ps(rhs);
         vec_ = _mm256_add_ps(vec_, _rhs);
         return *this;
     }
 
-    force_inline simd_vec<float, 8> &operator-=(const simd_vec<float, 8> &rhs) {
+    force_inline simd_vec<float, 8> &vectorcall operator-=(const simd_vec<float, 8> rhs) {
         vec_ = _mm256_sub_ps(vec_, rhs.vec_);
         return *this;
     }
 
-    force_inline simd_vec<float, 8> &operator-=(const float rhs) {
+    force_inline simd_vec<float, 8> &vectorcall operator-=(const float rhs) {
         vec_ = _mm256_sub_ps(vec_, _mm256_set1_ps(rhs));
         return *this;
     }
 
-    force_inline simd_vec<float, 8> &operator*=(const simd_vec<float, 8> &rhs) {
+    force_inline simd_vec<float, 8> &vectorcall operator*=(const simd_vec<float, 8> rhs) {
         vec_ = _mm256_mul_ps(vec_, rhs.vec_);
         return *this;
     }
 
-    force_inline simd_vec<float, 8> &operator*=(const float rhs) {
+    force_inline simd_vec<float, 8> &vectorcall operator*=(const float rhs) {
         vec_ = _mm256_mul_ps(vec_, _mm256_set1_ps(rhs));
         return *this;
     }
 
-    force_inline simd_vec<float, 8> &operator/=(const simd_vec<float, 8> &rhs) {
+    force_inline simd_vec<float, 8> &vectorcall operator/=(const simd_vec<float, 8> rhs) {
         vec_ = _mm256_div_ps(vec_, rhs.vec_);
         return *this;
     }
@@ -129,25 +129,25 @@ template <> class simd_vec<float, 8> {
         return *this;
     }
 
-    force_inline simd_vec<float, 8> &operator|=(const simd_vec<float, 8> &rhs) {
+    force_inline simd_vec<float, 8> &vectorcall operator|=(const simd_vec<float, 8> rhs) {
         vec_ = _mm256_or_ps(vec_, rhs.vec_);
         return *this;
     }
 
-    force_inline simd_vec<float, 8> &operator|=(const float rhs) {
+    force_inline simd_vec<float, 8> &vectorcall operator|=(const float rhs) {
         __m256 _rhs = _mm256_set1_ps(rhs);
         vec_ = _mm256_or_ps(vec_, _rhs);
         return *this;
     }
 
-    force_inline simd_vec<float, 8> &operator&=(const simd_vec<float, 8> &rhs) {
+    force_inline simd_vec<float, 8> &vectorcall operator&=(const simd_vec<float, 8> rhs) {
         vec_ = _mm256_and_ps(vec_, rhs.vec_);
         return *this;
     }
 
     force_inline simd_vec<float, 8> operator~() const;
     force_inline simd_vec<float, 8> operator-() const;
-    force_inline explicit operator simd_vec<int, 8>() const;
+    force_inline explicit vectorcall operator simd_vec<int, 8>() const;
 
     force_inline simd_vec<float, 8> sqrt() const;
     force_inline simd_vec<float, 8> log() const;
@@ -170,7 +170,7 @@ template <> class simd_vec<float, 8> {
     force_inline void copy_to(float *f) const { _mm256_storeu_ps(f, vec_); }
     force_inline void copy_to(float *f, simd_mem_aligned_tag) const { _mm256_store_ps(f, vec_); }
 
-    force_inline void blend_to(const simd_vec<float, 8> &mask, const simd_vec<float, 8> &v1) {
+    force_inline void vectorcall blend_to(const simd_vec<float, 8> mask, const simd_vec<float, 8> v1) {
 #if VALIDATE_MASKS
         alignas(32) float comp[8];
         _mm256_store_ps(comp, mask.vec_);
@@ -183,7 +183,7 @@ template <> class simd_vec<float, 8> {
         vec_ = _mm256_blendv_ps(vec_, v1.vec_, mask.vec_);
     }
 
-    force_inline void blend_inv_to(const simd_vec<float, 8> &mask, const simd_vec<float, 8> &v1) {
+    force_inline void vectorcall blend_inv_to(const simd_vec<float, 8> mask, const simd_vec<float, 8> v1) {
 #if VALIDATE_MASKS
         alignas(32) float comp[8];
         _mm256_store_ps(comp, mask.vec_);
@@ -196,73 +196,67 @@ template <> class simd_vec<float, 8> {
         vec_ = _mm256_blendv_ps(v1.vec_, vec_, mask.vec_);
     }
 
-    force_inline static simd_vec<float, 8> min(const simd_vec<float, 8> &v1, const simd_vec<float, 8> &v2);
-    force_inline static simd_vec<float, 8> min(const simd_vec<float, 8> &v1, const float v2);
-    force_inline static simd_vec<float, 8> min(float v1, const simd_vec<float, 8> &v2);
-    force_inline static simd_vec<float, 8> max(const simd_vec<float, 8> &v1, const simd_vec<float, 8> &v2);
-    force_inline static simd_vec<float, 8> max(const simd_vec<float, 8> &v1, const float v2);
-    force_inline static simd_vec<float, 8> max(float v1, const simd_vec<float, 8> &v2);
+    force_inline static simd_vec<float, 8> vectorcall min(simd_vec<float, 8> v1, simd_vec<float, 8> v2);
+    force_inline static simd_vec<float, 8> vectorcall min(simd_vec<float, 8> v1, float v2);
+    force_inline static simd_vec<float, 8> vectorcall min(float v1, simd_vec<float, 8> v2);
+    force_inline static simd_vec<float, 8> vectorcall max(simd_vec<float, 8> v1, simd_vec<float, 8> v2);
+    force_inline static simd_vec<float, 8> vectorcall max(simd_vec<float, 8> v1, float v2);
+    force_inline static simd_vec<float, 8> vectorcall max(float v1, simd_vec<float, 8> v2);
 
-    force_inline static simd_vec<float, 8> and_not(const simd_vec<float, 8> &v1, const simd_vec<float, 8> &v2);
+    force_inline static simd_vec<float, 8> vectorcall and_not(simd_vec<float, 8> v1, simd_vec<float, 8> v2);
 
-    force_inline static simd_vec<float, 8> floor(const simd_vec<float, 8> &v1);
+    force_inline static simd_vec<float, 8> vectorcall floor(simd_vec<float, 8> v1);
 
-    force_inline static simd_vec<float, 8> ceil(const simd_vec<float, 8> &v1);
+    force_inline static simd_vec<float, 8> vectorcall ceil(simd_vec<float, 8> v1);
 
-    friend force_inline simd_vec<float, 8> operator&(const simd_vec<float, 8> &v1, const simd_vec<float, 8> &v2);
-    friend force_inline simd_vec<float, 8> operator|(const simd_vec<float, 8> &v1, const simd_vec<float, 8> &v2);
-    friend force_inline simd_vec<float, 8> operator^(const simd_vec<float, 8> &v1, const simd_vec<float, 8> &v2);
-    friend force_inline simd_vec<float, 8> operator+(const simd_vec<float, 8> &v1, const simd_vec<float, 8> &v2);
-    friend force_inline simd_vec<float, 8> operator-(const simd_vec<float, 8> &v1, const simd_vec<float, 8> &v2);
-    friend force_inline simd_vec<float, 8> operator*(const simd_vec<float, 8> &v1, const simd_vec<float, 8> &v2);
-    friend force_inline simd_vec<float, 8> operator/(const simd_vec<float, 8> &v1, const simd_vec<float, 8> &v2);
+    friend force_inline simd_vec<float, 8> vectorcall operator&(simd_vec<float, 8> v1, simd_vec<float, 8> v2);
+    friend force_inline simd_vec<float, 8> vectorcall operator|(simd_vec<float, 8> v1, simd_vec<float, 8> v2);
+    friend force_inline simd_vec<float, 8> vectorcall operator^(simd_vec<float, 8> v1, simd_vec<float, 8> v2);
+    friend force_inline simd_vec<float, 8> vectorcall operator+(simd_vec<float, 8> v1, simd_vec<float, 8> v2);
+    friend force_inline simd_vec<float, 8> vectorcall operator-(simd_vec<float, 8> v1, simd_vec<float, 8> v2);
+    friend force_inline simd_vec<float, 8> vectorcall operator*(simd_vec<float, 8> v1, simd_vec<float, 8> v2);
+    friend force_inline simd_vec<float, 8> vectorcall operator/(simd_vec<float, 8> v1, simd_vec<float, 8> v2);
 
-    friend force_inline simd_vec<float, 8> operator+(const simd_vec<float, 8> &v1, float v2);
-    friend force_inline simd_vec<float, 8> operator-(const simd_vec<float, 8> &v1, float v2);
-    friend force_inline simd_vec<float, 8> operator*(const simd_vec<float, 8> &v1, float v2);
-    friend force_inline simd_vec<float, 8> operator/(const simd_vec<float, 8> &v1, float v2);
+    friend force_inline simd_vec<float, 8> vectorcall operator+(simd_vec<float, 8> v1, float v2);
+    friend force_inline simd_vec<float, 8> vectorcall operator-(simd_vec<float, 8> v1, float v2);
+    friend force_inline simd_vec<float, 8> vectorcall operator*(simd_vec<float, 8> v1, float v2);
+    friend force_inline simd_vec<float, 8> vectorcall operator/(simd_vec<float, 8> v1, float v2);
 
-    friend force_inline simd_vec<float, 8> operator+(float v1, const simd_vec<float, 8> &v2);
-    friend force_inline simd_vec<float, 8> operator-(float v1, const simd_vec<float, 8> &v2);
-    friend force_inline simd_vec<float, 8> operator*(float v1, const simd_vec<float, 8> &v2);
-    friend force_inline simd_vec<float, 8> operator/(float v1, const simd_vec<float, 8> &v2);
+    friend force_inline simd_vec<float, 8> vectorcall operator+(float v1, simd_vec<float, 8> v2);
+    friend force_inline simd_vec<float, 8> vectorcall operator-(float v1, simd_vec<float, 8> v2);
+    friend force_inline simd_vec<float, 8> vectorcall operator*(float v1, simd_vec<float, 8> v2);
+    friend force_inline simd_vec<float, 8> vectorcall operator/(float v1, simd_vec<float, 8> v2);
 
-    friend force_inline simd_vec<float, 8> operator<(const simd_vec<float, 8> &v1, const simd_vec<float, 8> &v2);
-    friend force_inline simd_vec<float, 8> operator<=(const simd_vec<float, 8> &v1, const simd_vec<float, 8> &v2);
-    friend force_inline simd_vec<float, 8> operator>(const simd_vec<float, 8> &v1, const simd_vec<float, 8> &v2);
-    friend force_inline simd_vec<float, 8> operator>=(const simd_vec<float, 8> &v1, const simd_vec<float, 8> &v2);
-    friend force_inline simd_vec<float, 8> operator==(const simd_vec<float, 8> &v1, const simd_vec<float, 8> &v2);
-    friend force_inline simd_vec<float, 8> operator!=(const simd_vec<float, 8> &v1, const simd_vec<float, 8> &v2);
+    friend force_inline simd_vec<float, 8> vectorcall operator<(simd_vec<float, 8> v1, simd_vec<float, 8> v2);
+    friend force_inline simd_vec<float, 8> vectorcall operator<=(simd_vec<float, 8> v1, simd_vec<float, 8> v2);
+    friend force_inline simd_vec<float, 8> vectorcall operator>(simd_vec<float, 8> v1, simd_vec<float, 8> v2);
+    friend force_inline simd_vec<float, 8> vectorcall operator>=(simd_vec<float, 8> v1, simd_vec<float, 8> v2);
+    friend force_inline simd_vec<float, 8> vectorcall operator==(simd_vec<float, 8> v1, simd_vec<float, 8> v2);
+    friend force_inline simd_vec<float, 8> vectorcall operator!=(simd_vec<float, 8> v1, simd_vec<float, 8> v2);
 
-    friend force_inline simd_vec<float, 8> operator<(const simd_vec<float, 8> &v1, float v2);
-    friend force_inline simd_vec<float, 8> operator<=(const simd_vec<float, 8> &v1, float v2);
-    friend force_inline simd_vec<float, 8> operator>(const simd_vec<float, 8> &v1, float v2);
-    friend force_inline simd_vec<float, 8> operator>=(const simd_vec<float, 8> &v1, float v2);
-    friend force_inline simd_vec<float, 8> operator==(const simd_vec<float, 8> &v1, float v2);
-    friend force_inline simd_vec<float, 8> operator!=(const simd_vec<float, 8> &v1, float v2);
+    friend force_inline simd_vec<float, 8> vectorcall operator<(simd_vec<float, 8> v1, float v2);
+    friend force_inline simd_vec<float, 8> vectorcall operator<=(simd_vec<float, 8> v1, float v2);
+    friend force_inline simd_vec<float, 8> vectorcall operator>(simd_vec<float, 8> v1, float v2);
+    friend force_inline simd_vec<float, 8> vectorcall operator>=(simd_vec<float, 8> v1, float v2);
+    friend force_inline simd_vec<float, 8> vectorcall operator==(simd_vec<float, 8> v1, float v2);
+    friend force_inline simd_vec<float, 8> vectorcall operator!=(simd_vec<float, 8> v1, float v2);
 
-    friend force_inline simd_vec<float, 8> clamp(const simd_vec<float, 8> &v1, float min, float max);
-    friend force_inline simd_vec<float, 8> pow(const simd_vec<float, 8> &v1, const simd_vec<float, 8> &v2);
+    friend force_inline simd_vec<float, 8> vectorcall clamp(simd_vec<float, 8> v1, float min, float max);
+    friend force_inline simd_vec<float, 8> vectorcall pow(simd_vec<float, 8> v1, simd_vec<float, 8> v2);
 
-    friend force_inline simd_vec<float, 8> normalize(const simd_vec<float, 8> &v1);
+    friend force_inline simd_vec<float, 8> vectorcall normalize(simd_vec<float, 8> v1);
 
 #ifdef USE_FMA
-    friend force_inline simd_vec<float, 8> fmadd(const simd_vec<float, 8> &a, const simd_vec<float, 8> &b,
-                                                 const simd_vec<float, 8> &c);
-    friend force_inline simd_vec<float, 8> fmadd(const simd_vec<float, 8> &a, const float b,
-                                                 const simd_vec<float, 8> &c);
-    friend force_inline simd_vec<float, 8> fmadd(const float a, const simd_vec<float, 8> &b, const float c);
+    friend force_inline simd_vec<float, 8> vectorcall fmadd(simd_vec<float, 8> a, simd_vec<float, 8> b,
+                                                            simd_vec<float, 8> c);
+    friend force_inline simd_vec<float, 8> vectorcall fmadd(simd_vec<float, 8> a, float b, simd_vec<float, 8> c);
+    friend force_inline simd_vec<float, 8> vectorcall fmadd(float a, simd_vec<float, 8> b, float c);
 
-    friend force_inline simd_vec<float, 8> fmsub(const simd_vec<float, 8> &a, const simd_vec<float, 8> &b,
-                                                 const simd_vec<float, 8> &c);
-    friend force_inline simd_vec<float, 8> fmsub(const simd_vec<float, 8> &a, const float b,
-                                                 const simd_vec<float, 8> &c);
-    friend force_inline simd_vec<float, 8> fmsub(const float a, const simd_vec<float, 8> &b, const float c);
+    friend force_inline simd_vec<float, 8> vectorcall fmsub(simd_vec<float, 8> a, simd_vec<float, 8> b,
+                                                            simd_vec<float, 8> c);
+    friend force_inline simd_vec<float, 8> vectorcall fmsub(simd_vec<float, 8> a, float b, simd_vec<float, 8> c);
+    friend force_inline simd_vec<float, 8> vectorcall fmsub(float a, const simd_vec<float, 8> b, float c);
 #endif // USE_FMA
-#if defined(USE_AVX2) || defined(USE_AVX512)
-    template <int Scale>
-    friend force_inline simd_vec<float, 8> gather(const float *base_addr, const simd_vec<int, 8> &vindex);
-#endif
 
     friend force_inline const float *value_ptr(const simd_vec<float, 8> &v1) {
         return reinterpret_cast<const float *>(&v1.vec_);
@@ -316,7 +310,7 @@ template <> class simd_vec<int, 8> {
 #endif
     }
 
-    force_inline simd_vec<int, 8> &operator+=(const simd_vec<int, 8> &rhs) {
+    force_inline simd_vec<int, 8> &vectorcall operator+=(const simd_vec<int, 8> rhs) {
 #if defined(USE_AVX2) || defined(USE_AVX512)
         vec_ = _mm256_add_epi32(vec_, rhs.vec_);
 #elif defined(_MSC_VER) && !defined(__clang__)
@@ -331,9 +325,9 @@ template <> class simd_vec<int, 8> {
         return *this;
     }
 
-    force_inline simd_vec<int, 8> &operator+=(const int rhs) { return operator+=(simd_vec<int, 8>{rhs}); }
+    force_inline simd_vec<int, 8> &vectorcall operator+=(const int rhs) { return operator+=(simd_vec<int, 8>{rhs}); }
 
-    force_inline simd_vec<int, 8> &operator-=(const simd_vec<int, 8> &rhs) {
+    force_inline simd_vec<int, 8> &vectorcall operator-=(const simd_vec<int, 8> rhs) {
 #if defined(USE_AVX2) || defined(USE_AVX512)
         vec_ = _mm256_sub_epi32(vec_, rhs.vec_);
 #elif defined(_MSC_VER) && !defined(__clang__)
@@ -348,9 +342,9 @@ template <> class simd_vec<int, 8> {
         return *this;
     }
 
-    force_inline simd_vec<int, 8> &operator-=(const int rhs) { return operator-=(simd_vec<int, 8>{rhs}); }
+    force_inline simd_vec<int, 8> &vectorcall operator-=(const int rhs) { return operator-=(simd_vec<int, 8>{rhs}); }
 
-    force_inline simd_vec<int, 8> &operator*=(const simd_vec<int, 8> &rhs) {
+    force_inline simd_vec<int, 8> &vectorcall operator*=(const simd_vec<int, 8> rhs) {
 #if defined(USE_AVX2) || defined(USE_AVX512)
         vec_ = _mm256_mullo_epi32(vec_, rhs.vec_);
 #elif defined(_MSC_VER) && !defined(__clang__)
@@ -365,9 +359,9 @@ template <> class simd_vec<int, 8> {
         return *this;
     }
 
-    force_inline simd_vec<int, 8> &operator*=(const int rhs) { return operator*=(simd_vec<int, 8>{rhs}); }
+    force_inline simd_vec<int, 8> &vectorcall operator*=(const int rhs) { return operator*=(simd_vec<int, 8>{rhs}); }
 
-    force_inline simd_vec<int, 8> &operator/=(const simd_vec<int, 8> &rhs) {
+    force_inline simd_vec<int, 8> &vectorcall operator/=(const simd_vec<int, 8> rhs) {
 #if defined(_MSC_VER) && !defined(__clang__)
         ITERATE_8({ vec_.m256i_i32[i] /= rhs.vec_.m256i_i32[i]; })
 #else
@@ -380,9 +374,9 @@ template <> class simd_vec<int, 8> {
         return *this;
     }
 
-    force_inline simd_vec<int, 8> &operator/=(const int rhs) { return operator/=(simd_vec<int, 8>{rhs}); }
+    force_inline simd_vec<int, 8> &vectorcall operator/=(const int rhs) { return operator/=(simd_vec<int, 8>{rhs}); }
 
-    force_inline simd_vec<int, 8> &operator|=(const simd_vec<int, 8> &rhs) {
+    force_inline simd_vec<int, 8> &vectorcall operator|=(const simd_vec<int, 8> rhs) {
 #if defined(USE_AVX2) || defined(USE_AVX512)
         vec_ = _mm256_or_si256(vec_, rhs.vec_);
 #elif defined(_MSC_VER) && !defined(__clang__)
@@ -397,9 +391,9 @@ template <> class simd_vec<int, 8> {
         return *this;
     }
 
-    force_inline simd_vec<int, 8> &operator|=(const int rhs) { return operator|=(simd_vec<int, 8>{rhs}); }
+    force_inline simd_vec<int, 8> &vectorcall operator|=(const int rhs) { return operator|=(simd_vec<int, 8>{rhs}); }
 
-    force_inline simd_vec<int, 8> operator-() const {
+    force_inline simd_vec<int, 8> vectorcall operator-() const {
         simd_vec<int, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_sub_epi32(_mm256_setzero_si256(), vec_);
@@ -414,7 +408,7 @@ template <> class simd_vec<int, 8> {
         return ret;
     }
 
-    force_inline simd_vec<int, 8> operator==(const simd_vec<int, 8> &rhs) const {
+    force_inline simd_vec<int, 8> vectorcall operator==(const simd_vec<int, 8> rhs) const {
         simd_vec<int, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_cmpeq_epi32(vec_, rhs.vec_);
@@ -430,9 +424,11 @@ template <> class simd_vec<int, 8> {
         return ret;
     }
 
-    force_inline simd_vec<int, 8> operator==(const int rhs) const { return operator==(simd_vec<int, 8>{rhs}); }
+    force_inline simd_vec<int, 8> vectorcall operator==(const int rhs) const {
+        return operator==(simd_vec<int, 8>{rhs});
+    }
 
-    force_inline simd_vec<int, 8> operator!=(const simd_vec<int, 8> &rhs) const {
+    force_inline simd_vec<int, 8> vectorcall operator!=(const simd_vec<int, 8> rhs) const {
         simd_vec<int, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_andnot_si256(_mm256_cmpeq_epi32(vec_, rhs.vec_), _mm256_set1_epi32(~0));
@@ -448,9 +444,11 @@ template <> class simd_vec<int, 8> {
         return ret;
     }
 
-    force_inline simd_vec<int, 8> operator!=(const int rhs) const { return operator!=(simd_vec<int, 8>{rhs}); }
+    force_inline simd_vec<int, 8> vectorcall operator!=(const int rhs) const {
+        return operator!=(simd_vec<int, 8>{rhs});
+    }
 
-    force_inline simd_vec<int, 8> &operator&=(const simd_vec<int, 8> &rhs) {
+    force_inline simd_vec<int, 8> &vectorcall operator&=(const simd_vec<int, 8> rhs) {
 #if defined(USE_AVX2) || defined(USE_AVX512)
         vec_ = _mm256_and_si256(vec_, rhs.vec_);
 #elif defined(_MSC_VER) && !defined(__clang__)
@@ -465,19 +463,18 @@ template <> class simd_vec<int, 8> {
         return *this;
     }
 
-    force_inline simd_vec<int, 8> &operator&=(const int rhs) { return operator&=(simd_vec<int, 8>{rhs}); }
+    force_inline simd_vec<int, 8> &vectorcall operator&=(const int rhs) { return operator&=(simd_vec<int, 8>{rhs}); }
 
-    force_inline explicit operator simd_vec<float, 8>() const {
+    force_inline explicit vectorcall operator simd_vec<float, 8>() const {
         simd_vec<float, 8> ret;
         ret.vec_ = _mm256_cvtepi32_ps(vec_);
         return ret;
     }
 
     force_inline void copy_to(int *f) const { _mm256_storeu_si256((__m256i *)f, vec_); }
-
     force_inline void copy_to(int *f, simd_mem_aligned_tag) const { _mm256_store_si256((__m256i *)f, vec_); }
 
-    force_inline void blend_to(const simd_vec<int, 8> &mask, const simd_vec<int, 8> &v1) {
+    force_inline void vectorcall blend_to(const simd_vec<int, 8> mask, const simd_vec<int, 8> v1) {
 #if VALIDATE_MASKS
         alignas(32) int comp[8];
         _mm256_store_si256((__m256i *)comp, mask.vec_);
@@ -487,7 +484,7 @@ template <> class simd_vec<int, 8> {
             _mm256_blendv_ps(_mm256_castsi256_ps(vec_), _mm256_castsi256_ps(v1.vec_), _mm256_castsi256_ps(mask.vec_)));
     }
 
-    force_inline void blend_inv_to(const simd_vec<int, 8> &mask, const simd_vec<int, 8> &v1) {
+    force_inline void vectorcall blend_inv_to(const simd_vec<int, 8> mask, const simd_vec<int, 8> v1) {
 #if VALIDATE_MASKS
         alignas(32) int comp[8];
         _mm256_store_si256((__m256i *)comp, mask.vec_);
@@ -499,18 +496,17 @@ template <> class simd_vec<int, 8> {
 
     force_inline int movemask() const { return _mm256_movemask_ps(_mm256_castsi256_ps(vec_)); }
 
-    force_inline bool all_zeros() const { return _mm256_test_all_zeros(vec_, vec_) != 0; }
-
-    force_inline bool all_zeros(const simd_vec<int, 8> &mask) const {
+    force_inline bool vectorcall all_zeros() const { return _mm256_test_all_zeros(vec_, vec_) != 0; }
+    force_inline bool vectorcall all_zeros(const simd_vec<int, 8> mask) const {
         return _mm256_test_all_zeros(vec_, mask.vec_) != 0;
     }
 
-    force_inline bool not_all_zeros() const {
+    force_inline bool vectorcall not_all_zeros() const {
         int res = _mm256_test_all_zeros(vec_, vec_);
         return res == 0;
     }
 
-    force_inline static simd_vec<int, 8> min(const simd_vec<int, 8> &v1, const simd_vec<int, 8> &v2) {
+    force_inline static simd_vec<int, 8> vectorcall min(const simd_vec<int, 8> v1, const simd_vec<int, 8> v2) {
         simd_vec<int, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_min_epi32(v1.vec_, v2.vec_);
@@ -526,19 +522,19 @@ template <> class simd_vec<int, 8> {
         return ret;
     }
 
-    force_inline static simd_vec<int, 8> min(const simd_vec<int, 8> &v1, const int v2) {
+    force_inline static simd_vec<int, 8> vectorcall min(const simd_vec<int, 8> v1, const int v2) {
         return min(v1, simd_vec<int, 8>{v2});
     }
 
-    force_inline static simd_vec<int, 8> min(const int v1, const simd_vec<int, 8> &v2) {
+    force_inline static simd_vec<int, 8> vectorcall min(const int v1, const simd_vec<int, 8> v2) {
         return min(simd_vec<int, 8>{v1}, v2);
     }
 
-    force_inline static simd_vec<int, 8> max(const simd_vec<int, 8> &v1, const simd_vec<int, 8> &v2) {
+    force_inline static simd_vec<int, 8> vectorcall max(const simd_vec<int, 8> v1, const simd_vec<int, 8> v2) {
         simd_vec<int, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_max_epi32(v1.vec_, v2.vec_);
-#elif defined(_MSC_VER) && !defined(__clang__) 
+#elif defined(_MSC_VER) && !defined(__clang__)
         ITERATE_8({ ret.vec_.m256i_i32[i] = std::max(v1.vec_.m256i_i32[i], v2.vec_.m256i_i32[i]); })
 #else
         alignas(32) int comp1[8], comp2[8];
@@ -550,39 +546,39 @@ template <> class simd_vec<int, 8> {
         return ret;
     }
 
-    force_inline static simd_vec<int, 8> max(const simd_vec<int, 8> &v1, const int v2) {
+    force_inline static simd_vec<int, 8> vectorcall max(const simd_vec<int, 8> v1, const int v2) {
         return max(v1, simd_vec<int, 8>{v2});
     }
 
-    force_inline static simd_vec<int, 8> max(const int v1, const simd_vec<int, 8> &v2) {
+    force_inline static simd_vec<int, 8> vectorcall max(const int v1, const simd_vec<int, 8> v2) {
         return max(simd_vec<int, 8>{v1}, v2);
     }
 
-    force_inline static simd_vec<int, 8> and_not(const simd_vec<int, 8> &v1, const simd_vec<int, 8> &v2) {
+    force_inline static simd_vec<int, 8> vectorcall and_not(const simd_vec<int, 8> v1, const simd_vec<int, 8> v2) {
         simd_vec<int, 8> temp;
         temp.vec_ = _mm256_castps_si256(_mm256_andnot_ps(_mm256_castsi256_ps(v1.vec_), _mm256_castsi256_ps(v2.vec_)));
         return temp;
     }
 
-    friend force_inline simd_vec<int, 8> operator&(const simd_vec<int, 8> &v1, const simd_vec<int, 8> &v2) {
+    friend force_inline simd_vec<int, 8> vectorcall operator&(const simd_vec<int, 8> v1, const simd_vec<int, 8> v2) {
         simd_vec<int, 8> temp;
         temp.vec_ = _mm256_castps_si256(_mm256_and_ps(_mm256_castsi256_ps(v1.vec_), _mm256_castsi256_ps(v2.vec_)));
         return temp;
     }
 
-    friend force_inline simd_vec<int, 8> operator|(const simd_vec<int, 8> &v1, const simd_vec<int, 8> &v2) {
+    friend force_inline simd_vec<int, 8> vectorcall operator|(const simd_vec<int, 8> v1, const simd_vec<int, 8> v2) {
         simd_vec<int, 8> temp;
         temp.vec_ = _mm256_castps_si256(_mm256_or_ps(_mm256_castsi256_ps(v1.vec_), _mm256_castsi256_ps(v2.vec_)));
         return temp;
     }
 
-    friend force_inline simd_vec<int, 8> operator^(const simd_vec<int, 8> &v1, const simd_vec<int, 8> &v2) {
+    friend force_inline simd_vec<int, 8> vectorcall operator^(const simd_vec<int, 8> v1, const simd_vec<int, 8> v2) {
         simd_vec<int, 8> temp;
         temp.vec_ = _mm256_castps_si256(_mm256_xor_ps(_mm256_castsi256_ps(v1.vec_), _mm256_castsi256_ps(v2.vec_)));
         return temp;
     }
 
-    friend force_inline simd_vec<int, 8> operator+(const simd_vec<int, 8> &v1, const simd_vec<int, 8> &v2) {
+    friend force_inline simd_vec<int, 8> vectorcall operator+(const simd_vec<int, 8> v1, const simd_vec<int, 8> v2) {
         simd_vec<int, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_add_epi32(v1.vec_, v2.vec_);
@@ -598,7 +594,7 @@ template <> class simd_vec<int, 8> {
         return ret;
     }
 
-    friend force_inline simd_vec<int, 8> operator-(const simd_vec<int, 8> &v1, const simd_vec<int, 8> &v2) {
+    friend force_inline simd_vec<int, 8> vectorcall operator-(const simd_vec<int, 8> v1, const simd_vec<int, 8> v2) {
         simd_vec<int, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_sub_epi32(v1.vec_, v2.vec_);
@@ -614,7 +610,7 @@ template <> class simd_vec<int, 8> {
         return ret;
     }
 
-    friend force_inline simd_vec<int, 8> operator*(const simd_vec<int, 8> &v1, const simd_vec<int, 8> &v2) {
+    friend force_inline simd_vec<int, 8> vectorcall operator*(const simd_vec<int, 8> v1, const simd_vec<int, 8> v2) {
         simd_vec<int, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_mullo_epi32(v1.vec_, v2.vec_);
@@ -630,7 +626,7 @@ template <> class simd_vec<int, 8> {
         return ret;
     }
 
-    friend force_inline simd_vec<int, 8> operator/(const simd_vec<int, 8> &v1, const simd_vec<int, 8> &v2) {
+    friend force_inline simd_vec<int, 8> vectorcall operator/(const simd_vec<int, 8> v1, const simd_vec<int, 8> v2) {
         simd_vec<int, 8> ret;
 #if defined(_MSC_VER) && !defined(__clang__)
         ITERATE_8({ ret.vec_.m256i_i32[i] = (v1.vec_.m256i_i32[i] / v2.vec_.m256i_i32[i]); })
@@ -644,39 +640,39 @@ template <> class simd_vec<int, 8> {
         return ret;
     }
 
-    friend force_inline simd_vec<int, 8> operator+(const simd_vec<int, 8> &v1, const int v2) {
+    friend force_inline simd_vec<int, 8> vectorcall operator+(const simd_vec<int, 8> v1, const int v2) {
         return operator+(v1, simd_vec<int, 8>{v2});
     }
 
-    friend force_inline simd_vec<int, 8> operator-(const simd_vec<int, 8> &v1, const int v2) {
+    friend force_inline simd_vec<int, 8> vectorcall operator-(const simd_vec<int, 8> v1, const int v2) {
         return v1 - simd_vec<int, 8>{v2};
     }
 
-    friend force_inline simd_vec<int, 8> operator*(const simd_vec<int, 8> &v1, const int v2) {
+    friend force_inline simd_vec<int, 8> vectorcall operator*(const simd_vec<int, 8> v1, const int v2) {
         return operator*(v1, simd_vec<int, 8>{v2});
     }
 
-    friend force_inline simd_vec<int, 8> operator/(const simd_vec<int, 8> &v1, const int v2) {
+    friend force_inline simd_vec<int, 8> vectorcall operator/(const simd_vec<int, 8> v1, const int v2) {
         return operator/(v1, simd_vec<int, 8>{v2});
     }
 
-    friend force_inline simd_vec<int, 8> operator+(const int v1, const simd_vec<int, 8> &v2) {
+    friend force_inline simd_vec<int, 8> vectorcall operator+(const int v1, const simd_vec<int, 8> v2) {
         return operator+(simd_vec<int, 8>{v1}, v2);
     }
 
-    friend force_inline simd_vec<int, 8> operator-(const int v1, const simd_vec<int, 8> &v2) {
+    friend force_inline simd_vec<int, 8> vectorcall operator-(const int v1, const simd_vec<int, 8> v2) {
         return simd_vec<int, 8>{v1} - v2;
     }
 
-    friend force_inline simd_vec<int, 8> operator*(const int v1, const simd_vec<int, 8> &v2) {
+    friend force_inline simd_vec<int, 8> vectorcall operator*(const int v1, const simd_vec<int, 8> v2) {
         return operator*(simd_vec<int, 8>{v1}, v2);
     }
 
-    friend force_inline simd_vec<int, 8> operator/(const int v1, const simd_vec<int, 8> &v2) {
+    friend force_inline simd_vec<int, 8> vectorcall operator/(const int v1, const simd_vec<int, 8> v2) {
         return operator/(simd_vec<int, 8>{v1}, v2);
     }
 
-    friend force_inline simd_vec<int, 8> operator<(const simd_vec<int, 8> &v1, const simd_vec<int, 8> &v2) {
+    friend force_inline simd_vec<int, 8> vectorcall operator<(const simd_vec<int, 8> v1, const simd_vec<int, 8> v2) {
         simd_vec<int, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_cmpgt_epi32(v2.vec_, v1.vec_);
@@ -692,7 +688,7 @@ template <> class simd_vec<int, 8> {
         return ret;
     }
 
-    friend force_inline simd_vec<int, 8> operator>(const simd_vec<int, 8> &v1, const simd_vec<int, 8> &v2) {
+    friend force_inline simd_vec<int, 8> vectorcall operator>(const simd_vec<int, 8> v1, const simd_vec<int, 8> v2) {
         simd_vec<int, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_cmpgt_epi32(v1.vec_, v2.vec_);
@@ -708,11 +704,11 @@ template <> class simd_vec<int, 8> {
         return ret;
     }
 
-    friend force_inline simd_vec<int, 8> operator<(const simd_vec<int, 8> &v1, const int v2) {
+    friend force_inline simd_vec<int, 8> vectorcall operator<(const simd_vec<int, 8> v1, const int v2) {
         return operator<(v1, simd_vec<int, 8>{v2});
     }
 
-    friend force_inline simd_vec<int, 8> operator<=(const simd_vec<int, 8> &v1, const int v2) {
+    friend force_inline simd_vec<int, 8> vectorcall operator<=(const simd_vec<int, 8> v1, const int v2) {
         simd_vec<int, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_or_si256(_mm256_cmpeq_epi32(_mm256_set1_epi32(v2), v1.vec_),
@@ -728,7 +724,7 @@ template <> class simd_vec<int, 8> {
         return ret;
     }
 
-    friend force_inline simd_vec<int, 8> operator>(const simd_vec<int, 8> &v1, const int v2) {
+    friend force_inline simd_vec<int, 8> vectorcall operator>(const simd_vec<int, 8> v1, const int v2) {
         simd_vec<int, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_cmpgt_epi32(v1.vec_, _mm256_set1_epi32(v2));
@@ -743,7 +739,7 @@ template <> class simd_vec<int, 8> {
         return ret;
     }
 
-    friend force_inline simd_vec<int, 8> operator>=(const simd_vec<int, 8> &v1, const int v2) {
+    friend force_inline simd_vec<int, 8> vectorcall operator>=(const simd_vec<int, 8> v1, const int v2) {
         simd_vec<int, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_cmpgt_epi32(v1.vec_, _mm256_set1_epi32(v2 - 1));
@@ -758,7 +754,7 @@ template <> class simd_vec<int, 8> {
         return ret;
     }
 
-    friend force_inline simd_vec<int, 8> operator>>(const simd_vec<int, 8> &v1, const simd_vec<int, 8> &v2) {
+    friend force_inline simd_vec<int, 8> vectorcall operator>>(const simd_vec<int, 8> v1, const simd_vec<int, 8> v2) {
         simd_vec<int, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_srlv_epi32(v1.vec_, v2.vec_);
@@ -774,11 +770,11 @@ template <> class simd_vec<int, 8> {
         return ret;
     }
 
-    friend force_inline simd_vec<int, 8> operator>>(const simd_vec<int, 8> &v1, const int v2) {
+    friend force_inline simd_vec<int, 8> vectorcall operator>>(const simd_vec<int, 8> v1, const int v2) {
         return operator>>(v1, simd_vec<int, 8>{v2});
     }
 
-    friend force_inline simd_vec<int, 8> operator<<(const simd_vec<int, 8> &v1, const simd_vec<int, 8> &v2) {
+    friend force_inline simd_vec<int, 8> vectorcall operator<<(const simd_vec<int, 8> v1, const simd_vec<int, 8> v2) {
         simd_vec<int, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_sllv_epi32(v1.vec_, v2.vec_);
@@ -794,7 +790,7 @@ template <> class simd_vec<int, 8> {
         return ret;
     }
 
-    friend force_inline simd_vec<int, 8> operator<<(const simd_vec<int, 8> &v1, const int v2) {
+    friend force_inline simd_vec<int, 8> vectorcall operator<<(const simd_vec<int, 8> v1, const int v2) {
         return operator<<(v1, simd_vec<int, 8>{v2});
     }
 
@@ -813,7 +809,7 @@ template <> class simd_vec<int, 8> {
         return ret;
     }
 
-    friend force_inline simd_vec<int, 8> srai(const simd_vec<int, 8> &v1, const int v2) {
+    friend force_inline simd_vec<int, 8> vectorcall srai(const simd_vec<int, 8> v1, const int v2) {
         simd_vec<int, 8> ret;
 #if defined(USE_AVX2) || defined(USE_AVX512)
         ret.vec_ = _mm256_srai_epi32(v1.vec_, v2);
@@ -828,7 +824,7 @@ template <> class simd_vec<int, 8> {
         return ret;
     }
 
-    friend force_inline bool is_equal(const simd_vec<int, 8> &v1, const simd_vec<int, 8> &v2) {
+    friend force_inline bool vectorcall is_equal(const simd_vec<int, 8> v1, const simd_vec<int, 8> v2) {
 #if defined(USE_AVX2) || defined(USE_AVX512)
         __m256i vcmp = _mm256_cmpeq_epi32(v1.vec_, v2.vec_);
         return (_mm256_movemask_epi8(vcmp) == 0xffffffff);
@@ -851,10 +847,10 @@ template <> class simd_vec<int, 8> {
     }
 
 #if defined(USE_AVX2) || defined(USE_AVX512)
-    template <int Scale>
-    friend force_inline simd_vec<float, 8> gather(const float *base_addr, const simd_vec<int, 8> &vindex);
-    template <int Scale>
-    friend force_inline simd_vec<int, 8> gather(const int *base_addr, const simd_vec<int, 8> &vindex);
+    template <int IndexScale>
+    friend force_inline simd_vec<float, 8> vectorcall gather(const float *base_addr, simd_vec<int, 8> vindex);
+    template <int IndexScale>
+    friend force_inline simd_vec<int, 8> vectorcall gather(const int *base_addr, simd_vec<int, 8> vindex);
 #endif
 
     friend force_inline const int *value_ptr(const simd_vec<int, 8> &v1) {
@@ -912,229 +908,231 @@ force_inline simd_vec<float, 8> simd_vec<float, 8>::log() const {
     return simd_vec<float, 8>{comp, simd_mem_aligned};
 }
 
-force_inline simd_vec<float, 8> simd_vec<float, 8>::min(const simd_vec<float, 8> &v1, const simd_vec<float, 8> &v2) {
+force_inline simd_vec<float, 8> vectorcall simd_vec<float, 8>::min(const simd_vec<float, 8> v1,
+                                                                   const simd_vec<float, 8> v2) {
     simd_vec<float, 8> temp;
     temp.vec_ = _mm256_min_ps(v1.vec_, v2.vec_);
     return temp;
 }
 
-force_inline simd_vec<float, 8> simd_vec<float, 8>::min(const simd_vec<float, 8> &v1, const float v2) {
+force_inline simd_vec<float, 8> vectorcall simd_vec<float, 8>::min(const simd_vec<float, 8> v1, const float v2) {
     simd_vec<float, 8> temp;
     temp.vec_ = _mm256_min_ps(v1.vec_, _mm256_set1_ps(v2));
     return temp;
 }
 
-force_inline simd_vec<float, 8> simd_vec<float, 8>::min(const float v1, const simd_vec<float, 8> &v2) {
+force_inline simd_vec<float, 8> vectorcall simd_vec<float, 8>::min(const float v1, const simd_vec<float, 8> v2) {
     simd_vec<float, 8> temp;
     temp.vec_ = _mm256_min_ps(_mm256_set1_ps(v1), v2.vec_);
     return temp;
 }
 
-force_inline simd_vec<float, 8> simd_vec<float, 8>::max(const simd_vec<float, 8> &v1, const simd_vec<float, 8> &v2) {
+force_inline simd_vec<float, 8> vectorcall simd_vec<float, 8>::max(const simd_vec<float, 8> v1,
+                                                                   const simd_vec<float, 8> v2) {
     simd_vec<float, 8> temp;
     temp.vec_ = _mm256_max_ps(v1.vec_, v2.vec_);
     return temp;
 }
 
-force_inline simd_vec<float, 8> simd_vec<float, 8>::max(const simd_vec<float, 8> &v1, const float v2) {
+force_inline simd_vec<float, 8> vectorcall simd_vec<float, 8>::max(const simd_vec<float, 8> v1, const float v2) {
     simd_vec<float, 8> temp;
     temp.vec_ = _mm256_max_ps(v1.vec_, _mm256_set1_ps(v2));
     return temp;
 }
 
-force_inline simd_vec<float, 8> simd_vec<float, 8>::max(const float v1, const simd_vec<float, 8> &v2) {
+force_inline simd_vec<float, 8> vectorcall simd_vec<float, 8>::max(const float v1, const simd_vec<float, 8> v2) {
     simd_vec<float, 8> temp;
     temp.vec_ = _mm256_max_ps(_mm256_set1_ps(v1), v2.vec_);
     return temp;
 }
 
-force_inline static simd_vec<float, 8> and_not(const simd_vec<float, 8> &v1, const simd_vec<float, 8> &v2) {
+force_inline static simd_vec<float, 8> vectorcall and_not(const simd_vec<float, 8> v1, const simd_vec<float, 8> v2) {
     simd_vec<float, 8> temp;
     temp.vec_ = _mm256_andnot_ps(v1.vec_, v2.vec_);
     return temp;
 }
 
-force_inline static simd_vec<float, 8> floor(const simd_vec<float, 8> &v1) {
+force_inline static simd_vec<float, 8> vectorcall floor(const simd_vec<float, 8> v1) {
     simd_vec<float, 8> temp;
     temp.vec_ = _mm256_floor_ps(v1.vec_);
     return temp;
 }
 
-force_inline static simd_vec<float, 8> ceil(const simd_vec<float, 8> &v1) {
+force_inline static simd_vec<float, 8> vectorcall ceil(const simd_vec<float, 8> v1) {
     simd_vec<float, 8> temp;
     temp.vec_ = _mm256_ceil_ps(v1.vec_);
     return temp;
 }
 
-force_inline simd_vec<float, 8> operator&(const simd_vec<float, 8> &v1, const simd_vec<float, 8> &v2) {
+force_inline simd_vec<float, 8> vectorcall operator&(const simd_vec<float, 8> v1, const simd_vec<float, 8> v2) {
     simd_vec<float, 8> temp;
     temp.vec_ = _mm256_and_ps(v1.vec_, v2.vec_);
     return temp;
 }
 
-force_inline simd_vec<float, 8> operator|(const simd_vec<float, 8> &v1, const simd_vec<float, 8> &v2) {
+force_inline simd_vec<float, 8> vectorcall operator|(const simd_vec<float, 8> v1, const simd_vec<float, 8> v2) {
     simd_vec<float, 8> temp;
     temp.vec_ = _mm256_or_ps(v1.vec_, v2.vec_);
     return temp;
 }
 
-force_inline simd_vec<float, 8> operator^(const simd_vec<float, 8> &v1, const simd_vec<float, 8> &v2) {
+force_inline simd_vec<float, 8> vectorcall operator^(const simd_vec<float, 8> v1, const simd_vec<float, 8> v2) {
     simd_vec<float, 8> temp;
     temp.vec_ = _mm256_xor_ps(v1.vec_, v2.vec_);
     return temp;
 }
 
-force_inline simd_vec<float, 8> operator+(const simd_vec<float, 8> &v1, const simd_vec<float, 8> &v2) {
+force_inline simd_vec<float, 8> vectorcall operator+(const simd_vec<float, 8> v1, const simd_vec<float, 8> v2) {
     simd_vec<float, 8> temp;
     temp.vec_ = _mm256_add_ps(v1.vec_, v2.vec_);
     return temp;
 }
 
-force_inline simd_vec<float, 8> operator-(const simd_vec<float, 8> &v1, const simd_vec<float, 8> &v2) {
+force_inline simd_vec<float, 8> vectorcall operator-(const simd_vec<float, 8> v1, const simd_vec<float, 8> v2) {
     simd_vec<float, 8> temp;
     temp.vec_ = _mm256_sub_ps(v1.vec_, v2.vec_);
     return temp;
 }
 
-force_inline simd_vec<float, 8> operator*(const simd_vec<float, 8> &v1, const simd_vec<float, 8> &v2) {
+force_inline simd_vec<float, 8> vectorcall operator*(const simd_vec<float, 8> v1, const simd_vec<float, 8> v2) {
     simd_vec<float, 8> temp;
     temp.vec_ = _mm256_mul_ps(v1.vec_, v2.vec_);
     return temp;
 }
 
-force_inline simd_vec<float, 8> operator/(const simd_vec<float, 8> &v1, const simd_vec<float, 8> &v2) {
+force_inline simd_vec<float, 8> vectorcall operator/(const simd_vec<float, 8> v1, const simd_vec<float, 8> v2) {
     simd_vec<float, 8> temp;
     temp.vec_ = _mm256_div_ps(v1.vec_, v2.vec_);
     return temp;
 }
 
-force_inline simd_vec<float, 8> operator+(const simd_vec<float, 8> &v1, const float v2) {
+force_inline simd_vec<float, 8> vectorcall operator+(const simd_vec<float, 8> v1, const float v2) {
     simd_vec<float, 8> temp;
     temp.vec_ = _mm256_add_ps(v1.vec_, _mm256_set1_ps(v2));
     return temp;
 }
 
-force_inline simd_vec<float, 8> operator-(const simd_vec<float, 8> &v1, const float v2) {
+force_inline simd_vec<float, 8> vectorcall operator-(const simd_vec<float, 8> v1, const float v2) {
     simd_vec<float, 8> temp;
     temp.vec_ = _mm256_sub_ps(v1.vec_, _mm256_set1_ps(v2));
     return temp;
 }
 
-force_inline simd_vec<float, 8> operator*(const simd_vec<float, 8> &v1, const float v2) {
+force_inline simd_vec<float, 8> vectorcall operator*(const simd_vec<float, 8> v1, const float v2) {
     simd_vec<float, 8> temp;
     temp.vec_ = _mm256_mul_ps(v1.vec_, _mm256_set1_ps(v2));
     return temp;
 }
 
-force_inline simd_vec<float, 8> operator/(const simd_vec<float, 8> &v1, const float v2) {
+force_inline simd_vec<float, 8> vectorcall operator/(const simd_vec<float, 8> v1, const float v2) {
     simd_vec<float, 8> temp;
     temp.vec_ = _mm256_div_ps(v1.vec_, _mm256_set1_ps(v2));
     return temp;
 }
 
-force_inline simd_vec<float, 8> operator+(const float v1, const simd_vec<float, 8> &v2) {
+force_inline simd_vec<float, 8> vectorcall operator+(const float v1, const simd_vec<float, 8> v2) {
     simd_vec<float, 8> temp;
     temp.vec_ = _mm256_add_ps(_mm256_set1_ps(v1), v2.vec_);
     return temp;
 }
 
-force_inline simd_vec<float, 8> operator-(const float v1, const simd_vec<float, 8> &v2) {
+force_inline simd_vec<float, 8> vectorcall operator-(const float v1, const simd_vec<float, 8> v2) {
     simd_vec<float, 8> temp;
     temp.vec_ = _mm256_sub_ps(_mm256_set1_ps(v1), v2.vec_);
     return temp;
 }
 
-force_inline simd_vec<float, 8> operator*(const float v1, const simd_vec<float, 8> &v2) {
+force_inline simd_vec<float, 8> vectorcall operator*(const float v1, const simd_vec<float, 8> v2) {
     simd_vec<float, 8> temp;
     temp.vec_ = _mm256_mul_ps(_mm256_set1_ps(v1), v2.vec_);
     return temp;
 }
 
-force_inline simd_vec<float, 8> operator/(const float v1, const simd_vec<float, 8> &v2) {
+force_inline simd_vec<float, 8> vectorcall operator/(const float v1, const simd_vec<float, 8> v2) {
     simd_vec<float, 8> temp;
     temp.vec_ = _mm256_div_ps(_mm256_set1_ps(v1), v2.vec_);
     return temp;
 }
 
-force_inline simd_vec<float, 8> operator<(const simd_vec<float, 8> &v1, const simd_vec<float, 8> &v2) {
+force_inline simd_vec<float, 8> vectorcall operator<(const simd_vec<float, 8> v1, const simd_vec<float, 8> v2) {
     simd_vec<float, 8> ret;
     ret.vec_ = _mm256_cmp_ps(v1.vec_, v2.vec_, _CMP_LT_OS);
     return ret;
 }
 
-force_inline simd_vec<float, 8> operator<=(const simd_vec<float, 8> &v1, const simd_vec<float, 8> &v2) {
+force_inline simd_vec<float, 8> vectorcall operator<=(const simd_vec<float, 8> v1, const simd_vec<float, 8> v2) {
     simd_vec<float, 8> ret;
     ret.vec_ = _mm256_cmp_ps(v1.vec_, v2.vec_, _CMP_LE_OS);
     return ret;
 }
 
-force_inline simd_vec<float, 8> operator>(const simd_vec<float, 8> &v1, const simd_vec<float, 8> &v2) {
+force_inline simd_vec<float, 8> vectorcall operator>(const simd_vec<float, 8> v1, const simd_vec<float, 8> v2) {
     simd_vec<float, 8> ret;
     ret.vec_ = _mm256_cmp_ps(v1.vec_, v2.vec_, _CMP_GT_OS);
     return ret;
 }
 
-force_inline simd_vec<float, 8> operator>=(const simd_vec<float, 8> &v1, const simd_vec<float, 8> &v2) {
+force_inline simd_vec<float, 8> vectorcall operator>=(const simd_vec<float, 8> v1, const simd_vec<float, 8> v2) {
     simd_vec<float, 8> ret;
     ret.vec_ = _mm256_cmp_ps(v1.vec_, v2.vec_, _CMP_GE_OS);
     return ret;
 }
 
-force_inline simd_vec<float, 8> operator==(const simd_vec<float, 8> &v1, const simd_vec<float, 8> &v2) {
+force_inline simd_vec<float, 8> vectorcall operator==(const simd_vec<float, 8> v1, const simd_vec<float, 8> v2) {
     simd_vec<float, 8> ret;
     ret.vec_ = _mm256_cmp_ps(v1.vec_, v2.vec_, _CMP_EQ_OS);
     return ret;
 }
 
-force_inline simd_vec<float, 8> operator!=(const simd_vec<float, 8> &v1, const simd_vec<float, 8> &v2) {
+force_inline simd_vec<float, 8> vectorcall operator!=(const simd_vec<float, 8> v1, const simd_vec<float, 8> v2) {
     simd_vec<float, 8> ret;
     ret.vec_ = _mm256_cmp_ps(v1.vec_, v2.vec_, _CMP_NEQ_OS);
     return ret;
 }
 
-force_inline simd_vec<float, 8> operator<(const simd_vec<float, 8> &v1, const float v2) {
+force_inline simd_vec<float, 8> vectorcall operator<(const simd_vec<float, 8> v1, const float v2) {
     simd_vec<float, 8> ret;
     ret.vec_ = _mm256_cmp_ps(v1.vec_, _mm256_set1_ps(v2), _CMP_LT_OS);
     return ret;
 }
 
-force_inline simd_vec<float, 8> operator<=(const simd_vec<float, 8> &v1, const float v2) {
+force_inline simd_vec<float, 8> vectorcall operator<=(const simd_vec<float, 8> v1, const float v2) {
     simd_vec<float, 8> ret;
     ret.vec_ = _mm256_cmp_ps(v1.vec_, _mm256_set1_ps(v2), _CMP_LE_OS);
     return ret;
 }
 
-force_inline simd_vec<float, 8> operator>(const simd_vec<float, 8> &v1, const float v2) {
+force_inline simd_vec<float, 8> vectorcall operator>(const simd_vec<float, 8> v1, const float v2) {
     simd_vec<float, 8> ret;
     ret.vec_ = _mm256_cmp_ps(v1.vec_, _mm256_set1_ps(v2), _CMP_GT_OS);
     return ret;
 }
 
-force_inline simd_vec<float, 8> operator>=(const simd_vec<float, 8> &v1, const float v2) {
+force_inline simd_vec<float, 8> vectorcall operator>=(const simd_vec<float, 8> v1, const float v2) {
     simd_vec<float, 8> ret;
     ret.vec_ = _mm256_cmp_ps(v1.vec_, _mm256_set1_ps(v2), _CMP_GE_OS);
     return ret;
 }
 
-force_inline simd_vec<float, 8> operator==(const simd_vec<float, 8> &v1, const float v2) {
+force_inline simd_vec<float, 8> vectorcall operator==(const simd_vec<float, 8> v1, const float v2) {
     simd_vec<float, 8> ret;
     ret.vec_ = _mm256_cmp_ps(v1.vec_, _mm256_set1_ps(v2), _CMP_EQ_OS);
     return ret;
 }
 
-force_inline simd_vec<float, 8> operator!=(const simd_vec<float, 8> &v1, const float v2) {
+force_inline simd_vec<float, 8> vectorcall operator!=(const simd_vec<float, 8> v1, const float v2) {
     simd_vec<float, 8> ret;
     ret.vec_ = _mm256_cmp_ps(v1.vec_, _mm256_set1_ps(v2), _CMP_NEQ_OS);
     return ret;
 }
 
-force_inline simd_vec<float, 8> clamp(const simd_vec<float, 8> &v1, const float min, const float max) {
+force_inline simd_vec<float, 8> vectorcall clamp(const simd_vec<float, 8> v1, const float min, const float max) {
     simd_vec<float, 8> ret;
     ret.vec_ = _mm256_max_ps(_mm256_set1_ps(min), _mm256_min_ps(v1.vec_, _mm256_set1_ps(max)));
     return ret;
 }
 
-force_inline simd_vec<float, 8> pow(const simd_vec<float, 8> &v1, const simd_vec<float, 8> &v2) {
+force_inline simd_vec<float, 8> vectorcall pow(const simd_vec<float, 8> v1, const simd_vec<float, 8> v2) {
     alignas(32) float comp1[8], comp2[8];
     _mm256_store_ps(comp1, v1.vec_);
     _mm256_store_ps(comp2, v2.vec_);
@@ -1142,42 +1140,44 @@ force_inline simd_vec<float, 8> pow(const simd_vec<float, 8> &v1, const simd_vec
     return simd_vec<float, 8>{comp1, simd_mem_aligned};
 }
 
-force_inline simd_vec<float, 8> normalize(const simd_vec<float, 8> &v1) { return v1 / v1.length(); }
+force_inline simd_vec<float, 8> vectorcall normalize(const simd_vec<float, 8> v1) { return v1 / v1.length(); }
 
 #ifdef USE_FMA
-force_inline simd_vec<float, 8> fmadd(const simd_vec<float, 8> &a, const simd_vec<float, 8> &b,
-                                      const simd_vec<float, 8> &c) {
+force_inline simd_vec<float, 8> vectorcall fmadd(const simd_vec<float, 8> a, const simd_vec<float, 8> b,
+                                                 const simd_vec<float, 8> c) {
     simd_vec<float, 8> ret;
     ret.vec_ = _mm256_fmadd_ps(a.vec_, b.vec_, c.vec_);
     return ret;
 }
 
-force_inline simd_vec<float, 8> fmadd(const simd_vec<float, 8> &a, const float b, const simd_vec<float, 8> &c) {
+force_inline simd_vec<float, 8> vectorcall fmadd(const simd_vec<float, 8> a, const float b,
+                                                 const simd_vec<float, 8> c) {
     simd_vec<float, 8> ret;
     ret.vec_ = _mm256_fmadd_ps(a.vec_, _mm256_set1_ps(b), c.vec_);
     return ret;
 }
 
-force_inline simd_vec<float, 8> fmadd(const float a, const simd_vec<float, 8> &b, const float c) {
+force_inline simd_vec<float, 8> vectorcall fmadd(const float a, const simd_vec<float, 8> b, const float c) {
     simd_vec<float, 8> ret;
     ret.vec_ = _mm256_fmadd_ps(_mm256_set1_ps(a), b.vec_, _mm256_set1_ps(c));
     return ret;
 }
 
-force_inline simd_vec<float, 8> fmsub(const simd_vec<float, 8> &a, const simd_vec<float, 8> &b,
-                                      const simd_vec<float, 8> &c) {
+force_inline simd_vec<float, 8> vectorcall fmsub(const simd_vec<float, 8> a, const simd_vec<float, 8> b,
+                                                 const simd_vec<float, 8> c) {
     simd_vec<float, 8> ret;
     ret.vec_ = _mm256_fmsub_ps(a.vec_, b.vec_, c.vec_);
     return ret;
 }
 
-force_inline simd_vec<float, 8> fmsub(const simd_vec<float, 8> &a, const float b, const simd_vec<float, 8> &c) {
+force_inline simd_vec<float, 8> vectorcall fmsub(const simd_vec<float, 8> a, const float b,
+                                                 const simd_vec<float, 8> c) {
     simd_vec<float, 8> ret;
     ret.vec_ = _mm256_fmsub_ps(a.vec_, _mm256_set1_ps(b), c.vec_);
     return ret;
 }
 
-force_inline simd_vec<float, 8> fmsub(const float a, const simd_vec<float, 8> &b, const float c) {
+force_inline simd_vec<float, 8> vectorcall fmsub(const float a, const simd_vec<float, 8> b, const float c) {
     simd_vec<float, 8> ret;
     ret.vec_ = _mm256_fmsub_ps(_mm256_set1_ps(a), b.vec_, _mm256_set1_ps(c));
     return ret;
@@ -1185,15 +1185,17 @@ force_inline simd_vec<float, 8> fmsub(const float a, const simd_vec<float, 8> &b
 #endif // USE_FMA
 
 #if defined(USE_AVX2) || defined(USE_AVX512)
-template <int Scale> force_inline simd_vec<float, 8> gather(const float *base_addr, const simd_vec<int, 8> &vindex) {
+template <int IndexScale>
+force_inline simd_vec<float, 8> vectorcall gather(const float *base_addr, const simd_vec<int, 8> vindex) {
     simd_vec<float, 8> ret;
-    ret.vec_ = _mm256_i32gather_ps(base_addr, vindex.vec_, Scale * sizeof(float));
+    ret.vec_ = _mm256_i32gather_ps(base_addr, vindex.vec_, IndexScale * sizeof(float));
     return ret;
 }
 
-template <int Scale> force_inline simd_vec<int, 8> gather(const int *base_addr, const simd_vec<int, 8> &vindex) {
+template <int IndexScale>
+force_inline simd_vec<int, 8> vectorcall gather(const int *base_addr, const simd_vec<int, 8> vindex) {
     simd_vec<int, 8> ret;
-    ret.vec_ = _mm256_i32gather_epi32(base_addr, vindex.vec_, Scale * sizeof(int));
+    ret.vec_ = _mm256_i32gather_epi32(base_addr, vindex.vec_, IndexScale * sizeof(int));
     return ret;
 }
 #endif

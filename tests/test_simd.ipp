@@ -139,7 +139,7 @@ using namespace Ray::NS;
     static const float gather_source[] = {0, 42.0f, 0, 0, 12.0f, 0, 0, 0, 11.0f, 0, 0, 0, 0, 0, 0, 23.0f, 0, 32.0f};
 
     const simd_ivec4 v12i = {-1, 2, 6, 13};
-    const simd_fvec4 v12 = gather(gather_source + 2, v12i);
+    const simd_fvec4 v12 = gather<1>(gather_source + 2, v12i);
 
     require(v12[0] == Approx(42));
     require(v12[1] == Approx(12));
@@ -279,7 +279,7 @@ using namespace Ray::NS;
     static const int gather_source[] = {0, 42, 0, 0, 12, 0, 0, 0, 11, 0, 0, 0, 0, 0, 0, 23, 0, 32};
 
     const simd_ivec4 v9i = {-1, 2, 6, 13};
-    const simd_ivec4 v9 = gather(gather_source + 2, v9i);
+    const simd_ivec4 v9 = gather<1>(gather_source + 2, v9i);
 
     require(v9[0] == 42);
     require(v9[1] == 12);
@@ -497,7 +497,7 @@ using namespace Ray::NS;
                                           0, 42.0f, 0, 0, 12.0f, 0, 0, 0, 11.0f, 0, 0, 0, 0, 0, 0, 23.0f, 0, 32.0f};
 
     const simd_ivec8 v12i = {-1, 2, 6, 13, -1, 2, 6, 13};
-    const simd_fvec8 v12 = gather(gather_source + 2, v12i);
+    const simd_fvec8 v12 = gather<1>(gather_source + 2, v12i);
 
     require(v12[0] == Approx(42));
     require(v12[1] == Approx(12));
@@ -667,7 +667,7 @@ using namespace Ray::NS;
                                         0, 42, 0, 0, 12, 0, 0, 0, 11, 0, 0, 0, 0, 0, 0, 23, 0, 32};
 
     const simd_ivec8 v9i = {-1, 2, 6, 13, -1, 2, 6, 13};
-    const simd_ivec8 v9 = gather(gather_source + 2, v9i);
+    const simd_ivec8 v9 = gather<1>(gather_source + 2, v9i);
 
     require(v9[0] == 42);
     require(v9[1] == 12);
@@ -1019,7 +1019,7 @@ using namespace Ray::NS;
                                           0, 42.0f, 0, 0, 12.0f, 0, 0, 0, 11.0f, 0, 0, 0, 0, 0, 0, 23.0f, 0, 32.0f};
 
     const simd_ivec16 v12i = {-1, 2, 6, 13, -1, 2, 6, 13, -1, 2, 6, 13, -1, 2, 6, 13};
-    const simd_fvec16 v12 = gather(gather_source + 2, v12i);
+    const simd_fvec16 v12 = gather<1>(gather_source + 2, v12i);
 
     require(v12[0] == Approx(42));
     require(v12[1] == Approx(12));
@@ -1311,7 +1311,7 @@ using namespace Ray::NS;
                                         0, 42, 0, 0, 12, 0, 0, 0, 11, 0, 0, 0, 0, 0, 0, 23, 0, 32};
 
     const simd_ivec16 v9i = {-1, 2, 6, 13, -1, 2, 6, 13, -1, 2, 6, 13, -1, 2, 6, 13};
-    const simd_ivec16 v9 = gather(gather_source + 2, v9i);
+    const simd_ivec16 v9 = gather<1>(gather_source + 2, v9i);
 
     require(v9[0] == 42);
     require(v9[1] == 12);
