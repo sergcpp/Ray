@@ -1537,7 +1537,35 @@ template <int S> force_inline simd_fvec<S> conv_unorm_16(const simd_ivec<S> &v) 
 template <int S> force_inline simd_fvec<S> safe_sqrtf(const simd_fvec<S> &f) { return sqrt(max(f, 0.0f)); }
 
 template <int S>
-void ensure_valid_reflection(const simd_fvec<S> Ng[3], const simd_fvec<S> I[3], simd_fvec<S> inout_N[3]) {
+void FetchTransformAndRecalcBasis(const transform_t *sc_transforms, const simd_ivec<S> &tr_index,
+                                  const simd_fvec<S> P_ls[3], simd_fvec<S> inout_plane_N[3], simd_fvec<S> inout_N[3],
+                                  simd_fvec<S> inout_B[3], simd_fvec<S> inout_T[3], simd_fvec<S> inout_tangent[3],
+                                  simd_fvec<S> out_transform[16]) {
+    const float *transforms = &sc_transforms[0].xform[0];
+    const float *inv_transforms = &sc_transforms[0].inv_xform[0];
+    const int TransformsStride = sizeof(transform_t) / sizeof(float);
+
+    simd_fvec<S> inv_transform[16];
+    ITERATE_16({
+        out_transform[i] = gather<1>(transforms + i, tr_index * TransformsStride);
+        inv_transform[i] = gather<1>(inv_transforms + i, tr_index * TransformsStride);
+    })
+
+    simd_fvec<S> temp[3];
+    cross(inout_tangent, inout_N, temp);
+    const simd_fvec<S> mask = length2(temp) == 0.0f;
+    ITERATE_3({ where(mask, inout_tangent[i]) = P_ls[i]; })
+
+    TransformNormal(inv_transform, inout_plane_N);
+    TransformNormal(inv_transform, inout_N);
+    TransformNormal(inv_transform, inout_B);
+    TransformNormal(inv_transform, inout_T);
+
+    TransformNormal(inv_transform, inout_tangent);
+}
+
+template <int S>
+void EnsureValidReflection(const simd_fvec<S> Ng[3], const simd_fvec<S> I[3], simd_fvec<S> inout_N[3]) {
     simd_fvec<S> R[3];
     ITERATE_3({ R[i] = 2.0f * dot3(inout_N, I) * inout_N[i] - I[i]; })
 
@@ -5300,31 +5328,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
     simd_fvec<S> tangent[3] = {-P_ls[2], {0.0f}, P_ls[0]};
 
     simd_fvec<S> transform[16];
-
-    { // fetch transformation matrices
-        const float *transforms = &sc.transforms[0].xform[0];
-        const float *inv_transforms = &sc.transforms[0].inv_xform[0];
-        const int TransformsStride = sizeof(transform_t) / sizeof(float);
-
-        simd_fvec<S> inv_transform[16];
-
-        ITERATE_16({
-            transform[i] = gather<1>(transforms + i, tr_index * TransformsStride);
-            inv_transform[i] = gather<1>(inv_transforms + i, tr_index * TransformsStride);
-        })
-
-        simd_fvec<S> temp[3];
-        cross(tangent, N, temp);
-        const simd_fvec<S> mask = length2(temp) == 0.0f;
-        ITERATE_3({ where(mask, tangent[i]) = P_ls[i]; })
-
-        TransformNormal(inv_transform, plane_N);
-        TransformNormal(inv_transform, N);
-        TransformNormal(inv_transform, B);
-        TransformNormal(inv_transform, T);
-
-        TransformNormal(inv_transform, tangent);
-    }
+    FetchTransformAndRecalcBasis(sc.transforms, tr_index, P_ls, plane_N, N, B, T, tangent, transform);
 
     //////////////////////////////////
 
@@ -5495,7 +5499,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
             normalize(new_normal);
 
             const simd_fvec<S> _I[3] = {-I[0], -I[1], -I[2]};
-            ensure_valid_reflection(plane_N, _I, new_normal);
+            EnsureValidReflection(plane_N, _I, new_normal);
 
             ITERATE_3({ where(has_texture, N[i]) = new_normal[i]; })
         }
