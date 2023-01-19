@@ -112,9 +112,11 @@ class RendererBase {
         unsigned long long time_primary_ray_gen_us;
         unsigned long long time_primary_trace_us;
         unsigned long long time_primary_shade_us;
+        unsigned long long time_primary_shadow_us;
         unsigned long long time_secondary_sort_us;
         unsigned long long time_secondary_trace_us;
         unsigned long long time_secondary_shade_us;
+        unsigned long long time_secondary_shadow_us;
     };
     virtual void GetStats(stats_t &st) = 0;
     virtual void ResetStats() = 0;

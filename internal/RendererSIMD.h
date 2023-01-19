@@ -295,6 +295,8 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
         })
     }
 
+    const auto time_after_prim_shade = std::chrono::high_resolution_clock::now();
+
     for (int ri = 0; ri < shadow_rays_count; ++ri) {
         const shadow_ray_t<S> &sh_r = p.shadow_rays[ri];
 
@@ -313,8 +315,9 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
         })
     }
 
-    const auto time_after_prim_shade = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double, std::micro> secondary_sort_time{}, secondary_trace_time{}, secondary_shade_time{};
+    const auto time_after_prim_shadow = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double, std::micro> secondary_sort_time{}, secondary_trace_time{}, secondary_shade_time{},
+        secondary_shadow_time{};
 
     p.hash_values.resize(p.primary_rays.size());
     // p.head_flags.resize(p.primary_rays.size() * S);
@@ -391,6 +394,8 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
             })
         }
 
+        auto time_secondary_shadow_start = std::chrono::high_resolution_clock::now();
+
         for (int ri = 0; ri < shadow_rays_count; ++ri) {
             const shadow_ray_t<S> &sh_r = p.shadow_rays[ri];
 
@@ -410,13 +415,15 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
             })
         }
 
-        auto time_secondary_shade_end = std::chrono::high_resolution_clock::now();
+        auto time_secondary_shadow_end = std::chrono::high_resolution_clock::now();
         secondary_sort_time +=
             std::chrono::duration<double, std::micro>{time_secondary_trace_start - time_secondary_sort_start};
         secondary_trace_time +=
             std::chrono::duration<double, std::micro>{time_secondary_shade_start - time_secondary_trace_start};
         secondary_shade_time +=
-            std::chrono::duration<double, std::micro>{time_secondary_shade_end - time_secondary_shade_start};
+            std::chrono::duration<double, std::micro>{time_secondary_shadow_start - time_secondary_shade_start};
+        secondary_shadow_time +=
+            std::chrono::duration<double, std::micro>{time_secondary_shadow_end - time_secondary_shadow_start};
     }
 
     {
@@ -430,9 +437,14 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
         stats_.time_primary_shade_us +=
             (unsigned long long)std::chrono::duration<double, std::micro>{time_after_prim_shade - time_after_prim_trace}
                 .count();
+        stats_.time_primary_shadow_us +=
+            (unsigned long long)std::chrono::duration<double, std::micro>{time_after_prim_shadow -
+                                                                          time_after_prim_shade}
+                .count();
         stats_.time_secondary_sort_us += (unsigned long long)secondary_sort_time.count();
         stats_.time_secondary_trace_us += (unsigned long long)secondary_trace_time.count();
         stats_.time_secondary_shade_us += (unsigned long long)secondary_shade_time.count();
+        stats_.time_secondary_shadow_us += (unsigned long long)secondary_shadow_time.count();
     }
 
     // factor used to compute incremental average
