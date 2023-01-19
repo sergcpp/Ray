@@ -669,6 +669,37 @@ void Ray::Vk::EndSingleTimeCommands(VkDevice device, VkQueue cmd_queue, VkComman
     vkFreeCommandBuffers(device, temp_command_pool, 1, &command_buf);
 }
 
+int Ray::Vk::Context::WriteTimestamp(const bool start) {
+    VkCommandBuffer cmd_buf = draw_cmd_bufs_[backend_frame];
+
+    vkCmdWriteTimestamp(cmd_buf, start ? VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT : VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                        query_pools_[backend_frame], query_counts_[backend_frame]);
+
+    const uint32_t query_index = query_counts_[backend_frame]++;
+    assert(query_counts_[backend_frame] < MaxTimestampQueries);
+    return int(query_index);
+}
+
+uint64_t Ray::Vk::Context::GetTimestampIntervalDurationUs(const int query_beg, const int query_end) const {
+    return (query_results_[backend_frame][query_end] - query_results_[backend_frame][query_beg]) / 1000;
+}
+
+bool Ray::Vk::Context::ReadbackTimestampQueries(const int i) {
+    VkQueryPool query_pool = query_pools_[i];
+    const uint32_t query_count = uint32_t(query_counts_[i]);
+    if (!query_count) {
+        // nothing to readback
+        return true;
+    }
+
+    const VkResult res =
+        vkGetQueryPoolResults(device_, query_pool, 0, query_count, query_count * sizeof(uint64_t), query_results_[i],
+                              sizeof(uint64_t), VK_QUERY_RESULT_WAIT_BIT | VK_QUERY_RESULT_64_BIT);
+    query_counts_[i] = 0;
+
+    return (res == VK_SUCCESS);
+}
+
 void Ray::Vk::Context::DestroyDeferredResources(const int i) {
     for (VkImageView view : image_views_to_destroy[i]) {
         vkDestroyImageView(device_, view, nullptr);

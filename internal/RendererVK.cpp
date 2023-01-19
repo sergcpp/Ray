@@ -366,8 +366,40 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
     vkResetFences(ctx_->device(), 1, &ctx_->in_flight_fence(ctx_->backend_frame));
 #endif
 
+    ctx_->ReadbackTimestampQueries(ctx_->backend_frame);
     ctx_->DestroyDeferredResources(ctx_->backend_frame);
     ctx_->default_descr_alloc()->Reset();
+
+    stats_.time_primary_ray_gen_us = ctx_->GetTimestampIntervalDurationUs(
+        timestamps_[ctx_->backend_frame].primary_ray_gen[0], timestamps_[ctx_->backend_frame].primary_ray_gen[1]);
+    stats_.time_primary_trace_us = ctx_->GetTimestampIntervalDurationUs(
+        timestamps_[ctx_->backend_frame].primary_trace[0], timestamps_[ctx_->backend_frame].primary_trace[1]);
+    stats_.time_primary_shade_us = ctx_->GetTimestampIntervalDurationUs(
+        timestamps_[ctx_->backend_frame].primary_shade[0], timestamps_[ctx_->backend_frame].primary_shade[1]);
+    stats_.time_primary_shadow_us = ctx_->GetTimestampIntervalDurationUs(
+        timestamps_[ctx_->backend_frame].primary_shadow[0], timestamps_[ctx_->backend_frame].primary_shadow[1]);
+
+    stats_.time_secondary_sort_us = 0; // no sorting for now
+    stats_.time_secondary_trace_us = 0;
+    for (int i = 0; i < int(timestamps_[ctx_->backend_frame].secondary_trace.size()); i += 2) {
+        stats_.time_secondary_trace_us +=
+            ctx_->GetTimestampIntervalDurationUs(timestamps_[ctx_->backend_frame].secondary_trace[i + 0],
+                                                 timestamps_[ctx_->backend_frame].secondary_trace[i + 1]);
+    }
+
+    stats_.time_secondary_shade_us = 0;
+    for (int i = 0; i < int(timestamps_[ctx_->backend_frame].secondary_shade.size()); i += 2) {
+        stats_.time_secondary_shade_us +=
+            ctx_->GetTimestampIntervalDurationUs(timestamps_[ctx_->backend_frame].secondary_shade[i + 0],
+                                                 timestamps_[ctx_->backend_frame].secondary_shade[i + 1]);
+    }
+
+    stats_.time_secondary_shadow_us = 0;
+    for (int i = 0; i < int(timestamps_[ctx_->backend_frame].secondary_shadow.size()); i += 2) {
+        stats_.time_secondary_shadow_us +=
+            ctx_->GetTimestampIntervalDurationUs(timestamps_[ctx_->backend_frame].secondary_shadow[i + 0],
+                                                 timestamps_[ctx_->backend_frame].secondary_shadow[i + 1]);
+    }
 
 #if RUN_IN_LOCKSTEP
     VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
@@ -378,6 +410,8 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
     vkBeginCommandBuffer(ctx_->draw_cmd_buf(ctx_->backend_frame), &begin_info);
     VkCommandBuffer cmd_buf = ctx_->draw_cmd_buf(ctx_->backend_frame);
 #endif
+
+    vkCmdResetQueryPool(cmd_buf, ctx_->query_pool(ctx_->backend_frame), 0, MaxTimestampQueries);
 
     //////////////////////////////////////////////////////////////////////////////////
 
@@ -443,7 +477,9 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
 
     { // generate primary rays
         DebugMarker _(cmd_buf, "GeneratePrimaryRays");
+        timestamps_[ctx_->backend_frame].primary_ray_gen[0] = ctx_->WriteTimestamp(true);
         kernel_GeneratePrimaryRays(cmd_buf, cam, hi, region.rect(), halton_seq_buf_, prim_rays_buf_);
+        timestamps_[ctx_->backend_frame].primary_ray_gen[1] = ctx_->WriteTimestamp(false);
     }
 
 #if DEBUG_HWRT
@@ -454,17 +490,21 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
 #else
     { // trace primary rays
         DebugMarker _(cmd_buf, "IntersectScenePrimary");
+        timestamps_[ctx_->backend_frame].primary_trace[0] = ctx_->WriteTimestamp(true);
         kernel_IntersectScenePrimary(cmd_buf, cam.pass_settings, sc_data, halton_seq_buf_, hi + RAND_DIM_BASE_COUNT,
                                      macro_tree_root, cam.clip_end, s->tex_atlases_, s->bindless_tex_data_.descr_set,
                                      prim_rays_buf_, prim_hits_buf_);
+        timestamps_[ctx_->backend_frame].primary_trace[1] = ctx_->WriteTimestamp(false);
     }
 
     { // shade primary hits
         DebugMarker _(cmd_buf, "ShadePrimaryHits");
+        timestamps_[ctx_->backend_frame].primary_shade[0] = ctx_->WriteTimestamp(true);
         kernel_ShadePrimaryHits(cmd_buf, cam.pass_settings, s->env_, prim_hits_buf_, prim_rays_buf_, sc_data,
                                 halton_seq_buf_, hi + RAND_DIM_BASE_COUNT, s->tex_atlases_,
                                 s->bindless_tex_data_.descr_set, temp_buf_, secondary_rays_buf_, shadow_rays_buf_,
                                 counters_buf_);
+        timestamps_[ctx_->backend_frame].primary_shade[1] = ctx_->WriteTimestamp(false);
     }
 
     { // prepare indirect args
@@ -474,12 +514,19 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
 
     { // trace shadow rays
         DebugMarker _(cmd_buf, "TraceShadow");
+        timestamps_[ctx_->backend_frame].primary_shadow[0] = ctx_->WriteTimestamp(true);
         kernel_IntersectSceneShadow(cmd_buf, cam.pass_settings, indir_args_buf_, counters_buf_, sc_data,
                                     macro_tree_root, s->tex_atlases_, s->bindless_tex_data_.descr_set, shadow_rays_buf_,
                                     temp_buf_);
+        timestamps_[ctx_->backend_frame].primary_shadow[1] = ctx_->WriteTimestamp(false);
     }
 
+    timestamps_[ctx_->backend_frame].secondary_trace.clear();
+    timestamps_[ctx_->backend_frame].secondary_shade.clear();
+    timestamps_[ctx_->backend_frame].secondary_shadow.clear();
+
     for (int bounce = 1; bounce <= cam.pass_settings.max_total_depth; ++bounce) {
+        timestamps_[ctx_->backend_frame].secondary_trace.push_back(ctx_->WriteTimestamp(true));
         { // trace secondary rays
             DebugMarker _(cmd_buf, "IntersectSceneSecondary");
             kernel_IntersectSceneSecondary(cmd_buf, indir_args_buf_, counters_buf_, cam.pass_settings, sc_data,
@@ -493,12 +540,16 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
                                        prim_hits_buf_);
         }
 
+        timestamps_[ctx_->backend_frame].secondary_trace.push_back(ctx_->WriteTimestamp(false));
+
         { // shade secondary hits
             DebugMarker _(cmd_buf, "ShadeSecondaryHits");
+            timestamps_[ctx_->backend_frame].secondary_shade.push_back(ctx_->WriteTimestamp(true));
             kernel_ShadeSecondaryHits(cmd_buf, cam.pass_settings, s->env_, indir_args_buf_, prim_hits_buf_,
                                       secondary_rays_buf_, sc_data, halton_seq_buf_, hi + RAND_DIM_BASE_COUNT,
                                       s->tex_atlases_, s->bindless_tex_data_.descr_set, temp_buf_, prim_rays_buf_,
                                       shadow_rays_buf_, counters_buf_);
+            timestamps_[ctx_->backend_frame].secondary_shade.push_back(ctx_->WriteTimestamp(false));
         }
 
         { // prepare indirect args
@@ -508,9 +559,11 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
 
         { // trace shadow rays
             DebugMarker _(cmd_buf, "TraceShadow");
+            timestamps_[ctx_->backend_frame].secondary_shadow.push_back(ctx_->WriteTimestamp(true));
             kernel_IntersectSceneShadow(cmd_buf, cam.pass_settings, indir_args_buf_, counters_buf_, sc_data,
                                         macro_tree_root, s->tex_atlases_, s->bindless_tex_data_.descr_set,
                                         shadow_rays_buf_, temp_buf_);
+            timestamps_[ctx_->backend_frame].secondary_shadow.push_back(ctx_->WriteTimestamp(false));
         }
 
         // std::swap(final_buf_, temp_buf_);

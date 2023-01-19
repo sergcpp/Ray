@@ -77,6 +77,16 @@ class Renderer : public RendererBase {
     const pixel_color_t *frame_pixels_ = nullptr;
     std::vector<shl1_data_t> sh_data_host_;
 
+    struct {
+        int primary_ray_gen[2];
+        int primary_trace[2];
+        int primary_shade[2];
+        int primary_shadow[2];
+        SmallVector<int, MAX_BOUNCES * 2> secondary_trace;
+        SmallVector<int, MAX_BOUNCES * 2> secondary_shade;
+        SmallVector<int, MAX_BOUNCES * 2> secondary_shadow;
+    } timestamps_[MaxFramesInFlight] = {};
+
     stats_t stats_ = {0};
 
     void kernel_GeneratePrimaryRays(VkCommandBuffer cmd_buf, const camera_t &cam, int hi, const rect_t &rect,

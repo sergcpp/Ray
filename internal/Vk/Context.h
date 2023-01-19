@@ -48,8 +48,8 @@ class Context {
     VkFence in_flight_fences_[MaxFramesInFlight] = {};
 
     VkQueryPool query_pools_[MaxFramesInFlight] = {};
-    // uint32_t query_counts_[MaxFramesInFlight] = {};
-    // uint64_t query_results_[MaxFramesInFlight][MaxTimestampQueries] = {};
+    uint32_t query_counts_[MaxFramesInFlight] = {};
+    uint64_t query_results_[MaxFramesInFlight][MaxTimestampQueries] = {};
 
     uint32_t max_combined_image_samplers_ = 0;
 
@@ -88,11 +88,16 @@ class Context {
     const VkCommandBuffer &draw_cmd_buf(const int i) const { return draw_cmd_bufs_[i]; }
     const VkSemaphore &render_finished_semaphore(const int i) const { return render_finished_semaphores_[i]; }
     const VkFence &in_flight_fence(const int i) const { return in_flight_fences_[i]; }
+    const VkQueryPool query_pool(const int i) const { return query_pools_[i]; }
 
     MemoryAllocators *default_memory_allocs() { return default_memory_allocs_.get(); }
     DescrMultiPoolAlloc *default_descr_alloc() const { return default_descr_alloc_[backend_frame].get(); }
 
-    void DestroyDeferredResources(const int i);
+    int WriteTimestamp(const bool start);
+    uint64_t GetTimestampIntervalDurationUs(int query_start, int query_end) const;
+
+    bool ReadbackTimestampQueries(int i);
+    void DestroyDeferredResources(int i);
 
     int backend_frame = 0;
     bool render_finished_semaphore_is_set[MaxFramesInFlight] = {};
