@@ -847,9 +847,7 @@ template <> class simd_vec<int, 8> {
     }
 
 #if defined(USE_AVX2) || defined(USE_AVX512)
-    template <int IndexScale>
     friend force_inline simd_vec<float, 8> vectorcall gather(const float *base_addr, simd_vec<int, 8> vindex);
-    template <int IndexScale>
     friend force_inline simd_vec<int, 8> vectorcall gather(const int *base_addr, simd_vec<int, 8> vindex);
 #endif
 
@@ -1185,17 +1183,15 @@ force_inline simd_vec<float, 8> vectorcall fmsub(const float a, const simd_vec<f
 #endif // USE_FMA
 
 #if defined(USE_AVX2) || defined(USE_AVX512)
-template <int IndexScale>
 force_inline simd_vec<float, 8> vectorcall gather(const float *base_addr, const simd_vec<int, 8> vindex) {
     simd_vec<float, 8> ret;
-    ret.vec_ = _mm256_i32gather_ps(base_addr, vindex.vec_, IndexScale * sizeof(float));
+    ret.vec_ = _mm256_i32gather_ps(base_addr, vindex.vec_, sizeof(float));
     return ret;
 }
 
-template <int IndexScale>
 force_inline simd_vec<int, 8> vectorcall gather(const int *base_addr, const simd_vec<int, 8> vindex) {
     simd_vec<int, 8> ret;
-    ret.vec_ = _mm256_i32gather_epi32(base_addr, vindex.vec_, IndexScale * sizeof(int));
+    ret.vec_ = _mm256_i32gather_epi32(base_addr, vindex.vec_, sizeof(int));
     return ret;
 }
 #endif

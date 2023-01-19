@@ -670,9 +670,7 @@ template <> class simd_vec<int, 16> {
         return _mm512_cmpeq_epi32_mask(v1.vec_, v2.vec_) == 0xFFFF;
     }
 
-    template <int IndexScale>
     friend force_inline simd_vec<float, 16> vectorcall gather(const float *base_addr, simd_vec<int, 16> vindex);
-    template <int IndexScale>
     friend force_inline simd_vec<int, 16> vectorcall gather(const int *base_addr, simd_vec<int, 16> vindex);
 
     friend force_inline const int *value_ptr(const simd_vec<int, 16> &v1) {
@@ -966,17 +964,15 @@ force_inline simd_vec<float, 16> vectorcall fmsub(const float a, const simd_vec<
     return ret;
 }
 
-template <int IndexScale>
 force_inline simd_vec<float, 16> vectorcall gather(const float *base_addr, const simd_vec<int, 16> vindex) {
     simd_vec<float, 16> ret;
-    ret.vec_ = _mm512_i32gather_ps(vindex.vec_, base_addr, IndexScale * sizeof(float));
+    ret.vec_ = _mm512_i32gather_ps(vindex.vec_, base_addr, sizeof(float));
     return ret;
 }
 
-template <int IndexScale>
 force_inline simd_vec<int, 16> vectorcall gather(const int *base_addr, const simd_vec<int, 16> vindex) {
     simd_vec<int, 16> ret;
-    ret.vec_ = _mm512_i32gather_epi32(vindex.vec_, base_addr, IndexScale * sizeof(int));
+    ret.vec_ = _mm512_i32gather_epi32(vindex.vec_, base_addr, sizeof(int));
     return ret;
 }
 

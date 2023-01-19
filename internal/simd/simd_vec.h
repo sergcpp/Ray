@@ -737,8 +737,6 @@ template <typename T, int S> class simd_vec {
         return res;
     }
 
-    friend force_inline simd_vec<T, S> gather(const T *base_addr, const simd_vec<int, S> &vindex);
-
     friend force_inline const T *value_ptr(const simd_vec<T, S> &v1) { return &v1.comp_[0]; }
     friend force_inline T *value_ptr(simd_vec<T, S> &v1) { return &v1.comp_[0]; }
 
@@ -829,10 +827,10 @@ force_inline simd_vec<T, S> mix(const simd_vec<T, S> &v1, const simd_vec<T, S> &
     return (simd_vec<T, S>{1} - k) * v1 + k * v2;
 }
 
-template <int IndexScale, typename T, int S>
+template <typename T, int S>
 force_inline simd_vec<T, S> gather(const T *base_addr, const simd_vec<int, S> &vindex) {
     simd_vec<T, S> res;
-    ITERATE(S, { res.template set<i>(base_addr[vindex[i] * IndexScale]); });
+    ITERATE(S, { res.template set<i>(base_addr[vindex[i]]); });
     return res;
 }
 
