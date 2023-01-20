@@ -5183,7 +5183,7 @@ void Ray::NS::Evaluate_LightColor(const simd_fvec<S> P[3], const ray_data_t<S> &
 
 template <int S>
 void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, const hit_data_t<S> &inter,
-                           const ray_data_t<S> &ray, const scene_data_t &sc, uint32_t node_index,
+                           const ray_data_t<S> &ray, const scene_data_t &sc, const uint32_t node_index,
                            const Ref::TexStorageBase *const textures[], simd_fvec<S> out_rgba[4],
                            simd_ivec<S> out_secondary_masks[], ray_data_t<S> out_secondary_rays[],
                            int *out_secondary_rays_count, simd_ivec<S> out_shadow_masks[],
@@ -5627,7 +5627,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
 
     simd_ivec<S> secondary_mask = {0}, shadow_mask = {0};
 
-    ray_data_t<S> new_ray;
+    ray_data_t<S> &new_ray = out_secondary_rays[*out_secondary_rays_count];
     new_ray.o[0] = new_ray.o[1] = new_ray.o[2] = 0.0f;
     new_ray.d[0] = new_ray.d[1] = new_ray.d[2] = 0.0f;
     new_ray.pdf = 0.0f;
@@ -5639,7 +5639,8 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
     new_ray.xy = ray.xy;
     new_ray.depth = 0;
 
-    shadow_ray_t<S> sh_r = {};
+    shadow_ray_t<S> &sh_r = out_shadow_rays[*out_shadow_rays_count];
+    sh_r = {};
     sh_r.depth = ray.depth;
     sh_r.dist = MAX_DIST;
     sh_r.xy = ray.xy;
@@ -6375,13 +6376,11 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
 
         const int index = (*out_secondary_rays_count)++;
         out_secondary_masks[index] = secondary_mask;
-        out_secondary_rays[index] = new_ray;
     }
 
     if (shadow_mask.not_all_zeros()) {
         const int index = (*out_shadow_rays_count)++;
         out_shadow_masks[index] = shadow_mask;
-        out_shadow_rays[index] = sh_r;
     }
 
     ITERATE_3({ where(is_active_lane, out_rgba[i]) = ray.c[i] * col[i]; })
