@@ -5,7 +5,9 @@
 #include <arm_neon.h>
 
 #ifndef NDEBUG
-#define VALIDATE_MASKS 1
+#define validate_mask(m) __assert_valid_mask(m)
+#else
+#define validate_mask(m) ((void)m)
 #endif
 
 namespace Ray {
@@ -229,28 +231,14 @@ template <> class simd_vec<float, 4> {
     }
 
     force_inline void vectorcall blend_to(const simd_vec<float, 4> mask, const simd_vec<float, 4> v1) {
-#if VALIDATE_MASKS
-        alignas(16) float comp[4];
-        vst1q_f32(comp, vec_);
-        ITERATE_4({
-            assert(reinterpret_cast<const uint32_t &>(comp[i]) == 0 ||
-                   reinterpret_cast<const uint32_t &>(comp[i]) == 0xffffffff);
-        })
-#endif
+        validate_mask(mask);
         int32x4_t temp1 = vandq_s32(vreinterpretq_s32_f32(v1.vec_), vreinterpretq_s32_f32(mask.vec_));
         int32x4_t temp2 = vbicq_s32(vreinterpretq_s32_f32(vec_), vreinterpretq_s32_f32(mask.vec_));
         vec_ = vreinterpretq_f32_s32(vorrq_s32(temp1, temp2));
     }
 
     force_inline void vectorcall blend_inv_to(const simd_vec<float, 4> mask, const simd_vec<float, 4> v1) {
-#if VALIDATE_MASKS
-        alignas(16) float comp[4];
-        vst1q_f32(comp, vec_);
-        ITERATE_4({
-            assert(reinterpret_cast<const uint32_t &>(comp[i]) == 0 ||
-                   reinterpret_cast<const uint32_t &>(comp[i]) == 0xffffffff);
-        })
-#endif
+        validate_mask(mask);
         int32x4_t temp1 = vandq_s32(vreinterpretq_s32_f32(vec_), vreinterpretq_s32_f32(mask.vec_));
         int32x4_t temp2 = vbicq_s32(vreinterpretq_s32_f32(v1.vec_), vreinterpretq_s32_f32(mask.vec_));
         vec_ = vreinterpretq_f32_s32(vorrq_s32(temp1, temp2));
@@ -444,6 +432,14 @@ template <> class simd_vec<float, 4> {
 
     friend force_inline simd_vec<float, 4> vectorcall normalize(const simd_vec<float, 4> v1) {
         return v1 / v1.length();
+    }
+
+    friend void vectorcall __assert_valid_mask(const simd_vec<float, 4> mask) {
+        ITERATE_4({
+            const float val = mask.get<i>();
+            assert(reinterpret_cast<const uint32_t &>(val) == 0 ||
+                   reinterpret_cast<const uint32_t &>(val) == 0xffffffff);
+        })
     }
 
     friend force_inline const float *value_ptr(const simd_vec<float, 4> &v1) {
@@ -669,28 +665,14 @@ template <> class simd_vec<int, 4> {
     }
 
     force_inline void vectorcall blend_to(const simd_vec<int, 4> mask, const simd_vec<int, 4> v1) {
-#if VALIDATE_MASKS
-        alignas(16) int comp[4];
-        vst1q_s32(comp, mask.vec_);
-        ITERATE_4({
-            assert(reinterpret_cast<const uint32_t &>(comp[i]) == 0 ||
-                   reinterpret_cast<const uint32_t &>(comp[i]) == 0xffffffff);
-        })
-#endif
+        validate_mask(mask);
         int32x4_t temp1 = vandq_s32(v1.vec_, mask.vec_);
         int32x4_t temp2 = vbicq_s32(vec_, mask.vec_);
         vec_ = vorrq_s32(temp1, temp2);
     }
 
     force_inline void vectorcall blend_inv_to(const simd_vec<int, 4> mask, const simd_vec<int, 4> v1) {
-#if VALIDATE_MASKS
-        alignas(16) int comp[4];
-        vst1q_s32(comp, mask.vec_);
-        ITERATE_4({
-            assert(reinterpret_cast<const uint32_t &>(comp[i]) == 0 ||
-                   reinterpret_cast<const uint32_t &>(comp[i]) == 0xffffffff);
-        })
-#endif
+        validate_mask(mask);
         int32x4_t temp1 = vandq_s32(vec_, mask.vec_);
         int32x4_t temp2 = vbicq_s32(v1.vec_, mask.vec_);
         vec_ = vorrq_s32(temp1, temp2);
@@ -960,6 +942,13 @@ template <> class simd_vec<int, 4> {
 #endif
     }
 
+    friend void vectorcall __assert_valid_mask(const simd_vec<int, 4> mask) {
+        ITERATE_4({
+            const float val = mask.get<i>();
+            assert(val == 0 || val == -1);
+        })
+    }
+
     friend force_inline const int *value_ptr(const simd_vec<int, 4> &v1) {
         return reinterpret_cast<const int *>(&v1.vec_);
     }
@@ -978,4 +967,4 @@ force_inline simd_vec<float, 4>::operator simd_vec<int, 4>() const {
 } // namespace NS
 } // namespace Ray
 
-#undef VALIDATE_MASKS
+#undef validate_mask

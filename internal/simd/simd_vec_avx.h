@@ -20,7 +20,9 @@
 #endif
 
 #ifndef NDEBUG
-#define VALIDATE_MASKS 1
+#define validate_mask(m) __assert_valid_mask(m)
+#else
+#define validate_mask(m) ((void)m)
 #endif
 
 #if defined(USE_AVX2) || defined(USE_AVX512)
@@ -171,28 +173,12 @@ template <> class simd_vec<float, 8> {
     force_inline void copy_to(float *f, simd_mem_aligned_tag) const { _mm256_store_ps(f, vec_); }
 
     force_inline void vectorcall blend_to(const simd_vec<float, 8> mask, const simd_vec<float, 8> v1) {
-#if VALIDATE_MASKS
-        alignas(32) float comp[8];
-        _mm256_store_ps(comp, mask.vec_);
-
-        ITERATE_8({
-            assert(reinterpret_cast<const uint32_t &>(comp[i]) == 0 ||
-                   reinterpret_cast<const uint32_t &>(comp[i]) == 0xffffffff);
-        })
-#endif
+        validate_mask(mask);
         vec_ = _mm256_blendv_ps(vec_, v1.vec_, mask.vec_);
     }
 
     force_inline void vectorcall blend_inv_to(const simd_vec<float, 8> mask, const simd_vec<float, 8> v1) {
-#if VALIDATE_MASKS
-        alignas(32) float comp[8];
-        _mm256_store_ps(comp, mask.vec_);
-
-        ITERATE_8({
-            assert(reinterpret_cast<const uint32_t &>(comp[i]) == 0 ||
-                   reinterpret_cast<const uint32_t &>(comp[i]) == 0xffffffff);
-        })
-#endif
+        validate_mask(mask);
         vec_ = _mm256_blendv_ps(v1.vec_, vec_, mask.vec_);
     }
 
@@ -257,6 +243,14 @@ template <> class simd_vec<float, 8> {
     friend force_inline simd_vec<float, 8> vectorcall fmsub(simd_vec<float, 8> a, float b, simd_vec<float, 8> c);
     friend force_inline simd_vec<float, 8> vectorcall fmsub(float a, const simd_vec<float, 8> b, float c);
 #endif // USE_FMA
+
+    friend void vectorcall __assert_valid_mask(const simd_vec<float, 8> mask) {
+        ITERATE_8({
+            const float val = mask.get<i>();
+            assert(reinterpret_cast<const uint32_t &>(val) == 0 ||
+                   reinterpret_cast<const uint32_t &>(val) == 0xffffffff);
+        })
+    }
 
     friend force_inline const float *value_ptr(const simd_vec<float, 8> &v1) {
         return reinterpret_cast<const float *>(&v1.vec_);
@@ -475,21 +469,13 @@ template <> class simd_vec<int, 8> {
     force_inline void copy_to(int *f, simd_mem_aligned_tag) const { _mm256_store_si256((__m256i *)f, vec_); }
 
     force_inline void vectorcall blend_to(const simd_vec<int, 8> mask, const simd_vec<int, 8> v1) {
-#if VALIDATE_MASKS
-        alignas(32) int comp[8];
-        _mm256_store_si256((__m256i *)comp, mask.vec_);
-        ITERATE_8({ assert(comp[i] == 0 || comp[i] == -1); })
-#endif
+        validate_mask(mask);
         vec_ = _mm256_castps_si256(
             _mm256_blendv_ps(_mm256_castsi256_ps(vec_), _mm256_castsi256_ps(v1.vec_), _mm256_castsi256_ps(mask.vec_)));
     }
 
     force_inline void vectorcall blend_inv_to(const simd_vec<int, 8> mask, const simd_vec<int, 8> v1) {
-#if VALIDATE_MASKS
-        alignas(32) int comp[8];
-        _mm256_store_si256((__m256i *)comp, mask.vec_);
-        ITERATE_8({ assert(comp[i] == 0 || comp[i] == -1); })
-#endif
+        validate_mask(mask);
         vec_ = _mm256_castps_si256(
             _mm256_blendv_ps(_mm256_castsi256_ps(v1.vec_), _mm256_castsi256_ps(vec_), _mm256_castsi256_ps(mask.vec_)));
     }
@@ -851,6 +837,13 @@ template <> class simd_vec<int, 8> {
     friend force_inline simd_vec<int, 8> vectorcall gather(const int *base_addr, simd_vec<int, 8> vindex);
 #endif
 
+    friend void vectorcall __assert_valid_mask(const simd_vec<int, 8> mask) {
+        ITERATE_8({
+            const int val = mask.get<i>();
+            assert(val == 0 || val == -1);
+        })
+    }
+
     friend force_inline const int *value_ptr(const simd_vec<int, 8> &v1) {
         return reinterpret_cast<const int *>(&v1.vec_);
     }
@@ -1201,7 +1194,7 @@ force_inline simd_vec<int, 8> vectorcall gather(const int *base_addr, const simd
 
 #pragma warning(pop)
 
-#undef VALIDATE_MASKS
+#undef validate_mask
 
 #ifdef __GNUC__
 #pragma GCC pop_options

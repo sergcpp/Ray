@@ -13,7 +13,9 @@
 #endif
 
 #ifndef NDEBUG
-#define VALIDATE_MASKS 1
+#define validate_mask(m) __assert_valid_mask(m)
+#else
+#define validate_mask(m) ((void)m)
 #endif
 
 namespace Ray {
@@ -243,13 +245,7 @@ template <> class simd_vec<float, 4> {
     force_inline void vectorcall copy_to(float *f, simd_mem_aligned_tag) const { _mm_store_ps(f, vec_); }
 
     force_inline void vectorcall blend_to(const simd_vec<float, 4> mask, const simd_vec<float, 4> v1) {
-#if VALIDATE_MASKS
-        ITERATE_4({
-            const float val = mask.get<i>();
-            assert(reinterpret_cast<const uint32_t &>(val) == 0 ||
-                   reinterpret_cast<const uint32_t &>(val) == 0xffffffff);
-        })
-#endif
+        validate_mask(mask);
 #if defined(USE_SSE41)
         vec_ = _mm_blendv_ps(vec_, v1.vec_, mask.vec_);
 #else
@@ -260,13 +256,7 @@ template <> class simd_vec<float, 4> {
     }
 
     force_inline void vectorcall blend_inv_to(const simd_vec<float, 4> mask, const simd_vec<float, 4> v1) {
-#if VALIDATE_MASKS
-        ITERATE_4({
-            const float val = mask.get<i>();
-            assert(reinterpret_cast<const uint32_t &>(val) == 0 ||
-                   reinterpret_cast<const uint32_t &>(val) == 0xffffffff);
-        })
-#endif
+        validate_mask(mask);
 #if defined(USE_SSE41)
         vec_ = _mm_blendv_ps(v1.vec_, vec_, mask.vec_);
 #else
@@ -484,6 +474,14 @@ template <> class simd_vec<float, 4> {
 
     friend force_inline simd_vec<float, 4> vectorcall normalize(const simd_vec<float, 4> v1) {
         return v1 / v1.length();
+    }
+
+    friend void vectorcall __assert_valid_mask(const simd_vec<float, 4> mask) {
+        ITERATE_4({
+            const float val = mask.get<i>();
+            assert(reinterpret_cast<const uint32_t &>(val) == 0 ||
+                   reinterpret_cast<const uint32_t &>(val) == 0xffffffff);
+        })
     }
 
     friend force_inline const float *vectorcall value_ptr(const simd_vec<float, 4> &v1) {
@@ -748,9 +746,7 @@ template <> class simd_vec<int, 4> {
     force_inline void copy_to(int *f, simd_mem_aligned_tag) const { _mm_store_si128((__m128i *)f, vec_); }
 
     force_inline void vectorcall blend_to(const simd_vec<int, 4> mask, const simd_vec<int, 4> v1) {
-#if VALIDATE_MASKS
-        ITERATE_4({ assert(mask.get<i>() == 0 || mask.get<i>() == -1); })
-#endif
+        validate_mask(mask);
 #if defined(USE_SSE41)
         vec_ = _mm_blendv_epi8(vec_, v1.vec_, mask.vec_);
 #else
@@ -761,9 +757,7 @@ template <> class simd_vec<int, 4> {
     }
 
     force_inline void vectorcall blend_inv_to(const simd_vec<int, 4> mask, const simd_vec<int, 4> v1) {
-#if VALIDATE_MASKS
-        ITERATE_4({ assert(mask.get<i>() == 0 || mask.get<i>() == -1); })
-#endif
+        validate_mask(mask);
 #if defined(USE_SSE41)
         vec_ = _mm_blendv_epi8(v1.vec_, vec_, mask.vec_);
 #else
@@ -1069,6 +1063,13 @@ template <> class simd_vec<int, 4> {
         return (_mm_movemask_epi8(vcmp) == 0xffff);
     }
 
+    friend void vectorcall __assert_valid_mask(const simd_vec<int, 4> mask) {
+        ITERATE_4({
+            const int val = mask.get<i>();
+            assert(val == 0 || val == -1);
+        })
+    }
+
     friend force_inline const int *value_ptr(const simd_vec<int, 4> &v1) {
         return reinterpret_cast<const int *>(&v1.vec_);
     }
@@ -1087,7 +1088,7 @@ force_inline vectorcall simd_vec<float, 4>::operator simd_vec<int, 4>() const {
 } // namespace NS
 } // namespace Ray
 
-#undef VALIDATE_MASKS
+#undef validate_mask
 
 #ifdef __GNUC__
 #pragma GCC pop_options
