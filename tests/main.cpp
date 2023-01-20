@@ -173,7 +173,6 @@ int main(int argc, char *argv[]) {
         arch_list = ArchListDefaultNoGPU;
     }
 
-#if 1
     if (g_tests_success) {
         const auto t2 = high_resolution_clock::now();
         puts("---------------");
@@ -206,10 +205,8 @@ int main(int argc, char *argv[]) {
         tests_success_final &= g_tests_success;
         g_tests_success = true;
     }
-#endif
 
     if (detailed_material_tests_needed) {
-#if 1
         if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
             puts("---------------");
@@ -221,8 +218,6 @@ int main(int argc, char *argv[]) {
             printf("Finished oren_mat tests in %.2f minutes\n",
                    duration<double>(high_resolution_clock::now() - t2).count() / 60.0);
         }
-#endif
-#if 1
         if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
             puts("---------------");
@@ -234,8 +229,6 @@ int main(int argc, char *argv[]) {
             printf("Finished diff_mat tests in %.2f minutes\n",
                    duration<double>(high_resolution_clock::now() - t2).count() / 60.0);
         }
-#endif
-#if 1
         if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
             puts("---------------");
@@ -246,8 +239,6 @@ int main(int argc, char *argv[]) {
             printf("Finished sheen_mat tests in %.2f minutes\n",
                    duration<double>(high_resolution_clock::now() - t2).count() / 60.0);
         }
-#endif
-#if 1
         if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
             puts("---------------");
@@ -259,8 +250,6 @@ int main(int argc, char *argv[]) {
             printf("Finished glossy_mat tests in %.2f minutes\n",
                    duration<double>(high_resolution_clock::now() - t2).count() / 60.0);
         }
-#endif
-#if 1
         if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
             puts("---------------");
@@ -272,8 +261,6 @@ int main(int argc, char *argv[]) {
             printf("Finished spec_mat tests in %.2f minutes\n",
                    duration<double>(high_resolution_clock::now() - t2).count() / 60.0);
         }
-#endif
-#if 1
         if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
             puts("---------------");
@@ -288,8 +275,6 @@ int main(int argc, char *argv[]) {
             printf("Finished aniso_mat tests in %.2f minutes\n",
                    duration<double>(high_resolution_clock::now() - t2).count() / 60.0);
         }
-#endif
-#if 1
         if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
             puts("---------------");
@@ -301,8 +286,6 @@ int main(int argc, char *argv[]) {
             printf("Finished metal_mat tests in %.2f minutes\n",
                    duration<double>(high_resolution_clock::now() - t2).count() / 60.0);
         }
-#endif
-#if 1
         if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
             puts("---------------");
@@ -314,8 +297,6 @@ int main(int argc, char *argv[]) {
             printf("Finished plastic_mat tests in %.2f minutes\n",
                    duration<double>(high_resolution_clock::now() - t2).count() / 60.0);
         }
-#endif
-#if 1
         if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
             puts("---------------");
@@ -327,8 +308,6 @@ int main(int argc, char *argv[]) {
             printf("Finished tint_mat tests in %.2f minutes\n",
                    duration<double>(high_resolution_clock::now() - t2).count() / 60.0);
         }
-#endif
-#if 1
         if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
             puts("---------------");
@@ -337,8 +316,6 @@ int main(int argc, char *argv[]) {
             printf("Finished emit_mat tests in %.2f minutes\n",
                    duration<double>(high_resolution_clock::now() - t2).count() / 60.0);
         }
-#endif
-#if 1
         if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
             puts("---------------");
@@ -350,8 +327,6 @@ int main(int argc, char *argv[]) {
             printf("Finished coat_mat tests in %.2f minutes\n",
                    duration<double>(high_resolution_clock::now() - t2).count() / 60.0);
         }
-#endif
-#if 1
         if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
             puts("---------------");
@@ -363,8 +338,6 @@ int main(int argc, char *argv[]) {
             printf("Finished refr_mis tests in %.2f minutes\n",
                    duration<double>(high_resolution_clock::now() - t2).count() / 60.0);
         }
-#endif
-#if 1
         if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
             puts("---------------");
@@ -377,8 +350,6 @@ int main(int argc, char *argv[]) {
             printf("Finished refr_mat tests in %.2f minutes\n",
                    duration<double>(high_resolution_clock::now() - t2).count() / 60.0);
         }
-#endif
-#if 1
         if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
             puts("---------------");
@@ -395,8 +366,6 @@ int main(int argc, char *argv[]) {
             printf("Finished trans_mat tests in %.2f minutes\n",
                    duration<double>(high_resolution_clock::now() - t2).count() / 60.0);
         }
-#endif
-#if 1
         if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
             puts("---------------");
@@ -408,7 +377,6 @@ int main(int argc, char *argv[]) {
             printf("Finished alpha_mat tests in %.2f minutes\n",
                    duration<double>(high_resolution_clock::now() - t2).count() / 60.0);
         }
-#endif
     }
     assemble_material_test_images(arch_list);
     // test_texture();

@@ -124,5 +124,6 @@ int total_depth(const shadow_ray_t r) {
 #define unpack_unorm_16(x) clamp(float(x) / 65535.0, 0.0, 1.0)
 
 #define length2(x) dot(x, x)
+#define sqr(x) ((x) * (x))
 
 #endif // COMMON_GLSL

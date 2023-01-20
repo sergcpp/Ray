@@ -74,6 +74,18 @@ struct hit_data_t {
     hit_data_t();
 };
 
+struct surface_t {
+    simd_fvec4 P, T, B, N, plane_N;
+    simd_fvec2 uvs;
+};
+
+struct derivatives_t {
+    simd_fvec4 do_dx, do_dy, dd_dx, dd_dy;
+    simd_fvec2 duv_dx, duv_dy;
+    simd_fvec4 dndx, dndy;
+    float ddn_dx, ddn_dy;
+};
+
 struct light_sample_t {
     simd_fvec4 col, L;
     float area = 0.0f, dist, pdf = 0.0f, cast_shadow = 1.0f;
@@ -264,6 +276,69 @@ simd_fvec4 Evaluate_EnvColor(const ray_data_t &ray, const environment_t &env, co
 // Get light color at intersection point
 simd_fvec4 Evaluate_LightColor(const ray_data_t &ray, const hit_data_t &inter, const environment_t &env,
                                const TexStorageRGBA &tex_storage, const light_t *lights);
+
+// Evaluate individual nodes
+simd_fvec4 Evaluate_DiffuseNode(const light_sample_t &ls, const ray_data_t &ray, const surface_t &surf,
+                                const simd_fvec4 &base_color, const float roughness, const float mix_weight,
+                                shadow_ray_t &sh_r);
+void Sample_DiffuseNode(const ray_data_t &ray, const surface_t &surf, const simd_fvec4 &base_color,
+                        const float roughness, const float rand_u, const float rand_v, const float mix_weight,
+                        ray_data_t &new_ray);
+
+simd_fvec4 Evaluate_GlossyNode(const light_sample_t &ls, const ray_data_t &ray, const surface_t &surf,
+                               const simd_fvec4 &base_color, const float roughness2, const float spec_ior,
+                               const float spec_F0, const float mix_weight, shadow_ray_t &sh_r);
+void Sample_GlossyNode(const ray_data_t &ray, const surface_t &surf, const simd_fvec4 &base_color,
+                       const float roughness, const float spec_ior, const float spec_F0, const float rand_u,
+                       const float rand_v, const float mix_weight, ray_data_t &new_ray);
+
+simd_fvec4 Evaluate_RefractiveNode(const light_sample_t &ls, const ray_data_t &ray, const surface_t &surf,
+                                   const simd_fvec4 &base_color, const float roughness2, const float eta,
+                                   const float mix_weight, shadow_ray_t &sh_r);
+void Sample_RefractiveNode(const ray_data_t &ray, const surface_t &surf, const simd_fvec4 &base_color,
+                           const float roughness, const float eta, const float rand_u, const float rand_v,
+                           const float mix_weight, ray_data_t &new_ray);
+
+struct diff_params_t {
+    simd_fvec4 base_color;
+    simd_fvec4 sheen_color;
+    float roughness;
+};
+
+struct spec_params_t {
+    simd_fvec4 tmp_col;
+    float roughness;
+    float ior;
+    float F0;
+    float anisotropy;
+};
+
+struct clearcoat_params_t {
+    float roughness;
+    float ior;
+    float F0;
+};
+
+struct transmission_params_t {
+    float roughness;
+    float eta;
+    float fresnel;
+};
+
+struct lobe_weights_t {
+    float diffuse, specular, clearcoat, refraction;
+};
+
+simd_fvec4 Evaluate_PrincipledNode(const light_sample_t &ls, const ray_data_t &ray, const surface_t &surf,
+                                   const lobe_weights_t &lobe_weights, const diff_params_t &diff,
+                                   const spec_params_t &spec, const clearcoat_params_t &coat,
+                                   const transmission_params_t &trans, const float metallic, const float N_dot_L,
+                                   const float mix_weight, shadow_ray_t &sh_r);
+void Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t &ray, const surface_t &surf,
+                           const lobe_weights_t &lobe_weights, const diff_params_t &diff, const spec_params_t &spec,
+                           const clearcoat_params_t &coat, const transmission_params_t &trans, const float metallic,
+                           const float rand_u, const float rand_v, float mix_rand, const float mix_weight,
+                           ray_data_t &new_ray);
 
 // Shade
 Ray::pixel_color_t ShadeSurface(const pass_settings_t &ps, const hit_data_t &inter, const ray_data_t &ray,

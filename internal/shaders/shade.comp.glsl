@@ -162,7 +162,7 @@ vec3 ensure_valid_reflection(vec3 Ng, vec3 I, vec3 N) {
     // lower hemisphere.
 
     const float Ix = dot(I, X), Iz = dot(I, Ng);
-    const float Ix2 = (Ix * Ix), Iz2 = (Iz * Iz);
+    const float Ix2 = sqr(Ix), Iz2 = sqr(Iz);
     const float a = Ix2 + Iz2;
 
     const float b = safe_sqrtf(Ix2 * (a - (threshold * threshold)));
@@ -208,25 +208,31 @@ vec3 ensure_valid_reflection(vec3 Ng, vec3 I, vec3 N) {
     return N_new[0] * X + N_new[1] * Ng;
 }
 
-void get_lobe_weights(const float base_color_lum, const float spec_color_lum, const float specular,
-                      const float metallic, const float transmission, const float clearcoat, out float out_diffuse_weight,
-                      out float out_specular_weight, out float out_clearcoat_weight, out float out_refraction_weight) {
-    // taken from Cycles
-    out_diffuse_weight = base_color_lum * (1.0 - metallic) * (1.0 - transmission);
-    const float final_transmission = transmission * (1.0 - metallic);
-    out_specular_weight =
-        (specular != 0.0 || metallic != 0.0) ? spec_color_lum * (1.0 - final_transmission) : 0.0;
-    out_clearcoat_weight = 0.25 * clearcoat * (1.0 - metallic);
-    out_refraction_weight = final_transmission * base_color_lum;
+struct lobe_weights_t {
+    float diffuse, specular, clearcoat, refraction;
+};
 
-    const float total_weight =
-        out_diffuse_weight + out_specular_weight + out_clearcoat_weight + out_refraction_weight;
+lobe_weights_t get_lobe_weights(const float base_color_lum, const float spec_color_lum, const float specular,
+                                const float metallic, const float transmission, const float clearcoat) {
+    lobe_weights_t weights;
+
+    // taken from Cycles
+    weights.diffuse = base_color_lum * (1.0 - metallic) * (1.0 - transmission);
+    const float final_transmission = transmission * (1.0 - metallic);
+    weights.specular =
+        (specular != 0.0 || metallic != 0.0) ? spec_color_lum * (1.0 - final_transmission) : 0.0;
+    weights.clearcoat = 0.25 * clearcoat * (1.0 - metallic);
+    weights.refraction = final_transmission * base_color_lum;
+
+    const float total_weight = weights.diffuse + weights.specular + weights.clearcoat + weights.refraction;
     if (total_weight != 0.0) {
-        out_diffuse_weight /= total_weight;
-        out_specular_weight /= total_weight;
-        out_clearcoat_weight /= total_weight;
-        out_refraction_weight /= total_weight;
+        weights.diffuse /= total_weight;
+        weights.specular /= total_weight;
+        weights.clearcoat /= total_weight;
+        weights.refraction /= total_weight;
     }
+
+    return weights;
 }
 
 vec3 rotate_around_axis(vec3 p, vec3 axis, float angle) {
@@ -305,13 +311,13 @@ float D_GTR1(float NDotH, float a) {
     if (a >= 1.0) {
         return 1.0 / PI;
     }
-    const float a2 = a * a;
+    const float a2 = sqr(a);
     const float t = 1.0 + (a2 - 1.0) * NDotH * NDotH;
     return (a2 - 1.0) / (PI * log(a2) * t);
 }
 
 float D_GTR2(const float N_dot_H, const float a) {
-    const float a2 = a * a;
+    const float a2 = sqr(a);
     const float t = 1.0 + (a2 - 1.0) * N_dot_H * N_dot_H;
     return a2 / (PI * t * t);
 }
@@ -471,7 +477,7 @@ vec4 Evaluate_GGXSpecular_BSDF(vec3 view_dir_ts, vec3 sampled_normal_ts,
 vec4 Sample_GGXSpecular_BSDF(vec3 T, vec3 B, vec3 N, vec3 I, const float roughness,
                              const float anisotropic, const float spec_ior, const float spec_F0,
                              const vec3 spec_col, const float rand_u, const float rand_v, out vec3 out_V) {
-    const float roughness2 = roughness * roughness;
+    const float roughness2 = sqr(roughness);
     const float aspect = sqrt(1.0 - 0.9 * anisotropic);
 
     const float alpha_x = roughness2 / aspect;
@@ -533,7 +539,7 @@ vec4 Evaluate_PrincipledClearcoat_BSDF(vec3 view_dir_ts, vec3 sampled_normal_ts,
 vec4 Sample_PrincipledClearcoat_BSDF(vec3 T, vec3 B, vec3 N, vec3 I, float clearcoat_roughness2,
                                      float clearcoat_ior, float clearcoat_F0, float rand_u, float rand_v,
                                      out vec3 out_V) {
-    [[dont_flatten]] if (clearcoat_roughness2 * clearcoat_roughness2 < 1e-7) {
+    [[dont_flatten]] if (sqr(clearcoat_roughness2) < 1e-7) {
         const vec3 V = reflect(I, N);
 
         const float FH = (fresnel_dielectric_cos(dot(V, N), clearcoat_ior) - clearcoat_F0) / (1.0 - clearcoat_F0);
@@ -594,8 +600,8 @@ vec4 Evaluate_GGXRefraction_BSDF(vec3 view_dir_ts, vec3 sampled_normal_ts,
 
 vec4 Sample_GGXRefraction_BSDF(vec3 T, vec3 B, vec3 N, vec3 I, float roughness, float eta,
                                vec3 refr_col, float rand_u, float rand_v, out vec4 out_V) {
-    const float roughness2 = (roughness * roughness);
-    [[dont_flatten]] if (roughness2 * roughness2 < 1e-7) {
+    const float roughness2 = sqr(roughness);
+    [[dont_flatten]] if (sqr(roughness2) < 1e-7) {
         const float cosi = -dot(I, N);
         const float cost2 = 1.0 - eta * eta * (1.0 - cosi * cosi);
         if (cost2 < 0) {
@@ -1063,6 +1069,435 @@ vec3 Evaluate_LightColor(ray_data_t ray, hit_data_t inter) {
     return lcol;
 }
 
+struct surface_t {
+    vec3 P, T, B, N, plane_N;
+    vec2 uvs;
+};
+
+vec3 Evaluate_DiffuseNode(const light_sample_t ls, const ray_data_t ray, const surface_t surf,
+                          const vec3 base_color, const float roughness, const float mix_weight, inout shadow_ray_t sh_r) {
+    const vec3 I = vec3(ray.d[0], ray.d[1], ray.d[2]);
+
+    const vec4 diff_col = Evaluate_OrenDiffuse_BSDF(-I, surf.N, ls.L, roughness, base_color);
+    const float bsdf_pdf = diff_col[3];
+
+    float mis_weight = 1.0;
+    if (ls.area > 0.0) {
+        mis_weight = power_heuristic(ls.pdf, bsdf_pdf);
+    }
+
+    const vec3 lcol = ls.col * diff_col.xyz * (mix_weight * mis_weight / ls.pdf);
+
+    [[dont_flatten]] if (ls.cast_shadow < 0.5) {
+        // apply light immediately
+        return lcol;
+    }
+
+    // schedule shadow ray
+    vec3 new_o = offset_ray(surf.P, surf.plane_N);
+    sh_r.o[0] = new_o[0]; sh_r.o[1] = new_o[1]; sh_r.o[2] = new_o[2];
+    sh_r.d[0] = ls.L[0]; sh_r.d[1] = ls.L[1]; sh_r.d[2] = ls.L[2];
+    sh_r.dist = ls.dist - 10.0 * HIT_BIAS;
+    sh_r.c[0] = ray.c[0] * lcol[0];
+    sh_r.c[1] = ray.c[1] * lcol[1];
+    sh_r.c[2] = ray.c[2] * lcol[2];
+    sh_r.xy = ray.xy;
+    sh_r.depth = ray.depth;
+
+    return vec3(0.0);
+}
+
+vec3 Evaluate_GlossyNode(const light_sample_t ls, const ray_data_t ray,
+                         const surface_t surf, const vec3 base_color,
+                         const float roughness, const float spec_ior, const float spec_F0,
+                         const float mix_weight, inout shadow_ray_t sh_r) {
+    const vec3 I = vec3(ray.d[0], ray.d[1], ray.d[2]);
+    const vec3 H = normalize(ls.L - I);
+
+    const vec3 view_dir_ts = tangent_from_world(surf.T, surf.B, surf.N, -I);
+    const vec3 light_dir_ts = tangent_from_world(surf.T, surf.B, surf.N, ls.L);
+    const vec3 sampled_normal_ts = tangent_from_world(surf.T, surf.B, surf.N, H);
+
+    const float roughness2 = sqr(roughness);
+
+    const vec4 spec_col = Evaluate_GGXSpecular_BSDF(
+        view_dir_ts, sampled_normal_ts, light_dir_ts, roughness2, roughness2, spec_ior, spec_F0, base_color);
+    const float bsdf_pdf = spec_col[3];
+
+    float mis_weight = 1.0;
+    if (ls.area > 0.0) {
+        mis_weight = power_heuristic(ls.pdf, bsdf_pdf);
+    }
+    const vec3 lcol = ls.col * spec_col.rgb * (mix_weight * mis_weight / ls.pdf);
+
+    [[dont_flatten]] if (ls.cast_shadow < 0.5) {
+        // apply light immediately
+        return lcol;
+    }
+
+    // schedule shadow ray
+    vec3 new_o = offset_ray(surf.P, surf.plane_N);
+    sh_r.o[0] = new_o[0]; sh_r.o[1] = new_o[1]; sh_r.o[2] = new_o[2];
+    sh_r.d[0] = ls.L[0]; sh_r.d[1] = ls.L[1]; sh_r.d[2] = ls.L[2];
+    sh_r.dist = ls.dist - 10.0 * HIT_BIAS;
+    sh_r.c[0] = ray.c[0] * lcol[0];
+    sh_r.c[1] = ray.c[1] * lcol[1];
+    sh_r.c[2] = ray.c[2] * lcol[2];
+    sh_r.xy = ray.xy;
+    sh_r.depth = ray.depth;
+
+    return vec3(0.0);
+}
+
+void Sample_GlossyNode(const ray_data_t ray, const surface_t surf, const vec3 base_color,
+                       const float roughness, const float spec_ior, const float spec_F0, const float rand_u,
+                       const float rand_v, const float mix_weight, inout ray_data_t new_ray) {
+    const vec3 I = vec3(ray.d[0], ray.d[1], ray.d[2]);
+
+    vec3 V;
+    const vec4 F =
+        Sample_GGXSpecular_BSDF(surf.T, surf.B, surf.N, I, roughness, 0.0, spec_ior, spec_F0, base_color, rand_u, rand_v, V);
+
+    new_ray.depth = ray.depth + 0x00000100;
+
+    vec3 new_o = offset_ray(surf.P, surf.plane_N);
+    new_ray.o[0] = new_o[0]; new_ray.o[1] = new_o[1]; new_ray.o[2] = new_o[2];
+    new_ray.d[0] = V[0]; new_ray.d[1] = V[1]; new_ray.d[2] = V[2];
+
+    new_ray.c[0] = ray.c[0] * F[0] * mix_weight / F[3];
+    new_ray.c[1] = ray.c[1] * F[1] * mix_weight / F[3];
+    new_ray.c[2] = ray.c[2] * F[2] * mix_weight / F[3];
+    new_ray.pdf = F[3];
+}
+
+void Sample_DiffuseNode(const ray_data_t ray, const surface_t surf, const vec3 base_color,
+                        const float roughness, const float rand_u, const float rand_v,
+                        const float mix_weight, inout ray_data_t new_ray) {
+    const vec3 I = vec3(ray.d[0], ray.d[1], ray.d[2]);
+
+    vec3 V;
+    const vec4 F = Sample_OrenDiffuse_BSDF(surf.T, surf.B, surf.N, I, roughness, base_color, rand_u, rand_v, V);
+
+    new_ray.depth = ray.depth + 0x00000001;
+
+    vec3 new_o = offset_ray(surf.P, surf.plane_N);
+    new_ray.o[0] = new_o[0]; new_ray.o[1] = new_o[1]; new_ray.o[2] = new_o[2];
+    new_ray.d[0] = V[0]; new_ray.d[1] = V[1]; new_ray.d[2] = V[2];
+
+    new_ray.c[0] = ray.c[0] * F[0] * mix_weight / F[3];
+    new_ray.c[1] = ray.c[1] * F[1] * mix_weight / F[3];
+    new_ray.c[2] = ray.c[2] * F[2] * mix_weight / F[3];
+    new_ray.pdf = F[3];
+}
+
+vec3 Evaluate_RefractiveNode(const light_sample_t ls, const ray_data_t ray,
+                             const surface_t surf, const vec3 base_color,
+                             const float roughness2, const float eta, const float mix_weight,
+                             inout shadow_ray_t sh_r) {
+    const vec3 I = vec3(ray.d[0], ray.d[1], ray.d[2]);
+    const vec3 H = normalize(ls.L - I * eta);
+    const vec3 view_dir_ts = tangent_from_world(surf.T, surf.B, surf.N, -I);
+    const vec3 light_dir_ts = tangent_from_world(surf.T, surf.B, surf.N, ls.L);
+    const vec3 sampled_normal_ts = tangent_from_world(surf.T, surf.B, surf.N, H);
+
+    const vec4 refr_col =
+        Evaluate_GGXRefraction_BSDF(view_dir_ts, sampled_normal_ts, light_dir_ts, roughness2, eta, base_color);
+    const float bsdf_pdf = refr_col[3];
+
+    float mis_weight = 1.0;
+    if (ls.area > 0.0) {
+        mis_weight = power_heuristic(ls.pdf, bsdf_pdf);
+    }
+    const vec3 lcol = ls.col * refr_col.rgb * (mix_weight * mis_weight / ls.pdf);
+
+    [[dont_flatten]] if (ls.cast_shadow < 0.5) {
+        // apply light immediately
+        return lcol;
+    }
+
+    // schedule shadow ray
+    vec3 new_o = offset_ray(surf.P, -surf.plane_N);
+    sh_r.o[0] = new_o[0]; sh_r.o[1] = new_o[1]; sh_r.o[2] = new_o[2];
+    sh_r.d[0] = ls.L[0]; sh_r.d[1] = ls.L[1]; sh_r.d[2] = ls.L[2];
+    sh_r.dist = ls.dist - 10.0 * HIT_BIAS;
+    sh_r.c[0] = ray.c[0] * lcol[0];
+    sh_r.c[1] = ray.c[1] * lcol[1];
+    sh_r.c[2] = ray.c[2] * lcol[2];
+    sh_r.xy = ray.xy;
+    sh_r.depth = ray.depth;
+
+    return vec3(0.0);
+}
+
+void Sample_RefractiveNode(const ray_data_t ray, const surface_t surf, const vec3 base_color,
+                           const float roughness, const float eta, const float rand_u, const float rand_v,
+                           const float mix_weight, inout ray_data_t new_ray) {
+    const vec3 I = vec3(ray.d[0], ray.d[1], ray.d[2]);
+
+    vec4 _V;
+    const vec4 F = Sample_GGXRefraction_BSDF(surf.T, surf.B, surf.N, I, roughness, eta, base_color, rand_u, rand_v, _V);
+
+    const vec3 V = _V.xyz;
+    const float m = _V[3];
+
+    new_ray.depth = ray.depth + 0x00010000;
+
+    new_ray.c[0] = ray.c[0] * F[0] * mix_weight / F[3];
+    new_ray.c[1] = ray.c[1] * F[1] * mix_weight / F[3];
+    new_ray.c[2] = ray.c[2] * F[2] * mix_weight / F[3];
+    new_ray.pdf = F[3];
+
+    vec3 new_o = offset_ray(surf.P, -surf.plane_N);
+    new_ray.o[0] = new_o[0]; new_ray.o[1] = new_o[1]; new_ray.o[2] = new_o[2];
+    new_ray.d[0] = V[0]; new_ray.d[1] = V[1]; new_ray.d[2] = V[2];
+}
+
+struct diff_params_t {
+    vec3 base_color;
+    vec3 sheen_color;
+    float roughness;
+};
+
+struct spec_params_t {
+    vec3 tmp_col;
+    float roughness;
+    float ior;
+    float F0;
+    float anisotropy;
+};
+
+struct clearcoat_params_t {
+    float roughness;
+    float ior;
+    float F0;
+};
+
+struct transmission_params_t {
+    float roughness;
+    float eta;
+    float fresnel;
+};
+
+vec3 Evaluate_PrincipledNode(const light_sample_t ls, const ray_data_t ray,
+                             const surface_t surf, const lobe_weights_t lobe_weights,
+                             const diff_params_t diff, const spec_params_t spec,
+                             const clearcoat_params_t coat, const transmission_params_t trans,
+                             const float metallic, const float N_dot_L, const float mix_weight,
+                             inout shadow_ray_t sh_r) {
+    const vec3 I = vec3(ray.d[0], ray.d[1], ray.d[2]);
+
+    vec3 lcol = vec3(0.0);
+    float bsdf_pdf = 0.0;
+
+    [[dont_flatten]] if (lobe_weights.diffuse > 1e-7 && N_dot_L > 0.0) {
+        vec4 diff_col = Evaluate_PrincipledDiffuse_BSDF(-I, surf.N, ls.L, diff.roughness, diff.base_color,
+                                                        diff.sheen_color, false);
+        bsdf_pdf += lobe_weights.diffuse * diff_col[3];
+        diff_col *= (1.0 - metallic);
+
+        lcol += ls.col * N_dot_L * diff_col.rgb / (PI * ls.pdf);
+    }
+
+    vec3 H;
+    [[flatten]] if (N_dot_L > 0.0) {
+        H = normalize(ls.L - I);
+    } else {
+        H = normalize(ls.L - I * trans.eta);
+    }
+
+    const float roughness2 = sqr(spec.roughness);
+    const float aspect = sqrt(1.0 - 0.9 * spec.anisotropy);
+
+    const float alpha_x = roughness2 / aspect;
+    const float alpha_y = roughness2 * aspect;
+
+    const vec3 view_dir_ts = tangent_from_world(surf.T, surf.B, surf.N, -I);
+    const vec3 light_dir_ts = tangent_from_world(surf.T, surf.B, surf.N, ls.L);
+    const vec3 sampled_normal_ts = tangent_from_world(surf.T, surf.B, surf.N, H);
+
+    [[dont_flatten]] if (lobe_weights.specular > 0.0 && alpha_x * alpha_y >= 1e-7 && N_dot_L > 0.0) {
+        const vec4 spec_col = Evaluate_GGXSpecular_BSDF(
+            view_dir_ts, sampled_normal_ts, light_dir_ts, alpha_x, alpha_y, spec.ior, spec.F0, spec.tmp_col);
+        bsdf_pdf += lobe_weights.specular * spec_col[3];
+        lcol += ls.col * spec_col.rgb / ls.pdf;
+    }
+
+    const float clearcoat_roughness2 = sqr(coat.roughness);
+
+    [[dont_flatten]] if (lobe_weights.clearcoat > 0.0 && sqr(clearcoat_roughness2) >= 1e-7 && N_dot_L > 0.0) {
+        const vec4 clearcoat_col = Evaluate_PrincipledClearcoat_BSDF(
+            view_dir_ts, sampled_normal_ts, light_dir_ts, clearcoat_roughness2, coat.ior, coat.F0);
+        bsdf_pdf += lobe_weights.clearcoat * clearcoat_col[3];
+        lcol += 0.25 * ls.col * clearcoat_col.rgb / ls.pdf;
+    }
+
+    [[dont_flatten]] if (lobe_weights.refraction > 0.0) {
+        [[dont_flatten]] if (trans.fresnel != 0.0 && sqr(roughness2) >= 1e-7 && N_dot_L > 0.0) {
+            const vec4 spec_col =
+                Evaluate_GGXSpecular_BSDF(view_dir_ts, sampled_normal_ts, light_dir_ts, roughness2, roughness2,
+                                            1.0 /* ior */, 0.0 /* F0 */, vec3(1.0));
+            bsdf_pdf += lobe_weights.refraction * trans.fresnel * spec_col[3];
+            lcol += ls.col * spec_col.rgb * (trans.fresnel / ls.pdf);
+        }
+
+        const float transmission_roughness2 = sqr(trans.roughness);
+
+        [[dont_flatten]] if (trans.fresnel != 1.0 && sqr(transmission_roughness2) >= 1e-7 && N_dot_L < 0.0) {
+            const vec4 refr_col = Evaluate_GGXRefraction_BSDF(
+                view_dir_ts, sampled_normal_ts, light_dir_ts, transmission_roughness2, trans.eta, diff.base_color);
+            bsdf_pdf += lobe_weights.refraction * (1.0 - trans.fresnel) * refr_col[3];
+            lcol += ls.col * refr_col.rgb * ((1.0 - trans.fresnel) / ls.pdf);
+        }
+    }
+
+    float mis_weight = 1.0;
+    [[flatten]] if (ls.area > 0.0) {
+        mis_weight = power_heuristic(ls.pdf, bsdf_pdf);
+    }
+    lcol *= mix_weight * mis_weight;
+
+    [[dont_flatten]] if (ls.cast_shadow < 0.5) {
+        // apply light immediately
+        return lcol;
+    }
+
+    // schedule shadow ray
+    vec3 new_o = offset_ray(surf.P, N_dot_L < 0.0 ? -surf.plane_N : surf.plane_N);
+    sh_r.o[0] = new_o[0]; sh_r.o[1] = new_o[1]; sh_r.o[2] = new_o[2];
+    sh_r.d[0] = ls.L[0]; sh_r.d[1] = ls.L[1]; sh_r.d[2] = ls.L[2];
+    sh_r.dist = ls.dist - 10.0 * HIT_BIAS;
+    sh_r.c[0] = ray.c[0] * lcol[0];
+    sh_r.c[1] = ray.c[1] * lcol[1];
+    sh_r.c[2] = ray.c[2] * lcol[2];
+    sh_r.xy = ray.xy;
+    sh_r.depth = ray.depth;
+
+    return vec3(0.0);
+}
+
+void Sample_PrincipledNode(const ray_data_t ray, const surface_t surf,
+                           const lobe_weights_t lobe_weights, const diff_params_t diff,
+                           const spec_params_t spec, const clearcoat_params_t coat,
+                           const transmission_params_t trans, const float metallic, const float rand_u,
+                           const float rand_v, float mix_rand, const float mix_weight, inout ray_data_t new_ray) {
+    const vec3 I = vec3(ray.d[0], ray.d[1], ray.d[2]);
+
+    const int diff_depth = ray.depth & 0x000000ff;
+    const int spec_depth = (ray.depth >> 8) & 0x000000ff;
+    const int refr_depth = (ray.depth >> 16) & 0x000000ff;
+    const int transp_depth = (ray.depth >> 24) & 0x000000ff;
+    // NOTE: transparency depth is not accounted here
+    const int total_depth = diff_depth + spec_depth + refr_depth;
+
+    [[dont_flatten]] if (mix_rand < lobe_weights.diffuse) {
+        //
+        // Diffuse lobe
+        //
+        if (diff_depth < g_params.max_diff_depth && total_depth < g_params.max_total_depth) {
+            vec3 V;
+            vec4 diff_col = Sample_PrincipledDiffuse_BSDF(surf.T, surf.B, surf.N, I, diff.roughness,
+                                                            diff.base_color, diff.sheen_color, false, rand_u, rand_v, V);
+            diff_col.rgb *= (1.0 - metallic);
+
+            new_ray.depth = ray.depth + 0x00000001;
+
+            const vec3 new_o = offset_ray(surf.P, surf.plane_N);
+            new_ray.o[0] = new_o[0]; new_ray.o[1] = new_o[1]; new_ray.o[2] = new_o[2];
+            new_ray.d[0] = V[0]; new_ray.d[1] = V[1]; new_ray.d[2] = V[2];
+
+            new_ray.c[0] = ray.c[0] * diff_col[0] * mix_weight / lobe_weights.diffuse;
+            new_ray.c[1] = ray.c[1] * diff_col[1] * mix_weight / lobe_weights.diffuse;
+            new_ray.c[2] = ray.c[2] * diff_col[2] * mix_weight / lobe_weights.diffuse;
+            new_ray.pdf = diff_col[3];
+        }
+    } else [[dont_flatten]] if (mix_rand < lobe_weights.diffuse + lobe_weights.specular) {
+        //
+        // Main specular lobe
+        //
+        if (spec_depth < g_params.max_spec_depth && total_depth < g_params.max_total_depth) {
+            vec3 V;
+            vec4 F = Sample_GGXSpecular_BSDF(surf.T, surf.B, surf.N, I, spec.roughness, spec.anisotropy,
+                                             spec.ior, spec.F0, spec.tmp_col, rand_u, rand_v, V);
+            F[3] *= lobe_weights.specular;
+
+            new_ray.depth = ray.depth + 0x00000100;
+
+            new_ray.c[0] = ray.c[0] * F[0] * mix_weight / F[3];
+            new_ray.c[1] = ray.c[1] * F[1] * mix_weight / F[3];
+            new_ray.c[2] = ray.c[2] * F[2] * mix_weight / F[3];
+            new_ray.pdf = F[3];
+
+            const vec3 new_o = offset_ray(surf.P, surf.plane_N);
+            new_ray.o[0] = new_o[0]; new_ray.o[1] = new_o[1]; new_ray.o[2] = new_o[2];
+            new_ray.d[0] = V[0]; new_ray.d[1] = V[1]; new_ray.d[2] = V[2];
+        }
+    } else [[dont_flatten]] if (mix_rand < lobe_weights.diffuse + lobe_weights.specular + lobe_weights.clearcoat) {
+        //
+        // Clearcoat lobe (secondary specular)
+        //
+        if (spec_depth < g_params.max_spec_depth && total_depth < g_params.max_total_depth) {
+            vec3 V;
+            vec4 F = Sample_PrincipledClearcoat_BSDF(surf.T, surf.B, surf.N, I, sqr(coat.roughness), coat.ior,
+                                                     coat.F0, rand_u, rand_v, V);
+            F[3] *= lobe_weights.clearcoat;
+
+            new_ray.depth = ray.depth + 0x00000100;
+
+            new_ray.c[0] = 0.25 * ray.c[0] * F[0] * mix_weight / F[3];
+            new_ray.c[1] = 0.25 * ray.c[1] * F[1] * mix_weight / F[3];
+            new_ray.c[2] = 0.25 * ray.c[2] * F[2] * mix_weight / F[3];
+            new_ray.pdf = F[3];
+
+            const vec3 new_o = offset_ray(surf.P, surf.plane_N);
+            new_ray.o[0] = new_o[0]; new_ray.o[1] = new_o[1]; new_ray.o[2] = new_o[2];
+            new_ray.d[0] = V[0]; new_ray.d[1] = V[1]; new_ray.d[2] = V[2];
+        }
+    } else /*if (mix_rand < lobe_weights.diffuse + lobe_weights.specular + lobe_weights.clearcoat + lobe_weights.refraction)*/ {
+        //
+        // Refraction/reflection lobes
+        //
+        [[dont_flatten]] if (((mix_rand >= trans.fresnel && refr_depth < g_params.max_refr_depth) ||
+                                (mix_rand < trans.fresnel && spec_depth < g_params.max_spec_depth)) &&
+                                total_depth < g_params.max_total_depth) {
+            mix_rand -= lobe_weights.diffuse + lobe_weights.specular + lobe_weights.clearcoat;
+            mix_rand /= lobe_weights.refraction;
+
+            //////////////////
+
+            vec4 F;
+            vec3 V;
+            [[dont_flatten]] if (mix_rand < trans.fresnel) {
+                F = Sample_GGXSpecular_BSDF(surf.T, surf.B, surf.N, I, spec.roughness, 0.0 /* anisotropic */, 1.0 /* ior */,
+                                            0.0 /* F0 */, vec3(1.0), rand_u, rand_v, V);
+
+                new_ray.depth = ray.depth + 0x00000100;
+
+                const vec3 new_o = offset_ray(surf.P, surf.plane_N);
+                new_ray.o[0] = new_o[0]; new_ray.o[1] = new_o[1]; new_ray.o[2] = new_o[2];
+            } else {
+                vec4 _V;
+                F = Sample_GGXRefraction_BSDF(surf.T, surf.B, surf.N, I, trans.roughness, trans.eta, diff.base_color,
+                                                rand_u, rand_v, _V);
+                V = _V.xyz;
+
+                new_ray.depth = ray.depth + 0x00010000;
+
+                const vec3 new_o = offset_ray(surf.P, -surf.plane_N);
+                new_ray.o[0] = new_o[0]; new_ray.o[1] = new_o[1]; new_ray.o[2] = new_o[2];
+            }
+
+            F[3] *= lobe_weights.refraction;
+
+            new_ray.c[0] = ray.c[0] * F[0] * mix_weight / F[3];
+            new_ray.c[1] = ray.c[1] * F[1] * mix_weight / F[3];
+            new_ray.c[2] = ray.c[2] * F[2] * mix_weight / F[3];
+            new_ray.pdf = F[3];
+
+            new_ray.d[0] = V[0]; new_ray.d[1] = V[1]; new_ray.d[2] = V[2];
+        }
+    }
+}
+
 vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
     const vec3 ro = vec3(ray.o[0], ray.o[1], ray.o[2]);
     const vec3 rd = vec3(ray.d[0], ray.d[1], ray.d[2]);
@@ -1073,7 +1508,9 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
     }
 
     const vec3 I = rd;
-    const vec3 P = ro + inter.t * rd;
+
+    surface_t surf;
+    surf.P = ro + inter.t * rd;
 
     [[dont_flatten]] if (inter.obj_index < 0) { // Area light intersection
         const vec3 lcol = Evaluate_LightColor(ray, inter);
@@ -1096,38 +1533,38 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
     const vec3 p3 = vec3(v3.p[0], v3.p[1], v3.p[2]);
 
     const float w = 1.0 - inter.u - inter.v;
-    vec3 N = normalize(vec3(v1.n[0], v1.n[1], v1.n[2]) * w +
+    surf.N = normalize(vec3(v1.n[0], v1.n[1], v1.n[2]) * w +
                        vec3(v2.n[0], v2.n[1], v2.n[2]) * inter.u +
                        vec3(v3.n[0], v3.n[1], v3.n[2]) * inter.v);
-    vec2 uvs = vec2(v1.t[0][0], v1.t[0][1]) * w +
+    surf.uvs = vec2(v1.t[0][0], v1.t[0][1]) * w +
                vec2(v2.t[0][0], v2.t[0][1]) * inter.u +
                vec2(v3.t[0][0], v3.t[0][1]) * inter.v;
 
-    vec3 plane_N = cross(vec3(p2 - p1), vec3(p3 - p1));
-    const float pa = length(plane_N);
-    plane_N /= pa;
+    surf.plane_N = cross(vec3(p2 - p1), vec3(p3 - p1));
+    const float pa = length(surf.plane_N);
+    surf.plane_N /= pa;
 
-    vec3 B = vec3(v1.b[0], v1.b[1], v1.b[2]) * w +
+    surf.B = vec3(v1.b[0], v1.b[1], v1.b[2]) * w +
              vec3(v2.b[0], v2.b[1], v2.b[2]) * inter.u +
              vec3(v3.b[0], v3.b[1], v3.b[2]) * inter.v;
-    vec3 T = cross(B, N);
+    surf.T = cross(surf.B, surf.N);
 
     if (is_backfacing) {
         if ((g_tri_materials[tri_index] & 0xffff) == 0xffff) {
             return vec3(0.0);
         } else {
             mat = g_materials[g_tri_materials[tri_index] & MATERIAL_INDEX_BITS];
-            plane_N = -plane_N;
-            N = -N;
-            B = -B;
-            T = -T;
+            surf.plane_N = -surf.plane_N;
+            surf.N = -surf.N;
+            surf.B = -surf.B;
+            surf.T = -surf.T;
         }
     }
 
-    plane_N = TransformNormal(plane_N, tr.inv_xform);
-    N = TransformNormal(N, tr.inv_xform);
-    B = TransformNormal(B, tr.inv_xform);
-    T = TransformNormal(T, tr.inv_xform);
+    surf.plane_N = TransformNormal(surf.plane_N, tr.inv_xform);
+    surf.N = TransformNormal(surf.N, tr.inv_xform);
+    surf.B = TransformNormal(surf.B, tr.inv_xform);
+    surf.T = TransformNormal(surf.T, tr.inv_xform);
 
     const float ta = abs((v2.t[0][0] - v1.t[0][0]) * (v3.t[0][1] - v1.t[0][1]) -
                          (v3.t[0][0] - v1.t[0][0]) * (v2.t[0][1] - v1.t[0][1]));
@@ -1159,11 +1596,11 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
     while (mat.type == MixNode) {
         float mix_val = mat.tangent_rotation_or_strength;
         if (mat.textures[BASE_TEXTURE] != 0xffffffff) {
-            mix_val *= SampleBilinear(mat.textures[BASE_TEXTURE], uvs, 0).r;
+            mix_val *= SampleBilinear(mat.textures[BASE_TEXTURE], surf.uvs, 0).r;
         }
 
         const float eta = is_backfacing ? (mat.ext_ior / mat.int_ior) : (mat.int_ior / mat.ext_ior);
-        const float RR = mat.int_ior != 0.0 ? fresnel_dielectric_cos(dot(I, N), eta) : 1.0;
+        const float RR = mat.int_ior != 0.0 ? fresnel_dielectric_cos(dot(I, surf.N), eta) : 1.0;
 
         mix_val *= clamp(RR, 0.0, 1.0);
 
@@ -1182,7 +1619,7 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
 
     // apply normal map
     [[dont_flatten]] if (mat.textures[NORMALS_TEXTURE] != 0xffffffff) {
-        vec3 normals = vec3(SampleBilinear(mat.textures[NORMALS_TEXTURE], uvs, 0).xy, 1.0);
+        vec3 normals = vec3(SampleBilinear(mat.textures[NORMALS_TEXTURE], surf.uvs, 0).xy, 1.0);
 #if BINDLESS
         normals = normals * 2.0 - 1.0;
         if ((mat.textures[NORMALS_TEXTURE] & TEX_RECONSTRUCT_Z_BIT) != 0) {
@@ -1194,12 +1631,12 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
             normals.z = sqrt(1.0 - dot(normals.xy, normals.xy));
         }
 #endif
-        vec3 in_normal = N;
-        N = normalize(normals[0] * T + normals[2] * N + normals[1] * B);
+        vec3 in_normal = surf.N;
+        surf.N = normalize(normals[0] * surf.T + normals[2] * surf.N + normals[1] * surf.B);
         if ((mat.normal_map_strength_unorm & 0xffff) != 0xffff) {
-            N = normalize(in_normal + (N - in_normal) * unpack_unorm_16(mat.normal_map_strength_unorm & 0xffff));
+            surf.N = normalize(in_normal + (surf.N - in_normal) * unpack_unorm_16(mat.normal_map_strength_unorm & 0xffff));
         }
-        N = ensure_valid_reflection(plane_N, -I, N);
+        surf.N = ensure_valid_reflection(surf.plane_N, -I, surf.N);
     }
 
 #if 0
@@ -1210,15 +1647,15 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
     // rotate around Y axis by 90 degrees in 2d
     vec3 tangent = vec3(-P_ls[2], 0.0, P_ls[0]);
     tangent = TransformNormal(tangent, tr.inv_xform);
-    if (length2(cross(tangent, N)) == 0.0) {
+    if (length2(cross(tangent, surf.N)) == 0.0) {
         tangent = TransformNormal(P_ls, tr.inv_xform);
     }
     if (mat.tangent_rotation_or_strength != 0.0) {
-        tangent = rotate_around_axis(tangent, N, mat.tangent_rotation_or_strength);
+        tangent = rotate_around_axis(tangent, surf.N, mat.tangent_rotation_or_strength);
     }
 
-    B = normalize(cross(tangent, N));
-    T = cross(N, B);
+    surf.B = normalize(cross(tangent, surf.N));
+    surf.T = cross(surf.N, surf.B);
 #endif
 
 #if USE_NEE
@@ -1226,9 +1663,9 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
     ls.col = ls.L = vec3(0.0);
     ls.area = ls.pdf = ls.dist = 0;
     if (/*pi.should_add_direct_light() &&*/ g_params.li_count != 0 && mat.type != EmissiveNode) {
-        SampleLightSource(P, hi, sample_off, ls);
+        SampleLightSource(surf.P, hi, sample_off, ls);
     }
-    const float N_dot_L = dot(N, ls.L);
+    const float N_dot_L = dot(surf.N, ls.L);
 #endif
 
     const float mat_ior = is_backfacing ? mat.ext_ior : mat.int_ior;
@@ -1236,7 +1673,7 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
     vec3 base_color = vec3(mat.base_color[0], mat.base_color[1], mat.base_color[2]);
     [[dont_flatten]] if (mat.textures[BASE_TEXTURE] != 0xffffffff) {
         const float base_lod = get_texture_lod(texSize(mat.textures[BASE_TEXTURE]), lambda);
-        base_color *= SampleBilinear(mat.textures[BASE_TEXTURE], uvs, int(base_lod), true /* YCoCg */, true /* SRGB */).rgb;
+        base_color *= SampleBilinear(mat.textures[BASE_TEXTURE], surf.uvs, int(base_lod), true /* YCoCg */, true /* SRGB */).rgb;
     }
 
     vec3 tint_color = vec3(0.0);
@@ -1249,7 +1686,7 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
     float roughness = unpack_unorm_16(mat.roughness_and_anisotropic & 0xffff);
     [[dont_flatten]] if (mat.textures[ROUGH_TEXTURE] != 0xffffffff) {
         const float roughness_lod = get_texture_lod(texSize(mat.textures[ROUGH_TEXTURE]), lambda);
-        roughness *= SampleBilinear(mat.textures[ROUGH_TEXTURE], uvs, int(roughness_lod), false /* YCoCg */, true /* SRGB */).r;
+        roughness *= SampleBilinear(mat.textures[ROUGH_TEXTURE], surf.uvs, int(roughness_lod), false /* YCoCg */, true /* SRGB */).r;
     }
 
     const float rand_u = fract(g_random_seq[hi + RAND_DIM_BSDF_U] + sample_off[0]);
@@ -1262,183 +1699,49 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
     new_ray.xy = ray.xy;
     new_ray.pdf = 0.0;
 
+    shadow_ray_t sh_r;
+    sh_r.c[0] = sh_r.c[1] = sh_r.c[2] = 0.0;
+    sh_r.depth = ray.depth;
+    sh_r.xy = ray.xy;
+
     ///
 
     [[dont_flatten]] if (mat.type == DiffuseNode) {
 #if USE_NEE
         [[dont_flatten]] if (ls.pdf > 0.0 && N_dot_L > 0.0) {
-            const vec4 diff_col = Evaluate_OrenDiffuse_BSDF(-I, N, ls.L, roughness, base_color);
-            const float bsdf_pdf = diff_col[3];
-
-            float mis_weight = 1.0;
-            if (ls.area > 0.0) {
-                mis_weight = power_heuristic(ls.pdf, bsdf_pdf);
-            }
-
-            const vec3 lcol = ls.col * diff_col.xyz * (mix_weight * mis_weight / ls.pdf);
-
-            [[dont_flatten]] if (ls.cast_shadow > 0.5) {
-                // schedule shadow ray
-                shadow_ray_t sh_r;
-
-                vec3 new_o = offset_ray(P, plane_N);
-                sh_r.o[0] = new_o[0]; sh_r.o[1] = new_o[1]; sh_r.o[2] = new_o[2];
-                sh_r.d[0] = ls.L[0]; sh_r.d[1] = ls.L[1]; sh_r.d[2] = ls.L[2];
-                sh_r.dist = ls.dist - 10.0 * HIT_BIAS;
-                sh_r.c[0] = ray.c[0] * lcol[0];
-                sh_r.c[1] = ray.c[1] * lcol[1];
-                sh_r.c[2] = ray.c[2] * lcol[2];
-                sh_r.xy = ray.xy;
-                sh_r.depth = ray.depth;
-
-                const uint index = atomicAdd(g_inout_counters[2], 1);
-                g_out_sh_rays[index] = sh_r;
-            } else {
-                // apply light immediately
-                col += lcol;
-            }
+            col += Evaluate_DiffuseNode(ls, ray, surf, base_color, roughness, mix_weight, sh_r);
         }
 #endif
-
         [[dont_flatten]] if (diff_depth < g_params.max_diff_depth && total_depth < g_params.max_total_depth) {
-            vec3 V;
-            const vec4 F = Sample_OrenDiffuse_BSDF(T, B, N, I, roughness, base_color, rand_u, rand_v, V);
-
-            new_ray.depth = ray.depth + 0x00000001;
-
-            vec3 new_o = offset_ray(P, plane_N);
-            new_ray.o[0] = new_o[0]; new_ray.o[1] = new_o[1]; new_ray.o[2] = new_o[2];
-            new_ray.d[0] = V[0]; new_ray.d[1] = V[1]; new_ray.d[2] = V[2];
-
-            new_ray.c[0] = ray.c[0] * F[0] * mix_weight / F[3];
-            new_ray.c[1] = ray.c[1] * F[1] * mix_weight / F[3];
-            new_ray.c[2] = ray.c[2] * F[2] * mix_weight / F[3];
-            new_ray.pdf = F[3];
+            Sample_DiffuseNode(ray, surf, base_color, roughness, rand_u, rand_v, mix_weight, new_ray);
         }
     } else [[dont_flatten]] if (mat.type == GlossyNode) {
         const float specular = 0.5;
         const float spec_ior = (2.0 / (1.0 - sqrt(0.08 * specular))) - 1.0;
         const float spec_F0 = fresnel_dielectric_cos(1.0, spec_ior);
-        const float roughness2 = roughness * roughness;
+        const float roughness2 = sqr(roughness);
 
 #if USE_NEE
-        [[dont_flatten]] if (ls.pdf > 0.0 && roughness2 * roughness2 >= 1e-7 && N_dot_L > 0.0) {
-            const vec3 H = normalize(ls.L - I);
-
-            const vec3 view_dir_ts = tangent_from_world(T, B, N, -I);
-            const vec3 light_dir_ts = tangent_from_world(T, B, N, ls.L);
-            const vec3 sampled_normal_ts = tangent_from_world(T, B, N, H);
-
-            const vec4 spec_col = Evaluate_GGXSpecular_BSDF(
-                view_dir_ts, sampled_normal_ts, light_dir_ts, roughness2, roughness2, spec_ior, spec_F0, base_color);
-            const float bsdf_pdf = spec_col[3];
-
-            float mis_weight = 1.0;
-            if (ls.area > 0.0) {
-                mis_weight = power_heuristic(ls.pdf, bsdf_pdf);
-            }
-            const vec3 lcol = ls.col * spec_col.rgb * (mix_weight * mis_weight / ls.pdf);
-
-            [[dont_flatten]] if (ls.cast_shadow > 0.5) {
-                // schedule shadow ray
-                shadow_ray_t sh_r;
-
-                vec3 new_o = offset_ray(P, plane_N);
-                sh_r.o[0] = new_o[0]; sh_r.o[1] = new_o[1]; sh_r.o[2] = new_o[2];
-                sh_r.d[0] = ls.L[0]; sh_r.d[1] = ls.L[1]; sh_r.d[2] = ls.L[2];
-                sh_r.dist = ls.dist - 10.0 * HIT_BIAS;
-                sh_r.c[0] = ray.c[0] * lcol[0];
-                sh_r.c[1] = ray.c[1] * lcol[1];
-                sh_r.c[2] = ray.c[2] * lcol[2];
-                sh_r.xy = ray.xy;
-                sh_r.depth = ray.depth;
-
-                const uint index = atomicAdd(g_inout_counters[2], 1);
-                g_out_sh_rays[index] = sh_r;
-            } else {
-                // apply light immediately
-                col += lcol;
-            }
+        [[dont_flatten]] if (ls.pdf > 0.0 && sqr(roughness2) >= 1e-7 && N_dot_L > 0.0) {
+            col += Evaluate_GlossyNode(ls, ray, surf, base_color, roughness, spec_ior,
+                                       spec_F0, mix_weight, sh_r);
         }
 #endif
-
         [[dont_flatten]] if (spec_depth < g_params.max_spec_depth && total_depth < g_params.max_total_depth) {
-            vec3 V;
-            const vec4 F =
-                Sample_GGXSpecular_BSDF(T, B, N, I, roughness, 0.0, spec_ior, spec_F0, base_color, rand_u, rand_v, V);
-
-            new_ray.depth = ray.depth + 0x00000100;
-
-            vec3 new_o = offset_ray(P, plane_N);
-            new_ray.o[0] = new_o[0]; new_ray.o[1] = new_o[1]; new_ray.o[2] = new_o[2];
-            new_ray.d[0] = V[0]; new_ray.d[1] = V[1]; new_ray.d[2] = V[2];
-
-            new_ray.c[0] = ray.c[0] * F[0] * mix_weight / F[3];
-            new_ray.c[1] = ray.c[1] * F[1] * mix_weight / F[3];
-            new_ray.c[2] = ray.c[2] * F[2] * mix_weight / F[3];
-            new_ray.pdf = F[3];
+            Sample_GlossyNode(ray, surf, base_color, roughness, spec_ior, spec_F0, rand_u,
+                              rand_v, mix_weight, new_ray);
         }
     } else [[dont_flatten]] if (mat.type == RefractiveNode) {
         const float eta = is_backfacing ? (mat.int_ior / mat.ext_ior) : (mat.ext_ior / mat.int_ior);
-        const float roughness2 = roughness * roughness;
+        const float roughness2 = sqr(roughness);
 
 #if USE_NEE
-        [[dont_flatten]] if (ls.pdf > 0.0 && roughness2 * roughness2 >= 1e-7 && N_dot_L < 0.0) {
-            const vec3 H = normalize(ls.L - I * eta);
-            const vec3 view_dir_ts = tangent_from_world(T, B, N, -I);
-            const vec3 light_dir_ts = tangent_from_world(T, B, N, ls.L);
-            const vec3 sampled_normal_ts = tangent_from_world(T, B, N, H);
-
-            const vec4 refr_col =
-                Evaluate_GGXRefraction_BSDF(view_dir_ts, sampled_normal_ts, light_dir_ts, roughness2, eta, base_color);
-            const float bsdf_pdf = refr_col[3];
-
-            float mis_weight = 1.0;
-            if (ls.area > 0.0) {
-                mis_weight = power_heuristic(ls.pdf, bsdf_pdf);
-            }
-            const vec3 lcol = ls.col * refr_col.rgb * (mix_weight * mis_weight / ls.pdf);
-
-            [[dont_flatten]] if (ls.cast_shadow > 0.5) {
-                // schedule shadow ray
-                shadow_ray_t sh_r;
-
-                vec3 new_o = offset_ray(P, -plane_N);
-                sh_r.o[0] = new_o[0]; sh_r.o[1] = new_o[1]; sh_r.o[2] = new_o[2];
-                sh_r.d[0] = ls.L[0]; sh_r.d[1] = ls.L[1]; sh_r.d[2] = ls.L[2];
-                sh_r.dist = ls.dist - 10.0 * HIT_BIAS;
-                sh_r.c[0] = ray.c[0] * lcol[0];
-                sh_r.c[1] = ray.c[1] * lcol[1];
-                sh_r.c[2] = ray.c[2] * lcol[2];
-                sh_r.xy = ray.xy;
-                sh_r.depth = ray.depth;
-
-                const uint index = atomicAdd(g_inout_counters[2], 1);
-                g_out_sh_rays[index] = sh_r;
-            } else {
-                // apply light immediately
-                col += lcol;
-            }
+        [[dont_flatten]] if (ls.pdf > 0.0 && sqr(roughness2) >= 1e-7 && N_dot_L < 0.0) {
+            col += Evaluate_RefractiveNode(ls, ray, surf, base_color, roughness2, eta, mix_weight, sh_r);
         }
 #endif
-
         [[dont_flatten]] if (refr_depth < g_params.max_refr_depth && total_depth < g_params.max_total_depth) {
-            vec4 _V;
-            const vec4 F = Sample_GGXRefraction_BSDF(T, B, N, I, roughness, eta, base_color, rand_u, rand_v, _V);
-
-            const vec3 V = _V.xyz;
-            const float m = _V[3];
-
-            new_ray.depth = ray.depth + 0x00010000;
-
-            new_ray.c[0] = ray.c[0] * F[0] * mix_weight / F[3];
-            new_ray.c[1] = ray.c[1] * F[1] * mix_weight / F[3];
-            new_ray.c[2] = ray.c[2] * F[2] * mix_weight / F[3];
-            new_ray.pdf = F[3];
-
-            vec3 new_o = offset_ray(P, -plane_N);
-            new_ray.o[0] = new_o[0]; new_ray.o[1] = new_o[1]; new_ray.o[2] = new_o[2];
-            new_ray.d[0] = V[0]; new_ray.d[1] = V[1]; new_ray.d[2] = V[2];
+            Sample_RefractiveNode(ray, surf, base_color, roughness, eta, rand_u, rand_v, mix_weight, new_ray);
         }
     } else [[dont_flatten]] if (mat.type == EmissiveNode) {
         float mis_weight = 1.0;
@@ -1467,13 +1770,13 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
         float metallic = unpack_unorm_16((mat.tint_and_metallic >> 16) & 0xffff);
         [[dont_flatten]] if (mat.textures[METALLIC_TEXTURE] != 0xffffffff) {
             const float metallic_lod = get_texture_lod(texSize(mat.textures[METALLIC_TEXTURE]), lambda);
-            metallic *= SampleBilinear(mat.textures[METALLIC_TEXTURE], uvs, int(metallic_lod)).r;
+            metallic *= SampleBilinear(mat.textures[METALLIC_TEXTURE], surf.uvs, int(metallic_lod)).r;
         }
 
         float specular = unpack_unorm_16(mat.specular_and_specular_tint & 0xffff);
         [[dont_flatten]] if (mat.textures[SPECULAR_TEXTURE] != 0xffffffff) {
             const float specular_lod = get_texture_lod(texSize(mat.textures[SPECULAR_TEXTURE]), lambda);
-            specular *= SampleBilinear(mat.textures[SPECULAR_TEXTURE], uvs, int(specular_lod)).r;
+            specular *= SampleBilinear(mat.textures[SPECULAR_TEXTURE], surf.uvs, int(specular_lod)).r;
         }
 
         const float specular_tint = unpack_unorm_16((mat.specular_and_specular_tint >> 16) & 0xffff);
@@ -1483,240 +1786,52 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
         const float sheen = 2.0 * unpack_unorm_16(mat.sheen_and_sheen_tint & 0xffff);
         const float sheen_tint = unpack_unorm_16((mat.sheen_and_sheen_tint >> 16) & 0xffff);
 
-        vec3 spec_tmp_col = mix(vec3(1.0), tint_color, specular_tint);
-        spec_tmp_col = mix(specular * 0.08 * spec_tmp_col, base_color, metallic);
+        diff_params_t diff;
+        diff.base_color = base_color;
+        diff.sheen_color = sheen * mix(vec3(1.0), tint_color, sheen_tint);
+        diff.roughness = roughness;
 
-        const float spec_ior = (2.0 / (1.0 - sqrt(0.08 * specular))) - 1.0;
-        const float spec_F0 = fresnel_dielectric_cos(1.0, spec_ior);
+        spec_params_t spec;
+        spec.tmp_col = mix(vec3(1.0), tint_color, specular_tint);
+        spec.tmp_col = mix(specular * 0.08 * spec.tmp_col, base_color, metallic);
+        spec.roughness = roughness;
+        spec.ior = (2.0 / (1.0 - sqrt(0.08 * specular))) - 1.0;
+        spec.F0 = fresnel_dielectric_cos(1.0, spec.ior);
+        spec.anisotropy = unpack_unorm_16((mat.roughness_and_anisotropic >> 16) & 0xffff);
+
+        clearcoat_params_t coat;
+        coat.roughness = clearcoat_roughness;
+        coat.ior = (2.0 / (1.0 - sqrt(0.08 * clearcoat))) - 1.0;
+        coat.F0 = fresnel_dielectric_cos(1.0, coat.ior);
+
+        transmission_params_t trans;
+        trans.roughness =
+            1.0 - (1.0 - roughness) * (1.0 - unpack_unorm_16((mat.transmission_and_transmission_roughness >> 16) & 0xffff));
+        trans.eta = is_backfacing ? (mat.int_ior / mat.ext_ior) : (mat.ext_ior / mat.int_ior);
+        trans.fresnel = fresnel_dielectric_cos(dot(I, surf.N), 1.0 / trans.eta);
 
         // Approximation of FH (using shading normal)
-        const float FN = (fresnel_dielectric_cos(dot(I, N), spec_ior) - spec_F0) / (1.0 - spec_F0);
+        const float FN = (fresnel_dielectric_cos(dot(I, surf.N), spec.ior) - spec.F0) / (1.0 - spec.F0);
 
-        const vec3 approx_spec_col = mix(spec_tmp_col, vec3(1.0), FN);
+        const vec3 approx_spec_col = mix(spec.tmp_col, vec3(1.0), FN);
         const float spec_color_lum = lum(approx_spec_col);
 
-        float diffuse_weight, specular_weight, clearcoat_weight, refraction_weight;
-        get_lobe_weights(mix(base_color_lum, 1.0, sheen), spec_color_lum, specular, metallic, transmission, clearcoat,
-                         diffuse_weight, specular_weight, clearcoat_weight, refraction_weight);
-
-        const vec3 _base_color = /*pi.should_consider_albedo()*/ true ? base_color : vec3(1.0);
-        const vec3 sheen_color = sheen * mix(vec3(1.0), tint_color, sheen_tint);
-
-        const float eta = is_backfacing ? (mat.int_ior / mat.ext_ior) : (mat.ext_ior / mat.int_ior);
-        const float fresnel = fresnel_dielectric_cos(dot(I, N), 1.0 / eta);
-
-        const float clearcoat_ior = (2.0 / (1.0 - sqrt(0.08 * clearcoat))) - 1.0;
-        const float clearcoat_F0 = fresnel_dielectric_cos(1.0, clearcoat_ior);
-        const float clearcoat_roughness2 = clearcoat_roughness * clearcoat_roughness;
-
-        const float transmission_roughness =
-            1.0 - (1.0 - roughness) * (1.0 - unpack_unorm_16((mat.transmission_and_transmission_roughness >> 16) & 0xffff));
-        const float transmission_roughness2 = transmission_roughness * transmission_roughness;
+        lobe_weights_t lobe_weights =
+            get_lobe_weights(mix(base_color_lum, 1.0, sheen), spec_color_lum, specular, metallic, transmission, clearcoat);
 
 #if USE_NEE
         [[dont_flatten]] if (ls.pdf > 0.0) {
-            vec3 lcol = vec3(0.0);
-            float bsdf_pdf = 0.0;
-
-            [[dont_flatten]] if (diffuse_weight > 1e-7 && N_dot_L > 0.0) {
-                vec4 diff_col = Evaluate_PrincipledDiffuse_BSDF(-I, N, ls.L, roughness, _base_color, sheen_color,
-                                                                false);
-                bsdf_pdf += diffuse_weight * diff_col[3];
-                diff_col *= (1.0 - metallic);
-
-                lcol += ls.col * N_dot_L * diff_col.rgb / (PI * ls.pdf);
-            }
-
-            vec3 H;
-            [[flatten]] if (N_dot_L > 0.0) {
-                H = normalize(ls.L - I);
-            } else {
-                H = normalize(ls.L - I * eta);
-            }
-
-            const float roughness2 = roughness * roughness;
-            const float aspect = sqrt(1.0 - 0.9 * unpack_unorm_16((mat.roughness_and_anisotropic >> 16) & 0xffff));
-
-            const float alpha_x = roughness2 / aspect;
-            const float alpha_y = roughness2 * aspect;
-
-            const vec3 view_dir_ts = tangent_from_world(T, B, N, -I);
-            const vec3 light_dir_ts = tangent_from_world(T, B, N, ls.L);
-            const vec3 sampled_normal_ts = tangent_from_world(T, B, N, H);
-
-            [[dont_flatten]] if (specular_weight > 0.0 && alpha_x * alpha_y >= 1e-7 && N_dot_L > 0.0) {
-                const vec4 spec_col = Evaluate_GGXSpecular_BSDF(
-                    view_dir_ts, sampled_normal_ts, light_dir_ts, alpha_x, alpha_y, spec_ior, spec_F0, spec_tmp_col);
-                bsdf_pdf += specular_weight * spec_col[3];
-                lcol += ls.col * spec_col.rgb / ls.pdf;
-            }
-
-            [[dont_flatten]] if (clearcoat_weight > 0.0 && clearcoat_roughness2 * clearcoat_roughness2 >= 1e-7 && N_dot_L > 0.0) {
-                const vec4 clearcoat_col = Evaluate_PrincipledClearcoat_BSDF(
-                    view_dir_ts, sampled_normal_ts, light_dir_ts, clearcoat_roughness2, clearcoat_ior, clearcoat_F0);
-                bsdf_pdf += clearcoat_weight * clearcoat_col[3];
-                lcol += 0.25 * ls.col * clearcoat_col.rgb / ls.pdf;
-            }
-
-            [[dont_flatten]] if (refraction_weight > 0.0) {
-                [[dont_flatten]] if (fresnel != 0.0 && roughness2 * roughness2 >= 1e-7 && N_dot_L > 0.0) {
-                    const vec4 spec_col =
-                        Evaluate_GGXSpecular_BSDF(view_dir_ts, sampled_normal_ts, light_dir_ts, roughness2, roughness2,
-                                                  1.0 /* ior */, 0.0 /* F0 */, vec3(1.0));
-                    bsdf_pdf += refraction_weight * fresnel * spec_col[3];
-                    lcol += ls.col * spec_col.rgb * (fresnel / ls.pdf);
-                }
-
-                [[dont_flatten]] if (fresnel != 1.0 && transmission_roughness2 * transmission_roughness2 >= 1e-7 && N_dot_L < 0.0) {
-                    const vec4 refr_col = Evaluate_GGXRefraction_BSDF(
-                        view_dir_ts, sampled_normal_ts, light_dir_ts, transmission_roughness2, eta, base_color);
-                    bsdf_pdf += refraction_weight * (1.0 - fresnel) * refr_col[3];
-                    lcol += ls.col * refr_col.rgb * ((1.0 - fresnel) / ls.pdf);
-                }
-            }
-
-            float mis_weight = 1.0;
-            [[flatten]] if (ls.area > 0.0) {
-                mis_weight = power_heuristic(ls.pdf, bsdf_pdf);
-            }
-            lcol *= mix_weight * mis_weight;
-
-            [[dont_flatten]] if (ls.cast_shadow > 0.5) {
-                // schedule shadow ray
-                shadow_ray_t sh_r;
-
-                vec3 new_o = offset_ray(P, N_dot_L < 0.0 ? -plane_N : plane_N);
-                sh_r.o[0] = new_o[0]; sh_r.o[1] = new_o[1]; sh_r.o[2] = new_o[2];
-                sh_r.d[0] = ls.L[0]; sh_r.d[1] = ls.L[1]; sh_r.d[2] = ls.L[2];
-                sh_r.dist = ls.dist - 10.0 * HIT_BIAS;
-                sh_r.c[0] = ray.c[0] * lcol[0];
-                sh_r.c[1] = ray.c[1] * lcol[1];
-                sh_r.c[2] = ray.c[2] * lcol[2];
-                sh_r.xy = ray.xy;
-                sh_r.depth = ray.depth;
-
-                const uint index = atomicAdd(g_inout_counters[2], 1);
-                g_out_sh_rays[index] = sh_r;
-            } else {
-                // apply light immediately
-                col += lcol;
-            }
+            col += Evaluate_PrincipledNode(ls, ray, surf, lobe_weights, diff, spec, coat, trans,
+                                           metallic, N_dot_L, mix_weight, sh_r);
         }
 #endif
-
-        [[dont_flatten]] if (mix_rand < diffuse_weight) {
-            //
-            // Diffuse lobe
-            //
-            if (diff_depth < g_params.max_diff_depth && total_depth < g_params.max_total_depth) {
-                vec3 V;
-                vec4 diff_col = Sample_PrincipledDiffuse_BSDF(T, B, N, I, roughness, _base_color, sheen_color,
-                                false, rand_u, rand_v, V);
-                diff_col.rgb *= (1.0 - metallic);
-
-                new_ray.depth = ray.depth + 0x00000001;
-
-                const vec3 new_o = offset_ray(P, plane_N);
-                new_ray.o[0] = new_o[0]; new_ray.o[1] = new_o[1]; new_ray.o[2] = new_o[2];
-                new_ray.d[0] = V[0]; new_ray.d[1] = V[1]; new_ray.d[2] = V[2];
-
-                new_ray.c[0] = ray.c[0] * diff_col[0] * mix_weight / diffuse_weight;
-                new_ray.c[1] = ray.c[1] * diff_col[1] * mix_weight / diffuse_weight;
-                new_ray.c[2] = ray.c[2] * diff_col[2] * mix_weight / diffuse_weight;
-                new_ray.pdf = diff_col[3];
-            }
-        } else [[dont_flatten]] if (mix_rand < diffuse_weight + specular_weight) {
-            //
-            // Main specular lobe
-            //
-            if (spec_depth < g_params.max_spec_depth && total_depth < g_params.max_total_depth) {
-                vec3 V;
-                vec4 F = Sample_GGXSpecular_BSDF(T, B, N, I, roughness, unpack_unorm_16((mat.roughness_and_anisotropic >> 16) & 0xffff),
-                                                 spec_ior, spec_F0, spec_tmp_col, rand_u, rand_v, V);
-                F[3] *= specular_weight;
-
-                new_ray.depth = ray.depth + 0x00000100;
-
-                new_ray.c[0] = ray.c[0] * F[0] * mix_weight / F[3];
-                new_ray.c[1] = ray.c[1] * F[1] * mix_weight / F[3];
-                new_ray.c[2] = ray.c[2] * F[2] * mix_weight / F[3];
-                new_ray.pdf = F[3];
-
-                const vec3 new_o = offset_ray(P, plane_N);
-                new_ray.o[0] = new_o[0]; new_ray.o[1] = new_o[1]; new_ray.o[2] = new_o[2];
-                new_ray.d[0] = V[0]; new_ray.d[1] = V[1]; new_ray.d[2] = V[2];
-            }
-        } else [[dont_flatten]] if (mix_rand < diffuse_weight + specular_weight + clearcoat_weight) {
-            //
-            // Clearcoat lobe (secondary specular)
-            //
-            if (spec_depth < g_params.max_spec_depth && total_depth < g_params.max_total_depth) {
-                vec3 V;
-                vec4 F = Sample_PrincipledClearcoat_BSDF(T, B, N, I, clearcoat_roughness2, clearcoat_ior,
-                                                         clearcoat_F0, rand_u, rand_v, V);
-                F[3] *= clearcoat_weight;
-
-                new_ray.depth = ray.depth + 0x00000100;
-
-                new_ray.c[0] = 0.25 * ray.c[0] * F[0] * mix_weight / F[3];
-                new_ray.c[1] = 0.25 * ray.c[1] * F[1] * mix_weight / F[3];
-                new_ray.c[2] = 0.25 * ray.c[2] * F[2] * mix_weight / F[3];
-                new_ray.pdf = F[3];
-
-                const vec3 new_o = offset_ray(P, plane_N);
-                new_ray.o[0] = new_o[0]; new_ray.o[1] = new_o[1]; new_ray.o[2] = new_o[2];
-                new_ray.d[0] = V[0]; new_ray.d[1] = V[1]; new_ray.d[2] = V[2];
-            }
-        } else /*if (mix_rand < diffuse_weight + specular_weight + clearcoat_weight + refraction_weight)*/ {
-            //
-            // Refraction/reflection lobes
-            //
-            [[dont_flatten]] if (((mix_rand >= fresnel && refr_depth < g_params.max_refr_depth) ||
-                                  (mix_rand < fresnel && spec_depth < g_params.max_spec_depth)) &&
-                                   total_depth < g_params.max_total_depth) {
-                mix_rand -= diffuse_weight + specular_weight + clearcoat_weight;
-                mix_rand /= refraction_weight;
-
-                //////////////////
-
-                vec4 F;
-                vec3 V;
-                [[dont_flatten]] if (mix_rand < fresnel) {
-                    F = Sample_GGXSpecular_BSDF(T, B, N, I, roughness, 0.0 /* anisotropic */, 1.0 /* ior */,
-                                                0.0 /* F0 */, vec3(1.0), rand_u, rand_v, V);
-
-                    new_ray.depth = ray.depth + 0x00000100;
-
-                    const vec3 new_o = offset_ray(P, plane_N);
-                    new_ray.o[0] = new_o[0]; new_ray.o[1] = new_o[1]; new_ray.o[2] = new_o[2];
-                } else {
-                    vec4 _V;
-                    F = Sample_GGXRefraction_BSDF(T, B, N, I, transmission_roughness, eta, base_color, rand_u, rand_v,
-                                                  _V);
-                    V = _V.xyz;
-
-                    new_ray.depth = ray.depth + 0x00010000;
-
-                    const vec3 new_o = offset_ray(P, -plane_N);
-                    new_ray.o[0] = new_o[0]; new_ray.o[1] = new_o[1]; new_ray.o[2] = new_o[2];
-                }
-
-                F[3] *= refraction_weight;
-
-                new_ray.c[0] = ray.c[0] * F[0] * mix_weight / F[3];
-                new_ray.c[1] = ray.c[1] * F[1] * mix_weight / F[3];
-                new_ray.c[2] = ray.c[2] * F[2] * mix_weight / F[3];
-                new_ray.pdf = F[3];
-
-                new_ray.d[0] = V[0]; new_ray.d[1] = V[1]; new_ray.d[2] = V[2];
-            }
-        }
+        Sample_PrincipledNode(ray, surf, lobe_weights, diff, spec, coat, trans, metallic, rand_u, rand_v, mix_rand, mix_weight, new_ray);
     } /*else [[dont_flatten]] if (mat.type == TransparentNode) {
         [[dont_flatten]] if (transp_depth < g_params.max_transp_depth && total_depth < g_params.max_total_depth) {
             new_ray.depth = ray.depth + 0x01000000;
             new_ray.pdf = ray.pdf;
 
-            const vec3 new_o = offset_ray(P, -plane_N);
+            const vec3 new_o = offset_ray(surf.P, -surf.plane_N);
             new_ray.o[0] = new_o[0]; new_ray.o[1] = new_o[1]; new_ray.o[2] = new_o[2];
             new_ray.d[0] = ray.d[0]; new_ray.d[1] = ray.d[1]; new_ray.d[2] = ray.d[2];
             new_ray.c[0] = ray.c[0]; new_ray.c[1] = ray.c[1]; new_ray.c[2] = ray.c[2];
@@ -1738,6 +1853,12 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
         new_ray.c[2] /= (1.0 - q);
         const uint index = atomicAdd(g_inout_counters[0], 1);
         g_out_rays[index] = new_ray;
+    }
+
+    const float sh_lum = max(sh_r.c[0], max(sh_r.c[1], sh_r.c[2]));
+    [[dont_flatten]] if (sh_lum > 0.0) {
+        const uint index = atomicAdd(g_inout_counters[2], 1);
+        g_out_sh_rays[index] = sh_r;
     }
 
     return vec3(ray.c[0] * col[0], ray.c[1] * col[1], ray.c[2] * col[2]);
