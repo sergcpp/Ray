@@ -1565,6 +1565,24 @@ void FetchTransformAndRecalcBasis(const transform_t *sc_transforms, const simd_i
 }
 
 template <int S>
+void FetchVertexAttribute3(const float *attribs, const simd_ivec<S> vtx_indices[3], const simd_fvec<S> &u,
+                           const simd_fvec<S> &v, const simd_fvec<S> &w, simd_fvec<S> out_A[3]) {
+    static const int VtxStride = sizeof(vertex_t) / sizeof(float);
+
+    const simd_fvec<S> A1[3] = {gather(attribs + 0, vtx_indices[0] * VtxStride),
+                                gather(attribs + 1, vtx_indices[0] * VtxStride),
+                                gather(attribs + 2, vtx_indices[0] * VtxStride)};
+    const simd_fvec<S> A2[3] = {gather(attribs + 0, vtx_indices[1] * VtxStride),
+                                gather(attribs + 1, vtx_indices[1] * VtxStride),
+                                gather(attribs + 2, vtx_indices[1] * VtxStride)};
+    const simd_fvec<S> A3[3] = {gather(attribs + 0, vtx_indices[2] * VtxStride),
+                                gather(attribs + 1, vtx_indices[2] * VtxStride),
+                                gather(attribs + 2, vtx_indices[2] * VtxStride)};
+
+    ITERATE_3({ out_A[i] = A1[i] * w + A2[i] * u + A3[i] * v; })
+}
+
+template <int S>
 void EnsureValidReflection(const simd_fvec<S> Ng[3], const simd_fvec<S> I[3], simd_fvec<S> inout_N[3]) {
     simd_fvec<S> R[3];
     ITERATE_3({ R[i] = 2.0f * dot3(inout_N, I) * inout_N[i] - I[i]; })
@@ -5244,18 +5262,9 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
         ITERATE_3({ P_ls[i] = p1[i] * w + p2[i] * inter.u + p3[i] * inter.v; });
     }
 
-    simd_fvec<S> n1[3], n2[3], n3[3], N[3];
-    { // Fetch vertex normals
-        const float *vtx_normals = &sc.vertices[0].n[0];
-        const int VtxNormalsStride = sizeof(vertex_t) / sizeof(float);
-
-        ITERATE_3({ n1[i] = gather(vtx_normals + i, vtx_indices[0] * VtxNormalsStride); });
-        ITERATE_3({ n2[i] = gather(vtx_normals + i, vtx_indices[1] * VtxNormalsStride); });
-        ITERATE_3({ n3[i] = gather(vtx_normals + i, vtx_indices[2] * VtxNormalsStride); });
-
-        ITERATE_3({ N[i] = n1[i] * w + n2[i] * inter.u + n3[i] * inter.v; });
-        normalize(N);
-    }
+    simd_fvec<S> N[3];
+    FetchVertexAttribute3(&sc.vertices[0].n[0], vtx_indices, inter.u, inter.v, w, N);
+    normalize(N);
 
     simd_fvec<S> u1[2], u2[2], u3[2], uvs[2];
     { // Fetch vertex uvs
@@ -5282,22 +5291,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
     ITERATE_3({ plane_N[i] /= pa; })
 
     simd_fvec<S> B[3];
-    { // Fetch vertex binormal
-        const float *vtx_binormals = &sc.vertices[0].b[0];
-        const int VtxBinormalsStride = sizeof(vertex_t) / sizeof(float);
-
-        const simd_fvec<S> B1[3] = {gather(vtx_binormals + 0, vtx_indices[0] * VtxBinormalsStride),
-                                    gather(vtx_binormals + 1, vtx_indices[0] * VtxBinormalsStride),
-                                    gather(vtx_binormals + 2, vtx_indices[0] * VtxBinormalsStride)};
-        const simd_fvec<S> B2[3] = {gather(vtx_binormals + 0, vtx_indices[1] * VtxBinormalsStride),
-                                    gather(vtx_binormals + 1, vtx_indices[1] * VtxBinormalsStride),
-                                    gather(vtx_binormals + 2, vtx_indices[1] * VtxBinormalsStride)};
-        const simd_fvec<S> B3[3] = {gather(vtx_binormals + 0, vtx_indices[2] * VtxBinormalsStride),
-                                    gather(vtx_binormals + 1, vtx_indices[2] * VtxBinormalsStride),
-                                    gather(vtx_binormals + 2, vtx_indices[2] * VtxBinormalsStride)};
-
-        ITERATE_3({ B[i] = B1[i] * w + B2[i] * inter.u + B3[i] * inter.v; });
-    }
+    FetchVertexAttribute3(&sc.vertices[0].b[0], vtx_indices, inter.u, inter.v, w, B);
 
     simd_fvec<S> T[3];
     cross(B, N, T);
