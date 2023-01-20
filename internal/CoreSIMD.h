@@ -2592,6 +2592,7 @@ bool Ray::NS::IntersectTris_AnyHit(const float o[3], const float d[3], const mtr
     return res;
 }
 
+
 template <int S>
 bool Ray::NS::Traverse_MacroTree_WithStack_ClosestHit(const simd_fvec<S> ro[3], const simd_fvec<S> rd[3],
                                                       const simd_ivec<S> &ray_mask, const bvh_node_t *nodes,
