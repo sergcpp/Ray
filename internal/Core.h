@@ -7,8 +7,6 @@
 #include "../Types.h"
 #include "Span.h"
 
-// #define USE_RAY_DIFFERENTIALS
-
 #ifdef __GNUC__
 #define force_inline __attribute__((always_inline)) inline
 #define assume_aligned(ptr, sz) (__builtin_assume_aligned((const void *)ptr, sz))

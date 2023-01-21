@@ -1129,17 +1129,6 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
     B = TransformNormal(B, tr.inv_xform);
     T = TransformNormal(T, tr.inv_xform);
 
-#ifdef USE_RAY_DIFFERENTIALS
-    #error "Not implemented"
-
-    //const auto do_dx = simd_fvec4{ray.do_dx[0], ray.do_dx[1], ray.do_dx[2], 0.0};
-    //const auto do_dy = simd_fvec4{ray.do_dy[0], ray.do_dy[1], ray.do_dy[2], 0.0};
-    //const auto dd_dx = simd_fvec4{ray.dd_dx[0], ray.dd_dx[1], ray.dd_dx[2], 0.0};
-    //const auto dd_dy = simd_fvec4{ray.dd_dy[0], ray.dd_dy[1], ray.dd_dy[2], 0.0};
-
-    //derivatives_t surf_der;
-    //ComputeDerivatives(I, inter.t, do_dx, do_dy, dd_dx, dd_dy, v1, v2, v3, plane_N, *tr, surf_der);
-#else
     const float ta = abs((v2.t[0][0] - v1.t[0][0]) * (v3.t[0][1] - v1.t[0][1]) -
                          (v3.t[0][0] - v1.t[0][0]) * (v2.t[0][1] - v1.t[0][1]));
 
@@ -1149,7 +1138,6 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
     lambda += log2(cone_width);
     // lambda += 0.5 * fast_log2(tex_res.x * tex_res.y);
     // lambda -= fast_log2(std::abs(dot(I, plane_N)));
-#endif
 
     vec2 sample_off = vec2(construct_float(hash(ray.xy)), construct_float(hash(hash(ray.xy))));
 
@@ -1269,10 +1257,8 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
 
     ray_data_t new_ray;
     new_ray.c[0] = new_ray.c[1] = new_ray.c[2] = 0.0;
-#ifndef USE_RAY_DIFFERENTIALS
     new_ray.cone_width = cone_width;
     new_ray.cone_spread = ray.cone_spread;
-#endif
     new_ray.xy = ray.xy;
     new_ray.pdf = 0.0;
 
@@ -1328,10 +1314,6 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
             new_ray.c[1] = ray.c[1] * F[1] * mix_weight / F[3];
             new_ray.c[2] = ray.c[2] * F[2] * mix_weight / F[3];
             new_ray.pdf = F[3];
-
-#ifdef USE_RAY_DIFFERENTIALS
-            // TODO: ...
-#endif
         }
     } else [[dont_flatten]] if (mat.type == GlossyNode) {
         const float specular = 0.5;
@@ -1395,10 +1377,6 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
             new_ray.c[1] = ray.c[1] * F[1] * mix_weight / F[3];
             new_ray.c[2] = ray.c[2] * F[2] * mix_weight / F[3];
             new_ray.pdf = F[3];
-
-#ifdef USE_RAY_DIFFERENTIALS
-            // TODO: ...
-#endif
         }
     } else [[dont_flatten]] if (mat.type == RefractiveNode) {
         const float eta = is_backfacing ? (mat.int_ior / mat.ext_ior) : (mat.ext_ior / mat.int_ior);
@@ -1461,9 +1439,6 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
             vec3 new_o = offset_ray(P, -plane_N);
             new_ray.o[0] = new_o[0]; new_ray.o[1] = new_o[1]; new_ray.o[2] = new_o[2];
             new_ray.d[0] = V[0]; new_ray.d[1] = V[1]; new_ray.d[2] = V[2];
-#ifdef USE_RAY_DIFFERENTIALS
-            // TODO: ...
-#endif
         }
     } else [[dont_flatten]] if (mat.type == EmissiveNode) {
         float mis_weight = 1.0;
@@ -1649,10 +1624,6 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
                 new_ray.c[1] = ray.c[1] * diff_col[1] * mix_weight / diffuse_weight;
                 new_ray.c[2] = ray.c[2] * diff_col[2] * mix_weight / diffuse_weight;
                 new_ray.pdf = diff_col[3];
-
-#ifdef USE_RAY_DIFFERENTIALS
-                // TODO: ...
-#endif
             }
         } else [[dont_flatten]] if (mix_rand < diffuse_weight + specular_weight) {
             //
@@ -1674,10 +1645,6 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
                 const vec3 new_o = offset_ray(P, plane_N);
                 new_ray.o[0] = new_o[0]; new_ray.o[1] = new_o[1]; new_ray.o[2] = new_o[2];
                 new_ray.d[0] = V[0]; new_ray.d[1] = V[1]; new_ray.d[2] = V[2];
-
-#ifdef USE_RAY_DIFFERENTIALS
-                // TODO: ...
-#endif
             }
         } else [[dont_flatten]] if (mix_rand < diffuse_weight + specular_weight + clearcoat_weight) {
             //
@@ -1699,10 +1666,6 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
                 const vec3 new_o = offset_ray(P, plane_N);
                 new_ray.o[0] = new_o[0]; new_ray.o[1] = new_o[1]; new_ray.o[2] = new_o[2];
                 new_ray.d[0] = V[0]; new_ray.d[1] = V[1]; new_ray.d[2] = V[2];
-
-#ifdef USE_RAY_DIFFERENTIALS
-                // TODO: ...
-#endif
             }
         } else /*if (mix_rand < diffuse_weight + specular_weight + clearcoat_weight + refraction_weight)*/ {
             //
@@ -1726,10 +1689,6 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
 
                     const vec3 new_o = offset_ray(P, plane_N);
                     new_ray.o[0] = new_o[0]; new_ray.o[1] = new_o[1]; new_ray.o[2] = new_o[2];
-
-#ifdef USE_RAY_DIFFERENTIALS
-                    // TODO: ...
-#endif
                 } else {
                     vec4 _V;
                     F = Sample_GGXRefraction_BSDF(T, B, N, I, transmission_roughness, eta, base_color, rand_u, rand_v,
@@ -1740,10 +1699,6 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
 
                     const vec3 new_o = offset_ray(P, -plane_N);
                     new_ray.o[0] = new_o[0]; new_ray.o[1] = new_o[1]; new_ray.o[2] = new_o[2];
-
-#ifdef USE_RAY_DIFFERENTIALS
-                    // TODO: ...
-#endif
                 }
 
                 F[3] *= refraction_weight;
@@ -1754,10 +1709,6 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
                 new_ray.pdf = F[3];
 
                 new_ray.d[0] = V[0]; new_ray.d[1] = V[1]; new_ray.d[2] = V[2];
-
-#ifdef USE_RAY_DIFFERENTIALS
-                // TODO: ...
-#endif
             }
         }
     } /*else [[dont_flatten]] if (mat.type == TransparentNode) {
@@ -1769,10 +1720,6 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
             new_ray.o[0] = new_o[0]; new_ray.o[1] = new_o[1]; new_ray.o[2] = new_o[2];
             new_ray.d[0] = ray.d[0]; new_ray.d[1] = ray.d[1]; new_ray.d[2] = ray.d[2];
             new_ray.c[0] = ray.c[0]; new_ray.c[1] = ray.c[1]; new_ray.c[2] = ray.c[2];
-
-#ifdef USE_RAY_DIFFERENTIALS
-            // TODO: ...
-#endif
         }
     }*/
 

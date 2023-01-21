@@ -37,23 +37,14 @@ struct ray_data_t {
     float o[3], d[3], pdf;
     // throughput color of ray
     float c[3];
-#ifdef USE_RAY_DIFFERENTIALS
-    // derivatives
-    float do_dx[3], dd_dx[3], do_dy[3], dd_dy[3];
-#else
     // ray cone params
     float cone_width, cone_spread;
-#endif
     // 16-bit pixel coordinates of ray ((x << 16) | y)
     int xy;
     // four 8-bit ray depth counters
     int depth;
 };
-#ifdef USE_RAY_DIFFERENTIALS
-static_assert(sizeof(ray_data_t) == 96, "!");
-#else
 static_assert(sizeof(ray_data_t) == 56, "!");
-#endif
 
 struct shadow_ray_t {
     // origin
@@ -81,13 +72,6 @@ struct hit_data_t {
 
     explicit hit_data_t(eUninitialize) {}
     hit_data_t();
-};
-
-struct derivatives_t {
-    simd_fvec4 do_dx, do_dy, dd_dx, dd_dy;
-    simd_fvec2 duv_dx, duv_dy;
-    simd_fvec4 dndx, dndy;
-    float ddn_dx, ddn_dy;
 };
 
 struct light_sample_t {
@@ -266,11 +250,6 @@ void IntersectScene(ray_data_t &r, int min_transp_depth, int max_transp_depth, c
                     hit_data_t &inter);
 simd_fvec4 IntersectScene(const shadow_ray_t &r, int max_transp_depth, const scene_data_t &sc, uint32_t node_index,
                           const TexStorageBase *const textures[]);
-
-// Compute derivatives at hit point
-void ComputeDerivatives(const simd_fvec4 &I, float t, const simd_fvec4 &do_dx, const simd_fvec4 &do_dy,
-                        const simd_fvec4 &dd_dx, const simd_fvec4 &dd_dy, const vertex_t &v1, const vertex_t &v2,
-                        const vertex_t &v3, const simd_fvec4 &plane_N, const transform_t &tr, derivatives_t &out_der);
 
 // Pick point on any light source for evaluation
 void SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, const TexStorageBase *const textures[],

@@ -70,16 +70,6 @@ template void SampleLatlong_RGBE<RPSize>(const Ref::TexStorageRGBA &storage, uin
                                          const simd_fvec<RPSize> dir[3], float y_rotation,
                                          const simd_ivec<RPSize> &mask, simd_fvec<RPSize> out_rgb[3]);
 
-template void ComputeDerivatives<RPSize>(const simd_fvec<RPSize> I[3], const simd_fvec<RPSize> &t,
-                                         const simd_fvec<RPSize> do_dx[3], const simd_fvec<RPSize> do_dy[3],
-                                         const simd_fvec<RPSize> dd_dx[3], const simd_fvec<RPSize> dd_dy[3],
-                                         const simd_fvec<RPSize> p1[3], const simd_fvec<RPSize> p2[3],
-                                         const simd_fvec<RPSize> p3[3], const simd_fvec<RPSize> n1[3],
-                                         const simd_fvec<RPSize> n2[3], const simd_fvec<RPSize> n3[3],
-                                         const simd_fvec<RPSize> u1[2], const simd_fvec<RPSize> u2[2],
-                                         const simd_fvec<RPSize> u3[2], const simd_fvec<RPSize> plane_N[3],
-                                         const simd_fvec<RPSize> xform[16], derivatives_t<RPSize> &out_der);
-
 template void IntersectAreaLights<RPSize>(const ray_data_t<RPSize> &r, const simd_ivec<RPSize> &ray_mask,
                                           const light_t lights[], Span<const uint32_t> visible_lights,
                                           const transform_t transforms[], hit_data_t<RPSize> &inout_inter);

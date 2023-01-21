@@ -108,11 +108,7 @@ const int FILTER_TENT = 1;
 struct ray_data_t {
 	float o[3], d[3], pdf;
 	float c[3];
-#ifdef USE_RAY_DIFFERENTIALS
-
-#else
 	float cone_width, cone_spread;
-#endif
 	int xy;
 	int depth;
 };

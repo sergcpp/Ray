@@ -115,11 +115,8 @@ void main() {
     new_ray.d[2] = _d[2];
     new_ray.c[0] = new_ray.c[1] = new_ray.c[2] = 1.0;
 
-#ifdef USE_RAY_DIFFERENTIALS
-#else
     new_ray.cone_width = 0.0;
     new_ray.cone_spread = g_params.spread_angle;
-#endif
 
     new_ray.pdf = 1e6;
     new_ray.xy = (x << 16) | y;

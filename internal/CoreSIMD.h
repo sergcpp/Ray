@@ -56,13 +56,8 @@ template <int S> struct ray_data_t {
     simd_fvec<S> d[3], pdf;
     // throughput color of ray
     simd_fvec<S> c[3];
-#ifdef USE_RAY_DIFFERENTIALS
-    // derivatives
-    simd_fvec<S> do_dx[3], dd_dx[3], do_dy[3], dd_dy[3];
-#else
     // ray cone params
     simd_fvec<S> cone_width, cone_spread;
-#endif
     // 16-bit pixel coordinates of rays in packet ((x << 16) | y)
     simd_ivec<S> xy;
     // four 8-bit ray depth counters
@@ -96,13 +91,6 @@ template <int S> struct hit_data_t {
         t = MAX_DIST;
         u = v = 0.0f;
     }
-};
-
-template <int S> struct derivatives_t {
-    simd_fvec<S> do_dx[3], dd_dx[3], do_dy[3], dd_dy[3];
-    simd_fvec<S> duv_dx[2], duv_dy[2];
-    simd_fvec<S> dndx[3], dndy[3];
-    simd_fvec<S> ddn_dx, ddn_dy;
 };
 
 template <int S> struct light_sample_t {
@@ -340,15 +328,6 @@ void IntersectScene(ray_data_t<S> &r, const simd_ivec<S> &ray_mask, int min_tran
 template <int S>
 void IntersectScene(const shadow_ray_t<S> &r, const simd_ivec<S> &mask, int max_transp_depth, const scene_data_t &sc,
                     uint32_t node_index, const Ref::TexStorageBase *const textures[], simd_fvec<S> rc[3]);
-
-// Compute derivatives at hit point
-template <int S>
-void ComputeDerivatives(const simd_fvec<S> I[3], const simd_fvec<S> &t, const simd_fvec<S> do_dx[3],
-                        const simd_fvec<S> do_dy[3], const simd_fvec<S> dd_dx[3], const simd_fvec<S> dd_dy[3],
-                        const simd_fvec<S> p1[3], const simd_fvec<S> p2[3], const simd_fvec<S> p3[3],
-                        const simd_fvec<S> n1[3], const simd_fvec<S> n2[3], const simd_fvec<S> n3[3],
-                        const simd_fvec<S> u1[2], const simd_fvec<S> u2[2], const simd_fvec<S> u3[2],
-                        const simd_fvec<S> plane_N[3], const simd_fvec<S> xform[16], derivatives_t<S> &out_der);
 
 // Pick point on any light source for evaluation
 template <int S>
@@ -2026,19 +2005,10 @@ void Ray::NS::GeneratePrimaryRays(const int iteration, const camera_t &cam, cons
                 out_r.d[j] = _d[j];
                 out_r.o[j] = _origin[j] + _d[j] * clip_start;
                 out_r.c[j] = {1.0f};
-
-#ifdef USE_RAY_DIFFERENTIALS
-                out_r.do_dx[j] = {0.0f};
-                out_r.dd_dx[j] = _dx[j] - out_r.d[j];
-                out_r.do_dy[j] = {0.0f};
-                out_r.dd_dy[j] = _dy[j] - out_r.d[j];
-#endif
             }
 
-#ifndef USE_RAY_DIFFERENTIALS
             out_r.cone_width = 0.0f;
             out_r.cone_spread = spread_angle;
-#endif
 
             out_r.pdf = {1e6f};
             out_r.xy = (ixx << 16) | iyy;
@@ -2072,15 +2042,8 @@ void Ray::NS::SampleMeshInTextureSpace(int iteration, int obj_index, int uv_laye
 
             out_ray.xy = (ixx << 16) | iyy;
             out_ray.c[0] = out_ray.c[1] = out_ray.c[2] = 1.0f;
-#ifdef USE_RAY_DIFFERENTIALS
-            out_ray.do_dx[0] = out_ray.do_dx[1] = out_ray.do_dx[2] = 0.0f;
-            out_ray.dd_dx[0] = out_ray.dd_dx[1] = out_ray.dd_dx[2] = 0.0f;
-            out_ray.do_dy[0] = out_ray.do_dy[1] = out_ray.do_dy[2] = 0.0f;
-            out_ray.dd_dy[0] = out_ray.dd_dy[1] = out_ray.dd_dy[2] = 0.0f;
-#else
             out_ray.cone_width = 0.0f;
             out_ray.cone_spread = 0.0f;
-#endif
             out_inter.mask = 0;
         }
     }
@@ -2247,26 +2210,8 @@ void Ray::NS::SortRays_CPU(ray_data_t<S> *rays, simd_ivec<S> *ray_masks, int &ra
                     swap_elements(rays[jj].c[1], _jj, rays[kk].c[1], _kk);
                     swap_elements(rays[jj].c[2], _jj, rays[kk].c[2], _kk);
 
-#ifdef USE_RAY_DIFFERENTIALS
-                    swap_elements(rays[jj].do_dx[0], _jj, rays[kk].do_dx[0], _kk);
-                    swap_elements(rays[jj].do_dx[1], _jj, rays[kk].do_dx[1], _kk);
-                    swap_elements(rays[jj].do_dx[2], _jj, rays[kk].do_dx[2], _kk);
-
-                    swap_elements(rays[jj].dd_dx[0], _jj, rays[kk].dd_dx[0], _kk);
-                    swap_elements(rays[jj].dd_dx[1], _jj, rays[kk].dd_dx[1], _kk);
-                    swap_elements(rays[jj].dd_dx[2], _jj, rays[kk].dd_dx[2], _kk);
-
-                    swap_elements(rays[jj].do_dy[0], _jj, rays[kk].do_dy[0], _kk);
-                    swap_elements(rays[jj].do_dy[1], _jj, rays[kk].do_dy[1], _kk);
-                    swap_elements(rays[jj].do_dy[2], _jj, rays[kk].do_dy[2], _kk);
-
-                    swap_elements(rays[jj].dd_dy[0], _jj, rays[kk].dd_dy[0], _kk);
-                    swap_elements(rays[jj].dd_dy[1], _jj, rays[kk].dd_dy[1], _kk);
-                    swap_elements(rays[jj].dd_dy[2], _jj, rays[kk].dd_dy[2], _kk);
-#else
                     swap_elements(rays[jj].cone_width, _jj, rays[kk].cone_width, _kk);
                     swap_elements(rays[jj].cone_spread, _jj, rays[kk].cone_spread, _kk);
-#endif
 
                     swap_elements(rays[jj].xy, _jj, rays[kk].xy, _kk);
                     swap_elements(rays[jj].depth, _jj, rays[kk].depth, _kk);
@@ -2383,26 +2328,9 @@ void Ray::NS::SortRays_GPU(ray_data_t<S> *rays, simd_ivec<S> *ray_masks, int &ra
                     swap_elements(rays[jj].c[1], _jj, rays[kk].c[1], _kk);
                     swap_elements(rays[jj].c[2], _jj, rays[kk].c[2], _kk);
 
-#ifdef USE_RAY_DIFFERENTIALS
-                    swap_elements(rays[jj].do_dx[0], _jj, rays[kk].do_dx[0], _kk);
-                    swap_elements(rays[jj].do_dx[1], _jj, rays[kk].do_dx[1], _kk);
-                    swap_elements(rays[jj].do_dx[2], _jj, rays[kk].do_dx[2], _kk);
-
-                    swap_elements(rays[jj].dd_dx[0], _jj, rays[kk].dd_dx[0], _kk);
-                    swap_elements(rays[jj].dd_dx[1], _jj, rays[kk].dd_dx[1], _kk);
-                    swap_elements(rays[jj].dd_dx[2], _jj, rays[kk].dd_dx[2], _kk);
-
-                    swap_elements(rays[jj].do_dy[0], _jj, rays[kk].do_dy[0], _kk);
-                    swap_elements(rays[jj].do_dy[1], _jj, rays[kk].do_dy[1], _kk);
-                    swap_elements(rays[jj].do_dy[2], _jj, rays[kk].do_dy[2], _kk);
-
-                    swap_elements(rays[jj].dd_dy[0], _jj, rays[kk].dd_dy[0], _kk);
-                    swap_elements(rays[jj].dd_dy[1], _jj, rays[kk].dd_dy[1], _kk);
-                    swap_elements(rays[jj].dd_dy[2], _jj, rays[kk].dd_dy[2], _kk);
-#else
                     swap_elements(rays[jj].cone_width, _jj, rays[kk].cone_width, _kk);
                     swap_elements(rays[jj].cone_spread, _jj, rays[kk].cone_spread, _kk);
-#endif
+
                     swap_elements(rays[jj].xy, _jj, rays[kk].xy, _kk);
 
                     swap_elements(ray_masks[jj], _jj, ray_masks[kk], _kk);
@@ -4472,103 +4400,6 @@ void Ray::NS::IntersectScene(const shadow_ray_t<S> &r, const simd_ivec<S> &mask,
     }
 }
 
-template <int S>
-void Ray::NS::ComputeDerivatives(const simd_fvec<S> I[3], const simd_fvec<S> &t, const simd_fvec<S> do_dx[3],
-                                 const simd_fvec<S> do_dy[3], const simd_fvec<S> dd_dx[3], const simd_fvec<S> dd_dy[3],
-                                 const simd_fvec<S> p1[3], const simd_fvec<S> p2[3], const simd_fvec<S> p3[3],
-                                 const simd_fvec<S> n1[3], const simd_fvec<S> n2[3], const simd_fvec<S> n3[3],
-                                 const simd_fvec<S> u1[2], const simd_fvec<S> u2[2], const simd_fvec<S> u3[2],
-                                 const simd_fvec<S> plane_N[3], const simd_fvec<S> xform[16],
-                                 derivatives_t<S> &out_der) {
-    // From 'Tracing Ray Differentials' [1999]
-
-    simd_fvec<S> temp[3];
-
-    const simd_fvec<S> dot_I_N = -dot3(I, plane_N);
-    simd_fvec<S> inv_dot = 1.0f / dot_I_N;
-    where(abs(dot_I_N) < FLT_EPS, inv_dot) = {0.0f};
-
-    ITERATE_3({ temp[i] = do_dx[i] + t * dd_dx[i]; })
-
-    const simd_fvec<S> dt_dx = dot3(temp, plane_N) * inv_dot;
-    ITERATE_3({ out_der.do_dx[i] = temp[i] + dt_dx * I[i]; })
-    ITERATE_3({ out_der.dd_dx[i] = dd_dx[i]; })
-
-    ITERATE_3({ temp[i] = do_dy[i] + t * dd_dy[i]; })
-
-    const simd_fvec<S> dt_dy = dot3(temp, plane_N) * inv_dot;
-    ITERATE_3({ out_der.do_dy[i] = temp[i] + dt_dy * I[i]; })
-    ITERATE_3({ out_der.dd_dy[i] = dd_dy[i]; })
-
-    // From 'Physically Based Rendering: ...' book
-
-    const simd_fvec<S> duv13[2] = {u1[0] - u3[0], u1[1] - u3[1]}, duv23[2] = {u2[0] - u3[0], u2[1] - u3[1]};
-    simd_fvec<S> dp13[3] = {p1[0] - p3[0], p1[1] - p3[1], p1[2] - p3[2]},
-                 dp23[3] = {p2[0] - p3[0], p2[1] - p3[1], p2[2] - p3[2]};
-
-    TransformDirection(xform, dp13);
-    TransformDirection(xform, dp23);
-
-    const simd_fvec<S> det_uv = duv13[0] * duv23[1] - duv13[1] * duv23[0];
-    simd_fvec<S> inv_det_uv = 1.0f / det_uv;
-    where(abs(det_uv) < FLT_EPS, inv_det_uv) = 0.0f;
-
-    const simd_fvec<S> dpdu[3] = {(duv23[1] * dp13[0] - duv13[1] * dp23[0]) * inv_det_uv,
-                                  (duv23[1] * dp13[1] - duv13[1] * dp23[1]) * inv_det_uv,
-                                  (duv23[1] * dp13[2] - duv13[1] * dp23[2]) * inv_det_uv};
-    const simd_fvec<S> dpdv[3] = {(-duv23[0] * dp13[0] + duv13[0] * dp23[0]) * inv_det_uv,
-                                  (-duv23[0] * dp13[1] + duv13[0] * dp23[1]) * inv_det_uv,
-                                  (-duv23[0] * dp13[2] + duv13[0] * dp23[2]) * inv_det_uv};
-
-    // System of equations
-    simd_fvec<S> A[2][2] = {{dpdu[0], dpdv[0]}, {dpdu[1], dpdv[1]}};
-    simd_fvec<S> Bx[2] = {out_der.do_dx[0], out_der.do_dx[1]};
-    simd_fvec<S> By[2] = {out_der.do_dy[0], out_der.do_dy[1]};
-
-    simd_fvec<S> mask1 = (abs(plane_N[0]) > abs(plane_N[1])) & (abs(plane_N[0]) > abs(plane_N[2]));
-    where(mask1, A[0][0]) = dpdu[1];
-    where(mask1, A[0][1]) = dpdv[1];
-    where(mask1, A[1][0]) = dpdu[2];
-    where(mask1, A[1][1]) = dpdv[2];
-    where(mask1, Bx[0]) = out_der.do_dx[1];
-    where(mask1, Bx[1]) = out_der.do_dx[2];
-    where(mask1, By[0]) = out_der.do_dy[1];
-    where(mask1, By[1]) = out_der.do_dy[2];
-
-    simd_fvec<S> mask2 = (abs(plane_N[1]) > abs(plane_N[0])) & (abs(plane_N[1]) > abs(plane_N[2]));
-    where(mask2, A[1][0]) = dpdu[2];
-    where(mask2, A[1][1]) = dpdv[2];
-    where(mask2, Bx[1]) = out_der.do_dx[2];
-    where(mask2, By[1]) = out_der.do_dy[2];
-
-    // Kramer's rule
-    const simd_fvec<S> det = A[0][0] * A[1][1] - A[0][1] * A[1][0];
-    simd_fvec<S> inv_det = 1.0f / det;
-    where(abs(det) < FLT_EPS, inv_det) = {0.0f};
-
-    out_der.duv_dx[0] = (A[1][1] * Bx[0] - A[0][1] * Bx[1]) * inv_det;
-    out_der.duv_dx[1] = (A[0][0] * Bx[1] - A[1][0] * Bx[0]) * inv_det;
-
-    out_der.duv_dy[0] = (A[1][1] * By[0] - A[0][1] * By[1]) * inv_det;
-    out_der.duv_dy[1] = (A[0][0] * By[1] - A[1][0] * By[0]) * inv_det;
-
-    // Derivative for normal
-    const simd_fvec<S> dn1[3] = {n1[0] - n3[0], n1[1] - n3[1], n1[2] - n3[2]},
-                       dn2[3] = {n2[0] - n3[0], n2[1] - n3[1], n2[2] - n3[2]};
-    const simd_fvec<S> dndu[3] = {(duv23[1] * dn1[0] - duv13[1] * dn2[0]) * inv_det_uv,
-                                  (duv23[1] * dn1[1] - duv13[1] * dn2[1]) * inv_det_uv,
-                                  (duv23[1] * dn1[2] - duv13[1] * dn2[2]) * inv_det_uv};
-    const simd_fvec<S> dndv[3] = {(-duv23[0] * dn1[0] + duv13[0] * dn2[0]) * inv_det_uv,
-                                  (-duv23[0] * dn1[1] + duv13[0] * dn2[1]) * inv_det_uv,
-                                  (-duv23[0] * dn1[2] + duv13[0] * dn2[2]) * inv_det_uv};
-
-    ITERATE_3({ out_der.dndx[i] = dndu[i] * out_der.duv_dx[0] + dndv[i] * out_der.duv_dx[1]; })
-    ITERATE_3({ out_der.dndy[i] = dndu[i] * out_der.duv_dy[0] + dndv[i] * out_der.duv_dy[1]; })
-
-    out_der.ddn_dx = dot3(out_der.dd_dx, plane_N) + dot3(I, out_der.dndx);
-    out_der.ddn_dy = dot3(out_der.dd_dy, plane_N) + dot3(I, out_der.dndy);
-}
-
 // Pick point on any light source for evaluation
 template <int S>
 void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const scene_data_t &sc,
@@ -5325,11 +5156,6 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
 
     //////////////////////////////////
 
-#ifdef USE_RAY_DIFFERENTIALS
-    derivatives_t<S> surf_der;
-    ComputeDerivatives(I, inter.t, ray.do_dx, ray.do_dy, ray.dd_dx, ray.dd_dy, p1, p2, p3, n1, n2, n3, u1, u2, u3,
-                       plane_N, transform, surf_der);
-#else
     const simd_fvec<S> ta = abs((u2[0] - u1[0]) * (u3[1] - u1[1]) - (u3[0] - u1[0]) * (u2[1] - u1[1]));
 
     const simd_fvec<S> cone_width = ray.cone_width + ray.cone_spread * inter.t;
@@ -5338,7 +5164,6 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
     lambda += fast_log2(cone_width);
     // lambda += 0.5 * fast_log2(tex_res.x * tex_res.y);
     // lambda -= fast_log2(abs(dot3(I, plane_N)));
-#endif
 
     //////////////////////////////////
 
@@ -5391,12 +5216,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                     ray_queue[num++] = diff_t;
                 }
 
-#ifdef USE_RAY_DIFFERENTIALS
-                const simd_fvec<S> base_lod =
-                    get_texture_lod(textures, first_t, surf_der.duv_dx, surf_der.duv_dy, ray_queue[index]);
-#else
                 const simd_fvec<S> base_lod = get_texture_lod(textures, first_t, lambda, ray_queue[index]);
-#endif
 
                 simd_fvec<S> tex_color[4] = {};
                 SampleBilinear(textures, first_t, uvs, simd_ivec<S>(base_lod), ray_queue[index], tex_color);
@@ -5551,12 +5371,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                     ray_queue[num++] = diff_t;
                 }
 
-#ifdef USE_RAY_DIFFERENTIALS
-                const simd_fvec<S> base_lod =
-                    get_texture_lod(textures, first_t, surf_der.duv_dx, surf_der.duv_dy, ray_queue[index]);
-#else
                 const simd_fvec<S> base_lod = get_texture_lod(textures, first_t, lambda, ray_queue[index]);
-#endif
 
                 simd_fvec<S> tex_color[4] = {};
                 SampleBilinear(textures, first_t, uvs, simd_ivec<S>(base_lod), ray_queue[index], tex_color);
@@ -5602,12 +5417,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                     ray_queue[num++] = diff_t;
                 }
 
-#ifdef USE_RAY_DIFFERENTIALS
-                const simd_fvec<S> roughness_lod =
-                    get_texture_lod(textures, first_t, surf_der.duv_dx, surf_der.duv_dy, ray_queue[index]);
-#else
                 const simd_fvec<S> roughness_lod = get_texture_lod(textures, first_t, lambda, ray_queue[index]);
-#endif
 
                 simd_fvec<S> roughness_color[4] = {};
                 SampleBilinear(textures, first_t, uvs, simd_ivec<S>(roughness_lod), ray_queue[index], roughness_color);
@@ -5633,10 +5443,8 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
     new_ray.d[0] = new_ray.d[1] = new_ray.d[2] = 0.0f;
     new_ray.pdf = 0.0f;
     new_ray.c[0] = new_ray.c[1] = new_ray.c[2] = 0.0f;
-#ifndef USE_RAY_DIFFERENTIALS
     new_ray.cone_width = cone_width;
     new_ray.cone_spread = ray.cone_spread;
-#endif
     new_ray.xy = ray.xy;
     new_ray.depth = 0;
 
@@ -5714,20 +5522,6 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                     })
                     where(gen_ray, new_ray.pdf) = F[3];
 
-#ifdef USE_RAY_DIFFERENTIALS
-                    ITERATE_3({
-                        where(gen_ray, new_ray.do_dx[i]) = surf_der.do_dx[i];
-                        where(gen_ray, new_ray.do_dy[i]) = surf_der.do_dy[i];
-
-                        where(gen_ray, new_ray.dd_dx[i]) =
-                            surf_der.dd_dx[i] -
-                            2 * (dot3(I, plane_N) * surf_der.dndx[i] + surf_der.ddn_dx[i] * plane_N[i]);
-                        where(gen_ray, new_ray.dd_dy[i]) =
-                            surf_der.dd_dy[i] -
-                            2 * (dot3(I, plane_N) * surf_der.dndy[i] + surf_der.ddn_dy[i] * plane_N[i]);
-                    })
-#endif
-
                     assert((secondary_mask & gen_ray).all_zeros());
                     secondary_mask |= gen_ray;
                 }
@@ -5794,20 +5588,6 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                     })
                     where(gen_ray, new_ray.pdf) = F[3];
 
-#ifdef USE_RAY_DIFFERENTIALS
-                    ITERATE_3({
-                        where(gen_ray, new_ray.do_dx[i]) = surf_der.do_dx[i];
-                        where(gen_ray, new_ray.do_dy[i]) = surf_der.do_dy[i];
-
-                        where(gen_ray, new_ray.dd_dx[i]) =
-                            surf_der.dd_dx[i] -
-                            2 * (dot3(I, plane_N) * surf_der.dndx[i] + surf_der.ddn_dx[i] * plane_N[i]);
-                        where(gen_ray, new_ray.dd_dy[i]) =
-                            surf_der.dd_dy[i] -
-                            2 * (dot3(I, plane_N) * surf_der.dndy[i] + surf_der.ddn_dy[i] * plane_N[i]);
-                    })
-#endif
-
                     assert((secondary_mask & gen_ray).all_zeros());
                     secondary_mask |= gen_ray;
                 }
@@ -5873,24 +5653,6 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                     })
                     where(gen_ray, new_ray.pdf) = F[3];
 
-#ifdef USE_RAY_DIFFERENTIALS
-                    const simd_fvec<S> m = V[3];
-                    const simd_fvec<S> k = (eta - eta * eta * dot3(I, plane_N) / dot3(V, plane_N));
-
-                    const simd_fvec<S> dmdx = k * surf_der.ddn_dx;
-                    const simd_fvec<S> dmdy = k * surf_der.ddn_dy;
-
-                    ITERATE_3({
-                        where(gen_ray, new_ray.do_dx[i]) = surf_der.do_dx[i];
-                        where(gen_ray, new_ray.do_dy[i]) = surf_der.do_dy[i];
-
-                        where(gen_ray, new_ray.dd_dx[i]) =
-                            eta * surf_der.dd_dx[i] - (m * surf_der.dndx[i] + dmdx * plane_N[i]);
-                        where(gen_ray, new_ray.dd_dy[i]) =
-                            eta * surf_der.dd_dy[i] - (m * surf_der.dndy[i] + dmdx * plane_N[i]);
-                    })
-#endif
-
                     assert((secondary_mask & gen_ray).all_zeros());
                     secondary_mask |= gen_ray;
                 }
@@ -5923,13 +5685,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                 simd_fvec<S> metallic = unpack_unorm_16(mat->metallic_unorm);
                 if (mat->textures[METALLIC_TEXTURE] != 0xffffffff) {
                     const uint32_t metallic_tex = mat->textures[METALLIC_TEXTURE];
-#ifdef USE_RAY_DIFFERENTIALS
-                    const simd_fvec<S> metallic_lod =
-                        get_texture_lod(textures, metallic_tex, surf_der.duv_dx, surf_der.duv_dy, ray_queue[index]);
-#else
                     const simd_fvec<S> metallic_lod = get_texture_lod(textures, metallic_tex, lambda, ray_queue[index]);
-#endif
-
                     simd_fvec<S> metallic_color[4] = {};
                     SampleBilinear(textures, metallic_tex, uvs, simd_ivec<S>(metallic_lod), ray_queue[index],
                                    metallic_color);
@@ -5940,13 +5696,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                 simd_fvec<S> specular = unpack_unorm_16(mat->specular_unorm);
                 if (mat->textures[SPECULAR_TEXTURE] != 0xffffffff) {
                     const uint32_t specular_tex = mat->textures[SPECULAR_TEXTURE];
-#ifdef USE_RAY_DIFFERENTIALS
-                    const simd_fvec<S> specular_lod =
-                        get_texture_lod(textures, specular_tex, surf_der.duv_dx, surf_der.duv_dy, ray_queue[index]);
-#else
                     const simd_fvec<S> specular_lod = get_texture_lod(textures, specular_tex, lambda, ray_queue[index]);
-#endif
-
                     simd_fvec<S> specular_color[4] = {};
                     SampleBilinear(textures, specular_tex, uvs, simd_ivec<S>(specular_lod), ray_queue[index],
                                    specular_color);
@@ -6159,20 +5909,6 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                     })
                     where(sample_diff_lobe, new_ray.pdf) = diff_col[3];
 
-#ifdef USE_RAY_DIFFERENTIALS
-                    ITERATE_3({
-                        where(sample_diff_lobe, new_ray.do_dx[i]) = surf_der.do_dx[i];
-                        where(sample_diff_lobe, new_ray.do_dy[i]) = surf_der.do_dy[i];
-
-                        where(sample_diff_lobe, new_ray.dd_dx[i]) =
-                            surf_der.dd_dx[i] -
-                            2 * (dot3(I, plane_N) * surf_der.dndx[i] + surf_der.ddn_dx[i] * plane_N[i]);
-                        where(sample_diff_lobe, new_ray.dd_dy[i]) =
-                            surf_der.dd_dy[i] -
-                            2 * (dot3(I, plane_N) * surf_der.dndy[i] + surf_der.ddn_dy[i] * plane_N[i]);
-                    })
-#endif
-
                     assert((secondary_mask & sample_diff_lobe).all_zeros());
                     secondary_mask |= sample_diff_lobe;
                 }
@@ -6199,20 +5935,6 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                         where(sample_spec_lobe, new_ray.c[i]) = safe_div_pos(ray.c[i] * F[i] * mix_weight, F[3]);
                     })
                     where(sample_spec_lobe, new_ray.pdf) = F[3];
-
-#ifdef USE_RAY_DIFFERENTIALS
-                    ITERATE_3({
-                        where(sample_spec_lobe, new_ray.do_dx[i]) = surf_der.do_dx[i];
-                        where(sample_spec_lobe, new_ray.do_dy[i]) = surf_der.do_dy[i];
-
-                        where(sample_spec_lobe, new_ray.dd_dx[i]) =
-                            surf_der.dd_dx[i] -
-                            2 * (dot3(I, plane_N) * surf_der.dndx[i] + surf_der.ddn_dx[i] * plane_N[i]);
-                        where(sample_spec_lobe, new_ray.dd_dy[i]) =
-                            surf_der.dd_dy[i] -
-                            2 * (dot3(I, plane_N) * surf_der.dndy[i] + surf_der.ddn_dy[i] * plane_N[i]);
-                    })
-#endif
 
                     assert(((sample_spec_lobe & ray_queue[index]) != sample_spec_lobe).all_zeros());
                     assert((secondary_mask & sample_spec_lobe).all_zeros());
@@ -6242,20 +5964,6 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                     })
                     where(sample_coat_lobe, new_ray.pdf) = F[3];
 
-#ifdef USE_RAY_DIFFERENTIALS
-                    ITERATE_3({
-                        where(sample_coat_lobe, new_ray.do_dx[i]) = surf_der.do_dx[i];
-                        where(sample_coat_lobe, new_ray.do_dy[i]) = surf_der.do_dy[i];
-
-                        where(sample_coat_lobe, new_ray.dd_dx[i]) =
-                            surf_der.dd_dx[i] -
-                            2 * (dot3(I, plane_N) * surf_der.dndx[i] + surf_der.ddn_dx[i] * plane_N[i]);
-                        where(sample_coat_lobe, new_ray.dd_dy[i]) =
-                            surf_der.dd_dy[i] -
-                            2 * (dot3(I, plane_N) * surf_der.dndy[i] + surf_der.ddn_dy[i] * plane_N[i]);
-                    })
-#endif
-
                     assert((secondary_mask & sample_coat_lobe).all_zeros());
                     secondary_mask |= sample_coat_lobe;
                 }
@@ -6284,17 +5992,6 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                         where(sample_trans_spec_lobe, new_ray.depth) = ray.depth + 0x00000100;
 
                         ITERATE_3({ where(sample_trans_spec_lobe, new_ray.o[i]) = new_p[i]; })
-
-#ifdef USE_RAY_DIFFERENTIALS
-                        ITERATE_3({
-                            where(sample_trans_spec_lobe, new_ray.dd_dx[i]) =
-                                surf_der.dd_dx[i] -
-                                2 * (dot3(I, plane_N) * surf_der.dndx[i] + surf_der.ddn_dx[i] * plane_N[i]);
-                            where(sample_trans_spec_lobe, new_ray.dd_dy[i]) =
-                                surf_der.dd_dy[i] -
-                                2 * (dot3(I, plane_N) * surf_der.dndy[i] + surf_der.ddn_dy[i] * plane_N[i]);
-                        })
-#endif
                     }
 
                     const simd_ivec<S> sample_trans_refr_lobe = ~sample_trans_spec_lobe & sample_trans_lobe;
@@ -6314,20 +6011,6 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                             where(sample_trans_refr_lobe, V[i]) = _V[i];
                             where(sample_trans_refr_lobe, new_ray.o[i]) = new_p[i];
                         })
-
-#ifdef USE_RAY_DIFFERENTIALS
-                        const simd_fvec<S> m = _V[3];
-                        const simd_fvec<S> k = (eta - eta * eta * dot3(I, plane_N) / dot3(_V, plane_N));
-                        const simd_fvec<S> dmdx = k * surf_der.ddn_dx;
-                        const simd_fvec<S> dmdy = k * surf_der.ddn_dy;
-
-                        ITERATE_3({
-                            where(sample_trans_refr_lobe, new_ray.dd_dx[i]) =
-                                eta * surf_der.dd_dx[i] - (m * surf_der.dndx[i] + dmdx * plane_N[i]);
-                            where(sample_trans_refr_lobe, new_ray.dd_dy[i]) =
-                                eta * surf_der.dd_dy[i] - (m * surf_der.dndy[i] + dmdx * plane_N[i]);
-                        })
-#endif
                     }
 
                     F[3] *= refraction_weight;
@@ -6337,13 +6020,6 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                         where(sample_trans_lobe, new_ray.c[i]) = safe_div_pos(ray.c[i] * F[i] * mix_weight, F[3]);
                     })
                     where(sample_trans_lobe, new_ray.pdf) = F[3];
-
-#ifdef USE_RAY_DIFFERENTIALS
-                    ITERATE_3({
-                        where(sample_trans_lobe, new_ray.do_dx[i]) = surf_der.do_dx[i];
-                        where(sample_trans_lobe, new_ray.do_dy[i]) = surf_der.do_dy[i];
-                    })
-#endif
 
                     assert((sample_trans_spec_lobe & sample_trans_refr_lobe).all_zeros());
                     assert((secondary_mask & sample_trans_lobe).all_zeros());
