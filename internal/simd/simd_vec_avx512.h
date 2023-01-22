@@ -216,6 +216,7 @@ template <> class simd_vec<float, 16> {
     friend force_inline simd_vec<float, 16> vectorcall fmsub(simd_vec<float, 16> a, float b, simd_vec<float, 16> c);
     friend force_inline simd_vec<float, 16> vectorcall fmsub(float a, simd_vec<float, 16> b, float c);
 
+#ifndef NDEBUG
     friend void vectorcall __assert_valid_mask(const simd_vec<float, 16> mask) {
         ITERATE_16({
             const float val = mask.get<i>();
@@ -223,6 +224,7 @@ template <> class simd_vec<float, 16> {
                    reinterpret_cast<const uint32_t &>(val) == 0xffffffff);
         })
     }
+#endif
 
     friend force_inline const float *value_ptr(const simd_vec<float, 16> &v1) {
         return reinterpret_cast<const float *>(&v1.vec_);
@@ -659,12 +661,14 @@ template <> class simd_vec<int, 16> {
     friend force_inline simd_vec<float, 16> vectorcall gather(const float *base_addr, simd_vec<int, 16> vindex);
     friend force_inline simd_vec<int, 16> vectorcall gather(const int *base_addr, simd_vec<int, 16> vindex);
 
+#ifndef NDEBUG
     friend void vectorcall __assert_valid_mask(const simd_vec<int, 16> mask) {
         ITERATE_16({
             const int val = mask.get<i>();
             assert(val == 0 || val == -1);
         })
     }
+#endif
 
     friend force_inline const int *value_ptr(const simd_vec<int, 16> &v1) {
         return reinterpret_cast<const int *>(&v1.vec_);
