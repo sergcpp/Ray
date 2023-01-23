@@ -1340,8 +1340,8 @@ void Ray::Ref::SortRays_CPU(ray_data_t *rays, const size_t rays_count, const flo
     size_t chunks_count = 0;
 
     // compress codes into spans of indentical values (makes sorting stage faster)
-    for (uint32_t start = 0, end = 1; end <= (uint32_t)rays_count; end++) {
-        if (end == (uint32_t)rays_count || (hash_values[start] != hash_values[end])) {
+    for (uint32_t start = 0, end = 1; end <= uint32_t(rays_count); end++) {
+        if (end == uint32_t(rays_count) || (hash_values[start] != hash_values[end])) {
             chunks[chunks_count].hash = hash_values[start];
             chunks[chunks_count].base = start;
             chunks[chunks_count++].size = end - start;
@@ -1401,7 +1401,7 @@ void Ray::Ref::SortRays_GPU(ray_data_t *rays, const size_t rays_count, const flo
     for (size_t i = 0; i < rays_count; ++i) {
         if (head_flags[i]) {
             chunks[scan_values[i]].hash = hash_values[i];
-            chunks[scan_values[i]].base = (uint32_t)i;
+            chunks[scan_values[i]].base = uint32_t(i);
         }
     }
 
@@ -1410,7 +1410,7 @@ void Ray::Ref::SortRays_GPU(ray_data_t *rays, const size_t rays_count, const flo
         for (size_t i = 0; i < chunks_count - 1; ++i) {
             chunks[i].size = chunks[i + 1].base - chunks[i].base;
         }
-        chunks[chunks_count - 1].size = (uint32_t)rays_count - chunks[chunks_count - 1].base;
+        chunks[chunks_count - 1].size = uint32_t(rays_count) - chunks[chunks_count - 1].base;
     }
 
     radix_sort(&chunks[0], &chunks[0] + chunks_count, &chunks_temp[0]);

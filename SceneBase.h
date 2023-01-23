@@ -396,9 +396,9 @@ class SceneBase {
     void set_current_cam(uint32_t i) { current_cam_ = i; }
 
     /// Overall triangle count in scene
-    virtual uint32_t triangle_count() = 0;
+    virtual uint32_t triangle_count() const = 0;
 
     /// Overall BVH node count in scene
-    virtual uint32_t node_count() = 0;
+    virtual uint32_t node_count() const = 0;
 };
 } // namespace Ray

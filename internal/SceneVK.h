@@ -127,8 +127,8 @@ class Scene : public SceneBase {
 
     void Finalize() override;
 
-    uint32_t triangle_count() override { return (uint32_t)0; }
-    uint32_t node_count() override { return (uint32_t)0; }
+    uint32_t triangle_count() const override { return 0; }
+    uint32_t node_count() const override { return 0; }
 };
 } // namespace Vk
 } // namespace Ray

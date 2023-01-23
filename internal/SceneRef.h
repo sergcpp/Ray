@@ -117,8 +117,8 @@ class Scene : public SceneBase {
 
     void Finalize() override;
 
-    uint32_t triangle_count() override { return uint32_t(tris_.size()); }
-    uint32_t node_count() override { return uint32_t(use_wide_bvh_ ? mnodes_.size() : nodes_.size()); }
+    uint32_t triangle_count() const override { return uint32_t(tris_.size()); }
+    uint32_t node_count() const override { return use_wide_bvh_ ? uint32_t(mnodes_.size()) : uint32_t(nodes_.size()); }
 };
 } // namespace Ref
 } // namespace Ray

@@ -119,8 +119,8 @@ void sort_mort_codes(uint32_t *morton_codes, size_t prims_count, uint32_t *out_i
     std::vector<prim_chunk_t> run_chunks;
     run_chunks.reserve(prims_count);
 
-    for (uint32_t start = 0, end = 1; end <= (uint32_t)prims_count; end++) {
-        if (end == (uint32_t)prims_count || (morton_codes[start] != morton_codes[end])) {
+    for (uint32_t start = 0, end = 1; end <= uint32_t(prims_count); end++) {
+        if (end == uint32_t(prims_count) || (morton_codes[start] != morton_codes[end])) {
 
             run_chunks.push_back({morton_codes[start], start, end - start});
 
@@ -647,9 +647,9 @@ uint32_t Ray::PreprocessPrims_HLBVH(Span<const prim_t> prims, std::vector<bvh_no
     treelets.reserve(1 << 12); // Top-level bvh can have up to 4096 items
 
     // Use upper 12 bits to extract treelets
-    for (uint32_t start = 0, end = 1; end <= (uint32_t)morton_codes.size(); end++) {
+    for (uint32_t start = 0, end = 1; end <= uint32_t(morton_codes.size()); end++) {
         uint32_t mask = 0b00111111111111000000000000000000;
-        if (end == (uint32_t)morton_codes.size() || ((morton_codes[start] & mask) != (morton_codes[end] & mask))) {
+        if (end == uint32_t(morton_codes.size()) || ((morton_codes[start] & mask) != (morton_codes[end] & mask))) {
 
             treelets.push_back({start, end - start});
 
@@ -694,7 +694,7 @@ uint32_t Ray::PreprocessPrims_HLBVH(Span<const prim_t> prims, std::vector<bvh_no
     auto bottom_nodes_start = uint32_t(out_nodes.size());
 
     // Replace leaf nodes of top-level bvh with bottom level nodes
-    for (uint32_t i = top_nodes_start; i < (uint32_t)out_nodes.size(); i++) {
+    for (uint32_t i = top_nodes_start; i < uint32_t(out_nodes.size()); i++) {
         bvh_node_t &n = out_nodes[i];
         if (!(n.prim_index & LEAF_NODE_BIT)) {
             bvh_node_t &left = out_nodes[n.left_child], &right = out_nodes[n.right_child & RIGHT_CHILD_BITS];

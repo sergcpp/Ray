@@ -6,7 +6,7 @@ namespace Ray {
 template <typename RandFunc> void Shuffle(uint16_t *arr, const int count, RandFunc &&rand_func) {
     for (int i = 0; i < count; i++) {
         int other;
-        const uint32_t thres = (~((uint32_t)count) + 1u) % count;
+        const uint32_t thres = (~(uint32_t(count)) + 1u) % count;
         while (true) {
             const uint32_t r = rand_func();
             if (r >= thres) {
