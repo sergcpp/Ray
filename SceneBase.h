@@ -62,14 +62,13 @@ struct shading_node_desc_t {
     uint32_t mix_materials[2] = {0xffffffff}; ///< Indices for two materials for mixing
     float roughness = 0;
     uint32_t roughness_texture = 0xffffffff;
-    float anisotropic = 0;                    ///< 
+    float anisotropic = 0;                    ///<
     float anisotropic_rotation = 0;           ///<
     float sheen = 0;
     float specular = 0;
     float strength = 1;                       ///< Strength of emissive material
     float fresnel = 1;                        ///< Fresnel factor of mix material
-    float int_ior = 1;                        ///< interior IOR for reflective or refractive material
-    float ext_ior = 1;                        ///< exterior IOR for reflective or refractive material
+    float ior = 1;                            ///< IOR for reflective or refractive material
     float tint = 0;
     uint32_t metallic_texture = 0xffffffff;
     bool multiple_importance = false;         ///< Enable explicit emissive geometry sampling

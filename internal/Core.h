@@ -152,8 +152,7 @@ struct material_t {
     };
     uint16_t roughness_unorm;
     uint16_t anisotropic_unorm;
-    float int_ior;
-    float ext_ior;
+    float ior;
     uint16_t sheen_unorm;
     uint16_t sheen_tint_unorm;
     uint16_t tint_unorm;
@@ -167,7 +166,7 @@ struct material_t {
     uint16_t normal_map_strength_unorm;
     uint16_t _pad;
 };
-static_assert(sizeof(material_t) == 80, "!");
+static_assert(sizeof(material_t) == 76, "!");
 
 const int LIGHT_TYPE_SPHERE = 0;
 const int LIGHT_TYPE_SPOT = 1;

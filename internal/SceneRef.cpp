@@ -122,8 +122,7 @@ uint32_t Ray::Ref::Scene::AddMaterial(const shading_node_desc_t &m) {
     mat.roughness_unorm = pack_unorm_16(_CLAMP(m.roughness, 0.0f, 1.0f));
     mat.textures[ROUGH_TEXTURE] = m.roughness_texture;
     memcpy(&mat.base_color[0], &m.base_color[0], 3 * sizeof(float));
-    mat.int_ior = m.int_ior;
-    mat.ext_ior = m.ext_ior;
+    mat.ior = m.ior;
     mat.tangent_rotation = 0.0f;
     mat.flags = 0;
 
@@ -170,8 +169,7 @@ uint32_t Ray::Ref::Scene::AddMaterial(const principled_mat_desc_t &m) {
     main_mat.textures[ROUGH_TEXTURE] = m.roughness_texture;
     main_mat.metallic_unorm = pack_unorm_16(_CLAMP(m.metallic, 0.0f, 1.0f));
     main_mat.textures[METALLIC_TEXTURE] = m.metallic_texture;
-    main_mat.int_ior = m.ior;
-    main_mat.ext_ior = 1.0f;
+    main_mat.ior = m.ior;
     main_mat.flags = 0;
     main_mat.transmission_unorm = pack_unorm_16(_CLAMP(m.transmission, 0.0f, 1.0f));
     main_mat.transmission_roughness_unorm = pack_unorm_16(_CLAMP(m.transmission_roughness, 0.0f, 1.0f));
@@ -214,7 +212,7 @@ uint32_t Ray::Ref::Scene::AddMaterial(const principled_mat_desc_t &m) {
             mix_node.type = MixNode;
             mix_node.base_texture = 0xffffffff;
             mix_node.strength = 0.5f;
-            mix_node.int_ior = mix_node.ext_ior = 0.0f;
+            mix_node.ior = 0.0f;
             mix_node.mix_add = true;
 
             mix_node.mix_materials[0] = root_node;
@@ -232,7 +230,7 @@ uint32_t Ray::Ref::Scene::AddMaterial(const principled_mat_desc_t &m) {
             mix_node.type = MixNode;
             mix_node.base_texture = m.alpha_texture;
             mix_node.strength = m.alpha;
-            mix_node.int_ior = mix_node.ext_ior = 0.0f;
+            mix_node.ior = 0.0f;
 
             mix_node.mix_materials[0] = transparent_node;
             mix_node.mix_materials[1] = root_node;

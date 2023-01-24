@@ -37,6 +37,8 @@ struct ray_data_t {
     float o[3], d[3], pdf;
     // throughput color of ray
     float c[3];
+    // stack of ior values
+    float ior[4];
     // ray cone params
     float cone_width, cone_spread;
     // 16-bit pixel coordinates of ray ((x << 16) | y)
@@ -44,7 +46,7 @@ struct ray_data_t {
     // four 8-bit ray depth counters
     int depth;
 };
-static_assert(sizeof(ray_data_t) == 56, "!");
+static_assert(sizeof(ray_data_t) == 72, "!");
 
 struct shadow_ray_t {
     // origin
@@ -296,8 +298,8 @@ simd_fvec4 Evaluate_RefractiveNode(const light_sample_t &ls, const ray_data_t &r
                                    const simd_fvec4 &base_color, const float roughness2, const float eta,
                                    const float mix_weight, shadow_ray_t &sh_r);
 void Sample_RefractiveNode(const ray_data_t &ray, const surface_t &surf, const simd_fvec4 &base_color,
-                           const float roughness, const float eta, const float rand_u, const float rand_v,
-                           const float mix_weight, ray_data_t &new_ray);
+                           const float roughness, bool is_backfacing, float int_ior, float ext_ior,
+                           const float rand_u, const float rand_v, const float mix_weight, ray_data_t &new_ray);
 
 struct diff_params_t {
     simd_fvec4 base_color;
@@ -321,8 +323,10 @@ struct clearcoat_params_t {
 
 struct transmission_params_t {
     float roughness;
+    float int_ior;
     float eta;
     float fresnel;
+    bool backfacing;
 };
 
 struct lobe_weights_t {

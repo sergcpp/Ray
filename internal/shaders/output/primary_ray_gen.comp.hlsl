@@ -27,6 +27,7 @@ struct ray_data_t
     float d[3];
     float pdf;
     float c[3];
+    float ior[4];
     float cone_width;
     float cone_spread;
     int xy;
@@ -36,7 +37,7 @@ struct ray_data_t
 static const uint3 gl_WorkGroupSize = uint3(8u, 8u, 1u);
 
 ByteAddressBuffer _260 : register(t1, space0);
-RWByteAddressBuffer _552 : register(u0, space0);
+RWByteAddressBuffer _560 : register(u0, space0);
 cbuffer UniformParams
 {
     Params _75_g_params : packoffset(c0);
@@ -188,20 +189,24 @@ void comp_main()
         float3 _506 = _origin;
         float3 _507 = _506 + (_494 * (_75_g_params.cam_clip_start / dot(_494, _75_g_params.cam_fwd.xyz)));
         _origin = _507;
-        _552.Store(_222 * 56 + 0, asuint(_507.x));
-        _552.Store(_222 * 56 + 4, asuint(_507.y));
-        _552.Store(_222 * 56 + 8, asuint(_507.z));
-        _552.Store(_222 * 56 + 12, asuint(_494.x));
-        _552.Store(_222 * 56 + 16, asuint(_494.y));
-        _552.Store(_222 * 56 + 20, asuint(_494.z));
-        _552.Store(_222 * 56 + 24, asuint(1000000.0f));
-        _552.Store(_222 * 56 + 28, asuint(1.0f));
-        _552.Store(_222 * 56 + 32, asuint(1.0f));
-        _552.Store(_222 * 56 + 36, asuint(1.0f));
-        _552.Store(_222 * 56 + 40, asuint(0.0f));
-        _552.Store(_222 * 56 + 44, asuint(_75_g_params.spread_angle));
-        _552.Store(_222 * 56 + 48, uint(_227));
-        _552.Store(_222 * 56 + 52, uint(0));
+        _560.Store(_222 * 72 + 0, asuint(_507.x));
+        _560.Store(_222 * 72 + 4, asuint(_507.y));
+        _560.Store(_222 * 72 + 8, asuint(_507.z));
+        _560.Store(_222 * 72 + 12, asuint(_494.x));
+        _560.Store(_222 * 72 + 16, asuint(_494.y));
+        _560.Store(_222 * 72 + 20, asuint(_494.z));
+        _560.Store(_222 * 72 + 24, asuint(1000000.0f));
+        _560.Store(_222 * 72 + 28, asuint(1.0f));
+        _560.Store(_222 * 72 + 32, asuint(1.0f));
+        _560.Store(_222 * 72 + 36, asuint(1.0f));
+        _560.Store(_222 * 72 + 40, asuint(-1.0f));
+        _560.Store(_222 * 72 + 44, asuint(-1.0f));
+        _560.Store(_222 * 72 + 48, asuint(-1.0f));
+        _560.Store(_222 * 72 + 52, asuint(-1.0f));
+        _560.Store(_222 * 72 + 56, asuint(0.0f));
+        _560.Store(_222 * 72 + 60, asuint(_75_g_params.spread_angle));
+        _560.Store(_222 * 72 + 64, uint(_227));
+        _560.Store(_222 * 72 + 68, uint(0));
         break;
     } while(false);
 }

@@ -78,8 +78,7 @@ struct material_t
     uint type;
     float tangent_rotation_or_strength;
     uint roughness_and_anisotropic;
-    float int_ior;
-    float ext_ior;
+    float ior;
     uint sheen_and_sheen_tint;
     uint tint_and_metallic;
     uint transmission_and_transmission_roughness;
@@ -101,8 +100,8 @@ ByteAddressBuffer _1096 : register(t9, space0);
 ByteAddressBuffer _1321 : register(t10, space0);
 ByteAddressBuffer _1325 : register(t11, space0);
 ByteAddressBuffer _1527 : register(t4, space0);
-ByteAddressBuffer _1713 : register(t13, space0);
-ByteAddressBuffer _1728 : register(t12, space0);
+ByteAddressBuffer _1710 : register(t13, space0);
+ByteAddressBuffer _1725 : register(t12, space0);
 cbuffer UniformParams
 {
     Params _1231_g_params : packoffset(c0);
@@ -137,9 +136,9 @@ float3 safe_invert(float3 v)
     }
     if (_134)
     {
-        float3 _2065 = inv_v;
-        _2065.x = 3.4028234663852885981170418348452e+38f;
-        inv_v = _2065;
+        float3 _2062 = inv_v;
+        _2062.x = 3.4028234663852885981170418348452e+38f;
+        inv_v = _2062;
     }
     else
     {
@@ -155,9 +154,9 @@ float3 safe_invert(float3 v)
         }
         if (_149)
         {
-            float3 _2067 = inv_v;
-            _2067.x = -3.4028234663852885981170418348452e+38f;
-            inv_v = _2067;
+            float3 _2064 = inv_v;
+            _2064.x = -3.4028234663852885981170418348452e+38f;
+            inv_v = _2064;
         }
     }
     bool _156 = v.y <= 1.0000000116860974230803549289703e-07f;
@@ -172,9 +171,9 @@ float3 safe_invert(float3 v)
     }
     if (_162)
     {
-        float3 _2069 = inv_v;
-        _2069.y = 3.4028234663852885981170418348452e+38f;
-        inv_v = _2069;
+        float3 _2066 = inv_v;
+        _2066.y = 3.4028234663852885981170418348452e+38f;
+        inv_v = _2066;
     }
     else
     {
@@ -190,9 +189,9 @@ float3 safe_invert(float3 v)
         }
         if (_175)
         {
-            float3 _2071 = inv_v;
-            _2071.y = -3.4028234663852885981170418348452e+38f;
-            inv_v = _2071;
+            float3 _2068 = inv_v;
+            _2068.y = -3.4028234663852885981170418348452e+38f;
+            inv_v = _2068;
         }
     }
     bool _181 = v.z <= 1.0000000116860974230803549289703e-07f;
@@ -207,9 +206,9 @@ float3 safe_invert(float3 v)
     }
     if (_187)
     {
-        float3 _2073 = inv_v;
-        _2073.z = 3.4028234663852885981170418348452e+38f;
-        inv_v = _2073;
+        float3 _2070 = inv_v;
+        _2070.z = 3.4028234663852885981170418348452e+38f;
+        inv_v = _2070;
     }
     else
     {
@@ -225,9 +224,9 @@ float3 safe_invert(float3 v)
         }
         if (_200)
         {
-            float3 _2075 = inv_v;
-            _2075.z = -3.4028234663852885981170418348452e+38f;
-            inv_v = _2075;
+            float3 _2072 = inv_v;
+            _2072.z = -3.4028234663852885981170418348452e+38f;
+            inv_v = _2072;
         }
     }
     return inv_v;
@@ -289,17 +288,17 @@ void IntersectTri(float3 ro, float3 rd, tri_accel_t tri, uint prim_index, inout 
 
 bool IntersectTris_AnyHit(float3 ro, float3 rd, int tri_start, int tri_end, int obj_index, inout hit_data_t out_inter)
 {
-    int _1886 = 0;
-    int _1887 = obj_index;
-    float _1889 = out_inter.t;
+    int _1884 = 0;
+    int _1885 = obj_index;
+    float _1887 = out_inter.t;
     float3 param;
     float3 param_1;
     tri_accel_t param_2;
     uint param_3;
     hit_data_t param_4;
-    int _1888;
-    float _1890;
-    float _1891;
+    int _1886;
+    float _1888;
+    float _1889;
     for (int i = tri_start; i < tri_end; )
     {
         param = ro;
@@ -312,23 +311,23 @@ bool IntersectTris_AnyHit(float3 ro, float3 rd, int tri_start, int tri_end, int 
         param_2.u_plane = _495.u_plane;
         param_2.v_plane = _495.v_plane;
         param_3 = uint(i);
-        hit_data_t _1898 = { _1886, _1887, _1888, _1889, _1890, _1891 };
-        param_4 = _1898;
+        hit_data_t _1896 = { _1884, _1885, _1886, _1887, _1888, _1889 };
+        param_4 = _1896;
         IntersectTri(param, param_1, param_2, param_3, param_4);
-        _1886 = param_4.mask;
-        _1887 = param_4.obj_index;
-        _1888 = param_4.prim_index;
-        _1889 = param_4.t;
-        _1890 = param_4.u;
-        _1891 = param_4.v;
+        _1884 = param_4.mask;
+        _1885 = param_4.obj_index;
+        _1886 = param_4.prim_index;
+        _1887 = param_4.t;
+        _1888 = param_4.u;
+        _1889 = param_4.v;
         i++;
         continue;
     }
-    out_inter.mask |= _1886;
+    out_inter.mask |= _1884;
     int _518;
-    if (_1886 != 0)
+    if (_1884 != 0)
     {
-        _518 = _1887;
+        _518 = _1885;
     }
     else
     {
@@ -336,20 +335,20 @@ bool IntersectTris_AnyHit(float3 ro, float3 rd, int tri_start, int tri_end, int 
     }
     out_inter.obj_index = _518;
     int _531;
-    if (_1886 != 0)
+    if (_1884 != 0)
     {
-        _531 = _1888;
+        _531 = _1886;
     }
     else
     {
         _531 = out_inter.prim_index;
     }
     out_inter.prim_index = _531;
-    out_inter.t = _1889;
+    out_inter.t = _1887;
     float _547;
-    if (_1886 != 0)
+    if (_1884 != 0)
     {
-        _547 = _1890;
+        _547 = _1888;
     }
     else
     {
@@ -357,22 +356,22 @@ bool IntersectTris_AnyHit(float3 ro, float3 rd, int tri_start, int tri_end, int 
     }
     out_inter.u = _547;
     float _560;
-    if (_1886 != 0)
+    if (_1884 != 0)
     {
-        _560 = _1891;
+        _560 = _1889;
     }
     else
     {
         _560 = out_inter.v;
     }
     out_inter.v = _560;
-    return _1886 != 0;
+    return _1884 != 0;
 }
 
 bool Traverse_MicroTree_WithStack(float3 ro, float3 rd, float3 inv_d, int obj_index, uint node_index, inout uint stack_size, inout hit_data_t inter)
 {
-    bool _1846 = false;
-    bool _1843;
+    bool _1844 = false;
+    bool _1841;
     do
     {
         float3 _666 = (-inv_d) * ro;
@@ -481,28 +480,28 @@ bool Traverse_MicroTree_WithStack(float3 ro, float3 rd, float3 inv_d, int obj_in
                     }
                     if (_885)
                     {
-                        _1846 = true;
-                        _1843 = true;
+                        _1844 = true;
+                        _1841 = true;
                         break;
                     }
                 }
             }
         }
-        if (_1846)
+        if (_1844)
         {
             break;
         }
-        _1846 = true;
-        _1843 = false;
+        _1844 = true;
+        _1841 = false;
         break;
     } while(false);
-    return _1843;
+    return _1841;
 }
 
 bool Traverse_MacroTree_WithStack(float3 orig_ro, float3 orig_rd, float3 orig_inv_rd, uint node_index, inout hit_data_t inter)
 {
-    bool _1837 = false;
-    bool _1834;
+    bool _1835 = false;
+    bool _1832;
     do
     {
         float3 _896 = (-orig_inv_rd) * orig_ro;
@@ -606,26 +605,26 @@ bool Traverse_MacroTree_WithStack(float3 orig_ro, float3 orig_rd, float3 orig_in
                     inter = param_17;
                     if (_1171)
                     {
-                        _1837 = true;
-                        _1834 = true;
+                        _1835 = true;
+                        _1832 = true;
                         break;
                     }
                 }
-                if (_1837)
+                if (_1835)
                 {
                     break;
                 }
             }
         }
-        if (_1837)
+        if (_1835)
         {
             break;
         }
-        _1837 = true;
-        _1834 = false;
+        _1835 = true;
+        _1832 = false;
         break;
     } while(false);
-    return _1834;
+    return _1832;
 }
 
 float3 YCoCg_to_RGB(float4 col)
@@ -686,13 +685,13 @@ float4 SampleBilinear(uint index, float2 uvs, int lod, bool maybe_YCoCg, bool ma
     {
         float3 param_1 = res.xyz;
         float3 _335 = srgb_to_rgb(param_1);
-        float4 _2091 = res;
-        _2091.x = _335.x;
-        float4 _2093 = _2091;
-        _2093.y = _335.y;
-        float4 _2095 = _2093;
-        _2095.z = _335.z;
-        res = _2095;
+        float4 _2088 = res;
+        _2088.x = _335.x;
+        float4 _2090 = _2088;
+        _2090.y = _335.y;
+        float4 _2092 = _2090;
+        _2092.z = _335.z;
+        res = _2092;
     }
     return res;
 }
@@ -709,8 +708,8 @@ float lum(float3 color)
 
 float3 IntersectSceneShadow(shadow_ray_t r, inout float dist)
 {
-    bool _1830 = false;
-    float3 _1827;
+    bool _1828 = false;
+    float3 _1825;
     do
     {
         float3 ro = float3(r.o[0], r.o[1], r.o[2]);
@@ -720,27 +719,27 @@ float3 IntersectSceneShadow(shadow_ray_t r, inout float dist)
         float3 param = _1196;
         float3 _1213 = safe_invert(param);
         int _1273;
-        int _1948;
-        int _1949;
-        float _1951;
-        float _1952;
+        int _1946;
+        int _1947;
+        float _1949;
+        float _1950;
         while (dist > 9.9999997473787516355514526367188e-06f)
         {
-            int _1947 = 0;
-            float _1950 = dist;
+            int _1945 = 0;
+            float _1948 = dist;
             float3 param_1 = ro;
             float3 param_2 = _1196;
             float3 param_3 = _1213;
             uint param_4 = _1231_g_params.node_index;
-            hit_data_t _1959 = { 0, _1948, _1949, dist, _1951, _1952 };
-            hit_data_t param_5 = _1959;
+            hit_data_t _1957 = { 0, _1946, _1947, dist, _1949, _1950 };
+            hit_data_t param_5 = _1957;
             bool _1244 = Traverse_MacroTree_WithStack(param_1, param_2, param_3, param_4, param_5);
-            _1947 = param_5.mask;
-            _1948 = param_5.obj_index;
-            _1949 = param_5.prim_index;
-            _1950 = param_5.t;
-            _1951 = param_5.u;
-            _1952 = param_5.v;
+            _1945 = param_5.mask;
+            _1946 = param_5.obj_index;
+            _1947 = param_5.prim_index;
+            _1948 = param_5.t;
+            _1949 = param_5.u;
+            _1950 = param_5.v;
             bool _1255;
             if (!_1244)
             {
@@ -752,14 +751,14 @@ float3 IntersectSceneShadow(shadow_ray_t r, inout float dist)
             }
             if (_1255)
             {
-                _1830 = true;
-                _1827 = 0.0f.xxx;
+                _1828 = true;
+                _1825 = 0.0f.xxx;
                 break;
             }
-            if (_1947 == 0)
+            if (_1945 == 0)
             {
-                _1830 = true;
-                _1827 = rc;
+                _1828 = true;
+                _1825 = rc;
                 break;
             }
             bool _1270 = param_5.prim_index < 0;
@@ -865,27 +864,26 @@ float3 IntersectSceneShadow(shadow_ray_t r, inout float dist)
                     [unroll]
                     for (int _39ident = 0; _39ident < 5; _39ident++)
                     {
-                        _1536.textures[_39ident] = _1527.Load(_39ident * 4 + g_stack[gl_LocalInvocationIndex][_1530] * 80 + 0);
+                        _1536.textures[_39ident] = _1527.Load(_39ident * 4 + g_stack[gl_LocalInvocationIndex][_1530] * 76 + 0);
                     }
                     [unroll]
                     for (int _40ident = 0; _40ident < 3; _40ident++)
                     {
-                        _1536.base_color[_40ident] = asfloat(_1527.Load(_40ident * 4 + g_stack[gl_LocalInvocationIndex][_1530] * 80 + 20));
+                        _1536.base_color[_40ident] = asfloat(_1527.Load(_40ident * 4 + g_stack[gl_LocalInvocationIndex][_1530] * 76 + 20));
                     }
-                    _1536.flags = _1527.Load(g_stack[gl_LocalInvocationIndex][_1530] * 80 + 32);
-                    _1536.type = _1527.Load(g_stack[gl_LocalInvocationIndex][_1530] * 80 + 36);
-                    _1536.tangent_rotation_or_strength = asfloat(_1527.Load(g_stack[gl_LocalInvocationIndex][_1530] * 80 + 40));
-                    _1536.roughness_and_anisotropic = _1527.Load(g_stack[gl_LocalInvocationIndex][_1530] * 80 + 44);
-                    _1536.int_ior = asfloat(_1527.Load(g_stack[gl_LocalInvocationIndex][_1530] * 80 + 48));
-                    _1536.ext_ior = asfloat(_1527.Load(g_stack[gl_LocalInvocationIndex][_1530] * 80 + 52));
-                    _1536.sheen_and_sheen_tint = _1527.Load(g_stack[gl_LocalInvocationIndex][_1530] * 80 + 56);
-                    _1536.tint_and_metallic = _1527.Load(g_stack[gl_LocalInvocationIndex][_1530] * 80 + 60);
-                    _1536.transmission_and_transmission_roughness = _1527.Load(g_stack[gl_LocalInvocationIndex][_1530] * 80 + 64);
-                    _1536.specular_and_specular_tint = _1527.Load(g_stack[gl_LocalInvocationIndex][_1530] * 80 + 68);
-                    _1536.clearcoat_and_clearcoat_roughness = _1527.Load(g_stack[gl_LocalInvocationIndex][_1530] * 80 + 72);
-                    _1536.normal_map_strength_unorm = _1527.Load(g_stack[gl_LocalInvocationIndex][_1530] * 80 + 76);
-                    uint _1594 = g_stack[gl_LocalInvocationIndex][_1530 + 1];
-                    float _1595 = asfloat(_1594);
+                    _1536.flags = _1527.Load(g_stack[gl_LocalInvocationIndex][_1530] * 76 + 32);
+                    _1536.type = _1527.Load(g_stack[gl_LocalInvocationIndex][_1530] * 76 + 36);
+                    _1536.tangent_rotation_or_strength = asfloat(_1527.Load(g_stack[gl_LocalInvocationIndex][_1530] * 76 + 40));
+                    _1536.roughness_and_anisotropic = _1527.Load(g_stack[gl_LocalInvocationIndex][_1530] * 76 + 44);
+                    _1536.ior = asfloat(_1527.Load(g_stack[gl_LocalInvocationIndex][_1530] * 76 + 48));
+                    _1536.sheen_and_sheen_tint = _1527.Load(g_stack[gl_LocalInvocationIndex][_1530] * 76 + 52);
+                    _1536.tint_and_metallic = _1527.Load(g_stack[gl_LocalInvocationIndex][_1530] * 76 + 56);
+                    _1536.transmission_and_transmission_roughness = _1527.Load(g_stack[gl_LocalInvocationIndex][_1530] * 76 + 60);
+                    _1536.specular_and_specular_tint = _1527.Load(g_stack[gl_LocalInvocationIndex][_1530] * 76 + 64);
+                    _1536.clearcoat_and_clearcoat_roughness = _1527.Load(g_stack[gl_LocalInvocationIndex][_1530] * 76 + 68);
+                    _1536.normal_map_strength_unorm = _1527.Load(g_stack[gl_LocalInvocationIndex][_1530] * 76 + 72);
+                    uint _1591 = g_stack[gl_LocalInvocationIndex][_1530 + 1];
+                    float _1592 = asfloat(_1591);
                     if (_1536.type == 4u)
                     {
                         float mix_val = _1536.tangent_rotation_or_strength;
@@ -893,19 +891,19 @@ float3 IntersectSceneShadow(shadow_ray_t r, inout float dist)
                         {
                             mix_val *= SampleBilinear(_1536.textures[1], _1499, 0).x;
                         }
-                        int _1620 = 2 * stack_size;
-                        g_stack[gl_LocalInvocationIndex][_1620] = _1536.textures[3];
-                        g_stack[gl_LocalInvocationIndex][_1620 + 1] = asuint(_1595 * (1.0f - mix_val));
-                        int _1639 = 2 * (stack_size + 1);
-                        g_stack[gl_LocalInvocationIndex][_1639] = _1536.textures[4];
-                        g_stack[gl_LocalInvocationIndex][_1639 + 1] = asuint(_1595 * mix_val);
+                        int _1617 = 2 * stack_size;
+                        g_stack[gl_LocalInvocationIndex][_1617] = _1536.textures[3];
+                        g_stack[gl_LocalInvocationIndex][_1617 + 1] = asuint(_1592 * (1.0f - mix_val));
+                        int _1636 = 2 * (stack_size + 1);
+                        g_stack[gl_LocalInvocationIndex][_1636] = _1536.textures[4];
+                        g_stack[gl_LocalInvocationIndex][_1636 + 1] = asuint(_1592 * mix_val);
                         stack_size += 2;
                     }
                     else
                     {
                         if (_1536.type == 5u)
                         {
-                            throughput += (float3(_1536.base_color[0], _1536.base_color[1], _1536.base_color[2]) * _1595);
+                            throughput += (float3(_1536.base_color[0], _1536.base_color[1], _1536.base_color[2]) * _1592);
                         }
                     }
                     continue;
@@ -915,68 +913,68 @@ float3 IntersectSceneShadow(shadow_ray_t r, inout float dist)
                     break;
                 }
             }
-            float3 _1673 = rc;
-            float3 _1674 = _1673 * throughput;
-            rc = _1674;
-            if (lum(_1674) < 1.0000000116860974230803549289703e-07f)
+            float3 _1670 = rc;
+            float3 _1671 = _1670 * throughput;
+            rc = _1671;
+            if (lum(_1671) < 1.0000000116860974230803549289703e-07f)
             {
                 break;
             }
-            float _1684 = _1950 + 9.9999997473787516355514526367188e-06f;
-            ro += (_1196 * _1684);
-            dist -= _1684;
+            float _1681 = _1948 + 9.9999997473787516355514526367188e-06f;
+            ro += (_1196 * _1681);
+            dist -= _1681;
             depth++;
         }
-        if (_1830)
+        if (_1828)
         {
             break;
         }
-        _1830 = true;
-        _1827 = rc;
+        _1828 = true;
+        _1825 = rc;
         break;
     } while(false);
-    return _1827;
+    return _1825;
 }
 
 void comp_main()
 {
     do
     {
-        int _1707 = int((gl_WorkGroupID.x * 64u) + gl_LocalInvocationIndex);
-        if (uint(_1707) >= _1713.Load(12))
+        int _1704 = int((gl_WorkGroupID.x * 64u) + gl_LocalInvocationIndex);
+        if (uint(_1704) >= _1710.Load(12))
         {
             break;
         }
-        shadow_ray_t _1732;
+        shadow_ray_t _1729;
         [unroll]
         for (int _41ident = 0; _41ident < 3; _41ident++)
         {
-            _1732.o[_41ident] = asfloat(_1728.Load(_41ident * 4 + _1707 * 48 + 0));
+            _1729.o[_41ident] = asfloat(_1725.Load(_41ident * 4 + _1704 * 48 + 0));
         }
-        _1732.depth = int(_1728.Load(_1707 * 48 + 12));
+        _1729.depth = int(_1725.Load(_1704 * 48 + 12));
         [unroll]
         for (int _42ident = 0; _42ident < 3; _42ident++)
         {
-            _1732.d[_42ident] = asfloat(_1728.Load(_42ident * 4 + _1707 * 48 + 16));
+            _1729.d[_42ident] = asfloat(_1725.Load(_42ident * 4 + _1704 * 48 + 16));
         }
-        _1732.dist = asfloat(_1728.Load(_1707 * 48 + 28));
+        _1729.dist = asfloat(_1725.Load(_1704 * 48 + 28));
         [unroll]
         for (int _43ident = 0; _43ident < 3; _43ident++)
         {
-            _1732.c[_43ident] = asfloat(_1728.Load(_43ident * 4 + _1707 * 48 + 32));
+            _1729.c[_43ident] = asfloat(_1725.Load(_43ident * 4 + _1704 * 48 + 32));
         }
-        _1732.xy = int(_1728.Load(_1707 * 48 + 44));
-        float _1885[3] = { _1732.c[0], _1732.c[1], _1732.c[2] };
-        float _1878[3] = { _1732.d[0], _1732.d[1], _1732.d[2] };
-        float _1871[3] = { _1732.o[0], _1732.o[1], _1732.o[2] };
-        shadow_ray_t _1864 = { _1871, _1732.depth, _1878, _1732.dist, _1885, _1732.xy };
-        shadow_ray_t param = _1864;
-        float param_1 = _1732.dist;
-        float3 _1769 = IntersectSceneShadow(param, param_1);
-        if (lum(_1769) > 0.0f)
+        _1729.xy = int(_1725.Load(_1704 * 48 + 44));
+        float _1883[3] = { _1729.c[0], _1729.c[1], _1729.c[2] };
+        float _1876[3] = { _1729.d[0], _1729.d[1], _1729.d[2] };
+        float _1869[3] = { _1729.o[0], _1729.o[1], _1729.o[2] };
+        shadow_ray_t _1862 = { _1869, _1729.depth, _1876, _1729.dist, _1883, _1729.xy };
+        shadow_ray_t param = _1862;
+        float param_1 = _1729.dist;
+        float3 _1766 = IntersectSceneShadow(param, param_1);
+        if (lum(_1766) > 0.0f)
         {
-            int2 _1794 = int2((_1732.xy >> 16) & 65535, _1732.xy & 65535);
-            g_out_img[_1794] = float4(g_out_img[_1794].xyz + _1769, 1.0f);
+            int2 _1791 = int2((_1729.xy >> 16) & 65535, _1729.xy & 65535);
+            g_out_img[_1791] = float4(g_out_img[_1791].xyz + _1766, 1.0f);
         }
         break;
     } while(false);

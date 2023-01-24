@@ -25,6 +25,15 @@
 #define USE_SAFE_MATH 1
 
 namespace Ray {
+#ifndef RAY_EXCHANGE_DEFINED
+template <class T, class U = T> T exchange(T &obj, U &&new_value) {
+    T old_value = std::move(obj);
+    obj = std::forward<U>(new_value);
+    return old_value;
+}
+#define RAY_EXCHANGE_DEFINED
+#endif
+
 namespace Ref {
 class TexStorageBase;
 template <typename T, int N> class TexStorageLinear;
@@ -36,17 +45,21 @@ using TexStorageRG = TexStorageSwizzled<uint8_t, 2>;
 using TexStorageR = TexStorageSwizzled<uint8_t, 1>;
 } // namespace Ref
 namespace NS {
-
+// Up to 4x4 rays
+// [ 0] [ 1] [ 4] [ 5]
+// [ 2] [ 3] [ 6] [ 7]
+// [ 8] [ 9] [12] [13]
+// [10] [11] [14] [15]
 alignas(64) const int ray_packet_layout_x[] = {0, 1, 0, 1,  // NOLINT
                                                2, 3, 2, 3,  // NOLINT
                                                0, 1, 0, 1,  // NOLINT
                                                2, 3, 2, 3}; // NOLINT
-
 alignas(64) const int ray_packet_layout_y[] = {0, 0, 1, 1,  // NOLINT
                                                0, 0, 1, 1,  // NOLINT
                                                2, 2, 3, 3,  // NOLINT
                                                2, 2, 3, 3}; // NOLINT
 
+// Usefull to make index argument for a gather instruction
 alignas(64) const int ascending_counter[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
 
 template <int S> struct ray_data_t {
@@ -56,6 +69,8 @@ template <int S> struct ray_data_t {
     simd_fvec<S> d[3], pdf;
     // throughput color of ray
     simd_fvec<S> c[3];
+    // stack of ior values
+    simd_fvec<S> ior[4];
     // ray cone params
     simd_fvec<S> cone_width, cone_spread;
     // 16-bit pixel coordinates of rays in packet ((x << 16) | y)
@@ -389,7 +404,8 @@ simd_ivec<S> Evaluate_RefractiveNode(const light_sample_t<S> &ls, const ray_data
                                      const simd_fvec<S> &mix_weight, simd_fvec<S> out_col[3], shadow_ray_t<S> &sh_r);
 template <int S>
 void Sample_RefractiveNode(const ray_data_t<S> &ray, const simd_ivec<S> &mask, const surface_t<S> &surf,
-                           const simd_fvec<S> base_color[3], const simd_fvec<S> &roughness, const simd_fvec<S> &eta,
+                           const simd_fvec<S> base_color[3], const simd_fvec<S> &roughness,
+                           const simd_ivec<S> &is_backfacing, const simd_fvec<S> &int_ior, const simd_fvec<S> &ext_ior,
                            const simd_fvec<S> &rand_u, const simd_fvec<S> &rand_v, const simd_fvec<S> &mix_weight,
                            ray_data_t<S> &new_ray);
 
@@ -415,8 +431,10 @@ template <int S> struct clearcoat_params_t {
 
 template <int S> struct transmission_params_t {
     simd_fvec<S> roughness;
+    simd_fvec<S> int_ior;
     simd_fvec<S> eta;
     simd_fvec<S> fresnel;
+    simd_ivec<S> backfacing;
 };
 
 template <int S> struct lobe_weights_t {
@@ -1991,7 +2009,82 @@ void get_pix_dirs(const float w, const float h, const camera_t &cam, const float
     d[2] = d[2] - origin[2];
 
     normalize(d);
-};
+}
+
+template <int S> void push_ior_stack(const simd_ivec<S> &_mask, simd_fvec<S> stack[4], const simd_fvec<S> &val) {
+    simd_fvec<S> active_lanes = simd_cast(_mask);
+    // 0
+    simd_fvec<S> mask = active_lanes & (stack[0] < 0.0f);
+    where(mask, stack[0]) = val;
+    active_lanes &= ~mask;
+    // 1
+    mask = active_lanes & (stack[1] < 0.0f);
+    where(mask, stack[1]) = val;
+    active_lanes &= ~mask;
+    // 2
+    mask = active_lanes & (stack[2] < 0.0f);
+    where(mask, stack[2]) = val;
+    active_lanes &= ~mask;
+    // 3
+    // replace the last value regardless of sign
+    where(active_lanes, stack[3]) = val;
+}
+
+template <int S>
+simd_fvec<S> pop_ior_stack(const simd_ivec<S> &_mask, simd_fvec<S> stack[4],
+                           const simd_fvec<S> &default_value = {1.0f}) {
+    simd_fvec<S> ret = default_value;
+    simd_fvec<S> active_lanes = simd_cast(_mask);
+    // 3
+    simd_fvec<S> mask = active_lanes & (stack[3] > 0.0f);
+    where(mask, ret) = stack[3];
+    where(mask, stack[3]) = -1.0f;
+    active_lanes &= ~mask;
+    // 2
+    mask = active_lanes & (stack[2] > 0.0f);
+    where(mask, ret) = stack[2];
+    where(mask, stack[2]) = -1.0f;
+    active_lanes &= ~mask;
+    // 1
+    mask = active_lanes & (stack[1] > 0.0f);
+    where(mask, ret) = stack[1];
+    where(mask, stack[1]) = -1.0f;
+    active_lanes &= ~mask;
+    // 0
+    mask = active_lanes & (stack[0] > 0.0f);
+    where(mask, ret) = stack[0];
+    where(mask, stack[0]) = -1.0f;
+
+    return ret;
+}
+
+template <int S>
+simd_fvec<S> peek_ior_stack(const simd_fvec<S> stack[4], const simd_ivec<S> &_skip_first,
+                            const simd_fvec<S> &default_value = {1.0f}) {
+    simd_fvec<S> ret = default_value;
+    simd_fvec<S> skip_first = simd_cast(_skip_first);
+    // 3
+    simd_fvec<S> mask = (stack[3] > 0.0f);
+    mask &= ~exchange(skip_first, skip_first & ~mask);
+    where(mask, ret) = stack[3];
+    simd_fvec<S> active_lanes = ~mask;
+    // 2
+    mask = active_lanes & (stack[2] > 0.0f);
+    mask &= ~exchange(skip_first, skip_first & ~mask);
+    where(mask, ret) = stack[2];
+    active_lanes &= ~mask;
+    // 1
+    mask = active_lanes & (stack[1] > 0.0f);
+    mask &= ~exchange(skip_first, skip_first & ~mask);
+    where(mask, ret) = stack[1];
+    active_lanes &= ~mask;
+    // 0
+    mask = active_lanes & (stack[0] > 0.0f);
+    mask &= ~exchange(skip_first, skip_first & ~mask);
+    where(mask, ret) = stack[0];
+
+    return ret;
+}
 
 } // namespace NS
 } // namespace Ray
@@ -2095,6 +2188,9 @@ void Ray::NS::GeneratePrimaryRays(const int iteration, const camera_t &cam, cons
                 out_r.o[j] = _origin[j] + _d[j] * clip_start;
                 out_r.c[j] = {1.0f};
             }
+
+            // air ior is implicit
+            out_r.ior[0] = out_r.ior[1] = out_r.ior[2] = out_r.ior[3] = -1.0f;
 
             out_r.cone_width = 0.0f;
             out_r.cone_spread = spread_angle;
@@ -2298,6 +2394,11 @@ void Ray::NS::SortRays_CPU(ray_data_t<S> *rays, simd_ivec<S> *ray_masks, int &ra
                     swap_elements(rays[jj].c[0], _jj, rays[kk].c[0], _kk);
                     swap_elements(rays[jj].c[1], _jj, rays[kk].c[1], _kk);
                     swap_elements(rays[jj].c[2], _jj, rays[kk].c[2], _kk);
+
+                    swap_elements(rays[jj].ior[0], _jj, rays[kk].ior[0], _kk);
+                    swap_elements(rays[jj].ior[1], _jj, rays[kk].ior[1], _kk);
+                    swap_elements(rays[jj].ior[2], _jj, rays[kk].ior[2], _kk);
+                    swap_elements(rays[jj].ior[3], _jj, rays[kk].ior[3], _kk);
 
                     swap_elements(rays[jj].cone_width, _jj, rays[kk].cone_width, _kk);
                     swap_elements(rays[jj].cone_spread, _jj, rays[kk].cone_spread, _kk);
@@ -5266,8 +5367,12 @@ Ray::NS::simd_ivec<S> Ray::NS::Evaluate_RefractiveNode(const light_sample_t<S> &
 template <int S>
 void Ray::NS::Sample_RefractiveNode(const ray_data_t<S> &ray, const simd_ivec<S> &mask, const surface_t<S> &surf,
                                     const simd_fvec<S> base_color[3], const simd_fvec<S> &roughness,
-                                    const simd_fvec<S> &eta, const simd_fvec<S> &rand_u, const simd_fvec<S> &rand_v,
+                                    const simd_ivec<S> &is_backfacing, const simd_fvec<S> &int_ior,
+                                    const simd_fvec<S> &ext_ior, const simd_fvec<S> &rand_u, const simd_fvec<S> &rand_v,
                                     const simd_fvec<S> &mix_weight, ray_data_t<S> &new_ray) {
+    simd_fvec<S> eta = (ext_ior / int_ior);
+    where(is_backfacing, eta) = (int_ior / ext_ior);
+
     simd_fvec<S> V[4], F[4];
     Sample_GGXRefraction_BSDF(surf.T, surf.B, surf.N, ray.d, roughness, eta, base_color, rand_u, rand_v, V, F);
 
@@ -5282,6 +5387,10 @@ void Ray::NS::Sample_RefractiveNode(const ray_data_t<S> &ray, const simd_ivec<S>
         where(mask, new_ray.d[i]) = V[i];
         where(mask, new_ray.c[i]) = ray.c[i] * F[i] * safe_div_pos(mix_weight, F[3]);
     })
+
+    pop_ior_stack(is_backfacing & mask, new_ray.ior);
+    push_ior_stack(~is_backfacing & mask, new_ray.ior, int_ior);
+
     where(mask, new_ray.pdf) = F[3];
 }
 
@@ -5547,6 +5656,9 @@ void Ray::NS::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t<
                 where(sample_trans_refr_lobe, V[i]) = _V[i];
                 where(sample_trans_refr_lobe, new_ray.o[i]) = new_p[i];
             })
+
+            pop_ior_stack(trans.backfacing & sample_trans_refr_lobe, new_ray.ior);
+            push_ior_stack(~trans.backfacing & sample_trans_refr_lobe, new_ray.ior, trans.int_ior);
         }
 
         F[3] *= lobe_weights.refraction;
@@ -5716,6 +5828,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
 
     // used to randomize random sequence among pixels
     const simd_fvec<S> sample_off[2] = {construct_float(hash(ray.xy)), construct_float(hash(hash(ray.xy)))};
+    const simd_fvec<S> ext_ior = peek_ior_stack(ray.ior, is_backfacing);
 
     const simd_ivec<S> diff_depth = ray.depth & 0x000000ff;
     const simd_ivec<S> spec_depth = (ray.depth >> 8) & 0x000000ff;
@@ -5772,17 +5885,15 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
             }
         }
 
-        const float *int_iors = &sc.materials[0].int_ior;
-        const float *ext_iors = &sc.materials[0].ext_ior;
+        const float *iors = &sc.materials[0].ior;
 
-        const simd_fvec<S> int_ior = gather(int_iors, mat_index * MatDWORDStride);
-        const simd_fvec<S> ext_ior = gather(ext_iors, mat_index * MatDWORDStride);
+        const simd_fvec<S> ior = gather(iors, mat_index * MatDWORDStride);
 
-        simd_fvec<S> eta = safe_div_pos(ext_ior, int_ior);
-        where(is_backfacing, eta) = safe_div_pos(int_ior, ext_ior);
+        simd_fvec<S> eta = safe_div_pos(ext_ior, ior);
+        where(is_backfacing, eta) = safe_div_pos(ior, ext_ior);
 
         simd_fvec<S> RR = fresnel_dielectric_cos(dot3(I, surf.N), eta);
-        where(int_ior == 0.0f, RR) = 1.0f;
+        where(ior == 0.0f, RR) = 1.0f;
 
         mix_val *= clamp(RR, 0.0f, 1.0f);
 
@@ -5990,6 +6101,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
     new_ray.o[0] = new_ray.o[1] = new_ray.o[2] = 0.0f;
     new_ray.d[0] = new_ray.d[1] = new_ray.d[2] = 0.0f;
     new_ray.pdf = 0.0f;
+    ITERATE_4({ new_ray.ior[i] = ray.ior[i]; })
     new_ray.c[0] = new_ray.c[1] = new_ray.c[2] = 0.0f;
     new_ray.cone_width = cone_width;
     new_ray.cone_spread = ray.cone_spread;
@@ -6067,14 +6179,14 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                     secondary_mask |= gen_ray;
                 }
             } else if (mat->type == RefractiveNode) {
-                simd_fvec<S> eta = (mat->ext_ior / mat->int_ior);
-                where(is_backfacing, eta) = (mat->int_ior / mat->ext_ior);
-                const simd_fvec<S> roughness2 = sqr(roughness);
 #if USE_NEE
+                const simd_fvec<S> roughness2 = sqr(roughness);
                 const simd_ivec<S> eval_light = simd_cast(ls.pdf > 0.0f) & simd_cast(sqr(roughness2) >= 1e-7f) &
                                                 simd_cast(N_dot_L < 0.0f) & ray_queue[index];
                 if (eval_light.not_all_zeros()) {
                     assert((shadow_mask & eval_light).all_zeros());
+                    simd_fvec<S> eta = (ext_ior / mat->ior);
+                    where(is_backfacing, eta) = (mat->ior / ext_ior);
                     shadow_mask |= Evaluate_RefractiveNode(ls, ray, eval_light, surf, base_color, roughness2, eta,
                                                            mix_weight, col, sh_r);
                 }
@@ -6082,8 +6194,8 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                 const simd_ivec<S> gen_ray =
                     (refr_depth < ps.max_refr_depth) & (total_depth < ps.max_total_depth) & ray_queue[index];
                 if (gen_ray.not_all_zeros()) {
-                    Sample_RefractiveNode(ray, gen_ray, surf, base_color, roughness, eta, rand_u, rand_v, mix_weight,
-                                          new_ray);
+                    Sample_RefractiveNode(ray, gen_ray, surf, base_color, roughness, is_backfacing,
+                                          simd_fvec<S>{mat->ior}, ext_ior, rand_u, rand_v, mix_weight, new_ray);
                     assert((secondary_mask & gen_ray).all_zeros());
                     secondary_mask |= gen_ray;
                 }
@@ -6166,9 +6278,11 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                 transmission_params_t<S> trans;
                 trans.roughness =
                     1.0f - (1.0f - roughness) * (1.0f - unpack_unorm_16(mat->transmission_roughness_unorm));
-                trans.eta = (mat->ext_ior / mat->int_ior);
-                where(is_backfacing, trans.eta) = (mat->int_ior / mat->ext_ior);
+                trans.int_ior = mat->ior;
+                trans.eta = (ext_ior / mat->ior);
+                where(is_backfacing, trans.eta) = (mat->ior / ext_ior);
                 trans.fresnel = fresnel_dielectric_cos(dot3(I, surf.N), 1.0f / trans.eta);
+                trans.backfacing = is_backfacing;
 
                 // Approximation of FH (using shading normal)
                 const simd_fvec<S> FN =

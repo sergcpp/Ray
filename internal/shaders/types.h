@@ -108,6 +108,7 @@ const int FILTER_TENT = 1;
 struct ray_data_t {
 	float o[3], d[3], pdf;
 	float c[3];
+    float ior[4];
 	float cone_width, cone_spread;
 	int xy;
 	int depth;
@@ -208,8 +209,7 @@ struct material_t {
     UINT_TYPE type;
     float tangent_rotation_or_strength;
     UINT_TYPE roughness_and_anisotropic;
-    float int_ior;
-    float ext_ior;
+    float ior;
     UINT_TYPE sheen_and_sheen_tint;
     UINT_TYPE tint_and_metallic;
     UINT_TYPE transmission_and_transmission_roughness;

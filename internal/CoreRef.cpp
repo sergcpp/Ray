@@ -1098,6 +1098,35 @@ force_inline float ngon_rad(const float theta, const float n) {
     return std::cos(PI / n) / std::cos(theta - (2.0f * PI / n) * std::floor((n * theta + PI) / (2.0f * PI)));
 }
 
+void push_ior_stack(float stack[4], const float val) {
+    ITERATE_3({
+        if (stack[i] < 0.0f) {
+            stack[i] = val;
+            return;
+        }
+    })
+    // replace the last value regardless of sign
+    stack[3] = val;
+}
+
+float pop_ior_stack(float stack[4], const float default_value = 1.0f) {
+    ITERATE_4_R({
+        if (stack[i] > 0.0f) {
+            return exchange(stack[i], -1.0f);
+        }
+    })
+    return default_value;
+}
+
+float peek_ior_stack(const float stack[4], bool skip_first, const float default_value = 1.0f) {
+    ITERATE_4_R({
+        if (stack[i] > 0.0f && !exchange(skip_first, false)) {
+            return stack[i];
+        }
+    })
+    return default_value;
+}
+
 } // namespace Ref
 } // namespace Ray
 
@@ -1205,6 +1234,9 @@ void Ray::Ref::GeneratePrimaryRays(const int iteration, const camera_t &cam, con
                 out_r.d[j] = _d[j];
                 out_r.c[j] = 1.0f;
             }
+
+            // air ior is implicit
+            out_r.ior[0] = out_r.ior[1] = out_r.ior[2] = out_r.ior[3] = -1.0f;
 
             out_r.cone_width = 0.0f;
             out_r.cone_spread = spread_angle;
@@ -3575,16 +3607,16 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_RefractiveNode(const light_sample_t &ls,
     memcpy(&sh_r.o[0], value_ptr(offset_ray(surf.P, -surf.plane_N)), 3 * sizeof(float));
     memcpy(&sh_r.d[0], value_ptr(ls.L), 3 * sizeof(float));
     sh_r.dist = ls.dist - 10.0f * HIT_BIAS;
-    sh_r.c[0] = ray.c[0] * lcol.get<0>();
-    sh_r.c[1] = ray.c[1] * lcol.get<1>();
-    sh_r.c[2] = ray.c[2] * lcol.get<2>();
+    ITERATE_3({ sh_r.c[i] = ray.c[i] * lcol.get<i>(); })
     return simd_fvec4{0.0f};
 }
 
 void Ray::Ref::Sample_RefractiveNode(const ray_data_t &ray, const surface_t &surf, const simd_fvec4 &base_color,
-                                     const float roughness, const float eta, const float rand_u, const float rand_v,
+                                     const float roughness, const bool is_backfacing, const float int_ior,
+                                     const float ext_ior, const float rand_u, const float rand_v,
                                      const float mix_weight, ray_data_t &new_ray) {
     const auto I = simd_fvec4{ray.d[0], ray.d[1], ray.d[2], 0.0f};
+    const float eta = is_backfacing ? (int_ior / ext_ior) : (ext_ior / int_ior);
 
     simd_fvec4 V;
     const simd_fvec4 F =
@@ -3596,6 +3628,14 @@ void Ray::Ref::Sample_RefractiveNode(const ray_data_t &ray, const surface_t &sur
     new_ray.c[1] = ray.c[1] * F.get<1>() * safe_div_pos(mix_weight, F.get<3>());
     new_ray.c[2] = ray.c[2] * F.get<2>() * safe_div_pos(mix_weight, F.get<3>());
     new_ray.pdf = F.get<3>();
+
+    if (!is_backfacing) {
+        // Entering the surface, push new value
+        push_ior_stack(new_ray.ior, int_ior);
+    } else {
+        // Exiting the surface, pop the last ior value
+        pop_ior_stack(new_ray.ior);
+    }
 
     memcpy(&new_ray.o[0], value_ptr(offset_ray(surf.P, -surf.plane_N)), 3 * sizeof(float));
     memcpy(&new_ray.d[0], value_ptr(V), 3 * sizeof(float));
@@ -3800,6 +3840,14 @@ void Ray::Ref::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t
 
                 new_ray.depth = ray.depth + 0x00010000;
                 memcpy(&new_ray.o[0], value_ptr(offset_ray(surf.P, -surf.plane_N)), 3 * sizeof(float));
+
+                if (!trans.backfacing) {
+                    // Entering the surface, push new value
+                    push_ior_stack(new_ray.ior, trans.int_ior);
+                } else {
+                    // Exiting the surface, pop the last ior value
+                    pop_ior_stack(new_ray.ior);
+                }
             }
 
             F.set<3>(F.get<3>() * lobe_weights.refraction);
@@ -3892,6 +3940,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
     random_seq += total_depth(ray) * RAND_DIM_BOUNCE_COUNT;
     // used to randomize random sequence among pixels
     const float sample_off[2] = {construct_float(hash(ray.xy)), construct_float(hash(hash(ray.xy)))};
+    const float ext_ior = peek_ior_stack(ray.ior, is_backfacing);
 
     simd_fvec4 col = {0.0f};
 
@@ -3911,9 +3960,8 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
             mix_val *= SampleBilinear(textures, mat->textures[BASE_TEXTURE], surf.uvs, 0).get<0>();
         }
 
-        const float eta =
-            is_backfacing ? safe_div_pos(mat->ext_ior, mat->int_ior) : safe_div_pos(mat->int_ior, mat->ext_ior);
-        const float RR = mat->int_ior != 0.0f ? fresnel_dielectric_cos(dot(I, surf.N), eta) : 1.0f;
+        const float eta = is_backfacing ? safe_div_pos(ext_ior, mat->ior) : safe_div_pos(mat->ior, ext_ior);
+        const float RR = mat->ior != 0.0f ? fresnel_dielectric_cos(dot(I, surf.N), eta) : 1.0f;
 
         mix_val *= clamp(RR, 0.0f, 1.0f);
 
@@ -4009,6 +4057,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
     const float rand_v = fract(random_seq[RAND_DIM_BSDF_V] + sample_off[1]);
 
     ray_data_t &new_ray = out_secondary_rays[*out_secondary_rays_count];
+    memcpy(new_ray.ior, ray.ior, 4 * sizeof(float));
     new_ray.cone_width = cone_width;
     new_ray.cone_spread = ray.cone_spread;
     new_ray.xy = ray.xy;
@@ -4034,7 +4083,6 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
         const float spec_ior = (2.0f / (1.0f - std::sqrt(0.08f * specular))) - 1.0f;
         const float spec_F0 = fresnel_dielectric_cos(1.0f, spec_ior);
         const float roughness2 = sqr(roughness);
-
 #if USE_NEE
         if (ls.pdf > 0.0f && sqr(roughness2) >= 1e-7f && N_dot_L > 0.0f) {
             col += Evaluate_GlossyNode(ls, ray, surf, base_color, roughness, spec_ior, spec_F0, mix_weight, sh_r);
@@ -4044,16 +4092,16 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
             Sample_GlossyNode(ray, surf, base_color, roughness, spec_ior, spec_F0, rand_u, rand_v, mix_weight, new_ray);
         }
     } else if (mat->type == RefractiveNode) {
-        const float eta = is_backfacing ? (mat->int_ior / mat->ext_ior) : (mat->ext_ior / mat->int_ior);
-        const float roughness2 = sqr(roughness);
-
 #if USE_NEE
+        const float roughness2 = sqr(roughness);
         if (ls.pdf > 0.0f && sqr(roughness2) >= 1e-7f && N_dot_L < 0.0f) {
+            const float eta = is_backfacing ? (mat->ior / ext_ior) : (ext_ior / mat->ior);
             col += Evaluate_RefractiveNode(ls, ray, surf, base_color, roughness2, eta, mix_weight, sh_r);
         }
 #endif
         if (refr_depth < ps.max_refr_depth && total_depth < ps.max_total_depth) {
-            Sample_RefractiveNode(ray, surf, base_color, roughness, eta, rand_u, rand_v, mix_weight, new_ray);
+            Sample_RefractiveNode(ray, surf, base_color, roughness, is_backfacing, mat->ior, ext_ior, rand_u, rand_v,
+                                  mix_weight, new_ray);
         }
     } else if (mat->type == EmissiveNode) {
         float mis_weight = 1.0f;
@@ -4125,8 +4173,10 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
 
         transmission_params_t trans;
         trans.roughness = 1.0f - (1.0f - roughness) * (1.0f - unpack_unorm_16(mat->transmission_roughness_unorm));
-        trans.eta = is_backfacing ? (mat->int_ior / mat->ext_ior) : (mat->ext_ior / mat->int_ior);
+        trans.int_ior = mat->ior;
+        trans.eta = is_backfacing ? (mat->ior / ext_ior) : (ext_ior / mat->ior);
         trans.fresnel = fresnel_dielectric_cos(dot(I, surf.N), 1.0f / trans.eta);
+        trans.backfacing = is_backfacing;
 
         // Approximation of FH (using shading normal)
         const float FN = (fresnel_dielectric_cos(dot(I, surf.N), spec.ior) - spec.F0) / (1.0f - spec.F0);

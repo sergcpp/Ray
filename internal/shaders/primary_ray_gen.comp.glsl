@@ -115,6 +115,9 @@ void main() {
     new_ray.d[2] = _d[2];
     new_ray.c[0] = new_ray.c[1] = new_ray.c[2] = 1.0;
 
+    // air ior is implicit
+    new_ray.ior[0] = new_ray.ior[1] = new_ray.ior[2] = new_ray.ior[3] = -1.0;
+
     new_ray.cone_width = 0.0;
     new_ray.cone_spread = g_params.spread_angle;
 

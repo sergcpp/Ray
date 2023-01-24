@@ -13,13 +13,16 @@
 namespace Ray {
 /// Renderer flags used to choose backend
 enum eRendererType : uint32_t {
+    // Reference renderer, slightly vectorized, the easiest to modify and debug
     RendererRef = (1 << 0),
+    // SIMD renderers, heavily vectorized
     RendererSSE2 = (1 << 1),
     RendererSSE41 = (1 << 2),
     RendererAVX = (1 << 3),
     RendererAVX2 = (1 << 4),
     RendererAVX512 = (1 << 5),
     RendererNEON = (1 << 6),
+    // GPU renderer
     RendererVK = (1 << 7)
 };
 

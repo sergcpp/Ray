@@ -142,6 +142,12 @@
 #define ITERATE_2_R(exp)  \
         { const int i = 1; exp }    \
         { const int i = 0; exp }
+
+#define ITERATE_4_R(exp)  \
+        { const int i = 3; exp }    \
+        { const int i = 2; exp }    \
+        { const int i = 1; exp }    \
+        { const int i = 0; exp }
 // clang-format on
 
 #ifdef __GNUC__

@@ -341,6 +341,67 @@ vec3 tangent_from_world(vec3 T, vec3 B, vec3 N, vec3 V) {
     return vec3(dot(V, T), dot(V, B), dot(V, N));
 }
 
+float exchange(inout float old_value, float new_value) {
+    float temp = old_value;
+    old_value = new_value;
+    return temp;
+}
+
+bool exchange(inout bool old_value, bool new_value) {
+    bool temp = old_value;
+    old_value = new_value;
+    return temp;
+}
+
+void push_ior_stack(inout float stack[4], const float val) {
+    if (stack[0] < 0.0) {
+        stack[0] = val;
+        return;
+    }
+    if (stack[1] < 0.0) {
+        stack[1] = val;
+        return;
+    }
+    if (stack[2] < 0.0) {
+        stack[2] = val;
+        return;
+    }
+    // replace the last value regardless of sign
+    stack[3] = val;
+}
+
+float pop_ior_stack(inout float stack[4], float default_value) {
+    if (stack[3] > 0.0) {
+        return exchange(stack[3], -1.0);
+    }
+    if (stack[2] > 0.0) {
+        return exchange(stack[2], -1.0);
+    }
+    if (stack[1] > 0.0) {
+        return exchange(stack[1], -1.0);
+    }
+    if (stack[0] > 0.0) {
+        return exchange(stack[0], -1.0);
+    }
+    return default_value;
+}
+
+float peek_ior_stack(float stack[4], bool skip_first, float default_value) {
+    if (stack[3] > 0.0 && !exchange(skip_first, false)) {
+        return stack[3];
+    }
+    if (stack[2] > 0.0 && !exchange(skip_first, false)) {
+        return stack[2];
+    }
+    if (stack[1] > 0.0 && !exchange(skip_first, false)) {
+        return stack[1];
+    }
+    if (stack[0] > 0.0 && !exchange(skip_first, false)) {
+        return stack[0];
+    }
+    return default_value;
+}
+
 float BRDF_PrincipledDiffuse(vec3 V, vec3 N, vec3 L, vec3 H, float roughness) {
     const float N_dot_L = dot(N, L);
     const float N_dot_V = dot(N, V);
@@ -1230,9 +1291,11 @@ vec3 Evaluate_RefractiveNode(const light_sample_t ls, const ray_data_t ray,
 }
 
 void Sample_RefractiveNode(const ray_data_t ray, const surface_t surf, const vec3 base_color,
-                           const float roughness, const float eta, const float rand_u, const float rand_v,
+                           const float roughness, const bool is_backfacing, const float int_ior,
+                           const float ext_ior, const float rand_u, const float rand_v,
                            const float mix_weight, inout ray_data_t new_ray) {
     const vec3 I = vec3(ray.d[0], ray.d[1], ray.d[2]);
+    const float eta = is_backfacing ? (int_ior / ext_ior) : (ext_ior / int_ior);
 
     vec4 _V;
     const vec4 F = Sample_GGXRefraction_BSDF(surf.T, surf.B, surf.N, I, roughness, eta, base_color, rand_u, rand_v, _V);
@@ -1246,6 +1309,14 @@ void Sample_RefractiveNode(const ray_data_t ray, const surface_t surf, const vec
     new_ray.c[1] = ray.c[1] * F[1] * mix_weight / F[3];
     new_ray.c[2] = ray.c[2] * F[2] * mix_weight / F[3];
     new_ray.pdf = F[3];
+
+    if (!is_backfacing) {
+        // Entering the surface, push new value
+        push_ior_stack(new_ray.ior, int_ior);
+    } else {
+        // Exiting the surface, pop the last ior value
+        pop_ior_stack(new_ray.ior, 1.0);
+    }
 
     vec3 new_o = offset_ray(surf.P, -surf.plane_N);
     new_ray.o[0] = new_o[0]; new_ray.o[1] = new_o[1]; new_ray.o[2] = new_o[2];
@@ -1274,8 +1345,10 @@ struct clearcoat_params_t {
 
 struct transmission_params_t {
     float roughness;
+    float int_ior;
     float eta;
     float fresnel;
+    bool backfacing;
 };
 
 vec3 Evaluate_PrincipledNode(const light_sample_t ls, const ray_data_t ray,
@@ -1484,6 +1557,14 @@ void Sample_PrincipledNode(const ray_data_t ray, const surface_t surf,
 
                 const vec3 new_o = offset_ray(surf.P, -surf.plane_N);
                 new_ray.o[0] = new_o[0]; new_ray.o[1] = new_o[1]; new_ray.o[2] = new_o[2];
+
+                if (!trans.backfacing) {
+                    // Entering the surface, push new value
+                    push_ior_stack(new_ray.ior, trans.int_ior);
+                } else {
+                    // Exiting the surface, pop the last ior value
+                    pop_ior_stack(new_ray.ior, 1.0);
+                }
             }
 
             F[3] *= lobe_weights.refraction;
@@ -1576,7 +1657,8 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
     // lambda += 0.5 * fast_log2(tex_res.x * tex_res.y);
     // lambda -= fast_log2(std::abs(dot(I, plane_N)));
 
-    vec2 sample_off = vec2(construct_float(hash(ray.xy)), construct_float(hash(hash(ray.xy))));
+    const vec2 sample_off = vec2(construct_float(hash(ray.xy)), construct_float(hash(hash(ray.xy))));
+    const float ext_ior = peek_ior_stack(ray.ior, is_backfacing, 1.0 /* default_value */);
 
     vec3 col = vec3(0.0);
 
@@ -1599,8 +1681,8 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
             mix_val *= SampleBilinear(mat.textures[BASE_TEXTURE], surf.uvs, 0).r;
         }
 
-        const float eta = is_backfacing ? (mat.ext_ior / mat.int_ior) : (mat.int_ior / mat.ext_ior);
-        const float RR = mat.int_ior != 0.0 ? fresnel_dielectric_cos(dot(I, surf.N), eta) : 1.0;
+        const float eta = is_backfacing ? (ext_ior / mat.ior) : (mat.ior / ext_ior);
+        const float RR = mat.ior != 0.0 ? fresnel_dielectric_cos(dot(I, surf.N), eta) : 1.0;
 
         mix_val *= clamp(RR, 0.0, 1.0);
 
@@ -1668,8 +1750,6 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
     const float N_dot_L = dot(surf.N, ls.L);
 #endif
 
-    const float mat_ior = is_backfacing ? mat.ext_ior : mat.int_ior;
-
     vec3 base_color = vec3(mat.base_color[0], mat.base_color[1], mat.base_color[2]);
     [[dont_flatten]] if (mat.textures[BASE_TEXTURE] != 0xffffffff) {
         const float base_lod = get_texture_lod(texSize(mat.textures[BASE_TEXTURE]), lambda);
@@ -1694,6 +1774,9 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
 
     ray_data_t new_ray;
     new_ray.c[0] = new_ray.c[1] = new_ray.c[2] = 0.0;
+    [[unroll]] for (int i = 0; i < 4; ++i) {
+        new_ray.ior[i] = ray.ior[i];
+    }
     new_ray.cone_width = cone_width;
     new_ray.cone_spread = ray.cone_spread;
     new_ray.xy = ray.xy;
@@ -1732,16 +1815,15 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
                               rand_v, mix_weight, new_ray);
         }
     } else [[dont_flatten]] if (mat.type == RefractiveNode) {
-        const float eta = is_backfacing ? (mat.int_ior / mat.ext_ior) : (mat.ext_ior / mat.int_ior);
-        const float roughness2 = sqr(roughness);
-
 #if USE_NEE
+        const float roughness2 = sqr(roughness);
         [[dont_flatten]] if (ls.pdf > 0.0 && sqr(roughness2) >= 1e-7 && N_dot_L < 0.0) {
+            const float eta = is_backfacing ? (mat.ior / ext_ior) : (ext_ior / mat.ior);
             col += Evaluate_RefractiveNode(ls, ray, surf, base_color, roughness2, eta, mix_weight, sh_r);
         }
 #endif
         [[dont_flatten]] if (refr_depth < g_params.max_refr_depth && total_depth < g_params.max_total_depth) {
-            Sample_RefractiveNode(ray, surf, base_color, roughness, eta, rand_u, rand_v, mix_weight, new_ray);
+            Sample_RefractiveNode(ray, surf, base_color, roughness, is_backfacing, mat.ior, ext_ior, rand_u, rand_v, mix_weight, new_ray);
         }
     } else [[dont_flatten]] if (mat.type == EmissiveNode) {
         float mis_weight = 1.0;
@@ -1807,8 +1889,10 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
         transmission_params_t trans;
         trans.roughness =
             1.0 - (1.0 - roughness) * (1.0 - unpack_unorm_16((mat.transmission_and_transmission_roughness >> 16) & 0xffff));
-        trans.eta = is_backfacing ? (mat.int_ior / mat.ext_ior) : (mat.ext_ior / mat.int_ior);
+        trans.int_ior = mat.ior;
+        trans.eta = is_backfacing ? (mat.ior / ext_ior) : (ext_ior / mat.ior);
         trans.fresnel = fresnel_dielectric_cos(dot(I, surf.N), 1.0 / trans.eta);
+        trans.backfacing = is_backfacing;
 
         // Approximation of FH (using shading normal)
         const float FN = (fresnel_dielectric_cos(dot(I, surf.N), spec.ior) - spec.F0) / (1.0 - spec.F0);
