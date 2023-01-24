@@ -198,7 +198,9 @@ const int STANDARD_SCENE_HDR_LIGHT = 5;
 const int STANDARD_SCENE_NO_LIGHT = 6;
 const int STANDARD_SCENE_DOF0 = 7;
 const int STANDARD_SCENE_DOF1 = 8;
-const int REFR_PLANE_SCENE = 9;
+const int STANDARD_SCENE_GLASSBALL0 = 9;
+const int STANDARD_SCENE_GLASSBALL1 = 10;
+const int REFR_PLANE_SCENE = 11;
 } // namespace
 
 template <typename MatDesc>
@@ -242,6 +244,11 @@ void setup_material_scene(Ray::SceneBase &scene, const bool output_sh, const Mat
             cam_desc.lens_blades = 0;
             cam_desc.lens_rotation = 30.0f * 3.141592653589f / 180.0f;
             cam_desc.lens_ratio = 2.0f;
+        } else if (scene_index == STANDARD_SCENE_GLASSBALL0 || scene_index == STANDARD_SCENE_GLASSBALL1) {
+            cam_desc.max_diff_depth = 8;
+            cam_desc.max_spec_depth = 8;
+            cam_desc.max_refr_depth = 8;
+            cam_desc.max_total_depth = 9;
         }
 
         const uint32_t cam = scene.AddCamera(cam_desc);
@@ -340,6 +347,48 @@ void setup_material_scene(Ray::SceneBase &scene, const bool output_sh, const Mat
         disc_light_mat_desc.base_color[1] = 1.0f;
         disc_light_mat_desc.base_color[2] = 1.0f;
         disc_light_mat = scene.AddMaterial(disc_light_mat_desc);
+    }
+
+    uint32_t glassball_mat0;
+    if (scene_index == STANDARD_SCENE_GLASSBALL0) {
+        Ray::shading_node_desc_t glassball_mat0_desc;
+        glassball_mat0_desc.type = Ray::RefractiveNode;
+        glassball_mat0_desc.base_color[0] = 1.0f;
+        glassball_mat0_desc.base_color[1] = 1.0f;
+        glassball_mat0_desc.base_color[2] = 1.0f;
+        glassball_mat0_desc.roughness = 0.0f;
+        glassball_mat0_desc.ior = 1.45f;
+        glassball_mat0 = scene.AddMaterial(glassball_mat0_desc);
+    } else {
+        Ray::principled_mat_desc_t glassball_mat0_desc;
+        glassball_mat0_desc.base_color[0] = 1.0f;
+        glassball_mat0_desc.base_color[1] = 1.0f;
+        glassball_mat0_desc.base_color[2] = 1.0f;
+        glassball_mat0_desc.roughness = 0.0f;
+        glassball_mat0_desc.ior = 1.45f;
+        glassball_mat0_desc.transmission = 1.0f;
+        glassball_mat0 = scene.AddMaterial(glassball_mat0_desc);
+    }
+
+    uint32_t glassball_mat1;
+    if (scene_index == STANDARD_SCENE_GLASSBALL0) {
+        Ray::shading_node_desc_t glassball_mat1_desc;
+        glassball_mat1_desc.type = Ray::RefractiveNode;
+        glassball_mat1_desc.base_color[0] = 1.0f;
+        glassball_mat1_desc.base_color[1] = 1.0f;
+        glassball_mat1_desc.base_color[2] = 1.0f;
+        glassball_mat1_desc.roughness = 0.0f;
+        glassball_mat1_desc.ior = 1.0f;
+        glassball_mat1 = scene.AddMaterial(glassball_mat1_desc);
+    } else {
+        Ray::principled_mat_desc_t glassball_mat1_desc;
+        glassball_mat1_desc.base_color[0] = 1.0f;
+        glassball_mat1_desc.base_color[1] = 1.0f;
+        glassball_mat1_desc.base_color[2] = 1.0f;
+        glassball_mat1_desc.roughness = 0.0f;
+        glassball_mat1_desc.ior = 1.0f;
+        glassball_mat1_desc.transmission = 1.0f;
+        glassball_mat1 = scene.AddMaterial(glassball_mat1_desc);
     }
 
     uint32_t base_mesh;
@@ -507,6 +556,27 @@ void setup_material_scene(Ray::SceneBase &scene, const bool output_sh, const Mat
         disc_light_mesh = scene.AddMesh(disc_light_mesh_desc);
     }
 
+    uint32_t glassball_mesh;
+    {
+        std::vector<float> glassball_attrs;
+        std::vector<uint32_t> glassball_indices, glassball_groups;
+        std::tie(glassball_attrs, glassball_indices, glassball_groups) =
+            LoadBIN("test_data/meshes/mat_test/glassball.bin");
+
+        Ray::mesh_desc_t glassball_mesh_desc;
+        glassball_mesh_desc.prim_type = Ray::TriangleList;
+        glassball_mesh_desc.layout = Ray::PxyzNxyzTuv;
+        glassball_mesh_desc.vtx_attrs = &glassball_attrs[0];
+        glassball_mesh_desc.vtx_attrs_count = uint32_t(glassball_attrs.size()) / 8;
+        glassball_mesh_desc.vtx_indices = &glassball_indices[0];
+        glassball_mesh_desc.vtx_indices_count = uint32_t(glassball_indices.size());
+        glassball_mesh_desc.shapes.push_back(
+            {glassball_mat0, glassball_mat0, glassball_groups[0], glassball_groups[1]});
+        glassball_mesh_desc.shapes.push_back(
+            {glassball_mat1, glassball_mat1, glassball_groups[2], glassball_groups[3]});
+        glassball_mesh = scene.AddMesh(glassball_mesh_desc);
+    }
+
     static const float identity[16] = {1.0f, 0.0f, 0.0f, 0.0f, // NOLINT
                                        0.0f, 1.0f, 0.0f, 0.0f, // NOLINT
                                        0.0f, 0.0f, 1.0f, 0.0f, // NOLINT
@@ -523,6 +593,13 @@ void setup_material_scene(Ray::SceneBase &scene, const bool output_sh, const Mat
 
     if (scene_index == REFR_PLANE_SCENE) {
         scene.AddMeshInstance(model_mesh, identity);
+    } else if (scene_index == STANDARD_SCENE_GLASSBALL0 || scene_index == STANDARD_SCENE_GLASSBALL1) {
+        static const float glassball_xform[16] = {1.0f, 0.0f,  0.0f, 0.0f, // NOLINT
+                                                  0.0f, 1.0f,  0.0f, 0.0f, // NOLINT
+                                                  0.0f, 0.0f,  1.0f, 0.0f, // NOLINT
+                                                  0.0f, 0.05f, 0.0f, 1.0f};
+
+        scene.AddMeshInstance(glassball_mesh, glassball_xform);
     } else {
         scene.AddMeshInstance(model_mesh, model_xform);
         scene.AddMeshInstance(base_mesh, identity);
@@ -541,11 +618,13 @@ void setup_material_scene(Ray::SceneBase &scene, const bool output_sh, const Mat
         scene.AddMeshInstance(disc_light_mesh, identity);
     } else if (scene_index == STANDARD_SCENE || scene_index == STANDARD_SCENE_SPHERE_LIGHT ||
                scene_index == STANDARD_SCENE_SPOT_LIGHT || scene_index == STANDARD_SCENE_DOF0 ||
-               scene_index == STANDARD_SCENE_DOF1) {
+               scene_index == STANDARD_SCENE_DOF1 || scene_index == STANDARD_SCENE_GLASSBALL0 ||
+               scene_index == STANDARD_SCENE_GLASSBALL1) {
         //
         // Use explicit lights sources
         //
-        if (scene_index == STANDARD_SCENE || scene_index == STANDARD_SCENE_DOF0 || scene_index == STANDARD_SCENE_DOF1) {
+        if (scene_index == STANDARD_SCENE || scene_index == STANDARD_SCENE_DOF0 || scene_index == STANDARD_SCENE_DOF1 ||
+            scene_index == STANDARD_SCENE_GLASSBALL0 || scene_index == STANDARD_SCENE_GLASSBALL1) {
             { // rect light
                 static const float xform[16] = {-0.425036609f, 2.24262476e-06f, -0.905176163f, 0.00000000f,
                                                 -0.876228273f, 0.250873595f,    0.411444396f,  0.00000000f,
@@ -693,8 +772,8 @@ void schedule_render_jobs(Ray::RendererBase &renderer, const Ray::SceneBase *sce
     const auto rt = renderer.type();
     const auto sz = renderer.size();
 
-    if (rt == Ray::RendererRef || rt == Ray::RendererSSE2 || rt == Ray::RendererSSE41 || rt == Ray::RendererAVX ||
-        rt == Ray::RendererAVX2 || rt == Ray::RendererAVX512 || rt == Ray::RendererNEON) {
+    if (rt & (Ray::RendererRef | Ray::RendererSSE2 | Ray::RendererSSE41 | Ray::RendererAVX | Ray::RendererAVX2 |
+              Ray::RendererAVX512 | Ray::RendererNEON)) {
         const int BucketSize = 16;
 
         std::vector<Ray::RegionContext> region_contexts;
@@ -960,7 +1039,7 @@ void assemble_material_test_images(const char *arch_list[]) {
 
     for (const char **arch = arch_list; *arch; ++arch) {
         const char *type = *arch;
-        //const auto rt = Ray::RendererTypeFromName(type);
+        // const auto rt = Ray::RendererTypeFromName(type);
         for (int j = 0; j < ImgCountH; ++j) {
             const int top_down_j = ImgCountH - j - 1;
 
@@ -1856,7 +1935,7 @@ void test_refr_mis0(const char *arch_list[], const char *preferred_device) {
     mat_desc.base_color[0] = 1.0f;
     mat_desc.base_color[1] = 1.0f;
     mat_desc.base_color[2] = 1.0f;
-    mat_desc.int_ior = 1.45f;
+    mat_desc.ior = 1.45f;
     mat_desc.roughness = 0.0f;
 
     run_material_test(arch_list, preferred_device, "refr_mis0", mat_desc, SampleCount, DefaultMinPSNR, PixThres,
@@ -1872,7 +1951,7 @@ void test_refr_mis1(const char *arch_list[], const char *preferred_device) {
     mat_desc.base_color[0] = 1.0f;
     mat_desc.base_color[1] = 1.0f;
     mat_desc.base_color[2] = 1.0f;
-    mat_desc.int_ior = 1.45f;
+    mat_desc.ior = 1.45f;
     mat_desc.roughness = 0.25f;
 
     run_material_test(arch_list, preferred_device, "refr_mis1", mat_desc, SampleCount, DefaultMinPSNR, PixThres,
@@ -1888,7 +1967,7 @@ void test_refr_mis2(const char *arch_list[], const char *preferred_device) {
     mat_desc.base_color[0] = 1.0f;
     mat_desc.base_color[1] = 1.0f;
     mat_desc.base_color[2] = 1.0f;
-    mat_desc.int_ior = 1.45f;
+    mat_desc.ior = 1.45f;
     mat_desc.roughness = 0.5f;
 
     run_material_test(arch_list, preferred_device, "refr_mis2", mat_desc, SampleCount, DefaultMinPSNR, PixThres,
@@ -1904,7 +1983,7 @@ void test_refr_mis3(const char *arch_list[], const char *preferred_device) {
     mat_desc.base_color[0] = 1.0f;
     mat_desc.base_color[1] = 1.0f;
     mat_desc.base_color[2] = 1.0f;
-    mat_desc.int_ior = 1.45f;
+    mat_desc.ior = 1.45f;
     mat_desc.roughness = 0.75f;
 
     run_material_test(arch_list, preferred_device, "refr_mis3", mat_desc, SampleCount, DefaultMinPSNR, PixThres,
@@ -1920,7 +1999,7 @@ void test_refr_mis4(const char *arch_list[], const char *preferred_device) {
     mat_desc.base_color[0] = 1.0f;
     mat_desc.base_color[1] = 1.0f;
     mat_desc.base_color[2] = 1.0f;
-    mat_desc.int_ior = 1.45f;
+    mat_desc.ior = 1.45f;
     mat_desc.roughness = 1.0f;
 
     run_material_test(arch_list, preferred_device, "refr_mis4", mat_desc, SampleCount, DefaultMinPSNR, PixThres,
@@ -1939,7 +2018,7 @@ void test_refr_mat0(const char *arch_list[], const char *preferred_device) {
     mat_desc.base_color[0] = 1.0f;
     mat_desc.base_color[1] = 1.0f;
     mat_desc.base_color[2] = 1.0f;
-    mat_desc.int_ior = 1.001f;
+    mat_desc.ior = 1.001f;
     mat_desc.roughness = 1.0f;
 
     run_material_test(arch_list, preferred_device, "refr_mat0", mat_desc, SampleCount, MinPSNR, PixThres, nullptr,
@@ -1956,7 +2035,7 @@ void test_refr_mat1(const char *arch_list[], const char *preferred_device) {
     mat_desc.base_color[0] = 1.0f;
     mat_desc.base_color[1] = 1.0f;
     mat_desc.base_color[2] = 1.0f;
-    mat_desc.int_ior = 1.45f;
+    mat_desc.ior = 1.45f;
     mat_desc.roughness = 0.0f;
 
     run_material_test(arch_list, preferred_device, "refr_mat1", mat_desc, SampleCount, MinPSNR, PixThres, nullptr,
@@ -1973,7 +2052,7 @@ void test_refr_mat2(const char *arch_list[], const char *preferred_device) {
     mat_desc.base_color[0] = 1.0f;
     mat_desc.base_color[1] = 0.0f;
     mat_desc.base_color[2] = 0.0f;
-    mat_desc.int_ior = 1.45f;
+    mat_desc.ior = 1.45f;
     mat_desc.roughness = 0.25f;
 
     run_material_test(arch_list, preferred_device, "refr_mat2", mat_desc, SampleCount, MinPSNR, PixThres, nullptr,
@@ -1990,7 +2069,7 @@ void test_refr_mat3(const char *arch_list[], const char *preferred_device) {
     mat_desc.base_color[0] = 0.0f;
     mat_desc.base_color[1] = 1.0f;
     mat_desc.base_color[2] = 0.0f;
-    mat_desc.int_ior = 1.45f;
+    mat_desc.ior = 1.45f;
     mat_desc.roughness = 0.5f;
 
     run_material_test(arch_list, preferred_device, "refr_mat3", mat_desc, SampleCount, MinPSNR, PixThres, nullptr,
@@ -2007,7 +2086,7 @@ void test_refr_mat4(const char *arch_list[], const char *preferred_device) {
     mat_desc.base_color[0] = 0.0f;
     mat_desc.base_color[1] = 0.0f;
     mat_desc.base_color[2] = 1.0f;
-    mat_desc.int_ior = 1.45f;
+    mat_desc.ior = 1.45f;
     mat_desc.roughness = 0.75f;
 
     run_material_test(arch_list, preferred_device, "refr_mat4", mat_desc, SampleCount, MinPSNR, PixThres, nullptr,
@@ -2024,7 +2103,7 @@ void test_refr_mat5(const char *arch_list[], const char *preferred_device) {
     mat_desc.base_color[0] = 1.0f;
     mat_desc.base_color[1] = 0.0f;
     mat_desc.base_color[2] = 1.0f;
-    mat_desc.int_ior = 1.45f;
+    mat_desc.ior = 1.45f;
     mat_desc.roughness = 1.0f;
 
     run_material_test(arch_list, preferred_device, "refr_mat5", mat_desc, SampleCount, MinPSNR, PixThres, nullptr,
@@ -2668,4 +2747,22 @@ void test_complex_mat6_hdr_light(const char *arch_list[], const char *preferred_
 
     run_material_test(arch_list, preferred_device, "complex_mat6_hdr_light", olive_mat_desc, SampleCount, MinPSNR,
                       PixThres, nullptr, STANDARD_SCENE_HDR_LIGHT);
+}
+
+void test_complex_mat7_refractive(const char *arch_list[], const char *preferred_device) {
+    const int SampleCount = 1338;
+    const int PixThres = 622;
+
+    Ray::principled_mat_desc_t unused;
+    run_material_test(arch_list, preferred_device, "complex_mat7_refractive", unused, SampleCount, DefaultMinPSNR,
+                      PixThres, nullptr, STANDARD_SCENE_GLASSBALL0);
+}
+
+void test_complex_mat7_principled(const char *arch_list[], const char *preferred_device) {
+    const int SampleCount = 1646;
+    const int PixThres = 292;
+
+    Ray::principled_mat_desc_t unused;
+    run_material_test(arch_list, preferred_device, "complex_mat7_principled", unused, SampleCount, DefaultMinPSNR,
+                      PixThres, nullptr, STANDARD_SCENE_GLASSBALL1);
 }
