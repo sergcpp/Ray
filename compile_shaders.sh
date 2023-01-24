@@ -1,5 +1,6 @@
 find internal/output/shaders -name "*.spv" -type f -delete
 find internal/output/shaders -name "*.inl" -type f -delete
+find internal/output/shaders -name "*.hlsl" -type f -delete
 
 if [[ "$OSTYPE" == "linux-gnu"* ]]; then
     BASE_PATH="./third-party/spirv/linux"
