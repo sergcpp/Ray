@@ -834,6 +834,11 @@ force_inline simd_vec<T, S> gather(const T *base_addr, const simd_vec<int, S> &v
     return res;
 }
 
+template <typename T, int S>
+force_inline void scatter(T* base_addr, const simd_vec<int, S>& vindex, const simd_vec<T, S>& v) {
+    ITERATE(S, { base_addr[vindex[i]] = v.template get<i>(); });
+}
+
 template <typename T, typename U, int S> class simd_comp_where_helper {
     const simd_vec<T, S> &mask_;
     simd_vec<T, S> &comp_;

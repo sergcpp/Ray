@@ -136,7 +136,7 @@ using namespace Ray::NS;
     require(v11[2] == 0);
     require(v11[3] == -1);
 
-    static const float gather_source[] = {0, 42.0f, 0, 0, 12.0f, 0, 0, 0, 11.0f, 0, 0, 0, 0, 0, 0, 23.0f, 0, 32.0f};
+    static const float gather_source[] = {0, 42.0f, 0, 0, 12.0f, 0, 0, 0, 11.0f, 0, 0, 0, 0, 0, 0, 23.0f, 0, 0.0f};
 
     const simd_ivec4 v12i = {-1, 2, 6, 13};
     const simd_fvec4 v12 = gather(gather_source + 2, v12i);
@@ -145,6 +145,11 @@ using namespace Ray::NS;
     require(v12[1] == Approx(12));
     require(v12[2] == Approx(11));
     require(v12[3] == Approx(23));
+
+    float scatter_destination[18] = {};
+    scatter(scatter_destination + 2, v12i, v12);
+
+    require(memcmp(gather_source, scatter_destination, sizeof(gather_source)) == 0);
 
     const simd_fvec4 v14 = {42.0f, 0, 24.0f, 0};
     simd_fvec4 v15 = {0, 12.0f, 0, 0};
@@ -268,7 +273,7 @@ using namespace Ray::NS;
     require(!v3.all_zeros());
     require(v6.all_zeros());
 
-    static const int gather_source[] = {0, 42, 0, 0, 12, 0, 0, 0, 11, 0, 0, 0, 0, 0, 0, 23, 0, 32};
+    static const int gather_source[] = {0, 42, 0, 0, 12, 0, 0, 0, 11, 0, 0, 0, 0, 0, 0, 23, 0, 0};
 
     const simd_ivec4 v9i = {-1, 2, 6, 13};
     const simd_ivec4 v9 = gather(gather_source + 2, v9i);
@@ -277,6 +282,11 @@ using namespace Ray::NS;
     require(v9[1] == 12);
     require(v9[2] == 11);
     require(v9[3] == 23);
+
+    int scatter_destination[18] = {};
+    scatter(scatter_destination + 2, v9i, v9);
+
+    require(memcmp(gather_source, scatter_destination, sizeof(gather_source)) == 0);
 
     const simd_ivec4 v11 = {-1, 0, -1, 0};
     simd_ivec4 v12 = {0, -1, 0, 0};
@@ -477,10 +487,10 @@ using namespace Ray::NS;
     require(v11[6] == 0);
     require(v11[7] == -1);
 
-    static const float gather_source[] = {0, 42.0f, 0, 0, 12.0f, 0, 0, 0, 11.0f, 0, 0, 0, 0, 0, 0, 23.0f, 0, 32.0f,
-                                          0, 42.0f, 0, 0, 12.0f, 0, 0, 0, 11.0f, 0, 0, 0, 0, 0, 0, 23.0f, 0, 32.0f};
+    static const float gather_source[] = {0, 42.0f, 0, 0, 12.0f, 0, 0, 0, 11.0f, 0, 0, 0, 0, 0, 0, 23.0f, 0, 0,
+                                          0, 42.0f, 0, 0, 12.0f, 0, 0, 0, 11.0f, 0, 0, 0, 0, 0, 0, 23.0f, 0, 0};
 
-    const simd_ivec8 v12i = {-1, 2, 6, 13, -1, 2, 6, 13};
+    const simd_ivec8 v12i = {-1, 2, 6, 13, 17, 20, 24, 31};
     const simd_fvec8 v12 = gather(gather_source + 2, v12i);
 
     require(v12[0] == Approx(42));
@@ -491,6 +501,11 @@ using namespace Ray::NS;
     require(v12[5] == Approx(12));
     require(v12[6] == Approx(11));
     require(v12[7] == Approx(23));
+
+    float scatter_destination[36] = {};
+    scatter(scatter_destination + 2, v12i, v12);
+
+    require(memcmp(gather_source, scatter_destination, sizeof(gather_source)) == 0);
 
     const simd_fvec8 v14 = {42.0f, 0, 24.0f, 0, 42.0f, 0, 24.0f, 0};
     simd_fvec8 v15 = {0, 12.0f, 0, 0, 0, 12.0f, 0, 0};
@@ -635,10 +650,10 @@ using namespace Ray::NS;
     require(v66[6] == -3);
     require(v66[7] == -2);
 
-    static const int gather_source[] = {0, 42, 0, 0, 12, 0, 0, 0, 11, 0, 0, 0, 0, 0, 0, 23, 0, 32,
-                                        0, 42, 0, 0, 12, 0, 0, 0, 11, 0, 0, 0, 0, 0, 0, 23, 0, 32};
+    static const int gather_source[] = {0, 42, 0, 0, 12, 0, 0, 0, 11, 0, 0, 0, 0, 0, 0, 23, 0, 0,
+                                        0, 42, 0, 0, 12, 0, 0, 0, 11, 0, 0, 0, 0, 0, 0, 23, 0, 0};
 
-    const simd_ivec8 v9i = {-1, 2, 6, 13, -1, 2, 6, 13};
+    const simd_ivec8 v9i = {-1, 2, 6, 13, 17, 20, 24, 31};
     const simd_ivec8 v9 = gather(gather_source + 2, v9i);
 
     require(v9[0] == 42);
@@ -649,6 +664,11 @@ using namespace Ray::NS;
     require(v9[5] == 12);
     require(v9[6] == 11);
     require(v9[7] == 23);
+
+    int scatter_destination[36] = {};
+    scatter(scatter_destination + 2, v9i, v9);
+
+    require(memcmp(gather_source, scatter_destination, sizeof(gather_source)) == 0);
 
     const simd_ivec8 v11 = {-1, 0, -1, 0, -1, 0, -1, 0};
     simd_ivec8 v12 = {0, -1, 0, 0, 0, -1, 0, 0};
@@ -973,12 +993,12 @@ using namespace Ray::NS;
     require(v11[6] == 0);
     require(v11[7] == -1);
 
-    static const float gather_source[] = {0, 42.0f, 0, 0, 12.0f, 0, 0, 0, 11.0f, 0, 0, 0, 0, 0, 0, 23.0f, 0, 32.0f,
-                                          0, 42.0f, 0, 0, 12.0f, 0, 0, 0, 11.0f, 0, 0, 0, 0, 0, 0, 23.0f, 0, 32.0f,
-                                          0, 42.0f, 0, 0, 12.0f, 0, 0, 0, 11.0f, 0, 0, 0, 0, 0, 0, 23.0f, 0, 32.0f,
-                                          0, 42.0f, 0, 0, 12.0f, 0, 0, 0, 11.0f, 0, 0, 0, 0, 0, 0, 23.0f, 0, 32.0f};
+    static const float gather_source[] = {0, 42.0f, 0, 0, 12.0f, 0, 0, 0, 11.0f, 0, 0, 0, 0, 0, 0, 23.0f, 0, 0,
+                                          0, 42.0f, 0, 0, 12.0f, 0, 0, 0, 11.0f, 0, 0, 0, 0, 0, 0, 23.0f, 0, 0,
+                                          0, 42.0f, 0, 0, 12.0f, 0, 0, 0, 11.0f, 0, 0, 0, 0, 0, 0, 23.0f, 0, 0,
+                                          0, 42.0f, 0, 0, 12.0f, 0, 0, 0, 11.0f, 0, 0, 0, 0, 0, 0, 23.0f, 0, 0};
 
-    const simd_ivec16 v12i = {-1, 2, 6, 13, -1, 2, 6, 13, -1, 2, 6, 13, -1, 2, 6, 13};
+    const simd_ivec16 v12i = {-1, 2, 6, 13, 17, 20, 24, 31, 35, 38, 42, 49, 53, 56, 60, 67};
     const simd_fvec16 v12 = gather(gather_source + 2, v12i);
 
     require(v12[0] == Approx(42));
@@ -997,6 +1017,11 @@ using namespace Ray::NS;
     require(v12[13] == Approx(12));
     require(v12[14] == Approx(11));
     require(v12[15] == Approx(23));
+
+    float scatter_destination[72] = {};
+    scatter(scatter_destination + 2, v12i, v12);
+
+    require(memcmp(gather_source, scatter_destination, sizeof(gather_source)) == 0);
 
     const simd_fvec16 v14 = {42.0f, 0, 24.0f, 0, 42.0f, 0, 24.0f, 0, 42.0f, 0, 24.0f, 0, 42.0f, 0, 24.0f, 0};
     simd_fvec16 v15 = {0, 12.0f, 0, 0, 0, 12.0f, 0, 0, 0, 12.0f, 0, 0, 0, 12.0f, 0, 0};
@@ -1245,12 +1270,12 @@ using namespace Ray::NS;
     require(v66[14] == -3);
     require(v66[15] == -2);
 
-    static const int gather_source[] = {0, 42, 0, 0, 12, 0, 0, 0, 11, 0, 0, 0, 0, 0, 0, 23, 0, 32,
-                                        0, 42, 0, 0, 12, 0, 0, 0, 11, 0, 0, 0, 0, 0, 0, 23, 0, 32,
-                                        0, 42, 0, 0, 12, 0, 0, 0, 11, 0, 0, 0, 0, 0, 0, 23, 0, 32,
-                                        0, 42, 0, 0, 12, 0, 0, 0, 11, 0, 0, 0, 0, 0, 0, 23, 0, 32};
+    static const int gather_source[] = {0, 42, 0, 0, 12, 0, 0, 0, 11, 0, 0, 0, 0, 0, 0, 23, 0, 0,
+                                        0, 42, 0, 0, 12, 0, 0, 0, 11, 0, 0, 0, 0, 0, 0, 23, 0, 0,
+                                        0, 42, 0, 0, 12, 0, 0, 0, 11, 0, 0, 0, 0, 0, 0, 23, 0, 0,
+                                        0, 42, 0, 0, 12, 0, 0, 0, 11, 0, 0, 0, 0, 0, 0, 23, 0, 0};
 
-    const simd_ivec16 v9i = {-1, 2, 6, 13, -1, 2, 6, 13, -1, 2, 6, 13, -1, 2, 6, 13};
+    const simd_ivec16 v9i = {-1, 2, 6, 13, 17, 20, 24, 31, 35, 38, 42, 49, 53, 56, 60, 67};
     const simd_ivec16 v9 = gather(gather_source + 2, v9i);
 
     require(v9[0] == 42);
@@ -1269,6 +1294,11 @@ using namespace Ray::NS;
     require(v9[13] == 12);
     require(v9[14] == 11);
     require(v9[15] == 23);
+
+    int scatter_destination[72] = {};
+    scatter(scatter_destination + 2, v9i, v9);
+
+    require(memcmp(gather_source, scatter_destination, sizeof(gather_source)) == 0);
 
     const simd_ivec16 v11 = {-1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0};
     simd_ivec16 v12 = {0, -1, 0, 0, 0, -1, 0, 0, 0, -1, 0, 0, 0, -1, 0, 0};
