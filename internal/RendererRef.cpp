@@ -61,26 +61,32 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
             root_max[0] = root_max[1] = root_max[2] = -MAX_DIST;
 
             if (root_node.child[0] & LEAF_NODE_BIT) {
-                ITERATE_3({ root_min[i] = root_node.bbox_min[i][0]; })
-                ITERATE_3({ root_max[i] = root_node.bbox_max[i][0]; })
+                UNROLLED_FOR(i, 3, {
+                    root_min[i] = root_node.bbox_min[i][0];
+                    root_max[i] = root_node.bbox_max[i][0];
+                })
             } else {
                 for (int j = 0; j < 8; j++) {
                     if (root_node.child[j] == 0x7fffffff) {
                         continue;
                     }
 
-                    ITERATE_3({ root_min[i] = root_node.bbox_min[i][j]; })
-                    ITERATE_3({ root_max[i] = root_node.bbox_max[i][j]; })
+                    UNROLLED_FOR(i, 3, {
+                        root_min[i] = root_node.bbox_min[i][j];
+                        root_max[i] = root_node.bbox_max[i][j];
+                    })
                 }
             }
         } else {
             const bvh_node_t &root_node = sc_data.nodes[macro_tree_root];
 
-            ITERATE_3({ root_min[i] = root_node.bbox_min[i]; })
-            ITERATE_3({ root_max[i] = root_node.bbox_max[i]; })
+            UNROLLED_FOR(i, 3, {
+                root_min[i] = root_node.bbox_min[i];
+                root_max[i] = root_node.bbox_max[i];
+            })
         }
 
-        ITERATE_3({ cell_size[i] = (root_max[i] - root_min[i]) / 255; })
+        UNROLLED_FOR(i, 3, { cell_size[i] = (root_max[i] - root_min[i]) / 255; })
     }
 
     const int w = final_buf_.w(), h = final_buf_.h();
@@ -333,7 +339,7 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
         auto c = simd_fvec4{&p.r};
 
         if (cam.dtype == SRGB) {
-            ITERATE_3({
+            UNROLLED_FOR(i, 3, {
                 if (c.get<i>() < 0.0031308f) {
                     c.set<i>(12.92f * c[i]);
                 } else {

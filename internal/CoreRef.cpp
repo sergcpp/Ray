@@ -236,44 +236,45 @@ force_inline bool bbox_test_oct(const float p[3], const mbvh_node_t &node, const
 
 force_inline void bbox_test_oct(const float o[3], const float inv_d[3], const mbvh_node_t &node, int res[8],
                                 float dist[8]){
-    ITERATE_8({ // NOLINT
-        float lo_x = inv_d[0] * (node.bbox_min[0][i] - o[0]);
-        float hi_x = inv_d[0] * (node.bbox_max[0][i] - o[0]);
-        if (lo_x > hi_x) {
-            const float tmp = lo_x;
-            lo_x = hi_x;
-            hi_x = tmp;
-        }
+    UNROLLED_FOR(i, 8,
+                 { // NOLINT
+                     float lo_x = inv_d[0] * (node.bbox_min[0][i] - o[0]);
+                     float hi_x = inv_d[0] * (node.bbox_max[0][i] - o[0]);
+                     if (lo_x > hi_x) {
+                         const float tmp = lo_x;
+                         lo_x = hi_x;
+                         hi_x = tmp;
+                     }
 
-        float lo_y = inv_d[1] * (node.bbox_min[1][i] - o[1]);
-        float hi_y = inv_d[1] * (node.bbox_max[1][i] - o[1]);
-        if (lo_y > hi_y) {
-            const float tmp = lo_y;
-            lo_y = hi_y;
-            hi_y = tmp;
-        }
+                     float lo_y = inv_d[1] * (node.bbox_min[1][i] - o[1]);
+                     float hi_y = inv_d[1] * (node.bbox_max[1][i] - o[1]);
+                     if (lo_y > hi_y) {
+                         const float tmp = lo_y;
+                         lo_y = hi_y;
+                         hi_y = tmp;
+                     }
 
-        float lo_z = inv_d[2] * (node.bbox_min[2][i] - o[2]);
-        float hi_z = inv_d[2] * (node.bbox_max[2][i] - o[2]);
-        if (lo_z > hi_z) {
-            const float tmp = lo_z;
-            lo_z = hi_z;
-            hi_z = tmp;
-        }
+                     float lo_z = inv_d[2] * (node.bbox_min[2][i] - o[2]);
+                     float hi_z = inv_d[2] * (node.bbox_max[2][i] - o[2]);
+                     if (lo_z > hi_z) {
+                         const float tmp = lo_z;
+                         lo_z = hi_z;
+                         hi_z = tmp;
+                     }
 
-        float tmin = lo_x > lo_y ? lo_x : lo_y;
-        if (lo_z > tmin) {
-            tmin = lo_z;
-        }
-        float tmax = hi_x < hi_y ? hi_x : hi_y;
-        if (hi_z < tmax) {
-            tmax = hi_z;
-        }
-        tmax *= 1.00000024f;
+                     float tmin = lo_x > lo_y ? lo_x : lo_y;
+                     if (lo_z > tmin) {
+                         tmin = lo_z;
+                     }
+                     float tmax = hi_x < hi_y ? hi_x : hi_y;
+                     if (hi_z < tmax) {
+                         tmax = hi_z;
+                     }
+                     tmax *= 1.00000024f;
 
-        dist[i] = tmin;
-        res[i] = (tmin <= tmax && tmax > 0) ? 1 : 0;
-    }) // NOLINT
+                     dist[i] = tmin;
+                     res[i] = (tmin <= tmax && tmax > 0) ? 1 : 0;
+                 }) // NOLINT
 }
 
 force_inline long bbox_test_oct(const float o[3], const float inv_d[3], const float t, const mbvh_node_t &node,
@@ -281,7 +282,7 @@ force_inline long bbox_test_oct(const float o[3], const float inv_d[3], const fl
     long mask = 0;
 #if VECTORIZE_BBOX_INTERSECTION
     simd_fvec4 lo, hi, tmin, tmax;
-    ITERATE_2_R({ // NOLINT
+    UNROLLED_FOR_R(i, 2, { // NOLINT
         lo = inv_d[0] * (simd_fvec4{&node.bbox_min[0][4 * i], simd_mem_aligned} - o[0]);
         hi = inv_d[0] * (simd_fvec4{&node.bbox_max[0][4 * i], simd_mem_aligned} - o[0]);
         tmin = min(lo, hi);
@@ -304,7 +305,7 @@ force_inline long bbox_test_oct(const float o[3], const float inv_d[3], const fl
         tmin.copy_to(&out_dist[4 * i], simd_mem_aligned);
     }) // NOLINT
 #else
-    ITERATE_8({ // NOLINT
+    UNROLLED_FOR(i, 8, { // NOLINT
         float lo_x = inv_d[0] * (node.bbox_min[0][i] - o[0]);
         float hi_x = inv_d[0] * (node.bbox_max[0][i] - o[0]);
         if (lo_x > hi_x) {
@@ -557,7 +558,7 @@ force_inline float construct_float(uint32_t m) {
 
 force_inline simd_fvec4 srgb_to_rgb(const simd_fvec4 &col) {
     simd_fvec4 ret;
-    ITERATE_3({
+    UNROLLED_FOR(i, 3, {
         if (col.get<i>() > 0.04045f) {
             ret.set<i>(std::pow((col.get<i>() + 0.055f) / 1.055f, 2.4f));
         } else {
@@ -1099,7 +1100,7 @@ force_inline float ngon_rad(const float theta, const float n) {
 }
 
 void push_ior_stack(float stack[4], const float val) {
-    ITERATE_3({
+    UNROLLED_FOR(i, 3, {
         if (stack[i] < 0.0f) {
             stack[i] = val;
             return;
@@ -1110,7 +1111,7 @@ void push_ior_stack(float stack[4], const float val) {
 }
 
 float pop_ior_stack(float stack[4], const float default_value = 1.0f) {
-    ITERATE_4_R({
+    UNROLLED_FOR_R(i, 4, {
         if (stack[i] > 0.0f) {
             return exchange(stack[i], -1.0f);
         }
@@ -1119,7 +1120,7 @@ float pop_ior_stack(float stack[4], const float default_value = 1.0f) {
 }
 
 float peek_ior_stack(const float stack[4], bool skip_first, const float default_value = 1.0f) {
-    ITERATE_4_R({
+    UNROLLED_FOR_R(i, 4, {
         if (stack[i] > 0.0f && !exchange(skip_first, false)) {
             return stack[i];
         }
@@ -1813,7 +1814,7 @@ bool Ray::Ref::Traverse_MacroTree_WithStack_AnyHit(const float ro[3], const floa
     const int ray_dir_oct = ((rd[2] > 0.0f) << 2) | ((rd[1] > 0.0f) << 1) | (rd[0] > 0.0f);
 
     int child_order[8];
-    ITERATE_8({ child_order[i] = i ^ ray_dir_oct; })
+    UNROLLED_FOR(i, 8, { child_order[i] = i ^ ray_dir_oct; })
 
     float inv_d[3];
     safe_invert(rd, inv_d);
@@ -2371,7 +2372,8 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_GGXRefraction_BSDF(const simd_fvec4 &vie
     const float G1i = G1(view_dir_ts, roughness2, roughness2);
 
     const float denom = dot(refr_dir_ts, sampled_normal_ts) + dot(view_dir_ts, sampled_normal_ts) * eta;
-    const float jacobian = denom != 0.0f ? std::max(-dot(refr_dir_ts, sampled_normal_ts), 0.0f) / (denom * denom) : 0.0f;
+    const float jacobian =
+        denom != 0.0f ? std::max(-dot(refr_dir_ts, sampled_normal_ts), 0.0f) / (denom * denom) : 0.0f;
 
     float F = D * G1i * G1o * std::max(dot(view_dir_ts, sampled_normal_ts), 0.0f) * jacobian /
               (/*-refr_dir_ts.get<2>() */ view_dir_ts.get<2>());
@@ -3501,7 +3503,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_DiffuseNode(const light_sample_t &ls, co
     memcpy(&sh_r.o[0], value_ptr(offset_ray(surf.P, surf.plane_N)), 3 * sizeof(float));
     memcpy(&sh_r.d[0], value_ptr(ls.L), 3 * sizeof(float));
     sh_r.dist = ls.dist - 10.0f * HIT_BIAS;
-    ITERATE_3({ sh_r.c[i] = ray.c[i] * lcol[i]; })
+    UNROLLED_FOR(i, 3, { sh_r.c[i] = ray.c[i] * lcol[i]; })
     return simd_fvec4{0.0f};
 }
 
@@ -3517,7 +3519,7 @@ void Ray::Ref::Sample_DiffuseNode(const ray_data_t &ray, const surface_t &surf, 
 
     memcpy(&new_ray.o[0], value_ptr(offset_ray(surf.P, surf.plane_N)), 3 * sizeof(float));
     memcpy(&new_ray.d[0], value_ptr(V), 3 * sizeof(float));
-    ITERATE_3({ new_ray.c[i] = ray.c[i] * F[i] * mix_weight / F[3]; })
+    UNROLLED_FOR(i, 3, { new_ray.c[i] = ray.c[i] * F[i] * mix_weight / F[3]; })
     new_ray.pdf = F[3];
 }
 
@@ -3607,7 +3609,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_RefractiveNode(const light_sample_t &ls,
     memcpy(&sh_r.o[0], value_ptr(offset_ray(surf.P, -surf.plane_N)), 3 * sizeof(float));
     memcpy(&sh_r.d[0], value_ptr(ls.L), 3 * sizeof(float));
     sh_r.dist = ls.dist - 10.0f * HIT_BIAS;
-    ITERATE_3({ sh_r.c[i] = ray.c[i] * lcol.get<i>(); })
+    UNROLLED_FOR(i, 3, { sh_r.c[i] = ray.c[i] * lcol.get<i>(); })
     return simd_fvec4{0.0f};
 }
 

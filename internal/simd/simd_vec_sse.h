@@ -213,7 +213,7 @@ template <> class simd_vec<float, 4> {
     force_inline simd_vec<float, 4> vectorcall log() const {
         alignas(16) float comp[4];
         _mm_store_ps(comp, vec_);
-        ITERATE_4({ comp[i] = std::log(comp[i]); })
+        UNROLLED_FOR(i, 4, { comp[i] = std::log(comp[i]); })
         return simd_vec<float, 4>{comp, simd_mem_aligned};
     }
 
@@ -468,7 +468,7 @@ template <> class simd_vec<float, 4> {
         alignas(16) float comp1[4], comp2[4];
         _mm_store_ps(comp1, v1.vec_);
         _mm_store_ps(comp2, v2.vec_);
-        ITERATE_4({ comp1[i] = std::pow(comp1[i], comp2[i]); })
+        UNROLLED_FOR(i, 4, { comp1[i] = std::pow(comp1[i], comp2[i]); })
         return simd_vec<float, 4>{comp1, simd_mem_aligned};
     }
 
@@ -478,7 +478,7 @@ template <> class simd_vec<float, 4> {
 
 #ifndef NDEBUG
     friend void vectorcall __assert_valid_mask(const simd_vec<float, 4> mask) {
-        ITERATE_4({
+        UNROLLED_FOR(i, 4, {
             const float val = mask.get<i>();
             assert(reinterpret_cast<const uint32_t &>(val) == 0 ||
                    reinterpret_cast<const uint32_t &>(val) == 0xffffffff);
@@ -584,12 +584,12 @@ template <> class simd_vec<int, 4> {
 #if defined(USE_SSE41)
         vec_ = _mm_mullo_epi32(vec_, rhs.vec_);
 #elif defined(_MSC_VER) && !defined(__clang__)
-        ITERATE_4({ vec_.m128i_i32[i] *= rhs.vec_.m128i_i32[i]; })
+        UNROLLED_FOR(i, 4, { vec_.m128i_i32[i] *= rhs.vec_.m128i_i32[i]; })
 #else
         alignas(16) int comp[4], comp_rhs[4];
         _mm_store_si128((__m128i *)comp, vec_);
         _mm_store_si128((__m128i *)comp_rhs, rhs.vec_);
-        ITERATE_4({ comp[i] = comp[i] * comp_rhs[i]; })
+        UNROLLED_FOR(i, 4, { comp[i] = comp[i] * comp_rhs[i]; })
         vec_ = _mm_load_si128((const __m128i *)comp);
 #endif
         return *this;
@@ -599,11 +599,11 @@ template <> class simd_vec<int, 4> {
 #if defined(USE_SSE41)
         vec_ = _mm_mullo_epi32(vec_, _mm_set1_epi32(rhs));
 #elif defined(_MSC_VER) && !defined(__clang__)
-        ITERATE_4({ vec_.m128i_i32[i] *= rhs; })
+        UNROLLED_FOR(i, 4, { vec_.m128i_i32[i] *= rhs; })
 #else
         alignas(16) int comp[4];
         _mm_store_si128((__m128i *)comp, vec_);
-        ITERATE_4({ comp[i] *= rhs; })
+        UNROLLED_FOR(i, 4, { comp[i] *= rhs; })
         vec_ = _mm_load_si128((const __m128i *)comp);
 #endif
         return *this;
@@ -611,12 +611,12 @@ template <> class simd_vec<int, 4> {
 
     force_inline simd_vec<int, 4> &vectorcall operator/=(const simd_vec<int, 4> rhs) {
 #if defined(_MSC_VER) && !defined(__clang__)
-        ITERATE_4({ vec_.m128i_i32[i] /= rhs.vec_.m128i_i32[i]; })
+        UNROLLED_FOR(i, 4, { vec_.m128i_i32[i] /= rhs.vec_.m128i_i32[i]; })
 #else
         alignas(16) int comp[4], comp_rhs[4];
         _mm_store_si128((__m128i *)comp, vec_);
         _mm_store_si128((__m128i *)comp_rhs, rhs.vec_);
-        ITERATE_4({ comp[i] /= comp_rhs[i]; })
+        UNROLLED_FOR(i, 4, { comp[i] /= comp_rhs[i]; })
         vec_ = _mm_load_si128((const __m128i *)comp);
 #endif
         return *this;
@@ -624,11 +624,11 @@ template <> class simd_vec<int, 4> {
 
     force_inline simd_vec<int, 4> &vectorcall operator/=(const int rhs) {
 #if defined(_MSC_VER) && !defined(__clang__)
-        ITERATE_4({ vec_.m128i_i32[i] /= rhs; })
+        UNROLLED_FOR(i, 4, { vec_.m128i_i32[i] /= rhs; })
 #else
         alignas(16) int comp[4];
         _mm_store_si128((__m128i *)comp, vec_);
-        ITERATE_4({ comp[i] /= rhs; })
+        UNROLLED_FOR(i, 4, { comp[i] /= rhs; })
         vec_ = _mm_load_si128((const __m128i *)comp);
 #endif
         return *this;
@@ -794,7 +794,7 @@ template <> class simd_vec<int, 4> {
 #if defined(USE_SSE41)
         temp.vec_ = _mm_min_epi32(v1.vec_, v2.vec_);
 #elif defined(_MSC_VER) && !defined(__clang__)
-        ITERATE_4({
+        UNROLLED_FOR(i, 4, {
             temp.vec_.m128i_i32[i] =
                 (v1.vec_.m128i_i32[i] < v2.vec_.m128i_i32[i]) ? v1.vec_.m128i_i32[i] : v2.vec_.m128i_i32[i];
         })
@@ -802,7 +802,7 @@ template <> class simd_vec<int, 4> {
         alignas(16) int comp1[4], comp2[4];
         _mm_store_si128((__m128i *)comp1, v1.vec_);
         _mm_store_si128((__m128i *)comp2, v2.vec_);
-        ITERATE_4({ comp1[i] = (comp1[i] < comp2[i]) ? comp1[i] : comp2[i]; })
+        UNROLLED_FOR(i, 4, { comp1[i] = (comp1[i] < comp2[i]) ? comp1[i] : comp2[i]; })
         temp.vec_ = _mm_load_si128((const __m128i *)comp1);
 #endif
         return temp;
@@ -813,11 +813,11 @@ template <> class simd_vec<int, 4> {
 #if defined(USE_SSE41)
         temp.vec_ = _mm_min_epi32(v1.vec_, _mm_set1_epi32(v2));
 #elif defined(_MSC_VER) && !defined(__clang__)
-        ITERATE_4({ temp.vec_.m128i_i32[i] = (v1.vec_.m128i_i32[i] < v2) ? v1.vec_.m128i_i32[i] : v2; })
+        UNROLLED_FOR(i, 4, { temp.vec_.m128i_i32[i] = (v1.vec_.m128i_i32[i] < v2) ? v1.vec_.m128i_i32[i] : v2; })
 #else
         alignas(16) int comp[4];
         _mm_store_si128((__m128i *)comp, v1.vec_);
-        ITERATE_4({ comp[i] = (comp[i] < v2) ? comp[i] : v2; })
+        UNROLLED_FOR(i, 4, { comp[i] = (comp[i] < v2) ? comp[i] : v2; })
         temp.vec_ = _mm_load_si128((const __m128i *)comp);
 #endif
         return temp;
@@ -828,11 +828,11 @@ template <> class simd_vec<int, 4> {
 #if defined(USE_SSE41)
         temp.vec_ = _mm_min_epi32(_mm_set1_epi32(v1), v2.vec_);
 #elif defined(_MSC_VER) && !defined(__clang__)
-        ITERATE_4({ temp.vec_.m128i_i32[i] = (v1 < v2.vec_.m128i_i32[i]) ? v1 : v2.vec_.m128i_i32[i]; })
+        UNROLLED_FOR(i, 4, { temp.vec_.m128i_i32[i] = (v1 < v2.vec_.m128i_i32[i]) ? v1 : v2.vec_.m128i_i32[i]; })
 #else
         alignas(16) int comp[4];
         _mm_store_si128((__m128i *)comp, v2.vec_);
-        ITERATE_4({ comp[i] = (comp[i] < v1) ? v1 : comp[i]; })
+        UNROLLED_FOR(i, 4, { comp[i] = (comp[i] < v1) ? v1 : comp[i]; })
         temp.vec_ = _mm_load_si128((const __m128i *)comp);
 #endif
         return temp;
@@ -843,7 +843,7 @@ template <> class simd_vec<int, 4> {
 #if defined(USE_SSE41)
         temp.vec_ = _mm_max_epi32(v1.vec_, v2.vec_);
 #elif defined(_MSC_VER) && !defined(__clang__)
-        ITERATE_4({
+        UNROLLED_FOR(i, 4, {
             temp.vec_.m128i_i32[i] =
                 (v1.vec_.m128i_i32[i] < v2.vec_.m128i_i32[i]) ? v1.vec_.m128i_i32[i] : v2.vec_.m128i_i32[i];
         })
@@ -851,7 +851,7 @@ template <> class simd_vec<int, 4> {
         alignas(16) int comp1[4], comp2[4];
         _mm_store_si128((__m128i *)comp1, v1.vec_);
         _mm_store_si128((__m128i *)comp2, v2.vec_);
-        ITERATE_4({ comp1[i] = (comp1[i] > comp2[i]) ? comp1[i] : comp2[i]; })
+        UNROLLED_FOR(i, 4, { comp1[i] = (comp1[i] > comp2[i]) ? comp1[i] : comp2[i]; })
         temp.vec_ = _mm_load_si128((const __m128i *)comp1);
 #endif
         return temp;
@@ -911,12 +911,12 @@ template <> class simd_vec<int, 4> {
 #if defined(USE_SSE41)
         ret.vec_ = _mm_mullo_epi32(v1.vec_, v2.vec_);
 #elif defined(_MSC_VER) && !defined(__clang__)
-        ITERATE_4({ ret.vec_.m128i_i32[i] = v1.vec_.m128i_i32[i] * v2.vec_.m128i_i32[i]; })
+        UNROLLED_FOR(i, 4, { ret.vec_.m128i_i32[i] = v1.vec_.m128i_i32[i] * v2.vec_.m128i_i32[i]; })
 #else
         alignas(16) int comp1[4], comp2[4];
         _mm_store_si128((__m128i *)comp1, v1.vec_);
         _mm_store_si128((__m128i *)comp2, v2.vec_);
-        ITERATE_4({ comp1[i] *= comp2[i]; })
+        UNROLLED_FOR(i, 4, { comp1[i] *= comp2[i]; })
         ret.vec_ = _mm_load_si128((const __m128i *)comp1);
 #endif
         return ret;
@@ -925,12 +925,12 @@ template <> class simd_vec<int, 4> {
     friend force_inline simd_vec<int, 4> vectorcall operator/(const simd_vec<int, 4> v1, const simd_vec<int, 4> v2) {
         simd_vec<int, 4> ret;
 #if defined(_MSC_VER) && !defined(__clang__)
-        ITERATE_4({ ret.vec_.m128i_i32[i] = v1.vec_.m128i_i32[i] / v2.vec_.m128i_i32[i]; })
+        UNROLLED_FOR(i, 4, { ret.vec_.m128i_i32[i] = v1.vec_.m128i_i32[i] / v2.vec_.m128i_i32[i]; })
 #else
         alignas(16) int comp1[4], comp2[4];
         _mm_store_si128((__m128i *)comp1, v1.vec_);
         _mm_store_si128((__m128i *)comp2, v2.vec_);
-        ITERATE_4({ comp1[i] /= comp2[i]; })
+        UNROLLED_FOR(i, 4, { comp1[i] /= comp2[i]; })
         ret.vec_ = _mm_load_si128((const __m128i *)comp1);
 #endif
         return ret;
@@ -953,11 +953,11 @@ template <> class simd_vec<int, 4> {
 #if defined(USE_SSE41)
         ret.vec_ = _mm_mullo_epi32(v1.vec_, _mm_set1_epi32(v2));
 #elif defined(_MSC_VER) && !defined(__clang__)
-        ITERATE_4({ ret.vec_.m128i_i32[i] = v1.vec_.m128i_i32[i] * v2; })
+        UNROLLED_FOR(i, 4, { ret.vec_.m128i_i32[i] = v1.vec_.m128i_i32[i] * v2; })
 #else
         alignas(16) int comp[4];
         _mm_store_si128((__m128i *)comp, v1.vec_);
-        ITERATE_4({ comp[i] *= v2; })
+        UNROLLED_FOR(i, 4, { comp[i] *= v2; })
         ret.vec_ = _mm_load_si128((const __m128i *)comp);
 #endif
         return ret;
@@ -966,11 +966,11 @@ template <> class simd_vec<int, 4> {
     friend force_inline simd_vec<int, 4> vectorcall operator/(const simd_vec<int, 4> v1, const int v2) {
         simd_vec<int, 4> ret;
 #if defined(_MSC_VER) && !defined(__clang__)
-        ITERATE_4({ ret.vec_.m128i_i32[i] = v1.vec_.m128i_i32[i] / v2; })
+        UNROLLED_FOR(i, 4, { ret.vec_.m128i_i32[i] = v1.vec_.m128i_i32[i] / v2; })
 #else
         alignas(16) int comp[4];
         _mm_store_si128((__m128i *)comp, v1.vec_);
-        ITERATE_4({ comp[i] /= v2; })
+        UNROLLED_FOR(i, 4, { comp[i] /= v2; })
         ret.vec_ = _mm_load_si128((const __m128i *)comp);
 #endif
         return ret;
@@ -991,11 +991,11 @@ template <> class simd_vec<int, 4> {
 #if defined(USE_SSE41)
         ret.vec_ = _mm_mullo_epi32(_mm_set1_epi32(v1), v2.vec_);
 #elif defined(_MSC_VER) && !defined(__clang__)
-        ITERATE_4({ ret.vec_.m128i_i32[i] = v1 * v2.vec_.m128i_i32[i]; })
+        UNROLLED_FOR(i, 4, { ret.vec_.m128i_i32[i] = v1 * v2.vec_.m128i_i32[i]; })
 #else
         alignas(16) int comp[4];
         _mm_store_si128((__m128i *)comp, v2.vec_);
-        ITERATE_4({ comp[i] *= v1; })
+        UNROLLED_FOR(i, 4, { comp[i] *= v1; })
         ret.vec_ = _mm_load_si128((const __m128i *)comp);
 #endif
         return ret;
@@ -1004,11 +1004,11 @@ template <> class simd_vec<int, 4> {
     friend force_inline simd_vec<int, 4> vectorcall operator/(const int v1, const simd_vec<int, 4> v2) {
         simd_vec<int, 4> ret;
 #if defined(_MSC_VER) && !defined(__clang__)
-        ITERATE_4({ ret.vec_.m128i_i32[i] = v1 / v2.vec_.m128i_i32[i]; })
+        UNROLLED_FOR(i, 4, { ret.vec_.m128i_i32[i] = v1 / v2.vec_.m128i_i32[i]; })
 #else
         alignas(16) int comp[4];
         _mm_store_si128((__m128i *)comp, v2.vec_);
-        ITERATE_4({ comp[i] = v1 / comp[i]; })
+        UNROLLED_FOR(i, 4, { comp[i] = v1 / comp[i]; })
         ret.vec_ = _mm_load_si128((const __m128i *)comp);
 #endif
         return ret;
@@ -1017,12 +1017,12 @@ template <> class simd_vec<int, 4> {
     friend force_inline simd_vec<int, 4> vectorcall operator>>(const simd_vec<int, 4> v1, const simd_vec<int, 4> v2) {
         simd_vec<int, 4> ret;
 #if defined(_MSC_VER) && !defined(__clang__)
-        ITERATE_4({ ret.vec_.m128i_i32[i] = v1.vec_.m128i_i32[i] >> v2.vec_.m128i_i32[i]; })
+        UNROLLED_FOR(i, 4, { ret.vec_.m128i_i32[i] = v1.vec_.m128i_i32[i] >> v2.vec_.m128i_i32[i]; })
 #else
         alignas(16) int comp1[4], comp2[4];
         _mm_store_si128((__m128i *)comp1, v1.vec_);
         _mm_store_si128((__m128i *)comp2, v2.vec_);
-        ITERATE_4({ comp1[i] = reinterpret_cast<const unsigned &>(comp1[i]) >> comp2[i]; })
+        UNROLLED_FOR(i, 4, { comp1[i] = reinterpret_cast<const unsigned &>(comp1[i]) >> comp2[i]; })
         ret.vec_ = _mm_load_si128((const __m128i *)comp1);
 #endif
         return ret;
@@ -1037,12 +1037,12 @@ template <> class simd_vec<int, 4> {
     friend force_inline simd_vec<int, 4> vectorcall operator<<(const simd_vec<int, 4> v1, const simd_vec<int, 4> v2) {
         simd_vec<int, 4> ret;
 #if defined(_MSC_VER) && !defined(__clang__)
-        ITERATE_4({ ret.vec_.m128i_i32[i] = v1.vec_.m128i_i32[i] << v2.vec_.m128i_i32[i]; })
+        UNROLLED_FOR(i, 4, { ret.vec_.m128i_i32[i] = v1.vec_.m128i_i32[i] << v2.vec_.m128i_i32[i]; })
 #else
         alignas(16) int comp1[4], comp2[4];
         _mm_store_si128((__m128i *)comp1, v1.vec_);
         _mm_store_si128((__m128i *)comp2, v2.vec_);
-        ITERATE_4({ comp1[i] <<= comp2[i]; })
+        UNROLLED_FOR(i, 4, { comp1[i] <<= comp2[i]; })
         ret.vec_ = _mm_load_si128((const __m128i *)comp1);
 #endif
         return ret;
@@ -1067,7 +1067,7 @@ template <> class simd_vec<int, 4> {
 
 #ifndef NDEBUG
     friend void vectorcall __assert_valid_mask(const simd_vec<int, 4> mask) {
-        ITERATE_4({
+        UNROLLED_FOR(i, 4, {
             const int val = mask.get<i>();
             assert(val == 0 || val == -1);
         })

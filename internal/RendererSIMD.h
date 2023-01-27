@@ -102,7 +102,7 @@ pixel_color_t clamp_and_gamma_correct(const pixel_color_t &p, const camera_t &ca
     auto c = simd_fvec4{&p.r};
 
     if (cam.dtype == SRGB) {
-        ITERATE_3({
+        UNROLLED_FOR(i, 3, {
             if (c.get<i>() < 0.0031308f) {
                 c.set<i>(12.92f * c.get<i>());
             } else {
@@ -181,26 +181,32 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
             root_max[0] = root_max[1] = root_max[2] = -MAX_DIST;
 
             if (root_node.child[0] & LEAF_NODE_BIT) {
-                ITERATE_3({ root_min[i] = root_node.bbox_min[i][0]; })
-                ITERATE_3({ root_max[i] = root_node.bbox_max[i][0]; })
+                UNROLLED_FOR(i, 3, {
+                    root_min[i] = root_node.bbox_min[i][0];
+                    root_max[i] = root_node.bbox_max[i][0];
+                })
             } else {
                 for (int j = 0; j < 8; j++) {
                     if (root_node.child[j] == 0x7fffffff) {
                         continue;
                     }
 
-                    ITERATE_3({ root_min[i] = root_node.bbox_min[i][j]; })
-                    ITERATE_3({ root_max[i] = root_node.bbox_max[i][j]; })
+                    UNROLLED_FOR(i, 3, {
+                        root_min[i] = root_node.bbox_min[i][j];
+                        root_max[i] = root_node.bbox_max[i][j];
+                    })
                 }
             }
         } else {
             const bvh_node_t &root_node = sc_data.nodes[macro_tree_root];
 
-            ITERATE_3({ root_min[i] = root_node.bbox_min[i]; })
-            ITERATE_3({ root_max[i] = root_node.bbox_max[i]; })
+            UNROLLED_FOR(i, 3, {
+                root_min[i] = root_node.bbox_min[i];
+                root_max[i] = root_node.bbox_max[i];
+            })
         }
 
-        ITERATE_3({ cell_size[i] = (root_max[i] - root_min[i]) / 255; })
+        UNROLLED_FOR(i, 3, { cell_size[i] = (root_max[i] - root_min[i]) / 255; })
     }
 
     const int w = final_buf_.w(), h = final_buf_.h();
@@ -286,7 +292,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
                          &secondary_rays_count, p.shadow_masks.data(), p.shadow_rays.data(), &shadow_rays_count);
 
         // TODO: vectorize this
-        ITERATE(S, {
+        UNROLLED_FOR_S(i, S, {
             if (p.primary_masks[ri].template get<i>()) {
                 temp_buf_.SetPixel(x.template get<i>(), y.template get<i>(),
                                    {out_rgba[0].template get<i>(), out_rgba[1].template get<i>(),
@@ -307,7 +313,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
                            s->tex_storages_, rc);
 
         // TODO: vectorize this
-        ITERATE(S, {
+        UNROLLED_FOR_S(i, S, {
             if (p.shadow_masks[ri].template get<i>()) {
                 temp_buf_.AddPixel(x.template get<i>(), y.template get<i>(),
                                    {rc[0].template get<i>(), rc[1].template get<i>(), rc[2].template get<i>(), 0.0f});
@@ -385,7 +391,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
                              p.shadow_rays.data(), &shadow_rays_count);
 
             // TODO: vectorize this
-            ITERATE(S, {
+            UNROLLED_FOR_S(i, S, {
                 if (p.primary_masks[ri].template get<i>()) {
                     temp_buf_.AddPixel(x.template get<i>(), y.template get<i>(),
                                        {out_rgba[0].template get<i>(), out_rgba[1].template get<i>(),
@@ -406,7 +412,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
                            s->tex_storages_, rc);
 
             // TODO: vectorize this
-            ITERATE(S, {
+            UNROLLED_FOR_S(i, S, {
                 if (p.shadow_masks[ri].template get<i>()) {
                     temp_buf_.AddPixel(
                         x.template get<i>(), y.template get<i>(),

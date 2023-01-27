@@ -10,90 +10,91 @@
 
 // Used to force loop unroll and make index compile-time constant
 // clang-format off
-#define ITERATE_2(exp)  \
-        { const int i = 0; exp }    \
-        { const int i = 1; exp }
+#define UNROLLED_FOR_0(I, N, C)
+#define UNROLLED_FOR_1(I, N, C) { const int I =  0 % N; C }
+#define UNROLLED_FOR_2(I, N, C) { const int I =  0 % N; C } { const int I =  1 % N; C }
+#define UNROLLED_FOR_3(I, N, C) { const int I =  0 % N; C } { const int I =  1 % N; C } { const int I =  2 % N; C }
+#define UNROLLED_FOR_4(I, N, C) { const int I =  0 % N; C } { const int I =  1 % N; C } { const int I =  2 % N; C } { const int I =  3 % N; C }
+#define UNROLLED_FOR_5(I, N, C) { const int I =  0 % N; C } { const int I =  1 % N; C } { const int I =  2 % N; C } { const int I =  3 % N; C } \
+                                { const int I =  4 % N; C }
+#define UNROLLED_FOR_6(I, N, C) { const int I =  0 % N; C } { const int I =  1 % N; C } { const int I =  2 % N; C } { const int I =  3 % N; C } \
+                                { const int I =  4 % N; C } { const int I =  5 % N; C }
+#define UNROLLED_FOR_7(I, N, C) { const int I =  0 % N; C } { const int I =  1 % N; C } { const int I =  2 % N; C } { const int I =  3 % N; C } \
+                                { const int I =  4 % N; C } { const int I =  5 % N; C } { const int I =  6 % N; C }
+#define UNROLLED_FOR_8(I, N, C) { const int I =  0 % N; C } { const int I =  1 % N; C } { const int I =  2 % N; C } { const int I =  3 % N; C } \
+                                { const int I =  4 % N; C } { const int I =  5 % N; C } { const int I =  6 % N; C } { const int I =  7 % N; C }
+#define UNROLLED_FOR_9(I, N, C) { const int I =  0 % N; C } { const int I =  1 % N; C } { const int I =  2 % N; C } { const int I =  3 % N; C } \
+                                { const int I =  4 % N; C } { const int I =  5 % N; C } { const int I =  6 % N; C } { const int I =  7 % N; C } \
+                                { const int I =  8 % N; C }
+#define UNROLLED_FOR_10(I, N, C){ const int I =  0 % N; C } { const int I =  1 % N; C } { const int I =  2 % N; C } { const int I =  3 % N; C } \
+                                { const int I =  4 % N; C } { const int I =  5 % N; C } { const int I =  6 % N; C } { const int I =  7 % N; C } \
+                                { const int I =  8 % N; C } { const int I =  9 % N; C }
+#define UNROLLED_FOR_11(I, N, C){ const int I =  0 % N; C } { const int I =  1 % N; C } { const int I =  2 % N; C } { const int I =  3 % N; C } \
+                                { const int I =  4 % N; C } { const int I =  5 % N; C } { const int I =  6 % N; C } { const int I =  7 % N; C } \
+                                { const int I =  8 % N; C } { const int I =  9 % N; C } { const int I = 10 % N; C }
+#define UNROLLED_FOR_12(I, N, C){ const int I =  0 % N; C } { const int I =  1 % N; C } { const int I =  2 % N; C } { const int I =  3 % N; C } \
+                                { const int I =  4 % N; C } { const int I =  5 % N; C } { const int I =  6 % N; C } { const int I =  7 % N; C } \
+                                { const int I =  8 % N; C } { const int I =  9 % N; C } { const int I = 10 % N; C } { const int I = 11 % N; C }
+#define UNROLLED_FOR_13(I, N, C){ const int I =  0 % N; C } { const int I =  1 % N; C } { const int I =  2 % N; C } { const int I =  3 % N; C } \
+                                { const int I =  4 % N; C } { const int I =  5 % N; C } { const int I =  6 % N; C } { const int I =  7 % N; C } \
+                                { const int I =  8 % N; C } { const int I =  9 % N; C } { const int I = 10 % N; C } { const int I = 11 % N; C } \
+                                { const int I = 12 % N; C }
+#define UNROLLED_FOR_14(I, N, C){ const int I =  0 % N; C } { const int I =  1 % N; C } { const int I =  2 % N; C } { const int I =  3 % N; C } \
+                                { const int I =  4 % N; C } { const int I =  5 % N; C } { const int I =  6 % N; C } { const int I =  7 % N; C } \
+                                { const int I =  8 % N; C } { const int I =  9 % N; C } { const int I = 10 % N; C } { const int I = 11 % N; C } \
+                                { const int I = 12 % N; C } { const int I = 13 % N; C }
+#define UNROLLED_FOR_15(I, N, C){ const int I =  0 % N; C } { const int I =  1 % N; C } { const int I =  2 % N; C } { const int I =  3 % N; C } \
+                                { const int I =  4 % N; C } { const int I =  5 % N; C } { const int I =  6 % N; C } { const int I =  7 % N; C } \
+                                { const int I =  8 % N; C } { const int I =  9 % N; C } { const int I = 10 % N; C } { const int I = 11 % N; C } \
+                                { const int I = 12 % N; C } { const int I = 13 % N; C } { const int I = 14 % N; C }
+#define UNROLLED_FOR_16(I, N, C){ const int I =  0 % N; C } { const int I =  1 % N; C } { const int I =  2 % N; C } { const int I =  3 % N; C } \
+                                { const int I =  4 % N; C } { const int I =  5 % N; C } { const int I =  6 % N; C } { const int I =  7 % N; C } \
+                                { const int I =  8 % N; C } { const int I =  9 % N; C } { const int I = 10 % N; C } { const int I = 11 % N; C } \
+                                { const int I = 12 % N; C } { const int I = 13 % N; C } { const int I = 14 % N; C } { const int I = 15 % N; C }
 
-#define ITERATE_3(exp)  \
-        { const int i = 0; exp }    \
-        { const int i = 1; exp }    \
-        { const int i = 2; exp }
+#define UNROLLED_FOR_WRAPPER(INDEX, COUNT, CODE) UNROLLED_FOR_##COUNT(INDEX, COUNT, CODE)
+#define UNROLLED_FOR(INDEX, COUNT, CODE) UNROLLED_FOR_WRAPPER(INDEX, COUNT, CODE)
 
-#define ITERATE_4(exp)  \
-        { const int i = 0; exp }    \
-        { const int i = 1; exp }    \
-        { const int i = 2; exp }    \
-        { const int i = 3; exp }
+// Needed for cases when count is not a literal constant (e.g. template parameter)
+#define UNROLLED_FOR_S(INDEX, COUNT, CODE)                  \
+    switch(COUNT) {                                         \
+        case  0: UNROLLED_FOR_0(INDEX, COUNT, CODE); break; \
+        case  1: UNROLLED_FOR_1(INDEX, COUNT, CODE); break; \
+        case  2: UNROLLED_FOR_2(INDEX, COUNT, CODE); break; \
+        case  3: UNROLLED_FOR_3(INDEX, COUNT, CODE); break; \
+        case  4: UNROLLED_FOR_4(INDEX, COUNT, CODE); break; \
+        case  5: UNROLLED_FOR_5(INDEX, COUNT, CODE); break; \
+        case  6: UNROLLED_FOR_6(INDEX, COUNT, CODE); break; \
+        case  7: UNROLLED_FOR_7(INDEX, COUNT, CODE); break; \
+        case  8: UNROLLED_FOR_8(INDEX, COUNT, CODE); break; \
+        case  9: UNROLLED_FOR_9(INDEX, COUNT, CODE); break; \
+        case 10: UNROLLED_FOR_10(INDEX, COUNT, CODE); break;\
+        case 11: UNROLLED_FOR_11(INDEX, COUNT, CODE); break;\
+        case 12: UNROLLED_FOR_12(INDEX, COUNT, CODE); break;\
+        case 13: UNROLLED_FOR_13(INDEX, COUNT, CODE); break;\
+        case 14: UNROLLED_FOR_14(INDEX, COUNT, CODE); break;\
+        case 15: UNROLLED_FOR_15(INDEX, COUNT, CODE); break;\
+        case 16: UNROLLED_FOR_16(INDEX, COUNT, CODE); break;\
+    }
 
-#define ITERATE_8(exp)  \
-        { const int i = 0; exp }    \
-        { const int i = 1; exp }    \
-        { const int i = 2; exp }    \
-        { const int i = 3; exp }    \
-        { const int i = 4; exp }    \
-        { const int i = 5; exp }    \
-        { const int i = 6; exp }    \
-        { const int i = 7; exp }
-
-#define ITERATE_16(exp)  \
-        { const int i = 0; exp }    \
-        { const int i = 1; exp }    \
-        { const int i = 2; exp }    \
-        { const int i = 3; exp }    \
-        { const int i = 4; exp }    \
-        { const int i = 5; exp }    \
-        { const int i = 6; exp }    \
-        { const int i = 7; exp }    \
-        { const int i = 8; exp }    \
-        { const int i = 9; exp }    \
-        { const int i = 10; exp }   \
-        { const int i = 11; exp }   \
-        { const int i = 12; exp }   \
-        { const int i = 13; exp }   \
-        { const int i = 14; exp }   \
-        { const int i = 15; exp }
-
-#define ITERATE(n, exp)                 \
-    if ((n) == 16) {                    \
-        { const int i = 0 % n; exp }    \
-        { const int i = 1 % n; exp }    \
-        { const int i = 2 % n; exp }    \
-        { const int i = 3 % n; exp }    \
-        { const int i = 4 % n; exp }    \
-        { const int i = 5 % n; exp }    \
-        { const int i = 6 % n; exp }    \
-        { const int i = 7 % n; exp }    \
-        { const int i = 8 % n; exp }    \
-        { const int i = 9 % n; exp }    \
-        { const int i = 10 % n; exp }   \
-        { const int i = 11 % n; exp }   \
-        { const int i = 12 % n; exp }   \
-        { const int i = 13 % n; exp }   \
-        { const int i = 14 % n; exp }   \
-        { const int i = 15 % n; exp }   \
-    } else if ((n) == 8) {              \
-        { const int i = 0 % n; exp }    \
-        { const int i = 1 % n; exp }    \
-        { const int i = 2 % n; exp }    \
-        { const int i = 3 % n; exp }    \
-        { const int i = 4 % n; exp }    \
-        { const int i = 5 % n; exp }    \
-        { const int i = 6 % n; exp }    \
-        { const int i = 7 % n; exp }    \
-    } else if ((n) == 4) {              \
-        { const int i = 0 % n; exp }    \
-        { const int i = 1 % n; exp }    \
-        { const int i = 2 % n; exp }    \
-        { const int i = 3 % n; exp }    \
-    } else if ((n) == 3) {              \
-        { const int i = 0 % n; exp }    \
-        { const int i = 1 % n; exp }    \
-        { const int i = 2 % n; exp }    \
-    } else if ((n) == 2) {              \
-        { const int i = 0 % n; exp }    \
-        { const int i = 1 % n; exp }    \
-    } else if ((n) == 1) {              \
-        { const int i = 0; exp }        \
+#define UNROLLED_FOR_R(INDEX, COUNT, CODE)              \
+    switch(COUNT) {                                     \
+        case 16: { const int INDEX = 15 % COUNT; CODE } \
+        case 15: { const int INDEX = 14 % COUNT; CODE } \
+        case 14: { const int INDEX = 13 % COUNT; CODE } \
+        case 13: { const int INDEX = 12 % COUNT; CODE } \
+        case 12: { const int INDEX = 11 % COUNT; CODE } \
+        case 11: { const int INDEX = 10 % COUNT; CODE } \
+        case 10: { const int INDEX =  9 % COUNT; CODE } \
+        case  9: { const int INDEX =  8 % COUNT; CODE } \
+        case  8: { const int INDEX =  7 % COUNT; CODE } \
+        case  7: { const int INDEX =  6 % COUNT; CODE } \
+        case  6: { const int INDEX =  5 % COUNT; CODE } \
+        case  5: { const int INDEX =  4 % COUNT; CODE } \
+        case  4: { const int INDEX =  3 % COUNT; CODE } \
+        case  3: { const int INDEX =  2 % COUNT; CODE } \
+        case  2: { const int INDEX =  1 % COUNT; CODE } \
+        case  1: { const int INDEX =  0 % COUNT; CODE } \
     }
 
 #define ITERATE_R(n, exp)               \
@@ -138,16 +139,6 @@
     } else if ((n) == 1) {              \
         { const int i = 0; exp }        \
     }
-
-#define ITERATE_2_R(exp)  \
-        { const int i = 1; exp }    \
-        { const int i = 0; exp }
-
-#define ITERATE_4_R(exp)  \
-        { const int i = 3; exp }    \
-        { const int i = 2; exp }    \
-        { const int i = 1; exp }    \
-        { const int i = 0; exp }
 // clang-format on
 
 #ifdef __GNUC__
@@ -169,7 +160,7 @@ template <typename T, int S> class simd_vec {
   public:
     force_inline simd_vec() = default;
     force_inline simd_vec(T f) {
-        ITERATE(S, { comp_[i] = f; })
+        UNROLLED_FOR_S(i, S, { comp_[i] = f; })
     }
     template <typename... Tail>
     force_inline simd_vec(typename std::enable_if<sizeof...(Tail) + 1 == S, T>::type head, Tail... tail)
@@ -187,22 +178,22 @@ template <typename T, int S> class simd_vec {
     force_inline void set(const int i, const T f) { comp_[i] = f; }
 
     force_inline simd_vec<T, S> &operator+=(const simd_vec<T, S> &rhs) {
-        ITERATE(S, { comp_[i] += rhs.comp_[i]; })
+        UNROLLED_FOR_S(i, S, { comp_[i] += rhs.comp_[i]; })
         return *this;
     }
 
     force_inline simd_vec<T, S> &operator-=(const simd_vec<T, S> &rhs) {
-        ITERATE(S, { comp_[i] -= rhs.comp_[i]; })
+        UNROLLED_FOR_S(i, S, { comp_[i] -= rhs.comp_[i]; })
         return *this;
     }
 
     force_inline simd_vec<T, S> &operator*=(const simd_vec<T, S> &rhs) {
-        ITERATE(S, { comp_[i] *= rhs.comp_[i]; })
+        UNROLLED_FOR_S(i, S, { comp_[i] *= rhs.comp_[i]; })
         return *this;
     }
 
     force_inline simd_vec<T, S> &operator/=(const simd_vec<T, S> &rhs) {
-        ITERATE(S, { comp_[i] /= rhs.comp_[i]; })
+        UNROLLED_FOR_S(i, S, { comp_[i] /= rhs.comp_[i]; })
         return *this;
     }
 
@@ -219,34 +210,34 @@ template <typename T, int S> class simd_vec {
     }
 
     force_inline simd_vec<T, S> &operator+=(T rhs) {
-        ITERATE(S, { comp_[i] += rhs; })
+        UNROLLED_FOR_S(i, S, { comp_[i] += rhs; })
         return *this;
     }
 
     force_inline simd_vec<T, S> &operator-=(T rhs) {
-        ITERATE(S, { comp_[i] -= rhs; })
+        UNROLLED_FOR_S(i, S, { comp_[i] -= rhs; })
         return *this;
     }
 
     force_inline simd_vec<T, S> &operator*=(T rhs) {
-        ITERATE(S, { comp_[i] *= rhs; })
+        UNROLLED_FOR_S(i, S, { comp_[i] *= rhs; })
         return *this;
     }
 
     force_inline simd_vec<T, S> &operator/=(T rhs) {
-        ITERATE(S, { comp_[i] /= rhs; })
+        UNROLLED_FOR_S(i, S, { comp_[i] /= rhs; })
         return *this;
     }
 
     force_inline simd_vec<T, S> operator-() const {
         simd_vec<T, S> temp;
-        ITERATE(S, { temp.comp_[i] = -comp_[i]; })
+        UNROLLED_FOR_S(i, S, { temp.comp_[i] = -comp_[i]; })
         return temp;
     }
 
     force_inline simd_vec<T, S> operator==(T rhs) const {
         simd_vec<int, S> temp;
-        ITERATE(S, { temp.comp_[i] = comp_[i] == rhs ? -1 : 0; })
+        UNROLLED_FOR_S(i, S, { temp.comp_[i] = comp_[i] == rhs ? -1 : 0; })
 
         static_assert(sizeof(simd_vec<T, S>) == sizeof(simd_vec<int, S>), "!");
 
@@ -258,7 +249,7 @@ template <typename T, int S> class simd_vec {
 
     force_inline simd_vec<T, S> operator==(const simd_vec<T, S> &rhs) const {
         simd_vec<int, S> temp;
-        ITERATE(S, { temp.comp_[i] = comp_[i] == rhs.comp_[i] ? -1 : 0; })
+        UNROLLED_FOR_S(i, S, { temp.comp_[i] = comp_[i] == rhs.comp_[i] ? -1 : 0; })
 
         static_assert(sizeof(simd_vec<T, S>) == sizeof(simd_vec<int, S>), "!");
 
@@ -270,7 +261,7 @@ template <typename T, int S> class simd_vec {
 
     force_inline simd_vec<T, S> operator!=(T rhs) const {
         simd_vec<int, S> temp;
-        ITERATE(S, { temp.comp_[i] = comp_[i] != rhs ? -1 : 0; })
+        UNROLLED_FOR_S(i, S, { temp.comp_[i] = comp_[i] != rhs ? -1 : 0; })
 
         static_assert(sizeof(simd_vec<T, S>) == sizeof(simd_vec<int, S>), "!");
 
@@ -282,7 +273,7 @@ template <typename T, int S> class simd_vec {
 
     force_inline simd_vec<T, S> operator!=(const simd_vec<T, S> &rhs) const {
         simd_vec<int, S> temp;
-        ITERATE(S, { temp.comp_[i] = comp_[i] != rhs.comp_[i] ? -1 : 0; })
+        UNROLLED_FOR_S(i, S, { temp.comp_[i] = comp_[i] != rhs.comp_[i] ? -1 : 0; })
 
         static_assert(sizeof(simd_vec<T, S>) == sizeof(simd_vec<int, S>), "!");
 
@@ -294,7 +285,7 @@ template <typename T, int S> class simd_vec {
 
     force_inline simd_vec<T, S> operator<(const simd_vec<T, S> &rhs) const {
         simd_vec<int, S> temp;
-        ITERATE(S, { temp.comp_[i] = comp_[i] < rhs.comp_[i] ? -1 : 0; })
+        UNROLLED_FOR_S(i, S, { temp.comp_[i] = comp_[i] < rhs.comp_[i] ? -1 : 0; })
 
         static_assert(sizeof(simd_vec<T, S>) == sizeof(simd_vec<int, S>), "!");
 
@@ -306,7 +297,7 @@ template <typename T, int S> class simd_vec {
 
     force_inline simd_vec<T, S> operator<=(const simd_vec<T, S> &rhs) const {
         simd_vec<int, S> temp;
-        ITERATE(S, { temp.comp_[i] = comp_[i] <= rhs.comp_[i] ? -1 : 0; })
+        UNROLLED_FOR_S(i, S, { temp.comp_[i] = comp_[i] <= rhs.comp_[i] ? -1 : 0; })
 
         static_assert(sizeof(simd_vec<T, S>) == sizeof(simd_vec<int, S>), "!");
 
@@ -318,7 +309,7 @@ template <typename T, int S> class simd_vec {
 
     force_inline simd_vec<T, S> operator>(const simd_vec<T, S> &rhs) const {
         simd_vec<int, S> temp;
-        ITERATE(S, { temp.comp_[i] = comp_[i] > rhs.comp_[i] ? -1 : 0; })
+        UNROLLED_FOR_S(i, S, { temp.comp_[i] = comp_[i] > rhs.comp_[i] ? -1 : 0; })
 
         static_assert(sizeof(simd_vec<T, S>) == sizeof(simd_vec<int, S>), "!");
 
@@ -330,7 +321,7 @@ template <typename T, int S> class simd_vec {
 
     force_inline simd_vec<T, S> operator>=(const simd_vec<T, S> &rhs) const {
         simd_vec<int, S> temp;
-        ITERATE(S, { temp.comp_[i] = comp_[i] >= rhs.comp_[i] ? -1 : 0; })
+        UNROLLED_FOR_S(i, S, { temp.comp_[i] = comp_[i] >= rhs.comp_[i] ? -1 : 0; })
 
         static_assert(sizeof(simd_vec<T, S>) == sizeof(simd_vec<int, S>), "!");
 
@@ -341,13 +332,14 @@ template <typename T, int S> class simd_vec {
     }
 
     force_inline simd_vec<T, S> &operator&=(const simd_vec<T, S> &rhs) {
-        ITERATE(S, { reinterpret_cast<uint32_t &>(comp_[i]) &= reinterpret_cast<const uint32_t &>(rhs.comp_[i]); })
+        UNROLLED_FOR_S(i, S,
+                       { reinterpret_cast<uint32_t &>(comp_[i]) &= reinterpret_cast<const uint32_t &>(rhs.comp_[i]); })
         return *this;
     }
 
     force_inline simd_vec<T, S> operator<(T rhs) const {
         simd_vec<int, S> temp;
-        ITERATE(S, { temp.comp_[i] = comp_[i] < rhs ? -1 : 0; })
+        UNROLLED_FOR_S(i, S, { temp.comp_[i] = comp_[i] < rhs ? -1 : 0; })
 
         static_assert(sizeof(simd_vec<T, S>) == sizeof(simd_vec<int, S>), "!");
 
@@ -359,7 +351,7 @@ template <typename T, int S> class simd_vec {
 
     force_inline simd_vec<T, S> operator<=(T rhs) const {
         simd_vec<int, S> temp;
-        ITERATE(S, { temp.comp_[i] = comp_[i] <= rhs ? -1 : 0; })
+        UNROLLED_FOR_S(i, S, { temp.comp_[i] = comp_[i] <= rhs ? -1 : 0; })
 
         static_assert(sizeof(simd_vec<T, S>) == sizeof(simd_vec<int, S>), "!");
 
@@ -371,7 +363,7 @@ template <typename T, int S> class simd_vec {
 
     force_inline simd_vec<T, S> operator>(T rhs) const {
         simd_vec<int, S> temp;
-        ITERATE(S, { temp.comp_[i] = comp_[i] > rhs ? -1 : 0; })
+        UNROLLED_FOR_S(i, S, { temp.comp_[i] = comp_[i] > rhs ? -1 : 0; })
 
         static_assert(sizeof(simd_vec<T, S>) == sizeof(simd_vec<int, S>), "!");
 
@@ -383,7 +375,7 @@ template <typename T, int S> class simd_vec {
 
     force_inline simd_vec<T, S> operator>=(T rhs) const {
         simd_vec<int, S> temp;
-        ITERATE(S, { temp.comp_[i] = comp_[i] >= rhs ? -1 : 0; })
+        UNROLLED_FOR_S(i, S, { temp.comp_[i] = comp_[i] >= rhs ? -1 : 0; })
 
         static_assert(sizeof(simd_vec<T, S>) == sizeof(simd_vec<int, S>), "!");
 
@@ -394,13 +386,13 @@ template <typename T, int S> class simd_vec {
     }
 
     force_inline simd_vec<T, S> &operator&=(const T rhs) {
-        ITERATE(S, { comp_[i] &= rhs; })
+        UNROLLED_FOR_S(i, S, { comp_[i] &= rhs; })
         return *this;
     }
 
     force_inline simd_vec<T, S> operator~() const {
         simd_vec<T, S> ret;
-        ITERATE(S, {
+        UNROLLED_FOR_S(i, S, {
             const uint32_t temp = ~reinterpret_cast<const uint32_t &>(comp_[i]);
             ret.comp_[i] = reinterpret_cast<const T &>(temp);
         })
@@ -409,37 +401,37 @@ template <typename T, int S> class simd_vec {
 
     force_inline explicit operator simd_vec<int, S>() const {
         simd_vec<int, S> ret;
-        ITERATE(S, { ret.comp_[i] = int(comp_[i]); })
+        UNROLLED_FOR_S(i, S, { ret.comp_[i] = int(comp_[i]); })
         return ret;
     }
 
     force_inline explicit operator simd_vec<float, S>() const {
         simd_vec<float, S> ret;
-        ITERATE(S, { ret.comp_[i] = float(comp_[i]); })
+        UNROLLED_FOR_S(i, S, { ret.comp_[i] = float(comp_[i]); })
         return ret;
     }
 
     force_inline simd_vec<T, S> sqrt() const {
         simd_vec<T, S> temp;
-        ITERATE(S, { temp.set<i>(std::sqrt(comp_[i])); })
+        UNROLLED_FOR_S(i, S, { temp.set<i>(std::sqrt(comp_[i])); })
         return temp;
     }
 
     force_inline simd_vec<T, S> log() const {
         simd_vec<T, S> temp;
-        ITERATE(S, { temp.set<i>(std::log(comp_[i])); })
+        UNROLLED_FOR_S(i, S, { temp.set<i>(std::log(comp_[i])); })
         return temp;
     }
 
     force_inline T length() const {
         T temp = {0};
-        ITERATE(S, { temp += comp_[i] * comp_[i]; })
+        UNROLLED_FOR_S(i, S, { temp += comp_[i] * comp_[i]; })
         return std::sqrt(temp);
     }
 
     force_inline T length2() const {
         T temp = {0};
-        ITERATE(S, { temp += comp_[i] * comp_[i]; })
+        UNROLLED_FOR_S(i, S, { temp += comp_[i] * comp_[i]; })
         return temp;
     }
 
@@ -451,7 +443,7 @@ template <typename T, int S> class simd_vec {
     }
 
     force_inline bool all_zeros() const {
-        ITERATE(S, {
+        UNROLLED_FOR_S(i, S, {
             if (comp_[i] != 0) {
                 return false;
             }
@@ -473,7 +465,7 @@ template <typename T, int S> class simd_vec {
     }
 
     force_inline bool not_all_zeros() const {
-        ITERATE(S, {
+        UNROLLED_FOR_S(i, S, {
             if (comp_[i] != 0) {
                 return true;
             }
@@ -483,7 +475,7 @@ template <typename T, int S> class simd_vec {
 
     // clang-format off
     force_inline void blend_to(const simd_vec<T, S> &mask, const simd_vec<T, S> &v1) {
-        ITERATE(S, {
+        UNROLLED_FOR_S(i, S, {
             if (mask.comp_[i] != T(0)) {
                 comp_[i] = v1.comp_[i];
             }
@@ -491,7 +483,7 @@ template <typename T, int S> class simd_vec {
     }
 
     force_inline void blend_inv_to(const simd_vec<T, S> &mask, const simd_vec<T, S> &v1) {
-        ITERATE(S, {
+        UNROLLED_FOR_S(i, S, {
             if (mask.comp_[i] == T(0)) {
                 comp_[i] = v1.comp_[i];
             }
@@ -500,7 +492,7 @@ template <typename T, int S> class simd_vec {
 
     force_inline int movemask() const {
         int res = 0;
-        ITERATE(S, {
+        UNROLLED_FOR_S(i, S, {
             if (comp_[i] != T(0)) {
                 res |= (1 << i);
             }
@@ -510,37 +502,37 @@ template <typename T, int S> class simd_vec {
 
     force_inline static simd_vec<T, S> min(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) {
         simd_vec<T, S> temp;
-        ITERATE(S, { temp.comp_[i] = std::min(v1.comp_[i], v2.comp_[i]); })
+        UNROLLED_FOR_S(i, S, { temp.comp_[i] = std::min(v1.comp_[i], v2.comp_[i]); })
         return temp;
     }
 
     force_inline static simd_vec<T, S> min(const simd_vec<T, S> &v1, const T v2) {
         simd_vec<T, S> temp;
-        ITERATE(S, { temp.comp_[i] = std::min(v1.comp_[i], v2); })
+        UNROLLED_FOR_S(i, S, { temp.comp_[i] = std::min(v1.comp_[i], v2); })
         return temp;
     }
 
     force_inline static simd_vec<T, S> min(const T v1, const simd_vec<T, S> &v2) {
         simd_vec<T, S> temp;
-        ITERATE(S, { temp.comp_[i] = std::min(v1, v2.comp_[i]); })
+        UNROLLED_FOR_S(i, S, { temp.comp_[i] = std::min(v1, v2.comp_[i]); })
         return temp;
     }
 
     force_inline static simd_vec<T, S> max(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) {
         simd_vec<T, S> temp;
-        ITERATE(S, { temp.comp_[i] = std::max(v1.comp_[i], v2.comp_[i]); })
+        UNROLLED_FOR_S(i, S, { temp.comp_[i] = std::max(v1.comp_[i], v2.comp_[i]); })
         return temp;
     }
 
     force_inline static simd_vec<T, S> max(const simd_vec<T, S> &v1, const T v2) {
         simd_vec<T, S> temp;
-        ITERATE(S, { temp.comp_[i] = std::max(v1.comp_[i], v2); })
+        UNROLLED_FOR_S(i, S, { temp.comp_[i] = std::max(v1.comp_[i], v2); })
         return temp;
     }
 
     force_inline static simd_vec<T, S> max(const T v1, const simd_vec<T, S> &v2) {
         simd_vec<T, S> temp;
-        ITERATE(S, { temp.comp_[i] = std::max(v1, v2.comp_[i]); })
+        UNROLLED_FOR_S(i, S, { temp.comp_[i] = std::max(v1, v2.comp_[i]); })
         return temp;
     }
 
@@ -561,13 +553,13 @@ template <typename T, int S> class simd_vec {
 
     force_inline static simd_vec<float, S> floor(const simd_vec<float, S> &v1) {
         simd_vec<float, S> temp;
-        ITERATE(S, { temp.comp_[i] = float(int(v1.comp_[i]) - (v1.comp_[i] < 0.0f)); })
+        UNROLLED_FOR_S(i, S, { temp.comp_[i] = float(int(v1.comp_[i]) - (v1.comp_[i] < 0.0f)); })
         return temp;
     }
 
     force_inline static simd_vec<float, S> ceil(const simd_vec<float, S> &v1) {
         simd_vec<float, S> temp;
-        ITERATE(S, {
+        UNROLLED_FOR_S(i, S, {
             int _v = int(v1.comp_[i]);
             temp.comp_[i] = float(_v + (v1.comp_[i] != _v));
         })
@@ -621,49 +613,49 @@ template <typename T, int S> class simd_vec {
 
     friend force_inline simd_vec<T, S> operator+(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) {
         simd_vec<T, S> ret;
-        ITERATE(S, { ret.comp_[i] = v1.comp_[i] + v2.comp_[i]; })
+        UNROLLED_FOR_S(i, S, { ret.comp_[i] = v1.comp_[i] + v2.comp_[i]; })
         return ret;
     }
 
     friend force_inline simd_vec<T, S> operator-(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) {
         simd_vec<T, S> ret;
-        ITERATE(S, { ret.comp_[i] = v1.comp_[i] - v2.comp_[i]; })
+        UNROLLED_FOR_S(i, S, { ret.comp_[i] = v1.comp_[i] - v2.comp_[i]; })
         return ret;
     }
 
     friend force_inline simd_vec<T, S> operator*(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) {
         simd_vec<T, S> ret;
-        ITERATE(S, { ret.comp_[i] = v1.comp_[i] * v2.comp_[i]; })
+        UNROLLED_FOR_S(i, S, { ret.comp_[i] = v1.comp_[i] * v2.comp_[i]; })
         return ret;
     }
 
     friend force_inline simd_vec<T, S> operator/(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) {
         simd_vec<T, S> ret;
-        ITERATE(S, { ret.comp_[i] = v1.comp_[i] / v2.comp_[i]; })
+        UNROLLED_FOR_S(i, S, { ret.comp_[i] = v1.comp_[i] / v2.comp_[i]; })
         return ret;
     }
 
     friend force_inline simd_vec<T, S> operator+(const simd_vec<T, S> &v1, T v2) {
         simd_vec<T, S> ret;
-        ITERATE(S, { ret.comp_[i] = v1.comp_[i] + v2; })
+        UNROLLED_FOR_S(i, S, { ret.comp_[i] = v1.comp_[i] + v2; })
         return ret;
     }
 
     friend force_inline simd_vec<T, S> operator-(const simd_vec<T, S> &v1, T v2) {
         simd_vec<T, S> ret;
-        ITERATE(S, { ret.comp_[i] = v1.comp_[i] - v2; })
+        UNROLLED_FOR_S(i, S, { ret.comp_[i] = v1.comp_[i] - v2; })
         return ret;
     }
 
     friend force_inline simd_vec<T, S> operator*(const simd_vec<T, S> &v1, T v2) {
         simd_vec<T, S> ret;
-        ITERATE(S, { ret.comp_[i] = v1.comp_[i] * v2; })
+        UNROLLED_FOR_S(i, S, { ret.comp_[i] = v1.comp_[i] * v2; })
         return ret;
     }
 
     friend force_inline simd_vec<T, S> operator/(const simd_vec<T, S> &v1, T v2) {
         simd_vec<T, S> ret;
-        ITERATE(S, { ret.comp_[i] = v1.comp_[i] / v2; })
+        UNROLLED_FOR_S(i, S, { ret.comp_[i] = v1.comp_[i] / v2; })
         return ret;
     }
 
@@ -671,67 +663,67 @@ template <typename T, int S> class simd_vec {
 
     friend force_inline simd_vec<T, S> operator-(T v1, const simd_vec<T, S> &v2) {
         simd_vec<T, S> ret;
-        ITERATE(S, { ret.comp_[i] = v1 - v2.comp_[i]; })
+        UNROLLED_FOR_S(i, S, { ret.comp_[i] = v1 - v2.comp_[i]; })
         return ret;
     }
 
     friend force_inline simd_vec<T, S> operator*(T v1, const simd_vec<T, S> &v2) {
         simd_vec<T, S> ret;
-        ITERATE(S, { ret.comp_[i] = v1 * v2.comp_[i]; })
+        UNROLLED_FOR_S(i, S, { ret.comp_[i] = v1 * v2.comp_[i]; })
         return ret;
     }
 
     friend force_inline simd_vec<T, S> operator/(T v1, const simd_vec<T, S> &v2) {
         simd_vec<T, S> ret;
-        ITERATE(S, { ret.comp_[i] = v1 / v2.comp_[i]; })
+        UNROLLED_FOR_S(i, S, { ret.comp_[i] = v1 / v2.comp_[i]; })
         return ret;
     }
 
     friend force_inline simd_vec<T, S> operator>>(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) {
         simd_vec<T, S> ret;
-        ITERATE(S, { ret.comp_[i] = v1.comp_[i] >> v2.comp_[i]; })
+        UNROLLED_FOR_S(i, S, { ret.comp_[i] = v1.comp_[i] >> v2.comp_[i]; })
         return ret;
     }
 
     friend force_inline simd_vec<T, S> operator>>(const simd_vec<T, S> &v1, T v2) {
         simd_vec<T, S> ret;
-        ITERATE(S, { ret.comp_[i] = v1.comp_[i] >> v2; })
+        UNROLLED_FOR_S(i, S, { ret.comp_[i] = v1.comp_[i] >> v2; })
         return ret;
     }
 
     friend force_inline simd_vec<T, S> operator<<(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) {
         simd_vec<T, S> ret;
-        ITERATE(S, { ret.comp_[i] = v1.comp_[i] << v2.comp_[i]; })
+        UNROLLED_FOR_S(i, S, { ret.comp_[i] = v1.comp_[i] << v2.comp_[i]; })
         return ret;
     }
 
     friend force_inline simd_vec<T, S> operator<<(const simd_vec<T, S> &v1, T v2) {
         simd_vec<T, S> ret;
-        ITERATE(S, { ret.comp_[i] = v1.comp_[i] << v2; })
+        UNROLLED_FOR_S(i, S, { ret.comp_[i] = v1.comp_[i] << v2; })
         return ret;
     }
 
     friend force_inline simd_vec<T, S> srai(const simd_vec<T, S> &v1, int v2) {
         simd_vec<T, S> ret;
-        ITERATE(S, { ret.comp_[i] = v1.comp_[i] >> v2; })
+        UNROLLED_FOR_S(i, S, { ret.comp_[i] = v1.comp_[i] >> v2; })
         return ret;
     }
 
     friend force_inline T dot(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) {
         T ret = {0};
-        ITERATE(S, { ret += v1.comp_[i] * v2.comp_[i]; })
+        UNROLLED_FOR_S(i, S, { ret += v1.comp_[i] * v2.comp_[i]; })
         return ret;
     }
 
     friend force_inline simd_vec<T, S> clamp(const simd_vec<T, S> &v1, T min, T max) {
         simd_vec<T, S> ret;
-        ITERATE(S, { ret.comp_[i] = v1.comp_[i] < min ? min : (v1.comp_[i] > max ? max : v1.comp_[i]); })
+        UNROLLED_FOR_S(i, S, { ret.comp_[i] = v1.comp_[i] < min ? min : (v1.comp_[i] > max ? max : v1.comp_[i]); })
         return ret;
     }
 
     friend force_inline simd_vec<T, S> pow(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) {
         simd_vec<T, S> ret;
-        ITERATE(S, { ret.comp_[i] = std::pow(v1.comp_[i], v2.comp_[i]); })
+        UNROLLED_FOR_S(i, S, { ret.comp_[i] = std::pow(v1.comp_[i], v2.comp_[i]); })
         return ret;
     }
 
@@ -739,7 +731,7 @@ template <typename T, int S> class simd_vec {
 
     friend force_inline bool is_equal(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) {
         bool res = true;
-        ITERATE(S, { res = res && (v1.comp_[i] == v2.comp_[i]); })
+        UNROLLED_FOR_S(i, S, { res = res && (v1.comp_[i] == v2.comp_[i]); })
         return res;
     }
 
@@ -833,16 +825,15 @@ force_inline simd_vec<T, S> mix(const simd_vec<T, S> &v1, const simd_vec<T, S> &
     return (simd_vec<T, S>{1} - k) * v1 + k * v2;
 }
 
-template <typename T, int S>
-force_inline simd_vec<T, S> gather(const T *base_addr, const simd_vec<int, S> &vindex) {
+template <typename T, int S> force_inline simd_vec<T, S> gather(const T *base_addr, const simd_vec<int, S> &vindex) {
     simd_vec<T, S> res;
-    ITERATE(S, { res.template set<i>(base_addr[vindex[i]]); });
+    UNROLLED_FOR_S(i, S, { res.template set<i>(base_addr[vindex[i]]); });
     return res;
 }
 
 template <typename T, int S>
-force_inline void scatter(T* base_addr, const simd_vec<int, S>& vindex, const simd_vec<T, S>& v) {
-    ITERATE(S, { base_addr[vindex[i]] = v.template get<i>(); });
+force_inline void scatter(T *base_addr, const simd_vec<int, S> &vindex, const simd_vec<T, S> &v) {
+    UNROLLED_FOR_S(i, S, { base_addr[vindex[i]] = v.template get<i>(); });
 }
 
 template <typename T, typename U, int S> class simd_comp_where_helper {

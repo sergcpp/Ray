@@ -112,7 +112,7 @@ bbox_t GetClippedAABB(const Ref::simd_fvec3 &_v0, const Ref::simd_fvec3 &_v1, co
     vertices1[1] = {double(_v1[0]), double(_v1[1]), double(_v1[2])};
     vertices1[2] = {double(_v2[0]), double(_v2[1]), double(_v2[2])};
 
-    ITERATE_3({
+    UNROLLED_FOR(i, 3, {
         vertex_count = sutherland_hodgman(vertices1, vertex_count, vertices2, i, limits.min.get<i>(), true);
         vertex_count = sutherland_hodgman(vertices2, vertex_count, vertices1, i, limits.max.get<i>(), false);
     })
@@ -155,7 +155,7 @@ Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, Span<const 
 
     float res_sah = std::numeric_limits<float>::max();
     if (s.oversplit_threshold > 0.0f) {
-        res_sah = s.oversplit_threshold *whole_box.surface_area() * float(num_prims);
+        res_sah = s.oversplit_threshold * whole_box.surface_area() * float(num_prims);
     }
     int div_axis = -1;
     float div_pos = 0.0f;
@@ -297,8 +297,8 @@ Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, Span<const 
                         left_bounds.max = max(left_bounds.max, modified_prim_bounds[list[i - 1]].max);
                     }
 
-                    const float sah =
-                        left_bounds.surface_area() * float(i) + right_bounds[i - 1].surface_area() * float(list.size() - i);
+                    const float sah = left_bounds.surface_area() * float(i) +
+                                      right_bounds[i - 1].surface_area() * float(list.size() - i);
                     if (sah < res_sah) {
                         res_sah = sah;
                         div_axis = axis;
