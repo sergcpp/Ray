@@ -2371,7 +2371,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_GGXRefraction_BSDF(const simd_fvec4 &vie
     const float G1i = G1(view_dir_ts, roughness2, roughness2);
 
     const float denom = dot(refr_dir_ts, sampled_normal_ts) + dot(view_dir_ts, sampled_normal_ts) * eta;
-    const float jacobian = std::max(-dot(refr_dir_ts, sampled_normal_ts), 0.0f) / (denom * denom);
+    const float jacobian = denom != 0.0f ? std::max(-dot(refr_dir_ts, sampled_normal_ts), 0.0f) / (denom * denom) : 0.0f;
 
     float F = D * G1i * G1o * std::max(dot(view_dir_ts, sampled_normal_ts), 0.0f) * jacobian /
               (/*-refr_dir_ts.get<2>() */ view_dir_ts.get<2>());
