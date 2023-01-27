@@ -434,6 +434,7 @@ template <> class simd_vec<float, 4> {
         return v1 / v1.length();
     }
 
+#ifndef NDEBUG
     friend void vectorcall __assert_valid_mask(const simd_vec<float, 4> mask) {
         ITERATE_4({
             const float val = mask.get<i>();
@@ -441,6 +442,7 @@ template <> class simd_vec<float, 4> {
                    reinterpret_cast<const uint32_t &>(val) == 0xffffffff);
         })
     }
+#endif
 
     friend force_inline const float *value_ptr(const simd_vec<float, 4> &v1) {
         return reinterpret_cast<const float *>(&v1.vec_);
@@ -942,12 +944,14 @@ template <> class simd_vec<int, 4> {
 #endif
     }
 
+#ifndef NDEBUG
     friend void vectorcall __assert_valid_mask(const simd_vec<int, 4> mask) {
         ITERATE_4({
             const float val = mask.get<i>();
             assert(val == 0 || val == -1);
         })
     }
+#endif
 
     friend force_inline const int *value_ptr(const simd_vec<int, 4> &v1) {
         return reinterpret_cast<const int *>(&v1.vec_);
