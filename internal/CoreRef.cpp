@@ -3928,6 +3928,12 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
     surf.B = TransformNormal(surf.B, tr->inv_xform);
     surf.T = TransformNormal(surf.T, tr->inv_xform);
 
+    // normalize vectors (scaling might have been applied)
+    surf.plane_N = safe_normalize(surf.plane_N);
+    surf.N = safe_normalize(surf.N);
+    surf.B = safe_normalize(surf.B);
+    surf.T = safe_normalize(surf.T);
+
     const float ta = std::abs((v2.t[0][0] - v1.t[0][0]) * (v3.t[0][1] - v1.t[0][1]) -
                               (v3.t[0][0] - v1.t[0][0]) * (v2.t[0][1] - v1.t[0][1]));
 

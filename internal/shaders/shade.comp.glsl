@@ -1647,6 +1647,12 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
     surf.B = TransformNormal(surf.B, tr.inv_xform);
     surf.T = TransformNormal(surf.T, tr.inv_xform);
 
+    // normalize vectors (scaling might have been applied)
+    surf.plane_N = normalize(surf.plane_N);
+    surf.N = normalize(surf.N);
+    surf.B = normalize(surf.B);
+    surf.T = normalize(surf.T);
+
     const float ta = abs((v2.t[0][0] - v1.t[0][0]) * (v3.t[0][1] - v1.t[0][1]) -
                          (v3.t[0][0] - v1.t[0][0]) * (v2.t[0][1] - v1.t[0][1]));
 

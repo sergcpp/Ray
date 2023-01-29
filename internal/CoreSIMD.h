@@ -4239,7 +4239,7 @@ void Ray::NS::SampleLatlong_RGBE(const Ref::TexStorageRGBA &storage, const uint3
 
     const simd_fvec<S> k[2] = {fract(uvs[0]), fract(uvs[1])};
 
-    simd_fvec<S> _p00[3], _p01[3], _p10[3], _p11[3];
+    simd_fvec<S> _p00[3] = {}, _p01[3] = {}, _p10[3] = {}, _p11[3] = {};
 
     for (int i = 0; i < S; i++) {
         if (!mask[i]) {
@@ -5816,6 +5816,12 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
     simd_fvec<S> transform[16];
     FetchTransformAndRecalcBasis(sc.transforms, tr_index, P_ls, surf.plane_N, surf.N, surf.B, surf.T, tangent,
                                  transform);
+
+    // normalize vectors (scaling might have been applied)
+    safe_normalize(surf.plane_N);
+    safe_normalize(surf.N);
+    safe_normalize(surf.B);
+    safe_normalize(surf.T);
 
     //////////////////////////////////
 
