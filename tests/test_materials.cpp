@@ -2401,7 +2401,7 @@ void test_complex_mat0(const char *arch_list[], const char *preferred_device) {
 }
 
 void test_complex_mat1(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 19;
+    const int SampleCount = 20;
     const int PixThres = 794;
 
     Ray::principled_mat_desc_t metal_mat_desc;
@@ -2422,7 +2422,7 @@ void test_complex_mat1(const char *arch_list[], const char *preferred_device) {
 }
 
 void test_complex_mat2(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 16;
+    const int SampleCount = 17;
     const int PixThres = 673;
 
     Ray::principled_mat_desc_t metal_mat_desc;
@@ -2488,7 +2488,7 @@ void test_complex_mat4(const char *arch_list[], const char *preferred_device) {
 }
 
 void test_complex_mat5(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 151;
+    const int SampleCount = 153;
     const int PixThres = 2802;
 
     Ray::principled_mat_desc_t metal_mat_desc;
@@ -2530,7 +2530,7 @@ void test_complex_mat5_dof(const char *arch_list[], const char *preferred_device
 }
 
 void test_complex_mat5_mesh_lights(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 219;
+    const int SampleCount = 220;
     const int PixThres = 2407;
 
     Ray::principled_mat_desc_t metal_mat_desc;
@@ -2615,7 +2615,7 @@ void test_complex_mat5_sun_light(const char *arch_list[], const char *preferred_
 }
 
 void test_complex_mat5_hdr_light(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 191;
+    const int SampleCount = 192;
     const int PixThres = 1767;
 
     Ray::principled_mat_desc_t metal_mat_desc;
@@ -2636,7 +2636,7 @@ void test_complex_mat5_hdr_light(const char *arch_list[], const char *preferred_
 }
 
 void test_complex_mat6(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 817;
+    const int SampleCount = 820;
     const int PixThres = 1260;
 
     Ray::principled_mat_desc_t olive_mat_desc;
@@ -2667,7 +2667,7 @@ void test_complex_mat6_dof(const char *arch_list[], const char *preferred_device
 }
 
 void test_complex_mat6_mesh_lights(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 1042;
+    const int SampleCount = 1050;
     const int PixThres = 1136;
 
     Ray::principled_mat_desc_t olive_mat_desc;
@@ -2700,7 +2700,7 @@ void test_complex_mat6_sphere_light(const char *arch_list[], const char *preferr
 }
 
 void test_complex_mat6_spot_light(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 3;
+    const int SampleCount = 4;
     const int PixThres = 302;
 
     Ray::principled_mat_desc_t olive_mat_desc;
