@@ -124,12 +124,18 @@ bool InitAndDestroyFakeGLContext();
 #endif
 
 int main(int argc, char *argv[]) {
+    for (int i = 0; i < argc; ++i) {
+        printf("%s ", argv[i]);
+    }
+    printf("\n");
+
     using namespace std::chrono;
 
     const auto t1 = high_resolution_clock::now();
 
     bool full_tests = false, nogpu = false, nocpu = false, run_detail_tests_on_fail = false;
     const char *device_name = nullptr;
+    const char *preferred_arch[] = {nullptr, nullptr};
 
     for (size_t i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--nogpu") == 0) {
@@ -142,6 +148,8 @@ int main(int argc, char *argv[]) {
             device_name = argv[i];
         } else if (strcmp(argv[i], "--detail_on_fail") == 0) {
             run_detail_tests_on_fail = true;
+        } else if (strcmp(argv[i], "--arch") == 0 && (++i != argc)) {
+            preferred_arch[0] = argv[i];
         }
     }
 
@@ -166,14 +174,16 @@ int main(int argc, char *argv[]) {
     static const char *ArchListFull[] = {"REF", "SSE2", "SSE41", "AVX", "AVX2", "AVX512", "NEON", "VK", nullptr};
     static const char *ArchListFullNoGPU[] = {"REF", "SSE2", "SSE41", "AVX", "AVX2", "AVX512", "NEON", nullptr};
     static const char *ArchListDefault[] = {"AVX2", "NEON", "VK", nullptr};
-    static const char *ArchListDefaultNoGPU[] = {"AVX2", "AVX512", "NEON", nullptr};
+    static const char *ArchListDefaultNoGPU[] = {"AVX2", "NEON", nullptr};
     static const char *ArchListGPUOnly[] = {"VK", nullptr};
 
     bool detailed_material_tests_needed = full_tests;
     bool tests_success_final = g_tests_success;
 
     const char **arch_list = ArchListDefault;
-    if (nocpu) {
+    if (preferred_arch[0]) {
+        arch_list = preferred_arch;
+    } else if (nocpu) {
         arch_list = ArchListGPUOnly;
     } else if (full_tests) {
         if (!nogpu) {

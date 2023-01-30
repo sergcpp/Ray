@@ -158,6 +158,24 @@ stages:
       - errors.txt
     expire_in: 1 week
 
+.windows-sde-test-job:
+  stage: test
+  script:
+    - echo "Running tests..."
+    - cd tests
+    - '& "sde" $SDE_TEST_ARGS.split(" ") -- ../$BIN_DIR/test_Ray $AUX_TEST_ARGS.split(" ")'
+    - cd ../
+  after_script:
+    - cp tests/test_data/material_*.tga ./
+    - cp tests/test_data/errors.txt ./
+  artifacts:
+    when: always
+    name: "$env:CI_JOB_NAME"
+    paths:
+      - material_*.tga
+      - errors.txt
+    expire_in: 1 week
+
 .windows-test-asan-job:
   stage: test
   script:
@@ -233,7 +251,77 @@ windows-x86_64-cpu-test-job:
   needs:
     - windows-x86_64-build-job
   tags:
-    - windows,x86_64,fastcpu,avx512
+    - windows,x86_64,fastcpu
+
+windows-x86_64-cpu-sse2-test-job:
+  variables:
+    BIN_DIR: windows-x86_64
+    AUX_TEST_ARGS: '--arch SSE2'
+    SDE_TEST_ARGS: '-p4p'
+  extends:
+    - .windows-sde-test-job
+  needs:
+    - windows-x86_64-build-job
+  tags:
+    - windows,x86_64,fastcpu,win10
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+
+windows-x86_64-cpu-sse41-test-job:
+  variables:
+    BIN_DIR: windows-x86_64
+    AUX_TEST_ARGS: '--arch SSE41'
+    SDE_TEST_ARGS: '-pnr'
+  extends:
+    - .windows-sde-test-job
+  needs:
+    - windows-x86_64-build-job
+  tags:
+    - windows,x86_64,fastcpu,win10
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+
+windows-x86_64-cpu-avx-test-job:
+  variables:
+    BIN_DIR: windows-x86_64
+    AUX_TEST_ARGS: '--arch AVX'
+    SDE_TEST_ARGS: '-snb'
+  extends:
+    - .windows-sde-test-job
+  needs:
+    - windows-x86_64-build-job
+  tags:
+    - windows,x86_64,fastcpu
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+
+windows-x86_64-cpu-avx2-test-job:
+  variables:
+    BIN_DIR: windows-x86_64
+    AUX_TEST_ARGS: '--arch AVX2'
+    SDE_TEST_ARGS: '-hsw'
+  extends:
+    - .windows-sde-test-job
+  needs:
+    - windows-x86_64-build-job
+  tags:
+    - windows,x86_64,fastcpu
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+
+windows-x86_64-cpu-avx512-test-job:
+  variables:
+    BIN_DIR: windows-x86_64
+    AUX_TEST_ARGS: '--arch AVX512'
+    SDE_TEST_ARGS: '-future'
+  extends:
+    - .windows-sde-test-job
+  needs:
+    - windows-x86_64-build-job
+  tags:
+    - windows,x86_64,fastcpu
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
 
 windows-x86_64-cpu-test-asan-job:
   variables:
