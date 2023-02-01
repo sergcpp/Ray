@@ -4,11 +4,12 @@
 #include <cstring>
 
 #include "../Log.h"
+#include "BVHSplit.h"
 #include "CoreRef.h"
 #include "TextureUtilsRef.h"
 #include "Time_.h"
 
-#define _CLAMP(val, min, max) (val < min ? min : (val > max ? max : val))
+#define CLAMP(val, min, max) (val < min ? min : (val > max ? max : val))
 
 Ray::Ref::Scene::Scene(ILog *log, const bool use_wide_bvh) : log_(log), use_wide_bvh_(use_wide_bvh) {}
 
@@ -92,7 +93,7 @@ uint32_t Ray::Ref::Scene::AddTexture(const tex_desc_t &_t) {
         index = tex_storage_r_.Allocate(reinterpret_cast<const color_r8_t *>(_t.data), res, _t.generate_mipmaps);
     }
 
-    if (storage == -1 || index == -1) {
+    if (storage == -1) {
         return 0xffffffff;
     }
 
@@ -119,7 +120,7 @@ uint32_t Ray::Ref::Scene::AddMaterial(const shading_node_desc_t &m) {
 
     mat.type = m.type;
     mat.textures[BASE_TEXTURE] = m.base_texture;
-    mat.roughness_unorm = pack_unorm_16(_CLAMP(m.roughness, 0.0f, 1.0f));
+    mat.roughness_unorm = pack_unorm_16(CLAMP(m.roughness, 0.0f, 1.0f));
     mat.textures[ROUGH_TEXTURE] = m.roughness_texture;
     memcpy(&mat.base_color[0], &m.base_color[0], 3 * sizeof(float));
     mat.ior = m.ior;
@@ -127,13 +128,13 @@ uint32_t Ray::Ref::Scene::AddMaterial(const shading_node_desc_t &m) {
     mat.flags = 0;
 
     if (m.type == DiffuseNode) {
-        mat.sheen_unorm = pack_unorm_16(_CLAMP(0.5f * m.sheen, 0.0f, 1.0f));
-        mat.sheen_tint_unorm = pack_unorm_16(_CLAMP(m.tint, 0.0f, 1.0f));
+        mat.sheen_unorm = pack_unorm_16(CLAMP(0.5f * m.sheen, 0.0f, 1.0f));
+        mat.sheen_tint_unorm = pack_unorm_16(CLAMP(m.tint, 0.0f, 1.0f));
         mat.textures[METALLIC_TEXTURE] = m.metallic_texture;
     } else if (m.type == GlossyNode) {
         mat.tangent_rotation = 2.0f * PI * m.anisotropic_rotation;
         mat.textures[METALLIC_TEXTURE] = m.metallic_texture;
-        mat.tint_unorm = pack_unorm_16(_CLAMP(m.tint, 0.0f, 1.0f));
+        mat.tint_unorm = pack_unorm_16(CLAMP(m.tint, 0.0f, 1.0f));
     } else if (m.type == RefractiveNode) {
     } else if (m.type == EmissiveNode) {
         mat.strength = m.strength;
@@ -151,7 +152,7 @@ uint32_t Ray::Ref::Scene::AddMaterial(const shading_node_desc_t &m) {
     }
 
     mat.textures[NORMALS_TEXTURE] = m.normal_map;
-    mat.normal_map_strength_unorm = pack_unorm_16(_CLAMP(m.normal_map_intensity, 0.0f, 1.0f));
+    mat.normal_map_strength_unorm = pack_unorm_16(CLAMP(m.normal_map_intensity, 0.0f, 1.0f));
 
     return materials_.push(mat);
 }
@@ -162,25 +163,25 @@ uint32_t Ray::Ref::Scene::AddMaterial(const principled_mat_desc_t &m) {
     main_mat.type = PrincipledNode;
     main_mat.textures[BASE_TEXTURE] = m.base_texture;
     memcpy(&main_mat.base_color[0], &m.base_color[0], 3 * sizeof(float));
-    main_mat.sheen_unorm = pack_unorm_16(_CLAMP(0.5f * m.sheen, 0.0f, 1.0f));
-    main_mat.sheen_tint_unorm = pack_unorm_16(_CLAMP(m.sheen_tint, 0.0f, 1.0f));
-    main_mat.roughness_unorm = pack_unorm_16(_CLAMP(m.roughness, 0.0f, 1.0f));
-    main_mat.tangent_rotation = 2.0f * PI * _CLAMP(m.anisotropic_rotation, 0.0f, 1.0f);
+    main_mat.sheen_unorm = pack_unorm_16(CLAMP(0.5f * m.sheen, 0.0f, 1.0f));
+    main_mat.sheen_tint_unorm = pack_unorm_16(CLAMP(m.sheen_tint, 0.0f, 1.0f));
+    main_mat.roughness_unorm = pack_unorm_16(CLAMP(m.roughness, 0.0f, 1.0f));
+    main_mat.tangent_rotation = 2.0f * PI * CLAMP(m.anisotropic_rotation, 0.0f, 1.0f);
     main_mat.textures[ROUGH_TEXTURE] = m.roughness_texture;
-    main_mat.metallic_unorm = pack_unorm_16(_CLAMP(m.metallic, 0.0f, 1.0f));
+    main_mat.metallic_unorm = pack_unorm_16(CLAMP(m.metallic, 0.0f, 1.0f));
     main_mat.textures[METALLIC_TEXTURE] = m.metallic_texture;
     main_mat.ior = m.ior;
     main_mat.flags = 0;
-    main_mat.transmission_unorm = pack_unorm_16(_CLAMP(m.transmission, 0.0f, 1.0f));
-    main_mat.transmission_roughness_unorm = pack_unorm_16(_CLAMP(m.transmission_roughness, 0.0f, 1.0f));
+    main_mat.transmission_unorm = pack_unorm_16(CLAMP(m.transmission, 0.0f, 1.0f));
+    main_mat.transmission_roughness_unorm = pack_unorm_16(CLAMP(m.transmission_roughness, 0.0f, 1.0f));
     main_mat.textures[NORMALS_TEXTURE] = m.normal_map;
-    main_mat.normal_map_strength_unorm = pack_unorm_16(_CLAMP(m.normal_map_intensity, 0.0f, 1.0f));
-    main_mat.anisotropic_unorm = pack_unorm_16(_CLAMP(m.anisotropic, 0.0f, 1.0f));
-    main_mat.specular_unorm = pack_unorm_16(_CLAMP(m.specular, 0.0f, 1.0f));
+    main_mat.normal_map_strength_unorm = pack_unorm_16(CLAMP(m.normal_map_intensity, 0.0f, 1.0f));
+    main_mat.anisotropic_unorm = pack_unorm_16(CLAMP(m.anisotropic, 0.0f, 1.0f));
+    main_mat.specular_unorm = pack_unorm_16(CLAMP(m.specular, 0.0f, 1.0f));
     main_mat.textures[SPECULAR_TEXTURE] = m.specular_texture;
-    main_mat.specular_tint_unorm = pack_unorm_16(_CLAMP(m.specular_tint, 0.0f, 1.0f));
-    main_mat.clearcoat_unorm = pack_unorm_16(_CLAMP(m.clearcoat, 0.0f, 1.0f));
-    main_mat.clearcoat_roughness_unorm = pack_unorm_16(_CLAMP(m.clearcoat_roughness, 0.0f, 1.0f));
+    main_mat.specular_tint_unorm = pack_unorm_16(CLAMP(m.specular_tint, 0.0f, 1.0f));
+    main_mat.clearcoat_unorm = pack_unorm_16(CLAMP(m.clearcoat, 0.0f, 1.0f));
+    main_mat.clearcoat_roughness_unorm = pack_unorm_16(CLAMP(m.clearcoat_roughness, 0.0f, 1.0f));
 
     uint32_t root_node = materials_.push(main_mat);
     uint32_t emissive_node = 0xffffffff, transparent_node = 0xffffffff;
@@ -790,7 +791,7 @@ void Ray::Ref::Scene::RebuildTLAS() {
 }
 
 void Ray::Ref::Scene::PrepareEnvMapQTree() {
-    const int tex = (env_.env_map & 0x00ffffff);
+    const int tex = int(env_.env_map & 0x00ffffff);
     simd_ivec2 size;
     tex_storage_rgba_.GetIRes(tex, 0, value_ptr(size));
 
@@ -810,9 +811,9 @@ void Ray::Ref::Scene::PrepareEnvMapQTree() {
         env_map_qtree_.mips.emplace_back(cur_res * cur_res, 0.0f);
 
         for (int y = 0; y < size[1]; ++y) {
-            const float theta = PI * float(y) / size[1];
+            const float theta = PI * float(y) / float(size[1]);
             for (int x = 0; x < size[0]; ++x) {
-                const float phi = 2.0f * PI * float(x) / size[0];
+                const float phi = 2.0f * PI * float(x) / float(size[0]);
 
                 const color_rgba8_t col_rgbe = tex_storage_rgba_.Get(tex, x, y, 0);
                 const simd_fvec4 col_rgb = rgbe_to_rgb(col_rgbe);
@@ -825,8 +826,8 @@ void Ray::Ref::Scene::PrepareEnvMapQTree() {
                 simd_fvec2 q;
                 DirToCanonical(value_ptr(dir), 0.0f, value_ptr(q));
 
-                int qx = _CLAMP(int(cur_res * q[0]), 0, cur_res - 1);
-                int qy = _CLAMP(int(cur_res * q[1]), 0, cur_res - 1);
+                int qx = CLAMP(int(cur_res * q[0]), 0, cur_res - 1);
+                int qy = CLAMP(int(cur_res * q[1]), 0, cur_res - 1);
 
                 int index = 0;
                 index |= (qx & 1) << 0;
@@ -875,7 +876,7 @@ void Ray::Ref::Scene::PrepareEnvMapQTree() {
     // Determine how many levels was actually required
     //
 
-    const float LumFractThreshold = 0.01f;
+    static const float LumFractThreshold = 0.01f;
 
     cur_res = 2;
     int the_last_required_lod;
@@ -922,4 +923,4 @@ void Ray::Ref::Scene::PrepareEnvMapQTree() {
     log_->Info("Env map qtree res is %i", env_map_qtree_.res);
 }
 
-#undef _CLAMP
+#undef CLAMP

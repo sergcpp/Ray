@@ -76,16 +76,4 @@ struct camera_t {
     uint32_t mi_index, uv_index;
     pass_settings_t pass_settings;
 };
-
-#if !defined(DISABLE_OCL)
-namespace Ocl {
-struct Device {
-    std::string name;
-};
-struct Platform {
-    std::string vendor, name;
-    std::vector<Device> devices;
-};
-} // namespace Ocl
-#endif
 } // namespace Ray

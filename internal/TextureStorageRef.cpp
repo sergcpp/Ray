@@ -63,8 +63,8 @@ int Ray::Ref::TexStorageLinear<T, N>::Allocate(const ColorType data[], const int
                 const ColorType c01 = Get(index, x + 0, y + 1, i - 1);
 
                 ColorType res;
-                for (int i = 0; i < N; ++i) {
-                    res.v[i] = (c00.v[i] + c10.v[i] + c11.v[i] + c01.v[i]) / 4;
+                for (int j = 0; j < N; ++j) {
+                    res.v[j] = (c00.v[j] + c10.v[j] + c11.v[j] + c01.v[j]) / 4;
                 }
 
                 out_pixels[(y / 2) * p.res[i][0] + (x / 2)] = res;

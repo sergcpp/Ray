@@ -123,10 +123,10 @@ Ray::RendererOCL
                     mat_desc4.base_texture = t1;
                     const uint32_t m4 = scene->AddMaterial(mat_desc4);
 
-                    mesh_desc.shapes.push_back({m1, m1, groups[0], groups[1]});
-                    mesh_desc.shapes.push_back({m2, m2, groups[2], groups[3]});
-                    mesh_desc.shapes.push_back({m3, m3, groups[4], groups[5]});
-                    mesh_desc.shapes.push_back({m4, m4, groups[6], groups[7]});
+                    mesh_desc.shapes.emplace_back(m1, m1, groups[0], groups[1]);
+                    mesh_desc.shapes.emplace_back(m2, m2, groups[2], groups[3]);
+                    mesh_desc.shapes.emplace_back(m3, m3, groups[4], groups[5]);
+                    mesh_desc.shapes.emplace_back(m4, m4, groups[6], groups[7]);
 
                     const uint32_t mesh = scene->AddMesh(mesh_desc);
 
@@ -138,7 +138,7 @@ Ray::RendererOCL
                     const uint32_t mesh_instance = scene->AddMeshInstance(mesh, xform);
                     (void)mesh_instance;
 
-                    renderer->Clear();
+                    renderer->Clear({0, 0, 0, 0});
 
                     auto reg = Ray::RegionContext{{0, 0, 64, 64}};
                     for (int i = 0; i < NUM_SAMPLES; ++i) {
@@ -161,9 +161,9 @@ Ray::RendererOCL
                         for (int i = 0; i < img_w; i++) {
                             const Ray::pixel_color_t &p = pixels[i];
 
-                            const uint8_t r = uint8_t(p.r * 255);
-                            const uint8_t g = uint8_t(p.g * 255);
-                            const uint8_t b = uint8_t(p.b * 255);
+                            const auto r = uint8_t(p.r * 255);
+                            const auto g = uint8_t(p.g * 255);
+                            const auto b = uint8_t(p.b * 255);
 
                             img_data_u8[3 * ((img_h - j - 1) * img_w + i) + 0] = r;
                             img_data_u8[3 * ((img_h - j - 1) * img_w + i) + 1] = g;

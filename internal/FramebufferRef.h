@@ -18,7 +18,6 @@ class Framebuffer {
     Framebuffer(int w, int h);
 
     force_inline int w() const { return w_; }
-
     force_inline int h() const { return h_; }
 
     force_inline void SetPixel(const int x, const int y, const pixel_color_t &p) {

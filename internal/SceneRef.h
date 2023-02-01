@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "../SceneBase.h"
+#include "CoreRef.h"
 #include "SmallVector.h"
 #include "SparseStorage.h"
 #include "TextureStorageRef.h"

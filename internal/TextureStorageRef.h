@@ -6,13 +6,11 @@
 #include "Core.h"
 #include "TextureSplitter.h"
 
-#define _MAX(x, y) ((x) < (y) ? (y) : (x))
-
 namespace Ray {
 namespace Ref {
 class TexStorageBase {
   public:
-    virtual ~TexStorageBase() {}
+    virtual ~TexStorageBase() = default;
 
     virtual void GetIRes(int index, int lod, int res[2]) const = 0;
     virtual void GetFRes(int index, int lod, float res[2]) const = 0;
@@ -325,5 +323,3 @@ extern template class TexStorageSwizzled<uint8_t, 1>;
 
 } // namespace Ref
 } // namespace Ray
-
-#undef _MAX

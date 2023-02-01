@@ -16,10 +16,10 @@
 #include "Vk/Context.h"
 #include "Vk/TextureParams.h"
 
-#define _MIN(x, y) ((x) < (y) ? (x) : (y))
-#define _MAX(x, y) ((x) < (y) ? (y) : (x))
-#define _ABS(x) ((x) < 0 ? -(x) : (x))
-#define _CLAMP(x, lo, hi) (_MIN(_MAX((x), (lo)), (hi)))
+#define MIN(x, y) ((x) < (y) ? (x) : (y))
+#define MAX(x, y) ((x) < (y) ? (y) : (x))
+#define ABS(x) ((x) < 0 ? -(x) : (x))
+#define CLAMP(x, lo, hi) (MIN(MAX((x), (lo)), (hi)))
 
 namespace Ray {
 uint32_t next_power_of_two(uint32_t v) {
@@ -377,8 +377,8 @@ uint32_t Ray::Vk::Scene::AddBindlessTexture(const tex_desc_t &_t) {
         for (int i = 0; i < p.mip_count; ++i) {
             bindless_textures_[ret].SetSubImage(i, 0, 0, res[0], res[1], fmt, temp_stage_buf, cmd_buf, data_offset,
                                                 data_size[i]);
-            res[0] = _MAX(res[0] / 2, 1);
-            res[1] = _MAX(res[1] / 2, 1);
+            res[0] = MAX(res[0] / 2, 1);
+            res[1] = MAX(res[1] / 2, 1);
             data_offset += 4096 * ((data_size[i] + 4095) / 4096);
         }
 
@@ -412,7 +412,7 @@ void Ray::Vk::Scene::WriteTextureMips(const color_t<T, N> data[], const int _res
     // TODO: try to get rid of these allocations
     std::vector<color_t<T, N>> _src_data, dst_data;
     for (int i = 1; i < mip_count; ++i) {
-        const int dst_res[2] = {_MAX(src_res[0] / 2, 1), _MAX(src_res[1] / 2, 1)};
+        const int dst_res[2] = {MAX(src_res[0] / 2, 1), MAX(src_res[1] / 2, 1)};
 
         dst_data.clear();
         dst_data.reserve(dst_res[0] * dst_res[1]);
@@ -422,10 +422,10 @@ void Ray::Vk::Scene::WriteTextureMips(const color_t<T, N> data[], const int _res
         for (int y = 0; y < dst_res[1]; ++y) {
             for (int x = 0; x < dst_res[0]; ++x) {
                 const color_t<T, N> c00 = src_data[(2 * y + 0) * src_res[0] + (2 * x + 0)];
-                const color_t<T, N> c10 = src_data[(2 * y + 0) * src_res[0] + _MIN(2 * x + 1, src_res[0] - 1)];
+                const color_t<T, N> c10 = src_data[(2 * y + 0) * src_res[0] + MIN(2 * x + 1, src_res[0] - 1)];
                 const color_t<T, N> c11 =
-                    src_data[_MIN(2 * y + 1, src_res[1] - 1) * src_res[0] + _MIN(2 * x + 1, src_res[0] - 1)];
-                const color_t<T, N> c01 = src_data[_MIN(2 * y + 1, src_res[1] - 1) * src_res[0] + (2 * x + 0)];
+                    src_data[MIN(2 * y + 1, src_res[1] - 1) * src_res[0] + MIN(2 * x + 1, src_res[0] - 1)];
+                const color_t<T, N> c01 = src_data[MIN(2 * y + 1, src_res[1] - 1) * src_res[0] + (2 * x + 0)];
 
                 color_t<T, N> res;
                 for (int j = 0; j < N; ++j) {
@@ -489,13 +489,13 @@ uint32_t Ray::Vk::Scene::AddMaterial(const shading_node_desc_t &m) {
     mat.flags = 0;
 
     if (m.type == DiffuseNode) {
-        mat.sheen_unorm = pack_unorm_16(_CLAMP(0.5f * m.sheen, 0.0f, 1.0f));
-        mat.sheen_tint_unorm = pack_unorm_16(_CLAMP(m.tint, 0.0f, 1.0f));
+        mat.sheen_unorm = pack_unorm_16(CLAMP(0.5f * m.sheen, 0.0f, 1.0f));
+        mat.sheen_tint_unorm = pack_unorm_16(CLAMP(m.tint, 0.0f, 1.0f));
         mat.textures[METALLIC_TEXTURE] = m.metallic_texture;
     } else if (m.type == GlossyNode) {
         mat.tangent_rotation = 2.0f * PI * m.anisotropic_rotation;
         mat.textures[METALLIC_TEXTURE] = m.metallic_texture;
-        mat.tint_unorm = pack_unorm_16(_CLAMP(m.tint, 0.0f, 1.0f));
+        mat.tint_unorm = pack_unorm_16(CLAMP(m.tint, 0.0f, 1.0f));
     } else if (m.type == RefractiveNode) {
     } else if (m.type == EmissiveNode) {
         mat.strength = m.strength;
@@ -513,7 +513,7 @@ uint32_t Ray::Vk::Scene::AddMaterial(const shading_node_desc_t &m) {
     }
 
     mat.textures[NORMALS_TEXTURE] = m.normal_map;
-    mat.normal_map_strength_unorm = pack_unorm_16(_CLAMP(m.normal_map_intensity, 0.0f, 1.0f));
+    mat.normal_map_strength_unorm = pack_unorm_16(CLAMP(m.normal_map_intensity, 0.0f, 1.0f));
 
     return materials_.push(mat);
 }
@@ -524,25 +524,25 @@ uint32_t Ray::Vk::Scene::AddMaterial(const principled_mat_desc_t &m) {
     main_mat.type = PrincipledNode;
     main_mat.textures[BASE_TEXTURE] = m.base_texture;
     memcpy(&main_mat.base_color[0], &m.base_color[0], 3 * sizeof(float));
-    main_mat.sheen_unorm = pack_unorm_16(_CLAMP(0.5f * m.sheen, 0.0f, 1.0f));
-    main_mat.sheen_tint_unorm = pack_unorm_16(_CLAMP(m.sheen_tint, 0.0f, 1.0f));
-    main_mat.roughness_unorm = pack_unorm_16(_CLAMP(m.roughness, 0.0f, 1.0f));
-    main_mat.tangent_rotation = 2.0f * PI * _CLAMP(m.anisotropic_rotation, 0.0f, 1.0f);
+    main_mat.sheen_unorm = pack_unorm_16(CLAMP(0.5f * m.sheen, 0.0f, 1.0f));
+    main_mat.sheen_tint_unorm = pack_unorm_16(CLAMP(m.sheen_tint, 0.0f, 1.0f));
+    main_mat.roughness_unorm = pack_unorm_16(CLAMP(m.roughness, 0.0f, 1.0f));
+    main_mat.tangent_rotation = 2.0f * PI * CLAMP(m.anisotropic_rotation, 0.0f, 1.0f);
     main_mat.textures[ROUGH_TEXTURE] = m.roughness_texture;
-    main_mat.metallic_unorm = pack_unorm_16(_CLAMP(m.metallic, 0.0f, 1.0f));
+    main_mat.metallic_unorm = pack_unorm_16(CLAMP(m.metallic, 0.0f, 1.0f));
     main_mat.textures[METALLIC_TEXTURE] = m.metallic_texture;
     main_mat.ior = m.ior;
     main_mat.flags = 0;
-    main_mat.transmission_unorm = pack_unorm_16(_CLAMP(m.transmission, 0.0f, 1.0f));
-    main_mat.transmission_roughness_unorm = pack_unorm_16(_CLAMP(m.transmission_roughness, 0.0f, 1.0f));
+    main_mat.transmission_unorm = pack_unorm_16(CLAMP(m.transmission, 0.0f, 1.0f));
+    main_mat.transmission_roughness_unorm = pack_unorm_16(CLAMP(m.transmission_roughness, 0.0f, 1.0f));
     main_mat.textures[NORMALS_TEXTURE] = m.normal_map;
-    main_mat.normal_map_strength_unorm = pack_unorm_16(_CLAMP(m.normal_map_intensity, 0.0f, 1.0f));
-    main_mat.anisotropic_unorm = pack_unorm_16(_CLAMP(m.anisotropic, 0.0f, 1.0f));
-    main_mat.specular_unorm = pack_unorm_16(_CLAMP(m.specular, 0.0f, 1.0f));
+    main_mat.normal_map_strength_unorm = pack_unorm_16(CLAMP(m.normal_map_intensity, 0.0f, 1.0f));
+    main_mat.anisotropic_unorm = pack_unorm_16(CLAMP(m.anisotropic, 0.0f, 1.0f));
+    main_mat.specular_unorm = pack_unorm_16(CLAMP(m.specular, 0.0f, 1.0f));
     main_mat.textures[SPECULAR_TEXTURE] = m.specular_texture;
-    main_mat.specular_tint_unorm = pack_unorm_16(_CLAMP(m.specular_tint, 0.0f, 1.0f));
-    main_mat.clearcoat_unorm = pack_unorm_16(_CLAMP(m.clearcoat, 0.0f, 1.0f));
-    main_mat.clearcoat_roughness_unorm = pack_unorm_16(_CLAMP(m.clearcoat_roughness, 0.0f, 1.0f));
+    main_mat.specular_tint_unorm = pack_unorm_16(CLAMP(m.specular_tint, 0.0f, 1.0f));
+    main_mat.clearcoat_unorm = pack_unorm_16(CLAMP(m.clearcoat, 0.0f, 1.0f));
+    main_mat.clearcoat_roughness_unorm = pack_unorm_16(CLAMP(m.clearcoat_roughness, 0.0f, 1.0f));
 
     uint32_t root_node = materials_.push(main_mat);
     uint32_t emissive_node = 0xffffffff, transparent_node = 0xffffffff;
@@ -1131,7 +1131,7 @@ void Ray::Vk::Scene::RebuildTLAS() {
 }
 
 void Ray::Vk::Scene::PrepareEnvMapQTree() {
-    const int tex = (env_.env_map & 0x00ffffff);
+    const int tex = int(env_.env_map & 0x00ffffff);
 
     Buffer temp_stage_buf;
     std::unique_ptr<uint8_t[]> temp_atlas_data;
@@ -1191,9 +1191,9 @@ void Ray::Vk::Scene::PrepareEnvMapQTree() {
         env_map_qtree_.mips.emplace_back(cur_res * cur_res / 4, 0.0f);
 
         for (int y = 0; y < size[1]; ++y) {
-            const float theta = PI * float(y) / size[1];
+            const float theta = PI * float(y) / float(size[1]);
             for (int x = 0; x < size[0]; ++x) {
-                const float phi = 2.0f * PI * float(x) / size[0];
+                const float phi = 2.0f * PI * float(x) / float(size[0]);
 
                 const uint8_t *col_rgbe = &rgbe_data[4 * (y * size[0] + x)];
                 simd_fvec4 col_rgb;
@@ -1207,8 +1207,8 @@ void Ray::Vk::Scene::PrepareEnvMapQTree() {
                 simd_fvec2 q;
                 DirToCanonical(value_ptr(dir), 0.0f, value_ptr(q));
 
-                int qx = _CLAMP(int(cur_res * q[0]), 0, cur_res - 1);
-                int qy = _CLAMP(int(cur_res * q[1]), 0, cur_res - 1);
+                int qx = CLAMP(int(cur_res * q[0]), 0, cur_res - 1);
+                int qy = CLAMP(int(cur_res * q[1]), 0, cur_res - 1);
 
                 int index = 0;
                 index |= (qx & 1) << 0;

@@ -42,7 +42,7 @@ class Scene : public SceneBase {
         VkDescriptorSetLayout descr_layout = {};
         VkDescriptorSet descr_set = {};
 
-        BindlessTexData(Context *ctx) : descr_pool(ctx) {}
+        explicit BindlessTexData(Context *ctx) : descr_pool(ctx) {}
     };
 
     BindlessTexData bindless_tex_data_;

@@ -75,6 +75,7 @@
         case 14: UNROLLED_FOR_14(INDEX, COUNT, CODE); break;\
         case 15: UNROLLED_FOR_15(INDEX, COUNT, CODE); break;\
         case 16: UNROLLED_FOR_16(INDEX, COUNT, CODE); break;\
+        default:                                      break;\
     }
 
 #define UNROLLED_FOR_R(INDEX, COUNT, CODE)              \

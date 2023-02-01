@@ -34,7 +34,7 @@ bool RendererSupportsMultithreading(eRendererType rt);
 
 /// Renderer settings
 struct settings_t {
-    int w, h;
+    int w = 0, h = 0;
 #ifdef ENABLE_GPU_IMPL
     const char *preferred_device = nullptr;
     bool use_tex_compression = true; // temporarily GPU only
@@ -98,7 +98,7 @@ class RendererBase {
     /** @brief Clear framebuffer
         @param c color used to fill image
     */
-    virtual void Clear(const pixel_color_t &c = {0, 0, 0, 0}) = 0;
+    virtual void Clear(const pixel_color_t &c) = 0;
 
     /** @brief Create new scene
         @return pointer to new scene for specific backend

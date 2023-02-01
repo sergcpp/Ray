@@ -7,7 +7,7 @@ class TextureSplitter {
     struct node_t {
         int parent = -1;
         int child[2] = { -1, -1 };
-        int pos[2], size[2];
+        int pos[2] = {}, size[2] = {};
         bool is_free = true;
 
         bool has_children() const {

@@ -98,7 +98,7 @@ template <int S> struct hit_data_t {
     simd_ivec<S> prim_index;
     simd_fvec<S> t, u, v;
 
-    hit_data_t(eUninitialize) {}
+    explicit hit_data_t(eUninitialize) {}
     force_inline hit_data_t() {
         mask = {0};
         obj_index = {-1};
@@ -112,7 +112,7 @@ template <int S> struct surface_t {
     simd_fvec<S> P[3] = {0.0f, 0.0f, 0.0f}, T[3], B[3], N[3], plane_N[3];
     simd_fvec<S> uvs[2];
 
-    force_inline surface_t() {}
+    force_inline surface_t() = default;
 };
 
 template <int S> struct light_sample_t {
@@ -120,7 +120,7 @@ template <int S> struct light_sample_t {
     simd_fvec<S> area = 0.0f, dist = 0.0f, pdf = 0.0f;
     simd_ivec<S> cast_shadow = -1;
 
-    force_inline light_sample_t() {}
+    force_inline light_sample_t() = default;
 };
 
 template <int S> force_inline simd_ivec<S> total_depth(const ray_data_t<S> &r) {
@@ -141,7 +141,7 @@ template <int S> force_inline int total_depth(const shadow_ray_t<S> &r) {
 
 // Generating rays
 template <int DimX, int DimY>
-void GeneratePrimaryRays(const int iteration, const camera_t &cam, const rect_t &r, int w, int h,
+void GeneratePrimaryRays(int iteration, const camera_t &cam, const rect_t &r, int w, int h,
                          const float random_seq[], aligned_vector<ray_data_t<DimX * DimY>> &out_rays,
                          aligned_vector<simd_ivec<DimX * DimY>> &out_masks);
 template <int DimX, int DimY>
@@ -574,11 +574,11 @@ force_inline void swap_elements(simd_vec<T, S> &v1, const int i1, simd_vec<T, S>
     v2.set(i2, temp);
 }
 
+#define _dot(x, y) ((x)[0] * (y)[0] + (x)[1] * (y)[1] + (x)[2] * (y)[2])
+
 template <int S>
 force_inline simd_ivec<S> IntersectTri(const simd_fvec<S> ro[3], const simd_fvec<S> rd[3], const simd_ivec<S> &ray_mask,
                                        const tri_accel_t &tri, uint32_t prim_index, hit_data_t<S> &inter) {
-#define _dot(x, y) ((x)[0] * (y)[0] + (x)[1] * (y)[1] + (x)[2] * (y)[2])
-
     const simd_fvec<S> det = _dot(rd, tri.n_plane);
     const simd_fvec<S> dett = tri.n_plane[3] - _dot(ro, tri.n_plane);
 
@@ -616,8 +616,9 @@ force_inline simd_ivec<S> IntersectTri(const simd_fvec<S> ro[3], const simd_fvec
     where(fmask, inter.v) = bar_v;
 
     return imask;
-#undef _dot
 }
+
+#undef _dot
 
 template <int S>
 force_inline bool IntersectTri(const float o[3], const float d[3], int i, const tri_accel_t &tri,
@@ -1215,44 +1216,6 @@ template <int StackSize> class TraversalStateStack_Single {
     }
 };
 
-template <int S> force_inline void safe_invert(const simd_fvec<S> v[3], simd_fvec<S> inv_v[3]) {
-    inv_v[0] = {1.0f / v[0]};
-    where((v[0] <= FLT_EPS) & (v[0] >= 0), inv_v[0]) = MAX_DIST;
-    where((v[0] >= -FLT_EPS) & (v[0] < 0), inv_v[0]) = -MAX_DIST;
-
-    inv_v[1] = {1.0f / v[1]};
-    where((v[1] <= FLT_EPS) & (v[1] >= 0), inv_v[1]) = MAX_DIST;
-    where((v[1] >= -FLT_EPS) & (v[1] < 0), inv_v[1]) = -MAX_DIST;
-
-    inv_v[2] = {1.0f / v[2]};
-    where((v[2] <= FLT_EPS) & (v[2] >= 0), inv_v[2]) = MAX_DIST;
-    where((v[2] >= -FLT_EPS) & (v[2] < 0), inv_v[2]) = -MAX_DIST;
-}
-
-force_inline void safe_invert(const float v[3], float out_v[3]) {
-    out_v[0] = 1.0f / v[0];
-    out_v[1] = 1.0f / v[1];
-    out_v[2] = 1.0f / v[2];
-
-    if (v[0] <= FLT_EPS && v[0] >= 0) {
-        out_v[0] = MAX_DIST;
-    } else if (v[0] >= -FLT_EPS && v[0] < 0) {
-        out_v[0] = -MAX_DIST;
-    }
-
-    if (v[1] <= FLT_EPS && v[1] >= 0) {
-        out_v[1] = MAX_DIST;
-    } else if (v[1] >= -FLT_EPS && v[1] < 0) {
-        out_v[1] = -MAX_DIST;
-    }
-
-    if (v[2] <= FLT_EPS && v[2] >= 0) {
-        out_v[2] = MAX_DIST;
-    } else if (v[2] >= -FLT_EPS && v[2] < 0) {
-        out_v[2] = -MAX_DIST;
-    }
-}
-
 template <int S>
 force_inline void comp_aux_inv_values(const simd_fvec<S> o[3], const simd_fvec<S> d[3], simd_fvec<S> inv_d[3],
                                       simd_fvec<S> inv_d_o[3]) {
@@ -1491,7 +1454,7 @@ force_inline float fast_log2(float val) {
         float val;
         int32_t x;
     } u = {val};
-    float log_2 = float(((u.x >> 23) & 255) - 128);
+    auto log_2 = float(((u.x >> 23) & 255) - 128);
     u.x &= ~(255 << 23);
     u.x += 127 << 23;
     log_2 += ((-0.34484843f) * u.val + 2.02466578f) * u.val - 0.67487759f;
@@ -1530,7 +1493,7 @@ simd_fvec<S> get_texture_lod(const Ref::TexStorageBase *textures[], const uint32
     const simd_fvec<S> lod = float(FORCE_TEXTURE_LOD);
 #else
     float sz[2];
-    textures[index >> 28]->GetFRes(index & 0x00ffffff, 0, sz);
+    textures[index >> 28]->GetFRes(int(index & 0x00ffffff), 0, sz);
 
     const simd_fvec<S> _duv_dx[2] = {duv_dx[0] * sz[0], duv_dx[1] * sz[1]};
     const simd_fvec<S> _duv_dy[2] = {duv_dy[0] * sz[0], duv_dy[1] * sz[1]};
@@ -1554,7 +1517,7 @@ simd_fvec<S> get_texture_lod(const Ref::TexStorageBase *const textures[], const 
     const simd_fvec<S> lod = float(FORCE_TEXTURE_LOD);
 #else
     float sz[2];
-    textures[index >> 28]->GetFRes(index & 0x00ffffff, 0, sz);
+    textures[index >> 28]->GetFRes(int(index & 0x00ffffff), 0, sz);
 
     simd_fvec<S> lod = 0.0f;
 
@@ -2096,7 +2059,7 @@ void Ray::NS::GeneratePrimaryRays(const int iteration, const camera_t &cam, cons
     const int S = DimX * DimY;
     static_assert(S <= 16, "!");
 
-    const float k = float(w) / h;
+    const float k = float(w) / float(h);
 
     const float temp = std::tan(0.5f * cam.fov * PI / 180.0f);
     const float fov_k = temp * cam.focus_distance;
@@ -2122,7 +2085,7 @@ void Ray::NS::GeneratePrimaryRays(const int iteration, const camera_t &cam, cons
 
             const simd_ivec<S> index = iyy * w + ixx;
 
-            simd_fvec<S> fxx = (simd_fvec<S>)ixx, fyy = (simd_fvec<S>)iyy;
+            auto fxx = (simd_fvec<S>)ixx, fyy = (simd_fvec<S>)iyy;
 
             const simd_ivec<S> hash_val = hash(index);
             const simd_fvec<S> sample_off[2] = {construct_float(hash_val), construct_float(hash(hash_val))};
@@ -2375,8 +2338,8 @@ void Ray::NS::SortRays_CPU(ray_data_t<S> *rays, simd_ivec<S> *ray_masks, int &ra
     { // reorder rays
         for (int i = 0; i < rays_count * S; i++) {
             int j;
-            while (i != (j = scan_values[i])) {
-                const int k = scan_values[j];
+            while (i != (j = int(scan_values[i]))) {
+                const int k = int(scan_values[j]);
 
                 {
                     const int jj = j / S, _jj = j % S, kk = k / S, _kk = k % S;
@@ -2446,7 +2409,7 @@ void Ray::NS::SortRays_GPU(ray_data_t<S> *rays, simd_ivec<S> *ray_masks, int &ra
             scan_values[i] = cur_sum;
             cur_sum += head_flags[i];
         }
-        chunks_count = cur_sum;
+        chunks_count = int(cur_sum);
     }
 
     // init ray chunks hash and base index
@@ -2567,7 +2530,7 @@ template <int S>
 bool Ray::NS::IntersectTris_ClosestHit(const simd_fvec<S> ro[3], const simd_fvec<S> rd[3], const simd_ivec<S> &ray_mask,
                                        const tri_accel_t *tris, const int tri_start, const int tri_end,
                                        const int obj_index, hit_data_t<S> &out_inter) {
-    hit_data_t<S> inter = {Uninitialize};
+    hit_data_t<S> inter{Uninitialize};
     inter.mask = {0};
     inter.obj_index = {reinterpret_cast<const int &>(obj_index)};
     inter.t = out_inter.t;
@@ -2649,7 +2612,7 @@ template <int S>
 bool Ray::NS::IntersectTris_AnyHit(const simd_fvec<S> ro[3], const simd_fvec<S> rd[3], const simd_ivec<S> &ray_mask,
                                    const tri_accel_t *tris, const int tri_start, const int tri_end, const int obj_index,
                                    hit_data_t<S> &out_inter) {
-    hit_data_t<S> inter = {Uninitialize};
+    hit_data_t<S> inter{Uninitialize};
     inter.mask = {0};
     inter.obj_index = {reinterpret_cast<const int &>(obj_index)};
     inter.t = out_inter.t;
@@ -3206,8 +3169,8 @@ bool Ray::NS::Traverse_MicroTree_WithStack_ClosestHit(const simd_fvec<S> ro[3], 
             if (!is_leaf_node(nodes[cur])) {
                 st.push_children(rd, nodes[cur]);
             } else {
-                const int tri_start = nodes[cur].prim_index & PRIM_INDEX_BITS,
-                          tri_end = tri_start + nodes[cur].prim_count;
+                const int tri_start = int(nodes[cur].prim_index & PRIM_INDEX_BITS),
+                          tri_end = int(tri_start + nodes[cur].prim_count);
                 res |= IntersectTris_ClosestHit(ro, rd, st.queue[st.index].mask, tris, tri_start, tri_end, obj_index,
                                                 inter);
             }
@@ -3300,8 +3263,8 @@ bool Ray::NS::Traverse_MicroTree_WithStack_ClosestHit(const float ro[3], const f
                 goto TRAVERSE;
             }
         } else {
-            const int tri_start = nodes[cur.index].child[0] & PRIM_INDEX_BITS,
-                      tri_end = tri_start + nodes[cur.index].child[1];
+            const int tri_start = int(nodes[cur.index].child[0] & PRIM_INDEX_BITS),
+                      tri_end = int(tri_start + nodes[cur.index].child[1]);
             res |= IntersectTris_ClosestHit<S>(ro, rd, mtris, tri_start, tri_end, inter_prim_index, inter_t, inter_u,
                                                inter_v);
         }
@@ -3456,8 +3419,8 @@ int Ray::NS::Traverse_MicroTree_WithStack_AnyHit(const float ro[3], const float 
                 goto TRAVERSE;
             }
         } else {
-            const int tri_start = nodes[cur.index].child[0] & PRIM_INDEX_BITS,
-                      tri_end = tri_start + nodes[cur.index].child[1];
+            const int tri_start = int(nodes[cur.index].child[0] & PRIM_INDEX_BITS),
+                      tri_end = int(tri_start + nodes[cur.index].child[1]);
             const bool hit_found = IntersectTris_AnyHit<S>(ro, rd, mtris, materials, tri_indices, tri_start, tri_end,
                                                            inter_prim_index, inter_t, inter_u, inter_v);
             if (hit_found) {
@@ -3665,10 +3628,10 @@ void Ray::NS::Sample_GGXSpecular_BSDF(const simd_fvec<S> T[3], const simd_fvec<S
         return;
     }
 
-    const simd_fvec<S> _I[3] = {-I[0], -I[1], -I[2]};
+    const simd_fvec<S> nI[3] = {-I[0], -I[1], -I[2]};
 
     simd_fvec<S> view_dir_ts[3];
-    tangent_from_world(T, B, N, _I, view_dir_ts);
+    tangent_from_world(T, B, N, nI, view_dir_ts);
     safe_normalize(view_dir_ts);
 
     simd_fvec<S> sampled_normal_ts[3];
@@ -4152,7 +4115,7 @@ void Ray::NS::SampleBilinear(const Ref::TexStorageBase *const textures[], const 
                              simd_fvec<S> out_rgba[4]) {
     const Ref::TexStorageBase &storage = *textures[index >> 28];
 
-    const int tex = (index & 0x00ffffff);
+    const int tex = int(index & 0x00ffffff);
 
     simd_fvec<S> _uvs[2];
     _uvs[0] = fract(uvs[0]);
@@ -4231,7 +4194,7 @@ void Ray::NS::SampleLatlong_RGBE(const Ref::TexStorageRGBA &storage, const uint3
 
     const simd_fvec<S> u = 0.5f * phi / PI;
 
-    const int tex = (index & 0x00ffffff);
+    const int tex = int(index & 0x00ffffff);
     float sz[2];
     storage.GetFRes(tex, 0, sz);
 
@@ -4360,7 +4323,7 @@ void Ray::NS::IntersectScene(ray_data_t<S> &r, const simd_ivec<S> &mask, const i
             ray_queue[0] = keep_going;
 
             while (index != num) {
-                const long mask = ray_queue[index].movemask();
+                const int mask = ray_queue[index].movemask();
                 uint32_t first_mi = mat_index[GetFirstBit(mask)];
 
                 simd_ivec<S> same_mi = (mat_index == first_mi);
@@ -4536,7 +4499,7 @@ void Ray::NS::IntersectScene(const shadow_ray_t<S> &r, const simd_ivec<S> &mask,
             ray_queue[0] = inter.mask;
 
             while (index != num) {
-                const long mask = ray_queue[index].movemask();
+                const int mask = ray_queue[index].movemask();
                 const uint32_t first_mi = mat_index[GetFirstBit(mask)];
 
                 simd_ivec<S> same_mi = (mat_index == first_mi);
@@ -5113,7 +5076,7 @@ void Ray::NS::Evaluate_LightColor(const simd_fvec<S> P[3], const ray_data_t<S> &
 
     int index = 0, num = 1;
     while (index != num) {
-        const long mask = ray_queue[index].movemask();
+        const int mask = ray_queue[index].movemask();
         const uint32_t first_li = inter.obj_index[GetFirstBit(mask)];
 
         const simd_ivec<S> same_li = (inter.obj_index == first_li);
@@ -5214,10 +5177,10 @@ Ray::NS::simd_ivec<S>
 Ray::NS::Evaluate_DiffuseNode(const light_sample_t<S> &ls, const ray_data_t<S> &ray, const simd_ivec<S> &mask,
                               const surface_t<S> &surf, const simd_fvec<S> base_color[3], const simd_fvec<S> &roughness,
                               const simd_fvec<S> &mix_weight, simd_fvec<S> out_col[3], shadow_ray_t<S> &sh_r) {
-    const simd_fvec<S> _I[3] = {-ray.d[0], -ray.d[1], -ray.d[2]};
+    const simd_fvec<S> nI[3] = {-ray.d[0], -ray.d[1], -ray.d[2]};
 
     simd_fvec<S> diff_col[4];
-    Evaluate_OrenDiffuse_BSDF(_I, surf.N, ls.L, roughness, base_color, diff_col);
+    Evaluate_OrenDiffuse_BSDF(nI, surf.N, ls.L, roughness, base_color, diff_col);
     const simd_fvec<S> &bsdf_pdf = diff_col[3];
 
     simd_fvec<S> mis_weight = 1.0f;
@@ -5267,12 +5230,12 @@ Ray::NS::Evaluate_GlossyNode(const light_sample_t<S> &ls, const ray_data_t<S> &r
                              const surface_t<S> &surf, const simd_fvec<S> base_color[3], const simd_fvec<S> &roughness,
                              const simd_fvec<S> &spec_ior, const simd_fvec<S> &spec_F0, const simd_fvec<S> &mix_weight,
                              simd_fvec<S> out_col[3], shadow_ray_t<S> &sh_r) {
-    const simd_fvec<S> _I[3] = {-ray.d[0], -ray.d[1], -ray.d[2]};
+    const simd_fvec<S> nI[3] = {-ray.d[0], -ray.d[1], -ray.d[2]};
     simd_fvec<S> H[3] = {ls.L[0] - ray.d[0], ls.L[1] - ray.d[1], ls.L[2] - ray.d[2]};
     safe_normalize(H);
 
     simd_fvec<S> view_dir_ts[3], light_dir_ts[3], sampled_normal_ts[3];
-    tangent_from_world(surf.T, surf.B, surf.N, _I, view_dir_ts);
+    tangent_from_world(surf.T, surf.B, surf.N, nI, view_dir_ts);
     tangent_from_world(surf.T, surf.B, surf.N, ls.L, light_dir_ts);
     tangent_from_world(surf.T, surf.B, surf.N, H, sampled_normal_ts);
 
@@ -5329,12 +5292,12 @@ Ray::NS::simd_ivec<S> Ray::NS::Evaluate_RefractiveNode(const light_sample_t<S> &
                                                        const simd_fvec<S> base_color[3], const simd_fvec<S> &roughness2,
                                                        const simd_fvec<S> &eta, const simd_fvec<S> &mix_weight,
                                                        simd_fvec<S> out_col[3], shadow_ray_t<S> &sh_r) {
-    const simd_fvec<S> _I[3] = {-ray.d[0], -ray.d[1], -ray.d[2]};
+    const simd_fvec<S> nI[3] = {-ray.d[0], -ray.d[1], -ray.d[2]};
     simd_fvec<S> H[3] = {ls.L[0] - ray.d[0] * eta, ls.L[1] - ray.d[1] * eta, ls.L[2] - ray.d[2] * eta};
     safe_normalize(H);
 
     simd_fvec<S> view_dir_ts[3], light_dir_ts[3], sampled_normal_ts[3];
-    tangent_from_world(surf.T, surf.B, surf.N, _I, view_dir_ts);
+    tangent_from_world(surf.T, surf.B, surf.N, nI, view_dir_ts);
     tangent_from_world(surf.T, surf.B, surf.N, ls.L, light_dir_ts);
     tangent_from_world(surf.T, surf.B, surf.N, H, sampled_normal_ts);
 
@@ -5400,7 +5363,7 @@ Ray::NS::simd_ivec<S> Ray::NS::Evaluate_PrincipledNode(
     const lobe_weights_t<S> &lobe_weights, const diff_params_t<S> &diff, const spec_params_t<S> &spec,
     const clearcoat_params_t<S> &coat, const transmission_params_t<S> &trans, const simd_fvec<S> &metallic,
     const simd_fvec<S> &N_dot_L, const simd_fvec<S> &mix_weight, simd_fvec<S> out_col[3], shadow_ray_t<S> &sh_r) {
-    const simd_fvec<S> _I[3] = {-ray.d[0], -ray.d[1], -ray.d[2]};
+    const simd_fvec<S> nI[3] = {-ray.d[0], -ray.d[1], -ray.d[2]};
 
     const simd_ivec<S> _is_backfacing = simd_cast(N_dot_L < 0.0f);
     const simd_ivec<S> _is_frontfacing = simd_cast(N_dot_L > 0.0f);
@@ -5411,7 +5374,7 @@ Ray::NS::simd_ivec<S> Ray::NS::Evaluate_PrincipledNode(
     const simd_ivec<S> eval_diff_lobe = simd_cast(lobe_weights.diffuse > 0.0f) & _is_frontfacing & mask;
     if (eval_diff_lobe.not_all_zeros()) {
         simd_fvec<S> diff_col[4];
-        Evaluate_PrincipledDiffuse_BSDF(_I, surf.N, ls.L, diff.roughness, diff.base_color, diff.sheen_color, false,
+        Evaluate_PrincipledDiffuse_BSDF(nI, surf.N, ls.L, diff.roughness, diff.base_color, diff.sheen_color, false,
                                         diff_col);
 
         where(eval_diff_lobe, bsdf_pdf) += lobe_weights.diffuse * diff_col[3];
@@ -5435,7 +5398,7 @@ Ray::NS::simd_ivec<S> Ray::NS::Evaluate_PrincipledNode(
     const simd_fvec<S> alpha_y = roughness2 * aspect;
 
     simd_fvec<S> view_dir_ts[3], light_dir_ts[3], sampled_normal_ts[3];
-    tangent_from_world(surf.T, surf.B, surf.N, _I, view_dir_ts);
+    tangent_from_world(surf.T, surf.B, surf.N, nI, view_dir_ts);
     tangent_from_world(surf.T, surf.B, surf.N, ls.L, light_dir_ts);
     tangent_from_world(surf.T, surf.B, surf.N, H, sampled_normal_ts);
 
@@ -5505,12 +5468,12 @@ Ray::NS::simd_ivec<S> Ray::NS::Evaluate_PrincipledNode(
     simd_fvec<S> P_biased[3];
     offset_ray(surf.P, surf.plane_N, P_biased);
 
-    const simd_fvec<S> _plane_N[3] = {-surf.plane_N[0], -surf.plane_N[1], -surf.plane_N[2]};
-    simd_fvec<S> _P_biased[3];
-    offset_ray(surf.P, _plane_N, _P_biased);
+    const simd_fvec<S> neg_plane_N[3] = {-surf.plane_N[0], -surf.plane_N[1], -surf.plane_N[2]};
+    simd_fvec<S> back_P_biased[3];
+    offset_ray(surf.P, neg_plane_N, back_P_biased);
 
     UNROLLED_FOR(i, 3, {
-        where(N_dot_L < 0.0f, P_biased[i]) = _P_biased[i];
+        where(N_dot_L < 0.0f, P_biased[i]) = back_P_biased[i];
         where(mask, sh_r.o[i]) = P_biased[i];
         where(mask, sh_r.d[i]) = ls.L[i];
     })
@@ -5643,9 +5606,9 @@ void Ray::NS::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t<
 
         const simd_ivec<S> sample_trans_refr_lobe = ~sample_trans_spec_lobe & sample_trans_lobe;
         if (sample_trans_refr_lobe.not_all_zeros()) {
-            simd_fvec<S> _F[4], _V[4];
+            simd_fvec<S> temp_F[4], temp_V[4];
             Sample_GGXRefraction_BSDF(surf.T, surf.B, surf.N, ray.d, trans.roughness, trans.eta, diff.base_color,
-                                      rand_u, rand_v, _V, _F);
+                                      rand_u, rand_v, temp_V, temp_F);
 
             const simd_fvec<S> _plane_N[3] = {-surf.plane_N[0], -surf.plane_N[1], -surf.plane_N[2]};
             simd_fvec<S> new_p[3];
@@ -5653,9 +5616,9 @@ void Ray::NS::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t<
 
             where(sample_trans_refr_lobe, new_ray.depth) = ray.depth + 0x00010000;
 
-            UNROLLED_FOR(i, 4, { where(sample_trans_refr_lobe, F[i]) = _F[i]; })
+            UNROLLED_FOR(i, 4, { where(sample_trans_refr_lobe, F[i]) = temp_F[i]; })
             UNROLLED_FOR(i, 3, {
-                where(sample_trans_refr_lobe, V[i]) = _V[i];
+                where(sample_trans_refr_lobe, V[i]) = temp_V[i];
                 where(sample_trans_refr_lobe, new_ray.o[i]) = new_p[i];
             })
 
@@ -5981,8 +5944,8 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
             UNROLLED_FOR(i, 3, { new_normal[i] = surf.N[i] + (new_normal[i] - surf.N[i]) * fstrength; })
             normalize(new_normal);
 
-            const simd_fvec<S> _I[3] = {-I[0], -I[1], -I[2]};
-            EnsureValidReflection(surf.plane_N, _I, new_normal);
+            const simd_fvec<S> nI[3] = {-I[0], -I[1], -I[2]};
+            EnsureValidReflection(surf.plane_N, nI, new_normal);
 
             UNROLLED_FOR(i, 3, { where(has_texture, surf.N[i]) = new_normal[i]; })
         }

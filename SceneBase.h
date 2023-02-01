@@ -217,9 +217,9 @@ struct camera_desc_t {
     eFilterType filter = Tent;           ///< Reconstruction filter
     eDeviceType dtype = SRGB;            ///< Device type
     eLensUnits ltype = FOV;              ///< Lens units type
-    float origin[3];                     ///< Camera origin
+    float origin[3] = {};                ///< Camera origin
     float fwd[3] = {};                   ///< Camera forward unit vector
-    float up[3];                         ///< Camera up vector (optional)
+    float up[3] = {};                    ///< Camera up vector (optional)
     float shift[2] = {};                 ///< Camera shift
     float fov = 45.0f, gamma = 1.0f;     ///< Field of view in degrees, gamma
     float sensor_height = 0.036f;        ///< Camera sensor height
@@ -231,7 +231,8 @@ struct camera_desc_t {
     int lens_blades = 0;                 ///< Bokeh shape
     float clip_start = 0;                ///< Clip start
     float clip_end = 3.402823466e+30F;   ///< Clip end
-    uint32_t mi_index, uv_index = 0;     ///< Index of mesh instance and uv layer used by geometry cam
+    uint32_t mi_index = 0xffffffff,      ///< Index of mesh instance
+             uv_index = 0;               ///< UV layer used by geometry cam
     bool lighting_only = false;          ///< Render lightmap only
     bool skip_direct_lighting = false;   ///< Render indirect light contribution only
     bool skip_indirect_lighting = false; ///< Render direct light contribution only

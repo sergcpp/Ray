@@ -19,41 +19,48 @@
 #define USE_SAFE_MATH 1
 
 namespace Ray {
+#ifndef RAY_EXCHANGE_DEFINED
+template <class T, class U = T> T exchange(T &obj, U &&new_value) {
+    T old_value = std::move(obj);
+    obj = std::forward<U>(new_value);
+    return old_value;
+}
+#define RAY_EXCHANGE_DEFINED
+#endif
+
 namespace Ref {
+#define sign_of(f) (((f) >= 0) ? 1 : -1)
+#define dot(x, y) ((x)[0] * (y)[0] + (x)[1] * (y)[1] + (x)[2] * (y)[2])
 force_inline void IntersectTri(const float ro[3], const float rd[3], const tri_accel_t &tri, const uint32_t prim_index,
                                hit_data_t &inter) {
-#define _sign_of(f) (((f) >= 0) ? 1 : -1)
-#define _dot(x, y) ((x)[0] * (y)[0] + (x)[1] * (y)[1] + (x)[2] * (y)[2])
-
-    const float det = _dot(rd, tri.n_plane);
-    const float dett = tri.n_plane[3] - _dot(ro, tri.n_plane);
-    if (_sign_of(dett) != _sign_of(det * inter.t - dett)) {
+    const float det = dot(rd, tri.n_plane);
+    const float dett = tri.n_plane[3] - dot(ro, tri.n_plane);
+    if (sign_of(dett) != sign_of(det * inter.t - dett)) {
         return;
     }
 
     const float p[3] = {det * ro[0] + dett * rd[0], det * ro[1] + dett * rd[1], det * ro[2] + dett * rd[2]};
 
-    const float detu = _dot(p, tri.u_plane) + det * tri.u_plane[3];
-    if (_sign_of(detu) != _sign_of(det - detu)) {
+    const float detu = dot(p, tri.u_plane) + det * tri.u_plane[3];
+    if (sign_of(detu) != sign_of(det - detu)) {
         return;
     }
 
-    const float detv = _dot(p, tri.v_plane) + det * tri.v_plane[3];
-    if (_sign_of(detv) != _sign_of(det - detu - detv)) {
+    const float detv = dot(p, tri.v_plane) + det * tri.v_plane[3];
+    if (sign_of(detv) != sign_of(det - detu - detv)) {
         return;
     }
 
     const float rdet = (1.0f / det);
 
-    inter.mask = 0xffffffff;
+    inter.mask = -1;
     inter.prim_index = (det < 0.0f) ? int(prim_index) : -int(prim_index) - 1;
     inter.t = dett * rdet;
     inter.u = detu * rdet;
     inter.v = detv * rdet;
-
-#undef _dot
-#undef _sign_of
 }
+#undef dot
+#undef sign_of
 
 force_inline void IntersectTri(const float ro[3], const float rd[3], const mtri_accel_t &tri, const uint32_t prim_index,
                                hit_data_t &inter) {
@@ -1945,7 +1952,7 @@ bool Ray::Ref::Traverse_MicroTree_WithStack_ClosestHit(const float ro[3], const 
             stack[stack_size++] = far_child(rd, nodes[cur]);
             stack[stack_size++] = near_child(rd, nodes[cur]);
         } else {
-            const int tri_start = nodes[cur].prim_index & PRIM_INDEX_BITS, tri_end = tri_start + nodes[cur].prim_count;
+            const int tri_start = int(nodes[cur].prim_index & PRIM_INDEX_BITS), tri_end = int(tri_start + nodes[cur].prim_count);
             res |= IntersectTris_ClosestHit(ro, rd, tris, tri_start, tri_end, obj_index, inter);
         }
     }
@@ -2029,8 +2036,8 @@ bool Ray::Ref::Traverse_MicroTree_WithStack_ClosestHit(const float ro[3], const 
                 goto TRAVERSE;
             }
         } else {
-            const int tri_start = nodes[cur.index].child[0] & PRIM_INDEX_BITS,
-                      tri_end = tri_start + nodes[cur.index].child[1];
+            const int tri_start = int(nodes[cur.index].child[0] & PRIM_INDEX_BITS),
+                      tri_end = int(tri_start + nodes[cur.index].child[1]);
             res |= IntersectTris_ClosestHit(ro, rd, mtris, tri_start, tri_end, obj_index, inter);
         }
     }
@@ -2058,7 +2065,7 @@ bool Ray::Ref::Traverse_MicroTree_WithStack_AnyHit(const float ro[3], const floa
             stack[stack_size++] = far_child(rd, nodes[cur]);
             stack[stack_size++] = near_child(rd, nodes[cur]);
         } else {
-            const int tri_start = nodes[cur].prim_index & PRIM_INDEX_BITS, tri_end = tri_start + nodes[cur].prim_count;
+            const int tri_start = int(nodes[cur].prim_index & PRIM_INDEX_BITS), tri_end = int(tri_start + nodes[cur].prim_count);
             const bool hit_found =
                 IntersectTris_AnyHit(ro, rd, mtris, materials, tri_indices, tri_start, tri_end, obj_index, inter);
             if (hit_found) {
@@ -2151,8 +2158,8 @@ bool Ray::Ref::Traverse_MicroTree_WithStack_AnyHit(const float ro[3], const floa
                 goto TRAVERSE;
             }
         } else {
-            const int tri_start = nodes[cur.index].child[0] & PRIM_INDEX_BITS,
-                      tri_end = tri_start + nodes[cur.index].child[1];
+            const int tri_start = int(nodes[cur.index].child[0] & PRIM_INDEX_BITS),
+                      tri_end = int(tri_start + nodes[cur.index].child[1]);
             const bool hit_found =
                 IntersectTris_AnyHit(ro, rd, tris, materials, tri_indices, tri_start, tri_end, obj_index, inter);
             if (hit_found) {
@@ -2509,8 +2516,8 @@ float Ray::Ref::Evaluate_EnvQTree(const float y_rotation, const simd_fvec4 *cons
     float factor = 1.0f;
 
     while (lod >= 0) {
-        const int x = clamp(int(p.get<0>() * res), 0, res - 1);
-        const int y = clamp(int(p.get<1>() * res), 0, res - 1);
+        const int x = clamp(int(p.get<0>() * float(res)), 0, res - 1);
+        const int y = clamp(int(p.get<1>() * float(res)), 0, res - 1);
 
         int index = 0;
         index |= (x & 1) << 0;
@@ -2547,8 +2554,8 @@ Ray::Ref::simd_fvec4 Ray::Ref::Sample_EnvQTree(const float y_rotation, const sim
     float factor = 1.0f;
 
     while (lod >= 0) {
-        const int qx = int(origin.get<0>() * res) / 2;
-        const int qy = int(origin.get<1>() * res) / 2;
+        const int qx = int(origin.get<0>() * float(res)) / 2;
+        const int qy = int(origin.get<1>() * float(res)) / 2;
 
         const simd_fvec4 quad = qtree_mips[lod][qy * res / 2 + qx];
 
@@ -2635,7 +2642,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::TransformNormal(const simd_fvec4 &n, const float 
 Ray::Ref::simd_fvec4 Ray::Ref::SampleNearest(const TexStorageBase *const textures[], const uint32_t index,
                                              const simd_fvec2 &uvs, const int lod) {
     const TexStorageBase &storage = *textures[index >> 28];
-    const auto &pix = storage.Fetch(index & 0x00ffffff, uvs.get<0>(), uvs.get<1>(), lod);
+    const auto &pix = storage.Fetch(int(index & 0x00ffffff), uvs.get<0>(), uvs.get<1>(), lod);
     return simd_fvec4{pix.v[0], pix.v[1], pix.v[2], pix.v[3]};
 }
 
@@ -2643,7 +2650,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleBilinear(const TexStorageBase *const textur
                                               const simd_fvec2 &uvs, const int lod) {
     const TexStorageBase &storage = *textures[index >> 28];
 
-    const int tex = (index & 0x00ffffff);
+    const int tex = int(index & 0x00ffffff);
     simd_fvec2 img_size;
     storage.GetFRes(tex, lod, value_ptr(img_size));
 
@@ -2668,10 +2675,10 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleBilinear(const TexStorageBase *const textur
 
 Ray::Ref::simd_fvec4 Ray::Ref::SampleBilinear(const TexStorageBase &storage, const uint32_t tex, const simd_fvec2 &iuvs,
                                               const int lod) {
-    const auto &p00 = storage.Fetch(tex, int(iuvs.get<0>()) + 0, int(iuvs.get<1>()) + 0, lod);
-    const auto &p01 = storage.Fetch(tex, int(iuvs.get<0>()) + 1, int(iuvs.get<1>()) + 0, lod);
-    const auto &p10 = storage.Fetch(tex, int(iuvs.get<0>()) + 0, int(iuvs.get<1>()) + 1, lod);
-    const auto &p11 = storage.Fetch(tex, int(iuvs.get<0>()) + 1, int(iuvs.get<1>()) + 1, lod);
+    const auto &p00 = storage.Fetch(int(tex), int(iuvs.get<0>()) + 0, int(iuvs.get<1>()) + 0, lod);
+    const auto &p01 = storage.Fetch(int(tex), int(iuvs.get<0>()) + 1, int(iuvs.get<1>()) + 0, lod);
+    const auto &p10 = storage.Fetch(int(tex), int(iuvs.get<0>()) + 0, int(iuvs.get<1>()) + 1, lod);
+    const auto &p11 = storage.Fetch(int(tex), int(iuvs.get<0>()) + 1, int(iuvs.get<1>()) + 1, lod);
 
     const simd_fvec2 k = fract(iuvs);
 
@@ -2699,7 +2706,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleAnisotropic(const TexStorageBase *const tex
                                                  const simd_fvec2 &uvs, const simd_fvec2 &duv_dx,
                                                  const simd_fvec2 &duv_dy) {
     const TexStorageBase &storage = *textures[index >> 28];
-    const uint32_t tex = (index & 0x00ffffff);
+    const int tex = int(index & 0x00ffffff);
 
     simd_fvec2 sz;
     storage.GetFRes(tex, 0, value_ptr(sz));
@@ -2773,7 +2780,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleLatlong_RGBE(const TexStorageRGBA &storage,
 
     const float u = fract(0.5f * phi / PI);
 
-    const int tex = (index & 0x00ffffff);
+    const int tex = int(index & 0x00ffffff);
     simd_fvec2 size;
     storage.GetFRes(tex, 0, value_ptr(size));
 
@@ -2991,7 +2998,7 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, co
     const float u1 = fract(random_seq[RAND_DIM_LIGHT_PICK] + sample_off[0]);
 
     // TODO: Hierarchical NEE
-    const auto light_index = std::min(uint32_t(u1 * sc.li_indices.size()), uint32_t(sc.li_indices.size() - 1));
+    const auto light_index = std::min(uint32_t(u1 * float(sc.li_indices.size())), uint32_t(sc.li_indices.size() - 1));
     const light_t &l = sc.lights[sc.li_indices[light_index]];
 
     ls.col = simd_fvec4{l.col[0], l.col[1], l.col[2], 0.0f};
@@ -3876,7 +3883,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
         return Ray::pixel_color_t{ray.c[0] * env_col[0], ray.c[1] * env_col[1], ray.c[2] * env_col[2], env_col[3]};
     }
 
-    surface_t surf;
+    surface_t surf = {};
 
     surf.P = simd_fvec4{ray.o[0], ray.o[1], ray.o[2], 0.0f} + inter.t * I;
 
@@ -4161,12 +4168,12 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
         const float sheen = 2.0f * unpack_unorm_16(mat->sheen_unorm);
         const float sheen_tint = unpack_unorm_16(mat->sheen_tint_unorm);
 
-        diff_params_t diff;
+        diff_params_t diff = {};
         diff.base_color = base_color;
         diff.sheen_color = sheen * mix(simd_fvec4{1.0f}, tint_color, sheen_tint);
         diff.roughness = roughness;
 
-        spec_params_t spec;
+        spec_params_t spec = {};
         spec.tmp_col = mix(simd_fvec4{1.0f}, tint_color, specular_tint);
         spec.tmp_col = mix(specular * 0.08f * spec.tmp_col, base_color, metallic);
         spec.roughness = roughness;
@@ -4174,12 +4181,12 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
         spec.F0 = fresnel_dielectric_cos(1.0f, spec.ior);
         spec.anisotropy = unpack_unorm_16(mat->anisotropic_unorm);
 
-        clearcoat_params_t coat;
+        clearcoat_params_t coat = {};
         coat.roughness = clearcoat_roughness;
         coat.ior = (2.0f / (1.0f - std::sqrt(0.08f * clearcoat))) - 1.0f;
         coat.F0 = fresnel_dielectric_cos(1.0f, coat.ior);
 
-        transmission_params_t trans;
+        transmission_params_t trans = {};
         trans.roughness = 1.0f - (1.0f - roughness) * (1.0f - unpack_unorm_16(mat->transmission_roughness_unorm));
         trans.int_ior = mat->ior;
         trans.eta = is_backfacing ? (mat->ior / ext_ior) : (ext_ior / mat->ior);

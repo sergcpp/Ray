@@ -30,10 +30,10 @@ template <int S> struct PassData {
     PassData() = default;
 
     PassData(const PassData &rhs) = delete;
-    PassData(PassData &&rhs) { *this = std::move(rhs); }
+    PassData(PassData &&rhs) noexcept { *this = std::move(rhs); }
 
     PassData &operator=(const PassData &rhs) = delete;
-    PassData &operator=(PassData &&rhs) {
+    PassData &operator=(PassData &&rhs) noexcept {
         primary_rays = std::move(rhs.primary_rays);
         primary_masks = std::move(rhs.primary_masks);
         secondary_rays = std::move(rhs.secondary_rays);
@@ -89,8 +89,8 @@ template <int DimX, int DimY> class RendererSIMD : public RendererBase {
     SceneBase *CreateScene() override;
     void RenderScene(const SceneBase *scene, RegionContext &region) override;
 
-    virtual void GetStats(stats_t &st) override { st = stats_; }
-    virtual void ResetStats() override { stats_ = {0}; }
+    void GetStats(stats_t &st) override { st = stats_; }
+    void ResetStats() override { stats_ = {0}; }
 };
 
 template <int S> Ray::NS::PassData<S> &get_per_thread_pass_data() {
@@ -140,10 +140,10 @@ template <int DimX, int DimY> Ray::SceneBase *Ray::NS::RendererSIMD<DimX, DimY>:
 }
 
 template <int DimX, int DimY>
-void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionContext &region) {
+void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *scene, RegionContext &region) {
     const int S = DimX * DimY;
 
-    const auto s = dynamic_cast<const Ref::Scene *>(_s);
+    const auto s = dynamic_cast<const Ref::Scene *>(scene);
     if (!s) {
         return;
     }
@@ -454,7 +454,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *_s, RegionC
     }
 
     // factor used to compute incremental average
-    const float mix_factor = 1.0f / region.iteration;
+    const float mix_factor = 1.0f / float(region.iteration);
 
     clean_buf_.MixWith(temp_buf_, rect, mix_factor);
     if (cam.pass_settings.flags & OutputSH) {

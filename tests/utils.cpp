@@ -33,7 +33,7 @@ std::tuple<std::vector<float>, std::vector<uint32_t>, std::vector<uint32_t>> Loa
 
 std::unique_ptr<uint8_t[]> ReadTGAFile(const void *data, const int data_len, int &w, int &h, int &bpp) {
     uint8_t tga_header[12] = {0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-    const uint8_t *tga_compare = (const uint8_t *)data;
+    const auto *tga_compare = (const uint8_t *)data;
     const uint8_t *img_header = (const uint8_t *)data + sizeof(tga_header);
     uint32_t img_size;
     bool compressed = false;

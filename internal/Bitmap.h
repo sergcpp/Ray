@@ -10,7 +10,7 @@ class Bitmap {
     static const int BitmapGranularity = sizeof(uint64_t) * CHAR_BIT;
 
   public:
-    Bitmap(const int block_count) { Resize(block_count); }
+    explicit Bitmap(const int block_count) { Resize(block_count); }
 
     ~Bitmap() {
         for (int i = 0; i < block_count_ / BitmapGranularity; ++i) {

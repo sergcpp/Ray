@@ -106,13 +106,13 @@ void test_texture() {
                 mat_desc.base_texture = tex_id;
                 const uint32_t mat_id = scene->AddMaterial(mat_desc);
 
-                mesh_desc.shapes.push_back({mat_id, mat_id, 0, indices_count});
+                mesh_desc.shapes.emplace_back(mat_id, mat_id, 0, indices_count);
 
                 const uint32_t mesh_id = scene->AddMesh(mesh_desc);
 
                 scene->AddMeshInstance(mesh_id, xform);
 
-                renderer->Clear();
+                renderer->Clear({0, 0, 0, 0});
 
                 auto reg = Ray::RegionContext{{0, 0, ImgRes, ImgRes}};
                 for (int i = 0; i < NUM_SAMPLES; ++i) {
@@ -133,9 +133,9 @@ void test_texture() {
                     for (int i = 0; i < ImgRes; i++) {
                         const Ray::pixel_color_t &p = pixels[i];
 
-                        const uint8_t r = uint8_t(p.r * 255);
-                        const uint8_t g = uint8_t(p.g * 255);
-                        const uint8_t b = uint8_t(p.b * 255);
+                        const auto r = uint8_t(p.r * 255);
+                        const auto g = uint8_t(p.g * 255);
+                        const auto b = uint8_t(p.b * 255);
 
                         img_data_u8[3 * ((ImgRes - j - 1) * ImgRes + i) + 0] = r;
                         img_data_u8[3 * ((ImgRes - j - 1) * ImgRes + i) + 1] = g;

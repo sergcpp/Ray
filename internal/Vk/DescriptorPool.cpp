@@ -1,6 +1,7 @@
 #include "DescriptorPool.h"
 
 #include "Context.h"
+#include "../../Log.h"
 
 namespace Ray {
 namespace Vk {

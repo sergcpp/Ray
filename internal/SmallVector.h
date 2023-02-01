@@ -33,7 +33,7 @@ inline void *aligned_malloc(size_t size, size_t alignment) {
     char *ptr_bytes = static_cast<char *>(ptr);
     ptr_bytes += sizeof(void *);
 
-    size_t off = static_cast<size_t>(reinterpret_cast<uintptr_t>(ptr_bytes) % alignment);
+    auto off = static_cast<size_t>(reinterpret_cast<uintptr_t>(ptr_bytes) % alignment);
     if (off) {
         off = alignment - off;
     }

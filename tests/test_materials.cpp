@@ -17,12 +17,12 @@ extern std::atomic_bool g_log_contains_errors;
 extern bool g_catch_flt_exceptions;
 extern bool g_determine_sample_count;
 
-class LogErr : public Ray::ILog {
+class LogErr final : public Ray::ILog {
     FILE *err_out_ = nullptr;
 
   public:
     LogErr() { err_out_ = fopen("test_data/errors.txt", "w"); }
-    ~LogErr() { fclose(err_out_); }
+    ~LogErr() override { fclose(err_out_); }
 
     void Info(const char *fmt, ...) override {}
     void Warning(const char *fmt, ...) override {}
@@ -404,7 +404,7 @@ void setup_material_scene(Ray::SceneBase &scene, const bool output_sh, const Mat
         base_mesh_desc.vtx_attrs_count = uint32_t(base_attrs.size()) / 8;
         base_mesh_desc.vtx_indices = &base_indices[0];
         base_mesh_desc.vtx_indices_count = uint32_t(base_indices.size());
-        base_mesh_desc.shapes.push_back({mid_grey_mat, mid_grey_mat, base_groups[0], base_groups[1]});
+        base_mesh_desc.shapes.emplace_back(mid_grey_mat, mid_grey_mat, base_groups[0], base_groups[1]);
         base_mesh = scene.AddMesh(base_mesh_desc);
     }
 
@@ -425,7 +425,7 @@ void setup_material_scene(Ray::SceneBase &scene, const bool output_sh, const Mat
         model_mesh_desc.vtx_attrs_count = uint32_t(model_attrs.size()) / 8;
         model_mesh_desc.vtx_indices = &model_indices[0];
         model_mesh_desc.vtx_indices_count = uint32_t(model_indices.size());
-        model_mesh_desc.shapes.push_back({main_mat, main_mat, model_groups[0], model_groups[1]});
+        model_mesh_desc.shapes.emplace_back(main_mat, main_mat, model_groups[0], model_groups[1]);
         model_mesh = scene.AddMesh(model_mesh_desc);
     }
 
@@ -442,7 +442,7 @@ void setup_material_scene(Ray::SceneBase &scene, const bool output_sh, const Mat
         core_mesh_desc.vtx_attrs_count = uint32_t(core_attrs.size()) / 8;
         core_mesh_desc.vtx_indices = &core_indices[0];
         core_mesh_desc.vtx_indices_count = uint32_t(core_indices.size());
-        core_mesh_desc.shapes.push_back({mid_grey_mat, mid_grey_mat, core_groups[0], core_groups[1]});
+        core_mesh_desc.shapes.emplace_back(mid_grey_mat, mid_grey_mat, core_groups[0], core_groups[1]);
         core_mesh = scene.AddMesh(core_mesh_desc);
     }
 
@@ -460,9 +460,9 @@ void setup_material_scene(Ray::SceneBase &scene, const bool output_sh, const Mat
         subsurf_bar_mesh_desc.vtx_attrs_count = uint32_t(subsurf_bar_attrs.size()) / 8;
         subsurf_bar_mesh_desc.vtx_indices = &subsurf_bar_indices[0];
         subsurf_bar_mesh_desc.vtx_indices_count = uint32_t(subsurf_bar_indices.size());
-        subsurf_bar_mesh_desc.shapes.push_back({white_mat, white_mat, subsurf_bar_groups[0], subsurf_bar_groups[1]});
-        subsurf_bar_mesh_desc.shapes.push_back(
-            {dark_grey_mat, dark_grey_mat, subsurf_bar_groups[2], subsurf_bar_groups[3]});
+        subsurf_bar_mesh_desc.shapes.emplace_back(white_mat, white_mat, subsurf_bar_groups[0], subsurf_bar_groups[1]);
+        subsurf_bar_mesh_desc.shapes.emplace_back(dark_grey_mat, dark_grey_mat, subsurf_bar_groups[2],
+                                                  subsurf_bar_groups[3]);
         subsurf_bar_mesh = scene.AddMesh(subsurf_bar_mesh_desc);
     }
 
@@ -479,7 +479,7 @@ void setup_material_scene(Ray::SceneBase &scene, const bool output_sh, const Mat
         text_mesh_desc.vtx_attrs_count = uint32_t(text_attrs.size()) / 8;
         text_mesh_desc.vtx_indices = &text_indices[0];
         text_mesh_desc.vtx_indices_count = uint32_t(text_indices.size());
-        text_mesh_desc.shapes.push_back({white_mat, white_mat, text_groups[0], text_groups[1]});
+        text_mesh_desc.shapes.emplace_back(white_mat, white_mat, text_groups[0], text_groups[1]);
         text_mesh = scene.AddMesh(text_mesh_desc);
     }
 
@@ -501,15 +501,15 @@ void setup_material_scene(Ray::SceneBase &scene, const bool output_sh, const Mat
         env_mesh_desc.vtx_indices = &env_indices[0];
         env_mesh_desc.vtx_indices_count = uint32_t(env_indices.size());
         if (scene_index == STANDARD_SCENE_SUN_LIGHT || scene_index == STANDARD_SCENE_HDR_LIGHT) {
-            env_mesh_desc.shapes.push_back({floor_mat, floor_mat, env_groups[0], env_groups[1]});
-            env_mesh_desc.shapes.push_back({dark_grey_mat, dark_grey_mat, env_groups[2], env_groups[3]});
-            env_mesh_desc.shapes.push_back({mid_grey_mat, mid_grey_mat, env_groups[4], env_groups[5]});
+            env_mesh_desc.shapes.emplace_back(floor_mat, floor_mat, env_groups[0], env_groups[1]);
+            env_mesh_desc.shapes.emplace_back(dark_grey_mat, dark_grey_mat, env_groups[2], env_groups[3]);
+            env_mesh_desc.shapes.emplace_back(mid_grey_mat, mid_grey_mat, env_groups[4], env_groups[5]);
         } else {
-            env_mesh_desc.shapes.push_back({floor_mat, floor_mat, env_groups[0], env_groups[1]});
-            env_mesh_desc.shapes.push_back({walls_mat, walls_mat, env_groups[2], env_groups[3]});
-            env_mesh_desc.shapes.push_back({dark_grey_mat, dark_grey_mat, env_groups[4], env_groups[5]});
-            env_mesh_desc.shapes.push_back({light_grey_mat, light_grey_mat, env_groups[6], env_groups[7]});
-            env_mesh_desc.shapes.push_back({mid_grey_mat, mid_grey_mat, env_groups[8], env_groups[9]});
+            env_mesh_desc.shapes.emplace_back(floor_mat, floor_mat, env_groups[0], env_groups[1]);
+            env_mesh_desc.shapes.emplace_back(walls_mat, walls_mat, env_groups[2], env_groups[3]);
+            env_mesh_desc.shapes.emplace_back(dark_grey_mat, dark_grey_mat, env_groups[4], env_groups[5]);
+            env_mesh_desc.shapes.emplace_back(light_grey_mat, light_grey_mat, env_groups[6], env_groups[7]);
+            env_mesh_desc.shapes.emplace_back(mid_grey_mat, mid_grey_mat, env_groups[8], env_groups[9]);
         }
         env_mesh = scene.AddMesh(env_mesh_desc);
     }
@@ -528,10 +528,10 @@ void setup_material_scene(Ray::SceneBase &scene, const bool output_sh, const Mat
         square_light_mesh_desc.vtx_attrs_count = uint32_t(square_light_attrs.size()) / 8;
         square_light_mesh_desc.vtx_indices = &square_light_indices[0];
         square_light_mesh_desc.vtx_indices_count = uint32_t(square_light_indices.size());
-        square_light_mesh_desc.shapes.push_back(
-            {square_light_mat, square_light_mat, square_light_groups[0], square_light_groups[1]});
-        square_light_mesh_desc.shapes.push_back(
-            {dark_grey_mat, dark_grey_mat, square_light_groups[2], square_light_groups[3]});
+        square_light_mesh_desc.shapes.emplace_back(square_light_mat, square_light_mat, square_light_groups[0],
+                                                   square_light_groups[1]);
+        square_light_mesh_desc.shapes.emplace_back(dark_grey_mat, dark_grey_mat, square_light_groups[2],
+                                                   square_light_groups[3]);
         square_light_mesh = scene.AddMesh(square_light_mesh_desc);
     }
 
@@ -549,10 +549,10 @@ void setup_material_scene(Ray::SceneBase &scene, const bool output_sh, const Mat
         disc_light_mesh_desc.vtx_attrs_count = uint32_t(disc_light_attrs.size()) / 8;
         disc_light_mesh_desc.vtx_indices = &disc_light_indices[0];
         disc_light_mesh_desc.vtx_indices_count = uint32_t(disc_light_indices.size());
-        disc_light_mesh_desc.shapes.push_back(
-            {disc_light_mat, disc_light_mat, disc_light_groups[0], disc_light_groups[1]});
-        disc_light_mesh_desc.shapes.push_back(
-            {dark_grey_mat, dark_grey_mat, disc_light_groups[2], disc_light_groups[3]});
+        disc_light_mesh_desc.shapes.emplace_back(disc_light_mat, disc_light_mat, disc_light_groups[0],
+                                                 disc_light_groups[1]);
+        disc_light_mesh_desc.shapes.emplace_back(dark_grey_mat, dark_grey_mat, disc_light_groups[2],
+                                                 disc_light_groups[3]);
         disc_light_mesh = scene.AddMesh(disc_light_mesh_desc);
     }
 
@@ -570,10 +570,10 @@ void setup_material_scene(Ray::SceneBase &scene, const bool output_sh, const Mat
         glassball_mesh_desc.vtx_attrs_count = uint32_t(glassball_attrs.size()) / 8;
         glassball_mesh_desc.vtx_indices = &glassball_indices[0];
         glassball_mesh_desc.vtx_indices_count = uint32_t(glassball_indices.size());
-        glassball_mesh_desc.shapes.push_back(
-            {glassball_mat0, glassball_mat0, glassball_groups[0], glassball_groups[1]});
-        glassball_mesh_desc.shapes.push_back(
-            {glassball_mat1, glassball_mat1, glassball_groups[2], glassball_groups[3]});
+        glassball_mesh_desc.shapes.emplace_back(glassball_mat0, glassball_mat0, glassball_groups[0],
+                                                glassball_groups[1]);
+        glassball_mesh_desc.shapes.emplace_back(glassball_mat1, glassball_mat1, glassball_groups[2],
+                                                glassball_groups[3]);
         glassball_mesh = scene.AddMesh(glassball_mesh_desc);
     }
 
@@ -809,7 +809,7 @@ void schedule_render_jobs(Ray::RendererBase &renderer, const Ray::SceneBase *sce
             }
 
             // report progress percentage
-            const float prog = 100.0f * float(i + std::min(SamplePortion, samples - i)) / samples;
+            const float prog = 100.0f * float(i + std::min(SamplePortion, samples - i)) / float(samples);
             printf("\r%s (%6s, %s): %.1f%% ", log_str, Ray::RendererTypeName(rt), settings.use_hwrt ? "HWRT" : "SWRT",
                    prog);
             fflush(stdout);
@@ -823,7 +823,7 @@ void schedule_render_jobs(Ray::RendererBase &renderer, const Ray::SceneBase *sce
 
             if ((i % SamplePortion) == 0 || i == samples - 1) {
                 // report progress percentage
-                const float prog = 100.0f * float(i + 1) / samples;
+                const float prog = 100.0f * float(i + 1) / float(samples);
                 printf("\r%s (%6s, %s): %.1f%% ", log_str, Ray::RendererTypeName(rt),
                        settings.use_hwrt ? "HWRT" : "SWRT", prog);
                 fflush(stdout);
@@ -900,9 +900,9 @@ void run_material_test(const char *arch_list[], const char *preferred_device, co
                             for (int i = 0; i < test_img_w; i++) {
                                 const Ray::pixel_color_t &p = pixels[j * test_img_w + i];
 
-                                const uint8_t r = uint8_t(p.r * 255);
-                                const uint8_t g = uint8_t(p.g * 255);
-                                const uint8_t b = uint8_t(p.b * 255);
+                                const auto r = uint8_t(p.r * 255);
+                                const auto g = uint8_t(p.g * 255);
+                                const auto b = uint8_t(p.b * 255);
 
                                 img_data_u8[3 * ((test_img_h - j - 1) * test_img_w + i) + 0] = r;
                                 img_data_u8[3 * ((test_img_h - j - 1) * test_img_w + i) + 1] = g;
