@@ -4241,6 +4241,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
     const float p = fract(random_seq[RAND_DIM_TERMINATE] + sample_off[0]);
     const float q = can_terminate_path ? std::max(0.05f, 1.0f - lum) : 0.0f;
     if (p >= q && lum > 0.0f && new_ray.pdf > 0.0f) {
+        new_ray.pdf = std::min(new_ray.pdf, 1e6f);
         new_ray.c[0] /= (1.0f - q);
         new_ray.c[1] /= (1.0f - q);
         new_ray.c[2] /= (1.0f - q);

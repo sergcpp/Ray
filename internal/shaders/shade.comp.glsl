@@ -1958,6 +1958,7 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
     const float p = fract(g_random_seq[hi + RAND_DIM_TERMINATE] + sample_off[0]);
     const float q = can_terminate_path ? max(0.05, 1.0 - lum) : 0.0;
     [[dont_flatten]] if (p >= q && lum > 0.0 && new_ray.pdf > 0.0) {
+        new_ray.pdf = min(new_ray.pdf, 1e6f);
         new_ray.c[0] /= (1.0 - q);
         new_ray.c[1] /= (1.0 - q);
         new_ray.c[2] /= (1.0 - q);

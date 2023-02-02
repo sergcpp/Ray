@@ -6327,6 +6327,9 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
     if (secondary_mask.not_all_zeros()) {
         UNROLLED_FOR(i, 3, { new_ray.c[i] = safe_div_pos(new_ray.c[i], 1.0f - q); })
 
+        // TODO: check if this is needed
+        new_ray.pdf = min(new_ray.pdf, 1e6f);
+
         // TODO: get rid of this!
         UNROLLED_FOR(i, 3, { where(~secondary_mask, new_ray.d[i]) = 0.0f; })
 
