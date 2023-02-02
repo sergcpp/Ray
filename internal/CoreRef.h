@@ -266,8 +266,9 @@ simd_fvec4 IntersectScene(const shadow_ray_t &r, int max_transp_depth, const sce
                           const TexStorageBase *const textures[]);
 
 // Pick point on any light source for evaluation
-void SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, const TexStorageBase *const textures[],
-                       const float random_seq[], const float sample_off[2], light_sample_t &ls);
+void SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const simd_fvec4 &B, const simd_fvec4 &N,
+                       const scene_data_t &sc, const TexStorageBase *const textures[], const float random_seq[],
+                       const float sample_off[2], light_sample_t &ls);
 
 // Account for visible lights contribution
 void IntersectAreaLights(const ray_data_t &ray, const light_t lights[], Span<const uint32_t> visible_lights,

@@ -21,7 +21,8 @@ struct Params {
     VEC4_TYPE back_col;
     float env_rotation;
     float back_rotation;
-    float _pad1[2];
+    int env_mult_importance;
+    float _pad1[1];
 };
 
 const int LOCAL_GROUP_SIZE_X = 8;

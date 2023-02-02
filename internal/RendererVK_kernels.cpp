@@ -253,6 +253,7 @@ void Ray::Vk::Renderer::kernel_ShadePrimaryHits(VkCommandBuffer cmd_buf, const p
 
     uniform_params.env_rotation = env.env_map_rotation;
     uniform_params.back_rotation = env.back_map_rotation;
+    uniform_params.env_mult_importance = sc_data.env->multiple_importance ? 1 : 0;
 
     if (use_bindless_) {
         assert(tex_descr_set);
@@ -321,6 +322,7 @@ void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(VkCommandBuffer cmd_buf, const
 
     uniform_params.env_rotation = env.env_map_rotation;
     uniform_params.back_rotation = env.back_map_rotation;
+    uniform_params.env_mult_importance = sc_data.env->multiple_importance ? 1 : 0;
 
     if (use_bindless_) {
         assert(tex_descr_set);

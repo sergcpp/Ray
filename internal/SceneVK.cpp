@@ -1028,8 +1028,19 @@ void Ray::Vk::Scene::Finalize() {
     env_map_qtree_ = {};
     env_.qtree_levels = 0;
 
-    if (env_.env_map != 0xffffffff && env_.multiple_importance) {
-        PrepareEnvMapQTree();
+    if (env_.multiple_importance && env_.env_col[0] > 0.0f && env_.env_col[1] > 0.0f && env_.env_col[2] > 0.0f) {
+        if (env_.env_map != 0xffffffff) {
+            PrepareEnvMapQTree();
+        } else {
+            // Dummy
+            Tex2DParams p;
+            p.w = p.h = 1;
+            p.format = eTexFormat::RawRGBA32F;
+            p.mip_count = 1;
+            p.usage = eTexUsageBits::Sampled | eTexUsageBits::Transfer;
+
+            env_map_qtree_.tex = Texture2D("Env map qtree", ctx_, p, ctx_->default_memory_allocs(), ctx_->log());
+        }
         { // add env light source
             light_t l = {};
 

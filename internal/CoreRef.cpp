@@ -761,8 +761,7 @@ simd_fvec3 sample_GTR1(const float rgh, const float r1, const float r2) {
 
     const float cosTheta = std::sqrt(std::max(0.0f, 1.0f - std::pow(a2, 1.0f - r2)) / (1.0f - a2));
     const float sinTheta = std::sqrt(std::max(0.0f, 1.0f - (cosTheta * cosTheta)));
-    const float sinPhi = std::sin(phi);
-    const float cosPhi = std::cos(phi);
+    const float sinPhi = std::sin(phi), cosPhi = std::cos(phi);
 
     return simd_fvec3{sinTheta * cosPhi, sinTheta * sinPhi, cosTheta};
 }
@@ -774,8 +773,7 @@ simd_fvec3 SampleGGX_NDF(const float rgh, const float r1, const float r2) {
 
     const float cosTheta = std::sqrt((1.0f - r2) / (1.0f + (a * a - 1.0f) * r2));
     const float sinTheta = clamp(std::sqrt(1.0f - (cosTheta * cosTheta)), 0.0f, 1.0f);
-    const float sinPhi = std::sin(phi);
-    const float cosPhi = std::cos(phi);
+    const float sinPhi = std::sin(phi), cosPhi = std::cos(phi);
 
     return simd_fvec3{sinTheta * cosPhi, sinTheta * sinPhi, cosTheta};
 }
@@ -1952,7 +1950,8 @@ bool Ray::Ref::Traverse_MicroTree_WithStack_ClosestHit(const float ro[3], const 
             stack[stack_size++] = far_child(rd, nodes[cur]);
             stack[stack_size++] = near_child(rd, nodes[cur]);
         } else {
-            const int tri_start = int(nodes[cur].prim_index & PRIM_INDEX_BITS), tri_end = int(tri_start + nodes[cur].prim_count);
+            const int tri_start = int(nodes[cur].prim_index & PRIM_INDEX_BITS),
+                      tri_end = int(tri_start + nodes[cur].prim_count);
             res |= IntersectTris_ClosestHit(ro, rd, tris, tri_start, tri_end, obj_index, inter);
         }
     }
@@ -2065,7 +2064,8 @@ bool Ray::Ref::Traverse_MicroTree_WithStack_AnyHit(const float ro[3], const floa
             stack[stack_size++] = far_child(rd, nodes[cur]);
             stack[stack_size++] = near_child(rd, nodes[cur]);
         } else {
-            const int tri_start = int(nodes[cur].prim_index & PRIM_INDEX_BITS), tri_end = int(tri_start + nodes[cur].prim_count);
+            const int tri_start = int(nodes[cur].prim_index & PRIM_INDEX_BITS),
+                      tri_end = int(tri_start + nodes[cur].prim_count);
             const bool hit_found =
                 IntersectTris_AnyHit(ro, rd, mtris, materials, tri_indices, tri_start, tri_end, obj_index, inter);
             if (hit_found) {
@@ -2226,9 +2226,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Sample_OrenDiffuse_BSDF(const simd_fvec4 &T, cons
                                                        const float rand_v, simd_fvec4 &out_V) {
 
     const float phi = 2 * PI * rand_v;
-
-    const float cos_phi = std::cos(phi);
-    const float sin_phi = std::sin(phi);
+    const float cos_phi = std::cos(phi), sin_phi = std::sin(phi);
 
     const float dir = std::sqrt(1.0f - rand_u * rand_u);
     auto V = simd_fvec4{dir * cos_phi, dir * sin_phi, rand_u, 0.0f}; // in tangent-space
@@ -2272,9 +2270,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Sample_PrincipledDiffuse_BSDF(const simd_fvec4 &T
                                                              const float rand_u, const float rand_v,
                                                              simd_fvec4 &out_V) {
     const float phi = 2 * PI * rand_v;
-
-    const float cos_phi = std::cos(phi);
-    const float sin_phi = std::sin(phi);
+    const float cos_phi = std::cos(phi), sin_phi = std::sin(phi);
 
     simd_fvec4 V;
     if (uniform_sampling) {
@@ -2993,7 +2989,8 @@ Ray::Ref::simd_fvec4 Ray::Ref::IntersectScene(const shadow_ray_t &r, const int m
     return rc;
 }
 
-void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, const TexStorageBase *const textures[],
+void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const simd_fvec4 &B, const simd_fvec4 &N,
+                                 const scene_data_t &sc, const TexStorageBase *const textures[],
                                  const float random_seq[], const float sample_off[2], light_sample_t &ls) {
     const float u1 = fract(random_seq[RAND_DIM_LIGHT_PICK] + sample_off[0]);
 
@@ -3227,27 +3224,39 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const scene_data_t &sc, co
             ls.col *= SampleBilinear(textures, lmat.textures[BASE_TEXTURE], luvs, 0 /* lod */);
         }
     } else if (l.type == LIGHT_TYPE_ENV) {
-        assert(sc.env.qtree_levels);
-        const auto *qtree_mips = reinterpret_cast<const simd_fvec4 *const *>(sc.env.qtree_mips);
-
         const float rand = u1 * float(sc.li_indices.size()) - float(light_index);
 
         const float rx = fract(random_seq[RAND_DIM_LIGHT_U] + sample_off[0]);
         const float ry = fract(random_seq[RAND_DIM_LIGHT_V] + sample_off[1]);
 
-        const simd_fvec4 dir_and_pdf =
-            Sample_EnvQTree(sc.env.env_map_rotation, qtree_mips, sc.env.qtree_levels, rand, rx, ry);
+        simd_fvec4 dir_and_pdf;
+        if (sc.env.qtree_levels) {
+            // Sample environment using quadtree
+            const auto *qtree_mips = reinterpret_cast<const simd_fvec4 *const *>(sc.env.qtree_mips);
+            dir_and_pdf = Sample_EnvQTree(sc.env.env_map_rotation, qtree_mips, sc.env.qtree_levels, rand, rx, ry);
+        } else {
+            // Sample environment as hemishpere
+            const float phi = 2 * PI * ry;
+            const float cos_phi = std::cos(phi), sin_phi = std::sin(phi);
+
+            const float dir = std::sqrt(1.0f - rx * rx);
+            auto V = simd_fvec4{dir * cos_phi, dir * sin_phi, rx, 0.0f}; // in tangent-space
+
+            dir_and_pdf = world_from_tangent(T, B, N, V);
+            dir_and_pdf.set<3>(0.5f / PI);
+        }
 
         ls.L = simd_fvec4{dir_and_pdf.get<0>(), dir_and_pdf.get<1>(), dir_and_pdf.get<2>(), 0.0f};
         ls.col *= {sc.env.env_col[0], sc.env.env_col[1], sc.env.env_col[2], 0.0f};
 
-        assert(sc.env.env_map != 0xffffffff);
-        ls.col *= SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), sc.env.env_map, ls.L,
-                                     sc.env.env_map_rotation);
+        if (sc.env.env_map != 0xffffffff) {
+            ls.col *= SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), sc.env.env_map, ls.L,
+                                         sc.env.env_map_rotation);
+        }
 
         ls.area = 1.0f;
         ls.dist = MAX_DIST;
-        ls.pdf = dir_and_pdf[3];
+        ls.pdf = dir_and_pdf.get<3>();
     }
 }
 
@@ -3387,16 +3396,24 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_EnvColor(const ray_data_t &ray, const en
     const float env_map_rotation = (ray.depth & 0x00ffffff) ? env.env_map_rotation : env.back_map_rotation;
     if (env_map != 0xffffffff) {
         env_col = SampleLatlong_RGBE(tex_storage, env_map, I, env_map_rotation);
-        if (env.qtree_levels) {
-            const auto *qtree_mips = reinterpret_cast<const simd_fvec4 *const *>(env.qtree_mips);
-
-            const float light_pdf = Evaluate_EnvQTree(env_map_rotation, qtree_mips, env.qtree_levels, I);
-            const float bsdf_pdf = ray.pdf;
-
-            const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
-            env_col *= mis_weight;
-        }
     }
+
+    if (env.qtree_levels) {
+        const auto *qtree_mips = reinterpret_cast<const simd_fvec4 *const *>(env.qtree_mips);
+
+        const float light_pdf = Evaluate_EnvQTree(env_map_rotation, qtree_mips, env.qtree_levels, I);
+        const float bsdf_pdf = ray.pdf;
+
+        const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
+        env_col *= mis_weight;
+    } else if (env.multiple_importance) {
+        const float light_pdf = 0.5f / PI;
+        const float bsdf_pdf = ray.pdf;
+
+        const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
+        env_col *= mis_weight;
+    }
+
     env_col *= (ray.depth & 0x00ffffff) ? simd_fvec4{env.env_col[0], env.env_col[1], env.env_col[2], 1.0f}
                                         : simd_fvec4{env.back_col[0], env.back_col[1], env.back_col[2], 1.0f};
     env_col.set<3>(1.0f);
@@ -4033,7 +4050,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
 #if USE_NEE == 1
     light_sample_t ls;
     if (!sc.li_indices.empty() && mat->type != EmissiveNode) {
-        SampleLightSource(surf.P, sc, textures, random_seq, sample_off, ls);
+        SampleLightSource(surf.P, surf.T, surf.B, surf.N, sc, textures, random_seq, sample_off, ls);
     }
     const float N_dot_L = dot(surf.N, ls.L);
 #endif

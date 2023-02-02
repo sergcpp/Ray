@@ -445,9 +445,7 @@ vec4 Evaluate_OrenDiffuse_BSDF(vec3 V, vec3 N, vec3 L, float roughness, vec3 bas
 vec4 Sample_OrenDiffuse_BSDF(vec3 T, vec3 B, vec3 N, vec3 I, float roughness,
                              vec3 base_color, float rand_u, float rand_v, out vec3 out_V) {
     const float phi = 2 * PI * rand_v;
-
-    const float cos_phi = cos(phi);
-    const float sin_phi = sin(phi);
+    const float cos_phi = cos(phi), sin_phi = sin(phi);
 
     const float dir = sqrt(1.0 - rand_u * rand_u);
     vec3 V = vec3(dir * cos_phi, dir * sin_phi, rand_u); // in tangent-space
@@ -483,9 +481,7 @@ vec4 Sample_PrincipledDiffuse_BSDF(vec3 T, vec3 B, vec3 N, vec3 I, float roughne
                                    vec3 sheen_color, bool uniform_sampling, float rand_u, float rand_v,
                                    out vec3 out_V) {
     const float phi = 2 * PI * rand_v;
-
-    const float cos_phi = cos(phi);
-    const float sin_phi = sin(phi);
+    const float cos_phi = cos(phi), sin_phi = sin(phi);
 
     vec3 V;
     if (uniform_sampling) {
@@ -740,7 +736,7 @@ vec3 MapToCone(float r1, float r2, vec3 N, float radius) {
     return N + uv[0] * LT + uv[1] * LB;
 }
 
-void SampleLightSource(vec3 P, int hi, vec2 sample_off, inout light_sample_t ls) {
+void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, int hi, vec2 sample_off, inout light_sample_t ls) {
     const float u1 = fract(g_random_seq[hi + RAND_DIM_LIGHT_PICK] + sample_off[0]);
     const uint light_index = min(uint(u1 * g_params.li_count), uint(g_params.li_count - 1));
 
@@ -991,17 +987,33 @@ void SampleLightSource(vec3 P, int hi, vec2 sample_off, inout light_sample_t ls)
         const float rx = fract(g_random_seq[hi + RAND_DIM_LIGHT_U] + sample_off[0]);
         const float ry = fract(g_random_seq[hi + RAND_DIM_LIGHT_V] + sample_off[1]);
 
-        const vec4 dir_and_pdf = Sample_EnvQTree(g_params.env_rotation, g_env_qtree, g_params.env_qtree_levels, rand, rx, ry);
+        vec4 dir_and_pdf;
+        if (g_params.env_qtree_levels > 0) {
+            // Sample environment using quadtree
+            dir_and_pdf = Sample_EnvQTree(g_params.env_rotation, g_env_qtree, g_params.env_qtree_levels, rand, rx, ry);
+        } else {
+            // Sample environment as hemishpere
+            const float phi = 2 * PI * ry;
+            const float cos_phi = cos(phi), sin_phi = sin(phi);
+
+            const float dir = sqrt(1.0 - rx * rx);
+            vec3 V = vec3(dir * cos_phi, dir * sin_phi, rx); // in tangent-space
+
+            dir_and_pdf.xyz = world_from_tangent(T, B, N, V);
+            dir_and_pdf.w = 0.5 / PI;
+        }
 
         ls.L = dir_and_pdf.xyz;
         ls.col *= g_params.env_col.xyz;
 
         const uint env_map = floatBitsToUint(g_params.env_col.w);
+        if (env_map != 0xffffffff) {
 #if BINDLESS
-        ls.col *= SampleLatlong_RGBE(env_map, ls.L, g_params.env_rotation);
+            ls.col *= SampleLatlong_RGBE(env_map, ls.L, g_params.env_rotation);
 #else
-        ls.col *= SampleLatlong_RGBE(g_textures[env_map], ls.L, g_params.env_rotation);
+            ls.col *= SampleLatlong_RGBE(g_textures[env_map], ls.L, g_params.env_rotation);
 #endif
+        }
 
         ls.area = 1.0;
         ls.dist = MAX_DIST;
@@ -1026,14 +1038,22 @@ vec3 Evaluate_EnvColor(ray_data_t ray) {
 #else
         env_col *= SampleLatlong_RGBE(g_textures[env_map], rd, env_map_rotation);
 #endif
-        if (g_params.env_qtree_levels > 0) {
-            const float light_pdf = Evaluate_EnvQTree(env_map_rotation, g_env_qtree, g_params.env_qtree_levels, rd);
-            const float bsdf_pdf = ray.pdf;
-
-            const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
-            env_col *= mis_weight;
-        }
     }
+
+    if (g_params.env_qtree_levels > 0) {
+        const float light_pdf = Evaluate_EnvQTree(env_map_rotation, g_env_qtree, g_params.env_qtree_levels, rd);
+        const float bsdf_pdf = ray.pdf;
+
+        const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
+        env_col *= mis_weight;
+    } else if (g_params.env_mult_importance != 0) {
+        const float light_pdf = 0.5 / PI;
+        const float bsdf_pdf = ray.pdf;
+
+        const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
+        env_col *= mis_weight;
+    }
+
     return env_col;
 }
 
@@ -1751,7 +1771,7 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
     ls.col = ls.L = vec3(0.0);
     ls.area = ls.pdf = ls.dist = 0;
     if (/*pi.should_add_direct_light() &&*/ g_params.li_count != 0 && mat.type != EmissiveNode) {
-        SampleLightSource(surf.P, hi, sample_off, ls);
+        SampleLightSource(surf.P, surf.T, surf.B, surf.N, hi, sample_off, ls);
     }
     const float N_dot_L = dot(surf.N, ls.L);
 #endif

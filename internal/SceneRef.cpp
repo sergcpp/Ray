@@ -658,8 +658,10 @@ void Ray::Ref::Scene::Finalize() {
     env_map_qtree_ = {};
     env_.qtree_levels = 0;
 
-    if (env_.env_map != 0xffffffff && env_.multiple_importance) {
-        PrepareEnvMapQTree();
+    if (env_.multiple_importance && env_.env_col[0] > 0.0f && env_.env_col[1] > 0.0f && env_.env_col[2] > 0.0f) {
+        if (env_.env_map != 0xffffffff) {
+            PrepareEnvMapQTree();
+        }
         { // add env light source
             light_t l = {};
 
