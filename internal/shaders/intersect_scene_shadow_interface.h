@@ -9,6 +9,8 @@ struct Params {
     UVEC2_TYPE img_size;
     UINT_TYPE node_index;
     int max_transp_depth;
+    int blocker_lights_count;
+    int _pad0, _pad1, _pad2;
 };
 
 const int LOCAL_GROUP_SIZE_X = 8;
@@ -27,9 +29,11 @@ const int VERTICES_BUF_SLOT = 10;
 const int VTX_INDICES_BUF_SLOT = 11;
 const int SH_RAYS_BUF_SLOT = 12;
 const int COUNTERS_BUF_SLOT = 13;
-const int TLAS_SLOT = 15;
+const int LIGHTS_BUF_SLOT = 14;
+const int BLOCKER_LIGHTS_BUF_SLOT = 15;
+const int TLAS_SLOT = 16;
 
-const int OUT_IMG_SLOT = 0;
+const int INOUT_IMG_SLOT = 0;
 
 INTERFACE_END
 

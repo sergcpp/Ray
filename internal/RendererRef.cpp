@@ -45,8 +45,9 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
                                   s->tri_materials_.empty() ? nullptr : &s->tri_materials_[0],
                                   s->materials_.empty() ? nullptr : &s->materials_[0],
                                   s->lights_.empty() ? nullptr : &s->lights_[0],
-                                  {s->li_indices_.data(), s->li_indices_.size()},
-                                  {s->visible_lights_.data(), s->visible_lights_.size()}};
+                                  {s->li_indices_},
+                                  {s->visible_lights_},
+                                  {s->blocker_lights_}};
 
     const uint32_t macro_tree_root = s->macro_nodes_root_;
 
@@ -174,14 +175,11 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
         const int x = (sh_r.xy >> 16) & 0x0000ffff;
         const int y = sh_r.xy & 0x0000ffff;
 
-        const simd_fvec4 rc =
+        simd_fvec4 rc =
             IntersectScene(sh_r, cam.pass_settings.max_transp_depth, sc_data, macro_tree_root, s->tex_storages_);
-        pixel_color_t col = {};
-        col.r = rc[0];
-        col.g = rc[1];
-        col.b = rc[2];
-        col.a = 0.0f;
+        rc *= IntersectAreaLights(sh_r, sc_data.lights, sc_data.blocker_lights, sc_data.transforms);
 
+        const pixel_color_t col = {rc[0], rc[1], rc[2], 0.0f};
         temp_buf_.AddPixel(x, y, col);
     }
 
@@ -283,14 +281,11 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
             const int x = (sh_r.xy >> 16) & 0x0000ffff;
             const int y = sh_r.xy & 0x0000ffff;
 
-            const simd_fvec4 rc =
+            simd_fvec4 rc =
                 IntersectScene(sh_r, cam.pass_settings.max_transp_depth, sc_data, macro_tree_root, s->tex_storages_);
-            pixel_color_t col = {};
-            col.r = rc[0];
-            col.g = rc[1];
-            col.b = rc[2];
-            col.a = 0.0f;
+            rc *= IntersectAreaLights(sh_r, sc_data.lights, sc_data.blocker_lights, sc_data.transforms);
 
+            const pixel_color_t col = {rc[0], rc[1], rc[2], 0.0f};
             temp_buf_.AddPixel(x, y, col);
         }
 

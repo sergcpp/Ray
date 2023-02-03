@@ -64,11 +64,19 @@ layout(std430, binding = COUNTERS_BUF_SLOT) readonly buffer Counters {
     uint g_counters[];
 };
 
+layout(std430, binding = LIGHTS_BUF_SLOT) readonly buffer Lights {
+    light_t g_lights[];
+};
+
+layout(std430, binding = BLOCKER_LIGHTS_BUF_SLOT) readonly buffer BlockerLights {
+    uint g_blocker_lights[];
+};
+
 #if HWRT
 layout(binding = TLAS_SLOT) uniform accelerationStructureEXT g_tlas;
 #endif
 
-layout(binding = OUT_IMG_SLOT, rgba32f) uniform image2D g_out_img;
+layout(binding = INOUT_IMG_SLOT, rgba32f) uniform image2D g_inout_img;
 
 #define FETCH_TRI(j) g_tris[j]
 #include "traverse_bvh.glsl"
@@ -171,11 +179,13 @@ bool Traverse_MacroTree_WithStack(vec3 orig_ro, vec3 orig_rd, vec3 orig_inv_rd, 
     return false;
 }
 
-vec3 IntersectSceneShadow(shadow_ray_t r, float dist) {
+vec3 IntersectSceneShadow(shadow_ray_t r) {
     vec3 ro = vec3(r.o[0], r.o[1], r.o[2]);
     vec3 rd = vec3(r.d[0], r.d[1], r.d[2]);
     vec3 rc = vec3(r.c[0], r.c[1], r.c[2]);
     int depth = (r.depth >> 24);
+
+    float dist = r.dist > 0.0 ? r.dist : MAX_DIST;
 #if !HWRT
     const vec3 inv_d = safe_invert(rd);
 
@@ -335,6 +345,72 @@ vec3 IntersectSceneShadow(shadow_ray_t r, float dist) {
 #endif
 }
 
+float IntersectAreaLightsShadow(shadow_ray_t r) {
+    vec3 ro = vec3(r.o[0], r.o[1], r.o[2]);
+    vec3 rd = vec3(r.d[0], r.d[1], r.d[2]);
+
+    float rdist = abs(r.dist);
+
+    for (uint li = 0; li < g_params.blocker_lights_count; ++li) {
+        uint light_index = g_blocker_lights[li];
+        light_t l = g_lights[light_index];
+
+        uint light_type = (l.type_and_param0.x & 0x1f);
+        if (light_type == LIGHT_TYPE_RECT) {
+            vec3 light_pos = l.RECT_POS;
+            vec3 light_u = l.RECT_U;
+            vec3 light_v = l.RECT_V;
+
+            vec3 light_forward = normalize(cross(light_u, light_v));
+
+            float plane_dist = dot(light_forward, light_pos);
+            float cos_theta = dot(rd, light_forward);
+            float t = (plane_dist - dot(light_forward, ro)) / cos_theta;
+
+            if (cos_theta < 0.0 && t > HIT_EPS && t < rdist) {
+                light_u /= dot(light_u, light_u);
+                light_v /= dot(light_v, light_v);
+
+                vec3 p = ro + rd * t;
+                vec3 vi = p - light_pos;
+                float a1 = dot(light_u, vi);
+                if (a1 >= -0.5 && a1 <= 0.5) {
+                    float a2 = dot(light_v, vi);
+                    if (a2 >= -0.5 && a2 <= 0.5) {
+                        return 0.0;
+                    }
+                }
+            }
+        } else if (light_type == LIGHT_TYPE_DISK) {
+            vec3 light_pos = l.DISK_POS;
+            vec3 light_u = l.DISK_U;
+            vec3 light_v = l.DISK_V;
+
+            vec3 light_forward = normalize(cross(light_u, light_v));
+
+            float plane_dist = dot(light_forward, light_pos);
+            float cos_theta = dot(rd, light_forward);
+            float t = (plane_dist - dot(light_forward, ro)) / cos_theta;
+
+            if (cos_theta < 0.0 && t > HIT_EPS && t < rdist) {
+                light_u /= dot(light_u, light_u);
+                light_v /= dot(light_v, light_v);
+
+                vec3 p = ro + rd * t;
+                vec3 vi = p - light_pos;
+                float a1 = dot(light_u, vi);
+                float a2 = dot(light_v, vi);
+
+                if (sqrt(a1 * a1 + a2 * a2) <= 0.5) {
+                    return 0.0;
+                }
+            }
+        }
+    }
+
+    return 1.0;
+}
+
 void main() {
     const int index = int(gl_WorkGroupID.x * 64 + gl_LocalInvocationIndex);
     if (index >= g_counters[3]) {
@@ -343,13 +419,13 @@ void main() {
 
     shadow_ray_t sh_ray = g_sh_rays[index];
 
-    const vec3 rc = IntersectSceneShadow(sh_ray, sh_ray.dist);
+    const vec3 rc = IntersectSceneShadow(sh_ray) * IntersectAreaLightsShadow(sh_ray);
     if (lum(rc) > 0.0) {
         const int x = (sh_ray.xy >> 16) & 0xffff;
         const int y = (sh_ray.xy & 0xffff);
 
-        vec3 col = imageLoad(g_out_img, ivec2(x, y)).rgb;
+        vec3 col = imageLoad(g_inout_img, ivec2(x, y)).rgb;
         col += rc;
-        imageStore(g_out_img, ivec2(x, y), vec4(col, 1.0));
+        imageStore(g_inout_img, ivec2(x, y), vec4(col, 1.0));
     }
 }

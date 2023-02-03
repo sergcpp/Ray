@@ -90,7 +90,9 @@ struct derivatives_t {
 
 struct light_sample_t {
     simd_fvec4 col, L;
-    float area = 0.0f, dist, pdf = 0.0f, cast_shadow = 1.0f;
+    float area = 0.0f, dist, pdf = 0.0f;
+    uint32_t cast_shadow : 1;
+    uint32_t _pad : 31;
 };
 static_assert(sizeof(light_sample_t) == 48, "!");
 
@@ -273,6 +275,8 @@ void SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const simd_fvec
 // Account for visible lights contribution
 void IntersectAreaLights(const ray_data_t &ray, const light_t lights[], Span<const uint32_t> visible_lights,
                          const transform_t transforms[], hit_data_t &inout_inter);
+float IntersectAreaLights(const shadow_ray_t &ray, const light_t lights[], Span<const uint32_t> blocker_lights,
+                          const transform_t transforms[]);
 
 // Get environment collor at direction
 simd_fvec4 Evaluate_EnvColor(const ray_data_t &ray, const environment_t &env, const TexStorageRGBA &tex_storage);

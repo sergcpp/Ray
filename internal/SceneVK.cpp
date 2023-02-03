@@ -53,8 +53,7 @@ Ray::Vk::Scene::Scene(Context *ctx, const bool use_hwrt, const bool use_bindless
     : ctx_(ctx), use_hwrt_(use_hwrt), use_bindless_(use_bindless), use_tex_compression_(use_tex_compression),
       nodes_(ctx), tris_(ctx), tri_indices_(ctx), tri_materials_(ctx), transforms_(ctx, "Transforms"),
       meshes_(ctx, "Meshes"), mesh_instances_(ctx, "Mesh Instances"), mi_indices_(ctx), vertices_(ctx),
-      vtx_indices_(ctx), materials_(ctx, "Materials"), atlas_textures_(ctx, "Atlas Textures"),
-      bindless_tex_data_{ctx},
+      vtx_indices_(ctx), materials_(ctx, "Materials"), atlas_textures_(ctx, "Atlas Textures"), bindless_tex_data_{ctx},
       tex_atlases_{{ctx, eTexFormat::RawRGBA8888, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
                    {ctx, eTexFormat::RawRGB888, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
                    {ctx, eTexFormat::RawRG88, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
@@ -62,7 +61,7 @@ Ray::Vk::Scene::Scene(Context *ctx, const bool use_hwrt, const bool use_bindless
                    {ctx, eTexFormat::BC3, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
                    {ctx, eTexFormat::BC4, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
                    {ctx, eTexFormat::BC5, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE}},
-      lights_(ctx, "Lights"), li_indices_(ctx), visible_lights_(ctx) {}
+      lights_(ctx, "Lights"), li_indices_(ctx), visible_lights_(ctx), blocker_lights_(ctx) {}
 
 Ray::Vk::Scene::~Scene() {
     bindless_textures_.clear();
@@ -880,6 +879,9 @@ uint32_t Ray::Vk::Scene::AddLight(const rect_light_desc_t &_l, const float *xfor
     if (_l.visible) {
         visible_lights_.PushBack(light_index);
     }
+    if (_l.sky_portal) {
+        blocker_lights_.PushBack(light_index);
+    }
     return light_index;
 }
 
@@ -909,6 +911,9 @@ uint32_t Ray::Vk::Scene::AddLight(const disk_light_desc_t &_l, const float *xfor
     li_indices_.PushBack(light_index);
     if (_l.visible) {
         visible_lights_.PushBack(light_index);
+    }
+    if (_l.sky_portal) {
+        blocker_lights_.PushBack(light_index);
     }
     return light_index;
 }
@@ -960,6 +965,12 @@ void Ray::Vk::Scene::RemoveLight(const uint32_t i) {
     //     auto it = find(begin(visible_lights_), end(visible_lights_), i);
     //     assert(it != end(visible_lights_));
     //     visible_lights_.erase(it);
+    // }
+
+    // if (lights_[i].sky_portal) {
+    //     auto it = find(begin(blocker_lights_), end(blocker_lights_), i);
+    //     assert(it != end(blocker_lights_));
+    //     blocker_lights_.erase(it);
     // }
 
     lights_.erase(i);
@@ -1773,7 +1784,7 @@ void Ray::Vk::Scene::RebuildHWAccStructures() {
         // VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR;
         new_instance.accelerationStructureReference = static_cast<uint64_t>(vk_blas.vk_device_address());
 
-        //const mesh_t &mesh = meshes_[instance.mesh_index];
+        // const mesh_t &mesh = meshes_[instance.mesh_index];
         {
             ++blas.geo_count;
 

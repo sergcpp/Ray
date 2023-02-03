@@ -165,8 +165,9 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *scene, Regi
                                   s->tri_materials_.empty() ? nullptr : &s->tri_materials_[0],
                                   s->materials_.empty() ? nullptr : &s->materials_[0],
                                   s->lights_.empty() ? nullptr : &s->lights_[0],
-                                  {s->li_indices_.data(), s->li_indices_.size()},
-                                  {s->visible_lights_.data(), s->visible_lights_.size()}};
+                                  {s->li_indices_},
+                                  {s->visible_lights_},
+                                  {s->blocker_lights_}};
 
     const uint32_t macro_tree_root = s->macro_nodes_root_;
 
@@ -311,6 +312,9 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *scene, Regi
         simd_fvec<S> rc[3];
         NS::IntersectScene(sh_r, p.shadow_masks[ri], cam.pass_settings.max_transp_depth, sc_data, macro_tree_root,
                            s->tex_storages_, rc);
+        const simd_fvec<S> k = NS::IntersectAreaLights(sh_r, p.shadow_masks[ri], sc_data.lights, sc_data.blocker_lights,
+                                                       sc_data.transforms);
+        UNROLLED_FOR(i, 3, { rc[i] *= k; })
 
         // TODO: vectorize this
         UNROLLED_FOR_S(i, S, {
@@ -410,6 +414,9 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *scene, Regi
             simd_fvec<S> rc[3];
             IntersectScene(sh_r, p.shadow_masks[ri], cam.pass_settings.max_transp_depth, sc_data, macro_tree_root,
                            s->tex_storages_, rc);
+            const simd_fvec<S> k = NS::IntersectAreaLights(sh_r, p.shadow_masks[ri], sc_data.lights,
+                                                           sc_data.blocker_lights, sc_data.transforms);
+            UNROLLED_FOR(i, 3, { rc[i] *= k; })
 
             // TODO: vectorize this
             UNROLLED_FOR_S(i, S, {

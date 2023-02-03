@@ -451,6 +451,7 @@ struct scene_data_t {
     const light_t *lights;
     Span<const uint32_t> li_indices;
     Span<const uint32_t> visible_lights;
+    Span<const uint32_t> blocker_lights;
 };
 
 } // namespace Ray

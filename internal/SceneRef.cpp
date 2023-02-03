@@ -511,6 +511,9 @@ uint32_t Ray::Ref::Scene::AddLight(const rect_light_desc_t &_l, const float *xfo
     if (_l.visible) {
         visible_lights_.push_back(light_index);
     }
+    if (_l.sky_portal) {
+        blocker_lights_.push_back(light_index);
+    }
     return light_index;
 }
 
@@ -540,6 +543,9 @@ uint32_t Ray::Ref::Scene::AddLight(const disk_light_desc_t &_l, const float *xfo
     li_indices_.push_back(light_index);
     if (_l.visible) {
         visible_lights_.push_back(light_index);
+    }
+    if (_l.sky_portal) {
+        blocker_lights_.push_back(light_index);
     }
     return light_index;
 }
@@ -591,6 +597,12 @@ void Ray::Ref::Scene::RemoveLight(const uint32_t i) {
         auto it = find(begin(visible_lights_), end(visible_lights_), i);
         assert(it != end(visible_lights_));
         visible_lights_.erase(it);
+    }
+
+    if (lights_[i].sky_portal) {
+        auto it = find(begin(blocker_lights_), end(blocker_lights_), i);
+        assert(it != end(blocker_lights_));
+        blocker_lights_.erase(it);
     }
 
     lights_.erase(i);

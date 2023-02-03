@@ -194,7 +194,8 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
                               ctx_.get(),
                               internal_shaders_output_debug_rt_comp_spv,
                               internal_shaders_output_debug_rt_comp_spv_size,
-            eShaderType::Comp, log};
+                              eShaderType::Comp,
+                              log};
     }
 
     prog_prim_rays_gen_ = Program{"Primary Raygen", ctx_.get(), &sh_prim_rays_gen_, log};
@@ -357,6 +358,8 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
                             int(s->li_indices_.size()),
                             s->visible_lights_.buf(),
                             int(s->visible_lights_.size()),
+                            s->blocker_lights_.buf(),
+                            int(s->blocker_lights_.size()),
                             s->rt_tlas_,
                             s->env_map_qtree_.tex,
                             int(s->env_map_qtree_.mips.size())};

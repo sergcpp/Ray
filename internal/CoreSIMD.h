@@ -116,7 +116,7 @@ template <int S> struct surface_t {
 };
 
 template <int S> struct light_sample_t {
-    simd_fvec<S> col[3], L[3] = {0.0f, 0.0f, 0.0f};
+    simd_fvec<S> col[3] = {0.0f, 0.0f, 0.0f}, L[3] = {0.0f, 0.0f, 0.0f};
     simd_fvec<S> area = 0.0f, dist = 0.0f, pdf = 0.0f;
     simd_ivec<S> cast_shadow = -1;
 
@@ -364,6 +364,9 @@ template <int S>
 void IntersectAreaLights(const ray_data_t<S> &r, const simd_ivec<S> &ray_mask, const light_t lights[],
                          Span<const uint32_t> visible_lights, const transform_t transforms[],
                          hit_data_t<S> &inout_inter);
+template <int S>
+simd_fvec<S> IntersectAreaLights(const shadow_ray_t<S> &r, simd_ivec<S> ray_mask, const light_t lights[],
+                                 Span<const uint32_t> blocker_lights, const transform_t transforms[]);
 
 // Get environment collor at direction
 template <int S>
@@ -4435,6 +4438,7 @@ void Ray::NS::IntersectScene(const shadow_ray_t<S> &r, const simd_ivec<S> &mask,
     simd_fvec<S> ro[3] = {r.o[0], r.o[1], r.o[2]};
     UNROLLED_FOR(i, 3, { rc[i] = r.c[i]; })
     simd_fvec<S> dist = r.dist;
+    where(r.dist < 0.0f, dist) = MAX_DIST;
     simd_ivec<S> depth = (r.depth >> 24);
 
     simd_ivec<S> keep_going = simd_cast(dist > HIT_EPS) & mask;
@@ -4713,7 +4717,7 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
                     UNROLLED_FOR(i, 3, { env_col[i] *= tex_col[i]; })
                 }
                 UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.col[i]) *= sc.env.env_col[i]; })
-                where(ray_queue[index], ls.dist) = MAX_DIST;
+                where(ray_queue[index], ls.dist) = -ls.dist;
             }
         } else if (l.type == LIGHT_TYPE_DISK) {
             simd_fvec<S> offset[2] = {2.0f * ru - 1.0f, 2.0f * rv - 1.0f};
@@ -4764,7 +4768,7 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
                     UNROLLED_FOR(i, 3, { env_col[i] *= tex_col[i]; })
                 }
                 UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.col[i]) *= sc.env.env_col[i]; })
-                where(ray_queue[index], ls.dist) = MAX_DIST;
+                where(ray_queue[index], ls.dist) = -ls.dist;
             }
         } else if (l.type == LIGHT_TYPE_LINE) {
             simd_fvec<S> center_to_surface[3];
@@ -4809,19 +4813,6 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
 
             if (!l.visible) {
                 where(ray_queue[index], ls.area) = 0.0f;
-            }
-
-            // probably can not be a portal, but still..
-            if (l.sky_portal != 0) {
-                simd_fvec<S> env_col[3] = {sc.env.env_col[0], sc.env.env_col[1], sc.env.env_col[2]};
-                if (sc.env.env_map != 0xffffffff) {
-                    simd_fvec<S> tex_col[3];
-                    SampleLatlong_RGBE(*static_cast<const Ref::TexStorageRGBA *>(textures[0]), sc.env.env_map, ls.L,
-                                       sc.env.env_map_rotation, ray_queue[index], tex_col);
-                    UNROLLED_FOR(i, 3, { env_col[i] *= tex_col[i]; })
-                }
-                UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.col[i]) *= sc.env.env_col[i]; })
-                where(ray_queue[index], ls.dist) = MAX_DIST;
             }
         } else if (l.type == LIGHT_TYPE_TRI) {
             const transform_t &ltr = sc.transforms[l.tri.xform_index];
@@ -5048,6 +5039,78 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, const simd_ivec<S> &_r
 }
 
 template <int S>
+Ray::NS::simd_fvec<S> Ray::NS::IntersectAreaLights(const shadow_ray_t<S> &r, simd_ivec<S> ray_mask,
+                                                   const light_t lights[], Span<const uint32_t> blocker_lights,
+                                                   const transform_t transforms[]) {
+    const simd_fvec<S> rdist = abs(r.dist);
+    simd_fvec<S> ret = 1.0f;
+
+    for (uint32_t li = 0; li < uint32_t(blocker_lights.size()) && ray_mask.not_all_zeros(); ++li) {
+        const uint32_t light_index = blocker_lights[li];
+        const light_t &l = lights[light_index];
+
+        if (l.type == LIGHT_TYPE_RECT) {
+            float light_fwd[3];
+            cross(l.rect.u, l.rect.v, light_fwd);
+            normalize(light_fwd);
+
+            const float plane_dist = dot3(light_fwd, l.rect.pos);
+
+            const simd_fvec<S> cos_theta = dot3(r.d, light_fwd);
+            const simd_fvec<S> t = safe_div_neg(plane_dist - dot3(light_fwd, r.o), cos_theta);
+
+            const simd_ivec<S> imask = simd_cast((cos_theta < 0.0f) & (t > HIT_EPS) & (t < rdist)) & ray_mask;
+            if (imask.not_all_zeros()) {
+                const float dot_u = dot3(l.rect.u, l.rect.u);
+                const float dot_v = dot3(l.rect.v, l.rect.v);
+
+                const simd_fvec<S> p[3] = {fmadd(r.d[0], t, r.o[0]), fmadd(r.d[1], t, r.o[1]),
+                                           fmadd(r.d[2], t, r.o[2])};
+                const simd_fvec<S> vi[3] = {p[0] - l.rect.pos[0], p[1] - l.rect.pos[1], p[2] - l.rect.pos[2]};
+
+                const simd_fvec<S> a1 = dot3(l.rect.u, vi) / dot_u;
+                const simd_fvec<S> a2 = dot3(l.rect.v, vi) / dot_v;
+
+                const simd_fvec<S> final_mask =
+                    (a1 >= -0.5f & a1 <= 0.5f) & (a2 >= -0.5f & a2 <= 0.5f) & simd_cast(imask);
+
+                ray_mask &= ~simd_cast(final_mask);
+                where(final_mask, ret) = 0.0f;
+            }
+        } else if (l.type == LIGHT_TYPE_DISK) {
+            float light_fwd[3];
+            cross(l.disk.u, l.disk.v, light_fwd);
+            normalize(light_fwd);
+
+            const float plane_dist = dot3(light_fwd, l.disk.pos);
+
+            const simd_fvec<S> cos_theta = dot3(r.d, light_fwd);
+            const simd_fvec<S> t = safe_div_neg(plane_dist - dot3(light_fwd, r.o), cos_theta);
+
+            const simd_ivec<S> imask = simd_cast((cos_theta < 0.0f) & (t > HIT_EPS) & (t < rdist)) & ray_mask;
+            if (imask.not_all_zeros()) {
+                const float dot_u = dot3(l.disk.u, l.disk.u);
+                const float dot_v = dot3(l.disk.v, l.disk.v);
+
+                const simd_fvec<S> p[3] = {fmadd(r.d[0], t, r.o[0]), fmadd(r.d[1], t, r.o[1]),
+                                           fmadd(r.d[2], t, r.o[2])};
+                const simd_fvec<S> vi[3] = {p[0] - l.disk.pos[0], p[1] - l.disk.pos[1], p[2] - l.disk.pos[2]};
+
+                const simd_fvec<S> a1 = dot3(l.disk.u, vi) / dot_u;
+                const simd_fvec<S> a2 = dot3(l.disk.v, vi) / dot_v;
+
+                const simd_fvec<S> final_mask = (sqrt(a1 * a1 + a2 * a2) <= 0.5f) & simd_cast(imask);
+
+                ray_mask &= ~simd_cast(final_mask);
+                where(final_mask, ret) = 0.0f;
+            }
+        }
+    }
+
+    return ret;
+}
+
+template <int S>
 void Ray::NS::Evaluate_EnvColor(const ray_data_t<S> &ray, const simd_ivec<S> &mask, const environment_t &env,
                                 const Ref::TexStorageRGBA &tex_storage, simd_fvec<S> env_col[4]) {
     const uint32_t env_map = env.env_map;
@@ -5215,7 +5278,6 @@ Ray::NS::Evaluate_DiffuseNode(const light_sample_t<S> &ls, const ray_data_t<S> &
         where(mask, sh_r.o[i]) = P_biased[i];
         where(mask, sh_r.d[i]) = ls.L[i];
     })
-    where(mask, sh_r.dist) = ls.dist - 10.0f * HIT_BIAS;
     UNROLLED_FOR(i, 3, {
         const simd_fvec<S> temp = ls.col[i] * diff_col[i] * safe_div(mix_weight * mis_weight, ls.pdf);
         where(mask, sh_r.c[i]) = ray.c[i] * temp;
@@ -5276,7 +5338,6 @@ Ray::NS::Evaluate_GlossyNode(const light_sample_t<S> &ls, const ray_data_t<S> &r
         where(mask, sh_r.o[i]) = P_biased[i];
         where(mask, sh_r.d[i]) = ls.L[i];
     })
-    where(mask, sh_r.dist) = ls.dist - 10.0f * HIT_BIAS;
     UNROLLED_FOR(i, 3, {
         const simd_fvec<S> temp = ls.col[i] * spec_col[i] * safe_div_pos(mix_weight * mis_weight, ls.pdf);
         where(mask, sh_r.c[i]) = ray.c[i] * temp;
@@ -5339,7 +5400,6 @@ Ray::NS::simd_ivec<S> Ray::NS::Evaluate_RefractiveNode(const light_sample_t<S> &
         where(mask, sh_r.o[i]) = P_biased[i];
         where(mask, sh_r.d[i]) = ls.L[i];
     })
-    where(mask, sh_r.dist) = ls.dist - 10.0f * HIT_BIAS;
     UNROLLED_FOR(i, 3, {
         const simd_fvec<S> temp = ls.col[i] * refr_col[i] * safe_div_pos(mix_weight * mis_weight, ls.pdf);
         where(mask, sh_r.c[i]) = ray.c[i] * temp;
@@ -5499,7 +5559,6 @@ Ray::NS::simd_ivec<S> Ray::NS::Evaluate_PrincipledNode(
         where(mask, sh_r.o[i]) = P_biased[i];
         where(mask, sh_r.d[i]) = ls.L[i];
     })
-    where(mask, sh_r.dist) = ls.dist - 10.0f * HIT_BIAS;
     UNROLLED_FOR(i, 3, {
         where(mask, sh_r.c[i]) = ray.c[i] * lcol[i];
         where(mask & ~ls.cast_shadow, out_col[i]) += lcol[i];
@@ -6109,7 +6168,8 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
     shadow_ray_t<S> &sh_r = out_shadow_rays[*out_shadow_rays_count];
     sh_r = {};
     sh_r.depth = ray.depth;
-    sh_r.dist = MAX_DIST;
+    sh_r.dist = ls.dist - 10.0f * HIT_BIAS;
+    where(ls.dist < 0.0f, sh_r.dist) = ls.dist + 10.0f * HIT_BIAS;
     sh_r.xy = ray.xy;
 
     { // Sample materials

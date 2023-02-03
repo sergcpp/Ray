@@ -841,7 +841,7 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, int hi, vec2 sample_off, 
 #endif
             }
             ls.col *= env_col;
-            ls.dist = MAX_DIST;
+            ls.dist = -ls.dist;
         }
     } else [[dont_flatten]] if (l_type == LIGHT_TYPE_DISK) {
         const vec3 light_pos = l.DISK_POS;
@@ -895,7 +895,7 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, int hi, vec2 sample_off, 
 #endif
             }
             ls.col *= env_col;
-            ls.dist = MAX_DIST;
+            ls.dist = -ls.dist;
         }
     } else [[dont_flatten]] if (l_type == LIGHT_TYPE_LINE) {
         const vec3 light_pos = l.LINE_POS;
@@ -927,21 +927,6 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, int hi, vec2 sample_off, 
 
         if ((l.type_and_param0.x & (1 << 6)) == 0) { // !visible
             ls.area = 0.0;
-        }
-
-        // probably can not be a portal, but still..
-        [[dont_flatten]] if ((l.type_and_param0.x & (1 << 7)) != 0) { // sky portal
-            vec3 env_col = g_params.env_col.xyz;
-            const uint env_map = floatBitsToUint(g_params.env_col.w);
-            if (env_map != 0xffffffff) {
-#if BINDLESS
-                env_col *= SampleLatlong_RGBE(env_map, ls.L, g_params.env_rotation);
-#else
-                env_col *= SampleLatlong_RGBE(g_textures[env_map], ls.L, g_params.env_rotation);
-#endif
-            }
-            ls.col *= env_col;
-            ls.dist = MAX_DIST;
         }
     } else [[dont_flatten]] if (l_type == LIGHT_TYPE_TRI) {
         const uint ltri_index = floatBitsToUint(l.TRI_TRI_INDEX);
@@ -1178,7 +1163,6 @@ vec3 Evaluate_DiffuseNode(const light_sample_t ls, const ray_data_t ray, const s
     vec3 new_o = offset_ray(surf.P, surf.plane_N);
     sh_r.o[0] = new_o[0]; sh_r.o[1] = new_o[1]; sh_r.o[2] = new_o[2];
     sh_r.d[0] = ls.L[0]; sh_r.d[1] = ls.L[1]; sh_r.d[2] = ls.L[2];
-    sh_r.dist = ls.dist - 10.0 * HIT_BIAS;
     sh_r.c[0] = ray.c[0] * lcol[0];
     sh_r.c[1] = ray.c[1] * lcol[1];
     sh_r.c[2] = ray.c[2] * lcol[2];
@@ -1220,7 +1204,6 @@ vec3 Evaluate_GlossyNode(const light_sample_t ls, const ray_data_t ray,
     vec3 new_o = offset_ray(surf.P, surf.plane_N);
     sh_r.o[0] = new_o[0]; sh_r.o[1] = new_o[1]; sh_r.o[2] = new_o[2];
     sh_r.d[0] = ls.L[0]; sh_r.d[1] = ls.L[1]; sh_r.d[2] = ls.L[2];
-    sh_r.dist = ls.dist - 10.0 * HIT_BIAS;
     sh_r.c[0] = ray.c[0] * lcol[0];
     sh_r.c[1] = ray.c[1] * lcol[1];
     sh_r.c[2] = ray.c[2] * lcol[2];
@@ -1300,7 +1283,6 @@ vec3 Evaluate_RefractiveNode(const light_sample_t ls, const ray_data_t ray,
     vec3 new_o = offset_ray(surf.P, -surf.plane_N);
     sh_r.o[0] = new_o[0]; sh_r.o[1] = new_o[1]; sh_r.o[2] = new_o[2];
     sh_r.d[0] = ls.L[0]; sh_r.d[1] = ls.L[1]; sh_r.d[2] = ls.L[2];
-    sh_r.dist = ls.dist - 10.0 * HIT_BIAS;
     sh_r.c[0] = ray.c[0] * lcol[0];
     sh_r.c[1] = ray.c[1] * lcol[1];
     sh_r.c[2] = ray.c[2] * lcol[2];
@@ -1458,7 +1440,6 @@ vec3 Evaluate_PrincipledNode(const light_sample_t ls, const ray_data_t ray,
     vec3 new_o = offset_ray(surf.P, N_dot_L < 0.0 ? -surf.plane_N : surf.plane_N);
     sh_r.o[0] = new_o[0]; sh_r.o[1] = new_o[1]; sh_r.o[2] = new_o[2];
     sh_r.d[0] = ls.L[0]; sh_r.d[1] = ls.L[1]; sh_r.d[2] = ls.L[2];
-    sh_r.dist = ls.dist - 10.0 * HIT_BIAS;
     sh_r.c[0] = ray.c[0] * lcol[0];
     sh_r.c[1] = ray.c[1] * lcol[1];
     sh_r.c[2] = ray.c[2] * lcol[2];
@@ -1812,6 +1793,7 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
     sh_r.c[0] = sh_r.c[1] = sh_r.c[2] = 0.0;
     sh_r.depth = ray.depth;
     sh_r.xy = ray.xy;
+    sh_r.dist = ls.dist - (ls.dist > 0.0 ? 10.0 : -10.0) * HIT_BIAS;
 
     ///
 
