@@ -5054,8 +5054,11 @@ void Ray::NS::Evaluate_EnvColor(const ray_data_t<S> &ray, const simd_ivec<S> &ma
     const float env_map_rotation = env.env_map_rotation;
     const simd_ivec<S> env_map_mask = (ray.depth & 0x00ffffff) != 0;
 
-    if (env_map != 0xffffffff && (mask & env_map_mask).not_all_zeros()) {
-        SampleLatlong_RGBE(tex_storage, env_map, ray.d, env_map_rotation, (mask & env_map_mask), env_col);
+    if ((mask & env_map_mask).not_all_zeros()) {
+        UNROLLED_FOR(i, 3, { env_col[i] = 1.0f; });
+        if (env_map != 0xffffffff) {
+            SampleLatlong_RGBE(tex_storage, env_map, ray.d, env_map_rotation, (mask & env_map_mask), env_col);
+        }
         if (env.qtree_levels) {
             const auto *qtree_mips = reinterpret_cast<const simd_fvec4 *const *>(env.qtree_mips);
 
