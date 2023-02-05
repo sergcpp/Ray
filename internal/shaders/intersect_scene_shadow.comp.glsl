@@ -246,7 +246,7 @@ vec3 IntersectSceneShadow(shadow_ray_t r) {
                 g_stack[gl_LocalInvocationIndex][2 * stack_size + 1] = floatBitsToUint(weight * mix_val);
                 ++stack_size;
             } else if (mat.type == TransparentNode) {
-                throughput +=weight * vec3(mat.base_color[0], mat.base_color[1], mat.base_color[2]);
+                throughput += weight * vec3(mat.base_color[0], mat.base_color[1], mat.base_color[2]);
             }
         }
 
@@ -264,29 +264,34 @@ vec3 IntersectSceneShadow(shadow_ray_t r) {
 
     return rc;
 #else
-    const uint ray_flags = 0;//gl_RayFlagsCullBackFacingTrianglesEXT;
+    while (dist > HIT_BIAS) {
+        rayQueryEXT rq;
+        rayQueryInitializeEXT(rq,               // rayQuery
+                              g_tlas,           // topLevel
+                              0,                // rayFlags
+                              0xff,             // cullMask
+                              ro,               // origin
+                              0.0,              // tMin
+                              rd,               // direction
+                              dist              // tMax
+                              );
 
-    rayQueryEXT rq;
-    rayQueryInitializeEXT(rq,               // rayQuery
-                          g_tlas,           // topLevel
-                          ray_flags,        // rayFlags
-                          0xff,             // cullMask
-                          ro,               // origin
-                          0.0,              // tMin
-                          rd,               // direction
-                          dist              // tMax
-                          );
-    while(rayQueryProceedEXT(rq)) {
-        if (rayQueryGetIntersectionTypeEXT(rq, false) == gl_RayQueryCandidateIntersectionTriangleEXT) {
+        while(rayQueryProceedEXT(rq)) {
+            if (rayQueryGetIntersectionTypeEXT(rq, false) == gl_RayQueryCandidateIntersectionTriangleEXT) {
+                rayQueryConfirmIntersectionEXT(rq);
+            }
+        }
+
+        if (rayQueryGetIntersectionTypeEXT(rq, true) != gl_RayQueryCommittedIntersectionNoneEXT) {
             // perform alpha test
-            const int primitive_offset = rayQueryGetIntersectionInstanceCustomIndexEXT(rq, false);
-            const int obj_index = rayQueryGetIntersectionInstanceIdEXT(rq, false);
-            const int tri_index = primitive_offset + rayQueryGetIntersectionPrimitiveIndexEXT(rq, false);
+            const int primitive_offset = rayQueryGetIntersectionInstanceCustomIndexEXT(rq, true);
+            const int obj_index = rayQueryGetIntersectionInstanceIdEXT(rq, true);
+            const int tri_index = primitive_offset + rayQueryGetIntersectionPrimitiveIndexEXT(rq, true);
 
             const uint front_mi = (g_tri_materials[tri_index] >> 16u) & 0xffff;
             const uint back_mi = (g_tri_materials[tri_index] & 0xffff);
 
-            const bool is_backfacing = !rayQueryGetIntersectionFrontFaceEXT(rq, false);
+            const bool is_backfacing = !rayQueryGetIntersectionFrontFaceEXT(rq, true);
             const bool solid_hit = (!is_backfacing && (front_mi & MATERIAL_SOLID_BIT) != 0) ||
                                    (is_backfacing && (back_mi & MATERIAL_SOLID_BIT) != 0);
             if (solid_hit || depth > g_params.max_transp_depth) {
@@ -299,7 +304,7 @@ vec3 IntersectSceneShadow(shadow_ray_t r) {
             const vertex_t v2 = g_vertices[g_vtx_indices[tri_index * 3 + 1]];
             const vertex_t v3 = g_vertices[g_vtx_indices[tri_index * 3 + 2]];
 
-            const vec2 uv = rayQueryGetIntersectionBarycentricsEXT(rq, false);
+            const vec2 uv = rayQueryGetIntersectionBarycentricsEXT(rq, true);
             const float w = 1.0 - uv.x - uv.y;
             const vec2 sh_uvs = vec2(v1.t[0][0], v1.t[0][1]) * w + vec2(v2.t[0][0], v2.t[0][1]) * uv.x + vec2(v3.t[0][0], v3.t[0][1]) * uv.y;
 
@@ -328,7 +333,7 @@ vec3 IntersectSceneShadow(shadow_ray_t r) {
                     g_stack[gl_LocalInvocationIndex][2 * stack_size + 1] = floatBitsToUint(weight * mix_val);
                     ++stack_size;
                 } else if (mat.type == TransparentNode) {
-                    throughput +=weight * vec3(mat.base_color[0], mat.base_color[1], mat.base_color[2]);
+                    throughput += weight * vec3(mat.base_color[0], mat.base_color[1], mat.base_color[2]);
                 }
             }
 
@@ -336,9 +341,13 @@ vec3 IntersectSceneShadow(shadow_ray_t r) {
             if (lum(rc) < FLT_EPS) {
                 break;
             }
-
-            ++depth;
         }
+
+        const float t = rayQueryGetIntersectionTEXT(rq, true) + HIT_BIAS;
+        ro += rd * t;
+        dist -= t;
+
+        ++depth;
     }
 
     return rc;
