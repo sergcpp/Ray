@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.2)
 project(test_Ray)
 
 IF(WIN32)
-    set(LIBS )
+    set(LIBS opengl32)
 ELSEIF(UNIX AND NOT APPLE)
     set(LIBS pthread)
 ELSE()

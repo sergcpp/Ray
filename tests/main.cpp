@@ -119,6 +119,10 @@ std::atomic_bool g_log_contains_errors{false};
 bool g_catch_flt_exceptions = false;
 bool g_determine_sample_count = false;
 
+#ifdef _WIN32
+bool InitAndDestroyFakeGLContext();
+#endif
+
 int main(int argc, char *argv[]) {
     using namespace std::chrono;
 
@@ -152,6 +156,12 @@ int main(int argc, char *argv[]) {
     test_simd();
     test_tex_storage();
     // test_mesh_lights();
+
+#ifdef _WIN32
+    // Stupid workaround that should not exist.
+    // Make sure vulkan will be able to use discrete Intel GPU when dual Xe/Arc GPUs are available.
+    InitAndDestroyFakeGLContext();
+#endif
 
     static const char *ArchListFull[] = {"REF", "SSE2", "SSE41", "AVX", "AVX2", "AVX512", "NEON", "VK", nullptr};
     static const char *ArchListFullNoGPU[] = {"REF", "SSE2", "SSE41", "AVX", "AVX2", "AVX512", "NEON", nullptr};
@@ -400,3 +410,51 @@ int main(int argc, char *argv[]) {
     }
     return tests_success_final ? 0 : -1;
 }
+
+//
+// Dirty workaround for Intel discrete GPU
+//
+#ifdef _WIN32
+#include <Windows.h>
+
+extern "C" {
+// Enable High Performance Graphics while using Integrated Graphics
+__declspec(dllexport) int32_t NvOptimusEnablement = 0x00000001;     // Nvidia
+__declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1; // AMD
+}
+
+bool InitAndDestroyFakeGLContext() {
+    HWND fake_window = ::CreateWindowEx(NULL, NULL, "FakeWindow", WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT,
+                                        256, 256, nullptr, nullptr, GetModuleHandle(nullptr), nullptr);
+
+    HDC fake_dc = GetDC(fake_window);
+
+    PIXELFORMATDESCRIPTOR pixel_format = {};
+    pixel_format.nSize = sizeof(pixel_format);
+    pixel_format.nVersion = 1;
+    pixel_format.dwFlags = PFD_SUPPORT_OPENGL;
+    pixel_format.iPixelType = PFD_TYPE_RGBA;
+    pixel_format.cColorBits = 24;
+    pixel_format.cAlphaBits = 8;
+    pixel_format.cDepthBits = 0;
+
+    int pix_format_id = ChoosePixelFormat(fake_dc, &pixel_format);
+    if (pix_format_id == 0) {
+        printf("ChoosePixelFormat() failed\n");
+        return false;
+    }
+
+    if (!SetPixelFormat(fake_dc, pix_format_id, &pixel_format)) {
+        printf("SetPixelFormat() failed\n");
+        return false;
+    }
+
+    HGLRC fake_rc = wglCreateContext(fake_dc);
+
+    wglDeleteContext(fake_rc);
+    ReleaseDC(fake_window, fake_dc);
+    DestroyWindow(fake_window);
+
+    return true;
+}
+#endif
