@@ -131,7 +131,9 @@ pixel_color_t clamp_and_gamma_correct(const pixel_color_t &p, const camera_t &ca
 template <int DimX, int DimY>
 Ray::NS::RendererSIMD<DimX, DimY>::RendererSIMD(const settings_t &s, ILog *log)
     : log_(log), clean_buf_(s.w, s.h), final_buf_(s.w, s.h), temp_buf_(s.w, s.h), use_wide_bvh_(s.use_wide_bvh) {
-    auto rand_func = std::bind(UniformIntDistribution<uint32_t>(), std::mt19937(0));
+    auto mt = std::mt19937(0);
+    auto dist = UniformIntDistribution<uint32_t>{};
+    auto rand_func = [&]() { return dist(mt); };
     permutations_ = Ray::ComputeRadicalInversePermutations(g_primes, PrimesCount, rand_func);
 }
 
