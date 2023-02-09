@@ -3242,7 +3242,7 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
         }
 
         ls.area = 1.0f;
-        ls.dist = MAX_DIST;
+        ls.dist = -MAX_DIST;
         ls.pdf = dir_and_pdf.get<3>();
     }
 }
@@ -3382,6 +3382,9 @@ float Ray::Ref::IntersectAreaLights(const shadow_ray_t &ray, const light_t light
     for (uint32_t li = 0; li < uint32_t(blocker_lights.size()); ++li) {
         const uint32_t light_index = blocker_lights[li];
         const light_t &l = lights[light_index];
+        if (l.sky_portal && ray.dist >= 0.0f) {
+            continue;
+        }
         if (l.type == LIGHT_TYPE_RECT) {
             const simd_fvec4 light_pos = make_fvec3(l.rect.pos);
             simd_fvec4 light_u = make_fvec3(l.rect.u), light_v = make_fvec3(l.rect.v);

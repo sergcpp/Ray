@@ -363,6 +363,9 @@ float IntersectAreaLightsShadow(shadow_ray_t r) {
     for (uint li = 0; li < g_params.blocker_lights_count; ++li) {
         uint light_index = g_blocker_lights[li];
         light_t l = g_lights[light_index];
+        [[dont_flatten]] if ((l.type_and_param0.x & (1 << 7)) != 0 && r.dist >= 0.0) { // sky portal
+            continue;
+        }
 
         uint light_type = (l.type_and_param0.x & 0x1f);
         if (light_type == LIGHT_TYPE_RECT) {

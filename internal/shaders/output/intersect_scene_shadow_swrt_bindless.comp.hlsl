@@ -114,8 +114,8 @@ ByteAddressBuffer _1340 : register(t11, space0);
 ByteAddressBuffer _1542 : register(t4, space0);
 ByteAddressBuffer _1745 : register(t15, space0);
 ByteAddressBuffer _1757 : register(t14, space0);
-ByteAddressBuffer _1982 : register(t13, space0);
-ByteAddressBuffer _1997 : register(t12, space0);
+ByteAddressBuffer _1996 : register(t13, space0);
+ByteAddressBuffer _2011 : register(t12, space0);
 cbuffer UniformParams
 {
     Params _1246_g_params : packoffset(c0);
@@ -150,9 +150,9 @@ float3 safe_invert(float3 v)
     }
     if (_137)
     {
-        float3 _2366 = inv_v;
-        _2366.x = 3.4028234663852885981170418348452e+38f;
-        inv_v = _2366;
+        float3 _2381 = inv_v;
+        _2381.x = 3.4028234663852885981170418348452e+38f;
+        inv_v = _2381;
     }
     else
     {
@@ -168,9 +168,9 @@ float3 safe_invert(float3 v)
         }
         if (_152)
         {
-            float3 _2368 = inv_v;
-            _2368.x = -3.4028234663852885981170418348452e+38f;
-            inv_v = _2368;
+            float3 _2383 = inv_v;
+            _2383.x = -3.4028234663852885981170418348452e+38f;
+            inv_v = _2383;
         }
     }
     bool _159 = v.y <= 1.0000000116860974230803549289703e-07f;
@@ -185,9 +185,9 @@ float3 safe_invert(float3 v)
     }
     if (_165)
     {
-        float3 _2370 = inv_v;
-        _2370.y = 3.4028234663852885981170418348452e+38f;
-        inv_v = _2370;
+        float3 _2385 = inv_v;
+        _2385.y = 3.4028234663852885981170418348452e+38f;
+        inv_v = _2385;
     }
     else
     {
@@ -203,9 +203,9 @@ float3 safe_invert(float3 v)
         }
         if (_178)
         {
-            float3 _2372 = inv_v;
-            _2372.y = -3.4028234663852885981170418348452e+38f;
-            inv_v = _2372;
+            float3 _2387 = inv_v;
+            _2387.y = -3.4028234663852885981170418348452e+38f;
+            inv_v = _2387;
         }
     }
     bool _184 = v.z <= 1.0000000116860974230803549289703e-07f;
@@ -220,9 +220,9 @@ float3 safe_invert(float3 v)
     }
     if (_190)
     {
-        float3 _2374 = inv_v;
-        _2374.z = 3.4028234663852885981170418348452e+38f;
-        inv_v = _2374;
+        float3 _2389 = inv_v;
+        _2389.z = 3.4028234663852885981170418348452e+38f;
+        inv_v = _2389;
     }
     else
     {
@@ -238,9 +238,9 @@ float3 safe_invert(float3 v)
         }
         if (_203)
         {
-            float3 _2376 = inv_v;
-            _2376.z = -3.4028234663852885981170418348452e+38f;
-            inv_v = _2376;
+            float3 _2391 = inv_v;
+            _2391.z = -3.4028234663852885981170418348452e+38f;
+            inv_v = _2391;
         }
     }
     return inv_v;
@@ -302,17 +302,17 @@ void IntersectTri(float3 ro, float3 rd, tri_accel_t tri, uint prim_index, inout 
 
 bool IntersectTris_AnyHit(float3 ro, float3 rd, int tri_start, int tri_end, int obj_index, inout hit_data_t out_inter)
 {
-    int _2183 = 0;
-    int _2184 = obj_index;
-    float _2186 = out_inter.t;
+    int _2197 = 0;
+    int _2198 = obj_index;
+    float _2200 = out_inter.t;
     float3 param;
     float3 param_1;
     tri_accel_t param_2;
     uint param_3;
     hit_data_t param_4;
-    int _2185;
-    float _2187;
-    float _2188;
+    int _2199;
+    float _2201;
+    float _2202;
     for (int i = tri_start; i < tri_end; )
     {
         param = ro;
@@ -325,23 +325,23 @@ bool IntersectTris_AnyHit(float3 ro, float3 rd, int tri_start, int tri_end, int 
         param_2.u_plane = _498.u_plane;
         param_2.v_plane = _498.v_plane;
         param_3 = uint(i);
-        hit_data_t _2195 = { _2183, _2184, _2185, _2186, _2187, _2188 };
-        param_4 = _2195;
+        hit_data_t _2209 = { _2197, _2198, _2199, _2200, _2201, _2202 };
+        param_4 = _2209;
         IntersectTri(param, param_1, param_2, param_3, param_4);
-        _2183 = param_4.mask;
-        _2184 = param_4.obj_index;
-        _2185 = param_4.prim_index;
-        _2186 = param_4.t;
-        _2187 = param_4.u;
-        _2188 = param_4.v;
+        _2197 = param_4.mask;
+        _2198 = param_4.obj_index;
+        _2199 = param_4.prim_index;
+        _2200 = param_4.t;
+        _2201 = param_4.u;
+        _2202 = param_4.v;
         i++;
         continue;
     }
-    out_inter.mask |= _2183;
+    out_inter.mask |= _2197;
     int _521;
-    if (_2183 != 0)
+    if (_2197 != 0)
     {
-        _521 = _2184;
+        _521 = _2198;
     }
     else
     {
@@ -349,20 +349,20 @@ bool IntersectTris_AnyHit(float3 ro, float3 rd, int tri_start, int tri_end, int 
     }
     out_inter.obj_index = _521;
     int _534;
-    if (_2183 != 0)
+    if (_2197 != 0)
     {
-        _534 = _2185;
+        _534 = _2199;
     }
     else
     {
         _534 = out_inter.prim_index;
     }
     out_inter.prim_index = _534;
-    out_inter.t = _2186;
+    out_inter.t = _2200;
     float _550;
-    if (_2183 != 0)
+    if (_2197 != 0)
     {
-        _550 = _2187;
+        _550 = _2201;
     }
     else
     {
@@ -370,22 +370,22 @@ bool IntersectTris_AnyHit(float3 ro, float3 rd, int tri_start, int tri_end, int 
     }
     out_inter.u = _550;
     float _563;
-    if (_2183 != 0)
+    if (_2197 != 0)
     {
-        _563 = _2188;
+        _563 = _2202;
     }
     else
     {
         _563 = out_inter.v;
     }
     out_inter.v = _563;
-    return _2183 != 0;
+    return _2197 != 0;
 }
 
 bool Traverse_MicroTree_WithStack(float3 ro, float3 rd, float3 inv_d, int obj_index, uint node_index, inout uint stack_size, inout hit_data_t inter)
 {
-    bool _2124 = false;
-    bool _2121;
+    bool _2138 = false;
+    bool _2135;
     do
     {
         float3 _669 = (-inv_d) * ro;
@@ -494,28 +494,28 @@ bool Traverse_MicroTree_WithStack(float3 ro, float3 rd, float3 inv_d, int obj_in
                     }
                     if (_888)
                     {
-                        _2124 = true;
-                        _2121 = true;
+                        _2138 = true;
+                        _2135 = true;
                         break;
                     }
                 }
             }
         }
-        if (_2124)
+        if (_2138)
         {
             break;
         }
-        _2124 = true;
-        _2121 = false;
+        _2138 = true;
+        _2135 = false;
         break;
     } while(false);
-    return _2121;
+    return _2135;
 }
 
 bool Traverse_MacroTree_WithStack(float3 orig_ro, float3 orig_rd, float3 orig_inv_rd, uint node_index, inout hit_data_t inter)
 {
-    bool _2115 = false;
-    bool _2112;
+    bool _2129 = false;
+    bool _2126;
     do
     {
         float3 _899 = (-orig_inv_rd) * orig_ro;
@@ -619,26 +619,26 @@ bool Traverse_MacroTree_WithStack(float3 orig_ro, float3 orig_rd, float3 orig_in
                     inter = param_17;
                     if (_1174)
                     {
-                        _2115 = true;
-                        _2112 = true;
+                        _2129 = true;
+                        _2126 = true;
                         break;
                     }
                 }
-                if (_2115)
+                if (_2129)
                 {
                     break;
                 }
             }
         }
-        if (_2115)
+        if (_2129)
         {
             break;
         }
-        _2115 = true;
-        _2112 = false;
+        _2129 = true;
+        _2126 = false;
         break;
     } while(false);
-    return _2112;
+    return _2126;
 }
 
 float3 YCoCg_to_RGB(float4 col)
@@ -699,13 +699,13 @@ float4 SampleBilinear(uint index, float2 uvs, int lod, bool maybe_YCoCg, bool ma
     {
         float3 param_1 = res.xyz;
         float3 _338 = srgb_to_rgb(param_1);
-        float4 _2392 = res;
-        _2392.x = _338.x;
-        float4 _2394 = _2392;
-        _2394.y = _338.y;
-        float4 _2396 = _2394;
-        _2396.z = _338.z;
-        res = _2396;
+        float4 _2407 = res;
+        _2407.x = _338.x;
+        float4 _2409 = _2407;
+        _2409.y = _338.y;
+        float4 _2411 = _2409;
+        _2411.z = _338.z;
+        res = _2411;
     }
     return res;
 }
@@ -722,8 +722,8 @@ float lum(float3 color)
 
 float3 IntersectSceneShadow(shadow_ray_t r)
 {
-    bool _2101 = false;
-    float3 _2098;
+    bool _2115 = false;
+    float3 _2112;
     do
     {
         float3 ro = float3(r.o[0], r.o[1], r.o[2]);
@@ -743,27 +743,27 @@ float3 IntersectSceneShadow(shadow_ray_t r)
         float3 param = _1199;
         float3 _1228 = safe_invert(param);
         int _1288;
-        int _2245;
-        int _2246;
-        float _2248;
-        float _2249;
+        int _2259;
+        int _2260;
+        float _2262;
+        float _2263;
         while (dist > 9.9999997473787516355514526367188e-06f)
         {
-            int _2244 = 0;
-            float _2247 = dist;
+            int _2258 = 0;
+            float _2261 = dist;
             float3 param_1 = ro;
             float3 param_2 = _1199;
             float3 param_3 = _1228;
             uint param_4 = _1246_g_params.node_index;
-            hit_data_t _2256 = { 0, _2245, _2246, dist, _2248, _2249 };
-            hit_data_t param_5 = _2256;
+            hit_data_t _2270 = { 0, _2259, _2260, dist, _2262, _2263 };
+            hit_data_t param_5 = _2270;
             bool _1259 = Traverse_MacroTree_WithStack(param_1, param_2, param_3, param_4, param_5);
-            _2244 = param_5.mask;
-            _2245 = param_5.obj_index;
-            _2246 = param_5.prim_index;
-            _2247 = param_5.t;
-            _2248 = param_5.u;
-            _2249 = param_5.v;
+            _2258 = param_5.mask;
+            _2259 = param_5.obj_index;
+            _2260 = param_5.prim_index;
+            _2261 = param_5.t;
+            _2262 = param_5.u;
+            _2263 = param_5.v;
             bool _1270;
             if (!_1259)
             {
@@ -775,14 +775,14 @@ float3 IntersectSceneShadow(shadow_ray_t r)
             }
             if (_1270)
             {
-                _2101 = true;
-                _2098 = 0.0f.xxx;
+                _2115 = true;
+                _2112 = 0.0f.xxx;
                 break;
             }
-            if (_2244 == 0)
+            if (_2258 == 0)
             {
-                _2101 = true;
-                _2098 = rc;
+                _2115 = true;
+                _2112 = rc;
                 break;
             }
             bool _1285 = param_5.prim_index < 0;
@@ -944,26 +944,26 @@ float3 IntersectSceneShadow(shadow_ray_t r)
             {
                 break;
             }
-            float _1696 = _2247 + 9.9999997473787516355514526367188e-06f;
+            float _1696 = _2261 + 9.9999997473787516355514526367188e-06f;
             ro += (_1199 * _1696);
             dist -= _1696;
             depth++;
         }
-        if (_2101)
+        if (_2115)
         {
             break;
         }
-        _2101 = true;
-        _2098 = rc;
+        _2115 = true;
+        _2112 = rc;
         break;
     } while(false);
-    return _2098;
+    return _2112;
 }
 
 float IntersectAreaLightsShadow(shadow_ray_t r)
 {
-    bool _2108 = false;
-    float _2105;
+    bool _2122 = false;
+    float _2119;
     do
     {
         float3 _1717 = float3(r.o[0], r.o[1], r.o[2]);
@@ -976,29 +976,44 @@ float IntersectAreaLightsShadow(shadow_ray_t r)
             _1761.param1 = asfloat(_1757.Load4(_1745.Load(li * 4 + 0) * 64 + 16));
             _1761.param2 = asfloat(_1757.Load4(_1745.Load(li * 4 + 0) * 64 + 32));
             _1761.param3 = asfloat(_1757.Load4(_1745.Load(li * 4 + 0) * 64 + 48));
-            uint _1775 = _1761.type_and_param0.x & 31u;
-            if (_1775 == 4u)
+            bool _1775 = (_1761.type_and_param0.x & 128u) != 0u;
+            bool _1781;
+            if (_1775)
+            {
+                _1781 = r.dist >= 0.0f;
+            }
+            else
+            {
+                _1781 = _1775;
+            }
+            [branch]
+            if (_1781)
+            {
+                continue;
+            }
+            uint _1789 = _1761.type_and_param0.x & 31u;
+            if (_1789 == 4u)
             {
                 float3 light_u = _1761.param2.xyz;
                 float3 light_v = _1761.param3.xyz;
-                float3 _1796 = normalize(cross(_1761.param2.xyz, _1761.param3.xyz));
-                float _1804 = dot(_1725, _1796);
-                float _1812 = (dot(_1796, _1761.param1.xyz) - dot(_1796, _1717)) / _1804;
-                if (((_1804 < 0.0f) && (_1812 > 9.9999999747524270787835121154785e-07f)) && (_1812 < _1729))
+                float3 _1810 = normalize(cross(_1761.param2.xyz, _1761.param3.xyz));
+                float _1818 = dot(_1725, _1810);
+                float _1826 = (dot(_1810, _1761.param1.xyz) - dot(_1810, _1717)) / _1818;
+                if (((_1818 < 0.0f) && (_1826 > 9.9999999747524270787835121154785e-07f)) && (_1826 < _1729))
                 {
-                    float3 _1825 = light_u;
-                    float3 _1830 = _1825 / dot(_1825, _1825).xxx;
-                    light_u = _1830;
+                    float3 _1839 = light_u;
+                    float3 _1844 = _1839 / dot(_1839, _1839).xxx;
+                    light_u = _1844;
                     light_v /= dot(light_v, light_v).xxx;
-                    float3 _1846 = (_1717 + (_1725 * _1812)) - _1761.param1.xyz;
-                    float _1850 = dot(_1830, _1846);
-                    if ((_1850 >= (-0.5f)) && (_1850 <= 0.5f))
+                    float3 _1860 = (_1717 + (_1725 * _1826)) - _1761.param1.xyz;
+                    float _1864 = dot(_1844, _1860);
+                    if ((_1864 >= (-0.5f)) && (_1864 <= 0.5f))
                     {
-                        float _1863 = dot(light_v, _1846);
-                        if ((_1863 >= (-0.5f)) && (_1863 <= 0.5f))
+                        float _1877 = dot(light_v, _1860);
+                        if ((_1877 >= (-0.5f)) && (_1877 <= 0.5f))
                         {
-                            _2108 = true;
-                            _2105 = 0.0f;
+                            _2122 = true;
+                            _2119 = 0.0f;
                             break;
                         }
                     }
@@ -1006,85 +1021,85 @@ float IntersectAreaLightsShadow(shadow_ray_t r)
             }
             else
             {
-                if (_1775 == 5u)
+                if (_1789 == 5u)
                 {
                     float3 light_u_1 = _1761.param2.xyz;
                     float3 light_v_1 = _1761.param3.xyz;
-                    float3 _1893 = normalize(cross(_1761.param2.xyz, _1761.param3.xyz));
-                    float _1901 = dot(_1725, _1893);
-                    float _1909 = (dot(_1893, _1761.param1.xyz) - dot(_1893, _1717)) / _1901;
-                    if (((_1901 < 0.0f) && (_1909 > 9.9999999747524270787835121154785e-07f)) && (_1909 < _1729))
+                    float3 _1907 = normalize(cross(_1761.param2.xyz, _1761.param3.xyz));
+                    float _1915 = dot(_1725, _1907);
+                    float _1923 = (dot(_1907, _1761.param1.xyz) - dot(_1907, _1717)) / _1915;
+                    if (((_1915 < 0.0f) && (_1923 > 9.9999999747524270787835121154785e-07f)) && (_1923 < _1729))
                     {
-                        float3 _1921 = light_u_1;
-                        float3 _1926 = _1921 / dot(_1921, _1921).xxx;
-                        light_u_1 = _1926;
-                        float3 _1927 = light_v_1;
-                        float3 _1932 = _1927 / dot(_1927, _1927).xxx;
-                        light_v_1 = _1932;
-                        float3 _1942 = (_1717 + (_1725 * _1909)) - _1761.param1.xyz;
-                        float _1946 = dot(_1926, _1942);
-                        float _1950 = dot(_1932, _1942);
-                        if (sqrt(mad(_1946, _1946, _1950 * _1950)) <= 0.5f)
+                        float3 _1935 = light_u_1;
+                        float3 _1940 = _1935 / dot(_1935, _1935).xxx;
+                        light_u_1 = _1940;
+                        float3 _1941 = light_v_1;
+                        float3 _1946 = _1941 / dot(_1941, _1941).xxx;
+                        light_v_1 = _1946;
+                        float3 _1956 = (_1717 + (_1725 * _1923)) - _1761.param1.xyz;
+                        float _1960 = dot(_1940, _1956);
+                        float _1964 = dot(_1946, _1956);
+                        if (sqrt(mad(_1960, _1960, _1964 * _1964)) <= 0.5f)
                         {
-                            _2108 = true;
-                            _2105 = 0.0f;
+                            _2122 = true;
+                            _2119 = 0.0f;
                             break;
                         }
                     }
                 }
             }
         }
-        if (_2108)
+        if (_2122)
         {
             break;
         }
-        _2108 = true;
-        _2105 = 1.0f;
+        _2122 = true;
+        _2119 = 1.0f;
         break;
     } while(false);
-    return _2105;
+    return _2119;
 }
 
 void comp_main()
 {
     do
     {
-        int _1976 = int((gl_WorkGroupID.x * 64u) + gl_LocalInvocationIndex);
-        if (uint(_1976) >= _1982.Load(12))
+        int _1990 = int((gl_WorkGroupID.x * 64u) + gl_LocalInvocationIndex);
+        if (uint(_1990) >= _1996.Load(12))
         {
             break;
         }
-        shadow_ray_t _2001;
+        shadow_ray_t _2015;
         [unroll]
         for (int _41ident = 0; _41ident < 3; _41ident++)
         {
-            _2001.o[_41ident] = asfloat(_1997.Load(_41ident * 4 + _1976 * 48 + 0));
+            _2015.o[_41ident] = asfloat(_2011.Load(_41ident * 4 + _1990 * 48 + 0));
         }
-        _2001.depth = int(_1997.Load(_1976 * 48 + 12));
+        _2015.depth = int(_2011.Load(_1990 * 48 + 12));
         [unroll]
         for (int _42ident = 0; _42ident < 3; _42ident++)
         {
-            _2001.d[_42ident] = asfloat(_1997.Load(_42ident * 4 + _1976 * 48 + 16));
+            _2015.d[_42ident] = asfloat(_2011.Load(_42ident * 4 + _1990 * 48 + 16));
         }
-        _2001.dist = asfloat(_1997.Load(_1976 * 48 + 28));
+        _2015.dist = asfloat(_2011.Load(_1990 * 48 + 28));
         [unroll]
         for (int _43ident = 0; _43ident < 3; _43ident++)
         {
-            _2001.c[_43ident] = asfloat(_1997.Load(_43ident * 4 + _1976 * 48 + 32));
+            _2015.c[_43ident] = asfloat(_2011.Load(_43ident * 4 + _1990 * 48 + 32));
         }
-        _2001.xy = int(_1997.Load(_1976 * 48 + 44));
-        float _2178[3] = { _2001.c[0], _2001.c[1], _2001.c[2] };
-        float _2167[3] = { _2001.d[0], _2001.d[1], _2001.d[2] };
-        float _2156[3] = { _2001.o[0], _2001.o[1], _2001.o[2] };
-        shadow_ray_t _2142 = { _2156, _2001.depth, _2167, _2001.dist, _2178, _2001.xy };
-        shadow_ray_t param = _2142;
-        float3 _2035 = IntersectSceneShadow(param);
-        shadow_ray_t param_1 = _2142;
-        float3 _2039 = _2035 * IntersectAreaLightsShadow(param_1);
-        if (lum(_2039) > 0.0f)
+        _2015.xy = int(_2011.Load(_1990 * 48 + 44));
+        float _2192[3] = { _2015.c[0], _2015.c[1], _2015.c[2] };
+        float _2181[3] = { _2015.d[0], _2015.d[1], _2015.d[2] };
+        float _2170[3] = { _2015.o[0], _2015.o[1], _2015.o[2] };
+        shadow_ray_t _2156 = { _2170, _2015.depth, _2181, _2015.dist, _2192, _2015.xy };
+        shadow_ray_t param = _2156;
+        float3 _2049 = IntersectSceneShadow(param);
+        shadow_ray_t param_1 = _2156;
+        float3 _2053 = _2049 * IntersectAreaLightsShadow(param_1);
+        if (lum(_2053) > 0.0f)
         {
-            int2 _2064 = int2((_2001.xy >> 16) & 65535, _2001.xy & 65535);
-            g_inout_img[_2064] = float4(g_inout_img[_2064].xyz + _2039, 1.0f);
+            int2 _2078 = int2((_2015.xy >> 16) & 65535, _2015.xy & 65535);
+            g_inout_img[_2078] = float4(g_inout_img[_2078].xyz + _2053, 1.0f);
         }
         break;
     } while(false);

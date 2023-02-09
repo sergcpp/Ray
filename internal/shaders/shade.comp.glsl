@@ -1001,7 +1001,7 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, int hi, vec2 sample_off, 
         }
 
         ls.area = 1.0;
-        ls.dist = MAX_DIST;
+        ls.dist = -MAX_DIST;
         ls.pdf = dir_and_pdf.w;
     }
 }

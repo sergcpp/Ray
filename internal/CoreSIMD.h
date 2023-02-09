@@ -4888,7 +4888,7 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
             UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.col[i]) *= sc.env.env_col[i] * tex_col[i]; })
 
             where(ray_queue[index], ls.area) = 1.0f;
-            where(ray_queue[index], ls.dist) = MAX_DIST;
+            where(ray_queue[index], ls.dist) = -MAX_DIST;
             where(ray_queue[index], ls.pdf) = dir_and_pdf[3];
         }
 
@@ -5041,12 +5041,13 @@ Ray::NS::simd_fvec<S> Ray::NS::IntersectAreaLights(const shadow_ray_t<S> &r, sim
                                                    const light_t lights[], Span<const uint32_t> blocker_lights,
                                                    const transform_t transforms[]) {
     const simd_fvec<S> rdist = abs(r.dist);
+    const simd_ivec<S> env_ray = simd_cast(r.dist < 0.0f);
     simd_fvec<S> ret = 1.0f;
 
     for (uint32_t li = 0; li < uint32_t(blocker_lights.size()) && ray_mask.not_all_zeros(); ++li) {
         const uint32_t light_index = blocker_lights[li];
         const light_t &l = lights[light_index];
-
+        const simd_ivec<S> portal_mask = l.sky_portal ? env_ray : -1;
         if (l.type == LIGHT_TYPE_RECT) {
             float light_fwd[3];
             cross(l.rect.u, l.rect.v, light_fwd);
@@ -5057,7 +5058,8 @@ Ray::NS::simd_fvec<S> Ray::NS::IntersectAreaLights(const shadow_ray_t<S> &r, sim
             const simd_fvec<S> cos_theta = dot3(r.d, light_fwd);
             const simd_fvec<S> t = safe_div_neg(plane_dist - dot3(light_fwd, r.o), cos_theta);
 
-            const simd_ivec<S> imask = simd_cast((cos_theta < 0.0f) & (t > HIT_EPS) & (t < rdist)) & ray_mask;
+            const simd_ivec<S> imask =
+                simd_cast((cos_theta < 0.0f) & (t > HIT_EPS) & (t < rdist)) & portal_mask & ray_mask;
             if (imask.not_all_zeros()) {
                 const float dot_u = dot3(l.rect.u, l.rect.u);
                 const float dot_v = dot3(l.rect.v, l.rect.v);
@@ -5085,7 +5087,8 @@ Ray::NS::simd_fvec<S> Ray::NS::IntersectAreaLights(const shadow_ray_t<S> &r, sim
             const simd_fvec<S> cos_theta = dot3(r.d, light_fwd);
             const simd_fvec<S> t = safe_div_neg(plane_dist - dot3(light_fwd, r.o), cos_theta);
 
-            const simd_ivec<S> imask = simd_cast((cos_theta < 0.0f) & (t > HIT_EPS) & (t < rdist)) & ray_mask;
+            const simd_ivec<S> imask =
+                simd_cast((cos_theta < 0.0f) & (t > HIT_EPS) & (t < rdist)) & portal_mask & ray_mask;
             if (imask.not_all_zeros()) {
                 const float dot_u = dot3(l.disk.u, l.disk.u);
                 const float dot_v = dot3(l.disk.v, l.disk.v);
