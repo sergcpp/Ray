@@ -537,7 +537,7 @@ template <typename T, int S> class simd_vec {
         return temp;
     }
 
-    force_inline static simd_vec<T, S> and_not(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) {
+    static simd_vec<T, S> and_not(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) {
         const auto *src1 = reinterpret_cast<const uint8_t *>(&v1.comp_[0]);
         const auto *src2 = reinterpret_cast<const uint8_t *>(&v2.comp_[0]);
 
@@ -567,7 +567,7 @@ template <typename T, int S> class simd_vec {
         return temp;
     }
 
-    friend force_inline simd_vec<T, S> operator&(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) {
+    friend simd_vec<T, S> operator&(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) {
         const auto *src1 = reinterpret_cast<const uint8_t *>(&v1.comp_[0]);
         const auto *src2 = reinterpret_cast<const uint8_t *>(&v2.comp_[0]);
 
@@ -582,7 +582,7 @@ template <typename T, int S> class simd_vec {
         return ret;
     }
 
-    friend force_inline simd_vec<T, S> operator|(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) {
+    friend simd_vec<T, S> operator|(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) {
         const auto *src1 = reinterpret_cast<const uint8_t *>(&v1.comp_[0]);
         const auto *src2 = reinterpret_cast<const uint8_t *>(&v2.comp_[0]);
 
@@ -597,7 +597,7 @@ template <typename T, int S> class simd_vec {
         return ret;
     }
 
-    friend force_inline simd_vec<T, S> operator^(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) {
+    friend simd_vec<T, S> operator^(const simd_vec<T, S> &v1, const simd_vec<T, S> &v2) {
         const auto *src1 = reinterpret_cast<const uint8_t *>(&v1.comp_[0]);
         const auto *src2 = reinterpret_cast<const uint8_t *>(&v2.comp_[0]);
 
@@ -826,14 +826,14 @@ force_inline simd_vec<T, S> mix(const simd_vec<T, S> &v1, const simd_vec<T, S> &
     return (simd_vec<T, S>{1} - k) * v1 + k * v2;
 }
 
-template <typename T, int S> force_inline simd_vec<T, S> gather(const T *base_addr, const simd_vec<int, S> &vindex) {
+template <typename T, int S> simd_vec<T, S> gather(const T *base_addr, const simd_vec<int, S> &vindex) {
     simd_vec<T, S> res;
     UNROLLED_FOR_S(i, S, { res.template set<i>(base_addr[vindex[i]]); });
     return res;
 }
 
 template <typename T, int S>
-force_inline void scatter(T *base_addr, const simd_vec<int, S> &vindex, const simd_vec<T, S> &v) {
+void scatter(T *base_addr, const simd_vec<int, S> &vindex, const simd_vec<T, S> &v) {
     UNROLLED_FOR_S(i, S, { base_addr[vindex[i]] = v.template get<i>(); });
 }
 

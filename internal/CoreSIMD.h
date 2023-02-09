@@ -569,6 +569,8 @@ template <int S> force_inline void safe_normalize(simd_fvec<S> v[3]) {
 #endif
 }
 
+template <int S> force_inline simd_fvec<S> safe_sqrtf(const simd_fvec<S> &f) { return sqrt(max(f, 0.0f)); }
+
 #define sqr(x) ((x) * (x))
 
 template <typename T, int S>
@@ -668,8 +670,8 @@ force_inline bool IntersectTri(const float o[3], const float d[3], int i, const 
 }
 
 template <int S>
-force_inline bool IntersectTri(const float ro[3], const float rd[3], const mtri_accel_t &tri, const uint32_t prim_index,
-                               int &inter_prim_index, float &inter_t, float &inter_u, float &inter_v) {
+bool IntersectTri(const float ro[3], const float rd[3], const mtri_accel_t &tri, const uint32_t prim_index,
+                  int &inter_prim_index, float &inter_t, float &inter_u, float &inter_v) {
     simd_ivec<S> _mask = 0, _prim_index;
     simd_fvec<S> _t = inter_t, _u, _v;
 
@@ -759,9 +761,8 @@ force_inline bool IntersectTri(const float ro[3], const float rd[3], const mtri_
 }
 
 template <>
-force_inline bool IntersectTri<16>(const float ro[3], const float rd[3], const mtri_accel_t &tri,
-                                   const uint32_t prim_index, int &inter_prim_index, float &inter_t, float &inter_u,
-                                   float &inter_v) {
+bool IntersectTri<16>(const float ro[3], const float rd[3], const mtri_accel_t &tri, const uint32_t prim_index,
+                      int &inter_prim_index, float &inter_t, float &inter_u, float &inter_v) {
     simd_ivec<8> _mask = 0, _prim_index;
     simd_fvec<8> _t = inter_t, _u, _v;
 
@@ -1385,8 +1386,8 @@ force_inline void TransformDirection(const float d[3], const float *xform, float
 template <int S> force_inline simd_fvec<S> pow5(const simd_fvec<S> &v) { return (v * v) * (v * v) * v; }
 
 template <int S>
-force_inline simd_ivec<S> get_ray_hash(const ray_data_t<S> &r, const simd_ivec<S> &mask, const float root_min[3],
-                                       const float cell_size[3]) {
+simd_ivec<S> get_ray_hash(const ray_data_t<S> &r, const simd_ivec<S> &mask, const float root_min[3],
+                          const float cell_size[3]) {
     simd_ivec<S> x = clamp((simd_ivec<S>)((r.o[0] - root_min[0]) / cell_size[0]), 0, 255),
                  y = clamp((simd_ivec<S>)((r.o[1] - root_min[1]) / cell_size[1]), 0, 255),
                  z = clamp((simd_ivec<S>)((r.o[2] - root_min[2]) / cell_size[2]), 0, 255);
@@ -1417,7 +1418,7 @@ force_inline simd_ivec<S> get_ray_hash(const ray_data_t<S> &r, const simd_ivec<S
     return (o << 25) | (p << 24) | (y << 2) | (z << 1) | (x << 0);
 }
 
-force_inline void _radix_sort_lsb(ray_chunk_t *begin, ray_chunk_t *end, ray_chunk_t *begin1, unsigned maxshift) {
+void _radix_sort_lsb(ray_chunk_t *begin, ray_chunk_t *end, ray_chunk_t *begin1, unsigned maxshift) {
     ray_chunk_t *end1 = begin1 + (end - begin);
 
     for (unsigned shift = 0; shift <= maxshift; shift += 8) {
@@ -1587,8 +1588,6 @@ simd_fvec<S> get_texture_lod(const simd_ivec<S> &width, const simd_ivec<S> &heig
 }
 
 template <int S> force_inline simd_fvec<S> conv_unorm_16(const simd_ivec<S> &v) { return simd_fvec<S>(v) / 65535.0f; }
-
-template <int S> force_inline simd_fvec<S> safe_sqrtf(const simd_fvec<S> &f) { return sqrt(max(f, 0.0f)); }
 
 template <int S>
 void FetchTransformAndRecalcBasis(const transform_t *sc_transforms, const simd_ivec<S> &tr_index,
@@ -3977,8 +3976,8 @@ void Ray::NS::Sample_EnvQTree(float y_rotation, const simd_fvec4 *const *qtree_m
 }
 
 template <int S>
-force_inline void Ray::NS::TransformRay(const simd_fvec<S> ro[3], const simd_fvec<S> rd[3], const float *xform,
-                                        simd_fvec<S> out_ro[3], simd_fvec<S> out_rd[3]) {
+void Ray::NS::TransformRay(const simd_fvec<S> ro[3], const simd_fvec<S> rd[3], const float *xform,
+                           simd_fvec<S> out_ro[3], simd_fvec<S> out_rd[3]) {
     out_ro[0] = ro[0] * xform[0] + ro[1] * xform[4] + ro[2] * xform[8] + xform[12];
     out_ro[1] = ro[0] * xform[1] + ro[1] * xform[5] + ro[2] * xform[9] + xform[13];
     out_ro[2] = ro[0] * xform[2] + ro[1] * xform[6] + ro[2] * xform[10] + xform[14];
@@ -3988,8 +3987,7 @@ force_inline void Ray::NS::TransformRay(const simd_fvec<S> ro[3], const simd_fve
     out_rd[2] = rd[0] * xform[2] + rd[1] * xform[6] + rd[2] * xform[10];
 }
 
-force_inline void Ray::NS::TransformRay(const float ro[3], const float rd[3], const float *xform, float out_ro[3],
-                                        float out_rd[3]) {
+void Ray::NS::TransformRay(const float ro[3], const float rd[3], const float *xform, float out_ro[3], float out_rd[3]) {
     out_ro[0] = ro[0] * xform[0] + ro[1] * xform[4] + ro[2] * xform[8] + xform[12];
     out_ro[1] = ro[0] * xform[1] + ro[1] * xform[5] + ro[2] * xform[9] + xform[13];
     out_ro[2] = ro[0] * xform[2] + ro[1] * xform[6] + ro[2] * xform[10] + xform[14];
@@ -4028,7 +4026,7 @@ void Ray::NS::TransformNormal(const simd_fvec<S> n[3], const simd_fvec<S> inv_xf
     out_n[2] = n[0] * inv_xform[8] + n[1] * inv_xform[9] + n[2] * inv_xform[10];
 }
 
-template <int S> force_inline void Ray::NS::TransformNormal(const simd_fvec<S> inv_xform[16], simd_fvec<S> inout_n[3]) {
+template <int S> void Ray::NS::TransformNormal(const simd_fvec<S> inv_xform[16], simd_fvec<S> inout_n[3]) {
     simd_fvec<S> temp0 = inout_n[0] * inv_xform[0] + inout_n[1] * inv_xform[1] + inout_n[2] * inv_xform[2];
     simd_fvec<S> temp1 = inout_n[0] * inv_xform[4] + inout_n[1] * inv_xform[5] + inout_n[2] * inv_xform[6];
     simd_fvec<S> temp2 = inout_n[0] * inv_xform[8] + inout_n[1] * inv_xform[9] + inout_n[2] * inv_xform[10];
