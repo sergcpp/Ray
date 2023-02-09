@@ -3640,9 +3640,7 @@ void Ray::Ref::Sample_GlossyNode(const ray_data_t &ray, const surface_t &surf, c
     memcpy(&new_ray.o[0], value_ptr(offset_ray(surf.P, surf.plane_N)), 3 * sizeof(float));
     memcpy(&new_ray.d[0], value_ptr(V), 3 * sizeof(float));
 
-    new_ray.c[0] = ray.c[0] * F.get<0>() * safe_div_pos(mix_weight, F.get<3>());
-    new_ray.c[1] = ray.c[1] * F.get<1>() * safe_div_pos(mix_weight, F.get<3>());
-    new_ray.c[2] = ray.c[2] * F.get<2>() * safe_div_pos(mix_weight, F.get<3>());
+    UNROLLED_FOR(i, 3, { new_ray.c[i] = ray.c[i] * F.get<i>() * safe_div_pos(mix_weight, F.get<3>()); })
     new_ray.pdf = F[3];
 }
 
@@ -3692,9 +3690,7 @@ void Ray::Ref::Sample_RefractiveNode(const ray_data_t &ray, const surface_t &sur
 
     new_ray.depth = ray.depth + 0x00010000;
 
-    new_ray.c[0] = ray.c[0] * F.get<0>() * safe_div_pos(mix_weight, F.get<3>());
-    new_ray.c[1] = ray.c[1] * F.get<1>() * safe_div_pos(mix_weight, F.get<3>());
-    new_ray.c[2] = ray.c[2] * F.get<2>() * safe_div_pos(mix_weight, F.get<3>());
+    UNROLLED_FOR(i, 3, { new_ray.c[i] = ray.c[i] * F.get<i>() * safe_div_pos(mix_weight, F.get<3>()); })
     new_ray.pdf = F.get<3>();
 
     if (!is_backfacing) {
@@ -3835,9 +3831,7 @@ void Ray::Ref::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t
             memcpy(&new_ray.o[0], value_ptr(offset_ray(surf.P, surf.plane_N)), 3 * sizeof(float));
             memcpy(&new_ray.d[0], value_ptr(V), 3 * sizeof(float));
 
-            new_ray.c[0] = ray.c[0] * diff_col.get<0>() * mix_weight / lobe_weights.diffuse;
-            new_ray.c[1] = ray.c[1] * diff_col.get<1>() * mix_weight / lobe_weights.diffuse;
-            new_ray.c[2] = ray.c[2] * diff_col.get<2>() * mix_weight / lobe_weights.diffuse;
+            UNROLLED_FOR(i, 3, { new_ray.c[i] = ray.c[i] * diff_col.get<i>() * mix_weight / lobe_weights.diffuse; })
             new_ray.pdf = pdf;
         }
     } else if (mix_rand < lobe_weights.diffuse + lobe_weights.specular) {
@@ -3852,9 +3846,7 @@ void Ray::Ref::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t
 
             new_ray.depth = ray.depth + 0x00000100;
 
-            new_ray.c[0] = ray.c[0] * F.get<0>() * safe_div_pos(mix_weight, F.get<3>());
-            new_ray.c[1] = ray.c[1] * F.get<1>() * safe_div_pos(mix_weight, F.get<3>());
-            new_ray.c[2] = ray.c[2] * F.get<2>() * safe_div_pos(mix_weight, F.get<3>());
+            UNROLLED_FOR(i, 3, { new_ray.c[i] = ray.c[i] * F.get<i>() * safe_div_pos(mix_weight, F.get<3>()); })
             new_ray.pdf = F.get<3>();
 
             memcpy(&new_ray.o[0], value_ptr(offset_ray(surf.P, surf.plane_N)), 3 * sizeof(float));
@@ -3872,9 +3864,7 @@ void Ray::Ref::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t
 
             new_ray.depth = ray.depth + 0x00000100;
 
-            new_ray.c[0] = 0.25f * ray.c[0] * F.get<0>() * safe_div_pos(mix_weight, F.get<3>());
-            new_ray.c[1] = 0.25f * ray.c[1] * F.get<1>() * safe_div_pos(mix_weight, F.get<3>());
-            new_ray.c[2] = 0.25f * ray.c[2] * F.get<2>() * safe_div_pos(mix_weight, F.get<3>());
+            UNROLLED_FOR(i, 3, { new_ray.c[i] = 0.25f * ray.c[i] * F.get<i>() * safe_div_pos(mix_weight, F.get<3>()); })
             new_ray.pdf = F[3];
 
             memcpy(&new_ray.o[0], value_ptr(offset_ray(surf.P, surf.plane_N)), 3 * sizeof(float));
@@ -3919,9 +3909,7 @@ void Ray::Ref::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t
 
             F.set<3>(F.get<3>() * lobe_weights.refraction);
 
-            new_ray.c[0] = ray.c[0] * F.get<0>() * safe_div_pos(mix_weight, F.get<3>());
-            new_ray.c[1] = ray.c[1] * F.get<1>() * safe_div_pos(mix_weight, F.get<3>());
-            new_ray.c[2] = ray.c[2] * F.get<2>() * safe_div_pos(mix_weight, F.get<3>());
+            UNROLLED_FOR(i, 3, { new_ray.c[i] = ray.c[i] * F.get<i>() * safe_div_pos(mix_weight, F.get<3>()); })
             new_ray.pdf = F.get<3>();
 
             memcpy(&new_ray.d[0], value_ptr(V), 3 * sizeof(float));
