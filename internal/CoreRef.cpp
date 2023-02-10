@@ -3001,6 +3001,7 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
     ls.col = make_fvec3(l.col);
     ls.col *= float(sc.li_indices.size());
     ls.cast_shadow = l.cast_shadow ? 1 : 0;
+    ls.from_env = 0;
 
     if (l.type == LIGHT_TYPE_SPHERE) {
         const float r1 = fract(random_seq[RAND_DIM_LIGHT_U] + sample_off[0]);
@@ -3022,17 +3023,17 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
         sampled_dir = LT * sampled_dir.get<0>() + LB * sampled_dir.get<1>() + center_to_surface * sampled_dir.get<2>();
 
         const simd_fvec4 light_surf_pos = make_fvec3(l.sph.pos) + sampled_dir * l.sph.radius;
-
-        ls.L = light_surf_pos - P;
-        ls.dist = length(ls.L);
-        ls.L /= ls.dist;
-
-        ls.area = l.sph.area;
         const simd_fvec4 light_forward = normalize(light_surf_pos - make_fvec3(l.sph.pos));
+
+        ls.lp = offset_ray(light_surf_pos, light_forward);
+        ls.L = light_surf_pos - P;
+        const float ls_dist = length(ls.L);
+        ls.L /= ls_dist;
+        ls.area = l.sph.area;
 
         const float cos_theta = std::abs(dot(ls.L, light_forward));
         if (cos_theta > 0.0f) {
-            ls.pdf = (ls.dist * ls.dist) / (0.5f * ls.area * cos_theta);
+            ls.pdf = (ls_dist * ls_dist) / (0.5f * ls.area * cos_theta);
         }
 
         if (!l.visible) {
@@ -3058,7 +3059,8 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
             ls.L = normalize(MapToCone(r1, r2, ls.L, radius));
         }
         ls.area = 0.0f;
-        ls.dist = MAX_DIST;
+        ls.lp = P + ls.L;
+        ls.dist_mul = MAX_DIST;
         ls.pdf = 1.0f;
     } else if (l.type == LIGHT_TYPE_RECT) {
         const simd_fvec4 light_pos = make_fvec3(l.rect.pos);
@@ -3068,17 +3070,17 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
         const float r1 = fract(random_seq[RAND_DIM_LIGHT_U] + sample_off[0]) - 0.5f;
         const float r2 = fract(random_seq[RAND_DIM_LIGHT_V] + sample_off[1]) - 0.5f;
         const simd_fvec4 lp = light_pos + light_u * r1 + light_v * r2;
+        const simd_fvec4 light_forward = normalize(cross(light_u, light_v));
 
-        const simd_fvec4 to_light = lp - P;
-        ls.dist = length(to_light);
-        ls.L = (to_light / ls.dist);
-
+        ls.lp = offset_ray(lp, light_forward);
+        ls.L = lp - P;
+        const float ls_dist = length(ls.L);
+        ls.L /= ls_dist;
         ls.area = l.rect.area;
-        simd_fvec4 light_forward = normalize(cross(light_u, light_v));
 
         const float cos_theta = dot(-ls.L, light_forward);
         if (cos_theta > 0.0f) {
-            ls.pdf = (ls.dist * ls.dist) / (ls.area * cos_theta);
+            ls.pdf = (ls_dist * ls_dist) / (ls.area * cos_theta);
         }
 
         if (!l.visible) {
@@ -3092,7 +3094,7 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
                                               sc.env.env_map_rotation);
             }
             ls.col *= env_col;
-            ls.dist = -ls.dist;
+            ls.from_env = 1;
         }
     } else if (l.type == LIGHT_TYPE_DISK) {
         const simd_fvec4 light_pos = make_fvec3(l.disk.pos);
@@ -3118,17 +3120,17 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
         }
 
         const simd_fvec4 lp = light_pos + light_u * offset.get<0>() + light_v * offset.get<1>();
+        const simd_fvec4 light_forward = normalize(cross(light_u, light_v));
 
-        const simd_fvec4 to_light = lp - P;
-        ls.dist = length(to_light);
-        ls.L = (to_light / ls.dist);
-
+        ls.lp = offset_ray(lp, light_forward);
+        ls.L = lp - P;
+        const float ls_dist = length(ls.L);
+        ls.L /= ls_dist;
         ls.area = l.disk.area;
-        simd_fvec4 light_forward = normalize(cross(light_u, light_v));
 
         const float cos_theta = dot(-ls.L, light_forward);
         if (cos_theta > 0.0f) {
-            ls.pdf = (ls.dist * ls.dist) / (ls.area * cos_theta);
+            ls.pdf = (ls_dist * ls_dist) / (ls.area * cos_theta);
         }
 
         if (!l.visible) {
@@ -3142,7 +3144,7 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
                                               sc.env.env_map_rotation);
             }
             ls.col *= env_col;
-            ls.dist = -ls.dist;
+            ls.from_env = 1;
         }
     } else if (l.type == LIGHT_TYPE_LINE) {
         const simd_fvec4 light_pos = make_fvec3(l.line.pos);
@@ -3161,15 +3163,15 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
 
         const simd_fvec4 lp = light_pos + normal * l.line.radius + (r2 - 0.5f) * light_dir * l.line.height;
 
-        const simd_fvec4 to_light = lp - P;
-        ls.dist = length(to_light);
-        ls.L = (to_light / ls.dist);
-
+        ls.lp = lp;
+        ls.L = lp - P;
+        const float ls_dist = length(ls.L);
+        ls.L /= ls_dist;
         ls.area = l.line.area;
 
         const float cos_theta = 1.0f - std::abs(dot(ls.L, light_dir));
         if (cos_theta != 0.0f) {
-            ls.pdf = (ls.dist * ls.dist) / (ls.area * cos_theta);
+            ls.pdf = (ls_dist * ls_dist) / (ls.area * cos_theta);
         }
 
         if (!l.visible) {
@@ -3197,13 +3199,16 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
         ls.area = 0.5f * length(light_forward);
         light_forward = normalize(light_forward);
 
-        const simd_fvec4 to_light = lp - P;
-        ls.dist = length(to_light);
-        ls.L = (to_light / ls.dist);
+        ls.L = lp - P;
+        const float ls_dist = length(ls.L);
+        ls.L /= ls_dist;
 
-        const float cos_theta = std::abs(dot(ls.L, light_forward)); // abs for doublesided light
+        float cos_theta = dot(ls.L, light_forward);
+        ls.lp = offset_ray(lp, cos_theta >= 0.0f ? -light_forward : light_forward);
+
+        cos_theta = std::abs(cos_theta); // abs for doublesided light
         if (cos_theta > 0.0f) {
-            ls.pdf = (ls.dist * ls.dist) / (ls.area * cos_theta);
+            ls.pdf = (ls_dist * ls_dist) / (ls.area * cos_theta);
         }
 
         const material_t &lmat = sc.materials[sc.tri_materials[ltri_index].front_mi & MATERIAL_INDEX_BITS];
@@ -3242,8 +3247,10 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
         }
 
         ls.area = 1.0f;
-        ls.dist = -MAX_DIST;
+        ls.lp = P + ls.L;
+        ls.dist_mul = MAX_DIST;
         ls.pdf = dir_and_pdf.get<3>();
+        ls.from_env = 1;
     }
 }
 
@@ -3573,7 +3580,6 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_DiffuseNode(const light_sample_t &ls, co
 
     // schedule shadow ray
     memcpy(&sh_r.o[0], value_ptr(offset_ray(surf.P, surf.plane_N)), 3 * sizeof(float));
-    memcpy(&sh_r.d[0], value_ptr(ls.L), 3 * sizeof(float));
     UNROLLED_FOR(i, 3, { sh_r.c[i] = ray.c[i] * lcol[i]; })
     return simd_fvec4{0.0f};
 }
@@ -3622,7 +3628,6 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_GlossyNode(const light_sample_t &ls, con
 
     // schedule shadow ray
     memcpy(&sh_r.o[0], value_ptr(offset_ray(surf.P, surf.plane_N)), 3 * sizeof(float));
-    memcpy(&sh_r.d[0], value_ptr(ls.L), 3 * sizeof(float));
     sh_r.c[0] = ray.c[0] * lcol.get<0>();
     sh_r.c[1] = ray.c[1] * lcol.get<1>();
     sh_r.c[2] = ray.c[2] * lcol.get<2>();
@@ -3675,7 +3680,6 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_RefractiveNode(const light_sample_t &ls,
 
     // schedule shadow ray
     memcpy(&sh_r.o[0], value_ptr(offset_ray(surf.P, -surf.plane_N)), 3 * sizeof(float));
-    memcpy(&sh_r.d[0], value_ptr(ls.L), 3 * sizeof(float));
     UNROLLED_FOR(i, 3, { sh_r.c[i] = ray.c[i] * lcol.get<i>(); })
     return simd_fvec4{0.0f};
 }
@@ -3797,10 +3801,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_PrincipledNode(const light_sample_t &ls,
 
     // schedule shadow ray
     memcpy(&sh_r.o[0], value_ptr(offset_ray(surf.P, N_dot_L < 0.0f ? -surf.plane_N : surf.plane_N)), 3 * sizeof(float));
-    memcpy(&sh_r.d[0], value_ptr(ls.L), 3 * sizeof(float));
-    sh_r.c[0] = ray.c[0] * lcol.get<0>();
-    sh_r.c[1] = ray.c[1] * lcol.get<1>();
-    sh_r.c[2] = ray.c[2] * lcol.get<2>();
+    UNROLLED_FOR(i, 3, { sh_r.c[i] = ray.c[i] * lcol.get<i>(); })
     return simd_fvec4{0.0f};
 }
 
@@ -4125,7 +4126,6 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
     sh_r.c[0] = sh_r.c[1] = sh_r.c[2] = 0.0f;
     sh_r.depth = ray.depth;
     sh_r.xy = ray.xy;
-    sh_r.dist = ls.dist - (ls.dist > 0.0f ? 10.0f : -10.0f) * HIT_BIAS;
 
     // Sample materials
     if (mat->type == DiffuseNode) {
@@ -4275,6 +4275,15 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
 
     const float sh_lum = std::max(sh_r.c[0], std::max(sh_r.c[1], sh_r.c[2]));
     if (sh_lum > 0.0f) {
+        // actual ray direction accouning for bias from both ends
+        const simd_fvec4 to_light = ls.lp - simd_fvec4{sh_r.o[0], sh_r.o[1], sh_r.o[2], 0.0f};
+        sh_r.dist = length(to_light);
+        memcpy(&sh_r.d[0], value_ptr(to_light / sh_r.dist), 3 * sizeof(float));
+        sh_r.dist *= ls.dist_mul;
+        if (ls.from_env) {
+            // NOTE: hacky way to identify env ray
+            sh_r.dist = -sh_r.dist;
+        }
         ++(*out_shadow_rays_count);
     }
 

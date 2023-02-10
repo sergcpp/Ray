@@ -116,9 +116,10 @@ template <int S> struct surface_t {
 };
 
 template <int S> struct light_sample_t {
-    simd_fvec<S> col[3] = {0.0f, 0.0f, 0.0f}, L[3] = {0.0f, 0.0f, 0.0f};
-    simd_fvec<S> area = 0.0f, dist = 0.0f, pdf = 0.0f;
-    simd_ivec<S> cast_shadow = -1;
+    simd_fvec<S> col[3] = {0.0f, 0.0f, 0.0f}, L[3] = {0.0f, 0.0f, 0.0f}, lp[3] = {0.0f, 0.0f, 0.0f};
+    simd_fvec<S> area = 0.0f, dist_mul = 1.0f, pdf = 0.0f;
+    // TODO: merge these two into bitflags
+    simd_ivec<S> cast_shadow = -1, from_env = 0;
 
     force_inline light_sample_t() = default;
 };
@@ -4624,20 +4625,22 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
             simd_fvec<S> L[3];
             UNROLLED_FOR(i, 3, { L[i] = light_surf_pos[i] - P[i]; })
 
-            const simd_fvec<S> dist = length(L);
-
-            where(ray_queue[index], ls.dist) = dist;
-            UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.L[i]) = L[i] / dist; })
-
-            where(ray_queue[index], ls.area) = l.sph.area;
-
             simd_fvec<S> light_forward[3];
             UNROLLED_FOR(i, 3, { light_forward[i] = light_surf_pos[i] - l.sph.pos[i]; })
             normalize(light_forward);
 
+            simd_fvec<S> lp_biased[3];
+            offset_ray(light_surf_pos, light_forward, lp_biased);
+            UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.lp[i]) = lp_biased[i]; })
+
+            const simd_fvec<S> ls_dist = length(L);
+            UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.L[i]) = L[i] / ls_dist; })
+
+            where(ray_queue[index], ls.area) = l.sph.area;
+
             const simd_fvec<S> cos_theta = abs(dot3(ls.L, light_forward));
 
-            simd_fvec<S> pdf = safe_div_pos(ls.dist * ls.dist, 0.5f * ls.area * cos_theta);
+            simd_fvec<S> pdf = safe_div_pos(ls_dist * ls_dist, 0.5f * ls.area * cos_theta);
             where(cos_theta <= 0.0f, pdf) = 0.0f;
             where(ray_queue[index], ls.pdf) = pdf;
 
@@ -4674,7 +4677,8 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
             }
 
             where(ray_queue[index], ls.area) = 0.0f;
-            where(ray_queue[index], ls.dist) = MAX_DIST;
+            UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.lp[i]) = P[i] + ls.L[i]; })
+            where(ray_queue[index], ls.dist_mul) = MAX_DIST;
             where(ray_queue[index], ls.pdf) = 1.0f;
         } else if (l.type == LIGHT_TYPE_RECT) {
             const simd_fvec<S> r1 = ru - 0.5f, r2 = rv - 0.5f;
@@ -4685,20 +4689,23 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
 
             simd_fvec<S> to_light[3];
             UNROLLED_FOR(i, 3, { to_light[i] = lp[i] - P[i]; })
-            const simd_fvec<S> dist = length(to_light);
-
-            where(ray_queue[index], ls.dist) = dist;
-            UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.L[i]) = to_light[i] / dist; })
-
-            where(ray_queue[index], ls.area) = l.rect.area;
 
             float light_forward[3];
             cross(l.rect.u, l.rect.v, light_forward);
             normalize(light_forward);
 
+            simd_fvec<S> lp_biased[3], _light_forward[3] = {light_forward[0], light_forward[1], light_forward[2]};
+            offset_ray(lp, _light_forward, lp_biased);
+            UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.lp[i]) = lp_biased[i]; })
+
+            const simd_fvec<S> ls_dist = length(to_light);
+            UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.L[i]) = to_light[i] / ls_dist; })
+
+            where(ray_queue[index], ls.area) = l.rect.area;
+
             const simd_fvec<S> cos_theta =
                 -ls.L[0] * light_forward[0] - ls.L[1] * light_forward[1] - ls.L[2] * light_forward[2];
-            simd_fvec<S> pdf = safe_div_pos(ls.dist * ls.dist, ls.area * cos_theta);
+            simd_fvec<S> pdf = safe_div_pos(ls_dist * ls_dist, ls.area * cos_theta);
             where(cos_theta <= 0.0f, pdf) = 0.0f;
             where(ray_queue[index], ls.pdf) = pdf;
 
@@ -4715,7 +4722,7 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
                     UNROLLED_FOR(i, 3, { env_col[i] *= tex_col[i]; })
                 }
                 UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.col[i]) *= sc.env.env_col[i]; })
-                where(ray_queue[index], ls.dist) = -ls.dist;
+                where(ray_queue[index], ls.from_env) = -1;
             }
         } else if (l.type == LIGHT_TYPE_DISK) {
             simd_fvec<S> offset[2] = {2.0f * ru - 1.0f, 2.0f * rv - 1.0f};
@@ -4736,10 +4743,9 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
 
             simd_fvec<S> to_light[3];
             UNROLLED_FOR(i, 3, { to_light[i] = lp[i] - P[i]; })
-            const simd_fvec<S> dist = length(to_light);
 
-            where(ray_queue[index], ls.dist) = dist;
-            UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.L[i]) = to_light[i] / dist; })
+            const simd_fvec<S> ls_dist = length(to_light);
+            UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.L[i]) = to_light[i] / ls_dist; })
 
             where(ray_queue[index], ls.area) = l.disk.area;
 
@@ -4747,9 +4753,13 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
             cross(l.disk.u, l.disk.v, light_forward);
             normalize(light_forward);
 
+            simd_fvec<S> lp_biased[3], _light_forward[3] = {light_forward[0], light_forward[1], light_forward[2]};
+            offset_ray(lp, _light_forward, lp_biased);
+            UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.lp[i]) = lp_biased[i]; })
+
             const simd_fvec<S> cos_theta =
                 -ls.L[0] * light_forward[0] - ls.L[1] * light_forward[1] - ls.L[2] * light_forward[2];
-            simd_fvec<S> pdf = safe_div_pos(ls.dist * ls.dist, ls.area * cos_theta);
+            simd_fvec<S> pdf = safe_div_pos(ls_dist * ls_dist, ls.area * cos_theta);
             where(cos_theta <= 0.0f, pdf) = 0.0f;
             where(ray_queue[index], ls.pdf) = pdf;
 
@@ -4766,7 +4776,7 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
                     UNROLLED_FOR(i, 3, { env_col[i] *= tex_col[i]; })
                 }
                 UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.col[i]) *= sc.env.env_col[i]; })
-                where(ray_queue[index], ls.dist) = -ls.dist;
+                where(ray_queue[index], ls.from_env) = -1;
             }
         } else if (l.type == LIGHT_TYPE_LINE) {
             simd_fvec<S> center_to_surface[3];
@@ -4795,17 +4805,18 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
                 l.line.pos[1] + normal[1] * l.line.radius + (rv - 0.5f) * light_dir[1] * l.line.height,
                 l.line.pos[2] + normal[2] * l.line.radius + (rv - 0.5f) * light_dir[2] * l.line.height};
 
+            UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.lp[i]) = lp[i]; })
+
             simd_fvec<S> to_light[3];
             UNROLLED_FOR(i, 3, { to_light[i] = lp[i] - P[i]; })
-            const simd_fvec<S> dist = length(to_light);
 
-            where(ray_queue[index], ls.dist) = dist;
-            UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.L[i]) = to_light[i] / dist; })
+            const simd_fvec<S> ls_dist = length(to_light);
+            UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.L[i]) = to_light[i] / ls_dist; })
 
             where(ray_queue[index], ls.area) = l.line.area;
 
             const simd_fvec<S> cos_theta = 1.0f - abs(dot3(ls.L, light_dir));
-            simd_fvec<S> pdf = safe_div_pos(ls.dist * ls.dist, ls.area * cos_theta);
+            simd_fvec<S> pdf = safe_div_pos(ls_dist * ls_dist, ls.area * cos_theta);
             where(cos_theta == 0.0f, pdf) = 0.0f;
             where(ray_queue[index], ls.pdf) = pdf;
 
@@ -4820,8 +4831,7 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
             const vertex_t &v2 = sc.vertices[sc.vtx_indices[ltri_index * 3 + 1]];
             const vertex_t &v3 = sc.vertices[sc.vtx_indices[ltri_index * 3 + 2]];
 
-            const simd_fvec<S> r1 = sqrt(ru);
-            const simd_fvec<S> r2 = rv;
+            const simd_fvec<S> r1 = sqrt(ru), r2 = rv;
 
             const simd_fvec<S> luvs[2] = {v1.t[0][0] * (1.0f - r1) + r1 * (v2.t[0][0] * (1.0f - r2) + v3.t[0][0] * r2),
                                           v1.t[0][1] * (1.0f - r1) + r1 * (v2.t[0][1] * (1.0f - r2) + v3.t[0][1] * r2)};
@@ -4846,12 +4856,19 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
             UNROLLED_FOR(i, 3, { light_forward[i] /= light_fwd_len; })
 
             const simd_fvec<S> to_light[3] = {lp[0] - P[0], lp[1] - P[1], lp[2] - P[2]};
-            where(ray_queue[index], ls.dist) = length(to_light);
-            UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.L[i]) = safe_div_pos(to_light[i], ls.dist); })
+            const simd_fvec<S> ls_dist = length(to_light);
+            UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.L[i]) = safe_div_pos(to_light[i], ls_dist); })
 
-            const simd_fvec<S> cos_theta = abs(dot3(ls.L, light_forward));
+            simd_fvec<S> cos_theta = dot3(ls.L, light_forward);
+
+            simd_fvec<S> lp_biased[3], vlight_forward[3] = {light_forward[0], light_forward[1], light_forward[2]};
+            UNROLLED_FOR(i, 3, { where(cos_theta >= 0.0f, vlight_forward[i]) = -vlight_forward[i]; })
+            offset_ray(lp, vlight_forward, lp_biased);
+            UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.lp[i]) = lp_biased[i]; })
+
+            cos_theta = abs(cos_theta);
             where(simd_cast(cos_theta > 0.0f) & ray_queue[index], ls.pdf) =
-                safe_div_pos(ls.dist * ls.dist, ls.area * cos_theta);
+                safe_div_pos(ls_dist * ls_dist, ls.area * cos_theta);
 
             const material_t &lmat = sc.materials[sc.tri_materials[ltri_index].front_mi & MATERIAL_INDEX_BITS];
             if (lmat.textures[BASE_TEXTURE] != 0xffffffff) {
@@ -4888,8 +4905,10 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
             UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.col[i]) *= sc.env.env_col[i] * tex_col[i]; })
 
             where(ray_queue[index], ls.area) = 1.0f;
-            where(ray_queue[index], ls.dist) = -MAX_DIST;
+            UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.lp[i]) = P[i] + ls.L[i]; })
+            where(ray_queue[index], ls.dist_mul) = MAX_DIST;
             where(ray_queue[index], ls.pdf) = dir_and_pdf[3];
+            where(ray_queue[index], ls.from_env) = -1;
         }
 
         ++index;
@@ -5275,10 +5294,7 @@ Ray::NS::Evaluate_DiffuseNode(const light_sample_t<S> &ls, const ray_data_t<S> &
     simd_fvec<S> P_biased[3];
     offset_ray(surf.P, surf.plane_N, P_biased);
 
-    UNROLLED_FOR(i, 3, {
-        where(mask, sh_r.o[i]) = P_biased[i];
-        where(mask, sh_r.d[i]) = ls.L[i];
-    })
+    UNROLLED_FOR(i, 3, { where(mask, sh_r.o[i]) = P_biased[i]; })
     UNROLLED_FOR(i, 3, {
         const simd_fvec<S> temp = ls.col[i] * diff_col[i] * safe_div(mix_weight * mis_weight, ls.pdf);
         where(mask, sh_r.c[i]) = ray.c[i] * temp;
@@ -5335,10 +5351,7 @@ Ray::NS::Evaluate_GlossyNode(const light_sample_t<S> &ls, const ray_data_t<S> &r
     simd_fvec<S> P_biased[3];
     offset_ray(surf.P, surf.plane_N, P_biased);
 
-    UNROLLED_FOR(i, 3, {
-        where(mask, sh_r.o[i]) = P_biased[i];
-        where(mask, sh_r.d[i]) = ls.L[i];
-    })
+    UNROLLED_FOR(i, 3, { where(mask, sh_r.o[i]) = P_biased[i]; })
     UNROLLED_FOR(i, 3, {
         const simd_fvec<S> temp = ls.col[i] * spec_col[i] * safe_div_pos(mix_weight * mis_weight, ls.pdf);
         where(mask, sh_r.c[i]) = ray.c[i] * temp;
@@ -5397,10 +5410,7 @@ Ray::NS::simd_ivec<S> Ray::NS::Evaluate_RefractiveNode(const light_sample_t<S> &
     const simd_fvec<S> _plane_N[3] = {-surf.plane_N[0], -surf.plane_N[1], -surf.plane_N[2]};
     offset_ray(surf.P, _plane_N, P_biased);
 
-    UNROLLED_FOR(i, 3, {
-        where(mask, sh_r.o[i]) = P_biased[i];
-        where(mask, sh_r.d[i]) = ls.L[i];
-    })
+    UNROLLED_FOR(i, 3, { where(mask, sh_r.o[i]) = P_biased[i]; })
     UNROLLED_FOR(i, 3, {
         const simd_fvec<S> temp = ls.col[i] * refr_col[i] * safe_div_pos(mix_weight * mis_weight, ls.pdf);
         where(mask, sh_r.c[i]) = ray.c[i] * temp;
@@ -5558,7 +5568,6 @@ Ray::NS::simd_ivec<S> Ray::NS::Evaluate_PrincipledNode(
     UNROLLED_FOR(i, 3, {
         where(N_dot_L < 0.0f, P_biased[i]) = back_P_biased[i];
         where(mask, sh_r.o[i]) = P_biased[i];
-        where(mask, sh_r.d[i]) = ls.L[i];
     })
     UNROLLED_FOR(i, 3, {
         where(mask, sh_r.c[i]) = ray.c[i] * lcol[i];
@@ -6169,8 +6178,6 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
     shadow_ray_t<S> &sh_r = out_shadow_rays[*out_shadow_rays_count];
     sh_r = {};
     sh_r.depth = ray.depth;
-    sh_r.dist = ls.dist - 10.0f * HIT_BIAS;
-    where(ls.dist < 0.0f, sh_r.dist) = ls.dist + 10.0f * HIT_BIAS;
     sh_r.xy = ray.xy;
 
     { // Sample materials
@@ -6402,6 +6409,16 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
     }
 
     if (shadow_mask.not_all_zeros()) {
+        // actual ray direction accouning for bias from both ends
+        simd_fvec<S> to_light[3];
+        UNROLLED_FOR(i, 3, { to_light[i] = ls.lp[i] - sh_r.o[i]; })
+
+        sh_r.dist = length(to_light);
+        UNROLLED_FOR(i, 3, { where(shadow_mask, sh_r.d[i]) = safe_div_pos(to_light[i], sh_r.dist); })
+        sh_r.dist *= ls.dist_mul;
+        // NOTE: hacky way to identify env ray
+        where(ls.from_env & shadow_mask, sh_r.dist) = -sh_r.dist;
+
         const int index = (*out_shadow_rays_count)++;
         out_shadow_masks[index] = shadow_mask;
     }

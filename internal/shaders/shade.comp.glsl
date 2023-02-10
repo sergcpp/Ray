@@ -695,8 +695,9 @@ vec4 Sample_GGXRefraction_BSDF(vec3 T, vec3 B, vec3 N, vec3 I, float roughness, 
 }
 
 struct light_sample_t {
-    vec3 col, L;
-    float area, dist, pdf, cast_shadow;
+    vec3 col, L, lp;
+    float area, dist_mul, pdf;
+    bool cast_shadow, from_env;
 };
 
 void create_tbn(const vec3 N, out vec3 out_T, out vec3 out_B) {
@@ -744,7 +745,8 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, int hi, vec2 sample_off, 
 
     ls.col = uintBitsToFloat(l.type_and_param0.yzw);
     ls.col *= float(g_params.li_count);
-    ls.cast_shadow = (l.type_and_param0.x & (1 << 5)) != 0 ? 1.0 : 0.0;
+    ls.cast_shadow = (l.type_and_param0.x & (1 << 5)) != 0;
+    ls.from_env = false;
 
     const uint l_type = (l.type_and_param0.x & 0x1f);
     [[dont_flatten]] if (l_type == LIGHT_TYPE_SPHERE) {
@@ -767,17 +769,17 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, int hi, vec2 sample_off, 
         sampled_dir = LT * sampled_dir[0] + LB * sampled_dir[1] + center_to_surface * sampled_dir[2];
 
         const vec3 light_surf_pos = l.SPH_POS + sampled_dir * l.SPH_RADIUS;
-
-        ls.L = light_surf_pos - P;
-        ls.dist = length(ls.L);
-        ls.L /= ls.dist;
-
-        ls.area = l.SPH_AREA;
         const vec3 light_forward = normalize(light_surf_pos - l.SPH_POS);
+
+        ls.lp = offset_ray(light_surf_pos, light_forward);
+        ls.L = light_surf_pos - P;
+        const float ls_dist = length(ls.L);
+        ls.L /= ls_dist;
+        ls.area = l.SPH_AREA;
 
         const float cos_theta = abs(dot(ls.L, light_forward));
         [[flatten]] if (cos_theta > 0.0) {
-            ls.pdf = (ls.dist * ls.dist) / (0.5 * ls.area * cos_theta);
+            ls.pdf = (ls_dist * ls_dist) / (0.5 * ls.area * cos_theta);
         }
 
         [[dont_flatten]] if (l.SPH_SPOT > 0.0) {
@@ -799,7 +801,8 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, int hi, vec2 sample_off, 
             ls.L = normalize(MapToCone(r1, r2, ls.L, radius));
         }
         ls.area = 0.0;
-        ls.dist = MAX_DIST;
+        ls.lp = P + ls.L;
+        ls.dist_mul = MAX_DIST;
         ls.pdf = 1.0;
 
         if ((l.type_and_param0.x & (1 << 6)) == 0) { // !visible
@@ -813,17 +816,17 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, int hi, vec2 sample_off, 
         const float r1 = fract(g_random_seq[hi + RAND_DIM_LIGHT_U] + sample_off[0]) - 0.5;
         const float r2 = fract(g_random_seq[hi + RAND_DIM_LIGHT_V] + sample_off[1]) - 0.5;
         const vec3 lp = light_pos + light_u * r1 + light_v * r2;
+        const vec3 light_forward = normalize(cross(light_u, light_v));
 
-        const vec3 to_light = lp - P;
-        ls.dist = length(to_light);
-        ls.L = (to_light / ls.dist);
-
+        ls.lp = offset_ray(lp, light_forward);
+        ls.L = lp - P;
+        const float ls_dist = length(ls.L);
+        ls.L /= ls_dist;
         ls.area = l.RECT_AREA;
-        vec3 light_forward = normalize(cross(light_u, light_v));
 
         const float cos_theta = dot(-ls.L, light_forward);
         if (cos_theta > 0.0) {
-            ls.pdf = (ls.dist * ls.dist) / (ls.area * cos_theta);
+            ls.pdf = (ls_dist * ls_dist) / (ls.area * cos_theta);
         }
 
         if ((l.type_and_param0.x & (1 << 6)) == 0) { // !visible
@@ -841,7 +844,7 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, int hi, vec2 sample_off, 
 #endif
             }
             ls.col *= env_col;
-            ls.dist = -ls.dist;
+            ls.from_env = true;
         }
     } else [[dont_flatten]] if (l_type == LIGHT_TYPE_DISK) {
         const vec3 light_pos = l.DISK_POS;
@@ -867,17 +870,17 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, int hi, vec2 sample_off, 
         }
 
         const vec3 lp = light_pos + light_u * offset[0] + light_v * offset[1];
+        const vec3 light_forward = normalize(cross(light_u, light_v));
 
-        const vec3 to_light = lp - P;
-        ls.dist = length(to_light);
-        ls.L = (to_light / ls.dist);
-
+        ls.lp = offset_ray(lp, light_forward);
+        ls.L = lp - P;
+        const float ls_dist = length(ls.L);
+        ls.L /= ls_dist;
         ls.area = l.DISK_AREA;
-        vec3 light_forward = normalize(cross(light_u, light_v));
 
         const float cos_theta = dot(-ls.L, light_forward);
         [[flatten]] if (cos_theta > 0.0) {
-            ls.pdf = (ls.dist * ls.dist) / (ls.area * cos_theta);
+            ls.pdf = (ls_dist * ls_dist) / (ls.area * cos_theta);
         }
 
         if ((l.type_and_param0.x & (1 << 6)) == 0) { // !visible
@@ -895,7 +898,7 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, int hi, vec2 sample_off, 
 #endif
             }
             ls.col *= env_col;
-            ls.dist = -ls.dist;
+            ls.from_env = true;
         }
     } else [[dont_flatten]] if (l_type == LIGHT_TYPE_LINE) {
         const vec3 light_pos = l.LINE_POS;
@@ -914,15 +917,16 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, int hi, vec2 sample_off, 
 
         const vec3 lp = light_pos + normal * l.LINE_RADIUS + (r2 - 0.5) * light_dir * l.LINE_HEIGHT;
 
+        ls.lp = lp;
         const vec3 to_light = lp - P;
-        ls.dist = length(to_light);
-        ls.L = (to_light / ls.dist);
+        const float ls_dist = length(to_light);
+        ls.L = (to_light / ls_dist);
 
         ls.area = l.LINE_AREA;
 
         const float cos_theta = 1.0 - abs(dot(ls.L, light_dir));
         [[flatten]] if (cos_theta != 0.0) {
-            ls.pdf = (ls.dist * ls.dist) / (ls.area * cos_theta);
+            ls.pdf = (ls_dist * ls_dist) / (ls.area * cos_theta);
         }
 
         if ((l.type_and_param0.x & (1 << 6)) == 0) { // !visible
@@ -953,13 +957,16 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, int hi, vec2 sample_off, 
         ls.area = 0.5 * length(light_forward);
         light_forward = normalize(light_forward);
 
-        const vec3 to_light = lp - P;
-        ls.dist = length(to_light);
-        ls.L = (to_light / ls.dist);
+        ls.L = lp - P;
+        const float ls_dist = length(ls.L);
+        ls.L /= ls_dist;
 
-        const float cos_theta = abs(dot(ls.L, light_forward)); // abs for doublesided light
+        float cos_theta = dot(ls.L, light_forward);
+        ls.lp = offset_ray(lp, cos_theta >= 0.0 ? -light_forward : light_forward);
+
+        cos_theta = abs(cos_theta); // abs for doublesided light
         [[flatten]] if (cos_theta > 0.0) {
-            ls.pdf = (ls.dist * ls.dist) / (ls.area * cos_theta);
+            ls.pdf = (ls_dist * ls_dist) / (ls.area * cos_theta);
         }
 
         const material_t lmat = g_materials[(g_tri_materials[ltri_index] >> 16u) & MATERIAL_INDEX_BITS];
@@ -1001,8 +1008,10 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, int hi, vec2 sample_off, 
         }
 
         ls.area = 1.0;
-        ls.dist = -MAX_DIST;
+        ls.lp = P + ls.L;
+        ls.dist_mul = MAX_DIST;
         ls.pdf = dir_and_pdf.w;
+        ls.from_env = true;
     }
 }
 
@@ -1154,7 +1163,7 @@ vec3 Evaluate_DiffuseNode(const light_sample_t ls, const ray_data_t ray, const s
 
     const vec3 lcol = ls.col * diff_col.xyz * (mix_weight * mis_weight / ls.pdf);
 
-    [[dont_flatten]] if (ls.cast_shadow < 0.5) {
+    [[dont_flatten]] if (!ls.cast_shadow) {
         // apply light immediately
         return lcol;
     }
@@ -1162,7 +1171,6 @@ vec3 Evaluate_DiffuseNode(const light_sample_t ls, const ray_data_t ray, const s
     // schedule shadow ray
     vec3 new_o = offset_ray(surf.P, surf.plane_N);
     sh_r.o[0] = new_o[0]; sh_r.o[1] = new_o[1]; sh_r.o[2] = new_o[2];
-    sh_r.d[0] = ls.L[0]; sh_r.d[1] = ls.L[1]; sh_r.d[2] = ls.L[2];
     sh_r.c[0] = ray.c[0] * lcol[0];
     sh_r.c[1] = ray.c[1] * lcol[1];
     sh_r.c[2] = ray.c[2] * lcol[2];
@@ -1195,7 +1203,7 @@ vec3 Evaluate_GlossyNode(const light_sample_t ls, const ray_data_t ray,
     }
     const vec3 lcol = ls.col * spec_col.rgb * (mix_weight * mis_weight / ls.pdf);
 
-    [[dont_flatten]] if (ls.cast_shadow < 0.5) {
+    [[dont_flatten]] if (!ls.cast_shadow) {
         // apply light immediately
         return lcol;
     }
@@ -1203,7 +1211,6 @@ vec3 Evaluate_GlossyNode(const light_sample_t ls, const ray_data_t ray,
     // schedule shadow ray
     vec3 new_o = offset_ray(surf.P, surf.plane_N);
     sh_r.o[0] = new_o[0]; sh_r.o[1] = new_o[1]; sh_r.o[2] = new_o[2];
-    sh_r.d[0] = ls.L[0]; sh_r.d[1] = ls.L[1]; sh_r.d[2] = ls.L[2];
     sh_r.c[0] = ray.c[0] * lcol[0];
     sh_r.c[1] = ray.c[1] * lcol[1];
     sh_r.c[2] = ray.c[2] * lcol[2];
@@ -1274,7 +1281,7 @@ vec3 Evaluate_RefractiveNode(const light_sample_t ls, const ray_data_t ray,
     }
     const vec3 lcol = ls.col * refr_col.rgb * (mix_weight * mis_weight / ls.pdf);
 
-    [[dont_flatten]] if (ls.cast_shadow < 0.5) {
+    [[dont_flatten]] if (!ls.cast_shadow) {
         // apply light immediately
         return lcol;
     }
@@ -1282,7 +1289,6 @@ vec3 Evaluate_RefractiveNode(const light_sample_t ls, const ray_data_t ray,
     // schedule shadow ray
     vec3 new_o = offset_ray(surf.P, -surf.plane_N);
     sh_r.o[0] = new_o[0]; sh_r.o[1] = new_o[1]; sh_r.o[2] = new_o[2];
-    sh_r.d[0] = ls.L[0]; sh_r.d[1] = ls.L[1]; sh_r.d[2] = ls.L[2];
     sh_r.c[0] = ray.c[0] * lcol[0];
     sh_r.c[1] = ray.c[1] * lcol[1];
     sh_r.c[2] = ray.c[2] * lcol[2];
@@ -1431,7 +1437,7 @@ vec3 Evaluate_PrincipledNode(const light_sample_t ls, const ray_data_t ray,
     }
     lcol *= mix_weight * mis_weight;
 
-    [[dont_flatten]] if (ls.cast_shadow < 0.5) {
+    [[dont_flatten]] if (!ls.cast_shadow) {
         // apply light immediately
         return lcol;
     }
@@ -1439,7 +1445,6 @@ vec3 Evaluate_PrincipledNode(const light_sample_t ls, const ray_data_t ray,
     // schedule shadow ray
     vec3 new_o = offset_ray(surf.P, N_dot_L < 0.0 ? -surf.plane_N : surf.plane_N);
     sh_r.o[0] = new_o[0]; sh_r.o[1] = new_o[1]; sh_r.o[2] = new_o[2];
-    sh_r.d[0] = ls.L[0]; sh_r.d[1] = ls.L[1]; sh_r.d[2] = ls.L[2];
     sh_r.c[0] = ray.c[0] * lcol[0];
     sh_r.c[1] = ray.c[1] * lcol[1];
     sh_r.c[2] = ray.c[2] * lcol[2];
@@ -1750,7 +1755,8 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
 #if USE_NEE
     light_sample_t ls;
     ls.col = ls.L = vec3(0.0);
-    ls.area = ls.pdf = ls.dist = 0;
+    ls.area = ls.pdf = 0;
+    ls.dist_mul = 1.0;
     if (/*pi.should_add_direct_light() &&*/ g_params.li_count != 0 && mat.type != EmissiveNode) {
         SampleLightSource(surf.P, surf.T, surf.B, surf.N, hi, sample_off, ls);
     }
@@ -1793,7 +1799,6 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
     sh_r.c[0] = sh_r.c[1] = sh_r.c[2] = 0.0;
     sh_r.depth = ray.depth;
     sh_r.xy = ray.xy;
-    sh_r.dist = ls.dist - (ls.dist > 0.0 ? 10.0 : -10.0) * HIT_BIAS;
 
     ///
 
@@ -1950,6 +1955,17 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
 
     const float sh_lum = max(sh_r.c[0], max(sh_r.c[1], sh_r.c[2]));
     [[dont_flatten]] if (sh_lum > 0.0) {
+        // actual ray direction accouning for bias from both ends
+        vec3 to_light = ls.lp - vec3(sh_r.o[0], sh_r.o[1], sh_r.o[2]);
+        float sh_dist = length(to_light);
+        to_light /= sh_dist;
+        sh_dist *= ls.dist_mul;
+        if (ls.from_env) {
+            // NOTE: hacky way to identify env ray
+            sh_dist = -sh_dist;
+        }
+        sh_r.d[0] = to_light[0]; sh_r.d[1] = to_light[1]; sh_r.d[2] = to_light[2];
+        sh_r.dist = sh_dist;
         const uint index = atomicAdd(g_inout_counters[2], 1);
         g_out_sh_rays[index] = sh_r;
     }
