@@ -1944,7 +1944,7 @@ void test_refr_mis0(const char *arch_list[], const char *preferred_device) {
 }
 
 void test_refr_mis1(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 2470;
+    const int SampleCount = 2475;
     const int PixThres = 10;
 
     Ray::shading_node_desc_t mat_desc;
