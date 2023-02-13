@@ -584,6 +584,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
 
         postprocess_params_.clamp = (cam.pass_settings.flags & Clamp) ? 1 : 0;
         postprocess_params_.srgb = (cam.dtype == SRGB) ? 1 : 0;
+        postprocess_params_.exposure = cam.exposure;
         postprocess_params_.gamma = (1.0f / cam.gamma);
     }
 
@@ -647,8 +648,8 @@ const Ray::pixel_color_t *Ray::Vk::Renderer::get_pixels_ref() const {
         { // postprocess
             DebugMarker _(cmd_buf, "Postprocess frame");
 
-            kernel_Postprocess(cmd_buf, clean_buf_, postprocess_params_.gamma, postprocess_params_.clamp,
-                               postprocess_params_.srgb, final_buf_);
+            kernel_Postprocess(cmd_buf, clean_buf_, postprocess_params_.exposure, postprocess_params_.gamma,
+                               postprocess_params_.clamp, postprocess_params_.srgb, final_buf_);
         }
 
         { // download result

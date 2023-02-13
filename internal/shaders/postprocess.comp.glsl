@@ -23,6 +23,10 @@ void main() {
 
     vec4 col = imageLoad(g_in_img, icoord);
 
+    if (g_params.exposure != 0.0) {
+        col *= g_params.exposure;
+    }
+
     [[unroll]] for (int i = 0; i < 3 && g_params.srgb != 0; ++i) {
         if (col[i] < 0.0031308) {
             col[i] = 12.92 * col[i];

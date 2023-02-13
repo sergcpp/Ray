@@ -429,7 +429,7 @@ void Ray::Vk::Renderer::kernel_MixIncremental(VkCommandBuffer cmd_buf, const Tex
                     ctx_->default_descr_alloc(), ctx_->log());
 }
 
-void Ray::Vk::Renderer::kernel_Postprocess(VkCommandBuffer cmd_buf, const Texture2D &frame_buf,
+void Ray::Vk::Renderer::kernel_Postprocess(VkCommandBuffer cmd_buf, const Texture2D &frame_buf, const float exposure,
                                            const float /*inv_gamma*/, const int clamp, const int srgb,
                                            const Texture2D &out_pixels) const {
     const TransitionInfo res_transitions[] = {{&frame_buf, eResState::UnorderedAccess},
@@ -448,6 +448,7 @@ void Ray::Vk::Renderer::kernel_Postprocess(VkCommandBuffer cmd_buf, const Textur
     uniform_params.img_size[1] = h_;
     uniform_params.srgb = srgb;
     uniform_params._clamp = clamp;
+    uniform_params.exposure = std::pow(2.0f, exposure);
 
     DispatchCompute(cmd_buf, pi_postprocess_, grp_count, bindings, &uniform_params, sizeof(uniform_params),
                     ctx_->default_descr_alloc(), ctx_->log());

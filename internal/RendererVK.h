@@ -73,7 +73,7 @@ class Renderer : public RendererBase {
 
     struct {
         int clamp, srgb;
-        float gamma;
+        float exposure, gamma;
     } postprocess_params_ = {};
 
     const pixel_color_t *frame_pixels_ = nullptr;
@@ -122,8 +122,8 @@ class Renderer : public RendererBase {
     void kernel_PrepareIndirArgs(VkCommandBuffer cmd_buf, const Buffer &inout_counters, const Buffer &out_indir_args);
     void kernel_MixIncremental(VkCommandBuffer cmd_buf, const Texture2D &fbuf1, const Texture2D &fbuf2, float k,
                                const Texture2D &out_img);
-    void kernel_Postprocess(VkCommandBuffer cmd_buf, const Texture2D &frame_buf, float inv_gamma, int clamp, int srgb,
-                            const Texture2D &out_pixels) const;
+    void kernel_Postprocess(VkCommandBuffer cmd_buf, const Texture2D &frame_buf, float exposure, float inv_gamma,
+                            int clamp, int srgb, const Texture2D &out_pixels) const;
     void kernel_DebugRT(VkCommandBuffer cmd_buf, const scene_data_t &sc_data, uint32_t node_index, const Buffer &rays,
                         const Texture2D &out_pixels);
 

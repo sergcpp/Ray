@@ -68,7 +68,7 @@ struct camera_t {
     eFilterType filter;
     eDeviceType dtype;
     eLensUnits ltype;
-    float fov, gamma, sensor_height;
+    float fov, exposure, gamma, sensor_height;
     float focus_distance, focal_length, fstop, lens_rotation, lens_ratio;
     int lens_blades;
     float clip_start, clip_end;

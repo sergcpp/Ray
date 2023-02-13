@@ -333,6 +333,10 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
     auto clamp_and_gamma_correct = [&cam](const pixel_color_t &p) {
         auto c = simd_fvec4{&p.r};
 
+        if (cam.exposure != 0.0f) {
+            c *= std::pow(2.0f, cam.exposure);
+        }
+
         if (cam.dtype == SRGB) {
             UNROLLED_FOR(i, 3, {
                 if (c.get<i>() < 0.0031308f) {

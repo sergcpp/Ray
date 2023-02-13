@@ -25,6 +25,7 @@ void Ray::SceneBase::GetCamera(const uint32_t i, camera_desc_t &c) const {
     const camera_t &cam = cams_[i].cam;
     c.type = cam.type;
     c.dtype = cam.dtype;
+    c.exposure = cam.exposure;
     c.gamma = cam.gamma;
     if (c.type != Geo) {
         c.filter = cam.filter;
@@ -68,13 +69,14 @@ void Ray::SceneBase::SetCamera(const uint32_t i, const camera_desc_t &c) {
     camera_t &cam = cams_[i].cam;
     if (c.type != Geo) {
         if (c.ltype == eLensUnits::FOV) {
-            ConstructCamera(c.type, c.filter, c.dtype, c.origin, c.fwd, c.up, c.shift, c.fov, c.sensor_height, c.gamma,
-                            c.focus_distance, c.fstop, c.lens_rotation, c.lens_ratio, c.lens_blades, c.clip_start,
-                            c.clip_end, &cam);
+            ConstructCamera(c.type, c.filter, c.dtype, c.origin, c.fwd, c.up, c.shift, c.fov, c.sensor_height,
+                            c.exposure, c.gamma, c.focus_distance, c.fstop, c.lens_rotation, c.lens_ratio,
+                            c.lens_blades, c.clip_start, c.clip_end, &cam);
         } else if (c.ltype == eLensUnits::FLength) {
         }
     } else {
         cam.type = Geo;
+        cam.exposure = c.exposure;
         cam.gamma = c.gamma;
         cam.mi_index = c.mi_index;
         cam.uv_index = c.uv_index;

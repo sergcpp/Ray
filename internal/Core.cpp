@@ -930,9 +930,10 @@ bool Ray::NaiivePluckerTest(const float p[9], const float o[3], const float d[3]
 
 void Ray::ConstructCamera(const eCamType type, const eFilterType filter, eDeviceType dtype, const float origin[3],
                           const float fwd[3], const float up[3], const float shift[2], const float fov,
-                          const float sensor_height, const float gamma, const float focus_distance, const float fstop,
-                          const float lens_rotation, const float lens_ratio, const int lens_blades,
-                          const float clip_start, const float clip_end, camera_t *cam) {
+                          const float sensor_height, const float exposure, const float gamma,
+                          const float focus_distance, const float fstop, const float lens_rotation,
+                          const float lens_ratio, const int lens_blades, const float clip_start, const float clip_end,
+                          camera_t *cam) {
     if (type == Persp) {
         auto o = Ref::simd_fvec3{origin}, f = Ref::simd_fvec3{fwd}, u = Ref::simd_fvec3{up};
 
@@ -952,6 +953,7 @@ void Ray::ConstructCamera(const eCamType type, const eFilterType filter, eDevice
         cam->dtype = dtype;
         cam->ltype = eLensUnits::FOV;
         cam->fov = fov;
+        cam->exposure = exposure;
         cam->gamma = gamma;
         cam->sensor_height = sensor_height;
         cam->focus_distance = std::max(focus_distance, 0.0f);

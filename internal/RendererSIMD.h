@@ -101,6 +101,10 @@ template <int S> Ray::NS::PassData<S> &get_per_thread_pass_data() {
 pixel_color_t clamp_and_gamma_correct(const pixel_color_t &p, const camera_t &cam) {
     auto c = simd_fvec4{&p.r};
 
+    if (cam.exposure != 0.0f) {
+        c *= std::pow(2.0f, cam.exposure);
+    }
+
     if (cam.dtype == SRGB) {
         UNROLLED_FOR(i, 3, {
             if (c.get<i>() < 0.0031308f) {

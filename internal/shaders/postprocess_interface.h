@@ -8,6 +8,8 @@ INTERFACE_START(Postprocess)
 struct Params {
     UVEC2_TYPE img_size;
     int srgb, _clamp;
+    float exposure;
+    float _pad0, _pad1, _pad2;
 };
 
 const int LOCAL_GROUP_SIZE_X = 8;

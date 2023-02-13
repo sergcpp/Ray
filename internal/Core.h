@@ -227,7 +227,8 @@ struct bvh_settings_t {
     int min_primitives_in_leaf = 8;
 };
 
-template <typename T, size_t Alignment = alignof(T)> using aligned_vector = std::vector<T, aligned_allocator<T, Alignment>>;
+template <typename T, size_t Alignment = alignof(T)>
+using aligned_vector = std::vector<T, aligned_allocator<T, Alignment>>;
 
 // bit scan forward
 force_inline long GetFirstBit(long mask) {
@@ -306,9 +307,9 @@ uint32_t FlattenBVH_Recursive(const bvh_node_t *nodes, uint32_t node_index, uint
 bool NaiivePluckerTest(const float p[9], const float o[3], const float d[3]);
 
 void ConstructCamera(eCamType type, eFilterType filter, eDeviceType dtype, const float origin[3], const float fwd[3],
-                     const float up[3], const float shift[2], float fov, float sensor_height, float gamma,
-                     float focus_distance, float fstop, float lens_rotation, float lens_ratio, int lens_blades,
-                     float clip_start, float clip_end, camera_t *cam);
+                     const float up[3], const float shift[2], float fov, float sensor_height, float exposure,
+                     float gamma, float focus_distance, float fstop, float lens_rotation, float lens_ratio,
+                     int lens_blades, float clip_start, float clip_end, camera_t *cam);
 
 // Applies 4x4 matrix matrix transform to bounding box
 void TransformBoundingBox(const float bbox_min[3], const float bbox_max[3], const float *xform, float out_bbox_min[3],
@@ -383,7 +384,10 @@ struct environment_t {
 
 force_inline float to_norm_float(uint8_t v) {
     uint32_t val = 0x3f800000 + v * 0x8080 + (v + 1) / 2;
-    union { uint32_t i; float f; } ret = {val};
+    union {
+        uint32_t i;
+        float f;
+    } ret = {val};
     return ret.f - 1.0f;
 }
 
