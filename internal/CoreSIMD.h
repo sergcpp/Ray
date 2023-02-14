@@ -5746,10 +5746,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
         simd_fvec<S> env_col[4] = {{1.0f}, {1.0f}, {1.0f}, {1.0f}};
         Evaluate_EnvColor(ray, ino_hit, sc.env, *static_cast<const Ref::TexStorageRGBA *>(textures[0]), env_col);
 
-        where(ino_hit, out_rgba[0]) = ray.c[0] * env_col[0];
-        where(ino_hit, out_rgba[1]) = ray.c[1] * env_col[1];
-        where(ino_hit, out_rgba[2]) = ray.c[2] * env_col[2];
-        where(ino_hit, out_rgba[3]) = env_col[3];
+        UNROLLED_FOR(i, 4, { where(ino_hit, out_rgba[i]) = ray.c[i] * env_col[i]; })
     }
 
     simd_ivec<S> is_active_lane = inter.mask;
