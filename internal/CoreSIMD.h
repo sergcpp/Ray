@@ -6408,6 +6408,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
         out_secondary_masks[index] = secondary_mask;
     }
 
+#if USE_NEE
     if (shadow_mask.not_all_zeros()) {
         // actual ray direction accouning for bias from both ends
         simd_fvec<S> to_light[3];
@@ -6422,6 +6423,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
         const int index = (*out_shadow_rays_count)++;
         out_shadow_masks[index] = shadow_mask;
     }
+#endif
 
     UNROLLED_FOR(i, 3, { where(is_active_lane, out_rgba[i]) = ray.c[i] * col[i]; })
     where(is_active_lane, out_rgba[3]) = 1.0f;

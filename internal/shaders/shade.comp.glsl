@@ -1953,6 +1953,7 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
         g_out_rays[index] = new_ray;
     }
 
+#if USE_NEE
     const float sh_lum = max(sh_r.c[0], max(sh_r.c[1], sh_r.c[2]));
     [[dont_flatten]] if (sh_lum > 0.0) {
         // actual ray direction accouning for bias from both ends
@@ -1969,6 +1970,7 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
         const uint index = atomicAdd(g_inout_counters[2], 1);
         g_out_sh_rays[index] = sh_r;
     }
+#endif
 
     return vec3(ray.c[0] * col[0], ray.c[1] * col[1], ray.c[2] * col[2]);
 }

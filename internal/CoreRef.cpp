@@ -11,7 +11,7 @@
 // Useful macros for debugging
 //
 #define USE_VNDF_GGX_SAMPLING 1
-#define USE_NEE 1
+#define USE_NEE 0
 #define USE_PATH_TERMINATION 1
 #define VECTORIZE_BBOX_INTERSECTION 1
 #define VECTORIZE_TRI_INTERSECTION 1
@@ -4273,6 +4273,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
         ++(*out_secondary_rays_count);
     }
 
+#if USE_NEE
     const float sh_lum = std::max(sh_r.c[0], std::max(sh_r.c[1], sh_r.c[2]));
     if (sh_lum > 0.0f) {
         // actual ray direction accouning for bias from both ends
@@ -4286,6 +4287,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
         }
         ++(*out_shadow_rays_count);
     }
+#endif
 
     return pixel_color_t{ray.c[0] * col.get<0>(), ray.c[1] * col.get<1>(), ray.c[2] * col.get<2>(), 1.0f};
 }
