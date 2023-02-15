@@ -13,20 +13,20 @@
 */
 
 namespace Ray {
-#define DEFINE_HANDLE(object)                                                                                           \
-    using object = struct object##_T {                                                                                  \
-        uint32_t _index;                                                                                                \
-    };                                                                                                                  \
-    inline bool operator==(const object lhs, const object rhs) { return lhs._index == rhs._index; }                     \
-    inline bool operator!=(const object lhs, const object rhs) { return lhs._index != rhs._index; }                     \
+#define DEFINE_HANDLE(object)                                                                                          \
+    using object = struct object##_T {                                                                                 \
+        uint32_t _index;                                                                                               \
+    };                                                                                                                 \
+    inline bool operator==(const object lhs, const object rhs) { return lhs._index == rhs._index; }                    \
+    inline bool operator!=(const object lhs, const object rhs) { return lhs._index != rhs._index; }                    \
     static const object Invalid##object = object{0xffffffff};
 
-DEFINE_HANDLE(Camera)
-DEFINE_HANDLE(Texture)
-DEFINE_HANDLE(Material)
-DEFINE_HANDLE(Mesh)
-DEFINE_HANDLE(MeshInstance)
-DEFINE_HANDLE(Light)
+DEFINE_HANDLE(CameraHandle)
+DEFINE_HANDLE(TextureHandle)
+DEFINE_HANDLE(MaterialHandle)
+DEFINE_HANDLE(MeshHandle)
+DEFINE_HANDLE(MeshInstanceHandle)
+DEFINE_HANDLE(LightHandle)
 
 #undef DEFINE_HANDLE
 
@@ -71,14 +71,14 @@ enum eShadingNode {
 
 /// Shading node descriptor struct
 struct shading_node_desc_t {
-    eShadingNode type;                             ///< Material type
-    float base_color[3] = {1, 1, 1};               ///< Base color
-    Texture base_texture = InvalidTexture;         ///< Base texture index
-    Texture normal_map = InvalidTexture;           ///< Normal map index
-    float normal_map_intensity = 1.0f;             ///< Normal map intensity
-    Material mix_materials[2] = {InvalidMaterial}; ///< Indices for two materials for mixing
+    eShadingNode type;                                         ///< Material type
+    float base_color[3] = {1, 1, 1};                           ///< Base color
+    TextureHandle base_texture = InvalidTextureHandle;         ///< Base texture index
+    TextureHandle normal_map = InvalidTextureHandle;           ///< Normal map index
+    float normal_map_intensity = 1.0f;                         ///< Normal map intensity
+    MaterialHandle mix_materials[2] = {InvalidMaterialHandle}; ///< Indices for two materials for mixing
     float roughness = 0;
-    Texture roughness_texture = InvalidTexture;
+    TextureHandle roughness_texture = InvalidTextureHandle;
     float anisotropic = 0;          ///<
     float anisotropic_rotation = 0; ///<
     float sheen = 0;
@@ -87,7 +87,7 @@ struct shading_node_desc_t {
     float fresnel = 1;  ///< Fresnel factor of mix material
     float ior = 1;      ///< IOR for reflective or refractive material
     float tint = 0;
-    Texture metallic_texture = InvalidTexture;
+    TextureHandle metallic_texture = InvalidTextureHandle;
     bool multiple_importance = false; ///< Enable explicit emissive geometry sampling
     bool mix_add = false;
 };
@@ -95,14 +95,14 @@ struct shading_node_desc_t {
 /// Printcipled material descriptor struct (metallicness workflow)
 struct principled_mat_desc_t {
     float base_color[3] = {1, 1, 1};
-    Texture base_texture = InvalidTexture;
+    TextureHandle base_texture = InvalidTextureHandle;
     float metallic = 0;
-    Texture metallic_texture = InvalidTexture;
+    TextureHandle metallic_texture = InvalidTextureHandle;
     float specular = 0.5f;
-    Texture specular_texture = InvalidTexture;
+    TextureHandle specular_texture = InvalidTextureHandle;
     float specular_tint = 0;
     float roughness = 0.5f;
-    Texture roughness_texture = InvalidTexture;
+    TextureHandle roughness_texture = InvalidTextureHandle;
     float anisotropic = 0;
     float anisotropic_rotation = 0;
     float sheen = 0;
@@ -113,26 +113,27 @@ struct principled_mat_desc_t {
     float transmission = 0.0f;
     float transmission_roughness = 0.0f;
     float emission_color[3] = {0, 0, 0};
-    Texture emission_texture = InvalidTexture;
+    TextureHandle emission_texture = InvalidTextureHandle;
     float emission_strength = 0;
     float alpha = 1.0f;
-    Texture alpha_texture = InvalidTexture;
-    Texture normal_map = InvalidTexture;
+    TextureHandle alpha_texture = InvalidTextureHandle;
+    TextureHandle normal_map = InvalidTextureHandle;
     float normal_map_intensity = 1.0f;
 };
 
 /// Defines mesh region with specific material
 struct shape_desc_t {
-    Material front_mat; ///< Index of material
-    Material back_mat;  ///< Index of material applied for back faces
-    size_t vtx_start;   ///< Vertex start index
-    size_t vtx_count;   ///< Vertex count
+    MaterialHandle front_mat; ///< Index of material
+    MaterialHandle back_mat;  ///< Index of material applied for back faces
+    size_t vtx_start;         ///< Vertex start index
+    size_t vtx_count;         ///< Vertex count
 
-    shape_desc_t(const Material _front_material, const Material _back_material, size_t _vtx_start, size_t _vtx_count)
+    shape_desc_t(const MaterialHandle _front_material, const MaterialHandle _back_material, size_t _vtx_start,
+                 size_t _vtx_count)
         : front_mat(_front_material), back_mat(_back_material), vtx_start(_vtx_start), vtx_count(_vtx_count) {}
 
-    shape_desc_t(const Material _front_material, size_t _vtx_start, size_t _vtx_count)
-        : front_mat(_front_material), back_mat(InvalidMaterial), vtx_start(_vtx_start), vtx_count(_vtx_count) {}
+    shape_desc_t(const MaterialHandle _front_material, size_t _vtx_start, size_t _vtx_count)
+        : front_mat(_front_material), back_mat(InvalidMaterialHandle), vtx_start(_vtx_start), vtx_count(_vtx_count) {}
 };
 
 /// Mesh description
@@ -256,10 +257,10 @@ struct camera_desc_t {
 
 /// Environment description
 struct environment_desc_t {
-    float env_col[3] = {};             ///< Environment color
-    Texture env_map = InvalidTexture;  ///< Environment texture
-    float back_col[3] = {};            ///< Background color
-    Texture back_map = InvalidTexture; ///< Background texture
+    float env_col[3] = {};                         ///< Environment color
+    TextureHandle env_map = InvalidTextureHandle;  ///< Environment texture
+    float back_col[3] = {};                        ///< Background color
+    TextureHandle back_map = InvalidTextureHandle; ///< Background texture
     float env_map_rotation = 0.0f;
     float back_map_rotation = 0.0f;
     bool multiple_importance = true; ///< Enable explicit env map sampling
@@ -272,13 +273,13 @@ class SceneBase {
   protected:
     union cam_storage_t {
         camera_t cam;
-        Camera next_free;
+        CameraHandle next_free;
     };
 
-    std::vector<cam_storage_t> cams_;      ///< scene cameras
-    Camera cam_first_free_ = InvalidCamera; ///< index to first free cam in cams_ array
+    std::vector<cam_storage_t> cams_;                   ///< scene cameras
+    CameraHandle cam_first_free_ = InvalidCameraHandle; ///< index to first free cam in cams_ array
 
-    Camera current_cam_ = InvalidCamera; ///< index of current camera
+    CameraHandle current_cam_ = InvalidCameraHandle; ///< index of current camera
   public:
     virtual ~SceneBase() = default;
 
@@ -292,69 +293,69 @@ class SceneBase {
         @param t texture description
         @return New texture handle
     */
-    virtual Texture AddTexture(const tex_desc_t &t) = 0;
+    virtual TextureHandle AddTexture(const tex_desc_t &t) = 0;
 
     /** @brief Removes texture with specific index from scene
         @param t texture handle
     */
-    virtual void RemoveTexture(Texture t) = 0;
+    virtual void RemoveTexture(TextureHandle t) = 0;
 
     /** @brief Adds material to scene
         @param m root shading node description
         @return New material handle
     */
-    virtual Material AddMaterial(const shading_node_desc_t &m) = 0;
+    virtual MaterialHandle AddMaterial(const shading_node_desc_t &m) = 0;
 
     /** @brief Adds material to scene
         @param m principled material description
         @return New material handle
     */
-    virtual Material AddMaterial(const principled_mat_desc_t &m) = 0;
+    virtual MaterialHandle AddMaterial(const principled_mat_desc_t &m) = 0;
 
     /** @brief Removes material with specific index from scene
         @param m material handle
     */
-    virtual void RemoveMaterial(Material m) = 0;
+    virtual void RemoveMaterial(MaterialHandle m) = 0;
 
     /** @brief Adds mesh to scene
         @param m mesh description
         @return New mesh index
     */
-    virtual Mesh AddMesh(const mesh_desc_t &m) = 0;
+    virtual MeshHandle AddMesh(const mesh_desc_t &m) = 0;
 
     /** @brief Removes mesh with specific index from scene
         @param i mesh index
     */
-    virtual void RemoveMesh(Mesh m) = 0;
+    virtual void RemoveMesh(MeshHandle m) = 0;
 
     /** @brief Adds light to scene
         @param l light description
         @return New light index
     */
-    virtual Light AddLight(const directional_light_desc_t &l) = 0;
-    virtual Light AddLight(const sphere_light_desc_t &l) = 0;
-    virtual Light AddLight(const spot_light_desc_t &l) = 0;
-    virtual Light AddLight(const rect_light_desc_t &l, const float *xform) = 0;
-    virtual Light AddLight(const disk_light_desc_t &l, const float *xform) = 0;
-    virtual Light AddLight(const line_light_desc_t &l, const float *xform) = 0;
+    virtual LightHandle AddLight(const directional_light_desc_t &l) = 0;
+    virtual LightHandle AddLight(const sphere_light_desc_t &l) = 0;
+    virtual LightHandle AddLight(const spot_light_desc_t &l) = 0;
+    virtual LightHandle AddLight(const rect_light_desc_t &l, const float *xform) = 0;
+    virtual LightHandle AddLight(const disk_light_desc_t &l, const float *xform) = 0;
+    virtual LightHandle AddLight(const line_light_desc_t &l, const float *xform) = 0;
 
     /** @brief Removes light with specific index from scene
         @param l light handle
     */
-    virtual void RemoveLight(Light l) = 0;
+    virtual void RemoveLight(LightHandle l) = 0;
 
     /** @brief Adds mesh instance to a scene
         @param mesh mesh handle
         @param xform array of 16 floats holding transformation matrix
         @return New mesh instance handle
     */
-    virtual MeshInstance AddMeshInstance(Mesh mesh, const float *xform) = 0;
+    virtual MeshInstanceHandle AddMeshInstance(MeshHandle mesh, const float *xform) = 0;
 
     /** @brief Sets mesh instance transformation
         @param mi mesh instance handle
         @param xform array of 16 floats holding transformation matrix
     */
-    virtual void SetMeshInstanceTransform(MeshInstance mi, const float *xform) = 0;
+    virtual void SetMeshInstanceTransform(MeshInstanceHandle mi, const float *xform) = 0;
 
     /** @brief Removes mesh instance from scene
         @param mi mesh instance handle
@@ -362,7 +363,7 @@ class SceneBase {
         Removes mesh instance from scene. Associated mesh remains loaded in scene even if
         there is no instances of this mesh left.
     */
-    virtual void RemoveMeshInstance(MeshInstance mi) = 0;
+    virtual void RemoveMeshInstance(MeshInstanceHandle mi) = 0;
 
     virtual void Finalize() = 0;
 
@@ -370,36 +371,36 @@ class SceneBase {
         @param c camera description
         @return New camera handle
     */
-    Camera AddCamera(const camera_desc_t &c);
+    CameraHandle AddCamera(const camera_desc_t &c);
 
     /** @brief Get camera description
         @param i camera handle
     */
-    void GetCamera(Camera i, camera_desc_t &c) const;
+    void GetCamera(CameraHandle i, camera_desc_t &c) const;
     ;
 
     /** @brief Sets camera properties
         @param i camera handle
         @param c camera description
     */
-    void SetCamera(Camera i, const camera_desc_t &c);
+    void SetCamera(CameraHandle i, const camera_desc_t &c);
 
     /** @brief Removes camera with specific index from scene
         @param i camera handle
 
         Removes camera with specific index from scene. Other cameras indices remain valid.
     */
-    void RemoveCamera(Camera i);
+    void RemoveCamera(CameraHandle i);
 
     /** @brief Get const reference to a camera with specific index
         @return Current camera index
     */
-    Camera current_cam() const { return current_cam_; }
+    CameraHandle current_cam() const { return current_cam_; }
 
     /** @brief Sets camera with specific index to be current
         @param i camera index
     */
-    void set_current_cam(Camera i) { current_cam_ = i; }
+    void set_current_cam(CameraHandle i) { current_cam_ = i; }
 
     /// Overall triangle count in scene
     virtual uint32_t triangle_count() const = 0;

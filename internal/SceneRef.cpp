@@ -15,13 +15,13 @@ Ray::Ref::Scene::Scene(ILog *log, const bool use_wide_bvh) : log_(log), use_wide
 
 Ray::Ref::Scene::~Scene() {
     while (!mesh_instances_.empty()) {
-        Scene::RemoveMeshInstance(MeshInstance{mesh_instances_.begin().index()});
+        Scene::RemoveMeshInstance(MeshInstanceHandle{mesh_instances_.begin().index()});
     }
     while (!meshes_.empty()) {
-        Scene::RemoveMesh(Mesh{meshes_.begin().index()});
+        Scene::RemoveMesh(MeshHandle{meshes_.begin().index()});
     }
     while (!lights_.empty()) {
-        Scene::RemoveLight(Light{lights_.begin().index()});
+        Scene::RemoveLight(LightHandle{lights_.begin().index()});
     }
     materials_.clear();
     lights_.clear();
@@ -29,9 +29,9 @@ Ray::Ref::Scene::~Scene() {
 
 void Ray::Ref::Scene::GetEnvironment(environment_desc_t &env) {
     memcpy(env.env_col, env_.env_col, 3 * sizeof(float));
-    env.env_map = Texture{env_.env_map};
+    env.env_map = TextureHandle{env_.env_map};
     memcpy(env.back_col, env_.back_col, 3 * sizeof(float));
-    env.back_map = Texture{env_.back_map};
+    env.back_map = TextureHandle{env_.back_map};
     env.env_map_rotation = env_.env_map_rotation;
     env.back_map_rotation = env_.back_map_rotation;
     env.multiple_importance = env_.multiple_importance;
@@ -47,7 +47,7 @@ void Ray::Ref::Scene::SetEnvironment(const environment_desc_t &env) {
     env_.multiple_importance = env.multiple_importance;
 }
 
-Ray::Texture Ray::Ref::Scene::AddTexture(const tex_desc_t &_t) {
+Ray::TextureHandle Ray::Ref::Scene::AddTexture(const tex_desc_t &_t) {
     const int res[2] = {_t.w, _t.h};
 
     bool recostruct_z = false;
@@ -94,7 +94,7 @@ Ray::Texture Ray::Ref::Scene::AddTexture(const tex_desc_t &_t) {
     }
 
     if (storage == -1) {
-        return InvalidTexture;
+        return InvalidTextureHandle;
     }
 
     log_->Info("Ray: Texture loaded (storage = %i, %ix%i)", storage, _t.w, _t.h);
@@ -112,10 +112,10 @@ Ray::Texture Ray::Ref::Scene::AddTexture(const tex_desc_t &_t) {
     }
     ret |= index;
 
-    return Texture{ret};
+    return TextureHandle{ret};
 }
 
-Ray::Material Ray::Ref::Scene::AddMaterial(const shading_node_desc_t &m) {
+Ray::MaterialHandle Ray::Ref::Scene::AddMaterial(const shading_node_desc_t &m) {
     material_t mat = {};
 
     mat.type = m.type;
@@ -154,10 +154,10 @@ Ray::Material Ray::Ref::Scene::AddMaterial(const shading_node_desc_t &m) {
     mat.textures[NORMALS_TEXTURE] = m.normal_map._index;
     mat.normal_map_strength_unorm = pack_unorm_16(CLAMP(m.normal_map_intensity, 0.0f, 1.0f));
 
-    return Material{materials_.push(mat)};
+    return MaterialHandle{materials_.push(mat)};
 }
 
-Ray::Material Ray::Ref::Scene::AddMaterial(const principled_mat_desc_t &m) {
+Ray::MaterialHandle Ray::Ref::Scene::AddMaterial(const principled_mat_desc_t &m) {
     material_t main_mat = {};
 
     main_mat.type = PrincipledNode;
@@ -183,8 +183,8 @@ Ray::Material Ray::Ref::Scene::AddMaterial(const principled_mat_desc_t &m) {
     main_mat.clearcoat_unorm = pack_unorm_16(CLAMP(m.clearcoat, 0.0f, 1.0f));
     main_mat.clearcoat_roughness_unorm = pack_unorm_16(CLAMP(m.clearcoat_roughness, 0.0f, 1.0f));
 
-    auto root_node = Material{materials_.push(main_mat)};
-    Material emissive_node = InvalidMaterial, transparent_node = InvalidMaterial;
+    auto root_node = MaterialHandle{materials_.push(main_mat)};
+    MaterialHandle emissive_node = InvalidMaterialHandle, transparent_node = InvalidMaterialHandle;
 
     if (m.emission_strength > 0.0f &&
         (m.emission_color[0] > 0.0f || m.emission_color[1] > 0.0f || m.emission_color[2] > 0.0f)) {
@@ -198,20 +198,20 @@ Ray::Material Ray::Ref::Scene::AddMaterial(const principled_mat_desc_t &m) {
         emissive_node = AddMaterial(emissive_desc);
     }
 
-    if (m.alpha != 1.0f || m.alpha_texture != InvalidTexture) {
+    if (m.alpha != 1.0f || m.alpha_texture != InvalidTextureHandle) {
         shading_node_desc_t transparent_desc;
         transparent_desc.type = TransparentNode;
 
         transparent_node = AddMaterial(transparent_desc);
     }
 
-    if (emissive_node != InvalidMaterial) {
-        if (root_node == InvalidMaterial) {
+    if (emissive_node != InvalidMaterialHandle) {
+        if (root_node == InvalidMaterialHandle) {
             root_node = emissive_node;
         } else {
             shading_node_desc_t mix_node;
             mix_node.type = MixNode;
-            mix_node.base_texture = InvalidTexture;
+            mix_node.base_texture = InvalidTextureHandle;
             mix_node.strength = 0.5f;
             mix_node.ior = 0.0f;
             mix_node.mix_add = true;
@@ -223,8 +223,8 @@ Ray::Material Ray::Ref::Scene::AddMaterial(const principled_mat_desc_t &m) {
         }
     }
 
-    if (transparent_node != InvalidMaterial) {
-        if (root_node == InvalidMaterial || m.alpha == 0.0f) {
+    if (transparent_node != InvalidMaterialHandle) {
+        if (root_node == InvalidMaterialHandle || m.alpha == 0.0f) {
             root_node = transparent_node;
         } else {
             shading_node_desc_t mix_node;
@@ -240,10 +240,10 @@ Ray::Material Ray::Ref::Scene::AddMaterial(const principled_mat_desc_t &m) {
         }
     }
 
-    return Material{root_node};
+    return MaterialHandle{root_node};
 }
 
-Ray::Mesh Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
+Ray::MeshHandle Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
     const uint32_t mesh_index = meshes_.emplace();
     mesh_t &m = meshes_.at(mesh_index);
 
@@ -386,10 +386,10 @@ Ray::Mesh Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
 
     vtx_indices_.insert(vtx_indices_.end(), new_vtx_indices.begin(), new_vtx_indices.end());
 
-    return Mesh{mesh_index};
+    return MeshHandle{mesh_index};
 }
 
-void Ray::Ref::Scene::RemoveMesh(const Mesh i) {
+void Ray::Ref::Scene::RemoveMesh(const MeshHandle i) {
     if (!meshes_.exists(i._index)) {
         return;
     }
@@ -420,7 +420,7 @@ void Ray::Ref::Scene::RemoveMesh(const Mesh i) {
     }
 }
 
-Ray::Light Ray::Ref::Scene::AddLight(const directional_light_desc_t &_l) {
+Ray::LightHandle Ray::Ref::Scene::AddLight(const directional_light_desc_t &_l) {
     light_t l = {};
 
     l.type = LIGHT_TYPE_DIR;
@@ -435,10 +435,10 @@ Ray::Light Ray::Ref::Scene::AddLight(const directional_light_desc_t &_l) {
 
     const uint32_t light_index = lights_.push(l);
     li_indices_.push_back(light_index);
-    return Light{light_index};
+    return LightHandle{light_index};
 }
 
-Ray::Light Ray::Ref::Scene::AddLight(const sphere_light_desc_t &_l) {
+Ray::LightHandle Ray::Ref::Scene::AddLight(const sphere_light_desc_t &_l) {
     light_t l = {};
 
     l.type = LIGHT_TYPE_SPHERE;
@@ -457,10 +457,10 @@ Ray::Light Ray::Ref::Scene::AddLight(const sphere_light_desc_t &_l) {
     if (_l.visible) {
         visible_lights_.push_back(light_index);
     }
-    return Light{light_index};
+    return LightHandle{light_index};
 }
 
-Ray::Light Ray::Ref::Scene::AddLight(const spot_light_desc_t &_l) {
+Ray::LightHandle Ray::Ref::Scene::AddLight(const spot_light_desc_t &_l) {
     light_t l = {};
 
     l.type = LIGHT_TYPE_SPHERE;
@@ -481,10 +481,10 @@ Ray::Light Ray::Ref::Scene::AddLight(const spot_light_desc_t &_l) {
     if (_l.visible) {
         visible_lights_.push_back(light_index);
     }
-    return Light{light_index};
+    return LightHandle{light_index};
 }
 
-Ray::Light Ray::Ref::Scene::AddLight(const rect_light_desc_t &_l, const float *xform) {
+Ray::LightHandle Ray::Ref::Scene::AddLight(const rect_light_desc_t &_l, const float *xform) {
     light_t l = {};
 
     l.type = LIGHT_TYPE_RECT;
@@ -514,10 +514,10 @@ Ray::Light Ray::Ref::Scene::AddLight(const rect_light_desc_t &_l, const float *x
     if (_l.sky_portal) {
         blocker_lights_.push_back(light_index);
     }
-    return Light{light_index};
+    return LightHandle{light_index};
 }
 
-Ray::Light Ray::Ref::Scene::AddLight(const disk_light_desc_t &_l, const float *xform) {
+Ray::LightHandle Ray::Ref::Scene::AddLight(const disk_light_desc_t &_l, const float *xform) {
     light_t l = {};
 
     l.type = LIGHT_TYPE_DISK;
@@ -547,10 +547,10 @@ Ray::Light Ray::Ref::Scene::AddLight(const disk_light_desc_t &_l, const float *x
     if (_l.sky_portal) {
         blocker_lights_.push_back(light_index);
     }
-    return Light{light_index};
+    return LightHandle{light_index};
 }
 
-Ray::Light Ray::Ref::Scene::AddLight(const line_light_desc_t &_l, const float *xform) {
+Ray::LightHandle Ray::Ref::Scene::AddLight(const line_light_desc_t &_l, const float *xform) {
     light_t l = {};
 
     l.type = LIGHT_TYPE_LINE;
@@ -579,10 +579,10 @@ Ray::Light Ray::Ref::Scene::AddLight(const line_light_desc_t &_l, const float *x
     if (_l.visible) {
         visible_lights_.push_back(light_index);
     }
-    return Light{light_index};
+    return LightHandle{light_index};
 }
 
-void Ray::Ref::Scene::RemoveLight(const Light i) {
+void Ray::Ref::Scene::RemoveLight(const LightHandle i) {
     if (!lights_.exists(i._index)) {
         return;
     }
@@ -608,7 +608,7 @@ void Ray::Ref::Scene::RemoveLight(const Light i) {
     lights_.erase(i._index);
 }
 
-Ray::MeshInstance Ray::Ref::Scene::AddMeshInstance(const Mesh mesh, const float *xform) {
+Ray::MeshInstanceHandle Ray::Ref::Scene::AddMeshInstance(const MeshHandle mesh, const float *xform) {
     const uint32_t mi_index = mesh_instances_.emplace();
 
     mesh_instance_t &mi = mesh_instances_.at(mi_index);
@@ -638,12 +638,12 @@ Ray::MeshInstance Ray::Ref::Scene::AddMeshInstance(const Mesh mesh, const float 
         }
     }
 
-    SetMeshInstanceTransform(MeshInstance{mi_index}, xform);
+    SetMeshInstanceTransform(MeshInstanceHandle{mi_index}, xform);
 
-    return MeshInstance{mi_index};
+    return MeshInstanceHandle{mi_index};
 }
 
-void Ray::Ref::Scene::SetMeshInstanceTransform(const MeshInstance mi_handle, const float *xform) {
+void Ray::Ref::Scene::SetMeshInstanceTransform(const MeshInstanceHandle mi_handle, const float *xform) {
     mesh_instance_t &mi = mesh_instances_[mi_handle._index];
     transform_t &tr = transforms_[mi.tr_index];
 
@@ -656,7 +656,7 @@ void Ray::Ref::Scene::SetMeshInstanceTransform(const MeshInstance mi_handle, con
     RebuildTLAS();
 }
 
-void Ray::Ref::Scene::RemoveMeshInstance(const MeshInstance i) {
+void Ray::Ref::Scene::RemoveMeshInstance(const MeshInstanceHandle i) {
     transforms_.erase(mesh_instances_[i._index].tr_index);
     mesh_instances_.erase(i._index);
 
@@ -664,7 +664,7 @@ void Ray::Ref::Scene::RemoveMeshInstance(const MeshInstance i) {
 }
 
 void Ray::Ref::Scene::Finalize() {
-    if (env_map_light_ != InvalidLight) {
+    if (env_map_light_ != InvalidLightHandle) {
         RemoveLight(env_map_light_);
     }
     env_map_qtree_ = {};
@@ -681,7 +681,7 @@ void Ray::Ref::Scene::Finalize() {
             l.cast_shadow = 1;
             l.col[0] = l.col[1] = l.col[2] = 1.0f;
 
-            env_map_light_ = Light{lights_.push(l)};
+            env_map_light_ = LightHandle{lights_.push(l)};
             li_indices_.push_back(env_map_light_._index);
         }
     }

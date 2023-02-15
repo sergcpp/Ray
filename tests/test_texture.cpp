@@ -96,19 +96,19 @@ void test_texture() {
                 auto renderer = std::unique_ptr<Ray::RendererBase>(Ray::CreateRenderer(s, &Ray::g_null_log, rt));
                 auto scene = std::unique_ptr<Ray::SceneBase>(renderer->CreateScene());
 
-                const Ray::Camera cam = scene->AddCamera(cam_desc);
+                const Ray::CameraHandle cam = scene->AddCamera(cam_desc);
                 scene->set_current_cam(cam);
 
                 scene->SetEnvironment(env_desc);
 
-                const Ray::Texture tex_handle = scene->AddTexture(tex_desc);
+                const Ray::TextureHandle tex_handle = scene->AddTexture(tex_desc);
 
                 mat_desc.base_texture = tex_handle;
-                const Ray::Material mat_handle = scene->AddMaterial(mat_desc);
+                const Ray::MaterialHandle mat_handle = scene->AddMaterial(mat_desc);
 
                 mesh_desc.shapes.emplace_back(mat_handle, mat_handle, 0, indices_count);
 
-                const Ray::Mesh mesh_handle = scene->AddMesh(mesh_desc);
+                const Ray::MeshHandle mesh_handle = scene->AddMesh(mesh_desc);
 
                 scene->AddMeshInstance(mesh_handle, xform);
 

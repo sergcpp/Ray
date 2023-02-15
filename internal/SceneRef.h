@@ -74,7 +74,7 @@ class Scene : public SceneBase {
     std::vector<uint32_t> blocker_lights_; // compacted list of all light blocker lights
 
     environment_t env_;
-    Light env_map_light_ = InvalidLight;
+    LightHandle env_map_light_ = InvalidLightHandle;
     struct {
         int res = -1;
         SmallVector<aligned_vector<float, 16>, 16> mips;
@@ -95,27 +95,27 @@ class Scene : public SceneBase {
     void GetEnvironment(environment_desc_t &env) override;
     void SetEnvironment(const environment_desc_t &env) override;
 
-    Texture AddTexture(const tex_desc_t &t) override;
-    void RemoveTexture(const Texture t) override { tex_storages_[t._index >> 24]->Free(t._index & 0x00ffffff); }
+    TextureHandle AddTexture(const tex_desc_t &t) override;
+    void RemoveTexture(const TextureHandle t) override { tex_storages_[t._index >> 24]->Free(t._index & 0x00ffffff); }
 
-    Material AddMaterial(const shading_node_desc_t &m) override;
-    Material AddMaterial(const principled_mat_desc_t &m) override;
-    void RemoveMaterial(const Material m) override { materials_.erase(m._index); }
+    MaterialHandle AddMaterial(const shading_node_desc_t &m) override;
+    MaterialHandle AddMaterial(const principled_mat_desc_t &m) override;
+    void RemoveMaterial(const MaterialHandle m) override { materials_.erase(m._index); }
 
-    Mesh AddMesh(const mesh_desc_t &m) override;
-    void RemoveMesh(Mesh m) override;
+    MeshHandle AddMesh(const mesh_desc_t &m) override;
+    void RemoveMesh(MeshHandle m) override;
 
-    Light AddLight(const directional_light_desc_t &l) override;
-    Light AddLight(const sphere_light_desc_t &l) override;
-    Light AddLight(const spot_light_desc_t &l) override;
-    Light AddLight(const rect_light_desc_t &l, const float *xform) override;
-    Light AddLight(const disk_light_desc_t &l, const float *xform) override;
-    Light AddLight(const line_light_desc_t &l, const float *xform) override;
-    void RemoveLight(Light l) override;
+    LightHandle AddLight(const directional_light_desc_t &l) override;
+    LightHandle AddLight(const sphere_light_desc_t &l) override;
+    LightHandle AddLight(const spot_light_desc_t &l) override;
+    LightHandle AddLight(const rect_light_desc_t &l, const float *xform) override;
+    LightHandle AddLight(const disk_light_desc_t &l, const float *xform) override;
+    LightHandle AddLight(const line_light_desc_t &l, const float *xform) override;
+    void RemoveLight(LightHandle l) override;
 
-    MeshInstance AddMeshInstance(Mesh mesh, const float *xform) override;
-    void SetMeshInstanceTransform(MeshInstance mi, const float *xform) override;
-    void RemoveMeshInstance(MeshInstance) override;
+    MeshInstanceHandle AddMeshInstance(MeshHandle mesh, const float *xform) override;
+    void SetMeshInstanceTransform(MeshInstanceHandle mi, const float *xform) override;
+    void RemoveMeshInstance(MeshInstanceHandle) override;
 
     void Finalize() override;
 

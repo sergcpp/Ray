@@ -5,23 +5,23 @@
 
 #include "internal/Core.h"
 
-Ray::Camera Ray::SceneBase::AddCamera(const camera_desc_t &c) {
-    Camera i;
-    if (cam_first_free_ == InvalidCamera) {
-        i = Camera{uint32_t(cams_.size())};
+Ray::CameraHandle Ray::SceneBase::AddCamera(const camera_desc_t &c) {
+    CameraHandle i;
+    if (cam_first_free_ == InvalidCameraHandle) {
+        i = CameraHandle{uint32_t(cams_.size())};
         cams_.emplace_back();
     } else {
         i = cam_first_free_;
         cam_first_free_ = cams_[i._index].next_free;
     }
     SetCamera(i, c);
-    if (current_cam_ == InvalidCamera) {
+    if (current_cam_ == InvalidCameraHandle) {
         current_cam_ = i;
     }
     return i;
 }
 
-void Ray::SceneBase::GetCamera(const Camera i, camera_desc_t &c) const {
+void Ray::SceneBase::GetCamera(const CameraHandle i, camera_desc_t &c) const {
     const camera_t &cam = cams_[i._index].cam;
     c.type = cam.type;
     c.dtype = cam.dtype;
@@ -64,7 +64,7 @@ void Ray::SceneBase::GetCamera(const Camera i, camera_desc_t &c) const {
     c.min_transp_depth = cam.pass_settings.min_transp_depth;
 }
 
-void Ray::SceneBase::SetCamera(const Camera i, const camera_desc_t &c) {
+void Ray::SceneBase::SetCamera(const CameraHandle i, const camera_desc_t &c) {
     assert(i._index < uint32_t(cams_.size()));
     camera_t &cam = cams_[i._index].cam;
     if (c.type != Geo) {
@@ -117,7 +117,7 @@ void Ray::SceneBase::SetCamera(const Camera i, const camera_desc_t &c) {
     }
 }
 
-void Ray::SceneBase::RemoveCamera(const Camera i) {
+void Ray::SceneBase::RemoveCamera(const CameraHandle i) {
     assert(i._index < uint32_t(cams_.size()));
     cams_[i._index].next_free = cam_first_free_;
     cam_first_free_ = i;
