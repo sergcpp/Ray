@@ -13,6 +13,23 @@
 */
 
 namespace Ray {
+#define DEFINE_HANDLE(object)                                                                                           \
+    using object = struct object##_T {                                                                                  \
+        uint32_t _index;                                                                                                \
+    };                                                                                                                  \
+    inline bool operator==(const object lhs, const object rhs) { return lhs._index == rhs._index; }                     \
+    inline bool operator!=(const object lhs, const object rhs) { return lhs._index != rhs._index; }                     \
+    static const object Invalid##object = object{0xffffffff};
+
+DEFINE_HANDLE(Camera)
+DEFINE_HANDLE(Texture)
+DEFINE_HANDLE(Material)
+DEFINE_HANDLE(Mesh)
+DEFINE_HANDLE(MeshInstance)
+DEFINE_HANDLE(Light)
+
+#undef DEFINE_HANDLE
+
 /// Mesh primitive type
 enum ePrimType {
     TriangleList, ///< indexed triangle list
@@ -54,38 +71,38 @@ enum eShadingNode {
 
 /// Shading node descriptor struct
 struct shading_node_desc_t {
-    eShadingNode type;                        ///< Material type
-    float base_color[3] = {1, 1, 1};          ///< Base color
-    uint32_t base_texture = 0xffffffff;       ///< Base texture index
-    uint32_t normal_map = 0xffffffff;         ///< Normal map index
-    float normal_map_intensity = 1.0f;        ///< Normal map intensity
-    uint32_t mix_materials[2] = {0xffffffff}; ///< Indices for two materials for mixing
+    eShadingNode type;                             ///< Material type
+    float base_color[3] = {1, 1, 1};               ///< Base color
+    Texture base_texture = InvalidTexture;         ///< Base texture index
+    Texture normal_map = InvalidTexture;           ///< Normal map index
+    float normal_map_intensity = 1.0f;             ///< Normal map intensity
+    Material mix_materials[2] = {InvalidMaterial}; ///< Indices for two materials for mixing
     float roughness = 0;
-    uint32_t roughness_texture = 0xffffffff;
-    float anisotropic = 0;                    ///<
-    float anisotropic_rotation = 0;           ///<
+    Texture roughness_texture = InvalidTexture;
+    float anisotropic = 0;          ///<
+    float anisotropic_rotation = 0; ///<
     float sheen = 0;
     float specular = 0;
-    float strength = 1;                       ///< Strength of emissive material
-    float fresnel = 1;                        ///< Fresnel factor of mix material
-    float ior = 1;                            ///< IOR for reflective or refractive material
+    float strength = 1; ///< Strength of emissive material
+    float fresnel = 1;  ///< Fresnel factor of mix material
+    float ior = 1;      ///< IOR for reflective or refractive material
     float tint = 0;
-    uint32_t metallic_texture = 0xffffffff;
-    bool multiple_importance = false;         ///< Enable explicit emissive geometry sampling
+    Texture metallic_texture = InvalidTexture;
+    bool multiple_importance = false; ///< Enable explicit emissive geometry sampling
     bool mix_add = false;
 };
 
 /// Printcipled material descriptor struct (metallicness workflow)
 struct principled_mat_desc_t {
     float base_color[3] = {1, 1, 1};
-    uint32_t base_texture = 0xffffffff;
+    Texture base_texture = InvalidTexture;
     float metallic = 0;
-    uint32_t metallic_texture = 0xffffffff;
+    Texture metallic_texture = InvalidTexture;
     float specular = 0.5f;
-    uint32_t specular_texture = 0xffffffff;
+    Texture specular_texture = InvalidTexture;
     float specular_tint = 0;
     float roughness = 0.5f;
-    uint32_t roughness_texture = 0xffffffff;
+    Texture roughness_texture = InvalidTexture;
     float anisotropic = 0;
     float anisotropic_rotation = 0;
     float sheen = 0;
@@ -96,27 +113,26 @@ struct principled_mat_desc_t {
     float transmission = 0.0f;
     float transmission_roughness = 0.0f;
     float emission_color[3] = {0, 0, 0};
-    uint32_t emission_texture = 0xffffffff;
+    Texture emission_texture = InvalidTexture;
     float emission_strength = 0;
     float alpha = 1.0f;
-    uint32_t alpha_texture = 0xffffffff;
-    uint32_t normal_map = 0xffffffff;
+    Texture alpha_texture = InvalidTexture;
+    Texture normal_map = InvalidTexture;
     float normal_map_intensity = 1.0f;
 };
 
 /// Defines mesh region with specific material
 struct shape_desc_t {
-    uint32_t mat_index;      ///< Index of material
-    uint32_t back_mat_index; ///< Index of material applied for back faces
-    size_t vtx_start;        ///< Vertex start index
-    size_t vtx_count;        ///< Vertex count
+    Material front_mat; ///< Index of material
+    Material back_mat;  ///< Index of material applied for back faces
+    size_t vtx_start;   ///< Vertex start index
+    size_t vtx_count;   ///< Vertex count
 
-    shape_desc_t(uint32_t _material_index, uint32_t _back_material_index, size_t _vtx_start, size_t _vtx_count)
-        : mat_index(_material_index), back_mat_index(_back_material_index), vtx_start(_vtx_start),
-          vtx_count(_vtx_count) {}
+    shape_desc_t(const Material _front_material, const Material _back_material, size_t _vtx_start, size_t _vtx_count)
+        : front_mat(_front_material), back_mat(_back_material), vtx_start(_vtx_start), vtx_count(_vtx_count) {}
 
-    shape_desc_t(uint32_t _material_index, size_t _vtx_start, size_t _vtx_count)
-        : mat_index(_material_index), back_mat_index(0xffffffff), vtx_start(_vtx_start), vtx_count(_vtx_count) {}
+    shape_desc_t(const Material _front_material, size_t _vtx_start, size_t _vtx_count)
+        : front_mat(_front_material), back_mat(InvalidMaterial), vtx_start(_vtx_start), vtx_count(_vtx_count) {}
 };
 
 /// Mesh description
@@ -133,33 +149,22 @@ struct mesh_desc_t {
     bool use_fast_bvh_build = false;   ///< Use faster BVH construction with less tree quality
 };
 
-enum eTextureFormat {
-    RGBA8888,
-    RGB888,
-    RG88,
-    R8
-};
+enum eTextureFormat { RGBA8888, RGB888, RG88, R8 };
 
 /// Texture description
 struct tex_desc_t {
     eTextureFormat format;
-    const char *name = nullptr;         ///< Debug name
+    const char *name = nullptr; ///< Debug name
     const void *data;
-    int w,                              ///< Texture width
-        h;                              ///< Texture height
+    int w, ///< Texture width
+        h; ///< Texture height
     bool is_srgb = true;
     bool is_normalmap = false;
-    bool force_no_compression = false;  ///< Make sure texture will have the best quality
+    bool force_no_compression = false; ///< Make sure texture will have the best quality
     bool generate_mipmaps = false;
 };
 
-enum eLightType {
-    SphereLight,
-    SpotLight,
-    DirectionalLight,
-    LineLight,
-    RectLight
-};
+enum eLightType { SphereLight, SpotLight, DirectionalLight, LineLight, RectLight };
 
 // Light description
 struct directional_light_desc_t {
@@ -233,7 +238,7 @@ struct camera_desc_t {
     float clip_start = 0;                ///< Clip start
     float clip_end = 3.402823466e+30F;   ///< Clip end
     uint32_t mi_index = 0xffffffff,      ///< Index of mesh instance
-             uv_index = 0;               ///< UV layer used by geometry cam
+        uv_index = 0;                    ///< UV layer used by geometry cam
     bool lighting_only = false;          ///< Render lightmap only
     bool skip_direct_lighting = false;   ///< Render indirect light contribution only
     bool skip_indirect_lighting = false; ///< Render direct light contribution only
@@ -243,21 +248,21 @@ struct camera_desc_t {
     uint8_t max_diff_depth = 4;          ///< Maximum tracing depth of diffuse rays
     uint8_t max_spec_depth = 8;          ///< Maximum tracing depth of glossy rays
     uint8_t max_refr_depth = 8;          ///< Maximum tracing depth of glossy rays
-    uint8_t max_transp_depth = 8;        ///< Maximum tracing depth of transparency rays (note: does not obey total depth)
-    uint8_t max_total_depth = 8;         ///< Maximum tracing depth of all rays (except transparency)
-    uint8_t min_total_depth = 2;         ///< Depth after which random rays termination starts
-    uint8_t min_transp_depth = 2;        ///< Depth after which random rays termination starts
+    uint8_t max_transp_depth = 8; ///< Maximum tracing depth of transparency rays (note: does not obey total depth)
+    uint8_t max_total_depth = 8;  ///< Maximum tracing depth of all rays (except transparency)
+    uint8_t min_total_depth = 2;  ///< Depth after which random rays termination starts
+    uint8_t min_transp_depth = 2; ///< Depth after which random rays termination starts
 };
 
 /// Environment description
 struct environment_desc_t {
-    float env_col[3] = {};              ///< Environment color
-    uint32_t env_map = 0xffffffff;      ///< Environment texture
-    float back_col[3] = {};             ///< Background color
-    uint32_t back_map = 0xffffffff;     ///< Background texture
+    float env_col[3] = {};             ///< Environment color
+    Texture env_map = InvalidTexture;  ///< Environment texture
+    float back_col[3] = {};            ///< Background color
+    Texture back_map = InvalidTexture; ///< Background texture
     float env_map_rotation = 0.0f;
     float back_map_rotation = 0.0f;
-    bool multiple_importance = true;    ///< Enable explicit env map sampling
+    bool multiple_importance = true; ///< Enable explicit env map sampling
 };
 
 /** Base Scene class,
@@ -267,13 +272,13 @@ class SceneBase {
   protected:
     union cam_storage_t {
         camera_t cam;
-        uint32_t next_free;
+        Camera next_free;
     };
 
     std::vector<cam_storage_t> cams_;      ///< scene cameras
-    uint32_t cam_first_free_ = 0xffffffff; ///< index to first free cam in cams_ array
+    Camera cam_first_free_ = InvalidCamera; ///< index to first free cam in cams_ array
 
-    uint32_t current_cam_ = 0xffffffff; ///< index of current camera
+    Camera current_cam_ = InvalidCamera; ///< index of current camera
   public:
     virtual ~SceneBase() = default;
 
@@ -285,116 +290,116 @@ class SceneBase {
 
     /** @brief Adds texture to scene
         @param t texture description
-        @return New texture index
+        @return New texture handle
     */
-    virtual uint32_t AddTexture(const tex_desc_t &t) = 0;
+    virtual Texture AddTexture(const tex_desc_t &t) = 0;
 
     /** @brief Removes texture with specific index from scene
-        @param i texture index
+        @param t texture handle
     */
-    virtual void RemoveTexture(uint32_t i) = 0;
+    virtual void RemoveTexture(Texture t) = 0;
 
     /** @brief Adds material to scene
         @param m root shading node description
-        @return New material index
+        @return New material handle
     */
-    virtual uint32_t AddMaterial(const shading_node_desc_t &m) = 0;
+    virtual Material AddMaterial(const shading_node_desc_t &m) = 0;
 
     /** @brief Adds material to scene
         @param m principled material description
-        @return New material index
+        @return New material handle
     */
-    virtual uint32_t AddMaterial(const principled_mat_desc_t &m) = 0;
+    virtual Material AddMaterial(const principled_mat_desc_t &m) = 0;
 
     /** @brief Removes material with specific index from scene
-        @param i material index
+        @param m material handle
     */
-    virtual void RemoveMaterial(uint32_t i) = 0;
+    virtual void RemoveMaterial(Material m) = 0;
 
     /** @brief Adds mesh to scene
         @param m mesh description
         @return New mesh index
     */
-    virtual uint32_t AddMesh(const mesh_desc_t &m) = 0;
+    virtual Mesh AddMesh(const mesh_desc_t &m) = 0;
 
     /** @brief Removes mesh with specific index from scene
         @param i mesh index
     */
-    virtual void RemoveMesh(uint32_t i) = 0;
+    virtual void RemoveMesh(Mesh m) = 0;
 
     /** @brief Adds light to scene
         @param l light description
         @return New light index
     */
-    virtual uint32_t AddLight(const directional_light_desc_t &l) = 0;
-    virtual uint32_t AddLight(const sphere_light_desc_t &l) = 0;
-    virtual uint32_t AddLight(const spot_light_desc_t &l) = 0;
-    virtual uint32_t AddLight(const rect_light_desc_t &l, const float *xform) = 0;
-    virtual uint32_t AddLight(const disk_light_desc_t &l, const float *xform) = 0;
-    virtual uint32_t AddLight(const line_light_desc_t &l, const float *xform) = 0;
+    virtual Light AddLight(const directional_light_desc_t &l) = 0;
+    virtual Light AddLight(const sphere_light_desc_t &l) = 0;
+    virtual Light AddLight(const spot_light_desc_t &l) = 0;
+    virtual Light AddLight(const rect_light_desc_t &l, const float *xform) = 0;
+    virtual Light AddLight(const disk_light_desc_t &l, const float *xform) = 0;
+    virtual Light AddLight(const line_light_desc_t &l, const float *xform) = 0;
 
     /** @brief Removes light with specific index from scene
-        @param i light index
+        @param l light handle
     */
-    virtual void RemoveLight(uint32_t i) = 0;
+    virtual void RemoveLight(Light l) = 0;
 
     /** @brief Adds mesh instance to a scene
-        @param m_index mesh index
+        @param mesh mesh handle
         @param xform array of 16 floats holding transformation matrix
-        @return New mesh instance index
+        @return New mesh instance handle
     */
-    virtual uint32_t AddMeshInstance(uint32_t m_index, const float *xform) = 0;
+    virtual MeshInstance AddMeshInstance(Mesh mesh, const float *xform) = 0;
 
     /** @brief Sets mesh instance transformation
-        @param mi_index mesh instance index
+        @param mi mesh instance handle
         @param xform array of 16 floats holding transformation matrix
     */
-    virtual void SetMeshInstanceTransform(uint32_t mi_index, const float *xform) = 0;
+    virtual void SetMeshInstanceTransform(MeshInstance mi, const float *xform) = 0;
 
     /** @brief Removes mesh instance from scene
-        @param mi_index mesh instance index
+        @param mi mesh instance handle
 
         Removes mesh instance from scene. Associated mesh remains loaded in scene even if
         there is no instances of this mesh left.
     */
-    virtual void RemoveMeshInstance(uint32_t mi_index) = 0;
+    virtual void RemoveMeshInstance(MeshInstance mi) = 0;
 
     virtual void Finalize() = 0;
 
     /** @brief Adds camera to a scene
         @param c camera description
-        @return New camera index
+        @return New camera handle
     */
-    uint32_t AddCamera(const camera_desc_t &c);
+    Camera AddCamera(const camera_desc_t &c);
 
     /** @brief Get camera description
-        @param i camera index
+        @param i camera handle
     */
-    void GetCamera(uint32_t i, camera_desc_t &c) const;
+    void GetCamera(Camera i, camera_desc_t &c) const;
     ;
 
     /** @brief Sets camera properties
-        @param i camera index
+        @param i camera handle
         @param c camera description
     */
-    void SetCamera(uint32_t i, const camera_desc_t &c);
+    void SetCamera(Camera i, const camera_desc_t &c);
 
     /** @brief Removes camera with specific index from scene
-        @param i camera index
+        @param i camera handle
 
         Removes camera with specific index from scene. Other cameras indices remain valid.
     */
-    void RemoveCamera(uint32_t i);
+    void RemoveCamera(Camera i);
 
     /** @brief Get const reference to a camera with specific index
         @return Current camera index
     */
-    uint32_t current_cam() const { return current_cam_; }
+    Camera current_cam() const { return current_cam_; }
 
     /** @brief Sets camera with specific index to be current
         @param i camera index
     */
-    void set_current_cam(uint32_t i) { current_cam_ = i; }
+    void set_current_cam(Camera i) { current_cam_ = i; }
 
     /// Overall triangle count in scene
     virtual uint32_t triangle_count() const = 0;

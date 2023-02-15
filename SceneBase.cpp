@@ -5,24 +5,24 @@
 
 #include "internal/Core.h"
 
-uint32_t Ray::SceneBase::AddCamera(const camera_desc_t &c) {
-    uint32_t i;
-    if (cam_first_free_ == -1) {
-        i = uint32_t(cams_.size());
+Ray::Camera Ray::SceneBase::AddCamera(const camera_desc_t &c) {
+    Camera i;
+    if (cam_first_free_ == InvalidCamera) {
+        i = Camera{uint32_t(cams_.size())};
         cams_.emplace_back();
     } else {
         i = cam_first_free_;
-        cam_first_free_ = cams_[i].next_free;
+        cam_first_free_ = cams_[i._index].next_free;
     }
     SetCamera(i, c);
-    if (current_cam_ == 0xffffffff) {
+    if (current_cam_ == InvalidCamera) {
         current_cam_ = i;
     }
     return i;
 }
 
-void Ray::SceneBase::GetCamera(const uint32_t i, camera_desc_t &c) const {
-    const camera_t &cam = cams_[i].cam;
+void Ray::SceneBase::GetCamera(const Camera i, camera_desc_t &c) const {
+    const camera_t &cam = cams_[i._index].cam;
     c.type = cam.type;
     c.dtype = cam.dtype;
     c.exposure = cam.exposure;
@@ -64,9 +64,9 @@ void Ray::SceneBase::GetCamera(const uint32_t i, camera_desc_t &c) const {
     c.min_transp_depth = cam.pass_settings.min_transp_depth;
 }
 
-void Ray::SceneBase::SetCamera(const uint32_t i, const camera_desc_t &c) {
-    assert(i < uint32_t(cams_.size()));
-    camera_t &cam = cams_[i].cam;
+void Ray::SceneBase::SetCamera(const Camera i, const camera_desc_t &c) {
+    assert(i._index < uint32_t(cams_.size()));
+    camera_t &cam = cams_[i._index].cam;
     if (c.type != Geo) {
         if (c.ltype == eLensUnits::FOV) {
             ConstructCamera(c.type, c.filter, c.dtype, c.origin, c.fwd, c.up, c.shift, c.fov, c.sensor_height,
@@ -117,8 +117,8 @@ void Ray::SceneBase::SetCamera(const uint32_t i, const camera_desc_t &c) {
     }
 }
 
-void Ray::SceneBase::RemoveCamera(const uint32_t i) {
-    assert(i < uint32_t(cams_.size()));
-    cams_[i].next_free = cam_first_free_;
+void Ray::SceneBase::RemoveCamera(const Camera i) {
+    assert(i._index < uint32_t(cams_.size()));
+    cams_[i._index].next_free = cam_first_free_;
     cam_first_free_ = i;
 }

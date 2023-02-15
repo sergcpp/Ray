@@ -57,7 +57,7 @@ class Scene : public SceneBase {
     Vector<uint32_t> blocker_lights_;
 
     environment_t env_;
-    uint32_t env_map_light_ = 0xffffffff;
+    Light env_map_light_ = InvalidLight;
     struct {
         int res = -1;
         SmallVector<aligned_vector<simd_fvec4>, 16> mips;
@@ -84,8 +84,8 @@ class Scene : public SceneBase {
     void PrepareBindlessTextures();
     void RebuildHWAccStructures();
 
-    uint32_t AddAtlasTexture(const tex_desc_t &t);
-    uint32_t AddBindlessTexture(const tex_desc_t &t);
+    Texture AddAtlasTexture(const tex_desc_t &t);
+    Texture AddBindlessTexture(const tex_desc_t &t);
 
     template <typename T, int N>
     void WriteTextureMips(const color_t<T, N> data[], const int _res[2], int mip_count, bool compress,
@@ -98,33 +98,33 @@ class Scene : public SceneBase {
     void GetEnvironment(environment_desc_t &env) override;
     void SetEnvironment(const environment_desc_t &env) override;
 
-    uint32_t AddTexture(const tex_desc_t &t) override {
+    Texture AddTexture(const tex_desc_t &t) override {
         if (use_bindless_) {
             return AddBindlessTexture(t);
         } else {
             return AddAtlasTexture(t);
         }
     }
-    void RemoveTexture(uint32_t) override {}
+    void RemoveTexture(Texture) override {}
 
-    uint32_t AddMaterial(const shading_node_desc_t &m) override;
-    uint32_t AddMaterial(const principled_mat_desc_t &m) override;
-    void RemoveMaterial(uint32_t) override {}
+    Material AddMaterial(const shading_node_desc_t &m) override;
+    Material AddMaterial(const principled_mat_desc_t &m) override;
+    void RemoveMaterial(Material) override {}
 
-    uint32_t AddMesh(const mesh_desc_t &m) override;
-    void RemoveMesh(uint32_t) override;
+    Mesh AddMesh(const mesh_desc_t &m) override;
+    void RemoveMesh(Mesh) override;
 
-    uint32_t AddLight(const directional_light_desc_t &l) override;
-    uint32_t AddLight(const sphere_light_desc_t &l) override;
-    uint32_t AddLight(const spot_light_desc_t &l) override;
-    uint32_t AddLight(const rect_light_desc_t &l, const float *xform) override;
-    uint32_t AddLight(const disk_light_desc_t &l, const float *xform) override;
-    uint32_t AddLight(const line_light_desc_t &l, const float *xform) override;
-    void RemoveLight(uint32_t i) override;
+    Light AddLight(const directional_light_desc_t &l) override;
+    Light AddLight(const sphere_light_desc_t &l) override;
+    Light AddLight(const spot_light_desc_t &l) override;
+    Light AddLight(const rect_light_desc_t &l, const float *xform) override;
+    Light AddLight(const disk_light_desc_t &l, const float *xform) override;
+    Light AddLight(const line_light_desc_t &l, const float *xform) override;
+    void RemoveLight(Light i) override;
 
-    uint32_t AddMeshInstance(uint32_t m_index, const float *xform) override;
-    void SetMeshInstanceTransform(uint32_t mi_index, const float *xform) override;
-    void RemoveMeshInstance(uint32_t) override;
+    MeshInstance AddMeshInstance(Mesh mesh, const float *xform) override;
+    void SetMeshInstanceTransform(MeshInstance mi_handle, const float *xform) override;
+    void RemoveMeshInstance(MeshInstance) override;
 
     void Finalize() override;
 

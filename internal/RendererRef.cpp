@@ -28,7 +28,7 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
         return;
     }
 
-    const camera_t &cam = s->cams_[s->current_cam()].cam;
+    const camera_t &cam = s->cams_[s->current_cam()._index].cam;
 
     const scene_data_t sc_data = {s->env_,
                                   s->mesh_instances_.empty() ? nullptr : &s->mesh_instances_[0],

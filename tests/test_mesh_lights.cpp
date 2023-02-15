@@ -104,38 +104,38 @@ Ray::RendererOCL
                     cam_desc.output_sh = output_sh;
                     cam_desc.clamp = true;
 
-                    const uint32_t cam = scene->AddCamera(cam_desc);
+                    const Ray::Camera cam = scene->AddCamera(cam_desc);
                     scene->set_current_cam(cam);
 
                     scene->SetEnvironment(env_desc);
 
-                    const uint32_t t1 = scene->AddTexture(tex_desc1);
+                    const Ray::Texture t1 = scene->AddTexture(tex_desc1);
 
                     mat_desc1.base_texture = t1;
-                    const uint32_t m1 = scene->AddMaterial(mat_desc1);
+                    const Ray::Material m1 = scene->AddMaterial(mat_desc1);
 
                     mat_desc2.base_texture = t1;
-                    const uint32_t m2 = scene->AddMaterial(mat_desc2);
+                    const Ray::Material m2 = scene->AddMaterial(mat_desc2);
 
                     mat_desc3.base_texture = t1;
-                    const uint32_t m3 = scene->AddMaterial(mat_desc3);
+                    const Ray::Material m3 = scene->AddMaterial(mat_desc3);
 
                     mat_desc4.base_texture = t1;
-                    const uint32_t m4 = scene->AddMaterial(mat_desc4);
+                    const Ray::Material m4 = scene->AddMaterial(mat_desc4);
 
                     mesh_desc.shapes.emplace_back(m1, m1, groups[0], groups[1]);
                     mesh_desc.shapes.emplace_back(m2, m2, groups[2], groups[3]);
                     mesh_desc.shapes.emplace_back(m3, m3, groups[4], groups[5]);
                     mesh_desc.shapes.emplace_back(m4, m4, groups[6], groups[7]);
 
-                    const uint32_t mesh = scene->AddMesh(mesh_desc);
+                    const Ray::Mesh mesh = scene->AddMesh(mesh_desc);
 
                     const float xform[16] = {1.0f, 0.0f, 0.0f, 0.0f, // NOLINT
                                              0.0f, 1.0f, 0.0f, 0.0f, // NOLINT
                                              0.0f, 0.0f, 1.0f, 0.0f, // NOLINT
                                              0.0f, 0.0f, 0.0f, 1.0f};
 
-                    const uint32_t mesh_instance = scene->AddMeshInstance(mesh, xform);
+                    const Ray::MeshInstance mesh_instance = scene->AddMeshInstance(mesh, xform);
                     (void)mesh_instance;
 
                     renderer->Clear({0, 0, 0, 0});

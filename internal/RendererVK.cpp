@@ -338,7 +338,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         loaded_halton_ = region.iteration;
     }
 
-    const Ray::camera_t &cam = s->cams_[s->current_cam()].cam;
+    const Ray::camera_t &cam = s->cams_[s->current_cam()._index].cam;
 
     scene_data_t sc_data = {&s->env_,
                             s->mesh_instances_.gpu_buf(),

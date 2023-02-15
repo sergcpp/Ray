@@ -15,13 +15,13 @@ Ray::Ref::Scene::Scene(ILog *log, const bool use_wide_bvh) : log_(log), use_wide
 
 Ray::Ref::Scene::~Scene() {
     while (!mesh_instances_.empty()) {
-        Scene::RemoveMeshInstance(mesh_instances_.begin().index());
+        Scene::RemoveMeshInstance(MeshInstance{mesh_instances_.begin().index()});
     }
     while (!meshes_.empty()) {
-        Scene::RemoveMesh(meshes_.begin().index());
+        Scene::RemoveMesh(Mesh{meshes_.begin().index()});
     }
     while (!lights_.empty()) {
-        Scene::RemoveLight(lights_.begin().index());
+        Scene::RemoveLight(Light{lights_.begin().index()});
     }
     materials_.clear();
     lights_.clear();
@@ -29,9 +29,9 @@ Ray::Ref::Scene::~Scene() {
 
 void Ray::Ref::Scene::GetEnvironment(environment_desc_t &env) {
     memcpy(env.env_col, env_.env_col, 3 * sizeof(float));
-    env.env_map = env_.env_map;
+    env.env_map = Texture{env_.env_map};
     memcpy(env.back_col, env_.back_col, 3 * sizeof(float));
-    env.back_map = env_.back_map;
+    env.back_map = Texture{env_.back_map};
     env.env_map_rotation = env_.env_map_rotation;
     env.back_map_rotation = env_.back_map_rotation;
     env.multiple_importance = env_.multiple_importance;
@@ -39,15 +39,15 @@ void Ray::Ref::Scene::GetEnvironment(environment_desc_t &env) {
 
 void Ray::Ref::Scene::SetEnvironment(const environment_desc_t &env) {
     memcpy(env_.env_col, env.env_col, 3 * sizeof(float));
-    env_.env_map = env.env_map;
+    env_.env_map = env.env_map._index;
     memcpy(env_.back_col, env.back_col, 3 * sizeof(float));
-    env_.back_map = env.back_map;
+    env_.back_map = env.back_map._index;
     env_.env_map_rotation = env.env_map_rotation;
     env_.back_map_rotation = env.back_map_rotation;
     env_.multiple_importance = env.multiple_importance;
 }
 
-uint32_t Ray::Ref::Scene::AddTexture(const tex_desc_t &_t) {
+Ray::Texture Ray::Ref::Scene::AddTexture(const tex_desc_t &_t) {
     const int res[2] = {_t.w, _t.h};
 
     bool recostruct_z = false;
@@ -94,7 +94,7 @@ uint32_t Ray::Ref::Scene::AddTexture(const tex_desc_t &_t) {
     }
 
     if (storage == -1) {
-        return 0xffffffff;
+        return InvalidTexture;
     }
 
     log_->Info("Ray: Texture loaded (storage = %i, %ix%i)", storage, _t.w, _t.h);
@@ -112,16 +112,16 @@ uint32_t Ray::Ref::Scene::AddTexture(const tex_desc_t &_t) {
     }
     ret |= index;
 
-    return ret;
+    return Texture{ret};
 }
 
-uint32_t Ray::Ref::Scene::AddMaterial(const shading_node_desc_t &m) {
+Ray::Material Ray::Ref::Scene::AddMaterial(const shading_node_desc_t &m) {
     material_t mat = {};
 
     mat.type = m.type;
-    mat.textures[BASE_TEXTURE] = m.base_texture;
+    mat.textures[BASE_TEXTURE] = m.base_texture._index;
     mat.roughness_unorm = pack_unorm_16(CLAMP(m.roughness, 0.0f, 1.0f));
-    mat.textures[ROUGH_TEXTURE] = m.roughness_texture;
+    mat.textures[ROUGH_TEXTURE] = m.roughness_texture._index;
     memcpy(&mat.base_color[0], &m.base_color[0], 3 * sizeof(float));
     mat.ior = m.ior;
     mat.tangent_rotation = 0.0f;
@@ -130,10 +130,10 @@ uint32_t Ray::Ref::Scene::AddMaterial(const shading_node_desc_t &m) {
     if (m.type == DiffuseNode) {
         mat.sheen_unorm = pack_unorm_16(CLAMP(0.5f * m.sheen, 0.0f, 1.0f));
         mat.sheen_tint_unorm = pack_unorm_16(CLAMP(m.tint, 0.0f, 1.0f));
-        mat.textures[METALLIC_TEXTURE] = m.metallic_texture;
+        mat.textures[METALLIC_TEXTURE] = m.metallic_texture._index;
     } else if (m.type == GlossyNode) {
         mat.tangent_rotation = 2.0f * PI * m.anisotropic_rotation;
-        mat.textures[METALLIC_TEXTURE] = m.metallic_texture;
+        mat.textures[METALLIC_TEXTURE] = m.metallic_texture._index;
         mat.tint_unorm = pack_unorm_16(CLAMP(m.tint, 0.0f, 1.0f));
     } else if (m.type == RefractiveNode) {
     } else if (m.type == EmissiveNode) {
@@ -143,48 +143,48 @@ uint32_t Ray::Ref::Scene::AddMaterial(const shading_node_desc_t &m) {
         }
     } else if (m.type == MixNode) {
         mat.strength = m.strength;
-        mat.textures[MIX_MAT1] = m.mix_materials[0];
-        mat.textures[MIX_MAT2] = m.mix_materials[1];
+        mat.textures[MIX_MAT1] = m.mix_materials[0]._index;
+        mat.textures[MIX_MAT2] = m.mix_materials[1]._index;
         if (m.mix_add) {
             mat.flags |= MAT_FLAG_MIX_ADD;
         }
     } else if (m.type == TransparentNode) {
     }
 
-    mat.textures[NORMALS_TEXTURE] = m.normal_map;
+    mat.textures[NORMALS_TEXTURE] = m.normal_map._index;
     mat.normal_map_strength_unorm = pack_unorm_16(CLAMP(m.normal_map_intensity, 0.0f, 1.0f));
 
-    return materials_.push(mat);
+    return Material{materials_.push(mat)};
 }
 
-uint32_t Ray::Ref::Scene::AddMaterial(const principled_mat_desc_t &m) {
+Ray::Material Ray::Ref::Scene::AddMaterial(const principled_mat_desc_t &m) {
     material_t main_mat = {};
 
     main_mat.type = PrincipledNode;
-    main_mat.textures[BASE_TEXTURE] = m.base_texture;
+    main_mat.textures[BASE_TEXTURE] = m.base_texture._index;
     memcpy(&main_mat.base_color[0], &m.base_color[0], 3 * sizeof(float));
     main_mat.sheen_unorm = pack_unorm_16(CLAMP(0.5f * m.sheen, 0.0f, 1.0f));
     main_mat.sheen_tint_unorm = pack_unorm_16(CLAMP(m.sheen_tint, 0.0f, 1.0f));
     main_mat.roughness_unorm = pack_unorm_16(CLAMP(m.roughness, 0.0f, 1.0f));
     main_mat.tangent_rotation = 2.0f * PI * CLAMP(m.anisotropic_rotation, 0.0f, 1.0f);
-    main_mat.textures[ROUGH_TEXTURE] = m.roughness_texture;
+    main_mat.textures[ROUGH_TEXTURE] = m.roughness_texture._index;
     main_mat.metallic_unorm = pack_unorm_16(CLAMP(m.metallic, 0.0f, 1.0f));
-    main_mat.textures[METALLIC_TEXTURE] = m.metallic_texture;
+    main_mat.textures[METALLIC_TEXTURE] = m.metallic_texture._index;
     main_mat.ior = m.ior;
     main_mat.flags = 0;
     main_mat.transmission_unorm = pack_unorm_16(CLAMP(m.transmission, 0.0f, 1.0f));
     main_mat.transmission_roughness_unorm = pack_unorm_16(CLAMP(m.transmission_roughness, 0.0f, 1.0f));
-    main_mat.textures[NORMALS_TEXTURE] = m.normal_map;
+    main_mat.textures[NORMALS_TEXTURE] = m.normal_map._index;
     main_mat.normal_map_strength_unorm = pack_unorm_16(CLAMP(m.normal_map_intensity, 0.0f, 1.0f));
     main_mat.anisotropic_unorm = pack_unorm_16(CLAMP(m.anisotropic, 0.0f, 1.0f));
     main_mat.specular_unorm = pack_unorm_16(CLAMP(m.specular, 0.0f, 1.0f));
-    main_mat.textures[SPECULAR_TEXTURE] = m.specular_texture;
+    main_mat.textures[SPECULAR_TEXTURE] = m.specular_texture._index;
     main_mat.specular_tint_unorm = pack_unorm_16(CLAMP(m.specular_tint, 0.0f, 1.0f));
     main_mat.clearcoat_unorm = pack_unorm_16(CLAMP(m.clearcoat, 0.0f, 1.0f));
     main_mat.clearcoat_roughness_unorm = pack_unorm_16(CLAMP(m.clearcoat_roughness, 0.0f, 1.0f));
 
-    uint32_t root_node = materials_.push(main_mat);
-    uint32_t emissive_node = 0xffffffff, transparent_node = 0xffffffff;
+    auto root_node = Material{materials_.push(main_mat)};
+    Material emissive_node = InvalidMaterial, transparent_node = InvalidMaterial;
 
     if (m.emission_strength > 0.0f &&
         (m.emission_color[0] > 0.0f || m.emission_color[1] > 0.0f || m.emission_color[2] > 0.0f)) {
@@ -198,20 +198,20 @@ uint32_t Ray::Ref::Scene::AddMaterial(const principled_mat_desc_t &m) {
         emissive_node = AddMaterial(emissive_desc);
     }
 
-    if (m.alpha != 1.0f || m.alpha_texture != 0xffffffff) {
+    if (m.alpha != 1.0f || m.alpha_texture != InvalidTexture) {
         shading_node_desc_t transparent_desc;
         transparent_desc.type = TransparentNode;
 
         transparent_node = AddMaterial(transparent_desc);
     }
 
-    if (emissive_node != 0xffffffff) {
-        if (root_node == 0xffffffff) {
+    if (emissive_node != InvalidMaterial) {
+        if (root_node == InvalidMaterial) {
             root_node = emissive_node;
         } else {
             shading_node_desc_t mix_node;
             mix_node.type = MixNode;
-            mix_node.base_texture = 0xffffffff;
+            mix_node.base_texture = InvalidTexture;
             mix_node.strength = 0.5f;
             mix_node.ior = 0.0f;
             mix_node.mix_add = true;
@@ -223,8 +223,8 @@ uint32_t Ray::Ref::Scene::AddMaterial(const principled_mat_desc_t &m) {
         }
     }
 
-    if (transparent_node != 0xffffffff) {
-        if (root_node == 0xffffffff || m.alpha == 0.0f) {
+    if (transparent_node != InvalidMaterial) {
+        if (root_node == InvalidMaterial || m.alpha == 0.0f) {
             root_node = transparent_node;
         } else {
             shading_node_desc_t mix_node;
@@ -240,10 +240,10 @@ uint32_t Ray::Ref::Scene::AddMaterial(const principled_mat_desc_t &m) {
         }
     }
 
-    return root_node;
+    return Material{root_node};
 }
 
-uint32_t Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
+Ray::Mesh Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
     const uint32_t mesh_index = meshes_.emplace();
     mesh_t &m = meshes_.at(mesh_index);
 
@@ -289,7 +289,7 @@ uint32_t Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
         bool is_front_solid = true, is_back_solid = true;
 
         uint32_t material_stack[32];
-        material_stack[0] = sh.mat_index;
+        material_stack[0] = sh.front_mat._index;
         uint32_t material_count = 1;
 
         while (material_count) {
@@ -304,7 +304,7 @@ uint32_t Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
             }
         }
 
-        material_stack[0] = sh.back_mat_index;
+        material_stack[0] = sh.back_mat._index;
         material_count = 1;
 
         while (material_count) {
@@ -322,15 +322,15 @@ uint32_t Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
         for (size_t i = sh.vtx_start; i < sh.vtx_start + sh.vtx_count; i += 3) {
             tri_mat_data_t &tri_mat = tri_materials_[tri_materials_start + (i / 3)];
 
-            assert(sh.mat_index < (1 << 14) && "Not enough bits to reference material!");
-            assert(sh.back_mat_index < (1 << 14) && "Not enough bits to reference material!");
+            assert(sh.front_mat._index < (1 << 14) && "Not enough bits to reference material!");
+            assert(sh.back_mat._index < (1 << 14) && "Not enough bits to reference material!");
 
-            tri_mat.front_mi = uint16_t(sh.mat_index);
+            tri_mat.front_mi = uint16_t(sh.front_mat._index);
             if (is_front_solid) {
                 tri_mat.front_mi |= MATERIAL_SOLID_BIT;
             }
 
-            tri_mat.back_mi = uint16_t(sh.back_mat_index);
+            tri_mat.back_mi = uint16_t(sh.back_mat._index);
             if (is_back_solid) {
                 tri_mat.back_mi |= MATERIAL_SOLID_BIT;
             }
@@ -386,25 +386,25 @@ uint32_t Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
 
     vtx_indices_.insert(vtx_indices_.end(), new_vtx_indices.begin(), new_vtx_indices.end());
 
-    return mesh_index;
+    return Mesh{mesh_index};
 }
 
-void Ray::Ref::Scene::RemoveMesh(const uint32_t i) {
-    if (!meshes_.exists(i)) {
+void Ray::Ref::Scene::RemoveMesh(const Mesh i) {
+    if (!meshes_.exists(i._index)) {
         return;
     }
 
-    const mesh_t &m = meshes_[i];
+    const mesh_t &m = meshes_[i._index];
 
     const uint32_t node_index = m.node_index, node_count = m.node_count;
     const uint32_t tris_index = m.tris_index, tris_count = m.tris_count;
 
-    meshes_.erase(i);
+    meshes_.erase(i._index);
 
     bool rebuild_needed = false;
     for (auto it = mesh_instances_.begin(); it != mesh_instances_.end();) {
         mesh_instance_t &mi = *it;
-        if (mi.mesh_index == i) {
+        if (mi.mesh_index == i._index) {
             it = mesh_instances_.erase(it);
             rebuild_needed = true;
         } else {
@@ -420,7 +420,7 @@ void Ray::Ref::Scene::RemoveMesh(const uint32_t i) {
     }
 }
 
-uint32_t Ray::Ref::Scene::AddLight(const directional_light_desc_t &_l) {
+Ray::Light Ray::Ref::Scene::AddLight(const directional_light_desc_t &_l) {
     light_t l = {};
 
     l.type = LIGHT_TYPE_DIR;
@@ -435,10 +435,10 @@ uint32_t Ray::Ref::Scene::AddLight(const directional_light_desc_t &_l) {
 
     const uint32_t light_index = lights_.push(l);
     li_indices_.push_back(light_index);
-    return light_index;
+    return Light{light_index};
 }
 
-uint32_t Ray::Ref::Scene::AddLight(const sphere_light_desc_t &_l) {
+Ray::Light Ray::Ref::Scene::AddLight(const sphere_light_desc_t &_l) {
     light_t l = {};
 
     l.type = LIGHT_TYPE_SPHERE;
@@ -457,10 +457,10 @@ uint32_t Ray::Ref::Scene::AddLight(const sphere_light_desc_t &_l) {
     if (_l.visible) {
         visible_lights_.push_back(light_index);
     }
-    return light_index;
+    return Light{light_index};
 }
 
-uint32_t Ray::Ref::Scene::AddLight(const spot_light_desc_t &_l) {
+Ray::Light Ray::Ref::Scene::AddLight(const spot_light_desc_t &_l) {
     light_t l = {};
 
     l.type = LIGHT_TYPE_SPHERE;
@@ -481,10 +481,10 @@ uint32_t Ray::Ref::Scene::AddLight(const spot_light_desc_t &_l) {
     if (_l.visible) {
         visible_lights_.push_back(light_index);
     }
-    return light_index;
+    return Light{light_index};
 }
 
-uint32_t Ray::Ref::Scene::AddLight(const rect_light_desc_t &_l, const float *xform) {
+Ray::Light Ray::Ref::Scene::AddLight(const rect_light_desc_t &_l, const float *xform) {
     light_t l = {};
 
     l.type = LIGHT_TYPE_RECT;
@@ -514,10 +514,10 @@ uint32_t Ray::Ref::Scene::AddLight(const rect_light_desc_t &_l, const float *xfo
     if (_l.sky_portal) {
         blocker_lights_.push_back(light_index);
     }
-    return light_index;
+    return Light{light_index};
 }
 
-uint32_t Ray::Ref::Scene::AddLight(const disk_light_desc_t &_l, const float *xform) {
+Ray::Light Ray::Ref::Scene::AddLight(const disk_light_desc_t &_l, const float *xform) {
     light_t l = {};
 
     l.type = LIGHT_TYPE_DISK;
@@ -547,10 +547,10 @@ uint32_t Ray::Ref::Scene::AddLight(const disk_light_desc_t &_l, const float *xfo
     if (_l.sky_portal) {
         blocker_lights_.push_back(light_index);
     }
-    return light_index;
+    return Light{light_index};
 }
 
-uint32_t Ray::Ref::Scene::AddLight(const line_light_desc_t &_l, const float *xform) {
+Ray::Light Ray::Ref::Scene::AddLight(const line_light_desc_t &_l, const float *xform) {
     light_t l = {};
 
     l.type = LIGHT_TYPE_LINE;
@@ -579,44 +579,44 @@ uint32_t Ray::Ref::Scene::AddLight(const line_light_desc_t &_l, const float *xfo
     if (_l.visible) {
         visible_lights_.push_back(light_index);
     }
-    return light_index;
+    return Light{light_index};
 }
 
-void Ray::Ref::Scene::RemoveLight(const uint32_t i) {
-    if (!lights_.exists(i)) {
+void Ray::Ref::Scene::RemoveLight(const Light i) {
+    if (!lights_.exists(i._index)) {
         return;
     }
 
     { // remove from compacted list
-        auto it = find(begin(li_indices_), end(li_indices_), i);
+        auto it = find(begin(li_indices_), end(li_indices_), i._index);
         assert(it != end(li_indices_));
         li_indices_.erase(it);
     }
 
-    if (lights_[i].visible) {
-        auto it = find(begin(visible_lights_), end(visible_lights_), i);
+    if (lights_[i._index].visible) {
+        auto it = find(begin(visible_lights_), end(visible_lights_), i._index);
         assert(it != end(visible_lights_));
         visible_lights_.erase(it);
     }
 
-    if (lights_[i].sky_portal) {
-        auto it = find(begin(blocker_lights_), end(blocker_lights_), i);
+    if (lights_[i._index].sky_portal) {
+        auto it = find(begin(blocker_lights_), end(blocker_lights_), i._index);
         assert(it != end(blocker_lights_));
         blocker_lights_.erase(it);
     }
 
-    lights_.erase(i);
+    lights_.erase(i._index);
 }
 
-uint32_t Ray::Ref::Scene::AddMeshInstance(const uint32_t mesh_index, const float *xform) {
+Ray::MeshInstance Ray::Ref::Scene::AddMeshInstance(const Mesh mesh, const float *xform) {
     const uint32_t mi_index = mesh_instances_.emplace();
 
     mesh_instance_t &mi = mesh_instances_.at(mi_index);
-    mi.mesh_index = mesh_index;
+    mi.mesh_index = mesh._index;
     mi.tr_index = transforms_.emplace();
 
     { // find emissive triangles and add them as emitters
-        const mesh_t &m = meshes_[mesh_index];
+        const mesh_t &m = meshes_[mesh._index];
         for (uint32_t tri = (m.vert_index / 3); tri < (m.vert_index + m.vert_count) / 3; ++tri) {
             const tri_mat_data_t &tri_mat = tri_materials_[tri];
 
@@ -638,13 +638,13 @@ uint32_t Ray::Ref::Scene::AddMeshInstance(const uint32_t mesh_index, const float
         }
     }
 
-    SetMeshInstanceTransform(mi_index, xform);
+    SetMeshInstanceTransform(MeshInstance{mi_index}, xform);
 
-    return mi_index;
+    return MeshInstance{mi_index};
 }
 
-void Ray::Ref::Scene::SetMeshInstanceTransform(uint32_t mi_index, const float *xform) {
-    mesh_instance_t &mi = mesh_instances_[mi_index];
+void Ray::Ref::Scene::SetMeshInstanceTransform(const MeshInstance mi_handle, const float *xform) {
+    mesh_instance_t &mi = mesh_instances_[mi_handle._index];
     transform_t &tr = transforms_[mi.tr_index];
 
     memcpy(tr.xform, xform, 16 * sizeof(float));
@@ -656,15 +656,15 @@ void Ray::Ref::Scene::SetMeshInstanceTransform(uint32_t mi_index, const float *x
     RebuildTLAS();
 }
 
-void Ray::Ref::Scene::RemoveMeshInstance(uint32_t i) {
-    transforms_.erase(mesh_instances_[i].tr_index);
-    mesh_instances_.erase(i);
+void Ray::Ref::Scene::RemoveMeshInstance(const MeshInstance i) {
+    transforms_.erase(mesh_instances_[i._index].tr_index);
+    mesh_instances_.erase(i._index);
 
     RebuildTLAS();
 }
 
 void Ray::Ref::Scene::Finalize() {
-    if (env_map_light_ != 0xffffffff) {
+    if (env_map_light_ != InvalidLight) {
         RemoveLight(env_map_light_);
     }
     env_map_qtree_ = {};
@@ -681,8 +681,8 @@ void Ray::Ref::Scene::Finalize() {
             l.cast_shadow = 1;
             l.col[0] = l.col[1] = l.col[2] = 1.0f;
 
-            env_map_light_ = lights_.push(l);
-            li_indices_.push_back(env_map_light_);
+            env_map_light_ = Light{lights_.push(l)};
+            li_indices_.push_back(env_map_light_._index);
         }
     }
 }

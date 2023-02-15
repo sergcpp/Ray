@@ -154,7 +154,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *scene, Regi
         return;
     }
 
-    const camera_t &cam = s->cams_[s->current_cam()].cam;
+    const camera_t &cam = s->cams_[s->current_cam()._index].cam;
 
     const scene_data_t sc_data = {s->env_,
                                   s->mesh_instances_.data(),
