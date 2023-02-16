@@ -1,81 +1,99 @@
 #include "RendererFactory.h"
 
+#ifdef ENABLE_REF_IMPL
 #include "internal/RendererRef.h"
+#else // ENABLE_REF_IMPL
+#pragma message("Compiling without reference backend")
+#endif // ENABLE_REF_IMPL
 
-#if !defined(__ANDROID__)
-#include "internal/RendererSSE2.h"
+#ifdef ENABLE_SIMD_IMPL
+#if !defined(__aarch64__) && !defined(_M_ARM) && !defined(_M_ARM64)
 #include "internal/RendererAVX.h"
 #include "internal/RendererAVX2.h"
-#elif defined(__ARM_NEON__) || defined(__aarch64__)
+#include "internal/RendererAVX512.h"
+#include "internal/RendererSSE2.h"
+#include "internal/RendererSSE41.h"
+#elif defined(__ARM_NEON__) || defined(__aarch64__) || defined(_M_ARM) || defined(_M_ARM64)
 #include "internal/RendererNEON.h"
 #elif defined(__i386__) || defined(__x86_64__)
 #include "internal/RendererSSE2.h"
 #endif
+#else // ENABLE_SIMD_IMPL
+#pragma message("Compiling without SIMD support")
+#endif // #ifdef ENABLE_SIMD_IMPL
 
-#if !defined(DISABLE_OCL)
-#include "internal/RendererOCL.h"
-#else
-#pragma message("Compiling without OpenCL support")
-#endif
+#ifdef ENABLE_GPU_IMPL
+#include "internal/RendererVK.h"
+#else // ENABLE_GPU_IMPL
+#pragma message("Compiling without GPU support")
+#endif // ENABLE_GPU_IMPL
 
 #include "internal/simd/detect.h"
 
-std::shared_ptr<Ray::RendererBase> Ray::CreateRenderer(const settings_t &s, uint32_t flags, std::ostream &log_stream) {
-    CpuFeatures features = GetCpuFeatures();
+namespace Ray {
+LogNull g_null_log;
+} // namespace Ray
 
-#if !defined(DISABLE_OCL)
-    if (flags & RendererOCL) {
-        log_stream << "Ray: Creating OpenCL renderer " << s.w << "x" << s.h << std::endl;
+Ray::RendererBase *Ray::CreateRenderer(const settings_t &s, ILog *log, const uint32_t enabled_types) {
+#ifdef ENABLE_GPU_IMPL
+    if (enabled_types & RendererVK) {
+        log->Info("Ray: Creating Vulkan renderer %ix%i", s.w, s.h);
         try {
-            return std::make_shared<Ocl::Renderer>(s.w, s.h, s.platform_index, s.device_index);
+            return new Vk::Renderer(s, log);
         } catch (std::exception &e) {
-            log_stream << "Ray: Creating OpenCL renderer failed, " << e.what() << std::endl;
+            log->Info("Ray: Creating Vulkan renderer failed, %s", e.what());
         }
     }
-#endif
+#endif // ENABLE_GPU_IMPL
 
-#if !defined(__ANDROID__)
-    if ((flags & RendererAVX2) && features.avx2_supported) {
-        log_stream << "Ray: Creating AVX2 renderer " << s.w << "x" << s.h << std::endl;
-        return std::make_shared<Avx2::Renderer>(s);
+#if !defined(__aarch64__) && !defined(_M_ARM) && !defined(_M_ARM64)
+#ifdef ENABLE_SIMD_IMPL
+    const CpuFeatures features = GetCpuFeatures();
+    if ((enabled_types & RendererAVX512) && features.avx512_supported) {
+        log->Info("Ray: Creating AVX512 renderer %ix%i", s.w, s.h);
+        return Avx512::CreateRenderer(s, log);
     }
-    if ((flags & RendererAVX) && features.avx_supported) {
-        log_stream << "Ray: Creating AVX renderer " << s.w << "x" << s.h << std::endl;
-        return std::make_shared<Avx::Renderer>(s);
+    if ((enabled_types & RendererAVX2) && features.avx2_supported) {
+        log->Info("Ray: Creating AVX2 renderer %ix%i", s.w, s.h);
+        return Avx2::CreateRenderer(s, log);
     }
-    if ((flags & RendererSSE2) && features.sse2_supported) {
-        log_stream << "Ray: Creating SSE2 renderer " << s.w << "x" << s.h << std::endl;
-        return std::make_shared<Sse2::Renderer>(s);
+    if ((enabled_types & RendererAVX) && features.avx_supported) {
+        log->Info("Ray: Creating AVX renderer %ix%i", s.w, s.h);
+        return Avx::CreateRenderer(s, log);
     }
-    if (flags & RendererRef) {
-        log_stream << "Ray: Creating Ref renderer " << s.w << "x" << s.h << std::endl;
-        return std::make_shared<Ref::Renderer>(s);
+    if ((enabled_types & RendererSSE41) && features.sse41_supported) {
+        log->Info("Ray: Creating SSE41 renderer %ix%i", s.w, s.h);
+        return Sse41::CreateRenderer(s, log);
     }
-#elif defined(__ARM_NEON__) || defined(__aarch64__)
-    if (flags & RendererNEON) {
-        log_stream << "Ray: Creating NEON renderer " << s.w << "x" << s.h << std::endl;
-        return std::make_shared<Neon::Renderer>(s);
-    }
-    if (flags & RendererRef) {
-        log_stream << "Ray: Creating Ref renderer " << s.w << "x" << s.h << std::endl;
-        return std::make_shared<Ref::Renderer>(s);
-    }
-#elif defined(__i386__) || defined(__x86_64__)
-    if ((flags & RendererSSE2) && features.sse2_supported) {
-        log_stream << "Ray: Creating SSE2 renderer " << s.w << "x" << s.h << std::endl;
-        return std::make_shared<Sse2::Renderer>(s);
-    }
-    if (flags & RendererRef) {
-        log_stream << "Ray: Creating Ref renderer " << s.w << "x" << s.h << std::endl;
-        return std::make_shared<Ref::Renderer>(s);
+    if ((enabled_types & RendererSSE2) && features.sse2_supported) {
+        log->Info("Ray: Creating SSE2 renderer %ix%i", s.w, s.h);
+        return Sse2::CreateRenderer(s, log);
     }
 #endif
-    log_stream << "Ray: Creating Ref renderer " << s.w << "x" << s.h << std::endl;
-    return std::make_shared<Ref::Renderer>(s);
-}
-
-#if !defined(DISABLE_OCL)
-std::vector<Ray::Ocl::Platform> Ray::Ocl::QueryPlatforms() {
-    return Renderer::QueryPlatforms();
-}
+#ifdef ENABLE_REF_IMPL
+    if (enabled_types & RendererRef) {
+        log->Info("Ray: Creating Ref renderer %ix%i", s.w, s.h);
+        return new Ref::Renderer(s, log);
+    }
 #endif
+#elif defined(__ARM_NEON__) || defined(__aarch64__) || defined(_M_ARM) || defined(_M_ARM64)
+#ifdef ENABLE_SIMD_IMPL
+    if (enabled_types & RendererNEON) {
+        log->Info("Ray: Creating NEON renderer %ix%i", s.w, s.h);
+        return Neon::CreateRenderer(s, log);
+    }
+#endif
+#ifdef ENABLE_REF_IMPL
+    if (enabled_types & RendererRef) {
+        log->Info("Ray: Creating Ref renderer %ix%i", s.w, s.h);
+        return new Ref::Renderer(s, log);
+    }
+#endif
+#endif
+#ifdef ENABLE_REF_IMPL
+    log->Info("Ray: Creating Ref renderer %ix%i", s.w, s.h);
+    return new Ref::Renderer(s, log);
+#else
+    return nullptr;
+#endif
+}

@@ -7,7 +7,7 @@ class TextureSplitter {
     struct node_t {
         int parent = -1;
         int child[2] = { -1, -1 };
-        int pos[2], size[2];
+        int pos[2] = {}, size[2] = {};
         bool is_free = true;
 
         bool has_children() const {
@@ -26,6 +26,9 @@ public:
         nodes_.back().size[0] = res[0];
         nodes_.back().size[1] = res[1];
     }
+
+    int resx() const { return nodes_[0].size[0]; }
+    int resy() const { return nodes_[0].size[1]; }
 
     bool empty() const {
         return nodes_.size() == 1;

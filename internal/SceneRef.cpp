@@ -3,233 +3,360 @@
 #include <cassert>
 #include <cstring>
 
+#include "../Log.h"
+#include "BVHSplit.h"
+#include "CoreRef.h"
 #include "TextureUtilsRef.h"
+#include "Time_.h"
 
-Ray::Ref::Scene::Scene(bool use_wide_bvh) : use_wide_bvh_(use_wide_bvh), texture_atlas_(TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE) {
-    {   // add default environment map (white)
-        static const pixel_color8_t default_env_map = { 255, 255, 255, 128 };
+#define CLAMP(val, min, max) (val < min ? min : (val > max ? max : val))
 
-        tex_desc_t t;
-        t.data = &default_env_map;
-        t.w = 1;
-        t.h = 1;
-        t.generate_mipmaps = false;
+Ray::Ref::Scene::Scene(ILog *log, const bool use_wide_bvh) : log_(log), use_wide_bvh_(use_wide_bvh) {}
 
-        default_env_texture_ = AddTexture(t);
-
-        if (default_env_texture_ == 0xffffffff) {
-            throw std::runtime_error("Cannot allocate 1px default env map!");
-        }
-
-        Ray::environment_desc_t desc;
-        desc.env_col[0] = desc.env_col[1] = desc.env_col[2] = 0.0f;
-        desc.env_map = default_env_texture_;
-        SetEnvironment(desc);
+Ray::Ref::Scene::~Scene() {
+    while (!mesh_instances_.empty()) {
+        Scene::RemoveMeshInstance(MeshInstanceHandle{mesh_instances_.begin().index()});
     }
-
-    {   // add default normal map (flat)
-        static const pixel_color8_t default_normalmap = { 127, 127, 255 };
-
-        tex_desc_t t;
-        t.data = &default_normalmap;
-        t.w = 1;
-        t.h = 1;
-        t.generate_mipmaps = false;
-
-        default_normals_texture_ = AddTexture(t);
-
-        if (default_normals_texture_ == 0xffffffff) {
-            throw std::runtime_error("Cannot allocate 1px default normal map!");
-        }
+    while (!meshes_.empty()) {
+        Scene::RemoveMesh(MeshHandle{meshes_.begin().index()});
     }
+    while (!lights_.empty()) {
+        Scene::RemoveLight(LightHandle{lights_.begin().index()});
+    }
+    materials_.clear();
+    lights_.clear();
 }
 
 void Ray::Ref::Scene::GetEnvironment(environment_desc_t &env) {
-    memcpy(&env.env_col[0], &env_.env_col, 3 * sizeof(float));
-    env.env_clamp = env_.env_clamp;
-    env.env_map = env_.env_map;
+    memcpy(env.env_col, env_.env_col, 3 * sizeof(float));
+    env.env_map = TextureHandle{env_.env_map};
+    memcpy(env.back_col, env_.back_col, 3 * sizeof(float));
+    env.back_map = TextureHandle{env_.back_map};
+    env.env_map_rotation = env_.env_map_rotation;
+    env.back_map_rotation = env_.back_map_rotation;
+    env.multiple_importance = env_.multiple_importance;
 }
 
 void Ray::Ref::Scene::SetEnvironment(const environment_desc_t &env) {
-    memcpy(&env_.env_col, &env.env_col[0], 3 * sizeof(float));
-    env_.env_clamp = env.env_clamp;
-    env_.env_map = env.env_map;
-    if (env_.env_map == 0xffffffff) {
-        env_.env_map = default_env_texture_;
-    }
+    memcpy(env_.env_col, env.env_col, 3 * sizeof(float));
+    env_.env_map = env.env_map._index;
+    memcpy(env_.back_col, env.back_col, 3 * sizeof(float));
+    env_.back_map = env.back_map._index;
+    env_.env_map_rotation = env.env_map_rotation;
+    env_.back_map_rotation = env.back_map_rotation;
+    env_.multiple_importance = env.multiple_importance;
 }
 
-uint32_t Ray::Ref::Scene::AddTexture(const tex_desc_t &_t) {
-    uint32_t tex_index = (uint32_t)textures_.size();
+Ray::TextureHandle Ray::Ref::Scene::AddTexture(const tex_desc_t &_t) {
+    const int res[2] = {_t.w, _t.h};
 
-    texture_t t;
-    t.size[0] = (uint16_t)_t.w;
-    t.size[1] = (uint16_t)_t.h;
+    bool recostruct_z = false;
 
-    int mip = 0;
-    int res[2] = { _t.w, _t.h };
-
-    std::vector<pixel_color8_t> tex_data(_t.data, _t.data + _t.w * _t.h);
-
-    while (res[0] >= 1 && res[1] >= 1) {
-        int pos[2];
-        int page = texture_atlas_.Allocate(&tex_data[0], res, pos);
-        if (page == -1) {
-            // release allocated mip levels on fail
-            for (int i = mip; i >= 0; i--) {
-                int _pos[2] = { t.pos[i][0], t.pos[i][1] };
-                texture_atlas_.Free(t.page[i], _pos);
-            }
-            return 0xffffffff;
-        }
-
-        t.page[mip] = (uint8_t)page;
-        t.pos[mip][0] = (uint16_t)pos[0];
-        t.pos[mip][1] = (uint16_t)pos[1];
-
-        mip++;
-
-        if (_t.generate_mipmaps) {
-            tex_data = Ref::DownsampleTexture(tex_data, res);
-
-            res[0] /= 2;
-            res[1] /= 2;
+    int storage = -1, index = -1;
+    if (_t.format == eTextureFormat::RGBA8888) {
+        const auto *rgba_data = reinterpret_cast<const color_rgba8_t *>(_t.data);
+        if (!_t.is_normalmap) {
+            storage = 0;
+            index = tex_storage_rgba_.Allocate(rgba_data, res, _t.generate_mipmaps);
         } else {
-            break;
+            // TODO: get rid of this allocation
+            std::unique_ptr<color_rg8_t[]> repacked_data(new color_rg8_t[res[0] * res[1]]);
+            for (int i = 0; i < res[0] * res[1]; ++i) {
+                repacked_data[i].v[0] = rgba_data[i].v[0];
+                repacked_data[i].v[1] = rgba_data[i].v[1];
+                recostruct_z |= (rgba_data[i].v[2] < 250);
+            }
+            storage = 2;
+            index = tex_storage_rg_.Allocate(repacked_data.get(), res, _t.generate_mipmaps);
         }
+    } else if (_t.format == eTextureFormat::RGB888) {
+        const auto *rgb_data = reinterpret_cast<const color_rgb8_t *>(_t.data);
+        if (!_t.is_normalmap) {
+            storage = 1;
+            index = tex_storage_rgb_.Allocate(rgb_data, res, _t.generate_mipmaps);
+        } else {
+            // TODO: get rid of this allocation
+            std::unique_ptr<color_rg8_t[]> repacked_data(new color_rg8_t[res[0] * res[1]]);
+            for (int i = 0; i < res[0] * res[1]; ++i) {
+                repacked_data[i].v[0] = rgb_data[i].v[0];
+                repacked_data[i].v[1] = rgb_data[i].v[1];
+                recostruct_z |= (rgb_data[i].v[2] < 250);
+            }
+            storage = 2;
+            index = tex_storage_rg_.Allocate(repacked_data.get(), res, _t.generate_mipmaps);
+        }
+    } else if (_t.format == eTextureFormat::RG88) {
+        storage = 2;
+        index = tex_storage_rg_.Allocate(reinterpret_cast<const color_rg8_t *>(_t.data), res, _t.generate_mipmaps);
+    } else if (_t.format == eTextureFormat::R8) {
+        storage = 3;
+        index = tex_storage_r_.Allocate(reinterpret_cast<const color_r8_t *>(_t.data), res, _t.generate_mipmaps);
     }
 
-    // fill remaining mip levels with the last one
-    for (int i = mip; i < NUM_MIP_LEVELS; i++) {
-        t.page[i] = t.page[mip - 1];
-        t.pos[i][0] = t.pos[mip - 1][0];
-        t.pos[i][1] = t.pos[mip - 1][1];
+    if (storage == -1) {
+        return InvalidTextureHandle;
     }
 
-    textures_.push_back(t);
+    log_->Info("Ray: Texture loaded (storage = %i, %ix%i)", storage, _t.w, _t.h);
+    log_->Info("Ray: Storages are (RGBA[%i], RGB[%i], RG[%i], R[%i])", tex_storage_rgba_.img_count(),
+               tex_storage_rgb_.img_count(), tex_storage_rg_.img_count(), tex_storage_r_.img_count());
 
-    return tex_index;
+    uint32_t ret = 0;
+
+    ret |= uint32_t(storage) << 28;
+    if (_t.is_srgb) {
+        ret |= TEX_SRGB_BIT;
+    }
+    if (recostruct_z) {
+        ret |= TEX_RECONSTRUCT_Z_BIT;
+    }
+    ret |= index;
+
+    return TextureHandle{ret};
 }
 
-uint32_t Ray::Ref::Scene::AddMaterial(const mat_desc_t &m) {
-    material_t mat;
+Ray::MaterialHandle Ray::Ref::Scene::AddMaterial(const shading_node_desc_t &m) {
+    material_t mat = {};
 
     mat.type = m.type;
-    mat.textures[MAIN_TEXTURE] = m.main_texture;
-    memcpy(&mat.main_color[0], &m.main_color[0], 3 * sizeof(float));
-    mat.int_ior = m.int_ior;
-    mat.ext_ior = m.ext_ior;
+    mat.textures[BASE_TEXTURE] = m.base_texture._index;
+    mat.roughness_unorm = pack_unorm_16(CLAMP(m.roughness, 0.0f, 1.0f));
+    mat.textures[ROUGH_TEXTURE] = m.roughness_texture._index;
+    memcpy(&mat.base_color[0], &m.base_color[0], 3 * sizeof(float));
+    mat.ior = m.ior;
+    mat.tangent_rotation = 0.0f;
+    mat.flags = 0;
 
-    if (m.type == DiffuseMaterial) {
-        mat.roughness = m.roughness;
-    } else if (m.type == GlossyMaterial) {
-        mat.roughness = m.roughness;
-    } else if (m.type == RefractiveMaterial) {
-        mat.roughness = m.roughness;
-    } else if (m.type == EmissiveMaterial) {
+    if (m.type == DiffuseNode) {
+        mat.sheen_unorm = pack_unorm_16(CLAMP(0.5f * m.sheen, 0.0f, 1.0f));
+        mat.sheen_tint_unorm = pack_unorm_16(CLAMP(m.tint, 0.0f, 1.0f));
+        mat.textures[METALLIC_TEXTURE] = m.metallic_texture._index;
+    } else if (m.type == GlossyNode) {
+        mat.tangent_rotation = 2.0f * PI * m.anisotropic_rotation;
+        mat.textures[METALLIC_TEXTURE] = m.metallic_texture._index;
+        mat.tint_unorm = pack_unorm_16(CLAMP(m.tint, 0.0f, 1.0f));
+    } else if (m.type == RefractiveNode) {
+    } else if (m.type == EmissiveNode) {
         mat.strength = m.strength;
-    } else if (m.type == MixMaterial) {
+        if (m.multiple_importance) {
+            mat.flags |= MAT_FLAG_MULT_IMPORTANCE;
+        }
+    } else if (m.type == MixNode) {
         mat.strength = m.strength;
-        mat.textures[MIX_MAT1] = m.mix_materials[0];
-        mat.textures[MIX_MAT2] = m.mix_materials[1];
-    } else if (m.type == TransparentMaterial) {
-
+        mat.textures[MIX_MAT1] = m.mix_materials[0]._index;
+        mat.textures[MIX_MAT2] = m.mix_materials[1]._index;
+        if (m.mix_add) {
+            mat.flags |= MAT_FLAG_MIX_ADD;
+        }
+    } else if (m.type == TransparentNode) {
     }
 
-    if (m.normal_map != 0xffffffff) {
-        mat.textures[NORMALS_TEXTURE] = m.normal_map;
-    } else {
-        mat.textures[NORMALS_TEXTURE] = default_normals_texture_;
-    }
+    mat.textures[NORMALS_TEXTURE] = m.normal_map._index;
+    mat.normal_map_strength_unorm = pack_unorm_16(CLAMP(m.normal_map_intensity, 0.0f, 1.0f));
 
-    uint32_t mat_index = (uint32_t)materials_.size();
-
-    materials_.push_back(mat);
-
-    return mat_index;
+    return MaterialHandle{materials_.push(mat)};
 }
 
-uint32_t Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
-    meshes_.emplace_back();
-    mesh_t &m = meshes_.back();
-    
-    uint32_t tris_start = (uint32_t)tris_.size(),
-             tri_index_start = (uint32_t)tri_indices_.size();
+Ray::MaterialHandle Ray::Ref::Scene::AddMaterial(const principled_mat_desc_t &m) {
+    material_t main_mat = {};
+
+    main_mat.type = PrincipledNode;
+    main_mat.textures[BASE_TEXTURE] = m.base_texture._index;
+    memcpy(&main_mat.base_color[0], &m.base_color[0], 3 * sizeof(float));
+    main_mat.sheen_unorm = pack_unorm_16(CLAMP(0.5f * m.sheen, 0.0f, 1.0f));
+    main_mat.sheen_tint_unorm = pack_unorm_16(CLAMP(m.sheen_tint, 0.0f, 1.0f));
+    main_mat.roughness_unorm = pack_unorm_16(CLAMP(m.roughness, 0.0f, 1.0f));
+    main_mat.tangent_rotation = 2.0f * PI * CLAMP(m.anisotropic_rotation, 0.0f, 1.0f);
+    main_mat.textures[ROUGH_TEXTURE] = m.roughness_texture._index;
+    main_mat.metallic_unorm = pack_unorm_16(CLAMP(m.metallic, 0.0f, 1.0f));
+    main_mat.textures[METALLIC_TEXTURE] = m.metallic_texture._index;
+    main_mat.ior = m.ior;
+    main_mat.flags = 0;
+    main_mat.transmission_unorm = pack_unorm_16(CLAMP(m.transmission, 0.0f, 1.0f));
+    main_mat.transmission_roughness_unorm = pack_unorm_16(CLAMP(m.transmission_roughness, 0.0f, 1.0f));
+    main_mat.textures[NORMALS_TEXTURE] = m.normal_map._index;
+    main_mat.normal_map_strength_unorm = pack_unorm_16(CLAMP(m.normal_map_intensity, 0.0f, 1.0f));
+    main_mat.anisotropic_unorm = pack_unorm_16(CLAMP(m.anisotropic, 0.0f, 1.0f));
+    main_mat.specular_unorm = pack_unorm_16(CLAMP(m.specular, 0.0f, 1.0f));
+    main_mat.textures[SPECULAR_TEXTURE] = m.specular_texture._index;
+    main_mat.specular_tint_unorm = pack_unorm_16(CLAMP(m.specular_tint, 0.0f, 1.0f));
+    main_mat.clearcoat_unorm = pack_unorm_16(CLAMP(m.clearcoat, 0.0f, 1.0f));
+    main_mat.clearcoat_roughness_unorm = pack_unorm_16(CLAMP(m.clearcoat_roughness, 0.0f, 1.0f));
+
+    auto root_node = MaterialHandle{materials_.push(main_mat)};
+    MaterialHandle emissive_node = InvalidMaterialHandle, transparent_node = InvalidMaterialHandle;
+
+    if (m.emission_strength > 0.0f &&
+        (m.emission_color[0] > 0.0f || m.emission_color[1] > 0.0f || m.emission_color[2] > 0.0f)) {
+        shading_node_desc_t emissive_desc;
+        emissive_desc.type = EmissiveNode;
+
+        memcpy(emissive_desc.base_color, m.emission_color, 3 * sizeof(float));
+        emissive_desc.base_texture = m.emission_texture;
+        emissive_desc.strength = m.emission_strength;
+
+        emissive_node = AddMaterial(emissive_desc);
+    }
+
+    if (m.alpha != 1.0f || m.alpha_texture != InvalidTextureHandle) {
+        shading_node_desc_t transparent_desc;
+        transparent_desc.type = TransparentNode;
+
+        transparent_node = AddMaterial(transparent_desc);
+    }
+
+    if (emissive_node != InvalidMaterialHandle) {
+        if (root_node == InvalidMaterialHandle) {
+            root_node = emissive_node;
+        } else {
+            shading_node_desc_t mix_node;
+            mix_node.type = MixNode;
+            mix_node.base_texture = InvalidTextureHandle;
+            mix_node.strength = 0.5f;
+            mix_node.ior = 0.0f;
+            mix_node.mix_add = true;
+
+            mix_node.mix_materials[0] = root_node;
+            mix_node.mix_materials[1] = emissive_node;
+
+            root_node = AddMaterial(mix_node);
+        }
+    }
+
+    if (transparent_node != InvalidMaterialHandle) {
+        if (root_node == InvalidMaterialHandle || m.alpha == 0.0f) {
+            root_node = transparent_node;
+        } else {
+            shading_node_desc_t mix_node;
+            mix_node.type = MixNode;
+            mix_node.base_texture = m.alpha_texture;
+            mix_node.strength = m.alpha;
+            mix_node.ior = 0.0f;
+
+            mix_node.mix_materials[0] = transparent_node;
+            mix_node.mix_materials[1] = root_node;
+
+            root_node = AddMaterial(mix_node);
+        }
+    }
+
+    return MaterialHandle{root_node};
+}
+
+Ray::MeshHandle Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
+    const uint32_t mesh_index = meshes_.emplace();
+    mesh_t &m = meshes_.at(mesh_index);
+
+    const auto tris_start = uint32_t(tris_.size());
+    // const auto tri_index_start = uint32_t(tri_indices_.size());
 
     bvh_settings_t s;
-    s.node_traversal_cost = 0.025f;
     s.oversplit_threshold = 0.95f;
     s.allow_spatial_splits = _m.allow_spatial_splits;
     s.use_fast_bvh_build = _m.use_fast_bvh_build;
 
-    m.node_index = (uint32_t)nodes_.size();
-    m.node_count = PreprocessMesh(_m.vtx_attrs, _m.vtx_indices, _m.vtx_indices_count, _m.layout, _m.base_vertex, s, nodes_, tris_, tri_indices_);
+    const uint64_t t1 = Ray::GetTimeMs();
+
+    m.node_index = uint32_t(nodes_.size());
+    m.node_count = PreprocessMesh(_m.vtx_attrs, {_m.vtx_indices, _m.vtx_indices_count}, _m.layout, _m.base_vertex,
+                                  uint32_t(tri_materials_.size()), s, nodes_, tris_, tri_indices_, mtris_);
+
+    memcpy(m.bbox_min, nodes_[m.node_index].bbox_min, 3 * sizeof(float));
+    memcpy(m.bbox_max, nodes_[m.node_index].bbox_max, 3 * sizeof(float));
+
+    log_->Info("Ray: Mesh preprocessed in %lldms", (Ray::GetTimeMs() - t1));
 
     if (use_wide_bvh_) {
-        uint32_t before_count = (uint32_t)mnodes_.size();
-        uint32_t new_root = FlattenBVH_Recursive(nodes_.data(), m.node_index, 0xffffffff, mnodes_);
+        const uint64_t t2 = Ray::GetTimeMs();
+
+        const auto before_count = uint32_t(mnodes_.size());
+        const uint32_t new_root = FlattenBVH_Recursive(nodes_.data(), m.node_index, 0xffffffff, mnodes_);
 
         m.node_index = new_root;
-        m.node_count = (uint32_t)(mnodes_.size() - before_count);
+        m.node_count = uint32_t(mnodes_.size() - before_count);
 
-        // nodes_ is treated as temporary storage
+        // nodes_ variable is treated as temporary storage
         nodes_.clear();
+
+        log_->Info("Ray: BVH flattened in %lldms", (Ray::GetTimeMs() - t2));
     }
 
+    const auto tri_materials_start = uint32_t(tri_materials_.size());
+    tri_materials_.resize(tri_materials_start + (_m.vtx_indices_count / 3));
+
     // init triangle materials
-    for (const shape_desc_t &s : _m.shapes) {
-        bool is_solid = true;
+    for (const shape_desc_t &sh : _m.shapes) {
+        bool is_front_solid = true, is_back_solid = true;
 
         uint32_t material_stack[32];
-        material_stack[0] = s.mat_index;
+        material_stack[0] = sh.front_mat._index;
         uint32_t material_count = 1;
 
         while (material_count) {
-            material_t &mat = materials_[material_stack[--material_count]];
+            const material_t &mat = materials_[material_stack[--material_count]];
 
-            if (mat.type == MixMaterial) {
+            if (mat.type == MixNode) {
                 material_stack[material_count++] = mat.textures[MIX_MAT1];
                 material_stack[material_count++] = mat.textures[MIX_MAT2];
-            } else if (mat.type == TransparentMaterial) {
-                is_solid = false;
+            } else if (mat.type == TransparentNode) {
+                is_front_solid = false;
                 break;
             }
         }
 
-        for (size_t i = s.vtx_start; i < s.vtx_start + s.vtx_count; i += 3) {
-            tri_accel_t &tri = tris_[tris_start + i / 3];
+        material_stack[0] = sh.back_mat._index;
+        material_count = 1;
 
-            if (is_solid) {
-                tri.ci = (tri.ci | uint32_t(TRI_SOLID_BIT));
-            } else {
-                tri.ci = (tri.ci & ~uint32_t(TRI_SOLID_BIT));
+        while (material_count) {
+            const material_t &mat = materials_[material_stack[--material_count]];
+
+            if (mat.type == MixNode) {
+                material_stack[material_count++] = mat.textures[MIX_MAT1];
+                material_stack[material_count++] = mat.textures[MIX_MAT2];
+            } else if (mat.type == TransparentNode) {
+                is_back_solid = false;
+                break;
+            }
+        }
+
+        for (size_t i = sh.vtx_start; i < sh.vtx_start + sh.vtx_count; i += 3) {
+            tri_mat_data_t &tri_mat = tri_materials_[tri_materials_start + (i / 3)];
+
+            assert(sh.front_mat._index < (1 << 14) && "Not enough bits to reference material!");
+            assert(sh.back_mat._index < (1 << 14) && "Not enough bits to reference material!");
+
+            tri_mat.front_mi = uint16_t(sh.front_mat._index);
+            if (is_front_solid) {
+                tri_mat.front_mi |= MATERIAL_SOLID_BIT;
             }
 
-            tri.mi = s.mat_index;
-            tri.back_mi = s.back_mat_index;
+            tri_mat.back_mi = uint16_t(sh.back_mat._index);
+            if (is_back_solid) {
+                tri_mat.back_mi |= MATERIAL_SOLID_BIT;
+            }
         }
     }
 
     m.tris_index = tris_start;
-    m.tris_count = (uint32_t)tris_.size() - tris_start;
+    m.tris_count = uint32_t(tris_.size() - tris_start);
 
     std::vector<uint32_t> new_vtx_indices;
     new_vtx_indices.reserve(_m.vtx_indices_count);
     for (size_t i = 0; i < _m.vtx_indices_count; i++) {
-        new_vtx_indices.push_back(_m.vtx_indices[i] + _m.base_vertex + (uint32_t)vertices_.size());
+        new_vtx_indices.push_back(_m.vtx_indices[i] + _m.base_vertex + uint32_t(vertices_.size()));
     }
 
-    size_t stride = AttrStrides[_m.layout];
+    const size_t stride = AttrStrides[_m.layout];
 
     // add attributes
-    size_t new_vertices_start = vertices_.size();
+    const size_t new_vertices_start = vertices_.size();
     vertices_.resize(new_vertices_start + _m.vtx_attrs_count);
-    for (size_t i = 0; i < _m.vtx_attrs_count; i++) {
+    for (size_t i = 0; i < _m.vtx_attrs_count; ++i) {
         vertex_t &v = vertices_[new_vertices_start + i];
 
         memcpy(&v.p[0], (_m.vtx_attrs + i * stride), 3 * sizeof(float));
         memcpy(&v.n[0], (_m.vtx_attrs + i * stride + 3), 3 * sizeof(float));
-        
+
         if (_m.layout == PxyzNxyzTuv) {
             memcpy(&v.t[0][0], (_m.vtx_attrs + i * stride + 6), 2 * sizeof(float));
             v.t[1][0] = v.t[1][1] = 0.0f;
@@ -250,39 +377,34 @@ uint32_t Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
     }
 
     if (_m.layout == PxyzNxyzTuv || _m.layout == PxyzNxyzTuvTuv) {
-        ComputeTangentBasis(0, new_vertices_start, vertices_, new_vtx_indices, &new_vtx_indices[0], new_vtx_indices.size());
+        ComputeTangentBasis(0, new_vertices_start, vertices_, new_vtx_indices, &new_vtx_indices[0],
+                            new_vtx_indices.size());
     }
+
+    m.vert_index = uint32_t(vtx_indices_.size());
+    m.vert_count = uint32_t(new_vtx_indices.size());
 
     vtx_indices_.insert(vtx_indices_.end(), new_vtx_indices.begin(), new_vtx_indices.end());
 
-    return (uint32_t)(meshes_.size() - 1);
+    return MeshHandle{mesh_index};
 }
 
-void Ray::Ref::Scene::RemoveMesh(uint32_t i) {
-    const mesh_t &m = meshes_[i];
+void Ray::Ref::Scene::RemoveMesh(const MeshHandle i) {
+    if (!meshes_.exists(i._index)) {
+        return;
+    }
 
-    uint32_t node_index = m.node_index,
-             node_count = m.node_count;
+    const mesh_t &m = meshes_[i._index];
 
-    uint32_t tris_index = m.tris_index,
-             tris_count = m.tris_count;
+    const uint32_t node_index = m.node_index, node_count = m.node_count;
+    const uint32_t tris_index = m.tris_index, tris_count = m.tris_count;
 
-    auto last_mesh_index = static_cast<uint32_t>(meshes_.size() - 1);
-
-    std::swap(meshes_[i], meshes_[last_mesh_index]);
-
-    meshes_.pop_back();
+    meshes_.erase(i._index);
 
     bool rebuild_needed = false;
-
-    for (auto it = mesh_instances_.begin(); it != mesh_instances_.end(); ) {
+    for (auto it = mesh_instances_.begin(); it != mesh_instances_.end();) {
         mesh_instance_t &mi = *it;
-
-        if (mi.mesh_index == last_mesh_index) {
-            mi.mesh_index = i;
-        }
-
-        if (mi.mesh_index == i) {
+        if (mi.mesh_index == i._index) {
             it = mesh_instances_.erase(it);
             rebuild_needed = true;
         } else {
@@ -294,132 +416,283 @@ void Ray::Ref::Scene::RemoveMesh(uint32_t i) {
     RemoveNodes(node_index, node_count);
 
     if (rebuild_needed) {
-        RebuildMacroBVH();
+        RebuildTLAS();
     }
 }
 
-uint32_t Ray::Ref::Scene::AddLight(const light_desc_t &_l) {
-    light_t l;
-    memcpy(&l.pos[0], &_l.position[0], 3 * sizeof(float));
-    l.radius = _l.radius;
+Ray::LightHandle Ray::Ref::Scene::AddLight(const directional_light_desc_t &_l) {
+    light_t l = {};
+
+    l.type = LIGHT_TYPE_DIR;
+    l.cast_shadow = _l.cast_shadow;
+    l.visible = false;
+
     memcpy(&l.col[0], &_l.color[0], 3 * sizeof(float));
-    if (_l.type == SpotLight) {
-        l.dir[0] = -_l.direction[0];
-        l.dir[1] = -_l.direction[1];
-        l.dir[2] = -_l.direction[2];
-        l.spot = std::cos(_l.angle * PI / 180.0f);
-    } else if (_l.type == PointLight) {
-        l.dir[0] = l.dir[2] = 0.0f;
-        l.dir[1] = 1.0f;
-        l.spot = -1.0f;
-    } else if (_l.type == DirectionalLight) {
-        float dist = 9999999.0f;
+    l.dir.dir[0] = -_l.direction[0];
+    l.dir.dir[1] = -_l.direction[1];
+    l.dir.dir[2] = -_l.direction[2];
+    l.dir.angle = _l.angle * PI / 360.0f;
 
-        l.dir[0] = -_l.direction[0];
-        l.dir[1] = -_l.direction[1];
-        l.dir[2] = -_l.direction[2];
+    const uint32_t light_index = lights_.push(l);
+    li_indices_.push_back(light_index);
+    return LightHandle{light_index};
+}
 
-        l.pos[0] = l.dir[0] * dist;
-        l.pos[1] = l.dir[1] * dist;
-        l.pos[2] = l.dir[2] * dist;
+Ray::LightHandle Ray::Ref::Scene::AddLight(const sphere_light_desc_t &_l) {
+    light_t l = {};
 
-        l.radius = dist * std::tan(_l.angle * PI / 180.0f) + 1.0f;
+    l.type = LIGHT_TYPE_SPHERE;
+    l.cast_shadow = _l.cast_shadow;
+    l.visible = _l.visible;
 
-        float k = 1.0f + dist / l.radius;
-        k *= k;
+    memcpy(&l.col[0], &_l.color[0], 3 * sizeof(float));
+    memcpy(&l.sph.pos[0], &_l.position[0], 3 * sizeof(float));
 
-        l.col[0] = _l.color[0] * k;
-        l.col[1] = _l.color[1] * k;
-        l.col[2] = _l.color[2] * k;
+    l.sph.area = 4.0f * PI * _l.radius * _l.radius;
+    l.sph.radius = _l.radius;
+    l.sph.spot = l.sph.blend = -1.0f;
 
-        l.spot = 0.0f;
+    const uint32_t light_index = lights_.push(l);
+    li_indices_.push_back(light_index);
+    if (_l.visible) {
+        visible_lights_.push_back(light_index);
+    }
+    return LightHandle{light_index};
+}
+
+Ray::LightHandle Ray::Ref::Scene::AddLight(const spot_light_desc_t &_l) {
+    light_t l = {};
+
+    l.type = LIGHT_TYPE_SPHERE;
+    l.cast_shadow = _l.cast_shadow;
+    l.visible = _l.visible;
+
+    memcpy(&l.col[0], &_l.color[0], 3 * sizeof(float));
+    memcpy(&l.sph.pos[0], &_l.position[0], 3 * sizeof(float));
+    memcpy(&l.sph.dir[0], &_l.direction[0], 3 * sizeof(float));
+
+    l.sph.area = 4.0f * PI * _l.radius * _l.radius;
+    l.sph.radius = _l.radius;
+    l.sph.spot = 0.5f * PI * _l.spot_size / 180.0f;
+    l.sph.blend = _l.spot_blend * _l.spot_blend;
+
+    const uint32_t light_index = lights_.push(l);
+    li_indices_.push_back(light_index);
+    if (_l.visible) {
+        visible_lights_.push_back(light_index);
+    }
+    return LightHandle{light_index};
+}
+
+Ray::LightHandle Ray::Ref::Scene::AddLight(const rect_light_desc_t &_l, const float *xform) {
+    light_t l = {};
+
+    l.type = LIGHT_TYPE_RECT;
+    l.cast_shadow = _l.cast_shadow;
+    l.visible = _l.visible;
+    l.sky_portal = _l.sky_portal;
+
+    memcpy(&l.col[0], &_l.color[0], 3 * sizeof(float));
+
+    l.rect.pos[0] = xform[12];
+    l.rect.pos[1] = xform[13];
+    l.rect.pos[2] = xform[14];
+
+    l.rect.area = _l.width * _l.height;
+
+    const simd_fvec4 uvec = _l.width * TransformDirection(simd_fvec4{1.0f, 0.0f, 0.0f, 0.0f}, xform);
+    const simd_fvec4 vvec = _l.height * TransformDirection(simd_fvec4{0.0f, 0.0f, 1.0f, 0.0f}, xform);
+
+    memcpy(l.rect.u, value_ptr(uvec), 3 * sizeof(float));
+    memcpy(l.rect.v, value_ptr(vvec), 3 * sizeof(float));
+
+    const uint32_t light_index = lights_.push(l);
+    li_indices_.push_back(light_index);
+    if (_l.visible) {
+        visible_lights_.push_back(light_index);
+    }
+    if (_l.sky_portal) {
+        blocker_lights_.push_back(light_index);
+    }
+    return LightHandle{light_index};
+}
+
+Ray::LightHandle Ray::Ref::Scene::AddLight(const disk_light_desc_t &_l, const float *xform) {
+    light_t l = {};
+
+    l.type = LIGHT_TYPE_DISK;
+    l.cast_shadow = _l.cast_shadow;
+    l.visible = _l.visible;
+    l.sky_portal = _l.sky_portal;
+
+    memcpy(&l.col[0], &_l.color[0], 3 * sizeof(float));
+
+    l.disk.pos[0] = xform[12];
+    l.disk.pos[1] = xform[13];
+    l.disk.pos[2] = xform[14];
+
+    l.disk.area = 0.25f * PI * _l.size_x * _l.size_y;
+
+    const simd_fvec4 uvec = _l.size_x * TransformDirection(simd_fvec4{1.0f, 0.0f, 0.0f, 0.0f}, xform);
+    const simd_fvec4 vvec = _l.size_y * TransformDirection(simd_fvec4{0.0f, 0.0f, 1.0f, 0.0f}, xform);
+
+    memcpy(l.disk.u, value_ptr(uvec), 3 * sizeof(float));
+    memcpy(l.disk.v, value_ptr(vvec), 3 * sizeof(float));
+
+    const uint32_t light_index = lights_.push(l);
+    li_indices_.push_back(light_index);
+    if (_l.visible) {
+        visible_lights_.push_back(light_index);
+    }
+    if (_l.sky_portal) {
+        blocker_lights_.push_back(light_index);
+    }
+    return LightHandle{light_index};
+}
+
+Ray::LightHandle Ray::Ref::Scene::AddLight(const line_light_desc_t &_l, const float *xform) {
+    light_t l = {};
+
+    l.type = LIGHT_TYPE_LINE;
+    l.cast_shadow = _l.cast_shadow;
+    l.visible = _l.visible;
+    l.sky_portal = _l.sky_portal;
+
+    memcpy(&l.col[0], &_l.color[0], 3 * sizeof(float));
+
+    l.line.pos[0] = xform[12];
+    l.line.pos[1] = xform[13];
+    l.line.pos[2] = xform[14];
+
+    l.line.area = 2.0f * PI * _l.radius * _l.height;
+
+    const simd_fvec4 uvec = TransformDirection(simd_fvec4{1.0f, 0.0f, 0.0f, 0.0f}, xform);
+    const simd_fvec4 vvec = TransformDirection(simd_fvec4{0.0f, 1.0f, 0.0f, 0.0f}, xform);
+
+    memcpy(l.line.u, value_ptr(uvec), 3 * sizeof(float));
+    l.line.radius = _l.radius;
+    memcpy(l.line.v, value_ptr(vvec), 3 * sizeof(float));
+    l.line.height = _l.height;
+
+    const uint32_t light_index = lights_.push(l);
+    li_indices_.push_back(light_index);
+    if (_l.visible) {
+        visible_lights_.push_back(light_index);
+    }
+    return LightHandle{light_index};
+}
+
+void Ray::Ref::Scene::RemoveLight(const LightHandle i) {
+    if (!lights_.exists(i._index)) {
+        return;
     }
 
-    l.brightness = std::max(l.col[0], std::max(l.col[1], l.col[2]));
+    { // remove from compacted list
+        auto it = find(begin(li_indices_), end(li_indices_), i._index);
+        assert(it != end(li_indices_));
+        li_indices_.erase(it);
+    }
 
-    lights_.push_back(l);
+    if (lights_[i._index].visible) {
+        auto it = find(begin(visible_lights_), end(visible_lights_), i._index);
+        assert(it != end(visible_lights_));
+        visible_lights_.erase(it);
+    }
 
-    RebuildLightBVH();
+    if (lights_[i._index].sky_portal) {
+        auto it = find(begin(blocker_lights_), end(blocker_lights_), i._index);
+        assert(it != end(blocker_lights_));
+        blocker_lights_.erase(it);
+    }
 
-    return (uint32_t)(lights_.size() - 1);
+    lights_.erase(i._index);
 }
 
-void Ray::Ref::Scene::RemoveLight(uint32_t i) {
-    // TODO!!!
-    unused(i);
+Ray::MeshInstanceHandle Ray::Ref::Scene::AddMeshInstance(const MeshHandle mesh, const float *xform) {
+    const uint32_t mi_index = mesh_instances_.emplace();
+
+    mesh_instance_t &mi = mesh_instances_.at(mi_index);
+    mi.mesh_index = mesh._index;
+    mi.tr_index = transforms_.emplace();
+
+    { // find emissive triangles and add them as emitters
+        const mesh_t &m = meshes_[mesh._index];
+        for (uint32_t tri = (m.vert_index / 3); tri < (m.vert_index + m.vert_count) / 3; ++tri) {
+            const tri_mat_data_t &tri_mat = tri_materials_[tri];
+
+            const material_t &front_mat = materials_[tri_mat.front_mi & MATERIAL_INDEX_BITS];
+            if (front_mat.type == EmissiveNode && (front_mat.flags & MAT_FLAG_MULT_IMPORTANCE)) {
+                light_t new_light = {};
+                new_light.cast_shadow = 1;
+                new_light.type = LIGHT_TYPE_TRI;
+                new_light.visible = 0;
+                new_light.sky_portal = 0;
+                new_light.tri.tri_index = tri;
+                new_light.tri.xform_index = mi.tr_index;
+                new_light.col[0] = front_mat.base_color[0] * front_mat.strength;
+                new_light.col[1] = front_mat.base_color[1] * front_mat.strength;
+                new_light.col[2] = front_mat.base_color[2] * front_mat.strength;
+                const uint32_t index = lights_.push(new_light);
+                li_indices_.push_back(index);
+            }
+        }
+    }
+
+    SetMeshInstanceTransform(MeshInstanceHandle{mi_index}, xform);
+
+    return MeshInstanceHandle{mi_index};
 }
 
-uint32_t Ray::Ref::Scene::AddMeshInstance(uint32_t mesh_index, const float *xform) {
-    auto mi_index = static_cast<uint32_t>(mesh_instances_.size());
-
-    mesh_instances_.emplace_back();
-    mesh_instance_t &mi = mesh_instances_.back();
-    mi.mesh_index = mesh_index;
-    mi.tr_index = (uint32_t)transforms_.size();
-    transforms_.emplace_back();
-
-    SetMeshInstanceTransform(mi_index, xform);
-
-    return mi_index;
-}
-
-void Ray::Ref::Scene::SetMeshInstanceTransform(uint32_t mi_index, const float *xform) {
-    mesh_instance_t &mi = mesh_instances_[mi_index];
+void Ray::Ref::Scene::SetMeshInstanceTransform(const MeshInstanceHandle mi_handle, const float *xform) {
+    mesh_instance_t &mi = mesh_instances_[mi_handle._index];
     transform_t &tr = transforms_[mi.tr_index];
 
     memcpy(tr.xform, xform, 16 * sizeof(float));
     InverseMatrix(tr.xform, tr.inv_xform);
 
     const mesh_t &m = meshes_[mi.mesh_index];
+    TransformBoundingBox(m.bbox_min, m.bbox_max, xform, mi.bbox_min, mi.bbox_max);
 
-    if (!use_wide_bvh_) {
-        const bvh_node_t &n = nodes_[m.node_index];
-        TransformBoundingBox(n.bbox_min, n.bbox_max, xform, mi.bbox_min, mi.bbox_max);
-    } else {
-        const mbvh_node_t &n = mnodes_[m.node_index];
-
-        float bbox_min[3] = { MAX_DIST, MAX_DIST, MAX_DIST },
-              bbox_max[3] = { -MAX_DIST, -MAX_DIST, -MAX_DIST };
-
-        if (n.child[0] & LEAF_NODE_BIT) {
-            bbox_min[0] = n.bbox_min[0][0];
-            bbox_min[1] = n.bbox_min[1][0];
-            bbox_min[2] = n.bbox_min[2][0];
-
-            bbox_max[0] = n.bbox_max[0][0];
-            bbox_max[1] = n.bbox_max[1][0];
-            bbox_max[2] = n.bbox_max[2][0];
-        } else {
-            for (int i = 0; i < 8; i++) {
-                if (n.child[i] == 0x7fffffff) continue;
-
-                bbox_min[0] = std::min(bbox_min[0], n.bbox_min[0][i]);
-                bbox_min[1] = std::min(bbox_min[1], n.bbox_min[1][i]);
-                bbox_min[2] = std::min(bbox_min[2], n.bbox_min[2][i]);
-
-                bbox_max[0] = std::max(bbox_max[0], n.bbox_max[0][i]);
-                bbox_max[1] = std::max(bbox_max[1], n.bbox_max[1][i]);
-                bbox_max[2] = std::max(bbox_max[2], n.bbox_max[2][i]);
-            }
-        }
-
-        TransformBoundingBox(bbox_min, bbox_max, xform, mi.bbox_min, mi.bbox_max);
-    }
-
-    RebuildMacroBVH();
+    RebuildTLAS();
 }
 
-void Ray::Ref::Scene::RemoveMeshInstance(uint32_t i) {
-    mesh_instances_.erase(mesh_instances_.begin() + i);
+void Ray::Ref::Scene::RemoveMeshInstance(const MeshInstanceHandle i) {
+    transforms_.erase(mesh_instances_[i._index].tr_index);
+    mesh_instances_.erase(i._index);
 
-    RebuildMacroBVH();
+    RebuildTLAS();
+}
+
+void Ray::Ref::Scene::Finalize() {
+    if (env_map_light_ != InvalidLightHandle) {
+        RemoveLight(env_map_light_);
+    }
+    env_map_qtree_ = {};
+    env_.qtree_levels = 0;
+
+    if (env_.multiple_importance && env_.env_col[0] > 0.0f && env_.env_col[1] > 0.0f && env_.env_col[2] > 0.0f) {
+        if (env_.env_map != 0xffffffff) {
+            PrepareEnvMapQTree();
+        }
+        { // add env light source
+            light_t l = {};
+
+            l.type = LIGHT_TYPE_ENV;
+            l.cast_shadow = 1;
+            l.col[0] = l.col[1] = l.col[2] = 1.0f;
+
+            env_map_light_ = LightHandle{lights_.push(l)};
+            li_indices_.push_back(env_map_light_._index);
+        }
+    }
 }
 
 void Ray::Ref::Scene::RemoveTris(uint32_t tris_index, uint32_t tris_count) {
-    if (!tris_count) return;
+    if (!tris_count) {
+        return;
+    }
 
-    tris_.erase(std::next(tris_.begin(), tris_index),
-                std::next(tris_.begin(), tris_index + tris_count));
+    tris_.erase(std::next(tris_.begin(), tris_index), std::next(tris_.begin(), tris_index + tris_count));
 
     if (tris_index != tris_.size()) {
         for (mesh_t &m : meshes_) {
@@ -431,14 +704,14 @@ void Ray::Ref::Scene::RemoveTris(uint32_t tris_index, uint32_t tris_count) {
 }
 
 void Ray::Ref::Scene::RemoveNodes(uint32_t node_index, uint32_t node_count) {
-    if (!node_count) return;
+    if (!node_count) {
+        return;
+    }
 
     if (!use_wide_bvh_) {
-        nodes_.erase(std::next(nodes_.begin(), node_index),
-                     std::next(nodes_.begin(), node_index + node_count));
+        nodes_.erase(std::next(nodes_.begin(), node_index), std::next(nodes_.begin(), node_index + node_count));
     } else {
-        mnodes_.erase(std::next(mnodes_.begin(), node_index),
-                         std::next(mnodes_.begin(), node_index + node_count));
+        mnodes_.erase(std::next(mnodes_.begin(), node_index), std::next(mnodes_.begin(), node_index + node_count));
     }
 
     if ((!use_wide_bvh_ && node_index != nodes_.size()) || (use_wide_bvh_ && node_index != mnodes_.size())) {
@@ -450,13 +723,13 @@ void Ray::Ref::Scene::RemoveNodes(uint32_t node_index, uint32_t node_count) {
 
         for (uint32_t i = node_index; i < nodes_.size(); i++) {
             bvh_node_t &n = nodes_[i];
-
-#ifdef USE_STACKLESS_BVH_TRAVERSAL
-            if (n.parent != 0xffffffff && n.parent > node_index) n.parent -= node_count;
-#endif
             if ((n.prim_index & LEAF_NODE_BIT) == 0) {
-                if (n.left_child > node_index) n.left_child -= node_count;
-                if ((n.right_child & RIGHT_CHILD_BITS) > node_index) n.right_child -= node_count;
+                if (n.left_child > node_index) {
+                    n.left_child -= node_count;
+                }
+                if ((n.right_child & RIGHT_CHILD_BITS) > node_index) {
+                    n.right_child -= node_count;
+                }
             }
         }
 
@@ -464,44 +737,64 @@ void Ray::Ref::Scene::RemoveNodes(uint32_t node_index, uint32_t node_count) {
             mbvh_node_t &n = mnodes_[i];
 
             if ((n.child[0] & LEAF_NODE_BIT) == 0) {
-                if (n.child[0] > node_index) n.child[0] -= node_count;
-                if (n.child[1] > node_index) n.child[1] -= node_count;
-                if (n.child[2] > node_index) n.child[2] -= node_count;
-                if (n.child[3] > node_index) n.child[3] -= node_count;
-                if (n.child[4] > node_index) n.child[4] -= node_count;
-                if (n.child[5] > node_index) n.child[5] -= node_count;
-                if (n.child[6] > node_index) n.child[6] -= node_count;
-                if (n.child[7] > node_index) n.child[7] -= node_count;
+                if (n.child[0] > node_index) {
+                    n.child[0] -= node_count;
+                }
+                if (n.child[1] > node_index) {
+                    n.child[1] -= node_count;
+                }
+                if (n.child[2] > node_index) {
+                    n.child[2] -= node_count;
+                }
+                if (n.child[3] > node_index) {
+                    n.child[3] -= node_count;
+                }
+                if (n.child[4] > node_index) {
+                    n.child[4] -= node_count;
+                }
+                if (n.child[5] > node_index) {
+                    n.child[5] -= node_count;
+                }
+                if (n.child[6] > node_index) {
+                    n.child[6] -= node_count;
+                }
+                if (n.child[7] > node_index) {
+                    n.child[7] -= node_count;
+                }
             }
         }
 
         if (macro_nodes_root_ > node_index) {
             macro_nodes_root_ -= node_count;
         }
-
-        if (light_nodes_root_ > node_index) {
-            light_nodes_root_ -= node_count;
-        }
     }
 }
 
-void Ray::Ref::Scene::RebuildMacroBVH() {
+void Ray::Ref::Scene::RebuildTLAS() {
     RemoveNodes(macro_nodes_root_, macro_nodes_count_);
     mi_indices_.clear();
+
+    macro_nodes_root_ = 0xffffffff;
+    macro_nodes_count_ = 0;
+
+    if (mesh_instances_.empty()) {
+        return;
+    }
 
     std::vector<prim_t> primitives;
     primitives.reserve(mesh_instances_.size());
 
     for (const mesh_instance_t &mi : mesh_instances_) {
-        primitives.push_back({ 0, 0, 0, Ref::simd_fvec3{ mi.bbox_min }, Ref::simd_fvec3{ mi.bbox_max } });
+        primitives.push_back({0, 0, 0, Ref::simd_fvec4{mi.bbox_min[0], mi.bbox_min[1], mi.bbox_min[2], 0.0f},
+                              Ref::simd_fvec4{mi.bbox_max[0], mi.bbox_max[1], mi.bbox_max[2], 0.0f}});
     }
 
-    macro_nodes_root_ = static_cast<uint32_t>(nodes_.size());
-    macro_nodes_count_ = PreprocessPrims_SAH(&primitives[0], primitives.size(), nullptr, 0, {}, nodes_, mi_indices_);
+    macro_nodes_root_ = uint32_t(nodes_.size());
+    macro_nodes_count_ = PreprocessPrims_SAH(primitives, nullptr, 0, {}, nodes_, mi_indices_);
 
     if (use_wide_bvh_) {
-        uint32_t before_count = static_cast<uint32_t>(mnodes_.size());
-        uint32_t new_root = FlattenBVH_Recursive(nodes_.data(), macro_nodes_root_, 0xffffffff, mnodes_);
+        const auto before_count = uint32_t(mnodes_.size());
+        const uint32_t new_root = FlattenBVH_Recursive(nodes_.data(), macro_nodes_root_, 0xffffffff, mnodes_);
 
         macro_nodes_root_ = new_root;
         macro_nodes_count_ = static_cast<uint32_t>(mnodes_.size() - before_count);
@@ -511,73 +804,137 @@ void Ray::Ref::Scene::RebuildMacroBVH() {
     }
 }
 
-void Ray::Ref::Scene::RebuildLightBVH() {
-    RemoveNodes(light_nodes_root_, light_nodes_count_);
-    li_indices_.clear();
+void Ray::Ref::Scene::PrepareEnvMapQTree() {
+    const int tex = int(env_.env_map & 0x00ffffff);
+    simd_ivec2 size;
+    tex_storage_rgba_.GetIRes(tex, 0, value_ptr(size));
 
-    std::vector<prim_t> primitives;
-    primitives.reserve(lights_.size());
+    const int lowest_dim = std::min(size[0], size[1]);
 
-    for (const light_t &l : lights_) {
-        float influence = l.radius * (std::sqrt(l.brightness / LIGHT_ATTEN_CUTOFF) - 1.0f);
-
-        simd_fvec3 bbox_min = { 0.0f }, bbox_max = { 0.0f };
-
-        simd_fvec3 p1 = { -l.dir[0] * influence,
-                          -l.dir[1] * influence,
-                          -l.dir[2] * influence };
-
-        bbox_min = min(bbox_min, p1);
-        bbox_max = max(bbox_max, p1);
-
-        simd_fvec3 p2 = { -l.dir[0] * l.spot * influence,
-                          -l.dir[1] * l.spot * influence,
-                          -l.dir[2] * l.spot * influence };
-
-        float d = std::sqrt(1.0f - l.spot * l.spot) * influence;
-
-        bbox_min = min(bbox_min, p2 - simd_fvec3{ d, 0.0f, d });
-        bbox_max = max(bbox_max, p2 + simd_fvec3{ d, 0.0f, d });
-
-        if (l.spot < 0.0f) {
-            bbox_min = min(bbox_min, p1 - simd_fvec3{ influence, 0.0f, influence });
-            bbox_max = max(bbox_max, p1 + simd_fvec3{ influence, 0.0f, influence });
-        }
-
-        simd_fvec3 up = { 1.0f, 0.0f, 0.0f };
-        if (std::abs(l.dir[1]) < std::abs(l.dir[2]) && std::abs(l.dir[1]) < std::abs(l.dir[0])) {
-            up = { 0.0f, 1.0f, 0.0f };
-        } else if (std::abs(l.dir[2]) < std::abs(l.dir[0]) && std::abs(l.dir[2]) < std::abs(l.dir[1])) {
-            up = { 0.0f, 0.0f, 1.0f };
-        }
-
-        simd_fvec3 side = { -l.dir[1] * up[2] + l.dir[2] * up[1],
-                            -l.dir[2] * up[0] + l.dir[0] * up[2],
-                            -l.dir[0] * up[1] + l.dir[1] * up[0] };
-
-        float xform[16] = { side[0],  l.dir[0], up[0],    0.0f,
-                            side[1],  l.dir[1], up[1],    0.0f,
-                            side[2],  l.dir[2], up[2],    0.0f,
-                            l.pos[0], l.pos[1], l.pos[2], 1.0f };
-
-        primitives.emplace_back();
-        prim_t &prim = primitives.back();
-
-        prim.i0 = prim.i1 = prim.i2 = 0;
-        TransformBoundingBox(&bbox_min[0], &bbox_max[0], xform, &prim.bbox_min[0], &prim.bbox_max[0]);
+    env_map_qtree_.res = 1;
+    while (2 * env_map_qtree_.res < lowest_dim) {
+        env_map_qtree_.res *= 2;
     }
 
-    light_nodes_root_ = static_cast<uint32_t>(nodes_.size());
-    light_nodes_count_ = PreprocessPrims_SAH(&primitives[0], primitives.size(), nullptr, 0, {}, nodes_, li_indices_);
+    assert(env_map_qtree_.mips.empty());
 
-    if (use_wide_bvh_) {
-        uint32_t before_count = static_cast<uint32_t>(mnodes_.size());
-        uint32_t new_root = FlattenBVH_Recursive(nodes_.data(), light_nodes_root_, 0xffffffff, mnodes_);
+    int cur_res = env_map_qtree_.res;
+    float total_lum = 0.0f;
 
-        light_nodes_root_ = new_root;
-        light_nodes_count_ = static_cast<uint32_t>(mnodes_.size() - before_count);
+    { // initialize the first quadtree level
+        env_map_qtree_.mips.emplace_back(cur_res * cur_res, 0.0f);
 
-        // nodes_ is temporary storage when wide BVH is used
-        nodes_.clear();
+        for (int y = 0; y < size[1]; ++y) {
+            const float theta = PI * float(y) / float(size[1]);
+            for (int x = 0; x < size[0]; ++x) {
+                const float phi = 2.0f * PI * float(x) / float(size[0]);
+
+                const color_rgba8_t col_rgbe = tex_storage_rgba_.Get(tex, x, y, 0);
+                const simd_fvec4 col_rgb = rgbe_to_rgb(col_rgbe);
+
+                const float cur_lum = (col_rgb[0] + col_rgb[1] + col_rgb[2]);
+
+                auto dir =
+                    simd_fvec4{std::sin(theta) * std::cos(phi), std::cos(theta), std::sin(theta) * std::sin(phi), 0.0f};
+
+                simd_fvec2 q;
+                DirToCanonical(value_ptr(dir), 0.0f, value_ptr(q));
+
+                int qx = CLAMP(int(cur_res * q[0]), 0, cur_res - 1);
+                int qy = CLAMP(int(cur_res * q[1]), 0, cur_res - 1);
+
+                int index = 0;
+                index |= (qx & 1) << 0;
+                index |= (qy & 1) << 1;
+
+                qx /= 2;
+                qy /= 2;
+
+                auto &qvec = reinterpret_cast<simd_fvec4 &>(env_map_qtree_.mips[0][4 * (qy * cur_res / 2 + qx)]);
+                qvec.set(index, std::max(qvec[index], cur_lum));
+            }
+        }
+
+        for (const float v : env_map_qtree_.mips[0]) {
+            total_lum += v;
+        }
+
+        cur_res /= 2;
     }
+
+    while (cur_res > 1) {
+        env_map_qtree_.mips.emplace_back(cur_res * cur_res, 0.0f);
+        const auto *prev_mip =
+            reinterpret_cast<const simd_fvec4 *>(env_map_qtree_.mips[env_map_qtree_.mips.size() - 2].data());
+
+        for (int y = 0; y < cur_res; ++y) {
+            for (int x = 0; x < cur_res; ++x) {
+                const float res_lum = prev_mip[y * cur_res + x][0] + prev_mip[y * cur_res + x][1] +
+                                      prev_mip[y * cur_res + x][2] + prev_mip[y * cur_res + x][3];
+
+                int index = 0;
+                index |= (x & 1) << 0;
+                index |= (y & 1) << 1;
+
+                const int qx = (x / 2);
+                const int qy = (y / 2);
+
+                env_map_qtree_.mips.back()[4 * (qy * cur_res / 2 + qx) + index] = res_lum;
+            }
+        }
+
+        cur_res /= 2;
+    }
+
+    //
+    // Determine how many levels was actually required
+    //
+
+    static const float LumFractThreshold = 0.01f;
+
+    cur_res = 2;
+    int the_last_required_lod;
+    for (int lod = int(env_map_qtree_.mips.size()) - 1; lod >= 0; --lod) {
+        the_last_required_lod = lod;
+        const auto *cur_mip = reinterpret_cast<const simd_fvec4 *>(env_map_qtree_.mips[lod].data());
+
+        bool subdivision_required = false;
+        for (int y = 0; y < (cur_res / 2) && !subdivision_required; ++y) {
+            for (int x = 0; x < (cur_res / 2) && !subdivision_required; ++x) {
+                const simd_ivec4 mask = simd_cast(cur_mip[y * cur_res / 2 + x] > LumFractThreshold * total_lum);
+                subdivision_required |= mask.not_all_zeros();
+            }
+        }
+
+        if (!subdivision_required) {
+            break;
+        }
+
+        cur_res *= 2;
+    }
+
+    //
+    // Drop not needed levels
+    //
+
+    while (the_last_required_lod != 0) {
+        for (int i = 1; i < int(env_map_qtree_.mips.size()); ++i) {
+            env_map_qtree_.mips[i - 1] = std::move(env_map_qtree_.mips[i]);
+        }
+        env_map_qtree_.res /= 2;
+        env_map_qtree_.mips.pop_back();
+        --the_last_required_lod;
+    }
+
+    env_.qtree_levels = int(env_map_qtree_.mips.size());
+    for (int i = 0; i < env_.qtree_levels; ++i) {
+        env_.qtree_mips[i] = env_map_qtree_.mips[i].data();
+    }
+    for (int i = env_.qtree_levels; i < countof(env_.qtree_mips); ++i) {
+        env_.qtree_mips[i] = nullptr;
+    }
+
+    log_->Info("Env map qtree res is %i", env_map_qtree_.res);
 }
+
+#undef CLAMP

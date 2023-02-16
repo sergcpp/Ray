@@ -2,6 +2,7 @@
 
 #include <memory>
 
+#include "Config.h"
 #include "SceneBase.h"
 #include "Types.h"
 
@@ -11,21 +12,35 @@
 
 namespace Ray {
 /// Renderer flags used to choose backend
-enum eRendererType {
-    RendererRef     = (1 << 0),
-    RendererSSE2    = (1 << 1),
-    RendererAVX     = (1 << 2),
-    RendererAVX2    = (1 << 3),
-    RendererNEON    = (1 << 4),
-    RendererOCL     = (1 << 5),
+enum eRendererType : uint32_t {
+    // Reference renderer, slightly vectorized, the easiest to modify and debug
+    RendererRef = (1 << 0),
+    // SIMD renderers, heavily vectorized
+    RendererSSE2 = (1 << 1),
+    RendererSSE41 = (1 << 2),
+    RendererAVX = (1 << 3),
+    RendererAVX2 = (1 << 4),
+    RendererAVX512 = (1 << 5),
+    RendererNEON = (1 << 6),
+    // GPU renderer
+    RendererVK = (1 << 7)
 };
+
+const char *RendererTypeName(eRendererType rt);
+eRendererType RendererTypeFromName(const char *name);
+
+/// Returns whether it is safe to call Render function for non-overlaping regions from different threads
+bool RendererSupportsMultithreading(eRendererType rt);
 
 /// Renderer settings
 struct settings_t {
-    int w, h;
-#if !defined(DISABLE_OCL)
-    int platform_index = -1, device_index = -1;
-#endif
+    int w = 0, h = 0;
+#ifdef ENABLE_GPU_IMPL
+    const char *preferred_device = nullptr;
+    bool use_tex_compression = true; // temporarily GPU only
+#endif // ENABLE_GPU_IMPL
+    bool use_hwrt = true;
+    bool use_bindless = true;
     bool use_wide_bvh = true;
 };
 
@@ -35,9 +50,10 @@ struct settings_t {
 class RegionContext {
     /// Rectangle on image
     rect_t rect_;
-public:
-    int iteration = 0;                      ///< Number of rendered samples per pixel
-    std::unique_ptr<float[]> halton_seq;    ///< Sequense of random 2D points
+
+  public:
+    int iteration = 0;                   ///< Number of rendered samples per pixel
+    std::unique_ptr<float[]> halton_seq; ///< Sequence of random 2D points
 
     explicit RegionContext(const rect_t &rect) : rect_(rect) {}
 
@@ -51,13 +67,18 @@ public:
 };
 
 /** Base class for all renderer backends
-*/
+ */
 class RendererBase {
-public:
+  public:
     virtual ~RendererBase() = default;
 
     /// Type of renderer
     virtual eRendererType type() const = 0;
+
+    /// Name of the device
+    virtual const char *device_name() const = 0;
+
+    virtual bool is_hwrt() const { return false; }
 
     /// Returns size of rendered image
     virtual std::pair<int, int> size() const = 0;
@@ -77,28 +98,30 @@ public:
     /** @brief Clear framebuffer
         @param c color used to fill image
     */
-    virtual void Clear(const pixel_color_t &c = { 0, 0, 0, 0 }) = 0;
+    virtual void Clear(const pixel_color_t &c) = 0;
 
     /** @brief Create new scene
-        @return shared pointer to new scene for specific backend
+        @return pointer to new scene for specific backend
     */
-    virtual std::shared_ptr<SceneBase> CreateScene() = 0;
+    virtual SceneBase *CreateScene() = 0;
 
     /** @brief Render image region
-        @param s shared pointer to a scene
+        @param scene reference to a scene
         @param region image region to render
     */
-    virtual void RenderScene(const std::shared_ptr<SceneBase> &s, RegionContext &region) = 0;
+    virtual void RenderScene(const SceneBase *scene, RegionContext &region) = 0;
 
     struct stats_t {
         unsigned long long time_primary_ray_gen_us;
         unsigned long long time_primary_trace_us;
         unsigned long long time_primary_shade_us;
+        unsigned long long time_primary_shadow_us;
         unsigned long long time_secondary_sort_us;
         unsigned long long time_secondary_trace_us;
         unsigned long long time_secondary_shade_us;
+        unsigned long long time_secondary_shadow_us;
     };
     virtual void GetStats(stats_t &st) = 0;
     virtual void ResetStats() = 0;
 };
-}
+} // namespace Ray

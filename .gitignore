@@ -1,1 +1,8 @@
 build-*
+*_diff.tga
+*_mask.tga
+*_out.tga
+material_*_imgs.tga
+material_*_masks.tga
+material_refs.tga
+Config.h

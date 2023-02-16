@@ -2,48 +2,19 @@
 
 #include "CoreRef.h"
 
+#include <cassert>
 #include <cmath>
 
 #include <array>
 
-std::vector<Ray::pixel_color8_t> Ray::Ref::DownsampleTexture(const std::vector<pixel_color8_t> &_tex, const int res[2]) {
-    if (res[0] == 1 || res[1] == 1) return _tex;
-    
-    const pixel_color8_t *tex = &_tex[0];
-
-    // TODO: properly downsample non-power-of-2 textures
-
-    std::vector<pixel_color8_t> ret;
-    ret.reserve(res[0] * res[1] / 4);
-
-    for (int j = 0; j < res[1]; j += 2) {
-        for (int i = 0; i < res[0]; i += 2) {
-            int r = tex[(j + 0) * res[0] + i].r + tex[(j + 0) * res[0] + i + 1].r +
-                    tex[(j + 1) * res[0] + i].r + tex[(j + 1) * res[0] + i + 1].r;
-            int g = tex[(j + 0) * res[0] + i].g + tex[(j + 0) * res[0] + i + 1].g +
-                    tex[(j + 1) * res[0] + i].g + tex[(j + 1) * res[0] + i + 1].g;
-            int b = tex[(j + 0) * res[0] + i].b + tex[(j + 0) * res[0] + i + 1].b +
-                    tex[(j + 1) * res[0] + i].b + tex[(j + 1) * res[0] + i + 1].b;
-            int a = tex[(j + 0) * res[0] + i].a + tex[(j + 0) * res[0] + i + 1].a +
-                    tex[(j + 1) * res[0] + i].a + tex[(j + 1) * res[0] + i + 1].a;
-
-            ret.push_back({
-                uint8_t(r / 4), uint8_t(g / 4),
-                uint8_t(b / 4), uint8_t(a / 4)
-            });
-        }
-    }
-
-    return ret;
-}
-
-void Ray::Ref::ComputeTangentBasis(size_t vtx_offset, size_t vtx_start, std::vector<vertex_t> &vertices, std::vector<uint32_t> &new_vtx_indices,
-                                   const uint32_t *indices, size_t indices_count) {
+void Ray::Ref::ComputeTangentBasis(size_t vtx_offset, size_t vtx_start, std::vector<vertex_t> &vertices,
+                                   std::vector<uint32_t> &new_vtx_indices, const uint32_t *indices,
+                                   size_t indices_count) {
     auto cross = [](const simd_fvec3 &v1, const simd_fvec3 &v2) -> simd_fvec3 {
-        return simd_fvec3{ v1[1] * v2[2] - v1[2] * v2[1], v1[2] * v2[0] - v1[0] * v2[2], v1[0] * v2[1] - v1[1] * v2[0] };
+        return simd_fvec3{v1[1] * v2[2] - v1[2] * v2[1], v1[2] * v2[0] - v1[0] * v2[2], v1[0] * v2[1] - v1[1] * v2[0]};
     };
 
-    std::vector<std::array<uint32_t, 3>> twin_verts(vertices.size(), { 0, 0, 0 });
+    std::vector<std::array<uint32_t, 3>> twin_verts(vertices.size(), {0, 0, 0});
     aligned_vector<simd_fvec3> binormals(vertices.size());
     for (size_t i = 0; i < indices_count; i += 3) {
         vertex_t *v0 = &vertices[indices[i + 0]];
@@ -54,38 +25,42 @@ void Ray::Ref::ComputeTangentBasis(size_t vtx_offset, size_t vtx_start, std::vec
         simd_fvec3 &b1 = binormals[indices[i + 1]];
         simd_fvec3 &b2 = binormals[indices[i + 2]];
 
-        simd_fvec3 dp1 = simd_fvec3(v1->p) - simd_fvec3(v0->p);
-        simd_fvec3 dp2 = simd_fvec3(v2->p) - simd_fvec3(v0->p);
+        const simd_fvec3 dp1 = simd_fvec3(v1->p) - simd_fvec3(v0->p);
+        const simd_fvec3 dp2 = simd_fvec3(v2->p) - simd_fvec3(v0->p);
 
-        simd_fvec2 dt1 = simd_fvec2(v1->t[0]) - simd_fvec2(v0->t[0]);
-        simd_fvec2 dt2 = simd_fvec2(v2->t[0]) - simd_fvec2(v0->t[0]);
+        const simd_fvec2 dt1 = simd_fvec2(v1->t[0]) - simd_fvec2(v0->t[0]);
+        const simd_fvec2 dt2 = simd_fvec2(v2->t[0]) - simd_fvec2(v0->t[0]);
 
         simd_fvec3 tangent, binormal;
 
-        float det = dt1[0] * dt2[1] - dt1[1] * dt2[0];
+        const float det = dt1[0] * dt2[1] - dt1[1] * dt2[0];
         if (std::abs(det) > FLT_EPS) {
-            float inv_det = 1.0f / det;
+            const float inv_det = 1.0f / det;
             tangent = (dp1 * dt2[1] - dp2 * dt1[1]) * inv_det;
             binormal = (dp2 * dt1[0] - dp1 * dt2[0]) * inv_det;
         } else {
             simd_fvec3 plane_N = cross(dp1, dp2);
 
             int w = 2;
-            tangent = simd_fvec3{ 0.0f, 1.0f, 0.0f };
+            tangent = simd_fvec3{0.0f, 1.0f, 0.0f};
             if (std::abs(plane_N[0]) <= std::abs(plane_N[1]) && std::abs(plane_N[0]) <= std::abs(plane_N[2])) {
-                tangent = simd_fvec3{ 1.0f, 0.0f, 0.0f };
+                tangent = simd_fvec3{1.0f, 0.0f, 0.0f};
                 w = 1;
             } else if (std::abs(plane_N[2]) <= std::abs(plane_N[0]) && std::abs(plane_N[2]) <= std::abs(plane_N[1])) {
-                tangent = simd_fvec3{ 0.0f, 0.0f, 1.0f };
+                tangent = simd_fvec3{0.0f, 0.0f, 1.0f};
                 w = 0;
             }
 
             if (std::abs(plane_N[w]) > FLT_EPS) {
                 binormal = normalize(cross(simd_fvec3(plane_N), tangent));
                 tangent = normalize(cross(simd_fvec3(plane_N), binormal));
+
+                // avoid floating-point underflow
+                where(abs(binormal) < FLT_EPS, binormal) = 0.0f;
+                where(abs(tangent) < FLT_EPS, tangent) = 0.0f;
             } else {
-                binormal = { 0.0f };
-                tangent = { 0.0f };
+                binormal = {0.0f};
+                tangent = {0.0f};
             }
         }
 
@@ -95,7 +70,7 @@ void Ray::Ref::ComputeTangentBasis(size_t vtx_offset, size_t vtx_start, std::vec
         if (i1 || i2) {
             uint32_t index = twin_verts[indices[i + 0]][i1 + i2 - 1];
             if (index == 0) {
-                index = (uint32_t)(vtx_offset + vertices.size());
+                index = uint32_t(vtx_offset + vertices.size());
                 vertices.push_back(*v0);
                 memset(&vertices.back().b[0], 0, 3 * sizeof(float));
                 twin_verts[indices[i + 0]][i1 + i2 - 1] = index;
@@ -119,7 +94,7 @@ void Ray::Ref::ComputeTangentBasis(size_t vtx_offset, size_t vtx_start, std::vec
         if (i1 || i2) {
             uint32_t index = twin_verts[indices[i + 1]][i1 + i2 - 1];
             if (index == 0) {
-                index = (uint32_t)(vtx_offset + vertices.size());
+                index = uint32_t(vtx_offset + vertices.size());
                 vertices.push_back(*v1);
                 memset(&vertices.back().b[0], 0, 3 * sizeof(float));
                 twin_verts[indices[i + 1]][i1 + i2 - 1] = index;
@@ -143,7 +118,7 @@ void Ray::Ref::ComputeTangentBasis(size_t vtx_offset, size_t vtx_start, std::vec
         if (i1 || i2) {
             uint32_t index = twin_verts[indices[i + 2]][i1 + i2 - 1];
             if (index == 0) {
-                index = (uint32_t)(vtx_offset + vertices.size());
+                index = uint32_t(vtx_offset + vertices.size());
                 vertices.push_back(*v2);
                 memset(&vertices.back().b[0], 0, 3 * sizeof(float));
                 twin_verts[indices[i + 2]][i1 + i2 - 1] = index;
@@ -166,12 +141,12 @@ void Ray::Ref::ComputeTangentBasis(size_t vtx_offset, size_t vtx_start, std::vec
         vertex_t &v = vertices[i];
 
         if (std::abs(v.b[0]) > FLT_EPS || std::abs(v.b[1]) > FLT_EPS || std::abs(v.b[2]) > FLT_EPS) {
-            simd_fvec3 tangent = { v.b };
+            const auto tangent = simd_fvec3{v.b};
             simd_fvec3 binormal = cross(simd_fvec3(v.n), tangent);
-            float l = length(binormal);
+            const float l = length(binormal);
             if (l > FLT_EPS) {
                 binormal /= l;
-                memcpy(&v.b[0], &binormal[0], 3 * sizeof(float));
+                memcpy(&v.b[0], value_ptr(binormal), 3 * sizeof(float));
             }
         }
     }

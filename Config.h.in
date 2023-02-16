@@ -1,0 +1,5 @@
+#pragma once
+
+#cmakedefine ENABLE_REF_IMPL
+#cmakedefine ENABLE_SIMD_IMPL
+#cmakedefine ENABLE_GPU_IMPL
