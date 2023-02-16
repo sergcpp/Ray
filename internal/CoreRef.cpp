@@ -11,7 +11,7 @@
 // Useful macros for debugging
 //
 #define USE_VNDF_GGX_SAMPLING 1
-#define USE_NEE 0
+#define USE_NEE 1
 #define USE_PATH_TERMINATION 1
 #define VECTORIZE_BBOX_INTERSECTION 1
 #define VECTORIZE_TRI_INTERSECTION 1
