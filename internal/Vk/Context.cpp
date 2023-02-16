@@ -13,7 +13,7 @@ namespace Ray {
 namespace Vk {
 bool ignore_optick_errors = false;
 
-VKAPI_ATTR VkBool32 VKAPI_ATTR DebugReportCallback(const VkDebugReportFlagsEXT flags,
+VKAPI_ATTR VkBool32 VKAPI_CALL DebugReportCallback(const VkDebugReportFlagsEXT flags,
                                                    const VkDebugReportObjectTypeEXT objectType, const uint64_t object,
                                                    const size_t location, const int32_t messageCode,
                                                    const char *pLayerPrefix, const char *pMessage, void *pUserData) {

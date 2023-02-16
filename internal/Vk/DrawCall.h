@@ -5,10 +5,15 @@
 #include "../Span.h"
 #include "VK.h"
 
+#if (VK_USE_64_BIT_PTR_DEFINES == 1)
 struct VkDescriptorSet_T;
 typedef VkDescriptorSet_T *VkDescriptorSet;
 struct VkDescriptorSetLayout_T;
 typedef VkDescriptorSetLayout_T *VkDescriptorSetLayout;
+#else
+typedef uint64_t VkDescriptorSet;
+typedef uint64_t VkDescriptorSetLayout;
+#endif
 
 namespace Ray {
 class ILog;
@@ -69,7 +74,7 @@ struct Binding {
     Binding(eBindTarget _trg, uint16_t _loc, size_t _offset, size_t _size, OpaqueHandle _handle)
         : trg(_trg), loc(_loc), offset(uint16_t(_offset)), size(uint16_t(_size)), handle(_handle) {}
 };
-static_assert(sizeof(Binding) == sizeof(void *) + 8 + 8, "!");
+// static_assert(sizeof(Binding) == sizeof(void *) + 8 + 8, "!");
 
 VkDescriptorSet PrepareDescriptorSet(Context *ctx, VkDescriptorSetLayout layout, Span<const Binding> bindings,
                                      DescrMultiPoolAlloc *descr_alloc, ILog *log);

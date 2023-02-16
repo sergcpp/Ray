@@ -614,7 +614,7 @@ uint32_t Ray::PreprocessPrims_HLBVH(Span<const prim_t> prims, std::vector<bvh_no
     const auto indices_start = uint32_t(out_indices.size());
     out_indices.reserve(out_indices.size() + prims.size());
 
-    for (uint32_t j = 0; j < prims.size(); j++) {
+    for (uint32_t j = 0; j < uint32_t(prims.size()); j++) {
         whole_min = min(whole_min, prims[j].bbox_min);
         whole_max = max(whole_max, prims[j].bbox_max);
 

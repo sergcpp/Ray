@@ -83,7 +83,7 @@ int Ray::Ref::TexStorageLinear<T, N>::Allocate(const ColorType data[], const int
 }
 
 template <typename T, int N> bool Ray::Ref::TexStorageLinear<T, N>::Free(const int index) {
-    if (index < 0 || index > images_.size()) {
+    if (index < 0 || index > int(images_.size())) {
         return false;
     }
 
@@ -247,7 +247,7 @@ int Ray::Ref::TexStorageTiled<T, N>::Allocate(const ColorType *data, const int _
 }
 
 template <typename T, int N> bool Ray::Ref::TexStorageTiled<T, N>::Free(const int index) {
-    if (index < 0 || index > images_.size()) {
+    if (index < 0 || index > int(images_.size())) {
         return false;
     }
 
@@ -395,7 +395,7 @@ int Ray::Ref::TexStorageSwizzled<T, N>::Allocate(const ColorType *data, const in
 }
 
 template <typename T, int N> bool Ray::Ref::TexStorageSwizzled<T, N>::Free(const int index) {
-    if (index < 0 || index > images_.size()) {
+    if (index < 0 || index > int(images_.size())) {
         return false;
     }
 

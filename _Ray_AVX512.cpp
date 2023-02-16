@@ -4,6 +4,6 @@
 
 #include "Config.h"
 
-#if defined(ENABLE_SIMD_IMPL) && (defined(_M_X86) || defined(_M_X64) || defined(__i386__) || defined(__x86_64__))
+#if defined(ENABLE_SIMD_IMPL) && (defined(_M_IX86) || defined(_M_X64) || defined(__i386__) || defined(__x86_64__))
 #include "internal/RendererAVX512.cpp"
 #endif
