@@ -137,7 +137,7 @@ int main(int argc, char *argv[]) {
     const char *device_name = nullptr;
     const char *preferred_arch[] = {nullptr, nullptr};
 
-    for (size_t i = 1; i < argc; i++) {
+    for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--nogpu") == 0) {
             nogpu = true;
         } else if (strcmp(argv[i], "--nocpu") == 0) {

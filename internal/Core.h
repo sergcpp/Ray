@@ -21,6 +21,23 @@
 
 #pragma intrinsic(_BitScanForward)
 #pragma intrinsic(_bittestandcomplement)
+
+#ifdef _M_IX86
+// Win32 doesn't have _BitScanForward64 so emulate it with two 32 bit calls
+force_inline unsigned char _BitScanForward64(unsigned long *Index, unsigned __int64 Mask) {
+    // Scan the Low Word
+    if (_BitScanForward(Index, static_cast<unsigned long>(Mask))) {
+        return 1;
+    }
+    // Scan the High Word
+    if (_BitScanForward(Index, static_cast<unsigned long>(Mask >> 32))) {
+        *Index += 32; // Create a bit offset from the LSB
+        return 1;
+    }
+    return 0;
+}
+#endif
+
 #endif
 
 #define unused(x) ((void)x)

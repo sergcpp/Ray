@@ -617,7 +617,7 @@ Ray::MeshHandle Ray::Vk::Scene::AddMesh(const mesh_desc_t &_m) {
 
     const size_t attr_stride = AttrStrides[_m.layout];
     if (use_hwrt_) {
-        for (int j = 0; j < _m.vtx_indices_count; j += 3) {
+        for (int j = 0; j < int(_m.vtx_indices_count); j += 3) {
             Ref::simd_fvec4 p[3];
 
             const uint32_t i0 = _m.vtx_indices[j + 0], i1 = _m.vtx_indices[j + 1], i2 = _m.vtx_indices[j + 2];
