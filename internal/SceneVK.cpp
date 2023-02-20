@@ -164,7 +164,6 @@ Ray::TextureHandle Ray::Vk::Scene::AddAtlasTexture(const tex_desc_t &_t) {
         } else if (t.atlas == 2 || t.atlas == 6) {
             page =
                 tex_atlases_[t.atlas].Allocate<uint8_t, 2>(reinterpret_cast<const color_rg8_t *>(tex_data), res, pos);
-            page = tex_atlases_[2].Allocate<uint8_t, 2>(reinterpret_cast<const color_rg8_t *>(tex_data), res, pos);
         } else if (t.atlas == 3 || t.atlas == 5) {
             page = tex_atlases_[t.atlas].Allocate<uint8_t, 1>(reinterpret_cast<const color_r8_t *>(tex_data), res, pos);
         }
