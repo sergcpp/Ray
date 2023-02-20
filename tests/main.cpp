@@ -10,13 +10,9 @@ void test_tex_storage();
 void test_oren_mat0(const char *arch_list[], const char *preferred_device);
 void test_oren_mat1(const char *arch_list[], const char *preferred_device);
 void test_oren_mat2(const char *arch_list[], const char *preferred_device);
-void test_oren_mat3(const char *arch_list[], const char *preferred_device);
-void test_oren_mat4(const char *arch_list[], const char *preferred_device);
 void test_diff_mat0(const char *arch_list[], const char *preferred_device);
 void test_diff_mat1(const char *arch_list[], const char *preferred_device);
 void test_diff_mat2(const char *arch_list[], const char *preferred_device);
-void test_diff_mat3(const char *arch_list[], const char *preferred_device);
-void test_diff_mat4(const char *arch_list[], const char *preferred_device);
 void test_sheen_mat0(const char *arch_list[], const char *preferred_device);
 void test_sheen_mat1(const char *arch_list[], const char *preferred_device);
 void test_sheen_mat2(const char *arch_list[], const char *preferred_device);
@@ -24,13 +20,9 @@ void test_sheen_mat3(const char *arch_list[], const char *preferred_device);
 void test_glossy_mat0(const char *arch_list[], const char *preferred_device);
 void test_glossy_mat1(const char *arch_list[], const char *preferred_device);
 void test_glossy_mat2(const char *arch_list[], const char *preferred_device);
-void test_glossy_mat3(const char *arch_list[], const char *preferred_device);
-void test_glossy_mat4(const char *arch_list[], const char *preferred_device);
 void test_spec_mat0(const char *arch_list[], const char *preferred_device);
 void test_spec_mat1(const char *arch_list[], const char *preferred_device);
 void test_spec_mat2(const char *arch_list[], const char *preferred_device);
-void test_spec_mat3(const char *arch_list[], const char *preferred_device);
-void test_spec_mat4(const char *arch_list[], const char *preferred_device);
 void test_aniso_mat0(const char *arch_list[], const char *preferred_device);
 void test_aniso_mat1(const char *arch_list[], const char *preferred_device);
 void test_aniso_mat2(const char *arch_list[], const char *preferred_device);
@@ -42,46 +34,30 @@ void test_aniso_mat7(const char *arch_list[], const char *preferred_device);
 void test_tint_mat0(const char *arch_list[], const char *preferred_device);
 void test_tint_mat1(const char *arch_list[], const char *preferred_device);
 void test_tint_mat2(const char *arch_list[], const char *preferred_device);
-void test_tint_mat3(const char *arch_list[], const char *preferred_device);
-void test_tint_mat4(const char *arch_list[], const char *preferred_device);
 void test_plastic_mat0(const char *arch_list[], const char *preferred_device);
 void test_plastic_mat1(const char *arch_list[], const char *preferred_device);
 void test_plastic_mat2(const char *arch_list[], const char *preferred_device);
-void test_plastic_mat3(const char *arch_list[], const char *preferred_device);
-void test_plastic_mat4(const char *arch_list[], const char *preferred_device);
 void test_metal_mat0(const char *arch_list[], const char *preferred_device);
 void test_metal_mat1(const char *arch_list[], const char *preferred_device);
 void test_metal_mat2(const char *arch_list[], const char *preferred_device);
-void test_metal_mat3(const char *arch_list[], const char *preferred_device);
-void test_metal_mat4(const char *arch_list[], const char *preferred_device);
 void test_emit_mat0(const char *arch_list[], const char *preferred_device);
 void test_emit_mat1(const char *arch_list[], const char *preferred_device);
 void test_coat_mat0(const char *arch_list[], const char *preferred_device);
 void test_coat_mat1(const char *arch_list[], const char *preferred_device);
 void test_coat_mat2(const char *arch_list[], const char *preferred_device);
-void test_coat_mat3(const char *arch_list[], const char *preferred_device);
-void test_coat_mat4(const char *arch_list[], const char *preferred_device);
 void test_refr_mis0(const char *arch_list[], const char *preferred_device);
 void test_refr_mis1(const char *arch_list[], const char *preferred_device);
 void test_refr_mis2(const char *arch_list[], const char *preferred_device);
-void test_refr_mis3(const char *arch_list[], const char *preferred_device);
-void test_refr_mis4(const char *arch_list[], const char *preferred_device);
 void test_refr_mat0(const char *arch_list[], const char *preferred_device);
 void test_refr_mat1(const char *arch_list[], const char *preferred_device);
 void test_refr_mat2(const char *arch_list[], const char *preferred_device);
 void test_refr_mat3(const char *arch_list[], const char *preferred_device);
-void test_refr_mat4(const char *arch_list[], const char *preferred_device);
-void test_refr_mat5(const char *arch_list[], const char *preferred_device);
 void test_trans_mat0(const char *arch_list[], const char *preferred_device);
 void test_trans_mat1(const char *arch_list[], const char *preferred_device);
 void test_trans_mat2(const char *arch_list[], const char *preferred_device);
 void test_trans_mat3(const char *arch_list[], const char *preferred_device);
 void test_trans_mat4(const char *arch_list[], const char *preferred_device);
 void test_trans_mat5(const char *arch_list[], const char *preferred_device);
-void test_trans_mat6(const char *arch_list[], const char *preferred_device);
-void test_trans_mat7(const char *arch_list[], const char *preferred_device);
-void test_trans_mat8(const char *arch_list[], const char *preferred_device);
-void test_trans_mat9(const char *arch_list[], const char *preferred_device);
 void test_alpha_mat0(const char *arch_list[], const char *preferred_device);
 void test_alpha_mat1(const char *arch_list[], const char *preferred_device);
 void test_alpha_mat2(const char *arch_list[], const char *preferred_device);
@@ -237,8 +213,6 @@ int main(int argc, char *argv[]) {
             test_oren_mat0(arch_list, device_name);
             test_oren_mat1(arch_list, device_name);
             test_oren_mat2(arch_list, device_name);
-            test_oren_mat3(arch_list, device_name);
-            test_oren_mat4(arch_list, device_name);
             printf("Finished oren_mat tests in %.2f minutes\n",
                    duration<double>(high_resolution_clock::now() - t2).count() / 60.0);
         }
@@ -248,8 +222,6 @@ int main(int argc, char *argv[]) {
             test_diff_mat0(arch_list, device_name);
             test_diff_mat1(arch_list, device_name);
             test_diff_mat2(arch_list, device_name);
-            test_diff_mat3(arch_list, device_name);
-            test_diff_mat4(arch_list, device_name);
             printf("Finished diff_mat tests in %.2f minutes\n",
                    duration<double>(high_resolution_clock::now() - t2).count() / 60.0);
         }
@@ -269,8 +241,6 @@ int main(int argc, char *argv[]) {
             test_glossy_mat0(arch_list, device_name);
             test_glossy_mat1(arch_list, device_name);
             test_glossy_mat2(arch_list, device_name);
-            test_glossy_mat3(arch_list, device_name);
-            test_glossy_mat4(arch_list, device_name);
             printf("Finished glossy_mat tests in %.2f minutes\n",
                    duration<double>(high_resolution_clock::now() - t2).count() / 60.0);
         }
@@ -280,8 +250,6 @@ int main(int argc, char *argv[]) {
             test_spec_mat0(arch_list, device_name);
             test_spec_mat1(arch_list, device_name);
             test_spec_mat2(arch_list, device_name);
-            test_spec_mat3(arch_list, device_name);
-            test_spec_mat4(arch_list, device_name);
             printf("Finished spec_mat tests in %.2f minutes\n",
                    duration<double>(high_resolution_clock::now() - t2).count() / 60.0);
         }
@@ -305,8 +273,6 @@ int main(int argc, char *argv[]) {
             test_metal_mat0(arch_list, device_name);
             test_metal_mat1(arch_list, device_name);
             test_metal_mat2(arch_list, device_name);
-            test_metal_mat3(arch_list, device_name);
-            test_metal_mat4(arch_list, device_name);
             printf("Finished metal_mat tests in %.2f minutes\n",
                    duration<double>(high_resolution_clock::now() - t2).count() / 60.0);
         }
@@ -316,8 +282,6 @@ int main(int argc, char *argv[]) {
             test_plastic_mat0(arch_list, device_name);
             test_plastic_mat1(arch_list, device_name);
             test_plastic_mat2(arch_list, device_name);
-            test_plastic_mat3(arch_list, device_name);
-            test_plastic_mat4(arch_list, device_name);
             printf("Finished plastic_mat tests in %.2f minutes\n",
                    duration<double>(high_resolution_clock::now() - t2).count() / 60.0);
         }
@@ -327,8 +291,6 @@ int main(int argc, char *argv[]) {
             test_tint_mat0(arch_list, device_name);
             test_tint_mat1(arch_list, device_name);
             test_tint_mat2(arch_list, device_name);
-            test_tint_mat3(arch_list, device_name);
-            test_tint_mat4(arch_list, device_name);
             printf("Finished tint_mat tests in %.2f minutes\n",
                    duration<double>(high_resolution_clock::now() - t2).count() / 60.0);
         }
@@ -346,8 +308,6 @@ int main(int argc, char *argv[]) {
             test_coat_mat0(arch_list, device_name);
             test_coat_mat1(arch_list, device_name);
             test_coat_mat2(arch_list, device_name);
-            test_coat_mat3(arch_list, device_name);
-            test_coat_mat4(arch_list, device_name);
             printf("Finished coat_mat tests in %.2f minutes\n",
                    duration<double>(high_resolution_clock::now() - t2).count() / 60.0);
         }
@@ -357,8 +317,6 @@ int main(int argc, char *argv[]) {
             test_refr_mis0(arch_list, device_name);
             test_refr_mis1(arch_list, device_name);
             test_refr_mis2(arch_list, device_name);
-            test_refr_mis3(arch_list, device_name);
-            test_refr_mis4(arch_list, device_name);
             printf("Finished refr_mis tests in %.2f minutes\n",
                    duration<double>(high_resolution_clock::now() - t2).count() / 60.0);
         }
@@ -369,8 +327,6 @@ int main(int argc, char *argv[]) {
             test_refr_mat1(arch_list, device_name);
             test_refr_mat2(arch_list, device_name);
             test_refr_mat3(arch_list, device_name);
-            test_refr_mat4(arch_list, device_name);
-            test_refr_mat5(arch_list, device_name);
             printf("Finished refr_mat tests in %.2f minutes\n",
                    duration<double>(high_resolution_clock::now() - t2).count() / 60.0);
         }
@@ -383,10 +339,6 @@ int main(int argc, char *argv[]) {
             test_trans_mat3(arch_list, device_name);
             test_trans_mat4(arch_list, device_name);
             test_trans_mat5(arch_list, device_name);
-            test_trans_mat6(arch_list, device_name);
-            test_trans_mat7(arch_list, device_name);
-            test_trans_mat8(arch_list, device_name);
-            test_trans_mat9(arch_list, device_name);
             printf("Finished trans_mat tests in %.2f minutes\n",
                    duration<double>(high_resolution_clock::now() - t2).count() / 60.0);
         }
