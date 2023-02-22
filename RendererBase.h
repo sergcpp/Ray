@@ -23,7 +23,12 @@ enum eRendererType : uint32_t {
     RendererAVX512 = (1 << 5),
     RendererNEON = (1 << 6),
     // GPU renderer
-    RendererVK = (1 << 7)
+    RendererVK = (1 << 7),
+    // All CPU renderers
+    RendererCPU =
+        RendererRef | RendererSSE2 | RendererSSE41 | RendererNEON | RendererAVX | RendererAVX2 /*| RendererAVX512 */,
+    // All GPU renderers
+    RendererGPU = RendererVK
 };
 
 const char *RendererTypeName(eRendererType rt);
