@@ -12,14 +12,16 @@
 
 namespace Ray {
 namespace NS {
-/*#ifndef vdivq_f32 force_inline float32x4_t vdivq_f32(float32x4_t num, float32x4_t den) {
+#ifndef __aarch64__
+force_inline float32x4_t vdivq_f32(float32x4_t num, float32x4_t den) {
     const float32x4_t q_inv0 = vrecpeq_f32(den);
     const float32x4_t q_step0 = vrecpsq_f32(q_inv0, den);
 
     const float32x4_t q_inv1 = vmulq_f32(q_step0, q_inv0);
     return vmulq_f32(num, q_inv1);
 }
-#endif*/
+#endif
+
 
 template <> class simd_vec<int, 4>;
 

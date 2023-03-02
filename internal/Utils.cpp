@@ -1311,7 +1311,7 @@ void Emit_BC4_Block_Ref(uint8_t block[16], uint8_t *&out_data) {
     EmitAlphaOnlyIndices_Ref(block, min_alpha, max_alpha, out_data);
 }
 
-#if !defined(__aarch64__) && !defined(_M_ARM) && !defined(_M_ARM64)
+#if !defined(__arm__) && !defined(__aarch64__) && !defined(_M_ARM) && !defined(_M_ARM64)
 void Emit_BC1_Block_SSE2(const uint8_t block[64], uint8_t *&out_data) {
     alignas(16) uint8_t min_color[4], max_color[4];
     GetMinMaxColorByBBox_SSE2(block, min_color, max_color);
@@ -1377,7 +1377,7 @@ void Ray::CompressImage_BC1(const uint8_t img_src[], const int w, const int h, u
     const int w_aligned = w - (w % 4);
     const int h_aligned = h - (h % 4);
 
-#if !defined(__aarch64__) && !defined(_M_ARM) && !defined(_M_ARM64)
+#if !defined(__arm__) && !defined(__aarch64__) && !defined(_M_ARM) && !defined(_M_ARM64)
     const CpuFeatures cpu = GetCpuFeatures();
     if (cpu.sse2_supported && cpu.ssse3_supported) {
         for (int j = 0; j < h_aligned; j += 4, img_src += 4 * w * SrcChannels) {
@@ -1440,7 +1440,7 @@ void Ray::CompressImage_BC3(const uint8_t img_src[], const int w, const int h, u
     const int w_aligned = w - (w % 4);
     const int h_aligned = h - (h % 4);
 
-#if !defined(__aarch64__) && !defined(_M_ARM) && !defined(_M_ARM64)
+#if !defined(__arm__) && !defined(__aarch64__) && !defined(_M_ARM) && !defined(_M_ARM64)
     const CpuFeatures cpu = GetCpuFeatures();
     if (cpu.sse2_supported && cpu.ssse3_supported) {
         for (int j = 0; j < h_aligned; j += 4, img_src += w * 4 * 4) {
