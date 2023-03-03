@@ -12,7 +12,7 @@
 
 namespace Ray {
 namespace NS {
-#ifndef __aarch64__
+#if !defined(__aarch64__) && !defined(_M_ARM64)
 force_inline float32x4_t vdivq_f32(float32x4_t num, float32x4_t den) {
     const float32x4_t q_inv0 = vrecpeq_f32(den);
     const float32x4_t q_step0 = vrecpsq_f32(q_inv0, den);
