@@ -2,9 +2,13 @@ cmake_minimum_required(VERSION 2.8.12)
 project(Ray)
 
 OPTION(ENABLE_UNITYBUILD "Enable compilation of one large cpp file" ON)
-OPTION(ENABLE_REF_IMPL "Enable reference CPU implementation" OFF)
+OPTION(ENABLE_REF_IMPL "Enable reference CPU implementation" ON)
 OPTION(ENABLE_SIMD_IMPL "Enable SIMD CPU implementations" ON)
-OPTION(ENABLE_GPU_IMPL "Enable Vulkan GPU implementation" ON)
+#IF (NOT CMAKE_SYSTEM_NAME MATCHES "Android")
+#    OPTION(ENABLE_GPU_IMPL "Enable Vulkan GPU implementation" ON)
+#ELSE()
+    OPTION(ENABLE_GPU_IMPL "Enable Vulkan GPU implementation" OFF)
+#ENDIF()
 
 set(CMAKE_CONFIGURATION_TYPES "Debug;Release;RelWithDebInfo;Asan" CACHE STRING "" FORCE)
 
@@ -19,8 +23,7 @@ IF(MSVC)
 ELSE(MSVC)
     set(CMAKE_CXX_STANDARD 11)
     set(CMAKE_CXX_STANDARD_REQUIRED ON)
-    if(NOT CMAKE_SYSTEM_NAME MATCHES "Android" AND NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64" AND
-       NOT "${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "arm64")
+    if(NOT CMAKE_SYSTEM_NAME MATCHES "Android" AND NOT CMAKE_GENERATOR_PLATFORM MATCHES "ARM64")
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse2 -mfma -fno-strict-aliasing")
         IF(WIN32)
         ELSE(WIN32)
@@ -69,7 +72,8 @@ if (ENABLE_REF_IMPL)
                               internal/RendererRef.cpp)
 endif()
 
-if(NOT CMAKE_SYSTEM_NAME MATCHES "Android" AND NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64")
+if(NOT CMAKE_SYSTEM_PROCESSOR MATCHES "armv7-a" AND NOT CMAKE_GENERATOR_PLATFORM MATCHES "ARM64")
+
 if (ENABLE_SIMD_IMPL)
     set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
                               internal/RendererSSE2.h
@@ -83,10 +87,10 @@ if (ENABLE_SIMD_IMPL)
                               internal/RendererAVX512.h
                               internal/RendererAVX512.cpp
                               internal/UtilsSSE2.cpp)
-endif()
+endif(ENABLE_SIMD_IMPL)
 
 
-elseif("${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64" OR "${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "arm64")
+elseif(CMAKE_GENERATOR_PLATFORM MATCHES "ARM64" OR CMAKE_SYSTEM_PROCESSOR MATCHES "arm64" OR CMAKE_SYSTEM_PROCESSOR MATCHES "armv7-a")
 
 if (ENABLE_SIMD_IMPL)
     set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
@@ -110,7 +114,7 @@ if (ENABLE_GPU_IMPL)
                               internal/VectorVK.h)
 endif()
 
-if(NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64")
+if(NOT CMAKE_GENERATOR_PLATFORM MATCHES "ARM64")
     if(MSVC)
         if(NOT CMAKE_CL_64)
             set_source_files_properties(internal/RendererSSE2.cpp PROPERTIES COMPILE_FLAGS /arch:SSE2)
@@ -123,10 +127,10 @@ if(NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64")
         set_source_files_properties(internal/RendererSSE2.cpp PROPERTIES COMPILE_FLAGS -msse2)
         set_source_files_properties(internal/RendererSSE41.cpp PROPERTIES COMPILE_FLAGS -msse4.1)
         set_source_files_properties(internal/RendererAVX.cpp PROPERTIES COMPILE_FLAGS -mavx)
-        set_source_files_properties(internal/RendererAVX2.cpp PROPERTIES COMPILE_FLAGS -mavx2)
+        set_source_files_properties(internal/RendererAVX2.cpp PROPERTIES COMPILE_FLAGS "-mavx2 -mfma")
         set_source_files_properties(internal/RendererAVX512.cpp PROPERTIES COMPILE_FLAGS "-mavx512f -mavx512bw -mavx512dq")
     endif()
-endif(NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64")
+endif(NOT CMAKE_GENERATOR_PLATFORM MATCHES "ARM64")
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/Config.h.in ${CMAKE_CURRENT_SOURCE_DIR}/Config.h)
 
@@ -268,7 +272,7 @@ if(ENABLE_UNITYBUILD)
     list(APPEND ALL_SOURCE_FILES _Ray_VK.cpp)
     source_group("src" FILES _Ray_VK.cpp)
 
-    if(NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64")
+    if(NOT CMAKE_GENERATOR_PLATFORM MATCHES "ARM64")
         if(MSVC)
             if(NOT CMAKE_CL_64)
                 set_source_files_properties(_Ray_SSE2.cpp PROPERTIES COMPILE_FLAGS /arch:SSE2)
@@ -281,10 +285,10 @@ if(ENABLE_UNITYBUILD)
             set_source_files_properties(_Ray_SSE2.cpp PROPERTIES COMPILE_FLAGS -msse2)
             set_source_files_properties(_Ray_SSE41.cpp PROPERTIES COMPILE_FLAGS -msse4.1)
             set_source_files_properties(_Ray_AVX.cpp PROPERTIES COMPILE_FLAGS -mavx)
-            set_source_files_properties(_Ray_AVX2.cpp PROPERTIES COMPILE_FLAGS -mavx2)
+            set_source_files_properties(_Ray_AVX2.cpp PROPERTIES COMPILE_FLAGS "-mavx2 -mfma")
             set_source_files_properties(_Ray_AVX512.cpp PROPERTIES COMPILE_FLAGS "-mavx512f -mavx512bw -mavx512dq")
         endif(MSVC)
-    endif(NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64")
+    endif(NOT CMAKE_GENERATOR_PLATFORM MATCHES "ARM64")
 endif()
 
 if(MSVC)

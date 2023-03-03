@@ -54,7 +54,7 @@ inline unsigned long long _xgetbv(unsigned int index) {
 
 Ray::CpuFeatures Ray::GetCpuFeatures() {
     if (!g_cpu_features_initialized) {
-#if !defined(__aarch64__) && !defined(_M_ARM) && !defined(_M_ARM64)
+#if !defined(__aarch64__) && !defined(_M_ARM) && !defined(_M_ARM64) && !defined(__ANDROID__)
         int info[4];
         cpuid(info, 0);
         int ids_count = info[0];

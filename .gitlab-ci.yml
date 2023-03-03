@@ -80,7 +80,7 @@ stages:
       - linux-x86_64/
     expire_in: 1 week
 
-.macos-x86_64-build-job:
+.macos-universal-build-job:
   stage: build
   tags:
     - macos
@@ -88,56 +88,26 @@ stages:
     - echo "Compiling the code..."
     - mkdir build
     - cd build
-    - cmake .. -DCMAKE_APPLE_SILICON_PROCESSOR=x86_64 -DCMAKE_BUILD_TYPE=Release -DENABLE_UNITYBUILD=ON -DENABLE_REF_IMPL=ON
+    - cmake .. -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_BUILD_TYPE=Release -DENABLE_UNITYBUILD=ON -DENABLE_REF_IMPL=ON
     - cd ..
     - mkdir build_dbg
     - cd build_dbg
-    - cmake .. -DCMAKE_APPLE_SILICON_PROCESSOR=x86_64 -DCMAKE_BUILD_TYPE=Debug -DENABLE_UNITYBUILD=ON -DENABLE_REF_IMPL=ON
+    - cmake .. -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_BUILD_TYPE=Debug -DENABLE_UNITYBUILD=ON -DENABLE_REF_IMPL=ON
     - cd ..
     - mkdir build_dev
     - cd build_dev
-    - cmake .. -DCMAKE_APPLE_SILICON_PROCESSOR=x86_64 -DCMAKE_BUILD_TYPE=RelWithDebInfo -DENABLE_UNITYBUILD=ON -DENABLE_REF_IMPL=ON
+    - cmake .. -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_BUILD_TYPE=RelWithDebInfo -DENABLE_UNITYBUILD=ON -DENABLE_REF_IMPL=ON
     - cd ..
     - cmake --build build --target all --parallel 16
     - cmake --build build_dbg --target all --parallel 16
     - cmake --build build_dev --target all --parallel 16
     - echo "Compile complete."
-    - mkdir macos-x86_64
-    - cp build/tests/test_Ray macos-x86_64
-    - cp build_dbg/tests/test_Ray-dbg macos-x86_64
+    - mkdir macos-universal
+    - cp build/tests/test_Ray macos-universal
+    - cp build_dbg/tests/test_Ray-dbg macos-universal
   artifacts:
     paths:
-      - macos-x86_64/
-    expire_in: 1 week
-
-.macos-arm64-build-job:
-  stage: build
-  tags:
-    - macos
-  script:
-    - echo "Compiling the code..."
-    - mkdir build
-    - cd build
-    - cmake .. -DCMAKE_APPLE_SILICON_PROCESSOR=arm64 -DCMAKE_BUILD_TYPE=Release -DENABLE_UNITYBUILD=ON -DENABLE_REF_IMPL=ON
-    - cd ..
-    - mkdir build_dbg
-    - cd build_dbg
-    - cmake .. -DCMAKE_APPLE_SILICON_PROCESSOR=arm64 -DCMAKE_BUILD_TYPE=Debug -DENABLE_UNITYBUILD=ON -DENABLE_REF_IMPL=ON
-    - cd ..
-    - mkdir build_dev
-    - cd build_dev
-    - cmake .. -DCMAKE_APPLE_SILICON_PROCESSOR=arm64 -DCMAKE_BUILD_TYPE=RelWithDebInfo -DENABLE_UNITYBUILD=ON -DENABLE_REF_IMPL=ON
-    - cd ..
-    - cmake --build build --target all --parallel 16
-    - cmake --build build_dbg --target all --parallel 16
-    - cmake --build build_dev --target all --parallel 16
-    - echo "Compile complete."
-    - mkdir macos-arm64
-    - cp build/tests/test_Ray macos-arm64
-    - cp build_dbg/tests/test_Ray-dbg macos-arm64
-  artifacts:
-    paths:
-      - macos-arm64/
+      - macos-universal/
     expire_in: 1 week
 
 .windows-test-job:
@@ -230,17 +200,11 @@ linux-x86_64-build-job:
   tags:
     - linux,builder
 
-macos-x86_64-build-job:
+macos-universal-build-job:
   extends:
-    - .macos-x86_64-build-job
+    - .macos-universal-build-job
   tags:
-    - macos,x86_64,builder
-
-macos-arm64-build-job:
-  extends:
-    - .macos-arm64-build-job
-  tags:
-    - macos,arm64,builder
+    - macos,builder
 
 windows-x86_64-cpu-test-job:
   variables:
@@ -441,34 +405,34 @@ linux-x86_64-gpu-amd-test-job:
 
 macos-x86_64-cpu-test-job:
   variables:
-    BIN_DIR: macos-x86_64
+    BIN_DIR: macos-universal
     AUX_TEST_ARGS: '--nogpu'
   extends:
     - .test-job
   needs:
-    - macos-x86_64-build-job
+    - macos-universal-build-job
   tags:
     - macos,x86_64,fastcpu
 
 macos-arm64-cpu-test-job:
   variables:
-    BIN_DIR: macos-arm64
+    BIN_DIR: macos-universal
     AUX_TEST_ARGS: '--nogpu'
   extends:
     - .test-job
   needs:
-    - macos-arm64-build-job
+    - macos-universal-build-job
   tags:
     - macos,arm64,fastcpu
 
 macos-arm64-gpu-m1-test-job:
   variables:
-    BIN_DIR: macos-arm64
+    BIN_DIR: macos-universal
     AUX_TEST_ARGS: '--nocpu'
   extends:
     - .test-job
   needs:
-    - macos-arm64-build-job
+    - macos-universal-build-job
   tags:
     - macos,arm64,m1
 

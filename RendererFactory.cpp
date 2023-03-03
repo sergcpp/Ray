@@ -7,13 +7,13 @@
 #endif // ENABLE_REF_IMPL
 
 #ifdef ENABLE_SIMD_IMPL
-#if !defined(__aarch64__) && !defined(_M_ARM) && !defined(_M_ARM64)
+#if !defined(__arm__) && !defined(__aarch64__) && !defined(_M_ARM) && !defined(_M_ARM64)
 #include "internal/RendererAVX.h"
 #include "internal/RendererAVX2.h"
 #include "internal/RendererAVX512.h"
 #include "internal/RendererSSE2.h"
 #include "internal/RendererSSE41.h"
-#elif defined(__ARM_NEON__) || defined(__aarch64__) || defined(_M_ARM) || defined(_M_ARM64)
+#elif defined(__arm__) || defined(__aarch64__) || defined(_M_ARM) || defined(_M_ARM64)
 #include "internal/RendererNEON.h"
 #elif defined(__i386__) || defined(__x86_64__)
 #include "internal/RendererSSE2.h"
@@ -46,7 +46,7 @@ Ray::RendererBase *Ray::CreateRenderer(const settings_t &s, ILog *log, const uin
     }
 #endif // ENABLE_GPU_IMPL
 
-#if !defined(__aarch64__) && !defined(_M_ARM) && !defined(_M_ARM64)
+#if !defined(__arm__) && !defined(__aarch64__) && !defined(_M_ARM) && !defined(_M_ARM64)
 #ifdef ENABLE_SIMD_IMPL
     const CpuFeatures features = GetCpuFeatures();
     if ((enabled_types & RendererAVX512) && features.avx512_supported) {
@@ -76,7 +76,7 @@ Ray::RendererBase *Ray::CreateRenderer(const settings_t &s, ILog *log, const uin
         return new Ref::Renderer(s, log);
     }
 #endif
-#elif defined(__ARM_NEON__) || defined(__aarch64__) || defined(_M_ARM) || defined(_M_ARM64)
+#elif defined(__arm__) || defined(__aarch64__) || defined(_M_ARM) || defined(_M_ARM64)
 #ifdef ENABLE_SIMD_IMPL
     if (enabled_types & RendererNEON) {
         log->Info("Ray: Creating NEON renderer %ix%i", s.w, s.h);
