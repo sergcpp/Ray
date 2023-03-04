@@ -11,7 +11,6 @@ ENDIF()
 
 add_executable(test_Ray main.cpp
                         test_common.h
-                        test_data.cpp
                         test_img1.h
                         test_materials.cpp
                         test_mesh_lights.cpp
