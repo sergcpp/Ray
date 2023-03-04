@@ -11,19 +11,14 @@ ENDIF()
 
 add_executable(test_Ray main.cpp
                         test_common.h
-                        test_img1.h
                         test_materials.cpp
-                        test_mesh_lights.cpp
                         test_simd.cpp
                         test_simd_avx.cpp
                         test_simd_avx2.cpp
                         test_simd_avx512.cpp
                         test_simd_sse41.cpp
                         test_simd.ipp
-                        test_texture.cpp
                         test_tex_storage.cpp
-                        test_scene1.h
-                        test_scene2.h
                         thread_pool.h
                         utils.h
                         utils.cpp)

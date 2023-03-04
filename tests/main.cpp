@@ -86,8 +86,6 @@ void test_complex_mat7_refractive(const char *arch_list[], const char *preferred
 void test_complex_mat7_principled(const char *arch_list[], const char *preferred_device);
 void assemble_material_test_images(const char *arch_list[]);
 void test_simd();
-void test_mesh_lights();
-void test_texture();
 
 bool g_stop_on_fail = false;
 bool g_tests_success = true;
@@ -139,7 +137,6 @@ int main(int argc, char *argv[]) {
 
     test_simd();
     test_tex_storage();
-    // test_mesh_lights();
 
 #ifdef _WIN32
     // Stupid workaround that should not exist.
@@ -355,7 +352,6 @@ int main(int argc, char *argv[]) {
         }
     }
     assemble_material_test_images(arch_list);
-    // test_texture();
 
     printf("FINISHED ALL TESTS in %.2f minutes\n", duration<double>(high_resolution_clock::now() - t1).count() / 60.0);
 
@@ -377,7 +373,10 @@ int main(int argc, char *argv[]) {
 // Dirty workaround for Intel discrete GPU
 //
 #ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
+#undef min
+#undef max
 
 extern "C" {
 // Enable High Performance Graphics while using Integrated Graphics
