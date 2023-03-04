@@ -1,7 +1,6 @@
 cmake_minimum_required(VERSION 2.8.12)
 project(Ray)
 
-OPTION(ENABLE_UNITYBUILD "Enable compilation of one large cpp file" ON)
 OPTION(ENABLE_REF_IMPL "Enable reference CPU implementation" ON)
 OPTION(ENABLE_SIMD_IMPL "Enable SIMD CPU implementations" ON)
 IF (NOT CMAKE_SYSTEM_NAME MATCHES "Android")
@@ -72,14 +71,14 @@ if (ENABLE_REF_IMPL)
                               internal/RendererRef.cpp)
 endif()
 
-if(NOT CMAKE_SYSTEM_PROCESSOR MATCHES "armv7-a" AND NOT CMAKE_GENERATOR_PLATFORM MATCHES "ARM64")
-
 if (ENABLE_SIMD_IMPL)
     set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
                               internal/RendererSSE2.h
                               internal/RendererSSE2.cpp
                               internal/RendererSSE41.h
                               internal/RendererSSE41.cpp
+                              internal/RendererNEON.h
+                              internal/RendererNEON.cpp
                               internal/RendererAVX.h
                               internal/RendererAVX.cpp
                               internal/RendererAVX2.h
@@ -88,18 +87,6 @@ if (ENABLE_SIMD_IMPL)
                               internal/RendererAVX512.cpp
                               internal/UtilsSSE2.cpp)
 endif(ENABLE_SIMD_IMPL)
-
-
-elseif(CMAKE_GENERATOR_PLATFORM MATCHES "ARM64" OR CMAKE_SYSTEM_PROCESSOR MATCHES "arm64" OR CMAKE_SYSTEM_PROCESSOR MATCHES "armv7-a")
-
-if (ENABLE_SIMD_IMPL)
-    set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
-                              internal/RendererNEON.h
-                              internal/RendererNEON.cpp)
-endif()
-
-
-endif()
 
 if (ENABLE_GPU_IMPL)
     add_definitions(-DENABLE_OBJ_LABELS)
@@ -240,56 +227,6 @@ list(APPEND ALL_SOURCE_FILES ${VK_FILES})
 source_group("src\\internal\\Vk" FILES ${VK_FILES})
 
 set_source_files_properties(${SHADER_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
-
-# enable or disable unity build
-if(ENABLE_UNITYBUILD)
-    set_source_files_properties(${INTERNAL_SOURCE_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
-    set_source_files_properties(${INTERNAL_DEPRECATED_SOURCE_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
-    set_source_files_properties(${SOURCE_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
-    set_source_files_properties(${VK_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
-
-    list(APPEND ALL_SOURCE_FILES _Ray.cpp)
-    source_group("src" FILES _Ray.cpp)
-
-    list(APPEND ALL_SOURCE_FILES _Ray_SSE2.cpp)
-    source_group("src" FILES _Ray_SSE2.cpp)
-
-    list(APPEND ALL_SOURCE_FILES _Ray_SSE41.cpp)
-    source_group("src" FILES _Ray_SSE41.cpp)
-
-    list(APPEND ALL_SOURCE_FILES _Ray_AVX.cpp)
-    source_group("src" FILES _Ray_AVX.cpp)
-
-    list(APPEND ALL_SOURCE_FILES _Ray_AVX2.cpp)
-    source_group("src" FILES _Ray_AVX2.cpp)
-
-    list(APPEND ALL_SOURCE_FILES _Ray_AVX512.cpp)
-    source_group("src" FILES _Ray_AVX512.cpp)
-
-    list(APPEND ALL_SOURCE_FILES _Ray_NEON.cpp)
-    source_group("src" FILES _Ray_NEON.cpp)
-
-    list(APPEND ALL_SOURCE_FILES _Ray_VK.cpp)
-    source_group("src" FILES _Ray_VK.cpp)
-
-    if(NOT CMAKE_GENERATOR_PLATFORM MATCHES "ARM64")
-        if(MSVC)
-            if(NOT CMAKE_CL_64)
-                set_source_files_properties(_Ray_SSE2.cpp PROPERTIES COMPILE_FLAGS /arch:SSE2)
-                set_source_files_properties(_Ray_SSE41.cpp PROPERTIES COMPILE_FLAGS /arch:SSE2)
-            endif()
-            set_source_files_properties(_Ray_AVX.cpp PROPERTIES COMPILE_FLAGS /arch:AVX)
-            set_source_files_properties(_Ray_AVX2.cpp PROPERTIES COMPILE_FLAGS /arch:AVX2)
-            set_source_files_properties(_Ray_AVX512.cpp PROPERTIES COMPILE_FLAGS /arch:AVX512)
-        else(MSVC)
-            set_source_files_properties(_Ray_SSE2.cpp PROPERTIES COMPILE_FLAGS -msse2)
-            set_source_files_properties(_Ray_SSE41.cpp PROPERTIES COMPILE_FLAGS -msse4.1)
-            set_source_files_properties(_Ray_AVX.cpp PROPERTIES COMPILE_FLAGS -mavx)
-            set_source_files_properties(_Ray_AVX2.cpp PROPERTIES COMPILE_FLAGS "-mavx2 -mfma")
-            set_source_files_properties(_Ray_AVX512.cpp PROPERTIES COMPILE_FLAGS "-mavx512f -mavx512bw -mavx512dq")
-        endif(MSVC)
-    endif(NOT CMAKE_GENERATOR_PLATFORM MATCHES "ARM64")
-endif()
 
 if(MSVC)
     list(APPEND ALL_SOURCE_FILES internal/_CustomTypes.natvis)

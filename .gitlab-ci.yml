@@ -12,7 +12,7 @@ stages:
     - echo "Compiling the code..."
     - mkdir build
     - cd build
-    - cmake .. -G "Visual Studio 17 2022" -A x64 -DENABLE_UNITYBUILD=ON -DENABLE_REF_IMPL=ON
+    - cmake .. -G "Visual Studio 17 2022" -A x64 -DCMAKE_UNITY_BUILD=ON -DENABLE_REF_IMPL=ON
     - cd ..
     - cmake --build build --target ALL_BUILD --config Release --parallel 16
     - cmake --build build --target ALL_BUILD --config Asan --parallel 16
@@ -35,7 +35,7 @@ stages:
     - echo "Compiling the code..."
     - mkdir build
     - cd build
-    - cmake .. -G "Visual Studio 17 2022" -A ARM64 -DENABLE_UNITYBUILD=ON -DENABLE_REF_IMPL=ON
+    - cmake .. -G "Visual Studio 17 2022" -A ARM64 -DCMAKE_UNITY_BUILD=ON -DENABLE_REF_IMPL=ON
     - cd ..
     - cmake --build build --target ALL_BUILD --config Release --parallel 16
     - cmake --build build --target ALL_BUILD --config Debug --parallel 16
@@ -58,15 +58,15 @@ stages:
     - echo "Compiling the code..."
     - mkdir build
     - cd build
-    - cmake .. -DCMAKE_BUILD_TYPE=Release -DENABLE_UNITYBUILD=ON -DENABLE_REF_IMPL=ON
+    - cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_UNITY_BUILD=ON -DENABLE_REF_IMPL=ON
     - cd ..
     - mkdir build_dbg
     - cd build_dbg
-    - cmake .. -DCMAKE_BUILD_TYPE=Debug -DENABLE_UNITYBUILD=ON -DENABLE_REF_IMPL=ON
+    - cmake .. -DCMAKE_BUILD_TYPE=Debug -DCMAKE_UNITY_BUILD=ON -DENABLE_REF_IMPL=ON
     - cd ..
     - mkdir build_dev
     - cd build_dev
-    - cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo -DENABLE_UNITYBUILD=ON -DENABLE_REF_IMPL=ON
+    - cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_UNITY_BUILD=ON -DENABLE_REF_IMPL=ON
     - cd ..
     - cmake --build build --target all --parallel 16
     - cmake --build build_dbg --target all --parallel 16
@@ -88,15 +88,15 @@ stages:
     - echo "Compiling the code..."
     - mkdir build
     - cd build
-    - cmake .. -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_BUILD_TYPE=Release -DENABLE_UNITYBUILD=ON -DENABLE_REF_IMPL=ON
+    - cmake .. -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_BUILD_TYPE=Release -DCMAKE_UNITY_BUILD=ON -DENABLE_REF_IMPL=ON
     - cd ..
     - mkdir build_dbg
     - cd build_dbg
-    - cmake .. -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_BUILD_TYPE=Debug -DENABLE_UNITYBUILD=ON -DENABLE_REF_IMPL=ON
+    - cmake .. -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_BUILD_TYPE=Debug -DCMAKE_UNITY_BUILD=ON -DENABLE_REF_IMPL=ON
     - cd ..
     - mkdir build_dev
     - cd build_dev
-    - cmake .. -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_BUILD_TYPE=RelWithDebInfo -DENABLE_UNITYBUILD=ON -DENABLE_REF_IMPL=ON
+    - cmake .. -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_UNITY_BUILD=ON -DENABLE_REF_IMPL=ON
     - cd ..
     - cmake --build build --target all --parallel 16
     - cmake --build build_dbg --target all --parallel 16
@@ -444,29 +444,16 @@ deploy-job:
     - echo "Deploying application..."
     - echo "Application successfully deployed."
   needs:
-    - windows-x86_64-cpu-test-job
-    - job: windows-x86_64-cpu-test-asan-job
-      optional: true
-    - job: windows-x86_64-gpu-nv-test-asan-job
-      optional: true
-    - windows-x86_64-gpu-amd-test-job
-    - windows-x86_64-gpu-nv-test-job
-    - windows-x86_64-gpu-xe-test-job
-    - windows-x86_64-gpu-arc-test-job
-    - windows-arm64-cpu-test-job
-    - linux-x86_64-cpu-test-job
-    - linux-x86_64-gpu-nv-test-job
-    - linux-x86_64-gpu-amd-test-job
-    - macos-x86_64-cpu-test-job
-    - macos-arm64-cpu-test-job
-    - macos-arm64-gpu-m1-test-job
+    - windows-x86_64-build-job
+    - windows-arm64-build-job
+    - linux-x86_64-build-job
+    - macos-universal-build-job
   artifacts:
     paths:
       - windows-x86_64/
       - windows-arm64/
       - linux-x86_64/
-      - macos-x86_64/
-      - macos-arm64/
+      - macos-universal/
     expire_in: 1 week
   tags:
     - windows

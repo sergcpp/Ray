@@ -1,3 +1,4 @@
+#if defined(_M_IX86) || defined(_M_X64) || defined(__i386__) || defined(__x86_64__)
 #include "Utils.h"
 
 #ifdef __GNUC__
@@ -583,3 +584,5 @@ void EmitAlphaIndices_SSE2(const uint8_t block[64], const uint8_t min_alpha, con
 #ifdef __GNUC__
 #pragma GCC pop_options
 #endif
+
+#endif // defined(_M_IX86) || defined(_M_X64) || defined(__i386__) || defined(__x86_64__)

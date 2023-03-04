@@ -1,5 +1,3 @@
-#pragma once
-
 #define VK_NO_PROTOTYPES
 #define VK_ENABLE_BETA_EXTENSIONS
 #include "../../third-party/vulkan/vulkan.h"
@@ -384,3 +382,5 @@ bool LoadVulkan(ILog *log);
 bool LoadVulkanExtensions(VkInstance instance, ILog *log);
 } // namespace Vk
 } // namespace Ray
+
+#undef EXTERN_FUNC

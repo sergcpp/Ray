@@ -1,3 +1,4 @@
+#if defined(__ARM_NEON__) || defined(__arm__) || defined(__aarch64__) || defined(_M_ARM) || defined(_M_ARM64)
 #include "RendererNEON.h"
 
 #define NS Neon
@@ -87,6 +88,4 @@ RendererBase *CreateRenderer(const settings_t &s, ILog *log) { return new Render
 } // namespace Neon
 } // namespace Ray
 
-#ifdef __GNUC__
-// #pragma GCC pop_options
-#endif
+#endif // defined(__ARM_NEON__) || defined(__arm__) || defined(__aarch64__) || defined(_M_ARM) || defined(_M_ARM64)

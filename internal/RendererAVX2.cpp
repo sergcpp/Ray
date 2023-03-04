@@ -1,3 +1,4 @@
+#if defined(_M_IX86) || defined(_M_X64) || defined(__i386__) || defined(__x86_64__)
 #include "RendererAVX2.h"
 
 #define NS Avx2
@@ -82,3 +83,5 @@ class Renderer : public RendererSIMD<RPDimX, RPDimY> {
 RendererBase *CreateRenderer(const settings_t &s, ILog *log) { return new Renderer(s, log); }
 } // namespace Avx2
 } // namespace Ray
+
+#endif // defined(_M_IX86) || defined(_M_X64) || defined(__i386__) || defined(__x86_64__)
