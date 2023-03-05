@@ -281,9 +281,9 @@ bool Ray::PreprocessTri(const float *p, int stride, tri_accel_t *out_acc) {
 }
 
 uint32_t Ray::PreprocessMesh(const float *attrs, Span<const uint32_t> vtx_indices, const eVertexLayout layout,
-                             const int base_vertex, const uint32_t tris_start, const bvh_settings_t &s,
-                             std::vector<bvh_node_t> &out_nodes, std::vector<tri_accel_t> &out_tris,
-                             std::vector<uint32_t> &out_tri_indices, aligned_vector<mtri_accel_t> &out_tris2) {
+                             const int base_vertex, const bvh_settings_t &s, std::vector<bvh_node_t> &out_nodes,
+                             std::vector<tri_accel_t> &out_tris, std::vector<uint32_t> &out_tri_indices,
+                             aligned_vector<mtri_accel_t> &out_tris2) {
     assert(!vtx_indices.empty() && vtx_indices.size() % 3 == 0);
 
     std::vector<prim_t> primitives;
@@ -348,7 +348,7 @@ uint32_t Ray::PreprocessMesh(const float *attrs, Span<const uint32_t> vtx_indice
             out_tris2[i / 8].v_plane[k][i % 8] = triangles[j].v_plane[k];
         }
 
-        out_tri_indices[i] = uint32_t(real_indices[j] + tris_start);
+        out_tri_indices[i] = uint32_t(real_indices[j]);
     }
 
     return num_out_nodes;

@@ -14,20 +14,24 @@
 Ray::Ref::Scene::Scene(ILog *log, const bool use_wide_bvh) : log_(log), use_wide_bvh_(use_wide_bvh) {}
 
 Ray::Ref::Scene::~Scene() {
+    std::unique_lock<std::shared_timed_mutex> lock(mtx_);
+
     while (!mesh_instances_.empty()) {
-        Scene::RemoveMeshInstance(MeshInstanceHandle{mesh_instances_.begin().index()});
+        Scene::RemoveMeshInstance_nolock(MeshInstanceHandle{mesh_instances_.begin().index()});
     }
     while (!meshes_.empty()) {
-        Scene::RemoveMesh(MeshHandle{meshes_.begin().index()});
+        Scene::RemoveMesh_nolock(MeshHandle{meshes_.begin().index()});
     }
     while (!lights_.empty()) {
-        Scene::RemoveLight(LightHandle{lights_.begin().index()});
+        Scene::RemoveLight_nolock(LightHandle{lights_.begin().index()});
     }
     materials_.clear();
     lights_.clear();
 }
 
 void Ray::Ref::Scene::GetEnvironment(environment_desc_t &env) {
+    std::shared_lock<std::shared_timed_mutex> lock(mtx_);
+
     memcpy(env.env_col, env_.env_col, 3 * sizeof(float));
     env.env_map = TextureHandle{env_.env_map};
     memcpy(env.back_col, env_.back_col, 3 * sizeof(float));
@@ -38,6 +42,8 @@ void Ray::Ref::Scene::GetEnvironment(environment_desc_t &env) {
 }
 
 void Ray::Ref::Scene::SetEnvironment(const environment_desc_t &env) {
+    std::unique_lock<std::shared_timed_mutex> lock(mtx_);
+
     memcpy(env_.env_col, env.env_col, 3 * sizeof(float));
     env_.env_map = env.env_map._index;
     memcpy(env_.back_col, env.back_col, 3 * sizeof(float));
@@ -48,6 +54,8 @@ void Ray::Ref::Scene::SetEnvironment(const environment_desc_t &env) {
 }
 
 Ray::TextureHandle Ray::Ref::Scene::AddTexture(const tex_desc_t &_t) {
+    std::unique_lock<std::shared_timed_mutex> lock(mtx_);
+
     const int res[2] = {_t.w, _t.h};
 
     bool recostruct_z = false;
@@ -115,7 +123,7 @@ Ray::TextureHandle Ray::Ref::Scene::AddTexture(const tex_desc_t &_t) {
     return TextureHandle{ret};
 }
 
-Ray::MaterialHandle Ray::Ref::Scene::AddMaterial(const shading_node_desc_t &m) {
+Ray::MaterialHandle Ray::Ref::Scene::AddMaterial_nolock(const shading_node_desc_t &m) {
     material_t mat = {};
 
     mat.type = m.type;
@@ -183,6 +191,8 @@ Ray::MaterialHandle Ray::Ref::Scene::AddMaterial(const principled_mat_desc_t &m)
     main_mat.clearcoat_unorm = pack_unorm_16(CLAMP(m.clearcoat, 0.0f, 1.0f));
     main_mat.clearcoat_roughness_unorm = pack_unorm_16(CLAMP(m.clearcoat_roughness, 0.0f, 1.0f));
 
+    std::unique_lock<std::shared_timed_mutex> lock(mtx_);
+
     auto root_node = MaterialHandle{materials_.push(main_mat)};
     MaterialHandle emissive_node = InvalidMaterialHandle, transparent_node = InvalidMaterialHandle;
 
@@ -195,14 +205,14 @@ Ray::MaterialHandle Ray::Ref::Scene::AddMaterial(const principled_mat_desc_t &m)
         emissive_desc.base_texture = m.emission_texture;
         emissive_desc.strength = m.emission_strength;
 
-        emissive_node = AddMaterial(emissive_desc);
+        emissive_node = AddMaterial_nolock(emissive_desc);
     }
 
     if (m.alpha != 1.0f || m.alpha_texture != InvalidTextureHandle) {
         shading_node_desc_t transparent_desc;
         transparent_desc.type = TransparentNode;
 
-        transparent_node = AddMaterial(transparent_desc);
+        transparent_node = AddMaterial_nolock(transparent_desc);
     }
 
     if (emissive_node != InvalidMaterialHandle) {
@@ -219,7 +229,7 @@ Ray::MaterialHandle Ray::Ref::Scene::AddMaterial(const principled_mat_desc_t &m)
             mix_node.mix_materials[0] = root_node;
             mix_node.mix_materials[1] = emissive_node;
 
-            root_node = AddMaterial(mix_node);
+            root_node = AddMaterial_nolock(mix_node);
         }
     }
 
@@ -236,7 +246,7 @@ Ray::MaterialHandle Ray::Ref::Scene::AddMaterial(const principled_mat_desc_t &m)
             mix_node.mix_materials[0] = transparent_node;
             mix_node.mix_materials[1] = root_node;
 
-            root_node = AddMaterial(mix_node);
+            root_node = AddMaterial_nolock(mix_node);
         }
     }
 
@@ -244,12 +254,6 @@ Ray::MaterialHandle Ray::Ref::Scene::AddMaterial(const principled_mat_desc_t &m)
 }
 
 Ray::MeshHandle Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
-    const uint32_t mesh_index = meshes_.emplace();
-    mesh_t &m = meshes_.at(mesh_index);
-
-    const auto tris_start = uint32_t(tris_.size());
-    // const auto tri_index_start = uint32_t(tri_indices_.size());
-
     bvh_settings_t s;
     s.oversplit_threshold = 0.95f;
     s.allow_spatial_splits = _m.allow_spatial_splits;
@@ -257,28 +261,60 @@ Ray::MeshHandle Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
 
     const uint64_t t1 = Ray::GetTimeMs();
 
-    m.node_index = uint32_t(nodes_.size());
-    m.node_count = PreprocessMesh(_m.vtx_attrs, {_m.vtx_indices, _m.vtx_indices_count}, _m.layout, _m.base_vertex,
-                                  uint32_t(tri_materials_.size()), s, nodes_, tris_, tri_indices_, mtris_);
+    std::vector<bvh_node_t> temp_nodes;
+    std::vector<tri_accel_t> temp_tris;
+    aligned_vector<mtri_accel_t> temp_mtris;
+    std::vector<uint32_t> temp_tri_indices;
 
-    memcpy(m.bbox_min, nodes_[m.node_index].bbox_min, 3 * sizeof(float));
-    memcpy(m.bbox_max, nodes_[m.node_index].bbox_max, 3 * sizeof(float));
+    PreprocessMesh(_m.vtx_attrs, {_m.vtx_indices, _m.vtx_indices_count}, _m.layout, _m.base_vertex, s, temp_nodes,
+                   temp_tris, temp_tri_indices, temp_mtris);
 
     log_->Info("Ray: Mesh preprocessed in %lldms", (Ray::GetTimeMs() - t1));
+
+    std::unique_lock<std::shared_timed_mutex> lock(mtx_);
+
+    mesh_t m;
+    m.node_index = uint32_t(nodes_.size());
+    m.node_count = uint32_t(temp_nodes.size());
+
+    { // Apply required offsets
+        const uint32_t nodes_offset = uint32_t(nodes_.size());
+        const uint32_t tris_indices_offset = uint32_t(tri_indices_.size());
+
+        for (bvh_node_t &n : temp_nodes) {
+            if (n.prim_index & LEAF_NODE_BIT) {
+                n.prim_index += tris_indices_offset;
+            } else {
+                n.left_child += nodes_offset;
+                n.right_child += nodes_offset;
+            }
+        }
+
+        const uint32_t tris_offset = uint32_t(tri_materials_.size());
+        for (uint32_t &tri_index : temp_tri_indices) {
+            tri_index += tris_offset;
+        }
+    }
+
+    tris_.insert(tris_.end(), temp_tris.begin(), temp_tris.end());
+    mtris_.insert(mtris_.end(), temp_mtris.begin(), temp_mtris.end());
+    tri_indices_.insert(tri_indices_.end(), temp_tri_indices.begin(), temp_tri_indices.end());
+
+    memcpy(m.bbox_min, temp_nodes[0].bbox_min, 3 * sizeof(float));
+    memcpy(m.bbox_max, temp_nodes[0].bbox_max, 3 * sizeof(float));
 
     if (use_wide_bvh_) {
         const uint64_t t2 = Ray::GetTimeMs();
 
         const auto before_count = uint32_t(mnodes_.size());
-        const uint32_t new_root = FlattenBVH_Recursive(nodes_.data(), m.node_index, 0xffffffff, mnodes_);
+        const uint32_t new_root = FlattenBVH_Recursive(temp_nodes.data(), m.node_index, 0xffffffff, mnodes_);
 
         m.node_index = new_root;
         m.node_count = uint32_t(mnodes_.size() - before_count);
 
-        // nodes_ variable is treated as temporary storage
-        nodes_.clear();
-
         log_->Info("Ray: BVH flattened in %lldms", (Ray::GetTimeMs() - t2));
+    } else {
+        nodes_.insert(nodes_.end(), temp_nodes.begin(), temp_nodes.end());
     }
 
     const auto tri_materials_start = uint32_t(tri_materials_.size());
@@ -337,6 +373,8 @@ Ray::MeshHandle Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
         }
     }
 
+    const auto tris_start = uint32_t(tris_.size());
+
     m.tris_index = tris_start;
     m.tris_count = uint32_t(tris_.size() - tris_start);
 
@@ -386,10 +424,10 @@ Ray::MeshHandle Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
 
     vtx_indices_.insert(vtx_indices_.end(), new_vtx_indices.begin(), new_vtx_indices.end());
 
-    return MeshHandle{mesh_index};
+    return MeshHandle{meshes_.emplace(m)};
 }
 
-void Ray::Ref::Scene::RemoveMesh(const MeshHandle i) {
+void Ray::Ref::Scene::RemoveMesh_nolock(const MeshHandle i) {
     if (!meshes_.exists(i._index)) {
         return;
     }
@@ -412,11 +450,11 @@ void Ray::Ref::Scene::RemoveMesh(const MeshHandle i) {
         }
     }
 
-    RemoveTris(tris_index, tris_count);
-    RemoveNodes(node_index, node_count);
+    RemoveTris_nolock(tris_index, tris_count);
+    RemoveNodes_nolock(node_index, node_count);
 
     if (rebuild_needed) {
-        RebuildTLAS();
+        RebuildTLAS_nolock();
     }
 }
 
@@ -432,6 +470,8 @@ Ray::LightHandle Ray::Ref::Scene::AddLight(const directional_light_desc_t &_l) {
     l.dir.dir[1] = -_l.direction[1];
     l.dir.dir[2] = -_l.direction[2];
     l.dir.angle = _l.angle * PI / 360.0f;
+
+    std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
     const uint32_t light_index = lights_.push(l);
     li_indices_.push_back(light_index);
@@ -451,6 +491,8 @@ Ray::LightHandle Ray::Ref::Scene::AddLight(const sphere_light_desc_t &_l) {
     l.sph.area = 4.0f * PI * _l.radius * _l.radius;
     l.sph.radius = _l.radius;
     l.sph.spot = l.sph.blend = -1.0f;
+
+    std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
     const uint32_t light_index = lights_.push(l);
     li_indices_.push_back(light_index);
@@ -475,6 +517,8 @@ Ray::LightHandle Ray::Ref::Scene::AddLight(const spot_light_desc_t &_l) {
     l.sph.radius = _l.radius;
     l.sph.spot = 0.5f * PI * _l.spot_size / 180.0f;
     l.sph.blend = _l.spot_blend * _l.spot_blend;
+
+    std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
     const uint32_t light_index = lights_.push(l);
     li_indices_.push_back(light_index);
@@ -505,6 +549,8 @@ Ray::LightHandle Ray::Ref::Scene::AddLight(const rect_light_desc_t &_l, const fl
 
     memcpy(l.rect.u, value_ptr(uvec), 3 * sizeof(float));
     memcpy(l.rect.v, value_ptr(vvec), 3 * sizeof(float));
+
+    std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
     const uint32_t light_index = lights_.push(l);
     li_indices_.push_back(light_index);
@@ -538,6 +584,8 @@ Ray::LightHandle Ray::Ref::Scene::AddLight(const disk_light_desc_t &_l, const fl
 
     memcpy(l.disk.u, value_ptr(uvec), 3 * sizeof(float));
     memcpy(l.disk.v, value_ptr(vvec), 3 * sizeof(float));
+
+    std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
     const uint32_t light_index = lights_.push(l);
     li_indices_.push_back(light_index);
@@ -574,6 +622,8 @@ Ray::LightHandle Ray::Ref::Scene::AddLight(const line_light_desc_t &_l, const fl
     memcpy(l.line.v, value_ptr(vvec), 3 * sizeof(float));
     l.line.height = _l.height;
 
+    std::unique_lock<std::shared_timed_mutex> lock(mtx_);
+
     const uint32_t light_index = lights_.push(l);
     li_indices_.push_back(light_index);
     if (_l.visible) {
@@ -582,7 +632,7 @@ Ray::LightHandle Ray::Ref::Scene::AddLight(const line_light_desc_t &_l, const fl
     return LightHandle{light_index};
 }
 
-void Ray::Ref::Scene::RemoveLight(const LightHandle i) {
+void Ray::Ref::Scene::RemoveLight_nolock(const LightHandle i) {
     if (!lights_.exists(i._index)) {
         return;
     }
@@ -609,6 +659,8 @@ void Ray::Ref::Scene::RemoveLight(const LightHandle i) {
 }
 
 Ray::MeshInstanceHandle Ray::Ref::Scene::AddMeshInstance(const MeshHandle mesh, const float *xform) {
+    std::unique_lock<std::shared_timed_mutex> lock(mtx_);
+
     const uint32_t mi_index = mesh_instances_.emplace();
 
     mesh_instance_t &mi = mesh_instances_.at(mi_index);
@@ -638,12 +690,12 @@ Ray::MeshInstanceHandle Ray::Ref::Scene::AddMeshInstance(const MeshHandle mesh, 
         }
     }
 
-    SetMeshInstanceTransform(MeshInstanceHandle{mi_index}, xform);
+    SetMeshInstanceTransform_nolock(MeshInstanceHandle{mi_index}, xform);
 
     return MeshInstanceHandle{mi_index};
 }
 
-void Ray::Ref::Scene::SetMeshInstanceTransform(const MeshInstanceHandle mi_handle, const float *xform) {
+void Ray::Ref::Scene::SetMeshInstanceTransform_nolock(const MeshInstanceHandle mi_handle, const float *xform) {
     mesh_instance_t &mi = mesh_instances_[mi_handle._index];
     transform_t &tr = transforms_[mi.tr_index];
 
@@ -653,26 +705,28 @@ void Ray::Ref::Scene::SetMeshInstanceTransform(const MeshInstanceHandle mi_handl
     const mesh_t &m = meshes_[mi.mesh_index];
     TransformBoundingBox(m.bbox_min, m.bbox_max, xform, mi.bbox_min, mi.bbox_max);
 
-    RebuildTLAS();
+    RebuildTLAS_nolock();
 }
 
-void Ray::Ref::Scene::RemoveMeshInstance(const MeshInstanceHandle i) {
+void Ray::Ref::Scene::RemoveMeshInstance_nolock(const MeshInstanceHandle i) {
     transforms_.erase(mesh_instances_[i._index].tr_index);
     mesh_instances_.erase(i._index);
 
-    RebuildTLAS();
+    RebuildTLAS_nolock();
 }
 
 void Ray::Ref::Scene::Finalize() {
+    std::unique_lock<std::shared_timed_mutex> lock(mtx_);
+
     if (env_map_light_ != InvalidLightHandle) {
-        RemoveLight(env_map_light_);
+        RemoveLight_nolock(env_map_light_);
     }
     env_map_qtree_ = {};
     env_.qtree_levels = 0;
 
     if (env_.multiple_importance && env_.env_col[0] > 0.0f && env_.env_col[1] > 0.0f && env_.env_col[2] > 0.0f) {
         if (env_.env_map != 0xffffffff) {
-            PrepareEnvMapQTree();
+            PrepareEnvMapQTree_nolock();
         }
         { // add env light source
             light_t l = {};
@@ -687,7 +741,7 @@ void Ray::Ref::Scene::Finalize() {
     }
 }
 
-void Ray::Ref::Scene::RemoveTris(uint32_t tris_index, uint32_t tris_count) {
+void Ray::Ref::Scene::RemoveTris_nolock(uint32_t tris_index, uint32_t tris_count) {
     if (!tris_count) {
         return;
     }
@@ -703,7 +757,7 @@ void Ray::Ref::Scene::RemoveTris(uint32_t tris_index, uint32_t tris_count) {
     }
 }
 
-void Ray::Ref::Scene::RemoveNodes(uint32_t node_index, uint32_t node_count) {
+void Ray::Ref::Scene::RemoveNodes_nolock(uint32_t node_index, uint32_t node_count) {
     if (!node_count) {
         return;
     }
@@ -770,8 +824,8 @@ void Ray::Ref::Scene::RemoveNodes(uint32_t node_index, uint32_t node_count) {
     }
 }
 
-void Ray::Ref::Scene::RebuildTLAS() {
-    RemoveNodes(macro_nodes_root_, macro_nodes_count_);
+void Ray::Ref::Scene::RebuildTLAS_nolock() {
+    RemoveNodes_nolock(macro_nodes_root_, macro_nodes_count_);
     mi_indices_.clear();
 
     macro_nodes_root_ = 0xffffffff;
@@ -804,7 +858,7 @@ void Ray::Ref::Scene::RebuildTLAS() {
     }
 }
 
-void Ray::Ref::Scene::PrepareEnvMapQTree() {
+void Ray::Ref::Scene::PrepareEnvMapQTree_nolock() {
     const int tex = int(env_.env_map & 0x00ffffff);
     simd_ivec2 size;
     tex_storage_rgba_.GetIRes(tex, 0, value_ptr(size));

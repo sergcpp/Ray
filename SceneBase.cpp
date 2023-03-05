@@ -6,6 +6,8 @@
 #include "internal/Core.h"
 
 Ray::CameraHandle Ray::SceneBase::AddCamera(const camera_desc_t &c) {
+    std::unique_lock<std::shared_timed_mutex> lock(mtx_);
+
     CameraHandle i;
     if (cam_first_free_ == InvalidCameraHandle) {
         i = CameraHandle{uint32_t(cams_.size())};
@@ -14,7 +16,7 @@ Ray::CameraHandle Ray::SceneBase::AddCamera(const camera_desc_t &c) {
         i = cam_first_free_;
         cam_first_free_ = cams_[i._index].next_free;
     }
-    SetCamera(i, c);
+    SetCamera_nolock(i, c);
     if (current_cam_ == InvalidCameraHandle) {
         current_cam_ = i;
     }
@@ -22,6 +24,8 @@ Ray::CameraHandle Ray::SceneBase::AddCamera(const camera_desc_t &c) {
 }
 
 void Ray::SceneBase::GetCamera(const CameraHandle i, camera_desc_t &c) const {
+    std::shared_lock<std::shared_timed_mutex> lock(mtx_);
+
     const camera_t &cam = cams_[i._index].cam;
     c.type = cam.type;
     c.dtype = cam.dtype;
@@ -64,7 +68,7 @@ void Ray::SceneBase::GetCamera(const CameraHandle i, camera_desc_t &c) const {
     c.min_transp_depth = cam.pass_settings.min_transp_depth;
 }
 
-void Ray::SceneBase::SetCamera(const CameraHandle i, const camera_desc_t &c) {
+void Ray::SceneBase::SetCamera_nolock(const CameraHandle i, const camera_desc_t &c) {
     assert(i._index < uint32_t(cams_.size()));
     camera_t &cam = cams_[i._index].cam;
     if (c.type != Geo) {
@@ -118,6 +122,8 @@ void Ray::SceneBase::SetCamera(const CameraHandle i, const camera_desc_t &c) {
 }
 
 void Ray::SceneBase::RemoveCamera(const CameraHandle i) {
+    std::unique_lock<std::shared_timed_mutex> lock(mtx_);
+
     assert(i._index < uint32_t(cams_.size()));
     cams_[i._index].next_free = cam_first_free_;
     cam_first_free_ = i;

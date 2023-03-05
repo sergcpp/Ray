@@ -57,6 +57,8 @@ class Renderer : public RendererBase {
 
     eRendererType type() const override { return RendererRef; }
 
+    ILog *log() const override { return log_; }
+
     const char *device_name() const override { return "CPU"; }
 
     std::pair<int, int> size() const override { return std::make_pair(final_buf_.w(), final_buf_.h()); }
