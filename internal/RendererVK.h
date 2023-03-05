@@ -135,6 +135,8 @@ class Renderer : public RendererBase {
 
     eRendererType type() const override { return RendererVK; }
 
+    ILog *log() const override { return ctx_->log(); }
+
     const char *device_name() const override;
 
     bool is_hwrt() const override { return use_hwrt_; }

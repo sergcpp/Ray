@@ -71,6 +71,8 @@ class RegionContext {
     }
 };
 
+class ILog;
+
 /** Base class for all renderer backends
  */
 class RendererBase {
@@ -79,6 +81,9 @@ class RendererBase {
 
     /// Type of renderer
     virtual eRendererType type() const = 0;
+
+    /// Log
+    virtual ILog *log() const { return nullptr; }
 
     /// Name of the device
     virtual const char *device_name() const = 0;

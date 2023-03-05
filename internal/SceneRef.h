@@ -46,6 +46,7 @@ class Scene : public SceneBase {
     ILog *log_;
 
     bool use_wide_bvh_;
+
     std::vector<bvh_node_t> nodes_;
     aligned_vector<mbvh_node_t> mnodes_;
     std::vector<tri_accel_t> tris_;
@@ -82,11 +83,17 @@ class Scene : public SceneBase {
 
     uint32_t macro_nodes_root_ = 0xffffffff, macro_nodes_count_ = 0;
 
-    void RemoveTris(uint32_t tris_index, uint32_t tris_count);
-    void RemoveNodes(uint32_t node_index, uint32_t node_count);
-    void RebuildTLAS();
+    void RemoveMesh_nolock(MeshHandle m);
+    void RemoveMeshInstance_nolock(MeshInstanceHandle);
+    void RemoveLight_nolock(LightHandle l);
+    void RemoveTris_nolock(uint32_t tris_index, uint32_t tris_count);
+    void RemoveNodes_nolock(uint32_t node_index, uint32_t node_count);
+    void RebuildTLAS_nolock();
 
-    void PrepareEnvMapQTree();
+    void PrepareEnvMapQTree_nolock();
+
+    MaterialHandle AddMaterial_nolock(const shading_node_desc_t &m);
+    void SetMeshInstanceTransform_nolock(MeshInstanceHandle mi, const float *xform);
 
   public:
     Scene(ILog *log, bool use_wide_bvh);
@@ -96,14 +103,26 @@ class Scene : public SceneBase {
     void SetEnvironment(const environment_desc_t &env) override;
 
     TextureHandle AddTexture(const tex_desc_t &t) override;
-    void RemoveTexture(const TextureHandle t) override { tex_storages_[t._index >> 24]->Free(t._index & 0x00ffffff); }
+    void RemoveTexture(const TextureHandle t) override {
+        std::unique_lock<std::shared_timed_mutex> lock(mtx_);
+        tex_storages_[t._index >> 24]->Free(t._index & 0x00ffffff);
+    }
 
-    MaterialHandle AddMaterial(const shading_node_desc_t &m) override;
+    MaterialHandle AddMaterial(const shading_node_desc_t &m) override {
+        std::unique_lock<std::shared_timed_mutex> lock(mtx_);
+        return AddMaterial_nolock(m);
+    }
     MaterialHandle AddMaterial(const principled_mat_desc_t &m) override;
-    void RemoveMaterial(const MaterialHandle m) override { materials_.erase(m._index); }
+    void RemoveMaterial(const MaterialHandle m) override {
+        std::unique_lock<std::shared_timed_mutex> lock(mtx_);
+        materials_.erase(m._index);
+    }
 
     MeshHandle AddMesh(const mesh_desc_t &m) override;
-    void RemoveMesh(MeshHandle m) override;
+    void RemoveMesh(MeshHandle m) override {
+        std::unique_lock<std::shared_timed_mutex> lock(mtx_);
+        RemoveMesh_nolock(m);
+    }
 
     LightHandle AddLight(const directional_light_desc_t &l) override;
     LightHandle AddLight(const sphere_light_desc_t &l) override;
@@ -111,16 +130,31 @@ class Scene : public SceneBase {
     LightHandle AddLight(const rect_light_desc_t &l, const float *xform) override;
     LightHandle AddLight(const disk_light_desc_t &l, const float *xform) override;
     LightHandle AddLight(const line_light_desc_t &l, const float *xform) override;
-    void RemoveLight(LightHandle l) override;
+    void RemoveLight(LightHandle l) override {
+        std::unique_lock<std::shared_timed_mutex> lock(mtx_);
+        RemoveLight(l);
+    }
 
     MeshInstanceHandle AddMeshInstance(MeshHandle mesh, const float *xform) override;
-    void SetMeshInstanceTransform(MeshInstanceHandle mi, const float *xform) override;
-    void RemoveMeshInstance(MeshInstanceHandle) override;
+    void SetMeshInstanceTransform(MeshInstanceHandle mi, const float *xform) override {
+        std::unique_lock<std::shared_timed_mutex> lock(mtx_);
+        SetMeshInstanceTransform_nolock(mi, xform);
+    }
+    void RemoveMeshInstance(MeshInstanceHandle mi) override {
+        std::unique_lock<std::shared_timed_mutex> lock(mtx_);
+        RemoveMeshInstance_nolock(mi);
+    }
 
     void Finalize() override;
 
-    uint32_t triangle_count() const override { return uint32_t(tris_.size()); }
-    uint32_t node_count() const override { return use_wide_bvh_ ? uint32_t(mnodes_.size()) : uint32_t(nodes_.size()); }
+    uint32_t triangle_count() const override {
+        std::shared_lock<std::shared_timed_mutex> lock(mtx_);
+        return uint32_t(tris_.size());
+    }
+    uint32_t node_count() const override {
+        std::shared_lock<std::shared_timed_mutex> lock(mtx_);
+        return use_wide_bvh_ ? uint32_t(mnodes_.size()) : uint32_t(nodes_.size());
+    }
 };
 } // namespace Ref
 } // namespace Ray

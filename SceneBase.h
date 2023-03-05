@@ -3,6 +3,8 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <mutex>
+#include <shared_mutex>
 #include <vector>
 
 #include "Types.h"
@@ -276,10 +278,15 @@ class SceneBase {
         CameraHandle next_free;
     };
 
+    mutable std::shared_timed_mutex mtx_;
+
     std::vector<cam_storage_t> cams_;                   ///< scene cameras
     CameraHandle cam_first_free_ = InvalidCameraHandle; ///< index to first free cam in cams_ array
 
     CameraHandle current_cam_ = InvalidCameraHandle; ///< index of current camera
+
+    void SetCamera_nolock(const CameraHandle i, const camera_desc_t &c);
+
   public:
     virtual ~SceneBase() = default;
 
@@ -377,13 +384,15 @@ class SceneBase {
         @param i camera handle
     */
     void GetCamera(CameraHandle i, camera_desc_t &c) const;
-    ;
 
     /** @brief Sets camera properties
         @param i camera handle
         @param c camera description
     */
-    void SetCamera(CameraHandle i, const camera_desc_t &c);
+    void SetCamera(CameraHandle i, const camera_desc_t &c) {
+        std::unique_lock<std::shared_timed_mutex> lock(mtx_);
+        SetCamera_nolock(i, c);
+    }
 
     /** @brief Removes camera with specific index from scene
         @param i camera handle
@@ -395,12 +404,18 @@ class SceneBase {
     /** @brief Get const reference to a camera with specific index
         @return Current camera index
     */
-    CameraHandle current_cam() const { return current_cam_; }
+    CameraHandle current_cam() const {
+        std::shared_lock<std::shared_timed_mutex> lock(mtx_);
+        return current_cam_;
+    }
 
     /** @brief Sets camera with specific index to be current
         @param i camera index
     */
-    void set_current_cam(CameraHandle i) { current_cam_ = i; }
+    void set_current_cam(CameraHandle i) {
+        std::unique_lock<std::shared_timed_mutex> lock(mtx_);
+        current_cam_ = i;
+    }
 
     /// Overall triangle count in scene
     virtual uint32_t triangle_count() const = 0;

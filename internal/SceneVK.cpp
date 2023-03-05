@@ -64,11 +64,15 @@ Ray::Vk::Scene::Scene(Context *ctx, const bool use_hwrt, const bool use_bindless
       lights_(ctx, "Lights"), li_indices_(ctx), visible_lights_(ctx), blocker_lights_(ctx) {}
 
 Ray::Vk::Scene::~Scene() {
+    std::unique_lock<std::shared_timed_mutex> lock(mtx_);
+
     bindless_textures_.clear();
     vkDestroyDescriptorSetLayout(ctx_->device(), bindless_tex_data_.descr_layout, nullptr);
 }
 
 void Ray::Vk::Scene::GetEnvironment(environment_desc_t &env) {
+    std::shared_lock<std::shared_timed_mutex> lock(mtx_);
+
     memcpy(env.env_col, env_.env_col, 3 * sizeof(float));
     env.env_map = TextureHandle{env_.env_map};
     memcpy(env.back_col, env_.back_col, 3 * sizeof(float));
@@ -79,6 +83,8 @@ void Ray::Vk::Scene::GetEnvironment(environment_desc_t &env) {
 }
 
 void Ray::Vk::Scene::SetEnvironment(const environment_desc_t &env) {
+    std::unique_lock<std::shared_timed_mutex> lock(mtx_);
+
     memcpy(env_.env_col, env.env_col, 3 * sizeof(float));
     env_.env_map = env.env_map._index;
     memcpy(env_.back_col, env.back_col, 3 * sizeof(float));
@@ -88,7 +94,7 @@ void Ray::Vk::Scene::SetEnvironment(const environment_desc_t &env) {
     env_.multiple_importance = env.multiple_importance;
 }
 
-Ray::TextureHandle Ray::Vk::Scene::AddAtlasTexture(const tex_desc_t &_t) {
+Ray::TextureHandle Ray::Vk::Scene::AddAtlasTexture_nolock(const tex_desc_t &_t) {
     atlas_texture_t t;
     t.width = uint16_t(_t.w);
     t.height = uint16_t(_t.h);
@@ -217,7 +223,7 @@ Ray::TextureHandle Ray::Vk::Scene::AddAtlasTexture(const tex_desc_t &_t) {
     return TextureHandle{atlas_textures_.push(t)};
 }
 
-Ray::TextureHandle Ray::Vk::Scene::AddBindlessTexture(const tex_desc_t &_t) {
+Ray::TextureHandle Ray::Vk::Scene::AddBindlessTexture_nolock(const tex_desc_t &_t) {
     eTexFormat src_fmt = eTexFormat::Undefined, fmt = eTexFormat::Undefined;
 
     Buffer temp_stage_buf("Temp stage buf", ctx_, eBufType::Stage, 2 * _t.w * _t.h * 4,
@@ -387,7 +393,7 @@ Ray::TextureHandle Ray::Vk::Scene::AddBindlessTexture(const tex_desc_t &_t) {
 
     ctx_->log()->Info("Ray: Texture loaded (%ix%i)", _t.w, _t.h);
 
-    assert(ret <= 0x00ffffffff);
+    assert(ret <= 0x00ffffff);
 
     if (_t.is_srgb && (is_YCoCg || fmt == eTexFormat::BC4)) {
         ret |= TEX_SRGB_BIT;
@@ -474,7 +480,7 @@ template void Ray::Vk::Scene::WriteTextureMips<uint8_t, 4>(const color_t<uint8_t
                                                            int mip_count, bool compress, uint8_t out_data[],
                                                            uint32_t out_size[16]);
 
-Ray::MaterialHandle Ray::Vk::Scene::AddMaterial(const shading_node_desc_t &m) {
+Ray::MaterialHandle Ray::Vk::Scene::AddMaterial_nolock(const shading_node_desc_t &m) {
     material_t mat;
 
     mat.type = m.type;
@@ -630,8 +636,8 @@ Ray::MeshHandle Ray::Vk::Scene::AddMesh(const mesh_desc_t &_m) {
         }
     } else {
         aligned_vector<mtri_accel_t> _unused;
-        PreprocessMesh(_m.vtx_attrs, {_m.vtx_indices, _m.vtx_indices_count}, _m.layout, _m.base_vertex,
-                       0 /* temp value */, s, new_nodes, new_tris, new_tri_indices, _unused);
+        PreprocessMesh(_m.vtx_attrs, {_m.vtx_indices, _m.vtx_indices_count}, _m.layout, _m.base_vertex, s, new_nodes,
+                       new_tris, new_tri_indices, _unused);
 
         memcpy(value_ptr(bbox_min), new_nodes[0].bbox_min, 3 * sizeof(float));
         memcpy(value_ptr(bbox_max), new_nodes[0].bbox_max, 3 * sizeof(float));
@@ -691,6 +697,8 @@ Ray::MeshHandle Ray::Vk::Scene::AddMesh(const mesh_desc_t &_m) {
             }
         }
     }
+
+    std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
     for (size_t i = 0; i < _m.vtx_indices_count; i++) {
         new_vtx_indices.push_back(_m.vtx_indices[i] + _m.base_vertex + uint32_t(vertices_.size()));
@@ -783,6 +791,7 @@ Ray::MeshHandle Ray::Vk::Scene::AddMesh(const mesh_desc_t &_m) {
 }
 
 void Ray::Vk::Scene::RemoveMesh(MeshHandle) {
+    std::unique_lock<std::shared_timed_mutex> lock(mtx_);
     // TODO!!!
 }
 
@@ -798,6 +807,8 @@ Ray::LightHandle Ray::Vk::Scene::AddLight(const directional_light_desc_t &_l) {
     l.dir.dir[1] = -_l.direction[1];
     l.dir.dir[2] = -_l.direction[2];
     l.dir.angle = _l.angle * PI / 360.0f;
+
+    std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
     const uint32_t light_index = lights_.push(l);
     li_indices_.PushBack(light_index);
@@ -817,6 +828,8 @@ Ray::LightHandle Ray::Vk::Scene::AddLight(const sphere_light_desc_t &_l) {
     l.sph.area = 4.0f * PI * _l.radius * _l.radius;
     l.sph.radius = _l.radius;
     l.sph.spot = l.sph.blend = -1.0f;
+
+    std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
     const uint32_t light_index = lights_.push(l);
     li_indices_.PushBack(light_index);
@@ -842,6 +855,8 @@ Ray::LightHandle Ray::Vk::Scene::AddLight(const spot_light_desc_t &_l) {
     l.sph.radius = _l.radius;
     l.sph.spot = 0.5f * PI * _l.spot_size / 180.0f;
     l.sph.blend = _l.spot_blend * _l.spot_blend;
+
+    std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
     const uint32_t light_index = lights_.push(l);
     li_indices_.PushBack(light_index);
@@ -872,6 +887,8 @@ Ray::LightHandle Ray::Vk::Scene::AddLight(const rect_light_desc_t &_l, const flo
 
     memcpy(l.rect.u, value_ptr(uvec), 3 * sizeof(float));
     memcpy(l.rect.v, value_ptr(vvec), 3 * sizeof(float));
+
+    std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
     const uint32_t light_index = lights_.push(l);
     li_indices_.PushBack(light_index);
@@ -905,6 +922,8 @@ Ray::LightHandle Ray::Vk::Scene::AddLight(const disk_light_desc_t &_l, const flo
 
     memcpy(l.disk.u, value_ptr(uvec), 3 * sizeof(float));
     memcpy(l.disk.v, value_ptr(vvec), 3 * sizeof(float));
+
+    std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
     const uint32_t light_index = lights_.push(l);
     li_indices_.PushBack(light_index);
@@ -941,6 +960,8 @@ Ray::LightHandle Ray::Vk::Scene::AddLight(const line_light_desc_t &_l, const flo
     memcpy(l.line.v, value_ptr(vvec), 3 * sizeof(float));
     l.line.height = _l.height;
 
+    std::unique_lock<std::shared_timed_mutex> lock(mtx_);
+
     const uint32_t light_index = lights_.push(l);
     li_indices_.PushBack(light_index);
     if (_l.visible) {
@@ -949,7 +970,7 @@ Ray::LightHandle Ray::Vk::Scene::AddLight(const line_light_desc_t &_l, const flo
     return LightHandle{light_index};
 }
 
-void Ray::Vk::Scene::RemoveLight(const LightHandle i) {
+void Ray::Vk::Scene::RemoveLight_nolock(const LightHandle i) {
     if (!lights_.exists(i._index)) {
         return;
     }
@@ -976,6 +997,8 @@ void Ray::Vk::Scene::RemoveLight(const LightHandle i) {
 }
 
 Ray::MeshInstanceHandle Ray::Vk::Scene::AddMeshInstance(const MeshHandle mesh, const float *xform) {
+    std::unique_lock<std::shared_timed_mutex> lock(mtx_);
+
     mesh_instance_t mi = {};
     mi.mesh_index = mesh._index;
     mi.tr_index = transforms_.emplace();
@@ -1005,12 +1028,12 @@ Ray::MeshInstanceHandle Ray::Vk::Scene::AddMeshInstance(const MeshHandle mesh, c
         }
     }
 
-    SetMeshInstanceTransform(MeshInstanceHandle{mi_index}, xform);
+    SetMeshInstanceTransform_nolock(MeshInstanceHandle{mi_index}, xform);
 
     return MeshInstanceHandle{mi_index};
 }
 
-void Ray::Vk::Scene::SetMeshInstanceTransform(const MeshInstanceHandle mi_handle, const float *xform) {
+void Ray::Vk::Scene::SetMeshInstanceTransform_nolock(const MeshInstanceHandle mi_handle, const float *xform) {
     transform_t tr = {};
 
     memcpy(tr.xform, xform, 16 * sizeof(float));
@@ -1024,7 +1047,7 @@ void Ray::Vk::Scene::SetMeshInstanceTransform(const MeshInstanceHandle mi_handle
     mesh_instances_.Set(mi_handle._index, mi);
     transforms_.Set(mi.tr_index, tr);
 
-    RebuildTLAS();
+    RebuildTLAS_nolock();
 }
 
 void Ray::Vk::Scene::RemoveMeshInstance(MeshInstanceHandle) {
@@ -1032,15 +1055,17 @@ void Ray::Vk::Scene::RemoveMeshInstance(MeshInstanceHandle) {
 }
 
 void Ray::Vk::Scene::Finalize() {
+    std::unique_lock<std::shared_timed_mutex> lock(mtx_);
+
     if (env_map_light_ != InvalidLightHandle) {
-        RemoveLight(env_map_light_);
+        RemoveLight_nolock(env_map_light_);
     }
     env_map_qtree_ = {};
     env_.qtree_levels = 0;
 
     if (env_.multiple_importance && env_.env_col[0] > 0.0f && env_.env_col[1] > 0.0f && env_.env_col[2] > 0.0f) {
         if (env_.env_map != 0xffffffff) {
-            PrepareEnvMapQTree();
+            PrepareEnvMapQTree_nolock();
         } else {
             // Dummy
             Tex2DParams p;
@@ -1072,12 +1097,12 @@ void Ray::Vk::Scene::Finalize() {
         env_map_qtree_.tex = Texture2D("Env map qtree", ctx_, p, ctx_->default_memory_allocs(), ctx_->log());
     }
 
-    GenerateTextureMips();
-    PrepareBindlessTextures();
-    RebuildHWAccStructures();
+    GenerateTextureMips_nolock();
+    PrepareBindlessTextures_nolock();
+    RebuildHWAccStructures_nolock();
 }
 
-void Ray::Vk::Scene::RemoveNodes(uint32_t node_index, uint32_t node_count) {
+void Ray::Vk::Scene::RemoveNodes_nolock(uint32_t node_index, uint32_t node_count) {
     if (!node_count) {
         return;
     }
@@ -1119,8 +1144,8 @@ void Ray::Vk::Scene::RemoveNodes(uint32_t node_index, uint32_t node_count) {
     }*/
 }
 
-void Ray::Vk::Scene::RebuildTLAS() {
-    RemoveNodes(macro_nodes_start_, macro_nodes_count_);
+void Ray::Vk::Scene::RebuildTLAS_nolock() {
+    RemoveNodes_nolock(macro_nodes_start_, macro_nodes_count_);
     mi_indices_.Clear();
 
     const size_t mi_count = mesh_instances_.size();
@@ -1151,7 +1176,7 @@ void Ray::Vk::Scene::RebuildTLAS() {
     mi_indices_.Append(&mi_indices[0], mi_indices.size());
 }
 
-void Ray::Vk::Scene::PrepareEnvMapQTree() {
+void Ray::Vk::Scene::PrepareEnvMapQTree_nolock() {
     const int tex = int(env_.env_map & 0x00ffffff);
 
     Buffer temp_stage_buf;
@@ -1366,7 +1391,7 @@ void Ray::Vk::Scene::PrepareEnvMapQTree() {
     ctx_->log()->Info("Env map qtree res is %i", env_map_qtree_.res);
 }
 
-void Ray::Vk::Scene::GenerateTextureMips() {
+void Ray::Vk::Scene::GenerateTextureMips_nolock() {
     struct mip_gen_info {
         uint32_t texture_index;
         uint16_t size; // used for sorting
@@ -1456,7 +1481,7 @@ void Ray::Vk::Scene::GenerateTextureMips() {
                       tex_atlases_[6].page_count());
 }
 
-void Ray::Vk::Scene::PrepareBindlessTextures() {
+void Ray::Vk::Scene::PrepareBindlessTextures_nolock() {
     assert(bindless_textures_.capacity() <= ctx_->max_combined_image_samplers());
 
     DescrSizes descr_sizes;
@@ -1531,7 +1556,7 @@ void Ray::Vk::Scene::PrepareBindlessTextures() {
     }
 }
 
-void Ray::Vk::Scene::RebuildHWAccStructures() {
+void Ray::Vk::Scene::RebuildHWAccStructures_nolock() {
     if (!use_hwrt_) {
         return;
     }

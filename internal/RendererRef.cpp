@@ -30,6 +30,8 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
 
     const camera_t &cam = s->cams_[s->current_cam()._index].cam;
 
+    std::shared_lock<std::shared_timed_mutex> lock(s->mtx_);
+
     const scene_data_t sc_data = {s->env_,
                                   s->mesh_instances_.empty() ? nullptr : &s->mesh_instances_[0],
                                   s->mi_indices_.empty() ? nullptr : &s->mi_indices_[0],
@@ -299,6 +301,8 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
         secondary_shadow_time +=
             std::chrono::duration<double, std::micro>{time_secondary_shadow_end - time_secondary_shadow_start};
     }
+
+    lock.unlock();
 
     {
         std::lock_guard<std::mutex> _(mtx_);
