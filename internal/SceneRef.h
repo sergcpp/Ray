@@ -132,7 +132,7 @@ class Scene : public SceneBase {
     LightHandle AddLight(const line_light_desc_t &l, const float *xform) override;
     void RemoveLight(LightHandle l) override {
         std::unique_lock<std::shared_timed_mutex> lock(mtx_);
-        RemoveLight(l);
+        RemoveLight_nolock(l);
     }
 
     MeshInstanceHandle AddMeshInstance(MeshHandle mesh, const float *xform) override;
