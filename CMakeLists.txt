@@ -229,8 +229,10 @@ source_group("src\\internal\\shaders" FILES ${SHADER_FILES})
 list(APPEND ALL_SOURCE_FILES ${SIMD_FILES})
 source_group("src\\internal\\simd" FILES ${SIMD_FILES})
 
-list(APPEND ALL_SOURCE_FILES ${VK_FILES})
-source_group("src\\internal\\Vk" FILES ${VK_FILES})
+if (ENABLE_GPU_IMPL)
+    list(APPEND ALL_SOURCE_FILES ${VK_FILES})
+    source_group("src\\internal\\Vk" FILES ${VK_FILES})
+endif(ENABLE_GPU_IMPL)
 
 set_source_files_properties(${SHADER_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
 
