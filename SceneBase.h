@@ -140,6 +140,7 @@ struct shape_desc_t {
 
 /// Mesh description
 struct mesh_desc_t {
+    const char *name = nullptr;        ///< Mesh name (for debugging)
     ePrimType prim_type;               ///< Primitive type
     eVertexLayout layout;              ///< Vertex attribute layout
     const float *vtx_attrs;            ///< Pointer to vertex attribute

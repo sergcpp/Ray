@@ -269,7 +269,7 @@ Ray::MeshHandle Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
     PreprocessMesh(_m.vtx_attrs, {_m.vtx_indices, _m.vtx_indices_count}, _m.layout, _m.base_vertex, s, temp_nodes,
                    temp_tris, temp_tri_indices, temp_mtris);
 
-    log_->Info("Ray: Mesh preprocessed in %lldms", (Ray::GetTimeMs() - t1));
+    log_->Info("Ray: Mesh \'%s\' preprocessed in %lldms", _m.name ? _m.name : "(unknown)", (Ray::GetTimeMs() - t1));
 
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
@@ -312,7 +312,8 @@ Ray::MeshHandle Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
         m.node_index = new_root;
         m.node_count = uint32_t(mnodes_.size() - before_count);
 
-        log_->Info("Ray: BVH flattened in %lldms", (Ray::GetTimeMs() - t2));
+        log_->Info("Ray: Mesh \'%s\' BVH flattened in %lldms", _m.name ? _m.name : "(unknown)",
+                   (Ray::GetTimeMs() - t2));
     } else {
         nodes_.insert(nodes_.end(), temp_nodes.begin(), temp_nodes.end());
     }
