@@ -373,7 +373,12 @@ int main(int argc, char *argv[]) {
 // Dirty workaround for Intel discrete GPU
 //
 #ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
+#ifndef NOMINMAX
+    #define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+    #define WIN32_LEAN_AND_MEAN
+#endif
 #include <Windows.h>
 #undef min
 #undef max

@@ -7,9 +7,13 @@
 #include "../../Log.h"
 
 #if defined(_WIN32)
+#ifndef NOMINMAX
+    #define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+    #define WIN32_LEAN_AND_MEAN
+#endif
 #include <Windows.h>
-#undef max
-#undef min
 #elif defined(__linux__) || defined(__APPLE__)
 #include <dlfcn.h>
 #endif
