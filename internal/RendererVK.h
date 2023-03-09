@@ -69,6 +69,7 @@ class Renderer : public RendererBase {
     Buffer counters_buf_, indir_args_buf_;
 
     Buffer pixel_stage_buf_;
+    mutable bool pixel_stage_is_tonemapped_ = false;
     mutable bool frame_dirty_ = true;
 
     struct {
@@ -129,6 +130,7 @@ class Renderer : public RendererBase {
 
     void UpdateHaltonSequence(int iteration, std::unique_ptr<float[]> &seq);
 
+    const pixel_color_t *get_pixels_ref(bool tonemap) const;
   public:
     Renderer(const settings_t &s, ILog *log);
     ~Renderer() override;
@@ -143,7 +145,9 @@ class Renderer : public RendererBase {
 
     std::pair<int, int> size() const override { return std::make_pair(w_, h_); }
 
-    const pixel_color_t *get_pixels_ref() const override;
+    // NOTE: currently these can not be used simultaneously!
+    const pixel_color_t *get_pixels_ref() const override { return get_pixels_ref(true); }
+    const pixel_color_t *get_raw_pixels_ref() const override { return get_pixels_ref(false); }
 
     const shl1_data_t *get_sh_data_ref() const override { return &sh_data_host_[0]; }
 

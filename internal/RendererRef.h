@@ -64,6 +64,7 @@ class Renderer : public RendererBase {
     std::pair<int, int> size() const override { return std::make_pair(final_buf_.w(), final_buf_.h()); }
 
     const pixel_color_t *get_pixels_ref() const override { return final_buf_.get_pixels_ref(); }
+    const pixel_color_t *get_raw_pixels_ref() const override { return clean_buf_.get_pixels_ref(); }
 
     const shl1_data_t *get_sh_data_ref() const override { return clean_buf_.get_sh_data_ref(); }
 

@@ -641,11 +641,11 @@ void Ray::Vk::Renderer::UpdateHaltonSequence(const int iteration, std::unique_pt
     }
 }
 
-const Ray::pixel_color_t *Ray::Vk::Renderer::get_pixels_ref() const {
-    if (frame_dirty_) {
+const Ray::pixel_color_t *Ray::Vk::Renderer::get_pixels_ref(const bool tonemap) const {
+    if (frame_dirty_ || pixel_stage_is_tonemapped_ != tonemap) {
         VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
 
-        { // postprocess
+        if (tonemap) { // postprocess
             DebugMarker _(cmd_buf, "Postprocess frame");
 
             kernel_Postprocess(cmd_buf, clean_buf_, postprocess_params_.exposure, postprocess_params_.gamma,
@@ -655,11 +655,13 @@ const Ray::pixel_color_t *Ray::Vk::Renderer::get_pixels_ref() const {
         { // download result
             DebugMarker _(cmd_buf, "Download Result");
 
-            const TransitionInfo res_transitions[] = {{&final_buf_, eResState::CopySrc},
+            const auto &buffer_to_use = tonemap ? final_buf_ : clean_buf_;
+
+            const TransitionInfo res_transitions[] = {{&buffer_to_use, eResState::CopySrc},
                                                       {&pixel_stage_buf_, eResState::CopyDst}};
             TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
-            CopyImageToBuffer(final_buf_, 0, 0, 0, w_, h_, pixel_stage_buf_, cmd_buf, 0);
+            CopyImageToBuffer(buffer_to_use, 0, 0, 0, w_, h_, pixel_stage_buf_, cmd_buf, 0);
         }
 
         VkMemoryBarrier mem_barrier = {VK_STRUCTURE_TYPE_MEMORY_BARRIER};
@@ -706,6 +708,7 @@ const Ray::pixel_color_t *Ray::Vk::Renderer::get_pixels_ref() const {
 
         pixel_stage_buf_.FlushMappedRange(0, pixel_stage_buf_.size());
         frame_dirty_ = false;
+        pixel_stage_is_tonemapped_ = tonemap;
     }
 
     return frame_pixels_;

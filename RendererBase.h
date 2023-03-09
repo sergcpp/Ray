@@ -96,6 +96,9 @@ class RendererBase {
     /// Returns pointer to rendered image
     virtual const pixel_color_t *get_pixels_ref() const = 0;
 
+    /// Returns pointer to 'raw' untonemapped image
+    virtual const pixel_color_t *get_raw_pixels_ref() const = 0;
+
     /// Returns pointer to SH data
     virtual const shl1_data_t *get_sh_data_ref() const = 0;
 
