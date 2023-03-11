@@ -282,12 +282,12 @@ bool Ray::PreprocessTri(const float *p, int stride, tri_accel_t *out_acc) {
 
 uint32_t Ray::PreprocessMesh(const float *attrs, Span<const uint32_t> vtx_indices, const eVertexLayout layout,
                              const int base_vertex, const bvh_settings_t &s, std::vector<bvh_node_t> &out_nodes,
-                             std::vector<tri_accel_t> &out_tris, std::vector<uint32_t> &out_tri_indices,
+                             aligned_vector<tri_accel_t> &out_tris, std::vector<uint32_t> &out_tri_indices,
                              aligned_vector<mtri_accel_t> &out_tris2) {
     assert(!vtx_indices.empty() && vtx_indices.size() % 3 == 0);
 
-    std::vector<prim_t> primitives;
-    std::vector<tri_accel_t> triangles;
+    aligned_vector<prim_t> primitives;
+    aligned_vector<tri_accel_t> triangles;
     std::vector<uint32_t> real_indices;
 
     primitives.reserve(vtx_indices.size() / 3);
@@ -533,7 +533,7 @@ uint32_t Ray::PreprocessPrims_SAH(Span<const prim_t> prims, const float *positio
             : indices(std::move(_indices)), min(_min), max(_max) {}
     };
 
-    std::deque<prims_coll_t> prim_lists;
+    std::deque <prims_coll_t, aligned_allocator<prims_coll_t, alignof(prims_coll_t)>> prim_lists;
     prim_lists.emplace_back();
 
     size_t num_nodes = out_nodes.size();
@@ -666,7 +666,7 @@ uint32_t Ray::PreprocessPrims_HLBVH(Span<const prim_t> prims, std::vector<bvh_no
                                               indices_start, start_bit, bottom_nodes);
     }
 
-    std::vector<prim_t> top_prims;
+    aligned_vector<prim_t> top_prims;
     for (const treelet_t &tr : treelets) {
         const bvh_node_t &node = bottom_nodes[tr.node_index];
 

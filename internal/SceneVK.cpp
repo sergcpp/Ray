@@ -610,7 +610,7 @@ Ray::MaterialHandle Ray::Vk::Scene::AddMaterial(const principled_mat_desc_t &m) 
 
 Ray::MeshHandle Ray::Vk::Scene::AddMesh(const mesh_desc_t &_m) {
     std::vector<bvh_node_t> new_nodes;
-    std::vector<tri_accel_t> new_tris;
+    aligned_vector<tri_accel_t> new_tris;
     std::vector<uint32_t> new_tri_indices;
     std::vector<uint32_t> new_vtx_indices;
 
@@ -1150,7 +1150,7 @@ void Ray::Vk::Scene::RebuildTLAS_nolock() {
 
     const size_t mi_count = mesh_instances_.size();
 
-    std::vector<prim_t> primitives;
+    aligned_vector<prim_t> primitives;
     primitives.reserve(mi_count);
 
     for (const mesh_instance_t &mi : mesh_instances_) {

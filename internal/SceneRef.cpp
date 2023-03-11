@@ -262,7 +262,7 @@ Ray::MeshHandle Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
     const uint64_t t1 = Ray::GetTimeMs();
 
     std::vector<bvh_node_t> temp_nodes;
-    std::vector<tri_accel_t> temp_tris;
+    aligned_vector<tri_accel_t> temp_tris;
     aligned_vector<mtri_accel_t> temp_mtris;
     std::vector<uint32_t> temp_tri_indices;
 
@@ -836,7 +836,7 @@ void Ray::Ref::Scene::RebuildTLAS_nolock() {
         return;
     }
 
-    std::vector<prim_t> primitives;
+    aligned_vector<prim_t> primitives;
     primitives.reserve(mesh_instances_.size());
 
     for (const mesh_instance_t &mi : mesh_instances_) {

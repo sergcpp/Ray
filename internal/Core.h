@@ -297,7 +297,7 @@ bool PreprocessTri(const float *p, int stride, tri_accel_t *out_acc);
 
 // Builds BVH for mesh and precomputes triangle data
 uint32_t PreprocessMesh(const float *attrs, Span<const uint32_t> vtx_indices, eVertexLayout layout, int base_vertex,
-                        const bvh_settings_t &s, std::vector<bvh_node_t> &out_nodes, std::vector<tri_accel_t> &out_tris,
+                        const bvh_settings_t &s, std::vector<bvh_node_t> &out_nodes, aligned_vector<tri_accel_t> &out_tris,
                         std::vector<uint32_t> &out_indices, aligned_vector<mtri_accel_t> &out_tris2);
 
 // Recursively builds linear bvh for a set of primitives
