@@ -10,6 +10,7 @@
 
 namespace Ray {
 class ILog;
+struct gpu_device_t;
 namespace Vk {
 static const int MaxFramesInFlight = 3;
 static const int MaxTimestampQueries = 256;
@@ -116,6 +117,8 @@ class Context {
     SmallVector<VkPipelineLayout, 128> pipeline_layouts_to_destroy[MaxFramesInFlight];
     SmallVector<VkPipeline, 128> pipelines_to_destroy[MaxFramesInFlight];
     SmallVector<VkAccelerationStructureKHR, 128> acc_structs_to_destroy[MaxFramesInFlight];
+
+    static int QueryAvailableDevices(ILog *log, gpu_device_t out_devices[], int capacity);
 
   private:
     static bool InitVkInstance(VkInstance &instance, const char *enabled_layers[], int enabled_layers_count, ILog *log);

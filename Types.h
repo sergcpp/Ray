@@ -76,4 +76,8 @@ struct camera_t {
     uint32_t mi_index, uv_index;
     pass_settings_t pass_settings;
 };
+
+struct gpu_device_t {
+    char name[256];
+};
 } // namespace Ray

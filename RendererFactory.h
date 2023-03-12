@@ -20,4 +20,6 @@ const uint32_t DefaultEnabledRenderTypes =
 */
 RendererBase *CreateRenderer(const settings_t &s, ILog *log = &g_null_log,
                              uint32_t enabled_types = DefaultEnabledRenderTypes);
+
+int QueryAvailableGPUDevices(ILog *log, gpu_device_t out_devices[], int capacity);
 } // namespace Ray

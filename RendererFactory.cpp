@@ -97,3 +97,11 @@ Ray::RendererBase *Ray::CreateRenderer(const settings_t &s, ILog *log, const uin
     return nullptr;
 #endif
 }
+
+int Ray::QueryAvailableGPUDevices(ILog *log, gpu_device_t out_devices[], const int capacity) {
+#ifdef ENABLE_GPU_IMPL
+    return Vk::Context::QueryAvailableDevices(log, out_devices, capacity);
+#else
+    return 0;
+#endif
+}

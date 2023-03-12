@@ -3,6 +3,7 @@
 #include <regex>
 
 #include "../../Log.h"
+#include "../../Types.h"
 #include "../SmallVector.h"
 #include "DescriptorPool.h"
 #include "MemoryAllocator.h"
@@ -32,6 +33,14 @@ const std::pair<uint32_t, const char *> KnownVendors[] = {
     {0x1002, "AMD"}, {0x10DE, "NVIDIA"}, {0x8086, "INTEL"}, {0x13B5, "ARM"}};
 
 RENDERDOC_DevicePointer rdoc_device = {};
+
+#ifndef NDEBUG
+const char *g_enabled_layers[] = {"VK_LAYER_KHRONOS_validation", "VK_LAYER_KHRONOS_synchronization2"};
+const int g_enabled_layers_count = COUNT_OF(g_enabled_layers);
+#else
+const char **g_enabled_layers = nullptr;
+const int g_enabled_layers_count = 0;
+#endif
 } // namespace Vk
 } // namespace Ray
 
@@ -90,15 +99,7 @@ bool Ray::Vk::Context::Init(ILog *log, const char *preferred_device) {
         return false;
     }
 
-#ifndef NDEBUG
-    const char *enabled_layers[] = {"VK_LAYER_KHRONOS_validation", "VK_LAYER_KHRONOS_synchronization2"};
-    const int enabled_layers_count = COUNT_OF(enabled_layers);
-#else
-    const char **enabled_layers = nullptr;
-    const int enabled_layers_count = 0;
-#endif
-
-    if (!InitVkInstance(instance_, enabled_layers, enabled_layers_count, log)) {
+    if (!InitVkInstance(instance_, g_enabled_layers, g_enabled_layers_count, log)) {
         return false;
     }
 
@@ -129,7 +130,7 @@ bool Ray::Vk::Context::Init(ILog *log, const char *preferred_device) {
     dynamic_rendering_supported_ = false;
 
     if (!InitVkDevice(device_, physical_device_, graphics_family_index_, raytracing_supported_, ray_query_supported_,
-                      dynamic_rendering_supported_, enabled_layers, enabled_layers_count, log)) {
+                      dynamic_rendering_supported_, g_enabled_layers, g_enabled_layers_count, log)) {
         return false;
     }
 
@@ -759,4 +760,39 @@ void Ray::Vk::Context::DestroyDeferredResources(const int i) {
         vkDestroyAccelerationStructureKHR(device_, acc_struct, nullptr);
     }
     acc_structs_to_destroy[i].clear();
+}
+
+int Ray::Vk::Context::QueryAvailableDevices(ILog *log, gpu_device_t out_devices[], const int capacity) {
+    if (!LoadVulkan(log)) {
+        log->Error("Failed to initialize vulkan!");
+        return 0;
+    }
+
+    VkInstance instance;
+    if (!InitVkInstance(instance, g_enabled_layers, g_enabled_layers_count, log)) {
+        log->Error("Failed to initialize VkInstance!");
+        return 0;
+    }
+
+    uint32_t physical_device_count = 0;
+    vkEnumeratePhysicalDevices(instance, &physical_device_count, nullptr);
+
+    SmallVector<VkPhysicalDevice, 4> physical_devices(physical_device_count);
+    vkEnumeratePhysicalDevices(instance, &physical_device_count, &physical_devices[0]);
+
+    if (int(physical_device_count) > capacity) {
+        log->Warning("Insufficiend devices copacity");
+        physical_device_count = capacity;
+    }
+
+    for (int i = 0; i < int(physical_device_count); ++i) {
+        VkPhysicalDeviceProperties device_properties = {};
+        vkGetPhysicalDeviceProperties(physical_devices[i], &device_properties);
+
+        strncpy(out_devices[i].name, device_properties.deviceName, sizeof(out_devices[i].name));
+    }
+
+    vkDestroyInstance(instance, nullptr);
+
+    return int(physical_device_count);
 }

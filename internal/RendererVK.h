@@ -159,8 +159,6 @@ class Renderer : public RendererBase {
 
     void GetStats(stats_t &st) override { st = stats_; }
     void ResetStats() override { stats_ = {0}; }
-
-    // static std::vector<Platform> QueryPlatforms();
 };
 } // namespace Vk
 } // namespace Ray
