@@ -380,8 +380,6 @@ int main(int argc, char *argv[]) {
     #define WIN32_LEAN_AND_MEAN
 #endif
 #include <Windows.h>
-#undef min
-#undef max
 
 extern "C" {
 // Enable High Performance Graphics while using Integrated Graphics
