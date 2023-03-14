@@ -393,7 +393,8 @@ bool Ray::Vk::Context::ChooseVkPhysicalDevice(VkPhysicalDevice &physical_device,
 
             if (preferred_device) {
                 std::regex match_name(preferred_device);
-                if (std::regex_search(device_properties.deviceName, match_name)) {
+                if (strcmp(device_properties.deviceName, preferred_device) == 0 ||
+                    std::regex_search(device_properties.deviceName, match_name)) {
                     // preferred device found
                     score += 100000;
                 }
