@@ -780,18 +780,19 @@ int Ray::Vk::Context::QueryAvailableDevices(ILog *log, gpu_device_t out_devices[
     SmallVector<VkPhysicalDevice, 4> physical_devices(physical_device_count);
     vkEnumeratePhysicalDevices(instance, &physical_device_count, &physical_devices[0]);
 
-    if (int(physical_device_count) > capacity) {
-        log->Warning("Insufficiend devices copacity");
-        physical_device_count = capacity;
+    if (out_devices) {
+        if (int(physical_device_count) > capacity) {
+            log->Warning("Insufficiend devices copacity");
+            physical_device_count = capacity;
+        }
+
+        for (int i = 0; i < int(physical_device_count); ++i) {
+            VkPhysicalDeviceProperties device_properties = {};
+            vkGetPhysicalDeviceProperties(physical_devices[i], &device_properties);
+
+            strncpy(out_devices[i].name, device_properties.deviceName, sizeof(out_devices[i].name));
+        }
     }
-
-    for (int i = 0; i < int(physical_device_count); ++i) {
-        VkPhysicalDeviceProperties device_properties = {};
-        vkGetPhysicalDeviceProperties(physical_devices[i], &device_properties);
-
-        strncpy(out_devices[i].name, device_properties.deviceName, sizeof(out_devices[i].name));
-    }
-
     vkDestroyInstance(instance, nullptr);
 
     return int(physical_device_count);
