@@ -1,4 +1,4 @@
-#include "CoreRef.h"
+﻿#include "CoreRef.h"
 
 #include <algorithm>
 #include <cassert>
@@ -1145,7 +1145,7 @@ Ray::Ref::hit_data_t::hit_data_t() {
     t = MAX_DIST;
 }
 
-void Ray::Ref::GeneratePrimaryRays(const int iteration, const camera_t &cam, const rect_t &r, const int w, const int h,
+void Ray::Ref::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, const int w, const int h,
                                    const float *random_seq, aligned_vector<ray_data_t> &out_rays) {
     const simd_fvec4 cam_origin = make_fvec3(cam.origin), fwd = make_fvec3(cam.fwd), side = make_fvec3(cam.side),
                      up = make_fvec3(cam.up);
@@ -4300,6 +4300,78 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
 
     return color_rgba_t{ray.c[0] * col.get<0>(), ray.c[1] * col.get<1>(), ray.c[2] * col.get<2>(), 1.0f};
 }
+
+template <int WINDOW_SIZE, int NEIGHBORHOOD_SIZE>
+void Ray::Ref::NLMFilter(const color_rgba_t input[], const rect_t &rect, const int input_stride, const float alpha,
+                         const float damping, const color_rgba_t variance[], const rect_t &output_rect,
+                         const int output_stride, color_rgba_t output[]) {
+    const int WindowRadius = (WINDOW_SIZE - 1) / 2;
+    const float PatchDistanceNormFactor = NEIGHBORHOOD_SIZE * NEIGHBORHOOD_SIZE;
+    const int NeighborRadius = (NEIGHBORHOOD_SIZE - 1) / 2;
+
+    assert(rect.w == output_rect.w);
+    assert(rect.h == output_rect.h);
+
+    for (int iy = rect.y; iy < rect.y + rect.h; ++iy) {
+        for (int ix = rect.x; ix < rect.x + rect.w; ++ix) {
+            simd_fvec4 sum_output = {};
+            float sum_weight = 0.0f;
+
+            for (int k = -WindowRadius; k <= WindowRadius; ++k) {
+                const int jy = iy + k;
+
+                for (int l = -WindowRadius; l <= WindowRadius; ++l) {
+                    const int jx = ix + l;
+
+                    simd_fvec4 distance = {};
+
+                    for (int q = -NeighborRadius; q <= NeighborRadius; ++q) {
+                        for (int p = -NeighborRadius; p <= NeighborRadius; ++p) {
+                            const simd_fvec4 ipx = {input[(iy + q) * input_stride + (ix + p)].v, simd_mem_aligned};
+                            const simd_fvec4 jpx = {input[(jy + q) * input_stride + (jx + p)].v, simd_mem_aligned};
+
+                            const simd_fvec4 ivar = {variance[(iy + q) * input_stride + (ix + p)].v, simd_mem_aligned};
+                            const simd_fvec4 jvar = {variance[(jy + q) * input_stride + (jx + p)].v, simd_mem_aligned};
+                            const simd_fvec4 min_var = min(ivar, jvar);
+
+                            distance += ((ipx - jpx) * (ipx - jpx) - alpha * (ivar + min_var)) /
+                                        (0.0001f + damping * damping * (ivar + jvar));
+                        }
+                    }
+
+                    const float patch_distance =
+                        0.25f * PatchDistanceNormFactor *
+                        (distance.get<0>() + distance.get<1>() + distance.get<2>() + distance.get<3>());
+
+                    const float weight = std::exp(-std::max(0.0f, patch_distance));
+
+                    sum_output += simd_fvec4{input[jy * input_stride + jx].v, simd_mem_aligned} * weight;
+                    sum_weight += weight;
+                }
+            }
+
+            if (sum_weight != 0.0f) {
+                sum_output /= sum_weight;
+            }
+
+            sum_output.store_to(output[(output_rect.y + iy - rect.y) * output_stride + (output_rect.x + ix - rect.x)].v,
+                                simd_mem_aligned);
+        }
+    }
+}
+
+template void Ray::Ref::NLMFilter<21 /* WINDOW_SIZE */, 5 /* NEIGHBORHOOD_SIZE */>(
+    const color_rgba_t input[], const rect_t &rect, int input_stride, float alpha, float damping,
+    const color_rgba_t variance[], const rect_t &output_rect, int output_stride, color_rgba_t output[]);
+template void Ray::Ref::NLMFilter<21 /* WINDOW_SIZE */, 3 /* NEIGHBORHOOD_SIZE */>(
+    const color_rgba_t input[], const rect_t &rect, int input_stride, float alpha, float damping,
+    const color_rgba_t variance[], const rect_t &output_rect, int output_stride, color_rgba_t output[]);
+template void Ray::Ref::NLMFilter<7 /* WINDOW_SIZE */, 3 /* NEIGHBORHOOD_SIZE */>(
+    const color_rgba_t input[], const rect_t &rect, int input_stride, float alpha, float damping,
+    const color_rgba_t variance[], const rect_t &output_rect, int output_stride, color_rgba_t output[]);
+template void Ray::Ref::NLMFilter<3 /* WINDOW_SIZE */, 1 /* NEIGHBORHOOD_SIZE */>(
+    const color_rgba_t input[], const rect_t &rect, int input_stride, float alpha, float damping,
+    const color_rgba_t variance[], const rect_t &output_rect, int output_stride, color_rgba_t output[]);
 
 #undef sqr
 

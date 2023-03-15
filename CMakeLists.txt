@@ -50,8 +50,6 @@ set(INTERNAL_SOURCE_FILES internal/Bitmap.h
                           internal/CoreRef.h
                           internal/CoreRef.cpp
                           internal/CoreSIMD.h
-                          internal/FramebufferRef.h
-                          internal/FramebufferRef.cpp
                           internal/Halton.h
                           internal/RendererSIMD.h
                           internal/SceneRef.h

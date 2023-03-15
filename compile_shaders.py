@@ -105,6 +105,10 @@ def main():
     compile_shader(src_name="mix_incremental", spv_name="mix_incremental_bn", defines="-DOUTPUT_BASE_COLOR=1 -DOUTPUT_DEPTH_NORMALS=1")
     compile_shader(src_name="postprocess")
 
+    # Denoise
+    compile_shader(src_name="filter_variance")
+    compile_shader(src_name="nlm_filter")
+
     # Other
     compile_shader(src_name="prepare_indir_args")
     compile_shader(src_name="debug_rt", target_env="spirv1.4")

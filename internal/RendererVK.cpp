@@ -39,6 +39,7 @@ static_assert(Types::LIGHT_TYPE_TRI == Ray::LIGHT_TYPE_TRI, "!");
 namespace Ray {
 namespace Vk {
 #include "shaders/output/debug_rt.comp.inl"
+#include "shaders/output/filter_variance.comp.inl"
 #include "shaders/output/intersect_area_lights.comp.inl"
 #include "shaders/output/intersect_scene_primary_hwrt_atlas.comp.inl"
 #include "shaders/output/intersect_scene_primary_hwrt_bindless.comp.inl"
@@ -56,6 +57,7 @@ namespace Vk {
 #include "shaders/output/mix_incremental_b.comp.inl"
 #include "shaders/output/mix_incremental_bn.comp.inl"
 #include "shaders/output/mix_incremental_n.comp.inl"
+#include "shaders/output/nlm_filter.comp.inl"
 #include "shaders/output/postprocess.comp.inl"
 #include "shaders/output/prepare_indir_args.comp.inl"
 #include "shaders/output/primary_ray_gen.comp.inl"
@@ -240,6 +242,18 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
                              internal_shaders_output_postprocess_comp_spv_size,
                              eShaderType::Comp,
                              log};
+    sh_filter_variance_ = Shader{"Filter Variance",
+                                 ctx_.get(),
+                                 internal_shaders_output_filter_variance_comp_spv,
+                                 internal_shaders_output_filter_variance_comp_spv_size,
+                                 eShaderType::Comp,
+                                 log};
+    sh_nlm_filter_ = Shader{"NLM Filter",
+                            ctx_.get(),
+                            internal_shaders_output_nlm_filter_comp_spv,
+                            internal_shaders_output_nlm_filter_comp_spv_size,
+                            eShaderType::Comp,
+                            log};
     if (use_hwrt_) {
         sh_debug_rt_ = Shader{"Debug RT",
                               ctx_.get(),
@@ -266,6 +280,8 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
     prog_mix_incremental_n_ = Program{"Mix Incremental N", ctx_.get(), &sh_mix_incremental_n_, log};
     prog_mix_incremental_bn_ = Program{"Mix Incremental BN", ctx_.get(), &sh_mix_incremental_bn_, log};
     prog_postprocess_ = Program{"Postprocess", ctx_.get(), &sh_postprocess_, log};
+    prog_filter_variance_ = Program{"Filter Variance", ctx_.get(), &sh_filter_variance_, log};
+    prog_nlm_filter_ = Program{"NLM Filter", ctx_.get(), &sh_nlm_filter_, log};
     prog_debug_rt_ = Program{"Debug RT", ctx_.get(), &sh_debug_rt_, log};
 
     if (!pi_prim_rays_gen_.Init(ctx_.get(), &prog_prim_rays_gen_, log) ||
@@ -284,6 +300,8 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
         !pi_mix_incremental_n_.Init(ctx_.get(), &prog_mix_incremental_n_, log) ||
         !pi_mix_incremental_bn_.Init(ctx_.get(), &prog_mix_incremental_bn_, log) ||
         !pi_postprocess_.Init(ctx_.get(), &prog_postprocess_, log) ||
+        !pi_filter_variance_.Init(ctx_.get(), &prog_filter_variance_, log) ||
+        !pi_nlm_filter_.Init(ctx_.get(), &prog_nlm_filter_, log) ||
         (use_hwrt_ && !pi_debug_rt_.Init(ctx_.get(), &prog_debug_rt_, log))) {
         throw std::runtime_error("Error initializing pipeline!");
     }
@@ -331,11 +349,19 @@ void Ray::Vk::Renderer::Resize(const int w, const int h) {
     params.w = w;
     params.h = h;
     params.format = eTexFormat::RawRGBA32F;
-    params.usage = eTexUsageBits::Storage | eTexUsageBits::Transfer;
+    params.usage = eTexUsageBits::Sampled | eTexUsageBits::Storage | eTexUsageBits::Transfer;
+    params.sampling.wrap = eTexWrap::ClampToEdge;
 
     temp_buf_ = Texture2D{"Temp Image", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
-    clean_buf_ = Texture2D{"Clean Image", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
+    dual_buf_[0] = Texture2D{"Dual Image [0]", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
+    dual_buf_[1] = Texture2D{"Dual Image [1]", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
     final_buf_ = Texture2D{"Final Image", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
+    raw_final_buf_ = Texture2D{"Raw Final Image", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
+
+    variance_buf_ = Texture2D{"Variance Image", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
+    filtered_variance_buf_ =
+        Texture2D{"Filter Variance Image", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
+    filtered_final_buf_ = Texture2D{"Filtered Image", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
 
     if (frame_pixels_) {
         pixel_stage_buf_.Unmap();
@@ -360,14 +386,18 @@ void Ray::Vk::Renderer::Resize(const int w, const int h) {
 void Ray::Vk::Renderer::Clear(const color_rgba_t &c) {
     VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
 
-    const TransitionInfo img_transitions[] = {{&clean_buf_, eResState::CopyDst},
+    const TransitionInfo img_transitions[] = {{&dual_buf_[0], eResState::CopyDst},
+                                              {&dual_buf_[1], eResState::CopyDst},
                                               {&final_buf_, eResState::CopyDst},
                                               {&base_color_buf_, eResState::CopyDst},
                                               {&depth_normals_buf_, eResState::CopyDst}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, img_transitions);
 
-    ClearColorImage(clean_buf_, c.v, cmd_buf);
+    ClearColorImage(dual_buf_[0], c.v, cmd_buf);
+    ClearColorImage(dual_buf_[1], c.v, cmd_buf);
     ClearColorImage(final_buf_, c.v, cmd_buf);
+    ClearColorImage(raw_final_buf_, c.v, cmd_buf);
+    ClearColorImage(filtered_final_buf_, c.v, cmd_buf);
     if (base_color_buf_.ready()) {
         static const float rgba[] = {0.0f, 0.0f, 0.0f, 0.0f};
         ClearColorImage(base_color_buf_, rgba, cmd_buf);
@@ -739,17 +769,34 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
     { // prepare result
         DebugMarker _(cmd_buf, "Prepare Result");
 
-        // factor used to compute incremental average
-        const float mix_factor = 1.0f / float(region.iteration);
+        Texture2D &clean_buf = dual_buf_[(region.iteration - 1) % 2];
 
-        kernel_MixIncremental(cmd_buf, clean_buf_, temp_buf_, mix_factor, temp_base_color_buf_, temp_depth_normals_buf_,
-                              final_buf_, base_color_buf_, depth_normals_buf_);
-        std::swap(final_buf_, clean_buf_);
+        // factor used to compute incremental average
+        const float main_mix_factor = 1.0f / float((region.iteration + 1) / 2);
+        const float aux_mix_factor = 1.0f / float(region.iteration);
+
+        kernel_MixIncremental(cmd_buf, clean_buf, temp_buf_, main_mix_factor, aux_mix_factor, temp_base_color_buf_,
+                              temp_depth_normals_buf_, final_buf_, base_color_buf_, depth_normals_buf_);
+        std::swap(final_buf_, clean_buf);
 
         postprocess_params_.clamp = (cam.pass_settings.flags & Clamp) ? 1 : 0;
         postprocess_params_.srgb = (cam.dtype == SRGB) ? 1 : 0;
         postprocess_params_.exposure = cam.exposure;
         postprocess_params_.gamma = (1.0f / cam.gamma);
+    }
+
+    { // output final buffer, prepare variance
+        DebugMarker _(cmd_buf, "Postprocess frame");
+
+        const int p1_samples = (region.iteration + 1) / 2;
+        const int p2_samples = (region.iteration) / 2;
+
+        const float p1_weight = float(p1_samples) / float(region.iteration);
+        const float p2_weight = float(p2_samples) / float(region.iteration);
+
+        kernel_Postprocess(cmd_buf, dual_buf_[0], p1_weight, dual_buf_[1], p2_weight, postprocess_params_.exposure,
+                           postprocess_params_.gamma, postprocess_params_.clamp, postprocess_params_.srgb, final_buf_,
+                           raw_final_buf_, variance_buf_);
     }
 
 #if RUN_IN_LOCKSTEP
@@ -790,6 +837,86 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
     frame_dirty_ = base_color_dirty_ = depth_normals_dirty_ = true;
 }
 
+void Ray::Vk::Renderer::DenoiseImage(const RegionContext &region) {
+#if !RUN_IN_LOCKSTEP
+    vkWaitForFences(ctx_->device(), 1, &ctx_->in_flight_fence(ctx_->backend_frame), VK_TRUE, UINT64_MAX);
+    vkResetFences(ctx_->device(), 1, &ctx_->in_flight_fence(ctx_->backend_frame));
+#endif
+
+    ctx_->ReadbackTimestampQueries(ctx_->backend_frame);
+    ctx_->DestroyDeferredResources(ctx_->backend_frame);
+    ctx_->default_descr_alloc()->Reset();
+
+    stats_.time_denoise_us = ctx_->GetTimestampIntervalDurationUs(timestamps_[ctx_->backend_frame].denoise[0],
+                                                                  timestamps_[ctx_->backend_frame].denoise[1]);
+
+#if RUN_IN_LOCKSTEP
+    VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+#else
+    VkCommandBufferBeginInfo begin_info = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+    begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+    vkBeginCommandBuffer(ctx_->draw_cmd_buf(ctx_->backend_frame), &begin_info);
+    VkCommandBuffer cmd_buf = ctx_->draw_cmd_buf(ctx_->backend_frame);
+#endif
+
+    vkCmdResetQueryPool(cmd_buf, ctx_->query_pool(ctx_->backend_frame), 0, MaxTimestampQueries);
+
+    //////////////////////////////////////////////////////////////////////////////////
+
+    timestamps_[ctx_->backend_frame].denoise[0] = ctx_->WriteTimestamp(true);
+
+    { // Filter variance
+        DebugMarker _(cmd_buf, "Filter Variance");
+        kernel_FilterVariance(cmd_buf, variance_buf_, filtered_variance_buf_);
+    }
+
+    { // Apply NLM Filter
+        DebugMarker _(cmd_buf, "NLM Filter");
+        kernel_NLMFilter(cmd_buf, final_buf_, filtered_variance_buf_, 1.0f, 0.45f, filtered_final_buf_);
+    }
+
+    timestamps_[ctx_->backend_frame].denoise[1] = ctx_->WriteTimestamp(false);
+
+    //////////////////////////////////////////////////////////////////////////////////
+
+#if RUN_IN_LOCKSTEP
+    EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+#else
+    vkEndCommandBuffer(cmd_buf);
+
+    const int prev_frame = (ctx_->backend_frame + MaxFramesInFlight - 1) % MaxFramesInFlight;
+
+    VkSubmitInfo submit_info = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
+
+    const VkSemaphore wait_semaphores[] = {ctx_->render_finished_semaphore(prev_frame)};
+    const VkPipelineStageFlags wait_stages[] = {VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT};
+
+    if (ctx_->render_finished_semaphore_is_set[prev_frame]) {
+        submit_info.waitSemaphoreCount = 1;
+        submit_info.pWaitSemaphores = wait_semaphores;
+        submit_info.pWaitDstStageMask = wait_stages;
+    }
+
+    submit_info.commandBufferCount = 1;
+    submit_info.pCommandBuffers = &ctx_->draw_cmd_buf(ctx_->backend_frame);
+
+    submit_info.signalSemaphoreCount = 1;
+    submit_info.pSignalSemaphores = &ctx_->render_finished_semaphore(ctx_->backend_frame);
+
+    const VkResult res =
+        vkQueueSubmit(ctx_->graphics_queue(), 1, &submit_info, ctx_->in_flight_fence(ctx_->backend_frame));
+    if (res != VK_SUCCESS) {
+        ctx_->log()->Error("Failed to submit into a queue!");
+    }
+
+    ctx_->render_finished_semaphore_is_set[ctx_->backend_frame] = true;
+    ctx_->render_finished_semaphore_is_set[prev_frame] = false;
+
+    ctx_->backend_frame = (ctx_->backend_frame + 1) % MaxFramesInFlight;
+#endif
+}
+
 void Ray::Vk::Renderer::UpdateHaltonSequence(const int iteration, std::unique_ptr<float[]> &seq) {
     if (!seq) {
         seq.reset(new float[HALTON_COUNT * HALTON_SEQ_LEN]);
@@ -805,21 +932,15 @@ void Ray::Vk::Renderer::UpdateHaltonSequence(const int iteration, std::unique_pt
     }
 }
 
-const Ray::color_rgba_t *Ray::Vk::Renderer::get_pixels_ref(const bool tonemap) const {
+const Ray::color_rgba_t *Ray::Vk::Renderer::get_pixels_ref(const bool tonemap, const bool denoised) const {
     if (frame_dirty_ || pixel_stage_is_tonemapped_ != tonemap) {
         VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
-
-        if (tonemap) { // postprocess
-            DebugMarker _(cmd_buf, "Postprocess frame");
-
-            kernel_Postprocess(cmd_buf, clean_buf_, postprocess_params_.exposure, postprocess_params_.gamma,
-                               postprocess_params_.clamp, postprocess_params_.srgb, final_buf_);
-        }
 
         { // download result
             DebugMarker _(cmd_buf, "Download Result");
 
-            const auto &buffer_to_use = tonemap ? final_buf_ : clean_buf_;
+            // TODO: fix this!
+            const auto &buffer_to_use = tonemap ? (denoised ? filtered_final_buf_ : final_buf_) : raw_final_buf_;
 
             const TransitionInfo res_transitions[] = {{&buffer_to_use, eResState::CopySrc},
                                                       {&pixel_stage_buf_, eResState::CopyDst}};

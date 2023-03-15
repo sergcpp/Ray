@@ -4,7 +4,6 @@
 
 #include "../RendererBase.h"
 #include "CoreRef.h"
-#include "FramebufferRef.h"
 
 namespace Ray {
 class ILog;
@@ -16,33 +15,24 @@ struct PassData {
     aligned_vector<shadow_ray_t> shadow_rays;
     aligned_vector<hit_data_t> intersections;
 
+    aligned_vector<color_rgba_t, 16> temp_final_buf;
+    aligned_vector<color_rgba_t, 16> variance_buf;
+    aligned_vector<color_rgba_t, 16> filtered_variance_buf;
+
     std::vector<uint32_t> hash_values;
     std::vector<int> head_flags;
     std::vector<uint32_t> scan_values;
 
     std::vector<ray_chunk_t> chunks, chunks_temp;
     std::vector<uint32_t> skeleton;
-
-    PassData() = default;
-
-    PassData(const PassData &rhs) = delete;
-    PassData(PassData &&rhs) noexcept { *this = std::move(rhs); }
-
-    PassData &operator=(const PassData &rhs) = delete;
-    PassData &operator=(PassData &&rhs) noexcept {
-        primary_rays = std::move(rhs.primary_rays);
-        secondary_rays = std::move(rhs.secondary_rays);
-        intersections = std::move(rhs.intersections);
-        head_flags = std::move(rhs.head_flags);
-        return *this;
-    }
 };
 
 class Renderer : public RendererBase {
     ILog *log_;
 
     bool use_wide_bvh_;
-    Ref::Framebuffer clean_buf_, final_buf_, temp_buf_;
+    aligned_vector<color_rgba_t, 16> dual_buf_[2], base_color_buf_, depth_normals_buf_, temp_buf_, final_buf_,
+        raw_final_buf_, filtered_final_buf_;
 
     std::mutex mtx_;
 
@@ -61,35 +51,51 @@ class Renderer : public RendererBase {
 
     const char *device_name() const override { return "CPU"; }
 
-    std::pair<int, int> size() const override { return std::make_pair(final_buf_.w(), final_buf_.h()); }
+    std::pair<int, int> size() const override { return std::make_pair(w_, h_); }
 
-    const color_rgba_t *get_pixels_ref() const override { return final_buf_.get_pixels_ref(); }
-    const color_rgba_t *get_raw_pixels_ref() const override { return clean_buf_.get_pixels_ref(); }
+    const color_rgba_t *get_pixels_ref() const override { return final_buf_.data(); }
+    const color_rgba_t *get_raw_pixels_ref() const override { return raw_final_buf_.data(); }
     const color_rgba_t *get_aux_pixels_ref(const eAUXBuffer buf) const override {
-        if (buf & eAUXBuffer::BaseColor) {
-            return clean_buf_.get_base_color_ref();
-        } else if (buf & eAUXBuffer::DepthNormals) {
-            return clean_buf_.get_depth_normals_ref();
+        if (buf == eAUXBuffer::BaseColor) {
+            return base_color_buf_.data();
+        } else if (buf == eAUXBuffer::DepthNormals) {
+            return depth_normals_buf_.data();
         }
         return nullptr;
     }
-    const shl1_data_t *get_sh_data_ref() const override { return clean_buf_.get_sh_data_ref(); }
+    const color_rgba_t *get_denoised_pixels_ref() const override { return filtered_final_buf_.data(); }
+
+    const shl1_data_t *get_sh_data_ref() const override { return nullptr; }
 
     void Resize(const int w, const int h) override {
         if (w_ != w || h_ != h) {
-            clean_buf_.Resize(w, h, 0);
-            final_buf_.Resize(w, h, 0);
-            temp_buf_.Resize(w, h, 0);
+            for (auto &buf : dual_buf_) {
+                buf.assign(w * h, {});
+                buf.shrink_to_fit();
+            }
+            temp_buf_.assign(w * h, {});
+            temp_buf_.shrink_to_fit();
+            final_buf_.assign(w * h, {});
+            final_buf_.shrink_to_fit();
+            raw_final_buf_.assign(w * h, {});
+            raw_final_buf_.shrink_to_fit();
+            filtered_final_buf_.assign(w * h, {});
+            filtered_final_buf_.shrink_to_fit();
 
             w_ = w;
             h_ = h;
         }
     }
 
-    void Clear(const color_rgba_t &c) override { clean_buf_.Clear(c); }
+    void Clear(const color_rgba_t &c) override {
+        for (auto &buf : dual_buf_) {
+            buf.assign(w_ * h_, c);
+        }
+    }
 
     SceneBase *CreateScene() override;
     void RenderScene(const SceneBase *scene, RegionContext &region) override;
+    void DenoiseImage(const RegionContext &region) override;
 
     void GetStats(stats_t &st) override { st = stats_; }
     void ResetStats() override { stats_ = {0}; }

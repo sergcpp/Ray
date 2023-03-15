@@ -34,19 +34,19 @@ void main() {
     vec3 col2 = imageLoad(g_in_img2, icoord).rgb;
 
     vec3 diff = col2 - col1;
-    imageStore(g_out_img, icoord, vec4(col1 + diff * g_params.k, 1.0));
+    imageStore(g_out_img, icoord, vec4(col1 + diff * g_params.main_mix_factor, 1.0));
 
 #if OUTPUT_BASE_COLOR
     vec3 base_color1 = imageLoad(g_out_base_color_img, icoord).rgb;
     vec3 base_color2 = imageLoad(g_temp_base_color, icoord).rgb;
     vec3 base_color_diff = base_color2 - base_color1;
-    imageStore(g_out_base_color_img, icoord, vec4(base_color1 + base_color_diff * g_params.k, 1.0));
+    imageStore(g_out_base_color_img, icoord, vec4(base_color1 + base_color_diff * g_params.aux_mix_factor, 1.0));
 #endif
 #if OUTPUT_DEPTH_NORMALS
     vec4 depth_normals1 = imageLoad(g_out_depth_normals_img, icoord);
     vec4 depth_normals2 = imageLoad(g_temp_depth_normals_img, icoord);
     depth_normals2.xyz = clamp(depth_normals2.xyz, vec3(-1.0), vec3(1.0));
     vec4 depth_normals_diff = depth_normals2 - depth_normals1;
-    imageStore(g_out_depth_normals_img, icoord, vec4(depth_normals1 + depth_normals_diff * g_params.k));
+    imageStore(g_out_depth_normals_img, icoord, vec4(depth_normals1 + depth_normals_diff * g_params.aux_mix_factor));
 #endif
 }
