@@ -94,10 +94,10 @@ class RendererBase {
     virtual std::pair<int, int> size() const = 0;
 
     /// Returns pointer to rendered image
-    virtual const pixel_color_t *get_pixels_ref() const = 0;
+    virtual const color_rgba_t *get_pixels_ref() const = 0;
 
     /// Returns pointer to 'raw' untonemapped image
-    virtual const pixel_color_t *get_raw_pixels_ref() const = 0;
+    virtual const color_rgba_t *get_raw_pixels_ref() const = 0;
 
     /// Returns pointer to SH data
     virtual const shl1_data_t *get_sh_data_ref() const = 0;
@@ -111,7 +111,7 @@ class RendererBase {
     /** @brief Clear framebuffer
         @param c color used to fill image
     */
-    virtual void Clear(const pixel_color_t &c) = 0;
+    virtual void Clear(const color_rgba_t &c) = 0;
 
     /** @brief Create new scene
         @return pointer to new scene for specific backend

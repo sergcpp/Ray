@@ -271,7 +271,7 @@ void Ray::Vk::Renderer::Resize(const int w, const int h) {
         frame_pixels_ = nullptr;
     }
     pixel_stage_buf_ = Buffer{"Px Stage Buf", ctx_.get(), eBufType::Stage, uint32_t(4 * w * h * sizeof(float))};
-    frame_pixels_ = (const pixel_color_t *)pixel_stage_buf_.Map(BufMapRead, true /* persistent */);
+    frame_pixels_ = (const color_rgba_t *)pixel_stage_buf_.Map(BufMapRead, true /* persistent */);
 
     prim_rays_buf_ =
         Buffer{"Primary Rays", ctx_.get(), eBufType::Storage, uint32_t(sizeof(Types::ray_data_t) * num_pixels)};
@@ -286,14 +286,14 @@ void Ray::Vk::Renderer::Resize(const int w, const int h) {
     h_ = h;
 }
 
-void Ray::Vk::Renderer::Clear(const pixel_color_t &c) {
+void Ray::Vk::Renderer::Clear(const color_rgba_t &c) {
     VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
 
     const TransitionInfo img_transitions[] = {{&clean_buf_, eResState::CopyDst}, {&final_buf_, eResState::CopyDst}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, img_transitions);
 
-    ClearColorImage(clean_buf_, &c.r, cmd_buf);
-    ClearColorImage(final_buf_, &c.r, cmd_buf);
+    ClearColorImage(clean_buf_, c.v, cmd_buf);
+    ClearColorImage(final_buf_, c.v, cmd_buf);
 
     EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 }
@@ -641,7 +641,7 @@ void Ray::Vk::Renderer::UpdateHaltonSequence(const int iteration, std::unique_pt
     }
 }
 
-const Ray::pixel_color_t *Ray::Vk::Renderer::get_pixels_ref(const bool tonemap) const {
+const Ray::color_rgba_t *Ray::Vk::Renderer::get_pixels_ref(const bool tonemap) const {
     if (frame_dirty_ || pixel_stage_is_tonemapped_ != tonemap) {
         VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
 

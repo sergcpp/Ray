@@ -11,12 +11,6 @@
 */
 
 namespace Ray {
-/// RGBA single precision f32 color
-struct pixel_color_t {
-    float r, g, b, a;
-};
-static_assert(sizeof(pixel_color_t) == 16, "!");
-
 template <typename T, int N> struct color_t { T v[N]; };
 
 using color_rgba8_t = color_t<uint8_t, 4>;

@@ -72,8 +72,8 @@ template <int DimX, int DimY> class RendererSIMD : public RendererBase {
 
     const char *device_name() const override { return "CPU"; }
 
-    const pixel_color_t *get_pixels_ref() const override { return final_buf_.get_pixels_ref(); }
-    const pixel_color_t *get_raw_pixels_ref() const override { return clean_buf_.get_pixels_ref(); }
+    const color_rgba_t *get_pixels_ref() const override { return final_buf_.get_pixels_ref(); }
+    const color_rgba_t *get_raw_pixels_ref() const override { return clean_buf_.get_pixels_ref(); }
 
     const shl1_data_t *get_sh_data_ref() const override { return clean_buf_.get_sh_data_ref(); }
 
@@ -87,7 +87,7 @@ template <int DimX, int DimY> class RendererSIMD : public RendererBase {
             h_ = h;
         }
     }
-    void Clear(const pixel_color_t &c) override { clean_buf_.Clear(c); }
+    void Clear(const color_rgba_t &c) override { clean_buf_.Clear(c); }
 
     SceneBase *CreateScene() override;
     void RenderScene(const SceneBase *scene, RegionContext &region) override;
@@ -101,8 +101,8 @@ template <int S> Ray::NS::PassData<S> &get_per_thread_pass_data() {
     return per_thread_pass_data;
 }
 
-pixel_color_t clamp_and_gamma_correct(const pixel_color_t &p, const camera_t &cam) {
-    auto c = simd_fvec4{&p.r};
+color_rgba_t clamp_and_gamma_correct(const color_rgba_t &p, const camera_t &cam) {
+    auto c = simd_fvec4{p.v};
 
     if (cam.exposure != 0.0f) {
         c *= std::pow(2.0f, cam.exposure);
@@ -125,7 +125,7 @@ pixel_color_t clamp_and_gamma_correct(const pixel_color_t &p, const camera_t &ca
     if (cam.pass_settings.flags & Clamp) {
         c = clamp(c, 0.0f, 1.0f);
     }
-    return pixel_color_t{c[0], c[1], c[2], c[3]};
+    return color_rgba_t{c[0], c[1], c[2], c[3]};
 };
 } // namespace NS
 } // namespace Ray
@@ -478,7 +478,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *scene, Regi
         clean_buf_.MixWith_SH(temp_buf_, rect, mix_factor);
     }
 
-    auto _clamp_and_gamma_correct = [&cam](const pixel_color_t &p) { return clamp_and_gamma_correct(p, cam); };
+    auto _clamp_and_gamma_correct = [&cam](const color_rgba_t &p) { return clamp_and_gamma_correct(p, cam); };
 
     final_buf_.CopyFrom(clean_buf_, rect, _clamp_and_gamma_correct);
 }

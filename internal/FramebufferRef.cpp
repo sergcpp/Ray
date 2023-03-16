@@ -21,16 +21,16 @@ void Ray::Ref::Framebuffer::Resize(const int w, const int h, const bool alloc_sh
         w_ = w;
         h_ = h;
         const size_t buf_size = size_t(w) * h;
-        pixels_.resize(buf_size, pixel_color_t{0.0f, 0.0f, 0.0f, 0.0f});
+        pixels_.resize(buf_size, color_rgba_t{0.0f, 0.0f, 0.0f, 0.0f});
     }
 }
 
-void Ray::Ref::Framebuffer::Clear(const pixel_color_t &p) {
+void Ray::Ref::Framebuffer::Clear(const color_rgba_t &p) {
     for (int i = 0; i < w_; i++) {
         pixels_[i] = p;
     }
     for (int i = 1; i < h_; i++) {
-        memcpy(&pixels_[i * w_], &pixels_[0], w_ * sizeof(pixel_color_t));
+        memcpy(&pixels_[i * w_], &pixels_[0], w_ * sizeof(color_rgba_t));
     }
 
     if (!sh_data_.empty()) {
@@ -61,15 +61,15 @@ void Ray::Ref::Framebuffer::ComputeSHData(const rect_t &rect) {
             const float *sh_coeff = sh_data.coeff_r;
             const float inv_weight = sh_data.coeff_g[0] > FLT_EPS ? (2.0f * PI / sh_data.coeff_g[0]) : 0.0f;
 
-            pixel_color_t p = pixels_[i];
-            p.r *= inv_weight;
-            p.g *= inv_weight;
-            p.b *= inv_weight;
+            color_rgba_t p = pixels_[i];
+            p.v[0] *= inv_weight;
+            p.v[1] *= inv_weight;
+            p.v[2] *= inv_weight;
 
             for (int j = 0; j < 4; j++) {
-                sh_data.coeff_g[j] = sh_coeff[j] * p.g;
-                sh_data.coeff_b[j] = sh_coeff[j] * p.b;
-                sh_data.coeff_r[j] = sh_coeff[j] * p.r;
+                sh_data.coeff_g[j] = sh_coeff[j] * p.v[1];
+                sh_data.coeff_b[j] = sh_coeff[j] * p.v[2];
+                sh_data.coeff_r[j] = sh_coeff[j] * p.v[0];
             }
         }
     }

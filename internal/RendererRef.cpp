@@ -163,9 +163,9 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
         const int x = (r.xy >> 16) & 0x0000ffff;
         const int y = r.xy & 0x0000ffff;
 
-        const pixel_color_t col = ShadeSurface(
-            cam.pass_settings, inter, r, &region.halton_seq[hi + RAND_DIM_BASE_COUNT], sc_data, macro_tree_root,
-            s->tex_storages_, &p.secondary_rays[0], &secondary_rays_count, &p.shadow_rays[0], &shadow_rays_count);
+        const color_rgba_t col = ShadeSurface(cam.pass_settings, inter, r, &region.halton_seq[hi + RAND_DIM_BASE_COUNT],
+                                              sc_data, macro_tree_root, s->tex_storages_, &p.secondary_rays[0],
+                                              &secondary_rays_count, &p.shadow_rays[0], &shadow_rays_count);
         temp_buf_.SetPixel(x, y, col);
     }
 
@@ -181,7 +181,7 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
             IntersectScene(sh_r, cam.pass_settings.max_transp_depth, sc_data, macro_tree_root, s->tex_storages_);
         rc *= IntersectAreaLights(sh_r, sc_data.lights, sc_data.blocker_lights, sc_data.transforms);
 
-        const pixel_color_t col = {rc[0], rc[1], rc[2], 0.0f};
+        const color_rgba_t col = {rc[0], rc[1], rc[2], 0.0f};
         temp_buf_.AddPixel(x, y, col);
     }
 
@@ -267,10 +267,10 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
             const int x = (r.xy >> 16) & 0x0000ffff;
             const int y = r.xy & 0x0000ffff;
 
-            pixel_color_t col = ShadeSurface(cam.pass_settings, inter, r, &region.halton_seq[hi + RAND_DIM_BASE_COUNT],
-                                             sc_data, macro_tree_root, s->tex_storages_, &p.secondary_rays[0],
-                                             &secondary_rays_count, &p.shadow_rays[0], &shadow_rays_count);
-            col.a = 0.0f;
+            color_rgba_t col = ShadeSurface(cam.pass_settings, inter, r, &region.halton_seq[hi + RAND_DIM_BASE_COUNT],
+                                            sc_data, macro_tree_root, s->tex_storages_, &p.secondary_rays[0],
+                                            &secondary_rays_count, &p.shadow_rays[0], &shadow_rays_count);
+            col.v[3] = 0.0f;
 
             temp_buf_.AddPixel(x, y, col);
         }
@@ -287,7 +287,7 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
                 IntersectScene(sh_r, cam.pass_settings.max_transp_depth, sc_data, macro_tree_root, s->tex_storages_);
             rc *= IntersectAreaLights(sh_r, sc_data.lights, sc_data.blocker_lights, sc_data.transforms);
 
-            const pixel_color_t col = {rc[0], rc[1], rc[2], 0.0f};
+            const color_rgba_t col = {rc[0], rc[1], rc[2], 0.0f};
             temp_buf_.AddPixel(x, y, col);
         }
 
@@ -334,8 +334,8 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
         clean_buf_.MixWith_SH(temp_buf_, rect, mix_factor);
     }
 
-    auto clamp_and_gamma_correct = [&cam](const pixel_color_t &p) {
-        auto c = simd_fvec4{&p.r};
+    auto clamp_and_gamma_correct = [&cam](const color_rgba_t &p) {
+        auto c = simd_fvec4{p.v};
 
         if (cam.exposure != 0.0f) {
             c *= std::pow(2.0f, cam.exposure);
@@ -358,7 +358,7 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
         if (cam.pass_settings.flags & Clamp) {
             c = clamp(c, 0.0f, 1.0f);
         }
-        return pixel_color_t{c[0], c[1], c[2], c[3]};
+        return color_rgba_t{c[0], c[1], c[2], c[3]};
     };
 
     final_buf_.CopyFrom(clean_buf_, rect, clamp_and_gamma_correct);
@@ -371,11 +371,11 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
 
             const auto col8 = s->tex_atlas_rgb_.Get(region.iteration % s->tex_atlas_rgb_.page_count(), u, v);
 
-            pixel_color_t col;
-            col.r = float(col8.v[0]) / 255.0f;
-            col.g = float(col8.v[1]) / 255.0f;
-            col.b = float(col8.v[2]) / 255.0f;
-            col.a = 1.0f;
+            color_rgba_t col;
+            col.v[0] = float(col8.v[0]) / 255.0f;
+            col.v[1] = float(col8.v[1]) / 255.0f;
+            col.v[2] = float(col8.v[2]) / 255.0f;
+            col.v[3] = 1.0f;
 
             final_buf_.SetPixel(x, y, col);
         }

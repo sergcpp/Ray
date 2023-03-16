@@ -348,10 +348,10 @@ void Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t &ray, con
                            float rand_u, float rand_v, float mix_rand, float mix_weight, ray_data_t &new_ray);
 
 // Shade
-Ray::pixel_color_t ShadeSurface(const pass_settings_t &ps, const hit_data_t &inter, const ray_data_t &ray,
-                                const float *random_seq, const scene_data_t &sc, uint32_t node_index,
-                                const TexStorageBase *const textures[], ray_data_t *out_secondary_rays,
-                                int *out_secondary_rays_count, shadow_ray_t *out_shadow_rays,
-                                int *out_shadow_rays_count);
+Ray::color_rgba_t ShadeSurface(const pass_settings_t &ps, const hit_data_t &inter, const ray_data_t &ray,
+                               const float *random_seq, const scene_data_t &sc, uint32_t node_index,
+                               const TexStorageBase *const textures[], ray_data_t *out_secondary_rays,
+                               int *out_secondary_rays_count, shadow_ray_t *out_shadow_rays,
+                               int *out_shadow_rays_count);
 } // namespace Ref
 } // namespace Ray

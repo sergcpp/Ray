@@ -77,7 +77,7 @@ class Renderer : public RendererBase {
         float exposure, gamma;
     } postprocess_params_ = {};
 
-    const pixel_color_t *frame_pixels_ = nullptr;
+    const color_rgba_t *frame_pixels_ = nullptr;
     std::vector<shl1_data_t> sh_data_host_;
 
     struct {
@@ -130,7 +130,7 @@ class Renderer : public RendererBase {
 
     void UpdateHaltonSequence(int iteration, std::unique_ptr<float[]> &seq);
 
-    const pixel_color_t *get_pixels_ref(bool tonemap) const;
+    const color_rgba_t *get_pixels_ref(bool tonemap) const;
   public:
     Renderer(const settings_t &s, ILog *log);
     ~Renderer() override;
@@ -146,13 +146,13 @@ class Renderer : public RendererBase {
     std::pair<int, int> size() const override { return std::make_pair(w_, h_); }
 
     // NOTE: currently these can not be used simultaneously!
-    const pixel_color_t *get_pixels_ref() const override { return get_pixels_ref(true); }
-    const pixel_color_t *get_raw_pixels_ref() const override { return get_pixels_ref(false); }
+    const color_rgba_t *get_pixels_ref() const override { return get_pixels_ref(true); }
+    const color_rgba_t *get_raw_pixels_ref() const override { return get_pixels_ref(false); }
 
     const shl1_data_t *get_sh_data_ref() const override { return &sh_data_host_[0]; }
 
     void Resize(int w, int h) override;
-    void Clear(const pixel_color_t &c) override;
+    void Clear(const color_rgba_t &c) override;
 
     SceneBase *CreateScene() override;
     void RenderScene(const SceneBase *scene, RegionContext &region) override;
