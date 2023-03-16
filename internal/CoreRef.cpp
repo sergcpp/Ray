@@ -3925,7 +3925,8 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
                                          const float *random_seq, const scene_data_t &sc, const uint32_t node_index,
                                          const TexStorageBase *const textures[], ray_data_t *out_secondary_rays,
                                          int *out_secondary_rays_count, shadow_ray_t *out_shadow_rays,
-                                         int *out_shadow_rays_count) {
+                                         int *out_shadow_rays_count, color_rgba_t *out_base_color,
+                                         color_rgba_t *out_depth_normal) {
     const simd_fvec4 I = make_fvec3(ray.d);
 
     if (!inter.mask) {
@@ -4092,6 +4093,14 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
             tex_color = srgb_to_rgb(tex_color);
         }
         base_color *= tex_color;
+    }
+
+    if (out_base_color) {
+        memcpy(out_base_color->v, value_ptr(base_color), 3 * sizeof(float));
+    }
+    if (out_depth_normal) {
+        memcpy(out_depth_normal->v, value_ptr(surf.N), 3 * sizeof(float));
+        out_depth_normal->v[3] = inter.t;
     }
 
     simd_fvec4 tint_color = {0.0f};

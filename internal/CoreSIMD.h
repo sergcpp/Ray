@@ -468,7 +468,8 @@ void ShadeSurface(const pass_settings_t &ps, const float *random_seq, const hit_
                   const ray_data_t<S> &ray, const scene_data_t &sc, uint32_t node_index,
                   const Ref::TexStorageBase *const tex_atlases[], simd_fvec<S> out_rgba[4],
                   simd_ivec<S> out_secondary_masks[], ray_data_t<S> out_secondary_rays[], int *out_secondary_rays_count,
-                  simd_ivec<S> out_shadow_masks[], shadow_ray_t<S> out_shadow_rays[], int *out_shadow_rays_count);
+                  simd_ivec<S> out_shadow_masks[], shadow_ray_t<S> out_shadow_rays[], int *out_shadow_rays_count,
+                  simd_fvec<S> out_base_color[4], simd_fvec<S> out_depth_normals[4]);
 } // namespace NS
 } // namespace Ray
 
@@ -5737,7 +5738,8 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                            const Ref::TexStorageBase *const textures[], simd_fvec<S> out_rgba[4],
                            simd_ivec<S> out_secondary_masks[], ray_data_t<S> out_secondary_rays[],
                            int *out_secondary_rays_count, simd_ivec<S> out_shadow_masks[],
-                           shadow_ray_t<S> out_shadow_rays[], int *out_shadow_rays_count) {
+                           shadow_ray_t<S> out_shadow_rays[], int *out_shadow_rays_count,
+                           simd_fvec<S> out_base_color[4], simd_fvec<S> out_depth_normals[4]) {
     out_rgba[0] = out_rgba[1] = out_rgba[2] = {0.0f};
     out_rgba[3] = {1.0f};
 
@@ -6107,6 +6109,14 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                 ++index;
             }
         }
+    }
+
+    if (out_base_color) {
+        UNROLLED_FOR(i, 3, { where(is_active_lane, out_base_color[i]) = base_color[i]; });
+    }
+    if (out_depth_normals) {
+        UNROLLED_FOR(i, 3, { where(is_active_lane, out_depth_normals[i]) = surf.N[i]; });
+        where(is_active_lane, out_depth_normals[3]) = inter.t;
     }
 
     simd_fvec<S> tint_color[3] = {{0.0f}, {0.0f}, {0.0f}};

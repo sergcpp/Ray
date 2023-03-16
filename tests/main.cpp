@@ -85,7 +85,9 @@ void test_complex_mat6_hdr_light(const char *arch_list[], const char *preferred_
 void test_complex_mat7_refractive(const char *arch_list[], const char *preferred_device);
 void test_complex_mat7_principled(const char *arch_list[], const char *preferred_device);
 void assemble_material_test_images(const char *arch_list[]);
+
 void test_simd();
+void test_aux_channels(const char *arch_list[], const char *preferred_device);
 
 bool g_stop_on_fail = false;
 bool g_tests_success = true;
@@ -171,6 +173,7 @@ int main(int argc, char *argv[]) {
     if (g_tests_success) {
         const auto t2 = high_resolution_clock::now();
         puts("---------------");
+        test_aux_channels(arch_list, device_name);
         test_complex_mat0(arch_list, device_name);
         test_complex_mat1(arch_list, device_name);
         test_complex_mat2(arch_list, device_name);
@@ -374,14 +377,12 @@ int main(int argc, char *argv[]) {
 //
 #ifdef _WIN32
 #ifndef NOMINMAX
-    #define NOMINMAX
+#define NOMINMAX
 #endif
 #ifndef WIN32_LEAN_AND_MEAN
-    #define WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
 #endif
 #include <Windows.h>
-#undef min
-#undef max
 
 extern "C" {
 // Enable High Performance Graphics while using Integrated Graphics
@@ -411,7 +412,7 @@ bool InitAndDestroyFakeGLContext() {
     }
 
     if (!SetPixelFormat(fake_dc, pix_format_id, &pixel_format)) {
-        printf("SetPixelFormat() failed\n");
+        printf("SetPixelFormat() failed (0x%08x)\n", GetLastError());
         return false;
     }
 

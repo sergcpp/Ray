@@ -58,6 +58,8 @@ void Ray::SceneBase::GetCamera(const CameraHandle i, camera_desc_t &c) const {
     c.no_background = (cam.pass_settings.flags & NoBackground) != 0;
     c.clamp = (cam.pass_settings.flags & Clamp) != 0;
     c.output_sh = (cam.pass_settings.flags & OutputSH) != 0;
+    c.output_base_color = (cam.pass_settings.flags & OutputBaseColor) != 0;
+    c.output_depth_normals = (cam.pass_settings.flags & OutputDepthNormals) != 0;
 
     c.max_diff_depth = cam.pass_settings.max_diff_depth;
     c.max_spec_depth = cam.pass_settings.max_spec_depth;
@@ -104,6 +106,12 @@ void Ray::SceneBase::SetCamera_nolock(const CameraHandle i, const camera_desc_t 
     }
     if (c.output_sh) {
         cam.pass_settings.flags |= OutputSH;
+    }
+    if (c.output_base_color) {
+        cam.pass_settings.flags |= OutputBaseColor;
+    }
+    if (c.output_depth_normals) {
+        cam.pass_settings.flags |= OutputDepthNormals;
     }
 
     cam.pass_settings.max_diff_depth = c.max_diff_depth;

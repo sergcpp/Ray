@@ -13,6 +13,8 @@ class Framebuffer {
     int w_, h_;
     std::vector<color_rgba_t> pixels_;
     std::vector<shl1_data_t> sh_data_;
+    std::vector<color_rgba_t> base_color_;
+    std::vector<color_rgba_t> depth_normals_;
 
   public:
     Framebuffer(int w, int h);
@@ -30,6 +32,26 @@ class Framebuffer {
         return pixels_[i];
     }
 
+    force_inline void SetBaseColor(const int x, const int y, const color_rgba_t &c) {
+        const int i = y * w_ + x;
+        UNROLLED_FOR(j, 4, { base_color_[i].v[j] = c.v[j]; })
+    }
+
+    force_inline void SetDepthNormal(const int x, const int y, const color_rgba_t &n) {
+        const int i = y * w_ + x;
+        UNROLLED_FOR(j, 4, { depth_normals_[i].v[j] = n.v[j]; })
+    }
+
+    force_inline color_rgba_t GetBaseColor(const int x, const int y) const {
+        const int i = y * w_ + x;
+        return base_color_[i];
+    }
+
+    force_inline color_rgba_t GetDepthNormal(const int x, const int y) const {
+        const int i = y * w_ + x;
+        return depth_normals_[i];
+    }
+
     force_inline const shl1_data_t &GetSHData(const int x, const int y) const {
         const int i = y * w_ + x;
         return sh_data_[i];
@@ -43,6 +65,16 @@ class Framebuffer {
     force_inline void MixPixel(const int x, const int y, const color_rgba_t &p, const float k) {
         const int i = y * w_ + x;
         UNROLLED_FOR(j, 4, { pixels_[i].v[j] += (p.v[j] - pixels_[i].v[j]) * k; })
+    }
+
+    force_inline void MixBaseColor(const int x, const int y, const color_rgba_t &c, const float k) {
+        const int i = y * w_ + x;
+        UNROLLED_FOR(j, 4, { base_color_[i].v[j] += (c.v[j] - base_color_[i].v[j]) * k; })
+    }
+
+    force_inline void MixDepthNormal(const int x, const int y, const color_rgba_t &n, const float k) {
+        const int i = y * w_ + x;
+        UNROLLED_FOR(j, 4, { depth_normals_[i].v[j] += (n.v[j] - depth_normals_[i].v[j]) * k; })
     }
 
     force_inline void MixSHData(const int x, const int y, const shl1_data_t &sh, const float k) {
@@ -76,7 +108,7 @@ class Framebuffer {
         sh_data_[i].coeff_g[0] = weight;
     }
 
-    void Resize(int w, int h, bool alloc_sh);
+    void Resize(int w, int h, uint32_t aux_buffers);
     void Clear(const color_rgba_t &p);
 
     void ResetSampleData(const rect_t &rect);
@@ -92,9 +124,13 @@ class Framebuffer {
 
     const color_rgba_t *get_pixels_ref() const { return pixels_.data(); }
     const shl1_data_t *get_sh_data_ref() const { return sh_data_.data(); }
+    const color_rgba_t *get_base_color_ref() const { return base_color_.data(); }
+    const color_rgba_t *get_depth_normals_ref() const { return depth_normals_.data(); }
 
     void MixWith(const Framebuffer &f2, const rect_t &rect, float k);
     void MixWith_SH(const Framebuffer &f2, const rect_t &rect, float k);
+    void MixWith_BaseColor(const Framebuffer &f2, const rect_t &rect, float k);
+    void MixWith_DepthNormal(const Framebuffer &f2, const rect_t &rect, float k);
 
     template <typename F> void CopyFrom(const Framebuffer &f2, const rect_t &rect, F &&filter) {
         for (int y = rect.y; y < rect.y + rect.h; y++) {

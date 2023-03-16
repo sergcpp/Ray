@@ -351,7 +351,7 @@ void Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t &ray, con
 Ray::color_rgba_t ShadeSurface(const pass_settings_t &ps, const hit_data_t &inter, const ray_data_t &ray,
                                const float *random_seq, const scene_data_t &sc, uint32_t node_index,
                                const TexStorageBase *const textures[], ray_data_t *out_secondary_rays,
-                               int *out_secondary_rays_count, shadow_ray_t *out_shadow_rays,
-                               int *out_shadow_rays_count);
+                               int *out_secondary_rays_count, shadow_ray_t *out_shadow_rays, int *out_shadow_rays_count,
+                               color_rgba_t *out_base_color, color_rgba_t *out_depth_normal);
 } // namespace Ref
 } // namespace Ray

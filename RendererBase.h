@@ -43,7 +43,7 @@ struct settings_t {
 #ifdef ENABLE_GPU_IMPL
     const char *preferred_device = nullptr;
     bool use_tex_compression = true; // temporarily GPU only
-#endif // ENABLE_GPU_IMPL
+#endif                               // ENABLE_GPU_IMPL
     bool use_hwrt = true;
     bool use_bindless = true;
     bool use_wide_bvh = true;
@@ -98,6 +98,9 @@ class RendererBase {
 
     /// Returns pointer to 'raw' untonemapped image
     virtual const color_rgba_t *get_raw_pixels_ref() const = 0;
+
+    /// Returns pointer to auxiliary image buffers
+    virtual const color_rgba_t *get_aux_pixels_ref(eAUXBuffer buf) const = 0;
 
     /// Returns pointer to SH data
     virtual const shl1_data_t *get_sh_data_ref() const = 0;

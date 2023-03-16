@@ -11,8 +11,8 @@ cbuffer UniformParams
     Params _20_g_params : packoffset(c0);
 };
 
-RWTexture2D<float4> g_in_img1 : register(u1, space0);
-RWTexture2D<float4> g_in_img2 : register(u2, space0);
+RWTexture2D<float4> g_in_img1 : register(u3, space0);
+RWTexture2D<float4> g_in_img2 : register(u4, space0);
 RWTexture2D<float4> g_out_img : register(u0, space0);
 
 static uint3 gl_GlobalInvocationID;

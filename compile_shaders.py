@@ -81,8 +81,14 @@ def main():
     compile_shader(src_name="intersect_area_lights", defines="-DPRIMARY=0")
 
     # Shading
-    compile_shader(src_name="shade", spv_name="shade_primary_atlas", defines="-DPRIMARY=1 -DBINDLESS=0")
-    compile_shader(src_name="shade", spv_name="shade_primary_bindless", defines="-DPRIMARY=1 -DBINDLESS=1")
+    compile_shader(src_name="shade", spv_name="shade_primary_atlas", defines="-DPRIMARY=1 -DBINDLESS=0 -DOUTPUT_BASE_COLOR=0 -DOUTPUT_DEPTH_NORMALS=0")
+    compile_shader(src_name="shade", spv_name="shade_primary_atlas_n", defines="-DPRIMARY=1 -DBINDLESS=0 -DOUTPUT_BASE_COLOR=0 -DOUTPUT_DEPTH_NORMALS=1")
+    compile_shader(src_name="shade", spv_name="shade_primary_atlas_b", defines="-DPRIMARY=1 -DBINDLESS=0 -DOUTPUT_BASE_COLOR=1 -DOUTPUT_DEPTH_NORMALS=0")
+    compile_shader(src_name="shade", spv_name="shade_primary_atlas_bn", defines="-DPRIMARY=1 -DBINDLESS=0 -DOUTPUT_BASE_COLOR=1 -DOUTPUT_DEPTH_NORMALS=1")
+    compile_shader(src_name="shade", spv_name="shade_primary_bindless", defines="-DPRIMARY=1 -DBINDLESS=1 -DOUTPUT_BASE_COLOR=0 -DOUTPUT_DEPTH_NORMALS=0")
+    compile_shader(src_name="shade", spv_name="shade_primary_bindless_n", defines="-DPRIMARY=1 -DBINDLESS=1 -DOUTPUT_BASE_COLOR=0 -DOUTPUT_DEPTH_NORMALS=1")
+    compile_shader(src_name="shade", spv_name="shade_primary_bindless_b", defines="-DPRIMARY=1 -DBINDLESS=1 -DOUTPUT_BASE_COLOR=1 -DOUTPUT_DEPTH_NORMALS=0")
+    compile_shader(src_name="shade", spv_name="shade_primary_bindless_bn", defines="-DPRIMARY=1 -DBINDLESS=1 -DOUTPUT_BASE_COLOR=1 -DOUTPUT_DEPTH_NORMALS=1")
     compile_shader(src_name="shade", spv_name="shade_secondary_atlas", defines="-DPRIMARY=0 -DBINDLESS=0")
     compile_shader(src_name="shade", spv_name="shade_secondary_bindless", defines="-DPRIMARY=0 -DBINDLESS=1")
 
@@ -93,7 +99,10 @@ def main():
     compile_shader(src_name="intersect_scene_shadow", spv_name="intersect_scene_shadow_hwrt_bindless", glsl_version="460", target_env="spirv1.4", defines="-DHWRT=1 -DBINDLESS=1")
 
     # Postprocess
-    compile_shader(src_name="mix_incremental")
+    compile_shader(src_name="mix_incremental", spv_name="mix_incremental", defines="-DOUTPUT_BASE_COLOR=0 -DOUTPUT_DEPTH_NORMALS=0")
+    compile_shader(src_name="mix_incremental", spv_name="mix_incremental_n", defines="-DOUTPUT_BASE_COLOR=0 -DOUTPUT_DEPTH_NORMALS=1")
+    compile_shader(src_name="mix_incremental", spv_name="mix_incremental_b", defines="-DOUTPUT_BASE_COLOR=1 -DOUTPUT_DEPTH_NORMALS=0")
+    compile_shader(src_name="mix_incremental", spv_name="mix_incremental_bn", defines="-DOUTPUT_BASE_COLOR=1 -DOUTPUT_DEPTH_NORMALS=1")
     compile_shader(src_name="postprocess")
 
     # Other

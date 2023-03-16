@@ -78,6 +78,13 @@ layout(std430, binding = INOUT_COUNTERS_BUF_SLOT) buffer InoutCounters {
     uint g_inout_counters[];
 };
 
+#if OUTPUT_BASE_COLOR
+    layout(binding = OUT_BASE_COLOR_IMG_SLOT, rgba32f) uniform image2D g_out_base_color_img;
+#endif
+#if OUTPUT_DEPTH_NORMALS
+    layout(binding = OUT_DEPTH_NORMALS_IMG_SLOT, rgba32f) uniform image2D g_out_depth_normals_img;
+#endif
+
 float power_heuristic(float a, float b) {
     float t = a * a;
     return t / (b * b + t);
@@ -1585,7 +1592,7 @@ void Sample_PrincipledNode(const ray_data_t ray, const surface_t surf,
     }
 }
 
-vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
+vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, inout vec3 out_normals) {
     const vec3 ro = vec3(ray.o[0], ray.o[1], ray.o[2]);
     const vec3 rd = vec3(ray.d[0], ray.d[1], ray.d[2]);
 
@@ -1768,6 +1775,9 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray) {
         const float base_lod = get_texture_lod(texSize(mat.textures[BASE_TEXTURE]), lambda);
         base_color *= SampleBilinear(mat.textures[BASE_TEXTURE], surf.uvs, int(base_lod), true /* YCoCg */, true /* SRGB */).rgb;
     }
+
+    out_base_color = base_color;
+    out_normals = surf.N;
 
     vec3 tint_color = vec3(0.0);
 
@@ -2000,9 +2010,16 @@ void main() {
     hit_data_t inter = g_hits[index];
     ray_data_t ray = g_rays[index];
 
-    vec3 col = ShadeSurface(inter, ray);
+    vec3 base_color = vec3(0.0), normals = vec3(0.0);
+    vec3 col = ShadeSurface(inter, ray, base_color, normals);
 #if !PRIMARY
     col += imageLoad(g_out_img, ivec2(x, y)).rgb;
 #endif
     imageStore(g_out_img, ivec2(x, y), vec4(col, 1.0));
+#if OUTPUT_BASE_COLOR
+    imageStore(g_out_base_color_img, ivec2(x, y), vec4(base_color, 0.0));
+#endif
+#if OUTPUT_DEPTH_NORMALS
+    imageStore(g_out_depth_normals_img, ivec2(x, y), vec4(normals, inter.t));
+#endif
 }

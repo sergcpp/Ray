@@ -65,14 +65,21 @@ class Renderer : public RendererBase {
 
     const color_rgba_t *get_pixels_ref() const override { return final_buf_.get_pixels_ref(); }
     const color_rgba_t *get_raw_pixels_ref() const override { return clean_buf_.get_pixels_ref(); }
-    
+    const color_rgba_t *get_aux_pixels_ref(const eAUXBuffer buf) const override {
+        if (buf & eAUXBuffer::BaseColor) {
+            return clean_buf_.get_base_color_ref();
+        } else if (buf & eAUXBuffer::DepthNormals) {
+            return clean_buf_.get_depth_normals_ref();
+        }
+        return nullptr;
+    }
     const shl1_data_t *get_sh_data_ref() const override { return clean_buf_.get_sh_data_ref(); }
 
-    void Resize(int w, int h) override {
+    void Resize(const int w, const int h) override {
         if (w_ != w || h_ != h) {
-            clean_buf_.Resize(w, h, false);
-            final_buf_.Resize(w, h, false);
-            temp_buf_.Resize(w, h, false);
+            clean_buf_.Resize(w, h, 0);
+            final_buf_.Resize(w, h, 0);
+            temp_buf_.Resize(w, h, 0);
 
             w_ = w;
             h_ = h;

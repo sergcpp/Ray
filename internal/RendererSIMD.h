@@ -74,14 +74,22 @@ template <int DimX, int DimY> class RendererSIMD : public RendererBase {
 
     const color_rgba_t *get_pixels_ref() const override { return final_buf_.get_pixels_ref(); }
     const color_rgba_t *get_raw_pixels_ref() const override { return clean_buf_.get_pixels_ref(); }
+    const color_rgba_t *get_aux_pixels_ref(const eAUXBuffer buf) const override {
+        if (buf & eAUXBuffer::BaseColor) {
+            return clean_buf_.get_base_color_ref();
+        } else if (buf & eAUXBuffer::DepthNormals) {
+            return clean_buf_.get_depth_normals_ref();
+        }
+        return nullptr;
+    }
 
     const shl1_data_t *get_sh_data_ref() const override { return clean_buf_.get_sh_data_ref(); }
 
     void Resize(const int w, const int h) override {
         if (w_ != w || h_ != h) {
-            clean_buf_.Resize(w, h, false);
-            final_buf_.Resize(w, h, false);
-            temp_buf_.Resize(w, h, false);
+            clean_buf_.Resize(w, h, 0);
+            final_buf_.Resize(w, h, 0);
+            temp_buf_.Resize(w, h, 0);
 
             w_ = w;
             h_ = h;
@@ -233,16 +241,30 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *scene, Regi
 
     PassData<S> &p = get_per_thread_pass_data<S>();
 
-    // allocate sh data on demand
-    if (cam.pass_settings.flags & OutputSH) {
+    // allocate aux data on demand
+    if (cam.pass_settings.flags & (OutputSH | OutputBaseColor | OutputDepthNormals)) {
+        uint32_t aux_bufs = 0;
+        if (cam.pass_settings.flags & OutputSH) {
+            aux_bufs |= eAUXBuffer::SHL1;
+        }
+        if (cam.pass_settings.flags & OutputBaseColor) {
+            aux_bufs |= eAUXBuffer::BaseColor;
+        }
+        if (cam.pass_settings.flags & OutputDepthNormals) {
+            aux_bufs |= eAUXBuffer::DepthNormals;
+        }
+
+        // TODO: Skip locking here
         std::lock_guard<std::mutex> _(mtx_);
 
-        temp_buf_.Resize(w, h, true);
-        clean_buf_.Resize(w, h, true);
+        temp_buf_.Resize(w, h, aux_bufs);
+        clean_buf_.Resize(w, h, aux_bufs);
     }
 
-    const auto time_start = std::chrono::high_resolution_clock::now();
-    std::chrono::time_point<std::chrono::high_resolution_clock> time_after_ray_gen;
+    using namespace std::chrono;
+
+    const auto time_start = high_resolution_clock::now();
+    time_point<high_resolution_clock> time_after_ray_gen;
 
     const uint32_t hi = (region.iteration & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT;
 
@@ -250,7 +272,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *scene, Regi
         GeneratePrimaryRays<DimX, DimY>(region.iteration, cam, rect, w, h, &region.halton_seq[hi], p.primary_rays,
                                         p.primary_masks);
 
-        time_after_ray_gen = std::chrono::high_resolution_clock::now();
+        time_after_ray_gen = high_resolution_clock::now();
 
         p.intersections.resize(p.primary_rays.size());
 
@@ -277,10 +299,10 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *scene, Regi
 
         p.primary_masks.resize(p.primary_rays.size());
 
-        time_after_ray_gen = std::chrono::high_resolution_clock::now();
+        time_after_ray_gen = high_resolution_clock::now();
     }
 
-    const auto time_after_prim_trace = std::chrono::high_resolution_clock::now();
+    const auto time_after_prim_trace = high_resolution_clock::now();
 
     p.secondary_rays.resize(p.primary_rays.size());
     p.secondary_masks.resize(p.primary_rays.size());
@@ -296,10 +318,11 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *scene, Regi
 
         p.secondary_masks[ri] = {0};
 
-        simd_fvec<S> out_rgba[4] = {0.0f};
+        simd_fvec<S> out_rgba[4] = {0.0f}, out_base_color[4] = {0.0f}, out_depth_normal[4] = {0.0f};
         NS::ShadeSurface(cam.pass_settings, &region.halton_seq[hi + RAND_DIM_BASE_COUNT], inter, r, sc_data,
                          macro_tree_root, s->tex_storages_, out_rgba, p.secondary_masks.data(), p.secondary_rays.data(),
-                         &secondary_rays_count, p.shadow_masks.data(), p.shadow_rays.data(), &shadow_rays_count);
+                         &secondary_rays_count, p.shadow_masks.data(), p.shadow_rays.data(), &shadow_rays_count,
+                         out_base_color, out_depth_normal);
 
         // TODO: vectorize this
         UNROLLED_FOR_S(i, S, {
@@ -307,11 +330,22 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *scene, Regi
                 temp_buf_.SetPixel(x.template get<i>(), y.template get<i>(),
                                    {out_rgba[0].template get<i>(), out_rgba[1].template get<i>(),
                                     out_rgba[2].template get<i>(), out_rgba[3].template get<i>()});
+                if (cam.pass_settings.flags & OutputBaseColor) {
+                    temp_buf_.SetBaseColor(x.template get<i>(), y.template get<i>(),
+                                           {out_base_color[0].template get<i>(), out_base_color[1].template get<i>(),
+                                            out_base_color[2].template get<i>()});
+                }
+                if (cam.pass_settings.flags & OutputDepthNormals) {
+                    temp_buf_.SetDepthNormal(
+                        x.template get<i>(), y.template get<i>(),
+                        {out_depth_normal[0].template get<i>(), out_depth_normal[1].template get<i>(),
+                         out_depth_normal[2].template get<i>(), out_depth_normal[3].template get<i>()});
+                }
             }
         })
     }
 
-    const auto time_after_prim_shade = std::chrono::high_resolution_clock::now();
+    const auto time_after_prim_shade = high_resolution_clock::now();
 
     for (int ri = 0; ri < shadow_rays_count; ++ri) {
         const shadow_ray_t<S> &sh_r = p.shadow_rays[ri];
@@ -334,8 +368,8 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *scene, Regi
         })
     }
 
-    const auto time_after_prim_shadow = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double, std::micro> secondary_sort_time{}, secondary_trace_time{}, secondary_shade_time{},
+    const auto time_after_prim_shadow = high_resolution_clock::now();
+    duration<double, std::micro> secondary_sort_time{}, secondary_trace_time{}, secondary_shade_time{},
         secondary_shadow_time{};
 
     p.hash_values.resize(p.primary_rays.size());
@@ -361,12 +395,12 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *scene, Regi
     }
 
     for (int bounce = 1; bounce <= cam.pass_settings.max_total_depth && secondary_rays_count; bounce++) {
-        auto time_secondary_sort_start = std::chrono::high_resolution_clock::now();
+        auto time_secondary_sort_start = high_resolution_clock::now();
 
         SortRays_CPU(&p.secondary_rays[0], &p.secondary_masks[0], secondary_rays_count, root_min, cell_size,
                      &p.hash_values[0], &p.scan_values[0], &p.chunks[0], &p.chunks_temp[0]);
 
-        auto time_secondary_trace_start = std::chrono::high_resolution_clock::now();
+        auto time_secondary_trace_start = high_resolution_clock::now();
 
         for (int i = 0; i < secondary_rays_count; i++) {
             ray_data_t<S> &r = p.secondary_rays[i];
@@ -383,7 +417,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *scene, Regi
                                     sc_data.visible_lights, sc_data.transforms, inter);
         }
 
-        auto time_secondary_shade_start = std::chrono::high_resolution_clock::now();
+        auto time_secondary_shade_start = high_resolution_clock::now();
 
         int rays_count = secondary_rays_count;
         secondary_rays_count = 0;
@@ -401,7 +435,8 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *scene, Regi
             NS::ShadeSurface(cam.pass_settings, &region.halton_seq[hi + RAND_DIM_BASE_COUNT], inter, r, sc_data,
                              macro_tree_root, s->tex_storages_, out_rgba, p.secondary_masks.data(),
                              p.secondary_rays.data(), &secondary_rays_count, p.shadow_masks.data(),
-                             p.shadow_rays.data(), &shadow_rays_count);
+                             p.shadow_rays.data(), &shadow_rays_count, (simd_fvec<S> *)nullptr,
+                             (simd_fvec<S> *)nullptr);
 
             // TODO: vectorize this
             UNROLLED_FOR_S(i, S, {
@@ -413,7 +448,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *scene, Regi
             })
         }
 
-        auto time_secondary_shadow_start = std::chrono::high_resolution_clock::now();
+        auto time_secondary_shadow_start = high_resolution_clock::now();
 
         for (int ri = 0; ri < shadow_rays_count; ++ri) {
             const shadow_ray_t<S> &sh_r = p.shadow_rays[ri];
@@ -437,32 +472,24 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *scene, Regi
             })
         }
 
-        auto time_secondary_shadow_end = std::chrono::high_resolution_clock::now();
-        secondary_sort_time +=
-            std::chrono::duration<double, std::micro>{time_secondary_trace_start - time_secondary_sort_start};
-        secondary_trace_time +=
-            std::chrono::duration<double, std::micro>{time_secondary_shade_start - time_secondary_trace_start};
-        secondary_shade_time +=
-            std::chrono::duration<double, std::micro>{time_secondary_shadow_start - time_secondary_shade_start};
-        secondary_shadow_time +=
-            std::chrono::duration<double, std::micro>{time_secondary_shadow_end - time_secondary_shadow_start};
+        auto time_secondary_shadow_end = high_resolution_clock::now();
+        secondary_sort_time += duration<double, std::micro>{time_secondary_trace_start - time_secondary_sort_start};
+        secondary_trace_time += duration<double, std::micro>{time_secondary_shade_start - time_secondary_trace_start};
+        secondary_shade_time += duration<double, std::micro>{time_secondary_shadow_start - time_secondary_shade_start};
+        secondary_shadow_time += duration<double, std::micro>{time_secondary_shadow_end - time_secondary_shadow_start};
     }
 
     {
         std::lock_guard<std::mutex> _(mtx_);
 
         stats_.time_primary_ray_gen_us +=
-            (unsigned long long)std::chrono::duration<double, std::micro>{time_after_ray_gen - time_start}.count();
+            (unsigned long long)duration<double, std::micro>{time_after_ray_gen - time_start}.count();
         stats_.time_primary_trace_us +=
-            (unsigned long long)std::chrono::duration<double, std::micro>{time_after_prim_trace - time_after_ray_gen}
-                .count();
+            (unsigned long long)duration<double, std::micro>{time_after_prim_trace - time_after_ray_gen}.count();
         stats_.time_primary_shade_us +=
-            (unsigned long long)std::chrono::duration<double, std::micro>{time_after_prim_shade - time_after_prim_trace}
-                .count();
+            (unsigned long long)duration<double, std::micro>{time_after_prim_shade - time_after_prim_trace}.count();
         stats_.time_primary_shadow_us +=
-            (unsigned long long)std::chrono::duration<double, std::micro>{time_after_prim_shadow -
-                                                                          time_after_prim_shade}
-                .count();
+            (unsigned long long)duration<double, std::micro>{time_after_prim_shadow - time_after_prim_shade}.count();
         stats_.time_secondary_sort_us += (unsigned long long)secondary_sort_time.count();
         stats_.time_secondary_trace_us += (unsigned long long)secondary_trace_time.count();
         stats_.time_secondary_shade_us += (unsigned long long)secondary_shade_time.count();
@@ -476,6 +503,12 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *scene, Regi
     if (cam.pass_settings.flags & OutputSH) {
         temp_buf_.ComputeSHData(rect);
         clean_buf_.MixWith_SH(temp_buf_, rect, mix_factor);
+    }
+    if (cam.pass_settings.flags & OutputBaseColor) {
+        clean_buf_.MixWith_BaseColor(temp_buf_, rect, mix_factor);
+    }
+    if (cam.pass_settings.flags & OutputDepthNormals) {
+        clean_buf_.MixWith_DepthNormal(temp_buf_, rect, mix_factor);
     }
 
     auto _clamp_and_gamma_correct = [&cam](const color_rgba_t &p) { return clamp_and_gamma_correct(p, cam); };
