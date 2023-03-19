@@ -23,13 +23,13 @@ third-party\spirv\win32\bin2c -o internal/shaders/output/intersect_scene_primary
 third-party\spirv\win32\glslangValidator -V --target-env spirv1.4 --glsl-version 460 internal/shaders/intersect_scene.comp.glsl -DPRIMARY=1 -DHWRT=1 -DBINDLESS=0 -o internal/shaders/output/intersect_scene_primary_hwrt_atlas.comp.spv
 if %errorlevel% neq 0 exit /b %errorlevel%
 call third-party\spirv\win32\spirv-opt.bat internal/shaders/output/intersect_scene_primary_hwrt_atlas.comp.spv -o internal/shaders/output/intersect_scene_primary_hwrt_atlas.comp.spv
-REM third-party\spirv\win32\spirv-cross internal/shaders/output/intersect_scene_primary_hwrt_atlas.comp.spv --hlsl --shader-model 60 --output internal/shaders/output/intersect_scene_primary_hwrt_atlas.comp.hlsl
+third-party\spirv\win32\spirv-cross internal/shaders/output/intersect_scene_primary_hwrt_atlas.comp.spv --hlsl --shader-model 60 --output internal/shaders/output/intersect_scene_primary_hwrt_atlas.comp.hlsl
 third-party\spirv\win32\bin2c -o internal/shaders/output/intersect_scene_primary_hwrt_atlas.comp.inl internal/shaders/output/intersect_scene_primary_hwrt_atlas.comp.spv
 
 third-party\spirv\win32\glslangValidator -V --target-env spirv1.4 --glsl-version 460 internal/shaders/intersect_scene.comp.glsl -DPRIMARY=1 -DHWRT=1 -DBINDLESS=1 -o internal/shaders/output/intersect_scene_primary_hwrt_bindless.comp.spv
 if %errorlevel% neq 0 exit /b %errorlevel%
 call third-party\spirv\win32\spirv-opt.bat internal/shaders/output/intersect_scene_primary_hwrt_bindless.comp.spv -o internal/shaders/output/intersect_scene_primary_hwrt_bindless.comp.spv
-REM third-party\spirv\win32\spirv-cross internal/shaders/output/intersect_scene_primary_hwrt_bindless.comp.spv --hlsl --shader-model 60 --output internal/shaders/output/intersect_scene_primary_hwrt_bindless.comp.hlsl
+third-party\spirv\win32\spirv-cross internal/shaders/output/intersect_scene_primary_hwrt_bindless.comp.spv --hlsl --shader-model 60 --output internal/shaders/output/intersect_scene_primary_hwrt_bindless.comp.hlsl
 third-party\spirv\win32\bin2c -o internal/shaders/output/intersect_scene_primary_hwrt_bindless.comp.inl internal/shaders/output/intersect_scene_primary_hwrt_bindless.comp.spv
 
 third-party\spirv\win32\glslangValidator -V --target-env spirv1.3 internal/shaders/intersect_scene.comp.glsl -DPRIMARY=0 -DHWRT=0 -DBINDLESS=0 -o internal/shaders/output/intersect_scene_secondary_swrt_atlas.comp.spv
@@ -47,13 +47,13 @@ third-party\spirv\win32\bin2c -o internal/shaders/output/intersect_scene_seconda
 third-party\spirv\win32\glslangValidator -V --target-env spirv1.4 --glsl-version 460 internal/shaders/intersect_scene.comp.glsl -DPRIMARY=0 -DHWRT=1 -DBINDLESS=0 -o internal/shaders/output/intersect_scene_secondary_hwrt_atlas.comp.spv
 if %errorlevel% neq 0 exit /b %errorlevel%
 call third-party\spirv\win32\spirv-opt.bat internal/shaders/output/intersect_scene_secondary_hwrt_atlas.comp.spv -o internal/shaders/output/intersect_scene_secondary_hwrt_atlas.comp.spv
-REM third-party\spirv\win32\spirv-cross internal/shaders/output/intersect_scene_secondary_hwrt_atlas.comp.spv --hlsl --shader-model 60 --output internal/shaders/output/intersect_scene_secondary_hwrt_atlas.comp.hlsl
+third-party\spirv\win32\spirv-cross internal/shaders/output/intersect_scene_secondary_hwrt_atlas.comp.spv --hlsl --shader-model 60 --output internal/shaders/output/intersect_scene_secondary_hwrt_atlas.comp.hlsl
 third-party\spirv\win32\bin2c -o internal/shaders/output/intersect_scene_secondary_hwrt_atlas.comp.inl internal/shaders/output/intersect_scene_secondary_hwrt_atlas.comp.spv
 
 third-party\spirv\win32\glslangValidator -V --target-env spirv1.4 --glsl-version 460 internal/shaders/intersect_scene.comp.glsl -DPRIMARY=0 -DHWRT=1 -DBINDLESS=1 -o internal/shaders/output/intersect_scene_secondary_hwrt_bindless.comp.spv
 if %errorlevel% neq 0 exit /b %errorlevel%
 call third-party\spirv\win32\spirv-opt.bat internal/shaders/output/intersect_scene_secondary_hwrt_bindless.comp.spv -o internal/shaders/output/intersect_scene_secondary_hwrt_bindless.comp.spv
-REM third-party\spirv\win32\spirv-cross internal/shaders/output/intersect_scene_secondary_hwrt_bindless.comp.spv --hlsl --shader-model 60 --output internal/shaders/output/intersect_scene_secondary_hwrt_bindless.comp.hlsl
+third-party\spirv\win32\spirv-cross internal/shaders/output/intersect_scene_secondary_hwrt_bindless.comp.spv --hlsl --shader-model 60 --output internal/shaders/output/intersect_scene_secondary_hwrt_bindless.comp.hlsl
 third-party\spirv\win32\bin2c -o internal/shaders/output/intersect_scene_secondary_hwrt_bindless.comp.inl internal/shaders/output/intersect_scene_secondary_hwrt_bindless.comp.spv
 
 third-party\spirv\win32\glslangValidator -V --target-env spirv1.3 internal/shaders/intersect_area_lights.comp.glsl -DPRIMARY=0 -o internal/shaders/output/intersect_area_lights.comp.spv
@@ -89,13 +89,13 @@ third-party\spirv\win32\bin2c -o internal/shaders/output/intersect_scene_shadow_
 third-party\spirv\win32\glslangValidator -V --target-env spirv1.4 --glsl-version 460 internal/shaders/intersect_scene_shadow.comp.glsl -DHWRT=1 -DBINDLESS=0 -o internal/shaders/output/intersect_scene_shadow_hwrt_atlas.comp.spv
 if %errorlevel% neq 0 exit /b %errorlevel%
 call third-party\spirv\win32\spirv-opt.bat internal/shaders/output/intersect_scene_shadow_hwrt_atlas.comp.spv -o internal/shaders/output/intersect_scene_shadow_hwrt_atlas.comp.spv
-REM third-party\spirv\win32\spirv-cross internal/shaders/output/intersect_scene_shadow_hwrt_atlas.comp.spv --hlsl --shader-model 60 --output internal/shaders/output/intersect_scene_shadow_hwrt_atlas.comp.hlsl
+third-party\spirv\win32\spirv-cross internal/shaders/output/intersect_scene_shadow_hwrt_atlas.comp.spv --hlsl --shader-model 60 --output internal/shaders/output/intersect_scene_shadow_hwrt_atlas.comp.hlsl
 third-party\spirv\win32\bin2c -o internal/shaders/output/intersect_scene_shadow_hwrt_atlas.comp.inl internal/shaders/output/intersect_scene_shadow_hwrt_atlas.comp.spv
 
 third-party\spirv\win32\glslangValidator -V --target-env spirv1.4 --glsl-version 460 internal/shaders/intersect_scene_shadow.comp.glsl -DHWRT=1 -DBINDLESS=1 -o internal/shaders/output/intersect_scene_shadow_hwrt_bindless.comp.spv
 if %errorlevel% neq 0 exit /b %errorlevel%
 call third-party\spirv\win32\spirv-opt.bat internal/shaders/output/intersect_scene_shadow_hwrt_bindless.comp.spv -o internal/shaders/output/intersect_scene_shadow_hwrt_bindless.comp.spv
-REM third-party\spirv\win32\spirv-cross internal/shaders/output/intersect_scene_shadow_hwrt_bindless.comp.spv --hlsl --shader-model 60 --output internal/shaders/output/intersect_scene_shadow_hwrt_bindless.comp.hlsl
+third-party\spirv\win32\spirv-cross internal/shaders/output/intersect_scene_shadow_hwrt_bindless.comp.spv --hlsl --shader-model 60 --output internal/shaders/output/intersect_scene_shadow_hwrt_bindless.comp.hlsl
 third-party\spirv\win32\bin2c -o internal/shaders/output/intersect_scene_shadow_hwrt_bindless.comp.inl internal/shaders/output/intersect_scene_shadow_hwrt_bindless.comp.spv
 
 third-party\spirv\win32\glslangValidator -V --target-env spirv1.3 internal/shaders/shade.comp.glsl -DPRIMARY=0 -DBINDLESS=0 -o internal/shaders/output/shade_secondary_atlas.comp.spv
@@ -131,5 +131,5 @@ third-party\spirv\win32\bin2c -o internal/shaders/output/postprocess.comp.inl in
 third-party\spirv\win32\glslangValidator -V --target-env spirv1.4 internal/shaders/debug_rt.comp.glsl -o internal/shaders/output/debug_rt.comp.spv
 if %errorlevel% neq 0 exit /b %errorlevel%
 call third-party\spirv\win32\spirv-opt.bat internal/shaders/output/debug_rt.comp.spv -o internal/shaders/output/debug_rt.comp.spv
-REM third-party\spirv\win32\spirv-cross internal/shaders/output/debug_rt.comp.spv --hlsl --shader-model 60 --output internal/shaders/output/debug_rt.comp.hlsl
+third-party\spirv\win32\spirv-cross internal/shaders/output/debug_rt.comp.spv --hlsl --shader-model 60 --output internal/shaders/output/debug_rt.comp.hlsl
 third-party\spirv\win32\bin2c -o internal/shaders/output/debug_rt.comp.inl internal/shaders/output/debug_rt.comp.spv
