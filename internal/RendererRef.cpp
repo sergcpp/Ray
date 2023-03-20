@@ -106,23 +106,37 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
 
     PassData &p = g_per_thread_pass_data;
 
-    // allocate sh data on demand
-    if (cam.pass_settings.flags & OutputSH) {
+    // allocate aux data on demand
+    if (cam.pass_settings.flags & (OutputSH | OutputBaseColor | OutputDepthNormals)) {
+        uint32_t aux_bufs = 0;
+        if (cam.pass_settings.flags & OutputSH) {
+            aux_bufs |= eAUXBuffer::SHL1;
+        }
+        if (cam.pass_settings.flags & OutputBaseColor) {
+            aux_bufs |= eAUXBuffer::BaseColor;
+        }
+        if (cam.pass_settings.flags & OutputDepthNormals) {
+            aux_bufs |= eAUXBuffer::DepthNormals;
+        }
+
+        // TODO: Skip locking here
         std::lock_guard<std::mutex> _(mtx_);
 
-        temp_buf_.Resize(w, h, true);
-        clean_buf_.Resize(w, h, true);
+        temp_buf_.Resize(w, h, aux_bufs);
+        clean_buf_.Resize(w, h, aux_bufs);
     }
 
-    const auto time_start = std::chrono::high_resolution_clock::now();
-    std::chrono::time_point<std::chrono::high_resolution_clock> time_after_ray_gen;
+    using namespace std::chrono;
+
+    const auto time_start = high_resolution_clock::now();
+    time_point<high_resolution_clock> time_after_ray_gen;
 
     const uint32_t hi = (region.iteration & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT;
 
     if (cam.type != Geo) {
         GeneratePrimaryRays(region.iteration, cam, rect, w, h, &region.halton_seq[hi], p.primary_rays);
 
-        time_after_ray_gen = std::chrono::high_resolution_clock::now();
+        time_after_ray_gen = high_resolution_clock::now();
 
         p.intersections.resize(p.primary_rays.size());
 
@@ -146,10 +160,10 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
                                  sc_data.transforms[mi.tr_index], sc_data.vtx_indices, sc_data.vertices, rect, w, h,
                                  &region.halton_seq[hi], p.primary_rays, p.intersections);
 
-        time_after_ray_gen = std::chrono::high_resolution_clock::now();
+        time_after_ray_gen = high_resolution_clock::now();
     }
 
-    const auto time_after_prim_trace = std::chrono::high_resolution_clock::now();
+    const auto time_after_prim_trace = high_resolution_clock::now();
 
     p.secondary_rays.resize(rect.w * rect.h);
     p.shadow_rays.resize(rect.w * rect.h);
@@ -163,13 +177,21 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
         const int x = (r.xy >> 16) & 0x0000ffff;
         const int y = r.xy & 0x0000ffff;
 
-        const pixel_color_t col = ShadeSurface(
-            cam.pass_settings, inter, r, &region.halton_seq[hi + RAND_DIM_BASE_COUNT], sc_data, macro_tree_root,
-            s->tex_storages_, &p.secondary_rays[0], &secondary_rays_count, &p.shadow_rays[0], &shadow_rays_count);
+        color_rgba_t base_color = {}, depth_normal = {};
+        const color_rgba_t col =
+            ShadeSurface(cam.pass_settings, inter, r, &region.halton_seq[hi + RAND_DIM_BASE_COUNT], sc_data,
+                         macro_tree_root, s->tex_storages_, &p.secondary_rays[0], &secondary_rays_count,
+                         &p.shadow_rays[0], &shadow_rays_count, &base_color, &depth_normal);
         temp_buf_.SetPixel(x, y, col);
+        if (cam.pass_settings.flags & OutputBaseColor) {
+            temp_buf_.SetBaseColor(x, y, base_color);
+        }
+        if (cam.pass_settings.flags & OutputDepthNormals) {
+            temp_buf_.SetDepthNormal(x, y, depth_normal);
+        }
     }
 
-    const auto time_after_prim_shade = std::chrono::high_resolution_clock::now();
+    const auto time_after_prim_shade = high_resolution_clock::now();
 
     for (int i = 0; i < shadow_rays_count; ++i) {
         const shadow_ray_t &sh_r = p.shadow_rays[i];
@@ -181,12 +203,12 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
             IntersectScene(sh_r, cam.pass_settings.max_transp_depth, sc_data, macro_tree_root, s->tex_storages_);
         rc *= IntersectAreaLights(sh_r, sc_data.lights, sc_data.blocker_lights, sc_data.transforms);
 
-        const pixel_color_t col = {rc[0], rc[1], rc[2], 0.0f};
+        const color_rgba_t col = {rc[0], rc[1], rc[2], 0.0f};
         temp_buf_.AddPixel(x, y, col);
     }
 
-    const auto time_after_prim_shadow = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double, std::micro> secondary_sort_time{}, secondary_trace_time{}, secondary_shade_time{},
+    const auto time_after_prim_shadow = high_resolution_clock::now();
+    duration<double, std::micro> secondary_sort_time{}, secondary_trace_time{}, secondary_shade_time{},
         secondary_shadow_time{};
 
     p.hash_values.resize(secondary_rays_count);
@@ -211,7 +233,7 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
     }
 
     for (int bounce = 1; bounce <= cam.pass_settings.max_total_depth && secondary_rays_count; ++bounce) {
-        const auto time_secondary_sort_start = std::chrono::high_resolution_clock::now();
+        const auto time_secondary_sort_start = high_resolution_clock::now();
 
         SortRays_CPU(&p.secondary_rays[0], size_t(secondary_rays_count), root_min, cell_size, &p.hash_values[0],
                      &p.scan_values[0], &p.chunks[0], &p.chunks_temp[0]);
@@ -232,12 +254,12 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
 
             const simd_fvec3 &c = color_table[hash(p.hash_values[i]) % 1024];
 
-            pixel_color_t col = { c[0], c[1], c[2], 1.0f };
+            color_rgba_t col = { c[0], c[1], c[2], 1.0f };
             temp_buf_.SetPixel(x, y, col);
         }
 #endif
 
-        const auto time_secondary_trace_start = std::chrono::high_resolution_clock::now();
+        const auto time_secondary_trace_start = high_resolution_clock::now();
 
         for (int i = 0; i < secondary_rays_count; i++) {
             ray_data_t &r = p.secondary_rays[i];
@@ -253,7 +275,7 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
             }
         }
 
-        const auto time_secondary_shade_start = std::chrono::high_resolution_clock::now();
+        const auto time_secondary_shade_start = high_resolution_clock::now();
 
         int rays_count = secondary_rays_count;
         secondary_rays_count = 0;
@@ -267,15 +289,16 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
             const int x = (r.xy >> 16) & 0x0000ffff;
             const int y = r.xy & 0x0000ffff;
 
-            pixel_color_t col = ShadeSurface(cam.pass_settings, inter, r, &region.halton_seq[hi + RAND_DIM_BASE_COUNT],
-                                             sc_data, macro_tree_root, s->tex_storages_, &p.secondary_rays[0],
-                                             &secondary_rays_count, &p.shadow_rays[0], &shadow_rays_count);
-            col.a = 0.0f;
+            color_rgba_t col =
+                ShadeSurface(cam.pass_settings, inter, r, &region.halton_seq[hi + RAND_DIM_BASE_COUNT], sc_data,
+                             macro_tree_root, s->tex_storages_, &p.secondary_rays[0], &secondary_rays_count,
+                             &p.shadow_rays[0], &shadow_rays_count, nullptr, nullptr);
+            col.v[3] = 0.0f;
 
             temp_buf_.AddPixel(x, y, col);
         }
 
-        const auto time_secondary_shadow_start = std::chrono::high_resolution_clock::now();
+        const auto time_secondary_shadow_start = high_resolution_clock::now();
 
         for (int i = 0; i < shadow_rays_count; ++i) {
             const shadow_ray_t &sh_r = p.shadow_rays[i];
@@ -287,19 +310,15 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
                 IntersectScene(sh_r, cam.pass_settings.max_transp_depth, sc_data, macro_tree_root, s->tex_storages_);
             rc *= IntersectAreaLights(sh_r, sc_data.lights, sc_data.blocker_lights, sc_data.transforms);
 
-            const pixel_color_t col = {rc[0], rc[1], rc[2], 0.0f};
+            const color_rgba_t col = {rc[0], rc[1], rc[2], 0.0f};
             temp_buf_.AddPixel(x, y, col);
         }
 
-        const auto time_secondary_shadow_end = std::chrono::high_resolution_clock::now();
-        secondary_sort_time +=
-            std::chrono::duration<double, std::micro>{time_secondary_trace_start - time_secondary_sort_start};
-        secondary_trace_time +=
-            std::chrono::duration<double, std::micro>{time_secondary_shade_start - time_secondary_trace_start};
-        secondary_shade_time +=
-            std::chrono::duration<double, std::micro>{time_secondary_shadow_start - time_secondary_shade_start};
-        secondary_shadow_time +=
-            std::chrono::duration<double, std::micro>{time_secondary_shadow_end - time_secondary_shadow_start};
+        const auto time_secondary_shadow_end = high_resolution_clock::now();
+        secondary_sort_time += duration<double, std::micro>{time_secondary_trace_start - time_secondary_sort_start};
+        secondary_trace_time += duration<double, std::micro>{time_secondary_shade_start - time_secondary_trace_start};
+        secondary_shade_time += duration<double, std::micro>{time_secondary_shadow_start - time_secondary_shade_start};
+        secondary_shadow_time += duration<double, std::micro>{time_secondary_shadow_end - time_secondary_shadow_start};
     }
 
     lock.unlock();
@@ -308,17 +327,13 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
         std::lock_guard<std::mutex> _(mtx_);
 
         stats_.time_primary_ray_gen_us +=
-            (unsigned long long)std::chrono::duration<double, std::micro>{time_after_ray_gen - time_start}.count();
+            (unsigned long long)duration<double, std::micro>{time_after_ray_gen - time_start}.count();
         stats_.time_primary_trace_us +=
-            (unsigned long long)std::chrono::duration<double, std::micro>{time_after_prim_trace - time_after_ray_gen}
-                .count();
+            (unsigned long long)duration<double, std::micro>{time_after_prim_trace - time_after_ray_gen}.count();
         stats_.time_primary_shade_us +=
-            (unsigned long long)std::chrono::duration<double, std::micro>{time_after_prim_shade - time_after_prim_trace}
-                .count();
+            (unsigned long long)duration<double, std::micro>{time_after_prim_shade - time_after_prim_trace}.count();
         stats_.time_primary_shadow_us +=
-            (unsigned long long)std::chrono::duration<double, std::micro>{time_after_prim_shadow -
-                                                                          time_after_prim_shade}
-                .count();
+            (unsigned long long)duration<double, std::micro>{time_after_prim_shadow - time_after_prim_shade}.count();
         stats_.time_secondary_sort_us += (unsigned long long)secondary_sort_time.count();
         stats_.time_secondary_trace_us += (unsigned long long)secondary_trace_time.count();
         stats_.time_secondary_shade_us += (unsigned long long)secondary_shade_time.count();
@@ -333,9 +348,15 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
         temp_buf_.ComputeSHData(rect);
         clean_buf_.MixWith_SH(temp_buf_, rect, mix_factor);
     }
+    if (cam.pass_settings.flags & OutputBaseColor) {
+        clean_buf_.MixWith_BaseColor(temp_buf_, rect, mix_factor);
+    }
+    if (cam.pass_settings.flags & OutputDepthNormals) {
+        clean_buf_.MixWith_DepthNormal(temp_buf_, rect, mix_factor);
+    }
 
-    auto clamp_and_gamma_correct = [&cam](const pixel_color_t &p) {
-        auto c = simd_fvec4{&p.r};
+    auto clamp_and_gamma_correct = [&cam](const color_rgba_t &p) {
+        auto c = simd_fvec4{p.v};
 
         if (cam.exposure != 0.0f) {
             c *= std::pow(2.0f, cam.exposure);
@@ -358,7 +379,7 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
         if (cam.pass_settings.flags & Clamp) {
             c = clamp(c, 0.0f, 1.0f);
         }
-        return pixel_color_t{c[0], c[1], c[2], c[3]};
+        return color_rgba_t{c[0], c[1], c[2], c[3]};
     };
 
     final_buf_.CopyFrom(clean_buf_, rect, clamp_and_gamma_correct);
@@ -371,11 +392,11 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
 
             const auto col8 = s->tex_atlas_rgb_.Get(region.iteration % s->tex_atlas_rgb_.page_count(), u, v);
 
-            pixel_color_t col;
-            col.r = float(col8.v[0]) / 255.0f;
-            col.g = float(col8.v[1]) / 255.0f;
-            col.b = float(col8.v[2]) / 255.0f;
-            col.a = 1.0f;
+            color_rgba_t col;
+            col.v[0] = float(col8.v[0]) / 255.0f;
+            col.v[1] = float(col8.v[1]) / 255.0f;
+            col.v[2] = float(col8.v[2]) / 255.0f;
+            col.v[3] = 1.0f;
 
             final_buf_.SetPixel(x, y, col);
         }

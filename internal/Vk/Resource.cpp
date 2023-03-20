@@ -163,7 +163,7 @@ void Ray::Vk::TransitionResourceStates(void *_cmd_buf, const eStageBits src_stag
     SmallVector<VkImageMemoryBarrier, 32> img_barriers;
 
     for (int i = 0; i < int(transitions.size()); i++) {
-        if (transitions[i].p_tex) {
+        if (transitions[i].p_tex && transitions[i].p_tex->ready()) {
             eResState old_state = transitions[i].old_state;
             if (old_state == eResState::Undefined) {
                 // take state from resource itself
@@ -203,7 +203,7 @@ void Ray::Vk::TransitionResourceStates(void *_cmd_buf, const eStageBits src_stag
             if (transitions[i].update_internal_state) {
                 transitions[i].p_tex->resource_state = transitions[i].new_state;
             }
-        } else if (transitions[i].p_buf) {
+        } else if (transitions[i].p_buf && *transitions[i].p_buf) {
             eResState old_state = transitions[i].old_state;
             if (old_state == eResState::Undefined) {
                 // take state from resource itself

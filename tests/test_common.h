@@ -20,7 +20,7 @@ static bool handle_assert(bool passed, const char* assert, const char* file, lon
 
 #define require(x) handle_assert(x, #x , __FILE__, __LINE__, g_stop_on_fail)
 #define require_fatal(x) handle_assert(x, #x , __FILE__, __LINE__, true)
-#define require_skip(x) handle_assert(x, #x , __FILE__, __LINE__, false); if (!(x)) return
+#define require_return(x) handle_assert(x, #x , __FILE__, __LINE__, false); if (!(x)) return
 
 #define require_throws(expr) {          \
             bool _ = false;             \
@@ -62,3 +62,4 @@ inline bool operator==(float val, const Approx &app) {
 }
 
 inline bool operator!=(float val, const Approx &app) { return !operator==(val, app); }
+

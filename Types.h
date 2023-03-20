@@ -11,12 +11,6 @@
 */
 
 namespace Ray {
-/// RGBA single precision f32 color
-struct pixel_color_t {
-    float r, g, b, a;
-};
-static_assert(sizeof(pixel_color_t) == 16, "!");
-
 template <typename T, int N> struct color_t { T v[N]; };
 
 using color_rgba8_t = color_t<uint8_t, 4>;
@@ -28,6 +22,8 @@ using color_rgba_t = color_t<float, 4>;
 using color_rgb_t = color_t<float, 3>;
 using color_rg_t = color_t<float, 2>;
 using color_r_t = color_t<float, 1>;
+
+enum eAUXBuffer : uint32_t { SHL1 = (1u << 0), BaseColor = (1u << 1), DepthNormals = (1u << 2) };
 
 struct shl1_data_t {
     float coeff_r[4], coeff_g[4], coeff_b[4];
@@ -53,7 +49,9 @@ enum ePassFlags {
     LightingOnly = (1 << 2),
     NoBackground = (1 << 3),
     Clamp = (1 << 4),
-    OutputSH = (1 << 5)
+    OutputSH = (1 << 5),
+    OutputBaseColor = (1 << 6),
+    OutputDepthNormals = (1 << 7)
 };
 
 struct pass_settings_t {

@@ -3921,16 +3921,17 @@ void Ray::Ref::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t
     }
 }
 
-Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_data_t &inter, const ray_data_t &ray,
-                                          const float *random_seq, const scene_data_t &sc, const uint32_t node_index,
-                                          const TexStorageBase *const textures[], ray_data_t *out_secondary_rays,
-                                          int *out_secondary_rays_count, shadow_ray_t *out_shadow_rays,
-                                          int *out_shadow_rays_count) {
+Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_data_t &inter, const ray_data_t &ray,
+                                         const float *random_seq, const scene_data_t &sc, const uint32_t node_index,
+                                         const TexStorageBase *const textures[], ray_data_t *out_secondary_rays,
+                                         int *out_secondary_rays_count, shadow_ray_t *out_shadow_rays,
+                                         int *out_shadow_rays_count, color_rgba_t *out_base_color,
+                                         color_rgba_t *out_depth_normal) {
     const simd_fvec4 I = make_fvec3(ray.d);
 
     if (!inter.mask) {
         const simd_fvec4 env_col = Evaluate_EnvColor(ray, sc.env, *static_cast<const TexStorageRGBA *>(textures[0]));
-        return Ray::pixel_color_t{ray.c[0] * env_col[0], ray.c[1] * env_col[1], ray.c[2] * env_col[2], env_col[3]};
+        return color_rgba_t{ray.c[0] * env_col[0], ray.c[1] * env_col[1], ray.c[2] * env_col[2], env_col[3]};
     }
 
     surface_t surf = {};
@@ -3939,7 +3940,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
     if (inter.obj_index < 0) { // Area light intersection
         const simd_fvec4 lcol =
             Evaluate_LightColor(ray, inter, sc.env, *static_cast<const TexStorageRGBA *>(textures[0]), sc.lights);
-        return Ray::pixel_color_t{ray.c[0] * lcol.get<0>(), ray.c[1] * lcol.get<1>(), ray.c[2] * lcol.get<2>(), 1.0f};
+        return color_rgba_t{ray.c[0] * lcol.get<0>(), ray.c[1] * lcol.get<1>(), ray.c[2] * lcol.get<2>(), 1.0f};
     }
 
     const bool is_backfacing = (inter.prim_index < 0);
@@ -3966,7 +3967,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
 
     if (is_backfacing) {
         if (sc.tri_materials[tri_index].back_mi == 0xffff) {
-            return pixel_color_t{0.0f, 0.0f, 0.0f, 0.0f};
+            return color_rgba_t{0.0f, 0.0f, 0.0f, 0.0f};
         } else {
             mat = &sc.materials[sc.tri_materials[tri_index].back_mi & MATERIAL_INDEX_BITS];
             surf.plane_N = -surf.plane_N;
@@ -4092,6 +4093,14 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
             tex_color = srgb_to_rgb(tex_color);
         }
         base_color *= tex_color;
+    }
+
+    if (out_base_color) {
+        memcpy(out_base_color->v, value_ptr(base_color), 3 * sizeof(float));
+    }
+    if (out_depth_normal) {
+        memcpy(out_depth_normal->v, value_ptr(surf.N), 3 * sizeof(float));
+        out_depth_normal->v[3] = inter.t;
     }
 
     simd_fvec4 tint_color = {0.0f};
@@ -4289,7 +4298,7 @@ Ray::pixel_color_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_d
     }
 #endif
 
-    return pixel_color_t{ray.c[0] * col.get<0>(), ray.c[1] * col.get<1>(), ray.c[2] * col.get<2>(), 1.0f};
+    return color_rgba_t{ray.c[0] * col.get<0>(), ray.c[1] * col.get<1>(), ray.c[2] * col.get<2>(), 1.0f};
 }
 
 #undef sqr

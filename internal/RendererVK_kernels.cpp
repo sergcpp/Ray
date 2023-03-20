@@ -202,12 +202,17 @@ void Ray::Vk::Renderer::kernel_ShadePrimaryHits(VkCommandBuffer cmd_buf, const p
                                                 const scene_data_t &sc_data, const Buffer &random_seq, const int hi,
                                                 Span<const TextureAtlas> tex_atlases, VkDescriptorSet tex_descr_set,
                                                 const Texture2D &out_img, const Buffer &out_rays,
-                                                const Buffer &out_sh_rays, const Buffer &inout_counters) {
-    const TransitionInfo res_transitions[] = {
-        {&hits, eResState::ShaderResource},           {&rays, eResState::ShaderResource},
-        {&random_seq, eResState::ShaderResource},     {&out_img, eResState::UnorderedAccess},
-        {&out_rays, eResState::UnorderedAccess},      {&out_sh_rays, eResState::UnorderedAccess},
-        {&inout_counters, eResState::UnorderedAccess}};
+                                                const Buffer &out_sh_rays, const Buffer &inout_counters,
+                                                const Texture2D &out_base_color, const Texture2D &out_depth_normals) {
+    const TransitionInfo res_transitions[] = {{&hits, eResState::ShaderResource},
+                                              {&rays, eResState::ShaderResource},
+                                              {&random_seq, eResState::ShaderResource},
+                                              {&out_img, eResState::UnorderedAccess},
+                                              {&out_rays, eResState::UnorderedAccess},
+                                              {&out_sh_rays, eResState::UnorderedAccess},
+                                              {&inout_counters, eResState::UnorderedAccess},
+                                              {&out_base_color, eResState::UnorderedAccess},
+                                              {&out_depth_normals, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
     SmallVector<Binding, 32> bindings = {{eBindTarget::SBuf, Shade::HITS_BUF_SLOT, hits},
@@ -227,6 +232,13 @@ void Ray::Vk::Renderer::kernel_ShadePrimaryHits(VkCommandBuffer cmd_buf, const p
                                          {eBindTarget::SBuf, Shade::OUT_RAYS_BUF_SLOT, out_rays},
                                          {eBindTarget::SBuf, Shade::OUT_SH_RAYS_BUF_SLOT, out_sh_rays},
                                          {eBindTarget::SBuf, Shade::INOUT_COUNTERS_BUF_SLOT, inout_counters}};
+
+    if (out_base_color.ready()) {
+        bindings.emplace_back(eBindTarget::Image, Shade::OUT_BASE_COLOR_IMG_SLOT, out_base_color);
+    }
+    if (out_depth_normals.ready()) {
+        bindings.emplace_back(eBindTarget::Image, Shade::OUT_DEPTH_NORMALS_IMG_SLOT, out_depth_normals);
+    }
 
     const uint32_t grp_count[3] = {uint32_t((w_ + Shade::LOCAL_GROUP_SIZE_X) / Shade::LOCAL_GROUP_SIZE_X),
                                    uint32_t((h_ + Shade::LOCAL_GROUP_SIZE_Y) / Shade::LOCAL_GROUP_SIZE_Y), 1u};
@@ -255,16 +267,27 @@ void Ray::Vk::Renderer::kernel_ShadePrimaryHits(VkCommandBuffer cmd_buf, const p
     uniform_params.back_rotation = env.back_map_rotation;
     uniform_params.env_mult_importance = sc_data.env->multiple_importance ? 1 : 0;
 
+    Pipeline *pi = &pi_shade_primary_;
+    if (out_base_color.ready()) {
+        if (out_depth_normals.ready()) {
+            pi = &pi_shade_primary_bn_;
+        } else {
+            pi = &pi_shade_primary_b_;
+        }
+    } else if (out_depth_normals.ready()) {
+        pi = &pi_shade_primary_n_;
+    }
+
     if (use_bindless_) {
         assert(tex_descr_set);
-        vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, pi_shade_primary_.layout(), 1, 1,
-                                &tex_descr_set, 0, nullptr);
+        vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, pi->layout(), 1, 1, &tex_descr_set, 0,
+                                nullptr);
     } else {
         bindings.emplace_back(eBindTarget::SBuf, Types::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
         bindings.emplace_back(eBindTarget::Tex2DArray, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
     }
 
-    DispatchCompute(cmd_buf, pi_shade_primary_, grp_count, bindings, &uniform_params, sizeof(uniform_params),
+    DispatchCompute(cmd_buf, *pi, grp_count, bindings, &uniform_params, sizeof(uniform_params),
                     ctx_->default_descr_alloc(), ctx_->log());
 }
 
@@ -406,15 +429,29 @@ void Ray::Vk::Renderer::kernel_PrepareIndirArgs(VkCommandBuffer cmd_buf, const B
 }
 
 void Ray::Vk::Renderer::kernel_MixIncremental(VkCommandBuffer cmd_buf, const Texture2D &fbuf1, const Texture2D &fbuf2,
-                                              const float k, const Texture2D &out_img) {
+                                              float k, const Texture2D &temp_base_color,
+                                              const Texture2D &temp_depth_normals, const Texture2D &out_img,
+                                              const Texture2D &out_base_color, const Texture2D &out_depth_normals) {
     const TransitionInfo res_transitions[] = {{&fbuf1, eResState::UnorderedAccess},
                                               {&fbuf2, eResState::UnorderedAccess},
-                                              {&out_img, eResState::UnorderedAccess}};
-    TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
+                                              {&out_img, eResState::UnorderedAccess},
+                                              {&temp_base_color, eResState::UnorderedAccess},
+                                              {&out_base_color, eResState::UnorderedAccess},
+                                              {&temp_depth_normals, eResState::UnorderedAccess},
+                                              {&out_depth_normals, eResState::UnorderedAccess}};
+    SmallVector<Binding, 16> bindings = {{eBindTarget::Image, MixIncremental::IN_IMG1_SLOT, fbuf1},
+                                         {eBindTarget::Image, MixIncremental::IN_IMG2_SLOT, fbuf2},
+                                         {eBindTarget::Image, MixIncremental::OUT_IMG_SLOT, out_img}};
+    if (temp_base_color.ready()) {
+        bindings.emplace_back(eBindTarget::Image, MixIncremental::IN_TEMP_BASE_COLOR_SLOT, temp_base_color);
+        bindings.emplace_back(eBindTarget::Image, MixIncremental::OUT_BASE_COLOR_IMG_SLOT, out_base_color);
+    }
+    if (temp_depth_normals.ready()) {
+        bindings.emplace_back(eBindTarget::Image, MixIncremental::IN_TEMP_DEPTH_NORMALS_SLOT, temp_depth_normals);
+        bindings.emplace_back(eBindTarget::Image, MixIncremental::OUT_DEPTH_NORMALS_IMG_SLOT, out_depth_normals);
+    }
 
-    const Binding bindings[] = {{eBindTarget::Image, MixIncremental::IN_IMG1_SLOT, fbuf1},
-                                {eBindTarget::Image, MixIncremental::IN_IMG2_SLOT, fbuf2},
-                                {eBindTarget::Image, MixIncremental::OUT_IMG_SLOT, out_img}};
+    TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
     const uint32_t grp_count[3] = {
         uint32_t((w_ + MixIncremental::LOCAL_GROUP_SIZE_X) / MixIncremental::LOCAL_GROUP_SIZE_X),
@@ -425,7 +462,18 @@ void Ray::Vk::Renderer::kernel_MixIncremental(VkCommandBuffer cmd_buf, const Tex
     uniform_params.img_size[1] = h_;
     uniform_params.k = k;
 
-    DispatchCompute(cmd_buf, pi_mix_incremental_, grp_count, bindings, &uniform_params, sizeof(uniform_params),
+    Pipeline *pi = &pi_mix_incremental_;
+    if (out_base_color.ready()) {
+        if (out_depth_normals.ready()) {
+            pi = &pi_mix_incremental_bn_;
+        } else {
+            pi = &pi_mix_incremental_b_;
+        }
+    } else if (out_depth_normals.ready()) {
+        pi = &pi_mix_incremental_n_;
+    }
+
+    DispatchCompute(cmd_buf, *pi, grp_count, bindings, &uniform_params, sizeof(uniform_params),
                     ctx_->default_descr_alloc(), ctx_->log());
 }
 

@@ -53,11 +53,20 @@ namespace Vk {
 #include "shaders/output/intersect_scene_shadow_swrt_atlas.comp.inl"
 #include "shaders/output/intersect_scene_shadow_swrt_bindless.comp.inl"
 #include "shaders/output/mix_incremental.comp.inl"
+#include "shaders/output/mix_incremental_b.comp.inl"
+#include "shaders/output/mix_incremental_bn.comp.inl"
+#include "shaders/output/mix_incremental_n.comp.inl"
 #include "shaders/output/postprocess.comp.inl"
 #include "shaders/output/prepare_indir_args.comp.inl"
 #include "shaders/output/primary_ray_gen.comp.inl"
 #include "shaders/output/shade_primary_atlas.comp.inl"
+#include "shaders/output/shade_primary_atlas_b.comp.inl"
+#include "shaders/output/shade_primary_atlas_bn.comp.inl"
+#include "shaders/output/shade_primary_atlas_n.comp.inl"
 #include "shaders/output/shade_primary_bindless.comp.inl"
+#include "shaders/output/shade_primary_bindless_b.comp.inl"
+#include "shaders/output/shade_primary_bindless_bn.comp.inl"
+#include "shaders/output/shade_primary_bindless_n.comp.inl"
 #include "shaders/output/shade_secondary_atlas.comp.inl"
 #include "shaders/output/shade_secondary_bindless.comp.inl"
 } // namespace Vk
@@ -141,6 +150,30 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
                                              : int(internal_shaders_output_shade_primary_atlas_comp_spv_size),
                                eShaderType::Comp,
                                log};
+    sh_shade_primary_b_ = Shader{"Shade (Primary) B",
+                                 ctx_.get(),
+                                 use_bindless_ ? internal_shaders_output_shade_primary_bindless_b_comp_spv
+                                               : internal_shaders_output_shade_primary_atlas_b_comp_spv,
+                                 use_bindless_ ? int(internal_shaders_output_shade_primary_bindless_b_comp_spv_size)
+                                               : int(internal_shaders_output_shade_primary_atlas_b_comp_spv_size),
+                                 eShaderType::Comp,
+                                 log};
+    sh_shade_primary_n_ = Shader{"Shade (Primary) N",
+                                 ctx_.get(),
+                                 use_bindless_ ? internal_shaders_output_shade_primary_bindless_n_comp_spv
+                                               : internal_shaders_output_shade_primary_atlas_n_comp_spv,
+                                 use_bindless_ ? int(internal_shaders_output_shade_primary_bindless_n_comp_spv_size)
+                                               : int(internal_shaders_output_shade_primary_atlas_n_comp_spv_size),
+                                 eShaderType::Comp,
+                                 log};
+    sh_shade_primary_bn_ = Shader{"Shade (Primary) BN",
+                                  ctx_.get(),
+                                  use_bindless_ ? internal_shaders_output_shade_primary_bindless_bn_comp_spv
+                                                : internal_shaders_output_shade_primary_atlas_bn_comp_spv,
+                                  use_bindless_ ? int(internal_shaders_output_shade_primary_bindless_bn_comp_spv_size)
+                                                : int(internal_shaders_output_shade_primary_atlas_bn_comp_spv_size),
+                                  eShaderType::Comp,
+                                  log};
     sh_shade_secondary_ = Shader{"Shade (Secondary)",
                                  ctx_.get(),
                                  use_bindless_ ? internal_shaders_output_shade_secondary_bindless_comp_spv
@@ -183,6 +216,24 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
                                  internal_shaders_output_mix_incremental_comp_spv_size,
                                  eShaderType::Comp,
                                  log};
+    sh_mix_incremental_b_ = Shader{"Mix Incremental B",
+                                   ctx_.get(),
+                                   internal_shaders_output_mix_incremental_b_comp_spv,
+                                   internal_shaders_output_mix_incremental_b_comp_spv_size,
+                                   eShaderType::Comp,
+                                   log};
+    sh_mix_incremental_n_ = Shader{"Mix Incremental N",
+                                   ctx_.get(),
+                                   internal_shaders_output_mix_incremental_n_comp_spv,
+                                   internal_shaders_output_mix_incremental_n_comp_spv_size,
+                                   eShaderType::Comp,
+                                   log};
+    sh_mix_incremental_bn_ = Shader{"Mix Incremental BN",
+                                    ctx_.get(),
+                                    internal_shaders_output_mix_incremental_bn_comp_spv,
+                                    internal_shaders_output_mix_incremental_bn_comp_spv_size,
+                                    eShaderType::Comp,
+                                    log};
     sh_postprocess_ = Shader{"Postprocess",
                              ctx_.get(),
                              internal_shaders_output_postprocess_comp_spv,
@@ -204,10 +255,16 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
         Program{"Intersect Scene (Secondary)", ctx_.get(), &sh_intersect_scene_secondary_, log};
     prog_intersect_area_lights_ = Program{"Intersect Area Lights", ctx_.get(), &sh_intersect_area_lights_, log};
     prog_shade_primary_ = Program{"Shade (Primary)", ctx_.get(), &sh_shade_primary_, log};
+    prog_shade_primary_b_ = Program{"Shade (Primary) B", ctx_.get(), &sh_shade_primary_b_, log};
+    prog_shade_primary_n_ = Program{"Shade (Primary) N", ctx_.get(), &sh_shade_primary_n_, log};
+    prog_shade_primary_bn_ = Program{"Shade (Primary) BN", ctx_.get(), &sh_shade_primary_bn_, log};
     prog_shade_secondary_ = Program{"Shade (Secondary)", ctx_.get(), &sh_shade_secondary_, log};
     prog_intersect_scene_shadow_ = Program{"Intersect Scene (Shadow)", ctx_.get(), &sh_intersect_scene_shadow_, log};
     prog_prepare_indir_args_ = Program{"Prepare Indir Args", ctx_.get(), &sh_prepare_indir_args_, log};
     prog_mix_incremental_ = Program{"Mix Incremental", ctx_.get(), &sh_mix_incremental_, log};
+    prog_mix_incremental_b_ = Program{"Mix Incremental B", ctx_.get(), &sh_mix_incremental_b_, log};
+    prog_mix_incremental_n_ = Program{"Mix Incremental N", ctx_.get(), &sh_mix_incremental_n_, log};
+    prog_mix_incremental_bn_ = Program{"Mix Incremental BN", ctx_.get(), &sh_mix_incremental_bn_, log};
     prog_postprocess_ = Program{"Postprocess", ctx_.get(), &sh_postprocess_, log};
     prog_debug_rt_ = Program{"Debug RT", ctx_.get(), &sh_debug_rt_, log};
 
@@ -216,10 +273,16 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
         !pi_intersect_scene_secondary_.Init(ctx_.get(), &prog_intersect_scene_secondary_, log) ||
         !pi_intersect_area_lights_.Init(ctx_.get(), &prog_intersect_area_lights_, log) ||
         !pi_shade_primary_.Init(ctx_.get(), &prog_shade_primary_, log) ||
+        !pi_shade_primary_b_.Init(ctx_.get(), &prog_shade_primary_b_, log) ||
+        !pi_shade_primary_n_.Init(ctx_.get(), &prog_shade_primary_n_, log) ||
+        !pi_shade_primary_bn_.Init(ctx_.get(), &prog_shade_primary_bn_, log) ||
         !pi_shade_secondary_.Init(ctx_.get(), &prog_shade_secondary_, log) ||
         !pi_intersect_scene_shadow_.Init(ctx_.get(), &prog_intersect_scene_shadow_, log) ||
         !pi_prepare_indir_args_.Init(ctx_.get(), &prog_prepare_indir_args_, log) ||
         !pi_mix_incremental_.Init(ctx_.get(), &prog_mix_incremental_, log) ||
+        !pi_mix_incremental_b_.Init(ctx_.get(), &prog_mix_incremental_b_, log) ||
+        !pi_mix_incremental_n_.Init(ctx_.get(), &prog_mix_incremental_n_, log) ||
+        !pi_mix_incremental_bn_.Init(ctx_.get(), &prog_mix_incremental_bn_, log) ||
         !pi_postprocess_.Init(ctx_.get(), &prog_postprocess_, log) ||
         (use_hwrt_ && !pi_debug_rt_.Init(ctx_.get(), &prog_debug_rt_, log))) {
         throw std::runtime_error("Error initializing pipeline!");
@@ -245,7 +308,15 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
     permutations_ = Ray::ComputeRadicalInversePermutations(g_primes, PrimesCount, rand_func);
 }
 
-Ray::Vk::Renderer::~Renderer() { pixel_stage_buf_.Unmap(); }
+Ray::Vk::Renderer::~Renderer() {
+    pixel_stage_buf_.Unmap();
+    if (base_color_stage_buf_) {
+        base_color_stage_buf_.Unmap();
+    }
+    if (depth_normals_stage_buf_) {
+        depth_normals_stage_buf_.Unmap();
+    }
+}
 
 const char *Ray::Vk::Renderer::device_name() const { return ctx_->device_properties().deviceName; }
 
@@ -271,7 +342,7 @@ void Ray::Vk::Renderer::Resize(const int w, const int h) {
         frame_pixels_ = nullptr;
     }
     pixel_stage_buf_ = Buffer{"Px Stage Buf", ctx_.get(), eBufType::Stage, uint32_t(4 * w * h * sizeof(float))};
-    frame_pixels_ = (const pixel_color_t *)pixel_stage_buf_.Map(BufMapRead, true /* persistent */);
+    frame_pixels_ = (const color_rgba_t *)pixel_stage_buf_.Map(BufMapRead, true /* persistent */);
 
     prim_rays_buf_ =
         Buffer{"Primary Rays", ctx_.get(), eBufType::Storage, uint32_t(sizeof(Types::ray_data_t) * num_pixels)};
@@ -286,14 +357,25 @@ void Ray::Vk::Renderer::Resize(const int w, const int h) {
     h_ = h;
 }
 
-void Ray::Vk::Renderer::Clear(const pixel_color_t &c) {
+void Ray::Vk::Renderer::Clear(const color_rgba_t &c) {
     VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
 
-    const TransitionInfo img_transitions[] = {{&clean_buf_, eResState::CopyDst}, {&final_buf_, eResState::CopyDst}};
+    const TransitionInfo img_transitions[] = {{&clean_buf_, eResState::CopyDst},
+                                              {&final_buf_, eResState::CopyDst},
+                                              {&base_color_buf_, eResState::CopyDst},
+                                              {&depth_normals_buf_, eResState::CopyDst}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, img_transitions);
 
-    ClearColorImage(clean_buf_, &c.r, cmd_buf);
-    ClearColorImage(final_buf_, &c.r, cmd_buf);
+    ClearColorImage(clean_buf_, c.v, cmd_buf);
+    ClearColorImage(final_buf_, c.v, cmd_buf);
+    if (base_color_buf_.ready()) {
+        static const float rgba[] = {0.0f, 0.0f, 0.0f, 0.0f};
+        ClearColorImage(base_color_buf_, rgba, cmd_buf);
+    }
+    if (depth_normals_buf_.ready()) {
+        static const float rgba[] = {0.0f, 0.0f, 0.0f, 0.0f};
+        ClearColorImage(depth_normals_buf_, rgba, cmd_buf);
+    }
 
     EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 }
@@ -313,6 +395,89 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
     region.iteration++;
     if (!region.halton_seq || region.iteration % HALTON_SEQ_LEN == 0) {
         UpdateHaltonSequence(region.iteration, region.halton_seq);
+    }
+
+    const Ray::camera_t &cam = s->cams_[s->current_cam()._index].cam;
+
+    // allocate aux data on demand
+    if (cam.pass_settings.flags & (OutputBaseColor | OutputDepthNormals)) {
+        const int w = final_buf_.params.w, h = final_buf_.params.h;
+
+        Tex2DParams params;
+        params.w = w;
+        params.h = h;
+        params.format = eTexFormat::RawRGBA32F;
+        params.usage = eTexUsageBits::Storage | eTexUsageBits::Transfer;
+
+        if (cam.pass_settings.flags & OutputBaseColor) {
+            if (!base_color_buf_.ready() || temp_base_color_buf_.params.w != w || temp_base_color_buf_.params.h != h) {
+                temp_base_color_buf_ = {};
+                temp_base_color_buf_ =
+                    Texture2D{"Temp Base Color Image", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
+                base_color_buf_ = {};
+                base_color_buf_ =
+                    Texture2D{"Base Color Image", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
+                if (base_color_pixels_) {
+                    base_color_stage_buf_.Unmap();
+                    base_color_pixels_ = nullptr;
+                }
+                base_color_stage_buf_ = {};
+                base_color_stage_buf_ =
+                    Buffer{"Base Color Stage Buf", ctx_.get(), eBufType::Stage, uint32_t(4 * w * h * sizeof(float))};
+                base_color_pixels_ = (const color_rgba_t *)base_color_stage_buf_.Map(BufMapRead, true /* persistent */);
+
+                // Perform initial clear
+                const TransitionInfo img_transitions[] = {{&base_color_buf_, eResState::CopyDst}};
+                VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+                TransitionResourceStates(cmd_buf, AllStages, AllStages, img_transitions);
+                static const float rgba[] = {0.0f, 0.0f, 0.0f, 0.0f};
+                ClearColorImage(base_color_buf_, rgba, cmd_buf);
+                EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+            }
+        } else {
+            temp_base_color_buf_ = {};
+            base_color_buf_ = {};
+            if (base_color_pixels_) {
+                base_color_stage_buf_.Unmap();
+                base_color_pixels_ = nullptr;
+            }
+            base_color_stage_buf_ = {};
+        }
+        if (cam.pass_settings.flags & OutputDepthNormals) {
+            if (!depth_normals_buf_.ready() || depth_normals_buf_.params.w != w || depth_normals_buf_.params.h != h) {
+                temp_depth_normals_buf_ = {};
+                temp_depth_normals_buf_ = Texture2D{"Temp Depth-Normals Image", ctx_.get(), params,
+                                                    ctx_->default_memory_allocs(), ctx_->log()};
+                depth_normals_buf_ = {};
+                depth_normals_buf_ =
+                    Texture2D{"Depth-Normals Image", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
+                if (depth_normals_pixels_) {
+                    depth_normals_stage_buf_.Unmap();
+                    depth_normals_pixels_ = nullptr;
+                }
+                depth_normals_stage_buf_ = {};
+                depth_normals_stage_buf_ =
+                    Buffer{"Depth Normals Stage Buf", ctx_.get(), eBufType::Stage, uint32_t(4 * w * h * sizeof(float))};
+                depth_normals_pixels_ =
+                    (const color_rgba_t *)depth_normals_stage_buf_.Map(BufMapRead, true /* persistent */);
+
+                // Perform initial clear
+                const TransitionInfo img_transitions[] = {{&depth_normals_buf_, eResState::CopyDst}};
+                VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+                TransitionResourceStates(cmd_buf, AllStages, AllStages, img_transitions);
+                static const float rgba[] = {0.0f, 0.0f, 0.0f, 0.0f};
+                ClearColorImage(depth_normals_buf_, rgba, cmd_buf);
+                EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+            }
+        } else {
+            temp_depth_normals_buf_ = {};
+            depth_normals_buf_ = {};
+            if (depth_normals_pixels_) {
+                depth_normals_stage_buf_.Unmap();
+                depth_normals_pixels_ = nullptr;
+            }
+            depth_normals_stage_buf_ = {};
+        }
     }
 
     if (loaded_halton_ == -1 || (region.iteration / HALTON_SEQ_LEN) != (loaded_halton_ / HALTON_SEQ_LEN)) {
@@ -337,8 +502,6 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         temp_stage_buf.FreeImmediate();
         loaded_halton_ = region.iteration;
     }
-
-    const Ray::camera_t &cam = s->cams_[s->current_cam()._index].cam;
 
     scene_data_t sc_data = {&s->env_,
                             s->mesh_instances_.gpu_buf(),
@@ -506,7 +669,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         kernel_ShadePrimaryHits(cmd_buf, cam.pass_settings, s->env_, prim_hits_buf_, prim_rays_buf_, sc_data,
                                 halton_seq_buf_, hi + RAND_DIM_BASE_COUNT, s->tex_atlases_,
                                 s->bindless_tex_data_.descr_set, temp_buf_, secondary_rays_buf_, shadow_rays_buf_,
-                                counters_buf_);
+                                counters_buf_, temp_base_color_buf_, temp_depth_normals_buf_);
         timestamps_[ctx_->backend_frame].primary_shade[1] = ctx_->WriteTimestamp(false);
     }
 
@@ -579,7 +742,8 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         // factor used to compute incremental average
         const float mix_factor = 1.0f / float(region.iteration);
 
-        kernel_MixIncremental(cmd_buf, clean_buf_, temp_buf_, mix_factor, final_buf_);
+        kernel_MixIncremental(cmd_buf, clean_buf_, temp_buf_, mix_factor, temp_base_color_buf_, temp_depth_normals_buf_,
+                              final_buf_, base_color_buf_, depth_normals_buf_);
         std::swap(final_buf_, clean_buf_);
 
         postprocess_params_.clamp = (cam.pass_settings.flags & Clamp) ? 1 : 0;
@@ -623,7 +787,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
 
     ctx_->backend_frame = (ctx_->backend_frame + 1) % MaxFramesInFlight;
 #endif
-    frame_dirty_ = true;
+    frame_dirty_ = base_color_dirty_ = depth_normals_dirty_ = true;
 }
 
 void Ray::Vk::Renderer::UpdateHaltonSequence(const int iteration, std::unique_ptr<float[]> &seq) {
@@ -641,7 +805,7 @@ void Ray::Vk::Renderer::UpdateHaltonSequence(const int iteration, std::unique_pt
     }
 }
 
-const Ray::pixel_color_t *Ray::Vk::Renderer::get_pixels_ref(const bool tonemap) const {
+const Ray::color_rgba_t *Ray::Vk::Renderer::get_pixels_ref(const bool tonemap) const {
     if (frame_dirty_ || pixel_stage_is_tonemapped_ != tonemap) {
         VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
 
@@ -712,4 +876,72 @@ const Ray::pixel_color_t *Ray::Vk::Renderer::get_pixels_ref(const bool tonemap) 
     }
 
     return frame_pixels_;
+}
+
+const Ray::color_rgba_t *Ray::Vk::Renderer::get_aux_pixels_ref(const eAUXBuffer buf) const {
+    bool &dirty_flag = (buf == eAUXBuffer::BaseColor) ? base_color_dirty_ : depth_normals_dirty_;
+
+    const auto &buffer_to_use = (buf == eAUXBuffer::BaseColor) ? base_color_buf_ : depth_normals_buf_;
+    const auto &stage_buffer_to_use = (buf == eAUXBuffer::BaseColor) ? base_color_stage_buf_ : depth_normals_stage_buf_;
+
+    if (dirty_flag) {
+        VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+
+        { // download result
+            DebugMarker _(cmd_buf, "Download Result");
+
+            const TransitionInfo res_transitions[] = {{&buffer_to_use, eResState::CopySrc},
+                                                      {&stage_buffer_to_use, eResState::CopyDst}};
+            TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
+
+            CopyImageToBuffer(buffer_to_use, 0, 0, 0, w_, h_, stage_buffer_to_use, cmd_buf, 0);
+        }
+
+        VkMemoryBarrier mem_barrier = {VK_STRUCTURE_TYPE_MEMORY_BARRIER};
+        mem_barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        mem_barrier.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
+
+        vkCmdPipelineBarrier(cmd_buf, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT, 0, 1, &mem_barrier, 0,
+                             nullptr, 0, nullptr);
+
+#if RUN_IN_LOCKSTEP
+        EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+#else
+        vkEndCommandBuffer(cmd_buf);
+
+        // Wait for all in-flight frames to not leave semaphores in unwaited state
+        SmallVector<VkSemaphore, MaxFramesInFlight> wait_semaphores;
+        SmallVector<VkPipelineStageFlags, MaxFramesInFlight> wait_stages;
+        for (int i = 0; i < MaxFramesInFlight; ++i) {
+            const bool is_set = ctx_->render_finished_semaphore_is_set[i];
+            if (is_set) {
+                wait_semaphores.push_back(ctx_->render_finished_semaphore(i));
+                wait_stages.push_back(VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT);
+            }
+        }
+
+        VkSubmitInfo submit_info = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
+
+        submit_info.waitSemaphoreCount = uint32_t(wait_semaphores.size());
+        submit_info.pWaitSemaphores = wait_semaphores.data();
+        submit_info.pWaitDstStageMask = wait_stages.data();
+
+        submit_info.commandBufferCount = 1;
+        submit_info.pCommandBuffers = &cmd_buf;
+
+        vkQueueSubmit(ctx_->graphics_queue(), 1, &submit_info, VK_NULL_HANDLE);
+        vkQueueWaitIdle(ctx_->graphics_queue());
+
+        vkFreeCommandBuffers(ctx_->device(), ctx_->temp_command_pool(), 1, &cmd_buf);
+#endif
+        // Can be reset after vkQueueWaitIdle
+        for (bool &is_set : ctx_->render_finished_semaphore_is_set) {
+            is_set = false;
+        }
+
+        stage_buffer_to_use.FlushMappedRange(0, stage_buffer_to_use.size());
+        dirty_flag = false;
+    }
+
+    return (const color_rgba_t *)((buf == eAUXBuffer::BaseColor) ? base_color_pixels_ : depth_normals_pixels_);
 }
