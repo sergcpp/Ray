@@ -309,7 +309,7 @@ force_inline long bbox_test_oct(const float o[3], const float inv_d[3], const fl
         const simd_fvec4 fmask = (tmin <= tmax) & (tmin <= t) & (tmax > 0.0f);
         mask <<= 4;
         mask |= simd_cast(fmask).movemask();
-        tmin.copy_to(&out_dist[4 * i], simd_mem_aligned);
+        tmin.store_to(&out_dist[4 * i], simd_mem_aligned);
     }) // NOLINT
 #else
     UNROLLED_FOR(i, 8, { // NOLINT

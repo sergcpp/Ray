@@ -59,8 +59,8 @@ using namespace Ray::NS;
     require(v8[2] == 30.0f);
     require(v8[3] == 14.0f);
 
-    v5.copy_to(&unaligned_array[0]);
-    v1.copy_to(&aligned_array[0], simd_mem_aligned);
+    v5.store_to(&unaligned_array[0]);
+    v1.store_to(&aligned_array[0], simd_mem_aligned);
 
     require(unaligned_array[0] == 1.0f);
     require(unaligned_array[1] == 2.0f);
@@ -223,8 +223,8 @@ using namespace Ray::NS;
     require(v8[2] == 30);
     require(v8[3] == 14);
 
-    v5.copy_to(&unaligned_array[0]);
-    v1.copy_to(&aligned_array[0], simd_mem_aligned);
+    v5.store_to(&unaligned_array[0]);
+    v1.store_to(&aligned_array[0], simd_mem_aligned);
 
     require(unaligned_array[0] == 1);
     require(unaligned_array[1] == 2);

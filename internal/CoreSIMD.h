@@ -954,7 +954,7 @@ force_inline long bbox_test_oct(const float inv_d[3], const float inv_d_o[3], co
         const simd_fvec<S> fmask = (tmin <= tmax) & (tmin <= t) & (tmax > 0.0f);
         res <<= S;
         res |= simd_cast(fmask).movemask();
-        tmin.copy_to(&out_dist[S * i], simd_mem_aligned);
+        tmin.store_to(&out_dist[S * i], simd_mem_aligned);
     })
 
     return res;
@@ -982,7 +982,7 @@ force_inline long bbox_test_oct<16>(const float inv_d[3], const float inv_d_o[3]
     const simd_fvec<8> fmask = (tmin <= tmax) & (tmin <= t) & (tmax > 0.0f);
 
     long res = simd_cast(fmask).movemask();
-    tmin.copy_to(&out_dist[0], simd_mem_aligned);
+    tmin.store_to(&out_dist[0], simd_mem_aligned);
 
     return res;
 }
@@ -2765,22 +2765,22 @@ bool Ray::NS::Traverse_MacroTree_WithStack_ClosestHit(const simd_fvec<S> ro[3], 
     comp_aux_inv_values(ro, rd, inv_d, inv_d_o);
 
     alignas(S * 4) float _ro[3][S], _rd[3][S];
-    ro[0].copy_to(_ro[0], simd_mem_aligned);
-    ro[1].copy_to(_ro[1], simd_mem_aligned);
-    ro[2].copy_to(_ro[2], simd_mem_aligned);
-    rd[0].copy_to(_rd[0], simd_mem_aligned);
-    rd[1].copy_to(_rd[1], simd_mem_aligned);
-    rd[2].copy_to(_rd[2], simd_mem_aligned);
+    ro[0].store_to(_ro[0], simd_mem_aligned);
+    ro[1].store_to(_ro[1], simd_mem_aligned);
+    ro[2].store_to(_ro[2], simd_mem_aligned);
+    rd[0].store_to(_rd[0], simd_mem_aligned);
+    rd[1].store_to(_rd[1], simd_mem_aligned);
+    rd[2].store_to(_rd[2], simd_mem_aligned);
 
     alignas(S * 4) int ray_masks[S], inter_mask[S], inter_prim_index[S], inter_obj_index[S];
     alignas(S * 4) float inter_t[S], inter_u[S], inter_v[S];
-    ray_mask.copy_to(ray_masks, simd_mem_aligned);
-    inter.mask.copy_to(inter_mask, simd_mem_aligned);
-    inter.prim_index.copy_to(inter_prim_index, simd_mem_aligned);
-    inter.obj_index.copy_to(inter_obj_index, simd_mem_aligned);
-    inter.t.copy_to(inter_t, simd_mem_aligned);
-    inter.u.copy_to(inter_u, simd_mem_aligned);
-    inter.v.copy_to(inter_v, simd_mem_aligned);
+    ray_mask.store_to(ray_masks, simd_mem_aligned);
+    inter.mask.store_to(inter_mask, simd_mem_aligned);
+    inter.prim_index.store_to(inter_prim_index, simd_mem_aligned);
+    inter.obj_index.store_to(inter_obj_index, simd_mem_aligned);
+    inter.t.store_to(inter_t, simd_mem_aligned);
+    inter.u.store_to(inter_u, simd_mem_aligned);
+    inter.v.store_to(inter_v, simd_mem_aligned);
 
     for (int ri = 0; ri < S; ri++) {
         if (!ray_masks[ri]) {
@@ -2998,11 +2998,11 @@ Ray::NS::simd_ivec<S> Ray::NS::Traverse_MacroTree_WithStack_AnyHit(
 
     alignas(S * 4) int ray_masks[S], inter_prim_index[S];
     alignas(S * 4) float inter_t[S], inter_u[S], inter_v[S];
-    ray_mask.copy_to(ray_masks, simd_mem_aligned);
-    inter.prim_index.copy_to(inter_prim_index, simd_mem_aligned);
-    inter.t.copy_to(inter_t, simd_mem_aligned);
-    inter.u.copy_to(inter_u, simd_mem_aligned);
-    inter.v.copy_to(inter_v, simd_mem_aligned);
+    ray_mask.store_to(ray_masks, simd_mem_aligned);
+    inter.prim_index.store_to(inter_prim_index, simd_mem_aligned);
+    inter.t.store_to(inter_t, simd_mem_aligned);
+    inter.u.store_to(inter_u, simd_mem_aligned);
+    inter.v.store_to(inter_v, simd_mem_aligned);
 
     for (int ri = 0; ri < S; ri++) {
         if (!ray_masks[ri]) {

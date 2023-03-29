@@ -226,8 +226,8 @@ template <> class simd_vec<float, 4> {
         return temp;
     }
 
-    force_inline void copy_to(float *f) const { vst1q_f32(f, vec_); }
-    force_inline void copy_to(float *f, simd_mem_aligned_tag) const {
+    force_inline void store_to(float *f) const { vst1q_f32(f, vec_); }
+    force_inline void store_to(float *f, simd_mem_aligned_tag) const {
         float *_f = (float *)__builtin_assume_aligned(f, 16);
         vst1q_f32(_f, vec_);
     }
@@ -661,9 +661,9 @@ template <> class simd_vec<int, 4> {
         return ret;
     }
 
-    force_inline void copy_to(int *f) const { vst1q_s32((int32_t *)f, vec_); }
+    force_inline void store_to(int *f) const { vst1q_s32((int32_t *)f, vec_); }
 
-    force_inline void copy_to(int *f, simd_mem_aligned_tag) const {
+    force_inline void store_to(int *f, simd_mem_aligned_tag) const {
         const int *_f = (const int *)__builtin_assume_aligned(f, 16);
         vst1q_s32((int32_t *)_f, vec_);
     }
