@@ -765,6 +765,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         std::swap(secondary_rays_buf_, prim_rays_buf_);
     }
 #endif
+
     { // prepare result
         DebugMarker _(cmd_buf, "Prepare Result");
 
@@ -777,11 +778,6 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         kernel_MixIncremental(cmd_buf, clean_buf, temp_buf_, main_mix_factor, aux_mix_factor, temp_base_color_buf_,
                               temp_depth_normals_buf_, final_buf_, base_color_buf_, depth_normals_buf_);
         std::swap(final_buf_, clean_buf);
-
-        postprocess_params_.clamp = (cam.pass_settings.flags & Clamp) ? 1 : 0;
-        postprocess_params_.srgb = (cam.dtype == SRGB) ? 1 : 0;
-        postprocess_params_.exposure = cam.exposure;
-        postprocess_params_.gamma = (1.0f / cam.gamma);
     }
 
     { // output final buffer, prepare variance
@@ -793,9 +789,13 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         const float p1_weight = float(p1_samples) / float(region.iteration);
         const float p2_weight = float(p2_samples) / float(region.iteration);
 
-        kernel_Postprocess(cmd_buf, dual_buf_[0], p1_weight, dual_buf_[1], p2_weight, postprocess_params_.exposure,
-                           postprocess_params_.gamma, postprocess_params_.clamp, postprocess_params_.srgb, final_buf_,
-                           raw_final_buf_, temp_buf_);
+        const bool clamp = (cam.pass_settings.flags & Clamp) != 0;
+        const bool srgb = (cam.dtype == SRGB);
+        const float exposure = std::pow(2.0f, cam.exposure);
+        const float inv_gamma = (1.0f / cam.gamma);
+
+        kernel_Postprocess(cmd_buf, dual_buf_[0], p1_weight, dual_buf_[1], p2_weight, exposure, inv_gamma, clamp, srgb,
+                           final_buf_, raw_final_buf_, temp_buf_);
     }
 
 #if RUN_IN_LOCKSTEP

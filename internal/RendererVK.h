@@ -82,11 +82,6 @@ class Renderer : public RendererBase {
     mutable bool pixel_stage_is_tonemapped_ = false;
     mutable bool frame_dirty_ = true, base_color_dirty_ = true, depth_normals_dirty_ = true;
 
-    struct {
-        int clamp, srgb;
-        float exposure, gamma;
-    } postprocess_params_ = {};
-
     const color_rgba_t *frame_pixels_ = nullptr, *base_color_pixels_ = nullptr, *depth_normals_pixels_ = nullptr;
     std::vector<shl1_data_t> sh_data_host_;
 
@@ -138,8 +133,8 @@ class Renderer : public RendererBase {
                                const Texture2D &temp_depth_normals, const Texture2D &out_img,
                                const Texture2D &out_base_color, const Texture2D &out_depth_normals);
     void kernel_Postprocess(VkCommandBuffer cmd_buf, const Texture2D &img0_buf, float img0_weight,
-                            const Texture2D &img1_buf, float img1_weight, float exposure, float inv_gamma, int clamp,
-                            int srgb, const Texture2D &out_pixels, const Texture2D &out_raw_pixels,
+                            const Texture2D &img1_buf, float img1_weight, float exposure, float inv_gamma, bool clamp,
+                            bool srgb, const Texture2D &out_pixels, const Texture2D &out_raw_pixels,
                             const Texture2D &out_variance) const;
     void kernel_FilterVariance(VkCommandBuffer cmd_buf, const Texture2D &img_buf, const Texture2D &out_variance);
     void kernel_NLMFilter(VkCommandBuffer cmd_buf, const Texture2D &img_buf, const Texture2D &var_buf, float alpha,
