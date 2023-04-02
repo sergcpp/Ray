@@ -14,7 +14,8 @@ layout(binding = VARIANCE_IMG_SLOT) uniform sampler2D g_variance_img;
 layout(binding = OUT_IMG_SLOT, rgba32f) uniform writeonly image2D g_out_img;
 
 #define USE_SHARED_MEMORY 1
-shared vec4 g_temp_color[16][16], g_temp_variance[16][16];
+shared uint g_temp_color0[16][16], g_temp_color1[16][16];
+shared uint g_temp_variance0[16][16], g_temp_variance1[16][16];
 
 const int WINDOW_SIZE = 7;
 const int NEIGHBORHOOD_SIZE = 3;
@@ -33,15 +34,31 @@ void main() {
     //
     // Load color and variance into shared memory (16x16 region)
     //
-    g_temp_color[0 + li.y][0 + li.x] = textureLodOffset(g_in_img, tex_coord, 0.0, ivec2(-4, -4));
-    g_temp_color[0 + li.y][8 + li.x] = textureLodOffset(g_in_img, tex_coord, 0.0, ivec2(+4, -4));
-    g_temp_color[8 + li.y][0 + li.x] = textureLodOffset(g_in_img, tex_coord, 0.0, ivec2(-4, +4));
-    g_temp_color[8 + li.y][8 + li.x] = textureLodOffset(g_in_img, tex_coord, 0.0, ivec2(+4, +4));
+    vec4 c00 = textureLodOffset(g_in_img, tex_coord, 0.0, ivec2(-4, -4));
+    g_temp_color0[0 + li.y][0 + li.x] = packHalf2x16(c00.xy);
+    g_temp_color1[0 + li.y][0 + li.x] = packHalf2x16(c00.zw);
+    vec4 c01 = textureLodOffset(g_in_img, tex_coord, 0.0, ivec2(+4, -4));
+    g_temp_color0[0 + li.y][8 + li.x] = packHalf2x16(c01.xy);
+    g_temp_color1[0 + li.y][8 + li.x] = packHalf2x16(c01.zw);
+    vec4 c10 = textureLodOffset(g_in_img, tex_coord, 0.0, ivec2(-4, +4));
+    g_temp_color0[8 + li.y][0 + li.x] = packHalf2x16(c10.xy);
+    g_temp_color1[8 + li.y][0 + li.x] = packHalf2x16(c10.zw);
+    vec4 c11 = textureLodOffset(g_in_img, tex_coord, 0.0, ivec2(+4, +4));
+    g_temp_color0[8 + li.y][8 + li.x] = packHalf2x16(c11.xy);
+    g_temp_color1[8 + li.y][8 + li.x] = packHalf2x16(c11.zw);
 
-    g_temp_variance[0 + li.y][0 + li.x] = textureLodOffset(g_variance_img, tex_coord, 0.0, ivec2(-4, -4));
-    g_temp_variance[0 + li.y][8 + li.x] = textureLodOffset(g_variance_img, tex_coord, 0.0, ivec2(+4, -4));
-    g_temp_variance[8 + li.y][0 + li.x] = textureLodOffset(g_variance_img, tex_coord, 0.0, ivec2(-4, +4));
-    g_temp_variance[8 + li.y][8 + li.x] = textureLodOffset(g_variance_img, tex_coord, 0.0, ivec2(+4, +4));
+    vec4 v00 = textureLodOffset(g_variance_img, tex_coord, 0.0, ivec2(-4, -4));
+    g_temp_variance0[0 + li.y][0 + li.x] = packHalf2x16(v00.xy);
+    g_temp_variance1[0 + li.y][0 + li.x] = packHalf2x16(v00.zw);
+    vec4 v01 = textureLodOffset(g_variance_img, tex_coord, 0.0, ivec2(+4, -4));
+    g_temp_variance0[0 + li.y][8 + li.x] = packHalf2x16(v01.xy);
+    g_temp_variance1[0 + li.y][8 + li.x] = packHalf2x16(v01.zw);
+    vec4 v10 = textureLodOffset(g_variance_img, tex_coord, 0.0, ivec2(-4, +4));
+    g_temp_variance0[8 + li.y][0 + li.x] = packHalf2x16(v10.xy);
+    g_temp_variance1[8 + li.y][0 + li.x] = packHalf2x16(v10.zw);
+    vec4 v11 = textureLodOffset(g_variance_img, tex_coord, 0.0, ivec2(+4, +4));
+    g_temp_variance0[8 + li.y][8 + li.x] = packHalf2x16(v11.xy);
+    g_temp_variance1[8 + li.y][8 + li.x] = packHalf2x16(v11.zw);
 
     groupMemoryBarrier(); barrier();
 
@@ -58,11 +75,15 @@ void main() {
 
             [[unroll]] for (int q = -NeighborRadius; q <= NeighborRadius; ++q) {
                 [[unroll]] for (int p = -NeighborRadius; p <= NeighborRadius; ++p) {
-                    vec4 ipx = g_temp_color[li.y + 4 + q][li.x + 4 + p];
-                    vec4 jpx = g_temp_color[li.y + 4 + k + q][li.x + 4 + l + p];
+                    vec4 ipx = vec4(unpackHalf2x16(g_temp_color0[li.y + 4 + q][li.x + 4 + p]),
+                                    unpackHalf2x16(g_temp_color1[li.y + 4 + q][li.x + 4 + p]));
+                    vec4 jpx = vec4(unpackHalf2x16(g_temp_color0[li.y + 4 + k + q][li.x + 4 + l + p]),
+                                    unpackHalf2x16(g_temp_color1[li.y + 4 + k + q][li.x + 4 + l + p]));
 
-                    vec4 ivar = g_temp_variance[li.y + 4 + q][li.x + 4 + p];
-                    vec4 jvar = g_temp_variance[li.y + 4 + k + q][li.x + 4 + l + p];
+                    vec4 ivar = vec4(unpackHalf2x16(g_temp_variance0[li.y + 4 + q][li.x + 4 + p]),
+                                     unpackHalf2x16(g_temp_variance1[li.y + 4 + q][li.x + 4 + p]));
+                    vec4 jvar = vec4(unpackHalf2x16(g_temp_variance0[li.y + 4 + k + q][li.x + 4 + l + p]),
+                                     unpackHalf2x16(g_temp_variance1[li.y + 4 + k + q][li.x + 4 + l + p]));
                     vec4 min_var = min(ivar, jvar);
 
                     distance += ((ipx - jpx) * (ipx - jpx) - g_params.alpha * (ivar + min_var)) /
@@ -75,7 +96,8 @@ void main() {
 
             float weight = exp(-max(0.0, patch_distance));
 
-            sum_output += g_temp_color[li.y + 4 + k][li.x + 4 + l] * weight;
+            sum_output += vec4(unpackHalf2x16(g_temp_color0[li.y + 4 + k][li.x + 4 + l]),
+                               unpackHalf2x16(g_temp_color1[li.y + 4 + k][li.x + 4 + l])) * weight;
             sum_weight += weight;
         }
     }
