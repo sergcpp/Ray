@@ -386,11 +386,11 @@ void Ray::Vk::Renderer::Resize(const int w, const int h) {
 void Ray::Vk::Renderer::Clear(const color_rgba_t &c) {
     VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
 
-    const TransitionInfo img_transitions[] = {{&dual_buf_[0], eResState::CopyDst},
-                                              {&dual_buf_[1], eResState::CopyDst},
-                                              {&final_buf_, eResState::CopyDst},
-                                              {&base_color_buf_, eResState::CopyDst},
-                                              {&depth_normals_buf_, eResState::CopyDst}};
+    const TransitionInfo img_transitions[] = {
+        {&dual_buf_[0], eResState::CopyDst},        {&dual_buf_[1], eResState::CopyDst},
+        {&final_buf_, eResState::CopyDst},          {&raw_final_buf_, eResState::CopyDst},
+        {&filtered_final_buf_, eResState::CopyDst}, {&base_color_buf_, eResState::CopyDst},
+        {&depth_normals_buf_, eResState::CopyDst}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, img_transitions);
 
     ClearColorImage(dual_buf_[0], c.v, cmd_buf);
