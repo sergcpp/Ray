@@ -445,11 +445,11 @@ void Ray::Vk::Renderer::kernel_MixIncremental(VkCommandBuffer cmd_buf, const Tex
     SmallVector<Binding, 16> bindings = {{eBindTarget::Image, MixIncremental::IN_IMG1_SLOT, fbuf1},
                                          {eBindTarget::Image, MixIncremental::IN_IMG2_SLOT, fbuf2},
                                          {eBindTarget::Image, MixIncremental::OUT_IMG_SLOT, out_img}};
-    if (temp_base_color.ready()) {
+    if (out_base_color.ready()) {
         bindings.emplace_back(eBindTarget::Image, MixIncremental::IN_TEMP_BASE_COLOR_SLOT, temp_base_color);
         bindings.emplace_back(eBindTarget::Image, MixIncremental::OUT_BASE_COLOR_IMG_SLOT, out_base_color);
     }
-    if (temp_depth_normals.ready()) {
+    if (out_depth_normals.ready()) {
         bindings.emplace_back(eBindTarget::Image, MixIncremental::IN_TEMP_DEPTH_NORMALS_SLOT, temp_depth_normals);
         bindings.emplace_back(eBindTarget::Image, MixIncremental::OUT_DEPTH_NORMALS_IMG_SLOT, out_depth_normals);
     }

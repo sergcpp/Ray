@@ -352,14 +352,12 @@ void Ray::Vk::Renderer::Resize(const int w, const int h) {
     params.usage = eTexUsageBits::Sampled | eTexUsageBits::Storage | eTexUsageBits::Transfer;
     params.sampling.wrap = eTexWrap::ClampToEdge;
 
-    temp_buf_ = Texture2D{"Temp Image", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
+    temp_buf0_ = Texture2D{"Temp Image 0", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
+    temp_buf1_ = Texture2D{"Temp Image 1", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
     dual_buf_[0] = Texture2D{"Dual Image [0]", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
     dual_buf_[1] = Texture2D{"Dual Image [1]", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
     final_buf_ = Texture2D{"Final Image", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
     raw_final_buf_ = Texture2D{"Raw Final Image", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
-
-    filtered_variance_buf_ =
-        Texture2D{"Filter Variance Image", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
     filtered_final_buf_ = Texture2D{"Filtered Image", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
 
     if (frame_pixels_) {
@@ -439,10 +437,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         params.usage = eTexUsageBits::Storage | eTexUsageBits::Transfer;
 
         if (cam.pass_settings.flags & OutputBaseColor) {
-            if (!base_color_buf_.ready() || temp_base_color_buf_.params.w != w || temp_base_color_buf_.params.h != h) {
-                temp_base_color_buf_ = {};
-                temp_base_color_buf_ =
-                    Texture2D{"Temp Base Color Image", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
+            if (!base_color_buf_.ready() || base_color_buf_.params.w != w || base_color_buf_.params.h != h) {
                 base_color_buf_ = {};
                 base_color_buf_ =
                     Texture2D{"Base Color Image", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
@@ -464,7 +459,6 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
                 EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
             }
         } else {
-            temp_base_color_buf_ = {};
             base_color_buf_ = {};
             if (base_color_pixels_) {
                 base_color_stage_buf_.Unmap();
@@ -692,13 +686,15 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         timestamps_[ctx_->backend_frame].primary_trace[1] = ctx_->WriteTimestamp(false);
     }
 
+    Texture2D &temp_base_color = temp_buf1_;
+
     { // shade primary hits
         DebugMarker _(cmd_buf, "ShadePrimaryHits");
         timestamps_[ctx_->backend_frame].primary_shade[0] = ctx_->WriteTimestamp(true);
         kernel_ShadePrimaryHits(cmd_buf, cam.pass_settings, s->env_, prim_hits_buf_, prim_rays_buf_, sc_data,
                                 halton_seq_buf_, hi + RAND_DIM_BASE_COUNT, s->tex_atlases_,
-                                s->bindless_tex_data_.descr_set, temp_buf_, secondary_rays_buf_, shadow_rays_buf_,
-                                counters_buf_, temp_base_color_buf_, temp_depth_normals_buf_);
+                                s->bindless_tex_data_.descr_set, temp_buf0_, secondary_rays_buf_, shadow_rays_buf_,
+                                counters_buf_, temp_base_color, temp_depth_normals_buf_);
         timestamps_[ctx_->backend_frame].primary_shade[1] = ctx_->WriteTimestamp(false);
     }
 
@@ -712,7 +708,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         timestamps_[ctx_->backend_frame].primary_shadow[0] = ctx_->WriteTimestamp(true);
         kernel_IntersectSceneShadow(cmd_buf, cam.pass_settings, indir_args_buf_, counters_buf_, sc_data,
                                     macro_tree_root, s->tex_atlases_, s->bindless_tex_data_.descr_set, shadow_rays_buf_,
-                                    temp_buf_);
+                                    temp_buf0_);
         timestamps_[ctx_->backend_frame].primary_shadow[1] = ctx_->WriteTimestamp(false);
     }
 
@@ -742,7 +738,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
             timestamps_[ctx_->backend_frame].secondary_shade.push_back(ctx_->WriteTimestamp(true));
             kernel_ShadeSecondaryHits(cmd_buf, cam.pass_settings, s->env_, indir_args_buf_, prim_hits_buf_,
                                       secondary_rays_buf_, sc_data, halton_seq_buf_, hi + RAND_DIM_BASE_COUNT,
-                                      s->tex_atlases_, s->bindless_tex_data_.descr_set, temp_buf_, prim_rays_buf_,
+                                      s->tex_atlases_, s->bindless_tex_data_.descr_set, temp_buf0_, prim_rays_buf_,
                                       shadow_rays_buf_, counters_buf_);
             timestamps_[ctx_->backend_frame].secondary_shade.push_back(ctx_->WriteTimestamp(false));
         }
@@ -757,11 +753,10 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
             timestamps_[ctx_->backend_frame].secondary_shadow.push_back(ctx_->WriteTimestamp(true));
             kernel_IntersectSceneShadow(cmd_buf, cam.pass_settings, indir_args_buf_, counters_buf_, sc_data,
                                         macro_tree_root, s->tex_atlases_, s->bindless_tex_data_.descr_set,
-                                        shadow_rays_buf_, temp_buf_);
+                                        shadow_rays_buf_, temp_buf0_);
             timestamps_[ctx_->backend_frame].secondary_shadow.push_back(ctx_->WriteTimestamp(false));
         }
 
-        // std::swap(final_buf_, temp_buf_);
         std::swap(secondary_rays_buf_, prim_rays_buf_);
     }
 #endif
@@ -775,7 +770,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         const float main_mix_factor = 1.0f / float((region.iteration + 1) / 2);
         const float aux_mix_factor = 1.0f / float(region.iteration);
 
-        kernel_MixIncremental(cmd_buf, clean_buf, temp_buf_, main_mix_factor, aux_mix_factor, temp_base_color_buf_,
+        kernel_MixIncremental(cmd_buf, clean_buf, temp_buf0_, main_mix_factor, aux_mix_factor, temp_base_color,
                               temp_depth_normals_buf_, final_buf_, base_color_buf_, depth_normals_buf_);
         std::swap(final_buf_, clean_buf);
     }
@@ -795,7 +790,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         const float inv_gamma = (1.0f / cam.gamma);
 
         kernel_Postprocess(cmd_buf, dual_buf_[0], p1_weight, dual_buf_[1], p2_weight, exposure, inv_gamma, clamp, srgb,
-                           final_buf_, raw_final_buf_, temp_buf_);
+                           final_buf_, raw_final_buf_, temp_buf0_);
     }
 
 #if RUN_IN_LOCKSTEP
@@ -865,14 +860,17 @@ void Ray::Vk::Renderer::DenoiseImage(const RegionContext &region) {
 
     timestamps_[ctx_->backend_frame].denoise[0] = ctx_->WriteTimestamp(true);
 
+    const auto &raw_variance = temp_buf0_;
+    const auto &filtered_variance = temp_buf1_;
+
     { // Filter variance
         DebugMarker _(cmd_buf, "Filter Variance");
-        kernel_FilterVariance(cmd_buf, temp_buf_, filtered_variance_buf_);
+        kernel_FilterVariance(cmd_buf, temp_buf0_, filtered_variance);
     }
 
     { // Apply NLM Filter
         DebugMarker _(cmd_buf, "NLM Filter");
-        kernel_NLMFilter(cmd_buf, final_buf_, filtered_variance_buf_, 1.0f, 0.45f, filtered_final_buf_);
+        kernel_NLMFilter(cmd_buf, final_buf_, filtered_variance, 1.0f, 0.45f, filtered_final_buf_);
     }
 
     timestamps_[ctx_->backend_frame].denoise[1] = ctx_->WriteTimestamp(false);
