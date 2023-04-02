@@ -358,7 +358,6 @@ void Ray::Vk::Renderer::Resize(const int w, const int h) {
     final_buf_ = Texture2D{"Final Image", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
     raw_final_buf_ = Texture2D{"Raw Final Image", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
 
-    variance_buf_ = Texture2D{"Variance Image", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
     filtered_variance_buf_ =
         Texture2D{"Filter Variance Image", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
     filtered_final_buf_ = Texture2D{"Filtered Image", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
@@ -796,7 +795,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
 
         kernel_Postprocess(cmd_buf, dual_buf_[0], p1_weight, dual_buf_[1], p2_weight, postprocess_params_.exposure,
                            postprocess_params_.gamma, postprocess_params_.clamp, postprocess_params_.srgb, final_buf_,
-                           raw_final_buf_, variance_buf_);
+                           raw_final_buf_, temp_buf_);
     }
 
 #if RUN_IN_LOCKSTEP
@@ -868,7 +867,7 @@ void Ray::Vk::Renderer::DenoiseImage(const RegionContext &region) {
 
     { // Filter variance
         DebugMarker _(cmd_buf, "Filter Variance");
-        kernel_FilterVariance(cmd_buf, variance_buf_, filtered_variance_buf_);
+        kernel_FilterVariance(cmd_buf, temp_buf_, filtered_variance_buf_);
     }
 
     { // Apply NLM Filter
