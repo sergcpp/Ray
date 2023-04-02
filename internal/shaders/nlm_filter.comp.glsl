@@ -69,8 +69,8 @@ void main() {
     vec4 sum_output = vec4(0.0);
     float sum_weight = 0.0;
 
-    [[unroll]] for (int k = -WindowRadius; k <= WindowRadius; ++k) {
-        [[unroll]] for (int l = -WindowRadius; l <= WindowRadius; ++l) {
+    for (int k = -WindowRadius; k <= WindowRadius; ++k) {
+        for (int l = -WindowRadius; l <= WindowRadius; ++l) {
             vec4 distance = vec4(0.0);
 
             [[unroll]] for (int q = -NeighborRadius; q <= NeighborRadius; ++q) {
@@ -106,7 +106,7 @@ void main() {
         sum_output /= sum_weight;
     }
 #else
-    if (gl_GlobalInvocationID.x >= g_params.img_size.x || gl_GlobalInvocationID.y >= g_params.img_size.y) {
+    [[dont_flatten]] if (gl_GlobalInvocationID.x >= g_params.img_size.x || gl_GlobalInvocationID.y >= g_params.img_size.y) {
         return;
     }
 
@@ -116,10 +116,10 @@ void main() {
     vec4 sum_output = vec4(0.0);
     float sum_weight = 0.0;
 
-    [[unroll]] for (int k = -WindowRadius; k <= WindowRadius; ++k) {
+    for (int k = -WindowRadius; k <= WindowRadius; ++k) {
         const int jy = iy + k;
 
-        [[unroll]] for (int l = -WindowRadius; l <= WindowRadius; ++l) {
+        for (int l = -WindowRadius; l <= WindowRadius; ++l) {
             const int jx = ix + l;
 
             vec4 distance = vec4(0.0);

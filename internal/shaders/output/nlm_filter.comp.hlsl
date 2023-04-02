@@ -96,11 +96,9 @@ void comp_main()
         float4 sum_output = 0.0f.xxxx;
         float sum_weight = 0.0f;
         int k = -3;
-        [unroll]
         for (; k <= 3; k++)
         {
             int l = -3;
-            [unroll]
             for (; l <= 3; l++)
             {
                 float4 _distance = 0.0f.xxxx;
