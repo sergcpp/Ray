@@ -1,5 +1,7 @@
 #include "test_scene.h"
 
+#include <cstring>
+
 #include "test_common.h"
 
 #include "../RendererFactory.h"
