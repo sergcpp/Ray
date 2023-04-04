@@ -1,5 +1,7 @@
 #include "test_scene.h"
 
+#include <cstring>
+
 #include "test_common.h"
 
 #include "../RendererFactory.h"
@@ -749,7 +751,7 @@ void schedule_render_jobs(Ray::RendererBase &renderer, const Ray::SceneBase *sce
 
         ThreadPool threads(std::thread::hardware_concurrency());
 
-        auto render_job = [&](int j, int portion) {
+        auto render_job = [&](const int j, const int portion) {
 #if defined(_WIN32)
             if (g_catch_flt_exceptions) {
                 _controlfp(_EM_INEXACT | _EM_UNDERFLOW | _EM_OVERFLOW, _MCW_EM);
@@ -760,6 +762,15 @@ void schedule_render_jobs(Ray::RendererBase &renderer, const Ray::SceneBase *sce
             }
         };
 
+        auto denoise_job = [&](const int j) {
+#if defined(_WIN32)
+            if (g_catch_flt_exceptions) {
+                _controlfp(_EM_INEXACT | _EM_UNDERFLOW | _EM_OVERFLOW, _MCW_EM);
+            }
+#endif
+            renderer.DenoiseImage(region_contexts[j]);
+        };
+
         static const int SamplePortion = 16;
         for (int i = 0; i < samples; i += std::min(SamplePortion, samples - i)) {
             std::vector<std::future<void>> job_res;
@@ -768,6 +779,17 @@ void schedule_render_jobs(Ray::RendererBase &renderer, const Ray::SceneBase *sce
             }
             for (auto &res : job_res) {
                 res.wait();
+            }
+            job_res.clear();
+
+            if (i + std::min(SamplePortion, samples - i) == samples) {
+                for (int j = 0; j < int(region_contexts.size()); ++j) {
+                    job_res.push_back(threads.Enqueue(denoise_job, j));
+                }
+                for (auto &res : job_res) {
+                    res.wait();
+                }
+                job_res.clear();
             }
 
             // report progress percentage
@@ -791,5 +813,6 @@ void schedule_render_jobs(Ray::RendererBase &renderer, const Ray::SceneBase *sce
                 fflush(stdout);
             }
         }
+        renderer.DenoiseImage(region);
     }
 }

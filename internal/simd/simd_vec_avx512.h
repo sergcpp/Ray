@@ -142,8 +142,8 @@ template <> class simd_vec<float, 16> {
         return temp;
     }
 
-    force_inline void copy_to(float *f) const { _mm512_storeu_ps(f, vec_); }
-    force_inline void copy_to(float *f, simd_mem_aligned_tag) const { _mm512_store_ps(f, vec_); }
+    force_inline void store_to(float *f) const { _mm512_storeu_ps(f, vec_); }
+    force_inline void store_to(float *f, simd_mem_aligned_tag) const { _mm512_store_ps(f, vec_); }
 
     force_inline void vectorcall blend_to(const simd_vec<float, 16> mask, const simd_vec<float, 16> v1) {
         validate_mask(mask);
@@ -396,8 +396,8 @@ template <> class simd_vec<int, 16> {
         return ret;
     }
 
-    force_inline void copy_to(int *f) const { _mm512_storeu_si512((__m512i *)f, vec_); }
-    force_inline void copy_to(int *f, simd_mem_aligned_tag) const { _mm512_store_si512((__m512i *)f, vec_); }
+    force_inline void store_to(int *f) const { _mm512_storeu_si512((__m512i *)f, vec_); }
+    force_inline void store_to(int *f, simd_mem_aligned_tag) const { _mm512_store_si512((__m512i *)f, vec_); }
 
     force_inline void vectorcall blend_to(const simd_vec<int, 16> mask, const simd_vec<int, 16> v1) {
         validate_mask(mask);

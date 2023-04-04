@@ -48,18 +48,20 @@ class Renderer : public RendererBase {
     Shader sh_prim_rays_gen_, sh_intersect_scene_primary_, sh_intersect_scene_secondary_, sh_intersect_area_lights_,
         sh_shade_primary_, sh_shade_primary_b_, sh_shade_primary_n_, sh_shade_primary_bn_, sh_shade_secondary_,
         sh_intersect_scene_shadow_, sh_prepare_indir_args_, sh_mix_incremental_, sh_mix_incremental_b_,
-        sh_mix_incremental_n_, sh_mix_incremental_bn_, sh_postprocess_, sh_debug_rt_;
+        sh_mix_incremental_n_, sh_mix_incremental_bn_, sh_postprocess_, sh_filter_variance_, sh_nlm_filter_,
+        sh_debug_rt_;
 
     Program prog_prim_rays_gen_, prog_intersect_scene_primary_, prog_intersect_scene_secondary_,
         prog_intersect_area_lights_, prog_shade_primary_, prog_shade_primary_b_, prog_shade_primary_n_,
         prog_shade_primary_bn_, prog_shade_secondary_, prog_intersect_scene_shadow_, prog_prepare_indir_args_,
         prog_mix_incremental_, prog_mix_incremental_b_, prog_mix_incremental_n_, prog_mix_incremental_bn_,
-        prog_postprocess_, prog_debug_rt_;
+        prog_postprocess_, prog_filter_variance_, prog_nlm_filter_, prog_debug_rt_;
 
     Pipeline pi_prim_rays_gen_, pi_intersect_scene_primary_, pi_intersect_scene_secondary_, pi_intersect_area_lights_,
         pi_shade_primary_, pi_shade_primary_b_, pi_shade_primary_n_, pi_shade_primary_bn_, pi_shade_secondary_,
         pi_intersect_scene_shadow_, pi_prepare_indir_args_, pi_mix_incremental_, pi_mix_incremental_b_,
-        pi_mix_incremental_n_, pi_mix_incremental_bn_, pi_postprocess_, pi_debug_rt_;
+        pi_mix_incremental_n_, pi_mix_incremental_bn_, pi_postprocess_, pi_filter_variance_, pi_nlm_filter_,
+        pi_debug_rt_;
 
     int w_ = 0, h_ = 0;
     bool use_hwrt_ = false, use_bindless_ = false, use_tex_compression_ = false;
@@ -67,9 +69,11 @@ class Renderer : public RendererBase {
     std::vector<uint16_t> permutations_;
     int loaded_halton_;
 
-    Texture2D temp_buf_, clean_buf_, final_buf_;
-    Texture2D temp_base_color_buf_, base_color_buf_;
+    // TODO: Optimize these!
+    Texture2D temp_buf0_, dual_buf_[2], final_buf_, raw_final_buf_;
+    Texture2D temp_buf1_, base_color_buf_;
     Texture2D temp_depth_normals_buf_, depth_normals_buf_;
+    Texture2D filtered_final_buf_;
 
     Buffer halton_seq_buf_, prim_rays_buf_, secondary_rays_buf_, shadow_rays_buf_, prim_hits_buf_;
     Buffer counters_buf_, indir_args_buf_;
@@ -77,11 +81,6 @@ class Renderer : public RendererBase {
     Buffer pixel_stage_buf_, base_color_stage_buf_, depth_normals_stage_buf_;
     mutable bool pixel_stage_is_tonemapped_ = false;
     mutable bool frame_dirty_ = true, base_color_dirty_ = true, depth_normals_dirty_ = true;
-
-    struct {
-        int clamp, srgb;
-        float exposure, gamma;
-    } postprocess_params_ = {};
 
     const color_rgba_t *frame_pixels_ = nullptr, *base_color_pixels_ = nullptr, *depth_normals_pixels_ = nullptr;
     std::vector<shl1_data_t> sh_data_host_;
@@ -94,6 +93,7 @@ class Renderer : public RendererBase {
         SmallVector<int, MAX_BOUNCES * 2> secondary_trace;
         SmallVector<int, MAX_BOUNCES * 2> secondary_shade;
         SmallVector<int, MAX_BOUNCES * 2> secondary_shadow;
+        int denoise[2];
     } timestamps_[MaxFramesInFlight] = {};
 
     stats_t stats_ = {0};
@@ -128,18 +128,23 @@ class Renderer : public RendererBase {
                                    const Texture2D &out_img, const Buffer &out_rays, const Buffer &out_sh_rays,
                                    const Buffer &inout_counters);
     void kernel_PrepareIndirArgs(VkCommandBuffer cmd_buf, const Buffer &inout_counters, const Buffer &out_indir_args);
-    void kernel_MixIncremental(VkCommandBuffer cmd_buf, const Texture2D &fbuf1, const Texture2D &fbuf2, float k,
-                               const Texture2D &temp_base_color, const Texture2D &temp_depth_normals,
-                               const Texture2D &out_img, const Texture2D &out_base_color,
-                               const Texture2D &out_depth_normals);
-    void kernel_Postprocess(VkCommandBuffer cmd_buf, const Texture2D &frame_buf, float exposure, float inv_gamma,
-                            int clamp, int srgb, const Texture2D &out_pixels) const;
+    void kernel_MixIncremental(VkCommandBuffer cmd_buf, const Texture2D &fbuf1, const Texture2D &fbuf2,
+                               float main_mix_factor, float aux_mix_factor, const Texture2D &temp_base_color,
+                               const Texture2D &temp_depth_normals, const Texture2D &out_img,
+                               const Texture2D &out_base_color, const Texture2D &out_depth_normals);
+    void kernel_Postprocess(VkCommandBuffer cmd_buf, const Texture2D &img0_buf, float img0_weight,
+                            const Texture2D &img1_buf, float img1_weight, float exposure, float inv_gamma, bool clamp,
+                            bool srgb, const Texture2D &out_pixels, const Texture2D &out_raw_pixels,
+                            const Texture2D &out_variance) const;
+    void kernel_FilterVariance(VkCommandBuffer cmd_buf, const Texture2D &img_buf, const Texture2D &out_variance);
+    void kernel_NLMFilter(VkCommandBuffer cmd_buf, const Texture2D &img_buf, const Texture2D &var_buf, float alpha,
+                          float damping, const Texture2D &out_img);
     void kernel_DebugRT(VkCommandBuffer cmd_buf, const scene_data_t &sc_data, uint32_t node_index, const Buffer &rays,
                         const Texture2D &out_pixels);
 
     void UpdateHaltonSequence(int iteration, std::unique_ptr<float[]> &seq);
 
-    const color_rgba_t *get_pixels_ref(bool tonemap) const;
+    const color_rgba_t *get_pixels_ref(bool tonemap, bool denoised) const;
 
   public:
     Renderer(const settings_t &s, ILog *log);
@@ -155,10 +160,10 @@ class Renderer : public RendererBase {
 
     std::pair<int, int> size() const override { return std::make_pair(w_, h_); }
 
-    // NOTE: currently these can not be used simultaneously!
-    const color_rgba_t *get_pixels_ref() const override { return get_pixels_ref(true); }
-    const color_rgba_t *get_raw_pixels_ref() const override { return get_pixels_ref(false); }
+    const color_rgba_t *get_pixels_ref() const override { return get_pixels_ref(true, false); }
+    const color_rgba_t *get_raw_pixels_ref() const override { return get_pixels_ref(false, false); }
     const color_rgba_t *get_aux_pixels_ref(eAUXBuffer buf) const override;
+    const color_rgba_t *get_denoised_pixels_ref() const override { return get_pixels_ref(true, true); }
 
     const shl1_data_t *get_sh_data_ref() const override { return &sh_data_host_[0]; }
 
@@ -167,6 +172,7 @@ class Renderer : public RendererBase {
 
     SceneBase *CreateScene() override;
     void RenderScene(const SceneBase *scene, RegionContext &region) override;
+    void DenoiseImage(const RegionContext &region) override;
 
     void GetStats(stats_t &st) override { st = stats_; }
     void ResetStats() override { stats_ = {0}; }

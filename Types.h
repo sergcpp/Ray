@@ -23,7 +23,7 @@ using color_rgb_t = color_t<float, 3>;
 using color_rg_t = color_t<float, 2>;
 using color_r_t = color_t<float, 1>;
 
-enum eAUXBuffer : uint32_t { SHL1 = (1u << 0), BaseColor = (1u << 1), DepthNormals = (1u << 2) };
+enum eAUXBuffer : uint32_t { SHL1 = 0, BaseColor = 1, DepthNormals = 2 };
 
 struct shl1_data_t {
     float coeff_r[4], coeff_g[4], coeff_b[4];

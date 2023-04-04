@@ -1,5 +1,7 @@
 #include "test_common.h"
 
+#include <cstring>
+
 #include <regex>
 
 #include "../RendererFactory.h"

@@ -7,7 +7,8 @@ INTERFACE_START(MixIncremental)
 
 struct Params {
     UVEC2_TYPE img_size;
-    float k;
+    float main_mix_factor;
+    float aux_mix_factor;
 };
 
 const int LOCAL_GROUP_SIZE_X = 8;

@@ -436,9 +436,9 @@ template <typename T, int S> class simd_vec {
         return temp;
     }
 
-    force_inline void copy_to(T *f) const { memcpy(f, &comp_[0], S * sizeof(T)); }
+    force_inline void store_to(T *f) const { memcpy(f, &comp_[0], S * sizeof(T)); }
 
-    force_inline void copy_to(T *_f, simd_mem_aligned_tag) const {
+    force_inline void store_to(T *_f, simd_mem_aligned_tag) const {
         auto *f = (T *)assume_aligned(_f, sizeof(T));
         memcpy(f, &comp_[0], S * sizeof(T));
     }

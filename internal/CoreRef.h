@@ -136,7 +136,7 @@ force_inline int total_depth(const shadow_ray_t &r) {
 }
 
 // Generation of rays
-void GeneratePrimaryRays(int iteration, const camera_t &cam, const rect_t &r, int w, int h, const float *random_seq,
+void GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, int h, const float *random_seq,
                          aligned_vector<ray_data_t> &out_rays);
 void SampleMeshInTextureSpace(int iteration, int obj_index, int uv_layer, const mesh_t &mesh, const transform_t &tr,
                               const uint32_t *vtx_indices, const vertex_t *vertices, const rect_t &r, int w, int h,
@@ -353,5 +353,11 @@ Ray::color_rgba_t ShadeSurface(const pass_settings_t &ps, const hit_data_t &inte
                                const TexStorageBase *const textures[], ray_data_t *out_secondary_rays,
                                int *out_secondary_rays_count, shadow_ray_t *out_shadow_rays, int *out_shadow_rays_count,
                                color_rgba_t *out_base_color, color_rgba_t *out_depth_normal);
+
+// Denoise
+template <int WINDOW_SIZE = 7, int NEIGHBORHOOD_SIZE = 3>
+void NLMFilter(const color_rgba_t input[], const rect_t &rect, int input_stride, float alpha, float damping,
+               const color_rgba_t variance[], const rect_t &output_rect, int output_stride, color_rgba_t output[]);
+
 } // namespace Ref
 } // namespace Ray

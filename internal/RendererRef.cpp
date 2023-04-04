@@ -8,16 +8,15 @@
 #include "SceneRef.h"
 #include "UniformIntDistribution.h"
 
-#define DEBUG_ATLAS 0
-
 namespace Ray {
 thread_local Ray::Ref::PassData g_per_thread_pass_data;
 }
 
-Ray::Ref::Renderer::Renderer(const settings_t &s, ILog *log)
-    : log_(log), use_wide_bvh_(s.use_wide_bvh), clean_buf_(s.w, s.h), final_buf_(s.w, s.h), temp_buf_(s.w, s.h) {
+Ray::Ref::Renderer::Renderer(const settings_t &s, ILog *log) : log_(log), use_wide_bvh_(s.use_wide_bvh) {
     auto rand_func = std::bind(UniformIntDistribution<uint32_t>(), std::mt19937(0));
     permutations_ = Ray::ComputeRadicalInversePermutations(g_primes, PrimesCount, rand_func);
+
+    Resize(s.w, s.h);
 }
 
 Ray::SceneBase *Ray::Ref::Renderer::CreateScene() { return new Ref::Scene(log_, use_wide_bvh_); }
@@ -30,7 +29,7 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
 
     const camera_t &cam = s->cams_[s->current_cam()._index].cam;
 
-    std::shared_lock<std::shared_timed_mutex> lock(s->mtx_);
+    std::shared_lock<std::shared_timed_mutex> scene_lock(s->mtx_);
 
     const scene_data_t sc_data = {s->env_,
                                   s->mesh_instances_.empty() ? nullptr : &s->mesh_instances_[0],
@@ -92,12 +91,7 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
         UNROLLED_FOR(i, 3, { cell_size[i] = (root_max[i] - root_min[i]) / 255; })
     }
 
-    const int w = final_buf_.w(), h = final_buf_.h();
-
-    rect_t rect = region.rect();
-    if (rect.w == 0 || rect.h == 0) {
-        rect = {0, 0, w, h};
-    }
+    const rect_t &rect = region.rect();
 
     region.iteration++;
     if (!region.halton_seq || region.iteration % HALTON_SEQ_LEN == 0) {
@@ -107,23 +101,20 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
     PassData &p = g_per_thread_pass_data;
 
     // allocate aux data on demand
-    if (cam.pass_settings.flags & (OutputSH | OutputBaseColor | OutputDepthNormals)) {
-        uint32_t aux_bufs = 0;
-        if (cam.pass_settings.flags & OutputSH) {
-            aux_bufs |= eAUXBuffer::SHL1;
-        }
-        if (cam.pass_settings.flags & OutputBaseColor) {
-            aux_bufs |= eAUXBuffer::BaseColor;
-        }
-        if (cam.pass_settings.flags & OutputDepthNormals) {
-            aux_bufs |= eAUXBuffer::DepthNormals;
-        }
-
+    if (cam.pass_settings.flags & (OutputBaseColor | OutputDepthNormals)) {
         // TODO: Skip locking here
         std::lock_guard<std::mutex> _(mtx_);
 
-        temp_buf_.Resize(w, h, aux_bufs);
-        clean_buf_.Resize(w, h, aux_bufs);
+        if (cam.pass_settings.flags & OutputBaseColor) {
+            base_color_buf_.resize(w_ * h_);
+        } else if (!base_color_buf_.empty()) {
+            base_color_buf_ = {};
+        }
+        if (cam.pass_settings.flags & OutputDepthNormals) {
+            depth_normals_buf_.resize(w_ * h_);
+        } else if (!depth_normals_buf_.empty()) {
+            depth_normals_buf_ = {};
+        }
     }
 
     using namespace std::chrono;
@@ -134,7 +125,7 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
     const uint32_t hi = (region.iteration & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT;
 
     if (cam.type != Geo) {
-        GeneratePrimaryRays(region.iteration, cam, rect, w, h, &region.halton_seq[hi], p.primary_rays);
+        GeneratePrimaryRays(cam, rect, w_, h_, &region.halton_seq[hi], p.primary_rays);
 
         time_after_ray_gen = high_resolution_clock::now();
 
@@ -157,11 +148,14 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
     } else {
         const mesh_instance_t &mi = sc_data.mesh_instances[cam.mi_index];
         SampleMeshInTextureSpace(region.iteration, int(cam.mi_index), int(cam.uv_index), sc_data.meshes[mi.mesh_index],
-                                 sc_data.transforms[mi.tr_index], sc_data.vtx_indices, sc_data.vertices, rect, w, h,
+                                 sc_data.transforms[mi.tr_index], sc_data.vtx_indices, sc_data.vertices, rect, w_, h_,
                                  &region.halton_seq[hi], p.primary_rays, p.intersections);
 
         time_after_ray_gen = high_resolution_clock::now();
     }
+
+    // factor used to compute incremental average
+    const float mix_factor = 1.0f / float(region.iteration);
 
     const auto time_after_prim_trace = high_resolution_clock::now();
 
@@ -182,12 +176,16 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
             ShadeSurface(cam.pass_settings, inter, r, &region.halton_seq[hi + RAND_DIM_BASE_COUNT], sc_data,
                          macro_tree_root, s->tex_storages_, &p.secondary_rays[0], &secondary_rays_count,
                          &p.shadow_rays[0], &shadow_rays_count, &base_color, &depth_normal);
-        temp_buf_.SetPixel(x, y, col);
+        temp_buf_[y * w_ + x] = col;
         if (cam.pass_settings.flags & OutputBaseColor) {
-            temp_buf_.SetBaseColor(x, y, base_color);
+            auto old_val = simd_fvec4{base_color_buf_[y * w_ + x].v, simd_mem_aligned};
+            old_val += (simd_fvec4{base_color.v, simd_mem_aligned} - old_val) * mix_factor;
+            old_val.store_to(base_color_buf_[y * w_ + x].v, simd_mem_aligned);
         }
         if (cam.pass_settings.flags & OutputDepthNormals) {
-            temp_buf_.SetDepthNormal(x, y, depth_normal);
+            auto old_val = simd_fvec4{depth_normals_buf_[y * w_ + x].v, simd_mem_aligned};
+            old_val += (simd_fvec4{depth_normal.v, simd_mem_aligned} - old_val) * mix_factor;
+            old_val.store_to(depth_normals_buf_[y * w_ + x].v, simd_mem_aligned);
         }
     }
 
@@ -203,8 +201,9 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
             IntersectScene(sh_r, cam.pass_settings.max_transp_depth, sc_data, macro_tree_root, s->tex_storages_);
         rc *= IntersectAreaLights(sh_r, sc_data.lights, sc_data.blocker_lights, sc_data.transforms);
 
-        const color_rgba_t col = {rc[0], rc[1], rc[2], 0.0f};
-        temp_buf_.AddPixel(x, y, col);
+        auto old_val = simd_fvec4{temp_buf_[y * w_ + x].v, simd_mem_aligned};
+        old_val += rc;
+        old_val.store_to(temp_buf_[y * w_ + x].v, simd_mem_aligned);
     }
 
     const auto time_after_prim_shadow = high_resolution_clock::now();
@@ -217,20 +216,6 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
     p.chunks.resize(secondary_rays_count);
     p.chunks_temp.resize(secondary_rays_count);
     // p.skeleton.resize(secondary_rays_count);
-
-    if (cam.pass_settings.flags & OutputSH) {
-        temp_buf_.ResetSampleData(rect);
-        for (int i = 0; i < secondary_rays_count; i++) {
-            const ray_data_t &r = p.secondary_rays[i];
-
-            const int x = (r.xy >> 16) & 0x0000ffff;
-            const int y = r.xy & 0x0000ffff;
-
-            temp_buf_.SetSampleDir(x, y, r.d[0], r.d[1], r.d[2]);
-            // sample weight for indirect lightmap has all r.c[0..2]'s set to same value
-            temp_buf_.SetSampleWeight(x, y, r.c[0]);
-        }
-    }
 
     for (int bounce = 1; bounce <= cam.pass_settings.max_total_depth && secondary_rays_count; ++bounce) {
         const auto time_secondary_sort_start = high_resolution_clock::now();
@@ -295,7 +280,9 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
                              &p.shadow_rays[0], &shadow_rays_count, nullptr, nullptr);
             col.v[3] = 0.0f;
 
-            temp_buf_.AddPixel(x, y, col);
+            auto old_val = simd_fvec4{temp_buf_[y * w_ + x].v, simd_mem_aligned};
+            old_val += simd_fvec4{col.v};
+            old_val.store_to(temp_buf_[y * w_ + x].v, simd_mem_aligned);
         }
 
         const auto time_secondary_shadow_start = high_resolution_clock::now();
@@ -310,8 +297,9 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
                 IntersectScene(sh_r, cam.pass_settings.max_transp_depth, sc_data, macro_tree_root, s->tex_storages_);
             rc *= IntersectAreaLights(sh_r, sc_data.lights, sc_data.blocker_lights, sc_data.transforms);
 
-            const color_rgba_t col = {rc[0], rc[1], rc[2], 0.0f};
-            temp_buf_.AddPixel(x, y, col);
+            auto old_val = simd_fvec4{temp_buf_[y * w_ + x].v, simd_mem_aligned};
+            old_val += rc;
+            old_val.store_to(temp_buf_[y * w_ + x].v, simd_mem_aligned);
         }
 
         const auto time_secondary_shadow_end = high_resolution_clock::now();
@@ -321,7 +309,7 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
         secondary_shadow_time += duration<double, std::micro>{time_secondary_shadow_end - time_secondary_shadow_start};
     }
 
-    lock.unlock();
+    scene_lock.unlock();
 
     {
         std::lock_guard<std::mutex> _(mtx_);
@@ -340,26 +328,24 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
         stats_.time_secondary_shadow_us += (unsigned long long)secondary_shadow_time.count();
     }
 
-    // factor used to compute incremental average
-    const float mix_factor = 1.0f / float(region.iteration);
+    color_rgba_t *clean_buf = dual_buf_[(region.iteration - 1) % 2].data();
 
-    clean_buf_.MixWith(temp_buf_, rect, mix_factor);
-    if (cam.pass_settings.flags & OutputSH) {
-        temp_buf_.ComputeSHData(rect);
-        clean_buf_.MixWith_SH(temp_buf_, rect, mix_factor);
-    }
-    if (cam.pass_settings.flags & OutputBaseColor) {
-        clean_buf_.MixWith_BaseColor(temp_buf_, rect, mix_factor);
-    }
-    if (cam.pass_settings.flags & OutputDepthNormals) {
-        clean_buf_.MixWith_DepthNormal(temp_buf_, rect, mix_factor);
+    const float half_mix_factor = 1.0f / float((region.iteration + 1) / 2);
+    for (int y = rect.y; y < rect.y + rect.h; ++y) {
+        for (int x = rect.x; x < rect.x + rect.w; ++x) {
+            const simd_fvec4 new_val = {temp_buf_[y * w_ + x].v, simd_mem_aligned};
+
+            simd_fvec4 cur_val = {clean_buf[y * w_ + x].v, simd_mem_aligned};
+            cur_val += (new_val - cur_val) * half_mix_factor;
+            cur_val.store_to(clean_buf[y * w_ + x].v, simd_mem_aligned);
+        }
     }
 
-    auto clamp_and_gamma_correct = [&cam](const color_rgba_t &p) {
-        auto c = simd_fvec4{p.v};
+    const float cam_exposure = std::pow(2.0f, cam.exposure);
 
+    auto clamp_and_gamma_correct = [&cam, cam_exposure](simd_fvec4 c) {
         if (cam.exposure != 0.0f) {
-            c *= std::pow(2.0f, cam.exposure);
+            c *= cam_exposure;
         }
 
         if (cam.dtype == SRGB) {
@@ -379,29 +365,112 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
         if (cam.pass_settings.flags & Clamp) {
             c = clamp(c, 0.0f, 1.0f);
         }
-        return color_rgba_t{c[0], c[1], c[2], c[3]};
+        return c;
     };
 
-    final_buf_.CopyFrom(clean_buf_, rect, clamp_and_gamma_correct);
-
-#if DEBUG_ATLAS
     for (int y = rect.y; y < rect.y + rect.h; ++y) {
-        const float v = float(y) / final_buf_.h();
         for (int x = rect.x; x < rect.x + rect.w; ++x) {
-            const float u = float(x) / final_buf_.w();
+            simd_fvec4 p1 = {dual_buf_[0][y * w_ + x].v, simd_mem_aligned};
+            simd_fvec4 p2 = {dual_buf_[1][y * w_ + x].v, simd_mem_aligned};
 
-            const auto col8 = s->tex_atlas_rgb_.Get(region.iteration % s->tex_atlas_rgb_.page_count(), u, v);
+            const int p1_samples = (region.iteration + 1) / 2;
+            const int p2_samples = (region.iteration) / 2;
 
-            color_rgba_t col;
-            col.v[0] = float(col8.v[0]) / 255.0f;
-            col.v[1] = float(col8.v[1]) / 255.0f;
-            col.v[2] = float(col8.v[2]) / 255.0f;
-            col.v[3] = 1.0f;
+            const float p1_weight = float(p1_samples) / float(region.iteration);
+            const float p2_weight = float(p2_samples) / float(region.iteration);
 
-            final_buf_.SetPixel(x, y, col);
+            const simd_fvec4 untonemapped_res = p1_weight * p1 + p2_weight * p2;
+            untonemapped_res.store_to(raw_final_buf_[y * w_ + x].v, simd_mem_aligned);
+
+            const simd_fvec4 tonemapped_res = clamp_and_gamma_correct(untonemapped_res);
+            tonemapped_res.store_to(final_buf_[y * w_ + x].v, simd_mem_aligned);
+
+            p1 = clamp_and_gamma_correct(p1);
+            p2 = clamp_and_gamma_correct(p2);
+
+            const simd_fvec4 variance = 0.5f * (p1 - p2) * (p1 - p2);
+            variance.store_to(temp_buf_[y * w_ + x].v, simd_mem_aligned);
         }
     }
-#endif
+}
+
+void Ray::Ref::Renderer::DenoiseImage(const RegionContext &region) {
+    using namespace std::chrono;
+    const auto denoise_start = high_resolution_clock::now();
+
+    const rect_t &rect = region.rect();
+
+    // TODO: determine radius precisely!
+    const int EXT_RADIUS = 8;
+    const rect_t rect_ext = {rect.x - EXT_RADIUS, rect.y - EXT_RADIUS, rect.w + 2 * EXT_RADIUS,
+                             rect.h + 2 * EXT_RADIUS};
+
+    PassData &p = g_per_thread_pass_data;
+    p.temp_final_buf.resize(rect_ext.w * rect_ext.h);
+    p.variance_buf.resize(rect_ext.w * rect_ext.h);
+    p.filtered_variance_buf.resize(rect_ext.w * rect_ext.h);
+
+#define FETCH_FINAL_BUF(_x, _y) final_buf_[std::min(std::max(_y, 0), h_ - 1) * w_ + std::min(std::max(_x, 0), w_ - 1)]
+#define FETCH_VARIANCE(_x, _y)                                                                                         \
+    simd_fvec4(temp_buf_[std::min(std::max(_y, 0), h_ - 1) * w_ + std::min(std::max(_x, 0), w_ - 1)].v,                \
+               simd_mem_aligned)
+
+    static const float GaussWeights[] = {0.2270270270f, 0.1945945946f, 0.1216216216f, 0.0540540541f, 0.0162162162f};
+
+    for (int y = 0; y < rect_ext.h; ++y) {
+        const int yy = rect_ext.y + y;
+        for (int x = 0; x < rect_ext.w; ++x) {
+            const int xx = rect_ext.x + x;
+            p.temp_final_buf[y * rect_ext.w + x] = FETCH_FINAL_BUF(xx, yy);
+
+            const simd_fvec4 center_val = FETCH_VARIANCE(xx, yy);
+
+            simd_fvec4 res = center_val * GaussWeights[0];
+            UNROLLED_FOR(i, 4, {
+                res += FETCH_VARIANCE(xx - i + 1, yy) * GaussWeights[i + 1];
+                res += FETCH_VARIANCE(xx + i + 1, yy) * GaussWeights[i + 1];
+            })
+
+            res = max(res, center_val);
+            res.store_to(p.variance_buf[y * rect_ext.w + x].v, simd_mem_aligned);
+        }
+    }
+
+#undef FETCH_VARIANCE
+#undef FETCH_FINAL_BUF
+
+    for (int y = 4; y < rect_ext.h - 4; ++y) {
+        for (int x = 4; x < rect_ext.w - 4; ++x) {
+            const simd_fvec4 center_val = {p.variance_buf[(y + 0) * rect_ext.w + x].v, simd_mem_aligned};
+
+            simd_fvec4 res = center_val * GaussWeights[0];
+            UNROLLED_FOR(i, 4, {
+                res +=
+                    simd_fvec4(p.variance_buf[(y - i + 1) * rect_ext.w + x].v, simd_mem_aligned) * GaussWeights[i + 1];
+                res +=
+                    simd_fvec4(p.variance_buf[(y + i + 1) * rect_ext.w + x].v, simd_mem_aligned) * GaussWeights[i + 1];
+            })
+
+            res = max(res, center_val);
+            res.store_to(p.filtered_variance_buf[y * rect_ext.w + x].v, simd_mem_aligned);
+        }
+    }
+
+    const int NLM_WINDOW_SIZE = 7;
+    const int NLM_NEIGHBORHOOD_SIZE = 3;
+
+    static_assert(EXT_RADIUS >= (NLM_WINDOW_SIZE - 1) / 2 + (NLM_NEIGHBORHOOD_SIZE - 1) / 2, "!");
+
+    NLMFilter<NLM_WINDOW_SIZE, NLM_NEIGHBORHOOD_SIZE>(
+        p.temp_final_buf.data(), rect_t{EXT_RADIUS, EXT_RADIUS, rect.w, rect.h}, rect_ext.w, 1.0f, 0.45f,
+        p.filtered_variance_buf.data(), rect, w_, filtered_final_buf_.data());
+
+    const auto denoise_end = high_resolution_clock::now();
+
+    {
+        std::lock_guard<std::mutex> _(mtx_);
+        stats_.time_denoise_us += (unsigned long long)duration<double, std::micro>{denoise_end - denoise_start}.count();
+    }
 }
 
 void Ray::Ref::Renderer::UpdateHaltonSequence(const int iteration, std::unique_ptr<float[]> &seq) {

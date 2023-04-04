@@ -12,7 +12,7 @@ namespace Ray {
 class ILog;
 struct gpu_device_t;
 namespace Vk {
-static const int MaxFramesInFlight = 3;
+static const int MaxFramesInFlight = 6;
 static const int MaxTimestampQueries = 256;
 
 class DescrMultiPoolAlloc;

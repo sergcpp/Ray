@@ -3,10 +3,12 @@
 #include "Vk/DrawCall.h"
 
 #include "shaders/debug_rt_interface.h"
+#include "shaders/filter_variance_interface.h"
 #include "shaders/intersect_area_lights_interface.h"
 #include "shaders/intersect_scene_interface.h"
 #include "shaders/intersect_scene_shadow_interface.h"
 #include "shaders/mix_incremental_interface.h"
+#include "shaders/nlm_filter_interface.h"
 #include "shaders/postprocess_interface.h"
 #include "shaders/prepare_indir_args_interface.h"
 #include "shaders/primary_ray_gen_interface.h"
@@ -25,8 +27,8 @@ void Ray::Vk::Renderer::kernel_GeneratePrimaryRays(VkCommandBuffer cmd_buf, cons
                                 {eBindTarget::SBuf, PrimaryRayGen::OUT_RAYS_BUF_SLOT, prim_rays_buf_}};
 
     const uint32_t grp_count[3] = {
-        uint32_t((w_ + PrimaryRayGen::LOCAL_GROUP_SIZE_X) / PrimaryRayGen::LOCAL_GROUP_SIZE_X),
-        uint32_t((h_ + PrimaryRayGen::LOCAL_GROUP_SIZE_Y) / PrimaryRayGen::LOCAL_GROUP_SIZE_Y), 1u};
+        uint32_t((w_ + PrimaryRayGen::LOCAL_GROUP_SIZE_X - 1) / PrimaryRayGen::LOCAL_GROUP_SIZE_X),
+        uint32_t((h_ + PrimaryRayGen::LOCAL_GROUP_SIZE_Y - 1) / PrimaryRayGen::LOCAL_GROUP_SIZE_Y), 1u};
 
     PrimaryRayGen::Params uniform_params = {};
     uniform_params.img_size[0] = w_;
@@ -111,8 +113,8 @@ void Ray::Vk::Renderer::kernel_IntersectScenePrimary(VkCommandBuffer cmd_buf, co
     }
 
     const uint32_t grp_count[3] = {
-        uint32_t((w_ + IntersectScene::LOCAL_GROUP_SIZE_X) / IntersectScene::LOCAL_GROUP_SIZE_X),
-        uint32_t((h_ + IntersectScene::LOCAL_GROUP_SIZE_Y) / IntersectScene::LOCAL_GROUP_SIZE_Y), 1u};
+        uint32_t((w_ + IntersectScene::LOCAL_GROUP_SIZE_X - 1) / IntersectScene::LOCAL_GROUP_SIZE_X),
+        uint32_t((h_ + IntersectScene::LOCAL_GROUP_SIZE_Y - 1) / IntersectScene::LOCAL_GROUP_SIZE_Y), 1u};
 
     DispatchCompute(cmd_buf, pi_intersect_scene_primary_, grp_count, bindings, &uniform_params, sizeof(uniform_params),
                     ctx_->default_descr_alloc(), ctx_->log());
@@ -240,8 +242,8 @@ void Ray::Vk::Renderer::kernel_ShadePrimaryHits(VkCommandBuffer cmd_buf, const p
         bindings.emplace_back(eBindTarget::Image, Shade::OUT_DEPTH_NORMALS_IMG_SLOT, out_depth_normals);
     }
 
-    const uint32_t grp_count[3] = {uint32_t((w_ + Shade::LOCAL_GROUP_SIZE_X) / Shade::LOCAL_GROUP_SIZE_X),
-                                   uint32_t((h_ + Shade::LOCAL_GROUP_SIZE_Y) / Shade::LOCAL_GROUP_SIZE_Y), 1u};
+    const uint32_t grp_count[3] = {uint32_t((w_ + Shade::LOCAL_GROUP_SIZE_X - 1) / Shade::LOCAL_GROUP_SIZE_X),
+                                   uint32_t((h_ + Shade::LOCAL_GROUP_SIZE_Y - 1) / Shade::LOCAL_GROUP_SIZE_Y), 1u};
 
     Shade::Params uniform_params = {};
     uniform_params.img_size[0] = w_;
@@ -429,9 +431,10 @@ void Ray::Vk::Renderer::kernel_PrepareIndirArgs(VkCommandBuffer cmd_buf, const B
 }
 
 void Ray::Vk::Renderer::kernel_MixIncremental(VkCommandBuffer cmd_buf, const Texture2D &fbuf1, const Texture2D &fbuf2,
-                                              float k, const Texture2D &temp_base_color,
-                                              const Texture2D &temp_depth_normals, const Texture2D &out_img,
-                                              const Texture2D &out_base_color, const Texture2D &out_depth_normals) {
+                                              const float main_mix_factor, const float aux_mix_factor,
+                                              const Texture2D &temp_base_color, const Texture2D &temp_depth_normals,
+                                              const Texture2D &out_img, const Texture2D &out_base_color,
+                                              const Texture2D &out_depth_normals) {
     const TransitionInfo res_transitions[] = {{&fbuf1, eResState::UnorderedAccess},
                                               {&fbuf2, eResState::UnorderedAccess},
                                               {&out_img, eResState::UnorderedAccess},
@@ -442,11 +445,11 @@ void Ray::Vk::Renderer::kernel_MixIncremental(VkCommandBuffer cmd_buf, const Tex
     SmallVector<Binding, 16> bindings = {{eBindTarget::Image, MixIncremental::IN_IMG1_SLOT, fbuf1},
                                          {eBindTarget::Image, MixIncremental::IN_IMG2_SLOT, fbuf2},
                                          {eBindTarget::Image, MixIncremental::OUT_IMG_SLOT, out_img}};
-    if (temp_base_color.ready()) {
+    if (out_base_color.ready()) {
         bindings.emplace_back(eBindTarget::Image, MixIncremental::IN_TEMP_BASE_COLOR_SLOT, temp_base_color);
         bindings.emplace_back(eBindTarget::Image, MixIncremental::OUT_BASE_COLOR_IMG_SLOT, out_base_color);
     }
-    if (temp_depth_normals.ready()) {
+    if (out_depth_normals.ready()) {
         bindings.emplace_back(eBindTarget::Image, MixIncremental::IN_TEMP_DEPTH_NORMALS_SLOT, temp_depth_normals);
         bindings.emplace_back(eBindTarget::Image, MixIncremental::OUT_DEPTH_NORMALS_IMG_SLOT, out_depth_normals);
     }
@@ -454,13 +457,14 @@ void Ray::Vk::Renderer::kernel_MixIncremental(VkCommandBuffer cmd_buf, const Tex
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
     const uint32_t grp_count[3] = {
-        uint32_t((w_ + MixIncremental::LOCAL_GROUP_SIZE_X) / MixIncremental::LOCAL_GROUP_SIZE_X),
-        uint32_t((h_ + MixIncremental::LOCAL_GROUP_SIZE_Y) / MixIncremental::LOCAL_GROUP_SIZE_Y), 1u};
+        uint32_t((w_ + MixIncremental::LOCAL_GROUP_SIZE_X - 1) / MixIncremental::LOCAL_GROUP_SIZE_X),
+        uint32_t((h_ + MixIncremental::LOCAL_GROUP_SIZE_Y - 1) / MixIncremental::LOCAL_GROUP_SIZE_Y), 1u};
 
     MixIncremental::Params uniform_params = {};
     uniform_params.img_size[0] = w_;
     uniform_params.img_size[1] = h_;
-    uniform_params.k = k;
+    uniform_params.main_mix_factor = main_mix_factor;
+    uniform_params.aux_mix_factor = aux_mix_factor;
 
     Pipeline *pi = &pi_mix_incremental_;
     if (out_base_color.ready()) {
@@ -477,28 +481,84 @@ void Ray::Vk::Renderer::kernel_MixIncremental(VkCommandBuffer cmd_buf, const Tex
                     ctx_->default_descr_alloc(), ctx_->log());
 }
 
-void Ray::Vk::Renderer::kernel_Postprocess(VkCommandBuffer cmd_buf, const Texture2D &frame_buf, const float exposure,
-                                           const float /*inv_gamma*/, const int clamp, const int srgb,
-                                           const Texture2D &out_pixels) const {
-    const TransitionInfo res_transitions[] = {{&frame_buf, eResState::UnorderedAccess},
-                                              {&out_pixels, eResState::UnorderedAccess}};
+void Ray::Vk::Renderer::kernel_Postprocess(VkCommandBuffer cmd_buf, const Texture2D &img0_buf, const float img0_weight,
+                                           const Texture2D &img1_buf, const float img1_weight, const float exposure,
+                                           const float /*inv_gamma*/, const bool clamp, const bool srgb,
+                                           const Texture2D &out_pixels, const Texture2D &out_raw_pixels,
+                                           const Texture2D &out_variance) const {
+    const TransitionInfo res_transitions[] = {{&img0_buf, eResState::UnorderedAccess},
+                                              {&img1_buf, eResState::UnorderedAccess},
+                                              {&out_pixels, eResState::UnorderedAccess},
+                                              {&out_raw_pixels, eResState::UnorderedAccess},
+                                              {&out_variance, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
-    const Binding bindings[] = {{eBindTarget::Image, Postprocess::IN_IMG_SLOT, frame_buf},
-                                {eBindTarget::Image, Postprocess::OUT_IMG_SLOT, out_pixels}};
+    const Binding bindings[] = {{eBindTarget::Image, Postprocess::IN_IMG0_SLOT, img0_buf},
+                                {eBindTarget::Image, Postprocess::IN_IMG1_SLOT, img1_buf},
+                                {eBindTarget::Image, Postprocess::OUT_IMG_SLOT, out_pixels},
+                                {eBindTarget::Image, Postprocess::OUT_RAW_IMG_SLOT, out_raw_pixels},
+                                {eBindTarget::Image, Postprocess::OUT_VARIANCE_IMG_SLOT, out_variance}};
 
-    const uint32_t grp_count[3] = {uint32_t((w_ + Postprocess::LOCAL_GROUP_SIZE_X) / Postprocess::LOCAL_GROUP_SIZE_X),
-                                   uint32_t((h_ + Postprocess::LOCAL_GROUP_SIZE_Y) / Postprocess::LOCAL_GROUP_SIZE_Y),
-                                   1u};
+    const uint32_t grp_count[3] = {
+        uint32_t((w_ + Postprocess::LOCAL_GROUP_SIZE_X - 1) / Postprocess::LOCAL_GROUP_SIZE_X),
+        uint32_t((h_ + Postprocess::LOCAL_GROUP_SIZE_Y - 1) / Postprocess::LOCAL_GROUP_SIZE_Y), 1u};
 
     Postprocess::Params uniform_params = {};
     uniform_params.img_size[0] = w_;
     uniform_params.img_size[1] = h_;
-    uniform_params.srgb = srgb;
-    uniform_params._clamp = clamp;
-    uniform_params.exposure = std::pow(2.0f, exposure);
+    uniform_params.srgb = srgb ? 1 : 0;
+    uniform_params._clamp = clamp ? 1 : 0;
+    uniform_params.exposure = exposure;
+    uniform_params.img0_weight = img0_weight;
+    uniform_params.img1_weight = img1_weight;
 
     DispatchCompute(cmd_buf, pi_postprocess_, grp_count, bindings, &uniform_params, sizeof(uniform_params),
+                    ctx_->default_descr_alloc(), ctx_->log());
+}
+
+void Ray::Vk::Renderer::kernel_FilterVariance(VkCommandBuffer cmd_buf, const Texture2D &img_buf,
+                                              const Texture2D &out_variance) {
+    const TransitionInfo res_transitions[] = {{&img_buf, eResState::ShaderResource},
+                                              {&out_variance, eResState::UnorderedAccess}};
+    TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
+
+    const Binding bindings[] = {{eBindTarget::Tex2D, FilterVariance::IN_IMG_SLOT, img_buf},
+                                {eBindTarget::Image, FilterVariance::OUT_IMG_SLOT, out_variance}};
+
+    const uint32_t grp_count[3] = {
+        uint32_t((w_ + FilterVariance::LOCAL_GROUP_SIZE_X - 1) / Postprocess::LOCAL_GROUP_SIZE_X),
+        uint32_t((h_ + FilterVariance::LOCAL_GROUP_SIZE_Y - 1) / Postprocess::LOCAL_GROUP_SIZE_Y), 1u};
+
+    FilterVariance::Params uniform_params = {};
+    uniform_params.img_size[0] = w_;
+    uniform_params.img_size[1] = h_;
+
+    DispatchCompute(cmd_buf, pi_filter_variance_, grp_count, bindings, &uniform_params, sizeof(uniform_params),
+                    ctx_->default_descr_alloc(), ctx_->log());
+}
+
+void Ray::Vk::Renderer::kernel_NLMFilter(VkCommandBuffer cmd_buf, const Texture2D &img_buf, const Texture2D &var_buf,
+                                         const float alpha, const float damping, const Texture2D &out_img) {
+    const TransitionInfo res_transitions[] = {{&img_buf, eResState::ShaderResource},
+                                              {&var_buf, eResState::ShaderResource},
+                                              {&out_img, eResState::UnorderedAccess}};
+    TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
+
+    const Binding bindings[] = {{eBindTarget::Tex2D, NLMFilter::IN_IMG_SLOT, img_buf},
+                                {eBindTarget::Tex2D, NLMFilter::VARIANCE_IMG_SLOT, var_buf},
+                                {eBindTarget::Image, NLMFilter::OUT_IMG_SLOT, out_img}};
+
+    const uint32_t grp_count[3] = {uint32_t((w_ + NLMFilter::LOCAL_GROUP_SIZE_X - 1) / NLMFilter::LOCAL_GROUP_SIZE_X),
+                                   uint32_t((h_ + NLMFilter::LOCAL_GROUP_SIZE_Y - 1) / NLMFilter::LOCAL_GROUP_SIZE_Y),
+                                   1u};
+
+    NLMFilter::Params uniform_params = {};
+    uniform_params.img_size[0] = w_;
+    uniform_params.img_size[1] = h_;
+    uniform_params.alpha = alpha;
+    uniform_params.damping = damping;
+
+    DispatchCompute(cmd_buf, pi_nlm_filter_, grp_count, bindings, &uniform_params, sizeof(uniform_params),
                     ctx_->default_descr_alloc(), ctx_->log());
 }
 
@@ -519,8 +579,8 @@ void Ray::Vk::Renderer::kernel_DebugRT(VkCommandBuffer cmd_buf, const scene_data
                                 {eBindTarget::SBuf, DebugRT::RAYS_BUF_SLOT, rays},
                                 {eBindTarget::Image, DebugRT::OUT_IMG_SLOT, out_pixels}};
 
-    const uint32_t grp_count[3] = {uint32_t((w_ + DebugRT::LOCAL_GROUP_SIZE_X) / DebugRT::LOCAL_GROUP_SIZE_X),
-                                   uint32_t((h_ + DebugRT::LOCAL_GROUP_SIZE_Y) / DebugRT::LOCAL_GROUP_SIZE_Y), 1u};
+    const uint32_t grp_count[3] = {uint32_t((w_ + DebugRT::LOCAL_GROUP_SIZE_X - 1) / DebugRT::LOCAL_GROUP_SIZE_X),
+                                   uint32_t((h_ + DebugRT::LOCAL_GROUP_SIZE_Y - 1) / DebugRT::LOCAL_GROUP_SIZE_Y), 1u};
 
     DebugRT::Params uniform_params = {};
     uniform_params.img_size[0] = w_;

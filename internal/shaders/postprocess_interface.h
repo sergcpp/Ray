@@ -9,15 +9,18 @@ struct Params {
     UVEC2_TYPE img_size;
     int srgb, _clamp;
     float exposure;
-    float _pad0, _pad1, _pad2;
+    float img0_weight, img1_weight, _pad2;
 };
 
 const int LOCAL_GROUP_SIZE_X = 8;
 const int LOCAL_GROUP_SIZE_Y = 8;
 
-const int IN_IMG_SLOT = 1;
+const int IN_IMG0_SLOT = 3;
+const int IN_IMG1_SLOT = 4;
 
 const int OUT_IMG_SLOT = 0;
+const int OUT_RAW_IMG_SLOT = 1;
+const int OUT_VARIANCE_IMG_SLOT = 2;
 
 INTERFACE_END
 

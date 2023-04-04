@@ -102,6 +102,9 @@ class RendererBase {
     /// Returns pointer to auxiliary image buffers
     virtual const color_rgba_t *get_aux_pixels_ref(eAUXBuffer buf) const = 0;
 
+    /// Returns pointer to denoised image
+    virtual const color_rgba_t *get_denoised_pixels_ref() const = 0;
+
     /// Returns pointer to SH data
     virtual const shl1_data_t *get_sh_data_ref() const = 0;
 
@@ -127,6 +130,11 @@ class RendererBase {
     */
     virtual void RenderScene(const SceneBase *scene, RegionContext &region) = 0;
 
+    /** @brief Denoise image region
+        @param region image region to denoise
+    */
+    virtual void DenoiseImage(const RegionContext &region) = 0;
+
     struct stats_t {
         unsigned long long time_primary_ray_gen_us;
         unsigned long long time_primary_trace_us;
@@ -136,6 +144,7 @@ class RendererBase {
         unsigned long long time_secondary_trace_us;
         unsigned long long time_secondary_shade_us;
         unsigned long long time_secondary_shadow_us;
+        unsigned long long time_denoise_us;
     };
     virtual void GetStats(stats_t &st) = 0;
     virtual void ResetStats() = 0;

@@ -1,7 +1,8 @@
 struct Params
 {
     uint2 img_size;
-    float k;
+    float main_mix_factor;
+    float aux_mix_factor;
 };
 
 static const uint3 gl_WorkGroupSize = uint3(8u, 8u, 1u);
@@ -41,7 +42,7 @@ void comp_main()
         }
         int2 _45 = int2(gl_GlobalInvocationID.xy);
         float3 _56 = g_in_img1[_45].xyz;
-        g_out_img[_45] = float4(_56 + ((g_in_img2[_45].xyz - _56) * _20_g_params.k), 1.0f);
+        g_out_img[_45] = float4(_56 + ((g_in_img2[_45].xyz - _56) * _20_g_params.main_mix_factor), 1.0f);
         break;
     } while(false);
 }
