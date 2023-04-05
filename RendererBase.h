@@ -62,7 +62,7 @@ class RegionContext {
 
     explicit RegionContext(const rect_t &rect) : rect_(rect) {}
 
-    rect_t rect() const { return rect_; }
+    const rect_t &rect() const { return rect_; }
 
     /// Clear region context (used to start again)
     void Clear() {
