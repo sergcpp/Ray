@@ -791,6 +791,8 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
 
         kernel_Postprocess(cmd_buf, dual_buf_[0], p1_weight, dual_buf_[1], p2_weight, exposure, inv_gamma, clamp, srgb,
                            final_buf_, raw_final_buf_, temp_buf0_);
+        // Also store as denosed result until Denoise method will be called
+        CopyImageToImage(cmd_buf, final_buf_, 0, 0, 0, filtered_final_buf_, 0, 0, 0, w_, h_);
     }
 
 #if RUN_IN_LOCKSTEP

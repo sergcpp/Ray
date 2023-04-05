@@ -384,6 +384,8 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
 
             const simd_fvec4 tonemapped_res = clamp_and_gamma_correct(untonemapped_res);
             tonemapped_res.store_to(final_buf_[y * w_ + x].v, simd_mem_aligned);
+            // Also store as denosed result until Denoise method will be called
+            tonemapped_res.store_to(filtered_final_buf_[y * w_ + x].v, simd_mem_aligned);
 
             p1 = clamp_and_gamma_correct(p1);
             p2 = clamp_and_gamma_correct(p2);
