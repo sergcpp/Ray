@@ -120,6 +120,39 @@ int total_depth(const shadow_ray_t r) {
     return diff_depth + spec_depth + refr_depth + transp_depth;
 }
 
+vec3 clamp_and_gamma_correct(bool srgb, float exposure, bool _clamp, float inv_gamma, vec3 col) {
+    col *= exposure;
+
+    [[unroll]] for (int i = 0; i < 3 && srgb; ++i) {
+        if (col[i] < 0.0031308) {
+            col[i] = 12.92 * col[i];
+        } else {
+            col[i] = 1.055 * pow(col[i], (1.0 / 2.4)) - 0.055;
+        }
+    }
+
+    if (inv_gamma != 1.0) {
+        col = pow(col, vec3(inv_gamma));
+    }
+
+    if (_clamp) {
+        col = clamp(col, vec3(0.0), vec3(1.0));
+    }
+
+    return col;
+}
+
+vec4 clamp_and_gamma_correct(bool srgb, float exposure, bool _clamp, float inv_gamma, vec4 col) {
+    return vec4(clamp_and_gamma_correct(srgb, exposure, _clamp, inv_gamma, col.xyz), col.w);
+}
+
+// https://gpuopen.com/learn/optimized-reversible-tonemapper-for-resolve/
+vec3 reversible_tonemap(vec3 c) { return c / (max(c.x, max(c.y, c.z)) + 1.0); }
+vec3 reversible_tonemap_invert(vec3 c) { return c / (1.0 - max(c.x, max(c.y, c.z))); }
+
+vec4 reversible_tonemap(vec4 c) { return vec4(reversible_tonemap(c.xyz), c.w); }
+vec4 reversible_tonemap_invert(vec4 c) { return vec4(reversible_tonemap_invert(c.xyz), c.w); }
+
 #define pack_unorm_16(x) uint(x * 65535.0)
 #define unpack_unorm_16(x) clamp(float(x) / 65535.0, 0.0, 1.0)
 

@@ -102,9 +102,6 @@ class RendererBase {
     /// Returns pointer to auxiliary image buffers
     virtual const color_rgba_t *get_aux_pixels_ref(eAUXBuffer buf) const = 0;
 
-    /// Returns pointer to denoised image
-    virtual const color_rgba_t *get_denoised_pixels_ref() const = 0;
-
     /// Returns pointer to SH data
     virtual const shl1_data_t *get_sh_data_ref() const = 0;
 

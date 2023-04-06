@@ -73,7 +73,6 @@ class Renderer : public RendererBase {
     Texture2D temp_buf0_, dual_buf_[2], final_buf_, raw_final_buf_;
     Texture2D temp_buf1_, base_color_buf_;
     Texture2D temp_depth_normals_buf_, depth_normals_buf_;
-    Texture2D filtered_final_buf_;
 
     Buffer halton_seq_buf_, prim_rays_buf_, secondary_rays_buf_, shadow_rays_buf_, prim_hits_buf_;
     Buffer counters_buf_, indir_args_buf_;
@@ -84,6 +83,11 @@ class Renderer : public RendererBase {
 
     const color_rgba_t *frame_pixels_ = nullptr, *base_color_pixels_ = nullptr, *depth_normals_pixels_ = nullptr;
     std::vector<shl1_data_t> sh_data_host_;
+
+    struct {
+        float exposure, inv_gamma;
+        bool srgb, clamp;
+    } tonemap_params_;
 
     struct {
         int primary_ray_gen[2];
@@ -138,13 +142,14 @@ class Renderer : public RendererBase {
                             const Texture2D &out_variance) const;
     void kernel_FilterVariance(VkCommandBuffer cmd_buf, const Texture2D &img_buf, const Texture2D &out_variance);
     void kernel_NLMFilter(VkCommandBuffer cmd_buf, const Texture2D &img_buf, const Texture2D &var_buf, float alpha,
-                          float damping, const Texture2D &out_img);
+                          float damping, const Texture2D &out_raw_img, float exposure, float inv_gamma, bool clamp,
+                          bool srgb, const Texture2D &out_img);
     void kernel_DebugRT(VkCommandBuffer cmd_buf, const scene_data_t &sc_data, uint32_t node_index, const Buffer &rays,
                         const Texture2D &out_pixels);
 
     void UpdateHaltonSequence(int iteration, std::unique_ptr<float[]> &seq);
 
-    const color_rgba_t *get_pixels_ref(bool tonemap, bool denoised) const;
+    const color_rgba_t *get_pixels_ref(bool tonemap) const;
 
   public:
     Renderer(const settings_t &s, ILog *log);
@@ -160,10 +165,9 @@ class Renderer : public RendererBase {
 
     std::pair<int, int> size() const override { return std::make_pair(w_, h_); }
 
-    const color_rgba_t *get_pixels_ref() const override { return get_pixels_ref(true, false); }
-    const color_rgba_t *get_raw_pixels_ref() const override { return get_pixels_ref(false, false); }
+    const color_rgba_t *get_pixels_ref() const override { return get_pixels_ref(true); }
+    const color_rgba_t *get_raw_pixels_ref() const override { return get_pixels_ref(false); }
     const color_rgba_t *get_aux_pixels_ref(eAUXBuffer buf) const override;
-    const color_rgba_t *get_denoised_pixels_ref() const override { return get_pixels_ref(true, true); }
 
     const shl1_data_t *get_sh_data_ref() const override { return &sh_data_host_[0]; }
 

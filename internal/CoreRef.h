@@ -135,6 +135,43 @@ force_inline int total_depth(const shadow_ray_t &r) {
     return diff_depth + spec_depth + refr_depth + transp_depth;
 }
 
+// https://gpuopen.com/learn/optimized-reversible-tonemapper-for-resolve/
+force_inline simd_fvec4 vectorcall reversible_tonemap(const simd_fvec4 c) {
+    return c / (std::max(c.get<0>(), std::max(c.get<1>(), c.get<2>())) + 1.0f);
+}
+
+force_inline simd_fvec4 vectorcall reversible_tonemap_invert(const simd_fvec4 c) {
+    return c / (1.0f - std::max(c.get<0>(), std::max(c.get<1>(), c.get<2>())));
+}
+
+struct tonemap_params_t {
+    float exposure, inv_gamma;
+    bool srgb, clamp;
+};
+
+force_inline simd_fvec4 vectorcall clamp_and_gamma_correct(const tonemap_params_t &params, simd_fvec4 c) {
+    c *= params.exposure;
+
+    if (params.srgb) {
+        UNROLLED_FOR(i, 3, {
+            if (c.get<i>() < 0.0031308f) {
+                c.set<i>(12.92f * c.get<i>());
+            } else {
+                c.set<i>(1.055f * std::pow(c.get<i>(), (1.0f / 2.4f)) - 0.055f);
+            }
+        })
+    }
+
+    if (params.inv_gamma != 1.0f) {
+        c = pow(c, simd_fvec4{params.inv_gamma});
+    }
+
+    if (params.clamp) {
+        c = clamp(c, 0.0f, 1.0f);
+    }
+    return c;
+}
+
 // Generation of rays
 void GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, int h, const float *random_seq,
                          aligned_vector<ray_data_t> &out_rays);

@@ -732,7 +732,7 @@ template void setup_test_scene(Ray::SceneBase &scene, bool output_sh, bool outpu
                                eTestScene test_scene);
 
 void schedule_render_jobs(Ray::RendererBase &renderer, const Ray::SceneBase *scene, const Ray::settings_t &settings,
-                          const int samples, const char *log_str) {
+                          const int samples, const bool denoise, const char *log_str) {
     const auto rt = renderer.type();
     const auto sz = renderer.size();
 
@@ -782,7 +782,7 @@ void schedule_render_jobs(Ray::RendererBase &renderer, const Ray::SceneBase *sce
             }
             job_res.clear();
 
-            if (i + std::min(SamplePortion, samples - i) == samples) {
+            if (i + std::min(SamplePortion, samples - i) == samples && denoise) {
                 for (int j = 0; j < int(region_contexts.size()); ++j) {
                     job_res.push_back(threads.Enqueue(denoise_job, j));
                 }
@@ -813,6 +813,8 @@ void schedule_render_jobs(Ray::RendererBase &renderer, const Ray::SceneBase *sce
                 fflush(stdout);
             }
         }
-        renderer.DenoiseImage(region);
+        if (denoise) {
+            renderer.DenoiseImage(region);
+        }
     }
 }

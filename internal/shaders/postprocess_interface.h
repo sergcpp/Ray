@@ -9,7 +9,8 @@ struct Params {
     UVEC2_TYPE img_size;
     int srgb, _clamp;
     float exposure;
-    float img0_weight, img1_weight, _pad2;
+    float inv_gamma;
+    float img0_weight, img1_weight;
 };
 
 const int LOCAL_GROUP_SIZE_X = 8;

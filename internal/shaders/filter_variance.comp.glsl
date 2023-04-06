@@ -24,16 +24,16 @@ void main() {
     // Load variance into shared memory (16x16 region)
     //
     vec2 tex_coord = (vec2(gi) + vec2(0.5)) / vec2(g_params.img_size);
-    vec4 v00 = textureLodOffset(g_in_img, tex_coord, 0.0, ivec2(-4, -4));
+    vec4 v00 = reversible_tonemap(textureLodOffset(g_in_img, tex_coord, 0.0, ivec2(-4, -4)));
     g_temp_variance0_0[0 + li.y][0 + li.x] = packHalf2x16(v00.xy);
     g_temp_variance0_1[0 + li.y][0 + li.x] = packHalf2x16(v00.zw);
-    vec4 v01 = textureLodOffset(g_in_img, tex_coord, 0.0, ivec2(+4, -4));
+    vec4 v01 = reversible_tonemap(textureLodOffset(g_in_img, tex_coord, 0.0, ivec2(+4, -4)));
     g_temp_variance0_0[0 + li.y][8 + li.x] = packHalf2x16(v01.xy);
     g_temp_variance0_1[0 + li.y][8 + li.x] = packHalf2x16(v01.zw);
-    vec4 v10 = textureLodOffset(g_in_img, tex_coord, 0.0, ivec2(-4, +4));
+    vec4 v10 = reversible_tonemap(textureLodOffset(g_in_img, tex_coord, 0.0, ivec2(-4, +4)));
     g_temp_variance0_0[8 + li.y][0 + li.x] = packHalf2x16(v10.xy);
     g_temp_variance0_1[8 + li.y][0 + li.x] = packHalf2x16(v10.zw);
-    vec4 v11 = textureLodOffset(g_in_img, tex_coord, 0.0, ivec2(+4, +4));
+    vec4 v11 = reversible_tonemap(textureLodOffset(g_in_img, tex_coord, 0.0, ivec2(+4, +4)));
     g_temp_variance0_0[8 + li.y][8 + li.x] = packHalf2x16(v11.xy);
     g_temp_variance0_1[8 + li.y][8 + li.x] = packHalf2x16(v11.zw);
 

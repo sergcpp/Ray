@@ -12,6 +12,7 @@ layout(binding = IN_IMG_SLOT) uniform sampler2D g_in_img;
 layout(binding = VARIANCE_IMG_SLOT) uniform sampler2D g_variance_img;
 
 layout(binding = OUT_IMG_SLOT, rgba32f) uniform writeonly image2D g_out_img;
+layout(binding = OUT_RAW_IMG_SLOT, rgba32f) uniform writeonly image2D g_out_raw_img;
 
 #define USE_SHARED_MEMORY 1
 shared uint g_temp_color0[16][16], g_temp_color1[16][16];
@@ -34,16 +35,16 @@ void main() {
     //
     // Load color and variance into shared memory (16x16 region)
     //
-    vec4 c00 = textureLodOffset(g_in_img, tex_coord, 0.0, ivec2(-4, -4));
+    vec4 c00 = reversible_tonemap(textureLodOffset(g_in_img, tex_coord, 0.0, ivec2(-4, -4)));
     g_temp_color0[0 + li.y][0 + li.x] = packHalf2x16(c00.xy);
     g_temp_color1[0 + li.y][0 + li.x] = packHalf2x16(c00.zw);
-    vec4 c01 = textureLodOffset(g_in_img, tex_coord, 0.0, ivec2(+4, -4));
+    vec4 c01 = reversible_tonemap(textureLodOffset(g_in_img, tex_coord, 0.0, ivec2(+4, -4)));
     g_temp_color0[0 + li.y][8 + li.x] = packHalf2x16(c01.xy);
     g_temp_color1[0 + li.y][8 + li.x] = packHalf2x16(c01.zw);
-    vec4 c10 = textureLodOffset(g_in_img, tex_coord, 0.0, ivec2(-4, +4));
+    vec4 c10 = reversible_tonemap(textureLodOffset(g_in_img, tex_coord, 0.0, ivec2(-4, +4)));
     g_temp_color0[8 + li.y][0 + li.x] = packHalf2x16(c10.xy);
     g_temp_color1[8 + li.y][0 + li.x] = packHalf2x16(c10.zw);
-    vec4 c11 = textureLodOffset(g_in_img, tex_coord, 0.0, ivec2(+4, +4));
+    vec4 c11 = reversible_tonemap(textureLodOffset(g_in_img, tex_coord, 0.0, ivec2(+4, +4)));
     g_temp_color0[8 + li.y][8 + li.x] = packHalf2x16(c11.xy);
     g_temp_color1[8 + li.y][8 + li.x] = packHalf2x16(c11.zw);
 
@@ -153,5 +154,9 @@ void main() {
     }
 #endif
 
-    imageStore(g_out_img, gi, sum_output);
+    sum_output = reversible_tonemap_invert(sum_output);
+
+    imageStore(g_out_raw_img, gi, sum_output);
+    imageStore(g_out_img, gi, clamp_and_gamma_correct(g_params.srgb != 0, g_params.exposure,
+                                                      g_params._clamp != 0, g_params.inv_gamma, sum_output));
 }

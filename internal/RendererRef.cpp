@@ -9,8 +9,28 @@
 #include "UniformIntDistribution.h"
 
 namespace Ray {
+namespace Ref {
+struct PassData {
+    aligned_vector<ray_data_t> primary_rays;
+    aligned_vector<ray_data_t> secondary_rays;
+    aligned_vector<shadow_ray_t> shadow_rays;
+    aligned_vector<hit_data_t> intersections;
+
+    aligned_vector<color_rgba_t, 16> temp_final_buf;
+    aligned_vector<color_rgba_t, 16> variance_buf;
+    aligned_vector<color_rgba_t, 16> filtered_variance_buf;
+
+    std::vector<uint32_t> hash_values;
+    std::vector<int> head_flags;
+    std::vector<uint32_t> scan_values;
+
+    std::vector<ray_chunk_t> chunks, chunks_temp;
+    std::vector<uint32_t> skeleton;
+};
+} // namespace Ref
+
 thread_local Ray::Ref::PassData g_per_thread_pass_data;
-}
+} // namespace Ray
 
 Ray::Ref::Renderer::Renderer(const settings_t &s, ILog *log) : log_(log), use_wide_bvh_(s.use_wide_bvh) {
     auto rand_func = std::bind(UniformIntDistribution<uint32_t>(), std::mt19937(0));
@@ -311,6 +331,12 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
 
     scene_lock.unlock();
 
+    tonemap_params_t tonemap_params;
+    tonemap_params.exposure = std::pow(2.0f, cam.exposure);
+    tonemap_params.inv_gamma = (1.0f / cam.gamma);
+    tonemap_params.srgb = (cam.dtype == SRGB);
+    tonemap_params.clamp = (cam.pass_settings.flags & Clamp) != 0;
+
     {
         std::lock_guard<std::mutex> _(mtx_);
 
@@ -326,6 +352,8 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
         stats_.time_secondary_trace_us += (unsigned long long)secondary_trace_time.count();
         stats_.time_secondary_shade_us += (unsigned long long)secondary_shade_time.count();
         stats_.time_secondary_shadow_us += (unsigned long long)secondary_shadow_time.count();
+
+        tonemap_params_ = tonemap_params;
     }
 
     color_rgba_t *clean_buf = dual_buf_[(region.iteration - 1) % 2].data();
@@ -341,33 +369,6 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
         }
     }
 
-    const float cam_exposure = std::pow(2.0f, cam.exposure);
-
-    auto clamp_and_gamma_correct = [&cam, cam_exposure](simd_fvec4 c) {
-        if (cam.exposure != 0.0f) {
-            c *= cam_exposure;
-        }
-
-        if (cam.dtype == SRGB) {
-            UNROLLED_FOR(i, 3, {
-                if (c.get<i>() < 0.0031308f) {
-                    c.set<i>(12.92f * c[i]);
-                } else {
-                    c.set<i>(1.055f * std::pow(c[i], (1.0f / 2.4f)) - 0.055f);
-                }
-            })
-        }
-
-        if (cam.gamma != 1.0f) {
-            c = pow(c, simd_fvec4{1.0f / cam.gamma});
-        }
-
-        if (cam.pass_settings.flags & Clamp) {
-            c = clamp(c, 0.0f, 1.0f);
-        }
-        return c;
-    };
-
     for (int y = rect.y; y < rect.y + rect.h; ++y) {
         for (int x = rect.x; x < rect.x + rect.w; ++x) {
             simd_fvec4 p1 = {dual_buf_[0][y * w_ + x].v, simd_mem_aligned};
@@ -382,13 +383,11 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
             const simd_fvec4 untonemapped_res = p1_weight * p1 + p2_weight * p2;
             untonemapped_res.store_to(raw_final_buf_[y * w_ + x].v, simd_mem_aligned);
 
-            const simd_fvec4 tonemapped_res = clamp_and_gamma_correct(untonemapped_res);
+            const simd_fvec4 tonemapped_res = clamp_and_gamma_correct(tonemap_params, untonemapped_res);
             tonemapped_res.store_to(final_buf_[y * w_ + x].v, simd_mem_aligned);
-            // Also store as denosed result until Denoise method will be called
-            tonemapped_res.store_to(filtered_final_buf_[y * w_ + x].v, simd_mem_aligned);
 
-            p1 = clamp_and_gamma_correct(p1);
-            p2 = clamp_and_gamma_correct(p2);
+            p1 = reversible_tonemap(p1);
+            p2 = reversible_tonemap(p2);
 
             const simd_fvec4 variance = 0.5f * (p1 - p2) * (p1 - p2);
             variance.store_to(temp_buf_[y * w_ + x].v, simd_mem_aligned);
@@ -412,7 +411,9 @@ void Ray::Ref::Renderer::DenoiseImage(const RegionContext &region) {
     p.variance_buf.resize(rect_ext.w * rect_ext.h);
     p.filtered_variance_buf.resize(rect_ext.w * rect_ext.h);
 
-#define FETCH_FINAL_BUF(_x, _y) final_buf_[std::min(std::max(_y, 0), h_ - 1) * w_ + std::min(std::max(_x, 0), w_ - 1)]
+#define FETCH_FINAL_BUF(_x, _y)                                                                                        \
+    simd_fvec4(raw_final_buf_[std::min(std::max(_y, 0), h_ - 1) * w_ + std::min(std::max(_x, 0), w_ - 1)].v,           \
+               simd_mem_aligned)
 #define FETCH_VARIANCE(_x, _y)                                                                                         \
     simd_fvec4(temp_buf_[std::min(std::max(_y, 0), h_ - 1) * w_ + std::min(std::max(_x, 0), w_ - 1)].v,                \
                simd_mem_aligned)
@@ -423,7 +424,8 @@ void Ray::Ref::Renderer::DenoiseImage(const RegionContext &region) {
         const int yy = rect_ext.y + y;
         for (int x = 0; x < rect_ext.w; ++x) {
             const int xx = rect_ext.x + x;
-            p.temp_final_buf[y * rect_ext.w + x] = FETCH_FINAL_BUF(xx, yy);
+            const simd_fvec4 center_col = reversible_tonemap(FETCH_FINAL_BUF(xx, yy));
+            center_col.store_to(p.temp_final_buf[y * rect_ext.w + x].v, simd_mem_aligned);
 
             const simd_fvec4 center_val = FETCH_VARIANCE(xx, yy);
 
@@ -465,7 +467,24 @@ void Ray::Ref::Renderer::DenoiseImage(const RegionContext &region) {
 
     NLMFilter<NLM_WINDOW_SIZE, NLM_NEIGHBORHOOD_SIZE>(
         p.temp_final_buf.data(), rect_t{EXT_RADIUS, EXT_RADIUS, rect.w, rect.h}, rect_ext.w, 1.0f, 0.45f,
-        p.filtered_variance_buf.data(), rect, w_, filtered_final_buf_.data());
+        p.filtered_variance_buf.data(), rect, w_, raw_final_buf_.data());
+
+    tonemap_params_t tonemap_params;
+
+    {
+        std::lock_guard<std::mutex> _(mtx_);
+        tonemap_params = tonemap_params_;
+    }
+
+    for (int y = rect.y; y < rect.y + rect.h; ++y) {
+        for (int x = rect.x; x < rect.x + rect.w; ++x) {
+            simd_fvec4 col = simd_fvec4(raw_final_buf_[y * w_ + x].v, simd_mem_aligned);
+            col = reversible_tonemap_invert(col);
+            col.store_to(raw_final_buf_[y * w_ + x].v, simd_mem_aligned);
+            col = clamp_and_gamma_correct(tonemap_params, col);
+            col.store_to(final_buf_[y * w_ + x].v, simd_mem_aligned);
+        }
+    }
 
     const auto denoise_end = high_resolution_clock::now();
 
