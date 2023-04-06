@@ -70,7 +70,7 @@ class Renderer : public RendererBase {
     int loaded_halton_;
 
     // TODO: Optimize these!
-    Texture2D temp_buf0_, dual_buf_[2], final_buf_, raw_final_buf_;
+    Texture2D temp_buf0_, dual_buf_[2], final_buf_, raw_final_buf_, raw_filtered_buf_;
     Texture2D temp_buf1_, base_color_buf_;
     Texture2D temp_depth_normals_buf_, depth_normals_buf_;
 

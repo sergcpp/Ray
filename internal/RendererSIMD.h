@@ -35,7 +35,7 @@ template <int S> struct PassData {
 template <int DimX, int DimY> class RendererSIMD : public RendererBase {
     ILog *log_;
     aligned_vector<color_rgba_t, 16> dual_buf_[2], base_color_buf_, depth_normals_buf_, temp_buf_, final_buf_,
-        raw_final_buf_;
+        raw_final_buf_, raw_filtered_buf_;
 
     std::mutex mtx_;
 
@@ -58,7 +58,7 @@ template <int DimX, int DimY> class RendererSIMD : public RendererBase {
     const char *device_name() const override { return "CPU"; }
 
     const color_rgba_t *get_pixels_ref() const override { return final_buf_.data(); }
-    const color_rgba_t *get_raw_pixels_ref() const override { return raw_final_buf_.data(); }
+    const color_rgba_t *get_raw_pixels_ref() const override { return raw_filtered_buf_.data(); }
     const color_rgba_t *get_aux_pixels_ref(const eAUXBuffer buf) const override {
         if (buf == eAUXBuffer::BaseColor) {
             return base_color_buf_.data();
@@ -82,6 +82,8 @@ template <int DimX, int DimY> class RendererSIMD : public RendererBase {
             final_buf_.shrink_to_fit();
             raw_final_buf_.assign(w * h, {});
             raw_final_buf_.shrink_to_fit();
+            raw_filtered_buf_.assign(w * h, {});
+            raw_filtered_buf_.shrink_to_fit();
 
             w_ = w;
             h_ = h;
@@ -502,6 +504,8 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *scene, Regi
 
             const Ref::simd_fvec4 untonemapped_res = p1_weight * p1 + p2_weight * p2;
             untonemapped_res.store_to(raw_final_buf_[y * w_ + x].v, Ref::simd_mem_aligned);
+            // Also store as denosed result until DenoiseImage method will be called
+            untonemapped_res.store_to(raw_filtered_buf_[y * w_ + x].v, Ref::simd_mem_aligned);
 
             const Ref::simd_fvec4 tonemapped_res = Ref::clamp_and_gamma_correct(tonemap_params, untonemapped_res);
             tonemapped_res.store_to(final_buf_[y * w_ + x].v, Ref::simd_mem_aligned);
@@ -589,7 +593,7 @@ template <int DimX, int DimY> void Ray::NS::RendererSIMD<DimX, DimY>::DenoiseIma
 
     Ref::NLMFilter<NLM_WINDOW_SIZE, NLM_NEIGHBORHOOD_SIZE>(
         p.temp_final_buf.data(), rect_t{EXT_RADIUS, EXT_RADIUS, rect.w, rect.h}, rect_ext.w, 1.0f, 0.45f,
-        p.filtered_variance_buf.data(), rect, w_, raw_final_buf_.data());
+        p.filtered_variance_buf.data(), rect, w_, raw_filtered_buf_.data());
 
     Ref::tonemap_params_t tonemap_params;
 
@@ -600,9 +604,9 @@ template <int DimX, int DimY> void Ray::NS::RendererSIMD<DimX, DimY>::DenoiseIma
 
     for (int y = rect.y; y < rect.y + rect.h; ++y) {
         for (int x = rect.x; x < rect.x + rect.w; ++x) {
-            auto col = Ref::simd_fvec4(raw_final_buf_[y * w_ + x].v, Ref::simd_mem_aligned);
+            auto col = Ref::simd_fvec4(raw_filtered_buf_[y * w_ + x].v, Ref::simd_mem_aligned);
             col = Ref::reversible_tonemap_invert(col);
-            col.store_to(raw_final_buf_[y * w_ + x].v, Ref::simd_mem_aligned);
+            col.store_to(raw_filtered_buf_[y * w_ + x].v, Ref::simd_mem_aligned);
             col = Ref::clamp_and_gamma_correct(tonemap_params, col);
             col.store_to(final_buf_[y * w_ + x].v, Ref::simd_mem_aligned);
         }

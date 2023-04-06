@@ -382,6 +382,8 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
 
             const simd_fvec4 untonemapped_res = p1_weight * p1 + p2_weight * p2;
             untonemapped_res.store_to(raw_final_buf_[y * w_ + x].v, simd_mem_aligned);
+            // Also store as denosed result until DenoiseImage method will be called
+            untonemapped_res.store_to(raw_filtered_buf_[y * w_ + x].v, simd_mem_aligned);
 
             const simd_fvec4 tonemapped_res = clamp_and_gamma_correct(tonemap_params, untonemapped_res);
             tonemapped_res.store_to(final_buf_[y * w_ + x].v, simd_mem_aligned);
@@ -467,7 +469,7 @@ void Ray::Ref::Renderer::DenoiseImage(const RegionContext &region) {
 
     NLMFilter<NLM_WINDOW_SIZE, NLM_NEIGHBORHOOD_SIZE>(
         p.temp_final_buf.data(), rect_t{EXT_RADIUS, EXT_RADIUS, rect.w, rect.h}, rect_ext.w, 1.0f, 0.45f,
-        p.filtered_variance_buf.data(), rect, w_, raw_final_buf_.data());
+        p.filtered_variance_buf.data(), rect, w_, raw_filtered_buf_.data());
 
     tonemap_params_t tonemap_params;
 
@@ -478,9 +480,9 @@ void Ray::Ref::Renderer::DenoiseImage(const RegionContext &region) {
 
     for (int y = rect.y; y < rect.y + rect.h; ++y) {
         for (int x = rect.x; x < rect.x + rect.w; ++x) {
-            simd_fvec4 col = simd_fvec4(raw_final_buf_[y * w_ + x].v, simd_mem_aligned);
+            simd_fvec4 col = simd_fvec4(raw_filtered_buf_[y * w_ + x].v, simd_mem_aligned);
             col = reversible_tonemap_invert(col);
-            col.store_to(raw_final_buf_[y * w_ + x].v, simd_mem_aligned);
+            col.store_to(raw_filtered_buf_[y * w_ + x].v, simd_mem_aligned);
             col = clamp_and_gamma_correct(tonemap_params, col);
             col.store_to(final_buf_[y * w_ + x].v, simd_mem_aligned);
         }

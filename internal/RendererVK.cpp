@@ -358,6 +358,8 @@ void Ray::Vk::Renderer::Resize(const int w, const int h) {
     dual_buf_[1] = Texture2D{"Dual Image [1]", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
     final_buf_ = Texture2D{"Final Image", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
     raw_final_buf_ = Texture2D{"Raw Final Image", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
+    raw_filtered_buf_ =
+        Texture2D{"Raw Filtered Final Image", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
 
     if (frame_pixels_) {
         pixel_stage_buf_.Unmap();
@@ -383,15 +385,17 @@ void Ray::Vk::Renderer::Clear(const color_rgba_t &c) {
     VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
 
     const TransitionInfo img_transitions[] = {
-        {&dual_buf_[0], eResState::CopyDst},    {&dual_buf_[1], eResState::CopyDst},
-        {&final_buf_, eResState::CopyDst},      {&raw_final_buf_, eResState::CopyDst},
-        {&base_color_buf_, eResState::CopyDst}, {&depth_normals_buf_, eResState::CopyDst}};
+        {&dual_buf_[0], eResState::CopyDst},      {&dual_buf_[1], eResState::CopyDst},
+        {&final_buf_, eResState::CopyDst},        {&raw_final_buf_, eResState::CopyDst},
+        {&raw_filtered_buf_, eResState::CopyDst}, {&base_color_buf_, eResState::CopyDst},
+        {&depth_normals_buf_, eResState::CopyDst}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, img_transitions);
 
     ClearColorImage(dual_buf_[0], c.v, cmd_buf);
     ClearColorImage(dual_buf_[1], c.v, cmd_buf);
     ClearColorImage(final_buf_, c.v, cmd_buf);
     ClearColorImage(raw_final_buf_, c.v, cmd_buf);
+    ClearColorImage(raw_filtered_buf_, c.v, cmd_buf);
     if (base_color_buf_.ready()) {
         static const float rgba[] = {0.0f, 0.0f, 0.0f, 0.0f};
         ClearColorImage(base_color_buf_, rgba, cmd_buf);
@@ -789,6 +793,11 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         kernel_Postprocess(cmd_buf, dual_buf_[0], p1_weight, dual_buf_[1], p2_weight, tonemap_params_.exposure,
                            tonemap_params_.inv_gamma, tonemap_params_.clamp, tonemap_params_.srgb, final_buf_,
                            raw_final_buf_, temp_buf0_);
+        // Also store as denosed result until Denoise method will be called
+        const TransitionInfo img_transitions[] = {{&raw_final_buf_, eResState::CopySrc},
+                                                  {&raw_filtered_buf_, eResState::CopyDst}};
+        TransitionResourceStates(cmd_buf, AllStages, AllStages, img_transitions);
+        CopyImageToImage(cmd_buf, raw_final_buf_, 0, 0, 0, raw_filtered_buf_, 0, 0, 0, w_, h_);
     }
 
 #if RUN_IN_LOCKSTEP
@@ -868,9 +877,9 @@ void Ray::Vk::Renderer::DenoiseImage(const RegionContext &region) {
 
     { // Apply NLM Filter
         DebugMarker _(cmd_buf, "NLM Filter");
-        kernel_NLMFilter(cmd_buf, raw_final_buf_, filtered_variance, 1.0f, 0.45f, temp_buf0_, tonemap_params_.exposure,
-                         tonemap_params_.inv_gamma, tonemap_params_.clamp, tonemap_params_.srgb, final_buf_);
-        std::swap(raw_final_buf_, temp_buf0_);
+        kernel_NLMFilter(cmd_buf, raw_final_buf_, filtered_variance, 1.0f, 0.45f, raw_filtered_buf_,
+                         tonemap_params_.exposure, tonemap_params_.inv_gamma, tonemap_params_.clamp,
+                         tonemap_params_.srgb, final_buf_);
     }
 
     timestamps_[ctx_->backend_frame].denoise[1] = ctx_->WriteTimestamp(false);
@@ -937,7 +946,7 @@ const Ray::color_rgba_t *Ray::Vk::Renderer::get_pixels_ref(const bool tonemap) c
             DebugMarker _(cmd_buf, "Download Result");
 
             // TODO: fix this!
-            const auto &buffer_to_use = tonemap ? final_buf_ : raw_final_buf_;
+            const auto &buffer_to_use = tonemap ? final_buf_ : raw_filtered_buf_;
 
             const TransitionInfo res_transitions[] = {{&buffer_to_use, eResState::CopySrc},
                                                       {&pixel_stage_buf_, eResState::CopyDst}};

@@ -13,7 +13,7 @@ class Renderer : public RendererBase {
 
     bool use_wide_bvh_;
     aligned_vector<color_rgba_t, 16> dual_buf_[2], base_color_buf_, depth_normals_buf_, temp_buf_, final_buf_,
-        raw_final_buf_;
+        raw_final_buf_, raw_filtered_buf_;
 
     std::mutex mtx_;
 
@@ -37,7 +37,7 @@ class Renderer : public RendererBase {
     std::pair<int, int> size() const override { return std::make_pair(w_, h_); }
 
     const color_rgba_t *get_pixels_ref() const override { return final_buf_.data(); }
-    const color_rgba_t *get_raw_pixels_ref() const override { return raw_final_buf_.data(); }
+    const color_rgba_t *get_raw_pixels_ref() const override { return raw_filtered_buf_.data(); }
     const color_rgba_t *get_aux_pixels_ref(const eAUXBuffer buf) const override {
         if (buf == eAUXBuffer::BaseColor) {
             return base_color_buf_.data();
@@ -61,6 +61,8 @@ class Renderer : public RendererBase {
             final_buf_.shrink_to_fit();
             raw_final_buf_.assign(w * h, {});
             raw_final_buf_.shrink_to_fit();
+            raw_filtered_buf_.assign(w * h, {});
+            raw_filtered_buf_.shrink_to_fit();
 
             w_ = w;
             h_ = h;
