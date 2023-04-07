@@ -75,10 +75,10 @@ bool Ray::Vk::Program::Init(Shader *vs_ref, Shader *fs_ref, Shader *tcs_ref, Sha
     }
 
     // store shaders
-    shaders_[int(eShaderType::Vert)] = std::move(vs_ref);
-    shaders_[int(eShaderType::Frag)] = std::move(fs_ref);
-    shaders_[int(eShaderType::Tesc)] = std::move(tcs_ref);
-    shaders_[int(eShaderType::Tese)] = std::move(tes_ref);
+    shaders_[int(eShaderType::Vert)] = vs_ref;
+    shaders_[int(eShaderType::Frag)] = fs_ref;
+    shaders_[int(eShaderType::Tesc)] = tcs_ref;
+    shaders_[int(eShaderType::Tese)] = tes_ref;
 
     if (!InitDescrSetLayouts(log)) {
         log->Error("Failed to initialize descriptor set layouts! (%s)", name_.c_str());

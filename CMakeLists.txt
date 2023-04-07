@@ -130,7 +130,8 @@ endif(NOT CMAKE_GENERATOR_PLATFORM MATCHES "ARM64")
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/Config.h.in ${CMAKE_CURRENT_SOURCE_DIR}/Config.h)
 
-set(SOURCE_FILES Config.h
+set(SOURCE_FILES Bitmask.h
+                 Config.h
                  Log.h
                  RendererBase.h
                  RendererBase.cpp

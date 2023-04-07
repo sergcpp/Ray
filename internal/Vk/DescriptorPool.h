@@ -37,7 +37,7 @@ class DescrPool {
     uint32_t descr_counts_[int(eDescrType::_Count)] = {};
 
   public:
-    DescrPool(Context *ctx) : ctx_(ctx) {}
+    explicit DescrPool(Context *ctx) : ctx_(ctx) {}
     DescrPool(const DescrPool &rhs) = delete;
     DescrPool(DescrPool &&rhs) noexcept { (*this) = std::move(rhs); }
     ~DescrPool() { Destroy(); }

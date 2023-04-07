@@ -155,7 +155,7 @@ class Renderer : public RendererBase {
     Renderer(const settings_t &s, ILog *log);
     ~Renderer() override;
 
-    eRendererType type() const override { return RendererVK; }
+    eRendererType type() const override { return eRendererType::Vulkan; }
 
     ILog *log() const override { return ctx_->log(); }
 

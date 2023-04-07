@@ -28,7 +28,7 @@ class Renderer : public RendererBase {
   public:
     Renderer(const settings_t &s, ILog *log);
 
-    eRendererType type() const override { return RendererRef; }
+    eRendererType type() const override { return eRendererType::Reference; }
 
     ILog *log() const override { return log_; }
 

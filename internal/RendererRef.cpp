@@ -121,16 +121,16 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
     PassData &p = g_per_thread_pass_data;
 
     // allocate aux data on demand
-    if (cam.pass_settings.flags & (OutputBaseColor | OutputDepthNormals)) {
+    if (cam.pass_settings.flags & (Bitmask<ePassFlags>{ePassFlags::OutputBaseColor} | ePassFlags::OutputDepthNormals)) {
         // TODO: Skip locking here
         std::lock_guard<std::mutex> _(mtx_);
 
-        if (cam.pass_settings.flags & OutputBaseColor) {
+        if (cam.pass_settings.flags & ePassFlags::OutputBaseColor) {
             base_color_buf_.resize(w_ * h_);
         } else if (!base_color_buf_.empty()) {
             base_color_buf_ = {};
         }
-        if (cam.pass_settings.flags & OutputDepthNormals) {
+        if (cam.pass_settings.flags & ePassFlags::OutputDepthNormals) {
             depth_normals_buf_.resize(w_ * h_);
         } else if (!depth_normals_buf_.empty()) {
             depth_normals_buf_ = {};
@@ -144,7 +144,7 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
 
     const uint32_t hi = (region.iteration & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT;
 
-    if (cam.type != Geo) {
+    if (cam.type != eCamType::Geo) {
         GeneratePrimaryRays(cam, rect, w_, h_, &region.halton_seq[hi], p.primary_rays);
 
         time_after_ray_gen = high_resolution_clock::now();
@@ -197,12 +197,12 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
                          macro_tree_root, s->tex_storages_, &p.secondary_rays[0], &secondary_rays_count,
                          &p.shadow_rays[0], &shadow_rays_count, &base_color, &depth_normal);
         temp_buf_[y * w_ + x] = col;
-        if (cam.pass_settings.flags & OutputBaseColor) {
+        if (cam.pass_settings.flags & ePassFlags::OutputBaseColor) {
             auto old_val = simd_fvec4{base_color_buf_[y * w_ + x].v, simd_mem_aligned};
             old_val += (simd_fvec4{base_color.v, simd_mem_aligned} - old_val) * mix_factor;
             old_val.store_to(base_color_buf_[y * w_ + x].v, simd_mem_aligned);
         }
-        if (cam.pass_settings.flags & OutputDepthNormals) {
+        if (cam.pass_settings.flags & ePassFlags::OutputDepthNormals) {
             auto old_val = simd_fvec4{depth_normals_buf_[y * w_ + x].v, simd_mem_aligned};
             old_val += (simd_fvec4{depth_normal.v, simd_mem_aligned} - old_val) * mix_factor;
             old_val.store_to(depth_normals_buf_[y * w_ + x].v, simd_mem_aligned);
@@ -334,8 +334,8 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
     tonemap_params_t tonemap_params;
     tonemap_params.exposure = std::pow(2.0f, cam.exposure);
     tonemap_params.inv_gamma = (1.0f / cam.gamma);
-    tonemap_params.srgb = (cam.dtype == SRGB);
-    tonemap_params.clamp = (cam.pass_settings.flags & Clamp) != 0;
+    tonemap_params.srgb = (cam.dtype == eDeviceType::SRGB);
+    tonemap_params.clamp = (cam.pass_settings.flags & ePassFlags::Clamp);
 
     {
         std::lock_guard<std::mutex> _(mtx_);

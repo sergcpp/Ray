@@ -2124,7 +2124,7 @@ void Ray::NS::GeneratePrimaryRays(const int iteration, const camera_t &cam, cons
                 offset[1] *= coc * cam.sensor_height;
             }
 
-            if (cam.filter == Tent) {
+            if (cam.filter == eFilterType::Tent) {
                 simd_fvec<S> temp = rxx;
                 rxx = 1.0f - sqrt(2.0f - 2.0f * temp);
                 where(temp < 0.5f, rxx) = sqrt(2.0f * temp) - 1.0f;
@@ -4342,7 +4342,7 @@ void Ray::NS::IntersectScene(ray_data_t<S> &r, const simd_ivec<S> &mask, const i
                 if (first_mi != 0xffff) {
                     const material_t *mat = &sc.materials[first_mi];
 
-                    while (mat->type == MixNode) {
+                    while (mat->type == eShadingNode::Mix) {
                         simd_fvec<S> _mix_val = 1.0f;
 
                         if (mat->textures[BASE_TEXTURE] != 0xffffffff) {
@@ -4387,7 +4387,7 @@ void Ray::NS::IntersectScene(ray_data_t<S> &r, const simd_ivec<S> &mask, const i
                         mat = &sc.materials[first_mi];
                     }
 
-                    if (mat->type != TransparentNode) {
+                    if (mat->type != eShadingNode::Transparent) {
                         where(ray_queue[index], keep_going) = 0;
                         index++;
                         continue;
@@ -4531,7 +4531,7 @@ void Ray::NS::IntersectScene(const shadow_ray_t<S> &r, const simd_ivec<S> &mask,
                         const simd_fvec<S> weight = stack[stack_size].weight;
 
                         // resolve mix material
-                        if (mat->type == MixNode) {
+                        if (mat->type == eShadingNode::Mix) {
                             simd_fvec<S> mix_val = mat->strength;
                             if (mat->textures[BASE_TEXTURE] != 0xffffffff) {
                                 simd_fvec<S> mix[4] = {};
@@ -4541,7 +4541,7 @@ void Ray::NS::IntersectScene(const shadow_ray_t<S> &r, const simd_ivec<S> &mask,
 
                             stack[stack_size++] = {mat->textures[MIX_MAT1], weight * (1.0f - mix_val)};
                             stack[stack_size++] = {mat->textures[MIX_MAT2], weight * mix_val};
-                        } else if (mat->type == TransparentNode) {
+                        } else if (mat->type == eShadingNode::Transparent) {
                             UNROLLED_FOR(i, 3, { throughput[i] += weight * mat->base_color[i]; })
                         }
                     }
@@ -5914,7 +5914,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
     simd_fvec<S> mix_weight = 1.0f;
 
     // resolve mix material
-    const simd_ivec<S> is_mix_mat = mat_type == MixNode;
+    const simd_ivec<S> is_mix_mat = (mat_type == int(eShadingNode::Mix));
     if (is_mix_mat.not_all_zeros()) {
         const float *mix_values = &sc.materials[0].strength;
         simd_fvec<S> mix_val = gather(mix_values, mat_index * MatDWORDStride);
@@ -6211,7 +6211,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
             lanes_processed |= ray_queue[index];
 
             const material_t *mat = &sc.materials[first_mi];
-            if (mat->type == DiffuseNode) {
+            if (mat->type == eShadingNode::Diffuse) {
 #if USE_NEE
                 const simd_ivec<S> eval_light = simd_cast(ls.pdf > 0.0f) & simd_cast(N_dot_L > 0.0f) & ray_queue[index];
                 if (eval_light.not_all_zeros()) {
@@ -6227,7 +6227,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                     assert((secondary_mask & gen_ray).all_zeros());
                     secondary_mask |= gen_ray;
                 }
-            } else if (mat->type == GlossyNode) {
+            } else if (mat->type == eShadingNode::Glossy) {
                 const float specular = 0.5f;
                 const float spec_ior = (2.0f / (1.0f - std::sqrt(0.08f * specular))) - 1.0f;
                 const float spec_F0 = fresnel_dielectric_cos(1.0f, spec_ior);
@@ -6252,7 +6252,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                     assert((secondary_mask & gen_ray).all_zeros());
                     secondary_mask |= gen_ray;
                 }
-            } else if (mat->type == RefractiveNode) {
+            } else if (mat->type == eShadingNode::Refractive) {
 #if USE_NEE
                 const simd_fvec<S> roughness2 = sqr(roughness);
                 const simd_ivec<S> eval_light = simd_cast(ls.pdf > 0.0f) & simd_cast(sqr(roughness2) >= 1e-7f) &
@@ -6273,7 +6273,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                     assert((secondary_mask & gen_ray).all_zeros());
                     secondary_mask |= gen_ray;
                 }
-            } else if (mat->type == EmissiveNode) {
+            } else if (mat->type == eShadingNode::Emissive) {
                 simd_fvec<S> mis_weight = 1.0f;
 #if USE_NEE
                 if ((ray.depth & 0x00ffffff).not_all_zeros() && (mat->flags & MAT_FLAG_MULT_IMPORTANCE)) {
@@ -6299,7 +6299,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                 UNROLLED_FOR(i, 3, {
                     where(ray_queue[index], col[i]) += mix_weight * mis_weight * mat->strength * base_color[i];
                 })
-            } else if (mat->type == PrincipledNode) {
+            } else if (mat->type == eShadingNode::Principled) {
                 simd_fvec<S> metallic = unpack_unorm_16(mat->metallic_unorm);
                 if (mat->textures[METALLIC_TEXTURE] != 0xffffffff) {
                     const uint32_t metallic_tex = mat->textures[METALLIC_TEXTURE];

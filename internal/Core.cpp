@@ -295,7 +295,7 @@ uint32_t Ray::PreprocessMesh(const float *attrs, Span<const uint32_t> vtx_indice
     real_indices.reserve(vtx_indices.size() / 3);
 
     const float *positions = attrs;
-    const size_t attr_stride = AttrStrides[layout];
+    const size_t attr_stride = AttrStrides[int(layout)];
 
     for (int j = 0; j < int(vtx_indices.size()); j += 3) {
         Ref::simd_fvec4 p[3] = {{0.0f}, {0.0f}, {0.0f}};
@@ -934,7 +934,7 @@ void Ray::ConstructCamera(const eCamType type, const eFilterType filter, eDevice
                           const float focus_distance, const float fstop, const float lens_rotation,
                           const float lens_ratio, const int lens_blades, const float clip_start, const float clip_end,
                           camera_t *cam) {
-    if (type == Persp) {
+    if (type == eCamType::Persp) {
         auto o = Ref::simd_fvec3{origin}, f = Ref::simd_fvec3{fwd}, u = Ref::simd_fvec3{up};
 
         if (u.length2() < FLT_EPS) {
@@ -969,7 +969,7 @@ void Ray::ConstructCamera(const eCamType type, const eFilterType filter, eDevice
         memcpy(&cam->side[0], value_ptr(s), 3 * sizeof(float));
         memcpy(&cam->up[0], value_ptr(u), 3 * sizeof(float));
         memcpy(&cam->shift[0], shift, 2 * sizeof(float));
-    } else if (type == Ortho) {
+    } else if (type == eCamType::Ortho) {
         // TODO!
     }
 }

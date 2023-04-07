@@ -115,7 +115,7 @@ bool Ray::Vk::Shader::InitFromSPIRV(const uint8_t *shader_code, const int code_s
         if (int(var->built_in) == -1) {
             Descr &new_item = attr_bindings.emplace_back();
             new_item.name = var->name;
-            new_item.loc = var->location;
+            new_item.loc = int(var->location);
             new_item.format = VkFormat(var->format);
         }
     }
@@ -125,9 +125,9 @@ bool Ray::Vk::Shader::InitFromSPIRV(const uint8_t *shader_code, const int code_s
         Descr &new_item = unif_bindings.emplace_back();
         new_item.name = desc.name;
         new_item.desc_type = VkDescriptorType(desc.descriptor_type);
-        new_item.loc = desc.binding;
-        new_item.set = desc.set;
-        new_item.count = desc.count;
+        new_item.loc = int(desc.binding);
+        new_item.set = int(desc.set);
+        new_item.count = int(desc.count);
         if (desc.descriptor_type == SPV_REFLECT_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER && desc.count == 1 &&
             (desc.type_description->op == SpvOpTypeRuntimeArray || desc.type_description->op == SpvOpTypeArray)) {
             new_item.unbounded_array = true;

@@ -103,7 +103,7 @@ uint32_t Ray::Vk::Buffer::AllocSubRegion(const uint32_t req_size, const char *ta
     if (alloc_off != 0xffffffff) {
         if (init_buf) {
             assert(init_buf->type_ == eBufType::Stage);
-            VkCommandBuffer cmd_buf = reinterpret_cast<VkCommandBuffer>(_cmd_buf);
+            auto cmd_buf = reinterpret_cast<VkCommandBuffer>(_cmd_buf);
 
             VkPipelineStageFlags src_stages = 0, dst_stages = 0;
             SmallVector<VkBufferMemoryBarrier, 2> barriers;
@@ -163,7 +163,7 @@ uint32_t Ray::Vk::Buffer::AllocSubRegion(const uint32_t req_size, const char *ta
 void Ray::Vk::Buffer::UpdateSubRegion(const uint32_t offset, const uint32_t size, const Buffer &init_buf,
                                       const uint32_t init_off, void *_cmd_buf) {
     assert(init_buf.type_ == eBufType::Stage);
-    VkCommandBuffer cmd_buf = reinterpret_cast<VkCommandBuffer>(_cmd_buf);
+    auto cmd_buf = reinterpret_cast<VkCommandBuffer>(_cmd_buf);
 
     VkPipelineStageFlags src_stages = 0, dst_stages = 0;
     SmallVector<VkBufferMemoryBarrier, 2> barriers;
@@ -352,12 +352,12 @@ void Ray::Vk::Buffer::FreeImmediate() {
 }
 
 uint32_t Ray::Vk::Buffer::AlignMapOffset(const uint32_t offset) const {
-    const uint32_t align_to = uint32_t(ctx_->device_properties().limits.nonCoherentAtomSize);
+    const auto align_to = uint32_t(ctx_->device_properties().limits.nonCoherentAtomSize);
     return offset - (offset % align_to);
 }
 
-uint32_t Ray::Vk::Buffer::AlignMapOffsetUp(uint32_t offset) const {
-    const uint32_t align_to = uint32_t(ctx_->device_properties().limits.nonCoherentAtomSize);
+uint32_t Ray::Vk::Buffer::AlignMapOffsetUp(const uint32_t offset) const {
+    const auto align_to = uint32_t(ctx_->device_properties().limits.nonCoherentAtomSize);
     return align_to * ((offset + align_to - 1) / align_to);
 }
 
@@ -456,7 +456,7 @@ void Ray::Vk::Buffer::Unmap() {
 }
 
 void Ray::Vk::Buffer::Fill(const uint32_t dst_offset, const uint32_t size, const uint32_t data, void *_cmd_buf) {
-    VkCommandBuffer cmd_buf = reinterpret_cast<VkCommandBuffer>(_cmd_buf);
+    auto cmd_buf = reinterpret_cast<VkCommandBuffer>(_cmd_buf);
 
     VkPipelineStageFlags src_stages = 0, dst_stages = 0;
     SmallVector<VkBufferMemoryBarrier, 1> barriers;
@@ -528,7 +528,7 @@ void Ray::Vk::Buffer::Print(ILog *log) {
 
 void Ray::Vk::CopyBufferToBuffer(Buffer &src, const uint32_t src_offset, Buffer &dst, const uint32_t dst_offset,
                                  const uint32_t size, void *_cmd_buf) {
-    VkCommandBuffer cmd_buf = reinterpret_cast<VkCommandBuffer>(_cmd_buf);
+    auto cmd_buf = reinterpret_cast<VkCommandBuffer>(_cmd_buf);
 
     VkPipelineStageFlags src_stages = 0, dst_stages = 0;
     SmallVector<VkBufferMemoryBarrier, 2> barriers;

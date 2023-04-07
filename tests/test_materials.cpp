@@ -294,7 +294,7 @@ void test_oren_mat0(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 310;
 
     Ray::shading_node_desc_t desc;
-    desc.type = Ray::DiffuseNode;
+    desc.type = Ray::eShadingNode::Diffuse;
     desc.base_color[0] = 0.5f;
     desc.base_color[1] = 0.0f;
     desc.base_color[2] = 0.0f;
@@ -306,7 +306,7 @@ void test_oren_mat1(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 130;
 
     Ray::shading_node_desc_t desc;
-    desc.type = Ray::DiffuseNode;
+    desc.type = Ray::eShadingNode::Diffuse;
     desc.base_color[0] = 0.0f;
     desc.base_color[1] = 0.5f;
     desc.base_color[2] = 0.5f;
@@ -319,7 +319,7 @@ void test_oren_mat2(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 310;
 
     Ray::shading_node_desc_t desc;
-    desc.type = Ray::DiffuseNode;
+    desc.type = Ray::eShadingNode::Diffuse;
     desc.base_color[0] = 0.0f;
     desc.base_color[1] = 0.0f;
     desc.base_color[2] = 0.5f;
@@ -448,7 +448,7 @@ void test_glossy_mat0(const char *arch_list[], const char *preferred_device) {
     const int PixThres = 100;
 
     Ray::shading_node_desc_t node_desc;
-    node_desc.type = Ray::GlossyNode;
+    node_desc.type = Ray::eShadingNode::Glossy;
     node_desc.base_color[0] = 1.0f;
     node_desc.base_color[1] = 1.0f;
     node_desc.base_color[2] = 1.0f;
@@ -461,7 +461,7 @@ void test_glossy_mat1(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 400;
 
     Ray::shading_node_desc_t node_desc;
-    node_desc.type = Ray::GlossyNode;
+    node_desc.type = Ray::eShadingNode::Glossy;
     node_desc.base_color[0] = 1.0f;
     node_desc.base_color[1] = 1.0f;
     node_desc.base_color[2] = 1.0f;
@@ -475,7 +475,7 @@ void test_glossy_mat2(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 170;
 
     Ray::shading_node_desc_t node_desc;
-    node_desc.type = Ray::GlossyNode;
+    node_desc.type = Ray::eShadingNode::Glossy;
     node_desc.base_color[0] = 1.0f;
     node_desc.base_color[1] = 1.0f;
     node_desc.base_color[2] = 1.0f;
@@ -895,7 +895,7 @@ void test_refr_mis0(const char *arch_list[], const char *preferred_device) {
     const int PixThres = 10;
 
     Ray::shading_node_desc_t mat_desc;
-    mat_desc.type = Ray::RefractiveNode;
+    mat_desc.type = Ray::eShadingNode::Refractive;
     mat_desc.base_color[0] = 1.0f;
     mat_desc.base_color[1] = 1.0f;
     mat_desc.base_color[2] = 1.0f;
@@ -911,7 +911,7 @@ void test_refr_mis1(const char *arch_list[], const char *preferred_device) {
     const int PixThres = 10;
 
     Ray::shading_node_desc_t mat_desc;
-    mat_desc.type = Ray::RefractiveNode;
+    mat_desc.type = Ray::eShadingNode::Refractive;
     mat_desc.base_color[0] = 1.0f;
     mat_desc.base_color[1] = 1.0f;
     mat_desc.base_color[2] = 1.0f;
@@ -927,7 +927,7 @@ void test_refr_mis2(const char *arch_list[], const char *preferred_device) {
     const int PixThres = 10;
 
     Ray::shading_node_desc_t mat_desc;
-    mat_desc.type = Ray::RefractiveNode;
+    mat_desc.type = Ray::eShadingNode::Refractive;
     mat_desc.base_color[0] = 1.0f;
     mat_desc.base_color[1] = 1.0f;
     mat_desc.base_color[2] = 1.0f;
@@ -946,7 +946,7 @@ void test_refr_mat0(const char *arch_list[], const char *preferred_device) {
     const int PixThres = 3846;
 
     Ray::shading_node_desc_t mat_desc;
-    mat_desc.type = Ray::RefractiveNode;
+    mat_desc.type = Ray::eShadingNode::Refractive;
     mat_desc.base_color[0] = 1.0f;
     mat_desc.base_color[1] = 1.0f;
     mat_desc.base_color[2] = 1.0f;
@@ -963,7 +963,7 @@ void test_refr_mat1(const char *arch_list[], const char *preferred_device) {
     const int PixThres = 2384;
 
     Ray::shading_node_desc_t mat_desc;
-    mat_desc.type = Ray::RefractiveNode;
+    mat_desc.type = Ray::eShadingNode::Refractive;
     mat_desc.base_color[0] = 1.0f;
     mat_desc.base_color[1] = 1.0f;
     mat_desc.base_color[2] = 1.0f;
@@ -980,7 +980,7 @@ void test_refr_mat2(const char *arch_list[], const char *preferred_device) {
     const int PixThres = 1521;
 
     Ray::shading_node_desc_t mat_desc;
-    mat_desc.type = Ray::RefractiveNode;
+    mat_desc.type = Ray::eShadingNode::Refractive;
     mat_desc.base_color[0] = 0.0f;
     mat_desc.base_color[1] = 1.0f;
     mat_desc.base_color[2] = 0.0f;
@@ -997,7 +997,7 @@ void test_refr_mat3(const char *arch_list[], const char *preferred_device) {
     const int PixThres = 40;
 
     Ray::shading_node_desc_t mat_desc;
-    mat_desc.type = Ray::RefractiveNode;
+    mat_desc.type = Ray::eShadingNode::Refractive;
     mat_desc.base_color[0] = 1.0f;
     mat_desc.base_color[1] = 0.0f;
     mat_desc.base_color[2] = 1.0f;
@@ -1189,7 +1189,7 @@ void test_alpha_mat4(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 130;
 
     Ray::shading_node_desc_t alpha_mat_desc;
-    alpha_mat_desc.type = Ray::TransparentNode;
+    alpha_mat_desc.type = Ray::eShadingNode::Transparent;
     alpha_mat_desc.base_color[0] = 0.75f;
     alpha_mat_desc.base_color[1] = 0.0f;
     alpha_mat_desc.base_color[2] = 0.0f;

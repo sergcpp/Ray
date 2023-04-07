@@ -51,7 +51,7 @@ void Ray::Vk::Renderer::kernel_GeneratePrimaryRays(VkCommandBuffer cmd_buf, cons
     uniform_params.cam_lens_ratio = cam.lens_ratio;
     uniform_params.cam_lens_blades = cam.lens_blades;
     uniform_params.cam_clip_start = cam.clip_start;
-    uniform_params.cam_filter = cam.filter;
+    uniform_params.cam_filter = int(cam.filter);
     uniform_params.shift_x = cam.shift[0];
     uniform_params.shift_y = cam.shift[1];
 

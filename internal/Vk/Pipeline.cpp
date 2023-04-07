@@ -76,7 +76,7 @@ Ray::Vk::Pipeline &Ray::Vk::Pipeline::operator=(Pipeline &&rhs) noexcept {
     ctx_ = exchange(rhs.ctx_, nullptr);
     rast_state_ = exchange(rhs.rast_state_, {});
     render_pass_ = exchange(rhs.render_pass_, nullptr);
-    prog_ = std::move(rhs.prog_);
+    prog_ = exchange(rhs.prog_, nullptr);
     vtx_input_ = exchange(rhs.vtx_input_, nullptr);
     layout_ = exchange(rhs.layout_, {});
     handle_ = exchange(rhs.handle_, {});
@@ -316,7 +316,7 @@ bool Ray::Vk::Pipeline::Init(Context *ctx, const RastState &rast_state, Program 
     type_ = ePipelineType::Graphics;
     rast_state_ = rast_state;
     render_pass_ = render_pass;
-    prog_ = std::move(prog);
+    prog_ = prog;
     vtx_input_ = vtx_input;
 
     return true;
@@ -333,8 +333,8 @@ bool Ray::Vk::Pipeline::Init(Context *ctx, const RastState &rast_state, Program 
                              uint32_t subpass_index, ILog *log) {
 
     SmallVector<RenderTargetInfo, MaxRTAttachments> color_infos;
-    for (int i = 0; i < color_attachments.size(); ++i) {
-        color_infos.emplace_back(color_attachments[i]);
+    for (const RenderTarget &attachment : color_attachments) {
+        color_infos.emplace_back(attachment);
     }
 
     return Init(ctx, rast_state, prog, vtx_input, nullptr, color_infos, RenderTargetInfo{depth_attachment},
@@ -444,7 +444,7 @@ bool Ray::Vk::Pipeline::Init(Context *ctx, Program *prog, ILog *log) {
             log->Error("Failed to create pipeline!");
             return false;
         }
-    } else if (type == ePipelineType::Raytracing) {
+    } else /* if (type == ePipelineType::Raytracing) */ {
         VkRayTracingPipelineCreateInfoKHR info = {VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR};
         info.pStages = shader_stage_create_info.cdata();
         info.stageCount = uint32_t(shader_stage_create_info.size());
@@ -543,7 +543,7 @@ bool Ray::Vk::Pipeline::Init(Context *ctx, Program *prog, ILog *log) {
 
     ctx_ = ctx;
     type_ = type;
-    prog_ = std::move(prog);
+    prog_ = prog;
 
     return true;
 }

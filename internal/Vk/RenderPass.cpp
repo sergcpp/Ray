@@ -40,7 +40,7 @@ static_assert(VkSampleCountFlagBits::VK_SAMPLE_COUNT_2_BIT == 2, "!");
 static_assert(VkSampleCountFlagBits::VK_SAMPLE_COUNT_4_BIT == 4, "!");
 static_assert(VkSampleCountFlagBits::VK_SAMPLE_COUNT_8_BIT == 8, "!");
 
-VkFormat ToSRGBFormat(const VkFormat format);
+VkFormat ToSRGBFormat(VkFormat format);
 } // namespace Vk
 } // namespace Ray
 
@@ -65,8 +65,8 @@ bool Ray::Vk::RenderPass::Init(Context *ctx, Span<const RenderTargetInfo> _color
 
     SmallVector<VkAttachmentDescription, MaxRTAttachments> pass_attachments;
     VkAttachmentReference color_attachment_refs[MaxRTAttachments];
-    for (int i = 0; i < MaxRTAttachments; i++) {
-        color_attachment_refs[i] = {VK_ATTACHMENT_UNUSED, VK_IMAGE_LAYOUT_UNDEFINED};
+    for (VkAttachmentReference &attachment_ref : color_attachment_refs) {
+        attachment_ref = {VK_ATTACHMENT_UNUSED, VK_IMAGE_LAYOUT_UNDEFINED};
     }
     VkAttachmentReference depth_attachment_ref = {VK_ATTACHMENT_UNUSED, VK_IMAGE_LAYOUT_UNDEFINED};
 
@@ -74,7 +74,7 @@ bool Ray::Vk::RenderPass::Init(Context *ctx, Span<const RenderTargetInfo> _color
     depth_rt = {};
 
     if (_depth_rt) {
-        const uint32_t att_index = uint32_t(pass_attachments.size());
+        const auto att_index = uint32_t(pass_attachments.size());
 
         auto &att_desc = pass_attachments.emplace_back();
         att_desc.format = Ray::Vk::VKFormatFromTexFormat(_depth_rt.format);
@@ -97,7 +97,7 @@ bool Ray::Vk::RenderPass::Init(Context *ctx, Span<const RenderTargetInfo> _color
             continue;
         }
 
-        const uint32_t att_index = uint32_t(pass_attachments.size());
+        const auto att_index = uint32_t(pass_attachments.size());
 
         auto &att_desc = pass_attachments.emplace_back();
         att_desc.format = VKFormatFromTexFormat(_color_rts[i].format);
@@ -191,8 +191,8 @@ bool Ray::Vk::RenderPass::Setup(Context *ctx, Span<const RenderTarget> _color_rt
     }
 
     SmallVector<RenderTargetInfo, MaxRTAttachments> infos;
-    for (int i = 0; i < _color_rts.size(); ++i) {
-        infos.emplace_back(_color_rts[i]);
+    for (const auto &color_rt : _color_rts) {
+        infos.emplace_back(color_rt);
     }
 
     return Init(ctx, infos, RenderTargetInfo{_depth_rt}, log);

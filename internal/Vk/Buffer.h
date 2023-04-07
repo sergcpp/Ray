@@ -47,7 +47,7 @@ struct BufHandle {
     VkBuffer buf = VK_NULL_HANDLE;
     uint32_t generation = 0;
 
-    operator bool() const { return buf != VK_NULL_HANDLE; }
+    explicit operator bool() const { return buf != VK_NULL_HANDLE; }
 };
 inline bool operator==(const BufHandle lhs, const BufHandle rhs) {
     return lhs.buf == rhs.buf && lhs.generation == rhs.generation;
@@ -100,7 +100,7 @@ class Buffer : public LinearAlloc {
 
     uint32_t generation() const { return handle_.generation; }
 
-    operator bool() const { return handle_.buf != VK_NULL_HANDLE; }
+    explicit operator bool() const { return handle_.buf != VK_NULL_HANDLE; }
 
     bool is_mapped() const { return mapped_ptr_ != nullptr; }
     template <typename T = uint8_t> T *mapped_ptr() const { return reinterpret_cast<T *>(mapped_ptr_); }

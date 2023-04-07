@@ -77,7 +77,7 @@ class Renderer : public RendererSIMD<RPDimX, RPDimY> {
   public:
     Renderer(const settings_t &s, ILog *log) : RendererSIMD(s, log) {}
 
-    eRendererType type() const override { return RendererAVX2; }
+    eRendererType type() const override { return eRendererType::SIMD_AVX2; }
 };
 
 RendererBase *CreateRenderer(const settings_t &s, ILog *log) { return new Renderer(s, log); }

@@ -168,9 +168,9 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_sh, const bool ou
         static const float view_up[] = {0.0f, 1.0f, 0.0f};
 
         Ray::camera_desc_t cam_desc;
-        cam_desc.type = Ray::Persp;
-        cam_desc.filter = Ray::Box;
-        cam_desc.dtype = Ray::SRGB;
+        cam_desc.type = Ray::eCamType::Persp;
+        cam_desc.filter = Ray::eFilterType::Box;
+        cam_desc.dtype = Ray::eDeviceType::SRGB;
         if (test_scene == eTestScene::Refraction_Plane) {
             memcpy(&cam_desc.origin[0], &view_origin_refr[0], 3 * sizeof(float));
             memcpy(&cam_desc.fwd[0], &view_dir_refr[0], 3 * sizeof(float));
@@ -284,7 +284,7 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_sh, const bool ou
     Ray::MaterialHandle square_light_mat;
     {
         Ray::shading_node_desc_t square_light_mat_desc;
-        square_light_mat_desc.type = Ray::EmissiveNode;
+        square_light_mat_desc.type = Ray::eShadingNode::Emissive;
         square_light_mat_desc.strength = 20.3718f;
         square_light_mat_desc.multiple_importance = true;
         square_light_mat_desc.base_color[0] = 1.0f;
@@ -296,7 +296,7 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_sh, const bool ou
     Ray::MaterialHandle disc_light_mat;
     {
         Ray::shading_node_desc_t disc_light_mat_desc;
-        disc_light_mat_desc.type = Ray::EmissiveNode;
+        disc_light_mat_desc.type = Ray::eShadingNode::Emissive;
         disc_light_mat_desc.strength = 81.4873f;
         disc_light_mat_desc.multiple_importance = true;
         disc_light_mat_desc.base_color[0] = 1.0f;
@@ -308,7 +308,7 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_sh, const bool ou
     Ray::MaterialHandle glassball_mat0;
     if (test_scene == eTestScene::Standard_GlassBall0) {
         Ray::shading_node_desc_t glassball_mat0_desc;
-        glassball_mat0_desc.type = Ray::RefractiveNode;
+        glassball_mat0_desc.type = Ray::eShadingNode::Refractive;
         glassball_mat0_desc.base_color[0] = 1.0f;
         glassball_mat0_desc.base_color[1] = 1.0f;
         glassball_mat0_desc.base_color[2] = 1.0f;
@@ -329,7 +329,7 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_sh, const bool ou
     Ray::MaterialHandle glassball_mat1;
     if (test_scene == eTestScene::Standard_GlassBall0) {
         Ray::shading_node_desc_t glassball_mat1_desc;
-        glassball_mat1_desc.type = Ray::RefractiveNode;
+        glassball_mat1_desc.type = Ray::eShadingNode::Refractive;
         glassball_mat1_desc.base_color[0] = 1.0f;
         glassball_mat1_desc.base_color[1] = 1.0f;
         glassball_mat1_desc.base_color[2] = 1.0f;
@@ -354,8 +354,8 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_sh, const bool ou
         std::tie(base_attrs, base_indices, base_groups) = LoadBIN("test_data/meshes/mat_test/base.bin");
 
         Ray::mesh_desc_t base_mesh_desc;
-        base_mesh_desc.prim_type = Ray::TriangleList;
-        base_mesh_desc.layout = Ray::PxyzNxyzTuv;
+        base_mesh_desc.prim_type = Ray::ePrimType::TriangleList;
+        base_mesh_desc.layout = Ray::eVertexLayout::PxyzNxyzTuv;
         base_mesh_desc.vtx_attrs = &base_attrs[0];
         base_mesh_desc.vtx_attrs_count = uint32_t(base_attrs.size()) / 8;
         base_mesh_desc.vtx_indices = &base_indices[0];
@@ -375,8 +375,8 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_sh, const bool ou
         }
 
         Ray::mesh_desc_t model_mesh_desc;
-        model_mesh_desc.prim_type = Ray::TriangleList;
-        model_mesh_desc.layout = Ray::PxyzNxyzTuv;
+        model_mesh_desc.prim_type = Ray::ePrimType::TriangleList;
+        model_mesh_desc.layout = Ray::eVertexLayout::PxyzNxyzTuv;
         model_mesh_desc.vtx_attrs = &model_attrs[0];
         model_mesh_desc.vtx_attrs_count = uint32_t(model_attrs.size()) / 8;
         model_mesh_desc.vtx_indices = &model_indices[0];
@@ -392,8 +392,8 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_sh, const bool ou
         std::tie(core_attrs, core_indices, core_groups) = LoadBIN("test_data/meshes/mat_test/core.bin");
 
         Ray::mesh_desc_t core_mesh_desc;
-        core_mesh_desc.prim_type = Ray::TriangleList;
-        core_mesh_desc.layout = Ray::PxyzNxyzTuv;
+        core_mesh_desc.prim_type = Ray::ePrimType::TriangleList;
+        core_mesh_desc.layout = Ray::eVertexLayout::PxyzNxyzTuv;
         core_mesh_desc.vtx_attrs = &core_attrs[0];
         core_mesh_desc.vtx_attrs_count = uint32_t(core_attrs.size()) / 8;
         core_mesh_desc.vtx_indices = &core_indices[0];
@@ -410,8 +410,8 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_sh, const bool ou
             LoadBIN("test_data/meshes/mat_test/subsurf_bar.bin");
 
         Ray::mesh_desc_t subsurf_bar_mesh_desc;
-        subsurf_bar_mesh_desc.prim_type = Ray::TriangleList;
-        subsurf_bar_mesh_desc.layout = Ray::PxyzNxyzTuv;
+        subsurf_bar_mesh_desc.prim_type = Ray::ePrimType::TriangleList;
+        subsurf_bar_mesh_desc.layout = Ray::eVertexLayout::PxyzNxyzTuv;
         subsurf_bar_mesh_desc.vtx_attrs = &subsurf_bar_attrs[0];
         subsurf_bar_mesh_desc.vtx_attrs_count = uint32_t(subsurf_bar_attrs.size()) / 8;
         subsurf_bar_mesh_desc.vtx_indices = &subsurf_bar_indices[0];
@@ -429,8 +429,8 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_sh, const bool ou
         std::tie(text_attrs, text_indices, text_groups) = LoadBIN("test_data/meshes/mat_test/text.bin");
 
         Ray::mesh_desc_t text_mesh_desc;
-        text_mesh_desc.prim_type = Ray::TriangleList;
-        text_mesh_desc.layout = Ray::PxyzNxyzTuv;
+        text_mesh_desc.prim_type = Ray::ePrimType::TriangleList;
+        text_mesh_desc.layout = Ray::eVertexLayout::PxyzNxyzTuv;
         text_mesh_desc.vtx_attrs = &text_attrs[0];
         text_mesh_desc.vtx_attrs_count = uint32_t(text_attrs.size()) / 8;
         text_mesh_desc.vtx_indices = &text_indices[0];
@@ -450,8 +450,8 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_sh, const bool ou
         }
 
         Ray::mesh_desc_t env_mesh_desc;
-        env_mesh_desc.prim_type = Ray::TriangleList;
-        env_mesh_desc.layout = Ray::PxyzNxyzTuv;
+        env_mesh_desc.prim_type = Ray::ePrimType::TriangleList;
+        env_mesh_desc.layout = Ray::eVertexLayout::PxyzNxyzTuv;
         env_mesh_desc.vtx_attrs = &env_attrs[0];
         env_mesh_desc.vtx_attrs_count = uint32_t(env_attrs.size()) / 8;
         env_mesh_desc.vtx_indices = &env_indices[0];
@@ -478,8 +478,8 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_sh, const bool ou
             LoadBIN("test_data/meshes/mat_test/square_light.bin");
 
         Ray::mesh_desc_t square_light_mesh_desc;
-        square_light_mesh_desc.prim_type = Ray::TriangleList;
-        square_light_mesh_desc.layout = Ray::PxyzNxyzTuv;
+        square_light_mesh_desc.prim_type = Ray::ePrimType::TriangleList;
+        square_light_mesh_desc.layout = Ray::eVertexLayout::PxyzNxyzTuv;
         square_light_mesh_desc.vtx_attrs = &square_light_attrs[0];
         square_light_mesh_desc.vtx_attrs_count = uint32_t(square_light_attrs.size()) / 8;
         square_light_mesh_desc.vtx_indices = &square_light_indices[0];
@@ -499,8 +499,8 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_sh, const bool ou
             LoadBIN("test_data/meshes/mat_test/disc_light.bin");
 
         Ray::mesh_desc_t disc_light_mesh_desc;
-        disc_light_mesh_desc.prim_type = Ray::TriangleList;
-        disc_light_mesh_desc.layout = Ray::PxyzNxyzTuv;
+        disc_light_mesh_desc.prim_type = Ray::ePrimType::TriangleList;
+        disc_light_mesh_desc.layout = Ray::eVertexLayout::PxyzNxyzTuv;
         disc_light_mesh_desc.vtx_attrs = &disc_light_attrs[0];
         disc_light_mesh_desc.vtx_attrs_count = uint32_t(disc_light_attrs.size()) / 8;
         disc_light_mesh_desc.vtx_indices = &disc_light_indices[0];
@@ -520,8 +520,8 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_sh, const bool ou
             LoadBIN("test_data/meshes/mat_test/glassball.bin");
 
         Ray::mesh_desc_t glassball_mesh_desc;
-        glassball_mesh_desc.prim_type = Ray::TriangleList;
-        glassball_mesh_desc.layout = Ray::PxyzNxyzTuv;
+        glassball_mesh_desc.prim_type = Ray::ePrimType::TriangleList;
+        glassball_mesh_desc.layout = Ray::eVertexLayout::PxyzNxyzTuv;
         glassball_mesh_desc.vtx_attrs = &glassball_attrs[0];
         glassball_mesh_desc.vtx_attrs_count = uint32_t(glassball_attrs.size()) / 8;
         glassball_mesh_desc.vtx_indices = &glassball_indices[0];
@@ -736,8 +736,7 @@ void schedule_render_jobs(Ray::RendererBase &renderer, const Ray::SceneBase *sce
     const auto rt = renderer.type();
     const auto sz = renderer.size();
 
-    if (rt & (Ray::RendererRef | Ray::RendererSSE2 | Ray::RendererSSE41 | Ray::RendererAVX | Ray::RendererAVX2 |
-              Ray::RendererAVX512 | Ray::RendererNEON)) {
+    if (Ray::RendererSupportsMultithreading(rt)) {
         static const int BucketSize = 16;
 
         std::vector<Ray::RegionContext> region_contexts;

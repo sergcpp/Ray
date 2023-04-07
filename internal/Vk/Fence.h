@@ -18,11 +18,11 @@ class SyncFence {
     ~SyncFence();
 
     SyncFence(const SyncFence &rhs) = delete;
-    SyncFence(SyncFence &&rhs);
+    SyncFence(SyncFence &&rhs) noexcept;
     SyncFence &operator=(const SyncFence &rhs) = delete;
-    SyncFence &operator=(SyncFence &&rhs);
+    SyncFence &operator=(SyncFence &&rhs) noexcept;
 
-    operator bool() const { return fence_ != VK_NULL_HANDLE; }
+    explicit operator bool() const { return fence_ != VK_NULL_HANDLE; }
     VkFence fence() { return fence_; }
 
     bool signaled() const { return vkGetFenceStatus(device_, fence_) == VK_SUCCESS; }

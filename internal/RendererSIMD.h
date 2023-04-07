@@ -213,16 +213,16 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *scene, Regi
     PassData<S> &p = get_per_thread_pass_data<S>();
 
     // allocate aux data on demand
-    if (cam.pass_settings.flags & (OutputBaseColor | OutputDepthNormals)) {
+    if (cam.pass_settings.flags & (Bitmask<ePassFlags>{ePassFlags::OutputBaseColor} | ePassFlags::OutputDepthNormals)) {
         // TODO: Skip locking here
         std::lock_guard<std::mutex> _(mtx_);
 
-        if (cam.pass_settings.flags & OutputBaseColor) {
+        if (cam.pass_settings.flags & ePassFlags::OutputBaseColor) {
             base_color_buf_.resize(w_ * h_, {});
         } else if (!base_color_buf_.empty()) {
             base_color_buf_ = {};
         }
-        if (cam.pass_settings.flags & OutputDepthNormals) {
+        if (cam.pass_settings.flags & ePassFlags::OutputDepthNormals) {
             depth_normals_buf_.resize(w_ * h_, {});
         } else if (!depth_normals_buf_.empty()) {
             depth_normals_buf_ = {};
@@ -236,7 +236,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *scene, Regi
 
     const uint32_t hi = (region.iteration & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT;
 
-    if (cam.type != Geo) {
+    if (cam.type != eCamType::Geo) {
         GeneratePrimaryRays<DimX, DimY>(region.iteration, cam, rect, w_, h_, &region.halton_seq[hi], p.primary_rays,
                                         p.primary_masks);
 
@@ -301,7 +301,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *scene, Regi
                 UNROLLED_FOR(j, 4, {
                     temp_buf_[y.template get<i>() * w_ + x.template get<i>()].v[j] = out_rgba[j].template get<i>();
                 })
-                if (cam.pass_settings.flags & OutputBaseColor) {
+                if (cam.pass_settings.flags & ePassFlags::OutputBaseColor) {
                     auto old_val =
                         simd_fvec4(base_color_buf_[y.template get<i>() * w_ + x.template get<i>()].v, simd_mem_aligned);
                     old_val += (simd_fvec4{out_base_color[0].template get<i>(), out_base_color[1].template get<i>(),
@@ -311,7 +311,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *scene, Regi
                     old_val.store_to(base_color_buf_[y.template get<i>() * w_ + x.template get<i>()].v,
                                      simd_mem_aligned);
                 }
-                if (cam.pass_settings.flags & OutputDepthNormals) {
+                if (cam.pass_settings.flags & ePassFlags::OutputDepthNormals) {
                     auto old_val = simd_fvec4(depth_normals_buf_[y.template get<i>() * w_ + x.template get<i>()].v,
                                               simd_mem_aligned);
                     old_val +=
@@ -456,8 +456,8 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *scene, Regi
     Ref::tonemap_params_t tonemap_params;
     tonemap_params.exposure = std::pow(2.0f, cam.exposure);
     tonemap_params.inv_gamma = (1.0f / cam.gamma);
-    tonemap_params.srgb = (cam.dtype == SRGB);
-    tonemap_params.clamp = (cam.pass_settings.flags & Clamp) != 0;
+    tonemap_params.srgb = (cam.dtype == eDeviceType::SRGB);
+    tonemap_params.clamp = (cam.pass_settings.flags & ePassFlags::Clamp);
 
     {
         std::lock_guard<std::mutex> _(mtx_);

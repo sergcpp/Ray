@@ -135,28 +135,28 @@ Ray::MaterialHandle Ray::Ref::Scene::AddMaterial_nolock(const shading_node_desc_
     mat.tangent_rotation = 0.0f;
     mat.flags = 0;
 
-    if (m.type == DiffuseNode) {
+    if (m.type == eShadingNode::Diffuse) {
         mat.sheen_unorm = pack_unorm_16(CLAMP(0.5f * m.sheen, 0.0f, 1.0f));
         mat.sheen_tint_unorm = pack_unorm_16(CLAMP(m.tint, 0.0f, 1.0f));
         mat.textures[METALLIC_TEXTURE] = m.metallic_texture._index;
-    } else if (m.type == GlossyNode) {
+    } else if (m.type == eShadingNode::Glossy) {
         mat.tangent_rotation = 2.0f * PI * m.anisotropic_rotation;
         mat.textures[METALLIC_TEXTURE] = m.metallic_texture._index;
         mat.tint_unorm = pack_unorm_16(CLAMP(m.tint, 0.0f, 1.0f));
-    } else if (m.type == RefractiveNode) {
-    } else if (m.type == EmissiveNode) {
+    } else if (m.type == eShadingNode::Refractive) {
+    } else if (m.type == eShadingNode::Emissive) {
         mat.strength = m.strength;
         if (m.multiple_importance) {
             mat.flags |= MAT_FLAG_MULT_IMPORTANCE;
         }
-    } else if (m.type == MixNode) {
+    } else if (m.type == eShadingNode::Mix) {
         mat.strength = m.strength;
         mat.textures[MIX_MAT1] = m.mix_materials[0]._index;
         mat.textures[MIX_MAT2] = m.mix_materials[1]._index;
         if (m.mix_add) {
             mat.flags |= MAT_FLAG_MIX_ADD;
         }
-    } else if (m.type == TransparentNode) {
+    } else if (m.type == eShadingNode::Transparent) {
     }
 
     mat.textures[NORMALS_TEXTURE] = m.normal_map._index;
@@ -168,7 +168,7 @@ Ray::MaterialHandle Ray::Ref::Scene::AddMaterial_nolock(const shading_node_desc_
 Ray::MaterialHandle Ray::Ref::Scene::AddMaterial(const principled_mat_desc_t &m) {
     material_t main_mat = {};
 
-    main_mat.type = PrincipledNode;
+    main_mat.type = eShadingNode::Principled;
     main_mat.textures[BASE_TEXTURE] = m.base_texture._index;
     memcpy(&main_mat.base_color[0], &m.base_color[0], 3 * sizeof(float));
     main_mat.sheen_unorm = pack_unorm_16(CLAMP(0.5f * m.sheen, 0.0f, 1.0f));
@@ -199,7 +199,7 @@ Ray::MaterialHandle Ray::Ref::Scene::AddMaterial(const principled_mat_desc_t &m)
     if (m.emission_strength > 0.0f &&
         (m.emission_color[0] > 0.0f || m.emission_color[1] > 0.0f || m.emission_color[2] > 0.0f)) {
         shading_node_desc_t emissive_desc;
-        emissive_desc.type = EmissiveNode;
+        emissive_desc.type = eShadingNode::Emissive;
 
         memcpy(emissive_desc.base_color, m.emission_color, 3 * sizeof(float));
         emissive_desc.base_texture = m.emission_texture;
@@ -210,7 +210,7 @@ Ray::MaterialHandle Ray::Ref::Scene::AddMaterial(const principled_mat_desc_t &m)
 
     if (m.alpha != 1.0f || m.alpha_texture != InvalidTextureHandle) {
         shading_node_desc_t transparent_desc;
-        transparent_desc.type = TransparentNode;
+        transparent_desc.type = eShadingNode::Transparent;
 
         transparent_node = AddMaterial_nolock(transparent_desc);
     }
@@ -220,7 +220,7 @@ Ray::MaterialHandle Ray::Ref::Scene::AddMaterial(const principled_mat_desc_t &m)
             root_node = emissive_node;
         } else {
             shading_node_desc_t mix_node;
-            mix_node.type = MixNode;
+            mix_node.type = eShadingNode::Mix;
             mix_node.base_texture = InvalidTextureHandle;
             mix_node.strength = 0.5f;
             mix_node.ior = 0.0f;
@@ -238,7 +238,7 @@ Ray::MaterialHandle Ray::Ref::Scene::AddMaterial(const principled_mat_desc_t &m)
             root_node = transparent_node;
         } else {
             shading_node_desc_t mix_node;
-            mix_node.type = MixNode;
+            mix_node.type = eShadingNode::Mix;
             mix_node.base_texture = m.alpha_texture;
             mix_node.strength = m.alpha;
             mix_node.ior = 0.0f;
@@ -273,13 +273,13 @@ Ray::MeshHandle Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
 
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
-    mesh_t m;
+    mesh_t m = {};
     m.node_index = uint32_t(nodes_.size());
     m.node_count = uint32_t(temp_nodes.size());
 
     { // Apply required offsets
-        const uint32_t nodes_offset = uint32_t(nodes_.size());
-        const uint32_t tris_indices_offset = uint32_t(tri_indices_.size());
+        const auto nodes_offset = uint32_t(nodes_.size());
+        const auto tris_indices_offset = uint32_t(tri_indices_.size());
 
         for (bvh_node_t &n : temp_nodes) {
             if (n.prim_index & LEAF_NODE_BIT) {
@@ -290,7 +290,7 @@ Ray::MeshHandle Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
             }
         }
 
-        const uint32_t tris_offset = uint32_t(tri_materials_.size());
+        const auto tris_offset = uint32_t(tri_materials_.size());
         for (uint32_t &tri_index : temp_tri_indices) {
             tri_index += tris_offset;
         }
@@ -332,10 +332,10 @@ Ray::MeshHandle Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
         while (material_count) {
             const material_t &mat = materials_[material_stack[--material_count]];
 
-            if (mat.type == MixNode) {
+            if (mat.type == eShadingNode::Mix) {
                 material_stack[material_count++] = mat.textures[MIX_MAT1];
                 material_stack[material_count++] = mat.textures[MIX_MAT2];
-            } else if (mat.type == TransparentNode) {
+            } else if (mat.type == eShadingNode::Transparent) {
                 is_front_solid = false;
                 break;
             }
@@ -347,10 +347,10 @@ Ray::MeshHandle Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
         while (material_count) {
             const material_t &mat = materials_[material_stack[--material_count]];
 
-            if (mat.type == MixNode) {
+            if (mat.type == eShadingNode::Mix) {
                 material_stack[material_count++] = mat.textures[MIX_MAT1];
                 material_stack[material_count++] = mat.textures[MIX_MAT2];
-            } else if (mat.type == TransparentNode) {
+            } else if (mat.type == eShadingNode::Transparent) {
                 is_back_solid = false;
                 break;
             }
@@ -385,7 +385,7 @@ Ray::MeshHandle Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
         new_vtx_indices.push_back(_m.vtx_indices[i] + _m.base_vertex + uint32_t(vertices_.size()));
     }
 
-    const size_t stride = AttrStrides[_m.layout];
+    const size_t stride = AttrStrides[int(_m.layout)];
 
     // add attributes
     const size_t new_vertices_start = vertices_.size();
@@ -396,26 +396,26 @@ Ray::MeshHandle Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
         memcpy(&v.p[0], (_m.vtx_attrs + i * stride), 3 * sizeof(float));
         memcpy(&v.n[0], (_m.vtx_attrs + i * stride + 3), 3 * sizeof(float));
 
-        if (_m.layout == PxyzNxyzTuv) {
+        if (_m.layout == eVertexLayout::PxyzNxyzTuv) {
             memcpy(&v.t[0][0], (_m.vtx_attrs + i * stride + 6), 2 * sizeof(float));
             v.t[1][0] = v.t[1][1] = 0.0f;
             v.b[0] = v.b[1] = v.b[2] = 0.0f;
-        } else if (_m.layout == PxyzNxyzTuvTuv) {
+        } else if (_m.layout == eVertexLayout::PxyzNxyzTuvTuv) {
             memcpy(&v.t[0][0], (_m.vtx_attrs + i * stride + 6), 2 * sizeof(float));
             memcpy(&v.t[1][0], (_m.vtx_attrs + i * stride + 8), 2 * sizeof(float));
             v.b[0] = v.b[1] = v.b[2] = 0.0f;
-        } else if (_m.layout == PxyzNxyzBxyzTuv) {
+        } else if (_m.layout == eVertexLayout::PxyzNxyzBxyzTuv) {
             memcpy(&v.b[0], (_m.vtx_attrs + i * stride + 6), 3 * sizeof(float));
             memcpy(&v.t[0][0], (_m.vtx_attrs + i * stride + 9), 2 * sizeof(float));
             v.t[1][0] = v.t[1][1] = 0.0f;
-        } else if (_m.layout == PxyzNxyzBxyzTuvTuv) {
+        } else if (_m.layout == eVertexLayout::PxyzNxyzBxyzTuvTuv) {
             memcpy(&v.b[0], (_m.vtx_attrs + i * stride + 6), 3 * sizeof(float));
             memcpy(&v.t[0][0], (_m.vtx_attrs + i * stride + 9), 2 * sizeof(float));
             memcpy(&v.t[1][0], (_m.vtx_attrs + i * stride + 11), 2 * sizeof(float));
         }
     }
 
-    if (_m.layout == PxyzNxyzTuv || _m.layout == PxyzNxyzTuvTuv) {
+    if (_m.layout == eVertexLayout::PxyzNxyzTuv || _m.layout == eVertexLayout::PxyzNxyzTuvTuv) {
         ComputeTangentBasis(0, new_vertices_start, vertices_, new_vtx_indices, &new_vtx_indices[0],
                             new_vtx_indices.size());
     }
@@ -674,7 +674,7 @@ Ray::MeshInstanceHandle Ray::Ref::Scene::AddMeshInstance(const MeshHandle mesh, 
             const tri_mat_data_t &tri_mat = tri_materials_[tri];
 
             const material_t &front_mat = materials_[tri_mat.front_mi & MATERIAL_INDEX_BITS];
-            if (front_mat.type == EmissiveNode && (front_mat.flags & MAT_FLAG_MULT_IMPORTANCE)) {
+            if (front_mat.type == eShadingNode::Emissive && (front_mat.flags & MAT_FLAG_MULT_IMPORTANCE)) {
                 light_t new_light = {};
                 new_light.cast_shadow = 1;
                 new_light.type = LIGHT_TYPE_TRI;

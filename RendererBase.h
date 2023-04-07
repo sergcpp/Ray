@@ -12,29 +12,31 @@
 
 namespace Ray {
 /// Renderer flags used to choose backend
-enum eRendererType : uint32_t {
+enum class eRendererType : uint32_t {
     // Reference renderer, slightly vectorized, the easiest to modify and debug
-    RendererRef = (1 << 0),
+    Reference,
     // SIMD renderers, heavily vectorized
-    RendererSSE2 = (1 << 1),
-    RendererSSE41 = (1 << 2),
-    RendererAVX = (1 << 3),
-    RendererAVX2 = (1 << 4),
-    RendererAVX512 = (1 << 5),
-    RendererNEON = (1 << 6),
-    // GPU renderer
-    RendererVK = (1 << 7),
-    // All CPU renderers
-    RendererCPU =
-        RendererRef | RendererSSE2 | RendererSSE41 | RendererNEON | RendererAVX | RendererAVX2 /*| RendererAVX512 */,
-    // All GPU renderers
-    RendererGPU = RendererVK
+    SIMD_SSE2,
+    SIMD_SSE41,
+    SIMD_AVX,
+    SIMD_AVX2,
+    SIMD_AVX512,
+    SIMD_NEON,
+    // GPU renderers
+    Vulkan
 };
+
+// All CPU renderers
+const Bitmask<eRendererType> RendererCPU = Bitmask<eRendererType>{eRendererType::Reference} | eRendererType::SIMD_SSE2 |
+                                           eRendererType::SIMD_SSE41 | eRendererType::SIMD_NEON |
+                                           eRendererType::SIMD_AVX | eRendererType::SIMD_AVX2;
+// All GPU renderers
+const Bitmask<eRendererType> RendererGPU = eRendererType::Vulkan;
 
 const char *RendererTypeName(eRendererType rt);
 eRendererType RendererTypeFromName(const char *name);
 
-/// Returns whether it is safe to call Render function for non-overlaping regions from different threads
+/// Returns whether it is safe to call Render function for non-overlapping regions from different threads
 bool RendererSupportsMultithreading(eRendererType rt);
 
 /// Renderer settings

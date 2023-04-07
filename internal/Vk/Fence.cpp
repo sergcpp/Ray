@@ -21,12 +21,12 @@ Ray::Vk::SyncFence::~SyncFence() {
     }
 }
 
-Ray::Vk::SyncFence::SyncFence(SyncFence &&rhs) {
+Ray::Vk::SyncFence::SyncFence(SyncFence &&rhs) noexcept {
     device_ = exchange(rhs.device_, VkDevice{VK_NULL_HANDLE});
     fence_ = exchange(rhs.fence_, VkFence{VK_NULL_HANDLE});
 }
 
-Ray::Vk::SyncFence &Ray::Vk::SyncFence::operator=(SyncFence &&rhs) {
+Ray::Vk::SyncFence &Ray::Vk::SyncFence::operator=(SyncFence &&rhs) noexcept {
     if (fence_) {
         vkDestroyFence(device_, fence_, nullptr);
     }

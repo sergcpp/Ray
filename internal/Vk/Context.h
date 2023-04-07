@@ -89,12 +89,12 @@ class Context {
     const VkCommandBuffer &draw_cmd_buf(const int i) const { return draw_cmd_bufs_[i]; }
     const VkSemaphore &render_finished_semaphore(const int i) const { return render_finished_semaphores_[i]; }
     const VkFence &in_flight_fence(const int i) const { return in_flight_fences_[i]; }
-    const VkQueryPool query_pool(const int i) const { return query_pools_[i]; }
+    VkQueryPool query_pool(const int i) const { return query_pools_[i]; }
 
     MemoryAllocators *default_memory_allocs() { return default_memory_allocs_.get(); }
     DescrMultiPoolAlloc *default_descr_alloc() const { return default_descr_alloc_[backend_frame].get(); }
 
-    int WriteTimestamp(const bool start);
+    int WriteTimestamp(bool start);
     uint64_t GetTimestampIntervalDurationUs(int query_start, int query_end) const;
 
     bool ReadbackTimestampQueries(int i);

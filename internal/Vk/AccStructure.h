@@ -16,10 +16,10 @@ class AccStructure {
     ~AccStructure() { Free(); }
 
     AccStructure(const AccStructure &rhs) = delete;
-    AccStructure(AccStructure &&rhs);
+    AccStructure(AccStructure &&rhs) noexcept;
 
     AccStructure &operator=(const AccStructure &rhs) = delete;
-    AccStructure &operator=(AccStructure &&rhs);
+    AccStructure &operator=(AccStructure &&rhs) noexcept;
 
     const VkAccelerationStructureKHR &vk_handle() const {
         return handle_;

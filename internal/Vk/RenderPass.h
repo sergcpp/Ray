@@ -42,7 +42,7 @@ struct RenderTarget {
         : ref(_ref), view_index(_view_index), load(_load), store(_store), stencil_load(_stencil_load),
           stencil_store(_stencil_store) {}
 
-    explicit operator bool() const { return bool(ref); }
+    operator bool() const { return bool(ref); }
 };
 
 inline bool operator==(const RenderTarget &lhs, const RenderTarget &rhs) {

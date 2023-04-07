@@ -40,7 +40,9 @@ class VertexInput {
                             SmallVectorImpl<VkVertexInputAttributeDescription> &out_attribs) const;
 
     bool Setup(Span<const VtxAttribDesc> attribs, const BufHandle &elem_buf);
-    bool Setup(Span<const VtxAttribDesc> attribs, const Buffer *elem_buf) { return Setup(attribs, elem_buf->handle()); }
+    bool Setup(Span<const VtxAttribDesc> _attribs, const Buffer *_elem_buf) {
+        return Setup(_attribs, _elem_buf->handle());
+    }
 };
 } // namespace Vk
 } // namespace Ray

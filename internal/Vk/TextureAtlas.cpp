@@ -860,7 +860,7 @@ void Ray::Vk::TextureAtlas::WritePageData(const int page, const int posx, const 
 
 void Ray::Vk::TextureAtlas::CopyRegionTo(const int page, const int x, const int y, const int w, const int h,
                                          const Buffer &dst_buf, void *_cmd_buf, const int data_off) const {
-    VkCommandBuffer cmd_buf = reinterpret_cast<VkCommandBuffer>(_cmd_buf);
+    auto cmd_buf = reinterpret_cast<VkCommandBuffer>(_cmd_buf);
 
     VkPipelineStageFlags src_stages = 0, dst_stages = 0;
     SmallVector<VkBufferMemoryBarrier, 1> buf_barriers;

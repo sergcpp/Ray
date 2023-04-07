@@ -178,8 +178,8 @@ bool Ray::Vk::Context::Init(ILog *log, const char *preferred_device) {
             (res == VK_SUCCESS) && (format_properties.optimalTilingFeatures & VK_FORMAT_FEATURE_BLIT_DST_BIT);
     }
 
-    default_memory_allocs_.reset(new MemoryAllocators("Default Allocs", this, 32 * 1024 * 1024 /* initial_block_size */,
-                                                      1.5f /* growth_factor */));
+    default_memory_allocs_ = std::make_unique<MemoryAllocators>(
+        "Default Allocs", this, 32 * 1024 * 1024 /* initial_block_size */, 1.5f /* growth_factor */);
 
     for (int i = 0; i < MaxFramesInFlight; ++i) {
         const int PoolStep = 4;
@@ -191,9 +191,9 @@ bool Ray::Vk::Context::Init(ILog *log, const char *preferred_device) {
         const int MaxAccCount = 1;
         const int InitialSetsCount = 16;
 
-        default_descr_alloc_[i].reset(new DescrMultiPoolAlloc(this, PoolStep, MaxImgSamplerCount, MaxStoreImgCount,
-                                                              MaxUBufCount, MaxSBufCount, MaxTBufCount, MaxAccCount,
-                                                              InitialSetsCount));
+        default_descr_alloc_[i] =
+            std::make_unique<DescrMultiPoolAlloc>(this, PoolStep, MaxImgSamplerCount, MaxStoreImgCount, MaxUBufCount,
+                                                  MaxSBufCount, MaxTBufCount, MaxAccCount, InitialSetsCount);
     }
 
     rdoc_device = RENDERDOC_DEVICEPOINTER_FROM_VKINSTANCE(instance_);
@@ -688,7 +688,7 @@ uint64_t Ray::Vk::Context::GetTimestampIntervalDurationUs(const int query_beg, c
 
 bool Ray::Vk::Context::ReadbackTimestampQueries(const int i) {
     VkQueryPool query_pool = query_pools_[i];
-    const uint32_t query_count = uint32_t(query_counts_[i]);
+    const auto query_count = uint32_t(query_counts_[i]);
     if (!query_count) {
         // nothing to readback
         return true;

@@ -832,7 +832,7 @@ bool Ray::Vk::Texture2D::Realloc(const int w, const int h, int mip_count, const 
         }
 
         if (copy_regions_count) {
-            VkCommandBuffer cmd_buf = reinterpret_cast<VkCommandBuffer>(_cmd_buf);
+            auto cmd_buf = reinterpret_cast<VkCommandBuffer>(_cmd_buf);
 
             VkPipelineStageFlags src_stages = 0, dst_stages = 0;
             SmallVector<VkImageMemoryBarrier, 2> barriers;
@@ -1063,7 +1063,7 @@ void Ray::Vk::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, void *_cmd_
     if (sbuf) {
         assert(p.samples == 1);
         assert(sbuf && sbuf->type() == eBufType::Stage);
-        VkCommandBuffer cmd_buf = reinterpret_cast<VkCommandBuffer>(_cmd_buf);
+        auto cmd_buf = reinterpret_cast<VkCommandBuffer>(_cmd_buf);
 
         VkPipelineStageFlags src_stages = 0, dst_stages = 0;
         SmallVector<VkBufferMemoryBarrier, 1> buf_barriers;
@@ -1196,7 +1196,7 @@ void Ray::Vk::Texture2D::InitFromTGA_RGBEFile(const void *data, Buffer &sbuf, vo
     std::unique_ptr<uint8_t[]> image_data = ReadTGAFile(data, w, h, format);
     assert(format == eTexFormat::RawRGBA8888);
 
-    uint16_t *stage_data = reinterpret_cast<uint16_t *>(sbuf.Map(BufMapWrite));
+    auto *stage_data = reinterpret_cast<uint16_t *>(sbuf.Map(BufMapWrite));
     ConvertRGBE_to_RGB16F(image_data.get(), w, h, stage_data);
     sbuf.FlushMappedRange(0, sbuf.AlignMapOffset(3 * w * h * sizeof(uint16_t)));
     sbuf.Unmap();
@@ -1211,7 +1211,7 @@ void Ray::Vk::Texture2D::InitFromTGA_RGBEFile(const void *data, Buffer &sbuf, vo
 
 void Ray::Vk::Texture2D::InitFromDDSFile(const void *data, const int size, Buffer &sbuf, void *_cmd_buf,
                                          MemoryAllocators *mem_allocs, const Tex2DParams &p, ILog *log) {
-    DDSHeader header;
+    DDSHeader header = {};
     memcpy(&header, data, sizeof(DDSHeader));
 
     eTexFormat format;
@@ -1259,7 +1259,7 @@ void Ray::Vk::Texture2D::InitFromDDSFile(const void *data, const int size, Buffe
     sbuf.Unmap();
 
     assert(sbuf.type() == eBufType::Stage);
-    VkCommandBuffer cmd_buf = reinterpret_cast<VkCommandBuffer>(_cmd_buf);
+    auto cmd_buf = reinterpret_cast<VkCommandBuffer>(_cmd_buf);
 
     VkPipelineStageFlags src_stages = 0, dst_stages = 0;
     SmallVector<VkBufferMemoryBarrier, 1> buf_barriers;
@@ -1385,7 +1385,7 @@ void Ray::Vk::Texture2D::InitFromKTXFile(const void *data, const int size, Buffe
     sbuf.Unmap();
 
     assert(sbuf.type() == eBufType::Stage);
-    VkCommandBuffer cmd_buf = reinterpret_cast<VkCommandBuffer>(_cmd_buf);
+    auto cmd_buf = reinterpret_cast<VkCommandBuffer>(_cmd_buf);
 
     VkPipelineStageFlags src_stages = 0, dst_stages = 0;
     SmallVector<VkBufferMemoryBarrier, 1> buf_barriers;
@@ -1468,7 +1468,7 @@ void Ray::Vk::Texture2D::InitFromKTXFile(const void *data, const int size, Buffe
         reg.imageExtent = {uint32_t(w), uint32_t(h), 1};
 
         initialized_mips_ |= (1u << i);
-        data_offset += img_size;
+        data_offset += int(img_size);
 
         w = std::max(w / 2, 1);
         h = std::max(h / 2, 1);
@@ -1602,7 +1602,7 @@ void Ray::Vk::Texture2D::InitFromRAWData(Buffer &sbuf, int data_off[6], void *_c
 
     assert(p.samples == 1);
     assert(sbuf.type() == eBufType::Stage);
-    VkCommandBuffer cmd_buf = reinterpret_cast<VkCommandBuffer>(_cmd_buf);
+    auto cmd_buf = reinterpret_cast<VkCommandBuffer>(_cmd_buf);
 
     VkPipelineStageFlags src_stages = 0, dst_stages = 0;
     SmallVector<VkBufferMemoryBarrier, 1> buf_barriers;
@@ -1763,7 +1763,7 @@ void Ray::Vk::Texture2D::InitFromDDSFile(const void *data[6], const int size[6],
     int first_block_size_bytes = 0;
 
     for (int i = 0; i < 6; ++i) {
-        const DDSHeader *header = reinterpret_cast<const DDSHeader *>(data[i]);
+        const auto *header = reinterpret_cast<const DDSHeader *>(data[i]);
 
         eTexFormat format;
         eTexBlock block;
@@ -1925,7 +1925,7 @@ void Ray::Vk::Texture2D::InitFromDDSFile(const void *data[6], const int size[6],
 
     assert(p.samples == 1);
     assert(sbuf.type() == eBufType::Stage);
-    VkCommandBuffer cmd_buf = reinterpret_cast<VkCommandBuffer>(_cmd_buf);
+    auto cmd_buf = reinterpret_cast<VkCommandBuffer>(_cmd_buf);
 
     VkPipelineStageFlags src_stages = 0, dst_stages = 0;
     SmallVector<VkBufferMemoryBarrier, 1> buf_barriers;
@@ -2178,7 +2178,7 @@ void Ray::Vk::Texture2D::InitFromKTXFile(const void *data[6], const int size[6],
 
     assert(p.samples == 1);
     assert(sbuf.type() == eBufType::Stage);
-    VkCommandBuffer cmd_buf = reinterpret_cast<VkCommandBuffer>(_cmd_buf);
+    auto cmd_buf = reinterpret_cast<VkCommandBuffer>(_cmd_buf);
 
     VkPipelineStageFlags src_stages = 0, dst_stages = 0;
     SmallVector<VkBufferMemoryBarrier, 1> buf_barriers;
@@ -2276,7 +2276,7 @@ void Ray::Vk::Texture2D::InitFromKTXFile(const void *data[6], const int size[6],
             reg.imageOffset = {0, 0, 0};
             reg.imageExtent = {uint32_t(_w), uint32_t(_h), 1};
 
-            data_offset += img_size;
+            data_offset += int(img_size);
 
             _w = std::max(_w / 2, 1);
             _h = std::max(_h / 2, 1);
@@ -2301,7 +2301,7 @@ void Ray::Vk::Texture2D::SetSubImage(const int level, const int offsetx, const i
     assert(offsety >= 0 && offsety + sizey <= std::max(params.h >> level, 1));
 
     assert(sbuf.type() == eBufType::Stage);
-    VkCommandBuffer cmd_buf = reinterpret_cast<VkCommandBuffer>(_cmd_buf);
+    auto cmd_buf = reinterpret_cast<VkCommandBuffer>(_cmd_buf);
 
     VkPipelineStageFlags src_stages = 0, dst_stages = 0;
     SmallVector<VkBufferMemoryBarrier, 1> buf_barriers;
@@ -2407,7 +2407,7 @@ void Ray::Vk::Texture2D::SetSampling(const SamplingParams s) {
 void Ray::Vk::CopyImageToImage(void *_cmd_buf, Texture2D &src_tex, const uint32_t src_level, const uint32_t src_x,
                                const uint32_t src_y, Texture2D &dst_tex, const uint32_t dst_level, const uint32_t dst_x,
                                const uint32_t dst_y, const uint32_t width, const uint32_t height) {
-    VkCommandBuffer cmd_buf = reinterpret_cast<VkCommandBuffer>(_cmd_buf);
+    auto cmd_buf = reinterpret_cast<VkCommandBuffer>(_cmd_buf);
 
     assert(src_tex.resource_state == eResState::CopySrc);
     assert(dst_tex.resource_state == eResState::CopyDst);
@@ -2439,7 +2439,7 @@ void Ray::Vk::CopyImageToImage(void *_cmd_buf, Texture2D &src_tex, const uint32_
 
 void Ray::Vk::CopyImageToBuffer(const Texture2D &src_tex, const int level, const int x, const int y, const int w,
                                 const int h, const Buffer &dst_buf, void *_cmd_buf, const int data_off) {
-    VkCommandBuffer cmd_buf = reinterpret_cast<VkCommandBuffer>(_cmd_buf);
+    auto cmd_buf = reinterpret_cast<VkCommandBuffer>(_cmd_buf);
 
     VkPipelineStageFlags src_stages = 0, dst_stages = 0;
     SmallVector<VkBufferMemoryBarrier, 1> buf_barriers;
@@ -2508,7 +2508,7 @@ void Ray::Vk::CopyImageToBuffer(const Texture2D &src_tex, const int level, const
 }
 
 void Ray::Vk::ClearColorImage(Texture2D &tex, const float rgba[4], void *_cmd_buf) {
-    VkCommandBuffer cmd_buf = reinterpret_cast<VkCommandBuffer>(_cmd_buf);
+    auto cmd_buf = reinterpret_cast<VkCommandBuffer>(_cmd_buf);
     assert(tex.resource_state == eResState::CopyDst);
 
     VkClearColorValue clear_val = {};
@@ -2527,7 +2527,7 @@ void Ray::Vk::ClearColorImage(Texture2D &tex, const float rgba[4], void *_cmd_bu
 Ray::Vk::Texture1D::Texture1D(const char *name, Buffer *buf, const eTexFormat format, const uint32_t offset,
                               const uint32_t size, ILog *log)
     : name_(name) {
-    Init(std::move(buf), format, offset, size, log);
+    Init(buf, format, offset, size, log);
 }
 
 Ray::Vk::Texture1D::~Texture1D() { Free(); }
@@ -2539,7 +2539,7 @@ Ray::Vk::Texture1D &Ray::Vk::Texture1D::operator=(Texture1D &&rhs) noexcept {
 
     Free();
 
-    buf_ = std::move(rhs.buf_);
+    buf_ = exchange(rhs.buf_, nullptr);
     params_ = exchange(rhs.params_, {});
     name_ = std::move(rhs.name_);
     buf_view_ = exchange(rhs.buf_view_, {});
@@ -2562,7 +2562,7 @@ void Ray::Vk::Texture1D::Init(Buffer *buf, const eTexFormat format, const uint32
         buf_->ctx()->log()->Error("Failed to create buffer view!");
     }
 
-    buf_ = std::move(buf);
+    buf_ = buf;
     params_.offset = offset;
     params_.size = size;
     params_.format = format;

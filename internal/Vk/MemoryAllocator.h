@@ -49,7 +49,7 @@ struct MemAllocation {
 };
 
 class MemoryAllocator {
-    char name_[32];
+    char name_[32] = {};
     Context *ctx_ = nullptr;
     float growth_factor_;
 
@@ -85,7 +85,7 @@ class MemoryAllocator {
 };
 
 class MemoryAllocators {
-    char name_[16];
+    char name_[16] = {};
     Context *ctx_;
     uint32_t initial_block_size_;
     float growth_factor_;

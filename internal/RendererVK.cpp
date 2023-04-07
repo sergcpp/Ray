@@ -428,7 +428,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
     const Ray::camera_t &cam = s->cams_[s->current_cam()._index].cam;
 
     // allocate aux data on demand
-    if (cam.pass_settings.flags & (OutputBaseColor | OutputDepthNormals)) {
+    if (cam.pass_settings.flags & (Bitmask<ePassFlags>{ePassFlags::OutputBaseColor} | ePassFlags::OutputDepthNormals)) {
         const int w = final_buf_.params.w, h = final_buf_.params.h;
 
         Tex2DParams params;
@@ -437,7 +437,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         params.format = eTexFormat::RawRGBA32F;
         params.usage = eTexUsageBits::Storage | eTexUsageBits::Transfer;
 
-        if (cam.pass_settings.flags & OutputBaseColor) {
+        if (cam.pass_settings.flags & ePassFlags::OutputBaseColor) {
             if (!base_color_buf_.ready() || base_color_buf_.params.w != w || base_color_buf_.params.h != h) {
                 base_color_buf_ = {};
                 base_color_buf_ =
@@ -467,7 +467,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
             }
             base_color_stage_buf_ = {};
         }
-        if (cam.pass_settings.flags & OutputDepthNormals) {
+        if (cam.pass_settings.flags & ePassFlags::OutputDepthNormals) {
             if (!depth_normals_buf_.ready() || depth_normals_buf_.params.w != w || depth_normals_buf_.params.h != h) {
                 temp_depth_normals_buf_ = {};
                 temp_depth_normals_buf_ = Texture2D{"Temp Depth-Normals Image", ctx_.get(), params,
@@ -787,8 +787,8 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
 
         tonemap_params_.exposure = std::pow(2.0f, cam.exposure);
         tonemap_params_.inv_gamma = (1.0f / cam.gamma);
-        tonemap_params_.srgb = (cam.dtype == SRGB);
-        tonemap_params_.clamp = (cam.pass_settings.flags & Clamp) != 0;
+        tonemap_params_.srgb = (cam.dtype == eDeviceType::SRGB);
+        tonemap_params_.clamp = (cam.pass_settings.flags & ePassFlags::Clamp);
 
         kernel_Postprocess(cmd_buf, dual_buf_[0], p1_weight, dual_buf_[1], p2_weight, tonemap_params_.exposure,
                            tonemap_params_.inv_gamma, tonemap_params_.clamp, tonemap_params_.srgb, final_buf_,

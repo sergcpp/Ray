@@ -6,12 +6,16 @@
 #include <vector>
 #endif
 
+#include "Bitmask.h"
+
 /**
   @file Types.h
 */
 
 namespace Ray {
-template <typename T, int N> struct color_t { T v[N]; };
+template <typename T, int N> struct color_t {
+    T v[N];
+};
 
 using color_rgba8_t = color_t<uint8_t, 4>;
 using color_rgb8_t = color_t<uint8_t, 3>;
@@ -23,7 +27,7 @@ using color_rgb_t = color_t<float, 3>;
 using color_rg_t = color_t<float, 2>;
 using color_r_t = color_t<float, 1>;
 
-enum eAUXBuffer : uint32_t { SHL1 = 0, BaseColor = 1, DepthNormals = 2 };
+enum class eAUXBuffer : uint32_t { SHL1 = 0, BaseColor = 1, DepthNormals = 2 };
 
 struct shl1_data_t {
     float coeff_r[4], coeff_g[4], coeff_b[4];
@@ -35,31 +39,31 @@ struct rect_t {
     int x, y, w, h;
 };
 
-enum eCamType { Persp, Ortho, Geo };
+enum class eCamType : uint8_t { Persp, Ortho, Geo };
 
-enum eFilterType { Box, Tent };
+enum class eFilterType : uint8_t { Box, Tent };
 
-enum eDeviceType { None, SRGB };
+enum class eDeviceType : uint8_t { None, SRGB };
 
-enum eLensUnits { FOV, FLength };
+enum class eLensUnits : uint8_t { FOV, FLength };
 
-enum ePassFlags {
-    SkipDirectLight = (1 << 0),
-    SkipIndirectLight = (1 << 1),
-    LightingOnly = (1 << 2),
-    NoBackground = (1 << 3),
-    Clamp = (1 << 4),
-    OutputSH = (1 << 5),
-    OutputBaseColor = (1 << 6),
-    OutputDepthNormals = (1 << 7)
+enum class ePassFlags : uint8_t {
+    SkipDirectLight,
+    SkipIndirectLight,
+    LightingOnly,
+    NoBackground,
+    Clamp,
+    OutputSH,
+    OutputBaseColor,
+    OutputDepthNormals
 };
 
 struct pass_settings_t {
     uint8_t max_diff_depth, max_spec_depth, max_refr_depth, max_transp_depth, max_total_depth;
     uint8_t min_total_depth, min_transp_depth;
-    uint8_t pad[2];
-    uint32_t flags;
+    Bitmask<ePassFlags> flags;
 };
+static_assert(sizeof(pass_settings_t) == 8, "!");
 
 struct camera_t {
     eCamType type;

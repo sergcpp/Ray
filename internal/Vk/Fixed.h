@@ -25,7 +25,6 @@ template <typename T, int FpBits> class Fixed {
     }
 
     static Fixed lowest() { return Fixed<T, FpBits>{std::numeric_limits<T>::lowest()}; }
-
     static Fixed max() { return Fixed<T, FpBits>{std::numeric_limits<T>::max()}; }
 
     static const T One = T(1) << FpBits;

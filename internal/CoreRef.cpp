@@ -1178,7 +1178,7 @@ void Ray::Ref::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, const i
 
             const float sample_off[2] = {construct_float(hash_val), construct_float(hash(hash_val))};
 
-            if (cam.filter == Tent) {
+            if (cam.filter == eFilterType::Tent) {
                 float rx = fract(random_seq[RAND_DIM_FILTER_U] + sample_off[0]);
                 if (rx < 0.5f) {
                     rx = std::sqrt(2.0f * rx) - 1.0f;
@@ -2849,7 +2849,7 @@ void Ray::Ref::IntersectScene(ray_data_t &r, const int min_transp_depth, const i
         float trans_r = fract(random_seq[RAND_DIM_BSDF_PICK] + rand_offset);
 
         // resolve mix material
-        while (mat->type == MixNode) {
+        while (mat->type == eShadingNode::Mix) {
             float mix_val = mat->strength;
             if (mat->textures[BASE_TEXTURE] != 0xffffffff) {
                 mix_val *= SampleBilinear(textures, mat->textures[BASE_TEXTURE], uvs, 0).get<0>();
@@ -2864,7 +2864,7 @@ void Ray::Ref::IntersectScene(ray_data_t &r, const int min_transp_depth, const i
             }
         }
 
-        if (mat->type != TransparentNode) {
+        if (mat->type != eShadingNode::Transparent) {
             break;
         }
 
@@ -2961,7 +2961,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::IntersectScene(const shadow_ray_t &r, const int m
             const float weight = stack[stack_size].weight;
 
             // resolve mix material
-            if (mat->type == MixNode) {
+            if (mat->type == eShadingNode::Mix) {
                 float mix_val = mat->strength;
                 if (mat->textures[BASE_TEXTURE] != 0xffffffff) {
                     mix_val *= SampleBilinear(textures, mat->textures[BASE_TEXTURE], sh_uvs, 0).get<0>();
@@ -2969,7 +2969,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::IntersectScene(const shadow_ray_t &r, const int m
 
                 stack[stack_size++] = {mat->textures[MIX_MAT1], weight * (1.0f - mix_val)};
                 stack[stack_size++] = {mat->textures[MIX_MAT2], weight * mix_val};
-            } else if (mat->type == TransparentNode) {
+            } else if (mat->type == eShadingNode::Transparent) {
                 throughput += weight * make_fvec3(mat->base_color);
             }
         }
@@ -4016,7 +4016,7 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
     float mix_weight = 1.0f;
 
     // resolve mix material
-    while (mat->type == MixNode) {
+    while (mat->type == eShadingNode::Mix) {
         float mix_val = mat->strength;
         if (mat->textures[BASE_TEXTURE] != 0xffffffff) {
             mix_val *= SampleBilinear(textures, mat->textures[BASE_TEXTURE], surf.uvs, 0).get<0>();
@@ -4077,7 +4077,7 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
 
 #if USE_NEE == 1
     light_sample_t ls;
-    if (!sc.li_indices.empty() && mat->type != EmissiveNode) {
+    if (!sc.li_indices.empty() && mat->type != eShadingNode::Emissive) {
         SampleLightSource(surf.P, surf.T, surf.B, surf.N, sc, textures, random_seq, sample_off, ls);
     }
     const float N_dot_L = dot(surf.N, ls.L);
@@ -4137,7 +4137,7 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
     sh_r.xy = ray.xy;
 
     // Sample materials
-    if (mat->type == DiffuseNode) {
+    if (mat->type == eShadingNode::Diffuse) {
 #if USE_NEE
         if (ls.pdf > 0.0f && N_dot_L > 0.0f) {
             col += Evaluate_DiffuseNode(ls, ray, surf, base_color, roughness, mix_weight, sh_r);
@@ -4146,7 +4146,7 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
         if (diff_depth < ps.max_diff_depth && total_depth < ps.max_total_depth) {
             Sample_DiffuseNode(ray, surf, base_color, roughness, rand_u, rand_v, mix_weight, new_ray);
         }
-    } else if (mat->type == GlossyNode) {
+    } else if (mat->type == eShadingNode::Glossy) {
         const float specular = 0.5f;
         const float spec_ior = (2.0f / (1.0f - std::sqrt(0.08f * specular))) - 1.0f;
         const float spec_F0 = fresnel_dielectric_cos(1.0f, spec_ior);
@@ -4159,7 +4159,7 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
         if (spec_depth < ps.max_spec_depth && total_depth < ps.max_total_depth) {
             Sample_GlossyNode(ray, surf, base_color, roughness, spec_ior, spec_F0, rand_u, rand_v, mix_weight, new_ray);
         }
-    } else if (mat->type == RefractiveNode) {
+    } else if (mat->type == eShadingNode::Refractive) {
 #if USE_NEE
         const float roughness2 = sqr(roughness);
         if (ls.pdf > 0.0f && sqr(roughness2) >= 1e-7f && N_dot_L < 0.0f) {
@@ -4171,7 +4171,7 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
             Sample_RefractiveNode(ray, surf, base_color, roughness, is_backfacing, mat->ior, ext_ior, rand_u, rand_v,
                                   mix_weight, new_ray);
         }
-    } else if (mat->type == EmissiveNode) {
+    } else if (mat->type == eShadingNode::Emissive) {
         float mis_weight = 1.0f;
 #if USE_NEE
         // TODO: consider removing ray depth check (rely on high pdf)
@@ -4193,7 +4193,7 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
         }
 #endif
         col += mix_weight * mis_weight * mat->strength * base_color;
-    } else if (mat->type == PrincipledNode) {
+    } else if (mat->type == eShadingNode::Principled) {
         float metallic = unpack_unorm_16(mat->metallic_unorm);
         if (mat->textures[METALLIC_TEXTURE] != 0xffffffff) {
             const uint32_t metallic_tex = mat->textures[METALLIC_TEXTURE];

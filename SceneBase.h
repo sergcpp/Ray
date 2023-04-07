@@ -33,7 +33,7 @@ DEFINE_HANDLE(LightHandle)
 #undef DEFINE_HANDLE
 
 /// Mesh primitive type
-enum ePrimType {
+enum class ePrimType {
     TriangleList, ///< indexed triangle list
 };
 
@@ -43,7 +43,7 @@ enum ePrimType {
     B - vertex binormal (oriented to vertical texture axis)
     T - vertex texture coordinates
 */
-enum eVertexLayout {
+enum class eVertexLayout {
     PxyzNxyzTuv = 0,    ///< [ P.x, P.y, P.z, N.x, N.y, N.z, T.x, T.y ]
     PxyzNxyzTuvTuv,     ///< [ P.x, P.y, P.z, N.x, N.y, N.z, T.x, T.y, T.x, T.y ]
     PxyzNxyzBxyzTuv,    ///< [ P.x, P.y, P.z, N.x, N.y, N.z, B.x, B.y, B.z, T.x, T.y ]
@@ -61,14 +61,14 @@ const size_t AttrStrides[] = {
 };
 
 /// Mesh region material type
-enum eShadingNode {
-    DiffuseNode,
-    GlossyNode,
-    RefractiveNode,
-    EmissiveNode,
-    MixNode,
-    TransparentNode,
-    PrincipledNode,
+enum class eShadingNode : uint32_t {
+    Diffuse,
+    Glossy,
+    Refractive,
+    Emissive,
+    Mix,
+    Transparent,
+    Principled
 };
 
 /// Shading node descriptor struct
@@ -222,38 +222,38 @@ struct line_light_desc_t {
 
 // Camera description
 struct camera_desc_t {
-    eCamType type = Persp;               ///< Type of projection
-    eFilterType filter = Tent;           ///< Reconstruction filter
-    eDeviceType dtype = SRGB;            ///< Device type
-    eLensUnits ltype = FOV;              ///< Lens units type
-    float origin[3] = {};                ///< Camera origin
-    float fwd[3] = {};                   ///< Camera forward unit vector
-    float up[3] = {};                    ///< Camera up vector (optional)
-    float shift[2] = {};                 ///< Camera shift
-    float exposure = 0.0f;               ///< Camera exposure in stops (output = value * (2 ^ exposure))
-    float fov = 45.0f, gamma = 1.0f;     ///< Field of view in degrees, gamma
-    float sensor_height = 0.036f;        ///< Camera sensor height
-    float focus_distance = 1.0f;         ///< Distance to focus point
-    float focal_length = 0.0f;           ///< Focal length
-    float fstop = 0.0f;                  ///< Focal fstop
-    float lens_rotation = 0.0f;          ///< Bokeh rotation
-    float lens_ratio = 1.0f;             ///< Bokeh distortion
-    int lens_blades = 0;                 ///< Bokeh shape
-    float clip_start = 0;                ///< Clip start
-    float clip_end = 3.402823466e+30F;   ///< Clip end
-    uint32_t mi_index = 0xffffffff,      ///< Index of mesh instance
-        uv_index = 0;                    ///< UV layer used by geometry cam
-    bool lighting_only = false;          ///< Render lightmap only
-    bool skip_direct_lighting = false;   ///< Render indirect light contribution only
-    bool skip_indirect_lighting = false; ///< Render direct light contribution only
-    bool no_background = false;          ///< Do not render background
-    bool clamp = false;                  ///< Clamp color values to [0..1] range
-    bool output_sh = false;              ///< Output 2-band (4 coeff) spherical harmonics data
-    bool output_base_color = false;      ///< Output float RGB material base color
-    bool output_depth_normals = false;   ///< Output smooth normals and depth
-    uint8_t max_diff_depth = 4;          ///< Maximum tracing depth of diffuse rays
-    uint8_t max_spec_depth = 8;          ///< Maximum tracing depth of glossy rays
-    uint8_t max_refr_depth = 8;          ///< Maximum tracing depth of glossy rays
+    eCamType type = eCamType::Persp;        ///< Type of projection
+    eFilterType filter = eFilterType::Tent; ///< Reconstruction filter
+    eDeviceType dtype = eDeviceType::SRGB;  ///< Device type
+    eLensUnits ltype = eLensUnits::FOV;     ///< Lens units type
+    float origin[3] = {};                   ///< Camera origin
+    float fwd[3] = {};                      ///< Camera forward unit vector
+    float up[3] = {};                       ///< Camera up vector (optional)
+    float shift[2] = {};                    ///< Camera shift
+    float exposure = 0.0f;                  ///< Camera exposure in stops (output = value * (2 ^ exposure))
+    float fov = 45.0f, gamma = 1.0f;        ///< Field of view in degrees, gamma
+    float sensor_height = 0.036f;           ///< Camera sensor height
+    float focus_distance = 1.0f;            ///< Distance to focus point
+    float focal_length = 0.0f;              ///< Focal length
+    float fstop = 0.0f;                     ///< Focal fstop
+    float lens_rotation = 0.0f;             ///< Bokeh rotation
+    float lens_ratio = 1.0f;                ///< Bokeh distortion
+    int lens_blades = 0;                    ///< Bokeh shape
+    float clip_start = 0;                   ///< Clip start
+    float clip_end = 3.402823466e+30F;      ///< Clip end
+    uint32_t mi_index = 0xffffffff,         ///< Index of mesh instance
+        uv_index = 0;                       ///< UV layer used by geometry cam
+    bool lighting_only = false;             ///< Render lightmap only
+    bool skip_direct_lighting = false;      ///< Render indirect light contribution only
+    bool skip_indirect_lighting = false;    ///< Render direct light contribution only
+    bool no_background = false;             ///< Do not render background
+    bool clamp = false;                     ///< Clamp color values to [0..1] range
+    bool output_sh = false;                 ///< Output 2-band (4 coeff) spherical harmonics data
+    bool output_base_color = false;         ///< Output float RGB material base color
+    bool output_depth_normals = false;      ///< Output smooth normals and depth
+    uint8_t max_diff_depth = 4;             ///< Maximum tracing depth of diffuse rays
+    uint8_t max_spec_depth = 8;             ///< Maximum tracing depth of glossy rays
+    uint8_t max_refr_depth = 8;             ///< Maximum tracing depth of glossy rays
     uint8_t max_transp_depth = 8; ///< Maximum tracing depth of transparency rays (note: does not obey total depth)
     uint8_t max_total_depth = 8;  ///< Maximum tracing depth of all rays (except transparency)
     uint8_t min_total_depth = 2;  ///< Depth after which random rays termination starts
@@ -266,9 +266,9 @@ struct environment_desc_t {
     TextureHandle env_map = InvalidTextureHandle;  ///< Environment texture
     float back_col[3] = {};                        ///< Background color
     TextureHandle back_map = InvalidTextureHandle; ///< Background texture
-    float env_map_rotation = 0.0f;
-    float back_map_rotation = 0.0f;
-    bool multiple_importance = true; ///< Enable explicit env map sampling
+    float env_map_rotation = 0.0f;                 ///< Environment map rotation in radians
+    float back_map_rotation = 0.0f;                ///< Background map rotation in radians
+    bool multiple_importance = true;               ///< Enable explicit env map sampling
 };
 
 /** Base Scene class,
@@ -276,7 +276,7 @@ struct environment_desc_t {
 */
 class SceneBase {
   protected:
-    union cam_storage_t {
+    struct cam_storage_t {
         camera_t cam;
         CameraHandle next_free;
     };
@@ -288,7 +288,7 @@ class SceneBase {
 
     CameraHandle current_cam_ = InvalidCameraHandle; ///< index of current camera
 
-    void SetCamera_nolock(const CameraHandle i, const camera_desc_t &c);
+    void SetCamera_nolock(CameraHandle i, const camera_desc_t &c);
 
   public:
     virtual ~SceneBase() = default;

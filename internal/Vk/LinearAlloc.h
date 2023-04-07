@@ -81,8 +81,8 @@ class LinearAlloc {
 
     bool IsSet(const uint32_t block_index) const {
         assert(int(block_index) < block_count_);
-        const int xword_index = block_index / BitmapGranularity;
-        const int bit_index = block_index % BitmapGranularity;
+        const uint32_t xword_index = block_index / BitmapGranularity;
+        const uint32_t bit_index = block_index % BitmapGranularity;
         return (bitmap_[xword_index] & (1ull << bit_index)) == 0;
     }
 

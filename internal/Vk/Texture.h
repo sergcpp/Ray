@@ -113,7 +113,7 @@ class Texture2D {
     Texture2D(const char *name, Context *ctx, const VkImage img, const VkImageView view, const VkSampler sampler,
               const Tex2DParams &_params, ILog *log)
         : handle_{img, view, VK_NULL_HANDLE, sampler, 0}, ready_(true), name_(name), params(_params) {}
-    Texture2D(const char *name, Context *ctx, const void *data, const uint32_t size, const Tex2DParams &p,
+    Texture2D(const char *name, Context *ctx, const void *data, uint32_t size, const Tex2DParams &p,
               Buffer &stage_buf, void *_cmd_buf, MemoryAllocators *mem_allocs, eTexLoadStatus *load_status, ILog *log);
     Texture2D(const char *name, Context *ctx, const void *data[6], const int size[6], const Tex2DParams &p,
               Buffer &stage_buf, void *_cmd_buf, MemoryAllocators *mem_allocs, eTexLoadStatus *load_status, ILog *log);
@@ -131,7 +131,7 @@ class Texture2D {
         params = _params;
         ready_ = true;
     }
-    void Init(const void *data, const uint32_t size, const Tex2DParams &p, Buffer &stage_buf, void *_cmd_buf,
+    void Init(const void *data, uint32_t size, const Tex2DParams &p, Buffer &stage_buf, void *_cmd_buf,
               MemoryAllocators *mem_allocs, eTexLoadStatus *load_status, ILog *log);
     void Init(const void *data[6], const int size[6], const Tex2DParams &p, Buffer &stage_buf, void *_cmd_buf,
               MemoryAllocators *mem_allocs, eTexLoadStatus *load_status, ILog *log);
@@ -178,7 +178,7 @@ void ClearColorImage(Texture2D &tex, const float rgba[4], void *_cmd_buf);
 struct Texture1DParams {
     uint16_t offset = 0, size = 0;
     eTexFormat format = eTexFormat::Undefined;
-    uint8_t _padding;
+    uint8_t _padding = 0;
 };
 static_assert(sizeof(Texture1DParams) == 6, "!");
 

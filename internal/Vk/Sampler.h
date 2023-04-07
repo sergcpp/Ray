@@ -23,7 +23,7 @@ class Sampler {
     VkSampler vk_handle() const { return handle_; }
     SamplingParams params() const { return params_; }
 
-    operator bool() const { return handle_ != VK_NULL_HANDLE; }
+    explicit operator bool() const { return handle_ != VK_NULL_HANDLE; }
 
     Sampler &operator=(const Sampler &rhs) = delete;
     Sampler &operator=(Sampler &&rhs) noexcept;

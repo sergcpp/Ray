@@ -68,7 +68,7 @@ class Pipeline {
     Pipeline &operator=(const Pipeline &rhs) = delete;
     Pipeline &operator=(Pipeline &&rhs) noexcept;
 
-    operator bool() const { return ctx_ != nullptr; }
+    explicit operator bool() const { return ctx_ != nullptr; }
 
     ePipelineType type() const { return type_; }
     const RastState &rast_state() const { return rast_state_; }
