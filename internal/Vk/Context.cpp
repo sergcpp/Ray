@@ -671,9 +671,7 @@ void Ray::Vk::EndSingleTimeCommands(VkDevice device, VkQueue cmd_queue, VkComman
     vkFreeCommandBuffers(device, temp_command_pool, 1, &command_buf);
 }
 
-int Ray::Vk::Context::WriteTimestamp(const bool start) {
-    VkCommandBuffer cmd_buf = draw_cmd_bufs_[backend_frame];
-
+int Ray::Vk::Context::WriteTimestamp(VkCommandBuffer cmd_buf, const bool start) {
     vkCmdWriteTimestamp(cmd_buf, start ? VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT : VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
                         query_pools_[backend_frame], query_counts_[backend_frame]);
 

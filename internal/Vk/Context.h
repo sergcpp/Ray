@@ -94,7 +94,7 @@ class Context {
     MemoryAllocators *default_memory_allocs() { return default_memory_allocs_.get(); }
     DescrMultiPoolAlloc *default_descr_alloc() const { return default_descr_alloc_[backend_frame].get(); }
 
-    int WriteTimestamp(bool start);
+    int WriteTimestamp(VkCommandBuffer cmd_buf, bool start);
     uint64_t GetTimestampIntervalDurationUs(int query_start, int query_end) const;
 
     bool ReadbackTimestampQueries(int i);
