@@ -6,6 +6,7 @@
 INTERFACE_START(IntersectAreaLights)
 
 struct Params {
+    UVEC4_TYPE rect;
     UVEC2_TYPE img_size;
     UINT_TYPE visible_lights_count;
 };

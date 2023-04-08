@@ -6,11 +6,10 @@
 INTERFACE_START(IntersectSceneShadow)
 
 struct Params {
-    UVEC2_TYPE img_size;
     UINT_TYPE node_index;
     int max_transp_depth;
     int blocker_lights_count;
-    int _pad0, _pad1, _pad2;
+    int _pad0, _pad1;
 };
 
 const int LOCAL_GROUP_SIZE_X = 8;

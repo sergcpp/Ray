@@ -88,7 +88,7 @@ void test_aux_channels(const char *arch_list[], const char *preferred_device) {
 
             char name_buf[1024];
             snprintf(name_buf, sizeof(name_buf), "Test %s", TestName);
-            schedule_render_jobs(*renderer, scene.get(), s, SampleCount, false, name_buf);
+            schedule_render_jobs(*renderer, scene.get(), s, SampleCount, false, false, name_buf);
 
             const auto *base_color_pixels =
                 reinterpret_cast<const Ray::color_rgba_t *>(renderer->get_aux_pixels_ref(Ray::eAUXBuffer::BaseColor));

@@ -105,7 +105,7 @@ class Renderer : public RendererBase {
     void kernel_GeneratePrimaryRays(VkCommandBuffer cmd_buf, const camera_t &cam, int hi, const rect_t &rect,
                                     const Buffer &random_seq, const Buffer &out_rays);
     void kernel_IntersectScenePrimary(VkCommandBuffer cmd_buf, const pass_settings_t &settings,
-                                      const scene_data_t &sc_data, const Buffer &random_seq, int hi,
+                                      const scene_data_t &sc_data, const Buffer &random_seq, int hi, const rect_t &rect,
                                       uint32_t node_index, float cam_clip_end, Span<const TextureAtlas> tex_atlases,
                                       VkDescriptorSet tex_descr_set, const Buffer &rays, const Buffer &out_hits);
     void kernel_IntersectSceneSecondary(VkCommandBuffer cmd_buf, const Buffer &indir_args, const Buffer &counters,
@@ -121,10 +121,11 @@ class Renderer : public RendererBase {
                                     const Buffer &counters, const Buffer &rays, const Buffer &inout_hits);
     void kernel_ShadePrimaryHits(VkCommandBuffer cmd_buf, const pass_settings_t &settings, const environment_t &env,
                                  const Buffer &hits, const Buffer &rays, const scene_data_t &sc_data,
-                                 const Buffer &random_seq, int hi, Span<const TextureAtlas> tex_atlases,
-                                 VkDescriptorSet tex_descr_set, const Texture2D &out_img, const Buffer &out_rays,
-                                 const Buffer &out_sh_rays, const Buffer &inout_counters,
-                                 const Texture2D &out_base_color, const Texture2D &out_depth_normals);
+                                 const Buffer &random_seq, int hi, const rect_t &rect,
+                                 Span<const TextureAtlas> tex_atlases, VkDescriptorSet tex_descr_set,
+                                 const Texture2D &out_img, const Buffer &out_rays, const Buffer &out_sh_rays,
+                                 const Buffer &inout_counters, const Texture2D &out_base_color,
+                                 const Texture2D &out_depth_normals);
     void kernel_ShadeSecondaryHits(VkCommandBuffer cmd_buf, const pass_settings_t &settings, const environment_t &env,
                                    const Buffer &indir_args, const Buffer &hits, const Buffer &rays,
                                    const scene_data_t &sc_data, const Buffer &random_seq, int hi,
@@ -132,18 +133,19 @@ class Renderer : public RendererBase {
                                    const Texture2D &out_img, const Buffer &out_rays, const Buffer &out_sh_rays,
                                    const Buffer &inout_counters);
     void kernel_PrepareIndirArgs(VkCommandBuffer cmd_buf, const Buffer &inout_counters, const Buffer &out_indir_args);
-    void kernel_MixIncremental(VkCommandBuffer cmd_buf, const Texture2D &fbuf1, const Texture2D &fbuf2,
-                               float main_mix_factor, float aux_mix_factor, const Texture2D &temp_base_color,
+    void kernel_MixIncremental(VkCommandBuffer cmd_buf, float main_mix_factor, float aux_mix_factor, const rect_t &rect,
+                               const Texture2D &temp_img, const Texture2D &temp_base_color,
                                const Texture2D &temp_depth_normals, const Texture2D &out_img,
                                const Texture2D &out_base_color, const Texture2D &out_depth_normals);
     void kernel_Postprocess(VkCommandBuffer cmd_buf, const Texture2D &img0_buf, float img0_weight,
                             const Texture2D &img1_buf, float img1_weight, float exposure, float inv_gamma, bool clamp,
-                            bool srgb, const Texture2D &out_pixels, const Texture2D &out_raw_pixels,
+                            bool srgb, const rect_t &rect, const Texture2D &out_pixels, const Texture2D &out_raw_pixels,
                             const Texture2D &out_variance) const;
-    void kernel_FilterVariance(VkCommandBuffer cmd_buf, const Texture2D &img_buf, const Texture2D &out_variance);
+    void kernel_FilterVariance(VkCommandBuffer cmd_buf, const Texture2D &img_buf, const rect_t &rect,
+                               const Texture2D &out_variance);
     void kernel_NLMFilter(VkCommandBuffer cmd_buf, const Texture2D &img_buf, const Texture2D &var_buf, float alpha,
                           float damping, const Texture2D &out_raw_img, float exposure, float inv_gamma, bool clamp,
-                          bool srgb, const Texture2D &out_img);
+                          bool srgb, const rect_t &rect, const Texture2D &out_img);
     void kernel_DebugRT(VkCommandBuffer cmd_buf, const scene_data_t &sc_data, uint32_t node_index, const Buffer &rays,
                         const Texture2D &out_pixels);
 

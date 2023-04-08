@@ -6,7 +6,10 @@
 INTERFACE_START(FilterVariance)
 
 struct Params {
-    UVEC2_TYPE img_size;
+    UVEC4_TYPE rect;
+    VEC2_TYPE inv_img_size;
+    float _pad0;
+    float _pad1;
 };
 
 const int LOCAL_GROUP_SIZE_X = 8;

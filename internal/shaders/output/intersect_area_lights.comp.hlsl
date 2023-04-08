@@ -23,6 +23,7 @@ struct hit_data_t
 
 struct Params
 {
+    uint4 rect;
     uint2 img_size;
     uint visible_lights_count;
 };
@@ -46,12 +47,12 @@ static const uint3 gl_WorkGroupSize = uint3(8u, 8u, 1u);
 ByteAddressBuffer _83 : register(t5, space0);
 ByteAddressBuffer _104 : register(t4, space0);
 RWByteAddressBuffer _197 : register(u0, space0);
-ByteAddressBuffer _235 : register(t2, space0);
+ByteAddressBuffer _236 : register(t2, space0);
 ByteAddressBuffer _248 : register(t1, space0);
 ByteAddressBuffer _812 : register(t3, space0);
 cbuffer UniformParams
 {
-    Params _226_g_params : packoffset(c0);
+    Params _227_g_params : packoffset(c0);
 };
 
 
@@ -145,13 +146,13 @@ void comp_main()
         float _843 = _201.t;
         float param_3;
         float param_4;
-        for (uint li = 0u; li < _226_g_params.visible_lights_count; li++)
+        for (uint li = 0u; li < _227_g_params.visible_lights_count; li++)
         {
             light_t _252;
-            _252.type_and_param0 = _248.Load4(_235.Load(li * 4 + 0) * 64 + 0);
-            _252.param1 = asfloat(_248.Load4(_235.Load(li * 4 + 0) * 64 + 16));
-            _252.param2 = asfloat(_248.Load4(_235.Load(li * 4 + 0) * 64 + 32));
-            _252.param3 = asfloat(_248.Load4(_235.Load(li * 4 + 0) * 64 + 48));
+            _252.type_and_param0 = _248.Load4(_236.Load(li * 4 + 0) * 64 + 0);
+            _252.param1 = asfloat(_248.Load4(_236.Load(li * 4 + 0) * 64 + 16));
+            _252.param2 = asfloat(_248.Load4(_236.Load(li * 4 + 0) * 64 + 32));
+            _252.param3 = asfloat(_248.Load4(_236.Load(li * 4 + 0) * 64 + 48));
             bool _265 = _840 != 0;
             bool _273;
             if (_265)
@@ -219,7 +220,7 @@ void comp_main()
                         if (accept)
                         {
                             _840 = -1;
-                            _841 = (-1) - int(_235.Load(li * 4 + 0));
+                            _841 = (-1) - int(_236.Load(li * 4 + 0));
                             _843 = _328;
                         }
                     }
@@ -238,7 +239,7 @@ void comp_main()
                         if (_401)
                         {
                             _840 = -1;
-                            _841 = (-1) - int(_235.Load(li * 4 + 0));
+                            _841 = (-1) - int(_236.Load(li * 4 + 0));
                             _843 = _332;
                         }
                     }
@@ -277,7 +278,7 @@ void comp_main()
                             if ((_503 >= (-0.5f)) && (_503 <= 0.5f))
                             {
                                 _840 = -1;
-                                _841 = (-1) - int(_235.Load(li * 4 + 0));
+                                _841 = (-1) - int(_236.Load(li * 4 + 0));
                                 _843 = _449;
                             }
                         }
@@ -316,7 +317,7 @@ void comp_main()
                             if (sqrt(mad(_599, _599, _603 * _603)) <= 0.5f)
                             {
                                 _840 = -1;
-                                _841 = (-1) - int(_235.Load(li * 4 + 0));
+                                _841 = (-1) - int(_236.Load(li * 4 + 0));
                                 _843 = _557;
                             }
                         }
@@ -351,7 +352,7 @@ void comp_main()
                                 if (_761)
                                 {
                                     _840 = -1;
-                                    _841 = (-1) - int(_235.Load(li * 4 + 0));
+                                    _841 = (-1) - int(_236.Load(li * 4 + 0));
                                     _843 = _739;
                                 }
                             }

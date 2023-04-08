@@ -31,16 +31,16 @@ float ngon_rad(const float theta, const float n) {
 }
 
 void main() {
-    if (gl_GlobalInvocationID.x >= g_params.img_size.x || gl_GlobalInvocationID.y >= g_params.img_size.y) {
+    if (gl_GlobalInvocationID.x >= g_params.rect.z || gl_GlobalInvocationID.y >= g_params.rect.w) {
         return;
     }
 
+    int x = int(g_params.rect.x + gl_GlobalInvocationID.x);
+    int y = int(g_params.rect.y + gl_GlobalInvocationID.y);
+
     float k = float(g_params.img_size.x) / float(g_params.img_size.y);
 
-    int x = int(gl_GlobalInvocationID.x);
-    int y = int(gl_GlobalInvocationID.y);
-
-    int index = y * int(g_params.img_size.x) + x;
+    int index = int(gl_GlobalInvocationID.y * g_params.rect.z) + x;
     int hash_val = hash((x << 16) | y);
 
     float _x = float(x);

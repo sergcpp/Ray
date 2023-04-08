@@ -6,13 +6,14 @@
 INTERFACE_START(PrimaryRayGen)
 
 struct Params {
-    UVEC2_TYPE img_size;
-    int hi;
-    float spread_angle;
+    UVEC4_TYPE rect;
     VEC4_TYPE cam_origin;
     VEC4_TYPE cam_fwd;
     VEC4_TYPE cam_side;
     VEC4_TYPE cam_up;
+    UVEC2_TYPE img_size;
+    int hi;
+    float spread_angle;
     float cam_fstop;
     float cam_focal_length;
     float cam_lens_rotation;

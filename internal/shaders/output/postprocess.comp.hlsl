@@ -1,6 +1,6 @@
 struct Params
 {
-    uint2 img_size;
+    uint4 rect;
     int srgb;
     int _clamp;
     float exposure;
@@ -80,11 +80,11 @@ void comp_main()
 {
     do
     {
-        bool _169 = gl_GlobalInvocationID.x >= _165_g_params.img_size.x;
+        bool _169 = gl_GlobalInvocationID.x >= _165_g_params.rect.z;
         bool _178;
         if (!_169)
         {
-            _178 = gl_GlobalInvocationID.y >= _165_g_params.img_size.y;
+            _178 = gl_GlobalInvocationID.y >= _165_g_params.rect.w;
         }
         else
         {
@@ -94,26 +94,26 @@ void comp_main()
         {
             break;
         }
-        int2 _187 = int2(gl_GlobalInvocationID.xy);
-        float4 _194 = g_in_img0[_187];
-        float4 img0 = _194;
-        float4 _199 = g_in_img1[_187];
-        float4 img1 = _199;
-        float4 _212 = (_194 * _165_g_params.img0_weight) + (_199 * _165_g_params.img1_weight);
-        g_out_raw_img[_187] = _212;
+        int2 _193 = int2(_165_g_params.rect.xy + gl_GlobalInvocationID.xy);
+        float4 _200 = g_in_img0[_193];
+        float4 img0 = _200;
+        float4 _205 = g_in_img1[_193];
+        float4 img1 = _205;
+        float4 _218 = (_200 * _165_g_params.img0_weight) + (_205 * _165_g_params.img1_weight);
+        g_out_raw_img[_193] = _218;
         bool param = _165_g_params.srgb != 0;
         float param_1 = _165_g_params.exposure;
         bool param_2 = _165_g_params._clamp != 0;
         float param_3 = _165_g_params.inv_gamma;
-        float4 param_4 = _212;
-        g_out_img[_187] = clamp_and_gamma_correct(param, param_1, param_2, param_3, param_4);
+        float4 param_4 = _218;
+        g_out_img[_193] = clamp_and_gamma_correct(param, param_1, param_2, param_3, param_4);
         float4 param_5 = img0;
         img0 = reversible_tonemap(param_5);
         float4 param_6 = img1;
-        float4 _247 = reversible_tonemap(param_6);
-        img1 = _247;
-        float4 _252 = img0 - _247;
-        g_out_variance_img[_187] = (_252 * 0.5f) * _252;
+        float4 _253 = reversible_tonemap(param_6);
+        img1 = _253;
+        float4 _258 = img0 - _253;
+        g_out_variance_img[_193] = (_258 * 0.5f) * _258;
         break;
     } while(false);
 }

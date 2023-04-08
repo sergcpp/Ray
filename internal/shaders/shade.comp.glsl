@@ -1989,14 +1989,14 @@ layout (local_size_x = LOCAL_GROUP_SIZE_X, local_size_y = LOCAL_GROUP_SIZE_Y, lo
 
 void main() {
 #if PRIMARY
-    if (gl_GlobalInvocationID.x >= g_params.img_size.x || gl_GlobalInvocationID.y >= g_params.img_size.y) {
+    if (gl_GlobalInvocationID.x >= g_params.rect.z || gl_GlobalInvocationID.y >= g_params.rect.w) {
         return;
     }
 
-    const int x = int(gl_GlobalInvocationID.x);
-    const int y = int(gl_GlobalInvocationID.y);
+    const int x = int(g_params.rect.x + gl_GlobalInvocationID.x);
+    const int y = int(g_params.rect.y + gl_GlobalInvocationID.y);
 
-    const int index = y * int(g_params.img_size.x) + x;
+    const int index = int(gl_GlobalInvocationID.y * g_params.rect.z) + x;
 #else
     const int index = int(gl_WorkGroupID.x * 64 + gl_LocalInvocationIndex);
     if (index >= g_inout_counters[1]) {

@@ -18,11 +18,11 @@ layout(binding = OUT_VARIANCE_IMG_SLOT, rgba32f) uniform writeonly image2D g_out
 layout (local_size_x = LOCAL_GROUP_SIZE_X, local_size_y = LOCAL_GROUP_SIZE_Y, local_size_z = 1) in;
 
 void main() {
-    if (gl_GlobalInvocationID.x >= g_params.img_size.x || gl_GlobalInvocationID.y >= g_params.img_size.y) {
+    if (gl_GlobalInvocationID.x >= g_params.rect.z || gl_GlobalInvocationID.y >= g_params.rect.w) {
         return;
     }
 
-    ivec2 gi = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 gi = ivec2(g_params.rect.xy + gl_GlobalInvocationID.xy);
 
     // Mix two half-buffers together
     vec4 img0 = imageLoad(g_in_img0, gi);

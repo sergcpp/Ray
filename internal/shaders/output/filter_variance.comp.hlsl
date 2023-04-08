@@ -1,15 +1,18 @@
 struct Params
 {
-    uint2 img_size;
+    uint4 rect;
+    float2 inv_img_size;
+    float _pad0;
+    float _pad1;
 };
 
 static const uint3 gl_WorkGroupSize = uint3(8u, 8u, 1u);
 
-static const float _316[5] = { 0.2270270287990570068359375f, 0.1945945918560028076171875f, 0.12162162363529205322265625f, 0.0540540553629398345947265625f, 0.01621621660888195037841796875f };
+static const float _321[5] = { 0.2270270287990570068359375f, 0.1945945918560028076171875f, 0.12162162363529205322265625f, 0.0540540553629398345947265625f, 0.01621621660888195037841796875f };
 
 cbuffer UniformParams
 {
-    Params _79_g_params : packoffset(c0);
+    Params _61_g_params : packoffset(c0);
 };
 
 Texture2D<float4> g_in_img : register(t1, space0);
@@ -55,42 +58,42 @@ void comp_main()
 {
     do
     {
-        int2 _62 = int2(gl_GlobalInvocationID.xy);
-        int2 _67 = int2(gl_LocalInvocationID.xy);
-        float2 _85 = (float2(_62) + 0.5f.xx) / float2(_79_g_params.img_size);
-        float4 param = g_in_img.SampleLevel(_g_in_img_sampler, _85, 0.0f, int2(-4, -4));
-        float4 _98 = reversible_tonemap(param);
-        int _106 = _67.y;
-        int _109 = _67.x;
-        g_temp_variance0_0[_106][_109] = spvPackHalf2x16(_98.xy);
-        g_temp_variance0_1[_106][_109] = spvPackHalf2x16(_98.zw);
-        float4 param_1 = g_in_img.SampleLevel(_g_in_img_sampler, _85, 0.0f, int2(4, -4));
-        float4 _134 = reversible_tonemap(param_1);
-        int _141 = 8 + _109;
-        g_temp_variance0_0[_106][_141] = spvPackHalf2x16(_134.xy);
-        g_temp_variance0_1[_106][_141] = spvPackHalf2x16(_134.zw);
-        float4 param_2 = g_in_img.SampleLevel(_g_in_img_sampler, _85, 0.0f, int2(-4, 4));
-        float4 _162 = reversible_tonemap(param_2);
-        int _165 = 8 + _106;
-        g_temp_variance0_0[_165][_109] = spvPackHalf2x16(_162.xy);
-        g_temp_variance0_1[_165][_109] = spvPackHalf2x16(_162.zw);
-        float4 param_3 = g_in_img.SampleLevel(_g_in_img_sampler, _85, 0.0f, int2(4, 4));
-        float4 _189 = reversible_tonemap(param_3);
-        g_temp_variance0_0[_165][_141] = spvPackHalf2x16(_189.xy);
-        g_temp_variance0_1[_165][_141] = spvPackHalf2x16(_189.zw);
+        int2 _74 = int2(_61_g_params.rect.xy + gl_GlobalInvocationID.xy);
+        int2 _79 = int2(gl_LocalInvocationID.xy);
+        float2 _91 = (float2(_74) + 0.5f.xx) * _61_g_params.inv_img_size;
+        float4 param = g_in_img.SampleLevel(_g_in_img_sampler, _91, 0.0f, int2(-4, -4));
+        float4 _104 = reversible_tonemap(param);
+        int _112 = _79.y;
+        int _115 = _79.x;
+        g_temp_variance0_0[_112][_115] = spvPackHalf2x16(_104.xy);
+        g_temp_variance0_1[_112][_115] = spvPackHalf2x16(_104.zw);
+        float4 param_1 = g_in_img.SampleLevel(_g_in_img_sampler, _91, 0.0f, int2(4, -4));
+        float4 _140 = reversible_tonemap(param_1);
+        int _147 = 8 + _115;
+        g_temp_variance0_0[_112][_147] = spvPackHalf2x16(_140.xy);
+        g_temp_variance0_1[_112][_147] = spvPackHalf2x16(_140.zw);
+        float4 param_2 = g_in_img.SampleLevel(_g_in_img_sampler, _91, 0.0f, int2(-4, 4));
+        float4 _168 = reversible_tonemap(param_2);
+        int _171 = 8 + _112;
+        g_temp_variance0_0[_171][_115] = spvPackHalf2x16(_168.xy);
+        g_temp_variance0_1[_171][_115] = spvPackHalf2x16(_168.zw);
+        float4 param_3 = g_in_img.SampleLevel(_g_in_img_sampler, _91, 0.0f, int2(4, 4));
+        float4 _195 = reversible_tonemap(param_3);
+        g_temp_variance0_0[_171][_147] = spvPackHalf2x16(_195.xy);
+        g_temp_variance0_1[_171][_147] = spvPackHalf2x16(_195.zw);
         AllMemoryBarrier();
         GroupMemoryBarrierWithGroupSync();
-        bool _219 = gl_GlobalInvocationID.x >= _79_g_params.img_size.x;
-        bool _228;
-        if (!_219)
+        bool _225 = gl_GlobalInvocationID.x >= _61_g_params.rect.z;
+        bool _234;
+        if (!_225)
         {
-            _228 = gl_GlobalInvocationID.y >= _79_g_params.img_size.y;
+            _234 = gl_GlobalInvocationID.y >= _61_g_params.rect.w;
         }
         else
         {
-            _228 = _219;
+            _234 = _225;
         }
-        if (_228)
+        if (_234)
         {
             break;
         }
@@ -98,45 +101,45 @@ void comp_main()
         [unroll]
         for (; j < 16; j += 8)
         {
-            int _245 = _106 + j;
-            int _248 = _109 + 4;
-            float4 _266 = float4(spvUnpackHalf2x16(g_temp_variance0_0[_245][_248]), spvUnpackHalf2x16(g_temp_variance0_1[_245][_248]));
-            float4 res = _266 * 0.2270270287990570068359375f;
+            int _251 = _112 + j;
+            int _254 = _115 + 4;
+            float4 _272 = float4(spvUnpackHalf2x16(g_temp_variance0_0[_251][_254]), spvUnpackHalf2x16(g_temp_variance0_1[_251][_254]));
+            float4 res = _272 * 0.2270270287990570068359375f;
             [unroll]
             for (int i = 1; i < 5; )
             {
-                int _284 = _106 + j;
-                int _289 = _248 + i;
-                int _333 = _248 - i;
-                res = (res + (float4(spvUnpackHalf2x16(g_temp_variance0_0[_284][_289]), spvUnpackHalf2x16(g_temp_variance0_1[_284][_289])) * _316[i])) + (float4(spvUnpackHalf2x16(g_temp_variance0_0[_284][_333]), spvUnpackHalf2x16(g_temp_variance0_1[_284][_333])) * _316[i]);
+                int _289 = _112 + j;
+                int _294 = _254 + i;
+                int _338 = _254 - i;
+                res = (res + (float4(spvUnpackHalf2x16(g_temp_variance0_0[_289][_294]), spvUnpackHalf2x16(g_temp_variance0_1[_289][_294])) * _321[i])) + (float4(spvUnpackHalf2x16(g_temp_variance0_0[_289][_338]), spvUnpackHalf2x16(g_temp_variance0_1[_289][_338])) * _321[i]);
                 i++;
                 continue;
             }
-            float4 _363 = res;
-            float4 _365 = max(_363, _266);
-            res = _365;
-            int _374 = _106 + j;
-            g_temp_variance1_0[_374][_109] = spvPackHalf2x16(_365.xy);
-            g_temp_variance1_1[_374][_109] = spvPackHalf2x16(_365.zw);
+            float4 _368 = res;
+            float4 _370 = max(_368, _272);
+            res = _370;
+            int _379 = _112 + j;
+            g_temp_variance1_0[_379][_115] = spvPackHalf2x16(_370.xy);
+            g_temp_variance1_1[_379][_115] = spvPackHalf2x16(_370.zw);
         }
         AllMemoryBarrier();
         GroupMemoryBarrierWithGroupSync();
-        int _397 = _106 + 4;
-        float4 _415 = float4(spvUnpackHalf2x16(g_temp_variance1_0[_397][_109]), spvUnpackHalf2x16(g_temp_variance1_1[_397][_109]));
-        float4 res_variance = _415 * 0.2270270287990570068359375f;
+        int _402 = _112 + 4;
+        float4 _420 = float4(spvUnpackHalf2x16(g_temp_variance1_0[_402][_115]), spvUnpackHalf2x16(g_temp_variance1_1[_402][_115]));
+        float4 res_variance = _420 * 0.2270270287990570068359375f;
         [unroll]
         for (int i_1 = 1; i_1 < 5; )
         {
-            int _431 = _397 + i_1;
-            int _463 = _397 - i_1;
-            res_variance = (res_variance + (float4(spvUnpackHalf2x16(g_temp_variance1_0[_431][_109]), spvUnpackHalf2x16(g_temp_variance1_1[_431][_109])) * _316[i_1])) + (float4(spvUnpackHalf2x16(g_temp_variance1_0[_463][_109]), spvUnpackHalf2x16(g_temp_variance1_1[_463][_109])) * _316[i_1]);
+            int _436 = _402 + i_1;
+            int _468 = _402 - i_1;
+            res_variance = (res_variance + (float4(spvUnpackHalf2x16(g_temp_variance1_0[_436][_115]), spvUnpackHalf2x16(g_temp_variance1_1[_436][_115])) * _321[i_1])) + (float4(spvUnpackHalf2x16(g_temp_variance1_0[_468][_115]), spvUnpackHalf2x16(g_temp_variance1_1[_468][_115])) * _321[i_1]);
             i_1++;
             continue;
         }
-        float4 _493 = res_variance;
-        float4 _495 = max(_493, _415);
-        res_variance = _495;
-        g_out_img[_62] = _495;
+        float4 _498 = res_variance;
+        float4 _500 = max(_498, _420);
+        res_variance = _500;
+        g_out_img[_74] = _500;
         break;
     } while(false);
 }

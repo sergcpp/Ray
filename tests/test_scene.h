@@ -59,4 +59,4 @@ void setup_test_scene(Ray::SceneBase &scene, bool output_sh, bool output_base_co
                       const MatDesc &main_mat_desc, const char *textures[], eTestScene test_scene);
 
 void schedule_render_jobs(Ray::RendererBase &renderer, const Ray::SceneBase *scene, const Ray::settings_t &settings,
-                          int samples, bool denoise, const char *log_str);
+                          int samples, bool denoise, bool partial, const char *log_str);

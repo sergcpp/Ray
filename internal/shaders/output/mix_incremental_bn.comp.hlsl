@@ -1,8 +1,10 @@
 struct Params
 {
-    uint2 img_size;
+    uint4 rect;
     float main_mix_factor;
     float aux_mix_factor;
+    float _pad0;
+    float _pad1;
 };
 
 static const uint3 gl_WorkGroupSize = uint3(8u, 8u, 1u);
@@ -12,9 +14,8 @@ cbuffer UniformParams
     Params _20_g_params : packoffset(c0);
 };
 
-RWTexture2D<float4> g_in_img1 : register(u3, space0);
-RWTexture2D<float4> g_in_img2 : register(u4, space0);
 RWTexture2D<float4> g_out_img : register(u0, space0);
+RWTexture2D<float4> g_temp_img : register(u3, space0);
 RWTexture2D<float4> g_out_base_color_img : register(u1, space0);
 RWTexture2D<float4> g_temp_base_color : register(u5, space0);
 RWTexture2D<float4> g_out_depth_normals_img : register(u2, space0);
@@ -30,35 +31,35 @@ void comp_main()
 {
     do
     {
-        bool _26 = gl_GlobalInvocationID.x >= _20_g_params.img_size.x;
-        bool _36;
-        if (!_26)
+        bool _27 = gl_GlobalInvocationID.x >= _20_g_params.rect.z;
+        bool _38;
+        if (!_27)
         {
-            _36 = gl_GlobalInvocationID.y >= _20_g_params.img_size.y;
+            _38 = gl_GlobalInvocationID.y >= _20_g_params.rect.w;
         }
         else
         {
-            _36 = _26;
+            _38 = _27;
         }
-        if (_36)
+        if (_38)
         {
             break;
         }
-        int2 _45 = int2(gl_GlobalInvocationID.xy);
-        float3 _56 = g_in_img1[_45].xyz;
-        g_out_img[_45] = float4(_56 + ((g_in_img2[_45].xyz - _56) * _20_g_params.main_mix_factor), 1.0f);
-        float3 _88 = g_out_base_color_img[_45].xyz;
-        g_out_base_color_img[_45] = float4(_88 + ((g_temp_base_color[_45].xyz - _88) * _20_g_params.aux_mix_factor), 1.0f);
-        float4 _117 = g_out_depth_normals_img[_45];
-        float4 _122 = g_temp_depth_normals_img[_45];
-        float3 _128 = clamp(_122.xyz, (-1.0f).xxx, 1.0f.xxx);
-        float4 _186 = _122;
-        _186.x = _128.x;
-        float4 _188 = _186;
-        _188.y = _128.y;
-        float4 _190 = _188;
-        _190.z = _128.z;
-        g_out_depth_normals_img[_45] = _117 + ((_190 - _117) * _20_g_params.aux_mix_factor);
+        int2 _53 = int2(_20_g_params.rect.xy + gl_GlobalInvocationID.xy);
+        float3 _64 = g_out_img[_53].xyz;
+        g_out_img[_53] = float4(_64 + ((g_temp_img[_53].xyz - _64) * _20_g_params.main_mix_factor), 1.0f);
+        float3 _95 = g_out_base_color_img[_53].xyz;
+        g_out_base_color_img[_53] = float4(_95 + ((g_temp_base_color[_53].xyz - _95) * _20_g_params.aux_mix_factor), 1.0f);
+        float4 _124 = g_out_depth_normals_img[_53];
+        float4 _129 = g_temp_depth_normals_img[_53];
+        float3 _135 = clamp(_129.xyz, (-1.0f).xxx, 1.0f.xxx);
+        float4 _192 = _129;
+        _192.x = _135.x;
+        float4 _194 = _192;
+        _194.y = _135.y;
+        float4 _196 = _194;
+        _196.z = _135.z;
+        g_out_depth_normals_img[_53] = _124 + ((_196 - _124) * _20_g_params.aux_mix_factor);
         break;
     } while(false);
 }

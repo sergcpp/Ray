@@ -8,10 +8,8 @@ LAYOUT_PARAMS uniform UniformParams {
     Params g_params;
 };
 
-layout(binding = IN_IMG1_SLOT, rgba32f) uniform readonly image2D g_in_img1;
-layout(binding = IN_IMG2_SLOT, rgba32f) uniform readonly image2D g_in_img2;
-
-layout(binding = OUT_IMG_SLOT, rgba32f) uniform writeonly image2D g_out_img;
+layout(binding = IN_TEMP_IMG_SLOT, rgba32f) uniform readonly image2D g_temp_img;
+layout(binding = OUT_IMG_SLOT, rgba32f) uniform image2D g_out_img;
 #if OUTPUT_BASE_COLOR
     layout(binding = IN_TEMP_BASE_COLOR_SLOT, rgba32f) uniform readonly image2D g_temp_base_color;
     layout(binding = OUT_BASE_COLOR_IMG_SLOT, rgba32f) uniform image2D g_out_base_color_img;
@@ -24,15 +22,14 @@ layout(binding = OUT_IMG_SLOT, rgba32f) uniform writeonly image2D g_out_img;
 layout (local_size_x = LOCAL_GROUP_SIZE_X, local_size_y = LOCAL_GROUP_SIZE_Y, local_size_z = 1) in;
 
 void main() {
-    if (gl_GlobalInvocationID.x >= g_params.img_size.x || gl_GlobalInvocationID.y >= g_params.img_size.y) {
+    if (gl_GlobalInvocationID.x >= g_params.rect.z || gl_GlobalInvocationID.y >= g_params.rect.w) {
         return;
     }
 
-    ivec2 icoord = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 icoord = ivec2(g_params.rect.xy + gl_GlobalInvocationID.xy);
 
-    vec3 col1 = imageLoad(g_in_img1, icoord).rgb;
-    vec3 col2 = imageLoad(g_in_img2, icoord).rgb;
-
+    vec3 col1 = imageLoad(g_out_img, icoord).rgb;
+    vec3 col2 = imageLoad(g_temp_img, icoord).rgb;
     vec3 diff = col2 - col1;
     imageStore(g_out_img, icoord, vec4(col1 + diff * g_params.main_mix_factor, 1.0));
 

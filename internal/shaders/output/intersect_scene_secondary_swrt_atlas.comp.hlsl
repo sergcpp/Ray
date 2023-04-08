@@ -68,13 +68,15 @@ struct transform_t
 
 struct Params
 {
-    uint2 img_size;
+    uint4 rect;
     uint node_index;
     float cam_clip_end;
     int min_transp_depth;
     int max_transp_depth;
     int hi;
-    int pad2;
+    int _pad0;
+    int _pad1;
+    int _pad2;
 };
 
 struct material_t

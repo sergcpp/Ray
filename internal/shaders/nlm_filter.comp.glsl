@@ -28,8 +28,8 @@ const int NeighborRadius = (NEIGHBORHOOD_SIZE - 1) / 2;
 layout(local_size_x = LOCAL_GROUP_SIZE_X, local_size_y = LOCAL_GROUP_SIZE_Y, local_size_z = 1) in;
 
 void main() {
-    ivec2 gi = ivec2(gl_GlobalInvocationID.xy), li = ivec2(gl_LocalInvocationID.xy);
-    vec2 tex_coord = (vec2(gi) + vec2(0.5)) / vec2(g_params.img_size);
+    ivec2 gi = ivec2(g_params.rect.xy + gl_GlobalInvocationID.xy), li = ivec2(gl_LocalInvocationID.xy);
+    vec2 tex_coord = (vec2(gi) + vec2(0.5)) * g_params.inv_img_size;
 
 #if USE_SHARED_MEMORY
     //
@@ -63,7 +63,7 @@ void main() {
 
     groupMemoryBarrier(); barrier();
 
-    if (gl_GlobalInvocationID.x >= g_params.img_size.x || gl_GlobalInvocationID.y >= g_params.img_size.y) {
+    if (gl_GlobalInvocationID.x >= g_params.rect.z || gl_GlobalInvocationID.y >= g_params.rect.w) {
         return;
     }
 
@@ -107,12 +107,11 @@ void main() {
         sum_output /= sum_weight;
     }
 #else
-    [[dont_flatten]] if (gl_GlobalInvocationID.x >= g_params.img_size.x || gl_GlobalInvocationID.y >= g_params.img_size.y) {
+    [[dont_flatten]] if (gl_GlobalInvocationID.x >= g_params.rect_size.x || gl_GlobalInvocationID.y >= g_params.rect_size.y) {
         return;
     }
 
     int ix = gi.x, iy = gi.y;
-    vec2 inv_res = vec2(1.0) / vec2(g_params.img_size);
 
     vec4 sum_output = vec4(0.0);
     float sum_weight = 0.0;
@@ -127,11 +126,11 @@ void main() {
 
             [[unroll]] for (int q = -NeighborRadius; q <= NeighborRadius; ++q) {
                 [[unroll]] for (int p = -NeighborRadius; p <= NeighborRadius; ++p) {
-                    vec4 ipx = textureLod(g_in_img, tex_coord + vec2(p, q) * inv_res, 0.0);
-                    vec4 jpx = textureLod(g_in_img, tex_coord + vec2(l + p, k + q) * inv_res, 0.0);
+                    vec4 ipx = textureLod(g_in_img, tex_coord + vec2(p, q) * g_params.inv_img_size, 0.0);
+                    vec4 jpx = textureLod(g_in_img, tex_coord + vec2(l + p, k + q) * g_params.inv_img_size, 0.0);
 
-                    vec4 ivar = textureLod(g_variance_img, tex_coord + vec2(p, q) * inv_res, 0.0);
-                    vec4 jvar = textureLod(g_variance_img, tex_coord + vec2(l + p, k + q) * inv_res, 0.0);
+                    vec4 ivar = textureLod(g_variance_img, tex_coord + vec2(p, q) * g_params.inv_img_size, 0.0);
+                    vec4 jvar = textureLod(g_variance_img, tex_coord + vec2(l + p, k + q) * g_params.inv_img_size, 0.0);
                     vec4 min_var = min(ivar, jvar);
 
                     distance += ((ipx - jpx) * (ipx - jpx) - g_params.alpha * (ivar + min_var)) /
@@ -144,7 +143,7 @@ void main() {
 
             float weight = exp(-max(0.0, patch_distance));
 
-            sum_output += textureLod(g_in_img, tex_coord + vec2(l, k) * inv_res, 0.0) * weight;
+            sum_output += textureLod(g_in_img, tex_coord + vec2(l, k) * g_params.inv_img_size, 0.0) * weight;
             sum_weight += weight;
         }
     }

@@ -18,12 +18,12 @@ shared uint g_temp_variance1_0[16][8], g_temp_variance1_1[16][8];
 layout (local_size_x = LOCAL_GROUP_SIZE_X, local_size_y = LOCAL_GROUP_SIZE_Y, local_size_z = 1) in;
 
 void main() {
-    ivec2 gi = ivec2(gl_GlobalInvocationID.xy), li = ivec2(gl_LocalInvocationID.xy);
+    ivec2 gi = ivec2(g_params.rect.xy + gl_GlobalInvocationID.xy), li = ivec2(gl_LocalInvocationID.xy);
 
     //
     // Load variance into shared memory (16x16 region)
     //
-    vec2 tex_coord = (vec2(gi) + vec2(0.5)) / vec2(g_params.img_size);
+    vec2 tex_coord = (vec2(gi) + vec2(0.5)) * g_params.inv_img_size;
     vec4 v00 = reversible_tonemap(textureLodOffset(g_in_img, tex_coord, 0.0, ivec2(-4, -4)));
     g_temp_variance0_0[0 + li.y][0 + li.x] = packHalf2x16(v00.xy);
     g_temp_variance0_1[0 + li.y][0 + li.x] = packHalf2x16(v00.zw);
@@ -39,7 +39,7 @@ void main() {
 
     groupMemoryBarrier(); barrier();
 
-    if (gl_GlobalInvocationID.x >= g_params.img_size.x || gl_GlobalInvocationID.y >= g_params.img_size.y) {
+    if (gl_GlobalInvocationID.x >= g_params.rect.z || gl_GlobalInvocationID.y >= g_params.rect.w) {
         return;
     }
 

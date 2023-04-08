@@ -6,7 +6,9 @@
 INTERFACE_START(Shade)
 
 struct Params {
-    UVEC2_TYPE img_size;
+    UVEC4_TYPE rect;
+    VEC4_TYPE env_col;
+    VEC4_TYPE back_col;
     int hi;
     int li_count;
     int max_diff_depth;
@@ -17,12 +19,12 @@ struct Params {
     int min_total_depth;
     int min_transp_depth;
     int env_qtree_levels;
-    VEC4_TYPE env_col;
-    VEC4_TYPE back_col;
     float env_rotation;
     float back_rotation;
     int env_mult_importance;
+    float _pad0;
     float _pad1;
+    float _pad2;
 };
 
 const int LOCAL_GROUP_SIZE_X = 8;

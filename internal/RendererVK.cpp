@@ -605,7 +605,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
 
     //////////////////////////////////////////////////////////////////////////////////
 
-    const int hi = (region.iteration & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT;
+    const int hi = (region.iteration % HALTON_SEQ_LEN) * HALTON_COUNT;
 
     { // transition resources
         SmallVector<TransitionInfo, 16> res_transitions;
@@ -665,10 +665,18 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
     }
 
+    VkMemoryBarrier mem_barrier = {VK_STRUCTURE_TYPE_MEMORY_BARRIER};
+    mem_barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;
+    mem_barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+    vkCmdPipelineBarrier(cmd_buf, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 1,
+                         &mem_barrier, 0, nullptr, 0, nullptr);
+
+    const rect_t rect = region.rect();
+
     { // generate primary rays
         DebugMarker _(cmd_buf, "GeneratePrimaryRays");
         timestamps_[ctx_->backend_frame].primary_ray_gen[0] = ctx_->WriteTimestamp(true);
-        kernel_GeneratePrimaryRays(cmd_buf, cam, hi, region.rect(), halton_seq_buf_, prim_rays_buf_);
+        kernel_GeneratePrimaryRays(cmd_buf, cam, hi, rect, halton_seq_buf_, prim_rays_buf_);
         timestamps_[ctx_->backend_frame].primary_ray_gen[1] = ctx_->WriteTimestamp(false);
     }
 
@@ -682,8 +690,8 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         DebugMarker _(cmd_buf, "IntersectScenePrimary");
         timestamps_[ctx_->backend_frame].primary_trace[0] = ctx_->WriteTimestamp(true);
         kernel_IntersectScenePrimary(cmd_buf, cam.pass_settings, sc_data, halton_seq_buf_, hi + RAND_DIM_BASE_COUNT,
-                                     macro_tree_root, cam.clip_end, s->tex_atlases_, s->bindless_tex_data_.descr_set,
-                                     prim_rays_buf_, prim_hits_buf_);
+                                     rect, macro_tree_root, cam.clip_end, s->tex_atlases_,
+                                     s->bindless_tex_data_.descr_set, prim_rays_buf_, prim_hits_buf_);
         timestamps_[ctx_->backend_frame].primary_trace[1] = ctx_->WriteTimestamp(false);
     }
 
@@ -693,7 +701,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         DebugMarker _(cmd_buf, "ShadePrimaryHits");
         timestamps_[ctx_->backend_frame].primary_shade[0] = ctx_->WriteTimestamp(true);
         kernel_ShadePrimaryHits(cmd_buf, cam.pass_settings, s->env_, prim_hits_buf_, prim_rays_buf_, sc_data,
-                                halton_seq_buf_, hi + RAND_DIM_BASE_COUNT, s->tex_atlases_,
+                                halton_seq_buf_, hi + RAND_DIM_BASE_COUNT, rect, s->tex_atlases_,
                                 s->bindless_tex_data_.descr_set, temp_buf0_, secondary_rays_buf_, shadow_rays_buf_,
                                 counters_buf_, temp_base_color, temp_depth_normals_buf_);
         timestamps_[ctx_->backend_frame].primary_shade[1] = ctx_->WriteTimestamp(false);
@@ -771,9 +779,8 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         const float main_mix_factor = 1.0f / float((region.iteration + 1) / 2);
         const float aux_mix_factor = 1.0f / float(region.iteration);
 
-        kernel_MixIncremental(cmd_buf, clean_buf, temp_buf0_, main_mix_factor, aux_mix_factor, temp_base_color,
-                              temp_depth_normals_buf_, final_buf_, base_color_buf_, depth_normals_buf_);
-        std::swap(final_buf_, clean_buf);
+        kernel_MixIncremental(cmd_buf, main_mix_factor, aux_mix_factor, rect, temp_buf0_, temp_base_color,
+                              temp_depth_normals_buf_, clean_buf, base_color_buf_, depth_normals_buf_);
     }
 
     { // output final buffer, prepare variance
@@ -791,13 +798,14 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         tonemap_params_.clamp = (cam.pass_settings.flags & ePassFlags::Clamp);
 
         kernel_Postprocess(cmd_buf, dual_buf_[0], p1_weight, dual_buf_[1], p2_weight, tonemap_params_.exposure,
-                           tonemap_params_.inv_gamma, tonemap_params_.clamp, tonemap_params_.srgb, final_buf_,
+                           tonemap_params_.inv_gamma, tonemap_params_.clamp, tonemap_params_.srgb, rect, final_buf_,
                            raw_final_buf_, temp_buf0_);
         // Also store as denosed result until Denoise method will be called
         const TransitionInfo img_transitions[] = {{&raw_final_buf_, eResState::CopySrc},
                                                   {&raw_filtered_buf_, eResState::CopyDst}};
         TransitionResourceStates(cmd_buf, AllStages, AllStages, img_transitions);
-        CopyImageToImage(cmd_buf, raw_final_buf_, 0, 0, 0, raw_filtered_buf_, 0, 0, 0, w_, h_);
+        CopyImageToImage(cmd_buf, raw_final_buf_, 0, rect.x, rect.y, raw_filtered_buf_, 0, rect.x, rect.y, rect.w,
+                         rect.h);
     }
 
 #if RUN_IN_LOCKSTEP
@@ -810,7 +818,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
     VkSubmitInfo submit_info = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
 
     const VkSemaphore wait_semaphores[] = {ctx_->render_finished_semaphore(prev_frame)};
-    const VkPipelineStageFlags wait_stages[] = {VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT};
+    const VkPipelineStageFlags wait_stages[] = {VK_PIPELINE_STAGE_ALL_COMMANDS_BIT};
 
     if (ctx_->render_finished_semaphore_is_set[prev_frame]) {
         submit_info.waitSemaphoreCount = 1;
@@ -867,19 +875,21 @@ void Ray::Vk::Renderer::DenoiseImage(const RegionContext &region) {
 
     timestamps_[ctx_->backend_frame].denoise[0] = ctx_->WriteTimestamp(true);
 
+    const rect_t &rect = region.rect();
+
     const auto &raw_variance = temp_buf0_;
     const auto &filtered_variance = temp_buf1_;
 
     { // Filter variance
         DebugMarker _(cmd_buf, "Filter Variance");
-        kernel_FilterVariance(cmd_buf, temp_buf0_, filtered_variance);
+        kernel_FilterVariance(cmd_buf, temp_buf0_, rect, filtered_variance);
     }
 
     { // Apply NLM Filter
         DebugMarker _(cmd_buf, "NLM Filter");
         kernel_NLMFilter(cmd_buf, raw_final_buf_, filtered_variance, 1.0f, 0.45f, raw_filtered_buf_,
                          tonemap_params_.exposure, tonemap_params_.inv_gamma, tonemap_params_.clamp,
-                         tonemap_params_.srgb, final_buf_);
+                         tonemap_params_.srgb, rect, final_buf_);
     }
 
     timestamps_[ctx_->backend_frame].denoise[1] = ctx_->WriteTimestamp(false);
@@ -896,7 +906,7 @@ void Ray::Vk::Renderer::DenoiseImage(const RegionContext &region) {
     VkSubmitInfo submit_info = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
 
     const VkSemaphore wait_semaphores[] = {ctx_->render_finished_semaphore(prev_frame)};
-    const VkPipelineStageFlags wait_stages[] = {VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT};
+    const VkPipelineStageFlags wait_stages[] = {VK_PIPELINE_STAGE_ALL_COMMANDS_BIT};
 
     if (ctx_->render_finished_semaphore_is_set[prev_frame]) {
         submit_info.waitSemaphoreCount = 1;
@@ -974,7 +984,7 @@ const Ray::color_rgba_t *Ray::Vk::Renderer::get_pixels_ref(const bool tonemap) c
             const bool is_set = ctx_->render_finished_semaphore_is_set[i];
             if (is_set) {
                 wait_semaphores.push_back(ctx_->render_finished_semaphore(i));
-                wait_stages.push_back(VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT);
+                wait_stages.push_back(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
             }
         }
 
@@ -1043,7 +1053,7 @@ const Ray::color_rgba_t *Ray::Vk::Renderer::get_aux_pixels_ref(const eAUXBuffer 
             const bool is_set = ctx_->render_finished_semaphore_is_set[i];
             if (is_set) {
                 wait_semaphores.push_back(ctx_->render_finished_semaphore(i));
-                wait_stages.push_back(VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT);
+                wait_stages.push_back(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
             }
         }
 

@@ -6,16 +6,17 @@
 INTERFACE_START(MixIncremental)
 
 struct Params {
-    UVEC2_TYPE img_size;
+    UVEC4_TYPE rect;
     float main_mix_factor;
     float aux_mix_factor;
+    float _pad0;
+    float _pad1;
 };
 
 const int LOCAL_GROUP_SIZE_X = 8;
 const int LOCAL_GROUP_SIZE_Y = 8;
 
-const int IN_IMG1_SLOT = 3;
-const int IN_IMG2_SLOT = 4;
+const int IN_TEMP_IMG_SLOT = 3;
 const int IN_TEMP_BASE_COLOR_SLOT = 5;
 const int IN_TEMP_DEPTH_NORMALS_SLOT = 6;
 

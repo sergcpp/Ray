@@ -533,7 +533,7 @@ uint32_t Ray::PreprocessPrims_SAH(Span<const prim_t> prims, const float *positio
             : indices(std::move(_indices)), min(_min), max(_max) {}
     };
 
-    std::deque <prims_coll_t, aligned_allocator<prims_coll_t, alignof(prims_coll_t)>> prim_lists;
+    std::deque<prims_coll_t, aligned_allocator<prims_coll_t, alignof(prims_coll_t)>> prim_lists;
     prim_lists.emplace_back();
 
     size_t num_nodes = out_nodes.size();
@@ -928,7 +928,7 @@ bool Ray::NaiivePluckerTest(const float p[9], const float o[3], const float d[3]
     return (t0 <= 0 && t1 <= 0 && t2 <= 0) || (t0 >= 0 && t1 >= 0 && t2 >= 0);
 }
 
-void Ray::ConstructCamera(const eCamType type, const eFilterType filter, eDeviceType dtype, const float origin[3],
+void Ray::ConstructCamera(const eCamType type, const eFilterType filter, const eDeviceType dtype, const float origin[3],
                           const float fwd[3], const float up[3], const float shift[2], const float fov,
                           const float sensor_height, const float exposure, const float gamma,
                           const float focus_distance, const float fstop, const float lens_rotation,
@@ -964,10 +964,10 @@ void Ray::ConstructCamera(const eCamType type, const eFilterType filter, eDevice
         cam->lens_blades = lens_blades;
         cam->clip_start = clip_start;
         cam->clip_end = clip_end;
-        memcpy(&cam->origin[0], value_ptr(o), 3 * sizeof(float));
-        memcpy(&cam->fwd[0], value_ptr(f), 3 * sizeof(float));
-        memcpy(&cam->side[0], value_ptr(s), 3 * sizeof(float));
-        memcpy(&cam->up[0], value_ptr(u), 3 * sizeof(float));
+        o.store_to(cam->origin);
+        f.store_to(cam->fwd);
+        s.store_to(cam->side);
+        u.store_to(cam->up);
         memcpy(&cam->shift[0], shift, 2 * sizeof(float));
     } else if (type == eCamType::Ortho) {
         // TODO!

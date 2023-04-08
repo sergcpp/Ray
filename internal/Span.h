@@ -15,8 +15,8 @@ template <typename T> class Span {
 
   public:
     Span() = default;
-    Span(T *p_data, ptrdiff_t size) : p_data_(p_data), size_(size) {}
-    Span(T *p_data, size_t size) : p_data_(p_data), size_(size) {}
+    Span(T *p_data, const ptrdiff_t size) : p_data_(p_data), size_(size) {}
+    Span(T *p_data, const size_t size) : p_data_(p_data), size_(size) {}
     Span(T *p_begin, T *p_end) : p_data_(p_begin), size_(p_end - p_begin) {}
     template <typename Alloc>
     Span(const std::vector<typename std::remove_const<T>::type, Alloc> &v)
@@ -34,8 +34,8 @@ template <typename T> class Span {
     ptrdiff_t size() const { return size_; }
     bool empty() const { return size_ == 0; }
 
-    T &operator[](ptrdiff_t i) const { return p_data_[i]; }
-    T &operator()(ptrdiff_t i) const { return p_data_[i]; }
+    T &operator[](const ptrdiff_t i) const { return p_data_[i]; }
+    T &operator()(const ptrdiff_t i) const { return p_data_[i]; }
 
     using iterator = T*;
     using const_iterator = const T*;

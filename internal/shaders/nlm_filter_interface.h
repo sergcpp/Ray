@@ -6,7 +6,8 @@
 INTERFACE_START(NLMFilter)
 
 struct Params {
-    UVEC2_TYPE img_size;
+    UVEC4_TYPE rect;
+    VEC2_TYPE inv_img_size;
     float alpha;
     float damping;
     int srgb, _clamp;

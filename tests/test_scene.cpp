@@ -732,16 +732,24 @@ template void setup_test_scene(Ray::SceneBase &scene, bool output_sh, bool outpu
                                eTestScene test_scene);
 
 void schedule_render_jobs(Ray::RendererBase &renderer, const Ray::SceneBase *scene, const Ray::settings_t &settings,
-                          const int samples, const bool denoise, const char *log_str) {
+                          const int samples, const bool denoise, const bool partial, const char *log_str) {
     const auto rt = renderer.type();
     const auto sz = renderer.size();
 
-    if (Ray::RendererSupportsMultithreading(rt)) {
-        static const int BucketSize = 16;
+    static const int BucketSize = 16;
+    static const int SamplePortion = 16;
 
+    if (Ray::RendererSupportsMultithreading(rt)) {
+        bool skip_tile = false;
         std::vector<Ray::RegionContext> region_contexts;
         for (int y = 0; y < sz.second; y += BucketSize) {
+            skip_tile = !skip_tile;
             for (int x = 0; x < sz.first; x += BucketSize) {
+                skip_tile = !skip_tile;
+                if (partial && skip_tile) {
+                    continue;
+                }
+
                 const auto rect =
                     Ray::rect_t{x, y, std::min(sz.first - x, BucketSize), std::min(sz.second - y, BucketSize)};
                 region_contexts.emplace_back(rect);
@@ -770,7 +778,6 @@ void schedule_render_jobs(Ray::RendererBase &renderer, const Ray::SceneBase *sce
             renderer.DenoiseImage(region_contexts[j]);
         };
 
-        static const int SamplePortion = 16;
         for (int i = 0; i < samples; i += std::min(SamplePortion, samples - i)) {
             std::vector<std::future<void>> job_res;
             for (int j = 0; j < int(region_contexts.size()); ++j) {
@@ -798,11 +805,30 @@ void schedule_render_jobs(Ray::RendererBase &renderer, const Ray::SceneBase *sce
             fflush(stdout);
         }
     } else {
-        static const int SamplePortion = 16;
+        std::vector<Ray::RegionContext> region_contexts;
+        if (partial) {
+            bool skip_tile = false;
+            for (int y = 0; y < sz.second; y += BucketSize) {
+                skip_tile = !skip_tile;
+                for (int x = 0; x < sz.first; x += BucketSize) {
+                    skip_tile = !skip_tile;
+                    if (partial && skip_tile) {
+                        continue;
+                    }
 
-        auto region = Ray::RegionContext{{0, 0, sz.first, sz.second}};
+                    const auto rect =
+                        Ray::rect_t{x, y, std::min(sz.first - x, BucketSize), std::min(sz.second - y, BucketSize)};
+                    region_contexts.emplace_back(rect);
+                }
+            }
+        } else {
+            region_contexts.emplace_back(Ray::rect_t{0, 0, sz.first, sz.second});
+        }
+
         for (int i = 0; i < samples; ++i) {
-            renderer.RenderScene(scene, region);
+            for (auto &region : region_contexts) {
+                renderer.RenderScene(scene, region);
+            }
 
             if ((i % SamplePortion) == 0 || i == samples - 1) {
                 // report progress percentage
@@ -813,7 +839,9 @@ void schedule_render_jobs(Ray::RendererBase &renderer, const Ray::SceneBase *sce
             }
         }
         if (denoise) {
-            renderer.DenoiseImage(region);
+            for (auto &region : region_contexts) {
+                renderer.DenoiseImage(region);
+            }
         }
     }
 }
