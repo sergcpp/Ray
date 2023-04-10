@@ -9,7 +9,8 @@ struct Params {
     UINT_TYPE node_index;
     int max_transp_depth;
     int blocker_lights_count;
-    int _pad0, _pad1;
+    float clamp_val;
+    int _pad0;
 };
 
 const int LOCAL_GROUP_SIZE_X = 8;

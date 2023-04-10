@@ -436,8 +436,8 @@ void main() {
         const int x = (sh_ray.xy >> 16) & 0xffff;
         const int y = (sh_ray.xy & 0xffff);
 
-        vec3 col = imageLoad(g_inout_img, ivec2(x, y)).rgb;
-        col += rc;
-        imageStore(g_inout_img, ivec2(x, y), vec4(col, 1.0));
+        vec4 col = imageLoad(g_inout_img, ivec2(x, y));
+        col.xyz += min(rc, vec3(g_params.clamp_val));
+        imageStore(g_inout_img, ivec2(x, y), col);
     }
 }

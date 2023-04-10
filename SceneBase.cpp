@@ -69,6 +69,9 @@ void Ray::SceneBase::GetCamera(const CameraHandle i, camera_desc_t &c) const {
     c.max_total_depth = cam.pass_settings.max_total_depth;
     c.min_total_depth = cam.pass_settings.min_total_depth;
     c.min_transp_depth = cam.pass_settings.min_transp_depth;
+
+    c.clamp_direct = cam.pass_settings.clamp_direct;
+    c.clamp_indirect = cam.pass_settings.clamp_indirect;
 }
 
 void Ray::SceneBase::SetCamera_nolock(const CameraHandle i, const camera_desc_t &c) {
@@ -128,6 +131,9 @@ void Ray::SceneBase::SetCamera_nolock(const CameraHandle i, const camera_desc_t 
         cam.pass_settings.max_transp_depth = std::max(cam.pass_settings.max_transp_depth - 1, 0);
         cam.pass_settings.max_total_depth = std::max(cam.pass_settings.max_total_depth - 1, 0);
     }
+
+    cam.pass_settings.clamp_direct = c.clamp_direct;
+    cam.pass_settings.clamp_indirect = c.clamp_indirect;
 }
 
 void Ray::SceneBase::RemoveCamera(const CameraHandle i) {

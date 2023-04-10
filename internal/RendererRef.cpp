@@ -182,6 +182,19 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
     p.secondary_rays.resize(rect.w * rect.h);
     p.shadow_rays.resize(rect.w * rect.h);
 
+    simd_fvec4 clamp_direct = simd_fvec4{std::numeric_limits<float>::max()};
+    if (cam.pass_settings.clamp_direct) {
+        clamp_direct.set<0>(cam.pass_settings.clamp_direct);
+        clamp_direct.set<1>(cam.pass_settings.clamp_direct);
+        clamp_direct.set<2>(cam.pass_settings.clamp_direct);
+    }
+    simd_fvec4 clamp_indirect = simd_fvec4{std::numeric_limits<float>::max()};
+    if (cam.pass_settings.clamp_indirect) {
+        clamp_indirect.set<0>(cam.pass_settings.clamp_indirect);
+        clamp_indirect.set<1>(cam.pass_settings.clamp_indirect);
+        clamp_indirect.set<2>(cam.pass_settings.clamp_indirect);
+    }
+
     int secondary_rays_count = 0, shadow_rays_count = 0;
 
     for (size_t i = 0; i < p.intersections.size(); i++) {
@@ -196,7 +209,8 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
             ShadeSurface(cam.pass_settings, inter, r, &region.halton_seq[hi + RAND_DIM_BASE_COUNT], sc_data,
                          macro_tree_root, s->tex_storages_, &p.secondary_rays[0], &secondary_rays_count,
                          &p.shadow_rays[0], &shadow_rays_count, &base_color, &depth_normal);
-        temp_buf_[y * w_ + x] = col;
+        const simd_fvec4 vcol = min(simd_fvec4{col.v}, clamp_direct);
+        vcol.store_to(temp_buf_[y * w_ + x].v, simd_mem_aligned);
         if (cam.pass_settings.flags & ePassFlags::OutputBaseColor) {
             auto old_val = simd_fvec4{base_color_buf_[y * w_ + x].v, simd_mem_aligned};
             old_val += (simd_fvec4{base_color.v, simd_mem_aligned} - old_val) * mix_factor;
@@ -222,7 +236,7 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
         rc *= IntersectAreaLights(sh_r, sc_data.lights, sc_data.blocker_lights, sc_data.transforms);
 
         auto old_val = simd_fvec4{temp_buf_[y * w_ + x].v, simd_mem_aligned};
-        old_val += rc;
+        old_val += min(rc, clamp_direct);
         old_val.store_to(temp_buf_[y * w_ + x].v, simd_mem_aligned);
     }
 
@@ -301,7 +315,7 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
             col.v[3] = 0.0f;
 
             auto old_val = simd_fvec4{temp_buf_[y * w_ + x].v, simd_mem_aligned};
-            old_val += simd_fvec4{col.v};
+            old_val += min(simd_fvec4{col.v}, clamp_indirect);
             old_val.store_to(temp_buf_[y * w_ + x].v, simd_mem_aligned);
         }
 
@@ -318,7 +332,7 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
             rc *= IntersectAreaLights(sh_r, sc_data.lights, sc_data.blocker_lights, sc_data.transforms);
 
             auto old_val = simd_fvec4{temp_buf_[y * w_ + x].v, simd_mem_aligned};
-            old_val += rc;
+            old_val += min(rc, clamp_indirect);
             old_val.store_to(temp_buf_[y * w_ + x].v, simd_mem_aligned);
         }
 

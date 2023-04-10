@@ -61,15 +61,7 @@ const size_t AttrStrides[] = {
 };
 
 /// Mesh region material type
-enum class eShadingNode : uint32_t {
-    Diffuse,
-    Glossy,
-    Refractive,
-    Emissive,
-    Mix,
-    Transparent,
-    Principled
-};
+enum class eShadingNode : uint32_t { Diffuse, Glossy, Refractive, Emissive, Mix, Transparent, Principled };
 
 /// Shading node descriptor struct
 struct shading_node_desc_t {
@@ -258,6 +250,8 @@ struct camera_desc_t {
     uint8_t max_total_depth = 8;  ///< Maximum tracing depth of all rays (except transparency)
     uint8_t min_total_depth = 2;  ///< Depth after which random rays termination starts
     uint8_t min_transp_depth = 2; ///< Depth after which random rays termination starts
+    float clamp_direct = 0.0f;    ///< Clamp direct lighting (0.0 - no clamp)
+    float clamp_indirect = 0.0f;  ///< Clamp indirect lighting (0.0 - no clamp)
 };
 
 /// Environment description

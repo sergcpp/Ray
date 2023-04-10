@@ -22,9 +22,9 @@ struct Params {
     float env_rotation;
     float back_rotation;
     int env_mult_importance;
+    float clamp_val;
     float _pad0;
     float _pad1;
-    float _pad2;
 };
 
 const int LOCAL_GROUP_SIZE_X = 8;

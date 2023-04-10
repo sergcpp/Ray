@@ -21,8 +21,8 @@ struct Params
     uint node_index;
     int max_transp_depth;
     int blocker_lights_count;
+    float clamp_val;
     int _pad0;
-    int _pad1;
 };
 
 struct vertex_t
@@ -106,13 +106,13 @@ ByteAddressBuffer _738 : register(t15, space0);
 ByteAddressBuffer _750 : register(t14, space0);
 ByteAddressBuffer _981 : register(t13, space0);
 ByteAddressBuffer _996 : register(t12, space0);
-ByteAddressBuffer _1077 : register(t1, space0);
-ByteAddressBuffer _1081 : register(t2, space0);
-ByteAddressBuffer _1086 : register(t5, space0);
-ByteAddressBuffer _1093 : register(t6, space0);
-ByteAddressBuffer _1098 : register(t7, space0);
-ByteAddressBuffer _1102 : register(t8, space0);
-ByteAddressBuffer _1108 : register(t9, space0);
+ByteAddressBuffer _1084 : register(t1, space0);
+ByteAddressBuffer _1088 : register(t2, space0);
+ByteAddressBuffer _1093 : register(t5, space0);
+ByteAddressBuffer _1100 : register(t6, space0);
+ByteAddressBuffer _1105 : register(t7, space0);
+ByteAddressBuffer _1109 : register(t8, space0);
+ByteAddressBuffer _1115 : register(t9, space0);
 cbuffer UniformParams
 {
     Params _450_g_params : packoffset(c0);
@@ -136,8 +136,8 @@ groupshared uint g_stack[64][48];
 
 float2 TransformUV(float2 _uv, atlas_texture_t t, int mip_level)
 {
-    uint _1136[14] = t.pos;
-    uint _1139[14] = t.pos;
+    uint _1143[14] = t.pos;
+    uint _1146[14] = t.pos;
     uint _189 = t.size & 16383u;
     uint _192 = t.size >> uint(16);
     uint _193 = _192 & 16383u;
@@ -146,7 +146,7 @@ float2 TransformUV(float2 _uv, atlas_texture_t t, int mip_level)
     {
         size = float2(float(_189 >> uint(mip_level)), float(_193 >> uint(mip_level)));
     }
-    return mad(frac(_uv), size, float2(float(_1136[mip_level] & 65535u), float((_1139[mip_level] >> uint(16)) & 65535u))) + 1.0f.xx;
+    return mad(frac(_uv), size, float2(float(_1143[mip_level] & 65535u), float((_1146[mip_level] >> uint(16)) & 65535u))) + 1.0f.xx;
 }
 
 float3 YCoCg_to_RGB(float4 col)
@@ -212,9 +212,9 @@ float4 SampleBilinear(uint index, float2 uvs, int lod, bool maybe_YCoCg, bool ma
     _235.pos[11] = _234.pos[11];
     _235.pos[12] = _234.pos[12];
     _235.pos[13] = _234.pos[13];
-    uint _1145[4] = _235.page;
+    uint _1152[4] = _235.page;
     uint _264 = _235.atlas;
-    float4 res = g_atlases[NonUniformResourceIndex(_264)].SampleLevel(_g_atlases_sampler[NonUniformResourceIndex(_264)], float3(TransformUV(uvs, _235, lod) * 0.000118371215648949146270751953125f.xx, float((_1145[lod / 4] >> uint((lod % 4) * 8)) & 255u)), 0.0f);
+    float4 res = g_atlases[NonUniformResourceIndex(_264)].SampleLevel(_g_atlases_sampler[NonUniformResourceIndex(_264)], float3(TransformUV(uvs, _235, lod) * 0.000118371215648949146270751953125f.xx, float((_1152[lod / 4] >> uint((lod % 4) * 8)) & 255u)), 0.0f);
     bool _280;
     if (maybe_YCoCg)
     {
@@ -242,13 +242,13 @@ float4 SampleBilinear(uint index, float2 uvs, int lod, bool maybe_YCoCg, bool ma
     {
         float3 param_1 = res.xyz;
         float3 _305 = srgb_to_rgb(param_1);
-        float4 _1245 = res;
-        _1245.x = _305.x;
-        float4 _1247 = _1245;
-        _1247.y = _305.y;
-        float4 _1249 = _1247;
-        _1249.z = _305.z;
-        res = _1249;
+        float4 _1258 = res;
+        _1258.x = _305.x;
+        float4 _1260 = _1258;
+        _1260.y = _305.y;
+        float4 _1262 = _1260;
+        _1262.z = _305.z;
+        res = _1262;
     }
     return res;
 }
@@ -265,8 +265,8 @@ float lum(float3 color)
 
 float3 IntersectSceneShadow(shadow_ray_t r)
 {
-    bool _1118 = false;
-    float3 _1115;
+    bool _1125 = false;
+    float3 _1122;
     do
     {
         float3 ro = float3(r.o[0], r.o[1], r.o[2]);
@@ -353,8 +353,8 @@ float3 IntersectSceneShadow(shadow_ray_t r)
                 }
                 if (_455)
                 {
-                    _1118 = true;
-                    _1115 = 0.0f.xxx;
+                    _1125 = true;
+                    _1122 = 0.0f.xxx;
                     break;
                 }
                 int _486 = _400 * 3;
@@ -576,21 +576,21 @@ float3 IntersectSceneShadow(shadow_ray_t r)
             dist -= _689;
             depth++;
         }
-        if (_1118)
+        if (_1125)
         {
             break;
         }
-        _1118 = true;
-        _1115 = rc;
+        _1125 = true;
+        _1122 = rc;
         break;
     } while(false);
-    return _1115;
+    return _1122;
 }
 
 float IntersectAreaLightsShadow(shadow_ray_t r)
 {
-    bool _1125 = false;
-    float _1122;
+    bool _1132 = false;
+    float _1129;
     do
     {
         float3 _710 = float3(r.o[0], r.o[1], r.o[2]);
@@ -644,8 +644,8 @@ float IntersectAreaLightsShadow(shadow_ray_t r)
                         float _862 = dot(light_v, _845);
                         if ((_862 >= (-0.5f)) && (_862 <= 0.5f))
                         {
-                            _1125 = true;
-                            _1122 = 0.0f;
+                            _1132 = true;
+                            _1129 = 0.0f;
                             break;
                         }
                     }
@@ -673,23 +673,23 @@ float IntersectAreaLightsShadow(shadow_ray_t r)
                         float _949 = dot(_931, _941);
                         if (sqrt(mad(_945, _945, _949 * _949)) <= 0.5f)
                         {
-                            _1125 = true;
-                            _1122 = 0.0f;
+                            _1132 = true;
+                            _1129 = 0.0f;
                             break;
                         }
                     }
                 }
             }
         }
-        if (_1125)
+        if (_1132)
         {
             break;
         }
-        _1125 = true;
-        _1122 = 1.0f;
+        _1132 = true;
+        _1129 = 1.0f;
         break;
     } while(false);
-    return _1122;
+    return _1129;
 }
 
 void comp_main()
@@ -740,7 +740,15 @@ void comp_main()
         if (lum(_1009) > 0.0f)
         {
             int2 _1034 = int2((_1001.xy >> 16) & 65535, _1001.xy & 65535);
-            g_inout_img[_1034] = float4(g_inout_img[_1034].xyz + _1009, 1.0f);
+            float4 _1035 = g_inout_img[_1034];
+            float3 _1044 = _1035.xyz + min(_1009, _450_g_params.clamp_val.xxx);
+            float4 _1238 = _1035;
+            _1238.x = _1044.x;
+            float4 _1240 = _1238;
+            _1240.y = _1044.y;
+            float4 _1242 = _1240;
+            _1242.z = _1044.z;
+            g_inout_img[_1034] = _1242;
         }
         break;
     } while(false);

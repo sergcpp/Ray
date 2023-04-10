@@ -276,6 +276,9 @@ void Ray::Vk::Renderer::kernel_ShadePrimaryHits(VkCommandBuffer cmd_buf, const p
     uniform_params.back_rotation = env.back_map_rotation;
     uniform_params.env_mult_importance = sc_data.env->multiple_importance ? 1 : 0;
 
+    uniform_params.clamp_val =
+        (settings.clamp_direct != 0.0f) ? settings.clamp_direct : std::numeric_limits<float>::max();
+
     Pipeline *pi = &pi_shade_primary_;
     if (out_base_color.ready()) {
         if (out_depth_normals.ready()) {
@@ -354,6 +357,9 @@ void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(VkCommandBuffer cmd_buf, const
     uniform_params.back_rotation = env.back_map_rotation;
     uniform_params.env_mult_importance = sc_data.env->multiple_importance ? 1 : 0;
 
+    uniform_params.clamp_val =
+        (settings.clamp_indirect != 0.0f) ? settings.clamp_indirect : std::numeric_limits<float>::max();
+
     if (use_bindless_) {
         assert(tex_descr_set);
         vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, pi_shade_secondary_.layout(), 1, 1,
@@ -370,8 +376,9 @@ void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(VkCommandBuffer cmd_buf, const
 void Ray::Vk::Renderer::kernel_IntersectSceneShadow(VkCommandBuffer cmd_buf, const pass_settings_t &settings,
                                                     const Buffer &indir_args, const Buffer &counters,
                                                     const scene_data_t &sc_data, const uint32_t node_index,
-                                                    Span<const TextureAtlas> tex_atlases, VkDescriptorSet tex_descr_set,
-                                                    const Buffer &sh_rays, const Texture2D &out_img) {
+                                                    const float clamp_val, Span<const TextureAtlas> tex_atlases,
+                                                    VkDescriptorSet tex_descr_set, const Buffer &sh_rays,
+                                                    const Texture2D &out_img) {
     const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
                                               {&counters, eResState::ShaderResource},
                                               {&sh_rays, eResState::ShaderResource},
@@ -413,6 +420,7 @@ void Ray::Vk::Renderer::kernel_IntersectSceneShadow(VkCommandBuffer cmd_buf, con
     uniform_params.node_index = node_index;
     uniform_params.max_transp_depth = settings.max_transp_depth;
     uniform_params.blocker_lights_count = sc_data.blocker_lights_count;
+    uniform_params.clamp_val = (clamp_val != 0.0f) ? clamp_val : std::numeric_limits<float>::max();
 
     DispatchComputeIndirect(cmd_buf, pi_intersect_scene_shadow_, indir_args, sizeof(DispatchIndirectCommand), bindings,
                             &uniform_params, sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());

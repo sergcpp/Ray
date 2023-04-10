@@ -281,6 +281,11 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *scene, Regi
     p.shadow_masks.resize(p.primary_rays.size());
     int secondary_rays_count = 0, shadow_rays_count = 0;
 
+    simd_fvec<S> clamp_direct = cam.pass_settings.clamp_direct;
+    where(clamp_direct == 0.0f, clamp_direct) = std::numeric_limits<float>::max();
+    simd_fvec<S> clamp_indirect = cam.pass_settings.clamp_indirect;
+    where(clamp_indirect == 0.0f, clamp_indirect) = std::numeric_limits<float>::max();
+
     for (size_t ri = 0; ri < p.intersections.size(); ri++) {
         const ray_data_t<S> &r = p.primary_rays[ri];
         const hit_data_t<S> &inter = p.intersections[ri];
@@ -298,6 +303,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *scene, Regi
         // TODO: match layouts!
         UNROLLED_FOR_S(i, S, {
             if (p.primary_masks[ri].template get<i>()) {
+                UNROLLED_FOR(j, 3, { out_rgba[j] = min(out_rgba[j], clamp_direct); })
                 UNROLLED_FOR(j, 4, {
                     temp_buf_[y.template get<i>() * w_ + x.template get<i>()].v[j] = out_rgba[j].template get<i>();
                 })
@@ -338,7 +344,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *scene, Regi
                            s->tex_storages_, rc);
         const simd_fvec<S> k = NS::IntersectAreaLights(sh_r, p.shadow_masks[ri], sc_data.lights, sc_data.blocker_lights,
                                                        sc_data.transforms);
-        UNROLLED_FOR(i, 3, { rc[i] *= k; })
+        UNROLLED_FOR(i, 3, { rc[i] = min(rc[i] * k, clamp_direct); })
 
         // TODO: match layouts!
         UNROLLED_FOR_S(i, S, {
@@ -405,6 +411,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *scene, Regi
                              p.secondary_rays.data(), &secondary_rays_count, p.shadow_masks.data(),
                              p.shadow_rays.data(), &shadow_rays_count, (simd_fvec<S> *)nullptr,
                              (simd_fvec<S> *)nullptr);
+            UNROLLED_FOR(i, 3, { out_rgba[i] = min(out_rgba[i], clamp_indirect); })
 
             // TODO: match layouts!
             UNROLLED_FOR_S(i, S, {
@@ -430,7 +437,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *scene, Regi
                            s->tex_storages_, rc);
             const simd_fvec<S> k = NS::IntersectAreaLights(sh_r, p.shadow_masks[ri], sc_data.lights,
                                                            sc_data.blocker_lights, sc_data.transforms);
-            UNROLLED_FOR(i, 3, { rc[i] *= k; })
+            UNROLLED_FOR(i, 3, { rc[i] = min(rc[i] * k, clamp_indirect); })
 
             // TODO: vectorize this
             UNROLLED_FOR_S(i, S, {
