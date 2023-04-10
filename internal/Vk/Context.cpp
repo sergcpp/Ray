@@ -681,7 +681,8 @@ int Ray::Vk::Context::WriteTimestamp(VkCommandBuffer cmd_buf, const bool start) 
 }
 
 uint64_t Ray::Vk::Context::GetTimestampIntervalDurationUs(const int query_beg, const int query_end) const {
-    return (query_results_[backend_frame][query_end] - query_results_[backend_frame][query_beg]) / 1000;
+    return uint64_t(float(query_results_[backend_frame][query_end] - query_results_[backend_frame][query_beg]) *
+                    phys_device_limits_.timestampPeriod / 1000.0f);
 }
 
 bool Ray::Vk::Context::ReadbackTimestampQueries(const int i) {
