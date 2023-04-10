@@ -1458,7 +1458,7 @@ void test_complex_mat5_sun_light(const char *arch_list[], const char *preferred_
 }
 
 void test_complex_mat5_hdr_light(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 192;
+    const int SampleCount = 194;
     const int PixThres = 1767;
 
     Ray::principled_mat_desc_t metal_mat_desc;
