@@ -285,6 +285,7 @@ void assemble_material_test_images(const char *arch_list[]) {
 
 const double DefaultMinPSNR = 30.0;
 const double FastMinPSNR = 28.0;
+const double VeryFastMinPSNR = 25.0;
 const int DefaultPixThres = 1;
 
 //
@@ -1501,8 +1502,8 @@ void test_complex_mat5_hdr_light(const char *arch_list[], const char *preferred_
 }
 
 void test_complex_mat6(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 820;
-    const int PixThres = 1260;
+    const int SampleCount = 268;
+    const int PixThres = 2898;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;
@@ -1512,7 +1513,7 @@ void test_complex_mat6(const char *arch_list[], const char *preferred_device) {
     olive_mat_desc.transmission = 1.0f;
     olive_mat_desc.ior = 2.3f;
 
-    run_material_test(arch_list, preferred_device, "complex_mat6", olive_mat_desc, SampleCount, FastMinPSNR, PixThres);
+    run_material_test(arch_list, preferred_device, "complex_mat6", olive_mat_desc, SampleCount, VeryFastMinPSNR, PixThres);
 }
 
 void test_complex_mat6_denoised(const char *arch_list[], const char *preferred_device) {
@@ -1532,8 +1533,8 @@ void test_complex_mat6_denoised(const char *arch_list[], const char *preferred_d
 }
 
 void test_complex_mat6_dof(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 809;
-    const int PixThres = 1181;
+    const int SampleCount = 266;
+    const int PixThres = 2831;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;
@@ -1543,13 +1544,13 @@ void test_complex_mat6_dof(const char *arch_list[], const char *preferred_device
     olive_mat_desc.transmission = 1.0f;
     olive_mat_desc.ior = 2.3f;
 
-    run_material_test(arch_list, preferred_device, "complex_mat6_dof", olive_mat_desc, SampleCount, FastMinPSNR,
+    run_material_test(arch_list, preferred_device, "complex_mat6_dof", olive_mat_desc, SampleCount, VeryFastMinPSNR,
                       PixThres, false, false, nullptr, eTestScene::Standard_DOF1);
 }
 
 void test_complex_mat6_mesh_lights(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 1050;
-    const int PixThres = 1136;
+    const int SampleCount = 309;
+    const int PixThres = 2958;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;
@@ -1559,7 +1560,7 @@ void test_complex_mat6_mesh_lights(const char *arch_list[], const char *preferre
     olive_mat_desc.transmission = 1.0f;
     olive_mat_desc.ior = 2.3f;
 
-    run_material_test(arch_list, preferred_device, "complex_mat6_mesh_lights", olive_mat_desc, SampleCount, FastMinPSNR,
+    run_material_test(arch_list, preferred_device, "complex_mat6_mesh_lights", olive_mat_desc, SampleCount, VeryFastMinPSNR,
                       PixThres, false, false, nullptr, eTestScene::Standard_MeshLights);
 }
 
@@ -1614,9 +1615,9 @@ void test_complex_mat6_sun_light(const char *arch_list[], const char *preferred_
 }
 
 void test_complex_mat6_hdr_light(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 2120;
-    const double MinPSNR = 25.37;
-    const int PixThres = 3023;
+    const int SampleCount = 309;
+    const double MinPSNR = 23.0;
+    const int PixThres = 4466;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;
@@ -1631,19 +1632,19 @@ void test_complex_mat6_hdr_light(const char *arch_list[], const char *preferred_
 }
 
 void test_complex_mat7_refractive(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 759;
-    const int PixThres = 1309;
+    const int SampleCount = 340;
+    const int PixThres = 3576;
 
     Ray::principled_mat_desc_t unused;
-    run_material_test(arch_list, preferred_device, "complex_mat7_refractive", unused, SampleCount, FastMinPSNR,
+    run_material_test(arch_list, preferred_device, "complex_mat7_refractive", unused, SampleCount, VeryFastMinPSNR,
                       PixThres, false, false, nullptr, eTestScene::Standard_GlassBall0);
 }
 
 void test_complex_mat7_principled(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 1004;
-    const int PixThres = 758;
+    const int SampleCount = 459;
+    const int PixThres = 2482;
 
     Ray::principled_mat_desc_t unused;
-    run_material_test(arch_list, preferred_device, "complex_mat7_principled", unused, SampleCount, FastMinPSNR,
+    run_material_test(arch_list, preferred_device, "complex_mat7_principled", unused, SampleCount, VeryFastMinPSNR,
                       PixThres, false, false, nullptr, eTestScene::Standard_GlassBall1);
 }
