@@ -1,6 +1,7 @@
 
 #include <cfloat>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 
 #include <atomic>
@@ -115,6 +116,7 @@ int main(int argc, char *argv[]) {
     bool full_tests = false, nogpu = false, nocpu = false, run_detail_tests_on_fail = false;
     const char *device_name = nullptr;
     const char *preferred_arch[] = {nullptr, nullptr};
+    double time_limit_s = std::numeric_limits<double>::max();
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--nogpu") == 0) {
@@ -129,6 +131,8 @@ int main(int argc, char *argv[]) {
             run_detail_tests_on_fail = true;
         } else if (strcmp(argv[i], "--arch") == 0 && (++i != argc)) {
             preferred_arch[0] = argv[i];
+        } else if (strcmp(argv[i], "--time_limit") == 0 && (++i != argc)) {
+            time_limit_s = atof(argv[i]);
         }
     }
 
@@ -362,7 +366,9 @@ int main(int argc, char *argv[]) {
     }
     assemble_material_test_images(arch_list);
 
-    printf("FINISHED ALL TESTS in %.2f minutes\n", duration<double>(high_resolution_clock::now() - t1).count() / 60.0);
+    const double test_duration_s = duration<double>(high_resolution_clock::now() - t1).count();
+
+    printf("FINISHED ALL TESTS in %.2f minutes\n", test_duration_s / 60.0);
 
     if (g_log_contains_errors) {
         printf("LOG CONTAINS ERRORS!\n");
@@ -370,6 +376,7 @@ int main(int argc, char *argv[]) {
 
     tests_success_final &= !g_log_contains_errors;
     tests_success_final &= g_tests_success;
+    tests_success_final &= (test_duration_s <= time_limit_s);
     if (tests_success_final) {
         puts("SUCCESS");
     } else {
@@ -418,7 +425,7 @@ bool InitAndDestroyFakeGLContext() {
     }
 
     if (!SetPixelFormat(fake_dc, pix_format_id, &pixel_format)) {
-        printf("SetPixelFormat() failed (0x%08x)\n", GetLastError());
+        //printf("SetPixelFormat() failed (0x%08x)\n", GetLastError());
         return false;
     }
 

@@ -128,6 +128,24 @@ stages:
       - errors.txt
     expire_in: 1 week
 
+.windows-perf-test-job:
+  stage: test
+  script:
+    - echo "Running tests..."
+    - cd tests
+    - '& "../$BIN_DIR/test_Ray" $AUX_TEST_ARGS.split(" ")'
+    - cd ../
+  after_script:
+    - cp tests/test_data/material_*.tga ./
+    - cp tests/test_data/errors.txt ./
+  artifacts:
+    when: always
+    name: "$env:CI_JOB_NAME"
+    paths:
+      - material_*.tga
+      - errors.txt
+    expire_in: 1 week
+
 .windows-sde-test-job:
   stage: test
   script:
@@ -368,6 +386,19 @@ windows-arm64-cpu-test-job:
     - windows-arm64-build-job
   tags:
     - windows,arm64,fastcpu
+
+windows-arm64-cpu-perf-test-job:
+  variables:
+    BIN_DIR: windows-arm64
+    AUX_TEST_ARGS: '--nogpu --time_limit 13.9'
+  extends:
+    - .windows-perf-test-job
+  needs:
+    - windows-arm64-build-job
+  tags:
+    - windows,arm64,perf
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
 
 linux-x86_64-cpu-test-job:
   variables:
