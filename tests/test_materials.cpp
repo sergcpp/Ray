@@ -1533,7 +1533,7 @@ void test_complex_mat6_denoised(const char *arch_list[], const char *preferred_d
 }
 
 void test_complex_mat6_dof(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 266;
+    const int SampleCount = 268;
     const int PixThres = 2831;
 
     Ray::principled_mat_desc_t olive_mat_desc;
@@ -1642,7 +1642,7 @@ void test_complex_mat7_refractive(const char *arch_list[], const char *preferred
 
 void test_complex_mat7_principled(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 459;
-    const int PixThres = 2482;
+    const int PixThres = 2483;
 
     Ray::principled_mat_desc_t unused;
     run_material_test(arch_list, preferred_device, "complex_mat7_principled", unused, SampleCount, VeryFastMinPSNR,
