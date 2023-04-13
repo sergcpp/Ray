@@ -1,5 +1,7 @@
 #include "RendererFactory.h"
 
+#include <regex>
+
 #ifdef ENABLE_REF_IMPL
 #include "internal/RendererRef.h"
 #else // ENABLE_REF_IMPL
@@ -104,4 +106,9 @@ int Ray::QueryAvailableGPUDevices(ILog *log, gpu_device_t out_devices[], const i
 #else
     return 0;
 #endif
+}
+
+bool Ray::MatchDeviceNames(const char *name, const char *pattern) {
+    std::regex match_name(pattern);
+    return std::regex_search(name, match_name) || strcmp(name, pattern) == 0;
 }

@@ -399,8 +399,8 @@ int main(int argc, char *argv[]) {
 
 extern "C" {
 // Enable High Performance Graphics while using Integrated Graphics
-__declspec(dllexport) int32_t NvOptimusEnablement = 0x00000001;     // Nvidia
-__declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1; // AMD
+__declspec(dllexport) int32_t NvOptimusEnablement = 1;                  // Nvidia
+__declspec(dllexport) int32_t AmdPowerXpressRequestHighPerformance = 1; // AMD
 }
 
 bool InitAndDestroyFakeGLContext() {

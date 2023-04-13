@@ -1,7 +1,5 @@
 #include "Context.h"
 
-#include <regex>
-
 #include "../../Log.h"
 #include "../../Types.h"
 #include "../SmallVector.h"
@@ -11,6 +9,8 @@
 #include "../../third-party/renderdoc/renderdoc_app.h"
 
 namespace Ray {
+bool MatchDeviceNames(const char *name, const char *pattern);
+    
 namespace Vk {
 bool ignore_optick_errors = false;
 
@@ -392,9 +392,7 @@ bool Ray::Vk::Context::ChooseVkPhysicalDevice(VkPhysicalDevice &physical_device,
             }
 
             if (preferred_device) {
-                std::regex match_name(preferred_device);
-                if (strcmp(device_properties.deviceName, preferred_device) == 0 ||
-                    std::regex_search(device_properties.deviceName, match_name)) {
+                if (MatchDeviceNames(device_properties.deviceName, preferred_device)) {
                     // preferred device found
                     score += 100000;
                 }

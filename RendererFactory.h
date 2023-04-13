@@ -23,4 +23,6 @@ RendererBase *CreateRenderer(const settings_t &s, ILog *log = &g_null_log,
                              Bitmask<eRendererType> enabled_types = DefaultEnabledRenderTypes);
 
 int QueryAvailableGPUDevices(ILog *log, gpu_device_t out_devices[], int capacity);
+
+bool MatchDeviceNames(const char *name, const char *pattern);
 } // namespace Ray

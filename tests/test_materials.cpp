@@ -5,7 +5,6 @@
 
 #include <algorithm>
 #include <fstream>
-#include <regex>
 
 #include "../RendererFactory.h"
 
@@ -54,9 +53,7 @@ void run_material_test(const char *arch_list[], const char *preferred_device, co
                     }
                     if (preferred_device) {
                         // make sure we use requested device
-                        std::regex match_name(preferred_device);
-                        if (!require(std::regex_search(renderer->device_name(), match_name)) &&
-                            strcmp(renderer->device_name(), preferred_device) != 0) {
+                        if (!require(Ray::MatchDeviceNames(renderer->device_name(), preferred_device))) {
                             printf("Wrong device: %s (%s was requested)\n", renderer->device_name(), preferred_device);
                             return;
                         }
