@@ -116,7 +116,7 @@ int main(int argc, char *argv[]) {
     bool full_tests = false, nogpu = false, nocpu = false, run_detail_tests_on_fail = false;
     const char *device_name = nullptr;
     const char *preferred_arch[] = {nullptr, nullptr};
-    double time_limit_s = std::numeric_limits<double>::max();
+    double time_limit_m = std::numeric_limits<double>::max();
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--nogpu") == 0) {
@@ -132,7 +132,7 @@ int main(int argc, char *argv[]) {
         } else if (strcmp(argv[i], "--arch") == 0 && (++i != argc)) {
             preferred_arch[0] = argv[i];
         } else if (strcmp(argv[i], "--time_limit") == 0 && (++i != argc)) {
-            time_limit_s = atof(argv[i]);
+            time_limit_m = atof(argv[i]);
         }
     }
 
@@ -366,9 +366,9 @@ int main(int argc, char *argv[]) {
     }
     assemble_material_test_images(arch_list);
 
-    const double test_duration_s = duration<double>(high_resolution_clock::now() - t1).count();
+    const double test_duration_m = duration<double>(high_resolution_clock::now() - t1).count() / 60.0;
 
-    printf("FINISHED ALL TESTS in %.2f minutes\n", test_duration_s / 60.0);
+    printf("FINISHED ALL TESTS in %.2f minutes\n", test_duration_m);
 
     if (g_log_contains_errors) {
         printf("LOG CONTAINS ERRORS!\n");
@@ -376,7 +376,7 @@ int main(int argc, char *argv[]) {
 
     tests_success_final &= !g_log_contains_errors;
     tests_success_final &= g_tests_success;
-    tests_success_final &= (test_duration_s <= time_limit_s);
+    tests_success_final &= (test_duration_m <= time_limit_m);
     if (tests_success_final) {
         puts("SUCCESS");
     } else {
