@@ -13,7 +13,7 @@ static const uint3 gl_WorkGroupSize = uint3(8u, 8u, 1u);
 
 cbuffer UniformParams
 {
-    Params _165_g_params : packoffset(c0);
+    Params _158_g_params : packoffset(c0);
 };
 
 RWTexture2D<float4> g_in_img0 : register(u3, space0);
@@ -28,9 +28,8 @@ struct SPIRV_Cross_Input
     uint3 gl_GlobalInvocationID : SV_DispatchThreadID;
 };
 
-float3 clamp_and_gamma_correct(bool srgb, float exposure, bool _clamp, float inv_gamma, inout float3 col)
+float3 clamp_and_gamma_correct(bool srgb, bool _clamp, float inv_gamma, inout float3 col)
 {
-    col *= exposure;
     [unroll]
     for (int i = 0; (i < 3) && srgb; i++)
     {
@@ -54,15 +53,14 @@ float3 clamp_and_gamma_correct(bool srgb, float exposure, bool _clamp, float inv
     return col;
 }
 
-float4 clamp_and_gamma_correct(bool srgb, float exposure, bool _clamp, float inv_gamma, float4 col)
+float4 clamp_and_gamma_correct(bool srgb, bool _clamp, float inv_gamma, float4 col)
 {
     bool param = srgb;
-    float param_1 = exposure;
-    bool param_2 = _clamp;
-    float param_3 = inv_gamma;
-    float3 param_4 = col.xyz;
-    float3 _115 = clamp_and_gamma_correct(param, param_1, param_2, param_3, param_4);
-    return float4(_115, col.w);
+    bool param_1 = _clamp;
+    float param_2 = inv_gamma;
+    float3 param_3 = col.xyz;
+    float3 _108 = clamp_and_gamma_correct(param, param_1, param_2, param_3);
+    return float4(_108, col.w);
 }
 
 float3 reversible_tonemap(float3 c)
@@ -80,40 +78,53 @@ void comp_main()
 {
     do
     {
-        bool _169 = gl_GlobalInvocationID.x >= _165_g_params.rect.z;
-        bool _178;
-        if (!_169)
+        bool _162 = gl_GlobalInvocationID.x >= _158_g_params.rect.z;
+        bool _171;
+        if (!_162)
         {
-            _178 = gl_GlobalInvocationID.y >= _165_g_params.rect.w;
+            _171 = gl_GlobalInvocationID.y >= _158_g_params.rect.w;
         }
         else
         {
-            _178 = _169;
+            _171 = _162;
         }
-        if (_178)
+        if (_171)
         {
             break;
         }
-        int2 _193 = int2(_165_g_params.rect.xy + gl_GlobalInvocationID.xy);
-        float4 _200 = g_in_img0[_193];
-        float4 img0 = _200;
-        float4 _205 = g_in_img1[_193];
-        float4 img1 = _205;
-        float4 _218 = (_200 * _165_g_params.img0_weight) + (_205 * _165_g_params.img1_weight);
-        g_out_raw_img[_193] = _218;
-        bool param = _165_g_params.srgb != 0;
-        float param_1 = _165_g_params.exposure;
-        bool param_2 = _165_g_params._clamp != 0;
-        float param_3 = _165_g_params.inv_gamma;
-        float4 param_4 = _218;
-        g_out_img[_193] = clamp_and_gamma_correct(param, param_1, param_2, param_3, param_4);
-        float4 param_5 = img0;
-        img0 = reversible_tonemap(param_5);
-        float4 param_6 = img1;
-        float4 _253 = reversible_tonemap(param_6);
-        img1 = _253;
-        float4 _258 = img0 - _253;
-        g_out_variance_img[_193] = (_258 * 0.5f) * _258;
+        int2 _186 = int2(_158_g_params.rect.xy + gl_GlobalInvocationID.xy);
+        float4 _193 = g_in_img0[_186];
+        float4 _198 = g_in_img1[_186];
+        float3 _204 = _193.xyz * _158_g_params.exposure;
+        float4 _307 = _193;
+        _307.x = _204.x;
+        float4 _309 = _307;
+        _309.y = _204.y;
+        float4 _311 = _309;
+        _311.z = _204.z;
+        float4 img0 = _311;
+        float3 _215 = _198.xyz * _158_g_params.exposure;
+        float4 _313 = _198;
+        _313.x = _215.x;
+        float4 _315 = _313;
+        _315.y = _215.y;
+        float4 _317 = _315;
+        _317.z = _215.z;
+        float4 img1 = _317;
+        float4 _233 = (_311 * _158_g_params.img0_weight) + (_317 * _158_g_params.img1_weight);
+        g_out_raw_img[_186] = _233;
+        bool param = _158_g_params.srgb != 0;
+        bool param_1 = _158_g_params._clamp != 0;
+        float param_2 = _158_g_params.inv_gamma;
+        float4 param_3 = _233;
+        g_out_img[_186] = clamp_and_gamma_correct(param, param_1, param_2, param_3);
+        float4 param_4 = img0;
+        img0 = reversible_tonemap(param_4);
+        float4 param_5 = img1;
+        float4 _265 = reversible_tonemap(param_5);
+        img1 = _265;
+        float4 _270 = img0 - _265;
+        g_out_variance_img[_186] = (_270 * 0.5f) * _270;
         break;
     } while(false);
 }

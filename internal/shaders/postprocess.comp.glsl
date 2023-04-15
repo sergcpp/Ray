@@ -28,11 +28,14 @@ void main() {
     vec4 img0 = imageLoad(g_in_img0, gi);
     vec4 img1 = imageLoad(g_in_img1, gi);
 
+    img0.xyz *= g_params.exposure;
+    img1.xyz *= g_params.exposure;
+
     vec4 untonemapped_res = (g_params.img0_weight * img0) + (g_params.img1_weight * img1);
     imageStore(g_out_raw_img, gi, untonemapped_res);
 
-    vec4 tonemapped_res = clamp_and_gamma_correct(g_params.srgb != 0, g_params.exposure,
-                                                  g_params._clamp != 0, g_params.inv_gamma, untonemapped_res);
+    vec4 tonemapped_res = clamp_and_gamma_correct(g_params.srgb != 0, g_params._clamp != 0,
+                                                  g_params.inv_gamma, untonemapped_res);
     imageStore(g_out_img, gi, tonemapped_res);
 
     img0 = reversible_tonemap(img0);

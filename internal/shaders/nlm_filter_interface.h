@@ -11,8 +11,8 @@ struct Params {
     float alpha;
     float damping;
     int srgb, _clamp;
-    float exposure;
     float inv_gamma;
+    float _pad0;
 };
 
 const int LOCAL_GROUP_SIZE_X = 8;

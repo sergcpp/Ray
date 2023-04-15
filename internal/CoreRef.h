@@ -145,13 +145,11 @@ force_inline simd_fvec4 vectorcall reversible_tonemap_invert(const simd_fvec4 c)
 }
 
 struct tonemap_params_t {
-    float exposure, inv_gamma;
+    float inv_gamma;
     bool srgb, clamp;
 };
 
 force_inline simd_fvec4 vectorcall clamp_and_gamma_correct(const tonemap_params_t &params, simd_fvec4 c) {
-    c *= params.exposure;
-
     if (params.srgb) {
         UNROLLED_FOR(i, 3, {
             if (c.get<i>() < 0.0031308f) {

@@ -85,7 +85,7 @@ class Renderer : public RendererBase {
     std::vector<shl1_data_t> sh_data_host_;
 
     struct {
-        float exposure, inv_gamma;
+        float inv_gamma;
         bool srgb, clamp;
     } tonemap_params_;
 
@@ -144,8 +144,8 @@ class Renderer : public RendererBase {
     void kernel_FilterVariance(VkCommandBuffer cmd_buf, const Texture2D &img_buf, const rect_t &rect,
                                const Texture2D &out_variance);
     void kernel_NLMFilter(VkCommandBuffer cmd_buf, const Texture2D &img_buf, const Texture2D &var_buf, float alpha,
-                          float damping, const Texture2D &out_raw_img, float exposure, float inv_gamma, bool clamp,
-                          bool srgb, const rect_t &rect, const Texture2D &out_img);
+                          float damping, const Texture2D &out_raw_img, float inv_gamma, bool clamp, bool srgb,
+                          const rect_t &rect, const Texture2D &out_img);
     void kernel_DebugRT(VkCommandBuffer cmd_buf, const scene_data_t &sc_data, uint32_t node_index, const Buffer &rays,
                         const Texture2D &out_pixels);
 

@@ -346,10 +346,12 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
     scene_lock.unlock();
 
     tonemap_params_t tonemap_params;
-    tonemap_params.exposure = std::pow(2.0f, cam.exposure);
     tonemap_params.inv_gamma = (1.0f / cam.gamma);
     tonemap_params.srgb = (cam.dtype == eDeviceType::SRGB);
     tonemap_params.clamp = (cam.pass_settings.flags & ePassFlags::Clamp);
+
+    simd_fvec4 exposure = std::pow(2.0f, cam.exposure);
+    exposure.set<3>(1.0f);
 
     {
         std::lock_guard<std::mutex> _(mtx_);
@@ -385,8 +387,8 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
 
     for (int y = rect.y; y < rect.y + rect.h; ++y) {
         for (int x = rect.x; x < rect.x + rect.w; ++x) {
-            simd_fvec4 p1 = {dual_buf_[0][y * w_ + x].v, simd_mem_aligned};
-            simd_fvec4 p2 = {dual_buf_[1][y * w_ + x].v, simd_mem_aligned};
+            simd_fvec4 p1 = simd_fvec4{dual_buf_[0][y * w_ + x].v, simd_mem_aligned} * exposure;
+            simd_fvec4 p2 = simd_fvec4{dual_buf_[1][y * w_ + x].v, simd_mem_aligned} * exposure;
 
             const int p1_samples = (region.iteration + 1) / 2;
             const int p2_samples = (region.iteration) / 2;
