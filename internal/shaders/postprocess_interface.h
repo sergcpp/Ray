@@ -7,11 +7,11 @@ INTERFACE_START(Postprocess)
 
 struct Params {
     UVEC4_TYPE rect;
-    int srgb;
     float exposure;
     float inv_gamma;
     float img0_weight;
     float img1_weight;
+    int tonemap_mode;
     float _pad0;
     float _pad1;
     float _pad2;
@@ -22,6 +22,7 @@ const int LOCAL_GROUP_SIZE_Y = 8;
 
 const int IN_IMG0_SLOT = 3;
 const int IN_IMG1_SLOT = 4;
+const int TONEMAP_LUT_SLOT = 5;
 
 const int OUT_IMG_SLOT = 0;
 const int OUT_RAW_IMG_SLOT = 1;

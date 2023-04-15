@@ -29,7 +29,7 @@ void Ray::SceneBase::GetCamera(const CameraHandle i, camera_desc_t &c) const {
 
     const camera_t &cam = cams_[i._index].cam;
     c.type = cam.type;
-    c.dtype = cam.dtype;
+    c.view_transform = cam.view_transform;
     c.exposure = cam.exposure;
     c.gamma = cam.gamma;
     if (c.type != eCamType::Geo) {
@@ -78,7 +78,7 @@ void Ray::SceneBase::SetCamera_nolock(const CameraHandle i, const camera_desc_t 
     camera_t &cam = cams_[i._index].cam;
     if (c.type != eCamType::Geo) {
         if (c.ltype == eLensUnits::FOV) {
-            ConstructCamera(c.type, c.filter, c.dtype, c.origin, c.fwd, c.up, c.shift, c.fov, c.sensor_height,
+            ConstructCamera(c.type, c.filter, c.view_transform, c.origin, c.fwd, c.up, c.shift, c.fov, c.sensor_height,
                             c.exposure, c.gamma, c.focus_distance, c.fstop, c.lens_rotation, c.lens_ratio,
                             c.lens_blades, c.clip_start, c.clip_end, &cam);
         } else if (c.ltype == eLensUnits::FLength) {

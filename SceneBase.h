@@ -214,37 +214,37 @@ struct line_light_desc_t {
 
 // Camera description
 struct camera_desc_t {
-    eCamType type = eCamType::Persp;        ///< Type of projection
-    eFilterType filter = eFilterType::Tent; ///< Reconstruction filter
-    eDeviceType dtype = eDeviceType::SRGB;  ///< Device type
-    eLensUnits ltype = eLensUnits::FOV;     ///< Lens units type
-    float origin[3] = {};                   ///< Camera origin
-    float fwd[3] = {};                      ///< Camera forward unit vector
-    float up[3] = {};                       ///< Camera up vector (optional)
-    float shift[2] = {};                    ///< Camera shift
-    float exposure = 0.0f;                  ///< Camera exposure in stops (output = value * (2 ^ exposure))
-    float fov = 45.0f, gamma = 1.0f;        ///< Field of view in degrees, gamma
-    float sensor_height = 0.036f;           ///< Camera sensor height
-    float focus_distance = 1.0f;            ///< Distance to focus point
-    float focal_length = 0.0f;              ///< Focal length
-    float fstop = 0.0f;                     ///< Focal fstop
-    float lens_rotation = 0.0f;             ///< Bokeh rotation
-    float lens_ratio = 1.0f;                ///< Bokeh distortion
-    int lens_blades = 0;                    ///< Bokeh shape
-    float clip_start = 0;                   ///< Clip start
-    float clip_end = 3.402823466e+30F;      ///< Clip end
-    uint32_t mi_index = 0xffffffff,         ///< Index of mesh instance
-        uv_index = 0;                       ///< UV layer used by geometry cam
-    bool lighting_only = false;             ///< Render lightmap only
-    bool skip_direct_lighting = false;      ///< Render indirect light contribution only
-    bool skip_indirect_lighting = false;    ///< Render direct light contribution only
-    bool no_background = false;             ///< Do not render background
-    bool output_sh = false;                 ///< Output 2-band (4 coeff) spherical harmonics data
-    bool output_base_color = false;         ///< Output float RGB material base color
-    bool output_depth_normals = false;      ///< Output smooth normals and depth
-    uint8_t max_diff_depth = 4;             ///< Maximum tracing depth of diffuse rays
-    uint8_t max_spec_depth = 8;             ///< Maximum tracing depth of glossy rays
-    uint8_t max_refr_depth = 8;             ///< Maximum tracing depth of glossy rays
+    eCamType type = eCamType::Persp;                          ///< Type of projection
+    eFilterType filter = eFilterType::Tent;                   ///< Reconstruction filter
+    eViewTransform view_transform = eViewTransform::Standard; ///< View transform
+    eLensUnits ltype = eLensUnits::FOV;                       ///< Lens units type
+    float origin[3] = {};                                     ///< Camera origin
+    float fwd[3] = {};                                        ///< Camera forward unit vector
+    float up[3] = {};                                         ///< Camera up vector (optional)
+    float shift[2] = {};                                      ///< Camera shift
+    float exposure = 0.0f;               ///< Camera exposure in stops (output = value * (2 ^ exposure))
+    float fov = 45.0f, gamma = 1.0f;     ///< Field of view in degrees, gamma
+    float sensor_height = 0.036f;        ///< Camera sensor height
+    float focus_distance = 1.0f;         ///< Distance to focus point
+    float focal_length = 0.0f;           ///< Focal length
+    float fstop = 0.0f;                  ///< Focal fstop
+    float lens_rotation = 0.0f;          ///< Bokeh rotation
+    float lens_ratio = 1.0f;             ///< Bokeh distortion
+    int lens_blades = 0;                 ///< Bokeh shape
+    float clip_start = 0;                ///< Clip start
+    float clip_end = 3.402823466e+30F;   ///< Clip end
+    uint32_t mi_index = 0xffffffff,      ///< Index of mesh instance
+        uv_index = 0;                    ///< UV layer used by geometry cam
+    bool lighting_only = false;          ///< Render lightmap only
+    bool skip_direct_lighting = false;   ///< Render indirect light contribution only
+    bool skip_indirect_lighting = false; ///< Render direct light contribution only
+    bool no_background = false;          ///< Do not render background
+    bool output_sh = false;              ///< Output 2-band (4 coeff) spherical harmonics data
+    bool output_base_color = false;      ///< Output float RGB material base color
+    bool output_depth_normals = false;   ///< Output smooth normals and depth
+    uint8_t max_diff_depth = 4;          ///< Maximum tracing depth of diffuse rays
+    uint8_t max_spec_depth = 8;          ///< Maximum tracing depth of glossy rays
+    uint8_t max_refr_depth = 8;          ///< Maximum tracing depth of glossy rays
     uint8_t max_transp_depth = 8; ///< Maximum tracing depth of transparency rays (note: does not obey total depth)
     uint8_t max_total_depth = 8;  ///< Maximum tracing depth of all rays (except transparency)
     uint8_t min_total_depth = 2;  ///< Depth after which random rays termination starts

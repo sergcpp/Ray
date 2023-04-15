@@ -120,8 +120,8 @@ int total_depth(const shadow_ray_t r) {
     return diff_depth + spec_depth + refr_depth + transp_depth;
 }
 
-vec3 clamp_and_gamma_correct(bool srgb, float inv_gamma, vec3 col) {
-    [[unroll]] for (int i = 0; i < 3 && srgb; ++i) {
+vec3 TonemapStandard(float inv_gamma, vec3 col) {
+    [[unroll]] for (int i = 0; i < 3; ++i) {
         if (col[i] < 0.0031308) {
             col[i] = 12.92 * col[i];
         } else {
@@ -136,8 +136,70 @@ vec3 clamp_and_gamma_correct(bool srgb, float inv_gamma, vec3 col) {
     return clamp(col, vec3(0.0), vec3(1.0));
 }
 
-vec4 clamp_and_gamma_correct(bool srgb, float inv_gamma, vec4 col) {
-    return vec4(clamp_and_gamma_correct(srgb, inv_gamma, col.xyz), col.w);
+vec4 TonemapStandard(float inv_gamma, vec4 col) {
+    return vec4(TonemapStandard(inv_gamma, col.xyz), col.w);
+}
+
+vec3 TonemapLUT(sampler3D lut, float inv_gamma, vec3 col) {
+    const vec3 encoded = col / (col + 1.0);
+
+    // Align the encoded range to texel centers
+    const float LUT_DIMS = 48.0;
+    const vec3 uv = encoded * ((LUT_DIMS - 1.0) / LUT_DIMS) + 0.5 / LUT_DIMS;
+
+    vec3 ret = textureLod(lut, uv, 0.0).xyz;
+    if (inv_gamma != 1.0) {
+        ret = pow(ret, vec3(inv_gamma));
+    }
+
+    return ret;
+}
+
+vec4 TonemapLUT(sampler3D lut, float inv_gamma, vec4 col) {
+    return vec4(TonemapLUT(lut, inv_gamma, col.xyz), col.w);
+}
+
+// Manual interpolation gives better result for some reason
+vec3 TonemapLUT_manual(sampler3D lut, float inv_gamma, vec3 col) {
+    const vec3 encoded = col / (col + 1.0);
+
+    // Align the encoded range to texel centers
+    const float LUT_DIMS = 48.0;
+    const vec3 uv = encoded * (LUT_DIMS - 1.0) + 0.5;
+    const ivec3 xyz = ivec3(uv);
+    const vec3 f = fract(uv);
+
+    const float fx = f.x, fy = f.y, fz = f.z;
+
+    const vec3 c000 = texelFetchOffset(lut, xyz, 0, ivec3(0, 0, 0)).xyz;
+    const vec3 c001 = texelFetchOffset(lut, xyz, 0, ivec3(1, 0, 0)).xyz;
+    const vec3 c010 = texelFetchOffset(lut, xyz, 0, ivec3(0, 1, 0)).xyz;
+    const vec3 c011 = texelFetchOffset(lut, xyz, 0, ivec3(1, 1, 0)).xyz;
+    const vec3 c100 = texelFetchOffset(lut, xyz, 0, ivec3(0, 0, 1)).xyz;
+    const vec3 c101 = texelFetchOffset(lut, xyz, 0, ivec3(1, 0, 1)).xyz;
+    const vec3 c110 = texelFetchOffset(lut, xyz, 0, ivec3(0, 1, 1)).xyz;
+    const vec3 c111 = texelFetchOffset(lut, xyz, 0, ivec3(1, 1, 1)).xyz;
+
+    const vec3 c00x = (1.0 - fx) * c000 + fx * c001;
+    const vec3 c01x = (1.0 - fx) * c010 + fx * c011;
+    const vec3 c10x = (1.0 - fx) * c100 + fx * c101;
+    const vec3 c11x = (1.0 - fx) * c110 + fx * c111;
+
+    const vec3 c0xx = (1.0 - fy) * c00x + fy * c01x;
+    const vec3 c1xx = (1.0 - fy) * c10x + fy * c11x;
+
+    vec3 cxxx = (1.0 - fz) * c0xx + fz * c1xx;
+
+    vec3 ret = cxxx;
+    if (inv_gamma != 1.0) {
+        ret = pow(ret, vec3(inv_gamma));
+    }
+
+    return ret;
+}
+
+vec4 TonemapLUT_manual(sampler3D lut, float inv_gamma, vec4 col) {
+    return vec4(TonemapLUT_manual(lut, inv_gamma, col.xyz), col.w);
 }
 
 // https://gpuopen.com/learn/optimized-reversible-tonemapper-for-resolve/

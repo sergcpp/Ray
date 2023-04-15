@@ -4373,6 +4373,69 @@ template void Ray::Ref::NLMFilter<3 /* WINDOW_SIZE */, 1 /* NEIGHBORHOOD_SIZE */
     const color_rgba_t input[], const rect_t &rect, int input_stride, float alpha, float damping,
     const color_rgba_t variance[], const rect_t &output_rect, int output_stride, color_rgba_t output[]);
 
+namespace Ray {
+extern const int LUT_DIMS = 48;
+#include "luts/__filmic.inl"
+#include "luts/__filmic_high_contrast.inl"
+#include "luts/__filmic_low_contrast.inl"
+#include "luts/__filmic_med_contrast.inl"
+#include "luts/__filmic_med_high_contrast.inl"
+#include "luts/__filmic_med_low_contrast.inl"
+#include "luts/__filmic_very_high_contrast.inl"
+#include "luts/__filmic_very_low_contrast.inl"
+
+const float *transform_luts[] = {
+    nullptr,                    // Standard
+    __filmic,                   // Filmic_BaseContrast
+    __filmic_very_low_contrast, // Filmic_VeryLowContrast
+    __filmic_low_contrast,      // Filmic_LowContrast
+    __filmic_med_low_contrast,  // Filmic_MediumLowContrast
+    __filmic_med_contrast,      // Filmic_MediumContrast
+    __filmic_med_high_contrast, // Filmic_MediumHighContrast
+    __filmic_high_contrast,     // Filmic_HighContrast
+    __filmic_very_high_contrast // Filmic_VeryHighContrast
+};
+static_assert(sizeof(transform_luts) / sizeof(transform_luts[0]) == int(eViewTransform::_Count), "!");
+
+namespace Ref {
+force_inline simd_fvec4 FetchLUT(const eViewTransform view_transform, const int ix, const int iy, const int iz) {
+    return simd_fvec4{&transform_luts[int(view_transform)][3 * (iz * LUT_DIMS * LUT_DIMS + iy * LUT_DIMS + ix)]};
+}
+} // namespace Ref
+} // namespace Ray
+
+Ray::Ref::simd_fvec4 vectorcall Ray::Ref::TonemapFilmic(const eViewTransform view_transform, simd_fvec4 color) {
+    const simd_fvec4 encoded = color / (color + 1.0f);
+    const simd_fvec4 uv = encoded * float(LUT_DIMS - 1) + 0.5f;
+    const simd_ivec4 xyz = simd_ivec4(uv);
+    const simd_fvec4 f = fract(uv);
+
+    const int ix = xyz.get<0>(), iy = xyz.get<1>(), iz = xyz.get<2>();
+    const float fx = f.get<0>(), fy = f.get<1>(), fz = f.get<2>();
+
+    const simd_fvec4 c000 = FetchLUT(view_transform, ix + 0, iy + 0, iz + 0);
+    const simd_fvec4 c001 = FetchLUT(view_transform, ix + 1, iy + 0, iz + 0);
+    const simd_fvec4 c010 = FetchLUT(view_transform, ix + 0, iy + 1, iz + 0);
+    const simd_fvec4 c011 = FetchLUT(view_transform, ix + 1, iy + 1, iz + 0);
+    const simd_fvec4 c100 = FetchLUT(view_transform, ix + 0, iy + 0, iz + 1);
+    const simd_fvec4 c101 = FetchLUT(view_transform, ix + 1, iy + 0, iz + 1);
+    const simd_fvec4 c110 = FetchLUT(view_transform, ix + 0, iy + 1, iz + 1);
+    const simd_fvec4 c111 = FetchLUT(view_transform, ix + 1, iy + 1, iz + 1);
+
+    const simd_fvec4 c00x = (1.0f - fx) * c000 + fx * c001;
+    const simd_fvec4 c01x = (1.0f - fx) * c010 + fx * c011;
+    const simd_fvec4 c10x = (1.0f - fx) * c100 + fx * c101;
+    const simd_fvec4 c11x = (1.0f - fx) * c110 + fx * c111;
+
+    const simd_fvec4 c0xx = (1.0f - fy) * c00x + fy * c01x;
+    const simd_fvec4 c1xx = (1.0f - fy) * c10x + fy * c11x;
+
+    simd_fvec4 cxxx = (1.0f - fz) * c0xx + fz * c1xx;
+    cxxx.set<3>(color.get<3>());
+
+    return cxxx;
+}
+
 #undef sqr
 
 #undef USE_VNDF_GGX_SAMPLING

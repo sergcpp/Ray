@@ -37,6 +37,8 @@ static_assert(Types::LIGHT_TYPE_DISK == Ray::LIGHT_TYPE_DISK, "!");
 static_assert(Types::LIGHT_TYPE_TRI == Ray::LIGHT_TYPE_TRI, "!");
 
 namespace Ray {
+extern const int LUT_DIMS;
+extern const float *transform_luts[];
 namespace Vk {
 #include "shaders/output/debug_rt.comp.inl"
 #include "shaders/output/filter_variance.comp.inl"
@@ -320,6 +322,17 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
         EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
     }
 
+    { // create tonemap LUT texture
+        Tex3DParams params = {};
+        params.w = params.h = params.d = LUT_DIMS;
+        params.usage = eTexUsage::Sampled | eTexUsage::Transfer;
+        params.format = eTexFormat::RawRGB10_A2;
+        params.sampling.filter = eTexFilter::BilinearNoMipmap;
+        params.sampling.wrap = eTexWrap::ClampToEdge;
+
+        tonemap_lut_ = Texture3D{"Tonemap LUT", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
+    }
+
     Renderer::Resize(s.w, s.h);
 
     auto rand_func = std::bind(UniformIntDistribution<uint32_t>(), std::mt19937(0));
@@ -525,6 +538,51 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
 
         temp_stage_buf.FreeImmediate();
         loaded_halton_ = region.iteration;
+    }
+
+    if (loaded_view_transform_ != cam.view_transform) {
+        if (cam.view_transform != eViewTransform::Standard) {
+            VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+
+            union RGB10A2 {
+                struct {
+                    uint32_t r : 10;
+                    uint32_t g : 10;
+                    uint32_t b : 10;
+                    uint32_t a : 2;
+                };
+                uint32_t v;
+            };
+            static_assert(sizeof(RGB10A2) == sizeof(uint32_t), "!");
+
+            const uint32_t data_len = LUT_DIMS * LUT_DIMS * LUT_DIMS * sizeof(RGB10A2);
+            Buffer temp_stage_buf{"Temp tonemap LUT stage", ctx_.get(), eBufType::Stage, data_len};
+            { // update stage buffer
+                RGB10A2 *mapped_ptr = reinterpret_cast<RGB10A2 *>(temp_stage_buf.Map(BufMapWrite));
+                const float *lut = transform_luts[int(cam.view_transform)];
+
+                for (int i = 0; i < LUT_DIMS * LUT_DIMS * LUT_DIMS; ++i) {
+                    mapped_ptr[i].r = uint32_t(std::round(lut[3 * i + 0] * 1023.0f));
+                    mapped_ptr[i].g = uint32_t(std::round(lut[3 * i + 1] * 1023.0f));
+                    mapped_ptr[i].b = uint32_t(std::round(lut[3 * i + 2] * 1023.0f));
+                    mapped_ptr[i].a = 3;
+                }
+
+                temp_stage_buf.Unmap();
+            }
+
+            const TransitionInfo res_transitions[] = {{&temp_stage_buf, eResState::CopySrc},
+                                                      {&tonemap_lut_, eResState::CopyDst}};
+            TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
+
+            tonemap_lut_.SetSubImage(0, 0, 0, LUT_DIMS, LUT_DIMS, LUT_DIMS, eTexFormat::RawRGB10_A2, temp_stage_buf,
+                                     cmd_buf, 0, data_len);
+
+            EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+
+            temp_stage_buf.FreeImmediate();
+        }
+        loaded_view_transform_ = cam.view_transform;
     }
 
     scene_data_t sc_data = {&s->env_,
@@ -793,12 +851,11 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         const float p2_weight = float(p2_samples) / float(region.iteration);
 
         const float exposure = std::pow(2.0f, cam.exposure);
+        tonemap_params_.view_transform = cam.view_transform;
         tonemap_params_.inv_gamma = (1.0f / cam.gamma);
-        tonemap_params_.srgb = (cam.dtype == eDeviceType::SRGB);
 
         kernel_Postprocess(cmd_buf, dual_buf_[0], p1_weight, dual_buf_[1], p2_weight, exposure,
-                           tonemap_params_.inv_gamma, tonemap_params_.srgb, rect, final_buf_, raw_final_buf_,
-                           temp_buf0_);
+                           tonemap_params_.inv_gamma, rect, final_buf_, raw_final_buf_, temp_buf0_);
         // Also store as denosed result until Denoise method will be called
         const TransitionInfo img_transitions[] = {{&raw_final_buf_, eResState::CopySrc},
                                                   {&raw_filtered_buf_, eResState::CopyDst}};
@@ -887,7 +944,7 @@ void Ray::Vk::Renderer::DenoiseImage(const RegionContext &region) {
     { // Apply NLM Filter
         DebugMarker _(cmd_buf, "NLM Filter");
         kernel_NLMFilter(cmd_buf, raw_final_buf_, filtered_variance, 1.0f, 0.45f, raw_filtered_buf_,
-                         tonemap_params_.inv_gamma, tonemap_params_.srgb, rect, final_buf_);
+                         tonemap_params_.view_transform, tonemap_params_.inv_gamma, rect, final_buf_);
     }
 
     timestamps_[ctx_->backend_frame].denoise[1] = ctx_->WriteTimestamp(cmd_buf, false);

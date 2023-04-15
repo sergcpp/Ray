@@ -461,8 +461,8 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *scene, Regi
     scene_lock.unlock();
 
     Ref::tonemap_params_t tonemap_params;
+    tonemap_params.view_transform = cam.view_transform;
     tonemap_params.inv_gamma = (1.0f / cam.gamma);
-    tonemap_params.srgb = (cam.dtype == eDeviceType::SRGB);
 
     Ref::simd_fvec4 exposure = std::pow(2.0f, cam.exposure);
     exposure.set<3>(1.0f);
@@ -515,7 +515,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *scene, Regi
             // Also store as denosed result until DenoiseImage method will be called
             untonemapped_res.store_to(raw_filtered_buf_[y * w_ + x].v, Ref::simd_mem_aligned);
 
-            const Ref::simd_fvec4 tonemapped_res = Ref::clamp_and_gamma_correct(tonemap_params, untonemapped_res);
+            const Ref::simd_fvec4 tonemapped_res = Ref::Tonemap(tonemap_params, untonemapped_res);
             tonemapped_res.store_to(final_buf_[y * w_ + x].v, Ref::simd_mem_aligned);
 
             p1 = Ref::reversible_tonemap(p1);
@@ -615,7 +615,7 @@ template <int DimX, int DimY> void Ray::NS::RendererSIMD<DimX, DimY>::DenoiseIma
             auto col = Ref::simd_fvec4(raw_filtered_buf_[y * w_ + x].v, Ref::simd_mem_aligned);
             col = Ref::reversible_tonemap_invert(col);
             col.store_to(raw_filtered_buf_[y * w_ + x].v, Ref::simd_mem_aligned);
-            col = Ref::clamp_and_gamma_correct(tonemap_params, col);
+            col = Ref::Tonemap(tonemap_params, col);
             col.store_to(final_buf_[y * w_ + x].v, Ref::simd_mem_aligned);
         }
     }

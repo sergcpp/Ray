@@ -10,6 +10,7 @@ LAYOUT_PARAMS uniform UniformParams {
 
 layout(binding = IN_IMG0_SLOT, rgba32f) uniform readonly image2D g_in_img0;
 layout(binding = IN_IMG1_SLOT, rgba32f) uniform readonly image2D g_in_img1;
+layout(binding = TONEMAP_LUT_SLOT) uniform sampler3D g_tonemap_lut;
 
 layout(binding = OUT_IMG_SLOT, rgba32f) uniform writeonly image2D g_out_img;
 layout(binding = OUT_RAW_IMG_SLOT, rgba32f) uniform writeonly image2D g_out_raw_img;
@@ -34,7 +35,12 @@ void main() {
     vec4 untonemapped_res = (g_params.img0_weight * img0) + (g_params.img1_weight * img1);
     imageStore(g_out_raw_img, gi, untonemapped_res);
 
-    vec4 tonemapped_res = clamp_and_gamma_correct(g_params.srgb != 0, g_params.inv_gamma, untonemapped_res);
+    vec4 tonemapped_res;
+    [[dont_flatten]] if (g_params.tonemap_mode == 0) {
+        tonemapped_res = TonemapStandard(g_params.inv_gamma, untonemapped_res);
+    } else {
+        tonemapped_res = TonemapLUT_manual(g_tonemap_lut, g_params.inv_gamma, untonemapped_res);
+    }
     imageStore(g_out_img, gi, tonemapped_res);
 
     img0 = reversible_tonemap(img0);

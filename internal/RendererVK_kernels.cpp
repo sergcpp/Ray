@@ -492,18 +492,17 @@ void Ray::Vk::Renderer::kernel_MixIncremental(VkCommandBuffer cmd_buf, const flo
 
 void Ray::Vk::Renderer::kernel_Postprocess(VkCommandBuffer cmd_buf, const Texture2D &img0_buf, const float img0_weight,
                                            const Texture2D &img1_buf, const float img1_weight, const float exposure,
-                                           const float inv_gamma, const bool srgb, const rect_t &rect,
-                                           const Texture2D &out_pixels, const Texture2D &out_raw_pixels,
-                                           const Texture2D &out_variance) const {
-    const TransitionInfo res_transitions[] = {{&img0_buf, eResState::UnorderedAccess},
-                                              {&img1_buf, eResState::UnorderedAccess},
-                                              {&out_pixels, eResState::UnorderedAccess},
-                                              {&out_raw_pixels, eResState::UnorderedAccess},
-                                              {&out_variance, eResState::UnorderedAccess}};
+                                           const float inv_gamma, const rect_t &rect, const Texture2D &out_pixels,
+                                           const Texture2D &out_raw_pixels, const Texture2D &out_variance) const {
+    const TransitionInfo res_transitions[] = {
+        {&img0_buf, eResState::UnorderedAccess},       {&img1_buf, eResState::UnorderedAccess},
+        {&tonemap_lut_, eResState::ShaderResource},    {&out_pixels, eResState::UnorderedAccess},
+        {&out_raw_pixels, eResState::UnorderedAccess}, {&out_variance, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
     const Binding bindings[] = {{eBindTarget::Image, Postprocess::IN_IMG0_SLOT, img0_buf},
                                 {eBindTarget::Image, Postprocess::IN_IMG1_SLOT, img1_buf},
+                                {eBindTarget::Tex3D, Postprocess::TONEMAP_LUT_SLOT, tonemap_lut_},
                                 {eBindTarget::Image, Postprocess::OUT_IMG_SLOT, out_pixels},
                                 {eBindTarget::Image, Postprocess::OUT_RAW_IMG_SLOT, out_raw_pixels},
                                 {eBindTarget::Image, Postprocess::OUT_VARIANCE_IMG_SLOT, out_variance}};
@@ -517,11 +516,11 @@ void Ray::Vk::Renderer::kernel_Postprocess(VkCommandBuffer cmd_buf, const Textur
     uniform_params.rect[1] = rect.y;
     uniform_params.rect[2] = rect.w;
     uniform_params.rect[3] = rect.h;
-    uniform_params.srgb = srgb ? 1 : 0;
     uniform_params.exposure = exposure;
     uniform_params.inv_gamma = inv_gamma;
     uniform_params.img0_weight = img0_weight;
     uniform_params.img1_weight = img1_weight;
+    uniform_params.tonemap_mode = (loaded_view_transform_ == eViewTransform::Standard) ? 0 : 1;
 
     DispatchCompute(cmd_buf, pi_postprocess_, grp_count, bindings, &uniform_params, sizeof(uniform_params),
                     ctx_->default_descr_alloc(), ctx_->log());
@@ -554,16 +553,18 @@ void Ray::Vk::Renderer::kernel_FilterVariance(VkCommandBuffer cmd_buf, const Tex
 
 void Ray::Vk::Renderer::kernel_NLMFilter(VkCommandBuffer cmd_buf, const Texture2D &img_buf, const Texture2D &var_buf,
                                          const float alpha, const float damping, const Texture2D &out_raw_img,
-                                         const float inv_gamma, const bool srgb, const rect_t &rect,
+                                         const eViewTransform view_transform, const float inv_gamma, const rect_t &rect,
                                          const Texture2D &out_img) {
     const TransitionInfo res_transitions[] = {{&img_buf, eResState::ShaderResource},
                                               {&var_buf, eResState::ShaderResource},
+                                              {&tonemap_lut_, eResState::ShaderResource},
                                               {&out_img, eResState::UnorderedAccess},
                                               {&out_raw_img, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
     const Binding bindings[] = {{eBindTarget::Tex2D, NLMFilter::IN_IMG_SLOT, img_buf},
                                 {eBindTarget::Tex2D, NLMFilter::VARIANCE_IMG_SLOT, var_buf},
+                                {eBindTarget::Tex3D, NLMFilter::TONEMAP_LUT_SLOT, tonemap_lut_},
                                 {eBindTarget::Image, NLMFilter::OUT_IMG_SLOT, out_img},
                                 {eBindTarget::Image, NLMFilter::OUT_RAW_IMG_SLOT, out_raw_img}};
 
@@ -580,9 +581,8 @@ void Ray::Vk::Renderer::kernel_NLMFilter(VkCommandBuffer cmd_buf, const Texture2
     uniform_params.inv_img_size[1] = 1.0f / float(h_);
     uniform_params.alpha = alpha;
     uniform_params.damping = damping;
-
-    uniform_params.srgb = srgb ? 1 : 0;
     uniform_params.inv_gamma = inv_gamma;
+    uniform_params.tonemap_mode = (loaded_view_transform_ == eViewTransform::Standard) ? 0 : 1;
 
     DispatchCompute(cmd_buf, pi_nlm_filter_, grp_count, bindings, &uniform_params, sizeof(uniform_params),
                     ctx_->default_descr_alloc(), ctx_->log());

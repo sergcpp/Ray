@@ -10,10 +10,10 @@ struct Params {
     VEC2_TYPE inv_img_size;
     float alpha;
     float damping;
-    int srgb;
     float inv_gamma;
-    float _pad0;
+    int tonemap_mode;
     float _pad1;
+    float _pad2;
 };
 
 const int LOCAL_GROUP_SIZE_X = 8;
@@ -21,6 +21,7 @@ const int LOCAL_GROUP_SIZE_Y = 8;
 
 const int IN_IMG_SLOT = 2;
 const int VARIANCE_IMG_SLOT = 3;
+const int TONEMAP_LUT_SLOT = 4;
 
 const int OUT_IMG_SLOT = 0;
 const int OUT_RAW_IMG_SLOT = 1;

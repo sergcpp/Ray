@@ -4,17 +4,17 @@ struct Params
     float2 inv_img_size;
     float alpha;
     float damping;
-    int srgb;
     float inv_gamma;
-    float _pad0;
+    int tonemap_mode;
     float _pad1;
+    float _pad2;
 };
 
 static const uint3 gl_WorkGroupSize = uint3(8u, 8u, 1u);
 
 cbuffer UniformParams
 {
-    Params _180_g_params : packoffset(c0);
+    Params _231_g_params : packoffset(c0);
 };
 
 Texture2D<float4> g_in_img : register(t2, space0);
@@ -22,6 +22,8 @@ SamplerState _g_in_img_sampler : register(s2, space0);
 Texture2D<float4> g_variance_img : register(t3, space0);
 SamplerState _g_variance_img_sampler : register(s3, space0);
 RWTexture2D<float4> g_out_raw_img : register(u1, space0);
+Texture3D<float4> g_tonemap_lut : register(t4, space0);
+SamplerState _g_tonemap_lut_sampler : register(s4, space0);
 RWTexture2D<float4> g_out_img : register(u0, space0);
 
 static uint3 gl_LocalInvocationID;
@@ -70,10 +72,10 @@ float4 reversible_tonemap_invert(float4 c)
     return float4(reversible_tonemap_invert(param), c.w);
 }
 
-float3 clamp_and_gamma_correct(bool srgb, float inv_gamma, inout float3 col)
+float3 TonemapStandard(float inv_gamma, inout float3 col)
 {
     [unroll]
-    for (int i = 0; (i < 3) && srgb; i++)
+    for (int i = 0; i < 3; i++)
     {
         if (col[i] < 0.003130800090730190277099609375f)
         {
@@ -91,67 +93,83 @@ float3 clamp_and_gamma_correct(bool srgb, float inv_gamma, inout float3 col)
     return clamp(col, 0.0f.xxx, 1.0f.xxx);
 }
 
-float4 clamp_and_gamma_correct(bool srgb, float inv_gamma, float4 col)
+float4 TonemapStandard(float inv_gamma, float4 col)
 {
-    bool param = srgb;
-    float param_1 = inv_gamma;
-    float3 param_2 = col.xyz;
-    float3 _106 = clamp_and_gamma_correct(param, param_1, param_2);
-    return float4(_106, col.w);
+    float param = inv_gamma;
+    float3 param_1 = col.xyz;
+    float3 _114 = TonemapStandard(param, param_1);
+    return float4(_114, col.w);
+}
+
+float3 TonemapLUT(Texture3D<float4> lut, SamplerState _lut_sampler, float inv_gamma, float3 col)
+{
+    float3 ret = lut.SampleLevel(_lut_sampler, ((col / (col + 1.0f.xxx)) * 0.979166686534881591796875f) + 0.010416666977107524871826171875f.xxx, 0.0f).xyz;
+    if (inv_gamma != 1.0f)
+    {
+        ret = pow(ret, inv_gamma.xxx);
+    }
+    return ret;
+}
+
+float4 TonemapLUT(Texture3D<float4> lut, SamplerState _lut_sampler, float inv_gamma, float4 col)
+{
+    float param = inv_gamma;
+    float3 param_1 = col.xyz;
+    return float4(TonemapLUT(lut, _lut_sampler, param, param_1), col.w);
 }
 
 void comp_main()
 {
     do
     {
-        int2 _192 = int2(_180_g_params.rect.xy + gl_GlobalInvocationID.xy);
-        int2 _197 = int2(gl_LocalInvocationID.xy);
-        float2 _208 = (float2(_192) + 0.5f.xx) * _180_g_params.inv_img_size;
-        float4 param = g_in_img.SampleLevel(_g_in_img_sampler, _208, 0.0f, int2(-4, -4));
-        float4 _220 = reversible_tonemap(param);
-        int _227 = _197.y;
-        int _230 = _197.x;
-        g_temp_color0[_227][_230] = spvPackHalf2x16(_220.xy);
-        g_temp_color1[_227][_230] = spvPackHalf2x16(_220.zw);
-        float4 param_1 = g_in_img.SampleLevel(_g_in_img_sampler, _208, 0.0f, int2(4, -4));
-        float4 _255 = reversible_tonemap(param_1);
-        int _262 = 8 + _230;
-        g_temp_color0[_227][_262] = spvPackHalf2x16(_255.xy);
-        g_temp_color1[_227][_262] = spvPackHalf2x16(_255.zw);
-        float4 param_2 = g_in_img.SampleLevel(_g_in_img_sampler, _208, 0.0f, int2(-4, 4));
-        float4 _283 = reversible_tonemap(param_2);
-        int _286 = 8 + _227;
-        g_temp_color0[_286][_230] = spvPackHalf2x16(_283.xy);
-        g_temp_color1[_286][_230] = spvPackHalf2x16(_283.zw);
-        float4 param_3 = g_in_img.SampleLevel(_g_in_img_sampler, _208, 0.0f, int2(4, 4));
-        float4 _310 = reversible_tonemap(param_3);
-        g_temp_color0[_286][_262] = spvPackHalf2x16(_310.xy);
-        g_temp_color1[_286][_262] = spvPackHalf2x16(_310.zw);
-        float4 _335 = g_variance_img.SampleLevel(_g_variance_img_sampler, _208, 0.0f, int2(-4, -4));
-        g_temp_variance0[_227][_230] = spvPackHalf2x16(_335.xy);
-        g_temp_variance1[_227][_230] = spvPackHalf2x16(_335.zw);
-        float4 _361 = g_variance_img.SampleLevel(_g_variance_img_sampler, _208, 0.0f, int2(4, -4));
-        g_temp_variance0[_227][_262] = spvPackHalf2x16(_361.xy);
-        g_temp_variance1[_227][_262] = spvPackHalf2x16(_361.zw);
-        float4 _385 = g_variance_img.SampleLevel(_g_variance_img_sampler, _208, 0.0f, int2(-4, 4));
-        g_temp_variance0[_286][_230] = spvPackHalf2x16(_385.xy);
-        g_temp_variance1[_286][_230] = spvPackHalf2x16(_385.zw);
-        float4 _409 = g_variance_img.SampleLevel(_g_variance_img_sampler, _208, 0.0f, int2(4, 4));
-        g_temp_variance0[_286][_262] = spvPackHalf2x16(_409.xy);
-        g_temp_variance1[_286][_262] = spvPackHalf2x16(_409.zw);
+        int2 _243 = int2(_231_g_params.rect.xy + gl_GlobalInvocationID.xy);
+        int2 _248 = int2(gl_LocalInvocationID.xy);
+        float2 _259 = (float2(_243) + 0.5f.xx) * _231_g_params.inv_img_size;
+        float4 param = g_in_img.SampleLevel(_g_in_img_sampler, _259, 0.0f, int2(-4, -4));
+        float4 _271 = reversible_tonemap(param);
+        int _278 = _248.y;
+        int _281 = _248.x;
+        g_temp_color0[_278][_281] = spvPackHalf2x16(_271.xy);
+        g_temp_color1[_278][_281] = spvPackHalf2x16(_271.zw);
+        float4 param_1 = g_in_img.SampleLevel(_g_in_img_sampler, _259, 0.0f, int2(4, -4));
+        float4 _306 = reversible_tonemap(param_1);
+        int _313 = 8 + _281;
+        g_temp_color0[_278][_313] = spvPackHalf2x16(_306.xy);
+        g_temp_color1[_278][_313] = spvPackHalf2x16(_306.zw);
+        float4 param_2 = g_in_img.SampleLevel(_g_in_img_sampler, _259, 0.0f, int2(-4, 4));
+        float4 _334 = reversible_tonemap(param_2);
+        int _337 = 8 + _278;
+        g_temp_color0[_337][_281] = spvPackHalf2x16(_334.xy);
+        g_temp_color1[_337][_281] = spvPackHalf2x16(_334.zw);
+        float4 param_3 = g_in_img.SampleLevel(_g_in_img_sampler, _259, 0.0f, int2(4, 4));
+        float4 _361 = reversible_tonemap(param_3);
+        g_temp_color0[_337][_313] = spvPackHalf2x16(_361.xy);
+        g_temp_color1[_337][_313] = spvPackHalf2x16(_361.zw);
+        float4 _386 = g_variance_img.SampleLevel(_g_variance_img_sampler, _259, 0.0f, int2(-4, -4));
+        g_temp_variance0[_278][_281] = spvPackHalf2x16(_386.xy);
+        g_temp_variance1[_278][_281] = spvPackHalf2x16(_386.zw);
+        float4 _412 = g_variance_img.SampleLevel(_g_variance_img_sampler, _259, 0.0f, int2(4, -4));
+        g_temp_variance0[_278][_313] = spvPackHalf2x16(_412.xy);
+        g_temp_variance1[_278][_313] = spvPackHalf2x16(_412.zw);
+        float4 _436 = g_variance_img.SampleLevel(_g_variance_img_sampler, _259, 0.0f, int2(-4, 4));
+        g_temp_variance0[_337][_281] = spvPackHalf2x16(_436.xy);
+        g_temp_variance1[_337][_281] = spvPackHalf2x16(_436.zw);
+        float4 _460 = g_variance_img.SampleLevel(_g_variance_img_sampler, _259, 0.0f, int2(4, 4));
+        g_temp_variance0[_337][_313] = spvPackHalf2x16(_460.xy);
+        g_temp_variance1[_337][_313] = spvPackHalf2x16(_460.zw);
         AllMemoryBarrier();
         GroupMemoryBarrierWithGroupSync();
-        bool _438 = gl_GlobalInvocationID.x >= _180_g_params.rect.z;
-        bool _447;
-        if (!_438)
+        bool _489 = gl_GlobalInvocationID.x >= _231_g_params.rect.z;
+        bool _498;
+        if (!_489)
         {
-            _447 = gl_GlobalInvocationID.y >= _180_g_params.rect.w;
+            _498 = gl_GlobalInvocationID.y >= _231_g_params.rect.w;
         }
         else
         {
-            _447 = _438;
+            _498 = _489;
         }
-        if (_447)
+        if (_498)
         {
             break;
         }
@@ -171,25 +189,25 @@ void comp_main()
                     [unroll]
                     for (int p = -1; p <= 1; )
                     {
-                        int _492 = _227 + 4;
-                        int _494 = _492 + q;
-                        int _497 = _230 + 4;
-                        int _499 = _497 + p;
-                        int _528 = (_492 + k) + q;
-                        int _535 = (_497 + l) + p;
-                        float4 _592 = float4(spvUnpackHalf2x16(g_temp_variance0[_494][_499]), spvUnpackHalf2x16(g_temp_variance1[_494][_499]));
-                        float4 _632 = float4(spvUnpackHalf2x16(g_temp_variance0[_528][_535]), spvUnpackHalf2x16(g_temp_variance1[_528][_535]));
-                        float4 _639 = float4(spvUnpackHalf2x16(g_temp_color0[_494][_499]), spvUnpackHalf2x16(g_temp_color1[_494][_499])) - float4(spvUnpackHalf2x16(g_temp_color0[_528][_535]), spvUnpackHalf2x16(g_temp_color1[_528][_535]));
-                        _distance += (mad(_639, _639, -((_592 + min(_592, _632)) * _180_g_params.alpha)) / (9.9999997473787516355514526367188e-05f.xxxx + ((_592 + _632) * (_180_g_params.damping * _180_g_params.damping))));
+                        int _543 = _278 + 4;
+                        int _545 = _543 + q;
+                        int _548 = _281 + 4;
+                        int _550 = _548 + p;
+                        int _579 = (_543 + k) + q;
+                        int _586 = (_548 + l) + p;
+                        float4 _643 = float4(spvUnpackHalf2x16(g_temp_variance0[_545][_550]), spvUnpackHalf2x16(g_temp_variance1[_545][_550]));
+                        float4 _683 = float4(spvUnpackHalf2x16(g_temp_variance0[_579][_586]), spvUnpackHalf2x16(g_temp_variance1[_579][_586]));
+                        float4 _690 = float4(spvUnpackHalf2x16(g_temp_color0[_545][_550]), spvUnpackHalf2x16(g_temp_color1[_545][_550])) - float4(spvUnpackHalf2x16(g_temp_color0[_579][_586]), spvUnpackHalf2x16(g_temp_color1[_579][_586]));
+                        _distance += (mad(_690, _690, -((_643 + min(_643, _683)) * _231_g_params.alpha)) / (9.9999997473787516355514526367188e-05f.xxxx + ((_643 + _683) * (_231_g_params.damping * _231_g_params.damping))));
                         p++;
                         continue;
                     }
                 }
-                float _690 = exp(-max(0.0f, 2.25f * (((_distance.x + _distance.y) + _distance.z) + _distance.w)));
-                int _695 = (_227 + 4) + k;
-                int _700 = (_230 + 4) + l;
-                sum_output += (float4(spvUnpackHalf2x16(g_temp_color0[_695][_700]), spvUnpackHalf2x16(g_temp_color1[_695][_700])) * _690);
-                sum_weight += _690;
+                float _741 = exp(-max(0.0f, 2.25f * (((_distance.x + _distance.y) + _distance.z) + _distance.w)));
+                int _746 = (_278 + 4) + k;
+                int _751 = (_281 + 4) + l;
+                sum_output += (float4(spvUnpackHalf2x16(g_temp_color0[_746][_751]), spvUnpackHalf2x16(g_temp_color1[_746][_751])) * _741);
+                sum_weight += _741;
             }
         }
         [flatten]
@@ -198,13 +216,23 @@ void comp_main()
             sum_output /= sum_weight.xxxx;
         }
         float4 param_4 = sum_output;
-        float4 _743 = reversible_tonemap_invert(param_4);
-        sum_output = _743;
-        g_out_raw_img[_192] = _743;
-        bool param_5 = _180_g_params.srgb != 0;
-        float param_6 = _180_g_params.inv_gamma;
-        float4 param_7 = _743;
-        g_out_img[_192] = clamp_and_gamma_correct(param_5, param_6, param_7);
+        float4 _794 = reversible_tonemap_invert(param_4);
+        sum_output = _794;
+        g_out_raw_img[_243] = _794;
+        [branch]
+        if (_231_g_params.tonemap_mode == 0)
+        {
+            float param_5 = _231_g_params.inv_gamma;
+            float4 param_6 = sum_output;
+            sum_output = TonemapStandard(param_5, param_6);
+        }
+        else
+        {
+            float param_7 = _231_g_params.inv_gamma;
+            float4 param_8 = sum_output;
+            sum_output = TonemapLUT(g_tonemap_lut, _g_tonemap_lut_sampler, param_7, param_8);
+        }
+        g_out_img[_243] = sum_output;
         break;
     } while(false);
 }

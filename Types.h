@@ -43,9 +43,20 @@ enum class eCamType : uint8_t { Persp, Ortho, Geo };
 
 enum class eFilterType : uint8_t { Box, Tent };
 
-enum class eDeviceType : uint8_t { None, SRGB };
-
 enum class eLensUnits : uint8_t { FOV, FLength };
+
+enum class eViewTransform : uint8_t {
+    Standard,
+    Filmic,
+    Filmic_VeryLowContrast,
+    Filmic_LowContrast,
+    Filmic_MediumLowContrast,
+    Filmic_MediumContrast,
+    Filmic_MediumHighContrast,
+    Filmic_HighContrast,
+    Filmic_VeryHighContrast,
+    _Count
+};
 
 enum class ePassFlags : uint8_t {
     SkipDirectLight,
@@ -68,7 +79,7 @@ static_assert(sizeof(pass_settings_t) == 16, "!");
 struct camera_t {
     eCamType type;
     eFilterType filter;
-    eDeviceType dtype;
+    eViewTransform view_transform;
     eLensUnits ltype;
     float fov, exposure, gamma, sensor_height;
     float focus_distance, focal_length, fstop, lens_rotation, lens_ratio;

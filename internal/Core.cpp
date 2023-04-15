@@ -928,9 +928,9 @@ bool Ray::NaiivePluckerTest(const float p[9], const float o[3], const float d[3]
     return (t0 <= 0 && t1 <= 0 && t2 <= 0) || (t0 >= 0 && t1 >= 0 && t2 >= 0);
 }
 
-void Ray::ConstructCamera(const eCamType type, const eFilterType filter, const eDeviceType dtype, const float origin[3],
-                          const float fwd[3], const float up[3], const float shift[2], const float fov,
-                          const float sensor_height, const float exposure, const float gamma,
+void Ray::ConstructCamera(const eCamType type, const eFilterType filter, const eViewTransform view_transform,
+                          const float origin[3], const float fwd[3], const float up[3], const float shift[2],
+                          const float fov, const float sensor_height, const float exposure, const float gamma,
                           const float focus_distance, const float fstop, const float lens_rotation,
                           const float lens_ratio, const int lens_blades, const float clip_start, const float clip_end,
                           camera_t *cam) {
@@ -950,7 +950,7 @@ void Ray::ConstructCamera(const eCamType type, const eFilterType filter, const e
 
         cam->type = type;
         cam->filter = filter;
-        cam->dtype = dtype;
+        cam->view_transform = view_transform;
         cam->ltype = eLensUnits::FOV;
         cam->fov = fov;
         cam->exposure = exposure;

@@ -180,7 +180,8 @@ void assemble_material_test_images(const char *arch_list[]) {
         {"complex_mat6", "complex_mat6_mesh_lights", "complex_mat6_sphere_light", "complex_mat6_sun_light",
          "complex_mat6_hdr_light"},
         {"complex_mat5_regions", "complex_mat5_dof", "complex_mat5_spot_light", "complex_mat6_dof",
-         "complex_mat6_spot_light"}};
+         "complex_mat6_spot_light"},
+        {"complex_mat5_filmic"}};
     const int ImgCountH = sizeof(test_names) / sizeof(test_names[0]);
 
     const int OutImageW = 256 * ImgCountW;
@@ -1329,6 +1330,27 @@ void test_complex_mat5(const char *arch_list[], const char *preferred_device) {
                       false, false, textures);
 }
 
+void test_complex_mat5_filmic(const char *arch_list[], const char *preferred_device) {
+    const int SampleCount = 87;
+    const int PixThres = 2461;
+
+    Ray::principled_mat_desc_t metal_mat_desc;
+    metal_mat_desc.base_texture = Ray::TextureHandle{0};
+    metal_mat_desc.metallic = 1.0f;
+    metal_mat_desc.roughness = 1.0f;
+    metal_mat_desc.roughness_texture = Ray::TextureHandle{2};
+    metal_mat_desc.metallic = 1.0f;
+    metal_mat_desc.metallic_texture = Ray::TextureHandle{3};
+    metal_mat_desc.normal_map = Ray::TextureHandle{1};
+
+    const char *textures[] = {
+        "test_data/textures/gold-scuffed_basecolor-boosted.tga", "test_data/textures/gold-scuffed_normal.tga",
+        "test_data/textures/gold-scuffed_roughness.tga", "test_data/textures/gold-scuffed_metallic.tga"};
+
+    run_material_test(arch_list, preferred_device, "complex_mat5_filmic", metal_mat_desc, SampleCount, FastMinPSNR,
+                      PixThres, false, false, textures, eTestScene::Standard_Filmic);
+}
+
 void test_complex_mat5_regions(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 42;
     const int PixThres = 2802;
@@ -1510,7 +1532,8 @@ void test_complex_mat6(const char *arch_list[], const char *preferred_device) {
     olive_mat_desc.transmission = 1.0f;
     olive_mat_desc.ior = 2.3f;
 
-    run_material_test(arch_list, preferred_device, "complex_mat6", olive_mat_desc, SampleCount, VeryFastMinPSNR, PixThres);
+    run_material_test(arch_list, preferred_device, "complex_mat6", olive_mat_desc, SampleCount, VeryFastMinPSNR,
+                      PixThres);
 }
 
 void test_complex_mat6_denoised(const char *arch_list[], const char *preferred_device) {
@@ -1557,8 +1580,8 @@ void test_complex_mat6_mesh_lights(const char *arch_list[], const char *preferre
     olive_mat_desc.transmission = 1.0f;
     olive_mat_desc.ior = 2.3f;
 
-    run_material_test(arch_list, preferred_device, "complex_mat6_mesh_lights", olive_mat_desc, SampleCount, VeryFastMinPSNR,
-                      PixThres, false, false, nullptr, eTestScene::Standard_MeshLights);
+    run_material_test(arch_list, preferred_device, "complex_mat6_mesh_lights", olive_mat_desc, SampleCount,
+                      VeryFastMinPSNR, PixThres, false, false, nullptr, eTestScene::Standard_MeshLights);
 }
 
 void test_complex_mat6_sphere_light(const char *arch_list[], const char *preferred_device) {

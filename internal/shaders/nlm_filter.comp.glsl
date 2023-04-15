@@ -10,6 +10,7 @@ LAYOUT_PARAMS uniform UniformParams {
 
 layout(binding = IN_IMG_SLOT) uniform sampler2D g_in_img;
 layout(binding = VARIANCE_IMG_SLOT) uniform sampler2D g_variance_img;
+layout(binding = TONEMAP_LUT_SLOT) uniform sampler3D g_tonemap_lut;
 
 layout(binding = OUT_IMG_SLOT, rgba32f) uniform writeonly image2D g_out_img;
 layout(binding = OUT_RAW_IMG_SLOT, rgba32f) uniform writeonly image2D g_out_raw_img;
@@ -156,5 +157,10 @@ void main() {
     sum_output = reversible_tonemap_invert(sum_output);
 
     imageStore(g_out_raw_img, gi, sum_output);
-    imageStore(g_out_img, gi, clamp_and_gamma_correct(g_params.srgb != 0, g_params.inv_gamma, sum_output));
+    [[dont_flatten]] if (g_params.tonemap_mode == 0) {
+        sum_output = TonemapStandard(g_params.inv_gamma, sum_output);
+    } else {
+        sum_output = TonemapLUT(g_tonemap_lut, g_params.inv_gamma, sum_output);
+    }
+    imageStore(g_out_img, gi, sum_output);
 }

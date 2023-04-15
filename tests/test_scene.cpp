@@ -170,7 +170,11 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_sh, const bool ou
         Ray::camera_desc_t cam_desc;
         cam_desc.type = Ray::eCamType::Persp;
         cam_desc.filter = Ray::eFilterType::Box;
-        cam_desc.dtype = Ray::eDeviceType::SRGB;
+        if (test_scene == eTestScene::Standard_Filmic) {
+            cam_desc.view_transform = Ray::eViewTransform::Filmic_HighContrast;
+        } else {
+            cam_desc.view_transform = Ray::eViewTransform::Standard;
+        }
         if (test_scene == eTestScene::Refraction_Plane) {
             memcpy(&cam_desc.origin[0], &view_origin_refr[0], 3 * sizeof(float));
             memcpy(&cam_desc.fwd[0], &view_dir_refr[0], 3 * sizeof(float));
@@ -571,16 +575,16 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_sh, const bool ou
             scene.AddMeshInstance(square_light_mesh, identity);
         }
         scene.AddMeshInstance(disc_light_mesh, identity);
-    } else if (test_scene == eTestScene::Standard || test_scene == eTestScene::Standard_SphereLight ||
-               test_scene == eTestScene::Standard_SpotLight || test_scene == eTestScene::Standard_DOF0 ||
-               test_scene == eTestScene::Standard_DOF1 || test_scene == eTestScene::Standard_GlassBall0 ||
-               test_scene == eTestScene::Standard_GlassBall1) {
+    } else if (test_scene == eTestScene::Standard || test_scene == eTestScene::Standard_Filmic ||
+               test_scene == eTestScene::Standard_SphereLight || test_scene == eTestScene::Standard_SpotLight ||
+               test_scene == eTestScene::Standard_DOF0 || test_scene == eTestScene::Standard_DOF1 ||
+               test_scene == eTestScene::Standard_GlassBall0 || test_scene == eTestScene::Standard_GlassBall1) {
         //
         // Use explicit lights sources
         //
-        if (test_scene == eTestScene::Standard || test_scene == eTestScene::Standard_DOF0 ||
-            test_scene == eTestScene::Standard_DOF1 || test_scene == eTestScene::Standard_GlassBall0 ||
-            test_scene == eTestScene::Standard_GlassBall1) {
+        if (test_scene == eTestScene::Standard || test_scene == eTestScene::Standard_Filmic ||
+            test_scene == eTestScene::Standard_DOF0 || test_scene == eTestScene::Standard_DOF1 ||
+            test_scene == eTestScene::Standard_GlassBall0 || test_scene == eTestScene::Standard_GlassBall1) {
             { // rect light
                 static const float xform[16] = {-0.425036609f, 2.24262476e-06f, -0.905176163f, 0.00000000f,
                                                 -0.876228273f, 0.250873595f,    0.411444396f,  0.00000000f,

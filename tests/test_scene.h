@@ -9,6 +9,7 @@
 
 enum class eTestScene {
     Standard,
+    Standard_Filmic,
     Standard_SphereLight,
     Standard_SpotLight,
     Standard_MeshLights,

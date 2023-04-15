@@ -135,38 +135,6 @@ force_inline int total_depth(const shadow_ray_t &r) {
     return diff_depth + spec_depth + refr_depth + transp_depth;
 }
 
-// https://gpuopen.com/learn/optimized-reversible-tonemapper-for-resolve/
-force_inline simd_fvec4 vectorcall reversible_tonemap(const simd_fvec4 c) {
-    return c / (std::max(c.get<0>(), std::max(c.get<1>(), c.get<2>())) + 1.0f);
-}
-
-force_inline simd_fvec4 vectorcall reversible_tonemap_invert(const simd_fvec4 c) {
-    return c / (1.0f - std::max(c.get<0>(), std::max(c.get<1>(), c.get<2>())));
-}
-
-struct tonemap_params_t {
-    float inv_gamma;
-    bool srgb;
-};
-
-force_inline simd_fvec4 vectorcall clamp_and_gamma_correct(const tonemap_params_t &params, simd_fvec4 c) {
-    if (params.srgb) {
-        UNROLLED_FOR(i, 3, {
-            if (c.get<i>() < 0.0031308f) {
-                c.set<i>(12.92f * c.get<i>());
-            } else {
-                c.set<i>(1.055f * std::pow(c.get<i>(), (1.0f / 2.4f)) - 0.055f);
-            }
-        })
-    }
-
-    if (params.inv_gamma != 1.0f) {
-        c = pow(c, simd_fvec4{params.inv_gamma});
-    }
-
-    return clamp(c, 0.0f, 1.0f);
-}
-
 // Generation of rays
 void GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, int h, const float *random_seq,
                          aligned_vector<ray_data_t> &out_rays);
@@ -390,6 +358,49 @@ Ray::color_rgba_t ShadeSurface(const pass_settings_t &ps, const hit_data_t &inte
 template <int WINDOW_SIZE = 7, int NEIGHBORHOOD_SIZE = 3>
 void NLMFilter(const color_rgba_t input[], const rect_t &rect, int input_stride, float alpha, float damping,
                const color_rgba_t variance[], const rect_t &output_rect, int output_stride, color_rgba_t output[]);
+
+// Tonemap
+
+// https://gpuopen.com/learn/optimized-reversible-tonemapper-for-resolve/
+force_inline simd_fvec4 vectorcall reversible_tonemap(const simd_fvec4 c) {
+    return c / (std::max(c.get<0>(), std::max(c.get<1>(), c.get<2>())) + 1.0f);
+}
+
+force_inline simd_fvec4 vectorcall reversible_tonemap_invert(const simd_fvec4 c) {
+    return c / (1.0f - std::max(c.get<0>(), std::max(c.get<1>(), c.get<2>())));
+}
+
+struct tonemap_params_t {
+    eViewTransform view_transform;
+    float inv_gamma;
+};
+
+force_inline simd_fvec4 vectorcall TonemapStandard(simd_fvec4 c) {
+    UNROLLED_FOR(i, 3, {
+        if (c.get<i>() < 0.0031308f) {
+            c.set<i>(12.92f * c.get<i>());
+        } else {
+            c.set<i>(1.055f * std::pow(c.get<i>(), (1.0f / 2.4f)) - 0.055f);
+        }
+    })
+    return c;
+}
+
+simd_fvec4 vectorcall TonemapFilmic(eViewTransform view_transform, simd_fvec4 color);
+
+force_inline simd_fvec4 vectorcall Tonemap(const tonemap_params_t &params, simd_fvec4 c) {
+    if (params.view_transform == eViewTransform::Standard) {
+        c = TonemapStandard(c);
+    } else {
+        c = TonemapFilmic(params.view_transform, c);
+    }
+
+    if (params.inv_gamma != 1.0f) {
+        c = pow(c, simd_fvec4{params.inv_gamma, params.inv_gamma, params.inv_gamma, 1.0f});
+    }
+
+    return clamp(c, 0.0f, 1.0f);
+}
 
 } // namespace Ref
 } // namespace Ray
