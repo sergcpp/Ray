@@ -146,7 +146,7 @@ force_inline simd_fvec4 vectorcall reversible_tonemap_invert(const simd_fvec4 c)
 
 struct tonemap_params_t {
     float inv_gamma;
-    bool srgb, clamp;
+    bool srgb;
 };
 
 force_inline simd_fvec4 vectorcall clamp_and_gamma_correct(const tonemap_params_t &params, simd_fvec4 c) {
@@ -164,10 +164,7 @@ force_inline simd_fvec4 vectorcall clamp_and_gamma_correct(const tonemap_params_
         c = pow(c, simd_fvec4{params.inv_gamma});
     }
 
-    if (params.clamp) {
-        c = clamp(c, 0.0f, 1.0f);
-    }
-    return c;
+    return clamp(c, 0.0f, 1.0f);
 }
 
 // Generation of rays

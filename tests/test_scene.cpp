@@ -181,7 +181,6 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_sh, const bool ou
             cam_desc.fov = 18.1806f;
         }
         memcpy(&cam_desc.up[0], &view_up[0], 3 * sizeof(float));
-        cam_desc.clamp = true;
         cam_desc.output_sh = output_sh;
         cam_desc.output_base_color = output_base_color;
         cam_desc.output_depth_normals = output_depth_normals;

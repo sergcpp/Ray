@@ -10,9 +10,10 @@ struct Params {
     VEC2_TYPE inv_img_size;
     float alpha;
     float damping;
-    int srgb, _clamp;
+    int srgb;
     float inv_gamma;
     float _pad0;
+    float _pad1;
 };
 
 const int LOCAL_GROUP_SIZE_X = 8;

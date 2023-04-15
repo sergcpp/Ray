@@ -120,7 +120,7 @@ int total_depth(const shadow_ray_t r) {
     return diff_depth + spec_depth + refr_depth + transp_depth;
 }
 
-vec3 clamp_and_gamma_correct(bool srgb, bool _clamp, float inv_gamma, vec3 col) {
+vec3 clamp_and_gamma_correct(bool srgb, float inv_gamma, vec3 col) {
     [[unroll]] for (int i = 0; i < 3 && srgb; ++i) {
         if (col[i] < 0.0031308) {
             col[i] = 12.92 * col[i];
@@ -133,15 +133,11 @@ vec3 clamp_and_gamma_correct(bool srgb, bool _clamp, float inv_gamma, vec3 col) 
         col = pow(col, vec3(inv_gamma));
     }
 
-    if (_clamp) {
-        col = clamp(col, vec3(0.0), vec3(1.0));
-    }
-
-    return col;
+    return clamp(col, vec3(0.0), vec3(1.0));
 }
 
-vec4 clamp_and_gamma_correct(bool srgb, bool _clamp, float inv_gamma, vec4 col) {
-    return vec4(clamp_and_gamma_correct(srgb, _clamp, inv_gamma, col.xyz), col.w);
+vec4 clamp_and_gamma_correct(bool srgb, float inv_gamma, vec4 col) {
+    return vec4(clamp_and_gamma_correct(srgb, inv_gamma, col.xyz), col.w);
 }
 
 // https://gpuopen.com/learn/optimized-reversible-tonemapper-for-resolve/

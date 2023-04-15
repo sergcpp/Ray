@@ -492,7 +492,7 @@ void Ray::Vk::Renderer::kernel_MixIncremental(VkCommandBuffer cmd_buf, const flo
 
 void Ray::Vk::Renderer::kernel_Postprocess(VkCommandBuffer cmd_buf, const Texture2D &img0_buf, const float img0_weight,
                                            const Texture2D &img1_buf, const float img1_weight, const float exposure,
-                                           const float inv_gamma, const bool clamp, const bool srgb, const rect_t &rect,
+                                           const float inv_gamma, const bool srgb, const rect_t &rect,
                                            const Texture2D &out_pixels, const Texture2D &out_raw_pixels,
                                            const Texture2D &out_variance) const {
     const TransitionInfo res_transitions[] = {{&img0_buf, eResState::UnorderedAccess},
@@ -518,7 +518,6 @@ void Ray::Vk::Renderer::kernel_Postprocess(VkCommandBuffer cmd_buf, const Textur
     uniform_params.rect[2] = rect.w;
     uniform_params.rect[3] = rect.h;
     uniform_params.srgb = srgb ? 1 : 0;
-    uniform_params._clamp = clamp ? 1 : 0;
     uniform_params.exposure = exposure;
     uniform_params.inv_gamma = inv_gamma;
     uniform_params.img0_weight = img0_weight;
@@ -555,7 +554,7 @@ void Ray::Vk::Renderer::kernel_FilterVariance(VkCommandBuffer cmd_buf, const Tex
 
 void Ray::Vk::Renderer::kernel_NLMFilter(VkCommandBuffer cmd_buf, const Texture2D &img_buf, const Texture2D &var_buf,
                                          const float alpha, const float damping, const Texture2D &out_raw_img,
-                                         const float inv_gamma, const bool clamp, const bool srgb, const rect_t &rect,
+                                         const float inv_gamma, const bool srgb, const rect_t &rect,
                                          const Texture2D &out_img) {
     const TransitionInfo res_transitions[] = {{&img_buf, eResState::ShaderResource},
                                               {&var_buf, eResState::ShaderResource},
@@ -583,7 +582,6 @@ void Ray::Vk::Renderer::kernel_NLMFilter(VkCommandBuffer cmd_buf, const Texture2
     uniform_params.damping = damping;
 
     uniform_params.srgb = srgb ? 1 : 0;
-    uniform_params._clamp = clamp ? 1 : 0;
     uniform_params.inv_gamma = inv_gamma;
 
     DispatchCompute(cmd_buf, pi_nlm_filter_, grp_count, bindings, &uniform_params, sizeof(uniform_params),

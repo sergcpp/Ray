@@ -795,11 +795,10 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         const float exposure = std::pow(2.0f, cam.exposure);
         tonemap_params_.inv_gamma = (1.0f / cam.gamma);
         tonemap_params_.srgb = (cam.dtype == eDeviceType::SRGB);
-        tonemap_params_.clamp = (cam.pass_settings.flags & ePassFlags::Clamp);
 
         kernel_Postprocess(cmd_buf, dual_buf_[0], p1_weight, dual_buf_[1], p2_weight, exposure,
-                           tonemap_params_.inv_gamma, tonemap_params_.clamp, tonemap_params_.srgb, rect, final_buf_,
-                           raw_final_buf_, temp_buf0_);
+                           tonemap_params_.inv_gamma, tonemap_params_.srgb, rect, final_buf_, raw_final_buf_,
+                           temp_buf0_);
         // Also store as denosed result until Denoise method will be called
         const TransitionInfo img_transitions[] = {{&raw_final_buf_, eResState::CopySrc},
                                                   {&raw_filtered_buf_, eResState::CopyDst}};
@@ -888,7 +887,7 @@ void Ray::Vk::Renderer::DenoiseImage(const RegionContext &region) {
     { // Apply NLM Filter
         DebugMarker _(cmd_buf, "NLM Filter");
         kernel_NLMFilter(cmd_buf, raw_final_buf_, filtered_variance, 1.0f, 0.45f, raw_filtered_buf_,
-                         tonemap_params_.inv_gamma, tonemap_params_.clamp, tonemap_params_.srgb, rect, final_buf_);
+                         tonemap_params_.inv_gamma, tonemap_params_.srgb, rect, final_buf_);
     }
 
     timestamps_[ctx_->backend_frame].denoise[1] = ctx_->WriteTimestamp(cmd_buf, false);

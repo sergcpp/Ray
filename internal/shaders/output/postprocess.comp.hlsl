@@ -2,18 +2,20 @@ struct Params
 {
     uint4 rect;
     int srgb;
-    int _clamp;
     float exposure;
     float inv_gamma;
     float img0_weight;
     float img1_weight;
+    float _pad0;
+    float _pad1;
+    float _pad2;
 };
 
 static const uint3 gl_WorkGroupSize = uint3(8u, 8u, 1u);
 
 cbuffer UniformParams
 {
-    Params _158_g_params : packoffset(c0);
+    Params _150_g_params : packoffset(c0);
 };
 
 RWTexture2D<float4> g_in_img0 : register(u3, space0);
@@ -28,7 +30,7 @@ struct SPIRV_Cross_Input
     uint3 gl_GlobalInvocationID : SV_DispatchThreadID;
 };
 
-float3 clamp_and_gamma_correct(bool srgb, bool _clamp, float inv_gamma, inout float3 col)
+float3 clamp_and_gamma_correct(bool srgb, float inv_gamma, inout float3 col)
 {
     [unroll]
     for (int i = 0; (i < 3) && srgb; i++)
@@ -46,21 +48,16 @@ float3 clamp_and_gamma_correct(bool srgb, bool _clamp, float inv_gamma, inout fl
     {
         col = pow(col, inv_gamma.xxx);
     }
-    if (_clamp)
-    {
-        col = clamp(col, 0.0f.xxx, 1.0f.xxx);
-    }
-    return col;
+    return clamp(col, 0.0f.xxx, 1.0f.xxx);
 }
 
-float4 clamp_and_gamma_correct(bool srgb, bool _clamp, float inv_gamma, float4 col)
+float4 clamp_and_gamma_correct(bool srgb, float inv_gamma, float4 col)
 {
     bool param = srgb;
-    bool param_1 = _clamp;
-    float param_2 = inv_gamma;
-    float3 param_3 = col.xyz;
-    float3 _108 = clamp_and_gamma_correct(param, param_1, param_2, param_3);
-    return float4(_108, col.w);
+    float param_1 = inv_gamma;
+    float3 param_2 = col.xyz;
+    float3 _100 = clamp_and_gamma_correct(param, param_1, param_2);
+    return float4(_100, col.w);
 }
 
 float3 reversible_tonemap(float3 c)
@@ -78,53 +75,52 @@ void comp_main()
 {
     do
     {
-        bool _162 = gl_GlobalInvocationID.x >= _158_g_params.rect.z;
-        bool _171;
-        if (!_162)
+        bool _154 = gl_GlobalInvocationID.x >= _150_g_params.rect.z;
+        bool _163;
+        if (!_154)
         {
-            _171 = gl_GlobalInvocationID.y >= _158_g_params.rect.w;
+            _163 = gl_GlobalInvocationID.y >= _150_g_params.rect.w;
         }
         else
         {
-            _171 = _162;
+            _163 = _154;
         }
-        if (_171)
+        if (_163)
         {
             break;
         }
-        int2 _186 = int2(_158_g_params.rect.xy + gl_GlobalInvocationID.xy);
-        float4 _193 = g_in_img0[_186];
-        float4 _198 = g_in_img1[_186];
-        float3 _204 = _193.xyz * _158_g_params.exposure;
-        float4 _307 = _193;
-        _307.x = _204.x;
-        float4 _309 = _307;
-        _309.y = _204.y;
-        float4 _311 = _309;
-        _311.z = _204.z;
-        float4 img0 = _311;
-        float3 _215 = _198.xyz * _158_g_params.exposure;
-        float4 _313 = _198;
-        _313.x = _215.x;
-        float4 _315 = _313;
-        _315.y = _215.y;
-        float4 _317 = _315;
-        _317.z = _215.z;
-        float4 img1 = _317;
-        float4 _233 = (_311 * _158_g_params.img0_weight) + (_317 * _158_g_params.img1_weight);
-        g_out_raw_img[_186] = _233;
-        bool param = _158_g_params.srgb != 0;
-        bool param_1 = _158_g_params._clamp != 0;
-        float param_2 = _158_g_params.inv_gamma;
-        float4 param_3 = _233;
-        g_out_img[_186] = clamp_and_gamma_correct(param, param_1, param_2, param_3);
-        float4 param_4 = img0;
-        img0 = reversible_tonemap(param_4);
-        float4 param_5 = img1;
-        float4 _265 = reversible_tonemap(param_5);
-        img1 = _265;
-        float4 _270 = img0 - _265;
-        g_out_variance_img[_186] = (_270 * 0.5f) * _270;
+        int2 _178 = int2(_150_g_params.rect.xy + gl_GlobalInvocationID.xy);
+        float4 _185 = g_in_img0[_178];
+        float4 _190 = g_in_img1[_178];
+        float3 _197 = _185.xyz * _150_g_params.exposure;
+        float4 _295 = _185;
+        _295.x = _197.x;
+        float4 _297 = _295;
+        _297.y = _197.y;
+        float4 _299 = _297;
+        _299.z = _197.z;
+        float4 img0 = _299;
+        float3 _208 = _190.xyz * _150_g_params.exposure;
+        float4 _301 = _190;
+        _301.x = _208.x;
+        float4 _303 = _301;
+        _303.y = _208.y;
+        float4 _305 = _303;
+        _305.z = _208.z;
+        float4 img1 = _305;
+        float4 _226 = (_299 * _150_g_params.img0_weight) + (_305 * _150_g_params.img1_weight);
+        g_out_raw_img[_178] = _226;
+        bool param = _150_g_params.srgb != 0;
+        float param_1 = _150_g_params.inv_gamma;
+        float4 param_2 = _226;
+        g_out_img[_178] = clamp_and_gamma_correct(param, param_1, param_2);
+        float4 param_3 = img0;
+        img0 = reversible_tonemap(param_3);
+        float4 param_4 = img1;
+        float4 _252 = reversible_tonemap(param_4);
+        img1 = _252;
+        float4 _257 = img0 - _252;
+        g_out_variance_img[_178] = (_257 * 0.5f) * _257;
         break;
     } while(false);
 }

@@ -156,6 +156,5 @@ void main() {
     sum_output = reversible_tonemap_invert(sum_output);
 
     imageStore(g_out_raw_img, gi, sum_output);
-    imageStore(g_out_img, gi, clamp_and_gamma_correct(g_params.srgb != 0, g_params._clamp != 0,
-                                                      g_params.inv_gamma, sum_output));
+    imageStore(g_out_img, gi, clamp_and_gamma_correct(g_params.srgb != 0, g_params.inv_gamma, sum_output));
 }

@@ -239,7 +239,6 @@ struct camera_desc_t {
     bool skip_direct_lighting = false;      ///< Render indirect light contribution only
     bool skip_indirect_lighting = false;    ///< Render direct light contribution only
     bool no_background = false;             ///< Do not render background
-    bool clamp = false;                     ///< Clamp color values to [0..1] range
     bool output_sh = false;                 ///< Output 2-band (4 coeff) spherical harmonics data
     bool output_base_color = false;         ///< Output float RGB material base color
     bool output_depth_normals = false;      ///< Output smooth normals and depth

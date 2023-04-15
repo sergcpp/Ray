@@ -348,7 +348,6 @@ void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &regi
     tonemap_params_t tonemap_params;
     tonemap_params.inv_gamma = (1.0f / cam.gamma);
     tonemap_params.srgb = (cam.dtype == eDeviceType::SRGB);
-    tonemap_params.clamp = (cam.pass_settings.flags & ePassFlags::Clamp);
 
     simd_fvec4 exposure = std::pow(2.0f, cam.exposure);
     exposure.set<3>(1.0f);

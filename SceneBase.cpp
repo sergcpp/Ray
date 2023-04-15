@@ -57,7 +57,6 @@ void Ray::SceneBase::GetCamera(const CameraHandle i, camera_desc_t &c) const {
     c.skip_direct_lighting = (cam.pass_settings.flags & ePassFlags::SkipDirectLight);
     c.skip_indirect_lighting = (cam.pass_settings.flags & ePassFlags::SkipIndirectLight);
     c.no_background = (cam.pass_settings.flags & ePassFlags::NoBackground);
-    c.clamp = (cam.pass_settings.flags & ePassFlags::Clamp);
     c.output_sh = (cam.pass_settings.flags & ePassFlags::OutputSH);
     c.output_base_color = (cam.pass_settings.flags & ePassFlags::OutputBaseColor);
     c.output_depth_normals = (cam.pass_settings.flags & ePassFlags::OutputDepthNormals);
@@ -104,9 +103,6 @@ void Ray::SceneBase::SetCamera_nolock(const CameraHandle i, const camera_desc_t 
     }
     if (c.no_background) {
         cam.pass_settings.flags |= ePassFlags::NoBackground;
-    }
-    if (c.clamp) {
-        cam.pass_settings.flags |= ePassFlags::Clamp;
     }
     if (c.output_sh) {
         cam.pass_settings.flags |= ePassFlags::OutputSH;

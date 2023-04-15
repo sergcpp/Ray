@@ -34,8 +34,7 @@ void main() {
     vec4 untonemapped_res = (g_params.img0_weight * img0) + (g_params.img1_weight * img1);
     imageStore(g_out_raw_img, gi, untonemapped_res);
 
-    vec4 tonemapped_res = clamp_and_gamma_correct(g_params.srgb != 0, g_params._clamp != 0,
-                                                  g_params.inv_gamma, untonemapped_res);
+    vec4 tonemapped_res = clamp_and_gamma_correct(g_params.srgb != 0, g_params.inv_gamma, untonemapped_res);
     imageStore(g_out_img, gi, tonemapped_res);
 
     img0 = reversible_tonemap(img0);

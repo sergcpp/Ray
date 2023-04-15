@@ -52,7 +52,6 @@ enum class ePassFlags : uint8_t {
     SkipIndirectLight,
     LightingOnly,
     NoBackground,
-    Clamp,
     OutputSH,
     OutputBaseColor,
     OutputDepthNormals

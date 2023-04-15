@@ -138,14 +138,14 @@ class Renderer : public RendererBase {
                                const Texture2D &temp_depth_normals, const Texture2D &out_img,
                                const Texture2D &out_base_color, const Texture2D &out_depth_normals);
     void kernel_Postprocess(VkCommandBuffer cmd_buf, const Texture2D &img0_buf, float img0_weight,
-                            const Texture2D &img1_buf, float img1_weight, float exposure, float inv_gamma, bool clamp,
-                            bool srgb, const rect_t &rect, const Texture2D &out_pixels, const Texture2D &out_raw_pixels,
+                            const Texture2D &img1_buf, float img1_weight, float exposure, float inv_gamma, bool srgb,
+                            const rect_t &rect, const Texture2D &out_pixels, const Texture2D &out_raw_pixels,
                             const Texture2D &out_variance) const;
     void kernel_FilterVariance(VkCommandBuffer cmd_buf, const Texture2D &img_buf, const rect_t &rect,
                                const Texture2D &out_variance);
     void kernel_NLMFilter(VkCommandBuffer cmd_buf, const Texture2D &img_buf, const Texture2D &var_buf, float alpha,
-                          float damping, const Texture2D &out_raw_img, float inv_gamma, bool clamp, bool srgb,
-                          const rect_t &rect, const Texture2D &out_img);
+                          float damping, const Texture2D &out_raw_img, float inv_gamma, bool srgb, const rect_t &rect,
+                          const Texture2D &out_img);
     void kernel_DebugRT(VkCommandBuffer cmd_buf, const scene_data_t &sc_data, uint32_t node_index, const Buffer &rays,
                         const Texture2D &out_pixels);
 

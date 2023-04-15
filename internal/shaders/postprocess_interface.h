@@ -7,10 +7,14 @@ INTERFACE_START(Postprocess)
 
 struct Params {
     UVEC4_TYPE rect;
-    int srgb, _clamp;
+    int srgb;
     float exposure;
     float inv_gamma;
-    float img0_weight, img1_weight;
+    float img0_weight;
+    float img1_weight;
+    float _pad0;
+    float _pad1;
+    float _pad2;
 };
 
 const int LOCAL_GROUP_SIZE_X = 8;
