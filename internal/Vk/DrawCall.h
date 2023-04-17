@@ -27,12 +27,14 @@ class Pipeline;
 class TextureAtlas;
 class Texture1D;
 class Texture2D;
+class Texture3D;
 
 enum class eBindTarget : uint16_t {
     Tex2D,
     Tex2DMs,
     Tex2DArray,
     TexCubeArray,
+    Tex3D,
     TBuf,
     UBuf,
     SBuf,
@@ -44,6 +46,7 @@ enum class eBindTarget : uint16_t {
 struct OpaqueHandle {
     union {
         const Texture2D *tex;
+        const Texture3D *tex3d;
         const Buffer *buf;
         const Texture1D *tex_buf;
         const TextureAtlas *tex_arr;
@@ -52,6 +55,7 @@ struct OpaqueHandle {
     int count = 0;
     OpaqueHandle() = default;
     OpaqueHandle(const Texture2D &_tex) : tex(&_tex), count(1) {}
+    OpaqueHandle(const Texture3D &_tex) : tex3d(&_tex), count(1) {}
     OpaqueHandle(const Buffer &_buf) : buf(&_buf), count(1) {}
     OpaqueHandle(const Texture1D &_tex) : tex_buf(&_tex), count(1) {}
     OpaqueHandle(const TextureAtlas &_tex_arr) : tex_arr(&_tex_arr), count(1) {}

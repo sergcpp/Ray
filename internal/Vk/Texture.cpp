@@ -2576,6 +2576,271 @@ void Ray::Vk::Texture1D::Free() {
     }
 }
 
+////////////////////////////////////////////////////////////////////////////////////////
+
+Ray::Vk::Texture3D::Texture3D(const char *name, Context *ctx, const Tex3DParams &params, MemoryAllocators *mem_allocs,
+                              ILog *log)
+    : name_(name), ctx_(ctx) {
+    Init(params, mem_allocs, log);
+}
+
+Ray::Vk::Texture3D::~Texture3D() { Free(); }
+
+Ray::Vk::Texture3D &Ray::Vk::Texture3D::operator=(Texture3D &&rhs) noexcept {
+    if (this == &rhs) {
+        return (*this);
+    }
+
+    Free();
+
+    ctx_ = exchange(rhs.ctx_, nullptr);
+    handle_ = exchange(rhs.handle_, {});
+    alloc_ = exchange(rhs.alloc_, {});
+    params = exchange(rhs.params, {});
+    name_ = std::move(rhs.name_);
+
+    resource_state = exchange(rhs.resource_state, eResState::Undefined);
+
+    return (*this);
+}
+
+void Ray::Vk::Texture3D::Init(const Tex3DParams &p, MemoryAllocators *mem_allocs, ILog *log) {
+    Free();
+
+    handle_.generation = TextureHandleCounter++;
+    params = p;
+
+    { // create image
+        VkImageCreateInfo img_info = {VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
+        img_info.imageType = VK_IMAGE_TYPE_3D;
+        img_info.extent.width = uint32_t(p.w);
+        img_info.extent.height = uint32_t(p.h);
+        img_info.extent.depth = uint32_t(p.d);
+        img_info.mipLevels = 1;
+        img_info.arrayLayers = 1;
+        img_info.format = g_vk_formats[size_t(p.format)];
+        if (bool(p.flags & eTexFlagBits::SRGB)) {
+            img_info.format = ToSRGBFormat(img_info.format);
+        }
+        img_info.tiling = VK_IMAGE_TILING_OPTIMAL;
+        img_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        assert(uint8_t(p.usage) != 0);
+        img_info.usage = to_vk_image_usage(p.usage, p.format);
+
+        img_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        img_info.samples = VK_SAMPLE_COUNT_1_BIT;
+        img_info.flags = 0;
+
+        VkResult res = vkCreateImage(ctx_->device(), &img_info, nullptr, &handle_.img);
+        if (res != VK_SUCCESS) {
+            log->Error("Failed to create image!");
+            return;
+        }
+
+#ifdef ENABLE_OBJ_LABELS
+        VkDebugUtilsObjectNameInfoEXT name_info = {VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT};
+        name_info.objectType = VK_OBJECT_TYPE_IMAGE;
+        name_info.objectHandle = uint64_t(handle_.img);
+        name_info.pObjectName = name_.c_str();
+        vkSetDebugUtilsObjectNameEXT(ctx_->device(), &name_info);
+#endif
+
+        VkMemoryRequirements tex_mem_req;
+        vkGetImageMemoryRequirements(ctx_->device(), handle_.img, &tex_mem_req);
+
+        VkMemoryPropertyFlags img_tex_desired_mem_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
+        alloc_ = mem_allocs->Allocate(uint32_t(tex_mem_req.size), uint32_t(tex_mem_req.alignment),
+                                      FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits,
+                                                     img_tex_desired_mem_flags, uint32_t(tex_mem_req.size)),
+                                      name_.c_str());
+        if (!alloc_) {
+            ctx_->log()->Warning("Not enough device memory, falling back to CPU RAM!");
+            img_tex_desired_mem_flags &= ~VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
+            alloc_ = mem_allocs->Allocate(uint32_t(tex_mem_req.size), uint32_t(tex_mem_req.alignment),
+                                          FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits,
+                                                         img_tex_desired_mem_flags, uint32_t(tex_mem_req.size)),
+                                          name_.c_str());
+            if (!alloc_) {
+                img_tex_desired_mem_flags |= VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+
+                alloc_ = mem_allocs->Allocate(uint32_t(tex_mem_req.size), uint32_t(tex_mem_req.alignment),
+                                              FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits,
+                                                             img_tex_desired_mem_flags, uint32_t(tex_mem_req.size)),
+                                              name_.c_str());
+            }
+        }
+
+        if (!alloc_) {
+            log->Error("Failed to allocate memory!");
+            return;
+        }
+
+        const VkDeviceSize aligned_offset = AlignTo(VkDeviceSize(alloc_.alloc_off), tex_mem_req.alignment);
+
+        res = vkBindImageMemory(ctx_->device(), handle_.img, alloc_.owner->mem(alloc_.block_ndx), aligned_offset);
+        if (res != VK_SUCCESS) {
+            log->Error("Failed to bind memory!");
+            return;
+        }
+    }
+
+    { // create default image view(s)
+        VkImageViewCreateInfo view_info = {VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
+        view_info.image = handle_.img;
+        view_info.viewType = VK_IMAGE_VIEW_TYPE_3D;
+        view_info.format = g_vk_formats[size_t(p.format)];
+        view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+
+        view_info.subresourceRange.baseMipLevel = 0;
+        view_info.subresourceRange.levelCount = 1;
+        view_info.subresourceRange.baseArrayLayer = 0;
+        view_info.subresourceRange.layerCount = 1;
+
+        if (GetColorChannelCount(p.format) == 1) {
+            view_info.components.r = VK_COMPONENT_SWIZZLE_R;
+            view_info.components.g = VK_COMPONENT_SWIZZLE_R;
+            view_info.components.b = VK_COMPONENT_SWIZZLE_R;
+            view_info.components.a = VK_COMPONENT_SWIZZLE_R;
+        }
+
+        const VkResult res = vkCreateImageView(ctx_->device(), &view_info, nullptr, &handle_.views[0]);
+        if (res != VK_SUCCESS) {
+            log->Error("Failed to create image view!");
+            return;
+        }
+
+#ifdef ENABLE_OBJ_LABELS
+        for (VkImageView view : handle_.views) {
+            VkDebugUtilsObjectNameInfoEXT name_info = {VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT};
+            name_info.objectType = VK_OBJECT_TYPE_IMAGE_VIEW;
+            name_info.objectHandle = uint64_t(view);
+            name_info.pObjectName = name_.c_str();
+            vkSetDebugUtilsObjectNameEXT(ctx_->device(), &name_info);
+        }
+#endif
+    }
+
+    this->resource_state = eResState::Undefined;
+
+    { // create new sampler
+        VkSamplerCreateInfo sampler_info = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
+        sampler_info.magFilter = g_vk_min_mag_filter[size_t(p.sampling.filter)];
+        sampler_info.minFilter = g_vk_min_mag_filter[size_t(p.sampling.filter)];
+        sampler_info.addressModeU = g_vk_wrap_mode[size_t(p.sampling.wrap)];
+        sampler_info.addressModeV = g_vk_wrap_mode[size_t(p.sampling.wrap)];
+        sampler_info.addressModeW = g_vk_wrap_mode[size_t(p.sampling.wrap)];
+        sampler_info.anisotropyEnable = VK_FALSE;
+        sampler_info.maxAnisotropy = AnisotropyLevel;
+        sampler_info.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+        sampler_info.unnormalizedCoordinates = VK_FALSE;
+        sampler_info.compareEnable = VK_FALSE;
+        sampler_info.compareOp = g_vk_compare_ops[size_t(p.sampling.compare)];
+        sampler_info.mipmapMode = g_vk_mipmap_mode[size_t(p.sampling.filter)];
+        sampler_info.mipLodBias = p.sampling.lod_bias.to_float();
+        sampler_info.minLod = p.sampling.min_lod.to_float();
+        sampler_info.maxLod = p.sampling.max_lod.to_float();
+
+        const VkResult res = vkCreateSampler(ctx_->device(), &sampler_info, nullptr, &handle_.sampler);
+        if (res != VK_SUCCESS) {
+            log->Error("Failed to create sampler!");
+        }
+    }
+}
+
+void Ray::Vk::Texture3D::Free() {
+    if (params.format != eTexFormat::Undefined && !bool(params.flags & eTexFlagBits::NoOwnership)) {
+        for (VkImageView view : handle_.views) {
+            if (view) {
+                ctx_->image_views_to_destroy[ctx_->backend_frame].push_back(view);
+            }
+        }
+        ctx_->images_to_destroy[ctx_->backend_frame].push_back(handle_.img);
+        ctx_->samplers_to_destroy[ctx_->backend_frame].push_back(handle_.sampler);
+        ctx_->allocs_to_free[ctx_->backend_frame].emplace_back(std::move(alloc_));
+
+        handle_ = {};
+        params.format = eTexFormat::Undefined;
+    }
+}
+
+void Ray::Vk::Texture3D::SetSubImage(int offsetx, int offsety, int offsetz, int sizex, int sizey, int sizez,
+                                     eTexFormat format, const Buffer &sbuf, void *_cmd_buf, int data_off,
+                                     int data_len) {
+    assert(format == params.format);
+    assert(offsetx >= 0 && offsetx + sizex <= params.w);
+    assert(offsety >= 0 && offsety + sizey <= params.h);
+    assert(offsetz >= 0 && offsetz + sizez <= params.d);
+
+    assert(sbuf.type() == eBufType::Stage);
+    auto cmd_buf = reinterpret_cast<VkCommandBuffer>(_cmd_buf);
+
+    VkPipelineStageFlags src_stages = 0, dst_stages = 0;
+    SmallVector<VkBufferMemoryBarrier, 1> buf_barriers;
+    SmallVector<VkImageMemoryBarrier, 1> img_barriers;
+
+    if (sbuf.resource_state != eResState::Undefined && sbuf.resource_state != eResState::CopySrc) {
+        auto &new_barrier = buf_barriers.emplace_back();
+        new_barrier = {VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER};
+        new_barrier.srcAccessMask = VKAccessFlagsForState(sbuf.resource_state);
+        new_barrier.dstAccessMask = VKAccessFlagsForState(eResState::CopySrc);
+        new_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        new_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        new_barrier.buffer = sbuf.vk_handle();
+        new_barrier.offset = VkDeviceSize(0);
+        new_barrier.size = VkDeviceSize(sbuf.size());
+
+        src_stages |= VKPipelineStagesForState(sbuf.resource_state);
+        dst_stages |= VKPipelineStagesForState(eResState::CopySrc);
+    }
+
+    if (this->resource_state != eResState::CopyDst) {
+        auto &new_barrier = img_barriers.emplace_back();
+        new_barrier = {VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
+        new_barrier.srcAccessMask = VKAccessFlagsForState(this->resource_state);
+        new_barrier.dstAccessMask = VKAccessFlagsForState(eResState::CopyDst);
+        new_barrier.oldLayout = VKImageLayoutForState(this->resource_state);
+        new_barrier.newLayout = VKImageLayoutForState(eResState::CopyDst);
+        new_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        new_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        new_barrier.image = handle_.img;
+        new_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        new_barrier.subresourceRange.baseMipLevel = 0;
+        new_barrier.subresourceRange.levelCount = 1;
+        new_barrier.subresourceRange.baseArrayLayer = 0;
+        new_barrier.subresourceRange.layerCount = 1;
+
+        src_stages |= VKPipelineStagesForState(this->resource_state);
+        dst_stages |= VKPipelineStagesForState(eResState::CopyDst);
+    }
+
+    if (!buf_barriers.empty() || !img_barriers.empty()) {
+        vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, dst_stages, 0, 0,
+                             nullptr, uint32_t(buf_barriers.size()), buf_barriers.cdata(),
+                             uint32_t(img_barriers.size()), img_barriers.cdata());
+    }
+
+    sbuf.resource_state = eResState::CopySrc;
+    this->resource_state = eResState::CopyDst;
+
+    VkBufferImageCopy region = {};
+
+    region.bufferOffset = VkDeviceSize(data_off);
+    region.bufferRowLength = 0;
+    region.bufferImageHeight = 0;
+
+    region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    region.imageSubresource.mipLevel = 0;
+    region.imageSubresource.baseArrayLayer = 0;
+    region.imageSubresource.layerCount = 1;
+
+    region.imageOffset = {int32_t(offsetx), int32_t(offsety), int32_t(offsetz)};
+    region.imageExtent = {uint32_t(sizex), uint32_t(sizey), uint32_t(sizez)};
+
+    vkCmdCopyBufferToImage(cmd_buf, sbuf.vk_handle(), handle_.img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+}
+
 VkFormat Ray::Vk::VKFormatFromTexFormat(eTexFormat format) { return g_vk_formats[size_t(format)]; }
 
 #ifdef _MSC_VER

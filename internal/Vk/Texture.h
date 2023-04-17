@@ -113,8 +113,8 @@ class Texture2D {
     Texture2D(const char *name, Context *ctx, const VkImage img, const VkImageView view, const VkSampler sampler,
               const Tex2DParams &_params, ILog *log)
         : handle_{img, view, VK_NULL_HANDLE, sampler, 0}, ready_(true), name_(name), params(_params) {}
-    Texture2D(const char *name, Context *ctx, const void *data, uint32_t size, const Tex2DParams &p,
-              Buffer &stage_buf, void *_cmd_buf, MemoryAllocators *mem_allocs, eTexLoadStatus *load_status, ILog *log);
+    Texture2D(const char *name, Context *ctx, const void *data, uint32_t size, const Tex2DParams &p, Buffer &stage_buf,
+              void *_cmd_buf, MemoryAllocators *mem_allocs, eTexLoadStatus *load_status, ILog *log);
     Texture2D(const char *name, Context *ctx, const void *data[6], const int size[6], const Tex2DParams &p,
               Buffer &stage_buf, void *_cmd_buf, MemoryAllocators *mem_allocs, eTexLoadStatus *load_status, ILog *log);
     Texture2D(const Texture2D &rhs) = delete;
@@ -207,6 +207,48 @@ class Texture1D {
     const std::string &name() const { return name_; }
 
     void Init(Buffer *buf, eTexFormat format, uint32_t offset, uint32_t size, ILog *log);
+};
+
+struct Tex3DParams {
+    uint16_t w = 0, h = 0, d = 0;
+    eTexFlags flags = {};
+    eTexUsage usage = {};
+    eTexFormat format = eTexFormat::Undefined;
+    eTexBlock block = eTexBlock::_None;
+    SamplingParams sampling;
+};
+static_assert(sizeof(Tex2DParams) == 22, "!");
+
+class Texture3D {
+    std::string name_;
+    Context *ctx_ = nullptr;
+    TexHandle handle_;
+    MemAllocation alloc_;
+
+    void Free();
+
+  public:
+    Tex3DParams params;
+    mutable eResState resource_state = eResState::Undefined;
+
+    Texture3D() = default;
+    Texture3D(const char *name, Context *ctx, const Tex3DParams &params, MemoryAllocators *mem_allocs, ILog *log);
+    Texture3D(const Texture3D &rhs) = delete;
+    Texture3D(Texture3D &&rhs) noexcept { (*this) = std::move(rhs); }
+    ~Texture3D();
+
+    Texture3D &operator=(const Texture3D &rhs) = delete;
+    Texture3D &operator=(Texture3D &&rhs) noexcept;
+
+    const std::string &name() const { return name_; }
+    const TexHandle &handle() const { return handle_; }
+    TexHandle &handle() { return handle_; }
+    VkSampler vk_sampler() const { return handle_.sampler; }
+
+    void Init(const Tex3DParams &params, MemoryAllocators *mem_allocs, ILog *log);
+
+    void SetSubImage(int offsetx, int offsety, int offsetz, int sizex, int sizey, int sizez, eTexFormat format,
+                     const Buffer &sbuf, void *_cmd_buf, int data_off, int data_len);
 };
 
 VkFormat VKFormatFromTexFormat(eTexFormat format);
