@@ -5,7 +5,7 @@
 #include <cfloat>
 #include <limits>
 
-#include "TextureStorageRef.h"
+#include "TextureStorageCPU.h"
 
 //
 // Useful macros for debugging
@@ -633,7 +633,7 @@ force_inline float lum(const simd_fvec4 &color) {
     return 0.212671f * color.get<0>() + 0.715160f * color.get<1>() + 0.072169f * color.get<2>();
 }
 
-float get_texture_lod(const TexStorageBase *const textures[], const uint32_t index, const simd_fvec2 &duv_dx,
+float get_texture_lod(const Cpu::TexStorageBase *const textures[], const uint32_t index, const simd_fvec2 &duv_dx,
                       const simd_fvec2 &duv_dy) {
 #ifdef FORCE_TEXTURE_LOD
     const float lod = float(FORCE_TEXTURE_LOD);
@@ -653,7 +653,7 @@ float get_texture_lod(const TexStorageBase *const textures[], const uint32_t ind
     return lod;
 }
 
-float get_texture_lod(const TexStorageBase *const textures[], const uint32_t index, const float lambda) {
+float get_texture_lod(const Cpu::TexStorageBase *const textures[], const uint32_t index, const float lambda) {
 #ifdef FORCE_TEXTURE_LOD
     const float lod = float(FORCE_TEXTURE_LOD);
 #else
@@ -1166,8 +1166,8 @@ void Ray::Ref::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, const i
     size_t i = 0;
     out_rays.resize(size_t(r.w) * r.h);
 
-    for (int y = r.y; y < r.y + r.h; y += RPDimY) {
-        for (int x = r.x; x < r.x + r.w; x += RPDimX) {
+    for (int y = r.y; y < r.y + r.h; ++y) {
+        for (int x = r.x; x < r.x + r.w; ++x) {
             ray_data_t &out_r = out_rays[i++];
 
             auto _x = float(x);
@@ -1262,8 +1262,8 @@ void Ray::Ref::SampleMeshInTextureSpace(const int iteration, const int obj_index
     out_rays.resize(size_t(r.w) * r.h);
     out_inters.resize(out_rays.size());
 
-    for (int y = r.y; y < r.y + r.h; y += RPDimY) {
-        for (int x = r.x; x < r.x + r.w; x += RPDimX) {
+    for (int y = r.y; y < r.y + r.h; ++y) {
+        for (int x = r.x; x < r.x + r.w; ++x) {
             const int i = (y - r.y) * r.w + (x - r.x);
 
             ray_data_t &out_ray = out_rays[i];
@@ -2635,16 +2635,16 @@ Ray::Ref::simd_fvec4 Ray::Ref::TransformNormal(const simd_fvec4 &n, const float 
                       inv_xform[8] * n.get<0>() + inv_xform[9] * n.get<1>() + inv_xform[10] * n.get<2>(), 0.0f};
 }
 
-Ray::Ref::simd_fvec4 Ray::Ref::SampleNearest(const TexStorageBase *const textures[], const uint32_t index,
+Ray::Ref::simd_fvec4 Ray::Ref::SampleNearest(const Cpu::TexStorageBase *const textures[], const uint32_t index,
                                              const simd_fvec2 &uvs, const int lod) {
-    const TexStorageBase &storage = *textures[index >> 28];
+    const Cpu::TexStorageBase &storage = *textures[index >> 28];
     const auto &pix = storage.Fetch(int(index & 0x00ffffff), uvs.get<0>(), uvs.get<1>(), lod);
     return simd_fvec4{pix.v[0], pix.v[1], pix.v[2], pix.v[3]};
 }
 
-Ray::Ref::simd_fvec4 Ray::Ref::SampleBilinear(const TexStorageBase *const textures[], const uint32_t index,
+Ray::Ref::simd_fvec4 Ray::Ref::SampleBilinear(const Cpu::TexStorageBase *const textures[], const uint32_t index,
                                               const simd_fvec2 &uvs, const int lod) {
-    const TexStorageBase &storage = *textures[index >> 28];
+    const Cpu::TexStorageBase &storage = *textures[index >> 28];
 
     const int tex = int(index & 0x00ffffff);
     simd_fvec2 img_size;
@@ -2669,8 +2669,8 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleBilinear(const TexStorageBase *const textur
     return (p1 * ky + p0 * (1.0f - ky));
 }
 
-Ray::Ref::simd_fvec4 Ray::Ref::SampleBilinear(const TexStorageBase &storage, const uint32_t tex, const simd_fvec2 &iuvs,
-                                              const int lod) {
+Ray::Ref::simd_fvec4 Ray::Ref::SampleBilinear(const Cpu::TexStorageBase &storage, const uint32_t tex,
+                                              const simd_fvec2 &iuvs, const int lod) {
     const auto &p00 = storage.Fetch(int(tex), int(iuvs.get<0>()) + 0, int(iuvs.get<1>()) + 0, lod);
     const auto &p01 = storage.Fetch(int(tex), int(iuvs.get<0>()) + 1, int(iuvs.get<1>()) + 0, lod);
     const auto &p10 = storage.Fetch(int(tex), int(iuvs.get<0>()) + 0, int(iuvs.get<1>()) + 1, lod);
@@ -2689,7 +2689,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleBilinear(const TexStorageBase &storage, con
     return (p1X * k.get<1>() + p0X * (1 - k.get<1>()));
 }
 
-Ray::Ref::simd_fvec4 Ray::Ref::SampleTrilinear(const TexStorageBase *const textures[], const uint32_t index,
+Ray::Ref::simd_fvec4 Ray::Ref::SampleTrilinear(const Cpu::TexStorageBase *const textures[], const uint32_t index,
                                                const simd_fvec2 &uvs, const float lod) {
     const simd_fvec4 col1 = SampleBilinear(textures, index, uvs, int(std::floor(lod)));
     const simd_fvec4 col2 = SampleBilinear(textures, index, uvs, int(std::ceil(lod)));
@@ -2698,10 +2698,10 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleTrilinear(const TexStorageBase *const textu
     return col1 * (1 - k) + col2 * k;
 }
 
-Ray::Ref::simd_fvec4 Ray::Ref::SampleAnisotropic(const TexStorageBase *const textures[], const uint32_t index,
+Ray::Ref::simd_fvec4 Ray::Ref::SampleAnisotropic(const Cpu::TexStorageBase *const textures[], const uint32_t index,
                                                  const simd_fvec2 &uvs, const simd_fvec2 &duv_dx,
                                                  const simd_fvec2 &duv_dy) {
-    const TexStorageBase &storage = *textures[index >> 28];
+    const Cpu::TexStorageBase &storage = *textures[index >> 28];
     const int tex = int(index & 0x00ffffff);
 
     simd_fvec2 sz;
@@ -2763,7 +2763,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleAnisotropic(const TexStorageBase *const tex
     return res / float(num);
 }
 
-Ray::Ref::simd_fvec4 Ray::Ref::SampleLatlong_RGBE(const TexStorageRGBA &storage, const uint32_t index,
+Ray::Ref::simd_fvec4 Ray::Ref::SampleLatlong_RGBE(const Cpu::TexStorageRGBA &storage, const uint32_t index,
                                                   const simd_fvec4 &dir, float y_rotation) {
     const float theta = std::acos(clamp(dir.get<1>(), -1.0f, 1.0f)) / PI;
     float phi = std::atan2(dir.get<2>(), dir.get<0>()) + y_rotation;
@@ -2801,7 +2801,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleLatlong_RGBE(const TexStorageRGBA &storage,
 
 void Ray::Ref::IntersectScene(ray_data_t &r, const int min_transp_depth, const int max_transp_depth,
                               const float *random_seq, const scene_data_t &sc, const uint32_t root_index,
-                              const TexStorageBase *const textures[], hit_data_t &inter) {
+                              const Cpu::TexStorageBase *const textures[], hit_data_t &inter) {
     const simd_fvec4 rd = make_fvec3(r.d);
     simd_fvec4 ro = make_fvec3(r.o);
 
@@ -2902,7 +2902,7 @@ void Ray::Ref::IntersectScene(ray_data_t &r, const int min_transp_depth, const i
 }
 
 Ray::Ref::simd_fvec4 Ray::Ref::IntersectScene(const shadow_ray_t &r, const int max_transp_depth, const scene_data_t &sc,
-                                              const uint32_t root_index, const TexStorageBase *const textures[]) {
+                                              const uint32_t root_index, const Cpu::TexStorageBase *const textures[]) {
     const simd_fvec4 rd = make_fvec3(r.d);
     simd_fvec4 ro = make_fvec3(r.o);
     simd_fvec4 rc = make_fvec3(r.c);
@@ -2990,7 +2990,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::IntersectScene(const shadow_ray_t &r, const int m
 }
 
 void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const simd_fvec4 &B, const simd_fvec4 &N,
-                                 const scene_data_t &sc, const TexStorageBase *const textures[],
+                                 const scene_data_t &sc, const Cpu::TexStorageBase *const textures[],
                                  const float random_seq[], const float sample_off[2], light_sample_t &ls) {
     const float u1 = fract(random_seq[RAND_DIM_LIGHT_PICK] + sample_off[0]);
 
@@ -3090,8 +3090,8 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
         if (l.sky_portal != 0) {
             simd_fvec4 env_col = make_fvec3(sc.env.env_col);
             if (sc.env.env_map != 0xffffffff) {
-                env_col *= SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), sc.env.env_map, ls.L,
-                                              sc.env.env_map_rotation);
+                env_col *= SampleLatlong_RGBE(*static_cast<const Cpu::TexStorageRGBA *>(textures[0]), sc.env.env_map,
+                                              ls.L, sc.env.env_map_rotation);
             }
             ls.col *= env_col;
             ls.from_env = 1;
@@ -3140,8 +3140,8 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
         if (l.sky_portal != 0) {
             simd_fvec4 env_col = make_fvec3(sc.env.env_col);
             if (sc.env.env_map != 0xffffffff) {
-                env_col *= SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), sc.env.env_map, ls.L,
-                                              sc.env.env_map_rotation);
+                env_col *= SampleLatlong_RGBE(*static_cast<const Cpu::TexStorageRGBA *>(textures[0]), sc.env.env_map,
+                                              ls.L, sc.env.env_map_rotation);
             }
             ls.col *= env_col;
             ls.from_env = 1;
@@ -3242,7 +3242,7 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
         ls.col *= {sc.env.env_col[0], sc.env.env_col[1], sc.env.env_col[2], 0.0f};
 
         if (sc.env.env_map != 0xffffffff) {
-            ls.col *= SampleLatlong_RGBE(*static_cast<const TexStorageRGBA *>(textures[0]), sc.env.env_map, ls.L,
+            ls.col *= SampleLatlong_RGBE(*static_cast<const Cpu::TexStorageRGBA *>(textures[0]), sc.env.env_map, ls.L,
                                          sc.env.env_map_rotation);
         }
 
@@ -3445,7 +3445,7 @@ float Ray::Ref::IntersectAreaLights(const shadow_ray_t &ray, const light_t light
 }
 
 Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_EnvColor(const ray_data_t &ray, const environment_t &env,
-                                                 const TexStorageRGBA &tex_storage) {
+                                                 const Cpu::TexStorageRGBA &tex_storage) {
     const simd_fvec4 I = make_fvec3(ray.d);
     simd_fvec4 env_col = {1.0f};
 
@@ -3479,7 +3479,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_EnvColor(const ray_data_t &ray, const en
 }
 
 Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_LightColor(const ray_data_t &ray, const hit_data_t &inter,
-                                                   const environment_t &env, const TexStorageRGBA &tex_storage,
+                                                   const environment_t &env, const Cpu::TexStorageRGBA &tex_storage,
                                                    const light_t *lights) {
     const simd_fvec4 I = make_fvec3(ray.d);
     const simd_fvec4 P = make_fvec3(ray.o) + inter.t * I;
@@ -3923,14 +3923,15 @@ void Ray::Ref::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t
 
 Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_data_t &inter, const ray_data_t &ray,
                                          const float *random_seq, const scene_data_t &sc, const uint32_t node_index,
-                                         const TexStorageBase *const textures[], ray_data_t *out_secondary_rays,
+                                         const Cpu::TexStorageBase *const textures[], ray_data_t *out_secondary_rays,
                                          int *out_secondary_rays_count, shadow_ray_t *out_shadow_rays,
                                          int *out_shadow_rays_count, color_rgba_t *out_base_color,
                                          color_rgba_t *out_depth_normal) {
     const simd_fvec4 I = make_fvec3(ray.d);
 
     if (!inter.mask) {
-        const simd_fvec4 env_col = Evaluate_EnvColor(ray, sc.env, *static_cast<const TexStorageRGBA *>(textures[0]));
+        const simd_fvec4 env_col =
+            Evaluate_EnvColor(ray, sc.env, *static_cast<const Cpu::TexStorageRGBA *>(textures[0]));
         return color_rgba_t{ray.c[0] * env_col[0], ray.c[1] * env_col[1], ray.c[2] * env_col[2], env_col[3]};
     }
 
@@ -3939,7 +3940,7 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
 
     if (inter.obj_index < 0) { // Area light intersection
         const simd_fvec4 lcol =
-            Evaluate_LightColor(ray, inter, sc.env, *static_cast<const TexStorageRGBA *>(textures[0]), sc.lights);
+            Evaluate_LightColor(ray, inter, sc.env, *static_cast<const Cpu::TexStorageRGBA *>(textures[0]), sc.lights);
         return color_rgba_t{ray.c[0] * lcol.get<0>(), ray.c[1] * lcol.get<1>(), ray.c[2] * lcol.get<2>(), 1.0f};
     }
 

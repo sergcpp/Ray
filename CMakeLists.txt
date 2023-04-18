@@ -52,17 +52,17 @@ set(INTERNAL_SOURCE_FILES internal/Bitmap.h
                           internal/CoreSIMD.h
                           internal/Halton.h
                           internal/RendererSIMD.h
-                          internal/SceneRef.h
-                          internal/SceneRef.cpp
+                          internal/SceneCPU.h
+                          internal/SceneCPU.cpp
                           internal/SmallVector.h
-                          internal/SparseStorage.h
+                          internal/SparseStorageCPU.h
                           internal/Span.h
                           internal/TextureSplitter.h
                           internal/TextureSplitter.cpp
-                          internal/TextureStorageRef.h
-                          internal/TextureStorageRef.cpp
-                          internal/TextureUtilsRef.h
-                          internal/TextureUtilsRef.cpp
+                          internal/TextureStorageCPU.h
+                          internal/TextureStorageCPU.cpp
+                          internal/TextureUtils.h
+                          internal/TextureUtils.cpp
                           internal/Time_.h
                           internal/Time.cpp
                           internal/UniformIntDistribution.h

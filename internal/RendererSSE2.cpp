@@ -58,16 +58,16 @@ template int Traverse_MicroTree_WithStack_AnyHit<RPSize>(const float ro[3], cons
                                                          const uint32_t *tri_indices, int &inter_prim_index,
                                                          float &inter_t, float &inter_u, float &inter_v);
 
-template void SampleNearest<RPSize>(const Ref::TexStorageBase *const textures[], uint32_t index,
+template void SampleNearest<RPSize>(const Cpu::TexStorageBase *const textures[], uint32_t index,
                                     const simd_fvec<RPSize> uvs[2], const simd_fvec<RPSize> &lod,
                                     const simd_ivec<RPSize> &mask, simd_fvec<RPSize> out_rgba[4]);
-template void SampleBilinear<RPSize>(const Ref::TexStorageBase *const textures[], uint32_t index,
+template void SampleBilinear<RPSize>(const Cpu::TexStorageBase *const textures[], uint32_t index,
                                      const simd_fvec<RPSize> uvs[2], const simd_ivec<RPSize> &lod,
                                      const simd_ivec<RPSize> &mask, simd_fvec<RPSize> out_rgba[4]);
-template void SampleTrilinear<RPSize>(const Ref::TexStorageBase *const textures[], uint32_t index,
+template void SampleTrilinear<RPSize>(const Cpu::TexStorageBase *const textures[], uint32_t index,
                                       const simd_fvec<RPSize> uvs[2], const simd_fvec<RPSize> &lod,
                                       const simd_ivec<RPSize> &mask, simd_fvec<RPSize> out_rgba[4]);
-template void SampleLatlong_RGBE<RPSize>(const Ref::TexStorageRGBA &storage, uint32_t index,
+template void SampleLatlong_RGBE<RPSize>(const Cpu::TexStorageRGBA &storage, uint32_t index,
                                          const simd_fvec<RPSize> dir[3], float y_rotation,
                                          const simd_ivec<RPSize> &mask, simd_fvec<RPSize> out_rgb[3]);
 

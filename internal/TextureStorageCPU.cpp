@@ -1,11 +1,11 @@
-#include "TextureStorageRef.h"
+#include "TextureStorageCPU.h"
 
 #include <cstring>
 
 #include <algorithm> // for std::max
 
 template <typename T, int N>
-int Ray::Ref::TexStorageLinear<T, N>::Allocate(const ColorType data[], const int _res[2], const bool mips) {
+int Ray::Cpu::TexStorageLinear<T, N>::Allocate(const ColorType data[], const int _res[2], const bool mips) {
     int index = -1;
     if (!free_slots_.empty()) {
         index = free_slots_.back();
@@ -82,7 +82,7 @@ int Ray::Ref::TexStorageLinear<T, N>::Allocate(const ColorType data[], const int
     return index;
 }
 
-template <typename T, int N> bool Ray::Ref::TexStorageLinear<T, N>::Free(const int index) {
+template <typename T, int N> bool Ray::Cpu::TexStorageLinear<T, N>::Free(const int index) {
     if (index < 0 || index > int(images_.size())) {
         return false;
     }
@@ -99,21 +99,21 @@ template <typename T, int N> bool Ray::Ref::TexStorageLinear<T, N>::Free(const i
 }
 
 template <typename T, int N>
-void Ray::Ref::TexStorageLinear<T, N>::WriteImageData(const int index, const int lod, const ColorType data[]) {
+void Ray::Cpu::TexStorageLinear<T, N>::WriteImageData(const int index, const int lod, const ColorType data[]) {
     const ImgData &p = images_[index];
     const int w = p.res[lod][0], h = p.res[lod][1];
     memcpy(&p.pixels[p.lod_offsets[lod]], data, w * h * sizeof(ColorType));
 }
 
-template class Ray::Ref::TexStorageLinear<uint8_t, 4>;
-template class Ray::Ref::TexStorageLinear<uint8_t, 3>;
-template class Ray::Ref::TexStorageLinear<uint8_t, 2>;
-template class Ray::Ref::TexStorageLinear<uint8_t, 1>;
+template class Ray::Cpu::TexStorageLinear<uint8_t, 4>;
+template class Ray::Cpu::TexStorageLinear<uint8_t, 3>;
+template class Ray::Cpu::TexStorageLinear<uint8_t, 2>;
+template class Ray::Cpu::TexStorageLinear<uint8_t, 1>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 template <typename T, int N>
-int Ray::Ref::TexStorageTiled<T, N>::Allocate(const ColorType *data, const int _res[2], bool mips) {
+int Ray::Cpu::TexStorageTiled<T, N>::Allocate(const ColorType *data, const int _res[2], bool mips) {
     int index = -1;
     if (!free_slots_.empty()) {
         index = free_slots_.back();
@@ -246,7 +246,7 @@ int Ray::Ref::TexStorageTiled<T, N>::Allocate(const ColorType *data, const int _
     return index;
 }
 
-template <typename T, int N> bool Ray::Ref::TexStorageTiled<T, N>::Free(const int index) {
+template <typename T, int N> bool Ray::Cpu::TexStorageTiled<T, N>::Free(const int index) {
     if (index < 0 || index > int(images_.size())) {
         return false;
     }
@@ -263,15 +263,15 @@ template <typename T, int N> bool Ray::Ref::TexStorageTiled<T, N>::Free(const in
     return true;
 }
 
-template class Ray::Ref::TexStorageTiled<uint8_t, 4>;
-template class Ray::Ref::TexStorageTiled<uint8_t, 3>;
-template class Ray::Ref::TexStorageTiled<uint8_t, 2>;
-template class Ray::Ref::TexStorageTiled<uint8_t, 1>;
+template class Ray::Cpu::TexStorageTiled<uint8_t, 4>;
+template class Ray::Cpu::TexStorageTiled<uint8_t, 3>;
+template class Ray::Cpu::TexStorageTiled<uint8_t, 2>;
+template class Ray::Cpu::TexStorageTiled<uint8_t, 1>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 template <typename T, int N>
-int Ray::Ref::TexStorageSwizzled<T, N>::Allocate(const ColorType *data, const int _res[2], bool mips) {
+int Ray::Cpu::TexStorageSwizzled<T, N>::Allocate(const ColorType *data, const int _res[2], bool mips) {
     int index = -1;
     if (!free_slots_.empty()) {
         index = free_slots_.back();
@@ -394,7 +394,7 @@ int Ray::Ref::TexStorageSwizzled<T, N>::Allocate(const ColorType *data, const in
     return index;
 }
 
-template <typename T, int N> bool Ray::Ref::TexStorageSwizzled<T, N>::Free(const int index) {
+template <typename T, int N> bool Ray::Cpu::TexStorageSwizzled<T, N>::Free(const int index) {
     if (index < 0 || index > int(images_.size())) {
         return false;
     }
@@ -411,7 +411,7 @@ template <typename T, int N> bool Ray::Ref::TexStorageSwizzled<T, N>::Free(const
     return true;
 }
 
-template class Ray::Ref::TexStorageSwizzled<uint8_t, 4>;
-template class Ray::Ref::TexStorageSwizzled<uint8_t, 3>;
-template class Ray::Ref::TexStorageSwizzled<uint8_t, 2>;
-template class Ray::Ref::TexStorageSwizzled<uint8_t, 1>;
+template class Ray::Cpu::TexStorageSwizzled<uint8_t, 4>;
+template class Ray::Cpu::TexStorageSwizzled<uint8_t, 3>;
+template class Ray::Cpu::TexStorageSwizzled<uint8_t, 2>;
+template class Ray::Cpu::TexStorageSwizzled<uint8_t, 1>;

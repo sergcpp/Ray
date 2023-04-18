@@ -7,7 +7,7 @@
 #include "simd/aligned_allocator.h"
 
 namespace Ray {
-namespace Ref {
+namespace Cpu {
 template <typename T> class SparseStorage {
     Bitmap bits_;
     T *data_ = nullptr;
@@ -229,5 +229,5 @@ template <typename T> class SparseStorage {
 };
 
 template <typename T> const uint32_t SparseStorage<T>::InitialNonZeroCapacity;
-} // namespace Ref
+} // namespace Cpu
 } // namespace Ray

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../SceneBase.h"
-#include "SparseStorage.h"
+#include "SparseStorageCPU.h"
 #include "SparseStorageVK.h"
 #include "VectorVK.h"
 #include "Vk/AccStructure.h"
@@ -35,7 +35,7 @@ class Scene : public SceneBase {
 
     SparseStorage<material_t> materials_;
     SparseStorage<atlas_texture_t> atlas_textures_;
-    Ref::SparseStorage<Texture2D> bindless_textures_;
+    Cpu::SparseStorage<Texture2D> bindless_textures_;
 
     struct BindlessTexData {
         DescrPool descr_pool;

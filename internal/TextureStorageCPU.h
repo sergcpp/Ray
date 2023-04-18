@@ -7,7 +7,7 @@
 #include "TextureSplitter.h"
 
 namespace Ray {
-namespace Ref {
+namespace Cpu {
 class TexStorageBase {
   public:
     virtual ~TexStorageBase() = default;
@@ -110,10 +110,10 @@ template <typename T, int N> class TexStorageLinear : public TexStorageBase {
     bool Free(int index) override final;
 };
 
-extern template class Ray::Ref::TexStorageLinear<uint8_t, 4>;
-extern template class Ray::Ref::TexStorageLinear<uint8_t, 3>;
-extern template class Ray::Ref::TexStorageLinear<uint8_t, 2>;
-extern template class Ray::Ref::TexStorageLinear<uint8_t, 1>;
+extern template class Ray::Cpu::TexStorageLinear<uint8_t, 4>;
+extern template class Ray::Cpu::TexStorageLinear<uint8_t, 3>;
+extern template class Ray::Cpu::TexStorageLinear<uint8_t, 2>;
+extern template class Ray::Cpu::TexStorageLinear<uint8_t, 1>;
 
 template <typename T, int N> class TexStorageTiled : public TexStorageBase {
     static const int TileSize = 4;
@@ -321,5 +321,5 @@ extern template class TexStorageSwizzled<uint8_t, 3>;
 extern template class TexStorageSwizzled<uint8_t, 2>;
 extern template class TexStorageSwizzled<uint8_t, 1>;
 
-} // namespace Ref
+} // namespace Cpu
 } // namespace Ray

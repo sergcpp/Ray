@@ -7,7 +7,7 @@
 #include "../RendererBase.h"
 #include "CoreSIMD.h"
 #include "Halton.h"
-#include "SceneRef.h"
+#include "SceneCPU.h"
 
 namespace Ray {
 class ILog;
@@ -127,14 +127,14 @@ Ray::NS::RendererSIMD<DimX, DimY>::RendererSIMD(const settings_t &s, ILog *log)
 }
 
 template <int DimX, int DimY> Ray::SceneBase *Ray::NS::RendererSIMD<DimX, DimY>::CreateScene() {
-    return new Ref::Scene(log_, use_wide_bvh_);
+    return new Cpu::Scene(log_, use_wide_bvh_);
 }
 
 template <int DimX, int DimY>
 void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *scene, RegionContext &region) {
     const int S = DimX * DimY;
 
-    const auto s = dynamic_cast<const Ref::Scene *>(scene);
+    const auto s = dynamic_cast<const Cpu::Scene *>(scene);
     if (!s) {
         return;
     }

@@ -1,15 +1,15 @@
 #include "test_common.h"
 
-#include "../internal/TextureStorageRef.h"
+#include "../internal/TextureStorageCPU.h"
 
 #include <memory>
 #include <random>
 
 void test_tex_storage() {
     { // Test three storage layouts
-        Ray::Ref::TexStorageLinear<uint8_t, 4> storage_linear;
-        Ray::Ref::TexStorageTiled<uint8_t, 4> storage_tiled;
-        Ray::Ref::TexStorageSwizzled<uint8_t, 4> storage_swizzled;
+        Ray::Cpu::TexStorageLinear<uint8_t, 4> storage_linear;
+        Ray::Cpu::TexStorageTiled<uint8_t, 4> storage_tiled;
+        Ray::Cpu::TexStorageSwizzled<uint8_t, 4> storage_swizzled;
 
         const int TextureRes = 4093;
         auto test_pixels =

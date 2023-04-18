@@ -1,4 +1,4 @@
-#include "SceneRef.h"
+#include "SceneCPU.h"
 
 #include <cassert>
 #include <cstring>
@@ -6,14 +6,14 @@
 #include "../Log.h"
 #include "BVHSplit.h"
 #include "CoreRef.h"
-#include "TextureUtilsRef.h"
+#include "TextureUtils.h"
 #include "Time_.h"
 
 #define CLAMP(val, min, max) (val < min ? min : (val > max ? max : val))
 
-Ray::Ref::Scene::Scene(ILog *log, const bool use_wide_bvh) : log_(log), use_wide_bvh_(use_wide_bvh) {}
+Ray::Cpu::Scene::Scene(ILog *log, const bool use_wide_bvh) : log_(log), use_wide_bvh_(use_wide_bvh) {}
 
-Ray::Ref::Scene::~Scene() {
+Ray::Cpu::Scene::~Scene() {
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
     while (!mesh_instances_.empty()) {
@@ -29,7 +29,7 @@ Ray::Ref::Scene::~Scene() {
     lights_.clear();
 }
 
-void Ray::Ref::Scene::GetEnvironment(environment_desc_t &env) {
+void Ray::Cpu::Scene::GetEnvironment(environment_desc_t &env) {
     std::shared_lock<std::shared_timed_mutex> lock(mtx_);
 
     memcpy(env.env_col, env_.env_col, 3 * sizeof(float));
@@ -41,7 +41,7 @@ void Ray::Ref::Scene::GetEnvironment(environment_desc_t &env) {
     env.multiple_importance = env_.multiple_importance;
 }
 
-void Ray::Ref::Scene::SetEnvironment(const environment_desc_t &env) {
+void Ray::Cpu::Scene::SetEnvironment(const environment_desc_t &env) {
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
     memcpy(env_.env_col, env.env_col, 3 * sizeof(float));
@@ -53,7 +53,7 @@ void Ray::Ref::Scene::SetEnvironment(const environment_desc_t &env) {
     env_.multiple_importance = env.multiple_importance;
 }
 
-Ray::TextureHandle Ray::Ref::Scene::AddTexture(const tex_desc_t &_t) {
+Ray::TextureHandle Ray::Cpu::Scene::AddTexture(const tex_desc_t &_t) {
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
     const int res[2] = {_t.w, _t.h};
@@ -123,7 +123,7 @@ Ray::TextureHandle Ray::Ref::Scene::AddTexture(const tex_desc_t &_t) {
     return TextureHandle{ret};
 }
 
-Ray::MaterialHandle Ray::Ref::Scene::AddMaterial_nolock(const shading_node_desc_t &m) {
+Ray::MaterialHandle Ray::Cpu::Scene::AddMaterial_nolock(const shading_node_desc_t &m) {
     material_t mat = {};
 
     mat.type = m.type;
@@ -165,7 +165,7 @@ Ray::MaterialHandle Ray::Ref::Scene::AddMaterial_nolock(const shading_node_desc_
     return MaterialHandle{materials_.push(mat)};
 }
 
-Ray::MaterialHandle Ray::Ref::Scene::AddMaterial(const principled_mat_desc_t &m) {
+Ray::MaterialHandle Ray::Cpu::Scene::AddMaterial(const principled_mat_desc_t &m) {
     material_t main_mat = {};
 
     main_mat.type = eShadingNode::Principled;
@@ -253,7 +253,7 @@ Ray::MaterialHandle Ray::Ref::Scene::AddMaterial(const principled_mat_desc_t &m)
     return MaterialHandle{root_node};
 }
 
-Ray::MeshHandle Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
+Ray::MeshHandle Ray::Cpu::Scene::AddMesh(const mesh_desc_t &_m) {
     bvh_settings_t s;
     s.oversplit_threshold = 0.95f;
     s.allow_spatial_splits = _m.allow_spatial_splits;
@@ -428,7 +428,7 @@ Ray::MeshHandle Ray::Ref::Scene::AddMesh(const mesh_desc_t &_m) {
     return MeshHandle{meshes_.emplace(m)};
 }
 
-void Ray::Ref::Scene::RemoveMesh_nolock(const MeshHandle i) {
+void Ray::Cpu::Scene::RemoveMesh_nolock(const MeshHandle i) {
     if (!meshes_.exists(i._index)) {
         return;
     }
@@ -459,7 +459,7 @@ void Ray::Ref::Scene::RemoveMesh_nolock(const MeshHandle i) {
     }
 }
 
-Ray::LightHandle Ray::Ref::Scene::AddLight(const directional_light_desc_t &_l) {
+Ray::LightHandle Ray::Cpu::Scene::AddLight(const directional_light_desc_t &_l) {
     light_t l = {};
 
     l.type = LIGHT_TYPE_DIR;
@@ -479,7 +479,7 @@ Ray::LightHandle Ray::Ref::Scene::AddLight(const directional_light_desc_t &_l) {
     return LightHandle{light_index};
 }
 
-Ray::LightHandle Ray::Ref::Scene::AddLight(const sphere_light_desc_t &_l) {
+Ray::LightHandle Ray::Cpu::Scene::AddLight(const sphere_light_desc_t &_l) {
     light_t l = {};
 
     l.type = LIGHT_TYPE_SPHERE;
@@ -503,7 +503,7 @@ Ray::LightHandle Ray::Ref::Scene::AddLight(const sphere_light_desc_t &_l) {
     return LightHandle{light_index};
 }
 
-Ray::LightHandle Ray::Ref::Scene::AddLight(const spot_light_desc_t &_l) {
+Ray::LightHandle Ray::Cpu::Scene::AddLight(const spot_light_desc_t &_l) {
     light_t l = {};
 
     l.type = LIGHT_TYPE_SPHERE;
@@ -529,7 +529,7 @@ Ray::LightHandle Ray::Ref::Scene::AddLight(const spot_light_desc_t &_l) {
     return LightHandle{light_index};
 }
 
-Ray::LightHandle Ray::Ref::Scene::AddLight(const rect_light_desc_t &_l, const float *xform) {
+Ray::LightHandle Ray::Cpu::Scene::AddLight(const rect_light_desc_t &_l, const float *xform) {
     light_t l = {};
 
     l.type = LIGHT_TYPE_RECT;
@@ -545,8 +545,8 @@ Ray::LightHandle Ray::Ref::Scene::AddLight(const rect_light_desc_t &_l, const fl
 
     l.rect.area = _l.width * _l.height;
 
-    const simd_fvec4 uvec = _l.width * TransformDirection(simd_fvec4{1.0f, 0.0f, 0.0f, 0.0f}, xform);
-    const simd_fvec4 vvec = _l.height * TransformDirection(simd_fvec4{0.0f, 0.0f, 1.0f, 0.0f}, xform);
+    const Ref::simd_fvec4 uvec = _l.width * TransformDirection(Ref::simd_fvec4{1.0f, 0.0f, 0.0f, 0.0f}, xform);
+    const Ref::simd_fvec4 vvec = _l.height * TransformDirection(Ref::simd_fvec4{0.0f, 0.0f, 1.0f, 0.0f}, xform);
 
     memcpy(l.rect.u, value_ptr(uvec), 3 * sizeof(float));
     memcpy(l.rect.v, value_ptr(vvec), 3 * sizeof(float));
@@ -564,7 +564,7 @@ Ray::LightHandle Ray::Ref::Scene::AddLight(const rect_light_desc_t &_l, const fl
     return LightHandle{light_index};
 }
 
-Ray::LightHandle Ray::Ref::Scene::AddLight(const disk_light_desc_t &_l, const float *xform) {
+Ray::LightHandle Ray::Cpu::Scene::AddLight(const disk_light_desc_t &_l, const float *xform) {
     light_t l = {};
 
     l.type = LIGHT_TYPE_DISK;
@@ -580,8 +580,8 @@ Ray::LightHandle Ray::Ref::Scene::AddLight(const disk_light_desc_t &_l, const fl
 
     l.disk.area = 0.25f * PI * _l.size_x * _l.size_y;
 
-    const simd_fvec4 uvec = _l.size_x * TransformDirection(simd_fvec4{1.0f, 0.0f, 0.0f, 0.0f}, xform);
-    const simd_fvec4 vvec = _l.size_y * TransformDirection(simd_fvec4{0.0f, 0.0f, 1.0f, 0.0f}, xform);
+    const Ref::simd_fvec4 uvec = _l.size_x * TransformDirection(Ref::simd_fvec4{1.0f, 0.0f, 0.0f, 0.0f}, xform);
+    const Ref::simd_fvec4 vvec = _l.size_y * TransformDirection(Ref::simd_fvec4{0.0f, 0.0f, 1.0f, 0.0f}, xform);
 
     memcpy(l.disk.u, value_ptr(uvec), 3 * sizeof(float));
     memcpy(l.disk.v, value_ptr(vvec), 3 * sizeof(float));
@@ -599,7 +599,7 @@ Ray::LightHandle Ray::Ref::Scene::AddLight(const disk_light_desc_t &_l, const fl
     return LightHandle{light_index};
 }
 
-Ray::LightHandle Ray::Ref::Scene::AddLight(const line_light_desc_t &_l, const float *xform) {
+Ray::LightHandle Ray::Cpu::Scene::AddLight(const line_light_desc_t &_l, const float *xform) {
     light_t l = {};
 
     l.type = LIGHT_TYPE_LINE;
@@ -615,8 +615,8 @@ Ray::LightHandle Ray::Ref::Scene::AddLight(const line_light_desc_t &_l, const fl
 
     l.line.area = 2.0f * PI * _l.radius * _l.height;
 
-    const simd_fvec4 uvec = TransformDirection(simd_fvec4{1.0f, 0.0f, 0.0f, 0.0f}, xform);
-    const simd_fvec4 vvec = TransformDirection(simd_fvec4{0.0f, 1.0f, 0.0f, 0.0f}, xform);
+    const Ref::simd_fvec4 uvec = TransformDirection(Ref::simd_fvec4{1.0f, 0.0f, 0.0f, 0.0f}, xform);
+    const Ref::simd_fvec4 vvec = TransformDirection(Ref::simd_fvec4{0.0f, 1.0f, 0.0f, 0.0f}, xform);
 
     memcpy(l.line.u, value_ptr(uvec), 3 * sizeof(float));
     l.line.radius = _l.radius;
@@ -633,7 +633,7 @@ Ray::LightHandle Ray::Ref::Scene::AddLight(const line_light_desc_t &_l, const fl
     return LightHandle{light_index};
 }
 
-void Ray::Ref::Scene::RemoveLight_nolock(const LightHandle i) {
+void Ray::Cpu::Scene::RemoveLight_nolock(const LightHandle i) {
     if (!lights_.exists(i._index)) {
         return;
     }
@@ -659,7 +659,7 @@ void Ray::Ref::Scene::RemoveLight_nolock(const LightHandle i) {
     lights_.erase(i._index);
 }
 
-Ray::MeshInstanceHandle Ray::Ref::Scene::AddMeshInstance(const MeshHandle mesh, const float *xform) {
+Ray::MeshInstanceHandle Ray::Cpu::Scene::AddMeshInstance(const MeshHandle mesh, const float *xform) {
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
     const uint32_t mi_index = mesh_instances_.emplace();
@@ -696,7 +696,7 @@ Ray::MeshInstanceHandle Ray::Ref::Scene::AddMeshInstance(const MeshHandle mesh, 
     return MeshInstanceHandle{mi_index};
 }
 
-void Ray::Ref::Scene::SetMeshInstanceTransform_nolock(const MeshInstanceHandle mi_handle, const float *xform) {
+void Ray::Cpu::Scene::SetMeshInstanceTransform_nolock(const MeshInstanceHandle mi_handle, const float *xform) {
     mesh_instance_t &mi = mesh_instances_[mi_handle._index];
     transform_t &tr = transforms_[mi.tr_index];
 
@@ -709,14 +709,14 @@ void Ray::Ref::Scene::SetMeshInstanceTransform_nolock(const MeshInstanceHandle m
     RebuildTLAS_nolock();
 }
 
-void Ray::Ref::Scene::RemoveMeshInstance_nolock(const MeshInstanceHandle i) {
+void Ray::Cpu::Scene::RemoveMeshInstance_nolock(const MeshInstanceHandle i) {
     transforms_.erase(mesh_instances_[i._index].tr_index);
     mesh_instances_.erase(i._index);
 
     RebuildTLAS_nolock();
 }
 
-void Ray::Ref::Scene::Finalize() {
+void Ray::Cpu::Scene::Finalize() {
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
     if (env_map_light_ != InvalidLightHandle) {
@@ -742,7 +742,7 @@ void Ray::Ref::Scene::Finalize() {
     }
 }
 
-void Ray::Ref::Scene::RemoveTris_nolock(uint32_t tris_index, uint32_t tris_count) {
+void Ray::Cpu::Scene::RemoveTris_nolock(uint32_t tris_index, uint32_t tris_count) {
     if (!tris_count) {
         return;
     }
@@ -758,7 +758,7 @@ void Ray::Ref::Scene::RemoveTris_nolock(uint32_t tris_index, uint32_t tris_count
     }
 }
 
-void Ray::Ref::Scene::RemoveNodes_nolock(uint32_t node_index, uint32_t node_count) {
+void Ray::Cpu::Scene::RemoveNodes_nolock(uint32_t node_index, uint32_t node_count) {
     if (!node_count) {
         return;
     }
@@ -825,7 +825,7 @@ void Ray::Ref::Scene::RemoveNodes_nolock(uint32_t node_index, uint32_t node_coun
     }
 }
 
-void Ray::Ref::Scene::RebuildTLAS_nolock() {
+void Ray::Cpu::Scene::RebuildTLAS_nolock() {
     RemoveNodes_nolock(macro_nodes_root_, macro_nodes_count_);
     mi_indices_.clear();
 
@@ -859,9 +859,9 @@ void Ray::Ref::Scene::RebuildTLAS_nolock() {
     }
 }
 
-void Ray::Ref::Scene::PrepareEnvMapQTree_nolock() {
+void Ray::Cpu::Scene::PrepareEnvMapQTree_nolock() {
     const int tex = int(env_.env_map & 0x00ffffff);
-    simd_ivec2 size;
+    Ref::simd_ivec2 size;
     tex_storage_rgba_.GetIRes(tex, 0, value_ptr(size));
 
     const int lowest_dim = std::min(size[0], size[1]);
@@ -885,14 +885,14 @@ void Ray::Ref::Scene::PrepareEnvMapQTree_nolock() {
                 const float phi = 2.0f * PI * float(x) / float(size[0]);
 
                 const color_rgba8_t col_rgbe = tex_storage_rgba_.Get(tex, x, y, 0);
-                const simd_fvec4 col_rgb = rgbe_to_rgb(col_rgbe);
+                const Ref::simd_fvec4 col_rgb = Ref::rgbe_to_rgb(col_rgbe);
 
                 const float cur_lum = (col_rgb[0] + col_rgb[1] + col_rgb[2]);
 
-                auto dir =
-                    simd_fvec4{std::sin(theta) * std::cos(phi), std::cos(theta), std::sin(theta) * std::sin(phi), 0.0f};
+                auto dir = Ref::simd_fvec4{std::sin(theta) * std::cos(phi), std::cos(theta),
+                                           std::sin(theta) * std::sin(phi), 0.0f};
 
-                simd_fvec2 q;
+                Ref::simd_fvec2 q;
                 DirToCanonical(value_ptr(dir), 0.0f, value_ptr(q));
 
                 int qx = CLAMP(int(cur_res * q[0]), 0, cur_res - 1);
@@ -905,7 +905,7 @@ void Ray::Ref::Scene::PrepareEnvMapQTree_nolock() {
                 qx /= 2;
                 qy /= 2;
 
-                auto &qvec = reinterpret_cast<simd_fvec4 &>(env_map_qtree_.mips[0][4 * (qy * cur_res / 2 + qx)]);
+                auto &qvec = reinterpret_cast<Ref::simd_fvec4 &>(env_map_qtree_.mips[0][4 * (qy * cur_res / 2 + qx)]);
                 qvec.set(index, std::max(qvec[index], cur_lum));
             }
         }
@@ -920,7 +920,7 @@ void Ray::Ref::Scene::PrepareEnvMapQTree_nolock() {
     while (cur_res > 1) {
         env_map_qtree_.mips.emplace_back(cur_res * cur_res, 0.0f);
         const auto *prev_mip =
-            reinterpret_cast<const simd_fvec4 *>(env_map_qtree_.mips[env_map_qtree_.mips.size() - 2].data());
+            reinterpret_cast<const Ref::simd_fvec4 *>(env_map_qtree_.mips[env_map_qtree_.mips.size() - 2].data());
 
         for (int y = 0; y < cur_res; ++y) {
             for (int x = 0; x < cur_res; ++x) {
@@ -951,12 +951,12 @@ void Ray::Ref::Scene::PrepareEnvMapQTree_nolock() {
     int the_last_required_lod;
     for (int lod = int(env_map_qtree_.mips.size()) - 1; lod >= 0; --lod) {
         the_last_required_lod = lod;
-        const auto *cur_mip = reinterpret_cast<const simd_fvec4 *>(env_map_qtree_.mips[lod].data());
+        const auto *cur_mip = reinterpret_cast<const Ref::simd_fvec4 *>(env_map_qtree_.mips[lod].data());
 
         bool subdivision_required = false;
         for (int y = 0; y < (cur_res / 2) && !subdivision_required; ++y) {
             for (int x = 0; x < (cur_res / 2) && !subdivision_required; ++x) {
-                const simd_ivec4 mask = simd_cast(cur_mip[y * cur_res / 2 + x] > LumFractThreshold * total_lum);
+                const Ref::simd_ivec4 mask = simd_cast(cur_mip[y * cur_res / 2 + x] > LumFractThreshold * total_lum);
                 subdivision_required |= mask.not_all_zeros();
             }
         }

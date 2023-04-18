@@ -5,10 +5,13 @@
 #include "../SceneBase.h"
 #include "CoreRef.h"
 #include "SmallVector.h"
-#include "SparseStorage.h"
-#include "TextureStorageRef.h"
+#include "SparseStorageCPU.h"
+#include "TextureStorageCPU.h"
 
 namespace Ray {
+namespace Ref {
+class Renderer;
+}
 namespace Sse2 {
 template <int DimX, int DimY> class RendererSIMD;
 }
@@ -30,9 +33,7 @@ template <int DimX, int DimY> class RendererSIMD;
 
 class ILog;
 
-namespace Ref {
-class Renderer;
-
+namespace Cpu {
 class Scene : public SceneBase {
   protected:
     friend class Ref::Renderer;
@@ -156,5 +157,5 @@ class Scene : public SceneBase {
         return use_wide_bvh_ ? uint32_t(mnodes_.size()) : uint32_t(nodes_.size());
     }
 };
-} // namespace Ref
+} // namespace Cpu
 } // namespace Ray

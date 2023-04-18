@@ -5,7 +5,7 @@
 #include <random>
 
 #include "Halton.h"
-#include "SceneRef.h"
+#include "SceneCPU.h"
 #include "UniformIntDistribution.h"
 
 namespace Ray {
@@ -39,10 +39,10 @@ Ray::Ref::Renderer::Renderer(const settings_t &s, ILog *log) : log_(log), use_wi
     Resize(s.w, s.h);
 }
 
-Ray::SceneBase *Ray::Ref::Renderer::CreateScene() { return new Ref::Scene(log_, use_wide_bvh_); }
+Ray::SceneBase *Ray::Ref::Renderer::CreateScene() { return new Cpu::Scene(log_, use_wide_bvh_); }
 
 void Ray::Ref::Renderer::RenderScene(const SceneBase *scene, RegionContext &region) {
-    const auto s = dynamic_cast<const Ref::Scene *>(scene);
+    const auto s = dynamic_cast<const Cpu::Scene *>(scene);
     if (!s) {
         return;
     }
