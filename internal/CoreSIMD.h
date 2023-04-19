@@ -50,14 +50,14 @@ namespace NS {
 // [ 2] [ 3] [ 6] [ 7]
 // [ 8] [ 9] [12] [13]
 // [10] [11] [14] [15]
-alignas(64) const int ray_packet_layout_x[] = {0, 1, 0, 1,  // NOLINT
-                                               2, 3, 2, 3,  // NOLINT
-                                               0, 1, 0, 1,  // NOLINT
-                                               2, 3, 2, 3}; // NOLINT
-alignas(64) const int ray_packet_layout_y[] = {0, 0, 1, 1,  // NOLINT
-                                               0, 0, 1, 1,  // NOLINT
-                                               2, 2, 3, 3,  // NOLINT
-                                               2, 2, 3, 3}; // NOLINT
+alignas(64) const int rays_layout_x[] = {0, 1, 0, 1,  // NOLINT
+                                         2, 3, 2, 3,  // NOLINT
+                                         0, 1, 0, 1,  // NOLINT
+                                         2, 3, 2, 3}; // NOLINT
+alignas(64) const int rays_layout_y[] = {0, 0, 1, 1,  // NOLINT
+                                         0, 0, 1, 1,  // NOLINT
+                                         2, 2, 3, 3,  // NOLINT
+                                         2, 2, 3, 3}; // NOLINT
 
 // Usefull to make index argument for a gather instruction
 alignas(64) const int ascending_counter[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
@@ -2070,8 +2070,8 @@ void Ray::NS::GeneratePrimaryRays(const int iteration, const camera_t &cam, cons
     const float fov_k = temp * cam.focus_distance;
     const float spread_angle = std::atan(2.0f * temp / float(h));
 
-    const auto off_x = simd_ivec<S>{ray_packet_layout_x, simd_mem_aligned},
-               off_y = simd_ivec<S>{ray_packet_layout_y, simd_mem_aligned};
+    const auto off_x = simd_ivec<S>{rays_layout_x, simd_mem_aligned},
+               off_y = simd_ivec<S>{rays_layout_y, simd_mem_aligned};
 
     const int x_res = (r.w + DimX - 1) / DimX, y_res = (r.h + DimY - 1) / DimY;
 
@@ -2182,7 +2182,7 @@ void Ray::NS::SampleMeshInTextureSpace(int iteration, int obj_index, int uv_laye
     out_rays.resize(r.w * r.h / S + ((r.w * r.h) % S != 0));
     out_inters.resize(out_rays.size());
 
-    const auto off_x = simd_ivec<S>{ray_packet_layout_x}, off_y = simd_ivec<S>{ray_packet_layout_y};
+    const auto off_x = simd_ivec<S>{rays_layout_x}, off_y = simd_ivec<S>{rays_layout_y};
 
     size_t count = 0;
     for (int y = r.y; y < r.y + r.h - (r.h & (DimY - 1)); y += DimY) {
