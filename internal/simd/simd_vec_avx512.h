@@ -662,7 +662,13 @@ template <> class simd_vec<int, 16> {
     friend force_inline simd_vec<int, 16> vectorcall gather(const int *base_addr, simd_vec<int, 16> vindex);
 
     friend force_inline void vectorcall scatter(float *base_addr, simd_vec<int, 16> vindex, simd_vec<float, 16> v);
+    friend force_inline void vectorcall scatter(float *base_addr, simd_vec<int, 16> vindex, const float v) {
+        scatter(base_addr, vindex, simd_vec<float, 16>{v});
+    }
     friend force_inline void vectorcall scatter(int *base_addr, simd_vec<int, 16> vindex, simd_vec<int, 16> v);
+    friend force_inline void vectorcall scatter(int *base_addr, simd_vec<int, 16> vindex, const int v) {
+        scatter(base_addr, vindex, simd_vec<int, 16>{v});
+    }
 
 #ifndef NDEBUG
     friend void vectorcall __assert_valid_mask(const simd_vec<int, 16> mask) {
