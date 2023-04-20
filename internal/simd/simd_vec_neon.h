@@ -22,6 +22,14 @@ force_inline float32x4_t vdivq_f32(float32x4_t num, float32x4_t den) {
 }
 #endif
 
+template <int imm> force_inline int32x4_t slli(int32x4_t a) {
+    if (imm == 0) {
+        return a;
+    } else if (imm & ~15) {
+        return vdupq_n_s32(0);
+    }
+    return vextq_s8(vdupq_n_s8(0), vreinterpretq_s32_s64(a), ((imm <= 0 || imm > 15) ? 0 : (16 - imm)));
+}
 
 template <> class simd_vec<int, 4>;
 
@@ -434,6 +442,12 @@ template <> class simd_vec<float, 4> {
 
     friend force_inline simd_vec<float, 4> vectorcall normalize(const simd_vec<float, 4> v1) {
         return v1 / v1.length();
+    }
+
+    friend force_inline simd_vec<float, 4> vectorcall inclusive_scan(simd_vec<float, 4> v1) {
+        v1.vec_ = vaddq_f32(v1.vec_, vreinterpretq_f32_s32(slli<4>(vreinterpretq_s32_f32(v1.vec_))));
+        v1.vec_ = vaddq_f32(v1.vec_, vreinterpretq_f32_s32(slli<8>(vreinterpretq_s32_f32(v1.vec_))));
+        return v1;
     }
 
 #ifndef NDEBUG
@@ -944,6 +958,12 @@ template <> class simd_vec<int, 4> {
         UNROLLED_FOR(i, 4, { res &= (comp1[i] == comp2[i]); })
         return res;
 #endif
+    }
+
+    friend force_inline simd_vec<int, 4> vectorcall inclusive_scan(simd_vec<int, 4> v1) {
+        v1.vec_ = vaddq_s32(v1.vec_, slli<4>(v1.vec_));
+        v1.vec_ = vaddq_s32(v1.vec_, slli<8>(v1.vec_));
+        return v1;
     }
 
 #ifndef NDEBUG

@@ -19,6 +19,9 @@
 #define _mm512_movemask_epi32(a)                                                                                       \
     (int)_mm512_cmpneq_epi32_mask(_mm512_setzero_si512(), _mm512_and_si512(_mm512_set1_epi32(0x80000000U), a))
 
+// https://adms-conf.org/2020-camera-ready/ADMS20_05.pdf
+#define _mm512_slli_si512(x, k) _mm512_alignr_epi32(x, _mm512_setzero_si512(), 16 - k)
+
 #ifndef NDEBUG
 #define validate_mask(m) __assert_valid_mask(m)
 #else
@@ -203,8 +206,8 @@ template <> class simd_vec<float, 16> {
 
     friend force_inline simd_vec<float, 16> vectorcall clamp(simd_vec<float, 16> v1, float min, float max);
     friend force_inline simd_vec<float, 16> vectorcall pow(simd_vec<float, 16> v1, simd_vec<float, 16> v2);
-
     friend force_inline simd_vec<float, 16> vectorcall normalize(simd_vec<float, 16> v1);
+    friend force_inline simd_vec<float, 16> vectorcall inclusive_scan(simd_vec<float, 16> v1);
 
     friend force_inline simd_vec<float, 16> vectorcall fmadd(simd_vec<float, 16> a, simd_vec<float, 16> b,
                                                              simd_vec<float, 16> c);
@@ -658,6 +661,8 @@ template <> class simd_vec<int, 16> {
         return _mm512_cmpeq_epi32_mask(v1.vec_, v2.vec_) == 0xFFFF;
     }
 
+    friend simd_vec<int, 16> vectorcall inclusive_scan(simd_vec<int, 16> v1);
+
     friend force_inline simd_vec<float, 16> vectorcall gather(const float *base_addr, simd_vec<int, 16> vindex);
     friend force_inline simd_vec<int, 16> vectorcall gather(const int *base_addr, simd_vec<int, 16> vindex);
 
@@ -941,6 +946,22 @@ force_inline simd_vec<float, 16> vectorcall pow(const simd_vec<float, 16> v1, co
 }
 
 force_inline simd_vec<float, 16> vectorcall normalize(const simd_vec<float, 16> v1) { return v1 / v1.length(); }
+
+force_inline simd_vec<float, 16> vectorcall inclusive_scan(simd_vec<float, 16> v1) {
+    v1.vec_ = _mm512_add_ps(v1.vec_, _mm512_castsi512_ps(_mm512_slli_si512(_mm512_castps_si512(v1.vec_), 1)));
+    v1.vec_ = _mm512_add_ps(v1.vec_, _mm512_castsi512_ps(_mm512_slli_si512(_mm512_castps_si512(v1.vec_), 2)));
+    v1.vec_ = _mm512_add_ps(v1.vec_, _mm512_castsi512_ps(_mm512_slli_si512(_mm512_castps_si512(v1.vec_), 4)));
+    v1.vec_ = _mm512_add_ps(v1.vec_, _mm512_castsi512_ps(_mm512_slli_si512(_mm512_castps_si512(v1.vec_), 8)));
+    return v1;
+}
+
+force_inline simd_vec<int, 16> vectorcall inclusive_scan(simd_vec<int, 16> v1) {
+    v1.vec_ = _mm512_add_epi32(v1.vec_, _mm512_slli_si512(v1.vec_, 1));
+    v1.vec_ = _mm512_add_epi32(v1.vec_, _mm512_slli_si512(v1.vec_, 2));
+    v1.vec_ = _mm512_add_epi32(v1.vec_, _mm512_slli_si512(v1.vec_, 4));
+    v1.vec_ = _mm512_add_epi32(v1.vec_, _mm512_slli_si512(v1.vec_, 8));
+    return v1;
+}
 
 force_inline simd_vec<float, 16> vectorcall fmadd(const simd_vec<float, 16> a, const simd_vec<float, 16> b,
                                                   const simd_vec<float, 16> c) {

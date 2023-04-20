@@ -476,6 +476,13 @@ template <> class simd_vec<float, 4> {
         return v1 / v1.length();
     }
 
+
+    friend force_inline simd_vec<float, 4> vectorcall inclusive_scan(simd_vec<float, 4> v1) {
+        v1.vec_ = _mm_add_ps(v1.vec_, _mm_castsi128_ps(_mm_slli_si128(_mm_castps_si128(v1.vec_), 4)));
+        v1.vec_ = _mm_add_ps(v1.vec_, _mm_castsi128_ps(_mm_slli_si128(_mm_castps_si128(v1.vec_), 8)));
+        return v1;
+    }
+
 #ifndef NDEBUG
     friend void vectorcall __assert_valid_mask(const simd_vec<float, 4> mask) {
         UNROLLED_FOR(i, 4, {
@@ -1063,6 +1070,12 @@ template <> class simd_vec<int, 4> {
     friend force_inline bool vectorcall is_equal(const simd_vec<int, 4> v1, const simd_vec<int, 4> v2) {
         __m128i vcmp = _mm_cmpeq_epi32(v1.vec_, v2.vec_);
         return (_mm_movemask_epi8(vcmp) == 0xffff);
+    }
+
+    friend force_inline simd_vec<int, 4> vectorcall inclusive_scan(simd_vec<int, 4> v1) {
+        v1.vec_ = _mm_add_epi32(v1.vec_, _mm_slli_si128(v1.vec_, 4));
+        v1.vec_ = _mm_add_epi32(v1.vec_, _mm_slli_si128(v1.vec_, 8));
+        return v1;
     }
 
 #ifndef NDEBUG

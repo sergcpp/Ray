@@ -124,7 +124,7 @@ if(NOT CMAKE_GENERATOR_PLATFORM MATCHES "ARM64")
         set_source_files_properties(internal/RendererSSE41.cpp PROPERTIES COMPILE_FLAGS -msse4.1)
         set_source_files_properties(internal/RendererAVX.cpp PROPERTIES COMPILE_FLAGS -mavx)
         set_source_files_properties(internal/RendererAVX2.cpp PROPERTIES COMPILE_FLAGS "-mavx2 -mfma")
-        set_source_files_properties(internal/RendererAVX512.cpp PROPERTIES COMPILE_FLAGS "-mavx512f -mavx512bw -mavx512dq")
+        set_source_files_properties(internal/RendererAVX512.cpp PROPERTIES COMPILE_FLAGS "-mavx512f -mavx512bw -mavx512dq -mavx512vl")
     endif()
 endif(NOT CMAKE_GENERATOR_PLATFORM MATCHES "ARM64")
 

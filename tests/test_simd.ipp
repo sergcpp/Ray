@@ -170,6 +170,14 @@ using namespace Ray::NS;
     require(v15[2] == 24.0f);
     require(v15[3] == 0);
 
+    const simd_fvec4 v16 = {3, 1, 4, 1};
+    const simd_fvec4 v17 = inclusive_scan(v16);
+
+    require(v17[0] == 3.0f);
+    require(v17[1] == 4.0f);
+    require(v17[2] == 8.0f);
+    require(v17[3] == 9.0f);
+
     std::cout << "OK" << std::endl;
 }
 
@@ -329,6 +337,14 @@ using namespace Ray::NS;
     const simd_ivec4 v15 = {-2147483647, 1, -42, 42};
     const simd_ivec4 v16 = srai(v15, 31);
     require((v16 != simd_ivec4{-1, 0, -1, 0}).all_zeros());
+
+    const simd_ivec4 v17 = {3, 1, 4, 1};
+    const simd_ivec4 v18 = inclusive_scan(v17);
+
+    require(v18[0] == 3);
+    require(v18[1] == 4);
+    require(v18[2] == 8);
+    require(v18[3] == 9);
 
     std::cout << "OK" << std::endl;
 }
@@ -550,6 +566,18 @@ using namespace Ray::NS;
     require(v15[6] == 24.0f);
     require(v15[7] == 0);
 
+    const simd_fvec8 v16 = {3, 1, 4, 1, 3, 1, 4, 1};
+    const simd_fvec8 v17 = inclusive_scan(v16);
+
+    require(v17[0] == 3.0f);
+    require(v17[1] == 4.0f);
+    require(v17[2] == 8.0f);
+    require(v17[3] == 9.0f);
+    require(v17[4] == 12.0f);
+    require(v17[5] == 13.0f);
+    require(v17[6] == 17.0f);
+    require(v17[7] == 18.0f);
+
     std::cout << "OK" << std::endl;
 }
 
@@ -741,6 +769,18 @@ using namespace Ray::NS;
     const simd_ivec8 v15 = {-2147483647, 1, -42, 42, -2147483647, 1, -42, 42};
     const simd_ivec8 v16 = srai(v15, 31);
     require((v16 != simd_ivec8{-1, 0, -1, 0, -1, 0, -1, 0}).all_zeros());
+
+    const simd_ivec8 v17 = {3, 1, 4, 1, 3, 1, 4, 1};
+    const simd_ivec8 v18 = inclusive_scan(v17);
+
+    require(v18[0] == 3);
+    require(v18[1] == 4);
+    require(v18[2] == 8);
+    require(v18[3] == 9);
+    require(v18[4] == 12);
+    require(v18[5] == 13);
+    require(v18[6] == 17);
+    require(v18[7] == 18);
 
     std::cout << "OK" << std::endl;
 }
@@ -1100,6 +1140,26 @@ using namespace Ray::NS;
     require(v15[14] == 24.0f);
     require(v15[15] == 0);
 
+    const simd_fvec16 v16 = {3, 1, 4, 1, 3, 1, 4, 1, 3, 1, 4, 1, 3, 1, 4, 1};
+    const simd_fvec16 v17 = inclusive_scan(v16);
+
+    require(v17[0] == 3.0f);
+    require(v17[1] == 4.0f);
+    require(v17[2] == 8.0f);
+    require(v17[3] == 9.0f);
+    require(v17[4] == 12.0f);
+    require(v17[5] == 13.0f);
+    require(v17[6] == 17.0f);
+    require(v17[7] == 18.0f);
+    require(v17[8] == 21.0f);
+    require(v17[9] == 22.0f);
+    require(v17[10] == 26.0f);
+    require(v17[11] == 27.0f);
+    require(v17[12] == 30.0f);
+    require(v17[13] == 31.0f);
+    require(v17[14] == 35.0f);
+    require(v17[15] == 36.0f);
+
     std::cout << "OK" << std::endl;
 }
 
@@ -1418,6 +1478,26 @@ using namespace Ray::NS;
                              -2147483647, 1, -42, 42, -2147483647, 1, -42, 42};
     const simd_ivec16 v16 = srai(v15, 31);
     require((v16 != simd_ivec16{-1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0}).all_zeros());
+
+    const simd_ivec16 v17 = {3, 1, 4, 1, 3, 1, 4, 1, 3, 1, 4, 1, 3, 1, 4, 1};
+    const simd_ivec16 v18 = inclusive_scan(v17);
+
+    require(v18[0] == 3);
+    require(v18[1] == 4);
+    require(v18[2] == 8);
+    require(v18[3] == 9);
+    require(v18[4] == 12);
+    require(v18[5] == 13);
+    require(v18[6] == 17);
+    require(v18[7] == 18);
+    require(v18[8] == 21);
+    require(v18[9] == 22);
+    require(v18[10] == 26);
+    require(v18[11] == 27);
+    require(v18[12] == 30);
+    require(v18[13] == 31);
+    require(v18[14] == 35);
+    require(v18[15] == 36);
 
     std::cout << "OK" << std::endl;
 }

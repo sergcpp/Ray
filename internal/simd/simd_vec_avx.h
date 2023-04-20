@@ -169,6 +169,20 @@ template <> class simd_vec<float, 8> {
         return ret;
     }
 
+#if defined(USE_AVX2) || defined(USE_AVX512)
+    friend force_inline simd_vec<float, 8> vectorcall inclusive_scan(simd_vec<float, 8> v1) {
+        v1.vec_ = _mm256_add_ps(v1.vec_, _mm256_castsi256_ps(_mm256_slli_si256(_mm256_castps_si256(v1.vec_), 4)));
+        v1.vec_ = _mm256_add_ps(v1.vec_, _mm256_castsi256_ps(_mm256_slli_si256(_mm256_castps_si256(v1.vec_), 8)));
+
+        __m256 temp = _mm256_shuffle_ps(v1.vec_, v1.vec_, _MM_SHUFFLE(3, 3, 3, 3));
+        temp = _mm256_permute2f128_ps(_mm256_setzero_ps(), temp, 0x20);
+
+        v1.vec_ = _mm256_add_ps(v1.vec_, temp);
+
+        return v1;
+    }
+#endif
+
     force_inline void store_to(float *f) const { _mm256_storeu_ps(f, vec_); }
     force_inline void store_to(float *f, simd_mem_aligned_tag) const { _mm256_store_ps(f, vec_); }
 
@@ -833,6 +847,20 @@ template <> class simd_vec<int, 8> {
         return ret;
 #endif
     }
+
+#if defined(USE_AVX2) || defined(USE_AVX512)
+    friend force_inline simd_vec<int, 8> vectorcall inclusive_scan(simd_vec<int, 8> v1) {
+        v1.vec_ = _mm256_add_epi32(v1.vec_, _mm256_slli_si256(v1.vec_, 4));
+        v1.vec_ = _mm256_add_epi32(v1.vec_, _mm256_slli_si256(v1.vec_, 8));
+
+        __m256i temp = _mm256_shuffle_epi32(v1.vec_, _MM_SHUFFLE(3, 3, 3, 3));
+        temp = _mm256_permute2x128_si256(_mm256_setzero_si256(), temp, 0x20);
+
+        v1.vec_ = _mm256_add_epi32(v1.vec_, temp);
+
+        return v1;
+    }
+#endif
 
 #if defined(USE_AVX2) || defined(USE_AVX512)
     friend force_inline simd_vec<float, 8> vectorcall gather(const float *base_addr, simd_vec<int, 8> vindex);
