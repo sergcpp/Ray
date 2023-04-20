@@ -665,9 +665,21 @@ template <> class simd_vec<int, 16> {
     friend force_inline void vectorcall scatter(float *base_addr, simd_vec<int, 16> vindex, const float v) {
         scatter(base_addr, vindex, simd_vec<float, 16>{v});
     }
+    friend force_inline void vectorcall scatter(float *base_addr, simd_vec<int, 16> mask, simd_vec<int, 16> vindex,
+                                                simd_vec<float, 16> v);
+    friend force_inline void vectorcall scatter(float *base_addr, simd_vec<int, 16> mask, simd_vec<int, 16> vindex,
+                                                const float v) {
+        scatter(base_addr, mask, vindex, simd_vec<float, 16>{v});
+    }
     friend force_inline void vectorcall scatter(int *base_addr, simd_vec<int, 16> vindex, simd_vec<int, 16> v);
     friend force_inline void vectorcall scatter(int *base_addr, simd_vec<int, 16> vindex, const int v) {
         scatter(base_addr, vindex, simd_vec<int, 16>{v});
+    }
+    friend force_inline void vectorcall scatter(int *base_addr, simd_vec<int, 16> mask, simd_vec<int, 16> vindex,
+                                                simd_vec<int, 16> v);
+    friend force_inline void vectorcall scatter(int *base_addr, simd_vec<int, 16> mask, simd_vec<int, 16> vindex,
+                                                const int v) {
+        scatter(base_addr, mask, vindex, simd_vec<int, 16>{v});
     }
 
 #ifndef NDEBUG
@@ -986,8 +998,18 @@ force_inline void vectorcall scatter(float *base_addr, simd_vec<int, 16> vindex,
     _mm512_i32scatter_ps(base_addr, vindex.vec_, v.vec_, sizeof(float));
 }
 
+force_inline void vectorcall scatter(float *base_addr, simd_vec<int, 16> mask, simd_vec<int, 16> vindex,
+                                     simd_vec<float, 16> v) {
+    _mm512_mask_i32scatter_ps(base_addr, mask.movemask(), vindex.vec_, v.vec_, sizeof(float));
+}
+
 force_inline void vectorcall scatter(int *base_addr, simd_vec<int, 16> vindex, simd_vec<int, 16> v) {
     _mm512_i32scatter_epi32(base_addr, vindex.vec_, v.vec_, sizeof(int));
+}
+
+force_inline void vectorcall scatter(int *base_addr, simd_vec<int, 16> mask, simd_vec<int, 16> vindex,
+                                     simd_vec<int, 16> v) {
+    _mm512_mask_i32scatter_epi32(base_addr, mask.movemask(), vindex.vec_, v.vec_, sizeof(int));
 }
 
 } // namespace NS

@@ -828,16 +828,34 @@ force_inline simd_vec<T, S> mix(const simd_vec<T, S> &v1, const simd_vec<T, S> &
 
 template <typename T, int S> simd_vec<T, S> gather(const T *base_addr, const simd_vec<int, S> &vindex) {
     simd_vec<T, S> res;
-    UNROLLED_FOR_S(i, S, { res.template set<i>(base_addr[vindex[i]]); });
+    UNROLLED_FOR_S(i, S, { res.template set<i>(base_addr[vindex.template get<i>()]); });
     return res;
 }
 
 template <typename T, int S> void scatter(T *base_addr, const simd_vec<int, S> &vindex, const simd_vec<T, S> &v) {
-    UNROLLED_FOR_S(i, S, { base_addr[vindex[i]] = v.template get<i>(); });
+    UNROLLED_FOR_S(i, S, { base_addr[vindex.template get<i>()] = v.template get<i>(); });
 }
 
 template <typename T, int S> void scatter(T *base_addr, const simd_vec<int, S> &vindex, const T v) {
-    UNROLLED_FOR_S(i, S, { base_addr[vindex[i]] = v; });
+    UNROLLED_FOR_S(i, S, { base_addr[vindex.template get<i>()] = v; });
+}
+
+template <typename T, int S>
+void scatter(T *base_addr, const simd_vec<int, S> &mask, const simd_vec<int, S> &vindex, const simd_vec<T, S> &v) {
+    UNROLLED_FOR_S(i, S, {
+        if (mask.template get<i>()) {
+            base_addr[vindex.template get<i>()] = v.template get<i>();
+        }
+    });
+}
+
+template <typename T, int S>
+void scatter(T *base_addr, const simd_vec<int, S> &mask, const simd_vec<int, S> &vindex, const T v) {
+    UNROLLED_FOR_S(i, S, {
+        if (mask.template get<i>()) {
+            base_addr[vindex.template get<i>()] = v;
+        }
+    });
 }
 
 template <typename T, typename U, int S> class simd_comp_where_helper {
