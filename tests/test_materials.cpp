@@ -1569,7 +1569,7 @@ void test_complex_mat6_dof(const char *arch_list[], const char *preferred_device
 }
 
 void test_complex_mat6_mesh_lights(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 309;
+    const int SampleCount = 310;
     const int PixThres = 2958;
 
     Ray::principled_mat_desc_t olive_mat_desc;
