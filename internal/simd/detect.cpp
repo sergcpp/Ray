@@ -95,7 +95,7 @@ Ray::CpuFeatures Ray::GetCpuFeatures() {
                 // g_cpu_features.avx512_supported &= (info[1] & (1 << 28)) != 0;   // HW_AVX512CD
                 // g_cpu_features.avx512_supported &= (info[1] & (1 << 26)) != 0;   // HW_AVX512PF
                 // g_cpu_features.avx512_supported &= (info[1] & (1 << 27)) != 0;   // HW_AVX512ER
-                // g_cpu_features.avx512_supported &= (info[1] & (1 << 31)) != 0;   // HW_AVX512VL
+                g_cpu_features.avx512_supported &= (info[1] & (1 << 31)) != 0; // HW_AVX512VL
                 g_cpu_features.avx512_supported &= (info[1] & (1 << 30)) != 0; // HW_AVX512BW
                 g_cpu_features.avx512_supported &= (info[1] & (1 << 17)) != 0; // HW_AVX512DQ
                 // g_cpu_features.avx512_supported &= (info[1] & (1 << 21)) != 0;   // HW_AVX512IFMA
