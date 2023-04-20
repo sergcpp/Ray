@@ -17,7 +17,7 @@ template <typename T> class Span {
     Span() = default;
     Span(T *p_data, const ptrdiff_t size) : p_data_(p_data), size_(size) {}
     Span(T *p_data, const size_t size) : p_data_(p_data), size_(size) {}
-#if defined(__aarch64__) || defined(_M_ARM64) || defined(_WIN64)
+#if INTPTR_MAX == INT64_MAX
     Span(T *p_data, const int size) : p_data_(p_data), size_(size) {}
 #endif
     Span(T *p_begin, T *p_end) : p_data_(p_begin), size_(p_end - p_begin) {}

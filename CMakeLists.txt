@@ -24,7 +24,7 @@ IF(MSVC)
     add_compile_definitions(VK_USE_PLATFORM_WIN32_KHR)
 ELSE(MSVC)
     if(NOT CMAKE_SYSTEM_NAME MATCHES "Android" AND NOT CMAKE_GENERATOR_PLATFORM MATCHES "ARM64")
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse2 -mfma -fno-strict-aliasing")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse2 -mfma -fno-strict-aliasing -Wno-unused-command-line-argument")
         set(CMAKE_CXX_FLAGS_DEBUG "-O1")
         if (NOT DEFINED CMAKE_CXX_FLAGS_ASAN)
             set(CMAKE_CXX_FLAGS_ASAN "-fsanitize=address")
@@ -51,7 +51,7 @@ set(INTERNAL_SOURCE_FILES internal/Bitmap.h
                           internal/CoreRef.cpp
                           internal/CoreSIMD.h
                           internal/Halton.h
-                          internal/RendererSIMD.h
+                          internal/RendererCPU.h
                           internal/SceneCPU.h
                           internal/SceneCPU.cpp
                           internal/SmallVector.h
@@ -72,7 +72,8 @@ set(INTERNAL_SOURCE_FILES internal/Bitmap.h
 if (ENABLE_REF_IMPL)
     set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
                               internal/RendererRef.h
-                              internal/RendererRef.cpp)
+                              internal/RendererRef.cpp
+    )
 endif()
 
 if (ENABLE_SIMD_IMPL)

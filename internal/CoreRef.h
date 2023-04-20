@@ -141,11 +141,11 @@ void SampleMeshInTextureSpace(int iteration, int obj_index, int uv_layer, const 
                               aligned_vector<hit_data_t> &out_inters);
 
 // Sorting of rays
-void SortRays_CPU(ray_data_t *rays, size_t rays_count, const float root_min[3], const float cell_size[3],
-                  uint32_t *hash_values, uint32_t *scan_values, ray_chunk_t *chunks, ray_chunk_t *chunks_temp);
-void SortRays_GPU(ray_data_t *rays, size_t rays_count, const float root_min[3], const float cell_size[3],
-                  uint32_t *hash_values, int *head_flags, uint32_t *scan_values, ray_chunk_t *chunks,
-                  ray_chunk_t *chunks_temp, uint32_t *skeleton);
+int SortRays_CPU(Span<ray_data_t> rays, const float root_min[3], const float cell_size[3], uint32_t *hash_values,
+                 uint32_t *scan_values, ray_chunk_t *chunks, ray_chunk_t *chunks_temp);
+int SortRays_GPU(Span<ray_data_t> rays, const float root_min[3], const float cell_size[3], uint32_t *hash_values,
+                 int *head_flags, uint32_t *scan_values, ray_chunk_t *chunks, ray_chunk_t *chunks_temp,
+                 uint32_t *skeleton);
 
 // Intersect primitives
 bool IntersectTris_ClosestHit(const float ro[3], const float rd[3], const tri_accel_t *tris, int tri_start, int tri_end,
@@ -261,9 +261,9 @@ simd_fvec4 SampleLatlong_RGBE(const Cpu::TexStorageRGBA &storage, uint32_t index
                               float y_rotation);
 
 // Trace rays through scene hierarchy
-void IntersectScene(ray_data_t &r, int min_transp_depth, int max_transp_depth, const float *random_seq,
+void IntersectScene(Span<ray_data_t> rays, int min_transp_depth, int max_transp_depth, const float *random_seq,
                     const scene_data_t &sc, uint32_t root_index, const Cpu::TexStorageBase *const textures[],
-                    hit_data_t &inter);
+                    Span<hit_data_t> out_inter);
 simd_fvec4 IntersectScene(const shadow_ray_t &r, int max_transp_depth, const scene_data_t &sc, uint32_t node_index,
                           const Cpu::TexStorageBase *const textures[]);
 
@@ -273,10 +273,17 @@ void SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const simd_fvec
                        const float sample_off[2], light_sample_t &ls);
 
 // Account for visible lights contribution
-void IntersectAreaLights(const ray_data_t &ray, const light_t lights[], Span<const uint32_t> visible_lights,
-                         const transform_t transforms[], hit_data_t &inout_inter);
+void IntersectAreaLights(Span<const ray_data_t> rays, const light_t lights[], Span<const uint32_t> visible_lights,
+                         const transform_t transforms[], Span<hit_data_t> inout_inters);
 float IntersectAreaLights(const shadow_ray_t &ray, const light_t lights[], Span<const uint32_t> blocker_lights,
                           const transform_t transforms[]);
+
+void TraceRays(Span<ray_data_t> rays, int min_transp_depth, int max_transp_depth, const scene_data_t &sc,
+               uint32_t node_index, bool trace_lights, const Cpu::TexStorageBase *const textures[],
+               const float random_seq[], Span<hit_data_t> out_inter);
+void TraceShadowRays(Span<const shadow_ray_t> rays, int max_transp_depth, float _clamp_val, const scene_data_t &sc,
+                     uint32_t node_index, const Cpu::TexStorageBase *const textures[], int img_w,
+                     color_rgba_t *out_color);
 
 // Get environment collor at direction
 simd_fvec4 Evaluate_EnvColor(const ray_data_t &ray, const environment_t &env, const Cpu::TexStorageRGBA &tex_storage);
@@ -347,11 +354,22 @@ void Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t &ray, con
                            float rand_u, float rand_v, float mix_rand, float mix_weight, ray_data_t &new_ray);
 
 // Shade
-Ray::color_rgba_t ShadeSurface(const pass_settings_t &ps, const hit_data_t &inter, const ray_data_t &ray,
-                               const float *random_seq, const scene_data_t &sc, uint32_t node_index,
-                               const Cpu::TexStorageBase *const textures[], ray_data_t *out_secondary_rays,
-                               int *out_secondary_rays_count, shadow_ray_t *out_shadow_rays, int *out_shadow_rays_count,
-                               color_rgba_t *out_base_color, color_rgba_t *out_depth_normal);
+color_rgba_t ShadeSurface(const pass_settings_t &ps, const hit_data_t &inter, const ray_data_t &ray,
+                          const float *random_seq, const scene_data_t &sc, uint32_t node_index,
+                          const Cpu::TexStorageBase *const textures[], ray_data_t *out_secondary_rays,
+                          int *out_secondary_rays_count, shadow_ray_t *out_shadow_rays, int *out_shadow_rays_count,
+                          color_rgba_t *out_base_color, color_rgba_t *out_depth_normal);
+void ShadePrimary(const pass_settings_t &ps, Span<const hit_data_t> inters, Span<const ray_data_t> rays,
+                  const float *random_seq, const scene_data_t &sc, uint32_t node_index,
+                  const Cpu::TexStorageBase *const textures[], ray_data_t *out_secondary_rays,
+                  int *out_secondary_rays_count, shadow_ray_t *out_shadow_rays, int *out_shadow_rays_count, int img_w,
+                  float mix_factor, color_rgba_t *out_color, color_rgba_t *out_base_color,
+                  color_rgba_t *out_depth_normal);
+void ShadeSecondary(const pass_settings_t &ps, Span<const hit_data_t> inters, Span<const ray_data_t> rays,
+                    const float *random_seq, const scene_data_t &sc, uint32_t node_index,
+                    const Cpu::TexStorageBase *const textures[], ray_data_t *out_secondary_rays,
+                    int *out_secondary_rays_count, shadow_ray_t *out_shadow_rays, int *out_shadow_rays_count, int img_w,
+                    color_rgba_t *out_color);
 
 // Denoise
 template <int WINDOW_SIZE = 7, int NEIGHBORHOOD_SIZE = 3>

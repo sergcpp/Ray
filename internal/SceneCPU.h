@@ -9,26 +9,29 @@
 #include "TextureStorageCPU.h"
 
 namespace Ray {
+namespace Cpu {
+template <typename SIMDPolicy> class Renderer;
+}
 namespace Ref {
-class Renderer;
+class SIMDPolicy;
 }
 namespace Sse2 {
-template <int DimX, int DimY> class RendererSIMD;
+class SIMDPolicy;
 }
 namespace Sse41 {
-template <int DimX, int DimY> class RendererSIMD;
+class SIMDPolicy;
 }
 namespace Avx {
-template <int DimX, int DimY> class RendererSIMD;
+class SIMDPolicy;
 }
 namespace Avx2 {
-template <int DimX, int DimY> class RendererSIMD;
+class SIMDPolicy;
 }
 namespace Avx512 {
-template <int DimX, int DimY> class RendererSIMD;
+class SIMDPolicy;
 }
 namespace Neon {
-template <int DimX, int DimY> class RendererSIMD;
+class SIMDPolicy;
 }
 
 class ILog;
@@ -36,13 +39,13 @@ class ILog;
 namespace Cpu {
 class Scene : public SceneBase {
   protected:
-    friend class Ref::Renderer;
-    template <int DimX, int DimY> friend class Sse2::RendererSIMD;
-    template <int DimX, int DimY> friend class Sse41::RendererSIMD;
-    template <int DimX, int DimY> friend class Avx::RendererSIMD;
-    template <int DimX, int DimY> friend class Avx2::RendererSIMD;
-    template <int DimX, int DimY> friend class Avx512::RendererSIMD;
-    template <int DimX, int DimY> friend class Neon::RendererSIMD;
+    friend class Cpu::Renderer<Ref::SIMDPolicy>;
+    friend class Cpu::Renderer<Sse2::SIMDPolicy>;
+    friend class Cpu::Renderer<Sse41::SIMDPolicy>;
+    friend class Cpu::Renderer<Avx::SIMDPolicy>;
+    friend class Cpu::Renderer<Avx2::SIMDPolicy>;
+    friend class Cpu::Renderer<Avx512::SIMDPolicy>;
+    friend class Cpu::Renderer<Neon::SIMDPolicy>;
 
     ILog *log_;
 

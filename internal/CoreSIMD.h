@@ -128,25 +128,17 @@ template <int S> struct light_sample_t {
     force_inline light_sample_t() = default;
 };
 
-template <int S> force_inline simd_ivec<S> total_depth(const ray_data_t<S> &r) {
-    const simd_ivec<S> diff_depth = r.depth & 0x000000ff;
-    const simd_ivec<S> spec_depth = (r.depth >> 8) & 0x000000ff;
-    const simd_ivec<S> refr_depth = (r.depth >> 16) & 0x000000ff;
-    const simd_ivec<S> transp_depth = (r.depth >> 24) & 0x000000ff;
-    return diff_depth + spec_depth + refr_depth + transp_depth;
-}
-
-template <int S> force_inline int total_depth(const shadow_ray_t<S> &r) {
-    const simd_ivec<S> diff_depth = r.depth & 0x000000ff;
-    const simd_ivec<S> spec_depth = (r.depth >> 8) & 0x000000ff;
-    const simd_ivec<S> refr_depth = (r.depth >> 16) & 0x000000ff;
-    const simd_ivec<S> transp_depth = (r.depth >> 24) & 0x000000ff;
+template <int S> force_inline simd_ivec<S> total_depth(const simd_ivec<S> &r_depth) {
+    const simd_ivec<S> diff_depth = r_depth & 0x000000ff;
+    const simd_ivec<S> spec_depth = (r_depth >> 8) & 0x000000ff;
+    const simd_ivec<S> refr_depth = (r_depth >> 16) & 0x000000ff;
+    const simd_ivec<S> transp_depth = (r_depth >> 24) & 0x000000ff;
     return diff_depth + spec_depth + refr_depth + transp_depth;
 }
 
 // Generating rays
 template <int DimX, int DimY>
-void GeneratePrimaryRays(int iteration, const camera_t &cam, const rect_t &r, int w, int h, const float random_seq[],
+void GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, int h, const float random_seq[],
                          aligned_vector<ray_data_t<DimX * DimY>> &out_rays);
 template <int DimX, int DimY>
 void SampleMeshInTextureSpace(int iteration, int obj_index, int uv_layer, const mesh_t &mesh, const transform_t &tr,
@@ -156,12 +148,12 @@ void SampleMeshInTextureSpace(int iteration, int obj_index, int uv_layer, const 
 
 // Sorting rays
 template <int S>
-void SortRays_CPU(ray_data_t<S> *rays, int &secondary_rays_count, const float root_min[3], const float cell_size[3],
-                  simd_ivec<S> *hash_values, uint32_t *scan_values, ray_chunk_t *chunks, ray_chunk_t *chunks_temp);
+int SortRays_CPU(Span<ray_data_t<S>> rays, const float root_min[3], const float cell_size[3], simd_ivec<S> *hash_values,
+                 uint32_t *scan_values, ray_chunk_t *chunks, ray_chunk_t *chunks_temp);
 template <int S>
-void SortRays_GPU(ray_data_t<S> *rays, int &secondary_rays_count, const float root_min[3], const float cell_size[3],
-                  simd_ivec<S> *hash_values, int *head_flags, uint32_t *scan_values, ray_chunk_t *chunks,
-                  ray_chunk_t *chunks_temp, uint32_t *skeleton);
+int SortRays_GPU(Span<ray_data_t<S>> rays, const float root_min[3], const float cell_size[3], simd_ivec<S> *hash_values,
+                 int *head_flags, uint32_t *scan_values, ray_chunk_t *chunks, ray_chunk_t *chunks_temp,
+                 uint32_t *skeleton);
 
 // Intersect primitives
 template <int S>
@@ -370,6 +362,15 @@ template <int S>
 simd_fvec<S> IntersectAreaLights(const shadow_ray_t<S> &r, const light_t lights[], Span<const uint32_t> blocker_lights,
                                  const transform_t transforms[]);
 
+template <int S>
+void TraceRays(Span<ray_data_t<S>> rays, int min_transp_depth, int max_transp_depth, const scene_data_t &sc,
+               uint32_t root_index, bool trace_lights, const Cpu::TexStorageBase *const textures[],
+               const float random_seq[], Span<hit_data_t<S>> out_inter);
+template <int S>
+void TraceShadowRays(Span<const shadow_ray_t<S>> rays, int max_transp_depth, float _clamp_val, const scene_data_t &sc,
+                     uint32_t root_index, const Cpu::TexStorageBase *const textures[], int img_w,
+                     color_rgba_t *out_color);
+
 // Get environment collor at direction
 template <int S>
 void Evaluate_EnvColor(const ray_data_t<S> &ray, const simd_ivec<S> &mask, const environment_t &env,
@@ -470,6 +471,86 @@ void ShadeSurface(const pass_settings_t &ps, const float *random_seq, const hit_
                   const Cpu::TexStorageBase *const tex_atlases[], simd_fvec<S> out_rgba[4],
                   ray_data_t<S> out_secondary_rays[], int *out_secondary_rays_count, shadow_ray_t<S> out_shadow_rays[],
                   int *out_shadow_rays_count, simd_fvec<S> out_base_color[4], simd_fvec<S> out_depth_normals[4]);
+template <int S>
+void ShadePrimary(const pass_settings_t &ps, Span<const hit_data_t<S>> inters, Span<const ray_data_t<S>> rays,
+                  const float *random_seq, const scene_data_t &sc, uint32_t node_index,
+                  const Cpu::TexStorageBase *const textures[], ray_data_t<S> *out_secondary_rays,
+                  int *out_secondary_rays_count, shadow_ray_t<S> *out_shadow_rays, int *out_shadow_rays_count,
+                  int img_w, float mix_factor, color_rgba_t *out_color, color_rgba_t *out_base_color,
+                  color_rgba_t *out_depth_normals);
+template <int S>
+void ShadeSecondary(const pass_settings_t &ps, Span<const hit_data_t<S>> inters, Span<const ray_data_t<S>> rays,
+                    const float *random_seq, const scene_data_t &sc, uint32_t node_index,
+                    const Cpu::TexStorageBase *const textures[], ray_data_t<S> *out_secondary_rays,
+                    int *out_secondary_rays_count, shadow_ray_t<S> *out_shadow_rays, int *out_shadow_rays_count,
+                    int img_w, color_rgba_t *out_color);
+
+class SIMDPolicyBase {
+  public:
+    using RayDataType = ray_data_t<RPSize>;
+    using ShadowRayType = shadow_ray_t<RPSize>;
+    using HitDataType = hit_data_t<RPSize>;
+    using RayHashType = simd_ivec<RPSize>;
+
+  protected:
+    static force_inline void GeneratePrimaryRays(const camera_t &cam, const rect_t &r, const int w, const int h,
+                                                 const float *random_seq, aligned_vector<RayDataType> &out_rays) {
+        NS::GeneratePrimaryRays<RPDimX, RPDimY>(cam, r, w, h, random_seq, out_rays);
+    }
+
+    static force_inline void SampleMeshInTextureSpace(int iteration, int obj_index, int uv_layer, const mesh_t &mesh,
+                                                      const transform_t &tr, const uint32_t *vtx_indices,
+                                                      const vertex_t *vertices, const rect_t &r, int w, int h,
+                                                      const float *random_seq, aligned_vector<RayDataType> &out_rays,
+                                                      aligned_vector<HitDataType> &out_inters) {
+        NS::SampleMeshInTextureSpace<RPDimX, RPDimY>(iteration, obj_index, uv_layer, mesh, tr, vtx_indices, vertices, r,
+                                                     w, h, random_seq, out_rays, out_inters);
+    }
+
+    static force_inline void TraceRays(Span<RayDataType> rays, int min_transp_depth, int max_transp_depth,
+                                       const scene_data_t &sc, uint32_t root_index, bool trace_lights,
+                                       const Cpu::TexStorageBase *const textures[], const float random_seq[],
+                                       Span<HitDataType> out_inter) {
+        NS::TraceRays<RPSize>(rays, min_transp_depth, max_transp_depth, sc, root_index, trace_lights, textures,
+                              random_seq, out_inter);
+    }
+
+    static force_inline void TraceShadowRays(Span<const ShadowRayType> rays, int max_transp_depth, float _clamp_val,
+                                             const scene_data_t &sc, uint32_t node_index,
+                                             const Cpu::TexStorageBase *const textures[], int img_w,
+                                             color_rgba_t *out_color) {
+        NS::TraceShadowRays<RPSize>(rays, max_transp_depth, _clamp_val, sc, node_index, textures, img_w, out_color);
+    }
+
+    static force_inline int SortRays_CPU(Span<RayDataType> rays, const float root_min[3], const float cell_size[3],
+                                         RayHashType *hash_values, uint32_t *scan_values, ray_chunk_t *chunks,
+                                         ray_chunk_t *chunks_temp) {
+        return NS::SortRays_CPU<RPSize>(rays, root_min, cell_size, hash_values, scan_values, chunks, chunks_temp);
+    }
+
+    static force_inline void ShadePrimary(const pass_settings_t &ps, Span<const HitDataType> inters,
+                                          Span<const RayDataType> rays, const float *random_seq, const scene_data_t &sc,
+                                          uint32_t node_index, const Cpu::TexStorageBase *const textures[],
+                                          RayDataType *out_secondary_rays, int *out_secondary_rays_count,
+                                          ShadowRayType *out_shadow_rays, int *out_shadow_rays_count, int img_w,
+                                          float mix_factor, color_rgba_t *out_color, color_rgba_t *out_base_color,
+                                          color_rgba_t *out_depth_normal) {
+        NS::ShadePrimary<RPSize>(ps, inters, rays, random_seq, sc, node_index, textures, out_secondary_rays,
+                                 out_secondary_rays_count, out_shadow_rays, out_shadow_rays_count, img_w, mix_factor,
+                                 out_color, out_base_color, out_depth_normal);
+    }
+
+    static force_inline void ShadeSecondary(const pass_settings_t &ps, Span<const HitDataType> inters,
+                                            Span<const RayDataType> rays, const float *random_seq,
+                                            const scene_data_t &sc, uint32_t node_index,
+                                            const Cpu::TexStorageBase *const textures[],
+                                            RayDataType *out_secondary_rays, int *out_secondary_rays_count,
+                                            ShadowRayType *out_shadow_rays, int *out_shadow_rays_count, int img_w,
+                                            color_rgba_t *out_color) {
+        NS::ShadeSecondary<RPSize>(ps, inters, rays, random_seq, sc, node_index, textures, out_secondary_rays,
+                                   out_secondary_rays_count, out_shadow_rays, out_shadow_rays_count, img_w, out_color);
+    }
+};
 } // namespace NS
 } // namespace Ray
 
@@ -2056,8 +2137,8 @@ simd_fvec<S> peek_ior_stack(const simd_fvec<S> stack[4], const simd_ivec<S> &_sk
 } // namespace Ray
 
 template <int DimX, int DimY>
-void Ray::NS::GeneratePrimaryRays(const int iteration, const camera_t &cam, const rect_t &r, int w, int h,
-                                  const float random_seq[], aligned_vector<ray_data_t<DimX * DimY>> &out_rays) {
+void Ray::NS::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, int h, const float random_seq[],
+                                  aligned_vector<ray_data_t<DimX * DimY>> &out_rays) {
     const int S = DimX * DimY;
     static_assert(S <= 16, "!");
 
@@ -2302,10 +2383,11 @@ void Ray::NS::SampleMeshInTextureSpace(int iteration, int obj_index, int uv_laye
 }
 
 template <int S>
-void Ray::NS::SortRays_CPU(ray_data_t<S> *rays, int &rays_count, const float root_min[3], const float cell_size[3],
-                           simd_ivec<S> *hash_values, uint32_t *scan_values, ray_chunk_t *chunks,
-                           ray_chunk_t *chunks_temp) {
+int Ray::NS::SortRays_CPU(Span<ray_data_t<S>> rays, const float root_min[3], const float cell_size[3],
+                          simd_ivec<S> *hash_values, uint32_t *scan_values, ray_chunk_t *chunks,
+                          ray_chunk_t *chunks_temp) {
     // From "Fast Ray Sorting and Breadth-First Packet Traversal for GPU Ray Tracing" [2010]
+    int rays_count = int(rays.size());
 
     // compute ray hash values
     for (int i = 0; i < rays_count; i++) {
@@ -2382,13 +2464,16 @@ void Ray::NS::SortRays_CPU(ray_data_t<S> *rays, int &rays_count, const float roo
     while (rays_count && rays[rays_count - 1].mask.all_zeros()) {
         rays_count--;
     }
+
+    return rays_count;
 }
 
 template <int S>
-void Ray::NS::SortRays_GPU(ray_data_t<S> *rays, int &rays_count, const float root_min[3],
-                           const float cell_size[3], simd_ivec<S> *hash_values, int *head_flags, uint32_t *scan_values,
-                           ray_chunk_t *chunks, ray_chunk_t *chunks_temp, uint32_t *skeleton) {
+int Ray::NS::SortRays_GPU(Span<ray_data_t<S>> rays, const float root_min[3], const float cell_size[3],
+                          simd_ivec<S> *hash_values, int *head_flags, uint32_t *scan_values, ray_chunk_t *chunks,
+                          ray_chunk_t *chunks_temp, uint32_t *skeleton) {
     // From "Fast Ray Sorting and Breadth-First Packet Traversal for GPU Ray Tracing" [2010]
+    int rays_count = int(rays.size());
 
     // compute ray hash values
     for (int i = 0; i < rays_count; i++) {
@@ -2424,9 +2509,9 @@ void Ray::NS::SortRays_GPU(ray_data_t<S> *rays, int &rays_count, const float roo
     for (int i = 0; i < chunks_count - 1; i++) {
         chunks[i].size = chunks[i + 1].base - chunks[i].base;
     }
-    chunks[chunks_count - 1].size = (uint32_t)rays_count * S - chunks[chunks_count - 1].base;
+    chunks[chunks_count - 1].size = uint32_t(rays_count) * S - chunks[chunks_count - 1].base;
 
-    radix_sort(&chunks[0], &chunks[0] + chunks_count, &chunks_temp[0]);
+    radix_sort(chunks, chunks + chunks_count, chunks_temp);
 
     { // perform exclusive scan on chunks size
         uint32_t cur_sum = 0;
@@ -2436,8 +2521,8 @@ void Ray::NS::SortRays_GPU(ray_data_t<S> *rays, int &rays_count, const float roo
         }
     }
 
-    std::fill(&skeleton[0], &skeleton[0] + rays_count * S, 1);
-    std::fill(&head_flags[0], &head_flags[0] + rays_count * S, 0);
+    std::fill(skeleton, skeleton + rays_count * S, 1);
+    memset(head_flags, 0, rays_count * S);
 
     // init skeleton and head flags array
     for (int i = 0; i < chunks_count; i++) {
@@ -2498,6 +2583,8 @@ void Ray::NS::SortRays_GPU(ray_data_t<S> *rays, int &rays_count, const float roo
     while (rays_count && rays[rays_count - 1].mask.all_zeros()) {
         rays_count--;
     }
+
+    return rays_count;
 }
 
 template <int S>
@@ -4251,7 +4338,7 @@ void Ray::NS::IntersectScene(ray_data_t<S> &r, const int min_transp_depth, const
     simd_fvec<S> ro[3] = {r.o[0], r.o[1], r.o[2]};
 
     const simd_fvec<S> rand_offset = construct_float(hash(r.xy));
-    simd_ivec<S> rand_index = total_depth(r) * RAND_DIM_BOUNCE_COUNT;
+    simd_ivec<S> rand_index = total_depth(r.depth) * RAND_DIM_BOUNCE_COUNT;
 
     simd_ivec<S> keep_going = r.mask;
     while (keep_going.not_all_zeros()) {
@@ -4423,6 +4510,52 @@ void Ray::NS::IntersectScene(ray_data_t<S> &r, const int min_transp_depth, const
     }
 
     inter.t += distance(r.o, ro);
+}
+
+template <int S>
+void Ray::NS::TraceRays(Span<ray_data_t<S>> rays, int min_transp_depth, int max_transp_depth, const scene_data_t &sc,
+                        uint32_t root_index, bool trace_lights, const Cpu::TexStorageBase *const textures[],
+                        const float random_seq[], Span<hit_data_t<S>> out_inter) {
+    for (int i = 0; i < rays.size(); ++i) {
+        ray_data_t<S> &r = rays[i];
+        hit_data_t<S> &inter = out_inter[i];
+
+        IntersectScene(r, min_transp_depth, max_transp_depth, random_seq, sc, root_index, textures, inter);
+        if (trace_lights) {
+            IntersectAreaLights(r, sc.lights, sc.visible_lights, sc.transforms, inter);
+        }
+    }
+}
+
+template <int S>
+void Ray::NS::TraceShadowRays(Span<const shadow_ray_t<S>> rays, int max_transp_depth, float _clamp_val,
+                              const scene_data_t &sc, uint32_t root_index, const Cpu::TexStorageBase *const textures[],
+                              int img_w, color_rgba_t *out_color) {
+    simd_fvec<S> clamp_val = _clamp_val;
+    if (_clamp_val == 0.0f) {
+        clamp_val = std::numeric_limits<float>::max();
+    }
+
+    for (int i = 0; i < rays.size(); ++i) {
+        const shadow_ray_t<S> &sh_r = rays[i];
+
+        simd_fvec<S> rc[3];
+        IntersectScene(sh_r, max_transp_depth, sc, root_index, textures, rc);
+        const simd_fvec<S> k = IntersectAreaLights(sh_r, sc.lights, sc.blocker_lights, sc.transforms);
+        UNROLLED_FOR(j, 3, { rc[j] = min(rc[j] * k, clamp_val); })
+
+        const simd_ivec<S> x = sh_r.xy >> 16, y = sh_r.xy & 0x0000FFFF;
+
+        // TODO: match layouts!
+        UNROLLED_FOR_S(i, S, {
+            if (sh_r.mask.template get<i>()) {
+                auto old_val =
+                    simd_fvec4(out_color[y.template get<i>() * img_w + x.template get<i>()].v, simd_mem_aligned);
+                old_val += simd_fvec4(rc[0].template get<i>(), rc[1].template get<i>(), rc[2].template get<i>(), 0.0f);
+                old_val.store_to(out_color[y.template get<i>() * img_w + x.template get<i>()].v, simd_mem_aligned);
+            }
+        })
+    }
 }
 
 template <int S>
@@ -5807,7 +5940,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
     }
 
     FetchVertexAttribute3(&sc.vertices[0].n[0], vtx_indices, inter.u, inter.v, w, surf.N);
-    normalize(surf.N);
+    safe_normalize(surf.N);
 
     simd_fvec<S> u1[2], u2[2], u3[2];
     { // Fetch vertex uvs
@@ -6050,7 +6183,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
     }
 
     cross(tangent, surf.N, surf.B);
-    normalize(surf.B);
+    safe_normalize(surf.B);
     cross(surf.N, surf.B, surf.T);
 #endif
 
@@ -6282,7 +6415,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                     const simd_fvec<S> tri_area = 0.5f * light_forward_len;
 
                     const simd_fvec<S> cos_theta = abs(dot3(I, light_forward));
-                    const simd_fvec<S> light_pdf = (inter.t * inter.t) / (tri_area * cos_theta);
+                    const simd_fvec<S> light_pdf = safe_div(inter.t * inter.t, tri_area * cos_theta);
                     const simd_fvec<S> &bsdf_pdf = ray.pdf;
 
                     where((cos_theta > 0.0f) & simd_cast((ray.depth & 0x00ffffff) != 0), mis_weight) =
@@ -6428,6 +6561,97 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
 
     UNROLLED_FOR(i, 3, { where(is_active_lane, out_rgba[i]) = ray.c[i] * col[i]; })
     where(is_active_lane, out_rgba[3]) = 1.0f;
+}
+
+template <int S>
+void Ray::NS::ShadePrimary(const pass_settings_t &ps, Span<const hit_data_t<S>> inters, Span<const ray_data_t<S>> rays,
+                           const float *random_seq, const scene_data_t &sc, uint32_t node_index,
+                           const Cpu::TexStorageBase *const textures[], ray_data_t<S> *out_secondary_rays,
+                           int *out_secondary_rays_count, shadow_ray_t<S> *out_shadow_rays, int *out_shadow_rays_count,
+                           int img_w, float mix_factor, color_rgba_t *out_color, color_rgba_t *out_base_color,
+                           color_rgba_t *out_depth_normals) {
+    simd_fvec<S> clamp_direct = ps.clamp_direct;
+    if (ps.clamp_direct == 0.0f) {
+        clamp_direct = std::numeric_limits<float>::max();
+    }
+
+    for (int i = 0; i < inters.size(); ++i) {
+        const ray_data_t<S> &r = rays[i];
+        const hit_data_t<S> &inter = inters[i];
+
+        simd_fvec<S> out_rgba[4] = {0.0f}, base_color[3], depth_normal[4];
+        ShadeSurface(ps, random_seq, inter, r, sc, node_index, textures, out_rgba, out_secondary_rays,
+                     out_secondary_rays_count, out_shadow_rays, out_shadow_rays_count, base_color, depth_normal);
+        UNROLLED_FOR(j, 3, { out_rgba[j] = min(out_rgba[j], clamp_direct); })
+
+        const simd_ivec<S> x = r.xy >> 16, y = r.xy & 0x0000FFFF;
+
+        // TODO: match layouts!
+        UNROLLED_FOR_S(j, S, {
+            if (r.mask.template get<j>()) {
+                UNROLLED_FOR(k, 4, {
+                    out_color[y.template get<j>() * img_w + x.template get<j>()].v[k] = out_rgba[k].template get<j>();
+                })
+                if (ps.flags & ePassFlags::OutputBaseColor) {
+                    auto old_val = simd_fvec4(out_base_color[y.template get<j>() * img_w + x.template get<j>()].v,
+                                              simd_mem_aligned);
+                    old_val += (simd_fvec4{base_color[0].template get<j>(), base_color[1].template get<j>(),
+                                           base_color[2].template get<j>(), 0.0f} -
+                                old_val) *
+                               mix_factor;
+                    old_val.store_to(out_base_color[y.template get<j>() * img_w + x.template get<j>()].v,
+                                     simd_mem_aligned);
+                }
+                if (ps.flags & ePassFlags::OutputDepthNormals) {
+                    auto old_val = simd_fvec4(out_depth_normals[y.template get<j>() * img_w + x.template get<j>()].v,
+                                              simd_mem_aligned);
+                    old_val += (simd_fvec4{depth_normal[0].template get<j>(), depth_normal[1].template get<j>(),
+                                           depth_normal[2].template get<j>(), depth_normal[3].template get<j>()} -
+                                old_val) *
+                               mix_factor;
+                    old_val.store_to(out_depth_normals[y.template get<j>() * img_w + x.template get<j>()].v,
+                                     simd_mem_aligned);
+                }
+            }
+        })
+    }
+}
+
+template <int S>
+void Ray::NS::ShadeSecondary(const pass_settings_t &ps, Span<const hit_data_t<S>> inters,
+                             Span<const ray_data_t<S>> rays, const float *random_seq, const scene_data_t &sc,
+                             uint32_t node_index, const Cpu::TexStorageBase *const textures[],
+                             ray_data_t<S> *out_secondary_rays, int *out_secondary_rays_count,
+                             shadow_ray_t<S> *out_shadow_rays, int *out_shadow_rays_count, int img_w,
+                             color_rgba_t *out_color) {
+    simd_fvec<S> clamp_indirect = ps.clamp_indirect;
+    if (ps.clamp_indirect == 0.0f) {
+        clamp_indirect = std::numeric_limits<float>::max();
+    }
+
+    for (int i = 0; i < inters.size(); ++i) {
+        const ray_data_t<S> &r = rays[i];
+        const hit_data_t<S> &inter = inters[i];
+
+        simd_fvec<S> out_rgba[4] = {0.0f};
+        Ray::NS::ShadeSurface(ps, random_seq, inter, r, sc, node_index, textures, out_rgba, out_secondary_rays,
+                              out_secondary_rays_count, out_shadow_rays, out_shadow_rays_count, (simd_fvec<S> *)nullptr,
+                              (simd_fvec<S> *)nullptr);
+        UNROLLED_FOR(j, 3, { out_rgba[j] = min(out_rgba[j], clamp_indirect); })
+
+        const simd_ivec<S> x = r.xy >> 16, y = r.xy & 0x0000FFFF;
+
+        // TODO: match layouts!
+        UNROLLED_FOR_S(j, S, {
+            if (r.mask.template get<j>()) {
+                auto old_val =
+                    simd_fvec4(out_color[y.template get<j>() * img_w + x.template get<j>()].v, simd_mem_aligned);
+                old_val += simd_fvec4(out_rgba[0].template get<j>(), out_rgba[1].template get<j>(),
+                                      out_rgba[2].template get<j>(), out_rgba[3].template get<j>());
+                old_val.store_to(out_color[y.template get<j>() * img_w + x.template get<j>()].v, simd_mem_aligned);
+            }
+        })
+    }
 }
 
 #undef sqr

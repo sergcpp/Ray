@@ -75,7 +75,7 @@ Ray::RendererBase *Ray::CreateRenderer(const settings_t &s, ILog *log, const Bit
 #ifdef ENABLE_REF_IMPL
     if (enabled_types & eRendererType::Reference) {
         log->Info("Ray: Creating Ref renderer %ix%i", s.w, s.h);
-        return new Ref::Renderer(s, log);
+        return Ref::CreateRenderer(s, log);
     }
 #endif
 #elif defined(__arm__) || defined(__aarch64__) || defined(_M_ARM) || defined(_M_ARM64)
@@ -88,13 +88,13 @@ Ray::RendererBase *Ray::CreateRenderer(const settings_t &s, ILog *log, const Bit
 #ifdef ENABLE_REF_IMPL
     if (enabled_types & eRendererType::Reference) {
         log->Info("Ray: Creating Ref renderer %ix%i", s.w, s.h);
-        return new Ref::Renderer(s, log);
+        return Ref::CreateRenderer(s, log);
     }
 #endif
 #endif
 #ifdef ENABLE_REF_IMPL
     log->Info("Ray: Creating Ref renderer %ix%i", s.w, s.h);
-    return new Ref::Renderer(s, log);
+    return Ref::CreateRenderer(s, log);
 #else
     return nullptr;
 #endif

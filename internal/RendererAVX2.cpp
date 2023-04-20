@@ -1,21 +1,22 @@
 #if defined(_M_IX86) || defined(_M_X64) || defined(__i386__) || defined(__x86_64__)
 #include "RendererAVX2.h"
 
+#include "RendererCPU.h"
+
 #define NS Avx2
 #define USE_AVX2
-#include "RendererSIMD.h"
+#include "CoreSIMD.h"
 #undef USE_AVX2
 #undef NS
 
 namespace Ray {
 namespace Avx2 {
-template void SortRays_CPU<RPSize>(ray_data_t<RPSize> *rays, int &secondary_rays_count, const float root_min[3],
-                                   const float cell_size[3], simd_ivec<RPSize> *hash_values, uint32_t *scan_values,
-                                   ray_chunk_t *chunks, ray_chunk_t *chunks_temp);
-template void SortRays_GPU<RPSize>(ray_data_t<RPSize> *rays, int &secondary_rays_count, const float root_min[3],
-                                   const float cell_size[3], simd_ivec<RPSize> *hash_values, int *head_flags,
-                                   uint32_t *scan_values, ray_chunk_t *chunks, ray_chunk_t *chunks_temp,
-                                   uint32_t *skeleton);
+template int SortRays_CPU<RPSize>(Span<ray_data_t<RPSize>> rays, const float root_min[3], const float cell_size[3],
+                                  simd_ivec<RPSize> *hash_values, uint32_t *scan_values, ray_chunk_t *chunks,
+                                  ray_chunk_t *chunks_temp);
+template int SortRays_GPU<RPSize>(Span<ray_data_t<RPSize>> rays, const float root_min[3], const float cell_size[3],
+                                  simd_ivec<RPSize> *hash_values, int *head_flags, uint32_t *scan_values,
+                                  ray_chunk_t *chunks, ray_chunk_t *chunks_temp, uint32_t *skeleton);
 
 template bool Traverse_MacroTree_WithStack_ClosestHit<RPSize>(
     const simd_fvec<RPSize> ro[3], const simd_fvec<RPSize> rd[3], const simd_ivec<RPSize> &ray_mask,
@@ -71,17 +72,14 @@ template void SampleLatlong_RGBE<RPSize>(const Cpu::TexStorageRGBA &storage, uin
                                          const simd_fvec<RPSize> dir[3], float y_rotation,
                                          const simd_ivec<RPSize> &mask, simd_fvec<RPSize> out_rgb[3]);
 
-template class RendererSIMD<RPDimX, RPDimY>;
-
-class Renderer : public RendererSIMD<RPDimX, RPDimY> {
-  public:
-    Renderer(const settings_t &s, ILog *log) : RendererSIMD(s, log) {}
-
-    eRendererType type() const override { return eRendererType::SIMD_AVX2; }
+class SIMDPolicy : public SIMDPolicyBase {
+  protected:
+    static force_inline eRendererType type() { return eRendererType::SIMD_AVX2; }
 };
 
-RendererBase *CreateRenderer(const settings_t &s, ILog *log) { return new Renderer(s, log); }
+RendererBase *CreateRenderer(const settings_t &s, ILog *log) { return new Cpu::Renderer<Avx2::SIMDPolicy>(s, log); }
 } // namespace Avx2
+template class Cpu::Renderer<Avx2::SIMDPolicy>;
 } // namespace Ray
 
 #endif // defined(_M_IX86) || defined(_M_X64) || defined(__i386__) || defined(__x86_64__)
