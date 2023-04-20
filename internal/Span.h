@@ -17,15 +17,16 @@ template <typename T> class Span {
     Span() = default;
     Span(T *p_data, const ptrdiff_t size) : p_data_(p_data), size_(size) {}
     Span(T *p_data, const size_t size) : p_data_(p_data), size_(size) {}
+    Span(T *p_data, const int size) : p_data_(p_data), size_(size) {}
     Span(T *p_begin, T *p_end) : p_data_(p_begin), size_(p_end - p_begin) {}
     template <typename Alloc>
-    Span(const std::vector<typename std::remove_const<T>::type, Alloc> &v)
-        : Span(v.data(), v.size()) {}
+    Span(const std::vector<typename std::remove_const<T>::type, Alloc> &v) : Span(v.data(), size_t(v.size())) {}
+    template <typename Alloc>
+    Span(std::vector<typename std::remove_const<T>::type, Alloc> &v) : Span(v.data(), size_t(v.size())) {}
 
     template <size_t N> Span(T (&arr)[N]) : p_data_(arr), size_(N) {}
 
-    template <typename U>
-    Span(const Span<U> &rhs) : Span(rhs.data(), rhs.size()) {}
+    template <typename U> Span(const Span<U> &rhs) : Span(rhs.data(), rhs.size()) {}
 
     Span(const Span &rhs) = default;
     Span &operator=(const Span &rhs) = default;
@@ -37,12 +38,12 @@ template <typename T> class Span {
     T &operator[](const ptrdiff_t i) const { return p_data_[i]; }
     T &operator()(const ptrdiff_t i) const { return p_data_[i]; }
 
-    using iterator = T*;
-    using const_iterator = const T*;
+    using iterator = T *;
+    using const_iterator = const T *;
 
     iterator begin() const { return p_data_; }
     iterator end() const { return p_data_ + size_; }
     const_iterator cbegin() const { return p_data_; }
     const_iterator cend() const { return p_data_ + size_; }
 };
-} // namespace Ren
+} // namespace Ray
