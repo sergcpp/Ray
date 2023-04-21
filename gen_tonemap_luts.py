@@ -58,7 +58,6 @@ def main():
     SaveLUT("__filmic_med_high_contrast", "Filmic sRGB", "Medium High Contrast")
     SaveLUT("__filmic_high_contrast", "Filmic sRGB", "High Contrast")
     SaveLUT("__filmic_very_high_contrast", "Filmic sRGB", "Very High Contrast")
-    SaveLUT("__filmic", "Filmic sRGB", None)
 
 if __name__ == "__main__":
     main()

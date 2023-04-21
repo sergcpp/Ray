@@ -4376,7 +4376,6 @@ template void Ray::Ref::NLMFilter<3 /* WINDOW_SIZE */, 1 /* NEIGHBORHOOD_SIZE */
 
 namespace Ray {
 extern const int LUT_DIMS = 48;
-#include "luts/__filmic.inl"
 #include "luts/__filmic_high_contrast.inl"
 #include "luts/__filmic_low_contrast.inl"
 #include "luts/__filmic_med_contrast.inl"
@@ -4387,7 +4386,6 @@ extern const int LUT_DIMS = 48;
 
 const float *transform_luts[] = {
     nullptr,                    // Standard
-    __filmic,                   // Filmic_BaseContrast
     __filmic_very_low_contrast, // Filmic_VeryLowContrast
     __filmic_low_contrast,      // Filmic_LowContrast
     __filmic_med_low_contrast,  // Filmic_MediumLowContrast

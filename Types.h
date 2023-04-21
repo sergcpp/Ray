@@ -47,7 +47,6 @@ enum class eLensUnits : uint8_t { FOV, FLength };
 
 enum class eViewTransform : uint8_t {
     Standard,
-    Filmic,
     Filmic_VeryLowContrast,
     Filmic_LowContrast,
     Filmic_MediumLowContrast,
