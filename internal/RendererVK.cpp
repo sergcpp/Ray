@@ -38,7 +38,7 @@ static_assert(Types::LIGHT_TYPE_TRI == Ray::LIGHT_TYPE_TRI, "!");
 
 namespace Ray {
 extern const int LUT_DIMS;
-extern const float *transform_luts[];
+extern const uint32_t *transform_luts[];
 namespace Vk {
 #include "shaders/output/debug_rt.comp.inl"
 #include "shaders/output/filter_variance.comp.inl"
@@ -544,29 +544,13 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         if (cam.view_transform != eViewTransform::Standard) {
             VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
 
-            union RGB10A2 {
-                struct {
-                    uint32_t r : 10;
-                    uint32_t g : 10;
-                    uint32_t b : 10;
-                    uint32_t a : 2;
-                };
-                uint32_t v;
-            };
-            static_assert(sizeof(RGB10A2) == sizeof(uint32_t), "!");
-
-            const uint32_t data_len = LUT_DIMS * LUT_DIMS * LUT_DIMS * sizeof(RGB10A2);
+            const uint32_t data_len = LUT_DIMS * LUT_DIMS * LUT_DIMS * sizeof(uint32_t);
             Buffer temp_stage_buf{"Temp tonemap LUT stage", ctx_.get(), eBufType::Stage, data_len};
             { // update stage buffer
-                RGB10A2 *mapped_ptr = reinterpret_cast<RGB10A2 *>(temp_stage_buf.Map(BufMapWrite));
-                const float *lut = transform_luts[int(cam.view_transform)];
+                uint32_t *mapped_ptr = reinterpret_cast<uint32_t *>(temp_stage_buf.Map(BufMapWrite));
+                const uint32_t *lut = transform_luts[int(cam.view_transform)];
 
-                for (int i = 0; i < LUT_DIMS * LUT_DIMS * LUT_DIMS; ++i) {
-                    mapped_ptr[i].r = uint32_t(std::round(lut[3 * i + 0] * 1023.0f));
-                    mapped_ptr[i].g = uint32_t(std::round(lut[3 * i + 1] * 1023.0f));
-                    mapped_ptr[i].b = uint32_t(std::round(lut[3 * i + 2] * 1023.0f));
-                    mapped_ptr[i].a = 3;
-                }
+                memcpy(mapped_ptr, lut, data_len);
 
                 temp_stage_buf.Unmap();
             }

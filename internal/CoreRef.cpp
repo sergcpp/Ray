@@ -4384,7 +4384,7 @@ extern const int LUT_DIMS = 48;
 #include "luts/__filmic_very_high_contrast.inl"
 #include "luts/__filmic_very_low_contrast.inl"
 
-const float *transform_luts[] = {
+const uint32_t *transform_luts[] = {
     nullptr,                    // Standard
     __filmic_very_low_contrast, // Filmic_VeryLowContrast
     __filmic_low_contrast,      // Filmic_LowContrast
@@ -4398,7 +4398,10 @@ static_assert(sizeof(transform_luts) / sizeof(transform_luts[0]) == int(eViewTra
 
 namespace Ref {
 force_inline simd_fvec4 FetchLUT(const eViewTransform view_transform, const int ix, const int iy, const int iz) {
-    return simd_fvec4{&transform_luts[int(view_transform)][3 * (iz * LUT_DIMS * LUT_DIMS + iy * LUT_DIMS + ix)]};
+    const uint32_t packed_val = transform_luts[int(view_transform)][iz * LUT_DIMS * LUT_DIMS + iy * LUT_DIMS + ix];
+    const simd_ivec4 ret = simd_ivec4{int((packed_val >> 0) & 0x3ff), int((packed_val >> 10) & 0x3ff),
+                                      int((packed_val >> 20) & 0x3ff), int((packed_val >> 30) & 0x3)};
+    return simd_fvec4(ret) * simd_fvec4{1.0f / 1023.0f, 1.0f / 1023.0f, 1.0f / 1023.0f, 1.0f / 3.0f};
 }
 } // namespace Ref
 } // namespace Ray

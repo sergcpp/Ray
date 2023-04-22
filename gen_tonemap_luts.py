@@ -24,17 +24,18 @@ def GenerateIdentityCube(res):
 
 def WriteAsCArray(lut_name, data, res):
     with open(os.path.join('internal', 'luts', lut_name + '.inl'), 'w') as f:
-        f.write('const long int %s_size = %d * %d * %d * 3 * sizeof(float);\n' % (lut_name, res, res, res))
-        f.write('const float %s[%d * %d * %d * 3 + 1] = {\n' % (lut_name, res, res, res))
+        f.write('const long int %s_size = %d * %d * %d * sizeof(uint32_t);\n' % (lut_name, res, res, res))
+        f.write('const uint32_t %s[%d * %d * %d] = {\n' % (lut_name, res, res, res))
         for iz in range(res):
             f.write('\t')
             for iy in range(res):
                 for ix in range(res):
-                    f.write('%ff, ' % data[iz, iy, ix, 0])
-                    f.write('%ff, ' % data[iz, iy, ix, 1])
-                    f.write('%ff, ' % data[iz, iy, ix, 2])
+                    r = round(data[iz, iy, ix, 0] * 1023.0)
+                    g = round(data[iz, iy, ix, 1] * 1023.0)
+                    b = round(data[iz, iy, ix, 2] * 1023.0)
+                    f.write('%u, ' % ((3 << 30) | (b << 20) | (g << 10) | (r << 0)))
             f.write('\n')
-        f.write('\t0.0f};\n')
+        f.write('};\n')
 
 def SaveLUT(name, color_space, looks):
     transform = OCIO.LookTransform()
