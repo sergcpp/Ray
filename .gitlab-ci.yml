@@ -487,6 +487,6 @@ deploy-job:
       - macos-universal/
     expire_in: 1 week
   tags:
-    - windows
+    - deployer
   rules:
     - if: $CI_COMMIT_BRANCH
