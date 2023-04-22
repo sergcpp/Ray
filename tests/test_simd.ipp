@@ -140,11 +140,17 @@ using namespace Ray::NS;
 
     const simd_ivec4 v12i = {-1, 2, 6, 13};
     const simd_fvec4 v12 = gather(gather_source + 2, v12i);
+    const simd_fvec4 v12_masked = gather(simd_fvec4{69}, gather_source + 2, simd_ivec4{-1, 0, -1, 0}, v12i);
 
     require(v12[0] == Approx(42));
     require(v12[1] == Approx(12));
     require(v12[2] == Approx(11));
     require(v12[3] == Approx(23));
+
+    require(v12_masked[0] == Approx(42));
+    require(v12_masked[1] == Approx(69));
+    require(v12_masked[2] == Approx(11));
+    require(v12_masked[3] == Approx(69));
 
     float scatter_destination[18] = {};
     scatter(scatter_destination + 2, v12i, v12);
@@ -294,11 +300,17 @@ using namespace Ray::NS;
 
     const simd_ivec4 v9i = {-1, 2, 6, 13};
     const simd_ivec4 v9 = gather(gather_source + 2, v9i);
+    const simd_ivec4 v9_masked = gather(simd_ivec4{69}, gather_source + 2, simd_ivec4{-1, 0, -1, 0}, v9i);
 
     require(v9[0] == 42);
     require(v9[1] == 12);
     require(v9[2] == 11);
     require(v9[3] == 23);
+
+    require(v9_masked[0] == 42);
+    require(v9_masked[1] == 69);
+    require(v9_masked[2] == 11);
+    require(v9_masked[3] == 69);
 
     int scatter_destination[18] = {};
     scatter(scatter_destination + 2, v9i, v9);
@@ -526,6 +538,8 @@ using namespace Ray::NS;
 
     const simd_ivec8 v12i = {-1, 2, 6, 13, 17, 20, 24, 31};
     const simd_fvec8 v12 = gather(gather_source + 2, v12i);
+    const simd_fvec8 v12_masked =
+        gather(simd_fvec8{69}, gather_source + 2, simd_ivec8{-1, 0, -1, 0, -1, 0, -1, 0}, v12i);
 
     require(v12[0] == Approx(42));
     require(v12[1] == Approx(12));
@@ -535,6 +549,15 @@ using namespace Ray::NS;
     require(v12[5] == Approx(12));
     require(v12[6] == Approx(11));
     require(v12[7] == Approx(23));
+
+    require(v12_masked[0] == Approx(42));
+    require(v12_masked[1] == Approx(69));
+    require(v12_masked[2] == Approx(11));
+    require(v12_masked[3] == Approx(69));
+    require(v12_masked[4] == Approx(42));
+    require(v12_masked[5] == Approx(69));
+    require(v12_masked[6] == Approx(11));
+    require(v12_masked[7] == Approx(69));
 
     float scatter_destination[36] = {};
     scatter(scatter_destination + 2, v12i, v12);
@@ -712,6 +735,7 @@ using namespace Ray::NS;
 
     const simd_ivec8 v9i = {-1, 2, 6, 13, 17, 20, 24, 31};
     const simd_ivec8 v9 = gather(gather_source + 2, v9i);
+    const simd_ivec8 v9_masked = gather(simd_ivec8{69}, gather_source + 2, simd_ivec8{-1, 0, -1, 0, -1, 0, -1, 0}, v9i);
 
     require(v9[0] == 42);
     require(v9[1] == 12);
@@ -721,6 +745,15 @@ using namespace Ray::NS;
     require(v9[5] == 12);
     require(v9[6] == 11);
     require(v9[7] == 23);
+
+    require(v9_masked[0] == 42);
+    require(v9_masked[1] == 69);
+    require(v9_masked[2] == 11);
+    require(v9_masked[3] == 69);
+    require(v9_masked[4] == 42);
+    require(v9_masked[5] == 69);
+    require(v9_masked[6] == 11);
+    require(v9_masked[7] == 69);
 
     int scatter_destination[36] = {};
     scatter(scatter_destination + 2, v9i, v9);
@@ -1080,6 +1113,8 @@ using namespace Ray::NS;
 
     const simd_ivec16 v12i = {-1, 2, 6, 13, 17, 20, 24, 31, 35, 38, 42, 49, 53, 56, 60, 67};
     const simd_fvec16 v12 = gather(gather_source + 2, v12i);
+    const simd_fvec16 v12_masked = gather(simd_fvec16{69}, gather_source + 2,
+                                          simd_ivec16{-1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0}, v12i);
 
     require(v12[0] == Approx(42));
     require(v12[1] == Approx(12));
@@ -1097,6 +1132,23 @@ using namespace Ray::NS;
     require(v12[13] == Approx(12));
     require(v12[14] == Approx(11));
     require(v12[15] == Approx(23));
+
+    require(v12_masked[0] == Approx(42));
+    require(v12_masked[1] == Approx(69));
+    require(v12_masked[2] == Approx(11));
+    require(v12_masked[3] == Approx(69));
+    require(v12_masked[4] == Approx(42));
+    require(v12_masked[5] == Approx(69));
+    require(v12_masked[6] == Approx(11));
+    require(v12_masked[7] == Approx(69));
+    require(v12_masked[8] == Approx(42));
+    require(v12_masked[9] == Approx(69));
+    require(v12_masked[10] == Approx(11));
+    require(v12_masked[11] == Approx(69));
+    require(v12_masked[12] == Approx(42));
+    require(v12_masked[13] == Approx(69));
+    require(v12_masked[14] == Approx(11));
+    require(v12_masked[15] == Approx(69));
 
     float scatter_destination[72] = {};
     scatter(scatter_destination + 2, v12i, v12);
@@ -1392,6 +1444,8 @@ using namespace Ray::NS;
 
     const simd_ivec16 v9i = {-1, 2, 6, 13, 17, 20, 24, 31, 35, 38, 42, 49, 53, 56, 60, 67};
     const simd_ivec16 v9 = gather(gather_source + 2, v9i);
+    const simd_ivec16 v9_masked = gather(simd_ivec16{69}, gather_source + 2,
+                                         simd_ivec16{-1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0}, v9i);
 
     require(v9[0] == 42);
     require(v9[1] == 12);
@@ -1409,6 +1463,23 @@ using namespace Ray::NS;
     require(v9[13] == 12);
     require(v9[14] == 11);
     require(v9[15] == 23);
+
+    require(v9_masked[0] == 42);
+    require(v9_masked[1] == 69);
+    require(v9_masked[2] == 11);
+    require(v9_masked[3] == 69);
+    require(v9_masked[4] == 42);
+    require(v9_masked[5] == 69);
+    require(v9_masked[6] == 11);
+    require(v9_masked[7] == 69);
+    require(v9_masked[8] == 42);
+    require(v9_masked[9] == 69);
+    require(v9_masked[10] == 11);
+    require(v9_masked[11] == 69);
+    require(v9_masked[12] == 42);
+    require(v9_masked[13] == 69);
+    require(v9_masked[14] == 11);
+    require(v9_masked[15] == 69);
 
     int scatter_destination[72] = {};
     scatter(scatter_destination + 2, v9i, v9);

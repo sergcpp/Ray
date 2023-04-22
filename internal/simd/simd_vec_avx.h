@@ -864,7 +864,11 @@ template <> class simd_vec<int, 8> {
 
 #if defined(USE_AVX2) || defined(USE_AVX512)
     friend force_inline simd_vec<float, 8> vectorcall gather(const float *base_addr, simd_vec<int, 8> vindex);
+    friend force_inline simd_vec<float, 8> vectorcall gather(simd_vec<float, 8> src, const float *base_addr,
+                                                             simd_vec<int, 8> mask, simd_vec<int, 8> vindex);
     friend force_inline simd_vec<int, 8> vectorcall gather(const int *base_addr, simd_vec<int, 8> vindex);
+    friend force_inline simd_vec<int, 8> vectorcall gather(simd_vec<int, 8> src, const int *base_addr,
+                                                           simd_vec<int, 8> mask, simd_vec<int, 8> vindex);
 #endif
 
 #ifndef NDEBUG
@@ -1214,9 +1218,24 @@ force_inline simd_vec<float, 8> vectorcall gather(const float *base_addr, const 
     return ret;
 }
 
+force_inline simd_vec<float, 8> vectorcall gather(simd_vec<float, 8> src, const float *base_addr, simd_vec<int, 8> mask,
+                                                  simd_vec<int, 8> vindex) {
+    simd_vec<float, 8> ret;
+    ret.vec_ =
+        _mm256_mask_i32gather_ps(src.vec_, base_addr, vindex.vec_, _mm256_castsi256_ps(mask.vec_), sizeof(float));
+    return ret;
+}
+
 force_inline simd_vec<int, 8> vectorcall gather(const int *base_addr, const simd_vec<int, 8> vindex) {
     simd_vec<int, 8> ret;
     ret.vec_ = _mm256_i32gather_epi32(base_addr, vindex.vec_, sizeof(int));
+    return ret;
+}
+
+force_inline simd_vec<int, 8> vectorcall gather(simd_vec<int, 8> src, const int *base_addr, simd_vec<int, 8> mask,
+                                                simd_vec<int, 8> vindex) {
+    simd_vec<int, 8> ret;
+    ret.vec_ = _mm256_mask_i32gather_epi32(src.vec_, base_addr, vindex.vec_, mask.vec_, sizeof(int));
     return ret;
 }
 #endif
