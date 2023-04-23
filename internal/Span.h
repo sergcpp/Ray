@@ -17,7 +17,9 @@ template <typename T> class Span {
     Span() = default;
     Span(T *p_data, const ptrdiff_t size) : p_data_(p_data), size_(size) {}
     Span(T *p_data, const size_t size) : p_data_(p_data), size_(size) {}
+#if defined(__aarch64__) || defined(_M_ARM64) || defined(_WIN64)
     Span(T *p_data, const int size) : p_data_(p_data), size_(size) {}
+#endif
     Span(T *p_begin, T *p_end) : p_data_(p_begin), size_(p_end - p_begin) {}
     template <typename Alloc>
     Span(const std::vector<typename std::remove_const<T>::type, Alloc> &v) : Span(v.data(), size_t(v.size())) {}
