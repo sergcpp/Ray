@@ -14,11 +14,8 @@ class ILog;
 namespace NS {
 template <int S> struct PassData {
     aligned_vector<ray_data_t<S>> primary_rays;
-    aligned_vector<simd_ivec<S>> primary_masks;
     aligned_vector<ray_data_t<S>> secondary_rays;
-    aligned_vector<simd_ivec<S>> secondary_masks;
     aligned_vector<shadow_ray_t<S>> shadow_rays;
-    aligned_vector<simd_ivec<S>> shadow_masks;
     aligned_vector<hit_data_t<S>> intersections;
 
     aligned_vector<color_rgba_t, 16> temp_final_buf;
@@ -237,8 +234,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *scene, Regi
     const uint32_t hi = (region.iteration & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT;
 
     if (cam.type != eCamType::Geo) {
-        GeneratePrimaryRays<DimX, DimY>(region.iteration, cam, rect, w_, h_, &region.halton_seq[hi], p.primary_rays,
-                                        p.primary_masks);
+        GeneratePrimaryRays<DimX, DimY>(region.iteration, cam, rect, w_, h_, &region.halton_seq[hi], p.primary_rays);
 
         time_after_ray_gen = high_resolution_clock::now();
 
@@ -252,11 +248,11 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *scene, Regi
             inter.t = cam.clip_end;
 
             if (macro_tree_root != 0xffffffff) {
-                NS::IntersectScene(r, p.primary_masks[i], cam.pass_settings.min_transp_depth,
-                                   cam.pass_settings.max_transp_depth, &region.halton_seq[hi + RAND_DIM_BASE_COUNT],
-                                   sc_data, macro_tree_root, s->tex_storages_, inter);
+                NS::IntersectScene(r, cam.pass_settings.min_transp_depth, cam.pass_settings.max_transp_depth,
+                                   &region.halton_seq[hi + RAND_DIM_BASE_COUNT], sc_data, macro_tree_root,
+                                   s->tex_storages_, inter);
             }
-            // NS::IntersectAreaLights(r, {-1}, sc_data.lights, sc_data.visible_lights, sc_data.transforms, inter);
+            // NS::IntersectAreaLights(r, sc_data.lights, sc_data.visible_lights, sc_data.transforms, inter);
         }
     } else {
         const mesh_instance_t &mi = sc_data.mesh_instances[cam.mi_index];
@@ -264,8 +260,6 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *scene, Regi
                                              sc_data.meshes[mi.mesh_index], sc_data.transforms[mi.tr_index],
                                              sc_data.vtx_indices, sc_data.vertices, rect, w_, h_,
                                              &region.halton_seq[hi], p.primary_rays, p.intersections);
-
-        p.primary_masks.resize(p.primary_rays.size());
 
         time_after_ray_gen = high_resolution_clock::now();
     }
@@ -276,9 +270,7 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *scene, Regi
     const auto time_after_prim_trace = high_resolution_clock::now();
 
     p.secondary_rays.resize(p.primary_rays.size());
-    p.secondary_masks.resize(p.primary_rays.size());
     p.shadow_rays.resize(p.primary_rays.size());
-    p.shadow_masks.resize(p.primary_rays.size());
     int secondary_rays_count = 0, shadow_rays_count = 0;
 
     simd_fvec<S> clamp_direct = cam.pass_settings.clamp_direct;
@@ -292,17 +284,14 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *scene, Regi
 
         const simd_ivec<S> x = r.xy >> 16, y = r.xy & 0x0000FFFF;
 
-        p.secondary_masks[ri] = {0};
-
         simd_fvec<S> out_rgba[4] = {0.0f}, out_base_color[4] = {0.0f}, out_depth_normal[4] = {0.0f};
         NS::ShadeSurface(cam.pass_settings, &region.halton_seq[hi + RAND_DIM_BASE_COUNT], inter, r, sc_data,
-                         macro_tree_root, s->tex_storages_, out_rgba, p.secondary_masks.data(), p.secondary_rays.data(),
-                         &secondary_rays_count, p.shadow_masks.data(), p.shadow_rays.data(), &shadow_rays_count,
-                         out_base_color, out_depth_normal);
+                         macro_tree_root, s->tex_storages_, out_rgba, p.secondary_rays.data(), &secondary_rays_count,
+                         p.shadow_rays.data(), &shadow_rays_count, out_base_color, out_depth_normal);
 
         // TODO: match layouts!
         UNROLLED_FOR_S(i, S, {
-            if (p.primary_masks[ri].template get<i>()) {
+            if (r.mask.template get<i>()) {
                 UNROLLED_FOR(j, 3, { out_rgba[j] = min(out_rgba[j], clamp_direct); })
                 UNROLLED_FOR(j, 4, {
                     temp_buf_[y.template get<i>() * w_ + x.template get<i>()].v[j] = out_rgba[j].template get<i>();
@@ -340,15 +329,14 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *scene, Regi
         const simd_ivec<S> x = sh_r.xy >> 16, y = sh_r.xy & 0x0000FFFF;
 
         simd_fvec<S> rc[3];
-        NS::IntersectScene(sh_r, p.shadow_masks[ri], cam.pass_settings.max_transp_depth, sc_data, macro_tree_root,
-                           s->tex_storages_, rc);
-        const simd_fvec<S> k = NS::IntersectAreaLights(sh_r, p.shadow_masks[ri], sc_data.lights, sc_data.blocker_lights,
-                                                       sc_data.transforms);
+        NS::IntersectScene(sh_r, cam.pass_settings.max_transp_depth, sc_data, macro_tree_root, s->tex_storages_, rc);
+        const simd_fvec<S> k =
+            NS::IntersectAreaLights(sh_r, sc_data.lights, sc_data.blocker_lights, sc_data.transforms);
         UNROLLED_FOR(i, 3, { rc[i] = min(rc[i] * k, clamp_direct); })
 
         // TODO: match layouts!
         UNROLLED_FOR_S(i, S, {
-            if (p.shadow_masks[ri].template get<i>()) {
+            if (sh_r.mask.template get<i>()) {
                 auto old_val =
                     simd_fvec4(temp_buf_[y.template get<i>() * w_ + x.template get<i>()].v, simd_mem_aligned);
                 old_val += simd_fvec4(rc[0].template get<i>(), rc[1].template get<i>(), rc[2].template get<i>(), 0.0f);
@@ -371,8 +359,8 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *scene, Regi
     for (int bounce = 1; bounce <= cam.pass_settings.max_total_depth && secondary_rays_count; bounce++) {
         auto time_secondary_sort_start = high_resolution_clock::now();
 
-        SortRays_CPU(&p.secondary_rays[0], &p.secondary_masks[0], secondary_rays_count, root_min, cell_size,
-                     &p.hash_values[0], &p.scan_values[0], &p.chunks[0], &p.chunks_temp[0]);
+        SortRays_CPU(&p.secondary_rays[0], secondary_rays_count, root_min, cell_size, &p.hash_values[0],
+                     &p.scan_values[0], &p.chunks[0], &p.chunks_temp[0]);
 
         auto time_secondary_trace_start = high_resolution_clock::now();
 
@@ -382,13 +370,17 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *scene, Regi
             hit_data_t<S> &inter = p.intersections[i];
             inter = {};
 
-            NS::IntersectScene(r, p.secondary_masks[i], cam.pass_settings.min_transp_depth,
-                               cam.pass_settings.max_transp_depth, &region.halton_seq[hi + RAND_DIM_BASE_COUNT],
-                               sc_data, macro_tree_root, s->tex_storages_, inter);
+            NS::IntersectScene(r, cam.pass_settings.min_transp_depth, cam.pass_settings.max_transp_depth,
+                               &region.halton_seq[hi + RAND_DIM_BASE_COUNT], sc_data, macro_tree_root, s->tex_storages_,
+                               inter);
+
+            const simd_ivec<S> orig_mask = r.mask;
 
             const simd_ivec<S> not_only_transparency_ray = (r.depth & 0x00ffffff) != 0;
-            NS::IntersectAreaLights(r, p.secondary_masks[i] & not_only_transparency_ray, sc_data.lights,
-                                    sc_data.visible_lights, sc_data.transforms, inter);
+            r.mask &= not_only_transparency_ray;
+
+            NS::IntersectAreaLights(r, sc_data.lights, sc_data.visible_lights, sc_data.transforms, inter);
+            r.mask = orig_mask;
         }
 
         auto time_secondary_shade_start = high_resolution_clock::now();
@@ -397,7 +389,6 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *scene, Regi
         secondary_rays_count = 0;
         shadow_rays_count = 0;
         std::swap(p.primary_rays, p.secondary_rays);
-        std::swap(p.primary_masks, p.secondary_masks);
 
         for (int ri = 0; ri < rays_count; ri++) {
             const ray_data_t<S> &r = p.primary_rays[ri];
@@ -407,15 +398,14 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *scene, Regi
 
             simd_fvec<S> out_rgba[4] = {0.0f};
             NS::ShadeSurface(cam.pass_settings, &region.halton_seq[hi + RAND_DIM_BASE_COUNT], inter, r, sc_data,
-                             macro_tree_root, s->tex_storages_, out_rgba, p.secondary_masks.data(),
-                             p.secondary_rays.data(), &secondary_rays_count, p.shadow_masks.data(),
-                             p.shadow_rays.data(), &shadow_rays_count, (simd_fvec<S> *)nullptr,
+                             macro_tree_root, s->tex_storages_, out_rgba, p.secondary_rays.data(),
+                             &secondary_rays_count, p.shadow_rays.data(), &shadow_rays_count, (simd_fvec<S> *)nullptr,
                              (simd_fvec<S> *)nullptr);
             UNROLLED_FOR(i, 3, { out_rgba[i] = min(out_rgba[i], clamp_indirect); })
 
             // TODO: match layouts!
             UNROLLED_FOR_S(i, S, {
-                if (p.primary_masks[ri].template get<i>()) {
+                if (r.mask.template get<i>()) {
                     auto old_val =
                         simd_fvec4(temp_buf_[y.template get<i>() * w_ + x.template get<i>()].v, simd_mem_aligned);
                     old_val += simd_fvec4(out_rgba[0].template get<i>(), out_rgba[1].template get<i>(),
@@ -433,15 +423,14 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *scene, Regi
             const simd_ivec<S> x = sh_r.xy >> 16, y = sh_r.xy & 0x0000FFFF;
 
             simd_fvec<S> rc[3];
-            IntersectScene(sh_r, p.shadow_masks[ri], cam.pass_settings.max_transp_depth, sc_data, macro_tree_root,
-                           s->tex_storages_, rc);
-            const simd_fvec<S> k = NS::IntersectAreaLights(sh_r, p.shadow_masks[ri], sc_data.lights,
-                                                           sc_data.blocker_lights, sc_data.transforms);
+            IntersectScene(sh_r, cam.pass_settings.max_transp_depth, sc_data, macro_tree_root, s->tex_storages_, rc);
+            const simd_fvec<S> k =
+                NS::IntersectAreaLights(sh_r, sc_data.lights, sc_data.blocker_lights, sc_data.transforms);
             UNROLLED_FOR(i, 3, { rc[i] = min(rc[i] * k, clamp_indirect); })
 
             // TODO: vectorize this
             UNROLLED_FOR_S(i, S, {
-                if (p.shadow_masks[ri].template get<i>()) {
+                if (sh_r.mask.template get<i>()) {
                     auto old_val =
                         simd_fvec4(temp_buf_[y.template get<i>() * w_ + x.template get<i>()].v, simd_mem_aligned);
                     old_val +=

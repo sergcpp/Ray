@@ -9,13 +9,13 @@
 
 namespace Ray {
 namespace Sse2 {
-template void SortRays_CPU<RPSize>(ray_data_t<RPSize> *rays, simd_ivec<RPSize> *ray_masks, int &secondary_rays_count,
-                                   const float root_min[3], const float cell_size[3], simd_ivec<RPSize> *hash_values,
-                                   uint32_t *scan_values, ray_chunk_t *chunks, ray_chunk_t *chunks_temp);
-template void SortRays_GPU<RPSize>(ray_data_t<RPSize> *rays, simd_ivec<RPSize> *ray_masks, int &secondary_rays_count,
-                                   const float root_min[3], const float cell_size[3], simd_ivec<RPSize> *hash_values,
-                                   int *head_flags, uint32_t *scan_values, ray_chunk_t *chunks,
-                                   ray_chunk_t *chunks_temp, uint32_t *skeleton);
+template void SortRays_CPU<RPSize>(ray_data_t<RPSize> *rays, int &secondary_rays_count, const float root_min[3],
+                                   const float cell_size[3], simd_ivec<RPSize> *hash_values, uint32_t *scan_values,
+                                   ray_chunk_t *chunks, ray_chunk_t *chunks_temp);
+template void SortRays_GPU<RPSize>(ray_data_t<RPSize> *rays, int &secondary_rays_count, const float root_min[3],
+                                   const float cell_size[3], simd_ivec<RPSize> *hash_values, int *head_flags,
+                                   uint32_t *scan_values, ray_chunk_t *chunks, ray_chunk_t *chunks_temp,
+                                   uint32_t *skeleton);
 
 template bool Traverse_MacroTree_WithStack_ClosestHit<RPSize>(
     const simd_fvec<RPSize> ro[3], const simd_fvec<RPSize> rd[3], const simd_ivec<RPSize> &ray_mask,
@@ -71,9 +71,9 @@ template void SampleLatlong_RGBE<RPSize>(const Cpu::TexStorageRGBA &storage, uin
                                          const simd_fvec<RPSize> dir[3], float y_rotation,
                                          const simd_ivec<RPSize> &mask, simd_fvec<RPSize> out_rgb[3]);
 
-template void IntersectAreaLights<RPSize>(const ray_data_t<RPSize> &r, const simd_ivec<RPSize> &ray_mask,
-                                          const light_t lights[], Span<const uint32_t> visible_lights,
-                                          const transform_t transforms[], hit_data_t<RPSize> &inout_inter);
+template void IntersectAreaLights<RPSize>(const ray_data_t<RPSize> &r, const light_t lights[],
+                                          Span<const uint32_t> visible_lights, const transform_t transforms[],
+                                          hit_data_t<RPSize> &inout_inter);
 
 template class RendererSIMD<RPDimX, RPDimY>;
 

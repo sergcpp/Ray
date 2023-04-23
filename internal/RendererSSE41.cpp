@@ -9,13 +9,13 @@
 
 namespace Ray {
 namespace Sse41 {
-template void SortRays_CPU<RPSize>(ray_data_t<RPSize> *rays, simd_ivec<RPSize> *ray_masks, int &secondary_rays_count,
-                                   const float root_min[3], const float cell_size[3], simd_ivec<RPSize> *hash_values,
-                                   uint32_t *scan_values, ray_chunk_t *chunks, ray_chunk_t *chunks_temp);
-template void SortRays_GPU<RPSize>(ray_data_t<RPSize> *rays, simd_ivec<RPSize> *ray_masks, int &secondary_rays_count,
-                                   const float root_min[3], const float cell_size[3], simd_ivec<RPSize> *hash_values,
-                                   int *head_flags, uint32_t *scan_values, ray_chunk_t *chunks,
-                                   ray_chunk_t *chunks_temp, uint32_t *skeleton);
+template void SortRays_CPU<RPSize>(ray_data_t<RPSize> *rays, int &secondary_rays_count, const float root_min[3],
+                                   const float cell_size[3], simd_ivec<RPSize> *hash_values, uint32_t *scan_values,
+                                   ray_chunk_t *chunks, ray_chunk_t *chunks_temp);
+template void SortRays_GPU<RPSize>(ray_data_t<RPSize> *rays, int &secondary_rays_count, const float root_min[3],
+                                   const float cell_size[3], simd_ivec<RPSize> *hash_values, int *head_flags,
+                                   uint32_t *scan_values, ray_chunk_t *chunks, ray_chunk_t *chunks_temp,
+                                   uint32_t *skeleton);
 
 template bool Traverse_MacroTree_WithStack_ClosestHit<RPSize>(
     const simd_fvec<RPSize> ro[3], const simd_fvec<RPSize> rd[3], const simd_ivec<RPSize> &ray_mask,
