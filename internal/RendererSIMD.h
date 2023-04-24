@@ -274,9 +274,13 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *scene, Regi
     int secondary_rays_count = 0, shadow_rays_count = 0;
 
     simd_fvec<S> clamp_direct = cam.pass_settings.clamp_direct;
-    where(clamp_direct == 0.0f, clamp_direct) = std::numeric_limits<float>::max();
+    if (cam.pass_settings.clamp_direct == 0.0f) {
+        clamp_direct = std::numeric_limits<float>::max();
+    }
     simd_fvec<S> clamp_indirect = cam.pass_settings.clamp_indirect;
-    where(clamp_indirect == 0.0f, clamp_indirect) = std::numeric_limits<float>::max();
+    if (cam.pass_settings.clamp_indirect == 0.0f) {
+        clamp_indirect = std::numeric_limits<float>::max();
+    }
 
     for (size_t ri = 0; ri < p.intersections.size(); ri++) {
         const ray_data_t<S> &r = p.primary_rays[ri];
@@ -288,11 +292,11 @@ void Ray::NS::RendererSIMD<DimX, DimY>::RenderScene(const SceneBase *scene, Regi
         NS::ShadeSurface(cam.pass_settings, &region.halton_seq[hi + RAND_DIM_BASE_COUNT], inter, r, sc_data,
                          macro_tree_root, s->tex_storages_, out_rgba, p.secondary_rays.data(), &secondary_rays_count,
                          p.shadow_rays.data(), &shadow_rays_count, out_base_color, out_depth_normal);
+        UNROLLED_FOR(j, 3, { out_rgba[j] = min(out_rgba[j], clamp_direct); })
 
         // TODO: match layouts!
         UNROLLED_FOR_S(i, S, {
             if (r.mask.template get<i>()) {
-                UNROLLED_FOR(j, 3, { out_rgba[j] = min(out_rgba[j], clamp_direct); })
                 UNROLLED_FOR(j, 4, {
                     temp_buf_[y.template get<i>() * w_ + x.template get<i>()].v[j] = out_rgba[j].template get<i>();
                 })
