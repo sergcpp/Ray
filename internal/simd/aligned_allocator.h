@@ -14,9 +14,15 @@ inline void *aligned_malloc(size_t size, size_t alignment) {
     while (alignment < sizeof(void *)) {
         alignment *= 2;
     }
-    size_t space = size + (alignment - 1);
+    size_t space = size + (alignment - 1) + sizeof(void *);
+    if (space > PTRDIFF_MAX) {
+        return nullptr;
+    }
 
-    void *ptr = malloc(space + sizeof(void *));
+    void *ptr = malloc(space);
+    if (!ptr) {
+        return nullptr;
+    }
     void *original_ptr = ptr;
 
     char *ptr_bytes = static_cast<char *>(ptr);
