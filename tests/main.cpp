@@ -140,7 +140,8 @@ int main(int argc, char *argv[]) {
 #if defined(_WIN32) && !defined(__clang__)
     const bool enable_fp_exceptions = !nocpu || full_tests;
     if (enable_fp_exceptions) {
-        _controlfp(_EM_INEXACT, _MCW_EM);
+        unsigned old_value;
+        _controlfp_s(&old_value, _EM_INEXACT, _MCW_EM);
         g_catch_flt_exceptions = true;
     }
 #endif

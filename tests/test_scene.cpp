@@ -764,7 +764,8 @@ void schedule_render_jobs(Ray::RendererBase &renderer, const Ray::SceneBase *sce
         auto render_job = [&](const int j, const int portion) {
 #if defined(_WIN32)
             if (g_catch_flt_exceptions) {
-                _controlfp(_EM_INEXACT | _EM_UNDERFLOW | _EM_OVERFLOW, _MCW_EM);
+                unsigned old_value;
+                _controlfp_s(&old_value, _EM_INEXACT | _EM_UNDERFLOW | _EM_OVERFLOW, _MCW_EM);
             }
 #endif
             for (int i = 0; i < portion; ++i) {
@@ -775,7 +776,8 @@ void schedule_render_jobs(Ray::RendererBase &renderer, const Ray::SceneBase *sce
         auto denoise_job = [&](const int j) {
 #if defined(_WIN32)
             if (g_catch_flt_exceptions) {
-                _controlfp(_EM_INEXACT | _EM_UNDERFLOW | _EM_OVERFLOW, _MCW_EM);
+                unsigned old_value;
+                _controlfp_s(&old_value, _EM_INEXACT | _EM_UNDERFLOW | _EM_OVERFLOW, _MCW_EM);
             }
 #endif
             renderer.DenoiseImage(region_contexts[j]);

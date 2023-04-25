@@ -922,7 +922,7 @@ void Ray::Vk::Renderer::DenoiseImage(const RegionContext &region) {
 
     { // Filter variance
         DebugMarker _(cmd_buf, "Filter Variance");
-        kernel_FilterVariance(cmd_buf, temp_buf0_, rect, filtered_variance);
+        kernel_FilterVariance(cmd_buf, raw_variance, rect, filtered_variance);
     }
 
     { // Apply NLM Filter

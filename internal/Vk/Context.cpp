@@ -10,7 +10,7 @@
 
 namespace Ray {
 bool MatchDeviceNames(const char *name, const char *pattern);
-    
+
 namespace Vk {
 bool ignore_optick_errors = false;
 
@@ -788,6 +788,7 @@ int Ray::Vk::Context::QueryAvailableDevices(ILog *log, gpu_device_t out_devices[
             VkPhysicalDeviceProperties device_properties = {};
             vkGetPhysicalDeviceProperties(physical_devices[i], &device_properties);
 
+#pragma warning(suppress : 4996)
             strncpy(out_devices[i].name, device_properties.deviceName, sizeof(out_devices[i].name));
         }
     }

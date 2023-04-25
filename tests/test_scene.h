@@ -37,7 +37,10 @@ class LogErr final : public Ray::ILog {
     FILE *err_out_ = nullptr;
 
   public:
-    LogErr() { err_out_ = fopen("test_data/errors.txt", "w"); }
+    LogErr() {
+#pragma warning(suppress : 4996)
+        err_out_ = fopen("test_data/errors.txt", "w");
+    }
     ~LogErr() override { fclose(err_out_); }
 
     void Info(const char *fmt, ...) override {}

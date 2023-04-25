@@ -160,12 +160,8 @@ struct material_t {
     uint32_t flags;
     eShadingNode type;
     union {
-        struct {
-            float tangent_rotation;
-        };
-        struct {
-            float strength;
-        };
+        float tangent_rotation;
+        float strength;
     };
     uint16_t roughness_unorm;
     uint16_t anisotropic_unorm;
