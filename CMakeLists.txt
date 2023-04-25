@@ -70,7 +70,8 @@ set(INTERNAL_SOURCE_FILES internal/Bitmap.h
                           internal/Time.cpp
                           internal/UniformIntDistribution.h
                           internal/Utils.h
-                          internal/Utils.cpp)
+                          internal/Utils.cpp
+                          internal/UtilsSSE2.cpp)
 
 if (ENABLE_REF_IMPL)
     set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
@@ -92,8 +93,7 @@ if (ENABLE_SIMD_IMPL)
                               internal/RendererAVX2.h
                               internal/RendererAVX2.cpp
                               internal/RendererAVX512.h
-                              internal/RendererAVX512.cpp
-                              internal/UtilsSSE2.cpp)
+                              internal/RendererAVX512.cpp)
 endif(ENABLE_SIMD_IMPL)
 
 if (ENABLE_GPU_IMPL)
