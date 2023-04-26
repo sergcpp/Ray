@@ -19,6 +19,16 @@ void run_material_test(const char *arch_list[], const char *preferred_device, co
                        const MatDesc &mat_desc, const int sample_count, const double min_psnr, const int pix_thres,
                        const bool denoise = false, const bool partial = false, const char *textures[] = nullptr,
                        const eTestScene test_scene = eTestScene::Standard) {
+    run_material_test(arch_list, preferred_device, test_name, mat_desc, sample_count, sample_count, 0.0f, min_psnr,
+                      pix_thres, denoise, partial, textures, test_scene);
+}
+
+template <typename MatDesc>
+void run_material_test(const char *arch_list[], const char *preferred_device, const char *test_name,
+                       const MatDesc &mat_desc, const int min_sample_count, const int max_sample_count,
+                       const float variance_threshold, const double min_psnr, const int pix_thres,
+                       const bool denoise = false, const bool partial = false, const char *textures[] = nullptr,
+                       const eTestScene test_scene = eTestScene::Standard) {
     char name_buf[1024];
     snprintf(name_buf, sizeof(name_buf), "test_data/%s/ref.tga", test_name);
 
@@ -42,7 +52,7 @@ void run_material_test(const char *arch_list[], const char *preferred_device, co
             for (const char **arch = arch_list; *arch; ++arch) {
                 const auto rt = Ray::RendererTypeFromName(*arch);
 
-                int current_sample_count = sample_count;
+                int current_sample_count = max_sample_count;
                 int failed_count = -1, succeeded_count = 4096;
                 bool images_match = false, searching = false;
                 do {
@@ -61,7 +71,8 @@ void run_material_test(const char *arch_list[], const char *preferred_device, co
 
                     auto scene = std::unique_ptr<Ray::SceneBase>(renderer->CreateScene());
 
-                    setup_test_scene(*scene, output_sh, false, false, mat_desc, textures, test_scene);
+                    setup_test_scene(*scene, output_sh, false, false, min_sample_count, variance_threshold, mat_desc,
+                                     textures, test_scene);
 
                     snprintf(name_buf, sizeof(name_buf), "Test %s", test_name);
                     schedule_render_jobs(*renderer, scene.get(), s, current_sample_count, denoise, partial, name_buf);
@@ -146,7 +157,7 @@ void run_material_test(const char *arch_list[], const char *preferred_device, co
                     }
                     searching |= !images_match;
                 } while (g_determine_sample_count && searching && (succeeded_count - failed_count) > 1);
-                if (g_determine_sample_count && searching && succeeded_count != sample_count) {
+                if (g_determine_sample_count && searching && succeeded_count != max_sample_count) {
                     printf("Required sample count for %s: %i\n", test_name, succeeded_count);
                 }
             }
@@ -181,7 +192,7 @@ void assemble_material_test_images(const char *arch_list[]) {
          "complex_mat6_hdr_light"},
         {"complex_mat5_regions", "complex_mat5_dof", "complex_mat5_spot_light", "complex_mat6_dof",
          "complex_mat6_spot_light"},
-        {"complex_mat5_filmic"}};
+        {"complex_mat5_filmic", "complex_mat5_adaptive"}};
     const int ImgCountH = sizeof(test_names) / sizeof(test_names[0]);
 
     const int OutImageW = 256 * ImgCountW;
@@ -1328,6 +1339,29 @@ void test_complex_mat5(const char *arch_list[], const char *preferred_device) {
 
     run_material_test(arch_list, preferred_device, "complex_mat5", metal_mat_desc, SampleCount, FastMinPSNR, PixThres,
                       false, false, textures);
+}
+
+void test_complex_mat5_adaptive(const char *arch_list[], const char *preferred_device) {
+    const int MinSampleCount = 32;
+    const int MaxSampleCount = 75;
+    const float VarianceThreshold = 0.004f;
+    const int PixThres = 1159;
+
+    Ray::principled_mat_desc_t metal_mat_desc;
+    metal_mat_desc.base_texture = Ray::TextureHandle{0};
+    metal_mat_desc.metallic = 1.0f;
+    metal_mat_desc.roughness = 1.0f;
+    metal_mat_desc.roughness_texture = Ray::TextureHandle{2};
+    metal_mat_desc.metallic = 1.0f;
+    metal_mat_desc.metallic_texture = Ray::TextureHandle{3};
+    metal_mat_desc.normal_map = Ray::TextureHandle{1};
+
+    const char *textures[] = {
+        "test_data/textures/gold-scuffed_basecolor-boosted.tga", "test_data/textures/gold-scuffed_normal.tga",
+        "test_data/textures/gold-scuffed_roughness.tga", "test_data/textures/gold-scuffed_metallic.tga"};
+
+    run_material_test(arch_list, preferred_device, "complex_mat5_adaptive", metal_mat_desc, MinSampleCount,
+                      MaxSampleCount, VarianceThreshold, DefaultMinPSNR, PixThres, true, false, textures);
 }
 
 void test_complex_mat5_filmic(const char *arch_list[], const char *preferred_device) {

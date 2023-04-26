@@ -158,8 +158,8 @@ void load_needed_textures(Ray::SceneBase &scene, Ray::principled_mat_desc_t &mat
 
 template <typename MatDesc>
 void setup_test_scene(Ray::SceneBase &scene, const bool output_sh, const bool output_base_color,
-                      const bool output_depth_normals, const MatDesc &main_mat_desc, const char *textures[],
-                      const eTestScene test_scene) {
+                      const bool output_depth_normals, const int min_samples, const float variance_threshold,
+                      const MatDesc &main_mat_desc, const char *textures[], const eTestScene test_scene) {
     { // setup camera
         static const float view_origin_standard[] = {0.16149f, 0.294997f, 0.332965f};
         static const float view_dir_standard[] = {-0.364128768f, -0.555621922f, -0.747458696f};
@@ -209,6 +209,9 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_sh, const bool ou
             cam_desc.max_refr_depth = 8;
             cam_desc.max_total_depth = 9;
         }
+
+        cam_desc.min_samples = min_samples;
+        cam_desc.variance_threshold = variance_threshold;
 
         const Ray::CameraHandle cam = scene.AddCamera(cam_desc);
         scene.set_current_cam(cam);
@@ -728,14 +731,15 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_sh, const bool ou
 }
 
 template void setup_test_scene(Ray::SceneBase &scene, bool output_sh, bool output_base_color, bool output_depth_normals,
-                               const Ray::shading_node_desc_t &main_mat_desc, const char *textures[],
-                               eTestScene test_scene);
+                               int min_samples, float variance_threshold, const Ray::shading_node_desc_t &main_mat_desc,
+                               const char *textures[], eTestScene test_scene);
 template void setup_test_scene(Ray::SceneBase &scene, bool output_sh, bool output_base_color, bool output_depth_normals,
+                               int min_samples, float variance_threshold,
                                const Ray::principled_mat_desc_t &main_mat_desc, const char *textures[],
                                eTestScene test_scene);
 
 void schedule_render_jobs(Ray::RendererBase &renderer, const Ray::SceneBase *scene, const Ray::settings_t &settings,
-                          const int samples, const bool denoise, const bool partial, const char *log_str) {
+                          const int max_samples, const bool denoise, const bool partial, const char *log_str) {
     const auto rt = renderer.type();
     const auto sz = renderer.size();
 
@@ -783,17 +787,17 @@ void schedule_render_jobs(Ray::RendererBase &renderer, const Ray::SceneBase *sce
             renderer.DenoiseImage(region_contexts[j]);
         };
 
-        for (int i = 0; i < samples; i += std::min(SamplePortion, samples - i)) {
+        for (int i = 0; i < max_samples; i += std::min(SamplePortion, max_samples - i)) {
             std::vector<std::future<void>> job_res;
             for (int j = 0; j < int(region_contexts.size()); ++j) {
-                job_res.push_back(threads.Enqueue(render_job, j, std::min(SamplePortion, samples - i)));
+                job_res.push_back(threads.Enqueue(render_job, j, std::min(SamplePortion, max_samples - i)));
             }
             for (auto &res : job_res) {
                 res.wait();
             }
             job_res.clear();
 
-            if (i + std::min(SamplePortion, samples - i) == samples && denoise) {
+            if (i + std::min(SamplePortion, max_samples - i) == max_samples && denoise) {
                 for (int j = 0; j < int(region_contexts.size()); ++j) {
                     job_res.push_back(threads.Enqueue(denoise_job, j));
                 }
@@ -804,7 +808,7 @@ void schedule_render_jobs(Ray::RendererBase &renderer, const Ray::SceneBase *sce
             }
 
             // report progress percentage
-            const float prog = 100.0f * float(i + std::min(SamplePortion, samples - i)) / float(samples);
+            const float prog = 100.0f * float(i + std::min(SamplePortion, max_samples - i)) / float(max_samples);
             printf("\r%s (%6s, %s): %.1f%% ", log_str, Ray::RendererTypeName(rt), settings.use_hwrt ? "HWRT" : "SWRT",
                    prog);
             fflush(stdout);
@@ -830,14 +834,14 @@ void schedule_render_jobs(Ray::RendererBase &renderer, const Ray::SceneBase *sce
             region_contexts.emplace_back(Ray::rect_t{0, 0, sz.first, sz.second});
         }
 
-        for (int i = 0; i < samples; ++i) {
+        for (int i = 0; i < max_samples; ++i) {
             for (auto &region : region_contexts) {
                 renderer.RenderScene(scene, region);
             }
 
-            if ((i % SamplePortion) == 0 || i == samples - 1) {
+            if ((i % SamplePortion) == 0 || i == max_samples - 1) {
                 // report progress percentage
-                const float prog = 100.0f * float(i + 1) / float(samples);
+                const float prog = 100.0f * float(i + 1) / float(max_samples);
                 printf("\r%s (%6s, %s): %.1f%% ", log_str, Ray::RendererTypeName(rt),
                        settings.use_hwrt ? "HWRT" : "SWRT", prog);
                 fflush(stdout);

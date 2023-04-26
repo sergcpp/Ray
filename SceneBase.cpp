@@ -71,6 +71,9 @@ void Ray::SceneBase::GetCamera(const CameraHandle i, camera_desc_t &c) const {
 
     c.clamp_direct = cam.pass_settings.clamp_direct;
     c.clamp_indirect = cam.pass_settings.clamp_indirect;
+
+    c.min_samples = cam.pass_settings.min_samples;
+    c.variance_threshold = cam.pass_settings.variance_threshold;
 }
 
 void Ray::SceneBase::SetCamera_nolock(const CameraHandle i, const camera_desc_t &c) {
@@ -130,6 +133,9 @@ void Ray::SceneBase::SetCamera_nolock(const CameraHandle i, const camera_desc_t 
 
     cam.pass_settings.clamp_direct = c.clamp_direct;
     cam.pass_settings.clamp_indirect = c.clamp_indirect;
+
+    cam.pass_settings.min_samples = c.min_samples;
+    cam.pass_settings.variance_threshold = c.variance_threshold;
 }
 
 void Ray::SceneBase::RemoveCamera(const CameraHandle i) {

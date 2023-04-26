@@ -8,16 +8,17 @@ INTERFACE_START(FilterVariance)
 struct Params {
     UVEC4_TYPE rect;
     VEC2_TYPE inv_img_size;
-    float _pad0;
-    float _pad1;
+    float variance_threshold;
+    int iteration;
 };
 
 const int LOCAL_GROUP_SIZE_X = 8;
 const int LOCAL_GROUP_SIZE_Y = 8;
 
-const int IN_IMG_SLOT = 1;
+const int IN_IMG_SLOT = 2;
 
 const int OUT_IMG_SLOT = 0;
+const int OUT_REQ_SAMPLES_IMG_SLOT = 1;
 
 INTERFACE_END
 

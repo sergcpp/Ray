@@ -245,12 +245,14 @@ struct camera_desc_t {
     uint8_t max_diff_depth = 4;          ///< Maximum tracing depth of diffuse rays
     uint8_t max_spec_depth = 8;          ///< Maximum tracing depth of glossy rays
     uint8_t max_refr_depth = 8;          ///< Maximum tracing depth of glossy rays
-    uint8_t max_transp_depth = 8; ///< Maximum tracing depth of transparency rays (note: does not obey total depth)
-    uint8_t max_total_depth = 8;  ///< Maximum tracing depth of all rays (except transparency)
-    uint8_t min_total_depth = 2;  ///< Depth after which random rays termination starts
-    uint8_t min_transp_depth = 2; ///< Depth after which random rays termination starts
-    float clamp_direct = 0.0f;    ///< Clamp direct lighting (0.0 - no clamp)
-    float clamp_indirect = 0.0f;  ///< Clamp indirect lighting (0.0 - no clamp)
+    uint8_t max_transp_depth = 8;    ///< Maximum tracing depth of transparency rays (note: does not obey total depth)
+    uint8_t max_total_depth = 8;     ///< Maximum tracing depth of all rays (except transparency)
+    uint8_t min_total_depth = 2;     ///< Depth after which random rays termination starts
+    uint8_t min_transp_depth = 2;    ///< Depth after which random rays termination starts
+    float clamp_direct = 0.0f;       ///< Clamp direct lighting (0.0 - no clamp)
+    float clamp_indirect = 0.0f;     ///< Clamp indirect lighting (0.0 - no clamp)
+    int min_samples = 128;           ///< Minimal number of samples will be taken regardless of variance
+    float variance_threshold = 0.0f; ///< Variance below which rendering should stop
 };
 
 /// Environment description

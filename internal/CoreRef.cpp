@@ -1146,7 +1146,8 @@ Ray::Ref::hit_data_t::hit_data_t() {
 }
 
 void Ray::Ref::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, const int w, const int h,
-                                   const float *random_seq, aligned_vector<ray_data_t> &out_rays) {
+                                   const float random_seq[], const int iteration, const uint16_t required_samples[],
+                                   aligned_vector<ray_data_t> &out_rays) {
     const simd_fvec4 cam_origin = make_fvec3(cam.origin), fwd = make_fvec3(cam.fwd), side = make_fvec3(cam.side),
                      up = make_fvec3(cam.up);
     const float focus_distance = cam.focus_distance;
@@ -1164,10 +1165,15 @@ void Ray::Ref::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, const i
     };
 
     size_t i = 0;
+    out_rays.reserve(size_t(r.w) * r.h);
     out_rays.resize(size_t(r.w) * r.h);
 
     for (int y = r.y; y < r.y + r.h; ++y) {
         for (int x = r.x; x < r.x + r.w; ++x) {
+            if (required_samples[y * w + x] < iteration) {
+                continue;
+            }
+
             ray_data_t &out_r = out_rays[i++];
 
             auto _x = float(x);
@@ -1252,6 +1258,8 @@ void Ray::Ref::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, const i
             out_r.depth = 0;
         }
     }
+
+    out_rays.resize(i);
 }
 
 void Ray::Ref::SampleMeshInTextureSpace(const int iteration, const int obj_index, const int uv_layer,

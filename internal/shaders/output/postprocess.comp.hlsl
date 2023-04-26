@@ -6,8 +6,8 @@ struct Params
     float img0_weight;
     float img1_weight;
     int tonemap_mode;
-    float _pad0;
-    float _pad1;
+    float variance_threshold;
+    int iteration;
     float _pad2;
 };
 
@@ -18,13 +18,14 @@ cbuffer UniformParams
     Params _334_g_params : packoffset(c0);
 };
 
-RWTexture2D<float4> g_in_img0 : register(u3, space0);
-RWTexture2D<float4> g_in_img1 : register(u4, space0);
+RWTexture2D<float4> g_in_img0 : register(u4, space0);
+RWTexture2D<float4> g_in_img1 : register(u5, space0);
 RWTexture2D<float4> g_out_raw_img : register(u1, space0);
-Texture3D<float4> g_tonemap_lut : register(t5, space0);
-SamplerState _g_tonemap_lut_sampler : register(s5, space0);
+Texture3D<float4> g_tonemap_lut : register(t6, space0);
+SamplerState _g_tonemap_lut_sampler : register(s6, space0);
 RWTexture2D<float4> g_out_img : register(u0, space0);
 RWTexture2D<float4> g_out_variance_img : register(u2, space0);
+RWTexture2D<uint> g_out_req_samples_img : register(u3, space0);
 
 static uint3 gl_GlobalInvocationID;
 struct SPIRV_Cross_Input
@@ -119,22 +120,22 @@ void comp_main()
         float4 _369 = g_in_img0[_362];
         float4 _374 = g_in_img1[_362];
         float3 _380 = _369.xyz * _334_g_params.exposure;
-        float4 _488 = _369;
-        _488.x = _380.x;
-        float4 _490 = _488;
-        _490.y = _380.y;
-        float4 _492 = _490;
-        _492.z = _380.z;
-        float4 img0 = _492;
+        float4 _507 = _369;
+        _507.x = _380.x;
+        float4 _509 = _507;
+        _509.y = _380.y;
+        float4 _511 = _509;
+        _511.z = _380.z;
+        float4 img0 = _511;
         float3 _391 = _374.xyz * _334_g_params.exposure;
-        float4 _494 = _374;
-        _494.x = _391.x;
-        float4 _496 = _494;
-        _496.y = _391.y;
-        float4 _498 = _496;
-        _498.z = _391.z;
-        float4 img1 = _498;
-        float4 _408 = (_492 * _334_g_params.img0_weight) + (_498 * _334_g_params.img1_weight);
+        float4 _513 = _374;
+        _513.x = _391.x;
+        float4 _515 = _513;
+        _515.y = _391.y;
+        float4 _517 = _515;
+        _517.z = _391.z;
+        float4 img1 = _517;
+        float4 _408 = (_511 * _334_g_params.img0_weight) + (_517 * _334_g_params.img1_weight);
         g_out_raw_img[_362] = _408;
         float4 tonemapped_res;
         [branch]
@@ -157,7 +158,13 @@ void comp_main()
         float4 _445 = reversible_tonemap(param_5);
         img1 = _445;
         float4 _449 = img0 - _445;
-        g_out_variance_img[_362] = (_449 * 0.5f) * _449;
+        float4 _454 = (_449 * 0.5f) * _449;
+        g_out_variance_img[_362] = _454;
+        float4 _463 = _334_g_params.variance_threshold.xxxx;
+        if (any(bool4(_454.x >= _463.x, _454.y >= _463.y, _454.z >= _463.z, _454.w >= _463.w)))
+        {
+            g_out_req_samples_img[_362] = uint(_334_g_params.iteration + 1).x;
+        }
         break;
     } while(false);
 }

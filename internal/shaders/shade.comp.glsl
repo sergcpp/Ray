@@ -60,11 +60,7 @@ layout(std430, binding = RANDOM_SEQ_BUF_SLOT) readonly buffer Random {
 
 layout(binding = ENV_QTREE_TEX_SLOT) uniform sampler2D g_env_qtree;
 
-#if PRIMARY
-layout(binding = OUT_IMG_SLOT, rgba32f) uniform writeonly image2D g_out_img;
-#else
 layout(binding = OUT_IMG_SLOT, rgba32f) uniform image2D g_out_img;
-#endif
 
 layout(std430, binding = OUT_RAYS_BUF_SLOT) writeonly buffer OutRays {
     ray_data_t g_out_rays[];
@@ -1988,7 +1984,7 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
 layout (local_size_x = LOCAL_GROUP_SIZE_X, local_size_y = LOCAL_GROUP_SIZE_Y, local_size_z = 1) in;
 
 void main() {
-#if PRIMARY
+#if !INDIRECT
     if (gl_GlobalInvocationID.x >= g_params.rect.z || gl_GlobalInvocationID.y >= g_params.rect.w) {
         return;
     }

@@ -138,8 +138,8 @@ template <int S> force_inline simd_ivec<S> total_depth(const simd_ivec<S> &r_dep
 
 // Generating rays
 template <int DimX, int DimY>
-void GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, int h, const float random_seq[],
-                         aligned_vector<ray_data_t<DimX * DimY>> &out_rays);
+void GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, int h, const float random_seq[], int iteration,
+                         const uint16_t required_samples[], aligned_vector<ray_data_t<DimX * DimY>> &out_rays);
 template <int DimX, int DimY>
 void SampleMeshInTextureSpace(int iteration, int obj_index, int uv_layer, const mesh_t &mesh, const transform_t &tr,
                               const uint32_t *vtx_indices, const vertex_t *vertices, const rect_t &r, int w, int h,
@@ -494,8 +494,10 @@ class SIMDPolicyBase {
 
   protected:
     static force_inline void GeneratePrimaryRays(const camera_t &cam, const rect_t &r, const int w, const int h,
-                                                 const float *random_seq, aligned_vector<RayDataType> &out_rays) {
-        NS::GeneratePrimaryRays<RPDimX, RPDimY>(cam, r, w, h, random_seq, out_rays);
+                                                 const float random_seq[], const int iteration,
+                                                 const uint16_t required_samples[],
+                                                 aligned_vector<RayDataType> &out_rays) {
+        NS::GeneratePrimaryRays<RPDimX, RPDimY>(cam, r, w, h, random_seq, iteration, required_samples, out_rays);
     }
 
     static force_inline void SampleMeshInTextureSpace(int iteration, int obj_index, int uv_layer, const mesh_t &mesh,
@@ -2138,6 +2140,7 @@ simd_fvec<S> peek_ior_stack(const simd_fvec<S> stack[4], const simd_ivec<S> &_sk
 
 template <int DimX, int DimY>
 void Ray::NS::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, int h, const float random_seq[],
+                                  const int iteration, const uint16_t required_samples[],
                                   aligned_vector<ray_data_t<DimX * DimY>> &out_rays) {
     const int S = DimX * DimY;
     static_assert(S <= 16, "!");
@@ -2162,7 +2165,12 @@ void Ray::NS::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, i
 
             const simd_ivec<S> ixx = x + off_x, iyy = y + off_y;
 
-            out_r.mask = (ixx < w) & (iyy < h);
+            simd_ivec<S> req_samples;
+            UNROLLED_FOR_S(i, S, {
+                req_samples.template set<i>(required_samples[iyy.template get<i>() * w + ixx.template get<i>()]);
+            });
+
+            out_r.mask = (ixx < w) & (iyy < h) & (req_samples >= iteration);
 
             const simd_ivec<S> index = iyy * w + ixx;
 
@@ -2244,6 +2252,8 @@ void Ray::NS::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, i
             out_r.depth = 0;
         }
     }
+
+    out_rays.resize(i);
 }
 
 template <int DimX, int DimY>
@@ -6647,7 +6657,7 @@ void Ray::NS::ShadeSecondary(const pass_settings_t &ps, Span<const hit_data_t<S>
                 auto old_val =
                     simd_fvec4(out_color[y.template get<j>() * img_w + x.template get<j>()].v, simd_mem_aligned);
                 old_val += simd_fvec4(out_rgba[0].template get<j>(), out_rgba[1].template get<j>(),
-                                      out_rgba[2].template get<j>(), out_rgba[3].template get<j>());
+                                      out_rgba[2].template get<j>(), 0.0f);
                 old_val.store_to(out_color[y.template get<j>() * img_w + x.template get<j>()].v, simd_mem_aligned);
             }
         })

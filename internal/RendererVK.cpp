@@ -373,6 +373,12 @@ void Ray::Vk::Renderer::Resize(const int w, const int h) {
     raw_final_buf_ = Texture2D{"Raw Final Image", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
     raw_filtered_buf_ =
         Texture2D{"Raw Filtered Final Image", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
+    { // Texture that holds required sample count per pixel
+        Tex2DParams uparams = params;
+        uparams.format = eTexFormat::RawR16UI;
+        required_samples_buf_ =
+            Texture2D{"Required samples Image", ctx_.get(), uparams, ctx_->default_memory_allocs(), ctx_->log()};
+    }
 
     if (frame_pixels_) {
         pixel_stage_buf_.Unmap();
@@ -400,10 +406,10 @@ void Ray::Vk::Renderer::Clear(const color_rgba_t &c) {
     VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
 
     const TransitionInfo img_transitions[] = {
-        {&dual_buf_[0], eResState::CopyDst},      {&dual_buf_[1], eResState::CopyDst},
-        {&final_buf_, eResState::CopyDst},        {&raw_final_buf_, eResState::CopyDst},
-        {&raw_filtered_buf_, eResState::CopyDst}, {&base_color_buf_, eResState::CopyDst},
-        {&depth_normals_buf_, eResState::CopyDst}};
+        {&dual_buf_[0], eResState::CopyDst},       {&dual_buf_[1], eResState::CopyDst},
+        {&final_buf_, eResState::CopyDst},         {&raw_final_buf_, eResState::CopyDst},
+        {&raw_filtered_buf_, eResState::CopyDst},  {&base_color_buf_, eResState::CopyDst},
+        {&depth_normals_buf_, eResState::CopyDst}, {&required_samples_buf_, eResState::CopyDst}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, img_transitions);
 
     ClearColorImage(dual_buf_[0], c.v, cmd_buf);
@@ -418,6 +424,10 @@ void Ray::Vk::Renderer::Clear(const color_rgba_t &c) {
     if (depth_normals_buf_.ready()) {
         static const float rgba[] = {0.0f, 0.0f, 0.0f, 0.0f};
         ClearColorImage(depth_normals_buf_, rgba, cmd_buf);
+    }
+    { // Clear integer texture
+        static const uint32_t rgba[4] = {0xffff, 0xffff, 0xffff, 0xffff};
+        ClearColorImage(required_samples_buf_, rgba, cmd_buf);
     }
 
     EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
@@ -720,8 +730,14 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
     { // generate primary rays
         DebugMarker _(cmd_buf, "GeneratePrimaryRays");
         timestamps_[ctx_->backend_frame].primary_ray_gen[0] = ctx_->WriteTimestamp(cmd_buf, true);
-        kernel_GeneratePrimaryRays(cmd_buf, cam, hi, rect, halton_seq_buf_, prim_rays_buf_);
+        kernel_GeneratePrimaryRays(cmd_buf, cam, hi, rect, halton_seq_buf_, region.iteration, required_samples_buf_,
+                                   counters_buf_, prim_rays_buf_);
         timestamps_[ctx_->backend_frame].primary_ray_gen[1] = ctx_->WriteTimestamp(cmd_buf, false);
+    }
+
+    { // prepare indirect args
+        DebugMarker _(cmd_buf, "PrepareIndirArgs");
+        kernel_PrepareIndirArgs(cmd_buf, counters_buf_, indir_args_buf_);
     }
 
 #if DEBUG_HWRT
@@ -733,9 +749,9 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
     { // trace primary rays
         DebugMarker _(cmd_buf, "IntersectScenePrimary");
         timestamps_[ctx_->backend_frame].primary_trace[0] = ctx_->WriteTimestamp(cmd_buf, true);
-        kernel_IntersectScenePrimary(cmd_buf, cam.pass_settings, sc_data, halton_seq_buf_, hi + RAND_DIM_BASE_COUNT,
-                                     rect, macro_tree_root, cam.clip_end, s->tex_atlases_,
-                                     s->bindless_tex_data_.descr_set, prim_rays_buf_, prim_hits_buf_);
+        kernel_IntersectScene(cmd_buf, indir_args_buf_, counters_buf_, cam.pass_settings, sc_data, halton_seq_buf_,
+                              hi + RAND_DIM_BASE_COUNT, macro_tree_root, s->tex_atlases_,
+                              s->bindless_tex_data_.descr_set, prim_rays_buf_, prim_hits_buf_);
         timestamps_[ctx_->backend_frame].primary_trace[1] = ctx_->WriteTimestamp(cmd_buf, false);
     }
 
@@ -744,8 +760,8 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
     { // shade primary hits
         DebugMarker _(cmd_buf, "ShadePrimaryHits");
         timestamps_[ctx_->backend_frame].primary_shade[0] = ctx_->WriteTimestamp(cmd_buf, true);
-        kernel_ShadePrimaryHits(cmd_buf, cam.pass_settings, s->env_, prim_hits_buf_, prim_rays_buf_, sc_data,
-                                halton_seq_buf_, hi + RAND_DIM_BASE_COUNT, rect, s->tex_atlases_,
+        kernel_ShadePrimaryHits(cmd_buf, cam.pass_settings, s->env_, indir_args_buf_, prim_hits_buf_, prim_rays_buf_,
+                                sc_data, halton_seq_buf_, hi + RAND_DIM_BASE_COUNT, rect, s->tex_atlases_,
                                 s->bindless_tex_data_.descr_set, temp_buf0_, secondary_rays_buf_, shadow_rays_buf_,
                                 counters_buf_, temp_base_color, temp_depth_normals_buf_);
         timestamps_[ctx_->backend_frame].primary_shade[1] = ctx_->WriteTimestamp(cmd_buf, false);
@@ -773,9 +789,9 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         timestamps_[ctx_->backend_frame].secondary_trace.push_back(ctx_->WriteTimestamp(cmd_buf, true));
         { // trace secondary rays
             DebugMarker _(cmd_buf, "IntersectSceneSecondary");
-            kernel_IntersectSceneSecondary(cmd_buf, indir_args_buf_, counters_buf_, cam.pass_settings, sc_data,
-                                           halton_seq_buf_, hi + RAND_DIM_BASE_COUNT, macro_tree_root, s->tex_atlases_,
-                                           s->bindless_tex_data_.descr_set, secondary_rays_buf_, prim_hits_buf_);
+            kernel_IntersectScene(cmd_buf, indir_args_buf_, counters_buf_, cam.pass_settings, sc_data, halton_seq_buf_,
+                                  hi + RAND_DIM_BASE_COUNT, macro_tree_root, s->tex_atlases_,
+                                  s->bindless_tex_data_.descr_set, secondary_rays_buf_, prim_hits_buf_);
         }
 
         if (sc_data.visible_lights_count) {
@@ -823,8 +839,9 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         const float main_mix_factor = 1.0f / float((region.iteration + 1) / 2);
         const float aux_mix_factor = 1.0f / float(region.iteration);
 
-        kernel_MixIncremental(cmd_buf, main_mix_factor, aux_mix_factor, rect, temp_buf0_, temp_base_color,
-                              temp_depth_normals_buf_, clean_buf, base_color_buf_, depth_normals_buf_);
+        kernel_MixIncremental(cmd_buf, main_mix_factor, aux_mix_factor, rect, region.iteration, temp_buf0_,
+                              temp_base_color, temp_depth_normals_buf_, required_samples_buf_, clean_buf,
+                              base_color_buf_, depth_normals_buf_);
     }
 
     { // output final buffer, prepare variance
@@ -840,8 +857,13 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         tonemap_params_.view_transform = cam.view_transform;
         tonemap_params_.inv_gamma = (1.0f / cam.gamma);
 
+        variance_threshold_ = region.iteration > cam.pass_settings.min_samples
+                                  ? 0.5f * cam.pass_settings.variance_threshold * cam.pass_settings.variance_threshold
+                                  : 0.0f;
+
         kernel_Postprocess(cmd_buf, dual_buf_[0], p1_weight, dual_buf_[1], p2_weight, exposure,
-                           tonemap_params_.inv_gamma, rect, final_buf_, raw_final_buf_, temp_buf0_);
+                           tonemap_params_.inv_gamma, rect, variance_threshold_, region.iteration, final_buf_,
+                           raw_final_buf_, temp_buf0_, required_samples_buf_);
         // Also store as denosed result until Denoise method will be called
         const TransitionInfo img_transitions[] = {{&raw_final_buf_, eResState::CopySrc},
                                                   {&raw_filtered_buf_, eResState::CopyDst}};
@@ -924,7 +946,8 @@ void Ray::Vk::Renderer::DenoiseImage(const RegionContext &region) {
 
     { // Filter variance
         DebugMarker _(cmd_buf, "Filter Variance");
-        kernel_FilterVariance(cmd_buf, raw_variance, rect, filtered_variance);
+        kernel_FilterVariance(cmd_buf, raw_variance, rect, variance_threshold_, region.iteration, filtered_variance,
+                              required_samples_buf_);
     }
 
     { // Apply NLM Filter

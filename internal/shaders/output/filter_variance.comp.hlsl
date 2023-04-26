@@ -2,8 +2,8 @@ struct Params
 {
     uint4 rect;
     float2 inv_img_size;
-    float _pad0;
-    float _pad1;
+    float variance_threshold;
+    int iteration;
 };
 
 static const uint3 gl_WorkGroupSize = uint3(8u, 8u, 1u);
@@ -15,9 +15,10 @@ cbuffer UniformParams
     Params _61_g_params : packoffset(c0);
 };
 
-Texture2D<float4> g_in_img : register(t1, space0);
-SamplerState _g_in_img_sampler : register(s1, space0);
+Texture2D<float4> g_in_img : register(t2, space0);
+SamplerState _g_in_img_sampler : register(s2, space0);
 RWTexture2D<float4> g_out_img : register(u0, space0);
+RWTexture2D<uint> g_out_req_samples_img : register(u1, space0);
 
 static uint3 gl_LocalInvocationID;
 static uint3 gl_GlobalInvocationID;
@@ -140,6 +141,11 @@ void comp_main()
         float4 _500 = max(_498, _420);
         res_variance = _500;
         g_out_img[_74] = _500;
+        float4 _512 = _61_g_params.variance_threshold.xxxx;
+        if (any(bool4(_500.x >= _512.x, _500.y >= _512.y, _500.z >= _512.z, _500.w >= _512.w)))
+        {
+            g_out_req_samples_img[_74] = uint(_61_g_params.iteration + 1).x;
+        }
         break;
     } while(false);
 }

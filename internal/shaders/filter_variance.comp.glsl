@@ -11,6 +11,7 @@ LAYOUT_PARAMS uniform UniformParams {
 layout(binding = IN_IMG_SLOT) uniform sampler2D g_in_img;
 
 layout(binding = OUT_IMG_SLOT, rgba32f) uniform writeonly image2D g_out_img;
+layout(binding = OUT_REQ_SAMPLES_IMG_SLOT, r16ui) uniform uimage2D g_out_req_samples_img;
 
 shared uint g_temp_variance0_0[16][16], g_temp_variance0_1[16][16];
 shared uint g_temp_variance1_0[16][8], g_temp_variance1_1[16][8];
@@ -80,4 +81,8 @@ void main() {
 
     res_variance = max(res_variance, center_val);
     imageStore(g_out_img, gi, res_variance);
+
+    if (any(greaterThanEqual(res_variance, vec4(g_params.variance_threshold)))) {
+        imageStore(g_out_req_samples_img, gi, uvec4(g_params.iteration + 1));
+    }
 }

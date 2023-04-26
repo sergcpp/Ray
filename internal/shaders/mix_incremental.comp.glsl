@@ -9,6 +9,8 @@ LAYOUT_PARAMS uniform UniformParams {
 };
 
 layout(binding = IN_TEMP_IMG_SLOT, rgba32f) uniform readonly image2D g_temp_img;
+layout(binding = IN_REQ_SAMPLES_SLOT, r16ui) uniform readonly uimage2D g_req_samples_img;
+
 layout(binding = OUT_IMG_SLOT, rgba32f) uniform image2D g_out_img;
 #if OUTPUT_BASE_COLOR
     layout(binding = IN_TEMP_BASE_COLOR_SLOT, rgba32f) uniform readonly image2D g_temp_base_color;
@@ -27,6 +29,11 @@ void main() {
     }
 
     ivec2 icoord = ivec2(g_params.rect.xy + gl_GlobalInvocationID.xy);
+
+    uint req_samples = imageLoad(g_req_samples_img, icoord).r;
+    [[dont_flatten]] if (req_samples < g_params.iteration) {
+        return;
+    }
 
     vec3 col1 = imageLoad(g_out_img, icoord).rgb;
     vec3 col2 = imageLoad(g_temp_img, icoord).rgb;

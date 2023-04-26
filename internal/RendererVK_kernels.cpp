@@ -17,13 +17,18 @@
 #include "shaders/types.h"
 
 void Ray::Vk::Renderer::kernel_GeneratePrimaryRays(VkCommandBuffer cmd_buf, const camera_t &cam, const int hi,
-                                                   const rect_t &rect, const Buffer &random_seq,
+                                                   const rect_t &rect, const Buffer &random_seq, const int iteration,
+                                                   const Texture2D &req_samples_img, const Buffer &inout_counters,
                                                    const Buffer &out_rays) {
     const TransitionInfo res_transitions[] = {{&random_seq, eResState::ShaderResource},
+                                              {&req_samples_img, eResState::UnorderedAccess},
+                                              {&inout_counters, eResState::UnorderedAccess},
                                               {&out_rays, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
     const Binding bindings[] = {{eBindTarget::SBuf, PrimaryRayGen::HALTON_SEQ_BUF_SLOT, random_seq},
+                                {eBindTarget::Image, PrimaryRayGen::REQUIRED_SAMPLES_IMG_SLOT, req_samples_img},
+                                {eBindTarget::SBuf, PrimaryRayGen::INOUT_COUNTERS_BUF_SLOT, inout_counters},
                                 {eBindTarget::SBuf, PrimaryRayGen::OUT_RAYS_BUF_SLOT, out_rays}};
 
     const uint32_t grp_count[3] = {
@@ -57,17 +62,17 @@ void Ray::Vk::Renderer::kernel_GeneratePrimaryRays(VkCommandBuffer cmd_buf, cons
     uniform_params.cam_filter_and_lens_blades = (int(cam.filter) << 8) | cam.lens_blades;
     uniform_params.shift_x = cam.shift[0];
     uniform_params.shift_y = cam.shift[1];
+    uniform_params.iteration = iteration;
 
     DispatchCompute(cmd_buf, pi_prim_rays_gen_, grp_count, bindings, &uniform_params, sizeof(uniform_params),
                     ctx_->default_descr_alloc(), ctx_->log());
 }
 
-void Ray::Vk::Renderer::kernel_IntersectScenePrimary(VkCommandBuffer cmd_buf, const pass_settings_t &settings,
-                                                     const scene_data_t &sc_data, const Buffer &random_seq,
-                                                     const int hi, const rect_t &rect, const uint32_t node_index,
-                                                     const float cam_clip_end, Span<const TextureAtlas> tex_atlases,
-                                                     VkDescriptorSet tex_descr_set, const Buffer &rays,
-                                                     const Buffer &out_hits) {
+void Ray::Vk::Renderer::kernel_IntersectScene(VkCommandBuffer cmd_buf, const pass_settings_t &settings,
+                                              const scene_data_t &sc_data, const Buffer &random_seq, const int hi,
+                                              const rect_t &rect, const uint32_t node_index, const float cam_clip_end,
+                                              Span<const TextureAtlas> tex_atlases, VkDescriptorSet tex_descr_set,
+                                              const Buffer &rays, const Buffer &out_hits) {
     const TransitionInfo res_transitions[] = {{&rays, eResState::UnorderedAccess},
                                               {&out_hits, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
@@ -125,10 +130,11 @@ void Ray::Vk::Renderer::kernel_IntersectScenePrimary(VkCommandBuffer cmd_buf, co
                     ctx_->default_descr_alloc(), ctx_->log());
 }
 
-void Ray::Vk::Renderer::kernel_IntersectSceneSecondary(
-    VkCommandBuffer cmd_buf, const Buffer &indir_args, const Buffer &counters, const pass_settings_t &settings,
-    const scene_data_t &sc_data, const Buffer &random_seq, const int hi, uint32_t node_index,
-    Span<const TextureAtlas> tex_atlases, VkDescriptorSet tex_descr_set, const Buffer &rays, const Buffer &out_hits) {
+void Ray::Vk::Renderer::kernel_IntersectScene(VkCommandBuffer cmd_buf, const Buffer &indir_args, const Buffer &counters,
+                                              const pass_settings_t &settings, const scene_data_t &sc_data,
+                                              const Buffer &random_seq, const int hi, uint32_t node_index,
+                                              Span<const TextureAtlas> tex_atlases, VkDescriptorSet tex_descr_set,
+                                              const Buffer &rays, const Buffer &out_hits) {
     const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
                                               {&counters, eResState::ShaderResource},
                                               {&rays, eResState::UnorderedAccess},
@@ -203,14 +209,15 @@ void Ray::Vk::Renderer::kernel_IntersectAreaLights(VkCommandBuffer cmd_buf, cons
 }
 
 void Ray::Vk::Renderer::kernel_ShadePrimaryHits(VkCommandBuffer cmd_buf, const pass_settings_t &settings,
-                                                const environment_t &env, const Buffer &hits, const Buffer &rays,
-                                                const scene_data_t &sc_data, const Buffer &random_seq, const int hi,
-                                                const rect_t &rect, Span<const TextureAtlas> tex_atlases,
-                                                VkDescriptorSet tex_descr_set, const Texture2D &out_img,
-                                                const Buffer &out_rays, const Buffer &out_sh_rays,
-                                                const Buffer &inout_counters, const Texture2D &out_base_color,
-                                                const Texture2D &out_depth_normals) {
-    const TransitionInfo res_transitions[] = {{&hits, eResState::ShaderResource},
+                                                const environment_t &env, const Buffer &indir_args, const Buffer &hits,
+                                                const Buffer &rays, const scene_data_t &sc_data,
+                                                const Buffer &random_seq, const int hi, const rect_t &rect,
+                                                Span<const TextureAtlas> tex_atlases, VkDescriptorSet tex_descr_set,
+                                                const Texture2D &out_img, const Buffer &out_rays,
+                                                const Buffer &out_sh_rays, const Buffer &inout_counters,
+                                                const Texture2D &out_base_color, const Texture2D &out_depth_normals) {
+    const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
+                                              {&hits, eResState::ShaderResource},
                                               {&rays, eResState::ShaderResource},
                                               {&random_seq, eResState::ShaderResource},
                                               {&out_img, eResState::UnorderedAccess},
@@ -245,9 +252,6 @@ void Ray::Vk::Renderer::kernel_ShadePrimaryHits(VkCommandBuffer cmd_buf, const p
     if (out_depth_normals.ready()) {
         bindings.emplace_back(eBindTarget::Image, Shade::OUT_DEPTH_NORMALS_IMG_SLOT, out_depth_normals);
     }
-
-    const uint32_t grp_count[3] = {uint32_t((rect.w + Shade::LOCAL_GROUP_SIZE_X - 1) / Shade::LOCAL_GROUP_SIZE_X),
-                                   uint32_t((rect.h + Shade::LOCAL_GROUP_SIZE_Y - 1) / Shade::LOCAL_GROUP_SIZE_Y), 1u};
 
     Shade::Params uniform_params = {};
     uniform_params.rect[0] = rect.x;
@@ -298,8 +302,11 @@ void Ray::Vk::Renderer::kernel_ShadePrimaryHits(VkCommandBuffer cmd_buf, const p
         bindings.emplace_back(eBindTarget::Tex2DArray, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
     }
 
-    DispatchCompute(cmd_buf, *pi, grp_count, bindings, &uniform_params, sizeof(uniform_params),
-                    ctx_->default_descr_alloc(), ctx_->log());
+    // DispatchCompute(cmd_buf, *pi, grp_count, bindings, &uniform_params, sizeof(uniform_params),
+    //                 ctx_->default_descr_alloc(), ctx_->log());
+
+    DispatchComputeIndirect(cmd_buf, *pi, indir_args, 0, bindings, &uniform_params, sizeof(uniform_params),
+                            ctx_->default_descr_alloc(), ctx_->log());
 }
 
 void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(VkCommandBuffer cmd_buf, const pass_settings_t &settings,
@@ -441,15 +448,18 @@ void Ray::Vk::Renderer::kernel_PrepareIndirArgs(VkCommandBuffer cmd_buf, const B
 }
 
 void Ray::Vk::Renderer::kernel_MixIncremental(VkCommandBuffer cmd_buf, const float main_mix_factor,
-                                              const float aux_mix_factor, const rect_t &rect, const Texture2D &temp_img,
-                                              const Texture2D &temp_base_color, const Texture2D &temp_depth_normals,
+                                              const float aux_mix_factor, const rect_t &rect, const int iteration,
+                                              const Texture2D &temp_img, const Texture2D &temp_base_color,
+                                              const Texture2D &temp_depth_normals, const Texture2D &req_samples,
                                               const Texture2D &out_img, const Texture2D &out_base_color,
                                               const Texture2D &out_depth_normals) {
     const TransitionInfo res_transitions[] = {
-        {&temp_img, eResState::UnorderedAccess},           {&out_img, eResState::UnorderedAccess},
-        {&temp_base_color, eResState::UnorderedAccess},    {&out_base_color, eResState::UnorderedAccess},
-        {&temp_depth_normals, eResState::UnorderedAccess}, {&out_depth_normals, eResState::UnorderedAccess}};
+        {&temp_img, eResState::UnorderedAccess},         {&temp_base_color, eResState::UnorderedAccess},
+        {&req_samples, eResState::UnorderedAccess},      {&out_img, eResState::UnorderedAccess},
+        {&out_base_color, eResState::UnorderedAccess},   {&temp_depth_normals, eResState::UnorderedAccess},
+        {&out_depth_normals, eResState::UnorderedAccess}};
     SmallVector<Binding, 16> bindings = {{eBindTarget::Image, MixIncremental::IN_TEMP_IMG_SLOT, temp_img},
+                                         {eBindTarget::Image, MixIncremental::IN_REQ_SAMPLES_SLOT, req_samples},
                                          {eBindTarget::Image, MixIncremental::OUT_IMG_SLOT, out_img}};
     if (out_base_color.ready()) {
         bindings.emplace_back(eBindTarget::Image, MixIncremental::IN_TEMP_BASE_COLOR_SLOT, temp_base_color);
@@ -473,6 +483,7 @@ void Ray::Vk::Renderer::kernel_MixIncremental(VkCommandBuffer cmd_buf, const flo
     uniform_params.rect[3] = rect.h;
     uniform_params.main_mix_factor = main_mix_factor;
     uniform_params.aux_mix_factor = aux_mix_factor;
+    uniform_params.iteration = iteration;
 
     Pipeline *pi = &pi_mix_incremental_;
     if (out_base_color.ready()) {
@@ -491,12 +502,15 @@ void Ray::Vk::Renderer::kernel_MixIncremental(VkCommandBuffer cmd_buf, const flo
 
 void Ray::Vk::Renderer::kernel_Postprocess(VkCommandBuffer cmd_buf, const Texture2D &img0_buf, const float img0_weight,
                                            const Texture2D &img1_buf, const float img1_weight, const float exposure,
-                                           const float inv_gamma, const rect_t &rect, const Texture2D &out_pixels,
-                                           const Texture2D &out_raw_pixels, const Texture2D &out_variance) const {
+                                           const float inv_gamma, const rect_t &rect, const float variance_threshold,
+                                           const int iteration, const Texture2D &out_pixels,
+                                           const Texture2D &out_raw_pixels, const Texture2D &out_variance,
+                                           const Texture2D &out_req_samples) const {
     const TransitionInfo res_transitions[] = {
         {&img0_buf, eResState::UnorderedAccess},       {&img1_buf, eResState::UnorderedAccess},
         {&tonemap_lut_, eResState::ShaderResource},    {&out_pixels, eResState::UnorderedAccess},
-        {&out_raw_pixels, eResState::UnorderedAccess}, {&out_variance, eResState::UnorderedAccess}};
+        {&out_raw_pixels, eResState::UnorderedAccess}, {&out_variance, eResState::UnorderedAccess},
+        {&out_req_samples, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
     const Binding bindings[] = {{eBindTarget::Image, Postprocess::IN_IMG0_SLOT, img0_buf},
@@ -504,7 +518,8 @@ void Ray::Vk::Renderer::kernel_Postprocess(VkCommandBuffer cmd_buf, const Textur
                                 {eBindTarget::Tex3D, Postprocess::TONEMAP_LUT_SLOT, tonemap_lut_},
                                 {eBindTarget::Image, Postprocess::OUT_IMG_SLOT, out_pixels},
                                 {eBindTarget::Image, Postprocess::OUT_RAW_IMG_SLOT, out_raw_pixels},
-                                {eBindTarget::Image, Postprocess::OUT_VARIANCE_IMG_SLOT, out_variance}};
+                                {eBindTarget::Image, Postprocess::OUT_VARIANCE_IMG_SLOT, out_variance},
+                                {eBindTarget::Image, Postprocess::OUT_REQ_SAMPLES_IMG_SLOT, out_req_samples}};
 
     const uint32_t grp_count[3] = {
         uint32_t((rect.w + Postprocess::LOCAL_GROUP_SIZE_X - 1) / Postprocess::LOCAL_GROUP_SIZE_X),
@@ -520,19 +535,24 @@ void Ray::Vk::Renderer::kernel_Postprocess(VkCommandBuffer cmd_buf, const Textur
     uniform_params.img0_weight = img0_weight;
     uniform_params.img1_weight = img1_weight;
     uniform_params.tonemap_mode = (loaded_view_transform_ == eViewTransform::Standard) ? 0 : 1;
+    uniform_params.variance_threshold = variance_threshold;
+    uniform_params.iteration = iteration;
 
     DispatchCompute(cmd_buf, pi_postprocess_, grp_count, bindings, &uniform_params, sizeof(uniform_params),
                     ctx_->default_descr_alloc(), ctx_->log());
 }
 
 void Ray::Vk::Renderer::kernel_FilterVariance(VkCommandBuffer cmd_buf, const Texture2D &img_buf, const rect_t &rect,
-                                              const Texture2D &out_variance) {
+                                              const float variance_threshold, const int iteration,
+                                              const Texture2D &out_variance, const Texture2D &out_req_samples) {
     const TransitionInfo res_transitions[] = {{&img_buf, eResState::ShaderResource},
-                                              {&out_variance, eResState::UnorderedAccess}};
+                                              {&out_variance, eResState::UnorderedAccess},
+                                              {&out_req_samples, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
     const Binding bindings[] = {{eBindTarget::Tex2D, FilterVariance::IN_IMG_SLOT, img_buf},
-                                {eBindTarget::Image, FilterVariance::OUT_IMG_SLOT, out_variance}};
+                                {eBindTarget::Image, FilterVariance::OUT_IMG_SLOT, out_variance},
+                                {eBindTarget::Image, FilterVariance::OUT_REQ_SAMPLES_IMG_SLOT, out_req_samples}};
 
     const uint32_t grp_count[3] = {
         uint32_t((rect.w + FilterVariance::LOCAL_GROUP_SIZE_X - 1) / Postprocess::LOCAL_GROUP_SIZE_X),
@@ -545,6 +565,8 @@ void Ray::Vk::Renderer::kernel_FilterVariance(VkCommandBuffer cmd_buf, const Tex
     uniform_params.rect[3] = rect.h;
     uniform_params.inv_img_size[0] = 1.0f / float(w_);
     uniform_params.inv_img_size[1] = 1.0f / float(h_);
+    uniform_params.variance_threshold = variance_threshold;
+    uniform_params.iteration = iteration;
 
     DispatchCompute(cmd_buf, pi_filter_variance_, grp_count, bindings, &uniform_params, sizeof(uniform_params),
                     ctx_->default_descr_alloc(), ctx_->log());

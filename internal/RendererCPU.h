@@ -11,6 +11,8 @@
 #include "SceneCPU.h"
 #include "UniformIntDistribution.h"
 
+#define DEBUG_ADAPTIVE_SAMPLING 0
+
 namespace Ray {
 class ILog;
 namespace Ref {
@@ -25,8 +27,10 @@ class SIMDPolicy {
     static force_inline eRendererType type() { return eRendererType::Reference; }
 
     static force_inline void GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, int h,
-                                                 const float *random_seq, aligned_vector<Ref::ray_data_t> &out_rays) {
-        Ref::GeneratePrimaryRays(cam, r, w, h, random_seq, out_rays);
+                                                 const float random_seq[], const int iteration,
+                                                 const uint16_t required_samples[],
+                                                 aligned_vector<Ref::ray_data_t> &out_rays) {
+        Ref::GeneratePrimaryRays(cam, r, w, h, random_seq, iteration, required_samples, out_rays);
     }
 
     static force_inline void SampleMeshInTextureSpace(int iteration, int obj_index, int uv_layer, const mesh_t &mesh,
@@ -101,6 +105,7 @@ template <typename SIMDPolicy> class Renderer : public RendererBase, private SIM
     bool use_wide_bvh_;
     aligned_vector<color_rgba_t, 16> dual_buf_[2], base_color_buf_, depth_normals_buf_, temp_buf_, final_buf_,
         raw_final_buf_, raw_filtered_buf_;
+    std::vector<uint16_t> required_samples_;
 
     std::mutex mtx_;
 
@@ -108,6 +113,7 @@ template <typename SIMDPolicy> class Renderer : public RendererBase, private SIM
     int w_ = 0, h_ = 0;
 
     Ref::tonemap_params_t tonemap_params_;
+    float variance_threshold_ = 0.0f;
 
     std::vector<uint16_t> permutations_;
     void UpdateHaltonSequence(int iteration, std::unique_ptr<float[]> &seq);
@@ -142,6 +148,8 @@ template <typename SIMDPolicy> class Renderer : public RendererBase, private SIM
                 buf.assign(w * h, {});
                 buf.shrink_to_fit();
             }
+            required_samples_.assign(w * h, 0xffff);
+            required_samples_.shrink_to_fit();
             temp_buf_.assign(w * h, {});
             temp_buf_.shrink_to_fit();
             final_buf_.assign(w * h, {});
@@ -160,6 +168,7 @@ template <typename SIMDPolicy> class Renderer : public RendererBase, private SIM
         for (auto &buf : dual_buf_) {
             buf.assign(w_ * h_, c);
         }
+        required_samples_.assign(w_ * h_, 0xffff);
     }
 
     SceneBase *CreateScene() override;
@@ -319,7 +328,9 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase *scene, RegionC
     const uint32_t hi = (region.iteration & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT;
 
     if (cam.type != eCamType::Geo) {
-        SIMDPolicy::GeneratePrimaryRays(cam, rect, w_, h_, &region.halton_seq[hi], p.primary_rays);
+        SIMDPolicy::GeneratePrimaryRays(cam, rect, w_, h_, &region.halton_seq[hi], region.iteration,
+                                        required_samples_.data(), p.primary_rays);
+
         p.intersections.resize(p.primary_rays.size());
         for (auto &inter : p.intersections) {
             inter = {};
@@ -449,6 +460,10 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase *scene, RegionC
     Ref::simd_fvec4 exposure = std::pow(2.0f, cam.exposure);
     exposure.set<3>(1.0f);
 
+    float variance_threshold = region.iteration > cam.pass_settings.min_samples
+                                   ? 0.5f * cam.pass_settings.variance_threshold * cam.pass_settings.variance_threshold
+                                   : 0.0f;
+
     {
         std::lock_guard<std::mutex> _(mtx_);
 
@@ -466,6 +481,7 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase *scene, RegionC
         stats_.time_secondary_shadow_us += (unsigned long long)secondary_shadow_time.count();
 
         tonemap_params_ = tonemap_params;
+        variance_threshold_ = variance_threshold;
     }
 
     color_rgba_t *clean_buf = dual_buf_[(region.iteration - 1) % 2].data();
@@ -473,6 +489,10 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase *scene, RegionC
     const float half_mix_factor = 1.0f / float((region.iteration + 1) / 2);
     for (int y = rect.y; y < rect.y + rect.h; ++y) {
         for (int x = rect.x; x < rect.x + rect.w; ++x) {
+            if (required_samples_[y * w_ + x] < region.iteration) {
+                continue;
+            }
+
             const Ref::simd_fvec4 new_val = {temp_buf_[y * w_ + x].v, Ref::simd_mem_aligned};
 
             Ref::simd_fvec4 cur_val = {clean_buf[y * w_ + x].v, Ref::simd_mem_aligned};
@@ -505,6 +525,18 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase *scene, RegionC
 
             const Ref::simd_fvec4 variance = 0.5f * (p1 - p2) * (p1 - p2);
             variance.store_to(temp_buf_[y * w_ + x].v, Ref::simd_mem_aligned);
+
+#if DEBUG_ADAPTIVE_SAMPLING
+            if (cam.pass_settings.variance_threshold != 0.0f && required_samples_[y * w_ + x] >= region.iteration &&
+                (region.iteration % 2)) {
+                final_buf_[y * w_ + x].v[0] = 1.0f;
+                raw_final_buf_[y * w_ + x].v[0] = 1.0f;
+            }
+#endif
+
+            if (simd_cast(variance >= variance_threshold_).not_all_zeros()) {
+                required_samples_[y * w_ + x] = region.iteration + 1;
+            }
         }
     }
 }
@@ -574,6 +606,28 @@ template <typename SIMDPolicy> void Ray::Cpu::Renderer<SIMDPolicy>::DenoiseImage
         }
     }
 
+    Ref::tonemap_params_t tonemap_params;
+    float variance_threshold;
+
+    {
+        std::lock_guard<std::mutex> _(mtx_);
+        tonemap_params = tonemap_params_;
+        variance_threshold = variance_threshold_;
+    }
+
+    for (int y = 0; y < rect.h; ++y) {
+        const int yy = rect.y + y;
+        for (int x = 0; x < rect.w; ++x) {
+            const int xx = rect.x + x;
+
+            const Ref::simd_fvec4 variance = {
+                p.filtered_variance_buf[(y + EXT_RADIUS) * rect_ext.w + (x + EXT_RADIUS)].v, Ref::simd_mem_aligned};
+            if (simd_cast(variance >= variance_threshold).not_all_zeros()) {
+                required_samples_[yy * w_ + xx] = region.iteration + 1;
+            }
+        }
+    }
+
     const int NLM_WINDOW_SIZE = 7;
     const int NLM_NEIGHBORHOOD_SIZE = 3;
 
@@ -582,13 +636,6 @@ template <typename SIMDPolicy> void Ray::Cpu::Renderer<SIMDPolicy>::DenoiseImage
     Ref::NLMFilter<NLM_WINDOW_SIZE, NLM_NEIGHBORHOOD_SIZE>(
         p.temp_final_buf.data(), rect_t{EXT_RADIUS, EXT_RADIUS, rect.w, rect.h}, rect_ext.w, 1.0f, 0.45f,
         p.filtered_variance_buf.data(), rect, w_, raw_filtered_buf_.data());
-
-    Ref::tonemap_params_t tonemap_params;
-
-    {
-        std::lock_guard<std::mutex> _(mtx_);
-        tonemap_params = tonemap_params_;
-    }
 
     for (int y = rect.y; y < rect.y + rect.h; ++y) {
         for (int x = rect.x; x < rect.x + rect.w; ++x) {

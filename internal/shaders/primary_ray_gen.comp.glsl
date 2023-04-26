@@ -12,6 +12,12 @@ layout(std430, binding = HALTON_SEQ_BUF_SLOT) readonly buffer Halton {
     float g_halton[];
 };
 
+layout(binding = REQUIRED_SAMPLES_IMG_SLOT, r16ui) uniform uimage2D g_required_samples_img;
+
+layout(std430, binding = INOUT_COUNTERS_BUF_SLOT) buffer InoutCounters {
+    uint g_inout_counters[];
+};
+
 layout(std430, binding = OUT_RAYS_BUF_SLOT) writeonly buffer OutRays {
     ray_data_t g_out_rays[];
 };
@@ -38,9 +44,13 @@ void main() {
     int x = int(g_params.rect.x + gl_GlobalInvocationID.x);
     int y = int(g_params.rect.y + gl_GlobalInvocationID.y);
 
+    if (imageLoad(g_required_samples_img, ivec2(x, y)).r < g_params.iteration) {
+        return;
+    }
+
     float k = float(g_params.img_size.x) / float(g_params.img_size.y);
 
-    int index = int(gl_GlobalInvocationID.y * g_params.rect.z) + x;
+    uint index = atomicAdd(g_inout_counters[0], 1);
     int hash_val = hash((x << 16) | y);
 
     float _x = float(x);

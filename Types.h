@@ -72,8 +72,10 @@ struct pass_settings_t {
     uint8_t min_total_depth, min_transp_depth;
     Bitmask<ePassFlags> flags;
     float clamp_direct = 0.0f, clamp_indirect = 0.0f;
+    int min_samples = 128;
+    float variance_threshold = 0.0f;
 };
-static_assert(sizeof(pass_settings_t) == 16, "!");
+static_assert(sizeof(pass_settings_t) == 24, "!");
 
 struct camera_t {
     eCamType type;
