@@ -15,6 +15,7 @@ enum class eTexFormat : uint8_t {
     RawR32F,
     RawR16F,
     RawR8,
+    RawR16UI,
     RawR32UI,
     RawRG88,
     RawRGB32F,
@@ -46,7 +47,7 @@ enum class eTexFormat : uint8_t {
 };
 
 inline bool IsDepthFormat(const eTexFormat format) {
-    static_assert(int(eTexFormat::_Count) == 33, "Update the list below!");
+    static_assert(int(eTexFormat::_Count) == 34, "Update the list below!");
     return format == eTexFormat::Depth16 || format == eTexFormat::Depth24Stencil8 ||
            format == eTexFormat::Depth32Stencil8
 #ifndef __ANDROID__
@@ -57,12 +58,12 @@ inline bool IsDepthFormat(const eTexFormat format) {
 }
 
 inline bool IsDepthStencilFormat(const eTexFormat format) {
-    static_assert(int(eTexFormat::_Count) == 33, "Update the list below!");
+    static_assert(int(eTexFormat::_Count) == 34, "Update the list below!");
     return format == eTexFormat::Depth24Stencil8 || format == eTexFormat::Depth32Stencil8;
 }
 
 inline bool IsCompressedFormat(const eTexFormat format) {
-    static_assert(int(eTexFormat::_Count) == 33, "Update the list below!");
+    static_assert(int(eTexFormat::_Count) == 34, "Update the list below!");
     switch (format) {
     case eTexFormat::BC1:
     case eTexFormat::BC2:

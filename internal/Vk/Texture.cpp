@@ -34,6 +34,7 @@ extern const VkFormat g_vk_formats[] = {
     VK_FORMAT_R32_SFLOAT,               // RawR32F
     VK_FORMAT_R16_SFLOAT,               // RawR16F
     VK_FORMAT_R8_UNORM,                 // RawR8
+    VK_FORMAT_R16_UINT,                 // RawR16UI
     VK_FORMAT_R32_UINT,                 // RawR32UI
     VK_FORMAT_R8G8_UNORM,               // RawRG88
     VK_FORMAT_R32G32B32_SFLOAT,         // RawRGB32F
@@ -197,6 +198,7 @@ const int g_per_pixel_data_len[] = {
     4,  // RawR32F
     2,  // RawR16F
     1,  // RawR8
+    2,  // RawR16UI
     4,  // RawR32UI
     2,  // RawRG88
     12, // RawRGB32F
@@ -254,7 +256,7 @@ int Ray::Vk::CalcMipCount(const int w, const int h, const int min_res, const eTe
 }
 
 int Ray::Vk::GetColorChannelCount(const eTexFormat format) {
-    static_assert(int(eTexFormat::_Count) == 33, "Update the list below!");
+    static_assert(int(eTexFormat::_Count) == 34, "Update the list below!");
     switch (format) {
     case eTexFormat::RawRGBA8888:
     case eTexFormat::RawRGBA8888Snorm:
@@ -283,6 +285,7 @@ int Ray::Vk::GetColorChannelCount(const eTexFormat format) {
     case eTexFormat::RawR32F:
     case eTexFormat::RawR16F:
     case eTexFormat::RawR8:
+    case eTexFormat::RawR16UI:
     case eTexFormat::RawR32UI:
     case eTexFormat::BC4:
         return 1;
@@ -301,7 +304,7 @@ int Ray::Vk::GetColorChannelCount(const eTexFormat format) {
 int Ray::Vk::GetPerPixelDataLen(const eTexFormat format) { return g_per_pixel_data_len[int(format)]; }
 
 int Ray::Vk::GetBlockLenBytes(const eTexFormat format, const eTexBlock block) {
-    static_assert(int(eTexFormat::_Count) == 33, "Update the list below!");
+    static_assert(int(eTexFormat::_Count) == 34, "Update the list below!");
     switch (format) {
     case eTexFormat::BC1:
         assert(block == eTexBlock::_4x4);
