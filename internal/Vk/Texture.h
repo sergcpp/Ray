@@ -174,6 +174,7 @@ void CopyImageToBuffer(const Texture2D &src_tex, int level, int x, int y, int w,
                        void *_cmd_buf, int data_off);
 
 void ClearColorImage(Texture2D &tex, const float rgba[4], void *_cmd_buf);
+void ClearColorImage(Texture2D &tex, const uint32_t rgba[4], void *_cmd_buf);
 
 struct Texture1DParams {
     uint16_t offset = 0, size = 0;

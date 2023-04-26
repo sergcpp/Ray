@@ -1025,7 +1025,7 @@ void Ray::Vk::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, void *_cmd_
         view_info.subresourceRange.baseArrayLayer = 0;
         view_info.subresourceRange.layerCount = 1;
 
-        if (GetColorChannelCount(p.format) == 1) {
+        if (GetColorChannelCount(p.format) == 1 && int(p.usage & eTexUsageBits::Storage) == 0) {
             view_info.components.r = VK_COMPONENT_SWIZZLE_R;
             view_info.components.g = VK_COMPONENT_SWIZZLE_R;
             view_info.components.b = VK_COMPONENT_SWIZZLE_R;
@@ -2516,6 +2516,21 @@ void Ray::Vk::ClearColorImage(Texture2D &tex, const float rgba[4], void *_cmd_bu
 
     VkClearColorValue clear_val = {};
     memcpy(clear_val.float32, rgba, 4 * sizeof(float));
+
+    VkImageSubresourceRange clear_range = {};
+    clear_range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    clear_range.layerCount = 1;
+    clear_range.levelCount = 1;
+
+    vkCmdClearColorImage(cmd_buf, tex.handle().img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clear_val, 1, &clear_range);
+}
+
+void Ray::Vk::ClearColorImage(Texture2D &tex, const uint32_t rgba[4], void *_cmd_buf) {
+    auto cmd_buf = reinterpret_cast<VkCommandBuffer>(_cmd_buf);
+    assert(tex.resource_state == eResState::CopyDst);
+
+    VkClearColorValue clear_val = {};
+    memcpy(clear_val.uint32, rgba, 4 * sizeof(uint32_t));
 
     VkImageSubresourceRange clear_range = {};
     clear_range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
