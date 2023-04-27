@@ -7,25 +7,23 @@ INTERFACE_START(PrimaryRayGen)
 
 struct Params {
     UVEC4_TYPE rect;
-    VEC4_TYPE cam_origin;
-    VEC4_TYPE cam_fwd;
-    VEC4_TYPE cam_side;
-    VEC4_TYPE cam_up;
+    VEC4_TYPE cam_origin;   // w is fov factor
+    VEC4_TYPE cam_fwd;      // w is clip start
+    VEC4_TYPE cam_side;     // w is focus distance
+    VEC4_TYPE cam_up;       // w is sensor height
     UVEC2_TYPE img_size;
     int hi;
     float spread_angle;
+    //
     float cam_fstop;
     float cam_focal_length;
     float cam_lens_rotation;
     float cam_lens_ratio;
-    int cam_lens_blades;
-    float cam_clip_start;
-    int cam_filter;
+    //
+    int cam_filter_and_lens_blades;
     float shift_x;
     float shift_y;
-    float _pad0;
-    float _pad1;
-    float _pad2;
+    int iteration;
 };
 
 const int LOCAL_GROUP_SIZE_X = 8;

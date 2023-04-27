@@ -45,6 +45,7 @@ void Ray::Vk::Renderer::kernel_GeneratePrimaryRays(VkCommandBuffer cmd_buf, cons
     memcpy(&uniform_params.cam_origin[0], cam.origin, 3 * sizeof(float));
     uniform_params.cam_origin[3] = temp;
     memcpy(&uniform_params.cam_fwd[0], cam.fwd, 3 * sizeof(float));
+    uniform_params.cam_fwd[3] = cam.clip_start;
     memcpy(&uniform_params.cam_side[0], cam.side, 3 * sizeof(float));
     uniform_params.cam_side[3] = cam.focus_distance;
     memcpy(&uniform_params.cam_up[0], cam.up, 3 * sizeof(float));
@@ -53,9 +54,7 @@ void Ray::Vk::Renderer::kernel_GeneratePrimaryRays(VkCommandBuffer cmd_buf, cons
     uniform_params.cam_focal_length = cam.focal_length;
     uniform_params.cam_lens_rotation = cam.lens_rotation;
     uniform_params.cam_lens_ratio = cam.lens_ratio;
-    uniform_params.cam_lens_blades = cam.lens_blades;
-    uniform_params.cam_clip_start = cam.clip_start;
-    uniform_params.cam_filter = int(cam.filter);
+    uniform_params.cam_filter_and_lens_blades = (int(cam.filter) << 8) | cam.lens_blades;
     uniform_params.shift_x = cam.shift[0];
     uniform_params.shift_y = cam.shift[1];
 

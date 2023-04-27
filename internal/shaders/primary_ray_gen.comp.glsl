@@ -48,7 +48,7 @@ void main() {
 
     vec2 sample_off = vec2(construct_float(hash_val), construct_float(hash(hash_val)));
 
-    if (g_params.cam_filter == FILTER_TENT) {
+    if ((g_params.cam_filter_and_lens_blades >> 8) == FILTER_TENT) {
         float rx = fract(g_halton[g_params.hi + RAND_DIM_FILTER_U] + sample_off.x);
         [[flatten]] if (rx < 0.5) {
             rx = sqrt(2.0 * rx) - 1.0;
@@ -87,8 +87,8 @@ void main() {
                 theta = 0.5 * PI - 0.25 * PI * (offset[0] / offset[1]);
             }
 
-            if (g_params.cam_lens_blades > 0) {
-                r *= ngon_rad(theta, float(g_params.cam_lens_blades));
+            if ((g_params.cam_filter_and_lens_blades & 0xff) > 0) {
+                r *= ngon_rad(theta, float(g_params.cam_filter_and_lens_blades & 0xff));
             }
 
             theta += g_params.cam_lens_rotation;
@@ -104,7 +104,7 @@ void main() {
     vec3 _origin = g_params.cam_origin.xyz + g_params.cam_side.xyz * offset.x + g_params.cam_up.xyz * offset.y;
     vec3 _d = get_pix_dir(_x, _y, _origin, k);
 
-    _origin += _d * (g_params.cam_clip_start / dot(_d, g_params.cam_fwd.xyz));
+    _origin += _d * (g_params.cam_fwd.w / dot(_d, g_params.cam_fwd.xyz));
 
     ray_data_t new_ray;
     new_ray.o[0] = _origin[0];
