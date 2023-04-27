@@ -392,6 +392,8 @@ void Ray::Vk::Renderer::Resize(const int w, const int h) {
 
     w_ = w;
     h_ = h;
+
+    Clear(color_rgba_t{});
 }
 
 void Ray::Vk::Renderer::Clear(const color_rgba_t &c) {
