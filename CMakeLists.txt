@@ -18,7 +18,9 @@ IF(MSVC)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP")
     set(CMAKE_CXX_FLAGS_DEBUG "/MDd /Zi /Ob0 /O1 /fp:except /WX")
     if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-        set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Wno-deprecated-declarations")
+        set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Wno-deprecated-declarations
+                                                            -Wno-unsupported-floating-point-opt
+                                                            -Wno-pragma-clang-attribute")
     endif()
     if (NOT DEFINED CMAKE_CXX_FLAGS_ASAN)
         set(CMAKE_CXX_FLAGS_ASAN "/MTd /Zi /Od /RTC1 /fsanitize=address")
