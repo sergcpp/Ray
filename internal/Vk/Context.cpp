@@ -134,6 +134,13 @@ bool Ray::Vk::Context::Init(ILog *log, const char *preferred_device) {
         return false;
     }
 
+    // Workaround for a buggy linux AMD driver, make sure vkGetBufferDeviceAddressKHR is not NULL
+    auto dev_vkGetBufferDeviceAddressKHR =
+        (PFN_vkGetBufferDeviceAddressKHR)vkGetDeviceProcAddr(device_, "vkGetBufferDeviceAddressKHR");
+    if (!dev_vkGetBufferDeviceAddressKHR) {
+        raytracing_supported_ = ray_query_supported_ = false;
+    }
+
     if (!InitCommandBuffers(command_pool_, temp_command_pool_, setup_cmd_buf_, draw_cmd_bufs_, image_avail_semaphores_,
                             render_finished_semaphores_, in_flight_fences_, query_pools_, graphics_queue_, device_,
                             graphics_family_index_, log)) {

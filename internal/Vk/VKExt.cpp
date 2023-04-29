@@ -76,6 +76,7 @@ bool Ray::Vk::LoadVulkan(ILog *log) {
     LOAD_VK_FUN(vkEnumerateInstanceExtensionProperties);
 
     LOAD_VK_FUN(vkGetInstanceProcAddr);
+    LOAD_VK_FUN(vkGetDeviceProcAddr);
     LOAD_VK_FUN(vkEnumeratePhysicalDevices);
 
     LOAD_VK_FUN(vkGetPhysicalDeviceProperties);
