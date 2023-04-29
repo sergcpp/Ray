@@ -39,7 +39,9 @@ bool Ray::Vk::DescrPool::Init(const DescrSizes &sizes, const uint32_t sets_count
     descr_counts_[int(eDescrType::UniformBuffer)] = sizes.ubuf_count;
     descr_counts_[int(eDescrType::StorageBuffer)] = sizes.sbuf_count;
     descr_counts_[int(eDescrType::UniformTexBuffer)] = sizes.tbuf_count;
-    descr_counts_[int(eDescrType::AccStructure)] = sizes.acc_count;
+    if (ctx_->raytracing_supported() || ctx_->ray_query_supported()) {
+        descr_counts_[int(eDescrType::AccStructure)] = sizes.acc_count;
+    }
 
     SmallVector<VkDescriptorPoolSize, int(eDescrType::_Count)> pool_sizes;
     for (int i = 0; i < int(eDescrType::_Count); ++i) {
