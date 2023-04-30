@@ -195,6 +195,7 @@ template <typename SIMDPolicy> struct PassData {
     aligned_vector<color_rgba_t, 16> temp_final_buf;
     aligned_vector<color_rgba_t, 16> variance_buf;
     aligned_vector<color_rgba_t, 16> filtered_variance_buf;
+    aligned_vector<color_rgba_t, 16> feature_buf1, feature_buf2;
 
     aligned_vector<typename SIMDPolicy::RayHashType> hash_values;
     std::vector<int> head_flags;
@@ -556,6 +557,16 @@ template <typename SIMDPolicy> void Ray::Cpu::Renderer<SIMDPolicy>::DenoiseImage
     p.temp_final_buf.resize(rect_ext.w * rect_ext.h);
     p.variance_buf.resize(rect_ext.w * rect_ext.h);
     p.filtered_variance_buf.resize(rect_ext.w * rect_ext.h);
+    if (!base_color_buf_.empty()) {
+        p.feature_buf1.resize(rect_ext.w * rect_ext.h);
+    } else {
+        p.feature_buf1 = {};
+    }
+    if (!depth_normals_buf_.empty()) {
+        p.feature_buf2.resize(rect_ext.w * rect_ext.h);
+    } else {
+        p.feature_buf2 = {};
+    }
 
 #define FETCH_FINAL_BUF(_x, _y)                                                                                        \
     Ref::simd_fvec4(raw_final_buf_[std::min(std::max(_y, 0), h_ - 1) * w_ + std::min(std::max(_x, 0), w_ - 1)].v,      \
@@ -589,6 +600,11 @@ template <typename SIMDPolicy> void Ray::Cpu::Renderer<SIMDPolicy>::DenoiseImage
 #undef FETCH_VARIANCE
 #undef FETCH_FINAL_BUF
 
+#define FETCH_BASE_COLOR(_x, _y)                                                                                       \
+    base_color_buf_[std::min(std::max(_y, 0), h_ - 1) * w_ + std::min(std::max(_x, 0), w_ - 1)]
+#define FETCH_DEPTH_NORMALS(_x, _y)                                                                                    \
+    depth_normals_buf_[std::min(std::max(_y, 0), h_ - 1) * w_ + std::min(std::max(_x, 0), w_ - 1)]
+
     for (int y = 4; y < rect_ext.h - 4; ++y) {
         for (int x = 4; x < rect_ext.w - 4; ++x) {
             const Ref::simd_fvec4 center_val = {p.variance_buf[(y + 0) * rect_ext.w + x].v, Ref::simd_mem_aligned};
@@ -603,8 +619,18 @@ template <typename SIMDPolicy> void Ray::Cpu::Renderer<SIMDPolicy>::DenoiseImage
 
             res = max(res, center_val);
             res.store_to(p.filtered_variance_buf[y * rect_ext.w + x].v, Ref::simd_mem_aligned);
+
+            if (!base_color_buf_.empty()) {
+                p.feature_buf1[y * rect_ext.w + x] = FETCH_BASE_COLOR(rect_ext.x + x, rect_ext.y + y);
+            }
+            if (!depth_normals_buf_.empty()) {
+                p.feature_buf2[y * rect_ext.w + x] = FETCH_DEPTH_NORMALS(rect_ext.x + x, rect_ext.y + y);
+            }
         }
     }
+
+#undef FETCH_BASE_COLOR
+#undef FETCH_DEPTH_NORMALS
 
     Ref::tonemap_params_t tonemap_params;
     float variance_threshold;
@@ -633,9 +659,10 @@ template <typename SIMDPolicy> void Ray::Cpu::Renderer<SIMDPolicy>::DenoiseImage
 
     static_assert(EXT_RADIUS >= (NLM_WINDOW_SIZE - 1) / 2 + (NLM_NEIGHBORHOOD_SIZE - 1) / 2, "!");
 
-    Ref::NLMFilter<NLM_WINDOW_SIZE, NLM_NEIGHBORHOOD_SIZE>(
+    Ref::JointNLMFilter<NLM_WINDOW_SIZE, NLM_NEIGHBORHOOD_SIZE>(
         p.temp_final_buf.data(), rect_t{EXT_RADIUS, EXT_RADIUS, rect.w, rect.h}, rect_ext.w, 1.0f, 0.45f,
-        p.filtered_variance_buf.data(), rect, w_, raw_filtered_buf_.data());
+        p.filtered_variance_buf.data(), !p.feature_buf1.empty() ? p.feature_buf1.data() : nullptr, 64.0f,
+        !p.feature_buf2.empty() ? p.feature_buf2.data() : nullptr, 32.0f, rect, w_, raw_filtered_buf_.data());
 
     for (int y = rect.y; y < rect.y + rect.h; ++y) {
         for (int x = rect.x; x < rect.x + rect.w; ++x) {

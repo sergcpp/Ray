@@ -12,8 +12,8 @@ struct Params {
     float damping;
     float inv_gamma;
     int tonemap_mode;
-    float _pad1;
-    float _pad2;
+    float base_color_weight;
+    float depth_normal_weight;
 };
 
 const int LOCAL_GROUP_SIZE_X = 8;
@@ -22,6 +22,8 @@ const int LOCAL_GROUP_SIZE_Y = 8;
 const int IN_IMG_SLOT = 2;
 const int VARIANCE_IMG_SLOT = 3;
 const int TONEMAP_LUT_SLOT = 4;
+const int BASE_COLOR_IMG_SLOT = 5;
+const int DEPTH_NORMAL_IMG_SLOT = 6;
 
 const int OUT_IMG_SLOT = 0;
 const int OUT_RAW_IMG_SLOT = 1;

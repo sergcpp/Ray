@@ -157,9 +157,9 @@ void load_needed_textures(Ray::SceneBase &scene, Ray::principled_mat_desc_t &mat
 }
 
 template <typename MatDesc>
-void setup_test_scene(Ray::SceneBase &scene, const bool output_sh, const bool output_base_color,
-                      const bool output_depth_normals, const int min_samples, const float variance_threshold,
-                      const MatDesc &main_mat_desc, const char *textures[], const eTestScene test_scene) {
+void setup_test_scene(Ray::SceneBase &scene, const bool output_sh, const int min_samples,
+                      const float variance_threshold, const MatDesc &main_mat_desc, const char *textures[],
+                      const eTestScene test_scene) {
     { // setup camera
         static const float view_origin_standard[] = {0.16149f, 0.294997f, 0.332965f};
         static const float view_dir_standard[] = {-0.364128768f, -0.555621922f, -0.747458696f};
@@ -186,8 +186,8 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_sh, const bool ou
         }
         memcpy(&cam_desc.up[0], &view_up[0], 3 * sizeof(float));
         cam_desc.output_sh = output_sh;
-        cam_desc.output_base_color = output_base_color;
-        cam_desc.output_depth_normals = output_depth_normals;
+        cam_desc.output_base_color = true;
+        cam_desc.output_depth_normals = true;
 
         if (test_scene == eTestScene::Standard_DOF0) {
             cam_desc.sensor_height = 0.018f;
@@ -730,11 +730,10 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_sh, const bool ou
     scene.Finalize();
 }
 
-template void setup_test_scene(Ray::SceneBase &scene, bool output_sh, bool output_base_color, bool output_depth_normals,
-                               int min_samples, float variance_threshold, const Ray::shading_node_desc_t &main_mat_desc,
-                               const char *textures[], eTestScene test_scene);
-template void setup_test_scene(Ray::SceneBase &scene, bool output_sh, bool output_base_color, bool output_depth_normals,
-                               int min_samples, float variance_threshold,
+template void setup_test_scene(Ray::SceneBase &scene, bool output_sh, int min_samples, float variance_threshold,
+                               const Ray::shading_node_desc_t &main_mat_desc, const char *textures[],
+                               eTestScene test_scene);
+template void setup_test_scene(Ray::SceneBase &scene, bool output_sh, int min_samples, float variance_threshold,
                                const Ray::principled_mat_desc_t &main_mat_desc, const char *textures[],
                                eTestScene test_scene);
 

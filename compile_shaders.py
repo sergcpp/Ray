@@ -107,7 +107,10 @@ def main():
 
     # Denoise
     compile_shader(src_name="filter_variance")
-    compile_shader(src_name="nlm_filter")
+    compile_shader(src_name="nlm_filter", spv_name="nlm_filter", defines="-DUSE_BASE_COLOR=0 -DUSE_DEPTH_NORMAL=0")
+    compile_shader(src_name="nlm_filter", spv_name="nlm_filter_n", defines="-DUSE_BASE_COLOR=0 -DUSE_DEPTH_NORMAL=1")
+    compile_shader(src_name="nlm_filter", spv_name="nlm_filter_b", defines="-DUSE_BASE_COLOR=1 -DUSE_DEPTH_NORMAL=0")
+    compile_shader(src_name="nlm_filter", spv_name="nlm_filter_bn", defines="-DUSE_BASE_COLOR=1 -DUSE_DEPTH_NORMAL=1")
 
     # Other
     compile_shader(src_name="prepare_indir_args")

@@ -573,19 +573,23 @@ void Ray::Vk::Renderer::kernel_FilterVariance(VkCommandBuffer cmd_buf, const Tex
 }
 
 void Ray::Vk::Renderer::kernel_NLMFilter(VkCommandBuffer cmd_buf, const Texture2D &img_buf, const Texture2D &var_buf,
-                                         const float alpha, const float damping, const Texture2D &out_raw_img,
+                                         const float alpha, const float damping, const Texture2D &base_color_img,
+                                         const float base_color_weight, const Texture2D &depth_normals_img,
+                                         const float depth_normals_weight, const Texture2D &out_raw_img,
                                          const eViewTransform view_transform, const float inv_gamma, const rect_t &rect,
                                          const Texture2D &out_img) {
-    const TransitionInfo res_transitions[] = {{&img_buf, eResState::ShaderResource},
-                                              {&var_buf, eResState::ShaderResource},
-                                              {&tonemap_lut_, eResState::ShaderResource},
-                                              {&out_img, eResState::UnorderedAccess},
-                                              {&out_raw_img, eResState::UnorderedAccess}};
+    const TransitionInfo res_transitions[] = {
+        {&img_buf, eResState::ShaderResource},           {&var_buf, eResState::ShaderResource},
+        {&tonemap_lut_, eResState::ShaderResource},      {&base_color_img, eResState::ShaderResource},
+        {&depth_normals_img, eResState::ShaderResource}, {&out_img, eResState::UnorderedAccess},
+        {&out_raw_img, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
     const Binding bindings[] = {{eBindTarget::Tex2D, NLMFilter::IN_IMG_SLOT, img_buf},
                                 {eBindTarget::Tex2D, NLMFilter::VARIANCE_IMG_SLOT, var_buf},
                                 {eBindTarget::Tex3D, NLMFilter::TONEMAP_LUT_SLOT, tonemap_lut_},
+                                {eBindTarget::Tex2D, NLMFilter::BASE_COLOR_IMG_SLOT, base_color_img},
+                                {eBindTarget::Tex2D, NLMFilter::DEPTH_NORMAL_IMG_SLOT, depth_normals_img},
                                 {eBindTarget::Image, NLMFilter::OUT_IMG_SLOT, out_img},
                                 {eBindTarget::Image, NLMFilter::OUT_RAW_IMG_SLOT, out_raw_img}};
 
@@ -604,8 +608,19 @@ void Ray::Vk::Renderer::kernel_NLMFilter(VkCommandBuffer cmd_buf, const Texture2
     uniform_params.damping = damping;
     uniform_params.inv_gamma = inv_gamma;
     uniform_params.tonemap_mode = (loaded_view_transform_ == eViewTransform::Standard) ? 0 : 1;
+    uniform_params.base_color_weight = base_color_weight;
+    uniform_params.depth_normal_weight = depth_normals_weight;
 
-    DispatchCompute(cmd_buf, pi_nlm_filter_, grp_count, bindings, &uniform_params, sizeof(uniform_params),
+    Pipeline *pi = &pi_nlm_filter_;
+    if (base_color_img.ready() && depth_normals_img.ready()) {
+        pi = &pi_nlm_filter_bn_;
+    } else if (base_color_img.ready()) {
+        pi = &pi_nlm_filter_b_;
+    } else if (depth_normals_img.ready()) {
+        pi = &pi_nlm_filter_n_;
+    }
+
+    DispatchCompute(cmd_buf, *pi, grp_count, bindings, &uniform_params, sizeof(uniform_params),
                     ctx_->default_descr_alloc(), ctx_->log());
 }
 

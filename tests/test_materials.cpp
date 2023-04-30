@@ -71,8 +71,8 @@ void run_material_test(const char *arch_list[], const char *preferred_device, co
 
                     auto scene = std::unique_ptr<Ray::SceneBase>(renderer->CreateScene());
 
-                    setup_test_scene(*scene, output_sh, false, false, min_sample_count, variance_threshold, mat_desc,
-                                     textures, test_scene);
+                    setup_test_scene(*scene, output_sh, min_sample_count, variance_threshold, mat_desc, textures,
+                                     test_scene);
 
                     snprintf(name_buf, sizeof(name_buf), "Test %s", test_name);
                     schedule_render_jobs(*renderer, scene.get(), s, current_sample_count, denoise, partial, name_buf);
@@ -1343,9 +1343,9 @@ void test_complex_mat5(const char *arch_list[], const char *preferred_device) {
 
 void test_complex_mat5_adaptive(const char *arch_list[], const char *preferred_device) {
     const int MinSampleCount = 32;
-    const int MaxSampleCount = 75;
+    const int MaxSampleCount = 47;
     const float VarianceThreshold = 0.004f;
-    const int PixThres = 1159;
+    const int PixThres = 1203;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1407,8 +1407,8 @@ void test_complex_mat5_regions(const char *arch_list[], const char *preferred_de
 }
 
 void test_complex_mat5_denoised(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 70;
-    const int PixThres = 1249;
+    const int SampleCount = 45;
+    const int PixThres = 1211;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1571,8 +1571,8 @@ void test_complex_mat6(const char *arch_list[], const char *preferred_device) {
 }
 
 void test_complex_mat6_denoised(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 467;
-    const int PixThres = 586;
+    const int SampleCount = 388;
+    const int PixThres = 583;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;

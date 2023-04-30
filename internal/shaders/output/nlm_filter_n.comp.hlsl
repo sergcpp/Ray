@@ -21,6 +21,8 @@ Texture2D<float4> g_in_img : register(t2, space0);
 SamplerState _g_in_img_sampler : register(s2, space0);
 Texture2D<float4> g_variance_img : register(t3, space0);
 SamplerState _g_variance_img_sampler : register(s3, space0);
+Texture2D<float4> g_depth_normal_img : register(t6, space0);
+SamplerState _g_depth_normal_img_sampler : register(s6, space0);
 RWTexture2D<float4> g_out_raw_img : register(u1, space0);
 Texture3D<float4> g_tonemap_lut : register(t4, space0);
 SamplerState _g_tonemap_lut_sampler : register(s4, space0);
@@ -38,6 +40,7 @@ groupshared uint g_temp_color0[16][16];
 groupshared uint g_temp_color1[16][16];
 groupshared uint g_temp_variance0[16][16];
 groupshared uint g_temp_variance1[16][16];
+groupshared uint g_temp_depth_normal[16][16];
 
 uint spvPackHalf2x16(float2 value)
 {
@@ -48,6 +51,18 @@ uint spvPackHalf2x16(float2 value)
 float2 spvUnpackHalf2x16(uint value)
 {
     return f16tof32(uint2(value & 0xffff, value >> 16));
+}
+
+uint spvPackUnorm4x8(float4 value)
+{
+    uint4 Packed = uint4(round(saturate(value) * 255.0));
+    return Packed.x | (Packed.y << 8) | (Packed.z << 16) | (Packed.w << 24);
+}
+
+float4 spvUnpackUnorm4x8(uint value)
+{
+    uint4 Packed = uint4(value & 0xff, (value >> 8) & 0xff, (value >> 16) & 0xff, value >> 24);
+    return float4(Packed) / 255.0;
 }
 
 float3 reversible_tonemap(float3 c)
@@ -165,19 +180,23 @@ void comp_main()
         float4 _592 = g_variance_img.SampleLevel(_g_variance_img_sampler, _391, 0.0f, int2(4, 4));
         g_temp_variance0[_469][_445] = spvPackHalf2x16(_592.xy);
         g_temp_variance1[_469][_445] = spvPackHalf2x16(_592.zw);
+        g_temp_depth_normal[_410][_413] = spvPackUnorm4x8(mad(g_depth_normal_img.SampleLevel(_g_depth_normal_img_sampler, _391, 0.0f, int2(-4, -4)), float4(0.5f, 0.5f, 0.5f, 0.0625f), float4(0.5f, 0.5f, 0.5f, 0.0f)));
+        g_temp_depth_normal[_410][_445] = spvPackUnorm4x8(mad(g_depth_normal_img.SampleLevel(_g_depth_normal_img_sampler, _391, 0.0f, int2(4, -4)), float4(0.5f, 0.5f, 0.5f, 0.0625f), float4(0.5f, 0.5f, 0.5f, 0.0f)));
+        g_temp_depth_normal[_469][_413] = spvPackUnorm4x8(mad(g_depth_normal_img.SampleLevel(_g_depth_normal_img_sampler, _391, 0.0f, int2(-4, 4)), float4(0.5f, 0.5f, 0.5f, 0.0625f), float4(0.5f, 0.5f, 0.5f, 0.0f)));
+        g_temp_depth_normal[_469][_445] = spvPackUnorm4x8(mad(g_depth_normal_img.SampleLevel(_g_depth_normal_img_sampler, _391, 0.0f, int2(4, 4)), float4(0.5f, 0.5f, 0.5f, 0.0625f), float4(0.5f, 0.5f, 0.5f, 0.0f)));
         AllMemoryBarrier();
         GroupMemoryBarrierWithGroupSync();
-        bool _621 = gl_GlobalInvocationID.x >= _364_g_params.rect.z;
-        bool _630;
-        if (!_621)
+        bool _686 = gl_GlobalInvocationID.x >= _364_g_params.rect.z;
+        bool _695;
+        if (!_686)
         {
-            _630 = gl_GlobalInvocationID.y >= _364_g_params.rect.w;
+            _695 = gl_GlobalInvocationID.y >= _364_g_params.rect.w;
         }
         else
         {
-            _630 = _621;
+            _695 = _686;
         }
-        if (_630)
+        if (_695)
         {
             break;
         }
@@ -197,25 +216,29 @@ void comp_main()
                     [unroll]
                     for (int p = -1; p <= 1; )
                     {
-                        int _675 = _410 + 4;
-                        int _677 = _675 + q;
-                        int _680 = _413 + 4;
-                        int _682 = _680 + p;
-                        int _711 = (_675 + k) + q;
-                        int _718 = (_680 + l) + p;
-                        float4 _775 = float4(spvUnpackHalf2x16(g_temp_variance0[_677][_682]), spvUnpackHalf2x16(g_temp_variance1[_677][_682]));
-                        float4 _815 = float4(spvUnpackHalf2x16(g_temp_variance0[_711][_718]), spvUnpackHalf2x16(g_temp_variance1[_711][_718]));
-                        float4 _822 = float4(spvUnpackHalf2x16(g_temp_color0[_677][_682]), spvUnpackHalf2x16(g_temp_color1[_677][_682])) - float4(spvUnpackHalf2x16(g_temp_color0[_711][_718]), spvUnpackHalf2x16(g_temp_color1[_711][_718]));
-                        color_distance += (mad(_822, _822, -((_775 + min(_775, _815)) * _364_g_params.alpha)) / (9.9999997473787516355514526367188e-05f.xxxx + ((_775 + _815) * (_364_g_params.damping * _364_g_params.damping))));
+                        int _740 = _410 + 4;
+                        int _742 = _740 + q;
+                        int _745 = _413 + 4;
+                        int _747 = _745 + p;
+                        int _776 = (_740 + k) + q;
+                        int _783 = (_745 + l) + p;
+                        float4 _840 = float4(spvUnpackHalf2x16(g_temp_variance0[_742][_747]), spvUnpackHalf2x16(g_temp_variance1[_742][_747]));
+                        float4 _880 = float4(spvUnpackHalf2x16(g_temp_variance0[_776][_783]), spvUnpackHalf2x16(g_temp_variance1[_776][_783]));
+                        float4 _887 = float4(spvUnpackHalf2x16(g_temp_color0[_742][_747]), spvUnpackHalf2x16(g_temp_color1[_742][_747])) - float4(spvUnpackHalf2x16(g_temp_color0[_776][_783]), spvUnpackHalf2x16(g_temp_color1[_776][_783]));
+                        color_distance += (mad(_887, _887, -((_840 + min(_840, _880)) * _364_g_params.alpha)) / (9.9999997473787516355514526367188e-05f.xxxx + ((_840 + _880) * (_364_g_params.damping * _364_g_params.damping))));
                         p++;
                         continue;
                     }
                 }
-                float _873 = exp(-max(0.0f, 2.25f * (((color_distance.x + color_distance.y) + color_distance.z) + color_distance.w)));
-                int _878 = (_410 + 4) + k;
-                int _883 = (_413 + 4) + l;
-                sum_output += (float4(spvUnpackHalf2x16(g_temp_color0[_878][_883]), spvUnpackHalf2x16(g_temp_color1[_878][_883])) * _873);
-                sum_weight += _873;
+                int _943 = _410 + 4;
+                int _946 = _413 + 4;
+                int _961 = _943 + k;
+                int _966 = _946 + l;
+                float4 _978 = mad(spvUnpackUnorm4x8(g_temp_depth_normal[_943][_946]), float4(2.0f, 2.0f, 2.0f, 16.0f), float4(-1.0f, -1.0f, -1.0f, -0.0f)) - mad(spvUnpackUnorm4x8(g_temp_depth_normal[_961][_966]), float4(2.0f, 2.0f, 2.0f, 16.0f), float4(-1.0f, -1.0f, -1.0f, -0.0f));
+                float4 _984 = max(0.0f.xxxx, (_978 * _364_g_params.depth_normal_weight) * _978);
+                float _1006 = min(exp(-max(0.0f, 2.25f * (((color_distance.x + color_distance.y) + color_distance.z) + color_distance.w))), exp(-max(0.0f, 0.25f * (((_984.x + _984.y) + _984.z) + _984.w))));
+                sum_output += (float4(spvUnpackHalf2x16(g_temp_color0[_961][_966]), spvUnpackHalf2x16(g_temp_color1[_961][_966])) * _1006);
+                sum_weight += _1006;
             }
         }
         [flatten]
@@ -224,9 +247,9 @@ void comp_main()
             sum_output /= sum_weight.xxxx;
         }
         float4 param_4 = sum_output;
-        float4 _926 = reversible_tonemap_invert(param_4);
-        sum_output = _926;
-        g_out_raw_img[_376] = _926;
+        float4 _1059 = reversible_tonemap_invert(param_4);
+        sum_output = _1059;
+        g_out_raw_img[_376] = _1059;
         [branch]
         if (_364_g_params.tonemap_mode == 0)
         {

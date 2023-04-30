@@ -133,8 +133,8 @@ force_inline int total_depth(const shadow_ray_t &r) {
 }
 
 // Generation of rays
-void GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, int h, const float random_seq[],
-                         int iteration, const uint16_t required_samples[], aligned_vector<ray_data_t> &out_rays);
+void GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, int h, const float random_seq[], int iteration,
+                         const uint16_t required_samples[], aligned_vector<ray_data_t> &out_rays);
 void SampleMeshInTextureSpace(int iteration, int obj_index, int uv_layer, const mesh_t &mesh, const transform_t &tr,
                               const uint32_t *vtx_indices, const vertex_t *vertices, const rect_t &r, int w, int h,
                               const float *random_seq, aligned_vector<ray_data_t> &out_rays,
@@ -373,8 +373,10 @@ void ShadeSecondary(const pass_settings_t &ps, Span<const hit_data_t> inters, Sp
 
 // Denoise
 template <int WINDOW_SIZE = 7, int NEIGHBORHOOD_SIZE = 3>
-void NLMFilter(const color_rgba_t input[], const rect_t &rect, int input_stride, float alpha, float damping,
-               const color_rgba_t variance[], const rect_t &output_rect, int output_stride, color_rgba_t output[]);
+void JointNLMFilter(const color_rgba_t input[], const rect_t &rect, int input_stride, float alpha, float damping,
+                    const color_rgba_t variance[], const color_rgba_t feature0[], float feature0_weight,
+                    const color_rgba_t feature1[], float feature1_weight, const rect_t &output_rect, int output_stride,
+                    color_rgba_t output[]);
 
 // Tonemap
 

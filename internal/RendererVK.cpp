@@ -60,6 +60,9 @@ namespace Vk {
 #include "shaders/output/mix_incremental_bn.comp.inl"
 #include "shaders/output/mix_incremental_n.comp.inl"
 #include "shaders/output/nlm_filter.comp.inl"
+#include "shaders/output/nlm_filter_b.comp.inl"
+#include "shaders/output/nlm_filter_bn.comp.inl"
+#include "shaders/output/nlm_filter_n.comp.inl"
 #include "shaders/output/postprocess.comp.inl"
 #include "shaders/output/prepare_indir_args.comp.inl"
 #include "shaders/output/primary_ray_gen.comp.inl"
@@ -256,6 +259,24 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
                             internal_shaders_output_nlm_filter_comp_spv_size,
                             eShaderType::Comp,
                             log};
+    sh_nlm_filter_b_ = Shader{"NLM Filter B",
+                              ctx_.get(),
+                              internal_shaders_output_nlm_filter_b_comp_spv,
+                              internal_shaders_output_nlm_filter_b_comp_spv_size,
+                              eShaderType::Comp,
+                              log};
+    sh_nlm_filter_n_ = Shader{"NLM Filter N",
+                              ctx_.get(),
+                              internal_shaders_output_nlm_filter_n_comp_spv,
+                              internal_shaders_output_nlm_filter_n_comp_spv_size,
+                              eShaderType::Comp,
+                              log};
+    sh_nlm_filter_bn_ = Shader{"NLM Filter BN",
+                               ctx_.get(),
+                               internal_shaders_output_nlm_filter_bn_comp_spv,
+                               internal_shaders_output_nlm_filter_bn_comp_spv_size,
+                               eShaderType::Comp,
+                               log};
     if (use_hwrt_) {
         sh_debug_rt_ = Shader{"Debug RT",
                               ctx_.get(),
@@ -284,6 +305,9 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
     prog_postprocess_ = Program{"Postprocess", ctx_.get(), &sh_postprocess_, log};
     prog_filter_variance_ = Program{"Filter Variance", ctx_.get(), &sh_filter_variance_, log};
     prog_nlm_filter_ = Program{"NLM Filter", ctx_.get(), &sh_nlm_filter_, log};
+    prog_nlm_filter_b_ = Program{"NLM Filter B", ctx_.get(), &sh_nlm_filter_b_, log};
+    prog_nlm_filter_n_ = Program{"NLM Filter N", ctx_.get(), &sh_nlm_filter_n_, log};
+    prog_nlm_filter_bn_ = Program{"NLM Filter BN", ctx_.get(), &sh_nlm_filter_bn_, log};
     prog_debug_rt_ = Program{"Debug RT", ctx_.get(), &sh_debug_rt_, log};
 
     if (!pi_prim_rays_gen_.Init(ctx_.get(), &prog_prim_rays_gen_, log) ||
@@ -304,6 +328,9 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
         !pi_postprocess_.Init(ctx_.get(), &prog_postprocess_, log) ||
         !pi_filter_variance_.Init(ctx_.get(), &prog_filter_variance_, log) ||
         !pi_nlm_filter_.Init(ctx_.get(), &prog_nlm_filter_, log) ||
+        !pi_nlm_filter_b_.Init(ctx_.get(), &prog_nlm_filter_b_, log) ||
+        !pi_nlm_filter_n_.Init(ctx_.get(), &prog_nlm_filter_n_, log) ||
+        !pi_nlm_filter_bn_.Init(ctx_.get(), &prog_nlm_filter_bn_, log) ||
         (use_hwrt_ && !pi_debug_rt_.Init(ctx_.get(), &prog_debug_rt_, log))) {
         throw std::runtime_error("Error initializing pipeline!");
     }
@@ -460,7 +487,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         params.w = w;
         params.h = h;
         params.format = eTexFormat::RawRGBA32F;
-        params.usage = eTexUsageBits::Storage | eTexUsageBits::Transfer;
+        params.usage = eTexUsageBits::Storage | eTexUsageBits::Transfer | eTexUsageBits::Sampled;
 
         if (cam.pass_settings.flags & ePassFlags::OutputBaseColor) {
             if (!base_color_buf_.ready() || base_color_buf_.params.w != w || base_color_buf_.params.h != h) {
@@ -952,8 +979,9 @@ void Ray::Vk::Renderer::DenoiseImage(const RegionContext &region) {
 
     { // Apply NLM Filter
         DebugMarker _(cmd_buf, "NLM Filter");
-        kernel_NLMFilter(cmd_buf, raw_final_buf_, filtered_variance, 1.0f, 0.45f, raw_filtered_buf_,
-                         tonemap_params_.view_transform, tonemap_params_.inv_gamma, rect, final_buf_);
+        kernel_NLMFilter(cmd_buf, raw_final_buf_, filtered_variance, 1.0f, 0.45f, base_color_buf_, 64.0f,
+                         depth_normals_buf_, 32.0f, raw_filtered_buf_, tonemap_params_.view_transform,
+                         tonemap_params_.inv_gamma, rect, final_buf_);
     }
 
     timestamps_[ctx_->backend_frame].denoise[1] = ctx_->WriteTimestamp(cmd_buf, false);
