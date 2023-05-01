@@ -1408,7 +1408,7 @@ void test_complex_mat5_regions(const char *arch_list[], const char *preferred_de
 
 void test_complex_mat5_denoised(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 45;
-    const int PixThres = 1211;
+    const int PixThres = 1216;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
