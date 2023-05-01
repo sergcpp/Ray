@@ -6589,7 +6589,7 @@ void Ray::NS::ShadePrimary(const pass_settings_t &ps, Span<const hit_data_t<S>> 
         const ray_data_t<S> &r = rays[i];
         const hit_data_t<S> &inter = inters[i];
 
-        simd_fvec<S> out_rgba[4] = {0.0f}, base_color[3], depth_normal[4];
+        simd_fvec<S> out_rgba[4] = {}, base_color[3] = {}, depth_normal[4] = {};
         ShadeSurface(ps, random_seq, inter, r, sc, node_index, textures, out_rgba, out_secondary_rays,
                      out_secondary_rays_count, out_shadow_rays, out_shadow_rays_count, base_color, depth_normal);
         UNROLLED_FOR(j, 3, { out_rgba[j] = min(out_rgba[j], clamp_direct); })
