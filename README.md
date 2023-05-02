@@ -12,10 +12,8 @@ Includes CPU and GPU (Vulkan) backends. Hardware and software raytracing is avai
 
 <div>
 <div float="left" >
-  <img src="scene6.jpg" width="89.84%" />
-</div>
-<div float="left" >
-  <img src="scene5.jpg" width="89.84%" />
+  <img src="scene6.jpg" width="47.0%" />
+  <img src="scene5.jpg" width="42.4%" />
 </div>
 <div float="left" >
   <img src="scene3.jpg" width="26.55%" />
