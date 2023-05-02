@@ -69,7 +69,7 @@ template <typename T> class Vector {
     void Erase(const size_t offset, const size_t count) {
 #ifndef NDEBUG
         if (offset + count > size_) {
-            throw std::out_of_range("VectorOCL::Erase");
+            throw std::out_of_range("VectorVK::Erase");
         }
 #endif
         if (offset + count != size_) {
@@ -98,7 +98,7 @@ template <typename T> class Vector {
     void Get(const size_t i, T &v) const {
 #ifndef NDEBUG
         if (i >= size_) {
-            throw std::out_of_range("VectorOCL::Get");
+            throw std::out_of_range("VectorVK::Get");
         }
 #endif
 
@@ -116,7 +116,7 @@ template <typename T> class Vector {
     void Get(T *p, const size_t offset, const size_t count) const {
 #ifndef NDEBUG
         if (offset + count > size_) {
-            throw std::out_of_range("VectorOCL::Get");
+            throw std::out_of_range("VectorVK::Get");
         }
 #endif
 
@@ -134,7 +134,7 @@ template <typename T> class Vector {
     void Set(const size_t i, const T &v) {
 #ifndef NDEBUG
         if (i >= size_) {
-            throw std::out_of_range("VectorOCL::Set");
+            throw std::out_of_range("VectorVK::Set");
         }
 #endif
 
@@ -152,7 +152,7 @@ template <typename T> class Vector {
     void Set(const T *p, const size_t offset, const size_t count) {
 #ifndef NDEBUG
         if (offset + count > size_) {
-            throw std::out_of_range("VectorOCL::Set");
+            throw std::out_of_range("VectorVK::Set");
         }
 #endif
 

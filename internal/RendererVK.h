@@ -49,29 +49,35 @@ class Renderer : public RendererBase {
         sh_intersect_area_lights_, sh_shade_primary_, sh_shade_primary_b_, sh_shade_primary_n_, sh_shade_primary_bn_,
         sh_shade_secondary_, sh_intersect_scene_shadow_, sh_prepare_indir_args_, sh_mix_incremental_,
         sh_mix_incremental_b_, sh_mix_incremental_n_, sh_mix_incremental_bn_, sh_postprocess_, sh_filter_variance_,
-        sh_nlm_filter_, sh_nlm_filter_b_, sh_nlm_filter_n_, sh_nlm_filter_bn_, sh_debug_rt_, sh_sort_hash_rays_,
-        sh_sort_set_head_flags_, sh_sort_exclusive_scan_, sh_sort_inclusive_scan_, sh_sort_add_partial_sums_,
-        sh_sort_init_chunks_hash_and_base_, sh_sort_init_chunks_size_, sh_sort_prepare_indir_args_,
-        sh_sort_init_count_table_;
+        sh_nlm_filter_, sh_nlm_filter_b_, sh_nlm_filter_n_, sh_nlm_filter_bn_, sh_debug_rt_;
+    Shader sh_sort_hash_rays_, sh_sort_set_head_flags_, sh_sort_exclusive_scan_, sh_sort_inclusive_scan_,
+        sh_sort_add_partial_sums_, sh_sort_init_chunks_hash_and_base_, sh_sort_init_chunks_size_,
+        sh_sort_prepare_indir_args_, sh_sort_init_count_table_, sh_sort_write_sorted_chunks_,
+        sh_sort_init_skeleton_and_head_flags_, sh_sort_exclusive_seg_scan_, sh_sort_inclusive_seg_scan_,
+        sh_sort_seg_add_partial_sums_, sh_sort_reorder_rays_;
 
     Program prog_prim_rays_gen_simple_, prog_prim_rays_gen_adaptive_, prog_intersect_scene_,
         prog_intersect_scene_indirect_, prog_intersect_area_lights_, prog_shade_primary_, prog_shade_primary_b_,
         prog_shade_primary_n_, prog_shade_primary_bn_, prog_shade_secondary_, prog_intersect_scene_shadow_,
         prog_prepare_indir_args_, prog_mix_incremental_, prog_mix_incremental_b_, prog_mix_incremental_n_,
         prog_mix_incremental_bn_, prog_postprocess_, prog_filter_variance_, prog_nlm_filter_, prog_nlm_filter_b_,
-        prog_nlm_filter_n_, prog_nlm_filter_bn_, prog_debug_rt_, prog_sort_hash_rays_, prog_sort_set_head_flags_,
-        prog_sort_exclusive_scan_, prog_sort_inclusive_scan_, prog_sort_add_partial_sums_,
-        prog_sort_init_chunks_hash_and_base_, prog_sort_init_chunks_size_, prog_sort_prepare_indir_args_,
-        prog_sort_init_count_table_;
+        prog_nlm_filter_n_, prog_nlm_filter_bn_, prog_debug_rt_;
+    Program prog_sort_hash_rays_, prog_sort_set_head_flags_, prog_sort_exclusive_scan_, prog_sort_inclusive_scan_,
+        prog_sort_add_partial_sums_, prog_sort_init_chunks_hash_and_base_, prog_sort_init_chunks_size_,
+        prog_sort_prepare_indir_args_, prog_sort_init_count_table_, prog_sort_write_sorted_chunks_,
+        prog_sort_init_skeleton_and_head_flags_, prog_sort_exclusive_seg_scan_, prog_sort_inclusive_seg_scan_,
+        prog_sort_seg_add_partial_sums_, prog_sort_reorder_rays_;
 
     Pipeline pi_prim_rays_gen_simple_, pi_prim_rays_gen_adaptive_, pi_intersect_scene_, pi_intersect_scene_indirect_,
         pi_intersect_area_lights_, pi_shade_primary_, pi_shade_primary_b_, pi_shade_primary_n_, pi_shade_primary_bn_,
         pi_shade_secondary_, pi_intersect_scene_shadow_, pi_prepare_indir_args_, pi_mix_incremental_,
         pi_mix_incremental_b_, pi_mix_incremental_n_, pi_mix_incremental_bn_, pi_postprocess_, pi_filter_variance_,
-        pi_nlm_filter_, pi_nlm_filter_b_, pi_nlm_filter_n_, pi_nlm_filter_bn_, pi_debug_rt_, pi_sort_hash_rays_,
-        pi_sort_set_head_flags_, pi_sort_exclusive_scan_, pi_sort_inclusive_scan_, pi_sort_add_partial_sums_,
-        pi_sort_init_chunks_hash_and_base_, pi_sort_init_chunks_size_, pi_sort_prepare_indir_args_,
-        pi_sort_init_count_table_;
+        pi_nlm_filter_, pi_nlm_filter_b_, pi_nlm_filter_n_, pi_nlm_filter_bn_, pi_debug_rt_;
+    Pipeline pi_sort_hash_rays_, pi_sort_set_head_flags_, pi_sort_exclusive_scan_, pi_sort_inclusive_scan_,
+        pi_sort_add_partial_sums_, pi_sort_init_chunks_hash_and_base_, pi_sort_init_chunks_size_,
+        pi_sort_prepare_indir_args_, pi_sort_init_count_table_, pi_sort_write_sorted_chunks_,
+        pi_sort_init_skeleton_and_head_flags_, pi_sort_exclusive_seg_scan_, pi_sort_inclusive_seg_scan_,
+        pi_sort_seg_add_partial_sums_, pi_sort_reorder_rays_;
 
     int w_ = 0, h_ = 0;
     bool use_hwrt_ = false, use_bindless_ = false, use_tex_compression_ = false;
@@ -88,8 +94,13 @@ class Renderer : public RendererBase {
     Texture3D tonemap_lut_;
     eViewTransform loaded_view_transform_ = eViewTransform::Standard;
 
-    Buffer halton_seq_buf_, prim_rays_buf_, secondary_rays_buf_, shadow_rays_buf_, prim_hits_buf_;
+    Buffer halton_seq_buf_, prim_rays_buf_, secondary_rays_buf_, shadow_rays_buf_, prim_hits_buf_, ray_hashes_buf_,
+        head_flags_buf_, scan_values_bufs_[4], partial_sums_bufs_[4], partial_flags_bufs_[4], ray_chunks_bufs_[2],
+        count_table_buf_, skeleton_buf_;
     Buffer counters_buf_, indir_args_buf_;
+
+    static const int SORT_SCAN_PORTION = 64;
+    static const int SORT_SEG_SCAN_PORTION = 64;
 
     Buffer pixel_stage_buf_, base_color_stage_buf_, depth_normals_stage_buf_;
     mutable bool pixel_stage_is_tonemapped_ = false;
@@ -109,6 +120,7 @@ class Renderer : public RendererBase {
         int primary_trace[2];
         int primary_shade[2];
         int primary_shadow[2];
+        SmallVector<int, MAX_BOUNCES * 2> secondary_sort;
         SmallVector<int, MAX_BOUNCES * 2> secondary_trace;
         SmallVector<int, MAX_BOUNCES * 2> secondary_shade;
         SmallVector<int, MAX_BOUNCES * 2> secondary_shadow;
@@ -124,13 +136,14 @@ class Renderer : public RendererBase {
                                const Buffer &random_seq, int hi, const rect_t &rect, uint32_t node_index, float inter_t,
                                Span<const TextureAtlas> tex_atlases, VkDescriptorSet tex_descr_set, const Buffer &rays,
                                const Buffer &out_hits);
-    void kernel_IntersectScene(VkCommandBuffer cmd_buf, const Buffer &indir_args, const Buffer &counters,
-                               const pass_settings_t &settings, const scene_data_t &sc_data, const Buffer &random_seq,
-                               int hi, uint32_t node_index, float inter_t, Span<const TextureAtlas> tex_atlases,
-                               VkDescriptorSet tex_descr_set, const Buffer &rays, const Buffer &out_hits);
+    void kernel_IntersectScene(VkCommandBuffer cmd_buf, const Buffer &indir_args, int indir_args_index,
+                               const Buffer &counters, const pass_settings_t &settings, const scene_data_t &sc_data,
+                               const Buffer &random_seq, int hi, uint32_t node_index, float inter_t,
+                               Span<const TextureAtlas> tex_atlases, VkDescriptorSet tex_descr_set, const Buffer &rays,
+                               const Buffer &out_hits);
     void kernel_IntersectSceneShadow(VkCommandBuffer cmd_buf, const pass_settings_t &settings, const Buffer &indir_args,
-                                     const Buffer &counters, const scene_data_t &sc_data, uint32_t node_index,
-                                     float clamp_val, Span<const TextureAtlas> tex_atlases,
+                                     int indir_args_index, const Buffer &counters, const scene_data_t &sc_data,
+                                     uint32_t node_index, float clamp_val, Span<const TextureAtlas> tex_atlases,
                                      VkDescriptorSet tex_descr_set, const Buffer &sh_rays, const Texture2D &out_img);
     void kernel_IntersectAreaLights(VkCommandBuffer cmd_buf, const scene_data_t &sc_data, const Buffer &indir_args,
                                     const Buffer &counters, const Buffer &rays, const Buffer &inout_hits);
@@ -165,10 +178,90 @@ class Renderer : public RendererBase {
                           float damping, const Texture2D &base_color_img, float base_color_weight,
                           const Texture2D &depth_normals_img, float depth_normals_weight, const Texture2D &out_raw_img,
                           eViewTransform view_transform, float inv_gamma, const rect_t &rect, const Texture2D &out_img);
+    void kernel_SortHashRays(VkCommandBuffer cmd_buf, const Buffer &indir_args, const Buffer &rays,
+                             const Buffer &counters, const float root_min[3], const float cell_size[3],
+                             const Buffer &out_hashes);
+    void kernel_SortSetHeadFlags(VkCommandBuffer cmd_buf, const Buffer &indir_args, const Buffer &input,
+                                 const Buffer &counters, const Buffer &out_head_flags);
+    void kernel_SortScan(VkCommandBuffer cmd_buf, bool exclusive, const Buffer &indir_args, int indir_args_index,
+                         const Buffer &input, int input_offset, int input_stride, const Buffer &out_scan_values,
+                         const Buffer &out_partial_sums);
+    void kernel_SortExclusiveScan(VkCommandBuffer cmd_buf, const Buffer &indir_args, int indir_args_index,
+                                  const Buffer &input, int input_offset, int input_stride,
+                                  const Buffer &out_scan_values, const Buffer &out_partial_sums) {
+        kernel_SortScan(cmd_buf, true, indir_args, indir_args_index, input, input_offset, input_stride, out_scan_values,
+                        out_partial_sums);
+    }
+    void kernel_SortInclusiveScan(VkCommandBuffer cmd_buf, const Buffer &indir_args, int indir_args_index,
+                                  const Buffer &input, int input_offset, int input_stride,
+                                  const Buffer &out_scan_values, const Buffer &out_partial_sums) {
+        kernel_SortScan(cmd_buf, false, indir_args, indir_args_index, input, input_offset, input_stride,
+                        out_scan_values, out_partial_sums);
+    }
+    void kernel_SortAddPartialSums(VkCommandBuffer cmd_buf, const Buffer &indir_args, int indir_args_index,
+                                   const Buffer &partials_sums, const Buffer &inout_values);
+    void kernel_SortInitChunksHashAndBase(VkCommandBuffer cmd_buf, const Buffer &indir_args, uint32_t indir_args_index,
+                                          const Buffer &counters, int chunks_counter, int rays_counter,
+                                          const Buffer &hashes, const Buffer &head_flags, const Buffer &scan_values,
+                                          const Buffer &out_chunks);
+    void kernel_SortInitChunksSize(VkCommandBuffer cmd_buf, const Buffer &indir_args, uint32_t indir_args_index,
+                                   const Buffer &counters, int chunks_counter, int rays_counters,
+                                   const Buffer &out_chunks);
+    void kernel_SortPrepareIndirArgs(VkCommandBuffer cmd_buf, const Buffer &head_flags, const Buffer &scan_values,
+                                     const Buffer &inout_counters, int in_counter_index, int out_counter_index,
+                                     const Buffer &out_indir_args, int indir_args_index);
+    void kernel_SortInitCountTable(VkCommandBuffer cmd_buf, int shift, const Buffer &indir_args, int indir_args_index,
+                                   const Buffer &chunks, const Buffer &counters, int counter_index,
+                                   const Buffer &out_count_table);
+    void kernel_SortWriteSortedChunks(VkCommandBuffer cmd_buf, int shift, const Buffer &indir_args,
+                                      int indir_args_index, const Buffer &chunks, const Buffer &offsets,
+                                      const Buffer &counters, int counter_index, int chunks_counter_index,
+                                      const Buffer &out_chunks);
+    void kernal_SortInitSkeletonAndHeadFlags(VkCommandBuffer cmd_buf, const Buffer &indir_args, int indir_args_index,
+                                             const Buffer &counters, int counter_index, const Buffer &scan_values,
+                                             const Buffer &chunks, const Buffer &out_skeleton,
+                                             const Buffer &out_head_flags);
+    void kernel_SortSegScan(VkCommandBuffer cmd_buf, bool exclusive, const Buffer &indir_args, int indir_args_index,
+                            const Buffer &input, const Buffer &flags, const Buffer &out_scan_values,
+                            const Buffer &out_partial_sums, const Buffer &out_partial_flags);
+    void kernel_SortExclusiveSegScan(VkCommandBuffer cmd_buf, const Buffer &indir_args, int indir_args_index,
+                                     const Buffer &input, const Buffer &flags, const Buffer &out_scan_values,
+                                     const Buffer &out_partial_sums, const Buffer &out_partial_flags) {
+        kernel_SortSegScan(cmd_buf, true, indir_args, indir_args_index, input, flags, out_scan_values, out_partial_sums,
+                           out_partial_flags);
+    }
+    void kernel_SortInclusiveSegScan(VkCommandBuffer cmd_buf, const Buffer &indir_args, int indir_args_index,
+                                     const Buffer &input, const Buffer &flags, const Buffer &out_scan_values,
+                                     const Buffer &out_partial_sums, const Buffer &out_partial_flags) {
+        kernel_SortSegScan(cmd_buf, false, indir_args, indir_args_index, input, flags, out_scan_values,
+                           out_partial_sums, out_partial_flags);
+    }
+    void kernel_SortSegAddPartialSums(VkCommandBuffer cmd_buf, const Buffer &indir_args, int indir_args_index,
+                                      const Buffer &partials_sums, const Buffer &partial_flags, const Buffer &counters,
+                                      int counter_index, const Buffer &inout_values);
+    void kernel_SortReorderRays(VkCommandBuffer cmd_buf, const Buffer &indir_args, int indir_args_index,
+                                const Buffer &in_rays, const Buffer &indices, const Buffer &counters, int counter_index,
+                                const Buffer &out_rays);
     void kernel_DebugRT(VkCommandBuffer cmd_buf, const scene_data_t &sc_data, uint32_t node_index, const Buffer &rays,
                         const Texture2D &out_pixels);
 
     void UpdateHaltonSequence(int iteration, std::unique_ptr<float[]> &seq);
+
+    void SortRays(VkCommandBuffer cmd_buf, const Buffer &indir_args, const Buffer &in_rays, const float root_min[3],
+                  const float cell_size[3], const Buffer &ray_hashes, Buffer ray_chunks[2], Buffer &skeleton,
+                  Buffer &head_flags, Buffer &count_table, const Buffer &counters, Buffer partial_sums[],
+                  Buffer partial_flags[], Buffer scan_values[], Buffer &out_rays);
+
+    void RadixSort(VkCommandBuffer cmd_buf, const Buffer &indir_args, Buffer _chunks[2], Buffer &count_table,
+                   const Buffer &counters, Buffer partial_sums[], Buffer scan_values[]);
+
+    void ExclusiveScan(VkCommandBuffer cmd_buf, const Buffer &indir_args, const int indir_args_indices[],
+                       const Buffer &input, const uint32_t offset, const uint32_t stride, const Buffer partial_sums[],
+                       const Buffer scan_values[]);
+    void InclusiveSegmentedScan(VkCommandBuffer cmd_buf, const Buffer &indir_args, const int indir_args_indices[],
+                                const Buffer &input, const Buffer &flags, const Buffer &counters,
+                                const int counter_indices[], const Buffer partial_sums[], const Buffer partial_flags[],
+                                const Buffer scan_values[]);
 
     const color_rgba_t *get_pixels_ref(bool tonemap) const;
 

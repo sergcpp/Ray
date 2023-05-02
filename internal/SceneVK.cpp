@@ -1173,6 +1173,9 @@ void Ray::Vk::Scene::RebuildTLAS_nolock() {
 
     nodes_.Append(&bvh_nodes[0], bvh_nodes.size());
     mi_indices_.Append(&mi_indices[0], mi_indices.size());
+
+    // store root node
+    tlas_root_node_ = bvh_nodes[0];
 }
 
 void Ray::Vk::Scene::PrepareEnvMapQTree_nolock() {

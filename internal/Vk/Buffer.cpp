@@ -477,8 +477,8 @@ void Ray::Vk::Buffer::Fill(const uint32_t dst_offset, const uint32_t size, const
     }
 
     if (!barriers.empty()) {
-        vkCmdPipelineBarrier(cmd_buf, src_stages, dst_stages, 0, 0, nullptr, uint32_t(barriers.size()),
-                             barriers.cdata(), 0, nullptr);
+        vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, dst_stages, 0, 0,
+                             nullptr, uint32_t(barriers.size()), barriers.cdata(), 0, nullptr);
     }
 
     vkCmdFillBuffer(cmd_buf, handle_.buf, VkDeviceSize{dst_offset}, VkDeviceSize{size}, data);

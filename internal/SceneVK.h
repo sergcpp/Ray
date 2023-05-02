@@ -66,6 +66,8 @@ class Scene : public SceneBase {
 
     uint32_t macro_nodes_start_ = 0xffffffff, macro_nodes_count_ = 0;
 
+    bvh_node_t tlas_root_node_ = {};
+
     Buffer rt_blas_buf_, rt_geo_data_buf_, rt_instance_buf_, rt_tlas_buf_;
 
     struct MeshBlas {

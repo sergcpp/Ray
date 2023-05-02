@@ -25,6 +25,17 @@ void main() {
         g_out_indir_args[1] = 1;
         g_out_indir_args[2] = 1;
 
+        { // arguments for sorting
+            uint scan_count = (ray_count + 63) / 64;
+            for (int i = 0; i < 7; ++i) {
+                g_counters[4 + i] = scan_count;
+                g_out_indir_args[6 + 3 * i + 0] = (scan_count + 63) / 64;
+                g_out_indir_args[6 + 3 * i + 1] = 1;
+                g_out_indir_args[6 + 3 * i + 2] = 1;
+                scan_count = (scan_count + 63) / 64;
+            }
+        }
+
         g_counters[0] = 0;
         g_counters[1] = ray_count;
     }

@@ -225,6 +225,10 @@ struct atlas_texture_t {
     UINT_TYPE pos[NUM_MIP_LEVELS];
 };
 
+struct ray_chunk_t {
+    UINT_TYPE hash, base, size;
+};
+
 INTERFACE_END
 
 #endif // TYPES_H

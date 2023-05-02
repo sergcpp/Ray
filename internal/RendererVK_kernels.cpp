@@ -13,6 +13,18 @@
 #include "shaders/prepare_indir_args_interface.h"
 #include "shaders/primary_ray_gen_interface.h"
 #include "shaders/shade_interface.h"
+#include "shaders/sort_add_partial_sums_interface.h"
+#include "shaders/sort_hash_rays_interface.h"
+#include "shaders/sort_init_chunks_interface.h"
+#include "shaders/sort_init_count_table_interface.h"
+#include "shaders/sort_init_skeleton_and_head_flags_interface.h"
+#include "shaders/sort_prepare_indir_args_interface.h"
+#include "shaders/sort_reorder_rays_interface.h"
+#include "shaders/sort_scan_interface.h"
+#include "shaders/sort_seg_add_partial_sums_interface.h"
+#include "shaders/sort_seg_scan_interface.h"
+#include "shaders/sort_set_head_flags_interface.h"
+#include "shaders/sort_write_sorted_chunks_interface.h"
 
 #include "shaders/types.h"
 
@@ -131,7 +143,8 @@ void Ray::Vk::Renderer::kernel_IntersectScene(VkCommandBuffer cmd_buf, const pas
                     ctx_->default_descr_alloc(), ctx_->log());
 }
 
-void Ray::Vk::Renderer::kernel_IntersectScene(VkCommandBuffer cmd_buf, const Buffer &indir_args, const Buffer &counters,
+void Ray::Vk::Renderer::kernel_IntersectScene(VkCommandBuffer cmd_buf, const Buffer &indir_args,
+                                              const int indir_args_index, const Buffer &counters,
                                               const pass_settings_t &settings, const scene_data_t &sc_data,
                                               const Buffer &random_seq, const int hi, uint32_t node_index,
                                               const float inter_t, Span<const TextureAtlas> tex_atlases,
@@ -181,7 +194,8 @@ void Ray::Vk::Renderer::kernel_IntersectScene(VkCommandBuffer cmd_buf, const Buf
         bindings.emplace_back(eBindTarget::SBuf, IntersectScene::TRANSFORMS_BUF_SLOT, sc_data.transforms);
     }
 
-    DispatchComputeIndirect(cmd_buf, pi_intersect_scene_indirect_, indir_args, 0, bindings, &uniform_params,
+    DispatchComputeIndirect(cmd_buf, pi_intersect_scene_indirect_, indir_args,
+                            indir_args_index * sizeof(DispatchIndirectCommand), bindings, &uniform_params,
                             sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
 }
 
@@ -383,11 +397,11 @@ void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(VkCommandBuffer cmd_buf, const
 }
 
 void Ray::Vk::Renderer::kernel_IntersectSceneShadow(VkCommandBuffer cmd_buf, const pass_settings_t &settings,
-                                                    const Buffer &indir_args, const Buffer &counters,
-                                                    const scene_data_t &sc_data, const uint32_t node_index,
-                                                    const float clamp_val, Span<const TextureAtlas> tex_atlases,
-                                                    VkDescriptorSet tex_descr_set, const Buffer &sh_rays,
-                                                    const Texture2D &out_img) {
+                                                    const Buffer &indir_args, const int indir_args_index,
+                                                    const Buffer &counters, const scene_data_t &sc_data,
+                                                    const uint32_t node_index, const float clamp_val,
+                                                    Span<const TextureAtlas> tex_atlases, VkDescriptorSet tex_descr_set,
+                                                    const Buffer &sh_rays, const Texture2D &out_img) {
     const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
                                               {&counters, eResState::ShaderResource},
                                               {&sh_rays, eResState::ShaderResource},
@@ -431,8 +445,9 @@ void Ray::Vk::Renderer::kernel_IntersectSceneShadow(VkCommandBuffer cmd_buf, con
     uniform_params.blocker_lights_count = sc_data.blocker_lights_count;
     uniform_params.clamp_val = (clamp_val != 0.0f) ? clamp_val : std::numeric_limits<float>::max();
 
-    DispatchComputeIndirect(cmd_buf, pi_intersect_scene_shadow_, indir_args, sizeof(DispatchIndirectCommand), bindings,
-                            &uniform_params, sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
+    DispatchComputeIndirect(cmd_buf, pi_intersect_scene_shadow_, indir_args,
+                            indir_args_index * sizeof(DispatchIndirectCommand), bindings, &uniform_params,
+                            sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
 }
 
 void Ray::Vk::Renderer::kernel_PrepareIndirArgs(VkCommandBuffer cmd_buf, const Buffer &inout_counters,
@@ -441,11 +456,10 @@ void Ray::Vk::Renderer::kernel_PrepareIndirArgs(VkCommandBuffer cmd_buf, const B
                                               {&out_indir_args, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
-    const Binding bindings[] = {{eBindTarget::SBuf, PrepareIndirectArgs::INOUT_COUNTERS_BUF_SLOT, inout_counters},
-                                {eBindTarget::SBuf, PrepareIndirectArgs::OUT_INDIR_ARGS_SLOT, out_indir_args}};
+    const Binding bindings[] = {{eBindTarget::SBuf, PrepareIndirArgs::INOUT_COUNTERS_BUF_SLOT, inout_counters},
+                                {eBindTarget::SBuf, PrepareIndirArgs::OUT_INDIR_ARGS_SLOT, out_indir_args}};
 
     const uint32_t grp_count[3] = {1u, 1u, 1u};
-
     DispatchCompute(cmd_buf, pi_prepare_indir_args_, grp_count, bindings, nullptr, 0, ctx_->default_descr_alloc(),
                     ctx_->log());
 }
@@ -625,6 +639,304 @@ void Ray::Vk::Renderer::kernel_NLMFilter(VkCommandBuffer cmd_buf, const Texture2
 
     DispatchCompute(cmd_buf, *pi, grp_count, bindings, &uniform_params, sizeof(uniform_params),
                     ctx_->default_descr_alloc(), ctx_->log());
+}
+
+void Ray::Vk::Renderer::kernel_SortHashRays(VkCommandBuffer cmd_buf, const Buffer &indir_args, const Buffer &rays,
+                                            const Buffer &counters, const float root_min[3], const float cell_size[3],
+                                            const Buffer &out_hashes) {
+    const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
+                                              {&rays, eResState::ShaderResource},
+                                              {&counters, eResState::ShaderResource},
+                                              {&out_hashes, eResState::UnorderedAccess}};
+    TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
+
+    const Binding bindings[] = {{eBindTarget::SBuf, SortHashRays::RAYS_BUF_SLOT, rays},
+                                {eBindTarget::SBuf, SortHashRays::COUNTERS_BUF_SLOT, counters},
+                                {eBindTarget::SBuf, SortHashRays::OUT_HASHES_BUF_SLOT, out_hashes}};
+
+    SortHashRays::Params uniform_params = {};
+    memcpy(&uniform_params.root_min[0], root_min, 3 * sizeof(float));
+    memcpy(&uniform_params.cell_size[0], cell_size, 3 * sizeof(float));
+
+    DispatchComputeIndirect(cmd_buf, pi_sort_hash_rays_, indir_args, 0, bindings, &uniform_params,
+                            sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
+}
+
+void Ray::Vk::Renderer::kernel_SortSetHeadFlags(VkCommandBuffer cmd_buf, const Buffer &indir_args, const Buffer &input,
+                                                const Buffer &counters, const Buffer &out_head_flags) {
+    const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
+                                              {&input, eResState::ShaderResource},
+                                              {&counters, eResState::ShaderResource},
+                                              {&out_head_flags, eResState::UnorderedAccess}};
+    TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
+
+    const Binding bindings[] = {{eBindTarget::SBuf, SortSetHeadFlags::INPUT_BUF_SLOT, input},
+                                {eBindTarget::SBuf, SortSetHeadFlags::COUNTERS_BUF_SLOT, counters},
+                                {eBindTarget::SBuf, SortSetHeadFlags::OUT_HEAD_FLAGS_BUF_SLOT, out_head_flags}};
+
+    DispatchComputeIndirect(cmd_buf, pi_sort_set_head_flags_, indir_args, 0, bindings, nullptr, 0,
+                            ctx_->default_descr_alloc(), ctx_->log());
+}
+
+void Ray::Vk::Renderer::kernel_SortScan(VkCommandBuffer cmd_buf, const bool exclusive, const Buffer &indir_args,
+                                        const int indir_args_index, const Buffer &input, const int input_offset,
+                                        const int input_stride, const Buffer &out_scan_values,
+                                        const Buffer &out_partial_sums) {
+    static_assert(SortScan::SCAN_PORTION == SORT_SCAN_PORTION, "!");
+
+    const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
+                                              {&input, eResState::ShaderResource},
+                                              {&out_scan_values, eResState::UnorderedAccess},
+                                              {&out_partial_sums, eResState::UnorderedAccess}};
+    TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
+
+    const Binding bindings[] = {{eBindTarget::SBuf, SortScan::INPUT_BUF_SLOT, input},
+                                {eBindTarget::SBuf, SortScan::OUT_SCAN_VALUES_BUF_SLOT, out_scan_values},
+                                {eBindTarget::SBuf, SortScan::OUT_PARTIAL_SUMS_BUF_SLOT, out_partial_sums}};
+
+    SortScan::Params uniform_params = {};
+    uniform_params.offset = input_offset;
+    uniform_params.stride = input_stride;
+
+    DispatchComputeIndirect(cmd_buf, exclusive ? pi_sort_exclusive_scan_ : pi_sort_inclusive_scan_, indir_args,
+                            indir_args_index * sizeof(DispatchIndirectCommand), bindings, &uniform_params,
+                            sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
+}
+
+void Ray::Vk::Renderer::kernel_SortAddPartialSums(VkCommandBuffer cmd_buf, const Buffer &indir_args,
+                                                  const int indir_args_index, const Buffer &partials_sums,
+                                                  const Buffer &inout_values) {
+    const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
+                                              {&partials_sums, eResState::ShaderResource},
+                                              {&inout_values, eResState::UnorderedAccess}};
+    TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
+
+    const Binding bindings[] = {{eBindTarget::SBuf, SortAddPartialSums::PART_SUMS_BUF_SLOT, partials_sums},
+                                {eBindTarget::SBuf, SortAddPartialSums::INOUT_BUF_SLOT, inout_values}};
+
+    DispatchComputeIndirect(cmd_buf, pi_sort_add_partial_sums_, indir_args,
+                            indir_args_index * sizeof(DispatchIndirectCommand), bindings, nullptr, 0,
+                            ctx_->default_descr_alloc(), ctx_->log());
+}
+
+void Ray::Vk::Renderer::kernel_SortInitChunksHashAndBase(VkCommandBuffer cmd_buf, const Buffer &indir_args,
+                                                         uint32_t indir_args_index, const Buffer &counters,
+                                                         const int chunks_counter, const int rays_counter,
+                                                         const Buffer &hashes, const Buffer &head_flags,
+                                                         const Buffer &scan_values, const Buffer &out_chunks) {
+    const TransitionInfo res_transitions[] = {
+        {&indir_args, eResState::IndirectArgument}, {&counters, eResState::ShaderResource},
+        {&hashes, eResState::ShaderResource},       {&head_flags, eResState::ShaderResource},
+        {&scan_values, eResState::ShaderResource},  {&out_chunks, eResState::UnorderedAccess}};
+    TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
+
+    const Binding bindings[] = {{eBindTarget::SBuf, SortInitChunks::COUNTERS_BUF_SLOT, counters},
+                                {eBindTarget::SBuf, SortInitChunks::HASH_VALUES_BUF_SLOT, hashes},
+                                {eBindTarget::SBuf, SortInitChunks::HEAD_FLAGS_BUF_SLOT, head_flags},
+                                {eBindTarget::SBuf, SortInitChunks::SCAN_VALUES_BUF_SLOT, scan_values},
+                                {eBindTarget::SBuf, SortInitChunks::INOUT_CHUNKS_BUF_SLOT, out_chunks}};
+
+    SortInitChunks::Params uniform_params = {};
+    uniform_params.chunks_counter = chunks_counter;
+    uniform_params.rays_counter = rays_counter;
+
+    DispatchComputeIndirect(cmd_buf, pi_sort_init_chunks_hash_and_base_, indir_args,
+                            indir_args_index * sizeof(DispatchIndirectCommand), bindings, &uniform_params,
+                            sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
+}
+
+void Ray::Vk::Renderer::kernel_SortInitChunksSize(VkCommandBuffer cmd_buf, const Buffer &indir_args,
+                                                  uint32_t indir_args_index, const Buffer &counters,
+                                                  const int chunks_counter, const int rays_counter,
+                                                  const Buffer &out_chunks) {
+    const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
+                                              {&counters, eResState::ShaderResource},
+                                              {&out_chunks, eResState::UnorderedAccess}};
+    TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
+
+    const Binding bindings[] = {{eBindTarget::SBuf, SortInitChunks::COUNTERS_BUF_SLOT, counters},
+                                {eBindTarget::SBuf, SortInitChunks::INOUT_CHUNKS_BUF_SLOT, out_chunks}};
+
+    SortInitChunks::Params uniform_params = {};
+    uniform_params.chunks_counter = chunks_counter;
+    uniform_params.rays_counter = rays_counter;
+
+    DispatchComputeIndirect(cmd_buf, pi_sort_init_chunks_size_, indir_args,
+                            indir_args_index * sizeof(DispatchIndirectCommand), bindings, &uniform_params,
+                            sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
+}
+
+void Ray::Vk::Renderer::kernel_SortPrepareIndirArgs(VkCommandBuffer cmd_buf, const Buffer &head_flags,
+                                                    const Buffer &scan_values, const Buffer &inout_counters,
+                                                    const int in_counter_index, const int out_counter_index,
+                                                    const Buffer &out_indir_args, const int indir_args_index) {
+    const TransitionInfo res_transitions[] = {{&head_flags, eResState::ShaderResource},
+                                              {&scan_values, eResState::ShaderResource},
+                                              {&inout_counters, eResState::UnorderedAccess},
+                                              {&out_indir_args, eResState::UnorderedAccess}};
+    TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
+
+    const Binding bindings[] = {{eBindTarget::SBuf, SortPrepareIndirArgs::HEAD_FLAGS_BUF_SLOT, head_flags},
+                                {eBindTarget::SBuf, SortPrepareIndirArgs::SCAN_VALUES_BUF_SLOT, scan_values},
+                                {eBindTarget::SBuf, SortPrepareIndirArgs::INOUT_COUNTERS_BUF_SLOT, inout_counters},
+                                {eBindTarget::SBuf, SortPrepareIndirArgs::OUT_INDIR_ARGS_SLOT, out_indir_args}};
+
+    SortPrepareIndirArgs::Params uniform_params = {};
+    uniform_params.in_counter = in_counter_index;
+    uniform_params.out_counter = out_counter_index;
+    uniform_params.indir_args_index = indir_args_index;
+
+    const uint32_t grp_count[3] = {1u, 1u, 1u};
+    DispatchCompute(cmd_buf, pi_sort_prepare_indir_args_, grp_count, bindings, &uniform_params, sizeof(uniform_params),
+                    ctx_->default_descr_alloc(), ctx_->log());
+}
+
+void Ray::Vk::Renderer::kernel_SortInitCountTable(VkCommandBuffer cmd_buf, const int shift, const Buffer &indir_args,
+                                                  const int indir_args_index, const Buffer &chunks,
+                                                  const Buffer &counters, const int counter_index,
+                                                  const Buffer &out_count_table) {
+    const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
+                                              {&chunks, eResState::ShaderResource},
+                                              {&counters, eResState::ShaderResource},
+                                              {&out_count_table, eResState::UnorderedAccess}};
+    TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
+
+    const Binding bindings[] = {{eBindTarget::SBuf, SortInitCountTable::CHUNKS_BUF_SLOT, chunks},
+                                {eBindTarget::SBuf, SortInitCountTable::COUNTERS_BUF_SLOT, counters},
+                                {eBindTarget::SBuf, SortInitCountTable::OUT_COUNT_TABLE_BUF_SLOT, out_count_table}};
+
+    SortInitCountTable::Params uniform_params = {};
+    uniform_params.counter = counter_index;
+    uniform_params.shift = shift;
+
+    DispatchComputeIndirect(cmd_buf, pi_sort_init_count_table_, indir_args,
+                            indir_args_index * sizeof(DispatchIndirectCommand), bindings, &uniform_params,
+                            sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
+}
+
+void Ray::Vk::Renderer::kernel_SortWriteSortedChunks(VkCommandBuffer cmd_buf, const int shift, const Buffer &indir_args,
+                                                     const int indir_args_index, const Buffer &chunks,
+                                                     const Buffer &offsets, const Buffer &counters, int counter_index,
+                                                     int chunks_counter_index, const Buffer &out_chunks) {
+    const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
+                                              {&chunks, eResState::ShaderResource},
+                                              {&offsets, eResState::ShaderResource},
+                                              {&counters, eResState::ShaderResource},
+                                              {&out_chunks, eResState::UnorderedAccess}};
+    TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
+
+    const Binding bindings[] = {{eBindTarget::SBuf, SortWriteSortedChunks::CHUNKS_BUF_SLOT, chunks},
+                                {eBindTarget::SBuf, SortWriteSortedChunks::OFFSETS_BUF_SLOT, offsets},
+                                {eBindTarget::SBuf, SortWriteSortedChunks::COUNTERS_BUF_SLOT, counters},
+                                {eBindTarget::SBuf, SortWriteSortedChunks::OUT_CHUNKS_BUF_SLOT, out_chunks}};
+
+    SortWriteSortedChunks::Params uniform_params = {};
+    uniform_params.counter = counter_index;
+    uniform_params.chunks_counter = chunks_counter_index;
+    uniform_params.shift = shift;
+
+    DispatchComputeIndirect(cmd_buf, pi_sort_write_sorted_chunks_, indir_args,
+                            indir_args_index * sizeof(DispatchIndirectCommand), bindings, &uniform_params,
+                            sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
+}
+
+void Ray::Vk::Renderer::kernal_SortInitSkeletonAndHeadFlags(VkCommandBuffer cmd_buf, const Buffer &indir_args,
+                                                            const int indir_args_index, const Buffer &counters,
+                                                            const int counter_index, const Buffer &scan_values,
+                                                            const Buffer &chunks, const Buffer &out_skeleton,
+                                                            const Buffer &out_head_flags) {
+    const TransitionInfo res_transitions[] = {
+        {&indir_args, eResState::IndirectArgument},  {&counters, eResState::ShaderResource},
+        {&scan_values, eResState::ShaderResource},   {&chunks, eResState::ShaderResource},
+        {&out_skeleton, eResState::UnorderedAccess}, {&out_head_flags, eResState::UnorderedAccess}};
+    TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
+
+    const Binding bindings[] = {
+        {eBindTarget::SBuf, SortInitSkeletonAndHeadFlags::COUNTERS_BUF_SLOT, counters},
+        {eBindTarget::SBuf, SortInitSkeletonAndHeadFlags::SCAN_VALUES_BUF_SLOT, scan_values},
+        {eBindTarget::SBuf, SortInitSkeletonAndHeadFlags::CHUNKS_BUF_SLOT, chunks},
+        {eBindTarget::SBuf, SortInitSkeletonAndHeadFlags::OUT_SKELETON_BUF_SLOT, out_skeleton},
+        {eBindTarget::SBuf, SortInitSkeletonAndHeadFlags::OUT_HEAD_FLAGS_BUF_SLOT, out_head_flags}};
+
+    SortInitSkeletonAndHeadFlags::Params uniform_params = {};
+    uniform_params.counter = counter_index;
+
+    DispatchComputeIndirect(cmd_buf, pi_sort_init_skeleton_and_head_flags_, indir_args,
+                            indir_args_index * sizeof(DispatchIndirectCommand), bindings, &uniform_params,
+                            sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
+}
+
+void Ray::Vk::Renderer::kernel_SortSegScan(VkCommandBuffer cmd_buf, bool exclusive, const Buffer &indir_args,
+                                           int indir_args_index, const Buffer &input, const Buffer &flags,
+                                           const Buffer &out_scan_values, const Buffer &out_partial_sums,
+                                           const Buffer &out_partial_flags) {
+    static_assert(SortSegScan::SEG_SCAN_PORTION == SORT_SEG_SCAN_PORTION, "!");
+
+    const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
+                                              {&input, eResState::ShaderResource},
+                                              {&flags, eResState::ShaderResource},
+                                              {&out_scan_values, eResState::UnorderedAccess},
+                                              {&out_partial_sums, eResState::UnorderedAccess},
+                                              {&out_partial_flags, eResState::UnorderedAccess}};
+    TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
+
+    const Binding bindings[] = {{eBindTarget::SBuf, SortSegScan::VALUES_BUF_SLOT, input},
+                                {eBindTarget::SBuf, SortSegScan::FLAGS_BUF_SLOT, flags},
+                                {eBindTarget::SBuf, SortSegScan::OUT_SCAN_VALUES_BUF_SLOT, out_scan_values},
+                                {eBindTarget::SBuf, SortSegScan::OUT_PARTIAL_SUMS_BUF_SLOT, out_partial_sums},
+                                {eBindTarget::SBuf, SortSegScan::OUT_PARTIAL_FLAGS_BUF_SLOT, out_partial_flags}};
+
+    DispatchComputeIndirect(cmd_buf, exclusive ? pi_sort_exclusive_seg_scan_ : pi_sort_inclusive_seg_scan_, indir_args,
+                            indir_args_index * sizeof(DispatchIndirectCommand), bindings, nullptr, 0,
+                            ctx_->default_descr_alloc(), ctx_->log());
+}
+
+void Ray::Vk::Renderer::kernel_SortSegAddPartialSums(VkCommandBuffer cmd_buf, const Buffer &indir_args,
+                                                     const int indir_args_index, const Buffer &partials_sums,
+                                                     const Buffer &partial_flags, const Buffer &counters,
+                                                     const int counter_index, const Buffer &inout_values) {
+    const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
+                                              {&partials_sums, eResState::ShaderResource},
+                                              {&partial_flags, eResState::ShaderResource},
+                                              {&counters, eResState::ShaderResource},
+                                              {&inout_values, eResState::UnorderedAccess}};
+    TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
+
+    const Binding bindings[] = {{eBindTarget::SBuf, SortSegAddPartialSums::PART_SUMS_BUF_SLOT, partials_sums},
+                                {eBindTarget::SBuf, SortSegAddPartialSums::PART_FLAGS_BUF_SLOT, partial_flags},
+                                {eBindTarget::SBuf, SortSegAddPartialSums::COUNTERS_BUF_SLOT, counters},
+                                {eBindTarget::SBuf, SortSegAddPartialSums::INOUT_BUF_SLOT, inout_values}};
+
+    SortSegAddPartialSums::Params uniform_params = {};
+    uniform_params.counter = counter_index;
+
+    DispatchComputeIndirect(cmd_buf, pi_sort_seg_add_partial_sums_, indir_args,
+                            indir_args_index * sizeof(DispatchIndirectCommand), bindings, &uniform_params,
+                            sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
+}
+
+void Ray::Vk::Renderer::kernel_SortReorderRays(VkCommandBuffer cmd_buf, const Buffer &indir_args,
+                                               const int indir_args_index, const Buffer &in_rays, const Buffer &indices,
+                                               const Buffer &counters, const int counter_index,
+                                               const Buffer &out_rays) {
+    const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
+                                              {&in_rays, eResState::ShaderResource},
+                                              {&indices, eResState::ShaderResource},
+                                              {&counters, eResState::ShaderResource},
+                                              {&out_rays, eResState::UnorderedAccess}};
+    TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
+
+    const Binding bindings[] = {{eBindTarget::SBuf, SortReorderRays::RAYS_BUF_SLOT, in_rays},
+                                {eBindTarget::SBuf, SortReorderRays::INDICES_BUF_SLOT, indices},
+                                {eBindTarget::SBuf, SortReorderRays::COUNTERS_BUF_SLOT, counters},
+                                {eBindTarget::SBuf, SortReorderRays::OUT_RAYS_BUF_SLOT, out_rays}};
+
+    SortReorderRays::Params uniform_params = {};
+    uniform_params.counter = counter_index;
+
+    DispatchComputeIndirect(cmd_buf, pi_sort_reorder_rays_, indir_args,
+                            indir_args_index * sizeof(DispatchIndirectCommand), bindings, &uniform_params,
+                            sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
 }
 
 void Ray::Vk::Renderer::kernel_DebugRT(VkCommandBuffer cmd_buf, const scene_data_t &sc_data, uint32_t node_index,

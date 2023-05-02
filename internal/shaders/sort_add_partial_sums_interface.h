@@ -1,0 +1,16 @@
+#ifndef SORT_ADD_PARTIAL_SUMS_INTERFACE_H
+#define SORT_ADD_PARTIAL_SUMS_INTERFACE_H
+
+#include "_interface_common.h"
+
+INTERFACE_START(SortAddPartialSums)
+
+const int LOCAL_GROUP_SIZE_X = 64;
+
+const int PART_SUMS_BUF_SLOT = 1;
+
+const int INOUT_BUF_SLOT = 0;
+
+INTERFACE_END
+
+#endif // SORT_ADD_PARTIAL_SUMS_INTERFACE_H

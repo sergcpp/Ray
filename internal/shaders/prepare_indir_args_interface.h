@@ -3,7 +3,7 @@
 
 #include "_interface_common.h"
 
-INTERFACE_START(PrepareIndirectArgs)
+INTERFACE_START(PrepareIndirArgs)
 
 const int INOUT_COUNTERS_BUF_SLOT = 0;
 const int OUT_INDIR_ARGS_SLOT = 1;

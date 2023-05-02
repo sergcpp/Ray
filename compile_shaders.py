@@ -113,6 +113,23 @@ def main():
     compile_shader(src_name="nlm_filter", spv_name="nlm_filter_b", defines="-DUSE_BASE_COLOR=1 -DUSE_DEPTH_NORMAL=0")
     compile_shader(src_name="nlm_filter", spv_name="nlm_filter_bn", defines="-DUSE_BASE_COLOR=1 -DUSE_DEPTH_NORMAL=1")
 
+    # Sorting
+    compile_shader(src_name="sort_hash_rays")
+    compile_shader(src_name="sort_set_head_flags")
+    compile_shader(src_name="sort_scan", spv_name="sort_inclusive_scan", defines="-DEXCLUSIVE_SCAN=0")
+    compile_shader(src_name="sort_scan", spv_name="sort_exclusive_scan", defines="-DEXCLUSIVE_SCAN=1")
+    compile_shader(src_name="sort_add_partial_sums")
+    compile_shader(src_name="sort_init_chunks", spv_name="sort_init_chunks_hash_and_base", defines="-DHASH_AND_BASE=1")
+    compile_shader(src_name="sort_init_chunks", spv_name="sort_init_chunks_size", defines="-DHASH_AND_BASE=0")
+    compile_shader(src_name="sort_prepare_indir_args")
+    compile_shader(src_name="sort_init_count_table")
+    compile_shader(src_name="sort_write_sorted_chunks")
+    compile_shader(src_name="sort_init_skeleton_and_head_flags")
+    compile_shader(src_name="sort_seg_scan", spv_name="sort_inclusive_seg_scan", defines="-DEXCLUSIVE_SCAN=0")
+    compile_shader(src_name="sort_seg_scan", spv_name="sort_exclusive_seg_scan", defines="-DEXCLUSIVE_SCAN=1")
+    compile_shader(src_name="sort_seg_add_partial_sums")
+    compile_shader(src_name="sort_reorder_rays")
+
     # Other
     compile_shader(src_name="prepare_indir_args")
     compile_shader(src_name="debug_rt", target_env="spirv1.4")
