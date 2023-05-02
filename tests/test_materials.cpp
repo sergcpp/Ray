@@ -168,22 +168,16 @@ void run_material_test(const char *arch_list[], const char *preferred_device, co
 void assemble_material_test_images(const char *arch_list[]) {
     static const int ImgCountW = 5;
     static const char *test_names[][ImgCountW] = {
-        {"oren_mat0", "oren_mat1", "oren_mat2"},
-        {"diff_mat0", "diff_mat1", "diff_mat2"},
-        {"sheen_mat0", "sheen_mat1", "sheen_mat2", "sheen_mat3"},
-        {"glossy_mat0", "glossy_mat1", "glossy_mat2"},
-        {"spec_mat0", "spec_mat2", "spec_mat4"},
-        {"aniso_mat0", "aniso_mat1", "aniso_mat2", "aniso_mat3", "aniso_mat4"},
-        {"aniso_mat5", "aniso_mat6", "aniso_mat7"},
-        {"metal_mat0", "metal_mat1", "metal_mat2"},
-        {"plastic_mat0", "plastic_mat1", "plastic_mat2"},
-        {"tint_mat0", "tint_mat1", "tint_mat2"},
-        {"emit_mat0", "emit_mat1"},
-        {"coat_mat0", "coat_mat1", "coat_mat2"},
-        {"refr_mis0", "refr_mis1", "refr_mis2"},
-        {"refr_mat0", "refr_mat1", "refr_mat2", "refr_mat3"},
+        {"oren_mat0", "oren_mat1", "oren_mat2", "diff_mat0", "diff_mat1"},
+        {"diff_mat2", "sheen_mat0", "sheen_mat1", "sheen_mat2", "sheen_mat3"},
+        {"glossy_mat0", "glossy_mat1", "glossy_mat2", "spec_mat0", "spec_mat1"},
+        {"spec_mat2", "aniso_mat0", "aniso_mat1", "aniso_mat2", "aniso_mat3"},
+        {"aniso_mat4", "aniso_mat5", "aniso_mat6", "aniso_mat7", "metal_mat0"},
+        {"metal_mat1", "metal_mat2", "plastic_mat0", "plastic_mat1", "plastic_mat2"},
+        {"tint_mat0", "tint_mat1", "tint_mat2", "emit_mat0", "emit_mat1"},
+        {"coat_mat0", "coat_mat1", "coat_mat2", "refr_mis0", "refr_mis1"},
+        {"refr_mat0", "refr_mat1", "refr_mat2", "refr_mat3", "trans_mat5"},
         {"trans_mat0", "trans_mat1", "trans_mat2", "trans_mat3", "trans_mat4"},
-        {"trans_mat5"},
         {"alpha_mat0", "alpha_mat1", "alpha_mat2", "alpha_mat3", "alpha_mat4"},
         {"complex_mat0", "complex_mat1", "complex_mat2", "complex_mat3", "complex_mat4"},
         {"complex_mat5", "complex_mat5_mesh_lights", "complex_mat5_sphere_light", "complex_mat5_sun_light",
@@ -192,7 +186,7 @@ void assemble_material_test_images(const char *arch_list[]) {
          "complex_mat6_hdr_light"},
         {"complex_mat5_regions", "complex_mat5_dof", "complex_mat5_spot_light", "complex_mat6_dof",
          "complex_mat6_spot_light"},
-        {"complex_mat5_filmic", "complex_mat5_adaptive"}};
+        {"refr_mis2", "complex_mat5_filmic", "complex_mat5_adaptive"}};
     const int ImgCountH = sizeof(test_names) / sizeof(test_names[0]);
 
     const int OutImageW = 256 * ImgCountW;
