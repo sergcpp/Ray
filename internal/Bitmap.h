@@ -52,161 +52,35 @@ class Bitmap {
     }
 
     int Alloc_FirstFit(const int blocks_required) {
-        int loc_beg = 0;
-        // Skip initial occupied blocks
-        while (!bitmap_[loc_beg]) {
-            ++loc_beg;
-        }
-#if 1
-        const int loc_lim = (block_count_ - blocks_required + BitmapGranularity - 1) / BitmapGranularity;
-        unsigned long bit_beg = 0;
-        while (loc_beg < loc_lim) {
-            if (GetFirstBit(bitmap_[loc_beg] & ~((1ull << bit_beg) - 1), &bit_beg)) {
-                int bit_end = CountTrailingZeroes(~(bitmap_[loc_beg] | ((1ull << bit_beg) - 1)));
-                int loc_end = loc_beg;
-                if (bit_end == BitmapGranularity) {
-                    ++loc_end;
-                    bit_end = 0;
-                    while (loc_end < (block_count_ / BitmapGranularity) &&
-                           (loc_end - loc_beg) * BitmapGranularity - int(bit_beg) + bit_end < blocks_required) {
-                        bit_end = CountTrailingZeroes(~bitmap_[loc_end]);
-                        if (bit_end != BitmapGranularity) {
-                            break;
-                        }
-                        ++loc_end;
-                        bit_end = 0;
-                    }
-                }
-
-                const int blocks_found = (loc_end - loc_beg) * BitmapGranularity - bit_beg + bit_end;
-                if (blocks_found >= blocks_required) {
-                    // Mark blocks as occupied
-                    const int block_beg = loc_beg * BitmapGranularity + bit_beg;
-                    for (int i = block_beg; i < block_beg + blocks_required; ++i) {
-                        const int xword_index = i / BitmapGranularity;
-                        const int bit_index = i % BitmapGranularity;
-                        bitmap_[xword_index] &= ~(1ull << bit_index);
-                    }
-                    return loc_beg * BitmapGranularity + bit_beg;
-                }
-                bit_beg = bit_end;
-                loc_beg = loc_end;
-            } else {
-                ++loc_beg;
+        int blocks_found = blocks_required;
+        const int pos = FindEmpty<true>(0, blocks_found);
+        if (pos != -1) {
+            // Mark blocks as occupied
+            for (int i = pos; i < pos + blocks_required; ++i) {
+                const int xword_index = i / BitmapGranularity;
+                const int bit_index = i % BitmapGranularity;
+                bitmap_[xword_index] &= ~(1ull << bit_index);
             }
         }
-#else
-        loc_beg *= BitmapGranularity;
-        for (; loc_beg <= block_count_ - blocks_required;) {
-            if (!bitmap_[loc_beg / BitmapGranularity]) {
-                const int count = (BitmapGranularity - (loc_beg % BitmapGranularity));
-                loc_beg += count;
-                continue;
-            }
-
-            // Count the number of available blocks
-            int loc_end = loc_beg;
-            while (loc_end < loc_beg + blocks_required) {
-                const int xword_index = loc_end / BitmapGranularity;
-                const int bit_index = loc_end % BitmapGranularity;
-                if ((bitmap_[xword_index] & (1ull << bit_index)) == 0) {
-                    break;
-                }
-                ++loc_end;
-            }
-
-            if ((loc_end - loc_beg) >= blocks_required) {
-                // Mark blocks as occupied
-                for (int i = loc_beg; i < loc_beg + blocks_required; ++i) {
-                    const int xword_index = i / BitmapGranularity;
-                    const int bit_index = i % BitmapGranularity;
-                    bitmap_[xword_index] &= ~(1ull << bit_index);
-                }
-                return loc_beg;
-            } else {
-                loc_beg = loc_end + 1;
-            }
-        }
-#endif
-        return -1;
+        return pos;
     }
 
     int Alloc_BestFit(const int blocks_required) {
         int best_blocks_available = block_count_ + 1;
         int best_loc = -1;
 
-        int loc_beg = 0;
-        // Skip initial occupied blocks
-        while (!bitmap_[loc_beg]) {
-            ++loc_beg;
-        }
-
-#if 1
-        const int loc_lim = (block_count_ - blocks_required + BitmapGranularity - 1) / BitmapGranularity;
-        unsigned long bit_beg = 0;
-        while (loc_beg < loc_lim) {
-            if (GetFirstBit(bitmap_[loc_beg] & ~((1ull << bit_beg) - 1), &bit_beg)) {
-                int bit_end = CountTrailingZeroes(~(bitmap_[loc_beg] | ((1ull << bit_beg) - 1)));
-                int loc_end = loc_beg;
-                if (bit_end == BitmapGranularity) {
-                    ++loc_end;
-                    bit_end = 0;
-                    while (loc_end < loc_lim) {
-                        bit_end = CountTrailingZeroes(~bitmap_[loc_end]);
-                        if (bit_end != BitmapGranularity) {
-                            break;
-                        }
-                        ++loc_end;
-                        bit_end = 0;
-                    }
-                }
-
-                const int blocks_found = (loc_end - loc_beg) * BitmapGranularity - bit_beg + bit_end;
-                if (blocks_found >= blocks_required && blocks_found < best_blocks_available) {
-                    best_blocks_available = blocks_found;
-                    best_loc = loc_beg * BitmapGranularity + bit_beg;
-                    if (blocks_found == blocks_required) {
-                        // Perfect fit was found, can stop here
-                        break;
-                    }
-                }
-                bit_beg = bit_end;
-                loc_beg = loc_end;
-            } else {
-                ++loc_beg;
-            }
-        }
-#else
-        loc_beg *= BitmapGranularity;
-        for (; loc_beg <= block_count_ - blocks_required;) {
-            if (!bitmap_[loc_beg / BitmapGranularity]) {
-                const int count = (BitmapGranularity - (loc_beg % BitmapGranularity));
-                loc_beg += count;
-                continue;
-            }
-
-            // Count the number of available blocks
-            int loc_end = loc_beg;
-            while (loc_end < block_count_) {
-                const int xword_index = loc_end / BitmapGranularity;
-                const int bit_index = loc_end % BitmapGranularity;
-                if ((bitmap_[xword_index] & (1ull << bit_index)) == 0) {
-                    break;
-                }
-                ++loc_end;
-            }
-
-            if ((loc_end - loc_beg) >= blocks_required && (loc_end - loc_beg) < best_blocks_available) {
-                best_blocks_available = (loc_end - loc_beg);
-                best_loc = loc_beg;
-                if ((loc_end - loc_beg) == blocks_required) {
-                    // Perfect fit was found, can stop here
+        int blocks_found = blocks_required;
+        int pos = FindEmpty<false>(0, blocks_found);
+        while (pos != -1) {
+            if (blocks_found < best_blocks_available) {
+                best_blocks_available = blocks_found;
+                best_loc = pos;
+                if (blocks_found == blocks_required) {
                     break;
                 }
             }
-            loc_beg = loc_end + 1;
+            pos = FindEmpty<false>(pos, blocks_found);
         }
-#endif
 
         if (best_loc != -1) {
             // Mark blocks as occupied
@@ -215,10 +89,9 @@ class Bitmap {
                 const int bit_index = i % BitmapGranularity;
                 bitmap_[xword_index] &= ~(1ull << bit_index);
             }
-            return best_loc;
         }
 
-        return -1;
+        return best_loc;
     }
 
     void Free(const int block_index, const int block_count) {
@@ -230,6 +103,95 @@ class Bitmap {
             assert((bitmap_[xword_index] & (1ull << bit_index)) == 0);
             bitmap_[xword_index] |= (1ull << bit_index);
         }
+    }
+
+    void Occupy(const int block_index, const int block_count) {
+        assert(block_index < block_count_);
+        // Mark blocks as occupied
+        for (int i = block_index; i < block_index + block_count; ++i) {
+            const int xword_index = i / BitmapGranularity;
+            const int bit_index = i % BitmapGranularity;
+            assert((bitmap_[xword_index] & (1ull << bit_index)) != 0);
+            bitmap_[xword_index] &= ~(1ull << bit_index);
+        }
+    }
+
+    template <bool EarlyExit> int FindEmpty(int start_index, int &blocks_required) const {
+#if 1
+        if (start_index >= block_count_) {
+            return -1;
+        }
+        int xword_beg = start_index / BitmapGranularity, bit_beg = start_index % BitmapGranularity;
+        int xword_end, bit_end;
+        for (xword_end = xword_beg, bit_end = bit_beg + 1; xword_end < (block_count_ / BitmapGranularity);) {
+            if (!bitmap_[xword_end]) {
+                ++xword_end;
+                bit_end = 0;
+                continue;
+            }
+            if ((bitmap_[xword_end] & (1ull << bit_end)) == 0) {
+                if ((bitmap_[xword_beg] & (1ull << bit_beg)) != 0) {
+                    const int free_count = (xword_end - xword_beg) * BitmapGranularity + (bit_end - bit_beg);
+                    if (free_count >= blocks_required) {
+                        blocks_required = free_count;
+                        return xword_beg * BitmapGranularity + bit_beg;
+                    }
+                }
+                xword_beg = xword_end;
+                bit_beg = bit_end;
+
+                bit_end = CountTrailingZeroes((bitmap_[xword_end] & ~((1ull << bit_end) - 1)));
+            } else {
+                if ((bitmap_[xword_beg] & (1ull << bit_beg)) == 0) {
+                    xword_beg = xword_end;
+                    bit_beg = bit_end;
+                } else if (EarlyExit) {
+                    const int free_count = (xword_end - xword_beg) * BitmapGranularity + (bit_end - bit_beg);
+                    if (free_count >= blocks_required) {
+                        blocks_required = free_count;
+                        return xword_beg * BitmapGranularity + bit_beg;
+                    }
+                }
+                bit_end = CountTrailingZeroes(~(bitmap_[xword_end] | ((1ull << bit_end) - 1)));
+            }
+
+            if (bit_end == BitmapGranularity) {
+                ++xword_end;
+                bit_end = 0;
+            }
+        }
+
+        if ((bitmap_[xword_beg] & (1ull << bit_beg)) != 0) {
+            const int free_count = (xword_end - xword_beg) * BitmapGranularity + (bit_end - bit_beg);
+            if (free_count >= blocks_required) {
+                blocks_required = free_count;
+                return xword_beg * BitmapGranularity + bit_beg;
+            }
+        }
+
+#else
+        int xword_beg = start_index / BitmapGranularity, bit_beg = start_index % BitmapGranularity;
+        for (int end = start_index + 1; end < block_count_;) {
+            const int xword_end = end / BitmapGranularity, bit_end = end % BitmapGranularity;
+            if (!bitmap_[xword_end]) {
+                end += (BitmapGranularity - bit_end);
+                continue;
+            }
+            if ((bitmap_[xword_end] & (1ull << bit_end)) == 0) {
+                if ((bitmap_[xword_beg] & (1ull << bit_beg)) != 0) {
+                    const int free_count = (xword_end - xword_beg) * BitmapGranularity + (bit_end - bit_beg);
+                    if (free_count >= blocks_required) {
+                        blocks_required = free_count;
+                        return xword_beg * BitmapGranularity + bit_beg;
+                    }
+                }
+                xword_beg = xword_end;
+                bit_beg = bit_end;
+            }
+            ++end;
+        }
+#endif
+        return -1;
     }
 };
 } // namespace Ray

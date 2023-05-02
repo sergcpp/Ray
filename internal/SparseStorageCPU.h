@@ -100,6 +100,49 @@ template <typename T> class SparseStorage {
         --size_;
     }
 
+    template <class... Args> uint32_t Allocate(const uint32_t count, Args &&...args) {
+        if (size_ + count > capacity_) {
+            uint32_t new_capacity = std::max(capacity_, InitialNonZeroCapacity);
+            while (new_capacity < size_ + count) {
+                new_capacity *= 2;
+            }
+            reserve(new_capacity);
+        }
+
+        int index = bits_.Alloc_FirstFit(count);
+        while (index == -1) {
+            reserve(std::max(capacity_ * 2, InitialNonZeroCapacity));
+            index = bits_.Alloc_FirstFit(count);
+        }
+
+        for (uint32_t i = uint32_t(index); i < uint32_t(index) + count; ++i) {
+            new (&data_[i]) T(std::forward<Args>(args)...);
+        }
+
+        size_ += count;
+        return uint32_t(index);
+    }
+
+    void Erase(const uint32_t index, const uint32_t count) {
+        for (uint32_t i = index; i < index + count; ++i) {
+            assert(bits_.IsSet(i) && "Invalid index!");
+            data_[i].~T();
+        }
+        bits_.Free(int(index), int(count));
+    }
+
+    void Move(const uint32_t src_index, const uint32_t dst_index, const uint32_t count) {
+        for (uint32_t i = 0; i < count; ++i) {
+            assert(bits_.IsSet(src_index + i) && !bits_.IsSet(dst_index + i));
+            new (&data_[dst_index + i]) T(std::move(data_[src_index + i]));
+            data_[src_index + i].~T();
+            bits_.Free(src_index + i, 1);
+            bits_.Occupy(dst_index + i, 1);
+        }
+    }
+
+    int FindEmpty(int start_index, int &inout_count) const { return bits_.FindEmpty<false>(start_index, inout_count); }
+
     force_inline T &at(const uint32_t index) {
         assert(bits_.IsSet(index) && "Invalid index!");
         return data_[index];

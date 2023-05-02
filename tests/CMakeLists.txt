@@ -22,6 +22,7 @@ add_executable(test_Ray main.cpp
                         test_simd_avx512.cpp
                         test_simd_sse41.cpp
                         test_simd.ipp
+                        test_sparse_storage.cpp
                         test_tex_storage.cpp
                         thread_pool.h
                         utils.h

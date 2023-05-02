@@ -3,6 +3,8 @@
 #include <cassert>
 #include <cstring>
 
+#include <functional>
+
 #include "../Log.h"
 #include "BVHSplit.h"
 #include "CoreRef.h"
@@ -10,6 +12,46 @@
 #include "Time_.h"
 
 #define CLAMP(val, min, max) (val < min ? min : (val > max ? max : val))
+
+namespace Ray {
+namespace Cpu {
+template <typename T> bool IsCompacted(const SparseStorage<T> &container) {
+    int empty_count = 1;
+    const int empty_index = container.FindEmpty(0, empty_count);
+    return (empty_index == -1 || (empty_index + empty_count) == int(container.capacity()));
+}
+template <typename T>
+void CompactContainer(SparseStorage<T> &container,
+                      const std::function<void(std::pair<int, int> block, int destination)> &on_move) {
+    int empty_index = -1, empty_count = 1;
+    empty_index = container.FindEmpty(0, empty_count);
+
+    std::vector<std::pair<int, int>> empty_places;
+
+    while (empty_index != -1) {
+        empty_places.emplace_back(empty_index, empty_count);
+        const int search_from = empty_index + empty_count;
+        empty_count = 1;
+        empty_index = container.FindEmpty(search_from, empty_count);
+    }
+
+    for (int i = 0; i < int(empty_places.size()) - 1; ++i) {
+        std::pair<int, int> block_to_move;
+        block_to_move.first = empty_places[i].first + empty_places[i].second;
+        block_to_move.second = empty_places[i + 1].first - block_to_move.first;
+
+        on_move(block_to_move, empty_places[i].first);
+
+        container.Move(block_to_move.first, empty_places[i].first, block_to_move.second);
+
+        empty_places[i + 1].first -= empty_places[i].second;
+        empty_places[i + 1].second += empty_places[i].second;
+    }
+
+    assert(IsCompacted(container));
+}
+} // namespace Cpu
+} // namespace Ray
 
 Ray::Cpu::Scene::Scene(ILog *log, const bool use_wide_bvh) : log_(log), use_wide_bvh_(use_wide_bvh) {}
 
@@ -277,32 +319,38 @@ Ray::MeshHandle Ray::Cpu::Scene::AddMesh(const mesh_desc_t &_m) {
     m.node_index = uint32_t(nodes_.size());
     m.node_count = uint32_t(temp_nodes.size());
 
+    m.tris_index = tris_.Allocate(uint32_t(temp_tris.size()));
+    m.tris_count = uint32_t(temp_tris.size());
+    for (uint32_t i = 0; i < uint32_t(temp_tris.size()); ++i) {
+        tris_[m.tris_index + i] = temp_tris[i];
+    }
+
+    const uint32_t mtris_index = mtris_.Allocate(uint32_t(temp_mtris.size()));
+    assert(mtris_index == m.tris_index / 8);
+    for (uint32_t i = 0; i < uint32_t(temp_mtris.size()); ++i) {
+        mtris_[mtris_index + i] = temp_mtris[i];
+    }
+
+    const auto tris_offset = uint32_t(tri_materials_.size());
+
+    const uint32_t tri_indices_index = tri_indices_.Allocate(uint32_t(temp_tri_indices.size()));
+    assert(tri_indices_index == m.tris_index);
+    for (uint32_t i = 0; i < uint32_t(temp_tri_indices.size()); ++i) {
+        tri_indices_[tri_indices_index + i] = tris_offset + temp_tri_indices[i];
+    }
+
     { // Apply required offsets
         const auto nodes_offset = uint32_t(nodes_.size());
-        const auto tris_indices_offset = uint32_t(tri_indices_.size());
 
         for (bvh_node_t &n : temp_nodes) {
             if (n.prim_index & LEAF_NODE_BIT) {
-                n.prim_index += tris_indices_offset;
+                n.prim_index += tri_indices_index;
             } else {
                 n.left_child += nodes_offset;
                 n.right_child += nodes_offset;
             }
         }
-
-        const auto tris_offset = uint32_t(tri_materials_.size());
-        for (uint32_t &tri_index : temp_tri_indices) {
-            tri_index += tris_offset;
-        }
     }
-
-    const auto tris_start = uint32_t(tris_.size());
-
-    m.tris_index = tris_start;
-
-    tris_.insert(tris_.end(), temp_tris.begin(), temp_tris.end());
-    mtris_.insert(mtris_.end(), temp_mtris.begin(), temp_mtris.end());
-    tri_indices_.insert(tri_indices_.end(), temp_tri_indices.begin(), temp_tri_indices.end());
 
     memcpy(m.bbox_min, temp_nodes[0].bbox_min, 3 * sizeof(float));
     memcpy(m.bbox_max, temp_nodes[0].bbox_max, 3 * sizeof(float));
@@ -378,8 +426,6 @@ Ray::MeshHandle Ray::Cpu::Scene::AddMesh(const mesh_desc_t &_m) {
         }
     }
 
-    m.tris_count = uint32_t(tris_.size() - tris_start);
-
     std::vector<uint32_t> new_vtx_indices;
     new_vtx_indices.reserve(_m.vtx_indices_count);
     for (size_t i = 0; i < _m.vtx_indices_count; i++) {
@@ -452,7 +498,9 @@ void Ray::Cpu::Scene::RemoveMesh_nolock(const MeshHandle i) {
         }
     }
 
-    RemoveTris_nolock(tris_index, tris_count);
+    tris_.Erase(tris_index, tris_count);
+    mtris_.Erase(tris_index / 8, tris_count / 8);
+    tri_indices_.Erase(tris_index, tris_count);
     RemoveNodes_nolock(node_index, node_count);
 
     if (rebuild_needed) {
@@ -741,22 +789,34 @@ void Ray::Cpu::Scene::Finalize() {
             li_indices_.push_back(env_map_light_._index);
         }
     }
-}
 
-void Ray::Cpu::Scene::RemoveTris_nolock(uint32_t tris_index, uint32_t tris_count) {
-    if (!tris_count) {
-        return;
-    }
-
-    tris_.erase(std::next(tris_.begin(), tris_index), std::next(tris_.begin(), tris_index + tris_count));
-
-    if (tris_index != tris_.size()) {
+    CompactContainer(tris_, [this](const std::pair<int, int> block_to_move, const int destination) {
+        const uint32_t offset = uint32_t(block_to_move.first - destination);
         for (mesh_t &m : meshes_) {
-            if (m.tris_index > tris_index) {
-                m.tris_index -= tris_count;
+            if (m.tris_index >= uint32_t(block_to_move.first) &&
+                m.tris_index < uint32_t(block_to_move.first + block_to_move.second)) {
+                m.tris_index -= offset;
             }
         }
-    }
+        for (bvh_node_t &n : nodes_) {
+            if ((n.prim_index & LEAF_NODE_BIT) != 0 &&
+                (n.prim_index & PRIM_INDEX_BITS) >= uint32_t(block_to_move.first) &&
+                (n.prim_index & PRIM_INDEX_BITS) < uint32_t(block_to_move.first + block_to_move.second)) {
+                n.prim_index -= offset;
+            }
+        }
+        for (mbvh_node_t &n : mnodes_) {
+            if ((n.child[0] & LEAF_NODE_BIT) != 0 && (n.child[0] & PRIM_INDEX_BITS) >= uint32_t(block_to_move.first) &&
+                (n.child[0] & PRIM_INDEX_BITS) < uint32_t(block_to_move.first + block_to_move.second)) {
+                n.child[0] -= offset;
+            }
+        }
+        // Move dependent containers
+        mtris_.Move(uint32_t(block_to_move.first / 8), uint32_t(destination / 8), uint32_t(block_to_move.second / 8));
+        tri_indices_.Move(uint32_t(block_to_move.first), uint32_t(destination), uint32_t(block_to_move.second));
+    });
+    assert(IsCompacted(mtris_));
+    assert(IsCompacted(tri_indices_));
 }
 
 void Ray::Cpu::Scene::RemoveNodes_nolock(uint32_t node_index, uint32_t node_count) {

@@ -357,6 +357,8 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_sh, const int min
         glassball_mat1 = scene.AddMaterial(glassball_mat1_desc);
     }
 
+    std::vector<Ray::MeshHandle> meshes_to_delete;
+
     Ray::MeshHandle base_mesh;
     {
         std::vector<float> base_attrs;
@@ -447,6 +449,10 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_sh, const int min
         text_mesh_desc.vtx_indices_count = uint32_t(text_indices.size());
         text_mesh_desc.shapes.emplace_back(white_mat, white_mat, text_groups[0], text_groups[1]);
         text_mesh = scene.AddMesh(text_mesh_desc);
+
+        // Add mesh one more time to test compaction later
+        meshes_to_delete.push_back(text_mesh);
+        text_mesh = scene.AddMesh(text_mesh_desc);
     }
 
     Ray::MeshHandle env_mesh;
@@ -478,6 +484,10 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_sh, const int min
             env_mesh_desc.shapes.emplace_back(mid_grey_mat, mid_grey_mat, env_groups[8], env_groups[9]);
         }
         env_mesh = scene.AddMesh(env_mesh_desc);
+
+        // Add mesh one more time to test compaction later
+        meshes_to_delete.push_back(env_mesh);
+        env_mesh = scene.AddMesh(env_mesh_desc);
     }
 
     Ray::MeshHandle square_light_mesh;
@@ -498,6 +508,10 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_sh, const int min
                                                    square_light_groups[1]);
         square_light_mesh_desc.shapes.emplace_back(dark_grey_mat, dark_grey_mat, square_light_groups[2],
                                                    square_light_groups[3]);
+        square_light_mesh = scene.AddMesh(square_light_mesh_desc);
+
+        // Add mesh one more time to test compaction later
+        meshes_to_delete.push_back(square_light_mesh);
         square_light_mesh = scene.AddMesh(square_light_mesh_desc);
     }
 
@@ -736,6 +750,10 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_sh, const int min
     }
 
     scene.SetEnvironment(env_desc);
+
+    for (const Ray::MeshHandle mesh : meshes_to_delete) {
+        scene.RemoveMesh(mesh);
+    }
 
     scene.Finalize();
 }

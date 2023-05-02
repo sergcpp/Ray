@@ -7,7 +7,13 @@
 #include <atomic>
 #include <chrono>
 
+
+void test_simd();
+void test_hashmap();
+void test_sparse_storage();
 void test_tex_storage();
+
+void test_aux_channels(const char *arch_list[], const char *preferred_device);
 void test_oren_mat0(const char *arch_list[], const char *preferred_device);
 void test_oren_mat1(const char *arch_list[], const char *preferred_device);
 void test_oren_mat2(const char *arch_list[], const char *preferred_device);
@@ -93,10 +99,6 @@ void test_complex_mat7_refractive(const char *arch_list[], const char *preferred
 void test_complex_mat7_principled(const char *arch_list[], const char *preferred_device);
 void assemble_material_test_images(const char *arch_list[]);
 
-void test_simd();
-void test_hashmap();
-void test_aux_channels(const char *arch_list[], const char *preferred_device);
-
 bool g_stop_on_fail = false;
 bool g_tests_success = true;
 std::atomic_bool g_log_contains_errors{false};
@@ -151,6 +153,7 @@ int main(int argc, char *argv[]) {
 
     test_simd();
     test_hashmap();
+    test_sparse_storage();
     test_tex_storage();
 
 #ifdef _WIN32

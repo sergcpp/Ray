@@ -53,9 +53,9 @@ class Scene : public SceneBase {
 
     std::vector<bvh_node_t> nodes_;
     aligned_vector<mbvh_node_t> mnodes_;
-    aligned_vector<tri_accel_t> tris_;
-    std::vector<uint32_t> tri_indices_;
-    aligned_vector<mtri_accel_t> mtris_;
+    SparseStorage<tri_accel_t> tris_;
+    SparseStorage<uint32_t> tri_indices_;
+    SparseStorage<mtri_accel_t> mtris_;
     std::vector<tri_mat_data_t> tri_materials_;
     SparseStorage<transform_t> transforms_;
     SparseStorage<mesh_t> meshes_;
@@ -90,7 +90,6 @@ class Scene : public SceneBase {
     void RemoveMesh_nolock(MeshHandle m);
     void RemoveMeshInstance_nolock(MeshInstanceHandle);
     void RemoveLight_nolock(LightHandle l);
-    void RemoveTris_nolock(uint32_t tris_index, uint32_t tris_count);
     void RemoveNodes_nolock(uint32_t node_index, uint32_t node_count);
     void RebuildTLAS_nolock();
 
