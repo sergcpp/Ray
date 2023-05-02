@@ -296,6 +296,10 @@ Ray::MeshHandle Ray::Cpu::Scene::AddMesh(const mesh_desc_t &_m) {
         }
     }
 
+    const auto tris_start = uint32_t(tris_.size());
+
+    m.tris_index = tris_start;
+
     tris_.insert(tris_.end(), temp_tris.begin(), temp_tris.end());
     mtris_.insert(mtris_.end(), temp_mtris.begin(), temp_mtris.end());
     tri_indices_.insert(tri_indices_.end(), temp_tri_indices.begin(), temp_tri_indices.end());
@@ -374,9 +378,6 @@ Ray::MeshHandle Ray::Cpu::Scene::AddMesh(const mesh_desc_t &_m) {
         }
     }
 
-    const auto tris_start = uint32_t(tris_.size());
-
-    m.tris_index = tris_start;
     m.tris_count = uint32_t(tris_.size() - tris_start);
 
     std::vector<uint32_t> new_vtx_indices;
