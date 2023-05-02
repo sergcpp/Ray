@@ -26,11 +26,21 @@ add_executable(test_Ray main.cpp
                         utils.h
                         utils.cpp)
 
-if(MSVC AND NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64")
-    set_source_files_properties(test_simd_avx.cpp PROPERTIES COMPILE_FLAGS /arch:AVX)
-    set_source_files_properties(test_simd_avx2.cpp PROPERTIES COMPILE_FLAGS /arch:AVX2)
-    set_source_files_properties(test_simd_avx512.cpp PROPERTIES COMPILE_FLAGS /arch:AVX512)
-endif(MSVC AND NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64")
+if(NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64")
+    if (MSVC)
+        if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+            set_source_files_properties(test_simd_sse41.cpp PROPERTIES COMPILE_FLAGS -msse4.1)
+        endif()
+        set_source_files_properties(test_simd_avx.cpp PROPERTIES COMPILE_FLAGS /arch:AVX)
+        set_source_files_properties(test_simd_avx2.cpp PROPERTIES COMPILE_FLAGS /arch:AVX2)
+        set_source_files_properties(test_simd_avx512.cpp PROPERTIES COMPILE_FLAGS /arch:AVX512)
+    else()
+        set_source_files_properties(test_simd_sse41.cpp PROPERTIES COMPILE_FLAGS -msse4.1)
+        set_source_files_properties(test_simd_avx.cpp PROPERTIES COMPILE_FLAGS -mavx)
+        set_source_files_properties(test_simd_avx2.cpp PROPERTIES COMPILE_FLAGS "-mavx2 -mfma")
+        set_source_files_properties(test_simd_avx512.cpp PROPERTIES COMPILE_FLAGS "-mavx512f -mavx512bw -mavx512dq -mavx512vl")
+    endif()
+endif(NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64")
 
 target_link_libraries(test_Ray Ray ${LIBS})
 
