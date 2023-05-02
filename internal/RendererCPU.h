@@ -335,7 +335,7 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase *scene, RegionC
         p.intersections.resize(p.primary_rays.size());
         for (auto &inter : p.intersections) {
             inter = {};
-            inter.t = cam.clip_end;
+            inter.t = cam.clip_end - cam.clip_start;
         }
 
         time_after_ray_gen = high_resolution_clock::now();

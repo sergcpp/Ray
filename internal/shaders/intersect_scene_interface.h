@@ -8,7 +8,7 @@ INTERFACE_START(IntersectScene)
 struct Params {
     UVEC4_TYPE rect;
     UINT_TYPE node_index;
-    float cam_clip_end;
+    float inter_t;
     int min_transp_depth;
     int max_transp_depth;
     int hi;

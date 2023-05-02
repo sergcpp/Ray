@@ -20,6 +20,7 @@ enum class eTestScene {
     Standard_DOF1,
     Standard_GlassBall0,
     Standard_GlassBall1,
+    Standard_Clipped,
     Refraction_Plane
 };
 

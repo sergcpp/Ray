@@ -56,7 +56,7 @@ layout(std430, binding = RAYS_BUF_SLOT) buffer Rays {
     ray_data_t g_rays[];
 };
 
-#if !PRIMARY
+#if INDIRECT
 layout(std430, binding = COUNTERS_BUF_SLOT) readonly buffer Counters {
     uint g_counters[];
 };
@@ -164,7 +164,7 @@ void Traverse_MacroTree_WithStack(vec3 orig_ro, vec3 orig_rd, vec3 orig_inv_rd, 
 layout (local_size_x = LOCAL_GROUP_SIZE_X, local_size_y = LOCAL_GROUP_SIZE_Y, local_size_z = 1) in;
 
 void main() {
-#if PRIMARY
+#if !INDIRECT
     if (gl_GlobalInvocationID.x >= g_params.rect.z || gl_GlobalInvocationID.y >= g_params.rect.w) {
         return;
     }
@@ -190,11 +190,7 @@ void main() {
     hit_data_t inter;
     inter.mask = 0;
     inter.obj_index = inter.prim_index = 0;
-#if PRIMARY
-    inter.t = g_params.cam_clip_end;
-#else
-    inter.t = MAX_DIST;
-#endif
+    inter.t = g_params.inter_t;
     inter.u = inter.v = 0.0;
 
     const float rand_offset = construct_float(hash(g_rays[index].xy));

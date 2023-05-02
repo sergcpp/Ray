@@ -184,6 +184,10 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_sh, const int min
             memcpy(&cam_desc.fwd[0], &view_dir_standard[0], 3 * sizeof(float));
             cam_desc.fov = 18.1806f;
         }
+        if (test_scene == eTestScene::Standard_Clipped) {
+            cam_desc.clip_start = 0.4f;
+            cam_desc.clip_end = 0.5f;
+        }
         memcpy(&cam_desc.up[0], &view_up[0], 3 * sizeof(float));
         cam_desc.output_sh = output_sh;
         cam_desc.output_base_color = true;
@@ -581,13 +585,15 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_sh, const int min
     } else if (test_scene == eTestScene::Standard || test_scene == eTestScene::Standard_Filmic ||
                test_scene == eTestScene::Standard_SphereLight || test_scene == eTestScene::Standard_SpotLight ||
                test_scene == eTestScene::Standard_DOF0 || test_scene == eTestScene::Standard_DOF1 ||
-               test_scene == eTestScene::Standard_GlassBall0 || test_scene == eTestScene::Standard_GlassBall1) {
+               test_scene == eTestScene::Standard_GlassBall0 || test_scene == eTestScene::Standard_GlassBall1 ||
+               test_scene == eTestScene::Standard_Clipped) {
         //
         // Use explicit lights sources
         //
         if (test_scene == eTestScene::Standard || test_scene == eTestScene::Standard_Filmic ||
             test_scene == eTestScene::Standard_DOF0 || test_scene == eTestScene::Standard_DOF1 ||
-            test_scene == eTestScene::Standard_GlassBall0 || test_scene == eTestScene::Standard_GlassBall1) {
+            test_scene == eTestScene::Standard_GlassBall0 || test_scene == eTestScene::Standard_GlassBall1 ||
+            test_scene == eTestScene::Standard_Clipped) {
             { // rect light
                 static const float xform[16] = {-0.425036609f, 2.24262476e-06f, -0.905176163f, 0.00000000f,
                                                 -0.876228273f, 0.250873595f,    0.411444396f,  0.00000000f,
@@ -702,7 +708,11 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_sh, const int min
         sun_desc.angle = 10.0f;
 
         scene.AddLight(sun_desc);
-    } else if (test_scene == eTestScene::Standard_HDRLight) {
+    }  else if (test_scene == eTestScene::Standard_NoLight) {
+        // nothing
+    }
+
+    if (test_scene == eTestScene::Standard_HDRLight || test_scene == eTestScene::Standard_Clipped) {
         int img_w, img_h;
         auto img_data = LoadHDR("test_data/textures/studio_small_03_2k.hdr", img_w, img_h);
         require(!img_data.empty());
@@ -720,9 +730,9 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_sh, const int min
         env_desc.back_col[0] = env_desc.back_col[1] = env_desc.back_col[2] = 0.25f;
 
         env_desc.env_map = env_desc.back_map = scene.AddTexture(tex_desc);
-        env_desc.env_map_rotation = env_desc.back_map_rotation = 2.35619449019f;
-    } else if (test_scene == eTestScene::Standard_NoLight) {
-        // nothing
+        if (test_scene == eTestScene::Standard_HDRLight) {
+            env_desc.env_map_rotation = env_desc.back_map_rotation = 2.35619449019f;
+        }
     }
 
     scene.SetEnvironment(env_desc);

@@ -45,20 +45,20 @@ class Renderer : public RendererBase {
   protected:
     std::unique_ptr<Context> ctx_;
 
-    Shader sh_prim_rays_gen_, sh_intersect_scene_primary_, sh_intersect_scene_secondary_, sh_intersect_area_lights_,
+    Shader sh_prim_rays_gen_, sh_intersect_scene_, sh_intersect_scene_indirect_, sh_intersect_area_lights_,
         sh_shade_primary_, sh_shade_primary_b_, sh_shade_primary_n_, sh_shade_primary_bn_, sh_shade_secondary_,
         sh_intersect_scene_shadow_, sh_prepare_indir_args_, sh_mix_incremental_, sh_mix_incremental_b_,
         sh_mix_incremental_n_, sh_mix_incremental_bn_, sh_postprocess_, sh_filter_variance_, sh_nlm_filter_,
         sh_nlm_filter_b_, sh_nlm_filter_n_, sh_nlm_filter_bn_, sh_debug_rt_;
 
-    Program prog_prim_rays_gen_, prog_intersect_scene_primary_, prog_intersect_scene_secondary_,
-        prog_intersect_area_lights_, prog_shade_primary_, prog_shade_primary_b_, prog_shade_primary_n_,
-        prog_shade_primary_bn_, prog_shade_secondary_, prog_intersect_scene_shadow_, prog_prepare_indir_args_,
-        prog_mix_incremental_, prog_mix_incremental_b_, prog_mix_incremental_n_, prog_mix_incremental_bn_,
-        prog_postprocess_, prog_filter_variance_, prog_nlm_filter_, prog_nlm_filter_b_, prog_nlm_filter_n_,
-        prog_nlm_filter_bn_, prog_debug_rt_;
+    Program prog_prim_rays_gen_, prog_intersect_scene_, prog_intersect_scene_indirect_, prog_intersect_area_lights_,
+        prog_shade_primary_, prog_shade_primary_b_, prog_shade_primary_n_, prog_shade_primary_bn_,
+        prog_shade_secondary_, prog_intersect_scene_shadow_, prog_prepare_indir_args_, prog_mix_incremental_,
+        prog_mix_incremental_b_, prog_mix_incremental_n_, prog_mix_incremental_bn_, prog_postprocess_,
+        prog_filter_variance_, prog_nlm_filter_, prog_nlm_filter_b_, prog_nlm_filter_n_, prog_nlm_filter_bn_,
+        prog_debug_rt_;
 
-    Pipeline pi_prim_rays_gen_, pi_intersect_scene_primary_, pi_intersect_scene_secondary_, pi_intersect_area_lights_,
+    Pipeline pi_prim_rays_gen_, pi_intersect_scene_, pi_intersect_scene_indirect_, pi_intersect_area_lights_,
         pi_shade_primary_, pi_shade_primary_b_, pi_shade_primary_n_, pi_shade_primary_bn_, pi_shade_secondary_,
         pi_intersect_scene_shadow_, pi_prepare_indir_args_, pi_mix_incremental_, pi_mix_incremental_b_,
         pi_mix_incremental_n_, pi_mix_incremental_bn_, pi_postprocess_, pi_filter_variance_, pi_nlm_filter_,
@@ -112,12 +112,12 @@ class Renderer : public RendererBase {
                                     const Buffer &random_seq, int iteration, const Texture2D &req_samples_img,
                                     const Buffer &inout_counters, const Buffer &out_rays);
     void kernel_IntersectScene(VkCommandBuffer cmd_buf, const pass_settings_t &settings, const scene_data_t &sc_data,
-                               const Buffer &random_seq, int hi, const rect_t &rect, uint32_t node_index,
-                               float cam_clip_end, Span<const TextureAtlas> tex_atlases, VkDescriptorSet tex_descr_set,
-                               const Buffer &rays, const Buffer &out_hits);
+                               const Buffer &random_seq, int hi, const rect_t &rect, uint32_t node_index, float inter_t,
+                               Span<const TextureAtlas> tex_atlases, VkDescriptorSet tex_descr_set, const Buffer &rays,
+                               const Buffer &out_hits);
     void kernel_IntersectScene(VkCommandBuffer cmd_buf, const Buffer &indir_args, const Buffer &counters,
                                const pass_settings_t &settings, const scene_data_t &sc_data, const Buffer &random_seq,
-                               int hi, uint32_t node_index, Span<const TextureAtlas> tex_atlases,
+                               int hi, uint32_t node_index, float inter_t, Span<const TextureAtlas> tex_atlases,
                                VkDescriptorSet tex_descr_set, const Buffer &rays, const Buffer &out_hits);
     void kernel_IntersectSceneShadow(VkCommandBuffer cmd_buf, const pass_settings_t &settings, const Buffer &indir_args,
                                      const Buffer &counters, const scene_data_t &sc_data, uint32_t node_index,

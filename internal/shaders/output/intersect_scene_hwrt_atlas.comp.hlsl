@@ -23,7 +23,7 @@ struct Params
 {
     uint4 rect;
     uint node_index;
-    float cam_clip_end;
+    float inter_t;
     int min_transp_depth;
     int max_transp_depth;
     int hi;
@@ -377,7 +377,7 @@ void comp_main()
         int _1048 = 0;
         int _1050 = 0;
         int _1049 = 0;
-        float _1051 = _465_g_params.cam_clip_end;
+        float _1051 = _465_g_params.inter_t;
         float _1053 = 0.0f;
         float _1052 = 0.0f;
         uint param_1 = uint(hash(int(_514.Load(_504 * 72 + 64))));

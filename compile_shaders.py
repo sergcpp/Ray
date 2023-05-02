@@ -68,14 +68,14 @@ def main():
     compile_shader(src_name="primary_ray_gen")
 
     # Scene intersection (main)
-    compile_shader(src_name="intersect_scene", spv_name="intersect_scene_primary_swrt_atlas", defines="-DPRIMARY=1 -DHWRT=0 -DBINDLESS=0")
-    compile_shader(src_name="intersect_scene", spv_name="intersect_scene_primary_swrt_bindless", defines="-DPRIMARY=1 -DHWRT=0 -DBINDLESS=1")
-    compile_shader(src_name="intersect_scene", spv_name="intersect_scene_primary_hwrt_atlas", glsl_version="460", target_env="spirv1.4", defines="-DPRIMARY=1 -DHWRT=1 -DBINDLESS=0")
-    compile_shader(src_name="intersect_scene", spv_name="intersect_scene_primary_hwrt_bindless", glsl_version="460", target_env="spirv1.4", defines="-DPRIMARY=1 -DHWRT=1 -DBINDLESS=1")
-    compile_shader(src_name="intersect_scene", spv_name="intersect_scene_secondary_swrt_atlas", defines="-DPRIMARY=0 -DHWRT=0 -DBINDLESS=0")
-    compile_shader(src_name="intersect_scene", spv_name="intersect_scene_secondary_swrt_bindless", defines="-DPRIMARY=0 -DHWRT=0 -DBINDLESS=1")
-    compile_shader(src_name="intersect_scene", spv_name="intersect_scene_secondary_hwrt_atlas", glsl_version="460", target_env="spirv1.4", defines="-DPRIMARY=0 -DHWRT=1 -DBINDLESS=0")
-    compile_shader(src_name="intersect_scene", spv_name="intersect_scene_secondary_hwrt_bindless", glsl_version="460", target_env="spirv1.4", defines="-DPRIMARY=0 -DHWRT=1 -DBINDLESS=1")
+    compile_shader(src_name="intersect_scene", spv_name="intersect_scene_swrt_atlas", defines="-DINDIRECT=0 -DHWRT=0 -DBINDLESS=0")
+    compile_shader(src_name="intersect_scene", spv_name="intersect_scene_swrt_bindless", defines="-DINDIRECT=0 -DHWRT=0 -DBINDLESS=1")
+    compile_shader(src_name="intersect_scene", spv_name="intersect_scene_hwrt_atlas", glsl_version="460", target_env="spirv1.4", defines="-DINDIRECT=0 -DHWRT=1 -DBINDLESS=0")
+    compile_shader(src_name="intersect_scene", spv_name="intersect_scene_hwrt_bindless", glsl_version="460", target_env="spirv1.4", defines="-DINDIRECT=0 -DHWRT=1 -DBINDLESS=1")
+    compile_shader(src_name="intersect_scene", spv_name="intersect_scene_indirect_swrt_atlas", defines="-DINDIRECT=1 -DHWRT=0 -DBINDLESS=0")
+    compile_shader(src_name="intersect_scene", spv_name="intersect_scene_indirect_swrt_bindless", defines="-DINDIRECT=1 -DHWRT=0 -DBINDLESS=1")
+    compile_shader(src_name="intersect_scene", spv_name="intersect_scene_indirect_hwrt_atlas", glsl_version="460", target_env="spirv1.4", defines="-DINDIRECT=1 -DHWRT=1 -DBINDLESS=0")
+    compile_shader(src_name="intersect_scene", spv_name="intersect_scene_indirect_hwrt_bindless", glsl_version="460", target_env="spirv1.4", defines="-DINDIRECT=1 -DHWRT=1 -DBINDLESS=1")
 
     # Lights intersection
     compile_shader(src_name="intersect_area_lights", defines="-DPRIMARY=0")

@@ -70,7 +70,7 @@ void Ray::Vk::Renderer::kernel_GeneratePrimaryRays(VkCommandBuffer cmd_buf, cons
 
 void Ray::Vk::Renderer::kernel_IntersectScene(VkCommandBuffer cmd_buf, const pass_settings_t &settings,
                                               const scene_data_t &sc_data, const Buffer &random_seq, const int hi,
-                                              const rect_t &rect, const uint32_t node_index, const float cam_clip_end,
+                                              const rect_t &rect, const uint32_t node_index, const float inter_t,
                                               Span<const TextureAtlas> tex_atlases, VkDescriptorSet tex_descr_set,
                                               const Buffer &rays, const Buffer &out_hits) {
     const TransitionInfo res_transitions[] = {{&rays, eResState::UnorderedAccess},
@@ -83,7 +83,7 @@ void Ray::Vk::Renderer::kernel_IntersectScene(VkCommandBuffer cmd_buf, const pas
     uniform_params.rect[2] = rect.w;
     uniform_params.rect[3] = rect.h;
     uniform_params.node_index = node_index;
-    uniform_params.cam_clip_end = cam_clip_end;
+    uniform_params.inter_t = inter_t;
     uniform_params.min_transp_depth = settings.min_transp_depth;
     uniform_params.max_transp_depth = settings.max_transp_depth;
     uniform_params.hi = hi;
@@ -97,7 +97,7 @@ void Ray::Vk::Renderer::kernel_IntersectScene(VkCommandBuffer cmd_buf, const pas
 
     if (use_bindless_) {
         assert(tex_descr_set);
-        vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, pi_intersect_scene_primary_.layout(), 1, 1,
+        vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, pi_intersect_scene_.layout(), 1, 1,
                                 &tex_descr_set, 0, nullptr);
     } else {
         bindings.emplace_back(eBindTarget::SBuf, Types::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
@@ -126,15 +126,16 @@ void Ray::Vk::Renderer::kernel_IntersectScene(VkCommandBuffer cmd_buf, const pas
         uint32_t((rect.w + IntersectScene::LOCAL_GROUP_SIZE_X - 1) / IntersectScene::LOCAL_GROUP_SIZE_X),
         uint32_t((rect.h + IntersectScene::LOCAL_GROUP_SIZE_Y - 1) / IntersectScene::LOCAL_GROUP_SIZE_Y), 1u};
 
-    DispatchCompute(cmd_buf, pi_intersect_scene_primary_, grp_count, bindings, &uniform_params, sizeof(uniform_params),
+    DispatchCompute(cmd_buf, pi_intersect_scene_, grp_count, bindings, &uniform_params, sizeof(uniform_params),
                     ctx_->default_descr_alloc(), ctx_->log());
 }
 
 void Ray::Vk::Renderer::kernel_IntersectScene(VkCommandBuffer cmd_buf, const Buffer &indir_args, const Buffer &counters,
                                               const pass_settings_t &settings, const scene_data_t &sc_data,
                                               const Buffer &random_seq, const int hi, uint32_t node_index,
-                                              Span<const TextureAtlas> tex_atlases, VkDescriptorSet tex_descr_set,
-                                              const Buffer &rays, const Buffer &out_hits) {
+                                              const float inter_t, Span<const TextureAtlas> tex_atlases,
+                                              VkDescriptorSet tex_descr_set, const Buffer &rays,
+                                              const Buffer &out_hits) {
     const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
                                               {&counters, eResState::ShaderResource},
                                               {&rays, eResState::UnorderedAccess},
@@ -143,6 +144,7 @@ void Ray::Vk::Renderer::kernel_IntersectScene(VkCommandBuffer cmd_buf, const Buf
 
     IntersectScene::Params uniform_params = {};
     uniform_params.node_index = node_index;
+    uniform_params.inter_t = inter_t;
     uniform_params.min_transp_depth = settings.min_transp_depth;
     uniform_params.max_transp_depth = settings.max_transp_depth;
     uniform_params.hi = hi;
@@ -159,7 +161,7 @@ void Ray::Vk::Renderer::kernel_IntersectScene(VkCommandBuffer cmd_buf, const Buf
 
     if (use_bindless_) {
         assert(tex_descr_set);
-        vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, pi_intersect_scene_secondary_.layout(), 1, 1,
+        vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, pi_intersect_scene_indirect_.layout(), 1, 1,
                                 &tex_descr_set, 0, nullptr);
     } else {
         bindings.emplace_back(eBindTarget::SBuf, Types::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
@@ -178,7 +180,7 @@ void Ray::Vk::Renderer::kernel_IntersectScene(VkCommandBuffer cmd_buf, const Buf
         bindings.emplace_back(eBindTarget::SBuf, IntersectScene::TRANSFORMS_BUF_SLOT, sc_data.transforms);
     }
 
-    DispatchComputeIndirect(cmd_buf, pi_intersect_scene_secondary_, indir_args, 0, bindings, &uniform_params,
+    DispatchComputeIndirect(cmd_buf, pi_intersect_scene_indirect_, indir_args, 0, bindings, &uniform_params,
                             sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
 }
 

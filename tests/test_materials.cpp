@@ -186,7 +186,7 @@ void assemble_material_test_images(const char *arch_list[]) {
          "complex_mat6_hdr_light"},
         {"complex_mat5_regions", "complex_mat5_dof", "complex_mat5_spot_light", "complex_mat6_dof",
          "complex_mat6_spot_light"},
-        {"refr_mis2", "complex_mat5_filmic", "complex_mat5_adaptive"}};
+        {"refr_mis2", "complex_mat5_filmic", "complex_mat5_adaptive", "complex_mat5_clipped"}};
     const int ImgCountH = sizeof(test_names) / sizeof(test_names[0]);
 
     const int OutImageW = 256 * ImgCountW;
@@ -1333,6 +1333,27 @@ void test_complex_mat5(const char *arch_list[], const char *preferred_device) {
 
     run_material_test(arch_list, preferred_device, "complex_mat5", metal_mat_desc, SampleCount, FastMinPSNR, PixThres,
                       false, false, textures);
+}
+
+void test_complex_mat5_clipped(const char *arch_list[], const char *preferred_device) {
+    const int SampleCount = 144;
+    const int PixThres = 2712;
+
+    Ray::principled_mat_desc_t metal_mat_desc;
+    metal_mat_desc.base_texture = Ray::TextureHandle{0};
+    metal_mat_desc.metallic = 1.0f;
+    metal_mat_desc.roughness = 1.0f;
+    metal_mat_desc.roughness_texture = Ray::TextureHandle{2};
+    metal_mat_desc.metallic = 1.0f;
+    metal_mat_desc.metallic_texture = Ray::TextureHandle{3};
+    metal_mat_desc.normal_map = Ray::TextureHandle{1};
+
+    const char *textures[] = {
+        "test_data/textures/gold-scuffed_basecolor-boosted.tga", "test_data/textures/gold-scuffed_normal.tga",
+        "test_data/textures/gold-scuffed_roughness.tga", "test_data/textures/gold-scuffed_metallic.tga"};
+
+    run_material_test(arch_list, preferred_device, "complex_mat5_clipped", metal_mat_desc, SampleCount, FastMinPSNR,
+                      PixThres, false, false, textures, eTestScene::Standard_Clipped);
 }
 
 void test_complex_mat5_adaptive(const char *arch_list[], const char *preferred_device) {
