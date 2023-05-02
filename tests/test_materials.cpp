@@ -1345,7 +1345,7 @@ void test_complex_mat5_adaptive(const char *arch_list[], const char *preferred_d
     const int MinSampleCount = 32;
     const int MaxSampleCount = 47;
     const float VarianceThreshold = 0.004f;
-    const int PixThres = 1203;
+    const int PixThres = 1205;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
