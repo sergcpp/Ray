@@ -94,6 +94,7 @@ void test_complex_mat7_principled(const char *arch_list[], const char *preferred
 void assemble_material_test_images(const char *arch_list[]);
 
 void test_simd();
+void test_hashmap();
 void test_aux_channels(const char *arch_list[], const char *preferred_device);
 
 bool g_stop_on_fail = false;
@@ -149,6 +150,7 @@ int main(int argc, char *argv[]) {
 #endif
 
     test_simd();
+    test_hashmap();
     test_tex_storage();
 
 #ifdef _WIN32

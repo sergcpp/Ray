@@ -56,6 +56,7 @@ set(INTERNAL_SOURCE_FILES internal/Bitmap.h
                           internal/CoreRef.cpp
                           internal/CoreSIMD.h
                           internal/Halton.h
+                          internal/HashMap32.h
                           internal/RendererCPU.h
                           internal/SceneCPU.h
                           internal/SceneCPU.cpp
