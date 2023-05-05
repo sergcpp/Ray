@@ -1892,7 +1892,8 @@ template <int S> force_inline simd_fvec<S> G1(const simd_fvec<S> Ve[3], simd_fve
     alpha_x *= alpha_x;
     alpha_y *= alpha_y;
     const simd_fvec<S> delta =
-        (-1.0f + safe_sqrt(1.0f + safe_div(alpha_x * Ve[0] * Ve[0] + alpha_y * Ve[1] * Ve[1], Ve[2] * Ve[2]))) / 2.0f;
+        (-1.0f + safe_sqrt(1.0f + safe_div_pos(alpha_x * Ve[0] * Ve[0] + alpha_y * Ve[1] * Ve[1], Ve[2] * Ve[2]))) /
+        2.0f;
     return 1.0f / (1.0f + delta);
 }
 

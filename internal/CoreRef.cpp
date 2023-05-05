@@ -810,8 +810,9 @@ simd_fvec4 SampleGGX_VNDF(const simd_fvec4 &Ve, float alpha_x, float alpha_y, fl
 force_inline float G1(const simd_fvec4 &Ve, float alpha_x, float alpha_y) {
     alpha_x *= alpha_x;
     alpha_y *= alpha_y;
-    const float delta =
-        (-1.0f + std::sqrt(1.0f + (alpha_x * sqr(Ve.get<0>()) + alpha_y * sqr(Ve.get<1>())) / sqr(Ve.get<2>()))) / 2.0f;
+    const float delta = (-1.0f + std::sqrt(1.0f + safe_div_pos(alpha_x * sqr(Ve.get<0>()) + alpha_y * sqr(Ve.get<1>()),
+                                                               sqr(Ve.get<2>())))) /
+                        2.0f;
     return 1.0f / (1.0f + delta);
 }
 
