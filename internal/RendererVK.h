@@ -45,24 +45,33 @@ class Renderer : public RendererBase {
   protected:
     std::unique_ptr<Context> ctx_;
 
-    Shader sh_prim_rays_gen_, sh_intersect_scene_, sh_intersect_scene_indirect_, sh_intersect_area_lights_,
-        sh_shade_primary_, sh_shade_primary_b_, sh_shade_primary_n_, sh_shade_primary_bn_, sh_shade_secondary_,
-        sh_intersect_scene_shadow_, sh_prepare_indir_args_, sh_mix_incremental_, sh_mix_incremental_b_,
-        sh_mix_incremental_n_, sh_mix_incremental_bn_, sh_postprocess_, sh_filter_variance_, sh_nlm_filter_,
-        sh_nlm_filter_b_, sh_nlm_filter_n_, sh_nlm_filter_bn_, sh_debug_rt_;
+    Shader sh_prim_rays_gen_simple_, sh_prim_rays_gen_adaptive_, sh_intersect_scene_, sh_intersect_scene_indirect_,
+        sh_intersect_area_lights_, sh_shade_primary_, sh_shade_primary_b_, sh_shade_primary_n_, sh_shade_primary_bn_,
+        sh_shade_secondary_, sh_intersect_scene_shadow_, sh_prepare_indir_args_, sh_mix_incremental_,
+        sh_mix_incremental_b_, sh_mix_incremental_n_, sh_mix_incremental_bn_, sh_postprocess_, sh_filter_variance_,
+        sh_nlm_filter_, sh_nlm_filter_b_, sh_nlm_filter_n_, sh_nlm_filter_bn_, sh_debug_rt_, sh_sort_hash_rays_,
+        sh_sort_set_head_flags_, sh_sort_exclusive_scan_, sh_sort_inclusive_scan_, sh_sort_add_partial_sums_,
+        sh_sort_init_chunks_hash_and_base_, sh_sort_init_chunks_size_, sh_sort_prepare_indir_args_,
+        sh_sort_init_count_table_;
 
-    Program prog_prim_rays_gen_, prog_intersect_scene_, prog_intersect_scene_indirect_, prog_intersect_area_lights_,
-        prog_shade_primary_, prog_shade_primary_b_, prog_shade_primary_n_, prog_shade_primary_bn_,
-        prog_shade_secondary_, prog_intersect_scene_shadow_, prog_prepare_indir_args_, prog_mix_incremental_,
-        prog_mix_incremental_b_, prog_mix_incremental_n_, prog_mix_incremental_bn_, prog_postprocess_,
-        prog_filter_variance_, prog_nlm_filter_, prog_nlm_filter_b_, prog_nlm_filter_n_, prog_nlm_filter_bn_,
-        prog_debug_rt_;
+    Program prog_prim_rays_gen_simple_, prog_prim_rays_gen_adaptive_, prog_intersect_scene_,
+        prog_intersect_scene_indirect_, prog_intersect_area_lights_, prog_shade_primary_, prog_shade_primary_b_,
+        prog_shade_primary_n_, prog_shade_primary_bn_, prog_shade_secondary_, prog_intersect_scene_shadow_,
+        prog_prepare_indir_args_, prog_mix_incremental_, prog_mix_incremental_b_, prog_mix_incremental_n_,
+        prog_mix_incremental_bn_, prog_postprocess_, prog_filter_variance_, prog_nlm_filter_, prog_nlm_filter_b_,
+        prog_nlm_filter_n_, prog_nlm_filter_bn_, prog_debug_rt_, prog_sort_hash_rays_, prog_sort_set_head_flags_,
+        prog_sort_exclusive_scan_, prog_sort_inclusive_scan_, prog_sort_add_partial_sums_,
+        prog_sort_init_chunks_hash_and_base_, prog_sort_init_chunks_size_, prog_sort_prepare_indir_args_,
+        prog_sort_init_count_table_;
 
-    Pipeline pi_prim_rays_gen_, pi_intersect_scene_, pi_intersect_scene_indirect_, pi_intersect_area_lights_,
-        pi_shade_primary_, pi_shade_primary_b_, pi_shade_primary_n_, pi_shade_primary_bn_, pi_shade_secondary_,
-        pi_intersect_scene_shadow_, pi_prepare_indir_args_, pi_mix_incremental_, pi_mix_incremental_b_,
-        pi_mix_incremental_n_, pi_mix_incremental_bn_, pi_postprocess_, pi_filter_variance_, pi_nlm_filter_,
-        pi_nlm_filter_b_, pi_nlm_filter_n_, pi_nlm_filter_bn_, pi_debug_rt_;
+    Pipeline pi_prim_rays_gen_simple_, pi_prim_rays_gen_adaptive_, pi_intersect_scene_, pi_intersect_scene_indirect_,
+        pi_intersect_area_lights_, pi_shade_primary_, pi_shade_primary_b_, pi_shade_primary_n_, pi_shade_primary_bn_,
+        pi_shade_secondary_, pi_intersect_scene_shadow_, pi_prepare_indir_args_, pi_mix_incremental_,
+        pi_mix_incremental_b_, pi_mix_incremental_n_, pi_mix_incremental_bn_, pi_postprocess_, pi_filter_variance_,
+        pi_nlm_filter_, pi_nlm_filter_b_, pi_nlm_filter_n_, pi_nlm_filter_bn_, pi_debug_rt_, pi_sort_hash_rays_,
+        pi_sort_set_head_flags_, pi_sort_exclusive_scan_, pi_sort_inclusive_scan_, pi_sort_add_partial_sums_,
+        pi_sort_init_chunks_hash_and_base_, pi_sort_init_chunks_size_, pi_sort_prepare_indir_args_,
+        pi_sort_init_count_table_;
 
     int w_ = 0, h_ = 0;
     bool use_hwrt_ = false, use_bindless_ = false, use_tex_compression_ = false;

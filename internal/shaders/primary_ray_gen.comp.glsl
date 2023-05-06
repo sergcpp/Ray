@@ -44,13 +44,18 @@ void main() {
     int x = int(g_params.rect.x + gl_GlobalInvocationID.x);
     int y = int(g_params.rect.y + gl_GlobalInvocationID.y);
 
+#if ADAPTIVE
     if (imageLoad(g_required_samples_img, ivec2(x, y)).r < g_params.iteration) {
         return;
     }
+    uint index = atomicAdd(g_inout_counters[0], 1);
+#else
+    atomicAdd(g_inout_counters[0], 1);
+    int index = int(gl_GlobalInvocationID.y * g_params.rect.z + gl_GlobalInvocationID.x);
+#endif
 
     float k = float(g_params.img_size.x) / float(g_params.img_size.y);
 
-    uint index = atomicAdd(g_inout_counters[0], 1);
     int hash_val = hash((x << 16) | y);
 
     float _x = float(x);

@@ -65,7 +65,8 @@ namespace Vk {
 #include "shaders/output/nlm_filter_n.comp.inl"
 #include "shaders/output/postprocess.comp.inl"
 #include "shaders/output/prepare_indir_args.comp.inl"
-#include "shaders/output/primary_ray_gen.comp.inl"
+#include "shaders/output/primary_ray_gen_adaptive.comp.inl"
+#include "shaders/output/primary_ray_gen_simple.comp.inl"
 #include "shaders/output/shade_primary_atlas.comp.inl"
 #include "shaders/output/shade_primary_atlas_b.comp.inl"
 #include "shaders/output/shade_primary_atlas_bn.comp.inl"
@@ -93,12 +94,18 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
     log->Info("Bindless    is %s", use_bindless_ ? "enabled" : "disabled");
     log->Info("Compression is %s", use_tex_compression_ ? "enabled" : "disabled");
 
-    sh_prim_rays_gen_ = Shader{"Primary Raygen",
-                               ctx_.get(),
-                               internal_shaders_output_primary_ray_gen_comp_spv,
-                               internal_shaders_output_primary_ray_gen_comp_spv_size,
-                               eShaderType::Comp,
-                               log};
+    sh_prim_rays_gen_simple_ = Shader{"Primary Raygen Simple",
+                                      ctx_.get(),
+                                      internal_shaders_output_primary_ray_gen_simple_comp_spv,
+                                      internal_shaders_output_primary_ray_gen_simple_comp_spv_size,
+                                      eShaderType::Comp,
+                                      log};
+    sh_prim_rays_gen_adaptive_ = Shader{"Primary Raygen Adaptive",
+                                        ctx_.get(),
+                                        internal_shaders_output_primary_ray_gen_adaptive_comp_spv,
+                                        internal_shaders_output_primary_ray_gen_adaptive_comp_spv_size,
+                                        eShaderType::Comp,
+                                        log};
     if (use_hwrt_) {
         sh_intersect_scene_ =
             Shader{"Intersect Scene (Primary) (HWRT)",
@@ -286,7 +293,8 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
                               log};
     }
 
-    prog_prim_rays_gen_ = Program{"Primary Raygen", ctx_.get(), &sh_prim_rays_gen_, log};
+    prog_prim_rays_gen_simple_ = Program{"Primary Raygen Simple", ctx_.get(), &sh_prim_rays_gen_simple_, log};
+    prog_prim_rays_gen_adaptive_ = Program{"Primary Raygen Adaptive", ctx_.get(), &sh_prim_rays_gen_adaptive_, log};
     prog_intersect_scene_ = Program{"Intersect Scene (Primary)", ctx_.get(), &sh_intersect_scene_, log};
     prog_intersect_scene_indirect_ =
         Program{"Intersect Scene (Secondary)", ctx_.get(), &sh_intersect_scene_indirect_, log};
@@ -310,7 +318,8 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
     prog_nlm_filter_bn_ = Program{"NLM Filter BN", ctx_.get(), &sh_nlm_filter_bn_, log};
     prog_debug_rt_ = Program{"Debug RT", ctx_.get(), &sh_debug_rt_, log};
 
-    if (!pi_prim_rays_gen_.Init(ctx_.get(), &prog_prim_rays_gen_, log) ||
+    if (!pi_prim_rays_gen_simple_.Init(ctx_.get(), &prog_prim_rays_gen_simple_, log) ||
+        !pi_prim_rays_gen_adaptive_.Init(ctx_.get(), &prog_prim_rays_gen_adaptive_, log) ||
         !pi_intersect_scene_.Init(ctx_.get(), &prog_intersect_scene_, log) ||
         !pi_intersect_scene_indirect_.Init(ctx_.get(), &prog_intersect_scene_indirect_, log) ||
         !pi_intersect_area_lights_.Init(ctx_.get(), &prog_intersect_area_lights_, log) ||

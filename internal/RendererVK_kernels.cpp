@@ -64,8 +64,9 @@ void Ray::Vk::Renderer::kernel_GeneratePrimaryRays(VkCommandBuffer cmd_buf, cons
     uniform_params.shift_y = cam.shift[1];
     uniform_params.iteration = iteration;
 
-    DispatchCompute(cmd_buf, pi_prim_rays_gen_, grp_count, bindings, &uniform_params, sizeof(uniform_params),
-                    ctx_->default_descr_alloc(), ctx_->log());
+    const bool adaptive = (iteration > cam.pass_settings.min_samples) && cam.pass_settings.min_samples != -1;
+    DispatchCompute(cmd_buf, adaptive ? pi_prim_rays_gen_adaptive_ : pi_prim_rays_gen_simple_, grp_count, bindings,
+                    &uniform_params, sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
 }
 
 void Ray::Vk::Renderer::kernel_IntersectScene(VkCommandBuffer cmd_buf, const pass_settings_t &settings,

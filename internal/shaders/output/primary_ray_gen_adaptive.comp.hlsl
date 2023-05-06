@@ -33,7 +33,7 @@ struct ray_data_t
 
 static const uint3 gl_WorkGroupSize = uint3(8u, 8u, 1u);
 
-RWByteAddressBuffer _246 : register(u1, space0);
+RWByteAddressBuffer _238 : register(u1, space0);
 ByteAddressBuffer _287 : register(t2, space0);
 RWByteAddressBuffer _588 : register(u0, space0);
 cbuffer UniformParams
@@ -100,8 +100,8 @@ void comp_main()
         {
             break;
         }
-        uint _249;
-        _246.InterlockedAdd(0, 1u, _249);
+        uint _241;
+        _238.InterlockedAdd(0, 1u, _241);
         int _254 = (_207 << 16) | _214;
         int _255 = hash(_254);
         float _x = float(_207);
@@ -194,24 +194,24 @@ void comp_main()
         float3 _533 = _origin;
         float3 _534 = _533 + (_522 * (_76_g_params.cam_fwd.w / dot(_522, _76_g_params.cam_fwd.xyz)));
         _origin = _534;
-        _588.Store(_249 * 72 + 0, asuint(_534.x));
-        _588.Store(_249 * 72 + 4, asuint(_534.y));
-        _588.Store(_249 * 72 + 8, asuint(_534.z));
-        _588.Store(_249 * 72 + 12, asuint(_522.x));
-        _588.Store(_249 * 72 + 16, asuint(_522.y));
-        _588.Store(_249 * 72 + 20, asuint(_522.z));
-        _588.Store(_249 * 72 + 24, asuint(1000000.0f));
-        _588.Store(_249 * 72 + 28, asuint(1.0f));
-        _588.Store(_249 * 72 + 32, asuint(1.0f));
-        _588.Store(_249 * 72 + 36, asuint(1.0f));
-        _588.Store(_249 * 72 + 40, asuint(-1.0f));
-        _588.Store(_249 * 72 + 44, asuint(-1.0f));
-        _588.Store(_249 * 72 + 48, asuint(-1.0f));
-        _588.Store(_249 * 72 + 52, asuint(-1.0f));
-        _588.Store(_249 * 72 + 56, asuint(0.0f));
-        _588.Store(_249 * 72 + 60, asuint(_76_g_params.spread_angle));
-        _588.Store(_249 * 72 + 64, uint(_254));
-        _588.Store(_249 * 72 + 68, uint(0));
+        _588.Store(_241 * 72 + 0, asuint(_534.x));
+        _588.Store(_241 * 72 + 4, asuint(_534.y));
+        _588.Store(_241 * 72 + 8, asuint(_534.z));
+        _588.Store(_241 * 72 + 12, asuint(_522.x));
+        _588.Store(_241 * 72 + 16, asuint(_522.y));
+        _588.Store(_241 * 72 + 20, asuint(_522.z));
+        _588.Store(_241 * 72 + 24, asuint(1000000.0f));
+        _588.Store(_241 * 72 + 28, asuint(1.0f));
+        _588.Store(_241 * 72 + 32, asuint(1.0f));
+        _588.Store(_241 * 72 + 36, asuint(1.0f));
+        _588.Store(_241 * 72 + 40, asuint(-1.0f));
+        _588.Store(_241 * 72 + 44, asuint(-1.0f));
+        _588.Store(_241 * 72 + 48, asuint(-1.0f));
+        _588.Store(_241 * 72 + 52, asuint(-1.0f));
+        _588.Store(_241 * 72 + 56, asuint(0.0f));
+        _588.Store(_241 * 72 + 60, asuint(_76_g_params.spread_angle));
+        _588.Store(_241 * 72 + 64, uint(_254));
+        _588.Store(_241 * 72 + 68, uint(0));
         break;
     } while(false);
 }

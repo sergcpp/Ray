@@ -65,7 +65,8 @@ def main():
             os.remove(os.path.join("internal/shaders/output", item))
 
     # Primary ray generation
-    compile_shader(src_name="primary_ray_gen")
+    compile_shader(src_name="primary_ray_gen", spv_name="primary_ray_gen_simple", defines="-DADAPTIVE=0")
+    compile_shader(src_name="primary_ray_gen", spv_name="primary_ray_gen_adaptive", defines="-DADAPTIVE=1")
 
     # Scene intersection (main)
     compile_shader(src_name="intersect_scene", spv_name="intersect_scene_swrt_atlas", defines="-DINDIRECT=0 -DHWRT=0 -DBINDLESS=0")
