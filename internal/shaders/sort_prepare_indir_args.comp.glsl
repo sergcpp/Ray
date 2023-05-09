@@ -30,7 +30,10 @@ layout(std430, binding = OUT_INDIR_ARGS_SLOT) writeonly buffer IndirArgs {
 layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 
 void main() {
-    uint chunks_count = g_scan_values[g_counters[g_params.in_counter] - 1] + g_head_flags[g_counters[g_params.in_counter] - 1];
+    uint chunks_count = 0;
+    if (g_counters[g_params.in_counter] != 0) {
+        chunks_count = g_scan_values[g_counters[g_params.in_counter] - 1] + g_head_flags[g_counters[g_params.in_counter] - 1];
+    }
 
     uint group_count = (chunks_count + 63) / 64;
     g_out_indir_args[3 * (g_params.indir_args_index + 0) + 0] = group_count;
