@@ -6,32 +6,41 @@ RWByteAddressBuffer _21 : register(u1, space0);
 void comp_main()
 {
     uint _17 = _12.Load(0);
-    uint _26 = (_17 + 63u) / 64u;
-    _21.Store(0, _26);
+    _21.Store(0, (_17 + 63u) / 64u);
     _21.Store(4, 1u);
     _21.Store(8, 1u);
-    uint scan_count = _26;
+    uint _38 = (_17 + 255u) / 256u;
+    _12.Store(16, _17);
+    _21.Store(24, _38);
+    _21.Store(28, 1u);
+    _21.Store(32, 1u);
+    _12.Store(20, _38);
+    _21.Store(36, (_38 + 255u) / 256u);
+    _21.Store(40, 1u);
+    _21.Store(44, 1u);
+    uint _64 = _38 * 16u;
+    uint counters_count = _64;
     int i = 0;
-    for (; i < 7; )
+    for (; i < 4; )
     {
-        _12.Store((4 + i) * 4 + 0, scan_count);
-        int _56 = 3 * i;
-        uint _61 = (scan_count + 63u) / 64u;
-        _21.Store((6 + _56) * 4 + 0, _61);
-        _21.Store((_56 + 7) * 4 + 0, 1u);
-        _21.Store((_56 + 8) * 4 + 0, 1u);
-        scan_count = _61;
+        _12.Store((6 + i) * 4 + 0, counters_count);
+        int _82 = 3 * i;
+        uint _87 = (counters_count + 255u) / 256u;
+        _21.Store((12 + _82) * 4 + 0, _87);
+        _21.Store((_82 + 13) * 4 + 0, 1u);
+        _21.Store((_82 + 14) * 4 + 0, 1u);
+        counters_count = _87;
         i++;
         continue;
     }
     _12.Store(0, 0u);
     _12.Store(4, _17);
-    uint _84 = _12.Load(8);
-    _21.Store(12, (_84 + 63u) / 64u);
+    uint _110 = _12.Load(8);
+    _21.Store(12, (_110 + 63u) / 64u);
     _21.Store(16, 1u);
     _21.Store(20, 1u);
     _12.Store(8, 0u);
-    _12.Store(12, _84);
+    _12.Store(12, _110);
 }
 
 [numthreads(1, 1, 1)]

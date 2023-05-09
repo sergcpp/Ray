@@ -13,7 +13,7 @@ layout(std430, binding = RAYS_BUF_SLOT) readonly buffer Rays {
 };
 
 layout(std430, binding = INDICES_BUF_SLOT) readonly buffer Indices {
-    uint g_indices[];
+    ray_hash_t g_indices[];
 };
 
 layout(std430, binding = COUNTERS_BUF_SLOT) readonly buffer Counters {
@@ -32,5 +32,5 @@ void main() {
         return;
     }
 
-    g_out_rays[gi] = g_rays[g_indices[gi]];
+    g_out_rays[gi] = g_rays[g_indices[gi].index];
 }

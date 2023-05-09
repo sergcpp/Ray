@@ -206,7 +206,10 @@ set(VK_FILES internal/Vk/AccStructure.h
 set(SHADER_FILES    internal/shaders/_interface_common.h
                     internal/shaders/common.glsl
                     internal/shaders/debug_rt.comp.glsl
+                    internal/shaders/debug_rt_interface.h
                     internal/shaders/envmap.glsl
+                    internal/shaders/filter_variance.comp.glsl
+                    internal/shaders/filter_variance_interface.h
                     internal/shaders/intersect.glsl
                     internal/shaders/intersect_area_lights.comp.glsl
                     internal/shaders/intersect_area_lights_interface.h
@@ -216,6 +219,8 @@ set(SHADER_FILES    internal/shaders/_interface_common.h
                     internal/shaders/intersect_scene_shadow_interface.h
                     internal/shaders/mix_incremental.comp.glsl
                     internal/shaders/mix_incremental_interface.h
+                    internal/shaders/nlm_filter.comp.glsl
+                    internal/shaders/nlm_filter_interface.h
                     internal/shaders/postprocess.comp.glsl
                     internal/shaders/postprocess_interface.h
                     internal/shaders/prepare_indir_args.comp.glsl
@@ -224,6 +229,18 @@ set(SHADER_FILES    internal/shaders/_interface_common.h
                     internal/shaders/primary_ray_gen_interface.h
                     internal/shaders/shade.comp.glsl
                     internal/shaders/shade_interface.h
+                    internal/shaders/sort_add_partial_sums.comp.glsl
+                    internal/shaders/sort_add_partial_sums_interface.h
+                    internal/shaders/sort_hash_rays.comp.glsl
+                    internal/shaders/sort_hash_rays_interface.h
+                    internal/shaders/sort_init_count_table.comp.glsl
+                    internal/shaders/sort_init_count_table_interface.h
+                    internal/shaders/sort_reorder_rays.comp.glsl
+                    internal/shaders/sort_reorder_rays_interface.h
+                    internal/shaders/sort_scan.comp.glsl
+                    internal/shaders/sort_scan_interface.h
+                    internal/shaders/sort_write_sorted_hashes.comp.glsl
+                    internal/shaders/sort_write_sorted_hashes_interface.h
                     internal/shaders/texture.glsl
                     internal/shaders/traverse_bvh.glsl
                     internal/shaders/types.h)

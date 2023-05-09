@@ -29,6 +29,7 @@ static_assert(sizeof(Types::light_t) == sizeof(Ray::light_t), "!");
 static_assert(sizeof(Types::material_t) == sizeof(Ray::material_t), "!");
 static_assert(sizeof(Types::atlas_texture_t) == sizeof(Ray::atlas_texture_t), "!");
 static_assert(sizeof(Types::ray_chunk_t) == sizeof(Ray::ray_chunk_t), "!");
+static_assert(sizeof(Types::ray_hash_t) == sizeof(Ray::ray_hash_t), "!");
 
 static_assert(Types::LIGHT_TYPE_SPHERE == Ray::LIGHT_TYPE_SPHERE, "!");
 static_assert(Types::LIGHT_TYPE_SPOT == Ray::LIGHT_TYPE_SPOT, "!");
@@ -81,19 +82,11 @@ namespace Vk {
 #include "shaders/output/shade_secondary_bindless.comp.inl"
 #include "shaders/output/sort_add_partial_sums.comp.inl"
 #include "shaders/output/sort_exclusive_scan.comp.inl"
-#include "shaders/output/sort_exclusive_seg_scan.comp.inl"
 #include "shaders/output/sort_hash_rays.comp.inl"
 #include "shaders/output/sort_inclusive_scan.comp.inl"
-#include "shaders/output/sort_inclusive_seg_scan.comp.inl"
-#include "shaders/output/sort_init_chunks_hash_and_base.comp.inl"
-#include "shaders/output/sort_init_chunks_size.comp.inl"
 #include "shaders/output/sort_init_count_table.comp.inl"
-#include "shaders/output/sort_init_skeleton_and_head_flags.comp.inl"
-#include "shaders/output/sort_prepare_indir_args.comp.inl"
 #include "shaders/output/sort_reorder_rays.comp.inl"
-#include "shaders/output/sort_seg_add_partial_sums.comp.inl"
-#include "shaders/output/sort_set_head_flags.comp.inl"
-#include "shaders/output/sort_write_sorted_chunks.comp.inl"
+#include "shaders/output/sort_write_sorted_hashes.comp.inl"
 } // namespace Vk
 } // namespace Ray
 
@@ -316,12 +309,6 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
                                 internal_shaders_output_sort_hash_rays_comp_spv_size,
                                 eShaderType::Comp,
                                 log};
-    sh_sort_set_head_flags_ = Shader{"Sort Set Head Flags",
-                                     ctx_.get(),
-                                     internal_shaders_output_sort_set_head_flags_comp_spv,
-                                     internal_shaders_output_sort_set_head_flags_comp_spv_size,
-                                     eShaderType::Comp,
-                                     log};
     sh_sort_exclusive_scan_ = Shader{"Sort Exclusive Scan",
                                      ctx_.get(),
                                      internal_shaders_output_sort_exclusive_scan_comp_spv,
@@ -340,61 +327,18 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
                                        internal_shaders_output_sort_add_partial_sums_comp_spv_size,
                                        eShaderType::Comp,
                                        log};
-    sh_sort_init_chunks_hash_and_base_ = Shader{"Sort Init Chunks Hash And Base",
-                                                ctx_.get(),
-                                                internal_shaders_output_sort_init_chunks_hash_and_base_comp_spv,
-                                                internal_shaders_output_sort_init_chunks_hash_and_base_comp_spv_size,
-                                                eShaderType::Comp,
-                                                log};
-    sh_sort_init_chunks_size_ = Shader{"Sort Init Chunks Size",
-                                       ctx_.get(),
-                                       internal_shaders_output_sort_init_chunks_size_comp_spv,
-                                       internal_shaders_output_sort_init_chunks_size_comp_spv_size,
-                                       eShaderType::Comp,
-                                       log};
-    sh_sort_prepare_indir_args_ = Shader{"Sort Prepare Indir Args",
-                                         ctx_.get(),
-                                         internal_shaders_output_sort_prepare_indir_args_comp_spv,
-                                         internal_shaders_output_sort_prepare_indir_args_comp_spv_size,
-                                         eShaderType::Comp,
-                                         log};
     sh_sort_init_count_table_ = Shader{"Sort Init Count Table",
                                        ctx_.get(),
                                        internal_shaders_output_sort_init_count_table_comp_spv,
                                        internal_shaders_output_sort_init_count_table_comp_spv_size,
                                        eShaderType::Comp,
                                        log};
-    sh_sort_write_sorted_chunks_ = Shader{"Sort Write Sorted Chunks",
+    sh_sort_write_sorted_hashes_ = Shader{"Sort Write Sorted Hashes",
                                           ctx_.get(),
-                                          internal_shaders_output_sort_write_sorted_chunks_comp_spv,
-                                          internal_shaders_output_sort_write_sorted_chunks_comp_spv_size,
+                                          internal_shaders_output_sort_write_sorted_hashes_comp_spv,
+                                          internal_shaders_output_sort_write_sorted_hashes_comp_spv_size,
                                           eShaderType::Comp,
                                           log};
-    sh_sort_init_skeleton_and_head_flags_ =
-        Shader{"Sort Init Skeleton And Head Flags",
-               ctx_.get(),
-               internal_shaders_output_sort_init_skeleton_and_head_flags_comp_spv,
-               internal_shaders_output_sort_init_skeleton_and_head_flags_comp_spv_size,
-               eShaderType::Comp,
-               log};
-    sh_sort_exclusive_seg_scan_ = Shader{"Sort Exclusive Seg Scan",
-                                         ctx_.get(),
-                                         internal_shaders_output_sort_exclusive_seg_scan_comp_spv,
-                                         internal_shaders_output_sort_exclusive_seg_scan_comp_spv_size,
-                                         eShaderType::Comp,
-                                         log};
-    sh_sort_inclusive_seg_scan_ = Shader{"Sort Inclusive Seg Scan",
-                                         ctx_.get(),
-                                         internal_shaders_output_sort_inclusive_seg_scan_comp_spv,
-                                         internal_shaders_output_sort_inclusive_seg_scan_comp_spv_size,
-                                         eShaderType::Comp,
-                                         log};
-    sh_sort_seg_add_partial_sums_ = Shader{"Sort Seg Add Partial Sums",
-                                           ctx_.get(),
-                                           internal_shaders_output_sort_seg_add_partial_sums_comp_spv,
-                                           internal_shaders_output_sort_seg_add_partial_sums_comp_spv_size,
-                                           eShaderType::Comp,
-                                           log};
     sh_sort_reorder_rays_ = Shader{"Sort Reorder Rays",
                                    ctx_.get(),
                                    internal_shaders_output_sort_reorder_rays_comp_spv,
@@ -427,21 +371,11 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
     prog_nlm_filter_bn_ = Program{"NLM Filter BN", ctx_.get(), &sh_nlm_filter_bn_, log};
     prog_debug_rt_ = Program{"Debug RT", ctx_.get(), &sh_debug_rt_, log};
     prog_sort_hash_rays_ = Program{"Hash Rays", ctx_.get(), &sh_sort_hash_rays_, log};
-    prog_sort_set_head_flags_ = Program{"Set Head Flags", ctx_.get(), &sh_sort_set_head_flags_, log};
     prog_sort_exclusive_scan_ = Program{"Exclusive Scan", ctx_.get(), &sh_sort_exclusive_scan_, log};
     prog_sort_inclusive_scan_ = Program{"Inclusive Scan", ctx_.get(), &sh_sort_inclusive_scan_, log};
     prog_sort_add_partial_sums_ = Program{"Add Partial Sums", ctx_.get(), &sh_sort_add_partial_sums_, log};
-    prog_sort_init_chunks_hash_and_base_ =
-        Program{"Init Chunks Hash And Base", ctx_.get(), &sh_sort_init_chunks_hash_and_base_, log};
-    prog_sort_init_chunks_size_ = Program{"Init Chunks Size", ctx_.get(), &sh_sort_init_chunks_size_, log};
-    prog_sort_prepare_indir_args_ = Program{"Prepare Indir Args", ctx_.get(), &sh_sort_prepare_indir_args_, log};
     prog_sort_init_count_table_ = Program{"Init Count Table", ctx_.get(), &sh_sort_init_count_table_, log};
-    prog_sort_write_sorted_chunks_ = Program{"Write Sorted Chunks", ctx_.get(), &sh_sort_write_sorted_chunks_, log};
-    prog_sort_init_skeleton_and_head_flags_ =
-        Program{"Init Skeleton And Head Flags", ctx_.get(), &sh_sort_init_skeleton_and_head_flags_, log};
-    prog_sort_exclusive_seg_scan_ = Program{"Exclusive Seg Scan", ctx_.get(), &sh_sort_exclusive_seg_scan_, log};
-    prog_sort_inclusive_seg_scan_ = Program{"Inclusive Seg Scan", ctx_.get(), &sh_sort_inclusive_seg_scan_, log};
-    prog_sort_seg_add_partial_sums_ = Program{"Seg Add Partial Sums", ctx_.get(), &sh_sort_seg_add_partial_sums_, log};
+    prog_sort_write_sorted_hashes_ = Program{"Write Sorted Chunks", ctx_.get(), &sh_sort_write_sorted_hashes_, log};
     prog_sort_reorder_rays_ = Program{"Reorder Rays", ctx_.get(), &sh_sort_reorder_rays_, log};
 
     if (!pi_prim_rays_gen_simple_.Init(ctx_.get(), &prog_prim_rays_gen_simple_, log) ||
@@ -468,19 +402,11 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
         !pi_nlm_filter_bn_.Init(ctx_.get(), &prog_nlm_filter_bn_, log) ||
         (use_hwrt_ && !pi_debug_rt_.Init(ctx_.get(), &prog_debug_rt_, log)) ||
         !pi_sort_hash_rays_.Init(ctx_.get(), &prog_sort_hash_rays_, log) ||
-        !pi_sort_set_head_flags_.Init(ctx_.get(), &prog_sort_set_head_flags_, log) ||
         !pi_sort_exclusive_scan_.Init(ctx_.get(), &prog_sort_exclusive_scan_, log) ||
         !pi_sort_inclusive_scan_.Init(ctx_.get(), &prog_sort_inclusive_scan_, log) ||
         !pi_sort_add_partial_sums_.Init(ctx_.get(), &prog_sort_add_partial_sums_, log) ||
-        !pi_sort_init_chunks_hash_and_base_.Init(ctx_.get(), &prog_sort_init_chunks_hash_and_base_, log) ||
-        !pi_sort_init_chunks_size_.Init(ctx_.get(), &prog_sort_init_chunks_size_, log) ||
-        !pi_sort_prepare_indir_args_.Init(ctx_.get(), &prog_sort_prepare_indir_args_, log) ||
         !pi_sort_init_count_table_.Init(ctx_.get(), &prog_sort_init_count_table_, log) ||
-        !pi_sort_write_sorted_chunks_.Init(ctx_.get(), &prog_sort_write_sorted_chunks_, log) ||
-        !pi_sort_init_skeleton_and_head_flags_.Init(ctx_.get(), &prog_sort_init_skeleton_and_head_flags_, log) ||
-        !pi_sort_exclusive_seg_scan_.Init(ctx_.get(), &prog_sort_exclusive_seg_scan_, log) ||
-        !pi_sort_inclusive_seg_scan_.Init(ctx_.get(), &prog_sort_inclusive_seg_scan_, log) ||
-        !pi_sort_seg_add_partial_sums_.Init(ctx_.get(), &prog_sort_seg_add_partial_sums_, log) ||
+        !pi_sort_write_sorted_hashes_.Init(ctx_.get(), &prog_sort_write_sorted_hashes_, log) ||
         !pi_sort_reorder_rays_.Init(ctx_.get(), &prog_sort_reorder_rays_, log)) {
         throw std::runtime_error("Error initializing pipeline!");
     }
@@ -577,19 +503,12 @@ void Ray::Vk::Renderer::Resize(const int w, const int h) {
     int scan_values_rounded_count =
         SORT_SCAN_PORTION * ((scan_values_count + SORT_SCAN_PORTION - 1) / SORT_SCAN_PORTION);
 
-    ray_hashes_buf_ =
-        Buffer{"Ray Hashes", ctx_.get(), eBufType::Storage, uint32_t(sizeof(uint32_t) * scan_values_rounded_count)};
-    head_flags_buf_ =
-        Buffer{"Head Flags", ctx_.get(), eBufType::Storage, uint32_t(sizeof(uint32_t) * scan_values_rounded_count)};
-
-    ray_chunks_bufs_[0] = Buffer{"Ray Chunks 0", ctx_.get(), eBufType::Storage,
-                                 uint32_t(sizeof(Types::ray_chunk_t) * scan_values_rounded_count)};
-    ray_chunks_bufs_[1] = Buffer{"Ray Chunks 1", ctx_.get(), eBufType::Storage,
-                                 uint32_t(sizeof(Types::ray_chunk_t) * scan_values_rounded_count)};
+    ray_hashes_bufs_[0] = Buffer{"Ray Hashes #0", ctx_.get(), eBufType::Storage,
+                                 uint32_t(sizeof(Types::ray_hash_t) * scan_values_rounded_count)};
+    ray_hashes_bufs_[1] = Buffer{"Ray Hashes #1", ctx_.get(), eBufType::Storage,
+                                 uint32_t(sizeof(Types::ray_hash_t) * scan_values_rounded_count)};
     count_table_buf_ =
         Buffer{"Count Table", ctx_.get(), eBufType::Storage, uint32_t(sizeof(uint32_t) * scan_values_rounded_count)};
-    skeleton_buf_ =
-        Buffer{"Skeleton", ctx_.get(), eBufType::Storage, uint32_t(sizeof(uint32_t) * scan_values_rounded_count)};
 
     VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
 
@@ -608,11 +527,6 @@ void Ray::Vk::Renderer::Resize(const int w, const int h) {
         partial_sums_bufs_[i] =
             Buffer{name_buf, ctx_.get(), eBufType::Storage, uint32_t(sizeof(uint32_t) * part_sums_rounded_count)};
         partial_sums_bufs_[i].Fill(0, uint32_t(sizeof(uint32_t) * part_sums_rounded_count), 0, cmd_buf);
-
-        snprintf(name_buf, sizeof(name_buf), "Partial Flags %i", i);
-        partial_flags_bufs_[i] =
-            Buffer{name_buf, ctx_.get(), eBufType::Storage, uint32_t(sizeof(uint32_t) * part_sums_rounded_count)};
-        partial_flags_bufs_[i].Fill(0, uint32_t(sizeof(uint32_t) * part_sums_rounded_count), 0, cmd_buf);
 
         scan_values_count = (scan_values_count + SORT_SCAN_PORTION - 1) / SORT_SCAN_PORTION;
         scan_values_rounded_count =
@@ -1037,9 +951,15 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         timestamps_[ctx_->backend_frame].secondary_sort.push_back(ctx_->WriteTimestamp(cmd_buf, true));
 
         if (!use_hwrt_) {
-            SortRays(cmd_buf, indir_args_buf_, secondary_rays_buf_, root_min, cell_size, ray_hashes_buf_,
-                     ray_chunks_bufs_, skeleton_buf_, head_flags_buf_, count_table_buf_, counters_buf_,
-                     partial_sums_bufs_, partial_flags_bufs_, scan_values_bufs_, prim_rays_buf_);
+            DebugMarker _(cmd_buf, "Sort Rays");
+
+            kernel_SortHashRays(cmd_buf, indir_args_buf_, secondary_rays_buf_, counters_buf_, root_min, cell_size,
+                                ray_hashes_bufs_[0]);
+            RadixSort(cmd_buf, indir_args_buf_, ray_hashes_bufs_, count_table_buf_, counters_buf_, partial_sums_bufs_,
+                      scan_values_bufs_);
+            kernel_SortReorderRays(cmd_buf, indir_args_buf_, 0, secondary_rays_buf_, ray_hashes_bufs_[0], counters_buf_,
+                                   1, prim_rays_buf_);
+
             std::swap(secondary_rays_buf_, prim_rays_buf_);
         }
 
@@ -1273,79 +1193,30 @@ void Ray::Vk::Renderer::UpdateHaltonSequence(const int iteration, std::unique_pt
     }
 }
 
-void Ray::Vk::Renderer::SortRays(VkCommandBuffer cmd_buf, const Buffer &indir_args, const Buffer &in_rays,
-                                 const float root_min[3], const float cell_size[3], const Buffer &ray_hashes,
-                                 Buffer ray_chunks[2], Buffer &skeleton, Buffer &head_flags, Buffer &count_table,
-                                 const Buffer &counters, Buffer partial_sums[], Buffer partial_flags[],
-                                 Buffer scan_values[], Buffer &out_rays) {
-    DebugMarker _(cmd_buf, "Sort Rays");
-
-    kernel_SortHashRays(cmd_buf, indir_args, in_rays, counters, root_min, cell_size, ray_hashes);
-    kernel_SortSetHeadFlags(cmd_buf, indir_args, ray_hashes, counters, head_flags);
-
-    { // Scan over head flags
-        static const int indir_args_indices[] = {0, 2, 3, 4};
-        ExclusiveScan(cmd_buf, indir_args, indir_args_indices, head_flags, 0 /* offset */, 1 /* stride */, partial_sums,
-                      scan_values);
-    }
-
-    // Init compacted ray chunks
-    kernel_SortInitChunksHashAndBase(cmd_buf, indir_args, 0, counters, 1, 1, ray_hashes, head_flags, scan_values[0],
-                                     ray_chunks[0]);
-    kernel_SortPrepareIndirArgs(cmd_buf, head_flags, scan_values[0], counters, 1, 12, indir_args, 12);
-    kernel_SortInitChunksSize(cmd_buf, indir_args, 12, counters, 12, 1, ray_chunks[0]);
-
-    RadixSort(cmd_buf, indir_args, ray_chunks, count_table, counters, partial_sums, scan_values);
-
-    { // Scan over chunk sizes
-        static const int indir_args_indices[] = {12, 13, 14, 15};
-        ExclusiveScan(cmd_buf, indir_args, indir_args_indices, ray_chunks[0], 2 /* offset */, 3 /* stride */,
-                      partial_sums, scan_values);
-    }
-
-    skeleton.Fill(0, skeleton.size(), 1, cmd_buf);
-    head_flags.Fill(0, head_flags.size(), 0, cmd_buf);
-
-    kernal_SortInitSkeletonAndHeadFlags(cmd_buf, indir_args, 12, counters, 12, scan_values[0], ray_chunks[0], skeleton,
-                                        head_flags);
-
-    { // Scan over skeleton buf
-        static const int indir_args_indices[] = {0, 2, 3, 4};
-        static const int counter_indices[] = {1, 4, 5, 6};
-
-        InclusiveSegmentedScan(cmd_buf, indir_args, indir_args_indices, skeleton, head_flags, counters, counter_indices,
-                               partial_sums, partial_flags, scan_values);
-    }
-
-    kernel_SortReorderRays(cmd_buf, indir_args, 0, in_rays, scan_values[0], counters, 1, out_rays);
-}
-
-void Ray::Vk::Renderer::RadixSort(VkCommandBuffer cmd_buf, const Buffer &indir_args, Buffer _chunks[2],
+void Ray::Vk::Renderer::RadixSort(VkCommandBuffer cmd_buf, const Buffer &indir_args, Buffer _hashes[2],
                                   Buffer &count_table, const Buffer &counters, Buffer partial_sums[],
                                   Buffer scan_values[]) {
     DebugMarker _(cmd_buf, "Radix Sort");
 
-    static const int indir_args_indices[] = {16, 17, 18, 19};
-
-    Buffer *chunks[] = {&_chunks[0], &_chunks[1]};
+    static const int indir_args_indices[] = {4, 5, 6, 7};
 
     static const char *MarkerStrings[] = {"Radix Sort Iter #0 [Bits   0-4]", "Radix Sort Iter #1 [Bits   4-8]",
                                           "Radix Sort Iter #2 [Bits  8-12]", "Radix Sort Iter #3 [Bits 12-16]",
                                           "Radix Sort Iter #4 [Bits 16-20]", "Radix Sort Iter #5 [Bits 20-24]",
                                           "Radix Sort Iter #6 [Bits 24-28]", "Radix Sort Iter #7 [Bits 28-32]"};
 
-    int iter = 0;
+    Buffer *hashes[] = {&_hashes[0], &_hashes[1]};
     for (int shift = 0; shift < 32; shift += 4) {
-        DebugMarker _(cmd_buf, MarkerStrings[iter++]);
+        DebugMarker _(cmd_buf, MarkerStrings[shift / 4]);
 
-        kernel_SortInitCountTable(cmd_buf, shift, indir_args, 12, *chunks[0], counters, 12, count_table);
+        kernel_SortInitCountTable(cmd_buf, shift, indir_args, 2, *hashes[0], counters, 4, count_table);
         ExclusiveScan(cmd_buf, indir_args, indir_args_indices, count_table, 0 /* offset */, 1 /* stride */,
                       partial_sums, scan_values);
-        kernel_SortWriteSortedChunks(cmd_buf, shift, indir_args, 13, *chunks[0], scan_values[0], counters, 13, 12,
-                                     *chunks[1]);
-        std::swap(chunks[0], chunks[1]);
+        kernel_SortWriteSortedHashes(cmd_buf, shift, indir_args, 3, *hashes[0], scan_values[0], counters, 5, 4,
+                                     *hashes[1]);
+        std::swap(hashes[0], hashes[1]);
     }
-    assert(chunks[0] == &_chunks[0]);
+    assert(hashes[0] == &_hashes[0]);
 }
 
 void Ray::Vk::Renderer::ExclusiveScan(VkCommandBuffer cmd_buf, const Buffer &indir_args, const int indir_args_indices[],
@@ -1358,6 +1229,7 @@ void Ray::Vk::Renderer::ExclusiveScan(VkCommandBuffer cmd_buf, const Buffer &ind
 
     kernel_SortInclusiveScan(cmd_buf, indir_args, indir_args_indices[1], partial_sums[0], 0 /* offset */,
                              1 /* stride */, scan_values[1], partial_sums[1]);
+
     { //
         kernel_SortInclusiveScan(cmd_buf, indir_args, indir_args_indices[2], partial_sums[1], 0 /* offset */,
                                  1 /* stride */, scan_values[2], partial_sums[2]);
@@ -1371,37 +1243,6 @@ void Ray::Vk::Renderer::ExclusiveScan(VkCommandBuffer cmd_buf, const Buffer &ind
     }
 
     kernel_SortAddPartialSums(cmd_buf, indir_args, indir_args_indices[0], scan_values[1], scan_values[0]);
-}
-
-void Ray::Vk::Renderer::InclusiveSegmentedScan(VkCommandBuffer cmd_buf, const Buffer &indir_args,
-                                               const int indir_args_indices[], const Buffer &input, const Buffer &flags,
-                                               const Buffer &counters, const int counter_indices[],
-                                               const Buffer partial_sums[], const Buffer partial_flags[],
-                                               const Buffer scan_values[]) {
-    DebugMarker _(cmd_buf, "Inclusive Segmented Scan");
-
-    kernel_SortInclusiveSegScan(cmd_buf, indir_args, indir_args_indices[0], input, flags, scan_values[0],
-                                partial_sums[0], partial_flags[0]);
-
-    kernel_SortInclusiveSegScan(cmd_buf, indir_args, indir_args_indices[1], partial_sums[0], partial_flags[0],
-                                scan_values[1], partial_sums[1], partial_flags[1]);
-
-    { //
-        kernel_SortInclusiveSegScan(cmd_buf, indir_args, indir_args_indices[2], partial_sums[1], partial_flags[1],
-                                    scan_values[2], partial_sums[2], partial_flags[2]);
-        { //
-            kernel_SortInclusiveSegScan(cmd_buf, indir_args, indir_args_indices[3], partial_sums[0], partial_flags[0],
-                                        scan_values[3], partial_sums[3], partial_flags[3]);
-            kernel_SortSegAddPartialSums(cmd_buf, indir_args, indir_args_indices[3], scan_values[3], partial_flags[0],
-                                         counters, counter_indices[3], scan_values[2]);
-        }
-
-        kernel_SortSegAddPartialSums(cmd_buf, indir_args, indir_args_indices[2], scan_values[2], partial_flags[0],
-                                     counters, counter_indices[2], scan_values[1]);
-    }
-
-    kernel_SortSegAddPartialSums(cmd_buf, indir_args, indir_args_indices[1], scan_values[1], flags, counters,
-                                 counter_indices[1], scan_values[0]);
 }
 
 const Ray::color_rgba_t *Ray::Vk::Renderer::get_pixels_ref(const bool tonemap) const {

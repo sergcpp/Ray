@@ -6,14 +6,13 @@ struct Params
     int _pad0;
 };
 
-struct ray_chunk_t
+struct ray_hash_t
 {
     uint hash;
-    uint base;
-    uint size;
+    uint index;
 };
 
-static const uint3 gl_WorkGroupSize = uint3(64u, 1u, 1u);
+static const uint3 gl_WorkGroupSize = uint3(256u, 1u, 1u);
 
 ByteAddressBuffer _23 : register(t3, space0);
 ByteAddressBuffer _58 : register(t2, space0);
@@ -48,29 +47,27 @@ void comp_main()
             i++;
             continue;
         }
-        for (int i_1 = 0; i_1 < 64; i_1++)
+        for (int i_1 = 0; i_1 < 256; i_1++)
         {
-            int _85 = _17 * 64;
+            int _85 = _17 * 256;
             if (uint(_85 + i_1) < _23.Load(_28_g_params.chunks_counter * 4 + 0))
             {
                 int _106 = _85 + i_1;
-                uint _113 = (_102.Load(_106 * 12 + 0) >> uint(_28_g_params.shift)) & 15u;
+                uint _113 = (_102.Load(_106 * 8 + 0) >> uint(_28_g_params.shift)) & 15u;
                 uint _117 = local_offsets[_113];
                 local_offsets[_113] = _117 + uint(1);
-                ray_chunk_t _130;
-                _130.hash = _102.Load(_106 * 12 + 0);
-                _130.base = _102.Load(_106 * 12 + 4);
-                _130.size = _102.Load(_106 * 12 + 8);
-                _122.Store(_117 * 12 + 0, _130.hash);
-                _122.Store(_117 * 12 + 4, _130.base);
-                _122.Store(_117 * 12 + 8, _130.size);
+                ray_hash_t _130;
+                _130.hash = _102.Load(_106 * 8 + 0);
+                _130.index = _102.Load(_106 * 8 + 4);
+                _122.Store(_117 * 8 + 0, _130.hash);
+                _122.Store(_117 * 8 + 4, _130.index);
             }
         }
         break;
     } while(false);
 }
 
-[numthreads(64, 1, 1)]
+[numthreads(256, 1, 1)]
 void main(SPIRV_Cross_Input stage_input)
 {
     gl_GlobalInvocationID = stage_input.gl_GlobalInvocationID;

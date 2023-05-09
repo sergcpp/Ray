@@ -6,14 +6,13 @@ struct Params
     int _pad1;
 };
 
-struct ray_chunk_t
+struct ray_hash_t
 {
     uint hash;
-    uint base;
-    uint size;
+    uint index;
 };
 
-static const uint3 gl_WorkGroupSize = uint3(64u, 1u, 1u);
+static const uint3 gl_WorkGroupSize = uint3(256u, 1u, 1u);
 
 ByteAddressBuffer _52 : register(t2, space0);
 ByteAddressBuffer _72 : register(t1, space0);
@@ -48,7 +47,7 @@ void comp_main()
     for (int i = _22; i < 16; )
     {
         g_shared_counters[i] = 0u;
-        i += 64;
+        i += 256;
         continue;
     }
     AllMemoryBarrier();
@@ -56,19 +55,19 @@ void comp_main()
     if (uint(_17) < _52.Load(_57_g_params.counter * 4 + 0))
     {
         uint _83;
-        InterlockedAdd(g_shared_counters[(_72.Load(_17 * 12 + 0) >> uint(_57_g_params.shift)) & 15u], 1u, _83);
+        InterlockedAdd(g_shared_counters[(_72.Load(_17 * 8 + 0) >> uint(_57_g_params.shift)) & 15u], 1u, _83);
     }
     AllMemoryBarrier();
     GroupMemoryBarrierWithGroupSync();
     for (int i_1 = _22; i_1 < 16; )
     {
         _96.Store(((uint(i_1) * SPIRV_Cross_NumWorkgroups_1_count.x) + gl_WorkGroupID.x) * 4 + 0, g_shared_counters[i_1]);
-        i_1 += 64;
+        i_1 += 256;
         continue;
     }
 }
 
-[numthreads(64, 1, 1)]
+[numthreads(256, 1, 1)]
 void main(SPIRV_Cross_Input stage_input)
 {
     gl_WorkGroupID = stage_input.gl_WorkGroupID;

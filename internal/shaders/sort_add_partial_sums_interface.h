@@ -5,7 +5,7 @@
 
 INTERFACE_START(SortAddPartialSums)
 
-const int LOCAL_GROUP_SIZE_X = 64;
+const int LOCAL_GROUP_SIZE_X = 256;
 
 const int PART_SUMS_BUF_SLOT = 1;
 

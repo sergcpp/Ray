@@ -8,8 +8,8 @@ LAYOUT_PARAMS uniform UniformParams {
     Params g_params;
 };
 
-layout(std430, binding = CHUNKS_BUF_SLOT) readonly buffer RayChunks {
-    ray_chunk_t g_chunks[];
+layout(std430, binding = HASHES_BUF_SLOT) readonly buffer RayChunks {
+    ray_hash_t g_hashes[];
 };
 
 layout(std430, binding = COUNTERS_BUF_SLOT) readonly buffer Counters {
@@ -33,7 +33,7 @@ void main() {
     groupMemoryBarrier(); barrier();
 
     if (gi < g_counters[g_params.counter]) {
-        atomicAdd(g_shared_counters[(g_chunks[gi].hash >> g_params.shift) & 0xF], 1u);
+        atomicAdd(g_shared_counters[(g_hashes[gi].hash >> g_params.shift) & 0xF], 1u);
     }
     groupMemoryBarrier(); barrier();
 

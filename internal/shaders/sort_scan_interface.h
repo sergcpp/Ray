@@ -12,8 +12,8 @@ struct Params {
     int _pad1;
 };
 
-const int LOCAL_GROUP_SIZE_X = 64;
-const int SCAN_PORTION = 64;
+const int LOCAL_GROUP_SIZE_X = 256;
+const int SCAN_PORTION = 256;
 
 const int INPUT_BUF_SLOT = 2;
 

@@ -17,7 +17,7 @@ layout(std430, binding = COUNTERS_BUF_SLOT) readonly buffer Counters {
 };
 
 layout(std430, binding = OUT_HASHES_BUF_SLOT) writeonly buffer OutHashes {
-    uint g_out_hashes[];
+    ray_hash_t g_out_hashes[];
 };
 
 const int g_morton_table_16[] = { 0, 1, 4, 5, 16, 17, 20, 21, 64, 65, 68, 69, 80, 81, 84, 85 };
@@ -95,5 +95,6 @@ void main() {
     }
 
     ray_data_t r = g_rays[gi];
-    g_out_hashes[gi] = get_ray_hash(r, g_params.root_min.xyz, g_params.cell_size.xyz);
+    g_out_hashes[gi].hash = get_ray_hash(r, g_params.root_min.xyz, g_params.cell_size.xyz);
+    g_out_hashes[gi].index = gi;
 }

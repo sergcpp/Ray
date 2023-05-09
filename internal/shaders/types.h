@@ -229,6 +229,10 @@ struct ray_chunk_t {
     UINT_TYPE hash, base, size;
 };
 
+struct ray_hash_t {
+    UINT_TYPE hash, index;
+};
+
 INTERFACE_END
 
 #endif // TYPES_H

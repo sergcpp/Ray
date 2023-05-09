@@ -12,13 +12,13 @@ struct Params {
     int _pad0;
 };
 
-const int LOCAL_GROUP_SIZE_X = 64;
+const int LOCAL_GROUP_SIZE_X = 256;
 
-const int CHUNKS_BUF_SLOT = 1;
+const int HASHES_BUF_SLOT = 1;
 const int OFFSETS_BUF_SLOT = 2;
 const int COUNTERS_BUF_SLOT = 3;
 
-const int OUT_CHUNKS_BUF_SLOT = 0;
+const int OUT_HASHES_BUF_SLOT = 0;
 
 INTERFACE_END
 

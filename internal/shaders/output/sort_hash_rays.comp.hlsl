@@ -11,6 +11,12 @@ struct ray_data_t
     int depth;
 };
 
+struct ray_hash_t
+{
+    uint hash;
+    uint index;
+};
+
 struct Params
 {
     float4 root_min;
@@ -43,10 +49,10 @@ static const int _418[17][17] = { { 2, 2, 2, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5,
 
 ByteAddressBuffer _460 : register(t2, space0);
 ByteAddressBuffer _478 : register(t1, space0);
-RWByteAddressBuffer _532 : register(u0, space0);
+RWByteAddressBuffer _533 : register(u0, space0);
 cbuffer UniformParams
 {
-    Params _538_g_params : packoffset(c0);
+    Params _539_g_params : packoffset(c0);
 };
 
 
@@ -66,7 +72,8 @@ void comp_main()
     do
     {
         int _454 = int(gl_GlobalInvocationID.x);
-        if (uint(_454) >= _460.Load(4))
+        uint _456 = uint(_454);
+        if (_456 >= _460.Load(4))
         {
             break;
         }
@@ -96,15 +103,16 @@ void comp_main()
         _482.cone_spread = asfloat(_478.Load(_454 * 72 + 60));
         _482.xy = int(_478.Load(_454 * 72 + 64));
         _482.depth = int(_478.Load(_454 * 72 + 68));
-        float _622[4] = { _482.ior[0], _482.ior[1], _482.ior[2], _482.ior[3] };
-        float _613[3] = { _482.c[0], _482.c[1], _482.c[2] };
-        float _606[3] = { _482.d[0], _482.d[1], _482.d[2] };
-        float _599[3] = { _482.o[0], _482.o[1], _482.o[2] };
-        ray_data_t _592 = { _599, _606, _482.pdf, _613, _622, _482.cone_width, _482.cone_spread, _482.xy, _482.depth };
-        ray_data_t param = _592;
-        float3 param_1 = _538_g_params.root_min.xyz;
-        float3 param_2 = _538_g_params.cell_size.xyz;
-        _532.Store(_454 * 4 + 0, get_ray_hash(param, param_1, param_2));
+        float _627[4] = { _482.ior[0], _482.ior[1], _482.ior[2], _482.ior[3] };
+        float _618[3] = { _482.c[0], _482.c[1], _482.c[2] };
+        float _611[3] = { _482.d[0], _482.d[1], _482.d[2] };
+        float _604[3] = { _482.o[0], _482.o[1], _482.o[2] };
+        ray_data_t _597 = { _604, _611, _482.pdf, _618, _627, _482.cone_width, _482.cone_spread, _482.xy, _482.depth };
+        ray_data_t param = _597;
+        float3 param_1 = _539_g_params.root_min.xyz;
+        float3 param_2 = _539_g_params.cell_size.xyz;
+        _533.Store(_454 * 8 + 0, get_ray_hash(param, param_1, param_2));
+        _533.Store(_454 * 8 + 4, _456);
         break;
     } while(false);
 }

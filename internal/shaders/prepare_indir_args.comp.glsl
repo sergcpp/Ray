@@ -25,14 +25,25 @@ void main() {
         g_out_indir_args[1] = 1;
         g_out_indir_args[2] = 1;
 
-        { // arguments for sorting
-            uint scan_count = (ray_count + 63) / 64;
-            for (int i = 0; i < 7; ++i) {
-                g_counters[4 + i] = scan_count;
-                g_out_indir_args[6 + 3 * i + 0] = (scan_count + 63) / 64;
-                g_out_indir_args[6 + 3 * i + 1] = 1;
-                g_out_indir_args[6 + 3 * i + 2] = 1;
-                scan_count = (scan_count + 63) / 64;
+        { // arguments for scanning
+            uint group_count = (ray_count + 255) / 256;
+            g_counters[4] = ray_count;
+            g_out_indir_args[6] = group_count;
+            g_out_indir_args[7] = 1;
+            g_out_indir_args[8] = 1;
+
+            g_counters[5] = group_count;
+            g_out_indir_args[9] = (group_count + 255) / 256;
+            g_out_indir_args[10] = 1;
+            g_out_indir_args[11] = 1;
+
+            uint counters_count = group_count * 0x10;
+            for (int i = 0; i < 4; ++i) {
+                g_counters[6 + i] = counters_count;
+                g_out_indir_args[12 + 3 * i + 0] = (counters_count + 255) / 256;
+                g_out_indir_args[12 + 3 * i + 1] = 1;
+                g_out_indir_args[12 + 3 * i + 2] = 1;
+                counters_count = (counters_count + 255) / 256;
             }
         }
 

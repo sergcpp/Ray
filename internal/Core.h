@@ -429,6 +429,10 @@ struct ray_chunk_t {
     uint32_t hash, base, size;
 };
 
+struct ray_hash_t {
+    uint32_t hash, index;
+};
+
 /*struct pass_info_t {
     int iteration, bounce;
     pass_settings_t settings;

@@ -12,9 +12,9 @@ struct Params {
     int _pad1;
 };
 
-const int LOCAL_GROUP_SIZE_X = 64;
+const int LOCAL_GROUP_SIZE_X = 256;
 
-const int CHUNKS_BUF_SLOT = 1;
+const int HASHES_BUF_SLOT = 1;
 const int COUNTERS_BUF_SLOT = 2;
 
 const int OUT_COUNT_TABLE_BUF_SLOT = 0;
