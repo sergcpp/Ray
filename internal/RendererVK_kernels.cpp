@@ -84,23 +84,14 @@ void Ray::Vk::Renderer::kernel_IntersectScene(VkCommandBuffer cmd_buf, const pas
                                               {&out_hits, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
-    IntersectScene::Params uniform_params = {};
-    uniform_params.rect[0] = rect.x;
-    uniform_params.rect[1] = rect.y;
-    uniform_params.rect[2] = rect.w;
-    uniform_params.rect[3] = rect.h;
-    uniform_params.node_index = node_index;
-    uniform_params.inter_t = inter_t;
-    uniform_params.min_transp_depth = settings.min_transp_depth;
-    uniform_params.max_transp_depth = settings.max_transp_depth;
-    uniform_params.hi = hi;
-
     SmallVector<Binding, 32> bindings = {
         {eBindTarget::SBuf, IntersectScene::VERTICES_BUF_SLOT, sc_data.vertices},
         {eBindTarget::SBuf, IntersectScene::VTX_INDICES_BUF_SLOT, sc_data.vtx_indices},
         {eBindTarget::SBuf, IntersectScene::TRI_MATERIALS_BUF_SLOT, sc_data.tri_materials},
         {eBindTarget::SBuf, IntersectScene::MATERIALS_BUF_SLOT, sc_data.materials},
-        {eBindTarget::SBuf, IntersectScene::RANDOM_SEQ_BUF_SLOT, random_seq}};
+        {eBindTarget::SBuf, IntersectScene::RANDOM_SEQ_BUF_SLOT, random_seq},
+        {eBindTarget::SBuf, IntersectScene::RAYS_BUF_SLOT, rays},
+        {eBindTarget::SBuf, IntersectScene::OUT_HITS_BUF_SLOT, out_hits}};
 
     if (use_bindless_) {
         assert(tex_descr_set);
@@ -112,22 +103,27 @@ void Ray::Vk::Renderer::kernel_IntersectScene(VkCommandBuffer cmd_buf, const pas
     }
 
     if (use_hwrt_) {
-        bindings.emplace_back(eBindTarget::SBuf, IntersectScene::RAYS_BUF_SLOT, rays);
         bindings.emplace_back(eBindTarget::AccStruct, IntersectScene::TLAS_SLOT, sc_data.rt_tlas);
-        bindings.emplace_back(eBindTarget::SBuf, IntersectScene::OUT_HITS_BUF_SLOT, out_hits);
     } else {
         bindings.emplace_back(eBindTarget::SBuf, IntersectScene::TRIS_BUF_SLOT, sc_data.tris);
         bindings.emplace_back(eBindTarget::SBuf, IntersectScene::TRI_INDICES_BUF_SLOT, sc_data.tri_indices);
-        bindings.emplace_back(eBindTarget::SBuf, IntersectScene::TRI_MATERIALS_BUF_SLOT, sc_data.tri_materials);
-        bindings.emplace_back(eBindTarget::SBuf, IntersectScene::MATERIALS_BUF_SLOT, sc_data.materials);
         bindings.emplace_back(eBindTarget::SBuf, IntersectScene::NODES_BUF_SLOT, sc_data.nodes);
         bindings.emplace_back(eBindTarget::SBuf, IntersectScene::MESHES_BUF_SLOT, sc_data.meshes);
         bindings.emplace_back(eBindTarget::SBuf, IntersectScene::MESH_INSTANCES_BUF_SLOT, sc_data.mesh_instances);
         bindings.emplace_back(eBindTarget::SBuf, IntersectScene::MI_INDICES_BUF_SLOT, sc_data.mi_indices);
         bindings.emplace_back(eBindTarget::SBuf, IntersectScene::TRANSFORMS_BUF_SLOT, sc_data.transforms);
-        bindings.emplace_back(eBindTarget::SBuf, IntersectScene::RAYS_BUF_SLOT, rays);
-        bindings.emplace_back(eBindTarget::SBuf, IntersectScene::OUT_HITS_BUF_SLOT, out_hits);
     }
+
+    IntersectScene::Params uniform_params = {};
+    uniform_params.rect[0] = rect.x;
+    uniform_params.rect[1] = rect.y;
+    uniform_params.rect[2] = rect.w;
+    uniform_params.rect[3] = rect.h;
+    uniform_params.node_index = node_index;
+    uniform_params.inter_t = inter_t;
+    uniform_params.min_transp_depth = settings.min_transp_depth;
+    uniform_params.max_transp_depth = settings.max_transp_depth;
+    uniform_params.hi = hi;
 
     const uint32_t grp_count[3] = {
         uint32_t((rect.w + IntersectScene::LOCAL_GROUP_SIZE_X - 1) / IntersectScene::LOCAL_GROUP_SIZE_X),
@@ -135,6 +131,47 @@ void Ray::Vk::Renderer::kernel_IntersectScene(VkCommandBuffer cmd_buf, const pas
 
     DispatchCompute(cmd_buf, pi_intersect_scene_, grp_count, bindings, &uniform_params, sizeof(uniform_params),
                     ctx_->default_descr_alloc(), ctx_->log());
+}
+
+void Ray::Vk::Renderer::kernel_IntersectScene_RTPipe(VkCommandBuffer cmd_buf, const pass_settings_t &settings,
+                                                     const scene_data_t &sc_data, const Buffer &random_seq,
+                                                     const int hi, const rect_t &rect, const uint32_t node_index,
+                                                     const float inter_t, Span<const TextureAtlas> tex_atlases,
+                                                     VkDescriptorSet tex_descr_set, const Buffer &rays,
+                                                     const Buffer &out_hits) {
+    const TransitionInfo res_transitions[] = {{&rays, eResState::UnorderedAccess},
+                                              {&out_hits, eResState::UnorderedAccess}};
+    TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
+
+    SmallVector<Binding, 32> bindings = {
+        {eBindTarget::SBuf, IntersectScene::VERTICES_BUF_SLOT, sc_data.vertices},
+        {eBindTarget::SBuf, IntersectScene::VTX_INDICES_BUF_SLOT, sc_data.vtx_indices},
+        {eBindTarget::SBuf, IntersectScene::TRI_MATERIALS_BUF_SLOT, sc_data.tri_materials},
+        {eBindTarget::SBuf, IntersectScene::MATERIALS_BUF_SLOT, sc_data.materials},
+        {eBindTarget::SBuf, IntersectScene::RANDOM_SEQ_BUF_SLOT, random_seq},
+        {eBindTarget::SBuf, IntersectScene::RAYS_BUF_SLOT, rays},
+        {eBindTarget::AccStruct, IntersectScene::TLAS_SLOT, sc_data.rt_tlas},
+        {eBindTarget::SBuf, IntersectScene::OUT_HITS_BUF_SLOT, out_hits}};
+
+    assert(tex_descr_set);
+    vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, pi_intersect_scene_rtpipe_.layout(), 1, 1,
+                            &tex_descr_set, 0, nullptr);
+
+    IntersectScene::Params uniform_params = {};
+    uniform_params.rect[0] = rect.x;
+    uniform_params.rect[1] = rect.y;
+    uniform_params.rect[2] = rect.w;
+    uniform_params.rect[3] = rect.h;
+    uniform_params.node_index = node_index;
+    uniform_params.inter_t = inter_t;
+    uniform_params.min_transp_depth = settings.min_transp_depth;
+    uniform_params.max_transp_depth = settings.max_transp_depth;
+    uniform_params.hi = hi;
+
+    const uint32_t dims[3] = {uint32_t(rect.w), uint32_t(rect.h), 1u};
+
+    TraceRays(cmd_buf, pi_intersect_scene_rtpipe_, dims, bindings, &uniform_params, sizeof(uniform_params),
+              ctx_->default_descr_alloc(), ctx_->log());
 }
 
 void Ray::Vk::Renderer::kernel_IntersectScene(VkCommandBuffer cmd_buf, const Buffer &indir_args,
@@ -149,13 +186,6 @@ void Ray::Vk::Renderer::kernel_IntersectScene(VkCommandBuffer cmd_buf, const Buf
                                               {&rays, eResState::UnorderedAccess},
                                               {&out_hits, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
-
-    IntersectScene::Params uniform_params = {};
-    uniform_params.node_index = node_index;
-    uniform_params.inter_t = inter_t;
-    uniform_params.min_transp_depth = settings.min_transp_depth;
-    uniform_params.max_transp_depth = settings.max_transp_depth;
-    uniform_params.hi = hi;
 
     SmallVector<Binding, 32> bindings = {
         {eBindTarget::SBuf, IntersectScene::VERTICES_BUF_SLOT, sc_data.vertices},
@@ -188,9 +218,54 @@ void Ray::Vk::Renderer::kernel_IntersectScene(VkCommandBuffer cmd_buf, const Buf
         bindings.emplace_back(eBindTarget::SBuf, IntersectScene::TRANSFORMS_BUF_SLOT, sc_data.transforms);
     }
 
+    IntersectScene::Params uniform_params = {};
+    uniform_params.node_index = node_index;
+    uniform_params.inter_t = inter_t;
+    uniform_params.min_transp_depth = settings.min_transp_depth;
+    uniform_params.max_transp_depth = settings.max_transp_depth;
+    uniform_params.hi = hi;
+
     DispatchComputeIndirect(cmd_buf, pi_intersect_scene_indirect_, indir_args,
                             indir_args_index * sizeof(DispatchIndirectCommand), bindings, &uniform_params,
                             sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
+}
+
+void Ray::Vk::Renderer::kernel_IntersectScene_RTPipe(VkCommandBuffer cmd_buf, const Buffer &indir_args,
+                                                     const int indir_args_index, const pass_settings_t &settings,
+                                                     const scene_data_t &sc_data, const Buffer &random_seq,
+                                                     const int hi, const uint32_t node_index, const float inter_t,
+                                                     Span<const TextureAtlas> tex_atlases,
+                                                     const VkDescriptorSet tex_descr_set, const Buffer &rays,
+                                                     const Buffer &out_hits) {
+    const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
+                                              {&rays, eResState::UnorderedAccess},
+                                              {&out_hits, eResState::UnorderedAccess}};
+    TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
+
+    SmallVector<Binding, 32> bindings = {
+        {eBindTarget::SBuf, IntersectScene::VERTICES_BUF_SLOT, sc_data.vertices},
+        {eBindTarget::SBuf, IntersectScene::VTX_INDICES_BUF_SLOT, sc_data.vtx_indices},
+        {eBindTarget::SBuf, IntersectScene::TRI_MATERIALS_BUF_SLOT, sc_data.tri_materials},
+        {eBindTarget::SBuf, IntersectScene::MATERIALS_BUF_SLOT, sc_data.materials},
+        {eBindTarget::SBuf, IntersectScene::RANDOM_SEQ_BUF_SLOT, random_seq},
+        {eBindTarget::SBuf, IntersectScene::RAYS_BUF_SLOT, rays},
+        {eBindTarget::AccStruct, IntersectScene::TLAS_SLOT, sc_data.rt_tlas},
+        {eBindTarget::SBuf, IntersectScene::OUT_HITS_BUF_SLOT, out_hits}};
+
+    assert(tex_descr_set);
+    vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,
+                            pi_intersect_scene_indirect_rtpipe_.layout(), 1, 1, &tex_descr_set, 0, nullptr);
+
+    IntersectScene::Params uniform_params = {};
+    uniform_params.node_index = node_index;
+    uniform_params.inter_t = inter_t;
+    uniform_params.min_transp_depth = settings.min_transp_depth;
+    uniform_params.max_transp_depth = settings.max_transp_depth;
+    uniform_params.hi = hi;
+
+    TraceRaysIndirect(cmd_buf, pi_intersect_scene_indirect_rtpipe_, indir_args,
+                      indir_args_index * sizeof(TraceRaysIndirectCommand), bindings, &uniform_params,
+                      sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
 }
 
 void Ray::Vk::Renderer::kernel_IntersectAreaLights(VkCommandBuffer cmd_buf, const scene_data_t &sc_data,
@@ -219,14 +294,12 @@ void Ray::Vk::Renderer::kernel_IntersectAreaLights(VkCommandBuffer cmd_buf, cons
                             sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
 }
 
-void Ray::Vk::Renderer::kernel_ShadePrimaryHits(VkCommandBuffer cmd_buf, const pass_settings_t &settings,
-                                                const environment_t &env, const Buffer &indir_args, const Buffer &hits,
-                                                const Buffer &rays, const scene_data_t &sc_data,
-                                                const Buffer &random_seq, const int hi, const rect_t &rect,
-                                                Span<const TextureAtlas> tex_atlases, VkDescriptorSet tex_descr_set,
-                                                const Texture2D &out_img, const Buffer &out_rays,
-                                                const Buffer &out_sh_rays, const Buffer &inout_counters,
-                                                const Texture2D &out_base_color, const Texture2D &out_depth_normals) {
+void Ray::Vk::Renderer::kernel_ShadePrimaryHits(
+    VkCommandBuffer cmd_buf, const pass_settings_t &settings, const environment_t &env, const Buffer &indir_args,
+    const int indir_args_index, const Buffer &hits, const Buffer &rays, const scene_data_t &sc_data,
+    const Buffer &random_seq, const int hi, const rect_t &rect, Span<const TextureAtlas> tex_atlases,
+    VkDescriptorSet tex_descr_set, const Texture2D &out_img, const Buffer &out_rays, const Buffer &out_sh_rays,
+    const Buffer &inout_counters, const Texture2D &out_base_color, const Texture2D &out_depth_normals) {
     const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
                                               {&hits, eResState::ShaderResource},
                                               {&rays, eResState::ShaderResource},
@@ -313,17 +386,14 @@ void Ray::Vk::Renderer::kernel_ShadePrimaryHits(VkCommandBuffer cmd_buf, const p
         bindings.emplace_back(eBindTarget::Tex2DArray, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
     }
 
-    // DispatchCompute(cmd_buf, *pi, grp_count, bindings, &uniform_params, sizeof(uniform_params),
-    //                 ctx_->default_descr_alloc(), ctx_->log());
-
-    DispatchComputeIndirect(cmd_buf, *pi, indir_args, 0, bindings, &uniform_params, sizeof(uniform_params),
-                            ctx_->default_descr_alloc(), ctx_->log());
+    DispatchComputeIndirect(cmd_buf, *pi, indir_args, indir_args_index * sizeof(DispatchIndirectCommand), bindings,
+                            &uniform_params, sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
 }
 
 void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(VkCommandBuffer cmd_buf, const pass_settings_t &settings,
                                                   const environment_t &env, const Buffer &indir_args,
-                                                  const Buffer &hits, const Buffer &rays, const scene_data_t &sc_data,
-                                                  const Buffer &random_seq, const int hi,
+                                                  const int indir_args_index, const Buffer &hits, const Buffer &rays,
+                                                  const scene_data_t &sc_data, const Buffer &random_seq, const int hi,
                                                   Span<const TextureAtlas> tex_atlases, VkDescriptorSet tex_descr_set,
                                                   const Texture2D &out_img, const Buffer &out_rays,
                                                   const Buffer &out_sh_rays, const Buffer &inout_counters) {
@@ -386,7 +456,8 @@ void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(VkCommandBuffer cmd_buf, const
         bindings.emplace_back(eBindTarget::Tex2DArray, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
     }
 
-    DispatchComputeIndirect(cmd_buf, pi_shade_secondary_, indir_args, 0, bindings, &uniform_params,
+    DispatchComputeIndirect(cmd_buf, pi_shade_secondary_, indir_args,
+                            indir_args_index * sizeof(DispatchIndirectCommand), bindings, &uniform_params,
                             sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
 }
 

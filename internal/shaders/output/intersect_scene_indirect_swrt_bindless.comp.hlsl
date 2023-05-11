@@ -112,7 +112,7 @@ ByteAddressBuffer _1419 : register(t6, space0);
 ByteAddressBuffer _1541 : register(t1, space0);
 ByteAddressBuffer _1545 : register(t2, space0);
 ByteAddressBuffer _1724 : register(t15, space0);
-RWByteAddressBuffer _2010 : register(u0, space0);
+RWByteAddressBuffer _2009 : register(u0, space0);
 cbuffer UniformParams
 {
     Params _1227_g_params : packoffset(c0);
@@ -146,9 +146,9 @@ float3 safe_invert(float3 v)
     }
     if (_158)
     {
-        float3 _2284 = inv_v;
-        _2284.x = 3.4028234663852885981170418348452e+38f;
-        inv_v = _2284;
+        float3 _2283 = inv_v;
+        _2283.x = 3.4028234663852885981170418348452e+38f;
+        inv_v = _2283;
     }
     else
     {
@@ -164,9 +164,9 @@ float3 safe_invert(float3 v)
         }
         if (_173)
         {
-            float3 _2282 = inv_v;
-            _2282.x = -3.4028234663852885981170418348452e+38f;
-            inv_v = _2282;
+            float3 _2281 = inv_v;
+            _2281.x = -3.4028234663852885981170418348452e+38f;
+            inv_v = _2281;
         }
     }
     bool _181 = v.y <= 1.0000000116860974230803549289703e-07f;
@@ -181,9 +181,9 @@ float3 safe_invert(float3 v)
     }
     if (_187)
     {
-        float3 _2288 = inv_v;
-        _2288.y = 3.4028234663852885981170418348452e+38f;
-        inv_v = _2288;
+        float3 _2287 = inv_v;
+        _2287.y = 3.4028234663852885981170418348452e+38f;
+        inv_v = _2287;
     }
     else
     {
@@ -199,9 +199,9 @@ float3 safe_invert(float3 v)
         }
         if (_200)
         {
-            float3 _2286 = inv_v;
-            _2286.y = -3.4028234663852885981170418348452e+38f;
-            inv_v = _2286;
+            float3 _2285 = inv_v;
+            _2285.y = -3.4028234663852885981170418348452e+38f;
+            inv_v = _2285;
         }
     }
     bool _207 = v.z <= 1.0000000116860974230803549289703e-07f;
@@ -216,9 +216,9 @@ float3 safe_invert(float3 v)
     }
     if (_213)
     {
-        float3 _2292 = inv_v;
-        _2292.z = 3.4028234663852885981170418348452e+38f;
-        inv_v = _2292;
+        float3 _2291 = inv_v;
+        _2291.z = 3.4028234663852885981170418348452e+38f;
+        inv_v = _2291;
     }
     else
     {
@@ -234,9 +234,9 @@ float3 safe_invert(float3 v)
         }
         if (_226)
         {
-            float3 _2290 = inv_v;
-            _2290.z = -3.4028234663852885981170418348452e+38f;
-            inv_v = _2290;
+            float3 _2289 = inv_v;
+            _2289.z = -3.4028234663852885981170418348452e+38f;
+            inv_v = _2289;
         }
     }
     return inv_v;
@@ -318,17 +318,17 @@ void IntersectTri(float3 ro, float3 rd, tri_accel_t tri, uint prim_index, inout 
 
 void IntersectTris_ClosestHit(float3 ro, float3 rd, int tri_start, int tri_end, int obj_index, inout hit_data_t out_inter)
 {
-    int _2220 = 0;
-    int _2221 = obj_index;
-    float _2223 = out_inter.t;
+    int _2219 = 0;
+    int _2220 = obj_index;
+    float _2222 = out_inter.t;
     float3 param;
     float3 param_1;
     tri_accel_t param_2;
     uint param_3;
     hit_data_t param_4;
-    int _2222;
+    int _2221;
+    float _2223;
     float _2224;
-    float _2225;
     for (int i = tri_start; i < tri_end; )
     {
         param = ro;
@@ -341,23 +341,23 @@ void IntersectTris_ClosestHit(float3 ro, float3 rd, int tri_start, int tri_end, 
         param_2.u_plane = _548.u_plane;
         param_2.v_plane = _548.v_plane;
         param_3 = uint(i);
-        hit_data_t _2232 = { _2220, _2221, _2222, _2223, _2224, _2225 };
-        param_4 = _2232;
+        hit_data_t _2231 = { _2219, _2220, _2221, _2222, _2223, _2224 };
+        param_4 = _2231;
         IntersectTri(param, param_1, param_2, param_3, param_4);
-        _2220 = param_4.mask;
-        _2221 = param_4.obj_index;
-        _2222 = param_4.prim_index;
-        _2223 = param_4.t;
-        _2224 = param_4.u;
-        _2225 = param_4.v;
+        _2219 = param_4.mask;
+        _2220 = param_4.obj_index;
+        _2221 = param_4.prim_index;
+        _2222 = param_4.t;
+        _2223 = param_4.u;
+        _2224 = param_4.v;
         i++;
         continue;
     }
-    out_inter.mask |= _2220;
+    out_inter.mask |= _2219;
     int _571;
-    if (_2220 != 0)
+    if (_2219 != 0)
     {
-        _571 = _2221;
+        _571 = _2220;
     }
     else
     {
@@ -365,20 +365,20 @@ void IntersectTris_ClosestHit(float3 ro, float3 rd, int tri_start, int tri_end, 
     }
     out_inter.obj_index = _571;
     int _584;
-    if (_2220 != 0)
+    if (_2219 != 0)
     {
-        _584 = _2222;
+        _584 = _2221;
     }
     else
     {
         _584 = out_inter.prim_index;
     }
     out_inter.prim_index = _584;
-    out_inter.t = _2223;
+    out_inter.t = _2222;
     float _600;
-    if (_2220 != 0)
+    if (_2219 != 0)
     {
-        _600 = _2224;
+        _600 = _2223;
     }
     else
     {
@@ -386,9 +386,9 @@ void IntersectTris_ClosestHit(float3 ro, float3 rd, int tri_start, int tri_end, 
     }
     out_inter.u = _600;
     float _613;
-    if (_2220 != 0)
+    if (_2219 != 0)
     {
-        _613 = _2225;
+        _613 = _2224;
     }
     else
     {
@@ -630,13 +630,13 @@ float4 SampleBilinear(uint index, float2 uvs, int lod, bool maybe_YCoCg, bool ma
     {
         float3 param_1 = res.xyz;
         float3 _388 = srgb_to_rgb(param_1);
-        float4 _2308 = res;
-        _2308.x = _388.x;
-        float4 _2310 = _2308;
-        _2310.y = _388.y;
-        float4 _2312 = _2310;
-        _2312.z = _388.z;
-        res = _2312;
+        float4 _2307 = res;
+        _2307.x = _388.x;
+        float4 _2309 = _2307;
+        _2309.y = _388.y;
+        float4 _2311 = _2309;
+        _2311.z = _388.z;
+        res = _2311;
     }
     return res;
 }
@@ -662,12 +662,12 @@ void comp_main()
         float3 _1214 = float3(_1207, _1210, _1213);
         float3 param = _1214;
         float3 _1218 = safe_invert(param);
-        int _2048 = 0;
-        int _2050 = 0;
+        int _2047 = 0;
         int _2049 = 0;
-        float _2051 = _1227_g_params.inter_t;
-        float _2053 = 0.0f;
+        int _2048 = 0;
+        float _2050 = _1227_g_params.inter_t;
         float _2052 = 0.0f;
+        float _2051 = 0.0f;
         uint param_1 = uint(hash(int(_1179.Load(_1157 * 72 + 64))));
         float _1241 = construct_float(param_1);
         ray_data_t _1249;
@@ -696,50 +696,50 @@ void comp_main()
         _1249.cone_spread = asfloat(_1179.Load(_1157 * 72 + 60));
         _1249.xy = int(_1179.Load(_1157 * 72 + 64));
         _1249.depth = int(_1179.Load(_1157 * 72 + 68));
-        float _2160[4] = { _1249.ior[0], _1249.ior[1], _1249.ior[2], _1249.ior[3] };
-        float _2151[3] = { _1249.c[0], _1249.c[1], _1249.c[2] };
-        float _2144[3] = { _1249.d[0], _1249.d[1], _1249.d[2] };
-        float _2137[3] = { _1249.o[0], _1249.o[1], _1249.o[2] };
-        ray_data_t _2092 = { _2137, _2144, _1249.pdf, _2151, _2160, _1249.cone_width, _1249.cone_spread, _1249.xy, _1249.depth };
-        int rand_index = _1227_g_params.hi + (total_depth(_2092) * 7);
+        float _2159[4] = { _1249.ior[0], _1249.ior[1], _1249.ior[2], _1249.ior[3] };
+        float _2150[3] = { _1249.c[0], _1249.c[1], _1249.c[2] };
+        float _2143[3] = { _1249.d[0], _1249.d[1], _1249.d[2] };
+        float _2136[3] = { _1249.o[0], _1249.o[1], _1249.o[2] };
+        ray_data_t _2091 = { _2136, _2143, _1249.pdf, _2150, _2159, _1249.cone_width, _1249.cone_spread, _1249.xy, _1249.depth };
+        int rand_index = _1227_g_params.hi + (total_depth(_2091) * 7);
         int _1363;
         float _1899;
         for (;;)
         {
-            float _1309 = _2051;
+            float _1309 = _2050;
             float3 param_2 = ro;
             float3 param_3 = _1214;
             float3 param_4 = _1218;
             uint param_5 = _1227_g_params.node_index;
-            hit_data_t _2060 = { _2048, _2049, _2050, _1309, _2052, _2053 };
-            hit_data_t param_6 = _2060;
+            hit_data_t _2059 = { _2047, _2048, _2049, _1309, _2051, _2052 };
+            hit_data_t param_6 = _2059;
             Traverse_MacroTree_WithStack(param_2, param_3, param_4, param_5, param_6);
-            _2048 = param_6.mask;
-            _2049 = param_6.obj_index;
-            _2050 = param_6.prim_index;
-            _2051 = param_6.t;
-            _2052 = param_6.u;
-            _2053 = param_6.v;
+            _2047 = param_6.mask;
+            _2048 = param_6.obj_index;
+            _2049 = param_6.prim_index;
+            _2050 = param_6.t;
+            _2051 = param_6.u;
+            _2052 = param_6.v;
             if (param_6.prim_index < 0)
             {
-                _2050 = (-1) - int(_1332.Load(((-1) - _2050) * 4 + 0));
+                _2049 = (-1) - int(_1332.Load(((-1) - _2049) * 4 + 0));
             }
             else
             {
-                _2050 = int(_1332.Load(_2050 * 4 + 0));
+                _2049 = int(_1332.Load(_2049 * 4 + 0));
             }
-            if (_2048 == 0)
+            if (_2047 == 0)
             {
                 break;
             }
-            bool _1360 = _2050 < 0;
+            bool _1360 = _2049 < 0;
             if (_1360)
             {
-                _1363 = (-1) - _2050;
+                _1363 = (-1) - _2049;
             }
             else
             {
-                _1363 = _2050;
+                _1363 = _2049;
             }
             uint _1374 = uint(_1363);
             bool _1376 = !_1360;
@@ -796,14 +796,14 @@ void comp_main()
             _1428.specular_and_specular_tint = _1419.Load(((_1382.Load(_1374 * 4 + 0) >> 16u) & 16383u) * 76 + 64);
             _1428.clearcoat_and_clearcoat_roughness = _1419.Load(((_1382.Load(_1374 * 4 + 0) >> 16u) & 16383u) * 76 + 68);
             _1428.normal_map_strength_unorm = _1419.Load(((_1382.Load(_1374 * 4 + 0) >> 16u) & 16383u) * 76 + 72);
-            uint _2162 = _1428.textures[1];
-            uint _2164 = _1428.textures[3];
-            uint _2165 = _1428.textures[4];
-            float _2166 = _1428.base_color[0];
-            float _2167 = _1428.base_color[1];
-            float _2168 = _1428.base_color[2];
-            uint _2096 = _1428.type;
-            float _2097 = _1428.tangent_rotation_or_strength;
+            uint _2161 = _1428.textures[1];
+            uint _2163 = _1428.textures[3];
+            uint _2164 = _1428.textures[4];
+            float _2165 = _1428.base_color[0];
+            float _2166 = _1428.base_color[1];
+            float _2167 = _1428.base_color[2];
+            uint _2095 = _1428.type;
+            float _2096 = _1428.tangent_rotation_or_strength;
             if (_1360)
             {
                 material_t _1484;
@@ -828,14 +828,14 @@ void comp_main()
                 _1484.specular_and_specular_tint = _1419.Load((_1382.Load(_1374 * 4 + 0) & 16383u) * 76 + 64);
                 _1484.clearcoat_and_clearcoat_roughness = _1419.Load((_1382.Load(_1374 * 4 + 0) & 16383u) * 76 + 68);
                 _1484.normal_map_strength_unorm = _1419.Load((_1382.Load(_1374 * 4 + 0) & 16383u) * 76 + 72);
-                _2162 = _1484.textures[1];
-                _2164 = _1484.textures[3];
-                _2165 = _1484.textures[4];
-                _2166 = _1484.base_color[0];
-                _2167 = _1484.base_color[1];
-                _2168 = _1484.base_color[2];
-                _2096 = _1484.type;
-                _2097 = _1484.tangent_rotation_or_strength;
+                _2161 = _1484.textures[1];
+                _2163 = _1484.textures[3];
+                _2164 = _1484.textures[4];
+                _2165 = _1484.base_color[0];
+                _2166 = _1484.base_color[1];
+                _2167 = _1484.base_color[2];
+                _2095 = _1484.type;
+                _2096 = _1484.tangent_rotation_or_strength;
             }
             uint _1547 = _1374 * 3u;
             vertex_t _1553;
@@ -913,14 +913,14 @@ void comp_main()
                     _1647.t[_52ident][_53ident] = asfloat(_1541.Load(_53ident * 4 + _52ident * 8 + _1545.Load((_1547 + 2u) * 4 + 0) * 52 + 36));
                 }
             }
-            float2 _1719 = ((float2(_1553.t[0][0], _1553.t[0][1]) * ((1.0f - _2052) - _2053)) + (float2(_1601.t[0][0], _1601.t[0][1]) * _2052)) + (float2(_1647.t[0][0], _1647.t[0][1]) * _2053);
+            float2 _1719 = ((float2(_1553.t[0][0], _1553.t[0][1]) * ((1.0f - _2051) - _2052)) + (float2(_1601.t[0][0], _1601.t[0][1]) * _2051)) + (float2(_1647.t[0][0], _1647.t[0][1]) * _2052);
             float trans_r = frac(asfloat(_1724.Load(rand_index * 4 + 0)) + _1241);
-            while (_2096 == 4u)
+            while (_2095 == 4u)
             {
-                float mix_val = _2097;
-                if (_2162 != 4294967295u)
+                float mix_val = _2096;
+                if (_2161 != 4294967295u)
                 {
-                    mix_val *= SampleBilinear(_2162, _1719, 0).x;
+                    mix_val *= SampleBilinear(_2161, _1719, 0).x;
                 }
                 if (trans_r > mix_val)
                 {
@@ -928,32 +928,32 @@ void comp_main()
                     [unroll]
                     for (int _54ident = 0; _54ident < 5; _54ident++)
                     {
-                        _1764.textures[_54ident] = _1419.Load(_54ident * 4 + _2164 * 76 + 0);
+                        _1764.textures[_54ident] = _1419.Load(_54ident * 4 + _2163 * 76 + 0);
                     }
                     [unroll]
                     for (int _55ident = 0; _55ident < 3; _55ident++)
                     {
-                        _1764.base_color[_55ident] = asfloat(_1419.Load(_55ident * 4 + _2164 * 76 + 20));
+                        _1764.base_color[_55ident] = asfloat(_1419.Load(_55ident * 4 + _2163 * 76 + 20));
                     }
-                    _1764.flags = _1419.Load(_2164 * 76 + 32);
-                    _1764.type = _1419.Load(_2164 * 76 + 36);
-                    _1764.tangent_rotation_or_strength = asfloat(_1419.Load(_2164 * 76 + 40));
-                    _1764.roughness_and_anisotropic = _1419.Load(_2164 * 76 + 44);
-                    _1764.ior = asfloat(_1419.Load(_2164 * 76 + 48));
-                    _1764.sheen_and_sheen_tint = _1419.Load(_2164 * 76 + 52);
-                    _1764.tint_and_metallic = _1419.Load(_2164 * 76 + 56);
-                    _1764.transmission_and_transmission_roughness = _1419.Load(_2164 * 76 + 60);
-                    _1764.specular_and_specular_tint = _1419.Load(_2164 * 76 + 64);
-                    _1764.clearcoat_and_clearcoat_roughness = _1419.Load(_2164 * 76 + 68);
-                    _1764.normal_map_strength_unorm = _1419.Load(_2164 * 76 + 72);
-                    _2162 = _1764.textures[1];
-                    _2164 = _1764.textures[3];
-                    _2165 = _1764.textures[4];
-                    _2166 = _1764.base_color[0];
-                    _2167 = _1764.base_color[1];
-                    _2168 = _1764.base_color[2];
-                    _2096 = _1764.type;
-                    _2097 = _1764.tangent_rotation_or_strength;
+                    _1764.flags = _1419.Load(_2163 * 76 + 32);
+                    _1764.type = _1419.Load(_2163 * 76 + 36);
+                    _1764.tangent_rotation_or_strength = asfloat(_1419.Load(_2163 * 76 + 40));
+                    _1764.roughness_and_anisotropic = _1419.Load(_2163 * 76 + 44);
+                    _1764.ior = asfloat(_1419.Load(_2163 * 76 + 48));
+                    _1764.sheen_and_sheen_tint = _1419.Load(_2163 * 76 + 52);
+                    _1764.tint_and_metallic = _1419.Load(_2163 * 76 + 56);
+                    _1764.transmission_and_transmission_roughness = _1419.Load(_2163 * 76 + 60);
+                    _1764.specular_and_specular_tint = _1419.Load(_2163 * 76 + 64);
+                    _1764.clearcoat_and_clearcoat_roughness = _1419.Load(_2163 * 76 + 68);
+                    _1764.normal_map_strength_unorm = _1419.Load(_2163 * 76 + 72);
+                    _2161 = _1764.textures[1];
+                    _2163 = _1764.textures[3];
+                    _2164 = _1764.textures[4];
+                    _2165 = _1764.base_color[0];
+                    _2166 = _1764.base_color[1];
+                    _2167 = _1764.base_color[2];
+                    _2095 = _1764.type;
+                    _2096 = _1764.tangent_rotation_or_strength;
                     trans_r = (trans_r - mix_val) / (1.0f - mix_val);
                 }
                 else
@@ -962,36 +962,36 @@ void comp_main()
                     [unroll]
                     for (int _56ident = 0; _56ident < 5; _56ident++)
                     {
-                        _1817.textures[_56ident] = _1419.Load(_56ident * 4 + _2165 * 76 + 0);
+                        _1817.textures[_56ident] = _1419.Load(_56ident * 4 + _2164 * 76 + 0);
                     }
                     [unroll]
                     for (int _57ident = 0; _57ident < 3; _57ident++)
                     {
-                        _1817.base_color[_57ident] = asfloat(_1419.Load(_57ident * 4 + _2165 * 76 + 20));
+                        _1817.base_color[_57ident] = asfloat(_1419.Load(_57ident * 4 + _2164 * 76 + 20));
                     }
-                    _1817.flags = _1419.Load(_2165 * 76 + 32);
-                    _1817.type = _1419.Load(_2165 * 76 + 36);
-                    _1817.tangent_rotation_or_strength = asfloat(_1419.Load(_2165 * 76 + 40));
-                    _1817.roughness_and_anisotropic = _1419.Load(_2165 * 76 + 44);
-                    _1817.ior = asfloat(_1419.Load(_2165 * 76 + 48));
-                    _1817.sheen_and_sheen_tint = _1419.Load(_2165 * 76 + 52);
-                    _1817.tint_and_metallic = _1419.Load(_2165 * 76 + 56);
-                    _1817.transmission_and_transmission_roughness = _1419.Load(_2165 * 76 + 60);
-                    _1817.specular_and_specular_tint = _1419.Load(_2165 * 76 + 64);
-                    _1817.clearcoat_and_clearcoat_roughness = _1419.Load(_2165 * 76 + 68);
-                    _1817.normal_map_strength_unorm = _1419.Load(_2165 * 76 + 72);
-                    _2162 = _1817.textures[1];
-                    _2164 = _1817.textures[3];
-                    _2165 = _1817.textures[4];
-                    _2166 = _1817.base_color[0];
-                    _2167 = _1817.base_color[1];
-                    _2168 = _1817.base_color[2];
-                    _2096 = _1817.type;
-                    _2097 = _1817.tangent_rotation_or_strength;
+                    _1817.flags = _1419.Load(_2164 * 76 + 32);
+                    _1817.type = _1419.Load(_2164 * 76 + 36);
+                    _1817.tangent_rotation_or_strength = asfloat(_1419.Load(_2164 * 76 + 40));
+                    _1817.roughness_and_anisotropic = _1419.Load(_2164 * 76 + 44);
+                    _1817.ior = asfloat(_1419.Load(_2164 * 76 + 48));
+                    _1817.sheen_and_sheen_tint = _1419.Load(_2164 * 76 + 52);
+                    _1817.tint_and_metallic = _1419.Load(_2164 * 76 + 56);
+                    _1817.transmission_and_transmission_roughness = _1419.Load(_2164 * 76 + 60);
+                    _1817.specular_and_specular_tint = _1419.Load(_2164 * 76 + 64);
+                    _1817.clearcoat_and_clearcoat_roughness = _1419.Load(_2164 * 76 + 68);
+                    _1817.normal_map_strength_unorm = _1419.Load(_2164 * 76 + 72);
+                    _2161 = _1817.textures[1];
+                    _2163 = _1817.textures[3];
+                    _2164 = _1817.textures[4];
+                    _2165 = _1817.base_color[0];
+                    _2166 = _1817.base_color[1];
+                    _2167 = _1817.base_color[2];
+                    _2095 = _1817.type;
+                    _2096 = _1817.tangent_rotation_or_strength;
                     trans_r /= mix_val;
                 }
             }
-            if (_2096 != 5u)
+            if (_2095 != 5u)
             {
                 break;
             }
@@ -1022,12 +1022,12 @@ void comp_main()
                 break;
             }
             float _1939 = 1.0f - _1899;
-            _1179.Store(_1157 * 72 + 28, asuint(asfloat(_1179.Load(_1157 * 72 + 28)) * (_2166 / _1939)));
-            _1179.Store(_1157 * 72 + 32, asuint(asfloat(_1179.Load(_1157 * 72 + 32)) * (_2167 / _1939)));
-            _1179.Store(_1157 * 72 + 36, asuint(asfloat(_1179.Load(_1157 * 72 + 36)) * (_2168 / _1939)));
-            ro += (_1214 * (_2051 + 9.9999997473787516355514526367188e-06f));
-            _2048 = 0;
-            _2051 = _1309 - _2051;
+            _1179.Store(_1157 * 72 + 28, asuint(asfloat(_1179.Load(_1157 * 72 + 28)) * (_2165 / _1939)));
+            _1179.Store(_1157 * 72 + 32, asuint(asfloat(_1179.Load(_1157 * 72 + 32)) * (_2166 / _1939)));
+            _1179.Store(_1157 * 72 + 36, asuint(asfloat(_1179.Load(_1157 * 72 + 36)) * (_2167 / _1939)));
+            ro += (_1214 * (_2050 + 9.9999997473787516355514526367188e-06f));
+            _2047 = 0;
+            _2050 = _1309 - _2050;
             _1179.Store(_1157 * 72 + 68, uint(int(_1179.Load(_1157 * 72 + 68)) + 16777216));
             rand_index += 7;
             continue;
@@ -1035,15 +1035,15 @@ void comp_main()
         float _1991 = asfloat(_1179.Load(_1157 * 72 + 0));
         float _1994 = asfloat(_1179.Load(_1157 * 72 + 4));
         float _1997 = asfloat(_1179.Load(_1157 * 72 + 8));
-        float _2003 = _2051;
-        float _2004 = _2003 + length(float3(_1991, _1994, _1997) - ro);
-        _2051 = _2004;
-        _2010.Store(_1157 * 24 + 0, uint(_2048));
-        _2010.Store(_1157 * 24 + 4, uint(_2049));
-        _2010.Store(_1157 * 24 + 8, uint(_2050));
-        _2010.Store(_1157 * 24 + 12, asuint(_2004));
-        _2010.Store(_1157 * 24 + 16, asuint(_2052));
-        _2010.Store(_1157 * 24 + 20, asuint(_2053));
+        float _2002 = _2050;
+        float _2003 = _2002 + distance(float3(_1991, _1994, _1997), ro);
+        _2050 = _2003;
+        _2009.Store(_1157 * 24 + 0, uint(_2047));
+        _2009.Store(_1157 * 24 + 4, uint(_2048));
+        _2009.Store(_1157 * 24 + 8, uint(_2049));
+        _2009.Store(_1157 * 24 + 12, asuint(_2003));
+        _2009.Store(_1157 * 24 + 16, asuint(_2051));
+        _2009.Store(_1157 * 24 + 20, asuint(_2052));
         break;
     } while(false);
 }

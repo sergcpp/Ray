@@ -18,6 +18,7 @@
 #define DEBUG_HWRT 0
 #define RUN_IN_LOCKSTEP 0
 #define DISABLE_SORTING 0
+#define ENABLE_RT_PIPELINE 0
 
 static_assert(sizeof(Types::tri_accel_t) == sizeof(Ray::tri_accel_t), "!");
 static_assert(sizeof(Types::bvh_node_t) == sizeof(Ray::bvh_node_t), "!");
@@ -46,8 +47,12 @@ namespace Vk {
 #include "shaders/output/debug_rt.comp.inl"
 #include "shaders/output/filter_variance.comp.inl"
 #include "shaders/output/intersect_area_lights.comp.inl"
+#include "shaders/output/intersect_scene.rchit.inl"
+#include "shaders/output/intersect_scene.rgen.inl"
+#include "shaders/output/intersect_scene.rmiss.inl"
 #include "shaders/output/intersect_scene_hwrt_atlas.comp.inl"
 #include "shaders/output/intersect_scene_hwrt_bindless.comp.inl"
+#include "shaders/output/intersect_scene_indirect.rgen.inl"
 #include "shaders/output/intersect_scene_indirect_hwrt_atlas.comp.inl"
 #include "shaders/output/intersect_scene_indirect_hwrt_bindless.comp.inl"
 #include "shaders/output/intersect_scene_indirect_swrt_atlas.comp.inl"
@@ -346,6 +351,31 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
                                    eShaderType::Comp,
                                    log};
 
+    sh_intersect_scene_rgen_ = Shader{"Intersect Scene RGEN",
+                                      ctx_.get(),
+                                      internal_shaders_output_intersect_scene_rgen_spv,
+                                      internal_shaders_output_intersect_scene_rgen_spv_size,
+                                      eShaderType::RayGen,
+                                      log};
+    sh_intersect_scene_indirect_rgen_ = Shader{"Intersect Scene Indirect RGEN",
+                                               ctx_.get(),
+                                               internal_shaders_output_intersect_scene_indirect_rgen_spv,
+                                               internal_shaders_output_intersect_scene_indirect_rgen_spv_size,
+                                               eShaderType::RayGen,
+                                               log};
+    sh_intersect_scene_rchit_ = Shader{"Intersect Scene RCHIT",
+                                       ctx_.get(),
+                                       internal_shaders_output_intersect_scene_rchit_spv,
+                                       internal_shaders_output_intersect_scene_rchit_spv_size,
+                                       eShaderType::ClosestHit,
+                                       log};
+    sh_intersect_scene_rmiss_ = Shader{"Intersect Scene RMISS",
+                                       ctx_.get(),
+                                       internal_shaders_output_intersect_scene_rmiss_spv,
+                                       internal_shaders_output_intersect_scene_rmiss_spv_size,
+                                       eShaderType::AnyHit,
+                                       log};
+
     prog_prim_rays_gen_simple_ = Program{"Primary Raygen Simple", ctx_.get(), &sh_prim_rays_gen_simple_, log};
     prog_prim_rays_gen_adaptive_ = Program{"Primary Raygen Adaptive", ctx_.get(), &sh_prim_rays_gen_adaptive_, log};
     prog_intersect_scene_ = Program{"Intersect Scene (Primary)", ctx_.get(), &sh_intersect_scene_, log};
@@ -377,6 +407,22 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
     prog_sort_init_count_table_ = Program{"Init Count Table", ctx_.get(), &sh_sort_init_count_table_, log};
     prog_sort_write_sorted_hashes_ = Program{"Write Sorted Chunks", ctx_.get(), &sh_sort_write_sorted_hashes_, log};
     prog_sort_reorder_rays_ = Program{"Reorder Rays", ctx_.get(), &sh_sort_reorder_rays_, log};
+    prog_intersect_scene_rtpipe_ = Program{"Intersect Scene",
+                                           ctx_.get(),
+                                           &sh_intersect_scene_rgen_,
+                                           &sh_intersect_scene_rchit_,
+                                           nullptr,
+                                           &sh_intersect_scene_rmiss_,
+                                           nullptr,
+                                           log};
+    prog_intersect_scene_indirect_rtpipe_ = Program{"Intersect Scene Indirect",
+                                                    ctx_.get(),
+                                                    &sh_intersect_scene_indirect_rgen_,
+                                                    &sh_intersect_scene_rchit_,
+                                                    nullptr,
+                                                    &sh_intersect_scene_rmiss_,
+                                                    nullptr,
+                                                    log};
 
     if (!pi_prim_rays_gen_simple_.Init(ctx_.get(), &prog_prim_rays_gen_simple_, log) ||
         !pi_prim_rays_gen_adaptive_.Init(ctx_.get(), &prog_prim_rays_gen_adaptive_, log) ||
@@ -407,7 +453,10 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
         !pi_sort_add_partial_sums_.Init(ctx_.get(), &prog_sort_add_partial_sums_, log) ||
         !pi_sort_init_count_table_.Init(ctx_.get(), &prog_sort_init_count_table_, log) ||
         !pi_sort_write_sorted_hashes_.Init(ctx_.get(), &prog_sort_write_sorted_hashes_, log) ||
-        !pi_sort_reorder_rays_.Init(ctx_.get(), &prog_sort_reorder_rays_, log)) {
+        !pi_sort_reorder_rays_.Init(ctx_.get(), &prog_sort_reorder_rays_, log) ||
+        (use_hwrt_ && !pi_intersect_scene_rtpipe_.Init(ctx_.get(), &prog_intersect_scene_rtpipe_, log)) ||
+        (use_hwrt_ &&
+         !pi_intersect_scene_indirect_rtpipe_.Init(ctx_.get(), &prog_intersect_scene_indirect_rtpipe_, log))) {
         throw std::runtime_error("Error initializing pipeline!");
     }
 
@@ -882,7 +931,8 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
     VkMemoryBarrier mem_barrier = {VK_STRUCTURE_TYPE_MEMORY_BARRIER};
     mem_barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;
     mem_barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-    vkCmdPipelineBarrier(cmd_buf, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 1,
+    vkCmdPipelineBarrier(cmd_buf, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,
+                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR, 0, 1,
                          &mem_barrier, 0, nullptr, 0, nullptr);
 
     const rect_t rect = region.rect();
@@ -894,6 +944,8 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
                                    counters_buf_, prim_rays_buf_);
         timestamps_[ctx_->backend_frame].primary_ray_gen[1] = ctx_->WriteTimestamp(cmd_buf, false);
     }
+
+    const bool use_rt_pipeline = (use_hwrt_ && ENABLE_RT_PIPELINE);
 
     { // prepare indirect args
         DebugMarker _(cmd_buf, "PrepareIndirArgs");
@@ -909,9 +961,17 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
     { // trace primary rays
         DebugMarker _(cmd_buf, "IntersectScenePrimary");
         timestamps_[ctx_->backend_frame].primary_trace[0] = ctx_->WriteTimestamp(cmd_buf, true);
-        kernel_IntersectScene(cmd_buf, indir_args_buf_, 0, counters_buf_, cam.pass_settings, sc_data, halton_seq_buf_,
-                              hi + RAND_DIM_BASE_COUNT, macro_tree_root, cam.clip_end - cam.clip_start, s->tex_atlases_,
-                              s->bindless_tex_data_.descr_set, prim_rays_buf_, prim_hits_buf_);
+        if (use_rt_pipeline) {
+            kernel_IntersectScene_RTPipe(cmd_buf, indir_args_buf_, 1, cam.pass_settings, sc_data, halton_seq_buf_,
+                                         hi + RAND_DIM_BASE_COUNT, macro_tree_root, cam.clip_end - cam.clip_start,
+                                         s->tex_atlases_, s->bindless_tex_data_.rt_descr_set, prim_rays_buf_,
+                                         prim_hits_buf_);
+        } else {
+            kernel_IntersectScene(cmd_buf, indir_args_buf_, 0, counters_buf_, cam.pass_settings, sc_data,
+                                  halton_seq_buf_, hi + RAND_DIM_BASE_COUNT, macro_tree_root,
+                                  cam.clip_end - cam.clip_start, s->tex_atlases_, s->bindless_tex_data_.descr_set,
+                                  prim_rays_buf_, prim_hits_buf_);
+        }
         timestamps_[ctx_->backend_frame].primary_trace[1] = ctx_->WriteTimestamp(cmd_buf, false);
     }
 
@@ -920,7 +980,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
     { // shade primary hits
         DebugMarker _(cmd_buf, "ShadePrimaryHits");
         timestamps_[ctx_->backend_frame].primary_shade[0] = ctx_->WriteTimestamp(cmd_buf, true);
-        kernel_ShadePrimaryHits(cmd_buf, cam.pass_settings, s->env_, indir_args_buf_, prim_hits_buf_, prim_rays_buf_,
+        kernel_ShadePrimaryHits(cmd_buf, cam.pass_settings, s->env_, indir_args_buf_, 0, prim_hits_buf_, prim_rays_buf_,
                                 sc_data, halton_seq_buf_, hi + RAND_DIM_BASE_COUNT, rect, s->tex_atlases_,
                                 s->bindless_tex_data_.descr_set, temp_buf0_, secondary_rays_buf_, shadow_rays_buf_,
                                 counters_buf_, temp_base_color, temp_depth_normals_buf_);
@@ -935,7 +995,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
     { // trace shadow rays
         DebugMarker _(cmd_buf, "TraceShadow");
         timestamps_[ctx_->backend_frame].primary_shadow[0] = ctx_->WriteTimestamp(cmd_buf, true);
-        kernel_IntersectSceneShadow(cmd_buf, cam.pass_settings, indir_args_buf_, 1, counters_buf_, sc_data,
+        kernel_IntersectSceneShadow(cmd_buf, cam.pass_settings, indir_args_buf_, 2, counters_buf_, sc_data,
                                     macro_tree_root, cam.pass_settings.clamp_direct, s->tex_atlases_,
                                     s->bindless_tex_data_.descr_set, shadow_rays_buf_, temp_buf0_);
         timestamps_[ctx_->backend_frame].primary_shadow[1] = ctx_->WriteTimestamp(cmd_buf, false);
@@ -969,9 +1029,16 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         timestamps_[ctx_->backend_frame].secondary_trace.push_back(ctx_->WriteTimestamp(cmd_buf, true));
         { // trace secondary rays
             DebugMarker _(cmd_buf, "IntersectSceneSecondary");
-            kernel_IntersectScene(cmd_buf, indir_args_buf_, 0, counters_buf_, cam.pass_settings, sc_data,
-                                  halton_seq_buf_, hi + RAND_DIM_BASE_COUNT, macro_tree_root, MAX_DIST, s->tex_atlases_,
-                                  s->bindless_tex_data_.descr_set, secondary_rays_buf_, prim_hits_buf_);
+            if (use_rt_pipeline) {
+                kernel_IntersectScene_RTPipe(cmd_buf, indir_args_buf_, 1, cam.pass_settings, sc_data, halton_seq_buf_,
+                                             hi + RAND_DIM_BASE_COUNT, macro_tree_root, MAX_DIST, s->tex_atlases_,
+                                             s->bindless_tex_data_.rt_descr_set, secondary_rays_buf_, prim_hits_buf_);
+            } else {
+                kernel_IntersectScene(cmd_buf, indir_args_buf_, 0, counters_buf_, cam.pass_settings, sc_data,
+                                      halton_seq_buf_, hi + RAND_DIM_BASE_COUNT, macro_tree_root, MAX_DIST,
+                                      s->tex_atlases_, s->bindless_tex_data_.descr_set, secondary_rays_buf_,
+                                      prim_hits_buf_);
+            }
         }
 
         if (sc_data.visible_lights_count) {
@@ -985,7 +1052,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         { // shade secondary hits
             DebugMarker _(cmd_buf, "ShadeSecondaryHits");
             timestamps_[ctx_->backend_frame].secondary_shade.push_back(ctx_->WriteTimestamp(cmd_buf, true));
-            kernel_ShadeSecondaryHits(cmd_buf, cam.pass_settings, s->env_, indir_args_buf_, prim_hits_buf_,
+            kernel_ShadeSecondaryHits(cmd_buf, cam.pass_settings, s->env_, indir_args_buf_, 0, prim_hits_buf_,
                                       secondary_rays_buf_, sc_data, halton_seq_buf_, hi + RAND_DIM_BASE_COUNT,
                                       s->tex_atlases_, s->bindless_tex_data_.descr_set, temp_buf0_, prim_rays_buf_,
                                       shadow_rays_buf_, counters_buf_);
@@ -1000,7 +1067,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         { // trace shadow rays
             DebugMarker _(cmd_buf, "TraceShadow");
             timestamps_[ctx_->backend_frame].secondary_shadow.push_back(ctx_->WriteTimestamp(cmd_buf, true));
-            kernel_IntersectSceneShadow(cmd_buf, cam.pass_settings, indir_args_buf_, 1, counters_buf_, sc_data,
+            kernel_IntersectSceneShadow(cmd_buf, cam.pass_settings, indir_args_buf_, 2, counters_buf_, sc_data,
                                         macro_tree_root, cam.pass_settings.clamp_indirect, s->tex_atlases_,
                                         s->bindless_tex_data_.descr_set, shadow_rays_buf_, temp_buf0_);
             timestamps_[ctx_->backend_frame].secondary_shadow.push_back(ctx_->WriteTimestamp(cmd_buf, false));
@@ -1198,7 +1265,7 @@ void Ray::Vk::Renderer::RadixSort(VkCommandBuffer cmd_buf, const Buffer &indir_a
                                   Buffer scan_values[]) {
     DebugMarker _(cmd_buf, "Radix Sort");
 
-    static const int indir_args_indices[] = {4, 5, 6, 7};
+    static const int indir_args_indices[] = {6, 7, 8, 9};
 
     static const char *MarkerStrings[] = {"Radix Sort Iter #0 [Bits   0-4]", "Radix Sort Iter #1 [Bits   4-8]",
                                           "Radix Sort Iter #2 [Bits  8-12]", "Radix Sort Iter #3 [Bits 12-16]",
@@ -1209,10 +1276,10 @@ void Ray::Vk::Renderer::RadixSort(VkCommandBuffer cmd_buf, const Buffer &indir_a
     for (int shift = 0; shift < 32; shift += 4) {
         DebugMarker _(cmd_buf, MarkerStrings[shift / 4]);
 
-        kernel_SortInitCountTable(cmd_buf, shift, indir_args, 2, *hashes[0], counters, 4, count_table);
+        kernel_SortInitCountTable(cmd_buf, shift, indir_args, 4, *hashes[0], counters, 4, count_table);
         ExclusiveScan(cmd_buf, indir_args, indir_args_indices, count_table, 0 /* offset */, 1 /* stride */,
                       partial_sums, scan_values);
-        kernel_SortWriteSortedHashes(cmd_buf, shift, indir_args, 3, *hashes[0], scan_values[0], counters, 5, 4,
+        kernel_SortWriteSortedHashes(cmd_buf, shift, indir_args, 5, *hashes[0], scan_values[0], counters, 5, 4,
                                      *hashes[1]);
         std::swap(hashes[0], hashes[1]);
     }

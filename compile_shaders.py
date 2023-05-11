@@ -37,11 +37,10 @@ def bin2header(data, file_name):
 
 def compile_shader(src_name, spv_name=None, glsl_version=None, target_env="spirv1.3", defines = ""):
     if  spv_name == None:
-        spv_name = src_name
-    src_name = src_name + ".comp.glsl"
-    hlsl_name = spv_name + ".comp.hlsl"
-    header_name = spv_name + ".comp.inl"
-    spv_name = spv_name + ".comp.spv"
+        spv_name = src_name[0:-4] + "spv"
+
+    hlsl_name = spv_name[0:-3] + "hlsl"
+    header_name = spv_name[0:-3] + "inl"
 
     compile_cmd = os.path.join(base_path(), "glslangValidator -V --target-env " + target_env + " internal/shaders/" + src_name + " " + defines + " -o internal/shaders/output/" + spv_name)
     if (glsl_version != None):
@@ -52,7 +51,7 @@ def compile_shader(src_name, spv_name=None, glsl_version=None, target_env="spirv
             subprocess.run(os.path.join(base_path(), "spirv-opt.bat internal/shaders/output/" + spv_name + " -o internal/shaders/output/" + spv_name), shell=True, check=True)
         else:
             subprocess.run(os.path.join(base_path(), "spirv-opt.sh internal/shaders/output/" + spv_name + " -o internal/shaders/output/" + spv_name), shell=True, check=True)
-    if ENABLE_HLSL_CROSS_COMPILATION == True:
+    if ENABLE_HLSL_CROSS_COMPILATION == True and src_name.endswith(".comp.glsl"):
         subprocess.run(os.path.join(base_path(), "spirv-cross internal/shaders/output/" + spv_name + " --hlsl --shader-model 60 --output internal/shaders/output/" + hlsl_name), shell=True, check=True)
 
     with open("internal/shaders/output/" + spv_name, 'rb') as f:
@@ -73,66 +72,71 @@ def main():
             os.remove(os.path.join("internal/shaders/output", item))
 
     # Primary ray generation
-    compile_shader_async(src_name="primary_ray_gen", spv_name="primary_ray_gen_simple", defines="-DADAPTIVE=0")
-    compile_shader_async(src_name="primary_ray_gen", spv_name="primary_ray_gen_adaptive", defines="-DADAPTIVE=1")
+    compile_shader_async(src_name="primary_ray_gen.comp.glsl", spv_name="primary_ray_gen_simple.comp.spv", defines="-DADAPTIVE=0")
+    compile_shader_async(src_name="primary_ray_gen.comp.glsl", spv_name="primary_ray_gen_adaptive.comp.spv", defines="-DADAPTIVE=1")
 
-    # Scene intersection (main)
-    compile_shader_async(src_name="intersect_scene", spv_name="intersect_scene_swrt_atlas", defines="-DINDIRECT=0 -DHWRT=0 -DBINDLESS=0")
-    compile_shader_async(src_name="intersect_scene", spv_name="intersect_scene_swrt_bindless", defines="-DINDIRECT=0 -DHWRT=0 -DBINDLESS=1")
-    compile_shader_async(src_name="intersect_scene", spv_name="intersect_scene_hwrt_atlas", glsl_version="460", target_env="spirv1.4", defines="-DINDIRECT=0 -DHWRT=1 -DBINDLESS=0")
-    compile_shader_async(src_name="intersect_scene", spv_name="intersect_scene_hwrt_bindless", glsl_version="460", target_env="spirv1.4", defines="-DINDIRECT=0 -DHWRT=1 -DBINDLESS=1")
-    compile_shader_async(src_name="intersect_scene", spv_name="intersect_scene_indirect_swrt_atlas", defines="-DINDIRECT=1 -DHWRT=0 -DBINDLESS=0")
-    compile_shader_async(src_name="intersect_scene", spv_name="intersect_scene_indirect_swrt_bindless", defines="-DINDIRECT=1 -DHWRT=0 -DBINDLESS=1")
-    compile_shader_async(src_name="intersect_scene", spv_name="intersect_scene_indirect_hwrt_atlas", glsl_version="460", target_env="spirv1.4", defines="-DINDIRECT=1 -DHWRT=1 -DBINDLESS=0")
-    compile_shader_async(src_name="intersect_scene", spv_name="intersect_scene_indirect_hwrt_bindless", glsl_version="460", target_env="spirv1.4", defines="-DINDIRECT=1 -DHWRT=1 -DBINDLESS=1")
+    # Scene intersection (main, inline RT)
+    compile_shader_async(src_name="intersect_scene.comp.glsl", spv_name="intersect_scene_swrt_atlas.comp.spv", defines="-DINDIRECT=0 -DHWRT=0 -DBINDLESS=0")
+    compile_shader_async(src_name="intersect_scene.comp.glsl", spv_name="intersect_scene_swrt_bindless.comp.spv", defines="-DINDIRECT=0 -DHWRT=0 -DBINDLESS=1")
+    compile_shader_async(src_name="intersect_scene.comp.glsl", spv_name="intersect_scene_hwrt_atlas.comp.spv", glsl_version="460", target_env="spirv1.4", defines="-DINDIRECT=0 -DHWRT=1 -DBINDLESS=0")
+    compile_shader_async(src_name="intersect_scene.comp.glsl", spv_name="intersect_scene_hwrt_bindless.comp.spv", glsl_version="460", target_env="spirv1.4", defines="-DINDIRECT=0 -DHWRT=1 -DBINDLESS=1")
+    compile_shader_async(src_name="intersect_scene.comp.glsl", spv_name="intersect_scene_indirect_swrt_atlas.comp.spv", defines="-DINDIRECT=1 -DHWRT=0 -DBINDLESS=0")
+    compile_shader_async(src_name="intersect_scene.comp.glsl", spv_name="intersect_scene_indirect_swrt_bindless.comp.spv", defines="-DINDIRECT=1 -DHWRT=0 -DBINDLESS=1")
+    compile_shader_async(src_name="intersect_scene.comp.glsl", spv_name="intersect_scene_indirect_hwrt_atlas.comp.spv", glsl_version="460", target_env="spirv1.4", defines="-DINDIRECT=1 -DHWRT=1 -DBINDLESS=0")
+    compile_shader_async(src_name="intersect_scene.comp.glsl", spv_name="intersect_scene_indirect_hwrt_bindless.comp.spv", glsl_version="460", target_env="spirv1.4", defines="-DINDIRECT=1 -DHWRT=1 -DBINDLESS=1")
+    # Scene intersection (main, pipeline RT)
+    compile_shader_async(src_name="intersect_scene.rgen.glsl", spv_name="intersect_scene.rgen.spv", glsl_version="460", target_env="spirv1.4", defines="-DINDIRECT=0 -DBINDLESS=1")
+    compile_shader_async(src_name="intersect_scene.rgen.glsl", spv_name="intersect_scene_indirect.rgen.spv", glsl_version="460", target_env="spirv1.4", defines="-DINDIRECT=1 -DBINDLESS=1")
+    compile_shader_async(src_name="intersect_scene.rchit.glsl", spv_name="intersect_scene.rchit.spv", glsl_version="460", target_env="spirv1.4")
+    compile_shader_async(src_name="intersect_scene.rmiss.glsl", spv_name="intersect_scene.rmiss.spv", glsl_version="460", target_env="spirv1.4")
 
     # Lights intersection
-    compile_shader_async(src_name="intersect_area_lights", defines="-DPRIMARY=0")
+    compile_shader_async(src_name="intersect_area_lights.comp.glsl", defines="-DPRIMARY=0")
 
     # Shading
-    compile_shader_async(src_name="shade", spv_name="shade_primary_atlas", defines="-DPRIMARY=1 -DINDIRECT=1 -DBINDLESS=0 -DOUTPUT_BASE_COLOR=0 -DOUTPUT_DEPTH_NORMALS=0")
-    compile_shader_async(src_name="shade", spv_name="shade_primary_atlas_n", defines="-DPRIMARY=1 -DINDIRECT=1 -DBINDLESS=0 -DOUTPUT_BASE_COLOR=0 -DOUTPUT_DEPTH_NORMALS=1")
-    compile_shader_async(src_name="shade", spv_name="shade_primary_atlas_b", defines="-DPRIMARY=1 -DINDIRECT=1 -DBINDLESS=0 -DOUTPUT_BASE_COLOR=1 -DOUTPUT_DEPTH_NORMALS=0")
-    compile_shader_async(src_name="shade", spv_name="shade_primary_atlas_bn", defines="-DPRIMARY=1 -DINDIRECT=1 -DBINDLESS=0 -DOUTPUT_BASE_COLOR=1 -DOUTPUT_DEPTH_NORMALS=1")
-    compile_shader_async(src_name="shade", spv_name="shade_primary_bindless", defines="-DPRIMARY=1 -DINDIRECT=1 -DBINDLESS=1 -DOUTPUT_BASE_COLOR=0 -DOUTPUT_DEPTH_NORMALS=0")
-    compile_shader_async(src_name="shade", spv_name="shade_primary_bindless_n", defines="-DPRIMARY=1 -DINDIRECT=1 -DBINDLESS=1 -DOUTPUT_BASE_COLOR=0 -DOUTPUT_DEPTH_NORMALS=1")
-    compile_shader_async(src_name="shade", spv_name="shade_primary_bindless_b", defines="-DPRIMARY=1 -DINDIRECT=1 -DBINDLESS=1 -DOUTPUT_BASE_COLOR=1 -DOUTPUT_DEPTH_NORMALS=0")
-    compile_shader_async(src_name="shade", spv_name="shade_primary_bindless_bn", defines="-DPRIMARY=1 -DINDIRECT=1 -DBINDLESS=1 -DOUTPUT_BASE_COLOR=1 -DOUTPUT_DEPTH_NORMALS=1")
-    compile_shader_async(src_name="shade", spv_name="shade_secondary_atlas", defines="-DPRIMARY=0 -DINDIRECT=1 -DBINDLESS=0")
-    compile_shader_async(src_name="shade", spv_name="shade_secondary_bindless", defines="-DPRIMARY=0 -DINDIRECT=1 -DBINDLESS=1")
+    compile_shader_async(src_name="shade.comp.glsl", spv_name="shade_primary_atlas.comp.spv", defines="-DPRIMARY=1 -DINDIRECT=1 -DBINDLESS=0 -DOUTPUT_BASE_COLOR=0 -DOUTPUT_DEPTH_NORMALS=0")
+    compile_shader_async(src_name="shade.comp.glsl", spv_name="shade_primary_atlas_n.comp.spv", defines="-DPRIMARY=1 -DINDIRECT=1 -DBINDLESS=0 -DOUTPUT_BASE_COLOR=0 -DOUTPUT_DEPTH_NORMALS=1")
+    compile_shader_async(src_name="shade.comp.glsl", spv_name="shade_primary_atlas_b.comp.spv", defines="-DPRIMARY=1 -DINDIRECT=1 -DBINDLESS=0 -DOUTPUT_BASE_COLOR=1 -DOUTPUT_DEPTH_NORMALS=0")
+    compile_shader_async(src_name="shade.comp.glsl", spv_name="shade_primary_atlas_bn.comp.spv", defines="-DPRIMARY=1 -DINDIRECT=1 -DBINDLESS=0 -DOUTPUT_BASE_COLOR=1 -DOUTPUT_DEPTH_NORMALS=1")
+    compile_shader_async(src_name="shade.comp.glsl", spv_name="shade_primary_bindless.comp.spv", defines="-DPRIMARY=1 -DINDIRECT=1 -DBINDLESS=1 -DOUTPUT_BASE_COLOR=0 -DOUTPUT_DEPTH_NORMALS=0")
+    compile_shader_async(src_name="shade.comp.glsl", spv_name="shade_primary_bindless_n.comp.spv", defines="-DPRIMARY=1 -DINDIRECT=1 -DBINDLESS=1 -DOUTPUT_BASE_COLOR=0 -DOUTPUT_DEPTH_NORMALS=1")
+    compile_shader_async(src_name="shade.comp.glsl", spv_name="shade_primary_bindless_b.comp.spv", defines="-DPRIMARY=1 -DINDIRECT=1 -DBINDLESS=1 -DOUTPUT_BASE_COLOR=1 -DOUTPUT_DEPTH_NORMALS=0")
+    compile_shader_async(src_name="shade.comp.glsl", spv_name="shade_primary_bindless_bn.comp.spv", defines="-DPRIMARY=1 -DINDIRECT=1 -DBINDLESS=1 -DOUTPUT_BASE_COLOR=1 -DOUTPUT_DEPTH_NORMALS=1")
+    compile_shader_async(src_name="shade.comp.glsl", spv_name="shade_secondary_atlas.comp.spv", defines="-DPRIMARY=0 -DINDIRECT=1 -DBINDLESS=0")
+    compile_shader_async(src_name="shade.comp.glsl", spv_name="shade_secondary_bindless.comp.spv", defines="-DPRIMARY=0 -DINDIRECT=1 -DBINDLESS=1")
 
     # Scene intersection (shadow)
-    compile_shader_async(src_name="intersect_scene_shadow", spv_name="intersect_scene_shadow_swrt_atlas", defines="-DHWRT=0 -DBINDLESS=0")
-    compile_shader_async(src_name="intersect_scene_shadow", spv_name="intersect_scene_shadow_swrt_bindless", defines="-DHWRT=0 -DBINDLESS=1")
-    compile_shader_async(src_name="intersect_scene_shadow", spv_name="intersect_scene_shadow_hwrt_atlas", glsl_version="460", target_env="spirv1.4", defines="-DHWRT=1 -DBINDLESS=0")
-    compile_shader_async(src_name="intersect_scene_shadow", spv_name="intersect_scene_shadow_hwrt_bindless", glsl_version="460", target_env="spirv1.4", defines="-DHWRT=1 -DBINDLESS=1")
+    compile_shader_async(src_name="intersect_scene_shadow.comp.glsl", spv_name="intersect_scene_shadow_swrt_atlas.comp.spv", defines="-DHWRT=0 -DBINDLESS=0")
+    compile_shader_async(src_name="intersect_scene_shadow.comp.glsl", spv_name="intersect_scene_shadow_swrt_bindless.comp.spv", defines="-DHWRT=0 -DBINDLESS=1")
+    compile_shader_async(src_name="intersect_scene_shadow.comp.glsl", spv_name="intersect_scene_shadow_hwrt_atlas.comp.spv", glsl_version="460", target_env="spirv1.4", defines="-DHWRT=1 -DBINDLESS=0")
+    compile_shader_async(src_name="intersect_scene_shadow.comp.glsl", spv_name="intersect_scene_shadow_hwrt_bindless.comp.spv", glsl_version="460", target_env="spirv1.4", defines="-DHWRT=1 -DBINDLESS=1")
 
     # Postprocess
-    compile_shader_async(src_name="mix_incremental", spv_name="mix_incremental", defines="-DOUTPUT_BASE_COLOR=0 -DOUTPUT_DEPTH_NORMALS=0")
-    compile_shader_async(src_name="mix_incremental", spv_name="mix_incremental_n", defines="-DOUTPUT_BASE_COLOR=0 -DOUTPUT_DEPTH_NORMALS=1")
-    compile_shader_async(src_name="mix_incremental", spv_name="mix_incremental_b", defines="-DOUTPUT_BASE_COLOR=1 -DOUTPUT_DEPTH_NORMALS=0")
-    compile_shader_async(src_name="mix_incremental", spv_name="mix_incremental_bn", defines="-DOUTPUT_BASE_COLOR=1 -DOUTPUT_DEPTH_NORMALS=1")
-    compile_shader_async(src_name="postprocess")
+    compile_shader_async(src_name="mix_incremental.comp.glsl", spv_name="mix_incremental.comp.spv", defines="-DOUTPUT_BASE_COLOR=0 -DOUTPUT_DEPTH_NORMALS=0")
+    compile_shader_async(src_name="mix_incremental.comp.glsl", spv_name="mix_incremental_n.comp.spv", defines="-DOUTPUT_BASE_COLOR=0 -DOUTPUT_DEPTH_NORMALS=1")
+    compile_shader_async(src_name="mix_incremental.comp.glsl", spv_name="mix_incremental_b.comp.spv", defines="-DOUTPUT_BASE_COLOR=1 -DOUTPUT_DEPTH_NORMALS=0")
+    compile_shader_async(src_name="mix_incremental.comp.glsl", spv_name="mix_incremental_bn.comp.spv", defines="-DOUTPUT_BASE_COLOR=1 -DOUTPUT_DEPTH_NORMALS=1")
+    compile_shader_async(src_name="postprocess.comp.glsl")
 
     # Denoise
-    compile_shader_async(src_name="filter_variance")
-    compile_shader_async(src_name="nlm_filter", spv_name="nlm_filter", defines="-DUSE_BASE_COLOR=0 -DUSE_DEPTH_NORMAL=0")
-    compile_shader_async(src_name="nlm_filter", spv_name="nlm_filter_n", defines="-DUSE_BASE_COLOR=0 -DUSE_DEPTH_NORMAL=1")
-    compile_shader_async(src_name="nlm_filter", spv_name="nlm_filter_b", defines="-DUSE_BASE_COLOR=1 -DUSE_DEPTH_NORMAL=0")
-    compile_shader_async(src_name="nlm_filter", spv_name="nlm_filter_bn", defines="-DUSE_BASE_COLOR=1 -DUSE_DEPTH_NORMAL=1")
+    compile_shader_async(src_name="filter_variance.comp.glsl")
+    compile_shader_async(src_name="nlm_filter.comp.glsl", spv_name="nlm_filter.comp.spv", defines="-DUSE_BASE_COLOR=0 -DUSE_DEPTH_NORMAL=0")
+    compile_shader_async(src_name="nlm_filter.comp.glsl", spv_name="nlm_filter_n.comp.spv", defines="-DUSE_BASE_COLOR=0 -DUSE_DEPTH_NORMAL=1")
+    compile_shader_async(src_name="nlm_filter.comp.glsl", spv_name="nlm_filter_b.comp.spv", defines="-DUSE_BASE_COLOR=1 -DUSE_DEPTH_NORMAL=0")
+    compile_shader_async(src_name="nlm_filter.comp.glsl", spv_name="nlm_filter_bn.comp.spv", defines="-DUSE_BASE_COLOR=1 -DUSE_DEPTH_NORMAL=1")
 
     # Sorting
-    compile_shader_async(src_name="sort_hash_rays")
-    compile_shader_async(src_name="sort_scan", spv_name="sort_inclusive_scan", defines="-DEXCLUSIVE_SCAN=0")
-    compile_shader_async(src_name="sort_scan", spv_name="sort_exclusive_scan", defines="-DEXCLUSIVE_SCAN=1")
-    compile_shader_async(src_name="sort_add_partial_sums")
-    compile_shader_async(src_name="sort_init_count_table")
-    compile_shader_async(src_name="sort_write_sorted_hashes")
-    compile_shader_async(src_name="sort_reorder_rays")
+    compile_shader_async(src_name="sort_hash_rays.comp.glsl")
+    compile_shader_async(src_name="sort_scan.comp.glsl", spv_name="sort_inclusive_scan.comp.spv", defines="-DEXCLUSIVE_SCAN=0")
+    compile_shader_async(src_name="sort_scan.comp.glsl", spv_name="sort_exclusive_scan.comp.spv", defines="-DEXCLUSIVE_SCAN=1")
+    compile_shader_async(src_name="sort_add_partial_sums.comp.glsl")
+    compile_shader_async(src_name="sort_init_count_table.comp.glsl")
+    compile_shader_async(src_name="sort_write_sorted_hashes.comp.glsl")
+    compile_shader_async(src_name="sort_reorder_rays.comp.glsl")
 
     # Other
-    compile_shader_async(src_name="prepare_indir_args")
-    compile_shader_async(src_name="debug_rt", target_env="spirv1.4")
+    compile_shader_async(src_name="prepare_indir_args.comp.glsl")
+    compile_shader_async(src_name="debug_rt.comp.glsl", target_env="spirv1.4")
 
 if __name__ == "__main__":
     main()

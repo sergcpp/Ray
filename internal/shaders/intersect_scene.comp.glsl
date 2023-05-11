@@ -12,7 +12,9 @@ LAYOUT_PARAMS uniform UniformParams {
     Params g_params;
 };
 
-#if !HWRT
+#if HWRT
+layout(binding = TLAS_SLOT) uniform accelerationStructureEXT g_tlas;
+#else // HWRT
 layout(std430, binding = TRIS_BUF_SLOT) readonly buffer Tris {
     tri_accel_t g_tris[];
 };
@@ -40,9 +42,7 @@ layout(std430, binding = MI_INDICES_BUF_SLOT) readonly buffer MiIndices {
 layout(std430, binding = TRANSFORMS_BUF_SLOT) readonly buffer Transforms {
     transform_t g_transforms[];
 };
-#else
-layout(binding = TLAS_SLOT) uniform accelerationStructureEXT g_tlas;
-#endif
+#endif // HWRT
 
 layout(std430, binding = TRI_MATERIALS_BUF_SLOT) readonly buffer TriMaterials {
     uint g_tri_materials[];
@@ -60,7 +60,7 @@ layout(std430, binding = RAYS_BUF_SLOT) buffer Rays {
 layout(std430, binding = COUNTERS_BUF_SLOT) readonly buffer Counters {
     uint g_counters[];
 };
-#endif
+#endif // INDIRECT
 
 layout(std430, binding = VERTICES_BUF_SLOT) readonly buffer Vertices {
     vertex_t g_vertices[];
@@ -172,8 +172,8 @@ void main() {
     const int x = int(g_params.rect.x + gl_GlobalInvocationID.x);
     const int y = int(g_params.rect.y + gl_GlobalInvocationID.y);
 
-    const int index = int(gl_GlobalInvocationID.y * g_params.rect.z) + x;
-#else
+    const int index = int(gl_GlobalInvocationID.y * g_params.rect.z + gl_GlobalInvocationID.x);
+#else // !INDIRECT
     const int index = int(gl_WorkGroupID.x * 64 + gl_LocalInvocationIndex);
     if (index >= g_counters[1]) {
         return;
@@ -181,7 +181,7 @@ void main() {
 
     const int x = (g_rays[index].xy >> 16) & 0xffff;
     const int y = (g_rays[index].xy & 0xffff);
-#endif
+#endif // !INDIRECT
 
     vec3 ro = vec3(g_rays[index].o[0], g_rays[index].o[1], g_rays[index].o[2]);
     vec3 rd = vec3(g_rays[index].d[0], g_rays[index].d[1], g_rays[index].d[2]);
@@ -314,7 +314,7 @@ void main() {
         rand_index += RAND_DIM_BOUNCE_COUNT;
     }
 
-    inter.t += length(vec3(g_rays[index].o[0], g_rays[index].o[1], g_rays[index].o[2]) - ro);
+    inter.t += distance(vec3(g_rays[index].o[0], g_rays[index].o[1], g_rays[index].o[2]), ro);
 
     g_out_hits[index] = inter;
 }

@@ -89,5 +89,12 @@ void DispatchCompute(VkCommandBuffer cmd_buf, const Pipeline &comp_pipeline, con
 void DispatchComputeIndirect(VkCommandBuffer cmd_buf, const Pipeline &comp_pipeline, const Buffer &indir_buf,
                              uint32_t indir_buf_offset, Span<const Binding> bindings, const void *uniform_data,
                              int uniform_data_len, DescrMultiPoolAlloc *descr_alloc, ILog *log);
+
+void TraceRays(VkCommandBuffer cmd_buf, const Pipeline &rt_pipeline, const uint32_t dims[3],
+               Span<const Binding> bindings, const void *uniform_data, int uniform_data_len,
+               DescrMultiPoolAlloc *descr_alloc, ILog *log);
+void TraceRaysIndirect(VkCommandBuffer cmd_buf, const Pipeline &rt_pipeline, const Buffer &indir_buf,
+                       uint32_t indir_buf_offset, Span<const Binding> bindings, const void *uniform_data,
+                       int uniform_data_len, DescrMultiPoolAlloc *descr_alloc, ILog *log);
 } // namespace Vk
 } // namespace Ray

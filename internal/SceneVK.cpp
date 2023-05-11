@@ -68,6 +68,7 @@ Ray::Vk::Scene::~Scene() {
 
     bindless_textures_.clear();
     vkDestroyDescriptorSetLayout(ctx_->device(), bindless_tex_data_.descr_layout, nullptr);
+    vkDestroyDescriptorSetLayout(ctx_->device(), bindless_tex_data_.rt_descr_layout, nullptr);
 }
 
 void Ray::Vk::Scene::GetEnvironment(environment_desc_t &env) {
@@ -1489,7 +1490,7 @@ void Ray::Vk::Scene::PrepareBindlessTextures_nolock() {
     DescrSizes descr_sizes;
     descr_sizes.img_sampler_count = ctx_->max_combined_image_samplers();
 
-    const bool bres = bindless_tex_data_.descr_pool.Init(descr_sizes, 1 /* sets_count */);
+    const bool bres = bindless_tex_data_.descr_pool.Init(descr_sizes, 2 /* sets_count */);
     if (!bres) {
         ctx_->log()->Error("Failed to init descriptor pool!");
     }
@@ -1520,8 +1521,35 @@ void Ray::Vk::Scene::PrepareBindlessTextures_nolock() {
         }
     }
 
+    if (!bindless_tex_data_.rt_descr_layout) {
+        VkDescriptorSetLayoutBinding textures_binding = {};
+        textures_binding.binding = 0;
+        textures_binding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        textures_binding.descriptorCount = ctx_->max_combined_image_samplers();
+        textures_binding.stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
+
+        VkDescriptorSetLayoutCreateInfo layout_info = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+        layout_info.bindingCount = 1;
+        layout_info.pBindings = &textures_binding;
+
+        VkDescriptorBindingFlagsEXT bind_flag = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT_EXT;
+
+        VkDescriptorSetLayoutBindingFlagsCreateInfoEXT extended_info = {
+            VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO_EXT};
+        extended_info.bindingCount = 1u;
+        extended_info.pBindingFlags = &bind_flag;
+        layout_info.pNext = &extended_info;
+
+        const VkResult res =
+            vkCreateDescriptorSetLayout(ctx_->device(), &layout_info, nullptr, &bindless_tex_data_.rt_descr_layout);
+        if (res != VK_SUCCESS) {
+            ctx_->log()->Error("Failed to create descriptor set layout!");
+        }
+    }
+
     bindless_tex_data_.descr_pool.Reset();
     bindless_tex_data_.descr_set = bindless_tex_data_.descr_pool.Alloc(bindless_tex_data_.descr_layout);
+    bindless_tex_data_.rt_descr_set = bindless_tex_data_.descr_pool.Alloc(bindless_tex_data_.rt_descr_layout);
 
     { // Transition resources
         std::vector<TransitionInfo> img_transitions;
@@ -1553,6 +1581,10 @@ void Ray::Vk::Scene::PrepareBindlessTextures_nolock() {
         descr_write.pImageInfo = &img_info;
         descr_write.pTexelBufferView = nullptr;
         descr_write.pNext = nullptr;
+
+        vkUpdateDescriptorSets(ctx_->device(), 1, &descr_write, 0, nullptr);
+
+        descr_write.dstSet = bindless_tex_data_.rt_descr_set;
 
         vkUpdateDescriptorSets(ctx_->device(), 1, &descr_write, 0, nullptr);
     }

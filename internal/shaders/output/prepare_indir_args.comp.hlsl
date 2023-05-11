@@ -9,38 +9,44 @@ void comp_main()
     _21.Store(0, (_17 + 63u) / 64u);
     _21.Store(4, 1u);
     _21.Store(8, 1u);
-    uint _38 = (_17 + 255u) / 256u;
+    _21.Store(12, _17);
+    _21.Store(16, 1u);
+    _21.Store(20, 1u);
+    uint _45 = (_17 + 255u) / 256u;
     _12.Store(16, _17);
-    _21.Store(24, _38);
-    _21.Store(28, 1u);
-    _21.Store(32, 1u);
-    _12.Store(20, _38);
-    _21.Store(36, (_38 + 255u) / 256u);
-    _21.Store(40, 1u);
-    _21.Store(44, 1u);
-    uint _64 = _38 * 16u;
-    uint counters_count = _64;
+    _21.Store(48, _45);
+    _21.Store(52, 1u);
+    _21.Store(56, 1u);
+    _12.Store(20, _45);
+    _21.Store(60, (_45 + 255u) / 256u);
+    _21.Store(64, 1u);
+    _21.Store(68, 1u);
+    uint _69 = _45 * 16u;
+    uint counters_count = _69;
     int i = 0;
     for (; i < 4; )
     {
         _12.Store((6 + i) * 4 + 0, counters_count);
-        int _82 = 3 * i;
-        uint _87 = (counters_count + 255u) / 256u;
-        _21.Store((12 + _82) * 4 + 0, _87);
-        _21.Store((_82 + 13) * 4 + 0, 1u);
-        _21.Store((_82 + 14) * 4 + 0, 1u);
-        counters_count = _87;
+        int _87 = 3 * i;
+        uint _92 = (counters_count + 255u) / 256u;
+        _21.Store((18 + _87) * 4 + 0, _92);
+        _21.Store((_87 + 19) * 4 + 0, 1u);
+        _21.Store((_87 + 20) * 4 + 0, 1u);
+        counters_count = _92;
         i++;
         continue;
     }
     _12.Store(0, 0u);
     _12.Store(4, _17);
-    uint _110 = _12.Load(8);
-    _21.Store(12, (_110 + 63u) / 64u);
-    _21.Store(16, 1u);
-    _21.Store(20, 1u);
+    uint _115 = _12.Load(8);
+    _21.Store(24, (_115 + 63u) / 64u);
+    _21.Store(28, 1u);
+    _21.Store(32, 1u);
+    _21.Store(36, _115);
+    _21.Store(40, 1u);
+    _21.Store(44, 1u);
     _12.Store(8, 0u);
-    _12.Store(12, _110);
+    _12.Store(12, _115);
 }
 
 [numthreads(1, 1, 1)]

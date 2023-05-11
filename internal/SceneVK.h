@@ -39,8 +39,8 @@ class Scene : public SceneBase {
 
     struct BindlessTexData {
         DescrPool descr_pool;
-        VkDescriptorSetLayout descr_layout = {};
-        VkDescriptorSet descr_set = {};
+        VkDescriptorSetLayout descr_layout = {}, rt_descr_layout = {};
+        VkDescriptorSet descr_set = {}, rt_descr_set = {};
 
         explicit BindlessTexData(Context *ctx) : descr_pool(ctx) {}
     };

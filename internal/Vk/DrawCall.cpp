@@ -215,3 +215,55 @@ void Ray::Vk::DispatchComputeIndirect(VkCommandBuffer cmd_buf, const Pipeline &c
 
     vkCmdDispatchIndirect(cmd_buf, indir_buf.vk_handle(), VkDeviceSize(indir_buf_offset));
 }
+
+void Ray::Vk::TraceRays(VkCommandBuffer cmd_buf, const Pipeline &rt_pipeline, const uint32_t dims[3],
+                        Span<const Binding> bindings, const void *uniform_data, const int uniform_data_len,
+                        DescrMultiPoolAlloc *descr_alloc, ILog *log) {
+    Context *ctx = descr_alloc->ctx();
+
+    VkDescriptorSet descr_set =
+        PrepareDescriptorSet(ctx, rt_pipeline.prog()->descr_set_layouts()[0], bindings, descr_alloc, log);
+    if (!descr_set) {
+        log->Error("Failed to allocate descriptor set, skipping draw call!");
+        return;
+    }
+
+    vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, rt_pipeline.handle());
+    vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, rt_pipeline.layout(), 0, 1, &descr_set, 0,
+                            nullptr);
+
+    if (uniform_data) {
+        // TODO: Properly determine required stages!
+        vkCmdPushConstants(cmd_buf, rt_pipeline.layout(), VK_SHADER_STAGE_RAYGEN_BIT_KHR, 0, uniform_data_len,
+                           uniform_data);
+    }
+
+    vkCmdTraceRaysKHR(cmd_buf, rt_pipeline.rgen_table(), rt_pipeline.miss_table(), rt_pipeline.hit_table(),
+                      rt_pipeline.call_table(), dims[0], dims[1], dims[2]);
+}
+
+void Ray::Vk::TraceRaysIndirect(VkCommandBuffer cmd_buf, const Pipeline &rt_pipeline, const Buffer &indir_buf,
+                                const uint32_t indir_buf_offset, Span<const Binding> bindings, const void *uniform_data,
+                                int uniform_data_len, DescrMultiPoolAlloc *descr_alloc, ILog *log) {
+    Context *ctx = descr_alloc->ctx();
+
+    VkDescriptorSet descr_set =
+        PrepareDescriptorSet(ctx, rt_pipeline.prog()->descr_set_layouts()[0], bindings, descr_alloc, log);
+    if (!descr_set) {
+        log->Error("Failed to allocate descriptor set, skipping draw call!");
+        return;
+    }
+
+    vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, rt_pipeline.handle());
+    vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, rt_pipeline.layout(), 0, 1, &descr_set, 0,
+                            nullptr);
+
+    if (uniform_data && uniform_data_len) {
+        // TODO: Properly determine required stages!
+        vkCmdPushConstants(cmd_buf, rt_pipeline.layout(), VK_SHADER_STAGE_RAYGEN_BIT_KHR, 0, uniform_data_len,
+                           uniform_data);
+    }
+
+    vkCmdTraceRaysIndirectKHR(cmd_buf, rt_pipeline.rgen_table(), rt_pipeline.miss_table(), rt_pipeline.hit_table(),
+                              rt_pipeline.call_table(), indir_buf.vk_device_address() + indir_buf_offset);
+}

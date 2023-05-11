@@ -185,6 +185,13 @@ bool Ray::Vk::Context::Init(ILog *log, const char *preferred_device) {
             (res == VK_SUCCESS) && (format_properties.optimalTilingFeatures & VK_FORMAT_FEATURE_BLIT_DST_BIT);
     }
 
+    if (raytracing_supported_) {
+        VkPhysicalDeviceProperties2 prop2 = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
+        prop2.pNext = &rt_props_;
+
+        vkGetPhysicalDeviceProperties2KHR(physical_device_, &prop2);
+    }
+
     default_memory_allocs_ = std::make_unique<MemoryAllocators>(
         "Default Allocs", this, 32 * 1024 * 1024 /* initial_block_size */, 1.5f /* growth_factor */);
 
