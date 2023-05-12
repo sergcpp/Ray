@@ -21,6 +21,8 @@ const char *RendererTypeName(const eRendererType rt) {
         return "NEON";
     case eRendererType::Vulkan:
         return "VK";
+    case eRendererType::DirectX12:
+        return "DX";
     default:
         return "";
     }
@@ -43,6 +45,8 @@ eRendererType RendererTypeFromName(const char *name) {
         return eRendererType::SIMD_NEON;
     } else if (strcmp(name, "VK") == 0) {
         return eRendererType::Vulkan;
+    } else if (strcmp(name, "DX") == 0) {
+        return eRendererType::DirectX12;
     }
     return eRendererType::Reference;
 }

@@ -8,8 +8,7 @@
 #include "SceneVK.h"
 #include "UniformIntDistribution.h"
 
-#include "Vk/DebugMarker.h"
-#include "Vk/Shader.h"
+#include "Vk/DebugMarkerVK.h"
 
 #include "../Log.h"
 
@@ -99,7 +98,7 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
     ctx_.reset(new Context);
     const bool res = ctx_->Init(log, s.preferred_device);
     if (!res) {
-        throw std::runtime_error("Error initializings vulkan context!");
+        throw std::runtime_error("Error initializing vulkan context!");
     }
 
     use_hwrt_ = (s.use_hwrt && ctx_->ray_query_supported());
@@ -466,10 +465,10 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
     indir_args_buf_ = Buffer{"Indir Args", ctx_.get(), eBufType::Indirect, 32 * sizeof(DispatchIndirectCommand)};
 
     { // zero out counters
-        VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+        CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
 
-        const uint32_t zeros[4] = {};
-        counters_buf_.UpdateImmediate(0, 16 * sizeof(uint32_t), zeros, cmd_buf);
+        const uint32_t zeros[32] = {};
+        counters_buf_.UpdateImmediate(0, 32 * sizeof(uint32_t), zeros, cmd_buf);
 
         EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
     }
@@ -492,12 +491,12 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
 }
 
 Ray::Vk::Renderer::~Renderer() {
-    pixel_stage_buf_.Unmap();
-    if (base_color_stage_buf_) {
-        base_color_stage_buf_.Unmap();
+    pixel_readback_buf_.Unmap();
+    if (base_color_readback_buf_) {
+        base_color_readback_buf_.Unmap();
     }
-    if (depth_normals_stage_buf_) {
-        depth_normals_stage_buf_.Unmap();
+    if (depth_normals_readback_buf_) {
+        depth_normals_readback_buf_.Unmap();
     }
 }
 
@@ -533,11 +532,12 @@ void Ray::Vk::Renderer::Resize(const int w, const int h) {
     }
 
     if (frame_pixels_) {
-        pixel_stage_buf_.Unmap();
+        pixel_readback_buf_.Unmap();
         frame_pixels_ = nullptr;
     }
-    pixel_stage_buf_ = Buffer{"Px Stage Buf", ctx_.get(), eBufType::Stage, uint32_t(4 * w * h * sizeof(float))};
-    frame_pixels_ = (const color_rgba_t *)pixel_stage_buf_.Map(BufMapRead, true /* persistent */);
+    pixel_readback_buf_ =
+        Buffer{"Px Readback Buf", ctx_.get(), eBufType::Readback, uint32_t(4 * w * h * sizeof(float))};
+    frame_pixels_ = (const color_rgba_t *)pixel_readback_buf_.Map(true /* persistent */);
 
     prim_rays_buf_ =
         Buffer{"Primary Rays", ctx_.get(), eBufType::Storage, uint32_t(sizeof(Types::ray_data_t) * num_pixels)};
@@ -559,7 +559,7 @@ void Ray::Vk::Renderer::Resize(const int w, const int h) {
     count_table_buf_ =
         Buffer{"Count Table", ctx_.get(), eBufType::Storage, uint32_t(sizeof(uint32_t) * scan_values_rounded_count)};
 
-    VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+    CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
 
     for (int i = 0; i < 4; ++i) {
         char name_buf[64];
@@ -591,13 +591,13 @@ void Ray::Vk::Renderer::Resize(const int w, const int h) {
 }
 
 void Ray::Vk::Renderer::Clear(const color_rgba_t &c) {
-    VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+    CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
 
     const TransitionInfo img_transitions[] = {
-        {&dual_buf_[0], eResState::CopyDst},       {&dual_buf_[1], eResState::CopyDst},
-        {&final_buf_, eResState::CopyDst},         {&raw_final_buf_, eResState::CopyDst},
-        {&raw_filtered_buf_, eResState::CopyDst},  {&base_color_buf_, eResState::CopyDst},
-        {&depth_normals_buf_, eResState::CopyDst}, {&required_samples_buf_, eResState::CopyDst}};
+        {&dual_buf_[0], ResStateForClear},       {&dual_buf_[1], ResStateForClear},
+        {&final_buf_, ResStateForClear},         {&raw_final_buf_, ResStateForClear},
+        {&raw_filtered_buf_, ResStateForClear},  {&base_color_buf_, ResStateForClear},
+        {&depth_normals_buf_, ResStateForClear}, {&required_samples_buf_, ResStateForClear}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, img_transitions);
 
     ClearColorImage(dual_buf_[0], c.v, cmd_buf);
@@ -671,17 +671,17 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
                 base_color_buf_ =
                     Texture2D{"Base Color Image", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
                 if (base_color_pixels_) {
-                    base_color_stage_buf_.Unmap();
+                    base_color_readback_buf_.Unmap();
                     base_color_pixels_ = nullptr;
                 }
-                base_color_stage_buf_ = {};
-                base_color_stage_buf_ =
-                    Buffer{"Base Color Stage Buf", ctx_.get(), eBufType::Stage, uint32_t(4 * w * h * sizeof(float))};
-                base_color_pixels_ = (const color_rgba_t *)base_color_stage_buf_.Map(BufMapRead, true /* persistent */);
+                base_color_readback_buf_ = {};
+                base_color_readback_buf_ = Buffer{"Base Color Readback Buf", ctx_.get(), eBufType::Readback,
+                                                  uint32_t(4 * w * h * sizeof(float))};
+                base_color_pixels_ = (const color_rgba_t *)base_color_readback_buf_.Map(true /* persistent */);
 
                 // Perform initial clear
-                const TransitionInfo img_transitions[] = {{&base_color_buf_, eResState::CopyDst}};
-                VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+                const TransitionInfo img_transitions[] = {{&base_color_buf_, ResStateForClear}};
+                CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
                 TransitionResourceStates(cmd_buf, AllStages, AllStages, img_transitions);
                 static const float rgba[] = {0.0f, 0.0f, 0.0f, 0.0f};
                 ClearColorImage(base_color_buf_, rgba, cmd_buf);
@@ -690,10 +690,10 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         } else {
             base_color_buf_ = {};
             if (base_color_pixels_) {
-                base_color_stage_buf_.Unmap();
+                base_color_readback_buf_.Unmap();
                 base_color_pixels_ = nullptr;
             }
-            base_color_stage_buf_ = {};
+            base_color_readback_buf_ = {};
         }
         if (cam.pass_settings.flags & ePassFlags::OutputDepthNormals) {
             if (!depth_normals_buf_.ready() || depth_normals_buf_.params.w != w || depth_normals_buf_.params.h != h) {
@@ -704,18 +704,17 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
                 depth_normals_buf_ =
                     Texture2D{"Depth-Normals Image", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
                 if (depth_normals_pixels_) {
-                    depth_normals_stage_buf_.Unmap();
+                    depth_normals_readback_buf_.Unmap();
                     depth_normals_pixels_ = nullptr;
                 }
-                depth_normals_stage_buf_ = {};
-                depth_normals_stage_buf_ =
-                    Buffer{"Depth Normals Stage Buf", ctx_.get(), eBufType::Stage, uint32_t(4 * w * h * sizeof(float))};
-                depth_normals_pixels_ =
-                    (const color_rgba_t *)depth_normals_stage_buf_.Map(BufMapRead, true /* persistent */);
+                depth_normals_readback_buf_ = {};
+                depth_normals_readback_buf_ = Buffer{"Depth Normals Readback Buf", ctx_.get(), eBufType::Readback,
+                                                     uint32_t(4 * w * h * sizeof(float))};
+                depth_normals_pixels_ = (const color_rgba_t *)depth_normals_readback_buf_.Map(true /* persistent */);
 
                 // Perform initial clear
-                const TransitionInfo img_transitions[] = {{&depth_normals_buf_, eResState::CopyDst}};
-                VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+                const TransitionInfo img_transitions[] = {{&depth_normals_buf_, ResStateForClear}};
+                CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
                 TransitionResourceStates(cmd_buf, AllStages, AllStages, img_transitions);
                 static const float rgba[] = {0.0f, 0.0f, 0.0f, 0.0f};
                 ClearColorImage(depth_normals_buf_, rgba, cmd_buf);
@@ -725,61 +724,57 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
             temp_depth_normals_buf_ = {};
             depth_normals_buf_ = {};
             if (depth_normals_pixels_) {
-                depth_normals_stage_buf_.Unmap();
+                depth_normals_readback_buf_.Unmap();
                 depth_normals_pixels_ = nullptr;
             }
-            depth_normals_stage_buf_ = {};
+            depth_normals_readback_buf_ = {};
         }
     }
 
     if (loaded_halton_ == -1 || (region.iteration / HALTON_SEQ_LEN) != (loaded_halton_ / HALTON_SEQ_LEN)) {
-        VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+        CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
 
-        Buffer temp_stage_buf{"Temp halton stage", ctx_.get(), eBufType::Stage, halton_seq_buf_.size()};
+        Buffer temp_upload_buf{"Temp halton upload", ctx_.get(), eBufType::Upload, halton_seq_buf_.size()};
         { // update stage buffer
-            uint8_t *mapped_ptr = temp_stage_buf.Map(BufMapWrite);
+            uint8_t *mapped_ptr = temp_upload_buf.Map();
             memcpy(mapped_ptr, &region.halton_seq[0], sizeof(float) * HALTON_COUNT * HALTON_SEQ_LEN);
-            temp_stage_buf.Unmap();
+            temp_upload_buf.Unmap();
         }
 
-        const TransitionInfo res_transitions[] = {{&temp_stage_buf, eResState::CopySrc},
-                                                  {&halton_seq_buf_, eResState::CopyDst}};
-        TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
-
-        CopyBufferToBuffer(temp_stage_buf, 0, halton_seq_buf_, 0, sizeof(float) * HALTON_COUNT * HALTON_SEQ_LEN,
+        CopyBufferToBuffer(temp_upload_buf, 0, halton_seq_buf_, 0, sizeof(float) * HALTON_COUNT * HALTON_SEQ_LEN,
                            cmd_buf);
 
         EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 
-        temp_stage_buf.FreeImmediate();
+        temp_upload_buf.FreeImmediate();
         loaded_halton_ = region.iteration;
     }
 
     if (loaded_view_transform_ != cam.view_transform) {
         if (cam.view_transform != eViewTransform::Standard) {
-            VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+            CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
 
             const uint32_t data_len = LUT_DIMS * LUT_DIMS * LUT_DIMS * sizeof(uint32_t);
-            Buffer temp_stage_buf{"Temp tonemap LUT stage", ctx_.get(), eBufType::Stage, data_len};
+            Buffer temp_upload_buf{"Temp tonemap LUT upload", ctx_.get(), eBufType::Upload, data_len};
             { // update stage buffer
-                uint32_t *mapped_ptr = reinterpret_cast<uint32_t *>(temp_stage_buf.Map(BufMapWrite));
+                uint32_t *mapped_ptr = reinterpret_cast<uint32_t *>(temp_upload_buf.Map());
                 const uint32_t *lut = transform_luts[int(cam.view_transform)];
 
                 memcpy(mapped_ptr, lut, data_len);
 
-                temp_stage_buf.Unmap();
+                temp_upload_buf.Unmap();
             }
 
-            const TransitionInfo res_transitions[] = {{&temp_stage_buf, eResState::CopySrc},
+            const TransitionInfo res_transitions[] = {{&temp_upload_buf, eResState::CopySrc},
                                                       {&tonemap_lut_, eResState::CopyDst}};
             TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
-            tonemap_lut_.SetSubImage(0, 0, 0, LUT_DIMS, LUT_DIMS, LUT_DIMS, eTexFormat::RawRGB10_A2, temp_stage_buf,
+            tonemap_lut_.SetSubImage(0, 0, 0, LUT_DIMS, LUT_DIMS, LUT_DIMS, eTexFormat::RawRGB10_A2, temp_upload_buf,
                                      cmd_buf, 0, data_len);
 
             EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 
-            temp_stage_buf.FreeImmediate();
+            temp_upload_buf.FreeImmediate();
         }
         loaded_view_transform_ = cam.view_transform;
     }
@@ -855,13 +850,13 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
     }
 
 #if RUN_IN_LOCKSTEP
-    VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+    CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
 #else
     VkCommandBufferBeginInfo begin_info = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
     begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
     vkBeginCommandBuffer(ctx_->draw_cmd_buf(ctx_->backend_frame), &begin_info);
-    VkCommandBuffer cmd_buf = ctx_->draw_cmd_buf(ctx_->backend_frame);
+    CommandBuffer cmd_buf = ctx_->draw_cmd_buf(ctx_->backend_frame);
 #endif
 
     vkCmdResetQueryPool(cmd_buf, ctx_->query_pool(ctx_->backend_frame), 0, MaxTimestampQueries);
@@ -1173,13 +1168,13 @@ void Ray::Vk::Renderer::DenoiseImage(const RegionContext &region) {
                                                                   timestamps_[ctx_->backend_frame].denoise[1]);
 
 #if RUN_IN_LOCKSTEP
-    VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+    CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
 #else
     VkCommandBufferBeginInfo begin_info = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
     begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
     vkBeginCommandBuffer(ctx_->draw_cmd_buf(ctx_->backend_frame), &begin_info);
-    VkCommandBuffer cmd_buf = ctx_->draw_cmd_buf(ctx_->backend_frame);
+    CommandBuffer cmd_buf = ctx_->draw_cmd_buf(ctx_->backend_frame);
 #endif
 
     vkCmdResetQueryPool(cmd_buf, ctx_->query_pool(ctx_->backend_frame), 0, MaxTimestampQueries);
@@ -1262,7 +1257,7 @@ void Ray::Vk::Renderer::UpdateHaltonSequence(const int iteration, std::unique_pt
     }
 }
 
-void Ray::Vk::Renderer::RadixSort(VkCommandBuffer cmd_buf, const Buffer &indir_args, Buffer _hashes[2],
+void Ray::Vk::Renderer::RadixSort(CommandBuffer cmd_buf, const Buffer &indir_args, Buffer _hashes[2],
                                   Buffer &count_table, const Buffer &counters, Buffer partial_sums[],
                                   Buffer scan_values[]) {
     DebugMarker _(cmd_buf, "Radix Sort");
@@ -1288,7 +1283,7 @@ void Ray::Vk::Renderer::RadixSort(VkCommandBuffer cmd_buf, const Buffer &indir_a
     assert(hashes[0] == &_hashes[0]);
 }
 
-void Ray::Vk::Renderer::ExclusiveScan(VkCommandBuffer cmd_buf, const Buffer &indir_args, const int indir_args_indices[],
+void Ray::Vk::Renderer::ExclusiveScan(CommandBuffer cmd_buf, const Buffer &indir_args, const int indir_args_indices[],
                                       const Buffer &input, const uint32_t offset, const uint32_t stride,
                                       const Buffer partial_sums[], const Buffer scan_values[]) {
     DebugMarker _(cmd_buf, "Exclusive Scan");
@@ -1315,8 +1310,8 @@ void Ray::Vk::Renderer::ExclusiveScan(VkCommandBuffer cmd_buf, const Buffer &ind
 }
 
 const Ray::color_rgba_t *Ray::Vk::Renderer::get_pixels_ref(const bool tonemap) const {
-    if (frame_dirty_ || pixel_stage_is_tonemapped_ != tonemap) {
-        VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+    if (frame_dirty_ || pixel_readback_is_tonemapped_ != tonemap) {
+        CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
 
         { // download result
             DebugMarker _(cmd_buf, "Download Result");
@@ -1325,10 +1320,10 @@ const Ray::color_rgba_t *Ray::Vk::Renderer::get_pixels_ref(const bool tonemap) c
             const auto &buffer_to_use = tonemap ? final_buf_ : raw_filtered_buf_;
 
             const TransitionInfo res_transitions[] = {{&buffer_to_use, eResState::CopySrc},
-                                                      {&pixel_stage_buf_, eResState::CopyDst}};
+                                                      {&pixel_readback_buf_, eResState::CopyDst}};
             TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
-            CopyImageToBuffer(buffer_to_use, 0, 0, 0, w_, h_, pixel_stage_buf_, cmd_buf, 0);
+            CopyImageToBuffer(buffer_to_use, 0, 0, 0, w_, h_, pixel_readback_buf_, cmd_buf, 0);
         }
 
         VkMemoryBarrier mem_barrier = {VK_STRUCTURE_TYPE_MEMORY_BARRIER};
@@ -1373,9 +1368,9 @@ const Ray::color_rgba_t *Ray::Vk::Renderer::get_pixels_ref(const bool tonemap) c
             is_set = false;
         }
 
-        pixel_stage_buf_.FlushMappedRange(0, pixel_stage_buf_.size());
+        pixel_readback_buf_.FlushMappedRange(0, pixel_readback_buf_.size());
         frame_dirty_ = false;
-        pixel_stage_is_tonemapped_ = tonemap;
+        pixel_readback_is_tonemapped_ = tonemap;
     }
 
     return frame_pixels_;
@@ -1385,19 +1380,20 @@ const Ray::color_rgba_t *Ray::Vk::Renderer::get_aux_pixels_ref(const eAUXBuffer 
     bool &dirty_flag = (buf == eAUXBuffer::BaseColor) ? base_color_dirty_ : depth_normals_dirty_;
 
     const auto &buffer_to_use = (buf == eAUXBuffer::BaseColor) ? base_color_buf_ : depth_normals_buf_;
-    const auto &stage_buffer_to_use = (buf == eAUXBuffer::BaseColor) ? base_color_stage_buf_ : depth_normals_stage_buf_;
+    const auto &readback_buffer_to_use =
+        (buf == eAUXBuffer::BaseColor) ? base_color_readback_buf_ : depth_normals_readback_buf_;
 
     if (dirty_flag) {
-        VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+        CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
 
         { // download result
             DebugMarker _(cmd_buf, "Download Result");
 
             const TransitionInfo res_transitions[] = {{&buffer_to_use, eResState::CopySrc},
-                                                      {&stage_buffer_to_use, eResState::CopyDst}};
+                                                      {&readback_buffer_to_use, eResState::CopyDst}};
             TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
-            CopyImageToBuffer(buffer_to_use, 0, 0, 0, w_, h_, stage_buffer_to_use, cmd_buf, 0);
+            CopyImageToBuffer(buffer_to_use, 0, 0, 0, w_, h_, readback_buffer_to_use, cmd_buf, 0);
         }
 
         VkMemoryBarrier mem_barrier = {VK_STRUCTURE_TYPE_MEMORY_BARRIER};
@@ -1442,7 +1438,7 @@ const Ray::color_rgba_t *Ray::Vk::Renderer::get_aux_pixels_ref(const eAUXBuffer 
             is_set = false;
         }
 
-        stage_buffer_to_use.FlushMappedRange(0, stage_buffer_to_use.size());
+        readback_buffer_to_use.FlushMappedRange(0, readback_buffer_to_use.size());
         dirty_flag = false;
     }
 

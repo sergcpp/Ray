@@ -12,7 +12,7 @@ layout(std430, binding = HALTON_SEQ_BUF_SLOT) readonly buffer Halton {
     float g_halton[];
 };
 
-layout(binding = REQUIRED_SAMPLES_IMG_SLOT, r16ui) uniform uimage2D g_required_samples_img;
+layout(binding = REQUIRED_SAMPLES_IMG_SLOT) uniform usampler2D g_required_samples_img;
 
 layout(std430, binding = INOUT_COUNTERS_BUF_SLOT) buffer InoutCounters {
     uint g_inout_counters[];
@@ -45,7 +45,7 @@ void main() {
     int y = int(g_params.rect.y + gl_GlobalInvocationID.y);
 
 #if ADAPTIVE
-    if (imageLoad(g_required_samples_img, ivec2(x, y)).r < g_params.iteration) {
+    if (texelFetch(g_required_samples_img, ivec2(x, y), 0).r < g_params.iteration) {
         return;
     }
     uint index = atomicAdd(g_inout_counters[0], 1);

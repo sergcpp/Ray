@@ -1,33 +1,35 @@
-cmake_minimum_required(VERSION 2.8.12)
+cmake_minimum_required(VERSION 3.18)
 project(Ray)
 
 OPTION(ENABLE_REF_IMPL "Enable reference CPU implementation" ON)
 OPTION(ENABLE_SIMD_IMPL "Enable SIMD CPU implementations" ON)
-IF (NOT CMAKE_SYSTEM_NAME MATCHES "Android")
-    OPTION(ENABLE_GPU_IMPL "Enable Vulkan GPU implementation" ON)
-ELSE()
-    OPTION(ENABLE_GPU_IMPL "Enable Vulkan GPU implementation" OFF)
-ENDIF()
+if(NOT CMAKE_SYSTEM_NAME MATCHES "Android")
+    OPTION(ENABLE_VK_IMPL "Enable Vulkan GPU implementation" ON)
+else(NOT CMAKE_SYSTEM_NAME MATCHES "Android")
+    OPTION(ENABLE_VK_IMPL "Enable Vulkan GPU implementation" OFF)
+endif(NOT CMAKE_SYSTEM_NAME MATCHES "Android")
+OPTION(ENABLE_DX_IMPL "Enable DirectX12 GPU implementation" OFF)
 
 set(CMAKE_CONFIGURATION_TYPES "Debug;Release;RelWithDebInfo;Asan" CACHE STRING "" FORCE)
 
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-IF(MSVC)
+if(MSVC)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP")
     set(CMAKE_CXX_FLAGS_DEBUG "/MDd /Zi /Ob0 /O1 /fp:except /WX")
     if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
         set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Wno-deprecated-declarations
                                                             -Wno-unsupported-floating-point-opt
-                                                            -Wno-pragma-clang-attribute")
+                                                            -Wno-pragma-clang-attribute
+                                                            -Wno-microsoft-enum-forward-reference")
     endif()
     if (NOT DEFINED CMAKE_CXX_FLAGS_ASAN)
         set(CMAKE_CXX_FLAGS_ASAN "/MTd /Zi /Od /RTC1 /fsanitize=address")
         set(CMAKE_EXE_LINKER_FLAGS_ASAN "${CMAKE_EXE_LINKER_FLAGS_DEBUG} /INCREMENTAL:NO")
     endif()
     add_compile_definitions(VK_USE_PLATFORM_WIN32_KHR)
-ELSE(MSVC)
+else(MSVC)
     if(NOT CMAKE_SYSTEM_NAME MATCHES "Android" AND NOT CMAKE_GENERATOR_PLATFORM MATCHES "ARM64")
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse2 -mfma -fno-strict-aliasing -Wno-unused-command-line-argument")
         set(CMAKE_CXX_FLAGS_DEBUG "-g -O1")
@@ -35,35 +37,45 @@ ELSE(MSVC)
             set(CMAKE_CXX_FLAGS_ASAN "-fsanitize=address")
             set(CMAKE_EXE_LINKER_FLAGS_ASAN "-fsanitize=address")
         endif()
-        IF(WIN32)
-        ELSE(WIN32)
+        if(WIN32)
+        else(WIN32)
             set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
-        ENDIF(WIN32)
+        endif(WIN32)
     endif()
     if(APPLE)
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused-command-line-argument")
         add_compile_definitions(VK_USE_PLATFORM_MACOS_MVK)
     else(APPLE)
         add_compile_definitions(VK_USE_PLATFORM_XLIB_KHR)
     endif(APPLE)
-ENDIF(MSVC)
+endif(MSVC)
 
 set(INTERNAL_SOURCE_FILES internal/Bitmap.h
                           internal/BVHSplit.h
                           internal/BVHSplit.cpp
                           internal/Core.h
                           internal/Core.cpp
+                          internal/CoreDX.h
                           internal/CoreRef.h
                           internal/CoreRef.cpp
                           internal/CoreSIMD.h
+                          internal/Fixed.h
                           internal/Halton.h
                           internal/HashMap32.h
+                          internal/LinearAlloc.h
+                          internal/LinearAlloc.cpp
+                          internal/RastState.h
                           internal/RendererCPU.h
+                          internal/SamplingParams.h
+                          internal/SamplingParams.cpp
                           internal/SceneCPU.h
                           internal/SceneCPU.cpp
                           internal/ScopeExit.h
                           internal/SmallVector.h
                           internal/SparseStorageCPU.h
                           internal/Span.h
+                          internal/TextureParams.h
+                          internal/TextureParams.cpp
                           internal/TextureSplitter.h
                           internal/TextureSplitter.cpp
                           internal/TextureStorageCPU.h
@@ -98,9 +110,19 @@ if (ENABLE_SIMD_IMPL)
                               internal/RendererAVX2.cpp
                               internal/RendererAVX512.h
                               internal/RendererAVX512.cpp)
+
+    set_source_files_properties(
+        internal/RendererSSE2.cpp
+        internal/RendererSSE41.cpp
+        internal/RendererNEON.cpp
+        internal/RendererAVX.cpp
+        internal/RendererAVX2.cpp
+        internal/RendererAVX512.cpp
+        PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON
+    )
 endif(ENABLE_SIMD_IMPL)
 
-if (ENABLE_GPU_IMPL)
+if (ENABLE_VK_IMPL)
     add_definitions(-DENABLE_OBJ_LABELS)
     set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
                               internal/CoreVK.h
@@ -111,7 +133,25 @@ if (ENABLE_GPU_IMPL)
                               internal/SceneVK.cpp
                               internal/SparseStorageVK.h
                               internal/VectorVK.h)
-endif()
+endif (ENABLE_VK_IMPL)
+
+if(ENABLE_DX_IMPL AND WIN32)
+    set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
+                                internal/CoreDX.h
+                                internal/RendererDX.h
+                                internal/RendererDX.cpp
+                                internal/RendererDX_kernels.cpp
+                                internal/SceneDX.h
+                                internal/SceneDX.cpp
+                                internal/SparseStorageDX.h
+                                internal/VectorDX.h
+    )
+    set_source_files_properties(
+        internal/RendererDX.cpp
+        internal/SceneDX.cpp
+        PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON
+    )
+endif(ENABLE_DX_IMPL AND WIN32)
 
 if(NOT CMAKE_GENERATOR_PLATFORM MATCHES "ARM64")
     if(MSVC)
@@ -158,51 +198,76 @@ set(SIMD_FILES internal/simd/aligned_allocator.h
                internal/simd/simd_vec_avx512.h
                internal/simd/simd_vec_neon.h)
 
-set(VK_FILES internal/Vk/AccStructure.h
-             internal/Vk/AccStructure.cpp
-             internal/Vk/Buffer.h
-             internal/Vk/Buffer.cpp
-             internal/Vk/Context.h
-             internal/Vk/Context.cpp
-             internal/Vk/DebugMarker.h
-             internal/Vk/DescriptorPool.h
-             internal/Vk/DescriptorPool.cpp
-             internal/Vk/DrawCall.h
-             internal/Vk/DrawCall.cpp
-             internal/Vk/Fence.h
-             internal/Vk/Fence.cpp
-             internal/Vk/Fixed.h
-             internal/Vk/LinearAlloc.h
-             internal/Vk/LinearAlloc.cpp
-             internal/Vk/MemoryAllocator.h
-             internal/Vk/MemoryAllocator.cpp
-             internal/Vk/Pipeline.h
-             internal/Vk/Pipeline.cpp
-             internal/Vk/Program.h
-             internal/Vk/Program.cpp
-             internal/Vk/RastState.h
-             internal/Vk/RenderPass.h
-             internal/Vk/RenderPass.cpp
-             internal/Vk/Resource.h
-             internal/Vk/Resource.cpp
-             internal/Vk/Sampler.h
-             internal/Vk/Sampler.cpp
-             internal/Vk/SamplingParams.h
-             internal/Vk/Shader.h
-             internal/Vk/Shader.cpp
-             internal/Vk/Texture.h
-             internal/Vk/Texture.cpp
-             internal/Vk/TextureAtlas.h
-             internal/Vk/TextureAtlas.cpp
-             internal/Vk/TextureParams.h
-             internal/Vk/Utils.h
-             internal/Vk/Utils.cpp
-             internal/Vk/VertexInput.h
-             internal/Vk/VertexInput.cpp
-             internal/Vk/VK.h
-             internal/Vk/VKExt.cpp
-             third-party/SPIRV-Reflect/spirv_reflect.h
-             third-party/SPIRV-Reflect/spirv_reflect.c)
+set(VK_SOURCE_FILES internal/Vk/AccStructureVK.h
+                    internal/Vk/AccStructureVK.cpp
+                    internal/Vk/BufferVK.h
+                    internal/Vk/BufferVK.cpp
+                    internal/Vk/ContextVK.h
+                    internal/Vk/ContextVK.cpp
+                    internal/Vk/DebugMarkerVK.h
+                    internal/Vk/DescriptorPoolVK.h
+                    internal/Vk/DescriptorPoolVK.cpp
+                    internal/Vk/DrawCallVK.h
+                    internal/Vk/DrawCallVK.cpp
+                    internal/Vk/FenceVK.h
+                    internal/Vk/FenceVK.cpp
+                    internal/Vk/MemoryAllocatorVK.h
+                    internal/Vk/MemoryAllocatorVK.cpp
+                    internal/Vk/PipelineVK.h
+                    internal/Vk/PipelineVK.cpp
+                    internal/Vk/ProgramVK.h
+                    internal/Vk/ProgramVK.cpp
+                    internal/Vk/RenderPassVK.h
+                    internal/Vk/RenderPassVK.cpp
+                    internal/Vk/ResourceVK.h
+                    internal/Vk/ResourceVK.cpp
+                    internal/Vk/SamplerVK.h
+                    internal/Vk/SamplerVK.cpp
+                    internal/Vk/ShaderVK.h
+                    internal/Vk/ShaderVK.cpp
+                    internal/Vk/TextureVK.h
+                    internal/Vk/TextureVK.cpp
+                    internal/Vk/TextureAtlasVK.h
+                    internal/Vk/TextureAtlasVK.cpp
+                    internal/Vk/VertexInputVK.h
+                    internal/Vk/VertexInputVK.cpp
+                    internal/Vk/VK.h
+                    internal/Vk/VKExt.cpp
+                    third-party/SPIRV-Reflect/spirv_reflect.h
+                    third-party/SPIRV-Reflect/spirv_reflect.c)
+
+if(WIN32)
+    set(DX_SOURCE_FILES internal/Dx/BufferDX.h
+                        internal/Dx/BufferDX.cpp
+                        internal/Dx/ContextDX.h
+                        internal/Dx/ContextDX.cpp
+                        internal/Dx/DebugMarkerDX.h
+                        internal/Dx/DebugMarkerDX.cpp
+                        internal/Dx/DescriptorPoolDX.h
+                        internal/Dx/DescriptorPoolDX.cpp
+                        internal/Dx/DrawCallDX.h
+                        internal/Dx/DrawCallDX.cpp
+                        internal/Dx/FenceDX.h
+                        internal/Dx/FenceDX.cpp
+                        internal/Dx/MemoryAllocatorDX.h
+                        internal/Dx/MemoryAllocatorDX.cpp
+                        internal/Dx/PipelineDX.h
+                        internal/Dx/PipelineDX.cpp
+                        internal/Dx/ProgramDX.h
+                        internal/Dx/ProgramDX.cpp
+                        internal/Dx/RenderPassDX.h
+                        internal/Dx/RenderPassDX.cpp
+                        internal/Dx/ResourceDX.h
+                        internal/Dx/ResourceDX.cpp
+                        internal/Dx/ShaderDX.h
+                        internal/Dx/ShaderDX.cpp
+                        internal/Dx/TextureDX.h
+                        internal/Dx/TextureDX.cpp
+                        #internal/Dx/TextureAtlasDX.h
+                        #internal/Dx/TextureAtlasDX.cpp
+                        internal/Dx/VertexInputDX.h
+                        internal/Dx/VertexInputDX.cpp)
+endif(WIN32)
 
 set(SHADER_FILES    internal/shaders/_interface_common.h
                     internal/shaders/common.glsl
@@ -258,10 +323,15 @@ source_group("src\\internal\\shaders" FILES ${SHADER_FILES})
 list(APPEND ALL_SOURCE_FILES ${SIMD_FILES})
 source_group("src\\internal\\simd" FILES ${SIMD_FILES})
 
-if (ENABLE_GPU_IMPL)
-    list(APPEND ALL_SOURCE_FILES ${VK_FILES})
-    source_group("src\\internal\\Vk" FILES ${VK_FILES})
-endif(ENABLE_GPU_IMPL)
+if(ENABLE_VK_IMPL)
+    list(APPEND ALL_SOURCE_FILES ${VK_SOURCE_FILES})
+    source_group("src\\internal\\Vk" FILES ${VK_SOURCE_FILES})
+endif(ENABLE_VK_IMPL)
+
+if(ENABLE_DX_IMPL AND WIN32)
+    list(APPEND ALL_SOURCE_FILES ${DX_SOURCE_FILES})
+    source_group("src\\internal\\Dx" FILES ${DX_SOURCE_FILES})
+endif(ENABLE_DX_IMPL AND WIN32)
 
 set_source_files_properties(${SHADER_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
 
@@ -270,5 +340,23 @@ if(MSVC)
 endif(MSVC)
 
 add_library(Ray STATIC ${ALL_SOURCE_FILES})
+if(WIN32 AND ENABLE_DX_IMPL)
+    target_link_libraries(Ray DXGI D3D12 D3dcompiler dxcompiler)
+endif(WIN32 AND ENABLE_DX_IMPL)
+
+set_target_properties(Ray PROPERTIES UNITY_BUILD_MODE GROUP)
+
+set_source_files_properties(${SOURCE_FILES}
+                            PROPERTIES UNITY_GROUP "common"
+                            )
+set_source_files_properties(${INTERNAL_SOURCE_FILES}
+                            PROPERTIES UNITY_GROUP "internal"
+                            )
+set_source_files_properties(${VK_SOURCE_FILES}
+                            PROPERTIES UNITY_GROUP "vk"
+                            )
+set_source_files_properties(${DX_SOURCE_FILES}
+                            PROPERTIES UNITY_GROUP "dx"
+                            )
 
 add_subdirectory(tests)

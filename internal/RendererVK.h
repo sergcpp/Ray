@@ -3,12 +3,12 @@
 #include "../RendererBase.h"
 #include "Core.h"
 
-#include "Vk/Buffer.h"
-#include "Vk/Context.h"
-#include "Vk/Pipeline.h"
-#include "Vk/Program.h"
-#include "Vk/Shader.h"
-#include "Vk/Texture.h"
+#include "Vk/BufferVK.h"
+#include "Vk/ContextVK.h"
+#include "Vk/PipelineVK.h"
+#include "Vk/ProgramVK.h"
+#include "Vk/ShaderVK.h"
+#include "Vk/TextureVK.h"
 
 namespace Ray {
 namespace Vk {
@@ -95,8 +95,8 @@ class Renderer : public RendererBase {
 
     static const int SORT_SCAN_PORTION = 256;
 
-    Buffer pixel_stage_buf_, base_color_stage_buf_, depth_normals_stage_buf_;
-    mutable bool pixel_stage_is_tonemapped_ = false;
+    Buffer pixel_readback_buf_, base_color_readback_buf_, depth_normals_readback_buf_;
+    mutable bool pixel_readback_is_tonemapped_ = false;
     mutable bool frame_dirty_ = true, base_color_dirty_ = true, depth_normals_dirty_ = true;
 
     const color_rgba_t *frame_pixels_ = nullptr, *base_color_pixels_ = nullptr, *depth_normals_pixels_ = nullptr;
@@ -122,104 +122,104 @@ class Renderer : public RendererBase {
 
     stats_t stats_ = {0};
 
-    void kernel_GeneratePrimaryRays(VkCommandBuffer cmd_buf, const camera_t &cam, int hi, const rect_t &rect,
+    void kernel_GeneratePrimaryRays(CommandBuffer cmd_buf, const camera_t &cam, int hi, const rect_t &rect,
                                     const Buffer &random_seq, int iteration, const Texture2D &req_samples_img,
                                     const Buffer &inout_counters, const Buffer &out_rays);
-    void kernel_IntersectScene(VkCommandBuffer cmd_buf, const pass_settings_t &settings, const scene_data_t &sc_data,
+    void kernel_IntersectScene(CommandBuffer cmd_buf, const pass_settings_t &settings, const scene_data_t &sc_data,
                                const Buffer &random_seq, int hi, const rect_t &rect, uint32_t node_index, float inter_t,
                                Span<const TextureAtlas> tex_atlases, VkDescriptorSet tex_descr_set, const Buffer &rays,
                                const Buffer &out_hits);
-    void kernel_IntersectScene_RTPipe(VkCommandBuffer cmd_buf, const pass_settings_t &settings,
+    void kernel_IntersectScene_RTPipe(CommandBuffer cmd_buf, const pass_settings_t &settings,
                                       const scene_data_t &sc_data, const Buffer &random_seq, int hi, const rect_t &rect,
                                       uint32_t node_index, float inter_t, Span<const TextureAtlas> tex_atlases,
                                       VkDescriptorSet tex_descr_set, const Buffer &rays, const Buffer &out_hits);
-    void kernel_IntersectScene(VkCommandBuffer cmd_buf, const Buffer &indir_args, int indir_args_index,
+    void kernel_IntersectScene(CommandBuffer cmd_buf, const Buffer &indir_args, int indir_args_index,
                                const Buffer &counters, const pass_settings_t &settings, const scene_data_t &sc_data,
                                const Buffer &random_seq, int hi, uint32_t node_index, float inter_t,
                                Span<const TextureAtlas> tex_atlases, VkDescriptorSet tex_descr_set, const Buffer &rays,
                                const Buffer &out_hits);
-    void kernel_IntersectScene_RTPipe(VkCommandBuffer cmd_buf, const Buffer &indir_args, int indir_args_index,
+    void kernel_IntersectScene_RTPipe(CommandBuffer cmd_buf, const Buffer &indir_args, int indir_args_index,
                                       const pass_settings_t &settings, const scene_data_t &sc_data,
                                       const Buffer &random_seq, int hi, uint32_t node_index, float inter_t,
                                       Span<const TextureAtlas> tex_atlases, VkDescriptorSet tex_descr_set,
                                       const Buffer &rays, const Buffer &out_hits);
-    void kernel_IntersectSceneShadow(VkCommandBuffer cmd_buf, const pass_settings_t &settings, const Buffer &indir_args,
+    void kernel_IntersectSceneShadow(CommandBuffer cmd_buf, const pass_settings_t &settings, const Buffer &indir_args,
                                      int indir_args_index, const Buffer &counters, const scene_data_t &sc_data,
                                      const Buffer &random_seq, int hi, uint32_t node_index, float clamp_val,
                                      Span<const TextureAtlas> tex_atlases, VkDescriptorSet tex_descr_set,
                                      const Buffer &sh_rays, const Texture2D &out_img);
-    void kernel_IntersectAreaLights(VkCommandBuffer cmd_buf, const scene_data_t &sc_data, const Buffer &indir_args,
+    void kernel_IntersectAreaLights(CommandBuffer cmd_buf, const scene_data_t &sc_data, const Buffer &indir_args,
                                     const Buffer &counters, const Buffer &rays, const Buffer &inout_hits);
-    void kernel_ShadePrimaryHits(VkCommandBuffer cmd_buf, const pass_settings_t &settings, const environment_t &env,
+    void kernel_ShadePrimaryHits(CommandBuffer cmd_buf, const pass_settings_t &settings, const environment_t &env,
                                  const Buffer &indir_args, int indir_args_index, const Buffer &hits, const Buffer &rays,
                                  const scene_data_t &sc_data, const Buffer &random_seq, int hi, const rect_t &rect,
                                  Span<const TextureAtlas> tex_atlases, VkDescriptorSet tex_descr_set,
                                  const Texture2D &out_img, const Buffer &out_rays, const Buffer &out_sh_rays,
                                  const Buffer &inout_counters, const Texture2D &out_base_color,
                                  const Texture2D &out_depth_normals);
-    void kernel_ShadeSecondaryHits(VkCommandBuffer cmd_buf, const pass_settings_t &settings, const environment_t &env,
+    void kernel_ShadeSecondaryHits(CommandBuffer cmd_buf, const pass_settings_t &settings, const environment_t &env,
                                    const Buffer &indir_args, int indir_args_index, const Buffer &hits,
                                    const Buffer &rays, const scene_data_t &sc_data, const Buffer &random_seq, int hi,
                                    Span<const TextureAtlas> tex_atlases, VkDescriptorSet tex_descr_set,
                                    const Texture2D &out_img, const Buffer &out_rays, const Buffer &out_sh_rays,
                                    const Buffer &inout_counters);
-    void kernel_PrepareIndirArgs(VkCommandBuffer cmd_buf, const Buffer &inout_counters, const Buffer &out_indir_args);
-    void kernel_MixIncremental(VkCommandBuffer cmd_buf, float main_mix_factor, float aux_mix_factor, const rect_t &rect,
+    void kernel_PrepareIndirArgs(CommandBuffer cmd_buf, const Buffer &inout_counters, const Buffer &out_indir_args);
+    void kernel_MixIncremental(CommandBuffer cmd_buf, float main_mix_factor, float aux_mix_factor, const rect_t &rect,
                                int iteration, const Texture2D &temp_img, const Texture2D &temp_base_color,
                                const Texture2D &temp_depth_normals, const Texture2D &req_samples,
                                const Texture2D &out_img, const Texture2D &out_base_color,
                                const Texture2D &out_depth_normals);
-    void kernel_Postprocess(VkCommandBuffer cmd_buf, const Texture2D &img0_buf, float img0_weight,
+    void kernel_Postprocess(CommandBuffer cmd_buf, const Texture2D &img0_buf, float img0_weight,
                             const Texture2D &img1_buf, float img1_weight, float exposure, float inv_gamma,
                             const rect_t &rect, float variance_threshold, int iteration, const Texture2D &out_pixels,
                             const Texture2D &out_raw_pixels, const Texture2D &out_variance,
                             const Texture2D &out_req_samples) const;
-    void kernel_FilterVariance(VkCommandBuffer cmd_buf, const Texture2D &img_buf, const rect_t &rect,
+    void kernel_FilterVariance(CommandBuffer cmd_buf, const Texture2D &img_buf, const rect_t &rect,
                                float variance_threshold, int iteration, const Texture2D &out_variance,
                                const Texture2D &out_req_samples);
-    void kernel_NLMFilter(VkCommandBuffer cmd_buf, const Texture2D &img_buf, const Texture2D &var_buf, float alpha,
+    void kernel_NLMFilter(CommandBuffer cmd_buf, const Texture2D &img_buf, const Texture2D &var_buf, float alpha,
                           float damping, const Texture2D &base_color_img, float base_color_weight,
                           const Texture2D &depth_normals_img, float depth_normals_weight, const Texture2D &out_raw_img,
                           eViewTransform view_transform, float inv_gamma, const rect_t &rect, const Texture2D &out_img);
-    void kernel_SortHashRays(VkCommandBuffer cmd_buf, const Buffer &indir_args, const Buffer &rays,
+    void kernel_SortHashRays(CommandBuffer cmd_buf, const Buffer &indir_args, const Buffer &rays,
                              const Buffer &counters, const float root_min[3], const float cell_size[3],
                              const Buffer &out_hashes);
-    void kernel_SortScan(VkCommandBuffer cmd_buf, bool exclusive, const Buffer &indir_args, int indir_args_index,
+    void kernel_SortScan(CommandBuffer cmd_buf, bool exclusive, const Buffer &indir_args, int indir_args_index,
                          const Buffer &input, int input_offset, int input_stride, const Buffer &out_scan_values,
                          const Buffer &out_partial_sums);
-    void kernel_SortExclusiveScan(VkCommandBuffer cmd_buf, const Buffer &indir_args, int indir_args_index,
+    void kernel_SortExclusiveScan(CommandBuffer cmd_buf, const Buffer &indir_args, int indir_args_index,
                                   const Buffer &input, int input_offset, int input_stride,
                                   const Buffer &out_scan_values, const Buffer &out_partial_sums) {
         kernel_SortScan(cmd_buf, true, indir_args, indir_args_index, input, input_offset, input_stride, out_scan_values,
                         out_partial_sums);
     }
-    void kernel_SortInclusiveScan(VkCommandBuffer cmd_buf, const Buffer &indir_args, int indir_args_index,
+    void kernel_SortInclusiveScan(CommandBuffer cmd_buf, const Buffer &indir_args, int indir_args_index,
                                   const Buffer &input, int input_offset, int input_stride,
                                   const Buffer &out_scan_values, const Buffer &out_partial_sums) {
         kernel_SortScan(cmd_buf, false, indir_args, indir_args_index, input, input_offset, input_stride,
                         out_scan_values, out_partial_sums);
     }
-    void kernel_SortAddPartialSums(VkCommandBuffer cmd_buf, const Buffer &indir_args, int indir_args_index,
+    void kernel_SortAddPartialSums(CommandBuffer cmd_buf, const Buffer &indir_args, int indir_args_index,
                                    const Buffer &partials_sums, const Buffer &inout_values);
-    void kernel_SortInitCountTable(VkCommandBuffer cmd_buf, int shift, const Buffer &indir_args, int indir_args_index,
+    void kernel_SortInitCountTable(CommandBuffer cmd_buf, int shift, const Buffer &indir_args, int indir_args_index,
                                    const Buffer &hashes, const Buffer &counters, int counter_index,
                                    const Buffer &out_count_table);
-    void kernel_SortWriteSortedHashes(VkCommandBuffer cmd_buf, int shift, const Buffer &indir_args,
+    void kernel_SortWriteSortedHashes(CommandBuffer cmd_buf, int shift, const Buffer &indir_args,
                                       int indir_args_index, const Buffer &hashes, const Buffer &offsets,
                                       const Buffer &counters, int counter_index, int chunks_counter_index,
                                       const Buffer &out_chunks);
-    void kernel_SortReorderRays(VkCommandBuffer cmd_buf, const Buffer &indir_args, int indir_args_index,
+    void kernel_SortReorderRays(CommandBuffer cmd_buf, const Buffer &indir_args, int indir_args_index,
                                 const Buffer &in_rays, const Buffer &indices, const Buffer &counters, int counter_index,
                                 const Buffer &out_rays);
-    void kernel_DebugRT(VkCommandBuffer cmd_buf, const scene_data_t &sc_data, uint32_t node_index, const Buffer &rays,
+    void kernel_DebugRT(CommandBuffer cmd_buf, const scene_data_t &sc_data, uint32_t node_index, const Buffer &rays,
                         const Texture2D &out_pixels);
 
     void UpdateHaltonSequence(int iteration, std::unique_ptr<float[]> &seq);
 
-    void RadixSort(VkCommandBuffer cmd_buf, const Buffer &indir_args, Buffer hashes[2], Buffer &count_table,
+    void RadixSort(CommandBuffer cmd_buf, const Buffer &indir_args, Buffer hashes[2], Buffer &count_table,
                    const Buffer &counters, Buffer partial_sums[], Buffer scan_values[]);
 
-    void ExclusiveScan(VkCommandBuffer cmd_buf, const Buffer &indir_args, const int indir_args_indices[],
+    void ExclusiveScan(CommandBuffer cmd_buf, const Buffer &indir_args, const int indir_args_indices[],
                        const Buffer &input, const uint32_t offset, const uint32_t stride, const Buffer partial_sums[],
                        const Buffer scan_values[]);
 

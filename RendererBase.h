@@ -23,7 +23,8 @@ enum class eRendererType : uint32_t {
     SIMD_AVX512,
     SIMD_NEON,
     // GPU renderers
-    Vulkan
+    Vulkan,
+    DirectX12
 };
 
 // All CPU renderers
@@ -31,7 +32,7 @@ const Bitmask<eRendererType> RendererCPU = Bitmask<eRendererType>{eRendererType:
                                            eRendererType::SIMD_SSE41 | eRendererType::SIMD_NEON |
                                            eRendererType::SIMD_AVX | eRendererType::SIMD_AVX2;
 // All GPU renderers
-const Bitmask<eRendererType> RendererGPU = eRendererType::Vulkan;
+const Bitmask<eRendererType> RendererGPU = Bitmask<eRendererType>{eRendererType::Vulkan} | eRendererType::DirectX12;
 
 const char *RendererTypeName(eRendererType rt);
 eRendererType RendererTypeFromName(const char *name);
@@ -42,10 +43,8 @@ bool RendererSupportsMultithreading(eRendererType rt);
 /// Renderer settings
 struct settings_t {
     int w = 0, h = 0;
-#ifdef ENABLE_GPU_IMPL
     const char *preferred_device = nullptr;
     bool use_tex_compression = true; // temporarily GPU only
-#endif                               // ENABLE_GPU_IMPL
     bool use_hwrt = true;
     bool use_bindless = true;
     bool use_wide_bvh = true;

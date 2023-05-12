@@ -11,10 +11,10 @@
 
 #include "../Log.h"
 #include "BVHSplit.h"
+#include "TextureParams.h"
 #include "TextureUtils.h"
 #include "Utils.h"
-#include "Vk/Context.h"
-#include "Vk/TextureParams.h"
+#include "Vk/ContextVK.h"
 
 #define MIN(x, y) ((x) < (y) ? (x) : (y))
 #define MAX(x, y) ((x) < (y) ? (y) : (x))
@@ -51,9 +51,10 @@ VkDeviceSize align_up(const VkDeviceSize size, const VkDeviceSize alignment) {
 
 Ray::Vk::Scene::Scene(Context *ctx, const bool use_hwrt, const bool use_bindless, const bool use_tex_compression)
     : ctx_(ctx), use_hwrt_(use_hwrt), use_bindless_(use_bindless), use_tex_compression_(use_tex_compression),
-      nodes_(ctx), tris_(ctx), tri_indices_(ctx), tri_materials_(ctx), transforms_(ctx, "Transforms"),
-      meshes_(ctx, "Meshes"), mesh_instances_(ctx, "Mesh Instances"), mi_indices_(ctx), vertices_(ctx),
-      vtx_indices_(ctx), materials_(ctx, "Materials"), atlas_textures_(ctx, "Atlas Textures"), bindless_tex_data_{ctx},
+      nodes_(ctx, "Nodes"), tris_(ctx, "Tris"), tri_indices_(ctx, "Tri Indices"), tri_materials_(ctx, "Tri Materials"),
+      transforms_(ctx, "Transforms"), meshes_(ctx, "Meshes"), mesh_instances_(ctx, "Mesh Instances"),
+      mi_indices_(ctx, "MI Indices"), vertices_(ctx, "Vertices"), vtx_indices_(ctx, "Vtx Indices"),
+      materials_(ctx, "Materials"), atlas_textures_(ctx, "Atlas Textures"), bindless_tex_data_{ctx},
       tex_atlases_{{ctx, eTexFormat::RawRGBA8888, eTexFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
                    {ctx, eTexFormat::RawRGB888, eTexFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
                    {ctx, eTexFormat::RawRG88, eTexFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
@@ -61,7 +62,8 @@ Ray::Vk::Scene::Scene(Context *ctx, const bool use_hwrt, const bool use_bindless
                    {ctx, eTexFormat::BC3, eTexFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
                    {ctx, eTexFormat::BC4, eTexFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
                    {ctx, eTexFormat::BC5, eTexFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE}},
-      lights_(ctx, "Lights"), li_indices_(ctx), visible_lights_(ctx), blocker_lights_(ctx) {}
+      lights_(ctx, "Lights"), li_indices_(ctx, "LI Indices"), visible_lights_(ctx, "Visible Lights"),
+      blocker_lights_(ctx, "Blocker Lights") {}
 
 Ray::Vk::Scene::~Scene() {
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
@@ -227,9 +229,9 @@ Ray::TextureHandle Ray::Vk::Scene::AddAtlasTexture_nolock(const tex_desc_t &_t) 
 Ray::TextureHandle Ray::Vk::Scene::AddBindlessTexture_nolock(const tex_desc_t &_t) {
     eTexFormat src_fmt = eTexFormat::Undefined, fmt = eTexFormat::Undefined;
 
-    Buffer temp_stage_buf("Temp stage buf", ctx_, eBufType::Stage, 2 * _t.w * _t.h * 4,
+    Buffer temp_stage_buf("Temp stage buf", ctx_, eBufType::Upload, 2 * _t.w * _t.h * 4,
                           4096); // allocate for worst case
-    uint8_t *stage_data = temp_stage_buf.Map(BufMapWrite);
+    uint8_t *stage_data = temp_stage_buf.Map();
 
     const bool use_compression = use_tex_compression_ && !_t.force_no_compression;
 
@@ -257,7 +259,7 @@ Ray::TextureHandle Ray::Vk::Scene::AddBindlessTexture_nolock(const tex_desc_t &_
             if (use_compression) {
                 src_fmt = eTexFormat::RawRG88;
                 fmt = eTexFormat::BC5;
-                data_size[0] = GetRequiredMemory_BC5(_t.w, _t.h);
+                data_size[0] = GetRequiredMemory_BC5(_t.w, _t.h, 1);
                 CompressImage_BC5<2>(&repacked_data[0], _t.w, _t.h, stage_data);
             } else {
                 src_fmt = fmt = eTexFormat::RawRG88;
@@ -272,7 +274,7 @@ Ray::TextureHandle Ray::Vk::Scene::AddBindlessTexture_nolock(const tex_desc_t &_
                 is_YCoCg = true;
                 src_fmt = eTexFormat::RawRGB888;
                 fmt = eTexFormat::BC3;
-                data_size[0] = GetRequiredMemory_BC3(_t.w, _t.h);
+                data_size[0] = GetRequiredMemory_BC3(_t.w, _t.h, 1);
                 CompressImage_BC3<true /* Is_YCoCg */>(temp_YCoCg.get(), _t.w, _t.h, stage_data);
             } else if (ctx_->rgb8_unorm_is_supported()) {
                 src_fmt = fmt = eTexFormat::RawRGB888;
@@ -310,7 +312,7 @@ Ray::TextureHandle Ray::Vk::Scene::AddBindlessTexture_nolock(const tex_desc_t &_
             if (use_compression) {
                 src_fmt = eTexFormat::RawRG88;
                 fmt = eTexFormat::BC5;
-                data_size[0] = GetRequiredMemory_BC5(_t.w, _t.h);
+                data_size[0] = GetRequiredMemory_BC5(_t.w, _t.h, 1);
                 CompressImage_BC5<2>(&repacked_data[0], _t.w, _t.h, stage_data);
             } else {
                 src_fmt = fmt = eTexFormat::RawRG88;
@@ -326,7 +328,7 @@ Ray::TextureHandle Ray::Vk::Scene::AddBindlessTexture_nolock(const tex_desc_t &_
         if (use_compression) {
             src_fmt = eTexFormat::RawR8;
             fmt = eTexFormat::BC4;
-            data_size[0] = GetRequiredMemory_BC4(_t.w, _t.h);
+            data_size[0] = GetRequiredMemory_BC4(_t.w, _t.h, 1);
             CompressImage_BC4<1>(reinterpret_cast<const uint8_t *>(_t.data), _t.w, _t.h, stage_data);
         } else {
             src_fmt = fmt = eTexFormat::RawR8;
@@ -375,7 +377,7 @@ Ray::TextureHandle Ray::Vk::Scene::AddBindlessTexture_nolock(const tex_desc_t &_
                                               ctx_->default_memory_allocs(), ctx_->log());
 
     { // Submit GPU commands
-        VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+        CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
 
         int res[2] = {_t.w, _t.h};
         uint32_t data_offset = 0;
@@ -448,13 +450,13 @@ void Ray::Vk::Scene::WriteTextureMips(const color_t<T, N> data[], const int _res
             if (N == 3) {
                 auto temp_YCoCg = ConvertRGB_to_CoCgxY(&dst_data[0].v[0], dst_res[0], dst_res[1]);
 
-                out_size[i] = GetRequiredMemory_BC3(dst_res[0], dst_res[1]);
+                out_size[i] = GetRequiredMemory_BC3(dst_res[0], dst_res[1], 1);
                 CompressImage_BC3<true /* Is_YCoCg */>(temp_YCoCg.get(), dst_res[0], dst_res[1], out_data);
             } else if (N == 1) {
-                out_size[i] = GetRequiredMemory_BC4(dst_res[0], dst_res[1]);
+                out_size[i] = GetRequiredMemory_BC4(dst_res[0], dst_res[1], 1);
                 CompressImage_BC4<N>(&dst_data[0].v[0], dst_res[0], dst_res[1], out_data);
             } else if (N == 2) {
-                out_size[i] = GetRequiredMemory_BC5(dst_res[0], dst_res[1]);
+                out_size[i] = GetRequiredMemory_BC5(dst_res[0], dst_res[1], 1);
                 CompressImage_BC5<2>(&dst_data[0].v[0], dst_res[0], dst_res[1], out_data);
             }
         } else {
@@ -1195,9 +1197,9 @@ void Ray::Vk::Scene::PrepareEnvMapQTree_nolock() {
         assert(t.params.format == eTexFormat::RawRGBA8888);
         const uint32_t data_size = t.params.w * t.params.h * GetPerPixelDataLen(eTexFormat::RawRGBA8888);
 
-        temp_stage_buf = Buffer("Temp stage buf", ctx_, eBufType::Stage, data_size);
+        temp_stage_buf = Buffer("Temp stage buf", ctx_, eBufType::Readback, data_size);
 
-        VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+        CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
 
         CopyImageToBuffer(t, 0, 0, 0, t.params.w, t.params.h, temp_stage_buf, cmd_buf, 0);
 
@@ -1212,9 +1214,9 @@ void Ray::Vk::Scene::PrepareEnvMapQTree_nolock() {
         assert(atlas.format() == eTexFormat::RawRGBA8888);
         const uint32_t data_size = atlas.res_x() * atlas.res_y() * GetPerPixelDataLen(atlas.format());
 
-        temp_stage_buf = Buffer("Temp stage buf", ctx_, eBufType::Stage, data_size);
+        temp_stage_buf = Buffer("Temp stage buf", ctx_, eBufType::Readback, data_size);
 
-        VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+        CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
 
         atlas.CopyRegionTo(t.page[0], t.pos[0][0] + 1, t.pos[0][1] + 1, (t.width & ATLAS_TEX_WIDTH_BITS),
                            (t.height & ATLAS_TEX_HEIGHT_BITS), temp_stage_buf, cmd_buf, 0);
@@ -1222,7 +1224,7 @@ void Ray::Vk::Scene::PrepareEnvMapQTree_nolock() {
         EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
     }
 
-    const uint8_t *rgbe_data = temp_stage_buf.Map(BufMapRead);
+    const uint8_t *rgbe_data = temp_stage_buf.Map();
 
     const int lowest_dim = std::min(size[0], size[1]);
 
@@ -1362,8 +1364,8 @@ void Ray::Vk::Scene::PrepareEnvMapQTree_nolock() {
         req_size += 4096 * int((env_map_qtree_.mips[i].size() * sizeof(simd_fvec4) + 4096 - 1) / 4096);
     }
 
-    temp_stage_buf = Buffer("Temp upload buf", ctx_, eBufType::Stage, req_size);
-    uint8_t *stage_data = temp_stage_buf.Map(BufMapWrite);
+    temp_stage_buf = Buffer("Temp upload buf", ctx_, eBufType::Upload, req_size);
+    uint8_t *stage_data = temp_stage_buf.Map();
 
     for (int i = 0; i < env_.qtree_levels; ++i) {
         memcpy(&stage_data[mip_offsets[i]], env_map_qtree_.mips[i].data(),
@@ -1378,7 +1380,7 @@ void Ray::Vk::Scene::PrepareEnvMapQTree_nolock() {
 
     env_map_qtree_.tex = Texture2D("Env map qtree", ctx_, p, ctx_->default_memory_allocs(), ctx_->log());
 
-    VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+    CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
 
     for (int i = 0; i < env_.qtree_levels; ++i) {
         env_map_qtree_.tex.SetSubImage(i, 0, 0, (env_map_qtree_.res >> i) / 2, (env_map_qtree_.res >> i) / 2,
@@ -1559,7 +1561,7 @@ void Ray::Vk::Scene::PrepareBindlessTextures_nolock() {
             img_transitions.emplace_back(&tex, eResState::ShaderResource);
         }
 
-        VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+        CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
         TransitionResourceStates(cmd_buf, AllStages, AllStages, img_transitions);
         EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
     }
@@ -1698,7 +1700,7 @@ void Ray::Vk::Scene::RebuildHWAccStructures_nolock() {
 
         { // Submit build commands
             VkDeviceSize acc_buf_offset = 0;
-            VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+            CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
 
             vkCmdResetQueryPool(cmd_buf, query_pool, 0, uint32_t(all_blases.size()));
 
@@ -1766,7 +1768,7 @@ void Ray::Vk::Scene::RebuildHWAccStructures_nolock() {
 
         { // Submit compaction commands
             VkDeviceSize compact_acc_buf_offset = 0;
-            VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+            CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
 
             for (int i = 0; i < int(all_blases.size()); ++i) {
                 VkAccelerationStructureCreateInfoKHR acc_create_info = {
@@ -1867,20 +1869,20 @@ void Ray::Vk::Scene::RebuildHWAccStructures_nolock() {
 
     rt_geo_data_buf_ =
         Buffer{"RT Geo Data Buf", ctx_, eBufType::Storage, uint32_t(geo_instances.size() * sizeof(RTGeoInstance))};
-    Buffer geo_data_stage_buf{"RT Geo Data Stage Buf", ctx_, eBufType::Stage,
+    Buffer geo_data_stage_buf{"RT Geo Data Stage Buf", ctx_, eBufType::Upload,
                               uint32_t(geo_instances.size() * sizeof(RTGeoInstance))};
     {
-        uint8_t *geo_data_stage = geo_data_stage_buf.Map(BufMapWrite);
+        uint8_t *geo_data_stage = geo_data_stage_buf.Map();
         memcpy(geo_data_stage, geo_instances.data(), geo_instances.size() * sizeof(RTGeoInstance));
         geo_data_stage_buf.Unmap();
     }
 
     rt_instance_buf_ = Buffer{"RT Instance Buf", ctx_, eBufType::Storage,
                               uint32_t(tlas_instances.size() * sizeof(VkAccelerationStructureInstanceKHR))};
-    Buffer instance_stage_buf{"RT Instance Stage Buf", ctx_, eBufType::Stage,
+    Buffer instance_stage_buf{"RT Instance Stage Buf", ctx_, eBufType::Upload,
                               uint32_t(tlas_instances.size() * sizeof(VkAccelerationStructureInstanceKHR))};
     {
-        uint8_t *instance_stage = instance_stage_buf.Map(BufMapWrite);
+        uint8_t *instance_stage = instance_stage_buf.Map();
         memcpy(instance_stage, tlas_instances.data(),
                tlas_instances.size() * sizeof(VkAccelerationStructureInstanceKHR));
         instance_stage_buf.Unmap();
@@ -1888,7 +1890,7 @@ void Ray::Vk::Scene::RebuildHWAccStructures_nolock() {
 
     VkDeviceAddress instance_buf_addr = rt_instance_buf_.vk_device_address();
 
-    VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+    CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
 
     CopyBufferToBuffer(geo_data_stage_buf, 0, rt_geo_data_buf_, 0, geo_data_stage_buf.size(), cmd_buf);
     CopyBufferToBuffer(instance_stage_buf, 0, rt_instance_buf_, 0, instance_stage_buf.size(), cmd_buf);

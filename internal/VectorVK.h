@@ -1,7 +1,7 @@
 #pragma once
 
 #include "CoreVK.h"
-#include "Vk/Buffer.h"
+#include "Vk/BufferVK.h"
 
 #pragma warning(push)
 #pragma warning(disable : 4127) // conditional expression is constant
@@ -14,8 +14,8 @@ template <typename T> class Vector {
     size_t size_, cap_;
 
   public:
-    explicit Vector(Context *ctx, const size_t capacity = 16) : ctx_(ctx), size_(0), cap_(capacity) {
-        buf_ = Buffer{"Vector Buf", ctx_, eBufType::Storage, uint32_t(sizeof(T) * cap_), sizeof(T)};
+    explicit Vector(Context *ctx, const char *name, const size_t capacity = 16) : ctx_(ctx), size_(0), cap_(capacity) {
+        buf_ = Buffer{name, ctx_, eBufType::Storage, uint32_t(sizeof(T) * cap_), sizeof(T)};
     }
 
     const Buffer &buf() const { return buf_; }
@@ -41,10 +41,10 @@ template <typename T> class Vector {
         Reserve(size_ + num);
 
         { // Write buffer
-            Buffer temp_stage_buf{"Temp Stage", ctx_, eBufType::Stage, uint32_t(sizeof(T) * num), uint32_t(sizeof(T))};
+            Buffer temp_stage_buf{"Temp Stage", ctx_, eBufType::Upload, uint32_t(sizeof(T) * num), uint32_t(sizeof(T))};
 
             { // Prepare stage buffer
-                uint8_t *ptr = temp_stage_buf.Map(BufMapWrite);
+                uint8_t *ptr = temp_stage_buf.Map();
                 memcpy(ptr, vec, sizeof(T) * num);
                 temp_stage_buf.Unmap();
             }
@@ -102,13 +102,13 @@ template <typename T> class Vector {
         }
 #endif
 
-        Buffer temp_stage_buf{"Temp Stage", ctx_, eBufType::Stage, uint32_t(sizeof(T)), uint32_t(sizeof(T))};
+        Buffer temp_stage_buf{"Temp Stage", ctx_, eBufType::Readback, uint32_t(sizeof(T)), uint32_t(sizeof(T))};
 
         VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
         CopyBufferToBuffer(buf_, uint32_t(sizeof(T) * i), temp_stage_buf, 0, uint32_t(sizeof(T)), cmd_buf);
         EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 
-        const uint8_t *ptr = temp_stage_buf.Map(BufMapRead);
+        const uint8_t *ptr = temp_stage_buf.Map();
         memcpy(&v, ptr, sizeof(T));
         temp_stage_buf.Unmap();
     }
@@ -120,13 +120,13 @@ template <typename T> class Vector {
         }
 #endif
 
-        Buffer temp_stage_buf{"Temp Stage", ctx_, eBufType::Stage, uint32_t(sizeof(T) * count), uint32_t(sizeof(T))};
+        Buffer temp_stage_buf{"Temp Stage", ctx_, eBufType::Readback, uint32_t(sizeof(T) * count), uint32_t(sizeof(T))};
 
         VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
         CopyBufferToBuffer(buf_, uint32_t(sizeof(T) * offset), temp_stage_buf, 0, uint32_t(sizeof(T) * count), cmd_buf);
         EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 
-        const uint8_t *ptr = temp_stage_buf.Map(BufMapRead);
+        const uint8_t *ptr = temp_stage_buf.Map();
         memcpy(p, ptr, sizeof(T) * count);
         temp_stage_buf.Unmap();
     }
@@ -138,9 +138,9 @@ template <typename T> class Vector {
         }
 #endif
 
-        Buffer temp_stage_buf{"Temp Stage", ctx_, eBufType::Stage, uint32_t(sizeof(T)), uint32_t(sizeof(T))};
+        Buffer temp_stage_buf{"Temp Stage", ctx_, eBufType::Upload, uint32_t(sizeof(T)), uint32_t(sizeof(T))};
 
-        uint8_t *ptr = temp_stage_buf.Map(BufMapWrite);
+        uint8_t *ptr = temp_stage_buf.Map();
         memcpy(ptr, &v, sizeof(T));
         temp_stage_buf.Unmap();
 
@@ -156,9 +156,9 @@ template <typename T> class Vector {
         }
 #endif
 
-        Buffer temp_stage_buf{"Temp Stage", ctx_, eBufType::Stage, uint32_t(sizeof(T) * count), uint32_t(sizeof(T))};
+        Buffer temp_stage_buf{"Temp Stage", ctx_, eBufType::Upload, uint32_t(sizeof(T) * count), uint32_t(sizeof(T))};
 
-        uint8_t *ptr = temp_stage_buf.Map(BufMapWrite);
+        uint8_t *ptr = temp_stage_buf.Map();
         memcpy(ptr, p, sizeof(T) * count);
         temp_stage_buf.Unmap();
 

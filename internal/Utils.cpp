@@ -147,6 +147,8 @@ const int _blank_BC3_block_4x4_len = sizeof(_blank_BC3_block_4x4);
 const uint8_t _blank_ASTC_block_4x4[] = {0xFC, 0xFD, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
                                          0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 const int _blank_ASTC_block_4x4_len = sizeof(_blank_ASTC_block_4x4);
+
+int round_up(int v, int align) { return align * ((v + align - 1) / align); }
 } // namespace Ray
 
 void Ray::RGBMDecode(const uint8_t rgbm[4], float out_rgb[3]) {
@@ -998,7 +1000,7 @@ void SelectYCoCgDiagonal_Ref(const uint8_t block[64], uint8_t min_color[3], uint
     uint8_t c0 = min_color[1];
     uint8_t c1 = max_color[1];
 
-    //c0 ^= c1 ^= mask &= c0 ^= c1;
+    // c0 ^= c1 ^= mask &= c0 ^= c1;
     c0 ^= c1;
     mask &= c0;
     c1 ^= mask;
@@ -1364,18 +1366,28 @@ const int BlockSize_BC5 = BlockSize_BC4 + BlockSize_BC4;
 
 } // namespace Ray
 
-int Ray::GetRequiredMemory_BC1(const int w, const int h) { return BlockSize_BC1 * ((w + 3) / 4) * ((h + 3) / 4); }
-int Ray::GetRequiredMemory_BC3(const int w, const int h) { return BlockSize_BC3 * ((w + 3) / 4) * ((h + 3) / 4); }
-int Ray::GetRequiredMemory_BC4(const int w, const int h) { return BlockSize_BC4 * ((w + 3) / 4) * ((h + 3) / 4); }
-int Ray::GetRequiredMemory_BC5(const int w, const int h) { return BlockSize_BC5 * ((w + 3) / 4) * ((h + 3) / 4); }
+int Ray::GetRequiredMemory_BC1(const int w, const int h, const int pitch_align) {
+    return round_up(BlockSize_BC1 * ((w + 3) / 4), pitch_align) * ((h + 3) / 4);
+}
+int Ray::GetRequiredMemory_BC3(const int w, const int h, const int pitch_align) {
+    return round_up(BlockSize_BC3 * ((w + 3) / 4), pitch_align) * ((h + 3) / 4);
+}
+int Ray::GetRequiredMemory_BC4(const int w, const int h, const int pitch_align) {
+    return round_up(BlockSize_BC4 * ((w + 3) / 4), pitch_align) * ((h + 3) / 4);
+}
+int Ray::GetRequiredMemory_BC5(const int w, const int h, const int pitch_align) {
+    return round_up(BlockSize_BC5 * ((w + 3) / 4), pitch_align) * ((h + 3) / 4);
+}
 
 template <int SrcChannels>
-void Ray::CompressImage_BC1(const uint8_t img_src[], const int w, const int h, uint8_t img_dst[]) {
+void Ray::CompressImage_BC1(const uint8_t img_src[], const int w, const int h, uint8_t img_dst[], int dst_pitch) {
     alignas(16) uint8_t block[64] = {};
     uint8_t *p_out = img_dst;
 
     const int w_aligned = w - (w % 4);
     const int h_aligned = h - (h % 4);
+
+    const int pitch_pad = dst_pitch == 0 ? 0 : dst_pitch - BlockSize_BC1 * ((w + 3) / 4);
 
 #if !defined(__arm__) && !defined(__aarch64__) && !defined(_M_ARM) && !defined(_M_ARM64)
     const CpuFeatures cpu = GetCpuFeatures();
@@ -1398,6 +1410,7 @@ void Ray::CompressImage_BC1(const uint8_t img_src[], const int w, const int h, u
                                                            block);
                 Emit_BC1_Block_SSE2(block, p_out);
             }
+            p_out += pitch_pad;
         }
         // process last (incomplete) row
         for (int i = 0; i < w && h_aligned != h; i += 4) {
@@ -1419,6 +1432,7 @@ void Ray::CompressImage_BC1(const uint8_t img_src[], const int w, const int h, u
                                                            block);
                 Emit_BC1_Block_Ref(block, p_out);
             }
+            p_out += pitch_pad;
         }
         // process last row
         for (int i = 0; i < w && h_aligned != h; i += 4) {
@@ -1429,16 +1443,20 @@ void Ray::CompressImage_BC1(const uint8_t img_src[], const int w, const int h, u
     }
 }
 
-template void Ray::CompressImage_BC1<4 /* SrcChannels */>(const uint8_t img_src[], int w, int h, uint8_t img_dst[]);
-template void Ray::CompressImage_BC1<3 /* SrcChannels */>(const uint8_t img_src[], int w, int h, uint8_t img_dst[]);
+template void Ray::CompressImage_BC1<4 /* SrcChannels */>(const uint8_t img_src[], int w, int h, uint8_t img_dst[],
+                                                          int dst_pitch);
+template void Ray::CompressImage_BC1<3 /* SrcChannels */>(const uint8_t img_src[], int w, int h, uint8_t img_dst[],
+                                                          int dst_pitch);
 
 template <bool Is_YCoCg>
-void Ray::CompressImage_BC3(const uint8_t img_src[], const int w, const int h, uint8_t img_dst[]) {
+void Ray::CompressImage_BC3(const uint8_t img_src[], const int w, const int h, uint8_t img_dst[], int dst_pitch) {
     alignas(16) uint8_t block[64] = {};
     uint8_t *p_out = img_dst;
 
     const int w_aligned = w - (w % 4);
     const int h_aligned = h - (h % 4);
+
+    const int pitch_pad = dst_pitch == 0 ? 0 : dst_pitch - BlockSize_BC3 * ((w + 3) / 4);
 
 #if !defined(__arm__) && !defined(__aarch64__) && !defined(_M_ARM) && !defined(_M_ARM64)
     const CpuFeatures cpu = GetCpuFeatures();
@@ -1453,6 +1471,7 @@ void Ray::CompressImage_BC3(const uint8_t img_src[], const int w, const int h, u
                 ExtractIncomplete4x4Block_Ref<4 /* SrcChannels */>(&img_src[w_aligned * 4], w * 4, w % 4, 4, block);
                 Emit_BC3_Block_SSE2<Is_YCoCg>(block, p_out);
             }
+            p_out += pitch_pad;
         }
         // process last (incomplete) row
         for (int i = 0; i < w && h_aligned != h; i += 4) {
@@ -1472,6 +1491,7 @@ void Ray::CompressImage_BC3(const uint8_t img_src[], const int w, const int h, u
                 ExtractIncomplete4x4Block_Ref<4>(&img_src[w_aligned * 4], w * 4, w % 4, 4, block);
                 Emit_BC3_Block_Ref<Is_YCoCg>(block, p_out);
             }
+            p_out += pitch_pad;
         }
         // process last (incomplete) row
         for (int i = 0; i < w && h_aligned != h; i += 4) {
@@ -1481,15 +1501,20 @@ void Ray::CompressImage_BC3(const uint8_t img_src[], const int w, const int h, u
     }
 }
 
-template void Ray::CompressImage_BC3<false /* Is_YCoCg */>(const uint8_t img_src[], int w, int h, uint8_t img_dst[]);
-template void Ray::CompressImage_BC3<true /* Is_YCoCg */>(const uint8_t img_src[], int w, int h, uint8_t img_dst[]);
+template void Ray::CompressImage_BC3<false /* Is_YCoCg */>(const uint8_t img_src[], int w, int h, uint8_t img_dst[],
+                                                           int dst_pitch);
+template void Ray::CompressImage_BC3<true /* Is_YCoCg */>(const uint8_t img_src[], int w, int h, uint8_t img_dst[],
+                                                          int dst_pitch);
 
-template <int SrcChannels> void Ray::CompressImage_BC4(const uint8_t img_src[], int w, int h, uint8_t img_dst[]) {
+template <int SrcChannels>
+void Ray::CompressImage_BC4(const uint8_t img_src[], const int w, const int h, uint8_t img_dst[], int dst_pitch) {
     alignas(16) uint8_t block[16] = {};
     uint8_t *p_out = img_dst;
 
     const int w_aligned = w - (w % 4);
     const int h_aligned = h - (h % 4);
+
+    const int pitch_pad = dst_pitch == 0 ? 0 : dst_pitch - BlockSize_BC4 * ((w + 3) / 4);
 
 #if 0
     // TODO: SIMD implementation
@@ -1506,6 +1531,7 @@ template <int SrcChannels> void Ray::CompressImage_BC4(const uint8_t img_src[], 
                                                               4, block);
                 Emit_BC4_Block_Ref(block, p_out);
             }
+            p_out += pitch_pad;
         }
         // process last (incomplete) row
         for (int i = 0; i < w && h_aligned != h; i += 4) {
@@ -1516,18 +1542,26 @@ template <int SrcChannels> void Ray::CompressImage_BC4(const uint8_t img_src[], 
     }
 }
 
-template void Ray::CompressImage_BC4<4 /* SrcChannels */>(const uint8_t img_src[], int w, int h, uint8_t img_dst[]);
-template void Ray::CompressImage_BC4<3 /* SrcChannels */>(const uint8_t img_src[], int w, int h, uint8_t img_dst[]);
-template void Ray::CompressImage_BC4<2 /* SrcChannels */>(const uint8_t img_src[], int w, int h, uint8_t img_dst[]);
-template void Ray::CompressImage_BC4<1 /* SrcChannels */>(const uint8_t img_src[], int w, int h, uint8_t img_dst[]);
+template void Ray::CompressImage_BC4<4 /* SrcChannels */>(const uint8_t img_src[], int w, int h, uint8_t img_dst[],
+                                                          int dst_pitch);
+template void Ray::CompressImage_BC4<3 /* SrcChannels */>(const uint8_t img_src[], int w, int h, uint8_t img_dst[],
+                                                          int dst_pitch);
+template void Ray::CompressImage_BC4<2 /* SrcChannels */>(const uint8_t img_src[], int w, int h, uint8_t img_dst[],
+                                                          int dst_pitch);
+template void Ray::CompressImage_BC4<1 /* SrcChannels */>(const uint8_t img_src[], int w, int h, uint8_t img_dst[],
+                                                          int dst_pitch);
+
+#include "TextureParams.h"
 
 template <int SrcChannels>
-void Ray::CompressImage_BC5(const uint8_t img_src[], const int w, const int h, uint8_t img_dst[]) {
+void Ray::CompressImage_BC5(const uint8_t img_src[], const int w, const int h, uint8_t img_dst[], int dst_pitch) {
     alignas(16) uint8_t block1[16] = {}, block2[16] = {};
     uint8_t *p_out = img_dst;
 
     const int w_aligned = w - (w % 4);
     const int h_aligned = h - (h % 4);
+
+    const int pitch_pad = dst_pitch == 0 ? 0 : dst_pitch - BlockSize_BC5 * ((w + 3) / 4);
 
 #if 0
     // TODO: SIMD implementation
@@ -1549,6 +1583,7 @@ void Ray::CompressImage_BC5(const uint8_t img_src[], const int w, const int h, u
                 Emit_BC4_Block_Ref(block1, p_out);
                 Emit_BC4_Block_Ref(block2, p_out);
             }
+            p_out += pitch_pad;
         }
         // process last (incomplete) row
         for (int i = 0; i < w && h_aligned != h; i += 4) {
@@ -1562,9 +1597,118 @@ void Ray::CompressImage_BC5(const uint8_t img_src[], const int w, const int h, u
     }
 }
 
-template void Ray::CompressImage_BC5<4 /* SrcChannels */>(const uint8_t img_src[], int w, int h, uint8_t img_dst[]);
-template void Ray::CompressImage_BC5<3 /* SrcChannels */>(const uint8_t img_src[], int w, int h, uint8_t img_dst[]);
-template void Ray::CompressImage_BC5<2 /* SrcChannels */>(const uint8_t img_src[], int w, int h, uint8_t img_dst[]);
+template void Ray::CompressImage_BC5<4 /* SrcChannels */>(const uint8_t img_src[], int w, int h, uint8_t img_dst[],
+                                                          int dst_pitch);
+template void Ray::CompressImage_BC5<3 /* SrcChannels */>(const uint8_t img_src[], int w, int h, uint8_t img_dst[],
+                                                          int dst_pitch);
+template void Ray::CompressImage_BC5<2 /* SrcChannels */>(const uint8_t img_src[], int w, int h, uint8_t img_dst[],
+                                                          int dst_pitch);
+
+std::unique_ptr<uint8_t[]> Ray::ReadTGAFile(const void *data, int &w, int &h, eTexFormat &format) {
+    uint32_t img_size;
+    ReadTGAFile(data, w, h, format, nullptr, img_size);
+
+    std::unique_ptr<uint8_t[]> image_ret(new uint8_t[img_size]);
+    ReadTGAFile(data, w, h, format, image_ret.get(), img_size);
+
+    return image_ret;
+}
+
+bool Ray::ReadTGAFile(const void *data, int &w, int &h, eTexFormat &format, uint8_t *out_data, uint32_t &out_size) {
+    const uint8_t tga_header[12] = {0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    const auto *tga_compare = (const uint8_t *)data;
+    const uint8_t *img_header = (const uint8_t *)data + sizeof(tga_header);
+    bool compressed = false;
+
+    if (memcmp(tga_header, tga_compare, sizeof(tga_header)) != 0) {
+        if (tga_compare[2] == 1) {
+            // fprintf(stderr, "Image cannot be indexed color.");
+            return false;
+        }
+        if (tga_compare[2] == 3) {
+            // fprintf(stderr, "Image cannot be greyscale color.");
+            return false;
+        }
+        if (tga_compare[2] == 9 || tga_compare[2] == 10) {
+            compressed = true;
+        }
+    }
+
+    w = int(img_header[1] * 256u + img_header[0]);
+    h = int(img_header[3] * 256u + img_header[2]);
+
+    if (w <= 0 || h <= 0 || (img_header[4] != 24 && img_header[4] != 32)) {
+        if (w <= 0 || h <= 0) {
+            // fprintf(stderr, "Image must have a width and height greater than 0");
+        }
+        if (img_header[4] != 24 && img_header[4] != 32) {
+            // fprintf(stderr, "Image must be 24 or 32 bit");
+        }
+        return false;
+    }
+
+    const uint32_t bpp = img_header[4];
+    const uint32_t bytes_per_pixel = bpp / 8;
+    if (bpp == 32) {
+        format = eTexFormat::RawRGBA8888;
+    } else if (bpp == 24) {
+        format = eTexFormat::RawRGB888;
+    }
+
+    if (out_data && out_size < w * h * bytes_per_pixel) {
+        return false;
+    }
+
+    out_size = w * h * bytes_per_pixel;
+    if (out_data) {
+        const uint8_t *image_data = (const uint8_t *)data + 18;
+
+        if (!compressed) {
+            for (size_t i = 0; i < out_size; i += bytes_per_pixel) {
+                out_data[i] = image_data[i + 2];
+                out_data[i + 1] = image_data[i + 1];
+                out_data[i + 2] = image_data[i];
+                if (bytes_per_pixel == 4) {
+                    out_data[i + 3] = image_data[i + 3];
+                }
+            }
+        } else {
+            for (size_t num = 0; num < out_size;) {
+                uint8_t packet_header = *image_data++;
+                if (packet_header & (1u << 7u)) {
+                    uint8_t color[4];
+                    unsigned size = (packet_header & ~(1u << 7u)) + 1;
+                    size *= bytes_per_pixel;
+                    for (unsigned i = 0; i < bytes_per_pixel; i++) {
+                        color[i] = *image_data++;
+                    }
+                    for (unsigned i = 0; i < size; i += bytes_per_pixel, num += bytes_per_pixel) {
+                        out_data[num] = color[2];
+                        out_data[num + 1] = color[1];
+                        out_data[num + 2] = color[0];
+                        if (bytes_per_pixel == 4) {
+                            out_data[num + 3] = color[3];
+                        }
+                    }
+                } else {
+                    unsigned size = (packet_header & ~(1u << 7u)) + 1;
+                    size *= bytes_per_pixel;
+                    for (unsigned i = 0; i < size; i += bytes_per_pixel, num += bytes_per_pixel) {
+                        out_data[num] = image_data[i + 2];
+                        out_data[num + 1] = image_data[i + 1];
+                        out_data[num + 2] = image_data[i];
+                        if (bytes_per_pixel == 4) {
+                            out_data[num + 3] = image_data[i + 3];
+                        }
+                    }
+                    image_data += size;
+                }
+            }
+        }
+    }
+
+    return true;
+}
 
 #undef _MIN
 #undef _MAX

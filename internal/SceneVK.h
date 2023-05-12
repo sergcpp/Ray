@@ -4,10 +4,10 @@
 #include "SparseStorageCPU.h"
 #include "SparseStorageVK.h"
 #include "VectorVK.h"
-#include "Vk/AccStructure.h"
-#include "Vk/DescriptorPool.h"
-#include "Vk/Texture.h"
-#include "Vk/TextureAtlas.h"
+#include "Vk/AccStructureVK.h"
+#include "Vk/DescriptorPoolVK.h"
+#include "Vk/TextureVK.h"
+#include "Vk/TextureAtlasVK.h"
 
 namespace Ray {
 namespace Vk {
