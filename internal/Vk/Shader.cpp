@@ -3,6 +3,7 @@
 #include <stdexcept>
 
 #include "../../Log.h"
+#include "../ScopeExit.h"
 #include "Context.h"
 
 #include "../../third-party/SPIRV-Reflect/spirv_reflect.h"
@@ -105,6 +106,7 @@ bool Ray::Vk::Shader::InitFromSPIRV(const uint8_t *shader_code, const int code_s
         log->Error("Failed to reflect shader module!");
         return false;
     }
+    SCOPE_EXIT(spvReflectDestroyShaderModule(&module));
 
     attr_bindings.clear();
     unif_bindings.clear();
@@ -141,6 +143,5 @@ bool Ray::Vk::Shader::InitFromSPIRV(const uint8_t *shader_code, const int code_s
         pc_ranges.push_back({blck.offset, blck.size});
     }
 
-    spvReflectDestroyShaderModule(&module);
     return true;
 }
