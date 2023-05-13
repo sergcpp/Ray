@@ -8,6 +8,8 @@ ENABLE_MULTIPLE_THREADS = True
 ENABLE_SPIRV_OPTIMIZATION = True
 ENABLE_DXC_COMPILATION = (os.name == "nt")
 
+mutex = threading.Lock()
+
 def spirv_base_path():
     if sys.platform.startswith("linux"):
         return os.path.join("third-party", "spirv", "linux")
@@ -49,15 +51,18 @@ def compile_shader(src_name, spv_name=None, glsl_version=None, target_env="spirv
     compile_cmd = os.path.join(spirv_base_path(), "glslangValidator -V --target-env " + target_env + " internal/shaders/" + src_name + " " + defines + " -o internal/shaders/output/" + spv_name)
     if (glsl_version != None):
         compile_cmd += " --glsl-version " + glsl_version
-    subprocess.run(compile_cmd, shell=True, check=True)
+    compile_result = subprocess.run(compile_cmd, shell=True, capture_output=True, text=True, check=True)
+    spirv_opt_result = None
+    spirv_cross_result = None
+    dxc_result = None
     if ENABLE_SPIRV_OPTIMIZATION == True:
         if os.name == "nt":
-            subprocess.run(os.path.join(spirv_base_path(), "spirv-opt.bat internal/shaders/output/" + spv_name + " -o internal/shaders/output/" + spv_name), shell=True, check=True)
+            spirv_opt_result = subprocess.run(os.path.join(spirv_base_path(), "spirv-opt.bat internal/shaders/output/" + spv_name + " -o internal/shaders/output/" + spv_name), shell=True, capture_output=True, text=True, check=True)
         else:
-            subprocess.run(os.path.join(spirv_base_path(), "spirv-opt.sh internal/shaders/output/" + spv_name + " -o internal/shaders/output/" + spv_name), shell=True, check=True)
+            spirv_opt_result = subprocess.run(os.path.join(spirv_base_path(), "spirv-opt.sh internal/shaders/output/" + spv_name + " -o internal/shaders/output/" + spv_name), shell=True, capture_output=True, text=True, check=True)
     if ENABLE_DXC_COMPILATION == True and compile_hlsl:
-        subprocess.run(os.path.join(spirv_base_path(), "spirv-cross internal/shaders/output/" + spv_name + " --hlsl --shader-model 60 --output internal/shaders/output/" + hlsl_name), shell=True, check=True)
-        subprocess.run(os.path.join(dxc_base_path(), "dxc -T cs_6_0 internal/shaders/output/" + hlsl_name + " -Fo internal/shaders/output/" + cso_name), shell=True, check=True)
+        spirv_cross_result = subprocess.run(os.path.join(spirv_base_path(), "spirv-cross internal/shaders/output/" + spv_name + " --hlsl --shader-model 60 --output internal/shaders/output/" + hlsl_name), shell=True, capture_output=True, text=True, check=True)
+        dxc_result = subprocess.run(os.path.join(dxc_base_path(), "dxc -T cs_6_0 internal/shaders/output/" + hlsl_name + " -Fo internal/shaders/output/" + cso_name), shell=True, capture_output=True, text=True, check=True)
 
         with open(os.path.join("internal", "shaders", "output", cso_name), 'rb') as f:
             cso_data = f.read()
@@ -71,6 +76,18 @@ def compile_shader(src_name, spv_name=None, glsl_version=None, target_env="spirv
     with open(os.path.join("internal", "shaders", "output", spv_name + ".inl"), 'w') as f:
         f.write(out)
 
+    mutex.acquire()
+    try:
+        print(compile_result.stdout)
+        if spirv_opt_result != None:
+            print(spirv_opt_result.stdout)
+        if spirv_cross_result != None:
+            print(spirv_cross_result.stdout)
+        if dxc_result != None:
+            print(dxc_result.stdout)
+    finally:
+        mutex.release()
+
 def compile_shader_async(src_name, spv_name=None, glsl_version=None, target_env="spirv1.3", defines = "", compile_hlsl=True):
     if ENABLE_MULTIPLE_THREADS == True:
         threading.Thread(target=compile_shader, args=(src_name, spv_name, glsl_version, target_env, defines, compile_hlsl,)).start()
@@ -79,7 +96,7 @@ def compile_shader_async(src_name, spv_name=None, glsl_version=None, target_env=
 
 def main():
     for item in os.listdir("internal/shaders/output"):
-        if item.endswith(".spv") or item.endswith(".inl") or (ENABLE_DXC_COMPILATION and (item.endswith(".hlsl") or item.endswith(".cso"))):
+        if item.endswith(".spv") or item.endswith(".spv.inl") or (ENABLE_DXC_COMPILATION and (item.endswith(".hlsl") or item.endswith(".cso") or item.endswith(".cso.inl"))):
             os.remove(os.path.join("internal/shaders/output", item))
 
     # Primary ray generation
