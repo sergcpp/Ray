@@ -60,6 +60,7 @@ set(INTERNAL_SOURCE_FILES internal/Bitmap.h
                           internal/RendererCPU.h
                           internal/SceneCPU.h
                           internal/SceneCPU.cpp
+                          internal/ScopeExit.h
                           internal/SmallVector.h
                           internal/SparseStorageCPU.h
                           internal/Span.h

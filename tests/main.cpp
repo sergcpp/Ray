@@ -10,6 +10,7 @@
 
 void test_simd();
 void test_hashmap();
+void test_scope_exit();
 void test_sparse_storage();
 void test_tex_storage();
 
@@ -153,6 +154,7 @@ int main(int argc, char *argv[]) {
 
     test_simd();
     test_hashmap();
+    test_scope_exit();
     test_sparse_storage();
     test_tex_storage();
 

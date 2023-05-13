@@ -16,6 +16,7 @@ add_executable(test_Ray main.cpp
                         test_materials.cpp
                         test_scene.h
                         test_scene.cpp
+                        test_scope_exit.cpp
                         test_simd.cpp
                         test_simd_avx.cpp
                         test_simd_avx2.cpp
