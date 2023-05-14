@@ -15,6 +15,7 @@ class TextureAtlas {
     Context *ctx_;
 
     eTexFormat format_, real_format_;
+    eTexFilter filter_;
     const int res_[2];
 
     VkImage img_ = VK_NULL_HANDLE;
@@ -27,7 +28,7 @@ class TextureAtlas {
     void WritePageData(int page, int posx, int posy, int sizex, int sizey, const void *data);
 
   public:
-    TextureAtlas(Context *ctx, eTexFormat format, int resx, int resy, int page_count = 0);
+    TextureAtlas(Context *ctx, eTexFormat format, eTexFilter filter, int resx, int resy, int page_count = 0);
     ~TextureAtlas();
 
     eTexFormat format() const { return format_; }

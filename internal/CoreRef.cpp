@@ -16,6 +16,7 @@
 #define VECTORIZE_BBOX_INTERSECTION 1
 #define VECTORIZE_TRI_INTERSECTION 1
 // #define FORCE_TEXTURE_LOD 0
+#define USE_STOCH_TEXTURE_FILTERING 1
 #define USE_SAFE_MATH 1
 
 namespace Ray {
@@ -2656,7 +2657,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleNearest(const Cpu::TexStorageBase *const te
 }
 
 Ray::Ref::simd_fvec4 Ray::Ref::SampleBilinear(const Cpu::TexStorageBase *const textures[], const uint32_t index,
-                                              const simd_fvec2 &uvs, const int lod) {
+                                              const simd_fvec2 &uvs, const int lod, const simd_fvec2 &rand) {
     const Cpu::TexStorageBase &storage = *textures[index >> 28];
 
     const int tex = int(index & 0x00ffffff);
@@ -2666,6 +2667,13 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleBilinear(const Cpu::TexStorageBase *const t
     simd_fvec2 _uvs = fract(uvs);
     _uvs = _uvs * img_size - 0.5f;
 
+#if USE_STOCH_TEXTURE_FILTERING
+    // Jitter UVs
+    _uvs += rand;
+
+    const auto &p00 = storage.Fetch(tex, int(_uvs.get<0>()), int(_uvs.get<1>()), lod);
+    return simd_fvec4{p00.v};
+#else // USE_STOCH_TEXTURE_FILTERING
     const auto &p00 = storage.Fetch(tex, int(_uvs.get<0>()) + 0, int(_uvs.get<1>()) + 0, lod);
     const auto &p01 = storage.Fetch(tex, int(_uvs.get<0>()) + 1, int(_uvs.get<1>()) + 0, lod);
     const auto &p10 = storage.Fetch(tex, int(_uvs.get<0>()) + 0, int(_uvs.get<1>()) + 1, lod);
@@ -2680,10 +2688,18 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleBilinear(const Cpu::TexStorageBase *const t
                                p11.v[2] * kx + p10.v[2] * (1 - kx), p11.v[3] * kx + p10.v[3] * (1 - kx)};
 
     return (p1 * ky + p0 * (1.0f - ky));
+#endif // USE_STOCH_TEXTURE_FILTERING
 }
 
 Ray::Ref::simd_fvec4 Ray::Ref::SampleBilinear(const Cpu::TexStorageBase &storage, const uint32_t tex,
-                                              const simd_fvec2 &iuvs, const int lod) {
+                                              const simd_fvec2 &iuvs, const int lod, const simd_fvec2 &rand) {
+#if USE_STOCH_TEXTURE_FILTERING
+    // Jitter UVs
+    simd_fvec2 _uvs = iuvs + rand;
+
+    const auto &p00 = storage.Fetch(tex, int(_uvs.get<0>()), int(_uvs.get<1>()), lod);
+    return simd_fvec4{p00.v};
+#else // USE_STOCH_TEXTURE_FILTERING
     const auto &p00 = storage.Fetch(int(tex), int(iuvs.get<0>()) + 0, int(iuvs.get<1>()) + 0, lod);
     const auto &p01 = storage.Fetch(int(tex), int(iuvs.get<0>()) + 1, int(iuvs.get<1>()) + 0, lod);
     const auto &p10 = storage.Fetch(int(tex), int(iuvs.get<0>()) + 0, int(iuvs.get<1>()) + 1, lod);
@@ -2700,12 +2716,13 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleBilinear(const Cpu::TexStorageBase &storage
     const simd_fvec4 p1X = _p11 * k.get<0>() + _p10 * (1 - k.get<0>());
 
     return (p1X * k.get<1>() + p0X * (1 - k.get<1>()));
+#endif // USE_STOCH_TEXTURE_FILTERING
 }
 
 Ray::Ref::simd_fvec4 Ray::Ref::SampleTrilinear(const Cpu::TexStorageBase *const textures[], const uint32_t index,
-                                               const simd_fvec2 &uvs, const float lod) {
-    const simd_fvec4 col1 = SampleBilinear(textures, index, uvs, int(std::floor(lod)));
-    const simd_fvec4 col2 = SampleBilinear(textures, index, uvs, int(std::ceil(lod)));
+                                               const simd_fvec2 &uvs, const float lod, const simd_fvec2 &rand) {
+    const simd_fvec4 col1 = SampleBilinear(textures, index, uvs, int(std::floor(lod)), rand);
+    const simd_fvec4 col2 = SampleBilinear(textures, index, uvs, int(std::ceil(lod)), rand);
 
     const float k = fract(lod);
     return col1 * (1 - k) + col2 * k;
@@ -2763,11 +2780,11 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleAnisotropic(const Cpu::TexStorageBase *cons
         _uvs = fract(_uvs);
 
         const simd_fvec2 _uvs1 = _uvs * size1;
-        res += (1 - kz) * SampleBilinear(storage, tex, _uvs1, lod1);
+        res += (1 - kz) * SampleBilinear(storage, tex, _uvs1, lod1, {});
 
         if (kz > 0.0001f) {
             const simd_fvec2 _uvs2 = _uvs * size2;
-            res += kz * SampleBilinear(storage, tex, _uvs2, lod2);
+            res += kz * SampleBilinear(storage, tex, _uvs2, lod2, {});
         }
 
         _uvs = _uvs + step;
@@ -2777,7 +2794,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleAnisotropic(const Cpu::TexStorageBase *cons
 }
 
 Ray::Ref::simd_fvec4 Ray::Ref::SampleLatlong_RGBE(const Cpu::TexStorageRGBA &storage, const uint32_t index,
-                                                  const simd_fvec4 &dir, float y_rotation) {
+                                                  const simd_fvec4 &dir, float y_rotation, const simd_fvec2 &rand) {
     const float theta = std::acos(clamp(dir.get<1>(), -1.0f, 1.0f)) / PI;
     float phi = std::atan2(dir.get<2>(), dir.get<0>()) + y_rotation;
     if (phi < 0) {
@@ -2794,6 +2811,15 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleLatlong_RGBE(const Cpu::TexStorageRGBA &sto
     storage.GetFRes(tex, 0, value_ptr(size));
 
     simd_fvec2 uvs = simd_fvec2{u, theta} * size;
+
+#if USE_STOCH_TEXTURE_FILTERING
+    // Jitter UVs
+    uvs += rand;
+    const simd_ivec2 iuvs = simd_ivec2(uvs);
+
+    const auto &p00 = storage.Get(tex, iuvs.get<0>(), iuvs.get<1>(), 0);
+    return rgbe_to_rgb(p00);
+#else // USE_STOCH_TEXTURE_FILTERING
     const simd_ivec2 iuvs = simd_ivec2(uvs);
 
     const auto &p00 = storage.Get(tex, iuvs.get<0>() + 0, iuvs.get<1>() + 0, 0);
@@ -2810,6 +2836,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleLatlong_RGBE(const Cpu::TexStorageRGBA &sto
     const simd_fvec4 p1X = _p11 * k.get<0>() + _p10 * (1 - k.get<0>());
 
     return (p1X * k.get<1>() + p0X * (1 - k.get<1>()));
+#endif // USE_STOCH_TEXTURE_FILTERING
 }
 
 void Ray::Ref::IntersectScene(Span<ray_data_t> rays, const int min_transp_depth, const int max_transp_depth,
@@ -2822,7 +2849,7 @@ void Ray::Ref::IntersectScene(Span<ray_data_t> rays, const int min_transp_depth,
         const simd_fvec4 rd = make_fvec3(r.d);
         simd_fvec4 ro = make_fvec3(r.o);
 
-        const float rand_offset = construct_float(hash(r.xy));
+        const float rand_offset[2] = {construct_float(hash(r.xy)), construct_float(hash(hash(r.xy)))};
         const float *random_seq = _random_seq + total_depth(r) * RAND_DIM_BOUNCE_COUNT;
 
         while (true) {
@@ -2864,13 +2891,16 @@ void Ray::Ref::IntersectScene(Span<ray_data_t> rays, const int min_transp_depth,
             const simd_fvec2 uvs =
                 simd_fvec2(v1.t[0]) * w + simd_fvec2(v2.t[0]) * inter.u + simd_fvec2(v3.t[0]) * inter.v;
 
-            float trans_r = fract(random_seq[RAND_DIM_BSDF_PICK] + rand_offset);
+            float trans_r = fract(random_seq[RAND_DIM_BSDF_PICK] + rand_offset[0]);
+
+            const simd_fvec2 tex_rand = simd_fvec2{fract(random_seq[RAND_DIM_TEX_U] + rand_offset[0]),
+                                                   fract(random_seq[RAND_DIM_TEX_V] + rand_offset[1])};
 
             // resolve mix material
             while (mat->type == eShadingNode::Mix) {
                 float mix_val = mat->strength;
                 if (mat->textures[BASE_TEXTURE] != 0xffffffff) {
-                    mix_val *= SampleBilinear(textures, mat->textures[BASE_TEXTURE], uvs, 0).get<0>();
+                    mix_val *= SampleBilinear(textures, mat->textures[BASE_TEXTURE], uvs, 0, tex_rand).get<0>();
                 }
 
                 if (trans_r > mix_val) {
@@ -2893,7 +2923,7 @@ void Ray::Ref::IntersectScene(Span<ray_data_t> rays, const int min_transp_depth,
 #endif
 
             const float lum = std::max(r.c[0], std::max(r.c[1], r.c[2]));
-            const float p = fract(random_seq[RAND_DIM_TERMINATE] + rand_offset);
+            const float p = fract(random_seq[RAND_DIM_TERMINATE] + rand_offset[0]);
             const float q = can_terminate_path ? std::max(0.05f, 1.0f - lum) : 0.0f;
             if (p < q || lum == 0.0f || (r.depth >> 24) + 1 >= max_transp_depth) {
                 // terminate ray
@@ -2921,11 +2951,15 @@ void Ray::Ref::IntersectScene(Span<ray_data_t> rays, const int min_transp_depth,
 }
 
 Ray::Ref::simd_fvec4 Ray::Ref::IntersectScene(const shadow_ray_t &r, const int max_transp_depth, const scene_data_t &sc,
-                                              const uint32_t root_index, const Cpu::TexStorageBase *const textures[]) {
+                                              const uint32_t root_index, const float *_random_seq,
+                                              const Cpu::TexStorageBase *const textures[]) {
     const simd_fvec4 rd = make_fvec3(r.d);
     simd_fvec4 ro = make_fvec3(r.o);
     simd_fvec4 rc = make_fvec3(r.c);
     int depth = (r.depth >> 24);
+
+    const float rand_offset[2] = {construct_float(hash(r.xy)), construct_float(hash(hash(r.xy)))};
+    const float *random_seq = _random_seq + total_depth(r) * RAND_DIM_BOUNCE_COUNT;
 
     float dist = r.dist > 0.0f ? r.dist : MAX_DIST;
     while (dist > HIT_BIAS) {
@@ -2965,6 +2999,9 @@ Ray::Ref::simd_fvec4 Ray::Ref::IntersectScene(const shadow_ray_t &r, const int m
         const simd_fvec2 sh_uvs =
             simd_fvec2(v1.t[0]) * w + simd_fvec2(v2.t[0]) * inter.u + simd_fvec2(v3.t[0]) * inter.v;
 
+        const simd_fvec2 tex_rand = simd_fvec2{fract(random_seq[RAND_DIM_TEX_U] + rand_offset[0]),
+                                               fract(random_seq[RAND_DIM_TEX_V] + rand_offset[1])};
+
         struct {
             uint32_t index;
             float weight;
@@ -2983,7 +3020,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::IntersectScene(const shadow_ray_t &r, const int m
             if (mat->type == eShadingNode::Mix) {
                 float mix_val = mat->strength;
                 if (mat->textures[BASE_TEXTURE] != 0xffffffff) {
-                    mix_val *= SampleBilinear(textures, mat->textures[BASE_TEXTURE], sh_uvs, 0).get<0>();
+                    mix_val *= SampleBilinear(textures, mat->textures[BASE_TEXTURE], sh_uvs, 0, tex_rand).get<0>();
                 }
 
                 stack[stack_size++] = {mat->textures[MIX_MAT1], weight * (1.0f - mix_val)};
@@ -3003,6 +3040,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::IntersectScene(const shadow_ray_t &r, const int m
         dist -= t;
 
         ++depth;
+        random_seq += RAND_DIM_BOUNCE_COUNT;
     }
 
     return rc;
@@ -3109,8 +3147,10 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
         if (l.sky_portal != 0) {
             simd_fvec4 env_col = make_fvec3(sc.env.env_col);
             if (sc.env.env_map != 0xffffffff) {
+                const simd_fvec2 tex_rand = simd_fvec2{fract(random_seq[RAND_DIM_TEX_U] + sample_off[0]),
+                                                       fract(random_seq[RAND_DIM_TEX_V] + sample_off[1])};
                 env_col *= SampleLatlong_RGBE(*static_cast<const Cpu::TexStorageRGBA *>(textures[0]), sc.env.env_map,
-                                              ls.L, sc.env.env_map_rotation);
+                                              ls.L, sc.env.env_map_rotation, tex_rand);
             }
             ls.col *= env_col;
             ls.from_env = 1;
@@ -3159,8 +3199,10 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
         if (l.sky_portal != 0) {
             simd_fvec4 env_col = make_fvec3(sc.env.env_col);
             if (sc.env.env_map != 0xffffffff) {
+                const simd_fvec2 tex_rand = simd_fvec2{fract(random_seq[RAND_DIM_TEX_U] + sample_off[0]),
+                                                       fract(random_seq[RAND_DIM_TEX_V] + sample_off[1])};
                 env_col *= SampleLatlong_RGBE(*static_cast<const Cpu::TexStorageRGBA *>(textures[0]), sc.env.env_map,
-                                              ls.L, sc.env.env_map_rotation);
+                                              ls.L, sc.env.env_map_rotation, tex_rand);
             }
             ls.col *= env_col;
             ls.from_env = 1;
@@ -3232,7 +3274,9 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
 
         const material_t &lmat = sc.materials[sc.tri_materials[ltri_index].front_mi & MATERIAL_INDEX_BITS];
         if (lmat.textures[BASE_TEXTURE] != 0xffffffff) {
-            ls.col *= SampleBilinear(textures, lmat.textures[BASE_TEXTURE], luvs, 0 /* lod */);
+            const simd_fvec2 tex_rand = simd_fvec2{fract(random_seq[RAND_DIM_TEX_U] + sample_off[0]),
+                                                   fract(random_seq[RAND_DIM_TEX_V] + sample_off[1])};
+            ls.col *= SampleBilinear(textures, lmat.textures[BASE_TEXTURE], luvs, 0 /* lod */, tex_rand);
         }
     } else if (l.type == LIGHT_TYPE_ENV) {
         const float rand = u1 * float(sc.li_indices.size()) - float(light_index);
@@ -3261,8 +3305,10 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
         ls.col *= {sc.env.env_col[0], sc.env.env_col[1], sc.env.env_col[2], 0.0f};
 
         if (sc.env.env_map != 0xffffffff) {
+            const simd_fvec2 tex_rand = simd_fvec2{fract(random_seq[RAND_DIM_TEX_U] + sample_off[0]),
+                                                   fract(random_seq[RAND_DIM_TEX_V] + sample_off[1])};
             ls.col *= SampleLatlong_RGBE(*static_cast<const Cpu::TexStorageRGBA *>(textures[0]), sc.env.env_map, ls.L,
-                                         sc.env.env_map_rotation);
+                                         sc.env.env_map_rotation, tex_rand);
         }
 
         ls.area = 1.0f;
@@ -3484,8 +3530,8 @@ void Ray::Ref::TraceRays(Span<ray_data_t> rays, int min_transp_depth, int max_tr
 }
 
 void Ray::Ref::TraceShadowRays(Span<const shadow_ray_t> rays, int max_transp_depth, float _clamp_val,
-                               const scene_data_t &sc, uint32_t node_index, const Cpu::TexStorageBase *const textures[],
-                               int img_w, color_rgba_t *out_color) {
+                               const scene_data_t &sc, uint32_t node_index, const float random_seq[],
+                               const Cpu::TexStorageBase *const textures[], int img_w, color_rgba_t *out_color) {
     simd_fvec4 clamp_val = simd_fvec4{std::numeric_limits<float>::max()};
     if (_clamp_val) {
         clamp_val.set<0>(_clamp_val);
@@ -3499,7 +3545,7 @@ void Ray::Ref::TraceShadowRays(Span<const shadow_ray_t> rays, int max_transp_dep
         const int x = (sh_r.xy >> 16) & 0x0000ffff;
         const int y = sh_r.xy & 0x0000ffff;
 
-        simd_fvec4 rc = IntersectScene(sh_r, max_transp_depth, sc, node_index, textures);
+        simd_fvec4 rc = IntersectScene(sh_r, max_transp_depth, sc, node_index, random_seq, textures);
         rc *= IntersectAreaLights(sh_r, sc.lights, sc.blocker_lights, sc.transforms);
 
         auto old_val = simd_fvec4{out_color[y * img_w + x].v, simd_mem_aligned};
@@ -3509,14 +3555,14 @@ void Ray::Ref::TraceShadowRays(Span<const shadow_ray_t> rays, int max_transp_dep
 }
 
 Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_EnvColor(const ray_data_t &ray, const environment_t &env,
-                                                 const Cpu::TexStorageRGBA &tex_storage) {
+                                                 const Cpu::TexStorageRGBA &tex_storage, const simd_fvec2 &rand) {
     const simd_fvec4 I = make_fvec3(ray.d);
     simd_fvec4 env_col = {1.0f};
 
     const uint32_t env_map = (ray.depth & 0x00ffffff) ? env.env_map : env.back_map;
     const float env_map_rotation = (ray.depth & 0x00ffffff) ? env.env_map_rotation : env.back_map_rotation;
     if (env_map != 0xffffffff) {
-        env_col = SampleLatlong_RGBE(tex_storage, env_map, I, env_map_rotation);
+        env_col = SampleLatlong_RGBE(tex_storage, env_map, I, env_map_rotation, rand);
     }
 
     if (env.qtree_levels) {
@@ -3544,7 +3590,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_EnvColor(const ray_data_t &ray, const en
 
 Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_LightColor(const ray_data_t &ray, const hit_data_t &inter,
                                                    const environment_t &env, const Cpu::TexStorageRGBA &tex_storage,
-                                                   const light_t *lights) {
+                                                   const light_t *lights, const simd_fvec2 &rand) {
     const simd_fvec4 I = make_fvec3(ray.d);
     const simd_fvec4 P = make_fvec3(ray.o) + inter.t * I;
 
@@ -3554,7 +3600,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_LightColor(const ray_data_t &ray, const 
     if (l.sky_portal != 0) {
         simd_fvec4 env_col = make_fvec3(env.env_col);
         if (env.env_map != 0xffffffff) {
-            env_col *= SampleLatlong_RGBE(tex_storage, env.env_map, I, env.env_map_rotation);
+            env_col *= SampleLatlong_RGBE(tex_storage, env.env_map, I, env.env_map_rotation, rand);
         }
         lcol *= env_col;
     }
@@ -3618,7 +3664,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_LightColor(const ray_data_t &ray, const 
         const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
         lcol *= mis_weight;
     }
-#endif
+#endif // USE_NEE
     return lcol;
 }
 
@@ -3993,9 +4039,17 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
                                          color_rgba_t *out_depth_normal) {
     const simd_fvec4 I = make_fvec3(ray.d);
 
+    // offset sequence
+    random_seq += total_depth(ray) * RAND_DIM_BOUNCE_COUNT;
+    // used to randomize random sequence among pixels
+    const float sample_off[2] = {construct_float(hash(ray.xy)), construct_float(hash(hash(ray.xy)))};
+
+    const simd_fvec2 tex_rand = simd_fvec2{fract(random_seq[RAND_DIM_TEX_U] + sample_off[0]),
+                                           fract(random_seq[RAND_DIM_TEX_V] + sample_off[1])};
+
     if (!inter.mask) {
         const simd_fvec4 env_col =
-            Evaluate_EnvColor(ray, sc.env, *static_cast<const Cpu::TexStorageRGBA *>(textures[0]));
+            Evaluate_EnvColor(ray, sc.env, *static_cast<const Cpu::TexStorageRGBA *>(textures[0]), tex_rand);
         return color_rgba_t{ray.c[0] * env_col[0], ray.c[1] * env_col[1], ray.c[2] * env_col[2], env_col[3]};
     }
 
@@ -4004,7 +4058,7 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
 
     if (inter.obj_index < 0) { // Area light intersection
         const simd_fvec4 lcol =
-            Evaluate_LightColor(ray, inter, sc.env, *static_cast<const Cpu::TexStorageRGBA *>(textures[0]), sc.lights);
+            Evaluate_LightColor(ray, inter, sc.env, *static_cast<const Cpu::TexStorageRGBA *>(textures[0]), sc.lights, tex_rand);
         return color_rgba_t{ray.c[0] * lcol.get<0>(), ray.c[1] * lcol.get<1>(), ray.c[2] * lcol.get<2>(), 1.0f};
     }
 
@@ -4063,10 +4117,6 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
     // lambda += 0.5 * fast_log2(tex_res.x * tex_res.y);
     // lambda -= fast_log2(std::abs(dot(I, plane_N)));
 
-    // offset sequence
-    random_seq += total_depth(ray) * RAND_DIM_BOUNCE_COUNT;
-    // used to randomize random sequence among pixels
-    const float sample_off[2] = {construct_float(hash(ray.xy)), construct_float(hash(hash(ray.xy)))};
     const float ext_ior = peek_ior_stack(ray.ior, is_backfacing);
 
     simd_fvec4 col = {0.0f};
@@ -4084,7 +4134,7 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
     while (mat->type == eShadingNode::Mix) {
         float mix_val = mat->strength;
         if (mat->textures[BASE_TEXTURE] != 0xffffffff) {
-            mix_val *= SampleBilinear(textures, mat->textures[BASE_TEXTURE], surf.uvs, 0).get<0>();
+            mix_val *= SampleBilinear(textures, mat->textures[BASE_TEXTURE], surf.uvs, 0, tex_rand).get<0>();
         }
 
         const float eta = is_backfacing ? safe_div_pos(ext_ior, mat->ior) : safe_div_pos(mat->ior, ext_ior);
@@ -4107,7 +4157,7 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
 
     // apply normal map
     if (mat->textures[NORMALS_TEXTURE] != 0xffffffff) {
-        simd_fvec4 normals = SampleBilinear(textures, mat->textures[NORMALS_TEXTURE], surf.uvs, 0);
+        simd_fvec4 normals = SampleBilinear(textures, mat->textures[NORMALS_TEXTURE], surf.uvs, 0, tex_rand);
         normals = normals * 2.0f - 1.0f;
         normals.set<2>(1.0f);
         if (mat->textures[NORMALS_TEXTURE] & TEX_RECONSTRUCT_Z_BIT) {
@@ -4140,7 +4190,7 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
     surf.T = cross(surf.N, surf.B);
 #endif
 
-#if USE_NEE == 1
+#if USE_NEE
     light_sample_t ls;
     if (!sc.li_indices.empty() && mat->type != eShadingNode::Emissive) {
         SampleLightSource(surf.P, surf.T, surf.B, surf.N, sc, textures, random_seq, sample_off, ls);
@@ -4153,7 +4203,7 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
     if (mat->textures[BASE_TEXTURE] != 0xffffffff) {
         const uint32_t base_texture = mat->textures[BASE_TEXTURE];
         const float base_lod = get_texture_lod(textures, base_texture, lambda);
-        simd_fvec4 tex_color = SampleBilinear(textures, base_texture, surf.uvs, int(base_lod));
+        simd_fvec4 tex_color = SampleBilinear(textures, base_texture, surf.uvs, int(base_lod), tex_rand);
         if (base_texture & TEX_SRGB_BIT) {
             tex_color = srgb_to_rgb(tex_color);
         }
@@ -4179,7 +4229,8 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
     if (mat->textures[ROUGH_TEXTURE] != 0xffffffff) {
         const uint32_t roughness_tex = mat->textures[ROUGH_TEXTURE];
         const float roughness_lod = get_texture_lod(textures, roughness_tex, lambda);
-        simd_fvec4 roughness_color = SampleBilinear(textures, roughness_tex, surf.uvs, int(roughness_lod)).get<0>();
+        simd_fvec4 roughness_color =
+            SampleBilinear(textures, roughness_tex, surf.uvs, int(roughness_lod), tex_rand).get<0>();
         if (roughness_tex & TEX_SRGB_BIT) {
             roughness_color = srgb_to_rgb(roughness_color);
         }
@@ -4263,14 +4314,14 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
         if (mat->textures[METALLIC_TEXTURE] != 0xffffffff) {
             const uint32_t metallic_tex = mat->textures[METALLIC_TEXTURE];
             const float metallic_lod = get_texture_lod(textures, metallic_tex, lambda);
-            metallic *= SampleBilinear(textures, metallic_tex, surf.uvs, int(metallic_lod)).get<0>();
+            metallic *= SampleBilinear(textures, metallic_tex, surf.uvs, int(metallic_lod), tex_rand).get<0>();
         }
 
         float specular = unpack_unorm_16(mat->specular_unorm);
         if (mat->textures[SPECULAR_TEXTURE] != 0xffffffff) {
             const uint32_t specular_tex = mat->textures[SPECULAR_TEXTURE];
             const float specular_lod = get_texture_lod(textures, specular_tex, lambda);
-            simd_fvec4 specular_color = SampleBilinear(textures, specular_tex, surf.uvs, int(specular_lod));
+            simd_fvec4 specular_color = SampleBilinear(textures, specular_tex, surf.uvs, int(specular_lod), tex_rand);
             if (specular_tex & TEX_SRGB_BIT) {
                 specular_color = srgb_to_rgb(specular_color);
             }
@@ -4635,3 +4686,5 @@ Ray::Ref::simd_fvec4 vectorcall Ray::Ref::TonemapFilmic(const eViewTransform vie
 #undef USE_PATH_TERMINATION
 #undef VECTORIZE_BBOX_INTERSECTION
 #undef FORCE_TEXTURE_LOD
+#undef USE_STOCH_TEXTURE_FILTERING
+#undef USE_SAFE_MATH

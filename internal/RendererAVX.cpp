@@ -64,13 +64,16 @@ template void SampleNearest<RPSize>(const Cpu::TexStorageBase *const textures[],
                                     const simd_ivec<RPSize> &mask, simd_fvec<RPSize> out_rgba[4]);
 template void SampleBilinear<RPSize>(const Cpu::TexStorageBase *const textures[], const uint32_t index,
                                      const simd_fvec<RPSize> uvs[2], const simd_ivec<RPSize> &lod,
-                                     const simd_ivec<RPSize> &mask, simd_fvec<RPSize> out_rgba[4]);
+                                     const simd_fvec<RPSize> rand[2], const simd_ivec<RPSize> &mask,
+                                     simd_fvec<RPSize> out_rgba[4]);
 template void SampleTrilinear<RPSize>(const Cpu::TexStorageBase *const textures[], const uint32_t index,
                                       const simd_fvec<RPSize> uvs[2], const simd_fvec<RPSize> &lod,
-                                      const simd_ivec<RPSize> &mask, simd_fvec<RPSize> out_rgba[4]);
+                                      const simd_fvec<RPSize> rand[2], const simd_ivec<RPSize> &mask,
+                                      simd_fvec<RPSize> out_rgba[4]);
 template void SampleLatlong_RGBE<RPSize>(const Cpu::TexStorageRGBA &storage, uint32_t index,
                                          const simd_fvec<RPSize> dir[3], float y_rotation,
-                                         const simd_ivec<RPSize> &mask, simd_fvec<RPSize> out_rgb[3]);
+                                         const simd_fvec<RPSize> rand[2], const simd_ivec<RPSize> &mask,
+                                         simd_fvec<RPSize> out_rgb[3]);
 
 class SIMDPolicy : public SIMDPolicyBase {
   protected:

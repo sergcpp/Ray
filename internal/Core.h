@@ -333,7 +333,7 @@ void TransformBoundingBox(const float bbox_min[3], const float bbox_max[3], cons
 void InverseMatrix(const float mat[16], float out_mat[16]);
 
 // Arrays of prime numbers, used to generate halton sequence for sampling
-const int PrimesCount = 228;
+const int PrimesCount = 292;
 extern const int g_primes[];
 
 const int HALTON_COUNT = PrimesCount;
@@ -352,7 +352,9 @@ const int RAND_DIM_LIGHT_PICK = 3;
 const int RAND_DIM_LIGHT_U = 4;
 const int RAND_DIM_LIGHT_V = 5;
 const int RAND_DIM_TERMINATE = 6;
-const int RAND_DIM_BOUNCE_COUNT = 7; // separate for each bounce
+const int RAND_DIM_TEX_U = 7;
+const int RAND_DIM_TEX_V = 8;
+const int RAND_DIM_BOUNCE_COUNT = 9; // separate for each bounce
 
 // Sampling stages must be independent from each other (otherwise it may lead to artifacts), so different halton
 // sequences at each ray bounce must be used. This leads to limited number of bounces. Can be easily fixed by generating

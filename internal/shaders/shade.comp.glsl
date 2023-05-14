@@ -751,6 +751,9 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, int hi, vec2 sample_off, 
     ls.cast_shadow = (l.type_and_param0.x & (1 << 5)) != 0;
     ls.from_env = false;
 
+    const vec2 tex_rand = vec2(fract(g_random_seq[hi + RAND_DIM_TEX_U] + sample_off[0]),
+                               fract(g_random_seq[hi + RAND_DIM_TEX_V] + sample_off[1]));
+
     const uint l_type = (l.type_and_param0.x & 0x1f);
     [[dont_flatten]] if (l_type == LIGHT_TYPE_SPHERE) {
         const float r1 = fract(g_random_seq[hi + RAND_DIM_LIGHT_U] + sample_off[0]);
@@ -841,9 +844,9 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, int hi, vec2 sample_off, 
             const uint env_map = floatBitsToUint(g_params.env_col.w);
             if (env_map != 0xffffffff) {
 #if BINDLESS
-                env_col *= SampleLatlong_RGBE(env_map, ls.L, g_params.env_rotation);
+                env_col *= SampleLatlong_RGBE(env_map, ls.L, g_params.env_rotation, tex_rand);
 #else
-                env_col *= SampleLatlong_RGBE(g_textures[env_map], ls.L, g_params.env_rotation);
+                env_col *= SampleLatlong_RGBE(g_textures[env_map], ls.L, g_params.env_rotation, tex_rand);
 #endif
             }
             ls.col *= env_col;
@@ -895,9 +898,9 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, int hi, vec2 sample_off, 
             const uint env_map = floatBitsToUint(g_params.env_col.w);
             if (env_map != 0xffffffff) {
 #if BINDLESS
-                env_col *= SampleLatlong_RGBE(env_map, ls.L, g_params.env_rotation);
+                env_col *= SampleLatlong_RGBE(env_map, ls.L, g_params.env_rotation, tex_rand);
 #else
-                env_col *= SampleLatlong_RGBE(g_textures[env_map], ls.L, g_params.env_rotation);
+                env_col *= SampleLatlong_RGBE(g_textures[env_map], ls.L, g_params.env_rotation, tex_rand);
 #endif
             }
             ls.col *= env_col;
@@ -974,7 +977,7 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, int hi, vec2 sample_off, 
 
         const material_t lmat = g_materials[(g_tri_materials[ltri_index] >> 16u) & MATERIAL_INDEX_BITS];
         if (lmat.textures[BASE_TEXTURE] != 0xffffffff) {
-            ls.col *= SampleBilinear(lmat.textures[BASE_TEXTURE], luvs, 0 /* lod */).xyz;
+            ls.col *= SampleBilinear(lmat.textures[BASE_TEXTURE], luvs, 0 /* lod */, tex_rand).xyz;
         }
     } else [[dont_flatten]] if (l_type == LIGHT_TYPE_ENV) {
         const float rand = u1 * float(g_params.li_count) - float(light_index);
@@ -1004,9 +1007,9 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, int hi, vec2 sample_off, 
         const uint env_map = floatBitsToUint(g_params.env_col.w);
         if (env_map != 0xffffffff) {
 #if BINDLESS
-            ls.col *= SampleLatlong_RGBE(env_map, ls.L, g_params.env_rotation);
+            ls.col *= SampleLatlong_RGBE(env_map, ls.L, g_params.env_rotation, tex_rand);
 #else
-            ls.col *= SampleLatlong_RGBE(g_textures[env_map], ls.L, g_params.env_rotation);
+            ls.col *= SampleLatlong_RGBE(g_textures[env_map], ls.L, g_params.env_rotation, tex_rand);
 #endif
         }
 
@@ -1018,7 +1021,7 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, int hi, vec2 sample_off, 
     }
 }
 
-vec3 Evaluate_EnvColor(ray_data_t ray) {
+vec3 Evaluate_EnvColor(ray_data_t ray, const vec2 tex_rand) {
     const vec3 rd = vec3(ray.d[0], ray.d[1], ray.d[2]);
 #if PRIMARY
     vec3 env_col = g_params.back_col.xyz;
@@ -1031,9 +1034,9 @@ vec3 Evaluate_EnvColor(ray_data_t ray) {
 #endif
     if (env_map != 0xffffffff) {
 #if BINDLESS
-        env_col *= SampleLatlong_RGBE(env_map, rd, env_map_rotation);
+        env_col *= SampleLatlong_RGBE(env_map, rd, env_map_rotation, tex_rand);
 #else
-        env_col *= SampleLatlong_RGBE(g_textures[env_map], rd, env_map_rotation);
+        env_col *= SampleLatlong_RGBE(g_textures[env_map], rd, env_map_rotation, tex_rand);
 #endif
     }
 
@@ -1054,7 +1057,7 @@ vec3 Evaluate_EnvColor(ray_data_t ray) {
     return env_col;
 }
 
-vec3 Evaluate_LightColor(ray_data_t ray, hit_data_t inter) {
+vec3 Evaluate_LightColor(ray_data_t ray, hit_data_t inter, const vec2 tex_rand) {
     const vec3 ro = vec3(ray.o[0], ray.o[1], ray.o[2]);
     const vec3 rd = vec3(ray.d[0], ray.d[1], ray.d[2]);
 
@@ -1068,9 +1071,9 @@ vec3 Evaluate_LightColor(ray_data_t ray, hit_data_t inter) {
         const uint env_map = floatBitsToUint(g_params.env_col.w);
         if (env_map != 0xffffffff) {
 #if BINDLESS
-            env_col *= SampleLatlong_RGBE(env_map, rd, g_params.env_rotation);
+            env_col *= SampleLatlong_RGBE(env_map, rd, g_params.env_rotation, tex_rand);
 #else
-            env_col *= SampleLatlong_RGBE(g_textures[env_map], rd, g_params.env_rotation);
+            env_col *= SampleLatlong_RGBE(g_textures[env_map], rd, g_params.env_rotation, tex_rand);
 #endif
         }
         lcol *= env_col;
@@ -1592,8 +1595,21 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
     const vec3 ro = vec3(ray.o[0], ray.o[1], ray.o[2]);
     const vec3 rd = vec3(ray.d[0], ray.d[1], ray.d[2]);
 
+    const int diff_depth = ray.depth & 0x000000ff;
+    const int spec_depth = (ray.depth >> 8) & 0x000000ff;
+    const int refr_depth = (ray.depth >> 16) & 0x000000ff;
+    const int transp_depth = (ray.depth >> 24) & 0x000000ff;
+    // NOTE: transparency depth is not accounted here
+    const int total_depth = diff_depth + spec_depth + refr_depth;
+
+    const int hi = g_params.hi + (total_depth + transp_depth) * RAND_DIM_BOUNCE_COUNT;
+
+    const vec2 sample_off = vec2(construct_float(hash(ray.xy)), construct_float(hash(hash(ray.xy))));
+    const vec2 tex_rand = vec2(fract(g_random_seq[hi + RAND_DIM_TEX_U] + sample_off[0]),
+                               fract(g_random_seq[hi + RAND_DIM_TEX_V] + sample_off[1]));
+
     [[dont_flatten]] if (inter.mask == 0) {
-        const vec3 env_col = Evaluate_EnvColor(ray);
+        const vec3 env_col = Evaluate_EnvColor(ray, tex_rand);
         return vec3(ray.c[0] * env_col[0], ray.c[1] * env_col[1], ray.c[2] * env_col[2]);
     }
 
@@ -1603,7 +1619,7 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
     surf.P = ro + inter.t * rd;
 
     [[dont_flatten]] if (inter.obj_index < 0) { // Area light intersection
-        const vec3 lcol = Evaluate_LightColor(ray, inter);
+        const vec3 lcol = Evaluate_LightColor(ray, inter, tex_rand);
         return vec3(ray.c[0] * lcol[0], ray.c[1] * lcol[1], ray.c[2] * lcol[2]);
     }
 
@@ -1672,19 +1688,9 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
     // lambda += 0.5 * fast_log2(tex_res.x * tex_res.y);
     // lambda -= fast_log2(std::abs(dot(I, plane_N)));
 
-    const vec2 sample_off = vec2(construct_float(hash(ray.xy)), construct_float(hash(hash(ray.xy))));
     const float ext_ior = peek_ior_stack(ray.ior, is_backfacing, 1.0 /* default_value */);
 
     vec3 col = vec3(0.0);
-
-    const int diff_depth = ray.depth & 0x000000ff;
-    const int spec_depth = (ray.depth >> 8) & 0x000000ff;
-    const int refr_depth = (ray.depth >> 16) & 0x000000ff;
-    const int transp_depth = (ray.depth >> 24) & 0x000000ff;
-    // NOTE: transparency depth is not accounted here
-    const int total_depth = diff_depth + spec_depth + refr_depth;
-
-    const int hi = g_params.hi + (total_depth + transp_depth) * RAND_DIM_BOUNCE_COUNT;
 
     float mix_rand = fract(g_random_seq[hi + RAND_DIM_BSDF_PICK] + sample_off[0]);
     float mix_weight = 1.0;
@@ -1693,7 +1699,7 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
     while (mat.type == MixNode) {
         float mix_val = mat.tangent_rotation_or_strength;
         if (mat.textures[BASE_TEXTURE] != 0xffffffff) {
-            mix_val *= SampleBilinear(mat.textures[BASE_TEXTURE], surf.uvs, 0).r;
+            mix_val *= SampleBilinear(mat.textures[BASE_TEXTURE], surf.uvs, 0, tex_rand).r;
         }
 
         const float eta = is_backfacing ? (ext_ior / mat.ior) : (mat.ior / ext_ior);
@@ -1716,7 +1722,7 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
 
     // apply normal map
     [[dont_flatten]] if (mat.textures[NORMALS_TEXTURE] != 0xffffffff) {
-        vec3 normals = vec3(SampleBilinear(mat.textures[NORMALS_TEXTURE], surf.uvs, 0).xy, 1.0);
+        vec3 normals = vec3(SampleBilinear(mat.textures[NORMALS_TEXTURE], surf.uvs, 0, tex_rand).xy, 1.0);
 #if BINDLESS
         normals = normals * 2.0 - 1.0;
         if ((mat.textures[NORMALS_TEXTURE] & TEX_RECONSTRUCT_Z_BIT) != 0) {
@@ -1769,7 +1775,7 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
     vec3 base_color = vec3(mat.base_color[0], mat.base_color[1], mat.base_color[2]);
     [[dont_flatten]] if (mat.textures[BASE_TEXTURE] != 0xffffffff) {
         const float base_lod = get_texture_lod(texSize(mat.textures[BASE_TEXTURE]), lambda);
-        base_color *= SampleBilinear(mat.textures[BASE_TEXTURE], surf.uvs, int(base_lod), true /* YCoCg */, true /* SRGB */).rgb;
+        base_color *= SampleBilinear(mat.textures[BASE_TEXTURE], surf.uvs, int(base_lod), tex_rand, true /* YCoCg */, true /* SRGB */).rgb;
     }
 
     out_base_color = base_color;
@@ -1785,7 +1791,7 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
     float roughness = unpack_unorm_16(mat.roughness_and_anisotropic & 0xffff);
     [[dont_flatten]] if (mat.textures[ROUGH_TEXTURE] != 0xffffffff) {
         const float roughness_lod = get_texture_lod(texSize(mat.textures[ROUGH_TEXTURE]), lambda);
-        roughness *= SampleBilinear(mat.textures[ROUGH_TEXTURE], surf.uvs, int(roughness_lod), false /* YCoCg */, true /* SRGB */).r;
+        roughness *= SampleBilinear(mat.textures[ROUGH_TEXTURE], surf.uvs, int(roughness_lod), tex_rand, false /* YCoCg */, true /* SRGB */).r;
     }
 
     const float rand_u = fract(g_random_seq[hi + RAND_DIM_BSDF_U] + sample_off[0]);
@@ -1871,13 +1877,13 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
         float metallic = unpack_unorm_16((mat.tint_and_metallic >> 16) & 0xffff);
         [[dont_flatten]] if (mat.textures[METALLIC_TEXTURE] != 0xffffffff) {
             const float metallic_lod = get_texture_lod(texSize(mat.textures[METALLIC_TEXTURE]), lambda);
-            metallic *= SampleBilinear(mat.textures[METALLIC_TEXTURE], surf.uvs, int(metallic_lod)).r;
+            metallic *= SampleBilinear(mat.textures[METALLIC_TEXTURE], surf.uvs, int(metallic_lod), tex_rand).r;
         }
 
         float specular = unpack_unorm_16(mat.specular_and_specular_tint & 0xffff);
         [[dont_flatten]] if (mat.textures[SPECULAR_TEXTURE] != 0xffffffff) {
             const float specular_lod = get_texture_lod(texSize(mat.textures[SPECULAR_TEXTURE]), lambda);
-            specular *= SampleBilinear(mat.textures[SPECULAR_TEXTURE], surf.uvs, int(specular_lod)).r;
+            specular *= SampleBilinear(mat.textures[SPECULAR_TEXTURE], surf.uvs, int(specular_lod), tex_rand).r;
         }
 
         const float specular_tint = unpack_unorm_16((mat.specular_and_specular_tint >> 16) & 0xffff);

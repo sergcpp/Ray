@@ -72,6 +72,10 @@ layout(std430, binding = BLOCKER_LIGHTS_BUF_SLOT) readonly buffer BlockerLights 
     uint g_blocker_lights[];
 };
 
+layout(std430, binding = RANDOM_SEQ_BUF_SLOT) readonly buffer Random {
+    float g_random_seq[];
+};
+
 #if HWRT
 layout(binding = TLAS_SLOT) uniform accelerationStructureEXT g_tlas;
 #endif
@@ -185,6 +189,9 @@ vec3 IntersectSceneShadow(shadow_ray_t r) {
     vec3 rc = vec3(r.c[0], r.c[1], r.c[2]);
     int depth = (r.depth >> 24);
 
+    const vec2 rand_offset = vec2(construct_float(hash(r.xy)), construct_float(hash(hash(r.xy))));
+    int rand_index = g_params.hi + total_depth(r) * RAND_DIM_BOUNCE_COUNT;
+
     float dist = r.dist > 0.0 ? r.dist : MAX_DIST;
 #if !HWRT
     const vec3 inv_d = safe_invert(rd);
@@ -228,6 +235,9 @@ vec3 IntersectSceneShadow(shadow_ray_t r) {
 
         vec3 throughput = vec3(0.0);
 
+        const vec2 tex_rand = vec2(fract(g_random_seq[rand_index + RAND_DIM_TEX_U] + rand_offset[0]),
+                                   fract(g_random_seq[rand_index + RAND_DIM_TEX_V] + rand_offset[1]));
+
         while (stack_size-- != 0) {
             material_t mat = g_materials[g_stack[gl_LocalInvocationIndex][2 * stack_size + 0]];
             float weight = uintBitsToFloat(g_stack[gl_LocalInvocationIndex][2 * stack_size + 1]);
@@ -236,7 +246,7 @@ vec3 IntersectSceneShadow(shadow_ray_t r) {
             if (mat.type == MixNode) {
                 float mix_val = mat.tangent_rotation_or_strength;
                 if (mat.textures[BASE_TEXTURE] != 0xffffffff) {
-                    mix_val *= SampleBilinear(mat.textures[BASE_TEXTURE], sh_uvs, 0).r;
+                    mix_val *= SampleBilinear(mat.textures[BASE_TEXTURE], sh_uvs, 0, tex_rand).r;
                 }
 
                 g_stack[gl_LocalInvocationIndex][2 * stack_size + 0] = mat.textures[MIX_MAT1];
@@ -260,6 +270,7 @@ vec3 IntersectSceneShadow(shadow_ray_t r) {
         dist -= t;
 
         ++depth;
+        rand_index += RAND_DIM_BOUNCE_COUNT;
     }
 
     return rc;
@@ -315,6 +326,9 @@ vec3 IntersectSceneShadow(shadow_ray_t r) {
 
             vec3 throughput = vec3(0.0);
 
+            const vec2 tex_rand = vec2(fract(g_random_seq[rand_index + RAND_DIM_TEX_U] + rand_offset[0]),
+                                   fract(g_random_seq[rand_index + RAND_DIM_TEX_V] + rand_offset[1]));
+
             while (stack_size-- != 0) {
                 material_t mat = g_materials[g_stack[gl_LocalInvocationIndex][2 * stack_size + 0]];
                 float weight = uintBitsToFloat(g_stack[gl_LocalInvocationIndex][2 * stack_size + 1]);
@@ -323,7 +337,7 @@ vec3 IntersectSceneShadow(shadow_ray_t r) {
                 if (mat.type == MixNode) {
                     float mix_val = mat.tangent_rotation_or_strength;
                     if (mat.textures[BASE_TEXTURE] != 0xffffffff) {
-                        mix_val *= SampleBilinear(mat.textures[BASE_TEXTURE], sh_uvs, 0).r;
+                        mix_val *= SampleBilinear(mat.textures[BASE_TEXTURE], sh_uvs, 0, tex_rand).r;
                     }
 
                     g_stack[gl_LocalInvocationIndex][2 * stack_size + 0] = mat.textures[MIX_MAT1];
@@ -348,6 +362,7 @@ vec3 IntersectSceneShadow(shadow_ray_t r) {
         dist -= t;
 
         ++depth;
+        rand_index += RAND_DIM_BOUNCE_COUNT;
     }
 
     return rc;

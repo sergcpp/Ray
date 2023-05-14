@@ -25,9 +25,9 @@ extern const VkFormat g_vk_formats[];
 
 #define _MIN(x, y) ((x) < (y) ? (x) : (y))
 
-Ray::Vk::TextureAtlas::TextureAtlas(Context *ctx, const eTexFormat format, const int resx, const int resy,
-                                    const int pages_count)
-    : ctx_(ctx), format_(format), res_{resx, resy} {
+Ray::Vk::TextureAtlas::TextureAtlas(Context *ctx, const eTexFormat format, const eTexFilter filter, const int resx,
+                                    const int resy, const int pages_count)
+    : ctx_(ctx), format_(format), filter_(filter), res_{resx, resy} {
     if (!Resize(pages_count)) {
         throw std::runtime_error("TextureAtlas cannot be resized!");
     }
@@ -347,7 +347,7 @@ bool Ray::Vk::TextureAtlas::Resize(const int pages_count) {
     }
 
     SamplingParams params;
-    params.filter = eTexFilter::Bilinear;
+    params.filter = filter_;
 
     Sampler new_sampler(ctx_, params);
 

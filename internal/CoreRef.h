@@ -251,21 +251,23 @@ simd_fvec4 TransformNormal(const simd_fvec4 &n, const float *inv_xform);
 
 // Sample Texture
 simd_fvec4 SampleNearest(const Cpu::TexStorageBase *const textures[], uint32_t index, const simd_fvec2 &uvs, int lod);
-simd_fvec4 SampleBilinear(const Cpu::TexStorageBase *const textures[], uint32_t index, const simd_fvec2 &uvs, int lod);
-simd_fvec4 SampleBilinear(const Cpu::TexStorageBase &storage, uint32_t tex, const simd_fvec2 &iuvs, int lod);
+simd_fvec4 SampleBilinear(const Cpu::TexStorageBase *const textures[], uint32_t index, const simd_fvec2 &uvs, int lod,
+                          const simd_fvec2 &rand);
+simd_fvec4 SampleBilinear(const Cpu::TexStorageBase &storage, uint32_t tex, const simd_fvec2 &iuvs, int lod,
+                          const simd_fvec2 &rand);
 simd_fvec4 SampleTrilinear(const Cpu::TexStorageBase *const textures[], uint32_t index, const simd_fvec2 &uvs,
-                           float lod);
+                           float lod, const simd_fvec2 &rand);
 simd_fvec4 SampleAnisotropic(const Cpu::TexStorageBase *const textures[], uint32_t index, const simd_fvec2 &uvs,
                              const simd_fvec2 &duv_dx, const simd_fvec2 &duv_dy);
 simd_fvec4 SampleLatlong_RGBE(const Cpu::TexStorageRGBA &storage, uint32_t index, const simd_fvec4 &dir,
-                              float y_rotation);
+                              float y_rotation, const simd_fvec2 &rand);
 
 // Trace rays through scene hierarchy
 void IntersectScene(Span<ray_data_t> rays, int min_transp_depth, int max_transp_depth, const float *random_seq,
                     const scene_data_t &sc, uint32_t root_index, const Cpu::TexStorageBase *const textures[],
                     Span<hit_data_t> out_inter);
 simd_fvec4 IntersectScene(const shadow_ray_t &r, int max_transp_depth, const scene_data_t &sc, uint32_t node_index,
-                          const Cpu::TexStorageBase *const textures[]);
+                          const float *random_seq, const Cpu::TexStorageBase *const textures[]);
 
 // Pick point on any light source for evaluation
 void SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const simd_fvec4 &B, const simd_fvec4 &N,
@@ -282,14 +284,15 @@ void TraceRays(Span<ray_data_t> rays, int min_transp_depth, int max_transp_depth
                uint32_t node_index, bool trace_lights, const Cpu::TexStorageBase *const textures[],
                const float random_seq[], Span<hit_data_t> out_inter);
 void TraceShadowRays(Span<const shadow_ray_t> rays, int max_transp_depth, float _clamp_val, const scene_data_t &sc,
-                     uint32_t node_index, const Cpu::TexStorageBase *const textures[], int img_w,
-                     color_rgba_t *out_color);
+                     uint32_t node_index, const float random_seq[], const Cpu::TexStorageBase *const textures[],
+                     int img_w, color_rgba_t *out_color);
 
 // Get environment collor at direction
-simd_fvec4 Evaluate_EnvColor(const ray_data_t &ray, const environment_t &env, const Cpu::TexStorageRGBA &tex_storage);
+simd_fvec4 Evaluate_EnvColor(const ray_data_t &ray, const environment_t &env, const Cpu::TexStorageRGBA &tex_storage,
+                             const simd_fvec2 &rand);
 // Get light color at intersection point
 simd_fvec4 Evaluate_LightColor(const ray_data_t &ray, const hit_data_t &inter, const environment_t &env,
-                               const Cpu::TexStorageRGBA &tex_storage, const light_t *lights);
+                               const Cpu::TexStorageRGBA &tex_storage, const light_t *lights, const simd_fvec2 &rand);
 
 // Evaluate individual nodes
 simd_fvec4 Evaluate_DiffuseNode(const light_sample_t &ls, const ray_data_t &ray, const surface_t &surf,

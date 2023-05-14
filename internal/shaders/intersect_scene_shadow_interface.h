@@ -10,7 +10,7 @@ struct Params {
     int max_transp_depth;
     int blocker_lights_count;
     float clamp_val;
-    int _pad0;
+    int hi;
 };
 
 const int LOCAL_GROUP_SIZE_X = 8;
@@ -31,7 +31,8 @@ const int SH_RAYS_BUF_SLOT = 12;
 const int COUNTERS_BUF_SLOT = 13;
 const int LIGHTS_BUF_SLOT = 14;
 const int BLOCKER_LIGHTS_BUF_SLOT = 15;
-const int TLAS_SLOT = 16;
+const int RANDOM_SEQ_BUF_SLOT = 16;
+const int TLAS_SLOT = 17;
 
 const int INOUT_IMG_SLOT = 0;
 

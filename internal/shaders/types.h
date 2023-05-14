@@ -18,7 +18,9 @@ const int RAND_DIM_LIGHT_PICK = 3;
 const int RAND_DIM_LIGHT_U = 4;
 const int RAND_DIM_LIGHT_V = 5;
 const int RAND_DIM_TERMINATE = 6;
-const int RAND_DIM_BOUNCE_COUNT = 7; // separate for each bounce
+const int RAND_DIM_TEX_U = 7;
+const int RAND_DIM_TEX_V = 8;
+const int RAND_DIM_BOUNCE_COUNT = 9; // separate for each bounce
 
 const int MAX_STACK_SIZE = 48;
 

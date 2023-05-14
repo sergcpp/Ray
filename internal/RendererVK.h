@@ -145,8 +145,9 @@ class Renderer : public RendererBase {
                                       const Buffer &rays, const Buffer &out_hits);
     void kernel_IntersectSceneShadow(VkCommandBuffer cmd_buf, const pass_settings_t &settings, const Buffer &indir_args,
                                      int indir_args_index, const Buffer &counters, const scene_data_t &sc_data,
-                                     uint32_t node_index, float clamp_val, Span<const TextureAtlas> tex_atlases,
-                                     VkDescriptorSet tex_descr_set, const Buffer &sh_rays, const Texture2D &out_img);
+                                     const Buffer &random_seq, int hi, uint32_t node_index, float clamp_val,
+                                     Span<const TextureAtlas> tex_atlases, VkDescriptorSet tex_descr_set,
+                                     const Buffer &sh_rays, const Texture2D &out_img);
     void kernel_IntersectAreaLights(VkCommandBuffer cmd_buf, const scene_data_t &sc_data, const Buffer &indir_args,
                                     const Buffer &counters, const Buffer &rays, const Buffer &inout_hits);
     void kernel_ShadePrimaryHits(VkCommandBuffer cmd_buf, const pass_settings_t &settings, const environment_t &env,

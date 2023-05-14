@@ -22,6 +22,7 @@
 #define USE_NEE 1
 #define USE_PATH_TERMINATION 1
 // #define FORCE_TEXTURE_LOD 0
+#define USE_STOCH_TEXTURE_FILTERING 1
 #define USE_SAFE_MATH 1
 
 namespace Ray {
@@ -330,13 +331,15 @@ void SampleNearest(const Cpu::TexStorageBase *const textures[], uint32_t index, 
                    const simd_fvec<S> &lod, const simd_ivec<S> &mask, simd_fvec<S> out_rgba[4]);
 template <int S>
 void SampleBilinear(const Cpu::TexStorageBase *const textures[], uint32_t index, const simd_fvec<S> uvs[2],
-                    const simd_ivec<S> &lod, const simd_ivec<S> &mask, simd_fvec<S> out_rgba[4]);
+                    const simd_ivec<S> &lod, const simd_fvec<S> rand[2], const simd_ivec<S> &mask,
+                    simd_fvec<S> out_rgba[4]);
 template <int S>
 void SampleTrilinear(const Cpu::TexStorageBase *const textures[], uint32_t index, const simd_fvec<S> uvs[2],
-                     const simd_fvec<S> &lod, const simd_ivec<S> &mask, simd_fvec<S> out_rgba[4]);
+                     const simd_fvec<S> &lod, const simd_fvec<S> rand[2], const simd_ivec<S> &mask,
+                     simd_fvec<S> out_rgba[4]);
 template <int S>
 void SampleLatlong_RGBE(const Cpu::TexStorageRGBA &storage, uint32_t index, const simd_fvec<S> dir[3], float y_rotation,
-                        const simd_ivec<S> &mask, simd_fvec<S> out_rgb[3]);
+                        const simd_fvec<S> rand[2], const simd_ivec<S> &mask, simd_fvec<S> out_rgb[3]);
 
 // Trace rays through scene hierarchy
 template <int S>
@@ -345,7 +348,7 @@ void IntersectScene(ray_data_t<S> &r, int min_transp_depth, int max_transp_depth
                     hit_data_t<S> &inter);
 template <int S>
 void IntersectScene(const shadow_ray_t<S> &r, int max_transp_depth, const scene_data_t &sc, uint32_t node_index,
-                    const Cpu::TexStorageBase *const textures[], simd_fvec<S> rc[3]);
+                    const float random_seq[], const Cpu::TexStorageBase *const textures[], simd_fvec<S> rc[3]);
 
 // Pick point on any light source for evaluation
 template <int S>
@@ -368,18 +371,18 @@ void TraceRays(Span<ray_data_t<S>> rays, int min_transp_depth, int max_transp_de
                const float random_seq[], Span<hit_data_t<S>> out_inter);
 template <int S>
 void TraceShadowRays(Span<const shadow_ray_t<S>> rays, int max_transp_depth, float _clamp_val, const scene_data_t &sc,
-                     uint32_t root_index, const Cpu::TexStorageBase *const textures[], int img_w,
-                     color_rgba_t *out_color);
+                     uint32_t root_index, const float random_seq[], const Cpu::TexStorageBase *const textures[],
+                     int img_w, color_rgba_t *out_color);
 
 // Get environment collor at direction
 template <int S>
 void Evaluate_EnvColor(const ray_data_t<S> &ray, const simd_ivec<S> &mask, const environment_t &env,
-                       const Cpu::TexStorageRGBA &tex_storage, simd_fvec<S> env_col[4]);
+                       const Cpu::TexStorageRGBA &tex_storage, const simd_fvec<S> rand[2], simd_fvec<S> env_col[4]);
 // Get light color at intersection point
 template <int S>
 void Evaluate_LightColor(const simd_fvec<S> P[3], const ray_data_t<S> &ray, const simd_ivec<S> &mask,
                          const hit_data_t<S> &inter, const environment_t &env, const light_t *lights,
-                         const Cpu::TexStorageRGBA &tex_storage, simd_fvec<S> light_col[3]);
+                         const Cpu::TexStorageRGBA &tex_storage, const simd_fvec<S> rand[2], simd_fvec<S> light_col[3]);
 
 // Evaluate individual nodes
 template <int S>
@@ -518,10 +521,11 @@ class SIMDPolicyBase {
     }
 
     static force_inline void TraceShadowRays(Span<const ShadowRayType> rays, int max_transp_depth, float _clamp_val,
-                                             const scene_data_t &sc, uint32_t node_index,
+                                             const scene_data_t &sc, uint32_t node_index, const float random_seq[],
                                              const Cpu::TexStorageBase *const textures[], int img_w,
                                              color_rgba_t *out_color) {
-        NS::TraceShadowRays<RPSize>(rays, max_transp_depth, _clamp_val, sc, node_index, textures, img_w, out_color);
+        NS::TraceShadowRays<RPSize>(rays, max_transp_depth, _clamp_val, sc, node_index, random_seq, textures, img_w,
+                                    out_color);
     }
 
     static force_inline int SortRays_CPU(Span<RayDataType> rays, const float root_min[3], const float cell_size[3],
@@ -4208,8 +4212,8 @@ void Ray::NS::SampleNearest(const Cpu::TexStorageBase *const textures[], const u
 
 template <int S>
 void Ray::NS::SampleBilinear(const Cpu::TexStorageBase *const textures[], const uint32_t index,
-                             const simd_fvec<S> uvs[2], const simd_ivec<S> &lod, const simd_ivec<S> &mask,
-                             simd_fvec<S> out_rgba[4]) {
+                             const simd_fvec<S> uvs[2], const simd_ivec<S> &lod, const simd_fvec<S> rand[2],
+                             const simd_ivec<S> &mask, simd_fvec<S> out_rgba[4]) {
     const Cpu::TexStorageBase &storage = *textures[index >> 28];
 
     const int tex = int(index & 0x00ffffff);
@@ -4230,11 +4234,29 @@ void Ray::NS::SampleBilinear(const Cpu::TexStorageBase *const textures[], const 
         _uvs[1].set(i, _uvs[1][i] * img_size[1] - 0.5f);
     }
 
+#if USE_STOCH_TEXTURE_FILTERING
+    // Jitter UVs
+    _uvs[0] += rand[0];
+    _uvs[1] += rand[1];
+
+    for (int i = 0; i < S; ++i) {
+        if (!mask[i]) {
+            continue;
+        }
+
+        const auto &p00 = storage.Fetch(tex, int(_uvs[0][i]), int(_uvs[1][i]), lod[i]);
+
+        out_rgba[0].set(i, p00.v[0]);
+        out_rgba[1].set(i, p00.v[1]);
+        out_rgba[2].set(i, p00.v[2]);
+        out_rgba[3].set(i, p00.v[3]);
+    }
+#else // USE_STOCH_TEXTURE_FILTERING
     const simd_fvec<S> k[2] = {fract(_uvs[0]), fract(_uvs[1])};
 
     simd_fvec<S> p0[4] = {}, p1[4] = {};
 
-    for (int i = 0; i < S; i++) {
+    for (int i = 0; i < S; ++i) {
         if (!mask[i]) {
             continue;
         }
@@ -4259,16 +4281,17 @@ void Ray::NS::SampleBilinear(const Cpu::TexStorageBase *const textures[], const 
     where(mask, out_rgba[1]) = (p1[1] * k[1] + p0[1] * (1.0f - k[1]));
     where(mask, out_rgba[2]) = (p1[2] * k[1] + p0[2] * (1.0f - k[1]));
     where(mask, out_rgba[3]) = (p1[3] * k[1] + p0[3] * (1.0f - k[1]));
+#endif // USE_STOCH_TEXTURE_FILTERING
 }
 
 template <int S>
 void Ray::NS::SampleTrilinear(const Cpu::TexStorageBase *const textures[], const uint32_t index,
-                              const simd_fvec<S> uvs[2], const simd_fvec<S> &lod, const simd_ivec<S> &mask,
-                              simd_fvec<S> out_rgba[4]) {
+                              const simd_fvec<S> uvs[2], const simd_fvec<S> &lod, const simd_fvec<S> rand[2],
+                              const simd_ivec<S> &mask, simd_fvec<S> out_rgba[4]) {
     simd_fvec<S> col1[4];
-    SampleBilinear(textures, index, uvs, (simd_ivec<S>)floor(lod), mask, col1);
+    SampleBilinear(textures, index, uvs, (simd_ivec<S>)floor(lod), rand, mask, col1);
     simd_fvec<S> col2[4];
-    SampleBilinear(textures, index, uvs, (simd_ivec<S>)ceil(lod), mask, col2);
+    SampleBilinear(textures, index, uvs, (simd_ivec<S>)ceil(lod), rand, mask, col2);
 
     const simd_fvec<S> k = fract(lod);
     UNROLLED_FOR(i, 4, { out_rgba[i] = col1[i] * (1.0f - k) + col2[i] * k; })
@@ -4276,7 +4299,8 @@ void Ray::NS::SampleTrilinear(const Cpu::TexStorageBase *const textures[], const
 
 template <int S>
 void Ray::NS::SampleLatlong_RGBE(const Cpu::TexStorageRGBA &storage, const uint32_t index, const simd_fvec<S> dir[3],
-                                 const float y_rotation, const simd_ivec<S> &mask, simd_fvec<S> out_rgb[3]) {
+                                 const float y_rotation, const simd_fvec<S> rand[2], const simd_ivec<S> &mask,
+                                 simd_fvec<S> out_rgb[3]) {
     const simd_fvec<S> y = clamp(dir[1], -1.0f, 1.0f);
 
     simd_fvec<S> theta = 0.0f, phi = 0.0f;
@@ -4295,8 +4319,27 @@ void Ray::NS::SampleLatlong_RGBE(const Cpu::TexStorageRGBA &storage, const uint3
     float sz[2];
     storage.GetFRes(tex, 0, sz);
 
-    const simd_fvec<S> uvs[2] = {clamp(u * sz[0], 0.0f, sz[0] - 1.0f), clamp(theta * sz[1], 0.0f, sz[1] - 1.0f)};
+    simd_fvec<S> uvs[2] = {clamp(u * sz[0], 0.0f, sz[0] - 1.0f), clamp(theta * sz[1], 0.0f, sz[1] - 1.0f)};
 
+#if USE_STOCH_TEXTURE_FILTERING
+    uvs[0] += rand[0];
+    uvs[1] += rand[1];
+
+    const simd_ivec<S> iuvs[2] = {simd_ivec<S>(uvs[0]), simd_ivec<S>(uvs[1])};
+
+    for (int i = 0; i < S; i++) {
+        if (!mask[i]) {
+            continue;
+        }
+
+        const auto &p00 = storage.Get(tex, iuvs[0][i], iuvs[1][i], 0);
+
+        const float f = std::exp2(float(p00.v[3]) - 128.0f);
+        out_rgb[0].set(i, to_norm_float(p00.v[0]) * f);
+        out_rgb[1].set(i, to_norm_float(p00.v[1]) * f);
+        out_rgb[2].set(i, to_norm_float(p00.v[2]) * f);
+    }
+#else  // USE_STOCH_TEXTURE_FILTERING
     const simd_fvec<S> k[2] = {fract(uvs[0]), fract(uvs[1])};
 
     simd_fvec<S> _p00[3] = {}, _p01[3] = {}, _p10[3] = {}, _p11[3] = {};
@@ -4340,6 +4383,7 @@ void Ray::NS::SampleLatlong_RGBE(const Cpu::TexStorageRGBA &storage, const uint3
     out_rgb[0] = p1X[0] * k[1] + p0X[0] * (1.0f - k[1]);
     out_rgb[1] = p1X[1] * k[1] + p0X[1] * (1.0f - k[1]);
     out_rgb[2] = p1X[2] * k[1] + p0X[2] * (1.0f - k[1]);
+#endif // USE_STOCH_TEXTURE_FILTERING
 }
 
 template <int S>
@@ -4348,7 +4392,7 @@ void Ray::NS::IntersectScene(ray_data_t<S> &r, const int min_transp_depth, const
                              const Cpu::TexStorageBase *const textures[], hit_data_t<S> &inter) {
     simd_fvec<S> ro[3] = {r.o[0], r.o[1], r.o[2]};
 
-    const simd_fvec<S> rand_offset = construct_float(hash(r.xy));
+    const simd_fvec<S> rand_offset[2] = {construct_float(hash(r.xy)), construct_float(hash(hash(r.xy)))};
     simd_ivec<S> rand_index = total_depth(r.depth) * RAND_DIM_BOUNCE_COUNT;
 
     simd_ivec<S> keep_going = r.mask;
@@ -4409,8 +4453,11 @@ void Ray::NS::IntersectScene(ray_data_t<S> &r, const int min_transp_depth, const
             })
         }
 
-        simd_fvec<S> rand_pick = fract(gather(random_seq + RAND_DIM_BSDF_PICK, rand_index) + rand_offset);
-        const simd_fvec<S> rand_term = fract(gather(random_seq + RAND_DIM_TERMINATE, rand_index) + rand_offset);
+        simd_fvec<S> rand_pick = fract(gather(random_seq + RAND_DIM_BSDF_PICK, rand_index) + rand_offset[0]);
+        const simd_fvec<S> rand_term = fract(gather(random_seq + RAND_DIM_TERMINATE, rand_index) + rand_offset[0]);
+
+        const simd_fvec<S> tex_rand[2] = {fract(gather(random_seq + RAND_DIM_TEX_U, rand_index) + rand_offset[0]),
+                                          fract(gather(random_seq + RAND_DIM_TEX_V, rand_index) + rand_offset[1])};
 
         { // resolve material
             simd_ivec<S> ray_queue[S];
@@ -4439,7 +4486,7 @@ void Ray::NS::IntersectScene(ray_data_t<S> &r, const int min_transp_depth, const
 
                         if (mat->textures[BASE_TEXTURE] != 0xffffffff) {
                             simd_fvec<S> mix[4] = {};
-                            SampleBilinear(textures, mat->textures[BASE_TEXTURE], uvs, {0}, same_mi, mix);
+                            SampleBilinear(textures, mat->textures[BASE_TEXTURE], uvs, {0}, tex_rand, same_mi, mix);
                             _mix_val *= mix[0];
                         }
                         _mix_val *= mat->strength;
@@ -4540,8 +4587,8 @@ void Ray::NS::TraceRays(Span<ray_data_t<S>> rays, int min_transp_depth, int max_
 
 template <int S>
 void Ray::NS::TraceShadowRays(Span<const shadow_ray_t<S>> rays, int max_transp_depth, float _clamp_val,
-                              const scene_data_t &sc, uint32_t root_index, const Cpu::TexStorageBase *const textures[],
-                              int img_w, color_rgba_t *out_color) {
+                              const scene_data_t &sc, const uint32_t root_index, const float random_seq[],
+                              const Cpu::TexStorageBase *const textures[], int img_w, color_rgba_t *out_color) {
     simd_fvec<S> clamp_val = _clamp_val;
     if (_clamp_val == 0.0f) {
         clamp_val = std::numeric_limits<float>::max();
@@ -4551,7 +4598,7 @@ void Ray::NS::TraceShadowRays(Span<const shadow_ray_t<S>> rays, int max_transp_d
         const shadow_ray_t<S> &sh_r = rays[i];
 
         simd_fvec<S> rc[3];
-        IntersectScene(sh_r, max_transp_depth, sc, root_index, textures, rc);
+        IntersectScene(sh_r, max_transp_depth, sc, root_index, random_seq, textures, rc);
         const simd_fvec<S> k = IntersectAreaLights(sh_r, sc.lights, sc.blocker_lights, sc.transforms);
         UNROLLED_FOR(j, 3, { rc[j] = min(rc[j] * k, clamp_val); })
 
@@ -4571,12 +4618,16 @@ void Ray::NS::TraceShadowRays(Span<const shadow_ray_t<S>> rays, int max_transp_d
 
 template <int S>
 void Ray::NS::IntersectScene(const shadow_ray_t<S> &r, const int max_transp_depth, const scene_data_t &sc,
-                             uint32_t node_index, const Cpu::TexStorageBase *const textures[], simd_fvec<S> rc[3]) {
+                             const uint32_t node_index, const float random_seq[],
+                             const Cpu::TexStorageBase *const textures[], simd_fvec<S> rc[3]) {
     simd_fvec<S> ro[3] = {r.o[0], r.o[1], r.o[2]};
     UNROLLED_FOR(i, 3, { rc[i] = r.c[i]; })
     simd_fvec<S> dist = r.dist;
     where(r.dist < 0.0f, dist) = MAX_DIST;
     simd_ivec<S> depth = (r.depth >> 24);
+
+    const simd_fvec<S> rand_offset[2] = {construct_float(hash(r.xy)), construct_float(hash(hash(r.xy)))};
+    simd_ivec<S> rand_index = total_depth(r.depth) * RAND_DIM_BOUNCE_COUNT;
 
     simd_ivec<S> keep_going = simd_cast(dist > HIT_EPS) & r.mask;
     while (keep_going.not_all_zeros()) {
@@ -4627,6 +4678,9 @@ void Ray::NS::IntersectScene(const shadow_ray_t<S> &r, const int max_transp_dept
             })
         }
 
+        const simd_fvec<S> tex_rand[2] = {fract(gather(random_seq + RAND_DIM_TEX_U, rand_index) + rand_offset[0]),
+                                          fract(gather(random_seq + RAND_DIM_TEX_V, rand_index) + rand_offset[1])};
+
         simd_ivec<S> mat_index = gather(reinterpret_cast<const int *>(sc.tri_materials), tri_index) &
                                  simd_ivec<S>((MATERIAL_INDEX_BITS << 16) | MATERIAL_INDEX_BITS);
 
@@ -4672,7 +4726,8 @@ void Ray::NS::IntersectScene(const shadow_ray_t<S> &r, const int max_transp_dept
                             simd_fvec<S> mix_val = mat->strength;
                             if (mat->textures[BASE_TEXTURE] != 0xffffffff) {
                                 simd_fvec<S> mix[4] = {};
-                                SampleBilinear(textures, mat->textures[BASE_TEXTURE], sh_uvs, {0}, same_mi, mix);
+                                SampleBilinear(textures, mat->textures[BASE_TEXTURE], sh_uvs, {0}, tex_rand, same_mi,
+                                               mix);
                                 mix_val *= mix[0];
                             }
 
@@ -4698,6 +4753,8 @@ void Ray::NS::IntersectScene(const shadow_ray_t<S> &r, const int max_transp_dept
 
         // update mask
         keep_going &= simd_cast(dist > HIT_EPS) & simd_cast(lum(rc) >= FLT_EPS);
+
+        rand_index += RAND_DIM_BOUNCE_COUNT;
     }
 }
 
@@ -4711,6 +4768,9 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
     const simd_fvec<S> ri = fract(gather(random_seq + RAND_DIM_LIGHT_PICK, rand_index) + sample_off[0]);
     const simd_fvec<S> ru = fract(gather(random_seq + RAND_DIM_LIGHT_U, rand_index) + sample_off[0]);
     const simd_fvec<S> rv = fract(gather(random_seq + RAND_DIM_LIGHT_V, rand_index) + sample_off[1]);
+
+    const simd_fvec<S> tex_rand[2] = {fract(gather(random_seq + RAND_DIM_TEX_U, rand_index) + sample_off[0]),
+                                      fract(gather(random_seq + RAND_DIM_TEX_V, rand_index) + sample_off[1])};
 
     const simd_ivec<S> light_index = min(simd_ivec<S>{ri * float(sc.li_indices.size())}, int(sc.li_indices.size() - 1));
 
@@ -4856,7 +4916,7 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
                 if (sc.env.env_map != 0xffffffff) {
                     simd_fvec<S> tex_col[3];
                     SampleLatlong_RGBE(*static_cast<const Cpu::TexStorageRGBA *>(textures[0]), sc.env.env_map, ls.L,
-                                       sc.env.env_map_rotation, ray_queue[index], tex_col);
+                                       sc.env.env_map_rotation, tex_rand, ray_queue[index], tex_col);
                     UNROLLED_FOR(i, 3, { env_col[i] *= tex_col[i]; })
                 }
                 UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.col[i]) *= sc.env.env_col[i]; })
@@ -4910,7 +4970,7 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
                 if (sc.env.env_map != 0xffffffff) {
                     simd_fvec<S> tex_col[3];
                     SampleLatlong_RGBE(*static_cast<const Cpu::TexStorageRGBA *>(textures[0]), sc.env.env_map, ls.L,
-                                       sc.env.env_map_rotation, ray_queue[index], tex_col);
+                                       sc.env.env_map_rotation, tex_rand, ray_queue[index], tex_col);
                     UNROLLED_FOR(i, 3, { env_col[i] *= tex_col[i]; })
                 }
                 UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.col[i]) *= sc.env.env_col[i]; })
@@ -5011,7 +5071,8 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
             const material_t &lmat = sc.materials[sc.tri_materials[ltri_index].front_mi & MATERIAL_INDEX_BITS];
             if (lmat.textures[BASE_TEXTURE] != 0xffffffff) {
                 simd_fvec<S> tex_col[4] = {};
-                SampleBilinear(textures, lmat.textures[BASE_TEXTURE], luvs, simd_ivec<S>{0}, ray_mask, tex_col);
+                SampleBilinear(textures, lmat.textures[BASE_TEXTURE], luvs, simd_ivec<S>{0}, tex_rand, ray_mask,
+                               tex_col);
                 UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.col[i]) *= tex_col[i]; })
             }
         } else if (l.type == LIGHT_TYPE_ENV) {
@@ -5038,7 +5099,7 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
             simd_fvec<S> tex_col[3] = {1.0f, 1.0f, 1.0f};
             if (sc.env.env_map != 0xffffffff) {
                 SampleLatlong_RGBE(*static_cast<const Cpu::TexStorageRGBA *>(textures[0]), sc.env.env_map, ls.L,
-                                   sc.env.env_map_rotation, ray_queue[index], tex_col);
+                                   sc.env.env_map_rotation, tex_rand, ray_queue[index], tex_col);
             }
             UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.col[i]) *= sc.env.env_col[i] * tex_col[i]; })
 
@@ -5271,7 +5332,8 @@ Ray::NS::simd_fvec<S> Ray::NS::IntersectAreaLights(const shadow_ray_t<S> &r, con
 
 template <int S>
 void Ray::NS::Evaluate_EnvColor(const ray_data_t<S> &ray, const simd_ivec<S> &mask, const environment_t &env,
-                                const Cpu::TexStorageRGBA &tex_storage, simd_fvec<S> env_col[4]) {
+                                const Cpu::TexStorageRGBA &tex_storage, const simd_fvec<S> rand[2],
+                                simd_fvec<S> env_col[4]) {
     const uint32_t env_map = env.env_map;
     const float env_map_rotation = env.env_map_rotation;
     const simd_ivec<S> env_map_mask = (ray.depth & 0x00ffffff) != 0;
@@ -5279,7 +5341,7 @@ void Ray::NS::Evaluate_EnvColor(const ray_data_t<S> &ray, const simd_ivec<S> &ma
     if ((mask & env_map_mask).not_all_zeros()) {
         UNROLLED_FOR(i, 3, { env_col[i] = 1.0f; });
         if (env_map != 0xffffffff) {
-            SampleLatlong_RGBE(tex_storage, env_map, ray.d, env_map_rotation, (mask & env_map_mask), env_col);
+            SampleLatlong_RGBE(tex_storage, env_map, ray.d, env_map_rotation, rand, (mask & env_map_mask), env_col);
         }
         if (env.qtree_levels) {
             const auto *qtree_mips = reinterpret_cast<const simd_fvec4 *const *>(env.qtree_mips);
@@ -5305,7 +5367,7 @@ void Ray::NS::Evaluate_EnvColor(const ray_data_t<S> &ray, const simd_ivec<S> &ma
 
     if (back_map != 0xffffffff && (mask & back_map_mask).not_all_zeros()) {
         simd_fvec<S> back_col[3];
-        SampleLatlong_RGBE(tex_storage, back_map, ray.d, back_map_rotation, (mask & back_map_mask), back_col);
+        SampleLatlong_RGBE(tex_storage, back_map, ray.d, back_map_rotation, rand, (mask & back_map_mask), back_col);
         UNROLLED_FOR(i, 3, { where(back_map_mask, env_col[i]) = back_col[i]; })
     }
     UNROLLED_FOR(i, 3, { where(back_map_mask, env_col[i]) *= env.back_col[i]; })
@@ -5314,7 +5376,8 @@ void Ray::NS::Evaluate_EnvColor(const ray_data_t<S> &ray, const simd_ivec<S> &ma
 template <int S>
 void Ray::NS::Evaluate_LightColor(const simd_fvec<S> P[3], const ray_data_t<S> &ray, const simd_ivec<S> &mask,
                                   const hit_data_t<S> &inter, const environment_t &env, const light_t *lights,
-                                  const Cpu::TexStorageRGBA &tex_storage, simd_fvec<S> light_col[3]) {
+                                  const Cpu::TexStorageRGBA &tex_storage, const simd_fvec<S> rand[2],
+                                  simd_fvec<S> light_col[3]) {
     simd_ivec<S> ray_queue[S];
     ray_queue[0] = mask;
 
@@ -5338,7 +5401,8 @@ void Ray::NS::Evaluate_LightColor(const simd_fvec<S> P[3], const ray_data_t<S> &
             UNROLLED_FOR(i, 3, { lcol[i] *= env.env_col[i]; })
             if (env.env_map != 0xffffffff) {
                 simd_fvec<S> tex_col[3];
-                SampleLatlong_RGBE(tex_storage, env.env_map, ray.d, env.env_map_rotation, ray_queue[index], tex_col);
+                SampleLatlong_RGBE(tex_storage, env.env_map, ray.d, env.env_map_rotation, rand, ray_queue[index],
+                                   tex_col);
                 UNROLLED_FOR(i, 3, { lcol[i] *= tex_col[i]; })
             }
         }
@@ -5880,10 +5944,27 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
     out_rgba[0] = out_rgba[1] = out_rgba[2] = {0.0f};
     out_rgba[3] = {1.0f};
 
+    // used to randomize random sequence among pixels
+    const simd_fvec<S> sample_off[2] = {construct_float(hash(ray.xy)), construct_float(hash(hash(ray.xy)))};
+
+    const simd_ivec<S> diff_depth = ray.depth & 0x000000ff;
+    const simd_ivec<S> spec_depth = (ray.depth >> 8) & 0x000000ff;
+    const simd_ivec<S> refr_depth = (ray.depth >> 16) & 0x000000ff;
+    const simd_ivec<S> transp_depth = (ray.depth >> 24) & 0x000000ff;
+    // NOTE: transparency depth is not accounted here
+    const simd_ivec<S> total_depth = diff_depth + spec_depth + refr_depth;
+
+    // offset of the sequence
+    const simd_ivec<S> rand_index = (total_depth + transp_depth) * RAND_DIM_BOUNCE_COUNT;
+
+    const simd_fvec<S> tex_rand[2] = {fract(gather(random_seq + RAND_DIM_TEX_U, rand_index) + sample_off[0]),
+                                      fract(gather(random_seq + RAND_DIM_TEX_V, rand_index) + sample_off[1])};
+
     const simd_ivec<S> ino_hit = ~inter.mask;
     if (ino_hit.not_all_zeros()) {
         simd_fvec<S> env_col[4] = {{1.0f}, {1.0f}, {1.0f}, {1.0f}};
-        Evaluate_EnvColor(ray, ino_hit, sc.env, *static_cast<const Cpu::TexStorageRGBA *>(textures[0]), env_col);
+        Evaluate_EnvColor(ray, ino_hit, sc.env, *static_cast<const Cpu::TexStorageRGBA *>(textures[0]), tex_rand,
+                          env_col);
 
         UNROLLED_FOR(i, 3, { where(ino_hit, out_rgba[i]) = ray.c[i] * env_col[i]; })
         where(ino_hit, out_rgba[3]) = env_col[3];
@@ -5903,7 +5984,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
     if (is_light_hit.not_all_zeros()) {
         simd_fvec<S> light_col[3] = {};
         Evaluate_LightColor(surf.P, ray, is_light_hit, inter, sc.env, sc.lights,
-                            *static_cast<const Cpu::TexStorageRGBA *>(textures[0]), light_col);
+                            *static_cast<const Cpu::TexStorageRGBA *>(textures[0]), tex_rand, light_col);
 
         UNROLLED_FOR(i, 3, { where(is_light_hit, out_rgba[i]) = ray.c[i] * light_col[i]; })
         where(is_light_hit, out_rgba[3]) = 1.0f;
@@ -6029,19 +6110,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
 
     static const int MatDWORDStride = sizeof(material_t) / sizeof(float);
 
-    // used to randomize random sequence among pixels
-    const simd_fvec<S> sample_off[2] = {construct_float(hash(ray.xy)), construct_float(hash(hash(ray.xy)))};
     const simd_fvec<S> ext_ior = peek_ior_stack(ray.ior, is_backfacing);
-
-    const simd_ivec<S> diff_depth = ray.depth & 0x000000ff;
-    const simd_ivec<S> spec_depth = (ray.depth >> 8) & 0x000000ff;
-    const simd_ivec<S> refr_depth = (ray.depth >> 16) & 0x000000ff;
-    const simd_ivec<S> transp_depth = (ray.depth >> 24) & 0x000000ff;
-    // NOTE: transparency depth is not accounted here
-    const simd_ivec<S> total_depth = diff_depth + spec_depth + refr_depth;
-
-    // offset of the sequence
-    const simd_ivec<S> rand_index = (total_depth + transp_depth) * RAND_DIM_BOUNCE_COUNT;
 
     const simd_ivec<S> mat_type =
         gather(reinterpret_cast<const int *>(&sc.materials[0].type), mat_index * sizeof(material_t) / sizeof(int)) &
@@ -6080,7 +6149,8 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                 const simd_fvec<S> base_lod = get_texture_lod(textures, first_t, lambda, ray_queue[index]);
 
                 simd_fvec<S> tex_color[4] = {};
-                SampleBilinear(textures, first_t, surf.uvs, simd_ivec<S>(base_lod), ray_queue[index], tex_color);
+                SampleBilinear(textures, first_t, surf.uvs, simd_ivec<S>(base_lod), tex_rand, ray_queue[index],
+                               tex_color);
 
                 where(ray_queue[index], mix_val) *= tex_color[0];
 
@@ -6144,7 +6214,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                     ray_queue[num++] = diff_t;
                 }
 
-                SampleBilinear(textures, first_t, surf.uvs, simd_ivec<S>{0}, ray_queue[index], normals_tex);
+                SampleBilinear(textures, first_t, surf.uvs, simd_ivec<S>{0}, tex_rand, ray_queue[index], normals_tex);
                 if (first_t & TEX_RECONSTRUCT_Z_BIT) {
                     reconstruct_z |= ray_queue[index];
                 }
@@ -6236,7 +6306,8 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                 const simd_fvec<S> base_lod = get_texture_lod(textures, first_t, lambda, ray_queue[index]);
 
                 simd_fvec<S> tex_color[4] = {};
-                SampleBilinear(textures, first_t, surf.uvs, simd_ivec<S>(base_lod), ray_queue[index], tex_color);
+                SampleBilinear(textures, first_t, surf.uvs, simd_ivec<S>(base_lod), tex_rand, ray_queue[index],
+                               tex_color);
                 if (first_t & TEX_SRGB_BIT) {
                     srgb_to_rgb(tex_color, tex_color);
                 }
@@ -6290,7 +6361,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                 const simd_fvec<S> roughness_lod = get_texture_lod(textures, first_t, lambda, ray_queue[index]);
 
                 simd_fvec<S> roughness_color[4] = {};
-                SampleBilinear(textures, first_t, surf.uvs, simd_ivec<S>(roughness_lod), ray_queue[index],
+                SampleBilinear(textures, first_t, surf.uvs, simd_ivec<S>(roughness_lod), tex_rand, ray_queue[index],
                                roughness_color);
                 if (first_t & TEX_SRGB_BIT) {
                     srgb_to_rgb(roughness_color, roughness_color);
@@ -6442,8 +6513,8 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                     const uint32_t metallic_tex = mat->textures[METALLIC_TEXTURE];
                     const simd_fvec<S> metallic_lod = get_texture_lod(textures, metallic_tex, lambda, ray_queue[index]);
                     simd_fvec<S> metallic_color[4] = {};
-                    SampleBilinear(textures, metallic_tex, surf.uvs, simd_ivec<S>(metallic_lod), ray_queue[index],
-                                   metallic_color);
+                    SampleBilinear(textures, metallic_tex, surf.uvs, simd_ivec<S>(metallic_lod), tex_rand,
+                                   ray_queue[index], metallic_color);
 
                     metallic *= metallic_color[0];
                 }
@@ -6453,8 +6524,8 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                     const uint32_t specular_tex = mat->textures[SPECULAR_TEXTURE];
                     const simd_fvec<S> specular_lod = get_texture_lod(textures, specular_tex, lambda, ray_queue[index]);
                     simd_fvec<S> specular_color[4] = {};
-                    SampleBilinear(textures, specular_tex, surf.uvs, simd_ivec<S>(specular_lod), ray_queue[index],
-                                   specular_color);
+                    SampleBilinear(textures, specular_tex, surf.uvs, simd_ivec<S>(specular_lod), tex_rand,
+                                   ray_queue[index], specular_color);
                     if (specular_tex & TEX_SRGB_BIT) {
                         srgb_to_rgb(specular_color, specular_color);
                     }
@@ -6671,5 +6742,7 @@ void Ray::NS::ShadeSecondary(const pass_settings_t &ps, Span<const hit_data_t<S>
 #undef USE_NEE
 #undef USE_PATH_TERMINATION
 #undef FORCE_TEXTURE_LOD
+#undef USE_SAFE_MATH
+#undef USE_STOCH_TEXTURE_FILTERING
 
 #pragma warning(pop)

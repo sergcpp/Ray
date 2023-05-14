@@ -464,9 +464,10 @@ void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(VkCommandBuffer cmd_buf, const
 void Ray::Vk::Renderer::kernel_IntersectSceneShadow(VkCommandBuffer cmd_buf, const pass_settings_t &settings,
                                                     const Buffer &indir_args, const int indir_args_index,
                                                     const Buffer &counters, const scene_data_t &sc_data,
-                                                    const uint32_t node_index, const float clamp_val,
-                                                    Span<const TextureAtlas> tex_atlases, VkDescriptorSet tex_descr_set,
-                                                    const Buffer &sh_rays, const Texture2D &out_img) {
+                                                    const Buffer &random_seq, const int hi, const uint32_t node_index,
+                                                    const float clamp_val, Span<const TextureAtlas> tex_atlases,
+                                                    VkDescriptorSet tex_descr_set, const Buffer &sh_rays,
+                                                    const Texture2D &out_img) {
     const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
                                               {&counters, eResState::ShaderResource},
                                               {&sh_rays, eResState::ShaderResource},
@@ -489,6 +490,7 @@ void Ray::Vk::Renderer::kernel_IntersectSceneShadow(VkCommandBuffer cmd_buf, con
         {eBindTarget::SBuf, IntersectSceneShadow::COUNTERS_BUF_SLOT, counters},
         {eBindTarget::SBuf, IntersectSceneShadow::LIGHTS_BUF_SLOT, sc_data.lights},
         {eBindTarget::SBuf, IntersectSceneShadow::BLOCKER_LIGHTS_BUF_SLOT, sc_data.blocker_lights},
+        {eBindTarget::SBuf, IntersectSceneShadow::RANDOM_SEQ_BUF_SLOT, random_seq},
         {eBindTarget::Image, IntersectSceneShadow::INOUT_IMG_SLOT, out_img}};
 
     if (use_hwrt_) {
@@ -509,6 +511,7 @@ void Ray::Vk::Renderer::kernel_IntersectSceneShadow(VkCommandBuffer cmd_buf, con
     uniform_params.max_transp_depth = settings.max_transp_depth;
     uniform_params.blocker_lights_count = sc_data.blocker_lights_count;
     uniform_params.clamp_val = (clamp_val != 0.0f) ? clamp_val : std::numeric_limits<float>::max();
+    uniform_params.hi = hi;
 
     DispatchComputeIndirect(cmd_buf, pi_intersect_scene_shadow_, indir_args,
                             indir_args_index * sizeof(DispatchIndirectCommand), bindings, &uniform_params,

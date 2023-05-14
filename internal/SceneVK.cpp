@@ -54,13 +54,13 @@ Ray::Vk::Scene::Scene(Context *ctx, const bool use_hwrt, const bool use_bindless
       nodes_(ctx), tris_(ctx), tri_indices_(ctx), tri_materials_(ctx), transforms_(ctx, "Transforms"),
       meshes_(ctx, "Meshes"), mesh_instances_(ctx, "Mesh Instances"), mi_indices_(ctx), vertices_(ctx),
       vtx_indices_(ctx), materials_(ctx, "Materials"), atlas_textures_(ctx, "Atlas Textures"), bindless_tex_data_{ctx},
-      tex_atlases_{{ctx, eTexFormat::RawRGBA8888, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
-                   {ctx, eTexFormat::RawRGB888, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
-                   {ctx, eTexFormat::RawRG88, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
-                   {ctx, eTexFormat::RawR8, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
-                   {ctx, eTexFormat::BC3, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
-                   {ctx, eTexFormat::BC4, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
-                   {ctx, eTexFormat::BC5, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE}},
+      tex_atlases_{{ctx, eTexFormat::RawRGBA8888, eTexFilter::NoFilter, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
+                   {ctx, eTexFormat::RawRGB888, eTexFilter::NoFilter, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
+                   {ctx, eTexFormat::RawRG88, eTexFilter::NoFilter, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
+                   {ctx, eTexFormat::RawR8, eTexFilter::NoFilter, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
+                   {ctx, eTexFormat::BC3, eTexFilter::NoFilter, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
+                   {ctx, eTexFormat::BC4, eTexFilter::NoFilter, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
+                   {ctx, eTexFormat::BC5, eTexFilter::NoFilter, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE}},
       lights_(ctx, "Lights"), li_indices_(ctx), visible_lights_(ctx), blocker_lights_(ctx) {}
 
 Ray::Vk::Scene::~Scene() {
@@ -369,7 +369,7 @@ Ray::TextureHandle Ray::Vk::Scene::AddBindlessTexture_nolock(const tex_desc_t &_
     p.mip_count = mip_count;
     p.usage = eTexUsageBits::Transfer | eTexUsageBits::Sampled;
     p.format = fmt;
-    p.sampling.filter = eTexFilter::Bilinear;
+    p.sampling.filter = eTexFilter::NearestMipmap;
 
     uint32_t ret = bindless_textures_.emplace(_t.name ? _t.name : "Bindless Tex", ctx_, p,
                                               ctx_->default_memory_allocs(), ctx_->log());

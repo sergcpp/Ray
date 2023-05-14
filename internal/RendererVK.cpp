@@ -996,8 +996,9 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         DebugMarker _(cmd_buf, "TraceShadow");
         timestamps_[ctx_->backend_frame].primary_shadow[0] = ctx_->WriteTimestamp(cmd_buf, true);
         kernel_IntersectSceneShadow(cmd_buf, cam.pass_settings, indir_args_buf_, 2, counters_buf_, sc_data,
-                                    macro_tree_root, cam.pass_settings.clamp_direct, s->tex_atlases_,
-                                    s->bindless_tex_data_.descr_set, shadow_rays_buf_, temp_buf0_);
+                                    halton_seq_buf_, hi + RAND_DIM_BASE_COUNT, macro_tree_root,
+                                    cam.pass_settings.clamp_direct, s->tex_atlases_, s->bindless_tex_data_.descr_set,
+                                    shadow_rays_buf_, temp_buf0_);
         timestamps_[ctx_->backend_frame].primary_shadow[1] = ctx_->WriteTimestamp(cmd_buf, false);
     }
 
@@ -1068,7 +1069,8 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
             DebugMarker _(cmd_buf, "TraceShadow");
             timestamps_[ctx_->backend_frame].secondary_shadow.push_back(ctx_->WriteTimestamp(cmd_buf, true));
             kernel_IntersectSceneShadow(cmd_buf, cam.pass_settings, indir_args_buf_, 2, counters_buf_, sc_data,
-                                        macro_tree_root, cam.pass_settings.clamp_indirect, s->tex_atlases_,
+                                        halton_seq_buf_, hi + RAND_DIM_BASE_COUNT, macro_tree_root,
+                                        cam.pass_settings.clamp_indirect, s->tex_atlases_,
                                         s->bindless_tex_data_.descr_set, shadow_rays_buf_, temp_buf0_);
             timestamps_[ctx_->backend_frame].secondary_shadow.push_back(ctx_->WriteTimestamp(cmd_buf, false));
         }

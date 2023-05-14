@@ -193,7 +193,8 @@ void main() {
     inter.t = g_params.inter_t;
     inter.u = inter.v = 0.0;
 
-    const float rand_offset = construct_float(hash(g_rays[index].xy));
+    const vec2 rand_offset = vec2(construct_float(hash(g_rays[index].xy)),
+                                  construct_float(hash(hash(g_rays[index].xy))));
     int rand_index = g_params.hi + total_depth(g_rays[index]) * RAND_DIM_BOUNCE_COUNT;
 
     while (true) {
@@ -262,13 +263,16 @@ void main() {
         const float w = 1.0 - inter.u - inter.v;
         const vec2 uvs = vec2(v1.t[0][0], v1.t[0][1]) * w + vec2(v2.t[0][0], v2.t[0][1]) * inter.u + vec2(v3.t[0][0], v3.t[0][1]) * inter.v;
 
-        float trans_r = fract(g_random_seq[rand_index + RAND_DIM_BSDF_PICK] + rand_offset);
+        float trans_r = fract(g_random_seq[rand_index + RAND_DIM_BSDF_PICK] + rand_offset[0]);
+
+        const vec2 tex_rand = vec2(fract(g_random_seq[rand_index + RAND_DIM_TEX_U] + rand_offset[0]),
+                                   fract(g_random_seq[rand_index + RAND_DIM_TEX_V] + rand_offset[1]));
 
         // resolve mix material
         while (mat.type == MixNode) {
             float mix_val = mat.tangent_rotation_or_strength;
             if (mat.textures[BASE_TEXTURE] != 0xffffffff) {
-                mix_val *= SampleBilinear(mat.textures[BASE_TEXTURE], uvs, 0).r;
+                mix_val *= SampleBilinear(mat.textures[BASE_TEXTURE], uvs, 0, tex_rand).r;
             }
 
             if (trans_r > mix_val) {
@@ -291,7 +295,7 @@ void main() {
 #endif
 
         const float lum = max(g_rays[index].c[0], max(g_rays[index].c[1], g_rays[index].c[2]));
-        const float p = fract(g_random_seq[rand_index + RAND_DIM_TERMINATE] + rand_offset);
+        const float p = fract(g_random_seq[rand_index + RAND_DIM_TERMINATE] + rand_offset[0]);
         const float q = can_terminate_path ? max(0.05, 1.0 - lum) : 0.0;
         if (p < q || lum == 0.0 || (g_rays[index].depth >> 24) + 1 >= g_params.max_transp_depth) {
             // terminate ray

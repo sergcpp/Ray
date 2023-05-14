@@ -63,10 +63,11 @@ class SIMDPolicy {
     }
 
     static force_inline void TraceShadowRays(Span<const shadow_ray_t> rays, int max_transp_depth, float _clamp_val,
-                                             const scene_data_t &sc, uint32_t node_index,
+                                             const scene_data_t &sc, uint32_t node_index, const float random_seq[],
                                              const Cpu::TexStorageBase *const textures[], int img_w,
                                              color_rgba_t *out_color) {
-        Ref::TraceShadowRays(rays, max_transp_depth, _clamp_val, sc, node_index, textures, img_w, out_color);
+        Ref::TraceShadowRays(rays, max_transp_depth, _clamp_val, sc, node_index, random_seq, textures, img_w,
+                             out_color);
     }
 
     static force_inline int SortRays_CPU(Span<ray_data_t> rays, const float root_min[3], const float cell_size[3],
@@ -374,7 +375,8 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase *scene, RegionC
 
     SIMDPolicy::TraceShadowRays(Span<typename SIMDPolicy::ShadowRayType>{p.shadow_rays.data(), shadow_rays_count},
                                 cam.pass_settings.max_transp_depth, cam.pass_settings.clamp_direct, sc_data,
-                                macro_tree_root, s->tex_storages_, w_, temp_buf_.data());
+                                macro_tree_root, &region.halton_seq[hi + RAND_DIM_BASE_COUNT], s->tex_storages_, w_,
+                                temp_buf_.data());
 
     const auto time_after_prim_shadow = high_resolution_clock::now();
     duration<double, std::micro> secondary_sort_time{}, secondary_trace_time{}, secondary_shade_time{},
@@ -443,7 +445,8 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase *scene, RegionC
 
         SIMDPolicy::TraceShadowRays(Span<typename SIMDPolicy::ShadowRayType>{p.shadow_rays.data(), shadow_rays_count},
                                     cam.pass_settings.max_transp_depth, cam.pass_settings.clamp_indirect, sc_data,
-                                    macro_tree_root, s->tex_storages_, w_, temp_buf_.data());
+                                    macro_tree_root, &region.halton_seq[hi + RAND_DIM_BASE_COUNT], s->tex_storages_, w_,
+                                    temp_buf_.data());
 
         const auto time_secondary_shadow_end = high_resolution_clock::now();
         secondary_sort_time += duration<double, std::micro>{time_secondary_trace_start - time_secondary_sort_start};

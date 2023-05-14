@@ -3,6 +3,8 @@
 
 #extension GL_EXT_nonuniform_qualifier : require
 
+#define USE_STOCH_TEXTURE_FILTERING 1
+
 #include "types.h"
 
 vec3 rgbe_to_rgb(vec4 rgbe) {
@@ -18,8 +20,13 @@ ivec2 texSize(const uint index) {
     return textureSize(g_textures[nonuniformEXT(index & 0x00ffffff)], 0);
 }
 
-vec4 SampleBilinear(const uint index, const vec2 uvs, const int lod, const bool maybe_YCoCg, const bool maybe_SRGB) {
+vec4 SampleBilinear(const uint index, const vec2 uvs, const int lod, const vec2 rand, const bool maybe_YCoCg, const bool maybe_SRGB) {
+#if USE_STOCH_TEXTURE_FILTERING
+    ivec2 size = textureSize(g_textures[nonuniformEXT(index & 0x00ffffff)], lod);
+    vec4 res = textureLod(g_textures[nonuniformEXT(index & 0x00ffffff)], uvs + (rand - 0.5) / vec2(size), float(lod));
+#else // USE_STOCH_TEXTURE_FILTERING
     vec4 res = textureLod(g_textures[nonuniformEXT(index & 0x00ffffff)], uvs, float(lod));
+#endif // USE_STOCH_TEXTURE_FILTERING
     if (maybe_YCoCg && (index & TEX_YCOCG_BIT) != 0) {
         res.rgb = YCoCg_to_RGB(res);
         res.a = 1.0;
@@ -30,11 +37,11 @@ vec4 SampleBilinear(const uint index, const vec2 uvs, const int lod, const bool 
     return res;
 }
 
-vec4 SampleBilinear(const uint index, const vec2 uvs, const int lod) {
-    return SampleBilinear(index, uvs, lod, false, false);
+vec4 SampleBilinear(const uint index, const vec2 uvs, const int lod, const vec2 rand) {
+    return SampleBilinear(index, uvs, lod, rand, false, false);
 }
 
-vec3 SampleLatlong_RGBE(const uint index, const vec3 dir, const float y_rotation) {
+vec3 SampleLatlong_RGBE(const uint index, const vec3 dir, const float y_rotation, const vec2 rand) {
     const float theta = acos(clamp(dir[1], -1.0, 1.0)) / PI;
     const float r = sqrt(dir[0] * dir[0] + dir[2] * dir[2]);
 
@@ -52,6 +59,10 @@ vec3 SampleLatlong_RGBE(const uint index, const vec3 dir, const float y_rotation
     ivec2 size = textureSize(g_textures[tex], 0);
     const vec2 uvs = vec2(u, theta) * vec2(size);
 
+#if USE_STOCH_TEXTURE_FILTERING
+    const vec4 p00 = texelFetch(g_textures[nonuniformEXT(tex)], ivec2(uvs + rand), 0);
+    return rgbe_to_rgb(p00);
+#else // USE_STOCH_TEXTURE_FILTERING
     const vec4 p00 = texelFetchOffset(g_textures[nonuniformEXT(tex)], ivec2(uvs), 0, ivec2(0, 0));
     const vec4 p01 = texelFetchOffset(g_textures[nonuniformEXT(tex)], ivec2(uvs), 0, ivec2(1, 0));
     const vec4 p10 = texelFetchOffset(g_textures[nonuniformEXT(tex)], ivec2(uvs), 0, ivec2(0, 1));
@@ -66,6 +77,7 @@ vec3 SampleLatlong_RGBE(const uint index, const vec3 dir, const float y_rotation
     const vec3 p1X = _p11 * k[0] + _p10 * (1 - k[0]);
 
     return (p1X * k[1] + p0X * (1 - k[1]));
+#endif // USE_STOCH_TEXTURE_FILTERING
 }
 
 #else // BINDLESS
@@ -94,9 +106,14 @@ vec2 TransformUV(const vec2 _uv, const atlas_texture_t t, const int mip_level) {
     return pos + uv * size + 1.0;
 }
 
-vec4 SampleBilinear(const uint index, const vec2 uvs, const int lod, const bool maybe_YCoCg, const bool maybe_SRGB) {
+vec4 SampleBilinear(const uint index, const vec2 uvs, const int lod, const vec2 rand, const bool maybe_YCoCg, const bool maybe_SRGB) {
     const atlas_texture_t t = g_textures[index];
+
+#if USE_STOCH_TEXTURE_FILTERING
+    vec2 _uvs = (TransformUV(uvs, t, lod) + rand - 0.5) / vec2(TEXTURE_ATLAS_SIZE);
+#else // USE_STOCH_TEXTURE_FILTERING
     vec2 _uvs = TransformUV(uvs, t, lod) / vec2(TEXTURE_ATLAS_SIZE);
+#endif // USE_STOCH_TEXTURE_FILTERING
 
     const float page = float((t.page[lod / 4] >> (lod % 4) * 8) & 0xff);
     vec4 res = textureLod(g_atlases[nonuniformEXT(t.atlas)], vec3(_uvs, page), 0.0);
@@ -110,11 +127,11 @@ vec4 SampleBilinear(const uint index, const vec2 uvs, const int lod, const bool 
     return res;
 }
 
-vec4 SampleBilinear(const uint index, const vec2 uvs, const int lod) {
-    return SampleBilinear(index, uvs, lod, false, false);
+vec4 SampleBilinear(const uint index, const vec2 uvs, const int lod, const vec2 rand) {
+    return SampleBilinear(index, uvs, lod, rand, false, false);
 }
 
-vec3 SampleLatlong_RGBE(const atlas_texture_t t, const vec3 dir, float y_rotation) {
+vec3 SampleLatlong_RGBE(const atlas_texture_t t, const vec3 dir, float y_rotation, const vec2 rand) {
     const float theta = acos(clamp(dir[1], -1.0, 1.0)) / PI;
     float phi = atan(dir[2], dir[0]) + y_rotation;
     if (phi < 0) {
@@ -125,9 +142,13 @@ vec3 SampleLatlong_RGBE(const atlas_texture_t t, const vec3 dir, float y_rotatio
     }
 
     const float u = fract(0.5 * phi / PI);
-    const vec2 uvs = TransformUV(vec2(u, theta), t, 0);
-
+    vec2 uvs = TransformUV(vec2(u, theta), t, 0);
     const int page = int(t.page[0] & 0xff);
+
+#if USE_STOCH_TEXTURE_FILTERING
+    const vec4 p00 = texelFetch(g_atlases[nonuniformEXT(t.atlas)], ivec3(uvs + rand, page), 0);
+    return rgbe_to_rgb(p00);
+#else // USE_STOCH_TEXTURE_FILTERING
     const vec4 p00 = texelFetchOffset(g_atlases[nonuniformEXT(t.atlas)], ivec3(uvs, page), 0, ivec2(0, 0));
     const vec4 p01 = texelFetchOffset(g_atlases[nonuniformEXT(t.atlas)], ivec3(uvs, page), 0, ivec2(1, 0));
     const vec4 p10 = texelFetchOffset(g_atlases[nonuniformEXT(t.atlas)], ivec3(uvs, page), 0, ivec2(0, 1));
@@ -142,6 +163,7 @@ vec3 SampleLatlong_RGBE(const atlas_texture_t t, const vec3 dir, float y_rotatio
     const vec3 p1X = _p11 * k[0] + _p10 * (1 - k[0]);
 
     return (p1X * k[1] + p0X * (1 - k[1]));
+#endif // USE_STOCH_TEXTURE_FILTERING
 }
 
 #endif // BINDLESS
