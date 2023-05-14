@@ -51,30 +51,32 @@ def compile_shader(src_name, spv_name=None, glsl_version=None, target_env="spirv
     compile_cmd = os.path.join(spirv_base_path(), "glslangValidator -V --target-env " + target_env + " internal/shaders/" + src_name + " " + defines + " -o internal/shaders/output/" + spv_name)
     if (glsl_version != None):
         compile_cmd += " --glsl-version " + glsl_version
-    compile_result = subprocess.run(compile_cmd, shell=True, capture_output=True, text=True, check=True)
+    compile_result = subprocess.run(compile_cmd, shell=True, capture_output=True, text=True, check=False)
     spirv_opt_result = None
     spirv_cross_result = None
     dxc_result = None
     if ENABLE_SPIRV_OPTIMIZATION == True:
         if os.name == "nt":
-            spirv_opt_result = subprocess.run(os.path.join(spirv_base_path(), "spirv-opt.bat internal/shaders/output/" + spv_name + " -o internal/shaders/output/" + spv_name), shell=True, capture_output=True, text=True, check=True)
+            spirv_opt_result = subprocess.run(os.path.join(spirv_base_path(), "spirv-opt.bat internal/shaders/output/" + spv_name + " -o internal/shaders/output/" + spv_name), shell=True, capture_output=True, text=True, check=False)
         else:
-            spirv_opt_result = subprocess.run(os.path.join(spirv_base_path(), "spirv-opt.sh internal/shaders/output/" + spv_name + " -o internal/shaders/output/" + spv_name), shell=True, capture_output=True, text=True, check=True)
+            spirv_opt_result = subprocess.run(os.path.join(spirv_base_path(), "spirv-opt.sh internal/shaders/output/" + spv_name + " -o internal/shaders/output/" + spv_name), shell=True, capture_output=True, text=True, check=False)
     if ENABLE_DXC_COMPILATION == True and compile_hlsl:
-        spirv_cross_result = subprocess.run(os.path.join(spirv_base_path(), "spirv-cross internal/shaders/output/" + spv_name + " --hlsl --shader-model 60 --output internal/shaders/output/" + hlsl_name), shell=True, capture_output=True, text=True, check=True)
-        dxc_result = subprocess.run(os.path.join(dxc_base_path(), "dxc -T cs_6_0 internal/shaders/output/" + hlsl_name + " -Fo internal/shaders/output/" + cso_name), shell=True, capture_output=True, text=True, check=True)
+        spirv_cross_result = subprocess.run(os.path.join(spirv_base_path(), "spirv-cross internal/shaders/output/" + spv_name + " --hlsl --shader-model 60 --output internal/shaders/output/" + hlsl_name), shell=True, capture_output=True, text=True, check=False)
+        dxc_result = subprocess.run(os.path.join(dxc_base_path(), "dxc -T cs_6_0 internal/shaders/output/" + hlsl_name + " -Fo internal/shaders/output/" + cso_name), shell=True, capture_output=True, text=True, check=False)
 
-        with open(os.path.join("internal", "shaders", "output", cso_name), 'rb') as f:
-            cso_data = f.read()
-        out = bin2header(cso_data, os.path.join("internal", "shaders", "output", cso_name))
-        with open(os.path.join("internal", "shaders", "output", cso_name + ".inl"), 'w') as f:
+        if dxc_result.returncode == 0:
+            with open(os.path.join("internal", "shaders", "output", cso_name), 'rb') as f:
+                cso_data = f.read()
+            out = bin2header(cso_data, os.path.join("internal", "shaders", "output", cso_name))
+            with open(os.path.join("internal", "shaders", "output", cso_name + ".inl"), 'w') as f:
+                f.write(out)
+
+    if compile_result.returncode == 0:
+        with open(os.path.join("internal", "shaders", "output", spv_name), 'rb') as f:
+            spv_data = f.read()
+        out = bin2header(spv_data, os.path.join("internal", "shaders", "output", spv_name))
+        with open(os.path.join("internal", "shaders", "output", spv_name + ".inl"), 'w') as f:
             f.write(out)
-
-    with open(os.path.join("internal", "shaders", "output", spv_name), 'rb') as f:
-        spv_data = f.read()
-    out = bin2header(spv_data, os.path.join("internal", "shaders", "output", spv_name))
-    with open(os.path.join("internal", "shaders", "output", spv_name + ".inl"), 'w') as f:
-        f.write(out)
 
     mutex.acquire()
     try:
