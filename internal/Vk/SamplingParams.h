@@ -8,14 +8,14 @@ namespace Ray {
 namespace Vk {
 using Fixed8 = Fixed<int8_t, 3>;
 
-enum class eTexFilter : uint8_t { NoFilter, Bilinear, Trilinear, BilinearNoMipmap, NearestMipmap, _Count };
+enum class eTexFilter : uint8_t { Nearest, Bilinear, Trilinear, BilinearNoMipmap, NearestMipmap, _Count };
 enum class eTexWrap : uint8_t { Repeat, ClampToEdge, ClampToBorder, _Count };
 
 #undef Always
 enum class eTexCompare : uint8_t { None, LEqual, GEqual, Less, Greater, Equal, NotEqual, Always, Never, _Count };
 
 struct SamplingParams {
-    eTexFilter filter = eTexFilter::NoFilter;
+    eTexFilter filter = eTexFilter::Nearest;
     eTexWrap wrap = eTexWrap::Repeat;
     eTexCompare compare = eTexCompare::None;
     Fixed8 lod_bias;

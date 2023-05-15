@@ -6,7 +6,7 @@
 namespace Ray {
 namespace Vk {
 extern const VkFilter g_vk_min_mag_filter[] = {
-    VK_FILTER_NEAREST, // NoFilter
+    VK_FILTER_NEAREST, // Nearest
     VK_FILTER_LINEAR,  // Bilinear
     VK_FILTER_LINEAR,  // Trilinear
     VK_FILTER_LINEAR,  // BilinearNoMipmap
@@ -22,7 +22,7 @@ extern const VkSamplerAddressMode g_vk_wrap_mode[] = {
 static_assert(COUNT_OF(g_vk_wrap_mode) == size_t(eTexWrap::_Count), "!");
 
 extern const VkSamplerMipmapMode g_vk_mipmap_mode[] = {
-    VK_SAMPLER_MIPMAP_MODE_NEAREST, // NoFilter
+    VK_SAMPLER_MIPMAP_MODE_NEAREST, // Nearest
     VK_SAMPLER_MIPMAP_MODE_NEAREST, // Bilinear
     VK_SAMPLER_MIPMAP_MODE_LINEAR,  // Trilinear
     VK_SAMPLER_MIPMAP_MODE_NEAREST, // BilinearNoMipmap
