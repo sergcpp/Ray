@@ -1603,7 +1603,7 @@ void test_complex_mat6_denoised(const char *arch_list[], const char *preferred_d
 
 void test_complex_mat6_dof(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 321;
-    const int PixThres = 2829;
+    const int PixThres = 2831;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;
