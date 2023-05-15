@@ -1602,11 +1602,11 @@ bool Ray::Ref::IntersectTris_AnyHit(const float ro[3], const float rd[3], const 
     return inter.mask != 0;
 }
 
-bool Ray::Ref::Traverse_MacroTree_WithStack_ClosestHit(const float ro[3], const float rd[3], const bvh_node_t *nodes,
-                                                       uint32_t root_index, const mesh_instance_t *mesh_instances,
-                                                       const uint32_t *mi_indices, const mesh_t *meshes,
-                                                       const transform_t *transforms, const tri_accel_t *tris,
-                                                       const uint32_t *tri_indices, hit_data_t &inter) {
+bool Ray::Ref::Traverse_TLAS_WithStack_ClosestHit(const float ro[3], const float rd[3], const bvh_node_t *nodes,
+                                                  uint32_t root_index, const mesh_instance_t *mesh_instances,
+                                                  const uint32_t *mi_indices, const mesh_t *meshes,
+                                                  const transform_t *transforms, const tri_accel_t *tris,
+                                                  const uint32_t *tri_indices, hit_data_t &inter) {
     bool res = false;
 
     float inv_d[3];
@@ -1643,8 +1643,8 @@ bool Ray::Ref::Traverse_MacroTree_WithStack_ClosestHit(const float ro[3], const 
 
                 float _inv_d[3];
                 safe_invert(_rd, _inv_d);
-                res |= Traverse_MicroTree_WithStack_ClosestHit(_ro, _rd, _inv_d, nodes, m.node_index, tris,
-                                                               int(mi_indices[i]), inter);
+                res |= Traverse_BLAS_WithStack_ClosestHit(_ro, _rd, _inv_d, nodes, m.node_index, tris,
+                                                          int(mi_indices[i]), inter);
             }
         }
     }
@@ -1652,11 +1652,11 @@ bool Ray::Ref::Traverse_MacroTree_WithStack_ClosestHit(const float ro[3], const 
     return res;
 }
 
-bool Ray::Ref::Traverse_MacroTree_WithStack_ClosestHit(const float ro[3], const float rd[3], const mbvh_node_t *nodes,
-                                                       uint32_t root_index, const mesh_instance_t *mesh_instances,
-                                                       const uint32_t *mi_indices, const mesh_t *meshes,
-                                                       const transform_t *transforms, const mtri_accel_t *mtris,
-                                                       const uint32_t *tri_indices, hit_data_t &inter) {
+bool Ray::Ref::Traverse_TLAS_WithStack_ClosestHit(const float ro[3], const float rd[3], const mbvh_node_t *nodes,
+                                                  uint32_t root_index, const mesh_instance_t *mesh_instances,
+                                                  const uint32_t *mi_indices, const mesh_t *meshes,
+                                                  const transform_t *transforms, const mtri_accel_t *mtris,
+                                                  const uint32_t *tri_indices, hit_data_t &inter) {
     bool res = false;
 
     float inv_d[3];
@@ -1748,8 +1748,8 @@ bool Ray::Ref::Traverse_MacroTree_WithStack_ClosestHit(const float ro[3], const 
 
                 float _inv_d[3];
                 safe_invert(_rd, _inv_d);
-                res |= Traverse_MicroTree_WithStack_ClosestHit(_ro, _rd, _inv_d, nodes, m.node_index, mtris,
-                                                               int(mi_indices[i]), inter);
+                res |= Traverse_BLAS_WithStack_ClosestHit(_ro, _rd, _inv_d, nodes, m.node_index, mtris,
+                                                          int(mi_indices[i]), inter);
             }
         }
     }
@@ -1764,12 +1764,12 @@ bool Ray::Ref::Traverse_MacroTree_WithStack_ClosestHit(const float ro[3], const 
     return res;
 }
 
-bool Ray::Ref::Traverse_MacroTree_WithStack_AnyHit(const float ro[3], const float rd[3], const bvh_node_t *nodes,
-                                                   const uint32_t root_index, const mesh_instance_t *mesh_instances,
-                                                   const uint32_t *mi_indices, const mesh_t *meshes,
-                                                   const transform_t *transforms, const mtri_accel_t *mtris,
-                                                   const tri_mat_data_t *materials, const uint32_t *tri_indices,
-                                                   hit_data_t &inter) {
+bool Ray::Ref::Traverse_TLAS_WithStack_AnyHit(const float ro[3], const float rd[3], const bvh_node_t *nodes,
+                                              const uint32_t root_index, const mesh_instance_t *mesh_instances,
+                                              const uint32_t *mi_indices, const mesh_t *meshes,
+                                              const transform_t *transforms, const mtri_accel_t *mtris,
+                                              const tri_mat_data_t *materials, const uint32_t *tri_indices,
+                                              hit_data_t &inter) {
     float inv_d[3];
     safe_invert(rd, inv_d);
 
@@ -1805,7 +1805,7 @@ bool Ray::Ref::Traverse_MacroTree_WithStack_AnyHit(const float ro[3], const floa
                 float _inv_d[3];
                 safe_invert(_rd, _inv_d);
 
-                const bool solid_hit_found = Traverse_MicroTree_WithStack_AnyHit(
+                const bool solid_hit_found = Traverse_BLAS_WithStack_AnyHit(
                     _ro, _rd, _inv_d, nodes, m.node_index, mtris, materials, tri_indices, int(mi_indices[i]), inter);
                 if (solid_hit_found) {
                     return true;
@@ -1824,12 +1824,12 @@ bool Ray::Ref::Traverse_MacroTree_WithStack_AnyHit(const float ro[3], const floa
     return false;
 }
 
-bool Ray::Ref::Traverse_MacroTree_WithStack_AnyHit(const float ro[3], const float rd[3], const mbvh_node_t *nodes,
-                                                   const uint32_t root_index, const mesh_instance_t *mesh_instances,
-                                                   const uint32_t *mi_indices, const mesh_t *meshes,
-                                                   const transform_t *transforms, const tri_accel_t *tris,
-                                                   const tri_mat_data_t *materials, const uint32_t *tri_indices,
-                                                   hit_data_t &inter) {
+bool Ray::Ref::Traverse_TLAS_WithStack_AnyHit(const float ro[3], const float rd[3], const mbvh_node_t *nodes,
+                                              const uint32_t root_index, const mesh_instance_t *mesh_instances,
+                                              const uint32_t *mi_indices, const mesh_t *meshes,
+                                              const transform_t *transforms, const tri_accel_t *tris,
+                                              const tri_mat_data_t *materials, const uint32_t *tri_indices,
+                                              hit_data_t &inter) {
     const int ray_dir_oct = ((rd[2] > 0.0f) << 2) | ((rd[1] > 0.0f) << 1) | (rd[0] > 0.0f);
 
     int child_order[8];
@@ -1924,7 +1924,7 @@ bool Ray::Ref::Traverse_MacroTree_WithStack_AnyHit(const float ro[3], const floa
 
                 float _inv_d[3];
                 safe_invert(_rd, _inv_d);
-                const bool solid_hit_found = Traverse_MicroTree_WithStack_AnyHit(
+                const bool solid_hit_found = Traverse_BLAS_WithStack_AnyHit(
                     _ro, _rd, _inv_d, nodes, m.node_index, tris, materials, tri_indices, int(mi_indices[i]), inter);
                 if (solid_hit_found) {
                     return true;
@@ -1943,10 +1943,9 @@ bool Ray::Ref::Traverse_MacroTree_WithStack_AnyHit(const float ro[3], const floa
     return false;
 }
 
-bool Ray::Ref::Traverse_MicroTree_WithStack_ClosestHit(const float ro[3], const float rd[3], const float inv_d[3],
-                                                       const bvh_node_t *nodes, const uint32_t root_index,
-                                                       const tri_accel_t *tris, const int obj_index,
-                                                       hit_data_t &inter) {
+bool Ray::Ref::Traverse_BLAS_WithStack_ClosestHit(const float ro[3], const float rd[3], const float inv_d[3],
+                                                  const bvh_node_t *nodes, const uint32_t root_index,
+                                                  const tri_accel_t *tris, const int obj_index, hit_data_t &inter) {
     bool res = false;
 
     uint32_t stack[MAX_STACK_SIZE];
@@ -1973,9 +1972,9 @@ bool Ray::Ref::Traverse_MicroTree_WithStack_ClosestHit(const float ro[3], const 
     return res;
 }
 
-bool Ray::Ref::Traverse_MicroTree_WithStack_ClosestHit(const float ro[3], const float rd[3], const float inv_d[3],
-                                                       const mbvh_node_t *nodes, const uint32_t root_index,
-                                                       const mtri_accel_t *mtris, int obj_index, hit_data_t &inter) {
+bool Ray::Ref::Traverse_BLAS_WithStack_ClosestHit(const float ro[3], const float rd[3], const float inv_d[3],
+                                                  const mbvh_node_t *nodes, const uint32_t root_index,
+                                                  const mtri_accel_t *mtris, int obj_index, hit_data_t &inter) {
     bool res = false;
 
     TraversalStack<MAX_STACK_SIZE> st;
@@ -2058,10 +2057,10 @@ bool Ray::Ref::Traverse_MicroTree_WithStack_ClosestHit(const float ro[3], const 
     return res;
 }
 
-bool Ray::Ref::Traverse_MicroTree_WithStack_AnyHit(const float ro[3], const float rd[3], const float inv_d[3],
-                                                   const bvh_node_t *nodes, uint32_t root_index,
-                                                   const mtri_accel_t *mtris, const tri_mat_data_t *materials,
-                                                   const uint32_t *tri_indices, int obj_index, hit_data_t &inter) {
+bool Ray::Ref::Traverse_BLAS_WithStack_AnyHit(const float ro[3], const float rd[3], const float inv_d[3],
+                                              const bvh_node_t *nodes, uint32_t root_index, const mtri_accel_t *mtris,
+                                              const tri_mat_data_t *materials, const uint32_t *tri_indices,
+                                              int obj_index, hit_data_t &inter) {
     uint32_t stack[MAX_STACK_SIZE];
     uint32_t stack_size = 0;
 
@@ -2097,10 +2096,10 @@ bool Ray::Ref::Traverse_MicroTree_WithStack_AnyHit(const float ro[3], const floa
     return false;
 }
 
-bool Ray::Ref::Traverse_MicroTree_WithStack_AnyHit(const float ro[3], const float rd[3], const float inv_d[3],
-                                                   const mbvh_node_t *nodes, const uint32_t root_index,
-                                                   const tri_accel_t *tris, const tri_mat_data_t *materials,
-                                                   const uint32_t *tri_indices, int obj_index, hit_data_t &inter) {
+bool Ray::Ref::Traverse_BLAS_WithStack_AnyHit(const float ro[3], const float rd[3], const float inv_d[3],
+                                              const mbvh_node_t *nodes, const uint32_t root_index,
+                                              const tri_accel_t *tris, const tri_mat_data_t *materials,
+                                              const uint32_t *tri_indices, int obj_index, hit_data_t &inter) {
     TraversalStack<MAX_STACK_SIZE> st;
     st.push(root_index, 0.0f);
 
@@ -2673,7 +2672,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleBilinear(const Cpu::TexStorageBase *const t
 
     const auto &p00 = storage.Fetch(tex, int(_uvs.get<0>()), int(_uvs.get<1>()), lod);
     return simd_fvec4{p00.v};
-#else // USE_STOCH_TEXTURE_FILTERING
+#else  // USE_STOCH_TEXTURE_FILTERING
     const auto &p00 = storage.Fetch(tex, int(_uvs.get<0>()) + 0, int(_uvs.get<1>()) + 0, lod);
     const auto &p01 = storage.Fetch(tex, int(_uvs.get<0>()) + 1, int(_uvs.get<1>()) + 0, lod);
     const auto &p10 = storage.Fetch(tex, int(_uvs.get<0>()) + 0, int(_uvs.get<1>()) + 1, lod);
@@ -2699,7 +2698,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleBilinear(const Cpu::TexStorageBase &storage
 
     const auto &p00 = storage.Fetch(tex, int(_uvs.get<0>()), int(_uvs.get<1>()), lod);
     return simd_fvec4{p00.v};
-#else // USE_STOCH_TEXTURE_FILTERING
+#else  // USE_STOCH_TEXTURE_FILTERING
     const auto &p00 = storage.Fetch(int(tex), int(iuvs.get<0>()) + 0, int(iuvs.get<1>()) + 0, lod);
     const auto &p01 = storage.Fetch(int(tex), int(iuvs.get<0>()) + 1, int(iuvs.get<1>()) + 0, lod);
     const auto &p10 = storage.Fetch(int(tex), int(iuvs.get<0>()) + 0, int(iuvs.get<1>()) + 1, lod);
@@ -2819,7 +2818,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::SampleLatlong_RGBE(const Cpu::TexStorageRGBA &sto
 
     const auto &p00 = storage.Get(tex, iuvs.get<0>(), iuvs.get<1>(), 0);
     return rgbe_to_rgb(p00);
-#else // USE_STOCH_TEXTURE_FILTERING
+#else  // USE_STOCH_TEXTURE_FILTERING
     const simd_ivec2 iuvs = simd_ivec2(uvs);
 
     const auto &p00 = storage.Get(tex, iuvs.get<0>() + 0, iuvs.get<1>() + 0, 0);
@@ -2857,13 +2856,13 @@ void Ray::Ref::IntersectScene(Span<ray_data_t> rays, const int min_transp_depth,
 
             bool hit_found = false;
             if (sc.mnodes) {
-                hit_found = Traverse_MacroTree_WithStack_ClosestHit(value_ptr(ro), value_ptr(rd), sc.mnodes, root_index,
-                                                                    sc.mesh_instances, sc.mi_indices, sc.meshes,
-                                                                    sc.transforms, sc.mtris, sc.tri_indices, inter);
+                hit_found = Traverse_TLAS_WithStack_ClosestHit(value_ptr(ro), value_ptr(rd), sc.mnodes, root_index,
+                                                               sc.mesh_instances, sc.mi_indices, sc.meshes,
+                                                               sc.transforms, sc.mtris, sc.tri_indices, inter);
             } else {
-                hit_found = Traverse_MacroTree_WithStack_ClosestHit(value_ptr(ro), value_ptr(rd), sc.nodes, root_index,
-                                                                    sc.mesh_instances, sc.mi_indices, sc.meshes,
-                                                                    sc.transforms, sc.tris, sc.tri_indices, inter);
+                hit_found = Traverse_TLAS_WithStack_ClosestHit(value_ptr(ro), value_ptr(rd), sc.nodes, root_index,
+                                                               sc.mesh_instances, sc.mi_indices, sc.meshes,
+                                                               sc.transforms, sc.tris, sc.tri_indices, inter);
             }
 
             if (!hit_found) {
@@ -2968,13 +2967,13 @@ Ray::Ref::simd_fvec4 Ray::Ref::IntersectScene(const shadow_ray_t &r, const int m
 
         bool solid_hit = false;
         if (sc.mnodes) {
-            solid_hit = Traverse_MacroTree_WithStack_AnyHit(value_ptr(ro), value_ptr(rd), sc.mnodes, root_index,
-                                                            sc.mesh_instances, sc.mi_indices, sc.meshes, sc.transforms,
-                                                            sc.tris, sc.tri_materials, sc.tri_indices, inter);
+            solid_hit = Traverse_TLAS_WithStack_AnyHit(value_ptr(ro), value_ptr(rd), sc.mnodes, root_index,
+                                                       sc.mesh_instances, sc.mi_indices, sc.meshes, sc.transforms,
+                                                       sc.tris, sc.tri_materials, sc.tri_indices, inter);
         } else {
-            solid_hit = Traverse_MacroTree_WithStack_AnyHit(value_ptr(ro), value_ptr(rd), sc.nodes, root_index,
-                                                            sc.mesh_instances, sc.mi_indices, sc.meshes, sc.transforms,
-                                                            sc.mtris, sc.tri_materials, sc.tri_indices, inter);
+            solid_hit = Traverse_TLAS_WithStack_AnyHit(value_ptr(ro), value_ptr(rd), sc.nodes, root_index,
+                                                       sc.mesh_instances, sc.mi_indices, sc.meshes, sc.transforms,
+                                                       sc.mtris, sc.tri_materials, sc.tri_indices, inter);
         }
 
         if (solid_hit || depth > max_transp_depth) {
@@ -4057,8 +4056,8 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
     surf.P = make_fvec3(ray.o) + inter.t * I;
 
     if (inter.obj_index < 0) { // Area light intersection
-        const simd_fvec4 lcol =
-            Evaluate_LightColor(ray, inter, sc.env, *static_cast<const Cpu::TexStorageRGBA *>(textures[0]), sc.lights, tex_rand);
+        const simd_fvec4 lcol = Evaluate_LightColor(
+            ray, inter, sc.env, *static_cast<const Cpu::TexStorageRGBA *>(textures[0]), sc.lights, tex_rand);
         return color_rgba_t{ray.c[0] * lcol.get<0>(), ray.c[1] * lcol.get<1>(), ray.c[2] * lcol.get<2>(), 1.0f};
     }
 

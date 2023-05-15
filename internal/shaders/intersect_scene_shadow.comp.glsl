@@ -95,7 +95,7 @@ layout (local_size_x = LOCAL_GROUP_SIZE_X, local_size_y = LOCAL_GROUP_SIZE_Y, lo
 
 shared uint g_stack[LOCAL_GROUP_SIZE_X * LOCAL_GROUP_SIZE_Y][MAX_STACK_SIZE];
 
-bool Traverse_MicroTree_WithStack(vec3 ro, vec3 rd, vec3 inv_d, int obj_index, uint node_index, uint stack_size,
+bool Traverse_BLAS_WithStack(vec3 ro, vec3 rd, vec3 inv_d, int obj_index, uint node_index, uint stack_size,
                                   inout hit_data_t inter) {
     vec3 neg_inv_do = -inv_d * ro;
 
@@ -138,7 +138,7 @@ bool Traverse_MicroTree_WithStack(vec3 ro, vec3 rd, vec3 inv_d, int obj_index, u
     return false;
 }
 
-bool Traverse_MacroTree_WithStack(vec3 orig_ro, vec3 orig_rd, vec3 orig_inv_rd, uint node_index, inout hit_data_t inter) {
+bool Traverse_TLAS_WithStack(vec3 orig_ro, vec3 orig_rd, vec3 orig_inv_rd, uint node_index, inout hit_data_t inter) {
     vec3 orig_neg_inv_do = -orig_inv_rd * orig_ro;
 
     uint stack_size = 0;
@@ -172,7 +172,7 @@ bool Traverse_MacroTree_WithStack(vec3 orig_ro, vec3 orig_rd, vec3 orig_inv_rd, 
                 const vec3 rd = (tr.inv_xform * vec4(orig_rd, 0.0)).xyz;
                 const vec3 inv_d = safe_invert(rd);
 
-                const bool solid_hit_found = Traverse_MicroTree_WithStack(ro, rd, inv_d, int(g_mi_indices[i]), m.node_index, stack_size, inter);
+                const bool solid_hit_found = Traverse_BLAS_WithStack(ro, rd, inv_d, int(g_mi_indices[i]), m.node_index, stack_size, inter);
                 if (solid_hit_found) {
                     return true;
                 }
@@ -201,7 +201,7 @@ vec3 IntersectSceneShadow(shadow_ray_t r) {
         sh_inter.mask = 0;
         sh_inter.t = dist;
 
-        const bool solid_hit = Traverse_MacroTree_WithStack(ro, rd, inv_d, g_params.node_index, sh_inter);
+        const bool solid_hit = Traverse_TLAS_WithStack(ro, rd, inv_d, g_params.node_index, sh_inter);
         if (solid_hit || depth > g_params.max_transp_depth) {
             return vec3(0.0);
         }

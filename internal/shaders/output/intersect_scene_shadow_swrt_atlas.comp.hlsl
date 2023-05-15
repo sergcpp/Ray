@@ -410,7 +410,7 @@ bool IntersectTris_AnyHit(float3 ro, float3 rd, int tri_start, int tri_end, int 
     return _2516 != 0;
 }
 
-bool Traverse_MicroTree_WithStack(float3 ro, float3 rd, float3 inv_d, int obj_index, uint node_index, inout uint stack_size, inout hit_data_t inter)
+bool Traverse_BLAS_WithStack(float3 ro, float3 rd, float3 inv_d, int obj_index, uint node_index, inout uint stack_size, inout hit_data_t inter)
 {
     bool _2410 = false;
     bool _2407;
@@ -540,7 +540,7 @@ bool Traverse_MicroTree_WithStack(float3 ro, float3 rd, float3 inv_d, int obj_in
     return _2407;
 }
 
-bool Traverse_MacroTree_WithStack(float3 orig_ro, float3 orig_rd, float3 orig_inv_rd, uint node_index, inout hit_data_t inter)
+bool Traverse_TLAS_WithStack(float3 orig_ro, float3 orig_rd, float3 orig_inv_rd, uint node_index, inout hit_data_t inter)
 {
     bool _2401 = false;
     bool _2398;
@@ -643,7 +643,7 @@ bool Traverse_MacroTree_WithStack(float3 orig_ro, float3 orig_rd, float3 orig_in
                     uint param_15 = _1288.node_index;
                     uint param_16 = stack_size;
                     hit_data_t param_17 = inter;
-                    bool _1401 = Traverse_MicroTree_WithStack(param_11, param_12, param_13, param_14, param_15, param_16, param_17);
+                    bool _1401 = Traverse_BLAS_WithStack(param_11, param_12, param_13, param_14, param_15, param_16, param_17);
                     inter = param_17;
                     if (_1401)
                     {
@@ -825,7 +825,7 @@ float3 IntersectSceneShadow(shadow_ray_t r)
             uint param_6 = _1458_g_params.node_index;
             hit_data_t _2589 = { 0, _2578, _2579, dist, _2581, _2582 };
             hit_data_t param_7 = _2589;
-            bool _1507 = Traverse_MacroTree_WithStack(param_3, param_4, param_5, param_6, param_7);
+            bool _1507 = Traverse_TLAS_WithStack(param_3, param_4, param_5, param_6, param_7);
             _2577 = param_7.mask;
             _2578 = param_7.obj_index;
             _2579 = param_7.prim_index;

@@ -160,45 +160,38 @@ bool IntersectTris_AnyHit(const float ro[3], const float rd[3], const mtri_accel
                           int obj_index, hit_data_t &out_inter);
 
 // traditional bvh traversal with stack for outer nodes
-bool Traverse_MacroTree_WithStack_ClosestHit(const float ro[3], const float rd[3], const bvh_node_t *nodes,
-                                             uint32_t root_index, const mesh_instance_t *mesh_instances,
-                                             const uint32_t *mi_indices, const mesh_t *meshes,
-                                             const transform_t *transforms, const tri_accel_t *tris,
-                                             const uint32_t *tri_indices, hit_data_t &inter);
-bool Traverse_MacroTree_WithStack_ClosestHit(const float ro[3], const float rd[3], const mbvh_node_t *oct_nodes,
-                                             uint32_t root_index, const mesh_instance_t *mesh_instances,
-                                             const uint32_t *mi_indices, const mesh_t *meshes,
-                                             const transform_t *transforms, const mtri_accel_t *mtris,
-                                             const uint32_t *tri_indices, hit_data_t &inter);
+bool Traverse_TLAS_WithStack_ClosestHit(const float ro[3], const float rd[3], const bvh_node_t *nodes,
+                                        uint32_t root_index, const mesh_instance_t *mesh_instances,
+                                        const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
+                                        const tri_accel_t *tris, const uint32_t *tri_indices, hit_data_t &inter);
+bool Traverse_TLAS_WithStack_ClosestHit(const float ro[3], const float rd[3], const mbvh_node_t *oct_nodes,
+                                        uint32_t root_index, const mesh_instance_t *mesh_instances,
+                                        const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms,
+                                        const mtri_accel_t *mtris, const uint32_t *tri_indices, hit_data_t &inter);
 // returns whether hit was solid
-bool Traverse_MacroTree_WithStack_AnyHit(const float ro[3], const float rd[3], const bvh_node_t *nodes,
-                                         uint32_t root_index, const mesh_instance_t *mesh_instances,
-                                         const uint32_t *mi_indices, const mesh_t *meshes,
-                                         const transform_t *transforms, const mtri_accel_t *mtris,
-                                         const tri_mat_data_t *materials, const uint32_t *tri_indices,
-                                         hit_data_t &inter);
-bool Traverse_MacroTree_WithStack_AnyHit(const float ro[3], const float rd[3], const mbvh_node_t *nodes,
-                                         uint32_t root_index, const mesh_instance_t *mesh_instances,
-                                         const uint32_t *mi_indices, const mesh_t *meshes,
-                                         const transform_t *transforms, const tri_accel_t *tris,
-                                         const tri_mat_data_t *materials, const uint32_t *tri_indices,
-                                         hit_data_t &inter);
+bool Traverse_TLAS_WithStack_AnyHit(const float ro[3], const float rd[3], const bvh_node_t *nodes, uint32_t root_index,
+                                    const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
+                                    const mesh_t *meshes, const transform_t *transforms, const mtri_accel_t *mtris,
+                                    const tri_mat_data_t *materials, const uint32_t *tri_indices, hit_data_t &inter);
+bool Traverse_TLAS_WithStack_AnyHit(const float ro[3], const float rd[3], const mbvh_node_t *nodes, uint32_t root_index,
+                                    const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
+                                    const mesh_t *meshes, const transform_t *transforms, const tri_accel_t *tris,
+                                    const tri_mat_data_t *materials, const uint32_t *tri_indices, hit_data_t &inter);
 // traditional bvh traversal with stack for inner nodes
-bool Traverse_MicroTree_WithStack_ClosestHit(const float ro[3], const float rd[3], const float inv_d[3],
-                                             const bvh_node_t *nodes, uint32_t root_index, const tri_accel_t *tris,
-                                             int obj_index, hit_data_t &inter);
-bool Traverse_MicroTree_WithStack_ClosestHit(const float ro[3], const float rd[3], const float inv_d[3],
-                                             const mbvh_node_t *nodes, uint32_t root_index, const mtri_accel_t *mtris,
-                                             int obj_index, hit_data_t &inter);
+bool Traverse_BLAS_WithStack_ClosestHit(const float ro[3], const float rd[3], const float inv_d[3],
+                                        const bvh_node_t *nodes, uint32_t root_index, const tri_accel_t *tris,
+                                        int obj_index, hit_data_t &inter);
+bool Traverse_BLAS_WithStack_ClosestHit(const float ro[3], const float rd[3], const float inv_d[3],
+                                        const mbvh_node_t *nodes, uint32_t root_index, const mtri_accel_t *mtris,
+                                        int obj_index, hit_data_t &inter);
 // returns whether hit was solid
-bool Traverse_MicroTree_WithStack_AnyHit(const float ro[3], const float rd[3], const float inv_d[3],
-                                         const bvh_node_t *nodes, uint32_t root_index, const mtri_accel_t *mtris,
-                                         const tri_mat_data_t *materials, const uint32_t *tri_indices, int obj_index,
-                                         hit_data_t &inter);
-bool Traverse_MicroTree_WithStack_AnyHit(const float ro[3], const float rd[3], const float inv_d[3],
-                                         const mbvh_node_t *nodes, uint32_t root_index, const tri_accel_t *tris,
-                                         const tri_mat_data_t *materials, const uint32_t *tri_indices, int obj_index,
-                                         hit_data_t &inter);
+bool Traverse_BLAS_WithStack_AnyHit(const float ro[3], const float rd[3], const float inv_d[3], const bvh_node_t *nodes,
+                                    uint32_t root_index, const mtri_accel_t *mtris, const tri_mat_data_t *materials,
+                                    const uint32_t *tri_indices, int obj_index, hit_data_t &inter);
+bool Traverse_BLAS_WithStack_AnyHit(const float ro[3], const float rd[3], const float inv_d[3],
+                                    const mbvh_node_t *nodes, uint32_t root_index, const tri_accel_t *tris,
+                                    const tri_mat_data_t *materials, const uint32_t *tri_indices, int obj_index,
+                                    hit_data_t &inter);
 
 // BRDFs
 float BRDF_PrincipledDiffuse(const simd_fvec4 &V, const simd_fvec4 &N, const simd_fvec4 &L, const simd_fvec4 &H,

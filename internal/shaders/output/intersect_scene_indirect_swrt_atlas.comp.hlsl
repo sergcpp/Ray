@@ -406,7 +406,7 @@ void IntersectTris_ClosestHit(float3 ro, float3 rd, int tri_start, int tri_end, 
     out_inter.v = _769;
 }
 
-void Traverse_MicroTree_WithStack(float3 ro, float3 rd, float3 inv_d, int obj_index, uint node_index, inout uint stack_size, inout hit_data_t inter)
+void Traverse_BLAS_WithStack(float3 ro, float3 rd, float3 inv_d, int obj_index, uint node_index, inout uint stack_size, inout hit_data_t inter)
 {
     float3 _870 = (-inv_d) * ro;
     uint _872 = stack_size;
@@ -475,7 +475,7 @@ void Traverse_MicroTree_WithStack(float3 ro, float3 rd, float3 inv_d, int obj_in
     }
 }
 
-void Traverse_MacroTree_WithStack(float3 orig_ro, float3 orig_rd, float3 orig_inv_rd, uint node_index, inout hit_data_t inter)
+void Traverse_TLAS_WithStack(float3 orig_ro, float3 orig_rd, float3 orig_inv_rd, uint node_index, inout hit_data_t inter)
 {
     float3 _1025 = (-orig_inv_rd) * orig_ro;
     uint stack_size = 1u;
@@ -574,7 +574,7 @@ void Traverse_MacroTree_WithStack(float3 orig_ro, float3 orig_rd, float3 orig_in
                 uint param_15 = _1186.node_index;
                 uint param_16 = stack_size;
                 hit_data_t param_17 = inter;
-                Traverse_MicroTree_WithStack(param_11, param_12, param_13, param_14, param_15, param_16, param_17);
+                Traverse_BLAS_WithStack(param_11, param_12, param_13, param_14, param_15, param_16, param_17);
                 inter = param_17;
             }
         }
@@ -759,7 +759,7 @@ void comp_main()
             uint param_6 = _1381_g_params.node_index;
             hit_data_t _2237 = { _2225, _2226, _2227, _1472, _2229, _2230 };
             hit_data_t param_7 = _2237;
-            Traverse_MacroTree_WithStack(param_3, param_4, param_5, param_6, param_7);
+            Traverse_TLAS_WithStack(param_3, param_4, param_5, param_6, param_7);
             _2225 = param_7.mask;
             _2226 = param_7.obj_index;
             _2227 = param_7.prim_index;

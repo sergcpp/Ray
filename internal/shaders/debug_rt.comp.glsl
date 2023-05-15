@@ -58,7 +58,7 @@ layout (local_size_x = LOCAL_GROUP_SIZE_X, local_size_y = LOCAL_GROUP_SIZE_Y, lo
 
 shared uint g_stack[LOCAL_GROUP_SIZE_X * LOCAL_GROUP_SIZE_Y][MAX_STACK_SIZE];
 
-void Traverse_MicroTree_WithStack(vec3 ro, vec3 rd, vec3 inv_d, int obj_index, uint node_index,
+void Traverse_BLAS_WithStack(vec3 ro, vec3 rd, vec3 inv_d, int obj_index, uint node_index,
                                   uint stack_size, inout hit_data_t inter) {
     vec3 neg_inv_do = -inv_d * ro;
 
@@ -86,7 +86,7 @@ void Traverse_MicroTree_WithStack(vec3 ro, vec3 rd, vec3 inv_d, int obj_index, u
     }
 }
 
-void Traverse_MacroTree_WithStack(vec3 orig_ro, vec3 orig_rd, vec3 orig_inv_rd, uint node_index,
+void Traverse_TLAS_WithStack(vec3 orig_ro, vec3 orig_rd, vec3 orig_inv_rd, uint node_index,
                                   inout hit_data_t inter) {
     vec3 orig_neg_inv_do = -orig_inv_rd * orig_ro;
 
@@ -121,7 +121,7 @@ void Traverse_MacroTree_WithStack(vec3 orig_ro, vec3 orig_rd, vec3 orig_inv_rd, 
                 vec3 rd = (tr.inv_xform * vec4(orig_rd, 0.0)).xyz;
                 vec3 inv_d = safe_invert(rd);
 
-                Traverse_MicroTree_WithStack(ro, rd, inv_d, int(g_mi_indices[i]), m.node_index,
+                Traverse_BLAS_WithStack(ro, rd, inv_d, int(g_mi_indices[i]), m.node_index,
                                              stack_size, inter);
             }
         }
@@ -149,7 +149,7 @@ void main() {
     inter.u = inter.v = 0.0;
 
     [[dont_flatten]] if (x < 256) {
-        Traverse_MacroTree_WithStack(ro, rd, inv_d, g_params.node_index, inter);
+        Traverse_TLAS_WithStack(ro, rd, inv_d, g_params.node_index, inter);
         if (inter.prim_index < 0) {
             inter.prim_index = -int(g_tri_indices[-inter.prim_index - 1]) - 1;
         } else {
