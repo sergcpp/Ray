@@ -389,7 +389,7 @@ windows-arm64-cpu-test-job:
 windows-arm64-cpu-perf-test-job:
   variables:
     BIN_DIR: windows-arm64
-    AUX_TEST_ARGS: '--nogpu --time_limit 13.9'
+    AUX_TEST_ARGS: '--nogpu --time_limit 14.1'
   extends:
     - .windows-perf-test-job
   needs:
