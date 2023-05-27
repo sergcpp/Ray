@@ -35,7 +35,7 @@ stages:
     - echo "Compiling the code..."
     - mkdir build
     - cd build
-    - cmake .. -G "Visual Studio 17 2022" -A ARM64 -DCMAKE_UNITY_BUILD=ON -DENABLE_REF_IMPL=ON
+    - cmake .. -G "Visual Studio 17 2022" -A ARM64 -DCMAKE_UNITY_BUILD=ON -DENABLE_REF_IMPL=ON -DENABLE_VK_IMPL=OFF -DENABLE_DX_IMPL=ON
     - cd ..
     - cmake --build build --target ALL_BUILD --config Release --parallel 16
     - cmake --build build --target ALL_BUILD --config Debug --parallel 16
@@ -385,6 +385,17 @@ windows-arm64-cpu-test-job:
     - windows-arm64-build-job
   tags:
     - windows,arm64,fastcpu
+
+windows-arm64-gpu-sqx-test-job:
+  variables:
+    BIN_DIR: windows-arm64
+    AUX_TEST_ARGS: '--nocpu'
+  extends:
+    - .windows-test-job
+  needs:
+    - windows-arm64-build-job
+  tags:
+    - windows,arm64,sqx
 
 windows-arm64-cpu-perf-test-job:
   variables:
