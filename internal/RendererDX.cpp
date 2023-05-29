@@ -823,6 +823,7 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
     ctx_->ReadbackTimestampQueries(ctx_->backend_frame);
     ctx_->DestroyDeferredResources(ctx_->backend_frame);
     ctx_->default_descr_alloc()->Reset();
+    ctx_->uniform_data_buf_offs[ctx_->backend_frame] = 0;
 
     stats_.time_primary_ray_gen_us = ctx_->GetTimestampIntervalDurationUs(
         timestamps_[ctx_->backend_frame].primary_ray_gen[0], timestamps_[ctx_->backend_frame].primary_ray_gen[1]);
@@ -1168,6 +1169,7 @@ void Ray::Dx::Renderer::DenoiseImage(const RegionContext &region) {
     ctx_->ReadbackTimestampQueries(ctx_->backend_frame);
     ctx_->DestroyDeferredResources(ctx_->backend_frame);
     ctx_->default_descr_alloc()->Reset();
+    ctx_->uniform_data_buf_offs[ctx_->backend_frame] = 0;
 
     stats_.time_denoise_us = ctx_->GetTimestampIntervalDurationUs(timestamps_[ctx_->backend_frame].denoise[0],
                                                                   timestamps_[ctx_->backend_frame].denoise[1]);

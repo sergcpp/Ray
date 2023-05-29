@@ -69,7 +69,12 @@ void Ray::Dx::Context::Destroy() {
         SAFE_RELEASE(command_allocators_[i]);
         SAFE_RELEASE(in_flight_fences_[i]);
         SAFE_RELEASE(query_heaps_[i]);
-        
+
+        if (uniform_data_bufs[i]) {
+            uniform_data_bufs[i].Unmap();
+            uniform_data_bufs[i].Free();
+        }
+
         backend_frame = i; // default_descr_alloc_'s destructors rely on this
         default_descr_alloc_[i].reset();
         query_readback_buf_[i].reset();
@@ -239,6 +244,10 @@ bool Ray::Dx::Context::Init(ILog *log, const char *preferred_device) {
         "Default Allocs", this, 32 * 1024 * 1024 /* initial_block_size */, 1.5f /* growth_factor */);
 
     for (int i = 0; i < MaxFramesInFlight; ++i) {
+        uniform_data_bufs[i] = Buffer{"Uniform data buf", this, eBufType::Upload, 1 * 1024 * 1024};
+        uniform_data_bufs[i].Map(true /* persistent */);
+        uniform_data_buf_offs[i] = 0;
+
         query_readback_buf_[i] = std::make_unique<Buffer>("Query Readback Buf", this, eBufType::Readback,
                                                           uint32_t(sizeof(uint64_t) * MaxTimestampQueries));
         default_descr_alloc_[i] = std::make_unique<DescrMultiPoolAlloc>(this, 16 * 1024);

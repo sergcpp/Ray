@@ -33,9 +33,8 @@ void Ray::Dx::PrepareDescriptors(Context *ctx, ID3D12GraphicsCommandList *cmd_bu
             ++descr_sizes.cbv_srv_uav_count;
             ++descr_sizes.sampler_count;
         } else if (b.trg == eBindTarget::Tex2D || b.trg == eBindTarget::Tex3D || b.trg == eBindTarget::Tex2DArray ||
-                   b.trg == eBindTarget::UBuf ||
-                   b.trg == eBindTarget::TBuf || b.trg == eBindTarget::SBufRO || b.trg == eBindTarget::SBufRW ||
-                   b.trg == eBindTarget::Image) {
+                   b.trg == eBindTarget::UBuf || b.trg == eBindTarget::TBuf || b.trg == eBindTarget::SBufRO ||
+                   b.trg == eBindTarget::SBufRW || b.trg == eBindTarget::Image) {
             ++descr_sizes.cbv_srv_uav_count;
         } else if (b.trg == eBindTarget::DescrTable) {
             if (b.handle.descr_table->type == eDescrType::CBV_SRV_UAV) {
@@ -187,17 +186,22 @@ void Ray::Dx::PrepareDescriptors(Context *ctx, ID3D12GraphicsCommandList *cmd_bu
     }
 
     if (uniform_data) {
-        // TODO: use single buffer for all uniform data
-        Buffer temp_cb("Temp constant buffer", ctx, eBufType::Upload, 256);
-        temp_cb.UpdateImmediate(0, uniform_data_len, uniform_data, cmd_buf);
+        uint8_t *out_uniform_data =
+             ctx->uniform_data_bufs[ctx->backend_frame].mapped_ptr() + ctx->uniform_data_buf_offs[ctx->backend_frame];
+        memcpy(out_uniform_data, uniform_data, uniform_data_len);
+        assert(ctx->uniform_data_buf_offs[ctx->backend_frame] + uniform_data_len <
+               ctx->uniform_data_bufs[ctx->backend_frame].size());
 
         D3D12_CONSTANT_BUFFER_VIEW_DESC cbv_desc = {};
-        cbv_desc.BufferLocation = temp_cb.dx_resource()->GetGPUVirtualAddress();
+        cbv_desc.BufferLocation = ctx->uniform_data_bufs[ctx->backend_frame].dx_resource()->GetGPUVirtualAddress() +
+                                  ctx->uniform_data_buf_offs[ctx->backend_frame];
         cbv_desc.SizeInBytes = 256;
 
         D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = cbv_srv_uav_cpu_handle;
         dest_handle.ptr += cbv_srv_uav_incr * prog->pc_param_index();
         device->CreateConstantBufferView(&cbv_desc, dest_handle);
+
+        ctx->uniform_data_buf_offs[ctx->backend_frame] += 256;
     }
 
     if (descr_sizes.cbv_srv_uav_count) {

@@ -118,6 +118,9 @@ class Context {
     bool render_finished_semaphore_is_set[MaxFramesInFlight] = {};
     uint64_t fence_values[MaxFramesInFlight] = {};
 
+    Buffer uniform_data_bufs[MaxFramesInFlight];
+    uint32_t uniform_data_buf_offs[MaxFramesInFlight];
+
     // resources scheduled for deferred destruction
     SmallVector<MemAllocation, 128> allocs_to_free[MaxFramesInFlight];
     SmallVector<ID3D12Resource *, 128> resources_to_destroy[MaxFramesInFlight];
