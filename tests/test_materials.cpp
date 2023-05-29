@@ -75,7 +75,7 @@ void run_material_test(const char *arch_list[], const char *preferred_device, co
                     snprintf(name_buf, sizeof(name_buf), "Test %s", test_name);
                     schedule_render_jobs(*renderer, scene.get(), s, current_sample_count, denoise, partial, name_buf);
 
-                    const Ray::color_rgba_t *pixels = renderer->get_pixels_ref();
+                    const Ray::color_data_rgba_t pixels = renderer->get_pixels_ref();
 
                     std::unique_ptr<uint8_t[]> img_data_u8(new uint8_t[test_img_w * test_img_h * 3]);
                     std::unique_ptr<uint8_t[]> diff_data_u8(new uint8_t[test_img_w * test_img_h * 3]);
@@ -87,7 +87,7 @@ void run_material_test(const char *arch_list[], const char *preferred_device, co
                     int error_pixels = 0;
                     for (int j = 0; j < test_img_h; j++) {
                         for (int i = 0; i < test_img_w; i++) {
-                            const Ray::color_rgba_t &p = pixels[j * test_img_w + i];
+                            const Ray::color_rgba_t &p = pixels.ptr[j * pixels.pitch + i];
 
                             const auto r = uint8_t(p.v[0] * 255);
                             const auto g = uint8_t(p.v[1] * 255);

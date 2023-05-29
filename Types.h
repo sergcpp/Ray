@@ -27,6 +27,21 @@ using color_rgb_t = color_t<float, 3>;
 using color_rg_t = color_t<float, 2>;
 using color_r_t = color_t<float, 1>;
 
+template <typename T, int N> struct color_data_t {
+    const color_t<T, N> *ptr;
+    int pitch;
+};
+
+using color_data_rgba8_t = color_data_t<uint8_t, 4>;
+using color_data_rgb8_t = color_data_t<uint8_t, 3>;
+using color_data_rg8_t = color_data_t<uint8_t, 2>;
+using color_data_r8_t = color_data_t<uint8_t, 1>;
+
+using color_data_rgba_t = color_data_t<float, 4>;
+using color_data_rgb_t = color_data_t<float, 3>;
+using color_data_rg_t = color_data_t<float, 2>;
+using color_data_r_t = color_data_t<float, 1>;
+
 enum class eAUXBuffer : uint32_t { SHL1 = 0, BaseColor = 1, DepthNormals = 2 };
 
 struct shl1_data_t {

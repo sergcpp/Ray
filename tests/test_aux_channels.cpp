@@ -82,10 +82,8 @@ void test_aux_channels(const char *arch_list[], const char *preferred_device) {
             snprintf(name_buf, sizeof(name_buf), "Test %s", TestName);
             schedule_render_jobs(*renderer, scene.get(), s, SampleCount, false, false, name_buf);
 
-            const auto *base_color_pixels =
-                reinterpret_cast<const Ray::color_rgba_t *>(renderer->get_aux_pixels_ref(Ray::eAUXBuffer::BaseColor));
-            const auto *depth_normals_pixels =
-                reinterpret_cast<const Ray::color_rgba_t *>(renderer->get_aux_pixels_ref(Ray::eAUXBuffer::DepthNormals));
+            const auto base_color_pixels = renderer->get_aux_pixels_ref(Ray::eAUXBuffer::BaseColor);
+            const auto depth_normals_pixels = renderer->get_aux_pixels_ref(Ray::eAUXBuffer::DepthNormals);
 
             std::unique_ptr<uint8_t[]> base_color_data_u8(new uint8_t[test_img_w * test_img_h * 3]);
             std::unique_ptr<uint8_t[]> normals_data_u8(new uint8_t[test_img_w * test_img_h * 3]);
@@ -96,7 +94,7 @@ void test_aux_channels(const char *arch_list[], const char *preferred_device) {
             for (int j = 0; j < test_img_h; j++) {
                 for (int i = 0; i < test_img_w; i++) {
                     { // check base color
-                        Ray::color_rgba_t c = base_color_pixels[j * test_img_w + i];
+                        Ray::color_rgba_t c = base_color_pixels.ptr[j * base_color_pixels.pitch + i];
 
                         for (int k = 0; k < 3; ++k) {
                             if (c.v[k] < 0.0031308f) {
@@ -126,7 +124,7 @@ void test_aux_channels(const char *arch_list[], const char *preferred_device) {
                         base_color_mse += diff_b * diff_b;
                     }
                     { // check normals
-                        const Ray::color_rgba_t &n = depth_normals_pixels[j * test_img_w + i];
+                        const Ray::color_rgba_t &n = depth_normals_pixels.ptr[j * depth_normals_pixels.pitch + i];
 
                         const auto r = uint8_t((n.v[0] * 0.5f + 0.5f) * 255);
                         const auto g = uint8_t((n.v[1] * 0.5f + 0.5f) * 255);
@@ -148,7 +146,7 @@ void test_aux_channels(const char *arch_list[], const char *preferred_device) {
                         normals_mse += diff_b * diff_b;
                     }
                     { // check depth
-                        const Ray::color_rgba_t &n = depth_normals_pixels[j * test_img_w + i];
+                        const Ray::color_rgba_t &n = depth_normals_pixels.ptr[j * depth_normals_pixels.pitch + i];
 
                         const auto u8 = uint8_t(n.v[3] * 255);
 
@@ -176,8 +174,8 @@ void test_aux_channels(const char *arch_list[], const char *preferred_device) {
             double depth_psnr = -10.0 * std::log10(depth_mse / (255.0 * 255.0));
             depth_psnr = std::floor(depth_psnr * 100.0) / 100.0;
 
-            printf("(PSNR: %.2f/%.2f dB, %.2f/%.2f dB, %.2f/%.2f dB)\n", base_color_psnr, BaseColor_MinPSNR, normals_psnr,
-                   Normals_MinPSNR, depth_psnr, Depth_MinPSNR);
+            printf("(PSNR: %.2f/%.2f dB, %.2f/%.2f dB, %.2f/%.2f dB)\n", base_color_psnr, BaseColor_MinPSNR,
+                   normals_psnr, Normals_MinPSNR, depth_psnr, Depth_MinPSNR);
 
             const char *type_name = Ray::RendererTypeName(rt);
 

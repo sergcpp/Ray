@@ -95,13 +95,13 @@ class RendererBase {
     virtual std::pair<int, int> size() const = 0;
 
     /// Returns pointer to rendered image
-    virtual const color_rgba_t *get_pixels_ref() const = 0;
+    virtual color_data_rgba_t get_pixels_ref() const = 0;
 
     /// Returns pointer to 'raw' untonemapped image
-    virtual const color_rgba_t *get_raw_pixels_ref() const = 0;
+    virtual color_data_rgba_t get_raw_pixels_ref() const = 0;
 
     /// Returns pointer to auxiliary image buffers
-    virtual const color_rgba_t *get_aux_pixels_ref(eAUXBuffer buf) const = 0;
+    virtual color_data_rgba_t get_aux_pixels_ref(eAUXBuffer buf) const = 0;
 
     /// Returns pointer to SH data
     virtual const shl1_data_t *get_sh_data_ref() const = 0;

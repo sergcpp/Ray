@@ -130,15 +130,15 @@ template <typename SIMDPolicy> class Renderer : public RendererBase, private SIM
 
     std::pair<int, int> size() const override { return std::make_pair(w_, h_); }
 
-    const color_rgba_t *get_pixels_ref() const override { return final_buf_.data(); }
-    const color_rgba_t *get_raw_pixels_ref() const override { return raw_filtered_buf_.data(); }
-    const color_rgba_t *get_aux_pixels_ref(const eAUXBuffer buf) const override {
+    color_data_rgba_t get_pixels_ref() const override { return {final_buf_.data(), w_}; }
+    color_data_rgba_t get_raw_pixels_ref() const override { return {raw_filtered_buf_.data(), w_}; }
+    color_data_rgba_t get_aux_pixels_ref(const eAUXBuffer buf) const override {
         if (buf == eAUXBuffer::BaseColor) {
-            return base_color_buf_.data();
+            return {base_color_buf_.data(), w_};
         } else if (buf == eAUXBuffer::DepthNormals) {
-            return depth_normals_buf_.data();
+            return color_data_rgba_t{depth_normals_buf_.data(), w_};
         }
-        return nullptr;
+        return {};
     }
 
     const shl1_data_t *get_sh_data_ref() const override { return nullptr; }

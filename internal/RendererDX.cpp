@@ -549,8 +549,8 @@ void Ray::Dx::Renderer::Resize(const int w, const int h) {
         pixel_readback_buf_.Unmap();
         frame_pixels_ = nullptr;
     }
-    pixel_readback_buf_ =
-        Buffer{"Px Readback Buf", ctx_.get(), eBufType::Readback, uint32_t(4 * w * h * sizeof(float))};
+    pixel_readback_buf_ = Buffer{"Px Readback Buf", ctx_.get(), eBufType::Readback,
+                                 uint32_t(round_up(4 * w * sizeof(float), TextureDataPitchAlignment) * h)};
     frame_pixels_ = (const color_rgba_t *)pixel_readback_buf_.Map(true /* persistent */);
 
     prim_rays_buf_ =
@@ -690,7 +690,8 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
                 }
                 base_color_readback_buf_ = {};
                 base_color_readback_buf_ =
-                    Buffer{"Base Color Stage Buf", ctx_.get(), eBufType::Readback, uint32_t(4 * w * h * sizeof(float))};
+                    Buffer{"Base Color Stage Buf", ctx_.get(), eBufType::Readback,
+                           uint32_t(round_up(4 * w * sizeof(float), TextureDataPitchAlignment) * h)};
                 base_color_pixels_ = (const color_rgba_t *)base_color_readback_buf_.Map(true /* persistent */);
 
                 // Perform initial clear
@@ -722,8 +723,9 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
                     depth_normals_pixels_ = nullptr;
                 }
                 depth_normals_readback_buf_ = {};
-                depth_normals_readback_buf_ = Buffer{"Depth Normals Stage Buf", ctx_.get(), eBufType::Readback,
-                                                     uint32_t(4 * w * h * sizeof(float))};
+                depth_normals_readback_buf_ =
+                    Buffer{"Depth Normals Stage Buf", ctx_.get(), eBufType::Readback,
+                           uint32_t(round_up(4 * w * sizeof(float), TextureDataPitchAlignment) * h)};
                 depth_normals_pixels_ = (const color_rgba_t *)depth_normals_readback_buf_.Map(true /* persistent */);
 
                 // Perform initial clear
@@ -1314,7 +1316,7 @@ void Ray::Dx::Renderer::ExclusiveScan(CommandBuffer cmd_buf, const Buffer &indir
     kernel_SortAddPartialSums(cmd_buf, indir_args, indir_args_indices[0], scan_values[1], scan_values[0]);
 }
 
-const Ray::color_rgba_t *Ray::Dx::Renderer::get_pixels_ref(const bool tonemap) const {
+Ray::color_data_rgba_t Ray::Dx::Renderer::get_pixels_ref(const bool tonemap) const {
     if (frame_dirty_ || pixel_readback_is_tonemapped_ != tonemap) {
         CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
 
@@ -1343,10 +1345,10 @@ const Ray::color_rgba_t *Ray::Dx::Renderer::get_pixels_ref(const bool tonemap) c
         pixel_readback_is_tonemapped_ = tonemap;
     }
 
-    return frame_pixels_;
+    return {frame_pixels_, round_up(w_, TextureDataPitchAlignment / sizeof(color_rgba_t))};
 }
 
-const Ray::color_rgba_t *Ray::Dx::Renderer::get_aux_pixels_ref(const eAUXBuffer buf) const {
+Ray::color_data_rgba_t Ray::Dx::Renderer::get_aux_pixels_ref(const eAUXBuffer buf) const {
     bool &dirty_flag = (buf == eAUXBuffer::BaseColor) ? base_color_dirty_ : depth_normals_dirty_;
 
     const auto &buffer_to_use = (buf == eAUXBuffer::BaseColor) ? base_color_buf_ : depth_normals_buf_;
@@ -1377,5 +1379,6 @@ const Ray::color_rgba_t *Ray::Dx::Renderer::get_aux_pixels_ref(const eAUXBuffer 
         dirty_flag = false;
     }
 
-    return (const color_rgba_t *)((buf == eAUXBuffer::BaseColor) ? base_color_pixels_ : depth_normals_pixels_);
+    return {((buf == eAUXBuffer::BaseColor) ? base_color_pixels_ : depth_normals_pixels_),
+            round_up(w_, TextureDataPitchAlignment / sizeof(color_rgba_t))};
 }

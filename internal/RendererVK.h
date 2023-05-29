@@ -223,7 +223,7 @@ class Renderer : public RendererBase {
                        const Buffer &input, const uint32_t offset, const uint32_t stride, const Buffer partial_sums[],
                        const Buffer scan_values[]);
 
-    const color_rgba_t *get_pixels_ref(bool tonemap) const;
+    color_data_rgba_t get_pixels_ref(bool tonemap) const;
 
   public:
     Renderer(const settings_t &s, ILog *log);
@@ -239,9 +239,9 @@ class Renderer : public RendererBase {
 
     std::pair<int, int> size() const override { return std::make_pair(w_, h_); }
 
-    const color_rgba_t *get_pixels_ref() const override { return get_pixels_ref(true); }
-    const color_rgba_t *get_raw_pixels_ref() const override { return get_pixels_ref(false); }
-    const color_rgba_t *get_aux_pixels_ref(eAUXBuffer buf) const override;
+    color_data_rgba_t get_pixels_ref() const override { return get_pixels_ref(true); }
+    color_data_rgba_t get_raw_pixels_ref() const override { return get_pixels_ref(false); }
+    color_data_rgba_t get_aux_pixels_ref(eAUXBuffer buf) const override;
 
     const shl1_data_t *get_sh_data_ref() const override { return &sh_data_host_[0]; }
 

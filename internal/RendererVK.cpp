@@ -1309,7 +1309,7 @@ void Ray::Vk::Renderer::ExclusiveScan(CommandBuffer cmd_buf, const Buffer &indir
     kernel_SortAddPartialSums(cmd_buf, indir_args, indir_args_indices[0], scan_values[1], scan_values[0]);
 }
 
-const Ray::color_rgba_t *Ray::Vk::Renderer::get_pixels_ref(const bool tonemap) const {
+Ray::color_data_rgba_t Ray::Vk::Renderer::get_pixels_ref(const bool tonemap) const {
     if (frame_dirty_ || pixel_readback_is_tonemapped_ != tonemap) {
         CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
 
@@ -1373,10 +1373,10 @@ const Ray::color_rgba_t *Ray::Vk::Renderer::get_pixels_ref(const bool tonemap) c
         pixel_readback_is_tonemapped_ = tonemap;
     }
 
-    return frame_pixels_;
+    return {frame_pixels_, w_};
 }
 
-const Ray::color_rgba_t *Ray::Vk::Renderer::get_aux_pixels_ref(const eAUXBuffer buf) const {
+Ray::color_data_rgba_t Ray::Vk::Renderer::get_aux_pixels_ref(const eAUXBuffer buf) const {
     bool &dirty_flag = (buf == eAUXBuffer::BaseColor) ? base_color_dirty_ : depth_normals_dirty_;
 
     const auto &buffer_to_use = (buf == eAUXBuffer::BaseColor) ? base_color_buf_ : depth_normals_buf_;
@@ -1442,5 +1442,5 @@ const Ray::color_rgba_t *Ray::Vk::Renderer::get_aux_pixels_ref(const eAUXBuffer 
         dirty_flag = false;
     }
 
-    return (const color_rgba_t *)((buf == eAUXBuffer::BaseColor) ? base_color_pixels_ : depth_normals_pixels_);
+    return {((buf == eAUXBuffer::BaseColor) ? base_color_pixels_ : depth_normals_pixels_), w_};
 }
