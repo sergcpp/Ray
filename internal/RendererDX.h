@@ -183,7 +183,7 @@ class Renderer : public RendererBase {
                           float damping, const Texture2D &base_color_img, float base_color_weight,
                           const Texture2D &depth_normals_img, float depth_normals_weight, const Texture2D &out_raw_img,
                           eViewTransform view_transform, float inv_gamma, const rect_t &rect, const Texture2D &out_img);
-    /*void kernel_SortHashRays(CommandBuffer cmd_buf, const Buffer &indir_args, const Buffer &rays,
+    void kernel_SortHashRays(CommandBuffer cmd_buf, const Buffer &indir_args, const Buffer &rays,
                              const Buffer &counters, const float root_min[3], const float cell_size[3],
                              const Buffer &out_hashes);
     void kernel_SortScan(CommandBuffer cmd_buf, bool exclusive, const Buffer &indir_args, int indir_args_index,
@@ -213,17 +213,17 @@ class Renderer : public RendererBase {
     void kernel_SortReorderRays(CommandBuffer cmd_buf, const Buffer &indir_args, int indir_args_index,
                                 const Buffer &in_rays, const Buffer &indices, const Buffer &counters, int counter_index,
                                 const Buffer &out_rays);
-    void kernel_DebugRT(CommandBuffer cmd_buf, const scene_data_t &sc_data, uint32_t node_index, const Buffer &rays,
+    /*void kernel_DebugRT(CommandBuffer cmd_buf, const scene_data_t &sc_data, uint32_t node_index, const Buffer &rays,
                         const Texture2D &out_pixels);*/
 
     void UpdateHaltonSequence(int iteration, std::unique_ptr<float[]> &seq);
 
-    /*void RadixSort(CommandBuffer cmd_buf, const Buffer &indir_args, Buffer hashes[2], Buffer &count_table,
+    void RadixSort(CommandBuffer cmd_buf, const Buffer &indir_args, Buffer hashes[2], Buffer &count_table,
                    const Buffer &counters, Buffer partial_sums[], Buffer scan_values[]);
 
     void ExclusiveScan(CommandBuffer cmd_buf, const Buffer &indir_args, const int indir_args_indices[],
                        const Buffer &input, const uint32_t offset, const uint32_t stride, const Buffer partial_sums[],
-                       const Buffer scan_values[]);*/
+                       const Buffer scan_values[]);
 
     const color_rgba_t *get_pixels_ref(bool tonemap) const;
 

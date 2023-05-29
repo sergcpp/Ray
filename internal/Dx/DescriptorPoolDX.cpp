@@ -47,6 +47,9 @@ bool Ray::Dx::DescrPool::Init(const uint32_t descr_count, const bool shader_visi
     D3D12_DESCRIPTOR_HEAP_DESC temp_gpu_descriptor_heap_desc = {};
     temp_gpu_descriptor_heap_desc.Type = g_descr_heap_types_dx[int(type_)];
     temp_gpu_descriptor_heap_desc.NumDescriptors = descr_count;
+    if (type_ == eDescrType::Sampler) {
+        temp_gpu_descriptor_heap_desc.NumDescriptors = std::min(temp_gpu_descriptor_heap_desc.NumDescriptors, 2048u);
+    }
     temp_gpu_descriptor_heap_desc.Flags =
         shader_visible ? D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE : D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
 

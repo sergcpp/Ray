@@ -32,12 +32,14 @@ void main() {
     }
     groupMemoryBarrier(); barrier();
 
-    if (gi < g_counters[g_params.counter]) {
+    const uint invocation_count = g_counters[g_params.counter];
+    if (gi < invocation_count) {
         atomicAdd(g_shared_counters[(g_hashes[gi].hash >> g_params.shift) & 0xF], 1u);
     }
     groupMemoryBarrier(); barrier();
 
+    const uint work_group_count = (invocation_count + LOCAL_GROUP_SIZE_X - 1) / LOCAL_GROUP_SIZE_X;
     for (int i = li; i < 0x10; i += LOCAL_GROUP_SIZE_X) {
-        g_count_table[i * gl_NumWorkGroups.x + gl_WorkGroupID.x] = g_shared_counters[i];
+        g_count_table[i * work_group_count + gl_WorkGroupID.x] = g_shared_counters[i];
     }
 }

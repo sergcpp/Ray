@@ -311,7 +311,7 @@ bool Ray::Dx::Context::Init(ILog *log, const char *preferred_device) {
     for (int i = 0; i < MaxFramesInFlight; ++i) {
         query_readback_buf_[i] = std::make_unique<Buffer>("Query Readback Buf", this, eBufType::Readback,
                                                           uint32_t(sizeof(uint64_t) * MaxTimestampQueries));
-        default_descr_alloc_[i] = std::make_unique<DescrMultiPoolAlloc>(this, 2048);
+        default_descr_alloc_[i] = std::make_unique<DescrMultiPoolAlloc>(this, 16 * 1024);
     }
 
     g_rdoc_device = device_;

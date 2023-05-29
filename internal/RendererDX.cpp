@@ -26,7 +26,7 @@
 
 #define DEBUG_HWRT 0
 #define RUN_IN_LOCKSTEP 1
-#define DISABLE_SORTING 1
+#define DISABLE_SORTING 0
 #define ENABLE_RT_PIPELINE 0
 
 static_assert(sizeof(Types::tri_accel_t) == sizeof(Ray::tri_accel_t), "!");
@@ -1255,8 +1255,7 @@ void Ray::Dx::Renderer::UpdateHaltonSequence(const int iteration, std::unique_pt
     }
 }
 
-#if 0
-void Ray::Dx::Renderer::RadixSort(VkCommandBuffer cmd_buf, const Buffer &indir_args, Buffer _hashes[2],
+void Ray::Dx::Renderer::RadixSort(CommandBuffer cmd_buf, const Buffer &indir_args, Buffer _hashes[2],
                                   Buffer &count_table, const Buffer &counters, Buffer partial_sums[],
                                   Buffer scan_values[]) {
     DebugMarker _(cmd_buf, "Radix Sort");
@@ -1282,7 +1281,7 @@ void Ray::Dx::Renderer::RadixSort(VkCommandBuffer cmd_buf, const Buffer &indir_a
     assert(hashes[0] == &_hashes[0]);
 }
 
-void Ray::Vk::Renderer::ExclusiveScan(VkCommandBuffer cmd_buf, const Buffer &indir_args, const int indir_args_indices[],
+void Ray::Dx::Renderer::ExclusiveScan(CommandBuffer cmd_buf, const Buffer &indir_args, const int indir_args_indices[],
                                       const Buffer &input, const uint32_t offset, const uint32_t stride,
                                       const Buffer partial_sums[], const Buffer scan_values[]) {
     DebugMarker _(cmd_buf, "Exclusive Scan");
@@ -1307,7 +1306,7 @@ void Ray::Vk::Renderer::ExclusiveScan(VkCommandBuffer cmd_buf, const Buffer &ind
 
     kernel_SortAddPartialSums(cmd_buf, indir_args, indir_args_indices[0], scan_values[1], scan_values[0]);
 }
-#endif
+
 const Ray::color_rgba_t *Ray::Dx::Renderer::get_pixels_ref(const bool tonemap) const {
     if (frame_dirty_ || pixel_readback_is_tonemapped_ != tonemap) {
         CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());

@@ -722,8 +722,8 @@ void Ray::Dx::Renderer::kernel_NLMFilter(CommandBuffer cmd_buf, const Texture2D 
     DispatchCompute(cmd_buf, *pi, grp_count, bindings, &uniform_params, sizeof(uniform_params),
                     ctx_->default_descr_alloc(), ctx_->log());
 }
-#if 0
-void Ray::Vk::Renderer::kernel_SortHashRays(CommandBuffer cmd_buf, const Buffer &indir_args, const Buffer &rays,
+
+void Ray::Dx::Renderer::kernel_SortHashRays(CommandBuffer cmd_buf, const Buffer &indir_args, const Buffer &rays,
                                             const Buffer &counters, const float root_min[3], const float cell_size[3],
                                             const Buffer &out_hashes) {
     const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
@@ -732,9 +732,9 @@ void Ray::Vk::Renderer::kernel_SortHashRays(CommandBuffer cmd_buf, const Buffer 
                                               {&out_hashes, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
-    const Binding bindings[] = {{eBindTarget::SBuf, SortHashRays::RAYS_BUF_SLOT, rays},
-                                {eBindTarget::SBuf, SortHashRays::COUNTERS_BUF_SLOT, counters},
-                                {eBindTarget::SBuf, SortHashRays::OUT_HASHES_BUF_SLOT, out_hashes}};
+    const Binding bindings[] = {{eBindTarget::SBufRO, SortHashRays::RAYS_BUF_SLOT, rays},
+                                {eBindTarget::SBufRO, SortHashRays::COUNTERS_BUF_SLOT, counters},
+                                {eBindTarget::SBufRW, SortHashRays::OUT_HASHES_BUF_SLOT, out_hashes}};
 
     SortHashRays::Params uniform_params = {};
     memcpy(&uniform_params.root_min[0], root_min, 3 * sizeof(float));
@@ -744,7 +744,7 @@ void Ray::Vk::Renderer::kernel_SortHashRays(CommandBuffer cmd_buf, const Buffer 
                             sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
 }
 
-void Ray::Vk::Renderer::kernel_SortScan(CommandBuffer cmd_buf, const bool exclusive, const Buffer &indir_args,
+void Ray::Dx::Renderer::kernel_SortScan(CommandBuffer cmd_buf, const bool exclusive, const Buffer &indir_args,
                                         const int indir_args_index, const Buffer &input, const int input_offset,
                                         const int input_stride, const Buffer &out_scan_values,
                                         const Buffer &out_partial_sums) {
@@ -756,9 +756,9 @@ void Ray::Vk::Renderer::kernel_SortScan(CommandBuffer cmd_buf, const bool exclus
                                               {&out_partial_sums, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
-    const Binding bindings[] = {{eBindTarget::SBuf, SortScan::INPUT_BUF_SLOT, input},
-                                {eBindTarget::SBuf, SortScan::OUT_SCAN_VALUES_BUF_SLOT, out_scan_values},
-                                {eBindTarget::SBuf, SortScan::OUT_PARTIAL_SUMS_BUF_SLOT, out_partial_sums}};
+    const Binding bindings[] = {{eBindTarget::SBufRO, SortScan::INPUT_BUF_SLOT, input},
+                                {eBindTarget::SBufRW, SortScan::OUT_SCAN_VALUES_BUF_SLOT, out_scan_values},
+                                {eBindTarget::SBufRW, SortScan::OUT_PARTIAL_SUMS_BUF_SLOT, out_partial_sums}};
 
     SortScan::Params uniform_params = {};
     uniform_params.offset = input_offset;
@@ -769,7 +769,7 @@ void Ray::Vk::Renderer::kernel_SortScan(CommandBuffer cmd_buf, const bool exclus
                             sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
 }
 
-void Ray::Vk::Renderer::kernel_SortAddPartialSums(CommandBuffer cmd_buf, const Buffer &indir_args,
+void Ray::Dx::Renderer::kernel_SortAddPartialSums(CommandBuffer cmd_buf, const Buffer &indir_args,
                                                   const int indir_args_index, const Buffer &partials_sums,
                                                   const Buffer &inout_values) {
     const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
@@ -777,15 +777,15 @@ void Ray::Vk::Renderer::kernel_SortAddPartialSums(CommandBuffer cmd_buf, const B
                                               {&inout_values, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
-    const Binding bindings[] = {{eBindTarget::SBuf, SortAddPartialSums::PART_SUMS_BUF_SLOT, partials_sums},
-                                {eBindTarget::SBuf, SortAddPartialSums::INOUT_BUF_SLOT, inout_values}};
+    const Binding bindings[] = {{eBindTarget::SBufRO, SortAddPartialSums::PART_SUMS_BUF_SLOT, partials_sums},
+                                {eBindTarget::SBufRW, SortAddPartialSums::INOUT_BUF_SLOT, inout_values}};
 
     DispatchComputeIndirect(cmd_buf, pi_sort_add_partial_sums_, indir_args,
                             indir_args_index * sizeof(DispatchIndirectCommand), bindings, nullptr, 0,
                             ctx_->default_descr_alloc(), ctx_->log());
 }
 
-void Ray::Vk::Renderer::kernel_SortInitCountTable(CommandBuffer cmd_buf, const int shift, const Buffer &indir_args,
+void Ray::Dx::Renderer::kernel_SortInitCountTable(CommandBuffer cmd_buf, const int shift, const Buffer &indir_args,
                                                   const int indir_args_index, const Buffer &hashes,
                                                   const Buffer &counters, const int counter_index,
                                                   const Buffer &out_count_table) {
@@ -795,9 +795,9 @@ void Ray::Vk::Renderer::kernel_SortInitCountTable(CommandBuffer cmd_buf, const i
                                               {&out_count_table, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
-    const Binding bindings[] = {{eBindTarget::SBuf, SortInitCountTable::HASHES_BUF_SLOT, hashes},
-                                {eBindTarget::SBuf, SortInitCountTable::COUNTERS_BUF_SLOT, counters},
-                                {eBindTarget::SBuf, SortInitCountTable::OUT_COUNT_TABLE_BUF_SLOT, out_count_table}};
+    const Binding bindings[] = {{eBindTarget::SBufRO, SortInitCountTable::HASHES_BUF_SLOT, hashes},
+                                {eBindTarget::SBufRO, SortInitCountTable::COUNTERS_BUF_SLOT, counters},
+                                {eBindTarget::SBufRW, SortInitCountTable::OUT_COUNT_TABLE_BUF_SLOT, out_count_table}};
 
     SortInitCountTable::Params uniform_params = {};
     uniform_params.counter = counter_index;
@@ -808,7 +808,7 @@ void Ray::Vk::Renderer::kernel_SortInitCountTable(CommandBuffer cmd_buf, const i
                             sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
 }
 
-void Ray::Vk::Renderer::kernel_SortWriteSortedHashes(CommandBuffer cmd_buf, const int shift, const Buffer &indir_args,
+void Ray::Dx::Renderer::kernel_SortWriteSortedHashes(CommandBuffer cmd_buf, const int shift, const Buffer &indir_args,
                                                      const int indir_args_index, const Buffer &hashes,
                                                      const Buffer &offsets, const Buffer &counters, int counter_index,
                                                      int chunks_counter_index, const Buffer &out_chunks) {
@@ -819,10 +819,10 @@ void Ray::Vk::Renderer::kernel_SortWriteSortedHashes(CommandBuffer cmd_buf, cons
                                               {&out_chunks, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
-    const Binding bindings[] = {{eBindTarget::SBuf, SortWriteSortedChunks::HASHES_BUF_SLOT, hashes},
-                                {eBindTarget::SBuf, SortWriteSortedChunks::OFFSETS_BUF_SLOT, offsets},
-                                {eBindTarget::SBuf, SortWriteSortedChunks::COUNTERS_BUF_SLOT, counters},
-                                {eBindTarget::SBuf, SortWriteSortedChunks::OUT_HASHES_BUF_SLOT, out_chunks}};
+    const Binding bindings[] = {{eBindTarget::SBufRO, SortWriteSortedChunks::HASHES_BUF_SLOT, hashes},
+                                {eBindTarget::SBufRO, SortWriteSortedChunks::OFFSETS_BUF_SLOT, offsets},
+                                {eBindTarget::SBufRO, SortWriteSortedChunks::COUNTERS_BUF_SLOT, counters},
+                                {eBindTarget::SBufRW, SortWriteSortedChunks::OUT_HASHES_BUF_SLOT, out_chunks}};
 
     SortWriteSortedChunks::Params uniform_params = {};
     uniform_params.counter = counter_index;
@@ -834,7 +834,7 @@ void Ray::Vk::Renderer::kernel_SortWriteSortedHashes(CommandBuffer cmd_buf, cons
                             sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
 }
 
-void Ray::Vk::Renderer::kernel_SortReorderRays(CommandBuffer cmd_buf, const Buffer &indir_args,
+void Ray::Dx::Renderer::kernel_SortReorderRays(CommandBuffer cmd_buf, const Buffer &indir_args,
                                                const int indir_args_index, const Buffer &in_rays, const Buffer &indices,
                                                const Buffer &counters, const int counter_index,
                                                const Buffer &out_rays) {
@@ -845,10 +845,10 @@ void Ray::Vk::Renderer::kernel_SortReorderRays(CommandBuffer cmd_buf, const Buff
                                               {&out_rays, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
-    const Binding bindings[] = {{eBindTarget::SBuf, SortReorderRays::RAYS_BUF_SLOT, in_rays},
-                                {eBindTarget::SBuf, SortReorderRays::INDICES_BUF_SLOT, indices},
-                                {eBindTarget::SBuf, SortReorderRays::COUNTERS_BUF_SLOT, counters},
-                                {eBindTarget::SBuf, SortReorderRays::OUT_RAYS_BUF_SLOT, out_rays}};
+    const Binding bindings[] = {{eBindTarget::SBufRO, SortReorderRays::RAYS_BUF_SLOT, in_rays},
+                                {eBindTarget::SBufRO, SortReorderRays::INDICES_BUF_SLOT, indices},
+                                {eBindTarget::SBufRO, SortReorderRays::COUNTERS_BUF_SLOT, counters},
+                                {eBindTarget::SBufRW, SortReorderRays::OUT_RAYS_BUF_SLOT, out_rays}};
 
     SortReorderRays::Params uniform_params = {};
     uniform_params.counter = counter_index;
@@ -857,7 +857,7 @@ void Ray::Vk::Renderer::kernel_SortReorderRays(CommandBuffer cmd_buf, const Buff
                             indir_args_index * sizeof(DispatchIndirectCommand), bindings, &uniform_params,
                             sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
 }
-
+#if 0
 void Ray::Vk::Renderer::kernel_DebugRT(CommandBuffer cmd_buf, const scene_data_t &sc_data, uint32_t node_index,
                                        const Buffer &rays, const Texture2D &out_pixels) {
     const TransitionInfo res_transitions[] = {{&rays, eResState::UnorderedAccess},
