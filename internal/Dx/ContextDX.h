@@ -55,11 +55,6 @@ class Context {
 
     ID3D12GraphicsCommandList *command_list_ = {};
 
-    // VkCommandPool command_pool_ = {}, temp_command_pool_ = {};
-    // VkCommandBuffer setup_cmd_buf_, draw_cmd_bufs_[MaxFramesInFlight];
-
-    // VkSemaphore image_avail_semaphores_[MaxFramesInFlight] = {};
-    // VkSemaphore render_finished_semaphores_[MaxFramesInFlight] = {};
     ID3D12Fence *in_flight_fences_[MaxFramesInFlight] = {};
     HANDLE fence_event_ = {};
 
@@ -124,42 +119,13 @@ class Context {
     uint64_t fence_values[MaxFramesInFlight] = {};
 
     // resources scheduled for deferred destruction
-    /*SmallVector<VkImage, 128> images_to_destroy[MaxFramesInFlight];
-    SmallVector<VkImageView, 128> image_views_to_destroy[MaxFramesInFlight];
-    SmallVector<VkSampler, 128> samplers_to_destroy[MaxFramesInFlight];*/
     SmallVector<MemAllocation, 128> allocs_to_free[MaxFramesInFlight];
-    /*SmallVector<VkBufferView, 128> buf_views_to_destroy[MaxFramesInFlight];
-    SmallVector<VkDeviceMemory, 128> mem_to_free[MaxFramesInFlight];
-    SmallVector<VkRenderPass, 128> render_passes_to_destroy[MaxFramesInFlight];
-    SmallVector<VkFramebuffer, 128> framebuffers_to_destroy[MaxFramesInFlight];
-    SmallVector<VkDescriptorPool, 16> descriptor_pools_to_destroy[MaxFramesInFlight];
-    SmallVector<VkPipelineLayout, 128> pipeline_layouts_to_destroy[MaxFramesInFlight];*/
     SmallVector<ID3D12Resource *, 128> resources_to_destroy[MaxFramesInFlight];
     SmallVector<ID3D12PipelineState *, 128> pipelines_to_destroy[MaxFramesInFlight];
     SmallVector<ID3D12DescriptorHeap *, 128> descriptor_heaps_to_destroy[MaxFramesInFlight];
     SmallVector<IUnknown *, 128> opaques_to_release[MaxFramesInFlight];
-    /*SmallVector<VkAccelerationStructureKHR, 128> acc_structs_to_destroy[MaxFramesInFlight];*/
 
     static int QueryAvailableDevices(ILog *log, gpu_device_t out_devices[], int capacity);
-
-  private:
-    /*static bool InitVkInstance(VkInstance &instance, const char *enabled_layers[], int enabled_layers_count,
-                                    ILog *log);
-    static bool ChooseVkPhysicalDevice(VkPhysicalDevice &physical_device, VkPhysicalDeviceProperties &device_properties,
-                                       VkPhysicalDeviceMemoryProperties &mem_properties,
-                                       uint32_t &graphics_family_index, bool &out_raytracing_supported,
-                                       bool &out_ray_query_supported, bool &out_dynamic_rendering_supported,
-                                       const char *preferred_device, VkInstance instance, ILog *log);
-    static bool InitVkDevice(VkDevice &device, VkPhysicalDevice physical_device, uint32_t graphics_family_index,
-                             bool enable_raytracing, bool enable_ray_query, bool enable_dynamic_rendering,
-                             const char *enabled_layers[], int enabled_layers_count, ILog *log);
-    static bool InitCommandBuffers(VkCommandPool &command_pool, VkCommandPool &temp_command_pool,
-                                   VkCommandBuffer &setup_cmd_buf, VkCommandBuffer draw_cmd_bufs[MaxFramesInFlight],
-                                   VkSemaphore image_avail_semaphores[MaxFramesInFlight],
-                                   VkSemaphore render_finished_semaphores[MaxFramesInFlight],
-                                   VkFence in_flight_fences[MaxFramesInFlight],
-                                   VkQueryPool query_pools[MaxFramesInFlight], VkQueue &graphics_queue, VkDevice device,
-                                   uint32_t graphics_family_index, ILog *log);*/
 };
 
 CommandBuffer BegSingleTimeCommands(ID3D12Device *device, ID3D12CommandAllocator *temp_command_allocator);

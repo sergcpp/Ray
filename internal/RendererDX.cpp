@@ -25,7 +25,7 @@
 #include "shaders/types.h"
 
 #define DEBUG_HWRT 0
-#define RUN_IN_LOCKSTEP 1
+#define RUN_IN_LOCKSTEP 0
 #define DISABLE_SORTING 0
 #define ENABLE_RT_PIPELINE 0
 
@@ -496,8 +496,6 @@ Ray::Dx::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
 
         tonemap_lut_ = Texture3D{"Tonemap LUT", ctx_.get(), params, ctx_->default_memory_allocs(), ctx_->log()};
     }
-
-    // throw std::runtime_error("Not implemented!");
 
     Renderer::Resize(s.w, s.h);
 
@@ -1154,8 +1152,17 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
 
 void Ray::Dx::Renderer::DenoiseImage(const RegionContext &region) {
 #if !RUN_IN_LOCKSTEP
-    vkWaitForFences(ctx_->device(), 1, &ctx_->in_flight_fence(ctx_->backend_frame), VK_TRUE, UINT64_MAX);
-    vkResetFences(ctx_->device(), 1, &ctx_->in_flight_fence(ctx_->backend_frame));
+    if (ctx_->in_flight_fence(ctx_->backend_frame)->GetCompletedValue() < ctx_->fence_values[ctx_->backend_frame]) {
+        HRESULT hr = ctx_->in_flight_fence(ctx_->backend_frame)
+                         ->SetEventOnCompletion(ctx_->fence_values[ctx_->backend_frame], ctx_->fence_event());
+        if (FAILED(hr)) {
+            return;
+        }
+
+        WaitForSingleObject(ctx_->fence_event(), INFINITE);
+    }
+
+    ++ctx_->fence_values[ctx_->backend_frame];
 #endif
 
     ctx_->ReadbackTimestampQueries(ctx_->backend_frame);
@@ -1168,11 +1175,19 @@ void Ray::Dx::Renderer::DenoiseImage(const RegionContext &region) {
 #if RUN_IN_LOCKSTEP
     CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
 #else
-    VkCommandBufferBeginInfo begin_info = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
-    begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    ID3D12CommandAllocator *cmd_alloc = ctx_->draw_cmd_alloc(ctx_->backend_frame);
+    CommandBuffer cmd_buf = ctx_->draw_cmd_buf();
 
-    vkBeginCommandBuffer(ctx_->draw_cmd_buf(ctx_->backend_frame), &begin_info);
-    VkCommandBuffer cmd_buf = ctx_->draw_cmd_buf(ctx_->backend_frame);
+    HRESULT hr = cmd_alloc->Reset();
+    if (FAILED(hr)) {
+        ctx_->log()->Error("Failed to reset command allocator!");
+    }
+
+    hr = cmd_buf->Reset(cmd_alloc, nullptr);
+    if (FAILED(hr)) {
+        ctx_->log()->Error("Failed to reset command list!");
+        return;
+    }
 #endif
 
     //vkCmdResetQueryPool(cmd_buf, ctx_->query_pool(ctx_->backend_frame), 0, MaxTimestampQueries);
@@ -1206,31 +1221,20 @@ void Ray::Dx::Renderer::DenoiseImage(const RegionContext &region) {
 #if RUN_IN_LOCKSTEP
     EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 #else
-    vkEndCommandBuffer(cmd_buf);
+    hr = cmd_buf->Close();
+    if (FAILED(hr)) {
+        return;
+    }
 
     const int prev_frame = (ctx_->backend_frame + MaxFramesInFlight - 1) % MaxFramesInFlight;
 
-    VkSubmitInfo submit_info = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
+    ID3D12CommandList *pp_cmd_bufs[] = {cmd_buf};
+    ctx_->graphics_queue()->ExecuteCommandLists(1, pp_cmd_bufs);
 
-    const VkSemaphore wait_semaphores[] = {ctx_->render_finished_semaphore(prev_frame)};
-    const VkPipelineStageFlags wait_stages[] = {VK_PIPELINE_STAGE_ALL_COMMANDS_BIT};
-
-    if (ctx_->render_finished_semaphore_is_set[prev_frame]) {
-        submit_info.waitSemaphoreCount = 1;
-        submit_info.pWaitSemaphores = wait_semaphores;
-        submit_info.pWaitDstStageMask = wait_stages;
-    }
-
-    submit_info.commandBufferCount = 1;
-    submit_info.pCommandBuffers = &ctx_->draw_cmd_buf(ctx_->backend_frame);
-
-    submit_info.signalSemaphoreCount = 1;
-    submit_info.pSignalSemaphores = &ctx_->render_finished_semaphore(ctx_->backend_frame);
-
-    const VkResult res =
-        vkQueueSubmit(ctx_->graphics_queue(), 1, &submit_info, ctx_->in_flight_fence(ctx_->backend_frame));
-    if (res != VK_SUCCESS) {
-        ctx_->log()->Error("Failed to submit into a queue!");
+    hr = ctx_->graphics_queue()->Signal(ctx_->in_flight_fence(ctx_->backend_frame),
+                                        ctx_->fence_values[ctx_->backend_frame]);
+    if (FAILED(hr)) {
+        return;
     }
 
     ctx_->render_finished_semaphore_is_set[ctx_->backend_frame] = true;
@@ -1324,36 +1328,8 @@ const Ray::color_rgba_t *Ray::Dx::Renderer::get_pixels_ref(const bool tonemap) c
             CopyImageToBuffer(buffer_to_use, 0, 0, 0, w_, h_, pixel_readback_buf_, cmd_buf, 0);
         }
 
-#if RUN_IN_LOCKSTEP
         EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
-#else
-        vkEndCommandBuffer(cmd_buf);
 
-        // Wait for all in-flight frames to not leave semaphores in unwaited state
-        SmallVector<VkSemaphore, MaxFramesInFlight> wait_semaphores;
-        SmallVector<VkPipelineStageFlags, MaxFramesInFlight> wait_stages;
-        for (int i = 0; i < MaxFramesInFlight; ++i) {
-            const bool is_set = ctx_->render_finished_semaphore_is_set[i];
-            if (is_set) {
-                wait_semaphores.push_back(ctx_->render_finished_semaphore(i));
-                wait_stages.push_back(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
-            }
-        }
-
-        VkSubmitInfo submit_info = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
-
-        submit_info.waitSemaphoreCount = uint32_t(wait_semaphores.size());
-        submit_info.pWaitSemaphores = wait_semaphores.data();
-        submit_info.pWaitDstStageMask = wait_stages.data();
-
-        submit_info.commandBufferCount = 1;
-        submit_info.pCommandBuffers = &cmd_buf;
-
-        vkQueueSubmit(ctx_->graphics_queue(), 1, &submit_info, VK_NULL_HANDLE);
-        vkQueueWaitIdle(ctx_->graphics_queue());
-
-        vkFreeCommandBuffers(ctx_->device(), ctx_->temp_command_pool(), 1, &cmd_buf);
-#endif
         // Can be reset after vkQueueWaitIdle
         for (bool &is_set : ctx_->render_finished_semaphore_is_set) {
             is_set = false;
@@ -1386,36 +1362,8 @@ const Ray::color_rgba_t *Ray::Dx::Renderer::get_aux_pixels_ref(const eAUXBuffer 
             CopyImageToBuffer(buffer_to_use, 0, 0, 0, w_, h_, stage_buffer_to_use, cmd_buf, 0);
         }
 
-#if RUN_IN_LOCKSTEP
         EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
-#else
-        vkEndCommandBuffer(cmd_buf);
 
-        // Wait for all in-flight frames to not leave semaphores in unwaited state
-        SmallVector<VkSemaphore, MaxFramesInFlight> wait_semaphores;
-        SmallVector<VkPipelineStageFlags, MaxFramesInFlight> wait_stages;
-        for (int i = 0; i < MaxFramesInFlight; ++i) {
-            const bool is_set = ctx_->render_finished_semaphore_is_set[i];
-            if (is_set) {
-                wait_semaphores.push_back(ctx_->render_finished_semaphore(i));
-                wait_stages.push_back(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
-            }
-        }
-
-        VkSubmitInfo submit_info = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
-
-        submit_info.waitSemaphoreCount = uint32_t(wait_semaphores.size());
-        submit_info.pWaitSemaphores = wait_semaphores.data();
-        submit_info.pWaitDstStageMask = wait_stages.data();
-
-        submit_info.commandBufferCount = 1;
-        submit_info.pCommandBuffers = &cmd_buf;
-
-        vkQueueSubmit(ctx_->graphics_queue(), 1, &submit_info, VK_NULL_HANDLE);
-        vkQueueWaitIdle(ctx_->graphics_queue());
-
-        vkFreeCommandBuffers(ctx_->device(), ctx_->temp_command_pool(), 1, &cmd_buf);
-#endif
         // Can be reset after vkQueueWaitIdle
         for (bool &is_set : ctx_->render_finished_semaphore_is_set) {
             is_set = false;

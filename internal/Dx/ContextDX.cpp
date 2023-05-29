@@ -65,68 +65,26 @@ void Ray::Dx::Context::Destroy() {
     }
 #endif
 
-    SAFE_RELEASE(device_);
-    SAFE_RELEASE(command_queue_);
-    SAFE_RELEASE(command_list_);
-
     for (int i = 0; i < MaxFramesInFlight; ++i) {
         SAFE_RELEASE(command_allocators_[i]);
         SAFE_RELEASE(in_flight_fences_[i]);
         SAFE_RELEASE(query_heaps_[i]);
-
+        
         backend_frame = i; // default_descr_alloc_'s destructors rely on this
         default_descr_alloc_[i].reset();
+        query_readback_buf_[i].reset();
         DestroyDeferredResources(i);
     }
+
+    SAFE_RELEASE(device_);
+    SAFE_RELEASE(command_queue_);
+    SAFE_RELEASE(command_list_);
+
     SAFE_RELEASE(temp_command_allocator_);
 
     CloseHandle(fence_event_);
 
 #undef SAFE_RELEASE
-
-    /*if (device_) {
-        vkDeviceWaitIdle(device_);
-
-        for (int i = 0; i < MaxFramesInFlight; ++i) {
-            backend_frame = i; // default_descr_alloc_'s destructors rely on this
-            default_descr_alloc_[i].reset();
-            DestroyDeferredResources(i);
-
-            vkDestroyFence(device_, in_flight_fences_[i], nullptr);
-            vkDestroySemaphore(device_, render_finished_semaphores_[i], nullptr);
-            vkDestroySemaphore(device_, image_avail_semaphores_[i], nullptr);
-
-            vkDestroyQueryPool(device_, query_pools_[i], nullptr);
-        }
-
-        default_memory_allocs_.reset();
-
-        vkFreeCommandBuffers(device_, command_pool_, 1, &setup_cmd_buf_);
-        vkFreeCommandBuffers(device_, command_pool_, MaxFramesInFlight, draw_cmd_bufs_);
-
-        // for (int i = 0; i < StageBufferCount; ++i) {
-        //     default_stage_bufs_.fences[i].ClientWaitSync();
-        //     default_stage_bufs_.fences[i] = {};
-        //     default_stage_bufs_.bufs[i] = {};
-        // }
-
-        vkDestroyCommandPool(device_, command_pool_, nullptr);
-        vkDestroyCommandPool(device_, temp_command_pool_, nullptr);
-
-        // for (size_t i = 0; i < api_ctx_->present_image_views.size(); ++i) {
-        //     vkDestroyImageView(api_ctx_->device, api_ctx_->present_image_views[i], nullptr);
-        // }
-
-        // vkDestroySwapchainKHR(device_, api_ctx_->swapchain, nullptr);
-
-        vkDestroyDevice(device_, nullptr);
-        // vkDestroySurfaceKHR(instance_, surface_, nullptr);
-#ifndef NDEBUG
-        vkDestroyDebugReportCallbackEXT(instance_, debug_callback_, nullptr);
-#endif
-
-        vkDestroyInstance(instance_, nullptr);
-    }*/
 }
 
 bool Ray::Dx::Context::Init(ILog *log, const char *preferred_device) {
@@ -248,34 +206,6 @@ bool Ray::Dx::Context::Init(ILog *log, const char *preferred_device) {
         return false;
     }
     timestamp_period_us_ = 1000000.0 / double(timestamp_frequency);
-
-    // if (!ChooseVkPhysicalDevice(physical_device_, device_properties_, mem_properties_, graphics_family_index_,
-    //                             raytracing_supported_, ray_query_supported_, dynamic_rendering_supported_,
-    //                             preferred_device, instance_, log)) {
-    //     return false;
-    // }
-
-    // Disable as it is not needed for now
-    // dynamic_rendering_supported_ = false;
-
-    // if (!InitVkDevice(device_, physical_device_, graphics_family_index_, raytracing_supported_, ray_query_supported_,
-    //                   dynamic_rendering_supported_, g_enabled_layers, g_enabled_layers_count, log)) {
-    //     return false;
-    // }
-
-    // Workaround for a buggy linux AMD driver, make sure vkGetBufferDeviceAddressKHR is not NULL
-    // auto dev_vkGetBufferDeviceAddressKHR =
-    //    (PFN_vkGetBufferDeviceAddressKHR)vkGetDeviceProcAddr(device_, "vkGetBufferDeviceAddressKHR");
-    // if (!dev_vkGetBufferDeviceAddressKHR) {
-    //    raytracing_supported_ = ray_query_supported_ = false;
-    //}
-
-    // if (!InitCommandBuffers(command_pool_, temp_command_pool_, setup_cmd_buf_, draw_cmd_bufs_,
-    // image_avail_semaphores_,
-    //                         render_finished_semaphores_, in_flight_fences_, query_pools_, graphics_queue_, device_,
-    //                         graphics_family_index_, log)) {
-    //     return false;
-    // }
 
     DXGI_ADAPTER_DESC1 desc;
     best_adapter->GetDesc1(&desc);
@@ -407,50 +337,7 @@ bool Ray::Dx::Context::ReadbackTimestampQueries(const int i) {
 }
 
 void Ray::Dx::Context::DestroyDeferredResources(const int i) {
-    /*for (VkImageView view : image_views_to_destroy[i]) {
-        vkDestroyImageView(device_, view, nullptr);
-    }
-    image_views_to_destroy[i].clear();
-    for (VkImage img : images_to_destroy[i]) {
-        vkDestroyImage(device_, img, nullptr);
-    }
-    images_to_destroy[i].clear();
-    for (VkSampler sampler : samplers_to_destroy[i]) {
-        vkDestroySampler(device_, sampler, nullptr);
-    }
-    samplers_to_destroy[i].clear();*/
-
     allocs_to_free[i].clear();
-
-    /*for (VkBufferView view : buf_views_to_destroy[i]) {
-        vkDestroyBufferView(device_, view, nullptr);
-    }
-    buf_views_to_destroy[i].clear();
-
-    for (VkDeviceMemory mem : mem_to_free[i]) {
-        vkFreeMemory(device_, mem, nullptr);
-    }
-    mem_to_free[i].clear();
-
-    for (VkRenderPass rp : render_passes_to_destroy[i]) {
-        vkDestroyRenderPass(device_, rp, nullptr);
-    }
-    render_passes_to_destroy[i].clear();
-
-    for (VkFramebuffer fb : framebuffers_to_destroy[i]) {
-        vkDestroyFramebuffer(device_, fb, nullptr);
-    }
-    framebuffers_to_destroy[i].clear();
-
-    for (VkDescriptorPool pool : descriptor_pools_to_destroy[i]) {
-        vkDestroyDescriptorPool(device_, pool, nullptr);
-    }
-    descriptor_pools_to_destroy[i].clear();
-
-    for (VkPipelineLayout pipe_layout : pipeline_layouts_to_destroy[i]) {
-        vkDestroyPipelineLayout(device_, pipe_layout, nullptr);
-    }
-    pipeline_layouts_to_destroy[i].clear();*/
 
     for (ID3D12Resource *res : resources_to_destroy[i]) {
         res->Release();
@@ -468,11 +355,6 @@ void Ray::Dx::Context::DestroyDeferredResources(const int i) {
         unknown->Release();
     }
     opaques_to_release[i].clear();
-
-    // for (VkAccelerationStructureKHR acc_struct : acc_structs_to_destroy[i]) {
-    //     vkDestroyAccelerationStructureKHR(device_, acc_struct, nullptr);
-    // }
-    // acc_structs_to_destroy[i].clear();
 }
 
 #if 0
