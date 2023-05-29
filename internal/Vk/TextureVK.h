@@ -241,6 +241,8 @@ class Texture3D {
 
 VkFormat VKFormatFromTexFormat(eTexFormat format);
 
+bool RequiresManualSRGBConversion(eTexFormat format);
+
 } // namespace Vk
 } // namespace Ray
 

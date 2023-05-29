@@ -2436,6 +2436,11 @@ void Ray::Dx::Texture3D::SetSubImage(int offsetx, int offsety, int offsetz, int 
 
 DXGI_FORMAT Ray::Dx::DXFormatFromTexFormat(eTexFormat format) { return g_dx_formats[size_t(format)]; }
 
+bool Ray::Dx::RequiresManualSRGBConversion(const eTexFormat format) {
+    const DXGI_FORMAT dxgi_format = g_dx_formats[size_t(format)];
+    return dxgi_format == ToSRGBFormat(dxgi_format);
+}
+
 #ifdef _MSC_VER
 #pragma warning(pop)
 #endif

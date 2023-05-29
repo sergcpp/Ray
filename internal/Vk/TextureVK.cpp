@@ -2532,6 +2532,11 @@ void Ray::Vk::Texture3D::SetSubImage(int offsetx, int offsety, int offsetz, int 
 
 VkFormat Ray::Vk::VKFormatFromTexFormat(eTexFormat format) { return g_vk_formats[size_t(format)]; }
 
+bool Ray::Vk::RequiresManualSRGBConversion(const eTexFormat format) {
+    const VkFormat vk_format = g_vk_formats[size_t(format)];
+    return vk_format == ToSRGBFormat(vk_format);
+}
+
 #ifdef _MSC_VER
 #pragma warning(pop)
 #endif

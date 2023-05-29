@@ -256,6 +256,8 @@ class Texture3D {
 DXGI_FORMAT DXFormatFromTexFormat(eTexFormat format);
 DXGI_FORMAT ToSRGBFormat(DXGI_FORMAT format);
 
+bool RequiresManualSRGBConversion(eTexFormat format);
+
 } // namespace Dx
 } // namespace Ray
 

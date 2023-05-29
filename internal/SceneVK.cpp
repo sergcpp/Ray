@@ -365,7 +365,7 @@ Ray::TextureHandle Ray::Vk::Scene::AddBindlessTexture_nolock(const tex_desc_t &_
     Tex2DParams p = {};
     p.w = _t.w;
     p.h = _t.h;
-    if (_t.is_srgb && !is_YCoCg && fmt != eTexFormat::BC4) {
+    if (_t.is_srgb && !is_YCoCg && !RequiresManualSRGBConversion(fmt)) {
         p.flags |= eTexFlagBits::SRGB;
     }
     p.mip_count = mip_count;
@@ -398,7 +398,7 @@ Ray::TextureHandle Ray::Vk::Scene::AddBindlessTexture_nolock(const tex_desc_t &_
 
     assert(ret <= 0x00ffffff);
 
-    if (_t.is_srgb && (is_YCoCg || fmt == eTexFormat::BC4)) {
+    if (_t.is_srgb && (is_YCoCg || RequiresManualSRGBConversion(fmt))) {
         ret |= TEX_SRGB_BIT;
     }
     if (recostruct_z) {

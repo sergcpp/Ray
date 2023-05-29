@@ -18,8 +18,10 @@ enum class eDescrType : uint8_t {
 
 struct DescrTable {
     eDescrType type;
-    ID3D12DescriptorHeap *heap = nullptr;
-    uint64_t ptr = 0;
+    ID3D12DescriptorHeap *cpu_heap = nullptr;
+    mutable ID3D12DescriptorHeap *gpu_heap = nullptr;
+    uint64_t cpu_ptr = 0;
+    mutable uint64_t gpu_ptr = 0;
     int count = 0;
 };
 

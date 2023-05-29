@@ -27,6 +27,8 @@ extern const DXGI_FORMAT g_dx_formats[];
 void Ray::Dx::PrepareDescriptors(Context *ctx, ID3D12GraphicsCommandList *cmd_buf, Span<const Binding> bindings,
                                  const void *uniform_data, const int uniform_data_len, const Program *prog,
                                  DescrMultiPoolAlloc *descr_alloc, ILog *log) {
+    ID3D12DescriptorHeap *descriptor_heaps[int(eDescrType::_Count)] = {};
+
     DescrSizes descr_sizes;
     for (const auto &b : bindings) {
         if (b.trg == eBindTarget::Tex2DSampled) {
@@ -37,7 +39,9 @@ void Ray::Dx::PrepareDescriptors(Context *ctx, ID3D12GraphicsCommandList *cmd_bu
                    b.trg == eBindTarget::SBufRW || b.trg == eBindTarget::Image) {
             ++descr_sizes.cbv_srv_uav_count;
         } else if (b.trg == eBindTarget::DescrTable) {
-            if (b.handle.descr_table->type == eDescrType::CBV_SRV_UAV) {
+            if (b.handle.descr_table->gpu_ptr) {
+                descriptor_heaps[int(b.handle.descr_table->type)] = b.handle.descr_table->gpu_heap;
+            } else if (b.handle.descr_table->type == eDescrType::CBV_SRV_UAV) {
                 descr_sizes.cbv_srv_uav_count += b.handle.descr_table->count;
             } else if (b.handle.descr_table->type == eDescrType::Sampler) {
                 descr_sizes.sampler_count += b.handle.descr_table->count;
@@ -51,13 +55,16 @@ void Ray::Dx::PrepareDescriptors(Context *ctx, ID3D12GraphicsCommandList *cmd_bu
 
     const PoolRefs pool_refs = descr_alloc->Alloc(descr_sizes);
 
-    SmallVector<ID3D12DescriptorHeap *, int(eDescrType::_Count)> descriptor_heaps;
+    SmallVector<ID3D12DescriptorHeap *, int(eDescrType::_Count)> compacted_descriptor_heaps;
     for (int i = 0; i < int(eDescrType::_Count); ++i) {
         if (pool_refs.refs[i].heap) {
-            descriptor_heaps.push_back(pool_refs.refs[i].heap);
+            assert(!descriptor_heaps[i] || pool_refs.refs[i].heap == descriptor_heaps[i]);
+            compacted_descriptor_heaps.push_back(pool_refs.refs[i].heap);
+        } else if (descriptor_heaps[i]) {
+            compacted_descriptor_heaps.push_back(descriptor_heaps[i]);
         }
     }
-    cmd_buf->SetDescriptorHeaps(UINT(descriptor_heaps.size()), descriptor_heaps.data());
+    cmd_buf->SetDescriptorHeaps(UINT(compacted_descriptor_heaps.size()), compacted_descriptor_heaps.data());
 
     ID3D12Device *device = ctx->device();
     const UINT cbv_srv_uav_incr = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
@@ -161,11 +168,14 @@ void Ray::Dx::PrepareDescriptors(Context *ctx, ID3D12GraphicsCommandList *cmd_bu
             dest_handle.ptr += cbv_srv_uav_incr * param_index;
             device->CreateUnorderedAccessView(b.handle.tex->dx_resource(), nullptr, &uav_desc, dest_handle);
         } else if (b.trg == eBindTarget::DescrTable && b.handle.descr_table->count) {
-            if (b.handle.descr_table->type == eDescrType::CBV_SRV_UAV) {
+            if (b.handle.descr_table->gpu_ptr) {
+                cmd_buf->SetComputeRootDescriptorTable(b.loc,
+                                                       D3D12_GPU_DESCRIPTOR_HANDLE{b.handle.descr_table->gpu_ptr});
+            } else if (b.handle.descr_table->type == eDescrType::CBV_SRV_UAV) {
                 D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = cbv_srv_uav_cpu_handle;
                 dest_handle.ptr += cbv_srv_uav_incr * (descr_sizes.cbv_srv_uav_count - b.handle.descr_table->count);
                 device->CopyDescriptorsSimple(b.handle.descr_table->count, dest_handle,
-                                              D3D12_CPU_DESCRIPTOR_HANDLE{b.handle.descr_table->ptr},
+                                              D3D12_CPU_DESCRIPTOR_HANDLE{b.handle.descr_table->cpu_ptr},
                                               D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
                 D3D12_GPU_DESCRIPTOR_HANDLE gpu_handle = cbv_srv_uav_gpu_handle;
@@ -175,7 +185,7 @@ void Ray::Dx::PrepareDescriptors(Context *ctx, ID3D12GraphicsCommandList *cmd_bu
                 D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = sampler_cpu_handle;
                 dest_handle.ptr += sampler_incr * (descr_sizes.sampler_count - b.handle.descr_table->count);
                 device->CopyDescriptorsSimple(b.handle.descr_table->count, dest_handle,
-                                              D3D12_CPU_DESCRIPTOR_HANDLE{b.handle.descr_table->ptr},
+                                              D3D12_CPU_DESCRIPTOR_HANDLE{b.handle.descr_table->cpu_ptr},
                                               D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
 
                 D3D12_GPU_DESCRIPTOR_HANDLE gpu_handle = sampler_gpu_handle;
@@ -187,7 +197,7 @@ void Ray::Dx::PrepareDescriptors(Context *ctx, ID3D12GraphicsCommandList *cmd_bu
 
     if (uniform_data) {
         uint8_t *out_uniform_data =
-             ctx->uniform_data_bufs[ctx->backend_frame].mapped_ptr() + ctx->uniform_data_buf_offs[ctx->backend_frame];
+            ctx->uniform_data_bufs[ctx->backend_frame].mapped_ptr() + ctx->uniform_data_buf_offs[ctx->backend_frame];
         memcpy(out_uniform_data, uniform_data, uniform_data_len);
         assert(ctx->uniform_data_buf_offs[ctx->backend_frame] + uniform_data_len <
                ctx->uniform_data_bufs[ctx->backend_frame].size());

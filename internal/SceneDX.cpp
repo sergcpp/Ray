@@ -392,7 +392,7 @@ Ray::TextureHandle Ray::Dx::Scene::AddBindlessTexture_nolock(const tex_desc_t &_
     Tex2DParams p = {};
     p.w = _t.w;
     p.h = _t.h;
-    if (_t.is_srgb && !is_YCoCg && fmt != eTexFormat::BC4) {
+    if (_t.is_srgb && !is_YCoCg && !RequiresManualSRGBConversion(fmt)) {
         p.flags |= eTexFlagBits::SRGB;
     }
     p.mip_count = mip_count;
@@ -426,7 +426,7 @@ Ray::TextureHandle Ray::Dx::Scene::AddBindlessTexture_nolock(const tex_desc_t &_
 
     assert(ret <= 0x00ffffff);
 
-    if (_t.is_srgb && (is_YCoCg || fmt == eTexFormat::BC4)) {
+    if (_t.is_srgb && (is_YCoCg || RequiresManualSRGBConversion(fmt))) {
         ret |= TEX_SRGB_BIT;
     }
     if (recostruct_z) {
@@ -1559,7 +1559,11 @@ void Ray::Dx::Scene::PrepareBindlessTextures_nolock() {
 
         { // create srv
             D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
-            srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+            if (GetColorChannelCount(tex.params.format) == 1) {
+                srv_desc.Shader4ComponentMapping = D3D12_ENCODE_SHADER_4_COMPONENT_MAPPING(0, 0, 0, 0);
+            } else {
+                srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+            }
             srv_desc.Format = DXFormatFromTexFormat(tex.params.format);
             if (bool(tex.params.flags & eTexFlagBits::SRGB)) {
                 srv_desc.Format = ToSRGBFormat(srv_desc.Format);
@@ -1591,14 +1595,14 @@ void Ray::Dx::Scene::PrepareBindlessTextures_nolock() {
 
     D3D12_CPU_DESCRIPTOR_HANDLE srv_gpu_handle = srv_descr_heap->GetCPUDescriptorHandleForHeapStart();
     bindless_tex_data_.srv_descr_table.type = eDescrType::CBV_SRV_UAV;
-    bindless_tex_data_.srv_descr_table.heap = srv_descr_heap;
-    bindless_tex_data_.srv_descr_table.ptr = srv_gpu_handle.ptr;
+    bindless_tex_data_.srv_descr_table.cpu_heap = srv_descr_heap;
+    bindless_tex_data_.srv_descr_table.cpu_ptr = srv_gpu_handle.ptr;
     bindless_tex_data_.srv_descr_table.count = int(bindless_textures_.capacity());
 
     D3D12_CPU_DESCRIPTOR_HANDLE sampler_gpu_handle = sampler_descr_heap->GetCPUDescriptorHandleForHeapStart();
     bindless_tex_data_.sampler_descr_table.type = eDescrType::Sampler;
-    bindless_tex_data_.sampler_descr_table.heap = sampler_descr_heap;
-    bindless_tex_data_.sampler_descr_table.ptr = sampler_gpu_handle.ptr;
+    bindless_tex_data_.sampler_descr_table.cpu_heap = sampler_descr_heap;
+    bindless_tex_data_.sampler_descr_table.cpu_ptr = sampler_gpu_handle.ptr;
     bindless_tex_data_.sampler_descr_table.count = int(bindless_textures_.capacity());
 
     { // Transition resources
