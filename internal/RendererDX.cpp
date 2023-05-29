@@ -768,7 +768,8 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         if (cam.view_transform != eViewTransform::Standard) {
             CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
 
-            const uint32_t data_len = LUT_DIMS * LUT_DIMS * round_up(LUT_DIMS * sizeof(uint32_t), 256);
+            const uint32_t data_len =
+                LUT_DIMS * LUT_DIMS * round_up(LUT_DIMS * sizeof(uint32_t), TextureDataPitchAlignment);
             Buffer temp_upload_buf{"Temp tonemap LUT upload", ctx_.get(), eBufType::Upload, data_len};
             { // update stage buffer
                 uint32_t *mapped_ptr = reinterpret_cast<uint32_t *>(temp_upload_buf.Map(BufMapWrite));
@@ -777,7 +778,7 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
                 int i = 0;
                 for (int yz = 0; yz < LUT_DIMS * LUT_DIMS; ++yz) {
                     memcpy(&mapped_ptr[i], &lut[yz * LUT_DIMS], LUT_DIMS * sizeof(uint32_t));
-                    i += round_up(LUT_DIMS, 256 / sizeof(uint32_t));
+                    i += round_up(LUT_DIMS, TextureDataPitchAlignment / sizeof(uint32_t));
                 }
 
                 temp_upload_buf.Unmap();
@@ -1192,7 +1193,7 @@ void Ray::Dx::Renderer::DenoiseImage(const RegionContext &region) {
     }
 #endif
 
-    //vkCmdResetQueryPool(cmd_buf, ctx_->query_pool(ctx_->backend_frame), 0, MaxTimestampQueries);
+    // vkCmdResetQueryPool(cmd_buf, ctx_->query_pool(ctx_->backend_frame), 0, MaxTimestampQueries);
 
     //////////////////////////////////////////////////////////////////////////////////
 
@@ -1349,7 +1350,8 @@ const Ray::color_rgba_t *Ray::Dx::Renderer::get_aux_pixels_ref(const eAUXBuffer 
     bool &dirty_flag = (buf == eAUXBuffer::BaseColor) ? base_color_dirty_ : depth_normals_dirty_;
 
     const auto &buffer_to_use = (buf == eAUXBuffer::BaseColor) ? base_color_buf_ : depth_normals_buf_;
-    const auto &stage_buffer_to_use = (buf == eAUXBuffer::BaseColor) ? base_color_readback_buf_ : depth_normals_readback_buf_;
+    const auto &stage_buffer_to_use =
+        (buf == eAUXBuffer::BaseColor) ? base_color_readback_buf_ : depth_normals_readback_buf_;
 
     if (dirty_flag) {
         CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());

@@ -255,8 +255,9 @@ Ray::TextureHandle Ray::Dx::Scene::AddBindlessTexture_nolock(const tex_desc_t &_
                 src_fmt = eTexFormat::RawRG88;
                 fmt = eTexFormat::BC5;
                 block = eTexBlock::_4x4;
-                data_size[0] = GetRequiredMemory_BC5(_t.w, _t.h, 256);
-                CompressImage_BC5<2>(&repacked_data[0], _t.w, _t.h, stage_data, GetRequiredMemory_BC5(_t.w, 1, 256));
+                data_size[0] = GetRequiredMemory_BC5(_t.w, _t.h, TextureDataPitchAlignment);
+                CompressImage_BC5<2>(&repacked_data[0], _t.w, _t.h, stage_data,
+                                     GetRequiredMemory_BC5(_t.w, 1, TextureDataPitchAlignment));
             } else {
                 src_fmt = fmt = eTexFormat::RawRG88;
                 data_size[0] = _t.w * _t.h * 2;
@@ -271,9 +272,9 @@ Ray::TextureHandle Ray::Dx::Scene::AddBindlessTexture_nolock(const tex_desc_t &_
                 src_fmt = eTexFormat::RawRGB888;
                 fmt = eTexFormat::BC3;
                 block = eTexBlock::_4x4;
-                data_size[0] = GetRequiredMemory_BC3(_t.w, _t.h, 256);
+                data_size[0] = GetRequiredMemory_BC3(_t.w, _t.h, TextureDataPitchAlignment);
                 CompressImage_BC3<true /* Is_YCoCg */>(temp_YCoCg.get(), _t.w, _t.h, stage_data,
-                                                       GetRequiredMemory_BC3(_t.w, 1, 256));
+                                                       GetRequiredMemory_BC3(_t.w, 1, TextureDataPitchAlignment));
             } else if (ctx_->rgb8_unorm_is_supported()) {
                 src_fmt = fmt = eTexFormat::RawRGB888;
                 data_size[0] = _t.w * _t.h * 3;
@@ -298,7 +299,7 @@ Ray::TextureHandle Ray::Dx::Scene::AddBindlessTexture_nolock(const tex_desc_t &_
                 int j = 0;
                 for (int y = 0; y < _t.h; ++y) {
                     memcpy(&stage_data[j], &repacked_data[y * _t.w * 4], _t.w * 4);
-                    j += round_up(_t.w * 4, 256);
+                    j += round_up(_t.w * 4, TextureDataPitchAlignment);
                 }
             }
         } else {
@@ -316,8 +317,9 @@ Ray::TextureHandle Ray::Dx::Scene::AddBindlessTexture_nolock(const tex_desc_t &_
                 src_fmt = eTexFormat::RawRG88;
                 fmt = eTexFormat::BC5;
                 block = eTexBlock::_4x4;
-                data_size[0] = GetRequiredMemory_BC5(_t.w, _t.h, 256);
-                CompressImage_BC5<2>(&repacked_data[0], _t.w, _t.h, stage_data, GetRequiredMemory_BC5(_t.w, 1, 256));
+                data_size[0] = GetRequiredMemory_BC5(_t.w, _t.h, TextureDataPitchAlignment);
+                CompressImage_BC5<2>(&repacked_data[0], _t.w, _t.h, stage_data,
+                                     GetRequiredMemory_BC5(_t.w, 1, TextureDataPitchAlignment));
             } else {
                 src_fmt = fmt = eTexFormat::RawRG88;
                 data_size[0] = _t.w * _t.h * 2;
@@ -325,7 +327,7 @@ Ray::TextureHandle Ray::Dx::Scene::AddBindlessTexture_nolock(const tex_desc_t &_
                 int j = 0;
                 for (int y = 0; y < _t.h; ++y) {
                     memcpy(&stage_data[j], &repacked_data[y * _t.w * 2], _t.w * 2);
-                    j += round_up(_t.w * 2, 256);
+                    j += round_up(_t.w * 2, TextureDataPitchAlignment);
                 }
             }
         }
@@ -338,16 +340,16 @@ Ray::TextureHandle Ray::Dx::Scene::AddBindlessTexture_nolock(const tex_desc_t &_
         int j = 0;
         for (int y = 0; y < _t.h; ++y) {
             memcpy(&stage_data[j], &rg_data[y * _t.w * 2], _t.w * 2);
-            j += round_up(_t.w * 2, 256);
+            j += round_up(_t.w * 2, TextureDataPitchAlignment);
         }
     } else if (_t.format == eTextureFormat::R8) {
         if (use_compression) {
             src_fmt = eTexFormat::RawR8;
             fmt = eTexFormat::BC4;
             block = eTexBlock::_4x4;
-            data_size[0] = GetRequiredMemory_BC4(_t.w, _t.h, 256);
+            data_size[0] = GetRequiredMemory_BC4(_t.w, _t.h, TextureDataPitchAlignment);
             CompressImage_BC4<1>(reinterpret_cast<const uint8_t *>(_t.data), _t.w, _t.h, stage_data,
-                                 GetRequiredMemory_BC4(_t.w, 1, 256));
+                                 GetRequiredMemory_BC4(_t.w, 1, TextureDataPitchAlignment));
         } else {
             src_fmt = fmt = eTexFormat::RawR8;
             data_size[0] = _t.w * _t.h;
@@ -357,7 +359,7 @@ Ray::TextureHandle Ray::Dx::Scene::AddBindlessTexture_nolock(const tex_desc_t &_
             int j = 0;
             for (int y = 0; y < _t.h; ++y) {
                 memcpy(&stage_data[j], &r_data[y * _t.w], _t.w);
-                j += round_up(_t.w, 256);
+                j += round_up(_t.w, TextureDataPitchAlignment);
             }
         }
     }
@@ -476,24 +478,24 @@ void Ray::Dx::Scene::WriteTextureMips(const color_t<T, N> data[], const int _res
             if (N == 3) {
                 auto temp_YCoCg = ConvertRGB_to_CoCgxY(&dst_data[0].v[0], dst_res[0], dst_res[1]);
 
-                out_size[i] = GetRequiredMemory_BC3(dst_res[0], dst_res[1], 256);
+                out_size[i] = GetRequiredMemory_BC3(dst_res[0], dst_res[1], TextureDataPitchAlignment);
                 CompressImage_BC3<true /* Is_YCoCg */>(temp_YCoCg.get(), dst_res[0], dst_res[1], out_data,
-                                                       GetRequiredMemory_BC3(dst_res[0], 1, 256));
+                                                       GetRequiredMemory_BC3(dst_res[0], 1, TextureDataPitchAlignment));
             } else if (N == 1) {
-                out_size[i] = GetRequiredMemory_BC4(dst_res[0], dst_res[1], 256);
+                out_size[i] = GetRequiredMemory_BC4(dst_res[0], dst_res[1], TextureDataPitchAlignment);
                 CompressImage_BC4<N>(&dst_data[0].v[0], dst_res[0], dst_res[1], out_data,
-                                     GetRequiredMemory_BC4(dst_res[0], 1, 256));
+                                     GetRequiredMemory_BC4(dst_res[0], 1, TextureDataPitchAlignment));
             } else if (N == 2) {
-                out_size[i] = GetRequiredMemory_BC5(dst_res[0], dst_res[1], 256);
+                out_size[i] = GetRequiredMemory_BC5(dst_res[0], dst_res[1], TextureDataPitchAlignment);
                 CompressImage_BC5<2>(&dst_data[0].v[0], dst_res[0], dst_res[1], out_data,
-                                     GetRequiredMemory_BC5(dst_res[0], 1, 256));
+                                     GetRequiredMemory_BC5(dst_res[0], 1, TextureDataPitchAlignment));
             }
         } else {
-            out_size[i] = int(dst_res[1] * round_up(dst_res[0] * sizeof(color_t<T, N>), 256));
+            out_size[i] = int(dst_res[1] * round_up(dst_res[0] * sizeof(color_t<T, N>), TextureDataPitchAlignment));
             int j = 0;
             for (int y = 0; y < dst_res[1]; ++y) {
                 memcpy(&out_data[j], &dst_data[y * dst_res[0]], dst_res[0] * sizeof(color_t<T, N>));
-                j += round_up(dst_res[0] * sizeof(color_t<T, N>), 256);
+                j += round_up(dst_res[0] * sizeof(color_t<T, N>), TextureDataPitchAlignment);
             }
         }
 
@@ -1408,7 +1410,7 @@ void Ray::Dx::Scene::PrepareEnvMapQTree_nolock() {
         int j = mip_offsets[i];
         for (int y = 0; y < res; ++y) {
             memcpy(&stage_data[j], &env_map_qtree_.mips[i][y * res], res * sizeof(simd_fvec4));
-            j += round_up(res * sizeof(simd_fvec4), 256);
+            j += round_up(res * sizeof(simd_fvec4), TextureDataPitchAlignment);
         }
     }
 
