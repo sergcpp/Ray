@@ -386,7 +386,7 @@ windows-arm64-cpu-test-job:
   tags:
     - windows,arm64,fastcpu
 
-windows-arm64-gpu-sqx-test-job:
+windows-arm64-gpu-adreno-test-job:
   variables:
     BIN_DIR: windows-arm64
     AUX_TEST_ARGS: '--nocpu'
@@ -395,7 +395,7 @@ windows-arm64-gpu-sqx-test-job:
   needs:
     - windows-arm64-build-job
   tags:
-    - windows,arm64,sqx
+    - windows,arm64,adreno
 
 windows-arm64-cpu-perf-test-job:
   variables:
