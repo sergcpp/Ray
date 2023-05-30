@@ -949,9 +949,9 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, int hi, vec2 sample_off, 
         const vec3 p1 = vec3(v1.p[0], v1.p[1], v1.p[2]),
                    p2 = vec3(v2.p[0], v2.p[1], v2.p[2]),
                    p3 = vec3(v3.p[0], v3.p[1], v3.p[2]);
-        const vec2 uv1 = vec2(v1.t[0][0], v1.t[0][1]),
-                   uv2 = vec2(v2.t[0][0], v2.t[0][1]),
-                   uv3 = vec2(v3.t[0][0], v3.t[0][1]);
+        const vec2 uv1 = vec2(v1.t[0], v1.t[1]),
+                   uv2 = vec2(v2.t[0], v2.t[1]),
+                   uv3 = vec2(v3.t[0], v3.t[1]);
 
         const float r1 = sqrt(fract(g_random_seq[hi + RAND_DIM_LIGHT_U] + sample_off[0]));
         const float r2 = fract(g_random_seq[hi + RAND_DIM_LIGHT_V] + sample_off[1]);
@@ -1642,9 +1642,9 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
     surf.N = normalize(vec3(v1.n[0], v1.n[1], v1.n[2]) * w +
                        vec3(v2.n[0], v2.n[1], v2.n[2]) * inter.u +
                        vec3(v3.n[0], v3.n[1], v3.n[2]) * inter.v);
-    surf.uvs = vec2(v1.t[0][0], v1.t[0][1]) * w +
-               vec2(v2.t[0][0], v2.t[0][1]) * inter.u +
-               vec2(v3.t[0][0], v3.t[0][1]) * inter.v;
+    surf.uvs = vec2(v1.t[0], v1.t[1]) * w +
+               vec2(v2.t[0], v2.t[1]) * inter.u +
+               vec2(v3.t[0], v3.t[1]) * inter.v;
 
     surf.plane_N = cross(vec3(p2 - p1), vec3(p3 - p1));
     const float pa = length(surf.plane_N);
@@ -1678,8 +1678,8 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
     surf.B = normalize(surf.B);
     surf.T = normalize(surf.T);
 
-    const float ta = abs((v2.t[0][0] - v1.t[0][0]) * (v3.t[0][1] - v1.t[0][1]) -
-                         (v3.t[0][0] - v1.t[0][0]) * (v2.t[0][1] - v1.t[0][1]));
+    const float ta = abs((v2.t[0] - v1.t[0]) * (v3.t[1] - v1.t[1]) -
+                         (v3.t[0] - v1.t[0]) * (v2.t[1] - v1.t[1]));
 
     const float cone_width = ray.cone_width + ray.cone_spread * inter.t;
 

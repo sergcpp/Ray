@@ -148,7 +148,7 @@ struct bvh_node_t {
 };
 
 struct vertex_t {
-    float p[3], n[3], b[3], t[2][2];
+    float p[3], n[3], b[3], t[2];
 };
 
 struct mesh_t {

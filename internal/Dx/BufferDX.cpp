@@ -225,7 +225,7 @@ void Ray::Dx::Buffer::Resize(const uint32_t new_size, const bool keep_content) {
         res_desc.Flags = D3D12_RESOURCE_FLAG_NONE;
     }
 
-    eResState new_buf_state = GetInitialDxResourceState(type_);
+    const eResState new_buf_state = GetInitialDxResourceState(type_);
 
     ID3D12Resource *new_buf = nullptr;
     HRESULT hr = device->CreateCommittedResource(&heap_properties, D3D12_HEAP_FLAG_NONE, &res_desc,
@@ -233,6 +233,7 @@ void Ray::Dx::Buffer::Resize(const uint32_t new_size, const bool keep_content) {
                                                                            : DXResourceState(new_buf_state),
                                                  nullptr, IID_PPV_ARGS(&new_buf));
     if (FAILED(hr)) {
+        ctx_->log()->Error("Failed to create buffer (as committed resource)!");
         return;
     }
 
@@ -271,6 +272,21 @@ void Ray::Dx::Buffer::Resize(const uint32_t new_size, const bool keep_content) {
     if (handle_.buf) {
         if (keep_content) {
             ID3D12GraphicsCommandList *cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+
+            SmallVector<D3D12_RESOURCE_BARRIER, 1> barriers;
+
+            if (resource_state != eResState::CopySrc) {
+                auto &new_barrier = barriers.emplace_back();
+                new_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+                new_barrier.Transition.pResource = handle_.buf;
+                new_barrier.Transition.StateBefore = DXResourceState(resource_state);
+                new_barrier.Transition.StateAfter = DXResourceState(eResState::CopySrc);
+                new_barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+            }
+
+            if (!barriers.empty()) {
+                cmd_buf->ResourceBarrier(UINT(barriers.size()), barriers.data());
+            }
 
             cmd_buf->CopyBufferRegion(new_buf, 0, handle_.buf, 0, old_size);
 

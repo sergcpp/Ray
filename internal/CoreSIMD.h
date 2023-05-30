@@ -2296,9 +2296,10 @@ void Ray::NS::SampleMeshInTextureSpace(int iteration, int obj_index, int uv_laye
         const vertex_t &v1 = vertices[vtx_indices[tri * 3 + 1]];
         const vertex_t &v2 = vertices[vtx_indices[tri * 3 + 2]];
 
-        const auto t0 = simd_fvec4{v0.t[uv_layer][0], 1.0f - v0.t[uv_layer][1], 0.0f, 0.0f} * size;
-        const auto t1 = simd_fvec4{v1.t[uv_layer][0], 1.0f - v1.t[uv_layer][1], 0.0f, 0.0f} * size;
-        const auto t2 = simd_fvec4{v2.t[uv_layer][0], 1.0f - v2.t[uv_layer][1], 0.0f, 0.0f} * size;
+        // TODO: use uv_layer
+        const auto t0 = simd_fvec4{v0.t[0], 1.0f - v0.t[1], 0.0f, 0.0f} * size;
+        const auto t1 = simd_fvec4{v1.t[0], 1.0f - v1.t[1], 0.0f, 0.0f} * size;
+        const auto t2 = simd_fvec4{v2.t[0], 1.0f - v2.t[1], 0.0f, 0.0f} * size;
 
         simd_fvec4 bbox_min = t0, bbox_max = t0;
 
@@ -4434,7 +4435,7 @@ void Ray::NS::IntersectScene(ray_data_t<S> &r, const int min_transp_depth, const
         simd_fvec<S> uvs[2];
 
         { // Fetch vertex uvs
-            const float *vtx_uvs = &sc.vertices[0].t[0][0];
+            const float *vtx_uvs = &sc.vertices[0].t[0];
             const int VtxUVsStride = sizeof(vertex_t) / sizeof(float);
 
             UNROLLED_FOR(i, 2, {
@@ -4659,7 +4660,7 @@ void Ray::NS::IntersectScene(const shadow_ray_t<S> &r, const int max_transp_dept
         simd_fvec<S> sh_uvs[2];
 
         { // Fetch vertex uvs
-            const float *vtx_uvs = &sc.vertices[0].t[0][0];
+            const float *vtx_uvs = &sc.vertices[0].t[0];
             const int VtxUVsStride = sizeof(vertex_t) / sizeof(float);
 
             UNROLLED_FOR(i, 2, {
@@ -5024,8 +5025,8 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
 
             const simd_fvec<S> r1 = sqrt(ru), r2 = rv;
 
-            const simd_fvec<S> luvs[2] = {v1.t[0][0] * (1.0f - r1) + r1 * (v2.t[0][0] * (1.0f - r2) + v3.t[0][0] * r2),
-                                          v1.t[0][1] * (1.0f - r1) + r1 * (v2.t[0][1] * (1.0f - r2) + v3.t[0][1] * r2)};
+            const simd_fvec<S> luvs[2] = {v1.t[0] * (1.0f - r1) + r1 * (v2.t[0] * (1.0f - r2) + v3.t[0] * r2),
+                                          v1.t[1] * (1.0f - r1) + r1 * (v2.t[1] * (1.0f - r2) + v3.t[1] * r2)};
 
             const simd_fvec<S> lp_ls[3] = {v1.p[0] * (1.0f - r1) + r1 * (v2.p[0] * (1.0f - r2) + v3.p[0] * r2),
                                            v1.p[1] * (1.0f - r1) + r1 * (v2.p[1] * (1.0f - r2) + v3.p[1] * r2),
@@ -6029,7 +6030,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
 
     simd_fvec<S> u1[2], u2[2], u3[2];
     { // Fetch vertex uvs
-        const float *vtx_uvs = &sc.vertices[0].t[0][0];
+        const float *vtx_uvs = &sc.vertices[0].t[0];
         const int VtxUVStride = sizeof(vertex_t) / sizeof(float);
 
         UNROLLED_FOR(i, 2, {

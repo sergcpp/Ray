@@ -755,21 +755,21 @@ Ray::MeshHandle Ray::Vk::Scene::AddMesh(const mesh_desc_t &_m) {
         memcpy(&v.n[0], (_m.vtx_attrs + i * stride + 3), 3 * sizeof(float));
 
         if (_m.layout == eVertexLayout::PxyzNxyzTuv) {
-            memcpy(&v.t[0][0], (_m.vtx_attrs + i * stride + 6), 2 * sizeof(float));
-            v.t[1][0] = v.t[1][1] = 0.0f;
+            memcpy(&v.t[0], (_m.vtx_attrs + i * stride + 6), 2 * sizeof(float));
+            //v.t[1][0] = v.t[1][1] = 0.0f;
             v.b[0] = v.b[1] = v.b[2] = 0.0f;
         } else if (_m.layout == eVertexLayout::PxyzNxyzTuvTuv) {
-            memcpy(&v.t[0][0], (_m.vtx_attrs + i * stride + 6), 2 * sizeof(float));
-            memcpy(&v.t[1][0], (_m.vtx_attrs + i * stride + 8), 2 * sizeof(float));
+            memcpy(&v.t[0], (_m.vtx_attrs + i * stride + 6), 2 * sizeof(float));
+            //memcpy(&v.t[1][0], (_m.vtx_attrs + i * stride + 8), 2 * sizeof(float));
             v.b[0] = v.b[1] = v.b[2] = 0.0f;
         } else if (_m.layout == eVertexLayout::PxyzNxyzBxyzTuv) {
             memcpy(&v.b[0], (_m.vtx_attrs + i * stride + 6), 3 * sizeof(float));
-            memcpy(&v.t[0][0], (_m.vtx_attrs + i * stride + 9), 2 * sizeof(float));
-            v.t[1][0] = v.t[1][1] = 0.0f;
+            memcpy(&v.t[0], (_m.vtx_attrs + i * stride + 9), 2 * sizeof(float));
+            //v.t[1][0] = v.t[1][1] = 0.0f;
         } else if (_m.layout == eVertexLayout::PxyzNxyzBxyzTuvTuv) {
             memcpy(&v.b[0], (_m.vtx_attrs + i * stride + 6), 3 * sizeof(float));
-            memcpy(&v.t[0][0], (_m.vtx_attrs + i * stride + 9), 2 * sizeof(float));
-            memcpy(&v.t[1][0], (_m.vtx_attrs + i * stride + 11), 2 * sizeof(float));
+            memcpy(&v.t[0], (_m.vtx_attrs + i * stride + 9), 2 * sizeof(float));
+            //memcpy(&v.t[1][0], (_m.vtx_attrs + i * stride + 11), 2 * sizeof(float));
         }
     }
 

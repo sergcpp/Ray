@@ -108,7 +108,7 @@ void main() {
         const vertex_t v3 = g_vertices[g_vtx_indices[tri_index * 3 + 2]];
 
         const float w = 1.0 - inter.u - inter.v;
-        const vec2 uvs = vec2(v1.t[0][0], v1.t[0][1]) * w + vec2(v2.t[0][0], v2.t[0][1]) * inter.u + vec2(v3.t[0][0], v3.t[0][1]) * inter.v;
+        const vec2 uvs = vec2(v1.t[0], v1.t[1]) * w + vec2(v2.t[0], v2.t[1]) * inter.u + vec2(v3.t[0], v3.t[1]) * inter.v;
 
         float trans_r = fract(g_random_seq[rand_index + RAND_DIM_BSDF_PICK] + rand_offset[0]);
 

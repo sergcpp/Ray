@@ -28,8 +28,8 @@ void Ray::ComputeTangentBasis(size_t vtx_offset, size_t vtx_start, std::vector<v
         const Ref::simd_fvec3 dp1 = Ref::simd_fvec3(v1->p) - Ref::simd_fvec3(v0->p);
         const Ref::simd_fvec3 dp2 = Ref::simd_fvec3(v2->p) - Ref::simd_fvec3(v0->p);
 
-        const Ref::simd_fvec2 dt1 = Ref::simd_fvec2(v1->t[0]) - Ref::simd_fvec2(v0->t[0]);
-        const Ref::simd_fvec2 dt2 = Ref::simd_fvec2(v2->t[0]) - Ref::simd_fvec2(v0->t[0]);
+        const Ref::simd_fvec2 dt1 = Ref::simd_fvec2(v1->t) - Ref::simd_fvec2(v0->t);
+        const Ref::simd_fvec2 dt2 = Ref::simd_fvec2(v2->t) - Ref::simd_fvec2(v0->t);
 
         Ref::simd_fvec3 tangent, binormal;
 

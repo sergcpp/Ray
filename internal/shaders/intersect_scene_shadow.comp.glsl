@@ -226,7 +226,7 @@ vec3 IntersectSceneShadow(shadow_ray_t r) {
 
         const float w = 1.0 - sh_inter.u - sh_inter.v;
         const vec2 sh_uvs =
-            vec2(v1.t[0][0], v1.t[0][1]) * w + vec2(v2.t[0][0], v2.t[0][1]) * sh_inter.u + vec2(v3.t[0][0], v3.t[0][1]) * sh_inter.v;
+            vec2(v1.t[0], v1.t[1]) * w + vec2(v2.t[0], v2.t[1]) * sh_inter.u + vec2(v3.t[0], v3.t[1]) * sh_inter.v;
 
         // reuse traversal stack
         g_stack[gl_LocalInvocationIndex][0] = mat_index;
@@ -317,7 +317,7 @@ vec3 IntersectSceneShadow(shadow_ray_t r) {
 
             const vec2 uv = rayQueryGetIntersectionBarycentricsEXT(rq, true);
             const float w = 1.0 - uv.x - uv.y;
-            const vec2 sh_uvs = vec2(v1.t[0][0], v1.t[0][1]) * w + vec2(v2.t[0][0], v2.t[0][1]) * uv.x + vec2(v3.t[0][0], v3.t[0][1]) * uv.y;
+            const vec2 sh_uvs = vec2(v1.t[0], v1.t[1]) * w + vec2(v2.t[0], v2.t[1]) * uv.x + vec2(v3.t[0], v3.t[1]) * uv.y;
 
             // reuse traversal stack
             g_stack[gl_LocalInvocationIndex][0] = mat_index;

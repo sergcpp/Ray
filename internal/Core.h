@@ -362,9 +362,9 @@ const int RAND_DIM_BOUNCE_COUNT = 9; // separate for each bounce
 static_assert(RAND_DIM_BASE_COUNT + MAX_BOUNCES * RAND_DIM_BOUNCE_COUNT <= HALTON_COUNT, "!");
 
 struct vertex_t {
-    float p[3], n[3], b[3], t[2][2];
+    float p[3], n[3], b[3], t[2];
 };
-static_assert(sizeof(vertex_t) == 52, "!");
+static_assert(sizeof(vertex_t) == 44, "!");
 
 struct mesh_t {
     float bbox_min[3], bbox_max[3];

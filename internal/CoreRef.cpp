@@ -1293,9 +1293,10 @@ void Ray::Ref::SampleMeshInTextureSpace(const int iteration, const int obj_index
         const vertex_t &v1 = vertices[vtx_indices[tri * 3 + 1]];
         const vertex_t &v2 = vertices[vtx_indices[tri * 3 + 2]];
 
-        const auto t0 = simd_fvec2{v0.t[uv_layer][0], 1.0f - v0.t[uv_layer][1]} * size;
-        const auto t1 = simd_fvec2{v1.t[uv_layer][0], 1.0f - v1.t[uv_layer][1]} * size;
-        const auto t2 = simd_fvec2{v2.t[uv_layer][0], 1.0f - v2.t[uv_layer][1]} * size;
+        // TODO: use uv_layer
+        const auto t0 = simd_fvec2{v0.t[0], 1.0f - v0.t[1]} * size;
+        const auto t1 = simd_fvec2{v1.t[0], 1.0f - v1.t[1]} * size;
+        const auto t2 = simd_fvec2{v2.t[0], 1.0f - v2.t[1]} * size;
 
         simd_fvec2 bbox_min = t0, bbox_max = t0;
 
@@ -2887,8 +2888,7 @@ void Ray::Ref::IntersectScene(Span<ray_data_t> rays, const int min_transp_depth,
             const vertex_t &v3 = sc.vertices[sc.vtx_indices[tri_index * 3 + 2]];
 
             const float w = 1.0f - inter.u - inter.v;
-            const simd_fvec2 uvs =
-                simd_fvec2(v1.t[0]) * w + simd_fvec2(v2.t[0]) * inter.u + simd_fvec2(v3.t[0]) * inter.v;
+            const simd_fvec2 uvs = simd_fvec2(v1.t) * w + simd_fvec2(v2.t) * inter.u + simd_fvec2(v3.t) * inter.v;
 
             float trans_r = fract(random_seq[RAND_DIM_BSDF_PICK] + rand_offset[0]);
 
@@ -2995,8 +2995,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::IntersectScene(const shadow_ray_t &r, const int m
         const vertex_t &v3 = sc.vertices[sc.vtx_indices[tri_index * 3 + 2]];
 
         const float w = 1.0f - inter.u - inter.v;
-        const simd_fvec2 sh_uvs =
-            simd_fvec2(v1.t[0]) * w + simd_fvec2(v2.t[0]) * inter.u + simd_fvec2(v3.t[0]) * inter.v;
+        const simd_fvec2 sh_uvs = simd_fvec2(v1.t) * w + simd_fvec2(v2.t) * inter.u + simd_fvec2(v3.t) * inter.v;
 
         const simd_fvec2 tex_rand = simd_fvec2{fract(random_seq[RAND_DIM_TEX_U] + rand_offset[0]),
                                                fract(random_seq[RAND_DIM_TEX_V] + rand_offset[1])};
@@ -3248,7 +3247,7 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
         const simd_fvec4 p1 = simd_fvec4(v1.p[0], v1.p[1], v1.p[2], 0.0f),
                          p2 = simd_fvec4(v2.p[0], v2.p[1], v2.p[2], 0.0f),
                          p3 = simd_fvec4(v3.p[0], v3.p[1], v3.p[2], 0.0f);
-        const simd_fvec2 uv1 = simd_fvec2(v1.t[0]), uv2 = simd_fvec2(v2.t[0]), uv3 = simd_fvec2(v3.t[0]);
+        const simd_fvec2 uv1 = simd_fvec2(v1.t), uv2 = simd_fvec2(v2.t), uv3 = simd_fvec2(v3.t);
 
         const float r1 = std::sqrt(fract(random_seq[RAND_DIM_LIGHT_U] + sample_off[0]));
         const float r2 = fract(random_seq[RAND_DIM_LIGHT_V] + sample_off[1]);
@@ -4074,7 +4073,7 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
 
     const float w = 1.0f - inter.u - inter.v;
     surf.N = normalize(make_fvec3(v1.n) * w + make_fvec3(v2.n) * inter.u + make_fvec3(v3.n) * inter.v);
-    surf.uvs = simd_fvec2(v1.t[0]) * w + simd_fvec2(v2.t[0]) * inter.u + simd_fvec2(v3.t[0]) * inter.v;
+    surf.uvs = simd_fvec2(v1.t) * w + simd_fvec2(v2.t) * inter.u + simd_fvec2(v3.t) * inter.v;
 
     surf.plane_N = cross(simd_fvec4{v2.p} - simd_fvec4{v1.p}, simd_fvec4{v3.p} - simd_fvec4{v1.p});
     const float pa = length(surf.plane_N);
@@ -4106,8 +4105,7 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
     surf.B = safe_normalize(surf.B);
     surf.T = safe_normalize(surf.T);
 
-    const float ta = std::abs((v2.t[0][0] - v1.t[0][0]) * (v3.t[0][1] - v1.t[0][1]) -
-                              (v3.t[0][0] - v1.t[0][0]) * (v2.t[0][1] - v1.t[0][1]));
+    const float ta = std::abs((v2.t[0] - v1.t[0]) * (v3.t[1] - v1.t[1]) - (v3.t[0] - v1.t[0]) * (v2.t[1] - v1.t[1]));
 
     const float cone_width = ray.cone_width + ray.cone_spread * inter.t;
 
