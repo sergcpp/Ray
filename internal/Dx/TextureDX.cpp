@@ -564,7 +564,7 @@ void Ray::Dx::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, void *_cmd_
 
     int mip_count = params.mip_count;
     if (!mip_count) {
-        mip_count = CalcMipCount(p.w, p.h, 1, p.sampling.filter);
+        mip_count = CalcMipCount(p.w, p.h, 4, p.sampling.filter);
     }
 
     { // create image
@@ -592,6 +592,7 @@ void Ray::Dx::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, void *_cmd_
         }
 
         const UINT64 aligned_offset = AlignTo(UINT64(alloc_.alloc_off), UINT64(alloc_info.Alignment));
+        assert(aligned_offset + alloc_info.SizeInBytes < alloc_.owner->heap(alloc_.block_ndx)->GetDesc().SizeInBytes);
 
         HRESULT hr =
             ctx_->device()->CreatePlacedResource(alloc_.owner->heap(alloc_.block_ndx), aligned_offset, &image_desc,
@@ -1944,11 +1945,16 @@ void Ray::Dx::Texture2D::SetSubImage(const int level, const int offsetx, const i
     src_loc.PlacedFootprint.Footprint.Height = sizey;
     src_loc.PlacedFootprint.Footprint.Depth = 1;
     src_loc.PlacedFootprint.Footprint.Format = g_dx_formats[int(params.format)];
+    if (bool(params.flags & eTexFlagBits::SRGB)) {
+        src_loc.PlacedFootprint.Footprint.Format = ToSRGBFormat(src_loc.PlacedFootprint.Footprint.Format);
+    }
     if (IsCompressedFormat(params.format)) {
         src_loc.PlacedFootprint.Footprint.RowPitch =
-            round_up(GetBlockCount(sizex, 1, params.block) * GetBlockLenBytes(params.format, params.block), 256);
+            round_up(GetBlockCount(sizex, 1, params.block) * GetBlockLenBytes(params.format, params.block),
+                     TextureDataPitchAlignment);
     } else {
-        src_loc.PlacedFootprint.Footprint.RowPitch = round_up(sizex * GetPerPixelDataLen(params.format), 256);
+        src_loc.PlacedFootprint.Footprint.RowPitch =
+            round_up(sizex * GetPerPixelDataLen(params.format), TextureDataPitchAlignment);
     }
 
     D3D12_TEXTURE_COPY_LOCATION dst_loc = {};
@@ -2072,10 +2078,10 @@ void Ray::Dx::CopyImageToBuffer(const Texture2D &src_tex, const int level, const
         dst_loc.PlacedFootprint.Footprint.RowPitch =
             round_up(GetBlockCount(src_tex.params.w, 1, src_tex.params.block) *
                          GetBlockLenBytes(src_tex.params.format, src_tex.params.block),
-                     256);
+                     TextureDataPitchAlignment);
     } else {
         dst_loc.PlacedFootprint.Footprint.RowPitch =
-            round_up(src_tex.params.w * GetPerPixelDataLen(src_tex.params.format), 256);
+            round_up(src_tex.params.w * GetPerPixelDataLen(src_tex.params.format), TextureDataPitchAlignment);
     }
 
     D3D12_BOX src_region = {};
@@ -2344,13 +2350,13 @@ void Ray::Dx::Texture3D::Init(const Tex3DParams &p, MemoryAllocators *mem_allocs
 
 void Ray::Dx::Texture3D::Free() {
     if (params.format != eTexFormat::Undefined && !bool(params.flags & eTexFlagBits::NoOwnership)) {
-        //for (VkImageView view : handle_.views) {
-        //    if (view) {
-        //        ctx_->image_views_to_destroy[ctx_->backend_frame].push_back(view);
-        //    }
-        //}
+        // for (VkImageView view : handle_.views) {
+        //     if (view) {
+        //         ctx_->image_views_to_destroy[ctx_->backend_frame].push_back(view);
+        //     }
+        // }
         ctx_->resources_to_destroy[ctx_->backend_frame].push_back(handle_.img);
-        //ctx_->samplers_to_destroy[ctx_->backend_frame].push_back(handle_.sampler);
+        // ctx_->samplers_to_destroy[ctx_->backend_frame].push_back(handle_.sampler);
         ctx_->allocs_to_free[ctx_->backend_frame].emplace_back(std::move(alloc_));
 
         handle_ = {};
@@ -2407,7 +2413,8 @@ void Ray::Dx::Texture3D::SetSubImage(int offsetx, int offsety, int offsetz, int 
     if (IsCompressedFormat(params.format)) {
         assert(false);
     } else {
-        src_loc.PlacedFootprint.Footprint.RowPitch = round_up(sizex * GetPerPixelDataLen(params.format), 256);
+        src_loc.PlacedFootprint.Footprint.RowPitch =
+            round_up(sizex * GetPerPixelDataLen(params.format), TextureDataPitchAlignment);
     }
 
     D3D12_TEXTURE_COPY_LOCATION dst_loc = {};

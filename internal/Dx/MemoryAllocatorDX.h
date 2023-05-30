@@ -98,7 +98,7 @@ class MemoryAllocators {
         strcpy(name_, name);
     }
 
-    MemAllocation Allocate(uint32_t size, uint32_t alignment, D3D12_HEAP_TYPE heap_type, const char *tag) {
+    MemAllocation Allocate(const uint32_t size, const uint32_t alignment, D3D12_HEAP_TYPE heap_type, const char *tag) {
         int alloc_index = -1;
         for (int i = 0; i < int(allocators_.size()); ++i) {
             if (allocators_[i].heap_type() == heap_type) {
@@ -123,7 +123,7 @@ class MemoryAllocators {
 inline uint64_t AlignTo(const uint64_t size, const uint64_t alignment) {
     return alignment * ((size + alignment - 1) / alignment);
 }
-} // namespace Vk
+} // namespace Dx
 } // namespace Ray
 
 #ifdef _MSC_VER

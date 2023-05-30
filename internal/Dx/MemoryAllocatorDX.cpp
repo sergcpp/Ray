@@ -43,6 +43,7 @@ bool Ray::Dx::MemoryAllocator::AllocateNewBlock(const uint32_t size) {
     MemBlock &new_block = blocks_.back();
 
     new_block.alloc = LinearAlloc{1024, size};
+    assert(new_block.alloc.size() == size);
 
     D3D12_HEAP_DESC heap_desc = {};
     heap_desc.SizeInBytes = size;
@@ -57,7 +58,8 @@ bool Ray::Dx::MemoryAllocator::AllocateNewBlock(const uint32_t size) {
     return SUCCEEDED(hr);
 }
 
-Ray::Dx::MemAllocation Ray::Dx::MemoryAllocator::Allocate(const uint32_t size, const uint32_t alignment, const char *tag) {
+Ray::Dx::MemAllocation Ray::Dx::MemoryAllocator::Allocate(const uint32_t size, const uint32_t alignment,
+                                                          const char *tag) {
     while (true) {
         for (uint32_t i = 0; i < uint32_t(blocks_.size()); ++i) {
             if (size > blocks_[i].alloc.size()) {

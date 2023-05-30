@@ -216,7 +216,7 @@ Ray::TextureHandle Ray::Dx::Scene::AddBindlessTexture_nolock(const tex_desc_t &_
     eTexFormat src_fmt = eTexFormat::Undefined, fmt = eTexFormat::Undefined;
     eTexBlock block = eTexBlock::_None;
 
-    Buffer temp_stage_buf("Temp stage buf", ctx_, eBufType::Upload, 2 * _t.w * _t.h * 4,
+    Buffer temp_stage_buf("Temp stage buf", ctx_, eBufType::Upload, 3 * _t.w * _t.h * 4,
                           4096); // allocate for worst case
     uint8_t *stage_data = temp_stage_buf.Map();
 
@@ -238,8 +238,15 @@ Ray::TextureHandle Ray::Dx::Scene::AddBindlessTexture_nolock(const tex_desc_t &_
     if (_t.format == eTextureFormat::RGBA8888) {
         if (!_t.is_normalmap) {
             src_fmt = fmt = eTexFormat::RawRGBA8888;
-            data_size[0] = _t.w * _t.h * 4;
-            memcpy(stage_data, _t.data, data_size[0]);
+            data_size[0] = round_up(_t.w * 4, TextureDataPitchAlignment) * _t.h;
+
+            const auto *rgba_data = reinterpret_cast<const color_rgba8_t *>(_t.data);
+
+            int j = 0;
+            for (int y = 0; y < _t.h; ++y) {
+                memcpy(&stage_data[j], &rgba_data[y * _t.w], _t.w * 4);
+                j += round_up(_t.w * 4, TextureDataPitchAlignment);
+            }
         } else {
             // TODO: get rid of this allocation
             repacked_data.reset(new uint8_t[2 * _t.w * _t.h]);
@@ -260,8 +267,13 @@ Ray::TextureHandle Ray::Dx::Scene::AddBindlessTexture_nolock(const tex_desc_t &_
                                      GetRequiredMemory_BC5(_t.w, 1, TextureDataPitchAlignment));
             } else {
                 src_fmt = fmt = eTexFormat::RawRG88;
-                data_size[0] = _t.w * _t.h * 2;
-                memcpy(stage_data, _t.data, data_size[0]);
+                data_size[0] = round_up(_t.w * 2, TextureDataPitchAlignment) * _t.h;
+
+                int j = 0;
+                for (int y = 0; y < _t.h; ++y) {
+                    memcpy(&stage_data[j], &repacked_data[y * _t.w * 2], _t.w * 2);
+                    j += round_up(_t.w * 2, TextureDataPitchAlignment);
+                }
             }
         }
     } else if (_t.format == eTextureFormat::RGB888) {
@@ -277,12 +289,19 @@ Ray::TextureHandle Ray::Dx::Scene::AddBindlessTexture_nolock(const tex_desc_t &_
                                                        GetRequiredMemory_BC3(_t.w, 1, TextureDataPitchAlignment));
             } else if (ctx_->rgb8_unorm_is_supported()) {
                 src_fmt = fmt = eTexFormat::RawRGB888;
-                data_size[0] = _t.w * _t.h * 3;
-                memcpy(stage_data, _t.data, data_size[0]);
+                data_size[0] = round_up(_t.w * 3, TextureDataPitchAlignment) * _t.h;
+
+                const auto *rgb_data = reinterpret_cast<const color_rgb8_t *>(_t.data);
+
+                int j = 0;
+                for (int y = 0; y < _t.h; ++y) {
+                    memcpy(&stage_data[j], &rgb_data[y * _t.w], _t.w * 3);
+                    j += round_up(_t.w * 3, TextureDataPitchAlignment);
+                }
             } else {
                 // Fallback to 4-component texture
                 src_fmt = fmt = eTexFormat::RawRGBA8888;
-                data_size[0] = _t.w * _t.h * 4;
+                data_size[0] = round_up(_t.w * 4, TextureDataPitchAlignment) * _t.h;
 
                 // TODO: get rid of this allocation
                 repacked_data.reset(new uint8_t[4 * _t.w * _t.h]);
@@ -322,7 +341,7 @@ Ray::TextureHandle Ray::Dx::Scene::AddBindlessTexture_nolock(const tex_desc_t &_
                                      GetRequiredMemory_BC5(_t.w, 1, TextureDataPitchAlignment));
             } else {
                 src_fmt = fmt = eTexFormat::RawRG88;
-                data_size[0] = _t.w * _t.h * 2;
+                data_size[0] = round_up(_t.w * 2, TextureDataPitchAlignment) * _t.h;
 
                 int j = 0;
                 for (int y = 0; y < _t.h; ++y) {
@@ -333,13 +352,13 @@ Ray::TextureHandle Ray::Dx::Scene::AddBindlessTexture_nolock(const tex_desc_t &_
         }
     } else if (_t.format == eTextureFormat::RG88) {
         src_fmt = fmt = eTexFormat::RawRG88;
-        data_size[0] = _t.w * _t.h * 2;
+        data_size[0] = round_up(_t.w * 2, TextureDataPitchAlignment) * _t.h;
 
         const auto *rg_data = reinterpret_cast<const color_rg8_t *>(_t.data);
 
         int j = 0;
         for (int y = 0; y < _t.h; ++y) {
-            memcpy(&stage_data[j], &rg_data[y * _t.w * 2], _t.w * 2);
+            memcpy(&stage_data[j], &rg_data[y * _t.w], _t.w * 2);
             j += round_up(_t.w * 2, TextureDataPitchAlignment);
         }
     } else if (_t.format == eTextureFormat::R8) {
@@ -352,7 +371,7 @@ Ray::TextureHandle Ray::Dx::Scene::AddBindlessTexture_nolock(const tex_desc_t &_
                                  GetRequiredMemory_BC4(_t.w, 1, TextureDataPitchAlignment));
         } else {
             src_fmt = fmt = eTexFormat::RawR8;
-            data_size[0] = _t.w * _t.h;
+            data_size[0] = round_up(_t.w, TextureDataPitchAlignment) * _t.h;
 
             const auto *r_data = reinterpret_cast<const color_r8_t *>(_t.data);
 
