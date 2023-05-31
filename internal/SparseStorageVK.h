@@ -83,6 +83,7 @@ template <typename T> class SparseStorage {
 
         T *el = cpu_buf_.mapped_ptr<T>() + cpu_index;
         new (el) T(std::forward<Args>(args)...);
+        cpu_buf_.FlushMappedRange(cpu_index * sizeof(T), sizeof(T), true /* align size */);
 
         VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
         gpu_buf_.UpdateSubRegion(gpu_index * sizeof(T), sizeof(T), cpu_buf_, cpu_index * sizeof(T), cmd_buf);
