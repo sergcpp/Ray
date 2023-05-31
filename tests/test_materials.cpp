@@ -651,7 +651,7 @@ void test_aniso_mat6(const char *arch_list[], const char *preferred_device) {
 }
 
 void test_aniso_mat7(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 951;
+    const int SampleCount = 952;
     const int PixThres = 100;
 
     Ray::principled_mat_desc_t spec_mat_desc;
