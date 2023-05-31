@@ -8,6 +8,7 @@
 #define COUNT_OF(x) ((sizeof(x) / sizeof(0 [x])) / ((size_t)(!(sizeof(x) % sizeof(0 [x])))))
 
 struct ID3D12Device;
+struct ID3D12Device5;
 struct ID3D12CommandQueue;
 struct ID3D12CommandAllocator;
 struct ID3D12GraphicsCommandList;
@@ -42,6 +43,7 @@ class Context {
     unsigned long debug_callback_cookie_ = {};
 #endif
     ID3D12Device *device_ = {};
+    ID3D12Device5 *device5_ = {};
     std::string device_name_;
 
     bool raytracing_supported_ = false, ray_query_supported_ = false;
@@ -83,6 +85,7 @@ class Context {
     void Destroy();
 
     ID3D12Device *device() const { return device_; }
+    ID3D12Device5 *device5() const { return device5_; }
     const std::string &device_name() const { return device_name_; }
 
     ILog *log() const { return log_; }

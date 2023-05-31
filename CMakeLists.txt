@@ -240,7 +240,9 @@ set(VK_SOURCE_FILES internal/Vk/AccStructureVK.h
                     third-party/SPIRV-Reflect/spirv_reflect.c)
 
 if(WIN32)
-    set(DX_SOURCE_FILES internal/Dx/BufferDX.h
+    set(DX_SOURCE_FILES internal/Dx/AccStructureDX.h
+                        internal/Dx/AccStructureDX.cpp
+                        internal/Dx/BufferDX.h
                         internal/Dx/BufferDX.cpp
                         internal/Dx/ContextDX.h
                         internal/Dx/ContextDX.cpp

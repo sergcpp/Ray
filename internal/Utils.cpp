@@ -149,6 +149,17 @@ const uint8_t _blank_ASTC_block_4x4[] = {0xFC, 0xFD, 0xFF, 0xFF, 0xFF, 0xFF, 0xF
 const int _blank_ASTC_block_4x4_len = sizeof(_blank_ASTC_block_4x4);
 
 int round_up(int v, int align) { return align * ((v + align - 1) / align); }
+
+uint32_t next_power_of_two(uint32_t v) {
+    v--;
+    v |= v >> 1;
+    v |= v >> 2;
+    v |= v >> 4;
+    v |= v >> 8;
+    v |= v >> 16;
+    v++;
+    return v;
+}
 } // namespace Ray
 
 void Ray::RGBMDecode(const uint8_t rgbm[4], float out_rgb[3]) {

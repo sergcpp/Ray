@@ -52,21 +52,21 @@ extern const uint32_t *transform_luts[];
 
 int round_up(int v, int align);
 namespace Dx {
-// #include "shaders/output/debug_rt.comp.cso.inl"
+#include "shaders/output/debug_rt.comp.cso.inl"
 #include "shaders/output/filter_variance.comp.cso.inl"
 #include "shaders/output/intersect_area_lights.comp.cso.inl"
 // #include "shaders/output/intersect_scene.rchit.cso.inl"
 // #include "shaders/output/intersect_scene.rgen.cso.inl"
 // #include "shaders/output/intersect_scene.rmiss.cso.inl"
-// #include "shaders/output/intersect_scene_hwrt_atlas.comp.cso.inl"
-// #include "shaders/output/intersect_scene_hwrt_bindless.comp.cso.inl"
+#include "shaders/output/intersect_scene_hwrt_atlas.comp.cso.inl"
+#include "shaders/output/intersect_scene_hwrt_bindless.comp.cso.inl"
 // #include "shaders/output/intersect_scene_indirect.rgen.cso.inl"
-// #include "shaders/output/intersect_scene_indirect_hwrt_atlas.comp.cso.inl"
-// #include "shaders/output/intersect_scene_indirect_hwrt_bindless.comp.cso.inl"
+#include "shaders/output/intersect_scene_indirect_hwrt_atlas.comp.cso.inl"
+#include "shaders/output/intersect_scene_indirect_hwrt_bindless.comp.cso.inl"
 #include "shaders/output/intersect_scene_indirect_swrt_atlas.comp.cso.inl"
 #include "shaders/output/intersect_scene_indirect_swrt_bindless.comp.cso.inl"
-// #include "shaders/output/intersect_scene_shadow_hwrt_atlas.comp.cso.inl"
-// #include "shaders/output/intersect_scene_shadow_hwrt_bindless.comp.cso.inl"
+#include "shaders/output/intersect_scene_shadow_hwrt_atlas.comp.cso.inl"
+#include "shaders/output/intersect_scene_shadow_hwrt_bindless.comp.cso.inl"
 #include "shaders/output/intersect_scene_shadow_swrt_atlas.comp.cso.inl"
 #include "shaders/output/intersect_scene_shadow_swrt_bindless.comp.cso.inl"
 #include "shaders/output/intersect_scene_swrt_atlas.comp.cso.inl"
@@ -130,15 +130,15 @@ Ray::Dx::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
                                         eShaderType::Comp,
                                         log};
     if (use_hwrt_) {
-        // sh_intersect_scene_ =
-        //     Shader{"Intersect Scene (Primary) (HWRT)",
-        //            ctx_.get(),
-        //            use_bindless_ ? internal_shaders_output_intersect_scene_hwrt_bindless_comp_spv
-        //                          : internal_shaders_output_intersect_scene_hwrt_atlas_comp_spv,
-        //            use_bindless_ ? int(internal_shaders_output_intersect_scene_hwrt_bindless_comp_spv_size)
-        //                          : int(internal_shaders_output_intersect_scene_hwrt_atlas_comp_spv_size),
-        //            eShaderType::Comp,
-        //            log};
+        sh_intersect_scene_ =
+            Shader{"Intersect Scene (Primary) (HWRT)",
+                   ctx_.get(),
+                   use_bindless_ ? internal_shaders_output_intersect_scene_hwrt_bindless_comp_cso
+                                 : internal_shaders_output_intersect_scene_hwrt_atlas_comp_cso,
+                   use_bindless_ ? int(internal_shaders_output_intersect_scene_hwrt_bindless_comp_cso_size)
+                                 : int(internal_shaders_output_intersect_scene_hwrt_atlas_comp_cso_size),
+                   eShaderType::Comp,
+                   log};
     } else {
         sh_intersect_scene_ =
             Shader{"Intersect Scene (Primary) (SWRT)",
@@ -152,15 +152,15 @@ Ray::Dx::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
     }
 
     if (use_hwrt_) {
-        // sh_intersect_scene_indirect_ =
-        //     Shader{"Intersect Scene (Secondary) (HWRT)",
-        //            ctx_.get(),
-        //            use_bindless_ ? internal_shaders_output_intersect_scene_indirect_hwrt_bindless_comp_spv
-        //                          : internal_shaders_output_intersect_scene_indirect_hwrt_atlas_comp_spv,
-        //            use_bindless_ ? int(internal_shaders_output_intersect_scene_indirect_hwrt_bindless_comp_spv_size)
-        //                          : int(internal_shaders_output_intersect_scene_indirect_hwrt_atlas_comp_spv_size),
-        //            eShaderType::Comp,
-        //            log};
+        sh_intersect_scene_indirect_ =
+            Shader{"Intersect Scene (Secondary) (HWRT)",
+                   ctx_.get(),
+                   use_bindless_ ? internal_shaders_output_intersect_scene_indirect_hwrt_bindless_comp_cso
+                                 : internal_shaders_output_intersect_scene_indirect_hwrt_atlas_comp_cso,
+                   use_bindless_ ? int(internal_shaders_output_intersect_scene_indirect_hwrt_bindless_comp_cso_size)
+                                 : int(internal_shaders_output_intersect_scene_indirect_hwrt_atlas_comp_cso_size),
+                   eShaderType::Comp,
+                   log};
     } else {
         sh_intersect_scene_indirect_ =
             Shader{"Intersect Scene (Secondary) (SWRT)",
@@ -221,15 +221,15 @@ Ray::Dx::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
                                  log};
 
     if (use_hwrt_) {
-        // sh_intersect_scene_shadow_ =
-        //     Shader{"Intersect Scene (Shadow) (HWRT)",
-        //            ctx_.get(),
-        //            use_bindless_ ? internal_shaders_output_intersect_scene_shadow_hwrt_bindless_comp_spv
-        //                          : internal_shaders_output_intersect_scene_shadow_hwrt_atlas_comp_spv,
-        //            use_bindless_ ? int(internal_shaders_output_intersect_scene_shadow_hwrt_bindless_comp_spv_size)
-        //                          : int(internal_shaders_output_intersect_scene_shadow_hwrt_atlas_comp_spv_size),
-        //            eShaderType::Comp,
-        //            log};
+        sh_intersect_scene_shadow_ =
+            Shader{"Intersect Scene (Shadow) (HWRT)",
+                   ctx_.get(),
+                   use_bindless_ ? internal_shaders_output_intersect_scene_shadow_hwrt_bindless_comp_cso
+                                 : internal_shaders_output_intersect_scene_shadow_hwrt_atlas_comp_cso,
+                   use_bindless_ ? int(internal_shaders_output_intersect_scene_shadow_hwrt_bindless_comp_cso_size)
+                                 : int(internal_shaders_output_intersect_scene_shadow_hwrt_atlas_comp_cso_size),
+                   eShaderType::Comp,
+                   log};
     } else {
         sh_intersect_scene_shadow_ =
             Shader{"Intersect Scene (Shadow) (SWRT)",
@@ -308,12 +308,12 @@ Ray::Dx::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
                                eShaderType::Comp,
                                log};
     if (use_hwrt_) {
-        // sh_debug_rt_ = Shader{"Debug RT",
-        //                       ctx_.get(),
-        //                       internal_shaders_output_debug_rt_comp_spv,
-        //                       internal_shaders_output_debug_rt_comp_spv_size,
-        //                       eShaderType::Comp,
-        //                       log};
+        sh_debug_rt_ = Shader{"Debug RT",
+                              ctx_.get(),
+                              internal_shaders_output_debug_rt_comp_cso,
+                              internal_shaders_output_debug_rt_comp_cso_size,
+                              eShaderType::Comp,
+                              log};
     }
 
     sh_sort_hash_rays_ = Shader{"Sort Hash Rays",
@@ -407,7 +407,9 @@ Ray::Dx::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
     prog_nlm_filter_b_ = Program{"NLM Filter B", ctx_.get(), &sh_nlm_filter_b_, log};
     prog_nlm_filter_n_ = Program{"NLM Filter N", ctx_.get(), &sh_nlm_filter_n_, log};
     prog_nlm_filter_bn_ = Program{"NLM Filter BN", ctx_.get(), &sh_nlm_filter_bn_, log};
-    // prog_debug_rt_ = Program{"Debug RT", ctx_.get(), &sh_debug_rt_, log};
+    if (use_hwrt_) {
+        prog_debug_rt_ = Program{"Debug RT", ctx_.get(), &sh_debug_rt_, log};
+    }
     prog_sort_hash_rays_ = Program{"Hash Rays", ctx_.get(), &sh_sort_hash_rays_, log};
     prog_sort_exclusive_scan_ = Program{"Exclusive Scan", ctx_.get(), &sh_sort_exclusive_scan_, log};
     prog_sort_inclusive_scan_ = Program{"Inclusive Scan", ctx_.get(), &sh_sort_inclusive_scan_, log};
@@ -454,7 +456,7 @@ Ray::Dx::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
         !pi_nlm_filter_b_.Init(ctx_.get(), &prog_nlm_filter_b_, log) ||
         !pi_nlm_filter_n_.Init(ctx_.get(), &prog_nlm_filter_n_, log) ||
         !pi_nlm_filter_bn_.Init(ctx_.get(), &prog_nlm_filter_bn_, log) ||
-        //(use_hwrt_ && !pi_debug_rt_.Init(ctx_.get(), &prog_debug_rt_, log)) ||
+        (use_hwrt_ && !pi_debug_rt_.Init(ctx_.get(), &prog_debug_rt_, log)) ||
         !pi_sort_hash_rays_.Init(ctx_.get(), &prog_sort_hash_rays_, log) ||
         !pi_sort_exclusive_scan_.Init(ctx_.get(), &prog_sort_exclusive_scan_, log) ||
         !pi_sort_inclusive_scan_.Init(ctx_.get(), &prog_sort_inclusive_scan_, log) ||
@@ -463,8 +465,8 @@ Ray::Dx::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
         !pi_sort_write_sorted_hashes_.Init(ctx_.get(), &prog_sort_write_sorted_hashes_, log) ||
         !pi_sort_reorder_rays_.Init(ctx_.get(), &prog_sort_reorder_rays_, log)
         //(use_hwrt_ && !pi_intersect_scene_rtpipe_.Init(ctx_.get(), &prog_intersect_scene_rtpipe_, log)) ||
-        //(use_hwrt_ && !pi_intersect_scene_indirect_rtpipe_.Init(ctx_.get(), &prog_intersect_scene_indirect_rtpipe_,
-        // log))
+        //(use_hwrt_ &&
+        //! pi_intersect_scene_indirect_rtpipe_.Init(ctx_.get(), &prog_intersect_scene_indirect_rtpipe_, log))
     ) {
         throw std::runtime_error("Error initializing pipeline!");
     }
@@ -796,14 +798,29 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         loaded_view_transform_ = cam.view_transform;
     }
 
-    const scene_data_t sc_data = {
-        &s->env_, s->mesh_instances_.gpu_buf(), s->mi_indices_.buf(), s->meshes_.gpu_buf(), s->transforms_.gpu_buf(),
-        s->vtx_indices_.buf(), s->vertices_.buf(), s->nodes_.buf(), s->tris_.buf(), s->tri_indices_.buf(),
-        s->tri_materials_.buf(), s->materials_.gpu_buf(), s->atlas_textures_.gpu_buf(), s->lights_.gpu_buf(),
-        s->li_indices_.buf(), int(s->li_indices_.size()), s->visible_lights_.buf(), int(s->visible_lights_.size()),
-        s->blocker_lights_.buf(), int(s->blocker_lights_.size()),
-        // s->rt_tlas_,
-        s->env_map_qtree_.tex, int(s->env_map_qtree_.mips.size())};
+    const scene_data_t sc_data = {&s->env_,
+                                  s->mesh_instances_.gpu_buf(),
+                                  s->mi_indices_.buf(),
+                                  s->meshes_.gpu_buf(),
+                                  s->transforms_.gpu_buf(),
+                                  s->vtx_indices_.buf(),
+                                  s->vertices_.buf(),
+                                  s->nodes_.buf(),
+                                  s->tris_.buf(),
+                                  s->tri_indices_.buf(),
+                                  s->tri_materials_.buf(),
+                                  s->materials_.gpu_buf(),
+                                  s->atlas_textures_.gpu_buf(),
+                                  s->lights_.gpu_buf(),
+                                  s->li_indices_.buf(),
+                                  int(s->li_indices_.size()),
+                                  s->visible_lights_.buf(),
+                                  int(s->visible_lights_.size()),
+                                  s->blocker_lights_.buf(),
+                                  int(s->blocker_lights_.size()),
+                                  s->rt_tlas_,
+                                  s->env_map_qtree_.tex,
+                                  int(s->env_map_qtree_.mips.size())};
 
 #if !RUN_IN_LOCKSTEP
     if (ctx_->in_flight_fence(ctx_->backend_frame)->GetCompletedValue() < ctx_->fence_values[ctx_->backend_frame]) {

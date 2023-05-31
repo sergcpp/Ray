@@ -598,9 +598,9 @@ void Ray::Dx::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, void *_cmd_
 #endif
     }
 
-    const UINT cbv_srv_uav_incr =
+    const UINT CBV_SRV_UAV_INCR =
         ctx_->device()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-    const UINT sampler_incr = ctx_->device()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
+    const UINT SAMPLER_INCR = ctx_->device()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
 
     const bool requires_uav = int(p.usage & eTexUsageBits::Storage) != 0;
 
@@ -624,7 +624,7 @@ void Ray::Dx::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, void *_cmd_
         }
 
         D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = handle_.views_ref.heap->GetCPUDescriptorHandleForHeapStart();
-        dest_handle.ptr += cbv_srv_uav_incr * handle_.views_ref.offset;
+        dest_handle.ptr += CBV_SRV_UAV_INCR * handle_.views_ref.offset;
         ctx_->device()->CreateShaderResourceView(handle_.img, &srv_desc, dest_handle);
     }
     if (requires_uav) {
@@ -635,7 +635,7 @@ void Ray::Dx::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, void *_cmd_
         uav_desc.Texture2D.MipSlice = 0;
 
         D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = handle_.views_ref.heap->GetCPUDescriptorHandleForHeapStart();
-        dest_handle.ptr += cbv_srv_uav_incr * (handle_.views_ref.offset + 1);
+        dest_handle.ptr += CBV_SRV_UAV_INCR * (handle_.views_ref.offset + 1);
         ctx_->device()->CreateUnorderedAccessView(handle_.img, nullptr, &uav_desc, dest_handle);
     }
 
@@ -759,7 +759,7 @@ void Ray::Dx::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, void *_cmd_
 
         D3D12_CPU_DESCRIPTOR_HANDLE sampler_dest_handle =
             handle_.sampler_ref.heap->GetCPUDescriptorHandleForHeapStart();
-        sampler_dest_handle.ptr += sampler_incr * handle_.sampler_ref.offset;
+        sampler_dest_handle.ptr += SAMPLER_INCR * handle_.sampler_ref.offset;
         ctx_->device()->CreateSampler(&sampler_desc, sampler_dest_handle);
     }
 }
@@ -2290,9 +2290,9 @@ void Ray::Dx::Texture3D::Init(const Tex3DParams &p, MemoryAllocators *mem_allocs
 
     this->resource_state = eResState::Undefined;
 
-    const UINT cbv_srv_uav_incr =
+    const UINT CBV_SRV_UAV_INCR =
         ctx_->device()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-    const UINT sampler_incr = ctx_->device()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
+    const UINT SAMPLER_INCR = ctx_->device()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
 
     handle_.views_ref = ctx_->staging_descr_alloc()->Alloc(eDescrType::CBV_SRV_UAV, 1);
     handle_.sampler_ref = ctx_->staging_descr_alloc()->Alloc(eDescrType::Sampler, 1);
@@ -2312,7 +2312,7 @@ void Ray::Dx::Texture3D::Init(const Tex3DParams &p, MemoryAllocators *mem_allocs
         }
 
         D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = handle_.views_ref.heap->GetCPUDescriptorHandleForHeapStart();
-        dest_handle.ptr += cbv_srv_uav_incr * handle_.views_ref.offset;
+        dest_handle.ptr += CBV_SRV_UAV_INCR * handle_.views_ref.offset;
         ctx_->device()->CreateShaderResourceView(handle_.img, &srv_desc, dest_handle);
     }
 
@@ -2331,7 +2331,7 @@ void Ray::Dx::Texture3D::Init(const Tex3DParams &p, MemoryAllocators *mem_allocs
         }
 
         D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = handle_.sampler_ref.heap->GetCPUDescriptorHandleForHeapStart();
-        dest_handle.ptr += sampler_incr * handle_.sampler_ref.offset;
+        dest_handle.ptr += SAMPLER_INCR * handle_.sampler_ref.offset;
         ctx_->device()->CreateSampler(&sampler_desc, dest_handle);
     }
 }

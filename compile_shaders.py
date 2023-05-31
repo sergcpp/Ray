@@ -44,7 +44,7 @@ def bin2header(data, file_name):
     ret += "\n};\n"
     return ret
 
-def compile_shader(src_name, spv_name=None, glsl_version=None, target_env="spirv1.3", defines="", compile_hlsl=True):
+def compile_shader(src_name, spv_name=None, glsl_version=None, target_env="spirv1.3", defines="", hlsl_profile="cs_6_0"):
     if  spv_name == None:
         spv_name = src_name[0:-4] + "spv"
 
@@ -63,9 +63,9 @@ def compile_shader(src_name, spv_name=None, glsl_version=None, target_env="spirv
             spirv_opt_result = subprocess.run(os.path.join(spirv_base_path(), "spirv-opt.bat internal/shaders/output/" + spv_name + " -o internal/shaders/output/" + spv_name), shell=True, capture_output=True, text=True, check=False)
         else:
             spirv_opt_result = subprocess.run(os.path.join(spirv_base_path(), "spirv-opt.sh internal/shaders/output/" + spv_name + " -o internal/shaders/output/" + spv_name), shell=True, capture_output=True, text=True, check=False)
-    if ENABLE_DXC_COMPILATION == True and compile_hlsl:
+    if ENABLE_DXC_COMPILATION == True and hlsl_profile != None:
         spirv_cross_result = subprocess.run(os.path.join(spirv_base_path(), "spirv-cross internal/shaders/output/" + spv_name + " --hlsl --shader-model 60 --output internal/shaders/output/" + hlsl_name), shell=True, capture_output=True, text=True, check=False)
-        dxc_result = subprocess.run(os.path.join(dxc_base_path(), "dxc -T cs_6_0 internal/shaders/output/" + hlsl_name + " -Fo internal/shaders/output/" + cso_name), shell=True, capture_output=True, text=True, check=False)
+        dxc_result = subprocess.run(os.path.join(dxc_base_path(), "dxc -T " + hlsl_profile + " internal/shaders/output/" + hlsl_name + " -Fo internal/shaders/output/" + cso_name), shell=True, capture_output=True, text=True, check=False)
 
         if dxc_result.returncode == 0:
             app_refl_result = subprocess.run(os.path.join(dxc_base_path(), "append_refl_data internal/shaders/output/", cso_name), shell=True, capture_output=True, text=True, check=False)
@@ -95,11 +95,11 @@ def compile_shader(src_name, spv_name=None, glsl_version=None, target_env="spirv
     finally:
         mutex.release()
 
-def compile_shader_async(src_name, spv_name=None, glsl_version=None, target_env="spirv1.3", defines = "", compile_hlsl=True):
+def compile_shader_async(src_name, spv_name=None, glsl_version=None, target_env="spirv1.3", defines = "", hlsl_profile="cs_6_0"):
     if ENABLE_MULTIPLE_THREADS == True:
-        threading.Thread(target=compile_shader, args=(src_name, spv_name, glsl_version, target_env, defines, compile_hlsl,)).start()
+        threading.Thread(target=compile_shader, args=(src_name, spv_name, glsl_version, target_env, defines, hlsl_profile,)).start()
     else:
-        compile_shader(src_name, spv_name, glsl_version, target_env, defines, compile_hlsl)
+        compile_shader(src_name, spv_name, glsl_version, target_env, defines, hlsl_profile)
 
 def main():
     for item in os.listdir("internal/shaders/output"):
@@ -113,17 +113,17 @@ def main():
     # Scene intersection (main, inline RT)
     compile_shader_async(src_name="intersect_scene.comp.glsl", spv_name="intersect_scene_swrt_atlas.comp.spv", defines="-DINDIRECT=0 -DHWRT=0 -DBINDLESS=0")
     compile_shader_async(src_name="intersect_scene.comp.glsl", spv_name="intersect_scene_swrt_bindless.comp.spv", defines="-DINDIRECT=0 -DHWRT=0 -DBINDLESS=1")
-    compile_shader_async(src_name="intersect_scene.comp.glsl", spv_name="intersect_scene_hwrt_atlas.comp.spv", glsl_version="460", target_env="spirv1.4", defines="-DINDIRECT=0 -DHWRT=1 -DBINDLESS=0", compile_hlsl=False)
-    compile_shader_async(src_name="intersect_scene.comp.glsl", spv_name="intersect_scene_hwrt_bindless.comp.spv", glsl_version="460", target_env="spirv1.4", defines="-DINDIRECT=0 -DHWRT=1 -DBINDLESS=1", compile_hlsl=False)
+    compile_shader_async(src_name="intersect_scene.comp.glsl", spv_name="intersect_scene_hwrt_atlas.comp.spv", glsl_version="460", target_env="spirv1.4", defines="-DINDIRECT=0 -DHWRT=1 -DBINDLESS=0", hlsl_profile="cs_6_5")
+    compile_shader_async(src_name="intersect_scene.comp.glsl", spv_name="intersect_scene_hwrt_bindless.comp.spv", glsl_version="460", target_env="spirv1.4", defines="-DINDIRECT=0 -DHWRT=1 -DBINDLESS=1", hlsl_profile="cs_6_5")
     compile_shader_async(src_name="intersect_scene.comp.glsl", spv_name="intersect_scene_indirect_swrt_atlas.comp.spv", defines="-DINDIRECT=1 -DHWRT=0 -DBINDLESS=0")
     compile_shader_async(src_name="intersect_scene.comp.glsl", spv_name="intersect_scene_indirect_swrt_bindless.comp.spv", defines="-DINDIRECT=1 -DHWRT=0 -DBINDLESS=1")
-    compile_shader_async(src_name="intersect_scene.comp.glsl", spv_name="intersect_scene_indirect_hwrt_atlas.comp.spv", glsl_version="460", target_env="spirv1.4", defines="-DINDIRECT=1 -DHWRT=1 -DBINDLESS=0", compile_hlsl=False)
-    compile_shader_async(src_name="intersect_scene.comp.glsl", spv_name="intersect_scene_indirect_hwrt_bindless.comp.spv", glsl_version="460", target_env="spirv1.4", defines="-DINDIRECT=1 -DHWRT=1 -DBINDLESS=1", compile_hlsl=False)
+    compile_shader_async(src_name="intersect_scene.comp.glsl", spv_name="intersect_scene_indirect_hwrt_atlas.comp.spv", glsl_version="460", target_env="spirv1.4", defines="-DINDIRECT=1 -DHWRT=1 -DBINDLESS=0", hlsl_profile="cs_6_5")
+    compile_shader_async(src_name="intersect_scene.comp.glsl", spv_name="intersect_scene_indirect_hwrt_bindless.comp.spv", glsl_version="460", target_env="spirv1.4", defines="-DINDIRECT=1 -DHWRT=1 -DBINDLESS=1", hlsl_profile="cs_6_5")
     # Scene intersection (main, pipeline RT)
-    compile_shader_async(src_name="intersect_scene.rgen.glsl", spv_name="intersect_scene.rgen.spv", glsl_version="460", target_env="spirv1.4", defines="-DINDIRECT=0 -DBINDLESS=1", compile_hlsl=False)
-    compile_shader_async(src_name="intersect_scene.rgen.glsl", spv_name="intersect_scene_indirect.rgen.spv", glsl_version="460", target_env="spirv1.4", defines="-DINDIRECT=1 -DBINDLESS=1", compile_hlsl=False)
-    compile_shader_async(src_name="intersect_scene.rchit.glsl", spv_name="intersect_scene.rchit.spv", glsl_version="460", target_env="spirv1.4", compile_hlsl=False)
-    compile_shader_async(src_name="intersect_scene.rmiss.glsl", spv_name="intersect_scene.rmiss.spv", glsl_version="460", target_env="spirv1.4", compile_hlsl=False)
+    compile_shader_async(src_name="intersect_scene.rgen.glsl", spv_name="intersect_scene.rgen.spv", glsl_version="460", target_env="spirv1.4", defines="-DINDIRECT=0 -DBINDLESS=1", hlsl_profile=None)
+    compile_shader_async(src_name="intersect_scene.rgen.glsl", spv_name="intersect_scene_indirect.rgen.spv", glsl_version="460", target_env="spirv1.4", defines="-DINDIRECT=1 -DBINDLESS=1", hlsl_profile=None)
+    compile_shader_async(src_name="intersect_scene.rchit.glsl", spv_name="intersect_scene.rchit.spv", glsl_version="460", target_env="spirv1.4", hlsl_profile=None)
+    compile_shader_async(src_name="intersect_scene.rmiss.glsl", spv_name="intersect_scene.rmiss.spv", glsl_version="460", target_env="spirv1.4", hlsl_profile=None)
 
     # Lights intersection
     compile_shader_async(src_name="intersect_area_lights.comp.glsl", defines="-DPRIMARY=0")
@@ -143,8 +143,8 @@ def main():
     # Scene intersection (shadow)
     compile_shader_async(src_name="intersect_scene_shadow.comp.glsl", spv_name="intersect_scene_shadow_swrt_atlas.comp.spv", defines="-DHWRT=0 -DBINDLESS=0")
     compile_shader_async(src_name="intersect_scene_shadow.comp.glsl", spv_name="intersect_scene_shadow_swrt_bindless.comp.spv", defines="-DHWRT=0 -DBINDLESS=1")
-    compile_shader_async(src_name="intersect_scene_shadow.comp.glsl", spv_name="intersect_scene_shadow_hwrt_atlas.comp.spv", glsl_version="460", target_env="spirv1.4", defines="-DHWRT=1 -DBINDLESS=0", compile_hlsl=False)
-    compile_shader_async(src_name="intersect_scene_shadow.comp.glsl", spv_name="intersect_scene_shadow_hwrt_bindless.comp.spv", glsl_version="460", target_env="spirv1.4", defines="-DHWRT=1 -DBINDLESS=1", compile_hlsl=False)
+    compile_shader_async(src_name="intersect_scene_shadow.comp.glsl", spv_name="intersect_scene_shadow_hwrt_atlas.comp.spv", glsl_version="460", target_env="spirv1.4", defines="-DHWRT=1 -DBINDLESS=0", hlsl_profile="cs_6_5")
+    compile_shader_async(src_name="intersect_scene_shadow.comp.glsl", spv_name="intersect_scene_shadow_hwrt_bindless.comp.spv", glsl_version="460", target_env="spirv1.4", defines="-DHWRT=1 -DBINDLESS=1", hlsl_profile="cs_6_5")
 
     # Postprocess
     compile_shader_async(src_name="mix_incremental.comp.glsl", spv_name="mix_incremental.comp.spv", defines="-DOUTPUT_BASE_COLOR=0 -DOUTPUT_DEPTH_NORMALS=0")
@@ -171,7 +171,7 @@ def main():
 
     # Other
     compile_shader_async(src_name="prepare_indir_args.comp.glsl")
-    compile_shader_async(src_name="debug_rt.comp.glsl", target_env="spirv1.4", compile_hlsl=False)
+    compile_shader_async(src_name="debug_rt.comp.glsl", target_env="spirv1.4", hlsl_profile="cs_6_5")
 
 if __name__ == "__main__":
     main()

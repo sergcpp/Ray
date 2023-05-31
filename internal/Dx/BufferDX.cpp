@@ -30,6 +30,8 @@ eResState GetInitialDxResourceState(const eBufType type) {
         return eResState::CopySrc;
     } else if (type == eBufType::Readback) {
         return eResState::CopyDst;
+    } else if (type == eBufType::AccStructure) {
+        return eResState::BuildASWrite;
     }
     return eResState::Undefined;
 }
@@ -81,52 +83,34 @@ uint32_t Ray::Dx::Buffer::AllocSubRegion(const uint32_t req_size, const char *ta
     if (alloc_off != 0xffffffff) {
         if (init_buf) {
             assert(init_buf->type_ == eBufType::Upload || init_buf->type_ == eBufType::Readback);
-            // auto cmd_buf = reinterpret_cast<VkCommandBuffer>(_cmd_buf);
+            auto cmd_buf = reinterpret_cast<CommandBuffer>(_cmd_buf);
 
-            // VkPipelineStageFlags src_stages = 0, dst_stages = 0;
-            // SmallVector<VkBufferMemoryBarrier, 2> barriers;
+            SmallVector<D3D12_RESOURCE_BARRIER, 2> barriers;
 
-            /*if (init_buf->resource_state != eResState::Undefined && init_buf->resource_state != eResState::CopySrc) {
+            if (/*init_buf->resource_state != eResState::Undefined &&*/ init_buf->resource_state !=
+                eResState::CopySrc) {
                 auto &new_barrier = barriers.emplace_back();
-                new_barrier = {VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER};
-                new_barrier.srcAccessMask = VKAccessFlagsForState(init_buf->resource_state);
-                new_barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-                new_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-                new_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-                new_barrier.buffer = init_buf->vk_handle();
-                new_barrier.offset = VkDeviceSize{init_off};
-                new_barrier.size = VkDeviceSize{req_size};
-
-                src_stages |= VKPipelineStagesForState(init_buf->resource_state);
-                dst_stages |= VKPipelineStagesForState(eResState::CopySrc);
+                new_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+                new_barrier.Transition.pResource = init_buf->dx_resource();
+                new_barrier.Transition.StateBefore = DXResourceState(init_buf->resource_state);
+                new_barrier.Transition.StateAfter = DXResourceState(eResState::CopySrc);
+                new_barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
             }
 
-            if (this->resource_state != eResState::Undefined && this->resource_state != eResState::CopyDst) {
+            if (/*this->resource_state != eResState::Undefined &&*/ this->resource_state != eResState::CopyDst) {
                 auto &new_barrier = barriers.emplace_back();
-                new_barrier = {VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER};
-                new_barrier.srcAccessMask = VKAccessFlagsForState(this->resource_state);
-                new_barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-                new_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-                new_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-                new_barrier.buffer = handle_.buf;
-                new_barrier.offset = VkDeviceSize{alloc_off};
-                new_barrier.size = VkDeviceSize{req_size};
-
-                src_stages |= VKPipelineStagesForState(this->resource_state);
-                dst_stages |= VKPipelineStagesForState(eResState::CopyDst);
+                new_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+                new_barrier.Transition.pResource = this->dx_resource();
+                new_barrier.Transition.StateBefore = DXResourceState(this->resource_state);
+                new_barrier.Transition.StateAfter = DXResourceState(eResState::CopyDst);
+                new_barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
             }
 
             if (!barriers.empty()) {
-                vkCmdPipelineBarrier(cmd_buf, src_stages, dst_stages, 0, 0, nullptr, uint32_t(barriers.size()),
-                                     barriers.cdata(), 0, nullptr);
+                cmd_buf->ResourceBarrier(UINT(barriers.size()), barriers.data());
             }
 
-            VkBufferCopy region_to_copy = {};
-            region_to_copy.srcOffset = VkDeviceSize{init_off};
-            region_to_copy.dstOffset = VkDeviceSize{alloc_off};
-            region_to_copy.size = VkDeviceSize{req_size};
-
-            vkCmdCopyBuffer(cmd_buf, init_buf->handle_.buf, handle_.buf, 1, &region_to_copy);*/
+            cmd_buf->CopyBufferRegion(handle_.buf, alloc_off, init_buf->dx_resource(), init_off, req_size);
 
             init_buf->resource_state = eResState::CopySrc;
             this->resource_state = eResState::CopyDst;
@@ -219,7 +203,7 @@ void Ray::Dx::Buffer::Resize(const uint32_t new_size, const bool keep_content) {
     res_desc.SampleDesc.Count = 1;
     res_desc.SampleDesc.Quality = 0;
     res_desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-    if (type_ == eBufType::Storage || type_ == eBufType::Indirect) {
+    if (type_ == eBufType::Storage || type_ == eBufType::Indirect || type_ == eBufType::AccStructure) {
         res_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
     } else {
         res_desc.Flags = D3D12_RESOURCE_FLAG_NONE;
@@ -244,8 +228,7 @@ void Ray::Dx::Buffer::Resize(const uint32_t new_size, const bool keep_content) {
 
     const bool requires_uav = (type_ == eBufType::Storage || type_ == eBufType::Indirect);
 
-    const PoolRef new_srv_uav_ref =
-        ctx_->staging_descr_alloc()->Alloc(eDescrType::CBV_SRV_UAV, requires_uav ? 2 : 1);
+    const PoolRef new_srv_uav_ref = ctx_->staging_descr_alloc()->Alloc(eDescrType::CBV_SRV_UAV, requires_uav ? 2 : 1);
     { // Create default SRV
         D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
         srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;

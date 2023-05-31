@@ -108,7 +108,7 @@ void Ray::Dx::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const pass_
     }
 
     if (use_hwrt_) {
-        // bindings.emplace_back(eBindTarget::AccStruct, IntersectScene::TLAS_SLOT, sc_data.rt_tlas);
+        bindings.emplace_back(eBindTarget::AccStruct, IntersectScene::TLAS_SLOT, sc_data.rt_tlas);
     } else {
         bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::TRIS_BUF_SLOT, sc_data.tris);
         bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::TRI_INDICES_BUF_SLOT, sc_data.tri_indices);
@@ -216,7 +216,7 @@ void Ray::Dx::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const Buffe
     }
 
     if (use_hwrt_) {
-        // bindings.emplace_back(eBindTarget::AccStruct, IntersectScene::TLAS_SLOT, sc_data.rt_tlas);
+        bindings.emplace_back(eBindTarget::AccStruct, IntersectScene::TLAS_SLOT, sc_data.rt_tlas);
     } else {
         bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::TRIS_BUF_SLOT, sc_data.tris);
         bindings.emplace_back(eBindTarget::SBufRO, IntersectScene::TRI_INDICES_BUF_SLOT, sc_data.tri_indices);
@@ -506,7 +506,7 @@ void Ray::Dx::Renderer::kernel_IntersectSceneShadow(CommandBuffer cmd_buf, const
         {eBindTarget::Image, IntersectSceneShadow::INOUT_IMG_SLOT, out_img}};
 
     if (use_hwrt_) {
-        // bindings.emplace_back(eBindTarget::AccStruct, IntersectSceneShadow::TLAS_SLOT, sc_data.rt_tlas);
+        bindings.emplace_back(eBindTarget::AccStruct, IntersectSceneShadow::TLAS_SLOT, sc_data.rt_tlas);
     }
 
     if (use_bindless_) {

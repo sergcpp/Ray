@@ -9,7 +9,7 @@
 #include <d3d12.h>
 
 #include "../../Log.h"
-// #include "AccStructureVK.h"
+#include "AccStructureDX.h"
 #include "BufferDX.h"
 #include "ContextDX.h"
 #include "DescriptorPoolDX.h"
@@ -35,7 +35,7 @@ void Ray::Dx::PrepareDescriptors(Context *ctx, ID3D12GraphicsCommandList *cmd_bu
             descr_sizes.sampler_count += b.handle.count;
         } else if (b.trg == eBindTarget::Tex2D || b.trg == eBindTarget::Tex3D || b.trg == eBindTarget::Tex2DArray ||
                    b.trg == eBindTarget::UBuf || b.trg == eBindTarget::TBuf || b.trg == eBindTarget::SBufRO ||
-                   b.trg == eBindTarget::SBufRW || b.trg == eBindTarget::Image) {
+                   b.trg == eBindTarget::SBufRW || b.trg == eBindTarget::Image || b.trg == eBindTarget::AccStruct) {
             descr_sizes.cbv_srv_uav_count += b.handle.count;
         } else if (b.trg == eBindTarget::Sampler) {
             descr_sizes.sampler_count += b.handle.count;
@@ -89,7 +89,7 @@ void Ray::Dx::PrepareDescriptors(Context *ctx, ID3D12GraphicsCommandList *cmd_bu
 
     for (const auto &b : bindings) {
         const short descr_index = prog->descr_index(b.trg == eBindTarget::Sampler ? 1 : 0, b.loc);
-        if (descr_index == -1) {
+        if (descr_index == -1 && b.trg != eBindTarget::DescrTable) {
             continue;
         }
 
@@ -210,6 +210,15 @@ void Ray::Dx::PrepareDescriptors(Context *ctx, ID3D12GraphicsCommandList *cmd_bu
                 gpu_handle.ptr += SAMPLER_INCR * (descr_sizes.sampler_count - b.handle.descr_table->count);
                 cmd_buf->SetComputeRootDescriptorTable(b.loc, gpu_handle);
             }
+        } else if (b.trg == eBindTarget::AccStruct) {
+            D3D12_CPU_DESCRIPTOR_HANDLE src_handle =
+                b.handle.acc_struct->view_ref().heap->GetCPUDescriptorHandleForHeapStart();
+            src_handle.ptr += CBV_SRV_UAV_INCR * b.handle.acc_struct->view_ref().offset;
+
+            D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = cbv_srv_uav_cpu_handle;
+            dest_handle.ptr += CBV_SRV_UAV_INCR * descr_index;
+
+            device->CopyDescriptorsSimple(1, dest_handle, src_handle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
         }
     }
 

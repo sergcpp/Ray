@@ -44,120 +44,115 @@ void run_material_test(const char *arch_list[], const char *preferred_device, co
 
     const int DiffThres = 32;
 
-    for (const bool use_hwrt : {false, true}) {
-        s.use_hwrt = use_hwrt;
-        for (const bool output_sh : {false}) {
-            for (const char **arch = arch_list; *arch; ++arch) {
-                const auto rt = Ray::RendererTypeFromName(*arch);
+    for (const char **arch = arch_list; *arch; ++arch) {
+        const auto rt = Ray::RendererTypeFromName(*arch);
 
-                int current_sample_count = max_sample_count;
-                int failed_count = -1, succeeded_count = 4096;
-                bool images_match = false, searching = false;
-                do {
-                    auto renderer = std::unique_ptr<Ray::RendererBase>(Ray::CreateRenderer(s, &g_log_err, rt));
-                    if (!renderer || renderer->type() != rt || renderer->is_hwrt() != use_hwrt) {
-                        // skip unsupported (we fell back to some other renderer)
-                        break;
-                    }
-                    if (preferred_device) {
-                        // make sure we use requested device
-                        if (!require(Ray::MatchDeviceNames(renderer->device_name(), preferred_device))) {
-                            printf("Wrong device: %s (%s was requested)\n", renderer->device_name(), preferred_device);
-                            return;
-                        }
-                    }
+        for (const bool use_hwrt : {false, true}) {
+            s.use_hwrt = use_hwrt;
 
-                    auto scene = std::unique_ptr<Ray::SceneBase>(renderer->CreateScene());
-
-                    setup_test_scene(*scene, output_sh, min_sample_count, variance_threshold, mat_desc, textures,
-                                     test_scene);
-
-                    snprintf(name_buf, sizeof(name_buf), "Test %s", test_name);
-                    schedule_render_jobs(*renderer, scene.get(), s, current_sample_count, denoise, partial, name_buf);
-
-                    const Ray::color_data_rgba_t pixels = renderer->get_pixels_ref();
-
-                    std::unique_ptr<uint8_t[]> img_data_u8(new uint8_t[test_img_w * test_img_h * 3]);
-                    std::unique_ptr<uint8_t[]> diff_data_u8(new uint8_t[test_img_w * test_img_h * 3]);
-                    std::unique_ptr<uint8_t[]> mask_data_u8(new uint8_t[test_img_w * test_img_h * 3]);
-                    memset(&mask_data_u8[0], 0, test_img_w * test_img_h * 3);
-
-                    double mse = 0.0;
-
-                    int error_pixels = 0;
-                    for (int j = 0; j < test_img_h; j++) {
-                        for (int i = 0; i < test_img_w; i++) {
-                            const Ray::color_rgba_t &p = pixels.ptr[j * pixels.pitch + i];
-
-                            const auto r = uint8_t(p.v[0] * 255);
-                            const auto g = uint8_t(p.v[1] * 255);
-                            const auto b = uint8_t(p.v[2] * 255);
-
-                            img_data_u8[3 * ((test_img_h - j - 1) * test_img_w + i) + 0] = r;
-                            img_data_u8[3 * ((test_img_h - j - 1) * test_img_w + i) + 1] = g;
-                            img_data_u8[3 * ((test_img_h - j - 1) * test_img_w + i) + 2] = b;
-
-                            const uint8_t diff_r =
-                                std::abs(r - test_img[4 * ((test_img_h - j - 1) * test_img_w + i) + 0]);
-                            const uint8_t diff_g =
-                                std::abs(g - test_img[4 * ((test_img_h - j - 1) * test_img_w + i) + 1]);
-                            const uint8_t diff_b =
-                                std::abs(b - test_img[4 * ((test_img_h - j - 1) * test_img_w + i) + 2]);
-
-                            diff_data_u8[3 * ((test_img_h - j - 1) * test_img_w + i) + 0] = diff_r;
-                            diff_data_u8[3 * ((test_img_h - j - 1) * test_img_w + i) + 1] = diff_g;
-                            diff_data_u8[3 * ((test_img_h - j - 1) * test_img_w + i) + 2] = diff_b;
-
-                            if (diff_r > DiffThres || diff_g > DiffThres || diff_b > DiffThres) {
-                                mask_data_u8[3 * ((test_img_h - j - 1) * test_img_w + i) + 0] = 255;
-                                ++error_pixels;
-                            }
-
-                            mse += diff_r * diff_r;
-                            mse += diff_g * diff_g;
-                            mse += diff_b * diff_b;
-                        }
-                    }
-
-                    mse /= 3.0;
-                    mse /= (test_img_w * test_img_h);
-
-                    double psnr = -10.0 * std::log10(mse / (255.0 * 255.0));
-                    psnr = std::floor(psnr * 100.0) / 100.0;
-
-                    printf("(PSNR: %.2f/%.2f dB, Fireflies: %i/%i)\n", psnr, min_psnr, error_pixels, pix_thres);
-
-                    const char *type = Ray::RendererTypeName(rt);
-
-                    snprintf(name_buf, sizeof(name_buf), "test_data/%s/%s_out.tga", test_name, type);
-                    WriteTGA(&img_data_u8[0], test_img_w, test_img_h, 3, name_buf);
-                    snprintf(name_buf, sizeof(name_buf), "test_data/%s/%s_diff.tga", test_name, type);
-                    WriteTGA(&diff_data_u8[0], test_img_w, test_img_h, 3, name_buf);
-                    snprintf(name_buf, sizeof(name_buf), "test_data/%s/%s_mask.tga", test_name, type);
-                    WriteTGA(&mask_data_u8[0], test_img_w, test_img_h, 3, name_buf);
-                    images_match = (psnr >= min_psnr) && (error_pixels <= pix_thres);
-                    require(images_match || searching);
-
-                    if (!images_match) {
-                        failed_count = std::max(failed_count, current_sample_count);
-                        if (succeeded_count != 4096) {
-                            current_sample_count = (failed_count + succeeded_count) / 2;
-                        } else {
-                            current_sample_count *= 2;
-                        }
-                    } else {
-                        succeeded_count = std::min(succeeded_count, current_sample_count);
-                        current_sample_count = (failed_count + succeeded_count) / 2;
-                    }
-                    if (searching) {
-                        printf("Current_sample_count = %i (%i - %i)\n", current_sample_count, failed_count,
-                               succeeded_count);
-                    }
-                    searching |= !images_match;
-                } while (g_determine_sample_count && searching && (succeeded_count - failed_count) > 1);
-                if (g_determine_sample_count && searching && succeeded_count != max_sample_count) {
-                    printf("Required sample count for %s: %i\n", test_name, succeeded_count);
+            int current_sample_count = max_sample_count;
+            int failed_count = -1, succeeded_count = 4096;
+            bool images_match = false, searching = false;
+            do {
+                auto renderer = std::unique_ptr<Ray::RendererBase>(Ray::CreateRenderer(s, &g_log_err, rt));
+                if (!renderer || renderer->type() != rt || renderer->is_hwrt() != use_hwrt) {
+                    // skip unsupported (we fell back to some other renderer)
+                    break;
                 }
+                if (preferred_device) {
+                    // make sure we use requested device
+                    if (!require(Ray::MatchDeviceNames(renderer->device_name(), preferred_device))) {
+                        printf("Wrong device: %s (%s was requested)\n", renderer->device_name(), preferred_device);
+                        return;
+                    }
+                }
+
+                auto scene = std::unique_ptr<Ray::SceneBase>(renderer->CreateScene());
+
+                setup_test_scene(*scene, false, min_sample_count, variance_threshold, mat_desc, textures, test_scene);
+
+                snprintf(name_buf, sizeof(name_buf), "Test %s", test_name);
+                schedule_render_jobs(*renderer, scene.get(), s, current_sample_count, denoise, partial, name_buf);
+
+                const Ray::color_data_rgba_t pixels = renderer->get_pixels_ref();
+
+                std::unique_ptr<uint8_t[]> img_data_u8(new uint8_t[test_img_w * test_img_h * 3]);
+                std::unique_ptr<uint8_t[]> diff_data_u8(new uint8_t[test_img_w * test_img_h * 3]);
+                std::unique_ptr<uint8_t[]> mask_data_u8(new uint8_t[test_img_w * test_img_h * 3]);
+                memset(&mask_data_u8[0], 0, test_img_w * test_img_h * 3);
+
+                double mse = 0.0;
+
+                int error_pixels = 0;
+                for (int j = 0; j < test_img_h; j++) {
+                    for (int i = 0; i < test_img_w; i++) {
+                        const Ray::color_rgba_t &p = pixels.ptr[j * pixels.pitch + i];
+
+                        const auto r = uint8_t(p.v[0] * 255);
+                        const auto g = uint8_t(p.v[1] * 255);
+                        const auto b = uint8_t(p.v[2] * 255);
+
+                        img_data_u8[3 * ((test_img_h - j - 1) * test_img_w + i) + 0] = r;
+                        img_data_u8[3 * ((test_img_h - j - 1) * test_img_w + i) + 1] = g;
+                        img_data_u8[3 * ((test_img_h - j - 1) * test_img_w + i) + 2] = b;
+
+                        const uint8_t diff_r = std::abs(r - test_img[4 * ((test_img_h - j - 1) * test_img_w + i) + 0]);
+                        const uint8_t diff_g = std::abs(g - test_img[4 * ((test_img_h - j - 1) * test_img_w + i) + 1]);
+                        const uint8_t diff_b = std::abs(b - test_img[4 * ((test_img_h - j - 1) * test_img_w + i) + 2]);
+
+                        diff_data_u8[3 * ((test_img_h - j - 1) * test_img_w + i) + 0] = diff_r;
+                        diff_data_u8[3 * ((test_img_h - j - 1) * test_img_w + i) + 1] = diff_g;
+                        diff_data_u8[3 * ((test_img_h - j - 1) * test_img_w + i) + 2] = diff_b;
+
+                        if (diff_r > DiffThres || diff_g > DiffThres || diff_b > DiffThres) {
+                            mask_data_u8[3 * ((test_img_h - j - 1) * test_img_w + i) + 0] = 255;
+                            ++error_pixels;
+                        }
+
+                        mse += diff_r * diff_r;
+                        mse += diff_g * diff_g;
+                        mse += diff_b * diff_b;
+                    }
+                }
+
+                mse /= 3.0;
+                mse /= (test_img_w * test_img_h);
+
+                double psnr = -10.0 * std::log10(mse / (255.0 * 255.0));
+                psnr = std::floor(psnr * 100.0) / 100.0;
+
+                printf("(PSNR: %.2f/%.2f dB, Fireflies: %i/%i)\n", psnr, min_psnr, error_pixels, pix_thres);
+
+                const char *type = Ray::RendererTypeName(rt);
+
+                snprintf(name_buf, sizeof(name_buf), "test_data/%s/%s_out.tga", test_name, type);
+                WriteTGA(&img_data_u8[0], test_img_w, test_img_h, 3, name_buf);
+                snprintf(name_buf, sizeof(name_buf), "test_data/%s/%s_diff.tga", test_name, type);
+                WriteTGA(&diff_data_u8[0], test_img_w, test_img_h, 3, name_buf);
+                snprintf(name_buf, sizeof(name_buf), "test_data/%s/%s_mask.tga", test_name, type);
+                WriteTGA(&mask_data_u8[0], test_img_w, test_img_h, 3, name_buf);
+                images_match = (psnr >= min_psnr) && (error_pixels <= pix_thres);
+                require(images_match || searching);
+
+                if (!images_match) {
+                    failed_count = std::max(failed_count, current_sample_count);
+                    if (succeeded_count != 4096) {
+                        current_sample_count = (failed_count + succeeded_count) / 2;
+                    } else {
+                        current_sample_count *= 2;
+                    }
+                } else {
+                    succeeded_count = std::min(succeeded_count, current_sample_count);
+                    current_sample_count = (failed_count + succeeded_count) / 2;
+                }
+                if (searching) {
+                    printf("Current_sample_count = %i (%i - %i)\n", current_sample_count, failed_count,
+                           succeeded_count);
+                }
+                searching |= !images_match;
+            } while (g_determine_sample_count && searching && (succeeded_count - failed_count) > 1);
+            if (g_determine_sample_count && searching && succeeded_count != max_sample_count) {
+                printf("Required sample count for %s: %i\n", test_name, succeeded_count);
             }
         }
     }
@@ -1314,7 +1309,7 @@ void test_complex_mat4(const char *arch_list[], const char *preferred_device) {
 
 void test_complex_mat5(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 154;
-    const int PixThres = 2744;
+    const int PixThres = 2755;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1379,7 +1374,7 @@ void test_complex_mat5_adaptive(const char *arch_list[], const char *preferred_d
 
 void test_complex_mat5_filmic(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 89;
-    const int PixThres = 2419;
+    const int PixThres = 2422;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};

@@ -137,10 +137,8 @@ bool Ray::Dx::Context::Init(ILog *log, const char *preferred_device) {
             adapter_score += 1000;
         }
 
-        if (preferred_device) {
-            if (MatchDeviceNames(str_converter.to_bytes(desc.Description).c_str(), preferred_device)) {
-                adapter_score += 100000;
-            }
+        if (preferred_device && MatchDeviceNames(str_converter.to_bytes(desc.Description).c_str(), preferred_device)) {
+            adapter_score += 100000;
         }
 
         if (adapter_score > best_adapter_score) {
@@ -254,6 +252,35 @@ bool Ray::Dx::Context::Init(ILog *log, const char *preferred_device) {
         }
     }
     max_combined_image_samplers_ = std::min(max_sampled_images_, max_samplers_);
+
+    hr = device_->QueryInterface(IID_PPV_ARGS(&device5_));
+    if (SUCCEEDED(hr)) {
+        D3D12_FEATURE_DATA_D3D12_OPTIONS5 feature_support = {};
+        hr = device5_->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &feature_support, sizeof(feature_support));
+        if (SUCCEEDED(hr)) {
+            if (feature_support.RaytracingTier > D3D12_RAYTRACING_TIER_NOT_SUPPORTED) {
+                raytracing_supported_ = ray_query_supported_ = true;
+            }
+        }
+    }
+
+    { // check shader model support
+        D3D12_FEATURE_DATA_SHADER_MODEL supported_shader_models = {};
+
+        supported_shader_models.HighestShaderModel = D3D_SHADER_MODEL_6_0;
+        hr = device_->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &supported_shader_models,
+                                          sizeof(supported_shader_models));
+        if (FAILED(hr)) {
+            return false;
+        }
+
+        supported_shader_models.HighestShaderModel = D3D_SHADER_MODEL_6_5;
+        hr = device_->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &supported_shader_models,
+                                          sizeof(supported_shader_models));
+        if (FAILED(hr)) {
+            raytracing_supported_ = ray_query_supported_ = false;
+        }
+    }
 
     default_memory_allocs_ = std::make_unique<MemoryAllocators>(
         "Default Allocs", this, 32 * 1024 * 1024 /* initial_block_size */, 1.5f /* growth_factor */);

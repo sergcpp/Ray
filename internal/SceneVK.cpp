@@ -22,16 +22,7 @@
 #define CLAMP(x, lo, hi) (MIN(MAX((x), (lo)), (hi)))
 
 namespace Ray {
-uint32_t next_power_of_two(uint32_t v) {
-    v--;
-    v |= v >> 1;
-    v |= v >> 2;
-    v |= v >> 4;
-    v |= v >> 8;
-    v |= v >> 16;
-    v++;
-    return v;
-}
+uint32_t next_power_of_two(uint32_t v);
 
 void to_khr_xform(const float xform[16], float matrix[3][4]) {
     // transpose
@@ -1928,7 +1919,7 @@ void Ray::Vk::Scene::RebuildHWAccStructures_nolock() {
         VkAccelerationStructureBuildGeometryInfoKHR tlas_build_info = {
             VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR};
         tlas_build_info.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR |
-                                VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_NV;
+                                VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR;
         tlas_build_info.geometryCount = 1;
         tlas_build_info.pGeometries = &tlas_geo;
         tlas_build_info.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;

@@ -1,13 +1,13 @@
 #pragma once
 
 #include "../SceneBase.h"
+#include "Dx/AccStructureDX.h"
+#include "Dx/DescriptorPoolDX.h"
+#include "Dx/TextureAtlasDX.h"
+#include "Dx/TextureDX.h"
 #include "SparseStorageCPU.h"
 #include "SparseStorageDX.h"
 #include "VectorDX.h"
-// #include "Vk/AccStructureVK.h"
-#include "Dx/DescriptorPoolDX.h"
-#include "Dx/TextureDX.h"
-#include "Dx/TextureAtlasDX.h"
 
 namespace Ray {
 namespace Dx {
@@ -19,8 +19,7 @@ struct BindlessTexData {
     DescrTable srv_descr_table;
     Sampler shared_sampler;
 
-    explicit BindlessTexData(Context *ctx)
-        : srv_descr_pool(ctx, eDescrType::CBV_SRV_UAV) {}
+    explicit BindlessTexData(Context *ctx) : srv_descr_pool(ctx, eDescrType::CBV_SRV_UAV) {}
 };
 
 class Scene : public SceneBase {
@@ -71,12 +70,12 @@ class Scene : public SceneBase {
 
     Buffer rt_blas_buf_, rt_geo_data_buf_, rt_instance_buf_, rt_tlas_buf_;
 
-    // struct MeshBlas {
-    //     AccStructure acc;
-    //     uint32_t geo_index, geo_count;
-    // };
-    // std::vector<MeshBlas> rt_mesh_blases_;
-    // AccStructure rt_tlas_;
+    struct MeshBlas {
+        AccStructure acc;
+        uint32_t geo_index, geo_count;
+    };
+    std::vector<MeshBlas> rt_mesh_blases_;
+    AccStructure rt_tlas_;
 
     MaterialHandle AddMaterial_nolock(const shading_node_desc_t &m);
     void SetMeshInstanceTransform_nolock(MeshInstanceHandle mi_handle, const float *xform);

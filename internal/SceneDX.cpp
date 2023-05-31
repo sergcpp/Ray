@@ -32,6 +32,15 @@
 namespace Ray {
 uint32_t next_power_of_two(uint32_t v);
 int round_up(int v, int align);
+
+void to_dxr_xform(const float xform[16], float matrix[3][4]) {
+    // transpose
+    for (int i = 0; i < 3; ++i) {
+        for (int j = 0; j < 4; ++j) {
+            matrix[i][j] = xform[4 * j + i];
+        }
+    }
+}
 } // namespace Ray
 
 Ray::Dx::Scene::Scene(Context *ctx, const bool use_hwrt, const bool use_bindless, const bool use_tex_compression)
@@ -1154,7 +1163,7 @@ void Ray::Dx::Scene::Finalize() {
 
     GenerateTextureMips_nolock();
     PrepareBindlessTextures_nolock();
-    // RebuildHWAccStructures_nolock();
+    RebuildHWAccStructures_nolock();
 }
 
 void Ray::Dx::Scene::RemoveNodes_nolock(uint32_t node_index, uint32_t node_count) {
@@ -1613,18 +1622,17 @@ void Ray::Dx::Scene::PrepareBindlessTextures_nolock() {
 }
 
 void Ray::Dx::Scene::RebuildHWAccStructures_nolock() {
-    /*if (!use_hwrt_) {
+    if (!use_hwrt_) {
         return;
     }
 
-    static const VkDeviceSize AccStructAlignment = 256;
+    static const uint32_t AccStructAlignment = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT;
 
     struct Blas {
-        SmallVector<VkAccelerationStructureGeometryKHR, 16> geometries;
-        SmallVector<VkAccelerationStructureBuildRangeInfoKHR, 16> build_ranges;
+        SmallVector<D3D12_RAYTRACING_GEOMETRY_DESC, 16> geometries;
         SmallVector<uint32_t, 16> prim_counts;
-        VkAccelerationStructureBuildSizesInfoKHR size_info = {};
-        VkAccelerationStructureBuildGeometryInfoKHR build_info = {};
+        D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO as_prebuild_info = {};
+        D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC as_desc = {};
     };
     std::vector<Blas> all_blases;
 
@@ -1632,16 +1640,6 @@ void Ray::Dx::Scene::RebuildHWAccStructures_nolock() {
     uint32_t needed_total_acc_struct_size = 0;
 
     for (const mesh_t &mesh : meshes_) {
-        VkAccelerationStructureGeometryTrianglesDataKHR tri_data = {
-            VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR};
-        tri_data.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT;
-        tri_data.vertexData.deviceAddress = vertices_.buf().vk_device_address();
-        tri_data.vertexStride = sizeof(vertex_t);
-        tri_data.indexType = VK_INDEX_TYPE_UINT32;
-        tri_data.indexData.deviceAddress = vtx_indices_.buf().vk_device_address();
-        // TODO: fix this!
-        tri_data.maxVertex = mesh.vert_index + mesh.vert_count;
-
         //
         // Gather geometries
         //
@@ -1650,45 +1648,48 @@ void Ray::Dx::Scene::RebuildHWAccStructures_nolock() {
 
         {
             auto &new_geo = new_blas.geometries.emplace_back();
-            new_geo = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR};
-            new_geo.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
-            new_geo.flags = 0;
-            // if ((mat_flags & uint32_t(Ren::eMatFlags::AlphaTest)) == 0) {
-            //     new_geo.flags |= VK_GEOMETRY_OPAQUE_BIT_KHR;
-            // }
-            new_geo.geometry.triangles = tri_data;
+            new_geo.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
+            new_geo.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_NONE;
 
-            auto &new_range = new_blas.build_ranges.emplace_back();
-            new_range.firstVertex = 0; // mesh.vert_index;
-            new_range.primitiveCount = mesh.vert_count / 3;
-            new_range.primitiveOffset = mesh.vert_index * sizeof(uint32_t);
-            new_range.transformOffset = 0;
+            new_geo.Triangles.Transform3x4 = 0;
+            new_geo.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
+            new_geo.Triangles.VertexBuffer.StartAddress = vertices_.buf().dx_resource()->GetGPUVirtualAddress();
+            new_geo.Triangles.VertexBuffer.StrideInBytes = sizeof(vertex_t);
+            new_geo.Triangles.VertexCount = vertices_.buf().size() / sizeof(vertex_t);
+            new_geo.Triangles.IndexFormat = DXGI_FORMAT_R32_UINT;
+            new_geo.Triangles.IndexBuffer =
+                vtx_indices_.buf().dx_resource()->GetGPUVirtualAddress() + mesh.vert_index * sizeof(uint32_t);
+            new_geo.Triangles.IndexCount = mesh.vert_count;
 
-            new_blas.prim_counts.push_back(new_range.primitiveCount);
+            // auto &new_range = new_blas.build_ranges.emplace_back();
+            // new_range.firstVertex = 0; // mesh.vert_index;
+            // new_range.primitiveCount = mesh.vert_count / 3;
+            // new_range.primitiveOffset = mesh.vert_index * sizeof(uint32_t);
+            // new_range.transformOffset = 0;
+
+            new_blas.prim_counts.push_back(mesh.vert_count / 3);
         }
 
         //
         // Query needed memory
         //
-        new_blas.build_info = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR};
-        new_blas.build_info.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
-        new_blas.build_info.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
-        new_blas.build_info.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR |
-                                    VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_COMPACTION_BIT_KHR;
-        new_blas.build_info.geometryCount = uint32_t(new_blas.geometries.size());
-        new_blas.build_info.pGeometries = new_blas.geometries.cdata();
+        new_blas.as_desc.Inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
+        new_blas.as_desc.Inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
+        new_blas.as_desc.Inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE |
+                                        D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_COMPACTION;
+        new_blas.as_desc.Inputs.NumDescs = UINT(new_blas.geometries.size());
+        new_blas.as_desc.Inputs.pGeometryDescs = new_blas.geometries.data();
 
-        new_blas.size_info = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR};
-        vkGetAccelerationStructureBuildSizesKHR(ctx_->device(), VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
-                                                &new_blas.build_info, new_blas.prim_counts.cdata(),
-                                                &new_blas.size_info);
+        ctx_->device5()->GetRaytracingAccelerationStructurePrebuildInfo(&new_blas.as_desc.Inputs,
+                                                                        &new_blas.as_prebuild_info);
 
         // make sure we will not use this potentially stale pointer
-        new_blas.build_info.pGeometries = nullptr;
+        new_blas.as_desc.Inputs.pGeometryDescs = nullptr;
 
-        needed_build_scratch_size = std::max(needed_build_scratch_size, uint32_t(new_blas.size_info.buildScratchSize));
+        needed_build_scratch_size =
+            std::max(needed_build_scratch_size, uint32_t(new_blas.as_prebuild_info.ScratchDataSizeInBytes));
         needed_total_acc_struct_size +=
-            uint32_t(align_up(new_blas.size_info.accelerationStructureSize, AccStructAlignment));
+            uint32_t(round_up(int(new_blas.as_prebuild_info.ResultDataMaxSizeInBytes), AccStructAlignment));
 
         rt_mesh_blases_.emplace_back();
     }
@@ -1698,126 +1699,109 @@ void Ray::Dx::Scene::RebuildHWAccStructures_nolock() {
         // Allocate memory
         //
         Buffer scratch_buf("BLAS Scratch Buf", ctx_, eBufType::Storage, next_power_of_two(needed_build_scratch_size));
-        VkDeviceAddress scratch_addr = scratch_buf.vk_device_address();
+        const uint64_t scratch_addr = scratch_buf.dx_resource()->GetGPUVirtualAddress();
 
         Buffer acc_structs_buf("BLAS Before-Compaction Buf", ctx_, eBufType::AccStructure,
                                needed_total_acc_struct_size);
+        const uint64_t acc_structs_addr = acc_structs_buf.dx_resource()->GetGPUVirtualAddress();
+
+        Buffer compacted_sizes_buf(
+            "BLAS Compacted Sizes Buf", ctx_, eBufType::Storage,
+            uint32_t(sizeof(D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_COMPACTED_SIZE_DESC) *
+                     all_blases.size()));
+        const uint64_t compacted_sizes_addr = compacted_sizes_buf.dx_resource()->GetGPUVirtualAddress();
+
+        Buffer compacted_sizes_readback_buf("BLAS Compacted Sizes Readback Buf", ctx_, eBufType::Readback,
+                                            compacted_sizes_buf.size());
 
         //
-
-        VkQueryPoolCreateInfo query_pool_create_info = {VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO};
-        query_pool_create_info.queryCount = uint32_t(all_blases.size());
-        query_pool_create_info.queryType = VK_QUERY_TYPE_ACCELERATION_STRUCTURE_COMPACTED_SIZE_KHR;
-
-        VkQueryPool query_pool;
-        VkResult res = vkCreateQueryPool(ctx_->device(), &query_pool_create_info, nullptr, &query_pool);
-        if (res != VK_SUCCESS) {
-            ctx_->log()->Error("Failed to create query pool!");
-        }
 
         std::vector<AccStructure> blases_before_compaction;
         blases_before_compaction.resize(all_blases.size());
 
         { // Submit build commands
-            VkDeviceSize acc_buf_offset = 0;
-            CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+            uint64_t acc_buf_offset = 0;
+            auto *cmd_buf = reinterpret_cast<ID3D12GraphicsCommandList4 *>(
+                BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool()));
 
-            vkCmdResetQueryPool(cmd_buf, query_pool, 0, uint32_t(all_blases.size()));
+            { // transition buffers to required states
+                const TransitionInfo transitions[] = {{&scratch_buf, eResState::UnorderedAccess},
+                                                      {&compacted_sizes_buf, eResState::UnorderedAccess}};
+                TransitionResourceStates(cmd_buf, AllStages, AllStages, transitions);
+            }
 
             for (int i = 0; i < int(all_blases.size()); ++i) {
-                VkAccelerationStructureCreateInfoKHR acc_create_info = {
-                    VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR};
-                acc_create_info.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
-                acc_create_info.buffer = acc_structs_buf.vk_handle();
-                acc_create_info.offset = acc_buf_offset;
-                acc_create_info.size = all_blases[i].size_info.accelerationStructureSize;
-                acc_buf_offset += align_up(acc_create_info.size, AccStructAlignment);
+                auto &blas = all_blases[i];
 
-                VkAccelerationStructureKHR acc_struct;
-                VkResult res = vkCreateAccelerationStructureKHR(ctx_->device(), &acc_create_info, nullptr, &acc_struct);
-                if (res != VK_SUCCESS) {
-                    ctx_->log()->Error("Failed to create acceleration structure!");
+                blas.as_desc.Inputs.pGeometryDescs = blas.geometries.data();
+                blas.as_desc.ScratchAccelerationStructureData = scratch_addr;
+                blas.as_desc.DestAccelerationStructureData = acc_structs_addr + acc_buf_offset;
+
+                D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_DESC postbuild_info = {};
+                postbuild_info.InfoType = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_COMPACTED_SIZE;
+                postbuild_info.DestBuffer =
+                    compacted_sizes_addr +
+                    i * sizeof(D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_COMPACTED_SIZE_DESC);
+                cmd_buf->BuildRaytracingAccelerationStructure(&blas.as_desc, 1, &postbuild_info);
+
+                {
+                    D3D12_RESOURCE_BARRIER barrier = {};
+                    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
+                    barrier.Transition.pResource = scratch_buf.dx_resource();
+                    barrier.Transition.StateBefore = DXResourceState(eResState::UnorderedAccess);
+                    barrier.Transition.StateAfter = DXResourceState(eResState::UnorderedAccess);
+                    barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+
+                    cmd_buf->ResourceBarrier(1, &barrier);
                 }
 
-                auto &acc = blases_before_compaction[i];
-                if (!acc.Init(ctx_, acc_struct)) {
-                    ctx_->log()->Error("Failed to init BLAS!");
-                }
-
-                all_blases[i].build_info.pGeometries = all_blases[i].geometries.cdata();
-
-                all_blases[i].build_info.dstAccelerationStructure = acc_struct;
-                all_blases[i].build_info.scratchData.deviceAddress = scratch_addr;
-
-                const VkAccelerationStructureBuildRangeInfoKHR *build_ranges = all_blases[i].build_ranges.cdata();
-                vkCmdBuildAccelerationStructuresKHR(cmd_buf, 1, &all_blases[i].build_info, &build_ranges);
-
-                { // Place barrier
-                    VkMemoryBarrier scr_buf_barrier = {VK_STRUCTURE_TYPE_MEMORY_BARRIER};
-                    scr_buf_barrier.srcAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
-                    scr_buf_barrier.dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
-
-                    vkCmdPipelineBarrier(cmd_buf, VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
-                                         VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR, 0, 1, &scr_buf_barrier,
-                                         0, nullptr, 0, nullptr);
-                }
-
-                vkCmdWriteAccelerationStructuresPropertiesKHR(
-                    cmd_buf, 1, &all_blases[i].build_info.dstAccelerationStructure,
-                    VK_QUERY_TYPE_ACCELERATION_STRUCTURE_COMPACTED_SIZE_KHR, query_pool, i);
+                acc_buf_offset += round_up(int(blas.as_prebuild_info.ResultDataMaxSizeInBytes), AccStructAlignment);
+                assert(acc_buf_offset <= needed_total_acc_struct_size);
             }
+
+            // copy compacted sizes for readback
+            CopyBufferToBuffer(compacted_sizes_buf, 0, compacted_sizes_readback_buf, 0, compacted_sizes_buf.size(),
+                               cmd_buf);
 
             EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
         }
 
-        std::vector<VkDeviceSize> compact_sizes(all_blases.size());
-        res = vkGetQueryPoolResults(ctx_->device(), query_pool, 0, uint32_t(all_blases.size()),
-                                    all_blases.size() * sizeof(VkDeviceSize), compact_sizes.data(),
-                                    sizeof(VkDeviceSize), VK_QUERY_RESULT_WAIT_BIT);
-        assert(res == VK_SUCCESS);
+        const auto *compact_sizes =
+            reinterpret_cast<const D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_COMPACTED_SIZE_DESC *>(
+                compacted_sizes_readback_buf.Map());
 
-        vkDestroyQueryPool(ctx_->device(), query_pool, nullptr);
-
-        VkDeviceSize total_compacted_size = 0;
-        for (int i = 0; i < int(compact_sizes.size()); ++i) {
-            total_compacted_size += align_up(compact_sizes[i], AccStructAlignment);
+        uint64_t total_compacted_size = 0;
+        for (int i = 0; i < int(all_blases.size()); ++i) {
+            total_compacted_size += round_up(uint32_t(compact_sizes[i].CompactedSizeInBytes), AccStructAlignment);
         }
 
         rt_blas_buf_ =
             Buffer{"BLAS After-Compaction Buf", ctx_, eBufType::AccStructure, uint32_t(total_compacted_size)};
 
+        compacted_sizes_readback_buf.Unmap();
+
         { // Submit compaction commands
-            VkDeviceSize compact_acc_buf_offset = 0;
-            CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+            uint64_t compact_acc_buf_offset = 0;
+            auto *cmd_buf = reinterpret_cast<ID3D12GraphicsCommandList4 *>(
+                BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool()));
 
             for (int i = 0; i < int(all_blases.size()); ++i) {
-                VkAccelerationStructureCreateInfoKHR acc_create_info = {
-                    VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR};
-                acc_create_info.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
-                acc_create_info.buffer = rt_blas_buf_.vk_handle();
-                acc_create_info.offset = compact_acc_buf_offset;
-                acc_create_info.size = compact_sizes[i];
-                assert(compact_acc_buf_offset + compact_sizes[i] <= total_compacted_size);
-                compact_acc_buf_offset += align_up(acc_create_info.size, AccStructAlignment);
+                auto &blas = all_blases[i];
 
-                VkAccelerationStructureKHR compact_acc_struct;
-                const VkResult res =
-                    vkCreateAccelerationStructureKHR(ctx_->device(), &acc_create_info, nullptr, &compact_acc_struct);
-                if (res != VK_SUCCESS) {
-                    ctx_->log()->Error("Failed to create acceleration structure!");
-                }
+                const uint64_t old_address = blas.as_desc.DestAccelerationStructureData;
+                const uint64_t new_address =
+                    rt_blas_buf_.dx_resource()->GetGPUVirtualAddress() + compact_acc_buf_offset;
 
-                VkCopyAccelerationStructureInfoKHR copy_info = {VK_STRUCTURE_TYPE_COPY_ACCELERATION_STRUCTURE_INFO_KHR};
-                copy_info.mode = VK_COPY_ACCELERATION_STRUCTURE_MODE_COMPACT_KHR;
-                copy_info.src = blases_before_compaction[i].vk_handle();
-                copy_info.dst = compact_acc_struct;
-
-                vkCmdCopyAccelerationStructureKHR(cmd_buf, &copy_info);
+                cmd_buf->CopyRaytracingAccelerationStructure(new_address, old_address,
+                                                             D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_COMPACT);
 
                 auto &vk_blas = rt_mesh_blases_[i].acc;
-                if (!vk_blas.Init(ctx_, compact_acc_struct)) {
+                if (!vk_blas.Init(ctx_, new_address)) {
                     ctx_->log()->Error("Blas compaction failed!");
                 }
+
+                assert(compact_acc_buf_offset + compact_sizes[i].CompactedSizeInBytes <= total_compacted_size);
+                compact_acc_buf_offset += round_up(uint32_t(compact_sizes[i].CompactedSizeInBytes), AccStructAlignment);
             }
 
             EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
@@ -1843,26 +1827,23 @@ void Ray::Dx::Scene::RebuildHWAccStructures_nolock() {
     static_assert(sizeof(RTGeoInstance) == 16, "!");
 
     std::vector<RTGeoInstance> geo_instances;
-    std::vector<VkAccelerationStructureInstanceKHR> tlas_instances;
+    std::vector<D3D12_RAYTRACING_INSTANCE_DESC> tlas_instances;
 
     for (const mesh_instance_t &instance : mesh_instances_) {
         auto &blas = rt_mesh_blases_[instance.mesh_index];
         blas.geo_index = uint32_t(geo_instances.size());
         blas.geo_count = 0;
 
-        auto &vk_blas = blas.acc;
+        auto &dx_blas = blas.acc;
 
         tlas_instances.emplace_back();
         auto &new_instance = tlas_instances.back();
-        to_khr_xform(transforms_[instance.tr_index].xform, new_instance.transform.matrix);
-        new_instance.instanceCustomIndex = meshes_[instance.mesh_index].vert_index / 3;
-        // blas.geo_index;
-        new_instance.mask = 0xff;
-        new_instance.instanceShaderBindingTableRecordOffset = 0;
-        new_instance.flags = 0;
-        // VK_GEOMETRY_INSTANCE_TRIANGLE_FRONT_COUNTERCLOCKWISE_BIT_KHR; //
-        // VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR;
-        new_instance.accelerationStructureReference = static_cast<uint64_t>(vk_blas.vk_device_address());
+        to_dxr_xform(transforms_[instance.tr_index].xform, new_instance.Transform);
+        new_instance.InstanceID = meshes_[instance.mesh_index].vert_index / 3;
+        new_instance.InstanceMask = 0xff;
+        new_instance.InstanceContributionToHitGroupIndex = 0;
+        new_instance.Flags = 0;
+        new_instance.AccelerationStructure = dx_blas.gpu_virtual_address();
 
         // const mesh_t &mesh = meshes_[instance.mesh_index];
         {
@@ -1898,93 +1879,54 @@ void Ray::Dx::Scene::RebuildHWAccStructures_nolock() {
     }
 
     rt_instance_buf_ = Buffer{"RT Instance Buf", ctx_, eBufType::Storage,
-                              uint32_t(tlas_instances.size() * sizeof(VkAccelerationStructureInstanceKHR))};
+                              uint32_t(tlas_instances.size() * sizeof(D3D12_RAYTRACING_INSTANCE_DESC))};
     Buffer instance_stage_buf{"RT Instance Stage Buf", ctx_, eBufType::Upload,
-                              uint32_t(tlas_instances.size() * sizeof(VkAccelerationStructureInstanceKHR))};
+                              uint32_t(tlas_instances.size() * sizeof(D3D12_RAYTRACING_INSTANCE_DESC))};
     {
         uint8_t *instance_stage = instance_stage_buf.Map();
-        memcpy(instance_stage, tlas_instances.data(),
-               tlas_instances.size() * sizeof(VkAccelerationStructureInstanceKHR));
+        memcpy(instance_stage, tlas_instances.data(), tlas_instances.size() * sizeof(D3D12_RAYTRACING_INSTANCE_DESC));
         instance_stage_buf.Unmap();
     }
 
-    VkDeviceAddress instance_buf_addr = rt_instance_buf_.vk_device_address();
+    uint64_t instance_buf_addr = rt_instance_buf_.dx_resource()->GetGPUVirtualAddress();
 
-    CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+    auto *cmd_buf = reinterpret_cast<ID3D12GraphicsCommandList4 *>(
+        BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool()));
 
     CopyBufferToBuffer(geo_data_stage_buf, 0, rt_geo_data_buf_, 0, geo_data_stage_buf.size(), cmd_buf);
     CopyBufferToBuffer(instance_stage_buf, 0, rt_instance_buf_, 0, instance_stage_buf.size(), cmd_buf);
 
-    { // Make sure compaction copying of BLASes has finished
-        VkMemoryBarrier mem_barrier = {VK_STRUCTURE_TYPE_MEMORY_BARRIER};
-        mem_barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        mem_barrier.dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
-
-        vkCmdPipelineBarrier(cmd_buf, VK_PIPELINE_STAGE_TRANSFER_BIT,
-                             VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR, 0, 1, &mem_barrier, 0, nullptr, 0,
-                             nullptr);
-    }
-
     Buffer tlas_scratch_buf;
 
     { //
-        VkAccelerationStructureGeometryInstancesDataKHR instances_data = {
-            VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR};
-        instances_data.data.deviceAddress = instance_buf_addr;
+        D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC tlas_build_info = {};
+        tlas_build_info.Inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
+        tlas_build_info.Inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
+        tlas_build_info.Inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE |
+                                       D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE;
+        tlas_build_info.Inputs.NumDescs = uint32_t(tlas_instances.size());
+        tlas_build_info.Inputs.InstanceDescs = instance_buf_addr;
 
-        VkAccelerationStructureGeometryKHR tlas_geo = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR};
-        tlas_geo.geometryType = VK_GEOMETRY_TYPE_INSTANCES_KHR;
-        tlas_geo.geometry.instances = instances_data;
+        D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO prebuild_info = {};
+        ctx_->device5()->GetRaytracingAccelerationStructurePrebuildInfo(&tlas_build_info.Inputs, &prebuild_info);
 
-        VkAccelerationStructureBuildGeometryInfoKHR tlas_build_info = {
-            VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR};
-        tlas_build_info.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR |
-                                VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_NV;
-        tlas_build_info.geometryCount = 1;
-        tlas_build_info.pGeometries = &tlas_geo;
-        tlas_build_info.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
-        tlas_build_info.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
-        tlas_build_info.srcAccelerationStructure = VK_NULL_HANDLE;
+        rt_tlas_buf_ =
+            Buffer{"TLAS Buf", ctx_, eBufType::AccStructure, uint32_t(prebuild_info.ResultDataMaxSizeInBytes)};
+        tlas_scratch_buf =
+            Buffer{"TLAS Scratch Buf", ctx_, eBufType::Storage, uint32_t(prebuild_info.ScratchDataSizeInBytes)};
 
-        const auto instance_count = uint32_t(tlas_instances.size());
-        const uint32_t max_instance_count = instance_count;
-
-        VkAccelerationStructureBuildSizesInfoKHR size_info = {
-            VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR};
-        vkGetAccelerationStructureBuildSizesKHR(ctx_->device(), VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
-                                                &tlas_build_info, &max_instance_count, &size_info);
-
-        rt_tlas_buf_ = Buffer{"TLAS Buf", ctx_, eBufType::AccStructure, uint32_t(size_info.accelerationStructureSize)};
-
-        VkAccelerationStructureCreateInfoKHR create_info = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR};
-        create_info.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
-        create_info.buffer = rt_tlas_buf_.vk_handle();
-        create_info.offset = 0;
-        create_info.size = size_info.accelerationStructureSize;
-
-        VkAccelerationStructureKHR tlas_handle;
-        VkResult res = vkCreateAccelerationStructureKHR(ctx_->device(), &create_info, nullptr, &tlas_handle);
-        if (res != VK_SUCCESS) {
-            ctx_->log()->Error("[SceneManager::InitHWAccStructures]: Failed to create acceleration structure!");
+        { // transition buffers to required states
+            const TransitionInfo transitions[] = {{&rt_instance_buf_, eResState::ShaderResource},
+                                                  {&tlas_scratch_buf, eResState::UnorderedAccess}};
+            TransitionResourceStates(cmd_buf, AllStages, AllStages, transitions);
         }
 
-        tlas_scratch_buf = Buffer{"TLAS Scratch Buf", ctx_, eBufType::Storage, uint32_t(size_info.buildScratchSize)};
-        VkDeviceAddress tlas_scratch_buf_addr = tlas_scratch_buf.vk_device_address();
+        tlas_build_info.DestAccelerationStructureData = rt_tlas_buf_.dx_resource()->GetGPUVirtualAddress();
+        tlas_build_info.ScratchAccelerationStructureData = tlas_scratch_buf.dx_resource()->GetGPUVirtualAddress();
 
-        tlas_build_info.srcAccelerationStructure = VK_NULL_HANDLE;
-        tlas_build_info.dstAccelerationStructure = tlas_handle;
-        tlas_build_info.scratchData.deviceAddress = tlas_scratch_buf_addr;
+        cmd_buf->BuildRaytracingAccelerationStructure(&tlas_build_info, 0, nullptr);
 
-        VkAccelerationStructureBuildRangeInfoKHR range_info = {};
-        range_info.primitiveOffset = 0;
-        range_info.primitiveCount = instance_count;
-        range_info.firstVertex = 0;
-        range_info.transformOffset = 0;
-
-        const VkAccelerationStructureBuildRangeInfoKHR *build_range = &range_info;
-        vkCmdBuildAccelerationStructuresKHR(cmd_buf, 1, &tlas_build_info, &build_range);
-
-        if (!rt_tlas_.Init(ctx_, tlas_handle)) {
+        if (!rt_tlas_.Init(ctx_, tlas_build_info.DestAccelerationStructureData)) {
             ctx_->log()->Error("[SceneManager::InitHWAccStructures]: Failed to init TLAS!");
         }
     }
@@ -1993,7 +1935,7 @@ void Ray::Dx::Scene::RebuildHWAccStructures_nolock() {
 
     tlas_scratch_buf.FreeImmediate();
     instance_stage_buf.FreeImmediate();
-    geo_data_stage_buf.FreeImmediate();*/
+    geo_data_stage_buf.FreeImmediate();
 }
 
 #undef _MIN

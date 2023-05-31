@@ -83,7 +83,7 @@ void Ray::Dx::TransitionResourceStates(void *_cmd_buf, const eStageBits src_stag
             if (transition.update_internal_state) {
                 transition.p_tex->resource_state = transition.new_state;
             }
-        } else /*if (transition.p_3dtex) {
+        } else if (transition.p_3dtex) {
             eResState old_state = transition.old_state;
             if (old_state == eResState::Undefined) {
                 // take state from resource itself
@@ -95,29 +95,22 @@ void Ray::Dx::TransitionResourceStates(void *_cmd_buf, const eStageBits src_stag
                 }
             }
 
-            auto &new_barrier = img_barriers.emplace_back();
-            new_barrier = {VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
-            new_barrier.srcAccessMask = VKAccessFlagsForState(old_state);
-            new_barrier.dstAccessMask = VKAccessFlagsForState(transition.new_state);
-            new_barrier.oldLayout = VKImageLayoutForState(old_state);
-            new_barrier.newLayout = VKImageLayoutForState(transition.new_state);
-            new_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            new_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            new_barrier.image = transition.p_3dtex->handle().img;
-            new_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            // transition whole image for now
-            new_barrier.subresourceRange.baseMipLevel = 0;
-            new_barrier.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
-            new_barrier.subresourceRange.baseArrayLayer = 0;
-            new_barrier.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
-
-            src_stages |= VKPipelineStagesForState(old_state);
-            dst_stages |= VKPipelineStagesForState(transition.new_state);
+            auto &new_barrier = barriers.emplace_back();
+            if (old_state != transition.new_state) {
+                new_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+                new_barrier.Transition.pResource = transition.p_3dtex->handle().img;
+                new_barrier.Transition.StateBefore = DXResourceState(old_state);
+                new_barrier.Transition.StateAfter = DXResourceState(transition.new_state);
+                new_barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+            } else {
+                new_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
+                new_barrier.UAV.pResource = transition.p_3dtex->handle().img;
+            }
 
             if (transition.update_internal_state) {
                 transition.p_3dtex->resource_state = transition.new_state;
             }
-        } else*/
+        } else
             if (transition.p_buf && *transition.p_buf) {
                 eResState old_state = transition.old_state;
                 if (old_state == eResState::Undefined) {
