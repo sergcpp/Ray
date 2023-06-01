@@ -341,7 +341,7 @@ endif(MSVC)
 
 add_library(Ray STATIC ${ALL_SOURCE_FILES})
 if(WIN32 AND ENABLE_DX_IMPL)
-    target_link_libraries(Ray DXGI D3D12 D3dcompiler dxcompiler)
+    target_link_libraries(Ray DXGI D3D12)
 endif(WIN32 AND ENABLE_DX_IMPL)
 
 set_target_properties(Ray PROPERTIES UNITY_BUILD_MODE GROUP)

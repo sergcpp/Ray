@@ -320,7 +320,7 @@ bool Ray::Dx::Texture2D::Realloc(const int w, const int h, int mip_count, const 
         if (is_srgb) {
             image_desc.Format = ToSRGBFormat(image_desc.Format);
         }
-        image_desc.SampleDesc.Count = samples;
+        image_desc.SampleDesc.Count = samples; 
         image_desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
         image_desc.Flags = to_dx_image_flags(params.usage, format);
 
@@ -330,7 +330,7 @@ bool Ray::Dx::Texture2D::Realloc(const int w, const int h, int mip_count, const 
         ctx_->device()->GetCopyableFootprints(&image_desc, 0, 1, 0, &footprint, &num_rows, &row_size_in_bytes,
                                               &total_bytes);
 
-        volatile int ii = 0;
+        (void)new_image;
 #if 0
         VkResult res = vkCreateImage(ctx_->device(), &img_info, nullptr, &new_image);
         if (res != VK_SUCCESS) {
@@ -850,6 +850,8 @@ void Ray::Dx::Texture2D::InitFromDDSFile(const void *data, const int size, Buffe
     Free();
     Realloc(int(header.dwWidth), int(header.dwHeight), int(header.dwMipMapCount), 1, format, block,
             bool(p.flags & eTexFlagBits::SRGB), _cmd_buf, mem_allocs, log);
+
+    (void)block_size_bytes;
 #if 0
     params.flags = p.flags;
     params.block = block;
@@ -1100,6 +1102,7 @@ void Ray::Dx::Texture2D::InitFromRAWData(Buffer &sbuf, int data_off[6], void *_c
     initialized_mips_ = 0;
 
     const int mip_count = CalcMipCount(p.w, p.h, 1, p.sampling.filter);
+    (void)mip_count;
 #if 0
     { // create image
         VkImageCreateInfo img_info = {VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};

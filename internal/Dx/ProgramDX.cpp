@@ -351,7 +351,7 @@ void Ray::Dx::Program::InitBindings(ILog *log) {
         if (attributes_[i].loc == -1) {
             continue;
         }
-        log->Info("\t\t%s : %i", attributes_[i].name.c_str(), attributes_[i].loc);
+        log->Info("\t\t%s : %i", attributes_[i].name, attributes_[i].loc);
     }
 
     // Print all uniforms
@@ -360,7 +360,7 @@ void Ray::Dx::Program::InitBindings(ILog *log) {
         if (uniforms_[i].loc == -1) {
             continue;
         }
-        log->Info("\t\t%s : %i", uniforms_[i].name.c_str(), uniforms_[i].loc);
+        log->Info("\t\t%s : %i", uniforms_[i].name, uniforms_[i].loc);
     }
 }
 

@@ -8,16 +8,13 @@
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
+//#include <d3d12shader.h>
 #include <d3dcommon.h>
-#include <d3d12shader.h>
-//#include <d3dcompiler.h>
-#include <dxcapi.h>
+//#include <dxcapi.h>
 
 #include "../../Log.h"
 #include "../ScopeExit.h"
 #include "ContextDX.h"
-
-// #include "../../third-party/SPIRV-Reflect/spirv_reflect.h"
 
 namespace Ray {
 namespace Dx {
@@ -41,20 +38,19 @@ namespace Dx {
 // static_assert(int(eShaderType::ClosestHit) < int(eShaderType::AnyHit), "!");
 // static_assert(int(eShaderType::AnyHit) < int(eShaderType::Intersection), "!");
 
-#define _DXC_FOURCC(ch0, ch1, ch2, ch3)                                                                                 \
-    (uint32_t(ch0) | uint32_t(ch1) << 8 | uint32_t(ch2) << 16 | uint32_t(ch3) << 24)
+#define _DXC_FOURCC(ch0, ch1, ch2, ch3) (uint32_t(ch0) | uint32_t(ch1) << 8 | uint32_t(ch2) << 16 | uint32_t(ch3) << 24)
 
-//const uint32_t _DXC_PART_PDB = _DXC_FOURCC('I', 'L', 'D', 'B');
-//const uint32_t _DXC_PART_PDB_NAME = _DXC_FOURCC('I', 'L', 'D', 'N');
-//const uint32_t _DXC_PART_PRIVATE_DATA = _DXC_FOURCC('P', 'R', 'I', 'V');
-//const uint32_t _DXC_PART_ROOT_SIGNATURE = _DXC_FOURCC('R', 'T', 'S', '0');
-//const uint32_t _DXC_PART_DXIL = _DXC_FOURCC('D', 'X', 'I', 'L');
+// const uint32_t _DXC_PART_PDB = _DXC_FOURCC('I', 'L', 'D', 'B');
+// const uint32_t _DXC_PART_PDB_NAME = _DXC_FOURCC('I', 'L', 'D', 'N');
+// const uint32_t _DXC_PART_PRIVATE_DATA = _DXC_FOURCC('P', 'R', 'I', 'V');
+// const uint32_t _DXC_PART_ROOT_SIGNATURE = _DXC_FOURCC('R', 'T', 'S', '0');
+// const uint32_t _DXC_PART_DXIL = _DXC_FOURCC('D', 'X', 'I', 'L');
 const uint32_t _DXC_PART_REFLECTION_DATA = _DXC_FOURCC('S', 'T', 'A', 'T');
-//const uint32_t _DXC_PART_SHADER_HASH = _DXC_FOURCC('H', 'A', 'S', 'H');
+// const uint32_t _DXC_PART_SHADER_HASH = _DXC_FOURCC('H', 'A', 'S', 'H');
 
 #undef _DXC_FOURCC
 
-struct ShaderBlobAdapter : public IDxcBlob {
+/*struct ShaderBlobAdapter : public IDxcBlob {
     LPVOID pointer_;
     SIZE_T size_;
 
@@ -81,7 +77,7 @@ struct ShaderBlobAdapter : public IDxcBlob {
 
     ULONG STDMETHODCALLTYPE AddRef() override { return 1; }
     ULONG STDMETHODCALLTYPE Release() override { return 0; }
-};
+};*/
 } // namespace Dx
 } // namespace Ray
 
@@ -94,8 +90,7 @@ Ray::Dx::Shader::Shader(const char *name, Context *ctx, const uint8_t *shader_co
     }
 }
 
-Ray::Dx::Shader::~Shader() {
-}
+Ray::Dx::Shader::~Shader() {}
 
 Ray::Dx::Shader &Ray::Dx::Shader::operator=(Shader &&rhs) noexcept {
     device_ = exchange(rhs.device_, {});
@@ -124,12 +119,81 @@ bool Ray::Dx::Shader::InitFromCSO(const uint8_t *shader_code, const int code_siz
     }
 
     type_ = type;
-    shader_code_.assign(shader_code, shader_code + code_size);
 
     attr_bindings.clear();
     unif_bindings.clear();
     pc_ranges.clear();
 
+    struct header_t {
+        char sig[4];
+        uint8_t checksum[16];
+        uint32_t one;
+        uint32_t total_size;
+        uint32_t chunk_count;
+    };
+
+    uint32_t data_off = 0;
+
+    header_t header = {};
+    memcpy(&header, shader_code, sizeof(header_t));
+    data_off += sizeof(header_t);
+
+    shader_code_.assign(shader_code, shader_code + header.total_size);
+
+#if 0 // Unfinished manual parsing
+    assert(header.chunk_count < 16);
+    uint32_t chunk_offsets[16] = {};
+    memcpy(chunk_offsets, shader_code + data_off, header.chunk_count * sizeof(uint32_t));
+    data_off += header.chunk_count * sizeof(uint32_t);
+
+    uint32_t stat_chunk_index = 0xffffffff;
+    for (uint32_t i = 0; i < header.chunk_count; ++i) {
+        uint32_t chunk_type = 0;
+        memcpy(&chunk_type, shader_code + chunk_offsets[i], sizeof(uint32_t));
+
+        if (chunk_type == _DXC_PART_REFLECTION_DATA) {
+            stat_chunk_index = i;
+            break;
+        }
+    }
+
+    if (stat_chunk_index == 0xffffffff) {
+        log->Error("Failed to find reflection data");
+        return false;
+    }
+
+    struct stat_chunk_t {
+        uint32_t chunk_type;
+        uint32_t chunk_size;
+        uint32_t version;
+    };
+#endif
+
+#if 1 // read custom reflection data
+    data_off = header.total_size;
+
+    uint32_t pc_count = 0;
+    memcpy(&pc_count, shader_code + data_off, sizeof(uint32_t));
+    data_off += sizeof(uint32_t);
+
+    if (pc_count) {
+        pc_ranges.resize(pc_count);
+        memcpy(pc_ranges.data(), shader_code + data_off, pc_count * sizeof(Range));
+        data_off += pc_count * sizeof(Range);
+    }
+
+    uint32_t ub_count = 0;
+    memcpy(&ub_count, shader_code + data_off, sizeof(uint32_t));
+    data_off += sizeof(uint32_t);
+
+    if (ub_count) {
+        unif_bindings.resize(ub_count);
+        memcpy(unif_bindings.data(), shader_code + data_off, ub_count * sizeof(Descr));
+        data_off += ub_count * sizeof(Descr);
+    }
+
+    (void)_DXC_PART_REFLECTION_DATA;
+#else
     IDxcContainerReflection *container_reflection = {};
     HRESULT hr = DxcCreateInstance(CLSID_DxcContainerReflection, IID_PPV_ARGS(&container_reflection));
     if (FAILED(hr)) {
@@ -185,13 +249,13 @@ bool Ray::Dx::Shader::InitFromCSO(const uint8_t *shader_code, const int code_siz
             pc_ranges.push_back({shader_input_bind_desc.BindPoint, shader_input_bind_desc.BindCount});
         } else {
             Descr &new_item = unif_bindings.emplace_back();
-            new_item.name = shader_input_bind_desc.Name;
+            strncpy_s(new_item.name, sizeof(new_item.name), shader_input_bind_desc.Name, sizeof(new_item.name) - 1);
             new_item.input_type = shader_input_bind_desc.Type;
             new_item.loc = int(shader_input_bind_desc.BindPoint);
             new_item.space = int(shader_input_bind_desc.Space);
             new_item.count = int(shader_input_bind_desc.BindCount);
         }
     }
-
+#endif
     return true;
 }

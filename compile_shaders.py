@@ -65,11 +65,13 @@ def compile_shader(src_name, spv_name=None, glsl_version=None, target_env="spirv
         dxc_result = subprocess.run(os.path.join(dxc_base_path(), "dxc -T cs_6_0 internal/shaders/output/" + hlsl_name + " -Fo internal/shaders/output/" + cso_name), shell=True, capture_output=True, text=True, check=False)
 
         if dxc_result.returncode == 0:
-            with open(os.path.join("internal", "shaders", "output", cso_name), 'rb') as f:
-                cso_data = f.read()
-            out = bin2header(cso_data, os.path.join("internal", "shaders", "output", cso_name))
-            with open(os.path.join("internal", "shaders", "output", cso_name + ".inl"), 'w') as f:
-                f.write(out)
+            app_refl_result = subprocess.run(os.path.join(dxc_base_path(), "append_refl_data internal/shaders/output/", cso_name), shell=True, capture_output=True, text=True, check=False)
+            if app_refl_result.returncode == 0:
+                with open(os.path.join("internal", "shaders", "output", cso_name), 'rb') as f:
+                    cso_data = f.read()
+                out = bin2header(cso_data, os.path.join("internal", "shaders", "output", cso_name))
+                with open(os.path.join("internal", "shaders", "output", cso_name + ".inl"), 'w') as f:
+                    f.write(out)
 
     if compile_result.returncode == 0:
         with open(os.path.join("internal", "shaders", "output", spv_name), 'rb') as f:
