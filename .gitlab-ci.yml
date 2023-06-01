@@ -400,7 +400,20 @@ windows-arm64-gpu-adreno-test-job:
 windows-arm64-cpu-perf-test-job:
   variables:
     BIN_DIR: windows-arm64
-    AUX_TEST_ARGS: '--nogpu --time_limit 14.1'
+    AUX_TEST_ARGS: '--nogpu --time_limit 11.7'
+  extends:
+    - .windows-perf-test-job
+  needs:
+    - windows-arm64-build-job
+  tags:
+    - windows,arm64,perf
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+
+windows-arm64-gpu-perf-test-job:
+  variables:
+    BIN_DIR: windows-arm64
+    AUX_TEST_ARGS: '--nocpu --time_limit 26.4'
   extends:
     - .windows-perf-test-job
   needs:

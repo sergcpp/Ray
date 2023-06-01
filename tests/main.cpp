@@ -7,7 +7,6 @@
 #include <atomic>
 #include <chrono>
 
-
 void test_simd();
 void test_hashmap();
 void test_scope_exit();
@@ -107,6 +106,14 @@ bool g_catch_flt_exceptions = false;
 bool g_determine_sample_count = false;
 
 #ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <Windows.h>
+
 bool InitAndDestroyFakeGLContext();
 #endif
 
@@ -140,6 +147,9 @@ int main(int argc, char *argv[]) {
             preferred_arch[0] = argv[i];
         } else if (strcmp(argv[i], "--time_limit") == 0 && (++i != argc)) {
             time_limit_m = atof(argv[i]);
+#ifdef _WIN32
+            SetPriorityClass(GetCurrentProcess(), REALTIME_PRIORITY_CLASS);
+#endif
         }
     }
 
@@ -403,14 +413,6 @@ int main(int argc, char *argv[]) {
 // Dirty workaround for Intel discrete GPU
 //
 #ifdef _WIN32
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#include <Windows.h>
-
 extern "C" {
 // Enable High Performance Graphics while using Integrated Graphics
 __declspec(dllexport) int32_t NvOptimusEnablement = 1;                  // Nvidia
@@ -439,7 +441,7 @@ bool InitAndDestroyFakeGLContext() {
     }
 
     if (!SetPixelFormat(fake_dc, pix_format_id, &pixel_format)) {
-        //printf("SetPixelFormat() failed (0x%08x)\n", GetLastError());
+        // printf("SetPixelFormat() failed (0x%08x)\n", GetLastError());
         return false;
     }
 
