@@ -1,4 +1,6 @@
+.vscode
 build-*
+cmake-build-*
 *_diff.tga
 *_mask.tga
 *_out.tga
@@ -9,3 +11,5 @@ Config.h
 *.spv
 *.cso
 *.hlsl
+.DS_Store
+.idea
