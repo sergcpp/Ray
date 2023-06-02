@@ -5,10 +5,11 @@ OPTION(ENABLE_REF_IMPL "Enable reference CPU implementation" ON)
 OPTION(ENABLE_SIMD_IMPL "Enable SIMD CPU implementations" ON)
 if(NOT CMAKE_SYSTEM_NAME MATCHES "Android")
     OPTION(ENABLE_VK_IMPL "Enable Vulkan GPU implementation" ON)
+    OPTION(ENABLE_DX_IMPL "Enable DirectX12 GPU implementation" ON)
 else(NOT CMAKE_SYSTEM_NAME MATCHES "Android")
     OPTION(ENABLE_VK_IMPL "Enable Vulkan GPU implementation" OFF)
+    OPTION(ENABLE_DX_IMPL "Enable DirectX12 GPU implementation" OFF)
 endif(NOT CMAKE_SYSTEM_NAME MATCHES "Android")
-OPTION(ENABLE_DX_IMPL "Enable DirectX12 GPU implementation" OFF)
 
 set(CMAKE_CONFIGURATION_TYPES "Debug;Release;RelWithDebInfo;Asan" CACHE STRING "" FORCE)
 
@@ -340,9 +341,9 @@ if(MSVC)
 endif(MSVC)
 
 add_library(Ray STATIC ${ALL_SOURCE_FILES})
-if(WIN32 AND ENABLE_DX_IMPL)
+if(ENABLE_DX_IMPL AND WIN32)
     target_link_libraries(Ray DXGI D3D12)
-endif(WIN32 AND ENABLE_DX_IMPL)
+endif(ENABLE_DX_IMPL AND WIN32)
 
 set_target_properties(Ray PROPERTIES UNITY_BUILD_MODE GROUP)
 
