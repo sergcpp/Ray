@@ -1,24 +1,25 @@
 #pragma once
 
-#include "../CoreVK.h"
+#include "../CoreDX.h"
 #include "../TextureSplitter.h"
 #include "ResourceDX.h"
 #include "SamplerDX.h"
 
+struct ID3D12Resource;
+
 namespace Ray {
 enum class eTexFormat : uint8_t;
-namespace Vk {
+namespace Dx {
 class Context;
 class TextureAtlas {
     Context *ctx_;
-
+    std::string name_;
     eTexFormat format_, real_format_;
     eTexFilter filter_;
     const int res_[2];
 
-    VkImage img_ = VK_NULL_HANDLE;
-    VkDeviceMemory mem_ = VK_NULL_HANDLE;
-    VkImageView img_view_ = VK_NULL_HANDLE;
+    ID3D12Resource *img_ = nullptr;
+    // VkImageView img_view_ = VK_NULL_HANDLE;
     Sampler sampler_;
 
     std::vector<TextureSplitter> splitters_;
@@ -26,13 +27,15 @@ class TextureAtlas {
     void WritePageData(int page, int posx, int posy, int sizex, int sizey, const void *data);
 
   public:
-    TextureAtlas(Context *ctx, eTexFormat format, eTexFilter filter, int resx, int resy, int page_count = 0);
+    TextureAtlas(Context *ctx, const char *name, eTexFormat format, eTexFilter filter, int resx, int resy,
+                 int page_count = 0);
     ~TextureAtlas();
 
     eTexFormat format() const { return format_; }
-    VkImage vk_image() const { return img_; }
-    VkImageView vk_imgage_view() const { return img_view_; }
-    VkSampler vk_sampler() const { return sampler_.vk_handle(); }
+    eTexFormat real_format() const { return real_format_; }
+    ID3D12Resource *dx_resource() const { return img_; }
+    // VkImageView vk_imgage_view() const { return img_view_; }
+    // VkSampler vk_sampler() const { return sampler_.vk_handle(); }
 
     int res_x() const { return res_[0]; }
     int res_y() const { return res_[1]; }
@@ -53,5 +56,5 @@ class TextureAtlas {
 
     mutable eResState resource_state = eResState::Undefined;
 };
-} // namespace Vk
+} // namespace Dx
 } // namespace Ray

@@ -88,6 +88,8 @@ class Context {
 
     bool rgb8_unorm_is_supported() const { return rgb8_unorm_is_supported_; }
 
+    bool image_blit_supported() const { return false; }
+
     // const VkPhysicalDeviceLimits &phys_device_limits() const { return phys_device_limits_; }
     // const VkPhysicalDeviceProperties &device_properties() const { return device_properties_; }
     // const VkPhysicalDeviceMemoryProperties &mem_properties() const { return mem_properties_; }

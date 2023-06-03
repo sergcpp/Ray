@@ -25,9 +25,9 @@ extern const VkFormat g_vk_formats[];
 
 #define _MIN(x, y) ((x) < (y) ? (x) : (y))
 
-Ray::Vk::TextureAtlas::TextureAtlas(Context *ctx, const eTexFormat format, const eTexFilter filter, const int resx,
-                                    const int resy, const int pages_count)
-    : ctx_(ctx), format_(format), filter_(filter), res_{resx, resy} {
+Ray::Vk::TextureAtlas::TextureAtlas(Context *ctx, const char *name, const eTexFormat format, const eTexFilter filter,
+                                    const int resx, const int resy, const int pages_count)
+    : ctx_(ctx), name_(name), format_(format), filter_(filter), res_{resx, resy} {
     if (!Resize(pages_count)) {
         throw std::runtime_error("TextureAtlas cannot be resized!");
     }
@@ -155,8 +155,12 @@ void Ray::Vk::TextureAtlas::AllocateMips(const color_t<T, N> *data, const int _r
 
     // TODO: try to get rid of these allocations
     std::vector<color_t<T, N>> _src_data, dst_data;
-    for (int i = 0; i < mip_count; ++i) {
+    int i = 0;
+    for (; i < mip_count; ++i) {
         const int dst_res[2] = {(src_res[0] + 1) / 2, (src_res[1] + 1) / 2};
+        if (dst_res[0] < 4 || dst_res[1] < 4) {
+            break;
+        }
 
         dst_data.clear();
         dst_data.reserve(dst_res[0] * dst_res[1]);
@@ -187,6 +191,11 @@ void Ray::Vk::TextureAtlas::AllocateMips(const color_t<T, N> *data, const int _r
         src_res[0] = dst_res[0];
         src_res[1] = dst_res[1];
         std::swap(_src_data, dst_data);
+    }
+    for (; i < mip_count; ++i) {
+        pos[i][0] = pos[i - 1][0];
+        pos[i][1] = pos[i - 1][1];
+        page[i] = page[i - 1];
     }
 }
 
@@ -321,6 +330,14 @@ bool Ray::Vk::TextureAtlas::Resize(const int pages_count) {
             throw std::runtime_error("Failed to bind memory!");
         }
     }
+
+#ifdef ENABLE_OBJ_LABELS
+    VkDebugUtilsObjectNameInfoEXT name_info = {VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT};
+    name_info.objectType = VK_OBJECT_TYPE_IMAGE;
+    name_info.objectHandle = uint64_t(new_img);
+    name_info.pObjectName = name_.c_str();
+    vkSetDebugUtilsObjectNameEXT(ctx_->device(), &name_info);
+#endif
 
     { // create default image view
         VkImageViewCreateInfo view_info = {VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};

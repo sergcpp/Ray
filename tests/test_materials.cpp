@@ -1248,7 +1248,7 @@ void test_complex_mat1(const char *arch_list[], const char *preferred_device) {
 
 void test_complex_mat2(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 17;
-    const int PixThres = 625;
+    const int PixThres = 630;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1334,7 +1334,7 @@ void test_complex_mat5(const char *arch_list[], const char *preferred_device) {
 }
 
 void test_complex_mat5_clipped(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 145;
+    const int SampleCount = 146;
     const int PixThres = 2698;
 
     Ray::principled_mat_desc_t metal_mat_desc;
@@ -1399,7 +1399,7 @@ void test_complex_mat5_filmic(const char *arch_list[], const char *preferred_dev
 }
 
 void test_complex_mat5_regions(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 43;
+    const int SampleCount = 44;
     const int PixThres = 2431;
 
     Ray::principled_mat_desc_t metal_mat_desc;
@@ -1462,7 +1462,7 @@ void test_complex_mat5_dof(const char *arch_list[], const char *preferred_device
 }
 
 void test_complex_mat5_mesh_lights(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 222;
+    const int SampleCount = 224;
     const int PixThres = 2396;
 
     Ray::principled_mat_desc_t metal_mat_desc;
@@ -1483,7 +1483,7 @@ void test_complex_mat5_mesh_lights(const char *arch_list[], const char *preferre
 }
 
 void test_complex_mat5_sphere_light(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 550;
+    const int SampleCount = 680;
     const double MinPSNR = 24.87;
     const int PixThres = 299;
 

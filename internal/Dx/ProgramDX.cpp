@@ -58,7 +58,9 @@ Ray::Dx::Program &Ray::Dx::Program::operator=(Program &&rhs) noexcept {
     shaders_ = rhs.shaders_;
     attributes_ = std::move(rhs.attributes_);
     uniforms_ = std::move(rhs.uniforms_);
-    param_indices_ = std::move(rhs.param_indices_);
+    for (int i = 0; i < COUNT_OF(descr_indices_); ++i) {
+        descr_indices_[i] = std::move(rhs.descr_indices_[i]);
+    }
     pc_param_index_ = exchange(rhs.pc_param_index_, -1);
     name_ = std::move(rhs.name_);
 
@@ -149,6 +151,7 @@ bool Ray::Dx::Program::InitRootSignature(ILog *log) {
 
     D3D12_ROOT_PARAMETER root_parameters[3] = {};
     SmallVector<D3D12_DESCRIPTOR_RANGE, 32> descriptor_ranges[3];
+    short descriptor_count[3] = {};
 
     for (int i = 0; i < int(eShaderType::_Count); ++i) {
         const Shader *sh_ref = shaders_[i];
@@ -157,17 +160,16 @@ bool Ray::Dx::Program::InitRootSignature(ILog *log) {
         }
 
         const Shader &sh = (*sh_ref);
-
         assert(!device || device == sh.device());
         device = sh.device();
 
         for (const Descr &u : sh.unif_bindings) {
             const int rp_index = (u.input_type == D3D_SIT_SAMPLER) ? 1 : (u.space != 0) ? 2 : 0;
 
-            if (u.loc >= param_indices_.size()) {
-                param_indices_.resize(std::max(u.loc + 1, int(param_indices_.size())), -1);
+            if (u.loc >= descr_indices_[rp_index].size()) {
+                descr_indices_[rp_index].resize(std::max(u.loc + 1, int(descr_indices_[rp_index].size())), -1);
             }
-            param_indices_[u.loc] = short(descriptor_ranges[rp_index].size());
+            descr_indices_[rp_index][u.loc] = descriptor_count[rp_index];
 
             D3D12_DESCRIPTOR_RANGE_TYPE range_type = {};
             if (u.input_type == D3D_SIT_BYTEADDRESS || u.input_type == D3D_SIT_TEXTURE) {
@@ -187,6 +189,8 @@ bool Ray::Dx::Program::InitRootSignature(ILog *log) {
             desc_range.BaseShaderRegister = u.loc;
             desc_range.RegisterSpace = u.space;
             desc_range.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+            descriptor_count[rp_index] += desc_range.NumDescriptors;
 
             /*auto &bindings = layout_bindings[u.set];
 
@@ -213,7 +217,7 @@ bool Ray::Dx::Program::InitRootSignature(ILog *log) {
         }
 
         for (const Range &u : sh.pc_ranges) {
-            pc_param_index_ = int(descriptor_ranges[0].size());
+            pc_param_index_ = descriptor_count[0]++;
 
             D3D12_DESCRIPTOR_RANGE &desc_range = descriptor_ranges[0].emplace_back();
             desc_range.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;

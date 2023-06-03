@@ -14,9 +14,8 @@
 #include "ContextDX.h"
 #include "DescriptorPoolDX.h"
 #include "PipelineDX.h"
+#include "TextureAtlasDX.h"
 #include "TextureDX.h"
-// #include "TextureAtlasVK.h"
-// #include "VK.h"
 
 namespace Ray {
 namespace Dx {
@@ -31,13 +30,13 @@ void Ray::Dx::PrepareDescriptors(Context *ctx, ID3D12GraphicsCommandList *cmd_bu
 
     DescrSizes descr_sizes;
     for (const auto &b : bindings) {
-        if (b.trg == eBindTarget::Tex2DSampled) {
-            ++descr_sizes.cbv_srv_uav_count;
-            ++descr_sizes.sampler_count;
+        if (b.trg == eBindTarget::Tex2DSampled || b.trg == eBindTarget::Tex2DArraySampled) {
+            descr_sizes.cbv_srv_uav_count += b.handle.count;
+            descr_sizes.sampler_count += b.handle.count;
         } else if (b.trg == eBindTarget::Tex2D || b.trg == eBindTarget::Tex3D || b.trg == eBindTarget::Tex2DArray ||
                    b.trg == eBindTarget::UBuf || b.trg == eBindTarget::TBuf || b.trg == eBindTarget::SBufRO ||
                    b.trg == eBindTarget::SBufRW || b.trg == eBindTarget::Image) {
-            ++descr_sizes.cbv_srv_uav_count;
+            descr_sizes.cbv_srv_uav_count += b.handle.count;
         } else if (b.trg == eBindTarget::DescrTable) {
             if (b.handle.descr_table->gpu_ptr) {
                 descriptor_heaps[int(b.handle.descr_table->type)] = b.handle.descr_table->gpu_heap;
@@ -87,8 +86,8 @@ void Ray::Dx::PrepareDescriptors(Context *ctx, ID3D12GraphicsCommandList *cmd_bu
     sampler_gpu_handle.ptr += pool_refs.sampler.offset * sampler_incr;
 
     for (const auto &b : bindings) {
-        const short param_index = prog->param_index(b.loc);
-        if (param_index == -1) {
+        const short descr_index = prog->descr_index(0, b.loc);
+        if (descr_index == -1) {
             continue;
         }
 
@@ -103,10 +102,12 @@ void Ray::Dx::PrepareDescriptors(Context *ctx, ID3D12GraphicsCommandList *cmd_bu
             srv_desc.Texture2D.ResourceMinLODClamp = 0.0f;
 
             D3D12_CPU_DESCRIPTOR_HANDLE srv_dest_handle = cbv_srv_uav_cpu_handle;
-            srv_dest_handle.ptr += cbv_srv_uav_incr * param_index;
+            srv_dest_handle.ptr += cbv_srv_uav_incr * descr_index;
             device->CreateShaderResourceView(b.handle.tex->dx_resource(), &srv_desc, srv_dest_handle);
 
             if (b.trg == eBindTarget::Tex2DSampled) {
+                const short descr_index = prog->descr_index(1, b.loc);
+
                 D3D12_SAMPLER_DESC sampler_desc = {};
                 sampler_desc.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
                 sampler_desc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
@@ -116,8 +117,45 @@ void Ray::Dx::PrepareDescriptors(Context *ctx, ID3D12GraphicsCommandList *cmd_bu
                 sampler_desc.MaxLOD = 1000.0f;
 
                 D3D12_CPU_DESCRIPTOR_HANDLE sampler_dest_handle = sampler_cpu_handle;
-                sampler_dest_handle.ptr += sampler_incr * param_index;
+                sampler_dest_handle.ptr += sampler_incr * descr_index;
                 device->CreateSampler(&sampler_desc, sampler_dest_handle);
+            }
+        } else if (b.trg == eBindTarget::Tex2DArray || b.trg == eBindTarget::Tex2DArraySampled) {
+            for (int i = 0; i < b.handle.count; ++i) {
+                D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
+                if (GetColorChannelCount(b.handle.tex_arr[i].real_format()) == 1) {
+                    srv_desc.Shader4ComponentMapping = D3D12_ENCODE_SHADER_4_COMPONENT_MAPPING(0, 0, 0, 0);
+                } else {
+                    srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+                }
+                srv_desc.Format = g_dx_formats[int(b.handle.tex_arr[i].real_format())];
+                srv_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
+                srv_desc.Texture2DArray.FirstArraySlice = 0;
+                srv_desc.Texture2DArray.ArraySize = std::max(b.handle.tex_arr[i].page_count(), 1);
+                srv_desc.Texture2DArray.MipLevels = 1;
+                srv_desc.Texture2DArray.MostDetailedMip = 0;
+                srv_desc.Texture2DArray.PlaneSlice = 0;
+                srv_desc.Texture2DArray.ResourceMinLODClamp = 0.0f;
+
+                D3D12_CPU_DESCRIPTOR_HANDLE srv_dest_handle = cbv_srv_uav_cpu_handle;
+                srv_dest_handle.ptr += cbv_srv_uav_incr * (descr_index + i);
+                device->CreateShaderResourceView(b.handle.tex_arr[i].dx_resource(), &srv_desc, srv_dest_handle);
+
+                if (b.trg == eBindTarget::Tex2DArraySampled) {
+                    const short descr_index = prog->descr_index(1, b.loc);
+
+                    D3D12_SAMPLER_DESC sampler_desc = {};
+                    sampler_desc.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+                    sampler_desc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+                    sampler_desc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+                    sampler_desc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+                    sampler_desc.MinLOD = 0.0f;
+                    sampler_desc.MaxLOD = 1000.0f;
+
+                    D3D12_CPU_DESCRIPTOR_HANDLE sampler_dest_handle = sampler_cpu_handle;
+                    sampler_dest_handle.ptr += sampler_incr * (descr_index + i);
+                    device->CreateSampler(&sampler_desc, sampler_dest_handle);
+                }
             }
         } else if (b.trg == eBindTarget::Tex3D) {
             D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
@@ -130,7 +168,7 @@ void Ray::Dx::PrepareDescriptors(Context *ctx, ID3D12GraphicsCommandList *cmd_bu
             srv_desc.Texture2D.ResourceMinLODClamp = 0.0f;
 
             D3D12_CPU_DESCRIPTOR_HANDLE srv_dest_handle = cbv_srv_uav_cpu_handle;
-            srv_dest_handle.ptr += cbv_srv_uav_incr * param_index;
+            srv_dest_handle.ptr += cbv_srv_uav_incr * descr_index;
             device->CreateShaderResourceView(b.handle.tex3d->dx_resource(), &srv_desc, srv_dest_handle);
         } else if (b.trg == eBindTarget::SBufRO) {
             D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
@@ -143,7 +181,7 @@ void Ray::Dx::PrepareDescriptors(Context *ctx, ID3D12GraphicsCommandList *cmd_bu
             srv_desc.Buffer.StructureByteStride = 0;
 
             D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = cbv_srv_uav_cpu_handle;
-            dest_handle.ptr += cbv_srv_uav_incr * param_index;
+            dest_handle.ptr += cbv_srv_uav_incr * descr_index;
             device->CreateShaderResourceView(b.handle.buf->dx_resource(), &srv_desc, dest_handle);
         } else if (b.trg == eBindTarget::SBufRW) {
             D3D12_UNORDERED_ACCESS_VIEW_DESC uav_desc = {};
@@ -155,7 +193,7 @@ void Ray::Dx::PrepareDescriptors(Context *ctx, ID3D12GraphicsCommandList *cmd_bu
             uav_desc.Buffer.StructureByteStride = 0;
 
             D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = cbv_srv_uav_cpu_handle;
-            dest_handle.ptr += cbv_srv_uav_incr * param_index;
+            dest_handle.ptr += cbv_srv_uav_incr * descr_index;
             device->CreateUnorderedAccessView(b.handle.buf->dx_resource(), nullptr, &uav_desc, dest_handle);
         } else if (b.trg == eBindTarget::Image) {
             D3D12_UNORDERED_ACCESS_VIEW_DESC uav_desc = {};
@@ -165,7 +203,7 @@ void Ray::Dx::PrepareDescriptors(Context *ctx, ID3D12GraphicsCommandList *cmd_bu
             uav_desc.Texture2D.MipSlice = 0;
 
             D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = cbv_srv_uav_cpu_handle;
-            dest_handle.ptr += cbv_srv_uav_incr * param_index;
+            dest_handle.ptr += cbv_srv_uav_incr * descr_index;
             device->CreateUnorderedAccessView(b.handle.tex->dx_resource(), nullptr, &uav_desc, dest_handle);
         } else if (b.trg == eBindTarget::DescrTable && b.handle.descr_table->count) {
             if (b.handle.descr_table->gpu_ptr) {

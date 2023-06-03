@@ -261,12 +261,14 @@ if(WIN32)
                         internal/Dx/RenderPassDX.cpp
                         internal/Dx/ResourceDX.h
                         internal/Dx/ResourceDX.cpp
+                        internal/Dx/SamplerDX.h
+                        internal/Dx/SamplerDX.cpp
                         internal/Dx/ShaderDX.h
                         internal/Dx/ShaderDX.cpp
                         internal/Dx/TextureDX.h
                         internal/Dx/TextureDX.cpp
-                        #internal/Dx/TextureAtlasDX.h
-                        #internal/Dx/TextureAtlasDX.cpp
+                        internal/Dx/TextureAtlasDX.h
+                        internal/Dx/TextureAtlasDX.cpp
                         internal/Dx/VertexInputDX.h
                         internal/Dx/VertexInputDX.cpp)
 endif(WIN32)
