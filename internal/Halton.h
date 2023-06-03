@@ -1,5 +1,8 @@
 #pragma once
 
+#include <cstdint>
+
+#include <limits>
 #include <vector>
 
 namespace Ray {

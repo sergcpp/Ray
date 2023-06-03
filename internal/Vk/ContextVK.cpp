@@ -342,6 +342,10 @@ bool Ray::Vk::Context::ChooseVkPhysicalDevice(VkPhysicalDevice &physical_device,
         VkPhysicalDeviceProperties device_properties = {};
         vkGetPhysicalDeviceProperties(physical_devices[i], &device_properties);
 
+        if (device_properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU) {
+            continue;
+        }
+
         bool acc_struct_supported = false, raytracing_supported = false, ray_query_supported = false,
              dynamic_rendering_supported = false;
 
@@ -792,6 +796,7 @@ int Ray::Vk::Context::QueryAvailableDevices(ILog *log, gpu_device_t out_devices[
     SmallVector<VkPhysicalDevice, 4> physical_devices(physical_device_count);
     vkEnumeratePhysicalDevices(instance, &physical_device_count, &physical_devices[0]);
 
+    int out_device_count = 0;
     if (out_devices) {
         if (int(physical_device_count) > capacity) {
             log->Warning("Insufficiend devices copacity");
@@ -802,11 +807,16 @@ int Ray::Vk::Context::QueryAvailableDevices(ILog *log, gpu_device_t out_devices[
             VkPhysicalDeviceProperties device_properties = {};
             vkGetPhysicalDeviceProperties(physical_devices[i], &device_properties);
 
+            if (device_properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU) {
+                continue;
+            }
+
 #pragma warning(suppress : 4996)
-            strncpy(out_devices[i].name, device_properties.deviceName, sizeof(out_devices[i].name));
+            strncpy(out_devices[out_device_count].name, device_properties.deviceName, sizeof(out_devices[i].name));
+            ++out_device_count;
         }
     }
     vkDestroyInstance(instance, nullptr);
 
-    return int(physical_device_count);
+    return out_device_count;
 }
