@@ -108,9 +108,10 @@ struct alignas(32) mbvh_node_t {
 };
 static_assert(sizeof(mbvh_node_t) == 224, "!");
 
-const int NUM_MIP_LEVELS = 14;
+const int NUM_MIP_LEVELS = 12;
 const int MAX_MIP_LEVEL = NUM_MIP_LEVELS - 1;
-const int MAX_TEXTURE_SIZE = (1 << MAX_MIP_LEVEL);
+const int MIN_ATLAS_TEXTURE_SIZE = 4;
+const int MAX_ATLAS_TEXTURE_SIZE = (MIN_ATLAS_TEXTURE_SIZE << MAX_MIP_LEVEL);
 
 const int TEXTURE_ATLAS_SIZE = 8192 + 256; // small margin to account for borders
 
@@ -124,10 +125,10 @@ struct atlas_texture_t {
     uint16_t width;
     uint16_t height;
     uint32_t atlas;
-    uint8_t page[NUM_MIP_LEVELS + 2];
+    uint8_t page[NUM_MIP_LEVELS];
     uint16_t pos[NUM_MIP_LEVELS][2];
 };
-static_assert(sizeof(atlas_texture_t) == 80, "!");
+static_assert(sizeof(atlas_texture_t) == 68, "!");
 
 const uint32_t TEX_SRGB_BIT = (0b00000001u << 24);
 const uint32_t TEX_RECONSTRUCT_Z_BIT = (0b00000010u << 24);

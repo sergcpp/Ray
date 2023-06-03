@@ -886,11 +886,11 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
     { // transition resources
         SmallVector<TransitionInfo, 16> res_transitions;
 
-        // for (const auto &tex_atlas : s->tex_atlases_) {
-        //     if (tex_atlas.resource_state != eResState::ShaderResource) {
-        //         res_transitions.emplace_back(&tex_atlas, eResState::ShaderResource);
-        //     }
-        // }
+        for (const auto &tex_atlas : s->tex_atlases_) {
+            if (tex_atlas.resource_state != eResState::ShaderResource) {
+                res_transitions.emplace_back(&tex_atlas, eResState::ShaderResource);
+            }
+        }
 
         if (sc_data.mi_indices && sc_data.mi_indices.resource_state != eResState::ShaderResource) {
             res_transitions.emplace_back(&sc_data.mi_indices, eResState::ShaderResource);
@@ -1002,8 +1002,7 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         DebugMarker _(cmd_buf, "IntersectScenePrimary");
         timestamps_[ctx_->backend_frame].primary_trace[0] = ctx_->WriteTimestamp(cmd_buf, true);
         kernel_IntersectScene(cmd_buf, indir_args_buf_, 0, counters_buf_, cam.pass_settings, sc_data, halton_seq_buf_,
-                              hi + RAND_DIM_BASE_COUNT, macro_tree_root, cam.clip_end - cam.clip_start,
-                              // s->tex_atlases_,
+                              hi + RAND_DIM_BASE_COUNT, macro_tree_root, cam.clip_end - cam.clip_start, s->tex_atlases_,
                               s->bindless_tex_data_, prim_rays_buf_, prim_hits_buf_);
         timestamps_[ctx_->backend_frame].primary_trace[1] = ctx_->WriteTimestamp(cmd_buf, false);
     }
@@ -1014,7 +1013,7 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         DebugMarker _(cmd_buf, "ShadePrimaryHits");
         timestamps_[ctx_->backend_frame].primary_shade[0] = ctx_->WriteTimestamp(cmd_buf, true);
         kernel_ShadePrimaryHits(cmd_buf, cam.pass_settings, s->env_, indir_args_buf_, 0, prim_hits_buf_, prim_rays_buf_,
-                                sc_data, halton_seq_buf_, hi + RAND_DIM_BASE_COUNT, rect, // s->tex_atlases_,
+                                sc_data, halton_seq_buf_, hi + RAND_DIM_BASE_COUNT, rect, s->tex_atlases_,
                                 s->bindless_tex_data_, temp_buf0_, secondary_rays_buf_, shadow_rays_buf_, counters_buf_,
                                 temp_base_color, temp_depth_normals_buf_);
         timestamps_[ctx_->backend_frame].primary_shade[1] = ctx_->WriteTimestamp(cmd_buf, false);
@@ -1030,8 +1029,8 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         timestamps_[ctx_->backend_frame].primary_shadow[0] = ctx_->WriteTimestamp(cmd_buf, true);
         kernel_IntersectSceneShadow(cmd_buf, cam.pass_settings, indir_args_buf_, 2, counters_buf_, sc_data,
                                     halton_seq_buf_, hi + RAND_DIM_BASE_COUNT, macro_tree_root,
-                                    cam.pass_settings.clamp_direct, // s->tex_atlases_,
-                                    s->bindless_tex_data_, shadow_rays_buf_, temp_buf0_);
+                                    cam.pass_settings.clamp_direct, s->tex_atlases_, s->bindless_tex_data_,
+                                    shadow_rays_buf_, temp_buf0_);
         timestamps_[ctx_->backend_frame].primary_shadow[1] = ctx_->WriteTimestamp(cmd_buf, false);
     }
 
@@ -1064,8 +1063,7 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         { // trace secondary rays
             DebugMarker _(cmd_buf, "IntersectSceneSecondary");
             kernel_IntersectScene(cmd_buf, indir_args_buf_, 0, counters_buf_, cam.pass_settings, sc_data,
-                                  halton_seq_buf_, hi + RAND_DIM_BASE_COUNT, macro_tree_root,
-                                  MAX_DIST, // s->tex_atlases_,
+                                  halton_seq_buf_, hi + RAND_DIM_BASE_COUNT, macro_tree_root, MAX_DIST, s->tex_atlases_,
                                   s->bindless_tex_data_, secondary_rays_buf_, prim_hits_buf_);
         }
 
@@ -1082,9 +1080,8 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
             timestamps_[ctx_->backend_frame].secondary_shade.push_back(ctx_->WriteTimestamp(cmd_buf, true));
             kernel_ShadeSecondaryHits(cmd_buf, cam.pass_settings, s->env_, indir_args_buf_, 0, prim_hits_buf_,
                                       secondary_rays_buf_, sc_data, halton_seq_buf_, hi + RAND_DIM_BASE_COUNT,
-                                      // s->tex_atlases_,
-                                      s->bindless_tex_data_, temp_buf0_, prim_rays_buf_, shadow_rays_buf_,
-                                      counters_buf_);
+                                      s->tex_atlases_, s->bindless_tex_data_, temp_buf0_, prim_rays_buf_,
+                                      shadow_rays_buf_, counters_buf_);
             timestamps_[ctx_->backend_frame].secondary_shade.push_back(ctx_->WriteTimestamp(cmd_buf, false));
         }
 
@@ -1098,8 +1095,8 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
             timestamps_[ctx_->backend_frame].secondary_shadow.push_back(ctx_->WriteTimestamp(cmd_buf, true));
             kernel_IntersectSceneShadow(cmd_buf, cam.pass_settings, indir_args_buf_, 2, counters_buf_, sc_data,
                                         halton_seq_buf_, hi + RAND_DIM_BASE_COUNT, macro_tree_root,
-                                        cam.pass_settings.clamp_indirect, // s->tex_atlases_,
-                                        s->bindless_tex_data_, shadow_rays_buf_, temp_buf0_);
+                                        cam.pass_settings.clamp_indirect, s->tex_atlases_, s->bindless_tex_data_,
+                                        shadow_rays_buf_, temp_buf0_);
             timestamps_[ctx_->backend_frame].secondary_shadow.push_back(ctx_->WriteTimestamp(cmd_buf, false));
         }
 

@@ -27,6 +27,7 @@ enum class eBindTarget : uint16_t {
     Tex2DSampled,
     Tex2DMs,
     Tex2DArray,
+    Tex2DArraySampled,
     TexCubeArray,
     Tex3D,
     TBuf,

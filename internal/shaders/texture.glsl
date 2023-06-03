@@ -101,6 +101,7 @@ vec2 TransformUV(const vec2 _uv, const atlas_texture_t t, const int mip_level) {
     if (((t.size >> 16) & ATLAS_TEX_MIPS_BIT) != 0) {
         size = vec2(float((t.size & ATLAS_TEX_WIDTH_BITS) >> mip_level),
                     float(((t.size >> 16) & ATLAS_TEX_HEIGHT_BITS) >> mip_level));
+        size = max(size, vec2(MIN_ATLAS_TEXTURE_SIZE));
     }
     const vec2 uv = fract(_uv);
     return pos + uv * size + 1.0;

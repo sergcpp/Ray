@@ -7,7 +7,7 @@
 // #include "Vk/AccStructureVK.h"
 #include "Dx/DescriptorPoolDX.h"
 #include "Dx/TextureDX.h"
-// #include "Vk/TextureAtlasVK.h"
+#include "Dx/TextureAtlasDX.h"
 
 namespace Ray {
 namespace Dx {
@@ -49,7 +49,7 @@ class Scene : public SceneBase {
 
     // SmallVector<VkDescriptorSet, 1024> textures_descr_sets_;
 
-    // TextureAtlas tex_atlases_[7];
+    TextureAtlas tex_atlases_[7];
 
     SparseStorage<light_t> lights_;
     Vector<uint32_t> li_indices_;

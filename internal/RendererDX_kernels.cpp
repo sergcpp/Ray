@@ -79,9 +79,8 @@ void Ray::Dx::Renderer::kernel_GeneratePrimaryRays(CommandBuffer cmd_buf, const 
 void Ray::Dx::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const pass_settings_t &settings,
                                               const scene_data_t &sc_data, const Buffer &random_seq, const int hi,
                                               const rect_t &rect, const uint32_t node_index, const float inter_t,
-                                              // Span<const TextureAtlas> tex_atlases,
-                                              const BindlessTexData &bindless_tex, const Buffer &rays,
-                                              const Buffer &out_hits) {
+                                              Span<const TextureAtlas> tex_atlases, const BindlessTexData &bindless_tex,
+                                              const Buffer &rays, const Buffer &out_hits) {
     const TransitionInfo res_transitions[] = {{&rays, eResState::UnorderedAccess},
                                               {&out_hits, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
@@ -103,8 +102,8 @@ void Ray::Dx::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const pass_
         // vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, pi_intersect_scene_.layout(), 1, 1,
         //                         &tex_descr_set, 0, nullptr);
     } else {
-        // bindings.emplace_back(eBindTarget::SBufRO, Types::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
-        // bindings.emplace_back(eBindTarget::Tex2DArray, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
+        bindings.emplace_back(eBindTarget::SBufRO, Types::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
+        bindings.emplace_back(eBindTarget::Tex2DArraySampled, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
     }
 
     if (use_hwrt_) {
@@ -183,7 +182,7 @@ void Ray::Dx::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const Buffe
                                               const int indir_args_index, const Buffer &counters,
                                               const pass_settings_t &settings, const scene_data_t &sc_data,
                                               const Buffer &random_seq, const int hi, uint32_t node_index,
-                                              const float inter_t, // Span<const TextureAtlas> tex_atlases,
+                                              const float inter_t, Span<const TextureAtlas> tex_atlases,
                                               const BindlessTexData &bindless_tex, const Buffer &rays,
                                               const Buffer &out_hits) {
     const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
@@ -210,8 +209,8 @@ void Ray::Dx::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const Buffe
         // vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, pi_intersect_scene_indirect_.layout(), 1, 1,
         //                         &tex_descr_set, 0, nullptr);
     } else {
-        // bindings.emplace_back(eBindTarget::SBufRO, Types::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
-        // bindings.emplace_back(eBindTarget::Tex2DArray, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
+        bindings.emplace_back(eBindTarget::SBufRO, Types::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
+        bindings.emplace_back(eBindTarget::Tex2DArraySampled, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
     }
 
     if (use_hwrt_) {
@@ -305,7 +304,7 @@ void Ray::Dx::Renderer::kernel_IntersectAreaLights(CommandBuffer cmd_buf, const 
 void Ray::Dx::Renderer::kernel_ShadePrimaryHits(
     CommandBuffer cmd_buf, const pass_settings_t &settings, const environment_t &env, const Buffer &indir_args,
     const int indir_args_index, const Buffer &hits, const Buffer &rays, const scene_data_t &sc_data,
-    const Buffer &random_seq, const int hi, const rect_t &rect, // Span<const TextureAtlas> tex_atlases,
+    const Buffer &random_seq, const int hi, const rect_t &rect, Span<const TextureAtlas> tex_atlases,
     const BindlessTexData &bindless_tex, const Texture2D &out_img, const Buffer &out_rays, const Buffer &out_sh_rays,
     const Buffer &inout_counters, const Texture2D &out_base_color, const Texture2D &out_depth_normals) {
     const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
@@ -390,7 +389,7 @@ void Ray::Dx::Renderer::kernel_ShadePrimaryHits(
         bindings.emplace_back(eBindTarget::DescrTable, 1, bindless_tex.sampler_descr_table);
     } else {
         bindings.emplace_back(eBindTarget::SBufRO, Types::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
-        // bindings.emplace_back(eBindTarget::Tex2DArray, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
+        bindings.emplace_back(eBindTarget::Tex2DArraySampled, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
     }
 
     DispatchComputeIndirect(cmd_buf, *pi, indir_args, indir_args_index * sizeof(DispatchIndirectCommand), bindings,
@@ -401,7 +400,7 @@ void Ray::Dx::Renderer::kernel_ShadeSecondaryHits(CommandBuffer cmd_buf, const p
                                                   const environment_t &env, const Buffer &indir_args,
                                                   const int indir_args_index, const Buffer &hits, const Buffer &rays,
                                                   const scene_data_t &sc_data, const Buffer &random_seq,
-                                                  const int hi, // Span<const TextureAtlas> tex_atlases,
+                                                  const int hi, Span<const TextureAtlas> tex_atlases,
                                                   const BindlessTexData &bindless_tex, const Texture2D &out_img,
                                                   const Buffer &out_rays, const Buffer &out_sh_rays,
                                                   const Buffer &inout_counters) {
@@ -464,7 +463,7 @@ void Ray::Dx::Renderer::kernel_ShadeSecondaryHits(CommandBuffer cmd_buf, const p
         //                         &tex_descr_set, 0, nullptr);
     } else {
         bindings.emplace_back(eBindTarget::SBufRO, Types::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
-        // bindings.emplace_back(eBindTarget::Tex2DArray, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
+        bindings.emplace_back(eBindTarget::Tex2DArraySampled, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
     }
 
     DispatchComputeIndirect(cmd_buf, pi_shade_secondary_, indir_args,
@@ -476,7 +475,7 @@ void Ray::Dx::Renderer::kernel_IntersectSceneShadow(CommandBuffer cmd_buf, const
                                                     const Buffer &indir_args, const int indir_args_index,
                                                     const Buffer &counters, const scene_data_t &sc_data,
                                                     const Buffer &random_seq, const int hi, const uint32_t node_index,
-                                                    const float clamp_val, // Span<const TextureAtlas> tex_atlases,
+                                                    const float clamp_val, Span<const TextureAtlas> tex_atlases,
                                                     const BindlessTexData &bindless_tex, const Buffer &sh_rays,
                                                     const Texture2D &out_img) {
     const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
@@ -517,7 +516,7 @@ void Ray::Dx::Renderer::kernel_IntersectSceneShadow(CommandBuffer cmd_buf, const
         //                         &tex_descr_set, 0, nullptr);
     } else {
         bindings.emplace_back(eBindTarget::SBufRO, Types::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
-        // bindings.emplace_back(eBindTarget::Tex2DArray, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
+        bindings.emplace_back(eBindTarget::Tex2DArraySampled, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
     }
 
     IntersectSceneShadow::Params uniform_params = {};

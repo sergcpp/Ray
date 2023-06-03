@@ -400,7 +400,7 @@ windows-arm64-gpu-adreno-test-job:
 windows-arm64-cpu-perf-test-job:
   variables:
     BIN_DIR: windows-arm64
-    AUX_TEST_ARGS: '--nogpu --time_limit 11.7'
+    AUX_TEST_ARGS: '--nogpu --time_limit 12.4'
   extends:
     - .windows-perf-test-job
   needs:

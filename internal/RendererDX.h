@@ -128,7 +128,7 @@ class Renderer : public RendererBase {
                                     const Buffer &inout_counters, const Buffer &out_rays);
     void kernel_IntersectScene(CommandBuffer cmd_buf, const pass_settings_t &settings, const scene_data_t &sc_data,
                                const Buffer &random_seq, int hi, const rect_t &rect, uint32_t node_index, float inter_t,
-                               /*Span<const TextureAtlas> tex_atlases,*/ const BindlessTexData &bindless_tex,
+                               Span<const TextureAtlas> tex_atlases, const BindlessTexData &bindless_tex,
                                const Buffer &rays, const Buffer &out_hits);
     /*void kernel_IntersectScene_RTPipe(CommandBuffer cmd_buf, const pass_settings_t &settings,
                                       const scene_data_t &sc_data, const Buffer &random_seq, int hi, const rect_t &rect,
@@ -137,7 +137,7 @@ class Renderer : public RendererBase {
     void kernel_IntersectScene(CommandBuffer cmd_buf, const Buffer &indir_args, int indir_args_index,
                                const Buffer &counters, const pass_settings_t &settings, const scene_data_t &sc_data,
                                const Buffer &random_seq, int hi, uint32_t node_index, float inter_t,
-                               /*Span<const TextureAtlas> tex_atlases,*/ const BindlessTexData &bindless_tex,
+                               Span<const TextureAtlas> tex_atlases, const BindlessTexData &bindless_tex,
                                const Buffer &rays, const Buffer &out_hits);
     /*void kernel_IntersectScene_RTPipe(CommandBuffer cmd_buf, const Buffer &indir_args, int indir_args_index,
                                       const pass_settings_t &settings, const scene_data_t &sc_data,
@@ -147,24 +147,23 @@ class Renderer : public RendererBase {
     void kernel_IntersectSceneShadow(CommandBuffer cmd_buf, const pass_settings_t &settings, const Buffer &indir_args,
                                      int indir_args_index, const Buffer &counters, const scene_data_t &sc_data,
                                      const Buffer &random_seq, int hi, uint32_t node_index, float clamp_val,
-                                     // Span<const TextureAtlas> tex_atlases,
-                                     const BindlessTexData &bindless_tex, const Buffer &sh_rays,
-                                     const Texture2D &out_img);
+                                     Span<const TextureAtlas> tex_atlases, const BindlessTexData &bindless_tex,
+                                     const Buffer &sh_rays, const Texture2D &out_img);
     void kernel_IntersectAreaLights(CommandBuffer cmd_buf, const scene_data_t &sc_data, const Buffer &indir_args,
                                     const Buffer &counters, const Buffer &rays, const Buffer &inout_hits);
     void kernel_ShadePrimaryHits(CommandBuffer cmd_buf, const pass_settings_t &settings, const environment_t &env,
                                  const Buffer &indir_args, int indir_args_index, const Buffer &hits, const Buffer &rays,
                                  const scene_data_t &sc_data, const Buffer &random_seq, int hi, const rect_t &rect,
-                                 // Span<const TextureAtlas> tex_atlases,
-                                 const BindlessTexData &bindless_tex, const Texture2D &out_img, const Buffer &out_rays,
-                                 const Buffer &out_sh_rays, const Buffer &inout_counters,
-                                 const Texture2D &out_base_color, const Texture2D &out_depth_normals);
+                                 Span<const TextureAtlas> tex_atlases, const BindlessTexData &bindless_tex,
+                                 const Texture2D &out_img, const Buffer &out_rays, const Buffer &out_sh_rays,
+                                 const Buffer &inout_counters, const Texture2D &out_base_color,
+                                 const Texture2D &out_depth_normals);
     void kernel_ShadeSecondaryHits(CommandBuffer cmd_buf, const pass_settings_t &settings, const environment_t &env,
                                    const Buffer &indir_args, int indir_args_index, const Buffer &hits,
                                    const Buffer &rays, const scene_data_t &sc_data, const Buffer &random_seq, int hi,
-                                   // Span<const TextureAtlas> tex_atlases,
-                                   const BindlessTexData &bindless_tex, const Texture2D &out_img,
-                                   const Buffer &out_rays, const Buffer &out_sh_rays, const Buffer &inout_counters);
+                                   Span<const TextureAtlas> tex_atlases, const BindlessTexData &bindless_tex,
+                                   const Texture2D &out_img, const Buffer &out_rays, const Buffer &out_sh_rays,
+                                   const Buffer &inout_counters);
     void kernel_PrepareIndirArgs(CommandBuffer cmd_buf, const Buffer &inout_counters, const Buffer &out_indir_args);
     void kernel_MixIncremental(CommandBuffer cmd_buf, float main_mix_factor, float aux_mix_factor, const rect_t &rect,
                                int iteration, const Texture2D &temp_img, const Texture2D &temp_base_color,
@@ -206,10 +205,9 @@ class Renderer : public RendererBase {
     void kernel_SortInitCountTable(CommandBuffer cmd_buf, int shift, const Buffer &indir_args, int indir_args_index,
                                    const Buffer &hashes, const Buffer &counters, int counter_index,
                                    const Buffer &out_count_table);
-    void kernel_SortWriteSortedHashes(CommandBuffer cmd_buf, int shift, const Buffer &indir_args,
-                                      int indir_args_index, const Buffer &hashes, const Buffer &offsets,
-                                      const Buffer &counters, int counter_index, int chunks_counter_index,
-                                      const Buffer &out_chunks);
+    void kernel_SortWriteSortedHashes(CommandBuffer cmd_buf, int shift, const Buffer &indir_args, int indir_args_index,
+                                      const Buffer &hashes, const Buffer &offsets, const Buffer &counters,
+                                      int counter_index, int chunks_counter_index, const Buffer &out_chunks);
     void kernel_SortReorderRays(CommandBuffer cmd_buf, const Buffer &indir_args, int indir_args_index,
                                 const Buffer &in_rays, const Buffer &indices, const Buffer &counters, int counter_index,
                                 const Buffer &out_rays);

@@ -55,13 +55,14 @@ Ray::Vk::Scene::Scene(Context *ctx, const bool use_hwrt, const bool use_bindless
       transforms_(ctx, "Transforms"), meshes_(ctx, "Meshes"), mesh_instances_(ctx, "Mesh Instances"),
       mi_indices_(ctx, "MI Indices"), vertices_(ctx, "Vertices"), vtx_indices_(ctx, "Vtx Indices"),
       materials_(ctx, "Materials"), atlas_textures_(ctx, "Atlas Textures"), bindless_tex_data_{ctx},
-      tex_atlases_{{ctx, eTexFormat::RawRGBA8888, eTexFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
-                   {ctx, eTexFormat::RawRGB888, eTexFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
-                   {ctx, eTexFormat::RawRG88, eTexFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
-                   {ctx, eTexFormat::RawR8, eTexFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
-                   {ctx, eTexFormat::BC3, eTexFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
-                   {ctx, eTexFormat::BC4, eTexFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
-                   {ctx, eTexFormat::BC5, eTexFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE}},
+      tex_atlases_{
+          {ctx, "Atlas RGBA", eTexFormat::RawRGBA8888, eTexFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
+          {ctx, "Atlas RGB", eTexFormat::RawRGB888, eTexFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
+          {ctx, "Atlas RG", eTexFormat::RawRG88, eTexFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
+          {ctx, "Atlas R", eTexFormat::RawR8, eTexFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
+          {ctx, "Atlas BC3", eTexFormat::BC3, eTexFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
+          {ctx, "Atlas BC4", eTexFormat::BC4, eTexFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
+          {ctx, "Atlas BC5", eTexFormat::BC5, eTexFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE}},
       lights_(ctx, "Lights"), li_indices_(ctx, "LI Indices"), visible_lights_(ctx, "Visible Lights"),
       blocker_lights_(ctx, "Blocker Lights") {}
 
@@ -106,7 +107,7 @@ Ray::TextureHandle Ray::Vk::Scene::AddAtlasTexture_nolock(const tex_desc_t &_t) 
         t.width |= ATLAS_TEX_SRGB_BIT;
     }
 
-    if (_t.generate_mipmaps) {
+    if (_t.generate_mipmaps && _t.w > MIN_ATLAS_TEXTURE_SIZE && _t.h > MIN_ATLAS_TEXTURE_SIZE) {
         t.height |= ATLAS_TEX_MIPS_BIT;
     }
 
@@ -114,7 +115,7 @@ Ray::TextureHandle Ray::Vk::Scene::AddAtlasTexture_nolock(const tex_desc_t &_t) 
 
     const bool use_compression = use_tex_compression_ && !_t.force_no_compression;
 
-    std::unique_ptr<color_rg8_t[]> repacked_normalmap(new color_rg8_t[res[0] * res[1]]);
+    std::unique_ptr<color_rg8_t[]> repacked_normalmap;
     bool recostruct_z = false;
 
     const void *tex_data = _t.data;
@@ -193,7 +194,7 @@ Ray::TextureHandle Ray::Vk::Scene::AddAtlasTexture_nolock(const tex_desc_t &_t) 
         t.pos[i][1] = t.pos[0][1];
     }
 
-    if (_t.generate_mipmaps && use_compression) {
+    if (_t.generate_mipmaps && (use_compression || !ctx_->image_blit_supported())) {
         // We have to generate mips here as uncompressed data will be lost
 
         int pages[16], positions[16][2];
@@ -756,20 +757,20 @@ Ray::MeshHandle Ray::Vk::Scene::AddMesh(const mesh_desc_t &_m) {
 
         if (_m.layout == eVertexLayout::PxyzNxyzTuv) {
             memcpy(&v.t[0], (_m.vtx_attrs + i * stride + 6), 2 * sizeof(float));
-            //v.t[1][0] = v.t[1][1] = 0.0f;
+            // v.t[1][0] = v.t[1][1] = 0.0f;
             v.b[0] = v.b[1] = v.b[2] = 0.0f;
         } else if (_m.layout == eVertexLayout::PxyzNxyzTuvTuv) {
             memcpy(&v.t[0], (_m.vtx_attrs + i * stride + 6), 2 * sizeof(float));
-            //memcpy(&v.t[1][0], (_m.vtx_attrs + i * stride + 8), 2 * sizeof(float));
+            // memcpy(&v.t[1][0], (_m.vtx_attrs + i * stride + 8), 2 * sizeof(float));
             v.b[0] = v.b[1] = v.b[2] = 0.0f;
         } else if (_m.layout == eVertexLayout::PxyzNxyzBxyzTuv) {
             memcpy(&v.b[0], (_m.vtx_attrs + i * stride + 6), 3 * sizeof(float));
             memcpy(&v.t[0], (_m.vtx_attrs + i * stride + 9), 2 * sizeof(float));
-            //v.t[1][0] = v.t[1][1] = 0.0f;
+            // v.t[1][0] = v.t[1][1] = 0.0f;
         } else if (_m.layout == eVertexLayout::PxyzNxyzBxyzTuvTuv) {
             memcpy(&v.b[0], (_m.vtx_attrs + i * stride + 6), 3 * sizeof(float));
             memcpy(&v.t[0], (_m.vtx_attrs + i * stride + 9), 2 * sizeof(float));
-            //memcpy(&v.t[1][0], (_m.vtx_attrs + i * stride + 11), 2 * sizeof(float));
+            // memcpy(&v.t[1][0], (_m.vtx_attrs + i * stride + 11), 2 * sizeof(float));
         }
     }
 
@@ -1313,7 +1314,7 @@ void Ray::Vk::Scene::PrepareEnvMapQTree_nolock() {
     const float LumFractThreshold = 0.01f;
 
     cur_res = 2;
-    int the_last_required_lod;
+    int the_last_required_lod = 0;
     for (int lod = int(env_map_qtree_.mips.size()) - 1; lod >= 0; --lod) {
         the_last_required_lod = lod;
         const auto &cur_mip = env_map_qtree_.mips[lod];

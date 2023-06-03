@@ -125,7 +125,8 @@ const eTexUsage g_tex_usage_per_state[] = {
 };
 static_assert(sizeof(g_tex_usage_per_state) / sizeof(g_tex_usage_per_state[0]) == int(eResState::_Count), "!");
 
-inline UINT D3D12CalcSubresource(UINT MipSlice, UINT ArraySlice, UINT PlaneSlice, UINT MipLevels, UINT ArraySize) {
+uint32_t D3D12CalcSubresource(uint32_t MipSlice, uint32_t ArraySlice, uint32_t PlaneSlice, uint32_t MipLevels,
+                              uint32_t ArraySize) {
     return MipSlice + ArraySlice * MipLevels + PlaneSlice * MipLevels * ArraySize;
 }
 } // namespace Dx
@@ -323,12 +324,6 @@ bool Ray::Dx::Texture2D::Realloc(const int w, const int h, int mip_count, const 
         image_desc.SampleDesc.Count = samples; 
         image_desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
         image_desc.Flags = to_dx_image_flags(params.usage, format);
-
-        D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint;
-        UINT num_rows;
-        UINT64 total_bytes, row_size_in_bytes;
-        ctx_->device()->GetCopyableFootprints(&image_desc, 0, 1, 0, &footprint, &num_rows, &row_size_in_bytes,
-                                              &total_bytes);
 
         (void)new_image;
 #if 0
@@ -2426,22 +2421,6 @@ void Ray::Dx::Texture3D::SetSubImage(int offsetx, int offsety, int offsetz, int 
     dst_loc.SubresourceIndex = D3D12CalcSubresource(0, 0, 0, 1, 1);
 
     cmd_buf->CopyTextureRegion(&dst_loc, offsetx, offsety, offsetz, &src_loc, nullptr);
-
-    /*VkBufferImageCopy region = {};
-
-    region.bufferOffset = VkDeviceSize(data_off);
-    region.bufferRowLength = 0;
-    region.bufferImageHeight = 0;
-
-    region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    region.imageSubresource.mipLevel = 0;
-    region.imageSubresource.baseArrayLayer = 0;
-    region.imageSubresource.layerCount = 1;
-
-    region.imageOffset = {int32_t(offsetx), int32_t(offsety), int32_t(offsetz)};
-    region.imageExtent = {uint32_t(sizex), uint32_t(sizey), uint32_t(sizez)};
-
-    vkCmdCopyBufferToImage(cmd_buf, sbuf.vk_handle(), handle_.img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);*/
 }
 
 DXGI_FORMAT Ray::Dx::DXFormatFromTexFormat(eTexFormat format) { return g_dx_formats[size_t(format)]; }

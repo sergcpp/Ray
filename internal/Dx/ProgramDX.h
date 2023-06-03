@@ -30,7 +30,7 @@ class Program {
     ID3D12RootSignature *root_signature_ = nullptr;
     //SmallVector<VkDescriptorSetLayout, 4> descr_set_layouts_;
     //SmallVector<VkPushConstantRange, 8> pc_ranges_;
-    SmallVector<short, 32> param_indices_;
+    SmallVector<short, 16> descr_indices_[3];
     int pc_param_index_ = -1;
 
     bool InitRootSignature(ILog *log);
@@ -88,11 +88,11 @@ class Program {
 
     ID3D12RootSignature *root_signature() const { return root_signature_; }
 
-    const int param_index(const int i) const {
-        if (i >= int(param_indices_.size())) {
+    const int descr_index(const int table, const int i) const {
+        if (i >= int(descr_indices_[table].size())) {
             return -1;
         }
-        return int(param_indices_[i]);
+        return int(descr_indices_[table][i]);
     }
 
     //uint32_t descr_set_layouts_count() const { return uint32_t(descr_set_layouts_.size()); }

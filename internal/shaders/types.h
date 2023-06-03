@@ -85,9 +85,10 @@ const int PrincipledNode = 6;
 const UINT_TYPE MAT_FLAG_MULT_IMPORTANCE = (1u << 0u);
 const UINT_TYPE MAT_FLAG_MIX_ADD = (1u << 1u);
 
-const int NUM_MIP_LEVELS = 14;
+const int NUM_MIP_LEVELS = 12;
 const int MAX_MIP_LEVEL = NUM_MIP_LEVELS - 1;
-const int MAX_TEXTURE_SIZE = (1 << MAX_MIP_LEVEL);
+const int MIN_ATLAS_TEXTURE_SIZE = 4;
+const int MAX_ATLAS_TEXTURE_SIZE = (MIN_ATLAS_TEXTURE_SIZE << MAX_MIP_LEVEL);
 
 const int TEXTURE_ATLAS_SIZE = 8192 + 256; // small margin to account for borders
 

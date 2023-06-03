@@ -70,22 +70,34 @@ void Ray::Dx::Context::Destroy() {
         SAFE_RELEASE(in_flight_fences_[i]);
         SAFE_RELEASE(query_heaps_[i]);
 
+        backend_frame = i; // default_descr_alloc_'s destructors rely on this
+
         if (uniform_data_bufs[i]) {
             uniform_data_bufs[i].Unmap();
             uniform_data_bufs[i].Free();
         }
 
-        backend_frame = i; // default_descr_alloc_'s destructors rely on this
         default_descr_alloc_[i].reset();
         query_readback_buf_[i].reset();
         DestroyDeferredResources(i);
     }
 
-    SAFE_RELEASE(device_);
+    if (default_memory_allocs_) {
+        default_memory_allocs_.reset();
+    }
+
     SAFE_RELEASE(command_queue_);
     SAFE_RELEASE(command_list_);
-
     SAFE_RELEASE(temp_command_allocator_);
+
+#ifndef NDEBUG
+    ID3D12DebugDevice *debug_device = nullptr;
+    if (device_ && SUCCEEDED(device_->QueryInterface(IID_PPV_ARGS(&debug_device)))) {
+        debug_device->ReportLiveDeviceObjects(D3D12_RLDO_DETAIL | D3D12_RLDO_IGNORE_INTERNAL);
+    }
+#endif
+
+    SAFE_RELEASE(device_);
 
     CloseHandle(fence_event_);
 
@@ -234,9 +246,9 @@ bool Ray::Dx::Context::Init(ILog *log, const char *preferred_device) {
     hr = device_->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &options, sizeof(options));
     if (SUCCEEDED(hr)) {
         if (options.ResourceBindingTier == D3D12_RESOURCE_BINDING_TIER_1) {
-            max_combined_image_samplers_ = 128;
+            max_combined_image_samplers_ = 16;
         } else {
-            max_combined_image_samplers_ = 16384;
+            max_combined_image_samplers_ = 2048;
         }
     }
 
