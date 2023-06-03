@@ -20,10 +20,10 @@ if(MSVC)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP")
     set(CMAKE_CXX_FLAGS_DEBUG "/MDd /Zi /Ob0 /O1 /fp:except /WX")
     if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-        set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Wno-deprecated-declarations
-                                                            -Wno-unsupported-floating-point-opt
-                                                            -Wno-pragma-clang-attribute
-                                                            -Wno-microsoft-enum-forward-reference")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-declarations
+                                                -Wno-unsupported-floating-point-opt
+                                                -Wno-pragma-clang-attribute
+                                                -Wno-microsoft-enum-forward-reference")
     endif()
     if (NOT DEFINED CMAKE_CXX_FLAGS_ASAN)
         set(CMAKE_CXX_FLAGS_ASAN "/MTd /Zi /Od /RTC1 /fsanitize=address")
@@ -62,6 +62,7 @@ set(INTERNAL_SOURCE_FILES internal/Bitmap.h
                           internal/CoreSIMD.h
                           internal/Fixed.h
                           internal/Halton.h
+                          internal/Halton.cpp
                           internal/HashMap32.h
                           internal/LinearAlloc.h
                           internal/LinearAlloc.cpp

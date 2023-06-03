@@ -366,41 +366,34 @@ void Ray::Dx::Context::DestroyDeferredResources(const int i) {
     opaques_to_release[i].clear();
 }
 
-#if 0
-int Ray::Vk::Context::QueryAvailableDevices(ILog *log, gpu_device_t out_devices[], const int capacity) {
-    if (!LoadVulkan(log)) {
-        log->Error("Failed to initialize vulkan!");
+int Ray::Dx::Context::QueryAvailableDevices(ILog *log, gpu_device_t out_devices[], const int capacity) {
+    IDXGIFactory4 *dxgi_factory = nullptr;
+    HRESULT hr = CreateDXGIFactory1(IID_PPV_ARGS(&dxgi_factory));
+    if (FAILED(hr)) {
         return 0;
     }
 
-    VkInstance instance;
-    if (!InitVkInstance(instance, g_enabled_layers, g_enabled_layers_count, log)) {
-        log->Error("Failed to initialize VkInstance!");
-        return 0;
-    }
+    std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t> str_converter;
 
-    uint32_t physical_device_count = 0;
-    vkEnumeratePhysicalDevices(instance, &physical_device_count, nullptr);
+    IDXGIAdapter1 *adapter = nullptr;
+    int adapter_index = 0;
 
-    SmallVector<VkPhysicalDevice, 4> physical_devices(physical_device_count);
-    vkEnumeratePhysicalDevices(instance, &physical_device_count, &physical_devices[0]);
+    int count = 0;
+    while (dxgi_factory->EnumAdapters1(adapter_index, &adapter) != DXGI_ERROR_NOT_FOUND) {
+        DXGI_ADAPTER_DESC1 desc;
+        adapter->GetDesc1(&desc);
 
-    if (out_devices) {
-        if (int(physical_device_count) > capacity) {
-            log->Warning("Insufficiend devices copacity");
-            physical_device_count = capacity;
+        if ((desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) != 0) {
+            ++adapter_index;
+            continue;
         }
 
-        for (int i = 0; i < int(physical_device_count); ++i) {
-            VkPhysicalDeviceProperties device_properties = {};
-            vkGetPhysicalDeviceProperties(physical_devices[i], &device_properties);
+        strncpy_s(out_devices[count].name, sizeof(out_devices[count].name),
+                  str_converter.to_bytes(desc.Description).c_str(), sizeof(out_devices[count].name) - 1);
+        ++count;
 
-#pragma warning(suppress : 4996)
-            strncpy(out_devices[i].name, device_properties.deviceName, sizeof(out_devices[i].name));
-        }
+        ++adapter_index;
     }
-    vkDestroyInstance(instance, nullptr);
 
-    return int(physical_device_count);
+    return count;
 }
-#endif

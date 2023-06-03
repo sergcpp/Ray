@@ -134,11 +134,14 @@ Ray::RendererBase *Ray::CreateRenderer(const settings_t &s, ILog *log, const Bit
 }
 
 int Ray::QueryAvailableGPUDevices(ILog *log, gpu_device_t out_devices[], const int capacity) {
+    int count = 0;
 #ifdef ENABLE_VK_IMPL
-    return Vk::Context::QueryAvailableDevices(log, out_devices, capacity);
-#else
-    return 0;
+    count = Vk::Context::QueryAvailableDevices(log, out_devices, capacity);
 #endif
+#if defined(ENABLE_DX_IMPL) && defined(_WIN32)
+    count = Dx::Context::QueryAvailableDevices(log, out_devices, capacity);
+#endif
+    return count;
 }
 
 bool Ray::MatchDeviceNames(const char *name, const char *pattern) {

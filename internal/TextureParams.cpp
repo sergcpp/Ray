@@ -32,9 +32,7 @@ const int g_per_pixel_data_len[] = {
     2,  // Depth16
     4,  // Depth24Stencil8
     5,  // Depth32Stencil8
-#ifndef __ANDROID__
     4, // Depth32
-#endif
     -1, // BC1
     -1, // BC2
     -1, // BC3

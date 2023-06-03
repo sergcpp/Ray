@@ -44,6 +44,8 @@ std::vector<uint16_t> ComputeRadicalInversePermutations(const int *primes, const
     return perms;
 }
 
+std::vector<uint16_t> ComputeRadicalInversePermutations(const int *primes, const int primes_count);
+
 template <typename Real = float> Real RadicalInverse(const int base, uint64_t a) {
     const Real inv_base = Real(1) / base;
     uint64_t reversed_digits = 0;

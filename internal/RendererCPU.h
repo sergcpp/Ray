@@ -9,7 +9,6 @@
 #include "CoreRef.h"
 #include "Halton.h"
 #include "SceneCPU.h"
-#include "UniformIntDistribution.h"
 
 #define DEBUG_ADAPTIVE_SAMPLING 0
 
@@ -215,8 +214,7 @@ template <typename SIMDPolicy> PassData<SIMDPolicy> &get_per_thread_pass_data() 
 
 template <typename SIMDPolicy>
 Ray::Cpu::Renderer<SIMDPolicy>::Renderer(const settings_t &s, ILog *log) : log_(log), use_wide_bvh_(s.use_wide_bvh) {
-    auto rand_func = std::bind(UniformIntDistribution<uint32_t>(), std::mt19937(0));
-    permutations_ = Ray::ComputeRadicalInversePermutations(g_primes, PrimesCount, rand_func);
+    permutations_ = Ray::ComputeRadicalInversePermutations(g_primes, PrimesCount);
 
     Resize(s.w, s.h);
 }

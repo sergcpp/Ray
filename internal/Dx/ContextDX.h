@@ -45,7 +45,7 @@ class Context {
     // VkPhysicalDeviceRayTracingPipelinePropertiesKHR rt_props_ = {
     //     VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR};
 
-    bool dynamic_rendering_supported_ = false;
+    //bool dynamic_rendering_supported_ = false;
 
     bool rgb8_unorm_is_supported_ = false;
 

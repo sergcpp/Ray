@@ -3,6 +3,7 @@
 #include <limits>
 #include <utility>
 
+namespace Ray {
 // Portable uniform int distribution. Taken from:
 // https://stackoverflow.com/questions/26538627/c11-cross-compiler-standard-library-random-distribution-reproducibility
 template <class IntType = int> class UniformIntDistribution {
@@ -86,3 +87,4 @@ template <class IntType> void UniformIntDistribution<IntType>::param(const param
 template <class IntType> auto UniformIntDistribution<IntType>::min() const -> result_type { return lower; }
 
 template <class IntType> auto UniformIntDistribution<IntType>::max() const -> result_type { return upper; }
+} // namespace Ray

@@ -32,9 +32,7 @@ enum class eTexFormat : uint8_t {
     Depth16,
     Depth24Stencil8,
     Depth32Stencil8,
-#ifndef __ANDROID__
     Depth32,
-#endif
     BC1,
     BC2,
     BC3,
@@ -48,12 +46,7 @@ enum class eTexFormat : uint8_t {
 inline bool IsDepthFormat(const eTexFormat format) {
     static_assert(int(eTexFormat::_Count) == 34, "Update the list below!");
     return format == eTexFormat::Depth16 || format == eTexFormat::Depth24Stencil8 ||
-           format == eTexFormat::Depth32Stencil8
-#ifndef __ANDROID__
-           || format == eTexFormat::Depth32;
-#else
-        ;
-#endif
+           format == eTexFormat::Depth32Stencil8 || format == eTexFormat::Depth32;
 }
 
 inline bool IsDepthStencilFormat(const eTexFormat format) {

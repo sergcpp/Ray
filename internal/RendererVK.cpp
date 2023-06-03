@@ -1,12 +1,9 @@
 #include "RendererVK.h"
 
-#include <functional>
-#include <random>
 #include <utility>
 
 #include "Halton.h"
 #include "SceneVK.h"
-#include "UniformIntDistribution.h"
 
 #include "Vk/DebugMarkerVK.h"
 
@@ -486,8 +483,7 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
 
     Renderer::Resize(s.w, s.h);
 
-    auto rand_func = std::bind(UniformIntDistribution<uint32_t>(), std::mt19937(0));
-    permutations_ = Ray::ComputeRadicalInversePermutations(g_primes, PrimesCount, rand_func);
+    permutations_ = Ray::ComputeRadicalInversePermutations(g_primes, PrimesCount);
 }
 
 Ray::Vk::Renderer::~Renderer() {
