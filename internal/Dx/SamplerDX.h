@@ -3,13 +3,14 @@
 #include <utility>
 
 #include "../SamplingParams.h"
+#include "DescriptorPoolDX.h"
 
 namespace Ray {
 namespace Dx {
 class Context;
 class Sampler {
     Context *ctx_ = nullptr;
-    // VkSampler handle_ = VK_NULL_HANDLE;
+    PoolRef ref_;
     SamplingParams params_;
 
   public:
@@ -19,10 +20,10 @@ class Sampler {
     Sampler(Sampler &&rhs) noexcept { (*this) = std::move(rhs); }
     ~Sampler() { Free(); }
 
-    // VkSampler vk_handle() const { return handle_; }
+    PoolRef ref() const { return ref_; }
     SamplingParams params() const { return params_; }
 
-    //explicit operator bool() const { return handle_ != VK_NULL_HANDLE; }
+    explicit operator bool() const { return ref_; }
 
     Sampler &operator=(const Sampler &rhs) = delete;
     Sampler &operator=(Sampler &&rhs) noexcept;

@@ -4,6 +4,7 @@
 #include "../TextureSplitter.h"
 #include "ResourceDX.h"
 #include "SamplerDX.h"
+#include "DescriptorPoolDX.h"
 
 struct ID3D12Resource;
 
@@ -19,7 +20,7 @@ class TextureAtlas {
     const int res_[2];
 
     ID3D12Resource *img_ = nullptr;
-    // VkImageView img_view_ = VK_NULL_HANDLE;
+    PoolRef srv_ref_;
     Sampler sampler_;
 
     std::vector<TextureSplitter> splitters_;
@@ -34,8 +35,8 @@ class TextureAtlas {
     eTexFormat format() const { return format_; }
     eTexFormat real_format() const { return real_format_; }
     ID3D12Resource *dx_resource() const { return img_; }
-    // VkImageView vk_imgage_view() const { return img_view_; }
-    // VkSampler vk_sampler() const { return sampler_.vk_handle(); }
+    PoolRef srv_ref() const { return srv_ref_; }
+    PoolRef sampler_ref() const { return sampler_.ref(); }
 
     int res_x() const { return res_[0]; }
     int res_y() const { return res_[1]; }

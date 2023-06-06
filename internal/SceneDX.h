@@ -15,7 +15,7 @@ class Context;
 class Renderer;
 
 struct BindlessTexData {
-    DescrPool srv_descr_pool, sampler_descr_pool;
+    DescrPool<BumpAlloc> srv_descr_pool, sampler_descr_pool;
     DescrTable srv_descr_table, sampler_descr_table;
 
     explicit BindlessTexData(Context *ctx)

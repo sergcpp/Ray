@@ -69,7 +69,6 @@ Ray::RendererBase *Ray::CreateRenderer(const settings_t &s, ILog *log, const Bit
         }
     }
 #endif // ENABLE_VK_IMPL
-
 #if defined(ENABLE_DX_IMPL) && defined(_WIN32)
     if (enabled_types & eRendererType::DirectX12) {
         log->Info("Ray: Creating DirectX12 renderer %ix%i", s.w, s.h);
@@ -80,7 +79,6 @@ Ray::RendererBase *Ray::CreateRenderer(const settings_t &s, ILog *log, const Bit
         }
     }
 #endif // defined(ENABLE_DX_IMPL) && defined(_WIN32)
-
 #if !defined(__arm__) && !defined(__aarch64__) && !defined(_M_ARM) && !defined(_M_ARM64)
 #ifdef ENABLE_SIMD_IMPL
     const CpuFeatures features = GetCpuFeatures();

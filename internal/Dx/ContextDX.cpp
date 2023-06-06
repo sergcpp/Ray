@@ -82,9 +82,8 @@ void Ray::Dx::Context::Destroy() {
         DestroyDeferredResources(i);
     }
 
-    if (default_memory_allocs_) {
-        default_memory_allocs_.reset();
-    }
+    default_memory_allocs_.reset();
+    staging_descr_alloc_.reset();
 
     SAFE_RELEASE(command_queue_);
     SAFE_RELEASE(command_list_);
@@ -254,6 +253,7 @@ bool Ray::Dx::Context::Init(ILog *log, const char *preferred_device) {
 
     default_memory_allocs_ = std::make_unique<MemoryAllocators>(
         "Default Allocs", this, 32 * 1024 * 1024 /* initial_block_size */, 1.5f /* growth_factor */);
+    staging_descr_alloc_ = std::make_unique<DescrMultiPoolAlloc<LinearAllocAdapted>>(this, false, 16 * 1024);
 
     for (int i = 0; i < MaxFramesInFlight; ++i) {
         uniform_data_bufs[i] = Buffer{"Uniform data buf", this, eBufType::Upload, 1 * 1024 * 1024};
@@ -262,7 +262,7 @@ bool Ray::Dx::Context::Init(ILog *log, const char *preferred_device) {
 
         query_readback_buf_[i] = std::make_unique<Buffer>("Query Readback Buf", this, eBufType::Readback,
                                                           uint32_t(sizeof(uint64_t) * MaxTimestampQueries));
-        default_descr_alloc_[i] = std::make_unique<DescrMultiPoolAlloc>(this, 16 * 1024);
+        default_descr_alloc_[i] = std::make_unique<DescrMultiPoolAlloc<BumpAlloc>>(this, true, 16 * 1024);
     }
 
     g_rdoc_device = device_;
@@ -368,10 +368,10 @@ void Ray::Dx::Context::DestroyDeferredResources(const int i) {
         pipe->Release();
     }
     pipelines_to_destroy[i].clear();
-    for (ID3D12DescriptorHeap *heap : descriptor_heaps_to_destroy[i]) {
+    for (ID3D12DescriptorHeap *heap : descriptor_heaps_to_release[i]) {
         heap->Release();
     }
-    descriptor_heaps_to_destroy[i].clear();
+    descriptor_heaps_to_release[i].clear();
     for (IUnknown *unknown : opaques_to_release[i]) {
         unknown->Release();
     }

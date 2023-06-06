@@ -13,7 +13,8 @@ class AccStructure;
 class Context;
 
 class Buffer;
-class DescrMultiPoolAlloc;
+class BumpAlloc;
+template <class Allocator> class DescrMultiPoolAlloc;
 class Pipeline;
 class Program;
 class TextureAtlas;
@@ -81,14 +82,14 @@ struct Binding {
 
 void PrepareDescriptors(Context *ctx, ID3D12GraphicsCommandList *cmd_buf, Span<const Binding> bindings,
                         const void *uniform_data, int uniform_data_len, const Program *prog,
-                        DescrMultiPoolAlloc *descr_alloc, ILog *log);
+                        DescrMultiPoolAlloc<BumpAlloc> *descr_alloc, ILog *log);
 
 void DispatchCompute(ID3D12GraphicsCommandList *cmd_buf, const Pipeline &comp_pipeline, const uint32_t grp_count[3],
                      Span<const Binding> bindings, const void *uniform_data, int uniform_data_len,
-                     DescrMultiPoolAlloc *descr_alloc, ILog *log);
+                     DescrMultiPoolAlloc<BumpAlloc> *descr_alloc, ILog *log);
 void DispatchComputeIndirect(ID3D12GraphicsCommandList *cmd_buf, const Pipeline &comp_pipeline, const Buffer &indir_buf,
                              uint32_t indir_buf_offset, Span<const Binding> bindings, const void *uniform_data,
-                             int uniform_data_len, DescrMultiPoolAlloc *descr_alloc, ILog *log);
+                             int uniform_data_len, DescrMultiPoolAlloc<BumpAlloc> *descr_alloc, ILog *log);
 
 // void TraceRays(ID3D12GraphicsCommandList *cmd_buf, const Pipeline &rt_pipeline, const uint32_t dims[3],
 //                Span<const Binding> bindings, const void *uniform_data, int uniform_data_len,

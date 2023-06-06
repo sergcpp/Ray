@@ -28,7 +28,9 @@ static const int MaxFramesInFlight = 6;
 static const int MaxTimestampQueries = 256;
 
 class Buffer;
-class DescrMultiPoolAlloc;
+class BumpAlloc;
+class LinearAllocAdapted;
+template <class Allocator> class DescrMultiPoolAlloc;
 class MemoryAllocators;
 
 using CommandBuffer = ID3D12GraphicsCommandList *;
@@ -45,7 +47,7 @@ class Context {
     // VkPhysicalDeviceRayTracingPipelinePropertiesKHR rt_props_ = {
     //     VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR};
 
-    //bool dynamic_rendering_supported_ = false;
+    // bool dynamic_rendering_supported_ = false;
 
     bool rgb8_unorm_is_supported_ = false;
 
@@ -67,7 +69,8 @@ class Context {
     uint32_t max_combined_image_samplers_ = 0;
 
     std::unique_ptr<MemoryAllocators> default_memory_allocs_;
-    std::unique_ptr<DescrMultiPoolAlloc> default_descr_alloc_[MaxFramesInFlight];
+    std::unique_ptr<DescrMultiPoolAlloc<BumpAlloc>> default_descr_alloc_[MaxFramesInFlight];
+    std::unique_ptr<DescrMultiPoolAlloc<LinearAllocAdapted>> staging_descr_alloc_;
 
   public:
     Context();
@@ -107,7 +110,8 @@ class Context {
     ID3D12QueryHeap *query_heap(const int i) const { return query_heaps_[i]; }
 
     MemoryAllocators *default_memory_allocs() { return default_memory_allocs_.get(); }
-    DescrMultiPoolAlloc *default_descr_alloc() { return default_descr_alloc_[backend_frame].get(); }
+    DescrMultiPoolAlloc<BumpAlloc> *default_descr_alloc() { return default_descr_alloc_[backend_frame].get(); }
+    DescrMultiPoolAlloc<LinearAllocAdapted> *staging_descr_alloc() { return staging_descr_alloc_.get(); }
 
     int WriteTimestamp(CommandBuffer cmd_buf, bool start);
     uint64_t GetTimestampIntervalDurationUs(int query_start, int query_end) const;
@@ -127,7 +131,7 @@ class Context {
     SmallVector<MemAllocation, 128> allocs_to_free[MaxFramesInFlight];
     SmallVector<ID3D12Resource *, 128> resources_to_destroy[MaxFramesInFlight];
     SmallVector<ID3D12PipelineState *, 128> pipelines_to_destroy[MaxFramesInFlight];
-    SmallVector<ID3D12DescriptorHeap *, 128> descriptor_heaps_to_destroy[MaxFramesInFlight];
+    SmallVector<ID3D12DescriptorHeap *, 128> descriptor_heaps_to_release[MaxFramesInFlight];
     SmallVector<IUnknown *, 128> opaques_to_release[MaxFramesInFlight];
 
     static int QueryAvailableDevices(ILog *log, gpu_device_t out_devices[], int capacity);

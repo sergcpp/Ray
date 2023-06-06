@@ -1564,8 +1564,8 @@ void Ray::Dx::Scene::PrepareBindlessTextures_nolock() {
     ID3D12DescriptorHeap *srv_descr_heap = bindless_tex_data_.srv_descr_pool.heap();
     ID3D12DescriptorHeap *sampler_descr_heap = bindless_tex_data_.sampler_descr_pool.heap();
 
-    const UINT cbv_srv_uav_incr = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-    const UINT sampler_incr = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
+    const UINT CBV_SRV_UAV_INCR = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    const UINT SAMPLER_INCR = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
 
     D3D12_CPU_DESCRIPTOR_HANDLE srv_cpu_handle = srv_descr_heap->GetCPUDescriptorHandleForHeapStart();
     D3D12_CPU_DESCRIPTOR_HANDLE sampler_cpu_handle = sampler_descr_heap->GetCPUDescriptorHandleForHeapStart();
@@ -1577,39 +1577,24 @@ void Ray::Dx::Scene::PrepareBindlessTextures_nolock() {
 
         Texture2D &tex = bindless_textures_[i];
 
-        { // create srv
-            D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
-            if (GetColorChannelCount(tex.params.format) == 1) {
-                srv_desc.Shader4ComponentMapping = D3D12_ENCODE_SHADER_4_COMPONENT_MAPPING(0, 0, 0, 0);
-            } else {
-                srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-            }
-            srv_desc.Format = DXFormatFromTexFormat(tex.params.format);
-            if (bool(tex.params.flags & eTexFlagBits::SRGB)) {
-                srv_desc.Format = ToSRGBFormat(srv_desc.Format);
-            }
-            srv_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-            srv_desc.Texture2D.MipLevels = tex.params.mip_count;
-            srv_desc.Texture2D.MostDetailedMip = 0;
-            srv_desc.Texture2D.PlaneSlice = 0;
-            srv_desc.Texture2D.ResourceMinLODClamp = 0.0f;
+        { // copy srv
+            D3D12_CPU_DESCRIPTOR_HANDLE src_handle = tex.handle().views_ref.heap->GetCPUDescriptorHandleForHeapStart();
+            src_handle.ptr += CBV_SRV_UAV_INCR * tex.handle().views_ref.offset;
 
             D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = srv_cpu_handle;
-            dest_handle.ptr += cbv_srv_uav_incr * i;
-            device->CreateShaderResourceView(tex.dx_resource(), &srv_desc, dest_handle);
+            dest_handle.ptr += CBV_SRV_UAV_INCR * i;
+
+            device->CopyDescriptorsSimple(1, dest_handle, src_handle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
         }
-        { // create sampler
-            D3D12_SAMPLER_DESC sampler_desc = {};
-            sampler_desc.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
-            sampler_desc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-            sampler_desc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-            sampler_desc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-            sampler_desc.MinLOD = 0.0f;
-            sampler_desc.MaxLOD = 1000.0f;
+        { // copy sampler
+            D3D12_CPU_DESCRIPTOR_HANDLE src_handle =
+                tex.handle().sampler_ref.heap->GetCPUDescriptorHandleForHeapStart();
+            src_handle.ptr += SAMPLER_INCR * tex.handle().sampler_ref.offset;
 
             D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = sampler_cpu_handle;
-            dest_handle.ptr += sampler_incr * i;
-            device->CreateSampler(&sampler_desc, dest_handle);
+            dest_handle.ptr += SAMPLER_INCR * i;
+
+            device->CopyDescriptorsSimple(1, dest_handle, src_handle, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
         }
     }
 
