@@ -9,7 +9,6 @@
 #include "ProgramDX.h"
 
 struct ID3D12PipelineState;
-struct ID3D12CommandSignature;
 
 namespace Ray {
 class ILog;
@@ -45,7 +44,6 @@ class Pipeline {
     const VertexInput *vtx_input_ = nullptr;
 
     ID3D12PipelineState *handle_ = nullptr;
-    ID3D12CommandSignature *cmd_signature_ = nullptr;
     // VkPipelineLayout layout_ = VK_NULL_HANDLE;
     // VkPipeline handle_ = VK_NULL_HANDLE;
 
@@ -86,7 +84,6 @@ class Pipeline {
 
     // VkPipelineLayout layout() const { return layout_; }
     ID3D12PipelineState *handle() const { return handle_; }
-    ID3D12CommandSignature *cmd_signature() const { return cmd_signature_; }
 
     // const VkStridedDeviceAddressRegionKHR *rgen_table() const { return &rgen_region_; }
     // const VkStridedDeviceAddressRegionKHR *miss_table() const { return &miss_region_; }

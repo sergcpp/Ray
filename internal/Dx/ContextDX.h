@@ -16,6 +16,7 @@ struct ID3D12Resource;
 struct ID3D12DescriptorHeap;
 struct ID3D12Fence;
 struct ID3D12QueryHeap;
+struct ID3D12CommandSignature;
 struct IUnknown;
 
 typedef void *HANDLE;
@@ -56,6 +57,8 @@ class Context {
     ID3D12CommandAllocator *command_allocators_[MaxFramesInFlight] = {}, *temp_command_allocator_ = {};
 
     ID3D12GraphicsCommandList *command_list_ = {};
+
+    ID3D12CommandSignature *indirect_dispatch_cmd_signature_ = {};
 
     ID3D12Fence *in_flight_fences_[MaxFramesInFlight] = {};
     HANDLE fence_event_ = {};
@@ -103,6 +106,8 @@ class Context {
 
     // VkCommandPool command_pool() const { return command_pool_; }
     ID3D12CommandAllocator *temp_command_pool() const { return temp_command_allocator_; }
+
+    ID3D12CommandSignature *indirect_dispatch_cmd_signature() const { return indirect_dispatch_cmd_signature_; }
 
     CommandBuffer draw_cmd_buf() const { return command_list_; }
     ID3D12CommandAllocator *draw_cmd_alloc(const int i) const { return command_allocators_[i]; }

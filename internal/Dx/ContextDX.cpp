@@ -88,6 +88,7 @@ void Ray::Dx::Context::Destroy() {
     SAFE_RELEASE(command_queue_);
     SAFE_RELEASE(command_list_);
     SAFE_RELEASE(temp_command_allocator_);
+    SAFE_RELEASE(indirect_dispatch_cmd_signature_);
 
 #ifndef NDEBUG
     ID3D12DebugDevice *debug_device = nullptr;
@@ -266,6 +267,23 @@ bool Ray::Dx::Context::Init(ILog *log, const char *preferred_device) {
         query_readback_buf_[i] = std::make_unique<Buffer>("Query Readback Buf", this, eBufType::Readback,
                                                           uint32_t(sizeof(uint64_t) * MaxTimestampQueries));
         default_descr_alloc_[i] = std::make_unique<DescrMultiPoolAlloc<BumpAlloc>>(this, true, 16 * 1024);
+    }
+
+    { // create indirect dispatch signature
+        D3D12_INDIRECT_ARGUMENT_DESC indir_arg_desc = {};
+        indir_arg_desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH;
+
+        D3D12_COMMAND_SIGNATURE_DESC cmd_signature_desc = {};
+        cmd_signature_desc.ByteStride = sizeof(D3D12_DISPATCH_ARGUMENTS);
+        cmd_signature_desc.NumArgumentDescs = 1;
+        cmd_signature_desc.pArgumentDescs = &indir_arg_desc;
+
+        hr = device_->CreateCommandSignature(&cmd_signature_desc, nullptr,
+                                             IID_PPV_ARGS(&indirect_dispatch_cmd_signature_));
+        if (FAILED(hr)) {
+            log_->Error("Failed to create command signature!");
+            return false;
+        }
     }
 
     g_rdoc_device = device_;

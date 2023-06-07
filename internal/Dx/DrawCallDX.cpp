@@ -264,7 +264,7 @@ void Ray::Dx::DispatchComputeIndirect(ID3D12GraphicsCommandList *cmd_buf, const 
 
     PrepareDescriptors(ctx, cmd_buf, bindings, uniform_data, uniform_data_len, comp_pipeline.prog(), descr_alloc, log);
 
-    cmd_buf->ExecuteIndirect(comp_pipeline.cmd_signature(), 1, indir_buf.dx_resource(), indir_buf_offset, nullptr, 0);
+    cmd_buf->ExecuteIndirect(ctx->indirect_dispatch_cmd_signature(), 1, indir_buf.dx_resource(), indir_buf_offset, nullptr, 0);
 
     /*Context *ctx = descr_alloc->ctx();
 
