@@ -1056,7 +1056,7 @@ void test_trans_mat1(const char *arch_list[], const char *preferred_device) {
 void test_trans_mat2(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 1050;
     const double MinPSNR = 27.86;
-    const int PixThres = 11192;
+    const int PixThres = 1192;
 
     Ray::principled_mat_desc_t mat_desc;
     mat_desc.base_color[0] = 1.0f;

@@ -1,5 +1,6 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_samplerless_texture_functions : require
 
 #include "shade_interface.h"
 #include "common.glsl"
@@ -58,7 +59,7 @@ layout(std430, binding = RANDOM_SEQ_BUF_SLOT) readonly buffer Random {
     float g_random_seq[];
 };
 
-layout(binding = ENV_QTREE_TEX_SLOT) uniform sampler2D g_env_qtree;
+layout(binding = ENV_QTREE_TEX_SLOT) uniform texture2D g_env_qtree;
 
 layout(binding = OUT_IMG_SLOT, rgba32f) uniform image2D g_out_img;
 

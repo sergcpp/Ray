@@ -22,6 +22,7 @@ class Texture1D;
 class Texture2D;
 class Texture3D;
 struct DescrTable;
+class Sampler;
 
 enum class eBindTarget : uint16_t {
     Tex2D,
@@ -37,6 +38,7 @@ enum class eBindTarget : uint16_t {
     SBufRW,
     Image,
     AccStruct,
+    Sampler,
     DescrTable, // TODO: This does not belong here!
     _Count
 };
@@ -49,6 +51,7 @@ struct OpaqueHandle {
         const Texture1D *tex_buf;
         const TextureAtlas *tex_arr;
         const AccStructure *acc_struct;
+        const Sampler *sampler;
         const DescrTable *descr_table;
     };
     int count = 0;
@@ -60,6 +63,7 @@ struct OpaqueHandle {
     OpaqueHandle(const TextureAtlas &_tex_arr) : tex_arr(&_tex_arr), count(1) {}
     OpaqueHandle(const TextureAtlas *_tex_arr, int _count = 1) : tex_arr(_tex_arr), count(_count) {}
     OpaqueHandle(Span<const TextureAtlas> tex_arrs) : tex_arr(tex_arrs.data()), count(int(tex_arrs.size())) {}
+    OpaqueHandle(const Sampler &_sampler) : sampler(&_sampler), count(1) {}
     OpaqueHandle(const AccStructure &_acc_struct) : acc_struct(&_acc_struct), count(1) {}
     OpaqueHandle(const DescrTable &_descr_table) : descr_table(&_descr_table), count(1) {}
 };

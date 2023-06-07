@@ -245,11 +245,14 @@ bool Ray::Dx::Context::Init(ILog *log, const char *preferred_device) {
     hr = device_->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &options, sizeof(options));
     if (SUCCEEDED(hr)) {
         if (options.ResourceBindingTier == D3D12_RESOURCE_BINDING_TIER_1) {
-            max_combined_image_samplers_ = 16;
+            max_sampled_images_ = 128;
+            max_samplers_ = 16;
         } else {
-            max_combined_image_samplers_ = 2048;
+            max_sampled_images_ = 16384; // made-up limitation
+            max_samplers_ = 2048;
         }
     }
+    max_combined_image_samplers_ = std::min(max_sampled_images_, max_samplers_);
 
     default_memory_allocs_ = std::make_unique<MemoryAllocators>(
         "Default Allocs", this, 32 * 1024 * 1024 /* initial_block_size */, 1.5f /* growth_factor */);

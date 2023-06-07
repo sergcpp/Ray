@@ -2,6 +2,7 @@
 #define TEXTURE_GLSL
 
 #extension GL_EXT_nonuniform_qualifier : require
+#extension GL_EXT_samplerless_texture_functions : require
 
 #define USE_STOCH_TEXTURE_FILTERING 1
 
@@ -14,7 +15,8 @@ vec3 rgbe_to_rgb(vec4 rgbe) {
 
 #if BINDLESS
 
-layout(set = 1, binding = 0) uniform sampler2D g_textures[];
+layout(binding = TEXTURES_SAMPLER_SLOT) uniform sampler g_sampler;
+layout(set = 1, binding = 0) uniform texture2D g_textures[];
 
 ivec2 texSize(const uint index) {
     return textureSize(g_textures[nonuniformEXT(index & 0x00ffffff)], 0);
@@ -22,10 +24,10 @@ ivec2 texSize(const uint index) {
 
 vec4 SampleBilinear(const uint index, const vec2 uvs, const int lod, const vec2 rand, const bool maybe_YCoCg, const bool maybe_SRGB) {
 #if USE_STOCH_TEXTURE_FILTERING
-    ivec2 size = textureSize(g_textures[nonuniformEXT(index & 0x00ffffff)], lod);
-    vec4 res = textureLod(g_textures[nonuniformEXT(index & 0x00ffffff)], uvs + (rand - 0.5) / vec2(size), float(lod));
+    ivec2 size = textureSize(sampler2D(g_textures[nonuniformEXT(index & 0x00ffffff)], g_sampler), lod);
+    vec4 res = textureLod(sampler2D(g_textures[nonuniformEXT(index & 0x00ffffff)], g_sampler), uvs + (rand - 0.5) / vec2(size), float(lod));
 #else // USE_STOCH_TEXTURE_FILTERING
-    vec4 res = textureLod(g_textures[nonuniformEXT(index & 0x00ffffff)], uvs, float(lod));
+    vec4 res = textureLod(sampler2D(g_textures[nonuniformEXT(index & 0x00ffffff)], g_sampler), uvs, float(lod));
 #endif // USE_STOCH_TEXTURE_FILTERING
     if (maybe_YCoCg && (index & TEX_YCOCG_BIT) != 0) {
         res.rgb = YCoCg_to_RGB(res);

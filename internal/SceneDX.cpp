@@ -1551,8 +1551,15 @@ void Ray::Dx::Scene::GenerateTextureMips_nolock() {
 void Ray::Dx::Scene::PrepareBindlessTextures_nolock() {
     assert(bindless_textures_.capacity() <= ctx_->max_combined_image_samplers());
 
-    const bool bres = bindless_tex_data_.srv_descr_pool.Init(ctx_->max_combined_image_samplers(), false) &&
-                      bindless_tex_data_.sampler_descr_pool.Init(ctx_->max_combined_image_samplers(), false);
+    { // Init shared sampler
+        SamplingParams params;
+        params.filter = eTexFilter::Nearest;
+        params.wrap = eTexWrap::Repeat;
+
+        bindless_tex_data_.shared_sampler.Init(ctx_, params);
+    }
+
+    const bool bres = bindless_tex_data_.srv_descr_pool.Init(ctx_->max_combined_image_samplers(), false);
     if (!bres) {
         ctx_->log()->Error("Failed to init descriptor pool!");
     }
@@ -1562,13 +1569,10 @@ void Ray::Dx::Scene::PrepareBindlessTextures_nolock() {
 
     ID3D12Device *device = ctx_->device();
     ID3D12DescriptorHeap *srv_descr_heap = bindless_tex_data_.srv_descr_pool.heap();
-    ID3D12DescriptorHeap *sampler_descr_heap = bindless_tex_data_.sampler_descr_pool.heap();
 
     const UINT CBV_SRV_UAV_INCR = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-    const UINT SAMPLER_INCR = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
 
     D3D12_CPU_DESCRIPTOR_HANDLE srv_cpu_handle = srv_descr_heap->GetCPUDescriptorHandleForHeapStart();
-    D3D12_CPU_DESCRIPTOR_HANDLE sampler_cpu_handle = sampler_descr_heap->GetCPUDescriptorHandleForHeapStart();
 
     for (uint32_t i = 0; i < bindless_textures_.capacity(); ++i) {
         if (!bindless_textures_.exists(i)) {
@@ -1586,16 +1590,6 @@ void Ray::Dx::Scene::PrepareBindlessTextures_nolock() {
 
             device->CopyDescriptorsSimple(1, dest_handle, src_handle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
         }
-        { // copy sampler
-            D3D12_CPU_DESCRIPTOR_HANDLE src_handle =
-                tex.handle().sampler_ref.heap->GetCPUDescriptorHandleForHeapStart();
-            src_handle.ptr += SAMPLER_INCR * tex.handle().sampler_ref.offset;
-
-            D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = sampler_cpu_handle;
-            dest_handle.ptr += SAMPLER_INCR * i;
-
-            device->CopyDescriptorsSimple(1, dest_handle, src_handle, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
-        }
     }
 
     D3D12_CPU_DESCRIPTOR_HANDLE srv_gpu_handle = srv_descr_heap->GetCPUDescriptorHandleForHeapStart();
@@ -1603,12 +1597,6 @@ void Ray::Dx::Scene::PrepareBindlessTextures_nolock() {
     bindless_tex_data_.srv_descr_table.cpu_heap = srv_descr_heap;
     bindless_tex_data_.srv_descr_table.cpu_ptr = srv_gpu_handle.ptr;
     bindless_tex_data_.srv_descr_table.count = int(bindless_textures_.capacity());
-
-    D3D12_CPU_DESCRIPTOR_HANDLE sampler_gpu_handle = sampler_descr_heap->GetCPUDescriptorHandleForHeapStart();
-    bindless_tex_data_.sampler_descr_table.type = eDescrType::Sampler;
-    bindless_tex_data_.sampler_descr_table.cpu_heap = sampler_descr_heap;
-    bindless_tex_data_.sampler_descr_table.cpu_ptr = sampler_gpu_handle.ptr;
-    bindless_tex_data_.sampler_descr_table.count = int(bindless_textures_.capacity());
 
     { // Transition resources
         std::vector<TransitionInfo> img_transitions;

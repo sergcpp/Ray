@@ -170,6 +170,8 @@ bool Ray::Vk::Context::Init(ILog *log, const char *preferred_device) {
                                                      device_properties.limits.maxPerStageDescriptorSamplers) -
                                                 10,
                                             16384u);
+    max_sampled_images_ = std::min(device_properties.limits.maxPerStageDescriptorSampledImages - 10, 16384u);
+    max_samplers_ = std::min(device_properties.limits.maxPerStageDescriptorSamplers - 10, 16384u);
 
     { // check if 3-component images are supported
         VkImageFormatProperties props;
@@ -197,6 +199,8 @@ bool Ray::Vk::Context::Init(ILog *log, const char *preferred_device) {
 
     for (int i = 0; i < MaxFramesInFlight; ++i) {
         const int PoolStep = 4;
+        const int MaxImgCount = 32;
+        const int MaxSamplerCount = 32;
         const int MaxImgSamplerCount = 32;
         const int MaxStoreImgCount = 6;
         const int MaxUBufCount = 8;
@@ -205,9 +209,9 @@ bool Ray::Vk::Context::Init(ILog *log, const char *preferred_device) {
         const int MaxAccCount = 1;
         const int InitialSetsCount = 16;
 
-        default_descr_alloc_[i] =
-            std::make_unique<DescrMultiPoolAlloc>(this, PoolStep, MaxImgSamplerCount, MaxStoreImgCount, MaxUBufCount,
-                                                  MaxSBufCount, MaxTBufCount, MaxAccCount, InitialSetsCount);
+        default_descr_alloc_[i] = std::make_unique<DescrMultiPoolAlloc>(
+            this, PoolStep, MaxImgCount, MaxSamplerCount, MaxImgSamplerCount, MaxStoreImgCount, MaxUBufCount,
+            MaxSBufCount, MaxTBufCount, MaxAccCount, InitialSetsCount);
     }
 
     g_rdoc_device = RENDERDOC_DEVICEPOINTER_FROM_VKINSTANCE(instance_);

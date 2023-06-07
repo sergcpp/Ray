@@ -54,7 +54,7 @@ class Context {
     uint32_t query_counts_[MaxFramesInFlight] = {};
     uint64_t query_results_[MaxFramesInFlight][MaxTimestampQueries] = {};
 
-    uint32_t max_combined_image_samplers_ = 0;
+    uint32_t max_combined_image_samplers_ = 0, max_sampled_images_ = 0, max_samplers_ = 0;
 
     std::unique_ptr<MemoryAllocators> default_memory_allocs_;
     std::unique_ptr<DescrMultiPoolAlloc> default_descr_alloc_[MaxFramesInFlight];
@@ -71,6 +71,8 @@ class Context {
     ILog *log() const { return log_; }
 
     uint32_t max_combined_image_samplers() const { return max_combined_image_samplers_; }
+    uint32_t max_sampled_images() const { return max_sampled_images_; }
+    uint32_t max_samplers() const { return max_samplers_; }
 
     bool raytracing_supported() const { return raytracing_supported_; }
     bool ray_query_supported() const { return ray_query_supported_; }

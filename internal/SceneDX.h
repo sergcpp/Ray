@@ -15,11 +15,12 @@ class Context;
 class Renderer;
 
 struct BindlessTexData {
-    DescrPool<BumpAlloc> srv_descr_pool, sampler_descr_pool;
-    DescrTable srv_descr_table, sampler_descr_table;
+    DescrPool<BumpAlloc> srv_descr_pool;
+    DescrTable srv_descr_table;
+    Sampler shared_sampler;
 
     explicit BindlessTexData(Context *ctx)
-        : srv_descr_pool(ctx, eDescrType::CBV_SRV_UAV), sampler_descr_pool(ctx, eDescrType::Sampler) {}
+        : srv_descr_pool(ctx, eDescrType::CBV_SRV_UAV) {}
 };
 
 class Scene : public SceneBase {

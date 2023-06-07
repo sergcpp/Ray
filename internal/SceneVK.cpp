@@ -1488,10 +1488,18 @@ void Ray::Vk::Scene::GenerateTextureMips_nolock() {
 }
 
 void Ray::Vk::Scene::PrepareBindlessTextures_nolock() {
-    assert(bindless_textures_.capacity() <= ctx_->max_combined_image_samplers());
+    assert(bindless_textures_.capacity() <= ctx_->max_sampled_images());
 
     DescrSizes descr_sizes;
-    descr_sizes.img_sampler_count = ctx_->max_combined_image_samplers();
+    descr_sizes.img_count = ctx_->max_sampled_images();
+
+    { // Init shared sampler
+        SamplingParams params;
+        params.filter = eTexFilter::Nearest;
+        params.wrap = eTexWrap::Repeat;
+
+        bindless_tex_data_.shared_sampler.Init(ctx_, params);
+    }
 
     const bool bres = bindless_tex_data_.descr_pool.Init(descr_sizes, 2 /* sets_count */);
     if (!bres) {
@@ -1501,8 +1509,8 @@ void Ray::Vk::Scene::PrepareBindlessTextures_nolock() {
     if (!bindless_tex_data_.descr_layout) {
         VkDescriptorSetLayoutBinding textures_binding = {};
         textures_binding.binding = 0;
-        textures_binding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        textures_binding.descriptorCount = ctx_->max_combined_image_samplers();
+        textures_binding.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+        textures_binding.descriptorCount = ctx_->max_sampled_images();
         textures_binding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 
         VkDescriptorSetLayoutCreateInfo layout_info = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
@@ -1527,8 +1535,8 @@ void Ray::Vk::Scene::PrepareBindlessTextures_nolock() {
     if (!bindless_tex_data_.rt_descr_layout) {
         VkDescriptorSetLayoutBinding textures_binding = {};
         textures_binding.binding = 0;
-        textures_binding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        textures_binding.descriptorCount = ctx_->max_combined_image_samplers();
+        textures_binding.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+        textures_binding.descriptorCount = ctx_->max_sampled_images();
         textures_binding.stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
 
         VkDescriptorSetLayoutCreateInfo layout_info = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
@@ -1578,7 +1586,7 @@ void Ray::Vk::Scene::PrepareBindlessTextures_nolock() {
         descr_write.dstSet = bindless_tex_data_.descr_set;
         descr_write.dstBinding = 0;
         descr_write.dstArrayElement = i;
-        descr_write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        descr_write.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
         descr_write.descriptorCount = 1;
         descr_write.pBufferInfo = nullptr;
         descr_write.pImageInfo = &img_info;

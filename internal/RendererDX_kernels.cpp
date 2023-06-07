@@ -95,8 +95,9 @@ void Ray::Dx::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const pass_
         {eBindTarget::SBufRW, IntersectScene::OUT_HITS_BUF_SLOT, out_hits}};
 
     if (use_bindless_) {
+        bindings.emplace_back(eBindTarget::Sampler, Types::TEXTURES_SAMPLER_SLOT, bindless_tex.shared_sampler);
+
         bindings.emplace_back(eBindTarget::DescrTable, 2, bindless_tex.srv_descr_table);
-        bindings.emplace_back(eBindTarget::DescrTable, 1, bindless_tex.sampler_descr_table);
 
         // assert(tex_descr_set);
         // vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, pi_intersect_scene_.layout(), 1, 1,
@@ -202,8 +203,9 @@ void Ray::Dx::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const Buffe
         {eBindTarget::SBufRW, IntersectScene::OUT_HITS_BUF_SLOT, out_hits}};
 
     if (use_bindless_) {
+        bindings.emplace_back(eBindTarget::Sampler, Types::TEXTURES_SAMPLER_SLOT, bindless_tex.shared_sampler);
+
         bindings.emplace_back(eBindTarget::DescrTable, 2, bindless_tex.srv_descr_table);
-        bindings.emplace_back(eBindTarget::DescrTable, 1, bindless_tex.sampler_descr_table);
 
         // assert(tex_descr_set);
         // vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, pi_intersect_scene_indirect_.layout(), 1, 1,
@@ -385,8 +387,8 @@ void Ray::Dx::Renderer::kernel_ShadePrimaryHits(
     }
 
     if (use_bindless_) {
+        bindings.emplace_back(eBindTarget::Sampler, Types::TEXTURES_SAMPLER_SLOT, bindless_tex.shared_sampler);
         bindings.emplace_back(eBindTarget::DescrTable, 2, bindless_tex.srv_descr_table);
-        bindings.emplace_back(eBindTarget::DescrTable, 1, bindless_tex.sampler_descr_table);
     } else {
         bindings.emplace_back(eBindTarget::SBufRO, Types::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
         bindings.emplace_back(eBindTarget::Tex2DArraySampled, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
@@ -455,8 +457,8 @@ void Ray::Dx::Renderer::kernel_ShadeSecondaryHits(CommandBuffer cmd_buf, const p
         (settings.clamp_indirect != 0.0f) ? settings.clamp_indirect : std::numeric_limits<float>::max();
 
     if (use_bindless_) {
+        bindings.emplace_back(eBindTarget::Sampler, Types::TEXTURES_SAMPLER_SLOT, bindless_tex.shared_sampler);
         bindings.emplace_back(eBindTarget::DescrTable, 2, bindless_tex.srv_descr_table);
-        bindings.emplace_back(eBindTarget::DescrTable, 1, bindless_tex.sampler_descr_table);
 
         // assert(tex_descr_set);
         // vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, pi_shade_secondary_.layout(), 1, 1,
@@ -508,8 +510,8 @@ void Ray::Dx::Renderer::kernel_IntersectSceneShadow(CommandBuffer cmd_buf, const
     }
 
     if (use_bindless_) {
+        bindings.emplace_back(eBindTarget::Sampler, Types::TEXTURES_SAMPLER_SLOT, bindless_tex.shared_sampler);
         bindings.emplace_back(eBindTarget::DescrTable, 2, bindless_tex.srv_descr_table);
-        bindings.emplace_back(eBindTarget::DescrTable, 1, bindless_tex.sampler_descr_table);
 
         // assert(tex_descr_set);
         // vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, pi_intersect_scene_shadow_.layout(), 1, 1,

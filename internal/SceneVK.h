@@ -14,6 +14,15 @@ namespace Vk {
 class Context;
 class Renderer;
 
+struct BindlessTexData {
+    DescrPool descr_pool;
+    VkDescriptorSetLayout descr_layout = {}, rt_descr_layout = {};
+    VkDescriptorSet descr_set = {}, rt_descr_set = {};
+    Sampler shared_sampler;
+
+    explicit BindlessTexData(Context *ctx) : descr_pool(ctx) {}
+};
+
 class Scene : public SceneBase {
   protected:
     friend class Vk::Renderer;
@@ -36,14 +45,6 @@ class Scene : public SceneBase {
     SparseStorage<material_t> materials_;
     SparseStorage<atlas_texture_t> atlas_textures_;
     Cpu::SparseStorage<Texture2D> bindless_textures_;
-
-    struct BindlessTexData {
-        DescrPool descr_pool;
-        VkDescriptorSetLayout descr_layout = {}, rt_descr_layout = {};
-        VkDescriptorSet descr_set = {}, rt_descr_set = {};
-
-        explicit BindlessTexData(Context *ctx) : descr_pool(ctx) {}
-    };
 
     BindlessTexData bindless_tex_data_;
 

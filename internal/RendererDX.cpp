@@ -111,7 +111,7 @@ Ray::Dx::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
     }
 
     use_hwrt_ = (s.use_hwrt && ctx_->ray_query_supported());
-    use_bindless_ = s.use_bindless && ctx_->max_combined_image_samplers() >= 16384u;
+    use_bindless_ = s.use_bindless && ctx_->max_sampled_images() >= 16384u;
     use_tex_compression_ = s.use_tex_compression;
     log->Info("HWRT        is %s", use_hwrt_ ? "enabled" : "disabled");
     log->Info("Bindless    is %s", use_bindless_ ? "enabled" : "disabled");
@@ -945,36 +945,24 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
     if (s->bindless_tex_data_.srv_descr_table.count) {
         // TODO: refactor this!
         ID3D12Device *device = ctx_->device();
-        const UINT cbv_srv_uav_incr = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-        const UINT sampler_incr = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
+        const UINT CBV_SRV_UAV_INCR = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
         DescrSizes descr_sizes;
         descr_sizes.cbv_srv_uav_count += s->bindless_tex_data_.srv_descr_table.count;
-        descr_sizes.sampler_count += s->bindless_tex_data_.sampler_descr_table.count;
 
         const PoolRefs pool_refs = ctx_->default_descr_alloc()->Alloc(descr_sizes);
 
         D3D12_CPU_DESCRIPTOR_HANDLE srv_cpu_handle = pool_refs.cbv_srv_uav.heap->GetCPUDescriptorHandleForHeapStart();
-        srv_cpu_handle.ptr += cbv_srv_uav_incr * pool_refs.cbv_srv_uav.offset;
+        srv_cpu_handle.ptr += CBV_SRV_UAV_INCR * pool_refs.cbv_srv_uav.offset;
         D3D12_GPU_DESCRIPTOR_HANDLE srv_gpu_handle = pool_refs.cbv_srv_uav.heap->GetGPUDescriptorHandleForHeapStart();
-        srv_gpu_handle.ptr += cbv_srv_uav_incr * pool_refs.cbv_srv_uav.offset;
-
-        D3D12_CPU_DESCRIPTOR_HANDLE sampler_cpu_handle = pool_refs.sampler.heap->GetCPUDescriptorHandleForHeapStart();
-        sampler_cpu_handle.ptr += sampler_incr * pool_refs.sampler.offset;
-        D3D12_GPU_DESCRIPTOR_HANDLE sampler_gpu_handle = pool_refs.sampler.heap->GetGPUDescriptorHandleForHeapStart();
-        sampler_gpu_handle.ptr += sampler_incr * pool_refs.sampler.offset;
+        srv_gpu_handle.ptr += CBV_SRV_UAV_INCR * pool_refs.cbv_srv_uav.offset;
 
         device->CopyDescriptorsSimple(descr_sizes.cbv_srv_uav_count, srv_cpu_handle,
                                       D3D12_CPU_DESCRIPTOR_HANDLE{s->bindless_tex_data_.srv_descr_table.cpu_ptr},
                                       D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-        device->CopyDescriptorsSimple(descr_sizes.sampler_count, sampler_cpu_handle,
-                                      D3D12_CPU_DESCRIPTOR_HANDLE{s->bindless_tex_data_.sampler_descr_table.cpu_ptr},
-                                      D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
 
         s->bindless_tex_data_.srv_descr_table.gpu_heap = pool_refs.cbv_srv_uav.heap;
         s->bindless_tex_data_.srv_descr_table.gpu_ptr = srv_gpu_handle.ptr;
-        s->bindless_tex_data_.sampler_descr_table.gpu_heap = pool_refs.sampler.heap;
-        s->bindless_tex_data_.sampler_descr_table.gpu_ptr = sampler_gpu_handle.ptr;
     }
 
     const rect_t rect = region.rect();

@@ -37,6 +37,8 @@ void Ray::Dx::PrepareDescriptors(Context *ctx, ID3D12GraphicsCommandList *cmd_bu
                    b.trg == eBindTarget::UBuf || b.trg == eBindTarget::TBuf || b.trg == eBindTarget::SBufRO ||
                    b.trg == eBindTarget::SBufRW || b.trg == eBindTarget::Image) {
             descr_sizes.cbv_srv_uav_count += b.handle.count;
+        } else if (b.trg == eBindTarget::Sampler) {
+            descr_sizes.sampler_count += b.handle.count;
         } else if (b.trg == eBindTarget::DescrTable) {
             if (b.handle.descr_table->gpu_ptr) {
                 descriptor_heaps[int(b.handle.descr_table->type)] = b.handle.descr_table->gpu_heap;
@@ -86,7 +88,7 @@ void Ray::Dx::PrepareDescriptors(Context *ctx, ID3D12GraphicsCommandList *cmd_bu
     sampler_gpu_handle.ptr += pool_refs.sampler.offset * SAMPLER_INCR;
 
     for (const auto &b : bindings) {
-        const short descr_index = prog->descr_index(0, b.loc);
+        const short descr_index = prog->descr_index(b.trg == eBindTarget::Sampler ? 1 : 0, b.loc);
         if (descr_index == -1) {
             continue;
         }
@@ -174,6 +176,15 @@ void Ray::Dx::PrepareDescriptors(Context *ctx, ID3D12GraphicsCommandList *cmd_bu
             dest_handle.ptr += CBV_SRV_UAV_INCR * descr_index;
 
             device->CopyDescriptorsSimple(1, dest_handle, src_handle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        } else if (b.trg == eBindTarget::Sampler) {
+            D3D12_CPU_DESCRIPTOR_HANDLE src_handle =
+                b.handle.sampler->ref().heap->GetCPUDescriptorHandleForHeapStart();
+            src_handle.ptr += SAMPLER_INCR * b.handle.sampler->ref().offset;
+
+            D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = sampler_cpu_handle;
+            dest_handle.ptr += SAMPLER_INCR * descr_index;
+
+            device->CopyDescriptorsSimple(1, dest_handle, src_handle, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
         } else if (b.trg == eBindTarget::DescrTable && b.handle.descr_table->count) {
             if (b.handle.descr_table->gpu_ptr) {
                 cmd_buf->SetComputeRootDescriptorTable(b.loc,

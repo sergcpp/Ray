@@ -1,5 +1,6 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_samplerless_texture_functions : require
 
 #include "primary_ray_gen_interface.h"
 #include "common.glsl"
@@ -12,7 +13,7 @@ layout(std430, binding = HALTON_SEQ_BUF_SLOT) readonly buffer Halton {
     float g_halton[];
 };
 
-layout(binding = REQUIRED_SAMPLES_IMG_SLOT) uniform usampler2D g_required_samples_img;
+layout(binding = REQUIRED_SAMPLES_IMG_SLOT) uniform utexture2D g_required_samples_img;
 
 layout(std430, binding = INOUT_COUNTERS_BUF_SLOT) buffer InoutCounters {
     uint g_inout_counters[];
