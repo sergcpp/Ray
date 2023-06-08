@@ -10,6 +10,7 @@ else(NOT CMAKE_SYSTEM_NAME MATCHES "Android")
     OPTION(ENABLE_VK_IMPL "Enable Vulkan GPU implementation" OFF)
     OPTION(ENABLE_DX_IMPL "Enable DirectX12 GPU implementation" OFF)
 endif(NOT CMAKE_SYSTEM_NAME MATCHES "Android")
+OPTION(ENABLE_PIX "Enable PIX debug/capture API" OFF)
 
 set(CMAKE_CONFIGURATION_TYPES "Debug;Release;RelWithDebInfo;Asan" CACHE STRING "" FORCE)
 
@@ -343,9 +344,20 @@ if(MSVC)
     list(APPEND ALL_SOURCE_FILES internal/_CustomTypes.natvis)
 endif(MSVC)
 
+if (ENABLE_PIX AND WIN32)
+    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/third-party/pix/include)
+endif (ENABLE_PIX AND WIN32)
+
 add_library(Ray STATIC ${ALL_SOURCE_FILES})
 if(ENABLE_DX_IMPL AND WIN32)
     target_link_libraries(Ray DXGI D3D12)
+    if(ENABLE_PIX)
+        if(CMAKE_GENERATOR_PLATFORM MATCHES "ARM64")
+            target_link_libraries(Ray ${CMAKE_CURRENT_SOURCE_DIR}/third-party/pix/ARM64/WinPixEventRuntime.lib)
+        else(CMAKE_GENERATOR_PLATFORM MATCHES "ARM64")
+            target_link_libraries(Ray ${CMAKE_CURRENT_SOURCE_DIR}/third-party/pix/x64/WinPixEventRuntime.lib)
+        endif(CMAKE_GENERATOR_PLATFORM MATCHES "ARM64")
+    endif(ENABLE_PIX)
 endif(ENABLE_DX_IMPL AND WIN32)
 
 set_target_properties(Ray PROPERTIES UNITY_BUILD_MODE GROUP)
