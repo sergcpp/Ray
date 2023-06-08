@@ -19,7 +19,10 @@ def spirv_base_path():
         return os.path.join("third-party", "spirv", "win32")
 
 def dxc_base_path():
-    return os.path.join("third-party", "dxc")
+    if sys.platform.startswith("linux"):
+        return os.path.join("third-party", "dxc", "linux")
+    elif os.name == "nt":
+        return os.path.join("third-party", "dxc", "win32")
 
 def make_sublist_group(lst: list, grp: int) -> list:
     return [lst[i:i+grp] for i in range(0, len(lst), grp)]
