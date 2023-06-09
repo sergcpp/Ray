@@ -8,6 +8,7 @@
 #define COUNT_OF(x) ((sizeof(x) / sizeof(0 [x])) / ((size_t)(!(sizeof(x) % sizeof(0 [x])))))
 
 struct ID3D12Device;
+struct ID3D12Device5;
 struct ID3D12CommandQueue;
 struct ID3D12CommandAllocator;
 struct ID3D12GraphicsCommandList;
@@ -16,6 +17,7 @@ struct ID3D12Resource;
 struct ID3D12DescriptorHeap;
 struct ID3D12Fence;
 struct ID3D12QueryHeap;
+struct ID3D12CommandSignature;
 struct IUnknown;
 
 typedef void *HANDLE;
@@ -28,7 +30,9 @@ static const int MaxFramesInFlight = 6;
 static const int MaxTimestampQueries = 256;
 
 class Buffer;
-class DescrMultiPoolAlloc;
+class BumpAlloc;
+class LinearAllocAdapted;
+template <class Allocator> class DescrMultiPoolAlloc;
 class MemoryAllocators;
 
 using CommandBuffer = ID3D12GraphicsCommandList *;
@@ -39,13 +43,14 @@ class Context {
     unsigned long debug_callback_cookie_ = {};
 #endif
     ID3D12Device *device_ = {};
+    ID3D12Device5 *device5_ = {};
     std::string device_name_;
 
     bool raytracing_supported_ = false, ray_query_supported_ = false;
     // VkPhysicalDeviceRayTracingPipelinePropertiesKHR rt_props_ = {
     //     VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR};
 
-    //bool dynamic_rendering_supported_ = false;
+    // bool dynamic_rendering_supported_ = false;
 
     bool rgb8_unorm_is_supported_ = false;
 
@@ -54,6 +59,8 @@ class Context {
     ID3D12CommandAllocator *command_allocators_[MaxFramesInFlight] = {}, *temp_command_allocator_ = {};
 
     ID3D12GraphicsCommandList *command_list_ = {};
+
+    ID3D12CommandSignature *indirect_dispatch_cmd_signature_ = {};
 
     ID3D12Fence *in_flight_fences_[MaxFramesInFlight] = {};
     HANDLE fence_event_ = {};
@@ -64,10 +71,11 @@ class Context {
     std::unique_ptr<Buffer> query_readback_buf_[MaxFramesInFlight];
     double timestamp_period_us_ = 0.0;
 
-    uint32_t max_combined_image_samplers_ = 0;
+    uint32_t max_combined_image_samplers_ = 0, max_sampled_images_ = 0, max_samplers_ = 0;
 
     std::unique_ptr<MemoryAllocators> default_memory_allocs_;
-    std::unique_ptr<DescrMultiPoolAlloc> default_descr_alloc_[MaxFramesInFlight];
+    std::unique_ptr<DescrMultiPoolAlloc<BumpAlloc>> default_descr_alloc_[MaxFramesInFlight];
+    std::unique_ptr<DescrMultiPoolAlloc<LinearAllocAdapted>> staging_descr_alloc_;
 
   public:
     Context();
@@ -77,11 +85,14 @@ class Context {
     void Destroy();
 
     ID3D12Device *device() const { return device_; }
+    ID3D12Device5 *device5() const { return device5_; }
     const std::string &device_name() const { return device_name_; }
 
     ILog *log() const { return log_; }
 
     uint32_t max_combined_image_samplers() const { return max_combined_image_samplers_; }
+    uint32_t max_sampled_images() const { return max_sampled_images_; }
+    uint32_t max_samplers() const { return max_samplers_; }
 
     bool raytracing_supported() const { return raytracing_supported_; }
     bool ray_query_supported() const { return ray_query_supported_; }
@@ -99,6 +110,8 @@ class Context {
     // VkCommandPool command_pool() const { return command_pool_; }
     ID3D12CommandAllocator *temp_command_pool() const { return temp_command_allocator_; }
 
+    ID3D12CommandSignature *indirect_dispatch_cmd_signature() const { return indirect_dispatch_cmd_signature_; }
+
     CommandBuffer draw_cmd_buf() const { return command_list_; }
     ID3D12CommandAllocator *draw_cmd_alloc(const int i) const { return command_allocators_[i]; }
     // const VkSemaphore &render_finished_semaphore(const int i) const { return render_finished_semaphores_[i]; }
@@ -107,7 +120,8 @@ class Context {
     ID3D12QueryHeap *query_heap(const int i) const { return query_heaps_[i]; }
 
     MemoryAllocators *default_memory_allocs() { return default_memory_allocs_.get(); }
-    DescrMultiPoolAlloc *default_descr_alloc() { return default_descr_alloc_[backend_frame].get(); }
+    DescrMultiPoolAlloc<BumpAlloc> *default_descr_alloc() { return default_descr_alloc_[backend_frame].get(); }
+    DescrMultiPoolAlloc<LinearAllocAdapted> *staging_descr_alloc() { return staging_descr_alloc_.get(); }
 
     int WriteTimestamp(CommandBuffer cmd_buf, bool start);
     uint64_t GetTimestampIntervalDurationUs(int query_start, int query_end) const;
@@ -127,7 +141,7 @@ class Context {
     SmallVector<MemAllocation, 128> allocs_to_free[MaxFramesInFlight];
     SmallVector<ID3D12Resource *, 128> resources_to_destroy[MaxFramesInFlight];
     SmallVector<ID3D12PipelineState *, 128> pipelines_to_destroy[MaxFramesInFlight];
-    SmallVector<ID3D12DescriptorHeap *, 128> descriptor_heaps_to_destroy[MaxFramesInFlight];
+    SmallVector<ID3D12DescriptorHeap *, 128> descriptor_heaps_to_release[MaxFramesInFlight];
     SmallVector<IUnknown *, 128> opaques_to_release[MaxFramesInFlight];
 
     static int QueryAvailableDevices(ILog *log, gpu_device_t out_devices[], int capacity);

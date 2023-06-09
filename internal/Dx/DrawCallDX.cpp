@@ -9,7 +9,7 @@
 #include <d3d12.h>
 
 #include "../../Log.h"
-// #include "AccStructureVK.h"
+#include "AccStructureDX.h"
 #include "BufferDX.h"
 #include "ContextDX.h"
 #include "DescriptorPoolDX.h"
@@ -25,7 +25,7 @@ extern const DXGI_FORMAT g_dx_formats[];
 
 void Ray::Dx::PrepareDescriptors(Context *ctx, ID3D12GraphicsCommandList *cmd_buf, Span<const Binding> bindings,
                                  const void *uniform_data, const int uniform_data_len, const Program *prog,
-                                 DescrMultiPoolAlloc *descr_alloc, ILog *log) {
+                                 DescrMultiPoolAlloc<BumpAlloc> *descr_alloc, ILog *log) {
     ID3D12DescriptorHeap *descriptor_heaps[int(eDescrType::_Count)] = {};
 
     DescrSizes descr_sizes;
@@ -35,8 +35,10 @@ void Ray::Dx::PrepareDescriptors(Context *ctx, ID3D12GraphicsCommandList *cmd_bu
             descr_sizes.sampler_count += b.handle.count;
         } else if (b.trg == eBindTarget::Tex2D || b.trg == eBindTarget::Tex3D || b.trg == eBindTarget::Tex2DArray ||
                    b.trg == eBindTarget::UBuf || b.trg == eBindTarget::TBuf || b.trg == eBindTarget::SBufRO ||
-                   b.trg == eBindTarget::SBufRW || b.trg == eBindTarget::Image) {
+                   b.trg == eBindTarget::SBufRW || b.trg == eBindTarget::Image || b.trg == eBindTarget::AccStruct) {
             descr_sizes.cbv_srv_uav_count += b.handle.count;
+        } else if (b.trg == eBindTarget::Sampler) {
+            descr_sizes.sampler_count += b.handle.count;
         } else if (b.trg == eBindTarget::DescrTable) {
             if (b.handle.descr_table->gpu_ptr) {
                 descriptor_heaps[int(b.handle.descr_table->type)] = b.handle.descr_table->gpu_heap;
@@ -66,170 +68,157 @@ void Ray::Dx::PrepareDescriptors(Context *ctx, ID3D12GraphicsCommandList *cmd_bu
     cmd_buf->SetDescriptorHeaps(UINT(compacted_descriptor_heaps.size()), compacted_descriptor_heaps.data());
 
     ID3D12Device *device = ctx->device();
-    const UINT cbv_srv_uav_incr = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-    const UINT sampler_incr = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
+    const UINT CBV_SRV_UAV_INCR = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    const UINT SAMPLER_INCR = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
 
     D3D12_CPU_DESCRIPTOR_HANDLE cbv_srv_uav_cpu_handle =
         pool_refs.cbv_srv_uav.heap->GetCPUDescriptorHandleForHeapStart();
-    cbv_srv_uav_cpu_handle.ptr += pool_refs.cbv_srv_uav.offset * cbv_srv_uav_incr;
+    cbv_srv_uav_cpu_handle.ptr += pool_refs.cbv_srv_uav.offset * CBV_SRV_UAV_INCR;
     D3D12_GPU_DESCRIPTOR_HANDLE cbv_srv_uav_gpu_handle =
         pool_refs.cbv_srv_uav.heap->GetGPUDescriptorHandleForHeapStart();
-    cbv_srv_uav_gpu_handle.ptr += pool_refs.cbv_srv_uav.offset * cbv_srv_uav_incr;
+    cbv_srv_uav_gpu_handle.ptr += pool_refs.cbv_srv_uav.offset * CBV_SRV_UAV_INCR;
 
     D3D12_CPU_DESCRIPTOR_HANDLE sampler_cpu_handle = pool_refs.sampler.heap
                                                          ? pool_refs.sampler.heap->GetCPUDescriptorHandleForHeapStart()
                                                          : D3D12_CPU_DESCRIPTOR_HANDLE{};
-    sampler_cpu_handle.ptr += pool_refs.sampler.offset * sampler_incr;
+    sampler_cpu_handle.ptr += pool_refs.sampler.offset * SAMPLER_INCR;
     D3D12_GPU_DESCRIPTOR_HANDLE sampler_gpu_handle = pool_refs.sampler.heap
                                                          ? pool_refs.sampler.heap->GetGPUDescriptorHandleForHeapStart()
                                                          : D3D12_GPU_DESCRIPTOR_HANDLE{};
-    sampler_gpu_handle.ptr += pool_refs.sampler.offset * sampler_incr;
+    sampler_gpu_handle.ptr += pool_refs.sampler.offset * SAMPLER_INCR;
 
     for (const auto &b : bindings) {
-        const short descr_index = prog->descr_index(0, b.loc);
-        if (descr_index == -1) {
+        const short descr_index = prog->descr_index(b.trg == eBindTarget::Sampler ? 1 : 0, b.loc);
+        if (descr_index == -1 && b.trg != eBindTarget::DescrTable) {
             continue;
         }
 
         if (b.trg == eBindTarget::Tex2D || b.trg == eBindTarget::Tex2DSampled) {
-            D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
-            srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-            srv_desc.Format = g_dx_formats[int(b.handle.tex->params.format)];
-            srv_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-            srv_desc.Texture2D.MipLevels = b.handle.tex->params.mip_count;
-            srv_desc.Texture2D.MostDetailedMip = 0;
-            srv_desc.Texture2D.PlaneSlice = 0;
-            srv_desc.Texture2D.ResourceMinLODClamp = 0.0f;
+            D3D12_CPU_DESCRIPTOR_HANDLE src_handle =
+                b.handle.tex->handle().views_ref.heap->GetCPUDescriptorHandleForHeapStart();
+            src_handle.ptr += CBV_SRV_UAV_INCR * b.handle.tex->handle().views_ref.offset;
 
-            D3D12_CPU_DESCRIPTOR_HANDLE srv_dest_handle = cbv_srv_uav_cpu_handle;
-            srv_dest_handle.ptr += cbv_srv_uav_incr * descr_index;
-            device->CreateShaderResourceView(b.handle.tex->dx_resource(), &srv_desc, srv_dest_handle);
+            D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = cbv_srv_uav_cpu_handle;
+            dest_handle.ptr += CBV_SRV_UAV_INCR * descr_index;
+
+            device->CopyDescriptorsSimple(1, dest_handle, src_handle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
             if (b.trg == eBindTarget::Tex2DSampled) {
                 const short descr_index = prog->descr_index(1, b.loc);
 
-                D3D12_SAMPLER_DESC sampler_desc = {};
-                sampler_desc.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
-                sampler_desc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-                sampler_desc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-                sampler_desc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-                sampler_desc.MinLOD = 0.0f;
-                sampler_desc.MaxLOD = 1000.0f;
+                D3D12_CPU_DESCRIPTOR_HANDLE src_handle =
+                    b.handle.tex->handle().sampler_ref.heap->GetCPUDescriptorHandleForHeapStart();
+                src_handle.ptr += SAMPLER_INCR * b.handle.tex->handle().sampler_ref.offset;
 
-                D3D12_CPU_DESCRIPTOR_HANDLE sampler_dest_handle = sampler_cpu_handle;
-                sampler_dest_handle.ptr += sampler_incr * descr_index;
-                device->CreateSampler(&sampler_desc, sampler_dest_handle);
+                D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = sampler_cpu_handle;
+                dest_handle.ptr += SAMPLER_INCR * descr_index;
+
+                device->CopyDescriptorsSimple(1, dest_handle, src_handle, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
             }
         } else if (b.trg == eBindTarget::Tex2DArray || b.trg == eBindTarget::Tex2DArraySampled) {
             for (int i = 0; i < b.handle.count; ++i) {
-                D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
-                if (GetColorChannelCount(b.handle.tex_arr[i].real_format()) == 1) {
-                    srv_desc.Shader4ComponentMapping = D3D12_ENCODE_SHADER_4_COMPONENT_MAPPING(0, 0, 0, 0);
-                } else {
-                    srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-                }
-                srv_desc.Format = g_dx_formats[int(b.handle.tex_arr[i].real_format())];
-                srv_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
-                srv_desc.Texture2DArray.FirstArraySlice = 0;
-                srv_desc.Texture2DArray.ArraySize = std::max(b.handle.tex_arr[i].page_count(), 1);
-                srv_desc.Texture2DArray.MipLevels = 1;
-                srv_desc.Texture2DArray.MostDetailedMip = 0;
-                srv_desc.Texture2DArray.PlaneSlice = 0;
-                srv_desc.Texture2DArray.ResourceMinLODClamp = 0.0f;
+                D3D12_CPU_DESCRIPTOR_HANDLE src_handle =
+                    b.handle.tex_arr[i].srv_ref().heap->GetCPUDescriptorHandleForHeapStart();
+                src_handle.ptr += CBV_SRV_UAV_INCR * b.handle.tex_arr[i].srv_ref().offset;
 
-                D3D12_CPU_DESCRIPTOR_HANDLE srv_dest_handle = cbv_srv_uav_cpu_handle;
-                srv_dest_handle.ptr += cbv_srv_uav_incr * (descr_index + i);
-                device->CreateShaderResourceView(b.handle.tex_arr[i].dx_resource(), &srv_desc, srv_dest_handle);
+                D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = cbv_srv_uav_cpu_handle;
+                dest_handle.ptr += CBV_SRV_UAV_INCR * (descr_index + i);
+
+                device->CopyDescriptorsSimple(1, dest_handle, src_handle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
                 if (b.trg == eBindTarget::Tex2DArraySampled) {
                     const short descr_index = prog->descr_index(1, b.loc);
 
-                    D3D12_SAMPLER_DESC sampler_desc = {};
-                    sampler_desc.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
-                    sampler_desc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-                    sampler_desc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-                    sampler_desc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-                    sampler_desc.MinLOD = 0.0f;
-                    sampler_desc.MaxLOD = 1000.0f;
+                    D3D12_CPU_DESCRIPTOR_HANDLE src_handle =
+                        b.handle.tex_arr[i].sampler_ref().heap->GetCPUDescriptorHandleForHeapStart();
+                    src_handle.ptr += SAMPLER_INCR * b.handle.tex_arr[i].sampler_ref().offset;
 
-                    D3D12_CPU_DESCRIPTOR_HANDLE sampler_dest_handle = sampler_cpu_handle;
-                    sampler_dest_handle.ptr += sampler_incr * (descr_index + i);
-                    device->CreateSampler(&sampler_desc, sampler_dest_handle);
+                    D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = sampler_cpu_handle;
+                    dest_handle.ptr += SAMPLER_INCR * (descr_index + i);
+
+                    device->CopyDescriptorsSimple(1, dest_handle, src_handle, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
                 }
             }
         } else if (b.trg == eBindTarget::Tex3D) {
-            D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
-            srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-            srv_desc.Format = g_dx_formats[int(b.handle.tex3d->params.format)];
-            srv_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE3D;
-            srv_desc.Texture2D.MipLevels = 1;
-            srv_desc.Texture2D.MostDetailedMip = 0;
-            srv_desc.Texture2D.PlaneSlice = 0;
-            srv_desc.Texture2D.ResourceMinLODClamp = 0.0f;
+            D3D12_CPU_DESCRIPTOR_HANDLE src_handle = b.handle.tex3d->handle().views_ref.heap->GetCPUDescriptorHandleForHeapStart();
+            src_handle.ptr += CBV_SRV_UAV_INCR * b.handle.tex3d->handle().views_ref.offset;
 
-            D3D12_CPU_DESCRIPTOR_HANDLE srv_dest_handle = cbv_srv_uav_cpu_handle;
-            srv_dest_handle.ptr += cbv_srv_uav_incr * descr_index;
-            device->CreateShaderResourceView(b.handle.tex3d->dx_resource(), &srv_desc, srv_dest_handle);
+            D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = cbv_srv_uav_cpu_handle;
+            dest_handle.ptr += CBV_SRV_UAV_INCR * descr_index;
+
+            device->CopyDescriptorsSimple(1, dest_handle, src_handle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
         } else if (b.trg == eBindTarget::SBufRO) {
-            D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
-            srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-            srv_desc.Format = DXGI_FORMAT_R32_TYPELESS;
-            srv_desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-            srv_desc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_RAW;
-            srv_desc.Buffer.FirstElement = 0;
-            srv_desc.Buffer.NumElements = b.handle.buf->size() / sizeof(uint32_t);
-            srv_desc.Buffer.StructureByteStride = 0;
+            D3D12_CPU_DESCRIPTOR_HANDLE src_handle =
+                b.handle.buf->handle().srv_uav_ref.heap->GetCPUDescriptorHandleForHeapStart();
+            src_handle.ptr += CBV_SRV_UAV_INCR * b.handle.buf->handle().srv_uav_ref.offset;
 
             D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = cbv_srv_uav_cpu_handle;
-            dest_handle.ptr += cbv_srv_uav_incr * descr_index;
-            device->CreateShaderResourceView(b.handle.buf->dx_resource(), &srv_desc, dest_handle);
+            dest_handle.ptr += CBV_SRV_UAV_INCR * descr_index;
+
+            device->CopyDescriptorsSimple(1, dest_handle, src_handle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
         } else if (b.trg == eBindTarget::SBufRW) {
-            D3D12_UNORDERED_ACCESS_VIEW_DESC uav_desc = {};
-            uav_desc.Format = DXGI_FORMAT_R32_TYPELESS;
-            uav_desc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
-            uav_desc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_RAW;
-            uav_desc.Buffer.FirstElement = 0;
-            uav_desc.Buffer.NumElements = b.handle.buf->size() / sizeof(uint32_t);
-            uav_desc.Buffer.StructureByteStride = 0;
+            assert(b.handle.buf->handle().srv_uav_ref.count == 2);
+            D3D12_CPU_DESCRIPTOR_HANDLE src_handle =
+                b.handle.buf->handle().srv_uav_ref.heap->GetCPUDescriptorHandleForHeapStart();
+            src_handle.ptr += CBV_SRV_UAV_INCR * (b.handle.buf->handle().srv_uav_ref.offset + 1);
 
             D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = cbv_srv_uav_cpu_handle;
-            dest_handle.ptr += cbv_srv_uav_incr * descr_index;
-            device->CreateUnorderedAccessView(b.handle.buf->dx_resource(), nullptr, &uav_desc, dest_handle);
+            dest_handle.ptr += CBV_SRV_UAV_INCR * descr_index;
+
+            device->CopyDescriptorsSimple(1, dest_handle, src_handle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
         } else if (b.trg == eBindTarget::Image) {
-            D3D12_UNORDERED_ACCESS_VIEW_DESC uav_desc = {};
-            uav_desc.Format = g_dx_formats[int(b.handle.tex->params.format)];
-            uav_desc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
-            uav_desc.Texture2D.PlaneSlice = 0;
-            uav_desc.Texture2D.MipSlice = 0;
+            assert(b.handle.tex->handle().views_ref.count == 2);
+            D3D12_CPU_DESCRIPTOR_HANDLE src_handle =
+                b.handle.tex->handle().views_ref.heap->GetCPUDescriptorHandleForHeapStart();
+            src_handle.ptr += CBV_SRV_UAV_INCR * (b.handle.tex->handle().views_ref.offset + 1);
 
             D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = cbv_srv_uav_cpu_handle;
-            dest_handle.ptr += cbv_srv_uav_incr * descr_index;
-            device->CreateUnorderedAccessView(b.handle.tex->dx_resource(), nullptr, &uav_desc, dest_handle);
+            dest_handle.ptr += CBV_SRV_UAV_INCR * descr_index;
+
+            device->CopyDescriptorsSimple(1, dest_handle, src_handle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        } else if (b.trg == eBindTarget::Sampler) {
+            D3D12_CPU_DESCRIPTOR_HANDLE src_handle =
+                b.handle.sampler->ref().heap->GetCPUDescriptorHandleForHeapStart();
+            src_handle.ptr += SAMPLER_INCR * b.handle.sampler->ref().offset;
+
+            D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = sampler_cpu_handle;
+            dest_handle.ptr += SAMPLER_INCR * descr_index;
+
+            device->CopyDescriptorsSimple(1, dest_handle, src_handle, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
         } else if (b.trg == eBindTarget::DescrTable && b.handle.descr_table->count) {
             if (b.handle.descr_table->gpu_ptr) {
                 cmd_buf->SetComputeRootDescriptorTable(b.loc,
                                                        D3D12_GPU_DESCRIPTOR_HANDLE{b.handle.descr_table->gpu_ptr});
             } else if (b.handle.descr_table->type == eDescrType::CBV_SRV_UAV) {
                 D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = cbv_srv_uav_cpu_handle;
-                dest_handle.ptr += cbv_srv_uav_incr * (descr_sizes.cbv_srv_uav_count - b.handle.descr_table->count);
+                dest_handle.ptr += CBV_SRV_UAV_INCR * (descr_sizes.cbv_srv_uav_count - b.handle.descr_table->count);
                 device->CopyDescriptorsSimple(b.handle.descr_table->count, dest_handle,
                                               D3D12_CPU_DESCRIPTOR_HANDLE{b.handle.descr_table->cpu_ptr},
                                               D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
                 D3D12_GPU_DESCRIPTOR_HANDLE gpu_handle = cbv_srv_uav_gpu_handle;
-                gpu_handle.ptr += cbv_srv_uav_incr * (descr_sizes.cbv_srv_uav_count - b.handle.descr_table->count);
+                gpu_handle.ptr += CBV_SRV_UAV_INCR * (descr_sizes.cbv_srv_uav_count - b.handle.descr_table->count);
                 cmd_buf->SetComputeRootDescriptorTable(b.loc, gpu_handle);
             } else if (b.handle.descr_table->type == eDescrType::Sampler) {
                 D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = sampler_cpu_handle;
-                dest_handle.ptr += sampler_incr * (descr_sizes.sampler_count - b.handle.descr_table->count);
+                dest_handle.ptr += SAMPLER_INCR * (descr_sizes.sampler_count - b.handle.descr_table->count);
                 device->CopyDescriptorsSimple(b.handle.descr_table->count, dest_handle,
                                               D3D12_CPU_DESCRIPTOR_HANDLE{b.handle.descr_table->cpu_ptr},
                                               D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
 
                 D3D12_GPU_DESCRIPTOR_HANDLE gpu_handle = sampler_gpu_handle;
-                gpu_handle.ptr += sampler_incr * (descr_sizes.sampler_count - b.handle.descr_table->count);
+                gpu_handle.ptr += SAMPLER_INCR * (descr_sizes.sampler_count - b.handle.descr_table->count);
                 cmd_buf->SetComputeRootDescriptorTable(b.loc, gpu_handle);
             }
+        } else if (b.trg == eBindTarget::AccStruct) {
+            D3D12_CPU_DESCRIPTOR_HANDLE src_handle =
+                b.handle.acc_struct->view_ref().heap->GetCPUDescriptorHandleForHeapStart();
+            src_handle.ptr += CBV_SRV_UAV_INCR * b.handle.acc_struct->view_ref().offset;
+
+            D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = cbv_srv_uav_cpu_handle;
+            dest_handle.ptr += CBV_SRV_UAV_INCR * descr_index;
+
+            device->CopyDescriptorsSimple(1, dest_handle, src_handle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
         }
     }
 
@@ -246,7 +235,7 @@ void Ray::Dx::PrepareDescriptors(Context *ctx, ID3D12GraphicsCommandList *cmd_bu
         cbv_desc.SizeInBytes = 256;
 
         D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = cbv_srv_uav_cpu_handle;
-        dest_handle.ptr += cbv_srv_uav_incr * prog->pc_param_index();
+        dest_handle.ptr += CBV_SRV_UAV_INCR * prog->pc_param_index();
         device->CreateConstantBufferView(&cbv_desc, dest_handle);
 
         ctx->uniform_data_buf_offs[ctx->backend_frame] += 256;
@@ -262,7 +251,7 @@ void Ray::Dx::PrepareDescriptors(Context *ctx, ID3D12GraphicsCommandList *cmd_bu
 
 void Ray::Dx::DispatchCompute(ID3D12GraphicsCommandList *cmd_buf, const Pipeline &comp_pipeline,
                               const uint32_t grp_count[3], Span<const Binding> bindings, const void *uniform_data,
-                              int uniform_data_len, DescrMultiPoolAlloc *descr_alloc, ILog *log) {
+                              int uniform_data_len, DescrMultiPoolAlloc<BumpAlloc> *descr_alloc, ILog *log) {
     Context *ctx = descr_alloc->ctx();
 
     cmd_buf->SetPipelineState(comp_pipeline.handle());
@@ -276,7 +265,7 @@ void Ray::Dx::DispatchCompute(ID3D12GraphicsCommandList *cmd_buf, const Pipeline
 void Ray::Dx::DispatchComputeIndirect(ID3D12GraphicsCommandList *cmd_buf, const Pipeline &comp_pipeline,
                                       const Buffer &indir_buf, const uint32_t indir_buf_offset,
                                       Span<const Binding> bindings, const void *uniform_data, int uniform_data_len,
-                                      DescrMultiPoolAlloc *descr_alloc, ILog *log) {
+                                      DescrMultiPoolAlloc<BumpAlloc> *descr_alloc, ILog *log) {
     Context *ctx = descr_alloc->ctx();
 
     cmd_buf->SetPipelineState(comp_pipeline.handle());
@@ -284,7 +273,7 @@ void Ray::Dx::DispatchComputeIndirect(ID3D12GraphicsCommandList *cmd_buf, const 
 
     PrepareDescriptors(ctx, cmd_buf, bindings, uniform_data, uniform_data_len, comp_pipeline.prog(), descr_alloc, log);
 
-    cmd_buf->ExecuteIndirect(comp_pipeline.cmd_signature(), 1, indir_buf.dx_resource(), indir_buf_offset, nullptr, 0);
+    cmd_buf->ExecuteIndirect(ctx->indirect_dispatch_cmd_signature(), 1, indir_buf.dx_resource(), indir_buf_offset, nullptr, 0);
 
     /*Context *ctx = descr_alloc->ctx();
 

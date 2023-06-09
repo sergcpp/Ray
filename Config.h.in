@@ -4,3 +4,4 @@
 #cmakedefine ENABLE_SIMD_IMPL
 #cmakedefine ENABLE_VK_IMPL
 #cmakedefine ENABLE_DX_IMPL
+#cmakedefine ENABLE_PIX

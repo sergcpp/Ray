@@ -1,5 +1,6 @@
 #include "RendererVK.h"
 
+#include "SceneVK.h"
 #include "Vk/DrawCallVK.h"
 
 #include "shaders/debug_rt_interface.h"
@@ -78,7 +79,7 @@ void Ray::Vk::Renderer::kernel_GeneratePrimaryRays(CommandBuffer cmd_buf, const 
 void Ray::Vk::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const pass_settings_t &settings,
                                               const scene_data_t &sc_data, const Buffer &random_seq, const int hi,
                                               const rect_t &rect, const uint32_t node_index, const float inter_t,
-                                              Span<const TextureAtlas> tex_atlases, VkDescriptorSet tex_descr_set,
+                                              Span<const TextureAtlas> tex_atlases, const BindlessTexData &bindless_tex,
                                               const Buffer &rays, const Buffer &out_hits) {
     const TransitionInfo res_transitions[] = {{&rays, eResState::UnorderedAccess},
                                               {&out_hits, eResState::UnorderedAccess}};
@@ -94,12 +95,14 @@ void Ray::Vk::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const pass_
         {eBindTarget::SBufRW, IntersectScene::OUT_HITS_BUF_SLOT, out_hits}};
 
     if (use_bindless_) {
-        assert(tex_descr_set);
+        bindings.emplace_back(eBindTarget::Sampler, Types::TEXTURES_SAMPLER_SLOT, bindless_tex.shared_sampler);
+
+        assert(bindless_tex.descr_set);
         vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, pi_intersect_scene_.layout(), 1, 1,
-                                &tex_descr_set, 0, nullptr);
+                                &bindless_tex.descr_set, 0, nullptr);
     } else {
         bindings.emplace_back(eBindTarget::SBufRO, Types::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
-        bindings.emplace_back(eBindTarget::Tex2DArray, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
+        bindings.emplace_back(eBindTarget::Tex2DArraySampled, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
     }
 
     if (use_hwrt_) {
@@ -137,7 +140,7 @@ void Ray::Vk::Renderer::kernel_IntersectScene_RTPipe(CommandBuffer cmd_buf, cons
                                                      const scene_data_t &sc_data, const Buffer &random_seq,
                                                      const int hi, const rect_t &rect, const uint32_t node_index,
                                                      const float inter_t, Span<const TextureAtlas> tex_atlases,
-                                                     VkDescriptorSet tex_descr_set, const Buffer &rays,
+                                                     const BindlessTexData &bindless_tex, const Buffer &rays,
                                                      const Buffer &out_hits) {
     const TransitionInfo res_transitions[] = {{&rays, eResState::UnorderedAccess},
                                               {&out_hits, eResState::UnorderedAccess}};
@@ -153,9 +156,9 @@ void Ray::Vk::Renderer::kernel_IntersectScene_RTPipe(CommandBuffer cmd_buf, cons
         {eBindTarget::AccStruct, IntersectScene::TLAS_SLOT, sc_data.rt_tlas},
         {eBindTarget::SBufRW, IntersectScene::OUT_HITS_BUF_SLOT, out_hits}};
 
-    assert(tex_descr_set);
+    assert(bindless_tex.rt_descr_set);
     vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, pi_intersect_scene_rtpipe_.layout(), 1, 1,
-                            &tex_descr_set, 0, nullptr);
+                            &bindless_tex.rt_descr_set, 0, nullptr);
 
     IntersectScene::Params uniform_params = {};
     uniform_params.rect[0] = rect.x;
@@ -179,7 +182,7 @@ void Ray::Vk::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const Buffe
                                               const pass_settings_t &settings, const scene_data_t &sc_data,
                                               const Buffer &random_seq, const int hi, uint32_t node_index,
                                               const float inter_t, Span<const TextureAtlas> tex_atlases,
-                                              VkDescriptorSet tex_descr_set, const Buffer &rays,
+                                              const BindlessTexData &bindless_tex, const Buffer &rays,
                                               const Buffer &out_hits) {
     const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
                                               {&counters, eResState::ShaderResource},
@@ -198,12 +201,14 @@ void Ray::Vk::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const Buffe
         {eBindTarget::SBufRW, IntersectScene::OUT_HITS_BUF_SLOT, out_hits}};
 
     if (use_bindless_) {
-        assert(tex_descr_set);
+        bindings.emplace_back(eBindTarget::Sampler, Types::TEXTURES_SAMPLER_SLOT, bindless_tex.shared_sampler);
+
+        assert(bindless_tex.descr_set);
         vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, pi_intersect_scene_indirect_.layout(), 1, 1,
-                                &tex_descr_set, 0, nullptr);
+                                &bindless_tex.descr_set, 0, nullptr);
     } else {
         bindings.emplace_back(eBindTarget::SBufRO, Types::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
-        bindings.emplace_back(eBindTarget::Tex2DArray, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
+        bindings.emplace_back(eBindTarget::Tex2DArraySampled, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
     }
 
     if (use_hwrt_) {
@@ -235,7 +240,7 @@ void Ray::Vk::Renderer::kernel_IntersectScene_RTPipe(CommandBuffer cmd_buf, cons
                                                      const scene_data_t &sc_data, const Buffer &random_seq,
                                                      const int hi, const uint32_t node_index, const float inter_t,
                                                      Span<const TextureAtlas> tex_atlases,
-                                                     const VkDescriptorSet tex_descr_set, const Buffer &rays,
+                                                     const BindlessTexData &bindless_tex, const Buffer &rays,
                                                      const Buffer &out_hits) {
     const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
                                               {&rays, eResState::UnorderedAccess},
@@ -252,9 +257,9 @@ void Ray::Vk::Renderer::kernel_IntersectScene_RTPipe(CommandBuffer cmd_buf, cons
         {eBindTarget::AccStruct, IntersectScene::TLAS_SLOT, sc_data.rt_tlas},
         {eBindTarget::SBufRW, IntersectScene::OUT_HITS_BUF_SLOT, out_hits}};
 
-    assert(tex_descr_set);
+    assert(bindless_tex.rt_descr_set);
     vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,
-                            pi_intersect_scene_indirect_rtpipe_.layout(), 1, 1, &tex_descr_set, 0, nullptr);
+                            pi_intersect_scene_indirect_rtpipe_.layout(), 1, 1, &bindless_tex.rt_descr_set, 0, nullptr);
 
     IntersectScene::Params uniform_params = {};
     uniform_params.node_index = node_index;
@@ -298,7 +303,7 @@ void Ray::Vk::Renderer::kernel_ShadePrimaryHits(
     CommandBuffer cmd_buf, const pass_settings_t &settings, const environment_t &env, const Buffer &indir_args,
     const int indir_args_index, const Buffer &hits, const Buffer &rays, const scene_data_t &sc_data,
     const Buffer &random_seq, const int hi, const rect_t &rect, Span<const TextureAtlas> tex_atlases,
-    VkDescriptorSet tex_descr_set, const Texture2D &out_img, const Buffer &out_rays, const Buffer &out_sh_rays,
+    const BindlessTexData &bindless_tex, const Texture2D &out_img, const Buffer &out_rays, const Buffer &out_sh_rays,
     const Buffer &inout_counters, const Texture2D &out_base_color, const Texture2D &out_depth_normals) {
     const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
                                               {&hits, eResState::ShaderResource},
@@ -378,25 +383,25 @@ void Ray::Vk::Renderer::kernel_ShadePrimaryHits(
     }
 
     if (use_bindless_) {
-        assert(tex_descr_set);
-        vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, pi->layout(), 1, 1, &tex_descr_set, 0,
+        bindings.emplace_back(eBindTarget::Sampler, Types::TEXTURES_SAMPLER_SLOT, bindless_tex.shared_sampler);
+
+        assert(bindless_tex.descr_set);
+        vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, pi->layout(), 1, 1, &bindless_tex.descr_set, 0,
                                 nullptr);
     } else {
         bindings.emplace_back(eBindTarget::SBufRO, Types::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
-        bindings.emplace_back(eBindTarget::Tex2DArray, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
+        bindings.emplace_back(eBindTarget::Tex2DArraySampled, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
     }
 
     DispatchComputeIndirect(cmd_buf, *pi, indir_args, indir_args_index * sizeof(DispatchIndirectCommand), bindings,
                             &uniform_params, sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
 }
 
-void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(CommandBuffer cmd_buf, const pass_settings_t &settings,
-                                                  const environment_t &env, const Buffer &indir_args,
-                                                  const int indir_args_index, const Buffer &hits, const Buffer &rays,
-                                                  const scene_data_t &sc_data, const Buffer &random_seq, const int hi,
-                                                  Span<const TextureAtlas> tex_atlases, VkDescriptorSet tex_descr_set,
-                                                  const Texture2D &out_img, const Buffer &out_rays,
-                                                  const Buffer &out_sh_rays, const Buffer &inout_counters) {
+void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(
+    CommandBuffer cmd_buf, const pass_settings_t &settings, const environment_t &env, const Buffer &indir_args,
+    const int indir_args_index, const Buffer &hits, const Buffer &rays, const scene_data_t &sc_data,
+    const Buffer &random_seq, const int hi, Span<const TextureAtlas> tex_atlases, const BindlessTexData &bindless_tex,
+    const Texture2D &out_img, const Buffer &out_rays, const Buffer &out_sh_rays, const Buffer &inout_counters) {
     const TransitionInfo res_transitions[] = {
         {&indir_args, eResState::IndirectArgument}, {&hits, eResState::ShaderResource},
         {&rays, eResState::ShaderResource},         {&random_seq, eResState::ShaderResource},
@@ -448,12 +453,14 @@ void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(CommandBuffer cmd_buf, const p
         (settings.clamp_indirect != 0.0f) ? settings.clamp_indirect : std::numeric_limits<float>::max();
 
     if (use_bindless_) {
-        assert(tex_descr_set);
+        bindings.emplace_back(eBindTarget::Sampler, Types::TEXTURES_SAMPLER_SLOT, bindless_tex.shared_sampler);
+
+        assert(bindless_tex.descr_set);
         vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, pi_shade_secondary_.layout(), 1, 1,
-                                &tex_descr_set, 0, nullptr);
+                                &bindless_tex.descr_set, 0, nullptr);
     } else {
         bindings.emplace_back(eBindTarget::SBufRO, Types::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
-        bindings.emplace_back(eBindTarget::Tex2DArray, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
+        bindings.emplace_back(eBindTarget::Tex2DArraySampled, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
     }
 
     DispatchComputeIndirect(cmd_buf, pi_shade_secondary_, indir_args,
@@ -466,7 +473,7 @@ void Ray::Vk::Renderer::kernel_IntersectSceneShadow(CommandBuffer cmd_buf, const
                                                     const Buffer &counters, const scene_data_t &sc_data,
                                                     const Buffer &random_seq, const int hi, const uint32_t node_index,
                                                     const float clamp_val, Span<const TextureAtlas> tex_atlases,
-                                                    VkDescriptorSet tex_descr_set, const Buffer &sh_rays,
+                                                    const BindlessTexData &bindless_tex, const Buffer &sh_rays,
                                                     const Texture2D &out_img) {
     const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
                                               {&counters, eResState::ShaderResource},
@@ -498,12 +505,14 @@ void Ray::Vk::Renderer::kernel_IntersectSceneShadow(CommandBuffer cmd_buf, const
     }
 
     if (use_bindless_) {
-        assert(tex_descr_set);
+        bindings.emplace_back(eBindTarget::Sampler, Types::TEXTURES_SAMPLER_SLOT, bindless_tex.shared_sampler);
+
+        assert(bindless_tex.descr_set);
         vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, pi_intersect_scene_shadow_.layout(), 1, 1,
-                                &tex_descr_set, 0, nullptr);
+                                &bindless_tex.descr_set, 0, nullptr);
     } else {
         bindings.emplace_back(eBindTarget::SBufRO, Types::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
-        bindings.emplace_back(eBindTarget::Tex2DArray, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
+        bindings.emplace_back(eBindTarget::Tex2DArraySampled, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
     }
 
     IntersectSceneShadow::Params uniform_params = {};
@@ -635,7 +644,7 @@ void Ray::Vk::Renderer::kernel_FilterVariance(CommandBuffer cmd_buf, const Textu
                                               {&out_req_samples, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
-    const Binding bindings[] = {{eBindTarget::Tex2D, FilterVariance::IN_IMG_SLOT, img_buf},
+    const Binding bindings[] = {{eBindTarget::Tex2DSampled, FilterVariance::IN_IMG_SLOT, img_buf},
                                 {eBindTarget::Image, FilterVariance::OUT_IMG_SLOT, out_variance},
                                 {eBindTarget::Image, FilterVariance::OUT_REQ_SAMPLES_IMG_SLOT, out_req_samples}};
 
@@ -670,11 +679,11 @@ void Ray::Vk::Renderer::kernel_NLMFilter(CommandBuffer cmd_buf, const Texture2D 
         {&out_raw_img, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
-    const Binding bindings[] = {{eBindTarget::Tex2D, NLMFilter::IN_IMG_SLOT, img_buf},
-                                {eBindTarget::Tex2D, NLMFilter::VARIANCE_IMG_SLOT, var_buf},
+    const Binding bindings[] = {{eBindTarget::Tex2DSampled, NLMFilter::IN_IMG_SLOT, img_buf},
+                                {eBindTarget::Tex2DSampled, NLMFilter::VARIANCE_IMG_SLOT, var_buf},
                                 {eBindTarget::Tex3D, NLMFilter::TONEMAP_LUT_SLOT, tonemap_lut_},
-                                {eBindTarget::Tex2D, NLMFilter::BASE_COLOR_IMG_SLOT, base_color_img},
-                                {eBindTarget::Tex2D, NLMFilter::DEPTH_NORMAL_IMG_SLOT, depth_normals_img},
+                                {eBindTarget::Tex2DSampled, NLMFilter::BASE_COLOR_IMG_SLOT, base_color_img},
+                                {eBindTarget::Tex2DSampled, NLMFilter::DEPTH_NORMAL_IMG_SLOT, depth_normals_img},
                                 {eBindTarget::Image, NLMFilter::OUT_IMG_SLOT, out_img},
                                 {eBindTarget::Image, NLMFilter::OUT_RAW_IMG_SLOT, out_raw_img}};
 

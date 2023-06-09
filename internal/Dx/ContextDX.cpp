@@ -82,13 +82,13 @@ void Ray::Dx::Context::Destroy() {
         DestroyDeferredResources(i);
     }
 
-    if (default_memory_allocs_) {
-        default_memory_allocs_.reset();
-    }
+    default_memory_allocs_.reset();
+    staging_descr_alloc_.reset();
 
     SAFE_RELEASE(command_queue_);
     SAFE_RELEASE(command_list_);
     SAFE_RELEASE(temp_command_allocator_);
+    SAFE_RELEASE(indirect_dispatch_cmd_signature_);
 
 #ifndef NDEBUG
     ID3D12DebugDevice *debug_device = nullptr;
@@ -137,10 +137,8 @@ bool Ray::Dx::Context::Init(ILog *log, const char *preferred_device) {
             adapter_score += 1000;
         }
 
-        if (preferred_device) {
-            if (MatchDeviceNames(str_converter.to_bytes(desc.Description).c_str(), preferred_device)) {
-                adapter_score += 100000;
-            }
+        if (preferred_device && MatchDeviceNames(str_converter.to_bytes(desc.Description).c_str(), preferred_device)) {
+            adapter_score += 100000;
         }
 
         if (adapter_score > best_adapter_score) {
@@ -246,14 +244,47 @@ bool Ray::Dx::Context::Init(ILog *log, const char *preferred_device) {
     hr = device_->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &options, sizeof(options));
     if (SUCCEEDED(hr)) {
         if (options.ResourceBindingTier == D3D12_RESOURCE_BINDING_TIER_1) {
-            max_combined_image_samplers_ = 16;
+            max_sampled_images_ = 128;
+            max_samplers_ = 16;
         } else {
-            max_combined_image_samplers_ = 2048;
+            max_sampled_images_ = 16384; // made-up limitation
+            max_samplers_ = 2048;
+        }
+    }
+    max_combined_image_samplers_ = std::min(max_sampled_images_, max_samplers_);
+
+    hr = device_->QueryInterface(IID_PPV_ARGS(&device5_));
+    if (SUCCEEDED(hr)) {
+        D3D12_FEATURE_DATA_D3D12_OPTIONS5 feature_support = {};
+        hr = device5_->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &feature_support, sizeof(feature_support));
+        if (SUCCEEDED(hr)) {
+            if (feature_support.RaytracingTier > D3D12_RAYTRACING_TIER_NOT_SUPPORTED) {
+                raytracing_supported_ = ray_query_supported_ = true;
+            }
+        }
+    }
+
+    { // check shader model support
+        D3D12_FEATURE_DATA_SHADER_MODEL supported_shader_models = {};
+
+        supported_shader_models.HighestShaderModel = D3D_SHADER_MODEL_6_0;
+        hr = device_->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &supported_shader_models,
+                                          sizeof(supported_shader_models));
+        if (FAILED(hr)) {
+            return false;
+        }
+
+        supported_shader_models.HighestShaderModel = D3D_SHADER_MODEL_6_5;
+        hr = device_->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &supported_shader_models,
+                                          sizeof(supported_shader_models));
+        if (FAILED(hr)) {
+            raytracing_supported_ = ray_query_supported_ = false;
         }
     }
 
     default_memory_allocs_ = std::make_unique<MemoryAllocators>(
         "Default Allocs", this, 32 * 1024 * 1024 /* initial_block_size */, 1.5f /* growth_factor */);
+    staging_descr_alloc_ = std::make_unique<DescrMultiPoolAlloc<LinearAllocAdapted>>(this, false, 16 * 1024);
 
     for (int i = 0; i < MaxFramesInFlight; ++i) {
         uniform_data_bufs[i] = Buffer{"Uniform data buf", this, eBufType::Upload, 1 * 1024 * 1024};
@@ -262,7 +293,24 @@ bool Ray::Dx::Context::Init(ILog *log, const char *preferred_device) {
 
         query_readback_buf_[i] = std::make_unique<Buffer>("Query Readback Buf", this, eBufType::Readback,
                                                           uint32_t(sizeof(uint64_t) * MaxTimestampQueries));
-        default_descr_alloc_[i] = std::make_unique<DescrMultiPoolAlloc>(this, 16 * 1024);
+        default_descr_alloc_[i] = std::make_unique<DescrMultiPoolAlloc<BumpAlloc>>(this, true, 16 * 1024);
+    }
+
+    { // create indirect dispatch signature
+        D3D12_INDIRECT_ARGUMENT_DESC indir_arg_desc = {};
+        indir_arg_desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH;
+
+        D3D12_COMMAND_SIGNATURE_DESC cmd_signature_desc = {};
+        cmd_signature_desc.ByteStride = sizeof(D3D12_DISPATCH_ARGUMENTS);
+        cmd_signature_desc.NumArgumentDescs = 1;
+        cmd_signature_desc.pArgumentDescs = &indir_arg_desc;
+
+        hr = device_->CreateCommandSignature(&cmd_signature_desc, nullptr,
+                                             IID_PPV_ARGS(&indirect_dispatch_cmd_signature_));
+        if (FAILED(hr)) {
+            log_->Error("Failed to create command signature!");
+            return false;
+        }
     }
 
     g_rdoc_device = device_;
@@ -368,10 +416,10 @@ void Ray::Dx::Context::DestroyDeferredResources(const int i) {
         pipe->Release();
     }
     pipelines_to_destroy[i].clear();
-    for (ID3D12DescriptorHeap *heap : descriptor_heaps_to_destroy[i]) {
+    for (ID3D12DescriptorHeap *heap : descriptor_heaps_to_release[i]) {
         heap->Release();
     }
-    descriptor_heaps_to_destroy[i].clear();
+    descriptor_heaps_to_release[i].clear();
     for (IUnknown *unknown : opaques_to_release[i]) {
         unknown->Release();
     }

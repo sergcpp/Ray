@@ -35,7 +35,7 @@ vec2 DirToCanonical(const vec3 d, const float y_rotation) {
     return vec2((cos_theta + 1.0) / 2.0, phi / (2.0 * PI));
 }
 
-float Evaluate_EnvQTree(const float y_rotation, sampler2D qtree_tex, const int qtree_levels, const vec3 L) {
+float Evaluate_EnvQTree(const float y_rotation, texture2D qtree_tex, const int qtree_levels, const vec3 L) {
     int res = 2;
     int lod = qtree_levels - 1;
 
@@ -66,7 +66,7 @@ float Evaluate_EnvQTree(const float y_rotation, sampler2D qtree_tex, const int q
     return factor / (4.0 * PI);
 }
 
-vec4 Sample_EnvQTree(const float y_rotation, sampler2D qtree_tex, const int qtree_levels,
+vec4 Sample_EnvQTree(const float y_rotation, texture2D qtree_tex, const int qtree_levels,
                      const float rand, const float rx, const float ry) {
     int res = 2;
     float _step = 1.0 / float(res);

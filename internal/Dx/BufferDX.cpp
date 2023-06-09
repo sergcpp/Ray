@@ -30,6 +30,8 @@ eResState GetInitialDxResourceState(const eBufType type) {
         return eResState::CopySrc;
     } else if (type == eBufType::Readback) {
         return eResState::CopyDst;
+    } else if (type == eBufType::AccStructure) {
+        return eResState::BuildASWrite;
     }
     return eResState::Undefined;
 }
@@ -81,52 +83,34 @@ uint32_t Ray::Dx::Buffer::AllocSubRegion(const uint32_t req_size, const char *ta
     if (alloc_off != 0xffffffff) {
         if (init_buf) {
             assert(init_buf->type_ == eBufType::Upload || init_buf->type_ == eBufType::Readback);
-            // auto cmd_buf = reinterpret_cast<VkCommandBuffer>(_cmd_buf);
+            auto cmd_buf = reinterpret_cast<CommandBuffer>(_cmd_buf);
 
-            // VkPipelineStageFlags src_stages = 0, dst_stages = 0;
-            // SmallVector<VkBufferMemoryBarrier, 2> barriers;
+            SmallVector<D3D12_RESOURCE_BARRIER, 2> barriers;
 
-            /*if (init_buf->resource_state != eResState::Undefined && init_buf->resource_state != eResState::CopySrc) {
+            if (/*init_buf->resource_state != eResState::Undefined &&*/ init_buf->resource_state !=
+                eResState::CopySrc) {
                 auto &new_barrier = barriers.emplace_back();
-                new_barrier = {VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER};
-                new_barrier.srcAccessMask = VKAccessFlagsForState(init_buf->resource_state);
-                new_barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-                new_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-                new_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-                new_barrier.buffer = init_buf->vk_handle();
-                new_barrier.offset = VkDeviceSize{init_off};
-                new_barrier.size = VkDeviceSize{req_size};
-
-                src_stages |= VKPipelineStagesForState(init_buf->resource_state);
-                dst_stages |= VKPipelineStagesForState(eResState::CopySrc);
+                new_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+                new_barrier.Transition.pResource = init_buf->dx_resource();
+                new_barrier.Transition.StateBefore = DXResourceState(init_buf->resource_state);
+                new_barrier.Transition.StateAfter = DXResourceState(eResState::CopySrc);
+                new_barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
             }
 
-            if (this->resource_state != eResState::Undefined && this->resource_state != eResState::CopyDst) {
+            if (/*this->resource_state != eResState::Undefined &&*/ this->resource_state != eResState::CopyDst) {
                 auto &new_barrier = barriers.emplace_back();
-                new_barrier = {VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER};
-                new_barrier.srcAccessMask = VKAccessFlagsForState(this->resource_state);
-                new_barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-                new_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-                new_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-                new_barrier.buffer = handle_.buf;
-                new_barrier.offset = VkDeviceSize{alloc_off};
-                new_barrier.size = VkDeviceSize{req_size};
-
-                src_stages |= VKPipelineStagesForState(this->resource_state);
-                dst_stages |= VKPipelineStagesForState(eResState::CopyDst);
+                new_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+                new_barrier.Transition.pResource = this->dx_resource();
+                new_barrier.Transition.StateBefore = DXResourceState(this->resource_state);
+                new_barrier.Transition.StateAfter = DXResourceState(eResState::CopyDst);
+                new_barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
             }
 
             if (!barriers.empty()) {
-                vkCmdPipelineBarrier(cmd_buf, src_stages, dst_stages, 0, 0, nullptr, uint32_t(barriers.size()),
-                                     barriers.cdata(), 0, nullptr);
+                cmd_buf->ResourceBarrier(UINT(barriers.size()), barriers.data());
             }
 
-            VkBufferCopy region_to_copy = {};
-            region_to_copy.srcOffset = VkDeviceSize{init_off};
-            region_to_copy.dstOffset = VkDeviceSize{alloc_off};
-            region_to_copy.size = VkDeviceSize{req_size};
-
-            vkCmdCopyBuffer(cmd_buf, init_buf->handle_.buf, handle_.buf, 1, &region_to_copy);*/
+            cmd_buf->CopyBufferRegion(handle_.buf, alloc_off, init_buf->dx_resource(), init_off, req_size);
 
             init_buf->resource_state = eResState::CopySrc;
             this->resource_state = eResState::CopyDst;
@@ -219,7 +203,7 @@ void Ray::Dx::Buffer::Resize(const uint32_t new_size, const bool keep_content) {
     res_desc.SampleDesc.Count = 1;
     res_desc.SampleDesc.Quality = 0;
     res_desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-    if (type_ == eBufType::Storage || type_ == eBufType::Indirect) {
+    if (type_ == eBufType::Storage || type_ == eBufType::Indirect || type_ == eBufType::AccStructure) {
         res_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
     } else {
         res_desc.Flags = D3D12_RESOURCE_FLAG_NONE;
@@ -242,33 +226,39 @@ void Ray::Dx::Buffer::Resize(const uint32_t new_size, const bool keep_content) {
     new_buf->SetName(temp_str.c_str());
 #endif
 
-#if 0
-    VkDeviceMemory buffer_mem = {};
+    const bool requires_uav = (type_ == eBufType::Storage || type_ == eBufType::Indirect);
 
-    res = VK_ERROR_OUT_OF_DEVICE_MEMORY;
-    if (buf_alloc_info.memoryTypeIndex != 0xffffffff) {
-        res = vkAllocateMemory(ctx_->device(), &buf_alloc_info, nullptr, &buffer_mem);
+    const PoolRef new_srv_uav_ref = ctx_->staging_descr_alloc()->Alloc(eDescrType::CBV_SRV_UAV, requires_uav ? 2 : 1);
+    { // Create default SRV
+        D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
+        srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        srv_desc.Format = DXGI_FORMAT_R32_TYPELESS;
+        srv_desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+        srv_desc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_RAW;
+        srv_desc.Buffer.FirstElement = 0;
+        srv_desc.Buffer.NumElements = size_ / sizeof(uint32_t);
+        srv_desc.Buffer.StructureByteStride = 0;
+
+        D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = new_srv_uav_ref.heap->GetCPUDescriptorHandleForHeapStart();
+        dest_handle.ptr +=
+            device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV) * new_srv_uav_ref.offset;
+        device->CreateShaderResourceView(new_buf, &srv_desc, dest_handle);
     }
-    if (res == VK_ERROR_OUT_OF_DEVICE_MEMORY) {
-        ctx_->log()->Warning("Not enough device memory, falling back to CPU RAM!");
-        memory_props &= ~VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    if (requires_uav) { // Create default UAV
+        D3D12_UNORDERED_ACCESS_VIEW_DESC uav_desc = {};
+        uav_desc.Format = DXGI_FORMAT_R32_TYPELESS;
+        uav_desc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+        uav_desc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_RAW;
+        uav_desc.Buffer.FirstElement = 0;
+        uav_desc.Buffer.NumElements = size_ / sizeof(uint32_t);
+        uav_desc.Buffer.StructureByteStride = 0;
 
-        buf_alloc_info.memoryTypeIndex = FindMemoryType(&ctx_->mem_properties(), memory_requirements.memoryTypeBits,
-                                                        memory_props, buf_alloc_info.allocationSize);
-        res = vkAllocateMemory(ctx_->device(), &buf_alloc_info, nullptr, &buffer_mem);
-        if (res == VK_ERROR_OUT_OF_DEVICE_MEMORY) {
-            memory_props |= VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
-
-            buf_alloc_info.memoryTypeIndex = FindMemoryType(&ctx_->mem_properties(), memory_requirements.memoryTypeBits,
-                                                            memory_props, buf_alloc_info.allocationSize);
-            res = vkAllocateMemory(ctx_->device(), &buf_alloc_info, nullptr, &buffer_mem);
-        }
+        D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = new_srv_uav_ref.heap->GetCPUDescriptorHandleForHeapStart();
+        dest_handle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV) *
+                           (new_srv_uav_ref.offset + 1);
+        device->CreateUnorderedAccessView(new_buf, nullptr, &uav_desc, dest_handle);
     }
-    assert(res == VK_SUCCESS && "Failed to allocate memory!");
 
-    res = vkBindBufferMemory(ctx_->device(), new_buf, buffer_mem, 0 /* offset */);
-    assert(res == VK_SUCCESS && "Failed to bind memory!");
-#endif
     if (handle_.buf) {
         if (keep_content) {
             ID3D12GraphicsCommandList *cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
@@ -294,13 +284,16 @@ void Ray::Dx::Buffer::Resize(const uint32_t new_size, const bool keep_content) {
 
             // destroy previous buffer
             handle_.buf->Release();
+            ctx_->staging_descr_alloc()->Free(eDescrType::CBV_SRV_UAV, handle_.srv_uav_ref);
         } else {
             // destroy previous buffer
             ctx_->resources_to_destroy[ctx_->backend_frame].push_back(handle_.buf);
+            ctx_->staging_descr_alloc()->Free(eDescrType::CBV_SRV_UAV, handle_.srv_uav_ref);
         }
     }
 
     handle_.buf = new_buf;
+    handle_.srv_uav_ref = new_srv_uav_ref;
     handle_.generation = g_GenCounter++;
     resource_state = new_buf_state;
 }
@@ -309,6 +302,7 @@ void Ray::Dx::Buffer::Free() {
     assert(mapped_offset_ == 0xffffffff && mapped_size_ == 0 && !mapped_ptr_);
     if (handle_.buf) {
         ctx_->resources_to_destroy[ctx_->backend_frame].push_back(handle_.buf);
+        ctx_->staging_descr_alloc()->Free(eDescrType::CBV_SRV_UAV, handle_.srv_uav_ref);
 
         handle_ = {};
         size_ = 0;
@@ -433,8 +427,8 @@ void Ray::Dx::Buffer::Fill(const uint32_t dst_offset, const uint32_t size, const
     cmd_buf->ClearUnorderedAccessViewUint(temp_buffer_gpu_UAV_handle, temp_buffer_cpu_readable_UAV_handle, handle_.buf,
                                           clear_val, 0, nullptr);
 
-    ctx_->descriptor_heaps_to_destroy[ctx_->backend_frame].push_back(temp_cpu_descriptor_heap);
-    ctx_->descriptor_heaps_to_destroy[ctx_->backend_frame].push_back(temp_gpu_descriptor_heap);
+    ctx_->descriptor_heaps_to_release[ctx_->backend_frame].push_back(temp_cpu_descriptor_heap);
+    ctx_->descriptor_heaps_to_release[ctx_->backend_frame].push_back(temp_gpu_descriptor_heap);
 }
 
 void Ray::Dx::Buffer::UpdateImmediate(uint32_t dst_offset, uint32_t size, const void *data, void *_cmd_buf) {

@@ -28,11 +28,14 @@ class TextureAtlas;
 class Texture1D;
 class Texture2D;
 class Texture3D;
+class Sampler;
 
 enum class eBindTarget : uint16_t {
     Tex2D,
+    Tex2DSampled,
     Tex2DMs,
     Tex2DArray,
+    Tex2DArraySampled,
     TexCubeArray,
     Tex3D,
     TBuf,
@@ -40,6 +43,7 @@ enum class eBindTarget : uint16_t {
     SBufRO,
     SBufRW,
     Image,
+    Sampler,
     AccStruct,
     _Count
 };
@@ -51,6 +55,7 @@ struct OpaqueHandle {
         const Buffer *buf;
         const Texture1D *tex_buf;
         const TextureAtlas *tex_arr;
+        const Sampler *sampler;
         const AccStructure *acc_struct;
     };
     int count = 0;
@@ -62,6 +67,7 @@ struct OpaqueHandle {
     OpaqueHandle(const TextureAtlas &_tex_arr) : tex_arr(&_tex_arr), count(1) {}
     OpaqueHandle(const TextureAtlas *_tex_arr, int _count = 1) : tex_arr(_tex_arr), count(_count) {}
     OpaqueHandle(Span<const TextureAtlas> tex_arrs) : tex_arr(tex_arrs.data()), count(int(tex_arrs.size())) {}
+    OpaqueHandle(const Sampler &_sampler) : sampler(&_sampler), count(1) {}
     OpaqueHandle(const AccStructure &_acc_struct) : acc_struct(&_acc_struct), count(1) {}
 };
 

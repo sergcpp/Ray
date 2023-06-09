@@ -34,8 +34,7 @@ Ray::Vk::Program::Program(const char *name, Context *ctx, Shader *cs_ref, ILog *
 }
 
 Ray::Vk::Program::Program(const char *name, Context *ctx, Shader *raygen_ref, Shader *closesthit_ref,
-                          Shader *anyhit_ref, Shader *miss_ref, Shader *intersection_ref,
-                          ILog *log) {
+                          Shader *anyhit_ref, Shader *miss_ref, Shader *intersection_ref, ILog *log) {
     name_ = name;
     ctx_ = ctx;
     if (!Init(raygen_ref, closesthit_ref, anyhit_ref, miss_ref, intersection_ref, log)) {
@@ -149,7 +148,8 @@ bool Ray::Vk::Program::InitDescrSetLayouts(ILog *log) {
                 new_binding.binding = u.loc;
                 new_binding.descriptorType = u.desc_type;
 
-                if (u.count == 0 && u.desc_type == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER) {
+                if (u.count == 0 && (u.desc_type == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER ||
+                                     u.desc_type == VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE)) {
                     new_binding.descriptorCount = ctx_->max_combined_image_samplers();
                 } else {
                     new_binding.descriptorCount = u.count;

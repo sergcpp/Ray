@@ -4,6 +4,7 @@
 
 #include "../LinearAlloc.h"
 #include "../SmallVector.h"
+#include "DescriptorPoolDX.h"
 #include "FenceDX.h"
 #include "ResourceDX.h"
 
@@ -46,6 +47,7 @@ const uint8_t BufMapWrite = (1u << 1u);
 
 struct BufHandle {
     ID3D12Resource *buf = nullptr;
+    PoolRef srv_uav_ref;
     uint32_t generation = 0;
 
     explicit operator bool() const { return buf != nullptr; }

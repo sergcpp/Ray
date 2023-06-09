@@ -6,6 +6,7 @@
 #include "../TextureParams.h"
 #include "BufferDX.h"
 #include "MemoryAllocatorDX.h"
+#include "DescriptorPoolDX.h"
 
 #ifdef _MSC_VER
 #pragma warning(push)
@@ -21,13 +22,14 @@ eTexUsage TexUsageFromState(eResState state);
 
 class MemoryAllocators;
 
+const int TextureDataPitchAlignment = 256;
+
 struct TexHandle {
     ID3D12Resource *img = nullptr;
-    // SmallVector<VkImageView, 1> views;
-    // VkSampler sampler = VK_NULL_HANDLE;
+    PoolRef views_ref, sampler_ref;
     uint32_t generation = 0; // used to identify unique texture (name can be reused)
 
-    TexHandle() { /*views.push_back(VK_NULL_HANDLE);*/
+    TexHandle() {
     }
     TexHandle(ID3D12Resource *_img,
               /*VkImageView _view0, VkImageView _view1, VkSampler _sampler,*/ uint32_t _generation)
@@ -136,7 +138,7 @@ class Texture2D {
     const TexHandle &handle() const { return handle_; }
     TexHandle &handle() { return handle_; }
     ID3D12Resource *dx_resource() const { return handle_.img; }
-    // VkSampler vk_sampler() const { return handle_.sampler; }
+    PoolRef sampler_ref() const { return handle_.sampler_ref; }
     uint16_t initialized_mips() const { return initialized_mips_; }
 
     /*VkDescriptorImageInfo
@@ -245,7 +247,7 @@ class Texture3D {
     const TexHandle &handle() const { return handle_; }
     TexHandle &handle() { return handle_; }
     ID3D12Resource *dx_resource() const { return handle_.img; }
-    //VkSampler vk_sampler() const { return handle_.sampler; }
+    PoolRef sampler_ref() const { return handle_.sampler_ref; }
 
     void Init(const Tex3DParams &params, MemoryAllocators *mem_allocs, ILog *log);
 

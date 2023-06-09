@@ -172,7 +172,8 @@ bool Ray::Dx::Program::InitRootSignature(ILog *log) {
             descr_indices_[rp_index][u.loc] = descriptor_count[rp_index];
 
             D3D12_DESCRIPTOR_RANGE_TYPE range_type = {};
-            if (u.input_type == D3D_SIT_BYTEADDRESS || u.input_type == D3D_SIT_TEXTURE) {
+            if (u.input_type == D3D_SIT_BYTEADDRESS || u.input_type == D3D_SIT_TEXTURE ||
+                u.input_type == D3D_SIT_RTACCELERATIONSTRUCTURE) {
                 range_type = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
             } else if (u.input_type == D3D_SIT_UAV_RWBYTEADDRESS || u.input_type == D3D_SIT_UAV_RWTYPED ||
                        u.input_type == D3D_SIT_UAV_RWSTRUCTURED) {

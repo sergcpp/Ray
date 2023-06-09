@@ -43,7 +43,10 @@ Ray::Dx::TextureAtlas::TextureAtlas(Context *ctx, const char *name, const eTexFo
     }
 }
 
-Ray::Dx::TextureAtlas::~TextureAtlas() { ctx_->resources_to_destroy[ctx_->backend_frame].push_back(img_); }
+Ray::Dx::TextureAtlas::~TextureAtlas() {
+    ctx_->staging_descr_alloc()->Free(eDescrType::CBV_SRV_UAV, srv_ref_);
+    ctx_->resources_to_destroy[ctx_->backend_frame].push_back(img_);
+}
 
 template <typename T, int N>
 int Ray::Dx::TextureAtlas::Allocate(const color_t<T, N> *data, const int _res[2], int pos[2]) {
@@ -264,6 +267,7 @@ bool Ray::Dx::TextureAtlas::Resize(const int pages_count) {
     real_format_ = format_;
 
     ID3D12Resource *new_img = nullptr;
+    PoolRef new_srv_ref;
 
     { // create image
         D3D12_RESOURCE_DESC image_desc = {};
@@ -311,30 +315,31 @@ bool Ray::Dx::TextureAtlas::Resize(const int pages_count) {
 #endif
     }
 
-    /*
-    { // create default image view
-        VkImageViewCreateInfo view_info = {VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
-        view_info.image = new_img;
-        view_info.viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
-        view_info.format = g_vk_formats[size_t(real_format_)];
-        view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        view_info.subresourceRange.baseMipLevel = 0;
-        view_info.subresourceRange.levelCount = 1;
-        view_info.subresourceRange.baseArrayLayer = 0;
-        view_info.subresourceRange.layerCount = std::max(pages_count, 1);
+    const UINT CBV_SRV_UAV_INCR =
+        ctx_->device()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
-        if (real_format_ == eTexFormat::RawR8 || real_format_ == eTexFormat::BC4) {
-            view_info.components.r = VK_COMPONENT_SWIZZLE_R;
-            view_info.components.g = VK_COMPONENT_SWIZZLE_R;
-            view_info.components.b = VK_COMPONENT_SWIZZLE_R;
-            view_info.components.a = VK_COMPONENT_SWIZZLE_R;
+    { // create default SRV
+        D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
+        if (GetColorChannelCount(real_format_) == 1) {
+            srv_desc.Shader4ComponentMapping = D3D12_ENCODE_SHADER_4_COMPONENT_MAPPING(0, 0, 0, 0);
+        } else {
+            srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
         }
+        srv_desc.Format = g_dx_formats[int(real_format_)];
+        srv_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
+        srv_desc.Texture2DArray.FirstArraySlice = 0;
+        srv_desc.Texture2DArray.ArraySize = std::max(pages_count, 1);
+        srv_desc.Texture2DArray.MipLevels = 1;
+        srv_desc.Texture2DArray.MostDetailedMip = 0;
+        srv_desc.Texture2DArray.PlaneSlice = 0;
+        srv_desc.Texture2DArray.ResourceMinLODClamp = 0.0f;
 
-        const VkResult res = vkCreateImageView(ctx_->device(), &view_info, nullptr, &new_img_view);
-        if (res != VK_SUCCESS) {
-            throw std::runtime_error("Failed to create image view!");
-        }
-    }*/
+        new_srv_ref = ctx_->staging_descr_alloc()->Alloc(eDescrType::CBV_SRV_UAV, 1);
+
+        D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = new_srv_ref.heap->GetCPUDescriptorHandleForHeapStart();
+        dest_handle.ptr += CBV_SRV_UAV_INCR * new_srv_ref.offset;
+        ctx_->device()->CreateShaderResourceView(new_img, &srv_desc, dest_handle);
+    }
 
     SamplingParams params;
     params.filter = filter_;
@@ -387,9 +392,11 @@ bool Ray::Dx::TextureAtlas::Resize(const int pages_count) {
 
         // destroy old image
         img_->Release();
+        ctx_->staging_descr_alloc()->Free(eDescrType::CBV_SRV_UAV, srv_ref_);
     } else if (img_) {
         // destroy temp dummy texture
         img_->Release();
+        ctx_->staging_descr_alloc()->Free(eDescrType::CBV_SRV_UAV, srv_ref_);
     }
 
     if (new_resource_state == eResState::Undefined) {
@@ -413,7 +420,7 @@ bool Ray::Dx::TextureAtlas::Resize(const int pages_count) {
     }
 
     img_ = new_img;
-    // img_view_ = new_img_view;
+    srv_ref_ = new_srv_ref;
 
     sampler_.FreeImmediate();
     sampler_ = std::move(new_sampler);

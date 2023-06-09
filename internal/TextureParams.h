@@ -153,7 +153,7 @@ inline bool operator!=(const Tex2DParams &lhs, const Tex2DParams &rhs) { return 
 
 enum class eTexLoadStatus { Found, Reinitialized, CreatedDefault, CreatedFromData };
 
-const int TextureDataPitchAlignment = 256;
+// const int TextureDataPitchAlignment = 256;
 
 int GetColorChannelCount(eTexFormat format);
 int GetPerPixelDataLen(eTexFormat format);

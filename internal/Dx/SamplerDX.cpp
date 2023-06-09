@@ -1,50 +1,49 @@
 #include "SamplerDX.h"
 
-#include "ContextDX.h"
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <d3d12.h>
+
 #include "../../Log.h"
+#include "ContextDX.h"
 
 namespace Ray {
 namespace Dx {
-/*extern const VkFilter g_vk_min_mag_filter[] = {
-    VK_FILTER_NEAREST, // Nearest
-    VK_FILTER_LINEAR,  // Bilinear
-    VK_FILTER_LINEAR,  // Trilinear
-    VK_FILTER_LINEAR,  // BilinearNoMipmap
-    VK_FILTER_NEAREST, // NearestMipmap
+extern const D3D12_FILTER g_dx_filter[] = {
+    D3D12_FILTER_MIN_MAG_MIP_POINT,        // Nearest
+    D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT, // Bilinear
+    D3D12_FILTER_MIN_MAG_MIP_LINEAR,       // Trilinear
+    D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT, // BilinearNoMipmap
+    D3D12_FILTER_MIN_MAG_MIP_POINT,        // NearestMipmap
 };
-static_assert(COUNT_OF(g_vk_min_mag_filter) == size_t(eTexFilter::_Count), "!");
+static_assert(COUNT_OF(g_dx_filter) == size_t(eTexFilter::_Count), "!");
 
-extern const VkSamplerAddressMode g_vk_wrap_mode[] = {
-    VK_SAMPLER_ADDRESS_MODE_REPEAT,          // Repeat
-    VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,   // ClampToEdge
-    VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER, // ClampToBorder
+extern const D3D12_TEXTURE_ADDRESS_MODE g_dx_wrap_mode[] = {
+    D3D12_TEXTURE_ADDRESS_MODE_WRAP,   // Repeat
+    D3D12_TEXTURE_ADDRESS_MODE_CLAMP,  // ClampToEdge
+    D3D12_TEXTURE_ADDRESS_MODE_BORDER, // ClampToBorder
 };
-static_assert(COUNT_OF(g_vk_wrap_mode) == size_t(eTexWrap::_Count), "!");
+static_assert(COUNT_OF(g_dx_wrap_mode) == size_t(eTexWrap::_Count), "!");
 
-extern const VkSamplerMipmapMode g_vk_mipmap_mode[] = {
-    VK_SAMPLER_MIPMAP_MODE_NEAREST, // Nearest
-    VK_SAMPLER_MIPMAP_MODE_NEAREST, // Bilinear
-    VK_SAMPLER_MIPMAP_MODE_LINEAR,  // Trilinear
-    VK_SAMPLER_MIPMAP_MODE_NEAREST, // BilinearNoMipmap
-    VK_SAMPLER_MIPMAP_MODE_NEAREST, // NearestMipmap
+extern const D3D12_COMPARISON_FUNC g_dx_compare_func[] = {
+    D3D12_COMPARISON_FUNC_NEVER,         // None
+    D3D12_COMPARISON_FUNC_LESS_EQUAL,    // LEqual
+    D3D12_COMPARISON_FUNC_GREATER_EQUAL, // GEqual
+    D3D12_COMPARISON_FUNC_LESS,          // Less
+    D3D12_COMPARISON_FUNC_GREATER,       // Greater
+    D3D12_COMPARISON_FUNC_EQUAL,         // Equal
+    D3D12_COMPARISON_FUNC_NOT_EQUAL,     // NotEqual
+    D3D12_COMPARISON_FUNC_ALWAYS,        // Always
+    D3D12_COMPARISON_FUNC_NEVER          // Never
 };
-static_assert(COUNT_OF(g_vk_mipmap_mode) == size_t(eTexFilter::_Count), "!");
+static_assert(COUNT_OF(g_dx_compare_func) == size_t(eTexCompare::_Count), "!");
 
-extern const VkCompareOp g_vk_compare_ops[] = {
-    VK_COMPARE_OP_NEVER,            // None
-    VK_COMPARE_OP_LESS_OR_EQUAL,    // LEqual
-    VK_COMPARE_OP_GREATER_OR_EQUAL, // GEqual
-    VK_COMPARE_OP_LESS,             // Less
-    VK_COMPARE_OP_GREATER,          // Greater
-    VK_COMPARE_OP_EQUAL,            // Equal
-    VK_COMPARE_OP_NOT_EQUAL,        // NotEqual
-    VK_COMPARE_OP_ALWAYS,           // Always
-    VK_COMPARE_OP_NEVER             // Never
-};
-static_assert(COUNT_OF(g_vk_compare_ops) == size_t(eTexCompare::_Count), "!");
-
-extern const float AnisotropyLevel = 4.0f;*/
-} // namespace Vk
+extern const float AnisotropyLevel = 4.0f;
+} // namespace Dx
 } // namespace Ray
 
 Ray::Dx::Sampler &Ray::Dx::Sampler::operator=(Sampler &&rhs) noexcept {
@@ -55,50 +54,44 @@ Ray::Dx::Sampler &Ray::Dx::Sampler::operator=(Sampler &&rhs) noexcept {
     Free();
 
     ctx_ = exchange(rhs.ctx_, nullptr);
-    //handle_ = exchange(rhs.handle_, {});
+    ref_ = exchange(rhs.ref_, {});
     params_ = exchange(rhs.params_, {});
 
     return (*this);
 }
 
 void Ray::Dx::Sampler::Free() {
-    //if (handle_) {
-    //    ctx_->samplers_to_destroy[ctx_->backend_frame].emplace_back(handle_);
-    //    handle_ = {};
-    //}
+    if (ref_) {
+        ctx_->staging_descr_alloc()->Free(eDescrType::Sampler, ref_);
+        ref_ = {};
+    }
 }
 
-void Ray::Dx::Sampler::FreeImmediate() {
-    //if (handle_) {
-    //    vkDestroySampler(ctx_->device(), handle_, nullptr);
-    //    handle_ = {};
-    //}
-}
+void Ray::Dx::Sampler::FreeImmediate() { Free(); }
 
 void Ray::Dx::Sampler::Init(Context *ctx, const SamplingParams params) {
     Free();
 
-    /*VkSamplerCreateInfo sampler_info = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
-    sampler_info.magFilter = g_vk_min_mag_filter[size_t(params.filter)];
-    sampler_info.minFilter = g_vk_min_mag_filter[size_t(params.filter)];
-    sampler_info.addressModeU = g_vk_wrap_mode[size_t(params.wrap)];
-    sampler_info.addressModeV = g_vk_wrap_mode[size_t(params.wrap)];
-    sampler_info.addressModeW = g_vk_wrap_mode[size_t(params.wrap)];
-    sampler_info.anisotropyEnable = VK_TRUE;
-    sampler_info.maxAnisotropy = AnisotropyLevel;
-    sampler_info.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-    sampler_info.unnormalizedCoordinates = VK_FALSE;
-    sampler_info.compareEnable = (params.compare != eTexCompare::None) ? VK_TRUE : VK_FALSE;
-    sampler_info.compareOp = g_vk_compare_ops[size_t(params.compare)];
-    sampler_info.mipmapMode = g_vk_mipmap_mode[size_t(params.filter)];
-    sampler_info.mipLodBias = params.lod_bias.to_float();
-    sampler_info.minLod = params.min_lod.to_float();
-    sampler_info.maxLod = params.max_lod.to_float();
+    D3D12_SAMPLER_DESC sampler_desc = {};
+    sampler_desc.Filter = g_dx_filter[size_t(params.filter)];
+    sampler_desc.AddressU = g_dx_wrap_mode[size_t(params.wrap)];
+    sampler_desc.AddressV = g_dx_wrap_mode[size_t(params.wrap)];
+    sampler_desc.AddressW = g_dx_wrap_mode[size_t(params.wrap)];
+    sampler_desc.MipLODBias = params.lod_bias.to_float();
+    sampler_desc.MinLOD = params.min_lod.to_float();
+    sampler_desc.MaxLOD = params.max_lod.to_float();
+    sampler_desc.MaxAnisotropy = UINT(AnisotropyLevel);
+    if (params.compare != eTexCompare::None) {
+        sampler_desc.ComparisonFunc = g_dx_compare_func[size_t(params.compare)];
+    }
 
-    const VkResult res = vkCreateSampler(ctx->device(), &sampler_info, nullptr, &handle_);
-    if (res != VK_SUCCESS) {
-        ctx->log()->Error("Failed to create sampler!");
-    }*/
+    ref_ = ctx->staging_descr_alloc()->Alloc(eDescrType::Sampler, 1);
+
+    ID3D12Device *device = ctx->device();
+
+    D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = ref_.heap->GetCPUDescriptorHandleForHeapStart();
+    dest_handle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER) * ref_.offset;
+    device->CreateSampler(&sampler_desc, dest_handle);
 
     ctx_ = ctx;
     params_ = params;

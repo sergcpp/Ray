@@ -105,19 +105,11 @@ Ray::Dx::Pipeline &Ray::Dx::Pipeline::operator=(Pipeline &&rhs) noexcept {
 Ray::Dx::Pipeline::~Pipeline() { Destroy(); }
 
 void Ray::Dx::Pipeline::Destroy() {
-    // if (layout_ != VK_NULL_HANDLE) {
-    //     ctx_->pipeline_layouts_to_destroy[ctx_->backend_frame].emplace_back(layout_);
-    //     layout_ = VK_NULL_HANDLE;
-    // }
     if (handle_) {
         ctx_->pipelines_to_destroy[ctx_->backend_frame].emplace_back(handle_);
         handle_ = nullptr;
     }
-    if (cmd_signature_) {
-        ctx_->opaques_to_release[ctx_->backend_frame].emplace_back(cmd_signature_);
-        cmd_signature_ = nullptr;
-    }
-
+    
     color_formats_.clear();
     depth_format_ = eTexFormat::Undefined;
 
@@ -367,20 +359,6 @@ bool Ray::Dx::Pipeline::Init(Context *ctx, Program *prog, ILog *log) {
     HRESULT hr = device->CreateComputePipelineState(&pso_desc, IID_PPV_ARGS(&handle_));
     if (FAILED(hr)) {
         log->Error("Failed to create pipeline state!");
-        return false;
-    }
-
-    D3D12_INDIRECT_ARGUMENT_DESC indir_arg_desc = {};
-    indir_arg_desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH;
-
-    D3D12_COMMAND_SIGNATURE_DESC cmd_signature_desc = {};
-    cmd_signature_desc.ByteStride = sizeof(D3D12_DISPATCH_ARGUMENTS);
-    cmd_signature_desc.NumArgumentDescs = 1;
-    cmd_signature_desc.pArgumentDescs = &indir_arg_desc;
-
-    hr = device->CreateCommandSignature(&cmd_signature_desc, nullptr, IID_PPV_ARGS(&cmd_signature_));
-    if (FAILED(hr)) {
-        log->Error("Failed to create command signature!");
         return false;
     }
 

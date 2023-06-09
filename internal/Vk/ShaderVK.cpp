@@ -126,7 +126,9 @@ bool Ray::Vk::Shader::InitFromSPIRV(const uint8_t *shader_code, const int code_s
         const auto &desc = module.descriptor_bindings[i];
 
         const bool unbounded_array =
-            desc.descriptor_type == SPV_REFLECT_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER && desc.count == 1 &&
+            (desc.descriptor_type == SPV_REFLECT_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER ||
+             desc.descriptor_type == SPV_REFLECT_DESCRIPTOR_TYPE_SAMPLED_IMAGE) &&
+            desc.count == 1 &&
             (desc.type_description->op == SpvOpTypeRuntimeArray || desc.type_description->op == SpvOpTypeArray);
 
         Descr &new_item = unif_bindings.emplace_back();

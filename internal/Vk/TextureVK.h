@@ -19,6 +19,8 @@ eTexUsage TexUsageFromState(eResState state);
 
 class MemoryAllocators;
 
+const int TextureDataPitchAlignment = 1;
+
 struct TexHandle {
     VkImage img = VK_NULL_HANDLE;
     SmallVector<VkImageView, 1> views;

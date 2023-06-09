@@ -25,12 +25,11 @@
 
 namespace Ray {
 namespace Dx {
-// extern const VkFilter g_vk_min_mag_filter[];
-// extern const VkSamplerAddressMode g_vk_wrap_mode[];
-// extern const VkSamplerMipmapMode g_vk_mipmap_mode[];
-// extern const VkCompareOp g_vk_compare_ops[];
+extern const D3D12_FILTER g_dx_filter[];
+extern const D3D12_TEXTURE_ADDRESS_MODE g_dx_wrap_mode[];
+extern const D3D12_COMPARISON_FUNC g_dx_compare_func[];
 
-// extern const float AnisotropyLevel;
+extern const float AnisotropyLevel;
 
 extern const DXGI_FORMAT g_dx_formats[] = {
     DXGI_FORMAT_UNKNOWN,              // Undefined
@@ -286,13 +285,9 @@ void Ray::Dx::Texture2D::Init(const void *data[6], const int size[6], const Tex2
 
 void Ray::Dx::Texture2D::Free() {
     if (params.format != eTexFormat::Undefined && !bool(params.flags & eTexFlagBits::NoOwnership)) {
-        // for (VkImageView view : handle_.views) {
-        //     if (view) {
-        //         ctx_->image_views_to_destroy[ctx_->backend_frame].push_back(view);
-        //     }
-        // }
+        ctx_->staging_descr_alloc()->Free(eDescrType::CBV_SRV_UAV, handle_.views_ref);
         ctx_->resources_to_destroy[ctx_->backend_frame].push_back(handle_.img);
-        // ctx_->samplers_to_destroy[ctx_->backend_frame].push_back(handle_.sampler);
+        ctx_->staging_descr_alloc()->Free(eDescrType::Sampler, handle_.sampler_ref);
         ctx_->allocs_to_free[ctx_->backend_frame].emplace_back(std::move(alloc_));
 
         handle_ = {};
@@ -321,7 +316,7 @@ bool Ray::Dx::Texture2D::Realloc(const int w, const int h, int mip_count, const 
         if (is_srgb) {
             image_desc.Format = ToSRGBFormat(image_desc.Format);
         }
-        image_desc.SampleDesc.Count = samples; 
+        image_desc.SampleDesc.Count = samples;
         image_desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
         image_desc.Flags = to_dx_image_flags(params.usage, format);
 
@@ -602,39 +597,51 @@ void Ray::Dx::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, void *_cmd_
         handle_.img->SetName(temp_str.c_str());
 #endif
     }
+
+    const UINT CBV_SRV_UAV_INCR =
+        ctx_->device()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    const UINT SAMPLER_INCR = ctx_->device()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
+
+    const bool requires_uav = int(p.usage & eTexUsageBits::Storage) != 0;
+
+    handle_.views_ref = ctx_->staging_descr_alloc()->Alloc(eDescrType::CBV_SRV_UAV, requires_uav ? 2 : 1);
+
+    { // create default SRV
+        D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
+        srv_desc.Format = g_dx_formats[int(p.format)];
+        if (bool(p.flags & eTexFlagBits::SRGB)) {
+            srv_desc.Format = ToSRGBFormat(srv_desc.Format);
+        }
+        srv_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+        srv_desc.Texture2D.MipLevels = p.mip_count;
+        srv_desc.Texture2D.MostDetailedMip = 0;
+        srv_desc.Texture2D.PlaneSlice = 0;
+        srv_desc.Texture2D.ResourceMinLODClamp = 0.0f;
+
+        srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        if (GetColorChannelCount(p.format) == 1 && int(p.usage & eTexUsageBits::Storage) == 0) {
+            srv_desc.Shader4ComponentMapping = D3D12_ENCODE_SHADER_4_COMPONENT_MAPPING(0, 0, 0, 0);
+        }
+
+        D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = handle_.views_ref.heap->GetCPUDescriptorHandleForHeapStart();
+        dest_handle.ptr += CBV_SRV_UAV_INCR * handle_.views_ref.offset;
+        ctx_->device()->CreateShaderResourceView(handle_.img, &srv_desc, dest_handle);
+    }
+    if (requires_uav) {
+        D3D12_UNORDERED_ACCESS_VIEW_DESC uav_desc = {};
+        uav_desc.Format = g_dx_formats[int(p.format)];
+        uav_desc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+        uav_desc.Texture2D.PlaneSlice = 0;
+        uav_desc.Texture2D.MipSlice = 0;
+
+        D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = handle_.views_ref.heap->GetCPUDescriptorHandleForHeapStart();
+        dest_handle.ptr += CBV_SRV_UAV_INCR * (handle_.views_ref.offset + 1);
+        ctx_->device()->CreateUnorderedAccessView(handle_.img, nullptr, &uav_desc, dest_handle);
+    }
+
 #if 0
     { // create default image view(s)
-        VkImageViewCreateInfo view_info = {VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
-        view_info.image = handle_.img;
-        view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        view_info.format = g_vk_formats[size_t(p.format)];
-        if (bool(p.flags & eTexFlagBits::SRGB)) {
-            view_info.format = ToSRGBFormat(view_info.format);
-        }
-        if (IsDepthStencilFormat(p.format)) {
-            view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
-        } else if (IsDepthFormat(p.format)) {
-            view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-        } else {
-            view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        }
-        view_info.subresourceRange.baseMipLevel = 0;
-        view_info.subresourceRange.levelCount = mip_count;
-        view_info.subresourceRange.baseArrayLayer = 0;
-        view_info.subresourceRange.layerCount = 1;
-
-        if (GetColorChannelCount(p.format) == 1 && int(p.usage & eTexUsageBits::Storage) == 0) {
-            view_info.components.r = VK_COMPONENT_SWIZZLE_R;
-            view_info.components.g = VK_COMPONENT_SWIZZLE_R;
-            view_info.components.b = VK_COMPONENT_SWIZZLE_R;
-            view_info.components.a = VK_COMPONENT_SWIZZLE_R;
-        }
-
-        const VkResult res = vkCreateImageView(ctx_->device(), &view_info, nullptr, &handle_.views[0]);
-        if (res != VK_SUCCESS) {
-            log->Error("Failed to create image view!");
-            return;
-        }
+        ...
 
         if (IsDepthStencilFormat(p.format)) {
             // create additional depth-only image view
@@ -732,31 +739,29 @@ void Ray::Dx::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, void *_cmd_
 
         initialized_mips_ |= (1u << 0);
     }
+#endif
 
     { // create new sampler
-        VkSamplerCreateInfo sampler_info = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
-        sampler_info.magFilter = g_vk_min_mag_filter[size_t(p.sampling.filter)];
-        sampler_info.minFilter = g_vk_min_mag_filter[size_t(p.sampling.filter)];
-        sampler_info.addressModeU = g_vk_wrap_mode[size_t(p.sampling.wrap)];
-        sampler_info.addressModeV = g_vk_wrap_mode[size_t(p.sampling.wrap)];
-        sampler_info.addressModeW = g_vk_wrap_mode[size_t(p.sampling.wrap)];
-        sampler_info.anisotropyEnable = VK_TRUE;
-        sampler_info.maxAnisotropy = AnisotropyLevel;
-        sampler_info.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-        sampler_info.unnormalizedCoordinates = VK_FALSE;
-        sampler_info.compareEnable = p.sampling.compare != eTexCompare::None ? VK_TRUE : VK_FALSE;
-        sampler_info.compareOp = g_vk_compare_ops[size_t(p.sampling.compare)];
-        sampler_info.mipmapMode = g_vk_mipmap_mode[size_t(p.sampling.filter)];
-        sampler_info.mipLodBias = p.sampling.lod_bias.to_float();
-        sampler_info.minLod = p.sampling.min_lod.to_float();
-        sampler_info.maxLod = p.sampling.max_lod.to_float();
-
-        const VkResult res = vkCreateSampler(ctx_->device(), &sampler_info, nullptr, &handle_.sampler);
-        if (res != VK_SUCCESS) {
-            log->Error("Failed to create sampler!");
+        D3D12_SAMPLER_DESC sampler_desc = {};
+        sampler_desc.Filter = g_dx_filter[size_t(p.sampling.filter)];
+        sampler_desc.AddressU = g_dx_wrap_mode[size_t(p.sampling.wrap)];
+        sampler_desc.AddressV = g_dx_wrap_mode[size_t(p.sampling.wrap)];
+        sampler_desc.AddressW = g_dx_wrap_mode[size_t(p.sampling.wrap)];
+        sampler_desc.MipLODBias = p.sampling.lod_bias.to_float();
+        sampler_desc.MinLOD = p.sampling.min_lod.to_float();
+        sampler_desc.MaxLOD = p.sampling.max_lod.to_float();
+        sampler_desc.MaxAnisotropy = UINT(AnisotropyLevel);
+        if (p.sampling.compare != eTexCompare::None) {
+            sampler_desc.ComparisonFunc = g_dx_compare_func[size_t(p.sampling.compare)];
         }
+
+        handle_.sampler_ref = ctx_->staging_descr_alloc()->Alloc(eDescrType::Sampler, 1);
+
+        D3D12_CPU_DESCRIPTOR_HANDLE sampler_dest_handle =
+            handle_.sampler_ref.heap->GetCPUDescriptorHandleForHeapStart();
+        sampler_dest_handle.ptr += SAMPLER_INCR * handle_.sampler_ref.offset;
+        ctx_->device()->CreateSampler(&sampler_desc, sampler_dest_handle);
     }
-#endif
 }
 
 void Ray::Dx::Texture2D::InitFromTGAFile(const void *data, Buffer &sbuf, void *_cmd_buf, MemoryAllocators *mem_allocs,
@@ -1970,33 +1975,33 @@ void Ray::Dx::Texture2D::SetSubImage(const int level, const int offsetx, const i
 }
 
 void Ray::Dx::Texture2D::SetSampling(const SamplingParams s) {
-    /*if (handle_.sampler) {
-        ctx_->samplers_to_destroy[ctx_->backend_frame].emplace_back(handle_.sampler);
+    if (handle_.sampler_ref) {
+        ctx_->staging_descr_alloc()->Free(eDescrType::Sampler, handle_.sampler_ref);
     }
 
-    VkSamplerCreateInfo sampler_info = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
-    sampler_info.magFilter = g_vk_min_mag_filter[size_t(s.filter)];
-    sampler_info.minFilter = g_vk_min_mag_filter[size_t(s.filter)];
-    sampler_info.addressModeU = g_vk_wrap_mode[size_t(s.wrap)];
-    sampler_info.addressModeV = g_vk_wrap_mode[size_t(s.wrap)];
-    sampler_info.addressModeW = g_vk_wrap_mode[size_t(s.wrap)];
-    sampler_info.anisotropyEnable = VK_TRUE;
-    sampler_info.maxAnisotropy = AnisotropyLevel;
-    sampler_info.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-    sampler_info.unnormalizedCoordinates = VK_FALSE;
-    sampler_info.compareEnable = s.compare != eTexCompare::None ? VK_TRUE : VK_FALSE;
-    sampler_info.compareOp = g_vk_compare_ops[size_t(s.compare)];
-    sampler_info.mipmapMode = g_vk_mipmap_mode[size_t(s.filter)];
-    sampler_info.mipLodBias = s.lod_bias.to_float();
-    sampler_info.minLod = s.min_lod.to_float();
-    sampler_info.maxLod = s.max_lod.to_float();
-
-    const VkResult res = vkCreateSampler(ctx_->device(), &sampler_info, nullptr, &handle_.sampler);
-    if (res != VK_SUCCESS) {
-        ctx_->log()->Error("Failed to create sampler!");
+    D3D12_SAMPLER_DESC sampler_desc = {};
+    sampler_desc.Filter = g_dx_filter[size_t(s.filter)];
+    sampler_desc.AddressU = g_dx_wrap_mode[size_t(s.wrap)];
+    sampler_desc.AddressV = g_dx_wrap_mode[size_t(s.wrap)];
+    sampler_desc.AddressW = g_dx_wrap_mode[size_t(s.wrap)];
+    sampler_desc.MipLODBias = s.lod_bias.to_float();
+    sampler_desc.MinLOD = s.min_lod.to_float();
+    sampler_desc.MaxLOD = s.max_lod.to_float();
+    sampler_desc.MaxAnisotropy = UINT(AnisotropyLevel);
+    if (s.compare != eTexCompare::None) {
+        sampler_desc.ComparisonFunc = g_dx_compare_func[size_t(s.compare)];
     }
 
-    params.sampling = s;*/
+    handle_.sampler_ref = ctx_->staging_descr_alloc()->Alloc(eDescrType::Sampler, 1);
+
+    ID3D12Device *device = ctx_->device();
+
+    D3D12_CPU_DESCRIPTOR_HANDLE sampler_dest_handle = handle_.sampler_ref.heap->GetCPUDescriptorHandleForHeapStart();
+    sampler_dest_handle.ptr +=
+        device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER) * handle_.sampler_ref.offset;
+    device->CreateSampler(&sampler_desc, sampler_dest_handle);
+
+    params.sampling = s;
 }
 
 void Ray::Dx::CopyImageToImage(void *_cmd_buf, Texture2D &src_tex, const uint32_t src_level, const uint32_t src_x,
@@ -2151,8 +2156,8 @@ void Ray::Dx::_ClearColorImage(Texture2D &tex, const void *rgba, void *_cmd_buf)
                                                tex.dx_resource(), (const float *)rgba, 0, nullptr);
     }
 
-    ctx->descriptor_heaps_to_destroy[ctx->backend_frame].push_back(temp_cpu_descriptor_heap);
-    ctx->descriptor_heaps_to_destroy[ctx->backend_frame].push_back(temp_gpu_descriptor_heap);
+    ctx->descriptor_heaps_to_release[ctx->backend_frame].push_back(temp_cpu_descriptor_heap);
+    ctx->descriptor_heaps_to_release[ctx->backend_frame].push_back(temp_gpu_descriptor_heap);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -2285,76 +2290,57 @@ void Ray::Dx::Texture3D::Init(const Tex3DParams &p, MemoryAllocators *mem_allocs
 
     this->resource_state = eResState::Undefined;
 
-    /*{ // create default image view(s)
-        VkImageViewCreateInfo view_info = {VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
-        view_info.image = handle_.img;
-        view_info.viewType = VK_IMAGE_VIEW_TYPE_3D;
-        view_info.format = g_vk_formats[size_t(p.format)];
-        view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    const UINT CBV_SRV_UAV_INCR =
+        ctx_->device()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    const UINT SAMPLER_INCR = ctx_->device()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
 
-        view_info.subresourceRange.baseMipLevel = 0;
-        view_info.subresourceRange.levelCount = 1;
-        view_info.subresourceRange.baseArrayLayer = 0;
-        view_info.subresourceRange.layerCount = 1;
+    handle_.views_ref = ctx_->staging_descr_alloc()->Alloc(eDescrType::CBV_SRV_UAV, 1);
+    handle_.sampler_ref = ctx_->staging_descr_alloc()->Alloc(eDescrType::Sampler, 1);
 
+    { // create default SRV
+        D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
+        srv_desc.Format = g_dx_formats[int(p.format)];
+        srv_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE3D;
+        srv_desc.Texture2D.MipLevels = 1;
+        srv_desc.Texture2D.MostDetailedMip = 0;
+        srv_desc.Texture2D.PlaneSlice = 0;
+        srv_desc.Texture2D.ResourceMinLODClamp = 0.0f;
+
+        srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
         if (GetColorChannelCount(p.format) == 1) {
-            view_info.components.r = VK_COMPONENT_SWIZZLE_R;
-            view_info.components.g = VK_COMPONENT_SWIZZLE_R;
-            view_info.components.b = VK_COMPONENT_SWIZZLE_R;
-            view_info.components.a = VK_COMPONENT_SWIZZLE_R;
+            srv_desc.Shader4ComponentMapping = D3D12_ENCODE_SHADER_4_COMPONENT_MAPPING(0, 0, 0, 0);
         }
 
-        const VkResult res = vkCreateImageView(ctx_->device(), &view_info, nullptr, &handle_.views[0]);
-        if (res != VK_SUCCESS) {
-            log->Error("Failed to create image view!");
-            return;
-        }
-
-#ifdef ENABLE_OBJ_LABELS
-        for (VkImageView view : handle_.views) {
-            VkDebugUtilsObjectNameInfoEXT name_info = {VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT};
-            name_info.objectType = VK_OBJECT_TYPE_IMAGE_VIEW;
-            name_info.objectHandle = uint64_t(view);
-            name_info.pObjectName = name_.c_str();
-            vkSetDebugUtilsObjectNameEXT(ctx_->device(), &name_info);
-        }
-#endif
+        D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = handle_.views_ref.heap->GetCPUDescriptorHandleForHeapStart();
+        dest_handle.ptr += CBV_SRV_UAV_INCR * handle_.views_ref.offset;
+        ctx_->device()->CreateShaderResourceView(handle_.img, &srv_desc, dest_handle);
     }
 
     { // create new sampler
-        VkSamplerCreateInfo sampler_info = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
-        sampler_info.magFilter = g_vk_min_mag_filter[size_t(p.sampling.filter)];
-        sampler_info.minFilter = g_vk_min_mag_filter[size_t(p.sampling.filter)];
-        sampler_info.addressModeU = g_vk_wrap_mode[size_t(p.sampling.wrap)];
-        sampler_info.addressModeV = g_vk_wrap_mode[size_t(p.sampling.wrap)];
-        sampler_info.addressModeW = g_vk_wrap_mode[size_t(p.sampling.wrap)];
-        sampler_info.anisotropyEnable = VK_FALSE;
-        sampler_info.maxAnisotropy = AnisotropyLevel;
-        sampler_info.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-        sampler_info.unnormalizedCoordinates = VK_FALSE;
-        sampler_info.compareEnable = VK_FALSE;
-        sampler_info.compareOp = g_vk_compare_ops[size_t(p.sampling.compare)];
-        sampler_info.mipmapMode = g_vk_mipmap_mode[size_t(p.sampling.filter)];
-        sampler_info.mipLodBias = p.sampling.lod_bias.to_float();
-        sampler_info.minLod = p.sampling.min_lod.to_float();
-        sampler_info.maxLod = p.sampling.max_lod.to_float();
-
-        const VkResult res = vkCreateSampler(ctx_->device(), &sampler_info, nullptr, &handle_.sampler);
-        if (res != VK_SUCCESS) {
-            log->Error("Failed to create sampler!");
+        D3D12_SAMPLER_DESC sampler_desc = {};
+        sampler_desc.Filter = g_dx_filter[size_t(p.sampling.filter)];
+        sampler_desc.AddressU = g_dx_wrap_mode[size_t(p.sampling.wrap)];
+        sampler_desc.AddressV = g_dx_wrap_mode[size_t(p.sampling.wrap)];
+        sampler_desc.AddressW = g_dx_wrap_mode[size_t(p.sampling.wrap)];
+        sampler_desc.MipLODBias = p.sampling.lod_bias.to_float();
+        sampler_desc.MinLOD = p.sampling.min_lod.to_float();
+        sampler_desc.MaxLOD = p.sampling.max_lod.to_float();
+        sampler_desc.MaxAnisotropy = UINT(AnisotropyLevel);
+        if (p.sampling.compare != eTexCompare::None) {
+            sampler_desc.ComparisonFunc = g_dx_compare_func[size_t(p.sampling.compare)];
         }
-    }*/
+
+        D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = handle_.sampler_ref.heap->GetCPUDescriptorHandleForHeapStart();
+        dest_handle.ptr += SAMPLER_INCR * handle_.sampler_ref.offset;
+        ctx_->device()->CreateSampler(&sampler_desc, dest_handle);
+    }
 }
 
 void Ray::Dx::Texture3D::Free() {
     if (params.format != eTexFormat::Undefined && !bool(params.flags & eTexFlagBits::NoOwnership)) {
-        // for (VkImageView view : handle_.views) {
-        //     if (view) {
-        //         ctx_->image_views_to_destroy[ctx_->backend_frame].push_back(view);
-        //     }
-        // }
+        ctx_->staging_descr_alloc()->Free(eDescrType::CBV_SRV_UAV, handle_.views_ref);
         ctx_->resources_to_destroy[ctx_->backend_frame].push_back(handle_.img);
-        // ctx_->samplers_to_destroy[ctx_->backend_frame].push_back(handle_.sampler);
+        ctx_->staging_descr_alloc()->Free(eDescrType::Sampler, handle_.sampler_ref);
         ctx_->allocs_to_free[ctx_->backend_frame].emplace_back(std::move(alloc_));
 
         handle_ = {};

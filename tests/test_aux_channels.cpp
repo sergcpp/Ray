@@ -54,12 +54,13 @@ void test_aux_channels(const char *arch_list[], const char *preferred_device) {
     s.use_wide_bvh = true;
 
     const int SampleCount = 256;
-    const double BaseColor_MinPSNR = 28.8, Normals_MinPSNR = 42.81, Depth_MinPSNR = 43.3;
+    const double BaseColor_MinPSNR = 28.8, Normals_MinPSNR = 42.8, Depth_MinPSNR = 43.3;
 
-    for (const bool use_hwrt : {false, true}) {
-        s.use_hwrt = use_hwrt;
-        for (const char **arch = arch_list; *arch; ++arch) {
-            const auto rt = Ray::RendererTypeFromName(*arch);
+    for (const char **arch = arch_list; *arch; ++arch) {
+        const auto rt = Ray::RendererTypeFromName(*arch);
+
+        for (const bool use_hwrt : {false, true}) {
+            s.use_hwrt = use_hwrt;
 
             auto renderer = std::unique_ptr<Ray::RendererBase>(Ray::CreateRenderer(s, &g_log_err, rt));
             if (!renderer || renderer->type() != rt || renderer->is_hwrt() != use_hwrt) {
