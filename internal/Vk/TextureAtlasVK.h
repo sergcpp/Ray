@@ -31,6 +31,7 @@ class TextureAtlas {
     ~TextureAtlas();
 
     eTexFormat format() const { return format_; }
+    eTexFormat real_format() const { return real_format_; }
     VkImage vk_image() const { return img_; }
     VkImageView vk_imgage_view() const { return img_view_; }
     VkSampler vk_sampler() const { return sampler_.vk_handle(); }

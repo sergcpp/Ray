@@ -73,6 +73,7 @@ set(INTERNAL_SOURCE_FILES internal/Bitmap.h
                           internal/SamplingParams.cpp
                           internal/SceneCPU.h
                           internal/SceneCPU.cpp
+                          internal/SceneGPU.h
                           internal/ScopeExit.h
                           internal/SmallVector.h
                           internal/SparseStorageCPU.h

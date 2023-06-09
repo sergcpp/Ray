@@ -22,6 +22,8 @@ eTexUsage TexUsageFromState(eResState state);
 
 class MemoryAllocators;
 
+const int TextureDataPitchAlignment = 256;
+
 struct TexHandle {
     ID3D12Resource *img = nullptr;
     PoolRef views_ref, sampler_ref;
