@@ -123,13 +123,16 @@ void run_material_test(const char *arch_list[], const char *preferred_device, co
 
                 printf("(PSNR: %.2f/%.2f dB, Fireflies: %i/%i)\n", psnr, min_psnr, error_pixels, pix_thres);
 
-                const char *type = Ray::RendererTypeName(rt);
+                std::string type = Ray::RendererTypeName(rt);
+                if (use_hwrt) {
+                    type += "_HWRT";
+                }
 
-                snprintf(name_buf, sizeof(name_buf), "test_data/%s/%s_out.tga", test_name, type);
+                snprintf(name_buf, sizeof(name_buf), "test_data/%s/%s_out.tga", test_name, type.c_str());
                 WriteTGA(&img_data_u8[0], test_img_w, test_img_h, 3, name_buf);
-                snprintf(name_buf, sizeof(name_buf), "test_data/%s/%s_diff.tga", test_name, type);
+                snprintf(name_buf, sizeof(name_buf), "test_data/%s/%s_diff.tga", test_name, type.c_str());
                 WriteTGA(&diff_data_u8[0], test_img_w, test_img_h, 3, name_buf);
-                snprintf(name_buf, sizeof(name_buf), "test_data/%s/%s_mask.tga", test_name, type);
+                snprintf(name_buf, sizeof(name_buf), "test_data/%s/%s_mask.tga", test_name, type.c_str());
                 WriteTGA(&mask_data_u8[0], test_img_w, test_img_h, 3, name_buf);
                 images_match = (psnr >= min_psnr) && (error_pixels <= pix_thres);
                 require(images_match || searching);
@@ -217,63 +220,76 @@ void assemble_material_test_images(const char *arch_list[]) {
     char name_buf[1024];
 
     for (const char **arch = arch_list; *arch; ++arch) {
-        const char *type = *arch;
-        // const auto rt = Ray::RendererTypeFromName(type);
-        for (int j = 0; j < ImgCountH; ++j) {
-            const int top_down_j = ImgCountH - j - 1;
-
-            for (int i = 0; i < ImgCountW && test_names[j][i]; ++i) {
-                { // reference image
-                    snprintf(name_buf, sizeof(name_buf), "test_data/%s/ref.tga", test_names[j][i]);
-
-                    int test_img_w, test_img_h;
-                    const auto img_ref = LoadTGA(name_buf, test_img_w, test_img_h);
-                    if (!img_ref.empty()) {
-                        for (int k = 0; k < test_img_h; ++k) {
-                            memcpy(&material_refs[((top_down_j * 256 + k) * OutImageW + i * 256) * 4],
-                                   &img_ref[k * test_img_w * 4], test_img_w * 4);
-                        }
-                    }
-
-                    blit_chars_to_alpha(material_refs.get(), i * 256, top_down_j * 256, test_names[j][i]);
+        std::string type = *arch;
+        for (const bool hwrt : {false, true}) {
+            const auto rt = Ray::RendererTypeFromName(type.c_str());
+            if (hwrt) {
+                if (!Ray::RendererSupportsHWRT(rt)) {
+                    continue;
                 }
+                type += "_HWRT";
+            }
 
-                { // test output
-                    snprintf(name_buf, sizeof(name_buf), "test_data/%s/%s_out.tga", test_names[j][i], type);
+            bool found_at_least_one_image = false;
+            for (int j = 0; j < ImgCountH; ++j) {
+                const int top_down_j = ImgCountH - j - 1;
 
-                    int test_img_w, test_img_h;
-                    const auto test_img = LoadTGA(name_buf, test_img_w, test_img_h);
-                    if (!test_img.empty()) {
-                        for (int k = 0; k < test_img_h; ++k) {
-                            memcpy(&material_imgs[((top_down_j * 256 + k) * OutImageW + i * 256) * 4],
-                                   &test_img[k * test_img_w * 4], test_img_w * 4);
+                for (int i = 0; i < ImgCountW && test_names[j][i]; ++i) {
+                    { // reference image
+                        snprintf(name_buf, sizeof(name_buf), "test_data/%s/ref.tga", test_names[j][i]);
+
+                        int test_img_w, test_img_h;
+                        const auto img_ref = LoadTGA(name_buf, test_img_w, test_img_h);
+                        if (!img_ref.empty()) {
+                            for (int k = 0; k < test_img_h; ++k) {
+                                memcpy(&material_refs[((top_down_j * 256 + k) * OutImageW + i * 256) * 4],
+                                       &img_ref[k * test_img_w * 4], test_img_w * 4);
+                            }
                         }
+
+                        blit_chars_to_alpha(material_refs.get(), i * 256, top_down_j * 256, test_names[j][i]);
                     }
 
-                    blit_chars_to_alpha(material_imgs.get(), i * 256, top_down_j * 256, test_names[j][i]);
-                }
+                    { // test output
+                        snprintf(name_buf, sizeof(name_buf), "test_data/%s/%s_out.tga", test_names[j][i], type.c_str());
 
-                { // error mask
-                    snprintf(name_buf, sizeof(name_buf), "test_data/%s/%s_mask.tga", test_names[j][i], type);
-
-                    int test_img_w, test_img_h;
-                    const auto test_img = LoadTGA(name_buf, test_img_w, test_img_h);
-                    if (!test_img.empty()) {
-                        for (int k = 0; k < test_img_h; ++k) {
-                            memcpy(&material_masks[((top_down_j * 256 + k) * OutImageW + i * 256) * 4],
-                                   &test_img[k * test_img_w * 4], test_img_w * 4);
+                        int test_img_w, test_img_h;
+                        const auto test_img = LoadTGA(name_buf, test_img_w, test_img_h);
+                        if (!test_img.empty()) {
+                            for (int k = 0; k < test_img_h; ++k) {
+                                memcpy(&material_imgs[((top_down_j * 256 + k) * OutImageW + i * 256) * 4],
+                                       &test_img[k * test_img_w * 4], test_img_w * 4);
+                            }
+                            found_at_least_one_image = true;
                         }
+
+                        blit_chars_to_alpha(material_imgs.get(), i * 256, top_down_j * 256, test_names[j][i]);
                     }
 
-                    blit_chars_to_alpha(material_masks.get(), i * 256, top_down_j * 256, test_names[j][i]);
+                    { // error mask
+                        snprintf(name_buf, sizeof(name_buf), "test_data/%s/%s_mask.tga", test_names[j][i], type.c_str());
+
+                        int test_img_w, test_img_h;
+                        const auto test_img = LoadTGA(name_buf, test_img_w, test_img_h);
+                        if (!test_img.empty()) {
+                            for (int k = 0; k < test_img_h; ++k) {
+                                memcpy(&material_masks[((top_down_j * 256 + k) * OutImageW + i * 256) * 4],
+                                       &test_img[k * test_img_w * 4], test_img_w * 4);
+                            }
+                        }
+
+                        blit_chars_to_alpha(material_masks.get(), i * 256, top_down_j * 256, test_names[j][i]);
+                    }
                 }
             }
-        }
 
-        snprintf(name_buf, sizeof(name_buf), "test_data/material_%s_imgs.tga", type);
-        WriteTGA(material_imgs.get(), OutImageW, OutImageH, 4, name_buf);
-        snprintf(name_buf, sizeof(name_buf), "test_data/material_%s_masks.tga", type);
-        WriteTGA(material_masks.get(), OutImageW, OutImageH, 4, name_buf);
+            if (found_at_least_one_image) {
+                snprintf(name_buf, sizeof(name_buf), "test_data/material_%s_imgs.tga", type.c_str());
+                WriteTGA(material_imgs.get(), OutImageW, OutImageH, 4, name_buf);
+                snprintf(name_buf, sizeof(name_buf), "test_data/material_%s_masks.tga", type.c_str());
+                WriteTGA(material_masks.get(), OutImageW, OutImageH, 4, name_buf);
+            }
+        }
     }
 
     WriteTGA(material_refs.get(), OutImageW, OutImageH, 4, "test_data/material_refs.tga");
