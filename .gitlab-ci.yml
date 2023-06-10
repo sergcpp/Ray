@@ -113,6 +113,8 @@ stages:
 .windows-test-job:
   stage: test
   script:
+    - echo "Cleaning repository..."
+    - git clean -fx -e $BIN_DIR
     - echo "Running tests..."
     - cd tests
     - '& "../$BIN_DIR/test_Ray" $TEST_ARGS.split(" ") $AUX_TEST_ARGS.split(" ")'
@@ -131,6 +133,8 @@ stages:
 .windows-perf-test-job:
   stage: test
   script:
+    - echo "Cleaning repository..."
+    - '& git clean -fx -e "$BIN_DIR"'
     - echo "Running tests..."
     - cd tests
     - '& "../$BIN_DIR/test_Ray" $AUX_TEST_ARGS.split(" ")'
@@ -149,6 +153,8 @@ stages:
 .windows-sde-test-job:
   stage: test
   script:
+    - echo "Cleaning repository..."
+    - '& git clean -fx -e "$BIN_DIR"'
     - echo "Running tests..."
     - cd tests
     - '& "sde" $SDE_TEST_ARGS.split(" ") -- ../$BIN_DIR/test_Ray $AUX_TEST_ARGS.split(" ")'
@@ -167,6 +173,8 @@ stages:
 .windows-test-asan-job:
   stage: test
   script:
+    - echo "Cleaning repository..."
+    - '& git clean -fx -e "$BIN_DIR"'
     - echo "Running tests..."
     - cd tests
     - '& "../$BIN_DIR/test_Ray-asan" $AUX_TEST_ARGS.split(" ")'
@@ -185,6 +193,8 @@ stages:
 .test-job:
   stage: test
   script:
+    - echo "Cleaning repository..."
+    - git clean -fx -e $BIN_DIR
     - echo "Running tests..."
     - cd tests
     - ../$BIN_DIR/test_Ray $TEST_ARGS $AUX_TEST_ARGS
