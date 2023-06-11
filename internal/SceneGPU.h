@@ -334,15 +334,10 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
                           4096); // allocate for worst case
     uint8_t *stage_data = temp_stage_buf.Map();
 
+    const int mip_count = _t.generate_mipmaps ? CalcMipCount(_t.w, _t.h, 4, eTexFilter::Bilinear) : 1;
+
     bool use_compression = use_tex_compression_ && !_t.force_no_compression;
-    // TODO: workaround this somehow!
-    if (!_t.generate_mipmaps) {
-        // make sure dimentions are multiples of 4
-        use_compression &= (_t.w % 4) == 0 && (_t.h % 4) == 0;
-    } else {
-        // make sure dimentions are power of two
-        use_compression &= _t.w > 1 && (_t.w & (_t.w - 1)) == 0 && _t.h > 1 && (_t.h & (_t.h - 1)) == 0;
-    }
+    use_compression &= CanBeBlockCompressed(_t.w, _t.h, mip_count, eTexBlock::_4x4);
 
     uint32_t data_size[16] = {};
 
@@ -497,10 +492,7 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
         }
     }
 
-    int mip_count = 1;
     if (_t.generate_mipmaps) {
-        mip_count = CalcMipCount(_t.w, _t.h, 4, eTexFilter::Bilinear);
-
         const int res[2] = {_t.w, _t.h};
         if (src_fmt == eTexFormat::RawRGBA8888) {
             const auto *rgba_data =

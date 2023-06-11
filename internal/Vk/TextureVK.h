@@ -244,6 +244,7 @@ class Texture3D {
 VkFormat VKFormatFromTexFormat(eTexFormat format);
 
 bool RequiresManualSRGBConversion(eTexFormat format);
+bool CanBeBlockCompressed(int w, int h, int mip_count, eTexBlock block);
 
 } // namespace Vk
 } // namespace Ray

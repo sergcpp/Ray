@@ -2537,6 +2537,11 @@ bool Ray::Vk::RequiresManualSRGBConversion(const eTexFormat format) {
     return vk_format == ToSRGBFormat(vk_format);
 }
 
+bool Ray::Vk::CanBeBlockCompressed(int w, int h, int mip_count, eTexBlock block) {
+    // assume non-multiple of block size resolutions are supported
+    return true;
+}
+
 #ifdef _MSC_VER
 #pragma warning(pop)
 #endif
