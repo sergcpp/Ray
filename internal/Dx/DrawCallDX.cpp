@@ -274,26 +274,6 @@ void Ray::Dx::DispatchComputeIndirect(ID3D12GraphicsCommandList *cmd_buf, const 
     PrepareDescriptors(ctx, cmd_buf, bindings, uniform_data, uniform_data_len, comp_pipeline.prog(), descr_alloc, log);
 
     cmd_buf->ExecuteIndirect(ctx->indirect_dispatch_cmd_signature(), 1, indir_buf.dx_resource(), indir_buf_offset, nullptr, 0);
-
-    /*Context *ctx = descr_alloc->ctx();
-
-    VkDescriptorSet descr_set =
-        PrepareDescriptorSet(ctx, comp_pipeline.prog()->descr_set_layouts()[0], bindings, descr_alloc, log);
-    if (!descr_set) {
-        log->Error("Failed to allocate descriptor set, skipping draw call!");
-        return;
-    }
-
-    vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, comp_pipeline.handle());
-    vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, comp_pipeline.layout(), 0, 1, &descr_set, 0,
-                            nullptr);
-
-    if (uniform_data && uniform_data_len) {
-        vkCmdPushConstants(cmd_buf, comp_pipeline.layout(), VK_SHADER_STAGE_COMPUTE_BIT, 0, uniform_data_len,
-                           uniform_data);
-    }
-
-    vkCmdDispatchIndirect(cmd_buf, indir_buf.vk_handle(), VkDeviceSize(indir_buf_offset));*/
 }
 
 /*void Ray::Dx::TraceRays(VkCommandBuffer cmd_buf, const Pipeline &rt_pipeline, const uint32_t dims[3],
