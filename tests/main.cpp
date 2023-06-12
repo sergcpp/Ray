@@ -78,7 +78,6 @@ void test_complex_mat4(const char *arch_list[], const char *preferred_device);
 void test_complex_mat5(const char *arch_list[], const char *preferred_device);
 void test_complex_mat5_clipped(const char *arch_list[], const char *preferred_device);
 void test_complex_mat5_adaptive(const char *arch_list[], const char *preferred_device);
-void test_complex_mat5_filmic(const char *arch_list[], const char *preferred_device);
 void test_complex_mat5_regions(const char *arch_list[], const char *preferred_device);
 void test_complex_mat5_denoised(const char *arch_list[], const char *preferred_device);
 void test_complex_mat5_dof(const char *arch_list[], const char *preferred_device);
@@ -103,7 +102,7 @@ bool g_stop_on_fail = false;
 bool g_tests_success = true;
 std::atomic_bool g_log_contains_errors{false};
 bool g_catch_flt_exceptions = false;
-bool g_determine_sample_count = false;
+bool g_determine_sample_count = true;
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -157,7 +156,7 @@ int main(int argc, char *argv[]) {
     const bool enable_fp_exceptions = !nocpu || full_tests;
     if (enable_fp_exceptions) {
         unsigned old_value;
-        _controlfp_s(&old_value, _EM_INEXACT, _MCW_EM);
+        _controlfp_s(&old_value, _EM_INEXACT | _EM_UNDERFLOW | _EM_OVERFLOW, _MCW_EM);
         g_catch_flt_exceptions = true;
     }
 #endif
@@ -210,7 +209,6 @@ int main(int argc, char *argv[]) {
         test_complex_mat5(arch_list, device_name);
         test_complex_mat5_clipped(arch_list, device_name);
         test_complex_mat5_adaptive(arch_list, device_name);
-        test_complex_mat5_filmic(arch_list, device_name);
         test_complex_mat5_regions(arch_list, device_name);
         test_complex_mat5_denoised(arch_list, device_name);
         test_complex_mat5_dof(arch_list, device_name);

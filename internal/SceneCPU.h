@@ -80,6 +80,7 @@ class Scene : public SceneBase {
 
     environment_t env_;
     LightHandle env_map_light_ = InvalidLightHandle;
+    TextureHandle physical_sky_texture_ = InvalidTextureHandle;
     struct {
         int res = -1;
         SmallVector<aligned_vector<float, 16>, 16> mips;
@@ -93,6 +94,7 @@ class Scene : public SceneBase {
     void RemoveNodes_nolock(uint32_t node_index, uint32_t node_count);
     void RebuildTLAS_nolock();
 
+    void PrepareSkyEnvMap_nolock();
     void PrepareEnvMapQTree_nolock();
 
     MaterialHandle AddMaterial_nolock(const shading_node_desc_t &m);

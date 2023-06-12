@@ -30,6 +30,8 @@ DEFINE_HANDLE(MeshHandle)
 DEFINE_HANDLE(MeshInstanceHandle)
 DEFINE_HANDLE(LightHandle)
 
+const TextureHandle PhysicalSkyTexture = {0xfffffffe};
+
 #undef DEFINE_HANDLE
 
 /// Mesh primitive type

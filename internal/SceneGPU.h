@@ -2,6 +2,7 @@
 
 #include "../Log.h"
 #include "../SceneBase.h"
+#include "Atmosphere.h"
 #include "BVHSplit.h"
 #include "SparseStorageCPU.h"
 #include "TextureUtils.h"
@@ -14,6 +15,18 @@ class Renderer;
 
 template <class T> force_inline T clamp(const T &val, const T &min_val, const T &max_val) {
     return std::min(std::max(val, min_val), max_val);
+}
+
+inline Ref::simd_fvec4 rgb_to_rgbe(const Ref::simd_fvec4 &rgb) {
+    float max_component = std::max(std::max(rgb.get<0>(), rgb.get<1>()), rgb.get<2>());
+    if (max_component < 1e-32) {
+        return Ref::simd_fvec4{0.0f};
+    }
+
+    int exponent;
+    const float factor = std::frexp(max_component, &exponent) * 256.0f / max_component;
+
+    return Ref::simd_fvec4{rgb.get<0>() * factor, rgb.get<1>() * factor, rgb.get<2>() * factor, float(exponent + 128)};
 }
 
 class Scene : public SceneBase {
@@ -50,6 +63,7 @@ class Scene : public SceneBase {
 
     environment_t env_;
     LightHandle env_map_light_ = InvalidLightHandle;
+    TextureHandle physical_sky_texture_ = InvalidTextureHandle;
     struct {
         int res = -1;
         SmallVector<aligned_vector<simd_fvec4>, 16> mips;
@@ -77,6 +91,7 @@ class Scene : public SceneBase {
     void RebuildTLAS_nolock();
     // void RebuildLightBVH();
 
+    void PrepareSkyEnvMap_nolock();
     void PrepareEnvMapQTree_nolock();
     void GenerateTextureMips_nolock();
     void PrepareBindlessTextures_nolock();
@@ -1213,8 +1228,13 @@ inline void Ray::NS::Scene::Finalize() {
     env_map_qtree_ = {};
     env_.qtree_levels = 0;
 
+    if (env_.env_map != InvalidTextureHandle._index && (env_.env_map == PhysicalSkyTexture._index ||
+        env_.env_map == physical_sky_texture_._index)) {
+        PrepareSkyEnvMap_nolock();
+    }
+
     if (env_.multiple_importance && env_.env_col[0] > 0.0f && env_.env_col[1] > 0.0f && env_.env_col[2] > 0.0f) {
-        if (env_.env_map != 0xffffffff) {
+        if (env_.env_map != InvalidTextureHandle._index) {
             PrepareEnvMapQTree_nolock();
         } else {
             // Dummy
@@ -1327,6 +1347,91 @@ inline void Ray::NS::Scene::RebuildTLAS_nolock() {
 
     // store root node
     tlas_root_node_ = bvh_nodes[0];
+}
+
+inline void Ray::NS::Scene::PrepareSkyEnvMap_nolock() {
+    if (physical_sky_texture_ != InvalidTextureHandle) {
+        if (use_bindless_) {
+            bindless_textures_.erase(physical_sky_texture_._index >> 24);
+        } else {
+            atlas_textures_.erase(physical_sky_texture_._index);
+        }
+    }
+
+    // Find directional light sources
+    std::vector<uint32_t> dir_lights;
+    for (int i = 0; i < int(lights_.size()); ++i) {
+        if (!lights_.exists(i)) {
+            continue;
+        }
+
+        const light_t &l = lights_[i];
+        if (l.type == LIGHT_TYPE_DIR) {
+            dir_lights.push_back(i);
+        }
+    }
+
+    if (dir_lights.empty()) {
+        env_.env_map = InvalidTextureHandle._index;
+        if (env_.back_map == PhysicalSkyTexture._index) {
+            env_.back_map = InvalidTextureHandle._index;
+        }
+        return;
+    }
+
+    static const int SkyEnvRes[] = {512, 256};
+    std::unique_ptr<color_rgba8_t[]> rgbe_pixels(new color_rgba8_t[SkyEnvRes[0] * SkyEnvRes[1]]);
+
+    for (int y = 0; y < SkyEnvRes[1]; ++y) {
+        const float theta = PI * float(y) / float(SkyEnvRes[1]);
+        for (int x = 0; x < SkyEnvRes[0]; ++x) {
+            const float phi = 2.0f * PI * float(x) / float(SkyEnvRes[0]);
+
+            auto ray_dir = Ref::simd_fvec4{std::sin(theta) * std::cos(phi), std::cos(theta),
+                                           std::sin(theta) * std::sin(phi), 0.0f};
+
+            Ref::simd_fvec4 color = 0.0f;
+
+            // Evaluate light sources
+            for (const uint32_t li_index : dir_lights) {
+                const light_t &l = lights_[li_index];
+
+                const Ref::simd_fvec4 light_dir = {l.dir.dir[0], l.dir.dir[1], l.dir.dir[2], 0.0f};
+                const Ref::simd_fvec4 light_col = {l.col[0], l.col[1], l.col[2], 0.0f};
+
+                Ref::simd_fvec4 transmittance;
+                color +=
+                    IntegrateScattering(Ref::simd_fvec4{0.0f}, ray_dir, MAX_DIST, light_dir, light_col, transmittance);
+            }
+
+            color = rgb_to_rgbe(color);
+
+            rgbe_pixels[y * SkyEnvRes[0] + x].v[0] = uint8_t(color.get<0>());
+            rgbe_pixels[y * SkyEnvRes[0] + x].v[1] = uint8_t(color.get<1>());
+            rgbe_pixels[y * SkyEnvRes[0] + x].v[2] = uint8_t(color.get<2>());
+            rgbe_pixels[y * SkyEnvRes[0] + x].v[3] = uint8_t(color.get<3>());
+        }
+    }
+
+    tex_desc_t desc = {};
+    desc.format = eTextureFormat::RGBA8888;
+    desc.name = "Physical Sky Texture";
+    desc.data = rgbe_pixels.get();
+    desc.w = SkyEnvRes[0];
+    desc.h = SkyEnvRes[1];
+    desc.is_srgb = false;
+    desc.force_no_compression = true;
+
+    if (use_bindless_) {
+        physical_sky_texture_ = AddBindlessTexture_nolock(desc);
+    } else {
+        physical_sky_texture_ = AddAtlasTexture_nolock(desc);
+    }
+
+    env_.env_map = physical_sky_texture_._index;
+    if (env_.back_map == PhysicalSkyTexture._index) {
+        env_.back_map = physical_sky_texture_._index;
+    }
 }
 
 inline void Ray::NS::Scene::PrepareEnvMapQTree_nolock() {
