@@ -4649,18 +4649,20 @@ Ray::Ref::simd_fvec4 vectorcall Ray::Ref::TonemapFilmic(const eViewTransform vie
     const simd_fvec4 uv = encoded * float(LUT_DIMS - 1) + 0.5f;
     const simd_ivec4 xyz = simd_ivec4(uv);
     const simd_fvec4 f = fract(uv);
+    const simd_ivec4 xyz_next = min(xyz + 1, simd_ivec4{LUT_DIMS - 1});
 
     const int ix = xyz.get<0>(), iy = xyz.get<1>(), iz = xyz.get<2>();
+    const int jx = xyz_next.get<0>(), jy = xyz_next.get<1>(), jz = xyz_next.get<2>();
     const float fx = f.get<0>(), fy = f.get<1>(), fz = f.get<2>();
 
-    const simd_fvec4 c000 = FetchLUT(view_transform, ix + 0, iy + 0, iz + 0);
-    const simd_fvec4 c001 = FetchLUT(view_transform, ix + 1, iy + 0, iz + 0);
-    const simd_fvec4 c010 = FetchLUT(view_transform, ix + 0, iy + 1, iz + 0);
-    const simd_fvec4 c011 = FetchLUT(view_transform, ix + 1, iy + 1, iz + 0);
-    const simd_fvec4 c100 = FetchLUT(view_transform, ix + 0, iy + 0, iz + 1);
-    const simd_fvec4 c101 = FetchLUT(view_transform, ix + 1, iy + 0, iz + 1);
-    const simd_fvec4 c110 = FetchLUT(view_transform, ix + 0, iy + 1, iz + 1);
-    const simd_fvec4 c111 = FetchLUT(view_transform, ix + 1, iy + 1, iz + 1);
+    const simd_fvec4 c000 = FetchLUT(view_transform, ix, iy, iz);
+    const simd_fvec4 c001 = FetchLUT(view_transform, jx, iy, iz);
+    const simd_fvec4 c010 = FetchLUT(view_transform, ix, jy, iz);
+    const simd_fvec4 c011 = FetchLUT(view_transform, jx, jy, iz);
+    const simd_fvec4 c100 = FetchLUT(view_transform, ix, iy, jz);
+    const simd_fvec4 c101 = FetchLUT(view_transform, jx, iy, jz);
+    const simd_fvec4 c110 = FetchLUT(view_transform, ix, jy, jz);
+    const simd_fvec4 c111 = FetchLUT(view_transform, jx, jy, jz);
 
     const simd_fvec4 c00x = (1.0f - fx) * c000 + fx * c001;
     const simd_fvec4 c01x = (1.0f - fx) * c010 + fx * c011;

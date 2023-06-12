@@ -62,7 +62,7 @@ vec3 SampleLatlong_RGBE(const uint index, const vec3 dir, const float y_rotation
     const vec2 uvs = vec2(u, theta) * vec2(size);
 
 #if USE_STOCH_TEXTURE_FILTERING
-    const vec4 p00 = texelFetch(g_textures[nonuniformEXT(tex)], ivec2(uvs + rand), 0);
+    const vec4 p00 = texelFetch(g_textures[nonuniformEXT(tex)], min(ivec2(uvs + rand), size - 1), 0);
     return rgbe_to_rgb(p00);
 #else // USE_STOCH_TEXTURE_FILTERING
     const vec4 p00 = texelFetchOffset(g_textures[nonuniformEXT(tex)], ivec2(uvs), 0, ivec2(0, 0));
