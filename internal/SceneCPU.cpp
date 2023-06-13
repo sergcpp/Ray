@@ -533,11 +533,21 @@ Ray::LightHandle Ray::Cpu::Scene::AddLight(const directional_light_desc_t &_l) {
     l.dir.dir[1] = -_l.direction[1];
     l.dir.dir[2] = -_l.direction[2];
     l.dir.angle = _l.angle * PI / 360.0f;
+    if (l.dir.angle != 0.0f) {
+        const float radius = std::tan(l.dir.angle);
+        const float mul = 1.0f / (PI * radius * radius);
+        l.col[0] *= mul;
+        l.col[1] *= mul;
+        l.col[2] *= mul;
+    }
 
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
     const uint32_t light_index = lights_.push(l);
     li_indices_.push_back(light_index);
+    if (_l.visible) {
+        visible_lights_.push_back(light_index);
+    }
     return LightHandle{light_index};
 }
 
@@ -980,7 +990,11 @@ void Ray::Cpu::Scene::PrepareSkyEnvMap_nolock() {
                 const light_t &l = lights_[li_index];
 
                 const Ref::simd_fvec4 light_dir = {l.dir.dir[0], l.dir.dir[1], l.dir.dir[2], 0.0f};
-                const Ref::simd_fvec4 light_col = {l.col[0], l.col[1], l.col[2], 0.0f};
+                Ref::simd_fvec4 light_col = {l.col[0], l.col[1], l.col[2], 0.0f};
+                if (l.dir.angle != 0.0f) {
+                    const float radius = std::tan(l.dir.angle);
+                    light_col *= (PI * radius * radius);
+                }
 
                 Ref::simd_fvec4 transmittance;
                 color +=

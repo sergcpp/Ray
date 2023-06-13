@@ -4858,6 +4858,9 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
             }
         } else if (l.type == LIGHT_TYPE_DIR) {
             UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.L[i]) = l.dir.dir[i]; })
+            where(ray_queue[index], ls.area) = 0.0f;
+            where(ray_queue[index], ls.pdf) = 1.0f;
+            where(ray_queue[index], ls.dist_mul) = MAX_DIST;
             if (l.dir.angle != 0.0f) {
                 const float radius = std::tan(l.dir.angle);
 
@@ -4866,12 +4869,16 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
                 safe_normalize(V);
 
                 UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.L[i]) = V[i]; })
-            }
+                where(ray_queue[index], ls.area) = PI * radius * radius;
 
-            where(ray_queue[index], ls.area) = 0.0f;
+                const simd_fvec<S> cos_theta = dot3(ls.L, l.dir.dir);
+                where(ray_queue[index], ls.pdf) = safe_div_pos(1.0f, ls.area * cos_theta);
+            }
             UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.lp[i]) = P[i] + ls.L[i]; })
-            where(ray_queue[index], ls.dist_mul) = MAX_DIST;
-            where(ray_queue[index], ls.pdf) = 1.0f;
+
+            if (!l.visible) {
+                where(ray_queue[index], ls.area) = 0.0f;
+            }
         } else if (l.type == LIGHT_TYPE_RECT) {
             const simd_fvec<S> r1 = ru - 0.5f, r2 = rv - 0.5f;
 
@@ -5115,8 +5122,7 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, const light_t lights[]
         const uint32_t light_index = visible_lights[li];
         const light_t &l = lights[light_index];
         // Portal lights affect only missed rays
-        const simd_ivec<S> ray_mask =
-            r.mask & ~((l.sky_portal ? simd_ivec<S>{-1} : simd_ivec<S>{0}) & inout_inter.mask);
+        const simd_ivec<S> ray_mask = r.mask & ~(simd_ivec<S>{l.sky_portal ? -1 : 0} & inout_inter.mask);
         if (ray_mask.all_zeros()) {
             continue;
         }
@@ -5158,6 +5164,13 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, const light_t lights[]
                 where(mask1, inout_inter.t) = t1;
                 where(mask2, inout_inter.t) = t2;
             }
+        } else if (l.type == LIGHT_TYPE_DIR) {
+            const simd_fvec<S> cos_theta = dot3(r.d, l.dir.dir);
+            const simd_ivec<S> imask =
+                simd_cast(cos_theta > std::cos(l.dir.angle)) & ray_mask & (~inout_inter.mask | simd_cast(no_shadow));
+            inout_inter.mask |= imask;
+            where(imask, inout_inter.obj_index) = -simd_ivec<S>(light_index) - 1;
+            where(imask, inout_inter.t) = safe_div_pos(1.0f, cos_theta);
         } else if (l.type == LIGHT_TYPE_RECT) {
             float light_fwd[3];
             cross(l.rect.u, l.rect.v, light_fwd);
@@ -5430,6 +5443,17 @@ void Ray::NS::Evaluate_LightColor(const simd_fvec<S> P[3], const ray_data_t<S> &
                     UNROLLED_FOR(i, 3, { lcol[i] *= spot_weight; })
                 }
             }
+        } else if (l.type == LIGHT_TYPE_DIR) {
+            const float radius = std::tan(l.dir.angle);
+            const float light_area = PI * radius * radius;
+
+            const simd_fvec<S> cos_theta = dot3(ray.d, l.dir.dir);
+
+            const simd_fvec<S> light_pdf = safe_div(simd_fvec<S>{1.0f}, light_area * cos_theta);
+            const simd_fvec<S> bsdf_pdf = ray.pdf;
+
+            const simd_fvec<S> mis_weight = power_heuristic(bsdf_pdf, light_pdf);
+            UNROLLED_FOR(i, 3, { lcol[i] *= mis_weight; });
         } else if (l.type == LIGHT_TYPE_RECT) {
             float light_fwd[3];
             cross(l.rect.u, l.rect.v, light_fwd);

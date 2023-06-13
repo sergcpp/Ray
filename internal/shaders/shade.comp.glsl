@@ -800,17 +800,21 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, int hi, vec2 sample_off, 
         }
     } else [[dont_flatten]] if (l_type == LIGHT_TYPE_DIR) {
         ls.L = l.DIR_DIR;
-        if (l.DIR_ANGLE != 0.0){
+        ls.area = 0.0;
+        ls.pdf = 1.0;
+        ls.dist_mul = MAX_DIST;
+        [[dont_flatten]] if (l.DIR_ANGLE != 0.0) {
             const float r1 = fract(g_random_seq[hi + RAND_DIM_LIGHT_U] + sample_off[0]);
             const float r2 = fract(g_random_seq[hi + RAND_DIM_LIGHT_V] + sample_off[1]);
 
             const float radius = tan(l.DIR_ANGLE);
             ls.L = normalize(MapToCone(r1, r2, ls.L, radius));
+            ls.area = PI * radius * radius;
+
+            const float cos_theta = dot(ls.L, l.DIR_DIR);
+            ls.pdf = 1.0 / (ls.area * cos_theta);
         }
-        ls.area = 0.0;
         ls.lp = P + ls.L;
-        ls.dist_mul = MAX_DIST;
-        ls.pdf = 1.0;
 
         if ((l.type_and_param0.x & (1 << 6)) == 0) { // !visible
             ls.area = 0.0;
@@ -1094,7 +1098,7 @@ vec3 Evaluate_LightColor(ray_data_t ray, hit_data_t inter, const vec2 tex_rand) 
         const float light_pdf = (inter.t * inter.t) / (0.5 * light_area * cos_theta);
         const float bsdf_pdf = ray.pdf;
 
-        float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
+        const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
         lcol *= mis_weight;
 
         [[dont_flatten]] if (l.SPH_SPOT > 0.0 && l.SPH_BLEND > 0.0) {
@@ -1104,6 +1108,17 @@ vec3 Evaluate_LightColor(ray_data_t ray, hit_data_t inter, const vec2 tex_rand) 
                 lcol *= clamp((l.SPH_SPOT - _angle) / l.SPH_BLEND, 0.0, 1.0);
             }
         }
+    } else if (l_type == LIGHT_TYPE_DIR) {
+        const float radius = tan(l.DIR_ANGLE);
+        const float light_area = PI * radius * radius;
+
+        const float cos_theta = dot(rd, l.DIR_DIR);
+
+        const float light_pdf = 1.0 / (light_area * cos_theta);
+        const float bsdf_pdf = ray.pdf;
+
+        const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
+        lcol *= mis_weight;
     } else if (l_type == LIGHT_TYPE_RECT) {
         const vec3 light_pos = l.RECT_POS;
         const vec3 light_u = l.RECT_U;

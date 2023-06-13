@@ -125,6 +125,13 @@ void main() {
                     inter.t = t2;
                 }
             }
+        } else if (light_type == LIGHT_TYPE_DIR) {
+            const float cos_theta = dot(rd, l.DIR_DIR);
+            if ((inter.mask == 0 || no_shadow) && cos_theta > cos(l.DIR_ANGLE)) {
+                inter.mask = -1;
+                inter.obj_index = -int(light_index) - 1;
+                inter.t = 1.0 / cos_theta;
+            }
         } else if (light_type == LIGHT_TYPE_RECT) {
             vec3 light_pos = l.RECT_POS;
             vec3 light_u = l.RECT_U;
