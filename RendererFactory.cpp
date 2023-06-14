@@ -105,7 +105,7 @@ Ray::RendererBase *Ray::CreateRenderer(const settings_t &s, ILog *log, const Bit
 #endif
 #ifdef ENABLE_REF_IMPL
     if (enabled_types & eRendererType::Reference) {
-        log->Info("Ray: Creating Ref renderer %ix%i", s.w, s.h);
+        log->Info("Ray: Creating Reference renderer %ix%i", s.w, s.h);
         return Ref::CreateRenderer(s, log);
     }
 #endif
@@ -118,13 +118,13 @@ Ray::RendererBase *Ray::CreateRenderer(const settings_t &s, ILog *log, const Bit
 #endif
 #ifdef ENABLE_REF_IMPL
     if (enabled_types & eRendererType::Reference) {
-        log->Info("Ray: Creating Ref renderer %ix%i", s.w, s.h);
+        log->Info("Ray: Creating Reference renderer %ix%i", s.w, s.h);
         return Ref::CreateRenderer(s, log);
     }
 #endif
 #endif
 #ifdef ENABLE_REF_IMPL
-    log->Info("Ray: Creating Ref renderer %ix%i", s.w, s.h);
+    log->Info("Ray: Creating Reference renderer %ix%i", s.w, s.h);
     return Ref::CreateRenderer(s, log);
 #else
     return nullptr;

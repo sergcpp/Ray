@@ -170,7 +170,7 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_sh, const int min
         Ray::camera_desc_t cam_desc;
         cam_desc.type = Ray::eCamType::Persp;
         cam_desc.filter = Ray::eFilterType::Box;
-        if (test_scene == eTestScene::Standard_Filmic) {
+        if (test_scene == eTestScene::Standard_SunLight) {
             cam_desc.view_transform = Ray::eViewTransform::Filmic_HighContrast;
         } else {
             cam_desc.view_transform = Ray::eViewTransform::Standard;
@@ -213,6 +213,8 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_sh, const int min
             cam_desc.max_refr_depth = 8;
             cam_desc.max_total_depth = 9;
         }
+
+        cam_desc.min_total_depth = 4;
 
         cam_desc.min_samples = min_samples;
         cam_desc.variance_threshold = variance_threshold;
@@ -596,18 +598,16 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_sh, const int min
             scene.AddMeshInstance(square_light_mesh, identity);
         }
         scene.AddMeshInstance(disc_light_mesh, identity);
-    } else if (test_scene == eTestScene::Standard || test_scene == eTestScene::Standard_Filmic ||
-               test_scene == eTestScene::Standard_SphereLight || test_scene == eTestScene::Standard_SpotLight ||
-               test_scene == eTestScene::Standard_DOF0 || test_scene == eTestScene::Standard_DOF1 ||
-               test_scene == eTestScene::Standard_GlassBall0 || test_scene == eTestScene::Standard_GlassBall1 ||
-               test_scene == eTestScene::Standard_Clipped) {
+    } else if (test_scene == eTestScene::Standard || test_scene == eTestScene::Standard_SphereLight ||
+               test_scene == eTestScene::Standard_SpotLight || test_scene == eTestScene::Standard_DOF0 ||
+               test_scene == eTestScene::Standard_DOF1 || test_scene == eTestScene::Standard_GlassBall0 ||
+               test_scene == eTestScene::Standard_GlassBall1 || test_scene == eTestScene::Standard_Clipped) {
         //
         // Use explicit lights sources
         //
-        if (test_scene == eTestScene::Standard || test_scene == eTestScene::Standard_Filmic ||
-            test_scene == eTestScene::Standard_DOF0 || test_scene == eTestScene::Standard_DOF1 ||
-            test_scene == eTestScene::Standard_GlassBall0 || test_scene == eTestScene::Standard_GlassBall1 ||
-            test_scene == eTestScene::Standard_Clipped) {
+        if (test_scene == eTestScene::Standard || test_scene == eTestScene::Standard_DOF0 ||
+            test_scene == eTestScene::Standard_DOF1 || test_scene == eTestScene::Standard_GlassBall0 ||
+            test_scene == eTestScene::Standard_GlassBall1 || test_scene == eTestScene::Standard_Clipped) {
             { // rect light
                 static const float xform[16] = {-0.425036609f, 2.24262476e-06f, -0.905176163f, 0.00000000f,
                                                 -0.876228273f, 0.250873595f,    0.411444396f,  0.00000000f,
@@ -718,11 +718,11 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_sh, const int min
         sun_desc.direction[1] = -0.541675210f;
         sun_desc.direction[2] = -0.642787635f;
 
-        sun_desc.color[0] = sun_desc.color[1] = sun_desc.color[2] = 1.0f;
+        sun_desc.color[0] = sun_desc.color[1] = sun_desc.color[2] = 12.0f;
         sun_desc.angle = 10.0f;
 
         scene.AddLight(sun_desc);
-    }  else if (test_scene == eTestScene::Standard_NoLight) {
+    } else if (test_scene == eTestScene::Standard_NoLight) {
         // nothing
     }
 
@@ -747,6 +747,11 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_sh, const int min
         if (test_scene == eTestScene::Standard_HDRLight) {
             env_desc.env_map_rotation = env_desc.back_map_rotation = 2.35619449019f;
         }
+    } else if (test_scene == eTestScene::Standard_SunLight) {
+        env_desc.env_col[0] = env_desc.env_col[1] = env_desc.env_col[2] = 1.0f;
+        env_desc.back_col[0] = env_desc.back_col[1] = env_desc.back_col[2] = 1.0f;
+
+        env_desc.env_map = env_desc.back_map = Ray::PhysicalSkyTexture;
     }
 
     scene.SetEnvironment(env_desc);

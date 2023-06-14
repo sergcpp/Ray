@@ -3106,17 +3106,25 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
         }
     } else if (l.type == LIGHT_TYPE_DIR) {
         ls.L = make_fvec3(l.dir.dir);
+        ls.area = 0.0f;
+        ls.pdf = 1.0f;
         if (l.dir.angle != 0.0f) {
             const float r1 = fract(random_seq[RAND_DIM_LIGHT_U] + sample_off[0]);
             const float r2 = fract(random_seq[RAND_DIM_LIGHT_V] + sample_off[1]);
 
             const float radius = std::tan(l.dir.angle);
             ls.L = normalize(MapToCone(r1, r2, ls.L, radius));
+            ls.area = PI * radius * radius;
+
+            const float cos_theta = dot(ls.L, make_fvec3(l.dir.dir));
+            ls.pdf = 1.0f / (ls.area * cos_theta);
         }
-        ls.area = 0.0f;
         ls.lp = P + ls.L;
         ls.dist_mul = MAX_DIST;
-        ls.pdf = 1.0f;
+
+        if (!l.visible) {
+            ls.area = 0.0f;
+        }
     } else if (l.type == LIGHT_TYPE_RECT) {
         const simd_fvec4 light_pos = make_fvec3(l.rect.pos);
         const simd_fvec4 light_u = make_fvec3(l.rect.u);
@@ -3371,6 +3379,14 @@ void Ray::Ref::IntersectAreaLights(Span<const ray_data_t> rays, const light_t li
                         inout_inter.t = t2;
                     }
                 }
+            } else if (l.type == LIGHT_TYPE_DIR) {
+                const simd_fvec4 light_dir = make_fvec3(l.dir.dir);
+                const float cos_theta = dot(rd, light_dir);
+                if ((inout_inter.mask == 0 || no_shadow) && cos_theta > std::cos(l.dir.angle)) {
+                    inout_inter.mask = -1;
+                    inout_inter.obj_index = -int(light_index) - 1;
+                    inout_inter.t = 1.0f / cos_theta;
+                }
             } else if (l.type == LIGHT_TYPE_RECT) {
                 const simd_fvec4 light_pos = make_fvec3(l.rect.pos);
                 simd_fvec4 light_u = make_fvec3(l.rect.u), light_v = make_fvec3(l.rect.v);
@@ -3624,6 +3640,17 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_LightColor(const ray_data_t &ray, const 
                 lcol *= clamp((l.sph.spot - _angle) / l.sph.blend, 0.0f, 1.0f);
             }
         }
+    } else if (l.type == LIGHT_TYPE_DIR) {
+        const float radius = std::tan(l.dir.angle);
+        const float light_area = PI * radius * radius;
+
+        const float cos_theta = dot(I, make_fvec3(l.dir.dir));
+
+        const float light_pdf = 1.0f / (light_area * cos_theta);
+        const float bsdf_pdf = ray.pdf;
+
+        const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
+        lcol *= mis_weight;
     } else if (l.type == LIGHT_TYPE_RECT) {
         simd_fvec4 light_u = make_fvec3(l.rect.u), light_v = make_fvec3(l.rect.v);
 
@@ -4649,18 +4676,20 @@ Ray::Ref::simd_fvec4 vectorcall Ray::Ref::TonemapFilmic(const eViewTransform vie
     const simd_fvec4 uv = encoded * float(LUT_DIMS - 1) + 0.5f;
     const simd_ivec4 xyz = simd_ivec4(uv);
     const simd_fvec4 f = fract(uv);
+    const simd_ivec4 xyz_next = min(xyz + 1, simd_ivec4{LUT_DIMS - 1});
 
     const int ix = xyz.get<0>(), iy = xyz.get<1>(), iz = xyz.get<2>();
+    const int jx = xyz_next.get<0>(), jy = xyz_next.get<1>(), jz = xyz_next.get<2>();
     const float fx = f.get<0>(), fy = f.get<1>(), fz = f.get<2>();
 
-    const simd_fvec4 c000 = FetchLUT(view_transform, ix + 0, iy + 0, iz + 0);
-    const simd_fvec4 c001 = FetchLUT(view_transform, ix + 1, iy + 0, iz + 0);
-    const simd_fvec4 c010 = FetchLUT(view_transform, ix + 0, iy + 1, iz + 0);
-    const simd_fvec4 c011 = FetchLUT(view_transform, ix + 1, iy + 1, iz + 0);
-    const simd_fvec4 c100 = FetchLUT(view_transform, ix + 0, iy + 0, iz + 1);
-    const simd_fvec4 c101 = FetchLUT(view_transform, ix + 1, iy + 0, iz + 1);
-    const simd_fvec4 c110 = FetchLUT(view_transform, ix + 0, iy + 1, iz + 1);
-    const simd_fvec4 c111 = FetchLUT(view_transform, ix + 1, iy + 1, iz + 1);
+    const simd_fvec4 c000 = FetchLUT(view_transform, ix, iy, iz);
+    const simd_fvec4 c001 = FetchLUT(view_transform, jx, iy, iz);
+    const simd_fvec4 c010 = FetchLUT(view_transform, ix, jy, iz);
+    const simd_fvec4 c011 = FetchLUT(view_transform, jx, jy, iz);
+    const simd_fvec4 c100 = FetchLUT(view_transform, ix, iy, jz);
+    const simd_fvec4 c101 = FetchLUT(view_transform, jx, iy, jz);
+    const simd_fvec4 c110 = FetchLUT(view_transform, ix, jy, jz);
+    const simd_fvec4 c111 = FetchLUT(view_transform, jx, jy, jz);
 
     const simd_fvec4 c00x = (1.0f - fx) * c000 + fx * c001;
     const simd_fvec4 c01x = (1.0f - fx) * c010 + fx * c011;

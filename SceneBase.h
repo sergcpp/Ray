@@ -30,6 +30,8 @@ DEFINE_HANDLE(MeshHandle)
 DEFINE_HANDLE(MeshInstanceHandle)
 DEFINE_HANDLE(LightHandle)
 
+const TextureHandle PhysicalSkyTexture = {0xfffffffe};
+
 #undef DEFINE_HANDLE
 
 /// Mesh primitive type
@@ -166,6 +168,7 @@ enum eLightType { SphereLight, SpotLight, DirectionalLight, LineLight, RectLight
 struct directional_light_desc_t {
     float color[3];
     float direction[3], angle;
+    bool visible = true; // visibility only affects secondary bounces
     bool cast_shadow = true;
 };
 
@@ -173,7 +176,7 @@ struct sphere_light_desc_t {
     float color[3] = {1.0f, 1.0f, 1.0f};
     float position[3] = {0.0f, 0.0f, 0.0f};
     float radius = 1.0f;
-    bool visible = true; // visibility for secondary bounces
+    bool visible = true; // visibility only affects secondary bounces
     bool cast_shadow = true;
 };
 
@@ -184,7 +187,7 @@ struct spot_light_desc_t {
     float spot_size = 45.0f;
     float spot_blend = 0.15f;
     float radius = 1.0f;
-    bool visible = true; // visibility for secondary bounces
+    bool visible = true; // visibility only affects secondary bounces
     bool cast_shadow = true;
 };
 
@@ -192,7 +195,7 @@ struct rect_light_desc_t {
     float color[3] = {1.0f, 1.0f, 1.0f};
     float width = 1.0f, height = 1.0f;
     bool sky_portal = false;
-    bool visible = true; // visibility for secondary bounces
+    bool visible = true; // visibility only affects secondary bounces
     bool cast_shadow = true;
 };
 
@@ -200,7 +203,7 @@ struct disk_light_desc_t {
     float color[3] = {1.0f, 1.0f, 1.0f};
     float size_x = 1.0f, size_y = 1.0f;
     bool sky_portal = false;
-    bool visible = true; // visibility for secondary bounces
+    bool visible = true; // visibility only affects secondary bounces
     bool cast_shadow = true;
 };
 
@@ -208,7 +211,7 @@ struct line_light_desc_t {
     float color[3] = {1.0f, 1.0f, 1.0f};
     float radius = 1.0f, height = 1.0f;
     bool sky_portal = false;
-    bool visible = true; // visibility for secondary bounces
+    bool visible = true; // visibility only affects secondary bounces
     bool cast_shadow = true;
 };
 

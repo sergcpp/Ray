@@ -6,6 +6,7 @@
 #include <functional>
 
 #include "../Log.h"
+#include "Atmosphere.h"
 #include "BVHSplit.h"
 #include "CoreRef.h"
 #include "TextureUtils.h"
@@ -49,6 +50,18 @@ void CompactContainer(SparseStorage<T> &container,
     }
 
     assert(IsCompacted(container));
+}
+
+Ref::simd_fvec4 rgb_to_rgbe(const Ref::simd_fvec4 &rgb) {
+    float max_component = std::max(std::max(rgb.get<0>(), rgb.get<1>()), rgb.get<2>());
+    if (max_component < 1e-32) {
+        return Ref::simd_fvec4{0.0f};
+    }
+
+    int exponent;
+    const float factor = std::frexp(max_component, &exponent) * 256.0f / max_component;
+
+    return Ref::simd_fvec4{rgb.get<0>() * factor, rgb.get<1>() * factor, rgb.get<2>() * factor, float(exponent + 128)};
 }
 } // namespace Cpu
 } // namespace Ray
@@ -445,20 +458,20 @@ Ray::MeshHandle Ray::Cpu::Scene::AddMesh(const mesh_desc_t &_m) {
 
         if (_m.layout == eVertexLayout::PxyzNxyzTuv) {
             memcpy(&v.t[0], (_m.vtx_attrs + i * stride + 6), 2 * sizeof(float));
-            //v.t[1][0] = v.t[1][1] = 0.0f;
+            // v.t[1][0] = v.t[1][1] = 0.0f;
             v.b[0] = v.b[1] = v.b[2] = 0.0f;
         } else if (_m.layout == eVertexLayout::PxyzNxyzTuvTuv) {
             memcpy(&v.t[0], (_m.vtx_attrs + i * stride + 6), 2 * sizeof(float));
-            //memcpy(&v.t[1][0], (_m.vtx_attrs + i * stride + 8), 2 * sizeof(float));
+            // memcpy(&v.t[1][0], (_m.vtx_attrs + i * stride + 8), 2 * sizeof(float));
             v.b[0] = v.b[1] = v.b[2] = 0.0f;
         } else if (_m.layout == eVertexLayout::PxyzNxyzBxyzTuv) {
             memcpy(&v.b[0], (_m.vtx_attrs + i * stride + 6), 3 * sizeof(float));
             memcpy(&v.t[0], (_m.vtx_attrs + i * stride + 9), 2 * sizeof(float));
-            //v.t[1][0] = v.t[1][1] = 0.0f;
+            // v.t[1][0] = v.t[1][1] = 0.0f;
         } else if (_m.layout == eVertexLayout::PxyzNxyzBxyzTuvTuv) {
             memcpy(&v.b[0], (_m.vtx_attrs + i * stride + 6), 3 * sizeof(float));
             memcpy(&v.t[0], (_m.vtx_attrs + i * stride + 9), 2 * sizeof(float));
-            //memcpy(&v.t[1][0], (_m.vtx_attrs + i * stride + 11), 2 * sizeof(float));
+            // memcpy(&v.t[1][0], (_m.vtx_attrs + i * stride + 11), 2 * sizeof(float));
         }
     }
 
@@ -520,11 +533,21 @@ Ray::LightHandle Ray::Cpu::Scene::AddLight(const directional_light_desc_t &_l) {
     l.dir.dir[1] = -_l.direction[1];
     l.dir.dir[2] = -_l.direction[2];
     l.dir.angle = _l.angle * PI / 360.0f;
+    if (l.dir.angle != 0.0f) {
+        const float radius = std::tan(l.dir.angle);
+        const float mul = 1.0f / (PI * radius * radius);
+        l.col[0] *= mul;
+        l.col[1] *= mul;
+        l.col[2] *= mul;
+    }
 
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
     const uint32_t light_index = lights_.push(l);
     li_indices_.push_back(light_index);
+    if (_l.visible) {
+        visible_lights_.push_back(light_index);
+    }
     return LightHandle{light_index};
 }
 
@@ -774,8 +797,13 @@ void Ray::Cpu::Scene::Finalize() {
     env_map_qtree_ = {};
     env_.qtree_levels = 0;
 
+    if (env_.env_map != InvalidTextureHandle._index &&
+        (env_.env_map == PhysicalSkyTexture._index || env_.env_map == physical_sky_texture_._index)) {
+        PrepareSkyEnvMap_nolock();
+    }
+
     if (env_.multiple_importance && env_.env_col[0] > 0.0f && env_.env_col[1] > 0.0f && env_.env_col[2] > 0.0f) {
-        if (env_.env_map != 0xffffffff) {
+        if (env_.env_map != InvalidTextureHandle._index) {
             PrepareEnvMapQTree_nolock();
         }
         { // add env light source
@@ -917,6 +945,83 @@ void Ray::Cpu::Scene::RebuildTLAS_nolock() {
 
         // nodes_ is temporary storage when wide BVH is used
         nodes_.clear();
+    }
+}
+
+void Ray::Cpu::Scene::PrepareSkyEnvMap_nolock() {
+    if (physical_sky_texture_ != InvalidTextureHandle) {
+        tex_storages_[physical_sky_texture_._index >> 24]->Free(physical_sky_texture_._index & 0x00ffffff);
+    }
+
+    // Find directional light sources
+    std::vector<uint32_t> dir_lights;
+    for (const uint32_t li_index : li_indices_) {
+        const light_t &l = lights_[li_index];
+        if (l.type == LIGHT_TYPE_DIR) {
+            dir_lights.push_back(li_index);
+        }
+    }
+
+    if (dir_lights.empty()) {
+        env_.env_map = InvalidTextureHandle._index;
+        if (env_.back_map == PhysicalSkyTexture._index) {
+            env_.back_map = InvalidTextureHandle._index;
+        }
+        return;
+    }
+
+    static const int SkyEnvRes[] = {512, 256};
+    std::unique_ptr<color_rgba8_t[]> rgbe_pixels(new color_rgba8_t[SkyEnvRes[0] * SkyEnvRes[1]]);
+
+    std::unique_ptr<color_rgb_t[]> rgb_pixels(new color_rgb_t[SkyEnvRes[0] * SkyEnvRes[1]]);
+
+    for (int y = 0; y < SkyEnvRes[1]; ++y) {
+        const float theta = PI * float(y) / float(SkyEnvRes[1]);
+        for (int x = 0; x < SkyEnvRes[0]; ++x) {
+            const float phi = 2.0f * PI * float(x) / float(SkyEnvRes[0]);
+
+            auto ray_dir = Ref::simd_fvec4{std::sin(theta) * std::cos(phi), std::cos(theta),
+                                           std::sin(theta) * std::sin(phi), 0.0f};
+
+            Ref::simd_fvec4 color = 0.0f;
+
+            // Evaluate light sources
+            for (const uint32_t li_index : dir_lights) {
+                const light_t &l = lights_[li_index];
+
+                const Ref::simd_fvec4 light_dir = {l.dir.dir[0], l.dir.dir[1], l.dir.dir[2], 0.0f};
+                Ref::simd_fvec4 light_col = {l.col[0], l.col[1], l.col[2], 0.0f};
+                if (l.dir.angle != 0.0f) {
+                    const float radius = std::tan(l.dir.angle);
+                    light_col *= (PI * radius * radius);
+                }
+
+                Ref::simd_fvec4 transmittance;
+                color +=
+                    IntegrateScattering(Ref::simd_fvec4{0.0f}, ray_dir, MAX_DIST, light_dir, light_col, transmittance);
+            }
+
+            rgb_pixels[y * SkyEnvRes[0] + x].v[0] = color.get<0>();
+            rgb_pixels[y * SkyEnvRes[0] + x].v[1] = color.get<1>();
+            rgb_pixels[y * SkyEnvRes[0] + x].v[2] = color.get<2>();
+
+            color = rgb_to_rgbe(color);
+
+            rgbe_pixels[y * SkyEnvRes[0] + x].v[0] = uint8_t(color.get<0>());
+            rgbe_pixels[y * SkyEnvRes[0] + x].v[1] = uint8_t(color.get<1>());
+            rgbe_pixels[y * SkyEnvRes[0] + x].v[2] = uint8_t(color.get<2>());
+            rgbe_pixels[y * SkyEnvRes[0] + x].v[3] = uint8_t(color.get<3>());
+        }
+    }
+
+    const int storage = 0;
+    const int index = tex_storage_rgba_.Allocate(rgbe_pixels.get(), SkyEnvRes, false);
+
+    physical_sky_texture_._index = (uint32_t(storage) << 28) | index;
+
+    env_.env_map = physical_sky_texture_._index;
+    if (env_.back_map == PhysicalSkyTexture._index) {
+        env_.back_map = physical_sky_texture_._index;
     }
 }
 

@@ -259,6 +259,7 @@ DXGI_FORMAT DXFormatFromTexFormat(eTexFormat format);
 DXGI_FORMAT ToSRGBFormat(DXGI_FORMAT format);
 
 bool RequiresManualSRGBConversion(eTexFormat format);
+bool CanBeBlockCompressed(int w, int h, int mip_count, eTexBlock block);
 
 } // namespace Dx
 } // namespace Ray

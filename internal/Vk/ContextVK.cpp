@@ -198,10 +198,10 @@ bool Ray::Vk::Context::Init(ILog *log, const char *preferred_device) {
         "Default Allocs", this, 32 * 1024 * 1024 /* initial_block_size */, 1.5f /* growth_factor */);
 
     for (int i = 0; i < MaxFramesInFlight; ++i) {
-        const int PoolStep = 4;
-        const int MaxImgCount = 32;
-        const int MaxSamplerCount = 32;
-        const int MaxImgSamplerCount = 32;
+        const int PoolStep = 8;
+        const int MaxImgCount = 16;
+        const int MaxSamplerCount = 16;
+        const int MaxImgSamplerCount = 16;
         const int MaxStoreImgCount = 6;
         const int MaxUBufCount = 8;
         const int MaxSBufCount = 20;

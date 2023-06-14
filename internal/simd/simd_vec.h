@@ -789,6 +789,10 @@ template <typename T, int S> force_inline simd_vec<T, S> abs(const simd_vec<T, S
     return max(v, -v);
 }
 
+template <typename T, int S> force_inline simd_vec<T, S> exp(const simd_vec<T, S> &v) {
+    return pow(simd_vec<T, S>{std::exp(1.0f)}, v);
+}
+
 template <typename T, int S>
 force_inline simd_vec<T, S> fmadd(const simd_vec<T, S> &a, const simd_vec<T, S> &b, const simd_vec<T, S> &c) {
     return a * b + c;

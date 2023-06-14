@@ -164,21 +164,24 @@ vec3 TonemapLUT_manual(sampler3D lut, float inv_gamma, vec3 col) {
     const vec3 encoded = col / (col + 1.0);
 
     // Align the encoded range to texel centers
-    const float LUT_DIMS = 48.0;
+    const float LUT_DIMS = 48;
     const vec3 uv = encoded * (LUT_DIMS - 1.0) + 0.5;
     const ivec3 xyz = ivec3(uv);
+    const ivec3 xyz_next = min(xyz + 1, ivec3(LUT_DIMS - 1));
     const vec3 f = fract(uv);
 
+    const int ix = xyz.x, iy = xyz.y, iz = xyz.z;
+    const int jx = xyz_next.x, jy = xyz_next.y, jz = xyz_next.z;
     const float fx = f.x, fy = f.y, fz = f.z;
 
-    const vec3 c000 = texelFetchOffset(lut, xyz, 0, ivec3(0, 0, 0)).xyz;
-    const vec3 c001 = texelFetchOffset(lut, xyz, 0, ivec3(1, 0, 0)).xyz;
-    const vec3 c010 = texelFetchOffset(lut, xyz, 0, ivec3(0, 1, 0)).xyz;
-    const vec3 c011 = texelFetchOffset(lut, xyz, 0, ivec3(1, 1, 0)).xyz;
-    const vec3 c100 = texelFetchOffset(lut, xyz, 0, ivec3(0, 0, 1)).xyz;
-    const vec3 c101 = texelFetchOffset(lut, xyz, 0, ivec3(1, 0, 1)).xyz;
-    const vec3 c110 = texelFetchOffset(lut, xyz, 0, ivec3(0, 1, 1)).xyz;
-    const vec3 c111 = texelFetchOffset(lut, xyz, 0, ivec3(1, 1, 1)).xyz;
+    const vec3 c000 = texelFetch(lut, ivec3(ix, iy, iz), 0).xyz;
+    const vec3 c001 = texelFetch(lut, ivec3(jx, iy, iz), 0).xyz;
+    const vec3 c010 = texelFetch(lut, ivec3(ix, jy, iz), 0).xyz;
+    const vec3 c011 = texelFetch(lut, ivec3(jx, jy, iz), 0).xyz;
+    const vec3 c100 = texelFetch(lut, ivec3(ix, iy, jz), 0).xyz;
+    const vec3 c101 = texelFetch(lut, ivec3(jx, iy, jz), 0).xyz;
+    const vec3 c110 = texelFetch(lut, ivec3(ix, jy, jz), 0).xyz;
+    const vec3 c111 = texelFetch(lut, ivec3(jx, jy, jz), 0).xyz;
 
     const vec3 c00x = (1.0 - fx) * c000 + fx * c001;
     const vec3 c01x = (1.0 - fx) * c010 + fx * c011;

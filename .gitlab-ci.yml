@@ -113,6 +113,8 @@ stages:
 .windows-test-job:
   stage: test
   script:
+    - echo "Cleaning repository..."
+    - git clean -fx -e $BIN_DIR
     - echo "Running tests..."
     - cd tests
     - '& "../$BIN_DIR/test_Ray" $TEST_ARGS.split(" ") $AUX_TEST_ARGS.split(" ")'
@@ -131,6 +133,8 @@ stages:
 .windows-perf-test-job:
   stage: test
   script:
+    - echo "Cleaning repository..."
+    - '& git clean -fx -e "$BIN_DIR"'
     - echo "Running tests..."
     - cd tests
     - '& "../$BIN_DIR/test_Ray" $AUX_TEST_ARGS.split(" ")'
@@ -149,6 +153,8 @@ stages:
 .windows-sde-test-job:
   stage: test
   script:
+    - echo "Cleaning repository..."
+    - '& git clean -fx -e "$BIN_DIR"'
     - echo "Running tests..."
     - cd tests
     - '& "sde" $SDE_TEST_ARGS.split(" ") -- ../$BIN_DIR/test_Ray $AUX_TEST_ARGS.split(" ")'
@@ -167,6 +173,8 @@ stages:
 .windows-test-asan-job:
   stage: test
   script:
+    - echo "Cleaning repository..."
+    - '& git clean -fx -e "$BIN_DIR"'
     - echo "Running tests..."
     - cd tests
     - '& "../$BIN_DIR/test_Ray-asan" $AUX_TEST_ARGS.split(" ")'
@@ -185,6 +193,8 @@ stages:
 .test-job:
   stage: test
   script:
+    - echo "Cleaning repository..."
+    - git clean -fx -e $BIN_DIR
     - echo "Running tests..."
     - cd tests
     - ../$BIN_DIR/test_Ray $TEST_ARGS $AUX_TEST_ARGS
@@ -400,7 +410,7 @@ windows-arm64-gpu-adreno-test-job:
 windows-arm64-cpu-perf-test-job:
   variables:
     BIN_DIR: windows-arm64
-    AUX_TEST_ARGS: '--nogpu --time_limit 12.4'
+    AUX_TEST_ARGS: '--nogpu --time_limit 16.2'
   extends:
     - .windows-perf-test-job
   needs:
@@ -413,7 +423,7 @@ windows-arm64-cpu-perf-test-job:
 windows-arm64-gpu-perf-test-job:
   variables:
     BIN_DIR: windows-arm64
-    AUX_TEST_ARGS: '--nocpu --time_limit 26.4'
+    AUX_TEST_ARGS: '--nocpu --time_limit 36.5'
   extends:
     - .windows-perf-test-job
   needs:

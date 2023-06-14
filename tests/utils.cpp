@@ -123,8 +123,6 @@ std::unique_ptr<uint8_t[]> ReadTGAFile(const void *data, const int data_len, int
 }
 
 std::vector<uint8_t> LoadTGA(const char file_name[], int &w, int &h) {
-    std::vector<uint8_t> tex_data;
-
     std::ifstream in_file(file_name, std::ios::binary);
     if (!in_file) {
         return {};
@@ -143,24 +141,18 @@ std::vector<uint8_t> LoadTGA(const char file_name[], int &w, int &h) {
         return {};
     }
 
+    std::vector<uint8_t> tex_data;
+
     if (bpp == 24) {
-        for (int y = 0; y < h; y++) {
-            for (int x = 0; x < w; x++) {
-                tex_data.push_back(pixels[3 * (y * w + x)]);
-                tex_data.push_back(pixels[3 * (y * w + x) + 1]);
-                tex_data.push_back(pixels[3 * (y * w + x) + 2]);
-                tex_data.push_back(255);
-            }
+        tex_data.resize(w * h * 4);
+        for (int i = 0; i < w * h; ++i) {
+            tex_data[4 * i + 0] = pixels[3 * i + 0];
+            tex_data[4 * i + 1] = pixels[3 * i + 1];
+            tex_data[4 * i + 2] = pixels[3 * i + 2];
+            tex_data[4 * i + 3] = 255;
         }
     } else if (bpp == 32) {
-        for (int y = 0; y < h; y++) {
-            for (int x = 0; x < w; x++) {
-                tex_data.push_back(pixels[4 * (y * w + x)]);
-                tex_data.push_back(pixels[4 * (y * w + x) + 1]);
-                tex_data.push_back(pixels[4 * (y * w + x) + 2]);
-                tex_data.push_back(pixels[4 * (y * w + x) + 3]);
-            }
-        }
+        tex_data.assign(pixels.get(), pixels.get() + 4 * w * h);
     } else {
         assert(false);
     }

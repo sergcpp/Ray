@@ -2416,6 +2416,17 @@ bool Ray::Dx::RequiresManualSRGBConversion(const eTexFormat format) {
     return dxgi_format == ToSRGBFormat(dxgi_format);
 }
 
+bool Ray::Dx::CanBeBlockCompressed(int w, int h, const int mip_count, const eTexBlock block) {
+    bool ret = true;
+    for (int i = 0; i < mip_count && ret; ++i) {
+        // make sure resolution is multiple of block size
+        ret &= (w % g_block_res[int(block)][0]) == 0 && (h % g_block_res[int(block)][1]) == 0;
+        w /= 2;
+        h /= 2;
+    }
+    return ret;
+}
+
 #ifdef _MSC_VER
 #pragma warning(pop)
 #endif

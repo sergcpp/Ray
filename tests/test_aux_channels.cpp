@@ -178,13 +178,16 @@ void test_aux_channels(const char *arch_list[], const char *preferred_device) {
             printf("(PSNR: %.2f/%.2f dB, %.2f/%.2f dB, %.2f/%.2f dB)\n", base_color_psnr, BaseColor_MinPSNR,
                    normals_psnr, Normals_MinPSNR, depth_psnr, Depth_MinPSNR);
 
-            const char *type_name = Ray::RendererTypeName(rt);
+            std::string type_name = Ray::RendererTypeName(rt);
+            if (use_hwrt) {
+                type_name += "_HWRT";
+            }
 
-            snprintf(name_buf, sizeof(name_buf), "test_data/%s/%s_base_color_out.tga", TestName, type_name);
+            snprintf(name_buf, sizeof(name_buf), "test_data/%s/%s_base_color_out.tga", TestName, type_name.c_str());
             WriteTGA(&base_color_data_u8[0], test_img_w, test_img_h, 3, name_buf);
-            snprintf(name_buf, sizeof(name_buf), "test_data/%s/%s_normals_out.tga", TestName, type_name);
+            snprintf(name_buf, sizeof(name_buf), "test_data/%s/%s_normals_out.tga", TestName, type_name.c_str());
             WriteTGA(&normals_data_u8[0], test_img_w, test_img_h, 3, name_buf);
-            snprintf(name_buf, sizeof(name_buf), "test_data/%s/%s_depth_out.tga", TestName, type_name);
+            snprintf(name_buf, sizeof(name_buf), "test_data/%s/%s_depth_out.tga", TestName, type_name.c_str());
             WriteTGA(&depth_data_u8[0], test_img_w, test_img_h, 3, name_buf);
 
             require(base_color_psnr >= BaseColor_MinPSNR);

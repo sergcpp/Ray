@@ -119,9 +119,5 @@ void Ray::LinearAlloc::Free(const uint32_t offset, const uint32_t size) {
 
 void Ray::LinearAlloc::Clear() {
     // Mark all blocks as free
-    for (uint32_t i = 0; i < block_count_; ++i) {
-        const int xword_index = i / BitmapGranularity;
-        const int bit_index = i % BitmapGranularity;
-        bitmap_[xword_index] |= (1ull << bit_index);
-    }
+    memset(bitmap_, 0xff, block_count_ / CHAR_BIT);
 }

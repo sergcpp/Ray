@@ -65,4 +65,6 @@ bool RendererSupportsMultithreading(const eRendererType rt) {
         return false;
     }
 }
+
+bool RendererSupportsHWRT(eRendererType rt) { return rt == eRendererType::Vulkan || rt == eRendererType::DirectX12; }
 } // namespace Ray
