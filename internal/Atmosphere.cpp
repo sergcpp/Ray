@@ -24,7 +24,7 @@
 #include <cmath>
 
 namespace Ray {
-const float ATMOSPHERE_EPS = 1e-6f;
+// const float ATMOSPHERE_EPS = 1e-6f;
 // #define INFINITY 1.0 / 0.0
 const float PLANET_RADIUS = 6371000.0f;
 const Ref::simd_fvec4 PLANET_CENTER = Ref::simd_fvec4(0, -PLANET_RADIUS, 0, 0);
