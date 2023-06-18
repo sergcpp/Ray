@@ -285,13 +285,13 @@ bool Ray::Vk::TextureAtlas::Resize(const int pages_count) {
             real_format_ = eTexFormat::RawRGBA8888;
         }
 
-        VkResult res = vkCreateImage(ctx_->device(), &img_info, nullptr, &new_img);
+        VkResult res = ctx_->api().vkCreateImage(ctx_->device(), &img_info, nullptr, &new_img);
         if (res != VK_SUCCESS) {
             throw std::runtime_error("Failed to create image!");
         }
 
         VkMemoryRequirements img_tex_mem_req = {};
-        vkGetImageMemoryRequirements(ctx_->device(), new_img, &img_tex_mem_req);
+        ctx_->api().vkGetImageMemoryRequirements(ctx_->device(), new_img, &img_tex_mem_req);
 
         VkMemoryAllocateInfo img_alloc_info = {VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};
         img_alloc_info.allocationSize = img_tex_mem_req.size;
@@ -303,7 +303,7 @@ bool Ray::Vk::TextureAtlas::Resize(const int pages_count) {
                                                         img_tex_desired_mem_flags, uint32_t(img_tex_mem_req.size));
         res = VK_ERROR_OUT_OF_DEVICE_MEMORY;
         if (img_alloc_info.memoryTypeIndex != 0xffffffff) {
-            res = vkAllocateMemory(ctx_->device(), &img_alloc_info, nullptr, &new_mem);
+            res = ctx_->api().vkAllocateMemory(ctx_->device(), &img_alloc_info, nullptr, &new_mem);
         }
         if (res == VK_ERROR_OUT_OF_DEVICE_MEMORY) {
             ctx_->log()->Warning("Not enough device memory, falling back to CPU RAM!");
@@ -311,21 +311,21 @@ bool Ray::Vk::TextureAtlas::Resize(const int pages_count) {
 
             img_alloc_info.memoryTypeIndex = FindMemoryType(&ctx_->mem_properties(), img_tex_type_bits,
                                                             img_tex_desired_mem_flags, uint32_t(img_tex_mem_req.size));
-            res = vkAllocateMemory(ctx_->device(), &img_alloc_info, nullptr, &new_mem);
+            res = ctx_->api().vkAllocateMemory(ctx_->device(), &img_alloc_info, nullptr, &new_mem);
             if (res == VK_ERROR_OUT_OF_DEVICE_MEMORY) {
                 img_tex_desired_mem_flags |= VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
 
                 img_alloc_info.memoryTypeIndex =
                     FindMemoryType(&ctx_->mem_properties(), img_tex_type_bits, img_tex_desired_mem_flags,
                                    uint32_t(img_tex_mem_req.size));
-                res = vkAllocateMemory(ctx_->device(), &img_alloc_info, nullptr, &new_mem);
+                res = ctx_->api().vkAllocateMemory(ctx_->device(), &img_alloc_info, nullptr, &new_mem);
             }
         }
         if (res != VK_SUCCESS) {
             throw std::runtime_error("Failed to allocate memory!");
         }
 
-        res = vkBindImageMemory(ctx_->device(), new_img, new_mem, 0);
+        res = ctx_->api().vkBindImageMemory(ctx_->device(), new_img, new_mem, 0);
         if (res != VK_SUCCESS) {
             throw std::runtime_error("Failed to bind memory!");
         }
@@ -336,7 +336,7 @@ bool Ray::Vk::TextureAtlas::Resize(const int pages_count) {
     name_info.objectType = VK_OBJECT_TYPE_IMAGE;
     name_info.objectHandle = uint64_t(new_img);
     name_info.pObjectName = name_.c_str();
-    vkSetDebugUtilsObjectNameEXT(ctx_->device(), &name_info);
+    ctx_->api().vkSetDebugUtilsObjectNameEXT(ctx_->device(), &name_info);
 #endif
 
     { // create default image view
@@ -357,7 +357,7 @@ bool Ray::Vk::TextureAtlas::Resize(const int pages_count) {
             view_info.components.a = VK_COMPONENT_SWIZZLE_R;
         }
 
-        const VkResult res = vkCreateImageView(ctx_->device(), &view_info, nullptr, &new_img_view);
+        const VkResult res = ctx_->api().vkCreateImageView(ctx_->device(), &view_info, nullptr, &new_img_view);
         if (res != VK_SUCCESS) {
             throw std::runtime_error("Failed to create image view!");
         }
@@ -414,10 +414,11 @@ bool Ray::Vk::TextureAtlas::Resize(const int pages_count) {
             dst_stages |= VKPipelineStagesForState(eResState::CopyDst);
         }
 
-        VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+        VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
-        vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, dst_stages, 0, 0,
-                             nullptr, 0, nullptr, uint32_t(img_barriers.size()), img_barriers.cdata());
+        ctx_->api().vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                         dst_stages, 0, 0, nullptr, 0, nullptr, uint32_t(img_barriers.size()),
+                                         img_barriers.cdata());
 
         resource_state = eResState::CopySrc;
         new_resource_state = eResState::CopyDst;
@@ -443,20 +444,20 @@ bool Ray::Vk::TextureAtlas::Resize(const int pages_count) {
         reg.dstOffset = {0, 0, 0};
         reg.extent = {uint32_t(res_[0]), uint32_t(res_[1]), 1u};
 
-        vkCmdCopyImage(cmd_buf, img_, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, new_img,
-                       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &reg);
+        ctx_->api().vkCmdCopyImage(cmd_buf, img_, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, new_img,
+                                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &reg);
 
-        EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+        EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 
         // destroy old image
-        vkDestroyImageView(ctx_->device(), img_view_, nullptr);
-        vkDestroyImage(ctx_->device(), img_, nullptr);
-        vkFreeMemory(ctx_->device(), mem_, nullptr);
+        ctx_->api().vkDestroyImageView(ctx_->device(), img_view_, nullptr);
+        ctx_->api().vkDestroyImage(ctx_->device(), img_, nullptr);
+        ctx_->api().vkFreeMemory(ctx_->device(), mem_, nullptr);
     } else if (img_view_) {
         // destroy temp dummy texture
-        vkDestroyImageView(ctx_->device(), img_view_, nullptr);
-        vkDestroyImage(ctx_->device(), img_, nullptr);
-        vkFreeMemory(ctx_->device(), mem_, nullptr);
+        ctx_->api().vkDestroyImageView(ctx_->device(), img_view_, nullptr);
+        ctx_->api().vkDestroyImage(ctx_->device(), img_, nullptr);
+        ctx_->api().vkFreeMemory(ctx_->device(), mem_, nullptr);
     }
 
     if (new_resource_state == eResState::Undefined) {
@@ -480,13 +481,13 @@ bool Ray::Vk::TextureAtlas::Resize(const int pages_count) {
 
         new_resource_state = eResState::ShaderResource;
 
-        VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+        VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
-        vkCmdPipelineBarrier(cmd_buf, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                             VKPipelineStagesForState(eResState::ShaderResource), 0, 0, nullptr, 0, nullptr,
-                             uint32_t(img_barriers.size()), img_barriers.cdata());
+        ctx_->api().vkCmdPipelineBarrier(cmd_buf, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                         VKPipelineStagesForState(eResState::ShaderResource), 0, 0, nullptr, 0, nullptr,
+                                         uint32_t(img_barriers.size()), img_barriers.cdata());
 
-        EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+        EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
     }
 
     img_ = new_img;
@@ -511,7 +512,7 @@ int Ray::Vk::TextureAtlas::DownsampleRegion(const int src_page, const int src_po
         return -1;
     }
 
-    VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+    VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
     {
         VkPipelineStageFlags src_stages = 0, dst_stages = 0;
@@ -537,8 +538,9 @@ int Ray::Vk::TextureAtlas::DownsampleRegion(const int src_page, const int src_po
             dst_stages |= VK_PIPELINE_STAGE_TRANSFER_BIT;
         }
 
-        vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, dst_stages, 0, 0,
-                             nullptr, 0, nullptr, uint32_t(img_barriers.size()), img_barriers.cdata());
+        ctx_->api().vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                         dst_stages, 0, 0, nullptr, 0, nullptr, uint32_t(img_barriers.size()),
+                                         img_barriers.cdata());
     }
 
     {
@@ -558,8 +560,8 @@ int Ray::Vk::TextureAtlas::DownsampleRegion(const int src_page, const int src_po
         main_reg.dstOffsets[0] = {dst_pos[0] + 1, dst_pos[1] + 1, 0};
         main_reg.dstOffsets[1] = {dst_pos[0] + 1 + dst_res[0], dst_pos[1] + 1 + dst_res[1], 1};
 
-        vkCmdBlitImage(cmd_buf, img_, VK_IMAGE_LAYOUT_GENERAL, img_, VK_IMAGE_LAYOUT_GENERAL, 1, &main_reg,
-                       VK_FILTER_LINEAR);
+        ctx_->api().vkCmdBlitImage(cmd_buf, img_, VK_IMAGE_LAYOUT_GENERAL, img_, VK_IMAGE_LAYOUT_GENERAL, 1, &main_reg,
+                                   VK_FILTER_LINEAR);
     }
 
     // TODO: try to do the same without barrier (e.g. downsample borders from original image)
@@ -587,8 +589,9 @@ int Ray::Vk::TextureAtlas::DownsampleRegion(const int src_page, const int src_po
             dst_stages |= VK_PIPELINE_STAGE_TRANSFER_BIT;
         }
 
-        vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, dst_stages, 0, 0,
-                             nullptr, 0, nullptr, uint32_t(img_barriers.size()), img_barriers.cdata());
+        ctx_->api().vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                         dst_stages, 0, 0, nullptr, 0, nullptr, uint32_t(img_barriers.size()),
+                                         img_barriers.cdata());
     }
 
     SmallVector<VkImageBlit, 8> regs;
@@ -730,8 +733,8 @@ int Ray::Vk::TextureAtlas::DownsampleRegion(const int src_page, const int src_po
         reg.dstOffsets[1] = {dst_pos[0] + dst_res[0] + 2, dst_pos[1] + dst_res[1] + 2, 1};
     }
 
-    vkCmdBlitImage(cmd_buf, img_, VK_IMAGE_LAYOUT_GENERAL, img_, VK_IMAGE_LAYOUT_GENERAL, uint32_t(regs.size()),
-                   regs.cdata(), VK_FILTER_LINEAR);
+    ctx_->api().vkCmdBlitImage(cmd_buf, img_, VK_IMAGE_LAYOUT_GENERAL, img_, VK_IMAGE_LAYOUT_GENERAL,
+                               uint32_t(regs.size()), regs.cdata(), VK_FILTER_LINEAR);
 
     {
         VkPipelineStageFlags src_stages = 0, dst_stages = 0;
@@ -757,11 +760,12 @@ int Ray::Vk::TextureAtlas::DownsampleRegion(const int src_page, const int src_po
             dst_stages |= VKPipelineStagesForState(resource_state);
         }
 
-        vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, dst_stages, 0, 0,
-                             nullptr, 0, nullptr, uint32_t(img_barriers.size()), img_barriers.cdata());
+        ctx_->api().vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                         dst_stages, 0, 0, nullptr, 0, nullptr, uint32_t(img_barriers.size()),
+                                         img_barriers.cdata());
     }
 
-    EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+    EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 
     return dst_page;
 }
@@ -842,11 +846,11 @@ void Ray::Vk::TextureAtlas::WritePageData(const int page, const int posx, const 
         dst_stages |= VKPipelineStagesForState(eResState::CopyDst);
     }
 
-    VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+    VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
-    vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, dst_stages, 0, 0,
-                         nullptr, uint32_t(buf_barriers.size()), buf_barriers.cdata(), uint32_t(img_barriers.size()),
-                         img_barriers.cdata());
+    ctx_->api().vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, dst_stages,
+                                     0, 0, nullptr, uint32_t(buf_barriers.size()), buf_barriers.cdata(),
+                                     uint32_t(img_barriers.size()), img_barriers.cdata());
 
     temp_sbuf.resource_state = eResState::CopySrc;
     this->resource_state = eResState::CopyDst;
@@ -864,9 +868,10 @@ void Ray::Vk::TextureAtlas::WritePageData(const int page, const int posx, const 
     region.imageOffset = {int32_t(posx), int32_t(posy), 0};
     region.imageExtent = {uint32_t(sizex), uint32_t(sizey), 1};
 
-    vkCmdCopyBufferToImage(cmd_buf, temp_sbuf.vk_handle(), img_, VKImageLayoutForState(eResState::CopyDst), 1, &region);
+    ctx_->api().vkCmdCopyBufferToImage(cmd_buf, temp_sbuf.vk_handle(), img_, VKImageLayoutForState(eResState::CopyDst),
+                                       1, &region);
 
-    EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+    EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 
     temp_sbuf.FreeImmediate();
 }
@@ -915,9 +920,9 @@ void Ray::Vk::TextureAtlas::CopyRegionTo(const int page, const int x, const int 
     }
 
     if (!buf_barriers.empty() || !img_barriers.empty()) {
-        vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, dst_stages, 0, 0,
-                             nullptr, uint32_t(buf_barriers.size()), buf_barriers.cdata(),
-                             uint32_t(img_barriers.size()), img_barriers.cdata());
+        ctx_->api().vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                         dst_stages, 0, 0, nullptr, uint32_t(buf_barriers.size()), buf_barriers.cdata(),
+                                         uint32_t(img_barriers.size()), img_barriers.cdata());
     }
 
     resource_state = eResState::CopySrc;
@@ -937,7 +942,8 @@ void Ray::Vk::TextureAtlas::CopyRegionTo(const int page, const int x, const int 
     region.imageOffset = {int32_t(x), int32_t(y), 0};
     region.imageExtent = {uint32_t(w), uint32_t(h), 1};
 
-    vkCmdCopyImageToBuffer(cmd_buf, vk_image(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dst_buf.vk_handle(), 1, &region);
+    ctx_->api().vkCmdCopyImageToBuffer(cmd_buf, vk_image(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dst_buf.vk_handle(),
+                                       1, &region);
 }
 
 #undef _MIN

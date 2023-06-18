@@ -367,7 +367,7 @@ bool Ray::Dx::TextureAtlas::Resize(const int pages_count) {
             new_barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
         }
 
-        CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+        CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
         cmd_buf->ResourceBarrier(UINT(barriers.size()), barriers.data());
 
@@ -388,7 +388,7 @@ bool Ray::Dx::TextureAtlas::Resize(const int pages_count) {
             cmd_buf->CopyTextureRegion(&dst_location, 0, 0, 0, &src_location, nullptr);
         }
 
-        EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+        EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 
         // destroy old image
         img_->Release();
@@ -412,11 +412,11 @@ bool Ray::Dx::TextureAtlas::Resize(const int pages_count) {
 
         new_resource_state = eResState::ShaderResource;
 
-        CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+        CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
         cmd_buf->ResourceBarrier(UINT(barriers.size()), barriers.data());
 
-        EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+        EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
     }
 
     img_ = new_img;
@@ -504,7 +504,7 @@ void Ray::Dx::TextureAtlas::WritePageData(const int page, const int posx, const 
         new_barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
     }
 
-    CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+    CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
     if (!barriers.empty()) {
         cmd_buf->ResourceBarrier(UINT(barriers.size()), barriers.data());
@@ -530,7 +530,7 @@ void Ray::Dx::TextureAtlas::WritePageData(const int page, const int posx, const 
 
     cmd_buf->CopyTextureRegion(&dst_loc, posx, posy, 0, &src_loc, nullptr);
 
-    EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+    EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 
     temp_sbuf.FreeImmediate();
 }

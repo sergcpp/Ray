@@ -2,19 +2,21 @@
 
 #include <cstdint>
 
-#include "VK.h"
+#include "Api.h"
 
 namespace Ray {
 namespace Vk {
+class Context;
+
 enum class WaitResult { Success, Timeout, Fail };
 
 class SyncFence {
-    VkDevice device_ = VK_NULL_HANDLE;
+    Context *ctx_ = nullptr;
     VkFence fence_ = VK_NULL_HANDLE;
 
   public:
     SyncFence() = default;
-    SyncFence(VkDevice device, VkFence fence) : device_(device), fence_(fence) {}
+    SyncFence(Context *ctx, VkFence fence) : ctx_(ctx), fence_(fence) {}
     ~SyncFence();
 
     SyncFence(const SyncFence &rhs) = delete;
@@ -25,7 +27,7 @@ class SyncFence {
     explicit operator bool() const { return fence_ != VK_NULL_HANDLE; }
     VkFence fence() { return fence_; }
 
-    bool signaled() const { return vkGetFenceStatus(device_, fence_) == VK_SUCCESS; }
+    bool signaled() const;
 
     bool Reset();
 

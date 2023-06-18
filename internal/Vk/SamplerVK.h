@@ -3,7 +3,6 @@
 #include <utility>
 
 #include "../SamplingParams.h"
-#include "VK.h"
 
 namespace Ray {
 namespace Vk {

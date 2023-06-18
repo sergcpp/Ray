@@ -3,7 +3,6 @@
 #include <cstdint>
 
 #include "../Span.h"
-#include "VK.h"
 
 #if (VK_USE_64_BIT_PTR_DEFINES == 1)
 struct VkDescriptorSet_T;

@@ -137,7 +137,7 @@ bool Ray::Vk::RenderPass::Init(Context *ctx, Span<const RenderTargetInfo> _color
     render_pass_create_info.subpassCount = 1;
     render_pass_create_info.pSubpasses = &subpass;
 
-    const VkResult res = vkCreateRenderPass(ctx->device(), &render_pass_create_info, nullptr, &handle_);
+    const VkResult res = ctx->api().vkCreateRenderPass(ctx->device(), &render_pass_create_info, nullptr, &handle_);
     if (res != VK_SUCCESS) {
         log->Error("Failed to create render pass!");
         return false;

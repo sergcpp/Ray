@@ -21,13 +21,15 @@ struct VtxAttribDesc {
 inline bool operator==(const VtxAttribDesc &lhs, const VtxAttribDesc &rhs) {
     return std::memcmp(&lhs, &rhs, sizeof(VtxAttribDesc)) == 0;
 }
-
+struct Api;
 class VertexInput {
+    const Api *api_;
+
   public:
     SmallVector<VtxAttribDesc, 8> attribs;
     BufHandle elem_buf;
 
-    VertexInput();
+    VertexInput(Context *ctx);
     VertexInput(const VertexInput &rhs) = delete;
     VertexInput(VertexInput &&rhs) noexcept { (*this) = std::move(rhs); }
     ~VertexInput();

@@ -37,8 +37,8 @@ Ray::Vk::Scene::~Scene() {
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
     bindless_textures_.clear();
-    vkDestroyDescriptorSetLayout(ctx_->device(), bindless_tex_data_.descr_layout, nullptr);
-    vkDestroyDescriptorSetLayout(ctx_->device(), bindless_tex_data_.rt_descr_layout, nullptr);
+    ctx_->api().vkDestroyDescriptorSetLayout(ctx_->device(), bindless_tex_data_.descr_layout, nullptr);
+    ctx_->api().vkDestroyDescriptorSetLayout(ctx_->device(), bindless_tex_data_.rt_descr_layout, nullptr);
 }
 
 void Ray::Vk::Scene::GenerateTextureMips_nolock() {
@@ -169,8 +169,8 @@ void Ray::Vk::Scene::PrepareBindlessTextures_nolock() {
         extended_info.pBindingFlags = &bind_flag;
         layout_info.pNext = &extended_info;
 
-        const VkResult res =
-            vkCreateDescriptorSetLayout(ctx_->device(), &layout_info, nullptr, &bindless_tex_data_.descr_layout);
+        const VkResult res = ctx_->api().vkCreateDescriptorSetLayout(ctx_->device(), &layout_info, nullptr,
+                                                                     &bindless_tex_data_.descr_layout);
         if (res != VK_SUCCESS) {
             ctx_->log()->Error("Failed to create descriptor set layout!");
         }
@@ -195,8 +195,8 @@ void Ray::Vk::Scene::PrepareBindlessTextures_nolock() {
         extended_info.pBindingFlags = &bind_flag;
         layout_info.pNext = &extended_info;
 
-        const VkResult res =
-            vkCreateDescriptorSetLayout(ctx_->device(), &layout_info, nullptr, &bindless_tex_data_.rt_descr_layout);
+        const VkResult res = ctx_->api().vkCreateDescriptorSetLayout(ctx_->device(), &layout_info, nullptr,
+                                                                     &bindless_tex_data_.rt_descr_layout);
         if (res != VK_SUCCESS) {
             ctx_->log()->Error("Failed to create descriptor set layout!");
         }
@@ -214,9 +214,9 @@ void Ray::Vk::Scene::PrepareBindlessTextures_nolock() {
             img_transitions.emplace_back(&tex, eResState::ShaderResource);
         }
 
-        CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+        CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
         TransitionResourceStates(cmd_buf, AllStages, AllStages, img_transitions);
-        EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+        EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
     }
 
     for (uint32_t i = 0; i < bindless_textures_.capacity(); ++i) {
@@ -237,11 +237,11 @@ void Ray::Vk::Scene::PrepareBindlessTextures_nolock() {
         descr_write.pTexelBufferView = nullptr;
         descr_write.pNext = nullptr;
 
-        vkUpdateDescriptorSets(ctx_->device(), 1, &descr_write, 0, nullptr);
+        ctx_->api().vkUpdateDescriptorSets(ctx_->device(), 1, &descr_write, 0, nullptr);
 
         descr_write.dstSet = bindless_tex_data_.rt_descr_set;
 
-        vkUpdateDescriptorSets(ctx_->device(), 1, &descr_write, 0, nullptr);
+        ctx_->api().vkUpdateDescriptorSets(ctx_->device(), 1, &descr_write, 0, nullptr);
     }
 }
 
@@ -312,9 +312,9 @@ void Ray::Vk::Scene::RebuildHWAccStructures_nolock() {
         new_blas.build_info.pGeometries = new_blas.geometries.cdata();
 
         new_blas.size_info = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR};
-        vkGetAccelerationStructureBuildSizesKHR(ctx_->device(), VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
-                                                &new_blas.build_info, new_blas.prim_counts.cdata(),
-                                                &new_blas.size_info);
+        ctx_->api().vkGetAccelerationStructureBuildSizesKHR(
+            ctx_->device(), VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &new_blas.build_info,
+            new_blas.prim_counts.cdata(), &new_blas.size_info);
 
         // make sure we will not use this potentially stale pointer
         new_blas.build_info.pGeometries = nullptr;
@@ -343,7 +343,7 @@ void Ray::Vk::Scene::RebuildHWAccStructures_nolock() {
         query_pool_create_info.queryType = VK_QUERY_TYPE_ACCELERATION_STRUCTURE_COMPACTED_SIZE_KHR;
 
         VkQueryPool query_pool;
-        VkResult res = vkCreateQueryPool(ctx_->device(), &query_pool_create_info, nullptr, &query_pool);
+        VkResult res = ctx_->api().vkCreateQueryPool(ctx_->device(), &query_pool_create_info, nullptr, &query_pool);
         if (res != VK_SUCCESS) {
             ctx_->log()->Error("Failed to create query pool!");
         }
@@ -353,9 +353,9 @@ void Ray::Vk::Scene::RebuildHWAccStructures_nolock() {
 
         { // Submit build commands
             VkDeviceSize acc_buf_offset = 0;
-            CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+            CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
-            vkCmdResetQueryPool(cmd_buf, query_pool, 0, uint32_t(all_blases.size()));
+            ctx_->api().vkCmdResetQueryPool(cmd_buf, query_pool, 0, uint32_t(all_blases.size()));
 
             for (int i = 0; i < int(all_blases.size()); ++i) {
                 VkAccelerationStructureCreateInfoKHR acc_create_info = {
@@ -367,7 +367,8 @@ void Ray::Vk::Scene::RebuildHWAccStructures_nolock() {
                 acc_buf_offset += align_up(acc_create_info.size, AccStructAlignment);
 
                 VkAccelerationStructureKHR acc_struct;
-                VkResult res = vkCreateAccelerationStructureKHR(ctx_->device(), &acc_create_info, nullptr, &acc_struct);
+                VkResult res = ctx_->api().vkCreateAccelerationStructureKHR(ctx_->device(), &acc_create_info, nullptr,
+                                                                            &acc_struct);
                 if (res != VK_SUCCESS) {
                     ctx_->log()->Error("Failed to create acceleration structure!");
                 }
@@ -383,33 +384,34 @@ void Ray::Vk::Scene::RebuildHWAccStructures_nolock() {
                 all_blases[i].build_info.scratchData.deviceAddress = scratch_addr;
 
                 const VkAccelerationStructureBuildRangeInfoKHR *build_ranges = all_blases[i].build_ranges.cdata();
-                vkCmdBuildAccelerationStructuresKHR(cmd_buf, 1, &all_blases[i].build_info, &build_ranges);
+                ctx_->api().vkCmdBuildAccelerationStructuresKHR(cmd_buf, 1, &all_blases[i].build_info, &build_ranges);
 
                 { // Place barrier
                     VkMemoryBarrier scr_buf_barrier = {VK_STRUCTURE_TYPE_MEMORY_BARRIER};
                     scr_buf_barrier.srcAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
                     scr_buf_barrier.dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
 
-                    vkCmdPipelineBarrier(cmd_buf, VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
-                                         VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR, 0, 1, &scr_buf_barrier,
-                                         0, nullptr, 0, nullptr);
+                    ctx_->api().vkCmdPipelineBarrier(cmd_buf, VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+                                                     VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR, 0, 1,
+                                                     &scr_buf_barrier, 0, nullptr, 0, nullptr);
                 }
 
-                vkCmdWriteAccelerationStructuresPropertiesKHR(
+                ctx_->api().vkCmdWriteAccelerationStructuresPropertiesKHR(
                     cmd_buf, 1, &all_blases[i].build_info.dstAccelerationStructure,
                     VK_QUERY_TYPE_ACCELERATION_STRUCTURE_COMPACTED_SIZE_KHR, query_pool, i);
             }
 
-            EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+            EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf,
+                                  ctx_->temp_command_pool());
         }
 
         std::vector<VkDeviceSize> compact_sizes(all_blases.size());
-        res = vkGetQueryPoolResults(ctx_->device(), query_pool, 0, uint32_t(all_blases.size()),
-                                    all_blases.size() * sizeof(VkDeviceSize), compact_sizes.data(),
-                                    sizeof(VkDeviceSize), VK_QUERY_RESULT_WAIT_BIT);
+        res = ctx_->api().vkGetQueryPoolResults(ctx_->device(), query_pool, 0, uint32_t(all_blases.size()),
+                                                all_blases.size() * sizeof(VkDeviceSize), compact_sizes.data(),
+                                                sizeof(VkDeviceSize), VK_QUERY_RESULT_WAIT_BIT);
         assert(res == VK_SUCCESS);
 
-        vkDestroyQueryPool(ctx_->device(), query_pool, nullptr);
+        ctx_->api().vkDestroyQueryPool(ctx_->device(), query_pool, nullptr);
 
         VkDeviceSize total_compacted_size = 0;
         for (int i = 0; i < int(compact_sizes.size()); ++i) {
@@ -421,7 +423,7 @@ void Ray::Vk::Scene::RebuildHWAccStructures_nolock() {
 
         { // Submit compaction commands
             VkDeviceSize compact_acc_buf_offset = 0;
-            CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+            CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
             for (int i = 0; i < int(all_blases.size()); ++i) {
                 VkAccelerationStructureCreateInfoKHR acc_create_info = {
@@ -434,8 +436,8 @@ void Ray::Vk::Scene::RebuildHWAccStructures_nolock() {
                 compact_acc_buf_offset += align_up(acc_create_info.size, AccStructAlignment);
 
                 VkAccelerationStructureKHR compact_acc_struct;
-                const VkResult res =
-                    vkCreateAccelerationStructureKHR(ctx_->device(), &acc_create_info, nullptr, &compact_acc_struct);
+                const VkResult res = ctx_->api().vkCreateAccelerationStructureKHR(ctx_->device(), &acc_create_info,
+                                                                                  nullptr, &compact_acc_struct);
                 if (res != VK_SUCCESS) {
                     ctx_->log()->Error("Failed to create acceleration structure!");
                 }
@@ -445,7 +447,7 @@ void Ray::Vk::Scene::RebuildHWAccStructures_nolock() {
                 copy_info.src = blases_before_compaction[i].vk_handle();
                 copy_info.dst = compact_acc_struct;
 
-                vkCmdCopyAccelerationStructureKHR(cmd_buf, &copy_info);
+                ctx_->api().vkCmdCopyAccelerationStructureKHR(cmd_buf, &copy_info);
 
                 auto &vk_blas = rt_mesh_blases_[i].acc;
                 if (!vk_blas.Init(ctx_, compact_acc_struct)) {
@@ -453,7 +455,8 @@ void Ray::Vk::Scene::RebuildHWAccStructures_nolock() {
                 }
             }
 
-            EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+            EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf,
+                                  ctx_->temp_command_pool());
 
             for (auto &b : blases_before_compaction) {
                 b.FreeImmediate();
@@ -543,7 +546,7 @@ void Ray::Vk::Scene::RebuildHWAccStructures_nolock() {
 
     VkDeviceAddress instance_buf_addr = rt_instance_buf_.vk_device_address();
 
-    CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+    CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
     CopyBufferToBuffer(geo_data_stage_buf, 0, rt_geo_data_buf_, 0, geo_data_stage_buf.size(), cmd_buf);
     CopyBufferToBuffer(instance_stage_buf, 0, rt_instance_buf_, 0, instance_stage_buf.size(), cmd_buf);
@@ -553,9 +556,9 @@ void Ray::Vk::Scene::RebuildHWAccStructures_nolock() {
         mem_barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
         mem_barrier.dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
 
-        vkCmdPipelineBarrier(cmd_buf, VK_PIPELINE_STAGE_TRANSFER_BIT,
-                             VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR, 0, 1, &mem_barrier, 0, nullptr, 0,
-                             nullptr);
+        ctx_->api().vkCmdPipelineBarrier(cmd_buf, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                         VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR, 0, 1, &mem_barrier, 0,
+                                         nullptr, 0, nullptr);
     }
 
     Buffer tlas_scratch_buf;
@@ -584,8 +587,9 @@ void Ray::Vk::Scene::RebuildHWAccStructures_nolock() {
 
         VkAccelerationStructureBuildSizesInfoKHR size_info = {
             VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR};
-        vkGetAccelerationStructureBuildSizesKHR(ctx_->device(), VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
-                                                &tlas_build_info, &max_instance_count, &size_info);
+        ctx_->api().vkGetAccelerationStructureBuildSizesKHR(ctx_->device(),
+                                                            VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
+                                                            &tlas_build_info, &max_instance_count, &size_info);
 
         rt_tlas_buf_ = Buffer{"TLAS Buf", ctx_, eBufType::AccStructure, uint32_t(size_info.accelerationStructureSize)};
 
@@ -596,7 +600,8 @@ void Ray::Vk::Scene::RebuildHWAccStructures_nolock() {
         create_info.size = size_info.accelerationStructureSize;
 
         VkAccelerationStructureKHR tlas_handle;
-        VkResult res = vkCreateAccelerationStructureKHR(ctx_->device(), &create_info, nullptr, &tlas_handle);
+        VkResult res =
+            ctx_->api().vkCreateAccelerationStructureKHR(ctx_->device(), &create_info, nullptr, &tlas_handle);
         if (res != VK_SUCCESS) {
             ctx_->log()->Error("[SceneManager::InitHWAccStructures]: Failed to create acceleration structure!");
         }
@@ -615,14 +620,14 @@ void Ray::Vk::Scene::RebuildHWAccStructures_nolock() {
         range_info.transformOffset = 0;
 
         const VkAccelerationStructureBuildRangeInfoKHR *build_range = &range_info;
-        vkCmdBuildAccelerationStructuresKHR(cmd_buf, 1, &tlas_build_info, &build_range);
+        ctx_->api().vkCmdBuildAccelerationStructuresKHR(cmd_buf, 1, &tlas_build_info, &build_range);
 
         if (!rt_tlas_.Init(ctx_, tlas_handle)) {
             ctx_->log()->Error("[SceneManager::InitHWAccStructures]: Failed to init TLAS!");
         }
     }
 
-    EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+    EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 
     tlas_scratch_buf.FreeImmediate();
     instance_stage_buf.FreeImmediate();

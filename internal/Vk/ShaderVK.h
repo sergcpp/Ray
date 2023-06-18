@@ -5,7 +5,6 @@
 #include <string>
 
 #include "../SmallVector.h"
-#include "VK.h"
 
 namespace Ray {
 class ILog;
@@ -44,7 +43,7 @@ enum class eShaderType : uint8_t {
 };
 
 class Shader {
-    VkDevice device_ = VK_NULL_HANDLE;
+    Context *ctx_ = nullptr;
     VkShaderModule module_ = VK_NULL_HANDLE;
     eShaderType type_ = eShaderType::_Count;
     std::string name_;

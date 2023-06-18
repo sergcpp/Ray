@@ -30,6 +30,7 @@ class TextureAtlas {
                  int page_count = 0);
     ~TextureAtlas();
 
+    Context *ctx() const { return ctx_; }
     eTexFormat format() const { return format_; }
     eTexFormat real_format() const { return real_format_; }
     VkImage vk_image() const { return img_; }

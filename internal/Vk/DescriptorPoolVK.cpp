@@ -65,7 +65,7 @@ bool Ray::Vk::DescrPool::Init(const DescrSizes &sizes, const uint32_t sets_count
 
     sets_count_ = sets_count;
 
-    const VkResult res = vkCreateDescriptorPool(ctx_->device(), &pool_info, nullptr, &handle_);
+    const VkResult res = ctx_->api().vkCreateDescriptorPool(ctx_->device(), &pool_info, nullptr, &handle_);
     return res == VK_SUCCESS;
 }
 
@@ -87,7 +87,7 @@ VkDescriptorSet Ray::Vk::DescrPool::Alloc(const VkDescriptorSetLayout layout) {
     alloc_info.pSetLayouts = &layout;
 
     VkDescriptorSet descr_set = VK_NULL_HANDLE;
-    const VkResult res = vkAllocateDescriptorSets(ctx_->device(), &alloc_info, &descr_set);
+    const VkResult res = ctx_->api().vkAllocateDescriptorSets(ctx_->device(), &alloc_info, &descr_set);
     if (res != VK_SUCCESS) {
         ctx_->log()->Error("Failed to allocate descriptor set!");
         return VK_NULL_HANDLE;
@@ -100,7 +100,7 @@ VkDescriptorSet Ray::Vk::DescrPool::Alloc(const VkDescriptorSetLayout layout) {
 
 bool Ray::Vk::DescrPool::Reset() {
     next_free_ = 0;
-    const VkResult res = vkResetDescriptorPool(ctx_->device(), handle_, 0);
+    const VkResult res = ctx_->api().vkResetDescriptorPool(ctx_->device(), handle_, 0);
     return res == VK_SUCCESS;
 }
 

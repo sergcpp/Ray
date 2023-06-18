@@ -3,8 +3,8 @@
 #include <memory>
 
 #include "../SmallVector.h"
+#include "Api.h"
 #include "MemoryAllocatorVK.h"
-#include "VK.h"
 
 #define COUNT_OF(x) ((sizeof(x) / sizeof(0 [x])) / ((size_t)(!(sizeof(x) % sizeof(0 [x])))))
 
@@ -21,6 +21,7 @@ using CommandBuffer = VkCommandBuffer;
 
 class Context {
     ILog *log_ = nullptr;
+    Api api_;
     VkInstance instance_ = {};
 #ifndef NDEBUG
     VkDebugReportCallbackEXT debug_callback_ = {};
@@ -69,6 +70,7 @@ class Context {
     VkPhysicalDevice physical_device() const { return physical_device_; }
 
     ILog *log() const { return log_; }
+    const Api &api() const { return api_; }
 
     uint32_t max_combined_image_samplers() const { return max_combined_image_samplers_; }
     uint32_t max_sampled_images() const { return max_sampled_images_; }
@@ -127,16 +129,19 @@ class Context {
     static int QueryAvailableDevices(ILog *log, gpu_device_t out_devices[], int capacity);
 
   private:
-    static bool InitVkInstance(VkInstance &instance, const char *enabled_layers[], int enabled_layers_count, ILog *log);
-    static bool ChooseVkPhysicalDevice(VkPhysicalDevice &physical_device, VkPhysicalDeviceProperties &device_properties,
+    static bool InitVkInstance(const Api &api, VkInstance &instance, const char *enabled_layers[],
+                               int enabled_layers_count, ILog *log);
+    static bool ChooseVkPhysicalDevice(const Api &api, VkPhysicalDevice &physical_device,
+                                       VkPhysicalDeviceProperties &device_properties,
                                        VkPhysicalDeviceMemoryProperties &mem_properties,
                                        uint32_t &graphics_family_index, bool &out_raytracing_supported,
                                        bool &out_ray_query_supported, bool &out_dynamic_rendering_supported,
                                        const char *preferred_device, VkInstance instance, ILog *log);
-    static bool InitVkDevice(VkDevice &device, VkPhysicalDevice physical_device, uint32_t graphics_family_index,
-                             bool enable_raytracing, bool enable_ray_query, bool enable_dynamic_rendering,
-                             const char *enabled_layers[], int enabled_layers_count, ILog *log);
-    static bool InitCommandBuffers(VkCommandPool &command_pool, VkCommandPool &temp_command_pool,
+    static bool InitVkDevice(const Api &api, VkDevice &device, VkPhysicalDevice physical_device,
+                             uint32_t graphics_family_index, bool enable_raytracing, bool enable_ray_query,
+                             bool enable_dynamic_rendering, const char *enabled_layers[], int enabled_layers_count,
+                             ILog *log);
+    static bool InitCommandBuffers(const Api &api, VkCommandPool &command_pool, VkCommandPool &temp_command_pool,
                                    VkCommandBuffer &setup_cmd_buf, VkCommandBuffer draw_cmd_bufs[MaxFramesInFlight],
                                    VkSemaphore image_avail_semaphores[MaxFramesInFlight],
                                    VkSemaphore render_finished_semaphores[MaxFramesInFlight],
@@ -145,8 +150,8 @@ class Context {
                                    uint32_t graphics_family_index, ILog *log);
 };
 
-VkCommandBuffer BegSingleTimeCommands(VkDevice device, VkCommandPool temp_command_pool);
-void EndSingleTimeCommands(VkDevice device, VkQueue cmd_queue, VkCommandBuffer command_buf,
+VkCommandBuffer BegSingleTimeCommands(const Api &api, VkDevice device, VkCommandPool temp_command_pool);
+void EndSingleTimeCommands(const Api &api, VkDevice device, VkQueue cmd_queue, VkCommandBuffer command_buf,
                            VkCommandPool temp_command_pool);
 
 } // namespace Vk

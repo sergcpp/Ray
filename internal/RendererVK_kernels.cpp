@@ -98,8 +98,8 @@ void Ray::Vk::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const pass_
         bindings.emplace_back(eBindTarget::Sampler, Types::TEXTURES_SAMPLER_SLOT, bindless_tex.shared_sampler);
 
         assert(bindless_tex.descr_set);
-        vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, pi_intersect_scene_.layout(), 1, 1,
-                                &bindless_tex.descr_set, 0, nullptr);
+        ctx_->api().vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, pi_intersect_scene_.layout(), 1, 1,
+                                            &bindless_tex.descr_set, 0, nullptr);
     } else {
         bindings.emplace_back(eBindTarget::SBufRO, Types::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
         bindings.emplace_back(eBindTarget::Tex2DArraySampled, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
@@ -157,8 +157,9 @@ void Ray::Vk::Renderer::kernel_IntersectScene_RTPipe(CommandBuffer cmd_buf, cons
         {eBindTarget::SBufRW, IntersectScene::OUT_HITS_BUF_SLOT, out_hits}};
 
     assert(bindless_tex.rt_descr_set);
-    vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, pi_intersect_scene_rtpipe_.layout(), 1, 1,
-                            &bindless_tex.rt_descr_set, 0, nullptr);
+    ctx_->api().vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,
+                                        pi_intersect_scene_rtpipe_.layout(), 1, 1, &bindless_tex.rt_descr_set, 0,
+                                        nullptr);
 
     IntersectScene::Params uniform_params = {};
     uniform_params.rect[0] = rect.x;
@@ -204,8 +205,9 @@ void Ray::Vk::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const Buffe
         bindings.emplace_back(eBindTarget::Sampler, Types::TEXTURES_SAMPLER_SLOT, bindless_tex.shared_sampler);
 
         assert(bindless_tex.descr_set);
-        vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, pi_intersect_scene_indirect_.layout(), 1, 1,
-                                &bindless_tex.descr_set, 0, nullptr);
+        ctx_->api().vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE,
+                                            pi_intersect_scene_indirect_.layout(), 1, 1, &bindless_tex.descr_set, 0,
+                                            nullptr);
     } else {
         bindings.emplace_back(eBindTarget::SBufRO, Types::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
         bindings.emplace_back(eBindTarget::Tex2DArraySampled, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
@@ -258,8 +260,9 @@ void Ray::Vk::Renderer::kernel_IntersectScene_RTPipe(CommandBuffer cmd_buf, cons
         {eBindTarget::SBufRW, IntersectScene::OUT_HITS_BUF_SLOT, out_hits}};
 
     assert(bindless_tex.rt_descr_set);
-    vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,
-                            pi_intersect_scene_indirect_rtpipe_.layout(), 1, 1, &bindless_tex.rt_descr_set, 0, nullptr);
+    ctx_->api().vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,
+                                        pi_intersect_scene_indirect_rtpipe_.layout(), 1, 1, &bindless_tex.rt_descr_set,
+                                        0, nullptr);
 
     IntersectScene::Params uniform_params = {};
     uniform_params.node_index = node_index;
@@ -386,8 +389,8 @@ void Ray::Vk::Renderer::kernel_ShadePrimaryHits(
         bindings.emplace_back(eBindTarget::Sampler, Types::TEXTURES_SAMPLER_SLOT, bindless_tex.shared_sampler);
 
         assert(bindless_tex.descr_set);
-        vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, pi->layout(), 1, 1, &bindless_tex.descr_set, 0,
-                                nullptr);
+        ctx_->api().vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, pi->layout(), 1, 1,
+                                            &bindless_tex.descr_set, 0, nullptr);
     } else {
         bindings.emplace_back(eBindTarget::SBufRO, Types::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
         bindings.emplace_back(eBindTarget::Tex2DArraySampled, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
@@ -456,8 +459,8 @@ void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(
         bindings.emplace_back(eBindTarget::Sampler, Types::TEXTURES_SAMPLER_SLOT, bindless_tex.shared_sampler);
 
         assert(bindless_tex.descr_set);
-        vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, pi_shade_secondary_.layout(), 1, 1,
-                                &bindless_tex.descr_set, 0, nullptr);
+        ctx_->api().vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, pi_shade_secondary_.layout(), 1, 1,
+                                            &bindless_tex.descr_set, 0, nullptr);
     } else {
         bindings.emplace_back(eBindTarget::SBufRO, Types::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
         bindings.emplace_back(eBindTarget::Tex2DArraySampled, Types::TEXTURE_ATLASES_SLOT, tex_atlases);
@@ -508,8 +511,9 @@ void Ray::Vk::Renderer::kernel_IntersectSceneShadow(CommandBuffer cmd_buf, const
         bindings.emplace_back(eBindTarget::Sampler, Types::TEXTURES_SAMPLER_SLOT, bindless_tex.shared_sampler);
 
         assert(bindless_tex.descr_set);
-        vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, pi_intersect_scene_shadow_.layout(), 1, 1,
-                                &bindless_tex.descr_set, 0, nullptr);
+        ctx_->api().vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE,
+                                            pi_intersect_scene_shadow_.layout(), 1, 1, &bindless_tex.descr_set, 0,
+                                            nullptr);
     } else {
         bindings.emplace_back(eBindTarget::SBufRO, Types::TEXTURES_BUF_SLOT, sc_data.atlas_textures);
         bindings.emplace_back(eBindTarget::Tex2DArraySampled, Types::TEXTURE_ATLASES_SLOT, tex_atlases);

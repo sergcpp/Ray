@@ -49,12 +49,13 @@ template <typename T> class Vector {
                 temp_stage_buf.Unmap();
             }
 
-            VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+            VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
             CopyBufferToBuffer(temp_stage_buf, 0, buf_, uint32_t(sizeof(T) * size_), uint32_t(sizeof(T) * num),
                                cmd_buf);
 
-            EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+            EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf,
+                                  ctx_->temp_command_pool());
 
             temp_stage_buf.FreeImmediate();
         }
@@ -104,9 +105,9 @@ template <typename T> class Vector {
 
         Buffer temp_stage_buf{"Temp Stage", ctx_, eBufType::Readback, uint32_t(sizeof(T)), uint32_t(sizeof(T))};
 
-        VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+        VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
         CopyBufferToBuffer(buf_, uint32_t(sizeof(T) * i), temp_stage_buf, 0, uint32_t(sizeof(T)), cmd_buf);
-        EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+        EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 
         const uint8_t *ptr = temp_stage_buf.Map();
         memcpy(&v, ptr, sizeof(T));
@@ -122,9 +123,9 @@ template <typename T> class Vector {
 
         Buffer temp_stage_buf{"Temp Stage", ctx_, eBufType::Readback, uint32_t(sizeof(T) * count), uint32_t(sizeof(T))};
 
-        VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+        VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
         CopyBufferToBuffer(buf_, uint32_t(sizeof(T) * offset), temp_stage_buf, 0, uint32_t(sizeof(T) * count), cmd_buf);
-        EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+        EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 
         const uint8_t *ptr = temp_stage_buf.Map();
         memcpy(p, ptr, sizeof(T) * count);
@@ -144,9 +145,9 @@ template <typename T> class Vector {
         memcpy(ptr, &v, sizeof(T));
         temp_stage_buf.Unmap();
 
-        VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+        VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
         CopyBufferToBuffer(temp_stage_buf, 0, buf_, uint32_t(sizeof(T) * i), uint32_t(sizeof(T)), cmd_buf);
-        EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+        EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
     }
 
     void Set(const T *p, const size_t offset, const size_t count) {
@@ -162,9 +163,9 @@ template <typename T> class Vector {
         memcpy(ptr, p, sizeof(T) * count);
         temp_stage_buf.Unmap();
 
-        VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+        VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
         CopyBufferToBuffer(temp_stage_buf, 0, buf_, uint32_t(sizeof(T) * offset), uint32_t(sizeof(T) * count), cmd_buf);
-        EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+        EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
     }
 };
 } // namespace Vk

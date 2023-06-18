@@ -89,6 +89,7 @@ class Context {
     const std::string &device_name() const { return device_name_; }
 
     ILog *log() const { return log_; }
+    void *api() const { return nullptr; }
 
     uint32_t max_combined_image_samplers() const { return max_combined_image_samplers_; }
     uint32_t max_sampled_images() const { return max_sampled_images_; }
@@ -147,8 +148,8 @@ class Context {
     static int QueryAvailableDevices(ILog *log, gpu_device_t out_devices[], int capacity);
 };
 
-CommandBuffer BegSingleTimeCommands(ID3D12Device *device, ID3D12CommandAllocator *temp_command_allocator);
-void EndSingleTimeCommands(ID3D12Device *device, ID3D12CommandQueue *cmd_queue, CommandBuffer command_list,
+CommandBuffer BegSingleTimeCommands(void *api, ID3D12Device *device, ID3D12CommandAllocator *temp_command_allocator);
+void EndSingleTimeCommands(void *api, ID3D12Device *device, ID3D12CommandQueue *cmd_queue, CommandBuffer command_list,
                            ID3D12CommandAllocator *temp_command_allocator);
 
 } // namespace Dx

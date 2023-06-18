@@ -7,8 +7,6 @@
 #include "FenceVK.h"
 #include "ResourceVK.h"
 
-#include "VK.h"
-
 namespace Ray {
 class ILog;
 namespace Vk {

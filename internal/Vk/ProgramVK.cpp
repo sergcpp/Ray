@@ -62,7 +62,7 @@ Ray::Vk::Program &Ray::Vk::Program::operator=(Program &&rhs) noexcept {
 void Ray::Vk::Program::Destroy() {
     for (VkDescriptorSetLayout &l : descr_set_layouts_) {
         if (l) {
-            vkDestroyDescriptorSetLayout(ctx_->device(), l, nullptr);
+            ctx_->api().vkDestroyDescriptorSetLayout(ctx_->device(), l, nullptr);
         }
     }
     descr_set_layouts_.clear();
@@ -186,7 +186,7 @@ bool Ray::Vk::Program::InitDescrSetLayouts(ILog *log) {
 
         descr_set_layouts_.emplace_back();
         const VkResult res =
-            vkCreateDescriptorSetLayout(ctx_->device(), &layout_info, nullptr, &descr_set_layouts_.back());
+            ctx_->api().vkCreateDescriptorSetLayout(ctx_->device(), &layout_info, nullptr, &descr_set_layouts_.back());
 
         if (res != VK_SUCCESS) {
             log->Error("Failed to create descriptor set layout!");

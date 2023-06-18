@@ -2,7 +2,6 @@
 
 #include "../Span.h"
 #include "TextureVK.h"
-#include "VK.h"
 
 namespace Ray {
 namespace Vk {

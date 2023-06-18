@@ -206,6 +206,8 @@ set(SIMD_FILES internal/simd/aligned_allocator.h
 
 set(VK_SOURCE_FILES internal/Vk/AccStructureVK.h
                     internal/Vk/AccStructureVK.cpp
+                    internal/Vk/Api.h
+                    internal/Vk/Api.cpp
                     internal/Vk/BufferVK.h
                     internal/Vk/BufferVK.cpp
                     internal/Vk/ContextVK.h
@@ -237,8 +239,6 @@ set(VK_SOURCE_FILES internal/Vk/AccStructureVK.h
                     internal/Vk/TextureAtlasVK.cpp
                     internal/Vk/VertexInputVK.h
                     internal/Vk/VertexInputVK.cpp
-                    internal/Vk/VK.h
-                    internal/Vk/VKExt.cpp
                     third-party/SPIRV-Reflect/spirv_reflect.h
                     third-party/SPIRV-Reflect/spirv_reflect.c)
 

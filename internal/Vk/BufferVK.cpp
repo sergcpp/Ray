@@ -94,7 +94,7 @@ Ray::Vk::Buffer &Ray::Vk::Buffer::operator=(Buffer &&rhs) noexcept {
 VkDeviceAddress Ray::Vk::Buffer::vk_device_address() const {
     VkBufferDeviceAddressInfo addr_info = {VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO};
     addr_info.buffer = handle_.buf;
-    return vkGetBufferDeviceAddressKHR(ctx_->device(), &addr_info);
+    return ctx_->api().vkGetBufferDeviceAddressKHR(ctx_->device(), &addr_info);
 }
 
 uint32_t Ray::Vk::Buffer::AllocSubRegion(const uint32_t req_size, const char *tag, const Buffer *init_buf,
@@ -139,8 +139,8 @@ uint32_t Ray::Vk::Buffer::AllocSubRegion(const uint32_t req_size, const char *ta
             }
 
             if (!barriers.empty()) {
-                vkCmdPipelineBarrier(cmd_buf, src_stages, dst_stages, 0, 0, nullptr, uint32_t(barriers.size()),
-                                     barriers.cdata(), 0, nullptr);
+                ctx_->api().vkCmdPipelineBarrier(cmd_buf, src_stages, dst_stages, 0, 0, nullptr,
+                                                 uint32_t(barriers.size()), barriers.cdata(), 0, nullptr);
             }
 
             VkBufferCopy region_to_copy = {};
@@ -148,7 +148,7 @@ uint32_t Ray::Vk::Buffer::AllocSubRegion(const uint32_t req_size, const char *ta
             region_to_copy.dstOffset = VkDeviceSize{alloc_off};
             region_to_copy.size = VkDeviceSize{req_size};
 
-            vkCmdCopyBuffer(cmd_buf, init_buf->handle_.buf, handle_.buf, 1, &region_to_copy);
+            ctx_->api().vkCmdCopyBuffer(cmd_buf, init_buf->handle_.buf, handle_.buf, 1, &region_to_copy);
 
             init_buf->resource_state = eResState::CopySrc;
             this->resource_state = eResState::CopyDst;
@@ -199,8 +199,8 @@ void Ray::Vk::Buffer::UpdateSubRegion(const uint32_t offset, const uint32_t size
     }
 
     if (!barriers.empty()) {
-        vkCmdPipelineBarrier(cmd_buf, src_stages, dst_stages, 0, 0, nullptr, uint32_t(barriers.size()),
-                             barriers.cdata(), 0, nullptr);
+        ctx_->api().vkCmdPipelineBarrier(cmd_buf, src_stages, dst_stages, 0, 0, nullptr, uint32_t(barriers.size()),
+                                         barriers.cdata(), 0, nullptr);
     }
 
     const VkBufferCopy region_to_copy = {
@@ -209,7 +209,7 @@ void Ray::Vk::Buffer::UpdateSubRegion(const uint32_t offset, const uint32_t size
         VkDeviceSize{size}      // size
     };
 
-    vkCmdCopyBuffer(cmd_buf, init_buf.handle_.buf, handle_.buf, 1, &region_to_copy);
+    ctx_->api().vkCmdCopyBuffer(cmd_buf, init_buf.handle_.buf, handle_.buf, 1, &region_to_copy);
 
     init_buf.resource_state = eResState::CopySrc;
     this->resource_state = eResState::CopyDst;
@@ -247,7 +247,7 @@ void Ray::Vk::Buffer::Resize(const uint32_t new_size, const bool keep_content) {
     buf_create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
     VkBuffer new_buf = {};
-    VkResult res = vkCreateBuffer(ctx_->device(), &buf_create_info, nullptr, &new_buf);
+    VkResult res = ctx_->api().vkCreateBuffer(ctx_->device(), &buf_create_info, nullptr, &new_buf);
     assert(res == VK_SUCCESS && "Failed to create vertex buffer!");
 
 #ifdef ENABLE_OBJ_LABELS
@@ -255,11 +255,11 @@ void Ray::Vk::Buffer::Resize(const uint32_t new_size, const bool keep_content) {
     name_info.objectType = VK_OBJECT_TYPE_BUFFER;
     name_info.objectHandle = uint64_t(new_buf);
     name_info.pObjectName = name_.c_str();
-    vkSetDebugUtilsObjectNameEXT(ctx_->device(), &name_info);
+    ctx_->api().vkSetDebugUtilsObjectNameEXT(ctx_->device(), &name_info);
 #endif
 
     VkMemoryRequirements memory_requirements = {};
-    vkGetBufferMemoryRequirements(ctx_->device(), new_buf, &memory_requirements);
+    ctx_->api().vkGetBufferMemoryRequirements(ctx_->device(), new_buf, &memory_requirements);
 
     VkMemoryPropertyFlags memory_props = GetVkMemoryPropertyFlags(type_);
 
@@ -279,7 +279,7 @@ void Ray::Vk::Buffer::Resize(const uint32_t new_size, const bool keep_content) {
 
     res = VK_ERROR_OUT_OF_DEVICE_MEMORY;
     if (buf_alloc_info.memoryTypeIndex != 0xffffffff) {
-        res = vkAllocateMemory(ctx_->device(), &buf_alloc_info, nullptr, &buffer_mem);
+        res = ctx_->api().vkAllocateMemory(ctx_->device(), &buf_alloc_info, nullptr, &buffer_mem);
     }
     if (res == VK_ERROR_OUT_OF_DEVICE_MEMORY) {
         ctx_->log()->Warning("Not enough device memory, falling back to CPU RAM!");
@@ -287,34 +287,35 @@ void Ray::Vk::Buffer::Resize(const uint32_t new_size, const bool keep_content) {
 
         buf_alloc_info.memoryTypeIndex = FindMemoryType(&ctx_->mem_properties(), memory_requirements.memoryTypeBits,
                                                         memory_props, buf_alloc_info.allocationSize);
-        res = vkAllocateMemory(ctx_->device(), &buf_alloc_info, nullptr, &buffer_mem);
+        res = ctx_->api().vkAllocateMemory(ctx_->device(), &buf_alloc_info, nullptr, &buffer_mem);
         if (res == VK_ERROR_OUT_OF_DEVICE_MEMORY) {
             memory_props |= VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
 
             buf_alloc_info.memoryTypeIndex = FindMemoryType(&ctx_->mem_properties(), memory_requirements.memoryTypeBits,
                                                             memory_props, buf_alloc_info.allocationSize);
-            res = vkAllocateMemory(ctx_->device(), &buf_alloc_info, nullptr, &buffer_mem);
+            res = ctx_->api().vkAllocateMemory(ctx_->device(), &buf_alloc_info, nullptr, &buffer_mem);
         }
     }
     assert(res == VK_SUCCESS && "Failed to allocate memory!");
 
-    res = vkBindBufferMemory(ctx_->device(), new_buf, buffer_mem, 0 /* offset */);
+    res = ctx_->api().vkBindBufferMemory(ctx_->device(), new_buf, buffer_mem, 0 /* offset */);
     assert(res == VK_SUCCESS && "Failed to bind memory!");
 
     if (handle_.buf != VK_NULL_HANDLE) {
         if (keep_content) {
-            VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+            VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
             VkBufferCopy region_to_copy = {};
             region_to_copy.size = VkDeviceSize{old_size};
 
-            vkCmdCopyBuffer(cmd_buf, handle_.buf, new_buf, 1, &region_to_copy);
+            ctx_->api().vkCmdCopyBuffer(cmd_buf, handle_.buf, new_buf, 1, &region_to_copy);
 
-            EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+            EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf,
+                                  ctx_->temp_command_pool());
 
             // destroy previous buffer
-            vkDestroyBuffer(ctx_->device(), handle_.buf, nullptr);
-            vkFreeMemory(ctx_->device(), mem_, nullptr);
+            ctx_->api().vkDestroyBuffer(ctx_->device(), handle_.buf, nullptr);
+            ctx_->api().vkFreeMemory(ctx_->device(), mem_, nullptr);
         } else {
             // destroy previous buffer
             ctx_->bufs_to_destroy[ctx_->backend_frame].push_back(handle_.buf);
@@ -342,8 +343,8 @@ void Ray::Vk::Buffer::Free() {
 void Ray::Vk::Buffer::FreeImmediate() {
     assert(mapped_offset_ == 0xffffffff && !mapped_ptr_);
     if (handle_.buf != VK_NULL_HANDLE) {
-        vkDestroyBuffer(ctx_->device(), handle_.buf, nullptr);
-        vkFreeMemory(ctx_->device(), mem_, nullptr);
+        ctx_->api().vkDestroyBuffer(ctx_->device(), handle_.buf, nullptr);
+        ctx_->api().vkFreeMemory(ctx_->device(), mem_, nullptr);
 
         handle_ = {};
         size_ = 0;
@@ -361,8 +362,7 @@ uint32_t Ray::Vk::Buffer::AlignMapOffsetUp(const uint32_t offset) const {
     return align_to * ((offset + align_to - 1) / align_to);
 }
 
-uint8_t *Ray::Vk::Buffer::MapRange(const uint32_t offset, const uint32_t size,
-                                   const bool persistent) {
+uint8_t *Ray::Vk::Buffer::MapRange(const uint32_t offset, const uint32_t size, const bool persistent) {
     assert(mapped_offset_ == 0xffffffff && !mapped_ptr_);
     assert(offset + size <= size_);
     assert(type_ == eBufType::Upload || type_ == eBufType::Readback);
@@ -382,7 +382,8 @@ uint8_t *Ray::Vk::Buffer::MapRange(const uint32_t offset, const uint32_t size,
 #endif
 
     void *mapped = nullptr;
-    const VkResult res = vkMapMemory(ctx_->device(), mem_, VkDeviceSize(offset), VkDeviceSize(size), 0, &mapped);
+    const VkResult res =
+        ctx_->api().vkMapMemory(ctx_->device(), mem_, VkDeviceSize(offset), VkDeviceSize(size), 0, &mapped);
     if (res != VK_SUCCESS) {
         ctx_->log()->Error("Failed to map memory!");
         return nullptr;
@@ -395,7 +396,7 @@ uint8_t *Ray::Vk::Buffer::MapRange(const uint32_t offset, const uint32_t size,
         range.size = VkDeviceSize(size);
         range.pNext = nullptr;
 
-        const VkResult res = vkInvalidateMappedMemoryRanges(ctx_->device(), 1, &range);
+        const VkResult res = ctx_->api().vkInvalidateMappedMemoryRanges(ctx_->device(), 1, &range);
         if (res != VK_SUCCESS) {
             ctx_->log()->Error("Failed to invalidate memory range!");
         }
@@ -427,12 +428,12 @@ void Ray::Vk::Buffer::FlushMappedRange(uint32_t offset, uint32_t size, const boo
     range.pNext = nullptr;
 
     if (type_ == eBufType::Upload) {
-        const VkResult res = vkFlushMappedMemoryRanges(ctx_->device(), 1, &range);
+        const VkResult res = ctx_->api().vkFlushMappedMemoryRanges(ctx_->device(), 1, &range);
         if (res != VK_SUCCESS) {
             ctx_->log()->Error("Failed to flush memory range!");
         }
     } else if (type_ == eBufType::Readback) {
-        const VkResult res = vkInvalidateMappedMemoryRanges(ctx_->device(), 1, &range);
+        const VkResult res = ctx_->api().vkInvalidateMappedMemoryRanges(ctx_->device(), 1, &range);
         if (res != VK_SUCCESS) {
             ctx_->log()->Error("Failed to invalidate memory range!");
         }
@@ -446,7 +447,7 @@ void Ray::Vk::Buffer::FlushMappedRange(uint32_t offset, uint32_t size, const boo
 
 void Ray::Vk::Buffer::Unmap() {
     assert(mapped_offset_ != 0xffffffff && mapped_ptr_);
-    vkUnmapMemory(ctx_->device(), mem_);
+    ctx_->api().vkUnmapMemory(ctx_->device(), mem_);
     mapped_ptr_ = nullptr;
     mapped_offset_ = 0xffffffff;
 }
@@ -473,11 +474,12 @@ void Ray::Vk::Buffer::Fill(const uint32_t dst_offset, const uint32_t size, const
     }
 
     if (!barriers.empty()) {
-        vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, dst_stages, 0, 0,
-                             nullptr, uint32_t(barriers.size()), barriers.cdata(), 0, nullptr);
+        ctx_->api().vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                         dst_stages, 0, 0, nullptr, uint32_t(barriers.size()), barriers.cdata(), 0,
+                                         nullptr);
     }
 
-    vkCmdFillBuffer(cmd_buf, handle_.buf, VkDeviceSize{dst_offset}, VkDeviceSize{size}, data);
+    ctx_->api().vkCmdFillBuffer(cmd_buf, handle_.buf, VkDeviceSize{dst_offset}, VkDeviceSize{size}, data);
 
     resource_state = eResState::CopyDst;
 }
@@ -504,11 +506,12 @@ void Ray::Vk::Buffer::UpdateImmediate(uint32_t dst_offset, uint32_t size, const 
     }
 
     if (!barriers.empty()) {
-        vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, dst_stages, 0, 0,
-                             nullptr, uint32_t(barriers.size()), barriers.cdata(), 0, nullptr);
+        ctx_->api().vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                         dst_stages, 0, 0, nullptr, uint32_t(barriers.size()), barriers.cdata(), 0,
+                                         nullptr);
     }
 
-    vkCmdUpdateBuffer(cmd_buf, handle_.buf, VkDeviceSize{dst_offset}, VkDeviceSize{size}, data);
+    ctx_->api().vkCmdUpdateBuffer(cmd_buf, handle_.buf, VkDeviceSize{dst_offset}, VkDeviceSize{size}, data);
 
     resource_state = eResState::CopyDst;
 }
@@ -551,8 +554,8 @@ void Ray::Vk::CopyBufferToBuffer(Buffer &src, const uint32_t src_offset, Buffer 
     }
 
     if (!barriers.empty()) {
-        vkCmdPipelineBarrier(cmd_buf, src_stages, dst_stages, 0, 0, nullptr, uint32_t(barriers.size()),
-                             barriers.cdata(), 0, nullptr);
+        src.ctx()->api().vkCmdPipelineBarrier(cmd_buf, src_stages, dst_stages, 0, 0, nullptr, uint32_t(barriers.size()),
+                                              barriers.cdata(), 0, nullptr);
     }
 
     VkBufferCopy region_to_copy = {};
@@ -560,7 +563,7 @@ void Ray::Vk::CopyBufferToBuffer(Buffer &src, const uint32_t src_offset, Buffer 
     region_to_copy.dstOffset = VkDeviceSize{dst_offset};
     region_to_copy.size = VkDeviceSize{size};
 
-    vkCmdCopyBuffer(cmd_buf, src.vk_handle(), dst.vk_handle(), 1, &region_to_copy);
+    src.ctx()->api().vkCmdCopyBuffer(cmd_buf, src.vk_handle(), dst.vk_handle(), 1, &region_to_copy);
 
     src.resource_state = eResState::CopySrc;
     dst.resource_state = eResState::CopyDst;

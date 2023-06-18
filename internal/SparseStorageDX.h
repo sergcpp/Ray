@@ -85,9 +85,10 @@ template <typename T> class SparseStorage {
         new (el) T(std::forward<Args>(args)...);
         cpu_buf_.FlushMappedRange(cpu_index * sizeof(T), sizeof(T), true /* align size */);
 
-        ID3D12GraphicsCommandList *cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+        ID3D12GraphicsCommandList *cmd_buf =
+            BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
         gpu_buf_.UpdateSubRegion(gpu_index * sizeof(T), sizeof(T), cpu_buf_, cpu_index * sizeof(T), cmd_buf);
-        EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+        EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 
         ++size_;
         return cpu_index;
@@ -105,9 +106,10 @@ template <typename T> class SparseStorage {
         new (cpu_buf_.mapped_ptr<T>() + cpu_index) T(el);
         cpu_buf_.FlushMappedRange(cpu_index * sizeof(T), sizeof(T), true /* align size */);
 
-        ID3D12GraphicsCommandList *cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+        ID3D12GraphicsCommandList *cmd_buf =
+            BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
         gpu_buf_.UpdateSubRegion(gpu_index * sizeof(T), sizeof(T), cpu_buf_, cpu_index * sizeof(T), cmd_buf);
-        EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+        EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 
         ++size_;
         return cpu_index;
@@ -132,9 +134,10 @@ template <typename T> class SparseStorage {
         new (cpu_buf_.mapped_ptr<T>() + index) T(el);
         cpu_buf_.FlushMappedRange(index * sizeof(T), sizeof(T), true /* align size */);
 
-        ID3D12GraphicsCommandList *cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+        ID3D12GraphicsCommandList *cmd_buf =
+            BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
         gpu_buf_.UpdateSubRegion(index * sizeof(T), sizeof(T), cpu_buf_, index * sizeof(T), cmd_buf);
-        EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+        EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 
         ++size_;
     }

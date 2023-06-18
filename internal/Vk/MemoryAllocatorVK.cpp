@@ -42,7 +42,7 @@ Ray::Vk::MemoryAllocator::MemoryAllocator(const char name[32], Context *ctx, con
 
 Ray::Vk::MemoryAllocator::~MemoryAllocator() {
     for (MemBlock &blk : blocks_) {
-        vkFreeMemory(ctx_->device(), blk.mem, nullptr);
+        ctx_->api().vkFreeMemory(ctx_->device(), blk.mem, nullptr);
     }
 }
 
@@ -59,11 +59,12 @@ bool Ray::Vk::MemoryAllocator::AllocateNewBlock(const uint32_t size) {
     buf_alloc_info.allocationSize = VkDeviceSize(size);
     buf_alloc_info.memoryTypeIndex = mem_type_index_;
 
-    const VkResult res = vkAllocateMemory(ctx_->device(), &buf_alloc_info, nullptr, &new_block.mem);
+    const VkResult res = ctx_->api().vkAllocateMemory(ctx_->device(), &buf_alloc_info, nullptr, &new_block.mem);
     return res == VK_SUCCESS;
 }
 
-Ray::Vk::MemAllocation Ray::Vk::MemoryAllocator::Allocate(const uint32_t size, const uint32_t alignment, const char *tag) {
+Ray::Vk::MemAllocation Ray::Vk::MemoryAllocator::Allocate(const uint32_t size, const uint32_t alignment,
+                                                          const char *tag) {
     while (true) {
         for (uint32_t i = 0; i < uint32_t(blocks_.size()); ++i) {
             if (size > blocks_[i].alloc.size()) {

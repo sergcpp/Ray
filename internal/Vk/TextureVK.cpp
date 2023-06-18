@@ -367,7 +367,7 @@ bool Ray::Vk::Texture2D::Realloc(const int w, const int h, int mip_count, const 
         img_info.samples = VkSampleCountFlagBits(samples);
         img_info.flags = 0;
 
-        VkResult res = vkCreateImage(ctx_->device(), &img_info, nullptr, &new_image);
+        VkResult res = ctx_->api().vkCreateImage(ctx_->device(), &img_info, nullptr, &new_image);
         if (res != VK_SUCCESS) {
             log->Error("Failed to create image!");
             return false;
@@ -378,11 +378,11 @@ bool Ray::Vk::Texture2D::Realloc(const int w, const int h, int mip_count, const 
         name_info.objectType = VK_OBJECT_TYPE_IMAGE;
         name_info.objectHandle = uint64_t(new_image);
         name_info.pObjectName = name_.c_str();
-        vkSetDebugUtilsObjectNameEXT(ctx_->device(), &name_info);
+        ctx_->api().vkSetDebugUtilsObjectNameEXT(ctx_->device(), &name_info);
 #endif
 
         VkMemoryRequirements tex_mem_req;
-        vkGetImageMemoryRequirements(ctx_->device(), new_image, &tex_mem_req);
+        ctx_->api().vkGetImageMemoryRequirements(ctx_->device(), new_image, &tex_mem_req);
 
         VkMemoryPropertyFlags img_tex_desired_mem_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
         new_alloc = mem_allocs->Allocate(uint32_t(tex_mem_req.size), uint32_t(tex_mem_req.alignment),
@@ -409,7 +409,8 @@ bool Ray::Vk::Texture2D::Realloc(const int w, const int h, int mip_count, const 
 
         const VkDeviceSize aligned_offset = AlignTo(VkDeviceSize(new_alloc.alloc_off), tex_mem_req.alignment);
 
-        res = vkBindImageMemory(ctx_->device(), new_image, new_alloc.owner->mem(new_alloc.block_ndx), aligned_offset);
+        res = ctx_->api().vkBindImageMemory(ctx_->device(), new_image, new_alloc.owner->mem(new_alloc.block_ndx),
+                                            aligned_offset);
         if (res != VK_SUCCESS) {
             log->Error("Failed to bind memory!");
             return false;
@@ -437,7 +438,7 @@ bool Ray::Vk::Texture2D::Realloc(const int w, const int h, int mip_count, const 
             view_info.components.a = VK_COMPONENT_SWIZZLE_R;
         }
 
-        const VkResult res = vkCreateImageView(ctx_->device(), &view_info, nullptr, &new_image_view);
+        const VkResult res = ctx_->api().vkCreateImageView(ctx_->device(), &view_info, nullptr, &new_image_view);
         if (res != VK_SUCCESS) {
             log->Error("Failed to create image view!");
             return false;
@@ -448,7 +449,7 @@ bool Ray::Vk::Texture2D::Realloc(const int w, const int h, int mip_count, const 
         name_info.objectType = VK_OBJECT_TYPE_IMAGE_VIEW;
         name_info.objectHandle = uint64_t(new_image_view);
         name_info.pObjectName = name_.c_str();
-        vkSetDebugUtilsObjectNameEXT(ctx_->device(), &name_info);
+        ctx_->api().vkSetDebugUtilsObjectNameEXT(ctx_->device(), &name_info);
 #endif
     }
 
@@ -554,15 +555,16 @@ bool Ray::Vk::Texture2D::Realloc(const int w, const int h, int mip_count, const 
             }
 
             if (!barriers.empty()) {
-                vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, dst_stages,
-                                     0, 0, nullptr, 0, nullptr, uint32_t(barriers.size()), barriers.cdata());
+                ctx_->api().vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                                 dst_stages, 0, 0, nullptr, 0, nullptr, uint32_t(barriers.size()),
+                                                 barriers.cdata());
             }
 
             this->resource_state = eResState::CopySrc;
             new_resource_state = eResState::CopyDst;
 
-            vkCmdCopyImage(cmd_buf, handle_.img, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, new_image,
-                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, copy_regions_count, copy_regions);
+            ctx_->api().vkCmdCopyImage(cmd_buf, handle_.img, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, new_image,
+                                       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, copy_regions_count, copy_regions);
         }
     }
     Free();
@@ -621,7 +623,7 @@ void Ray::Vk::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, void *_cmd_
         img_info.samples = VkSampleCountFlagBits(p.samples);
         img_info.flags = 0;
 
-        VkResult res = vkCreateImage(ctx_->device(), &img_info, nullptr, &handle_.img);
+        VkResult res = ctx_->api().vkCreateImage(ctx_->device(), &img_info, nullptr, &handle_.img);
         if (res != VK_SUCCESS) {
             log->Error("Failed to create image!");
             return;
@@ -632,11 +634,11 @@ void Ray::Vk::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, void *_cmd_
         name_info.objectType = VK_OBJECT_TYPE_IMAGE;
         name_info.objectHandle = uint64_t(handle_.img);
         name_info.pObjectName = name_.c_str();
-        vkSetDebugUtilsObjectNameEXT(ctx_->device(), &name_info);
+        ctx_->api().vkSetDebugUtilsObjectNameEXT(ctx_->device(), &name_info);
 #endif
 
         VkMemoryRequirements tex_mem_req;
-        vkGetImageMemoryRequirements(ctx_->device(), handle_.img, &tex_mem_req);
+        ctx_->api().vkGetImageMemoryRequirements(ctx_->device(), handle_.img, &tex_mem_req);
 
         VkMemoryPropertyFlags img_tex_desired_mem_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
@@ -669,7 +671,8 @@ void Ray::Vk::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, void *_cmd_
 
         const VkDeviceSize aligned_offset = AlignTo(VkDeviceSize(alloc_.alloc_off), tex_mem_req.alignment);
 
-        res = vkBindImageMemory(ctx_->device(), handle_.img, alloc_.owner->mem(alloc_.block_ndx), aligned_offset);
+        res = ctx_->api().vkBindImageMemory(ctx_->device(), handle_.img, alloc_.owner->mem(alloc_.block_ndx),
+                                            aligned_offset);
         if (res != VK_SUCCESS) {
             log->Error("Failed to bind memory!");
             return;
@@ -703,7 +706,7 @@ void Ray::Vk::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, void *_cmd_
             view_info.components.a = VK_COMPONENT_SWIZZLE_R;
         }
 
-        const VkResult res = vkCreateImageView(ctx_->device(), &view_info, nullptr, &handle_.views[0]);
+        const VkResult res = ctx_->api().vkCreateImageView(ctx_->device(), &view_info, nullptr, &handle_.views[0]);
         if (res != VK_SUCCESS) {
             log->Error("Failed to create image view!");
             return;
@@ -713,7 +716,7 @@ void Ray::Vk::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, void *_cmd_
             // create additional depth-only image view
             view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
             VkImageView depth_only_view;
-            const VkResult res = vkCreateImageView(ctx_->device(), &view_info, nullptr, &depth_only_view);
+            const VkResult res = ctx_->api().vkCreateImageView(ctx_->device(), &view_info, nullptr, &depth_only_view);
             if (res != VK_SUCCESS) {
                 log->Error("Failed to create image view!");
                 return;
@@ -727,7 +730,7 @@ void Ray::Vk::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, void *_cmd_
             name_info.objectType = VK_OBJECT_TYPE_IMAGE_VIEW;
             name_info.objectHandle = uint64_t(view);
             name_info.pObjectName = name_.c_str();
-            vkSetDebugUtilsObjectNameEXT(ctx_->device(), &name_info);
+            ctx_->api().vkSetDebugUtilsObjectNameEXT(ctx_->device(), &name_info);
         }
 #endif
     }
@@ -779,9 +782,9 @@ void Ray::Vk::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, void *_cmd_
         }
 
         if (!buf_barriers.empty() || !img_barriers.empty()) {
-            vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, dst_stages, 0, 0,
-                                 nullptr, uint32_t(buf_barriers.size()), buf_barriers.cdata(),
-                                 uint32_t(img_barriers.size()), img_barriers.cdata());
+            ctx_->api().vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                             dst_stages, 0, 0, nullptr, uint32_t(buf_barriers.size()),
+                                             buf_barriers.cdata(), uint32_t(img_barriers.size()), img_barriers.cdata());
         }
 
         sbuf->resource_state = eResState::CopySrc;
@@ -800,8 +803,8 @@ void Ray::Vk::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, void *_cmd_
         region.imageOffset = {0, 0, 0};
         region.imageExtent = {uint32_t(p.w), uint32_t(p.h), 1};
 
-        vkCmdCopyBufferToImage(cmd_buf, sbuf->vk_handle(), handle_.img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
-                               &region);
+        ctx_->api().vkCmdCopyBufferToImage(cmd_buf, sbuf->vk_handle(), handle_.img,
+                                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
         initialized_mips_ |= (1u << 0);
     }
@@ -824,7 +827,7 @@ void Ray::Vk::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, void *_cmd_
         sampler_info.minLod = p.sampling.min_lod.to_float();
         sampler_info.maxLod = p.sampling.max_lod.to_float();
 
-        const VkResult res = vkCreateSampler(ctx_->device(), &sampler_info, nullptr, &handle_.sampler);
+        const VkResult res = ctx_->api().vkCreateSampler(ctx_->device(), &sampler_info, nullptr, &handle_.sampler);
         if (res != VK_SUCCESS) {
             log->Error("Failed to create sampler!");
         }
@@ -975,9 +978,9 @@ void Ray::Vk::Texture2D::InitFromDDSFile(const void *data, const int size, Buffe
     }
 
     if (!buf_barriers.empty() || !img_barriers.empty()) {
-        vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, dst_stages, 0, 0,
-                             nullptr, uint32_t(buf_barriers.size()), buf_barriers.cdata(),
-                             uint32_t(img_barriers.size()), img_barriers.cdata());
+        ctx_->api().vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                         dst_stages, 0, 0, nullptr, uint32_t(buf_barriers.size()), buf_barriers.cdata(),
+                                         uint32_t(img_barriers.size()), img_barriers.cdata());
     }
 
     sbuf.resource_state = eResState::CopySrc;
@@ -1016,8 +1019,8 @@ void Ray::Vk::Texture2D::InitFromDDSFile(const void *data, const int size, Buffe
         h = std::max(h / 2, 1);
     }
 
-    vkCmdCopyBufferToImage(cmd_buf, sbuf.vk_handle(), handle_.img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, regions_count,
-                           regions);
+    ctx_->api().vkCmdCopyBufferToImage(cmd_buf, sbuf.vk_handle(), handle_.img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                       regions_count, regions);
 
     ApplySampling(p.sampling, log);
 }
@@ -1101,9 +1104,9 @@ void Ray::Vk::Texture2D::InitFromKTXFile(const void *data, const int size, Buffe
     }
 
     if (!buf_barriers.empty() || !img_barriers.empty()) {
-        vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, dst_stages, 0, 0,
-                             nullptr, uint32_t(buf_barriers.size()), buf_barriers.cdata(),
-                             uint32_t(img_barriers.size()), img_barriers.cdata());
+        ctx_->api().vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                         dst_stages, 0, 0, nullptr, uint32_t(buf_barriers.size()), buf_barriers.cdata(),
+                                         uint32_t(img_barriers.size()), img_barriers.cdata());
     }
 
     sbuf.resource_state = eResState::CopySrc;
@@ -1151,8 +1154,8 @@ void Ray::Vk::Texture2D::InitFromKTXFile(const void *data, const int size, Buffe
         data_offset += pad;
     }
 
-    vkCmdCopyBufferToImage(cmd_buf, sbuf.vk_handle(), handle_.img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, regions_count,
-                           regions);
+    ctx_->api().vkCmdCopyBufferToImage(cmd_buf, sbuf.vk_handle(), handle_.img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                       regions_count, regions);
 
     ApplySampling(p.sampling, log);
 }
@@ -1188,7 +1191,7 @@ void Ray::Vk::Texture2D::InitFromRAWData(Buffer &sbuf, int data_off[6], void *_c
         img_info.samples = VkSampleCountFlagBits(p.samples);
         img_info.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
 
-        VkResult res = vkCreateImage(ctx_->device(), &img_info, nullptr, &handle_.img);
+        VkResult res = ctx_->api().vkCreateImage(ctx_->device(), &img_info, nullptr, &handle_.img);
         if (res != VK_SUCCESS) {
             log->Error("Failed to create image!");
             return;
@@ -1199,11 +1202,11 @@ void Ray::Vk::Texture2D::InitFromRAWData(Buffer &sbuf, int data_off[6], void *_c
         name_info.objectType = VK_OBJECT_TYPE_IMAGE;
         name_info.objectHandle = uint64_t(handle_.img);
         name_info.pObjectName = name_.c_str();
-        vkSetDebugUtilsObjectNameEXT(ctx_->device(), &name_info);
+        ctx_->api().vkSetDebugUtilsObjectNameEXT(ctx_->device(), &name_info);
 #endif
 
         VkMemoryRequirements tex_mem_req;
-        vkGetImageMemoryRequirements(ctx_->device(), handle_.img, &tex_mem_req);
+        ctx_->api().vkGetImageMemoryRequirements(ctx_->device(), handle_.img, &tex_mem_req);
 
         VkMemoryPropertyFlags img_tex_desired_mem_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
@@ -1231,7 +1234,8 @@ void Ray::Vk::Texture2D::InitFromRAWData(Buffer &sbuf, int data_off[6], void *_c
 
         const VkDeviceSize aligned_offset = AlignTo(VkDeviceSize(alloc_.alloc_off), tex_mem_req.alignment);
 
-        res = vkBindImageMemory(ctx_->device(), handle_.img, alloc_.owner->mem(alloc_.block_ndx), aligned_offset);
+        res = ctx_->api().vkBindImageMemory(ctx_->device(), handle_.img, alloc_.owner->mem(alloc_.block_ndx),
+                                            aligned_offset);
         if (res != VK_SUCCESS) {
             log->Error("Failed to bind memory!");
             return;
@@ -1259,7 +1263,7 @@ void Ray::Vk::Texture2D::InitFromRAWData(Buffer &sbuf, int data_off[6], void *_c
             view_info.components.a = VK_COMPONENT_SWIZZLE_R;
         }
 
-        const VkResult res = vkCreateImageView(ctx_->device(), &view_info, nullptr, &handle_.views[0]);
+        const VkResult res = ctx_->api().vkCreateImageView(ctx_->device(), &view_info, nullptr, &handle_.views[0]);
         if (res != VK_SUCCESS) {
             log->Error("Failed to create image view!");
             return;
@@ -1270,7 +1274,7 @@ void Ray::Vk::Texture2D::InitFromRAWData(Buffer &sbuf, int data_off[6], void *_c
         name_info.objectType = VK_OBJECT_TYPE_IMAGE_VIEW;
         name_info.objectHandle = uint64_t(handle_.views[0]);
         name_info.pObjectName = name_.c_str();
-        vkSetDebugUtilsObjectNameEXT(ctx_->device(), &name_info);
+        ctx_->api().vkSetDebugUtilsObjectNameEXT(ctx_->device(), &name_info);
 #endif
     }
 
@@ -1318,9 +1322,9 @@ void Ray::Vk::Texture2D::InitFromRAWData(Buffer &sbuf, int data_off[6], void *_c
     }
 
     if (!buf_barriers.empty() || !img_barriers.empty()) {
-        vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, dst_stages, 0, 0,
-                             nullptr, uint32_t(buf_barriers.size()), buf_barriers.cdata(),
-                             uint32_t(img_barriers.size()), img_barriers.cdata());
+        ctx_->api().vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                         dst_stages, 0, 0, nullptr, uint32_t(buf_barriers.size()), buf_barriers.cdata(),
+                                         uint32_t(img_barriers.size()), img_barriers.cdata());
     }
 
     sbuf.resource_state = eResState::CopySrc;
@@ -1341,7 +1345,8 @@ void Ray::Vk::Texture2D::InitFromRAWData(Buffer &sbuf, int data_off[6], void *_c
         regions[i].imageExtent = {uint32_t(p.w), uint32_t(p.h), 1};
     }
 
-    vkCmdCopyBufferToImage(cmd_buf, sbuf.vk_handle(), handle_.img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 6, regions);
+    ctx_->api().vkCmdCopyBufferToImage(cmd_buf, sbuf.vk_handle(), handle_.img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 6,
+                                       regions);
 
     initialized_mips_ |= (1u << 0);
 
@@ -1511,7 +1516,7 @@ void Ray::Vk::Texture2D::InitFromDDSFile(const void *data[6], const int size[6],
         img_info.samples = VK_SAMPLE_COUNT_1_BIT;
         img_info.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
 
-        VkResult res = vkCreateImage(ctx_->device(), &img_info, nullptr, &handle_.img);
+        VkResult res = ctx_->api().vkCreateImage(ctx_->device(), &img_info, nullptr, &handle_.img);
         if (res != VK_SUCCESS) {
             log->Error("Failed to create image!");
             return;
@@ -1522,11 +1527,11 @@ void Ray::Vk::Texture2D::InitFromDDSFile(const void *data[6], const int size[6],
         name_info.objectType = VK_OBJECT_TYPE_IMAGE;
         name_info.objectHandle = uint64_t(handle_.img);
         name_info.pObjectName = name_.c_str();
-        vkSetDebugUtilsObjectNameEXT(ctx_->device(), &name_info);
+        ctx_->api().vkSetDebugUtilsObjectNameEXT(ctx_->device(), &name_info);
 #endif
 
         VkMemoryRequirements tex_mem_req;
-        vkGetImageMemoryRequirements(ctx_->device(), handle_.img, &tex_mem_req);
+        ctx_->api().vkGetImageMemoryRequirements(ctx_->device(), handle_.img, &tex_mem_req);
 
         VkMemoryPropertyFlags img_tex_desired_mem_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
@@ -1554,7 +1559,8 @@ void Ray::Vk::Texture2D::InitFromDDSFile(const void *data[6], const int size[6],
 
         const VkDeviceSize aligned_offset = AlignTo(VkDeviceSize(alloc_.alloc_off), tex_mem_req.alignment);
 
-        res = vkBindImageMemory(ctx_->device(), handle_.img, alloc_.owner->mem(alloc_.block_ndx), aligned_offset);
+        res = ctx_->api().vkBindImageMemory(ctx_->device(), handle_.img, alloc_.owner->mem(alloc_.block_ndx),
+                                            aligned_offset);
         if (res != VK_SUCCESS) {
             log->Error("Failed to bind memory!");
             return;
@@ -1582,7 +1588,7 @@ void Ray::Vk::Texture2D::InitFromDDSFile(const void *data[6], const int size[6],
             view_info.components.a = VK_COMPONENT_SWIZZLE_R;
         }
 
-        const VkResult res = vkCreateImageView(ctx_->device(), &view_info, nullptr, &handle_.views[0]);
+        const VkResult res = ctx_->api().vkCreateImageView(ctx_->device(), &view_info, nullptr, &handle_.views[0]);
         if (res != VK_SUCCESS) {
             log->Error("Failed to create image view!");
             return;
@@ -1593,7 +1599,7 @@ void Ray::Vk::Texture2D::InitFromDDSFile(const void *data[6], const int size[6],
         name_info.objectType = VK_OBJECT_TYPE_IMAGE_VIEW;
         name_info.objectHandle = uint64_t(handle_.views[0]);
         name_info.pObjectName = name_.c_str();
-        vkSetDebugUtilsObjectNameEXT(ctx_->device(), &name_info);
+        ctx_->api().vkSetDebugUtilsObjectNameEXT(ctx_->device(), &name_info);
 #endif
     }
 
@@ -1641,9 +1647,9 @@ void Ray::Vk::Texture2D::InitFromDDSFile(const void *data[6], const int size[6],
     }
 
     if (!buf_barriers.empty() || !img_barriers.empty()) {
-        vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, dst_stages, 0, 0,
-                             nullptr, uint32_t(buf_barriers.size()), buf_barriers.cdata(),
-                             uint32_t(img_barriers.size()), img_barriers.cdata());
+        ctx_->api().vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                         dst_stages, 0, 0, nullptr, uint32_t(buf_barriers.size()), buf_barriers.cdata(),
+                                         uint32_t(img_barriers.size()), img_barriers.cdata());
     }
 
     sbuf.resource_state = eResState::CopySrc;
@@ -1686,8 +1692,8 @@ void Ray::Vk::Texture2D::InitFromDDSFile(const void *data[6], const int size[6],
         }
     }
 
-    vkCmdCopyBufferToImage(cmd_buf, sbuf.vk_handle(), handle_.img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, regions_count,
-                           regions);
+    ctx_->api().vkCmdCopyBufferToImage(cmd_buf, sbuf.vk_handle(), handle_.img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                       regions_count, regions);
 
     ApplySampling(p.sampling, log);
 }
@@ -1764,7 +1770,7 @@ void Ray::Vk::Texture2D::InitFromKTXFile(const void *data[6], const int size[6],
         img_info.samples = VK_SAMPLE_COUNT_1_BIT;
         img_info.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
 
-        VkResult res = vkCreateImage(ctx_->device(), &img_info, nullptr, &handle_.img);
+        VkResult res = ctx_->api().vkCreateImage(ctx_->device(), &img_info, nullptr, &handle_.img);
         if (res != VK_SUCCESS) {
             log->Error("Failed to create image!");
             return;
@@ -1775,11 +1781,11 @@ void Ray::Vk::Texture2D::InitFromKTXFile(const void *data[6], const int size[6],
         name_info.objectType = VK_OBJECT_TYPE_IMAGE;
         name_info.objectHandle = uint64_t(handle_.img);
         name_info.pObjectName = name_.c_str();
-        vkSetDebugUtilsObjectNameEXT(ctx_->device(), &name_info);
+        ctx_->api().vkSetDebugUtilsObjectNameEXT(ctx_->device(), &name_info);
 #endif
 
         VkMemoryRequirements tex_mem_req;
-        vkGetImageMemoryRequirements(ctx_->device(), handle_.img, &tex_mem_req);
+        ctx_->api().vkGetImageMemoryRequirements(ctx_->device(), handle_.img, &tex_mem_req);
 
         VkMemoryPropertyFlags img_tex_desired_mem_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
@@ -1807,7 +1813,8 @@ void Ray::Vk::Texture2D::InitFromKTXFile(const void *data[6], const int size[6],
 
         const VkDeviceSize aligned_offset = AlignTo(VkDeviceSize(alloc_.alloc_off), tex_mem_req.alignment);
 
-        res = vkBindImageMemory(ctx_->device(), handle_.img, alloc_.owner->mem(alloc_.block_ndx), aligned_offset);
+        res = ctx_->api().vkBindImageMemory(ctx_->device(), handle_.img, alloc_.owner->mem(alloc_.block_ndx),
+                                            aligned_offset);
         if (res != VK_SUCCESS) {
             log->Error("Failed to bind memory!");
             return;
@@ -1835,7 +1842,7 @@ void Ray::Vk::Texture2D::InitFromKTXFile(const void *data[6], const int size[6],
             view_info.components.a = VK_COMPONENT_SWIZZLE_R;
         }
 
-        const VkResult res = vkCreateImageView(ctx_->device(), &view_info, nullptr, &handle_.views[0]);
+        const VkResult res = ctx_->api().vkCreateImageView(ctx_->device(), &view_info, nullptr, &handle_.views[0]);
         if (res != VK_SUCCESS) {
             log->Error("Failed to create image view!");
             return;
@@ -1846,7 +1853,7 @@ void Ray::Vk::Texture2D::InitFromKTXFile(const void *data[6], const int size[6],
         name_info.objectType = VK_OBJECT_TYPE_IMAGE_VIEW;
         name_info.objectHandle = uint64_t(handle_.views[0]);
         name_info.pObjectName = name_.c_str();
-        vkSetDebugUtilsObjectNameEXT(ctx_->device(), &name_info);
+        ctx_->api().vkSetDebugUtilsObjectNameEXT(ctx_->device(), &name_info);
 #endif
     }
 
@@ -1894,9 +1901,9 @@ void Ray::Vk::Texture2D::InitFromKTXFile(const void *data[6], const int size[6],
     }
 
     if (!buf_barriers.empty() || !img_barriers.empty()) {
-        vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, dst_stages, 0, 0,
-                             nullptr, uint32_t(buf_barriers.size()), buf_barriers.cdata(),
-                             uint32_t(img_barriers.size()), img_barriers.cdata());
+        ctx_->api().vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                         dst_stages, 0, 0, nullptr, uint32_t(buf_barriers.size()), buf_barriers.cdata(),
+                                         uint32_t(img_barriers.size()), img_barriers.cdata());
     }
 
     sbuf.resource_state = eResState::CopySrc;
@@ -1960,8 +1967,8 @@ void Ray::Vk::Texture2D::InitFromKTXFile(const void *data[6], const int size[6],
         }
     }
 
-    vkCmdCopyBufferToImage(cmd_buf, sbuf.vk_handle(), handle_.img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, regions_count,
-                           regions);
+    ctx_->api().vkCmdCopyBufferToImage(cmd_buf, sbuf.vk_handle(), handle_.img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                       regions_count, regions);
 
     ApplySampling(p.sampling, log);
 }
@@ -2017,9 +2024,9 @@ void Ray::Vk::Texture2D::SetSubImage(const int level, const int offsetx, const i
     }
 
     if (!buf_barriers.empty() || !img_barriers.empty()) {
-        vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, dst_stages, 0, 0,
-                             nullptr, uint32_t(buf_barriers.size()), buf_barriers.cdata(),
-                             uint32_t(img_barriers.size()), img_barriers.cdata());
+        ctx_->api().vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                         dst_stages, 0, 0, nullptr, uint32_t(buf_barriers.size()), buf_barriers.cdata(),
+                                         uint32_t(img_barriers.size()), img_barriers.cdata());
     }
 
     sbuf.resource_state = eResState::CopySrc;
@@ -2039,7 +2046,8 @@ void Ray::Vk::Texture2D::SetSubImage(const int level, const int offsetx, const i
     region.imageOffset = {int32_t(offsetx), int32_t(offsety), 0};
     region.imageExtent = {uint32_t(sizex), uint32_t(sizey), 1};
 
-    vkCmdCopyBufferToImage(cmd_buf, sbuf.vk_handle(), handle_.img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+    ctx_->api().vkCmdCopyBufferToImage(cmd_buf, sbuf.vk_handle(), handle_.img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
+                                       &region);
 
     if (offsetx == 0 && offsety == 0 && sizex == std::max(params.w >> level, 1) &&
         sizey == std::max(params.h >> level, 1)) {
@@ -2070,7 +2078,7 @@ void Ray::Vk::Texture2D::SetSampling(const SamplingParams s) {
     sampler_info.minLod = s.min_lod.to_float();
     sampler_info.maxLod = s.max_lod.to_float();
 
-    const VkResult res = vkCreateSampler(ctx_->device(), &sampler_info, nullptr, &handle_.sampler);
+    const VkResult res = ctx_->api().vkCreateSampler(ctx_->device(), &sampler_info, nullptr, &handle_.sampler);
     if (res != VK_SUCCESS) {
         ctx_->log()->Error("Failed to create sampler!");
     }
@@ -2107,8 +2115,8 @@ void Ray::Vk::CopyImageToImage(void *_cmd_buf, Texture2D &src_tex, const uint32_
     reg.dstOffset = {int32_t(dst_x), int32_t(dst_y), 0};
     reg.extent = {width, height, 1};
 
-    vkCmdCopyImage(cmd_buf, src_tex.handle().img, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dst_tex.handle().img,
-                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &reg);
+    src_tex.ctx()->api().vkCmdCopyImage(cmd_buf, src_tex.handle().img, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                                        dst_tex.handle().img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &reg);
 }
 
 void Ray::Vk::CopyImageToBuffer(const Texture2D &src_tex, const int level, const int x, const int y, const int w,
@@ -2155,9 +2163,9 @@ void Ray::Vk::CopyImageToBuffer(const Texture2D &src_tex, const int level, const
     }
 
     if (!buf_barriers.empty() || !img_barriers.empty()) {
-        vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, dst_stages, 0, 0,
-                             nullptr, uint32_t(buf_barriers.size()), buf_barriers.cdata(),
-                             uint32_t(img_barriers.size()), img_barriers.cdata());
+        src_tex.ctx()->api().vkCmdPipelineBarrier(
+            cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, dst_stages, 0, 0, nullptr,
+            uint32_t(buf_barriers.size()), buf_barriers.cdata(), uint32_t(img_barriers.size()), img_barriers.cdata());
     }
 
     src_tex.resource_state = eResState::CopySrc;
@@ -2177,8 +2185,8 @@ void Ray::Vk::CopyImageToBuffer(const Texture2D &src_tex, const int level, const
     region.imageOffset = {int32_t(x), int32_t(y), 0};
     region.imageExtent = {uint32_t(w), uint32_t(h), 1};
 
-    vkCmdCopyImageToBuffer(cmd_buf, src_tex.handle().img, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dst_buf.vk_handle(), 1,
-                           &region);
+    src_tex.ctx()->api().vkCmdCopyImageToBuffer(cmd_buf, src_tex.handle().img, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                                                dst_buf.vk_handle(), 1, &region);
 }
 
 void Ray::Vk::ClearColorImage(Texture2D &tex, const float rgba[4], void *_cmd_buf) {
@@ -2193,7 +2201,8 @@ void Ray::Vk::ClearColorImage(Texture2D &tex, const float rgba[4], void *_cmd_bu
     clear_range.layerCount = 1;
     clear_range.levelCount = 1;
 
-    vkCmdClearColorImage(cmd_buf, tex.handle().img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clear_val, 1, &clear_range);
+    tex.ctx()->api().vkCmdClearColorImage(cmd_buf, tex.handle().img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clear_val,
+                                          1, &clear_range);
 }
 
 void Ray::Vk::ClearColorImage(Texture2D &tex, const uint32_t rgba[4], void *_cmd_buf) {
@@ -2208,7 +2217,8 @@ void Ray::Vk::ClearColorImage(Texture2D &tex, const uint32_t rgba[4], void *_cmd
     clear_range.layerCount = 1;
     clear_range.levelCount = 1;
 
-    vkCmdClearColorImage(cmd_buf, tex.handle().img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clear_val, 1, &clear_range);
+    tex.ctx()->api().vkCmdClearColorImage(cmd_buf, tex.handle().img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clear_val,
+                                          1, &clear_range);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -2246,7 +2256,7 @@ void Ray::Vk::Texture1D::Init(Buffer *buf, const eTexFormat format, const uint32
     view_info.offset = VkDeviceSize(offset);
     view_info.range = VkDeviceSize(size);
 
-    const VkResult res = vkCreateBufferView(buf->ctx()->device(), &view_info, nullptr, &buf_view_);
+    const VkResult res = buf->ctx()->api().vkCreateBufferView(buf->ctx()->device(), &view_info, nullptr, &buf_view_);
     if (res != VK_SUCCESS) {
         buf_->ctx()->log()->Error("Failed to create buffer view!");
     }
@@ -2320,7 +2330,7 @@ void Ray::Vk::Texture3D::Init(const Tex3DParams &p, MemoryAllocators *mem_allocs
         img_info.samples = VK_SAMPLE_COUNT_1_BIT;
         img_info.flags = 0;
 
-        VkResult res = vkCreateImage(ctx_->device(), &img_info, nullptr, &handle_.img);
+        VkResult res = ctx_->api().vkCreateImage(ctx_->device(), &img_info, nullptr, &handle_.img);
         if (res != VK_SUCCESS) {
             log->Error("Failed to create image!");
             return;
@@ -2331,11 +2341,11 @@ void Ray::Vk::Texture3D::Init(const Tex3DParams &p, MemoryAllocators *mem_allocs
         name_info.objectType = VK_OBJECT_TYPE_IMAGE;
         name_info.objectHandle = uint64_t(handle_.img);
         name_info.pObjectName = name_.c_str();
-        vkSetDebugUtilsObjectNameEXT(ctx_->device(), &name_info);
+        ctx_->api().vkSetDebugUtilsObjectNameEXT(ctx_->device(), &name_info);
 #endif
 
         VkMemoryRequirements tex_mem_req;
-        vkGetImageMemoryRequirements(ctx_->device(), handle_.img, &tex_mem_req);
+        ctx_->api().vkGetImageMemoryRequirements(ctx_->device(), handle_.img, &tex_mem_req);
 
         VkMemoryPropertyFlags img_tex_desired_mem_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
@@ -2368,7 +2378,8 @@ void Ray::Vk::Texture3D::Init(const Tex3DParams &p, MemoryAllocators *mem_allocs
 
         const VkDeviceSize aligned_offset = AlignTo(VkDeviceSize(alloc_.alloc_off), tex_mem_req.alignment);
 
-        res = vkBindImageMemory(ctx_->device(), handle_.img, alloc_.owner->mem(alloc_.block_ndx), aligned_offset);
+        res = ctx_->api().vkBindImageMemory(ctx_->device(), handle_.img, alloc_.owner->mem(alloc_.block_ndx),
+                                            aligned_offset);
         if (res != VK_SUCCESS) {
             log->Error("Failed to bind memory!");
             return;
@@ -2394,7 +2405,7 @@ void Ray::Vk::Texture3D::Init(const Tex3DParams &p, MemoryAllocators *mem_allocs
             view_info.components.a = VK_COMPONENT_SWIZZLE_R;
         }
 
-        const VkResult res = vkCreateImageView(ctx_->device(), &view_info, nullptr, &handle_.views[0]);
+        const VkResult res = ctx_->api().vkCreateImageView(ctx_->device(), &view_info, nullptr, &handle_.views[0]);
         if (res != VK_SUCCESS) {
             log->Error("Failed to create image view!");
             return;
@@ -2406,7 +2417,7 @@ void Ray::Vk::Texture3D::Init(const Tex3DParams &p, MemoryAllocators *mem_allocs
             name_info.objectType = VK_OBJECT_TYPE_IMAGE_VIEW;
             name_info.objectHandle = uint64_t(view);
             name_info.pObjectName = name_.c_str();
-            vkSetDebugUtilsObjectNameEXT(ctx_->device(), &name_info);
+            ctx_->api().vkSetDebugUtilsObjectNameEXT(ctx_->device(), &name_info);
         }
 #endif
     }
@@ -2431,7 +2442,7 @@ void Ray::Vk::Texture3D::Init(const Tex3DParams &p, MemoryAllocators *mem_allocs
         sampler_info.minLod = p.sampling.min_lod.to_float();
         sampler_info.maxLod = p.sampling.max_lod.to_float();
 
-        const VkResult res = vkCreateSampler(ctx_->device(), &sampler_info, nullptr, &handle_.sampler);
+        const VkResult res = ctx_->api().vkCreateSampler(ctx_->device(), &sampler_info, nullptr, &handle_.sampler);
         if (res != VK_SUCCESS) {
             log->Error("Failed to create sampler!");
         }
@@ -2505,9 +2516,9 @@ void Ray::Vk::Texture3D::SetSubImage(int offsetx, int offsety, int offsetz, int 
     }
 
     if (!buf_barriers.empty() || !img_barriers.empty()) {
-        vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, dst_stages, 0, 0,
-                             nullptr, uint32_t(buf_barriers.size()), buf_barriers.cdata(),
-                             uint32_t(img_barriers.size()), img_barriers.cdata());
+        ctx_->api().vkCmdPipelineBarrier(cmd_buf, src_stages ? src_stages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                         dst_stages, 0, 0, nullptr, uint32_t(buf_barriers.size()), buf_barriers.cdata(),
+                                         uint32_t(img_barriers.size()), img_barriers.cdata());
     }
 
     sbuf.resource_state = eResState::CopySrc;
@@ -2527,7 +2538,8 @@ void Ray::Vk::Texture3D::SetSubImage(int offsetx, int offsety, int offsetz, int 
     region.imageOffset = {int32_t(offsetx), int32_t(offsety), int32_t(offsetz)};
     region.imageExtent = {uint32_t(sizex), uint32_t(sizey), uint32_t(sizez)};
 
-    vkCmdCopyBufferToImage(cmd_buf, sbuf.vk_handle(), handle_.img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+    ctx_->api().vkCmdCopyBufferToImage(cmd_buf, sbuf.vk_handle(), handle_.img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
+                                       &region);
 }
 
 VkFormat Ray::Vk::VKFormatFromTexFormat(eTexFormat format) { return g_vk_formats[size_t(format)]; }

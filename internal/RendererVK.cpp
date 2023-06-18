@@ -462,12 +462,12 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
     indir_args_buf_ = Buffer{"Indir Args", ctx_.get(), eBufType::Indirect, 32 * sizeof(DispatchIndirectCommand)};
 
     { // zero out counters
-        CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+        CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
         const uint32_t zeros[32] = {};
         counters_buf_.UpdateImmediate(0, 32 * sizeof(uint32_t), zeros, cmd_buf);
 
-        EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+        EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
     }
 
     { // create tonemap LUT texture
@@ -555,7 +555,7 @@ void Ray::Vk::Renderer::Resize(const int w, const int h) {
     count_table_buf_ =
         Buffer{"Count Table", ctx_.get(), eBufType::Storage, uint32_t(sizeof(uint32_t) * scan_values_rounded_count)};
 
-    CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+    CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
     for (int i = 0; i < 4; ++i) {
         char name_buf[64];
@@ -578,7 +578,7 @@ void Ray::Vk::Renderer::Resize(const int w, const int h) {
             SORT_SCAN_PORTION * ((scan_values_count + SORT_SCAN_PORTION - 1) / SORT_SCAN_PORTION);
     }
 
-    EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+    EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 
     w_ = w;
     h_ = h;
@@ -587,7 +587,7 @@ void Ray::Vk::Renderer::Resize(const int w, const int h) {
 }
 
 void Ray::Vk::Renderer::Clear(const color_rgba_t &c) {
-    CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+    CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
     const TransitionInfo img_transitions[] = {
         {&dual_buf_[0], ResStateForClear},       {&dual_buf_[1], ResStateForClear},
@@ -614,7 +614,7 @@ void Ray::Vk::Renderer::Clear(const color_rgba_t &c) {
         ClearColorImage(required_samples_buf_, rgba, cmd_buf);
     }
 
-    EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+    EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 }
 
 Ray::SceneBase *Ray::Vk::Renderer::CreateScene() {
@@ -677,11 +677,12 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
 
                 // Perform initial clear
                 const TransitionInfo img_transitions[] = {{&base_color_buf_, ResStateForClear}};
-                CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+                CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
                 TransitionResourceStates(cmd_buf, AllStages, AllStages, img_transitions);
                 static const float rgba[] = {0.0f, 0.0f, 0.0f, 0.0f};
                 ClearColorImage(base_color_buf_, rgba, cmd_buf);
-                EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+                EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf,
+                                      ctx_->temp_command_pool());
             }
         } else {
             base_color_buf_ = {};
@@ -710,11 +711,12 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
 
                 // Perform initial clear
                 const TransitionInfo img_transitions[] = {{&depth_normals_buf_, ResStateForClear}};
-                CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+                CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
                 TransitionResourceStates(cmd_buf, AllStages, AllStages, img_transitions);
                 static const float rgba[] = {0.0f, 0.0f, 0.0f, 0.0f};
                 ClearColorImage(depth_normals_buf_, rgba, cmd_buf);
-                EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+                EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf,
+                                      ctx_->temp_command_pool());
             }
         } else {
             temp_depth_normals_buf_ = {};
@@ -728,7 +730,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
     }
 
     if (loaded_halton_ == -1 || (region.iteration / HALTON_SEQ_LEN) != (loaded_halton_ / HALTON_SEQ_LEN)) {
-        CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+        CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
         Buffer temp_upload_buf{"Temp halton upload", ctx_.get(), eBufType::Upload, halton_seq_buf_.size()};
         { // update stage buffer
@@ -740,7 +742,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         CopyBufferToBuffer(temp_upload_buf, 0, halton_seq_buf_, 0, sizeof(float) * HALTON_COUNT * HALTON_SEQ_LEN,
                            cmd_buf);
 
-        EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+        EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 
         temp_upload_buf.FreeImmediate();
         loaded_halton_ = region.iteration;
@@ -748,7 +750,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
 
     if (loaded_view_transform_ != cam.view_transform) {
         if (cam.view_transform != eViewTransform::Standard) {
-            CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+            CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
             const uint32_t data_len = LUT_DIMS * LUT_DIMS * LUT_DIMS * sizeof(uint32_t);
             Buffer temp_upload_buf{"Temp tonemap LUT upload", ctx_.get(), eBufType::Upload, data_len};
@@ -768,7 +770,8 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
             tonemap_lut_.SetSubImage(0, 0, 0, LUT_DIMS, LUT_DIMS, LUT_DIMS, eTexFormat::RawRGB10_A2, temp_upload_buf,
                                      cmd_buf, 0, data_len);
 
-            EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+            EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf,
+                                  ctx_->temp_command_pool());
 
             temp_upload_buf.FreeImmediate();
         }
@@ -800,8 +803,8 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
                                   int(s->env_map_qtree_.mips.size())};
 
 #if !RUN_IN_LOCKSTEP
-    vkWaitForFences(ctx_->device(), 1, &ctx_->in_flight_fence(ctx_->backend_frame), VK_TRUE, UINT64_MAX);
-    vkResetFences(ctx_->device(), 1, &ctx_->in_flight_fence(ctx_->backend_frame));
+    ctx_->api().vkWaitForFences(ctx_->device(), 1, &ctx_->in_flight_fence(ctx_->backend_frame), VK_TRUE, UINT64_MAX);
+    ctx_->api().vkResetFences(ctx_->device(), 1, &ctx_->in_flight_fence(ctx_->backend_frame));
 #endif
 
     ctx_->ReadbackTimestampQueries(ctx_->backend_frame);
@@ -846,16 +849,16 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
     }
 
 #if RUN_IN_LOCKSTEP
-    CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+    CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 #else
     VkCommandBufferBeginInfo begin_info = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
     begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-    vkBeginCommandBuffer(ctx_->draw_cmd_buf(ctx_->backend_frame), &begin_info);
+    ctx_->api().vkBeginCommandBuffer(ctx_->draw_cmd_buf(ctx_->backend_frame), &begin_info);
     CommandBuffer cmd_buf = ctx_->draw_cmd_buf(ctx_->backend_frame);
 #endif
 
-    vkCmdResetQueryPool(cmd_buf, ctx_->query_pool(ctx_->backend_frame), 0, MaxTimestampQueries);
+    ctx_->api().vkCmdResetQueryPool(cmd_buf, ctx_->query_pool(ctx_->backend_frame), 0, MaxTimestampQueries);
 
     //////////////////////////////////////////////////////////////////////////////////
 
@@ -922,14 +925,15 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
     VkMemoryBarrier mem_barrier = {VK_STRUCTURE_TYPE_MEMORY_BARRIER};
     mem_barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;
     mem_barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-    vkCmdPipelineBarrier(cmd_buf, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,
-                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR, 0, 1,
-                         &mem_barrier, 0, nullptr, 0, nullptr);
+    ctx_->api().vkCmdPipelineBarrier(
+        cmd_buf, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR, 0, 1, &mem_barrier, 0,
+        nullptr, 0, nullptr);
 
     const rect_t rect = region.rect();
 
     { // generate primary rays
-        DebugMarker _(cmd_buf, "GeneratePrimaryRays");
+        DebugMarker _(ctx_.get(), cmd_buf, "GeneratePrimaryRays");
         timestamps_[ctx_->backend_frame].primary_ray_gen[0] = ctx_->WriteTimestamp(cmd_buf, true);
         kernel_GeneratePrimaryRays(cmd_buf, cam, hi, rect, halton_seq_buf_, region.iteration, required_samples_buf_,
                                    counters_buf_, prim_rays_buf_);
@@ -939,7 +943,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
     const bool use_rt_pipeline = (use_hwrt_ && ENABLE_RT_PIPELINE);
 
     { // prepare indirect args
-        DebugMarker _(cmd_buf, "PrepareIndirArgs");
+        DebugMarker _(ctx_.get(), cmd_buf, "PrepareIndirArgs");
         kernel_PrepareIndirArgs(cmd_buf, counters_buf_, indir_args_buf_);
     }
 
@@ -950,7 +954,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
     }
 #else
     { // trace primary rays
-        DebugMarker _(cmd_buf, "IntersectScenePrimary");
+        DebugMarker _(ctx_.get(), cmd_buf, "IntersectScenePrimary");
         timestamps_[ctx_->backend_frame].primary_trace[0] = ctx_->WriteTimestamp(cmd_buf, true);
         if (use_rt_pipeline) {
             kernel_IntersectScene_RTPipe(cmd_buf, indir_args_buf_, 1, cam.pass_settings, sc_data, halton_seq_buf_,
@@ -968,7 +972,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
     Texture2D &temp_base_color = temp_buf1_;
 
     { // shade primary hits
-        DebugMarker _(cmd_buf, "ShadePrimaryHits");
+        DebugMarker _(ctx_.get(), cmd_buf, "ShadePrimaryHits");
         timestamps_[ctx_->backend_frame].primary_shade[0] = ctx_->WriteTimestamp(cmd_buf, true);
         kernel_ShadePrimaryHits(cmd_buf, cam.pass_settings, s->env_, indir_args_buf_, 0, prim_hits_buf_, prim_rays_buf_,
                                 sc_data, halton_seq_buf_, hi + RAND_DIM_BASE_COUNT, rect, s->tex_atlases_,
@@ -978,12 +982,12 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
     }
 
     { // prepare indirect args
-        DebugMarker _(cmd_buf, "PrepareIndirArgs");
+        DebugMarker _(ctx_.get(), cmd_buf, "PrepareIndirArgs");
         kernel_PrepareIndirArgs(cmd_buf, counters_buf_, indir_args_buf_);
     }
 
     { // trace shadow rays
-        DebugMarker _(cmd_buf, "TraceShadow");
+        DebugMarker _(ctx_.get(), cmd_buf, "TraceShadow");
         timestamps_[ctx_->backend_frame].primary_shadow[0] = ctx_->WriteTimestamp(cmd_buf, true);
         kernel_IntersectSceneShadow(cmd_buf, cam.pass_settings, indir_args_buf_, 2, counters_buf_, sc_data,
                                     halton_seq_buf_, hi + RAND_DIM_BASE_COUNT, macro_tree_root,
@@ -1002,7 +1006,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         timestamps_[ctx_->backend_frame].secondary_sort.push_back(ctx_->WriteTimestamp(cmd_buf, true));
 
         if (!use_hwrt_) {
-            DebugMarker _(cmd_buf, "Sort Rays");
+            DebugMarker _(ctx_.get(), cmd_buf, "Sort Rays");
 
             kernel_SortHashRays(cmd_buf, indir_args_buf_, secondary_rays_buf_, counters_buf_, root_min, cell_size,
                                 ray_hashes_bufs_[0]);
@@ -1019,7 +1023,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
 
         timestamps_[ctx_->backend_frame].secondary_trace.push_back(ctx_->WriteTimestamp(cmd_buf, true));
         { // trace secondary rays
-            DebugMarker _(cmd_buf, "IntersectSceneSecondary");
+            DebugMarker _(ctx_.get(), cmd_buf, "IntersectSceneSecondary");
             if (use_rt_pipeline) {
                 kernel_IntersectScene_RTPipe(cmd_buf, indir_args_buf_, 1, cam.pass_settings, sc_data, halton_seq_buf_,
                                              hi + RAND_DIM_BASE_COUNT, macro_tree_root, MAX_DIST, s->tex_atlases_,
@@ -1032,7 +1036,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         }
 
         if (sc_data.visible_lights_count) {
-            DebugMarker _(cmd_buf, "IntersectAreaLights");
+            DebugMarker _(ctx_.get(), cmd_buf, "IntersectAreaLights");
             kernel_IntersectAreaLights(cmd_buf, sc_data, indir_args_buf_, counters_buf_, secondary_rays_buf_,
                                        prim_hits_buf_);
         }
@@ -1040,7 +1044,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         timestamps_[ctx_->backend_frame].secondary_trace.push_back(ctx_->WriteTimestamp(cmd_buf, false));
 
         { // shade secondary hits
-            DebugMarker _(cmd_buf, "ShadeSecondaryHits");
+            DebugMarker _(ctx_.get(), cmd_buf, "ShadeSecondaryHits");
             timestamps_[ctx_->backend_frame].secondary_shade.push_back(ctx_->WriteTimestamp(cmd_buf, true));
             kernel_ShadeSecondaryHits(cmd_buf, cam.pass_settings, s->env_, indir_args_buf_, 0, prim_hits_buf_,
                                       secondary_rays_buf_, sc_data, halton_seq_buf_, hi + RAND_DIM_BASE_COUNT,
@@ -1050,12 +1054,12 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         }
 
         { // prepare indirect args
-            DebugMarker _(cmd_buf, "PrepareIndirArgs");
+            DebugMarker _(ctx_.get(), cmd_buf, "PrepareIndirArgs");
             kernel_PrepareIndirArgs(cmd_buf, counters_buf_, indir_args_buf_);
         }
 
         { // trace shadow rays
-            DebugMarker _(cmd_buf, "TraceShadow");
+            DebugMarker _(ctx_.get(), cmd_buf, "TraceShadow");
             timestamps_[ctx_->backend_frame].secondary_shadow.push_back(ctx_->WriteTimestamp(cmd_buf, true));
             kernel_IntersectSceneShadow(cmd_buf, cam.pass_settings, indir_args_buf_, 2, counters_buf_, sc_data,
                                         halton_seq_buf_, hi + RAND_DIM_BASE_COUNT, macro_tree_root,
@@ -1069,7 +1073,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
 #endif
 
     { // prepare result
-        DebugMarker _(cmd_buf, "Prepare Result");
+        DebugMarker _(ctx_.get(), cmd_buf, "Prepare Result");
 
         Texture2D &clean_buf = dual_buf_[(region.iteration - 1) % 2];
 
@@ -1083,7 +1087,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
     }
 
     { // output final buffer, prepare variance
-        DebugMarker _(cmd_buf, "Postprocess frame");
+        DebugMarker _(ctx_.get(), cmd_buf, "Postprocess frame");
 
         const int p1_samples = (region.iteration + 1) / 2;
         const int p2_samples = (region.iteration) / 2;
@@ -1111,9 +1115,9 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
     }
 
 #if RUN_IN_LOCKSTEP
-    EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+    EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 #else
-    vkEndCommandBuffer(cmd_buf);
+    ctx_->api().vkEndCommandBuffer(cmd_buf);
 
     const int prev_frame = (ctx_->backend_frame + MaxFramesInFlight - 1) % MaxFramesInFlight;
 
@@ -1135,7 +1139,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
     submit_info.pSignalSemaphores = &ctx_->render_finished_semaphore(ctx_->backend_frame);
 
     const VkResult res =
-        vkQueueSubmit(ctx_->graphics_queue(), 1, &submit_info, ctx_->in_flight_fence(ctx_->backend_frame));
+        ctx_->api().vkQueueSubmit(ctx_->graphics_queue(), 1, &submit_info, ctx_->in_flight_fence(ctx_->backend_frame));
     if (res != VK_SUCCESS) {
         ctx_->log()->Error("Failed to submit into a queue!");
     }
@@ -1150,8 +1154,8 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
 
 void Ray::Vk::Renderer::DenoiseImage(const RegionContext &region) {
 #if !RUN_IN_LOCKSTEP
-    vkWaitForFences(ctx_->device(), 1, &ctx_->in_flight_fence(ctx_->backend_frame), VK_TRUE, UINT64_MAX);
-    vkResetFences(ctx_->device(), 1, &ctx_->in_flight_fence(ctx_->backend_frame));
+    ctx_->api().vkWaitForFences(ctx_->device(), 1, &ctx_->in_flight_fence(ctx_->backend_frame), VK_TRUE, UINT64_MAX);
+    ctx_->api().vkResetFences(ctx_->device(), 1, &ctx_->in_flight_fence(ctx_->backend_frame));
 #endif
 
     ctx_->ReadbackTimestampQueries(ctx_->backend_frame);
@@ -1162,16 +1166,16 @@ void Ray::Vk::Renderer::DenoiseImage(const RegionContext &region) {
                                                                   timestamps_[ctx_->backend_frame].denoise[1]);
 
 #if RUN_IN_LOCKSTEP
-    CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+    CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 #else
     VkCommandBufferBeginInfo begin_info = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
     begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-    vkBeginCommandBuffer(ctx_->draw_cmd_buf(ctx_->backend_frame), &begin_info);
+    ctx_->api().vkBeginCommandBuffer(ctx_->draw_cmd_buf(ctx_->backend_frame), &begin_info);
     CommandBuffer cmd_buf = ctx_->draw_cmd_buf(ctx_->backend_frame);
 #endif
 
-    vkCmdResetQueryPool(cmd_buf, ctx_->query_pool(ctx_->backend_frame), 0, MaxTimestampQueries);
+    ctx_->api().vkCmdResetQueryPool(cmd_buf, ctx_->query_pool(ctx_->backend_frame), 0, MaxTimestampQueries);
 
     //////////////////////////////////////////////////////////////////////////////////
 
@@ -1183,13 +1187,13 @@ void Ray::Vk::Renderer::DenoiseImage(const RegionContext &region) {
     const auto &filtered_variance = temp_buf1_;
 
     { // Filter variance
-        DebugMarker _(cmd_buf, "Filter Variance");
+        DebugMarker _(ctx_.get(), cmd_buf, "Filter Variance");
         kernel_FilterVariance(cmd_buf, raw_variance, rect, variance_threshold_, region.iteration, filtered_variance,
                               required_samples_buf_);
     }
 
     { // Apply NLM Filter
-        DebugMarker _(cmd_buf, "NLM Filter");
+        DebugMarker _(ctx_.get(), cmd_buf, "NLM Filter");
         kernel_NLMFilter(cmd_buf, raw_final_buf_, filtered_variance, 1.0f, 0.45f, base_color_buf_, 64.0f,
                          depth_normals_buf_, 32.0f, raw_filtered_buf_, tonemap_params_.view_transform,
                          tonemap_params_.inv_gamma, rect, final_buf_);
@@ -1200,9 +1204,9 @@ void Ray::Vk::Renderer::DenoiseImage(const RegionContext &region) {
     //////////////////////////////////////////////////////////////////////////////////
 
 #if RUN_IN_LOCKSTEP
-    EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+    EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 #else
-    vkEndCommandBuffer(cmd_buf);
+    ctx_->api().vkEndCommandBuffer(cmd_buf);
 
     const int prev_frame = (ctx_->backend_frame + MaxFramesInFlight - 1) % MaxFramesInFlight;
 
@@ -1224,7 +1228,7 @@ void Ray::Vk::Renderer::DenoiseImage(const RegionContext &region) {
     submit_info.pSignalSemaphores = &ctx_->render_finished_semaphore(ctx_->backend_frame);
 
     const VkResult res =
-        vkQueueSubmit(ctx_->graphics_queue(), 1, &submit_info, ctx_->in_flight_fence(ctx_->backend_frame));
+        ctx_->api().vkQueueSubmit(ctx_->graphics_queue(), 1, &submit_info, ctx_->in_flight_fence(ctx_->backend_frame));
     if (res != VK_SUCCESS) {
         ctx_->log()->Error("Failed to submit into a queue!");
     }
@@ -1254,7 +1258,7 @@ void Ray::Vk::Renderer::UpdateHaltonSequence(const int iteration, std::unique_pt
 void Ray::Vk::Renderer::RadixSort(CommandBuffer cmd_buf, const Buffer &indir_args, Buffer _hashes[2],
                                   Buffer &count_table, const Buffer &counters, Buffer partial_sums[],
                                   Buffer scan_values[]) {
-    DebugMarker _(cmd_buf, "Radix Sort");
+    DebugMarker _(ctx_.get(), cmd_buf, "Radix Sort");
 
     static const int indir_args_indices[] = {6, 7, 8, 9};
 
@@ -1265,7 +1269,7 @@ void Ray::Vk::Renderer::RadixSort(CommandBuffer cmd_buf, const Buffer &indir_arg
 
     Buffer *hashes[] = {&_hashes[0], &_hashes[1]};
     for (int shift = 0; shift < 32; shift += 4) {
-        DebugMarker _(cmd_buf, MarkerStrings[shift / 4]);
+        DebugMarker _(ctx_.get(), cmd_buf, MarkerStrings[shift / 4]);
 
         kernel_SortInitCountTable(cmd_buf, shift, indir_args, 4, *hashes[0], counters, 4, count_table);
         ExclusiveScan(cmd_buf, indir_args, indir_args_indices, count_table, 0 /* offset */, 1 /* stride */,
@@ -1280,7 +1284,7 @@ void Ray::Vk::Renderer::RadixSort(CommandBuffer cmd_buf, const Buffer &indir_arg
 void Ray::Vk::Renderer::ExclusiveScan(CommandBuffer cmd_buf, const Buffer &indir_args, const int indir_args_indices[],
                                       const Buffer &input, const uint32_t offset, const uint32_t stride,
                                       const Buffer partial_sums[], const Buffer scan_values[]) {
-    DebugMarker _(cmd_buf, "Exclusive Scan");
+    DebugMarker _(ctx_.get(), cmd_buf, "Exclusive Scan");
 
     kernel_SortExclusiveScan(cmd_buf, indir_args, indir_args_indices[0], input, offset, stride, scan_values[0],
                              partial_sums[0]);
@@ -1305,10 +1309,10 @@ void Ray::Vk::Renderer::ExclusiveScan(CommandBuffer cmd_buf, const Buffer &indir
 
 Ray::color_data_rgba_t Ray::Vk::Renderer::get_pixels_ref(const bool tonemap) const {
     if (frame_dirty_ || pixel_readback_is_tonemapped_ != tonemap) {
-        CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+        CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
         { // download result
-            DebugMarker _(cmd_buf, "Download Result");
+            DebugMarker _(ctx_.get(), cmd_buf, "Download Result");
 
             // TODO: fix this!
             const auto &buffer_to_use = tonemap ? final_buf_ : raw_filtered_buf_;
@@ -1324,13 +1328,13 @@ Ray::color_data_rgba_t Ray::Vk::Renderer::get_pixels_ref(const bool tonemap) con
         mem_barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
         mem_barrier.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
 
-        vkCmdPipelineBarrier(cmd_buf, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT, 0, 1, &mem_barrier, 0,
-                             nullptr, 0, nullptr);
+        ctx_->api().vkCmdPipelineBarrier(cmd_buf, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT, 0, 1,
+                                         &mem_barrier, 0, nullptr, 0, nullptr);
 
 #if RUN_IN_LOCKSTEP
-        EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+        EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 #else
-        vkEndCommandBuffer(cmd_buf);
+        ctx_->api().vkEndCommandBuffer(cmd_buf);
 
         // Wait for all in-flight frames to not leave semaphores in unwaited state
         SmallVector<VkSemaphore, MaxFramesInFlight> wait_semaphores;
@@ -1352,10 +1356,10 @@ Ray::color_data_rgba_t Ray::Vk::Renderer::get_pixels_ref(const bool tonemap) con
         submit_info.commandBufferCount = 1;
         submit_info.pCommandBuffers = &cmd_buf;
 
-        vkQueueSubmit(ctx_->graphics_queue(), 1, &submit_info, VK_NULL_HANDLE);
-        vkQueueWaitIdle(ctx_->graphics_queue());
+        ctx_->api().vkQueueSubmit(ctx_->graphics_queue(), 1, &submit_info, VK_NULL_HANDLE);
+        ctx_->api().vkQueueWaitIdle(ctx_->graphics_queue());
 
-        vkFreeCommandBuffers(ctx_->device(), ctx_->temp_command_pool(), 1, &cmd_buf);
+        ctx_->api().vkFreeCommandBuffers(ctx_->device(), ctx_->temp_command_pool(), 1, &cmd_buf);
 #endif
         // Can be reset after vkQueueWaitIdle
         for (bool &is_set : ctx_->render_finished_semaphore_is_set) {
@@ -1378,10 +1382,10 @@ Ray::color_data_rgba_t Ray::Vk::Renderer::get_aux_pixels_ref(const eAUXBuffer bu
         (buf == eAUXBuffer::BaseColor) ? base_color_readback_buf_ : depth_normals_readback_buf_;
 
     if (dirty_flag) {
-        CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+        CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
         { // download result
-            DebugMarker _(cmd_buf, "Download Result");
+            DebugMarker _(ctx_.get(), cmd_buf, "Download Result");
 
             const TransitionInfo res_transitions[] = {{&buffer_to_use, eResState::CopySrc},
                                                       {&readback_buffer_to_use, eResState::CopyDst}};
@@ -1394,13 +1398,13 @@ Ray::color_data_rgba_t Ray::Vk::Renderer::get_aux_pixels_ref(const eAUXBuffer bu
         mem_barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
         mem_barrier.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
 
-        vkCmdPipelineBarrier(cmd_buf, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT, 0, 1, &mem_barrier, 0,
-                             nullptr, 0, nullptr);
+        ctx_->api().vkCmdPipelineBarrier(cmd_buf, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT, 0, 1,
+                                         &mem_barrier, 0, nullptr, 0, nullptr);
 
 #if RUN_IN_LOCKSTEP
-        EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+        EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 #else
-        vkEndCommandBuffer(cmd_buf);
+        ctx_->api().vkEndCommandBuffer(cmd_buf);
 
         // Wait for all in-flight frames to not leave semaphores in unwaited state
         SmallVector<VkSemaphore, MaxFramesInFlight> wait_semaphores;
@@ -1422,10 +1426,10 @@ Ray::color_data_rgba_t Ray::Vk::Renderer::get_aux_pixels_ref(const eAUXBuffer bu
         submit_info.commandBufferCount = 1;
         submit_info.pCommandBuffers = &cmd_buf;
 
-        vkQueueSubmit(ctx_->graphics_queue(), 1, &submit_info, VK_NULL_HANDLE);
-        vkQueueWaitIdle(ctx_->graphics_queue());
+        ctx_->api().vkQueueSubmit(ctx_->graphics_queue(), 1, &submit_info, VK_NULL_HANDLE);
+        ctx_->api().vkQueueWaitIdle(ctx_->graphics_queue());
 
-        vkFreeCommandBuffers(ctx_->device(), ctx_->temp_command_pool(), 1, &cmd_buf);
+        ctx_->api().vkFreeCommandBuffers(ctx_->device(), ctx_->temp_command_pool(), 1, &cmd_buf);
 #endif
         // Can be reset after vkQueueWaitIdle
         for (bool &is_set : ctx_->render_finished_semaphore_is_set) {

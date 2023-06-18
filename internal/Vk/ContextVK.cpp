@@ -48,24 +48,24 @@ Ray::Vk::Context::~Context() { Destroy(); }
 
 void Ray::Vk::Context::Destroy() {
     if (device_) {
-        vkDeviceWaitIdle(device_);
+        api_.vkDeviceWaitIdle(device_);
 
         for (int i = 0; i < MaxFramesInFlight; ++i) {
             backend_frame = i; // default_descr_alloc_'s destructors rely on this
             default_descr_alloc_[i].reset();
             DestroyDeferredResources(i);
 
-            vkDestroyFence(device_, in_flight_fences_[i], nullptr);
-            vkDestroySemaphore(device_, render_finished_semaphores_[i], nullptr);
-            vkDestroySemaphore(device_, image_avail_semaphores_[i], nullptr);
+            api_.vkDestroyFence(device_, in_flight_fences_[i], nullptr);
+            api_.vkDestroySemaphore(device_, render_finished_semaphores_[i], nullptr);
+            api_.vkDestroySemaphore(device_, image_avail_semaphores_[i], nullptr);
 
-            vkDestroyQueryPool(device_, query_pools_[i], nullptr);
+            api_.vkDestroyQueryPool(device_, query_pools_[i], nullptr);
         }
 
         default_memory_allocs_.reset();
 
-        vkFreeCommandBuffers(device_, command_pool_, 1, &setup_cmd_buf_);
-        vkFreeCommandBuffers(device_, command_pool_, MaxFramesInFlight, draw_cmd_bufs_);
+        api_.vkFreeCommandBuffers(device_, command_pool_, 1, &setup_cmd_buf_);
+        api_.vkFreeCommandBuffers(device_, command_pool_, MaxFramesInFlight, draw_cmd_bufs_);
 
         // for (int i = 0; i < StageBufferCount; ++i) {
         //     default_stage_bufs_.fences[i].ClientWaitSync();
@@ -73,8 +73,8 @@ void Ray::Vk::Context::Destroy() {
         //     default_stage_bufs_.bufs[i] = {};
         // }
 
-        vkDestroyCommandPool(device_, command_pool_, nullptr);
-        vkDestroyCommandPool(device_, temp_command_pool_, nullptr);
+        api_.vkDestroyCommandPool(device_, command_pool_, nullptr);
+        api_.vkDestroyCommandPool(device_, temp_command_pool_, nullptr);
 
         // for (size_t i = 0; i < api_ctx_->present_image_views.size(); ++i) {
         //     vkDestroyImageView(api_ctx_->device, api_ctx_->present_image_views[i], nullptr);
@@ -82,24 +82,28 @@ void Ray::Vk::Context::Destroy() {
 
         // vkDestroySwapchainKHR(device_, api_ctx_->swapchain, nullptr);
 
-        vkDestroyDevice(device_, nullptr);
+        api_.vkDestroyDevice(device_, nullptr);
         // vkDestroySurfaceKHR(instance_, surface_, nullptr);
 #ifndef NDEBUG
-        vkDestroyDebugReportCallbackEXT(instance_, debug_callback_, nullptr);
+        api_.vkDestroyDebugReportCallbackEXT(instance_, debug_callback_, nullptr);
 #endif
 
-        vkDestroyInstance(instance_, nullptr);
+        api_.vkDestroyInstance(instance_, nullptr);
     }
 }
 
 bool Ray::Vk::Context::Init(ILog *log, const char *preferred_device) {
     log_ = log;
 
-    if (!LoadVulkan(log)) {
+    if (!api_.Load(log)) {
         return false;
     }
 
-    if (!InitVkInstance(instance_, g_enabled_layers, g_enabled_layers_count, log)) {
+    if (!InitVkInstance(api_, instance_, g_enabled_layers, g_enabled_layers_count, log)) {
+        return false;
+    }
+
+    if (!api_.LoadExtensions(instance_, log)) {
         return false;
     }
 
@@ -112,7 +116,7 @@ bool Ray::Vk::Context::Init(ILog *log, const char *preferred_device) {
         callback_create_info.pUserData = this;
 
         const VkResult res =
-            vkCreateDebugReportCallbackEXT(instance_, &callback_create_info, nullptr, &debug_callback_);
+            api_.vkCreateDebugReportCallbackEXT(instance_, &callback_create_info, nullptr, &debug_callback_);
         if (res != VK_SUCCESS) {
             log->Error("Failed to create debug report callback");
             return false;
@@ -120,7 +124,7 @@ bool Ray::Vk::Context::Init(ILog *log, const char *preferred_device) {
     }
 #endif
 
-    if (!ChooseVkPhysicalDevice(physical_device_, device_properties_, mem_properties_, graphics_family_index_,
+    if (!ChooseVkPhysicalDevice(api_, physical_device_, device_properties_, mem_properties_, graphics_family_index_,
                                 raytracing_supported_, ray_query_supported_, dynamic_rendering_supported_,
                                 preferred_device, instance_, log)) {
         return false;
@@ -129,21 +133,22 @@ bool Ray::Vk::Context::Init(ILog *log, const char *preferred_device) {
     // Disable as it is not needed for now
     dynamic_rendering_supported_ = false;
 
-    if (!InitVkDevice(device_, physical_device_, graphics_family_index_, raytracing_supported_, ray_query_supported_,
-                      dynamic_rendering_supported_, g_enabled_layers, g_enabled_layers_count, log)) {
+    if (!InitVkDevice(api_, device_, physical_device_, graphics_family_index_, raytracing_supported_,
+                      ray_query_supported_, dynamic_rendering_supported_, g_enabled_layers, g_enabled_layers_count,
+                      log)) {
         return false;
     }
 
     // Workaround for a buggy linux AMD driver, make sure vkGetBufferDeviceAddressKHR is not NULL
     auto dev_vkGetBufferDeviceAddressKHR =
-        (PFN_vkGetBufferDeviceAddressKHR)vkGetDeviceProcAddr(device_, "vkGetBufferDeviceAddressKHR");
+        (PFN_vkGetBufferDeviceAddressKHR)api_.vkGetDeviceProcAddr(device_, "vkGetBufferDeviceAddressKHR");
     if (!dev_vkGetBufferDeviceAddressKHR) {
         raytracing_supported_ = ray_query_supported_ = false;
     }
 
-    if (!InitCommandBuffers(command_pool_, temp_command_pool_, setup_cmd_buf_, draw_cmd_bufs_, image_avail_semaphores_,
-                            render_finished_semaphores_, in_flight_fences_, query_pools_, graphics_queue_, device_,
-                            graphics_family_index_, log)) {
+    if (!InitCommandBuffers(api_, command_pool_, temp_command_pool_, setup_cmd_buf_, draw_cmd_bufs_,
+                            image_avail_semaphores_, render_finished_semaphores_, in_flight_fences_, query_pools_,
+                            graphics_queue_, device_, graphics_family_index_, log)) {
         return false;
     }
 
@@ -163,7 +168,7 @@ bool Ray::Vk::Context::Init(ILog *log, const char *preferred_device) {
     log_->Info("===========================================");
 
     VkPhysicalDeviceProperties device_properties = {};
-    vkGetPhysicalDeviceProperties(physical_device_, &device_properties);
+    api_.vkGetPhysicalDeviceProperties(physical_device_, &device_properties);
 
     phys_device_limits_ = device_properties.limits;
     max_combined_image_samplers_ = std::min(std::min(device_properties.limits.maxPerStageDescriptorSampledImages,
@@ -175,13 +180,13 @@ bool Ray::Vk::Context::Init(ILog *log, const char *preferred_device) {
 
     { // check if 3-component images are supported
         VkImageFormatProperties props;
-        const VkResult res = vkGetPhysicalDeviceImageFormatProperties(
+        const VkResult res = api_.vkGetPhysicalDeviceImageFormatProperties(
             physical_device_, VK_FORMAT_R8G8B8_UNORM, VK_IMAGE_TYPE_2D, VK_IMAGE_TILING_OPTIMAL,
             (VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT), 0,
             &props);
 
         VkFormatProperties format_properties;
-        vkGetPhysicalDeviceFormatProperties(physical_device_, VK_FORMAT_R8G8B8_UNORM, &format_properties);
+        api_.vkGetPhysicalDeviceFormatProperties(physical_device_, VK_FORMAT_R8G8B8_UNORM, &format_properties);
 
         rgb8_unorm_is_supported_ =
             (res == VK_SUCCESS) && (format_properties.optimalTilingFeatures & VK_FORMAT_FEATURE_BLIT_DST_BIT);
@@ -191,7 +196,7 @@ bool Ray::Vk::Context::Init(ILog *log, const char *preferred_device) {
         VkPhysicalDeviceProperties2 prop2 = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
         prop2.pNext = &rt_props_;
 
-        vkGetPhysicalDeviceProperties2KHR(physical_device_, &prop2);
+        api_.vkGetPhysicalDeviceProperties2KHR(physical_device_, &prop2);
     }
 
     default_memory_allocs_ = std::make_unique<MemoryAllocators>(
@@ -219,11 +224,11 @@ bool Ray::Vk::Context::Init(ILog *log, const char *preferred_device) {
     return true;
 }
 
-bool Ray::Vk::Context::InitVkInstance(VkInstance &instance, const char *enabled_layers[],
+bool Ray::Vk::Context::InitVkInstance(const Api &api, VkInstance &instance, const char *enabled_layers[],
                                       const int enabled_layers_count, ILog *log) {
     { // Find validation layer
         uint32_t layers_count = 0;
-        vkEnumerateInstanceLayerProperties(&layers_count, nullptr);
+        api.vkEnumerateInstanceLayerProperties(&layers_count, nullptr);
 
         if (!layers_count) {
             log->Error("Failed to find any layer in your system");
@@ -231,7 +236,7 @@ bool Ray::Vk::Context::InitVkInstance(VkInstance &instance, const char *enabled_
         }
 
         SmallVector<VkLayerProperties, 16> layers_available(layers_count);
-        vkEnumerateInstanceLayerProperties(&layers_count, &layers_available[0]);
+        api.vkEnumerateInstanceLayerProperties(&layers_count, &layers_available[0]);
 
 #ifndef NDEBUG
         bool found_validation = false;
@@ -259,10 +264,10 @@ bool Ray::Vk::Context::InitVkInstance(VkInstance &instance, const char *enabled_
 
     { // Find required extensions
         uint32_t ext_count = 0;
-        vkEnumerateInstanceExtensionProperties(nullptr, &ext_count, nullptr);
+        api.vkEnumerateInstanceExtensionProperties(nullptr, &ext_count, nullptr);
 
         SmallVector<VkExtensionProperties, 16> extensions_available(ext_count);
-        vkEnumerateInstanceExtensionProperties(nullptr, &ext_count, &extensions_available[0]);
+        api.vkEnumerateInstanceExtensionProperties(nullptr, &ext_count, &extensions_available[0]);
 
         uint32_t found_required_extensions = 0;
         for (uint32_t i = 0; i < ext_count; i++) {
@@ -317,34 +322,32 @@ bool Ray::Vk::Context::InitVkInstance(VkInstance &instance, const char *enabled_
     instance_info.pNext = &validation_features;
 #endif
 
-    const VkResult res = vkCreateInstance(&instance_info, nullptr, &instance);
+    const VkResult res = api.vkCreateInstance(&instance_info, nullptr, &instance);
     if (res != VK_SUCCESS) {
         log->Error("Failed to create vulkan instance");
         return false;
     }
 
-    LoadVulkanExtensions(instance, log);
-
     return true;
 }
 
-bool Ray::Vk::Context::ChooseVkPhysicalDevice(VkPhysicalDevice &physical_device,
+bool Ray::Vk::Context::ChooseVkPhysicalDevice(const Api &api, VkPhysicalDevice &physical_device,
                                               VkPhysicalDeviceProperties &out_device_properties,
                                               VkPhysicalDeviceMemoryProperties &out_mem_properties,
                                               uint32_t &out_graphics_family_index, bool &out_raytracing_supported,
                                               bool &out_ray_query_supported, bool &out_dynamic_rendering_supported,
                                               const char *preferred_device, VkInstance instance, ILog *log) {
     uint32_t physical_device_count = 0;
-    vkEnumeratePhysicalDevices(instance, &physical_device_count, nullptr);
+    api.vkEnumeratePhysicalDevices(instance, &physical_device_count, nullptr);
 
     SmallVector<VkPhysicalDevice, 4> physical_devices(physical_device_count);
-    vkEnumeratePhysicalDevices(instance, &physical_device_count, &physical_devices[0]);
+    api.vkEnumeratePhysicalDevices(instance, &physical_device_count, &physical_devices[0]);
 
     int best_score = 0;
 
     for (uint32_t i = 0; i < physical_device_count; i++) {
         VkPhysicalDeviceProperties device_properties = {};
-        vkGetPhysicalDeviceProperties(physical_devices[i], &device_properties);
+        api.vkGetPhysicalDeviceProperties(physical_devices[i], &device_properties);
 
         if (device_properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU) {
             continue;
@@ -355,11 +358,11 @@ bool Ray::Vk::Context::ChooseVkPhysicalDevice(VkPhysicalDevice &physical_device,
 
         { // check for features support
             uint32_t extension_count;
-            vkEnumerateDeviceExtensionProperties(physical_devices[i], nullptr, &extension_count, nullptr);
+            api.vkEnumerateDeviceExtensionProperties(physical_devices[i], nullptr, &extension_count, nullptr);
 
             SmallVector<VkExtensionProperties, 16> available_extensions(extension_count);
-            vkEnumerateDeviceExtensionProperties(physical_devices[i], nullptr, &extension_count,
-                                                 &available_extensions[0]);
+            api.vkEnumerateDeviceExtensionProperties(physical_devices[i], nullptr, &extension_count,
+                                                     &available_extensions[0]);
 
             for (uint32_t j = 0; j < extension_count; j++) {
                 const VkExtensionProperties &ext = available_extensions[j];
@@ -377,10 +380,11 @@ bool Ray::Vk::Context::ChooseVkPhysicalDevice(VkPhysicalDevice &physical_device,
         }
 
         uint32_t queue_family_count;
-        vkGetPhysicalDeviceQueueFamilyProperties(physical_devices[i], &queue_family_count, nullptr);
+        api.vkGetPhysicalDeviceQueueFamilyProperties(physical_devices[i], &queue_family_count, nullptr);
 
         SmallVector<VkQueueFamilyProperties, 8> queue_family_properties(queue_family_count);
-        vkGetPhysicalDeviceQueueFamilyProperties(physical_devices[i], &queue_family_count, &queue_family_properties[0]);
+        api.vkGetPhysicalDeviceQueueFamilyProperties(physical_devices[i], &queue_family_count,
+                                                     &queue_family_properties[0]);
 
         uint32_t graphics_family_index = 0xffffffff;
 
@@ -438,14 +442,15 @@ bool Ray::Vk::Context::ChooseVkPhysicalDevice(VkPhysicalDevice &physical_device,
         return false;
     }
 
-    vkGetPhysicalDeviceMemoryProperties(physical_device, &out_mem_properties);
+    api.vkGetPhysicalDeviceMemoryProperties(physical_device, &out_mem_properties);
 
     return true;
 }
 
-bool Ray::Vk::Context::InitVkDevice(VkDevice &device, VkPhysicalDevice physical_device, uint32_t graphics_family_index,
-                                    bool enable_raytracing, bool enable_ray_query, bool enable_dynamic_rendering,
-                                    const char *enabled_layers[], int enabled_layers_count, ILog *log) {
+bool Ray::Vk::Context::InitVkDevice(const Api &api, VkDevice &device, VkPhysicalDevice physical_device,
+                                    uint32_t graphics_family_index, bool enable_raytracing, bool enable_ray_query,
+                                    bool enable_dynamic_rendering, const char *enabled_layers[],
+                                    int enabled_layers_count, ILog *log) {
     VkDeviceQueueCreateInfo queue_create_infos[2] = {{}, {}};
     const float queue_priorities[] = {1.0f};
 
@@ -560,7 +565,7 @@ bool Ray::Vk::Context::InitVkDevice(VkDevice &device, VkPhysicalDevice physical_
     pp_next = &subset_features.pNext;
 #endif
 
-    const VkResult res = vkCreateDevice(physical_device, &device_info, nullptr, &device);
+    const VkResult res = api.vkCreateDevice(physical_device, &device_info, nullptr, &device);
     if (res != VK_SUCCESS) {
         log->Error("Failed to create logical device!");
         return false;
@@ -569,7 +574,7 @@ bool Ray::Vk::Context::InitVkDevice(VkDevice &device, VkPhysicalDevice physical_
     return true;
 }
 
-bool Ray::Vk::Context::InitCommandBuffers(VkCommandPool &command_pool, VkCommandPool &temp_command_pool,
+bool Ray::Vk::Context::InitCommandBuffers(const Api &api, VkCommandPool &command_pool, VkCommandPool &temp_command_pool,
                                           VkCommandBuffer &setup_cmd_buf,
                                           VkCommandBuffer draw_cmd_bufs[MaxFramesInFlight],
                                           VkSemaphore image_avail_semaphores[MaxFramesInFlight],
@@ -577,13 +582,13 @@ bool Ray::Vk::Context::InitCommandBuffers(VkCommandPool &command_pool, VkCommand
                                           VkFence in_flight_fences[MaxFramesInFlight],
                                           VkQueryPool query_pools[MaxFramesInFlight], VkQueue &graphics_queue,
                                           VkDevice device, uint32_t graphics_family_index, ILog *log) {
-    vkGetDeviceQueue(device, graphics_family_index, 0, &graphics_queue);
+    api.vkGetDeviceQueue(device, graphics_family_index, 0, &graphics_queue);
 
     VkCommandPoolCreateInfo cmd_pool_create_info = {VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};
     cmd_pool_create_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
     cmd_pool_create_info.queueFamilyIndex = graphics_family_index;
 
-    VkResult res = vkCreateCommandPool(device, &cmd_pool_create_info, nullptr, &command_pool);
+    VkResult res = api.vkCreateCommandPool(device, &cmd_pool_create_info, nullptr, &command_pool);
     if (res != VK_SUCCESS) {
         log->Error("Failed to create command pool!");
         return false;
@@ -594,7 +599,7 @@ bool Ray::Vk::Context::InitCommandBuffers(VkCommandPool &command_pool, VkCommand
         tmp_cmd_pool_create_info.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
         tmp_cmd_pool_create_info.queueFamilyIndex = graphics_family_index;
 
-        res = vkCreateCommandPool(device, &tmp_cmd_pool_create_info, nullptr, &temp_command_pool);
+        res = api.vkCreateCommandPool(device, &tmp_cmd_pool_create_info, nullptr, &temp_command_pool);
         if (res != VK_SUCCESS) {
             log->Error("Failed to create command pool!");
             return false;
@@ -606,14 +611,14 @@ bool Ray::Vk::Context::InitCommandBuffers(VkCommandPool &command_pool, VkCommand
     cmd_buf_alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     cmd_buf_alloc_info.commandBufferCount = 1;
 
-    res = vkAllocateCommandBuffers(device, &cmd_buf_alloc_info, &setup_cmd_buf);
+    res = api.vkAllocateCommandBuffers(device, &cmd_buf_alloc_info, &setup_cmd_buf);
     if (res != VK_SUCCESS) {
         log->Error("Failed to create command buffer!");
         return false;
     }
 
     cmd_buf_alloc_info.commandBufferCount = MaxFramesInFlight;
-    res = vkAllocateCommandBuffers(device, &cmd_buf_alloc_info, draw_cmd_bufs);
+    res = api.vkAllocateCommandBuffers(device, &cmd_buf_alloc_info, draw_cmd_bufs);
     if (res != VK_SUCCESS) {
         log->Error("Failed to create command buffer!");
         return false;
@@ -626,17 +631,17 @@ bool Ray::Vk::Context::InitCommandBuffers(VkCommandPool &command_pool, VkCommand
         fence_info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
         for (int i = 0; i < MaxFramesInFlight; i++) {
-            res = vkCreateSemaphore(device, &sem_info, nullptr, &image_avail_semaphores[i]);
+            res = api.vkCreateSemaphore(device, &sem_info, nullptr, &image_avail_semaphores[i]);
             if (res != VK_SUCCESS) {
                 log->Error("Failed to create semaphore!");
                 return false;
             }
-            res = vkCreateSemaphore(device, &sem_info, nullptr, &render_finished_semaphores[i]);
+            res = api.vkCreateSemaphore(device, &sem_info, nullptr, &render_finished_semaphores[i]);
             if (res != VK_SUCCESS) {
                 log->Error("Failed to create semaphore!");
                 return false;
             }
-            res = vkCreateFence(device, &fence_info, nullptr, &in_flight_fences[i]);
+            res = api.vkCreateFence(device, &fence_info, nullptr, &in_flight_fences[i]);
             if (res != VK_SUCCESS) {
                 log->Error("Failed to create fence!");
                 return false;
@@ -650,7 +655,7 @@ bool Ray::Vk::Context::InitCommandBuffers(VkCommandPool &command_pool, VkCommand
         pool_info.queryType = VK_QUERY_TYPE_TIMESTAMP;
 
         for (int i = 0; i < MaxFramesInFlight; ++i) {
-            res = vkCreateQueryPool(device, &pool_info, nullptr, &query_pools[i]);
+            res = api.vkCreateQueryPool(device, &pool_info, nullptr, &query_pools[i]);
             if (res != VK_SUCCESS) {
                 log->Error("Failed to create query pool!");
                 return false;
@@ -661,39 +666,39 @@ bool Ray::Vk::Context::InitCommandBuffers(VkCommandPool &command_pool, VkCommand
     return true;
 }
 
-VkCommandBuffer Ray::Vk::BegSingleTimeCommands(VkDevice device, VkCommandPool temp_command_pool) {
+VkCommandBuffer Ray::Vk::BegSingleTimeCommands(const Api &api, VkDevice device, VkCommandPool temp_command_pool) {
     VkCommandBufferAllocateInfo alloc_info = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
     alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     alloc_info.commandPool = temp_command_pool;
     alloc_info.commandBufferCount = 1;
 
     VkCommandBuffer command_buf = {};
-    vkAllocateCommandBuffers(device, &alloc_info, &command_buf);
+    api.vkAllocateCommandBuffers(device, &alloc_info, &command_buf);
 
     VkCommandBufferBeginInfo begin_info = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
     begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-    vkBeginCommandBuffer(command_buf, &begin_info);
+    api.vkBeginCommandBuffer(command_buf, &begin_info);
     return command_buf;
 }
 
-void Ray::Vk::EndSingleTimeCommands(VkDevice device, VkQueue cmd_queue, VkCommandBuffer command_buf,
+void Ray::Vk::EndSingleTimeCommands(const Api &api, VkDevice device, VkQueue cmd_queue, VkCommandBuffer command_buf,
                                     VkCommandPool temp_command_pool) {
-    vkEndCommandBuffer(command_buf);
+    api.vkEndCommandBuffer(command_buf);
 
     VkSubmitInfo submit_info = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
     submit_info.commandBufferCount = 1;
     submit_info.pCommandBuffers = &command_buf;
 
-    vkQueueSubmit(cmd_queue, 1, &submit_info, VK_NULL_HANDLE);
-    vkQueueWaitIdle(cmd_queue);
+    api.vkQueueSubmit(cmd_queue, 1, &submit_info, VK_NULL_HANDLE);
+    api.vkQueueWaitIdle(cmd_queue);
 
-    vkFreeCommandBuffers(device, temp_command_pool, 1, &command_buf);
+    api.vkFreeCommandBuffers(device, temp_command_pool, 1, &command_buf);
 }
 
 int Ray::Vk::Context::WriteTimestamp(VkCommandBuffer cmd_buf, const bool start) {
-    vkCmdWriteTimestamp(cmd_buf, start ? VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT : VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-                        query_pools_[backend_frame], query_counts_[backend_frame]);
+    api_.vkCmdWriteTimestamp(cmd_buf, start ? VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT : VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                             query_pools_[backend_frame], query_counts_[backend_frame]);
 
     const uint32_t query_index = query_counts_[backend_frame]++;
     assert(query_counts_[backend_frame] < MaxTimestampQueries);
@@ -713,9 +718,9 @@ bool Ray::Vk::Context::ReadbackTimestampQueries(const int i) {
         return true;
     }
 
-    const VkResult res =
-        vkGetQueryPoolResults(device_, query_pool, 0, query_count, query_count * sizeof(uint64_t), query_results_[i],
-                              sizeof(uint64_t), VK_QUERY_RESULT_WAIT_BIT | VK_QUERY_RESULT_64_BIT);
+    const VkResult res = api_.vkGetQueryPoolResults(device_, query_pool, 0, query_count, query_count * sizeof(uint64_t),
+                                                    query_results_[i], sizeof(uint64_t),
+                                                    VK_QUERY_RESULT_WAIT_BIT | VK_QUERY_RESULT_64_BIT);
     query_counts_[i] = 0;
 
     return (res == VK_SUCCESS);
@@ -723,82 +728,83 @@ bool Ray::Vk::Context::ReadbackTimestampQueries(const int i) {
 
 void Ray::Vk::Context::DestroyDeferredResources(const int i) {
     for (VkImageView view : image_views_to_destroy[i]) {
-        vkDestroyImageView(device_, view, nullptr);
+        api_.vkDestroyImageView(device_, view, nullptr);
     }
     image_views_to_destroy[i].clear();
     for (VkImage img : images_to_destroy[i]) {
-        vkDestroyImage(device_, img, nullptr);
+        api_.vkDestroyImage(device_, img, nullptr);
     }
     images_to_destroy[i].clear();
     for (VkSampler sampler : samplers_to_destroy[i]) {
-        vkDestroySampler(device_, sampler, nullptr);
+        api_.vkDestroySampler(device_, sampler, nullptr);
     }
     samplers_to_destroy[i].clear();
 
     allocs_to_free[i].clear();
 
     for (VkBufferView view : buf_views_to_destroy[i]) {
-        vkDestroyBufferView(device_, view, nullptr);
+        api_.vkDestroyBufferView(device_, view, nullptr);
     }
     buf_views_to_destroy[i].clear();
     for (VkBuffer buf : bufs_to_destroy[i]) {
-        vkDestroyBuffer(device_, buf, nullptr);
+        api_.vkDestroyBuffer(device_, buf, nullptr);
     }
     bufs_to_destroy[i].clear();
 
     for (VkDeviceMemory mem : mem_to_free[i]) {
-        vkFreeMemory(device_, mem, nullptr);
+        api_.vkFreeMemory(device_, mem, nullptr);
     }
     mem_to_free[i].clear();
 
     for (VkRenderPass rp : render_passes_to_destroy[i]) {
-        vkDestroyRenderPass(device_, rp, nullptr);
+        api_.vkDestroyRenderPass(device_, rp, nullptr);
     }
     render_passes_to_destroy[i].clear();
 
     for (VkFramebuffer fb : framebuffers_to_destroy[i]) {
-        vkDestroyFramebuffer(device_, fb, nullptr);
+        api_.vkDestroyFramebuffer(device_, fb, nullptr);
     }
     framebuffers_to_destroy[i].clear();
 
     for (VkDescriptorPool pool : descriptor_pools_to_destroy[i]) {
-        vkDestroyDescriptorPool(device_, pool, nullptr);
+        api_.vkDestroyDescriptorPool(device_, pool, nullptr);
     }
     descriptor_pools_to_destroy[i].clear();
 
     for (VkPipelineLayout pipe_layout : pipeline_layouts_to_destroy[i]) {
-        vkDestroyPipelineLayout(device_, pipe_layout, nullptr);
+        api_.vkDestroyPipelineLayout(device_, pipe_layout, nullptr);
     }
     pipeline_layouts_to_destroy[i].clear();
 
     for (VkPipeline pipe : pipelines_to_destroy[i]) {
-        vkDestroyPipeline(device_, pipe, nullptr);
+        api_.vkDestroyPipeline(device_, pipe, nullptr);
     }
     pipelines_to_destroy[i].clear();
 
     for (VkAccelerationStructureKHR acc_struct : acc_structs_to_destroy[i]) {
-        vkDestroyAccelerationStructureKHR(device_, acc_struct, nullptr);
+        api_.vkDestroyAccelerationStructureKHR(device_, acc_struct, nullptr);
     }
     acc_structs_to_destroy[i].clear();
 }
 
 int Ray::Vk::Context::QueryAvailableDevices(ILog *log, gpu_device_t out_devices[], const int capacity) {
-    if (!LoadVulkan(log)) {
+    Api api;
+    if (!api.Load(log)) {
         log->Error("Failed to initialize vulkan!");
         return 0;
     }
 
     VkInstance instance;
-    if (!InitVkInstance(instance, g_enabled_layers, g_enabled_layers_count, log)) {
+    if (!InitVkInstance(api, instance, g_enabled_layers, g_enabled_layers_count, log)) {
         log->Error("Failed to initialize VkInstance!");
         return 0;
     }
 
     uint32_t physical_device_count = 0;
-    vkEnumeratePhysicalDevices(instance, &physical_device_count, nullptr);
+    api.vkEnumeratePhysicalDevices(instance, &physical_device_count, nullptr);
 
     SmallVector<VkPhysicalDevice, 4> physical_devices(physical_device_count);
-    vkEnumeratePhysicalDevices(instance, &physical_device_count, &physical_devices[0]);
+    api.vkEnumeratePhysicalDevices(instance, &physical_device_count, &physical_devices[0]);
 
     int out_device_count = 0;
     if (out_devices) {
@@ -809,7 +815,7 @@ int Ray::Vk::Context::QueryAvailableDevices(ILog *log, gpu_device_t out_devices[
 
         for (int i = 0; i < int(physical_device_count); ++i) {
             VkPhysicalDeviceProperties device_properties = {};
-            vkGetPhysicalDeviceProperties(physical_devices[i], &device_properties);
+            api.vkGetPhysicalDeviceProperties(physical_devices[i], &device_properties);
 
             if (device_properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU) {
                 continue;
@@ -820,7 +826,7 @@ int Ray::Vk::Context::QueryAvailableDevices(ILog *log, gpu_device_t out_devices[
             ++out_device_count;
         }
     }
-    vkDestroyInstance(instance, nullptr);
+    api.vkDestroyInstance(instance, nullptr);
 
     return out_device_count;
 }

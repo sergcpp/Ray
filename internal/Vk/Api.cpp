@@ -1,26 +1,22 @@
-#define __VK_API_DEF__
-#include "VK.h"
-#undef __VK_API_DEF__
-
-#include <cassert>
+#include "Api.h"
 
 #include "../../Log.h"
 
 #if defined(_WIN32)
 #ifndef NOMINMAX
-    #define NOMINMAX
+#define NOMINMAX
 #endif
 #ifndef WIN32_LEAN_AND_MEAN
-    #define WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
 #endif
 #include <Windows.h>
 #elif defined(__linux__) || defined(__APPLE__)
 #include <dlfcn.h>
 #endif
 
-bool Ray::Vk::LoadVulkan(ILog *log) {
+bool Ray::Vk::Api::Load(ILog *log) {
 #if defined(_WIN32)
-    HMODULE vulkan_module = LoadLibrary("vulkan-1.dll");
+    vulkan_module = LoadLibrary("vulkan-1.dll");
     if (!vulkan_module) {
         log->Error("Failed to load vulkan-1.dll");
         return false;
@@ -69,32 +65,28 @@ bool Ray::Vk::LoadVulkan(ILog *log) {
     }
 #endif
 
-    LOAD_VK_FUN(vkCreateInstance);
-    LOAD_VK_FUN(vkDestroyInstance);
+    LOAD_VK_FUN(vkCreateInstance)
+    LOAD_VK_FUN(vkDestroyInstance)
 
-    LOAD_VK_FUN(vkEnumerateInstanceLayerProperties);
-    LOAD_VK_FUN(vkEnumerateInstanceExtensionProperties);
+    LOAD_VK_FUN(vkEnumerateInstanceLayerProperties)
+    LOAD_VK_FUN(vkEnumerateInstanceExtensionProperties)
+    LOAD_VK_FUN(vkGetInstanceProcAddr)
+    LOAD_VK_FUN(vkGetDeviceProcAddr)
 
-    LOAD_VK_FUN(vkGetInstanceProcAddr);
-    LOAD_VK_FUN(vkGetDeviceProcAddr);
-    LOAD_VK_FUN(vkEnumeratePhysicalDevices);
+    LOAD_VK_FUN(vkEnumeratePhysicalDevices)
+    LOAD_VK_FUN(vkGetPhysicalDeviceProperties)
+    LOAD_VK_FUN(vkGetPhysicalDeviceFeatures)
+    LOAD_VK_FUN(vkGetPhysicalDeviceQueueFamilyProperties)
 
-    LOAD_VK_FUN(vkGetPhysicalDeviceProperties);
-    LOAD_VK_FUN(vkGetPhysicalDeviceFeatures);
-    LOAD_VK_FUN(vkGetPhysicalDeviceQueueFamilyProperties);
+    LOAD_VK_FUN(vkCreateDevice)
+    LOAD_VK_FUN(vkDestroyDevice)
 
-    LOAD_VK_FUN(vkCreateDevice);
-    LOAD_VK_FUN(vkDestroyDevice);
-
-    LOAD_VK_FUN(vkEnumerateDeviceExtensionProperties);
+    LOAD_VK_FUN(vkEnumerateDeviceExtensionProperties)
 
     LOAD_VK_FUN(vkGetPhysicalDeviceSurfaceSupportKHR)
     LOAD_VK_FUN(vkGetPhysicalDeviceSurfaceCapabilitiesKHR)
     LOAD_VK_FUN(vkGetPhysicalDeviceSurfaceFormatsKHR)
     LOAD_VK_FUN(vkGetPhysicalDeviceSurfacePresentModesKHR)
-
-    LOAD_VK_FUN(vkCreateSwapchainKHR)
-    LOAD_VK_FUN(vkDestroySwapchainKHR)
 
     LOAD_VK_FUN(vkGetDeviceQueue)
     LOAD_VK_FUN(vkCreateCommandPool)
@@ -102,8 +94,6 @@ bool Ray::Vk::LoadVulkan(ILog *log) {
 
     LOAD_VK_FUN(vkAllocateCommandBuffers)
     LOAD_VK_FUN(vkFreeCommandBuffers)
-
-    LOAD_VK_FUN(vkGetSwapchainImagesKHR)
 
     LOAD_VK_FUN(vkCreateFence)
     LOAD_VK_FUN(vkWaitForFences)
@@ -113,19 +103,14 @@ bool Ray::Vk::LoadVulkan(ILog *log) {
 
     LOAD_VK_FUN(vkBeginCommandBuffer)
     LOAD_VK_FUN(vkEndCommandBuffer)
-
+    LOAD_VK_FUN(vkResetCommandBuffer)
     LOAD_VK_FUN(vkCmdPipelineBarrier)
 
     LOAD_VK_FUN(vkQueueSubmit)
     LOAD_VK_FUN(vkQueueWaitIdle)
 
-    LOAD_VK_FUN(vkResetCommandBuffer)
-
     LOAD_VK_FUN(vkCreateImageView)
     LOAD_VK_FUN(vkDestroyImageView)
-
-    LOAD_VK_FUN(vkAcquireNextImageKHR)
-    LOAD_VK_FUN(vkQueuePresentKHR)
 
     LOAD_VK_FUN(vkGetPhysicalDeviceMemoryProperties)
     LOAD_VK_FUN(vkGetPhysicalDeviceFormatProperties)
@@ -143,7 +128,7 @@ bool Ray::Vk::LoadVulkan(ILog *log) {
     LOAD_VK_FUN(vkDestroyRenderPass)
 
     LOAD_VK_FUN(vkCreateFramebuffer)
-    LOAD_VK_FUN(vkDestroyFramebuffer);
+    LOAD_VK_FUN(vkDestroyFramebuffer)
 
     LOAD_VK_FUN(vkCreateBuffer)
     LOAD_VK_FUN(vkGetBufferMemoryRequirements)
@@ -210,63 +195,63 @@ bool Ray::Vk::LoadVulkan(ILog *log) {
     LOAD_VK_FUN(vkCmdResetQueryPool)
     LOAD_VK_FUN(vkCmdWriteTimestamp)
 
-#if defined(VK_USE_PLATFORM_WIN32_KHR)
-    LOAD_VK_FUN(vkCreateWin32SurfaceKHR)
-#elif defined(VK_USE_PLATFORM_XLIB_KHR)
-    LOAD_VK_FUN(vkCreateXlibSurfaceKHR)
-#elif defined(VK_USE_PLATFORM_IOS_MVK)
-    LOAD_VK_FUN(vkCreateIOSSurfaceMVK)
-#elif defined(VK_USE_PLATFORM_MACOS_MVK)
-    LOAD_VK_FUN(vkCreateMacOSSurfaceMVK)
-#endif
-    LOAD_VK_FUN(vkDestroySurfaceKHR)
-
 #undef LOAD_VK_FUN
 
     return true;
 }
 
-bool Ray::Vk::LoadVulkanExtensions(VkInstance instance, ILog *log) {
-#define LOAD_VK_FUN(x)                                                                                                 \
+bool Ray::Vk::Api::LoadExtensions(VkInstance instance, ILog *log) {
+#define LOAD_INSTANCE_FUN(x)                                                                                           \
     x = (PFN_##x)vkGetInstanceProcAddr(instance, #x);                                                                  \
     if (!(x)) {                                                                                                        \
         log->Error("Failed to load %s", #x);                                                                           \
         return false;                                                                                                  \
     }
 
-    LOAD_VK_FUN(vkCreateDebugReportCallbackEXT)
-    LOAD_VK_FUN(vkDestroyDebugReportCallbackEXT)
-    LOAD_VK_FUN(vkDebugReportMessageEXT)
+    LOAD_INSTANCE_FUN(vkCreateDebugReportCallbackEXT)
+    LOAD_INSTANCE_FUN(vkDestroyDebugReportCallbackEXT)
+    LOAD_INSTANCE_FUN(vkDebugReportMessageEXT)
 
-    LOAD_VK_FUN(vkCreateAccelerationStructureKHR);
-    LOAD_VK_FUN(vkDestroyAccelerationStructureKHR);
+    LOAD_INSTANCE_FUN(vkCreateAccelerationStructureKHR)
+    LOAD_INSTANCE_FUN(vkDestroyAccelerationStructureKHR)
 
-    LOAD_VK_FUN(vkCmdBeginDebugUtilsLabelEXT)
-    LOAD_VK_FUN(vkCmdEndDebugUtilsLabelEXT)
-    LOAD_VK_FUN(vkSetDebugUtilsObjectNameEXT)
+    LOAD_INSTANCE_FUN(vkCmdBeginDebugUtilsLabelEXT)
+    LOAD_INSTANCE_FUN(vkCmdEndDebugUtilsLabelEXT)
+    LOAD_INSTANCE_FUN(vkSetDebugUtilsObjectNameEXT)
 
-    LOAD_VK_FUN(vkCmdSetDepthBias);
+    LOAD_INSTANCE_FUN(vkCmdSetDepthBias)
 
-    LOAD_VK_FUN(vkCmdBuildAccelerationStructuresKHR);
-    LOAD_VK_FUN(vkCmdWriteAccelerationStructuresPropertiesKHR);
-    LOAD_VK_FUN(vkCmdCopyAccelerationStructureKHR);
-    LOAD_VK_FUN(vkCmdTraceRaysKHR);
-    LOAD_VK_FUN(vkCmdTraceRaysIndirectKHR);
+    LOAD_INSTANCE_FUN(vkCmdBuildAccelerationStructuresKHR)
+    LOAD_INSTANCE_FUN(vkCmdWriteAccelerationStructuresPropertiesKHR)
+    LOAD_INSTANCE_FUN(vkCmdCopyAccelerationStructureKHR)
+    LOAD_INSTANCE_FUN(vkCmdTraceRaysKHR)
+    LOAD_INSTANCE_FUN(vkCmdTraceRaysIndirectKHR)
 
-    LOAD_VK_FUN(vkDeviceWaitIdle)
+    LOAD_INSTANCE_FUN(vkDeviceWaitIdle)
 
-    LOAD_VK_FUN(vkGetPhysicalDeviceProperties2KHR);
-    LOAD_VK_FUN(vkGetBufferDeviceAddressKHR)
-    LOAD_VK_FUN(vkGetAccelerationStructureBuildSizesKHR)
-    LOAD_VK_FUN(vkGetAccelerationStructureDeviceAddressKHR)
-    LOAD_VK_FUN(vkGetRayTracingShaderGroupHandlesKHR)
+    LOAD_INSTANCE_FUN(vkGetPhysicalDeviceProperties2KHR)
+    LOAD_INSTANCE_FUN(vkGetBufferDeviceAddressKHR)
+    LOAD_INSTANCE_FUN(vkGetAccelerationStructureBuildSizesKHR)
+    LOAD_INSTANCE_FUN(vkGetAccelerationStructureDeviceAddressKHR)
+    LOAD_INSTANCE_FUN(vkGetRayTracingShaderGroupHandlesKHR)
 
-    LOAD_VK_FUN(vkCreateRayTracingPipelinesKHR)
+    LOAD_INSTANCE_FUN(vkCreateRayTracingPipelinesKHR)
 
-    LOAD_VK_FUN(vkCmdBeginRenderingKHR)
-    LOAD_VK_FUN(vkCmdEndRenderingKHR)
+    LOAD_INSTANCE_FUN(vkCmdBeginRenderingKHR)
+    LOAD_INSTANCE_FUN(vkCmdEndRenderingKHR)
+
+#undef LOAD_INSTANCE_FUN
 
     return true;
+}
 
-#undef LOAD_VK_FUN
+Ray::Vk::Api::~Api() {
+    if (vulkan_module) {
+#if defined(_WIN32)
+        FreeLibrary(vulkan_module);
+#else
+        dlclose(vulkan_module);
+#endif
+        vulkan_module = {};
+    }
 }

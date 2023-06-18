@@ -8,7 +8,6 @@
 #include "PipelineVK.h"
 #include "TextureAtlasVK.h"
 #include "TextureVK.h"
-#include "VK.h"
 
 VkDescriptorSet Ray::Vk::PrepareDescriptorSet(Context *ctx, VkDescriptorSetLayout layout, Span<const Binding> bindings,
                                               DescrMultiPoolAlloc *descr_alloc, ILog *log) {
@@ -182,7 +181,7 @@ VkDescriptorSet Ray::Vk::PrepareDescriptorSet(Context *ctx, VkDescriptorSetLayou
         d.dstSet = descr_set;
     }
 
-    vkUpdateDescriptorSets(ctx->device(), uint32_t(descr_writes.size()), descr_writes.data(), 0, nullptr);
+    ctx->api().vkUpdateDescriptorSets(ctx->device(), uint32_t(descr_writes.size()), descr_writes.data(), 0, nullptr);
 
     return descr_set;
 }
@@ -199,16 +198,16 @@ void Ray::Vk::DispatchCompute(VkCommandBuffer cmd_buf, const Pipeline &comp_pipe
         return;
     }
 
-    vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, comp_pipeline.handle());
-    vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, comp_pipeline.layout(), 0, 1, &descr_set, 0,
-                            nullptr);
+    ctx->api().vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, comp_pipeline.handle());
+    ctx->api().vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, comp_pipeline.layout(), 0, 1,
+                                       &descr_set, 0, nullptr);
 
     if (uniform_data) {
-        vkCmdPushConstants(cmd_buf, comp_pipeline.layout(), VK_SHADER_STAGE_COMPUTE_BIT, 0, uniform_data_len,
-                           uniform_data);
+        ctx->api().vkCmdPushConstants(cmd_buf, comp_pipeline.layout(), VK_SHADER_STAGE_COMPUTE_BIT, 0, uniform_data_len,
+                                      uniform_data);
     }
 
-    vkCmdDispatch(cmd_buf, grp_count[0], grp_count[1], grp_count[2]);
+    ctx->api().vkCmdDispatch(cmd_buf, grp_count[0], grp_count[1], grp_count[2]);
 }
 
 void Ray::Vk::DispatchComputeIndirect(VkCommandBuffer cmd_buf, const Pipeline &comp_pipeline, const Buffer &indir_buf,
@@ -224,16 +223,16 @@ void Ray::Vk::DispatchComputeIndirect(VkCommandBuffer cmd_buf, const Pipeline &c
         return;
     }
 
-    vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, comp_pipeline.handle());
-    vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, comp_pipeline.layout(), 0, 1, &descr_set, 0,
-                            nullptr);
+    ctx->api().vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, comp_pipeline.handle());
+    ctx->api().vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, comp_pipeline.layout(), 0, 1,
+                                       &descr_set, 0, nullptr);
 
     if (uniform_data && uniform_data_len) {
-        vkCmdPushConstants(cmd_buf, comp_pipeline.layout(), VK_SHADER_STAGE_COMPUTE_BIT, 0, uniform_data_len,
-                           uniform_data);
+        ctx->api().vkCmdPushConstants(cmd_buf, comp_pipeline.layout(), VK_SHADER_STAGE_COMPUTE_BIT, 0, uniform_data_len,
+                                      uniform_data);
     }
 
-    vkCmdDispatchIndirect(cmd_buf, indir_buf.vk_handle(), VkDeviceSize(indir_buf_offset));
+    ctx->api().vkCmdDispatchIndirect(cmd_buf, indir_buf.vk_handle(), VkDeviceSize(indir_buf_offset));
 }
 
 void Ray::Vk::TraceRays(VkCommandBuffer cmd_buf, const Pipeline &rt_pipeline, const uint32_t dims[3],
@@ -248,18 +247,18 @@ void Ray::Vk::TraceRays(VkCommandBuffer cmd_buf, const Pipeline &rt_pipeline, co
         return;
     }
 
-    vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, rt_pipeline.handle());
-    vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, rt_pipeline.layout(), 0, 1, &descr_set, 0,
-                            nullptr);
+    ctx->api().vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, rt_pipeline.handle());
+    ctx->api().vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, rt_pipeline.layout(), 0, 1,
+                                       &descr_set, 0, nullptr);
 
     if (uniform_data) {
         // TODO: Properly determine required stages!
-        vkCmdPushConstants(cmd_buf, rt_pipeline.layout(), VK_SHADER_STAGE_RAYGEN_BIT_KHR, 0, uniform_data_len,
-                           uniform_data);
+        ctx->api().vkCmdPushConstants(cmd_buf, rt_pipeline.layout(), VK_SHADER_STAGE_RAYGEN_BIT_KHR, 0,
+                                      uniform_data_len, uniform_data);
     }
 
-    vkCmdTraceRaysKHR(cmd_buf, rt_pipeline.rgen_table(), rt_pipeline.miss_table(), rt_pipeline.hit_table(),
-                      rt_pipeline.call_table(), dims[0], dims[1], dims[2]);
+    ctx->api().vkCmdTraceRaysKHR(cmd_buf, rt_pipeline.rgen_table(), rt_pipeline.miss_table(), rt_pipeline.hit_table(),
+                                 rt_pipeline.call_table(), dims[0], dims[1], dims[2]);
 }
 
 void Ray::Vk::TraceRaysIndirect(VkCommandBuffer cmd_buf, const Pipeline &rt_pipeline, const Buffer &indir_buf,
@@ -274,16 +273,17 @@ void Ray::Vk::TraceRaysIndirect(VkCommandBuffer cmd_buf, const Pipeline &rt_pipe
         return;
     }
 
-    vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, rt_pipeline.handle());
-    vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, rt_pipeline.layout(), 0, 1, &descr_set, 0,
-                            nullptr);
+    ctx->api().vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, rt_pipeline.handle());
+    ctx->api().vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, rt_pipeline.layout(), 0, 1,
+                                       &descr_set, 0, nullptr);
 
     if (uniform_data && uniform_data_len) {
         // TODO: Properly determine required stages!
-        vkCmdPushConstants(cmd_buf, rt_pipeline.layout(), VK_SHADER_STAGE_RAYGEN_BIT_KHR, 0, uniform_data_len,
-                           uniform_data);
+        ctx->api().vkCmdPushConstants(cmd_buf, rt_pipeline.layout(), VK_SHADER_STAGE_RAYGEN_BIT_KHR, 0,
+                                      uniform_data_len, uniform_data);
     }
 
-    vkCmdTraceRaysIndirectKHR(cmd_buf, rt_pipeline.rgen_table(), rt_pipeline.miss_table(), rt_pipeline.hit_table(),
-                              rt_pipeline.call_table(), indir_buf.vk_device_address() + indir_buf_offset);
+    ctx->api().vkCmdTraceRaysIndirectKHR(cmd_buf, rt_pipeline.rgen_table(), rt_pipeline.miss_table(),
+                                         rt_pipeline.hit_table(), rt_pipeline.call_table(),
+                                         indir_buf.vk_device_address() + indir_buf_offset);
 }

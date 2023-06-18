@@ -145,7 +145,7 @@ bool Ray::Vk::Pipeline::Init(Context *ctx, const RastState &rast_state, Program 
         layout_create_info.pushConstantRangeCount = prog->pc_range_count();
         layout_create_info.pPushConstantRanges = prog->pc_ranges();
 
-        const VkResult res = vkCreatePipelineLayout(ctx->device(), &layout_create_info, nullptr, &layout_);
+        const VkResult res = ctx_->api().vkCreatePipelineLayout(ctx->device(), &layout_create_info, nullptr, &layout_);
         if (res != VK_SUCCESS) {
             log->Error("Failed to create pipeline layout!");
             return false;
@@ -304,8 +304,8 @@ bool Ray::Vk::Pipeline::Init(Context *ctx, const RastState &rast_state, Program 
             pipeline_create_info.pNext = &pipeline_rendering_create_info;
         }
 
-        const VkResult res =
-            vkCreateGraphicsPipelines(ctx->device(), VK_NULL_HANDLE, 1, &pipeline_create_info, nullptr, &handle_);
+        const VkResult res = ctx->api().vkCreateGraphicsPipelines(ctx->device(), VK_NULL_HANDLE, 1,
+                                                                  &pipeline_create_info, nullptr, &handle_);
         if (res != VK_SUCCESS) {
             log->Error("Failed to create graphics pipeline!");
             return false;
@@ -427,7 +427,7 @@ bool Ray::Vk::Pipeline::Init(Context *ctx, Program *prog, ILog *log) {
         layout_create_info.pushConstantRangeCount = prog->pc_range_count();
         layout_create_info.pPushConstantRanges = prog->pc_ranges();
 
-        const VkResult res = vkCreatePipelineLayout(ctx->device(), &layout_create_info, nullptr, &layout_);
+        const VkResult res = ctx->api().vkCreatePipelineLayout(ctx->device(), &layout_create_info, nullptr, &layout_);
         if (res != VK_SUCCESS) {
             log->Error("Failed to create pipeline layout!");
             return false;
@@ -439,7 +439,8 @@ bool Ray::Vk::Pipeline::Init(Context *ctx, Program *prog, ILog *log) {
         info.stage = shader_stage_create_info[0];
         info.layout = layout_;
 
-        const VkResult res = vkCreateComputePipelines(ctx->device(), VK_NULL_HANDLE, 1, &info, nullptr, &handle_);
+        const VkResult res =
+            ctx->api().vkCreateComputePipelines(ctx->device(), VK_NULL_HANDLE, 1, &info, nullptr, &handle_);
         if (res != VK_SUCCESS) {
             log->Error("Failed to create pipeline!");
             return false;
@@ -453,8 +454,8 @@ bool Ray::Vk::Pipeline::Init(Context *ctx, Program *prog, ILog *log) {
         info.groupCount = uint32_t(rt_shader_groups_.size());
         info.pGroups = rt_shader_groups_.cdata();
 
-        const VkResult res =
-            vkCreateRayTracingPipelinesKHR(ctx->device(), VK_NULL_HANDLE, VK_NULL_HANDLE, 1, &info, nullptr, &handle_);
+        const VkResult res = ctx->api().vkCreateRayTracingPipelinesKHR(ctx->device(), VK_NULL_HANDLE, VK_NULL_HANDLE, 1,
+                                                                       &info, nullptr, &handle_);
         if (res != VK_SUCCESS) {
             log->Error("Failed to create pipeline!");
             return false;
@@ -480,8 +481,8 @@ bool Ray::Vk::Pipeline::Init(Context *ctx, Program *prog, ILog *log) {
             const uint32_t data_size = HandleCount * handle_size;
             SmallVector<uint8_t, 128> handles_data(data_size);
 
-            const VkResult res = vkGetRayTracingShaderGroupHandlesKHR(ctx->device(), handle_, 0, HandleCount, data_size,
-                                                                      &handles_data[0]);
+            const VkResult res = ctx->api().vkGetRayTracingShaderGroupHandlesKHR(ctx->device(), handle_, 0, HandleCount,
+                                                                                 data_size, &handles_data[0]);
             if (res != VK_SUCCESS) {
                 log->Error("Failed to get shader group handles!");
                 return false;
@@ -524,19 +525,21 @@ bool Ray::Vk::Pipeline::Init(Context *ctx, Program *prog, ILog *log) {
             }
 
             { // Copy data
-                VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx->device(), ctx->temp_command_pool());
+                VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx->api(), ctx->device(), ctx->temp_command_pool());
 
                 VkBufferCopy region_to_copy = {};
                 region_to_copy.srcOffset = VkDeviceSize{0};
                 region_to_copy.dstOffset = VkDeviceSize{0};
                 region_to_copy.size = VkDeviceSize{sbt_stage_buf.size()};
 
-                vkCmdCopyBuffer(cmd_buf, sbt_stage_buf.vk_handle(), rt_sbt_buf_.vk_handle(), 1, &region_to_copy);
+                ctx->api().vkCmdCopyBuffer(cmd_buf, sbt_stage_buf.vk_handle(), rt_sbt_buf_.vk_handle(), 1,
+                                           &region_to_copy);
 
                 sbt_stage_buf.resource_state = eResState::CopySrc;
                 rt_sbt_buf_.resource_state = eResState::CopyDst;
 
-                EndSingleTimeCommands(ctx->device(), ctx->graphics_queue(), cmd_buf, ctx->temp_command_pool());
+                EndSingleTimeCommands(ctx->api(), ctx->device(), ctx->graphics_queue(), cmd_buf,
+                                      ctx->temp_command_pool());
             }
         }
     }

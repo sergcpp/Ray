@@ -318,7 +318,7 @@ bool Ray::Dx::Context::Init(ILog *log, const char *preferred_device) {
     return true;
 }
 
-ID3D12GraphicsCommandList *Ray::Dx::BegSingleTimeCommands(ID3D12Device *device,
+ID3D12GraphicsCommandList *Ray::Dx::BegSingleTimeCommands(void *api, ID3D12Device *device,
                                                           ID3D12CommandAllocator *temp_command_allocator) {
     HRESULT hr = temp_command_allocator->Reset();
     if (FAILED(hr)) {
@@ -335,7 +335,7 @@ ID3D12GraphicsCommandList *Ray::Dx::BegSingleTimeCommands(ID3D12Device *device,
     return temp_command_list;
 }
 
-void Ray::Dx::EndSingleTimeCommands(ID3D12Device *device, ID3D12CommandQueue *cmd_queue,
+void Ray::Dx::EndSingleTimeCommands(void *api, ID3D12Device *device, ID3D12CommandQueue *cmd_queue,
                                     ID3D12GraphicsCommandList *command_list,
                                     ID3D12CommandAllocator *temp_command_allocator) {
     HRESULT hr = command_list->Close();

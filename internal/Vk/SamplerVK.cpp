@@ -1,7 +1,7 @@
 #include "SamplerVK.h"
 
-#include "ContextVK.h"
 #include "../../Log.h"
+#include "ContextVK.h"
 
 namespace Ray {
 namespace Vk {
@@ -70,7 +70,7 @@ void Ray::Vk::Sampler::Free() {
 
 void Ray::Vk::Sampler::FreeImmediate() {
     if (handle_) {
-        vkDestroySampler(ctx_->device(), handle_, nullptr);
+        ctx_->api().vkDestroySampler(ctx_->device(), handle_, nullptr);
         handle_ = {};
     }
 }
@@ -95,7 +95,7 @@ void Ray::Vk::Sampler::Init(Context *ctx, const SamplingParams params) {
     sampler_info.minLod = params.min_lod.to_float();
     sampler_info.maxLod = params.max_lod.to_float();
 
-    const VkResult res = vkCreateSampler(ctx->device(), &sampler_info, nullptr, &handle_);
+    const VkResult res = ctx->api().vkCreateSampler(ctx->device(), &sampler_info, nullptr, &handle_);
     if (res != VK_SUCCESS) {
         ctx->log()->Error("Failed to create sampler!");
     }

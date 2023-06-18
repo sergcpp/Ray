@@ -545,7 +545,7 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
                                               ctx_->default_memory_allocs(), ctx_->log());
 
     { // Submit GPU commands
-        CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+        CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
         int res[2] = {_t.w, _t.h};
         uint32_t data_offset = 0;
@@ -557,7 +557,7 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
             data_offset += 4096 * ((data_size[i] + 4095) / 4096);
         }
 
-        EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+        EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
     }
 
     temp_stage_buf.FreeImmediate();
@@ -1237,8 +1237,8 @@ inline void Ray::NS::Scene::Finalize() {
     env_map_qtree_ = {};
     env_.qtree_levels = 0;
 
-    if (env_.env_map != InvalidTextureHandle._index && (env_.env_map == PhysicalSkyTexture._index ||
-        env_.env_map == physical_sky_texture_._index)) {
+    if (env_.env_map != InvalidTextureHandle._index &&
+        (env_.env_map == PhysicalSkyTexture._index || env_.env_map == physical_sky_texture_._index)) {
         PrepareSkyEnvMap_nolock();
     }
 
@@ -1465,11 +1465,11 @@ inline void Ray::NS::Scene::PrepareEnvMapQTree_nolock() {
 
         temp_stage_buf = Buffer("Temp stage buf", ctx_, eBufType::Readback, data_size);
 
-        CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+        CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
         CopyImageToBuffer(t, 0, 0, 0, t.params.w, t.params.h, temp_stage_buf, cmd_buf, 0);
 
-        EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+        EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
     } else {
         const atlas_texture_t &t = atlas_textures_[tex];
         size.template set<0>(t.width & ATLAS_TEX_WIDTH_BITS);
@@ -1483,12 +1483,12 @@ inline void Ray::NS::Scene::PrepareEnvMapQTree_nolock() {
 
         temp_stage_buf = Buffer("Temp stage buf", ctx_, eBufType::Readback, data_size);
 
-        CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+        CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
         atlas.CopyRegionTo(t.page[0], t.pos[0][0] + 1, t.pos[0][1] + 1, (t.width & ATLAS_TEX_WIDTH_BITS),
                            (t.height & ATLAS_TEX_HEIGHT_BITS), temp_stage_buf, cmd_buf, 0);
 
-        EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+        EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
     }
 
     pitch /= 4;
@@ -1655,7 +1655,7 @@ inline void Ray::NS::Scene::PrepareEnvMapQTree_nolock() {
 
     env_map_qtree_.tex = Texture2D("Env map qtree", ctx_, p, ctx_->default_memory_allocs(), ctx_->log());
 
-    CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+    CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
     for (int i = 0; i < env_.qtree_levels; ++i) {
         env_map_qtree_.tex.SetSubImage(i, 0, 0, (env_map_qtree_.res >> i) / 2, (env_map_qtree_.res >> i) / 2,
@@ -1663,7 +1663,7 @@ inline void Ray::NS::Scene::PrepareEnvMapQTree_nolock() {
                                        int(env_map_qtree_.mips[i].size() * sizeof(simd_fvec4)));
     }
 
-    EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+    EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 
     temp_stage_buf.Unmap();
     temp_stage_buf.FreeImmediate();

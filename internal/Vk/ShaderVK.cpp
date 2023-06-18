@@ -35,7 +35,7 @@ static_assert(int(eShaderType::AnyHit) < int(eShaderType::Intersection), "!");
 Ray::Vk::Shader::Shader(const char *name, Context *ctx, const uint8_t *shader_code, const int code_size,
                         const eShaderType type, ILog *log) {
     name_ = name;
-    device_ = ctx->device();
+    ctx_ = ctx;
     if (!Init(shader_code, code_size, type, log)) {
         throw std::runtime_error("Shader Init error!");
     }
@@ -43,16 +43,16 @@ Ray::Vk::Shader::Shader(const char *name, Context *ctx, const uint8_t *shader_co
 
 Ray::Vk::Shader::~Shader() {
     if (module_) {
-        vkDestroyShaderModule(device_, module_, nullptr);
+        ctx_->api().vkDestroyShaderModule(ctx_->device(), module_, nullptr);
     }
 }
 
 Ray::Vk::Shader &Ray::Vk::Shader::operator=(Shader &&rhs) noexcept {
     if (module_) {
-        vkDestroyShaderModule(device_, module_, nullptr);
+        ctx_->api().vkDestroyShaderModule(ctx_->device(), module_, nullptr);
     }
 
-    device_ = exchange(rhs.device_, VkDevice(VK_NULL_HANDLE));
+    ctx_ = exchange(rhs.ctx_, nullptr);
     module_ = exchange(rhs.module_, VkShaderModule(VK_NULL_HANDLE));
     type_ = rhs.type_;
     name_ = std::move(rhs.name_);
@@ -74,7 +74,7 @@ bool Ray::Vk::Shader::Init(const uint8_t *shader_code, const int code_size, cons
     name_info.objectType = VK_OBJECT_TYPE_SHADER_MODULE;
     name_info.objectHandle = uint64_t(module_);
     name_info.pObjectName = name_.c_str();
-    vkSetDebugUtilsObjectNameEXT(device_, &name_info);
+    ctx_->api().vkSetDebugUtilsObjectNameEXT(ctx_->device(), &name_info);
 #endif
 
     return true;
@@ -93,7 +93,7 @@ bool Ray::Vk::Shader::InitFromSPIRV(const uint8_t *shader_code, const int code_s
         create_info.codeSize = static_cast<size_t>(code_size);
         create_info.pCode = reinterpret_cast<const uint32_t *>(shader_code);
 
-        const VkResult res = vkCreateShaderModule(device_, &create_info, nullptr, &module_);
+        const VkResult res = ctx_->api().vkCreateShaderModule(ctx_->device(), &create_info, nullptr, &module_);
         if (res != VK_SUCCESS) {
             log->Error("Failed to create shader module!");
             return false;

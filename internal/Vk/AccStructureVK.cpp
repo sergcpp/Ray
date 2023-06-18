@@ -23,7 +23,7 @@ void Ray::Vk::AccStructure::Free() {
 
 void Ray::Vk::AccStructure::FreeImmediate() {
     if (handle_) {
-        vkDestroyAccelerationStructureKHR(ctx_->device(), handle_, nullptr);
+        ctx_->api().vkDestroyAccelerationStructureKHR(ctx_->device(), handle_, nullptr);
         handle_ = {};
     }
 }
@@ -32,7 +32,7 @@ VkDeviceAddress Ray::Vk::AccStructure::vk_device_address() const {
     VkAccelerationStructureDeviceAddressInfoKHR info = {
         VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR};
     info.accelerationStructure = handle_;
-    return vkGetAccelerationStructureDeviceAddressKHR(ctx_->device(), &info);
+    return ctx_->api().vkGetAccelerationStructureDeviceAddressKHR(ctx_->device(), &info);
 }
 
 bool Ray::Vk::AccStructure::Init(Context *ctx, VkAccelerationStructureKHR handle) {

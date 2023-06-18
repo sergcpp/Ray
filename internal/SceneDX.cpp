@@ -42,8 +42,7 @@ Ray::Dx::Scene::~Scene() {
     bindless_textures_.clear();
 }
 
-void Ray::Dx::Scene::GenerateTextureMips_nolock() {
-}
+void Ray::Dx::Scene::GenerateTextureMips_nolock() {}
 
 void Ray::Dx::Scene::PrepareBindlessTextures_nolock() {
     assert(bindless_textures_.capacity() <= ctx_->max_combined_image_samplers());
@@ -103,9 +102,9 @@ void Ray::Dx::Scene::PrepareBindlessTextures_nolock() {
             img_transitions.emplace_back(&tex, eResState::ShaderResource);
         }
 
-        CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+        CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
         TransitionResourceStates(cmd_buf, AllStages, AllStages, img_transitions);
-        EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+        EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
     }
 }
 
@@ -210,7 +209,7 @@ void Ray::Dx::Scene::RebuildHWAccStructures_nolock() {
         { // Submit build commands
             uint64_t acc_buf_offset = 0;
             auto *cmd_buf = reinterpret_cast<ID3D12GraphicsCommandList4 *>(
-                BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool()));
+                BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool()));
 
             { // transition buffers to required states
                 const TransitionInfo transitions[] = {{&scratch_buf, eResState::UnorderedAccess},
@@ -251,7 +250,8 @@ void Ray::Dx::Scene::RebuildHWAccStructures_nolock() {
             CopyBufferToBuffer(compacted_sizes_buf, 0, compacted_sizes_readback_buf, 0, compacted_sizes_buf.size(),
                                cmd_buf);
 
-            EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+            EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf,
+                                  ctx_->temp_command_pool());
         }
 
         const auto *compact_sizes =
@@ -271,7 +271,7 @@ void Ray::Dx::Scene::RebuildHWAccStructures_nolock() {
         { // Submit compaction commands
             uint64_t compact_acc_buf_offset = 0;
             auto *cmd_buf = reinterpret_cast<ID3D12GraphicsCommandList4 *>(
-                BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool()));
+                BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool()));
 
             for (int i = 0; i < int(all_blases.size()); ++i) {
                 auto &blas = all_blases[i];
@@ -292,7 +292,8 @@ void Ray::Dx::Scene::RebuildHWAccStructures_nolock() {
                 compact_acc_buf_offset += round_up(uint32_t(compact_sizes[i].CompactedSizeInBytes), AccStructAlignment);
             }
 
-            EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+            EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf,
+                                  ctx_->temp_command_pool());
 
             for (auto &b : blases_before_compaction) {
                 b.FreeImmediate();
@@ -379,7 +380,7 @@ void Ray::Dx::Scene::RebuildHWAccStructures_nolock() {
     uint64_t instance_buf_addr = rt_instance_buf_.dx_resource()->GetGPUVirtualAddress();
 
     auto *cmd_buf = reinterpret_cast<ID3D12GraphicsCommandList4 *>(
-        BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool()));
+        BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool()));
 
     CopyBufferToBuffer(geo_data_stage_buf, 0, rt_geo_data_buf_, 0, geo_data_stage_buf.size(), cmd_buf);
     CopyBufferToBuffer(instance_stage_buf, 0, rt_instance_buf_, 0, instance_stage_buf.size(), cmd_buf);
@@ -419,7 +420,7 @@ void Ray::Dx::Scene::RebuildHWAccStructures_nolock() {
         }
     }
 
-    EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+    EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 
     tlas_scratch_buf.FreeImmediate();
     instance_stage_buf.FreeImmediate();

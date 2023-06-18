@@ -477,12 +477,12 @@ Ray::Dx::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
     indir_args_buf_ = Buffer{"Indir Args", ctx_.get(), eBufType::Indirect, 32 * sizeof(DispatchIndirectCommand)};
 
     { // zero out counters
-        CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+        CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
         const uint32_t zeros[32] = {};
         counters_buf_.UpdateImmediate(0, 32 * sizeof(uint32_t), zeros, cmd_buf);
 
-        EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+        EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
     }
 
     { // create tonemap LUT texture
@@ -571,7 +571,7 @@ void Ray::Dx::Renderer::Resize(const int w, const int h) {
     count_table_buf_ =
         Buffer{"Count Table", ctx_.get(), eBufType::Storage, uint32_t(sizeof(uint32_t) * scan_values_rounded_count)};
 
-    CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+    CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
     for (int i = 0; i < 4; ++i) {
         char name_buf[64];
@@ -594,7 +594,7 @@ void Ray::Dx::Renderer::Resize(const int w, const int h) {
             SORT_SCAN_PORTION * ((scan_values_count + SORT_SCAN_PORTION - 1) / SORT_SCAN_PORTION);
     }
 
-    EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+    EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 
     w_ = w;
     h_ = h;
@@ -603,7 +603,7 @@ void Ray::Dx::Renderer::Resize(const int w, const int h) {
 }
 
 void Ray::Dx::Renderer::Clear(const color_rgba_t &c) {
-    CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+    CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
     const TransitionInfo img_transitions[] = {
         {&dual_buf_[0], ResStateForClear},       {&dual_buf_[1], ResStateForClear},
@@ -630,7 +630,7 @@ void Ray::Dx::Renderer::Clear(const color_rgba_t &c) {
         ClearColorImage(required_samples_buf_, rgba, cmd_buf);
     }
 
-    EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+    EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 }
 
 Ray::SceneBase *Ray::Dx::Renderer::CreateScene() {
@@ -694,11 +694,12 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
 
                 // Perform initial clear
                 const TransitionInfo img_transitions[] = {{&base_color_buf_, ResStateForClear}};
-                CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+                CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
                 TransitionResourceStates(cmd_buf, AllStages, AllStages, img_transitions);
                 static const float rgba[] = {0.0f, 0.0f, 0.0f, 0.0f};
                 ClearColorImage(base_color_buf_, rgba, cmd_buf);
-                EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+                EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf,
+                                      ctx_->temp_command_pool());
             }
         } else {
             base_color_buf_ = {};
@@ -728,11 +729,12 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
 
                 // Perform initial clear
                 const TransitionInfo img_transitions[] = {{&depth_normals_buf_, ResStateForClear}};
-                CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+                CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
                 TransitionResourceStates(cmd_buf, AllStages, AllStages, img_transitions);
                 static const float rgba[] = {0.0f, 0.0f, 0.0f, 0.0f};
                 ClearColorImage(depth_normals_buf_, rgba, cmd_buf);
-                EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+                EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf,
+                                      ctx_->temp_command_pool());
             }
         } else {
             temp_depth_normals_buf_ = {};
@@ -746,7 +748,7 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
     }
 
     if (loaded_halton_ == -1 || (region.iteration / HALTON_SEQ_LEN) != (loaded_halton_ / HALTON_SEQ_LEN)) {
-        CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+        CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
         Buffer temp_stage_buf{"Temp halton stage", ctx_.get(), eBufType::Upload, halton_seq_buf_.size()};
         { // update stage buffer
@@ -758,7 +760,7 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         CopyBufferToBuffer(temp_stage_buf, 0, halton_seq_buf_, 0, sizeof(float) * HALTON_COUNT * HALTON_SEQ_LEN,
                            cmd_buf);
 
-        EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+        EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 
         temp_stage_buf.FreeImmediate();
         loaded_halton_ = region.iteration;
@@ -766,7 +768,7 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
 
     if (loaded_view_transform_ != cam.view_transform) {
         if (cam.view_transform != eViewTransform::Standard) {
-            CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+            CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
             const uint32_t data_len =
                 LUT_DIMS * LUT_DIMS * round_up(LUT_DIMS * sizeof(uint32_t), TextureDataPitchAlignment);
@@ -791,7 +793,8 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
             tonemap_lut_.SetSubImage(0, 0, 0, LUT_DIMS, LUT_DIMS, LUT_DIMS, eTexFormat::RawRGB10_A2, temp_upload_buf,
                                      cmd_buf, 0, data_len);
 
-            EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+            EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf,
+                                  ctx_->temp_command_pool());
 
             temp_upload_buf.FreeImmediate();
         }
@@ -879,7 +882,7 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
     }
 
 #if RUN_IN_LOCKSTEP
-    CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+    CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 #else
     ID3D12CommandAllocator *cmd_alloc = ctx_->draw_cmd_alloc(ctx_->backend_frame);
     CommandBuffer cmd_buf = ctx_->draw_cmd_buf();
@@ -1152,7 +1155,7 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
     }
 
 #if RUN_IN_LOCKSTEP
-    EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+    EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 #else
     ctx_->ResolveTimestampQueries(ctx_->backend_frame);
 
@@ -1204,7 +1207,7 @@ void Ray::Dx::Renderer::DenoiseImage(const RegionContext &region) {
                                                                   timestamps_[ctx_->backend_frame].denoise[1]);
 
 #if RUN_IN_LOCKSTEP
-    CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+    CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 #else
     ID3D12CommandAllocator *cmd_alloc = ctx_->draw_cmd_alloc(ctx_->backend_frame);
     CommandBuffer cmd_buf = ctx_->draw_cmd_buf();
@@ -1250,7 +1253,7 @@ void Ray::Dx::Renderer::DenoiseImage(const RegionContext &region) {
     //////////////////////////////////////////////////////////////////////////////////
 
 #if RUN_IN_LOCKSTEP
-    EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+    EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 #else
     hr = cmd_buf->Close();
     if (FAILED(hr)) {
@@ -1344,7 +1347,7 @@ void Ray::Dx::Renderer::ExclusiveScan(CommandBuffer cmd_buf, const Buffer &indir
 
 Ray::color_data_rgba_t Ray::Dx::Renderer::get_pixels_ref(const bool tonemap) const {
     if (frame_dirty_ || pixel_readback_is_tonemapped_ != tonemap) {
-        CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+        CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
         { // download result
             DebugMarker _(cmd_buf, "Download Result");
@@ -1359,7 +1362,7 @@ Ray::color_data_rgba_t Ray::Dx::Renderer::get_pixels_ref(const bool tonemap) con
             CopyImageToBuffer(buffer_to_use, 0, 0, 0, w_, h_, pixel_readback_buf_, cmd_buf, 0);
         }
 
-        EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+        EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 
         // Can be reset after vkQueueWaitIdle
         for (bool &is_set : ctx_->render_finished_semaphore_is_set) {
@@ -1382,7 +1385,7 @@ Ray::color_data_rgba_t Ray::Dx::Renderer::get_aux_pixels_ref(const eAUXBuffer bu
         (buf == eAUXBuffer::BaseColor) ? base_color_readback_buf_ : depth_normals_readback_buf_;
 
     if (dirty_flag) {
-        CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->device(), ctx_->temp_command_pool());
+        CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
         { // download result
             DebugMarker _(cmd_buf, "Download Result");
@@ -1394,7 +1397,7 @@ Ray::color_data_rgba_t Ray::Dx::Renderer::get_aux_pixels_ref(const eAUXBuffer bu
             CopyImageToBuffer(buffer_to_use, 0, 0, 0, w_, h_, stage_buffer_to_use, cmd_buf, 0);
         }
 
-        EndSingleTimeCommands(ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+        EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 
         // Can be reset after vkQueueWaitIdle
         for (bool &is_set : ctx_->render_finished_semaphore_is_set) {

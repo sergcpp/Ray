@@ -128,6 +128,7 @@ class Texture2D {
     bool Realloc(int w, int h, int mip_count, int samples, eTexFormat format, eTexBlock block, bool is_srgb,
                  void *_cmd_buf, MemoryAllocators *mem_allocs, ILog *log);
 
+    Context *ctx() const { return ctx_; }
     const TexHandle &handle() const { return handle_; }
     TexHandle &handle() { return handle_; }
     VkSampler vk_sampler() const { return handle_.sampler; }
@@ -231,6 +232,7 @@ class Texture3D {
     Texture3D &operator=(Texture3D &&rhs) noexcept;
 
     const std::string &name() const { return name_; }
+    Context *ctx() const { return ctx_; }
     const TexHandle &handle() const { return handle_; }
     TexHandle &handle() { return handle_; }
     VkSampler vk_sampler() const { return handle_.sampler; }

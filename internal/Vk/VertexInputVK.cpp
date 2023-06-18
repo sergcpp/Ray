@@ -1,5 +1,7 @@
 #include "VertexInputVK.h"
 
+#include "ContextVK.h"
+
 namespace Ray {
 namespace Vk {
 const VkFormat g_vk_attrib_formats[][4] = {
@@ -36,7 +38,7 @@ const int MaxVertexInputAttributeOffset = 16; // 16 seems to be supported by all
 } // namespace Vk
 } // namespace Ray
 
-Ray::Vk::VertexInput::VertexInput() = default;
+Ray::Vk::VertexInput::VertexInput(Context *ctx) : api_(&ctx->api()) {}
 
 Ray::Vk::VertexInput::~VertexInput() = default;
 
@@ -66,10 +68,10 @@ void Ray::Vk::VertexInput::BindBuffers(VkCommandBuffer cmd_buf, const uint32_t i
         }
     }
 
-    vkCmdBindVertexBuffers(cmd_buf, 0, uint32_t(buffers_to_bind.size()), buffers_to_bind.cdata(),
-                           buffer_offsets.cdata());
+    api_->vkCmdBindVertexBuffers(cmd_buf, 0, uint32_t(buffers_to_bind.size()), buffers_to_bind.cdata(),
+                                 buffer_offsets.cdata());
     if (elem_buf) {
-        vkCmdBindIndexBuffer(cmd_buf, elem_buf.buf, VkDeviceSize(index_offset), index_type);
+        api_->vkCmdBindIndexBuffer(cmd_buf, elem_buf.buf, VkDeviceSize(index_offset), index_type);
     }
 }
 
