@@ -6,6 +6,9 @@
 
 #include <atomic>
 #include <chrono>
+#include <future>
+
+#include "thread_pool.h"
 
 void test_simd();
 void test_hashmap();
@@ -99,10 +102,11 @@ void test_complex_mat7_principled(const char *arch_list[], const char *preferred
 void assemble_material_test_images(const char *arch_list[]);
 
 bool g_stop_on_fail = false;
-bool g_tests_success = true;
+std::atomic_bool g_tests_success{true};
 std::atomic_bool g_log_contains_errors{false};
 bool g_catch_flt_exceptions = false;
 bool g_determine_sample_count = false;
+bool g_minimal_output = false;
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -130,6 +134,7 @@ int main(int argc, char *argv[]) {
     const char *device_name = nullptr;
     const char *preferred_arch[] = {nullptr, nullptr};
     double time_limit_m = std::numeric_limits<double>::max();
+    bool multithreaded = false;
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--nogpu") == 0) {
@@ -144,6 +149,9 @@ int main(int argc, char *argv[]) {
             run_detail_tests_on_fail = true;
         } else if (strcmp(argv[i], "--arch") == 0 && (++i != argc)) {
             preferred_arch[0] = argv[i];
+        } else if (strcmp(argv[i], "--mt") == 0) {
+            multithreaded = true;
+            g_minimal_output = true;
         } else if (strcmp(argv[i], "--time_limit") == 0 && (++i != argc)) {
             time_limit_m = atof(argv[i]);
 #ifdef _WIN32
@@ -197,36 +205,44 @@ int main(int argc, char *argv[]) {
         arch_list = ArchListDefaultNoGPU;
     }
 
+    ThreadPool mt_run_pool(multithreaded ? 2 : 1);
+
     if (g_tests_success) {
         const auto t2 = high_resolution_clock::now();
         puts("---------------");
-        test_aux_channels(arch_list, device_name);
-        test_complex_mat0(arch_list, device_name);
-        test_complex_mat1(arch_list, device_name);
-        test_complex_mat2(arch_list, device_name);
-        test_complex_mat3(arch_list, device_name);
-        test_complex_mat4(arch_list, device_name);
-        test_complex_mat5(arch_list, device_name);
-        test_complex_mat5_clipped(arch_list, device_name);
-        test_complex_mat5_adaptive(arch_list, device_name);
-        test_complex_mat5_regions(arch_list, device_name);
-        test_complex_mat5_denoised(arch_list, device_name);
-        test_complex_mat5_dof(arch_list, device_name);
-        test_complex_mat5_mesh_lights(arch_list, device_name);
-        test_complex_mat5_sphere_light(arch_list, device_name);
-        test_complex_mat5_spot_light(arch_list, device_name);
-        test_complex_mat5_sun_light(arch_list, device_name);
-        test_complex_mat5_hdr_light(arch_list, device_name);
-        test_complex_mat6(arch_list, device_name);
-        test_complex_mat6_denoised(arch_list, device_name);
-        test_complex_mat6_dof(arch_list, device_name);
-        test_complex_mat6_mesh_lights(arch_list, device_name);
-        test_complex_mat6_sphere_light(arch_list, device_name);
-        test_complex_mat6_spot_light(arch_list, device_name);
-        test_complex_mat6_sun_light(arch_list, device_name);
-        test_complex_mat6_hdr_light(arch_list, device_name);
-        test_complex_mat7_refractive(arch_list, device_name);
-        test_complex_mat7_principled(arch_list, device_name);
+        std::vector<std::future<void>> futures;
+
+        futures.push_back(mt_run_pool.Enqueue(test_aux_channels, arch_list, device_name));
+        futures.push_back(mt_run_pool.Enqueue(test_complex_mat0, arch_list, device_name));
+        futures.push_back(mt_run_pool.Enqueue(test_complex_mat1, arch_list, device_name));
+        futures.push_back(mt_run_pool.Enqueue(test_complex_mat2, arch_list, device_name));
+        futures.push_back(mt_run_pool.Enqueue(test_complex_mat3, arch_list, device_name));
+        futures.push_back(mt_run_pool.Enqueue(test_complex_mat4, arch_list, device_name));
+        futures.push_back(mt_run_pool.Enqueue(test_complex_mat5, arch_list, device_name));
+        futures.push_back(mt_run_pool.Enqueue(test_complex_mat5_clipped, arch_list, device_name));
+        futures.push_back(mt_run_pool.Enqueue(test_complex_mat5_adaptive, arch_list, device_name));
+        futures.push_back(mt_run_pool.Enqueue(test_complex_mat5_regions, arch_list, device_name));
+        futures.push_back(mt_run_pool.Enqueue(test_complex_mat5_denoised, arch_list, device_name));
+        futures.push_back(mt_run_pool.Enqueue(test_complex_mat5_dof, arch_list, device_name));
+        futures.push_back(mt_run_pool.Enqueue(test_complex_mat5_mesh_lights, arch_list, device_name));
+        futures.push_back(mt_run_pool.Enqueue(test_complex_mat5_sphere_light, arch_list, device_name));
+        futures.push_back(mt_run_pool.Enqueue(test_complex_mat5_spot_light, arch_list, device_name));
+        futures.push_back(mt_run_pool.Enqueue(test_complex_mat5_sun_light, arch_list, device_name));
+        futures.push_back(mt_run_pool.Enqueue(test_complex_mat5_hdr_light, arch_list, device_name));
+        futures.push_back(mt_run_pool.Enqueue(test_complex_mat6, arch_list, device_name));
+        futures.push_back(mt_run_pool.Enqueue(test_complex_mat6_denoised, arch_list, device_name));
+        futures.push_back(mt_run_pool.Enqueue(test_complex_mat6_dof, arch_list, device_name));
+        futures.push_back(mt_run_pool.Enqueue(test_complex_mat6_mesh_lights, arch_list, device_name));
+        futures.push_back(mt_run_pool.Enqueue(test_complex_mat6_sphere_light, arch_list, device_name));
+        futures.push_back(mt_run_pool.Enqueue(test_complex_mat6_spot_light, arch_list, device_name));
+        futures.push_back(mt_run_pool.Enqueue(test_complex_mat6_sun_light, arch_list, device_name));
+        futures.push_back(mt_run_pool.Enqueue(test_complex_mat6_hdr_light, arch_list, device_name));
+        futures.push_back(mt_run_pool.Enqueue(test_complex_mat7_refractive, arch_list, device_name));
+        futures.push_back(mt_run_pool.Enqueue(test_complex_mat7_principled, arch_list, device_name));
+
+        for (auto &f : futures) {
+            f.wait();
+        }
         printf("Finished complex_mat tests in %.2f minutes\n",
                duration<double>(high_resolution_clock::now() - t2).count() / 60.0);
 
@@ -242,146 +258,236 @@ int main(int argc, char *argv[]) {
         if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
             puts("---------------");
-            test_oren_mat0(arch_list, device_name);
-            test_oren_mat1(arch_list, device_name);
-            test_oren_mat2(arch_list, device_name);
+            std::vector<std::future<void>> futures;
+
+            futures.push_back(mt_run_pool.Enqueue(test_oren_mat0, arch_list, device_name));
+            futures.push_back(mt_run_pool.Enqueue(test_oren_mat1, arch_list, device_name));
+            futures.push_back(mt_run_pool.Enqueue(test_oren_mat2, arch_list, device_name));
+
+            for (auto &f : futures) {
+                f.wait();
+            }
             printf("Finished oren_mat tests in %.2f minutes\n",
                    duration<double>(high_resolution_clock::now() - t2).count() / 60.0);
         }
         if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
             puts("---------------");
-            test_diff_mat0(arch_list, device_name);
-            test_diff_mat1(arch_list, device_name);
-            test_diff_mat2(arch_list, device_name);
+            std::vector<std::future<void>> futures;
+
+            futures.push_back(mt_run_pool.Enqueue(test_diff_mat0, arch_list, device_name));
+            futures.push_back(mt_run_pool.Enqueue(test_diff_mat1, arch_list, device_name));
+            futures.push_back(mt_run_pool.Enqueue(test_diff_mat2, arch_list, device_name));
+
+            for (auto &f : futures) {
+                f.wait();
+            }
             printf("Finished diff_mat tests in %.2f minutes\n",
                    duration<double>(high_resolution_clock::now() - t2).count() / 60.0);
         }
         if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
             puts("---------------");
-            test_sheen_mat0(arch_list, device_name);
-            test_sheen_mat1(arch_list, device_name);
-            test_sheen_mat2(arch_list, device_name);
-            test_sheen_mat3(arch_list, device_name);
+            std::vector<std::future<void>> futures;
+
+            futures.push_back(mt_run_pool.Enqueue(test_sheen_mat0, arch_list, device_name));
+            futures.push_back(mt_run_pool.Enqueue(test_sheen_mat1, arch_list, device_name));
+            futures.push_back(mt_run_pool.Enqueue(test_sheen_mat2, arch_list, device_name));
+            futures.push_back(mt_run_pool.Enqueue(test_sheen_mat3, arch_list, device_name));
+
+            for (auto &f : futures) {
+                f.wait();
+            }
             printf("Finished sheen_mat tests in %.2f minutes\n",
                    duration<double>(high_resolution_clock::now() - t2).count() / 60.0);
         }
         if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
             puts("---------------");
-            test_glossy_mat0(arch_list, device_name);
-            test_glossy_mat1(arch_list, device_name);
-            test_glossy_mat2(arch_list, device_name);
+            std::vector<std::future<void>> futures;
+
+            futures.push_back(mt_run_pool.Enqueue(test_glossy_mat0, arch_list, device_name));
+            futures.push_back(mt_run_pool.Enqueue(test_glossy_mat1, arch_list, device_name));
+            futures.push_back(mt_run_pool.Enqueue(test_glossy_mat2, arch_list, device_name));
+
+            for (auto &f : futures) {
+                f.wait();
+            }
             printf("Finished glossy_mat tests in %.2f minutes\n",
                    duration<double>(high_resolution_clock::now() - t2).count() / 60.0);
         }
         if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
             puts("---------------");
-            test_spec_mat0(arch_list, device_name);
-            test_spec_mat1(arch_list, device_name);
-            test_spec_mat2(arch_list, device_name);
+            std::vector<std::future<void>> futures;
+
+            futures.push_back(mt_run_pool.Enqueue(test_spec_mat0, arch_list, device_name));
+            futures.push_back(mt_run_pool.Enqueue(test_spec_mat1, arch_list, device_name));
+            futures.push_back(mt_run_pool.Enqueue(test_spec_mat2, arch_list, device_name));
+
+            for (auto &f : futures) {
+                f.wait();
+            }
             printf("Finished spec_mat tests in %.2f minutes\n",
                    duration<double>(high_resolution_clock::now() - t2).count() / 60.0);
         }
         if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
             puts("---------------");
-            test_aniso_mat0(arch_list, device_name);
-            test_aniso_mat1(arch_list, device_name);
-            test_aniso_mat2(arch_list, device_name);
-            test_aniso_mat3(arch_list, device_name);
-            test_aniso_mat4(arch_list, device_name);
-            test_aniso_mat5(arch_list, device_name);
-            test_aniso_mat6(arch_list, device_name);
-            test_aniso_mat7(arch_list, device_name);
+            std::vector<std::future<void>> futures;
+
+            futures.push_back(mt_run_pool.Enqueue(test_aniso_mat0, arch_list, device_name));
+            futures.push_back(mt_run_pool.Enqueue(test_aniso_mat1, arch_list, device_name));
+            futures.push_back(mt_run_pool.Enqueue(test_aniso_mat2, arch_list, device_name));
+            futures.push_back(mt_run_pool.Enqueue(test_aniso_mat3, arch_list, device_name));
+            futures.push_back(mt_run_pool.Enqueue(test_aniso_mat4, arch_list, device_name));
+            futures.push_back(mt_run_pool.Enqueue(test_aniso_mat5, arch_list, device_name));
+            futures.push_back(mt_run_pool.Enqueue(test_aniso_mat6, arch_list, device_name));
+            futures.push_back(mt_run_pool.Enqueue(test_aniso_mat7, arch_list, device_name));
+
+            for (auto &f : futures) {
+                f.wait();
+            }
             printf("Finished aniso_mat tests in %.2f minutes\n",
                    duration<double>(high_resolution_clock::now() - t2).count() / 60.0);
         }
         if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
             puts("---------------");
-            test_metal_mat0(arch_list, device_name);
-            test_metal_mat1(arch_list, device_name);
-            test_metal_mat2(arch_list, device_name);
+            std::vector<std::future<void>> futures;
+
+            futures.push_back(mt_run_pool.Enqueue(test_metal_mat0, arch_list, device_name));
+            futures.push_back(mt_run_pool.Enqueue(test_metal_mat1, arch_list, device_name));
+            futures.push_back(mt_run_pool.Enqueue(test_metal_mat2, arch_list, device_name));
+
+            for (auto &f : futures) {
+                f.wait();
+            }
             printf("Finished metal_mat tests in %.2f minutes\n",
                    duration<double>(high_resolution_clock::now() - t2).count() / 60.0);
         }
         if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
             puts("---------------");
-            test_plastic_mat0(arch_list, device_name);
-            test_plastic_mat1(arch_list, device_name);
-            test_plastic_mat2(arch_list, device_name);
+            std::vector<std::future<void>> futures;
+
+            futures.push_back(mt_run_pool.Enqueue(test_plastic_mat0, arch_list, device_name));
+            futures.push_back(mt_run_pool.Enqueue(test_plastic_mat1, arch_list, device_name));
+            futures.push_back(mt_run_pool.Enqueue(test_plastic_mat2, arch_list, device_name));
+
+            for (auto &f : futures) {
+                f.wait();
+            }
             printf("Finished plastic_mat tests in %.2f minutes\n",
                    duration<double>(high_resolution_clock::now() - t2).count() / 60.0);
         }
         if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
             puts("---------------");
-            test_tint_mat0(arch_list, device_name);
-            test_tint_mat1(arch_list, device_name);
-            test_tint_mat2(arch_list, device_name);
+            std::vector<std::future<void>> futures;
+
+            futures.push_back(mt_run_pool.Enqueue(test_tint_mat0, arch_list, device_name));
+            futures.push_back(mt_run_pool.Enqueue(test_tint_mat1, arch_list, device_name));
+            futures.push_back(mt_run_pool.Enqueue(test_tint_mat2, arch_list, device_name));
+
+            for (auto &f : futures) {
+                f.wait();
+            }
             printf("Finished tint_mat tests in %.2f minutes\n",
                    duration<double>(high_resolution_clock::now() - t2).count() / 60.0);
         }
         if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
             puts("---------------");
-            test_emit_mat0(arch_list, device_name);
-            test_emit_mat1(arch_list, device_name);
+            std::vector<std::future<void>> futures;
+
+            futures.push_back(mt_run_pool.Enqueue(test_emit_mat0, arch_list, device_name));
+            futures.push_back(mt_run_pool.Enqueue(test_emit_mat1, arch_list, device_name));
+
+            for (auto &f : futures) {
+                f.wait();
+            }
             printf("Finished emit_mat tests in %.2f minutes\n",
                    duration<double>(high_resolution_clock::now() - t2).count() / 60.0);
         }
         if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
             puts("---------------");
-            test_coat_mat0(arch_list, device_name);
-            test_coat_mat1(arch_list, device_name);
-            test_coat_mat2(arch_list, device_name);
+            std::vector<std::future<void>> futures;
+
+            futures.push_back(mt_run_pool.Enqueue(test_coat_mat0, arch_list, device_name));
+            futures.push_back(mt_run_pool.Enqueue(test_coat_mat1, arch_list, device_name));
+            futures.push_back(mt_run_pool.Enqueue(test_coat_mat2, arch_list, device_name));
+
+            for (auto &f : futures) {
+                f.wait();
+            }
             printf("Finished coat_mat tests in %.2f minutes\n",
                    duration<double>(high_resolution_clock::now() - t2).count() / 60.0);
         }
         if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
             puts("---------------");
-            test_refr_mis0(arch_list, device_name);
-            test_refr_mis1(arch_list, device_name);
-            test_refr_mis2(arch_list, device_name);
+            std::vector<std::future<void>> futures;
+
+            futures.push_back(mt_run_pool.Enqueue(test_refr_mis0, arch_list, device_name));
+            futures.push_back(mt_run_pool.Enqueue(test_refr_mis1, arch_list, device_name));
+            futures.push_back(mt_run_pool.Enqueue(test_refr_mis2, arch_list, device_name));
+
+            for (auto &f : futures) {
+                f.wait();
+            }
             printf("Finished refr_mis tests in %.2f minutes\n",
                    duration<double>(high_resolution_clock::now() - t2).count() / 60.0);
         }
         if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
             puts("---------------");
-            test_refr_mat0(arch_list, device_name);
-            test_refr_mat1(arch_list, device_name);
-            test_refr_mat2(arch_list, device_name);
-            test_refr_mat3(arch_list, device_name);
+            std::vector<std::future<void>> futures;
+
+            futures.push_back(mt_run_pool.Enqueue(test_refr_mat0, arch_list, device_name));
+            futures.push_back(mt_run_pool.Enqueue(test_refr_mat1, arch_list, device_name));
+            futures.push_back(mt_run_pool.Enqueue(test_refr_mat2, arch_list, device_name));
+            futures.push_back(mt_run_pool.Enqueue(test_refr_mat3, arch_list, device_name));
+
+            for (auto &f : futures) {
+                f.wait();
+            }
             printf("Finished refr_mat tests in %.2f minutes\n",
                    duration<double>(high_resolution_clock::now() - t2).count() / 60.0);
         }
         if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
             puts("---------------");
-            test_trans_mat0(arch_list, device_name);
-            test_trans_mat1(arch_list, device_name);
-            test_trans_mat2(arch_list, device_name);
-            test_trans_mat3(arch_list, device_name);
-            test_trans_mat4(arch_list, device_name);
-            test_trans_mat5(arch_list, device_name);
+            std::vector<std::future<void>> futures;
+
+            futures.push_back(mt_run_pool.Enqueue(test_trans_mat0, arch_list, device_name));
+            futures.push_back(mt_run_pool.Enqueue(test_trans_mat1, arch_list, device_name));
+            futures.push_back(mt_run_pool.Enqueue(test_trans_mat2, arch_list, device_name));
+            futures.push_back(mt_run_pool.Enqueue(test_trans_mat3, arch_list, device_name));
+            futures.push_back(mt_run_pool.Enqueue(test_trans_mat4, arch_list, device_name));
+            futures.push_back(mt_run_pool.Enqueue(test_trans_mat5, arch_list, device_name));
+
+            for (auto &f : futures) {
+                f.wait();
+            }
             printf("Finished trans_mat tests in %.2f minutes\n",
                    duration<double>(high_resolution_clock::now() - t2).count() / 60.0);
         }
         if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
             puts("---------------");
-            test_alpha_mat0(arch_list, device_name);
-            test_alpha_mat1(arch_list, device_name);
-            test_alpha_mat2(arch_list, device_name);
-            test_alpha_mat3(arch_list, device_name);
-            test_alpha_mat4(arch_list, device_name);
+            std::vector<std::future<void>> futures;
+
+            futures.push_back(mt_run_pool.Enqueue(test_alpha_mat0, arch_list, device_name));
+            futures.push_back(mt_run_pool.Enqueue(test_alpha_mat1, arch_list, device_name));
+            futures.push_back(mt_run_pool.Enqueue(test_alpha_mat2, arch_list, device_name));
+            futures.push_back(mt_run_pool.Enqueue(test_alpha_mat3, arch_list, device_name));
+            futures.push_back(mt_run_pool.Enqueue(test_alpha_mat4, arch_list, device_name));
+
+            for (auto &f : futures) {
+                f.wait();
+            }
             printf("Finished alpha_mat tests in %.2f minutes\n",
                    duration<double>(high_resolution_clock::now() - t2).count() / 60.0);
         }

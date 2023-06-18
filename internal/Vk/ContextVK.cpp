@@ -1,5 +1,7 @@
 #include "ContextVK.h"
 
+#include <mutex>
+
 #include "../../Log.h"
 #include "../../Types.h"
 #include "../SmallVector.h"
@@ -17,7 +19,8 @@ extern const int KnownGPUVendorsCount;
 extern RENDERDOC_DevicePointer g_rdoc_device;
 
 namespace Vk {
-bool ignore_optick_errors = false;
+bool g_ignore_optick_errors = false;
+std::mutex g_device_mtx;
 
 VKAPI_ATTR VkBool32 VKAPI_CALL DebugReportCallback(const VkDebugReportFlagsEXT flags,
                                                    const VkDebugReportObjectTypeEXT objectType, const uint64_t object,
@@ -25,7 +28,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL DebugReportCallback(const VkDebugReportFlagsEXT f
                                                    const char *pLayerPrefix, const char *pMessage, void *pUserData) {
     auto *ctx = reinterpret_cast<const Context *>(pUserData);
 
-    bool ignore = ignore_optick_errors && (location == 0x45e90123 || location == 0xffffffff9cacd67a);
+    bool ignore = g_ignore_optick_errors && (location == 0x45e90123 || location == 0xffffffff9cacd67a);
     ignore |= (location == 0x0000000079de34d4); // dynamic rendering support is incomplete
     ignore |= (location == 0x000000004dae5635); // layout warning when blitting within the same image
     if (!ignore) {
@@ -47,6 +50,7 @@ const int g_enabled_layers_count = 0;
 Ray::Vk::Context::~Context() { Destroy(); }
 
 void Ray::Vk::Context::Destroy() {
+    std::lock_guard<std::mutex> _(g_device_mtx);
     if (device_) {
         api_.vkDeviceWaitIdle(device_);
 
@@ -98,6 +102,8 @@ bool Ray::Vk::Context::Init(ILog *log, const char *preferred_device) {
     if (!api_.Load(log)) {
         return false;
     }
+
+    std::lock_guard<std::mutex> _(g_device_mtx);
 
     if (!InitVkInstance(api_, instance_, g_enabled_layers, g_enabled_layers_count, log)) {
         return false;
@@ -226,6 +232,7 @@ bool Ray::Vk::Context::Init(ILog *log, const char *preferred_device) {
 
 bool Ray::Vk::Context::InitVkInstance(const Api &api, VkInstance &instance, const char *enabled_layers[],
                                       const int enabled_layers_count, ILog *log) {
+#ifndef NDEBUG
     { // Find validation layer
         uint32_t layers_count = 0;
         api.vkEnumerateInstanceLayerProperties(&layers_count, nullptr);
@@ -238,7 +245,6 @@ bool Ray::Vk::Context::InitVkInstance(const Api &api, VkInstance &instance, cons
         SmallVector<VkLayerProperties, 16> layers_available(layers_count);
         api.vkEnumerateInstanceLayerProperties(&layers_count, &layers_available[0]);
 
-#ifndef NDEBUG
         bool found_validation = false;
         for (uint32_t i = 0; i < layers_count; i++) {
             if (strcmp(layers_available[i].layerName, "VK_LAYER_KHRONOS_validation") == 0) {
@@ -250,8 +256,8 @@ bool Ray::Vk::Context::InitVkInstance(const Api &api, VkInstance &instance, cons
             log->Error("Could not find validation layer");
             return false;
         }
-#endif
     }
+#endif
 
     const char *desired_extensions[] = {VK_EXT_DEBUG_REPORT_EXTENSION_NAME, VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
                                         VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,

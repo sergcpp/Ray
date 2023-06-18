@@ -13,6 +13,8 @@
 #include "utils.h"
 
 extern bool g_determine_sample_count;
+extern bool g_minimal_output;
+std::mutex g_stdout_mtx;
 
 template <typename MatDesc>
 void run_material_test(const char *arch_list[], const char *preferred_device, const char *test_name,
@@ -62,6 +64,7 @@ void run_material_test(const char *arch_list[], const char *preferred_device, co
                 if (preferred_device) {
                     // make sure we use requested device
                     if (!require(Ray::MatchDeviceNames(renderer->device_name(), preferred_device))) {
+                        std::lock_guard<std::mutex> _(g_stdout_mtx);
                         printf("Wrong device: %s (%s was requested)\n", renderer->device_name(), preferred_device);
                         return;
                     }
@@ -121,7 +124,15 @@ void run_material_test(const char *arch_list[], const char *preferred_device, co
                 double psnr = -10.0 * std::log10(mse / (255.0 * 255.0));
                 psnr = std::floor(psnr * 100.0) / 100.0;
 
-                printf("(PSNR: %.2f/%.2f dB, Fireflies: %i/%i)\n", psnr, min_psnr, error_pixels, pix_thres);
+                {
+                    std::lock_guard<std::mutex> _(g_stdout_mtx);
+                    if (g_minimal_output) {
+                        printf("\r%s (%6s, %s): %.1f%% ", name_buf, Ray::RendererTypeName(rt),
+                               s.use_hwrt ? "HWRT" : "SWRT", 100.0);
+                    }
+                    printf("(PSNR: %.2f/%.2f dB, Fireflies: %i/%i)\n", psnr, min_psnr, error_pixels, pix_thres);
+                    fflush(stdout);
+                }
 
                 std::string type = Ray::RendererTypeName(rt);
                 if (use_hwrt) {
@@ -149,12 +160,14 @@ void run_material_test(const char *arch_list[], const char *preferred_device, co
                     current_sample_count = (failed_count + succeeded_count) / 2;
                 }
                 if (searching) {
+                    std::lock_guard<std::mutex> _(g_stdout_mtx);
                     printf("Current_sample_count = %i (%i - %i)\n", current_sample_count, failed_count,
                            succeeded_count);
                 }
                 searching |= !images_match;
             } while (g_determine_sample_count && searching && (succeeded_count - failed_count) > 1);
             if (g_determine_sample_count && searching && succeeded_count != max_sample_count) {
+                std::lock_guard<std::mutex> _(g_stdout_mtx);
                 printf("Required sample count for %s: %i\n", test_name, succeeded_count);
             }
         }
@@ -267,7 +280,8 @@ void assemble_material_test_images(const char *arch_list[]) {
                     }
 
                     { // error mask
-                        snprintf(name_buf, sizeof(name_buf), "test_data/%s/%s_mask.tga", test_names[j][i], type.c_str());
+                        snprintf(name_buf, sizeof(name_buf), "test_data/%s/%s_mask.tga", test_names[j][i],
+                                 type.c_str());
 
                         int test_img_w, test_img_h;
                         const auto test_img = LoadTGA(name_buf, test_img_w, test_img_h);

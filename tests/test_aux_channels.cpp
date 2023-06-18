@@ -7,6 +7,9 @@
 #include "test_scene.h"
 #include "utils.h"
 
+extern bool g_minimal_output;
+extern std::mutex g_stdout_mtx;
+
 void test_aux_channels(const char *arch_list[], const char *preferred_device) {
     const char TestName[] = "aux_channels";
 
@@ -70,6 +73,7 @@ void test_aux_channels(const char *arch_list[], const char *preferred_device) {
             if (preferred_device) {
                 // make sure we use requested device
                 if (!require(Ray::MatchDeviceNames(renderer->device_name(), preferred_device))) {
+                    std::lock_guard<std::mutex> _(g_stdout_mtx);
                     printf("Wrong device: %s (%s was requested)\n", renderer->device_name(), preferred_device);
                     return;
                 }
@@ -175,8 +179,16 @@ void test_aux_channels(const char *arch_list[], const char *preferred_device) {
             double depth_psnr = -10.0 * std::log10(depth_mse / (255.0 * 255.0));
             depth_psnr = std::floor(depth_psnr * 100.0) / 100.0;
 
-            printf("(PSNR: %.2f/%.2f dB, %.2f/%.2f dB, %.2f/%.2f dB)\n", base_color_psnr, BaseColor_MinPSNR,
-                   normals_psnr, Normals_MinPSNR, depth_psnr, Depth_MinPSNR);
+            {
+                std::lock_guard<std::mutex> _(g_stdout_mtx);
+                if (g_minimal_output) {
+                    printf("\r%s (%6s, %s): %.1f%% ", name_buf, Ray::RendererTypeName(rt), s.use_hwrt ? "HWRT" : "SWRT",
+                           100.0);
+                }
+                printf("(PSNR: %.2f/%.2f dB, %.2f/%.2f dB, %.2f/%.2f dB)\n", base_color_psnr, BaseColor_MinPSNR,
+                       normals_psnr, Normals_MinPSNR, depth_psnr, Depth_MinPSNR);
+                fflush(stdout);
+            }
 
             std::string type_name = Ray::RendererTypeName(rt);
             if (use_hwrt) {

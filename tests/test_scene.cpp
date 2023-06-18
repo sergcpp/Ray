@@ -9,6 +9,9 @@
 #include "thread_pool.h"
 #include "utils.h"
 
+extern bool g_minimal_output;
+extern std::mutex g_stdout_mtx;
+
 LogErr g_log_err;
 
 void load_needed_textures(Ray::SceneBase &scene, Ray::shading_node_desc_t &mat_desc, const char *textures[]) {
@@ -840,10 +843,13 @@ void schedule_render_jobs(Ray::RendererBase &renderer, const Ray::SceneBase *sce
             }
 
             // report progress percentage
-            const float prog = 100.0f * float(i + std::min(SamplePortion, max_samples - i)) / float(max_samples);
-            printf("\r%s (%6s, %s): %.1f%% ", log_str, Ray::RendererTypeName(rt), settings.use_hwrt ? "HWRT" : "SWRT",
-                   prog);
-            fflush(stdout);
+            if (!g_minimal_output) {
+                const float prog = 100.0f * float(i + std::min(SamplePortion, max_samples - i)) / float(max_samples);
+                std::lock_guard<std::mutex> _(g_stdout_mtx);
+                printf("\r%s (%6s, %s): %.1f%% ", log_str, Ray::RendererTypeName(rt),
+                       settings.use_hwrt ? "HWRT" : "SWRT", prog);
+                fflush(stdout);
+            }
         }
     } else {
         std::vector<Ray::RegionContext> region_contexts;
@@ -871,9 +877,10 @@ void schedule_render_jobs(Ray::RendererBase &renderer, const Ray::SceneBase *sce
                 renderer.RenderScene(scene, region);
             }
 
-            if ((i % SamplePortion) == 0 || i == max_samples - 1) {
+            if (((i % SamplePortion) == 0 || i == max_samples - 1) && !g_minimal_output) {
                 // report progress percentage
                 const float prog = 100.0f * float(i + 1) / float(max_samples);
+                std::lock_guard<std::mutex> _(g_stdout_mtx);
                 printf("\r%s (%6s, %s): %.1f%% ", log_str, Ray::RendererTypeName(rt),
                        settings.use_hwrt ? "HWRT" : "SWRT", prog);
                 fflush(stdout);

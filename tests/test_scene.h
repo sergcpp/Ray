@@ -4,6 +4,7 @@
 #include <cstdio>
 
 #include <atomic>
+#include <mutex>
 
 #include "../Log.h"
 
@@ -35,6 +36,7 @@ extern bool g_catch_flt_exceptions;
 
 class LogErr final : public Ray::ILog {
     FILE *err_out_ = nullptr;
+    std::mutex mtx_;
 
   public:
     LogErr() {
@@ -43,9 +45,15 @@ class LogErr final : public Ray::ILog {
     }
     ~LogErr() override { fclose(err_out_); }
 
-    void Info(const char *fmt, ...) override {}
-    void Warning(const char *fmt, ...) override {}
+    void Info(const char *fmt, ...) override {
+        // ignored
+    }
+    void Warning(const char *fmt, ...) override {
+        // ignored
+    }
     void Error(const char *fmt, ...) override {
+        std::lock_guard<std::mutex> _(mtx_);
+
         va_list vl;
         va_start(vl, fmt);
         vfprintf(err_out_, fmt, vl);

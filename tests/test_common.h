@@ -4,8 +4,10 @@
 #include <cstdio>
 #include <cstdlib>
 
+#include <atomic>
+
 extern bool g_stop_on_fail;
-extern bool g_tests_success;
+extern std::atomic_bool g_tests_success;
 
 static bool handle_assert(bool passed, const char* assert, const char* file, long line, bool fatal) {
     if (!passed) {

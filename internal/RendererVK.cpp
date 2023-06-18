@@ -450,8 +450,9 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
         !pi_sort_init_count_table_.Init(ctx_.get(), &prog_sort_init_count_table_, log) ||
         !pi_sort_write_sorted_hashes_.Init(ctx_.get(), &prog_sort_write_sorted_hashes_, log) ||
         !pi_sort_reorder_rays_.Init(ctx_.get(), &prog_sort_reorder_rays_, log) ||
-        (use_hwrt_ && !pi_intersect_scene_rtpipe_.Init(ctx_.get(), &prog_intersect_scene_rtpipe_, log)) ||
-        (use_hwrt_ &&
+        (ENABLE_RT_PIPELINE && use_hwrt_ &&
+         !pi_intersect_scene_rtpipe_.Init(ctx_.get(), &prog_intersect_scene_rtpipe_, log)) ||
+        (ENABLE_RT_PIPELINE && use_hwrt_ &&
          !pi_intersect_scene_indirect_rtpipe_.Init(ctx_.get(), &prog_intersect_scene_indirect_rtpipe_, log))) {
         throw std::runtime_error("Error initializing pipeline!");
     }
