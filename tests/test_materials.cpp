@@ -1573,7 +1573,7 @@ void test_complex_mat5_hdr_light(const char *arch_list[], const char *preferred_
 
 void test_complex_mat6(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 321;
-    const int PixThres = 2903;
+    const int PixThres = 1309;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;

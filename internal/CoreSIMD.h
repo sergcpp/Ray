@@ -1847,18 +1847,11 @@ template <int S> void offset_ray(const simd_fvec<S> p[3], const simd_fvec<S> n[3
     })
 }
 
-// http://jcgt.org/published/0007/04/01/paper.pdf by Eric Heitz
-// Input Ve: view direction
-// Input alpha_x, alpha_y: roughness parameters
-// Input U1, U2: uniform random numbers
-// Output Ne: normal sampled with PDF D_Ve(Ne) = G1(Ve) * max(0, dot(Ve, Ne)) * D(Ne) / Ve.z
+// http://jcgt.org/published/0007/04/01/paper.pdf
 template <int S>
-void SampleGGX_VNDF(const simd_fvec<S> Ve[3], const simd_fvec<S> &alpha_x, const simd_fvec<S> &alpha_y,
-                    const simd_fvec<S> &U1, const simd_fvec<S> &U2, simd_fvec<S> out_V[3]) {
-    // Section 3.2: transforming the view direction to the hemisphere configuration
-    simd_fvec<S> Vh[3] = {alpha_x * Ve[0], alpha_y * Ve[1], Ve[2]};
-    safe_normalize(Vh);
-    // Section 4.1: orthonormal basis (with special case if cross product is zero)
+void SampleVNDF_Hemisphere_CrossSect(const simd_fvec<S> Vh[3], const simd_fvec<S> &U1, const simd_fvec<S> &U2,
+                                     simd_fvec<S> out_Nh[3]) {
+    // orthonormal basis (with special case if cross product is zero)
     const simd_fvec<S> lensq = Vh[0] * Vh[0] + Vh[1] * Vh[1];
 
     simd_fvec<S> T1[3] = {{1.0f}, {0.0f}, {0.0f}};
@@ -1868,7 +1861,7 @@ void SampleGGX_VNDF(const simd_fvec<S> Ve[3], const simd_fvec<S> &alpha_x, const
 
     simd_fvec<S> T2[3];
     cross(Vh, T1, T2);
-    // Section 4.2: parameterization of the projected area
+    // parameterization of the projected area
     const simd_fvec<S> r = sqrt(U1);
     const simd_fvec<S> phi = 2.0f * PI * U2;
     simd_fvec<S> t1;
@@ -1877,10 +1870,36 @@ void SampleGGX_VNDF(const simd_fvec<S> Ve[3], const simd_fvec<S> &alpha_x, const
     UNROLLED_FOR_S(i, S, { t2.template set<i>(r.template get<i>() * std::sin(phi.template get<i>())); })
     const simd_fvec<S> s = 0.5f * (1.0f + Vh[2]);
     t2 = (1.0f - s) * sqrt(1.0f - t1 * t1) + s * t2;
-    // Section 4.3: reprojection onto hemisphere
+    // reprojection onto hemisphere
+    UNROLLED_FOR(i, 3, { out_Nh[i] = t1 * T1[i] + t2 * T2[i] + sqrt(max(0.0f, 1.0f - t1 * t1 - t2 * t2)) * Vh[i]; })
+}
+
+// https://arxiv.org/pdf/2306.05044.pdf
+template <int S>
+void SampleVNDF_Hemisphere_SphCap(const simd_fvec<S> Vh[3], const simd_fvec<S> &U1, const simd_fvec<S> &U2,
+                                  simd_fvec<S> out_Nh[3]) {
+    const simd_fvec<S> phi = 2.0f * PI * U1;
+    const simd_fvec<S> z = fmadd(1.0f - U2, 1.0f + Vh[2], -Vh[2]);
+    const simd_fvec<S> sin_theta = sqrt(clamp(1.0f - z * z, 0.0f, 1.0f));
+    out_Nh[0] = Vh[0] + sin_theta * cos(phi);
+    out_Nh[1] = Vh[1] + sin_theta * sin(phi);
+    out_Nh[2] = Vh[2] + z;
+}
+
+// Input Ve: view direction
+// Input alpha_x, alpha_y: roughness parameters
+// Input U1, U2: uniform random numbers
+// Output Ne: normal sampled with PDF D_Ve(Ne) = G1(Ve) * max(0, dot(Ve, Ne)) * D(Ne) / Ve.z
+template <int S>
+void SampleGGX_VNDF(const simd_fvec<S> Ve[3], const simd_fvec<S> &alpha_x, const simd_fvec<S> &alpha_y,
+                    const simd_fvec<S> &U1, const simd_fvec<S> &U2, simd_fvec<S> out_V[3]) {
+    // transforming the view direction to the hemisphere configuration
+    simd_fvec<S> Vh[3] = {alpha_x * Ve[0], alpha_y * Ve[1], Ve[2]};
+    safe_normalize(Vh);
+    // sample the hemisphere
     simd_fvec<S> Nh[3];
-    UNROLLED_FOR(i, 3, { Nh[i] = t1 * T1[i] + t2 * T2[i] + sqrt(max(0.0f, 1.0f - t1 * t1 - t2 * t2)) * Vh[i]; })
-    // Section 3.4: transforming the normal back to the ellipsoid configuration
+    SampleVNDF_Hemisphere_SphCap(Vh, U1, U2, Nh);
+    // transforming the normal back to the ellipsoid configuration
     out_V[0] = alpha_x * Nh[0];
     out_V[1] = alpha_y * Nh[1];
     out_V[2] = max(0.0f, Nh[2]);
