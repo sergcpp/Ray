@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../SmallVector.h"
+#include "Api.h"
 
 namespace Ray {
 namespace Vk {

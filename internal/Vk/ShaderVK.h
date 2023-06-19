@@ -5,6 +5,7 @@
 #include <string>
 
 #include "../SmallVector.h"
+#include "Api.h"
 
 namespace Ray {
 class ILog;
