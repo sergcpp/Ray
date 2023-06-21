@@ -62,7 +62,7 @@ void main() {
     float _x = float(x);
     float _y = float(y);
 
-    vec2 sample_off = vec2(construct_float(hash_val), construct_float(hash(hash_val)));
+    vec2 sample_off = 0.0 * vec2(construct_float(hash_val), construct_float(hash(hash_val)));
 
     if ((g_params.cam_filter_and_lens_blades >> 8) == FILTER_TENT) {
         float rx = fract(g_halton[g_params.hi + RAND_DIM_FILTER_U] + sample_off.x);

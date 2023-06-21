@@ -230,10 +230,13 @@ bool Ray::Vk::Api::LoadExtensions(VkInstance instance, ILog *log) {
     LOAD_INSTANCE_FUN(vkDeviceWaitIdle)
 
     LOAD_INSTANCE_FUN(vkGetPhysicalDeviceProperties2KHR)
+    LOAD_INSTANCE_FUN(vkGetPhysicalDeviceFeatures2KHR);
     LOAD_INSTANCE_FUN(vkGetBufferDeviceAddressKHR)
     LOAD_INSTANCE_FUN(vkGetAccelerationStructureBuildSizesKHR)
     LOAD_INSTANCE_FUN(vkGetAccelerationStructureDeviceAddressKHR)
     LOAD_INSTANCE_FUN(vkGetRayTracingShaderGroupHandlesKHR)
+
+    LOAD_INSTANCE_FUN(vkGetPhysicalDeviceCooperativeMatrixPropertiesNV)
 
     LOAD_INSTANCE_FUN(vkCreateRayTracingPipelinesKHR)
 

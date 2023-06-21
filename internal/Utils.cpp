@@ -1,6 +1,7 @@
 #include "Utils.h"
 
 #include <deque>
+#include <fstream>
 #include <limits>
 
 #include "CoreRef.h"
@@ -78,6 +79,34 @@ uint16_t f32_to_f16(const float value) {
         memcpy(&ret, &s, sizeof(uint16_t));
         return ret;
     }
+}
+
+float f16_to_f32(const uint16_t h) {
+    static const uint32_t magic = {113 << 23};
+    static const uint32_t shifted_exp = 0x7c00 << 13; // exponent mask after shift
+    uint32_t o;
+
+    o = (h & 0x7fff) << 13;         // exponent/mantissa bits
+    uint32_t exp = shifted_exp & o; // just the exponent
+    o += (127 - 15) << 23;          // exponent adjust
+
+    // handle exponent special cases
+    if (exp == shifted_exp) {  // Inf/NaN?
+        o += (128 - 16) << 23; // extra exp adjust
+    } else if (exp == 0) {     // Zero/Denormal?
+        o += 1 << 23;          // extra exp adjust
+
+        float f;
+        memcpy(&f, &o, sizeof(float));
+        f -= reinterpret_cast<const float &>(magic); // renormalize
+        memcpy(&o, &f, sizeof(float));
+    }
+
+    o |= (h & 0x8000) << 16; // sign bit
+
+    float ret;
+    memcpy(&ret, &o, sizeof(float));
+    return ret;
 }
 
 force_inline int16_t f32_to_s16(const float value) { return int16_t(value * 32767); }
@@ -1719,6 +1748,33 @@ bool Ray::ReadTGAFile(const void *data, int &w, int &h, eTexFormat &format, uint
     }
 
     return true;
+}
+
+void Ray::WritePFM(const char *base_name, const float values[], int w, int h, int channels) {
+    for (int c = 0; c < channels; ++c) {
+        // Open the file
+        const std::string filename = base_name + std::to_string(c) + ".pfm";
+        std::ofstream file(filename, std::ios::binary);
+        if (file.fail()) {
+            throw std::runtime_error("cannot open image file: " + std::string(filename));
+        }
+
+        // Write the header
+        file << "Pf" << std::endl;
+        file << w << " " << h << std::endl;
+        file << "-1.0" << std::endl;
+
+        // Write the pixels
+        for (int y = h - 1; y >= 0; --y) {
+            for (int x = 0; x < w; ++x) {
+                const float v = values[channels * (y * w + x) + c];
+                if (std::isnan(v)) {
+                    printf("NAN at (%i %i)!!\n", x, y);
+                }
+                file.write((char *)&v, sizeof(float));
+            }
+        }
+    }
 }
 
 #undef _MIN

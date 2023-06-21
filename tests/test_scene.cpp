@@ -160,9 +160,9 @@ void load_needed_textures(Ray::SceneBase &scene, Ray::principled_mat_desc_t &mat
 }
 
 template <typename MatDesc>
-void setup_test_scene(Ray::SceneBase &scene, const bool output_sh, const int min_samples,
-                      const float variance_threshold, const MatDesc &main_mat_desc, const char *textures[],
-                      const eTestScene test_scene) {
+void setup_test_scene(Ray::SceneBase &scene, const bool output_base_color, const bool output_normals,
+                      const int min_samples, const float variance_threshold, const MatDesc &main_mat_desc,
+                      const char *textures[], const eTestScene test_scene) {
     { // setup camera
         static const float view_origin_standard[] = {0.16149f, 0.294997f, 0.332965f};
         static const float view_dir_standard[] = {-0.364128768f, -0.555621922f, -0.747458696f};
@@ -192,9 +192,8 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_sh, const int min
             cam_desc.clip_end = 0.5f;
         }
         memcpy(&cam_desc.up[0], &view_up[0], 3 * sizeof(float));
-        cam_desc.output_sh = output_sh;
-        cam_desc.output_base_color = true;
-        cam_desc.output_depth_normals = true;
+        cam_desc.output_base_color = output_base_color;
+        cam_desc.output_depth_normals = output_normals;
 
         if (test_scene == eTestScene::Standard_DOF0) {
             cam_desc.sensor_height = 0.018f;
@@ -766,15 +765,16 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_sh, const int min
     scene.Finalize();
 }
 
-template void setup_test_scene(Ray::SceneBase &scene, bool output_sh, int min_samples, float variance_threshold,
-                               const Ray::shading_node_desc_t &main_mat_desc, const char *textures[],
-                               eTestScene test_scene);
-template void setup_test_scene(Ray::SceneBase &scene, bool output_sh, int min_samples, float variance_threshold,
-                               const Ray::principled_mat_desc_t &main_mat_desc, const char *textures[],
-                               eTestScene test_scene);
+template void setup_test_scene(Ray::SceneBase &scene, bool output_base_color, bool output_normals, int min_samples,
+                               float variance_threshold, const Ray::shading_node_desc_t &main_mat_desc,
+                               const char *textures[], eTestScene test_scene);
+template void setup_test_scene(Ray::SceneBase &scene, bool output_base_color, bool output_normals, int min_samples,
+                               float variance_threshold, const Ray::principled_mat_desc_t &main_mat_desc,
+                               const char *textures[], eTestScene test_scene);
 
 void schedule_render_jobs(Ray::RendererBase &renderer, const Ray::SceneBase *scene, const Ray::settings_t &settings,
-                          const int max_samples, const bool denoise, const bool partial, const char *log_str) {
+                          const int max_samples, const eDenoiseMethod denoise, const bool partial,
+                          const char *log_str) {
     const auto rt = renderer.type();
     const auto sz = renderer.size();
 
@@ -812,7 +812,7 @@ void schedule_render_jobs(Ray::RendererBase &renderer, const Ray::SceneBase *sce
             }
         };
 
-        auto denoise_job = [&](const int j) {
+        auto denoise_job_nlm = [&](const int j) {
 #if defined(_WIN32)
             if (g_catch_flt_exceptions) {
                 unsigned old_value;
@@ -820,6 +820,16 @@ void schedule_render_jobs(Ray::RendererBase &renderer, const Ray::SceneBase *sce
             }
 #endif
             renderer.DenoiseImage(region_contexts[j]);
+        };
+
+        auto denoise_job_unet = [&](const int pass, const int j) {
+#if defined(_WIN32)
+            if (g_catch_flt_exceptions) {
+                unsigned old_value;
+                _controlfp_s(&old_value, _EM_INEXACT | _EM_UNDERFLOW | _EM_OVERFLOW, _MCW_EM);
+            }
+#endif
+            renderer.DenoiseImage(pass, region_contexts[j]);
         };
 
         for (int i = 0; i < max_samples; i += std::min(SamplePortion, max_samples - i)) {
@@ -832,14 +842,31 @@ void schedule_render_jobs(Ray::RendererBase &renderer, const Ray::SceneBase *sce
             }
             job_res.clear();
 
-            if (i + std::min(SamplePortion, max_samples - i) == max_samples && denoise) {
-                for (int j = 0; j < int(region_contexts.size()); ++j) {
-                    job_res.push_back(threads.Enqueue(denoise_job, j));
+            if (i + std::min(SamplePortion, max_samples - i) == max_samples && denoise != eDenoiseMethod::None) {
+                if (denoise == eDenoiseMethod::NLM || denoise == eDenoiseMethod::NLM_b ||
+                    denoise == eDenoiseMethod::NLM_bn) {
+                    for (int j = 0; j < int(region_contexts.size()); ++j) {
+                        job_res.push_back(threads.Enqueue(denoise_job_nlm, j));
+                    }
+                    for (auto &res : job_res) {
+                        res.wait();
+                    }
+                    job_res.clear();
+                } else if (denoise == eDenoiseMethod::UNet || denoise == eDenoiseMethod::UNet_b ||
+                           denoise == eDenoiseMethod::UNet_bn) {
+                    Ray::unet_filter_properties_t props;
+                    renderer.InitUNetFilter(true, props);
+
+                    for (int pass = 0; pass < props.pass_count; ++pass) {
+                        for (int j = 0; j < int(region_contexts.size()); ++j) {
+                            job_res.push_back(threads.Enqueue(denoise_job_unet, pass, j));
+                        }
+                        for (auto &res : job_res) {
+                            res.wait();
+                        }
+                        job_res.clear();
+                    }
                 }
-                for (auto &res : job_res) {
-                    res.wait();
-                }
-                job_res.clear();
             }
 
             // report progress percentage
@@ -886,9 +913,19 @@ void schedule_render_jobs(Ray::RendererBase &renderer, const Ray::SceneBase *sce
                 fflush(stdout);
             }
         }
-        if (denoise) {
+        if (denoise == eDenoiseMethod::NLM || denoise == eDenoiseMethod::NLM_b || denoise == eDenoiseMethod::NLM_bn) {
             for (auto &region : region_contexts) {
                 renderer.DenoiseImage(region);
+            }
+        } else if (denoise == eDenoiseMethod::UNet || denoise == eDenoiseMethod::UNet_b ||
+                   denoise == eDenoiseMethod::UNet_bn) {
+            Ray::unet_filter_properties_t props;
+            renderer.InitUNetFilter(true, props);
+
+            for (int pass = 0; pass < props.pass_count; ++pass) {
+                for (auto &region : region_contexts) {
+                    renderer.DenoiseImage(pass, region);
+                }
             }
         }
     }

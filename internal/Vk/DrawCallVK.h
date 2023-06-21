@@ -74,16 +74,16 @@ struct OpaqueHandle {
 struct Binding {
     eBindTarget trg;
     uint16_t loc = 0;
-    uint16_t offset = 0;
-    uint16_t size = 0;
+    uint32_t offset = 0;
+    uint32_t size = 0;
     OpaqueHandle handle;
 
     Binding() = default;
     Binding(eBindTarget _trg, int _loc, OpaqueHandle _handle) : trg(_trg), loc(_loc), handle(_handle) {}
     Binding(eBindTarget _trg, int _loc, size_t _offset, OpaqueHandle _handle)
-        : trg(_trg), loc(_loc), offset(uint16_t(_offset)), handle(_handle) {}
-    Binding(eBindTarget _trg, uint16_t _loc, size_t _offset, size_t _size, OpaqueHandle _handle)
-        : trg(_trg), loc(_loc), offset(uint16_t(_offset)), size(uint16_t(_size)), handle(_handle) {}
+        : trg(_trg), loc(_loc), offset(uint32_t(_offset)), handle(_handle) {}
+    Binding(eBindTarget _trg, int _loc, size_t _offset, size_t _size, OpaqueHandle _handle)
+        : trg(_trg), loc(_loc), offset(uint32_t(_offset)), size(uint32_t(_size)), handle(_handle) {}
 };
 // static_assert(sizeof(Binding) == sizeof(void *) + 8 + 8, "!");
 

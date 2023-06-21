@@ -253,6 +253,17 @@ bool Ray::Dx::Context::Init(ILog *log, const char *preferred_device) {
     }
     max_combined_image_samplers_ = std::min(max_sampled_images_, max_samplers_);
 
+    hr = device_->QueryInterface(IID_PPV_ARGS(&device4_));
+    if (SUCCEEDED(hr)) {
+        D3D12_FEATURE_DATA_D3D12_OPTIONS4 feature_support = {};
+        hr = device4_->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS4, &feature_support, sizeof(feature_support));
+        if (SUCCEEDED(hr)) {
+            if (feature_support.Native16BitShaderOpsSupported == TRUE) {
+                fp16_supported_ = true;
+            }
+        }
+    }
+
     hr = device_->QueryInterface(IID_PPV_ARGS(&device5_));
     if (SUCCEEDED(hr)) {
         D3D12_FEATURE_DATA_D3D12_OPTIONS5 feature_support = {};
@@ -272,6 +283,13 @@ bool Ray::Dx::Context::Init(ILog *log, const char *preferred_device) {
                                           sizeof(supported_shader_models));
         if (FAILED(hr)) {
             return false;
+        }
+
+        supported_shader_models.HighestShaderModel = D3D_SHADER_MODEL_6_2;
+        hr = device_->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &supported_shader_models,
+                                          sizeof(supported_shader_models));
+        if (FAILED(hr)) {
+            fp16_supported_ = false;
         }
 
         supported_shader_models.HighestShaderModel = D3D_SHADER_MODEL_6_5;

@@ -47,6 +47,7 @@ int InitMipMapsRGBM(std::unique_ptr<uint8_t[]> mipmaps[16], int widths[16], int 
 void ReorderTriangleIndices(const uint32_t *indices, uint32_t indices_count, uint32_t vtx_count, uint32_t *out_indices);
 
 uint16_t f32_to_f16(float value);
+float f16_to_f32(const uint16_t h);
 
 struct KTXHeader { // NOLINT
     char identifier[12] = {'\xAB', 'K', 'T', 'X', ' ', '1', '1', '\xBB', '\r', '\n', '\x1A', '\n'};
@@ -152,4 +153,6 @@ void CompressImage_BC5(const uint8_t img_src[], int w, int h, uint8_t img_dst[],
 enum class eTexFormat : uint8_t;
 std::unique_ptr<uint8_t[]> ReadTGAFile(const void *data, int &w, int &h, eTexFormat &format);
 bool ReadTGAFile(const void *data, int &w, int &h, eTexFormat &format, uint8_t *out_data, uint32_t &out_size);
+
+void WritePFM(const char *base_name, const float values[], int w, int h, int channels);
 } // namespace Ray

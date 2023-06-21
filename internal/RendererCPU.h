@@ -9,6 +9,7 @@
 #include "CoreRef.h"
 #include "Halton.h"
 #include "SceneCPU.h"
+#include "UNetFilter.h"
 
 #define DEBUG_ADAPTIVE_SAMPLING 0
 
@@ -16,6 +17,9 @@ namespace Ray {
 class ILog;
 
 int round_up(int v, int align);
+
+void WritePFM(const char *base_name, const float values[], int w, int h, int channels);
+
 namespace Ref {
 class SIMDPolicy {
   public:
@@ -98,6 +102,54 @@ class SIMDPolicy {
         Ref::ShadeSecondary(ps, inters, rays, random_seq, sc, node_index, textures, out_secondary_rays,
                             out_secondary_rays_count, out_shadow_rays, out_shadow_rays_count, img_w, out_color);
     }
+
+    template <int InChannels1, int InChannels2, int InChannels3, int PxPitch, int OutChannels,
+              ePreOp PreOp1 = ePreOp::None, ePreOp PreOp2 = ePreOp::None, ePreOp PreOp3 = ePreOp::None,
+              ePostOp PostOp = ePostOp::None, eActivation Activation = eActivation::ReLU>
+    static force_inline void Convolution3x3_GEMM(const float data1[], const float data2[], const float data3[],
+                                                 const rect_t &rect, int in_w, int in_h, int w, int h, int stride,
+                                                 const float weights[], const float biases[], float output[],
+                                                 int output_stride) {
+        Ref::Convolution3x3_GEMM<InChannels1, InChannels2, InChannels3, PxPitch, OutChannels, PreOp1, PreOp2, PreOp3,
+                                 PostOp, Activation>(data1, data2, data3, rect, in_w, in_h, w, h, stride, weights,
+                                                     biases, output, output_stride);
+    }
+
+    template <int InChannels, int OutChannels, int OutPxPitch = OutChannels, ePostOp PostOp = ePostOp::None,
+              eActivation Activation = eActivation::ReLU>
+    static force_inline void Convolution3x3_Direct(const float data[], const rect_t &rect, int w, int h, int stride,
+                                                   const float weights[], const float biases[], float output[],
+                                                   int output_stride) {
+        Ref::Convolution3x3_Direct<InChannels, OutChannels, OutPxPitch, PostOp, Activation>(
+            data, rect, w, h, stride, weights, biases, output, output_stride);
+    }
+
+    template <int InChannels1, int InChannels2, int OutChannels, ePreOp PreOp1 = ePreOp::None,
+              ePostOp PostOp = ePostOp::None, eActivation Activation = eActivation::ReLU>
+    static force_inline void ConvolutionConcat3x3_Direct(const float data1[], const float data2[], const rect_t &rect,
+                                                         int w, int h, int stride1, int stride2, const float weights[],
+                                                         const float biases[], float output[], int output_stride) {
+        Ref::ConvolutionConcat3x3_Direct<InChannels1, InChannels2, OutChannels, PreOp1, PostOp, Activation>(
+            data1, data2, rect, w, h, stride1, stride2, weights, biases, output, output_stride);
+    }
+
+    template <int InChannels1, int InChannels2, int InChannels3, int InChannels4, int PxPitch2, int OutChannels,
+              ePreOp PreOp1 = ePreOp::None, ePreOp PreOp2 = ePreOp::None, ePreOp PreOp3 = ePreOp::None,
+              ePreOp PreOp4 = ePreOp::None, ePostOp PostOp = ePostOp::None, eActivation Activation = eActivation::ReLU>
+    static force_inline void
+    ConvolutionConcat3x3_1Direct_2GEMM(const float data1[], const float data2[], const float data3[],
+                                       const float data4[], const rect_t &rect, int w, int h, int w2, int h2,
+                                       int stride1, int stride2, const float weights[], const float biases[],
+                                       float output[], int output_stride) {
+        Ref::ConvolutionConcat3x3_1Direct_2GEMM<InChannels1, InChannels2, InChannels3, InChannels4, PxPitch2,
+                                                OutChannels, PreOp1, PreOp2, PreOp3, PreOp4, PostOp, Activation>(
+            data1, data2, data3, data4, rect, w, h, w2, h2, stride1, stride2, weights, biases, output, output_stride);
+    }
+
+    static force_inline void ClearBorders(const rect_t &rect, int w, int h, bool downscaled, int out_channels,
+                                          float output[]) {
+        Ref::ClearBorders(rect, w, h, downscaled, out_channels, output);
+    }
 };
 } // namespace Ref
 namespace Cpu {
@@ -119,6 +171,30 @@ template <typename SIMDPolicy> class Renderer : public RendererBase, private SIM
 
     std::vector<uint16_t> permutations_;
     void UpdateHaltonSequence(int iteration, std::unique_ptr<float[]> &seq);
+
+    aligned_vector<float, 64> unet_weights_[3];
+    unet_weight_offsets_t unet_offsets_[3];
+    bool unet_alias_memory_ = true;
+    aligned_vector<float, 64> unet_tensors_heap_;
+    struct {
+        float *encConv0 = nullptr;
+        float *pool1 = nullptr;
+        float *pool2 = nullptr;
+        float *pool3 = nullptr;
+        float *pool4 = nullptr;
+        float *enc_conv5a = nullptr;
+        float *upsample4 = nullptr;
+        float *dec_conv4a = nullptr;
+        float *upsample3 = nullptr;
+        float *dec_conv3a = nullptr;
+        float *upsample2 = nullptr;
+        float *dec_conv2a = nullptr;
+        float *upsample1 = nullptr;
+        float *dec_conv1a = nullptr;
+        float *dec_conv1b = nullptr;
+    } unet_tensors_;
+    SmallVector<int, 2> unet_alias_dependencies_[UNetFilterPasses];
+    void UpdateUNetFilterMemory();
 
   public:
     Renderer(const settings_t &s, ILog *log);
@@ -163,6 +239,8 @@ template <typename SIMDPolicy> class Renderer : public RendererBase, private SIM
 
             w_ = w;
             h_ = h;
+
+            UpdateUNetFilterMemory();
         }
     }
 
@@ -176,9 +254,12 @@ template <typename SIMDPolicy> class Renderer : public RendererBase, private SIM
     SceneBase *CreateScene() override;
     void RenderScene(const SceneBase *scene, RegionContext &region) override;
     void DenoiseImage(const RegionContext &region) override;
+    void DenoiseImage(int pass, const RegionContext &region) override;
 
     void GetStats(stats_t &st) override { st = stats_; }
     void ResetStats() override { stats_ = {0}; }
+
+    void InitUNetFilter(bool alias_memory, unet_filter_properties_t &out_props) override;
 };
 } // namespace Cpu
 namespace Ref {
@@ -684,6 +765,258 @@ template <typename SIMDPolicy> void Ray::Cpu::Renderer<SIMDPolicy>::DenoiseImage
 }
 
 template <typename SIMDPolicy>
+void Ray::Cpu::Renderer<SIMDPolicy>::DenoiseImage(const int pass, const RegionContext &region) {
+    using namespace std::chrono;
+    const auto denoise_start = high_resolution_clock::now();
+
+    const int w_rounded = 16 * ((w_ + 15) / 16);
+    const int h_rounded = 16 * ((h_ + 15) / 16);
+
+    rect_t r = region.rect();
+    if (pass < 15) {
+        r.w = 16 * ((r.w + 15) / 16);
+        r.h = 16 * ((r.h + 15) / 16);
+    }
+
+    const float *weights = unet_weights_[0].data();
+    const unet_weight_offsets_t *offsets = &unet_offsets_[0];
+    if (!base_color_buf_.empty() && !depth_normals_buf_.empty()) {
+        weights = unet_weights_[2].data();
+        offsets = &unet_offsets_[2];
+    } else if (!base_color_buf_.empty()) {
+        weights = unet_weights_[1].data();
+        offsets = &unet_offsets_[1];
+    }
+
+    switch (pass) {
+    case 0: {
+        if (!base_color_buf_.empty() && !depth_normals_buf_.empty()) {
+            SIMDPolicy::template Convolution3x3_GEMM<3, 3, 3, 4, 32, ePreOp::HDRTransfer, ePreOp::None,
+                                                     ePreOp::PositiveNormalize>(
+                &raw_final_buf_[0].v[0], &base_color_buf_[0].v[0], &depth_normals_buf_[0].v[0], r, w_, h_, w_rounded,
+                h_rounded, w_, &weights[offsets->enc_conv0_weight], &weights[offsets->enc_conv0_bias],
+                unet_tensors_.encConv0 + (w_rounded + 3) * 32, w_rounded + 2);
+        } else if (!base_color_buf_.empty()) {
+            SIMDPolicy::template Convolution3x3_GEMM<3, 3, 0, 4, 32, ePreOp::HDRTransfer>(
+                &raw_final_buf_[0].v[0], &base_color_buf_[0].v[0], nullptr, r, w_, h_, w_rounded, h_rounded, w_,
+                &weights[offsets->enc_conv0_weight], &weights[offsets->enc_conv0_bias],
+                unet_tensors_.encConv0 + (w_rounded + 3) * 32, w_rounded + 2);
+        } else {
+            SIMDPolicy::template Convolution3x3_GEMM<3, 0, 0, 4, 32, ePreOp::HDRTransfer>(
+                &raw_final_buf_[0].v[0], nullptr, nullptr, r, w_, h_, w_rounded, h_rounded, w_,
+                &weights[offsets->enc_conv0_weight], &weights[offsets->enc_conv0_bias],
+                unet_tensors_.encConv0 + (w_rounded + 3) * 32, w_rounded + 2);
+        }
+        SIMDPolicy::ClearBorders(r, w_rounded, h_rounded, false, 32, unet_tensors_.encConv0);
+        break;
+    }
+    case 1: {
+        SIMDPolicy::template Convolution3x3_Direct<32, 32, 32, Ray::ePostOp::Downscale>(
+            unet_tensors_.encConv0 + (w_rounded + 3) * 32, r, w_rounded, h_rounded, w_rounded + 2,
+            &weights[offsets->enc_conv1_weight], &weights[offsets->enc_conv1_bias],
+            unet_tensors_.pool1 + (w_rounded / 2 + 3) * 32, w_rounded / 2 + 2);
+        SIMDPolicy::ClearBorders(r, w_rounded, h_rounded, true, 32, unet_tensors_.pool1);
+        break;
+    }
+    case 2: {
+        r.x = r.x / 2;
+        r.y = r.y / 2;
+        r.w = (r.w + 1) / 2;
+        r.h = (r.h + 1) / 2;
+        SIMDPolicy::template Convolution3x3_Direct<32, 48, 48, Ray::ePostOp::Downscale>(
+            unet_tensors_.pool1 + (w_rounded / 2 + 3) * 32, r, w_rounded / 2, h_rounded / 2, w_rounded / 2 + 2,
+            &weights[offsets->enc_conv2_weight], &weights[offsets->enc_conv2_bias],
+            unet_tensors_.pool2 + (w_rounded / 4 + 3) * 48, w_rounded / 4 + 2);
+        SIMDPolicy::ClearBorders(r, w_rounded / 2, h_rounded / 2, true, 48, unet_tensors_.pool2);
+        break;
+    }
+    case 3: {
+        r.x = r.x / 4;
+        r.y = r.y / 4;
+        r.w = (r.w + 3) / 4;
+        r.h = (r.h + 3) / 4;
+        SIMDPolicy::template Convolution3x3_Direct<48, 64, 64, Ray::ePostOp::Downscale>(
+            unet_tensors_.pool2 + (w_rounded / 4 + 3) * 48, r, w_rounded / 4, h_rounded / 4, w_rounded / 4 + 2,
+            &weights[offsets->enc_conv3_weight], &weights[offsets->enc_conv3_bias],
+            unet_tensors_.pool3 + (w_rounded / 8 + 3) * 64, w_rounded / 8 + 2);
+        SIMDPolicy::ClearBorders(r, w_rounded / 4, h_rounded / 4, true, 64, unet_tensors_.pool3);
+        break;
+    }
+    case 4: {
+        r.x = r.x / 8;
+        r.y = r.y / 8;
+        r.w = (r.w + 7) / 8;
+        r.h = (r.h + 7) / 8;
+        SIMDPolicy::template Convolution3x3_Direct<64, 80, 80, Ray::ePostOp::Downscale>(
+            unet_tensors_.pool3 + (w_rounded / 8 + 3) * 64, r, w_rounded / 8, h_rounded / 8, w_rounded / 8 + 2,
+            &weights[offsets->enc_conv4_weight], &weights[offsets->enc_conv4_bias],
+            unet_tensors_.pool4 + (w_rounded / 16 + 3) * 80, w_rounded / 16 + 2);
+        SIMDPolicy::ClearBorders(r, w_rounded / 8, h_rounded / 8, true, 80, unet_tensors_.pool4);
+        break;
+    }
+    case 5: {
+        r.x = r.x / 16;
+        r.y = r.y / 16;
+        r.w = (r.w + 15) / 16;
+        r.h = (r.h + 15) / 16;
+        SIMDPolicy::template Convolution3x3_Direct<80, 96>(
+            unet_tensors_.pool4 + (w_rounded / 16 + 3) * 80, r, w_rounded / 16, h_rounded / 16, w_rounded / 16 + 2,
+            &weights[offsets->enc_conv5a_weight], &weights[offsets->enc_conv5a_bias],
+            unet_tensors_.enc_conv5a + (w_rounded / 16 + 3) * 96, w_rounded / 16 + 2);
+        SIMDPolicy::ClearBorders(r, w_rounded / 16, h_rounded / 16, false, 96, unet_tensors_.enc_conv5a);
+        break;
+    }
+    case 6: {
+        r.x = r.x / 16;
+        r.y = r.y / 16;
+        r.w = (r.w + 15) / 16;
+        r.h = (r.h + 15) / 16;
+        SIMDPolicy::template Convolution3x3_Direct<96, 96>(
+            unet_tensors_.enc_conv5a + (w_rounded / 16 + 3) * 96, r, w_rounded / 16, h_rounded / 16, w_rounded / 16 + 2,
+            &weights[offsets->enc_conv5b_weight], &weights[offsets->enc_conv5b_bias],
+            unet_tensors_.upsample4 + (w_rounded / 16 + 3) * 96, w_rounded / 16 + 2);
+        SIMDPolicy::ClearBorders(r, w_rounded / 16, h_rounded / 16, false, 96, unet_tensors_.upsample4);
+        break;
+    }
+    case 7: {
+        r.x = r.x / 8;
+        r.y = r.y / 8;
+        r.w = (r.w + 7) / 8;
+        r.h = (r.h + 7) / 8;
+        SIMDPolicy::template ConvolutionConcat3x3_Direct<96, 64, 112, Ray::ePreOp::Upscale>(
+            unet_tensors_.upsample4 + (w_rounded / 16 + 3) * 96, unet_tensors_.pool3 + (w_rounded / 8 + 3) * 64, r,
+            w_rounded / 8, h_rounded / 8, w_rounded / 16 + 2, w_rounded / 8 + 2, &weights[offsets->dec_conv4a_weight],
+            &weights[offsets->dec_conv4a_bias], unet_tensors_.dec_conv4a + (w_rounded / 8 + 3) * 112,
+            w_rounded / 8 + 2);
+        SIMDPolicy::ClearBorders(r, w_rounded / 8, h_rounded / 8, false, 112, unet_tensors_.dec_conv4a);
+        break;
+    }
+    case 8: {
+        r.x = r.x / 8;
+        r.y = r.y / 8;
+        r.w = (r.w + 7) / 8;
+        r.h = (r.h + 7) / 8;
+        SIMDPolicy::template Convolution3x3_Direct<112, 112>(
+            unet_tensors_.dec_conv4a + (w_rounded / 8 + 3) * 112, r, w_rounded / 8, h_rounded / 8, w_rounded / 8 + 2,
+            &weights[offsets->dec_conv4b_weight], &weights[offsets->dec_conv4b_bias],
+            unet_tensors_.upsample3 + (w_rounded / 8 + 3) * 112, w_rounded / 8 + 2);
+        SIMDPolicy::ClearBorders(r, w_rounded / 8, h_rounded / 8, false, 112, unet_tensors_.upsample3);
+        break;
+    }
+    case 9: {
+        r.x = r.x / 4;
+        r.y = r.y / 4;
+        r.w = (r.w + 3) / 4;
+        r.h = (r.h + 3) / 4;
+        SIMDPolicy::template ConvolutionConcat3x3_Direct<112, 48, 96, Ray::ePreOp::Upscale>(
+            unet_tensors_.upsample3 + (w_rounded / 8 + 3) * 112, unet_tensors_.pool2 + (w_rounded / 4 + 3) * 48, r,
+            w_rounded / 4, h_rounded / 4, w_rounded / 8 + 2, w_rounded / 4 + 2, &weights[offsets->dec_conv3a_weight],
+            &weights[offsets->dec_conv3a_bias], unet_tensors_.dec_conv3a + (w_rounded / 4 + 3) * 96, w_rounded / 4 + 2);
+        SIMDPolicy::ClearBorders(r, w_rounded / 4, h_rounded / 4, false, 96, unet_tensors_.dec_conv3a);
+        break;
+    }
+    case 10: {
+        r.x = r.x / 4;
+        r.y = r.y / 4;
+        r.w = (r.w + 3) / 4;
+        r.h = (r.h + 3) / 4;
+        SIMDPolicy::template Convolution3x3_Direct<96, 96>(
+            unet_tensors_.dec_conv3a + (w_rounded / 4 + 3) * 96, r, w_rounded / 4, h_rounded / 4, w_rounded / 4 + 2,
+            &weights[offsets->dec_conv3b_weight], &weights[offsets->dec_conv3b_bias],
+            unet_tensors_.upsample2 + (w_rounded / 4 + 3) * 96, w_rounded / 4 + 2);
+        SIMDPolicy::ClearBorders(r, w_rounded / 4, h_rounded / 4, false, 96, unet_tensors_.upsample2);
+        break;
+    }
+    case 11: {
+        r.x = r.x / 2;
+        r.y = r.y / 2;
+        r.w = (r.w + 1) / 2;
+        r.h = (r.h + 1) / 2;
+        SIMDPolicy::template ConvolutionConcat3x3_Direct<96, 32, 64, Ray::ePreOp::Upscale>(
+            unet_tensors_.upsample2 + (w_rounded / 4 + 3) * 96, unet_tensors_.pool1 + (w_rounded / 2 + 3) * 32, r,
+            w_rounded / 2, h_rounded / 2, w_rounded / 4 + 2, w_rounded / 2 + 2, &weights[offsets->dec_conv2a_weight],
+            &weights[offsets->dec_conv2a_bias], unet_tensors_.dec_conv2a + (w_rounded / 2 + 3) * 64, w_rounded / 2 + 2);
+        SIMDPolicy::ClearBorders(r, w_rounded / 2, h_rounded / 2, false, 64, unet_tensors_.dec_conv2a);
+        break;
+    }
+    case 12: {
+        r.x = r.x / 2;
+        r.y = r.y / 2;
+        r.w = (r.w + 1) / 2;
+        r.h = (r.h + 1) / 2;
+        SIMDPolicy::template Convolution3x3_Direct<64, 64>(
+            unet_tensors_.dec_conv2a + (w_rounded / 2 + 3) * 64, r, w_rounded / 2, h_rounded / 2, w_rounded / 2 + 2,
+            &weights[offsets->dec_conv2b_weight], &weights[offsets->dec_conv2b_bias],
+            unet_tensors_.upsample1 + (w_rounded / 2 + 3) * 64, w_rounded / 2 + 2);
+        SIMDPolicy::ClearBorders(r, w_rounded / 2, h_rounded / 2, false, 64, unet_tensors_.upsample1);
+        break;
+    }
+    case 13: {
+        if (!base_color_buf_.empty() && !depth_normals_buf_.empty()) {
+            SIMDPolicy::template ConvolutionConcat3x3_1Direct_2GEMM<64, 3, 3, 3, 4, 64, Ray::ePreOp::Upscale,
+                                                                    Ray::ePreOp::HDRTransfer, Ray::ePreOp::None,
+                                                                    Ray::ePreOp::PositiveNormalize>(
+                unet_tensors_.upsample1 + (w_rounded / 2 + 3) * 64, &raw_final_buf_[0].v[0], &base_color_buf_[0].v[0],
+                &depth_normals_buf_[0].v[0], r, w_rounded, h_rounded, w_, h_, w_rounded / 2 + 2, w_,
+                &weights[offsets->dec_conv1a_weight], &weights[offsets->dec_conv1a_bias],
+                unet_tensors_.dec_conv1a + (w_rounded + 3) * 64, w_rounded + 2);
+        } else if (!base_color_buf_.empty()) {
+            SIMDPolicy::template ConvolutionConcat3x3_1Direct_2GEMM<64, 3, 3, 0, 4, 64, Ray::ePreOp::Upscale,
+                                                                    Ray::ePreOp::HDRTransfer>(
+                unet_tensors_.upsample1 + (w_rounded / 2 + 3) * 64, &raw_final_buf_[0].v[0], &base_color_buf_[0].v[0],
+                nullptr, r, w_rounded, h_rounded, w_, h_, w_rounded / 2 + 2, w_, &weights[offsets->dec_conv1a_weight],
+                &weights[offsets->dec_conv1a_bias], unet_tensors_.dec_conv1a + (w_rounded + 3) * 64, w_rounded + 2);
+        } else {
+            SIMDPolicy::template ConvolutionConcat3x3_1Direct_2GEMM<64, 3, 0, 0, 4, 64, Ray::ePreOp::Upscale,
+                                                                    Ray::ePreOp::HDRTransfer>(
+                unet_tensors_.upsample1 + (w_rounded / 2 + 3) * 64, &raw_final_buf_[0].v[0], nullptr, nullptr, r,
+                w_rounded, h_rounded, w_, h_, w_rounded / 2 + 2, w_, &weights[offsets->dec_conv1a_weight],
+                &weights[offsets->dec_conv1a_bias], unet_tensors_.dec_conv1a + (w_rounded + 3) * 64, w_rounded + 2);
+        }
+        SIMDPolicy::ClearBorders(r, w_rounded, h_rounded, false, 64, unet_tensors_.dec_conv1a);
+        break;
+    }
+    case 14: {
+        SIMDPolicy::template Convolution3x3_Direct<64, 32>(
+            unet_tensors_.dec_conv1a + (w_rounded + 3) * 64, r, w_rounded, h_rounded, w_rounded + 2,
+            &weights[offsets->dec_conv1b_weight], &weights[offsets->dec_conv1b_bias],
+            unet_tensors_.dec_conv1b + (w_rounded + 3) * 32, w_rounded + 2);
+        SIMDPolicy::ClearBorders(r, w_rounded, h_rounded, false, 32, unet_tensors_.dec_conv1b);
+        break;
+    }
+    case 15: {
+        SIMDPolicy::template Convolution3x3_Direct<32, 3, 4, ePostOp::HDRTransfer>(
+            unet_tensors_.dec_conv1b + (w_rounded + 3) * 32, r, w_, h_, w_rounded + 2,
+            &weights[offsets->dec_conv0_weight], &weights[offsets->dec_conv0_bias], &raw_filtered_buf_[0].v[0], 0);
+
+        Ref::tonemap_params_t tonemap_params;
+
+        {
+            std::lock_guard<std::mutex> _(mtx_);
+            tonemap_params = tonemap_params_;
+        }
+
+        for (int y = r.y; y < r.y + r.h; ++y) {
+            for (int x = r.x; x < r.x + r.w; ++x) {
+                auto col = Ref::simd_fvec4(raw_filtered_buf_[y * w_ + x].v, Ref::simd_mem_aligned);
+                col = Tonemap(tonemap_params, col);
+                col.store_to(final_buf_[y * w_ + x].v, Ref::simd_mem_aligned);
+            }
+        }
+
+        break;
+    }
+    }
+
+    const auto denoise_end = high_resolution_clock::now();
+
+    {
+        std::lock_guard<std::mutex> _(mtx_);
+        stats_.time_denoise_us += (unsigned long long)duration<double, std::micro>{denoise_end - denoise_start}.count();
+    }
+}
+
+template <typename SIMDPolicy>
 void Ray::Cpu::Renderer<SIMDPolicy>::UpdateHaltonSequence(const int iteration, std::unique_ptr<float[]> &seq) {
     if (!seq) {
         seq.reset(new float[HALTON_COUNT * HALTON_SEQ_LEN]);
@@ -697,4 +1030,66 @@ void Ray::Cpu::Renderer<SIMDPolicy>::UpdateHaltonSequence(const int iteration, s
             prime_sum += g_primes[j];
         }
     }
+}
+
+template <typename SIMDPolicy>
+void Ray::Cpu::Renderer<SIMDPolicy>::InitUNetFilter(const bool alias_memory, unet_filter_properties_t &out_props) {
+    { // weights for no feature buffers case
+        const int total_count = SetupUNetWeights<float>(false, false, true, 1, nullptr, nullptr);
+        unet_weights_[0].resize(total_count);
+        SetupUNetWeights(false, false, true, 1, &unet_offsets_[0], unet_weights_[0].data());
+    }
+    { // weights for the case if base color is available
+        const int total_count = SetupUNetWeights<float>(true, false, true, 1, nullptr, nullptr);
+        unet_weights_[1].resize(total_count);
+        SetupUNetWeights(true, false, true, 1, &unet_offsets_[1], unet_weights_[1].data());
+    }
+    { // weights for the case if base color and normals is available
+        const int total_count = SetupUNetWeights<float>(true, true, true, 1, nullptr, nullptr);
+        unet_weights_[2].resize(total_count);
+        SetupUNetWeights(true, true, true, 1, &unet_offsets_[2], unet_weights_[2].data());
+    }
+
+    unet_alias_memory_ = alias_memory;
+    UpdateUNetFilterMemory();
+
+    out_props.pass_count = UNetFilterPasses;
+    for (int i = 0; i < UNetFilterPasses; ++i) {
+        std::fill(&out_props.alias_dependencies[i][0], &out_props.alias_dependencies[i][0] + 4, -1);
+        for (int j = 0; j < int(unet_alias_dependencies_[i].size()); ++j) {
+            out_props.alias_dependencies[i][j] = unet_alias_dependencies_[i][j];
+        }
+    }
+}
+
+template <typename SIMDPolicy> void Ray::Cpu::Renderer<SIMDPolicy>::UpdateUNetFilterMemory() {
+    unet_tensors_heap_ = {};
+    if (unet_weights_[0].empty()) {
+        return;
+    }
+
+    unet_filter_tensors_t tensors;
+    const int required_memory = SetupUNetFilter(w_, h_, unet_alias_memory_, false, tensors, unet_alias_dependencies_);
+
+#ifndef NDEBUG
+    unet_tensors_heap_.resize(required_memory, NAN);
+#else
+    unet_tensors_heap_.resize(required_memory, 0.0f);
+#endif
+
+    unet_tensors_.encConv0 = unet_tensors_heap_.data() + tensors.enc_conv0_offset;
+    unet_tensors_.pool1 = unet_tensors_heap_.data() + tensors.pool1_offset;
+    unet_tensors_.pool2 = unet_tensors_heap_.data() + tensors.pool2_offset;
+    unet_tensors_.pool3 = unet_tensors_heap_.data() + tensors.pool3_offset;
+    unet_tensors_.pool4 = unet_tensors_heap_.data() + tensors.pool4_offset;
+    unet_tensors_.enc_conv5a = unet_tensors_heap_.data() + tensors.enc_conv5a_offset;
+    unet_tensors_.upsample4 = unet_tensors_heap_.data() + tensors.upsample4_offset;
+    unet_tensors_.dec_conv4a = unet_tensors_heap_.data() + tensors.dec_conv4a_offset;
+    unet_tensors_.upsample3 = unet_tensors_heap_.data() + tensors.upsample3_offset;
+    unet_tensors_.dec_conv3a = unet_tensors_heap_.data() + tensors.dec_conv3a_offset;
+    unet_tensors_.upsample2 = unet_tensors_heap_.data() + tensors.upsample2_offset;
+    unet_tensors_.dec_conv2a = unet_tensors_heap_.data() + tensors.dec_conv2a_offset;
+    unet_tensors_.upsample1 = unet_tensors_heap_.data() + tensors.upsample1_offset;
+    unet_tensors_.dec_conv1a = unet_tensors_heap_.data() + tensors.dec_conv1a_offset;
+    unet_tensors_.dec_conv1b = unet_tensors_heap_.data() + tensors.dec_conv1b_offset;
 }

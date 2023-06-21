@@ -13,9 +13,9 @@
 namespace Ray {
 /// Renderer flags used to choose backend
 enum class eRendererType : uint32_t {
-    // Reference renderer, slightly vectorized, the easiest to modify and debug
+    // Reference CPU renderer, slightly vectorized, the easiest to modify and debug
     Reference,
-    // SIMD renderers, heavily vectorized
+    // SIMD CPU renderers, heavily vectorized in SPMD fashion
     SIMD_SSE2,
     SIMD_SSE41,
     SIMD_AVX,
@@ -129,10 +129,16 @@ class RendererBase {
     */
     virtual void RenderScene(const SceneBase *scene, RegionContext &region) = 0;
 
-    /** @brief Denoise image region
+    /** @brief Denoise image region using NLM filter
         @param region image region to denoise
     */
     virtual void DenoiseImage(const RegionContext &region) = 0;
+
+    /** @brief Denoise image region using UNet filter
+        @param pass UNet filter pass
+        @param region image region to denoise
+    */
+    virtual void DenoiseImage(int pass, const RegionContext &region) = 0;
 
     struct stats_t {
         unsigned long long time_primary_ray_gen_us;
@@ -147,5 +153,7 @@ class RendererBase {
     };
     virtual void GetStats(stats_t &st) = 0;
     virtual void ResetStats() = 0;
+
+    virtual void InitUNetFilter(bool alias_memory, unet_filter_properties_t &out_props) = 0;
 };
 } // namespace Ray

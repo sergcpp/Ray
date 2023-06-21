@@ -42,6 +42,10 @@ class Context {
 
     bool rgb8_unorm_is_supported_ = false;
 
+    bool fp16_supported_ = false;
+
+    bool nv_coop_matrix_supported_ = false;
+
     VkQueue graphics_queue_ = {};
 
     VkCommandPool command_pool_ = {}, temp_command_pool_ = {};
@@ -78,8 +82,9 @@ class Context {
 
     bool raytracing_supported() const { return raytracing_supported_; }
     bool ray_query_supported() const { return ray_query_supported_; }
-
     bool rgb8_unorm_is_supported() const { return rgb8_unorm_is_supported_; }
+    bool fp16_supported() const { return fp16_supported_; }
+    bool nv_coop_matrix_supported() const { return nv_coop_matrix_supported_; }
 
     bool image_blit_supported() const { return true; }
 
@@ -136,11 +141,12 @@ class Context {
                                        VkPhysicalDeviceMemoryProperties &mem_properties,
                                        uint32_t &graphics_family_index, bool &out_raytracing_supported,
                                        bool &out_ray_query_supported, bool &out_dynamic_rendering_supported,
+                                       bool &out_fp16_supported, bool &out_coop_matrix_supported,
                                        const char *preferred_device, VkInstance instance, ILog *log);
     static bool InitVkDevice(const Api &api, VkDevice &device, VkPhysicalDevice physical_device,
                              uint32_t graphics_family_index, bool enable_raytracing, bool enable_ray_query,
-                             bool enable_dynamic_rendering, const char *enabled_layers[], int enabled_layers_count,
-                             ILog *log);
+                             bool enable_dynamic_rendering, bool enable_fp16, bool enable_coop_matrix,
+                             const char *enabled_layers[], int enabled_layers_count, ILog *log);
     static bool InitCommandBuffers(const Api &api, VkCommandPool &command_pool, VkCommandPool &temp_command_pool,
                                    VkCommandBuffer &setup_cmd_buf, VkCommandBuffer draw_cmd_bufs[MaxFramesInFlight],
                                    VkSemaphore image_avail_semaphores[MaxFramesInFlight],

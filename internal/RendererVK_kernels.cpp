@@ -3,6 +3,7 @@
 #include "SceneVK.h"
 #include "Vk/DrawCallVK.h"
 
+#include "shaders/convolution_interface.h"
 #include "shaders/debug_rt_interface.h"
 #include "shaders/filter_variance_interface.h"
 #include "shaders/intersect_area_lights_interface.h"
@@ -683,13 +684,18 @@ void Ray::Vk::Renderer::kernel_NLMFilter(CommandBuffer cmd_buf, const Texture2D 
         {&out_raw_img, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
-    const Binding bindings[] = {{eBindTarget::Tex2DSampled, NLMFilter::IN_IMG_SLOT, img_buf},
-                                {eBindTarget::Tex2DSampled, NLMFilter::VARIANCE_IMG_SLOT, var_buf},
-                                {eBindTarget::Tex3D, NLMFilter::TONEMAP_LUT_SLOT, tonemap_lut_},
-                                {eBindTarget::Tex2DSampled, NLMFilter::BASE_COLOR_IMG_SLOT, base_color_img},
-                                {eBindTarget::Tex2DSampled, NLMFilter::DEPTH_NORMAL_IMG_SLOT, depth_normals_img},
-                                {eBindTarget::Image, NLMFilter::OUT_IMG_SLOT, out_img},
-                                {eBindTarget::Image, NLMFilter::OUT_RAW_IMG_SLOT, out_raw_img}};
+    SmallVector<Binding, 16> bindings = {{eBindTarget::Tex2DSampled, NLMFilter::IN_IMG_SLOT, img_buf},
+                                         {eBindTarget::Tex2DSampled, NLMFilter::VARIANCE_IMG_SLOT, var_buf},
+                                         {eBindTarget::Tex3D, NLMFilter::TONEMAP_LUT_SLOT, tonemap_lut_},
+                                         {eBindTarget::Image, NLMFilter::OUT_IMG_SLOT, out_img},
+                                         {eBindTarget::Image, NLMFilter::OUT_RAW_IMG_SLOT, out_raw_img}};
+
+    if (base_color_img.ready()) {
+        bindings.emplace_back(eBindTarget::Tex2DSampled, NLMFilter::BASE_COLOR_IMG_SLOT, base_color_img);
+    }
+    if (depth_normals_img.ready()) {
+        bindings.emplace_back(eBindTarget::Tex2DSampled, NLMFilter::DEPTH_NORMAL_IMG_SLOT, depth_normals_img);
+    }
 
     const uint32_t grp_count[3] = {
         uint32_t((rect.w + NLMFilter::LOCAL_GROUP_SIZE_X - 1) / NLMFilter::LOCAL_GROUP_SIZE_X),
@@ -716,6 +722,320 @@ void Ray::Vk::Renderer::kernel_NLMFilter(CommandBuffer cmd_buf, const Texture2D 
         pi = &pi_nlm_filter_b_;
     } else if (depth_normals_img.ready()) {
         pi = &pi_nlm_filter_n_;
+    }
+
+    DispatchCompute(cmd_buf, *pi, grp_count, bindings, &uniform_params, sizeof(uniform_params),
+                    ctx_->default_descr_alloc(), ctx_->log());
+}
+
+void Ray::Vk::Renderer::kernel_Convolution(CommandBuffer cmd_buf, int in_channels, int out_channels,
+                                           const Texture2D &img_buf1, const Texture2D &img_buf2,
+                                           const Texture2D &img_buf3, const Sampler &sampler, const rect_t &rect, int w,
+                                           int h, const Buffer &weights, uint32_t weights_offset,
+                                           uint32_t biases_offset, const Buffer &out_buf, uint32_t output_offset,
+                                           int output_stride, const Texture2D &out_debug_img) {
+    const TransitionInfo res_transitions[] = {{&img_buf1, eResState::ShaderResource},
+                                              {&img_buf2, eResState::ShaderResource},
+                                              {&img_buf3, eResState::ShaderResource},
+                                              {&out_buf, eResState::UnorderedAccess},
+                                              {&out_debug_img, eResState::UnorderedAccess}};
+    TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
+
+    const int el_sz = use_fp16_ ? sizeof(uint16_t) : sizeof(float);
+    const uint32_t weights_size = out_channels * 3 * round_up(3 * in_channels, 8) * el_sz;
+    const uint32_t biases_size = out_channels * el_sz;
+    const uint32_t output_size = output_stride * (h + 2) * out_channels * el_sz;
+
+    SmallVector<Binding, 8> bindings = {
+        {eBindTarget::Tex2D, Convolution::IN_IMG1_SLOT, img_buf1},
+        {eBindTarget::Sampler, Convolution::IN_SAMPLER_SLOT, sampler},
+        {eBindTarget::SBufRO, Convolution::WEIGHTS_BUF_SLOT, weights_offset, weights_size, weights},
+        {eBindTarget::SBufRO, Convolution::BIASES_BUF_SLOT, biases_offset, biases_size, weights},
+        {eBindTarget::SBufRW, Convolution::OUT_BUF_SLOT, output_offset, output_size, out_buf}};
+
+    if (img_buf2.ready()) {
+        bindings.emplace_back(eBindTarget::Tex2D, Convolution::IN_IMG2_SLOT, img_buf2);
+    }
+    if (img_buf3.ready()) {
+        bindings.emplace_back(eBindTarget::Tex2D, Convolution::IN_IMG3_SLOT, img_buf3);
+    }
+    if (out_debug_img.ready()) {
+        bindings.emplace_back(eBindTarget::Image, Convolution::OUT_DEBUG_IMG_SLOT, out_debug_img);
+    }
+
+    const uint32_t grp_count[3] = {uint32_t((rect.w + Convolution::TILE_M - 1) / Convolution::TILE_M),
+                                   uint32_t((rect.h + 1) / 2),
+                                   uint32_t((out_channels + Convolution::TILE_N - 1) / Convolution::TILE_N)};
+
+    Convolution::Params uniform_params = {};
+    uniform_params.rect[0] = rect.x;
+    uniform_params.rect[1] = rect.y;
+    uniform_params.rect[2] = rect.w;
+    uniform_params.rect[3] = rect.h;
+    uniform_params.inv_img_size[0] = 1.0f / float(w_);
+    uniform_params.inv_img_size[1] = 1.0f / float(h_);
+    uniform_params.output_stride = output_stride;
+    uniform_params.in_dims[0] = w;
+    uniform_params.in_dims[1] = h;
+    uniform_params.out_dims[0] = w;
+    uniform_params.out_dims[1] = h;
+
+    Pipeline *pi = nullptr;
+    if (in_channels == 3 && out_channels == 32) {
+        pi = &pi_convolution_DirectImg_3_32_;
+    } else if (in_channels == 6 && out_channels == 32) {
+        assert(img_buf2.ready());
+        pi = &pi_convolution_DirectImg_6_32_;
+    } else if (in_channels == 9 && out_channels == 32) {
+        assert(img_buf2.ready() && img_buf3.ready());
+        pi = &pi_convolution_DirectImg_9_32_;
+    }
+
+    DispatchCompute(cmd_buf, *pi, grp_count, bindings, &uniform_params, sizeof(uniform_params),
+                    ctx_->default_descr_alloc(), ctx_->log());
+}
+
+void Ray::Vk::Renderer::kernel_Convolution(CommandBuffer cmd_buf, int in_channels, int out_channels,
+                                           const Buffer &input_buf, uint32_t input_offset, int input_stride,
+                                           const rect_t &rect, int w, int h, const Buffer &weights,
+                                           uint32_t weights_offset, uint32_t biases_offset, const Buffer &out_buf,
+                                           uint32_t output_offset, int output_stride, const bool downsample,
+                                           const Texture2D &out_debug_img) {
+    const TransitionInfo res_transitions[] = {{&out_buf, eResState::UnorderedAccess},
+                                              {&out_debug_img, eResState::UnorderedAccess}};
+    TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
+
+    const int el_sz = use_fp16_ ? sizeof(uint16_t) : sizeof(float);
+    const uint32_t weights_size = out_channels * 3 * round_up(3 * in_channels, 8) * el_sz;
+    const uint32_t biases_size = out_channels * el_sz;
+    const uint32_t output_size = output_stride * (h + 2) * out_channels * el_sz;
+
+    SmallVector<Binding, 16> bindings = {
+        {eBindTarget::SBufRO, Convolution::IN_BUF1_SLOT, input_offset, input_buf},
+        {eBindTarget::SBufRO, Convolution::WEIGHTS_BUF_SLOT, weights_offset, weights_size, weights},
+        {eBindTarget::SBufRO, Convolution::BIASES_BUF_SLOT, biases_offset, biases_size, weights},
+        {eBindTarget::SBufRW, Convolution::OUT_BUF_SLOT, output_offset, output_size, out_buf}};
+
+    if (out_debug_img.ready()) {
+        bindings.emplace_back(eBindTarget::Image, Convolution::OUT_DEBUG_IMG_SLOT, out_debug_img);
+    }
+
+    const uint32_t grp_count[3] = {uint32_t((rect.w + Convolution::TILE_M - 1) / Convolution::TILE_M),
+                                   uint32_t((rect.h + 1) / 2),
+                                   uint32_t((out_channels + Convolution::TILE_N - 1) / Convolution::TILE_N)};
+
+    Convolution::Params uniform_params = {};
+    uniform_params.rect[0] = rect.x;
+    uniform_params.rect[1] = rect.y;
+    uniform_params.rect[2] = rect.w;
+    uniform_params.rect[3] = rect.h;
+    uniform_params.input_stride1 = input_stride;
+    uniform_params.output_stride = output_stride;
+    uniform_params.in_dims[0] = w;
+    uniform_params.in_dims[1] = h;
+    if (downsample) {
+        uniform_params.out_dims[0] = w / 2;
+        uniform_params.out_dims[1] = h / 2;
+    } else {
+        uniform_params.out_dims[0] = w;
+        uniform_params.out_dims[1] = h;
+    }
+
+    Pipeline *pi = nullptr;
+    if (in_channels == 32 && out_channels == 32 && downsample) {
+        pi = &pi_convolution_Direct_32_32_Downsample_;
+    } else if (in_channels == 32 && out_channels == 48 && downsample) {
+        pi = &pi_convolution_Direct_32_48_Downsample_;
+    } else if (in_channels == 48 && out_channels == 64 && downsample) {
+        pi = &pi_convolution_Direct_48_64_Downsample_;
+    } else if (in_channels == 64 && out_channels == 80 && downsample) {
+        pi = &pi_convolution_Direct_64_80_Downsample_;
+    } else if (in_channels == 64 && out_channels == 64) {
+        pi = &pi_convolution_Direct_64_64_;
+    } else if (in_channels == 64 && out_channels == 32) {
+        pi = &pi_convolution_Direct_64_32_;
+    } else if (in_channels == 80 && out_channels == 96) {
+        pi = &pi_convolution_Direct_80_96_;
+    } else if (in_channels == 96 && out_channels == 96) {
+        pi = &pi_convolution_Direct_96_96_;
+    } else if (in_channels == 112 && out_channels == 112) {
+        pi = &pi_convolution_Direct_112_112_;
+    }
+
+    DispatchCompute(cmd_buf, *pi, grp_count, bindings, &uniform_params, sizeof(uniform_params),
+                    ctx_->default_descr_alloc(), ctx_->log());
+}
+
+void Ray::Vk::Renderer::kernel_Convolution(CommandBuffer cmd_buf, int in_channels, int out_channels,
+                                           const Buffer &input_buf, uint32_t input_offset, int input_stride,
+                                           const float inv_gamma, const rect_t &rect, int w, int h,
+                                           const Buffer &weights, uint32_t weights_offset, uint32_t biases_offset,
+                                           const Texture2D &out_img, const Texture2D &out_tonemapped_img) {
+    const TransitionInfo res_transitions[] = {{&input_buf, eResState::ShaderResource},
+                                              {&out_img, eResState::UnorderedAccess},
+                                              {&out_tonemapped_img, eResState::UnorderedAccess}};
+    TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
+
+    const int el_sz = use_fp16_ ? sizeof(uint16_t) : sizeof(float);
+    const uint32_t weights_size = out_channels * 3 * round_up(3 * in_channels, 8) * el_sz;
+    const uint32_t biases_size = out_channels * el_sz;
+
+    const Binding bindings[] = {
+        {eBindTarget::SBufRO, Convolution::IN_BUF1_SLOT, input_offset, input_buf},
+        {eBindTarget::SBufRO, Convolution::WEIGHTS_BUF_SLOT, weights_offset, weights_size, weights},
+        {eBindTarget::SBufRO, Convolution::BIASES_BUF_SLOT, biases_offset, biases_size, weights},
+        {eBindTarget::Tex3D, Convolution::TONEMAP_LUT_SLOT, tonemap_lut_},
+        {eBindTarget::Image, Convolution::OUT_IMG_SLOT, out_img},
+        {eBindTarget::Image, Convolution::OUT_TONEMAPPED_IMG_SLOT, out_tonemapped_img}};
+
+    const uint32_t grp_count[3] = {uint32_t((rect.w + Convolution::TILE_M - 1) / Convolution::TILE_M),
+                                   uint32_t((rect.h + 1) / 2),
+                                   uint32_t((out_channels + Convolution::TILE_N - 1) / Convolution::TILE_N)};
+
+    Convolution::Params uniform_params = {};
+    uniform_params.rect[0] = rect.x;
+    uniform_params.rect[1] = rect.y;
+    uniform_params.rect[2] = rect.w;
+    uniform_params.rect[3] = rect.h;
+    uniform_params.input_stride1 = input_stride;
+    uniform_params.tonemap_mode = (loaded_view_transform_ == eViewTransform::Standard) ? 0 : 1;
+    uniform_params.inv_gamma = inv_gamma;
+    uniform_params.in_dims[0] = w;
+    uniform_params.in_dims[1] = h;
+    uniform_params.out_dims[0] = w;
+    uniform_params.out_dims[1] = h;
+
+    Pipeline *pi = nullptr;
+    if (in_channels == 32 && out_channels == 3) {
+        pi = &pi_convolution_Direct_32_3_img_;
+    }
+
+    DispatchCompute(cmd_buf, *pi, grp_count, bindings, &uniform_params, sizeof(uniform_params),
+                    ctx_->default_descr_alloc(), ctx_->log());
+}
+
+void Ray::Vk::Renderer::kernel_ConvolutionConcat(CommandBuffer cmd_buf, int in_channels1, int in_channels2,
+                                                 int out_channels, const Buffer &input_buf1, uint32_t input_offset1,
+                                                 int input_stride1, bool upscale1, const Buffer &input_buf2,
+                                                 uint32_t input_offset2, int input_stride2, const rect_t &rect, int w,
+                                                 int h, const Buffer &weights, uint32_t weights_offset,
+                                                 uint32_t biases_offset, const Buffer &out_buf, uint32_t output_offset,
+                                                 int output_stride, const Texture2D &out_debug_img) {
+    const TransitionInfo res_transitions[] = {{&out_buf, eResState::UnorderedAccess},
+                                              {&out_debug_img, eResState::UnorderedAccess}};
+    TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
+
+    const int el_sz = use_fp16_ ? sizeof(uint16_t) : sizeof(float);
+    const uint32_t weights_size = out_channels * 3 * (3 * in_channels1 + round_up(3 * in_channels2, 8)) * el_sz;
+    const uint32_t biases_size = out_channels * el_sz;
+    const uint32_t output_size = output_stride * (h + 2) * out_channels * el_sz;
+
+    SmallVector<Binding, 16> bindings = {
+        {eBindTarget::SBufRO, Convolution::IN_BUF1_SLOT, input_offset1, input_buf1},
+        {eBindTarget::SBufRO, Convolution::IN_BUF2_SLOT, input_offset2, input_buf2},
+        {eBindTarget::SBufRO, Convolution::WEIGHTS_BUF_SLOT, weights_offset, weights_size, weights},
+        {eBindTarget::SBufRO, Convolution::BIASES_BUF_SLOT, biases_offset, biases_size, weights},
+        {eBindTarget::SBufRW, Convolution::OUT_BUF_SLOT, output_offset, output_size, out_buf}};
+
+    if (out_debug_img.ready()) {
+        bindings.emplace_back(eBindTarget::Image, Convolution::OUT_DEBUG_IMG_SLOT, out_debug_img);
+    }
+
+    const uint32_t grp_count[3] = {uint32_t((rect.w + Convolution::TILE_M - 1) / Convolution::TILE_M),
+                                   uint32_t((rect.h + 1) / 2),
+                                   uint32_t((out_channels + Convolution::TILE_N - 1) / Convolution::TILE_N)};
+
+    Convolution::Params uniform_params = {};
+    uniform_params.rect[0] = rect.x;
+    uniform_params.rect[1] = rect.y;
+    uniform_params.rect[2] = rect.w;
+    uniform_params.rect[3] = rect.h;
+    uniform_params.input_stride1 = input_stride1;
+    uniform_params.input_stride2 = input_stride2;
+    uniform_params.output_stride = output_stride;
+    uniform_params.in_dims[0] = w;
+    uniform_params.in_dims[1] = h;
+    uniform_params.out_dims[0] = w;
+    uniform_params.out_dims[1] = h;
+
+    Pipeline *pi = nullptr;
+    if (in_channels1 == 96 && in_channels2 == 64 && out_channels == 112 && upscale1) {
+        pi = &pi_convolution_concat_Direct_96_64_112_;
+    } else if (in_channels1 == 112 && in_channels2 == 48 && out_channels == 96 && upscale1) {
+        pi = &pi_convolution_concat_Direct_112_48_96_;
+    } else if (in_channels1 == 96 && in_channels2 == 32 && out_channels == 64 && upscale1) {
+        pi = &pi_convolution_concat_Direct_96_32_64_;
+    }
+
+    DispatchCompute(cmd_buf, *pi, grp_count, bindings, &uniform_params, sizeof(uniform_params),
+                    ctx_->default_descr_alloc(), ctx_->log());
+}
+
+void Ray::Vk::Renderer::kernel_ConvolutionConcat(CommandBuffer cmd_buf, int in_channels1, int in_channels2,
+                                                 int out_channels, const Buffer &input_buf1, uint32_t input_offset1,
+                                                 int input_stride1, bool upscale1, const Texture2D &img_buf1,
+                                                 const Texture2D &img_buf2, const Texture2D &img_buf3,
+                                                 const Sampler &sampler, const rect_t &rect, int w, int h,
+                                                 const Buffer &weights, uint32_t weights_offset, uint32_t biases_offset,
+                                                 const Buffer &out_buf, uint32_t output_offset, int output_stride,
+                                                 const Texture2D &out_debug_img) {
+    const TransitionInfo res_transitions[] = {{&img_buf1, eResState::ShaderResource},
+                                              {&img_buf2, eResState::ShaderResource},
+                                              {&img_buf3, eResState::ShaderResource},
+                                              {&out_buf, eResState::UnorderedAccess},
+                                              {&out_debug_img, eResState::UnorderedAccess}};
+    TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
+
+    const int el_sz = use_fp16_ ? sizeof(uint16_t) : sizeof(float);
+    const uint32_t weights_size = out_channels * 3 * (3 * in_channels1 + round_up(3 * in_channels2, 8)) * el_sz;
+    const uint32_t biases_size = out_channels * el_sz;
+    const uint32_t output_size = output_stride * (h + 2) * out_channels * el_sz;
+
+    SmallVector<Binding, 8> bindings = {
+        {eBindTarget::SBufRO, Convolution::IN_BUF1_SLOT, input_offset1, input_buf1},
+        {eBindTarget::Tex2D, Convolution::IN_IMG2_SLOT, img_buf1},
+        {eBindTarget::Sampler, Convolution::IN_SAMPLER_SLOT, sampler},
+        {eBindTarget::SBufRO, Convolution::WEIGHTS_BUF_SLOT, weights_offset, weights_size, weights},
+        {eBindTarget::SBufRO, Convolution::BIASES_BUF_SLOT, biases_offset, biases_size, weights},
+        {eBindTarget::SBufRW, Convolution::OUT_BUF_SLOT, output_offset, output_size, out_buf}};
+
+    if (img_buf2.ready()) {
+        bindings.emplace_back(eBindTarget::Tex2D, Convolution::IN_IMG3_SLOT, img_buf2);
+    }
+    if (img_buf3.ready()) {
+        bindings.emplace_back(eBindTarget::Tex2D, Convolution::IN_IMG4_SLOT, img_buf3);
+    }
+    if (out_debug_img.ready()) {
+        bindings.emplace_back(eBindTarget::Image, Convolution::OUT_DEBUG_IMG_SLOT, out_debug_img);
+    }
+
+    const uint32_t grp_count[3] = {uint32_t((rect.w + Convolution::TILE_M - 1) / Convolution::TILE_M),
+                                   uint32_t((rect.h + 1) / 2),
+                                   uint32_t((out_channels + Convolution::TILE_N - 1) / Convolution::TILE_N)};
+
+    Convolution::Params uniform_params = {};
+    uniform_params.rect[0] = rect.x;
+    uniform_params.rect[1] = rect.y;
+    uniform_params.rect[2] = rect.w;
+    uniform_params.rect[3] = rect.h;
+    uniform_params.inv_img_size[0] = 1.0f / float(w_);
+    uniform_params.inv_img_size[1] = 1.0f / float(h_);
+    uniform_params.input_stride1 = input_stride1;
+    uniform_params.output_stride = output_stride;
+    uniform_params.in_dims[0] = w;
+    uniform_params.in_dims[1] = h;
+    uniform_params.out_dims[0] = w;
+    uniform_params.out_dims[1] = h;
+
+    Pipeline *pi = nullptr;
+    if (in_channels1 == 64 && in_channels2 == 3 && out_channels == 64 && upscale1) {
+        pi = &pi_convolution_concat_Direct_64_3_64_;
+    } else if (in_channels1 == 64 && in_channels2 == 6 && out_channels == 64 && upscale1) {
+        assert(img_buf2.ready());
+        pi = &pi_convolution_concat_Direct_64_6_64_;
+    } else if (in_channels1 == 64 && in_channels2 == 9 && out_channels == 64 && upscale1) {
+        assert(img_buf2.ready() && img_buf3.ready());
+        pi = &pi_convolution_concat_Direct_64_9_64_;
     }
 
     DispatchCompute(cmd_buf, *pi, grp_count, bindings, &uniform_params, sizeof(uniform_params),

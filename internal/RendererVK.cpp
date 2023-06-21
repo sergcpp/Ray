@@ -40,6 +40,63 @@ namespace Ray {
 extern const int LUT_DIMS;
 extern const uint32_t *transform_luts[];
 namespace Vk {
+#include "shaders/output/convolution_112_112.comp.spv.inl"
+#include "shaders/output/convolution_112_112_fp16.comp.spv.inl"
+#include "shaders/output/convolution_112_112_nv.comp.spv.inl"
+#include "shaders/output/convolution_32_32_Downsample.comp.spv.inl"
+#include "shaders/output/convolution_32_32_Downsample_fp16.comp.spv.inl"
+#include "shaders/output/convolution_32_32_Downsample_nv.comp.spv.inl"
+#include "shaders/output/convolution_32_3_img.comp.spv.inl"
+#include "shaders/output/convolution_32_3_img_fp16.comp.spv.inl"
+#include "shaders/output/convolution_32_3_img_nv.comp.spv.inl"
+#include "shaders/output/convolution_32_48_Downsample.comp.spv.inl"
+#include "shaders/output/convolution_32_48_Downsample_fp16.comp.spv.inl"
+#include "shaders/output/convolution_32_48_Downsample_nv.comp.spv.inl"
+#include "shaders/output/convolution_48_64_Downsample.comp.spv.inl"
+#include "shaders/output/convolution_48_64_Downsample_fp16.comp.spv.inl"
+#include "shaders/output/convolution_48_64_Downsample_nv.comp.spv.inl"
+#include "shaders/output/convolution_64_32.comp.spv.inl"
+#include "shaders/output/convolution_64_32_fp16.comp.spv.inl"
+#include "shaders/output/convolution_64_32_nv.comp.spv.inl"
+#include "shaders/output/convolution_64_64.comp.spv.inl"
+#include "shaders/output/convolution_64_64_fp16.comp.spv.inl"
+#include "shaders/output/convolution_64_64_nv.comp.spv.inl"
+#include "shaders/output/convolution_64_80_Downsample.comp.spv.inl"
+#include "shaders/output/convolution_64_80_Downsample_fp16.comp.spv.inl"
+#include "shaders/output/convolution_64_80_Downsample_nv.comp.spv.inl"
+#include "shaders/output/convolution_80_96.comp.spv.inl"
+#include "shaders/output/convolution_80_96_fp16.comp.spv.inl"
+#include "shaders/output/convolution_80_96_nv.comp.spv.inl"
+#include "shaders/output/convolution_96_96.comp.spv.inl"
+#include "shaders/output/convolution_96_96_fp16.comp.spv.inl"
+#include "shaders/output/convolution_96_96_nv.comp.spv.inl"
+#include "shaders/output/convolution_Img_3_32.comp.spv.inl"
+#include "shaders/output/convolution_Img_3_32_fp16.comp.spv.inl"
+#include "shaders/output/convolution_Img_3_32_nv.comp.spv.inl"
+#include "shaders/output/convolution_Img_6_32.comp.spv.inl"
+#include "shaders/output/convolution_Img_6_32_fp16.comp.spv.inl"
+#include "shaders/output/convolution_Img_6_32_nv.comp.spv.inl"
+#include "shaders/output/convolution_Img_9_32.comp.spv.inl"
+#include "shaders/output/convolution_Img_9_32_fp16.comp.spv.inl"
+#include "shaders/output/convolution_Img_9_32_nv.comp.spv.inl"
+#include "shaders/output/convolution_concat_112_48_96.comp.spv.inl"
+#include "shaders/output/convolution_concat_112_48_96_fp16.comp.spv.inl"
+#include "shaders/output/convolution_concat_112_48_96_nv.comp.spv.inl"
+#include "shaders/output/convolution_concat_64_3_64.comp.spv.inl"
+#include "shaders/output/convolution_concat_64_3_64_fp16.comp.spv.inl"
+#include "shaders/output/convolution_concat_64_3_64_nv.comp.spv.inl"
+#include "shaders/output/convolution_concat_64_6_64.comp.spv.inl"
+#include "shaders/output/convolution_concat_64_6_64_fp16.comp.spv.inl"
+#include "shaders/output/convolution_concat_64_6_64_nv.comp.spv.inl"
+#include "shaders/output/convolution_concat_64_9_64.comp.spv.inl"
+#include "shaders/output/convolution_concat_64_9_64_fp16.comp.spv.inl"
+#include "shaders/output/convolution_concat_64_9_64_nv.comp.spv.inl"
+#include "shaders/output/convolution_concat_96_32_64.comp.spv.inl"
+#include "shaders/output/convolution_concat_96_32_64_fp16.comp.spv.inl"
+#include "shaders/output/convolution_concat_96_32_64_nv.comp.spv.inl"
+#include "shaders/output/convolution_concat_96_64_112.comp.spv.inl"
+#include "shaders/output/convolution_concat_96_64_112_fp16.comp.spv.inl"
+#include "shaders/output/convolution_concat_96_64_112_nv.comp.spv.inl"
 #include "shaders/output/debug_rt.comp.spv.inl"
 #include "shaders/output/filter_variance.comp.spv.inl"
 #include "shaders/output/intersect_area_lights.comp.spv.inl"
@@ -101,42 +158,37 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
     use_hwrt_ = (s.use_hwrt && ctx_->ray_query_supported());
     use_bindless_ = s.use_bindless && ctx_->max_sampled_images() >= 16384u;
     use_tex_compression_ = s.use_tex_compression;
+    use_fp16_ = ctx_->fp16_supported();
+    use_nv_coop_matrix_ = ctx_->nv_coop_matrix_supported();
     log->Info("HWRT        is %s", use_hwrt_ ? "enabled" : "disabled");
     log->Info("Bindless    is %s", use_bindless_ ? "enabled" : "disabled");
     log->Info("Compression is %s", use_tex_compression_ ? "enabled" : "disabled");
+    log->Info("Float16     is %s", use_fp16_ ? "enabled" : "disabled");
+    log->Info("CoopMatrix  is %s", use_nv_coop_matrix_ ? "enabled" : "disabled");
 
-    sh_prim_rays_gen_simple_ = Shader{"Primary Raygen Simple",
-                                      ctx_.get(),
-                                      internal_shaders_output_primary_ray_gen_simple_comp_spv,
-                                      internal_shaders_output_primary_ray_gen_simple_comp_spv_size,
-                                      eShaderType::Comp,
-                                      log};
-    sh_prim_rays_gen_adaptive_ = Shader{"Primary Raygen Adaptive",
-                                        ctx_.get(),
-                                        internal_shaders_output_primary_ray_gen_adaptive_comp_spv,
-                                        internal_shaders_output_primary_ray_gen_adaptive_comp_spv_size,
-                                        eShaderType::Comp,
-                                        log};
+    sh_prim_rays_gen_simple_ = Shader{"Primary Raygen Simple", ctx_.get(),
+                                      internal_shaders_output_primary_ray_gen_simple_comp_spv, eShaderType::Comp, log};
+    sh_prim_rays_gen_adaptive_ =
+        Shader{"Primary Raygen Adaptive", ctx_.get(), internal_shaders_output_primary_ray_gen_adaptive_comp_spv,
+               eShaderType::Comp, log};
     if (use_hwrt_) {
-        sh_intersect_scene_ =
-            Shader{"Intersect Scene (Primary) (HWRT)",
-                   ctx_.get(),
-                   use_bindless_ ? internal_shaders_output_intersect_scene_hwrt_bindless_comp_spv
-                                 : internal_shaders_output_intersect_scene_hwrt_atlas_comp_spv,
-                   use_bindless_ ? int(internal_shaders_output_intersect_scene_hwrt_bindless_comp_spv_size)
-                                 : int(internal_shaders_output_intersect_scene_hwrt_atlas_comp_spv_size),
-                   eShaderType::Comp,
-                   log};
+        sh_intersect_scene_ = Shader{"Intersect Scene (Primary) (HWRT)",
+                                     ctx_.get(),
+                                     use_bindless_ ? internal_shaders_output_intersect_scene_hwrt_bindless_comp_spv
+                                                   : internal_shaders_output_intersect_scene_hwrt_atlas_comp_spv,
+                                     use_bindless_ ? internal_shaders_output_intersect_scene_hwrt_bindless_comp_spv_size
+                                                   : internal_shaders_output_intersect_scene_hwrt_atlas_comp_spv_size,
+                                     eShaderType::Comp,
+                                     log};
     } else {
-        sh_intersect_scene_ =
-            Shader{"Intersect Scene (Primary) (SWRT)",
-                   ctx_.get(),
-                   use_bindless_ ? internal_shaders_output_intersect_scene_swrt_bindless_comp_spv
-                                 : internal_shaders_output_intersect_scene_swrt_atlas_comp_spv,
-                   use_bindless_ ? int(internal_shaders_output_intersect_scene_swrt_bindless_comp_spv_size)
-                                 : int(internal_shaders_output_intersect_scene_swrt_atlas_comp_spv_size),
-                   eShaderType::Comp,
-                   log};
+        sh_intersect_scene_ = Shader{"Intersect Scene (Primary) (SWRT)",
+                                     ctx_.get(),
+                                     use_bindless_ ? internal_shaders_output_intersect_scene_swrt_bindless_comp_spv
+                                                   : internal_shaders_output_intersect_scene_swrt_atlas_comp_spv,
+                                     use_bindless_ ? internal_shaders_output_intersect_scene_swrt_bindless_comp_spv_size
+                                                   : internal_shaders_output_intersect_scene_swrt_atlas_comp_spv_size,
+                                     eShaderType::Comp,
+                                     log};
     }
 
     if (use_hwrt_) {
@@ -145,8 +197,8 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
                    ctx_.get(),
                    use_bindless_ ? internal_shaders_output_intersect_scene_indirect_hwrt_bindless_comp_spv
                                  : internal_shaders_output_intersect_scene_indirect_hwrt_atlas_comp_spv,
-                   use_bindless_ ? int(internal_shaders_output_intersect_scene_indirect_hwrt_bindless_comp_spv_size)
-                                 : int(internal_shaders_output_intersect_scene_indirect_hwrt_atlas_comp_spv_size),
+                   use_bindless_ ? internal_shaders_output_intersect_scene_indirect_hwrt_bindless_comp_spv_size
+                                 : internal_shaders_output_intersect_scene_indirect_hwrt_atlas_comp_spv_size,
                    eShaderType::Comp,
                    log};
     } else {
@@ -155,56 +207,52 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
                    ctx_.get(),
                    use_bindless_ ? internal_shaders_output_intersect_scene_indirect_swrt_bindless_comp_spv
                                  : internal_shaders_output_intersect_scene_indirect_swrt_atlas_comp_spv,
-                   use_bindless_ ? int(internal_shaders_output_intersect_scene_indirect_swrt_bindless_comp_spv_size)
-                                 : int(internal_shaders_output_intersect_scene_indirect_swrt_atlas_comp_spv_size),
+                   use_bindless_ ? internal_shaders_output_intersect_scene_indirect_swrt_bindless_comp_spv_size
+                                 : internal_shaders_output_intersect_scene_indirect_swrt_atlas_comp_spv_size,
                    eShaderType::Comp,
                    log};
     }
 
-    sh_intersect_area_lights_ = Shader{"Intersect Area Lights",
-                                       ctx_.get(),
-                                       internal_shaders_output_intersect_area_lights_comp_spv,
-                                       internal_shaders_output_intersect_area_lights_comp_spv_size,
-                                       eShaderType::Comp,
-                                       log};
+    sh_intersect_area_lights_ = Shader{"Intersect Area Lights", ctx_.get(),
+                                       internal_shaders_output_intersect_area_lights_comp_spv, eShaderType::Comp, log};
     sh_shade_primary_ = Shader{"Shade (Primary)",
                                ctx_.get(),
                                use_bindless_ ? internal_shaders_output_shade_primary_bindless_comp_spv
                                              : internal_shaders_output_shade_primary_atlas_comp_spv,
-                               use_bindless_ ? int(internal_shaders_output_shade_primary_bindless_comp_spv_size)
-                                             : int(internal_shaders_output_shade_primary_atlas_comp_spv_size),
+                               use_bindless_ ? internal_shaders_output_shade_primary_bindless_comp_spv_size
+                                             : internal_shaders_output_shade_primary_atlas_comp_spv_size,
                                eShaderType::Comp,
                                log};
     sh_shade_primary_b_ = Shader{"Shade (Primary) B",
                                  ctx_.get(),
                                  use_bindless_ ? internal_shaders_output_shade_primary_bindless_b_comp_spv
                                                : internal_shaders_output_shade_primary_atlas_b_comp_spv,
-                                 use_bindless_ ? int(internal_shaders_output_shade_primary_bindless_b_comp_spv_size)
-                                               : int(internal_shaders_output_shade_primary_atlas_b_comp_spv_size),
+                                 use_bindless_ ? internal_shaders_output_shade_primary_bindless_b_comp_spv_size
+                                               : internal_shaders_output_shade_primary_atlas_b_comp_spv_size,
                                  eShaderType::Comp,
                                  log};
     sh_shade_primary_n_ = Shader{"Shade (Primary) N",
                                  ctx_.get(),
                                  use_bindless_ ? internal_shaders_output_shade_primary_bindless_n_comp_spv
                                                : internal_shaders_output_shade_primary_atlas_n_comp_spv,
-                                 use_bindless_ ? int(internal_shaders_output_shade_primary_bindless_n_comp_spv_size)
-                                               : int(internal_shaders_output_shade_primary_atlas_n_comp_spv_size),
+                                 use_bindless_ ? internal_shaders_output_shade_primary_bindless_n_comp_spv_size
+                                               : internal_shaders_output_shade_primary_atlas_n_comp_spv_size,
                                  eShaderType::Comp,
                                  log};
     sh_shade_primary_bn_ = Shader{"Shade (Primary) BN",
                                   ctx_.get(),
                                   use_bindless_ ? internal_shaders_output_shade_primary_bindless_bn_comp_spv
                                                 : internal_shaders_output_shade_primary_atlas_bn_comp_spv,
-                                  use_bindless_ ? int(internal_shaders_output_shade_primary_bindless_bn_comp_spv_size)
-                                                : int(internal_shaders_output_shade_primary_atlas_bn_comp_spv_size),
+                                  use_bindless_ ? internal_shaders_output_shade_primary_bindless_bn_comp_spv_size
+                                                : internal_shaders_output_shade_primary_atlas_bn_comp_spv_size,
                                   eShaderType::Comp,
                                   log};
     sh_shade_secondary_ = Shader{"Shade (Secondary)",
                                  ctx_.get(),
                                  use_bindless_ ? internal_shaders_output_shade_secondary_bindless_comp_spv
                                                : internal_shaders_output_shade_secondary_atlas_comp_spv,
-                                 use_bindless_ ? int(internal_shaders_output_shade_secondary_bindless_comp_spv_size)
-                                               : int(internal_shaders_output_shade_secondary_atlas_comp_spv_size),
+                                 use_bindless_ ? internal_shaders_output_shade_secondary_bindless_comp_spv_size
+                                               : internal_shaders_output_shade_secondary_atlas_comp_spv_size,
                                  eShaderType::Comp,
                                  log};
 
@@ -214,8 +262,8 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
                    ctx_.get(),
                    use_bindless_ ? internal_shaders_output_intersect_scene_shadow_hwrt_bindless_comp_spv
                                  : internal_shaders_output_intersect_scene_shadow_hwrt_atlas_comp_spv,
-                   use_bindless_ ? int(internal_shaders_output_intersect_scene_shadow_hwrt_bindless_comp_spv_size)
-                                 : int(internal_shaders_output_intersect_scene_shadow_hwrt_atlas_comp_spv_size),
+                   use_bindless_ ? internal_shaders_output_intersect_scene_shadow_hwrt_bindless_comp_spv_size
+                                 : internal_shaders_output_intersect_scene_shadow_hwrt_atlas_comp_spv_size,
                    eShaderType::Comp,
                    log};
     } else {
@@ -224,153 +272,65 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
                    ctx_.get(),
                    use_bindless_ ? internal_shaders_output_intersect_scene_shadow_swrt_bindless_comp_spv
                                  : internal_shaders_output_intersect_scene_shadow_swrt_atlas_comp_spv,
-                   use_bindless_ ? int(internal_shaders_output_intersect_scene_shadow_swrt_bindless_comp_spv_size)
-                                 : int(internal_shaders_output_intersect_scene_shadow_swrt_atlas_comp_spv_size),
+                   use_bindless_ ? internal_shaders_output_intersect_scene_shadow_swrt_bindless_comp_spv_size
+                                 : internal_shaders_output_intersect_scene_shadow_swrt_atlas_comp_spv_size,
                    eShaderType::Comp,
                    log};
     }
-    sh_prepare_indir_args_ = Shader{"Prepare Indir Args",
-                                    ctx_.get(),
-                                    internal_shaders_output_prepare_indir_args_comp_spv,
-                                    internal_shaders_output_prepare_indir_args_comp_spv_size,
-                                    eShaderType::Comp,
-                                    log};
-    sh_mix_incremental_ = Shader{"Mix Incremental",
-                                 ctx_.get(),
-                                 internal_shaders_output_mix_incremental_comp_spv,
-                                 internal_shaders_output_mix_incremental_comp_spv_size,
-                                 eShaderType::Comp,
-                                 log};
-    sh_mix_incremental_b_ = Shader{"Mix Incremental B",
-                                   ctx_.get(),
-                                   internal_shaders_output_mix_incremental_b_comp_spv,
-                                   internal_shaders_output_mix_incremental_b_comp_spv_size,
-                                   eShaderType::Comp,
-                                   log};
-    sh_mix_incremental_n_ = Shader{"Mix Incremental N",
-                                   ctx_.get(),
-                                   internal_shaders_output_mix_incremental_n_comp_spv,
-                                   internal_shaders_output_mix_incremental_n_comp_spv_size,
-                                   eShaderType::Comp,
-                                   log};
-    sh_mix_incremental_bn_ = Shader{"Mix Incremental BN",
-                                    ctx_.get(),
-                                    internal_shaders_output_mix_incremental_bn_comp_spv,
-                                    internal_shaders_output_mix_incremental_bn_comp_spv_size,
-                                    eShaderType::Comp,
-                                    log};
-    sh_postprocess_ = Shader{"Postprocess",
-                             ctx_.get(),
-                             internal_shaders_output_postprocess_comp_spv,
-                             internal_shaders_output_postprocess_comp_spv_size,
-                             eShaderType::Comp,
-                             log};
-    sh_filter_variance_ = Shader{"Filter Variance",
-                                 ctx_.get(),
-                                 internal_shaders_output_filter_variance_comp_spv,
-                                 internal_shaders_output_filter_variance_comp_spv_size,
-                                 eShaderType::Comp,
-                                 log};
-    sh_nlm_filter_ = Shader{"NLM Filter",
-                            ctx_.get(),
-                            internal_shaders_output_nlm_filter_comp_spv,
-                            internal_shaders_output_nlm_filter_comp_spv_size,
-                            eShaderType::Comp,
-                            log};
-    sh_nlm_filter_b_ = Shader{"NLM Filter B",
-                              ctx_.get(),
-                              internal_shaders_output_nlm_filter_b_comp_spv,
-                              internal_shaders_output_nlm_filter_b_comp_spv_size,
-                              eShaderType::Comp,
-                              log};
-    sh_nlm_filter_n_ = Shader{"NLM Filter N",
-                              ctx_.get(),
-                              internal_shaders_output_nlm_filter_n_comp_spv,
-                              internal_shaders_output_nlm_filter_n_comp_spv_size,
-                              eShaderType::Comp,
-                              log};
-    sh_nlm_filter_bn_ = Shader{"NLM Filter BN",
-                               ctx_.get(),
-                               internal_shaders_output_nlm_filter_bn_comp_spv,
-                               internal_shaders_output_nlm_filter_bn_comp_spv_size,
-                               eShaderType::Comp,
-                               log};
+    sh_prepare_indir_args_ = Shader{"Prepare Indir Args", ctx_.get(),
+                                    internal_shaders_output_prepare_indir_args_comp_spv, eShaderType::Comp, log};
+    sh_mix_incremental_ =
+        Shader{"Mix Incremental", ctx_.get(), internal_shaders_output_mix_incremental_comp_spv, eShaderType::Comp, log};
+    sh_mix_incremental_b_ = Shader{"Mix Incremental B", ctx_.get(), internal_shaders_output_mix_incremental_b_comp_spv,
+                                   eShaderType::Comp, log};
+    sh_mix_incremental_n_ = Shader{"Mix Incremental N", ctx_.get(), internal_shaders_output_mix_incremental_n_comp_spv,
+                                   eShaderType::Comp, log};
+    sh_mix_incremental_bn_ = Shader{"Mix Incremental BN", ctx_.get(),
+                                    internal_shaders_output_mix_incremental_bn_comp_spv, eShaderType::Comp, log};
+    sh_postprocess_ =
+        Shader{"Postprocess", ctx_.get(), internal_shaders_output_postprocess_comp_spv, eShaderType::Comp, log};
+    sh_filter_variance_ =
+        Shader{"Filter Variance", ctx_.get(), internal_shaders_output_filter_variance_comp_spv, eShaderType::Comp, log};
+    sh_nlm_filter_ =
+        Shader{"NLM Filter", ctx_.get(), internal_shaders_output_nlm_filter_comp_spv, eShaderType::Comp, log};
+    sh_nlm_filter_b_ =
+        Shader{"NLM Filter B", ctx_.get(), internal_shaders_output_nlm_filter_b_comp_spv, eShaderType::Comp, log};
+    sh_nlm_filter_n_ =
+        Shader{"NLM Filter N", ctx_.get(), internal_shaders_output_nlm_filter_n_comp_spv, eShaderType::Comp, log};
+    sh_nlm_filter_bn_ =
+        Shader{"NLM Filter BN", ctx_.get(), internal_shaders_output_nlm_filter_bn_comp_spv, eShaderType::Comp, log};
     if (use_hwrt_) {
-        sh_debug_rt_ = Shader{"Debug RT",
-                              ctx_.get(),
-                              internal_shaders_output_debug_rt_comp_spv,
-                              internal_shaders_output_debug_rt_comp_spv_size,
-                              eShaderType::Comp,
-                              log};
+        sh_debug_rt_ =
+            Shader{"Debug RT", ctx_.get(), internal_shaders_output_debug_rt_comp_spv, eShaderType::Comp, log};
     }
 
-    sh_sort_hash_rays_ = Shader{"Sort Hash Rays",
-                                ctx_.get(),
-                                internal_shaders_output_sort_hash_rays_comp_spv,
-                                internal_shaders_output_sort_hash_rays_comp_spv_size,
-                                eShaderType::Comp,
-                                log};
-    sh_sort_exclusive_scan_ = Shader{"Sort Exclusive Scan",
-                                     ctx_.get(),
-                                     internal_shaders_output_sort_exclusive_scan_comp_spv,
-                                     internal_shaders_output_sort_exclusive_scan_comp_spv_size,
-                                     eShaderType::Comp,
-                                     log};
-    sh_sort_inclusive_scan_ = Shader{"Sort Inclusive Scan",
-                                     ctx_.get(),
-                                     internal_shaders_output_sort_inclusive_scan_comp_spv,
-                                     internal_shaders_output_sort_inclusive_scan_comp_spv_size,
-                                     eShaderType::Comp,
-                                     log};
-    sh_sort_add_partial_sums_ = Shader{"Sort Add Partial Sums",
-                                       ctx_.get(),
-                                       internal_shaders_output_sort_add_partial_sums_comp_spv,
-                                       internal_shaders_output_sort_add_partial_sums_comp_spv_size,
-                                       eShaderType::Comp,
-                                       log};
-    sh_sort_init_count_table_ = Shader{"Sort Init Count Table",
-                                       ctx_.get(),
-                                       internal_shaders_output_sort_init_count_table_comp_spv,
-                                       internal_shaders_output_sort_init_count_table_comp_spv_size,
-                                       eShaderType::Comp,
-                                       log};
-    sh_sort_write_sorted_hashes_ = Shader{"Sort Write Sorted Hashes",
-                                          ctx_.get(),
-                                          internal_shaders_output_sort_write_sorted_hashes_comp_spv,
-                                          internal_shaders_output_sort_write_sorted_hashes_comp_spv_size,
-                                          eShaderType::Comp,
-                                          log};
-    sh_sort_reorder_rays_ = Shader{"Sort Reorder Rays",
-                                   ctx_.get(),
-                                   internal_shaders_output_sort_reorder_rays_comp_spv,
-                                   internal_shaders_output_sort_reorder_rays_comp_spv_size,
-                                   eShaderType::Comp,
-                                   log};
-
-    sh_intersect_scene_rgen_ = Shader{"Intersect Scene RGEN",
-                                      ctx_.get(),
-                                      internal_shaders_output_intersect_scene_rgen_spv,
-                                      internal_shaders_output_intersect_scene_rgen_spv_size,
-                                      eShaderType::RayGen,
-                                      log};
-    sh_intersect_scene_indirect_rgen_ = Shader{"Intersect Scene Indirect RGEN",
-                                               ctx_.get(),
-                                               internal_shaders_output_intersect_scene_indirect_rgen_spv,
-                                               internal_shaders_output_intersect_scene_indirect_rgen_spv_size,
-                                               eShaderType::RayGen,
-                                               log};
-    sh_intersect_scene_rchit_ = Shader{"Intersect Scene RCHIT",
-                                       ctx_.get(),
-                                       internal_shaders_output_intersect_scene_rchit_spv,
-                                       internal_shaders_output_intersect_scene_rchit_spv_size,
-                                       eShaderType::ClosestHit,
-                                       log};
-    sh_intersect_scene_rmiss_ = Shader{"Intersect Scene RMISS",
-                                       ctx_.get(),
-                                       internal_shaders_output_intersect_scene_rmiss_spv,
-                                       internal_shaders_output_intersect_scene_rmiss_spv_size,
-                                       eShaderType::AnyHit,
-                                       log};
+    sh_sort_hash_rays_ =
+        Shader{"Sort Hash Rays", ctx_.get(), internal_shaders_output_sort_hash_rays_comp_spv, eShaderType::Comp, log};
+    sh_sort_exclusive_scan_ = Shader{"Sort Exclusive Scan", ctx_.get(),
+                                     internal_shaders_output_sort_exclusive_scan_comp_spv, eShaderType::Comp, log};
+    sh_sort_inclusive_scan_ = Shader{"Sort Inclusive Scan", ctx_.get(),
+                                     internal_shaders_output_sort_inclusive_scan_comp_spv, eShaderType::Comp, log};
+    sh_sort_add_partial_sums_ = Shader{"Sort Add Partial Sums", ctx_.get(),
+                                       internal_shaders_output_sort_add_partial_sums_comp_spv, eShaderType::Comp, log};
+    sh_sort_init_count_table_ = Shader{"Sort Init Count Table", ctx_.get(),
+                                       internal_shaders_output_sort_init_count_table_comp_spv, eShaderType::Comp, log};
+    sh_sort_write_sorted_hashes_ =
+        Shader{"Sort Write Sorted Hashes", ctx_.get(), internal_shaders_output_sort_write_sorted_hashes_comp_spv,
+               eShaderType::Comp, log};
+    sh_sort_reorder_rays_ = Shader{"Sort Reorder Rays", ctx_.get(), internal_shaders_output_sort_reorder_rays_comp_spv,
+                                   eShaderType::Comp, log};
+    if (use_hwrt_) {
+        sh_intersect_scene_rgen_ = Shader{"Intersect Scene RGEN", ctx_.get(),
+                                          internal_shaders_output_intersect_scene_rgen_spv, eShaderType::RayGen, log};
+        sh_intersect_scene_indirect_rgen_ =
+            Shader{"Intersect Scene Indirect RGEN", ctx_.get(),
+                   internal_shaders_output_intersect_scene_indirect_rgen_spv, eShaderType::RayGen, log};
+        sh_intersect_scene_rchit_ =
+            Shader{"Intersect Scene RCHIT", ctx_.get(), internal_shaders_output_intersect_scene_rchit_spv,
+                   eShaderType::ClosestHit, log};
+        sh_intersect_scene_rmiss_ = Shader{"Intersect Scene RMISS", ctx_.get(),
+                                           internal_shaders_output_intersect_scene_rmiss_spv, eShaderType::AnyHit, log};
+    }
 
     prog_prim_rays_gen_simple_ = Program{"Primary Raygen Simple", ctx_.get(), &sh_prim_rays_gen_simple_, log};
     prog_prim_rays_gen_adaptive_ = Program{"Primary Raygen Adaptive", ctx_.get(), &sh_prim_rays_gen_adaptive_, log};
@@ -526,6 +486,12 @@ void Ray::Vk::Renderer::Resize(const int w, const int h) {
         uparams.format = eTexFormat::RawR16UI;
         required_samples_buf_ =
             Texture2D{"Required samples Image", ctx_.get(), uparams, ctx_->default_memory_allocs(), ctx_->log()};
+    }
+
+    { // Sampler with black border
+        SamplingParams params;
+        params.wrap = eTexWrap::ClampToBorder;
+        zero_border_sampler_ = Sampler{ctx_.get(), params};
     }
 
     if (frame_pixels_) {
@@ -1241,6 +1207,359 @@ void Ray::Vk::Renderer::DenoiseImage(const RegionContext &region) {
 #endif
 }
 
+void Ray::Vk::Renderer::DenoiseImage(const int pass, const RegionContext &region) {
+    CommandBuffer cmd_buf = {};
+    if (pass == 0) {
+#if !RUN_IN_LOCKSTEP
+        ctx_->api().vkWaitForFences(ctx_->device(), 1, &ctx_->in_flight_fence(ctx_->backend_frame), VK_TRUE,
+                                    UINT64_MAX);
+        ctx_->api().vkResetFences(ctx_->device(), 1, &ctx_->in_flight_fence(ctx_->backend_frame));
+#endif
+
+        ctx_->ReadbackTimestampQueries(ctx_->backend_frame);
+        ctx_->DestroyDeferredResources(ctx_->backend_frame);
+        ctx_->default_descr_alloc()->Reset();
+
+        stats_.time_denoise_us = ctx_->GetTimestampIntervalDurationUs(timestamps_[ctx_->backend_frame].denoise[0],
+                                                                      timestamps_[ctx_->backend_frame].denoise[1]);
+
+#if RUN_IN_LOCKSTEP
+        cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
+#else
+        VkCommandBufferBeginInfo begin_info = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+        begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+        ctx_->api().vkBeginCommandBuffer(ctx_->draw_cmd_buf(ctx_->backend_frame), &begin_info);
+        cmd_buf = ctx_->draw_cmd_buf(ctx_->backend_frame);
+#endif
+
+        ctx_->api().vkCmdResetQueryPool(cmd_buf, ctx_->query_pool(ctx_->backend_frame), 0, MaxTimestampQueries);
+
+        timestamps_[ctx_->backend_frame].denoise[0] = ctx_->WriteTimestamp(cmd_buf, true);
+    } else {
+#if RUN_IN_LOCKSTEP
+        cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
+#else
+        cmd_buf = ctx_->draw_cmd_buf(ctx_->backend_frame);
+#endif
+    }
+
+    //////////////////////////////////////////////////////////////////////////////////
+
+    const int w_rounded = 16 * ((w_ + 15) / 16);
+    const int h_rounded = 16 * ((h_ + 15) / 16);
+
+    rect_t r = region.rect();
+    if (pass < 15) {
+        r.w = 16 * ((r.w + 15) / 16);
+        r.h = 16 * ((r.h + 15) / 16);
+    }
+
+    Buffer *weights = &unet_weights_[0];
+    const unet_weight_offsets_t *offsets = &unet_offsets_[0];
+    if (base_color_buf_.ready() && depth_normals_buf_.ready()) {
+        weights = &unet_weights_[2];
+        offsets = &unet_offsets_[2];
+    } else if (base_color_buf_.ready()) {
+        weights = &unet_weights_[1];
+        offsets = &unet_offsets_[1];
+    }
+
+    switch (pass) {
+    case 0: {
+        const int output_stride = round_up(w_rounded + 1, 16) + 1;
+        if (base_color_buf_.ready() && depth_normals_buf_.ready()) {
+            DebugMarker _(ctx_.get(), cmd_buf, "Convolution 9 32");
+            kernel_Convolution(cmd_buf, 9, 32, raw_final_buf_, base_color_buf_, depth_normals_buf_,
+                               zero_border_sampler_, r, w_rounded, h_rounded, *weights, offsets->enc_conv0_weight,
+                               offsets->enc_conv0_bias, unet_tensors_heap_, unet_tensors_.enc_conv0_offset,
+                               output_stride);
+        } else if (base_color_buf_.ready()) {
+            DebugMarker _(ctx_.get(), cmd_buf, "Convolution 6 32");
+            kernel_Convolution(cmd_buf, 6, 32, raw_final_buf_, base_color_buf_, {}, zero_border_sampler_, r, w_rounded,
+                               h_rounded, *weights, offsets->enc_conv0_weight, offsets->enc_conv0_bias,
+                               unet_tensors_heap_, unet_tensors_.enc_conv0_offset, output_stride);
+        } else { // fp16 0.28ms
+            DebugMarker _(ctx_.get(), cmd_buf, "Convolution 3 32");
+            kernel_Convolution(cmd_buf, 3, 32, raw_final_buf_, {}, {}, zero_border_sampler_, r, w_rounded, h_rounded,
+                               *weights, offsets->enc_conv0_weight, offsets->enc_conv0_bias, unet_tensors_heap_,
+                               unet_tensors_.enc_conv0_offset, output_stride);
+        }
+    } break;
+    case 1: { // fp16 2.81ms
+        DebugMarker _(ctx_.get(), cmd_buf, "Convolution 32 32 Downscale");
+        const int input_stride = round_up(w_rounded + 1, 16) + 1, output_stride = round_up(w_rounded / 2 + 1, 16) + 1;
+        kernel_Convolution(cmd_buf, 32, 32, unet_tensors_heap_, unet_tensors_.enc_conv0_offset, input_stride, r,
+                           w_rounded, h_rounded, *weights, offsets->enc_conv1_weight, offsets->enc_conv1_bias,
+                           unet_tensors_heap_, unet_tensors_.pool1_offset, output_stride, true);
+    } break;
+    case 2: { // fp16 1.06ms
+        DebugMarker _(ctx_.get(), cmd_buf, "Convolution 32 48 Downscale");
+        r.x = r.x / 2;
+        r.y = r.y / 2;
+        r.w = (r.w + 1) / 2;
+        r.h = (r.h + 1) / 2;
+
+        const int input_stride = round_up(w_rounded / 2 + 1, 16) + 1,
+                  output_stride = round_up(w_rounded / 4 + 1, 16) + 1;
+        kernel_Convolution(cmd_buf, 32, 48, unet_tensors_heap_, unet_tensors_.pool1_offset, input_stride, r,
+                           w_rounded / 2, h_rounded / 2, *weights, offsets->enc_conv2_weight, offsets->enc_conv2_bias,
+                           unet_tensors_heap_, unet_tensors_.pool2_offset, output_stride, true);
+    } break;
+    case 3: { // fp16 0.57ms
+        DebugMarker _(ctx_.get(), cmd_buf, "Convolution 48 64 Downscale");
+        r.x = r.x / 4;
+        r.y = r.y / 4;
+        r.w = (r.w + 3) / 4;
+        r.h = (r.h + 3) / 4;
+
+        const int input_stride = round_up(w_rounded / 4 + 1, 16) + 1,
+                  output_stride = round_up(w_rounded / 8 + 1, 16) + 1;
+        kernel_Convolution(cmd_buf, 48, 64, unet_tensors_heap_, unet_tensors_.pool2_offset, input_stride, r,
+                           w_rounded / 4, h_rounded / 4, *weights, offsets->enc_conv3_weight, offsets->enc_conv3_bias,
+                           unet_tensors_heap_, unet_tensors_.pool3_offset, output_stride, true);
+    } break;
+    case 4: { // fp16 0.47ms
+        DebugMarker _(ctx_.get(), cmd_buf, "Convolution 64 80 Downscale");
+        r.x = r.x / 8;
+        r.y = r.y / 8;
+        r.w = (r.w + 7) / 8;
+        r.h = (r.h + 7) / 8;
+
+        const int input_stride = round_up(w_rounded / 8 + 1, 16) + 1,
+                  output_stride = round_up(w_rounded / 16 + 1, 16) + 1;
+        kernel_Convolution(cmd_buf, 64, 80, unet_tensors_heap_, unet_tensors_.pool3_offset, input_stride, r,
+                           w_rounded / 8, h_rounded / 8, *weights, offsets->enc_conv4_weight, offsets->enc_conv4_bias,
+                           unet_tensors_heap_, unet_tensors_.pool4_offset, output_stride, true);
+    } break;
+    case 5: { // fp16 0.12ms
+        DebugMarker _(ctx_.get(), cmd_buf, "Convolution 80 96");
+        r.x = r.x / 16;
+        r.y = r.y / 16;
+        r.w = (r.w + 15) / 16;
+        r.h = (r.h + 15) / 16;
+
+        const int input_stride = round_up(w_rounded / 16 + 1, 16) + 1,
+                  output_stride = round_up(w_rounded / 16 + 1, 16) + 1;
+        kernel_Convolution(cmd_buf, 80, 96, unet_tensors_heap_, unet_tensors_.pool4_offset, input_stride, r,
+                           w_rounded / 16, h_rounded / 16, *weights, offsets->enc_conv5a_weight,
+                           offsets->enc_conv5a_bias, unet_tensors_heap_, unet_tensors_.enc_conv5a_offset, output_stride,
+                           false);
+    } break;
+    case 6: { // fp16 0.19ms
+        DebugMarker _(ctx_.get(), cmd_buf, "Convolution 96 96");
+        r.x = r.x / 16;
+        r.y = r.y / 16;
+        r.w = (r.w + 15) / 16;
+        r.h = (r.h + 15) / 16;
+
+        const int input_stride = round_up(w_rounded / 16 + 1, 16) + 1,
+                  output_stride = round_up(w_rounded / 16 + 1, 16) + 1;
+        kernel_Convolution(cmd_buf, 96, 96, unet_tensors_heap_, unet_tensors_.enc_conv5a_offset, input_stride, r,
+                           w_rounded / 16, h_rounded / 16, *weights, offsets->enc_conv5b_weight,
+                           offsets->enc_conv5b_bias, unet_tensors_heap_, unet_tensors_.upsample4_offset, output_stride,
+                           false);
+    } break;
+    case 7: { // fp16 1.17ms
+        DebugMarker _(ctx_.get(), cmd_buf, "Convolution Concat 96 64 112");
+        r.x = r.x / 8;
+        r.y = r.y / 8;
+        r.w = (r.w + 7) / 8;
+        r.h = (r.h + 7) / 8;
+
+        const int input_stride1 = round_up(w_rounded / 16 + 1, 16) + 1,
+                  input_stride2 = round_up(w_rounded / 8 + 1, 16) + 1,
+                  output_stride = round_up(w_rounded / 8 + 1, 16) + 1;
+        kernel_ConvolutionConcat(cmd_buf, 96, 64, 112, unet_tensors_heap_, unet_tensors_.upsample4_offset,
+                                 input_stride1, true, unet_tensors_heap_, unet_tensors_.pool3_offset, input_stride2, r,
+                                 w_rounded / 8, h_rounded / 8, *weights, offsets->dec_conv4a_weight,
+                                 offsets->dec_conv4a_bias, unet_tensors_heap_, unet_tensors_.dec_conv4a_offset,
+                                 output_stride);
+    } break;
+    case 8: { // fp16 0.52ms
+        DebugMarker _(ctx_.get(), cmd_buf, "Convolution 112 112");
+        r.x = r.x / 8;
+        r.y = r.y / 8;
+        r.w = (r.w + 7) / 8;
+        r.h = (r.h + 7) / 8;
+
+        const int input_stride = round_up(w_rounded / 8 + 1, 16) + 1,
+                  output_stride = round_up(w_rounded / 8 + 1, 16) + 1;
+        kernel_Convolution(cmd_buf, 112, 112, unet_tensors_heap_, unet_tensors_.dec_conv4a_offset, input_stride, r,
+                           w_rounded / 8, h_rounded / 8, *weights, offsets->dec_conv4b_weight, offsets->dec_conv4b_bias,
+                           unet_tensors_heap_, unet_tensors_.upsample3_offset, output_stride, false);
+    } break;
+    case 9: { // fp16 3.82ms
+        DebugMarker _(ctx_.get(), cmd_buf, "Convolution Concat 112 48 96");
+        r.x = r.x / 4;
+        r.y = r.y / 4;
+        r.w = (r.w + 3) / 4;
+        r.h = (r.h + 3) / 4;
+
+        const int input_stride1 = round_up(w_rounded / 8 + 1, 16) + 1,
+                  input_stride2 = round_up(w_rounded / 4 + 1, 16) + 1,
+                  output_stride = round_up(w_rounded / 4 + 1, 16) + 1;
+        kernel_ConvolutionConcat(cmd_buf, 112, 48, 96, unet_tensors_heap_, unet_tensors_.upsample3_offset,
+                                 input_stride1, true, unet_tensors_heap_, unet_tensors_.pool2_offset, input_stride2, r,
+                                 w_rounded / 4, h_rounded / 4, *weights, offsets->dec_conv3a_weight,
+                                 offsets->dec_conv3a_bias, unet_tensors_heap_, unet_tensors_.dec_conv3a_offset,
+                                 output_stride);
+    } break;
+    case 10: { // fp16 2.23ms
+        DebugMarker _(ctx_.get(), cmd_buf, "Convolution 96 96");
+        r.x = r.x / 4;
+        r.y = r.y / 4;
+        r.w = (r.w + 3) / 4;
+        r.h = (r.h + 3) / 4;
+
+        const int input_stride = round_up(w_rounded / 4 + 1, 16) + 1,
+                  output_stride = round_up(w_rounded / 4 + 1, 16) + 1;
+        kernel_Convolution(cmd_buf, 96, 96, unet_tensors_heap_, unet_tensors_.dec_conv3a_offset, input_stride, r,
+                           w_rounded / 4, h_rounded / 4, *weights, offsets->dec_conv3b_weight, offsets->dec_conv3b_bias,
+                           unet_tensors_heap_, unet_tensors_.upsample2_offset, output_stride, false);
+    } break;
+    case 11: { // fp16 11.85ms
+        DebugMarker _(ctx_.get(), cmd_buf, "Convolution Concat 96 32 64");
+        r.x = r.x / 2;
+        r.y = r.y / 2;
+        r.w = (r.w + 1) / 2;
+        r.h = (r.h + 1) / 2;
+
+        const int input_stride1 = round_up(w_rounded / 4 + 1, 16) + 1,
+                  input_stride2 = round_up(w_rounded / 2 + 1, 16) + 1,
+                  output_stride = round_up(w_rounded / 2 + 1, 16) + 1;
+        kernel_ConvolutionConcat(cmd_buf, 96, 32, 64, unet_tensors_heap_, unet_tensors_.upsample2_offset, input_stride1,
+                                 true, unet_tensors_heap_, unet_tensors_.pool1_offset, input_stride2, r, w_rounded / 2,
+                                 h_rounded / 2, *weights, offsets->dec_conv2a_weight, offsets->dec_conv2a_bias,
+                                 unet_tensors_heap_, unet_tensors_.dec_conv2a_offset, output_stride);
+    } break;
+    case 12: { // fp16 5.75ms
+        DebugMarker _(ctx_.get(), cmd_buf, "Convolution 64 64");
+        r.x = r.x / 2;
+        r.y = r.y / 2;
+        r.w = (r.w + 1) / 2;
+        r.h = (r.h + 1) / 2;
+
+        const int input_stride = round_up(w_rounded / 2 + 1, 16) + 1,
+                  output_stride = round_up(w_rounded / 2 + 1, 16) + 1;
+        kernel_Convolution(cmd_buf, 64, 64, unet_tensors_heap_, unet_tensors_.dec_conv2a_offset, input_stride, r,
+                           w_rounded / 2, h_rounded / 2, *weights, offsets->dec_conv2b_weight, offsets->dec_conv2b_bias,
+                           unet_tensors_heap_, unet_tensors_.upsample1_offset, output_stride, false);
+    } break;
+    case 13: {
+        const int input_stride = round_up(w_rounded / 2 + 1, 16) + 1, output_stride = round_up(w_rounded + 1, 16) + 1;
+        if (base_color_buf_.ready() && depth_normals_buf_.ready()) {
+            DebugMarker _(ctx_.get(), cmd_buf, "Convolution Concat 64 9 64");
+            kernel_ConvolutionConcat(cmd_buf, 64, 9, 64, unet_tensors_heap_, unet_tensors_.upsample1_offset,
+                                     input_stride, true, raw_final_buf_, base_color_buf_, depth_normals_buf_,
+                                     zero_border_sampler_, r, w_rounded, h_rounded, *weights,
+                                     offsets->dec_conv1a_weight, offsets->dec_conv1a_bias, unet_tensors_heap_,
+                                     unet_tensors_.dec_conv1a_offset, output_stride);
+        } else if (base_color_buf_.ready()) {
+            DebugMarker _(ctx_.get(), cmd_buf, "Convolution Concat 64 6 64");
+            kernel_ConvolutionConcat(cmd_buf, 64, 6, 64, unet_tensors_heap_, unet_tensors_.upsample1_offset,
+                                     input_stride, true, raw_final_buf_, base_color_buf_, {}, zero_border_sampler_, r,
+                                     w_rounded, h_rounded, *weights, offsets->dec_conv1a_weight,
+                                     offsets->dec_conv1a_bias, unet_tensors_heap_, unet_tensors_.dec_conv1a_offset,
+                                     output_stride);
+        } else { // fp16 12.66ms
+            DebugMarker _(ctx_.get(), cmd_buf, "Convolution Concat 64 3 64");
+            kernel_ConvolutionConcat(cmd_buf, 64, 3, 64, unet_tensors_heap_, unet_tensors_.upsample1_offset,
+                                     input_stride, true, raw_final_buf_, {}, {}, zero_border_sampler_, r, w_rounded,
+                                     h_rounded, *weights, offsets->dec_conv1a_weight, offsets->dec_conv1a_bias,
+                                     unet_tensors_heap_, unet_tensors_.dec_conv1a_offset, output_stride);
+        }
+    } break;
+    case 14: { // fp16 11.84ms
+        DebugMarker _(ctx_.get(), cmd_buf, "Convolution 64 32");
+        const int input_stride = round_up(w_rounded + 1, 16) + 1, output_stride = round_up(w_rounded + 1, 16) + 1;
+        kernel_Convolution(cmd_buf, 64, 32, unet_tensors_heap_, unet_tensors_.dec_conv1a_offset, input_stride, r,
+                           w_rounded, h_rounded, *weights, offsets->dec_conv1b_weight, offsets->dec_conv1b_bias,
+                           unet_tensors_heap_, unet_tensors_.dec_conv1b_offset, output_stride, false);
+    } break;
+    case 15: { // fp16 1.33ms
+        DebugMarker _(ctx_.get(), cmd_buf, "Convolution 32 3 Img ");
+        const int input_stride = round_up(w_rounded + 1, 16) + 1;
+        kernel_Convolution(cmd_buf, 32, 3, unet_tensors_heap_, unet_tensors_.dec_conv1b_offset, input_stride,
+                           tonemap_params_.inv_gamma, r, w_, h_, *weights, offsets->dec_conv0_weight,
+                           offsets->dec_conv0_bias, raw_filtered_buf_, final_buf_);
+    } break;
+    }
+
+    //////////////////////////////////////////////////////////////////////////////////
+
+    if (pass == 15) {
+        timestamps_[ctx_->backend_frame].denoise[1] = ctx_->WriteTimestamp(cmd_buf, false);
+
+#if RUN_IN_LOCKSTEP
+        Buffer debug_buf("Tensors Debug Buf", ctx_.get(), eBufType::Readback, unet_tensors_heap_.size());
+
+        CopyBufferToBuffer(unet_tensors_heap_, 0, debug_buf, 0, unet_tensors_heap_.size(), cmd_buf);
+
+        EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+
+        const uint16_t *_data = (const uint16_t *)debug_buf.Map();
+        _data += unet_tensors_.upsample1_offset / sizeof(uint16_t);
+
+        const int debug_stride = 273;
+        const int channels = 64;
+
+        std::vector<float> data1, data2, data3;
+        for (int i = debug_stride * channels * 0; i < debug_stride * channels * 1; ++i) {
+            data1.push_back(f16_to_f32(_data[i]));
+        }
+        for (int i = debug_stride * channels * 1; i < debug_stride * channels * 2; ++i) {
+            data2.push_back(f16_to_f32(_data[i]));
+        }
+        for (int i = debug_stride * channels * 2; i < debug_stride * channels * 3; ++i) {
+            data3.push_back(f16_to_f32(_data[i]));
+        }
+
+        volatile int ii = 0;
+
+        debug_buf.Unmap();
+#else
+        ctx_->api().vkEndCommandBuffer(cmd_buf);
+
+        ///
+
+        const int prev_frame = (ctx_->backend_frame + MaxFramesInFlight - 1) % MaxFramesInFlight;
+
+        VkSubmitInfo submit_info = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
+
+        const VkSemaphore wait_semaphores[] = {ctx_->render_finished_semaphore(prev_frame)};
+        const VkPipelineStageFlags wait_stages[] = {VK_PIPELINE_STAGE_ALL_COMMANDS_BIT};
+
+        if (ctx_->render_finished_semaphore_is_set[prev_frame]) {
+            submit_info.waitSemaphoreCount = 1;
+            submit_info.pWaitSemaphores = wait_semaphores;
+            submit_info.pWaitDstStageMask = wait_stages;
+        }
+
+        submit_info.commandBufferCount = 1;
+        submit_info.pCommandBuffers = &ctx_->draw_cmd_buf(ctx_->backend_frame);
+
+        submit_info.signalSemaphoreCount = 1;
+        submit_info.pSignalSemaphores = &ctx_->render_finished_semaphore(ctx_->backend_frame);
+
+        const VkResult res = ctx_->api().vkQueueSubmit(ctx_->graphics_queue(), 1, &submit_info,
+                                                       ctx_->in_flight_fence(ctx_->backend_frame));
+        if (res != VK_SUCCESS) {
+            ctx_->log()->Error("Failed to submit into a queue!");
+        }
+
+        ctx_->render_finished_semaphore_is_set[ctx_->backend_frame] = true;
+        ctx_->render_finished_semaphore_is_set[prev_frame] = false;
+
+        ctx_->backend_frame = (ctx_->backend_frame + 1) % MaxFramesInFlight;
+#endif
+    } else {
+#if RUN_IN_LOCKSTEP
+        EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+#endif
+    }
+}
+
 void Ray::Vk::Renderer::UpdateHaltonSequence(const int iteration, std::unique_ptr<float[]> &seq) {
     if (!seq) {
         seq.reset(new float[HALTON_COUNT * HALTON_SEQ_LEN]);
@@ -1442,4 +1761,395 @@ Ray::color_data_rgba_t Ray::Vk::Renderer::get_aux_pixels_ref(const eAUXBuffer bu
     }
 
     return {((buf == eAUXBuffer::BaseColor) ? base_color_pixels_ : depth_normals_pixels_), w_};
+}
+
+void Ray::Vk::Renderer::InitUNetFilter(const bool alias_memory, unet_filter_properties_t &out_props) {
+    CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
+
+    Buffer temp_upload_bufs[3];
+
+    if (use_fp16_) {
+        { // weights for no feature buffers case
+            const int total_count = SetupUNetWeights<uint16_t>(false, false, false, 8, nullptr, nullptr);
+
+            temp_upload_bufs[0] =
+                Buffer{"UNet Weights C Upload", ctx_.get(), eBufType::Upload, uint32_t(total_count * sizeof(uint16_t))};
+            unet_weights_[0] =
+                Buffer{"UNet Weights C", ctx_.get(), eBufType::Storage, uint32_t(total_count * sizeof(uint16_t))};
+
+            uint16_t *out_weights = (uint16_t *)temp_upload_bufs[0].Map();
+            SetupUNetWeights(false, false, false, 8, &unet_offsets_[0], out_weights);
+            temp_upload_bufs[0].Unmap();
+
+            CopyBufferToBuffer(temp_upload_bufs[0], 0, unet_weights_[0], 0, sizeof(uint16_t) * total_count, cmd_buf);
+        }
+        { // weights for the case if base color is available
+            const int total_count = SetupUNetWeights<uint16_t>(true, false, false, 8, nullptr, nullptr);
+
+            temp_upload_bufs[1] = Buffer{"UNet Weights CB Upload", ctx_.get(), eBufType::Upload,
+                                         uint32_t(total_count * sizeof(uint16_t))};
+            unet_weights_[1] =
+                Buffer{"UNet Weights CB", ctx_.get(), eBufType::Storage, uint32_t(total_count * sizeof(uint16_t))};
+
+            uint16_t *out_weights = (uint16_t *)temp_upload_bufs[1].Map();
+            SetupUNetWeights(true, false, false, 8, &unet_offsets_[1], out_weights);
+            temp_upload_bufs[1].Unmap();
+
+            CopyBufferToBuffer(temp_upload_bufs[1], 0, unet_weights_[1], 0, sizeof(uint16_t) * total_count, cmd_buf);
+        }
+        { // weights for the case if base color and normals is available
+            const int total_count = SetupUNetWeights<uint16_t>(true, true, false, 8, nullptr, nullptr);
+
+            temp_upload_bufs[2] = Buffer{"UNet Weights CBN Upload", ctx_.get(), eBufType::Upload,
+                                         uint32_t(total_count * sizeof(uint16_t))};
+            unet_weights_[2] =
+                Buffer{"UNet Weights CBN", ctx_.get(), eBufType::Storage, uint32_t(total_count * sizeof(uint16_t))};
+
+            uint16_t *out_weights = (uint16_t *)temp_upload_bufs[2].Map();
+            SetupUNetWeights(true, true, false, 8, &unet_offsets_[2], out_weights);
+            temp_upload_bufs[2].Unmap();
+
+            CopyBufferToBuffer(temp_upload_bufs[2], 0, unet_weights_[2], 0, sizeof(uint16_t) * total_count, cmd_buf);
+        }
+    } else {
+        { // weights for no feature buffers case
+            const int total_count = SetupUNetWeights<float>(false, false, false, 8, nullptr, nullptr);
+
+            temp_upload_bufs[0] =
+                Buffer{"UNet Weights C Upload", ctx_.get(), eBufType::Upload, uint32_t(total_count * sizeof(float))};
+            unet_weights_[0] =
+                Buffer{"UNet Weights C", ctx_.get(), eBufType::Storage, uint32_t(total_count * sizeof(float))};
+
+            float *out_weights = (float *)temp_upload_bufs[0].Map();
+            SetupUNetWeights(false, false, false, 8, &unet_offsets_[0], out_weights);
+            temp_upload_bufs[0].Unmap();
+
+            CopyBufferToBuffer(temp_upload_bufs[0], 0, unet_weights_[0], 0, sizeof(float) * total_count, cmd_buf);
+        }
+        { // weights for the case if base color is available
+            const int total_count = SetupUNetWeights<float>(true, false, false, 8, nullptr, nullptr);
+
+            temp_upload_bufs[1] =
+                Buffer{"UNet Weights CB Upload", ctx_.get(), eBufType::Upload, uint32_t(total_count * sizeof(float))};
+            unet_weights_[1] =
+                Buffer{"UNet Weights CB", ctx_.get(), eBufType::Storage, uint32_t(total_count * sizeof(float))};
+
+            float *out_weights = (float *)temp_upload_bufs[1].Map();
+            SetupUNetWeights(true, false, false, 8, &unet_offsets_[1], out_weights);
+            temp_upload_bufs[1].Unmap();
+
+            CopyBufferToBuffer(temp_upload_bufs[1], 0, unet_weights_[1], 0, sizeof(float) * total_count, cmd_buf);
+        }
+        { // weights for the case if base color and normals is available
+            const int total_count = SetupUNetWeights<float>(true, true, false, 8, nullptr, nullptr);
+
+            temp_upload_bufs[2] =
+                Buffer{"UNet Weights CBN Upload", ctx_.get(), eBufType::Upload, uint32_t(total_count * sizeof(float))};
+            unet_weights_[2] =
+                Buffer{"UNet Weights CBN", ctx_.get(), eBufType::Storage, uint32_t(total_count * sizeof(float))};
+
+            float *out_weights = (float *)temp_upload_bufs[2].Map();
+            SetupUNetWeights(true, true, false, 8, &unet_offsets_[2], out_weights);
+            temp_upload_bufs[2].Unmap();
+
+            CopyBufferToBuffer(temp_upload_bufs[2], 0, unet_weights_[2], 0, sizeof(float) * total_count, cmd_buf);
+        }
+    }
+
+    const TransitionInfo res_transitions[] = {{&unet_weights_[0], eResState::ShaderResource},
+                                              {&unet_weights_[1], eResState::ShaderResource},
+                                              {&unet_weights_[2], eResState::ShaderResource}};
+    TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
+
+    unet_alias_memory_ = alias_memory;
+    UpdateUNetFilterMemory(cmd_buf);
+
+    EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+
+    const int el_sz = use_fp16_ ? sizeof(uint16_t) : sizeof(float);
+
+    for (int i = 0; i < 3; ++i) {
+        temp_upload_bufs[i].FreeImmediate();
+
+        unet_offsets_[i].enc_conv0_weight *= el_sz;
+        unet_offsets_[i].enc_conv0_bias *= el_sz;
+        unet_offsets_[i].enc_conv1_weight *= el_sz;
+        unet_offsets_[i].enc_conv1_bias *= el_sz;
+        unet_offsets_[i].enc_conv2_weight *= el_sz;
+        unet_offsets_[i].enc_conv2_bias *= el_sz;
+        unet_offsets_[i].enc_conv3_weight *= el_sz;
+        unet_offsets_[i].enc_conv3_bias *= el_sz;
+        unet_offsets_[i].enc_conv4_weight *= el_sz;
+        unet_offsets_[i].enc_conv4_bias *= el_sz;
+        unet_offsets_[i].enc_conv5a_weight *= el_sz;
+        unet_offsets_[i].enc_conv5a_bias *= el_sz;
+        unet_offsets_[i].enc_conv5b_weight *= el_sz;
+        unet_offsets_[i].enc_conv5b_bias *= el_sz;
+        unet_offsets_[i].dec_conv4a_weight *= el_sz;
+        unet_offsets_[i].dec_conv4a_bias *= el_sz;
+        unet_offsets_[i].dec_conv4b_weight *= el_sz;
+        unet_offsets_[i].dec_conv4b_bias *= el_sz;
+        unet_offsets_[i].dec_conv3a_weight *= el_sz;
+        unet_offsets_[i].dec_conv3a_bias *= el_sz;
+        unet_offsets_[i].dec_conv3b_weight *= el_sz;
+        unet_offsets_[i].dec_conv3b_bias *= el_sz;
+        unet_offsets_[i].dec_conv2a_weight *= el_sz;
+        unet_offsets_[i].dec_conv2a_bias *= el_sz;
+        unet_offsets_[i].dec_conv2b_weight *= el_sz;
+        unet_offsets_[i].dec_conv2b_bias *= el_sz;
+        unet_offsets_[i].dec_conv1a_weight *= el_sz;
+        unet_offsets_[i].dec_conv1a_bias *= el_sz;
+        unet_offsets_[i].dec_conv1b_weight *= el_sz;
+        unet_offsets_[i].dec_conv1b_bias *= el_sz;
+        unet_offsets_[i].dec_conv0_weight *= el_sz;
+        unet_offsets_[i].dec_conv0_bias *= el_sz;
+    }
+
+    out_props.pass_count = UNetFilterPasses;
+    for (int i = 0; i < UNetFilterPasses; ++i) {
+        std::fill(&out_props.alias_dependencies[i][0], &out_props.alias_dependencies[i][0] + 4, -1);
+        for (int j = 0; j < int(unet_alias_dependencies_[i].size()); ++j) {
+            out_props.alias_dependencies[i][j] = unet_alias_dependencies_[i][j];
+        }
+    }
+
+    if (!pi_convolution_DirectImg_3_32_) {
+        if (!InitUNetPipelines()) {
+            throw std::runtime_error("Error initializing pipeline!");
+        }
+    }
+}
+
+bool Ray::Vk::Renderer::InitUNetPipelines() {
+    ILog *log = ctx_->log();
+
+    auto select_shader = [this](Span<const uint8_t> default_shader, Span<const uint8_t> fp16_shader,
+                                Span<const uint8_t> nv_coop_shader) {
+        return use_fp16_ ? (use_nv_coop_matrix_ ? nv_coop_shader : fp16_shader) : default_shader;
+    };
+
+    sh_convolution_DirectImg_3_32_ = Shader{"Convolution DirectImg 3 32", ctx_.get(),
+                                            select_shader(internal_shaders_output_convolution_Img_3_32_comp_spv,
+                                                          internal_shaders_output_convolution_Img_3_32_fp16_comp_spv,
+                                                          internal_shaders_output_convolution_Img_3_32_nv_comp_spv),
+                                            eShaderType::Comp, log};
+    sh_convolution_DirectImg_6_32_ = Shader{"Convolution DirectImg 6 32", ctx_.get(),
+                                            select_shader(internal_shaders_output_convolution_Img_6_32_comp_spv,
+                                                          internal_shaders_output_convolution_Img_6_32_fp16_comp_spv,
+                                                          internal_shaders_output_convolution_Img_6_32_nv_comp_spv),
+                                            eShaderType::Comp, log};
+    sh_convolution_DirectImg_9_32_ = Shader{"Convolution DirectImg 9 32", ctx_.get(),
+                                            select_shader(internal_shaders_output_convolution_Img_9_32_comp_spv,
+                                                          internal_shaders_output_convolution_Img_9_32_fp16_comp_spv,
+                                                          internal_shaders_output_convolution_Img_9_32_nv_comp_spv),
+                                            eShaderType::Comp, log};
+    sh_convolution_Direct_32_32_Downsample_ =
+        Shader{"Convolution Direct 32 32 Downsample", ctx_.get(),
+               select_shader(internal_shaders_output_convolution_32_32_Downsample_comp_spv,
+                             internal_shaders_output_convolution_32_32_Downsample_fp16_comp_spv,
+                             internal_shaders_output_convolution_32_32_Downsample_nv_comp_spv),
+               eShaderType::Comp, log};
+    sh_convolution_Direct_32_48_Downsample_ =
+        Shader{"Convolution Direct 32 48 Downsample", ctx_.get(),
+               select_shader(internal_shaders_output_convolution_32_48_Downsample_comp_spv,
+                             internal_shaders_output_convolution_32_48_Downsample_fp16_comp_spv,
+                             internal_shaders_output_convolution_32_48_Downsample_nv_comp_spv),
+               eShaderType::Comp, log};
+    sh_convolution_Direct_48_64_Downsample_ =
+        Shader{"Convolution Direct 48 64 Downsample", ctx_.get(),
+               select_shader(internal_shaders_output_convolution_48_64_Downsample_comp_spv,
+                             internal_shaders_output_convolution_48_64_Downsample_fp16_comp_spv,
+                             internal_shaders_output_convolution_48_64_Downsample_nv_comp_spv),
+               eShaderType::Comp, log};
+    sh_convolution_Direct_64_80_Downsample_ =
+        Shader{"Convolution Direct 64 80 Downsample", ctx_.get(),
+               select_shader(internal_shaders_output_convolution_64_80_Downsample_comp_spv,
+                             internal_shaders_output_convolution_64_80_Downsample_fp16_comp_spv,
+                             internal_shaders_output_convolution_64_80_Downsample_nv_comp_spv),
+               eShaderType::Comp, log};
+    sh_convolution_Direct_64_64_ = Shader{"Convolution Direct 64 64", ctx_.get(),
+                                          select_shader(internal_shaders_output_convolution_64_64_comp_spv,
+                                                        internal_shaders_output_convolution_64_64_fp16_comp_spv,
+                                                        internal_shaders_output_convolution_64_64_nv_comp_spv),
+                                          eShaderType::Comp, log};
+    sh_convolution_Direct_64_32_ = Shader{"Convolution Direct 64 32", ctx_.get(),
+                                          select_shader(internal_shaders_output_convolution_64_32_comp_spv,
+                                                        internal_shaders_output_convolution_64_32_fp16_comp_spv,
+                                                        internal_shaders_output_convolution_64_32_nv_comp_spv),
+                                          eShaderType::Comp, log};
+    sh_convolution_Direct_80_96_ = Shader{"Convolution Direct 80 96", ctx_.get(),
+                                          select_shader(internal_shaders_output_convolution_80_96_comp_spv,
+                                                        internal_shaders_output_convolution_80_96_fp16_comp_spv,
+                                                        internal_shaders_output_convolution_80_96_nv_comp_spv),
+                                          eShaderType::Comp, log};
+    sh_convolution_Direct_96_96_ = Shader{"Convolution Direct 96 96", ctx_.get(),
+                                          select_shader(internal_shaders_output_convolution_96_96_comp_spv,
+                                                        internal_shaders_output_convolution_96_96_fp16_comp_spv,
+                                                        internal_shaders_output_convolution_96_96_nv_comp_spv),
+                                          eShaderType::Comp, log};
+    sh_convolution_Direct_112_112_ = Shader{"Convolution Direct 112 112", ctx_.get(),
+                                            select_shader(internal_shaders_output_convolution_112_112_comp_spv,
+                                                          internal_shaders_output_convolution_112_112_fp16_comp_spv,
+                                                          internal_shaders_output_convolution_112_112_nv_comp_spv),
+                                            eShaderType::Comp, log};
+    sh_convolution_concat_Direct_96_64_112_ =
+        Shader{"Convolution Concat Direct 96 64 112", ctx_.get(),
+               select_shader(internal_shaders_output_convolution_concat_96_64_112_comp_spv,
+                             internal_shaders_output_convolution_concat_96_64_112_fp16_comp_spv,
+                             internal_shaders_output_convolution_concat_96_64_112_nv_comp_spv),
+               eShaderType::Comp, log};
+    sh_convolution_concat_Direct_112_48_96_ =
+        Shader{"Convolution Concat Direct 112 48 96", ctx_.get(),
+               select_shader(internal_shaders_output_convolution_concat_112_48_96_comp_spv,
+                             internal_shaders_output_convolution_concat_112_48_96_fp16_comp_spv,
+                             internal_shaders_output_convolution_concat_112_48_96_nv_comp_spv),
+               eShaderType::Comp, log};
+    sh_convolution_concat_Direct_96_32_64_ =
+        Shader{"Convolution Concat Direct 96 32 64", ctx_.get(),
+               select_shader(internal_shaders_output_convolution_concat_96_32_64_comp_spv,
+                             internal_shaders_output_convolution_concat_96_32_64_fp16_comp_spv,
+                             internal_shaders_output_convolution_concat_96_32_64_nv_comp_spv),
+               eShaderType::Comp, log};
+    sh_convolution_concat_Direct_64_3_64_ =
+        Shader{"Convolution Concat Direct 64 3 64", ctx_.get(),
+               select_shader(internal_shaders_output_convolution_concat_64_3_64_comp_spv,
+                             internal_shaders_output_convolution_concat_64_3_64_fp16_comp_spv,
+                             internal_shaders_output_convolution_concat_64_3_64_nv_comp_spv),
+               eShaderType::Comp, log};
+    sh_convolution_concat_Direct_64_6_64_ =
+        Shader{"Convolution Concat Direct 64 6 64", ctx_.get(),
+               select_shader(internal_shaders_output_convolution_concat_64_6_64_comp_spv,
+                             internal_shaders_output_convolution_concat_64_6_64_fp16_comp_spv,
+                             internal_shaders_output_convolution_concat_64_6_64_nv_comp_spv),
+               eShaderType::Comp, log};
+    sh_convolution_concat_Direct_64_9_64_ =
+        Shader{"Convolution Concat Direct 64 9 64", ctx_.get(),
+               select_shader(internal_shaders_output_convolution_concat_64_9_64_comp_spv,
+                             internal_shaders_output_convolution_concat_64_9_64_fp16_comp_spv,
+                             internal_shaders_output_convolution_concat_64_9_64_nv_comp_spv),
+               eShaderType::Comp, log};
+    sh_convolution_Direct_32_3_img_ = Shader{"Convolution Direct 32 3 Img", ctx_.get(),
+                                             select_shader(internal_shaders_output_convolution_32_3_img_comp_spv,
+                                                           internal_shaders_output_convolution_32_3_img_fp16_comp_spv,
+                                                           internal_shaders_output_convolution_32_3_img_nv_comp_spv),
+                                             eShaderType::Comp, log};
+
+    prog_convolution_DirectImg_3_32_ =
+        Program{"Convolution DirectImg 3 32", ctx_.get(), &sh_convolution_DirectImg_3_32_, log};
+    prog_convolution_DirectImg_6_32_ =
+        Program{"Convolution DirectImg 6 32", ctx_.get(), &sh_convolution_DirectImg_6_32_, log};
+    prog_convolution_DirectImg_9_32_ =
+        Program{"Convolution DirectImg 9 32", ctx_.get(), &sh_convolution_DirectImg_9_32_, log};
+    prog_convolution_Direct_32_32_Downsample_ =
+        Program{"Convolution Direct 32 32", ctx_.get(), &sh_convolution_Direct_32_32_Downsample_, log};
+    prog_convolution_Direct_32_48_Downsample_ =
+        Program{"Convolution Direct 32 48", ctx_.get(), &sh_convolution_Direct_32_48_Downsample_, log};
+    prog_convolution_Direct_48_64_Downsample_ =
+        Program{"Convolution Direct 48 64", ctx_.get(), &sh_convolution_Direct_48_64_Downsample_, log};
+    prog_convolution_Direct_64_80_Downsample_ =
+        Program{"Convolution Direct 64 80", ctx_.get(), &sh_convolution_Direct_64_80_Downsample_, log};
+    prog_convolution_Direct_64_64_ =
+        Program{"Convolution Direct 64 64", ctx_.get(), &sh_convolution_Direct_64_64_, log};
+    prog_convolution_Direct_64_32_ =
+        Program{"Convolution Direct 64 32", ctx_.get(), &sh_convolution_Direct_64_32_, log};
+    prog_convolution_Direct_80_96_ =
+        Program{"Convolution Direct 80 96", ctx_.get(), &sh_convolution_Direct_80_96_, log};
+    prog_convolution_Direct_96_96_ =
+        Program{"Convolution Direct 96 96", ctx_.get(), &sh_convolution_Direct_96_96_, log};
+    prog_convolution_Direct_112_112_ =
+        Program{"Convolution Direct 112 112", ctx_.get(), &sh_convolution_Direct_112_112_, log};
+    prog_convolution_concat_Direct_96_64_112_ =
+        Program{"Convolution Concat Direct 96 64 112", ctx_.get(), &sh_convolution_concat_Direct_96_64_112_, log};
+    prog_convolution_concat_Direct_112_48_96_ =
+        Program{"Convolution Concat Direct 112 48 96", ctx_.get(), &sh_convolution_concat_Direct_112_48_96_, log};
+    prog_convolution_concat_Direct_96_32_64_ =
+        Program{"Convolution Concat Direct 96 32 64", ctx_.get(), &sh_convolution_concat_Direct_96_32_64_, log};
+    prog_convolution_concat_Direct_64_3_64_ =
+        Program{"Convolution Concat Direct 64 3 64", ctx_.get(), &sh_convolution_concat_Direct_64_3_64_, log};
+    prog_convolution_concat_Direct_64_6_64_ =
+        Program{"Convolution Concat Direct 64 6 64", ctx_.get(), &sh_convolution_concat_Direct_64_6_64_, log};
+    prog_convolution_concat_Direct_64_9_64_ =
+        Program{"Convolution Concat Direct 64 9 64", ctx_.get(), &sh_convolution_concat_Direct_64_9_64_, log};
+    prog_convolution_Direct_32_3_img_ =
+        Program{"Convolution Direct 32 3 Img", ctx_.get(), &sh_convolution_Direct_32_3_img_, log};
+
+    return pi_convolution_DirectImg_3_32_.Init(ctx_.get(), &prog_convolution_DirectImg_3_32_, log) &&
+           pi_convolution_DirectImg_6_32_.Init(ctx_.get(), &prog_convolution_DirectImg_6_32_, log) &&
+           pi_convolution_DirectImg_9_32_.Init(ctx_.get(), &prog_convolution_DirectImg_9_32_, log) &&
+           pi_convolution_Direct_32_32_Downsample_.Init(ctx_.get(), &prog_convolution_Direct_32_32_Downsample_, log) &&
+           pi_convolution_Direct_32_48_Downsample_.Init(ctx_.get(), &prog_convolution_Direct_32_48_Downsample_, log) &&
+           pi_convolution_Direct_48_64_Downsample_.Init(ctx_.get(), &prog_convolution_Direct_48_64_Downsample_, log) &&
+           pi_convolution_Direct_64_80_Downsample_.Init(ctx_.get(), &prog_convolution_Direct_64_80_Downsample_, log) &&
+           pi_convolution_Direct_64_64_.Init(ctx_.get(), &prog_convolution_Direct_64_64_, log) &&
+           pi_convolution_Direct_64_32_.Init(ctx_.get(), &prog_convolution_Direct_64_32_, log) &&
+           pi_convolution_Direct_80_96_.Init(ctx_.get(), &prog_convolution_Direct_80_96_, log) &&
+           pi_convolution_Direct_96_96_.Init(ctx_.get(), &prog_convolution_Direct_96_96_, log) &&
+           pi_convolution_Direct_112_112_.Init(ctx_.get(), &prog_convolution_Direct_112_112_, log) &&
+           pi_convolution_concat_Direct_96_64_112_.Init(ctx_.get(), &prog_convolution_concat_Direct_96_64_112_, log) &&
+           pi_convolution_concat_Direct_112_48_96_.Init(ctx_.get(), &prog_convolution_concat_Direct_112_48_96_, log) &&
+           pi_convolution_concat_Direct_96_32_64_.Init(ctx_.get(), &prog_convolution_concat_Direct_96_32_64_, log) &&
+           pi_convolution_concat_Direct_64_3_64_.Init(ctx_.get(), &prog_convolution_concat_Direct_64_3_64_, log) &&
+           pi_convolution_concat_Direct_64_6_64_.Init(ctx_.get(), &prog_convolution_concat_Direct_64_6_64_, log) &&
+           pi_convolution_concat_Direct_64_9_64_.Init(ctx_.get(), &prog_convolution_concat_Direct_64_9_64_, log) &&
+           pi_convolution_Direct_32_3_img_.Init(ctx_.get(), &prog_convolution_Direct_32_3_img_, log);
+}
+
+void Ray::Vk::Renderer::UpdateUNetFilterMemory(CommandBuffer cmd_buf) {
+    unet_tensors_heap_ = {};
+    if (!unet_weights_[0]) {
+        return;
+    }
+
+    const int el_sz = use_fp16_ ? sizeof(uint16_t) : sizeof(float);
+
+    const int required_memory =
+        SetupUNetFilter(w_, h_, unet_alias_memory_, true, unet_tensors_, unet_alias_dependencies_);
+    unet_tensors_heap_ = Buffer{"UNet Tensors", ctx_.get(), eBufType::Storage, uint32_t(required_memory * el_sz)};
+
+    if (use_fp16_) {
+#ifndef NDEBUG
+        const uint32_t fill_val = (f32_to_f16(NAN) << 16) | f32_to_f16(NAN);
+#else
+        const uint32_t fill_val = 0;
+#endif
+        unet_tensors_heap_.Fill(0, required_memory * el_sz, fill_val, cmd_buf);
+    } else {
+#ifndef NDEBUG
+        const float fill_val = NAN;
+#else
+        const float fill_val = 0.0f;
+#endif
+        unet_tensors_heap_.Fill(0, required_memory * el_sz, reinterpret_cast<const uint32_t &>(fill_val), cmd_buf);
+    }
+
+    unet_tensors_.enc_conv0_offset *= el_sz;
+    unet_tensors_.enc_conv0_size *= el_sz;
+    unet_tensors_.pool1_offset *= el_sz;
+    unet_tensors_.pool1_size *= el_sz;
+    unet_tensors_.pool2_offset *= el_sz;
+    unet_tensors_.pool2_size *= el_sz;
+    unet_tensors_.pool3_offset *= el_sz;
+    unet_tensors_.pool3_size *= el_sz;
+    unet_tensors_.pool4_offset *= el_sz;
+    unet_tensors_.pool4_size *= el_sz;
+    unet_tensors_.enc_conv5a_offset *= el_sz;
+    unet_tensors_.enc_conv5a_size *= el_sz;
+    unet_tensors_.upsample4_offset *= el_sz;
+    unet_tensors_.upsample4_size *= el_sz;
+    unet_tensors_.dec_conv4a_offset *= el_sz;
+    unet_tensors_.dec_conv4a_size *= el_sz;
+    unet_tensors_.upsample3_offset *= el_sz;
+    unet_tensors_.upsample3_size *= el_sz;
+    unet_tensors_.dec_conv3a_offset *= el_sz;
+    unet_tensors_.dec_conv3a_size *= el_sz;
+    unet_tensors_.upsample2_offset *= el_sz;
+    unet_tensors_.upsample2_size *= el_sz;
+    unet_tensors_.dec_conv2a_offset *= el_sz;
+    unet_tensors_.dec_conv2a_size *= el_sz;
+    unet_tensors_.upsample1_offset *= el_sz;
+    unet_tensors_.upsample1_size *= el_sz;
+    unet_tensors_.dec_conv1a_offset *= el_sz;
+    unet_tensors_.dec_conv1a_size *= el_sz;
+    unet_tensors_.dec_conv1b_offset *= el_sz;
+    unet_tensors_.dec_conv1b_size *= el_sz;
 }

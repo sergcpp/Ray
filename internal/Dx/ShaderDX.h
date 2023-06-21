@@ -61,6 +61,8 @@ class Shader {
 
     Shader() = default;
     Shader(const char *name, Context *ctx, const uint8_t *shader_code, int code_size, eShaderType type, ILog *log);
+    Shader(const char *name, Context *ctx, Span<const uint8_t> shader_code, eShaderType type, ILog *log)
+        : Shader(name, ctx, shader_code.data(), int(shader_code.size()), type, log) {}
 
     Shader(const Shader &rhs) = delete;
     Shader(Shader &&rhs) noexcept { (*this) = std::move(rhs); }

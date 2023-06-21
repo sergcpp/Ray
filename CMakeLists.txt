@@ -57,6 +57,7 @@ set(INTERNAL_SOURCE_FILES internal/Atmosphere.h
                           internal/Bitmap.h
                           internal/BVHSplit.h
                           internal/BVHSplit.cpp
+                          internal/Convolution.h
                           internal/Core.h
                           internal/Core.cpp
                           internal/CoreDX.h
@@ -90,6 +91,8 @@ set(INTERNAL_SOURCE_FILES internal/Atmosphere.h
                           internal/TextureUtils.cpp
                           internal/Time_.h
                           internal/Time.cpp
+                          internal/UNetFilter.h
+                          internal/UNetFilter.cpp
                           internal/UniformIntDistribution.h
                           internal/Utils.h
                           internal/Utils.cpp

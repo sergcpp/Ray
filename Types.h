@@ -109,4 +109,9 @@ struct camera_t {
 struct gpu_device_t {
     char name[256];
 };
+
+struct unet_filter_properties_t {
+    int pass_count = 0;
+    int alias_dependencies[16][4] = {};
+};
 } // namespace Ray

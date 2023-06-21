@@ -8,9 +8,10 @@
 
 #include <cfloat>
 
-#include "TextureStorageCPU.h"
-
 #include "simd/simd_vec.h"
+
+#include "Convolution.h"
+#include "TextureStorageCPU.h"
 
 #pragma warning(push)
 #pragma warning(disable : 4127) // conditional expression is constant
@@ -484,6 +485,28 @@ void ShadeSecondary(const pass_settings_t &ps, Span<const hit_data_t<S>> inters,
                     int *out_secondary_rays_count, shadow_ray_t<S> *out_shadow_rays, int *out_shadow_rays_count,
                     int img_w, color_rgba_t *out_color);
 
+template <int S, int InChannels, int OutChannels, int OutPxPitch = OutChannels, ePostOp PostOp = ePostOp::None,
+          eActivation Activation = eActivation::ReLU>
+void Convolution3x3_Direct(const float data[], const rect_t &rect, int w, int h, int stride, const float weights[],
+                           const float biases[], float output[], int output_stride);
+
+template <int S, int InChannels1, int InChannels2, int OutChannels, ePreOp PreOp1 = ePreOp::None,
+          ePostOp PostOp = ePostOp::None, eActivation Activation = eActivation::ReLU>
+void ConvolutionConcat3x3_Direct(const float data1[], const float data2[], const rect_t &rect, int w, int h,
+                                 int stride1, int stride2, const float weights[], const float biases[], float output[],
+                                 int output_stride);
+template <int S, int InChannels1, int InChannels2, int OutChannels, ePreOp PreOp1 = ePreOp::None,
+          eActivation Activation = eActivation::ReLU>
+void ConvolutionConcat3x3_GEMM(const float data1[], const float data2[], const rect_t &rect, int w, int h,
+                               const float weights[], const float biases[], float output[]);
+template <int S, int InChannels1, int InChannels2, int InChannels3, int InChannels4, int PxPitch2, int OutChannels,
+          Ray::ePreOp PreOp1, Ray::ePreOp PreOp2, Ray::ePreOp PreOp3, Ray::ePreOp PreOp4, Ray::ePostOp PostOp,
+          Ray::eActivation Activation>
+void ConvolutionConcat3x3_1Direct_2GEMM(const float data1[], const float data2[], const float data3[],
+                                        const float data4[], const rect_t &rect, int w, int h, int w2, int h2,
+                                        int stride1, int stride2, const float weights[], const float biases[],
+                                        float output[], int output_stride);
+
 class SIMDPolicyBase {
   public:
     using RayDataType = ray_data_t<RPSize>;
@@ -551,6 +574,54 @@ class SIMDPolicyBase {
                                             color_rgba_t *out_color) {
         NS::ShadeSecondary<RPSize>(ps, inters, rays, random_seq, sc, node_index, textures, out_secondary_rays,
                                    out_secondary_rays_count, out_shadow_rays, out_shadow_rays_count, img_w, out_color);
+    }
+
+    template <int InChannels1, int InChannels2, int InChannels3, int PxPitch, int OutChannels,
+              ePreOp PreOp1 = ePreOp::None, ePreOp PreOp2 = ePreOp::None, ePreOp PreOp3 = ePreOp::None,
+              ePostOp PostOp = ePostOp::None, eActivation Activation = eActivation::ReLU>
+    static force_inline void Convolution3x3_GEMM(const float data1[], const float data2[], const float data3[],
+                                                 const rect_t &rect, int in_w, int in_h, int w, int h, int stride,
+                                                 const float weights[], const float biases[], float output[],
+                                                 int output_stride) {
+        NS::Convolution3x3_GEMM<RPSize, InChannels1, InChannels2, InChannels3, PxPitch, OutChannels, PreOp1, PreOp2,
+                                PreOp3, PostOp, Activation>(data1, data2, data3, rect, in_w, in_h, w, h, stride,
+                                                            weights, biases, output, output_stride);
+    }
+
+    template <int InChannels, int OutChannels, int OutPxPitch = OutChannels, ePostOp PostOp = ePostOp::None,
+              eActivation Activation = eActivation::ReLU>
+    static force_inline void Convolution3x3_Direct(const float data[], const rect_t &rect, int w, int h, int stride,
+                                                   const float weights[], const float biases[], float output[],
+                                                   int output_stride) {
+        NS::Convolution3x3_Direct<RPSize, InChannels, OutChannels, OutPxPitch, PostOp, Activation>(
+            data, rect, w, h, stride, weights, biases, output, output_stride);
+    }
+
+    template <int InChannels1, int InChannels2, int OutChannels, ePreOp PreOp1 = ePreOp::None,
+              ePostOp PostOp = ePostOp::None, eActivation Activation = eActivation::ReLU>
+    static force_inline void ConvolutionConcat3x3_Direct(const float data1[], const float data2[], const rect_t &rect,
+                                                         int w, int h, int stride1, int stride2, const float weights[],
+                                                         const float biases[], float output[], int output_stride) {
+        NS::ConvolutionConcat3x3_Direct<RPSize, InChannels1, InChannels2, OutChannels, PreOp1, PostOp, Activation>(
+            data1, data2, rect, w, h, stride1, stride2, weights, biases, output, output_stride);
+    }
+
+    template <int InChannels1, int InChannels2, int InChannels3, int InChannels4, int PxPitch2, int OutChannels,
+              ePreOp PreOp1 = ePreOp::None, ePreOp PreOp2 = ePreOp::None, ePreOp PreOp3 = ePreOp::None,
+              ePreOp PreOp4 = ePreOp::None, ePostOp PostOp = ePostOp::None, eActivation Activation = eActivation::ReLU>
+    static force_inline void
+    ConvolutionConcat3x3_1Direct_2GEMM(const float data1[], const float data2[], const float data3[],
+                                       const float data4[], const rect_t &rect, int w, int h, int w2, int h2,
+                                       int stride1, int stride2, const float weights[], const float biases[],
+                                       float output[], int output_stride) {
+        NS::ConvolutionConcat3x3_1Direct_2GEMM<RPSize, InChannels1, InChannels2, InChannels3, InChannels4, PxPitch2,
+                                               OutChannels, PreOp1, PreOp2, PreOp3, PreOp4, PostOp, Activation>(
+            data1, data2, data3, data4, rect, w, h, w2, h2, stride1, stride2, weights, biases, output, output_stride);
+    }
+
+    static force_inline void ClearBorders(const rect_t &rect, int w, int h, bool downscaled, int out_channels,
+                                          float output[]) {
+        NS::ClearBorders(rect, w, h, downscaled, out_channels, output);
     }
 };
 } // namespace NS
@@ -6772,6 +6843,125 @@ void Ray::NS::ShadeSecondary(const pass_settings_t &ps, Span<const hit_data_t<S>
                 old_val.store_to(out_color[y.template get<j>() * img_w + x.template get<j>()].v, simd_mem_aligned);
             }
         })
+    }
+}
+
+template <int S, int InChannels, int OutChannels, int OutPxPitch, Ray::ePostOp PostOp, Ray::eActivation Activation>
+void Ray::NS::Convolution3x3_Direct(const float data[], const rect_t &rect, int w, int h, int stride,
+                                    const float weights[], const float biases[], float output[], int output_stride) {
+    static_assert((InChannels % S) == 0, "!");
+
+    if (!output_stride) {
+        if (PostOp == ePostOp::Downscale) {
+            output_stride = (w + 1) / 2;
+        } else {
+            output_stride = w;
+        }
+    }
+
+    if (PostOp == ePostOp::Downscale) {
+        if (OutChannels == OutPxPitch) {
+            for (int y = (rect.y / 2); y < (rect.y + rect.h + 1) / 2; ++y) {
+                float *ptr = &output[OutChannels * (y * output_stride + (rect.x / 2))];
+                std::fill(ptr, ptr + ((rect.w + 1) / 2) * OutChannels, 0.0f);
+            }
+        } else {
+            for (int y = (rect.y / 2); y < (rect.y + rect.h + 1) / 2; ++y) {
+                for (int x = (rect.x / 2); x < (rect.x + rect.w + 1) / 2; ++x) {
+                    for (int c = 0; c < OutChannels; ++c) {
+                        output[OutPxPitch * (y * output_stride + (x / 2)) + c] = 0.0f;
+                    }
+                }
+            }
+        }
+    }
+
+    static_assert((InChannels % S) == 0, "!");
+
+    int y = rect.y;
+    for (; y < rect.y + rect.h - 7; y += 8) {
+        Convolution3x3_Direct_ProcessRows<8, S, InChannels, OutChannels, OutPxPitch, PostOp, Activation>(
+            y, data, rect, w, h, stride, weights, biases, output, output_stride);
+    }
+
+    for (; y < rect.y + rect.h - 3; y += 4) {
+        Convolution3x3_Direct_ProcessRows<4, S, InChannels, OutChannels, OutPxPitch, PostOp, Activation>(
+            y, data, rect, w, h, stride, weights, biases, output, output_stride);
+    }
+
+    for (; y < rect.y + rect.h; ++y) {
+        Convolution3x3_Direct_ProcessRows<1, S, InChannels, OutChannels, OutPxPitch, PostOp, Activation>(
+            y, data, rect, w, h, stride, weights, biases, output, output_stride);
+    }
+}
+
+template <int S, int InChannels1, int InChannels2, int OutChannels, Ray::ePreOp PreOp1, Ray::ePostOp PostOp,
+          Ray::eActivation Activation>
+void Ray::NS::ConvolutionConcat3x3_Direct(const float data1[], const float data2[], const rect_t &rect, int w, int h,
+                                          int stride1, int stride2, const float weights[], const float biases[],
+                                          float output[], int output_stride) {
+    static_assert((InChannels1 % S) == 0 && (InChannels2 % S) == 0, "!");
+
+    if (!output_stride) {
+        if (PostOp == ePostOp::Downscale) {
+            output_stride = (w + 1) / 2;
+        } else {
+            output_stride = w;
+        }
+    }
+
+    int y = rect.y;
+    for (; y < rect.y + rect.h - 7; y += 8) {
+        ConvolutionConcat3x3_Direct_ProcessRows<8, S, InChannels1, InChannels2, OutChannels, PreOp1, PostOp,
+                                                Activation>(y, data1, data2, rect, w, h, stride1, stride2, weights,
+                                                            biases, output, output_stride);
+    }
+
+    for (; y < rect.y + rect.h - 3; y += 4) {
+        ConvolutionConcat3x3_Direct_ProcessRows<4, S, InChannels1, InChannels2, OutChannels, PreOp1, PostOp,
+                                                Activation>(y, data1, data2, rect, w, h, stride1, stride2, weights,
+                                                            biases, output, output_stride);
+    }
+
+    for (; y < rect.y + rect.h; ++y) {
+        ConvolutionConcat3x3_Direct_ProcessRows<1, S, InChannels1, InChannels2, OutChannels, PreOp1, PostOp,
+                                                Activation>(y, data1, data2, rect, w, h, stride1, stride2, weights,
+                                                            biases, output, output_stride);
+    }
+}
+
+template <int S, int InChannels1, int InChannels2, int InChannels3, int InChannels4, int PxPitch2, int OutChannels,
+          Ray::ePreOp PreOp1, Ray::ePreOp PreOp2, Ray::ePreOp PreOp3, Ray::ePreOp PreOp4, Ray::ePostOp PostOp,
+          Ray::eActivation Activation>
+void Ray::NS::ConvolutionConcat3x3_1Direct_2GEMM(const float data1[], const float data2[], const float data3[],
+                                                 const float data4[], const rect_t &rect, int w, int h, int w2, int h2,
+                                                 int stride1, int stride2, const float weights[], const float biases[],
+                                                 float output[], int output_stride) {
+    static_assert((InChannels1 % S) == 0, "!");
+
+    int y = rect.y;
+    for (; y < rect.y + rect.h - 7; y += 8) {
+        ConvolutionConcat3x3_1Direct_2GEMM_ProcessRows<8, S, InChannels1, InChannels2, InChannels3, InChannels4,
+                                                       PxPitch2, OutChannels, PreOp1, PreOp2, PreOp3, PreOp4, PostOp,
+                                                       Activation>(y, data1, data2, data3, data4, rect, w, h, w2, h2,
+                                                                   stride1, stride2, weights, biases, output,
+                                                                   output_stride);
+    }
+
+    for (; y < rect.y + rect.h - 3; y += 4) {
+        ConvolutionConcat3x3_1Direct_2GEMM_ProcessRows<4, S, InChannels1, InChannels2, InChannels3, InChannels4,
+                                                       PxPitch2, OutChannels, PreOp1, PreOp2, PreOp3, PreOp4, PostOp,
+                                                       Activation>(y, data1, data2, data3, data4, rect, w, h, w2, h2,
+                                                                   stride1, stride2, weights, biases, output,
+                                                                   output_stride);
+    }
+
+    for (; y < rect.y + rect.h; ++y) {
+        ConvolutionConcat3x3_1Direct_2GEMM_ProcessRows<1, S, InChannels1, InChannels2, InChannels3, InChannels4,
+                                                       PxPitch2, OutChannels, PreOp1, PreOp2, PreOp3, PreOp4, PostOp,
+                                                       Activation>(y, data1, data2, data3, data4, rect, w, h, w2, h2,
+                                                                   stride1, stride2, weights, biases, output,
+                                                                   output_stride);
     }
 }
 

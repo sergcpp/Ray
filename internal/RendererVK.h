@@ -2,11 +2,13 @@
 
 #include "../RendererBase.h"
 #include "Core.h"
+#include "UNetFilter.h"
 
 #include "Vk/BufferVK.h"
 #include "Vk/ContextVK.h"
 #include "Vk/PipelineVK.h"
 #include "Vk/ProgramVK.h"
+#include "Vk/SamplerVK.h"
 #include "Vk/ShaderVK.h"
 #include "Vk/TextureVK.h"
 
@@ -55,6 +57,14 @@ class Renderer : public RendererBase {
         sh_sort_init_count_table_, sh_sort_write_sorted_hashes_, sh_sort_reorder_rays_;
     Shader sh_intersect_scene_rgen_, sh_intersect_scene_rchit_, sh_intersect_scene_rmiss_,
         sh_intersect_scene_indirect_rgen_;
+    Shader sh_convolution_DirectImg_3_32_, sh_convolution_DirectImg_6_32_, sh_convolution_DirectImg_9_32_,
+        sh_convolution_Direct_32_32_Downsample_, sh_convolution_Direct_32_48_Downsample_,
+        sh_convolution_Direct_48_64_Downsample_, sh_convolution_Direct_64_80_Downsample_, sh_convolution_Direct_64_64_,
+        sh_convolution_Direct_64_32_, sh_convolution_Direct_80_96_, sh_convolution_Direct_96_96_,
+        sh_convolution_Direct_112_112_, sh_convolution_concat_Direct_96_64_112_,
+        sh_convolution_concat_Direct_112_48_96_, sh_convolution_concat_Direct_96_32_64_,
+        sh_convolution_concat_Direct_64_3_64_, sh_convolution_concat_Direct_64_6_64_,
+        sh_convolution_concat_Direct_64_9_64_, sh_convolution_Direct_32_3_img_;
 
     Program prog_prim_rays_gen_simple_, prog_prim_rays_gen_adaptive_, prog_intersect_scene_,
         prog_intersect_scene_indirect_, prog_intersect_area_lights_, prog_shade_primary_, prog_shade_primary_b_,
@@ -65,6 +75,14 @@ class Renderer : public RendererBase {
     Program prog_sort_hash_rays_, prog_sort_exclusive_scan_, prog_sort_inclusive_scan_, prog_sort_add_partial_sums_,
         prog_sort_init_count_table_, prog_sort_write_sorted_hashes_, prog_sort_reorder_rays_;
     Program prog_intersect_scene_rtpipe_, prog_intersect_scene_indirect_rtpipe_;
+    Program prog_convolution_DirectImg_3_32_, prog_convolution_DirectImg_6_32_, prog_convolution_DirectImg_9_32_,
+        prog_convolution_Direct_32_32_Downsample_, prog_convolution_Direct_32_48_Downsample_,
+        prog_convolution_Direct_48_64_Downsample_, prog_convolution_Direct_64_80_Downsample_,
+        prog_convolution_Direct_64_64_, prog_convolution_Direct_64_32_, prog_convolution_Direct_80_96_,
+        prog_convolution_Direct_96_96_, prog_convolution_Direct_112_112_, prog_convolution_concat_Direct_96_64_112_,
+        prog_convolution_concat_Direct_112_48_96_, prog_convolution_concat_Direct_96_32_64_,
+        prog_convolution_concat_Direct_64_3_64_, prog_convolution_concat_Direct_64_6_64_,
+        prog_convolution_concat_Direct_64_9_64_, prog_convolution_Direct_32_3_img_;
 
     Pipeline pi_prim_rays_gen_simple_, pi_prim_rays_gen_adaptive_, pi_intersect_scene_, pi_intersect_scene_indirect_,
         pi_intersect_area_lights_, pi_shade_primary_, pi_shade_primary_b_, pi_shade_primary_n_, pi_shade_primary_bn_,
@@ -74,9 +92,18 @@ class Renderer : public RendererBase {
     Pipeline pi_sort_hash_rays_, pi_sort_exclusive_scan_, pi_sort_inclusive_scan_, pi_sort_add_partial_sums_,
         pi_sort_init_count_table_, pi_sort_write_sorted_hashes_, pi_sort_reorder_rays_, pi_intersect_scene_rtpipe_,
         pi_intersect_scene_indirect_rtpipe_;
+    Pipeline pi_convolution_DirectImg_3_32_, pi_convolution_DirectImg_6_32_, pi_convolution_DirectImg_9_32_,
+        pi_convolution_Direct_32_32_Downsample_, pi_convolution_Direct_32_48_Downsample_,
+        pi_convolution_Direct_48_64_Downsample_, pi_convolution_Direct_64_80_Downsample_, pi_convolution_Direct_64_64_,
+        pi_convolution_Direct_64_32_, pi_convolution_Direct_80_96_, pi_convolution_Direct_96_96_,
+        pi_convolution_Direct_112_112_, pi_convolution_concat_Direct_96_64_112_,
+        pi_convolution_concat_Direct_112_48_96_, pi_convolution_concat_Direct_96_32_64_,
+        pi_convolution_concat_Direct_64_3_64_, pi_convolution_concat_Direct_64_6_64_,
+        pi_convolution_concat_Direct_64_9_64_, pi_convolution_Direct_32_3_img_;
 
     int w_ = 0, h_ = 0;
-    bool use_hwrt_ = false, use_bindless_ = false, use_tex_compression_ = false;
+    bool use_hwrt_ = false, use_bindless_ = false, use_tex_compression_ = false, use_fp16_ = false,
+         use_nv_coop_matrix_ = false;
 
     std::vector<uint16_t> permutations_;
     int loaded_halton_;
@@ -86,6 +113,8 @@ class Renderer : public RendererBase {
     Texture2D temp_buf1_, base_color_buf_;
     Texture2D temp_depth_normals_buf_, depth_normals_buf_;
     Texture2D required_samples_buf_;
+
+    Sampler zero_border_sampler_;
 
     Texture3D tonemap_lut_;
     eViewTransform loaded_view_transform_ = eViewTransform::Standard;
@@ -102,6 +131,15 @@ class Renderer : public RendererBase {
 
     const color_rgba_t *frame_pixels_ = nullptr, *base_color_pixels_ = nullptr, *depth_normals_pixels_ = nullptr;
     std::vector<shl1_data_t> sh_data_host_;
+
+    Buffer unet_weights_[3];
+    unet_weight_offsets_t unet_offsets_[3];
+    bool unet_alias_memory_ = true;
+    Buffer unet_tensors_heap_;
+    unet_filter_tensors_t unet_tensors_ = {};
+    SmallVector<int, 2> unet_alias_dependencies_[UNetFilterPasses];
+    bool InitUNetPipelines();
+    void UpdateUNetFilterMemory(CommandBuffer cmd_buf);
 
     struct {
         eViewTransform view_transform;
@@ -182,6 +220,32 @@ class Renderer : public RendererBase {
                           float damping, const Texture2D &base_color_img, float base_color_weight,
                           const Texture2D &depth_normals_img, float depth_normals_weight, const Texture2D &out_raw_img,
                           eViewTransform view_transform, float inv_gamma, const rect_t &rect, const Texture2D &out_img);
+    void kernel_Convolution(CommandBuffer cmd_buf, int in_channels, int out_channels, const Texture2D &img_buf1,
+                            const Texture2D &img_buf2, const Texture2D &img_buf3, const Sampler &sampler,
+                            const rect_t &rect, int w, int h, const Buffer &weights, uint32_t weights_offset,
+                            uint32_t biases_offset, const Buffer &out_buf, uint32_t output_offset, int output_stride,
+                            const Texture2D &out_debug_img = {});
+    void kernel_Convolution(CommandBuffer cmd_buf, int in_channels, int out_channels, const Buffer &input_buf,
+                            uint32_t input_offset, int input_stride, const rect_t &rect, int w, int h,
+                            const Buffer &weights, uint32_t weights_offset, uint32_t biases_offset,
+                            const Buffer &out_buf, uint32_t output_offset, int output_stride, bool downsample,
+                            const Texture2D &out_debug_img = {});
+    void kernel_Convolution(CommandBuffer cmd_buf, int in_channels, int out_channels, const Buffer &input_buf,
+                            uint32_t input_offset, int input_stride, float inv_gamma, const rect_t &rect, int w, int h,
+                            const Buffer &weights, uint32_t weights_offset, uint32_t biases_offset,
+                            const Texture2D &out_img, const Texture2D &out_tonemapped_img);
+    void kernel_ConvolutionConcat(CommandBuffer cmd_buf, int in_channels1, int in_channels2, int out_channels,
+                                  const Buffer &input_buf1, uint32_t input_offset1, int input_stride1, bool upscale1,
+                                  const Buffer &input_buf2, uint32_t input_offset2, int input_stride2,
+                                  const rect_t &rect, int w, int h, const Buffer &weights, uint32_t weights_offset,
+                                  uint32_t biases_offset, const Buffer &out_buf, uint32_t output_offset,
+                                  int output_stride, const Texture2D &out_debug_img = {});
+    void kernel_ConvolutionConcat(CommandBuffer cmd_buf, int in_channels1, int in_channels2, int out_channels,
+                                  const Buffer &input_buf1, uint32_t input_offset1, int input_stride1, bool upscale1,
+                                  const Texture2D &img_buf1, const Texture2D &img_buf2, const Texture2D &img_buf3,
+                                  const Sampler &sampler, const rect_t &rect, int w, int h, const Buffer &weights,
+                                  uint32_t weights_offset, uint32_t biases_offset, const Buffer &out_buf,
+                                  uint32_t output_offset, int output_stride, const Texture2D &out_debug_img = {});
     void kernel_SortHashRays(CommandBuffer cmd_buf, const Buffer &indir_args, const Buffer &rays,
                              const Buffer &counters, const float root_min[3], const float cell_size[3],
                              const Buffer &out_hashes);
@@ -251,9 +315,12 @@ class Renderer : public RendererBase {
     SceneBase *CreateScene() override;
     void RenderScene(const SceneBase *scene, RegionContext &region) override;
     void DenoiseImage(const RegionContext &region) override;
+    void DenoiseImage(int pass, const RegionContext &region) override;
 
     void GetStats(stats_t &st) override { st = stats_; }
     void ResetStats() override { stats_ = {0}; }
+
+    void InitUNetFilter(bool alias_memory, unet_filter_properties_t &out_props) override;
 };
 } // namespace Vk
 } // namespace Ray

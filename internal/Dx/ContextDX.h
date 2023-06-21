@@ -8,6 +8,7 @@
 #define COUNT_OF(x) ((sizeof(x) / sizeof(0 [x])) / ((size_t)(!(sizeof(x) % sizeof(0 [x])))))
 
 struct ID3D12Device;
+struct ID3D12Device4;
 struct ID3D12Device5;
 struct ID3D12CommandQueue;
 struct ID3D12CommandAllocator;
@@ -43,6 +44,7 @@ class Context {
     unsigned long debug_callback_cookie_ = {};
 #endif
     ID3D12Device *device_ = {};
+    ID3D12Device4 *device4_ = {};
     ID3D12Device5 *device5_ = {};
     std::string device_name_;
 
@@ -53,6 +55,8 @@ class Context {
     // bool dynamic_rendering_supported_ = false;
 
     bool rgb8_unorm_is_supported_ = false;
+
+    bool fp16_supported_ = false;
 
     ID3D12CommandQueue *command_queue_ = {};
 
@@ -99,6 +103,8 @@ class Context {
     bool ray_query_supported() const { return ray_query_supported_; }
 
     bool rgb8_unorm_is_supported() const { return rgb8_unorm_is_supported_; }
+
+    bool fp16_supported() const { return fp16_supported_; }
 
     bool image_blit_supported() const { return false; }
 

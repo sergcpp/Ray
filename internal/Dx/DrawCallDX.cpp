@@ -140,7 +140,8 @@ void Ray::Dx::PrepareDescriptors(Context *ctx, ID3D12GraphicsCommandList *cmd_bu
                 }
             }
         } else if (b.trg == eBindTarget::Tex3D) {
-            D3D12_CPU_DESCRIPTOR_HANDLE src_handle = b.handle.tex3d->handle().views_ref.heap->GetCPUDescriptorHandleForHeapStart();
+            D3D12_CPU_DESCRIPTOR_HANDLE src_handle =
+                b.handle.tex3d->handle().views_ref.heap->GetCPUDescriptorHandleForHeapStart();
             src_handle.ptr += CBV_SRV_UAV_INCR * b.handle.tex3d->handle().views_ref.offset;
 
             D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = cbv_srv_uav_cpu_handle;
@@ -148,24 +149,57 @@ void Ray::Dx::PrepareDescriptors(Context *ctx, ID3D12GraphicsCommandList *cmd_bu
 
             device->CopyDescriptorsSimple(1, dest_handle, src_handle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
         } else if (b.trg == eBindTarget::SBufRO) {
-            D3D12_CPU_DESCRIPTOR_HANDLE src_handle =
-                b.handle.buf->handle().srv_uav_ref.heap->GetCPUDescriptorHandleForHeapStart();
-            src_handle.ptr += CBV_SRV_UAV_INCR * b.handle.buf->handle().srv_uav_ref.offset;
+            if (b.offset == 0) {
+                D3D12_CPU_DESCRIPTOR_HANDLE src_handle =
+                    b.handle.buf->handle().srv_uav_ref.heap->GetCPUDescriptorHandleForHeapStart();
+                src_handle.ptr += CBV_SRV_UAV_INCR * b.handle.buf->handle().srv_uav_ref.offset;
 
-            D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = cbv_srv_uav_cpu_handle;
-            dest_handle.ptr += CBV_SRV_UAV_INCR * descr_index;
+                D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = cbv_srv_uav_cpu_handle;
+                dest_handle.ptr += CBV_SRV_UAV_INCR * descr_index;
 
-            device->CopyDescriptorsSimple(1, dest_handle, src_handle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+                device->CopyDescriptorsSimple(1, dest_handle, src_handle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+            } else {
+                D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
+                srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+                srv_desc.Format = DXGI_FORMAT_R32_TYPELESS;
+                srv_desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+                srv_desc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_RAW;
+                assert((b.offset % 4) == 0);
+                srv_desc.Buffer.FirstElement = b.offset / sizeof(uint32_t);
+                srv_desc.Buffer.NumElements = (b.size ? b.size : (b.handle.buf->size() - b.offset)) / sizeof(uint32_t);
+                srv_desc.Buffer.StructureByteStride = 0;
+
+                D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = cbv_srv_uav_cpu_handle;
+                dest_handle.ptr += CBV_SRV_UAV_INCR * descr_index;
+
+                device->CreateShaderResourceView(b.handle.buf->dx_resource(), &srv_desc, dest_handle);
+            }
         } else if (b.trg == eBindTarget::SBufRW) {
-            assert(b.handle.buf->handle().srv_uav_ref.count == 2);
-            D3D12_CPU_DESCRIPTOR_HANDLE src_handle =
-                b.handle.buf->handle().srv_uav_ref.heap->GetCPUDescriptorHandleForHeapStart();
-            src_handle.ptr += CBV_SRV_UAV_INCR * (b.handle.buf->handle().srv_uav_ref.offset + 1);
+            if (b.offset == 0) {
+                assert(b.handle.buf->handle().srv_uav_ref.count == 2);
+                D3D12_CPU_DESCRIPTOR_HANDLE src_handle =
+                    b.handle.buf->handle().srv_uav_ref.heap->GetCPUDescriptorHandleForHeapStart();
+                src_handle.ptr += CBV_SRV_UAV_INCR * (b.handle.buf->handle().srv_uav_ref.offset + 1);
 
-            D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = cbv_srv_uav_cpu_handle;
-            dest_handle.ptr += CBV_SRV_UAV_INCR * descr_index;
+                D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = cbv_srv_uav_cpu_handle;
+                dest_handle.ptr += CBV_SRV_UAV_INCR * descr_index;
 
-            device->CopyDescriptorsSimple(1, dest_handle, src_handle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+                device->CopyDescriptorsSimple(1, dest_handle, src_handle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+            } else {
+                D3D12_UNORDERED_ACCESS_VIEW_DESC uav_desc = {};
+                uav_desc.Format = DXGI_FORMAT_R32_TYPELESS;
+                uav_desc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+                uav_desc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_RAW;
+                assert((b.offset % 4) == 0);
+                uav_desc.Buffer.FirstElement = b.offset / sizeof(uint32_t);
+                uav_desc.Buffer.NumElements = (b.size ? b.size : (b.handle.buf->size() - b.offset)) / sizeof(uint32_t);
+                uav_desc.Buffer.StructureByteStride = 0;
+
+                D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = cbv_srv_uav_cpu_handle;
+                dest_handle.ptr += CBV_SRV_UAV_INCR * descr_index;
+
+                device->CreateUnorderedAccessView(b.handle.buf->dx_resource(), nullptr, &uav_desc, dest_handle);
+            }
         } else if (b.trg == eBindTarget::Image) {
             assert(b.handle.tex->handle().views_ref.count == 2);
             D3D12_CPU_DESCRIPTOR_HANDLE src_handle =
@@ -177,8 +211,7 @@ void Ray::Dx::PrepareDescriptors(Context *ctx, ID3D12GraphicsCommandList *cmd_bu
 
             device->CopyDescriptorsSimple(1, dest_handle, src_handle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
         } else if (b.trg == eBindTarget::Sampler) {
-            D3D12_CPU_DESCRIPTOR_HANDLE src_handle =
-                b.handle.sampler->ref().heap->GetCPUDescriptorHandleForHeapStart();
+            D3D12_CPU_DESCRIPTOR_HANDLE src_handle = b.handle.sampler->ref().heap->GetCPUDescriptorHandleForHeapStart();
             src_handle.ptr += SAMPLER_INCR * b.handle.sampler->ref().offset;
 
             D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = sampler_cpu_handle;
@@ -273,7 +306,8 @@ void Ray::Dx::DispatchComputeIndirect(ID3D12GraphicsCommandList *cmd_buf, const 
 
     PrepareDescriptors(ctx, cmd_buf, bindings, uniform_data, uniform_data_len, comp_pipeline.prog(), descr_alloc, log);
 
-    cmd_buf->ExecuteIndirect(ctx->indirect_dispatch_cmd_signature(), 1, indir_buf.dx_resource(), indir_buf_offset, nullptr, 0);
+    cmd_buf->ExecuteIndirect(ctx->indirect_dispatch_cmd_signature(), 1, indir_buf.dx_resource(), indir_buf_offset,
+                             nullptr, 0);
 }
 
 /*void Ray::Dx::TraceRays(VkCommandBuffer cmd_buf, const Pipeline &rt_pipeline, const uint32_t dims[3],

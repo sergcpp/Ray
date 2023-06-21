@@ -38,7 +38,7 @@ def do_conversion(content: bytes) -> str:
 def bin2header(data, file_name):
     file_name = file_name.replace(os.sep, '/')
     ret = "/* Contents of file " + file_name + " */\n"
-    ret += "const long int " + file_name.replace('/', '_').replace('.', '_') + "_size = " + str(len(data)) + ";\n"
+    ret += "const int " + file_name.replace('/', '_').replace('.', '_') + "_size = " + str(len(data)) + ";\n"
     ret += "const unsigned char " + file_name.replace('/', '_').replace('.', '_') + "[" + str(len(data)) + "] = {\n    "
     ret += do_conversion(data)
     ret += "\n};\n"
@@ -64,8 +64,10 @@ def compile_shader(src_name, spv_name=None, glsl_version=None, target_env="spirv
         else:
             spirv_opt_result = subprocess.run(os.path.join(spirv_base_path(), "spirv-opt.sh internal/shaders/output/" + spv_name + " -o internal/shaders/output/" + spv_name), shell=True, capture_output=True, text=True, check=False)
     if ENABLE_DXC_COMPILATION == True and hlsl_profile != None:
-        spirv_cross_result = subprocess.run(os.path.join(spirv_base_path(), "spirv-cross internal/shaders/output/" + spv_name + " --hlsl --shader-model 60 --output internal/shaders/output/" + hlsl_name), shell=True, capture_output=True, text=True, check=False)
-        dxc_result = subprocess.run(os.path.join(dxc_base_path(), "dxc -T " + hlsl_profile + " internal/shaders/output/" + hlsl_name + " -Fo internal/shaders/output/" + cso_name), shell=True, capture_output=True, text=True, check=False)
+        spirv_cross_flags = "--shader-model 62 --hlsl-enable-16bit-types" if hlsl_profile == "cs_6_2" else "--shader-model 60"
+        spirv_cross_result = subprocess.run(os.path.join(spirv_base_path(), "spirv-cross internal/shaders/output/" + spv_name + " --hlsl " + spirv_cross_flags + " --output internal/shaders/output/" + hlsl_name), shell=True, capture_output=True, text=True, check=False)
+        dxc_flags = "-enable-16bit-types" if hlsl_profile == "cs_6_2" else ""
+        dxc_result = subprocess.run(os.path.join(dxc_base_path(), "dxc " + dxc_flags + " -T " + hlsl_profile + " internal/shaders/output/" + hlsl_name + " -Fo internal/shaders/output/" + cso_name), shell=True, capture_output=True, text=True, check=False)
 
         if dxc_result.returncode == 0:
             app_refl_result = subprocess.run(os.path.join(dxc_base_path(), "append_refl_data internal/shaders/output/", cso_name), shell=True, capture_output=True, text=True, check=False)
@@ -172,6 +174,65 @@ def main():
     # Other
     compile_shader_async(src_name="prepare_indir_args.comp.glsl")
     compile_shader_async(src_name="debug_rt.comp.glsl", target_env="spirv1.4", hlsl_profile="cs_6_5")
+
+    # Convolution
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_Img_3_32.comp.spv", defines="-DIMG_INPUT1=1 -DIN_CHANNELS1=3 -DOUT_CHANNELS=32 -DHDR_TRANSFER1=1")
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_Img_3_32_fp16.comp.spv", defines="-DIMG_INPUT1=1 -DIN_CHANNELS1=3 -DOUT_CHANNELS=32 -DHDR_TRANSFER1=1 -DUSE_FP16=1", hlsl_profile="cs_6_2")
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_Img_3_32_nv.comp.spv", defines="-DIMG_INPUT1=1 -DIN_CHANNELS1=3 -DOUT_CHANNELS=32 -DHDR_TRANSFER1=1 -DUSE_FP16=1 -DUSE_NV_COOP_MATRIX=1", hlsl_profile=None)
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_Img_6_32.comp.spv", defines="-DIMG_INPUT1=1 -DIMG_INPUT2=1 -DIN_CHANNELS1=6 -DOUT_CHANNELS=32 -DHDR_TRANSFER1=1")
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_Img_6_32_fp16.comp.spv", defines="-DIMG_INPUT1=1 -DIMG_INPUT2=1 -DIN_CHANNELS1=6 -DOUT_CHANNELS=32 -DHDR_TRANSFER1=1 -DUSE_FP16=1", hlsl_profile="cs_6_2")
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_Img_6_32_nv.comp.spv", defines="-DIMG_INPUT1=1 -DIMG_INPUT2=1 -DIN_CHANNELS1=6 -DOUT_CHANNELS=32 -DHDR_TRANSFER1=1 -DUSE_FP16=1 -DUSE_NV_COOP_MATRIX=1", hlsl_profile=None)
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_Img_9_32.comp.spv", defines="-DIMG_INPUT1=1 -DIMG_INPUT2=1 -DIMG_INPUT3=1 -DIN_CHANNELS1=9 -DOUT_CHANNELS=32 -DHDR_TRANSFER1=1 -DPOS_NORMALIZE3=1")
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_Img_9_32_fp16.comp.spv", defines="-DIMG_INPUT1=1 -DIMG_INPUT2=1 -DIMG_INPUT3=1 -DIN_CHANNELS1=9 -DOUT_CHANNELS=32 -DHDR_TRANSFER1=1 -DPOS_NORMALIZE3=1 -DUSE_FP16=1", hlsl_profile="cs_6_2")
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_Img_9_32_nv.comp.spv", defines="-DIMG_INPUT1=1 -DIMG_INPUT2=1 -DIMG_INPUT3=1 -DIN_CHANNELS1=9 -DOUT_CHANNELS=32 -DHDR_TRANSFER1=1 -DPOS_NORMALIZE3=1 -DUSE_FP16=1 -DUSE_NV_COOP_MATRIX=1", hlsl_profile=None)
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_32_32_Downsample.comp.spv", defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=32 -DOUT_CHANNELS=32 -DDOWNSAMPLE=1")
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_32_32_Downsample_fp16.comp.spv", defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=32 -DOUT_CHANNELS=32 -DDOWNSAMPLE=1 -DUSE_FP16=1", hlsl_profile="cs_6_2")
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_32_32_Downsample_nv.comp.spv", defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=32 -DOUT_CHANNELS=32 -DDOWNSAMPLE=1 -DUSE_FP16=1 -DUSE_NV_COOP_MATRIX=1", hlsl_profile=None)
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_32_48_Downsample.comp.spv", defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=32 -DOUT_CHANNELS=48 -DDOWNSAMPLE=1")
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_32_48_Downsample_fp16.comp.spv", defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=32 -DOUT_CHANNELS=48 -DDOWNSAMPLE=1 -DUSE_FP16=1", hlsl_profile="cs_6_2")
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_32_48_Downsample_nv.comp.spv", defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=32 -DOUT_CHANNELS=48 -DDOWNSAMPLE=1 -DUSE_FP16=1 -DUSE_NV_COOP_MATRIX=1", hlsl_profile=None)
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_48_64_Downsample.comp.spv", defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=48 -DOUT_CHANNELS=64 -DDOWNSAMPLE=1")
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_48_64_Downsample_fp16.comp.spv", defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=48 -DOUT_CHANNELS=64 -DDOWNSAMPLE=1 -DUSE_FP16=1", hlsl_profile="cs_6_2")
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_48_64_Downsample_nv.comp.spv", defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=48 -DOUT_CHANNELS=64 -DDOWNSAMPLE=1 -DUSE_FP16=1 -DUSE_NV_COOP_MATRIX=1", hlsl_profile=None)
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_64_80_Downsample.comp.spv", defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=64 -DOUT_CHANNELS=80 -DDOWNSAMPLE=1")
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_64_80_Downsample_fp16.comp.spv", defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=64 -DOUT_CHANNELS=80 -DDOWNSAMPLE=1 -DUSE_FP16=1", hlsl_profile="cs_6_2")
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_64_80_Downsample_nv.comp.spv", defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=64 -DOUT_CHANNELS=80 -DDOWNSAMPLE=1 -DUSE_FP16=1 -DUSE_NV_COOP_MATRIX=1", hlsl_profile=None)
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_64_64.comp.spv", defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=64 -DOUT_CHANNELS=64")
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_64_64_fp16.comp.spv", defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=64 -DOUT_CHANNELS=64 -DUSE_FP16=1", hlsl_profile="cs_6_2")
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_64_64_nv.comp.spv", defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=64 -DOUT_CHANNELS=64 -DUSE_FP16=1 -DUSE_NV_COOP_MATRIX=1", hlsl_profile=None)
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_64_32.comp.spv", defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=64 -DOUT_CHANNELS=32")
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_64_32_fp16.comp.spv", defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=64 -DOUT_CHANNELS=32 -DUSE_FP16=1", hlsl_profile="cs_6_2")
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_64_32_nv.comp.spv", defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=64 -DOUT_CHANNELS=32 -DUSE_FP16=1 -DUSE_NV_COOP_MATRIX=1", hlsl_profile=None)
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_80_96.comp.spv", defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=80 -DOUT_CHANNELS=96")
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_80_96_fp16.comp.spv", defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=80 -DOUT_CHANNELS=96 -DUSE_FP16=1", hlsl_profile="cs_6_2")
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_80_96_nv.comp.spv", defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=80 -DOUT_CHANNELS=96 -DUSE_FP16=1 -DUSE_NV_COOP_MATRIX=1", hlsl_profile=None)
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_96_96.comp.spv", defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=96 -DOUT_CHANNELS=96")
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_96_96_fp16.comp.spv", defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=96 -DOUT_CHANNELS=96 -DUSE_FP16=1", hlsl_profile="cs_6_2")
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_96_96_nv.comp.spv", defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=96 -DOUT_CHANNELS=96 -DUSE_FP16=1 -DUSE_NV_COOP_MATRIX=1", hlsl_profile=None)
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_112_112.comp.spv", defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=112 -DOUT_CHANNELS=112")
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_112_112_fp16.comp.spv", defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=112 -DOUT_CHANNELS=112 -DUSE_FP16=1", hlsl_profile="cs_6_2")
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_112_112_nv.comp.spv", defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=112 -DOUT_CHANNELS=112 -DUSE_FP16=1 -DUSE_NV_COOP_MATRIX=1", hlsl_profile=None)
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_32_3_img.comp.spv", defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=32 -DOUT_CHANNELS=3 -DOUT_IMG=1 -DHDR_TRANSFER1=1 -DTONEMAP=1")
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_32_3_img_fp16.comp.spv", defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=32 -DOUT_CHANNELS=3 -DOUT_IMG=1 -DHDR_TRANSFER1=1 -DTONEMAP=1 -DUSE_FP16=1", hlsl_profile="cs_6_2")
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_32_3_img_nv.comp.spv", defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=32 -DOUT_CHANNELS=3 -DOUT_IMG=1 -DHDR_TRANSFER1=1 -DTONEMAP=1 -DUSE_FP16=1 -DUSE_NV_COOP_MATRIX=1", hlsl_profile=None)
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_concat_96_64_112.comp.spv", defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=96 -DUPSCALE1=1 -DBUF_INPUT2=1 -DIN_CHANNELS2=64 -DOUT_CHANNELS=112")
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_concat_96_64_112_fp16.comp.spv", defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=96 -DUPSCALE1=1 -DBUF_INPUT2=1 -DIN_CHANNELS2=64 -DOUT_CHANNELS=112 -DUSE_FP16=1", hlsl_profile="cs_6_2")
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_concat_96_64_112_nv.comp.spv", defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=96 -DUPSCALE1=1 -DBUF_INPUT2=1 -DIN_CHANNELS2=64 -DOUT_CHANNELS=112 -DUSE_FP16=1 -DUSE_NV_COOP_MATRIX=1", hlsl_profile=None)
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_concat_112_48_96.comp.spv", defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=112 -DUPSCALE1=1 -DBUF_INPUT2=1 -DIN_CHANNELS2=48 -DOUT_CHANNELS=96")
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_concat_112_48_96_fp16.comp.spv", defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=112 -DUPSCALE1=1 -DBUF_INPUT2=1 -DIN_CHANNELS2=48 -DOUT_CHANNELS=96 -DUSE_FP16=1", hlsl_profile="cs_6_2")
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_concat_112_48_96_nv.comp.spv", defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=112 -DUPSCALE1=1 -DBUF_INPUT2=1 -DIN_CHANNELS2=48 -DOUT_CHANNELS=96 -DUSE_FP16=1 -DUSE_NV_COOP_MATRIX=1", hlsl_profile=None)
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_concat_96_32_64.comp.spv", defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=96 -DUPSCALE1=1 -DBUF_INPUT2=1 -DIN_CHANNELS2=32 -DOUT_CHANNELS=64")
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_concat_96_32_64_fp16.comp.spv", defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=96 -DUPSCALE1=1 -DBUF_INPUT2=1 -DIN_CHANNELS2=32 -DOUT_CHANNELS=64 -DUSE_FP16=1", hlsl_profile="cs_6_2")
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_concat_96_32_64_nv.comp.spv", defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=96 -DUPSCALE1=1 -DBUF_INPUT2=1 -DIN_CHANNELS2=32 -DOUT_CHANNELS=64 -DUSE_FP16=1 -DUSE_NV_COOP_MATRIX=1", hlsl_profile=None)
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_concat_64_3_64.comp.spv", defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=64 -DUPSCALE1=1 -DIMG_INPUT2=1 -DIN_CHANNELS2=3 -DOUT_CHANNELS=64 -DHDR_TRANSFER2=1")
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_concat_64_3_64_fp16.comp.spv", defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=64 -DUPSCALE1=1 -DIMG_INPUT2=1 -DIN_CHANNELS2=3 -DOUT_CHANNELS=64 -DHDR_TRANSFER2=1 -DUSE_FP16=1", hlsl_profile="cs_6_2")
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_concat_64_3_64_nv.comp.spv", defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=64 -DUPSCALE1=1 -DIMG_INPUT2=1 -DIN_CHANNELS2=3 -DOUT_CHANNELS=64 -DHDR_TRANSFER2=1 -DUSE_FP16=1 -DUSE_NV_COOP_MATRIX=1", hlsl_profile=None)
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_concat_64_6_64.comp.spv", defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=64 -DUPSCALE1=1 -DIMG_INPUT2=1 -DIMG_INPUT3=1 -DIN_CHANNELS2=6 -DOUT_CHANNELS=64 -DHDR_TRANSFER2=1")
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_concat_64_6_64_fp16.comp.spv", defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=64 -DUPSCALE1=1 -DIMG_INPUT2=1 -DIMG_INPUT3=1 -DIN_CHANNELS2=6 -DOUT_CHANNELS=64 -DHDR_TRANSFER2=1 -DUSE_FP16=1", hlsl_profile="cs_6_2")
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_concat_64_6_64_nv.comp.spv", defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=64 -DUPSCALE1=1 -DIMG_INPUT2=1 -DIMG_INPUT3=1 -DIN_CHANNELS2=6 -DOUT_CHANNELS=64 -DHDR_TRANSFER2=1 -DUSE_FP16=1 -DUSE_NV_COOP_MATRIX=1", hlsl_profile=None)
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_concat_64_9_64.comp.spv", defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=64 -DUPSCALE1=1 -DIMG_INPUT2=1 -DIMG_INPUT3=1 -DIMG_INPUT4=1 -DIN_CHANNELS2=9 -DOUT_CHANNELS=64 -DHDR_TRANSFER2=1 -DPOS_NORMALIZE4=1")
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_concat_64_9_64_fp16.comp.spv", defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=64 -DUPSCALE1=1 -DIMG_INPUT2=1 -DIMG_INPUT3=1 -DIMG_INPUT4=1 -DIN_CHANNELS2=9 -DOUT_CHANNELS=64 -DHDR_TRANSFER2=1 -DPOS_NORMALIZE4=1 -DUSE_FP16=1", hlsl_profile="cs_6_2")
+    compile_shader_async(src_name="convolution.comp.glsl", spv_name="convolution_concat_64_9_64_nv.comp.spv", defines="-DBUF_INPUT1=1 -DIN_CHANNELS1=64 -DUPSCALE1=1 -DIMG_INPUT2=1 -DIMG_INPUT3=1 -DIMG_INPUT4=1 -DIN_CHANNELS2=9 -DOUT_CHANNELS=64 -DHDR_TRANSFER2=1 -DPOS_NORMALIZE4=1 -DUSE_FP16=1 -DUSE_NV_COOP_MATRIX=1", hlsl_profile=None)
 
 if __name__ == "__main__":
     main()

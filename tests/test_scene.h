@@ -24,6 +24,8 @@ enum class eTestScene {
     Refraction_Plane
 };
 
+enum class eDenoiseMethod { None, NLM, NLM_b, NLM_bn, UNet, UNet_b, UNet_bn };
+
 namespace Ray {
 class RendererBase;
 class SceneBase;
@@ -67,8 +69,9 @@ class LogErr final : public Ray::ILog {
 extern LogErr g_log_err;
 
 template <typename MatDesc>
-void setup_test_scene(Ray::SceneBase &scene, bool output_sh, int min_samples, float variance_threshold,
-                      const MatDesc &main_mat_desc, const char *textures[], eTestScene test_scene);
+void setup_test_scene(Ray::SceneBase &scene, bool output_base_color, bool output_normals, int min_samples,
+                      float variance_threshold, const MatDesc &main_mat_desc, const char *textures[],
+                      eTestScene test_scene);
 
 void schedule_render_jobs(Ray::RendererBase &renderer, const Ray::SceneBase *scene, const Ray::settings_t &settings,
-                          int max_samples, bool denoise, bool partial, const char *log_str);
+                          int max_samples, eDenoiseMethod denoise, bool partial, const char *log_str);

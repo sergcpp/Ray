@@ -104,7 +104,7 @@ VkDescriptorSet Ray::Vk::PrepareDescriptorSet(Context *ctx, VkDescriptorSetLayou
             auto &sbuf = sbuf_infos[descr_sizes.sbuf_count++];
             sbuf.buffer = b.handle.buf->vk_handle();
             sbuf.offset = b.offset;
-            sbuf.range = b.offset ? b.size : VK_WHOLE_SIZE;
+            sbuf.range = (b.offset || b.size) ? (b.size ? b.size : (b.handle.buf->size() - b.offset)) : VK_WHOLE_SIZE;
 
             auto &new_write = descr_writes.emplace_back();
             new_write = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
