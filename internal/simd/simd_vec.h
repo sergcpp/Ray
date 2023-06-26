@@ -436,6 +436,12 @@ template <typename T, int S> class simd_vec {
         return temp;
     }
 
+    force_inline T hsum() const {
+        T temp = {0};
+        UNROLLED_FOR_S(i, S, { temp += comp_[i]; })
+        return temp;
+    }
+
     force_inline void store_to(T *f) const { memcpy(f, &comp_[0], S * sizeof(T)); }
 
     force_inline void store_to(T *_f, simd_mem_aligned_tag) const {
@@ -761,6 +767,8 @@ template <typename T, int S> force_inline simd_vec<T, S> log(const simd_vec<T, S
 template <typename T, int S> force_inline T length(const simd_vec<T, S> &v1) { return v1.length(); }
 
 template <typename T, int S> force_inline T length2(const simd_vec<T, S> &v1) { return v1.length2(); }
+
+template <typename T, int S> force_inline T hsum(const simd_vec<T, S> &v1) { return v1.hsum(); }
 
 template <typename T, int S> force_inline simd_vec<T, S> fract(const simd_vec<T, S> &v1) { return v1 - floor(v1); }
 

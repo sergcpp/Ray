@@ -241,6 +241,19 @@ template <> class simd_vec<float, 4> {
         return _mm_cvtss_f32(r1);
     }
 
+    force_inline float hsum() const {
+#if defined(USE_SSE41)
+        __m128 temp = _mm_hadd_ps(vec_, vec_);
+        temp = _mm_hadd_ps(temp, temp);
+
+        return _mm_cvtss_f32(temp);
+#else
+        alignas(16) float comp[4];
+        _mm_store_ps(comp, vec_);
+        return comp[0] + comp[1] + comp[2] + comp[3];
+#endif
+    }
+
     force_inline void vectorcall store_to(float *f) const { _mm_storeu_ps(f, vec_); }
     force_inline void vectorcall store_to(float *f, simd_mem_aligned_tag) const { _mm_store_ps(f, vec_); }
 

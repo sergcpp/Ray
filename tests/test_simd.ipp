@@ -122,6 +122,8 @@ using namespace Ray::NS;
 
     simd_fvec4 v9 = {3.0f, 6.0f, 7.0f, 6.0f};
 
+    require(hsum(v9) == Approx(22.0f));
+
     auto v10 = simd_cast(v2 < v9);
 
     require(v10[0] == 0);
@@ -510,6 +512,8 @@ using namespace Ray::NS;
     require(v55[7] == Approx(0.4142));
 
     simd_fvec8 v9 = {3.0f, 6.0f, 7.0f, 6.0f, 2.0f, 12.0f, 18.0f, 0.0f};
+
+    require(hsum(v9) == Approx(54.0f));
 
     auto v10 = simd_cast(v2 < v9);
 
@@ -1083,6 +1087,8 @@ using namespace Ray::NS;
 
     simd_fvec16 v9 = {3.0f, 6.0f, 7.0f, 6.0f, 2.0f, 12.0f, 18.0f, 0.0f,
                       3.0f, 6.0f, 7.0f, 6.0f, 2.0f, 12.0f, 18.0f, 0.0f};
+
+    require(hsum(v9) == Approx(108.0f));
 
     auto v10 = simd_cast(v2 < v9);
 

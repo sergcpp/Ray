@@ -234,6 +234,12 @@ template <> class simd_vec<float, 4> {
         return temp;
     }
 
+    force_inline float hsum() const {
+        alignas(16) float comp[4];
+        vst1q_f32(comp, vec_);
+        return comp[0] + comp[1] + comp[2] + comp[3];
+    }
+
     force_inline void store_to(float *f) const { vst1q_f32(f, vec_); }
     force_inline void store_to(float *f, simd_mem_aligned_tag) const {
         float *_f = (float *)__builtin_assume_aligned(f, 16);
