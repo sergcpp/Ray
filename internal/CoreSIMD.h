@@ -2183,7 +2183,7 @@ void Ray::NS::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, i
         for (int x = r.x; x < r.x + r.w; x += DimX) {
             ray_data_t<S> &out_r = out_rays[i++];
 
-            const simd_ivec<S> ixx = x + off_x, iyy = y + off_y;
+            const simd_ivec<S> ixx = min(x + off_x, w - 1), iyy = min(y + off_y, h - 1);
 
             simd_ivec<S> req_samples;
             UNROLLED_FOR_S(i, S, {

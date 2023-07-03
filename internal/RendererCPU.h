@@ -14,6 +14,8 @@
 
 namespace Ray {
 class ILog;
+
+int round_up(int v, int align);
 namespace Ref {
 class SIMDPolicy {
   public:
@@ -381,11 +383,9 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase *scene, RegionC
         secondary_shadow_time{};
 
     p.hash_values.resize(p.primary_rays.size());
-    // p.head_flags.resize(rect.w * rect.h);
-    p.scan_values.resize(rect.w * rect.h);
-    p.chunks.resize(rect.w * rect.h);
-    p.chunks_temp.resize(rect.w * rect.h);
-    // p.skeleton.resize(rect.w * rect.h);
+    p.scan_values.resize(round_up(rect.w, 4) * round_up(rect.h, 4));
+    p.chunks.resize(round_up(rect.w, 4) * round_up(rect.h, 4));
+    p.chunks_temp.resize(round_up(rect.w, 4) * round_up(rect.h, 4));
 
     for (int bounce = 1; bounce <= cam.pass_settings.max_total_depth && secondary_rays_count; ++bounce) {
         const auto time_secondary_sort_start = high_resolution_clock::now();
