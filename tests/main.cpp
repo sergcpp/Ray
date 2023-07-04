@@ -82,7 +82,7 @@ void test_complex_mat5(const char *arch_list[], const char *preferred_device);
 void test_complex_mat5_clipped(const char *arch_list[], const char *preferred_device);
 void test_complex_mat5_adaptive(const char *arch_list[], const char *preferred_device);
 void test_complex_mat5_regions(const char *arch_list[], const char *preferred_device);
-void test_complex_mat5_denoised(const char *arch_list[], const char *preferred_device);
+void test_complex_mat5_nlm_filter(const char *arch_list[], const char *preferred_device);
 void test_complex_mat5_dof(const char *arch_list[], const char *preferred_device);
 void test_complex_mat5_mesh_lights(const char *arch_list[], const char *preferred_device);
 void test_complex_mat5_sphere_light(const char *arch_list[], const char *preferred_device);
@@ -90,7 +90,7 @@ void test_complex_mat5_spot_light(const char *arch_list[], const char *preferred
 void test_complex_mat5_sun_light(const char *arch_list[], const char *preferred_device);
 void test_complex_mat5_hdr_light(const char *arch_list[], const char *preferred_device);
 void test_complex_mat6(const char *arch_list[], const char *preferred_device);
-void test_complex_mat6_denoised(const char *arch_list[], const char *preferred_device);
+void test_complex_mat6_nlm_filter(const char *arch_list[], const char *preferred_device);
 void test_complex_mat6_dof(const char *arch_list[], const char *preferred_device);
 void test_complex_mat6_mesh_lights(const char *arch_list[], const char *preferred_device);
 void test_complex_mat6_sphere_light(const char *arch_list[], const char *preferred_device);
@@ -222,7 +222,7 @@ int main(int argc, char *argv[]) {
         futures.push_back(mt_run_pool.Enqueue(test_complex_mat5_clipped, arch_list, device_name));
         futures.push_back(mt_run_pool.Enqueue(test_complex_mat5_adaptive, arch_list, device_name));
         futures.push_back(mt_run_pool.Enqueue(test_complex_mat5_regions, arch_list, device_name));
-        futures.push_back(mt_run_pool.Enqueue(test_complex_mat5_denoised, arch_list, device_name));
+        futures.push_back(mt_run_pool.Enqueue(test_complex_mat5_nlm_filter, arch_list, device_name));
         futures.push_back(mt_run_pool.Enqueue(test_complex_mat5_dof, arch_list, device_name));
         futures.push_back(mt_run_pool.Enqueue(test_complex_mat5_mesh_lights, arch_list, device_name));
         futures.push_back(mt_run_pool.Enqueue(test_complex_mat5_sphere_light, arch_list, device_name));
@@ -230,7 +230,7 @@ int main(int argc, char *argv[]) {
         futures.push_back(mt_run_pool.Enqueue(test_complex_mat5_sun_light, arch_list, device_name));
         futures.push_back(mt_run_pool.Enqueue(test_complex_mat5_hdr_light, arch_list, device_name));
         futures.push_back(mt_run_pool.Enqueue(test_complex_mat6, arch_list, device_name));
-        futures.push_back(mt_run_pool.Enqueue(test_complex_mat6_denoised, arch_list, device_name));
+        futures.push_back(mt_run_pool.Enqueue(test_complex_mat6_nlm_filter, arch_list, device_name));
         futures.push_back(mt_run_pool.Enqueue(test_complex_mat6_dof, arch_list, device_name));
         futures.push_back(mt_run_pool.Enqueue(test_complex_mat6_mesh_lights, arch_list, device_name));
         futures.push_back(mt_run_pool.Enqueue(test_complex_mat6_sphere_light, arch_list, device_name));

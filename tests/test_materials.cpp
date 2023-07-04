@@ -195,7 +195,8 @@ void assemble_material_test_images(const char *arch_list[]) {
          "complex_mat6_hdr_light"},
         {"complex_mat5_regions", "complex_mat5_dof", "complex_mat5_spot_light", "complex_mat6_dof",
          "complex_mat6_spot_light"},
-        {"refr_mis2", "complex_mat5_filmic", "complex_mat5_adaptive", "complex_mat5_clipped"}};
+        {"refr_mis2", "complex_mat5_nlm_filter", "complex_mat5_adaptive", "complex_mat5_clipped",
+         "complex_mat6_nlm_filter"}};
     const int ImgCountH = sizeof(test_names) / sizeof(test_names[0]);
 
     const int OutImageW = 256 * ImgCountW;
@@ -1423,7 +1424,7 @@ void test_complex_mat5_regions(const char *arch_list[], const char *preferred_de
                       PixThres, false, true, textures);
 }
 
-void test_complex_mat5_denoised(const char *arch_list[], const char *preferred_device) {
+void test_complex_mat5_nlm_filter(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 52;
     const int PixThres = 1216;
 
@@ -1440,8 +1441,8 @@ void test_complex_mat5_denoised(const char *arch_list[], const char *preferred_d
         "test_data/textures/gold-scuffed_basecolor-boosted.tga", "test_data/textures/gold-scuffed_normal.tga",
         "test_data/textures/gold-scuffed_roughness.tga", "test_data/textures/gold-scuffed_metallic.tga"};
 
-    run_material_test(arch_list, preferred_device, "complex_mat5_denoised", metal_mat_desc, SampleCount, DefaultMinPSNR,
-                      PixThres, true, false, textures);
+    run_material_test(arch_list, preferred_device, "complex_mat5_nlm_filter", metal_mat_desc, SampleCount,
+                      DefaultMinPSNR, PixThres, true, false, textures);
 }
 
 void test_complex_mat5_dof(const char *arch_list[], const char *preferred_device) {
@@ -1587,7 +1588,7 @@ void test_complex_mat6(const char *arch_list[], const char *preferred_device) {
                       PixThres);
 }
 
-void test_complex_mat6_denoised(const char *arch_list[], const char *preferred_device) {
+void test_complex_mat6_nlm_filter(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 416;
     const int PixThres = 561;
 
@@ -1599,8 +1600,8 @@ void test_complex_mat6_denoised(const char *arch_list[], const char *preferred_d
     olive_mat_desc.transmission = 1.0f;
     olive_mat_desc.ior = 2.3f;
 
-    run_material_test(arch_list, preferred_device, "complex_mat6_denoised", olive_mat_desc, SampleCount, DefaultMinPSNR,
-                      PixThres, true);
+    run_material_test(arch_list, preferred_device, "complex_mat6_nlm_filter", olive_mat_desc, SampleCount,
+                      DefaultMinPSNR, PixThres, true);
 }
 
 void test_complex_mat6_dof(const char *arch_list[], const char *preferred_device) {
