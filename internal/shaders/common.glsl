@@ -83,7 +83,7 @@ vec3 YCoCg_to_RGB(vec4 col) {
     col_rgb.g = Y + Cg;
     col_rgb.b = Y - Co - Cg;
 
-    return col_rgb;
+    return clamp(col_rgb, vec3(0.0), vec3(1.0));
 }
 
 float get_texture_lod(const ivec2 res, const float lambda) {

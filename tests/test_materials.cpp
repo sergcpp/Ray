@@ -1382,7 +1382,7 @@ void test_complex_mat5_clipped(const char *arch_list[], const char *preferred_de
 
 void test_complex_mat5_adaptive(const char *arch_list[], const char *preferred_device) {
     const int MinSampleCount = 32;
-    const int MaxSampleCount = 57;
+    const int MaxSampleCount = 61;
     const float VarianceThreshold = 0.004f;
     const int PixThres = 1184;
 
