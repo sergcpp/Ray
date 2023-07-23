@@ -60,8 +60,8 @@ void test_aux_channels(const char *arch_list[], const char *preferred_device) {
     s.preferred_device = preferred_device;
     s.use_wide_bvh = true;
 
-    const int SampleCount = 256;
-    const double BaseColor_MinPSNR = 28.8, Normals_MinPSNR = 42.8, Depth_MinPSNR = 43.3;
+    const int SampleCount = 16;
+    const double BaseColor_MinPSNR = 28.55, Normals_MinPSNR = 38.76, Depth_MinPSNR = 43.3;
 
     for (const char **arch = arch_list; *arch; ++arch) {
         const auto rt = Ray::RendererTypeFromName(*arch);

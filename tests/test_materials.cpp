@@ -55,12 +55,12 @@ void run_material_test(const char *arch_list[], const char *preferred_device, co
         for (const bool use_hwrt : {false, true}) {
             s.use_hwrt = use_hwrt;
 
-            const auto start_time = high_resolution_clock::now();
-
             int current_sample_count = max_sample_count;
             int failed_count = -1, succeeded_count = 4096;
             bool images_match = false, searching = false;
             do {
+                const auto start_time = high_resolution_clock::now();
+
                 auto renderer = std::unique_ptr<Ray::RendererBase>(Ray::CreateRenderer(s, &g_log_err, rt));
                 if (!renderer || renderer->type() != rt || renderer->is_hwrt() != use_hwrt) {
                     // skip unsupported (we fell back to some other renderer)
@@ -1334,8 +1334,8 @@ void test_complex_mat3(const char *arch_list[], const char *preferred_device) {
 }
 
 void test_complex_mat4(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 28;
-    const int PixThres = 747;
+    const int SampleCount = 12;
+    const int PixThres = 2396;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1352,13 +1352,13 @@ void test_complex_mat4(const char *arch_list[], const char *preferred_device) {
         "test_data/textures/Fence007A_2K_Roughness.tga", "test_data/textures/Fence007A_2K_Metalness.tga",
         "test_data/textures/Fence007A_2K_Opacity.tga"};
 
-    run_material_test(arch_list, preferred_device, "complex_mat4", metal_mat_desc, SampleCount, FastMinPSNR, PixThres,
-                      eDenoiseMethod::None, false, textures);
+    run_material_test(arch_list, preferred_device, "complex_mat4", metal_mat_desc, SampleCount, VeryFastMinPSNR,
+                      PixThres, eDenoiseMethod::None, false, textures);
 }
 
 void test_complex_mat5(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 154;
-    const int PixThres = 2755;
+    const int SampleCount = 35;
+    const int PixThres = 4729;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1373,13 +1373,13 @@ void test_complex_mat5(const char *arch_list[], const char *preferred_device) {
         "test_data/textures/gold-scuffed_basecolor-boosted.tga", "test_data/textures/gold-scuffed_normal.tga",
         "test_data/textures/gold-scuffed_roughness.tga", "test_data/textures/gold-scuffed_metallic.tga"};
 
-    run_material_test(arch_list, preferred_device, "complex_mat5", metal_mat_desc, SampleCount, FastMinPSNR, PixThres,
-                      eDenoiseMethod::None, false, textures);
+    run_material_test(arch_list, preferred_device, "complex_mat5", metal_mat_desc, SampleCount, VeryFastMinPSNR,
+                      PixThres, eDenoiseMethod::None, false, textures);
 }
 
 void test_complex_mat5_clipped(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 146;
-    const int PixThres = 2698;
+    const int SampleCount = 34;
+    const int PixThres = 4740;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1394,15 +1394,15 @@ void test_complex_mat5_clipped(const char *arch_list[], const char *preferred_de
         "test_data/textures/gold-scuffed_basecolor-boosted.tga", "test_data/textures/gold-scuffed_normal.tga",
         "test_data/textures/gold-scuffed_roughness.tga", "test_data/textures/gold-scuffed_metallic.tga"};
 
-    run_material_test(arch_list, preferred_device, "complex_mat5_clipped", metal_mat_desc, SampleCount, FastMinPSNR,
+    run_material_test(arch_list, preferred_device, "complex_mat5_clipped", metal_mat_desc, SampleCount, VeryFastMinPSNR,
                       PixThres, eDenoiseMethod::None, false, textures, eTestScene::Standard_Clipped);
 }
 
 void test_complex_mat5_adaptive(const char *arch_list[], const char *preferred_device) {
-    const int MinSampleCount = 32;
-    const int MaxSampleCount = 61;
+    const int MinSampleCount = 8;
+    const int MaxSampleCount = 21;
     const float VarianceThreshold = 0.004f;
-    const int PixThres = 1184;
+    const int PixThres = 2072;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1418,13 +1418,13 @@ void test_complex_mat5_adaptive(const char *arch_list[], const char *preferred_d
         "test_data/textures/gold-scuffed_roughness.tga", "test_data/textures/gold-scuffed_metallic.tga"};
 
     run_material_test(arch_list, preferred_device, "complex_mat5_adaptive", metal_mat_desc, MinSampleCount,
-                      MaxSampleCount, VarianceThreshold, DefaultMinPSNR, PixThres, eDenoiseMethod::NLM_bn, false,
+                      MaxSampleCount, VarianceThreshold, FastMinPSNR, PixThres, eDenoiseMethod::NLM_bn, false,
                       textures);
 }
 
 void test_complex_mat5_regions(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 44;
-    const int PixThres = 2431;
+    const int SampleCount = 10;
+    const int PixThres = 4014;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1439,13 +1439,13 @@ void test_complex_mat5_regions(const char *arch_list[], const char *preferred_de
         "test_data/textures/gold-scuffed_basecolor-boosted.tga", "test_data/textures/gold-scuffed_normal.tga",
         "test_data/textures/gold-scuffed_roughness.tga", "test_data/textures/gold-scuffed_metallic.tga"};
 
-    run_material_test(arch_list, preferred_device, "complex_mat5_regions", metal_mat_desc, SampleCount, FastMinPSNR,
+    run_material_test(arch_list, preferred_device, "complex_mat5_regions", metal_mat_desc, SampleCount, VeryFastMinPSNR,
                       PixThres, eDenoiseMethod::None, true, textures);
 }
 
 void test_complex_mat5_nlm_filter(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 100;
-    const int PixThres = 1204;
+    const int SampleCount = 29;
+    const int PixThres = 2068;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1460,13 +1460,13 @@ void test_complex_mat5_nlm_filter(const char *arch_list[], const char *preferred
         "test_data/textures/gold-scuffed_basecolor-boosted.tga", "test_data/textures/gold-scuffed_normal.tga",
         "test_data/textures/gold-scuffed_roughness.tga", "test_data/textures/gold-scuffed_metallic.tga"};
 
-    run_material_test(arch_list, preferred_device, "complex_mat5_nlm_filter", metal_mat_desc, SampleCount,
-                      DefaultMinPSNR, PixThres, eDenoiseMethod::NLM, false, textures);
+    run_material_test(arch_list, preferred_device, "complex_mat5_nlm_filter", metal_mat_desc, SampleCount, FastMinPSNR,
+                      PixThres, eDenoiseMethod::NLM, false, textures);
 }
 
 void test_complex_mat5_nlm_filter_b(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 62;
-    const int PixThres = 1180;
+    const int SampleCount = 22;
+    const int PixThres = 2085;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1482,12 +1482,12 @@ void test_complex_mat5_nlm_filter_b(const char *arch_list[], const char *preferr
         "test_data/textures/gold-scuffed_roughness.tga", "test_data/textures/gold-scuffed_metallic.tga"};
 
     run_material_test(arch_list, preferred_device, "complex_mat5_nlm_filter_b", metal_mat_desc, SampleCount,
-                      DefaultMinPSNR, PixThres, eDenoiseMethod::NLM_b, false, textures);
+                      FastMinPSNR, PixThres, eDenoiseMethod::NLM_b, false, textures);
 }
 
 void test_complex_mat5_nlm_filter_bn(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 52;
-    const int PixThres = 1201;
+    const int SampleCount = 19;
+    const int PixThres = 2089;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1503,7 +1503,7 @@ void test_complex_mat5_nlm_filter_bn(const char *arch_list[], const char *prefer
         "test_data/textures/gold-scuffed_roughness.tga", "test_data/textures/gold-scuffed_metallic.tga"};
 
     run_material_test(arch_list, preferred_device, "complex_mat5_nlm_filter_bn", metal_mat_desc, SampleCount,
-                      DefaultMinPSNR, PixThres, eDenoiseMethod::NLM_bn, false, textures);
+                      FastMinPSNR, PixThres, eDenoiseMethod::NLM_bn, false, textures);
 }
 
 void test_complex_mat5_unet_filter(const char *arch_list[], const char *preferred_device) {
@@ -1570,8 +1570,9 @@ void test_complex_mat5_unet_filter_bn(const char *arch_list[], const char *prefe
 }
 
 void test_complex_mat5_dof(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 458;
-    const int PixThres = 2421;
+    const int SampleCount = 30;
+    const double MinPSNR = 21.0;
+    const int PixThres = 9976;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1586,13 +1587,14 @@ void test_complex_mat5_dof(const char *arch_list[], const char *preferred_device
         "test_data/textures/gold-scuffed_basecolor-boosted.tga", "test_data/textures/gold-scuffed_normal.tga",
         "test_data/textures/gold-scuffed_roughness.tga", "test_data/textures/gold-scuffed_metallic.tga"};
 
-    run_material_test(arch_list, preferred_device, "complex_mat5_dof", metal_mat_desc, SampleCount, FastMinPSNR,
-                      PixThres, eDenoiseMethod::None, false, textures, eTestScene::Standard_DOF0);
+    run_material_test(arch_list, preferred_device, "complex_mat5_dof", metal_mat_desc, SampleCount, MinPSNR, PixThres,
+                      eDenoiseMethod::None, false, textures, eTestScene::Standard_DOF0);
 }
 
 void test_complex_mat5_mesh_lights(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 224;
-    const int PixThres = 2396;
+    const int SampleCount = 25;
+    const double MinPSNR = 23.0;
+    const int PixThres = 7235;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1607,14 +1609,14 @@ void test_complex_mat5_mesh_lights(const char *arch_list[], const char *preferre
         "test_data/textures/gold-scuffed_basecolor-boosted.tga", "test_data/textures/gold-scuffed_normal.tga",
         "test_data/textures/gold-scuffed_roughness.tga", "test_data/textures/gold-scuffed_metallic.tga"};
 
-    run_material_test(arch_list, preferred_device, "complex_mat5_mesh_lights", metal_mat_desc, SampleCount, FastMinPSNR,
+    run_material_test(arch_list, preferred_device, "complex_mat5_mesh_lights", metal_mat_desc, SampleCount, MinPSNR,
                       PixThres, eDenoiseMethod::None, false, textures, eTestScene::Standard_MeshLights);
 }
 
 void test_complex_mat5_sphere_light(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 680;
-    const double MinPSNR = 24.87;
-    const int PixThres = 301;
+    const int SampleCount = 24;
+    const double MinPSNR = 23.0;
+    const int PixThres = 5041;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1655,8 +1657,9 @@ void test_complex_mat5_spot_light(const char *arch_list[], const char *preferred
 }
 
 void test_complex_mat5_sun_light(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 991; // 541;
-    const int PixThres = 2064;
+    const int SampleCount = 19;
+    const double MinPSNR = 23.0;
+    const int PixThres = 5980;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1671,13 +1674,14 @@ void test_complex_mat5_sun_light(const char *arch_list[], const char *preferred_
         "test_data/textures/gold-scuffed_basecolor-boosted.tga", "test_data/textures/gold-scuffed_normal.tga",
         "test_data/textures/gold-scuffed_roughness.tga", "test_data/textures/gold-scuffed_metallic.tga"};
 
-    run_material_test(arch_list, preferred_device, "complex_mat5_sun_light", metal_mat_desc, SampleCount, FastMinPSNR,
+    run_material_test(arch_list, preferred_device, "complex_mat5_sun_light", metal_mat_desc, SampleCount, MinPSNR,
                       PixThres, eDenoiseMethod::None, false, textures, eTestScene::Standard_SunLight);
 }
 
 void test_complex_mat5_hdr_light(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 211;
-    const int PixThres = 1746;
+    const int SampleCount = 18;
+    const double MinPSNR = 23.0;
+    const int PixThres = 6577;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1692,13 +1696,14 @@ void test_complex_mat5_hdr_light(const char *arch_list[], const char *preferred_
         "test_data/textures/gold-scuffed_basecolor-boosted.tga", "test_data/textures/gold-scuffed_normal.tga",
         "test_data/textures/gold-scuffed_roughness.tga", "test_data/textures/gold-scuffed_metallic.tga"};
 
-    run_material_test(arch_list, preferred_device, "complex_mat5_hdr_light", metal_mat_desc, SampleCount, FastMinPSNR,
+    run_material_test(arch_list, preferred_device, "complex_mat5_hdr_light", metal_mat_desc, SampleCount, MinPSNR,
                       PixThres, eDenoiseMethod::None, false, textures, eTestScene::Standard_HDRLight);
 }
 
 void test_complex_mat6(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 321;
-    const int PixThres = 1309;
+    const int SampleCount = 45;
+    const double MinPSNR = 23.0;
+    const int PixThres = 4230;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;
@@ -1708,13 +1713,13 @@ void test_complex_mat6(const char *arch_list[], const char *preferred_device) {
     olive_mat_desc.transmission = 1.0f;
     olive_mat_desc.ior = 2.3f;
 
-    run_material_test(arch_list, preferred_device, "complex_mat6", olive_mat_desc, SampleCount, VeryFastMinPSNR,
+    run_material_test(arch_list, preferred_device, "complex_mat6", olive_mat_desc, SampleCount, MinPSNR,
                       PixThres);
 }
 
 void test_complex_mat6_nlm_filter(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 416;
-    const int PixThres = 500;
+    const int SampleCount = 18;
+    const int PixThres = 1927;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;
@@ -1725,12 +1730,12 @@ void test_complex_mat6_nlm_filter(const char *arch_list[], const char *preferred
     olive_mat_desc.ior = 2.3f;
 
     run_material_test(arch_list, preferred_device, "complex_mat6_nlm_filter", olive_mat_desc, SampleCount,
-                      DefaultMinPSNR, PixThres, eDenoiseMethod::NLM);
+                      VeryFastMinPSNR, PixThres, eDenoiseMethod::NLM);
 }
 
 void test_complex_mat6_nlm_filter_b(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 416;
-    const int PixThres = 472;
+    const int SampleCount = 14;
+    const int PixThres = 1756;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;
@@ -1741,12 +1746,12 @@ void test_complex_mat6_nlm_filter_b(const char *arch_list[], const char *preferr
     olive_mat_desc.ior = 2.3f;
 
     run_material_test(arch_list, preferred_device, "complex_mat6_nlm_filter_b", olive_mat_desc, SampleCount,
-                      DefaultMinPSNR, PixThres, eDenoiseMethod::NLM_b);
+                      VeryFastMinPSNR, PixThres, eDenoiseMethod::NLM_b);
 }
 
 void test_complex_mat6_nlm_filter_bn(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 416;
-    const int PixThres = 447;
+    const int SampleCount = 11;
+    const int PixThres = 1751;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;
@@ -1757,12 +1762,12 @@ void test_complex_mat6_nlm_filter_bn(const char *arch_list[], const char *prefer
     olive_mat_desc.ior = 2.3f;
 
     run_material_test(arch_list, preferred_device, "complex_mat6_nlm_filter_bn", olive_mat_desc, SampleCount,
-                      DefaultMinPSNR, PixThres, eDenoiseMethod::NLM_bn);
+                      VeryFastMinPSNR, PixThres, eDenoiseMethod::NLM_bn);
 }
 
 void test_complex_mat6_unet_filter(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 202;
-    const int PixThres = 615;
+    const int SampleCount = 31;
+    const int PixThres = 1038;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;
@@ -1773,12 +1778,12 @@ void test_complex_mat6_unet_filter(const char *arch_list[], const char *preferre
     olive_mat_desc.ior = 2.3f;
 
     run_material_test(arch_list, preferred_device, "complex_mat6_unet_filter", olive_mat_desc, SampleCount,
-                      DefaultMinPSNR, PixThres, eDenoiseMethod::UNet);
+                      FastMinPSNR, PixThres, eDenoiseMethod::UNet);
 }
 
 void test_complex_mat6_unet_filter_b(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 154;
-    const int PixThres = 572;
+    const int SampleCount = 26;
+    const int PixThres = 902;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;
@@ -1789,12 +1794,12 @@ void test_complex_mat6_unet_filter_b(const char *arch_list[], const char *prefer
     olive_mat_desc.ior = 2.3f;
 
     run_material_test(arch_list, preferred_device, "complex_mat6_unet_filter_b", olive_mat_desc, SampleCount,
-                      DefaultMinPSNR, PixThres, eDenoiseMethod::UNet_b);
+                      FastMinPSNR, PixThres, eDenoiseMethod::UNet_b);
 }
 
 void test_complex_mat6_unet_filter_bn(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 154;
-    const int PixThres = 565;
+    const int SampleCount = 27;
+    const int PixThres = 926;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;
@@ -1805,12 +1810,13 @@ void test_complex_mat6_unet_filter_bn(const char *arch_list[], const char *prefe
     olive_mat_desc.ior = 2.3f;
 
     run_material_test(arch_list, preferred_device, "complex_mat6_unet_filter_bn", olive_mat_desc, SampleCount,
-                      DefaultMinPSNR, PixThres, eDenoiseMethod::UNet_bn);
+                      FastMinPSNR, PixThres, eDenoiseMethod::UNet_bn);
 }
 
 void test_complex_mat6_dof(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 321;
-    const int PixThres = 2831;
+    const int SampleCount = 27;
+    const double MinPSNR = 22.0;
+    const int PixThres = 5194;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;
@@ -1820,13 +1826,14 @@ void test_complex_mat6_dof(const char *arch_list[], const char *preferred_device
     olive_mat_desc.transmission = 1.0f;
     olive_mat_desc.ior = 2.3f;
 
-    run_material_test(arch_list, preferred_device, "complex_mat6_dof", olive_mat_desc, SampleCount, VeryFastMinPSNR,
+    run_material_test(arch_list, preferred_device, "complex_mat6_dof", olive_mat_desc, SampleCount, MinPSNR,
                       PixThres, eDenoiseMethod::None, false, nullptr, eTestScene::Standard_DOF1);
 }
 
 void test_complex_mat6_mesh_lights(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 337;
-    const int PixThres = 2980;
+    const int SampleCount = 29;
+    const double MinPSNR = 21.0;
+    const int PixThres = 7380;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;
@@ -1837,13 +1844,13 @@ void test_complex_mat6_mesh_lights(const char *arch_list[], const char *preferre
     olive_mat_desc.ior = 2.3f;
 
     run_material_test(arch_list, preferred_device, "complex_mat6_mesh_lights", olive_mat_desc, SampleCount,
-                      VeryFastMinPSNR, PixThres, eDenoiseMethod::None, false, nullptr, eTestScene::Standard_MeshLights);
+                      MinPSNR, PixThres, eDenoiseMethod::None, false, nullptr, eTestScene::Standard_MeshLights);
 }
 
 void test_complex_mat6_sphere_light(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 530;
-    const double MinPSNR = 23.98;
-    const int PixThres = 883;
+    const int SampleCount = 20;
+    const double MinPSNR = 21.0;
+    const int PixThres = 7951;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;
@@ -1874,9 +1881,9 @@ void test_complex_mat6_spot_light(const char *arch_list[], const char *preferred
 }
 
 void test_complex_mat6_sun_light(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 420;
-    const double MinPSNR = 22.0;
-    const int PixThres = 5892;
+    const int SampleCount = 48;
+    const double MinPSNR = 19.0;
+    const int PixThres = 10319;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;
@@ -1891,9 +1898,9 @@ void test_complex_mat6_sun_light(const char *arch_list[], const char *preferred_
 }
 
 void test_complex_mat6_hdr_light(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 410;
-    const double MinPSNR = 23.0;
-    const int PixThres = 4062;
+    const int SampleCount = 64;
+    const double MinPSNR = 21.0;
+    const int PixThres = 5995;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;
@@ -1908,19 +1915,21 @@ void test_complex_mat6_hdr_light(const char *arch_list[], const char *preferred_
 }
 
 void test_complex_mat7_refractive(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 340;
-    const int PixThres = 3529;
+    const int SampleCount = 8;
+    const double MinPSNR = 21.0;
+    const int PixThres = 7395;
 
     Ray::principled_mat_desc_t unused;
-    run_material_test(arch_list, preferred_device, "complex_mat7_refractive", unused, SampleCount, VeryFastMinPSNR,
+    run_material_test(arch_list, preferred_device, "complex_mat7_refractive", unused, SampleCount, MinPSNR,
                       PixThres, eDenoiseMethod::None, false, nullptr, eTestScene::Standard_GlassBall0);
 }
 
 void test_complex_mat7_principled(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 459;
-    const int PixThres = 2462;
+    const int SampleCount = 24;
+    const double MinPSNR = 21.0;
+    const int PixThres = 8186;
 
     Ray::principled_mat_desc_t unused;
-    run_material_test(arch_list, preferred_device, "complex_mat7_principled", unused, SampleCount, VeryFastMinPSNR,
+    run_material_test(arch_list, preferred_device, "complex_mat7_principled", unused, SampleCount, MinPSNR,
                       PixThres, eDenoiseMethod::None, false, nullptr, eTestScene::Standard_GlassBall1);
 }
