@@ -2,6 +2,8 @@
 
 #include <cstring>
 
+#include <chrono>
+
 #include "../RendererFactory.h"
 
 #include "test_scene.h"
@@ -11,6 +13,8 @@ extern bool g_minimal_output;
 extern std::mutex g_stdout_mtx;
 
 void test_aux_channels(const char *arch_list[], const char *preferred_device) {
+    using namespace std::chrono;
+
     const char TestName[] = "aux_channels";
 
     //
@@ -64,6 +68,8 @@ void test_aux_channels(const char *arch_list[], const char *preferred_device) {
 
         for (const bool use_hwrt : {false, true}) {
             s.use_hwrt = use_hwrt;
+
+            const auto start_time = high_resolution_clock::now();
 
             auto renderer = std::unique_ptr<Ray::RendererBase>(Ray::CreateRenderer(s, &g_log_err, rt));
             if (!renderer || renderer->type() != rt || renderer->is_hwrt() != use_hwrt) {
@@ -179,14 +185,16 @@ void test_aux_channels(const char *arch_list[], const char *preferred_device) {
             double depth_psnr = -10.0 * std::log10(depth_mse / (255.0 * 255.0));
             depth_psnr = std::floor(depth_psnr * 100.0) / 100.0;
 
+            const double test_duration_m = duration<double>(high_resolution_clock::now() - start_time).count() / 60.0;
+
             {
                 std::lock_guard<std::mutex> _(g_stdout_mtx);
                 if (g_minimal_output) {
                     printf("\r%s (%6s, %s): %.1f%% ", name_buf, Ray::RendererTypeName(rt), s.use_hwrt ? "HWRT" : "SWRT",
                            100.0);
                 }
-                printf("(PSNR: %.2f/%.2f dB, %.2f/%.2f dB, %.2f/%.2f dB)\n", base_color_psnr, BaseColor_MinPSNR,
-                       normals_psnr, Normals_MinPSNR, depth_psnr, Depth_MinPSNR);
+                printf("(PSNR: %.2f/%.2f dB, %.2f/%.2f dB, %.2f/%.2f dB, Time: %.2fm)\n", base_color_psnr,
+                       BaseColor_MinPSNR, normals_psnr, Normals_MinPSNR, depth_psnr, Depth_MinPSNR, test_duration_m);
                 fflush(stdout);
             }
 

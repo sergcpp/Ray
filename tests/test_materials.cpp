@@ -4,6 +4,7 @@
 #include <cstring>
 
 #include <algorithm>
+#include <chrono>
 #include <fstream>
 
 #include "../RendererFactory.h"
@@ -31,6 +32,8 @@ void run_material_test(const char *arch_list[], const char *preferred_device, co
                        const float variance_threshold, const double min_psnr, const int pix_thres,
                        const eDenoiseMethod denoise = eDenoiseMethod::None, const bool partial = false,
                        const char *textures[] = nullptr, const eTestScene test_scene = eTestScene::Standard) {
+    using namespace std::chrono;
+
     char name_buf[1024];
     snprintf(name_buf, sizeof(name_buf), "test_data/%s/ref.tga", test_name);
 
@@ -51,6 +54,8 @@ void run_material_test(const char *arch_list[], const char *preferred_device, co
 
         for (const bool use_hwrt : {false, true}) {
             s.use_hwrt = use_hwrt;
+
+            const auto start_time = high_resolution_clock::now();
 
             int current_sample_count = max_sample_count;
             int failed_count = -1, succeeded_count = 4096;
@@ -129,13 +134,17 @@ void run_material_test(const char *arch_list[], const char *preferred_device, co
                 double psnr = -10.0 * std::log10(mse / (255.0 * 255.0));
                 psnr = std::floor(psnr * 100.0) / 100.0;
 
+                const double test_duration_m =
+                    duration<double>(high_resolution_clock::now() - start_time).count() / 60.0;
+
                 {
                     std::lock_guard<std::mutex> _(g_stdout_mtx);
                     if (g_minimal_output) {
                         printf("\r%s (%6s, %s): %.1f%% ", name_buf, Ray::RendererTypeName(rt),
                                s.use_hwrt ? "HWRT" : "SWRT", 100.0);
                     }
-                    printf("(PSNR: %.2f/%.2f dB, Fireflies: %i/%i)\n", psnr, min_psnr, error_pixels, pix_thres);
+                    printf("(PSNR: %.2f/%.2f dB, Fireflies: %i/%i, Time: %.2fm)\n", psnr, min_psnr, error_pixels,
+                           pix_thres, test_duration_m);
                     fflush(stdout);
                 }
 
