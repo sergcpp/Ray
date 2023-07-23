@@ -332,7 +332,7 @@ inline Ray::TextureHandle Ray::NS::Scene::AddAtlasTexture_nolock(const tex_desc_
         }
     }
 
-    ctx_->log()->Info("Ray: Texture loaded (atlas = %i, %ix%i)", int(t.atlas), _t.w, _t.h);
+    ctx_->log()->Info("Ray: Texture '%s' loaded (atlas = %i, %ix%i)", _t.name, int(t.atlas), _t.w, _t.h);
     ctx_->log()->Info("Ray: Atlasses are (RGBA[%i], RGB[%i], RG[%i], R[%i], BC3[%i], BC4[%i], BC5[%i])",
                       tex_atlases_[0].page_count(), tex_atlases_[1].page_count(), tex_atlases_[2].page_count(),
                       tex_atlases_[3].page_count(), tex_atlases_[4].page_count(), tex_atlases_[5].page_count(),
@@ -562,7 +562,7 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
 
     temp_stage_buf.FreeImmediate();
 
-    ctx_->log()->Info("Ray: Texture loaded (%ix%i)", _t.w, _t.h);
+    ctx_->log()->Info("Ray: Texture '%s' loaded (%ix%i)", _t.name, _t.w, _t.h);
 
     assert(ret <= 0x00ffffff);
 

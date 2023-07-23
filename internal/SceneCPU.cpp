@@ -160,7 +160,7 @@ Ray::TextureHandle Ray::Cpu::Scene::AddTexture(const tex_desc_t &_t) {
         return InvalidTextureHandle;
     }
 
-    log_->Info("Ray: Texture loaded (storage = %i, %ix%i)", storage, _t.w, _t.h);
+    log_->Info("Ray: Texture '%s' loaded (storage = %i, %ix%i)", _t.name, storage, _t.w, _t.h);
     log_->Info("Ray: Storages are (RGBA[%i], RGB[%i], RG[%i], R[%i])", tex_storage_rgba_.img_count(),
                tex_storage_rgb_.img_count(), tex_storage_rg_.img_count(), tex_storage_r_.img_count());
 
