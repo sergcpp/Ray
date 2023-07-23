@@ -568,27 +568,28 @@ int Ray::SetupUNetWeights(const bool albedo, const bool normals, const bool gemm
 
     const int el_align = (256 / sizeof(T));
 
-    const int total_count = extend(enc_conv0_weight_count, input_channels) + round_up(enc_conv0_bias_count, el_align) +
-                            round_up(enc_conv1_weight_count, el_align) + round_up(enc_conv1_bias_count, el_align) +
-                            round_up(enc_conv2_weight_count, el_align) + round_up(enc_conv2_bias_count, el_align) +
-                            round_up(enc_conv3_weight_count, el_align) + round_up(enc_conv3_bias_count, el_align) +
-                            round_up(enc_conv4_weight_count, el_align) + round_up(enc_conv4_bias_count, el_align) +
-                            round_up(enc_conv5a_weight_count, el_align) + round_up(enc_conv5a_bias_count, el_align) +
-                            round_up(enc_conv5b_weight_count, el_align) + round_up(enc_conv5b_bias_count, el_align) +
-                            round_up(dec_conv4a_weight_count, el_align) + round_up(dec_conv4a_bias_count, el_align) +
-                            round_up(dec_conv4b_weight_count, el_align) + round_up(dec_conv4b_bias_count, el_align) +
-                            round_up(dec_conv3a_weight_count, el_align) + round_up(dec_conv3a_bias_count, el_align) +
-                            round_up(dec_conv3b_weight_count, el_align) + round_up(dec_conv3b_bias_count, el_align) +
-                            round_up(dec_conv2a_weight_count, el_align) + round_up(dec_conv2a_bias_count, el_align) +
-                            round_up(dec_conv2b_weight_count, el_align) + round_up(dec_conv2b_bias_count, el_align) +
-                            round_up(count2(64, input_channels, 64), el_align) +
-                            round_up(dec_conv1a_bias_count, el_align) + round_up(dec_conv1b_weight_count, el_align) +
-                            round_up(dec_conv1b_bias_count, el_align) + round_up(dec_conv0_weight_count, el_align) +
-                            dec_conv0_bias_count;
+    const int total_count =
+        round_up(extend(enc_conv0_weight_count, input_channels), el_align) + round_up(enc_conv0_bias_count, el_align) +
+        round_up(enc_conv1_weight_count, el_align) + round_up(enc_conv1_bias_count, el_align) +
+        round_up(enc_conv2_weight_count, el_align) + round_up(enc_conv2_bias_count, el_align) +
+        round_up(enc_conv3_weight_count, el_align) + round_up(enc_conv3_bias_count, el_align) +
+        round_up(enc_conv4_weight_count, el_align) + round_up(enc_conv4_bias_count, el_align) +
+        round_up(enc_conv5a_weight_count, el_align) + round_up(enc_conv5a_bias_count, el_align) +
+        round_up(enc_conv5b_weight_count, el_align) + round_up(enc_conv5b_bias_count, el_align) +
+        round_up(dec_conv4a_weight_count, el_align) + round_up(dec_conv4a_bias_count, el_align) +
+        round_up(dec_conv4b_weight_count, el_align) + round_up(dec_conv4b_bias_count, el_align) +
+        round_up(dec_conv3a_weight_count, el_align) + round_up(dec_conv3a_bias_count, el_align) +
+        round_up(dec_conv3b_weight_count, el_align) + round_up(dec_conv3b_bias_count, el_align) +
+        round_up(dec_conv2a_weight_count, el_align) + round_up(dec_conv2a_bias_count, el_align) +
+        round_up(dec_conv2b_weight_count, el_align) + round_up(dec_conv2b_bias_count, el_align) +
+        round_up(count2(64, input_channels, 64), el_align) + round_up(dec_conv1a_bias_count, el_align) +
+        round_up(dec_conv1b_weight_count, el_align) + round_up(dec_conv1b_bias_count, el_align) +
+        round_up(dec_conv0_weight_count, el_align) + dec_conv0_bias_count;
 
     if (out_offsets) {
         out_offsets->enc_conv0_weight = 0;
-        out_offsets->enc_conv0_bias = out_offsets->enc_conv0_weight + extend(enc_conv0_weight_count, input_channels);
+        out_offsets->enc_conv0_bias =
+            out_offsets->enc_conv0_weight + round_up(extend(enc_conv0_weight_count, input_channels), el_align);
         out_offsets->enc_conv1_weight = out_offsets->enc_conv0_bias + round_up(enc_conv0_bias_count, el_align);
         out_offsets->enc_conv1_bias = out_offsets->enc_conv1_weight + round_up(enc_conv1_weight_count, el_align);
         out_offsets->enc_conv2_weight = out_offsets->enc_conv1_bias + round_up(enc_conv1_bias_count, el_align);
