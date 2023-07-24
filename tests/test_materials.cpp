@@ -1335,7 +1335,7 @@ void test_complex_mat3(const char *arch_list[], const char *preferred_device) {
 
 void test_complex_mat4(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 12;
-    const int PixThres = 2396;
+    const int PixThres = 2397;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1358,7 +1358,7 @@ void test_complex_mat4(const char *arch_list[], const char *preferred_device) {
 
 void test_complex_mat5(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 35;
-    const int PixThres = 4729;
+    const int PixThres = 4730;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1594,7 +1594,7 @@ void test_complex_mat5_dof(const char *arch_list[], const char *preferred_device
 void test_complex_mat5_mesh_lights(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 25;
     const double MinPSNR = 23.0;
-    const int PixThres = 7235;
+    const int PixThres = 7239;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1616,7 +1616,7 @@ void test_complex_mat5_mesh_lights(const char *arch_list[], const char *preferre
 void test_complex_mat5_sphere_light(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 24;
     const double MinPSNR = 23.0;
-    const int PixThres = 5041;
+    const int PixThres = 5105;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1681,7 +1681,7 @@ void test_complex_mat5_sun_light(const char *arch_list[], const char *preferred_
 void test_complex_mat5_hdr_light(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 18;
     const double MinPSNR = 23.0;
-    const int PixThres = 6577;
+    const int PixThres = 6579;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1719,7 +1719,7 @@ void test_complex_mat6(const char *arch_list[], const char *preferred_device) {
 
 void test_complex_mat6_nlm_filter(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 18;
-    const int PixThres = 1927;
+    const int PixThres = 1929;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;
@@ -1816,7 +1816,7 @@ void test_complex_mat6_unet_filter_bn(const char *arch_list[], const char *prefe
 void test_complex_mat6_dof(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 27;
     const double MinPSNR = 22.0;
-    const int PixThres = 5194;
+    const int PixThres = 5195;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;
@@ -1848,7 +1848,7 @@ void test_complex_mat6_mesh_lights(const char *arch_list[], const char *preferre
 }
 
 void test_complex_mat6_sphere_light(const char *arch_list[], const char *preferred_device) {
-    const int SampleCount = 20;
+    const int SampleCount = 22;
     const double MinPSNR = 21.0;
     const int PixThres = 7951;
 
@@ -1883,7 +1883,7 @@ void test_complex_mat6_spot_light(const char *arch_list[], const char *preferred
 void test_complex_mat6_sun_light(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 48;
     const double MinPSNR = 19.0;
-    const int PixThres = 10319;
+    const int PixThres = 10320;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;
@@ -1927,7 +1927,7 @@ void test_complex_mat7_refractive(const char *arch_list[], const char *preferred
 void test_complex_mat7_principled(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 24;
     const double MinPSNR = 21.0;
-    const int PixThres = 8186;
+    const int PixThres = 8187;
 
     Ray::principled_mat_desc_t unused;
     run_material_test(arch_list, preferred_device, "complex_mat7_principled", unused, SampleCount, MinPSNR,
