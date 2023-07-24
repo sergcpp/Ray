@@ -52,44 +52,44 @@ extern const uint32_t *transform_luts[];
 
 int round_up(int v, int align);
 namespace Dx {
-#include "shaders/output/convolution_112_112.comp.cso.inl"
 #include "shaders/output/convolution_112_112_fp16.comp.cso.inl"
-#include "shaders/output/convolution_32_32_Downsample.comp.cso.inl"
+#include "shaders/output/convolution_112_112_fp32.comp.cso.inl"
 #include "shaders/output/convolution_32_32_Downsample_fp16.comp.cso.inl"
-#include "shaders/output/convolution_32_3_img.comp.cso.inl"
+#include "shaders/output/convolution_32_32_Downsample_fp32.comp.cso.inl"
 #include "shaders/output/convolution_32_3_img_fp16.comp.cso.inl"
-#include "shaders/output/convolution_32_48_Downsample.comp.cso.inl"
+#include "shaders/output/convolution_32_3_img_fp32.comp.cso.inl"
 #include "shaders/output/convolution_32_48_Downsample_fp16.comp.cso.inl"
-#include "shaders/output/convolution_48_64_Downsample.comp.cso.inl"
+#include "shaders/output/convolution_32_48_Downsample_fp32.comp.cso.inl"
 #include "shaders/output/convolution_48_64_Downsample_fp16.comp.cso.inl"
-#include "shaders/output/convolution_64_32.comp.cso.inl"
+#include "shaders/output/convolution_48_64_Downsample_fp32.comp.cso.inl"
 #include "shaders/output/convolution_64_32_fp16.comp.cso.inl"
-#include "shaders/output/convolution_64_64.comp.cso.inl"
+#include "shaders/output/convolution_64_32_fp32.comp.cso.inl"
 #include "shaders/output/convolution_64_64_fp16.comp.cso.inl"
-#include "shaders/output/convolution_64_80_Downsample.comp.cso.inl"
+#include "shaders/output/convolution_64_64_fp32.comp.cso.inl"
 #include "shaders/output/convolution_64_80_Downsample_fp16.comp.cso.inl"
-#include "shaders/output/convolution_80_96.comp.cso.inl"
+#include "shaders/output/convolution_64_80_Downsample_fp32.comp.cso.inl"
 #include "shaders/output/convolution_80_96_fp16.comp.cso.inl"
-#include "shaders/output/convolution_96_96.comp.cso.inl"
+#include "shaders/output/convolution_80_96_fp32.comp.cso.inl"
 #include "shaders/output/convolution_96_96_fp16.comp.cso.inl"
-#include "shaders/output/convolution_Img_3_32.comp.cso.inl"
+#include "shaders/output/convolution_96_96_fp32.comp.cso.inl"
 #include "shaders/output/convolution_Img_3_32_fp16.comp.cso.inl"
-#include "shaders/output/convolution_Img_6_32.comp.cso.inl"
+#include "shaders/output/convolution_Img_3_32_fp32.comp.cso.inl"
 #include "shaders/output/convolution_Img_6_32_fp16.comp.cso.inl"
-#include "shaders/output/convolution_Img_9_32.comp.cso.inl"
+#include "shaders/output/convolution_Img_6_32_fp32.comp.cso.inl"
 #include "shaders/output/convolution_Img_9_32_fp16.comp.cso.inl"
-#include "shaders/output/convolution_concat_112_48_96.comp.cso.inl"
+#include "shaders/output/convolution_Img_9_32_fp32.comp.cso.inl"
 #include "shaders/output/convolution_concat_112_48_96_fp16.comp.cso.inl"
-#include "shaders/output/convolution_concat_64_3_64.comp.cso.inl"
+#include "shaders/output/convolution_concat_112_48_96_fp32.comp.cso.inl"
 #include "shaders/output/convolution_concat_64_3_64_fp16.comp.cso.inl"
-#include "shaders/output/convolution_concat_64_6_64.comp.cso.inl"
+#include "shaders/output/convolution_concat_64_3_64_fp32.comp.cso.inl"
 #include "shaders/output/convolution_concat_64_6_64_fp16.comp.cso.inl"
-#include "shaders/output/convolution_concat_64_9_64.comp.cso.inl"
+#include "shaders/output/convolution_concat_64_6_64_fp32.comp.cso.inl"
 #include "shaders/output/convolution_concat_64_9_64_fp16.comp.cso.inl"
-#include "shaders/output/convolution_concat_96_32_64.comp.cso.inl"
+#include "shaders/output/convolution_concat_64_9_64_fp32.comp.cso.inl"
 #include "shaders/output/convolution_concat_96_32_64_fp16.comp.cso.inl"
-#include "shaders/output/convolution_concat_96_64_112.comp.cso.inl"
+#include "shaders/output/convolution_concat_96_32_64_fp32.comp.cso.inl"
 #include "shaders/output/convolution_concat_96_64_112_fp16.comp.cso.inl"
+#include "shaders/output/convolution_concat_96_64_112_fp32.comp.cso.inl"
 #include "shaders/output/debug_rt.comp.cso.inl"
 #include "shaders/output/filter_variance.comp.cso.inl"
 #include "shaders/output/intersect_area_lights.comp.cso.inl"
@@ -1858,89 +1858,89 @@ bool Ray::Dx::Renderer::InitUNetPipelines() {
     };
 
     sh_convolution_DirectImg_3_32_ = Shader{"Convolution DirectImg 3 32", ctx_.get(),
-                                            select_shader(internal_shaders_output_convolution_Img_3_32_comp_cso,
+                                            select_shader(internal_shaders_output_convolution_Img_3_32_fp32_comp_cso,
                                                           internal_shaders_output_convolution_Img_3_32_fp16_comp_cso),
                                             eShaderType::Comp, log};
     sh_convolution_DirectImg_6_32_ = Shader{"Convolution DirectImg 6 32", ctx_.get(),
-                                            select_shader(internal_shaders_output_convolution_Img_6_32_comp_cso,
+                                            select_shader(internal_shaders_output_convolution_Img_6_32_fp32_comp_cso,
                                                           internal_shaders_output_convolution_Img_6_32_fp16_comp_cso),
                                             eShaderType::Comp, log};
     sh_convolution_DirectImg_9_32_ = Shader{"Convolution DirectImg 9 32", ctx_.get(),
-                                            select_shader(internal_shaders_output_convolution_Img_9_32_comp_cso,
+                                            select_shader(internal_shaders_output_convolution_Img_9_32_fp32_comp_cso,
                                                           internal_shaders_output_convolution_Img_9_32_fp16_comp_cso),
                                             eShaderType::Comp, log};
     sh_convolution_Direct_32_32_Downsample_ =
         Shader{"Convolution Direct 32 32 Downsample", ctx_.get(),
-               select_shader(internal_shaders_output_convolution_32_32_Downsample_comp_cso,
+               select_shader(internal_shaders_output_convolution_32_32_Downsample_fp32_comp_cso,
                              internal_shaders_output_convolution_32_32_Downsample_fp16_comp_cso),
                eShaderType::Comp, log};
     sh_convolution_Direct_32_48_Downsample_ =
         Shader{"Convolution Direct 32 48 Downsample", ctx_.get(),
-               select_shader(internal_shaders_output_convolution_32_48_Downsample_comp_cso,
+               select_shader(internal_shaders_output_convolution_32_48_Downsample_fp32_comp_cso,
                              internal_shaders_output_convolution_32_48_Downsample_fp16_comp_cso),
                eShaderType::Comp, log};
     sh_convolution_Direct_48_64_Downsample_ =
         Shader{"Convolution Direct 48 64 Downsample", ctx_.get(),
-               select_shader(internal_shaders_output_convolution_48_64_Downsample_comp_cso,
+               select_shader(internal_shaders_output_convolution_48_64_Downsample_fp32_comp_cso,
                              internal_shaders_output_convolution_48_64_Downsample_fp16_comp_cso),
                eShaderType::Comp, log};
     sh_convolution_Direct_64_80_Downsample_ =
         Shader{"Convolution Direct 64 80 Downsample", ctx_.get(),
-               select_shader(internal_shaders_output_convolution_64_80_Downsample_comp_cso,
+               select_shader(internal_shaders_output_convolution_64_80_Downsample_fp32_comp_cso,
                              internal_shaders_output_convolution_64_80_Downsample_fp16_comp_cso),
                eShaderType::Comp, log};
     sh_convolution_Direct_64_64_ = Shader{"Convolution Direct 64 64", ctx_.get(),
-                                          select_shader(internal_shaders_output_convolution_64_64_comp_cso,
+                                          select_shader(internal_shaders_output_convolution_64_64_fp32_comp_cso,
                                                         internal_shaders_output_convolution_64_64_fp16_comp_cso),
                                           eShaderType::Comp, log};
     sh_convolution_Direct_64_32_ = Shader{"Convolution Direct 64 32", ctx_.get(),
-                                          select_shader(internal_shaders_output_convolution_64_32_comp_cso,
+                                          select_shader(internal_shaders_output_convolution_64_32_fp32_comp_cso,
                                                         internal_shaders_output_convolution_64_32_fp16_comp_cso),
                                           eShaderType::Comp, log};
     sh_convolution_Direct_80_96_ = Shader{"Convolution Direct 80 96", ctx_.get(),
-                                          select_shader(internal_shaders_output_convolution_80_96_comp_cso,
+                                          select_shader(internal_shaders_output_convolution_80_96_fp32_comp_cso,
                                                         internal_shaders_output_convolution_80_96_fp16_comp_cso),
                                           eShaderType::Comp, log};
     sh_convolution_Direct_96_96_ = Shader{"Convolution Direct 96 96", ctx_.get(),
-                                          select_shader(internal_shaders_output_convolution_96_96_comp_cso,
+                                          select_shader(internal_shaders_output_convolution_96_96_fp32_comp_cso,
                                                         internal_shaders_output_convolution_96_96_fp16_comp_cso),
                                           eShaderType::Comp, log};
     sh_convolution_Direct_112_112_ = Shader{"Convolution Direct 112 112", ctx_.get(),
-                                            select_shader(internal_shaders_output_convolution_112_112_comp_cso,
+                                            select_shader(internal_shaders_output_convolution_112_112_fp32_comp_cso,
                                                           internal_shaders_output_convolution_112_112_fp16_comp_cso),
                                             eShaderType::Comp, log};
     sh_convolution_concat_Direct_96_64_112_ =
         Shader{"Convolution Concat Direct 96 64 112", ctx_.get(),
-               select_shader(internal_shaders_output_convolution_concat_96_64_112_comp_cso,
+               select_shader(internal_shaders_output_convolution_concat_96_64_112_fp32_comp_cso,
                              internal_shaders_output_convolution_concat_96_64_112_fp16_comp_cso),
                eShaderType::Comp, log};
     sh_convolution_concat_Direct_112_48_96_ =
         Shader{"Convolution Concat Direct 112 48 96", ctx_.get(),
-               select_shader(internal_shaders_output_convolution_concat_112_48_96_comp_cso,
+               select_shader(internal_shaders_output_convolution_concat_112_48_96_fp32_comp_cso,
                              internal_shaders_output_convolution_concat_112_48_96_fp16_comp_cso),
                eShaderType::Comp, log};
     sh_convolution_concat_Direct_96_32_64_ =
         Shader{"Convolution Concat Direct 96 32 64", ctx_.get(),
-               select_shader(internal_shaders_output_convolution_concat_96_32_64_comp_cso,
+               select_shader(internal_shaders_output_convolution_concat_96_32_64_fp32_comp_cso,
                              internal_shaders_output_convolution_concat_96_32_64_fp16_comp_cso),
                eShaderType::Comp, log};
     sh_convolution_concat_Direct_64_3_64_ =
         Shader{"Convolution Concat Direct 64 3 64", ctx_.get(),
-               select_shader(internal_shaders_output_convolution_concat_64_3_64_comp_cso,
+               select_shader(internal_shaders_output_convolution_concat_64_3_64_fp32_comp_cso,
                              internal_shaders_output_convolution_concat_64_3_64_fp16_comp_cso),
                eShaderType::Comp, log};
     sh_convolution_concat_Direct_64_6_64_ =
         Shader{"Convolution Concat Direct 64 6 64", ctx_.get(),
-               select_shader(internal_shaders_output_convolution_concat_64_6_64_comp_cso,
+               select_shader(internal_shaders_output_convolution_concat_64_6_64_fp32_comp_cso,
                              internal_shaders_output_convolution_concat_64_6_64_fp16_comp_cso),
                eShaderType::Comp, log};
     sh_convolution_concat_Direct_64_9_64_ =
         Shader{"Convolution Concat Direct 64 9 64", ctx_.get(),
-               select_shader(internal_shaders_output_convolution_concat_64_9_64_comp_cso,
+               select_shader(internal_shaders_output_convolution_concat_64_9_64_fp32_comp_cso,
                              internal_shaders_output_convolution_concat_64_9_64_fp16_comp_cso),
                eShaderType::Comp, log};
     sh_convolution_Direct_32_3_img_ = Shader{"Convolution Direct 32 3 Img", ctx_.get(),
-                                             select_shader(internal_shaders_output_convolution_32_3_img_comp_cso,
+                                             select_shader(internal_shaders_output_convolution_32_3_img_fp32_comp_cso,
                                                            internal_shaders_output_convolution_32_3_img_fp16_comp_cso),
                                              eShaderType::Comp, log};
 
