@@ -72,6 +72,7 @@ set(INTERNAL_SOURCE_FILES internal/Atmosphere.h
                           internal/LinearAlloc.cpp
                           internal/RastState.h
                           internal/RendererCPU.h
+                          internal/RendererGPU_kernels.h
                           internal/SamplingParams.h
                           internal/SamplingParams.cpp
                           internal/SceneCPU.h
