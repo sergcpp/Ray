@@ -235,6 +235,18 @@ bool Ray::Vk::Context::Init(ILog *log, const char *preferred_device) {
         api_.vkGetPhysicalDeviceProperties2KHR(physical_device_, &prop2);
     }
 
+    { // check if subgroup extensions are supported
+        VkPhysicalDeviceSubgroupProperties subgroup_props = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES};
+
+        VkPhysicalDeviceProperties2 prop2 = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
+        prop2.pNext = &subgroup_props;
+
+        api_.vkGetPhysicalDeviceProperties2KHR(physical_device_, &prop2);
+
+        subgroup_supported_ = (subgroup_props.supportedStages & VK_SHADER_STAGE_COMPUTE_BIT) != 0;
+        subgroup_supported_ &= (subgroup_props.supportedOperations & VK_SUBGROUP_FEATURE_BASIC_BIT) != 0;
+    }
+
     default_memory_allocs_ = std::make_unique<MemoryAllocators>(
         "Default Allocs", this, 32 * 1024 * 1024 /* initial_block_size */, 1.5f /* growth_factor */);
 

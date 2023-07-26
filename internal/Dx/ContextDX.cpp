@@ -275,6 +275,8 @@ bool Ray::Dx::Context::Init(ILog *log, const char *preferred_device) {
         }
     }
 
+    subgroup_supported_ = true;
+
     { // check shader model support
         D3D12_FEATURE_DATA_SHADER_MODEL supported_shader_models = {};
 
@@ -282,6 +284,7 @@ bool Ray::Dx::Context::Init(ILog *log, const char *preferred_device) {
         hr = device_->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &supported_shader_models,
                                           sizeof(supported_shader_models));
         if (FAILED(hr)) {
+            subgroup_supported_ = false;
             return false;
         }
 

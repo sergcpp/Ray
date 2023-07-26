@@ -5,14 +5,14 @@
 
 INTERFACE_START(SortInitCountTable)
 
+#include "sort_common.h"
+
 struct Params {
     int shift;
     int counter;
     int _pad0;
     int _pad1;
 };
-
-const int LOCAL_GROUP_SIZE_X = 256;
 
 const int HASHES_BUF_SLOT = 1;
 const int COUNTERS_BUF_SLOT = 2;

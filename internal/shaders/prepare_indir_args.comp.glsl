@@ -7,6 +7,7 @@
 #endif
 
 #include "prepare_indir_args_interface.h"
+#include "sort_common.h"
 
 layout(std430, binding = INOUT_COUNTERS_BUF_SLOT) buffer Counters {
     uint g_counters[];
@@ -30,26 +31,18 @@ void main() {
         g_out_indir_args[4] = 1;
         g_out_indir_args[5] = 1;
 
-        { // arguments for scanning
-            uint group_count = (ray_count + 255) / 256;
+        { // arguments for sorting
+            const int BlockSize = SORT_ELEMENTS_PER_THREAD * SORT_THREADGROUP_SIZE;
+            uint blocks_count = (ray_count + BlockSize - 1) / BlockSize;
             g_counters[4] = ray_count;
-            g_out_indir_args[12] = group_count;
+            g_out_indir_args[12] = blocks_count;
             g_out_indir_args[13] = 1;
             g_out_indir_args[14] = 1;
 
-            g_counters[5] = group_count;
-            g_out_indir_args[15] = (group_count + 255) / 256;
+            g_counters[5] = blocks_count;
+            g_out_indir_args[15] = SORT_BINS_COUNT * ((blocks_count + BlockSize - 1) / BlockSize);
             g_out_indir_args[16] = 1;
             g_out_indir_args[17] = 1;
-
-            uint counters_count = group_count * 0x10;
-            for (int i = 0; i < 4; ++i) {
-                g_counters[6 + i] = counters_count;
-                g_out_indir_args[18 + 3 * i + 0] = (counters_count + 255) / 256;
-                g_out_indir_args[18 + 3 * i + 1] = 1;
-                g_out_indir_args[18 + 3 * i + 2] = 1;
-                counters_count = (counters_count + 255) / 256;
-            }
         }
 
         g_counters[0] = 0;

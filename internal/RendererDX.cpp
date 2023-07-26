@@ -19,6 +19,7 @@
 
 #include "../Log.h"
 
+#include "shaders/sort_common.h"
 #include "shaders/types.h"
 
 #define DEBUG_HWRT 0
@@ -131,13 +132,13 @@ namespace Dx {
 #include "shaders/output/shade_primary_bindless_n.comp.cso.inl"
 #include "shaders/output/shade_secondary_atlas.comp.cso.inl"
 #include "shaders/output/shade_secondary_bindless.comp.cso.inl"
-#include "shaders/output/sort_add_partial_sums.comp.cso.inl"
-#include "shaders/output/sort_exclusive_scan.comp.cso.inl"
 #include "shaders/output/sort_hash_rays.comp.cso.inl"
-#include "shaders/output/sort_inclusive_scan.comp.cso.inl"
 #include "shaders/output/sort_init_count_table.comp.cso.inl"
+#include "shaders/output/sort_reduce.comp.cso.inl"
 #include "shaders/output/sort_reorder_rays.comp.cso.inl"
-#include "shaders/output/sort_write_sorted_hashes.comp.cso.inl"
+#include "shaders/output/sort_scan.comp.cso.inl"
+#include "shaders/output/sort_scan_add.comp.cso.inl"
+#include "shaders/output/sort_scatter.comp.cso.inl"
 } // namespace Dx
 } // namespace Ray
 
@@ -152,10 +153,12 @@ Ray::Dx::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
     use_bindless_ = s.use_bindless && ctx_->max_sampled_images() >= 16384u;
     use_tex_compression_ = s.use_tex_compression;
     use_fp16_ = ctx_->fp16_supported();
+    use_subgroup_ = ctx_->subgroup_supported();
     log->Info("HWRT        is %s", use_hwrt_ ? "enabled" : "disabled");
     log->Info("Bindless    is %s", use_bindless_ ? "enabled" : "disabled");
     log->Info("Compression is %s", use_tex_compression_ ? "enabled" : "disabled");
     log->Info("Float16     is %s", use_fp16_ ? "enabled" : "disabled");
+    log->Info("Subgroup    is %s", use_subgroup_ ? "enabled" : "disabled");
 
     sh_prim_rays_gen_simple_ = Shader{"Primary Raygen Simple", ctx_.get(),
                                       internal_shaders_output_primary_ray_gen_simple_comp_cso, eShaderType::Comp, log};
@@ -299,17 +302,15 @@ Ray::Dx::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
 
     sh_sort_hash_rays_ =
         Shader{"Sort Hash Rays", ctx_.get(), internal_shaders_output_sort_hash_rays_comp_cso, eShaderType::Comp, log};
-    sh_sort_exclusive_scan_ = Shader{"Sort Exclusive Scan", ctx_.get(),
-                                     internal_shaders_output_sort_exclusive_scan_comp_cso, eShaderType::Comp, log};
-    sh_sort_inclusive_scan_ = Shader{"Sort Inclusive Scan", ctx_.get(),
-                                     internal_shaders_output_sort_inclusive_scan_comp_cso, eShaderType::Comp, log};
-    sh_sort_add_partial_sums_ = Shader{"Sort Add Partial Sums", ctx_.get(),
-                                       internal_shaders_output_sort_add_partial_sums_comp_cso, eShaderType::Comp, log};
     sh_sort_init_count_table_ = Shader{"Sort Init Count Table", ctx_.get(),
                                        internal_shaders_output_sort_init_count_table_comp_cso, eShaderType::Comp, log};
-    sh_sort_write_sorted_hashes_ =
-        Shader{"Sort Write Sorted Hashes", ctx_.get(), internal_shaders_output_sort_write_sorted_hashes_comp_cso,
-               eShaderType::Comp, log};
+    sh_sort_reduce_ =
+        Shader{"Sort Reduce", ctx_.get(), internal_shaders_output_sort_reduce_comp_cso, eShaderType::Comp, log};
+    sh_sort_scan_ = Shader{"Sort Scan", ctx_.get(), internal_shaders_output_sort_scan_comp_cso, eShaderType::Comp, log};
+    sh_sort_scan_add_ =
+        Shader{"Sort Scan Add", ctx_.get(), internal_shaders_output_sort_scan_add_comp_cso, eShaderType::Comp, log};
+    sh_sort_scatter_ =
+        Shader{"Sort Scatter", ctx_.get(), internal_shaders_output_sort_scatter_comp_cso, eShaderType::Comp, log};
     sh_sort_reorder_rays_ = Shader{"Sort Reorder Rays", ctx_.get(), internal_shaders_output_sort_reorder_rays_comp_cso,
                                    eShaderType::Comp, log};
 
@@ -361,11 +362,11 @@ Ray::Dx::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
         prog_debug_rt_ = Program{"Debug RT", ctx_.get(), &sh_debug_rt_, log};
     }
     prog_sort_hash_rays_ = Program{"Hash Rays", ctx_.get(), &sh_sort_hash_rays_, log};
-    prog_sort_exclusive_scan_ = Program{"Exclusive Scan", ctx_.get(), &sh_sort_exclusive_scan_, log};
-    prog_sort_inclusive_scan_ = Program{"Inclusive Scan", ctx_.get(), &sh_sort_inclusive_scan_, log};
-    prog_sort_add_partial_sums_ = Program{"Add Partial Sums", ctx_.get(), &sh_sort_add_partial_sums_, log};
     prog_sort_init_count_table_ = Program{"Init Count Table", ctx_.get(), &sh_sort_init_count_table_, log};
-    prog_sort_write_sorted_hashes_ = Program{"Write Sorted Chunks", ctx_.get(), &sh_sort_write_sorted_hashes_, log};
+    prog_sort_reduce_ = Program{"Sort Reduce", ctx_.get(), &sh_sort_reduce_, log};
+    prog_sort_scan_ = Program{"Sort Scan", ctx_.get(), &sh_sort_scan_, log};
+    prog_sort_scan_add_ = Program{"Sort Scan Add", ctx_.get(), &sh_sort_scan_add_, log};
+    prog_sort_scatter_ = Program{"Sort Scatter", ctx_.get(), &sh_sort_scatter_, log};
     prog_sort_reorder_rays_ = Program{"Reorder Rays", ctx_.get(), &sh_sort_reorder_rays_, log};
     // prog_intersect_scene_rtpipe_ = Program{"Intersect Scene",
     //                                        ctx_.get(),
@@ -408,11 +409,11 @@ Ray::Dx::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
         !pi_nlm_filter_bn_.Init(ctx_.get(), &prog_nlm_filter_bn_, log) ||
         (use_hwrt_ && !pi_debug_rt_.Init(ctx_.get(), &prog_debug_rt_, log)) ||
         !pi_sort_hash_rays_.Init(ctx_.get(), &prog_sort_hash_rays_, log) ||
-        !pi_sort_exclusive_scan_.Init(ctx_.get(), &prog_sort_exclusive_scan_, log) ||
-        !pi_sort_inclusive_scan_.Init(ctx_.get(), &prog_sort_inclusive_scan_, log) ||
-        !pi_sort_add_partial_sums_.Init(ctx_.get(), &prog_sort_add_partial_sums_, log) ||
         !pi_sort_init_count_table_.Init(ctx_.get(), &prog_sort_init_count_table_, log) ||
-        !pi_sort_write_sorted_hashes_.Init(ctx_.get(), &prog_sort_write_sorted_hashes_, log) ||
+        !pi_sort_reduce_.Init(ctx_.get(), &prog_sort_reduce_, log) ||
+        !pi_sort_scan_.Init(ctx_.get(), &prog_sort_scan_, log) ||
+        !pi_sort_scan_add_.Init(ctx_.get(), &prog_sort_scan_add_, log) ||
+        !pi_sort_scatter_.Init(ctx_.get(), &prog_sort_scatter_, log) ||
         !pi_sort_reorder_rays_.Init(ctx_.get(), &prog_sort_reorder_rays_, log)
         //(use_hwrt_ && !pi_intersect_scene_rtpipe_.Init(ctx_.get(), &prog_intersect_scene_rtpipe_, log)) ||
         //(use_hwrt_ &&
@@ -516,41 +517,20 @@ void Ray::Dx::Renderer::Resize(const int w, const int h) {
     prim_hits_buf_ =
         Buffer{"Primary Hits", ctx_.get(), eBufType::Storage, uint32_t(sizeof(Types::hit_data_t) * num_pixels)};
 
-    int scan_values_count = num_pixels;
-    int scan_values_rounded_count =
-        SORT_SCAN_PORTION * ((scan_values_count + SORT_SCAN_PORTION - 1) / SORT_SCAN_PORTION);
+    ray_hashes_bufs_[0] =
+        Buffer{"Ray Hashes #0", ctx_.get(), eBufType::Storage, uint32_t(sizeof(Types::ray_hash_t) * num_pixels)};
+    ray_hashes_bufs_[1] =
+        Buffer{"Ray Hashes #1", ctx_.get(), eBufType::Storage, uint32_t(sizeof(Types::ray_hash_t) * num_pixels)};
 
-    ray_hashes_bufs_[0] = Buffer{"Ray Hashes #0", ctx_.get(), eBufType::Storage,
-                                 uint32_t(sizeof(Types::ray_hash_t) * scan_values_rounded_count)};
-    ray_hashes_bufs_[1] = Buffer{"Ray Hashes #1", ctx_.get(), eBufType::Storage,
-                                 uint32_t(sizeof(Types::ray_hash_t) * scan_values_rounded_count)};
-    count_table_buf_ =
-        Buffer{"Count Table", ctx_.get(), eBufType::Storage, uint32_t(sizeof(uint32_t) * scan_values_rounded_count)};
+    const int BlockSize = SORT_ELEMENTS_PER_THREAD * SORT_THREADGROUP_SIZE;
+    const int blocks_count = (num_pixels + BlockSize - 1) / BlockSize;
 
-    CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
+    count_table_buf_ = Buffer{"Count Table", ctx_.get(), eBufType::Storage,
+                              uint32_t(sizeof(uint32_t) * SORT_BINS_COUNT * blocks_count)};
 
-    for (int i = 0; i < 4; ++i) {
-        char name_buf[64];
-
-        snprintf(name_buf, sizeof(name_buf), "Scan Values %i", i);
-        scan_values_bufs_[i] =
-            Buffer{name_buf, ctx_.get(), eBufType::Storage, uint32_t(sizeof(uint32_t) * scan_values_rounded_count)};
-        scan_values_bufs_[i].Fill(0, uint32_t(sizeof(uint32_t) * scan_values_rounded_count), 0, cmd_buf);
-
-        const int part_sums_count = (scan_values_count + SORT_SCAN_PORTION - 1) / SORT_SCAN_PORTION;
-        const int part_sums_rounded_count =
-            SORT_SCAN_PORTION * ((part_sums_count + SORT_SCAN_PORTION - 1) / SORT_SCAN_PORTION);
-        snprintf(name_buf, sizeof(name_buf), "Partial Sums %i", i);
-        partial_sums_bufs_[i] =
-            Buffer{name_buf, ctx_.get(), eBufType::Storage, uint32_t(sizeof(uint32_t) * part_sums_rounded_count)};
-        partial_sums_bufs_[i].Fill(0, uint32_t(sizeof(uint32_t) * part_sums_rounded_count), 0, cmd_buf);
-
-        scan_values_count = (scan_values_count + SORT_SCAN_PORTION - 1) / SORT_SCAN_PORTION;
-        scan_values_rounded_count =
-            SORT_SCAN_PORTION * ((scan_values_count + SORT_SCAN_PORTION - 1) / SORT_SCAN_PORTION);
-    }
-
-    EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+    const int reduce_blocks_count = (blocks_count + BlockSize - 1) / BlockSize;
+    reduce_table_buf_ = Buffer{"Reduce Table", ctx_.get(), eBufType::Storage,
+                               uint32_t(sizeof(uint32_t) * SORT_BINS_COUNT * reduce_blocks_count)};
 
     w_ = w;
     h_ = h;
@@ -1012,8 +992,7 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
 
             kernel_SortHashRays(cmd_buf, indir_args_buf_, secondary_rays_buf_, counters_buf_, root_min, cell_size,
                                 ray_hashes_bufs_[0]);
-            RadixSort(cmd_buf, indir_args_buf_, ray_hashes_bufs_, count_table_buf_, counters_buf_, partial_sums_bufs_,
-                      scan_values_bufs_);
+            RadixSort(cmd_buf, indir_args_buf_, ray_hashes_bufs_, count_table_buf_, counters_buf_, reduce_table_buf_);
             kernel_SortReorderRays(cmd_buf, indir_args_buf_, 0, secondary_rays_buf_, ray_hashes_bufs_[0], counters_buf_,
                                    1, prim_rays_buf_);
 
@@ -1575,11 +1554,8 @@ void Ray::Dx::Renderer::UpdateHaltonSequence(const int iteration, std::unique_pt
 }
 
 void Ray::Dx::Renderer::RadixSort(CommandBuffer cmd_buf, const Buffer &indir_args, Buffer _hashes[2],
-                                  Buffer &count_table, const Buffer &counters, Buffer partial_sums[],
-                                  Buffer scan_values[]) {
+                                  Buffer &count_table, const Buffer &counters, const Buffer &reduce_table) {
     DebugMarker _(ctx_.get(), cmd_buf, "Radix Sort");
-
-    static const int indir_args_indices[] = {6, 7, 8, 9};
 
     static const char *MarkerStrings[] = {"Radix Sort Iter #0 [Bits   0-4]", "Radix Sort Iter #1 [Bits   4-8]",
                                           "Radix Sort Iter #2 [Bits  8-12]", "Radix Sort Iter #3 [Bits 12-16]",
@@ -1591,39 +1567,18 @@ void Ray::Dx::Renderer::RadixSort(CommandBuffer cmd_buf, const Buffer &indir_arg
         DebugMarker _(ctx_.get(), cmd_buf, MarkerStrings[shift / 4]);
 
         kernel_SortInitCountTable(cmd_buf, shift, indir_args, 4, *hashes[0], counters, 4, count_table);
-        ExclusiveScan(cmd_buf, indir_args, indir_args_indices, count_table, 0 /* offset */, 1 /* stride */,
-                      partial_sums, scan_values);
-        kernel_SortWriteSortedHashes(cmd_buf, shift, indir_args, 5, *hashes[0], scan_values[0], counters, 5, 4,
-                                     *hashes[1]);
+
+        kernel_SortReduce(cmd_buf, indir_args, 5, count_table, counters, 5, reduce_table);
+
+        kernel_SortScan(cmd_buf, reduce_table, counters, 5, reduce_table);
+
+        kernel_SortScanAdd(cmd_buf, indir_args, 5, count_table, reduce_table, counters, 5, count_table);
+
+        kernel_SortScatter(cmd_buf, shift, indir_args, 4, *hashes[0], count_table, counters, 4, *hashes[1]);
+
         std::swap(hashes[0], hashes[1]);
     }
     assert(hashes[0] == &_hashes[0]);
-}
-
-void Ray::Dx::Renderer::ExclusiveScan(CommandBuffer cmd_buf, const Buffer &indir_args, const int indir_args_indices[],
-                                      const Buffer &input, const uint32_t offset, const uint32_t stride,
-                                      const Buffer partial_sums[], const Buffer scan_values[]) {
-    DebugMarker _(ctx_.get(), cmd_buf, "Exclusive Scan");
-
-    kernel_SortExclusiveScan(cmd_buf, indir_args, indir_args_indices[0], input, offset, stride, scan_values[0],
-                             partial_sums[0]);
-
-    kernel_SortInclusiveScan(cmd_buf, indir_args, indir_args_indices[1], partial_sums[0], 0 /* offset */,
-                             1 /* stride */, scan_values[1], partial_sums[1]);
-
-    { //
-        kernel_SortInclusiveScan(cmd_buf, indir_args, indir_args_indices[2], partial_sums[1], 0 /* offset */,
-                                 1 /* stride */, scan_values[2], partial_sums[2]);
-        { //
-            kernel_SortInclusiveScan(cmd_buf, indir_args, indir_args_indices[3], partial_sums[2], 0 /* offset */,
-                                     1 /* stride */, scan_values[3], partial_sums[3]);
-            kernel_SortAddPartialSums(cmd_buf, indir_args, indir_args_indices[2], scan_values[3], scan_values[2]);
-        }
-
-        kernel_SortAddPartialSums(cmd_buf, indir_args, indir_args_indices[1], scan_values[2], scan_values[1]);
-    }
-
-    kernel_SortAddPartialSums(cmd_buf, indir_args, indir_args_indices[0], scan_values[1], scan_values[0]);
 }
 
 Ray::color_data_rgba_t Ray::Dx::Renderer::get_pixels_ref(const bool tonemap) const {

@@ -53,8 +53,8 @@ class Renderer : public RendererBase {
         sh_shade_secondary_, sh_intersect_scene_shadow_, sh_prepare_indir_args_, sh_mix_incremental_,
         sh_mix_incremental_b_, sh_mix_incremental_n_, sh_mix_incremental_bn_, sh_postprocess_, sh_filter_variance_,
         sh_nlm_filter_, sh_nlm_filter_b_, sh_nlm_filter_n_, sh_nlm_filter_bn_, sh_debug_rt_;
-    Shader sh_sort_hash_rays_, sh_sort_exclusive_scan_, sh_sort_inclusive_scan_, sh_sort_add_partial_sums_,
-        sh_sort_init_count_table_, sh_sort_write_sorted_hashes_, sh_sort_reorder_rays_;
+    Shader sh_sort_hash_rays_, sh_sort_init_count_table_, sh_sort_reduce_, sh_sort_scan_, sh_sort_scan_add_,
+        sh_sort_scatter_, sh_sort_reorder_rays_;
     Shader sh_intersect_scene_rgen_, sh_intersect_scene_rchit_, sh_intersect_scene_rmiss_,
         sh_intersect_scene_indirect_rgen_;
     Shader sh_convolution_DirectImg_3_32_, sh_convolution_DirectImg_6_32_, sh_convolution_DirectImg_9_32_,
@@ -72,8 +72,8 @@ class Renderer : public RendererBase {
         prog_prepare_indir_args_, prog_mix_incremental_, prog_mix_incremental_b_, prog_mix_incremental_n_,
         prog_mix_incremental_bn_, prog_postprocess_, prog_filter_variance_, prog_nlm_filter_, prog_nlm_filter_b_,
         prog_nlm_filter_n_, prog_nlm_filter_bn_, prog_debug_rt_;
-    Program prog_sort_hash_rays_, prog_sort_exclusive_scan_, prog_sort_inclusive_scan_, prog_sort_add_partial_sums_,
-        prog_sort_init_count_table_, prog_sort_write_sorted_hashes_, prog_sort_reorder_rays_;
+    Program prog_sort_hash_rays_, prog_sort_init_count_table_, prog_sort_reduce_, prog_sort_scan_, prog_sort_scan_add_,
+        prog_sort_scatter_, prog_sort_reorder_rays_;
     Program prog_intersect_scene_rtpipe_, prog_intersect_scene_indirect_rtpipe_;
     Program prog_convolution_DirectImg_3_32_, prog_convolution_DirectImg_6_32_, prog_convolution_DirectImg_9_32_,
         prog_convolution_Direct_32_32_Downsample_, prog_convolution_Direct_32_48_Downsample_,
@@ -89,9 +89,8 @@ class Renderer : public RendererBase {
         pi_shade_secondary_, pi_intersect_scene_shadow_, pi_prepare_indir_args_, pi_mix_incremental_,
         pi_mix_incremental_b_, pi_mix_incremental_n_, pi_mix_incremental_bn_, pi_postprocess_, pi_filter_variance_,
         pi_nlm_filter_, pi_nlm_filter_b_, pi_nlm_filter_n_, pi_nlm_filter_bn_, pi_debug_rt_;
-    Pipeline pi_sort_hash_rays_, pi_sort_exclusive_scan_, pi_sort_inclusive_scan_, pi_sort_add_partial_sums_,
-        pi_sort_init_count_table_, pi_sort_write_sorted_hashes_, pi_sort_reorder_rays_, pi_intersect_scene_rtpipe_,
-        pi_intersect_scene_indirect_rtpipe_;
+    Pipeline pi_sort_hash_rays_, pi_sort_init_count_table_, pi_sort_reduce_, pi_sort_scan_, pi_sort_scan_add_,
+        pi_sort_scatter_, pi_sort_reorder_rays_, pi_intersect_scene_rtpipe_, pi_intersect_scene_indirect_rtpipe_;
     Pipeline pi_convolution_DirectImg_3_32_, pi_convolution_DirectImg_6_32_, pi_convolution_DirectImg_9_32_,
         pi_convolution_Direct_32_32_Downsample_, pi_convolution_Direct_32_48_Downsample_,
         pi_convolution_Direct_48_64_Downsample_, pi_convolution_Direct_64_80_Downsample_, pi_convolution_Direct_64_64_,
@@ -102,7 +101,8 @@ class Renderer : public RendererBase {
         pi_convolution_concat_Direct_64_9_64_, pi_convolution_Direct_32_3_img_;
 
     int w_ = 0, h_ = 0;
-    bool use_hwrt_ = false, use_bindless_ = false, use_tex_compression_ = false, use_fp16_ = false;
+    bool use_hwrt_ = false, use_bindless_ = false, use_tex_compression_ = false, use_fp16_ = false,
+         use_subgroup_ = false;
 
     std::vector<uint16_t> permutations_;
     int loaded_halton_;
@@ -119,7 +119,7 @@ class Renderer : public RendererBase {
     eViewTransform loaded_view_transform_ = eViewTransform::Standard;
 
     Buffer halton_seq_buf_, prim_rays_buf_, secondary_rays_buf_, shadow_rays_buf_, prim_hits_buf_, ray_hashes_bufs_[2],
-        scan_values_bufs_[4], partial_sums_bufs_[4], count_table_buf_;
+        count_table_buf_, reduce_table_buf_;
     Buffer counters_buf_, indir_args_buf_;
 
     static const int SORT_SCAN_PORTION = 256;
@@ -248,29 +248,19 @@ class Renderer : public RendererBase {
     void kernel_SortHashRays(CommandBuffer cmd_buf, const Buffer &indir_args, const Buffer &rays,
                              const Buffer &counters, const float root_min[3], const float cell_size[3],
                              const Buffer &out_hashes);
-    void kernel_SortScan(CommandBuffer cmd_buf, bool exclusive, const Buffer &indir_args, int indir_args_index,
-                         const Buffer &input, int input_offset, int input_stride, const Buffer &out_scan_values,
-                         const Buffer &out_partial_sums);
-    void kernel_SortExclusiveScan(CommandBuffer cmd_buf, const Buffer &indir_args, int indir_args_index,
-                                  const Buffer &input, int input_offset, int input_stride,
-                                  const Buffer &out_scan_values, const Buffer &out_partial_sums) {
-        kernel_SortScan(cmd_buf, true, indir_args, indir_args_index, input, input_offset, input_stride, out_scan_values,
-                        out_partial_sums);
-    }
-    void kernel_SortInclusiveScan(CommandBuffer cmd_buf, const Buffer &indir_args, int indir_args_index,
-                                  const Buffer &input, int input_offset, int input_stride,
-                                  const Buffer &out_scan_values, const Buffer &out_partial_sums) {
-        kernel_SortScan(cmd_buf, false, indir_args, indir_args_index, input, input_offset, input_stride,
-                        out_scan_values, out_partial_sums);
-    }
-    void kernel_SortAddPartialSums(CommandBuffer cmd_buf, const Buffer &indir_args, int indir_args_index,
-                                   const Buffer &partials_sums, const Buffer &inout_values);
     void kernel_SortInitCountTable(CommandBuffer cmd_buf, int shift, const Buffer &indir_args, int indir_args_index,
                                    const Buffer &hashes, const Buffer &counters, int counter_index,
                                    const Buffer &out_count_table);
-    void kernel_SortWriteSortedHashes(CommandBuffer cmd_buf, int shift, const Buffer &indir_args, int indir_args_index,
-                                      const Buffer &hashes, const Buffer &offsets, const Buffer &counters,
-                                      int counter_index, int chunks_counter_index, const Buffer &out_chunks);
+    void kernel_SortReduce(CommandBuffer cmd_buf, const Buffer &indir_args, int indir_args_index, const Buffer &input,
+                           const Buffer &counters, int counter_index, const Buffer &out_reduce_table);
+    void kernel_SortScan(CommandBuffer cmd_buf, const Buffer &input, const Buffer &counters, int counter_index,
+                         const Buffer &out_scan_values);
+    void kernel_SortScanAdd(CommandBuffer cmd_buf, const Buffer &indir_args, int indir_args_index, const Buffer &input,
+                            const Buffer &scratch, const Buffer &counters, int counter_index,
+                            const Buffer &out_scan_values);
+    void kernel_SortScatter(CommandBuffer cmd_buf, int shift, const Buffer &indir_args, int indir_args_index,
+                            const Buffer &hashes, const Buffer &sum_table, const Buffer &counters, int counter_index,
+                            const Buffer &out_chunks);
     void kernel_SortReorderRays(CommandBuffer cmd_buf, const Buffer &indir_args, int indir_args_index,
                                 const Buffer &in_rays, const Buffer &indices, const Buffer &counters, int counter_index,
                                 const Buffer &out_rays);
@@ -280,11 +270,7 @@ class Renderer : public RendererBase {
     void UpdateHaltonSequence(int iteration, std::unique_ptr<float[]> &seq);
 
     void RadixSort(CommandBuffer cmd_buf, const Buffer &indir_args, Buffer hashes[2], Buffer &count_table,
-                   const Buffer &counters, Buffer partial_sums[], Buffer scan_values[]);
-
-    void ExclusiveScan(CommandBuffer cmd_buf, const Buffer &indir_args, const int indir_args_indices[],
-                       const Buffer &input, const uint32_t offset, const uint32_t stride, const Buffer partial_sums[],
-                       const Buffer scan_values[]);
+                   const Buffer &counters, const Buffer &reduce_table);
 
     color_data_rgba_t get_pixels_ref(bool tonemap) const;
 

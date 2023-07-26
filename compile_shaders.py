@@ -164,11 +164,11 @@ def main():
 
     # Sorting
     compile_shader_async(src_name="sort_hash_rays.comp.glsl")
-    compile_shader_async(src_name="sort_scan.comp.glsl", spv_name="sort_inclusive_scan.comp.spv", defines="-DEXCLUSIVE_SCAN=0")
-    compile_shader_async(src_name="sort_scan.comp.glsl", spv_name="sort_exclusive_scan.comp.spv", defines="-DEXCLUSIVE_SCAN=1")
-    compile_shader_async(src_name="sort_add_partial_sums.comp.glsl")
     compile_shader_async(src_name="sort_init_count_table.comp.glsl")
-    compile_shader_async(src_name="sort_write_sorted_hashes.comp.glsl")
+    compile_shader_async(src_name="sort_reduce.comp.glsl")
+    compile_shader_async(src_name="sort_scan.comp.glsl", spv_name="sort_scan.comp.spv", defines="-DADD_PARTIAL_SUMS=0")
+    compile_shader_async(src_name="sort_scan.comp.glsl", spv_name="sort_scan_add.comp.spv", defines="-DADD_PARTIAL_SUMS=1")
+    compile_shader_async(src_name="sort_scatter.comp.glsl")
     compile_shader_async(src_name="sort_reorder_rays.comp.glsl")
 
     # Other
