@@ -251,7 +251,7 @@ windows-x86_64-cpu-test-job:
   needs:
     - windows-x86_64-build-job
   tags:
-    - windows,x86_64,fastcpu
+    - windows,x86_64
 
 windows-x86_64-cpu-sse2-test-job:
   variables:
@@ -263,7 +263,7 @@ windows-x86_64-cpu-sse2-test-job:
   needs:
     - windows-x86_64-build-job
   tags:
-    - windows,x86_64,fastcpu,win10
+    - windows,x86_64,win10
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
 
@@ -277,7 +277,7 @@ windows-x86_64-cpu-sse41-test-job:
   needs:
     - windows-x86_64-build-job
   tags:
-    - windows,x86_64,fastcpu,win10
+    - windows,x86_64,win10
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
 
@@ -291,7 +291,7 @@ windows-x86_64-cpu-avx-test-job:
   needs:
     - windows-x86_64-build-job
   tags:
-    - windows,x86_64,fastcpu
+    - windows,x86_64
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
 
@@ -305,7 +305,7 @@ windows-x86_64-cpu-avx2-test-job:
   needs:
     - windows-x86_64-build-job
   tags:
-    - windows,x86_64,fastcpu
+    - windows,x86_64
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
 
@@ -319,7 +319,7 @@ windows-x86_64-cpu-avx512-test-job:
   needs:
     - windows-x86_64-build-job
   tags:
-    - windows,x86_64,fastcpu
+    - windows,x86_64
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
 
@@ -332,7 +332,7 @@ windows-x86_64-cpu-test-asan-job:
   needs:
     - windows-x86_64-build-job
   tags:
-    - windows,x86_64,fastcpu
+    - windows,x86_64
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
 
@@ -402,7 +402,7 @@ windows-arm64-cpu-test-job:
   needs:
     - windows-arm64-build-job
   tags:
-    - windows,arm64,fastcpu
+    - windows,arm64
 
 windows-arm64-gpu-adreno-test-job:
   variables:
@@ -450,7 +450,7 @@ linux-x86_64-cpu-test-job:
   needs:
     - linux-x86_64-build-job
   tags:
-    - linux,x86_64,fastcpu
+    - linux,x86_64
 
 linux-x86_64-gpu-nv-test-job:
   variables:
@@ -483,7 +483,7 @@ macos-x86_64-cpu-test-job:
   needs:
     - macos-universal-build-job
   tags:
-    - macos,x86_64,fastcpu
+    - macos,x86_64
 
 macos-arm64-cpu-test-job:
   variables:
@@ -494,7 +494,7 @@ macos-arm64-cpu-test-job:
   needs:
     - macos-universal-build-job
   tags:
-    - macos,arm64,fastcpu
+    - macos,arm64
 
 macos-arm64-gpu-m1-test-job:
   variables:
