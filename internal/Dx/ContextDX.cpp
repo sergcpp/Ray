@@ -303,6 +303,18 @@ bool Ray::Dx::Context::Init(ILog *log, const char *preferred_device) {
         }
     }
 
+    { // check wave ops support
+        D3D12_FEATURE_DATA_D3D12_OPTIONS1 options1;
+
+        hr = device_->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS1, &options1,
+                                          sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS1));
+        if (FAILED(hr)) {
+            subgroup_supported_ = false;
+        }
+
+        subgroup_supported_ = (options1.WaveOps == TRUE);
+    }
+
     default_memory_allocs_ = std::make_unique<MemoryAllocators>(
         "Default Allocs", this, 32 * 1024 * 1024 /* initial_block_size */, 1.5f /* growth_factor */);
     staging_descr_alloc_ = std::make_unique<DescrMultiPoolAlloc<LinearAllocAdapted>>(this, false, 16 * 1024);
