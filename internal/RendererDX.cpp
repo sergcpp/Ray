@@ -409,11 +409,11 @@ Ray::Dx::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
         !pi_nlm_filter_bn_.Init(ctx_.get(), &prog_nlm_filter_bn_, log) ||
         (use_hwrt_ && !pi_debug_rt_.Init(ctx_.get(), &prog_debug_rt_, log)) ||
         !pi_sort_hash_rays_.Init(ctx_.get(), &prog_sort_hash_rays_, log) ||
-        !pi_sort_init_count_table_.Init(ctx_.get(), &prog_sort_init_count_table_, log) ||
-        !pi_sort_reduce_.Init(ctx_.get(), &prog_sort_reduce_, log) ||
-        !pi_sort_scan_.Init(ctx_.get(), &prog_sort_scan_, log) ||
-        !pi_sort_scan_add_.Init(ctx_.get(), &prog_sort_scan_add_, log) ||
-        !pi_sort_scatter_.Init(ctx_.get(), &prog_sort_scatter_, log) ||
+        (use_subgroup_ && !pi_sort_init_count_table_.Init(ctx_.get(), &prog_sort_init_count_table_, log)) ||
+        (use_subgroup_ && !pi_sort_reduce_.Init(ctx_.get(), &prog_sort_reduce_, log)) ||
+        (use_subgroup_ && !pi_sort_scan_.Init(ctx_.get(), &prog_sort_scan_, log)) ||
+        (use_subgroup_ && !pi_sort_scan_add_.Init(ctx_.get(), &prog_sort_scan_add_, log)) ||
+        (use_subgroup_ && !pi_sort_scatter_.Init(ctx_.get(), &prog_sort_scatter_, log)) ||
         !pi_sort_reorder_rays_.Init(ctx_.get(), &prog_sort_reorder_rays_, log)
         //(use_hwrt_ && !pi_intersect_scene_rtpipe_.Init(ctx_.get(), &prog_intersect_scene_rtpipe_, log)) ||
         //(use_hwrt_ &&
@@ -987,7 +987,7 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
 #if !DISABLE_SORTING
         timestamps_[ctx_->backend_frame].secondary_sort.push_back(ctx_->WriteTimestamp(cmd_buf, true));
 
-        if (!use_hwrt_) {
+        if (!use_hwrt_ && use_subgroup_) {
             DebugMarker _(ctx_.get(), cmd_buf, "Sort Rays");
 
             kernel_SortHashRays(cmd_buf, indir_args_buf_, secondary_rays_buf_, counters_buf_, root_min, cell_size,
