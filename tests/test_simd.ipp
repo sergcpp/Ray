@@ -1,7 +1,7 @@
 using namespace Ray::NS;
 
 {
-    std::cout << "Test simd_fvec4  (" << (simd_fvec4::is_native() ? "hard" : "soft") << ") | ";
+    printf("Test simd_fvec4  (%s) | ", simd_fvec4::is_native() ? "hard" : "soft");
 
     simd_fvec4 v1, v2 = {42.0f}, v3 = {1.0f, 2.0f, 3.0f, 4.0f};
 
@@ -186,11 +186,11 @@ using namespace Ray::NS;
     require(v17[2] == 8.0f);
     require(v17[3] == 9.0f);
 
-    std::cout << "OK" << std::endl;
+    printf("OK\n");
 }
 
 {
-    std::cout << "Test simd_ivec4  (" << (simd_ivec4::is_native() ? "hard" : "soft") << ") | ";
+    printf("Test simd_ivec4  (%s) | ", simd_ivec4::is_native() ? "hard" : "soft");
 
     simd_ivec4 v1, v2 = {42}, v3 = {1, 2, 3, 4};
 
@@ -360,11 +360,11 @@ using namespace Ray::NS;
     require(v18[2] == 8);
     require(v18[3] == 9);
 
-    std::cout << "OK" << std::endl;
+    printf("OK\n");
 }
 
 {
-    std::cout << "Test simd_fvec8  (" << (simd_fvec8::is_native() ? "hard" : "soft") << ") | ";
+    printf("Test simd_fvec8  (%s) | ", simd_fvec8::is_native() ? "hard" : "soft");
 
     simd_fvec8 v1, v2 = {42.0f}, v3 = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f};
 
@@ -605,11 +605,11 @@ using namespace Ray::NS;
     require(v17[6] == 17.0f);
     require(v17[7] == 18.0f);
 
-    std::cout << "OK" << std::endl;
+    printf("OK\n");
 }
 
 {
-    std::cout << "Test simd_ivec8  (" << (simd_ivec8::is_native() ? "hard" : "soft") << ") | ";
+    printf("Test simd_ivec8  (%s) | ", simd_ivec8::is_native() ? "hard" : "soft");
 
     simd_ivec8 v1, v2 = {42}, v3 = {1, 2, 3, 4, 5, 6, 7, 8};
 
@@ -819,13 +819,13 @@ using namespace Ray::NS;
     require(v18[6] == 17);
     require(v18[7] == 18);
 
-    std::cout << "OK" << std::endl;
+    printf("OK\n");
 }
 
 //////////////////////////////////////////////////
 
 {
-    std::cout << "Test simd_fvec16 (" << (simd_fvec16::is_native() ? "hard" : "soft") << ") | ";
+    printf("Test simd_fvec16 (%s) | ", simd_fvec16::is_native() ? "hard" : "soft");
 
     simd_fvec16 v1, v2 = {42.0f}, v3 = {1.0f, 2.0f,  3.0f,  4.0f,  5.0f,  6.0f,  7.0f,  8.0f,
                                         9.0f, 10.0f, 11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f};
@@ -1218,11 +1218,11 @@ using namespace Ray::NS;
     require(v17[14] == 35.0f);
     require(v17[15] == 36.0f);
 
-    std::cout << "OK" << std::endl;
+    printf("OK\n");
 }
 
 {
-    std::cout << "Test simd_ivec16 (" << (simd_ivec16::is_native() ? "hard" : "soft") << ") | ";
+    printf("Test simd_ivec16 (%s) | ", simd_ivec16::is_native() ? "hard" : "soft");
 
     simd_ivec16 v1, v2 = {42}, v3 = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
 
@@ -1576,5 +1576,5 @@ using namespace Ray::NS;
     require(v18[14] == 35);
     require(v18[15] == 36);
 
-    std::cout << "OK" << std::endl;
+    printf("OK\n");
 }

@@ -219,17 +219,13 @@ void Ray::Vk::Scene::PrepareBindlessTextures_nolock() {
         EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
     }
 
-    for (uint32_t i = 0; i < bindless_textures_.capacity(); ++i) {
-        if (!bindless_textures_.exists(i)) {
-            continue;
-        }
-
-        VkDescriptorImageInfo img_info = bindless_textures_[i].vk_desc_image_info();
+    for (auto it = bindless_textures_.begin(); it != bindless_textures_.end(); ++it) {
+        VkDescriptorImageInfo img_info = bindless_textures_[it.index()].vk_desc_image_info();
 
         VkWriteDescriptorSet descr_write = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
         descr_write.dstSet = bindless_tex_data_.descr_set;
         descr_write.dstBinding = 0;
-        descr_write.dstArrayElement = i;
+        descr_write.dstArrayElement = it.index();
         descr_write.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
         descr_write.descriptorCount = 1;
         descr_write.pBufferInfo = nullptr;
@@ -264,7 +260,9 @@ void Ray::Vk::Scene::RebuildHWAccStructures_nolock() {
     uint32_t needed_build_scratch_size = 0;
     uint32_t needed_total_acc_struct_size = 0;
 
-    for (const mesh_t &mesh : meshes_) {
+    for (auto it = meshes_.cbegin(); it != meshes_.cend(); ++it) {
+        const mesh_t &mesh = *it;
+
         VkAccelerationStructureGeometryTrianglesDataKHR tri_data = {
             VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR};
         tri_data.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT;
@@ -481,7 +479,9 @@ void Ray::Vk::Scene::RebuildHWAccStructures_nolock() {
     std::vector<RTGeoInstance> geo_instances;
     std::vector<VkAccelerationStructureInstanceKHR> tlas_instances;
 
-    for (const mesh_instance_t &instance : mesh_instances_) {
+    for (auto it = mesh_instances_.cbegin(); it != mesh_instances_.cend(); ++it) {
+        const mesh_instance_t &instance = *it;
+
         auto &blas = rt_mesh_blases_[instance.mesh_index];
         blas.geo_index = uint32_t(geo_instances.size());
         blas.geo_count = 0;

@@ -2,22 +2,25 @@
 
 #include <cassert>
 #include <climits>
+#include <cstdint>
 
-#include "Bitmap.h"
+#include <memory>
+
+#include "Core.h"
+#include "FreelistAlloc.h"
 #include "simd/aligned_allocator.h"
 
 namespace Ray {
 namespace Cpu {
 template <typename T> class SparseStorage {
-    Bitmap bits_;
+    std::unique_ptr<FreelistAlloc> alloc_; // TODO: merge with data allocation
     T *data_ = nullptr;
     uint32_t capacity_ = 0, size_ = 0;
-    // TODO: add next_free_ to speedup allocation
 
     static const uint32_t InitialNonZeroCapacity = 8;
 
   public:
-    explicit SparseStorage(uint32_t initial_capacity = 0) : bits_(int(initial_capacity)) {
+    explicit SparseStorage(const uint32_t initial_capacity = 0) {
         if (initial_capacity) {
             reserve(initial_capacity);
         }
@@ -33,23 +36,27 @@ template <typename T> class SparseStorage {
     force_inline T *data() { return data_; }
     force_inline const T *data() const { return data_; }
 
-    force_inline bool exists(const uint32_t index) const { return bits_.IsSet(index); }
-
     void reserve(uint32_t new_capacity) {
         if (new_capacity <= capacity_) {
             return;
         }
 
-        bits_.Resize(int(new_capacity));
+        if (!alloc_) {
+            alloc_.reset(new FreelistAlloc(new_capacity));
+        } else {
+            alloc_->ResizePool(0, new_capacity);
+        }
 
         T *new_data = (T *)aligned_malloc(new_capacity * sizeof(T), alignof(T));
 
         // move old data
-        for (uint32_t i = 0; i < capacity_; ++i) {
-            if (bits_.IsSet(i)) {
+        FreelistAlloc::Range r = alloc_->GetFirstOccupiedBlock(0);
+        while (r.size) {
+            for (uint32_t i = r.offset; i < r.offset + r.size; ++i) {
                 new (&new_data[i]) T(std::move(data_[i]));
                 data_[i].~T();
             }
+            r = alloc_->GetNextOccupiedBlock(r.block);
         }
 
         aligned_free(data_);
@@ -57,50 +64,58 @@ template <typename T> class SparseStorage {
         capacity_ = new_capacity;
     }
 
-    template <class... Args> uint32_t emplace(Args &&...args) {
+    template <class... Args> std::pair<uint32_t, uint32_t> emplace(Args &&...args) {
         if (size_ + 1 > capacity_) {
             reserve(std::max(capacity_ * 2, InitialNonZeroCapacity));
         }
 
-        const uint32_t index = bits_.Alloc_FirstFit(1);
-
-        T *el = data_ + index;
-        new (el) T(std::forward<Args>(args)...);
+        const FreelistAlloc::Allocation al = alloc_->Alloc(1);
+        new (&data_[al.offset]) T(std::forward<Args>(args)...);
 
         ++size_;
-        return index;
+        return std::make_pair(al.offset, al.block);
     }
 
-    uint32_t push(const T &el) {
+    std::pair<uint32_t, uint32_t> push(const T &el) {
         if (size_ + 1 > capacity_) {
             reserve(std::max(capacity_ * 2, InitialNonZeroCapacity));
         }
 
-        const uint32_t index = bits_.Alloc_FirstFit(1);
-        new (&data_[index]) T(el);
+        const FreelistAlloc::Allocation al = alloc_->Alloc(1);
+        new (&data_[al.offset]) T(el);
 
         ++size_;
-        return index;
+        return std::make_pair(al.offset, al.block);
     }
 
     void clear() {
-        for (uint32_t i = 0; i < capacity_ && size_; ++i) {
-            if (bits_.IsSet(i)) {
-                erase(i);
-            }
+        if (!alloc_) {
+            return;
         }
+        FreelistAlloc::Range r = alloc_->GetFirstOccupiedBlock(0);
+        while (r.size) {
+            for (uint32_t i = r.offset; i < r.offset + r.size; ++i) {
+                data_[i].~T();
+                assert(size_ > 0);
+                --size_;
+            }
+            const uint32_t to_release = r.block;
+            r = alloc_->GetNextOccupiedBlock(r.block);
+            alloc_->Free(to_release);
+        }
+        assert(size_ == 0);
     }
 
-    void erase(const uint32_t index) {
-        assert(bits_.IsSet(index) && "Invalid index!");
-
-        data_[index].~T();
-        bits_.Free(int(index), 1);
-
-        --size_;
+    void Erase(const uint32_t block_index) {
+        const FreelistAlloc::Range r = alloc_->GetBlockRange(block_index);
+        for (uint32_t i = r.offset; i < r.offset + r.size; ++i) {
+            data_[i].~T();
+            --size_;
+        }
+        alloc_->Free(block_index);
     }
 
-    template <class... Args> uint32_t Allocate(const uint32_t count, Args &&...args) {
+    template <class... Args> std::pair<uint32_t, uint32_t> Allocate(const uint32_t count, Args &&...args) {
         if (size_ + count > capacity_) {
             uint32_t new_capacity = std::max(capacity_, InitialNonZeroCapacity);
             while (new_capacity < size_ + count) {
@@ -109,73 +124,46 @@ template <typename T> class SparseStorage {
             reserve(new_capacity);
         }
 
-        int index = bits_.Alloc_FirstFit(count);
-        while (index == -1) {
+        FreelistAlloc::Allocation al = alloc_->Alloc(count);
+        while (al.offset == 0xffffffff) {
             reserve(std::max(capacity_ * 2, InitialNonZeroCapacity));
-            index = bits_.Alloc_FirstFit(count);
+            al = alloc_->Alloc(count);
         }
 
-        for (uint32_t i = uint32_t(index); i < uint32_t(index) + count; ++i) {
+        for (uint32_t i = al.offset; i < al.offset + count; ++i) {
             new (&data_[i]) T(std::forward<Args>(args)...);
         }
 
         size_ += count;
-        return uint32_t(index);
+
+        return std::make_pair(al.offset, al.block);
     }
 
-    void Erase(const uint32_t index, const uint32_t count) {
-        for (uint32_t i = index; i < index + count; ++i) {
-            assert(bits_.IsSet(i) && "Invalid index!");
-            data_[i].~T();
-        }
-        bits_.Free(int(index), int(count));
-    }
+    force_inline T &at(const uint32_t index) { return data_[index]; }
+    force_inline const T &at(const uint32_t index) const { return data_[index]; }
 
-    void Move(const uint32_t src_index, const uint32_t dst_index, const uint32_t count) {
-        for (uint32_t i = 0; i < count; ++i) {
-            assert(bits_.IsSet(src_index + i) && !bits_.IsSet(dst_index + i));
-            new (&data_[dst_index + i]) T(std::move(data_[src_index + i]));
-            data_[src_index + i].~T();
-            bits_.Free(src_index + i, 1);
-            bits_.Occupy(dst_index + i, 1);
-        }
-    }
-
-    int FindEmpty(int start_index, int &inout_count) const { return bits_.FindEmpty<false>(start_index, inout_count); }
-
-    force_inline T &at(const uint32_t index) {
-        assert(bits_.IsSet(index) && "Invalid index!");
-        return data_[index];
-    }
-
-    force_inline const T &at(const uint32_t index) const {
-        assert(bits_.IsSet(index) && "Invalid index!");
-        return data_[index];
-    }
-
-    force_inline T &operator[](const uint32_t index) {
-        assert(bits_.IsSet(index) && "Invalid index!");
-        return data_[index];
-    }
-
-    force_inline const T &operator[](const uint32_t index) const {
-        assert(bits_.IsSet(index) && "Invalid index!");
-        return data_[index];
-    }
+    force_inline T &operator[](const uint32_t index) { return data_[index]; }
+    force_inline const T &operator[](const uint32_t index) const { return data_[index]; }
 
     class SparseStorageIterator : public std::iterator<std::forward_iterator_tag, T> {
         friend class SparseStorage<T>;
 
         SparseStorage<T> *container_;
-        uint32_t index_;
+        FreelistAlloc::Range range_;
 
-        SparseStorageIterator(SparseStorage<T> *container, uint32_t index) : container_(container), index_(index) {}
+        SparseStorageIterator(SparseStorage<T> *container, FreelistAlloc::Range range)
+            : container_(container), range_(range) {}
 
       public:
-        T &operator*() { return container_->at(index_); }
-        T *operator->() { return &container_->at(index_); }
+        T &operator*() { return container_->at(range_.offset); }
+        T *operator->() { return &container_->at(range_.offset); }
         SparseStorageIterator &operator++() {
-            index_ = container_->NextOccupied(index_);
+            if (range_.size > 1) {
+                ++range_.offset;
+                --range_.size;
+            } else {
+                range_ = container_->alloc_->GetNextOccupiedBlock(range_.block);
+            }
             return *this;
         }
         SparseStorageIterator operator++(int) {
@@ -184,91 +172,82 @@ template <typename T> class SparseStorage {
             return tmp;
         }
 
-        uint32_t index() const { return index_; }
+        uint32_t index() const { return range_.offset; }
+        uint32_t block() const { return range_.block; }
 
-        bool operator<(const SparseStorageIterator &rhs) const { return index_ < rhs.index_; }
-        bool operator<=(const SparseStorageIterator &rhs) const { return index_ <= rhs.index_; }
-        bool operator>(const SparseStorageIterator &rhs) const { return index_ > rhs.index_; }
-        bool operator>=(const SparseStorageIterator &rhs) const { return index_ >= rhs.index_; }
-        bool operator==(const SparseStorageIterator &rhs) const { return index_ == rhs.index_; }
-        bool operator!=(const SparseStorageIterator &rhs) const { return index_ != rhs.index_; }
+        bool operator<(const SparseStorageIterator &rhs) const { return range_.offset < rhs.range_.offset; }
+        bool operator<=(const SparseStorageIterator &rhs) const { return range_.offset <= rhs.range_.offset; }
+        bool operator>(const SparseStorageIterator &rhs) const { return range_.offset > rhs.range_.offset; }
+        bool operator>=(const SparseStorageIterator &rhs) const { return range_.offset >= rhs.range_.offset; }
+        bool operator==(const SparseStorageIterator &rhs) const { return range_.offset == rhs.range_.offset; }
+        bool operator!=(const SparseStorageIterator &rhs) const { return range_.offset != rhs.range_.offset; }
     };
 
     class SparseStorageConstIterator : public std::iterator<std::forward_iterator_tag, T> {
         friend class SparseStorage<T>;
 
         const SparseStorage<T> *container_;
-        uint32_t index_;
+        FreelistAlloc::Range range_;
 
-        SparseStorageConstIterator(const SparseStorage<T> *container, uint32_t index)
-            : container_(container), index_(index) {}
+        SparseStorageConstIterator(const SparseStorage<T> *container, FreelistAlloc::Range range)
+            : container_(container), range_(range) {}
 
       public:
-        const T &operator*() const { return container_->at(index_); }
-        const T *operator->() const { return &container_->at(index_); }
+        const T &operator*() { return container_->at(range_.offset); }
+        const T *operator->() { return &container_->at(range_.offset); }
         SparseStorageConstIterator &operator++() {
-            index_ = container_->NextOccupied(index_);
+            if (range_.size > 1) {
+                ++range_.offset;
+                --range_.size;
+            } else {
+                range_ = container_->alloc_->GetNextOccupiedBlock(range_.block);
+            }
             return *this;
         }
-
         SparseStorageConstIterator operator++(int) {
-            SparseStorageConstIterator tmp(*this);
+            SparseStorageIterator tmp(*this);
             ++(*this);
             return tmp;
         }
 
-        uint32_t index() const { return index_; }
+        uint32_t index() const { return range_.offset; }
+        uint32_t block() const { return range_.block; }
 
-        bool operator<(const SparseStorageConstIterator &rhs) const { return index_ < rhs.index_; }
-        bool operator<=(const SparseStorageConstIterator &rhs) const { return index_ <= rhs.index_; }
-        bool operator>(const SparseStorageConstIterator &rhs) const { return index_ > rhs.index_; }
-        bool operator>=(const SparseStorageConstIterator &rhs) const { return index_ >= rhs.index_; }
-        bool operator==(const SparseStorageConstIterator &rhs) const { return index_ == rhs.index_; }
-        bool operator!=(const SparseStorageConstIterator &rhs) const { return index_ != rhs.index_; }
+        bool operator<(const SparseStorageIterator &rhs) const { return range_.offset < rhs.range_.offset; }
+        bool operator<=(const SparseStorageIterator &rhs) const { return range_.offset <= rhs.range_.offset; }
+        bool operator>(const SparseStorageIterator &rhs) const { return range_.offset > rhs.range_.offset; }
+        bool operator>=(const SparseStorageIterator &rhs) const { return range_.offset >= rhs.range_.offset; }
+        bool operator==(const SparseStorageIterator &rhs) const { return range_.offset == rhs.range_.offset; }
+        bool operator!=(const SparseStorageIterator &rhs) const { return range_.offset != rhs.range_.offset; }
     };
 
     using iterator = SparseStorageIterator;
     using const_iterator = SparseStorageConstIterator;
 
     iterator begin() {
-        for (uint32_t i = 0; i < capacity_; i++) {
-            if (bits_.IsSet(i)) {
-                return iterator(this, i);
-            }
+        if (alloc_) {
+            return iterator(this, alloc_->GetFirstOccupiedBlock(0));
         }
         return end();
     }
 
     const_iterator cbegin() const {
-        for (uint32_t i = 0; i < capacity_; i++) {
-            if (bits_.IsSet(i)) {
-                return const_iterator(this, i);
-            }
+        if (alloc_) {
+            return const_iterator(this, alloc_->GetFirstOccupiedBlock(0));
         }
         return cend();
     }
 
-    iterator end() { return iterator(this, capacity_); }
-    const_iterator cend() const { return const_iterator(this, capacity_); }
-
-    iterator iter_at(uint32_t i) { return iterator(this, i); }
-    const_iterator citer_at(uint32_t i) const { return const_iterator(this, i); }
+    iterator end() { return iterator(this, FreelistAlloc::Range{0xffffffff, capacity_, 0}); }
+    const_iterator cend() const { return const_iterator(this, FreelistAlloc::Range{0xffffffff, capacity_, 0}); }
 
     iterator erase(iterator it) {
-        const uint32_t next_index = NextOccupied(it.index());
-        erase(it.index());
-        return iterator(this, next_index);
+        iterator ret = it;
+        Erase(it.block());
+        return ++ret;
     }
 
-  private:
-    uint32_t NextOccupied(uint32_t index) const {
-        for (uint32_t i = index + 1; i < capacity_; ++i) {
-            if (bits_.IsSet(i)) {
-                return i;
-            }
-        }
-        return capacity_;
-    }
+    bool IntegrityCheck() const { return alloc_->IntegrityCheck(); }
 };
 
 template <typename T> const uint32_t SparseStorage<T>::InitialNonZeroCapacity;

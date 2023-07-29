@@ -70,19 +70,15 @@ void Ray::Dx::Scene::PrepareBindlessTextures_nolock() {
 
     D3D12_CPU_DESCRIPTOR_HANDLE srv_cpu_handle = srv_descr_heap->GetCPUDescriptorHandleForHeapStart();
 
-    for (uint32_t i = 0; i < bindless_textures_.capacity(); ++i) {
-        if (!bindless_textures_.exists(i)) {
-            continue;
-        }
-
-        Texture2D &tex = bindless_textures_[i];
+    for (auto it = bindless_textures_.begin(); it != bindless_textures_.end(); ++it) {
+        Texture2D &tex = bindless_textures_[it.index()];
 
         { // copy srv
             D3D12_CPU_DESCRIPTOR_HANDLE src_handle = tex.handle().views_ref.heap->GetCPUDescriptorHandleForHeapStart();
             src_handle.ptr += CBV_SRV_UAV_INCR * tex.handle().views_ref.offset;
 
             D3D12_CPU_DESCRIPTOR_HANDLE dest_handle = srv_cpu_handle;
-            dest_handle.ptr += CBV_SRV_UAV_INCR * i;
+            dest_handle.ptr += CBV_SRV_UAV_INCR * it.index();
 
             device->CopyDescriptorsSimple(1, dest_handle, src_handle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
         }
@@ -126,7 +122,8 @@ void Ray::Dx::Scene::RebuildHWAccStructures_nolock() {
     uint32_t needed_build_scratch_size = 0;
     uint32_t needed_total_acc_struct_size = 0;
 
-    for (const mesh_t &mesh : meshes_) {
+    for (auto it = meshes_.cbegin(); it != meshes_.cend(); ++it) {
+        const mesh_t &mesh = *it;
         //
         // Gather geometries
         //
@@ -318,7 +315,9 @@ void Ray::Dx::Scene::RebuildHWAccStructures_nolock() {
     std::vector<RTGeoInstance> geo_instances;
     std::vector<D3D12_RAYTRACING_INSTANCE_DESC> tlas_instances;
 
-    for (const mesh_instance_t &instance : mesh_instances_) {
+    for (auto it = mesh_instances_.cbegin(); it != mesh_instances_.cend(); ++it) {
+        const mesh_instance_t &instance = *it;
+
         auto &blas = rt_mesh_blases_[instance.mesh_index];
         blas.geo_index = uint32_t(geo_instances.size());
         blas.geo_count = 0;

@@ -13,6 +13,7 @@
 void test_simd();
 void test_hashmap();
 void test_scope_exit();
+void test_freelist_alloc();
 void test_sparse_storage();
 void test_tex_storage();
 
@@ -180,10 +181,13 @@ int main(int argc, char *argv[]) {
 #endif
 
     test_simd();
+    puts(" ---------------");
     test_hashmap();
     test_scope_exit();
+    test_freelist_alloc();
     test_sparse_storage();
     test_tex_storage();
+    puts(" ---------------");
 
 #ifdef _WIN32
     // Stupid workaround that should not exist.
@@ -219,7 +223,6 @@ int main(int argc, char *argv[]) {
 
     if (g_tests_success) {
         const auto t2 = high_resolution_clock::now();
-        puts("---------------");
         std::vector<std::future<void>> futures;
 
         futures.push_back(mt_run_pool.Enqueue(test_aux_channels, arch_list, device_name));
@@ -277,7 +280,7 @@ int main(int argc, char *argv[]) {
     if (detailed_material_tests_needed) {
         if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
-            puts("---------------");
+            puts(" ---------------");
             std::vector<std::future<void>> futures;
 
             futures.push_back(mt_run_pool.Enqueue(test_oren_mat0, arch_list, device_name));
@@ -292,7 +295,7 @@ int main(int argc, char *argv[]) {
         }
         if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
-            puts("---------------");
+            puts(" ---------------");
             std::vector<std::future<void>> futures;
 
             futures.push_back(mt_run_pool.Enqueue(test_diff_mat0, arch_list, device_name));
@@ -307,7 +310,7 @@ int main(int argc, char *argv[]) {
         }
         if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
-            puts("---------------");
+            puts(" ---------------");
             std::vector<std::future<void>> futures;
 
             futures.push_back(mt_run_pool.Enqueue(test_sheen_mat0, arch_list, device_name));
@@ -323,7 +326,7 @@ int main(int argc, char *argv[]) {
         }
         if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
-            puts("---------------");
+            puts(" ---------------");
             std::vector<std::future<void>> futures;
 
             futures.push_back(mt_run_pool.Enqueue(test_glossy_mat0, arch_list, device_name));
@@ -338,7 +341,7 @@ int main(int argc, char *argv[]) {
         }
         if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
-            puts("---------------");
+            puts(" ---------------");
             std::vector<std::future<void>> futures;
 
             futures.push_back(mt_run_pool.Enqueue(test_spec_mat0, arch_list, device_name));
@@ -353,7 +356,7 @@ int main(int argc, char *argv[]) {
         }
         if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
-            puts("---------------");
+            puts(" ---------------");
             std::vector<std::future<void>> futures;
 
             futures.push_back(mt_run_pool.Enqueue(test_aniso_mat0, arch_list, device_name));
@@ -373,7 +376,7 @@ int main(int argc, char *argv[]) {
         }
         if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
-            puts("---------------");
+            puts(" ---------------");
             std::vector<std::future<void>> futures;
 
             futures.push_back(mt_run_pool.Enqueue(test_metal_mat0, arch_list, device_name));
@@ -388,7 +391,7 @@ int main(int argc, char *argv[]) {
         }
         if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
-            puts("---------------");
+            puts(" ---------------");
             std::vector<std::future<void>> futures;
 
             futures.push_back(mt_run_pool.Enqueue(test_plastic_mat0, arch_list, device_name));
@@ -403,7 +406,7 @@ int main(int argc, char *argv[]) {
         }
         if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
-            puts("---------------");
+            puts(" ---------------");
             std::vector<std::future<void>> futures;
 
             futures.push_back(mt_run_pool.Enqueue(test_tint_mat0, arch_list, device_name));
@@ -418,7 +421,7 @@ int main(int argc, char *argv[]) {
         }
         if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
-            puts("---------------");
+            puts(" ---------------");
             std::vector<std::future<void>> futures;
 
             futures.push_back(mt_run_pool.Enqueue(test_emit_mat0, arch_list, device_name));
@@ -432,7 +435,7 @@ int main(int argc, char *argv[]) {
         }
         if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
-            puts("---------------");
+            puts(" ---------------");
             std::vector<std::future<void>> futures;
 
             futures.push_back(mt_run_pool.Enqueue(test_coat_mat0, arch_list, device_name));
@@ -447,7 +450,7 @@ int main(int argc, char *argv[]) {
         }
         if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
-            puts("---------------");
+            puts(" ---------------");
             std::vector<std::future<void>> futures;
 
             futures.push_back(mt_run_pool.Enqueue(test_refr_mis0, arch_list, device_name));
@@ -462,7 +465,7 @@ int main(int argc, char *argv[]) {
         }
         if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
-            puts("---------------");
+            puts(" ---------------");
             std::vector<std::future<void>> futures;
 
             futures.push_back(mt_run_pool.Enqueue(test_refr_mat0, arch_list, device_name));
@@ -478,7 +481,7 @@ int main(int argc, char *argv[]) {
         }
         if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
-            puts("---------------");
+            puts(" ---------------");
             std::vector<std::future<void>> futures;
 
             futures.push_back(mt_run_pool.Enqueue(test_trans_mat0, arch_list, device_name));
@@ -496,7 +499,7 @@ int main(int argc, char *argv[]) {
         }
         if (g_tests_success || full_tests) {
             const auto t2 = high_resolution_clock::now();
-            puts("---------------");
+            puts(" ---------------");
             std::vector<std::future<void>> futures;
 
             futures.push_back(mt_run_pool.Enqueue(test_alpha_mat0, arch_list, device_name));

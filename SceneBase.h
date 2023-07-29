@@ -14,21 +14,22 @@ namespace Ray {
 #define DEFINE_HANDLE(object)                                                                                          \
     using object = struct object##_T {                                                                                 \
         uint32_t _index;                                                                                               \
+        uint32_t _block;                                                                                               \
     };                                                                                                                 \
     inline bool operator==(const object lhs, const object rhs) { return lhs._index == rhs._index; }                    \
     inline bool operator!=(const object lhs, const object rhs) { return lhs._index != rhs._index; }                    \
     static const object Invalid##object = object{0xffffffff};
 
 DEFINE_HANDLE(CameraHandle)
-DEFINE_HANDLE(TextureHandle)
+DEFINE_HANDLE(LightHandle)
 DEFINE_HANDLE(MaterialHandle)
 DEFINE_HANDLE(MeshHandle)
 DEFINE_HANDLE(MeshInstanceHandle)
-DEFINE_HANDLE(LightHandle)
-
-const TextureHandle PhysicalSkyTexture = {0xfffffffe};
+DEFINE_HANDLE(TextureHandle)
 
 #undef DEFINE_HANDLE
+
+const TextureHandle PhysicalSkyTexture = {0xfffffffe};
 
 /// Mesh primitive type
 enum class ePrimType {

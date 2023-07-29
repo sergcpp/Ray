@@ -1,7 +1,5 @@
 #include "test_common.h"
 
-#include <iostream>
-
 #include "../internal/Core.h"
 #include "../internal/simd/detect.h"
 

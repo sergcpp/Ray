@@ -15,7 +15,7 @@
 
 void Ray::Dx::MemAllocation::Release() {
     if (owner) {
-        owner->Free(block_ndx, alloc_off, alloc_size);
+        owner->Free(block);
         owner = nullptr;
     }
 }
@@ -26,24 +26,25 @@ Ray::Dx::MemoryAllocator::MemoryAllocator(const char name[32], Context *ctx, con
     strcpy(name_, name);
 
     assert(growth_factor_ > 1.0f);
-    AllocateNewBlock(initial_block_size);
+    AllocateNewPool(initial_block_size);
 }
 
 Ray::Dx::MemoryAllocator::~MemoryAllocator() {
-    for (MemBlock &blk : blocks_) {
-        blk.heap->Release();
+    for (MemPool &pool : pools_) {
+        pool.heap->Release();
     }
 }
 
-bool Ray::Dx::MemoryAllocator::AllocateNewBlock(const uint32_t size) {
+bool Ray::Dx::MemoryAllocator::AllocateNewPool(const uint32_t size) {
     char buf_name[48];
-    snprintf(buf_name, sizeof(buf_name), "%s block %i", name_, int(blocks_.size()));
+    snprintf(buf_name, sizeof(buf_name), "%s pool %i", name_, int(pools_.size()));
 
-    blocks_.emplace_back();
-    MemBlock &new_block = blocks_.back();
+    pools_.emplace_back();
+    MemPool &new_pool = pools_.back();
+    new_pool.size = size;
 
-    new_block.alloc = LinearAlloc{1024, size};
-    assert(new_block.alloc.size() == size);
+    const uint16_t pool_ndx = alloc_.AddPool(size);
+    assert(pool_ndx == pools_.size() - 1);
 
     D3D12_HEAP_DESC heap_desc = {};
     heap_desc.SizeInBytes = size;
@@ -54,47 +55,37 @@ bool Ray::Dx::MemoryAllocator::AllocateNewBlock(const uint32_t size) {
     heap_desc.Properties.CreationNodeMask = 1;
     heap_desc.Properties.VisibleNodeMask = 1;
 
-    HRESULT hr = ctx_->device()->CreateHeap(&heap_desc, IID_PPV_ARGS(&new_block.heap));
+    HRESULT hr = ctx_->device()->CreateHeap(&heap_desc, IID_PPV_ARGS(&new_pool.heap));
     return SUCCEEDED(hr);
 }
 
-Ray::Dx::MemAllocation Ray::Dx::MemoryAllocator::Allocate(const uint32_t size, const uint32_t alignment,
-                                                          const char *tag) {
-    while (true) {
-        for (uint32_t i = 0; i < uint32_t(blocks_.size()); ++i) {
-            if (size > blocks_[i].alloc.size()) {
-                // can skip entire buffer
-                continue;
-            }
+Ray::Dx::MemAllocation Ray::Dx::MemoryAllocator::Allocate(const uint32_t alignment, const uint32_t size) {
+    auto allocation = alloc_.Alloc(alignment, size);
 
-            const uint32_t alloc_off = blocks_[i].alloc.Alloc(size + alignment, tag);
-            if (alloc_off != 0xffffffff) {
-                // allocation succeded
-                MemAllocation new_alloc = {};
-                new_alloc.block_ndx = i;
-                new_alloc.alloc_off = alloc_off;
-                new_alloc.alloc_size = size + alignment;
-                new_alloc.owner = this;
-                return new_alloc;
-            }
+    if (allocation.block == 0xffffffff) {
+        const bool res = AllocateNewPool(std::max(size, uint32_t(pools_.back().size * growth_factor_)));
+        if (!res) {
+            // allocation failed (out of memory)
+            return {};
         }
-
-        // allocation failed, add new buffer
-        do {
-            const bool res = AllocateNewBlock(uint32_t(blocks_.back().alloc.size() * growth_factor_));
-            if (!res) {
-                // allocation failed (out of memory)
-                return {};
-            }
-        } while (blocks_.back().alloc.size() < size);
+        allocation = alloc_.Alloc(alignment, size);
     }
 
-    return {};
+    assert((allocation.offset % alignment) == 0);
+    assert(alloc_.IntegrityCheck());
+
+    MemAllocation new_alloc = {};
+    new_alloc.offset = allocation.offset;
+    new_alloc.block = allocation.block;
+    new_alloc.pool = allocation.pool;
+    new_alloc.owner = this;
+
+    return new_alloc;
 }
 
-void Ray::Dx::MemoryAllocator::Free(const uint32_t block_ndx, const uint32_t alloc_off, const uint32_t alloc_size) {
-    assert(block_ndx < blocks_.size());
-    blocks_[block_ndx].alloc.Free(alloc_off, alloc_size);
+void Ray::Dx::MemoryAllocator::Free(const uint32_t block) {
+    alloc_.Free(block);
+    assert(alloc_.IntegrityCheck());
 }
 
 void Ray::Dx::MemoryAllocators::Print(ILog *log) {

@@ -362,8 +362,6 @@ bool Ray::Dx::Texture2D::Realloc(const int w, const int h, int mip_count, const 
             }
         }
 
-        const VkDeviceSize aligned_offset = AlignTo(VkDeviceSize(new_alloc.alloc_off), tex_mem_req.alignment);
-
         res = vkBindImageMemory(ctx_->device(), new_image, new_alloc.owner->mem(new_alloc.block_ndx), aligned_offset);
         if (res != VK_SUCCESS) {
             log->Error("Failed to bind memory!");
@@ -574,18 +572,15 @@ void Ray::Dx::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, void *_cmd_
 
         const D3D12_RESOURCE_ALLOCATION_INFO alloc_info = ctx_->device()->GetResourceAllocationInfo(0, 1, &image_desc);
 
-        alloc_ = mem_allocs->Allocate(uint32_t(alloc_info.SizeInBytes), uint32_t(alloc_info.Alignment),
-                                      D3D12_HEAP_TYPE_DEFAULT, name_.c_str());
+        alloc_ = mem_allocs->Allocate(uint32_t(alloc_info.Alignment), uint32_t(alloc_info.SizeInBytes),
+                                      D3D12_HEAP_TYPE_DEFAULT);
         if (!alloc_) {
             log->Error("Failed to allocate memory!");
             return;
         }
 
-        const UINT64 aligned_offset = AlignTo(UINT64(alloc_.alloc_off), UINT64(alloc_info.Alignment));
-        assert(aligned_offset + alloc_info.SizeInBytes < alloc_.owner->heap(alloc_.block_ndx)->GetDesc().SizeInBytes);
-
         HRESULT hr =
-            ctx_->device()->CreatePlacedResource(alloc_.owner->heap(alloc_.block_ndx), aligned_offset, &image_desc,
+            ctx_->device()->CreatePlacedResource(alloc_.owner->heap(alloc_.pool), UINT64(alloc_.offset), &image_desc,
                                                  D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(&handle_.img));
         if (FAILED(hr)) {
             log->Error("Failed to create image!");
@@ -1165,8 +1160,6 @@ void Ray::Dx::Texture2D::InitFromRAWData(Buffer &sbuf, int data_off[6], void *_c
             }
         }
 
-        const VkDeviceSize aligned_offset = AlignTo(VkDeviceSize(alloc_.alloc_off), tex_mem_req.alignment);
-
         res = vkBindImageMemory(ctx_->device(), handle_.img, alloc_.owner->mem(alloc_.block_ndx), aligned_offset);
         if (res != VK_SUCCESS) {
             log->Error("Failed to bind memory!");
@@ -1488,8 +1481,6 @@ void Ray::Dx::Texture2D::InitFromDDSFile(const void *data[6], const int size[6],
             }
         }
 
-        const VkDeviceSize aligned_offset = AlignTo(VkDeviceSize(alloc_.alloc_off), tex_mem_req.alignment);
-
         res = vkBindImageMemory(ctx_->device(), handle_.img, alloc_.owner->mem(alloc_.block_ndx), aligned_offset);
         if (res != VK_SUCCESS) {
             log->Error("Failed to bind memory!");
@@ -1740,8 +1731,6 @@ void Ray::Dx::Texture2D::InitFromKTXFile(const void *data[6], const int size[6],
                                               name_.c_str());
             }
         }
-
-        const VkDeviceSize aligned_offset = AlignTo(VkDeviceSize(alloc_.alloc_off), tex_mem_req.alignment);
 
         res = vkBindImageMemory(ctx_->device(), handle_.img, alloc_.owner->mem(alloc_.block_ndx), aligned_offset);
         if (res != VK_SUCCESS) {
@@ -2265,17 +2254,15 @@ void Ray::Dx::Texture3D::Init(const Tex3DParams &p, MemoryAllocators *mem_allocs
 
         const D3D12_RESOURCE_ALLOCATION_INFO alloc_info = ctx_->device()->GetResourceAllocationInfo(0, 1, &image_desc);
 
-        alloc_ = mem_allocs->Allocate(uint32_t(alloc_info.SizeInBytes), uint32_t(alloc_info.Alignment),
-                                      D3D12_HEAP_TYPE_DEFAULT, name_.c_str());
+        alloc_ = mem_allocs->Allocate(uint32_t(alloc_info.Alignment), uint32_t(alloc_info.SizeInBytes),
+                                      D3D12_HEAP_TYPE_DEFAULT);
         if (!alloc_) {
             log->Error("Failed to allocate memory!");
             return;
         }
 
-        const UINT64 aligned_offset = AlignTo(UINT64(alloc_.alloc_off), UINT64(alloc_info.Alignment));
-
         HRESULT hr =
-            ctx_->device()->CreatePlacedResource(alloc_.owner->heap(alloc_.block_ndx), aligned_offset, &image_desc,
+            ctx_->device()->CreatePlacedResource(alloc_.owner->heap(alloc_.pool), UINT64(alloc_.offset), &image_desc,
                                                  D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(&handle_.img));
         if (FAILED(hr)) {
             log->Error("Failed to create image!");

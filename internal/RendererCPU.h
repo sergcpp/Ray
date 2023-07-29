@@ -313,7 +313,7 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase *scene, RegionC
         return;
     }
 
-    const camera_t &cam = s->cams_[s->current_cam()._index].cam;
+    const camera_t &cam = s->cams_[s->current_cam()._index];
 
     std::shared_lock<std::shared_timed_mutex> scene_lock(s->mtx_);
 

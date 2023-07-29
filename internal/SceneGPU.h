@@ -1,9 +1,9 @@
 #pragma once
 
 #include "../Log.h"
-#include "SceneCommon.h"
 #include "Atmosphere.h"
 #include "BVHSplit.h"
+#include "SceneCommon.h"
 #include "SparseStorageCPU.h"
 #include "TextureUtils.h"
 #include "Utils.h"
@@ -122,9 +122,9 @@ class Scene : public SceneCommon {
     void RemoveTexture(const TextureHandle t) override {
         std::unique_lock<std::shared_timed_mutex> lock(mtx_);
         if (use_bindless_) {
-            bindless_textures_.erase(t._index >> 24);
+            bindless_textures_.Erase(t._block);
         } else {
-            atlas_textures_.erase(t._index);
+            atlas_textures_.Erase(t._block);
         }
     }
 
@@ -135,7 +135,7 @@ class Scene : public SceneCommon {
     MaterialHandle AddMaterial(const principled_mat_desc_t &m) override;
     void RemoveMaterial(const MaterialHandle m) override {
         std::unique_lock<std::shared_timed_mutex> lock(mtx_);
-        materials_.erase(m._index);
+        materials_.Erase(m._block);
     }
 
     MeshHandle AddMesh(const mesh_desc_t &m) override;
@@ -338,14 +338,15 @@ inline Ray::TextureHandle Ray::NS::Scene::AddAtlasTexture_nolock(const tex_desc_
                       tex_atlases_[3].page_count(), tex_atlases_[4].page_count(), tex_atlases_[5].page_count(),
                       tex_atlases_[6].page_count());
 
-    return TextureHandle{atlas_textures_.push(t)};
+    const std::pair<uint32_t, uint32_t> at = atlas_textures_.push(t);
+    return TextureHandle{at.first, at.second};
 }
 
 inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_desc_t &_t) {
     eTexFormat src_fmt = eTexFormat::Undefined, fmt = eTexFormat::Undefined;
     eTexBlock block = eTexBlock::_None;
 
-    Buffer temp_stage_buf("Temp stage buf", ctx_, eBufType::Upload, 3 * _t.w * _t.h * 4,
+    Buffer temp_stage_buf("Temp stage buf", ctx_, eBufType::Upload, std::max(3 * _t.w * _t.h * 4, 256),
                           4096); // allocate for worst case
     uint8_t *stage_data = temp_stage_buf.Map();
 
@@ -541,8 +542,8 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
     p.block = block;
     p.sampling.filter = eTexFilter::NearestMipmap;
 
-    uint32_t ret = bindless_textures_.emplace(_t.name ? _t.name : "Bindless Tex", ctx_, p,
-                                              ctx_->default_memory_allocs(), ctx_->log());
+    std::pair<uint32_t, uint32_t> ret = bindless_textures_.emplace(_t.name ? _t.name : "Bindless Tex", ctx_, p,
+                                                                   ctx_->default_memory_allocs(), ctx_->log());
 
     { // Submit GPU commands
         CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
@@ -550,8 +551,8 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
         int res[2] = {_t.w, _t.h};
         uint32_t data_offset = 0;
         for (int i = 0; i < p.mip_count; ++i) {
-            bindless_textures_[ret].SetSubImage(i, 0, 0, res[0], res[1], fmt, temp_stage_buf, cmd_buf, data_offset,
-                                                data_size[i]);
+            bindless_textures_[ret.first].SetSubImage(i, 0, 0, res[0], res[1], fmt, temp_stage_buf, cmd_buf,
+                                                      data_offset, data_size[i]);
             res[0] = std::max(res[0] / 2, 1);
             res[1] = std::max(res[1] / 2, 1);
             data_offset += 4096 * ((data_size[i] + 4095) / 4096);
@@ -564,19 +565,19 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
 
     ctx_->log()->Info("Ray: Texture '%s' loaded (%ix%i)", _t.name, _t.w, _t.h);
 
-    assert(ret <= 0x00ffffff);
+    assert(ret.first <= 0x00ffffff);
 
     if (_t.is_srgb && (is_YCoCg || RequiresManualSRGBConversion(fmt))) {
-        ret |= TEX_SRGB_BIT;
+        ret.first |= TEX_SRGB_BIT;
     }
     if (recostruct_z) {
-        ret |= TEX_RECONSTRUCT_Z_BIT;
+        ret.first |= TEX_RECONSTRUCT_Z_BIT;
     }
     if (is_YCoCg) {
-        ret |= TEX_YCOCG_BIT;
+        ret.first |= TEX_YCOCG_BIT;
     }
 
-    return TextureHandle{ret};
+    return TextureHandle{ret.first, ret.second};
 }
 
 template <typename T, int N>
@@ -684,7 +685,8 @@ inline Ray::MaterialHandle Ray::NS::Scene::AddMaterial_nolock(const shading_node
     mat.textures[NORMALS_TEXTURE] = m.normal_map._index;
     mat.normal_map_strength_unorm = pack_unorm_16(clamp(m.normal_map_intensity, 0.0f, 1.0f));
 
-    return MaterialHandle{materials_.push(mat)};
+    const std::pair<uint32_t, uint32_t> mi = materials_.push(mat);
+    return MaterialHandle{mi.first, mi.second};
 }
 
 inline Ray::MaterialHandle Ray::NS::Scene::AddMaterial(const principled_mat_desc_t &m) {
@@ -713,7 +715,8 @@ inline Ray::MaterialHandle Ray::NS::Scene::AddMaterial(const principled_mat_desc
     main_mat.clearcoat_unorm = pack_unorm_16(clamp(m.clearcoat, 0.0f, 1.0f));
     main_mat.clearcoat_roughness_unorm = pack_unorm_16(clamp(m.clearcoat_roughness, 0.0f, 1.0f));
 
-    auto root_node = MaterialHandle{materials_.push(main_mat)};
+    const std::pair<uint32_t, uint32_t> mi = materials_.push(main_mat);
+    auto root_node = MaterialHandle{mi.first, mi.second};
     MaterialHandle emissive_node = InvalidMaterialHandle, transparent_node = InvalidMaterialHandle;
 
     if (m.emission_strength > 0.0f &&
@@ -770,7 +773,7 @@ inline Ray::MaterialHandle Ray::NS::Scene::AddMaterial(const principled_mat_desc
         }
     }
 
-    return MaterialHandle{root_node};
+    return root_node;
 }
 
 inline Ray::MeshHandle Ray::NS::Scene::AddMesh(const mesh_desc_t &_m) {
@@ -900,7 +903,7 @@ inline Ray::MeshHandle Ray::NS::Scene::AddMesh(const mesh_desc_t &_m) {
     m.vert_index = uint32_t(vtx_indices_.size());
     m.vert_count = uint32_t(new_vtx_indices.size());
 
-    const uint32_t mesh_index = meshes_.push(m);
+    const std::pair<uint32_t, uint32_t> mesh_index = meshes_.push(m);
 
     if (!use_hwrt_) {
         // add nodes
@@ -952,7 +955,7 @@ inline Ray::MeshHandle Ray::NS::Scene::AddMesh(const mesh_desc_t &_m) {
         tri_indices_.Append(&new_tri_indices[0], new_tri_indices.size());
     }
 
-    return MeshHandle{mesh_index};
+    return MeshHandle{mesh_index.first, mesh_index.second};
 }
 
 inline void Ray::NS::Scene::RemoveMesh(MeshHandle) {
@@ -982,12 +985,12 @@ inline Ray::LightHandle Ray::NS::Scene::AddLight(const directional_light_desc_t 
 
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
-    const uint32_t light_index = lights_.push(l);
-    li_indices_.PushBack(light_index);
+    const std::pair<uint32_t, uint32_t> light_index = lights_.push(l);
+    li_indices_.PushBack(light_index.first);
     if (_l.visible) {
-        visible_lights_.PushBack(light_index);
+        visible_lights_.PushBack(light_index.first);
     }
-    return LightHandle{light_index};
+    return LightHandle{light_index.first, light_index.second};
 }
 
 inline Ray::LightHandle Ray::NS::Scene::AddLight(const sphere_light_desc_t &_l) {
@@ -1006,12 +1009,12 @@ inline Ray::LightHandle Ray::NS::Scene::AddLight(const sphere_light_desc_t &_l) 
 
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
-    const uint32_t light_index = lights_.push(l);
-    li_indices_.PushBack(light_index);
+    const std::pair<uint32_t, uint32_t> light_index = lights_.push(l);
+    li_indices_.PushBack(light_index.first);
     if (_l.visible) {
-        visible_lights_.PushBack(light_index);
+        visible_lights_.PushBack(light_index.first);
     }
-    return LightHandle{light_index};
+    return LightHandle{light_index.first, light_index.second};
 }
 
 inline Ray::LightHandle Ray::NS::Scene::AddLight(const spot_light_desc_t &_l) {
@@ -1032,12 +1035,12 @@ inline Ray::LightHandle Ray::NS::Scene::AddLight(const spot_light_desc_t &_l) {
 
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
-    const uint32_t light_index = lights_.push(l);
-    li_indices_.PushBack(light_index);
+    const std::pair<uint32_t, uint32_t> light_index = lights_.push(l);
+    li_indices_.PushBack(light_index.first);
     if (_l.visible) {
-        visible_lights_.PushBack(light_index);
+        visible_lights_.PushBack(light_index.first);
     }
-    return LightHandle{light_index};
+    return LightHandle{light_index.first, light_index.second};
 }
 
 inline Ray::LightHandle Ray::NS::Scene::AddLight(const rect_light_desc_t &_l, const float *xform) {
@@ -1064,15 +1067,15 @@ inline Ray::LightHandle Ray::NS::Scene::AddLight(const rect_light_desc_t &_l, co
 
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
-    const uint32_t light_index = lights_.push(l);
-    li_indices_.PushBack(light_index);
+    const std::pair<uint32_t, uint32_t> light_index = lights_.push(l);
+    li_indices_.PushBack(light_index.first);
     if (_l.visible) {
-        visible_lights_.PushBack(light_index);
+        visible_lights_.PushBack(light_index.first);
     }
     if (_l.sky_portal) {
-        blocker_lights_.PushBack(light_index);
+        blocker_lights_.PushBack(light_index.first);
     }
-    return LightHandle{light_index};
+    return LightHandle{light_index.first, light_index.second};
 }
 
 inline Ray::LightHandle Ray::NS::Scene::AddLight(const disk_light_desc_t &_l, const float *xform) {
@@ -1099,15 +1102,15 @@ inline Ray::LightHandle Ray::NS::Scene::AddLight(const disk_light_desc_t &_l, co
 
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
-    const uint32_t light_index = lights_.push(l);
-    li_indices_.PushBack(light_index);
+    const std::pair<uint32_t, uint32_t> light_index = lights_.push(l);
+    li_indices_.PushBack(light_index.first);
     if (_l.visible) {
-        visible_lights_.PushBack(light_index);
+        visible_lights_.PushBack(light_index.first);
     }
     if (_l.sky_portal) {
-        blocker_lights_.PushBack(light_index);
+        blocker_lights_.PushBack(light_index.first);
     }
-    return LightHandle{light_index};
+    return LightHandle{light_index.first, light_index.second};
 }
 
 inline Ray::LightHandle Ray::NS::Scene::AddLight(const line_light_desc_t &_l, const float *xform) {
@@ -1136,19 +1139,15 @@ inline Ray::LightHandle Ray::NS::Scene::AddLight(const line_light_desc_t &_l, co
 
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
-    const uint32_t light_index = lights_.push(l);
-    li_indices_.PushBack(light_index);
+    const std::pair<uint32_t, uint32_t> light_index = lights_.push(l);
+    li_indices_.PushBack(light_index.first);
     if (_l.visible) {
-        visible_lights_.PushBack(light_index);
+        visible_lights_.PushBack(light_index.first);
     }
-    return LightHandle{light_index};
+    return LightHandle{light_index.first, light_index.second};
 }
 
 inline void Ray::NS::Scene::RemoveLight_nolock(const LightHandle i) {
-    if (!lights_.exists(i._index)) {
-        return;
-    }
-
     //{ // remove from compacted list
     //    auto it = find(begin(li_indices_), end(li_indices_), i);
     //    assert(it != end(li_indices_));
@@ -1167,17 +1166,20 @@ inline void Ray::NS::Scene::RemoveLight_nolock(const LightHandle i) {
     //     blocker_lights_.erase(it);
     // }
 
-    lights_.erase(i._index);
+    lights_.Erase(i._block);
 }
 
 inline Ray::MeshInstanceHandle Ray::NS::Scene::AddMeshInstance(const MeshHandle mesh, const float *xform) {
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
+    const std::pair<uint32_t, uint32_t> tr_index = transforms_.emplace();
+
     mesh_instance_t mi = {};
     mi.mesh_index = mesh._index;
-    mi.tr_index = transforms_.emplace();
+    mi.tr_index = tr_index.first;
+    mi.tr_block = tr_index.second;
 
-    const uint32_t mi_index = mesh_instances_.push(mi);
+    const std::pair<uint32_t, uint32_t> mi_index = mesh_instances_.push(mi);
 
     { // find emissive triangles and add them as emitters
         const mesh_t &m = meshes_[mesh._index];
@@ -1196,15 +1198,17 @@ inline Ray::MeshInstanceHandle Ray::NS::Scene::AddMeshInstance(const MeshHandle 
                 new_light.col[0] = front_mat.base_color[0] * front_mat.strength;
                 new_light.col[1] = front_mat.base_color[1] * front_mat.strength;
                 new_light.col[2] = front_mat.base_color[2] * front_mat.strength;
-                const uint32_t index = lights_.push(new_light);
-                li_indices_.PushBack(index);
+                const std::pair<uint32_t, uint32_t> index = lights_.push(new_light);
+                li_indices_.PushBack(index.first);
             }
         }
     }
 
-    SetMeshInstanceTransform_nolock(MeshInstanceHandle{mi_index}, xform);
+    auto ret = MeshInstanceHandle{mi_index.first, mi_index.second};
 
-    return MeshInstanceHandle{mi_index};
+    SetMeshInstanceTransform_nolock(ret, xform);
+
+    return ret;
 }
 
 inline void Ray::NS::Scene::SetMeshInstanceTransform_nolock(const MeshInstanceHandle mi_handle, const float *xform) {
@@ -1262,7 +1266,8 @@ inline void Ray::NS::Scene::Finalize() {
             l.cast_shadow = 1;
             l.col[0] = l.col[1] = l.col[2] = 1.0f;
 
-            env_map_light_ = LightHandle{lights_.push(l)};
+            const std::pair<uint32_t, uint32_t> li = lights_.push(l);
+            env_map_light_ = LightHandle{li.first, li.second};
             li_indices_.PushBack(env_map_light_._index);
         }
     } else {
@@ -1332,9 +1337,9 @@ inline void Ray::NS::Scene::RebuildTLAS_nolock() {
     aligned_vector<prim_t> primitives;
     primitives.reserve(mi_count);
 
-    for (const mesh_instance_t &mi : mesh_instances_) {
-        primitives.push_back({0, 0, 0, Ref::simd_fvec4{mi.bbox_min[0], mi.bbox_min[1], mi.bbox_min[2], 0.0f},
-                              Ref::simd_fvec4{mi.bbox_max[0], mi.bbox_max[1], mi.bbox_max[2], 0.0f}});
+    for (auto it = mesh_instances_.cbegin(); it != mesh_instances_.cend(); ++it) {
+        primitives.push_back({0, 0, 0, Ref::simd_fvec4{it->bbox_min[0], it->bbox_min[1], it->bbox_min[2], 0.0f},
+                              Ref::simd_fvec4{it->bbox_max[0], it->bbox_max[1], it->bbox_max[2], 0.0f}});
     }
 
     std::vector<bvh_node_t> bvh_nodes;
@@ -1361,22 +1366,18 @@ inline void Ray::NS::Scene::RebuildTLAS_nolock() {
 inline void Ray::NS::Scene::PrepareSkyEnvMap_nolock() {
     if (physical_sky_texture_ != InvalidTextureHandle) {
         if (use_bindless_) {
-            bindless_textures_.erase(physical_sky_texture_._index >> 24);
+            bindless_textures_.Erase(physical_sky_texture_._block);
         } else {
-            atlas_textures_.erase(physical_sky_texture_._index);
+            atlas_textures_.Erase(physical_sky_texture_._block);
         }
     }
 
     // Find directional light sources
     std::vector<uint32_t> dir_lights;
-    for (int i = 0; i < int(lights_.size()); ++i) {
-        if (!lights_.exists(i)) {
-            continue;
-        }
-
-        const light_t &l = lights_[i];
+    for (auto it = lights_.begin(); it != lights_.end(); ++it) {
+        const light_t &l = lights_[it.index()];
         if (l.type == LIGHT_TYPE_DIR) {
-            dir_lights.push_back(i);
+            dir_lights.push_back(it.index());
         }
     }
 

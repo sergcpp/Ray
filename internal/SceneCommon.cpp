@@ -5,14 +5,9 @@
 Ray::CameraHandle Ray::SceneCommon::AddCamera(const camera_desc_t &c) {
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
-    CameraHandle i;
-    if (cam_first_free_ == InvalidCameraHandle) {
-        i = CameraHandle{uint32_t(cams_.size())};
-        cams_.emplace_back();
-    } else {
-        i = cam_first_free_;
-        cam_first_free_ = cams_[i._index].next_free;
-    }
+    const std::pair<uint32_t, uint32_t> al = cams_.Allocate(1);
+    const Ray::CameraHandle i = {al.first, al.second};
+
     SetCamera_nolock(i, c);
     if (current_cam_ == InvalidCameraHandle) {
         current_cam_ = i;
@@ -23,7 +18,7 @@ Ray::CameraHandle Ray::SceneCommon::AddCamera(const camera_desc_t &c) {
 void Ray::SceneCommon::GetCamera(const CameraHandle i, camera_desc_t &c) const {
     std::shared_lock<std::shared_timed_mutex> lock(mtx_);
 
-    const camera_t &cam = cams_[i._index].cam;
+    const camera_t &cam = cams_[i._index];
     c.type = cam.type;
     c.view_transform = cam.view_transform;
     c.exposure = cam.exposure;
@@ -74,15 +69,12 @@ void Ray::SceneCommon::GetCamera(const CameraHandle i, camera_desc_t &c) const {
 
 void Ray::SceneCommon::RemoveCamera(const CameraHandle i) {
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
-
-    assert(i._index < uint32_t(cams_.size()));
-    cams_[i._index].next_free = cam_first_free_;
-    cam_first_free_ = i;
+    cams_.Erase(i._block);
 }
 
 void Ray::SceneCommon::SetCamera_nolock(const CameraHandle i, const camera_desc_t &c) {
     assert(i._index < uint32_t(cams_.size()));
-    camera_t &cam = cams_[i._index].cam;
+    camera_t &cam = cams_[i._index];
     if (c.type != eCamType::Geo) {
         if (c.ltype == eLensUnits::FOV) {
             ConstructCamera(c.type, c.filter, c.view_transform, c.origin, c.fwd, c.up, c.shift, c.fov, c.sensor_height,

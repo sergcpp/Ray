@@ -2,7 +2,7 @@
 
 #include <string>
 
-#include "../LinearAlloc.h"
+#include "../FreelistAlloc.h"
 #include "../SmallVector.h"
 #include "BufferVK.h"
 
@@ -17,23 +17,22 @@ class Buffer;
 class MemoryAllocator;
 
 struct MemAllocation {
-    uint32_t block_ndx = 0;
-    uint32_t alloc_off = 0, alloc_size = 0;
+    uint32_t offset = 0, block = 0;
+    uint16_t pool = 0;
     MemoryAllocator *owner = nullptr;
 
     MemAllocation() = default;
     MemAllocation(const MemAllocation &rhs) = delete;
     MemAllocation(MemAllocation &&rhs) noexcept
-        : block_ndx(rhs.block_ndx), alloc_off(rhs.alloc_off), alloc_size(rhs.alloc_size),
-          owner(exchange(rhs.owner, nullptr)) {}
+        : offset(rhs.offset), block(rhs.block), pool(rhs.pool), owner(exchange(rhs.owner, nullptr)) {}
 
     MemAllocation &operator=(const MemAllocation &rhs) = delete;
     MemAllocation &operator=(MemAllocation &&rhs) noexcept {
         Release();
 
-        block_ndx = rhs.block_ndx;
-        alloc_off = rhs.alloc_off;
-        alloc_size = rhs.alloc_size;
+        offset = rhs.offset;
+        block = rhs.block;
+        pool = rhs.pool;
         owner = exchange(rhs.owner, nullptr);
 
         return (*this);
@@ -51,15 +50,16 @@ class MemoryAllocator {
     Context *ctx_ = nullptr;
     float growth_factor_;
 
-    struct MemBlock {
+    struct MemPool {
         VkDeviceMemory mem;
-        LinearAlloc alloc;
+        uint32_t size;
     };
 
     uint32_t mem_type_index_;
-    SmallVector<MemBlock, 8> blocks_;
+    FreelistAlloc alloc_;
+    SmallVector<MemPool, 8> pools_;
 
-    bool AllocateNewBlock(uint32_t size);
+    bool AllocateNewPool(uint32_t size);
 
   public:
     MemoryAllocator(const char name[32], Context *ctx, uint32_t initial_block_size, uint32_t mem_type_index,
@@ -72,11 +72,11 @@ class MemoryAllocator {
     MemoryAllocator &operator=(const MemoryAllocator &rhs) = delete;
     MemoryAllocator &operator=(MemoryAllocator &&rhs) = default;
 
-    VkDeviceMemory mem(int i) const { return blocks_[i].mem; }
+    VkDeviceMemory mem(const int pool) const { return pools_[pool].mem; }
     uint32_t mem_type_index() const { return mem_type_index_; }
 
-    MemAllocation Allocate(uint32_t size, uint32_t alignment, const char *tag);
-    void Free(uint32_t block_ndx, uint32_t alloc_off, uint32_t alloc_size);
+    MemAllocation Allocate(uint32_t alignment, uint32_t size);
+    void Free(uint32_t block);
 
     void Print(ILog *log) const {}
 };
@@ -94,7 +94,7 @@ class MemoryAllocators {
         strcpy(name_, name);
     }
 
-    MemAllocation Allocate(uint32_t size, uint32_t alignment, uint32_t mem_type_index, const char *tag) {
+    MemAllocation Allocate(const uint32_t alignment, const uint32_t size, const uint32_t mem_type_index) {
         if (mem_type_index == 0xffffffff) {
             return {};
         }
@@ -114,7 +114,7 @@ class MemoryAllocators {
             allocators_.emplace_back(name, ctx_, initial_block_size_, mem_type_index, growth_factor_);
         }
 
-        return allocators_[alloc_index].Allocate(size, alignment, tag);
+        return allocators_[alloc_index].Allocate(alignment, size);
     }
 
     void Print(ILog *log);

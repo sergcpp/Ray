@@ -596,7 +596,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         UpdateHaltonSequence(region.iteration, region.halton_seq);
     }
 
-    const Ray::camera_t &cam = s->cams_[s->current_cam()._index].cam;
+    const Ray::camera_t &cam = s->cams_[s->current_cam()._index];
 
     // allocate aux data on demand
     if (cam.pass_settings.flags & (Bitmask<ePassFlags>{ePassFlags::OutputBaseColor} | ePassFlags::OutputDepthNormals)) {

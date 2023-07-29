@@ -5,6 +5,8 @@
 #include "../internal/HashMap32.h"
 
 void test_hashmap() {
+    printf("Test hashmap            | ");
+
     { // Basic test
         Ray::HashMap32<int, double> cont;
 
@@ -110,4 +112,6 @@ void test_hashmap() {
             require(values_count == 100000);
         }
     }
+
+    printf("OK\n");
 }

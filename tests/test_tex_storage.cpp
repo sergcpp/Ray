@@ -6,6 +6,8 @@
 #include <random>
 
 void test_tex_storage() {
+    printf("Test tex_storage        | ");
+
     { // Test three storage layouts
         Ray::Cpu::TexStorageLinear<uint8_t, 4> storage_linear;
         Ray::Cpu::TexStorageTiled<uint8_t, 4> storage_tiled;
@@ -58,4 +60,6 @@ void test_tex_storage() {
             }
         }
     }
+
+    printf("OK\n");
 }

@@ -5,21 +5,16 @@
 #include <vector>
 
 #include "../SceneBase.h"
+#include "SparseStorageCPU.h"
 
 namespace Ray {
 class SceneCommon : public SceneBase {
   protected:
-    struct cam_storage_t {
-        camera_t cam;
-        CameraHandle next_free;
-    };
-
     mutable std::shared_timed_mutex mtx_;
 
-    std::vector<cam_storage_t> cams_;                   ///< scene cameras
-    CameraHandle cam_first_free_ = InvalidCameraHandle; ///< index to first free cam in cams_ array
+    Cpu::SparseStorage<camera_t> cams_;
 
-    CameraHandle current_cam_ = InvalidCameraHandle; ///< index of current camera
+    CameraHandle current_cam_ = InvalidCameraHandle;
 
     void SetCamera_nolock(CameraHandle i, const camera_desc_t &c);
 

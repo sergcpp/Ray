@@ -120,7 +120,7 @@ class Scene : public SceneCommon {
     MaterialHandle AddMaterial(const principled_mat_desc_t &m) override;
     void RemoveMaterial(const MaterialHandle m) override {
         std::unique_lock<std::shared_timed_mutex> lock(mtx_);
-        materials_.erase(m._index);
+        materials_.Erase(m._block);
     }
 
     MeshHandle AddMesh(const mesh_desc_t &m) override;

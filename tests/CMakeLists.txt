@@ -12,6 +12,7 @@ ENDIF()
 add_executable(test_Ray main.cpp
                         test_common.h
                         test_aux_channels.cpp
+                        test_freelist_alloc.cpp
                         test_hashmap.cpp
                         test_materials.cpp
                         test_scene.h

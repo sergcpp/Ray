@@ -3,12 +3,18 @@
 #include "../internal/ScopeExit.h"
 
 void test_scope_exit() {
-    bool test = false;
+    printf("Test scope_exit         | ");
 
-    {
-        SCOPE_EXIT(test = true);
-        require(!test);
+    { // basic usage
+        bool test = false;
+
+        {
+            SCOPE_EXIT(test = true);
+            require(!test);
+        }
+
+        require(test);
     }
 
-    require(test);
+    printf("OK\n");
 }

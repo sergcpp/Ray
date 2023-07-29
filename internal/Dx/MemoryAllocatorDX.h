@@ -2,7 +2,7 @@
 
 #include <string>
 
-#include "../LinearAlloc.h"
+#include "../FreelistAlloc.h"
 #include "../SmallVector.h"
 #include "BufferDX.h"
 
@@ -21,23 +21,22 @@ class Buffer;
 class MemoryAllocator;
 
 struct MemAllocation {
-    uint32_t block_ndx = 0;
-    uint32_t alloc_off = 0, alloc_size = 0;
+    uint32_t offset = 0, block = 0;
+    uint16_t pool = 0;
     MemoryAllocator *owner = nullptr;
 
     MemAllocation() = default;
     MemAllocation(const MemAllocation &rhs) = delete;
     MemAllocation(MemAllocation &&rhs) noexcept
-        : block_ndx(rhs.block_ndx), alloc_off(rhs.alloc_off), alloc_size(rhs.alloc_size),
-          owner(exchange(rhs.owner, nullptr)) {}
+        : offset(rhs.offset), block(rhs.block), pool(rhs.pool), owner(exchange(rhs.owner, nullptr)) {}
 
     MemAllocation &operator=(const MemAllocation &rhs) = delete;
     MemAllocation &operator=(MemAllocation &&rhs) noexcept {
         Release();
 
-        block_ndx = rhs.block_ndx;
-        alloc_off = rhs.alloc_off;
-        alloc_size = rhs.alloc_size;
+        offset = rhs.offset;
+        block = rhs.block;
+        pool = rhs.pool;
         owner = exchange(rhs.owner, nullptr);
 
         return (*this);
@@ -55,15 +54,16 @@ class MemoryAllocator {
     Context *ctx_ = nullptr;
     float growth_factor_;
 
-    struct MemBlock {
+    struct MemPool {
         ID3D12Heap *heap;
-        LinearAlloc alloc;
+        uint32_t size;
     };
 
     D3D12_HEAP_TYPE heap_type_;
-    SmallVector<MemBlock, 8> blocks_;
+    FreelistAlloc alloc_;
+    SmallVector<MemPool, 8> pools_;
 
-    bool AllocateNewBlock(uint32_t size);
+    bool AllocateNewPool(uint32_t size);
 
   public:
     MemoryAllocator(const char name[32], Context *ctx, uint32_t initial_block_size, D3D12_HEAP_TYPE heap_type,
@@ -76,11 +76,11 @@ class MemoryAllocator {
     MemoryAllocator &operator=(const MemoryAllocator &rhs) = delete;
     MemoryAllocator &operator=(MemoryAllocator &&rhs) = default;
 
-    ID3D12Heap *heap(const int i) const { return blocks_[i].heap; }
+    ID3D12Heap *heap(const int pool) const { return pools_[pool].heap; }
     D3D12_HEAP_TYPE heap_type() const { return heap_type_; }
 
-    MemAllocation Allocate(uint32_t size, uint32_t alignment, const char *tag);
-    void Free(uint32_t block_ndx, uint32_t alloc_off, uint32_t alloc_size);
+    MemAllocation Allocate(uint32_t alignment, uint32_t size);
+    void Free(uint32_t block);
 
     void Print(ILog *log) const {}
 };
@@ -98,7 +98,7 @@ class MemoryAllocators {
         strcpy(name_, name);
     }
 
-    MemAllocation Allocate(const uint32_t size, const uint32_t alignment, D3D12_HEAP_TYPE heap_type, const char *tag) {
+    MemAllocation Allocate(const uint32_t alignment, const uint32_t size, const D3D12_HEAP_TYPE heap_type) {
         int alloc_index = -1;
         for (int i = 0; i < int(allocators_.size()); ++i) {
             if (allocators_[i].heap_type() == heap_type) {
@@ -114,15 +114,11 @@ class MemoryAllocators {
             allocators_.emplace_back(name, ctx_, initial_block_size_, heap_type, growth_factor_);
         }
 
-        return allocators_[alloc_index].Allocate(size, alignment, tag);
+        return allocators_[alloc_index].Allocate(alignment, size);
     }
 
     void Print(ILog *log);
 };
-
-inline uint64_t AlignTo(const uint64_t size, const uint64_t alignment) {
-    return alignment * ((size + alignment - 1) / alignment);
-}
 } // namespace Dx
 } // namespace Ray
 

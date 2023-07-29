@@ -16,42 +16,6 @@
 
 namespace Ray {
 namespace Cpu {
-template <typename T> bool IsCompacted(const SparseStorage<T> &container) {
-    int empty_count = 1;
-    const int empty_index = container.FindEmpty(0, empty_count);
-    return (empty_index == -1 || (empty_index + empty_count) == int(container.capacity()));
-}
-template <typename T>
-void CompactContainer(SparseStorage<T> &container,
-                      const std::function<void(std::pair<int, int> block, int destination)> &on_move) {
-    int empty_index = -1, empty_count = 1;
-    empty_index = container.FindEmpty(0, empty_count);
-
-    std::vector<std::pair<int, int>> empty_places;
-
-    while (empty_index != -1) {
-        empty_places.emplace_back(empty_index, empty_count);
-        const int search_from = empty_index + empty_count;
-        empty_count = 1;
-        empty_index = container.FindEmpty(search_from, empty_count);
-    }
-
-    for (int i = 0; i < int(empty_places.size()) - 1; ++i) {
-        std::pair<int, int> block_to_move;
-        block_to_move.first = empty_places[i].first + empty_places[i].second;
-        block_to_move.second = empty_places[i + 1].first - block_to_move.first;
-
-        on_move(block_to_move, empty_places[i].first);
-
-        container.Move(block_to_move.first, empty_places[i].first, block_to_move.second);
-
-        empty_places[i + 1].first -= empty_places[i].second;
-        empty_places[i + 1].second += empty_places[i].second;
-    }
-
-    assert(IsCompacted(container));
-}
-
 Ref::simd_fvec4 rgb_to_rgbe(const Ref::simd_fvec4 &rgb) {
     float max_component = std::max(std::max(rgb.get<0>(), rgb.get<1>()), rgb.get<2>());
     if (max_component < 1e-32) {
@@ -71,15 +35,22 @@ Ray::Cpu::Scene::Scene(ILog *log, const bool use_wide_bvh) : log_(log), use_wide
 Ray::Cpu::Scene::~Scene() {
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
-    while (!mesh_instances_.empty()) {
-        Scene::RemoveMeshInstance_nolock(MeshInstanceHandle{mesh_instances_.begin().index()});
+    for (auto it = mesh_instances_.begin(); it != mesh_instances_.end();) {
+        MeshInstanceHandle to_delete = {it.index(), it.block()};
+        ++it;
+        Scene::RemoveMeshInstance_nolock(to_delete);
     }
-    while (!meshes_.empty()) {
-        Scene::RemoveMesh_nolock(MeshHandle{meshes_.begin().index()});
+    for (auto it = meshes_.begin(); it != meshes_.end();) {
+        MeshHandle to_delete = {it.index(), it.block()};
+        ++it;
+        Scene::RemoveMesh_nolock(to_delete);
     }
-    while (!lights_.empty()) {
-        Scene::RemoveLight_nolock(LightHandle{lights_.begin().index()});
+    for (auto it = lights_.begin(); it != lights_.end();) {
+        LightHandle to_delete = {it.index(), it.block()};
+        ++it;
+        Scene::RemoveLight_nolock(to_delete);
     }
+
     materials_.clear();
     lights_.clear();
 }
@@ -217,7 +188,8 @@ Ray::MaterialHandle Ray::Cpu::Scene::AddMaterial_nolock(const shading_node_desc_
     mat.textures[NORMALS_TEXTURE] = m.normal_map._index;
     mat.normal_map_strength_unorm = pack_unorm_16(CLAMP(m.normal_map_intensity, 0.0f, 1.0f));
 
-    return MaterialHandle{materials_.push(mat)};
+    const std::pair<uint32_t, uint32_t> ret = materials_.push(mat);
+    return MaterialHandle{ret.first, ret.second};
 }
 
 Ray::MaterialHandle Ray::Cpu::Scene::AddMaterial(const principled_mat_desc_t &m) {
@@ -248,7 +220,8 @@ Ray::MaterialHandle Ray::Cpu::Scene::AddMaterial(const principled_mat_desc_t &m)
 
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
-    auto root_node = MaterialHandle{materials_.push(main_mat)};
+    const std::pair<uint32_t, uint32_t> rn = materials_.push(main_mat);
+    auto root_node = MaterialHandle{rn.first, rn.second};
     MaterialHandle emissive_node = InvalidMaterialHandle, transparent_node = InvalidMaterialHandle;
 
     if (m.emission_strength > 0.0f &&
@@ -332,24 +305,28 @@ Ray::MeshHandle Ray::Cpu::Scene::AddMesh(const mesh_desc_t &_m) {
     m.node_index = uint32_t(nodes_.size());
     m.node_count = uint32_t(temp_nodes.size());
 
-    m.tris_index = tris_.Allocate(uint32_t(temp_tris.size()));
+    const std::pair<uint32_t, uint32_t> tris_index = tris_.Allocate(uint32_t(temp_tris.size()));
+
+    m.tris_index = tris_index.first;
+    m.tris_block = tris_index.second;
     m.tris_count = uint32_t(temp_tris.size());
     for (uint32_t i = 0; i < uint32_t(temp_tris.size()); ++i) {
         tris_[m.tris_index + i] = temp_tris[i];
     }
 
-    const uint32_t mtris_index = mtris_.Allocate(uint32_t(temp_mtris.size()));
-    assert(mtris_index == m.tris_index / 8);
+    const std::pair<uint32_t, uint32_t> mtris_index = mtris_.Allocate(uint32_t(temp_mtris.size()));
+    assert(mtris_index.first == m.tris_index / 8);
     for (uint32_t i = 0; i < uint32_t(temp_mtris.size()); ++i) {
-        mtris_[mtris_index + i] = temp_mtris[i];
+        mtris_[mtris_index.first + i] = temp_mtris[i];
     }
 
     const auto tris_offset = uint32_t(tri_materials_.size());
 
-    const uint32_t tri_indices_index = tri_indices_.Allocate(uint32_t(temp_tri_indices.size()));
-    assert(tri_indices_index == m.tris_index);
+    const std::pair<uint32_t, uint32_t> tri_indices_index = tri_indices_.Allocate(uint32_t(temp_tri_indices.size()));
+    assert(tri_indices_index.first == m.tris_index);
+    assert(tri_indices_index.second == m.tris_block);
     for (uint32_t i = 0; i < uint32_t(temp_tri_indices.size()); ++i) {
-        tri_indices_[tri_indices_index + i] = tris_offset + temp_tri_indices[i];
+        tri_indices_[tri_indices_index.first + i] = tris_offset + temp_tri_indices[i];
     }
 
     { // Apply required offsets
@@ -357,7 +334,7 @@ Ray::MeshHandle Ray::Cpu::Scene::AddMesh(const mesh_desc_t &_m) {
 
         for (bvh_node_t &n : temp_nodes) {
             if (n.prim_index & LEAF_NODE_BIT) {
-                n.prim_index += tri_indices_index;
+                n.prim_index += tri_indices_index.first;
             } else {
                 n.left_child += nodes_offset;
                 n.right_child += nodes_offset;
@@ -485,20 +462,17 @@ Ray::MeshHandle Ray::Cpu::Scene::AddMesh(const mesh_desc_t &_m) {
 
     vtx_indices_.insert(vtx_indices_.end(), new_vtx_indices.begin(), new_vtx_indices.end());
 
-    return MeshHandle{meshes_.emplace(m)};
+    const std::pair<uint32_t, uint32_t> ret = meshes_.emplace(m);
+    return MeshHandle{ret.first, ret.second};
 }
 
 void Ray::Cpu::Scene::RemoveMesh_nolock(const MeshHandle i) {
-    if (!meshes_.exists(i._index)) {
-        return;
-    }
-
     const mesh_t &m = meshes_[i._index];
 
     const uint32_t node_index = m.node_index, node_count = m.node_count;
-    const uint32_t tris_index = m.tris_index, tris_count = m.tris_count;
+    const uint32_t tris_block = m.tris_block;
 
-    meshes_.erase(i._index);
+    meshes_.Erase(i._block);
 
     bool rebuild_needed = false;
     for (auto it = mesh_instances_.begin(); it != mesh_instances_.end();) {
@@ -511,9 +485,9 @@ void Ray::Cpu::Scene::RemoveMesh_nolock(const MeshHandle i) {
         }
     }
 
-    tris_.Erase(tris_index, tris_count);
-    mtris_.Erase(tris_index / 8, tris_count / 8);
-    tri_indices_.Erase(tris_index, tris_count);
+    tris_.Erase(tris_block);
+    mtris_.Erase(tris_block);
+    tri_indices_.Erase(tris_block);
     RemoveNodes_nolock(node_index, node_count);
 
     if (rebuild_needed) {
@@ -543,12 +517,12 @@ Ray::LightHandle Ray::Cpu::Scene::AddLight(const directional_light_desc_t &_l) {
 
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
-    const uint32_t light_index = lights_.push(l);
-    li_indices_.push_back(light_index);
+    const std::pair<uint32_t, uint32_t> light_index = lights_.push(l);
+    li_indices_.push_back(light_index.first);
     if (_l.visible) {
-        visible_lights_.push_back(light_index);
+        visible_lights_.push_back(light_index.first);
     }
-    return LightHandle{light_index};
+    return LightHandle{light_index.first, light_index.second};
 }
 
 Ray::LightHandle Ray::Cpu::Scene::AddLight(const sphere_light_desc_t &_l) {
@@ -567,12 +541,12 @@ Ray::LightHandle Ray::Cpu::Scene::AddLight(const sphere_light_desc_t &_l) {
 
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
-    const uint32_t light_index = lights_.push(l);
-    li_indices_.push_back(light_index);
+    const std::pair<uint32_t, uint32_t> light_index = lights_.push(l);
+    li_indices_.push_back(light_index.first);
     if (_l.visible) {
-        visible_lights_.push_back(light_index);
+        visible_lights_.push_back(light_index.first);
     }
-    return LightHandle{light_index};
+    return LightHandle{light_index.first, light_index.second};
 }
 
 Ray::LightHandle Ray::Cpu::Scene::AddLight(const spot_light_desc_t &_l) {
@@ -593,12 +567,12 @@ Ray::LightHandle Ray::Cpu::Scene::AddLight(const spot_light_desc_t &_l) {
 
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
-    const uint32_t light_index = lights_.push(l);
-    li_indices_.push_back(light_index);
+    const std::pair<uint32_t, uint32_t> light_index = lights_.push(l);
+    li_indices_.push_back(light_index.first);
     if (_l.visible) {
-        visible_lights_.push_back(light_index);
+        visible_lights_.push_back(light_index.first);
     }
-    return LightHandle{light_index};
+    return LightHandle{light_index.first, light_index.second};
 }
 
 Ray::LightHandle Ray::Cpu::Scene::AddLight(const rect_light_desc_t &_l, const float *xform) {
@@ -625,15 +599,15 @@ Ray::LightHandle Ray::Cpu::Scene::AddLight(const rect_light_desc_t &_l, const fl
 
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
-    const uint32_t light_index = lights_.push(l);
-    li_indices_.push_back(light_index);
+    const std::pair<uint32_t, uint32_t> light_index = lights_.push(l);
+    li_indices_.push_back(light_index.first);
     if (_l.visible) {
-        visible_lights_.push_back(light_index);
+        visible_lights_.push_back(light_index.first);
     }
     if (_l.sky_portal) {
-        blocker_lights_.push_back(light_index);
+        blocker_lights_.push_back(light_index.first);
     }
-    return LightHandle{light_index};
+    return LightHandle{light_index.first, light_index.second};
 }
 
 Ray::LightHandle Ray::Cpu::Scene::AddLight(const disk_light_desc_t &_l, const float *xform) {
@@ -660,15 +634,15 @@ Ray::LightHandle Ray::Cpu::Scene::AddLight(const disk_light_desc_t &_l, const fl
 
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
-    const uint32_t light_index = lights_.push(l);
-    li_indices_.push_back(light_index);
+    const std::pair<uint32_t, uint32_t> light_index = lights_.push(l);
+    li_indices_.push_back(light_index.first);
     if (_l.visible) {
-        visible_lights_.push_back(light_index);
+        visible_lights_.push_back(light_index.first);
     }
     if (_l.sky_portal) {
-        blocker_lights_.push_back(light_index);
+        blocker_lights_.push_back(light_index.first);
     }
-    return LightHandle{light_index};
+    return LightHandle{light_index.first, light_index.second};
 }
 
 Ray::LightHandle Ray::Cpu::Scene::AddLight(const line_light_desc_t &_l, const float *xform) {
@@ -697,19 +671,15 @@ Ray::LightHandle Ray::Cpu::Scene::AddLight(const line_light_desc_t &_l, const fl
 
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
-    const uint32_t light_index = lights_.push(l);
-    li_indices_.push_back(light_index);
+    const std::pair<uint32_t, uint32_t> light_index = lights_.push(l);
+    li_indices_.push_back(light_index.first);
     if (_l.visible) {
-        visible_lights_.push_back(light_index);
+        visible_lights_.push_back(light_index.first);
     }
-    return LightHandle{light_index};
+    return LightHandle{light_index.first, light_index.second};
 }
 
 void Ray::Cpu::Scene::RemoveLight_nolock(const LightHandle i) {
-    if (!lights_.exists(i._index)) {
-        return;
-    }
-
     { // remove from compacted list
         auto it = find(begin(li_indices_), end(li_indices_), i._index);
         assert(it != end(li_indices_));
@@ -728,17 +698,20 @@ void Ray::Cpu::Scene::RemoveLight_nolock(const LightHandle i) {
         blocker_lights_.erase(it);
     }
 
-    lights_.erase(i._index);
+    lights_.Erase(i._block);
 }
 
 Ray::MeshInstanceHandle Ray::Cpu::Scene::AddMeshInstance(const MeshHandle mesh, const float *xform) {
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
-    const uint32_t mi_index = mesh_instances_.emplace();
+    const std::pair<uint32_t, uint32_t> mi_index = mesh_instances_.emplace();
+    const std::pair<uint32_t, uint32_t> tr_index = transforms_.emplace();
 
-    mesh_instance_t &mi = mesh_instances_.at(mi_index);
+    mesh_instance_t &mi = mesh_instances_.at(mi_index.first);
     mi.mesh_index = mesh._index;
-    mi.tr_index = transforms_.emplace();
+    mi.mesh_block = mesh._block;
+    mi.tr_index = tr_index.first;
+    mi.tr_block = tr_index.second;
 
     { // find emissive triangles and add them as emitters
         const mesh_t &m = meshes_[mesh._index];
@@ -757,15 +730,16 @@ Ray::MeshInstanceHandle Ray::Cpu::Scene::AddMeshInstance(const MeshHandle mesh, 
                 new_light.col[0] = front_mat.base_color[0] * front_mat.strength;
                 new_light.col[1] = front_mat.base_color[1] * front_mat.strength;
                 new_light.col[2] = front_mat.base_color[2] * front_mat.strength;
-                const uint32_t index = lights_.push(new_light);
+                const uint32_t index = lights_.push(new_light).first;
                 li_indices_.push_back(index);
             }
         }
     }
 
-    SetMeshInstanceTransform_nolock(MeshInstanceHandle{mi_index}, xform);
+    const MeshInstanceHandle ret = {mi_index.first, mi_index.second};
+    SetMeshInstanceTransform_nolock(ret, xform);
 
-    return MeshInstanceHandle{mi_index};
+    return ret;
 }
 
 void Ray::Cpu::Scene::SetMeshInstanceTransform_nolock(const MeshInstanceHandle mi_handle, const float *xform) {
@@ -782,8 +756,10 @@ void Ray::Cpu::Scene::SetMeshInstanceTransform_nolock(const MeshInstanceHandle m
 }
 
 void Ray::Cpu::Scene::RemoveMeshInstance_nolock(const MeshInstanceHandle i) {
-    transforms_.erase(mesh_instances_[i._index].tr_index);
-    mesh_instances_.erase(i._index);
+    mesh_instance_t &mi = mesh_instances_[i._index];
+
+    transforms_.Erase(mi.tr_block);
+    mesh_instances_.Erase(i._block);
 
     RebuildTLAS_nolock();
 }
@@ -813,38 +789,11 @@ void Ray::Cpu::Scene::Finalize() {
             l.cast_shadow = 1;
             l.col[0] = l.col[1] = l.col[2] = 1.0f;
 
-            env_map_light_ = LightHandle{lights_.push(l)};
+            const std::pair<uint32_t, uint32_t> li = lights_.push(l);
+            env_map_light_ = LightHandle{li.first, li.second};
             li_indices_.push_back(env_map_light_._index);
         }
     }
-
-    CompactContainer(tris_, [this](const std::pair<int, int> block_to_move, const int destination) {
-        const uint32_t offset = uint32_t(block_to_move.first - destination);
-        for (mesh_t &m : meshes_) {
-            if (m.tris_index >= uint32_t(block_to_move.first) &&
-                m.tris_index < uint32_t(block_to_move.first + block_to_move.second)) {
-                m.tris_index -= offset;
-            }
-        }
-        for (bvh_node_t &n : nodes_) {
-            if ((n.prim_index & LEAF_NODE_BIT) != 0 &&
-                (n.prim_index & PRIM_INDEX_BITS) >= uint32_t(block_to_move.first) &&
-                (n.prim_index & PRIM_INDEX_BITS) < uint32_t(block_to_move.first + block_to_move.second)) {
-                n.prim_index -= offset;
-            }
-        }
-        for (mbvh_node_t &n : mnodes_) {
-            if ((n.child[0] & LEAF_NODE_BIT) != 0 && (n.child[0] & PRIM_INDEX_BITS) >= uint32_t(block_to_move.first) &&
-                (n.child[0] & PRIM_INDEX_BITS) < uint32_t(block_to_move.first + block_to_move.second)) {
-                n.child[0] -= offset;
-            }
-        }
-        // Move dependent containers
-        mtris_.Move(uint32_t(block_to_move.first / 8), uint32_t(destination / 8), uint32_t(block_to_move.second / 8));
-        tri_indices_.Move(uint32_t(block_to_move.first), uint32_t(destination), uint32_t(block_to_move.second));
-    });
-    assert(IsCompacted(mtris_));
-    assert(IsCompacted(tri_indices_));
 }
 
 void Ray::Cpu::Scene::RemoveNodes_nolock(uint32_t node_index, uint32_t node_count) {

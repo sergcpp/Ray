@@ -22,6 +22,7 @@
 #include <intrin.h>
 
 #pragma intrinsic(_BitScanForward)
+#pragma intrinsic(_BitScanReverse)
 #pragma intrinsic(_bittestandcomplement)
 
 #ifdef _M_IX86
@@ -370,10 +371,10 @@ static_assert(sizeof(vertex_t) == 44, "!");
 struct mesh_t {
     float bbox_min[3], bbox_max[3];
     uint32_t node_index, node_count;
-    uint32_t tris_index, tris_count;
+    uint32_t tris_index, tris_block, tris_count;
     uint32_t vert_index, vert_count;
 };
-static_assert(sizeof(mesh_t) == 48, "!");
+static_assert(sizeof(mesh_t) == 52, "!");
 
 struct transform_t {
     float xform[16], inv_xform[16];
@@ -385,8 +386,12 @@ struct mesh_instance_t {
     uint32_t tr_index;
     float bbox_max[3];
     uint32_t mesh_index;
+    uint32_t tr_block;
+    uint32_t mesh_block;
+    uint32_t _pad0;
+    uint32_t _pad1;
 };
-static_assert(sizeof(mesh_instance_t) == 32, "!");
+static_assert(sizeof(mesh_instance_t) == 48, "!");
 
 struct environment_t {
     float env_col[3];

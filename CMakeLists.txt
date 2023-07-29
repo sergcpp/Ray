@@ -64,6 +64,8 @@ set(INTERNAL_SOURCE_FILES internal/Atmosphere.h
                           internal/CoreRef.cpp
                           internal/CoreSIMD.h
                           internal/Fixed.h
+                          internal/FreelistAlloc.h
+                          internal/FreelistAlloc.cpp
                           internal/Halton.h
                           internal/Halton.cpp
                           internal/HashMap32.h
