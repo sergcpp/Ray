@@ -19,7 +19,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 if(MSVC)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP")
-    set(CMAKE_CXX_FLAGS_DEBUG "/MDd /Zi /Ob0 /O1 /fp:except /WX")
+    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /fp:except /WX")
     if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-declarations
                                                 -Wno-unsupported-floating-point-opt
@@ -34,7 +34,6 @@ if(MSVC)
 else(MSVC)
     if(NOT CMAKE_SYSTEM_NAME MATCHES "Android" AND NOT CMAKE_GENERATOR_PLATFORM MATCHES "ARM64")
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse2 -mfma -fno-strict-aliasing -Wno-unused-command-line-argument")
-        set(CMAKE_CXX_FLAGS_DEBUG "-g -O1")
         if (NOT DEFINED CMAKE_CXX_FLAGS_ASAN)
             set(CMAKE_CXX_FLAGS_ASAN "-fsanitize=address")
             set(CMAKE_EXE_LINKER_FLAGS_ASAN "-fsanitize=address")
