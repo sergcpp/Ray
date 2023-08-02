@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../Log.h"
-#include "../SceneBase.h"
+#include "SceneCommon.h"
 #include "Atmosphere.h"
 #include "BVHSplit.h"
 #include "SparseStorageCPU.h"
@@ -29,7 +29,7 @@ inline Ref::simd_fvec4 rgb_to_rgbe(const Ref::simd_fvec4 &rgb) {
     return Ref::simd_fvec4{rgb.get<0>() * factor, rgb.get<1>() * factor, rgb.get<2>() * factor, float(exponent + 128)};
 }
 
-class Scene : public SceneBase {
+class Scene : public SceneCommon {
   protected:
     friend class NS::Renderer;
 

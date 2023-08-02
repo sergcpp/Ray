@@ -74,6 +74,8 @@ set(INTERNAL_SOURCE_FILES internal/Atmosphere.h
                           internal/RendererGPU_kernels.h
                           internal/SamplingParams.h
                           internal/SamplingParams.cpp
+                          internal/SceneCommon.h
+                          internal/SceneCommon.cpp
                           internal/SceneCPU.h
                           internal/SceneCPU.cpp
                           internal/SceneGPU.h
@@ -195,7 +197,6 @@ set(SOURCE_FILES Bitmask.h
                  RendererFactory.h
                  RendererFactory.cpp
                  SceneBase.h
-                 SceneBase.cpp
                  Types.h)
 
 set(SIMD_FILES internal/simd/aligned_allocator.h

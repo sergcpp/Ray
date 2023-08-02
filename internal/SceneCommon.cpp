@@ -1,12 +1,8 @@
-#include "SceneBase.h"
+#include "SceneCommon.h"
 
-#include <cassert>
-#include <cstring>
+#include "Core.h"
 
-#include "Bitmask.h"
-#include "internal/Core.h"
-
-Ray::CameraHandle Ray::SceneBase::AddCamera(const camera_desc_t &c) {
+Ray::CameraHandle Ray::SceneCommon::AddCamera(const camera_desc_t &c) {
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
     CameraHandle i;
@@ -24,7 +20,7 @@ Ray::CameraHandle Ray::SceneBase::AddCamera(const camera_desc_t &c) {
     return i;
 }
 
-void Ray::SceneBase::GetCamera(const CameraHandle i, camera_desc_t &c) const {
+void Ray::SceneCommon::GetCamera(const CameraHandle i, camera_desc_t &c) const {
     std::shared_lock<std::shared_timed_mutex> lock(mtx_);
 
     const camera_t &cam = cams_[i._index].cam;
@@ -76,7 +72,15 @@ void Ray::SceneBase::GetCamera(const CameraHandle i, camera_desc_t &c) const {
     c.variance_threshold = cam.pass_settings.variance_threshold;
 }
 
-void Ray::SceneBase::SetCamera_nolock(const CameraHandle i, const camera_desc_t &c) {
+void Ray::SceneCommon::RemoveCamera(const CameraHandle i) {
+    std::unique_lock<std::shared_timed_mutex> lock(mtx_);
+
+    assert(i._index < uint32_t(cams_.size()));
+    cams_[i._index].next_free = cam_first_free_;
+    cam_first_free_ = i;
+}
+
+void Ray::SceneCommon::SetCamera_nolock(const CameraHandle i, const camera_desc_t &c) {
     assert(i._index < uint32_t(cams_.size()));
     camera_t &cam = cams_[i._index].cam;
     if (c.type != eCamType::Geo) {
@@ -136,12 +140,4 @@ void Ray::SceneBase::SetCamera_nolock(const CameraHandle i, const camera_desc_t 
 
     cam.pass_settings.min_samples = c.min_samples;
     cam.pass_settings.variance_threshold = c.variance_threshold;
-}
-
-void Ray::SceneBase::RemoveCamera(const CameraHandle i) {
-    std::unique_lock<std::shared_timed_mutex> lock(mtx_);
-
-    assert(i._index < uint32_t(cams_.size()));
-    cams_[i._index].next_free = cam_first_free_;
-    cam_first_free_ = i;
 }

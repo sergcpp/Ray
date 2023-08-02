@@ -2,7 +2,7 @@
 
 #include <vector>
 
-#include "../SceneBase.h"
+#include "SceneCommon.h"
 #include "CoreRef.h"
 #include "SmallVector.h"
 #include "SparseStorageCPU.h"
@@ -37,7 +37,7 @@ class SIMDPolicy;
 class ILog;
 
 namespace Cpu {
-class Scene : public SceneBase {
+class Scene : public SceneCommon {
   protected:
     friend class Cpu::Renderer<Ref::SIMDPolicy>;
     friend class Cpu::Renderer<Sse2::SIMDPolicy>;
