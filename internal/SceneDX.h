@@ -5,7 +5,7 @@
 #include "Dx/SparseStorageDX.h"
 #include "Dx/TextureAtlasDX.h"
 #include "Dx/TextureDX.h"
-#include "VectorDX.h"
+#include "Dx/VectorDX.h"
 
 namespace Ray {
 namespace Dx {

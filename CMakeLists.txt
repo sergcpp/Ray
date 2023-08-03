@@ -94,6 +94,7 @@ set(INTERNAL_SOURCE_FILES internal/Atmosphere.h
                           internal/TextureUtils.cpp
                           internal/Time_.h
                           internal/Time.cpp
+                          internal/VectorGPU.h
                           internal/UNetFilter.h
                           internal/UNetFilter.cpp
                           internal/UniformIntDistribution.h
@@ -142,8 +143,7 @@ if (ENABLE_VK_IMPL)
                               internal/RendererVK.cpp
                               internal/RendererVK_kernels.cpp
                               internal/SceneVK.h
-                              internal/SceneVK.cpp
-                              internal/VectorVK.h)
+                              internal/SceneVK.cpp)
 endif (ENABLE_VK_IMPL)
 
 if(ENABLE_DX_IMPL AND WIN32)
@@ -153,9 +153,7 @@ if(ENABLE_DX_IMPL AND WIN32)
                                 internal/RendererDX.cpp
                                 internal/RendererDX_kernels.cpp
                                 internal/SceneDX.h
-                                internal/SceneDX.cpp
-                                internal/VectorDX.h
-    )
+                                internal/SceneDX.cpp)
     set_source_files_properties(
         internal/RendererDX.cpp
         internal/SceneDX.cpp
@@ -241,6 +239,7 @@ set(VK_SOURCE_FILES internal/Vk/AccStructureVK.h
                     internal/Vk/TextureVK.cpp
                     internal/Vk/TextureAtlasVK.h
                     internal/Vk/TextureAtlasVK.cpp
+                    internal/Vk/VectorVK.h
                     internal/Vk/VertexInputVK.h
                     internal/Vk/VertexInputVK.cpp
                     third-party/SPIRV-Reflect/spirv_reflect.h
@@ -280,6 +279,7 @@ if(WIN32)
                         internal/Dx/TextureDX.cpp
                         internal/Dx/TextureAtlasDX.h
                         internal/Dx/TextureAtlasDX.cpp
+                        internal/Dx/VectorDX.h
                         internal/Dx/VertexInputDX.h
                         internal/Dx/VertexInputDX.cpp)
 endif(WIN32)

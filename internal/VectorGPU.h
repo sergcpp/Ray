@@ -1,13 +1,10 @@
 #pragma once
 
-#include "CoreVK.h"
-#include "Vk/BufferVK.h"
-
 #pragma warning(push)
 #pragma warning(disable : 4127) // conditional expression is constant
 
 namespace Ray {
-namespace Vk {
+namespace NS {
 template <typename T> class Vector {
     Context *ctx_ = nullptr;
     mutable Buffer buf_;
@@ -49,7 +46,7 @@ template <typename T> class Vector {
                 temp_stage_buf.Unmap();
             }
 
-            VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
+            CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
             CopyBufferToBuffer(temp_stage_buf, 0, buf_, uint32_t(sizeof(T) * size_), uint32_t(sizeof(T) * num),
                                cmd_buf);
@@ -105,7 +102,7 @@ template <typename T> class Vector {
 
         Buffer temp_stage_buf{"Temp Stage", ctx_, eBufType::Readback, uint32_t(sizeof(T)), uint32_t(sizeof(T))};
 
-        VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
+        CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
         CopyBufferToBuffer(buf_, uint32_t(sizeof(T) * i), temp_stage_buf, 0, uint32_t(sizeof(T)), cmd_buf);
         EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 
@@ -123,7 +120,7 @@ template <typename T> class Vector {
 
         Buffer temp_stage_buf{"Temp Stage", ctx_, eBufType::Readback, uint32_t(sizeof(T) * count), uint32_t(sizeof(T))};
 
-        VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
+        CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
         CopyBufferToBuffer(buf_, uint32_t(sizeof(T) * offset), temp_stage_buf, 0, uint32_t(sizeof(T) * count), cmd_buf);
         EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
 
@@ -145,7 +142,7 @@ template <typename T> class Vector {
         memcpy(ptr, &v, sizeof(T));
         temp_stage_buf.Unmap();
 
-        VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
+        CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
         CopyBufferToBuffer(temp_stage_buf, 0, buf_, uint32_t(sizeof(T) * i), uint32_t(sizeof(T)), cmd_buf);
         EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
     }
@@ -163,7 +160,7 @@ template <typename T> class Vector {
         memcpy(ptr, p, sizeof(T) * count);
         temp_stage_buf.Unmap();
 
-        VkCommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
+        CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
         CopyBufferToBuffer(temp_stage_buf, 0, buf_, uint32_t(sizeof(T) * offset), uint32_t(sizeof(T) * count), cmd_buf);
         EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
     }
