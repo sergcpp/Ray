@@ -43,7 +43,7 @@ int Ray::Dx::Buffer::g_GenCounter = 0;
 Ray::Dx::Buffer::Buffer(const char *name, Context *ctx, const eBufType type, const uint32_t initial_size,
                         const uint32_t suballoc_align)
     : LinearAlloc(std::min(suballoc_align, initial_size), initial_size), ctx_(ctx), name_(name), type_(type), size_(0) {
-    Resize(size());
+    Resize(initial_size);
 }
 
 Ray::Dx::Buffer::~Buffer() { Free(); }
@@ -169,14 +169,8 @@ void Ray::Dx::Buffer::Resize(const uint32_t new_size, const bool keep_content) {
 
     const uint32_t old_size = size_;
 
-    if (!size_) {
-        size_ = new_size;
-        assert(size_ > 0);
-    }
-
-    while (size_ < new_size) {
-        size_ *= 2;
-    }
+    size_ = new_size;
+    assert(size_ > 0);
 
     if (old_size) {
         LinearAlloc::Resize(size_);
@@ -261,7 +255,8 @@ void Ray::Dx::Buffer::Resize(const uint32_t new_size, const bool keep_content) {
 
     if (handle_.buf) {
         if (keep_content) {
-            ID3D12GraphicsCommandList *cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
+            ID3D12GraphicsCommandList *cmd_buf =
+                BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
             SmallVector<D3D12_RESOURCE_BARRIER, 1> barriers;
 

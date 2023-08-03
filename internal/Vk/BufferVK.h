@@ -84,7 +84,7 @@ class Buffer : public LinearAlloc {
 
     const std::string &name() const { return name_; }
     eBufType type() const { return type_; }
-    // uint32_t size() const { return size_; }
+    uint32_t size() const { return size_; }
 
     BufHandle handle() const { return handle_; }
 

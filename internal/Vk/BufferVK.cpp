@@ -58,7 +58,7 @@ int Ray::Vk::Buffer::g_GenCounter = 0;
 Ray::Vk::Buffer::Buffer(const char *name, Context *ctx, const eBufType type, const uint32_t initial_size,
                         const uint32_t suballoc_align)
     : LinearAlloc(std::min(suballoc_align, initial_size), initial_size), ctx_(ctx), name_(name), type_(type), size_(0) {
-    Resize(size());
+    Resize(initial_size);
 }
 
 Ray::Vk::Buffer::~Buffer() { Free(); }
@@ -227,14 +227,8 @@ void Ray::Vk::Buffer::Resize(const uint32_t new_size, const bool keep_content) {
 
     const uint32_t old_size = size_;
 
-    if (!size_) {
-        size_ = new_size;
-        assert(size_ > 0);
-    }
-
-    while (size_ < new_size) {
-        size_ *= 2;
-    }
+    size_ = new_size;
+    assert(size_ > 0);
 
     if (old_size) {
         LinearAlloc::Resize(size_);
@@ -242,7 +236,7 @@ void Ray::Vk::Buffer::Resize(const uint32_t new_size, const bool keep_content) {
     }
 
     VkBufferCreateInfo buf_create_info = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
-    buf_create_info.size = VkDeviceSize(new_size);
+    buf_create_info.size = VkDeviceSize(size_);
     buf_create_info.usage = GetVkBufferUsageFlags(ctx_, type_);
     buf_create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
