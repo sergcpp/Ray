@@ -126,7 +126,7 @@ struct shape_desc_t {
         : front_mat(_front_material), back_mat(_back_material), vtx_start(_vtx_start), vtx_count(_vtx_count) {}
 
     shape_desc_t(const MaterialHandle _front_material, size_t _vtx_start, size_t _vtx_count)
-        : front_mat(_front_material), back_mat(InvalidMaterialHandle), vtx_start(_vtx_start), vtx_count(_vtx_count) {}
+        : front_mat(_front_material), back_mat(_front_material), vtx_start(_vtx_start), vtx_count(_vtx_count) {}
 };
 
 /// Mesh description

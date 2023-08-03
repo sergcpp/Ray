@@ -388,4 +388,5 @@ set_source_files_properties(${DX_SOURCE_FILES}
                             PROPERTIES UNITY_GROUP "dx"
                             )
 
+add_subdirectory(samples)
 add_subdirectory(tests)

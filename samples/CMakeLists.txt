@@ -1,0 +1,13 @@
+cmake_minimum_required(VERSION 3.18)
+
+add_subdirectory(00_basic)
+add_subdirectory(01_texturing)
+add_subdirectory(02_multithreading)
+add_subdirectory(03_principled)
+add_subdirectory(04_denoising)
+
+set_target_properties(00_basic PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}")
+set_target_properties(01_texturing PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}")
+set_target_properties(02_multithreading PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}")
+set_target_properties(03_principled PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}")
+set_target_properties(04_denoising PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}")
