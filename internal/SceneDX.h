@@ -2,9 +2,9 @@
 
 #include "Dx/AccStructureDX.h"
 #include "Dx/DescriptorPoolDX.h"
+#include "Dx/SparseStorageDX.h"
 #include "Dx/TextureAtlasDX.h"
 #include "Dx/TextureDX.h"
-#include "SparseStorageDX.h"
 #include "VectorDX.h"
 
 namespace Ray {

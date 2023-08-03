@@ -82,6 +82,7 @@ set(INTERNAL_SOURCE_FILES internal/Atmosphere.h
                           internal/ScopeExit.h
                           internal/SmallVector.h
                           internal/SparseStorageCPU.h
+                          internal/SparseStorageGPU.h
                           internal/Span.h
                           internal/TextureParams.h
                           internal/TextureParams.cpp
@@ -142,7 +143,6 @@ if (ENABLE_VK_IMPL)
                               internal/RendererVK_kernels.cpp
                               internal/SceneVK.h
                               internal/SceneVK.cpp
-                              internal/SparseStorageVK.h
                               internal/VectorVK.h)
 endif (ENABLE_VK_IMPL)
 
@@ -154,7 +154,6 @@ if(ENABLE_DX_IMPL AND WIN32)
                                 internal/RendererDX_kernels.cpp
                                 internal/SceneDX.h
                                 internal/SceneDX.cpp
-                                internal/SparseStorageDX.h
                                 internal/VectorDX.h
     )
     set_source_files_properties(
@@ -237,6 +236,7 @@ set(VK_SOURCE_FILES internal/Vk/AccStructureVK.h
                     internal/Vk/SamplerVK.cpp
                     internal/Vk/ShaderVK.h
                     internal/Vk/ShaderVK.cpp
+                    internal/Vk/SparseStorageVK.h
                     internal/Vk/TextureVK.h
                     internal/Vk/TextureVK.cpp
                     internal/Vk/TextureAtlasVK.h
@@ -275,6 +275,7 @@ if(WIN32)
                         internal/Dx/SamplerDX.cpp
                         internal/Dx/ShaderDX.h
                         internal/Dx/ShaderDX.cpp
+                        internal/Dx/SparseStorageDX.h
                         internal/Dx/TextureDX.h
                         internal/Dx/TextureDX.cpp
                         internal/Dx/TextureAtlasDX.h

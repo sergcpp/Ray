@@ -1,11 +1,11 @@
 #pragma once
 
-#include "SparseStorageVK.h"
 #include "VectorVK.h"
 #include "Vk/AccStructureVK.h"
 #include "Vk/DescriptorPoolVK.h"
-#include "Vk/TextureVK.h"
+#include "Vk/SparseStorageVK.h"
 #include "Vk/TextureAtlasVK.h"
+#include "Vk/TextureVK.h"
 
 namespace Ray {
 namespace Vk {
