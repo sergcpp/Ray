@@ -7,7 +7,7 @@
 #include <chrono>
 #include <fstream>
 
-#include "../RendererFactory.h"
+#include "../Ray.h"
 
 #include "test_scene.h"
 #include "thread_pool.h"

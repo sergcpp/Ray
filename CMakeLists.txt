@@ -191,10 +191,10 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/Config.h.in ${CMAKE_CURRENT_SOURCE_DI
 set(SOURCE_FILES Bitmask.h
                  Config.h
                  Log.h
+                 Ray.h
+                 Ray.cpp
                  RendererBase.h
                  RendererBase.cpp
-                 RendererFactory.h
-                 RendererFactory.cpp
                  SceneBase.h
                  Types.h)
 

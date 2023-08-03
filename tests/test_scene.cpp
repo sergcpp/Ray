@@ -4,7 +4,7 @@
 
 #include "test_common.h"
 
-#include "../RendererFactory.h"
+#include "../Ray.h"
 
 #include "thread_pool.h"
 #include "utils.h"

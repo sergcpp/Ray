@@ -4,7 +4,7 @@
 
 #include <chrono>
 
-#include "../RendererFactory.h"
+#include "../Ray.h"
 
 #include "test_scene.h"
 #include "utils.h"

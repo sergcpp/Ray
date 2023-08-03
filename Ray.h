@@ -5,7 +5,7 @@
 #include "RendererBase.h"
 
 /**
-  @file RendererFactory.h
+  @file Ray.h
 */
 
 namespace Ray {
