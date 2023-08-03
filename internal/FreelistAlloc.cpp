@@ -5,7 +5,7 @@
 #include "Core.h"
 
 namespace Ray {
-force_inline int fls(uint32_t word) {
+force_inline int fls(const uint32_t word) {
 #ifdef _MSC_VER
     unsigned long index;
     return _BitScanReverse(&index, word) ? index : -1;
@@ -13,6 +13,17 @@ force_inline int fls(uint32_t word) {
     const int bit = word ? 32 - __builtin_clz(word) : 0;
     return bit - 1;
 #endif
+}
+
+force_inline int fls(const uint64_t size) {
+    int high = (int)(size >> 32);
+    int bits = 0;
+    if (high) {
+        bits = 32 + fls(uint32_t(high));
+    } else {
+        bits = fls((int)size & 0xffffffff);
+    }
+    return bits;
 }
 
 force_inline int ffs(uint32_t word) {
@@ -26,9 +37,9 @@ force_inline int ffs(uint32_t word) {
 } // namespace Ray
 
 template <typename OffsetType, bool InPlace>
-std::pair<int, int> Ray::tlsf_index_t<OffsetType, InPlace>::mapping_insert(const uint32_t size) {
+std::pair<int, int> Ray::tlsf_index_t<OffsetType, InPlace>::mapping_insert(const OffsetType size) {
     if (size < SMALL_BLOCK_SIZE) {
-        return std::make_pair(0, int(size) / (SMALL_BLOCK_SIZE / SL_INDEX_COUNT));
+        return std::make_pair(0, int(size / (SMALL_BLOCK_SIZE / SL_INDEX_COUNT)));
     } else {
         const int fl = fls(size);
         const int sl = int(size >> (fl - SL_INDEX_COUNT_LOG2)) ^ (1 << SL_INDEX_COUNT_LOG2);
@@ -37,7 +48,7 @@ std::pair<int, int> Ray::tlsf_index_t<OffsetType, InPlace>::mapping_insert(const
 }
 
 template <typename OffsetType, bool InPlace>
-std::pair<int, int> Ray::tlsf_index_t<OffsetType, InPlace>::mapping_search(uint32_t size) {
+std::pair<int, int> Ray::tlsf_index_t<OffsetType, InPlace>::mapping_search(OffsetType size) {
     if (size >= SMALL_BLOCK_SIZE) {
         const uint32_t round = (1 << (fls(size) - SL_INDEX_COUNT_LOG2)) - 1;
         size += round;

@@ -25,8 +25,8 @@ template <typename OffsetType, bool InPlace = true> struct tlsf_index_t {
     // Free blocks arranged by size
     OffsetType free_heads[FL_INDEX_COUNT][SL_INDEX_COUNT] = {}; // block 0 is a fake 'null block'
 
-    static std::pair<int, int> mapping_insert(uint32_t size);
-    static std::pair<int, int> mapping_search(uint32_t size);
+    static std::pair<int, int> mapping_insert(OffsetType size);
+    static std::pair<int, int> mapping_search(OffsetType size);
 
     OffsetType search_suitable_block(std::pair<int, int> &inout_index);
 };
