@@ -41,6 +41,7 @@
 
 namespace Ray {
 LogNull g_null_log;
+LogStdout g_stdout_log;
 RENDERDOC_DevicePointer g_rdoc_device = {};
 
 extern const std::pair<uint32_t, const char *> KnownGPUVendors[] = {

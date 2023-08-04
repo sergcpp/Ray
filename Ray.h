@@ -10,6 +10,7 @@
 
 namespace Ray {
 extern LogNull g_null_log;
+extern LogStdout g_stdout_log;
 
 /// Default renderer flags used to choose backend, by default tries to create gpu renderer first
 const Bitmask<eRendererType> DefaultEnabledRenderTypes =
