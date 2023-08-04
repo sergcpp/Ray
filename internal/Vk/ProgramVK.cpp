@@ -238,7 +238,7 @@ void Ray::Vk::Program::InitBindings(ILog *log) {
         }
     }
 
-    log->Info("PROGRAM %s", name_.c_str());
+    /*log->Info("PROGRAM %s", name_.c_str());
 
     // Print all attributes
     log->Info("\tATTRIBUTES");
@@ -256,7 +256,7 @@ void Ray::Vk::Program::InitBindings(ILog *log) {
             continue;
         }
         log->Info("\t\t%s : %i", uniforms_[i].name.c_str(), uniforms_[i].loc);
-    }
+    }*/
 }
 
 #ifdef _MSC_VER
