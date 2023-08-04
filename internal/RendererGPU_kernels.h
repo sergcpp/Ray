@@ -329,13 +329,13 @@ void Ray::NS::Renderer::kernel_Convolution(CommandBuffer cmd_buf, int in_channel
 
     Pipeline *pi = nullptr;
     if (in_channels == 3 && out_channels == 32) {
-        pi = &pi_convolution_DirectImg_3_32_;
+        pi = &pi_convolution_Img_3_32_;
     } else if (in_channels == 6 && out_channels == 32) {
         assert(img_buf2.ready());
-        pi = &pi_convolution_DirectImg_6_32_;
+        pi = &pi_convolution_Img_6_32_;
     } else if (in_channels == 9 && out_channels == 32) {
         assert(img_buf2.ready() && img_buf3.ready());
-        pi = &pi_convolution_DirectImg_9_32_;
+        pi = &pi_convolution_Img_9_32_;
     }
 
     DispatchCompute(cmd_buf, *pi, grp_count, bindings, &uniform_params, sizeof(uniform_params),
@@ -390,23 +390,23 @@ void Ray::NS::Renderer::kernel_Convolution(CommandBuffer cmd_buf, int in_channel
 
     Pipeline *pi = nullptr;
     if (in_channels == 32 && out_channels == 32 && downsample) {
-        pi = &pi_convolution_Direct_32_32_Downsample_;
+        pi = &pi_convolution_32_32_Downsample_;
     } else if (in_channels == 32 && out_channels == 48 && downsample) {
-        pi = &pi_convolution_Direct_32_48_Downsample_;
+        pi = &pi_convolution_32_48_Downsample_;
     } else if (in_channels == 48 && out_channels == 64 && downsample) {
-        pi = &pi_convolution_Direct_48_64_Downsample_;
+        pi = &pi_convolution_48_64_Downsample_;
     } else if (in_channels == 64 && out_channels == 80 && downsample) {
-        pi = &pi_convolution_Direct_64_80_Downsample_;
+        pi = &pi_convolution_64_80_Downsample_;
     } else if (in_channels == 64 && out_channels == 64) {
-        pi = &pi_convolution_Direct_64_64_;
+        pi = &pi_convolution_64_64_;
     } else if (in_channels == 64 && out_channels == 32) {
-        pi = &pi_convolution_Direct_64_32_;
+        pi = &pi_convolution_64_32_;
     } else if (in_channels == 80 && out_channels == 96) {
-        pi = &pi_convolution_Direct_80_96_;
+        pi = &pi_convolution_80_96_;
     } else if (in_channels == 96 && out_channels == 96) {
-        pi = &pi_convolution_Direct_96_96_;
+        pi = &pi_convolution_96_96_;
     } else if (in_channels == 112 && out_channels == 112) {
-        pi = &pi_convolution_Direct_112_112_;
+        pi = &pi_convolution_112_112_;
     }
 
     DispatchCompute(cmd_buf, *pi, grp_count, bindings, &uniform_params, sizeof(uniform_params),
@@ -454,7 +454,7 @@ void Ray::NS::Renderer::kernel_Convolution(CommandBuffer cmd_buf, int in_channel
 
     Pipeline *pi = nullptr;
     if (in_channels == 32 && out_channels == 3) {
-        pi = &pi_convolution_Direct_32_3_img_;
+        pi = &pi_convolution_32_3_img_;
     }
 
     DispatchCompute(cmd_buf, *pi, grp_count, bindings, &uniform_params, sizeof(uniform_params),
@@ -507,11 +507,11 @@ void Ray::NS::Renderer::kernel_ConvolutionConcat(CommandBuffer cmd_buf, int in_c
 
     Pipeline *pi = nullptr;
     if (in_channels1 == 96 && in_channels2 == 64 && out_channels == 112 && upscale1) {
-        pi = &pi_convolution_concat_Direct_96_64_112_;
+        pi = &pi_convolution_concat_96_64_112_;
     } else if (in_channels1 == 112 && in_channels2 == 48 && out_channels == 96 && upscale1) {
-        pi = &pi_convolution_concat_Direct_112_48_96_;
+        pi = &pi_convolution_concat_112_48_96_;
     } else if (in_channels1 == 96 && in_channels2 == 32 && out_channels == 64 && upscale1) {
-        pi = &pi_convolution_concat_Direct_96_32_64_;
+        pi = &pi_convolution_concat_96_32_64_;
     }
 
     DispatchCompute(cmd_buf, *pi, grp_count, bindings, &uniform_params, sizeof(uniform_params),
@@ -575,13 +575,13 @@ void Ray::NS::Renderer::kernel_ConvolutionConcat(CommandBuffer cmd_buf, int in_c
 
     Pipeline *pi = nullptr;
     if (in_channels1 == 64 && in_channels2 == 3 && out_channels == 64 && upscale1) {
-        pi = &pi_convolution_concat_Direct_64_3_64_;
+        pi = &pi_convolution_concat_64_3_64_;
     } else if (in_channels1 == 64 && in_channels2 == 6 && out_channels == 64 && upscale1) {
         assert(img_buf2.ready());
-        pi = &pi_convolution_concat_Direct_64_6_64_;
+        pi = &pi_convolution_concat_64_6_64_;
     } else if (in_channels1 == 64 && in_channels2 == 9 && out_channels == 64 && upscale1) {
         assert(img_buf2.ready() && img_buf3.ready());
-        pi = &pi_convolution_concat_Direct_64_9_64_;
+        pi = &pi_convolution_concat_64_9_64_;
     }
 
     DispatchCompute(cmd_buf, *pi, grp_count, bindings, &uniform_params, sizeof(uniform_params),

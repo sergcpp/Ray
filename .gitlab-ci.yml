@@ -185,7 +185,7 @@ stages:
     - '& git clean -fx -e "$BIN_DIR"'
     - echo "Running tests..."
     - cd tests
-    - '& "../$BIN_DIR/test_Ray-asan" --mt $AUX_TEST_ARGS.split(" ")'
+    - '& "../$BIN_DIR/test_Ray-asan" $AUX_TEST_ARGS.split(" ")'
     - cd ../
   after_script:
     - cp tests/test_data/material_*.tga ./
@@ -418,7 +418,7 @@ windows-arm64-gpu-adreno-test-job:
 windows-arm64-cpu-perf-test-job:
   variables:
     BIN_DIR: windows-arm64
-    AUX_TEST_ARGS: '--nogpu --time_limit 16.4'
+    AUX_TEST_ARGS: '--nogpu --time_limit 2.6'
   extends:
     - .windows-perf-test-job
   needs:
@@ -431,7 +431,7 @@ windows-arm64-cpu-perf-test-job:
 windows-arm64-gpu-perf-test-job:
   variables:
     BIN_DIR: windows-arm64
-    AUX_TEST_ARGS: '--nocpu --time_limit 36.5'
+    AUX_TEST_ARGS: '--nocpu --time_limit 5.4'
   extends:
     - .windows-perf-test-job
   needs:

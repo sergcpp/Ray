@@ -1798,7 +1798,7 @@ void Ray::Dx::Renderer::InitUNetFilter(const bool alias_memory, unet_filter_prop
         }
     }
 
-    if (!pi_convolution_DirectImg_3_32_) {
+    if (!pi_convolution_Img_3_32_) {
         if (!InitUNetPipelines()) {
             throw std::runtime_error("Error initializing pipeline!");
         }
@@ -1812,151 +1812,142 @@ bool Ray::Dx::Renderer::InitUNetPipelines() {
         return use_fp16_ ? fp16_shader : default_shader;
     };
 
-    sh_convolution_DirectImg_3_32_ = Shader{"Convolution DirectImg 3 32", ctx_.get(),
-                                            select_shader(internal_shaders_output_convolution_Img_3_32_fp32_comp_cso,
-                                                          internal_shaders_output_convolution_Img_3_32_fp16_comp_cso),
-                                            eShaderType::Comp, log};
-    sh_convolution_DirectImg_6_32_ = Shader{"Convolution DirectImg 6 32", ctx_.get(),
-                                            select_shader(internal_shaders_output_convolution_Img_6_32_fp32_comp_cso,
-                                                          internal_shaders_output_convolution_Img_6_32_fp16_comp_cso),
-                                            eShaderType::Comp, log};
-    sh_convolution_DirectImg_9_32_ = Shader{"Convolution DirectImg 9 32", ctx_.get(),
-                                            select_shader(internal_shaders_output_convolution_Img_9_32_fp32_comp_cso,
-                                                          internal_shaders_output_convolution_Img_9_32_fp16_comp_cso),
-                                            eShaderType::Comp, log};
-    sh_convolution_Direct_32_32_Downsample_ =
-        Shader{"Convolution Direct 32 32 Downsample", ctx_.get(),
+    sh_convolution_Img_3_32_ = Shader{"Convolution Img 3 32", ctx_.get(),
+                                      select_shader(internal_shaders_output_convolution_Img_3_32_fp32_comp_cso,
+                                                    internal_shaders_output_convolution_Img_3_32_fp16_comp_cso),
+                                      eShaderType::Comp, log};
+    sh_convolution_Img_6_32_ = Shader{"Convolution Img 6 32", ctx_.get(),
+                                      select_shader(internal_shaders_output_convolution_Img_6_32_fp32_comp_cso,
+                                                    internal_shaders_output_convolution_Img_6_32_fp16_comp_cso),
+                                      eShaderType::Comp, log};
+    sh_convolution_Img_9_32_ = Shader{"Convolution Img 9 32", ctx_.get(),
+                                      select_shader(internal_shaders_output_convolution_Img_9_32_fp32_comp_cso,
+                                                    internal_shaders_output_convolution_Img_9_32_fp16_comp_cso),
+                                      eShaderType::Comp, log};
+    sh_convolution_32_32_Downsample_ =
+        Shader{"Convolution 32 32 Downsample", ctx_.get(),
                select_shader(internal_shaders_output_convolution_32_32_Downsample_fp32_comp_cso,
                              internal_shaders_output_convolution_32_32_Downsample_fp16_comp_cso),
                eShaderType::Comp, log};
-    sh_convolution_Direct_32_48_Downsample_ =
-        Shader{"Convolution Direct 32 48 Downsample", ctx_.get(),
+    sh_convolution_32_48_Downsample_ =
+        Shader{"Convolution 32 48 Downsample", ctx_.get(),
                select_shader(internal_shaders_output_convolution_32_48_Downsample_fp32_comp_cso,
                              internal_shaders_output_convolution_32_48_Downsample_fp16_comp_cso),
                eShaderType::Comp, log};
-    sh_convolution_Direct_48_64_Downsample_ =
-        Shader{"Convolution Direct 48 64 Downsample", ctx_.get(),
+    sh_convolution_48_64_Downsample_ =
+        Shader{"Convolution 48 64 Downsample", ctx_.get(),
                select_shader(internal_shaders_output_convolution_48_64_Downsample_fp32_comp_cso,
                              internal_shaders_output_convolution_48_64_Downsample_fp16_comp_cso),
                eShaderType::Comp, log};
-    sh_convolution_Direct_64_80_Downsample_ =
-        Shader{"Convolution Direct 64 80 Downsample", ctx_.get(),
+    sh_convolution_64_80_Downsample_ =
+        Shader{"Convolution 64 80 Downsample", ctx_.get(),
                select_shader(internal_shaders_output_convolution_64_80_Downsample_fp32_comp_cso,
                              internal_shaders_output_convolution_64_80_Downsample_fp16_comp_cso),
                eShaderType::Comp, log};
-    sh_convolution_Direct_64_64_ = Shader{"Convolution Direct 64 64", ctx_.get(),
-                                          select_shader(internal_shaders_output_convolution_64_64_fp32_comp_cso,
-                                                        internal_shaders_output_convolution_64_64_fp16_comp_cso),
-                                          eShaderType::Comp, log};
-    sh_convolution_Direct_64_32_ = Shader{"Convolution Direct 64 32", ctx_.get(),
-                                          select_shader(internal_shaders_output_convolution_64_32_fp32_comp_cso,
-                                                        internal_shaders_output_convolution_64_32_fp16_comp_cso),
-                                          eShaderType::Comp, log};
-    sh_convolution_Direct_80_96_ = Shader{"Convolution Direct 80 96", ctx_.get(),
-                                          select_shader(internal_shaders_output_convolution_80_96_fp32_comp_cso,
-                                                        internal_shaders_output_convolution_80_96_fp16_comp_cso),
-                                          eShaderType::Comp, log};
-    sh_convolution_Direct_96_96_ = Shader{"Convolution Direct 96 96", ctx_.get(),
-                                          select_shader(internal_shaders_output_convolution_96_96_fp32_comp_cso,
-                                                        internal_shaders_output_convolution_96_96_fp16_comp_cso),
-                                          eShaderType::Comp, log};
-    sh_convolution_Direct_112_112_ = Shader{"Convolution Direct 112 112", ctx_.get(),
-                                            select_shader(internal_shaders_output_convolution_112_112_fp32_comp_cso,
-                                                          internal_shaders_output_convolution_112_112_fp16_comp_cso),
-                                            eShaderType::Comp, log};
-    sh_convolution_concat_Direct_96_64_112_ =
-        Shader{"Convolution Concat Direct 96 64 112", ctx_.get(),
+    sh_convolution_64_64_ = Shader{"Convolution 64 64", ctx_.get(),
+                                   select_shader(internal_shaders_output_convolution_64_64_fp32_comp_cso,
+                                                 internal_shaders_output_convolution_64_64_fp16_comp_cso),
+                                   eShaderType::Comp, log};
+    sh_convolution_64_32_ = Shader{"Convolution 64 32", ctx_.get(),
+                                   select_shader(internal_shaders_output_convolution_64_32_fp32_comp_cso,
+                                                 internal_shaders_output_convolution_64_32_fp16_comp_cso),
+                                   eShaderType::Comp, log};
+    sh_convolution_80_96_ = Shader{"Convolution 80 96", ctx_.get(),
+                                   select_shader(internal_shaders_output_convolution_80_96_fp32_comp_cso,
+                                                 internal_shaders_output_convolution_80_96_fp16_comp_cso),
+                                   eShaderType::Comp, log};
+    sh_convolution_96_96_ = Shader{"Convolution 96 96", ctx_.get(),
+                                   select_shader(internal_shaders_output_convolution_96_96_fp32_comp_cso,
+                                                 internal_shaders_output_convolution_96_96_fp16_comp_cso),
+                                   eShaderType::Comp, log};
+    sh_convolution_112_112_ = Shader{"Convolution 112 112", ctx_.get(),
+                                     select_shader(internal_shaders_output_convolution_112_112_fp32_comp_cso,
+                                                   internal_shaders_output_convolution_112_112_fp16_comp_cso),
+                                     eShaderType::Comp, log};
+    sh_convolution_concat_96_64_112_ =
+        Shader{"Convolution Concat 96 64 112", ctx_.get(),
                select_shader(internal_shaders_output_convolution_concat_96_64_112_fp32_comp_cso,
                              internal_shaders_output_convolution_concat_96_64_112_fp16_comp_cso),
                eShaderType::Comp, log};
-    sh_convolution_concat_Direct_112_48_96_ =
-        Shader{"Convolution Concat Direct 112 48 96", ctx_.get(),
+    sh_convolution_concat_112_48_96_ =
+        Shader{"Convolution Concat 112 48 96", ctx_.get(),
                select_shader(internal_shaders_output_convolution_concat_112_48_96_fp32_comp_cso,
                              internal_shaders_output_convolution_concat_112_48_96_fp16_comp_cso),
                eShaderType::Comp, log};
-    sh_convolution_concat_Direct_96_32_64_ =
-        Shader{"Convolution Concat Direct 96 32 64", ctx_.get(),
+    sh_convolution_concat_96_32_64_ =
+        Shader{"Convolution Concat 96 32 64", ctx_.get(),
                select_shader(internal_shaders_output_convolution_concat_96_32_64_fp32_comp_cso,
                              internal_shaders_output_convolution_concat_96_32_64_fp16_comp_cso),
                eShaderType::Comp, log};
-    sh_convolution_concat_Direct_64_3_64_ =
-        Shader{"Convolution Concat Direct 64 3 64", ctx_.get(),
+    sh_convolution_concat_64_3_64_ =
+        Shader{"Convolution Concat 64 3 64", ctx_.get(),
                select_shader(internal_shaders_output_convolution_concat_64_3_64_fp32_comp_cso,
                              internal_shaders_output_convolution_concat_64_3_64_fp16_comp_cso),
                eShaderType::Comp, log};
-    sh_convolution_concat_Direct_64_6_64_ =
-        Shader{"Convolution Concat Direct 64 6 64", ctx_.get(),
+    sh_convolution_concat_64_6_64_ =
+        Shader{"Convolution Concat 64 6 64", ctx_.get(),
                select_shader(internal_shaders_output_convolution_concat_64_6_64_fp32_comp_cso,
                              internal_shaders_output_convolution_concat_64_6_64_fp16_comp_cso),
                eShaderType::Comp, log};
-    sh_convolution_concat_Direct_64_9_64_ =
-        Shader{"Convolution Concat Direct 64 9 64", ctx_.get(),
+    sh_convolution_concat_64_9_64_ =
+        Shader{"Convolution Concat 64 9 64", ctx_.get(),
                select_shader(internal_shaders_output_convolution_concat_64_9_64_fp32_comp_cso,
                              internal_shaders_output_convolution_concat_64_9_64_fp16_comp_cso),
                eShaderType::Comp, log};
-    sh_convolution_Direct_32_3_img_ = Shader{"Convolution Direct 32 3 Img", ctx_.get(),
-                                             select_shader(internal_shaders_output_convolution_32_3_img_fp32_comp_cso,
-                                                           internal_shaders_output_convolution_32_3_img_fp16_comp_cso),
-                                             eShaderType::Comp, log};
+    sh_convolution_32_3_img_ = Shader{"Convolution 32 3 Img", ctx_.get(),
+                                      select_shader(internal_shaders_output_convolution_32_3_img_fp32_comp_cso,
+                                                    internal_shaders_output_convolution_32_3_img_fp16_comp_cso),
+                                      eShaderType::Comp, log};
 
-    prog_convolution_DirectImg_3_32_ =
-        Program{"Convolution DirectImg 3 32", ctx_.get(), &sh_convolution_DirectImg_3_32_, log};
-    prog_convolution_DirectImg_6_32_ =
-        Program{"Convolution DirectImg 6 32", ctx_.get(), &sh_convolution_DirectImg_6_32_, log};
-    prog_convolution_DirectImg_9_32_ =
-        Program{"Convolution DirectImg 9 32", ctx_.get(), &sh_convolution_DirectImg_9_32_, log};
-    prog_convolution_Direct_32_32_Downsample_ =
-        Program{"Convolution Direct 32 32", ctx_.get(), &sh_convolution_Direct_32_32_Downsample_, log};
-    prog_convolution_Direct_32_48_Downsample_ =
-        Program{"Convolution Direct 32 48", ctx_.get(), &sh_convolution_Direct_32_48_Downsample_, log};
-    prog_convolution_Direct_48_64_Downsample_ =
-        Program{"Convolution Direct 48 64", ctx_.get(), &sh_convolution_Direct_48_64_Downsample_, log};
-    prog_convolution_Direct_64_80_Downsample_ =
-        Program{"Convolution Direct 64 80", ctx_.get(), &sh_convolution_Direct_64_80_Downsample_, log};
-    prog_convolution_Direct_64_64_ =
-        Program{"Convolution Direct 64 64", ctx_.get(), &sh_convolution_Direct_64_64_, log};
-    prog_convolution_Direct_64_32_ =
-        Program{"Convolution Direct 64 32", ctx_.get(), &sh_convolution_Direct_64_32_, log};
-    prog_convolution_Direct_80_96_ =
-        Program{"Convolution Direct 80 96", ctx_.get(), &sh_convolution_Direct_80_96_, log};
-    prog_convolution_Direct_96_96_ =
-        Program{"Convolution Direct 96 96", ctx_.get(), &sh_convolution_Direct_96_96_, log};
-    prog_convolution_Direct_112_112_ =
-        Program{"Convolution Direct 112 112", ctx_.get(), &sh_convolution_Direct_112_112_, log};
-    prog_convolution_concat_Direct_96_64_112_ =
-        Program{"Convolution Concat Direct 96 64 112", ctx_.get(), &sh_convolution_concat_Direct_96_64_112_, log};
-    prog_convolution_concat_Direct_112_48_96_ =
-        Program{"Convolution Concat Direct 112 48 96", ctx_.get(), &sh_convolution_concat_Direct_112_48_96_, log};
-    prog_convolution_concat_Direct_96_32_64_ =
-        Program{"Convolution Concat Direct 96 32 64", ctx_.get(), &sh_convolution_concat_Direct_96_32_64_, log};
-    prog_convolution_concat_Direct_64_3_64_ =
-        Program{"Convolution Concat Direct 64 3 64", ctx_.get(), &sh_convolution_concat_Direct_64_3_64_, log};
-    prog_convolution_concat_Direct_64_6_64_ =
-        Program{"Convolution Concat Direct 64 6 64", ctx_.get(), &sh_convolution_concat_Direct_64_6_64_, log};
-    prog_convolution_concat_Direct_64_9_64_ =
-        Program{"Convolution Concat Direct 64 9 64", ctx_.get(), &sh_convolution_concat_Direct_64_9_64_, log};
-    prog_convolution_Direct_32_3_img_ =
-        Program{"Convolution Direct 32 3 Img", ctx_.get(), &sh_convolution_Direct_32_3_img_, log};
+    prog_convolution_Img_3_32_ = Program{"Convolution Img 3 32", ctx_.get(), &sh_convolution_Img_3_32_, log};
+    prog_convolution_Img_6_32_ = Program{"Convolution Img 6 32", ctx_.get(), &sh_convolution_Img_6_32_, log};
+    prog_convolution_Img_9_32_ = Program{"Convolution Img 9 32", ctx_.get(), &sh_convolution_Img_9_32_, log};
+    prog_convolution_32_32_Downsample_ =
+        Program{"Convolution 32 32", ctx_.get(), &sh_convolution_32_32_Downsample_, log};
+    prog_convolution_32_48_Downsample_ =
+        Program{"Convolution 32 48", ctx_.get(), &sh_convolution_32_48_Downsample_, log};
+    prog_convolution_48_64_Downsample_ =
+        Program{"Convolution 48 64", ctx_.get(), &sh_convolution_48_64_Downsample_, log};
+    prog_convolution_64_80_Downsample_ =
+        Program{"Convolution 64 80", ctx_.get(), &sh_convolution_64_80_Downsample_, log};
+    prog_convolution_64_64_ = Program{"Convolution 64 64", ctx_.get(), &sh_convolution_64_64_, log};
+    prog_convolution_64_32_ = Program{"Convolution 64 32", ctx_.get(), &sh_convolution_64_32_, log};
+    prog_convolution_80_96_ = Program{"Convolution 80 96", ctx_.get(), &sh_convolution_80_96_, log};
+    prog_convolution_96_96_ = Program{"Convolution 96 96", ctx_.get(), &sh_convolution_96_96_, log};
+    prog_convolution_112_112_ = Program{"Convolution 112 112", ctx_.get(), &sh_convolution_112_112_, log};
+    prog_convolution_concat_96_64_112_ =
+        Program{"Convolution Concat 96 64 112", ctx_.get(), &sh_convolution_concat_96_64_112_, log};
+    prog_convolution_concat_112_48_96_ =
+        Program{"Convolution Concat 112 48 96", ctx_.get(), &sh_convolution_concat_112_48_96_, log};
+    prog_convolution_concat_96_32_64_ =
+        Program{"Convolution Concat 96 32 64", ctx_.get(), &sh_convolution_concat_96_32_64_, log};
+    prog_convolution_concat_64_3_64_ =
+        Program{"Convolution Concat 64 3 64", ctx_.get(), &sh_convolution_concat_64_3_64_, log};
+    prog_convolution_concat_64_6_64_ =
+        Program{"Convolution Concat 64 6 64", ctx_.get(), &sh_convolution_concat_64_6_64_, log};
+    prog_convolution_concat_64_9_64_ =
+        Program{"Convolution Concat 64 9 64", ctx_.get(), &sh_convolution_concat_64_9_64_, log};
+    prog_convolution_32_3_img_ = Program{"Convolution 32 3 Img", ctx_.get(), &sh_convolution_32_3_img_, log};
 
-    return pi_convolution_DirectImg_3_32_.Init(ctx_.get(), &prog_convolution_DirectImg_3_32_, log) &&
-           pi_convolution_DirectImg_6_32_.Init(ctx_.get(), &prog_convolution_DirectImg_6_32_, log) &&
-           pi_convolution_DirectImg_9_32_.Init(ctx_.get(), &prog_convolution_DirectImg_9_32_, log) &&
-           pi_convolution_Direct_32_32_Downsample_.Init(ctx_.get(), &prog_convolution_Direct_32_32_Downsample_, log) &&
-           pi_convolution_Direct_32_48_Downsample_.Init(ctx_.get(), &prog_convolution_Direct_32_48_Downsample_, log) &&
-           pi_convolution_Direct_48_64_Downsample_.Init(ctx_.get(), &prog_convolution_Direct_48_64_Downsample_, log) &&
-           pi_convolution_Direct_64_80_Downsample_.Init(ctx_.get(), &prog_convolution_Direct_64_80_Downsample_, log) &&
-           pi_convolution_Direct_64_64_.Init(ctx_.get(), &prog_convolution_Direct_64_64_, log) &&
-           pi_convolution_Direct_64_32_.Init(ctx_.get(), &prog_convolution_Direct_64_32_, log) &&
-           pi_convolution_Direct_80_96_.Init(ctx_.get(), &prog_convolution_Direct_80_96_, log) &&
-           pi_convolution_Direct_96_96_.Init(ctx_.get(), &prog_convolution_Direct_96_96_, log) &&
-           pi_convolution_Direct_112_112_.Init(ctx_.get(), &prog_convolution_Direct_112_112_, log) &&
-           pi_convolution_concat_Direct_96_64_112_.Init(ctx_.get(), &prog_convolution_concat_Direct_96_64_112_, log) &&
-           pi_convolution_concat_Direct_112_48_96_.Init(ctx_.get(), &prog_convolution_concat_Direct_112_48_96_, log) &&
-           pi_convolution_concat_Direct_96_32_64_.Init(ctx_.get(), &prog_convolution_concat_Direct_96_32_64_, log) &&
-           pi_convolution_concat_Direct_64_3_64_.Init(ctx_.get(), &prog_convolution_concat_Direct_64_3_64_, log) &&
-           pi_convolution_concat_Direct_64_6_64_.Init(ctx_.get(), &prog_convolution_concat_Direct_64_6_64_, log) &&
-           pi_convolution_concat_Direct_64_9_64_.Init(ctx_.get(), &prog_convolution_concat_Direct_64_9_64_, log) &&
-           pi_convolution_Direct_32_3_img_.Init(ctx_.get(), &prog_convolution_Direct_32_3_img_, log);
+    return pi_convolution_Img_3_32_.Init(ctx_.get(), &prog_convolution_Img_3_32_, log) &&
+           pi_convolution_Img_6_32_.Init(ctx_.get(), &prog_convolution_Img_6_32_, log) &&
+           pi_convolution_Img_9_32_.Init(ctx_.get(), &prog_convolution_Img_9_32_, log) &&
+           pi_convolution_32_32_Downsample_.Init(ctx_.get(), &prog_convolution_32_32_Downsample_, log) &&
+           pi_convolution_32_48_Downsample_.Init(ctx_.get(), &prog_convolution_32_48_Downsample_, log) &&
+           pi_convolution_48_64_Downsample_.Init(ctx_.get(), &prog_convolution_48_64_Downsample_, log) &&
+           pi_convolution_64_80_Downsample_.Init(ctx_.get(), &prog_convolution_64_80_Downsample_, log) &&
+           pi_convolution_64_64_.Init(ctx_.get(), &prog_convolution_64_64_, log) &&
+           pi_convolution_64_32_.Init(ctx_.get(), &prog_convolution_64_32_, log) &&
+           pi_convolution_80_96_.Init(ctx_.get(), &prog_convolution_80_96_, log) &&
+           pi_convolution_96_96_.Init(ctx_.get(), &prog_convolution_96_96_, log) &&
+           pi_convolution_112_112_.Init(ctx_.get(), &prog_convolution_112_112_, log) &&
+           pi_convolution_concat_96_64_112_.Init(ctx_.get(), &prog_convolution_concat_96_64_112_, log) &&
+           pi_convolution_concat_112_48_96_.Init(ctx_.get(), &prog_convolution_concat_112_48_96_, log) &&
+           pi_convolution_concat_96_32_64_.Init(ctx_.get(), &prog_convolution_concat_96_32_64_, log) &&
+           pi_convolution_concat_64_3_64_.Init(ctx_.get(), &prog_convolution_concat_64_3_64_, log) &&
+           pi_convolution_concat_64_6_64_.Init(ctx_.get(), &prog_convolution_concat_64_6_64_, log) &&
+           pi_convolution_concat_64_9_64_.Init(ctx_.get(), &prog_convolution_concat_64_9_64_, log) &&
+           pi_convolution_32_3_img_.Init(ctx_.get(), &prog_convolution_32_3_img_, log);
 }
 
 void Ray::Dx::Renderer::UpdateUNetFilterMemory(CommandBuffer cmd_buf) {
