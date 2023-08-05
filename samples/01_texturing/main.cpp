@@ -111,7 +111,7 @@ int main() {
                            0.0f, 1.0f, 0.0f, 0.0f, //
                            0.0f, 0.0f, 1.0f, 0.0f, //
                            0.0f, 0.0f, 0.0f, 1.0f};
-    const Ray::MeshInstanceHandle inst = scene->AddMeshInstance(mesh1, xform);
+    scene->AddMeshInstance(mesh1, xform);
 
     // Add camera
     const float view_origin[] = {2.0f, 2.0f, 2.0f};
