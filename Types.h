@@ -13,23 +13,27 @@
 */
 
 namespace Ray {
+/// Templated color struct
 template <typename T, int N> struct color_t {
     T v[N];
 };
 
+/// 8-bit color types
 using color_rgba8_t = color_t<uint8_t, 4>;
 using color_rgb8_t = color_t<uint8_t, 3>;
 using color_rg8_t = color_t<uint8_t, 2>;
 using color_r8_t = color_t<uint8_t, 1>;
 
+/// Floating-point color types
 using color_rgba_t = color_t<float, 4>;
 using color_rgb_t = color_t<float, 3>;
 using color_rg_t = color_t<float, 2>;
 using color_r_t = color_t<float, 1>;
 
+/// Color data struct, references array of pixels
 template <typename T, int N> struct color_data_t {
-    const color_t<T, N> *ptr;
-    int pitch;
+    const color_t<T, N> *ptr;   ///< Pixels array
+    int pitch;                  ///< Data pitch (distance between lines) expressed in pixels
 };
 
 using color_data_rgba8_t = color_data_t<uint8_t, 4>;
@@ -54,12 +58,15 @@ struct rect_t {
     int x, y, w, h;
 };
 
+/// Camera type
 enum class eCamType : uint8_t { Persp, Ortho, Geo };
 
+/// Type of reconstruction filter
 enum class eFilterType : uint8_t { Box, Tent };
 
 enum class eLensUnits : uint8_t { FOV, FLength };
 
+/// View transform (affects tonemapping)
 enum class eViewTransform : uint8_t {
     Standard,
     Filmic_VeryLowContrast,
