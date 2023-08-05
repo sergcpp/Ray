@@ -70,48 +70,48 @@ struct shading_node_desc_t {
     TextureHandle normal_map = InvalidTextureHandle;           ///< Normal map index
     float normal_map_intensity = 1.0f;                         ///< Normal map intensity
     MaterialHandle mix_materials[2] = {InvalidMaterialHandle}; ///< Indices for two materials for mixing
-    float roughness = 0;
-    TextureHandle roughness_texture = InvalidTextureHandle;
-    float anisotropic = 0;          ///<
-    float anisotropic_rotation = 0; ///<
-    float sheen = 0;
-    float specular = 0;
-    float strength = 1; ///< Strength of emissive material
-    float fresnel = 1;  ///< Fresnel factor of mix material
-    float ior = 1;      ///< IOR for reflective or refractive material
-    float tint = 0;
-    TextureHandle metallic_texture = InvalidTextureHandle;
-    bool multiple_importance = false; ///< Enable explicit emissive geometry sampling
-    bool mix_add = false;
+    float roughness = 0;                                       ///< Roughness
+    TextureHandle roughness_texture = InvalidTextureHandle;    ///< Roughness texture
+    float anisotropic = 0;                                     ///< Amount of anisotropy [0; 1]
+    float anisotropic_rotation = 0;                            ///< Anisotropy rotation [-PI; +PI]
+    float sheen = 0;                                           ///< Sheen
+    float specular = 0;                                        ///< Specular
+    float strength = 1;                                        ///< Strength of emissive material
+    float fresnel = 1;                                         ///< Fresnel factor of mix material
+    float ior = 1;                                             ///< IOR for reflective or refractive material
+    float tint = 0;                                            ///< Specular tint
+    TextureHandle metallic_texture = InvalidTextureHandle;     ///< Metalness texture
+    bool multiple_importance = false;                          ///< Enable explicit emissive geometry sampling
+    bool mix_add = false;                                      ///< Enable additive mixing
 };
 
 /// Printcipled material descriptor struct (metallicness workflow)
 struct principled_mat_desc_t {
-    float base_color[3] = {1, 1, 1};
-    TextureHandle base_texture = InvalidTextureHandle;
-    float metallic = 0;
-    TextureHandle metallic_texture = InvalidTextureHandle;
-    float specular = 0.5f;
-    TextureHandle specular_texture = InvalidTextureHandle;
-    float specular_tint = 0;
-    float roughness = 0.5f;
-    TextureHandle roughness_texture = InvalidTextureHandle;
-    float anisotropic = 0;
-    float anisotropic_rotation = 0;
-    float sheen = 0;
-    float sheen_tint = 0.5f;
-    float clearcoat = 0.0f;
-    float clearcoat_roughness = 0.0f;
-    float ior = 1.45f;
-    float transmission = 0.0f;
-    float transmission_roughness = 0.0f;
-    float emission_color[3] = {0, 0, 0};
-    TextureHandle emission_texture = InvalidTextureHandle;
-    float emission_strength = 0;
-    float alpha = 1.0f;
-    TextureHandle alpha_texture = InvalidTextureHandle;
-    TextureHandle normal_map = InvalidTextureHandle;
-    float normal_map_intensity = 1.0f;
+    float base_color[3] = {1, 1, 1};                        ///< Base color
+    TextureHandle base_texture = InvalidTextureHandle;      ///< Base color texture
+    float metallic = 0;                                     ///< Metalness value
+    TextureHandle metallic_texture = InvalidTextureHandle;  ///< Metalness texture
+    float specular = 0.5f;                                  ///< Specular value [0; 1]
+    TextureHandle specular_texture = InvalidTextureHandle;  ///< Specular texture
+    float specular_tint = 0;                                ///< Specular tint
+    float roughness = 0.5f;                                 ///< Roughness value
+    TextureHandle roughness_texture = InvalidTextureHandle; ///< Roughness texture
+    float anisotropic = 0;                                  ///< Amount of anisotropy [0; 1]
+    float anisotropic_rotation = 0;                         ///< Anisotropy rotation [-PI; +PI]
+    float sheen = 0;                                        ///< Sheen
+    float sheen_tint = 0.5f;                                ///< Sheen tint
+    float clearcoat = 0.0f;                                 ///< Weight of clearcoat layer
+    float clearcoat_roughness = 0.0f;                       ///< Clearcoat layer roughness
+    float ior = 1.45f;                                      ///< IOR
+    float transmission = 0.0f;                              ///< Transmission amount
+    float transmission_roughness = 0.0f;                    ///< Transmission roughness
+    float emission_color[3] = {0, 0, 0};                    ///< Emissive color
+    TextureHandle emission_texture = InvalidTextureHandle;  ///< Emissive texture
+    float emission_strength = 0;                            ///< Emission strength
+    float alpha = 1.0f;                                     ///< Material transparency (alpha blending)
+    TextureHandle alpha_texture = InvalidTextureHandle;     ///< Transparency texture
+    TextureHandle normal_map = InvalidTextureHandle;        ///< Material normalmap
+    float normal_map_intensity = 1.0f;                      ///< Normalmap intensity
 };
 
 /// Defines mesh region with specific material
@@ -148,20 +148,21 @@ enum eTextureFormat { RGBA8888, RGB888, RG88, R8 };
 
 /// Texture description
 struct tex_desc_t {
-    eTextureFormat format;
-    const char *name = nullptr; ///< Debug name
-    const void *data;
-    int w, ///< Texture width
-        h; ///< Texture height
-    bool is_srgb = true;
-    bool is_normalmap = false;
-    bool force_no_compression = false; ///< Make sure texture will have the best quality
-    bool generate_mipmaps = false;
+    eTextureFormat format;              ///< Texture data format
+    const char *name = nullptr;         ///< Debug name
+    const void *data;                   ///< Texture data
+    int w,                              ///< Texture width
+        h;                              ///< Texture height
+    bool is_srgb = true;                ///< Treat this texture as SRGB
+    bool is_normalmap = false;          ///< Is this a normalmap
+    bool force_no_compression = false;  ///< Disable compression (guarantee the best quality)
+    bool generate_mipmaps = false;      ///< Generate mipmaps for this texture
 };
 
+/// Lightsource type
 enum eLightType { SphereLight, SpotLight, DirectionalLight, LineLight, RectLight };
 
-// Light description
+/// Directional lightsource description
 struct directional_light_desc_t {
     float color[3];
     float direction[3], angle;
@@ -169,6 +170,7 @@ struct directional_light_desc_t {
     bool cast_shadow = true;
 };
 
+/// Spherical light source description
 struct sphere_light_desc_t {
     float color[3] = {1.0f, 1.0f, 1.0f};
     float position[3] = {0.0f, 0.0f, 0.0f};
@@ -177,6 +179,7 @@ struct sphere_light_desc_t {
     bool cast_shadow = true;
 };
 
+/// Spotlight description
 struct spot_light_desc_t {
     float color[3] = {1.0f, 1.0f, 1.0f};
     float position[3] = {0.0f, 0.0f, 0.0f};
@@ -188,6 +191,7 @@ struct spot_light_desc_t {
     bool cast_shadow = true;
 };
 
+/// Rectangular lightsource description
 struct rect_light_desc_t {
     float color[3] = {1.0f, 1.0f, 1.0f};
     float width = 1.0f, height = 1.0f;
@@ -196,6 +200,7 @@ struct rect_light_desc_t {
     bool cast_shadow = true;
 };
 
+/// Disk lightsource description
 struct disk_light_desc_t {
     float color[3] = {1.0f, 1.0f, 1.0f};
     float size_x = 1.0f, size_y = 1.0f;
@@ -204,6 +209,7 @@ struct disk_light_desc_t {
     bool cast_shadow = true;
 };
 
+/// Line light description
 struct line_light_desc_t {
     float color[3] = {1.0f, 1.0f, 1.0f};
     float radius = 1.0f, height = 1.0f;
@@ -212,7 +218,7 @@ struct line_light_desc_t {
     bool cast_shadow = true;
 };
 
-// Camera description
+/// Camera description
 struct camera_desc_t {
     eCamType type = eCamType::Persp;                          ///< Type of projection
     eFilterType filter = eFilterType::Tent;                   ///< Reconstruction filter

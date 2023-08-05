@@ -39,6 +39,7 @@ eRendererType RendererTypeFromName(const char *name);
 
 /// Returns whether it is safe to call Render function for non-overlapping regions from different threads
 bool RendererSupportsMultithreading(eRendererType rt);
+/// Returns whether this type of renderer supports hardware raytracing
 bool RendererSupportsHWRT(eRendererType rt);
 
 /// Renderer settings
@@ -90,6 +91,7 @@ class RendererBase {
     /// Name of the device
     virtual const char *device_name() const = 0;
 
+    /// Tells whether this is a hardware accelerated renderer
     virtual bool is_hwrt() const { return false; }
 
     /// Returns size of rendered image
@@ -140,6 +142,7 @@ class RendererBase {
     */
     virtual void DenoiseImage(int pass, const RegionContext &region) = 0;
 
+    /// Structure that holds render timings (in microseconds)
     struct stats_t {
         unsigned long long time_primary_ray_gen_us;
         unsigned long long time_primary_trace_us;
@@ -154,6 +157,10 @@ class RendererBase {
     virtual void GetStats(stats_t &st) = 0;
     virtual void ResetStats() = 0;
 
+    /** @brief Initialize UNet filter (neural denoiser)
+        @param alias_memory enable tensom memory aliasing (to lower memory usage)
+        @param out_props output filter properties
+    */
     virtual void InitUNetFilter(bool alias_memory, unet_filter_properties_t &out_props) = 0;
 };
 } // namespace Ray
