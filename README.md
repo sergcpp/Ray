@@ -66,7 +66,7 @@ $ cmake .. -DCMAKE_BUILD_TYPE=Release && make
 ## Usage
 ### Image rendering
 ```c++
-#include <Ray/RendererFactory.h>
+#include <Ray/Ray.h>
 
 int main() {
     const int IMG_W = 256, IMG_H = 256;

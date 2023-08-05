@@ -158,7 +158,7 @@ int main() {
     const Ray::color_data_rgba_t pixels = renderer->get_pixels_ref();
 
     // Save image
-    WriteTGA(pixels.ptr, pixels.pitch, IMG_W, IMG_H, 4, true, "02_multithreading.tga");
+    WriteTGA(pixels.ptr, pixels.pitch, IMG_W, IMG_H, 3, true, "02_multithreading.tga");
     printf("Image saved as samples/02_multithreading.tga\n");
 
     delete scene;
