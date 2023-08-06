@@ -8,9 +8,9 @@
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
-//#include <d3d12shader.h>
+// #include <d3d12shader.h>
 #include <d3dcommon.h>
-//#include <dxcapi.h>
+// #include <dxcapi.h>
 
 #include "../../Log.h"
 #include "../ScopeExit.h"
@@ -82,8 +82,8 @@ const uint32_t _DXC_PART_REFLECTION_DATA = _DXC_FOURCC('S', 'T', 'A', 'T');
 } // namespace Ray
 
 Ray::Dx::Shader::Shader(const char *name, Context *ctx, const uint8_t *shader_code, const int code_size,
-                        const eShaderType type, ILog *log) {
-    name_ = name;
+                        const eShaderType type, ILog *log)
+    : name_(name) {
     device_ = ctx->device();
     if (!Init(shader_code, code_size, type, log)) {
         throw std::runtime_error("Shader Init error!");

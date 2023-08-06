@@ -1393,7 +1393,7 @@ void Ray::Vk::Texture2D::InitFromTGA_RGBEFile(const void *data[6], Buffer &sbuf,
         if (data[i]) {
             const uint32_t img_size = 3 * w * h * sizeof(uint16_t);
             assert(stage_off + img_size <= sbuf.size());
-            ConvertRGBE_to_RGB16F((const uint8_t *)data[i], w, h, (uint16_t *)&stage_data[stage_off]);
+            ConvertRGBE_to_RGB16F(reinterpret_cast<const uint8_t *>(data[i]), w, h, (uint16_t *)&stage_data[stage_off]);
             data_off[i] = int(stage_off);
             stage_off += img_size;
         } else {
@@ -1689,7 +1689,7 @@ void Ray::Vk::Texture2D::InitFromKTXFile(const void *data[6], const int size[6],
     uint32_t stage_len = 0;
 
     for (int i = 0; i < 6; ++i) {
-        const auto *_data = (const uint8_t *)data[i];
+        const auto *_data = reinterpret_cast<const uint8_t *>(data[i]);
         const auto *this_header = reinterpret_cast<const KTXHeader *>(_data);
 
         // make sure all images have same properties
@@ -1888,7 +1888,7 @@ void Ray::Vk::Texture2D::InitFromKTXFile(const void *data[6], const int size[6],
     int regions_count = 0;
 
     for (int i = 0; i < 6; ++i) {
-        const auto *_data = (const uint8_t *)data[i];
+        const auto *_data = reinterpret_cast<const uint8_t *>(data[i]);
 
 #ifndef NDEBUG
         const auto *this_header = reinterpret_cast<const KTXHeader *>(data[i]);

@@ -17,26 +17,22 @@ extern const VkShaderStageFlagBits g_shader_stages_vk[];
 } // namespace Ray
 
 Ray::Vk::Program::Program(const char *name, Context *ctx, Shader *vs_ref, Shader *fs_ref, Shader *tcs_ref,
-                          Shader *tes_ref, ILog *log) {
-    name_ = name;
-    ctx_ = ctx;
+                          Shader *tes_ref, ILog *log)
+    : name_(name), ctx_(ctx) {
     if (!Init(vs_ref, fs_ref, tcs_ref, tes_ref, log)) {
         throw std::runtime_error("Program Init error!");
     }
 }
 
-Ray::Vk::Program::Program(const char *name, Context *ctx, Shader *cs_ref, ILog *log) {
-    name_ = name;
-    ctx_ = ctx;
+Ray::Vk::Program::Program(const char *name, Context *ctx, Shader *cs_ref, ILog *log) : name_(name), ctx_(ctx) {
     if (!Init(cs_ref, log)) {
         throw std::runtime_error("Program Init error!");
     }
 }
 
 Ray::Vk::Program::Program(const char *name, Context *ctx, Shader *raygen_ref, Shader *closesthit_ref,
-                          Shader *anyhit_ref, Shader *miss_ref, Shader *intersection_ref, ILog *log) {
-    name_ = name;
-    ctx_ = ctx;
+                          Shader *anyhit_ref, Shader *miss_ref, Shader *intersection_ref, ILog *log)
+    : name_(name), ctx_(ctx) {
     if (!Init(raygen_ref, closesthit_ref, anyhit_ref, miss_ref, intersection_ref, log)) {
         throw std::runtime_error("Program Init error!");
     }

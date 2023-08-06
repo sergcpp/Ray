@@ -33,9 +33,8 @@ static_assert(int(eShaderType::AnyHit) < int(eShaderType::Intersection), "!");
 } // namespace Ray
 
 Ray::Vk::Shader::Shader(const char *name, Context *ctx, const uint8_t *shader_code, const int code_size,
-                        const eShaderType type, ILog *log) {
-    name_ = name;
-    ctx_ = ctx;
+                        const eShaderType type, ILog *log)
+    : ctx_(ctx), name_(name) {
     if (!Init(shader_code, code_size, type, log)) {
         throw std::runtime_error("Shader Init error!");
     }

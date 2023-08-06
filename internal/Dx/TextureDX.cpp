@@ -1332,7 +1332,7 @@ void Ray::Dx::Texture2D::InitFromTGA_RGBEFile(const void *data[6], Buffer &sbuf,
         if (data[i]) {
             const uint32_t img_size = 3 * w * h * sizeof(uint16_t);
             assert(stage_off + img_size <= sbuf.size());
-            ConvertRGBE_to_RGB16F((const uint8_t *)data[i], w, h, (uint16_t *)&stage_data[stage_off]);
+            ConvertRGBE_to_RGB16F(reinterpret_cast<const uint8_t *>(data[i]), w, h, (uint16_t *)&stage_data[stage_off]);
             data_off[i] = int(stage_off);
             stage_off += img_size;
         } else {
@@ -1630,7 +1630,7 @@ void Ray::Dx::Texture2D::InitFromKTXFile(const void *data[6], const int size[6],
     uint32_t stage_len = 0;
 
     for (int i = 0; i < 6; ++i) {
-        const auto *_data = (const uint8_t *)data[i];
+        const auto *_data = reinterpret_cast<const uint8_t *>(data[i]);
         const auto *this_header = reinterpret_cast<const KTXHeader *>(_data);
 
         // make sure all images have same properties
@@ -1831,7 +1831,7 @@ void Ray::Dx::Texture2D::InitFromKTXFile(const void *data[6], const int size[6],
     int regions_count = 0;
 
     for (int i = 0; i < 6; ++i) {
-        const auto *_data = (const uint8_t *)data[i];
+        const auto *_data = reinterpret_cast<const uint8_t *>(data[i]);
 
 #ifndef NDEBUG
         const auto *this_header = reinterpret_cast<const KTXHeader *>(data[i]);
@@ -2139,10 +2139,10 @@ void Ray::Dx::_ClearColorImage(Texture2D &tex, const void *rgba, void *_cmd_buf)
 
     if (IsUintFormat(tex.params.format)) {
         cmd_buf->ClearUnorderedAccessViewUint(temp_buffer_gpu_UAV_handle, temp_buffer_cpu_readable_UAV_handle,
-                                              tex.dx_resource(), (const UINT *)rgba, 0, nullptr);
+                                              tex.dx_resource(), reinterpret_cast<const UINT *>(rgba), 0, nullptr);
     } else {
         cmd_buf->ClearUnorderedAccessViewFloat(temp_buffer_gpu_UAV_handle, temp_buffer_cpu_readable_UAV_handle,
-                                               tex.dx_resource(), (const float *)rgba, 0, nullptr);
+                                               tex.dx_resource(), reinterpret_cast<const float *>(rgba), 0, nullptr);
     }
 
     ctx->descriptor_heaps_to_release[ctx->backend_frame].push_back(temp_cpu_descriptor_heap);
