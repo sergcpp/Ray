@@ -73,6 +73,7 @@ set(INTERNAL_SOURCE_FILES internal/Atmosphere.h
                           internal/LinearAlloc.cpp
                           internal/RastState.h
                           internal/RendererCPU.h
+                          internal/RendererGPU.h
                           internal/RendererGPU_kernels.h
                           internal/SamplingParams.h
                           internal/SamplingParams.cpp
@@ -143,7 +144,6 @@ if (ENABLE_VK_IMPL)
                               internal/CoreVK.h
                               internal/RendererVK.h
                               internal/RendererVK.cpp
-                              internal/RendererVK_kernels.cpp
                               internal/SceneVK.h
                               internal/SceneVK.cpp)
 endif (ENABLE_VK_IMPL)
@@ -153,7 +153,6 @@ if(ENABLE_DX_IMPL AND WIN32)
                                 internal/CoreDX.h
                                 internal/RendererDX.h
                                 internal/RendererDX.cpp
-                                internal/RendererDX_kernels.cpp
                                 internal/SceneDX.h
                                 internal/SceneDX.cpp)
     set_source_files_properties(

@@ -64,7 +64,7 @@ Ray::RendererBase *Ray::CreateRenderer(const settings_t &s, ILog *log, const Bit
     if (enabled_types & eRendererType::Vulkan) {
         log->Info("Ray: Creating Vulkan renderer %ix%i", s.w, s.h);
         try {
-            return new Vk::Renderer(s, log);
+            return Vk::CreateRenderer(s, log);
         } catch (std::exception &e) {
             log->Info("Ray: Failed to create Vulkan renderer, %s", e.what());
         }
@@ -74,7 +74,7 @@ Ray::RendererBase *Ray::CreateRenderer(const settings_t &s, ILog *log, const Bit
     if (enabled_types & eRendererType::DirectX12) {
         log->Info("Ray: Creating DirectX12 renderer %ix%i", s.w, s.h);
         try {
-            return new Dx::Renderer(s, log);
+            return Dx::CreateRenderer(s, log);
         } catch (std::exception &e) {
             log->Info("Ray: Failed to create DirectX12 renderer, %s", e.what());
         }
