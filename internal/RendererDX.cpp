@@ -466,6 +466,8 @@ Ray::Dx::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
     permutations_ = Ray::ComputeRadicalInversePermutations(g_primes, PrimesCount);
 }
 
+Ray::eRendererType Ray::Dx::Renderer::type() const { return eRendererType::DirectX12; }
+
 const char *Ray::Dx::Renderer::device_name() const { return ctx_->device_name().c_str(); }
 
 void Ray::Dx::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) {

@@ -462,6 +462,8 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
     permutations_ = Ray::ComputeRadicalInversePermutations(g_primes, PrimesCount);
 }
 
+Ray::eRendererType Ray::Vk::Renderer::type() const { return eRendererType::Vulkan; }
+
 const char *Ray::Vk::Renderer::device_name() const { return ctx_->device_properties().deviceName; }
 
 void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) {

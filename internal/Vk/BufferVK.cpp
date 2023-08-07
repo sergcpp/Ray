@@ -236,7 +236,7 @@ void Ray::Vk::Buffer::Resize(const uint32_t new_size, const bool keep_content) {
     }
 
     VkBufferCreateInfo buf_create_info = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
-    buf_create_info.size = VkDeviceSize(size_);
+    buf_create_info.size = VkDeviceSize(AlignMapOffsetUp(size_));
     buf_create_info.usage = GetVkBufferUsageFlags(ctx_, type_);
     buf_create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
@@ -376,8 +376,8 @@ uint8_t *Ray::Vk::Buffer::MapRange(const uint32_t offset, const uint32_t size, c
 #endif
 
     void *mapped = nullptr;
-    const VkResult res =
-        ctx_->api().vkMapMemory(ctx_->device(), mem_, VkDeviceSize(offset), VkDeviceSize(size), 0, &mapped);
+    const VkResult res = ctx_->api().vkMapMemory(ctx_->device(), mem_, VkDeviceSize(offset),
+                                                 VkDeviceSize(AlignMapOffsetUp(size)), 0, &mapped);
     if (res != VK_SUCCESS) {
         ctx_->log()->Error("Failed to map memory!");
         return nullptr;
@@ -387,7 +387,7 @@ uint8_t *Ray::Vk::Buffer::MapRange(const uint32_t offset, const uint32_t size, c
         VkMappedMemoryRange range = {VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE};
         range.memory = mem_;
         range.offset = VkDeviceSize(offset);
-        range.size = VkDeviceSize(size);
+        range.size = VkDeviceSize(AlignMapOffsetUp(size));
         range.pNext = nullptr;
 
         const VkResult res = ctx_->api().vkInvalidateMappedMemoryRanges(ctx_->device(), 1, &range);
@@ -418,7 +418,7 @@ void Ray::Vk::Buffer::FlushMappedRange(uint32_t offset, uint32_t size, const boo
     VkMappedMemoryRange range = {VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE};
     range.memory = mem_;
     range.offset = VkDeviceSize(offset);
-    range.size = VkDeviceSize(size);
+    range.size = VkDeviceSize(AlignMapOffsetUp(size));
     range.pNext = nullptr;
 
     if (type_ == eBufType::Upload) {

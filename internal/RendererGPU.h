@@ -258,7 +258,7 @@ class Renderer : public RendererBase {
     Renderer(const settings_t &s, ILog *log);
     ~Renderer() override;
 
-    eRendererType type() const override { return eRendererType::Vulkan; }
+    eRendererType type() const override;
 
     ILog *log() const override { return ctx_->log(); }
 
@@ -343,8 +343,8 @@ inline void Ray::NS::Renderer::Resize(const int w, const int h) {
         pixel_readback_buf_.Unmap();
         frame_pixels_ = nullptr;
     }
-    pixel_readback_buf_ =
-        Buffer{"Px Readback Buf", ctx_.get(), eBufType::Readback, uint32_t(4 * w * h * sizeof(float))};
+    pixel_readback_buf_ = Buffer{"Px Readback Buf", ctx_.get(), eBufType::Readback,
+                                 uint32_t(round_up(4 * w * sizeof(float), TextureDataPitchAlignment) * h)};
     frame_pixels_ = (const color_rgba_t *)pixel_readback_buf_.Map(true /* persistent */);
 
     prim_rays_buf_ =
