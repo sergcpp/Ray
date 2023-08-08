@@ -188,6 +188,7 @@ inline Ray::NS::Scene::Scene(Context *ctx, const bool use_hwrt, const bool use_b
       lights_(ctx, "Lights"), li_indices_(ctx, "LI Indices"), visible_lights_(ctx, "Visible Lights"),
       blocker_lights_(ctx, "Blocker Lights") {
     SceneBase::log_ = ctx->log();
+    SetEnvironment({});
 }
 
 inline void Ray::NS::Scene::GetEnvironment(environment_desc_t &env) {

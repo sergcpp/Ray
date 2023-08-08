@@ -30,7 +30,10 @@ Ref::simd_fvec4 rgb_to_rgbe(const Ref::simd_fvec4 &rgb) {
 } // namespace Cpu
 } // namespace Ray
 
-Ray::Cpu::Scene::Scene(ILog *log, const bool use_wide_bvh) : use_wide_bvh_(use_wide_bvh) { SceneBase::log_ = log; }
+Ray::Cpu::Scene::Scene(ILog *log, const bool use_wide_bvh) : use_wide_bvh_(use_wide_bvh) {
+    SceneBase::log_ = log;
+    SetEnvironment({});
+}
 
 Ray::Cpu::Scene::~Scene() {
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
