@@ -86,7 +86,7 @@ class RendererBase {
     virtual eRendererType type() const = 0;
 
     /// Log
-    virtual ILog *log() const { return nullptr; }
+    virtual ILog *log() const = 0;
 
     /// Name of the device
     virtual const char *device_name() const = 0;

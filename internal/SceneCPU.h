@@ -47,8 +47,6 @@ class Scene : public SceneCommon {
     friend class Cpu::Renderer<Avx512::SIMDPolicy>;
     friend class Cpu::Renderer<Neon::SIMDPolicy>;
 
-    ILog *log_;
-
     bool use_wide_bvh_;
 
     std::vector<bvh_node_t> nodes_;

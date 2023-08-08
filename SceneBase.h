@@ -272,12 +272,19 @@ struct environment_desc_t {
     bool multiple_importance = true;               ///< Enable explicit env map sampling
 };
 
+class ILog;
+
 /** Base Scene class,
     cpu and gpu backends have different implementation of SceneBase
 */
 class SceneBase {
+  protected:
+    ILog *log_ = nullptr;
   public:
     virtual ~SceneBase() = default;
+
+    /// Log
+    ILog *log() const { return log_; }
 
     /// Get current environment description
     virtual void GetEnvironment(environment_desc_t &env) = 0;

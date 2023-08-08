@@ -105,7 +105,7 @@ void Ray::Vk::Scene::GenerateTextureMips_nolock() {
         int pos[2];
         const int page = tex_atlases_[t.atlas].DownsampleRegion(t.page[src_mip], src_pos, src_res, pos);
         if (page == -1) {
-            ctx_->log()->Error("Failed to allocate texture!");
+            log_->Error("Failed to allocate texture!");
             break;
         }
 
@@ -125,10 +125,10 @@ void Ray::Vk::Scene::GenerateTextureMips_nolock() {
         atlas_textures_.Set(info.texture_index, t);
     }
 
-    ctx_->log()->Info("Ray: Atlasses are (RGBA[%i], RGB[%i], RG[%i], R[%i], BC3[%i], BC4[%i], BC5[%i])",
-                      tex_atlases_[0].page_count(), tex_atlases_[1].page_count(), tex_atlases_[2].page_count(),
-                      tex_atlases_[3].page_count(), tex_atlases_[4].page_count(), tex_atlases_[5].page_count(),
-                      tex_atlases_[6].page_count());
+    log_->Info("Ray: Atlasses are (RGBA[%i], RGB[%i], RG[%i], R[%i], BC3[%i], BC4[%i], BC5[%i])",
+               tex_atlases_[0].page_count(), tex_atlases_[1].page_count(), tex_atlases_[2].page_count(),
+               tex_atlases_[3].page_count(), tex_atlases_[4].page_count(), tex_atlases_[5].page_count(),
+               tex_atlases_[6].page_count());
 }
 
 void Ray::Vk::Scene::PrepareBindlessTextures_nolock() {
@@ -147,7 +147,7 @@ void Ray::Vk::Scene::PrepareBindlessTextures_nolock() {
 
     const bool bres = bindless_tex_data_.descr_pool.Init(descr_sizes, 2 /* sets_count */);
     if (!bres) {
-        ctx_->log()->Error("Failed to init descriptor pool!");
+        log_->Error("Failed to init descriptor pool!");
     }
 
     if (!bindless_tex_data_.descr_layout) {
@@ -172,7 +172,7 @@ void Ray::Vk::Scene::PrepareBindlessTextures_nolock() {
         const VkResult res = ctx_->api().vkCreateDescriptorSetLayout(ctx_->device(), &layout_info, nullptr,
                                                                      &bindless_tex_data_.descr_layout);
         if (res != VK_SUCCESS) {
-            ctx_->log()->Error("Failed to create descriptor set layout!");
+            log_->Error("Failed to create descriptor set layout!");
         }
     }
 
@@ -198,7 +198,7 @@ void Ray::Vk::Scene::PrepareBindlessTextures_nolock() {
         const VkResult res = ctx_->api().vkCreateDescriptorSetLayout(ctx_->device(), &layout_info, nullptr,
                                                                      &bindless_tex_data_.rt_descr_layout);
         if (res != VK_SUCCESS) {
-            ctx_->log()->Error("Failed to create descriptor set layout!");
+            log_->Error("Failed to create descriptor set layout!");
         }
     }
 
@@ -343,7 +343,7 @@ void Ray::Vk::Scene::RebuildHWAccStructures_nolock() {
         VkQueryPool query_pool;
         VkResult res = ctx_->api().vkCreateQueryPool(ctx_->device(), &query_pool_create_info, nullptr, &query_pool);
         if (res != VK_SUCCESS) {
-            ctx_->log()->Error("Failed to create query pool!");
+            log_->Error("Failed to create query pool!");
         }
 
         std::vector<AccStructure> blases_before_compaction;
@@ -368,12 +368,12 @@ void Ray::Vk::Scene::RebuildHWAccStructures_nolock() {
                 VkResult res = ctx_->api().vkCreateAccelerationStructureKHR(ctx_->device(), &acc_create_info, nullptr,
                                                                             &acc_struct);
                 if (res != VK_SUCCESS) {
-                    ctx_->log()->Error("Failed to create acceleration structure!");
+                    log_->Error("Failed to create acceleration structure!");
                 }
 
                 auto &acc = blases_before_compaction[i];
                 if (!acc.Init(ctx_, acc_struct)) {
-                    ctx_->log()->Error("Failed to init BLAS!");
+                    log_->Error("Failed to init BLAS!");
                 }
 
                 all_blases[i].build_info.pGeometries = all_blases[i].geometries.cdata();
@@ -437,7 +437,7 @@ void Ray::Vk::Scene::RebuildHWAccStructures_nolock() {
                 const VkResult res = ctx_->api().vkCreateAccelerationStructureKHR(ctx_->device(), &acc_create_info,
                                                                                   nullptr, &compact_acc_struct);
                 if (res != VK_SUCCESS) {
-                    ctx_->log()->Error("Failed to create acceleration structure!");
+                    log_->Error("Failed to create acceleration structure!");
                 }
 
                 VkCopyAccelerationStructureInfoKHR copy_info = {VK_STRUCTURE_TYPE_COPY_ACCELERATION_STRUCTURE_INFO_KHR};
@@ -449,7 +449,7 @@ void Ray::Vk::Scene::RebuildHWAccStructures_nolock() {
 
                 auto &vk_blas = rt_mesh_blases_[i].acc;
                 if (!vk_blas.Init(ctx_, compact_acc_struct)) {
-                    ctx_->log()->Error("Blas compaction failed!");
+                    log_->Error("Blas compaction failed!");
                 }
             }
 
@@ -603,7 +603,7 @@ void Ray::Vk::Scene::RebuildHWAccStructures_nolock() {
         VkResult res =
             ctx_->api().vkCreateAccelerationStructureKHR(ctx_->device(), &create_info, nullptr, &tlas_handle);
         if (res != VK_SUCCESS) {
-            ctx_->log()->Error("[SceneManager::InitHWAccStructures]: Failed to create acceleration structure!");
+            log_->Error("[SceneManager::InitHWAccStructures]: Failed to create acceleration structure!");
         }
 
         tlas_scratch_buf = Buffer{"TLAS Scratch Buf", ctx_, eBufType::Storage, uint32_t(size_info.buildScratchSize)};
@@ -623,7 +623,7 @@ void Ray::Vk::Scene::RebuildHWAccStructures_nolock() {
         ctx_->api().vkCmdBuildAccelerationStructuresKHR(cmd_buf, 1, &tlas_build_info, &build_range);
 
         if (!rt_tlas_.Init(ctx_, tlas_handle)) {
-            ctx_->log()->Error("[SceneManager::InitHWAccStructures]: Failed to init TLAS!");
+            log_->Error("[SceneManager::InitHWAccStructures]: Failed to init TLAS!");
         }
     }
 

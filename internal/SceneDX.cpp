@@ -57,7 +57,7 @@ void Ray::Dx::Scene::PrepareBindlessTextures_nolock() {
 
     const bool bres = bindless_tex_data_.srv_descr_pool.Init(ctx_->max_combined_image_samplers(), false);
     if (!bres) {
-        ctx_->log()->Error("Failed to init descriptor pool!");
+        log_->Error("Failed to init descriptor pool!");
     }
 
     const uint32_t off = bindless_tex_data_.srv_descr_pool.Alloc(bindless_textures_.capacity());
@@ -282,7 +282,7 @@ void Ray::Dx::Scene::RebuildHWAccStructures_nolock() {
 
                 auto &vk_blas = rt_mesh_blases_[i].acc;
                 if (!vk_blas.Init(ctx_, new_address)) {
-                    ctx_->log()->Error("Blas compaction failed!");
+                    log_->Error("Blas compaction failed!");
                 }
 
                 assert(compact_acc_buf_offset + compact_sizes[i].CompactedSizeInBytes <= total_compacted_size);
@@ -415,7 +415,7 @@ void Ray::Dx::Scene::RebuildHWAccStructures_nolock() {
         cmd_buf->BuildRaytracingAccelerationStructure(&tlas_build_info, 0, nullptr);
 
         if (!rt_tlas_.Init(ctx_, tlas_build_info.DestAccelerationStructureData)) {
-            ctx_->log()->Error("[SceneManager::InitHWAccStructures]: Failed to init TLAS!");
+            log_->Error("[SceneManager::InitHWAccStructures]: Failed to init TLAS!");
         }
     }
 

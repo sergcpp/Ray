@@ -186,7 +186,9 @@ inline Ray::NS::Scene::Scene(Context *ctx, const bool use_hwrt, const bool use_b
           {ctx, "Atlas BC4", eTexFormat::BC4, eTexFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
           {ctx, "Atlas BC5", eTexFormat::BC5, eTexFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE}},
       lights_(ctx, "Lights"), li_indices_(ctx, "LI Indices"), visible_lights_(ctx, "Visible Lights"),
-      blocker_lights_(ctx, "Blocker Lights") {}
+      blocker_lights_(ctx, "Blocker Lights") {
+    SceneBase::log_ = ctx->log();
+}
 
 inline void Ray::NS::Scene::GetEnvironment(environment_desc_t &env) {
     std::shared_lock<std::shared_timed_mutex> lock(mtx_);
@@ -332,11 +334,11 @@ inline Ray::TextureHandle Ray::NS::Scene::AddAtlasTexture_nolock(const tex_desc_
         }
     }
 
-    ctx_->log()->Info("Ray: Texture '%s' loaded (atlas = %i, %ix%i)", _t.name, int(t.atlas), _t.w, _t.h);
-    ctx_->log()->Info("Ray: Atlasses are (RGBA[%i], RGB[%i], RG[%i], R[%i], BC3[%i], BC4[%i], BC5[%i])",
-                      tex_atlases_[0].page_count(), tex_atlases_[1].page_count(), tex_atlases_[2].page_count(),
-                      tex_atlases_[3].page_count(), tex_atlases_[4].page_count(), tex_atlases_[5].page_count(),
-                      tex_atlases_[6].page_count());
+    log_->Info("Ray: Texture '%s' loaded (atlas = %i, %ix%i)", _t.name, int(t.atlas), _t.w, _t.h);
+    log_->Info("Ray: Atlasses are (RGBA[%i], RGB[%i], RG[%i], R[%i], BC3[%i], BC4[%i], BC5[%i])",
+               tex_atlases_[0].page_count(), tex_atlases_[1].page_count(), tex_atlases_[2].page_count(),
+               tex_atlases_[3].page_count(), tex_atlases_[4].page_count(), tex_atlases_[5].page_count(),
+               tex_atlases_[6].page_count());
 
     const std::pair<uint32_t, uint32_t> at = atlas_textures_.push(t);
     return TextureHandle{at.first, at.second};
@@ -542,8 +544,8 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
     p.block = block;
     p.sampling.filter = eTexFilter::NearestMipmap;
 
-    std::pair<uint32_t, uint32_t> ret = bindless_textures_.emplace(_t.name ? _t.name : "Bindless Tex", ctx_, p,
-                                                                   ctx_->default_memory_allocs(), ctx_->log());
+    std::pair<uint32_t, uint32_t> ret =
+        bindless_textures_.emplace(_t.name ? _t.name : "Bindless Tex", ctx_, p, ctx_->default_memory_allocs(), log_);
 
     { // Submit GPU commands
         CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
@@ -563,7 +565,7 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
 
     temp_stage_buf.FreeImmediate();
 
-    ctx_->log()->Info("Ray: Texture '%s' loaded (%ix%i)", _t.name, _t.w, _t.h);
+    log_->Info("Ray: Texture '%s' loaded (%ix%i)", _t.name, _t.w, _t.h);
 
     assert(ret.first <= 0x00ffffff);
 
@@ -1257,7 +1259,7 @@ inline void Ray::NS::Scene::Finalize() {
             p.mip_count = 1;
             p.usage = eTexUsageBits::Sampled | eTexUsageBits::Transfer;
 
-            env_map_qtree_.tex = Texture2D("Env map qtree", ctx_, p, ctx_->default_memory_allocs(), ctx_->log());
+            env_map_qtree_.tex = Texture2D("Env map qtree", ctx_, p, ctx_->default_memory_allocs(), log_);
         }
         { // add env light source
             light_t l = {};
@@ -1278,7 +1280,7 @@ inline void Ray::NS::Scene::Finalize() {
         p.mip_count = 1;
         p.usage = eTexUsageBits::Sampled | eTexUsageBits::Transfer;
 
-        env_map_qtree_.tex = Texture2D("Env map qtree", ctx_, p, ctx_->default_memory_allocs(), ctx_->log());
+        env_map_qtree_.tex = Texture2D("Env map qtree", ctx_, p, ctx_->default_memory_allocs(), log_);
     }
 
     GenerateTextureMips_nolock();
@@ -1654,7 +1656,7 @@ inline void Ray::NS::Scene::PrepareEnvMapQTree_nolock() {
     p.mip_count = env_.qtree_levels;
     p.usage = eTexUsageBits::Sampled | eTexUsageBits::Transfer;
 
-    env_map_qtree_.tex = Texture2D("Env map qtree", ctx_, p, ctx_->default_memory_allocs(), ctx_->log());
+    env_map_qtree_.tex = Texture2D("Env map qtree", ctx_, p, ctx_->default_memory_allocs(), log_);
 
     CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
@@ -1669,5 +1671,5 @@ inline void Ray::NS::Scene::PrepareEnvMapQTree_nolock() {
     temp_stage_buf.Unmap();
     temp_stage_buf.FreeImmediate();
 
-    ctx_->log()->Info("Env map qtree res is %i", env_map_qtree_.res);
+    log_->Info("Env map qtree res is %i", env_map_qtree_.res);
 }
