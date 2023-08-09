@@ -4628,13 +4628,15 @@ void Ray::NS::IntersectScene(ray_data_t<S> &r, const int min_transp_depth, const
                     simd_fvec<S> q = 0.0f;
                     where(can_terminate_path, q) = max(0.05f, 1.0f - lum);
 
-                    const simd_ivec<S> terminate =
+                    const simd_ivec<S> _terminate =
                         simd_cast(p < q) | simd_cast(lum == 0.0f) | ((r.depth >> 24) + 1 >= max_transp_depth);
 
                     UNROLLED_FOR(i, 3, {
-                        where(ray_queue[index] & terminate, r.c[i]) = 0.0f;
-                        where(ray_queue[index] & ~terminate, r.c[i]) *= safe_div_pos(mat->base_color[i], 1.0f - q);
+                        where(ray_queue[index] & _terminate, r.c[i]) = 0.0f;
+                        where(ray_queue[index] & ~_terminate, r.c[i]) *= safe_div_pos(mat->base_color[i], 1.0f - q);
                     })
+
+                    keep_going &= ~_terminate;
                 }
 
                 index++;
