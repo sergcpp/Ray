@@ -350,11 +350,11 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
     eTexFormat src_fmt = eTexFormat::Undefined, fmt = eTexFormat::Undefined;
     eTexBlock block = eTexBlock::_None;
 
-    Buffer temp_stage_buf("Temp stage buf", ctx_, eBufType::Upload, std::max(3 * _t.w * _t.h * 4, 256),
+    const int mip_count = _t.generate_mipmaps ? CalcMipCount(_t.w, _t.h, 4, eTexFilter::Bilinear) : 1;
+
+    Buffer temp_stage_buf("Temp stage buf", ctx_, eBufType::Upload, 3 * _t.w * _t.h * 4 + 4096 * mip_count,
                           4096); // allocate for worst case
     uint8_t *stage_data = temp_stage_buf.Map();
-
-    const int mip_count = _t.generate_mipmaps ? CalcMipCount(_t.w, _t.h, 4, eTexFilter::Bilinear) : 1;
 
     bool use_compression = use_tex_compression_ && !_t.force_no_compression;
     use_compression &= CanBeBlockCompressed(_t.w, _t.h, mip_count, eTexBlock::_4x4);
