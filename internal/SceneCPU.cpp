@@ -125,6 +125,7 @@ Ray::TextureHandle Ray::Cpu::Scene::AddTexture(const tex_desc_t &_t) {
     } else if (_t.format == eTextureFormat::RG88) {
         storage = 2;
         index = tex_storage_rg_.Allocate(reinterpret_cast<const color_rg8_t *>(_t.data), res, _t.generate_mipmaps);
+        recostruct_z = _t.is_normalmap;
     } else if (_t.format == eTextureFormat::R8) {
         storage = 3;
         index = tex_storage_r_.Allocate(reinterpret_cast<const color_r8_t *>(_t.data), res, _t.generate_mipmaps);

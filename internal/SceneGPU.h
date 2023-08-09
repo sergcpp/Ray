@@ -273,6 +273,7 @@ inline Ray::TextureHandle Ray::NS::Scene::AddAtlasTexture_nolock(const tex_desc_
         }
     } else if (_t.format == eTextureFormat::RG88) {
         t.atlas = use_compression ? 6 : 2;
+        recostruct_z = _t.is_normalmap;
     } else if (_t.format == eTextureFormat::R8) {
         t.atlas = use_compression ? 5 : 3;
     }
@@ -489,6 +490,8 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
             memcpy(&stage_data[j], &rg_data[y * _t.w], _t.w * 2);
             j += round_up(_t.w * 2, TextureDataPitchAlignment);
         }
+
+        recostruct_z = _t.is_normalmap;
     } else if (_t.format == eTextureFormat::R8) {
         if (use_compression) {
             src_fmt = eTexFormat::RawR8;
