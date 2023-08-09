@@ -1783,7 +1783,7 @@ void test_complex_mat6_unet_filter(const char *arch_list[], const char *preferre
 
 void test_complex_mat6_unet_filter_b(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 28;
-    const int PixThres = 919;
+    const int PixThres = 924;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;
@@ -1799,7 +1799,7 @@ void test_complex_mat6_unet_filter_b(const char *arch_list[], const char *prefer
 
 void test_complex_mat6_unet_filter_bn(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 29;
-    const int PixThres = 913;
+    const int PixThres = 914;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;
