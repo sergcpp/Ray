@@ -316,7 +316,10 @@ inline Ray::TextureHandle Ray::NS::Scene::AddAtlasTexture_nolock(const tex_desc_
         // We have to generate mips here as uncompressed data will be lost
 
         int pages[16], positions[16][2];
-        if (_t.format == eTextureFormat::RGB888) {
+        if (_t.format == eTextureFormat::RGBA8888) {
+            tex_atlases_[t.atlas].AllocateMips<uint8_t, 4>(reinterpret_cast<const color_rgba8_t *>(_t.data), res,
+                                                           NUM_MIP_LEVELS - 1, pages, positions);
+        } else if (_t.format == eTextureFormat::RGB888) {
             tex_atlases_[t.atlas].AllocateMips<uint8_t, 3>(reinterpret_cast<const color_rgb8_t *>(_t.data), res,
                                                            NUM_MIP_LEVELS - 1, pages, positions);
         } else if (_t.format == eTextureFormat::RG88) {
@@ -621,7 +624,7 @@ void Ray::NS::Scene::WriteTextureMips(const color_t<T, N> data[], const int _res
         assert(dst_data.size() == (dst_res[0] * dst_res[1]));
 
         out_data += 4096 * ((out_size[i - 1] + 4095) / 4096);
-        if (compress) {
+        if (compress && N <= 3) {
             if (N == 3) {
                 auto temp_YCoCg = ConvertRGB_to_CoCgxY(&dst_data[0].v[0], dst_res[0], dst_res[1]);
 
