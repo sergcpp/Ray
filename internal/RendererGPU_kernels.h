@@ -697,9 +697,11 @@ void Ray::NS::Renderer::kernel_SortReduce(CommandBuffer cmd_buf, const Buffer &i
 
 void Ray::NS::Renderer::kernel_SortScan(CommandBuffer cmd_buf, const Buffer &input, const Buffer &counters,
                                         int counter_index, const Buffer &out_scan_values) {
-    const TransitionInfo res_transitions[] = {{&input, eResState::ShaderResource},
-                                              {&counters, eResState::ShaderResource},
-                                              {&out_scan_values, eResState::UnorderedAccess}};
+    SmallVector<TransitionInfo, 4> res_transitions = {{&counters, eResState::ShaderResource},
+                                                      {&out_scan_values, eResState::UnorderedAccess}};
+    if (&input != &out_scan_values) {
+        res_transitions.emplace_back(&input, eResState::ShaderResource);
+    }
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
     const Binding bindings[] = {{eBindTarget::SBufRO, SortScan::INPUT_BUF_SLOT, input},
