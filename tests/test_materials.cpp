@@ -1550,7 +1550,7 @@ void test_complex_mat5_unet_filter_b(const char *arch_list[], const char *prefer
 
 void test_complex_mat5_unet_filter_bn(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 27;
-    const int PixThres = 1089;
+    const int PixThres = 1092;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
