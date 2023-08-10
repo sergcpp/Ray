@@ -814,7 +814,8 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         timestamps_[ctx_->backend_frame].primary_trace[1] = ctx_->WriteTimestamp(cmd_buf, false);
     }
 
-    Texture2D &temp_base_color = temp_buf1_;
+    Texture2D null_tex;
+    Texture2D &temp_base_color = base_color_buf_.ready() ? temp_buf1_ : null_tex;
 
     { // shade primary hits
         DebugMarker _(ctx_.get(), cmd_buf, "ShadePrimaryHits");
