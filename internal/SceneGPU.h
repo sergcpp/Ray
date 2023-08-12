@@ -227,6 +227,9 @@ inline Ray::TextureHandle Ray::NS::Scene::AddAtlasTexture_nolock(const tex_desc_
     if (_t.generate_mipmaps && _t.w > MIN_ATLAS_TEXTURE_SIZE && _t.h > MIN_ATLAS_TEXTURE_SIZE) {
         t.height |= ATLAS_TEX_MIPS_BIT;
     }
+    if (_t.flip_normalmap_y) {
+        t.height |= ATLAS_TEX_FLIP_Y_BIT;
+    }
 
     int res[2] = {_t.w, _t.h};
 
@@ -581,6 +584,9 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
     }
     if (recostruct_z) {
         ret.first |= TEX_RECONSTRUCT_Z_BIT;
+    }
+    if (_t.flip_normalmap_y) {
+        ret.first |= TEX_FLIP_Y_BIT;
     }
     if (is_YCoCg) {
         ret.first |= TEX_YCOCG_BIT;

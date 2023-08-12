@@ -148,6 +148,9 @@ Ray::TextureHandle Ray::Cpu::Scene::AddTexture(const tex_desc_t &_t) {
     if (recostruct_z) {
         ret |= TEX_RECONSTRUCT_Z_BIT;
     }
+    if (_t.flip_normalmap_y) {
+        ret |= TEX_FLIP_Y_BIT;
+    }
     ret |= index;
 
     return TextureHandle{ret};

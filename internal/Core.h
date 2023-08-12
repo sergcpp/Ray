@@ -120,6 +120,7 @@ const int ATLAS_TEX_SRGB_BIT = 0b1000000000000000;
 const int ATLAS_TEX_RECONSTRUCT_Z_BIT = 0b0100000000000000;
 const int ATLAS_TEX_WIDTH_BITS = 0b0011111111111111;
 const int ATLAS_TEX_MIPS_BIT = 0b1000000000000000;
+const int ATLAS_TEX_FLIP_Y_BIT = 0b0100000000000000;
 const int ATLAS_TEX_HEIGHT_BITS = 0b0011111111111111;
 
 struct atlas_texture_t {
@@ -134,6 +135,7 @@ static_assert(sizeof(atlas_texture_t) == 68, "!");
 const uint32_t TEX_SRGB_BIT = (0b00000001u << 24);
 const uint32_t TEX_RECONSTRUCT_Z_BIT = (0b00000010u << 24);
 const uint32_t TEX_YCOCG_BIT = (0b00000100u << 24);
+const uint32_t TEX_FLIP_Y_BIT = (0b00001000u << 24);
 
 const int MAX_MATERIAL_TEXTURES = 5;
 

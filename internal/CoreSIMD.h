@@ -6311,7 +6311,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
             ray_queue[0] = has_texture;
 
             simd_fvec<S> normals_tex[4] = {{0.0f}, {1.0f}, {0.0f}, {0.0f}};
-            simd_ivec<S> reconstruct_z = 0;
+            simd_ivec<S> reconstruct_z = 0, flip_y = 0;
 
             int index = 0, num = 1;
             while (index != num) {
@@ -6330,6 +6330,9 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                 if (first_t & TEX_RECONSTRUCT_Z_BIT) {
                     reconstruct_z |= ray_queue[index];
                 }
+                if (first_t & TEX_FLIP_Y_BIT) {
+                    flip_y |= ray_queue[index];
+                }
 
                 ++index;
             }
@@ -6340,6 +6343,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                 where(reconstruct_z, normals_tex[2]) =
                     safe_sqrt(1.0f - normals_tex[0] * normals_tex[0] - normals_tex[1] * normals_tex[1]);
             }
+            where(flip_y, normals_tex[1]) = -normals_tex[1];
 
             simd_fvec<S> new_normal[3];
             UNROLLED_FOR(i, 3, {

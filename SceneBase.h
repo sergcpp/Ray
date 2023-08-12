@@ -155,6 +155,7 @@ struct tex_desc_t {
         h;                              ///< Texture height
     bool is_srgb = true;                ///< Treat this texture as SRGB
     bool is_normalmap = false;          ///< Is this a normalmap
+    bool flip_normalmap_y = false;      ///< Set to true for DX-style normalmap
     bool force_no_compression = false;  ///< Disable compression (guarantee the best quality)
     bool generate_mipmaps = false;      ///< Generate mipmaps for this texture
 };
