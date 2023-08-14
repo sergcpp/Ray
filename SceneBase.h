@@ -107,7 +107,7 @@ struct principled_mat_desc_t {
     float transmission_roughness = 0.0f;                    ///< Transmission roughness
     float emission_color[3] = {0, 0, 0};                    ///< Emissive color
     TextureHandle emission_texture = InvalidTextureHandle;  ///< Emissive texture
-    float emission_strength = 0;                            ///< Emission strength
+    float emission_strength = 1.0f;                         ///< Emission strength
     float alpha = 1.0f;                                     ///< Material transparency (alpha blending)
     TextureHandle alpha_texture = InvalidTextureHandle;     ///< Transparency texture
     TextureHandle normal_map = InvalidTextureHandle;        ///< Material normalmap
