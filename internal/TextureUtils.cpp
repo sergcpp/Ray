@@ -33,8 +33,8 @@ void Ray::ComputeTangentBasis(size_t vtx_offset, size_t vtx_start, std::vector<v
 
         Ref::simd_fvec3 tangent, binormal;
 
-        const float det = dt1[0] * dt2[1] - dt1[1] * dt2[0];
-        if (std::abs(det) > FLT_EPS) {
+        const float det = std::abs(dt1[0] * dt2[1] - dt1[1] * dt2[0]);
+        if (det > FLT_EPS) {
             const float inv_det = 1.0f / det;
             tangent = (dp1 * dt2[1] - dp2 * dt1[1]) * inv_det;
             binormal = (dp2 * dt1[0] - dp1 * dt2[0]) * inv_det;
@@ -54,10 +54,6 @@ void Ray::ComputeTangentBasis(size_t vtx_offset, size_t vtx_start, std::vector<v
             if (std::abs(plane_N[w]) > FLT_EPS) {
                 binormal = normalize(cross(Ref::simd_fvec3(plane_N), tangent));
                 tangent = normalize(cross(Ref::simd_fvec3(plane_N), binormal));
-
-                // avoid floating-point underflow
-                where(abs(binormal) < FLT_EPS, binormal) = 0.0f;
-                where(abs(tangent) < FLT_EPS, tangent) = 0.0f;
             } else {
                 binormal = {0.0f};
                 tangent = {0.0f};
