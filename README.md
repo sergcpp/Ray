@@ -17,12 +17,16 @@ Features:
     https://benedikt-bitterli.me/resources/  \
     https://www.blender.org/download/demo-files/  \
     https://www.intel.com/content/www/us/en/developer/topic-technology/graphics-research/samples.html  \
+    https://developer.nvidia.com/orca/amazon-lumberyard-bistro \
     https://evermotion.org/shop/show_product/scene-1-ai43-archinteriors-for-blender/14564
 
   <div>
     <div float="left" >
       <img src="scene6.jpg" width="47.0%" />
       <img src="scene5.jpg" width="42.4%" />
+    </div>
+    <div float="left" >
+      <img src="scene7.jpg" width="89.75%" />
     </div>
     <div float="left" >
       <img src="scene3.jpg" width="26.55%" />
