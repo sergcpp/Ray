@@ -37,9 +37,13 @@ template <typename T, int N> class TexStorageLinear : public TexStorageBase {
   public:
     force_inline int img_count() const { return int(images_.size() - free_slots_.size()); }
 
-    force_inline ColorType Get(const int index, const int x, const int y, const int lod) const {
+    force_inline ColorType Get(const int index, int x, int y, const int lod) const {
         const ImgData &p = images_[index];
         const int w = p.res[lod][0];
+
+        x %= p.res[lod][0];
+        y %= p.res[lod][1];
+
         return p.pixels[p.lod_offsets[lod] + w * y + x];
     }
 
@@ -57,15 +61,15 @@ template <typename T, int N> class TexStorageLinear : public TexStorageBase {
     void GetIRes(const int index, const int lod, int res[2]) const override {
         const ImgData &p = images_[index];
 
-        res[0] = p.res[lod][0] - 1;
-        res[1] = p.res[lod][1] - 1;
+        res[0] = p.res[lod][0];
+        res[1] = p.res[lod][1];
     }
 
     void GetFRes(const int index, const int lod, float res[2]) const override {
         const ImgData &p = images_[index];
 
-        res[0] = float(p.res[lod][0] - 1);
-        res[1] = float(p.res[lod][1] - 1);
+        res[0] = float(p.res[lod][0]);
+        res[1] = float(p.res[lod][1]);
     }
 
     color_rgba_t Fetch(const int index, const int x, const int y, const int lod) const override {
@@ -131,8 +135,11 @@ template <typename T, int N> class TexStorageTiled : public TexStorageBase {
   public:
     force_inline int img_count() const { return int(images_.size() - free_slots_.size()); }
 
-    force_inline ColorType Get(const int index, const int x, const int y, const int lod) const {
+    force_inline ColorType Get(const int index, int x, int y, const int lod) const {
         const ImgData &p = images_[index];
+
+        x %= p.res[lod][0];
+        y %= p.res[lod][1];
 
         const int tilex = x / TileSize, tiley = y / TileSize;
         const int in_tilex = x % TileSize, in_tiley = y % TileSize;
@@ -144,8 +151,8 @@ template <typename T, int N> class TexStorageTiled : public TexStorageBase {
 
     force_inline ColorType Get(const int index, float x, float y, const int lod) const {
         const ImgData &p = images_[index];
-        const int w = p.res[lod][0] - 1;
-        const int h = p.res[lod][1] - 1;
+        const int w = p.res[lod][0];
+        const int h = p.res[lod][1];
 
         x -= std::floor(x);
         y -= std::floor(y);
@@ -156,15 +163,15 @@ template <typename T, int N> class TexStorageTiled : public TexStorageBase {
     void GetIRes(const int index, const int lod, int res[2]) const override {
         const ImgData &p = images_[index];
 
-        res[0] = p.res[lod][0] - 1;
-        res[1] = p.res[lod][1] - 1;
+        res[0] = p.res[lod][0];
+        res[1] = p.res[lod][1];
     }
 
     void GetFRes(const int index, const int lod, float res[2]) const override {
         const ImgData &p = images_[index];
 
-        res[0] = float(p.res[lod][0] - 1);
-        res[1] = float(p.res[lod][1] - 1);
+        res[0] = float(p.res[lod][0]);
+        res[1] = float(p.res[lod][1]);
     }
 
     color_rgba_t Fetch(const int index, const int x, const int y, const int lod) const override {
@@ -244,15 +251,19 @@ template <typename T, int N> class TexStorageSwizzled : public TexStorageBase {
   public:
     force_inline int img_count() const { return int(images_.size() - free_slots_.size()); }
 
-    force_inline ColorType Get(const int index, const int x, const int y, const int lod) const {
+    force_inline ColorType Get(const int index, int x, int y, const int lod) const {
         const ImgData &p = images_[index];
+
+        x %= p.res[lod][0];
+        y %= p.res[lod][1];
+
         return p.pixels[p.lod_offsets[lod] + EncodeSwizzle(x, y, p.tile_y_stride[lod])];
     }
 
     force_inline ColorType Get(const int index, float x, float y, const int lod) const {
         const ImgData &p = images_[index];
-        const int w = p.res[lod][0] - 1;
-        const int h = p.res[lod][1] - 1;
+        const int w = p.res[lod][0];
+        const int h = p.res[lod][1];
 
         x -= std::floor(x);
         y -= std::floor(y);
@@ -263,15 +274,15 @@ template <typename T, int N> class TexStorageSwizzled : public TexStorageBase {
     void GetIRes(const int index, const int lod, int res[2]) const override {
         const ImgData &p = images_[index];
 
-        res[0] = p.res[lod][0] - 1;
-        res[1] = p.res[lod][1] - 1;
+        res[0] = p.res[lod][0];
+        res[1] = p.res[lod][1];
     }
 
     void GetFRes(const int index, const int lod, float res[2]) const override {
         const ImgData &p = images_[index];
 
-        res[0] = float(p.res[lod][0] - 1);
-        res[1] = float(p.res[lod][1] - 1);
+        res[0] = float(p.res[lod][0]);
+        res[1] = float(p.res[lod][1]);
     }
 
     color_rgba_t Fetch(const int index, const int x, const int y, const int lod) const override {
