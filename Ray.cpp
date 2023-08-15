@@ -2,6 +2,8 @@
 
 #include <regex>
 
+#include "internal/Core.h"
+
 #ifdef ENABLE_REF_IMPL
 #include "internal/RendererRef.h"
 #else // ENABLE_REF_IMPL
@@ -147,3 +149,7 @@ bool Ray::MatchDeviceNames(const char *name, const char *pattern) {
     std::regex match_name(pattern);
     return std::regex_search(name, match_name) || strcmp(name, pattern) == 0;
 }
+
+// Workaround for a strange clang behavior
+template class std::vector<uint16_t>;
+template class std::vector<float, Ray::aligned_allocator<float, 64>>;

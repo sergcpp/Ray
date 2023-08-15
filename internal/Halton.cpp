@@ -9,3 +9,5 @@ std::vector<uint16_t> Ray::ComputeRadicalInversePermutations(const int* primes, 
     auto rand_func = std::bind(UniformIntDistribution<uint32_t>(), std::mt19937(0));
     return ComputeRadicalInversePermutations(primes, primes_count, rand_func);
 }
+
+template float Ray::ScrambledRadicalInverse<float>(const int base, const uint16_t *perm, uint64_t a);

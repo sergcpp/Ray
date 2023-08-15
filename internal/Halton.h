@@ -77,4 +77,6 @@ template <typename Real = float> Real ScrambledRadicalInverse(const int base, co
     return std::min(inv_base_n * (reversed_digits + inv_base * perm[0] / (1 - inv_base)),
                     Real(1) - std::numeric_limits<Real>::epsilon());
 }
+
+extern template float Ray::ScrambledRadicalInverse<float>(const int base, const uint16_t *perm, uint64_t a);
 } // namespace Ray
