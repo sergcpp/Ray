@@ -578,6 +578,20 @@ force_inline simd_fvec4 srgb_to_rgb(const simd_fvec4 &col) {
     return ret;
 }
 
+force_inline simd_fvec4 YCoCg_to_RGB(const simd_fvec4 &col) {
+    const float scale = (col.get<2>() * (255.0f / 8.0f)) + 1.0f;
+    const float Y = col.get<3>();
+    const float Co = (col.get<0>() - (0.5f * 256.0f / 255.0f)) / scale;
+    const float Cg = (col.get<1>() - (0.5f * 256.0f / 255.0f)) / scale;
+
+    simd_fvec4 col_rgb = 1.0f;
+    col_rgb.set<0>(Y + Co - Cg);
+    col_rgb.set<1>(Y + Cg);
+    col_rgb.set<2>(Y - Co - Cg);
+
+    return clamp(col_rgb, 0.0f, 1.0f);
+}
+
 force_inline float fast_log2(float val) {
     // From https://stackoverflow.com/questions/9411823/fast-log2float-x-implementation-c
     union {
@@ -4251,6 +4265,9 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
         const uint32_t base_texture = mat->textures[BASE_TEXTURE];
         const float base_lod = get_texture_lod(textures, base_texture, lambda);
         simd_fvec4 tex_color = SampleBilinear(textures, base_texture, surf.uvs, int(base_lod), tex_rand);
+        if (base_texture & TEX_YCOCG_BIT) {
+            tex_color = YCoCg_to_RGB(tex_color);
+        }
         if (base_texture & TEX_SRGB_BIT) {
             tex_color = srgb_to_rgb(tex_color);
         }

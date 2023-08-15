@@ -1645,6 +1645,17 @@ template <int S> force_inline void srgb_to_rgb(const simd_fvec<S> in_col[4], sim
     out_col[3] = in_col[3];
 }
 
+template <int S> force_inline void YCoCg_to_RGB(const simd_fvec<S> in_col[4], simd_fvec<S> out_col[3]) {
+    const simd_fvec<S> scale = (in_col[2] * (255.0f / 8.0f)) + 1.0f;
+    const simd_fvec<S> Y = in_col[3];
+    const simd_fvec<S> Co = (in_col[0] - (0.5f * 256.0f / 255.0f)) / scale;
+    const simd_fvec<S> Cg = (in_col[1] - (0.5f * 256.0f / 255.0f)) / scale;
+
+    out_col[0] = clamp(Y + Co - Cg, 0.0f, 1.0f);
+    out_col[1] = clamp(Y + Cg, 0.0f, 1.0f);
+    out_col[2] = clamp(Y - Co - Cg, 0.0f, 1.0f);
+}
+
 template <int S>
 simd_fvec<S> get_texture_lod(const Cpu::TexStorageBase *textures[], const uint32_t index, const simd_fvec<S> duv_dx[2],
                              const simd_fvec<S> duv_dy[2], const simd_ivec<S> &mask) {
@@ -6424,6 +6435,9 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                 simd_fvec<S> tex_color[4] = {};
                 SampleBilinear(textures, first_t, surf.uvs, simd_ivec<S>(base_lod), tex_rand, ray_queue[index],
                                tex_color);
+                if (first_t & TEX_YCOCG_BIT) {
+                    YCoCg_to_RGB(tex_color, tex_color);
+                }
                 if (first_t & TEX_SRGB_BIT) {
                     srgb_to_rgb(tex_color, tex_color);
                 }

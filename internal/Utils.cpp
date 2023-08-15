@@ -1392,18 +1392,6 @@ template <bool Is_YCoCg> void Emit_BC3_Block_SSE2(uint8_t block[64], uint8_t *&o
     EmitColorIndices_SSE2(block, min_color, max_color, out_data);
 }
 #endif
-
-// clang-format off
-
-const int BlockSize_BC1 = 2 * sizeof(uint16_t) + sizeof(uint32_t);
-//                        \_ low/high colors_/   \_ 16 x 2-bit _/
-const int BlockSize_BC4 = 2 * sizeof(uint8_t) + 6 * sizeof(uint8_t);
-//                        \_ low/high alpha_/     \_ 16 x 3-bit _/
-const int BlockSize_BC3 = BlockSize_BC1 + BlockSize_BC4;
-const int BlockSize_BC5 = BlockSize_BC4 + BlockSize_BC4;
-
-// clang-format on
-
 } // namespace Ray
 
 int Ray::GetRequiredMemory_BC1(const int w, const int h, const int pitch_align) {

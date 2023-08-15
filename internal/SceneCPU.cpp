@@ -30,7 +30,8 @@ Ref::simd_fvec4 rgb_to_rgbe(const Ref::simd_fvec4 &rgb) {
 } // namespace Cpu
 } // namespace Ray
 
-Ray::Cpu::Scene::Scene(ILog *log, const bool use_wide_bvh) : use_wide_bvh_(use_wide_bvh) {
+Ray::Cpu::Scene::Scene(ILog *log, const bool use_wide_bvh, const bool use_tex_compression)
+    : use_wide_bvh_(use_wide_bvh), use_tex_compression_(use_tex_compression) {
     SceneBase::log_ = log;
     SetEnvironment({});
 }
@@ -87,48 +88,87 @@ Ray::TextureHandle Ray::Cpu::Scene::AddTexture(const tex_desc_t &_t) {
 
     const int res[2] = {_t.w, _t.h};
 
-    bool recostruct_z = false;
+    bool use_compression = use_tex_compression_ && !_t.force_no_compression;
+    bool recostruct_z = false, is_YCoCg = false;
 
     int storage = -1, index = -1;
     if (_t.format == eTextureFormat::RGBA8888) {
         const auto *rgba_data = reinterpret_cast<const color_rgba8_t *>(_t.data);
         if (!_t.is_normalmap) {
             storage = 0;
-            index = tex_storage_rgba_.Allocate(rgba_data, res, _t.generate_mipmaps);
+            index = tex_storage_rgba_.Allocate(Span<const color_rgba8_t>(rgba_data, res[0] * res[1]), res,
+                                               _t.generate_mipmaps);
         } else {
             // TODO: get rid of this allocation
-            std::unique_ptr<color_rg8_t[]> repacked_data(new color_rg8_t[res[0] * res[1]]);
+            std::vector<color_rg8_t> repacked_data(res[0] * res[1]);
             for (int i = 0; i < res[0] * res[1]; ++i) {
                 repacked_data[i].v[0] = rgba_data[i].v[0];
                 repacked_data[i].v[1] = rgba_data[i].v[1];
                 recostruct_z |= (rgba_data[i].v[2] < 250);
             }
-            storage = 2;
-            index = tex_storage_rg_.Allocate(repacked_data.get(), res, _t.generate_mipmaps);
+            if (use_compression) {
+                storage = 4;
+                index = tex_storage_bc5_.Allocate(repacked_data, res, _t.generate_mipmaps);
+            } else {
+                storage = 2;
+                index = tex_storage_rg_.Allocate(repacked_data, res, _t.generate_mipmaps);
+            }
         }
     } else if (_t.format == eTextureFormat::RGB888) {
         const auto *rgb_data = reinterpret_cast<const color_rgb8_t *>(_t.data);
         if (!_t.is_normalmap) {
-            storage = 1;
-            index = tex_storage_rgb_.Allocate(rgb_data, res, _t.generate_mipmaps);
+            if (use_compression) {
+                is_YCoCg = true;
+                storage = 4;
+                index = tex_storage_bc3_.Allocate(Span<const color_rgb8_t>(rgb_data, res[0] * res[1]), res,
+                                                  _t.generate_mipmaps);
+            } else {
+                storage = 1;
+                index = tex_storage_rgb_.Allocate(Span<const color_rgb8_t>(rgb_data, res[0] * res[1]), res,
+                                                  _t.generate_mipmaps);
+            }
         } else {
             // TODO: get rid of this allocation
-            std::unique_ptr<color_rg8_t[]> repacked_data(new color_rg8_t[res[0] * res[1]]);
+            std::vector<color_rg8_t> repacked_data(res[0] * res[1]);
             for (int i = 0; i < res[0] * res[1]; ++i) {
                 repacked_data[i].v[0] = rgb_data[i].v[0];
                 repacked_data[i].v[1] = rgb_data[i].v[1];
                 recostruct_z |= (rgb_data[i].v[2] < 250);
             }
-            storage = 2;
-            index = tex_storage_rg_.Allocate(repacked_data.get(), res, _t.generate_mipmaps);
+
+            if (use_compression) {
+                storage = 6;
+                index = tex_storage_bc5_.Allocate(repacked_data, res, _t.generate_mipmaps);
+            } else {
+                storage = 2;
+                index = tex_storage_rg_.Allocate(repacked_data, res, _t.generate_mipmaps);
+            }
         }
     } else if (_t.format == eTextureFormat::RG88) {
-        storage = 2;
-        index = tex_storage_rg_.Allocate(reinterpret_cast<const color_rg8_t *>(_t.data), res, _t.generate_mipmaps);
+        if (use_compression) {
+            storage = 6;
+            index = tex_storage_bc5_.Allocate(
+                Span<const color_rg8_t>(reinterpret_cast<const color_rg8_t *>(_t.data), res[0] * res[1]), res,
+                _t.generate_mipmaps);
+        } else {
+            storage = 2;
+            index = tex_storage_rg_.Allocate(
+                Span<const color_rg8_t>(reinterpret_cast<const color_rg8_t *>(_t.data), res[0] * res[1]), res,
+                _t.generate_mipmaps);
+        }
         recostruct_z = _t.is_normalmap;
     } else if (_t.format == eTextureFormat::R8) {
-        storage = 3;
-        index = tex_storage_r_.Allocate(reinterpret_cast<const color_r8_t *>(_t.data), res, _t.generate_mipmaps);
+        if (use_compression) {
+            storage = 5;
+            index = tex_storage_bc4_.Allocate(
+                Span<const color_r8_t>(reinterpret_cast<const color_r8_t *>(_t.data), res[0] * res[1]), res,
+                _t.generate_mipmaps);
+        } else {
+            storage = 3;
+            index = tex_storage_r_.Allocate(
+                Span<const color_r8_t>(reinterpret_cast<const color_r8_t *>(_t.data), res[0] * res[1]), res,
+                _t.generate_mipmaps);
+        }
     }
 
     if (storage == -1) {
@@ -136,8 +176,10 @@ Ray::TextureHandle Ray::Cpu::Scene::AddTexture(const tex_desc_t &_t) {
     }
 
     log_->Info("Ray: Texture '%s' loaded (storage = %i, %ix%i)", _t.name, storage, _t.w, _t.h);
-    log_->Info("Ray: Storages are (RGBA[%i], RGB[%i], RG[%i], R[%i])", tex_storage_rgba_.img_count(),
-               tex_storage_rgb_.img_count(), tex_storage_rg_.img_count(), tex_storage_r_.img_count());
+    log_->Info("Ray: Storages are (RGBA[%i], RGB[%i], RG[%i], R[%i], BC3[%i], BC4[%i], BC5[%i])",
+               tex_storage_rgba_.img_count(), tex_storage_rgb_.img_count(), tex_storage_rg_.img_count(),
+               tex_storage_r_.img_count(), tex_storage_bc3_.img_count(), tex_storage_bc4_.img_count(),
+               tex_storage_bc5_.img_count());
 
     uint32_t ret = 0;
 
@@ -150,6 +192,9 @@ Ray::TextureHandle Ray::Cpu::Scene::AddTexture(const tex_desc_t &_t) {
     }
     if (_t.flip_normalmap_y) {
         ret |= TEX_FLIP_Y_BIT;
+    }
+    if (is_YCoCg) {
+        ret |= TEX_YCOCG_BIT;
     }
     ret |= index;
 
@@ -927,9 +972,9 @@ void Ray::Cpu::Scene::PrepareSkyEnvMap_nolock() {
     }
 
     static const int SkyEnvRes[] = {512, 256};
-    std::unique_ptr<color_rgba8_t[]> rgbe_pixels(new color_rgba8_t[SkyEnvRes[0] * SkyEnvRes[1]]);
+    std::vector<color_rgba8_t> rgbe_pixels(SkyEnvRes[0] * SkyEnvRes[1]);
 
-    std::unique_ptr<color_rgb_t[]> rgb_pixels(new color_rgb_t[SkyEnvRes[0] * SkyEnvRes[1]]);
+    // std::vector<color_rgb_t> rgb_pixels(SkyEnvRes[0] * SkyEnvRes[1]);
 
     for (int y = 0; y < SkyEnvRes[1]; ++y) {
         const float theta = PI * float(y) / float(SkyEnvRes[1]);
@@ -957,9 +1002,9 @@ void Ray::Cpu::Scene::PrepareSkyEnvMap_nolock() {
                     IntegrateScattering(Ref::simd_fvec4{0.0f}, ray_dir, MAX_DIST, light_dir, light_col, transmittance);
             }
 
-            rgb_pixels[y * SkyEnvRes[0] + x].v[0] = color.get<0>();
-            rgb_pixels[y * SkyEnvRes[0] + x].v[1] = color.get<1>();
-            rgb_pixels[y * SkyEnvRes[0] + x].v[2] = color.get<2>();
+            // rgb_pixels[y * SkyEnvRes[0] + x].v[0] = color.get<0>();
+            // rgb_pixels[y * SkyEnvRes[0] + x].v[1] = color.get<1>();
+            // rgb_pixels[y * SkyEnvRes[0] + x].v[2] = color.get<2>();
 
             color = rgb_to_rgbe(color);
 
@@ -971,7 +1016,7 @@ void Ray::Cpu::Scene::PrepareSkyEnvMap_nolock() {
     }
 
     const int storage = 0;
-    const int index = tex_storage_rgba_.Allocate(rgbe_pixels.get(), SkyEnvRes, false);
+    const int index = tex_storage_rgba_.Allocate(rgbe_pixels, SkyEnvRes, false);
 
     physical_sky_texture_._index = (uint32_t(storage) << 28) | index;
 

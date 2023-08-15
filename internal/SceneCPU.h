@@ -2,8 +2,8 @@
 
 #include <vector>
 
-#include "SceneCommon.h"
 #include "CoreRef.h"
+#include "SceneCommon.h"
 #include "SmallVector.h"
 #include "SparseStorageCPU.h"
 #include "TextureStorageCPU.h"
@@ -47,7 +47,7 @@ class Scene : public SceneCommon {
     friend class Cpu::Renderer<Avx512::SIMDPolicy>;
     friend class Cpu::Renderer<Neon::SIMDPolicy>;
 
-    bool use_wide_bvh_;
+    bool use_wide_bvh_, use_tex_compression_;
 
     std::vector<bvh_node_t> nodes_;
     aligned_vector<mbvh_node_t> mnodes_;
@@ -68,8 +68,12 @@ class Scene : public SceneCommon {
     TexStorageRGB tex_storage_rgb_;
     TexStorageRG tex_storage_rg_;
     TexStorageR tex_storage_r_;
+    TexStorageBCn<4> tex_storage_bc3_;
+    TexStorageBCn<2> tex_storage_bc5_;
+    TexStorageBCn<1> tex_storage_bc4_;
 
-    TexStorageBase *tex_storages_[4] = {&tex_storage_rgba_, &tex_storage_rgb_, &tex_storage_rg_, &tex_storage_r_};
+    TexStorageBase *tex_storages_[7] = {&tex_storage_rgba_, &tex_storage_rgb_, &tex_storage_rg_, &tex_storage_r_,
+                                        &tex_storage_bc3_,  &tex_storage_bc4_, &tex_storage_bc5_};
 
     SparseStorage<light_t> lights_;
     std::vector<uint32_t> li_indices_;     // compacted list of all lights
@@ -99,7 +103,7 @@ class Scene : public SceneCommon {
     void SetMeshInstanceTransform_nolock(MeshInstanceHandle mi, const float *xform);
 
   public:
-    Scene(ILog *log, bool use_wide_bvh);
+    Scene(ILog *log, bool use_wide_bvh, bool use_tex_compression);
     ~Scene() override;
 
     void GetEnvironment(environment_desc_t &env) override;

@@ -135,6 +135,17 @@ extern const int _blank_ASTC_block_4x4_len;
 // BCn compression
 //
 
+// clang-format off
+
+const int BlockSize_BC1 = 2 * sizeof(uint16_t) + sizeof(uint32_t);
+//                        \_ low/high colors_/   \_ 16 x 2-bit _/
+const int BlockSize_BC4 = 2 * sizeof(uint8_t) + 6 * sizeof(uint8_t);
+//                        \_ low/high alpha_/     \_ 16 x 3-bit _/
+const int BlockSize_BC3 = BlockSize_BC1 + BlockSize_BC4;
+const int BlockSize_BC5 = BlockSize_BC4 + BlockSize_BC4;
+
+// clang-format on
+
 int GetRequiredMemory_BC1(int w, int h, int pitch_align);
 int GetRequiredMemory_BC3(int w, int h, int pitch_align);
 int GetRequiredMemory_BC4(int w, int h, int pitch_align);
