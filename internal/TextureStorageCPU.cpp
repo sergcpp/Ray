@@ -397,7 +397,7 @@ template <int N> int Ray::Cpu::TexStorageBCn<N>::Allocate(Span<const InColorType
                     src_data[std::min(2 * y + 1, p.res[i - 1][1] - 1) * p.res[i - 1][0] + (2 * x + 0)];
 
                 InColorType res;
-                for (int j = 0; j < N; ++j) {
+                for (int j = 0; j < InChannels; ++j) {
                     res.v[j] = (c00.v[j] + c10.v[j] + c11.v[j] + c01.v[j]) / 4;
                 }
 
