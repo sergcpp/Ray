@@ -49,6 +49,7 @@ class MemoryAllocator {
     char name_[32] = {};
     Context *ctx_ = nullptr;
     float growth_factor_;
+    uint32_t max_pool_size_;
 
     struct MemPool {
         VkDeviceMemory mem;
@@ -62,8 +63,8 @@ class MemoryAllocator {
     bool AllocateNewPool(uint32_t size);
 
   public:
-    MemoryAllocator(const char name[32], Context *ctx, uint32_t initial_block_size, uint32_t mem_type_index,
-                    float growth_factor);
+    MemoryAllocator(const char name[32], Context *ctx, uint32_t initial_pool_size, uint32_t mem_type_index,
+                    float growth_factor, uint32_t max_pool_size);
     ~MemoryAllocator();
 
     MemoryAllocator(const MemoryAllocator &rhs) = delete;
@@ -84,13 +85,16 @@ class MemoryAllocator {
 class MemoryAllocators {
     char name_[16] = {};
     Context *ctx_;
-    uint32_t initial_block_size_;
+    uint32_t initial_pool_size_;
     float growth_factor_;
+    uint32_t max_pool_size_;
     SmallVector<MemoryAllocator, 4> allocators_;
 
   public:
-    MemoryAllocators(const char name[16], Context *ctx, uint32_t initial_block_size, float growth_factor)
-        : ctx_(ctx), initial_block_size_(initial_block_size), growth_factor_(growth_factor) {
+    MemoryAllocators(const char name[16], Context *ctx, const uint32_t initial_pool_size, const float growth_factor,
+                     const uint32_t max_pool_size)
+        : ctx_(ctx), initial_pool_size_(initial_pool_size), growth_factor_(growth_factor),
+          max_pool_size_(max_pool_size) {
         strcpy(name_, name);
     }
 
@@ -111,7 +115,7 @@ class MemoryAllocators {
             char name[32];
             snprintf(name, sizeof(name), "%s (type %i)", name_, int(mem_type_index));
             alloc_index = int(allocators_.size());
-            allocators_.emplace_back(name, ctx_, initial_block_size_, mem_type_index, growth_factor_);
+            allocators_.emplace_back(name, ctx_, initial_pool_size_, mem_type_index, growth_factor_, max_pool_size_);
         }
 
         return allocators_[alloc_index].Allocate(alignment, size);

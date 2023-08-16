@@ -315,8 +315,9 @@ bool Ray::Dx::Context::Init(ILog *log, const char *preferred_device) {
         subgroup_supported_ = (options1.WaveOps == TRUE);
     }
 
-    default_memory_allocs_ = std::make_unique<MemoryAllocators>(
-        "Default Allocs", this, 32 * 1024 * 1024 /* initial_block_size */, 1.5f /* growth_factor */);
+    default_memory_allocs_ =
+        std::make_unique<MemoryAllocators>("Default Allocs", this, 32 * 1024 * 1024 /* initial_pool_size */,
+                                           1.5f /* growth_factor */, 128 * 1024 * 1024 /* max_pool_size */);
     staging_descr_alloc_ = std::make_unique<DescrMultiPoolAlloc<LinearAllocAdapted>>(this, false, 16 * 1024);
 
     for (int i = 0; i < MaxFramesInFlight; ++i) {

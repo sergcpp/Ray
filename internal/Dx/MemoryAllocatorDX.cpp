@@ -20,13 +20,14 @@ void Ray::Dx::MemAllocation::Release() {
     }
 }
 
-Ray::Dx::MemoryAllocator::MemoryAllocator(const char name[32], Context *ctx, const uint32_t initial_block_size,
-                                          D3D12_HEAP_TYPE heap_type, const float growth_factor)
-    : ctx_(ctx), growth_factor_(growth_factor), heap_type_(heap_type) {
+Ray::Dx::MemoryAllocator::MemoryAllocator(const char name[32], Context *ctx, const uint32_t initial_pool_size,
+                                          D3D12_HEAP_TYPE heap_type, const float growth_factor,
+                                          const uint32_t max_pool_size)
+    : ctx_(ctx), growth_factor_(growth_factor), max_pool_size_(max_pool_size), heap_type_(heap_type) {
     strcpy(name_, name);
 
     assert(growth_factor_ > 1.0f);
-    AllocateNewPool(initial_block_size);
+    AllocateNewPool(initial_pool_size);
 }
 
 Ray::Dx::MemoryAllocator::~MemoryAllocator() {
@@ -36,16 +37,6 @@ Ray::Dx::MemoryAllocator::~MemoryAllocator() {
 }
 
 bool Ray::Dx::MemoryAllocator::AllocateNewPool(const uint32_t size) {
-    char buf_name[48];
-    snprintf(buf_name, sizeof(buf_name), "%s pool %i", name_, int(pools_.size()));
-
-    pools_.emplace_back();
-    MemPool &new_pool = pools_.back();
-    new_pool.size = size;
-
-    const uint16_t pool_ndx = alloc_.AddPool(size);
-    assert(pool_ndx == pools_.size() - 1);
-
     D3D12_HEAP_DESC heap_desc = {};
     heap_desc.SizeInBytes = size;
     heap_desc.Flags = D3D12_HEAP_FLAG_DENY_BUFFERS | D3D12_HEAP_FLAG_ALLOW_ONLY_NON_RT_DS_TEXTURES;
@@ -55,7 +46,17 @@ bool Ray::Dx::MemoryAllocator::AllocateNewPool(const uint32_t size) {
     heap_desc.Properties.CreationNodeMask = 1;
     heap_desc.Properties.VisibleNodeMask = 1;
 
-    HRESULT hr = ctx_->device()->CreateHeap(&heap_desc, IID_PPV_ARGS(&new_pool.heap));
+    ID3D12Heap *dx_heap = nullptr;
+    HRESULT hr = ctx_->device()->CreateHeap(&heap_desc, IID_PPV_ARGS(&dx_heap));
+    if (SUCCEEDED(hr)) {
+        pools_.emplace_back();
+        MemPool &new_pool = pools_.back();
+        new_pool.heap = dx_heap;
+        new_pool.size = size;
+
+        const uint16_t pool_ndx = alloc_.AddPool(size);
+        assert(pool_ndx == pools_.size() - 1);
+    }
     return SUCCEEDED(hr);
 }
 
@@ -63,7 +64,8 @@ Ray::Dx::MemAllocation Ray::Dx::MemoryAllocator::Allocate(const uint32_t alignme
     auto allocation = alloc_.Alloc(alignment, size);
 
     if (allocation.block == 0xffffffff) {
-        const bool res = AllocateNewPool(std::max(size, uint32_t(pools_.back().size * growth_factor_)));
+        const bool res =
+            AllocateNewPool(std::max(size, std::min(max_pool_size_, uint32_t(pools_.back().size * growth_factor_))));
         if (!res) {
             // allocation failed (out of memory)
             return {};

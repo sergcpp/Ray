@@ -31,13 +31,14 @@ void Ray::Vk::MemAllocation::Release() {
     }
 }
 
-Ray::Vk::MemoryAllocator::MemoryAllocator(const char name[32], Context *ctx, const uint32_t initial_block_size,
-                                          uint32_t mem_type_index, const float growth_factor)
-    : ctx_(ctx), growth_factor_(growth_factor), mem_type_index_(mem_type_index) {
+Ray::Vk::MemoryAllocator::MemoryAllocator(const char name[32], Context *ctx, const uint32_t initial_pool_size,
+                                          uint32_t mem_type_index, const float growth_factor,
+                                          const uint32_t max_pool_size)
+    : ctx_(ctx), growth_factor_(growth_factor), max_pool_size_(max_pool_size), mem_type_index_(mem_type_index) {
     strcpy(name_, name);
 
     assert(growth_factor_ > 1.0f);
-    AllocateNewPool(initial_block_size);
+    AllocateNewPool(initial_pool_size);
 }
 
 Ray::Vk::MemoryAllocator::~MemoryAllocator() {
@@ -47,21 +48,21 @@ Ray::Vk::MemoryAllocator::~MemoryAllocator() {
 }
 
 bool Ray::Vk::MemoryAllocator::AllocateNewPool(const uint32_t size) {
-    char buf_name[48];
-    snprintf(buf_name, sizeof(buf_name), "%s pool %i", name_, int(pools_.size()));
-
-    pools_.emplace_back();
-    MemPool &new_pool = pools_.back();
-    new_pool.size = size;
-
-    const uint16_t pool_ndx = alloc_.AddPool(size);
-    assert(pool_ndx == pools_.size() - 1);
-
     VkMemoryAllocateInfo buf_alloc_info = {VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};
     buf_alloc_info.allocationSize = VkDeviceSize(size);
     buf_alloc_info.memoryTypeIndex = mem_type_index_;
 
-    const VkResult res = ctx_->api().vkAllocateMemory(ctx_->device(), &buf_alloc_info, nullptr, &new_pool.mem);
+    VkDeviceMemory new_mem = {};
+    const VkResult res = ctx_->api().vkAllocateMemory(ctx_->device(), &buf_alloc_info, nullptr, &new_mem);
+    if (res == VK_SUCCESS) {
+        pools_.emplace_back();
+        MemPool &new_pool = pools_.back();
+        new_pool.mem = new_mem;
+        new_pool.size = size;
+
+        const uint16_t pool_ndx = alloc_.AddPool(size);
+        assert(pool_ndx == pools_.size() - 1);
+    }
     return res == VK_SUCCESS;
 }
 
@@ -69,7 +70,8 @@ Ray::Vk::MemAllocation Ray::Vk::MemoryAllocator::Allocate(const uint32_t alignme
     auto allocation = alloc_.Alloc(alignment, size);
 
     if (allocation.block == 0xffffffff) {
-        const bool res = AllocateNewPool(std::max(size, uint32_t(pools_.back().size * growth_factor_)));
+        const bool res =
+            AllocateNewPool(std::max(size, std::min(max_pool_size_, uint32_t(pools_.back().size * growth_factor_))));
         if (!res) {
             // allocation failed (out of memory)
             return {};

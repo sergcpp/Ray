@@ -247,8 +247,9 @@ bool Ray::Vk::Context::Init(ILog *log, const char *preferred_device) {
         subgroup_supported_ &= (subgroup_props.supportedOperations & VK_SUBGROUP_FEATURE_BASIC_BIT) != 0;
     }
 
-    default_memory_allocs_ = std::make_unique<MemoryAllocators>(
-        "Default Allocs", this, 32 * 1024 * 1024 /* initial_block_size */, 1.5f /* growth_factor */);
+    default_memory_allocs_ =
+        std::make_unique<MemoryAllocators>("Default Allocs", this, 32 * 1024 * 1024 /* initial_pool_size */,
+                                           1.5f /* growth_factor */, 128 * 1024 * 1024 /* max_pool_size */);
 
     for (int i = 0; i < MaxFramesInFlight; ++i) {
         const int PoolStep = 8;
