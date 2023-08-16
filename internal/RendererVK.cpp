@@ -182,6 +182,7 @@ Ray::Vk::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1)
     log->Info("Float16     is %s", use_fp16_ ? "enabled" : "disabled");
     log->Info("Subgroup    is %s", use_subgroup_ ? "enabled" : "disabled");
     log->Info("CoopMatrix  is %s", use_nv_coop_matrix_ ? "enabled" : "disabled");
+    log->Info("===========================================");
 
     sh_prim_rays_gen_simple_ = Shader{"Primary Raygen Simple", ctx_.get(),
                                       internal_shaders_output_primary_ray_gen_simple_comp_spv, eShaderType::Comp, log};

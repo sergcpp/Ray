@@ -5,6 +5,7 @@
 #include <mutex>
 #include <random>
 
+#include "../Log.h"
 #include "../RendererBase.h"
 #include "CoreRef.h"
 #include "Halton.h"
@@ -14,8 +15,6 @@
 #define DEBUG_ADAPTIVE_SAMPLING 0
 
 namespace Ray {
-class ILog;
-
 int round_up(int v, int align);
 
 void WritePFM(const char *base_name, const float values[], int w, int h, int channels);
@@ -299,6 +298,11 @@ template <typename SIMDPolicy>
 Ray::Cpu::Renderer<SIMDPolicy>::Renderer(const settings_t &s, ILog *log)
     : log_(log), use_wide_bvh_(s.use_wide_bvh), use_tex_compression_(s.use_tex_compression) {
     permutations_ = Ray::ComputeRadicalInversePermutations(g_primes, PrimesCount);
+
+    log->Info("===========================================");
+    log->Info("Wide BVH    is %s", use_wide_bvh_ ? "enabled" : "disabled");
+    log->Info("Compression is %s", use_tex_compression_ ? "enabled" : "disabled");
+    log->Info("===========================================");
 
     Resize(s.w, s.h);
 }
