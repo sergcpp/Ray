@@ -98,28 +98,9 @@ class MemoryAllocators {
         strcpy(name_, name);
     }
 
-    MemAllocation Allocate(const uint32_t alignment, const uint32_t size, const uint32_t mem_type_index) {
-        if (mem_type_index == 0xffffffff) {
-            return {};
-        }
+    MemAllocation Allocate(uint32_t alignment, uint32_t size, uint32_t mem_type_index);
 
-        int alloc_index = -1;
-        for (int i = 0; i < int(allocators_.size()); ++i) {
-            if (allocators_[i].mem_type_index() == mem_type_index) {
-                alloc_index = i;
-                break;
-            }
-        }
-
-        if (alloc_index == -1) {
-            char name[32];
-            snprintf(name, sizeof(name), "%s (type %i)", name_, int(mem_type_index));
-            alloc_index = int(allocators_.size());
-            allocators_.emplace_back(name, ctx_, initial_pool_size_, mem_type_index, growth_factor_, max_pool_size_);
-        }
-
-        return allocators_[alloc_index].Allocate(alignment, size);
-    }
+    MemAllocation Allocate(const VkMemoryRequirements &mem_req, VkMemoryPropertyFlags desired_mem_flags);
 
     void Print(ILog *log);
 };

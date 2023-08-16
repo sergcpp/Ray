@@ -16,8 +16,8 @@ template <> eTexFormat tex_format<uint8_t, 3>() { return eTexFormat::RawRGB888; 
 template <> eTexFormat tex_format<uint8_t, 2>() { return eTexFormat::RawRG88; }
 template <> eTexFormat tex_format<uint8_t, 1>() { return eTexFormat::RawR8; }
 
-uint32_t FindMemoryType(const VkPhysicalDeviceMemoryProperties *mem_properties, uint32_t mem_type_bits,
-                        VkMemoryPropertyFlags desired_mem_flags, VkDeviceSize desired_size);
+uint32_t FindMemoryType(uint32_t start_from, const VkPhysicalDeviceMemoryProperties *mem_properties,
+                        uint32_t mem_type_bits, VkMemoryPropertyFlags desired_mem_flags, VkDeviceSize desired_size);
 
 extern const VkFormat g_vk_formats[];
 } // namespace Vk
@@ -299,26 +299,30 @@ bool Ray::Vk::TextureAtlas::Resize(const int pages_count) {
         uint32_t img_tex_type_bits = img_tex_mem_req.memoryTypeBits;
         VkMemoryPropertyFlags img_tex_desired_mem_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
-        img_alloc_info.memoryTypeIndex = FindMemoryType(&ctx_->mem_properties(), img_tex_type_bits,
+        img_alloc_info.memoryTypeIndex = FindMemoryType(0, &ctx_->mem_properties(), img_tex_type_bits,
                                                         img_tex_desired_mem_flags, uint32_t(img_tex_mem_req.size));
         res = VK_ERROR_OUT_OF_DEVICE_MEMORY;
-        if (img_alloc_info.memoryTypeIndex != 0xffffffff) {
+        while (img_alloc_info.memoryTypeIndex != 0xffffffff) {
             res = ctx_->api().vkAllocateMemory(ctx_->device(), &img_alloc_info, nullptr, &new_mem);
+            if (res == VK_SUCCESS) {
+                break;
+            }
+            img_alloc_info.memoryTypeIndex =
+                FindMemoryType(img_alloc_info.memoryTypeIndex + 1, &ctx_->mem_properties(), img_tex_type_bits,
+                               img_tex_desired_mem_flags, uint32_t(img_tex_mem_req.size));
         }
         if (res == VK_ERROR_OUT_OF_DEVICE_MEMORY) {
             ctx_->log()->Warning("Not enough device memory, falling back to CPU RAM!");
             img_tex_desired_mem_flags &= ~VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
-            img_alloc_info.memoryTypeIndex = FindMemoryType(&ctx_->mem_properties(), img_tex_type_bits,
-                                                            img_tex_desired_mem_flags, uint32_t(img_tex_mem_req.size));
-            res = ctx_->api().vkAllocateMemory(ctx_->device(), &img_alloc_info, nullptr, &new_mem);
-            if (res == VK_ERROR_OUT_OF_DEVICE_MEMORY) {
-                img_tex_desired_mem_flags |= VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
-
-                img_alloc_info.memoryTypeIndex =
-                    FindMemoryType(&ctx_->mem_properties(), img_tex_type_bits, img_tex_desired_mem_flags,
-                                   uint32_t(img_tex_mem_req.size));
+            while (img_alloc_info.memoryTypeIndex != 0xffffffff) {
                 res = ctx_->api().vkAllocateMemory(ctx_->device(), &img_alloc_info, nullptr, &new_mem);
+                if (res == VK_SUCCESS) {
+                    break;
+                }
+                img_alloc_info.memoryTypeIndex =
+                    FindMemoryType(img_alloc_info.memoryTypeIndex + 1, &ctx_->mem_properties(), img_tex_type_bits,
+                                   img_tex_desired_mem_flags, uint32_t(img_tex_mem_req.size));
             }
         }
         if (res != VK_SUCCESS) {

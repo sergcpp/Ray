@@ -64,8 +64,8 @@ extern const VkFormat g_vk_formats[] = {
 };
 static_assert(sizeof(g_vk_formats) / sizeof(g_vk_formats[0]) == size_t(eTexFormat::_Count), "!");
 
-uint32_t FindMemoryType(const VkPhysicalDeviceMemoryProperties *mem_properties, uint32_t mem_type_bits,
-                        VkMemoryPropertyFlags desired_mem_flags, VkDeviceSize desired_size);
+uint32_t FindMemoryType(uint32_t search_from, const VkPhysicalDeviceMemoryProperties *mem_properties,
+                        uint32_t mem_type_bits, VkMemoryPropertyFlags desired_mem_flags, VkDeviceSize desired_size);
 
 uint32_t TextureHandleCounter = 0;
 
@@ -385,23 +385,17 @@ bool Ray::Vk::Texture2D::Realloc(const int w, const int h, int mip_count, const 
         ctx_->api().vkGetImageMemoryRequirements(ctx_->device(), new_image, &tex_mem_req);
 
         VkMemoryPropertyFlags img_tex_desired_mem_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-        new_alloc = mem_allocs->Allocate(uint32_t(tex_mem_req.alignment), uint32_t(tex_mem_req.size),
-                                         FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits,
-                                                        img_tex_desired_mem_flags, uint32_t(tex_mem_req.size)));
-        if (!alloc_) {
+        new_alloc = mem_allocs->Allocate(tex_mem_req, img_tex_desired_mem_flags);
+        if (!new_alloc) {
             ctx_->log()->Warning("Not enough device memory, falling back to CPU RAM!");
             img_tex_desired_mem_flags &= ~VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
-            alloc_ = mem_allocs->Allocate(uint32_t(tex_mem_req.alignment), uint32_t(tex_mem_req.size),
-                                          FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits,
-                                                         img_tex_desired_mem_flags, uint32_t(tex_mem_req.size)));
-            if (!alloc_) {
-                img_tex_desired_mem_flags |= VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+            new_alloc = mem_allocs->Allocate(tex_mem_req, img_tex_desired_mem_flags);
+        }
 
-                alloc_ = mem_allocs->Allocate(uint32_t(tex_mem_req.alignment), uint32_t(tex_mem_req.size),
-                                              FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits,
-                                                             img_tex_desired_mem_flags, uint32_t(tex_mem_req.size)));
-            }
+        if (!new_alloc) {
+            log->Error("Failed to allocate memory!");
+            return false;
         }
 
         res = ctx_->api().vkBindImageMemory(ctx_->device(), new_image, new_alloc.owner->mem(new_alloc.pool),
@@ -636,24 +630,12 @@ void Ray::Vk::Texture2D::InitFromRAWData(Buffer *sbuf, int data_off, void *_cmd_
         ctx_->api().vkGetImageMemoryRequirements(ctx_->device(), handle_.img, &tex_mem_req);
 
         VkMemoryPropertyFlags img_tex_desired_mem_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-
-        alloc_ = mem_allocs->Allocate(uint32_t(tex_mem_req.alignment), uint32_t(tex_mem_req.size),
-                                      FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits,
-                                                     img_tex_desired_mem_flags, uint32_t(tex_mem_req.size)));
+        alloc_ = mem_allocs->Allocate(tex_mem_req, img_tex_desired_mem_flags);
         if (!alloc_) {
             ctx_->log()->Warning("Not enough device memory, falling back to CPU RAM!");
             img_tex_desired_mem_flags &= ~VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
-            alloc_ = mem_allocs->Allocate(uint32_t(tex_mem_req.alignment), uint32_t(tex_mem_req.size),
-                                          FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits,
-                                                         img_tex_desired_mem_flags, uint32_t(tex_mem_req.size)));
-            if (!alloc_) {
-                img_tex_desired_mem_flags |= VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
-
-                alloc_ = mem_allocs->Allocate(uint32_t(tex_mem_req.alignment), uint32_t(tex_mem_req.size),
-                                              FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits,
-                                                             img_tex_desired_mem_flags, uint32_t(tex_mem_req.size)));
-            }
+            alloc_ = mem_allocs->Allocate(tex_mem_req, img_tex_desired_mem_flags);
         }
 
         if (!alloc_) {
@@ -1199,24 +1181,17 @@ void Ray::Vk::Texture2D::InitFromRAWData(Buffer &sbuf, int data_off[6], void *_c
         ctx_->api().vkGetImageMemoryRequirements(ctx_->device(), handle_.img, &tex_mem_req);
 
         VkMemoryPropertyFlags img_tex_desired_mem_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-
-        alloc_ = mem_allocs->Allocate(uint32_t(tex_mem_req.alignment), uint32_t(tex_mem_req.size),
-                                      FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits,
-                                                     img_tex_desired_mem_flags, uint32_t(tex_mem_req.size)));
+        alloc_ = mem_allocs->Allocate(tex_mem_req, img_tex_desired_mem_flags);
         if (!alloc_) {
             ctx_->log()->Warning("Not enough device memory, falling back to CPU RAM!");
             img_tex_desired_mem_flags &= ~VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
-            alloc_ = mem_allocs->Allocate(uint32_t(tex_mem_req.alignment), uint32_t(tex_mem_req.size),
-                                          FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits,
-                                                         img_tex_desired_mem_flags, uint32_t(tex_mem_req.size)));
-            if (!alloc_) {
-                img_tex_desired_mem_flags |= VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+            alloc_ = mem_allocs->Allocate(tex_mem_req, img_tex_desired_mem_flags);
+        }
 
-                alloc_ = mem_allocs->Allocate(uint32_t(tex_mem_req.alignment), uint32_t(tex_mem_req.size),
-                                              FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits,
-                                                             img_tex_desired_mem_flags, uint32_t(tex_mem_req.size)));
-            }
+        if (!alloc_) {
+            log->Error("Failed to allocate memory!");
+            return;
         }
 
         res = ctx_->api().vkBindImageMemory(ctx_->device(), handle_.img, alloc_.owner->mem(alloc_.pool),
@@ -1519,24 +1494,17 @@ void Ray::Vk::Texture2D::InitFromDDSFile(const void *data[6], const int size[6],
         ctx_->api().vkGetImageMemoryRequirements(ctx_->device(), handle_.img, &tex_mem_req);
 
         VkMemoryPropertyFlags img_tex_desired_mem_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-
-        alloc_ = mem_allocs->Allocate(uint32_t(tex_mem_req.alignment), uint32_t(tex_mem_req.size),
-                                      FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits,
-                                                     img_tex_desired_mem_flags, uint32_t(tex_mem_req.size)));
+        alloc_ = mem_allocs->Allocate(tex_mem_req, img_tex_desired_mem_flags);
         if (!alloc_) {
             ctx_->log()->Warning("Not enough device memory, falling back to CPU RAM!");
             img_tex_desired_mem_flags &= ~VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
-            alloc_ = mem_allocs->Allocate(uint32_t(tex_mem_req.alignment), uint32_t(tex_mem_req.size),
-                                          FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits,
-                                                         img_tex_desired_mem_flags, uint32_t(tex_mem_req.size)));
-            if (!alloc_) {
-                img_tex_desired_mem_flags |= VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+            alloc_ = mem_allocs->Allocate(tex_mem_req, img_tex_desired_mem_flags);
+        }
 
-                alloc_ = mem_allocs->Allocate(uint32_t(tex_mem_req.alignment), uint32_t(tex_mem_req.size),
-                                              FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits,
-                                                             img_tex_desired_mem_flags, uint32_t(tex_mem_req.size)));
-            }
+        if (!alloc_) {
+            log->Error("Failed to allocate memory!");
+            return;
         }
 
         res = ctx_->api().vkBindImageMemory(ctx_->device(), handle_.img, alloc_.owner->mem(alloc_.pool),
@@ -1768,24 +1736,17 @@ void Ray::Vk::Texture2D::InitFromKTXFile(const void *data[6], const int size[6],
         ctx_->api().vkGetImageMemoryRequirements(ctx_->device(), handle_.img, &tex_mem_req);
 
         VkMemoryPropertyFlags img_tex_desired_mem_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-
-        alloc_ = mem_allocs->Allocate(uint32_t(tex_mem_req.alignment), uint32_t(tex_mem_req.size),
-                                      FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits,
-                                                     img_tex_desired_mem_flags, uint32_t(tex_mem_req.size)));
-        if (!alloc_ && (img_tex_desired_mem_flags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)) {
+        alloc_ = mem_allocs->Allocate(tex_mem_req, img_tex_desired_mem_flags);
+        if (!alloc_) {
             ctx_->log()->Warning("Not enough device memory, falling back to CPU RAM!");
             img_tex_desired_mem_flags &= ~VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
-            alloc_ = mem_allocs->Allocate(uint32_t(tex_mem_req.alignment), uint32_t(tex_mem_req.size),
-                                          FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits,
-                                                         img_tex_desired_mem_flags, uint32_t(tex_mem_req.size)));
-            if (!alloc_) {
-                img_tex_desired_mem_flags |= VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+            alloc_ = mem_allocs->Allocate(tex_mem_req, img_tex_desired_mem_flags);
+        }
 
-                alloc_ = mem_allocs->Allocate(uint32_t(tex_mem_req.alignment), uint32_t(tex_mem_req.size),
-                                              FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits,
-                                                             img_tex_desired_mem_flags, uint32_t(tex_mem_req.size)));
-            }
+        if (!alloc_) {
+            log->Error("Failed to allocate memory!");
+            return;
         }
 
         res = ctx_->api().vkBindImageMemory(ctx_->device(), handle_.img, alloc_.owner->mem(alloc_.pool),
@@ -2323,24 +2284,12 @@ void Ray::Vk::Texture3D::Init(const Tex3DParams &p, MemoryAllocators *mem_allocs
         ctx_->api().vkGetImageMemoryRequirements(ctx_->device(), handle_.img, &tex_mem_req);
 
         VkMemoryPropertyFlags img_tex_desired_mem_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-
-        alloc_ = mem_allocs->Allocate(uint32_t(tex_mem_req.alignment), uint32_t(tex_mem_req.size),
-                                      FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits,
-                                                     img_tex_desired_mem_flags, uint32_t(tex_mem_req.size)));
+        alloc_ = mem_allocs->Allocate(tex_mem_req, img_tex_desired_mem_flags);
         if (!alloc_) {
             ctx_->log()->Warning("Not enough device memory, falling back to CPU RAM!");
             img_tex_desired_mem_flags &= ~VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
-            alloc_ = mem_allocs->Allocate(uint32_t(tex_mem_req.alignment), uint32_t(tex_mem_req.size),
-                                          FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits,
-                                                         img_tex_desired_mem_flags, uint32_t(tex_mem_req.size)));
-            if (!alloc_) {
-                img_tex_desired_mem_flags |= VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
-
-                alloc_ = mem_allocs->Allocate(uint32_t(tex_mem_req.alignment), uint32_t(tex_mem_req.size),
-                                              FindMemoryType(&ctx_->mem_properties(), tex_mem_req.memoryTypeBits,
-                                                             img_tex_desired_mem_flags, uint32_t(tex_mem_req.size)));
-            }
+            alloc_ = mem_allocs->Allocate(tex_mem_req, img_tex_desired_mem_flags);
         }
 
         if (!alloc_) {

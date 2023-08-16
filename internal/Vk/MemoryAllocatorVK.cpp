@@ -7,9 +7,9 @@
 
 namespace Ray {
 namespace Vk {
-uint32_t FindMemoryType(const VkPhysicalDeviceMemoryProperties *mem_properties, uint32_t mem_type_bits,
-                        VkMemoryPropertyFlags desired_mem_flags, VkDeviceSize desired_size) {
-    for (uint32_t i = 0; i < 32; i++) {
+uint32_t FindMemoryType(uint32_t search_from, const VkPhysicalDeviceMemoryProperties *mem_properties,
+                        uint32_t mem_type_bits, VkMemoryPropertyFlags desired_mem_flags, VkDeviceSize desired_size) {
+    for (uint32_t i = search_from; i < 32; i++) {
         const VkMemoryType mem_type = mem_properties->memoryTypes[i];
         if (mem_type_bits & 1u) {
             if ((mem_type.propertyFlags & desired_mem_flags) == desired_mem_flags &&
@@ -94,6 +94,45 @@ Ray::Vk::MemAllocation Ray::Vk::MemoryAllocator::Allocate(const uint32_t alignme
 void Ray::Vk::MemoryAllocator::Free(const uint32_t block) {
     alloc_.Free(block);
     assert(alloc_.IntegrityCheck());
+}
+
+Ray::Vk::MemAllocation Ray::Vk::MemoryAllocators::Allocate(const uint32_t alignment, const uint32_t size,
+                                                           const uint32_t mem_type_index) {
+    if (mem_type_index == 0xffffffff) {
+        return {};
+    }
+
+    int alloc_index = -1;
+    for (int i = 0; i < int(allocators_.size()); ++i) {
+        if (allocators_[i].mem_type_index() == mem_type_index) {
+            alloc_index = i;
+            break;
+        }
+    }
+
+    if (alloc_index == -1) {
+        char name[32];
+        snprintf(name, sizeof(name), "%s (type %i)", name_, int(mem_type_index));
+        alloc_index = int(allocators_.size());
+        allocators_.emplace_back(name, ctx_, initial_pool_size_, mem_type_index, growth_factor_, max_pool_size_);
+    }
+
+    return allocators_[alloc_index].Allocate(alignment, size);
+}
+
+Ray::Vk::MemAllocation Ray::Vk::MemoryAllocators::Allocate(const VkMemoryRequirements &mem_req,
+                                                           const VkMemoryPropertyFlags desired_mem_flags) {
+    uint32_t mem_type_index =
+        FindMemoryType(0, &ctx_->mem_properties(), mem_req.memoryTypeBits, desired_mem_flags, uint32_t(mem_req.size));
+    while (mem_type_index != 0xffffffff) {
+        MemAllocation alloc = Allocate(uint32_t(mem_req.alignment), uint32_t(mem_req.size), mem_type_index);
+        if (alloc) {
+            return alloc;
+        }
+        mem_type_index = FindMemoryType(mem_type_index + 1, &ctx_->mem_properties(), mem_req.memoryTypeBits,
+                                        desired_mem_flags, uint32_t(mem_req.size));
+    }
+    return {};
 }
 
 void Ray::Vk::MemoryAllocators::Print(ILog *log) {
