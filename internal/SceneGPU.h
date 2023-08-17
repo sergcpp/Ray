@@ -1527,34 +1527,37 @@ inline void Ray::NS::Scene::PrepareEnvMapQTree_nolock() {
         env_map_qtree_.mips.emplace_back(cur_res * cur_res / 4, 0.0f);
 
         for (int y = 0; y < size[1]; ++y) {
-            const float theta = PI * float(y) / float(size[1]);
             for (int x = 0; x < size[0]; ++x) {
-                const float phi = 2.0f * PI * float(x) / float(size[0]);
-
                 const uint8_t *col_rgbe = &rgbe_data[4 * (y * pitch + x)];
                 simd_fvec4 col_rgb;
                 rgbe_to_rgb(col_rgbe, value_ptr(col_rgb));
 
                 const float cur_lum = (col_rgb[0] + col_rgb[1] + col_rgb[2]);
 
-                auto dir =
-                    simd_fvec4{std::sin(theta) * std::cos(phi), std::cos(theta), std::sin(theta) * std::sin(phi), 0.0f};
+                for (int jj = -1; jj <= 1; ++jj) {
+                    const float theta = PI * float(y + jj) / float(size[1]);
+                    for (int ii = -1; ii <= 1; ++ii) {
+                        const float phi = 2.0f * PI * float(x + ii) / float(size[0]);
+                        auto dir = simd_fvec4{std::sin(theta) * std::cos(phi), std::cos(theta),
+                                              std::sin(theta) * std::sin(phi), 0.0f};
 
-                simd_fvec2 q;
-                DirToCanonical(value_ptr(dir), 0.0f, value_ptr(q));
+                        simd_fvec2 q;
+                        DirToCanonical(value_ptr(dir), 0.0f, value_ptr(q));
 
-                int qx = clamp(int(cur_res * q[0]), 0, cur_res - 1);
-                int qy = clamp(int(cur_res * q[1]), 0, cur_res - 1);
+                        int qx = clamp(int(cur_res * q[0]), 0, cur_res - 1);
+                        int qy = clamp(int(cur_res * q[1]), 0, cur_res - 1);
 
-                int index = 0;
-                index |= (qx & 1) << 0;
-                index |= (qy & 1) << 1;
+                        int index = 0;
+                        index |= (qx & 1) << 0;
+                        index |= (qy & 1) << 1;
 
-                qx /= 2;
-                qy /= 2;
+                        qx /= 2;
+                        qy /= 2;
 
-                simd_fvec4 &qvec = env_map_qtree_.mips[0][qy * cur_res / 2 + qx];
-                qvec.set(index, std::max(qvec[index], cur_lum));
+                        simd_fvec4 &qvec = env_map_qtree_.mips[0][qy * cur_res / 2 + qx];
+                        qvec.set(index, std::max(qvec[index], cur_lum));
+                    }
+                }
             }
         }
 

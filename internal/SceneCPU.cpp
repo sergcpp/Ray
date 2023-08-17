@@ -1047,33 +1047,38 @@ void Ray::Cpu::Scene::PrepareEnvMapQTree_nolock() {
         env_map_qtree_.mips.emplace_back(cur_res * cur_res, 0.0f);
 
         for (int y = 0; y < size[1]; ++y) {
-            const float theta = PI * float(y) / float(size[1]);
             for (int x = 0; x < size[0]; ++x) {
-                const float phi = 2.0f * PI * float(x) / float(size[0]);
-
                 const color_rgba8_t col_rgbe = tex_storage_rgba_.Get(tex, x, y, 0);
                 const Ref::simd_fvec4 col_rgb = Ref::rgbe_to_rgb(col_rgbe);
 
                 const float cur_lum = (col_rgb[0] + col_rgb[1] + col_rgb[2]);
 
-                auto dir = Ref::simd_fvec4{std::sin(theta) * std::cos(phi), std::cos(theta),
-                                           std::sin(theta) * std::sin(phi), 0.0f};
+                for (int jj = -1; jj <= 1; ++jj) {
+                    const float theta = PI * float(y + jj) / float(size[1]);
+                    for (int ii = -1; ii <= 1; ++ii) {
+                        const float phi = 2.0f * PI * float(x + ii) / float(size[0]);
 
-                Ref::simd_fvec2 q;
-                DirToCanonical(value_ptr(dir), 0.0f, value_ptr(q));
+                        auto dir = Ref::simd_fvec4{std::sin(theta) * std::cos(phi), std::cos(theta),
+                                                   std::sin(theta) * std::sin(phi), 0.0f};
 
-                int qx = CLAMP(int(cur_res * q[0]), 0, cur_res - 1);
-                int qy = CLAMP(int(cur_res * q[1]), 0, cur_res - 1);
+                        Ref::simd_fvec2 q;
+                        DirToCanonical(value_ptr(dir), 0.0f, value_ptr(q));
 
-                int index = 0;
-                index |= (qx & 1) << 0;
-                index |= (qy & 1) << 1;
+                        int qx = CLAMP(int(cur_res * q[0]), 0, cur_res - 1);
+                        int qy = CLAMP(int(cur_res * q[1]), 0, cur_res - 1);
 
-                qx /= 2;
-                qy /= 2;
+                        int index = 0;
+                        index |= (qx & 1) << 0;
+                        index |= (qy & 1) << 1;
 
-                auto &qvec = reinterpret_cast<Ref::simd_fvec4 &>(env_map_qtree_.mips[0][4 * (qy * cur_res / 2 + qx)]);
-                qvec.set(index, std::max(qvec[index], cur_lum));
+                        qx /= 2;
+                        qy /= 2;
+
+                        auto &qvec =
+                            reinterpret_cast<Ref::simd_fvec4 &>(env_map_qtree_.mips[0][4 * (qy * cur_res / 2 + qx)]);
+                        qvec.set(index, std::max(qvec[index], cur_lum));
+                    }
+                }
             }
         }
 
@@ -1115,7 +1120,7 @@ void Ray::Cpu::Scene::PrepareEnvMapQTree_nolock() {
     static const float LumFractThreshold = 0.01f;
 
     cur_res = 2;
-    int the_last_required_lod;
+    int the_last_required_lod = 0;
     for (int lod = int(env_map_qtree_.mips.size()) - 1; lod >= 0; --lod) {
         the_last_required_lod = lod;
         const auto *cur_mip = reinterpret_cast<const Ref::simd_fvec4 *>(env_map_qtree_.mips[lod].data());
