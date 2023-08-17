@@ -111,6 +111,12 @@ const UINT_TYPE TEXTURE_ATLASES_SLOT = 22;
 const int FILTER_BOX = 0;
 const int FILTER_TENT = 1;
 
+const int RAY_TYPE_CAMERA = 0;
+const int RAY_TYPE_DIFFUSE = 1;
+const int RAY_TYPE_SPECULAR = 2;
+const int RAY_TYPE_REFR = 3;
+const int RAY_TYPE_SHADOW = 4;
+
 struct ray_data_t {
 	float o[3], d[3], pdf;
 	float c[3];
@@ -169,7 +175,7 @@ struct transform_t {
 struct mesh_instance_t {
     VEC4_TYPE bbox_min; // w is tr_index
     VEC4_TYPE bbox_max; // w is mesh_index
-    UVEC4_TYPE block_ndx; // xy - indexes of transform and mesh blocks
+    UVEC4_TYPE block_ndx; // xy - indexes of transform and mesh blocks, z - ray_visibility
 };
 
 struct light_t {

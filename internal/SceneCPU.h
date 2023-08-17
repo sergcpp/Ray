@@ -142,7 +142,7 @@ class Scene : public SceneCommon {
         RemoveLight_nolock(l);
     }
 
-    MeshInstanceHandle AddMeshInstance(MeshHandle mesh, const float *xform) override;
+    MeshInstanceHandle AddMeshInstance(const mesh_instance_desc_t &mi) override;
     void SetMeshInstanceTransform(MeshInstanceHandle mi, const float *xform) override {
         std::unique_lock<std::shared_timed_mutex> lock(mtx_);
         SetMeshInstanceTransform_nolock(mi, xform);

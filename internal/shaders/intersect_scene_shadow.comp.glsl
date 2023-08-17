@@ -161,6 +161,10 @@ bool Traverse_TLAS_WithStack(vec3 orig_ro, vec3 orig_rd, vec3 orig_inv_rd, uint 
             uint prim_count = floatBitsToUint(n.bbox_max.w);
             for (uint i = prim_index; i < prim_index + prim_count; ++i) {
                 mesh_instance_t mi = g_mesh_instances[g_mi_indices[i]];
+                if ((mi.block_ndx.z & (1u << RAY_TYPE_SHADOW)) == 0) {
+                    continue;
+                }
+
                 mesh_t m = g_meshes[floatBitsToUint(mi.bbox_max.w)];
                 transform_t tr = g_transforms[floatBitsToUint(mi.bbox_min.w)];
 
@@ -277,14 +281,14 @@ vec3 IntersectSceneShadow(shadow_ray_t r) {
 #else
     while (dist > HIT_BIAS) {
         rayQueryEXT rq;
-        rayQueryInitializeEXT(rq,               // rayQuery
-                              g_tlas,           // topLevel
-                              0,                // rayFlags
-                              0xff,             // cullMask
-                              ro,               // origin
-                              0.0,              // tMin
-                              rd,               // direction
-                              dist              // tMax
+        rayQueryInitializeEXT(rq,                       // rayQuery
+                              g_tlas,                   // topLevel
+                              0,                        // rayFlags
+                              (1u << RAY_TYPE_SHADOW),  // cullMask
+                              ro,                       // origin
+                              0.0,                      // tMin
+                              rd,                       // direction
+                              dist                      // tMax
                               );
 
         while(rayQueryProceedEXT(rq)) {

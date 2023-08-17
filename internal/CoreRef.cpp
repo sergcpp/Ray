@@ -1799,12 +1799,14 @@ bool Ray::Ref::Traverse_TLAS_WithStack_ClosestHit(const float ro[3], const float
     return res;
 }
 
-bool Ray::Ref::Traverse_TLAS_WithStack_AnyHit(const float ro[3], const float rd[3], const bvh_node_t *nodes,
-                                              const uint32_t root_index, const mesh_instance_t *mesh_instances,
-                                              const uint32_t *mi_indices, const mesh_t *meshes,
-                                              const transform_t *transforms, const mtri_accel_t *mtris,
-                                              const tri_mat_data_t *materials, const uint32_t *tri_indices,
-                                              hit_data_t &inter) {
+bool Ray::Ref::Traverse_TLAS_WithStack_AnyHit(const float ro[3], const float rd[3], int ray_type,
+                                              const bvh_node_t *nodes, const uint32_t root_index,
+                                              const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
+                                              const mesh_t *meshes, const transform_t *transforms,
+                                              const mtri_accel_t *mtris, const tri_mat_data_t *materials,
+                                              const uint32_t *tri_indices, hit_data_t &inter) {
+    const int ray_vismask = (1u << ray_type);
+
     float inv_d[3];
     safe_invert(rd, inv_d);
 
@@ -1827,6 +1829,10 @@ bool Ray::Ref::Traverse_TLAS_WithStack_AnyHit(const float ro[3], const float rd[
             const uint32_t prim_index = (nodes[cur].prim_index & PRIM_INDEX_BITS);
             for (uint32_t i = prim_index; i < prim_index + nodes[cur].prim_count; ++i) {
                 const mesh_instance_t &mi = mesh_instances[mi_indices[i]];
+                if ((mi.ray_visibility & ray_vismask) == 0) {
+                    continue;
+                }
+
                 const mesh_t &m = meshes[mi.mesh_index];
                 const transform_t &tr = transforms[mi.tr_index];
 
@@ -1859,13 +1865,14 @@ bool Ray::Ref::Traverse_TLAS_WithStack_AnyHit(const float ro[3], const float rd[
     return false;
 }
 
-bool Ray::Ref::Traverse_TLAS_WithStack_AnyHit(const float ro[3], const float rd[3], const mbvh_node_t *nodes,
-                                              const uint32_t root_index, const mesh_instance_t *mesh_instances,
-                                              const uint32_t *mi_indices, const mesh_t *meshes,
-                                              const transform_t *transforms, const tri_accel_t *tris,
-                                              const tri_mat_data_t *materials, const uint32_t *tri_indices,
-                                              hit_data_t &inter) {
+bool Ray::Ref::Traverse_TLAS_WithStack_AnyHit(const float ro[3], const float rd[3], int ray_type,
+                                              const mbvh_node_t *nodes, const uint32_t root_index,
+                                              const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
+                                              const mesh_t *meshes, const transform_t *transforms,
+                                              const tri_accel_t *tris, const tri_mat_data_t *materials,
+                                              const uint32_t *tri_indices, hit_data_t &inter) {
     const int ray_dir_oct = ((rd[2] > 0.0f) << 2) | ((rd[1] > 0.0f) << 1) | (rd[0] > 0.0f);
+    const int ray_vismask = (1u << ray_type);
 
     int child_order[8];
     UNROLLED_FOR(i, 8, { child_order[i] = i ^ ray_dir_oct; })
@@ -1947,6 +1954,10 @@ bool Ray::Ref::Traverse_TLAS_WithStack_AnyHit(const float ro[3], const float rd[
             const uint32_t prim_index = (nodes[cur.index].child[0] & PRIM_INDEX_BITS);
             for (uint32_t i = prim_index; i < prim_index + nodes[cur.index].child[1]; ++i) {
                 const mesh_instance_t &mi = mesh_instances[mi_indices[i]];
+                if ((mi.ray_visibility & ray_vismask) == 0) {
+                    continue;
+                }
+
                 const mesh_t &m = meshes[mi.mesh_index];
                 const transform_t &tr = transforms[mi.tr_index];
 
@@ -3001,13 +3012,13 @@ Ray::Ref::simd_fvec4 Ray::Ref::IntersectScene(const shadow_ray_t &r, const int m
 
         bool solid_hit = false;
         if (sc.mnodes) {
-            solid_hit = Traverse_TLAS_WithStack_AnyHit(value_ptr(ro), value_ptr(rd), sc.mnodes, root_index,
-                                                       sc.mesh_instances, sc.mi_indices, sc.meshes, sc.transforms,
-                                                       sc.tris, sc.tri_materials, sc.tri_indices, inter);
+            solid_hit = Traverse_TLAS_WithStack_AnyHit(value_ptr(ro), value_ptr(rd), RAY_TYPE_SHADOW, sc.mnodes,
+                                                       root_index, sc.mesh_instances, sc.mi_indices, sc.meshes,
+                                                       sc.transforms, sc.tris, sc.tri_materials, sc.tri_indices, inter);
         } else {
-            solid_hit = Traverse_TLAS_WithStack_AnyHit(value_ptr(ro), value_ptr(rd), sc.nodes, root_index,
-                                                       sc.mesh_instances, sc.mi_indices, sc.meshes, sc.transforms,
-                                                       sc.mtris, sc.tri_materials, sc.tri_indices, inter);
+            solid_hit = Traverse_TLAS_WithStack_AnyHit(
+                value_ptr(ro), value_ptr(rd), RAY_TYPE_SHADOW, sc.nodes, root_index, sc.mesh_instances, sc.mi_indices,
+                sc.meshes, sc.transforms, sc.mtris, sc.tri_materials, sc.tri_indices, inter);
         }
 
         if (solid_hit || depth > max_transp_depth) {

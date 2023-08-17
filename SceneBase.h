@@ -144,20 +144,36 @@ struct mesh_desc_t {
     bool use_fast_bvh_build = false;   ///< Use faster BVH construction with less tree quality
 };
 
+/// Mesh instance description
+struct mesh_instance_desc_t {
+    float xform[16] = {
+        1.0f, 0.0f, 0.0f, 0.0f,          //
+        0.0f, 1.0f, 0.0f, 0.0f,          //
+        0.0f, 0.0f, 1.0f, 0.0f,          //
+        0.0f, 0.0f, 0.0f, 1.0f,          //
+    };                                   ///< Transformation matrix
+    MeshHandle mesh = InvalidMeshHandle; ///< Mesh handle
+    bool camera_visibility = true;       ///< Instance visibility to camera rays
+    bool diffuse_visibility = true;      ///< Instance visibility to diffuse rays
+    bool specular_visibility = true;     ///< Instance visibility to specular rays
+    bool refraction_visibility = true;   ///< Instance visibility to refraction (transmission) rays
+    bool shadow_visibility = true;       ///< Instance visibility to shadow rays
+};
+
 enum eTextureFormat { RGBA8888, RGB888, RG88, R8 };
 
 /// Texture description
 struct tex_desc_t {
-    eTextureFormat format;              ///< Texture data format
-    const char *name = nullptr;         ///< Debug name
-    const void *data;                   ///< Texture data
-    int w,                              ///< Texture width
-        h;                              ///< Texture height
-    bool is_srgb = true;                ///< Treat this texture as SRGB
-    bool is_normalmap = false;          ///< Is this a normalmap
-    bool flip_normalmap_y = false;      ///< Set to true for DX-style normalmap
-    bool force_no_compression = false;  ///< Disable compression (guarantee the best quality)
-    bool generate_mipmaps = false;      ///< Generate mipmaps for this texture
+    eTextureFormat format;             ///< Texture data format
+    const char *name = nullptr;        ///< Debug name
+    const void *data;                  ///< Texture data
+    int w,                             ///< Texture width
+        h;                             ///< Texture height
+    bool is_srgb = true;               ///< Treat this texture as SRGB
+    bool is_normalmap = false;         ///< Is this a normalmap
+    bool flip_normalmap_y = false;     ///< Set to true for DX-style normalmap
+    bool force_no_compression = false; ///< Disable compression (guarantee the best quality)
+    bool generate_mipmaps = false;     ///< Generate mipmaps for this texture
 };
 
 /// Lightsource type
@@ -281,6 +297,7 @@ class ILog;
 class SceneBase {
   protected:
     ILog *log_ = nullptr;
+
   public:
     virtual ~SceneBase() = default;
 
@@ -353,7 +370,20 @@ class SceneBase {
         @param xform array of 16 floats holding transformation matrix
         @return New mesh instance handle
     */
-    virtual MeshInstanceHandle AddMeshInstance(MeshHandle mesh, const float *xform) = 0;
+    MeshInstanceHandle AddMeshInstance(MeshHandle mesh, const float *xform) {
+        mesh_instance_desc_t mi;
+        mi.mesh = mesh;
+        for (int i = 0; i < 16; ++i) {
+            mi.xform[i] = xform[i];
+        }
+        return AddMeshInstance(mi);
+    }
+
+    /** @brief Adds mesh instance to a scene
+        @param mi mesh instance description
+        @return New mesh instance handle
+    */
+    virtual MeshInstanceHandle AddMeshInstance(const mesh_instance_desc_t &mi) = 0;
 
     /** @brief Sets mesh instance transformation
         @param mi mesh instance handle

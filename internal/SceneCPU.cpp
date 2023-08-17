@@ -753,20 +753,37 @@ void Ray::Cpu::Scene::RemoveLight_nolock(const LightHandle i) {
     lights_.Erase(i._block);
 }
 
-Ray::MeshInstanceHandle Ray::Cpu::Scene::AddMeshInstance(const MeshHandle mesh, const float *xform) {
+Ray::MeshInstanceHandle Ray::Cpu::Scene::AddMeshInstance(const mesh_instance_desc_t &mi_desc) {
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
     const std::pair<uint32_t, uint32_t> mi_index = mesh_instances_.emplace();
     const std::pair<uint32_t, uint32_t> tr_index = transforms_.emplace();
 
     mesh_instance_t &mi = mesh_instances_.at(mi_index.first);
-    mi.mesh_index = mesh._index;
-    mi.mesh_block = mesh._block;
+    mi.mesh_index = mi_desc.mesh._index;
+    mi.mesh_block = mi_desc.mesh._block;
     mi.tr_index = tr_index.first;
     mi.tr_block = tr_index.second;
+    mi.ray_visibility = 0x000000ff;
+
+    if (!mi_desc.camera_visibility) {
+        mi.ray_visibility &= ~(1u << RAY_TYPE_CAMERA);
+    }
+    if (!mi_desc.diffuse_visibility) {
+        mi.ray_visibility &= ~(1u << RAY_TYPE_DIFFUSE);
+    }
+    if (!mi_desc.specular_visibility) {
+        mi.ray_visibility &= ~(1u << RAY_TYPE_SPECULAR);
+    }
+    if (!mi_desc.refraction_visibility) {
+        mi.ray_visibility &= ~(1u << RAY_TYPE_REFR);
+    }
+    if (!mi_desc.shadow_visibility) {
+        mi.ray_visibility &= ~(1u << RAY_TYPE_SHADOW);
+    }
 
     { // find emissive triangles and add them as emitters
-        const mesh_t &m = meshes_[mesh._index];
+        const mesh_t &m = meshes_[mi_desc.mesh._index];
         for (uint32_t tri = (m.vert_index / 3); tri < (m.vert_index + m.vert_count) / 3; ++tri) {
             const tri_mat_data_t &tri_mat = tri_materials_[tri];
 
@@ -789,7 +806,7 @@ Ray::MeshInstanceHandle Ray::Cpu::Scene::AddMeshInstance(const MeshHandle mesh, 
     }
 
     const MeshInstanceHandle ret = {mi_index.first, mi_index.second};
-    SetMeshInstanceTransform_nolock(ret, xform);
+    SetMeshInstanceTransform_nolock(ret, mi_desc.xform);
 
     return ret;
 }

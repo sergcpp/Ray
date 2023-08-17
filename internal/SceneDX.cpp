@@ -328,7 +328,7 @@ void Ray::Dx::Scene::RebuildHWAccStructures_nolock() {
         auto &new_instance = tlas_instances.back();
         to_dxr_xform(transforms_[instance.tr_index].xform, new_instance.Transform);
         new_instance.InstanceID = meshes_[instance.mesh_index].vert_index / 3;
-        new_instance.InstanceMask = 0xff;
+        new_instance.InstanceMask = instance.ray_visibility;
         new_instance.InstanceContributionToHitGroupIndex = 0;
         new_instance.Flags = 0;
         new_instance.AccelerationStructure = dx_blas.gpu_virtual_address();
