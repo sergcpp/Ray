@@ -6287,8 +6287,8 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
 
         const simd_fvec<S> ior = gather(iors, mat_index * MatDWORDStride);
 
-        simd_fvec<S> eta = safe_div_pos(ext_ior, ior);
-        where(is_backfacing, eta) = safe_div_pos(ior, ext_ior);
+        simd_fvec<S> eta = safe_div_pos(ior, ext_ior);
+        where(is_backfacing, eta) = safe_div_pos(ext_ior, ior);
 
         simd_fvec<S> RR = fresnel_dielectric_cos(dot3(I, surf.N), eta);
         where(ior == 0.0f, RR) = 1.0f;
