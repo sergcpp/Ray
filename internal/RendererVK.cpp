@@ -892,10 +892,11 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         { // shade secondary hits
             DebugMarker _(ctx_.get(), cmd_buf, "ShadeSecondaryHits");
             timestamps_[ctx_->backend_frame].secondary_shade.push_back(ctx_->WriteTimestamp(cmd_buf, true));
-            kernel_ShadeSecondaryHits(cmd_buf, cam.pass_settings, s->env_, indir_args_buf_, 0, prim_hits_buf_,
-                                      secondary_rays_buf_, sc_data, halton_seq_buf_, hi + RAND_DIM_BASE_COUNT,
-                                      s->tex_atlases_, s->bindless_tex_data_, temp_buf0_, prim_rays_buf_,
-                                      shadow_rays_buf_, counters_buf_);
+            const float clamp_val = (bounce == 1) ? cam.pass_settings.clamp_direct : cam.pass_settings.clamp_indirect;
+            kernel_ShadeSecondaryHits(cmd_buf, cam.pass_settings, clamp_val, s->env_, indir_args_buf_, 0,
+                                      prim_hits_buf_, secondary_rays_buf_, sc_data, halton_seq_buf_,
+                                      hi + RAND_DIM_BASE_COUNT, s->tex_atlases_, s->bindless_tex_data_, temp_buf0_,
+                                      prim_rays_buf_, shadow_rays_buf_, counters_buf_);
             timestamps_[ctx_->backend_frame].secondary_shade.push_back(ctx_->WriteTimestamp(cmd_buf, false));
         }
 
@@ -2143,11 +2144,14 @@ void Ray::Vk::Renderer::kernel_ShadePrimaryHits(
                             &uniform_params, sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
 }
 
-void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(
-    CommandBuffer cmd_buf, const pass_settings_t &settings, const environment_t &env, const Buffer &indir_args,
-    const int indir_args_index, const Buffer &hits, const Buffer &rays, const scene_data_t &sc_data,
-    const Buffer &random_seq, const int hi, Span<const TextureAtlas> tex_atlases, const BindlessTexData &bindless_tex,
-    const Texture2D &out_img, const Buffer &out_rays, const Buffer &out_sh_rays, const Buffer &inout_counters) {
+void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(CommandBuffer cmd_buf, const pass_settings_t &settings,
+                                                  float clamp_val, const environment_t &env, const Buffer &indir_args,
+                                                  const int indir_args_index, const Buffer &hits, const Buffer &rays,
+                                                  const scene_data_t &sc_data, const Buffer &random_seq, const int hi,
+                                                  Span<const TextureAtlas> tex_atlases,
+                                                  const BindlessTexData &bindless_tex, const Texture2D &out_img,
+                                                  const Buffer &out_rays, const Buffer &out_sh_rays,
+                                                  const Buffer &inout_counters) {
     const TransitionInfo res_transitions[] = {
         {&indir_args, eResState::IndirectArgument}, {&hits, eResState::ShaderResource},
         {&rays, eResState::ShaderResource},         {&random_seq, eResState::ShaderResource},
@@ -2195,8 +2199,7 @@ void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(
     uniform_params.back_rotation = env.back_map_rotation;
     uniform_params.env_mult_importance = sc_data.env->multiple_importance ? 1 : 0;
 
-    uniform_params.clamp_val =
-        (settings.clamp_indirect != 0.0f) ? settings.clamp_indirect : std::numeric_limits<float>::max();
+    uniform_params.clamp_val = (clamp_val != 0.0f) ? clamp_val : std::numeric_limits<float>::max();
 
     if (use_bindless_) {
         bindings.emplace_back(eBindTarget::Sampler, Types::TEXTURES_SAMPLER_SLOT, bindless_tex.shared_sampler);

@@ -361,8 +361,8 @@ void ShadePrimary(const pass_settings_t &ps, Span<const hit_data_t> inters, Span
                   int *out_secondary_rays_count, shadow_ray_t *out_shadow_rays, int *out_shadow_rays_count, int img_w,
                   float mix_factor, color_rgba_t *out_color, color_rgba_t *out_base_color,
                   color_rgba_t *out_depth_normal);
-void ShadeSecondary(const pass_settings_t &ps, Span<const hit_data_t> inters, Span<const ray_data_t> rays,
-                    const float *random_seq, const scene_data_t &sc, uint32_t node_index,
+void ShadeSecondary(const pass_settings_t &ps, float clamp_val, Span<const hit_data_t> inters,
+                    Span<const ray_data_t> rays, const float *random_seq, const scene_data_t &sc, uint32_t node_index,
                     const Cpu::TexStorageBase *const textures[], ray_data_t *out_secondary_rays,
                     int *out_secondary_rays_count, shadow_ray_t *out_shadow_rays, int *out_shadow_rays_count, int img_w,
                     color_rgba_t *out_color);

@@ -92,13 +92,13 @@ class SIMDPolicy {
                           out_color, out_base_color, out_depth_normal);
     }
 
-    static force_inline void ShadeSecondary(const pass_settings_t &ps, Span<const hit_data_t> inters,
+    static force_inline void ShadeSecondary(const pass_settings_t &ps, float clamp_val, Span<const hit_data_t> inters,
                                             Span<const ray_data_t> rays, const float *random_seq,
                                             const scene_data_t &sc, uint32_t node_index,
                                             const Cpu::TexStorageBase *const textures[], ray_data_t *out_secondary_rays,
                                             int *out_secondary_rays_count, shadow_ray_t *out_shadow_rays,
                                             int *out_shadow_rays_count, int img_w, color_rgba_t *out_color) {
-        Ref::ShadeSecondary(ps, inters, rays, random_seq, sc, node_index, textures, out_secondary_rays,
+        Ref::ShadeSecondary(ps, clamp_val, inters, rays, random_seq, sc, node_index, textures, out_secondary_rays,
                             out_secondary_rays_count, out_shadow_rays, out_shadow_rays_count, img_w, out_color);
     }
 
@@ -519,8 +519,9 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase *scene, RegionC
         shadow_rays_count = 0;
         std::swap(p.primary_rays, p.secondary_rays);
 
+        const float clamp_val = (bounce == 1) ? cam.pass_settings.clamp_direct : cam.pass_settings.clamp_indirect;
         SIMDPolicy::ShadeSecondary(
-            cam.pass_settings, Span<typename SIMDPolicy::HitDataType>{p.intersections.data(), rays_count},
+            cam.pass_settings, clamp_val, Span<typename SIMDPolicy::HitDataType>{p.intersections.data(), rays_count},
             Span<typename SIMDPolicy::RayDataType>{p.primary_rays.data(), rays_count},
             &region.halton_seq[hi + RAND_DIM_BASE_COUNT], sc_data, macro_tree_root, s->tex_storages_,
             &p.secondary_rays[0], &secondary_rays_count, &p.shadow_rays[0], &shadow_rays_count, w_, temp_buf_.data());

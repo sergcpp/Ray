@@ -175,12 +175,12 @@ class Renderer : public RendererBase {
                                  const Texture2D &out_img, const Buffer &out_rays, const Buffer &out_sh_rays,
                                  const Buffer &inout_counters, const Texture2D &out_base_color,
                                  const Texture2D &out_depth_normals);
-    void kernel_ShadeSecondaryHits(CommandBuffer cmd_buf, const pass_settings_t &settings, const environment_t &env,
-                                   const Buffer &indir_args, int indir_args_index, const Buffer &hits,
-                                   const Buffer &rays, const scene_data_t &sc_data, const Buffer &random_seq, int hi,
-                                   Span<const TextureAtlas> tex_atlases, const BindlessTexData &bindless_tex,
-                                   const Texture2D &out_img, const Buffer &out_rays, const Buffer &out_sh_rays,
-                                   const Buffer &inout_counters);
+    void kernel_ShadeSecondaryHits(CommandBuffer cmd_buf, const pass_settings_t &settings, float clamp_val,
+                                   const environment_t &env, const Buffer &indir_args, int indir_args_index,
+                                   const Buffer &hits, const Buffer &rays, const scene_data_t &sc_data,
+                                   const Buffer &random_seq, int hi, Span<const TextureAtlas> tex_atlases,
+                                   const BindlessTexData &bindless_tex, const Texture2D &out_img,
+                                   const Buffer &out_rays, const Buffer &out_sh_rays, const Buffer &inout_counters);
     void kernel_PrepareIndirArgs(CommandBuffer cmd_buf, const Buffer &inout_counters, const Buffer &out_indir_args);
     void kernel_MixIncremental(CommandBuffer cmd_buf, float main_mix_factor, float aux_mix_factor, const rect_t &rect,
                                int iteration, const Texture2D &temp_img, const Texture2D &temp_base_color,

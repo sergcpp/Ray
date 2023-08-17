@@ -4523,16 +4523,17 @@ void Ray::Ref::ShadePrimary(const pass_settings_t &ps, Span<const hit_data_t> in
     }
 }
 
-void Ray::Ref::ShadeSecondary(const pass_settings_t &ps, Span<const hit_data_t> inters, Span<const ray_data_t> rays,
-                              const float *random_seq, const scene_data_t &sc, uint32_t node_index,
-                              const Cpu::TexStorageBase *const textures[], ray_data_t *out_secondary_rays,
-                              int *out_secondary_rays_count, shadow_ray_t *out_shadow_rays, int *out_shadow_rays_count,
-                              int img_w, color_rgba_t *out_color) {
+void Ray::Ref::ShadeSecondary(const pass_settings_t &ps, float clamp_val, Span<const hit_data_t> inters,
+                              Span<const ray_data_t> rays, const float *random_seq, const scene_data_t &sc,
+                              uint32_t node_index, const Cpu::TexStorageBase *const textures[],
+                              ray_data_t *out_secondary_rays, int *out_secondary_rays_count,
+                              shadow_ray_t *out_shadow_rays, int *out_shadow_rays_count, int img_w,
+                              color_rgba_t *out_color) {
     auto clamp_indirect = simd_fvec4{std::numeric_limits<float>::max()};
-    if (ps.clamp_indirect != 0.0f) {
-        clamp_indirect.set<0>(ps.clamp_indirect);
-        clamp_indirect.set<1>(ps.clamp_indirect);
-        clamp_indirect.set<2>(ps.clamp_indirect);
+    if (clamp_val != 0.0f) {
+        clamp_indirect.set<0>(clamp_val);
+        clamp_indirect.set<1>(clamp_val);
+        clamp_indirect.set<2>(clamp_val);
     }
 
     for (int i = 0; i < int(inters.size()); ++i) {
