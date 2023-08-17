@@ -5455,6 +5455,7 @@ void Ray::NS::Evaluate_EnvColor(const ray_data_t<S> &ray, const simd_ivec<S> &ma
         if (env_map != 0xffffffff) {
             SampleLatlong_RGBE(tex_storage, env_map, ray.d, env_map_rotation, rand, (mask & env_map_mask), env_col);
         }
+#if USE_NEE
         if (env.qtree_levels) {
             const auto *qtree_mips = reinterpret_cast<const simd_fvec4 *const *>(env.qtree_mips);
 
@@ -5470,6 +5471,7 @@ void Ray::NS::Evaluate_EnvColor(const ray_data_t<S> &ray, const simd_ivec<S> &ma
             const simd_fvec<S> mis_weight = power_heuristic(bsdf_pdf, light_pdf);
             UNROLLED_FOR(i, 3, { env_col[i] *= mis_weight; })
         }
+#endif
     }
     UNROLLED_FOR(i, 3, { where(env_map_mask, env_col[i]) *= env.env_col[i]; })
 

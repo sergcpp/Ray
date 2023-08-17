@@ -1061,6 +1061,7 @@ vec3 Evaluate_EnvColor(ray_data_t ray, const vec2 tex_rand) {
 #endif
     }
 
+#if USE_NEE
     if (g_params.env_qtree_levels > 0) {
         const float light_pdf = Evaluate_EnvQTree(env_map_rotation, g_env_qtree, g_params.env_qtree_levels, rd);
         const float bsdf_pdf = ray.pdf;
@@ -1074,6 +1075,7 @@ vec3 Evaluate_EnvColor(ray_data_t ray, const vec2 tex_rand) {
         const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
         env_col *= mis_weight;
     }
+#endif
 
     return env_col;
 }

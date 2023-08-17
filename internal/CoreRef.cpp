@@ -3613,6 +3613,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_EnvColor(const ray_data_t &ray, const en
         env_col = SampleLatlong_RGBE(tex_storage, env_map, I, env_map_rotation, rand);
     }
 
+#if USE_NEE
     if (env.qtree_levels) {
         const auto *qtree_mips = reinterpret_cast<const simd_fvec4 *const *>(env.qtree_mips);
 
@@ -3628,6 +3629,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_EnvColor(const ray_data_t &ray, const en
         const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
         env_col *= mis_weight;
     }
+#endif
 
     env_col *= (ray.depth & 0x00ffffff) ? simd_fvec4{env.env_col[0], env.env_col[1], env.env_col[2], 1.0f}
                                         : simd_fvec4{env.back_col[0], env.back_col[1], env.back_col[2], 1.0f};
