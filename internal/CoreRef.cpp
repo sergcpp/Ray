@@ -2943,8 +2943,16 @@ void Ray::Ref::IntersectScene(Span<ray_data_t> rays, const int min_transp_depth,
             // resolve mix material
             while (mat->type == eShadingNode::Mix) {
                 float mix_val = mat->strength;
-                if (mat->textures[BASE_TEXTURE] != 0xffffffff) {
-                    mix_val *= SampleBilinear(textures, mat->textures[BASE_TEXTURE], uvs, 0, tex_rand).get<0>();
+                const uint32_t base_texture = mat->textures[BASE_TEXTURE];
+                if (base_texture != 0xffffffff) {
+                    simd_fvec4 tex_color = SampleBilinear(textures, base_texture, uvs, 0, tex_rand);
+                    if (base_texture & TEX_YCOCG_BIT) {
+                        tex_color = YCoCg_to_RGB(tex_color);
+                    }
+                    if (base_texture & TEX_SRGB_BIT) {
+                        tex_color = srgb_to_rgb(tex_color);
+                    }
+                    mix_val *= tex_color.get<0>();
                 }
 
                 if (trans_r > mix_val) {
@@ -3062,8 +3070,16 @@ Ray::Ref::simd_fvec4 Ray::Ref::IntersectScene(const shadow_ray_t &r, const int m
             // resolve mix material
             if (mat->type == eShadingNode::Mix) {
                 float mix_val = mat->strength;
-                if (mat->textures[BASE_TEXTURE] != 0xffffffff) {
-                    mix_val *= SampleBilinear(textures, mat->textures[BASE_TEXTURE], sh_uvs, 0, tex_rand).get<0>();
+                const uint32_t base_texture = mat->textures[BASE_TEXTURE];
+                if (base_texture != 0xffffffff) {
+                    simd_fvec4 tex_color = SampleBilinear(textures, base_texture, sh_uvs, 0, tex_rand);
+                    if (base_texture & TEX_YCOCG_BIT) {
+                        tex_color = YCoCg_to_RGB(tex_color);
+                    }
+                    if (base_texture & TEX_SRGB_BIT) {
+                        tex_color = srgb_to_rgb(tex_color);
+                    }
+                    mix_val *= tex_color.get<0>();
                 }
 
                 stack[stack_size++] = {mat->textures[MIX_MAT1], weight * (1.0f - mix_val)};
@@ -4204,8 +4220,16 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
     // resolve mix material
     while (mat->type == eShadingNode::Mix) {
         float mix_val = mat->strength;
-        if (mat->textures[BASE_TEXTURE] != 0xffffffff) {
-            mix_val *= SampleBilinear(textures, mat->textures[BASE_TEXTURE], surf.uvs, 0, tex_rand).get<0>();
+        const uint32_t base_texture = mat->textures[BASE_TEXTURE];
+        if (base_texture != 0xffffffff) {
+            simd_fvec4 tex_color = SampleBilinear(textures, base_texture, surf.uvs, 0, tex_rand);
+            if (base_texture & TEX_YCOCG_BIT) {
+                tex_color = YCoCg_to_RGB(tex_color);
+            }
+            if (base_texture & TEX_SRGB_BIT) {
+                tex_color = srgb_to_rgb(tex_color);
+            }
+            mix_val *= tex_color.get<0>();
         }
 
         const float eta = is_backfacing ? safe_div_pos(ext_ior, mat->ior) : safe_div_pos(mat->ior, ext_ior);

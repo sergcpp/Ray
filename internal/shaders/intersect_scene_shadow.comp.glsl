@@ -250,7 +250,7 @@ vec3 IntersectSceneShadow(shadow_ray_t r) {
             if (mat.type == MixNode) {
                 float mix_val = mat.tangent_rotation_or_strength;
                 if (mat.textures[BASE_TEXTURE] != 0xffffffff) {
-                    mix_val *= SampleBilinear(mat.textures[BASE_TEXTURE], sh_uvs, 0, tex_rand).r;
+                    mix_val *= SampleBilinear(mat.textures[BASE_TEXTURE], sh_uvs, 0, tex_rand, true /* YCoCg */, true /* SRGB */).r;
                 }
 
                 g_stack[gl_LocalInvocationIndex][2 * stack_size + 0] = mat.textures[MIX_MAT1];
@@ -341,7 +341,7 @@ vec3 IntersectSceneShadow(shadow_ray_t r) {
                 if (mat.type == MixNode) {
                     float mix_val = mat.tangent_rotation_or_strength;
                     if (mat.textures[BASE_TEXTURE] != 0xffffffff) {
-                        mix_val *= SampleBilinear(mat.textures[BASE_TEXTURE], sh_uvs, 0, tex_rand).r;
+                        mix_val *= SampleBilinear(mat.textures[BASE_TEXTURE], sh_uvs, 0, tex_rand, true /* YCoCg */, true /* SRGB */).r;
                     }
 
                     g_stack[gl_LocalInvocationIndex][2 * stack_size + 0] = mat.textures[MIX_MAT1];

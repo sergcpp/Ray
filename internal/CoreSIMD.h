@@ -4594,9 +4594,16 @@ void Ray::NS::IntersectScene(ray_data_t<S> &r, const int min_transp_depth, const
                     while (mat->type == eShadingNode::Mix) {
                         simd_fvec<S> _mix_val = 1.0f;
 
-                        if (mat->textures[BASE_TEXTURE] != 0xffffffff) {
+                        const uint32_t first_t = mat->textures[BASE_TEXTURE];
+                        if (first_t != 0xffffffff) {
                             simd_fvec<S> mix[4] = {};
-                            SampleBilinear(textures, mat->textures[BASE_TEXTURE], uvs, {0}, tex_rand, same_mi, mix);
+                            SampleBilinear(textures, first_t, uvs, {0}, tex_rand, same_mi, mix);
+                            if (first_t & TEX_YCOCG_BIT) {
+                                YCoCg_to_RGB(mix, mix);
+                            }
+                            if (first_t & TEX_SRGB_BIT) {
+                                srgb_to_rgb(mix, mix);
+                            }
                             _mix_val *= mix[0];
                         }
                         _mix_val *= mat->strength;
@@ -4836,10 +4843,16 @@ void Ray::NS::IntersectScene(const shadow_ray_t<S> &r, const int max_transp_dept
                         // resolve mix material
                         if (mat->type == eShadingNode::Mix) {
                             simd_fvec<S> mix_val = mat->strength;
-                            if (mat->textures[BASE_TEXTURE] != 0xffffffff) {
+                            const uint32_t first_t = mat->textures[BASE_TEXTURE];
+                            if (first_t != 0xffffffff) {
                                 simd_fvec<S> mix[4] = {};
-                                SampleBilinear(textures, mat->textures[BASE_TEXTURE], sh_uvs, {0}, tex_rand, same_mi,
-                                               mix);
+                                SampleBilinear(textures, first_t, sh_uvs, {0}, tex_rand, same_mi, mix);
+                                if (first_t & TEX_YCOCG_BIT) {
+                                    YCoCg_to_RGB(mix, mix);
+                                }
+                                if (first_t & TEX_SRGB_BIT) {
+                                    srgb_to_rgb(mix, mix);
+                                }
                                 mix_val *= mix[0];
                             }
 
@@ -6292,6 +6305,12 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                 simd_fvec<S> tex_color[4] = {};
                 SampleBilinear(textures, first_t, surf.uvs, simd_ivec<S>(base_lod), tex_rand, ray_queue[index],
                                tex_color);
+                if (first_t & TEX_YCOCG_BIT) {
+                    YCoCg_to_RGB(tex_color, tex_color);
+                }
+                if (first_t & TEX_SRGB_BIT) {
+                    srgb_to_rgb(tex_color, tex_color);
+                }
 
                 where(ray_queue[index], mix_val) *= tex_color[0];
 

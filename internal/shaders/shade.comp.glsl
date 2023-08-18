@@ -1731,7 +1731,7 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
     while (mat.type == MixNode) {
         float mix_val = mat.tangent_rotation_or_strength;
         if (mat.textures[BASE_TEXTURE] != 0xffffffff) {
-            mix_val *= SampleBilinear(mat.textures[BASE_TEXTURE], surf.uvs, 0, tex_rand).r;
+            mix_val *= SampleBilinear(mat.textures[BASE_TEXTURE], surf.uvs, 0, tex_rand, true /* YCoCg */, true /* SRGB */).r;
         }
 
         const float eta = is_backfacing ? (ext_ior / mat.ior) : (mat.ior / ext_ior);

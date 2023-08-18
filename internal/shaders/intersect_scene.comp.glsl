@@ -272,7 +272,7 @@ void main() {
         while (mat.type == MixNode) {
             float mix_val = mat.tangent_rotation_or_strength;
             if (mat.textures[BASE_TEXTURE] != 0xffffffff) {
-                mix_val *= SampleBilinear(mat.textures[BASE_TEXTURE], uvs, 0, tex_rand).r;
+                mix_val *= SampleBilinear(mat.textures[BASE_TEXTURE], uvs, 0, tex_rand, true /* YCoCg */, true /* SRGB */).r;
             }
 
             if (trans_r > mix_val) {
