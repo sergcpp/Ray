@@ -3899,8 +3899,8 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_PrincipledNode(const light_sample_t &ls,
                                                        const diff_params_t &diff, const spec_params_t &spec,
                                                        const clearcoat_params_t &coat,
                                                        const transmission_params_t &trans, const float metallic,
-                                                       const float N_dot_L, const float mix_weight,
-                                                       shadow_ray_t &sh_r) {
+                                                       const float transmission, const float N_dot_L,
+                                                       const float mix_weight, shadow_ray_t &sh_r) {
     const simd_fvec4 I = make_fvec3(ray.d);
 
     simd_fvec4 lcol = 0.0f;
@@ -3909,8 +3909,8 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_PrincipledNode(const light_sample_t &ls,
     if (lobe_weights.diffuse > 0.0f && N_dot_L > 0.0f) {
         simd_fvec4 diff_col =
             Evaluate_PrincipledDiffuse_BSDF(-I, surf.N, ls.L, diff.roughness, diff.base_color, diff.sheen_color, false);
-        bsdf_pdf += lobe_weights.diffuse * diff_col[3];
-        diff_col *= (1.0f - metallic);
+        bsdf_pdf += lobe_weights.diffuse * diff_col.get<3>();
+        diff_col *= (1.0f - metallic) * (1.0f - transmission);
 
         lcol += ls.col * N_dot_L * diff_col / (PI * ls.pdf);
     }
@@ -3934,7 +3934,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_PrincipledNode(const light_sample_t &ls,
     if (lobe_weights.specular > 0.0f && alpha_x * alpha_y >= 1e-7f && N_dot_L > 0.0f) {
         const simd_fvec4 spec_col = Evaluate_GGXSpecular_BSDF(view_dir_ts, sampled_normal_ts, light_dir_ts, alpha_x,
                                                               alpha_y, spec.ior, spec.F0, spec.tmp_col);
-        bsdf_pdf += lobe_weights.specular * spec_col[3];
+        bsdf_pdf += lobe_weights.specular * spec_col.get<3>();
 
         lcol += ls.col * spec_col / ls.pdf;
     }
@@ -3944,7 +3944,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_PrincipledNode(const light_sample_t &ls,
     if (lobe_weights.clearcoat > 0.0f && sqr(clearcoat_roughness2) >= 1e-7f && N_dot_L > 0.0f) {
         const simd_fvec4 clearcoat_col = Evaluate_PrincipledClearcoat_BSDF(view_dir_ts, sampled_normal_ts, light_dir_ts,
                                                                            clearcoat_roughness2, coat.ior, coat.F0);
-        bsdf_pdf += lobe_weights.clearcoat * clearcoat_col[3];
+        bsdf_pdf += lobe_weights.clearcoat * clearcoat_col.get<3>();
 
         lcol += 0.25f * ls.col * clearcoat_col / ls.pdf;
     }
@@ -3954,7 +3954,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_PrincipledNode(const light_sample_t &ls,
             const simd_fvec4 spec_col =
                 Evaluate_GGXSpecular_BSDF(view_dir_ts, sampled_normal_ts, light_dir_ts, roughness2, roughness2,
                                           1.0f /* ior */, 0.0f /* F0 */, simd_fvec4{1.0f});
-            bsdf_pdf += lobe_weights.refraction * trans.fresnel * spec_col[3];
+            bsdf_pdf += lobe_weights.refraction * trans.fresnel * spec_col.get<3>();
 
             lcol += ls.col * spec_col * (trans.fresnel / ls.pdf);
         }
@@ -3964,7 +3964,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_PrincipledNode(const light_sample_t &ls,
         if (trans.fresnel != 1.0f && sqr(transmission_roughness2) >= 1e-7f && N_dot_L < 0.0f) {
             const simd_fvec4 refr_col = Evaluate_GGXRefraction_BSDF(
                 view_dir_ts, sampled_normal_ts, light_dir_ts, transmission_roughness2, trans.eta, diff.base_color);
-            bsdf_pdf += lobe_weights.refraction * (1.0f - trans.fresnel) * refr_col[3];
+            bsdf_pdf += lobe_weights.refraction * (1.0f - trans.fresnel) * refr_col.get<3>();
 
             lcol += ls.col * refr_col * ((1.0f - trans.fresnel) / ls.pdf);
         }
@@ -3990,8 +3990,9 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_PrincipledNode(const light_sample_t &ls,
 void Ray::Ref::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t &ray, const surface_t &surf,
                                      const lobe_weights_t &lobe_weights, const diff_params_t &diff,
                                      const spec_params_t &spec, const clearcoat_params_t &coat,
-                                     const transmission_params_t &trans, const float metallic, const float rand_u,
-                                     const float rand_v, float mix_rand, const float mix_weight, ray_data_t &new_ray) {
+                                     const transmission_params_t &trans, const float metallic, const float transmission,
+                                     const float rand_u, const float rand_v, float mix_rand, const float mix_weight,
+                                     ray_data_t &new_ray) {
     const simd_fvec4 I = make_fvec3(ray.d);
 
     const int diff_depth = ray.depth & 0x000000ff;
@@ -4006,18 +4007,19 @@ void Ray::Ref::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t
         //
         if (diff_depth < ps.max_diff_depth && total_depth < ps.max_total_depth) {
             simd_fvec4 V;
-            simd_fvec4 diff_col = Sample_PrincipledDiffuse_BSDF(
-                surf.T, surf.B, surf.N, I, diff.roughness, diff.base_color, diff.sheen_color, false, rand_u, rand_v, V);
-            const float pdf = diff_col[3];
+            simd_fvec4 F = Sample_PrincipledDiffuse_BSDF(surf.T, surf.B, surf.N, I, diff.roughness, diff.base_color,
+                                                         diff.sheen_color, false, rand_u, rand_v, V);
+            const float pdf = F.get<3>() * lobe_weights.diffuse;
 
-            diff_col *= (1.0f - metallic);
+            F *= (1.0f - metallic) * (1.0f - transmission);
 
             new_ray.depth = ray.depth + 0x00000001;
 
             memcpy(&new_ray.o[0], value_ptr(offset_ray(surf.P, surf.plane_N)), 3 * sizeof(float));
             memcpy(&new_ray.d[0], value_ptr(V), 3 * sizeof(float));
 
-            UNROLLED_FOR(i, 3, { new_ray.c[i] = ray.c[i] * diff_col.get<i>() * mix_weight / lobe_weights.diffuse; })
+            UNROLLED_FOR(i, 3,
+                         { new_ray.c[i] = ray.c[i] * F.get<i>() * safe_div_pos(mix_weight, lobe_weights.diffuse); })
             new_ray.pdf = pdf;
         }
     } else if (mix_rand < lobe_weights.diffuse + lobe_weights.specular) {
@@ -4028,12 +4030,12 @@ void Ray::Ref::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t
             simd_fvec4 V;
             simd_fvec4 F = Sample_GGXSpecular_BSDF(surf.T, surf.B, surf.N, I, spec.roughness, spec.anisotropy, spec.ior,
                                                    spec.F0, spec.tmp_col, rand_u, rand_v, V);
-            F.set<3>(F.get<3>() * lobe_weights.specular);
+            const float pdf = F.get<3>() * lobe_weights.specular;
 
             new_ray.depth = ray.depth + 0x00000100;
 
-            UNROLLED_FOR(i, 3, { new_ray.c[i] = ray.c[i] * F.get<i>() * safe_div_pos(mix_weight, F.get<3>()); })
-            new_ray.pdf = F.get<3>();
+            UNROLLED_FOR(i, 3, { new_ray.c[i] = ray.c[i] * F.get<i>() * safe_div_pos(mix_weight, pdf); })
+            new_ray.pdf = pdf;
 
             memcpy(&new_ray.o[0], value_ptr(offset_ray(surf.P, surf.plane_N)), 3 * sizeof(float));
             memcpy(&new_ray.d[0], value_ptr(V), 3 * sizeof(float));
@@ -4046,12 +4048,12 @@ void Ray::Ref::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t
             simd_fvec4 V;
             simd_fvec4 F = Sample_PrincipledClearcoat_BSDF(surf.T, surf.B, surf.N, I, sqr(coat.roughness), coat.ior,
                                                            coat.F0, rand_u, rand_v, V);
-            F.set<3>(F.get<3>() * lobe_weights.clearcoat);
+            const float pdf = F.get<3>() * lobe_weights.clearcoat;
 
             new_ray.depth = ray.depth + 0x00000100;
 
-            UNROLLED_FOR(i, 3, { new_ray.c[i] = 0.25f * ray.c[i] * F.get<i>() * safe_div_pos(mix_weight, F.get<3>()); })
-            new_ray.pdf = F[3];
+            UNROLLED_FOR(i, 3, { new_ray.c[i] = 0.25f * ray.c[i] * F.get<i>() * safe_div_pos(mix_weight, pdf); })
+            new_ray.pdf = pdf;
 
             memcpy(&new_ray.o[0], value_ptr(offset_ray(surf.P, surf.plane_N)), 3 * sizeof(float));
             memcpy(&new_ray.d[0], value_ptr(V), 3 * sizeof(float));
@@ -4062,13 +4064,11 @@ void Ray::Ref::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t
         //
         // Refraction/reflection lobes
         //
+        mix_rand -= lobe_weights.diffuse + lobe_weights.specular + lobe_weights.clearcoat;
+        mix_rand = safe_div_pos(mix_rand, lobe_weights.refraction);
         if (((mix_rand >= trans.fresnel && refr_depth < ps.max_refr_depth) ||
              (mix_rand < trans.fresnel && spec_depth < ps.max_spec_depth)) &&
             total_depth < ps.max_total_depth) {
-            mix_rand -= lobe_weights.diffuse + lobe_weights.specular + lobe_weights.clearcoat;
-            mix_rand = safe_div_pos(mix_rand, lobe_weights.refraction);
-
-            //////////////////
 
             simd_fvec4 F, V;
             if (mix_rand < trans.fresnel) {
@@ -4093,10 +4093,10 @@ void Ray::Ref::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t
                 }
             }
 
-            F.set<3>(F.get<3>() * lobe_weights.refraction);
+            const float pdf = F.get<3>() * lobe_weights.refraction;
 
-            UNROLLED_FOR(i, 3, { new_ray.c[i] = ray.c[i] * F.get<i>() * safe_div_pos(mix_weight, F.get<3>()); })
-            new_ray.pdf = F.get<3>();
+            UNROLLED_FOR(i, 3, { new_ray.c[i] = ray.c[i] * F.get<i>() * safe_div_pos(mix_weight, pdf); })
+            new_ray.pdf = pdf;
 
             memcpy(&new_ray.d[0], value_ptr(V), 3 * sizeof(float));
         }
@@ -4448,12 +4448,12 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
 
 #if USE_NEE
         if (ls.pdf > 0.0f) {
-            col += Evaluate_PrincipledNode(ls, ray, surf, lobe_weights, diff, spec, coat, trans, metallic, N_dot_L,
-                                           mix_weight, sh_r);
+            col += Evaluate_PrincipledNode(ls, ray, surf, lobe_weights, diff, spec, coat, trans, metallic, transmission,
+                                           N_dot_L, mix_weight, sh_r);
         }
 #endif
-        Sample_PrincipledNode(ps, ray, surf, lobe_weights, diff, spec, coat, trans, metallic, rand_u, rand_v, mix_rand,
-                              mix_weight, new_ray);
+        Sample_PrincipledNode(ps, ray, surf, lobe_weights, diff, spec, coat, trans, metallic, transmission, rand_u,
+                              rand_v, mix_rand, mix_weight, new_ray);
     } /*else if (mat->type == TransparentNode) {
         assert(false);
     }*/

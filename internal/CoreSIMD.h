@@ -453,16 +453,16 @@ simd_ivec<S> Evaluate_PrincipledNode(const light_sample_t<S> &ls, const ray_data
                                      const surface_t<S> &surf, const lobe_weights_t<S> &lobe_weights,
                                      const diff_params_t<S> &diff, const spec_params_t<S> &spec,
                                      const clearcoat_params_t<S> &coat, const transmission_params_t<S> &trans,
-                                     const simd_fvec<S> &metallic, const simd_fvec<S> &N_dot_L,
+                                     const simd_fvec<S> &metallic, float transmission, const simd_fvec<S> &N_dot_L,
                                      const simd_fvec<S> &mix_weight, simd_fvec<S> out_col[3], shadow_ray_t<S> &sh_r);
 template <int S>
 void Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t<S> &ray, const simd_ivec<S> &mask,
                            const surface_t<S> &surf, const lobe_weights_t<S> &lobe_weights,
                            const diff_params_t<S> &diff, const spec_params_t<S> &spec,
                            const clearcoat_params_t<S> &coat, const transmission_params_t<S> &trans,
-                           const simd_fvec<S> &metallic, const simd_fvec<S> &rand_u, const simd_fvec<S> &rand_v,
-                           simd_fvec<S> mix_rand, const simd_fvec<S> &mix_weight, simd_ivec<S> &secondary_mask,
-                           ray_data_t<S> &new_ray);
+                           const simd_fvec<S> &metallic, float transmission, const simd_fvec<S> &rand_u,
+                           const simd_fvec<S> &rand_v, simd_fvec<S> mix_rand, const simd_fvec<S> &mix_weight,
+                           simd_ivec<S> &secondary_mask, ray_data_t<S> &new_ray);
 
 // Shade
 template <int S>
@@ -5792,11 +5792,13 @@ void Ray::NS::Sample_RefractiveNode(const ray_data_t<S> &ray, const simd_ivec<S>
 }
 
 template <int S>
-Ray::NS::simd_ivec<S> Ray::NS::Evaluate_PrincipledNode(
-    const light_sample_t<S> &ls, const ray_data_t<S> &ray, const simd_ivec<S> &mask, const surface_t<S> &surf,
-    const lobe_weights_t<S> &lobe_weights, const diff_params_t<S> &diff, const spec_params_t<S> &spec,
-    const clearcoat_params_t<S> &coat, const transmission_params_t<S> &trans, const simd_fvec<S> &metallic,
-    const simd_fvec<S> &N_dot_L, const simd_fvec<S> &mix_weight, simd_fvec<S> out_col[3], shadow_ray_t<S> &sh_r) {
+Ray::NS::simd_ivec<S>
+Ray::NS::Evaluate_PrincipledNode(const light_sample_t<S> &ls, const ray_data_t<S> &ray, const simd_ivec<S> &mask,
+                                 const surface_t<S> &surf, const lobe_weights_t<S> &lobe_weights,
+                                 const diff_params_t<S> &diff, const spec_params_t<S> &spec,
+                                 const clearcoat_params_t<S> &coat, const transmission_params_t<S> &trans,
+                                 const simd_fvec<S> &metallic, const float transmission, const simd_fvec<S> &N_dot_L,
+                                 const simd_fvec<S> &mix_weight, simd_fvec<S> out_col[3], shadow_ray_t<S> &sh_r) {
     const simd_fvec<S> nI[3] = {-ray.d[0], -ray.d[1], -ray.d[2]};
 
     const simd_ivec<S> _is_backfacing = simd_cast(N_dot_L < 0.0f);
@@ -5813,7 +5815,7 @@ Ray::NS::simd_ivec<S> Ray::NS::Evaluate_PrincipledNode(
 
         where(eval_diff_lobe, bsdf_pdf) += lobe_weights.diffuse * diff_col[3];
         UNROLLED_FOR(i, 3, {
-            diff_col[i] *= (1.0f - metallic);
+            diff_col[i] *= (1.0f - metallic) * (1.0f - transmission);
             where(eval_diff_lobe, lcol[i]) += safe_div_pos(ls.col[i] * N_dot_L * diff_col[i], PI * ls.pdf);
         })
     }
@@ -5923,7 +5925,7 @@ void Ray::NS::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t<
                                     const surface_t<S> &surf, const lobe_weights_t<S> &lobe_weights,
                                     const diff_params_t<S> &diff, const spec_params_t<S> &spec,
                                     const clearcoat_params_t<S> &coat, const transmission_params_t<S> &trans,
-                                    const simd_fvec<S> &metallic, const simd_fvec<S> &rand_u,
+                                    const simd_fvec<S> &metallic, const float transmission, const simd_fvec<S> &rand_u,
                                     const simd_fvec<S> &rand_v, simd_fvec<S> mix_rand, const simd_fvec<S> &mix_weight,
                                     simd_ivec<S> &secondary_mask, ray_data_t<S> &new_ray) {
     const simd_ivec<S> diff_depth = ray.depth & 0x000000ff;
@@ -5935,11 +5937,12 @@ void Ray::NS::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t<
     const simd_ivec<S> sample_diff_lobe = (diff_depth < ps.max_diff_depth) & (total_depth < ps.max_total_depth) &
                                           simd_cast(mix_rand < lobe_weights.diffuse) & mask;
     if (sample_diff_lobe.not_all_zeros()) {
-        simd_fvec<S> V[3], diff_col[4];
+        simd_fvec<S> V[3], F[4];
         Sample_PrincipledDiffuse_BSDF(surf.T, surf.B, surf.N, ray.d, diff.roughness, diff.base_color, diff.sheen_color,
-                                      false, rand_u, rand_v, V, diff_col);
+                                      false, rand_u, rand_v, V, F);
+        F[3] *= lobe_weights.diffuse;
 
-        UNROLLED_FOR(i, 3, { diff_col[i] *= (1.0f - metallic); })
+        UNROLLED_FOR(i, 3, { F[i] *= (1.0f - metallic) * (1.0f - transmission); })
 
         simd_fvec<S> new_p[3];
         offset_ray(surf.P, surf.plane_N, new_p);
@@ -5949,10 +5952,9 @@ void Ray::NS::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t<
         UNROLLED_FOR(i, 3, {
             where(sample_diff_lobe, new_ray.o[i]) = new_p[i];
             where(sample_diff_lobe, new_ray.d[i]) = V[i];
-            where(sample_diff_lobe, new_ray.c[i]) =
-                safe_div_pos(ray.c[i] * diff_col[i] * mix_weight, lobe_weights.diffuse);
+            where(sample_diff_lobe, new_ray.c[i]) = safe_div_pos(ray.c[i] * F[i] * mix_weight, lobe_weights.diffuse);
         })
-        where(sample_diff_lobe, new_ray.pdf) = diff_col[3];
+        where(sample_diff_lobe, new_ray.pdf) = F[3];
 
         assert((secondary_mask & sample_diff_lobe).all_zeros());
         secondary_mask |= sample_diff_lobe;
@@ -6010,15 +6012,16 @@ void Ray::NS::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t<
         secondary_mask |= sample_coat_lobe;
     }
 
-    const simd_ivec<S> sample_trans_lobe =
+    simd_ivec<S> sample_trans_lobe =
         simd_cast(mix_rand >= lobe_weights.diffuse + lobe_weights.specular + lobe_weights.clearcoat) &
-        ((simd_cast(mix_rand >= trans.fresnel) & (refr_depth < ps.max_refr_depth)) |
-         (simd_cast(mix_rand < trans.fresnel) & (spec_depth < ps.max_spec_depth))) &
         (total_depth < ps.max_total_depth) & mask;
-    if (sample_trans_lobe.not_all_zeros()) {
-        where(sample_trans_lobe, mix_rand) -= lobe_weights.diffuse + lobe_weights.specular + lobe_weights.clearcoat;
-        where(sample_trans_lobe, mix_rand) = safe_div_pos(mix_rand, lobe_weights.refraction);
 
+    mix_rand -= lobe_weights.diffuse + lobe_weights.specular + lobe_weights.clearcoat;
+    mix_rand = safe_div_pos(mix_rand, lobe_weights.refraction);
+
+    sample_trans_lobe &= ((simd_cast(mix_rand >= trans.fresnel) & (refr_depth < ps.max_refr_depth)) |
+                          (simd_cast(mix_rand < trans.fresnel) & (spec_depth < ps.max_spec_depth)));
+    if (sample_trans_lobe.not_all_zeros()) {
         simd_fvec<S> F[4] = {}, V[3] = {};
 
         const simd_ivec<S> sample_trans_spec_lobe = simd_cast(mix_rand < trans.fresnel) & sample_trans_lobe;
@@ -6730,12 +6733,13 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                 const simd_ivec<S> eval_light = simd_cast(ls.pdf > 0.0f) & ray_queue[index];
                 if (eval_light.not_all_zeros()) {
                     assert((shadow_mask & eval_light).all_zeros());
-                    shadow_mask |= Evaluate_PrincipledNode(ls, ray, eval_light, surf, lobe_weights, diff, spec, coat,
-                                                           trans, metallic, N_dot_L, mix_weight, col, sh_r);
+                    shadow_mask |=
+                        Evaluate_PrincipledNode(ls, ray, eval_light, surf, lobe_weights, diff, spec, coat, trans,
+                                                metallic, transmission, N_dot_L, mix_weight, col, sh_r);
                 }
 #endif
                 Sample_PrincipledNode(ps, ray, ray_queue[index], surf, lobe_weights, diff, spec, coat, trans, metallic,
-                                      rand_u, rand_v, mix_rand, mix_weight, secondary_mask, new_ray);
+                                      transmission, rand_u, rand_v, mix_rand, mix_weight, secondary_mask, new_ray);
             } /*else if (mat->type == TransparentNode) {
                 assert(false);
             }*/

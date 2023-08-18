@@ -344,12 +344,13 @@ struct lobe_weights_t {
 simd_fvec4 Evaluate_PrincipledNode(const light_sample_t &ls, const ray_data_t &ray, const surface_t &surf,
                                    const lobe_weights_t &lobe_weights, const diff_params_t &diff,
                                    const spec_params_t &spec, const clearcoat_params_t &coat,
-                                   const transmission_params_t &trans, float metallic, float N_dot_L, float mix_weight,
-                                   shadow_ray_t &sh_r);
+                                   const transmission_params_t &trans, float metallic, float transmission,
+                                   float N_dot_L, float mix_weight, shadow_ray_t &sh_r);
 void Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t &ray, const surface_t &surf,
                            const lobe_weights_t &lobe_weights, const diff_params_t &diff, const spec_params_t &spec,
                            const clearcoat_params_t &coat, const transmission_params_t &trans, float metallic,
-                           float rand_u, float rand_v, float mix_rand, float mix_weight, ray_data_t &new_ray);
+                           float transmission, float rand_u, float rand_v, float mix_rand, float mix_weight,
+                           ray_data_t &new_ray);
 
 // Shade
 color_rgba_t ShadeSurface(const pass_settings_t &ps, const hit_data_t &inter, const ray_data_t &ray,
