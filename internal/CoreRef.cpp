@@ -4025,7 +4025,7 @@ void Ray::Ref::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t
             simd_fvec4 V;
             simd_fvec4 F = Sample_PrincipledDiffuse_BSDF(surf.T, surf.B, surf.N, I, diff.roughness, diff.base_color,
                                                          diff.sheen_color, false, rand_u, rand_v, V);
-            const float pdf = F.get<3>() * lobe_weights.diffuse;
+            const float pdf = F.get<3>(); // * lobe_weights.diffuse;
 
             F *= (1.0f - metallic) * (1.0f - transmission);
 

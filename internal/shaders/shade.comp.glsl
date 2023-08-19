@@ -1517,7 +1517,7 @@ void Sample_PrincipledNode(const ray_data_t ray, const surface_t surf,
             vec4 F = Sample_PrincipledDiffuse_BSDF(surf.T, surf.B, surf.N, I, diff.roughness,
                                                    diff.base_color, diff.sheen_color, false, rand_u, rand_v, V);
             F.rgb *= (1.0 - metallic) * (1.0 - transmission);
-            F[3] *= lobe_weights.diffuse;
+            //F[3] *= lobe_weights.diffuse;
 
             new_ray.depth = ray.depth + 0x00000001;
 

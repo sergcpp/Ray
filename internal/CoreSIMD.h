@@ -5953,7 +5953,7 @@ void Ray::NS::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t<
         simd_fvec<S> V[3], F[4];
         Sample_PrincipledDiffuse_BSDF(surf.T, surf.B, surf.N, ray.d, diff.roughness, diff.base_color, diff.sheen_color,
                                       false, rand_u, rand_v, V, F);
-        F[3] *= lobe_weights.diffuse;
+        //F[3] *= lobe_weights.diffuse;
 
         UNROLLED_FOR(i, 3, { F[i] *= (1.0f - metallic) * (1.0f - transmission); })
 
