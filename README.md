@@ -22,15 +22,16 @@ Features:
 
   <div>
     <div float="left" >
-      <img src="scene6.jpg" width="47.0%" />
-      <img src="scene5.jpg" width="42.4%" />
-    </div>
-    <div float="left" >
-      <img src="scene7.jpg" width="89.75%" />
+      <img src="scene7.jpg" width="46.95%" />
+      <img src="scene8.jpg" width="42.45%" />
     </div>
     <div float="left" >
       <img src="scene3.jpg" width="26.55%" />
       <img src="scene4.jpg" width="62.9%" />
+    </div>
+    <div float="left" >
+      <img src="scene6.jpg" width="47.0%" />
+      <img src="scene5.jpg" width="42.4%" />
     </div>
     <div float="left" >
       <img src="scene1.jpg" width="44.1%" />
