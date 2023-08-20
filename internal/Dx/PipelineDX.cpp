@@ -83,6 +83,7 @@ Ray::Dx::Pipeline &Ray::Dx::Pipeline::operator=(Pipeline &&rhs) noexcept {
     Destroy();
 
     ctx_ = exchange(rhs.ctx_, nullptr);
+    type_ = exchange(rhs.type_, ePipelineType::Undefined);
     rast_state_ = exchange(rhs.rast_state_, {});
     render_pass_ = exchange(rhs.render_pass_, nullptr);
     prog_ = exchange(rhs.prog_, nullptr);

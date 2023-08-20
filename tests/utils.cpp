@@ -33,8 +33,8 @@ std::tuple<std::vector<float>, std::vector<uint32_t>, std::vector<uint32_t>> Loa
 
 std::unique_ptr<uint8_t[]> ReadTGAFile(const void *data, const int data_len, int &w, int &h, int &bpp) {
     uint8_t tga_header[12] = {0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-    const auto *tga_compare = (const uint8_t *)data;
-    const uint8_t *img_header = (const uint8_t *)data + sizeof(tga_header);
+    const auto *tga_compare = reinterpret_cast<const uint8_t *>(data);
+    const auto *img_header = reinterpret_cast<const uint8_t *>(data) + sizeof(tga_header);
     uint32_t img_size;
     bool compressed = false;
 
@@ -268,7 +268,7 @@ std::vector<uint8_t> LoadHDR(const char name[], int &out_w, int &out_h) {
 
                 if (buf[0] > 128) {
                     int count = buf[0] - 128;
-                    if ((count == 0) || (count > index_end - index)) {
+                    if (count > index_end - index) {
                         throw std::runtime_error("Wrong data!");
                     }
                     while (count-- > 0) {

@@ -10,6 +10,7 @@ Ray::Vk::AccStructure &Ray::Vk::AccStructure::operator=(AccStructure &&rhs) noex
 
     ctx_ = exchange(rhs.ctx_, nullptr);
     handle_ = exchange(rhs.handle_, {});
+    resource_state = exchange(rhs.resource_state, eResState::Undefined);
 
     return (*this);
 }

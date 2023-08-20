@@ -41,7 +41,6 @@ void test_aux_channels(const char *arch_list[], const char *preferred_device) {
 
     Ray::principled_mat_desc_t mat_desc;
     mat_desc.base_texture = Ray::TextureHandle{0};
-    mat_desc.metallic = 1.0f;
     mat_desc.roughness = 1.0f;
     mat_desc.roughness_texture = Ray::TextureHandle{2};
     mat_desc.metallic = 1.0f;

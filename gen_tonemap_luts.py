@@ -1,6 +1,5 @@
 
 import numpy as np
-import OpenEXR, Imath
 import os
 import PyOpenColorIO as OCIO
 
@@ -41,7 +40,7 @@ def SaveLUT(name, color_space, looks):
     transform = OCIO.LookTransform()
     transform.setSrc("Linear")
     transform.setDst(color_space)
-    if looks != None:
+    if looks is not None:
         transform.setLooks(looks)
 
     config = OCIO.GetCurrentConfig()
@@ -59,6 +58,7 @@ def main():
     SaveLUT("__filmic_med_high_contrast", "Filmic sRGB", "Medium High Contrast")
     SaveLUT("__filmic_high_contrast", "Filmic sRGB", "High Contrast")
     SaveLUT("__filmic_very_high_contrast", "Filmic sRGB", "Very High Contrast")
+
 
 if __name__ == "__main__":
     main()
