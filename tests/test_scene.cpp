@@ -21,7 +21,7 @@ void load_needed_textures(Ray::SceneBase &scene, Ray::shading_node_desc_t &mat_d
 
     if (mat_desc.base_texture != Ray::InvalidTextureHandle && textures[0]) {
         int img_w, img_h;
-        auto img_data = LoadTGA(textures[0], img_w, img_h);
+        auto img_data = LoadTGA(textures[0], true /* flip_y */, img_w, img_h);
         require(!img_data.empty());
 
         // drop alpha channel
@@ -50,7 +50,7 @@ void load_needed_textures(Ray::SceneBase &scene, Ray::principled_mat_desc_t &mat
 
     if (mat_desc.base_texture != Ray::InvalidTextureHandle && textures[mat_desc.base_texture._index]) {
         int img_w, img_h;
-        auto img_data = LoadTGA(textures[mat_desc.base_texture._index], img_w, img_h);
+        auto img_data = LoadTGA(textures[mat_desc.base_texture._index], true /* flip_y */, img_w, img_h);
         require(!img_data.empty());
 
         // drop alpha channel
@@ -73,7 +73,7 @@ void load_needed_textures(Ray::SceneBase &scene, Ray::principled_mat_desc_t &mat
 
     if (mat_desc.normal_map != Ray::InvalidTextureHandle && textures[mat_desc.normal_map._index]) {
         int img_w, img_h;
-        auto img_data = LoadTGA(textures[mat_desc.normal_map._index], img_w, img_h);
+        auto img_data = LoadTGA(textures[mat_desc.normal_map._index], true /* flip_y */, img_w, img_h);
         require(!img_data.empty());
 
         // drop alpha channel
@@ -97,7 +97,7 @@ void load_needed_textures(Ray::SceneBase &scene, Ray::principled_mat_desc_t &mat
 
     if (mat_desc.roughness_texture != Ray::InvalidTextureHandle && textures[mat_desc.roughness_texture._index]) {
         int img_w, img_h;
-        auto img_data = LoadTGA(textures[mat_desc.roughness_texture._index], img_w, img_h);
+        auto img_data = LoadTGA(textures[mat_desc.roughness_texture._index], true /* flip_y */, img_w, img_h);
         require(!img_data.empty());
 
         // use only red channel
@@ -118,7 +118,7 @@ void load_needed_textures(Ray::SceneBase &scene, Ray::principled_mat_desc_t &mat
 
     if (mat_desc.metallic_texture != Ray::InvalidTextureHandle && textures[mat_desc.metallic_texture._index]) {
         int img_w, img_h;
-        auto img_data = LoadTGA(textures[mat_desc.metallic_texture._index], img_w, img_h);
+        auto img_data = LoadTGA(textures[mat_desc.metallic_texture._index], true /* flip_y */, img_w, img_h);
         require(!img_data.empty());
 
         // use only red channel
@@ -139,7 +139,7 @@ void load_needed_textures(Ray::SceneBase &scene, Ray::principled_mat_desc_t &mat
 
     if (mat_desc.alpha_texture != Ray::InvalidTextureHandle && textures[mat_desc.alpha_texture._index]) {
         int img_w, img_h;
-        auto img_data = LoadTGA(textures[mat_desc.alpha_texture._index], img_w, img_h);
+        auto img_data = LoadTGA(textures[mat_desc.alpha_texture._index], true /* flip_y */, img_w, img_h);
         require(!img_data.empty());
 
         // use only red channel

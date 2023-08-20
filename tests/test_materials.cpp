@@ -8,6 +8,7 @@
 #include <fstream>
 
 #include "../Ray.h"
+#include "../internal/Utils.h"
 
 #include "test_scene.h"
 #include "thread_pool.h"
@@ -105,20 +106,20 @@ void run_material_test(const char *arch_list[], const char *preferred_device, co
                         const auto g = uint8_t(p.v[1] * 255);
                         const auto b = uint8_t(p.v[2] * 255);
 
-                        img_data_u8[3 * ((test_img_h - j - 1) * test_img_w + i) + 0] = r;
-                        img_data_u8[3 * ((test_img_h - j - 1) * test_img_w + i) + 1] = g;
-                        img_data_u8[3 * ((test_img_h - j - 1) * test_img_w + i) + 2] = b;
+                        img_data_u8[3 * (j * test_img_w + i) + 0] = r;
+                        img_data_u8[3 * (j * test_img_w + i) + 1] = g;
+                        img_data_u8[3 * (j * test_img_w + i) + 2] = b;
 
-                        const uint8_t diff_r = std::abs(r - test_img[4 * ((test_img_h - j - 1) * test_img_w + i) + 0]);
-                        const uint8_t diff_g = std::abs(g - test_img[4 * ((test_img_h - j - 1) * test_img_w + i) + 1]);
-                        const uint8_t diff_b = std::abs(b - test_img[4 * ((test_img_h - j - 1) * test_img_w + i) + 2]);
+                        const uint8_t diff_r = std::abs(r - test_img[4 * (j * test_img_w + i) + 0]);
+                        const uint8_t diff_g = std::abs(g - test_img[4 * (j * test_img_w + i) + 1]);
+                        const uint8_t diff_b = std::abs(b - test_img[4 * (j * test_img_w + i) + 2]);
 
-                        diff_data_u8[3 * ((test_img_h - j - 1) * test_img_w + i) + 0] = diff_r;
-                        diff_data_u8[3 * ((test_img_h - j - 1) * test_img_w + i) + 1] = diff_g;
-                        diff_data_u8[3 * ((test_img_h - j - 1) * test_img_w + i) + 2] = diff_b;
+                        diff_data_u8[3 * (j * test_img_w + i) + 0] = diff_r;
+                        diff_data_u8[3 * (j * test_img_w + i) + 1] = diff_g;
+                        diff_data_u8[3 * (j * test_img_w + i) + 2] = diff_b;
 
                         if (diff_r > DiffThres || diff_g > DiffThres || diff_b > DiffThres) {
-                            mask_data_u8[3 * ((test_img_h - j - 1) * test_img_w + i) + 0] = 255;
+                            mask_data_u8[3 * (j * test_img_w + i) + 0] = 255;
                             ++error_pixels;
                         }
 
@@ -154,11 +155,11 @@ void run_material_test(const char *arch_list[], const char *preferred_device, co
                 }
 
                 snprintf(name_buf, sizeof(name_buf), "test_data/%s/%s_out.tga", test_name, type.c_str());
-                WriteTGA(&img_data_u8[0], test_img_w, test_img_h, 3, name_buf);
+                Ray::WriteTGA(&img_data_u8[0], test_img_w, test_img_h, 3, name_buf);
                 snprintf(name_buf, sizeof(name_buf), "test_data/%s/%s_diff.tga", test_name, type.c_str());
-                WriteTGA(&diff_data_u8[0], test_img_w, test_img_h, 3, name_buf);
+                Ray::WriteTGA(&diff_data_u8[0], test_img_w, test_img_h, 3, name_buf);
                 snprintf(name_buf, sizeof(name_buf), "test_data/%s/%s_mask.tga", test_name, type.c_str());
-                WriteTGA(&mask_data_u8[0], test_img_w, test_img_h, 3, name_buf);
+                Ray::WriteTGA(&mask_data_u8[0], test_img_w, test_img_h, 3, name_buf);
                 images_match = (psnr >= min_psnr) && (error_pixels <= pix_thres);
                 require(images_match || searching);
 
@@ -264,8 +265,6 @@ void assemble_material_test_images(const char *arch_list[]) {
 
             bool found_at_least_one_image = false;
             for (int j = 0; j < ImgCountH; ++j) {
-                const int top_down_j = ImgCountH - j - 1;
-
                 for (int i = 0; i < ImgCountW && test_names[j][i]; ++i) {
                     { // reference image
                         snprintf(name_buf, sizeof(name_buf), "test_data/%s/ref.tga", test_names[j][i]);
@@ -274,12 +273,12 @@ void assemble_material_test_images(const char *arch_list[]) {
                         const auto img_ref = LoadTGA(name_buf, test_img_w, test_img_h);
                         if (!img_ref.empty()) {
                             for (int k = 0; k < test_img_h; ++k) {
-                                memcpy(&material_refs[((top_down_j * 256 + k) * OutImageW + i * 256) * 4],
+                                memcpy(&material_refs[((j * 256 + k) * OutImageW + i * 256) * 4],
                                        &img_ref[k * test_img_w * 4], test_img_w * 4);
                             }
                         }
 
-                        blit_chars_to_alpha(material_refs.get(), i * 256, top_down_j * 256, test_names[j][i]);
+                        blit_chars_to_alpha(material_refs.get(), i * 256, j * 256, test_names[j][i]);
                     }
 
                     { // test output
@@ -289,13 +288,13 @@ void assemble_material_test_images(const char *arch_list[]) {
                         const auto test_img = LoadTGA(name_buf, test_img_w, test_img_h);
                         if (!test_img.empty()) {
                             for (int k = 0; k < test_img_h; ++k) {
-                                memcpy(&material_imgs[((top_down_j * 256 + k) * OutImageW + i * 256) * 4],
+                                memcpy(&material_imgs[((j * 256 + k) * OutImageW + i * 256) * 4],
                                        &test_img[k * test_img_w * 4], test_img_w * 4);
                             }
                             found_at_least_one_image = true;
                         }
 
-                        blit_chars_to_alpha(material_imgs.get(), i * 256, top_down_j * 256, test_names[j][i]);
+                        blit_chars_to_alpha(material_imgs.get(), i * 256, j * 256, test_names[j][i]);
                     }
 
                     { // error mask
@@ -306,26 +305,26 @@ void assemble_material_test_images(const char *arch_list[]) {
                         const auto test_img = LoadTGA(name_buf, test_img_w, test_img_h);
                         if (!test_img.empty()) {
                             for (int k = 0; k < test_img_h; ++k) {
-                                memcpy(&material_masks[((top_down_j * 256 + k) * OutImageW + i * 256) * 4],
+                                memcpy(&material_masks[((j * 256 + k) * OutImageW + i * 256) * 4],
                                        &test_img[k * test_img_w * 4], test_img_w * 4);
                             }
                         }
 
-                        blit_chars_to_alpha(material_masks.get(), i * 256, top_down_j * 256, test_names[j][i]);
+                        blit_chars_to_alpha(material_masks.get(), i * 256, j * 256, test_names[j][i]);
                     }
                 }
             }
 
             if (found_at_least_one_image) {
                 snprintf(name_buf, sizeof(name_buf), "test_data/material_%s_imgs.tga", type.c_str());
-                WriteTGA(material_imgs.get(), OutImageW, OutImageH, 4, name_buf);
+                Ray::WriteTGA(material_imgs.get(), OutImageW, OutImageH, 4, name_buf);
                 snprintf(name_buf, sizeof(name_buf), "test_data/material_%s_masks.tga", type.c_str());
-                WriteTGA(material_masks.get(), OutImageW, OutImageH, 4, name_buf);
+                Ray::WriteTGA(material_masks.get(), OutImageW, OutImageH, 4, name_buf);
             }
         }
     }
 
-    WriteTGA(material_refs.get(), OutImageW, OutImageH, 4, "test_data/material_refs.tga");
+    Ray::WriteTGA(material_refs.get(), OutImageW, OutImageH, 4, "test_data/material_refs.tga");
 }
 
 const double DefaultMinPSNR = 30.0;
@@ -1713,8 +1712,7 @@ void test_complex_mat6(const char *arch_list[], const char *preferred_device) {
     olive_mat_desc.transmission = 1.0f;
     olive_mat_desc.ior = 2.3f;
 
-    run_material_test(arch_list, preferred_device, "complex_mat6", olive_mat_desc, SampleCount, MinPSNR,
-                      PixThres);
+    run_material_test(arch_list, preferred_device, "complex_mat6", olive_mat_desc, SampleCount, MinPSNR, PixThres);
 }
 
 void test_complex_mat6_nlm_filter(const char *arch_list[], const char *preferred_device) {
@@ -1777,8 +1775,8 @@ void test_complex_mat6_unet_filter(const char *arch_list[], const char *preferre
     olive_mat_desc.transmission = 1.0f;
     olive_mat_desc.ior = 2.3f;
 
-    run_material_test(arch_list, preferred_device, "complex_mat6_unet_filter", olive_mat_desc, SampleCount,
-                      FastMinPSNR, PixThres, eDenoiseMethod::UNet);
+    run_material_test(arch_list, preferred_device, "complex_mat6_unet_filter", olive_mat_desc, SampleCount, FastMinPSNR,
+                      PixThres, eDenoiseMethod::UNet);
 }
 
 void test_complex_mat6_unet_filter_b(const char *arch_list[], const char *preferred_device) {
@@ -1826,8 +1824,8 @@ void test_complex_mat6_dof(const char *arch_list[], const char *preferred_device
     olive_mat_desc.transmission = 1.0f;
     olive_mat_desc.ior = 2.3f;
 
-    run_material_test(arch_list, preferred_device, "complex_mat6_dof", olive_mat_desc, SampleCount, MinPSNR,
-                      PixThres, eDenoiseMethod::None, false, nullptr, eTestScene::Standard_DOF1);
+    run_material_test(arch_list, preferred_device, "complex_mat6_dof", olive_mat_desc, SampleCount, MinPSNR, PixThres,
+                      eDenoiseMethod::None, false, nullptr, eTestScene::Standard_DOF1);
 }
 
 void test_complex_mat6_mesh_lights(const char *arch_list[], const char *preferred_device) {
@@ -1843,8 +1841,8 @@ void test_complex_mat6_mesh_lights(const char *arch_list[], const char *preferre
     olive_mat_desc.transmission = 1.0f;
     olive_mat_desc.ior = 2.3f;
 
-    run_material_test(arch_list, preferred_device, "complex_mat6_mesh_lights", olive_mat_desc, SampleCount,
-                      MinPSNR, PixThres, eDenoiseMethod::None, false, nullptr, eTestScene::Standard_MeshLights);
+    run_material_test(arch_list, preferred_device, "complex_mat6_mesh_lights", olive_mat_desc, SampleCount, MinPSNR,
+                      PixThres, eDenoiseMethod::None, false, nullptr, eTestScene::Standard_MeshLights);
 }
 
 void test_complex_mat6_sphere_light(const char *arch_list[], const char *preferred_device) {
@@ -1920,8 +1918,8 @@ void test_complex_mat7_refractive(const char *arch_list[], const char *preferred
     const int PixThres = 7395;
 
     Ray::principled_mat_desc_t unused;
-    run_material_test(arch_list, preferred_device, "complex_mat7_refractive", unused, SampleCount, MinPSNR,
-                      PixThres, eDenoiseMethod::None, false, nullptr, eTestScene::Standard_GlassBall0);
+    run_material_test(arch_list, preferred_device, "complex_mat7_refractive", unused, SampleCount, MinPSNR, PixThres,
+                      eDenoiseMethod::None, false, nullptr, eTestScene::Standard_GlassBall0);
 }
 
 void test_complex_mat7_principled(const char *arch_list[], const char *preferred_device) {
@@ -1930,6 +1928,6 @@ void test_complex_mat7_principled(const char *arch_list[], const char *preferred
     const int PixThres = 8193;
 
     Ray::principled_mat_desc_t unused;
-    run_material_test(arch_list, preferred_device, "complex_mat7_principled", unused, SampleCount, MinPSNR,
-                      PixThres, eDenoiseMethod::None, false, nullptr, eTestScene::Standard_GlassBall1);
+    run_material_test(arch_list, preferred_device, "complex_mat7_principled", unused, SampleCount, MinPSNR, PixThres,
+                      eDenoiseMethod::None, false, nullptr, eTestScene::Standard_GlassBall1);
 }

@@ -211,10 +211,6 @@ int main() {
         }
     }
 
-    // Save image
-    WriteTGA(pixels.ptr, pixels.pitch, IMG_W, IMG_H, 4, true, "00_basic.tga");
-    printf("Image saved as samples/00_basic.tga\n");
-
     delete scene;
     delete renderer;
 }

@@ -108,7 +108,7 @@ def compile_shader(src_name, spv_name=None, glsl_version=None, target_env="spirv
         mutex.release()
 
 def compile_shader_async(src_name, spv_name=None, glsl_version=None, target_env="spirv1.3", defines = "", hlsl_profile="cs_6_0"):
-    if ENABLE_MULTIPLE_THREADS == True:
+    if ENABLE_MULTIPLE_THREADS:
         threading.Thread(target=compile_shader, args=(src_name, spv_name, glsl_version, target_env, defines, hlsl_profile,)).start()
     else:
         compile_shader(src_name, spv_name, glsl_version, target_env, defines, hlsl_profile)

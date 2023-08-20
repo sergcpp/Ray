@@ -1568,7 +1568,7 @@ template <int S> simd_ivec<S> get_ray_hash(const ray_data_t<S> &r, const float r
             y.template set<i>(0xFFFFFFFF);
             z.template set<i>(0xFFFFFFFF);
         }
-    });
+    })
 
     return (o << 25) | (p << 24) | (y << 2) | (z << 1) | (x << 0);
 }
@@ -2273,7 +2273,7 @@ void Ray::NS::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, i
             UNROLLED_FOR_S(i, S, {
                 req_samples.template set<i>(
                     required_samples[iyy_clamped.template get<i>() * w + ixx_clamped.template get<i>()]);
-            });
+            })
 
             out_r.mask = (ixx < w) & (iyy < h) & (req_samples >= iteration);
 
@@ -4313,7 +4313,7 @@ void Ray::NS::SampleNearest(const Cpu::TexStorageBase *const textures[], const u
 
         const auto &pix = storage.Fetch(index & 0x00ffffff, uvs[0][j], uvs[1][j], _lod[j]);
 
-        UNROLLED_FOR(i, 4, { out_rgba[i].set(j, static_cast<float>(pix.v[i])); });
+        UNROLLED_FOR(i, 4, { out_rgba[i].set(j, static_cast<float>(pix.v[i])); })
     }
 
     const float k = 1.0f / 255.0f;
@@ -5477,7 +5477,7 @@ void Ray::NS::Evaluate_EnvColor(const ray_data_t<S> &ray, const simd_ivec<S> &ma
     const simd_ivec<S> env_map_mask = (ray.depth & 0x00ffffff) != 0;
 
     if ((mask & env_map_mask).not_all_zeros()) {
-        UNROLLED_FOR(i, 3, { env_col[i] = 1.0f; });
+        UNROLLED_FOR(i, 3, { env_col[i] = 1.0f; })
         if (env_map != 0xffffffff) {
             SampleLatlong_RGBE(tex_storage, env_map, ray.d, env_map_rotation, rand, (mask & env_map_mask), env_col);
         }
@@ -5557,7 +5557,7 @@ void Ray::NS::Evaluate_LightColor(const simd_fvec<S> P[3], const ray_data_t<S> &
             const simd_fvec<S> bsdf_pdf = ray.pdf;
 
             const simd_fvec<S> mis_weight = power_heuristic(bsdf_pdf, light_pdf);
-            UNROLLED_FOR(i, 3, { lcol[i] *= mis_weight; });
+            UNROLLED_FOR(i, 3, { lcol[i] *= mis_weight; })
 
             if (l.sph.spot > 0.0f && l.sph.blend > 0.0f) {
                 const simd_fvec<S> _dot =
@@ -5586,7 +5586,7 @@ void Ray::NS::Evaluate_LightColor(const simd_fvec<S> P[3], const ray_data_t<S> &
             const simd_fvec<S> bsdf_pdf = ray.pdf;
 
             const simd_fvec<S> mis_weight = power_heuristic(bsdf_pdf, light_pdf);
-            UNROLLED_FOR(i, 3, { lcol[i] *= mis_weight; });
+            UNROLLED_FOR(i, 3, { lcol[i] *= mis_weight; })
         } else if (l.type == LIGHT_TYPE_RECT) {
             float light_fwd[3];
             cross(l.rect.u, l.rect.v, light_fwd);
@@ -5598,7 +5598,7 @@ void Ray::NS::Evaluate_LightColor(const simd_fvec<S> P[3], const ray_data_t<S> &
             const simd_fvec<S> bsdf_pdf = ray.pdf;
 
             const simd_fvec<S> mis_weight = power_heuristic(bsdf_pdf, light_pdf);
-            UNROLLED_FOR(i, 3, { lcol[i] *= mis_weight; });
+            UNROLLED_FOR(i, 3, { lcol[i] *= mis_weight; })
         } else if (l.type == LIGHT_TYPE_DISK) {
             float light_fwd[3];
             cross(l.disk.u, l.disk.v, light_fwd);
@@ -5610,7 +5610,7 @@ void Ray::NS::Evaluate_LightColor(const simd_fvec<S> P[3], const ray_data_t<S> &
             const simd_fvec<S> bsdf_pdf = ray.pdf;
 
             const simd_fvec<S> mis_weight = power_heuristic(bsdf_pdf, light_pdf);
-            UNROLLED_FOR(i, 3, { lcol[i] *= mis_weight; });
+            UNROLLED_FOR(i, 3, { lcol[i] *= mis_weight; })
         } else if (l.type == LIGHT_TYPE_LINE) {
             const float *light_dir = l.line.v;
 
@@ -5620,7 +5620,7 @@ void Ray::NS::Evaluate_LightColor(const simd_fvec<S> P[3], const ray_data_t<S> &
             const simd_fvec<S> bsdf_pdf = ray.pdf;
 
             const simd_fvec<S> mis_weight = power_heuristic(bsdf_pdf, light_pdf);
-            UNROLLED_FOR(i, 3, { lcol[i] *= mis_weight; });
+            UNROLLED_FOR(i, 3, { lcol[i] *= mis_weight; })
         }
 
         where(ray_queue[index], light_col[0]) = lcol[0];
@@ -6182,7 +6182,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
             p3[i] = gather(vtx_positions + i, vtx_indices[2] * VtxPositionsStride);
 
             P_ls[i] = p1[i] * w + p2[i] * inter.u + p3[i] * inter.v;
-        });
+        })
     }
 
     FetchVertexAttribute3(&sc.vertices[0].n[0], vtx_indices, inter.u, inter.v, w, surf.N);
@@ -6235,7 +6235,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
         where(is_backfacing, surf.N[i]) = -surf.N[i];
         where(is_backfacing, surf.B[i]) = -surf.B[i];
         where(is_backfacing, surf.T[i]) = -surf.T[i];
-    });
+    })
 
     simd_fvec<S> tangent[3] = {-P_ls[2], {0.0f}, P_ls[0]};
 
@@ -6487,10 +6487,10 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
     }
 
     if (out_base_color) {
-        UNROLLED_FOR(i, 3, { where(is_active_lane, out_base_color[i]) = base_color[i]; });
+        UNROLLED_FOR(i, 3, { where(is_active_lane, out_base_color[i]) = base_color[i]; })
     }
     if (out_depth_normals) {
-        UNROLLED_FOR(i, 3, { where(is_active_lane, out_depth_normals[i]) = surf.N[i]; });
+        UNROLLED_FOR(i, 3, { where(is_active_lane, out_depth_normals[i]) = surf.N[i]; })
         where(is_active_lane, out_depth_normals[3]) = inter.t;
     }
 

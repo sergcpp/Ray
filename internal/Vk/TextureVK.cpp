@@ -811,7 +811,7 @@ void Ray::Vk::Texture2D::InitFromTGAFile(const void *data, Buffer &sbuf, void *_
     int w = 0, h = 0;
     eTexFormat format = eTexFormat::Undefined;
     uint32_t img_size = 0;
-    const bool res1 = ReadTGAFile(data, w, h, format, nullptr, img_size);
+    const bool res1 = ReadTGAFile(data, 0, w, h, format, nullptr, img_size);
     if (!res1 || img_size <= sbuf.size()) {
         ctx_->log()->Error("Failed to read tga data!");
         return;
@@ -823,7 +823,7 @@ void Ray::Vk::Texture2D::InitFromTGAFile(const void *data, Buffer &sbuf, void *_
         return;
     }
 
-    const bool res2 = ReadTGAFile(data, w, h, format, stage_data, img_size);
+    const bool res2 = ReadTGAFile(data, 0, w, h, format, stage_data, img_size);
     if (!res2) {
         ctx_->log()->Error("Failed to read tga data!");
     }
@@ -842,7 +842,7 @@ void Ray::Vk::Texture2D::InitFromTGA_RGBEFile(const void *data, Buffer &sbuf, vo
                                               MemoryAllocators *mem_allocs, const Tex2DParams &p, ILog *log) {
     int w = 0, h = 0;
     eTexFormat format = eTexFormat::Undefined;
-    std::unique_ptr<uint8_t[]> image_data = ReadTGAFile(data, w, h, format);
+    std::unique_ptr<uint8_t[]> image_data = ReadTGAFile(data, 0, w, h, format);
     assert(format == eTexFormat::RawRGBA8888);
 
     auto *stage_data = reinterpret_cast<uint16_t *>(sbuf.Map());
@@ -1326,14 +1326,14 @@ void Ray::Vk::Texture2D::InitFromTGAFile(const void *data[6], Buffer &sbuf, void
     for (int i = 0; i < 6; i++) {
         if (data[i]) {
             uint32_t data_size;
-            const bool res1 = ReadTGAFile(data[i], w, h, format, nullptr, data_size);
+            const bool res1 = ReadTGAFile(data[i], 0, w, h, format, nullptr, data_size);
             if (!res1) {
                 ctx_->log()->Error("Failed to read tga data!");
                 break;
             }
 
             assert(stage_off + data_size < sbuf.size());
-            const bool res2 = ReadTGAFile(data[i], w, h, format, &stage_data[stage_off], data_size);
+            const bool res2 = ReadTGAFile(data[i], 0, w, h, format, &stage_data[stage_off], data_size);
             if (!res2) {
                 ctx_->log()->Error("Failed to read tga data!");
                 break;

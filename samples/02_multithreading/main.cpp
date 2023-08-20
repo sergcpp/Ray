@@ -9,7 +9,7 @@
 #include "../../Ray.h"
 
 std::vector<Ray::color_rgba8_t> GenerateCheckerboard(int res, int square_size);
-void WriteTGA(const Ray::color_rgba_t *data, int pitch, int w, int h, int bpp, bool flip_vertical, const char *name);
+void WriteTGA(const Ray::color_rgba_t *data, int pitch, int w, int h, int bpp, const char *name);
 
 int main() {
     const int IMG_W = 256, IMG_H = 256;
@@ -137,7 +137,7 @@ int main() {
                                         Ray::RegionContext{{IMG_W / 2, 0, IMG_W / 2, IMG_H / 2}},
                                         Ray::RegionContext{{0, IMG_H / 2, IMG_W / 2, IMG_H / 2}},
                                         Ray::RegionContext{{IMG_W / 2, IMG_H / 2, IMG_W / 2, IMG_H / 2}}};
-        #pragma omp parallel for
+#pragma omp parallel for
         for (int i = 0; i < 4; i++) {
             for (int j = 0; j < SAMPLE_COUNT; j++) {
                 renderer->RenderScene(scene, regions[i]);
@@ -158,7 +158,7 @@ int main() {
     const Ray::color_data_rgba_t pixels = renderer->get_pixels_ref();
 
     // Save image
-    WriteTGA(pixels.ptr, pixels.pitch, IMG_W, IMG_H, 3, true, "02_multithreading.tga");
+    WriteTGA(pixels.ptr, pixels.pitch, IMG_W, IMG_H, 3, "02_multithreading.tga");
     printf("Image saved as samples/02_multithreading.tga\n");
 
     delete scene;
@@ -168,8 +168,7 @@ int main() {
 #define float_to_byte(val)                                                                                             \
     (((val) <= 0.0f) ? 0 : (((val) > (1.0f - 0.5f / 255.0f)) ? 255 : uint8_t((255.0f * (val)) + 0.5f)))
 
-void WriteTGA(const Ray::color_rgba_t *data, int pitch, const int w, const int h, const int bpp,
-              const bool flip_vertical, const char *name) {
+void WriteTGA(const Ray::color_rgba_t *data, int pitch, const int w, const int h, const int bpp, const char *name) {
     if (!pitch) {
         pitch = w;
     }
@@ -183,18 +182,18 @@ void WriteTGA(const Ray::color_rgba_t *data, int pitch, const int w, const int h
     header[14] = (h)&0xFF;
     header[15] = (h >> 8) & 0xFF;
     header[16] = bpp * 8;
+    header[17] |= (1 << 5); // set origin to upper left corner
 
-    file.write((char *)&header[0], sizeof(unsigned char) * 18);
+    file.write((char *)&header[0], sizeof(header));
 
     auto out_data = std::unique_ptr<uint8_t[]>{new uint8_t[size_t(w) * h * bpp]};
     for (int j = 0; j < h; ++j) {
-        const int _j = flip_vertical ? (h - j - 1) : j;
         for (int i = 0; i < w; ++i) {
-            out_data[(j * w + i) * bpp + 0] = float_to_byte(data[_j * pitch + i].v[2]);
-            out_data[(j * w + i) * bpp + 1] = float_to_byte(data[_j * pitch + i].v[1]);
-            out_data[(j * w + i) * bpp + 2] = float_to_byte(data[_j * pitch + i].v[0]);
+            out_data[(j * w + i) * bpp + 0] = float_to_byte(data[j * pitch + i].v[2]);
+            out_data[(j * w + i) * bpp + 1] = float_to_byte(data[j * pitch + i].v[1]);
+            out_data[(j * w + i) * bpp + 2] = float_to_byte(data[j * pitch + i].v[0]);
             if (bpp == 4) {
-                out_data[i * 4 + 3] = float_to_byte(data[_j * pitch + i].v[3]);
+                out_data[i * 4 + 3] = float_to_byte(data[j * pitch + i].v[3]);
             }
         }
     }

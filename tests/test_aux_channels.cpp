@@ -5,6 +5,7 @@
 #include <chrono>
 
 #include "../Ray.h"
+#include "../internal/Utils.h"
 
 #include "test_scene.h"
 #include "utils.h"
@@ -118,16 +119,13 @@ void test_aux_channels(const char *arch_list[], const char *preferred_device) {
                         const auto g = uint8_t(c.v[1] * 255);
                         const auto b = uint8_t(c.v[2] * 255);
 
-                        base_color_data_u8[3 * ((test_img_h - j - 1) * test_img_w + i) + 0] = r;
-                        base_color_data_u8[3 * ((test_img_h - j - 1) * test_img_w + i) + 1] = g;
-                        base_color_data_u8[3 * ((test_img_h - j - 1) * test_img_w + i) + 2] = b;
+                        base_color_data_u8[3 * (j * test_img_w + i) + 0] = r;
+                        base_color_data_u8[3 * (j * test_img_w + i) + 1] = g;
+                        base_color_data_u8[3 * (j * test_img_w + i) + 2] = b;
 
-                        const uint8_t diff_r =
-                            std::abs(r - base_color_ref[4 * ((test_img_h - j - 1) * test_img_w + i) + 0]);
-                        const uint8_t diff_g =
-                            std::abs(g - base_color_ref[4 * ((test_img_h - j - 1) * test_img_w + i) + 1]);
-                        const uint8_t diff_b =
-                            std::abs(b - base_color_ref[4 * ((test_img_h - j - 1) * test_img_w + i) + 2]);
+                        const uint8_t diff_r = std::abs(r - base_color_ref[4 * (j * test_img_w + i) + 0]);
+                        const uint8_t diff_g = std::abs(g - base_color_ref[4 * (j * test_img_w + i) + 1]);
+                        const uint8_t diff_b = std::abs(b - base_color_ref[4 * (j * test_img_w + i) + 2]);
 
                         base_color_mse += diff_r * diff_r;
                         base_color_mse += diff_g * diff_g;
@@ -140,16 +138,13 @@ void test_aux_channels(const char *arch_list[], const char *preferred_device) {
                         const auto g = uint8_t((n.v[1] * 0.5f + 0.5f) * 255);
                         const auto b = uint8_t((n.v[2] * 0.5f + 0.5f) * 255);
 
-                        normals_data_u8[3 * ((test_img_h - j - 1) * test_img_w + i) + 0] = r;
-                        normals_data_u8[3 * ((test_img_h - j - 1) * test_img_w + i) + 1] = g;
-                        normals_data_u8[3 * ((test_img_h - j - 1) * test_img_w + i) + 2] = b;
+                        normals_data_u8[3 * (j * test_img_w + i) + 0] = r;
+                        normals_data_u8[3 * (j * test_img_w + i) + 1] = g;
+                        normals_data_u8[3 * (j * test_img_w + i) + 2] = b;
 
-                        const uint8_t diff_r =
-                            std::abs(r - normals_ref[4 * ((test_img_h - j - 1) * test_img_w + i) + 0]);
-                        const uint8_t diff_g =
-                            std::abs(g - normals_ref[4 * ((test_img_h - j - 1) * test_img_w + i) + 1]);
-                        const uint8_t diff_b =
-                            std::abs(b - normals_ref[4 * ((test_img_h - j - 1) * test_img_w + i) + 2]);
+                        const uint8_t diff_r = std::abs(r - normals_ref[4 * (j * test_img_w + i) + 0]);
+                        const uint8_t diff_g = std::abs(g - normals_ref[4 * (j * test_img_w + i) + 1]);
+                        const uint8_t diff_b = std::abs(b - normals_ref[4 * (j * test_img_w + i) + 2]);
 
                         normals_mse += diff_r * diff_r;
                         normals_mse += diff_g * diff_g;
@@ -160,12 +155,11 @@ void test_aux_channels(const char *arch_list[], const char *preferred_device) {
 
                         const auto u8 = uint8_t(n.v[3] * 255);
 
-                        depth_data_u8[3 * ((test_img_h - j - 1) * test_img_w + i) + 0] = u8;
-                        depth_data_u8[3 * ((test_img_h - j - 1) * test_img_w + i) + 1] = u8;
-                        depth_data_u8[3 * ((test_img_h - j - 1) * test_img_w + i) + 2] = u8;
+                        depth_data_u8[3 * (j * test_img_w + i) + 0] = u8;
+                        depth_data_u8[3 * (j * test_img_w + i) + 1] = u8;
+                        depth_data_u8[3 * (j * test_img_w + i) + 2] = u8;
 
-                        const uint8_t diff_d =
-                            std::abs(u8 - depth_ref[4 * ((test_img_h - j - 1) * test_img_w + i) + 0]);
+                        const uint8_t diff_d = std::abs(u8 - depth_ref[4 * (j * test_img_w + i) + 0]);
 
                         depth_mse += diff_d * diff_d;
                     }
@@ -203,11 +197,11 @@ void test_aux_channels(const char *arch_list[], const char *preferred_device) {
             }
 
             snprintf(name_buf, sizeof(name_buf), "test_data/%s/%s_base_color_out.tga", TestName, type_name.c_str());
-            WriteTGA(&base_color_data_u8[0], test_img_w, test_img_h, 3, name_buf);
+            Ray::WriteTGA(&base_color_data_u8[0], test_img_w, test_img_h, 3, name_buf);
             snprintf(name_buf, sizeof(name_buf), "test_data/%s/%s_normals_out.tga", TestName, type_name.c_str());
-            WriteTGA(&normals_data_u8[0], test_img_w, test_img_h, 3, name_buf);
+            Ray::WriteTGA(&normals_data_u8[0], test_img_w, test_img_h, 3, name_buf);
             snprintf(name_buf, sizeof(name_buf), "test_data/%s/%s_depth_out.tga", TestName, type_name.c_str());
-            WriteTGA(&depth_data_u8[0], test_img_w, test_img_h, 3, name_buf);
+            Ray::WriteTGA(&depth_data_u8[0], test_img_w, test_img_h, 3, name_buf);
 
             require(base_color_psnr >= BaseColor_MinPSNR);
             require(normals_psnr >= Normals_MinPSNR);

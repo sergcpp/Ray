@@ -1632,21 +1632,26 @@ template void Ray::CompressImage_BC5<3 /* SrcChannels */>(const uint8_t img_src[
 template void Ray::CompressImage_BC5<2 /* SrcChannels */>(const uint8_t img_src[], int w, int h, uint8_t img_dst[],
                                                           int dst_pitch);
 
-std::unique_ptr<uint8_t[]> Ray::ReadTGAFile(const void *data, int &w, int &h, eTexFormat &format) {
+std::unique_ptr<uint8_t[]> Ray::ReadTGAFile(const void *data, const int data_len, int &w, int &h, eTexFormat &format) {
     uint32_t img_size;
-    ReadTGAFile(data, w, h, format, nullptr, img_size);
+    ReadTGAFile(data, data_len, w, h, format, nullptr, img_size);
 
     std::unique_ptr<uint8_t[]> image_ret(new uint8_t[img_size]);
-    ReadTGAFile(data, w, h, format, image_ret.get(), img_size);
+    ReadTGAFile(data, data_len, w, h, format, image_ret.get(), img_size);
 
     return image_ret;
 }
 
-bool Ray::ReadTGAFile(const void *data, int &w, int &h, eTexFormat &format, uint8_t *out_data, uint32_t &out_size) {
+bool Ray::ReadTGAFile(const void *data, const int data_len, int &w, int &h, eTexFormat &format, uint8_t *out_data,
+                      uint32_t &out_size) {
     const uint8_t tga_header[12] = {0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     const auto *tga_compare = (const uint8_t *)data;
     const uint8_t *img_header = (const uint8_t *)data + sizeof(tga_header);
     bool compressed = false;
+
+    if (data_len && data_len < sizeof(tga_header)) {
+        return {};
+    }
 
     if (memcmp(tga_header, tga_compare, sizeof(tga_header)) != 0) {
         if (tga_compare[2] == 1) {
@@ -1689,16 +1694,24 @@ bool Ray::ReadTGAFile(const void *data, int &w, int &h, eTexFormat &format, uint
 
     out_size = w * h * bytes_per_pixel;
     if (out_data) {
-        const uint8_t *image_data = (const uint8_t *)data + 18;
+        const bool flip_y = (img_header[5] & (1 << 5)) == 0;
+        const auto *image_data = reinterpret_cast<const uint8_t *>(data) + 18;
 
         if (!compressed) {
-            for (size_t i = 0; i < out_size; i += bytes_per_pixel) {
-                out_data[i] = image_data[i + 2];
-                out_data[i + 1] = image_data[i + 1];
-                out_data[i + 2] = image_data[i];
-                if (bytes_per_pixel == 4) {
-                    out_data[i + 3] = image_data[i + 3];
+            if (flip_y) {
+                out_data += w * (h - 1) * bytes_per_pixel;
+            }
+            for (int y = 0; y < h; ++y) {
+                for (uint32_t i = 0; i < w * bytes_per_pixel; i += bytes_per_pixel) {
+                    out_data[i + 0] = image_data[i + 2];
+                    out_data[i + 1] = image_data[i + 1];
+                    out_data[i + 2] = image_data[i + 0];
+                    if (bytes_per_pixel == 4) {
+                        out_data[i + 3] = image_data[i + 3];
+                    }
                 }
+                image_data += w * bytes_per_pixel;
+                out_data += flip_y ? -int(w * bytes_per_pixel) : int(w * bytes_per_pixel);
             }
         } else {
             for (size_t num = 0; num < out_size;) {
@@ -1732,10 +1745,65 @@ bool Ray::ReadTGAFile(const void *data, int &w, int &h, eTexFormat &format, uint
                     image_data += size;
                 }
             }
+
+            for (int y = 0; y < (h / 2) && flip_y; ++y) {
+                if (bytes_per_pixel == 4) {
+                    for (int i = 0; i < w * 4; ++i) {
+                        const uint8_t t = out_data[y * w * 4 + i];
+                        out_data[y * w * 4 + i] = out_data[(h - y - 1) * w * 4 + i];
+                        out_data[(h - y - 1) * w * 4 + i] = t;
+                    }
+                } else {
+                    for (int i = 0; i < w * 3; ++i) {
+                        const uint8_t t = out_data[y * w * 3 + i];
+                        out_data[y * w * 3 + i] = out_data[(h - y - 1) * w * 3 + i];
+                        out_data[(h - y - 1) * w * 3 + i] = t;
+                    }
+                }
+            }
         }
     }
 
     return true;
+}
+
+void Ray::WriteTGA(const uint8_t *data, const int w, const int h, const int bpp, const char *name) {
+    std::ofstream file(name, std::ios::binary);
+
+    unsigned char header[18] = {0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+
+    header[12] = w & 0xFF;
+    header[13] = (w >> 8) & 0xFF;
+    header[14] = (h)&0xFF;
+    header[15] = (h >> 8) & 0xFF;
+    header[16] = bpp * 8;
+    header[17] |= (1 << 5); // set origin to upper left corner
+
+    file.write((char *)&header[0], sizeof(unsigned char) * 18);
+
+    auto out_data = std::unique_ptr<uint8_t[]>{new uint8_t[size_t(w) * h * bpp]};
+    if (bpp == 3) {
+        for (size_t i = 0; i < size_t(w) * h; ++i) {
+            out_data[i * 3 + 0] = data[i * 3 + 2];
+            out_data[i * 3 + 1] = data[i * 3 + 1];
+            out_data[i * 3 + 2] = data[i * 3 + 0];
+        }
+    } else {
+        for (size_t i = 0; i < size_t(w) * h; ++i) {
+            out_data[i * 4 + 0] = data[i * 4 + 2];
+            out_data[i * 4 + 1] = data[i * 4 + 1];
+            out_data[i * 4 + 2] = data[i * 4 + 0];
+            out_data[i * 4 + 3] = data[i * 4 + 3];
+        }
+    }
+
+    file.write((const char *)&out_data[0], size_t(w) * h * bpp);
+
+    static const char footer[26] = "\0\0\0\0"         // no extension area
+                                   "\0\0\0\0"         // no developer directory
+                                   "TRUEVISION-XFILE" // yep, this is a TGA file
+                                   ".";
+    file.write((const char *)&footer, sizeof(footer));
 }
 
 void Ray::WritePFM(const char *base_name, const float values[], int w, int h, int channels) {

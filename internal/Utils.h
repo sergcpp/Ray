@@ -4,6 +4,8 @@
 
 #include <memory>
 
+#include "TextureParams.h"
+
 namespace Ray {
 void RGBMDecode(const uint8_t rgbm[4], float out_rgb[3]);
 void RGBMEncode(const float rgb[3], uint8_t out_rgbm[4]);
@@ -161,9 +163,10 @@ void CompressImage_BC4(const uint8_t img_src[], int w, int h, uint8_t img_dst[],
 template <int SrcChannels = 2>
 void CompressImage_BC5(const uint8_t img_src[], int w, int h, uint8_t img_dst[], int dst_pitch = 0);
 
-enum class eTexFormat : uint8_t;
-std::unique_ptr<uint8_t[]> ReadTGAFile(const void *data, int &w, int &h, eTexFormat &format);
-bool ReadTGAFile(const void *data, int &w, int &h, eTexFormat &format, uint8_t *out_data, uint32_t &out_size);
+std::unique_ptr<uint8_t[]> ReadTGAFile(const void *data, int data_len, int &w, int &h, eTexFormat &format);
+bool ReadTGAFile(const void *data, int data_len, int &w, int &h, eTexFormat &format, uint8_t *out_data,
+                 uint32_t &out_size);
 
+void WriteTGA(const uint8_t *data, int w, int h, int bpp, const char *name);
 void WritePFM(const char *base_name, const float values[], int w, int h, int channels);
 } // namespace Ray
