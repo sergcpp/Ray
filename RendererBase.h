@@ -46,7 +46,7 @@ bool RendererSupportsHWRT(eRendererType rt);
 struct settings_t {
     int w = 0, h = 0;
     const char *preferred_device = nullptr;
-    bool use_tex_compression = true; // temporarily GPU only
+    bool use_tex_compression = true;
     bool use_hwrt = true;
     bool use_bindless = true;
     bool use_wide_bvh = true;
