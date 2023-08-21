@@ -337,8 +337,9 @@ template <int N> int Ray::Cpu::TexStorageBCn<N>::Allocate(Span<const InColorType
         total_size = GetRequiredMemory_BC4(res[0], res[1], 1);
     }
 
+    int mip_count = 1;
     for (int i = 1; i < NUM_MIP_LEVELS; ++i) {
-        if (mips && (p.res[i - 1][0] > 4 || p.res[i - 1][1] > 4)) {
+        if (mips && (p.res[i - 1][0] >= 4 || p.res[i - 1][1] >= 4)) {
             p.lod_offsets[i] = total_size;
 
             p.res[i][0] = p.res[i - 1][0] / 2;
@@ -354,6 +355,8 @@ template <int N> int Ray::Cpu::TexStorageBCn<N>::Allocate(Span<const InColorType
             } else if (N == 1) {
                 total_size += GetRequiredMemory_BC4(p.res[i][0], p.res[i][1], 1);
             }
+
+            ++mip_count;
         } else {
             p.lod_offsets[i] = p.lod_offsets[i - 1];
             p.res[i][0] = p.res[i - 1][0];
@@ -376,11 +379,7 @@ template <int N> int Ray::Cpu::TexStorageBCn<N>::Allocate(Span<const InColorType
 
     // TODO: try to get rid of these allocations
     std::vector<InColorType> _src_data, dst_data;
-    for (int i = 1; i < NUM_MIP_LEVELS && mips; ++i) {
-        if (p.res[i][0] < 4 || p.res[i][1] < 4) {
-            break;
-        }
-
+    for (int i = 1; i < mip_count; ++i) {
         dst_data.clear();
         dst_data.reserve(p.res[i][0] * p.res[i][1]);
 

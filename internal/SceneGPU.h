@@ -236,7 +236,7 @@ inline Ray::TextureHandle Ray::NS::Scene::AddAtlasTexture_nolock(const tex_desc_
     const bool use_compression = use_tex_compression_ && !_t.force_no_compression;
 
     std::unique_ptr<color_rg8_t[]> repacked_normalmap;
-    bool recostruct_z = false;
+    bool reconstruct_z = false;
 
     const void *tex_data = _t.data;
 
@@ -251,7 +251,7 @@ inline Ray::TextureHandle Ray::NS::Scene::AddAtlasTexture_nolock(const tex_desc_
             for (int i = 0; i < res[0] * res[1]; ++i) {
                 repacked_normalmap[i].v[0] = rgba_data[i].v[0];
                 repacked_normalmap[i].v[1] = rgba_data[i].v[1];
-                recostruct_z |= (rgba_data[i].v[2] < 250);
+                reconstruct_z |= (rgba_data[i].v[2] < 250);
             }
 
             tex_data = repacked_normalmap.get();
@@ -268,7 +268,7 @@ inline Ray::TextureHandle Ray::NS::Scene::AddAtlasTexture_nolock(const tex_desc_
             for (int i = 0; i < res[0] * res[1]; ++i) {
                 repacked_normalmap[i].v[0] = rgb_data[i].v[0];
                 repacked_normalmap[i].v[1] = rgb_data[i].v[1];
-                recostruct_z |= (rgb_data[i].v[2] < 250);
+                reconstruct_z |= (rgb_data[i].v[2] < 250);
             }
 
             tex_data = repacked_normalmap.get();
@@ -276,12 +276,12 @@ inline Ray::TextureHandle Ray::NS::Scene::AddAtlasTexture_nolock(const tex_desc_
         }
     } else if (_t.format == eTextureFormat::RG88) {
         t.atlas = use_compression ? 6 : 2;
-        recostruct_z = _t.is_normalmap;
+        reconstruct_z = _t.is_normalmap;
     } else if (_t.format == eTextureFormat::R8) {
         t.atlas = use_compression ? 5 : 3;
     }
 
-    if (recostruct_z) {
+    if (reconstruct_z) {
         t.width |= uint32_t(ATLAS_TEX_RECONSTRUCT_Z_BIT);
     }
 
@@ -368,7 +368,7 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
     uint32_t data_size[16] = {};
 
     std::unique_ptr<uint8_t[]> repacked_data;
-    bool recostruct_z = false, is_YCoCg = false;
+    bool reconstruct_z = false, is_YCoCg = false;
 
     if (_t.format == eTextureFormat::RGBA8888) {
         if (!_t.is_normalmap) {
@@ -390,7 +390,7 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
             for (int i = 0; i < _t.w * _t.h; ++i) {
                 repacked_data[i * 2 + 0] = rgba_data[i].v[0];
                 repacked_data[i * 2 + 1] = rgba_data[i].v[1];
-                recostruct_z |= (rgba_data[i].v[2] < 250);
+                reconstruct_z |= (rgba_data[i].v[2] < 250);
             }
 
             if (use_compression) {
@@ -464,7 +464,7 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
             for (int i = 0; i < _t.w * _t.h; ++i) {
                 repacked_data[i * 2 + 0] = rgb_data[i].v[0];
                 repacked_data[i * 2 + 1] = rgb_data[i].v[1];
-                recostruct_z |= (rgb_data[i].v[2] < 250);
+                reconstruct_z |= (rgb_data[i].v[2] < 250);
             }
 
             if (use_compression) {
@@ -497,7 +497,7 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
             j += round_up(_t.w * 2, TextureDataPitchAlignment);
         }
 
-        recostruct_z = _t.is_normalmap;
+        reconstruct_z = _t.is_normalmap;
     } else if (_t.format == eTextureFormat::R8) {
         if (use_compression) {
             src_fmt = eTexFormat::RawR8;
@@ -582,7 +582,7 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
     if (_t.is_srgb && (is_YCoCg || RequiresManualSRGBConversion(fmt))) {
         ret.first |= TEX_SRGB_BIT;
     }
-    if (recostruct_z) {
+    if (reconstruct_z) {
         ret.first |= TEX_RECONSTRUCT_Z_BIT;
     }
     if (_t.flip_normalmap_y) {

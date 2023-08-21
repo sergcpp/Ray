@@ -89,7 +89,7 @@ Ray::TextureHandle Ray::Cpu::Scene::AddTexture(const tex_desc_t &_t) {
     const int res[2] = {_t.w, _t.h};
 
     bool use_compression = use_tex_compression_ && !_t.force_no_compression;
-    bool recostruct_z = false, is_YCoCg = false;
+    bool reconstruct_z = false, is_YCoCg = false;
 
     int storage = -1, index = -1;
     if (_t.format == eTextureFormat::RGBA8888) {
@@ -104,10 +104,10 @@ Ray::TextureHandle Ray::Cpu::Scene::AddTexture(const tex_desc_t &_t) {
             for (int i = 0; i < res[0] * res[1]; ++i) {
                 repacked_data[i].v[0] = rgba_data[i].v[0];
                 repacked_data[i].v[1] = rgba_data[i].v[1];
-                recostruct_z |= (rgba_data[i].v[2] < 250);
+                reconstruct_z |= (rgba_data[i].v[2] < 250);
             }
             if (use_compression) {
-                storage = 4;
+                storage = 6;
                 index = tex_storage_bc5_.Allocate(repacked_data, res, _t.generate_mipmaps);
             } else {
                 storage = 2;
@@ -133,7 +133,7 @@ Ray::TextureHandle Ray::Cpu::Scene::AddTexture(const tex_desc_t &_t) {
             for (int i = 0; i < res[0] * res[1]; ++i) {
                 repacked_data[i].v[0] = rgb_data[i].v[0];
                 repacked_data[i].v[1] = rgb_data[i].v[1];
-                recostruct_z |= (rgb_data[i].v[2] < 250);
+                reconstruct_z |= (rgb_data[i].v[2] < 250);
             }
 
             if (use_compression) {
@@ -156,7 +156,7 @@ Ray::TextureHandle Ray::Cpu::Scene::AddTexture(const tex_desc_t &_t) {
                 Span<const color_rg8_t>(reinterpret_cast<const color_rg8_t *>(_t.data), res[0] * res[1]), res,
                 _t.generate_mipmaps);
         }
-        recostruct_z = _t.is_normalmap;
+        reconstruct_z = _t.is_normalmap;
     } else if (_t.format == eTextureFormat::R8) {
         if (use_compression) {
             storage = 5;
@@ -187,7 +187,7 @@ Ray::TextureHandle Ray::Cpu::Scene::AddTexture(const tex_desc_t &_t) {
     if (_t.is_srgb) {
         ret |= TEX_SRGB_BIT;
     }
-    if (recostruct_z) {
+    if (reconstruct_z) {
         ret |= TEX_RECONSTRUCT_Z_BIT;
     }
     if (_t.flip_normalmap_y) {
