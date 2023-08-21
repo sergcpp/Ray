@@ -1770,7 +1770,7 @@ bool Ray::ReadTGAFile(const void *data, const int data_len, int &w, int &h, eTex
 void Ray::WriteTGA(const uint8_t *data, const int w, const int h, const int bpp, const char *name) {
     std::ofstream file(name, std::ios::binary);
 
-    unsigned char header[18] = {0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    unsigned char header[18] = {0, 0, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
     header[12] = w & 0xFF;
     header[13] = (w >> 8) & 0xFF;
@@ -1781,23 +1781,53 @@ void Ray::WriteTGA(const uint8_t *data, const int w, const int h, const int bpp,
 
     file.write((char *)&header[0], sizeof(unsigned char) * 18);
 
-    auto out_data = std::unique_ptr<uint8_t[]>{new uint8_t[size_t(w) * h * bpp]};
-    if (bpp == 3) {
-        for (size_t i = 0; i < size_t(w) * h; ++i) {
-            out_data[i * 3 + 0] = data[i * 3 + 2];
-            out_data[i * 3 + 1] = data[i * 3 + 1];
-            out_data[i * 3 + 2] = data[i * 3 + 0];
+    uint8_t out_data[512];
+    int out_data_count = 0;
+
+    out_data[0] = data[2];
+    out_data[1] = data[1];
+    out_data[2] = data[0];
+    if (bpp == 4) {
+        out_data[3] = data[3];
+    }
+    out_data_count = bpp;
+
+    int ref_point = 0, is_rle = -1;
+
+    for (int i = 1; i < w * h; ++i) {
+        uint8_t temp[4] = {};
+        temp[0] = data[i * bpp + 2];
+        temp[1] = data[i * bpp + 1];
+        temp[2] = data[i * bpp + 0];
+        if (bpp == 4) {
+            temp[3] = data[i * bpp + 3];
         }
-    } else {
-        for (size_t i = 0; i < size_t(w) * h; ++i) {
-            out_data[i * 4 + 0] = data[i * 4 + 2];
-            out_data[i * 4 + 1] = data[i * 4 + 1];
-            out_data[i * 4 + 2] = data[i * 4 + 0];
-            out_data[i * 4 + 3] = data[i * 4 + 3];
+
+        const int prev_rle = is_rle;
+        is_rle = (memcmp(temp, out_data, bpp) == 0);
+
+        if ((is_rle != prev_rle && prev_rle != -1) || (i - ref_point) >= 128 || i == w * h - 1) {
+            { // write data
+                uint8_t packet_header = uint8_t(i - ref_point - 1);
+                if (prev_rle == 1) {
+                    packet_header |= (1u << 7u);
+                }
+
+                file.write((const char *)&packet_header, 1);
+                file.write((const char *)out_data, out_data_count);
+
+                out_data_count = 0;
+            }
+
+            ref_point = i;
+            is_rle = -1;
+        }
+
+        if (is_rle != 1) {
+            memcpy(out_data + out_data_count, temp, bpp);
+            out_data_count += bpp;
         }
     }
-
-    file.write((const char *)&out_data[0], size_t(w) * h * bpp);
 
     static const char footer[26] = "\0\0\0\0"         // no extension area
                                    "\0\0\0\0"         // no developer directory
