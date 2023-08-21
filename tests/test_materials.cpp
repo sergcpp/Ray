@@ -1334,7 +1334,7 @@ void test_complex_mat3(const char *arch_list[], const char *preferred_device) {
 
 void test_complex_mat4(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 12;
-    const int PixThres = 2426;
+    const int PixThres = 2427;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};

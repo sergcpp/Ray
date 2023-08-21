@@ -103,6 +103,7 @@ set(INTERNAL_SOURCE_FILES internal/Atmosphere.h
                           internal/UniformIntDistribution.h
                           internal/Utils.h
                           internal/Utils.cpp
+                          internal/UtilsNEON.cpp
                           internal/UtilsSSE2.cpp)
 
 if (ENABLE_REF_IMPL)

@@ -6,7 +6,6 @@
 #pragma GCC target("sse2")
 #endif
 
-#include <cassert>
 #include <cstring>
 
 #include <immintrin.h>
@@ -30,9 +29,9 @@ namespace Ray {
 // clang-format off
 // Copy rgb values and zero out alpha
 static const __m128i RGB_to_RGBA = _mm_set_epi8(-1 /* Insert zero */, 11, 10, 9,
-    -1 /* Insert zero */, 8, 7, 6,
-    -1 /* Insert zero */, 5, 4, 3,
-    -1 /* Insert zero */, 2, 1, 0);
+                                                -1 /* Insert zero */, 8, 7, 6,
+                                                -1 /* Insert zero */, 5, 4, 3,
+                                                -1 /* Insert zero */, 2, 1, 0);
 // clang-format on
 
 #ifdef __GNUC__
@@ -136,8 +135,8 @@ void GetMinMaxAlphaByBBox_SSE2(const uint8_t block[16], uint8_t &min_alpha, uint
     max_col = _mm_max_epu8(max_col, _mm_srli_si128(max_col, 2));
     max_col = _mm_max_epu8(max_col, _mm_srli_si128(max_col, 1));
 
-    min_alpha = _mm_extract_epi8(min_col, 0);
-    max_alpha = _mm_extract_epi8(max_col, 0);
+    min_alpha = _mm_extract_epi16(min_col, 0) & 0xff;
+    max_alpha = _mm_extract_epi16(max_col, 0) & 0xff;
 }
 
 static const __m128i YCoCgScaleBias =
@@ -311,8 +310,9 @@ void SelectYCoCgDiagonal_SSE2(const uint8_t block[64], uint8_t min_color[3], uin
     _mm_storeu_si32(max_color, max_col);
 }
 
-static const __m128i RGB565Mask = _mm_set_epi8(0, 0, 0, 0, 0, char(0b11111000), char(0b11111100), char(0b11111000), 0,
-                                               0, 0, 0, 0, char(0b11111000), char(0b11111100), char(0b11111000));
+static const __m128i RGB565Mask =
+    _mm_set_epi8(0, 0, 0, 0, 0, int8_t(0b11111000), int8_t(0b11111100), int8_t(0b11111000), 0, 0, 0, 0, 0,
+                 int8_t(0b11111000), int8_t(0b11111100), int8_t(0b11111000));
 // multiplier used to emulate division by 3
 static const __m128i DivBy3_i16 = _mm_set1_epi16((1 << 16) / 3 + 1);
 
