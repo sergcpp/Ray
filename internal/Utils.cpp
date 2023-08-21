@@ -960,7 +960,7 @@ void GetMinMaxColorByBBox_Ref(const uint8_t block[64], uint8_t min_color[4], uin
     }
 }
 
-void GetMinMaxAlphaByBBox_Ref(const uint8_t block[64], uint8_t &min_alpha, uint8_t &max_alpha) {
+void GetMinMaxAlphaByBBox_Ref(const uint8_t block[16], uint8_t &min_alpha, uint8_t &max_alpha) {
     min_alpha = 255;
     max_alpha = 0;
 
@@ -974,6 +974,8 @@ void GetMinMaxAlphaByBBox_Ref(const uint8_t block[64], uint8_t &min_alpha, uint8
 
 template <bool UseAlpha = false, bool Is_YCoCg = false>
 void GetMinMaxColorByBBox_SSE2(const uint8_t block[64], uint8_t min_color[4], uint8_t max_color[4]);
+
+void GetMinMaxAlphaByBBox_SSE2(const uint8_t block[16], uint8_t &min_alpha, uint8_t &max_alpha);
 
 void InsetYCoCgBBox_Ref(uint8_t min_color[4], uint8_t max_color[4]) {
     const int inset[] = {(max_color[0] - min_color[0]) - ((1 << (4 - 1)) - 1),
@@ -1301,6 +1303,8 @@ void EmitAlphaOnlyIndices_Ref(const uint8_t block[16], const uint8_t min_alpha, 
 
 void EmitAlphaIndices_SSE2(const uint8_t block[64], uint8_t min_alpha, uint8_t max_alpha, uint8_t *&out_data);
 
+void EmitAlphaOnlyIndices_SSE2(const uint8_t block[16], uint8_t min_alpha, uint8_t max_alpha, uint8_t *&out_data);
+
 void Emit_BC1_Block_Ref(const uint8_t block[64], uint8_t *&out_data) {
     uint8_t min_color[4], max_color[4];
     GetMinMaxColorByBBox_Ref(block, min_color, max_color);
@@ -1390,6 +1394,20 @@ template <bool Is_YCoCg> void Emit_BC3_Block_SSE2(uint8_t block[64], uint8_t *&o
     push_u16(rgb888_to_rgb565(min_color), out_data);
 
     EmitColorIndices_SSE2(block, min_color, max_color, out_data);
+}
+
+void Emit_BC4_Block_SSE2(uint8_t block[16], uint8_t *&out_data) {
+    uint8_t min_alpha, max_alpha;
+    GetMinMaxAlphaByBBox_SSE2(block, min_alpha, max_alpha);
+
+    //
+    // Write alpha block
+    //
+
+    push_u8(max_alpha, out_data);
+    push_u8(min_alpha, out_data);
+
+    EmitAlphaOnlyIndices_SSE2(block, min_alpha, max_alpha, out_data);
 }
 #endif
 } // namespace Ray
@@ -1544,8 +1562,29 @@ void Ray::CompressImage_BC4(const uint8_t img_src[], const int w, const int h, u
 
     const int pitch_pad = dst_pitch == 0 ? 0 : dst_pitch - BlockSize_BC4 * ((w + 3) / 4);
 
-#if 0
-    // TODO: SIMD implementation
+#if !defined(__arm__) && !defined(__aarch64__) && !defined(_M_ARM) && !defined(_M_ARM64)
+    const CpuFeatures cpu = GetCpuFeatures();
+    if (cpu.sse2_supported) {
+        for (int j = 0; j < h_aligned; j += 4, img_src += w * 4 * SrcChannels) {
+            for (int i = 0; i < w_aligned; i += 4) {
+                Extract4x4Block_Ref<SrcChannels, 1>(&img_src[i * SrcChannels], w * SrcChannels, block);
+                Emit_BC4_Block_SSE2(block, p_out);
+            }
+            // process last (incomplete) column
+            if (w_aligned != w) {
+                ExtractIncomplete4x4Block_Ref<SrcChannels, 1>(&img_src[w_aligned * SrcChannels], w * SrcChannels, w % 4,
+                                                              4, block);
+                Emit_BC4_Block_SSE2(block, p_out);
+            }
+            p_out += pitch_pad;
+        }
+        // process last (incomplete) row
+        for (int i = 0; i < w && h_aligned != h; i += 4) {
+            ExtractIncomplete4x4Block_Ref<SrcChannels, 1>(&img_src[i * SrcChannels], w * SrcChannels, _MIN(4, w - i),
+                                                          h % 4, block);
+            Emit_BC4_Block_SSE2(block, p_out);
+        }
+    } else
 #endif
     {
         for (int j = 0; j < h_aligned; j += 4, img_src += w * 4 * SrcChannels) {
@@ -1591,8 +1630,37 @@ void Ray::CompressImage_BC5(const uint8_t img_src[], const int w, const int h, u
 
     const int pitch_pad = dst_pitch == 0 ? 0 : dst_pitch - BlockSize_BC5 * ((w + 3) / 4);
 
-#if 0
-    // TODO: SIMD implementation
+#if !defined(__arm__) && !defined(__aarch64__) && !defined(_M_ARM) && !defined(_M_ARM64)
+    const CpuFeatures cpu = GetCpuFeatures();
+    if (cpu.sse2_supported) {
+        for (int j = 0; j < h_aligned; j += 4, img_src += w * 4 * SrcChannels) {
+            for (int i = 0; i < w_aligned; i += 4) {
+                Extract4x4Block_Ref<SrcChannels, 1>(&img_src[i * SrcChannels + 0], w * SrcChannels, block1);
+                Extract4x4Block_Ref<SrcChannels, 1>(&img_src[i * SrcChannels + 1], w * SrcChannels, block2);
+                Emit_BC4_Block_SSE2(block1, p_out);
+                Emit_BC4_Block_SSE2(block2, p_out);
+            }
+            // process last (incomplete) column
+            if (w_aligned != w) {
+                ExtractIncomplete4x4Block_Ref<SrcChannels, 1>(&img_src[w_aligned * SrcChannels + 0], w * SrcChannels,
+                                                              w % 4, 4, block1);
+                ExtractIncomplete4x4Block_Ref<SrcChannels, 1>(&img_src[w_aligned * SrcChannels + 1], w * SrcChannels,
+                                                              w % 4, 4, block2);
+                Emit_BC4_Block_SSE2(block1, p_out);
+                Emit_BC4_Block_SSE2(block2, p_out);
+            }
+            p_out += pitch_pad;
+        }
+        // process last (incomplete) row
+        for (int i = 0; i < w && h_aligned != h; i += 4) {
+            ExtractIncomplete4x4Block_Ref<SrcChannels, 1>(&img_src[i * SrcChannels + 0], w * SrcChannels,
+                                                          _MIN(4, w - i), h % 4, block1);
+            ExtractIncomplete4x4Block_Ref<SrcChannels, 1>(&img_src[i * SrcChannels + 1], w * SrcChannels,
+                                                          _MIN(4, w - i), h % 4, block2);
+            Emit_BC4_Block_SSE2(block1, p_out);
+            Emit_BC4_Block_SSE2(block2, p_out);
+        }
+    } else
 #endif
     {
         for (int j = 0; j < h_aligned; j += 4, img_src += w * 4 * SrcChannels) {

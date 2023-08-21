@@ -131,11 +131,13 @@ int Ray::Dx::TextureAtlas::Allocate(const color_t<T, N> *data, const int _res[2]
                         CompressImage_BC3<true /* Is_YCoCg */>(temp_YCoCg.get(), res[0], res[1], compressed_data.get());
                     } else if (format_ == eTexFormat::BC4) {
                         const int req_size = GetRequiredMemory_BC4(res[0], res[1], 1);
-                        compressed_data.reset(new uint8_t[req_size]);
+                        // NOTE: 1 byte is added due to BC4 compression write outside of memory block
+                        compressed_data.reset(new uint8_t[req_size + 1]);
                         CompressImage_BC4<N>(&temp_storage[0].v[0], res[0], res[1], compressed_data.get());
                     } else if (format_ == eTexFormat::BC5) {
                         const int req_size = GetRequiredMemory_BC5(res[0], res[1], 1);
-                        compressed_data.reset(new uint8_t[req_size]);
+                        // NOTE: 1 byte is added due to BC5 compression write outside of memory block
+                        compressed_data.reset(new uint8_t[req_size + 1]);
                         CompressImage_BC5<2>(&temp_storage[0].v[0], res[0], res[1], compressed_data.get());
                     }
 

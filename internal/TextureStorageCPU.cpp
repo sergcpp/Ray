@@ -366,7 +366,8 @@ template <int N> int Ray::Cpu::TexStorageBCn<N>::Allocate(Span<const InColorType
         }
     }
 
-    p.pixels.reset(new uint8_t[total_size]);
+    // NOTE: 1 byte is added due to BC4/BC5 compression write outside of memory block
+    p.pixels.reset(new uint8_t[total_size + 1]);
     if (N == 4) {
         // TODO: get rid of this allocation
         auto temp_YCoCg = ConvertRGB_to_CoCgxY(&data[0].v[0], res[0], res[1]);
