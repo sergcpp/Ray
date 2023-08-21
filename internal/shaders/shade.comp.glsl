@@ -572,7 +572,7 @@ vec4 Sample_GGXSpecular_BSDF(vec3 T, vec3 B, vec3 N, vec3 I, const float roughne
 #if USE_VNDF_GGX_SAMPLING == 1
     const vec3 sampled_normal_ts = SampleGGX_VNDF(view_dir_ts, alpha_x, alpha_y, rand_u, rand_v);
 #else
-    const simd_fvec4 sampled_normal_ts = sample_GGX_NDF(alpha_x, rand_u, rand_v);
+    const simd_fvec4 sampled_normal_ts = Sample_GGX_NDF(alpha_x, rand_u, rand_v);
 #endif
     const float dot_N_V = -dot(sampled_normal_ts, view_dir_ts);
     const vec3 reflected_dir_ts = normalize(reflect(-view_dir_ts, sampled_normal_ts));
@@ -632,7 +632,7 @@ vec4 Sample_PrincipledClearcoat_BSDF(vec3 T, vec3 B, vec3 N, vec3 I, float clear
     const vec3 sampled_normal_ts =
         SampleGGX_VNDF(view_dir_ts, clearcoat_roughness2, clearcoat_roughness2, rand_u, rand_v);
 #else
-    const vec3 sampled_normal_ts = sample_GGX_NDF(clearcoat_roughness2, rand_u, rand_v);
+    const vec3 sampled_normal_ts = Sample_GGX_NDF(clearcoat_roughness2, rand_u, rand_v);
 #endif
     const float dot_N_V = -dot(sampled_normal_ts, view_dir_ts);
     const vec3 reflected_dir_ts = normalize(reflect(-view_dir_ts, sampled_normal_ts));
@@ -695,7 +695,7 @@ vec4 Sample_GGXRefraction_BSDF(vec3 T, vec3 B, vec3 N, vec3 I, float roughness, 
 #if USE_VNDF_GGX_SAMPLING == 1
     const vec3 sampled_normal_ts = SampleGGX_VNDF(view_dir_ts, roughness2, roughness2, rand_u, rand_v);
 #else
-    const vec3 sampled_normal_ts = sample_GGX_NDF(roughness2, rand_u, rand_v);
+    const vec3 sampled_normal_ts = Sample_GGX_NDF(roughness2, rand_u, rand_v);
 #endif
 
     const float cosi = dot(view_dir_ts, sampled_normal_ts);

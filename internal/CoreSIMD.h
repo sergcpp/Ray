@@ -3850,7 +3850,7 @@ void Ray::NS::Sample_GGXSpecular_BSDF(const simd_fvec<S> T[3], const simd_fvec<S
 #if USE_VNDF_GGX_SAMPLING == 1
     SampleGGX_VNDF(view_dir_ts, max(alpha_x, FLT_EPS), max(alpha_y, FLT_EPS), rand_u, rand_v, sampled_normal_ts);
 #else
-    const simd_fvec4 sampled_normal_ts = sample_GGX_NDF(alpha_x, rand_u, rand_v);
+    const simd_fvec4 sampled_normal_ts = Sample_GGX_NDF(alpha_x, rand_u, rand_v);
 #endif
 
     const simd_fvec<S> dot_N_V = -dot3(sampled_normal_ts, view_dir_ts);
@@ -3944,7 +3944,7 @@ void Ray::NS::Sample_GGXRefraction_BSDF(const simd_fvec<S> T[3], const simd_fvec
 #if USE_VNDF_GGX_SAMPLING == 1
     SampleGGX_VNDF(view_dir_ts, roughness2, roughness2, rand_u, rand_v, sampled_normal_ts);
 #else
-    const simd_fvec4 sampled_normal_ts = sample_GGX_NDF(alpha_x, rand_u, rand_v);
+    const simd_fvec4 sampled_normal_ts = Sample_GGX_NDF(alpha_x, rand_u, rand_v);
 #endif
 
     const simd_fvec<S> cosi = dot3(view_dir_ts, sampled_normal_ts);
@@ -4040,7 +4040,7 @@ void Ray::NS::Sample_PrincipledClearcoat_BSDF(const simd_fvec<S> T[3], const sim
 #if USE_VNDF_GGX_SAMPLING == 1
     SampleGGX_VNDF(view_dir_ts, clearcoat_roughness2, clearcoat_roughness2, rand_u, rand_v, sampled_normal_ts);
 #else
-    const simd_fvec4 sampled_normal_ts = sample_GGX_NDF(clearcoat_roughness2, rand_u, rand_v);
+    const simd_fvec4 sampled_normal_ts = Sample_GGX_NDF(clearcoat_roughness2, rand_u, rand_v);
 #endif
 
     const simd_fvec<S> dot_N_V = -dot3(sampled_normal_ts, view_dir_ts);
