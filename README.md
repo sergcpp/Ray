@@ -3,11 +3,11 @@
 Small pathtracing library created for learning purposes. \
 Features:
 
-  - Unidirectional pathtracing with NEE and skyportals
-  - Principled BSDF, filmic tonemapping
-  - CPU backend accelerated using SSE/AVX/NEON extensions
-  - GPU backends (Vulkan, DirectX 12) with optional HW raytracing
-  - DNN denoiser (manual inference of OpenImageDenoise UNet), accelerated using VK_NV_cooperative_matrix if available
+- Unidirectional pathtracing with NEE and skyportals
+- Principled BSDF, filmic tonemapping
+- CPU backend accelerated using SSE/AVX/NEON extensions
+- GPU backends (Vulkan, DirectX 12) with optional HW raytracing
+- DNN denoiser (manual inference of OpenImageDenoise UNet), accelerated using VK_NV_cooperative_matrix if available
 
 <details>
   <summary>1-minute renders</summary>
@@ -46,15 +46,21 @@ Features:
 
   ## Installation
 The intended use is to add it as a submodule to an existing project:
+
 ```console
 $ git submodule add https://github.com/sergcpp/Ray.git
 ```
+
 Then in CMakeLists.txt file:
+
 ```cmake
 add_subdirectory(Ray)
 ```
+
 But also standalone samples can be compiled and run:
+
 ### Windows
+
 ```console
 $ git clone https://github.com/sergcpp/Ray.git
 $ cd Ray
@@ -62,15 +68,20 @@ $ mkdir build && cd build/
 $ cmake ..
 $ msbuild ALL_BUILD.vcxproj /p:Configuration=Release
 ```
+
 ### Linux/MacOS
+
 ```console
 $ git clone https://github.com/sergcpp/Ray.git
 $ cd Ray
 $ mkdir build && cd build/
 $ cmake .. -DCMAKE_BUILD_TYPE=Release && make
 ```
+
 ## Usage
+
 ### Image rendering
+
 ```c++
 #include <Ray/Ray.h>
 
@@ -215,10 +226,13 @@ int main() {
     delete renderer;
 }
 ```
+
 ![Screenshot](img1.jpg)
 
 ### Multithreading
+
 With CPU backends it is safe to call RenderScene from different threads for non-overlaping image regions:
+
 ```c++
 ...
     if (Ray::RendererSupportsMultithreading(renderer->type())) {
@@ -237,8 +251,11 @@ With CPU backends it is safe to call RenderScene from different threads for non-
     }
 ...
 ```
+
 ### Denoising
+
 The image can be denoised either with UNet (slower) of NLM filter (faster).
+
 ```c++
 ...
   if (EnableHighQualityDenoising) {
@@ -255,6 +272,7 @@ The image can be denoised either with UNet (slower) of NLM filter (faster).
   }
 ...
 ```
+
 See [samples](samples) folder for more.
 </details>
 

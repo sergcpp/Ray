@@ -3,8 +3,11 @@
 ## [Unreleased]
 
 ### Added
+
 ### Fixed
+
 ### Changed
+
 ### Removed
 
 ## [0.2.0] - 2023-08-05
