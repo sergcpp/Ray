@@ -93,10 +93,8 @@ int main() {
     Ray::mesh_desc_t mesh_desc;
     mesh_desc.prim_type = Ray::ePrimType::TriangleList;
     mesh_desc.layout = Ray::eVertexLayout::PxyzNxyzTuv;
-    mesh_desc.vtx_attrs = &attrs[0];
-    mesh_desc.vtx_attrs_count = 10;
-    mesh_desc.vtx_indices = &indices[0];
-    mesh_desc.vtx_indices_count = 24;
+    mesh_desc.vtx_attrs = attrs;
+    mesh_desc.vtx_indices = indices;
 
     // Setup material groups
     const Ray::mat_group_desc_t groups[] = {

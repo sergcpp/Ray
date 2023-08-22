@@ -8,15 +8,14 @@
 #include <array>
 
 void Ray::ComputeTangentBasis(size_t vtx_offset, size_t vtx_start, std::vector<vertex_t> &vertices,
-                                   std::vector<uint32_t> &new_vtx_indices, const uint32_t *indices,
-                                   size_t indices_count) {
+                              std::vector<uint32_t> &new_vtx_indices, Span<const uint32_t> indices) {
     auto cross = [](const Ref::simd_fvec3 &v1, const Ref::simd_fvec3 &v2) -> Ref::simd_fvec3 {
         return Ref::simd_fvec3{v1[1] * v2[2] - v1[2] * v2[1], v1[2] * v2[0] - v1[0] * v2[2], v1[0] * v2[1] - v1[1] * v2[0]};
     };
 
     std::vector<std::array<uint32_t, 3>> twin_verts(vertices.size(), {0, 0, 0});
     aligned_vector<Ref::simd_fvec3> binormals(vertices.size());
-    for (size_t i = 0; i < indices_count; i += 3) {
+    for (int i = 0; i < indices.size(); i += 3) {
         vertex_t *v0 = &vertices[indices[i + 0]];
         vertex_t *v1 = &vertices[indices[i + 1]];
         vertex_t *v2 = &vertices[indices[i + 2]];

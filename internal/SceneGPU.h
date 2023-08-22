@@ -805,7 +805,7 @@ inline Ray::MeshHandle Ray::NS::Scene::AddMesh(const mesh_desc_t &_m) {
 
     const size_t attr_stride = AttrStrides[int(_m.layout)];
     if (use_hwrt_) {
-        for (int j = 0; j < int(_m.vtx_indices_count); j += 3) {
+        for (int j = 0; j < int(_m.vtx_indices.size()); j += 3) {
             simd_fvec4 p[3];
 
             const uint32_t i0 = _m.vtx_indices[j + 0], i1 = _m.vtx_indices[j + 1], i2 = _m.vtx_indices[j + 2];
@@ -819,14 +819,14 @@ inline Ray::MeshHandle Ray::NS::Scene::AddMesh(const mesh_desc_t &_m) {
         }
     } else {
         aligned_vector<mtri_accel_t> _unused;
-        PreprocessMesh(_m.vtx_attrs, {_m.vtx_indices, _m.vtx_indices_count}, _m.layout, _m.base_vertex, s, new_nodes,
-                       new_tris, new_tri_indices, _unused);
+        PreprocessMesh(_m.vtx_attrs.data(), _m.vtx_indices, _m.layout, _m.base_vertex, s, new_nodes, new_tris,
+                       new_tri_indices, _unused);
 
         memcpy(value_ptr(bbox_min), new_nodes[0].bbox_min, 3 * sizeof(float));
         memcpy(value_ptr(bbox_max), new_nodes[0].bbox_max, 3 * sizeof(float));
     }
 
-    std::vector<tri_mat_data_t> new_tri_materials(_m.vtx_indices_count / 3);
+    std::vector<tri_mat_data_t> new_tri_materials(_m.vtx_indices.size() / 3);
 
     // init triangle materials
     for (const mat_group_desc_t &grp : _m.groups) {
@@ -883,7 +883,7 @@ inline Ray::MeshHandle Ray::NS::Scene::AddMesh(const mesh_desc_t &_m) {
 
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
-    for (size_t i = 0; i < _m.vtx_indices_count; i++) {
+    for (int i = 0; i < _m.vtx_indices.size(); ++i) {
         new_vtx_indices.push_back(_m.vtx_indices[i] + _m.base_vertex + uint32_t(vertices_.size()));
     }
 
@@ -928,34 +928,34 @@ inline Ray::MeshHandle Ray::NS::Scene::AddMesh(const mesh_desc_t &_m) {
     const size_t stride = AttrStrides[int(_m.layout)];
 
     // add attributes
-    std::vector<vertex_t> new_vertices(_m.vtx_attrs_count);
-    for (size_t i = 0; i < _m.vtx_attrs_count; ++i) {
+    std::vector<vertex_t> new_vertices(_m.vtx_attrs.size() / stride);
+    for (int i = 0; i < _m.vtx_attrs.size() / stride; ++i) {
         vertex_t &v = new_vertices[i];
 
-        memcpy(&v.p[0], (_m.vtx_attrs + i * stride), 3 * sizeof(float));
-        memcpy(&v.n[0], (_m.vtx_attrs + i * stride + 3), 3 * sizeof(float));
+        memcpy(&v.p[0], (_m.vtx_attrs.data() + i * stride), 3 * sizeof(float));
+        memcpy(&v.n[0], (_m.vtx_attrs.data() + i * stride + 3), 3 * sizeof(float));
 
         if (_m.layout == eVertexLayout::PxyzNxyzTuv) {
-            memcpy(&v.t[0], (_m.vtx_attrs + i * stride + 6), 2 * sizeof(float));
+            memcpy(&v.t[0], (_m.vtx_attrs.data() + i * stride + 6), 2 * sizeof(float));
             // v.t[1][0] = v.t[1][1] = 0.0f;
             v.b[0] = v.b[1] = v.b[2] = 0.0f;
         } else if (_m.layout == eVertexLayout::PxyzNxyzTuvTuv) {
-            memcpy(&v.t[0], (_m.vtx_attrs + i * stride + 6), 2 * sizeof(float));
-            // memcpy(&v.t[1][0], (_m.vtx_attrs + i * stride + 8), 2 * sizeof(float));
+            memcpy(&v.t[0], (_m.vtx_attrs.data() + i * stride + 6), 2 * sizeof(float));
+            // memcpy(&v.t[1][0], (_m.vtx_attrs.data() + i * stride + 8), 2 * sizeof(float));
             v.b[0] = v.b[1] = v.b[2] = 0.0f;
         } else if (_m.layout == eVertexLayout::PxyzNxyzBxyzTuv) {
-            memcpy(&v.b[0], (_m.vtx_attrs + i * stride + 6), 3 * sizeof(float));
-            memcpy(&v.t[0], (_m.vtx_attrs + i * stride + 9), 2 * sizeof(float));
+            memcpy(&v.b[0], (_m.vtx_attrs.data() + i * stride + 6), 3 * sizeof(float));
+            memcpy(&v.t[0], (_m.vtx_attrs.data() + i * stride + 9), 2 * sizeof(float));
             // v.t[1][0] = v.t[1][1] = 0.0f;
         } else if (_m.layout == eVertexLayout::PxyzNxyzBxyzTuvTuv) {
-            memcpy(&v.b[0], (_m.vtx_attrs + i * stride + 6), 3 * sizeof(float));
-            memcpy(&v.t[0], (_m.vtx_attrs + i * stride + 9), 2 * sizeof(float));
-            // memcpy(&v.t[1][0], (_m.vtx_attrs + i * stride + 11), 2 * sizeof(float));
+            memcpy(&v.b[0], (_m.vtx_attrs.data() + i * stride + 6), 3 * sizeof(float));
+            memcpy(&v.t[0], (_m.vtx_attrs.data() + i * stride + 9), 2 * sizeof(float));
+            // memcpy(&v.t[1][0], (_m.vtx_attrs.data() + i * stride + 11), 2 * sizeof(float));
         }
     }
 
     if (_m.layout == eVertexLayout::PxyzNxyzTuv || _m.layout == eVertexLayout::PxyzNxyzTuvTuv) {
-        ComputeTangentBasis(vertices_.size(), 0, new_vertices, new_vtx_indices, _m.vtx_indices, _m.vtx_indices_count);
+        ComputeTangentBasis(vertices_.size(), 0, new_vertices, new_vtx_indices, _m.vtx_indices);
     }
 
     vertices_.Append(&new_vertices[0], new_vertices.size());

@@ -372,10 +372,8 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_base_color, const
         Ray::mesh_desc_t base_mesh_desc;
         base_mesh_desc.prim_type = Ray::ePrimType::TriangleList;
         base_mesh_desc.layout = Ray::eVertexLayout::PxyzNxyzTuv;
-        base_mesh_desc.vtx_attrs = &base_attrs[0];
-        base_mesh_desc.vtx_attrs_count = uint32_t(base_attrs.size()) / 8;
-        base_mesh_desc.vtx_indices = &base_indices[0];
-        base_mesh_desc.vtx_indices_count = uint32_t(base_indices.size());
+        base_mesh_desc.vtx_attrs = base_attrs;
+        base_mesh_desc.vtx_indices = base_indices;
 
         const Ray::mat_group_desc_t groups[] = {{mid_grey_mat, mid_grey_mat, base_groups[0], base_groups[1]}};
         base_mesh_desc.groups = groups;
@@ -396,10 +394,8 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_base_color, const
         Ray::mesh_desc_t model_mesh_desc;
         model_mesh_desc.prim_type = Ray::ePrimType::TriangleList;
         model_mesh_desc.layout = Ray::eVertexLayout::PxyzNxyzTuv;
-        model_mesh_desc.vtx_attrs = &model_attrs[0];
-        model_mesh_desc.vtx_attrs_count = uint32_t(model_attrs.size()) / 8;
-        model_mesh_desc.vtx_indices = &model_indices[0];
-        model_mesh_desc.vtx_indices_count = uint32_t(model_indices.size());
+        model_mesh_desc.vtx_attrs = model_attrs;
+        model_mesh_desc.vtx_indices = model_indices;
 
         const Ray::mat_group_desc_t groups[] = {{main_mat, main_mat, model_groups[0], model_groups[1]}};
         model_mesh_desc.groups = groups;
@@ -416,10 +412,8 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_base_color, const
         Ray::mesh_desc_t core_mesh_desc;
         core_mesh_desc.prim_type = Ray::ePrimType::TriangleList;
         core_mesh_desc.layout = Ray::eVertexLayout::PxyzNxyzTuv;
-        core_mesh_desc.vtx_attrs = &core_attrs[0];
-        core_mesh_desc.vtx_attrs_count = uint32_t(core_attrs.size()) / 8;
-        core_mesh_desc.vtx_indices = &core_indices[0];
-        core_mesh_desc.vtx_indices_count = uint32_t(core_indices.size());
+        core_mesh_desc.vtx_attrs = core_attrs;
+        core_mesh_desc.vtx_indices = core_indices;
 
         const Ray::mat_group_desc_t groups[] = {{mid_grey_mat, mid_grey_mat, core_groups[0], core_groups[1]}};
         core_mesh_desc.groups = groups;
@@ -437,10 +431,8 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_base_color, const
         Ray::mesh_desc_t subsurf_bar_mesh_desc;
         subsurf_bar_mesh_desc.prim_type = Ray::ePrimType::TriangleList;
         subsurf_bar_mesh_desc.layout = Ray::eVertexLayout::PxyzNxyzTuv;
-        subsurf_bar_mesh_desc.vtx_attrs = &subsurf_bar_attrs[0];
-        subsurf_bar_mesh_desc.vtx_attrs_count = uint32_t(subsurf_bar_attrs.size()) / 8;
-        subsurf_bar_mesh_desc.vtx_indices = &subsurf_bar_indices[0];
-        subsurf_bar_mesh_desc.vtx_indices_count = uint32_t(subsurf_bar_indices.size());
+        subsurf_bar_mesh_desc.vtx_attrs = subsurf_bar_attrs;
+        subsurf_bar_mesh_desc.vtx_indices = subsurf_bar_indices;
 
         const Ray::mat_group_desc_t groups[] = {
             {white_mat, white_mat, subsurf_bar_groups[0], subsurf_bar_groups[1]},
@@ -459,10 +451,8 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_base_color, const
         Ray::mesh_desc_t text_mesh_desc;
         text_mesh_desc.prim_type = Ray::ePrimType::TriangleList;
         text_mesh_desc.layout = Ray::eVertexLayout::PxyzNxyzTuv;
-        text_mesh_desc.vtx_attrs = &text_attrs[0];
-        text_mesh_desc.vtx_attrs_count = uint32_t(text_attrs.size()) / 8;
-        text_mesh_desc.vtx_indices = &text_indices[0];
-        text_mesh_desc.vtx_indices_count = uint32_t(text_indices.size());
+        text_mesh_desc.vtx_attrs = text_attrs;
+        text_mesh_desc.vtx_indices = text_indices;
 
         const Ray::mat_group_desc_t groups[] = {{white_mat, white_mat, text_groups[0], text_groups[1]}};
         text_mesh_desc.groups = groups;
@@ -487,10 +477,8 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_base_color, const
         Ray::mesh_desc_t env_mesh_desc;
         env_mesh_desc.prim_type = Ray::ePrimType::TriangleList;
         env_mesh_desc.layout = Ray::eVertexLayout::PxyzNxyzTuv;
-        env_mesh_desc.vtx_attrs = &env_attrs[0];
-        env_mesh_desc.vtx_attrs_count = uint32_t(env_attrs.size()) / 8;
-        env_mesh_desc.vtx_indices = &env_indices[0];
-        env_mesh_desc.vtx_indices_count = uint32_t(env_indices.size());
+        env_mesh_desc.vtx_attrs = env_attrs;
+        env_mesh_desc.vtx_indices = env_indices;
 
         std::vector<Ray::mat_group_desc_t> groups;
         if (test_scene == eTestScene::Standard_SunLight || test_scene == eTestScene::Standard_HDRLight) {
@@ -523,10 +511,8 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_base_color, const
         Ray::mesh_desc_t square_light_mesh_desc;
         square_light_mesh_desc.prim_type = Ray::ePrimType::TriangleList;
         square_light_mesh_desc.layout = Ray::eVertexLayout::PxyzNxyzTuv;
-        square_light_mesh_desc.vtx_attrs = &square_light_attrs[0];
-        square_light_mesh_desc.vtx_attrs_count = uint32_t(square_light_attrs.size()) / 8;
-        square_light_mesh_desc.vtx_indices = &square_light_indices[0];
-        square_light_mesh_desc.vtx_indices_count = uint32_t(square_light_indices.size());
+        square_light_mesh_desc.vtx_attrs = square_light_attrs;
+        square_light_mesh_desc.vtx_indices = square_light_indices;
 
         const Ray::mat_group_desc_t groups[] = {
             {square_light_mat, square_light_mat, square_light_groups[0], square_light_groups[1]},
@@ -550,10 +536,8 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_base_color, const
         Ray::mesh_desc_t disc_light_mesh_desc;
         disc_light_mesh_desc.prim_type = Ray::ePrimType::TriangleList;
         disc_light_mesh_desc.layout = Ray::eVertexLayout::PxyzNxyzTuv;
-        disc_light_mesh_desc.vtx_attrs = &disc_light_attrs[0];
-        disc_light_mesh_desc.vtx_attrs_count = uint32_t(disc_light_attrs.size()) / 8;
-        disc_light_mesh_desc.vtx_indices = &disc_light_indices[0];
-        disc_light_mesh_desc.vtx_indices_count = uint32_t(disc_light_indices.size());
+        disc_light_mesh_desc.vtx_attrs = disc_light_attrs;
+        disc_light_mesh_desc.vtx_indices = disc_light_indices;
 
         const Ray::mat_group_desc_t groups[] = {
             {disc_light_mat, disc_light_mat, disc_light_groups[0], disc_light_groups[1]},
@@ -573,10 +557,8 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_base_color, const
         Ray::mesh_desc_t glassball_mesh_desc;
         glassball_mesh_desc.prim_type = Ray::ePrimType::TriangleList;
         glassball_mesh_desc.layout = Ray::eVertexLayout::PxyzNxyzTuv;
-        glassball_mesh_desc.vtx_attrs = &glassball_attrs[0];
-        glassball_mesh_desc.vtx_attrs_count = uint32_t(glassball_attrs.size()) / 8;
-        glassball_mesh_desc.vtx_indices = &glassball_indices[0];
-        glassball_mesh_desc.vtx_indices_count = uint32_t(glassball_indices.size());
+        glassball_mesh_desc.vtx_attrs = glassball_attrs;
+        glassball_mesh_desc.vtx_indices = glassball_indices;
 
         const Ray::mat_group_desc_t groups[] = {
             {glassball_mat0, glassball_mat0, glassball_groups[0], glassball_groups[1]},

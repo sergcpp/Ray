@@ -135,10 +135,8 @@ struct mesh_desc_t {
     const char *name = nullptr;             ///< Mesh name (for debugging)
     ePrimType prim_type;                    ///< Primitive type
     eVertexLayout layout;                   ///< Vertex attribute layout
-    const float *vtx_attrs;                 ///< Pointer to vertex attribute
-    size_t vtx_attrs_count;                 ///< Vertex attribute count (number of vertices)
-    const uint32_t *vtx_indices;            ///< Pointer to vertex indices, defining primitive
-    size_t vtx_indices_count;               ///< Primitive indices count
+    Span<const float> vtx_attrs;            ///< Vertex attributes
+    Span<const uint32_t> vtx_indices;       ///< Vertex indices, defining primitives
     int base_vertex = 0;                    ///< Shift applied to indices
     Span<const mat_group_desc_t> groups;    ///< Shapes of a mesh
     bool allow_spatial_splits = false;      ///< Better BVH, worse load times and memory consumption
