@@ -155,16 +155,17 @@ int main() {
     Ray::mesh_desc_t mesh_desc;
     mesh_desc.prim_type = Ray::ePrimType::TriangleList;
     mesh_desc.layout = Ray::eVertexLayout::PxyzNxyzTuv;
-    mesh_desc.vtx_attrs = &attrs[0];
-    mesh_desc.vtx_attrs_count = 10;
-    mesh_desc.vtx_indices = &indices[0];
-    mesh_desc.vtx_indices_count = 24;
+    mesh_desc.vtx_attrs = attrs;
+    mesh_desc.vtx_indices = indices;
 
     // Setup material groups
-    mesh_desc.shapes.emplace_back(mat1, 0, 6);
-    mesh_desc.shapes.emplace_back(mat2, 6, 6);
-    mesh_desc.shapes.emplace_back(mat3, 12, 6);
-    mesh_desc.shapes.emplace_back(mat4, 18, 6);
+    const Ray::mat_group_desc_t groups[] = {
+        {mat1, 0, 6},
+        {mat2, 6, 6},
+        {mat3, 12, 6},
+        {mat4, 18, 6},
+    };
+    mesh_desc.groups = groups;
 
     Ray::MeshHandle mesh1 = scene->AddMesh(mesh_desc);
 
