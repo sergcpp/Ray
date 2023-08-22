@@ -336,9 +336,14 @@ extern template class TexStorageSwizzled<uint8_t, 1>;
 template <int N> struct BCCache {
     int decoded_index = -1, decoded_block_offset = -1;
     color_t<uint8_t, N> decoded_block[16];
+
+    void Invalidate() {
+        decoded_index = -1;
+        decoded_block_offset = -1;
+    }
 };
 
-template <int N> BCCache<N> &GetBCCache() {
+template <int N> BCCache<N> &get_per_thread_BCCache() {
     static thread_local BCCache<N> g_block_cache;
     return g_block_cache;
 }
@@ -385,7 +390,7 @@ template <int N> class TexStorageBCn : public TexStorageBase {
         const int block_offset =
             p.lod_offsets[lod] + (tiley * w_in_tiles + tilex) * (N == 4 ? BlockSize_BC3 : BlockSize_BC4 * N);
 
-        BCCache<N> &cache = GetBCCache<N>();
+        BCCache<N> &cache = get_per_thread_BCCache<N>();
 
         if (index != cache.decoded_index || block_offset != cache.decoded_block_offset) {
             const uint8_t *compressed_block = &p.pixels[block_offset];

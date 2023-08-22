@@ -408,6 +408,11 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase *scene, RegionC
         }
     }
 
+    // make sure we will not use stale values
+    get_per_thread_BCCache<1>().Invalidate();
+    get_per_thread_BCCache<2>().Invalidate();
+    get_per_thread_BCCache<4>().Invalidate();
+
     using namespace std::chrono;
 
     const auto time_start = high_resolution_clock::now();
