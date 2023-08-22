@@ -160,7 +160,7 @@ enum eTextureFormat { RGBA8888, RGB888, RG88, R8 };
 struct tex_desc_t {
     eTextureFormat format;             ///< Texture data format
     const char *name = nullptr;        ///< Debug name
-    const void *data;                  ///< Texture data
+    Span<const uint8_t> data;          ///< Texture data
     int w,                             ///< Texture width
         h;                             ///< Texture height
     bool is_srgb = true;               ///< Treat this texture as SRGB

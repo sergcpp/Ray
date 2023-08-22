@@ -8,7 +8,7 @@
 
 #include "../../Ray.h"
 
-std::vector<Ray::color_rgba8_t> GenerateCheckerboard(int res, int square_size);
+std::vector<uint8_t> GenerateCheckerboard(int res, int square_size);
 void WriteTGA(const Ray::color_rgba_t *data, int pitch, int w, int h, int bpp, const char *name);
 
 int main() {
@@ -33,13 +33,13 @@ int main() {
     scene->SetEnvironment(env_desc);
 
     // Add checker texture
-    std::vector<Ray::color_rgba8_t> tex_data = GenerateCheckerboard(128, 16);
+    const std::vector<uint8_t> tex_data = GenerateCheckerboard(128, 16);
     Ray::tex_desc_t tex_desc;
     tex_desc.format = Ray::eTextureFormat::RGBA8888;
     tex_desc.w = 128;
     tex_desc.h = 128;
     tex_desc.generate_mipmaps = false;
-    tex_desc.data = tex_data.data();
+    tex_desc.data = tex_data;
 
     Ray::TextureHandle checker_tex = scene->AddTexture(tex_desc);
 
@@ -209,8 +209,8 @@ void WriteTGA(const Ray::color_rgba_t *data, int pitch, const int w, const int h
     file.write(footer, sizeof(footer));
 }
 
-std::vector<Ray::color_rgba8_t> GenerateCheckerboard(const int res, const int square_size) {
-    std::vector<Ray::color_rgba8_t> ret(res * res);
+std::vector<uint8_t> GenerateCheckerboard(const int res, const int square_size) {
+    std::vector<uint8_t> ret(4 * res * res);
 
     for (int i = 0; i < res; i++) {
         for (int j = 0; j < res; j++) {
@@ -219,15 +219,15 @@ std::vector<Ray::color_rgba8_t> GenerateCheckerboard(const int res, const int sq
             const int square_y = i / square_size;
 
             if ((square_x + square_y) % 2 == 0) {
-                ret[index].v[0] = 10;
-                ret[index].v[1] = 10;
-                ret[index].v[2] = 10;
-                ret[index].v[3] = 255;
+                ret[4 * index + 0] = 10;
+                ret[4 * index + 1] = 10;
+                ret[4 * index + 2] = 10;
+                ret[4 * index + 3] = 255;
             } else {
-                ret[index].v[0] = 250;
-                ret[index].v[1] = 250;
-                ret[index].v[2] = 250;
-                ret[index].v[3] = 255;
+                ret[4 * index + 0] = 250;
+                ret[4 * index + 1] = 250;
+                ret[4 * index + 2] = 250;
+                ret[4 * index + 3] = 255;
             }
         }
     }

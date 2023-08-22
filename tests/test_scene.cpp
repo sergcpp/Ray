@@ -33,7 +33,7 @@ void load_needed_textures(Ray::SceneBase &scene, Ray::shading_node_desc_t &mat_d
 
         Ray::tex_desc_t tex_desc;
         tex_desc.format = Ray::eTextureFormat::RGBA8888;
-        tex_desc.data = img_data.data();
+        tex_desc.data = img_data;
         tex_desc.w = img_w;
         tex_desc.h = img_h;
         tex_desc.generate_mipmaps = true;
@@ -62,7 +62,7 @@ void load_needed_textures(Ray::SceneBase &scene, Ray::principled_mat_desc_t &mat
 
         Ray::tex_desc_t tex_desc;
         tex_desc.format = Ray::eTextureFormat::RGB888;
-        tex_desc.data = img_data.data();
+        tex_desc.data = img_data;
         tex_desc.w = img_w;
         tex_desc.h = img_h;
         tex_desc.generate_mipmaps = true;
@@ -85,7 +85,7 @@ void load_needed_textures(Ray::SceneBase &scene, Ray::principled_mat_desc_t &mat
 
         Ray::tex_desc_t tex_desc;
         tex_desc.format = Ray::eTextureFormat::RGB888;
-        tex_desc.data = img_data.data();
+        tex_desc.data = img_data;
         tex_desc.w = img_w;
         tex_desc.h = img_h;
         tex_desc.is_normalmap = true;
@@ -107,7 +107,7 @@ void load_needed_textures(Ray::SceneBase &scene, Ray::principled_mat_desc_t &mat
 
         Ray::tex_desc_t tex_desc;
         tex_desc.format = Ray::eTextureFormat::R8;
-        tex_desc.data = img_data.data();
+        tex_desc.data = img_data;
         tex_desc.w = img_w;
         tex_desc.h = img_h;
         tex_desc.generate_mipmaps = true;
@@ -128,7 +128,7 @@ void load_needed_textures(Ray::SceneBase &scene, Ray::principled_mat_desc_t &mat
 
         Ray::tex_desc_t tex_desc;
         tex_desc.format = Ray::eTextureFormat::R8;
-        tex_desc.data = img_data.data();
+        tex_desc.data = img_data;
         tex_desc.w = img_w;
         tex_desc.h = img_h;
         tex_desc.generate_mipmaps = true;
@@ -149,7 +149,7 @@ void load_needed_textures(Ray::SceneBase &scene, Ray::principled_mat_desc_t &mat
 
         Ray::tex_desc_t tex_desc;
         tex_desc.format = Ray::eTextureFormat::R8;
-        tex_desc.data = img_data.data();
+        tex_desc.data = img_data;
         tex_desc.w = img_w;
         tex_desc.h = img_h;
         tex_desc.generate_mipmaps = false;
@@ -742,7 +742,7 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_base_color, const
 
         Ray::tex_desc_t tex_desc;
         tex_desc.format = Ray::eTextureFormat::RGBA8888;
-        tex_desc.data = img_data.data();
+        tex_desc.data = img_data;
         tex_desc.w = img_w;
         tex_desc.h = img_h;
         tex_desc.generate_mipmaps = false;

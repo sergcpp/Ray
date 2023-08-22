@@ -238,7 +238,7 @@ inline Ray::TextureHandle Ray::NS::Scene::AddAtlasTexture_nolock(const tex_desc_
     std::unique_ptr<color_rg8_t[]> repacked_normalmap;
     bool reconstruct_z = false;
 
-    const void *tex_data = _t.data;
+    const void *tex_data = _t.data.data();
 
     if (_t.format == eTextureFormat::RGBA8888) {
         if (!_t.is_normalmap) {
@@ -247,7 +247,7 @@ inline Ray::TextureHandle Ray::NS::Scene::AddAtlasTexture_nolock(const tex_desc_
             // TODO: get rid of this allocation
             repacked_normalmap.reset(new color_rg8_t[res[0] * res[1]]);
 
-            const auto *rgba_data = reinterpret_cast<const color_rgba8_t *>(_t.data);
+            const auto *rgba_data = reinterpret_cast<const color_rgba8_t *>(_t.data.data());
             for (int i = 0; i < res[0] * res[1]; ++i) {
                 repacked_normalmap[i].v[0] = rgba_data[i].v[0];
                 repacked_normalmap[i].v[1] = rgba_data[i].v[1];
@@ -264,7 +264,7 @@ inline Ray::TextureHandle Ray::NS::Scene::AddAtlasTexture_nolock(const tex_desc_
             // TODO: get rid of this allocation
             repacked_normalmap.reset(new color_rg8_t[res[0] * res[1]]);
 
-            const auto *rgb_data = reinterpret_cast<const color_rgb8_t *>(_t.data);
+            const auto *rgb_data = reinterpret_cast<const color_rgb8_t *>(_t.data.data());
             for (int i = 0; i < res[0] * res[1]; ++i) {
                 repacked_normalmap[i].v[0] = rgb_data[i].v[0];
                 repacked_normalmap[i].v[1] = rgb_data[i].v[1];
@@ -320,16 +320,16 @@ inline Ray::TextureHandle Ray::NS::Scene::AddAtlasTexture_nolock(const tex_desc_
 
         int pages[16], positions[16][2];
         if (_t.format == eTextureFormat::RGBA8888) {
-            tex_atlases_[t.atlas].AllocateMips<uint8_t, 4>(reinterpret_cast<const color_rgba8_t *>(_t.data), res,
+            tex_atlases_[t.atlas].AllocateMips<uint8_t, 4>(reinterpret_cast<const color_rgba8_t *>(_t.data.data()), res,
                                                            NUM_MIP_LEVELS - 1, pages, positions);
         } else if (_t.format == eTextureFormat::RGB888) {
-            tex_atlases_[t.atlas].AllocateMips<uint8_t, 3>(reinterpret_cast<const color_rgb8_t *>(_t.data), res,
+            tex_atlases_[t.atlas].AllocateMips<uint8_t, 3>(reinterpret_cast<const color_rgb8_t *>(_t.data.data()), res,
                                                            NUM_MIP_LEVELS - 1, pages, positions);
         } else if (_t.format == eTextureFormat::RG88) {
-            tex_atlases_[t.atlas].AllocateMips<uint8_t, 2>(reinterpret_cast<const color_rg8_t *>(_t.data), res,
+            tex_atlases_[t.atlas].AllocateMips<uint8_t, 2>(reinterpret_cast<const color_rg8_t *>(_t.data.data()), res,
                                                            NUM_MIP_LEVELS - 1, pages, positions);
         } else if (_t.format == eTextureFormat::R8) {
-            tex_atlases_[t.atlas].AllocateMips<uint8_t, 1>(reinterpret_cast<const color_r8_t *>(_t.data), res,
+            tex_atlases_[t.atlas].AllocateMips<uint8_t, 1>(reinterpret_cast<const color_r8_t *>(_t.data.data()), res,
                                                            NUM_MIP_LEVELS - 1, pages, positions);
         } else {
             return InvalidTextureHandle;
@@ -375,7 +375,7 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
             src_fmt = fmt = eTexFormat::RawRGBA8888;
             data_size[0] = round_up(_t.w * 4, TextureDataPitchAlignment) * _t.h;
 
-            const auto *rgba_data = reinterpret_cast<const color_rgba8_t *>(_t.data);
+            const auto *rgba_data = reinterpret_cast<const color_rgba8_t *>(_t.data.data());
 
             int j = 0;
             for (int y = 0; y < _t.h; ++y) {
@@ -386,7 +386,7 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
             // TODO: get rid of this allocation
             repacked_data.reset(new uint8_t[2 * _t.w * _t.h]);
 
-            const auto *rgba_data = reinterpret_cast<const color_rgba8_t *>(_t.data);
+            const auto *rgba_data = reinterpret_cast<const color_rgba8_t *>(_t.data.data());
             for (int i = 0; i < _t.w * _t.h; ++i) {
                 repacked_data[i * 2 + 0] = rgba_data[i].v[0];
                 repacked_data[i * 2 + 1] = rgba_data[i].v[1];
@@ -414,7 +414,7 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
     } else if (_t.format == eTextureFormat::RGB888) {
         if (!_t.is_normalmap) {
             if (use_compression) {
-                auto temp_YCoCg = ConvertRGB_to_CoCgxY(reinterpret_cast<const uint8_t *>(_t.data), _t.w, _t.h);
+                auto temp_YCoCg = ConvertRGB_to_CoCgxY(reinterpret_cast<const uint8_t *>(_t.data.data()), _t.w, _t.h);
                 is_YCoCg = true;
                 src_fmt = eTexFormat::RawRGB888;
                 fmt = eTexFormat::BC3;
@@ -426,7 +426,7 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
                 src_fmt = fmt = eTexFormat::RawRGB888;
                 data_size[0] = round_up(_t.w * 3, TextureDataPitchAlignment) * _t.h;
 
-                const auto *rgb_data = reinterpret_cast<const color_rgb8_t *>(_t.data);
+                const auto *rgb_data = reinterpret_cast<const color_rgb8_t *>(_t.data.data());
 
                 int j = 0;
                 for (int y = 0; y < _t.h; ++y) {
@@ -441,7 +441,7 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
                 // TODO: get rid of this allocation
                 repacked_data.reset(new uint8_t[4 * _t.w * _t.h]);
 
-                const auto *rgb_data = reinterpret_cast<const uint8_t *>(_t.data);
+                const auto *rgb_data = reinterpret_cast<const uint8_t *>(_t.data.data());
 
                 for (int i = 0; i < _t.w * _t.h; ++i) {
                     repacked_data[i * 4 + 0] = rgb_data[i * 3 + 0];
@@ -460,7 +460,7 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
             // TODO: get rid of this allocation
             repacked_data.reset(new uint8_t[2 * _t.w * _t.h]);
 
-            const auto *rgb_data = reinterpret_cast<const color_rgb8_t *>(_t.data);
+            const auto *rgb_data = reinterpret_cast<const color_rgb8_t *>(_t.data.data());
             for (int i = 0; i < _t.w * _t.h; ++i) {
                 repacked_data[i * 2 + 0] = rgb_data[i].v[0];
                 repacked_data[i * 2 + 1] = rgb_data[i].v[1];
@@ -489,7 +489,7 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
         src_fmt = fmt = eTexFormat::RawRG88;
         data_size[0] = round_up(_t.w * 2, TextureDataPitchAlignment) * _t.h;
 
-        const auto *rg_data = reinterpret_cast<const color_rg8_t *>(_t.data);
+        const auto *rg_data = reinterpret_cast<const color_rg8_t *>(_t.data.data());
 
         int j = 0;
         for (int y = 0; y < _t.h; ++y) {
@@ -504,13 +504,13 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
             fmt = eTexFormat::BC4;
             block = eTexBlock::_4x4;
             data_size[0] = GetRequiredMemory_BC4(_t.w, _t.h, TextureDataPitchAlignment);
-            CompressImage_BC4<1>(reinterpret_cast<const uint8_t *>(_t.data), _t.w, _t.h, stage_data,
+            CompressImage_BC4<1>(reinterpret_cast<const uint8_t *>(_t.data.data()), _t.w, _t.h, stage_data,
                                  GetRequiredMemory_BC4(_t.w, 1, TextureDataPitchAlignment));
         } else {
             src_fmt = fmt = eTexFormat::RawR8;
             data_size[0] = round_up(_t.w, TextureDataPitchAlignment) * _t.h;
 
-            const auto *r_data = reinterpret_cast<const color_r8_t *>(_t.data);
+            const auto *r_data = reinterpret_cast<const color_r8_t *>(_t.data.data());
 
             int j = 0;
             for (int y = 0; y < _t.h; ++y) {
@@ -524,17 +524,19 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
         const int res[2] = {_t.w, _t.h};
         if (src_fmt == eTexFormat::RawRGBA8888) {
             const auto *rgba_data =
-                reinterpret_cast<const color_rgba8_t *>(repacked_data ? repacked_data.get() : _t.data);
+                reinterpret_cast<const color_rgba8_t *>(repacked_data ? repacked_data.get() : _t.data.data());
             WriteTextureMips(rgba_data, res, mip_count, use_compression, stage_data, data_size);
         } else if (src_fmt == eTexFormat::RawRGB888) {
             const auto *rgb_data =
-                reinterpret_cast<const color_rgb8_t *>(repacked_data ? repacked_data.get() : _t.data);
+                reinterpret_cast<const color_rgb8_t *>(repacked_data ? repacked_data.get() : _t.data.data());
             WriteTextureMips(rgb_data, res, mip_count, use_compression, stage_data, data_size);
         } else if (src_fmt == eTexFormat::RawRG88) {
-            const auto *rg_data = reinterpret_cast<const color_rg8_t *>(repacked_data ? repacked_data.get() : _t.data);
+            const auto *rg_data =
+                reinterpret_cast<const color_rg8_t *>(repacked_data ? repacked_data.get() : _t.data.data());
             WriteTextureMips(rg_data, res, mip_count, use_compression, stage_data, data_size);
         } else if (src_fmt == eTexFormat::RawR8) {
-            const auto *r_data = reinterpret_cast<const color_r8_t *>(repacked_data ? repacked_data.get() : _t.data);
+            const auto *r_data =
+                reinterpret_cast<const color_r8_t *>(repacked_data ? repacked_data.get() : _t.data.data());
             WriteTextureMips(r_data, res, mip_count, use_compression, stage_data, data_size);
         }
     }
@@ -1422,7 +1424,7 @@ inline void Ray::NS::Scene::PrepareSkyEnvMap_nolock() {
     }
 
     static const int SkyEnvRes[] = {512, 256};
-    std::unique_ptr<color_rgba8_t[]> rgbe_pixels(new color_rgba8_t[SkyEnvRes[0] * SkyEnvRes[1]]);
+    std::vector<uint8_t> rgbe_pixels(4 * SkyEnvRes[0] * SkyEnvRes[1]);
 
     for (int y = 0; y < SkyEnvRes[1]; ++y) {
         const float theta = PI * float(y) / float(SkyEnvRes[1]);
@@ -1452,17 +1454,17 @@ inline void Ray::NS::Scene::PrepareSkyEnvMap_nolock() {
 
             color = rgb_to_rgbe(color);
 
-            rgbe_pixels[y * SkyEnvRes[0] + x].v[0] = uint8_t(color.get<0>());
-            rgbe_pixels[y * SkyEnvRes[0] + x].v[1] = uint8_t(color.get<1>());
-            rgbe_pixels[y * SkyEnvRes[0] + x].v[2] = uint8_t(color.get<2>());
-            rgbe_pixels[y * SkyEnvRes[0] + x].v[3] = uint8_t(color.get<3>());
+            rgbe_pixels[4 * (y * SkyEnvRes[0] + x) + 0] = uint8_t(color.get<0>());
+            rgbe_pixels[4 * (y * SkyEnvRes[0] + x) + 1] = uint8_t(color.get<1>());
+            rgbe_pixels[4 * (y * SkyEnvRes[0] + x) + 2] = uint8_t(color.get<2>());
+            rgbe_pixels[4 * (y * SkyEnvRes[0] + x) + 3] = uint8_t(color.get<3>());
         }
     }
 
     tex_desc_t desc = {};
     desc.format = eTextureFormat::RGBA8888;
     desc.name = "Physical Sky Texture";
-    desc.data = rgbe_pixels.get();
+    desc.data = rgbe_pixels;
     desc.w = SkyEnvRes[0];
     desc.h = SkyEnvRes[1];
     desc.is_srgb = false;

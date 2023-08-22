@@ -93,7 +93,7 @@ Ray::TextureHandle Ray::Cpu::Scene::AddTexture(const tex_desc_t &_t) {
 
     int storage = -1, index = -1;
     if (_t.format == eTextureFormat::RGBA8888) {
-        const auto *rgba_data = reinterpret_cast<const color_rgba8_t *>(_t.data);
+        const auto *rgba_data = reinterpret_cast<const color_rgba8_t *>(_t.data.data());
         if (!_t.is_normalmap) {
             storage = 0;
             index = tex_storage_rgba_.Allocate(Span<const color_rgba8_t>(rgba_data, res[0] * res[1]), res,
@@ -115,7 +115,7 @@ Ray::TextureHandle Ray::Cpu::Scene::AddTexture(const tex_desc_t &_t) {
             }
         }
     } else if (_t.format == eTextureFormat::RGB888) {
-        const auto *rgb_data = reinterpret_cast<const color_rgb8_t *>(_t.data);
+        const auto *rgb_data = reinterpret_cast<const color_rgb8_t *>(_t.data.data());
         if (!_t.is_normalmap) {
             if (use_compression) {
                 is_YCoCg = true;
@@ -148,12 +148,12 @@ Ray::TextureHandle Ray::Cpu::Scene::AddTexture(const tex_desc_t &_t) {
         if (use_compression) {
             storage = 6;
             index = tex_storage_bc5_.Allocate(
-                Span<const color_rg8_t>(reinterpret_cast<const color_rg8_t *>(_t.data), res[0] * res[1]), res,
+                Span<const color_rg8_t>(reinterpret_cast<const color_rg8_t *>(_t.data.data()), res[0] * res[1]), res,
                 _t.generate_mipmaps);
         } else {
             storage = 2;
             index = tex_storage_rg_.Allocate(
-                Span<const color_rg8_t>(reinterpret_cast<const color_rg8_t *>(_t.data), res[0] * res[1]), res,
+                Span<const color_rg8_t>(reinterpret_cast<const color_rg8_t *>(_t.data.data()), res[0] * res[1]), res,
                 _t.generate_mipmaps);
         }
         reconstruct_z = _t.is_normalmap;
@@ -161,12 +161,12 @@ Ray::TextureHandle Ray::Cpu::Scene::AddTexture(const tex_desc_t &_t) {
         if (use_compression) {
             storage = 5;
             index = tex_storage_bc4_.Allocate(
-                Span<const color_r8_t>(reinterpret_cast<const color_r8_t *>(_t.data), res[0] * res[1]), res,
+                Span<const color_r8_t>(reinterpret_cast<const color_r8_t *>(_t.data.data()), res[0] * res[1]), res,
                 _t.generate_mipmaps);
         } else {
             storage = 3;
             index = tex_storage_r_.Allocate(
-                Span<const color_r8_t>(reinterpret_cast<const color_r8_t *>(_t.data), res[0] * res[1]), res,
+                Span<const color_r8_t>(reinterpret_cast<const color_r8_t *>(_t.data.data()), res[0] * res[1]), res,
                 _t.generate_mipmaps);
         }
     }
