@@ -376,7 +376,10 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_base_color, const
         base_mesh_desc.vtx_attrs_count = uint32_t(base_attrs.size()) / 8;
         base_mesh_desc.vtx_indices = &base_indices[0];
         base_mesh_desc.vtx_indices_count = uint32_t(base_indices.size());
-        base_mesh_desc.shapes.emplace_back(mid_grey_mat, mid_grey_mat, base_groups[0], base_groups[1]);
+
+        const Ray::mat_group_desc_t groups[] = {{mid_grey_mat, mid_grey_mat, base_groups[0], base_groups[1]}};
+        base_mesh_desc.groups = groups;
+
         base_mesh = scene.AddMesh(base_mesh_desc);
     }
 
@@ -397,7 +400,10 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_base_color, const
         model_mesh_desc.vtx_attrs_count = uint32_t(model_attrs.size()) / 8;
         model_mesh_desc.vtx_indices = &model_indices[0];
         model_mesh_desc.vtx_indices_count = uint32_t(model_indices.size());
-        model_mesh_desc.shapes.emplace_back(main_mat, main_mat, model_groups[0], model_groups[1]);
+
+        const Ray::mat_group_desc_t groups[] = {{main_mat, main_mat, model_groups[0], model_groups[1]}};
+        model_mesh_desc.groups = groups;
+
         model_mesh = scene.AddMesh(model_mesh_desc);
     }
 
@@ -414,7 +420,10 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_base_color, const
         core_mesh_desc.vtx_attrs_count = uint32_t(core_attrs.size()) / 8;
         core_mesh_desc.vtx_indices = &core_indices[0];
         core_mesh_desc.vtx_indices_count = uint32_t(core_indices.size());
-        core_mesh_desc.shapes.emplace_back(mid_grey_mat, mid_grey_mat, core_groups[0], core_groups[1]);
+
+        const Ray::mat_group_desc_t groups[] = {{mid_grey_mat, mid_grey_mat, core_groups[0], core_groups[1]}};
+        core_mesh_desc.groups = groups;
+
         core_mesh = scene.AddMesh(core_mesh_desc);
     }
 
@@ -432,9 +441,12 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_base_color, const
         subsurf_bar_mesh_desc.vtx_attrs_count = uint32_t(subsurf_bar_attrs.size()) / 8;
         subsurf_bar_mesh_desc.vtx_indices = &subsurf_bar_indices[0];
         subsurf_bar_mesh_desc.vtx_indices_count = uint32_t(subsurf_bar_indices.size());
-        subsurf_bar_mesh_desc.shapes.emplace_back(white_mat, white_mat, subsurf_bar_groups[0], subsurf_bar_groups[1]);
-        subsurf_bar_mesh_desc.shapes.emplace_back(dark_grey_mat, dark_grey_mat, subsurf_bar_groups[2],
-                                                  subsurf_bar_groups[3]);
+
+        const Ray::mat_group_desc_t groups[] = {
+            {white_mat, white_mat, subsurf_bar_groups[0], subsurf_bar_groups[1]},
+            {dark_grey_mat, dark_grey_mat, subsurf_bar_groups[2], subsurf_bar_groups[3]}};
+        subsurf_bar_mesh_desc.groups = groups;
+
         subsurf_bar_mesh = scene.AddMesh(subsurf_bar_mesh_desc);
     }
 
@@ -451,7 +463,10 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_base_color, const
         text_mesh_desc.vtx_attrs_count = uint32_t(text_attrs.size()) / 8;
         text_mesh_desc.vtx_indices = &text_indices[0];
         text_mesh_desc.vtx_indices_count = uint32_t(text_indices.size());
-        text_mesh_desc.shapes.emplace_back(white_mat, white_mat, text_groups[0], text_groups[1]);
+
+        const Ray::mat_group_desc_t groups[] = {{white_mat, white_mat, text_groups[0], text_groups[1]}};
+        text_mesh_desc.groups = groups;
+
         text_mesh = scene.AddMesh(text_mesh_desc);
 
         // Add mesh one more time to test compaction later
@@ -476,17 +491,21 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_base_color, const
         env_mesh_desc.vtx_attrs_count = uint32_t(env_attrs.size()) / 8;
         env_mesh_desc.vtx_indices = &env_indices[0];
         env_mesh_desc.vtx_indices_count = uint32_t(env_indices.size());
+
+        std::vector<Ray::mat_group_desc_t> groups;
         if (test_scene == eTestScene::Standard_SunLight || test_scene == eTestScene::Standard_HDRLight) {
-            env_mesh_desc.shapes.emplace_back(floor_mat, floor_mat, env_groups[0], env_groups[1]);
-            env_mesh_desc.shapes.emplace_back(dark_grey_mat, dark_grey_mat, env_groups[2], env_groups[3]);
-            env_mesh_desc.shapes.emplace_back(mid_grey_mat, mid_grey_mat, env_groups[4], env_groups[5]);
+            groups.emplace_back(floor_mat, floor_mat, env_groups[0], env_groups[1]);
+            groups.emplace_back(dark_grey_mat, dark_grey_mat, env_groups[2], env_groups[3]);
+            groups.emplace_back(mid_grey_mat, mid_grey_mat, env_groups[4], env_groups[5]);
         } else {
-            env_mesh_desc.shapes.emplace_back(floor_mat, floor_mat, env_groups[0], env_groups[1]);
-            env_mesh_desc.shapes.emplace_back(walls_mat, walls_mat, env_groups[2], env_groups[3]);
-            env_mesh_desc.shapes.emplace_back(dark_grey_mat, dark_grey_mat, env_groups[4], env_groups[5]);
-            env_mesh_desc.shapes.emplace_back(light_grey_mat, light_grey_mat, env_groups[6], env_groups[7]);
-            env_mesh_desc.shapes.emplace_back(mid_grey_mat, mid_grey_mat, env_groups[8], env_groups[9]);
+            groups.emplace_back(floor_mat, floor_mat, env_groups[0], env_groups[1]);
+            groups.emplace_back(walls_mat, walls_mat, env_groups[2], env_groups[3]);
+            groups.emplace_back(dark_grey_mat, dark_grey_mat, env_groups[4], env_groups[5]);
+            groups.emplace_back(light_grey_mat, light_grey_mat, env_groups[6], env_groups[7]);
+            groups.emplace_back(mid_grey_mat, mid_grey_mat, env_groups[8], env_groups[9]);
         }
+        env_mesh_desc.groups = groups;
+
         env_mesh = scene.AddMesh(env_mesh_desc);
 
         // Add mesh one more time to test compaction later
@@ -508,10 +527,12 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_base_color, const
         square_light_mesh_desc.vtx_attrs_count = uint32_t(square_light_attrs.size()) / 8;
         square_light_mesh_desc.vtx_indices = &square_light_indices[0];
         square_light_mesh_desc.vtx_indices_count = uint32_t(square_light_indices.size());
-        square_light_mesh_desc.shapes.emplace_back(square_light_mat, square_light_mat, square_light_groups[0],
-                                                   square_light_groups[1]);
-        square_light_mesh_desc.shapes.emplace_back(dark_grey_mat, dark_grey_mat, square_light_groups[2],
-                                                   square_light_groups[3]);
+
+        const Ray::mat_group_desc_t groups[] = {
+            {square_light_mat, square_light_mat, square_light_groups[0], square_light_groups[1]},
+            {dark_grey_mat, dark_grey_mat, square_light_groups[2], square_light_groups[3]}};
+        square_light_mesh_desc.groups = groups;
+
         square_light_mesh = scene.AddMesh(square_light_mesh_desc);
 
         // Add mesh one more time to test compaction later
@@ -533,10 +554,12 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_base_color, const
         disc_light_mesh_desc.vtx_attrs_count = uint32_t(disc_light_attrs.size()) / 8;
         disc_light_mesh_desc.vtx_indices = &disc_light_indices[0];
         disc_light_mesh_desc.vtx_indices_count = uint32_t(disc_light_indices.size());
-        disc_light_mesh_desc.shapes.emplace_back(disc_light_mat, disc_light_mat, disc_light_groups[0],
-                                                 disc_light_groups[1]);
-        disc_light_mesh_desc.shapes.emplace_back(dark_grey_mat, dark_grey_mat, disc_light_groups[2],
-                                                 disc_light_groups[3]);
+
+        const Ray::mat_group_desc_t groups[] = {
+            {disc_light_mat, disc_light_mat, disc_light_groups[0], disc_light_groups[1]},
+            {dark_grey_mat, dark_grey_mat, disc_light_groups[2], disc_light_groups[3]}};
+        disc_light_mesh_desc.groups = groups;
+
         disc_light_mesh = scene.AddMesh(disc_light_mesh_desc);
     }
 
@@ -554,10 +577,12 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_base_color, const
         glassball_mesh_desc.vtx_attrs_count = uint32_t(glassball_attrs.size()) / 8;
         glassball_mesh_desc.vtx_indices = &glassball_indices[0];
         glassball_mesh_desc.vtx_indices_count = uint32_t(glassball_indices.size());
-        glassball_mesh_desc.shapes.emplace_back(glassball_mat0, glassball_mat0, glassball_groups[0],
-                                                glassball_groups[1]);
-        glassball_mesh_desc.shapes.emplace_back(glassball_mat1, glassball_mat1, glassball_groups[2],
-                                                glassball_groups[3]);
+
+        const Ray::mat_group_desc_t groups[] = {
+            {glassball_mat0, glassball_mat0, glassball_groups[0], glassball_groups[1]},
+            {glassball_mat1, glassball_mat1, glassball_groups[2], glassball_groups[3]}};
+        glassball_mesh_desc.groups = groups;
+
         glassball_mesh = scene.AddMesh(glassball_mesh_desc);
     }
 

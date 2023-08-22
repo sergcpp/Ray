@@ -99,10 +99,8 @@ int main() {
     mesh_desc.vtx_indices_count = 24;
 
     // Setup material groups
-    mesh_desc.shapes.emplace_back(mat1, 0, 6);
-    mesh_desc.shapes.emplace_back(mat2, 6, 6);
-    mesh_desc.shapes.emplace_back(mat3, 12, 6);
-    mesh_desc.shapes.emplace_back(mat4, 18, 6);
+    const Ray::mat_group_desc_t groups[] = {{mat1, 0, 6}, {mat2, 6, 6}, {mat3, 12, 6}, {mat4, 18, 6}};
+    mesh_desc.groups = groups;
 
     Ray::MeshHandle mesh1 = scene->AddMesh(mesh_desc);
 

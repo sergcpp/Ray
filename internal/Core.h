@@ -4,8 +4,8 @@
 #include <cstdint>
 
 #include "../SceneBase.h"
+#include "../Span.h"
 #include "../Types.h"
-#include "Span.h"
 
 #ifdef __GNUC__
 #define force_inline __attribute__((always_inline)) inline

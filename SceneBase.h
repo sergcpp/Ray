@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "Span.h"
 #include "Types.h"
 
 /**
@@ -115,33 +116,33 @@ struct principled_mat_desc_t {
 };
 
 /// Defines mesh region with specific material
-struct shape_desc_t {
+struct mat_group_desc_t {
     MaterialHandle front_mat; ///< Index of material
     MaterialHandle back_mat;  ///< Index of material applied for back faces
     size_t vtx_start;         ///< Vertex start index
     size_t vtx_count;         ///< Vertex count
 
-    shape_desc_t(const MaterialHandle _front_material, const MaterialHandle _back_material, size_t _vtx_start,
+    mat_group_desc_t(const MaterialHandle _front_material, const MaterialHandle _back_material, size_t _vtx_start,
                  size_t _vtx_count)
         : front_mat(_front_material), back_mat(_back_material), vtx_start(_vtx_start), vtx_count(_vtx_count) {}
 
-    shape_desc_t(const MaterialHandle _front_material, size_t _vtx_start, size_t _vtx_count)
+    mat_group_desc_t(const MaterialHandle _front_material, size_t _vtx_start, size_t _vtx_count)
         : front_mat(_front_material), back_mat(_front_material), vtx_start(_vtx_start), vtx_count(_vtx_count) {}
 };
 
 /// Mesh description
 struct mesh_desc_t {
-    const char *name = nullptr;        ///< Mesh name (for debugging)
-    ePrimType prim_type;               ///< Primitive type
-    eVertexLayout layout;              ///< Vertex attribute layout
-    const float *vtx_attrs;            ///< Pointer to vertex attribute
-    size_t vtx_attrs_count;            ///< Vertex attribute count (number of vertices)
-    const uint32_t *vtx_indices;       ///< Pointer to vertex indices, defining primitive
-    size_t vtx_indices_count;          ///< Primitive indices count
-    int base_vertex = 0;               ///< Shift applied to indices
-    std::vector<shape_desc_t> shapes;  ///< Vector of shapes in mesh
-    bool allow_spatial_splits = false; ///< Better BVH, worse load times and memory consumption
-    bool use_fast_bvh_build = false;   ///< Use faster BVH construction with less tree quality
+    const char *name = nullptr;             ///< Mesh name (for debugging)
+    ePrimType prim_type;                    ///< Primitive type
+    eVertexLayout layout;                   ///< Vertex attribute layout
+    const float *vtx_attrs;                 ///< Pointer to vertex attribute
+    size_t vtx_attrs_count;                 ///< Vertex attribute count (number of vertices)
+    const uint32_t *vtx_indices;            ///< Pointer to vertex indices, defining primitive
+    size_t vtx_indices_count;               ///< Primitive indices count
+    int base_vertex = 0;                    ///< Shift applied to indices
+    Span<const mat_group_desc_t> groups;    ///< Shapes of a mesh
+    bool allow_spatial_splits = false;      ///< Better BVH, worse load times and memory consumption
+    bool use_fast_bvh_build = false;        ///< Use faster BVH construction with less tree quality
 };
 
 /// Mesh instance description

@@ -4,8 +4,8 @@
 
 #include <string>
 
+#include "../../Span.h"
 #include "../SmallVector.h"
-#include "../Span.h"
 #include "Api.h"
 
 namespace Ray {

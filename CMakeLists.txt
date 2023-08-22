@@ -86,7 +86,6 @@ set(INTERNAL_SOURCE_FILES internal/Atmosphere.h
                           internal/SmallVector.h
                           internal/SparseStorageCPU.h
                           internal/SparseStorageGPU.h
-                          internal/Span.h
                           internal/TextureParams.h
                           internal/TextureParams.cpp
                           internal/TextureSplitter.h
@@ -196,6 +195,7 @@ set(SOURCE_FILES Bitmask.h
                  RendererBase.h
                  RendererBase.cpp
                  SceneBase.h
+                 Span.h
                  Types.h)
 
 set(SIMD_FILES internal/simd/aligned_allocator.h

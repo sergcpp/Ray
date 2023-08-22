@@ -2,8 +2,8 @@
 
 #include <cstdint>
 
+#include "../../Span.h"
 #include "../RastState.h"
-#include "../Span.h"
 #include "../TextureParams.h"
 #include "BufferVK.h"
 #include "ProgramVK.h"

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../Span.h"
+#include "../../Span.h"
 #include "TextureVK.h"
 
 namespace Ray {

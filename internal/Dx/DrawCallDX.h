@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-#include "../Span.h"
+#include "../../Span.h"
 
 struct ID3D12GraphicsCommandList;
 

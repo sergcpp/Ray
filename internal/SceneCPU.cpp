@@ -416,11 +416,11 @@ Ray::MeshHandle Ray::Cpu::Scene::AddMesh(const mesh_desc_t &_m) {
     tri_materials_.resize(tri_materials_start + (_m.vtx_indices_count / 3));
 
     // init triangle materials
-    for (const shape_desc_t &sh : _m.shapes) {
+    for (const mat_group_desc_t &grp : _m.groups) {
         bool is_front_solid = true, is_back_solid = true;
 
         uint32_t material_stack[32];
-        material_stack[0] = sh.front_mat._index;
+        material_stack[0] = grp.front_mat._index;
         uint32_t material_count = 1;
 
         while (material_count) {
@@ -435,7 +435,7 @@ Ray::MeshHandle Ray::Cpu::Scene::AddMesh(const mesh_desc_t &_m) {
             }
         }
 
-        material_stack[0] = sh.back_mat._index;
+        material_stack[0] = grp.back_mat._index;
         material_count = 1;
 
         while (material_count) {
@@ -450,18 +450,18 @@ Ray::MeshHandle Ray::Cpu::Scene::AddMesh(const mesh_desc_t &_m) {
             }
         }
 
-        for (size_t i = sh.vtx_start; i < sh.vtx_start + sh.vtx_count; i += 3) {
+        for (size_t i = grp.vtx_start; i < grp.vtx_start + grp.vtx_count; i += 3) {
             tri_mat_data_t &tri_mat = tri_materials_[tri_materials_start + (i / 3)];
 
-            assert(sh.front_mat._index < (1 << 14) && "Not enough bits to reference material!");
-            assert(sh.back_mat._index < (1 << 14) && "Not enough bits to reference material!");
+            assert(grp.front_mat._index < (1 << 14) && "Not enough bits to reference material!");
+            assert(grp.back_mat._index < (1 << 14) && "Not enough bits to reference material!");
 
-            tri_mat.front_mi = uint16_t(sh.front_mat._index);
+            tri_mat.front_mi = uint16_t(grp.front_mat._index);
             if (is_front_solid) {
                 tri_mat.front_mi |= MATERIAL_SOLID_BIT;
             }
 
-            tri_mat.back_mi = uint16_t(sh.back_mat._index);
+            tri_mat.back_mi = uint16_t(grp.back_mat._index);
             if (is_back_solid) {
                 tri_mat.back_mi |= MATERIAL_SOLID_BIT;
             }

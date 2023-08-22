@@ -8,7 +8,7 @@
 #include <initializer_list>
 #include <new>
 
-#include "Span.h"
+#include "../Span.h"
 
 namespace Ray {
 #ifndef RAY_EXCHANGE_DEFINED

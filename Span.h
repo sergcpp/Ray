@@ -6,8 +6,6 @@
 #include <type_traits>
 #include <vector>
 
-#include "simd/aligned_allocator.h"
-
 namespace Ray {
 template <typename T> class Span {
     T *p_data_ = nullptr;

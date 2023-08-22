@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-#include "../Span.h"
+#include "../../Span.h"
 // #include "Buffer.h"
 #include "../RastState.h"
 #include "../TextureParams.h"
