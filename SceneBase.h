@@ -145,12 +145,7 @@ struct mesh_desc_t {
 
 /// Mesh instance description
 struct mesh_instance_desc_t {
-    float xform[16] = {
-        1.0f, 0.0f, 0.0f, 0.0f,          //
-        0.0f, 1.0f, 0.0f, 0.0f,          //
-        0.0f, 0.0f, 1.0f, 0.0f,          //
-        0.0f, 0.0f, 0.0f, 1.0f,          //
-    };                                   ///< Transformation matrix
+    const float *xform = nullptr;        ///< 4x4 transformation matrix (16 floats)
     MeshHandle mesh = InvalidMeshHandle; ///< Mesh handle
     bool camera_visibility = true;       ///< Instance visibility to camera rays
     bool diffuse_visibility = true;      ///< Instance visibility to diffuse rays
@@ -371,10 +366,8 @@ class SceneBase {
     */
     MeshInstanceHandle AddMeshInstance(MeshHandle mesh, const float *xform) {
         mesh_instance_desc_t mi;
+        mi.xform = xform;
         mi.mesh = mesh;
-        for (int i = 0; i < 16; ++i) {
-            mi.xform[i] = xform[i];
-        }
         return AddMeshInstance(mi);
     }
 
