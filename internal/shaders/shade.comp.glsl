@@ -1760,16 +1760,10 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
         if ((mat.textures[NORMALS_TEXTURE] & TEX_RECONSTRUCT_Z_BIT) != 0) {
             normals.z = sqrt(1.0 - dot(normals.xy, normals.xy));
         }
-        if ((mat.textures[NORMALS_TEXTURE] & TEX_FLIP_Y_BIT) != 0) {
-            normals.y = -normals.y;
-        }
 #else
         normals = normals * 2.0 - 1.0;
         if ((g_textures[mat.textures[NORMALS_TEXTURE]].size & ATLAS_TEX_RECONSTRUCT_Z_BIT) != 0) {
             normals.z = sqrt(1.0 - dot(normals.xy, normals.xy));
-        }
-        if ((g_textures[mat.textures[NORMALS_TEXTURE]].size & (ATLAS_TEX_FLIP_Y_BIT << 16)) != 0) {
-            normals.y = -normals.y;
         }
 #endif
         vec3 in_normal = surf.N;

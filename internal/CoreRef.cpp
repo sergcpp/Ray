@@ -4258,9 +4258,6 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
         if (mat->textures[NORMALS_TEXTURE] & TEX_RECONSTRUCT_Z_BIT) {
             normals.set<2>(safe_sqrt(1.0f - normals.get<0>() * normals.get<0>() - normals.get<1>() * normals.get<1>()));
         }
-        if (mat->textures[NORMALS_TEXTURE] & TEX_FLIP_Y_BIT) {
-            normals.set<1>(-normals.get<1>());
-        }
         simd_fvec4 in_normal = surf.N;
         surf.N = normalize(normals.get<0>() * surf.T + normals.get<2>() * surf.N + normals.get<1>() * surf.B);
         if (mat->normal_map_strength_unorm != 0xffff) {

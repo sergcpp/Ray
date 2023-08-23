@@ -227,9 +227,6 @@ inline Ray::TextureHandle Ray::NS::Scene::AddAtlasTexture_nolock(const tex_desc_
     if (_t.generate_mipmaps && _t.w > MIN_ATLAS_TEXTURE_SIZE && _t.h > MIN_ATLAS_TEXTURE_SIZE) {
         t.height |= ATLAS_TEX_MIPS_BIT;
     }
-    if (_t.convention == eTextureConvention::DX) {
-        t.height |= ATLAS_TEX_FLIP_Y_BIT;
-    }
 
     int res[2] = {_t.w, _t.h};
 
@@ -246,11 +243,11 @@ inline Ray::TextureHandle Ray::NS::Scene::AddAtlasTexture_nolock(const tex_desc_
         } else {
             // TODO: get rid of this allocation
             repacked_normalmap.reset(new color_rg8_t[res[0] * res[1]]);
-
+            const bool invert_y = (_t.convention == eTextureConvention::DX);
             const auto *rgba_data = reinterpret_cast<const color_rgba8_t *>(_t.data.data());
             for (int i = 0; i < res[0] * res[1]; ++i) {
                 repacked_normalmap[i].v[0] = rgba_data[i].v[0];
-                repacked_normalmap[i].v[1] = rgba_data[i].v[1];
+                repacked_normalmap[i].v[1] = invert_y ? (255 - rgba_data[i].v[1]) : rgba_data[i].v[1];
                 reconstruct_z |= (rgba_data[i].v[2] < 250);
             }
 
@@ -263,11 +260,11 @@ inline Ray::TextureHandle Ray::NS::Scene::AddAtlasTexture_nolock(const tex_desc_
         } else {
             // TODO: get rid of this allocation
             repacked_normalmap.reset(new color_rg8_t[res[0] * res[1]]);
-
+            const bool invert_y = (_t.convention == eTextureConvention::DX);
             const auto *rgb_data = reinterpret_cast<const color_rgb8_t *>(_t.data.data());
             for (int i = 0; i < res[0] * res[1]; ++i) {
                 repacked_normalmap[i].v[0] = rgb_data[i].v[0];
-                repacked_normalmap[i].v[1] = rgb_data[i].v[1];
+                repacked_normalmap[i].v[1] = invert_y ? (255 - rgb_data[i].v[1]) : rgb_data[i].v[1];
                 reconstruct_z |= (rgb_data[i].v[2] < 250);
             }
 
@@ -386,10 +383,11 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
             // TODO: get rid of this allocation
             repacked_data.reset(new uint8_t[2 * _t.w * _t.h]);
 
+            const bool invert_y = (_t.convention == Ray::eTextureConvention::DX);
             const auto *rgba_data = reinterpret_cast<const color_rgba8_t *>(_t.data.data());
             for (int i = 0; i < _t.w * _t.h; ++i) {
                 repacked_data[i * 2 + 0] = rgba_data[i].v[0];
-                repacked_data[i * 2 + 1] = rgba_data[i].v[1];
+                repacked_data[i * 2 + 1] = invert_y ? (255 - rgba_data[i].v[1]) : rgba_data[i].v[1];
                 reconstruct_z |= (rgba_data[i].v[2] < 250);
             }
 
@@ -460,10 +458,11 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
             // TODO: get rid of this allocation
             repacked_data.reset(new uint8_t[2 * _t.w * _t.h]);
 
+            const bool invert_y = (_t.convention == Ray::eTextureConvention::DX);
             const auto *rgb_data = reinterpret_cast<const color_rgb8_t *>(_t.data.data());
             for (int i = 0; i < _t.w * _t.h; ++i) {
                 repacked_data[i * 2 + 0] = rgb_data[i].v[0];
-                repacked_data[i * 2 + 1] = rgb_data[i].v[1];
+                repacked_data[i * 2 + 1] = invert_y ? (255 - rgb_data[i].v[1]) : rgb_data[i].v[1];
                 reconstruct_z |= (rgb_data[i].v[2] < 250);
             }
 
@@ -489,11 +488,16 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
         src_fmt = fmt = eTexFormat::RawRG88;
         data_size[0] = round_up(_t.w * 2, TextureDataPitchAlignment) * _t.h;
 
+        const bool invert_y = (_t.convention == Ray::eTextureConvention::DX);
         const auto *rg_data = reinterpret_cast<const color_rg8_t *>(_t.data.data());
 
         int j = 0;
         for (int y = 0; y < _t.h; ++y) {
-            memcpy(&stage_data[j], &rg_data[y * _t.w], _t.w * 2);
+            auto *dst = reinterpret_cast<color_rg8_t *>(&stage_data[j]);
+            for (int x = 0; x < _t.w; ++x) {
+                dst[x].v[0] = rg_data[y * _t.w + x].v[0];
+                dst[x].v[1] = invert_y ? (255 - rg_data[y * _t.w + x].v[1]) : rg_data[y * _t.w + x].v[1];
+            }
             j += round_up(_t.w * 2, TextureDataPitchAlignment);
         }
 
@@ -586,9 +590,6 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
     }
     if (reconstruct_z) {
         ret.first |= TEX_RECONSTRUCT_Z_BIT;
-    }
-    if (_t.convention == eTextureConvention::DX) {
-        ret.first |= TEX_FLIP_Y_BIT;
     }
     if (is_YCoCg) {
         ret.first |= TEX_YCOCG_BIT;

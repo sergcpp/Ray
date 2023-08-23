@@ -101,9 +101,10 @@ Ray::TextureHandle Ray::Cpu::Scene::AddTexture(const tex_desc_t &_t) {
         } else {
             // TODO: get rid of this allocation
             std::vector<color_rg8_t> repacked_data(res[0] * res[1]);
+            const bool invert_y = (_t.convention == Ray::eTextureConvention::DX);
             for (int i = 0; i < res[0] * res[1]; ++i) {
                 repacked_data[i].v[0] = rgba_data[i].v[0];
-                repacked_data[i].v[1] = rgba_data[i].v[1];
+                repacked_data[i].v[1] = invert_y ? (255 - rgba_data[i].v[1]) : rgba_data[i].v[1];
                 reconstruct_z |= (rgba_data[i].v[2] < 250);
             }
             if (use_compression) {
@@ -129,10 +130,11 @@ Ray::TextureHandle Ray::Cpu::Scene::AddTexture(const tex_desc_t &_t) {
             }
         } else {
             // TODO: get rid of this allocation
+            const bool invert_y = (_t.convention == Ray::eTextureConvention::DX);
             std::vector<color_rg8_t> repacked_data(res[0] * res[1]);
             for (int i = 0; i < res[0] * res[1]; ++i) {
                 repacked_data[i].v[0] = rgb_data[i].v[0];
-                repacked_data[i].v[1] = rgb_data[i].v[1];
+                repacked_data[i].v[1] = invert_y ? (255 - rgb_data[i].v[1]) : rgb_data[i].v[1];
                 reconstruct_z |= (rgb_data[i].v[2] < 250);
             }
 
@@ -145,16 +147,27 @@ Ray::TextureHandle Ray::Cpu::Scene::AddTexture(const tex_desc_t &_t) {
             }
         }
     } else if (_t.format == eTextureFormat::RG88) {
+        const auto *data_to_use = reinterpret_cast<const color_rg8_t *>(_t.data.data());
+        // TODO: get rid of this allocation
+        std::vector<color_rg8_t> repacked_data;
+        const bool invert_y = (_t.convention == Ray::eTextureConvention::DX);
+        if (_t.is_normalmap && invert_y) {
+            repacked_data.resize(res[0] * res[1]);
+            for (int i = 0; i < res[0] * res[1]; ++i) {
+                repacked_data[i].v[0] = data_to_use[i].v[0];
+                repacked_data[i].v[1] = invert_y ? (255 - data_to_use[i].v[1]) : data_to_use[i].v[1];
+            }
+            data_to_use = repacked_data.data();
+        }
+
         if (use_compression) {
             storage = 6;
-            index = tex_storage_bc5_.Allocate(
-                Span<const color_rg8_t>(reinterpret_cast<const color_rg8_t *>(_t.data.data()), res[0] * res[1]), res,
-                _t.generate_mipmaps);
+            index = tex_storage_bc5_.Allocate(Span<const color_rg8_t>(data_to_use, res[0] * res[1]), res,
+                                              _t.generate_mipmaps);
         } else {
             storage = 2;
-            index = tex_storage_rg_.Allocate(
-                Span<const color_rg8_t>(reinterpret_cast<const color_rg8_t *>(_t.data.data()), res[0] * res[1]), res,
-                _t.generate_mipmaps);
+            index = tex_storage_rg_.Allocate(Span<const color_rg8_t>(data_to_use, res[0] * res[1]), res,
+                                             _t.generate_mipmaps);
         }
         reconstruct_z = _t.is_normalmap;
     } else if (_t.format == eTextureFormat::R8) {
@@ -189,9 +202,6 @@ Ray::TextureHandle Ray::Cpu::Scene::AddTexture(const tex_desc_t &_t) {
     }
     if (reconstruct_z) {
         ret |= TEX_RECONSTRUCT_Z_BIT;
-    }
-    if (_t.convention == eTextureConvention::DX) {
-        ret |= TEX_FLIP_Y_BIT;
     }
     if (is_YCoCg) {
         ret |= TEX_YCOCG_BIT;
