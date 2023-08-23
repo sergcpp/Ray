@@ -71,25 +71,8 @@ class Texture2D {
 
     void InitFromRAWData(Buffer *sbuf, int data_off, void *_cmd_buf, MemoryAllocators *mem_allocs, const Tex2DParams &p,
                          ILog *log);
-    void InitFromTGAFile(const void *data, Buffer &stage_buf, void *_cmd_buf, MemoryAllocators *mem_allocs,
-                         const Tex2DParams &p, ILog *log);
-    void InitFromTGA_RGBEFile(const void *data, Buffer &stage_buf, void *_cmd_buf, MemoryAllocators *mem_allocs,
-                              const Tex2DParams &p, ILog *log);
-    void InitFromDDSFile(const void *data, int size, Buffer &sbuf, void *_cmd_buf, MemoryAllocators *mem_allocs,
-                         const Tex2DParams &p, ILog *log);
-    void InitFromKTXFile(const void *data, int size, Buffer &sbuf, void *_cmd_buf, MemoryAllocators *mem_allocs,
-                         const Tex2DParams &p, ILog *log);
-
     void InitFromRAWData(Buffer &sbuf, int data_off[6], void *_cmd_buf, MemoryAllocators *mem_allocs,
                          const Tex2DParams &p, ILog *log);
-    void InitFromTGAFile(const void *data[6], Buffer &sbuf, void *_cmd_buf, MemoryAllocators *mem_allocs,
-                         const Tex2DParams &p, ILog *log);
-    void InitFromTGA_RGBEFile(const void *data[6], Buffer &sbuf, void *_cmd_buf, MemoryAllocators *mem_allocs,
-                              const Tex2DParams &p, ILog *log);
-    void InitFromDDSFile(const void *data[6], const int size[6], Buffer &sbuf, void *_cmd_buf,
-                         MemoryAllocators *mem_allocs, const Tex2DParams &p, ILog *log);
-    void InitFromKTXFile(const void *data[6], const int size[6], Buffer &sbuf, void *_cmd_buf,
-                         MemoryAllocators *mem_allocs, const Tex2DParams &p, ILog *log);
 
   public:
     Tex2DParams params;
