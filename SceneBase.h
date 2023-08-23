@@ -154,18 +154,24 @@ struct mesh_instance_desc_t {
     bool shadow_visibility = true;       ///< Instance visibility to shadow rays
 };
 
-enum eTextureFormat { RGBA8888, RGB888, RG88, R8 };
+enum class eTextureFormat { RGBA8888, RGB888, RG88, R8 };
+
+enum class eTextureConvention {
+    OGL, // OpenGL, default
+    DX   // DirectX, flip y for normalmaps + flip BC-compressed textures vertically
+};
 
 /// Texture description
 struct tex_desc_t {
     eTextureFormat format;             ///< Texture data format
+    eTextureConvention convention =
+        eTextureConvention::OGL;       ///< Texture convention (affects normalmaps and BC-compressed textures)
     const char *name = nullptr;        ///< Debug name
     Span<const uint8_t> data;          ///< Texture data
     int w,                             ///< Texture width
         h;                             ///< Texture height
     bool is_srgb = true;               ///< Treat this texture as SRGB
     bool is_normalmap = false;         ///< Is this a normalmap
-    bool flip_normalmap_y = false;     ///< Set to true for DX-style normalmap
     bool force_no_compression = false; ///< Disable compression (guarantee the best quality)
     bool generate_mipmaps = false;     ///< Generate mipmaps for this texture
 };

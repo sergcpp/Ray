@@ -190,7 +190,7 @@ Ray::TextureHandle Ray::Cpu::Scene::AddTexture(const tex_desc_t &_t) {
     if (reconstruct_z) {
         ret |= TEX_RECONSTRUCT_Z_BIT;
     }
-    if (_t.flip_normalmap_y) {
+    if (_t.convention == eTextureConvention::DX) {
         ret |= TEX_FLIP_Y_BIT;
     }
     if (is_YCoCg) {
