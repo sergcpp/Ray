@@ -88,7 +88,7 @@ layout(std430, binding = TEXTURES_BUF_SLOT) readonly buffer Textures {
     atlas_texture_t g_textures[];
 };
 
-layout(binding = TEXTURE_ATLASES_SLOT) uniform sampler2DArray g_atlases[7];
+layout(binding = TEXTURE_ATLASES_SLOT) uniform sampler2DArray g_atlases[8];
 
 ivec2 texSize(const uint index) {
     const atlas_texture_t t = g_textures[index];
@@ -121,7 +121,7 @@ vec4 SampleBilinear(const uint index, const vec2 uvs, const int lod, const vec2 
 
     const float page = float((t.page[lod / 4] >> (lod % 4) * 8) & 0xff);
     vec4 res = textureLod(g_atlases[nonuniformEXT(t.atlas)], vec3(_uvs, page), 0.0);
-    if (maybe_YCoCg && t.atlas == 4) {
+    if (maybe_YCoCg && ((t.size >> 16) & ATLAS_TEX_YCOCG_BIT) != 0) {
         res.rgb = YCoCg_to_RGB(res);
         res.a = 1.0;
     }

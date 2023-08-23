@@ -54,7 +54,7 @@ void Ray::Vk::Scene::GenerateTextureMips_nolock() {
 
     for (uint32_t i = 0; i < uint32_t(atlas_textures_.size()); ++i) {
         const atlas_texture_t &t = atlas_textures_[i];
-        if ((t.height & ATLAS_TEX_MIPS_BIT) == 0) {
+        if ((t.height & ATLAS_TEX_MIPS_BIT) == 0 || IsCompressedFormat(tex_atlases_[t.atlas].format())) {
             continue;
         }
 

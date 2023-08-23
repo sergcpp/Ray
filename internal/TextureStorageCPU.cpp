@@ -310,7 +310,8 @@ template class Ray::Cpu::TexStorageSwizzled<uint8_t, 1>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-template <int N> int Ray::Cpu::TexStorageBCn<N>::Allocate(Span<const InColorType> data, const int res[2], bool mips) {
+template <int N>
+int Ray::Cpu::TexStorageBCn<N>::Allocate(Span<const InColorType> data, const int res[2], const bool mips) {
     int index = -1;
     if (!free_slots_.empty()) {
         index = free_slots_.back();
@@ -328,14 +329,7 @@ template <int N> int Ray::Cpu::TexStorageBCn<N>::Allocate(Span<const InColorType
     p.res_in_tiles[0][0] = (p.res[0][0] + TileSize - 1) / TileSize;
     p.res_in_tiles[0][1] = (p.res[0][1] + TileSize - 1) / TileSize;
 
-    int total_size = 0;
-    if (N == 4) {
-        total_size = GetRequiredMemory_BC3(res[0], res[1], 1);
-    } else if (N == 2) {
-        total_size = GetRequiredMemory_BC5(res[0], res[1], 1);
-    } else if (N == 1) {
-        total_size = GetRequiredMemory_BC4(res[0], res[1], 1);
-    }
+    int total_size = GetRequiredMemory_BCn<N>(res[0], res[1], 1);
 
     int mip_count = 1;
     for (int i = 1; i < NUM_MIP_LEVELS; ++i) {
@@ -348,13 +342,7 @@ template <int N> int Ray::Cpu::TexStorageBCn<N>::Allocate(Span<const InColorType
             p.res_in_tiles[i][0] = (p.res[i][0] + TileSize - 1) / TileSize;
             p.res_in_tiles[i][1] = (p.res[i][1] + TileSize - 1) / TileSize;
 
-            if (N == 4) {
-                total_size += GetRequiredMemory_BC3(p.res[i][0], p.res[i][1], 1);
-            } else if (N == 2) {
-                total_size += GetRequiredMemory_BC5(p.res[i][0], p.res[i][1], 1);
-            } else if (N == 1) {
-                total_size += GetRequiredMemory_BC4(p.res[i][0], p.res[i][1], 1);
-            }
+            total_size += GetRequiredMemory_BCn<N>(p.res[i][0], p.res[i][1], 1);
 
             ++mip_count;
         } else {
@@ -372,6 +360,8 @@ template <int N> int Ray::Cpu::TexStorageBCn<N>::Allocate(Span<const InColorType
         // TODO: get rid of this allocation
         auto temp_YCoCg = ConvertRGB_to_CoCgxY(&data[0].v[0], res[0], res[1]);
         CompressImage_BC3<true /* Is_YCoCg */>(temp_YCoCg.get(), res[0], res[1], p.pixels.get());
+    } else if (N == 3) {
+        CompressImage_BC1<3>(&data[0].v[0], res[0], res[1], p.pixels.get());
     } else if (N == 2) {
         CompressImage_BC5(&data[0].v[0], res[0], res[1], p.pixels.get());
     } else if (N == 1) {
@@ -412,6 +402,8 @@ template <int N> int Ray::Cpu::TexStorageBCn<N>::Allocate(Span<const InColorType
             auto temp_YCoCg = ConvertRGB_to_CoCgxY(&dst_data[0].v[0], p.res[i][0], p.res[i][1]);
             CompressImage_BC3<true /* Is_YCoCg */>(temp_YCoCg.get(), p.res[i][0], p.res[i][1],
                                                    p.pixels.get() + p.lod_offsets[i]);
+        } else if (N == 3) {
+            CompressImage_BC1<3>(&dst_data[0].v[0], p.res[i][0], p.res[i][1], p.pixels.get() + p.lod_offsets[i]);
         } else if (N == 2) {
             CompressImage_BC5(&dst_data[0].v[0], p.res[i][0], p.res[i][1], p.pixels.get() + p.lod_offsets[i]);
         } else if (N == 1) {
@@ -424,6 +416,67 @@ template <int N> int Ray::Cpu::TexStorageBCn<N>::Allocate(Span<const InColorType
     return index;
 }
 
+template <int N>
+int Ray::Cpu::TexStorageBCn<N>::AllocateRaw(Span<const uint8_t> data, const int res[2], const int mips_count,
+                                            const bool flip_vertical, const bool invert_green) {
+    int index = -1;
+    if (!free_slots_.empty()) {
+        index = free_slots_.back();
+        free_slots_.pop_back();
+    } else {
+        index = int(images_.size());
+        images_.resize(images_.size() + 1);
+    }
+
+    ImgData &p = images_[index];
+
+    p.lod_offsets[0] = 0;
+    p.res[0][0] = res[0];
+    p.res[0][1] = res[1];
+    p.res_in_tiles[0][0] = (p.res[0][0] + TileSize - 1) / TileSize;
+    p.res_in_tiles[0][1] = (p.res[0][1] + TileSize - 1) / TileSize;
+
+    int total_size = GetRequiredMemory_BCn<N>(res[0], res[1], 1);
+
+    int actual_mip_count = 1;
+    for (int i = 1; i < NUM_MIP_LEVELS; ++i) {
+        if (i < mips_count && (p.res[i - 1][0] >= 4 || p.res[i - 1][1] >= 4)) {
+            p.lod_offsets[i] = total_size;
+
+            p.res[i][0] = p.res[i - 1][0] / 2;
+            p.res[i][1] = p.res[i - 1][1] / 2;
+
+            p.res_in_tiles[i][0] = (p.res[i][0] + TileSize - 1) / TileSize;
+            p.res_in_tiles[i][1] = (p.res[i][1] + TileSize - 1) / TileSize;
+
+            total_size += GetRequiredMemory_BCn<N>(p.res[i][0], p.res[i][1], 1);
+
+            ++actual_mip_count;
+        } else {
+            p.lod_offsets[i] = p.lod_offsets[i - 1];
+            p.res[i][0] = p.res[i - 1][0];
+            p.res[i][1] = p.res[i - 1][1];
+            p.res_in_tiles[i][0] = p.res_in_tiles[i - 1][0];
+            p.res_in_tiles[i][1] = p.res_in_tiles[i - 1][1];
+        }
+    }
+
+    if (data.size() < total_size) {
+        return -1;
+    }
+    p.pixels = std::make_unique<uint8_t[]>(total_size);
+
+    int offset = 0;
+    for (int i = 0; i < actual_mip_count; ++i) {
+        offset += Preprocess_BCn<N>(&data[offset], p.res_in_tiles[i][0], p.res_in_tiles[i][1], flip_vertical,
+                                    invert_green, &p.pixels[p.lod_offsets[i]]);
+    }
+    assert(offset == total_size);
+
+    return index;
+}
+
 template class Ray::Cpu::TexStorageBCn<1>;
 template class Ray::Cpu::TexStorageBCn<2>;
+template class Ray::Cpu::TexStorageBCn<3>;
 template class Ray::Cpu::TexStorageBCn<4>;

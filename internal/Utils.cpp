@@ -1851,6 +1851,191 @@ template void Ray::CompressImage_BC5<3 /* SrcChannels */>(const uint8_t img_src[
 template void Ray::CompressImage_BC5<2 /* SrcChannels */>(const uint8_t img_src[], int w, int h, uint8_t img_dst[],
                                                           int dst_pitch);
 
+template <int N>
+int Ray::Preprocess_BCn(const uint8_t in_data[], const int tiles_w, const int tiles_h, const bool flip_vertical,
+                        const bool invert_green, uint8_t out_data[]) {
+    int read_bytes = tiles_w * tiles_h * GetBlockSize_BCn<N>();
+    if (flip_vertical || invert_green) {
+        struct bc1_block_t {
+            uint16_t color[2];
+            uint8_t cl[4];
+        };
+        static_assert(sizeof(bc1_block_t) == 8, "!");
+
+        struct bc4_block_t {
+            uint8_t alpha[2];
+            union {
+                struct {
+                    // ushort 0
+                    uint16_t l0 : 12;
+                    uint16_t l1_0 : 4;
+                    // ushort 1
+                    uint16_t l1_1 : 4;
+                    uint16_t l1_2 : 4;
+                    uint16_t l2_0 : 4;
+                    uint16_t l2_1 : 4;
+                    // ushort 2
+                    uint16_t l2_2 : 4;
+                    uint16_t l3 : 12;
+                };
+                uint8_t ndx[6];
+            };
+        };
+        static_assert(sizeof(bc4_block_t) == 8, "!");
+
+        struct bc5_block_t {
+            bc4_block_t r, g;
+        };
+        static_assert(sizeof(bc5_block_t) == 16, "!");
+
+        struct bc3_block_t {
+            bc4_block_t a;
+            bc1_block_t rgb;
+        };
+        static_assert(sizeof(bc3_block_t) == 16, "!");
+
+        for (int y = 0; y < tiles_h; ++y) {
+            if (N == 4) {
+                const bc3_block_t *src_blocks = reinterpret_cast<const bc3_block_t *>(in_data);
+                src_blocks += (tiles_h - y - 1) * tiles_w;
+                bc3_block_t *dst_blocks = reinterpret_cast<bc3_block_t *>(out_data);
+                dst_blocks += y * tiles_w;
+
+                for (int i = 0; i < tiles_w; ++i) {
+                    const bc3_block_t &src = src_blocks[i];
+                    bc3_block_t &dst = dst_blocks[i];
+
+                    dst.rgb.color[0] = src.rgb.color[0];
+                    dst.rgb.color[1] = src.rgb.color[1];
+                    // flip lines
+                    dst.rgb.cl[0] = src.rgb.cl[3];
+                    dst.rgb.cl[1] = src.rgb.cl[2];
+                    dst.rgb.cl[2] = src.rgb.cl[1];
+                    dst.rgb.cl[3] = src.rgb.cl[0];
+
+                    dst.a.alpha[0] = src.a.alpha[0];
+                    dst.a.alpha[1] = src.a.alpha[1];
+                    // flip lines
+                    dst.a.l0 = src.a.l3;
+                    dst.a.l1_0 = src.a.l2_0;
+                    dst.a.l1_1 = src.a.l2_1;
+                    dst.a.l1_2 = src.a.l2_2;
+                    dst.a.l2_0 = src.a.l1_0;
+                    dst.a.l2_1 = src.a.l1_1;
+                    dst.a.l2_2 = src.a.l1_2;
+                    dst.a.l3 = src.a.l0;
+                }
+            } else if (N == 3) {
+                const bc1_block_t *src_blocks = reinterpret_cast<const bc1_block_t *>(in_data);
+                src_blocks += (tiles_h - y - 1) * tiles_w;
+                bc1_block_t *dst_blocks = reinterpret_cast<bc1_block_t *>(out_data);
+                dst_blocks += y * tiles_w;
+
+                for (int i = 0; i < tiles_w; ++i) {
+                    const bc1_block_t &src = src_blocks[i];
+                    bc1_block_t &dst = dst_blocks[i];
+
+                    dst.color[0] = src.color[0];
+                    dst.color[1] = src.color[1];
+                    // flip lines
+                    dst.cl[0] = src.cl[3];
+                    dst.cl[1] = src.cl[2];
+                    dst.cl[2] = src.cl[1];
+                    dst.cl[3] = src.cl[0];
+                }
+            } else {
+                const bc4_block_t *src_blocks = reinterpret_cast<const bc4_block_t *>(in_data);
+                src_blocks += N * (tiles_h - y - 1) * tiles_w;
+                bc4_block_t *dst_blocks = reinterpret_cast<bc4_block_t *>(out_data);
+                dst_blocks += N * y * tiles_w;
+
+                for (int i = 0; i < tiles_w; ++i) {
+                    for (int j = 0; j < N; ++j) {
+                        const bc4_block_t &src = src_blocks[i * N + j];
+                        bc4_block_t &dst = dst_blocks[i * N + j];
+
+                        if (invert_green && j == 1) {
+                            const bool is_6step = (src.alpha[0] > src.alpha[1]);
+
+                            // flip lo/hi values
+                            dst.alpha[1] = 255 - src.alpha[0];
+                            dst.alpha[0] = 255 - src.alpha[1];
+                            // flip lines
+                            dst.l0 = src.l3;
+                            dst.l1_0 = src.l2_0;
+                            dst.l1_1 = src.l2_1;
+                            dst.l1_2 = src.l2_2;
+                            dst.l2_0 = src.l1_0;
+                            dst.l2_1 = src.l1_1;
+                            dst.l2_2 = src.l1_2;
+                            dst.l3 = src.l0;
+
+                            // remap indices
+                            static const int _6step_mapping[] = {1, 0, 7, 6, 5, 4, 3, 2};
+                            static const int _4step_mapping[] = {1, 0, 5, 4, 3, 2, 6, 7};
+
+                            for (int i = 0; i < 16; ++i) {
+                                int next_bit = i * 3;
+
+                                int idx = 0, bit;
+                                bit = (dst.ndx[next_bit >> 3] >> (next_bit & 7)) & 1;
+                                idx += bit << 0;
+                                ++next_bit;
+                                bit = (dst.ndx[next_bit >> 3] >> (next_bit & 7)) & 1;
+                                idx += bit << 1;
+                                ++next_bit;
+                                bit = (dst.ndx[next_bit >> 3] >> (next_bit & 7)) & 1;
+                                idx += bit << 2;
+                                ++next_bit;
+
+                                idx = is_6step ? _6step_mapping[idx] : _4step_mapping[idx];
+
+                                --next_bit;
+                                bit = (idx >> 2) & 1;
+                                dst.ndx[next_bit >> 3] &= ~(1 << (next_bit & 7));
+                                dst.ndx[next_bit >> 3] |= (bit << (next_bit & 7));
+                                --next_bit;
+                                bit = (idx >> 1) & 1;
+                                dst.ndx[next_bit >> 3] &= ~(1 << (next_bit & 7));
+                                dst.ndx[next_bit >> 3] |= (bit << (next_bit & 7));
+                                --next_bit;
+                                bit = (idx >> 0) & 1;
+                                dst.ndx[next_bit >> 3] &= ~(1 << (next_bit & 7));
+                                dst.ndx[next_bit >> 3] |= (bit << (next_bit & 7));
+                            }
+                        } else {
+                            dst.alpha[0] = src.alpha[0];
+                            dst.alpha[1] = src.alpha[1];
+                            // flip lines
+                            dst.l0 = src.l3;
+                            dst.l1_0 = src.l2_0;
+                            dst.l1_1 = src.l2_1;
+                            dst.l1_2 = src.l2_2;
+                            dst.l2_0 = src.l1_0;
+                            dst.l2_1 = src.l1_1;
+                            dst.l2_2 = src.l1_2;
+                            dst.l3 = src.l0;
+                        }
+                    }
+                }
+            }
+        }
+    } else {
+        // no preprocessing needed, just copy
+        memcpy(out_data, in_data, read_bytes);
+    }
+    return read_bytes;
+}
+
+template int Ray::Preprocess_BCn<1>(const uint8_t in_data[], const int tiles_w, const int tiles_h,
+                                    const bool flip_vertical, const bool invert_green, uint8_t out_data[]);
+template int Ray::Preprocess_BCn<2>(const uint8_t in_data[], const int tiles_w, const int tiles_h,
+                                    const bool flip_vertical, const bool invert_green, uint8_t out_data[]);
+template int Ray::Preprocess_BCn<3>(const uint8_t in_data[], const int tiles_w, const int tiles_h,
+                                    const bool flip_vertical, const bool invert_green, uint8_t out_data[]);
+template int Ray::Preprocess_BCn<4>(const uint8_t in_data[], const int tiles_w, const int tiles_h,
+                                    const bool flip_vertical, const bool invert_green, uint8_t out_data[]);
+
 std::unique_ptr<uint8_t[]> Ray::ReadTGAFile(const void *data, const int data_len, int &w, int &h, eTexFormat &format) {
     uint32_t img_size;
     ReadTGAFile(data, data_len, w, h, format, nullptr, img_size);

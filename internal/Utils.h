@@ -77,6 +77,30 @@ int GetRequiredMemory_BC3(int w, int h, int pitch_align);
 int GetRequiredMemory_BC4(int w, int h, int pitch_align);
 int GetRequiredMemory_BC5(int w, int h, int pitch_align);
 
+template <int N> int GetBlockSize_BCn() {
+    if (N == 4) {
+        return BlockSize_BC3;
+    } else if (N == 3) {
+        return BlockSize_BC1;
+    } else if (N == 2) {
+        return BlockSize_BC5;
+    } else if (N == 1) {
+        return BlockSize_BC4;
+    }
+}
+
+template <int N> int GetRequiredMemory_BCn(const int w, const int h, const int pitch_align) {
+    if (N == 4) {
+        return GetRequiredMemory_BC3(w, h, pitch_align);
+    } else if (N == 3) {
+        return GetRequiredMemory_BC1(w, h, pitch_align);
+    } else if (N == 2) {
+        return GetRequiredMemory_BC5(w, h, pitch_align);
+    } else if (N == 1) {
+        return GetRequiredMemory_BC4(w, h, pitch_align);
+    }
+}
+
 // NOTE: intended for realtime compression, quality may be not the best
 template <int SrcChannels>
 void CompressImage_BC1(const uint8_t img_src[], int w, int h, uint8_t img_dst[], int dst_pitch = 0);
@@ -86,6 +110,10 @@ template <int SrcChannels = 1>
 void CompressImage_BC4(const uint8_t img_src[], int w, int h, uint8_t img_dst[], int dst_pitch = 0);
 template <int SrcChannels = 2>
 void CompressImage_BC5(const uint8_t img_src[], int w, int h, uint8_t img_dst[], int dst_pitch = 0);
+
+template <int N>
+int Preprocess_BCn(const uint8_t in_data[], int tiles_w, int tiles_h, bool flip_vertical, bool invert_green,
+                   uint8_t out_data[]);
 
 std::unique_ptr<uint8_t[]> ReadTGAFile(const void *data, int data_len, int &w, int &h, eTexFormat &format);
 bool ReadTGAFile(const void *data, int data_len, int &w, int &h, eTexFormat &format, uint8_t *out_data,

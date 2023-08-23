@@ -108,7 +108,7 @@ Ray::TextureHandle Ray::Cpu::Scene::AddTexture(const tex_desc_t &_t) {
                 reconstruct_z |= (rgba_data[i].v[2] < 250);
             }
             if (use_compression) {
-                storage = 6;
+                storage = 7;
                 index = tex_storage_bc5_.Allocate(repacked_data, res, _t.generate_mipmaps);
             } else {
                 storage = 2;
@@ -120,7 +120,7 @@ Ray::TextureHandle Ray::Cpu::Scene::AddTexture(const tex_desc_t &_t) {
         if (!_t.is_normalmap) {
             if (use_compression) {
                 is_YCoCg = true;
-                storage = 4;
+                storage = 5;
                 index = tex_storage_bc3_.Allocate(Span<const color_rgb8_t>(rgb_data, res[0] * res[1]), res,
                                                   _t.generate_mipmaps);
             } else {
@@ -139,7 +139,7 @@ Ray::TextureHandle Ray::Cpu::Scene::AddTexture(const tex_desc_t &_t) {
             }
 
             if (use_compression) {
-                storage = 6;
+                storage = 7;
                 index = tex_storage_bc5_.Allocate(repacked_data, res, _t.generate_mipmaps);
             } else {
                 storage = 2;
@@ -161,7 +161,7 @@ Ray::TextureHandle Ray::Cpu::Scene::AddTexture(const tex_desc_t &_t) {
         }
 
         if (use_compression) {
-            storage = 6;
+            storage = 7;
             index = tex_storage_bc5_.Allocate(Span<const color_rg8_t>(data_to_use, res[0] * res[1]), res,
                                               _t.generate_mipmaps);
         } else {
@@ -172,7 +172,7 @@ Ray::TextureHandle Ray::Cpu::Scene::AddTexture(const tex_desc_t &_t) {
         reconstruct_z = _t.is_normalmap;
     } else if (_t.format == eTextureFormat::R8) {
         if (use_compression) {
-            storage = 5;
+            storage = 6;
             index = tex_storage_bc4_.Allocate(
                 Span<const color_r8_t>(reinterpret_cast<const color_r8_t *>(_t.data.data()), res[0] * res[1]), res,
                 _t.generate_mipmaps);
@@ -182,6 +182,25 @@ Ray::TextureHandle Ray::Cpu::Scene::AddTexture(const tex_desc_t &_t) {
                 Span<const color_r8_t>(reinterpret_cast<const color_r8_t *>(_t.data.data()), res[0] * res[1]), res,
                 _t.generate_mipmaps);
         }
+    } else if (_t.format == eTextureFormat::BC1) {
+        storage = 4;
+        index = tex_storage_bc1_.AllocateRaw(_t.data, res, _t.mips_count, (_t.convention == eTextureConvention::DX),
+                                             false /* invert_green */);
+
+    } else if (_t.format == eTextureFormat::BC3) {
+        storage = 5;
+        index = tex_storage_bc3_.AllocateRaw(_t.data, res, _t.mips_count, (_t.convention == eTextureConvention::DX),
+                                             false /* invert_green */);
+    } else if (_t.format == eTextureFormat::BC4) {
+        storage = 6;
+        index = tex_storage_bc4_.AllocateRaw(_t.data, res, _t.mips_count, (_t.convention == eTextureConvention::DX),
+                                             false /* invert_green */);
+    } else if (_t.format == eTextureFormat::BC5) {
+        storage = 7;
+        const bool flip_vertical = (_t.convention == eTextureConvention::DX);
+        const bool invert_green = (_t.convention == eTextureConvention::DX) && _t.is_normalmap;
+        index = tex_storage_bc5_.AllocateRaw(_t.data, res, _t.mips_count, flip_vertical, invert_green);
+        reconstruct_z = _t.is_normalmap;
     }
 
     if (storage == -1) {
@@ -189,10 +208,10 @@ Ray::TextureHandle Ray::Cpu::Scene::AddTexture(const tex_desc_t &_t) {
     }
 
     log_->Info("Ray: Texture '%s' loaded (storage = %i, %ix%i)", _t.name, storage, _t.w, _t.h);
-    log_->Info("Ray: Storages are (RGBA[%i], RGB[%i], RG[%i], R[%i], BC3[%i], BC4[%i], BC5[%i])",
+    log_->Info("Ray: Storages are (RGBA[%i], RGB[%i], RG[%i], R[%i], BC1[%i], BC3[%i], BC4[%i], BC5[%i])",
                tex_storage_rgba_.img_count(), tex_storage_rgb_.img_count(), tex_storage_rg_.img_count(),
-               tex_storage_r_.img_count(), tex_storage_bc3_.img_count(), tex_storage_bc4_.img_count(),
-               tex_storage_bc5_.img_count());
+               tex_storage_r_.img_count(), tex_storage_bc1_.img_count(), tex_storage_bc3_.img_count(),
+               tex_storage_bc4_.img_count(), tex_storage_bc5_.img_count());
 
     uint32_t ret = 0;
 

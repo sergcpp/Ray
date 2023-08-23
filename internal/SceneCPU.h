@@ -68,12 +68,13 @@ class Scene : public SceneCommon {
     TexStorageRGB tex_storage_rgb_;
     TexStorageRG tex_storage_rg_;
     TexStorageR tex_storage_r_;
+    TexStorageBCn<3> tex_storage_bc1_;
     TexStorageBCn<4> tex_storage_bc3_;
-    TexStorageBCn<2> tex_storage_bc5_;
     TexStorageBCn<1> tex_storage_bc4_;
+    TexStorageBCn<2> tex_storage_bc5_;
 
-    TexStorageBase *tex_storages_[7] = {&tex_storage_rgba_, &tex_storage_rgb_, &tex_storage_rg_, &tex_storage_r_,
-                                        &tex_storage_bc3_,  &tex_storage_bc4_, &tex_storage_bc5_};
+    TexStorageBase *tex_storages_[8] = {&tex_storage_rgba_, &tex_storage_rgb_, &tex_storage_rg_,  &tex_storage_r_,
+                                        &tex_storage_bc1_,  &tex_storage_bc3_, &tex_storage_bc4_, &tex_storage_bc5_};
 
     SparseStorage<light_t> lights_;
     std::vector<uint32_t> li_indices_;     // compacted list of all lights

@@ -9,6 +9,66 @@
 
 #include "../internal/Utils.h"
 
+namespace {
+//	the following constants were copied directly off the MSDN website
+
+//	The dwFlags member of the original DDSURFACEDESC2 structure
+//        can be set to one or more of the following values.
+#define DDSD_CAPS 0x00000001
+#define DDSD_HEIGHT 0x00000002
+#define DDSD_WIDTH 0x00000004
+#define DDSD_PITCH 0x00000008
+#define DDSD_PIXELFORMAT 0x00001000
+#define DDSD_MIPMAPCOUNT 0x00020000
+#define DDSD_LINEARSIZE 0x00080000
+#define DDSD_DEPTH 0x00800000
+
+//	DirectDraw Pixel Format
+#define DDPF_ALPHAPIXELS 0x00000001
+#define DDPF_FOURCC 0x00000004
+#define DDPF_RGB 0x00000040
+
+//	The dwCaps1 member of the DDSCAPS2 structure can be
+//        set to one or more of the following values.
+#define DDSCAPS_COMPLEX 0x00000008
+#define DDSCAPS_TEXTURE 0x00001000
+#define DDSCAPS_MIPMAP 0x00400000
+
+struct DDSHeader {
+    uint32_t dwMagic;
+    uint32_t dwSize;
+    uint32_t dwFlags;
+    uint32_t dwHeight;
+    uint32_t dwWidth;
+    uint32_t dwPitchOrLinearSize;
+    uint32_t dwDepth;
+    uint32_t dwMipMapCount;
+    uint32_t dwReserved1[11];
+
+    //  DDPIXELFORMAT
+    struct {
+        uint32_t dwSize;
+        uint32_t dwFlags;
+        uint32_t dwFourCC;
+        uint32_t dwRGBBitCount;
+        uint32_t dwRBitMask;
+        uint32_t dwGBitMask;
+        uint32_t dwBBitMask;
+        uint32_t dwAlphaBitMask;
+    } sPixelFormat;
+
+    //  DDCAPS2
+    struct {
+        uint32_t dwCaps1;
+        uint32_t dwCaps2;
+        uint32_t dwDDSX;
+        uint32_t dwReserved;
+    } sCaps;
+    uint32_t dwReserved2;
+};
+static_assert(sizeof(DDSHeader) == 128, "!");
+} // namespace
+
 std::tuple<std::vector<float>, std::vector<uint32_t>, std::vector<uint32_t>> LoadBIN(const char file_name[]) {
     std::ifstream in_file(file_name, std::ios::binary);
     uint32_t num_attrs;
@@ -74,6 +134,44 @@ std::vector<uint8_t> LoadTGA(const char file_name[], bool flip_y, int &w, int &h
     }
 
     return tex_data;
+}
+
+std::vector<uint8_t> LoadDDS(const char file_name[], int &w, int &h, int &mips, int &channels) {
+    std::ifstream in_file(file_name, std::ios::binary);
+    if (!in_file) {
+        return {};
+    }
+
+    in_file.seekg(0, std::ios::end);
+    size_t in_file_size = (size_t)in_file.tellg();
+    in_file.seekg(0, std::ios::beg);
+
+    DDSHeader dds_header = {};
+    in_file.read((char *)&dds_header, sizeof(DDSHeader));
+
+    w = dds_header.dwWidth;
+    h = dds_header.dwHeight;
+    mips = dds_header.dwMipMapCount;
+
+    if ((dds_header.dwFlags & DDPF_FOURCC) != 0) {
+        if (dds_header.sPixelFormat.dwFourCC == (('D' << 0) | ('X' << 8) | ('T' << 16) | ('1' << 24))) {
+            channels = 3;
+        } else if (dds_header.sPixelFormat.dwFourCC == (('D' << 0) | ('X' << 8) | ('T' << 16) | ('5' << 24))) {
+            channels = 4;
+        } else if (dds_header.sPixelFormat.dwFourCC == (('B' << 0) | ('C' << 8) | ('4' << 16) | ('U' << 24)) ||
+                   dds_header.sPixelFormat.dwFourCC == (('A' << 0) | ('T' << 8) | ('I' << 16) | ('1' << 24))) {
+            channels = 1;
+        } else if (dds_header.sPixelFormat.dwFourCC == (('A' << 0) | ('T' << 8) | ('I' << 16) | ('2' << 24))) {
+            channels = 2;
+        } else if (dds_header.sPixelFormat.dwFourCC == (('D' << 0u) | ('X' << 8u) | ('1' << 16u) | ('0' << 24u))) {
+            assert(false);
+        }
+    }
+
+    std::vector<uint8_t> ret(in_file_size - sizeof(DDSHeader));
+    in_file.read((char *)&ret[0], in_file_size - sizeof(DDSHeader));
+
+    return ret;
 }
 
 std::vector<uint8_t> LoadHDR(const char name[], int &out_w, int &out_h) {

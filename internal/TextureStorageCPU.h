@@ -359,7 +359,8 @@ force_inline void rgb_888_from_565(unsigned int c, int *r, int *g, int *b) {
 }
 
 template <int N> class TexStorageBCn : public TexStorageBase {
-    static_assert(N == 4 || N == 2 || N == 1, "!");
+    static_assert(N <= 4, "!");
+    const int BlockSizes[4] = {BlockSize_BC4, BlockSize_BC5, BlockSize_BC1, BlockSize_BC3};
     static const int InChannels = (N == 4) ? 3 : N;
     static const int TileSize = 4;
 
@@ -387,8 +388,7 @@ template <int N> class TexStorageBCn : public TexStorageBase {
         const int in_tilex = x % TileSize, in_tiley = y % TileSize;
 
         const int w_in_tiles = p.res_in_tiles[lod][0];
-        const int block_offset =
-            p.lod_offsets[lod] + (tiley * w_in_tiles + tilex) * (N == 4 ? BlockSize_BC3 : BlockSize_BC4 * N);
+        const int block_offset = p.lod_offsets[lod] + (tiley * w_in_tiles + tilex) * BlockSizes[N - 1];
 
         BCCache<N> &cache = get_per_thread_BCCache<N>();
 
@@ -458,19 +458,60 @@ template <int N> class TexStorageBCn : public TexStorageBase {
                         c.v[2] = decode_colors[idx + 2];
                     }
                 }
+            } else if (N == 3) {
+                // find the 2 primary colors
+                const int c0 = compressed_block[0] + (compressed_block[1] << 8);
+                const int c1 = compressed_block[2] + (compressed_block[3] << 8);
+                int r, g, b;
+                rgb_888_from_565(c0, &r, &g, &b);
+                uint8_t decode_colors[4 * 3];
+                decode_colors[0] = r;
+                decode_colors[1] = g;
+                decode_colors[2] = b;
+                rgb_888_from_565(c1, &r, &g, &b);
+                decode_colors[3] = r;
+                decode_colors[4] = g;
+                decode_colors[5] = b;
+                //	Like DXT1, but no choicees:
+                //	no alpha, 2 interpolated colors
+                decode_colors[6] = (2 * decode_colors[0] + decode_colors[3]) / 3;
+                decode_colors[7] = (2 * decode_colors[1] + decode_colors[4]) / 3;
+                decode_colors[8] = (2 * decode_colors[2] + decode_colors[5]) / 3;
+                decode_colors[9] = (decode_colors[0] + 2 * decode_colors[3]) / 3;
+                decode_colors[10] = (decode_colors[1] + 2 * decode_colors[4]) / 3;
+                decode_colors[11] = (decode_colors[2] + 2 * decode_colors[5]) / 3;
+                //	decode the block
+                int next_bit = 4 * 8;
+                for (OutColorType &c : cache.decoded_block) {
+                    const int idx = ((compressed_block[next_bit >> 3] >> (next_bit & 7)) & 3) * 3;
+                    next_bit += 2;
+                    c.v[0] = decode_colors[idx + 0];
+                    c.v[1] = decode_colors[idx + 1];
+                    c.v[2] = decode_colors[idx + 2];
+                }
             } else {
                 for (int ch = 0; ch < N; ++ch) {
                     uint8_t decode_data[8];
                     decode_data[0] = compressed_block[0];
                     decode_data[1] = compressed_block[1];
 
-                    // 6-step intermediate values
-                    decode_data[2] = (6 * decode_data[0] + 1 * decode_data[1]) / 7;
-                    decode_data[3] = (5 * decode_data[0] + 2 * decode_data[1]) / 7;
-                    decode_data[4] = (4 * decode_data[0] + 3 * decode_data[1]) / 7;
-                    decode_data[5] = (3 * decode_data[0] + 4 * decode_data[1]) / 7;
-                    decode_data[6] = (2 * decode_data[0] + 5 * decode_data[1]) / 7;
-                    decode_data[7] = (1 * decode_data[0] + 6 * decode_data[1]) / 7;
+                    if (decode_data[0] > decode_data[1]) {
+                        // 6-step intermediate values
+                        decode_data[2] = (6 * decode_data[0] + 1 * decode_data[1]) / 7;
+                        decode_data[3] = (5 * decode_data[0] + 2 * decode_data[1]) / 7;
+                        decode_data[4] = (4 * decode_data[0] + 3 * decode_data[1]) / 7;
+                        decode_data[5] = (3 * decode_data[0] + 4 * decode_data[1]) / 7;
+                        decode_data[6] = (2 * decode_data[0] + 5 * decode_data[1]) / 7;
+                        decode_data[7] = (1 * decode_data[0] + 6 * decode_data[1]) / 7;
+                    } else {
+                        // 4-step intermediate values + full and none
+                        decode_data[2] = (4 * decode_data[0] + 1 * decode_data[1]) / 5;
+                        decode_data[3] = (3 * decode_data[0] + 2 * decode_data[1]) / 5;
+                        decode_data[4] = (2 * decode_data[0] + 3 * decode_data[1]) / 5;
+                        decode_data[5] = (1 * decode_data[0] + 4 * decode_data[1]) / 5;
+                        decode_data[6] = 0;
+                        decode_data[7] = 255;
+                    }
 
                     int next_bit = 8 * 2;
                     for (OutColorType &c : cache.decoded_block) {
@@ -562,11 +603,13 @@ template <int N> class TexStorageBCn : public TexStorageBase {
     }
 
     int Allocate(Span<const InColorType> data, const int res[2], bool mips);
+    int AllocateRaw(Span<const uint8_t> data, const int res[2], int mips_count, bool flip_vertical, bool invert_green);
     bool Free(int index) override { return true; }
 };
 
 extern template class TexStorageBCn<1>;
 extern template class TexStorageBCn<2>;
+extern template class TexStorageBCn<3>;
 extern template class TexStorageBCn<4>;
 
 } // namespace Cpu

@@ -1333,7 +1333,7 @@ void test_complex_mat3(const char *arch_list[], const char *preferred_device) {
 
 void test_complex_mat4(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 12;
-    const int PixThres = 2427;
+    const int PixThres = 2484;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};
@@ -1346,9 +1346,9 @@ void test_complex_mat4(const char *arch_list[], const char *preferred_device) {
     metal_mat_desc.alpha_texture = Ray::TextureHandle{4};
 
     const char *textures[] = {
-        "test_data/textures/Fence007A_2K_Color.tga", "test_data/textures/Fence007A_2K_NormalGL.tga",
-        "test_data/textures/Fence007A_2K_Roughness.tga", "test_data/textures/Fence007A_2K_Metalness.tga",
-        "test_data/textures/Fence007A_2K_Opacity.tga"};
+        "test_data/textures/Fence007A_2K_Color.dds", "test_data/textures/Fence007A_2K_NormalDX.dds",
+        "test_data/textures/Fence007A_2K_Roughness.dds", "test_data/textures/Fence007A_2K_Metalness.dds",
+        "test_data/textures/Fence007A_2K_Opacity.dds"};
 
     run_material_test(arch_list, preferred_device, "complex_mat4", metal_mat_desc, SampleCount, VeryFastMinPSNR,
                       PixThres, eDenoiseMethod::None, false, textures);

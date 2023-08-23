@@ -29,6 +29,18 @@ inline Ref::simd_fvec4 rgb_to_rgbe(const Ref::simd_fvec4 &rgb) {
     return Ref::simd_fvec4{rgb.get<0>() * factor, rgb.get<1>() * factor, rgb.get<2>() * factor, float(exponent + 128)};
 }
 
+const eTexFormat g_to_internal_format[] = {
+    eTexFormat::Undefined,   // Undefined
+    eTexFormat::RawRGBA8888, // RGBA8888
+    eTexFormat::RawRGB888,   // RGB888
+    eTexFormat::RawRG88,     // RG88
+    eTexFormat::RawR8,       // R8
+    eTexFormat::BC1,         // BC1
+    eTexFormat::BC3,         // BC3
+    eTexFormat::BC4,         // BC4
+    eTexFormat::BC5          // BC5
+};
+
 class Scene : public SceneCommon {
   protected:
     friend class NS::Renderer;
@@ -54,7 +66,7 @@ class Scene : public SceneCommon {
 
     BindlessTexData bindless_tex_data_;
 
-    TextureAtlas tex_atlases_[7];
+    TextureAtlas tex_atlases_[8];
 
     SparseStorage<light_t> lights_;
     Vector<uint32_t> li_indices_;
@@ -182,6 +194,7 @@ inline Ray::NS::Scene::Scene(Context *ctx, const bool use_hwrt, const bool use_b
           {ctx, "Atlas RGB", eTexFormat::RawRGB888, eTexFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
           {ctx, "Atlas RG", eTexFormat::RawRG88, eTexFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
           {ctx, "Atlas R", eTexFormat::RawR8, eTexFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
+          {ctx, "Atlas BC1", eTexFormat::BC1, eTexFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
           {ctx, "Atlas BC3", eTexFormat::BC3, eTexFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
           {ctx, "Atlas BC4", eTexFormat::BC4, eTexFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
           {ctx, "Atlas BC5", eTexFormat::BC5, eTexFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE}},
@@ -224,7 +237,8 @@ inline Ray::TextureHandle Ray::NS::Scene::AddAtlasTexture_nolock(const tex_desc_
         t.width |= ATLAS_TEX_SRGB_BIT;
     }
 
-    if (_t.generate_mipmaps && _t.w > MIN_ATLAS_TEXTURE_SIZE && _t.h > MIN_ATLAS_TEXTURE_SIZE) {
+    if (((_t.generate_mipmaps && !IsCompressedFormat(_t.format)) || _t.mips_count > 1) &&
+        _t.w > MIN_ATLAS_TEXTURE_SIZE && _t.h > MIN_ATLAS_TEXTURE_SIZE) {
         t.height |= ATLAS_TEX_MIPS_BIT;
     }
 
@@ -252,11 +266,12 @@ inline Ray::TextureHandle Ray::NS::Scene::AddAtlasTexture_nolock(const tex_desc_
             }
 
             tex_data = repacked_normalmap.get();
-            t.atlas = use_compression ? 6 : 2;
+            t.atlas = use_compression ? 7 : 2;
         }
     } else if (_t.format == eTextureFormat::RGB888) {
         if (!_t.is_normalmap) {
-            t.atlas = use_compression ? 4 : 1;
+            t.atlas = use_compression ? 5 : 1;
+            t.height |= ATLAS_TEX_YCOCG_BIT;
         } else {
             // TODO: get rid of this allocation
             repacked_normalmap = std::make_unique<color_rg8_t[]>(res[0] * res[1]);
@@ -269,10 +284,10 @@ inline Ray::TextureHandle Ray::NS::Scene::AddAtlasTexture_nolock(const tex_desc_
             }
 
             tex_data = repacked_normalmap.get();
-            t.atlas = use_compression ? 6 : 2;
+            t.atlas = use_compression ? 7 : 2;
         }
     } else if (_t.format == eTextureFormat::RG88) {
-        t.atlas = use_compression ? 6 : 2;
+        t.atlas = use_compression ? 7 : 2;
         reconstruct_z = _t.is_normalmap;
 
         const bool invert_y = _t.is_normalmap && (_t.convention == eTextureConvention::DX);
@@ -287,24 +302,75 @@ inline Ray::TextureHandle Ray::NS::Scene::AddAtlasTexture_nolock(const tex_desc_
             tex_data = repacked_normalmap.get();
         }
     } else if (_t.format == eTextureFormat::R8) {
-        t.atlas = use_compression ? 5 : 3;
+        t.atlas = use_compression ? 6 : 3;
+    } else {
+        const bool flip_vertical = (_t.convention == eTextureConvention::DX);
+        const bool invert_green = (_t.convention == eTextureConvention::DX) && _t.is_normalmap;
+        reconstruct_z = _t.is_normalmap && (_t.format == eTextureFormat::BC5);
+
+        int read_offset = 0;
+        int res[2] = {_t.w, _t.h};
+        // TODO: Get rid of allocation
+        std::vector<uint8_t> temp_data;
+        for (int i = 0; i < std::min(_t.mips_count, NUM_MIP_LEVELS) && res[0] >= 4 && res[1] >= 4; ++i) {
+            if (_t.format == eTextureFormat::BC1) {
+                t.atlas = 4;
+                temp_data.resize(GetRequiredMemory_BCn<3>(res[0], res[1], 1));
+                Preprocess_BCn<3>(&_t.data[read_offset], (res[0] + 3) / 4, (res[1] + 3) / 4, flip_vertical,
+                                  invert_green, temp_data.data());
+            } else if (_t.format == eTextureFormat::BC3) {
+                t.atlas = 5;
+                temp_data.resize(GetRequiredMemory_BCn<4>(res[0], res[1], 1));
+                Preprocess_BCn<4>(&_t.data[read_offset], (res[0] + 3) / 4, (res[1] + 3) / 4, flip_vertical,
+                                  invert_green, temp_data.data());
+            } else if (_t.format == eTextureFormat::BC4) {
+                t.atlas = 6;
+                temp_data.resize(GetRequiredMemory_BCn<1>(res[0], res[1], 1));
+                Preprocess_BCn<1>(&_t.data[read_offset], (res[0] + 3) / 4, (res[1] + 3) / 4, flip_vertical,
+                                  invert_green, temp_data.data());
+            } else if (_t.format == eTextureFormat::BC5) {
+                t.atlas = 7;
+                temp_data.resize(GetRequiredMemory_BCn<2>(res[0], res[1], 1));
+                Preprocess_BCn<2>(&_t.data[read_offset], (res[0] + 3) / 4, (res[1] + 3) / 4, flip_vertical,
+                                  invert_green, temp_data.data());
+            }
+
+            int pos[2] = {};
+            const int page = tex_atlases_[t.atlas].AllocateRaw(temp_data.data(), res, pos);
+
+            t.page[i] = uint8_t(page);
+            t.pos[i][0] = uint16_t(pos[0]);
+            t.pos[i][1] = uint16_t(pos[1]);
+
+            read_offset += int(temp_data.size());
+
+            res[0] /= 2;
+            res[1] /= 2;
+        }
+
+        // Fill remaining mip levels
+        for (int i = _t.mips_count; i < NUM_MIP_LEVELS; i++) {
+            t.page[i] = t.page[_t.mips_count - 1];
+            t.pos[i][0] = t.pos[_t.mips_count - 1][0];
+            t.pos[i][1] = t.pos[_t.mips_count - 1][1];
+        }
     }
 
     if (reconstruct_z) {
         t.width |= uint32_t(ATLAS_TEX_RECONSTRUCT_Z_BIT);
     }
 
-    { // Allocate initial mip level
+    if (!IsCompressedFormat(_t.format)) { // Allocate initial mip level
         int page = -1, pos[2] = {};
         if (t.atlas == 0) {
             page = tex_atlases_[0].Allocate<uint8_t, 4>(reinterpret_cast<const color_rgba8_t *>(tex_data), res, pos);
-        } else if (t.atlas == 1 || t.atlas == 4) {
+        } else if (t.atlas == 1 || t.atlas == 5) {
             page =
                 tex_atlases_[t.atlas].Allocate<uint8_t, 3>(reinterpret_cast<const color_rgb8_t *>(tex_data), res, pos);
-        } else if (t.atlas == 2 || t.atlas == 6) {
+        } else if (t.atlas == 2 || t.atlas == 7) {
             page =
                 tex_atlases_[t.atlas].Allocate<uint8_t, 2>(reinterpret_cast<const color_rg8_t *>(tex_data), res, pos);
-        } else if (t.atlas == 3 || t.atlas == 5) {
+        } else if (t.atlas == 3 || t.atlas == 6) {
             page = tex_atlases_[t.atlas].Allocate<uint8_t, 1>(reinterpret_cast<const color_r8_t *>(tex_data), res, pos);
         }
 
@@ -318,13 +384,13 @@ inline Ray::TextureHandle Ray::NS::Scene::AddAtlasTexture_nolock(const tex_desc_
     }
 
     // Temporarily fill remaining mip levels with the last one (mips will be added later)
-    for (int i = 1; i < NUM_MIP_LEVELS; i++) {
+    for (int i = 1; i < NUM_MIP_LEVELS && !IsCompressedFormat(_t.format); i++) {
         t.page[i] = t.page[0];
         t.pos[i][0] = t.pos[0][0];
         t.pos[i][1] = t.pos[0][1];
     }
 
-    if (_t.generate_mipmaps && (use_compression || !ctx_->image_blit_supported())) {
+    if (_t.generate_mipmaps && (use_compression || !ctx_->image_blit_supported()) && !IsCompressedFormat(_t.format)) {
         // We have to generate mips here as uncompressed data will be lost
 
         int pages[16], positions[16][2];
@@ -352,10 +418,10 @@ inline Ray::TextureHandle Ray::NS::Scene::AddAtlasTexture_nolock(const tex_desc_
     }
 
     log_->Info("Ray: Texture '%s' loaded (atlas = %i, %ix%i)", _t.name, int(t.atlas), _t.w, _t.h);
-    log_->Info("Ray: Atlasses are (RGBA[%i], RGB[%i], RG[%i], R[%i], BC3[%i], BC4[%i], BC5[%i])",
+    log_->Info("Ray: Atlasses are (RGBA[%i], RGB[%i], RG[%i], R[%i], BC1[%i], BC3[%i], BC4[%i], BC5[%i])",
                tex_atlases_[0].page_count(), tex_atlases_[1].page_count(), tex_atlases_[2].page_count(),
                tex_atlases_[3].page_count(), tex_atlases_[4].page_count(), tex_atlases_[5].page_count(),
-               tex_atlases_[6].page_count());
+               tex_atlases_[6].page_count(), tex_atlases_[7].page_count());
 
     const std::pair<uint32_t, uint32_t> at = atlas_textures_.push(t);
     return TextureHandle{at.first, at.second};
@@ -365,7 +431,10 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
     eTexFormat src_fmt = eTexFormat::Undefined, fmt = eTexFormat::Undefined;
     eTexBlock block = eTexBlock::_None;
 
-    const int mip_count = _t.generate_mipmaps ? CalcMipCount(_t.w, _t.h, 4, eTexFilter::Bilinear) : 1;
+    const int expected_mip_count = CalcMipCount(_t.w, _t.h, 4, eTexFilter::Bilinear);
+    const int mip_count = (_t.generate_mipmaps && !Ray::IsCompressedFormat(_t.format))
+                              ? expected_mip_count
+                              : std::min(_t.mips_count, expected_mip_count);
 
     Buffer temp_stage_buf("Temp stage buf", ctx_, eBufType::Upload, 3 * _t.w * _t.h * 4 + 4096 * mip_count,
                           4096); // allocate for worst case
@@ -424,7 +493,7 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
     } else if (_t.format == eTextureFormat::RGB888) {
         if (!_t.is_normalmap) {
             if (use_compression) {
-                auto temp_YCoCg = ConvertRGB_to_CoCgxY(reinterpret_cast<const uint8_t *>(_t.data.data()), _t.w, _t.h);
+                auto temp_YCoCg = ConvertRGB_to_CoCgxY(_t.data.data(), _t.w, _t.h);
                 is_YCoCg = true;
                 src_fmt = eTexFormat::RawRGB888;
                 fmt = eTexFormat::BC3;
@@ -451,7 +520,7 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
                 // TODO: get rid of this allocation
                 repacked_data = std::make_unique<uint8_t[]>(4 * _t.w * _t.h);
 
-                const auto *rgb_data = reinterpret_cast<const uint8_t *>(_t.data.data());
+                const auto *rgb_data = _t.data.data();
 
                 for (int i = 0; i < _t.w * _t.h; ++i) {
                     repacked_data[i * 4 + 0] = rgb_data[i * 3 + 0];
@@ -520,7 +589,7 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
             fmt = eTexFormat::BC4;
             block = eTexBlock::_4x4;
             data_size[0] = GetRequiredMemory_BC4(_t.w, _t.h, TextureDataPitchAlignment);
-            CompressImage_BC4<1>(reinterpret_cast<const uint8_t *>(_t.data.data()), _t.w, _t.h, stage_data,
+            CompressImage_BC4<1>(_t.data.data(), _t.w, _t.h, stage_data,
                                  GetRequiredMemory_BC4(_t.w, 1, TextureDataPitchAlignment));
         } else {
             src_fmt = fmt = eTexFormat::RawR8;
@@ -534,9 +603,43 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
                 j += round_up(_t.w, TextureDataPitchAlignment);
             }
         }
+    } else {
+        //
+        // Compressed formats
+        //
+        src_fmt = fmt = g_to_internal_format[int(_t.format)];
+        block = eTexBlock::_4x4;
+
+        const bool flip_vertical = (_t.convention == eTextureConvention::DX);
+        const bool invert_green = (_t.convention == eTextureConvention::DX) && _t.is_normalmap;
+        reconstruct_z = _t.is_normalmap && (_t.format == eTextureFormat::BC5);
+
+        int read_offset = 0, write_offset = 0;
+        int w = _t.w, h = _t.h;
+        for (int i = 0; i < mip_count; ++i) {
+            if (_t.format == eTextureFormat::BC1) {
+                data_size[i] = Preprocess_BCn<3>(&_t.data[read_offset], (w + 3) / 4, (h + 3) / 4, flip_vertical,
+                                                 invert_green, &stage_data[write_offset]);
+            } else if (_t.format == eTextureFormat::BC3) {
+                data_size[i] = Preprocess_BCn<4>(&_t.data[read_offset], (w + 3) / 4, (h + 3) / 4, flip_vertical,
+                                                 invert_green, &stage_data[write_offset]);
+            } else if (_t.format == eTextureFormat::BC4) {
+                data_size[i] = Preprocess_BCn<1>(&_t.data[read_offset], (w + 3) / 4, (h + 3) / 4, flip_vertical,
+                                                 invert_green, &stage_data[write_offset]);
+            } else if (_t.format == eTextureFormat::BC5) {
+                data_size[i] = Preprocess_BCn<2>(&_t.data[read_offset], (w + 3) / 4, (h + 3) / 4, flip_vertical,
+                                                 invert_green, &stage_data[write_offset]);
+            }
+
+            read_offset += data_size[i];
+            write_offset += round_up(data_size[i], 4096);
+
+            w /= 2;
+            h /= 2;
+        }
     }
 
-    if (_t.generate_mipmaps) {
+    if (_t.generate_mipmaps && !IsCompressedFormat(src_fmt)) {
         const int res[2] = {_t.w, _t.h};
         if (src_fmt == eTexFormat::RawRGBA8888) {
             const auto *rgba_data =
@@ -585,7 +688,7 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
                                                       data_offset, data_size[i]);
             res[0] = std::max(res[0] / 2, 1);
             res[1] = std::max(res[1] / 2, 1);
-            data_offset += 4096 * ((data_size[i] + 4095) / 4096);
+            data_offset += round_up(data_size[i], 4096);
         }
 
         EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());

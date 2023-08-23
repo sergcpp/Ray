@@ -123,7 +123,7 @@ struct mat_group_desc_t {
     size_t vtx_count;         ///< Vertex count
 
     mat_group_desc_t(const MaterialHandle _front_material, const MaterialHandle _back_material, size_t _vtx_start,
-                 size_t _vtx_count)
+                     size_t _vtx_count)
         : front_mat(_front_material), back_mat(_back_material), vtx_start(_vtx_start), vtx_count(_vtx_count) {}
 
     mat_group_desc_t(const MaterialHandle _front_material, size_t _vtx_start, size_t _vtx_count)
@@ -132,15 +132,15 @@ struct mat_group_desc_t {
 
 /// Mesh description
 struct mesh_desc_t {
-    const char *name = nullptr;             ///< Mesh name (for debugging)
-    ePrimType prim_type;                    ///< Primitive type
-    eVertexLayout layout;                   ///< Vertex attribute layout
-    Span<const float> vtx_attrs;            ///< Vertex attributes
-    Span<const uint32_t> vtx_indices;       ///< Vertex indices, defining primitives
-    int base_vertex = 0;                    ///< Shift applied to indices
-    Span<const mat_group_desc_t> groups;    ///< Shapes of a mesh
-    bool allow_spatial_splits = false;      ///< Better BVH, worse load times and memory consumption
-    bool use_fast_bvh_build = false;        ///< Use faster BVH construction with less tree quality
+    const char *name = nullptr;          ///< Mesh name (for debugging)
+    ePrimType prim_type;                 ///< Primitive type
+    eVertexLayout layout;                ///< Vertex attribute layout
+    Span<const float> vtx_attrs;         ///< Vertex attributes
+    Span<const uint32_t> vtx_indices;    ///< Vertex indices, defining primitives
+    int base_vertex = 0;                 ///< Shift applied to indices
+    Span<const mat_group_desc_t> groups; ///< Shapes of a mesh
+    bool allow_spatial_splits = false;   ///< Better BVH, worse load times and memory consumption
+    bool use_fast_bvh_build = false;     ///< Use faster BVH construction with less tree quality
 };
 
 /// Mesh instance description
@@ -154,22 +154,47 @@ struct mesh_instance_desc_t {
     bool shadow_visibility = true;       ///< Instance visibility to shadow rays
 };
 
-enum class eTextureFormat { RGBA8888, RGB888, RG88, R8 };
+enum class eTextureFormat { Undefined, RGBA8888, RGB888, RG88, R8, BC1, BC3, BC4, BC5 };
 
 enum class eTextureConvention {
     OGL, // OpenGL, default
-    DX   // DirectX, flip y for normalmaps + flip BC-compressed textures vertically
+    DX   // DirectX, invert y for normalmaps + flip BC-compressed textures vertically
 };
+
+const int TexFormatChannelCount[] = {
+    0, // Undefined
+    4, // RGBA8888
+    3, // RGB888
+    2, // RG88
+    1, // R8
+    3, // BC1
+    4, // BC3
+    1, // BC4
+    2  // BC5
+};
+
+inline bool IsCompressedFormat(const eTextureFormat format) {
+    switch (format) {
+    case eTextureFormat::BC1:
+    case eTextureFormat::BC3:
+    case eTextureFormat::BC4:
+    case eTextureFormat::BC5:
+        return true;
+    default:
+        return false;
+    }
+}
 
 /// Texture description
 struct tex_desc_t {
-    eTextureFormat format;             ///< Texture data format
+    eTextureFormat format; ///< Texture data format
     eTextureConvention convention =
         eTextureConvention::OGL;       ///< Texture convention (affects normalmaps and BC-compressed textures)
     const char *name = nullptr;        ///< Debug name
     Span<const uint8_t> data;          ///< Texture data
     int w,                             ///< Texture width
         h;                             ///< Texture height
+    int mips_count = 1;                ///< Count of mips provided in data
     bool is_srgb = true;               ///< Treat this texture as SRGB
     bool is_normalmap = false;         ///< Is this a normalmap
     bool force_no_compression = false; ///< Disable compression (guarantee the best quality)
