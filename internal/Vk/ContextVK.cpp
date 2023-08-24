@@ -56,7 +56,7 @@ void Ray::Vk::Context::Destroy() {
 
         for (int i = 0; i < MaxFramesInFlight; ++i) {
             backend_frame = i; // default_descr_alloc_'s destructors rely on this
-            default_descr_alloc_[i].reset();
+            default_descr_alloc_[i] = {};
             DestroyDeferredResources(i);
 
             api_.vkDestroyFence(device_, in_flight_fences_[i], nullptr);
@@ -66,7 +66,7 @@ void Ray::Vk::Context::Destroy() {
             api_.vkDestroyQueryPool(device_, query_pools_[i], nullptr);
         }
 
-        default_memory_allocs_.reset();
+        default_memory_allocs_ = {};
 
         api_.vkFreeCommandBuffers(device_, command_pool_, 1, &setup_cmd_buf_);
         api_.vkFreeCommandBuffers(device_, command_pool_, MaxFramesInFlight, draw_cmd_bufs_);

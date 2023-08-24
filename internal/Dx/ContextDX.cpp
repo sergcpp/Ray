@@ -77,13 +77,13 @@ void Ray::Dx::Context::Destroy() {
             uniform_data_bufs[i].Free();
         }
 
-        default_descr_alloc_[i].reset();
-        query_readback_buf_[i].reset();
+        default_descr_alloc_[i] = {};
+        query_readback_buf_[i] = {};
         DestroyDeferredResources(i);
     }
 
-    default_memory_allocs_.reset();
-    staging_descr_alloc_.reset();
+    default_memory_allocs_ = {};
+    staging_descr_alloc_ = {};
 
     SAFE_RELEASE(command_queue_);
     SAFE_RELEASE(command_list_);

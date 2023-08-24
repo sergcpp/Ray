@@ -393,7 +393,7 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
             }
         } else {
             // TODO: get rid of this allocation
-            repacked_data.reset(new uint8_t[2 * _t.w * _t.h]);
+            repacked_data = std::make_unique<uint8_t[]>(2 * _t.w * _t.h);
 
             const bool invert_y = (_t.convention == Ray::eTextureConvention::DX);
             const auto *rgba_data = reinterpret_cast<const color_rgba8_t *>(_t.data.data());
@@ -449,7 +449,7 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
                 data_size[0] = round_up(_t.w * 4, TextureDataPitchAlignment) * _t.h;
 
                 // TODO: get rid of this allocation
-                repacked_data.reset(new uint8_t[4 * _t.w * _t.h]);
+                repacked_data = std::make_unique<uint8_t[]>(4 * _t.w * _t.h);
 
                 const auto *rgb_data = reinterpret_cast<const uint8_t *>(_t.data.data());
 
@@ -468,7 +468,7 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
             }
         } else {
             // TODO: get rid of this allocation
-            repacked_data.reset(new uint8_t[2 * _t.w * _t.h]);
+            repacked_data = std::make_unique<uint8_t[]>(2 * _t.w * _t.h);
 
             const bool invert_y = (_t.convention == Ray::eTextureConvention::DX);
             const auto *rgb_data = reinterpret_cast<const color_rgb8_t *>(_t.data.data());

@@ -36,7 +36,7 @@ int Ray::Cpu::TexStorageLinear<T, N>::Allocate(Span<const ColorType> data, const
         }
     }
 
-    p.pixels.reset(new ColorType[total_size]);
+    p.pixels = std::make_unique<ColorType[]>(total_size);
     memcpy(p.pixels.get(), data.data(), total_size * sizeof(ColorType));
 
     p.lod_offsets[0] = 0;
@@ -83,7 +83,7 @@ template <typename T, int N> bool Ray::Cpu::TexStorageLinear<T, N>::Free(const i
     memset(images_[index].lod_offsets, 0, sizeof(images_[index].lod_offsets));
 #endif
 
-    images_[index].pixels.reset();
+    images_[index].pixels = {};
     free_slots_.push_back(index);
 
     return true;
@@ -144,7 +144,7 @@ int Ray::Cpu::TexStorageTiled<T, N>::Allocate(Span<const ColorType> data, const 
         }
     }
 
-    p.pixels.reset(new ColorType[total_size]);
+    p.pixels = std::make_unique<ColorType[]>(total_size);
 
     for (int y = 0; y < res[1]; ++y) {
         const int tiley = y / TileSize, in_tiley = y % TileSize;
@@ -196,7 +196,7 @@ template <typename T, int N> bool Ray::Cpu::TexStorageTiled<T, N>::Free(const in
     memset(images_[index].lod_offsets, 0, sizeof(images_[index].lod_offsets));
 #endif
 
-    images_[index].pixels.reset();
+    images_[index].pixels = {};
     free_slots_.push_back(index);
 
     return true;
@@ -249,7 +249,7 @@ int Ray::Cpu::TexStorageSwizzled<T, N>::Allocate(Span<const ColorType> data, con
         }
     }
 
-    p.pixels.reset(new ColorType[total_size]);
+    p.pixels = std::make_unique<ColorType[]>(total_size);
 
     for (int y = 0; y < res[1]; ++y) {
         const uint32_t y_off = (y / OuterTileH) * p.tile_y_stride[0] + swizzle_y(y);
@@ -297,7 +297,7 @@ template <typename T, int N> bool Ray::Cpu::TexStorageSwizzled<T, N>::Free(const
     memset(images_[index].lod_offsets, 0, sizeof(images_[index].lod_offsets));
 #endif
 
-    images_[index].pixels.reset();
+    images_[index].pixels = {};
     free_slots_.push_back(index);
 
     return true;
@@ -367,7 +367,7 @@ template <int N> int Ray::Cpu::TexStorageBCn<N>::Allocate(Span<const InColorType
     }
 
     // NOTE: 1 byte is added due to BC4/BC5 compression write outside of memory block
-    p.pixels.reset(new uint8_t[total_size + 1]);
+    p.pixels = std::make_unique<uint8_t[]>(total_size + 1);
     if (N == 4) {
         // TODO: get rid of this allocation
         auto temp_YCoCg = ConvertRGB_to_CoCgxY(&data[0].v[0], res[0], res[1]);

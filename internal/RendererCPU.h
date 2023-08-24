@@ -1030,7 +1030,7 @@ void Ray::Cpu::Renderer<SIMDPolicy>::DenoiseImage(const int pass, const RegionCo
 template <typename SIMDPolicy>
 void Ray::Cpu::Renderer<SIMDPolicy>::UpdateHaltonSequence(const int iteration, std::unique_ptr<float[]> &seq) {
     if (!seq) {
-        seq.reset(new float[HALTON_COUNT * HALTON_SEQ_LEN]);
+        seq = std::make_unique<float[]>(HALTON_COUNT * HALTON_SEQ_LEN);
     }
 
     for (int i = 0; i < HALTON_SEQ_LEN; ++i) {

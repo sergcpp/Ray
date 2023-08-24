@@ -58,7 +58,7 @@ template <typename T> class SparseStorage {
         }
 
         if (!alloc_) {
-            alloc_.reset(new FreelistAlloc(new_capacity));
+            alloc_ = std::make_unique<FreelistAlloc>(new_capacity);
         } else {
             alloc_->ResizePool(0, new_capacity);
         }

@@ -402,7 +402,7 @@ int Ray::InitMipMaps(std::unique_ptr<uint8_t[]> mipmaps[16], int widths[16], int
         _w = std::max(_w / 2, 1);
         _h = std::max(_h / 2, 1);
         if (!mipmaps[mip_count]) {
-            mipmaps[mip_count].reset(new uint8_t[_w * _h * channels]);
+            mipmaps[mip_count] = std::make_unique<uint8_t[]>(_w * _h * channels);
         }
         widths[mip_count] = _w;
         heights[mip_count] = _h;
@@ -517,7 +517,7 @@ int Ray::InitMipMapsRGBM(std::unique_ptr<uint8_t[]> mipmaps[16], int widths[16],
         int _prev_w = _w, _prev_h = _h;
         _w = std::max(_w / 2, 1);
         _h = std::max(_h / 2, 1);
-        mipmaps[mip_count].reset(new uint8_t[_w * _h * 4]);
+        mipmaps[mip_count] = std::make_unique<uint8_t[]>(_w * _h * 4);
         widths[mip_count] = _w;
         heights[mip_count] = _h;
         const uint8_t *tex = mipmaps[mip_count - 1].get();
@@ -641,7 +641,7 @@ void Ray::ReorderTriangleIndices(const uint32_t *indices, const uint32_t indices
 
     for (uint32_t i = 0; i < vtx_count; i++) {
         vtx_data_t &v = vertices[i];
-        v.tris.reset(new int32_t[v.active_tris_count]);
+        v.tris = std::make_unique<int32_t[]>(v.active_tris_count);
         v.score = get_vertex_score(v.cache_pos, v.active_tris_count);
     }
 

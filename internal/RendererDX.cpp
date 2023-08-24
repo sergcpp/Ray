@@ -157,7 +157,7 @@ namespace Dx {
 #undef NS
 
 Ray::Dx::Renderer::Renderer(const settings_t &s, ILog *log) : loaded_halton_(-1) {
-    ctx_.reset(new Context);
+    ctx_ = std::make_unique<Context>();
     const bool res = ctx_->Init(log, s.preferred_device);
     if (!res) {
         throw std::runtime_error("Error initializing directx context!");
@@ -1440,7 +1440,7 @@ void Ray::Dx::Renderer::DenoiseImage(const int pass, const RegionContext &region
 
 void Ray::Dx::Renderer::UpdateHaltonSequence(const int iteration, std::unique_ptr<float[]> &seq) {
     if (!seq) {
-        seq.reset(new float[HALTON_COUNT * HALTON_SEQ_LEN]);
+        seq = std::make_unique<float[]>(HALTON_COUNT * HALTON_SEQ_LEN);
     }
 
     for (int i = 0; i < HALTON_SEQ_LEN; ++i) {
