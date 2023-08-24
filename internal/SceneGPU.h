@@ -242,7 +242,7 @@ inline Ray::TextureHandle Ray::NS::Scene::AddAtlasTexture_nolock(const tex_desc_
             t.atlas = 0;
         } else {
             // TODO: get rid of this allocation
-            repacked_normalmap.reset(new color_rg8_t[res[0] * res[1]]);
+            repacked_normalmap = std::make_unique<color_rg8_t[]>(res[0] * res[1]);
             const bool invert_y = (_t.convention == eTextureConvention::DX);
             const auto *rgba_data = reinterpret_cast<const color_rgba8_t *>(_t.data.data());
             for (int i = 0; i < res[0] * res[1]; ++i) {
@@ -259,7 +259,7 @@ inline Ray::TextureHandle Ray::NS::Scene::AddAtlasTexture_nolock(const tex_desc_
             t.atlas = use_compression ? 4 : 1;
         } else {
             // TODO: get rid of this allocation
-            repacked_normalmap.reset(new color_rg8_t[res[0] * res[1]]);
+            repacked_normalmap = std::make_unique<color_rg8_t[]>(res[0] * res[1]);
             const bool invert_y = (_t.convention == eTextureConvention::DX);
             const auto *rgb_data = reinterpret_cast<const color_rgb8_t *>(_t.data.data());
             for (int i = 0; i < res[0] * res[1]; ++i) {
@@ -275,14 +275,14 @@ inline Ray::TextureHandle Ray::NS::Scene::AddAtlasTexture_nolock(const tex_desc_
         t.atlas = use_compression ? 6 : 2;
         reconstruct_z = _t.is_normalmap;
 
-        const bool invert_y = (_t.convention == eTextureConvention::DX);
-        if (_t.is_normalmap && invert_y) {
+        const bool invert_y = _t.is_normalmap && (_t.convention == eTextureConvention::DX);
+        if (invert_y) {
             // TODO: get rid of this allocation
-            repacked_normalmap.reset(new color_rg8_t[res[0] * res[1]]);
+            repacked_normalmap = std::make_unique<color_rg8_t[]>(res[0] * res[1]);
             const auto *rg_data = reinterpret_cast<const color_rg8_t *>(_t.data.data());
             for (int i = 0; i < res[0] * res[1]; ++i) {
                 repacked_normalmap[i].v[0] = rg_data[i].v[0];
-                repacked_normalmap[i].v[1] = invert_y ? (255 - rg_data[i].v[1]) : rg_data[i].v[1];
+                repacked_normalmap[i].v[1] = 255 - rg_data[i].v[1];
             }
             tex_data = repacked_normalmap.get();
         }
