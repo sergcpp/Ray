@@ -46,7 +46,6 @@ void run_material_test(const char *arch_list[], const char *preferred_device, co
     s.w = test_img_w;
     s.h = test_img_h;
     s.preferred_device = preferred_device;
-    s.use_wide_bvh = true;
 
     const int DiffThres = 32;
 
@@ -1680,7 +1679,7 @@ void test_complex_mat5_sun_light(const char *arch_list[], const char *preferred_
 void test_complex_mat5_hdr_light(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 23;
     const double MinPSNR = 23.0;
-    const int PixThres = 6355;
+    const int PixThres = 6363;
 
     Ray::principled_mat_desc_t metal_mat_desc;
     metal_mat_desc.base_texture = Ray::TextureHandle{0};

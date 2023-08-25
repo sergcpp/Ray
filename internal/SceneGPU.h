@@ -1533,7 +1533,7 @@ inline void Ray::NS::Scene::PrepareEnvMapQTree_nolock() {
 
         CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
-        atlas.CopyRegionTo(t.page[0], t.pos[0][0] + 1, t.pos[0][1] + 1, (t.width & ATLAS_TEX_WIDTH_BITS),
+        atlas.CopyRegionTo(t.page[0], t.pos[0][0], t.pos[0][1], (t.width & ATLAS_TEX_WIDTH_BITS),
                            (t.height & ATLAS_TEX_HEIGHT_BITS), temp_stage_buf, cmd_buf, 0);
 
         EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());

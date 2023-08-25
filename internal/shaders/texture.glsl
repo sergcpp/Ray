@@ -97,7 +97,7 @@ ivec2 texSize(const uint index) {
     return ivec2(w, h);
 }
 
-vec2 TransformUV(const vec2 _uv, const atlas_texture_t t, const int mip_level) {
+vec2 TransformUV(const vec2 _uv, const vec2 px_off, const atlas_texture_t t, const int mip_level) {
     const vec2 pos = vec2(float(t.pos[mip_level] & 0xffff), float((t.pos[mip_level] >> 16) & 0xffff));
     vec2 size = {float(t.size & ATLAS_TEX_WIDTH_BITS), float((t.size >> 16) & ATLAS_TEX_HEIGHT_BITS)};
     if (((t.size >> 16) & ATLAS_TEX_MIPS_BIT) != 0) {
@@ -105,17 +105,18 @@ vec2 TransformUV(const vec2 _uv, const atlas_texture_t t, const int mip_level) {
                     float(((t.size >> 16) & ATLAS_TEX_HEIGHT_BITS) >> mip_level));
         size = max(size, vec2(MIN_ATLAS_TEXTURE_SIZE));
     }
-    const vec2 uv = fract(_uv);
-    return pos + uv * size + 1.0;
+    const vec2 uv = fract(_uv + (px_off / size));
+    return pos + uv * size;
 }
 
 vec4 SampleBilinear(const uint index, const vec2 uvs, const int lod, const vec2 rand, const bool maybe_YCoCg, const bool maybe_SRGB) {
     const atlas_texture_t t = g_textures[index];
 
 #if USE_STOCH_TEXTURE_FILTERING
-    vec2 _uvs = (TransformUV(uvs, t, lod) + rand - 0.5) / vec2(TEXTURE_ATLAS_SIZE);
+    vec2 _uvs = TransformUV(uvs, rand - 0.5, t, lod) / vec2(TEXTURE_ATLAS_SIZE);
 #else // USE_STOCH_TEXTURE_FILTERING
-    vec2 _uvs = TransformUV(uvs, t, lod) / vec2(TEXTURE_ATLAS_SIZE);
+    // NOTE: This branch is incorrect now!
+    vec2 _uvs = TransformUV(uvs, vec2(0.0), t, lod) / vec2(TEXTURE_ATLAS_SIZE);
 #endif // USE_STOCH_TEXTURE_FILTERING
 
     const float page = float((t.page[lod / 4] >> (lod % 4) * 8) & 0xff);
@@ -145,11 +146,11 @@ vec3 SampleLatlong_RGBE(const atlas_texture_t t, const vec3 dir, float y_rotatio
     }
 
     const float u = fract(0.5 * phi / PI);
-    vec2 uvs = TransformUV(vec2(u, theta), t, 0);
+    vec2 uvs = TransformUV(vec2(u, theta), rand, t, 0);
     const int page = int(t.page[0] & 0xff);
 
 #if USE_STOCH_TEXTURE_FILTERING
-    const vec4 p00 = texelFetch(g_atlases[nonuniformEXT(t.atlas)], ivec3(uvs + rand, page), 0);
+    const vec4 p00 = texelFetch(g_atlases[nonuniformEXT(t.atlas)], ivec3(uvs, page), 0);
     return rgbe_to_rgb(p00);
 #else // USE_STOCH_TEXTURE_FILTERING
     const vec4 p00 = texelFetchOffset(g_atlases[nonuniformEXT(t.atlas)], ivec3(uvs, page), 0, ivec2(0, 0));

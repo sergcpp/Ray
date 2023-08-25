@@ -50,8 +50,7 @@ Ray::Dx::TextureAtlas::~TextureAtlas() {
 
 template <typename T, int N>
 int Ray::Dx::TextureAtlas::Allocate(const color_t<T, N> *data, const int _res[2], int pos[2]) {
-    // add 1px border
-    int res[2] = {_res[0] + 2, _res[1] + 2};
+    int res[2] = {_res[0], _res[1]};
     if (res[0] > res_[0] || res[1] > res_[1]) {
         return -1;
     }
@@ -62,30 +61,7 @@ int Ray::Dx::TextureAtlas::Allocate(const color_t<T, N> *data, const int _res[2]
             const int index = splitters_[page_index].Allocate(&res[0], &pos[0]);
             if (index != -1) {
                 if (data) {
-                    WritePageData(page_index, pos[0] + 1, pos[1] + 1, _res[0], _res[1], &data[0]);
-
-                    // add 1px border
-                    WritePageData(page_index, pos[0] + 1, pos[1], _res[0], 1, &data[(_res[1] - 1) * _res[0]]);
-
-                    WritePageData(page_index, pos[0] + 1, pos[1] + res[1] - 1, _res[0], 1, &data[0]);
-
-                    temp_storage.resize(res[1]);
-                    auto &vertical_border = temp_storage;
-                    vertical_border[0] = data[(_res[1] - 1) * _res[0] + _res[0] - 1];
-                    for (int i = 0; i < _res[1]; i++) {
-                        vertical_border[i + 1] = data[i * _res[0] + _res[0] - 1];
-                    }
-                    vertical_border[res[1] - 1] = data[0 * _res[0] + _res[0] - 1];
-
-                    WritePageData(page_index, pos[0], pos[1], 1, res[1], &vertical_border[0]);
-
-                    vertical_border[0] = data[(_res[1] - 1) * _res[0]];
-                    for (int i = 0; i < _res[1]; i++) {
-                        vertical_border[i + 1] = data[i * _res[0]];
-                    }
-                    vertical_border[res[1] - 1] = data[0];
-
-                    WritePageData(page_index, pos[0] + res[0] - 1, pos[1], 1, res[1], &vertical_border[0]);
+                    WritePageData(page_index, pos[0], pos[1], res[0], res[1], &data[0]);
                 }
                 return page_index;
             }
@@ -95,35 +71,20 @@ int Ray::Dx::TextureAtlas::Allocate(const color_t<T, N> *data, const int _res[2]
         res[0] = 4 * ((res[0] + 3) / 4);
         res[1] = 4 * ((res[1] + 3) / 4);
 
+        // TODO: Get rid of allocation
         std::vector<color_t<T, N>> temp_storage;
         for (int page_index = 0; page_index < int(splitters_.size()); page_index++) {
             const int index = splitters_[page_index].Allocate(&res[0], &pos[0]);
             if (index != -1) {
                 if (data) {
                     temp_storage.resize(res[0] * res[1], {});
-
                     for (int y = 0; y < _res[1]; ++y) {
-                        memcpy(&temp_storage[(1 + y) * res[0] + 1], &data[y * _res[0]],
-                               _res[0] * sizeof(color_t<T, N>));
+                        memcpy(&temp_storage[y * res[0]], &data[y * _res[0]], _res[0] * sizeof(color_t<T, N>));
                     }
-
-                    memcpy(&temp_storage[1], &data[(_res[1] - 1) * _res[0]], _res[0] * sizeof(color_t<T, N>));
-                    memcpy(&temp_storage[(1 + _res[1]) * res[0] + 1], &data[0], _res[0] * sizeof(color_t<T, N>));
-
-                    temp_storage[0] = data[(_res[1] - 1) * _res[0] + _res[0] - 1];
-                    for (int y = 0; y < _res[1]; ++y) {
-                        temp_storage[(y + 1) * res[0]] = data[y * _res[0] + _res[0] - 1];
-                    }
-                    temp_storage[(1 + _res[1]) * res[0]] = data[0 * _res[0] + _res[0] - 1];
-
-                    temp_storage[1 + _res[0]] = data[(_res[1] - 1) * _res[0]];
-                    for (int y = 0; y < _res[1]; ++y) {
-                        temp_storage[(y + 1) * res[0] + 1 + _res[0]] = data[y * _res[0]];
-                    }
-                    temp_storage[(1 + _res[1]) * res[0] + 1 + _res[0]] = data[0];
 
                     std::unique_ptr<uint8_t[]> compressed_data;
                     if (format_ == eTexFormat::BC3) {
+                        // TODO: get rid of allocation
                         auto temp_YCoCg = ConvertRGB_to_CoCgxY(&temp_storage[0].v[0], res[0], res[1]);
 
                         const int req_size = GetRequiredMemory_BC3(res[0], res[1], 1);
