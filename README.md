@@ -23,20 +23,20 @@ Features:
 
   <div>
     <div float="left" >
-      <img src="scene7.jpg" width="46.95%" />
-      <img src="scene8.jpg" width="42.45%" />
+      <img src="images/scene7.jpg" width="46.95%" />
+      <img src="images/scene8.jpg" width="42.45%" />
     </div>
     <div float="left" >
-      <img src="scene3.jpg" width="26.55%" />
-      <img src="scene4.jpg" width="62.9%" />
+      <img src="images/scene3.jpg" width="26.55%" />
+      <img src="images/scene4.jpg" width="62.9%" />
     </div>
     <div float="left" >
-      <img src="scene6.jpg" width="47.0%" />
-      <img src="scene5.jpg" width="42.4%" />
+      <img src="images/scene6.jpg" width="47.0%" />
+      <img src="images/scene5.jpg" width="42.4%" />
     </div>
     <div float="left" >
-      <img src="scene1.jpg" width="44.1%" />
-      <img src="scene2.jpg" width="45.35%" />
+      <img src="images/scene1.jpg" width="44.1%" />
+      <img src="images/scene2.jpg" width="45.35%" />
     </div>
   </div>
 </details>
@@ -228,7 +228,7 @@ int main() {
 }
 ```
 
-![Screenshot](img1.jpg)
+![Screenshot](images/img1.jpg)
 
 ### Multithreading
 
