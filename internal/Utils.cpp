@@ -1952,7 +1952,7 @@ int Ray::Preprocess_BCn(const uint8_t in_data[], const int tiles_w, const int ti
                 for (int i = 0; i < tiles_w; ++i) {
                     for (int j = 0; j < N; ++j) {
                         const bc4_block_t &src = src_blocks[i * N + j];
-                        bc4_block_t &dst = dst_blocks[i * N + j];
+                        bc4_block_t dst;
 
                         if (invert_green && j == 1) {
                             const bool is_6step = (src.alpha[0] > src.alpha[1]);
@@ -2016,6 +2016,8 @@ int Ray::Preprocess_BCn(const uint8_t in_data[], const int tiles_w, const int ti
                             dst.l2_2 = src.l1_2;
                             dst.l3 = src.l0;
                         }
+
+                        dst_blocks[i * N + j] = dst;
                     }
                 }
             }
