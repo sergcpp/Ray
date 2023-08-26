@@ -333,7 +333,7 @@ int Ray::Cpu::TexStorageBCn<N>::Allocate(Span<const InColorType> data, const int
 
     int mip_count = 1;
     for (int i = 1; i < NUM_MIP_LEVELS; ++i) {
-        if (mips && (p.res[i - 1][0] >= 4 || p.res[i - 1][1] >= 4)) {
+        if (mips && p.res[i - 1][0] >= 4 && p.res[i - 1][1] >= 4) {
             p.lod_offsets[i] = total_size;
 
             p.res[i][0] = p.res[i - 1][0] / 2;

@@ -58,6 +58,22 @@ force_inline int8x16_t _mm_sad_epu8(int8x16_t a, int8x16_t b) {
 
 force_inline int32x4_t _mm_packs_epi32(int32x4_t a, int32x4_t b) { return vcombine_s16(vqmovn_s32(a), vqmovn_s32(b)); }
 
+#if !defined(__aarch64__) && !defined(_M_ARM64)
+force_inline int8x16_t vzip1q_s8(int8x16_t a, int8x16_t b) {
+    int8x8_t a1 = vget_low_s16(a);
+    int8x8_t b1 = vget_low_s16(b);
+    int8x8x2_t result = vzip_s8(a1, b1);
+    return vcombine_s8(result.val[0], result.val[1]);
+}
+
+force_inline int16x8_t vzip1q_s16(int16x8_t a, int16x8_t b) {
+    int16x4_t a1 = vget_low_s16(a);
+    int16x4_t b1 = vget_low_s16(b);
+    int16x4x2_t result = vzip_s16(a1, b1);
+    return vcombine_s16(result.val[0], result.val[1]);
+}
+#endif
+
 #ifndef _MM_SHUFFLE
 #define _MM_SHUFFLE(fp3, fp2, fp1, fp0) (((fp3) << 6) | ((fp2) << 4) | ((fp1) << 2) | ((fp0)))
 #endif
@@ -68,8 +84,20 @@ template <int Channels> void Extract4x4Block_NEON(const uint8_t src[], const int
         if (Channels == 4) {
             rgba = vld1q_s32(reinterpret_cast<const int32_t *>(src));
         } else if (Channels == 3) {
-            const int32x4_t rgb = vld1q_s32(reinterpret_cast<const int32_t *>(src));
-            rgba = vqtbl1q_s8(rgb, vld1q_s32(reinterpret_cast<const int32_t *>(RGB_to_RGBA)));
+#if defined(__aarch64__) || defined(_M_ARM64)
+            const int32x4_t rgb = vld1q_u8(src);
+            rgba = vqtbl1q_s8(rgb, vld1q_s8(RGB_to_RGBA));
+#else
+            const int32x2_t rgb_lo = vld1_u8(src);
+            const int32x2_t rgb_hi = vld1_u8(src + 6);
+
+            int8x8_t index = vld1_s8(RGB_to_RGBA + 2);
+
+            int8x8_t res_hi = vtbl1_s8(rgb_hi, index);
+            int8x8_t res_lo = vtbl1_s8(rgb_lo, index);
+
+            rgba = vcombine_s32(res_hi, res_lo);
+#endif
         }
 
         vst1q_s32(reinterpret_cast<int32_t *>(dst), rgba);
