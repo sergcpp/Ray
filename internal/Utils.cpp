@@ -1853,7 +1853,7 @@ template void Ray::CompressImage_BC5<2 /* SrcChannels */>(const uint8_t img_src[
 
 template <int N>
 int Ray::Preprocess_BCn(const uint8_t in_data[], const int tiles_w, const int tiles_h, const bool flip_vertical,
-                        const bool invert_green, uint8_t out_data[]) {
+                        const bool invert_green, uint8_t out_data[], int out_pitch) {
     int read_bytes = tiles_w * tiles_h * GetBlockSize_BCn<N>();
     if (flip_vertical || invert_green) {
         struct bc1_block_t {
@@ -1894,12 +1894,15 @@ int Ray::Preprocess_BCn(const uint8_t in_data[], const int tiles_w, const int ti
         };
         static_assert(sizeof(bc3_block_t) == 16, "!");
 
+        if (out_pitch == 0) {
+            out_pitch = tiles_w * GetBlockSize_BCn<N>();
+        }
+
         for (int y = 0; y < tiles_h; ++y) {
             if (N == 4) {
                 const bc3_block_t *src_blocks = reinterpret_cast<const bc3_block_t *>(in_data);
                 src_blocks += (tiles_h - y - 1) * tiles_w;
-                bc3_block_t *dst_blocks = reinterpret_cast<bc3_block_t *>(out_data);
-                dst_blocks += y * tiles_w;
+                bc3_block_t *dst_blocks = reinterpret_cast<bc3_block_t *>(out_data + y * out_pitch);
 
                 for (int i = 0; i < tiles_w; ++i) {
                     const bc3_block_t &src = src_blocks[i];
@@ -1928,8 +1931,7 @@ int Ray::Preprocess_BCn(const uint8_t in_data[], const int tiles_w, const int ti
             } else if (N == 3) {
                 const bc1_block_t *src_blocks = reinterpret_cast<const bc1_block_t *>(in_data);
                 src_blocks += (tiles_h - y - 1) * tiles_w;
-                bc1_block_t *dst_blocks = reinterpret_cast<bc1_block_t *>(out_data);
-                dst_blocks += y * tiles_w;
+                bc1_block_t *dst_blocks = reinterpret_cast<bc1_block_t *>(out_data + y * out_pitch);
 
                 for (int i = 0; i < tiles_w; ++i) {
                     const bc1_block_t &src = src_blocks[i];
@@ -1946,8 +1948,7 @@ int Ray::Preprocess_BCn(const uint8_t in_data[], const int tiles_w, const int ti
             } else {
                 const bc4_block_t *src_blocks = reinterpret_cast<const bc4_block_t *>(in_data);
                 src_blocks += N * (tiles_h - y - 1) * tiles_w;
-                bc4_block_t *dst_blocks = reinterpret_cast<bc4_block_t *>(out_data);
-                dst_blocks += N * y * tiles_w;
+                bc4_block_t *dst_blocks = reinterpret_cast<bc4_block_t *>(out_data + y * out_pitch);
 
                 for (int i = 0; i < tiles_w; ++i) {
                     for (int j = 0; j < N; ++j) {
@@ -2024,19 +2025,33 @@ int Ray::Preprocess_BCn(const uint8_t in_data[], const int tiles_w, const int ti
         }
     } else {
         // no preprocessing needed, just copy
-        memcpy(out_data, in_data, read_bytes);
+        if (out_pitch == 0) {
+            memcpy(out_data, in_data, read_bytes);
+        } else {
+            int in_offset = 0, out_offset = 0;
+            for (int ty = 0; ty < tiles_h; ++ty) {
+                const int line_len = tiles_w * GetBlockSize_BCn<N>();
+                memcpy(&out_data[out_offset], &in_data[in_offset], line_len);
+                in_offset += line_len;
+                out_offset += out_pitch;
+            }
+        }
     }
     return read_bytes;
 }
 
 template int Ray::Preprocess_BCn<1>(const uint8_t in_data[], const int tiles_w, const int tiles_h,
-                                    const bool flip_vertical, const bool invert_green, uint8_t out_data[]);
+                                    const bool flip_vertical, const bool invert_green, uint8_t out_data[],
+                                    int out_pitch);
 template int Ray::Preprocess_BCn<2>(const uint8_t in_data[], const int tiles_w, const int tiles_h,
-                                    const bool flip_vertical, const bool invert_green, uint8_t out_data[]);
+                                    const bool flip_vertical, const bool invert_green, uint8_t out_data[],
+                                    int out_pitch);
 template int Ray::Preprocess_BCn<3>(const uint8_t in_data[], const int tiles_w, const int tiles_h,
-                                    const bool flip_vertical, const bool invert_green, uint8_t out_data[]);
+                                    const bool flip_vertical, const bool invert_green, uint8_t out_data[],
+                                    int out_pitch);
 template int Ray::Preprocess_BCn<4>(const uint8_t in_data[], const int tiles_w, const int tiles_h,
-                                    const bool flip_vertical, const bool invert_green, uint8_t out_data[]);
+                                    const bool flip_vertical, const bool invert_green, uint8_t out_data[],
+                                    int out_pitch);
 
 std::unique_ptr<uint8_t[]> Ray::ReadTGAFile(const void *data, const int data_len, int &w, int &h, eTexFormat &format) {
     uint32_t img_size;

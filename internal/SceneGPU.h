@@ -619,16 +619,20 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
         for (int i = 0; i < mip_count; ++i) {
             if (_t.format == eTextureFormat::BC1) {
                 data_size[i] = Preprocess_BCn<3>(&_t.data[read_offset], (w + 3) / 4, (h + 3) / 4, flip_vertical,
-                                                 invert_green, &stage_data[write_offset]);
+                                                 invert_green, &stage_data[write_offset],
+                                                 GetRequiredMemory_BC1(w, 1, TextureDataPitchAlignment));
             } else if (_t.format == eTextureFormat::BC3) {
                 data_size[i] = Preprocess_BCn<4>(&_t.data[read_offset], (w + 3) / 4, (h + 3) / 4, flip_vertical,
-                                                 invert_green, &stage_data[write_offset]);
+                                                 invert_green, &stage_data[write_offset],
+                                                 GetRequiredMemory_BC3(w, 1, TextureDataPitchAlignment));
             } else if (_t.format == eTextureFormat::BC4) {
                 data_size[i] = Preprocess_BCn<1>(&_t.data[read_offset], (w + 3) / 4, (h + 3) / 4, flip_vertical,
-                                                 invert_green, &stage_data[write_offset]);
+                                                 invert_green, &stage_data[write_offset],
+                                                 GetRequiredMemory_BC4(w, 1, TextureDataPitchAlignment));
             } else if (_t.format == eTextureFormat::BC5) {
                 data_size[i] = Preprocess_BCn<2>(&_t.data[read_offset], (w + 3) / 4, (h + 3) / 4, flip_vertical,
-                                                 invert_green, &stage_data[write_offset]);
+                                                 invert_green, &stage_data[write_offset],
+                                                 GetRequiredMemory_BC5(w, 1, TextureDataPitchAlignment));
             }
 
             read_offset += data_size[i];
@@ -747,7 +751,7 @@ void Ray::NS::Scene::WriteTextureMips(const color_t<T, N> data[], const int _res
 
         assert(dst_data.size() == (dst_res[0] * dst_res[1]));
 
-        out_data += 4096 * ((out_size[i - 1] + 4095) / 4096);
+        out_data += round_up(out_size[i - 1], 4096);
         if (compress && N <= 3) {
             if (N == 3) {
                 auto temp_YCoCg = ConvertRGB_to_CoCgxY(&dst_data[0].v[0], dst_res[0], dst_res[1]);

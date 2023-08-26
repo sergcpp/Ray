@@ -113,7 +113,7 @@ void CompressImage_BC5(const uint8_t img_src[], int w, int h, uint8_t img_dst[],
 
 template <int N>
 int Preprocess_BCn(const uint8_t in_data[], int tiles_w, int tiles_h, bool flip_vertical, bool invert_green,
-                   uint8_t out_data[]);
+                   uint8_t out_data[], int out_pitch = 0);
 
 std::unique_ptr<uint8_t[]> ReadTGAFile(const void *data, int data_len, int &w, int &h, eTexFormat &format);
 bool ReadTGAFile(const void *data, int data_len, int &w, int &h, eTexFormat &format, uint8_t *out_data,
