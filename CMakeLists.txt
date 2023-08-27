@@ -56,6 +56,8 @@ set(INTERNAL_SOURCE_FILES internal/Atmosphere.h
                           internal/Bitmap.h
                           internal/BVHSplit.h
                           internal/BVHSplit.cpp
+                          internal/CDFUtils.h
+                          internal/CDFUtils.cpp
                           internal/Convolution.h
                           internal/Core.h
                           internal/Core.cpp
@@ -100,10 +102,8 @@ set(INTERNAL_SOURCE_FILES internal/Atmosphere.h
                           internal/UNetFilter.h
                           internal/UNetFilter.cpp
                           internal/UniformIntDistribution.h
-                          internal/Utils.h
-                          internal/Utils.cpp
-                          internal/UtilsNEON.cpp
-                          internal/UtilsSSE2.cpp)
+                          internal/TextureUtilsNEON.cpp
+                          internal/TextureUtilsSSE2.cpp)
 
 if (ENABLE_REF_IMPL)
     set(INTERNAL_SOURCE_FILES ${INTERNAL_SOURCE_FILES}
@@ -166,11 +166,11 @@ if(NOT CMAKE_GENERATOR_PLATFORM MATCHES "ARM64")
     if(MSVC)
         if(NOT CMAKE_CL_64)
             set_source_files_properties(internal/RendererSSE2.cpp PROPERTIES COMPILE_FLAGS /arch:SSE2)
-            set_source_files_properties(internal/UtilsSSE2.cpp PROPERTIES COMPILE_FLAGS /arch:SSE2)
+            set_source_files_properties(internal/TextureUtilsSSE2.cpp PROPERTIES COMPILE_FLAGS /arch:SSE2)
             set_source_files_properties(internal/RendererSSE41.cpp PROPERTIES COMPILE_FLAGS /arch:SSE2)
         endif()
         if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-            set_source_files_properties(internal/UtilsSSE2.cpp PROPERTIES COMPILE_FLAGS -mssse3)
+            set_source_files_properties(internal/TextureUtilsSSE2.cpp PROPERTIES COMPILE_FLAGS -mssse3)
             set_source_files_properties(internal/RendererSSE41.cpp PROPERTIES COMPILE_FLAGS -msse4.1)
         endif()
         set_source_files_properties(internal/RendererAVX.cpp PROPERTIES COMPILE_FLAGS /arch:AVX)

@@ -5,7 +5,7 @@
 
 #include "Core.h"
 #include "TextureSplitter.h"
-#include "Utils.h"
+#include "TextureUtils.h"
 
 namespace Ray {
 namespace Cpu {

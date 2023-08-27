@@ -3,7 +3,7 @@
 #include <memory>
 
 #include "../../Log.h"
-#include "../Utils.h"
+#include "../TextureUtils.h"
 #include "ContextVK.h"
 
 #ifdef _MSC_VER

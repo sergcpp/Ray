@@ -11,7 +11,7 @@
 #include <d3d12.h>
 
 #include "../../Log.h"
-#include "../Utils.h"
+#include "../TextureUtils.h"
 #include "ContextDX.h"
 
 #ifdef _MSC_VER

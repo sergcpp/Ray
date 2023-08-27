@@ -330,10 +330,23 @@ uint32_t FlattenBVH_Recursive(const bvh_node_t *nodes, uint32_t node_index, uint
 
 bool NaiivePluckerTest(const float p[9], const float o[3], const float d[3]);
 
-void ConstructCamera(eCamType type, ePixelFilter filter, eViewTransform view_transform, const float origin[3],
-                     const float fwd[3], const float up[3], const float shift[2], float fov, float sensor_height,
-                     float exposure, float gamma, float focus_distance, float fstop, float lens_rotation,
-                     float lens_ratio, int lens_blades, float clip_start, float clip_end, camera_t *cam);
+const int FILTER_TABLE_SIZE = 1024;
+
+inline float filter_box(float /*v*/, float /*width*/) { return 1.0f; }
+inline float filter_gaussian(float v, float width) {
+    v *= 6.0f / width;
+    return expf(-2.0f * v * v);
+}
+inline float filter_blackman_harris(float v, float width) {
+    v = 2.0f * PI * (v / width + 0.5f);
+    return 0.35875f - 0.48829f * cosf(v) + 0.14128f * cosf(2.0f * v) - 0.01168f * cosf(3.0f * v);
+}
+
+void ConstructCamera(eCamType type, ePixelFilter filter, float filter_width, eViewTransform view_transform,
+                     const float origin[3], const float fwd[3], const float up[3], const float shift[2], float fov,
+                     float sensor_height, float exposure, float gamma, float focus_distance, float fstop,
+                     float lens_rotation, float lens_ratio, int lens_blades, float clip_start, float clip_end,
+                     camera_t *cam);
 
 // Applies 4x4 matrix matrix transform to bounding box
 void TransformBoundingBox(const float bbox_min[3], const float bbox_max[3], const float *xform, float out_bbox_min[3],

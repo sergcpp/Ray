@@ -7,6 +7,7 @@
 
 #include "../Log.h"
 #include "../RendererBase.h"
+#include "CDFUtils.h"
 #include "CoreRef.h"
 #include "Halton.h"
 #include "SceneCPU.h"
@@ -31,10 +32,10 @@ class SIMDPolicy {
     static force_inline eRendererType type() { return eRendererType::Reference; }
 
     static force_inline void GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, int h,
-                                                 const float random_seq[], const int iteration,
-                                                 const uint16_t required_samples[],
+                                                 const float random_seq[], const float filter_table[],
+                                                 const int iteration, const uint16_t required_samples[],
                                                  aligned_vector<Ref::ray_data_t> &out_rays) {
-        Ref::GeneratePrimaryRays(cam, r, w, h, random_seq, iteration, required_samples, out_rays);
+        Ref::GeneratePrimaryRays(cam, r, w, h, random_seq, filter_table, iteration, required_samples, out_rays);
     }
 
     static force_inline void SampleMeshInTextureSpace(int iteration, int obj_index, int uv_layer, const mesh_t &mesh,
@@ -164,6 +165,11 @@ template <typename SIMDPolicy> class Renderer : public RendererBase, private SIM
 
     stats_t stats_ = {0};
     int w_ = 0, h_ = 0;
+
+    ePixelFilter filter_table_filter_ = ePixelFilter(-1);
+    float filter_table_width_ = 0.0f;
+    std::vector<float> filter_table_;
+    void UpdateFilterTable(ePixelFilter filter, float filter_width);
 
     Ref::tonemap_params_t tonemap_params_;
     float variance_threshold_ = 0.0f;
@@ -389,6 +395,16 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase *scene, RegionC
         UpdateHaltonSequence(region.iteration, region.halton_seq);
     }
 
+    { // Check filter table
+        // TODO: Skip locking here
+        std::lock_guard<std::mutex> _(mtx_);
+        if (cam.filter != filter_table_filter_ || cam.filter_width != filter_table_width_) {
+            UpdateFilterTable(cam.filter, cam.filter_width);
+            filter_table_filter_ = cam.filter;
+            filter_table_width_ = cam.filter_width;
+        }
+    }
+
     PassData<SIMDPolicy> &p = get_per_thread_pass_data<SIMDPolicy>();
 
     // allocate aux data on demand
@@ -421,8 +437,8 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase *scene, RegionC
     const uint32_t hi = (region.iteration & (HALTON_SEQ_LEN - 1)) * HALTON_COUNT;
 
     if (cam.type != eCamType::Geo) {
-        SIMDPolicy::GeneratePrimaryRays(cam, rect, w_, h_, &region.halton_seq[hi], region.iteration,
-                                        required_samples_.data(), p.primary_rays);
+        SIMDPolicy::GeneratePrimaryRays(cam, rect, w_, h_, &region.halton_seq[hi], filter_table_.data(),
+                                        region.iteration, required_samples_.data(), p.primary_rays);
 
         p.intersections.resize(p.primary_rays.size());
         for (auto &inter : p.intersections) {
@@ -1025,6 +1041,32 @@ void Ray::Cpu::Renderer<SIMDPolicy>::DenoiseImage(const int pass, const RegionCo
         std::lock_guard<std::mutex> _(mtx_);
         stats_.time_denoise_us += (unsigned long long)duration<double, std::micro>{denoise_end - denoise_start}.count();
     }
+}
+
+template <typename SIMDPolicy>
+void Ray::Cpu::Renderer<SIMDPolicy>::UpdateFilterTable(ePixelFilter filter, float filter_width) {
+    float (*filter_func)(float v, float width);
+
+    switch (filter) {
+    case ePixelFilter::Box:
+        filter_func = filter_box;
+        filter_width = 1.0f;
+        break;
+    case ePixelFilter::Gaussian:
+        filter_func = filter_gaussian;
+        filter_width *= 3.0f;
+        break;
+    case ePixelFilter::BlackmanHarris:
+        filter_func = filter_blackman_harris;
+        filter_width *= 2.0f;
+        break;
+    default:
+        assert(false && "Unknown filter!");
+    }
+
+    filter_table_ =
+        Ray::CDFInverted(FILTER_TABLE_SIZE, 0.0f, filter_width * 0.5f,
+                         std::bind(filter_func, std::placeholders::_1, filter_width), true /* make_symmetric */);
 }
 
 template <typename SIMDPolicy>

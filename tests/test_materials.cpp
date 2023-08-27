@@ -8,7 +8,7 @@
 #include <fstream>
 
 #include "../Ray.h"
-#include "../internal/Utils.h"
+#include "../internal/TextureUtils.h"
 
 #include "test_scene.h"
 #include "thread_pool.h"

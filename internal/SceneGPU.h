@@ -6,7 +6,6 @@
 #include "SceneCommon.h"
 #include "SparseStorageCPU.h"
 #include "TextureUtils.h"
-#include "Utils.h"
 
 namespace Ray {
 namespace NS {

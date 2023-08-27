@@ -7,7 +7,7 @@
 #include <memory>
 #include <string>
 
-#include "../internal/Utils.h"
+#include "../internal/TextureUtils.h"
 
 namespace {
 //	the following constants were copied directly off the MSDN website

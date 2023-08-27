@@ -19,7 +19,8 @@
 #include "shaders/sort_scatter_interface.h"
 
 void Ray::NS::Renderer::kernel_GeneratePrimaryRays(CommandBuffer cmd_buf, const camera_t &cam, const int hi,
-                                                   const rect_t &rect, const Buffer &random_seq, const int iteration,
+                                                   const rect_t &rect, const Buffer &random_seq,
+                                                   const Buffer &filter_table, const int iteration,
                                                    const Texture2D &req_samples_img, const Buffer &inout_counters,
                                                    const Buffer &out_rays) {
     const TransitionInfo res_transitions[] = {{&random_seq, eResState::ShaderResource},
@@ -29,6 +30,7 @@ void Ray::NS::Renderer::kernel_GeneratePrimaryRays(CommandBuffer cmd_buf, const 
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
 
     const Binding bindings[] = {{eBindTarget::SBufRO, PrimaryRayGen::HALTON_SEQ_BUF_SLOT, random_seq},
+                                {eBindTarget::SBufRO, PrimaryRayGen::FILTER_TABLE_BUF_SLOT, filter_table},
                                 {eBindTarget::Tex2D, PrimaryRayGen::REQUIRED_SAMPLES_IMG_SLOT, req_samples_img},
                                 {eBindTarget::SBufRW, PrimaryRayGen::INOUT_COUNTERS_BUF_SLOT, inout_counters},
                                 {eBindTarget::SBufRW, PrimaryRayGen::OUT_RAYS_BUF_SLOT, out_rays}};

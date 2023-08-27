@@ -1,5 +1,6 @@
 #include "RendererDX.h"
 
+#include <functional>
 #include <utility>
 
 #ifndef NOMINMAX
@@ -10,6 +11,7 @@
 #endif
 #include <d3d12.h>
 
+#include "CDFUtils.h"
 #include "Core.h"
 #include "CoreDX.h"
 #include "Halton.h"
@@ -55,6 +57,10 @@ static_assert(Types::LIGHT_TYPE_LINE == Ray::LIGHT_TYPE_LINE, "!");
 static_assert(Types::LIGHT_TYPE_RECT == Ray::LIGHT_TYPE_RECT, "!");
 static_assert(Types::LIGHT_TYPE_DISK == Ray::LIGHT_TYPE_DISK, "!");
 static_assert(Types::LIGHT_TYPE_TRI == Ray::LIGHT_TYPE_TRI, "!");
+static_assert(Types::FILTER_BOX == int(Ray::ePixelFilter::Box), "!");
+static_assert(Types::FILTER_GAUSSIAN == int(Ray::ePixelFilter::Gaussian), "!");
+static_assert(Types::FILTER_BLACKMAN_HARRIS == int(Ray::ePixelFilter::BlackmanHarris), "!");
+static_assert(Types::FILTER_TABLE_SIZE == Ray::FILTER_TABLE_SIZE, "!");
 
 namespace Ray {
 extern const int LUT_DIMS;
@@ -581,6 +587,17 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         }
     }
 
+    // TODO: Use common command buffer for all uploads
+    if (cam.filter != filter_table_filter_ || cam.filter_width != filter_table_width_) {
+        CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
+
+        UpdateFilterTable(cmd_buf, cam.filter, cam.filter_width);
+        filter_table_filter_ = cam.filter;
+        filter_table_width_ = cam.filter_width;
+
+        EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+    }
+
     if (loaded_halton_ == -1 || (region.iteration / HALTON_SEQ_LEN) != (loaded_halton_ / HALTON_SEQ_LEN)) {
         CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
 
@@ -824,8 +841,8 @@ void Ray::Dx::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
     { // generate primary rays
         DebugMarker _(ctx_.get(), cmd_buf, "GeneratePrimaryRays");
         timestamps_[ctx_->backend_frame].primary_ray_gen[0] = ctx_->WriteTimestamp(cmd_buf, true);
-        kernel_GeneratePrimaryRays(cmd_buf, cam, hi, rect, halton_seq_buf_, region.iteration, required_samples_buf_,
-                                   counters_buf_, prim_rays_buf_);
+        kernel_GeneratePrimaryRays(cmd_buf, cam, hi, rect, halton_seq_buf_, filter_table_, region.iteration,
+                                   required_samples_buf_, counters_buf_, prim_rays_buf_);
         timestamps_[ctx_->backend_frame].primary_ray_gen[1] = ctx_->WriteTimestamp(cmd_buf, false);
     }
 
@@ -1435,21 +1452,6 @@ void Ray::Dx::Renderer::DenoiseImage(const int pass, const RegionContext &region
 
         ctx_->backend_frame = (ctx_->backend_frame + 1) % MaxFramesInFlight;
 #endif
-    }
-}
-
-void Ray::Dx::Renderer::UpdateHaltonSequence(const int iteration, std::unique_ptr<float[]> &seq) {
-    if (!seq) {
-        seq = std::make_unique<float[]>(HALTON_COUNT * HALTON_SEQ_LEN);
-    }
-
-    for (int i = 0; i < HALTON_SEQ_LEN; ++i) {
-        uint32_t prime_sum = 0;
-        for (int j = 0; j < HALTON_COUNT; ++j) {
-            seq[i * HALTON_COUNT + j] =
-                ScrambledRadicalInverse(g_primes[j], &permutations_[prime_sum], uint64_t(iteration) + i);
-            prime_sum += g_primes[j];
-        }
     }
 }
 

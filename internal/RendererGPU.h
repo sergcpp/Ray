@@ -86,8 +86,14 @@ class Renderer : public RendererBase {
     bool use_hwrt_ = false, use_bindless_ = false, use_tex_compression_ = false, use_fp16_ = false,
          use_nv_coop_matrix_ = false, use_subgroup_ = false;
 
+    ePixelFilter filter_table_filter_ = ePixelFilter(-1);
+    float filter_table_width_ = 0.0f;
+    Buffer filter_table_;
+    void UpdateFilterTable(CommandBuffer cmd_buf, ePixelFilter filter, float filter_width);
+
     std::vector<uint16_t> permutations_;
     int loaded_halton_;
+    void UpdateHaltonSequence(int iteration, std::unique_ptr<float[]> &seq);
 
     // TODO: Optimize these!
     Texture2D temp_buf0_, dual_buf_[2], final_buf_, raw_final_buf_, raw_filtered_buf_;
@@ -141,8 +147,9 @@ class Renderer : public RendererBase {
     stats_t stats_ = {0};
 
     void kernel_GeneratePrimaryRays(CommandBuffer cmd_buf, const camera_t &cam, int hi, const rect_t &rect,
-                                    const Buffer &random_seq, int iteration, const Texture2D &req_samples_img,
-                                    const Buffer &inout_counters, const Buffer &out_rays);
+                                    const Buffer &random_seq, const Buffer &filter_table, int iteration,
+                                    const Texture2D &req_samples_img, const Buffer &inout_counters,
+                                    const Buffer &out_rays);
     void kernel_IntersectScene(CommandBuffer cmd_buf, const pass_settings_t &settings, const scene_data_t &sc_data,
                                const Buffer &random_seq, int hi, const rect_t &rect, uint32_t node_index, float inter_t,
                                Span<const TextureAtlas> tex_atlases, const BindlessTexData &bindless_tex,
@@ -246,8 +253,6 @@ class Renderer : public RendererBase {
                                 const Buffer &out_rays);
     void kernel_DebugRT(CommandBuffer cmd_buf, const scene_data_t &sc_data, uint32_t node_index, const Buffer &rays,
                         const Texture2D &out_pixels);
-
-    void UpdateHaltonSequence(int iteration, std::unique_ptr<float[]> &seq);
 
     void RadixSort(CommandBuffer cmd_buf, const Buffer &indir_args, Buffer hashes[2], Buffer &count_table,
                    const Buffer &counters, const Buffer &reduce_table);
@@ -406,6 +411,58 @@ inline void Ray::NS::Renderer::Clear(const color_rgba_t &c) {
     }
 
     EndSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->graphics_queue(), cmd_buf, ctx_->temp_command_pool());
+}
+
+inline void Ray::NS::Renderer::UpdateFilterTable(CommandBuffer cmd_buf, const ePixelFilter filter, float filter_width) {
+    float (*filter_func)(float v, float width);
+
+    switch (filter) {
+    case ePixelFilter::Box:
+        filter_func = filter_box;
+        filter_width = 1.0f;
+        break;
+    case ePixelFilter::Gaussian:
+        filter_func = filter_gaussian;
+        filter_width *= 3.0f;
+        break;
+    case ePixelFilter::BlackmanHarris:
+        filter_func = filter_blackman_harris;
+        filter_width *= 2.0f;
+        break;
+    default:
+        assert(false && "Unknown filter!");
+    }
+
+    // TODO: Avoid unnecessary copy
+    const std::vector<float> filter_table =
+        Ray::CDFInverted(FILTER_TABLE_SIZE, 0.0f, filter_width * 0.5f,
+                         std::bind(filter_func, std::placeholders::_1, filter_width), true /* make_symmetric */);
+
+    Buffer stage_buf("Filter Table Stage", ctx_.get(), eBufType::Upload, FILTER_TABLE_SIZE * sizeof(float));
+    { // Update stage buffer
+        uint8_t *stage_data = stage_buf.Map();
+        memcpy(stage_data, filter_table.data(), FILTER_TABLE_SIZE * sizeof(float));
+        stage_buf.Unmap();
+    }
+
+    filter_table_ = Buffer{"Filter Table", ctx_.get(), eBufType::Storage, FILTER_TABLE_SIZE * sizeof(float)};
+
+    CopyBufferToBuffer(stage_buf, 0, filter_table_, 0, FILTER_TABLE_SIZE * sizeof(float), cmd_buf);
+}
+
+inline void Ray::NS::Renderer::UpdateHaltonSequence(const int iteration, std::unique_ptr<float[]> &seq) {
+    if (!seq) {
+        seq = std::make_unique<float[]>(HALTON_COUNT * HALTON_SEQ_LEN);
+    }
+
+    for (int i = 0; i < HALTON_SEQ_LEN; ++i) {
+        uint32_t prime_sum = 0;
+        for (int j = 0; j < HALTON_COUNT; ++j) {
+            seq[i * HALTON_COUNT + j] =
+                ScrambledRadicalInverse(g_primes[j], &permutations_[prime_sum], uint64_t(iteration) + i);
+            prime_sum += g_primes[j];
+        }
+    }
 }
 
 inline void Ray::NS::Renderer::InitUNetFilter(const bool alias_memory, unet_filter_properties_t &out_props) {

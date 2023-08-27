@@ -3,7 +3,7 @@
 #include <cassert>
 
 #include "../../Log.h"
-#include "../Utils.h"
+#include "../TextureUtils.h"
 #include "ContextVK.h"
 #include "TextureVK.h"
 

@@ -13,6 +13,10 @@ layout(std430, binding = HALTON_SEQ_BUF_SLOT) readonly buffer Halton {
     float g_halton[];
 };
 
+layout(std430, binding = FILTER_TABLE_BUF_SLOT) readonly buffer FilterTable {
+    float g_filter_table[];
+};
+
 layout(binding = REQUIRED_SAMPLES_IMG_SLOT) uniform utexture2D g_required_samples_img;
 
 layout(std430, binding = INOUT_COUNTERS_BUF_SLOT) buffer InoutCounters {
@@ -27,10 +31,26 @@ layout (local_size_x = LOCAL_GROUP_SIZE_X, local_size_y = LOCAL_GROUP_SIZE_Y, lo
 
 vec3 get_pix_dir(float x, float y, vec3 _origin, float prop) {
     float k = g_params.cam_origin.w * g_params.cam_side.w;
-    vec3 p = vec3(2 * k * (x / float(g_params.img_size.x) + g_params.shift_x / prop) - k,
-                  2 * k * (-y / float(g_params.img_size.y) + g_params.shift_y) + k, g_params.cam_side.w);
+    vec3 p = vec3(2 * k * (x / float(g_params.img_size[0]) + g_params.shift_x / prop) - k,
+                  2 * k * (-y / float(g_params.img_size[1]) + g_params.shift_y) + k, g_params.cam_side.w);
     p = g_params.cam_origin.xyz + prop * p.x * g_params.cam_side.xyz + p.y * g_params.cam_up.xyz + p.z * g_params.cam_fwd.xyz;
     return normalize(p - _origin);
+}
+
+float lookup_filter_table(float x) {
+    x *= (FILTER_TABLE_SIZE - 1);
+
+    const int index = min(int(x), FILTER_TABLE_SIZE - 1);
+    const int nindex = min(index + 1, FILTER_TABLE_SIZE - 1);
+    const float t = x - float(index);
+
+    const float data0 = g_filter_table[index];
+    if (t == 0.0) {
+        return data0;
+    }
+
+    const float data1 = g_filter_table[nindex];
+    return (1.0 - t) * data0 + t * data1;
 }
 
 float ngon_rad(const float theta, const float n) {
@@ -55,36 +75,25 @@ void main() {
     int index = int(gl_GlobalInvocationID.y * g_params.rect.z + gl_GlobalInvocationID.x);
 #endif
 
-    float k = float(g_params.img_size.x) / float(g_params.img_size.y);
+    float k = float(g_params.img_size[0]) / float(g_params.img_size[1]);
 
     int hash_val = hash((x << 16) | y);
 
-    float _x = float(x);
-    float _y = float(y);
+    float fx = float(x);
+    float fy = float(y);
 
     vec2 sample_off = vec2(construct_float(hash_val), construct_float(hash(hash_val)));
 
-    if ((g_params.cam_filter_and_lens_blades >> 8) == FILTER_TENT) {
-        float rx = fract(g_halton[g_params.hi + RAND_DIM_FILTER_U] + sample_off.x);
-        [[flatten]] if (rx < 0.5) {
-            rx = sqrt(2.0 * rx) - 1.0;
-        } else {
-            rx = 1.0 - sqrt(2.0 - 2 * rx);
-        }
+    float rx = fract(g_halton[g_params.hi + RAND_DIM_FILTER_U] + sample_off.x);
+    float ry = fract(g_halton[g_params.hi + RAND_DIM_FILTER_V] + sample_off.y);
 
-        float ry = fract(g_halton[g_params.hi + RAND_DIM_FILTER_V] + sample_off.y);
-        [[flatten]] if (ry < 0.5) {
-            ry = sqrt(2.0 * ry) - 1.0;
-        } else {
-            ry = 1.0 - sqrt(2.0 - 2.0 * ry);
-        }
-
-        _x += 0.5f + rx;
-        _y += 0.5f + ry;
-    } else {
-        _x += fract(g_halton[g_params.hi + RAND_DIM_FILTER_U] + sample_off.x);
-        _y += fract(g_halton[g_params.hi + RAND_DIM_FILTER_V] + sample_off.y);
+    if ((g_params.cam_filter_and_lens_blades >> 8) != FILTER_BOX) {
+        rx = lookup_filter_table(rx);
+        ry = lookup_filter_table(ry);
     }
+
+    fx += rx;
+    fy += ry;
 
     vec2 offset = vec2(0.0);
 
@@ -118,7 +127,7 @@ void main() {
     }
 
     vec3 _origin = g_params.cam_origin.xyz + g_params.cam_side.xyz * offset.x + g_params.cam_up.xyz * offset.y;
-    vec3 _d = get_pix_dir(_x, _y, _origin, k);
+    vec3 _d = get_pix_dir(fx, fy, _origin, k);
 
     _origin += _d * (g_params.cam_fwd.w / dot(_d, g_params.cam_fwd.xyz));
 

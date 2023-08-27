@@ -263,9 +263,10 @@ struct line_light_desc_t {
 /// Camera description
 struct camera_desc_t {
     eCamType type = eCamType::Persp;                          ///< Type of projection
-    ePixelFilter filter = ePixelFilter::Tent;                 ///< Reconstruction filter
+    ePixelFilter filter = ePixelFilter::BlackmanHarris;       ///< Reconstruction filter
     eViewTransform view_transform = eViewTransform::Standard; ///< View transform
     eLensUnits ltype = eLensUnits::FOV;                       ///< Lens units type
+    float filter_width = 1.5f;                                ///< Width of the reconstruction filter
     float origin[3] = {};                                     ///< Camera origin
     float fwd[3] = {};                                        ///< Camera forward unit vector
     float up[3] = {};                                         ///< Camera up vector (optional)

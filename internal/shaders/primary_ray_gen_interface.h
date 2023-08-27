@@ -30,7 +30,8 @@ const int LOCAL_GROUP_SIZE_X = 8;
 const int LOCAL_GROUP_SIZE_Y = 8;
 
 const int HALTON_SEQ_BUF_SLOT = 2;
-const int REQUIRED_SAMPLES_IMG_SLOT = 3;
+const int FILTER_TABLE_BUF_SLOT = 3;
+const int REQUIRED_SAMPLES_IMG_SLOT = 4;
 
 const int OUT_RAYS_BUF_SLOT = 0;
 const int INOUT_COUNTERS_BUF_SLOT = 1;

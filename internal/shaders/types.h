@@ -108,7 +108,10 @@ const UINT_TYPE TEXTURES_BUF_SLOT = 21;
 const UINT_TYPE TEXTURE_ATLASES_SLOT = 22;
 
 const int FILTER_BOX = 0;
-const int FILTER_TENT = 1;
+const int FILTER_GAUSSIAN = 1;
+const int FILTER_BLACKMAN_HARRIS = 2;
+
+const int FILTER_TABLE_SIZE = 1024;
 
 const int RAY_TYPE_CAMERA = 0;
 const int RAY_TYPE_DIFFUSE = 1;

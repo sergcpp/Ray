@@ -1182,8 +1182,8 @@ Ray::Ref::hit_data_t::hit_data_t() {
 }
 
 void Ray::Ref::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, const int w, const int h,
-                                   const float random_seq[], const int iteration, const uint16_t required_samples[],
-                                   aligned_vector<ray_data_t> &out_rays) {
+                                   const float random_seq[], const float filter_table[], const int iteration,
+                                   const uint16_t required_samples[], aligned_vector<ray_data_t> &out_rays) {
     const simd_fvec4 cam_origin = make_fvec3(cam.origin), fwd = make_fvec3(cam.fwd), side = make_fvec3(cam.side),
                      up = make_fvec3(cam.up);
     const float focus_distance = cam.focus_distance;
@@ -1200,6 +1200,22 @@ void Ray::Ref::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, const i
         return normalize(p - origin);
     };
 
+    auto lookup_filter_table = [filter_table](float x) {
+        x *= (FILTER_TABLE_SIZE - 1);
+
+        const int index = std::min(int(x), FILTER_TABLE_SIZE - 1);
+        const int nindex = std::min(index + 1, FILTER_TABLE_SIZE - 1);
+        const float t = x - float(index);
+
+        const float data0 = filter_table[index];
+        if (t == 0.0f) {
+            return data0;
+        }
+
+        float data1 = filter_table[nindex];
+        return (1.0f - t) * data0 + t * data1;
+    };
+
     size_t i = 0;
     out_rays.reserve(size_t(r.w) * r.h);
     out_rays.resize(size_t(r.w) * r.h);
@@ -1212,35 +1228,24 @@ void Ray::Ref::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, const i
 
             ray_data_t &out_r = out_rays[i++];
 
-            auto _x = float(x);
-            auto _y = float(y);
+            auto fx = float(x);
+            auto fy = float(y);
 
             const int index = y * w + x;
             const int hash_val = hash(index);
 
             const float sample_off[2] = {construct_float(hash_val), construct_float(hash(hash_val))};
 
-            if (cam.filter == ePixelFilter::Tent) {
-                float rx = fract(random_seq[RAND_DIM_FILTER_U] + sample_off[0]);
-                if (rx < 0.5f) {
-                    rx = std::sqrt(2.0f * rx) - 1.0f;
-                } else {
-                    rx = 1.0f - std::sqrt(2.0f - 2.0f * rx);
-                }
+            float rx = fract(random_seq[RAND_DIM_FILTER_U] + sample_off[0]);
+            float ry = fract(random_seq[RAND_DIM_FILTER_V] + sample_off[1]);
 
-                float ry = fract(random_seq[RAND_DIM_FILTER_V] + sample_off[1]);
-                if (ry < 0.5f) {
-                    ry = std::sqrt(2.0f * ry) - 1.0f;
-                } else {
-                    ry = 1.0f - std::sqrt(2.0f - 2.0f * ry);
-                }
-
-                _x += 0.5f + rx;
-                _y += 0.5f + ry;
-            } else {
-                _x += fract(random_seq[RAND_DIM_FILTER_U] + sample_off[0]);
-                _y += fract(random_seq[RAND_DIM_FILTER_V] + sample_off[1]);
+            if (cam.filter != ePixelFilter::Box) {
+                rx = lookup_filter_table(rx);
+                ry = lookup_filter_table(ry);
             }
+
+            fx += rx;
+            fy += ry;
 
             simd_fvec2 offset = 0.0f;
 
@@ -1274,7 +1279,7 @@ void Ray::Ref::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, const i
             }
 
             const simd_fvec4 _origin = cam_origin + side * offset.get<0>() + up * offset.get<1>();
-            const simd_fvec4 _d = get_pix_dir(_x, _y, _origin);
+            const simd_fvec4 _d = get_pix_dir(fx, fy, _origin);
             const float clip_start = cam.clip_start / dot(_d, fwd);
 
             for (int j = 0; j < 3; j++) {

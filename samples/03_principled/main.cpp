@@ -121,7 +121,6 @@ int main() {
 
     Ray::camera_desc_t cam_desc;
     cam_desc.type = Ray::eCamType::Persp;
-    cam_desc.filter = Ray::ePixelFilter::Tent;
     memcpy(&cam_desc.origin[0], &view_origin[0], 3 * sizeof(float));
     memcpy(&cam_desc.fwd[0], &view_dir[0], 3 * sizeof(float));
     cam_desc.fov = 45.0f;

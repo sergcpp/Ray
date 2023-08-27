@@ -140,8 +140,9 @@ template <int S> force_inline simd_ivec<S> total_depth(const simd_ivec<S> &r_dep
 
 // Generating rays
 template <int DimX, int DimY>
-void GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, int h, const float random_seq[], int iteration,
-                         const uint16_t required_samples[], aligned_vector<ray_data_t<DimX * DimY>> &out_rays);
+void GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, int h, const float random_seq[],
+                         const float filter_table[], int iteration, const uint16_t required_samples[],
+                         aligned_vector<ray_data_t<DimX * DimY>> &out_rays);
 template <int DimX, int DimY>
 void SampleMeshInTextureSpace(int iteration, int obj_index, int uv_layer, const mesh_t &mesh, const transform_t &tr,
                               const uint32_t *vtx_indices, const vertex_t *vertices, const rect_t &r, int w, int h,
@@ -516,10 +517,11 @@ class SIMDPolicyBase {
 
   protected:
     static force_inline void GeneratePrimaryRays(const camera_t &cam, const rect_t &r, const int w, const int h,
-                                                 const float random_seq[], const int iteration,
-                                                 const uint16_t required_samples[],
+                                                 const float random_seq[], const float filter_table[],
+                                                 const int iteration, const uint16_t required_samples[],
                                                  aligned_vector<RayDataType> &out_rays) {
-        NS::GeneratePrimaryRays<RPDimX, RPDimY>(cam, r, w, h, random_seq, iteration, required_samples, out_rays);
+        NS::GeneratePrimaryRays<RPDimX, RPDimY>(cam, r, w, h, random_seq, filter_table, iteration, required_samples,
+                                                out_rays);
     }
 
     static force_inline void SampleMeshInTextureSpace(int iteration, int obj_index, int uv_layer, const mesh_t &mesh,
@@ -2243,7 +2245,7 @@ simd_fvec<S> peek_ior_stack(const simd_fvec<S> stack[4], const simd_ivec<S> &_sk
 
 template <int DimX, int DimY>
 void Ray::NS::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, int h, const float random_seq[],
-                                  const int iteration, const uint16_t required_samples[],
+                                  const float filter_table[], const int iteration, const uint16_t required_samples[],
                                   aligned_vector<ray_data_t<DimX * DimY>> &out_rays) {
     const int S = DimX * DimY;
     static_assert(S <= 16, "!");
@@ -2287,6 +2289,28 @@ void Ray::NS::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, i
             simd_fvec<S> rxx = fract(random_seq[RAND_DIM_FILTER_U] + sample_off[0]),
                          ryy = fract(random_seq[RAND_DIM_FILTER_V] + sample_off[1]);
 
+            if (cam.filter != ePixelFilter::Box) {
+                rxx *= float(FILTER_TABLE_SIZE - 1);
+                ryy *= float(FILTER_TABLE_SIZE - 1);
+
+                const simd_ivec<S> index_x = min(simd_ivec<S>(rxx), FILTER_TABLE_SIZE - 1),
+                                   index_y = min(simd_ivec<S>(ryy), FILTER_TABLE_SIZE - 1);
+
+                const simd_ivec<S> nindex_x = min(index_x + 1, FILTER_TABLE_SIZE - 1),
+                                   nindex_y = min(index_y + 1, FILTER_TABLE_SIZE - 1);
+
+                const simd_fvec<S> tx = rxx - simd_fvec<S>(index_x), ty = ryy - simd_fvec<S>(index_y);
+
+                const simd_fvec<S> data0_x = gather(filter_table, index_x), data1_x = gather(filter_table, nindex_x);
+                const simd_fvec<S> data0_y = gather(filter_table, index_y), data1_y = gather(filter_table, nindex_y);
+
+                rxx = (1.0f - tx) * data0_x + tx * data1_x;
+                ryy = (1.0f - ty) * data0_y + ty * data1_y;
+            }
+
+            fxx += rxx;
+            fyy += ryy;
+
             simd_fvec<S> offset[2] = {0.0f, 0.0f};
             if (cam.fstop > 0.0f) {
                 const simd_fvec<S> r1 = fract(random_seq[RAND_DIM_LENS_U] + sample_off[0]);
@@ -2312,22 +2336,6 @@ void Ray::NS::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, i
                 offset[0] *= coc * cam.sensor_height;
                 offset[1] *= coc * cam.sensor_height;
             }
-
-            if (cam.filter == ePixelFilter::Tent) {
-                simd_fvec<S> temp = rxx;
-                rxx = 1.0f - sqrt(2.0f - 2.0f * temp);
-                where(temp < 0.5f, rxx) = sqrt(2.0f * temp) - 1.0f;
-
-                temp = ryy;
-                ryy = 1.0f - sqrt(2.0f - 2.0f * temp);
-                where(temp < 0.5f, ryy) = sqrt(2.0f * temp) - 1.0f;
-
-                rxx += 0.5f;
-                ryy += 0.5f;
-            }
-
-            fxx += rxx;
-            fyy += ryy;
 
             const simd_fvec<S> _origin[3] = {{cam.origin[0] + cam.side[0] * offset[0] + cam.up[0] * offset[1]},
                                              {cam.origin[1] + cam.side[1] * offset[0] + cam.up[1] * offset[1]},
@@ -5953,7 +5961,7 @@ void Ray::NS::Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t<
         simd_fvec<S> V[3], F[4];
         Sample_PrincipledDiffuse_BSDF(surf.T, surf.B, surf.N, ray.d, diff.roughness, diff.base_color, diff.sheen_color,
                                       false, rand_u, rand_v, V, F);
-        //F[3] *= lobe_weights.diffuse;
+        // F[3] *= lobe_weights.diffuse;
 
         UNROLLED_FOR(i, 3, { F[i] *= (1.0f - metallic) * (1.0f - transmission); })
 

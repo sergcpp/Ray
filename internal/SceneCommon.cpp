@@ -25,6 +25,7 @@ void Ray::SceneCommon::GetCamera(const CameraHandle i, camera_desc_t &c) const {
     c.gamma = cam.gamma;
     if (c.type != eCamType::Geo) {
         c.filter = cam.filter;
+        c.filter_width = cam.filter_width;
         memcpy(&c.origin[0], &cam.origin[0], 3 * sizeof(float));
         memcpy(&c.fwd[0], &cam.fwd[0], 3 * sizeof(float));
         memcpy(&c.up[0], &cam.up[0], 3 * sizeof(float));
@@ -77,9 +78,9 @@ void Ray::SceneCommon::SetCamera_nolock(const CameraHandle i, const camera_desc_
     camera_t &cam = cams_[i._index];
     if (c.type != eCamType::Geo) {
         if (c.ltype == eLensUnits::FOV) {
-            ConstructCamera(c.type, c.filter, c.view_transform, c.origin, c.fwd, c.up, c.shift, c.fov, c.sensor_height,
-                            c.exposure, c.gamma, c.focus_distance, c.fstop, c.lens_rotation, c.lens_ratio,
-                            c.lens_blades, c.clip_start, c.clip_end, &cam);
+            ConstructCamera(c.type, c.filter, c.filter_width, c.view_transform, c.origin, c.fwd, c.up, c.shift, c.fov,
+                            c.sensor_height, c.exposure, c.gamma, c.focus_distance, c.fstop, c.lens_rotation,
+                            c.lens_ratio, c.lens_blades, c.clip_start, c.clip_end, &cam);
         } else if (c.ltype == eLensUnits::FLength) {
         }
     } else {

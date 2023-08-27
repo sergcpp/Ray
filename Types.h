@@ -62,7 +62,7 @@ struct rect_t {
 enum class eCamType : uint8_t { Persp, Ortho, Geo };
 
 /// Type of reconstruction filter
-enum class ePixelFilter : uint8_t { Box, Tent };
+enum class ePixelFilter : uint8_t { Box, Gaussian, BlackmanHarris, _Count };
 
 enum class eLensUnits : uint8_t { FOV, FLength };
 
@@ -104,6 +104,7 @@ struct camera_t {
     ePixelFilter filter;
     eViewTransform view_transform;
     eLensUnits ltype;
+    float filter_width;
     float fov, exposure, gamma, sensor_height;
     float focus_distance, focal_length, fstop, lens_rotation, lens_ratio;
     int lens_blades;
