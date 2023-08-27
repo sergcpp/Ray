@@ -84,7 +84,7 @@ void Ray::Vk::Sampler::Init(Context *ctx, const SamplingParams params) {
     sampler_info.addressModeU = g_vk_wrap_mode[size_t(params.wrap)];
     sampler_info.addressModeV = g_vk_wrap_mode[size_t(params.wrap)];
     sampler_info.addressModeW = g_vk_wrap_mode[size_t(params.wrap)];
-    sampler_info.anisotropyEnable = VK_TRUE;
+    sampler_info.anisotropyEnable = (params.filter == eTexFilter::Nearest) ? VK_FALSE : VK_TRUE;
     sampler_info.maxAnisotropy = AnisotropyLevel;
     sampler_info.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
     sampler_info.unnormalizedCoordinates = VK_FALSE;
