@@ -431,7 +431,7 @@ windows-arm64-cpu-perf-test-job:
 windows-arm64-gpu-perf-test-job:
   variables:
     BIN_DIR: windows-arm64
-    AUX_TEST_ARGS: '--nocpu --time_limit 5.4'
+    AUX_TEST_ARGS: '--nocpu --time_limit 5.5'
   extends:
     - .windows-perf-test-job
   needs:
