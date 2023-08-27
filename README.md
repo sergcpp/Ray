@@ -48,7 +48,7 @@ Features:
 The intended use is to add it as a submodule to an existing project:
 
 ```console
-$ git submodule add https://github.com/sergcpp/Ray.git
+git submodule add https://github.com/sergcpp/Ray.git
 ```
 
 Then in CMakeLists.txt file:
@@ -62,20 +62,20 @@ But also standalone samples can be compiled and run:
 ### Windows
 
 ```console
-$ git clone https://github.com/sergcpp/Ray.git
-$ cd Ray
-$ mkdir build && cd build/
-$ cmake ..
-$ msbuild ALL_BUILD.vcxproj /p:Configuration=Release
+git clone https://github.com/sergcpp/Ray.git
+cd Ray
+mkdir build && cd build/
+cmake ..
+msbuild ALL_BUILD.vcxproj /p:Configuration=Release
 ```
 
 ### Linux/MacOS
 
 ```console
-$ git clone https://github.com/sergcpp/Ray.git
-$ cd Ray
-$ mkdir build && cd build/
-$ cmake .. -DCMAKE_BUILD_TYPE=Release && make
+git clone https://github.com/sergcpp/Ray.git
+cd Ray
+mkdir build && cd build/
+cmake .. -DCMAKE_BUILD_TYPE=Release && make
 ```
 
 ## Usage
