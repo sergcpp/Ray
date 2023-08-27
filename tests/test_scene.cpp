@@ -238,7 +238,7 @@ void setup_test_scene(Ray::SceneBase &scene, const bool output_base_color, const
 
         Ray::camera_desc_t cam_desc;
         cam_desc.type = Ray::eCamType::Persp;
-        cam_desc.filter = Ray::eFilterType::Box;
+        cam_desc.filter = Ray::ePixelFilter::Box;
         if (test_scene == eTestScene::Standard_SunLight) {
             cam_desc.view_transform = Ray::eViewTransform::Filmic_HighContrast;
         } else {

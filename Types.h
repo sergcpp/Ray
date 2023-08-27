@@ -62,7 +62,7 @@ struct rect_t {
 enum class eCamType : uint8_t { Persp, Ortho, Geo };
 
 /// Type of reconstruction filter
-enum class eFilterType : uint8_t { Box, Tent };
+enum class ePixelFilter : uint8_t { Box, Tent };
 
 enum class eLensUnits : uint8_t { FOV, FLength };
 
@@ -101,7 +101,7 @@ static_assert(sizeof(pass_settings_t) == 24, "!");
 
 struct camera_t {
     eCamType type;
-    eFilterType filter;
+    ePixelFilter filter;
     eViewTransform view_transform;
     eLensUnits ltype;
     float fov, exposure, gamma, sensor_height;

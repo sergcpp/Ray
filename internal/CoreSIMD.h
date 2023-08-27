@@ -2313,7 +2313,7 @@ void Ray::NS::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, i
                 offset[1] *= coc * cam.sensor_height;
             }
 
-            if (cam.filter == eFilterType::Tent) {
+            if (cam.filter == ePixelFilter::Tent) {
                 simd_fvec<S> temp = rxx;
                 rxx = 1.0f - sqrt(2.0f - 2.0f * temp);
                 where(temp < 0.5f, rxx) = sqrt(2.0f * temp) - 1.0f;

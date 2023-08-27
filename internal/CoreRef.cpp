@@ -1220,7 +1220,7 @@ void Ray::Ref::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, const i
 
             const float sample_off[2] = {construct_float(hash_val), construct_float(hash(hash_val))};
 
-            if (cam.filter == eFilterType::Tent) {
+            if (cam.filter == ePixelFilter::Tent) {
                 float rx = fract(random_seq[RAND_DIM_FILTER_U] + sample_off[0]);
                 if (rx < 0.5f) {
                     rx = std::sqrt(2.0f * rx) - 1.0f;

@@ -330,7 +330,7 @@ uint32_t FlattenBVH_Recursive(const bvh_node_t *nodes, uint32_t node_index, uint
 
 bool NaiivePluckerTest(const float p[9], const float o[3], const float d[3]);
 
-void ConstructCamera(eCamType type, eFilterType filter, eViewTransform view_transform, const float origin[3],
+void ConstructCamera(eCamType type, ePixelFilter filter, eViewTransform view_transform, const float origin[3],
                      const float fwd[3], const float up[3], const float shift[2], float fov, float sensor_height,
                      float exposure, float gamma, float focus_distance, float fstop, float lens_rotation,
                      float lens_ratio, int lens_blades, float clip_start, float clip_end, camera_t *cam);
