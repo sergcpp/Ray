@@ -515,9 +515,10 @@ int main(int argc, char *argv[]) {
                    duration<double>(high_resolution_clock::now() - t2).count() / 60.0);
         }
     }
-    assemble_material_test_images(arch_list);
 
     const double test_duration_m = duration<double>(high_resolution_clock::now() - t1).count() / 60.0;
+
+    assemble_material_test_images(arch_list);
 
     printf("FINISHED ALL TESTS in %.2f minutes\n", test_duration_m);
 
