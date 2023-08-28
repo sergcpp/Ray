@@ -889,7 +889,8 @@ void schedule_render_jobs(Ray::RendererBase &renderer, const Ray::SceneBase *sce
 #if defined(_WIN32)
             if (g_catch_flt_exceptions) {
                 unsigned old_value;
-                _controlfp_s(&old_value, _EM_INEXACT | _EM_UNDERFLOW | _EM_OVERFLOW, _MCW_EM);
+                //_controlfp_s(&old_value, _EM_INEXACT | _EM_UNDERFLOW | _EM_OVERFLOW, _MCW_EM);
+                _controlfp_s(&old_value, _EM_INEXACT | _EM_UNDERFLOW | _EM_OVERFLOW | _EM_INVALID, _MCW_EM);
             }
 #endif
             renderer.DenoiseImage(region_contexts[j]);
