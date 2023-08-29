@@ -171,6 +171,8 @@ int main(int argc, char *argv[]) {
         }
     }
 
+    multithreaded &= !g_determine_sample_count;
+
 #if defined(_WIN32) && !defined(__clang__)
     const bool enable_fp_exceptions = !nocpu || full_tests;
     if (enable_fp_exceptions) {
