@@ -339,13 +339,13 @@ windows-x86_64-gpu-nv-test-asan-job:
   variables:
     BIN_DIR: windows-x86_64
     AUX_TEST_ARGS: '-d NV --nocpu'
+    ASAN_OPTIONS: 'windows_hook_legacy_allocators=false'
   extends:
     - .windows-test-asan-job
   needs:
     - windows-x86_64-build-job
   tags:
     - windows,x86_64,nv
-  allow_failure: true
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
 
