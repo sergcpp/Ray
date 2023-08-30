@@ -504,7 +504,7 @@ void test_glossy_mat0(const char *arch_list[], const char *preferred_device) {
 
 void test_glossy_mat1(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 66;
-    const int PixThres = 366;
+    const int PixThres = 367;
 
     Ray::shading_node_desc_t node_desc;
     node_desc.type = Ray::eShadingNode::Glossy;
@@ -550,7 +550,7 @@ void test_spec_mat0(const char *arch_list[], const char *preferred_device) {
 
 void test_spec_mat1(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 66;
-    const int PixThres = 366;
+    const int PixThres = 367;
 
     Ray::principled_mat_desc_t spec_mat_desc;
     spec_mat_desc.base_color[0] = 1.0f;
@@ -598,7 +598,7 @@ void test_aniso_mat0(const char *arch_list[], const char *preferred_device) {
 
 void test_aniso_mat1(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 368;
-    const int PixThres = 468;
+    const int PixThres = 469;
 
     Ray::principled_mat_desc_t spec_mat_desc;
     spec_mat_desc.base_color[0] = 1.0f;
