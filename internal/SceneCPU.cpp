@@ -580,7 +580,7 @@ Ray::LightHandle Ray::Cpu::Scene::AddLight(const directional_light_desc_t &_l) {
 
     l.type = LIGHT_TYPE_DIR;
     l.cast_shadow = _l.cast_shadow;
-    l.visible = false;
+    l.visible = _l.visible;
 
     memcpy(&l.col[0], &_l.color[0], 3 * sizeof(float));
     l.dir.dir[0] = -_l.direction[0];
