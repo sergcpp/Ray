@@ -68,8 +68,8 @@ layout(std430, binding = LIGHTS_BUF_SLOT) readonly buffer Lights {
     light_t g_lights[];
 };
 
-layout(std430, binding = BLOCKER_LIGHTS_BUF_SLOT) readonly buffer BlockerLights {
-    uint g_blocker_lights[];
+layout(std430, binding = LIGHT_NODES_BUF_SLOT) readonly buffer LightNodes {
+    bvh_node_t g_light_nodes[];
 };
 
 layout(std430, binding = RANDOM_SEQ_BUF_SLOT) readonly buffer Random {
@@ -84,12 +84,6 @@ layout(binding = INOUT_IMG_SLOT, rgba32f) uniform image2D g_inout_img;
 
 #define FETCH_TRI(j) g_tris[j]
 #include "traverse_bvh.glsl"
-
-#define near_child(rd, n)   \
-    (rd)[floatBitsToUint(n.bbox_max.w) >> 30] < 0 ? (floatBitsToUint(n.bbox_max.w) & RIGHT_CHILD_BITS) : floatBitsToUint(n.bbox_min.w)
-
-#define far_child(rd, n)    \
-    (rd)[floatBitsToUint(n.bbox_max.w) >> 30] < 0 ? floatBitsToUint(n.bbox_min.w) : (floatBitsToUint(n.bbox_max.w) & RIGHT_CHILD_BITS)
 
 layout (local_size_x = LOCAL_GROUP_SIZE_X, local_size_y = LOCAL_GROUP_SIZE_Y, local_size_z = 1) in;
 
@@ -379,61 +373,84 @@ float IntersectAreaLightsShadow(shadow_ray_t r) {
 
     float rdist = abs(r.dist);
 
-    for (uint li = 0; li < g_params.blocker_lights_count; ++li) {
-        uint light_index = g_blocker_lights[li];
-        light_t l = g_lights[light_index];
-        [[dont_flatten]] if ((l.type_and_param0.x & (1 << 7)) != 0 && r.dist >= 0.0) { // sky portal
+    vec3 inv_d = safe_invert(rd);
+    vec3 neg_inv_do = -inv_d * ro;
+
+    uint stack_size = 0;
+    g_stack[gl_LocalInvocationIndex][stack_size++] = g_params.lights_node_index;
+
+    while (stack_size != 0) {
+        uint cur = g_stack[gl_LocalInvocationIndex][--stack_size];
+
+        bvh_node_t n = g_light_nodes[cur];
+
+        if (!_bbox_test_fma(inv_d, neg_inv_do, rdist, n.bbox_min.xyz, n.bbox_max.xyz)) {
             continue;
         }
 
-        uint light_type = (l.type_and_param0.x & 0x1f);
-        if (light_type == LIGHT_TYPE_RECT) {
-            vec3 light_pos = l.RECT_POS;
-            vec3 light_u = l.RECT_U;
-            vec3 light_v = l.RECT_V;
+        if ((floatBitsToUint(n.bbox_min.w) & LEAF_NODE_BIT) == 0) {
+            g_stack[gl_LocalInvocationIndex][stack_size++] = far_child(rd, n);
+            g_stack[gl_LocalInvocationIndex][stack_size++] = near_child(rd, n);
+        } else {
+            const int light_index = int(floatBitsToUint(n.bbox_min.w) & PRIM_INDEX_BITS);
+            light_t l = g_lights[light_index];
+            [[dont_flatten]] if ((l.type_and_param0.x & (1 << 8)) == 0) {
+                // Skip non-blocking light
+                continue;
+            }
+            [[dont_flatten]] if ((l.type_and_param0.x & (1 << 7)) != 0 && r.dist >= 0.0) { // sky portal
+                continue;
+            }
 
-            vec3 light_forward = normalize(cross(light_u, light_v));
+            uint light_type = (l.type_and_param0.x & 0x1f);
+            if (light_type == LIGHT_TYPE_RECT) {
+                vec3 light_pos = l.RECT_POS;
+                vec3 light_u = l.RECT_U;
+                vec3 light_v = l.RECT_V;
 
-            float plane_dist = dot(light_forward, light_pos);
-            float cos_theta = dot(rd, light_forward);
-            float t = (plane_dist - dot(light_forward, ro)) / cos_theta;
+                vec3 light_forward = normalize(cross(light_u, light_v));
 
-            if (cos_theta < 0.0 && t > HIT_EPS && t < rdist) {
-                light_u /= dot(light_u, light_u);
-                light_v /= dot(light_v, light_v);
+                float plane_dist = dot(light_forward, light_pos);
+                float cos_theta = dot(rd, light_forward);
+                float t = (plane_dist - dot(light_forward, ro)) / cos_theta;
 
-                vec3 p = ro + rd * t;
-                vec3 vi = p - light_pos;
-                float a1 = dot(light_u, vi);
-                if (a1 >= -0.5 && a1 <= 0.5) {
-                    float a2 = dot(light_v, vi);
-                    if (a2 >= -0.5 && a2 <= 0.5) {
-                        return 0.0;
+                if (cos_theta < 0.0 && t > HIT_EPS && t < rdist) {
+                    light_u /= dot(light_u, light_u);
+                    light_v /= dot(light_v, light_v);
+
+                    vec3 p = ro + rd * t;
+                    vec3 vi = p - light_pos;
+                    float a1 = dot(light_u, vi);
+                    if (a1 >= -0.5 && a1 <= 0.5) {
+                        float a2 = dot(light_v, vi);
+                        if (a2 >= -0.5 && a2 <= 0.5) {
+                            return 0.0;
+                        }
                     }
                 }
-            }
-        } else if (light_type == LIGHT_TYPE_DISK) {
-            vec3 light_pos = l.DISK_POS;
-            vec3 light_u = l.DISK_U;
-            vec3 light_v = l.DISK_V;
+            } else if (light_type == LIGHT_TYPE_DISK) {
+                vec3 light_pos = l.DISK_POS;
+                vec3 light_u = l.DISK_U;
+                vec3 light_v = l.DISK_V;
 
-            vec3 light_forward = normalize(cross(light_u, light_v));
+                vec3 light_forward = normalize(cross(light_u, light_v));
 
-            float plane_dist = dot(light_forward, light_pos);
-            float cos_theta = dot(rd, light_forward);
-            float t = (plane_dist - dot(light_forward, ro)) / cos_theta;
+                float plane_dist = dot(light_forward, light_pos);
+                float cos_theta = dot(rd, light_forward);
+                float t = (plane_dist - dot(light_forward, ro)) / cos_theta;
 
-            if (cos_theta < 0.0 && t > HIT_EPS && t < rdist) {
-                light_u /= dot(light_u, light_u);
-                light_v /= dot(light_v, light_v);
+                if (cos_theta < 0.0 && t > HIT_EPS && t < rdist) {
+                    light_u /= dot(light_u, light_u);
+                    light_v /= dot(light_v, light_v);
 
-                vec3 p = ro + rd * t;
-                vec3 vi = p - light_pos;
-                float a1 = dot(light_u, vi);
-                float a2 = dot(light_v, vi);
+                    vec3 p = ro + rd * t;
+                    vec3 vi = p - light_pos;
+                    float a1 = dot(light_u, vi);
+                    float a2 = dot(light_v, vi);
 
-                if (sqrt(a1 * a1 + a2 * a2) <= 0.5) {
-                    return 0.0;
+                    if (sqrt(a1 * a1 + a2 * a2) <= 0.5) {
+                        return 0.0;
+                    }
                 }
             }
         }

@@ -357,11 +357,10 @@ void SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3], const s
 
 // Account for visible lights contribution
 template <int S>
-void IntersectAreaLights(const ray_data_t<S> &r, const light_t lights[], Span<const uint32_t> visible_lights,
-                         const transform_t transforms[], hit_data_t<S> &inout_inter);
+void IntersectAreaLights(const ray_data_t<S> &r, Span<const light_t> lights, Span<const mbvh_node_t> nodes,
+                         hit_data_t<S> &inout_inter);
 template <int S>
-simd_fvec<S> IntersectAreaLights(const shadow_ray_t<S> &r, const light_t lights[], Span<const uint32_t> blocker_lights,
-                                 const transform_t transforms[]);
+simd_fvec<S> IntersectAreaLights(const shadow_ray_t<S> &r, Span<const light_t> lights, Span<const mbvh_node_t> nodes);
 
 template <int S>
 void TraceRays(Span<ray_data_t<S>> rays, int min_transp_depth, int max_transp_depth, const scene_data_t &sc,
@@ -379,7 +378,7 @@ void Evaluate_EnvColor(const ray_data_t<S> &ray, const simd_ivec<S> &mask, const
 // Get light color at intersection point
 template <int S>
 void Evaluate_LightColor(const simd_fvec<S> P[3], const ray_data_t<S> &ray, const simd_ivec<S> &mask,
-                         const hit_data_t<S> &inter, const environment_t &env, const light_t *lights,
+                         const hit_data_t<S> &inter, const environment_t &env, Span<const light_t> lights,
                          const Cpu::TexStorageRGBA &tex_storage, const simd_fvec<S> rand[2], simd_fvec<S> light_col[3]);
 
 // Evaluate individual nodes
@@ -4706,8 +4705,8 @@ void Ray::NS::TraceRays(Span<ray_data_t<S>> rays, int min_transp_depth, int max_
         hit_data_t<S> &inter = out_inter[i];
 
         IntersectScene(r, min_transp_depth, max_transp_depth, random_seq, sc, root_index, textures, inter);
-        if (trace_lights) {
-            IntersectAreaLights(r, sc.lights, sc.visible_lights, sc.transforms, inter);
+        if (trace_lights && !sc.visible_lights.empty()) {
+            IntersectAreaLights(r, sc.lights, sc.light_mnodes, inter);
         }
     }
 }
@@ -4726,8 +4725,11 @@ void Ray::NS::TraceShadowRays(Span<const shadow_ray_t<S>> rays, int max_transp_d
 
         simd_fvec<S> rc[3];
         IntersectScene(sh_r, max_transp_depth, sc, root_index, random_seq, textures, rc);
-        const simd_fvec<S> k = IntersectAreaLights(sh_r, sc.lights, sc.blocker_lights, sc.transforms);
-        UNROLLED_FOR(j, 3, { rc[j] = min(rc[j] * k, clamp_val); })
+        if (!sc.blocker_lights.empty()) {
+            const simd_fvec<S> k = IntersectAreaLights(sh_r, sc.lights, sc.light_mnodes);
+            UNROLLED_FOR(j, 3, { rc[j] *= k; })
+        }
+        UNROLLED_FOR(j, 3, { rc[j] = min(rc[j], clamp_val); })
 
         const simd_ivec<S> x = sh_r.xy >> 16, y = sh_r.xy & 0x0000FFFF;
 
@@ -5255,220 +5257,414 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
 }
 
 template <int S>
-void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, const light_t lights[], Span<const uint32_t> visible_lights,
-                                  const transform_t transforms[], hit_data_t<S> &inout_inter) {
-    for (uint32_t li = 0; li < uint32_t(visible_lights.size()); ++li) {
-        const uint32_t light_index = visible_lights[li];
-        const light_t &l = lights[light_index];
-        // Portal lights affect only missed rays
-        const simd_ivec<S> ray_mask = r.mask & ~(simd_ivec<S>{l.sky_portal ? -1 : 0} & inout_inter.mask);
-        if (ray_mask.all_zeros()) {
+void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, Span<const light_t> lights, Span<const mbvh_node_t> nodes,
+                                  hit_data_t<S> &inout_inter) {
+    simd_fvec<S> inv_d[3], inv_d_o[3];
+    comp_aux_inv_values(r.o, r.d, inv_d, inv_d_o);
+
+    alignas(S * 4) int ray_masks[S];
+    alignas(S * 4) float inter_t[S];
+    r.mask.store_to(ray_masks, simd_mem_aligned);
+    inout_inter.t.store_to(inter_t, simd_mem_aligned);
+
+    for (int ri = 0; ri < S; ri++) {
+        if (!ray_masks[ri]) {
             continue;
         }
 
-        const simd_fvec<S> no_shadow = simd_cast(l.cast_shadow ? simd_ivec<S>{0} : simd_ivec<S>{-1});
-        if (l.type == LIGHT_TYPE_SPHERE) {
-            const simd_fvec<S> op[3] = {l.sph.pos[0] - r.o[0], l.sph.pos[1] - r.o[1], l.sph.pos[2] - r.o[2]};
-            const simd_fvec<S> b = dot3(op, r.d);
-            simd_fvec<S> det = b * b - dot3(op, op) + l.sph.radius * l.sph.radius;
+        // recombine in AoS layout
+        const float _inv_d[3] = {inv_d[0][ri], inv_d[1][ri], inv_d[2][ri]},
+                    _inv_d_o[3] = {inv_d_o[0][ri], inv_d_o[1][ri], inv_d_o[2][ri]};
 
-            simd_ivec<S> imask = simd_cast(det >= 0.0f) & ray_mask;
-            if (imask.not_all_zeros()) {
-                det = safe_sqrt(det);
-                const simd_fvec<S> t1 = b - det, t2 = b + det;
+        TraversalStateStack_Single<MAX_STACK_SIZE> st;
+        st.push(0 /* root_index */, 0.0f);
 
-                simd_fvec<S> mask1 = (t1 > HIT_EPS) & ((t1 < inout_inter.t) | no_shadow) & simd_cast(imask);
-                const simd_fvec<S> mask2 =
-                    (t2 > HIT_EPS) & ((t2 < inout_inter.t) | no_shadow) & simd_cast(imask) & ~mask1;
+        while (!st.empty()) {
+            stack_entry_t cur = st.pop();
 
-                if (l.sph.spot > 0.0f) {
-                    const simd_fvec<S> _dot =
-                        min(-r.d[0] * l.sph.dir[0] - r.d[1] * l.sph.dir[1] - r.d[2] * l.sph.dir[2], 1.0f);
-                    mask1 &= (_dot > 0.0f);
-                    const simd_ivec<S> imask1 = simd_cast(mask1);
-                    if (imask1.not_all_zeros()) {
-                        simd_fvec<S> _angle = 0.0f;
-                        UNROLLED_FOR_S(i, S, {
-                            if (imask1.template get<i>()) {
-                                _angle.template set<i>(std::acos(_dot.template get<i>()));
-                            }
-                        })
-                        mask1 &= (_angle <= l.sph.spot);
+            if (cur.dist > inter_t[ri]) {
+                continue;
+            }
+
+        TRAVERSE:
+            if (!is_leaf_node(nodes[cur.index])) {
+                alignas(32) float res_dist[8];
+                long mask = bbox_test_oct<S>(_inv_d, _inv_d_o, inter_t[ri], nodes[cur.index].bbox_min,
+                                             nodes[cur.index].bbox_max, res_dist);
+                if (mask) {
+                    long i = GetFirstBit(mask);
+                    mask = ClearBit(mask, i);
+                    if (mask == 0) { // only one box was hit
+                        cur.index = nodes[cur.index].child[i];
+                        goto TRAVERSE;
                     }
+
+                    const long i2 = GetFirstBit(mask);
+                    mask = ClearBit(mask, i2);
+                    if (mask == 0) { // two boxes were hit
+                        if (res_dist[i] < res_dist[i2]) {
+                            st.push(nodes[cur.index].child[i2], res_dist[i2]);
+                            cur.index = nodes[cur.index].child[i];
+                        } else {
+                            st.push(nodes[cur.index].child[i], res_dist[i]);
+                            cur.index = nodes[cur.index].child[i2];
+                        }
+                        goto TRAVERSE;
+                    }
+
+                    st.push(nodes[cur.index].child[i], res_dist[i]);
+                    st.push(nodes[cur.index].child[i2], res_dist[i2]);
+
+                    i = GetFirstBit(mask);
+                    mask = ClearBit(mask, i);
+                    st.push(nodes[cur.index].child[i], res_dist[i]);
+                    if (mask == 0) { // three boxes were hit
+                        st.sort_top3();
+                        cur.index = st.pop_index();
+                        goto TRAVERSE;
+                    }
+
+                    i = GetFirstBit(mask);
+                    mask = ClearBit(mask, i);
+                    st.push(nodes[cur.index].child[i], res_dist[i]);
+                    if (mask == 0) { // four boxes were hit
+                        st.sort_top4();
+                        cur.index = st.pop_index();
+                        goto TRAVERSE;
+                    }
+
+                    const uint32_t size_before = st.stack_size;
+
+                    // from five to eight boxes were hit
+                    do {
+                        i = GetFirstBit(mask);
+                        mask = ClearBit(mask, i);
+                        st.push(nodes[cur.index].child[i], res_dist[i]);
+                    } while (mask != 0);
+
+                    const int count = int(st.stack_size - size_before + 4);
+                    st.sort_topN(count);
+                    cur.index = st.pop_index();
+                    goto TRAVERSE;
+                }
+            } else {
+                const uint32_t light_index = (nodes[cur.index].child[0] & PRIM_INDEX_BITS);
+                assert(nodes[cur.index].child[1] == 1);
+                const light_t &l = lights[light_index];
+                if (!l.visible) {
+                    continue;
+                }
+                // Portal lights affect only missed rays
+                const simd_ivec<S> ray_mask = r.mask & ~(simd_ivec<S>{l.sky_portal ? -1 : 0} & inout_inter.mask);
+                if (ray_mask.all_zeros()) {
+                    continue;
                 }
 
-                inout_inter.mask |= simd_cast(mask1 | mask2);
+                const simd_fvec<S> no_shadow = simd_cast(l.cast_shadow ? simd_ivec<S>{0} : simd_ivec<S>{-1});
+                if (l.type == LIGHT_TYPE_SPHERE) {
+                    const simd_fvec<S> op[3] = {l.sph.pos[0] - r.o[0], l.sph.pos[1] - r.o[1], l.sph.pos[2] - r.o[2]};
+                    const simd_fvec<S> b = dot3(op, r.d);
+                    simd_fvec<S> det = b * b - dot3(op, op) + l.sph.radius * l.sph.radius;
 
-                where(mask1 | mask2, inout_inter.obj_index) = -simd_ivec<S>(light_index) - 1;
-                where(mask1, inout_inter.t) = t1;
-                where(mask2, inout_inter.t) = t2;
+                    simd_ivec<S> imask = simd_cast(det >= 0.0f) & ray_mask;
+                    if (imask.not_all_zeros()) {
+                        det = safe_sqrt(det);
+                        const simd_fvec<S> t1 = b - det, t2 = b + det;
+
+                        simd_fvec<S> mask1 = (t1 > HIT_EPS) & ((t1 < inout_inter.t) | no_shadow) & simd_cast(imask);
+                        const simd_fvec<S> mask2 =
+                            (t2 > HIT_EPS) & ((t2 < inout_inter.t) | no_shadow) & simd_cast(imask) & ~mask1;
+
+                        if (l.sph.spot > 0.0f) {
+                            const simd_fvec<S> _dot =
+                                min(-r.d[0] * l.sph.dir[0] - r.d[1] * l.sph.dir[1] - r.d[2] * l.sph.dir[2], 1.0f);
+                            mask1 &= (_dot > 0.0f);
+                            const simd_ivec<S> imask1 = simd_cast(mask1);
+                            if (imask1.not_all_zeros()) {
+                                simd_fvec<S> _angle = 0.0f;
+                                UNROLLED_FOR_S(i, S, {
+                                    if (imask1.template get<i>()) {
+                                        _angle.template set<i>(std::acos(_dot.template get<i>()));
+                                    }
+                                })
+                                mask1 &= (_angle <= l.sph.spot);
+                            }
+                        }
+
+                        inout_inter.mask |= simd_cast(mask1 | mask2);
+
+                        where(mask1 | mask2, inout_inter.obj_index) = -simd_ivec<S>(light_index) - 1;
+                        where(mask1, inout_inter.t) = t1;
+                        where(mask2, inout_inter.t) = t2;
+                        inout_inter.t.store_to(inter_t, simd_mem_aligned);
+                    }
+                } else if (l.type == LIGHT_TYPE_DIR) {
+                    const simd_fvec<S> cos_theta = dot3(r.d, l.dir.dir);
+                    const simd_ivec<S> imask = simd_cast(cos_theta > std::cos(l.dir.angle)) & ray_mask &
+                                               (~inout_inter.mask | simd_cast(no_shadow));
+                    inout_inter.mask |= imask;
+                    where(imask, inout_inter.obj_index) = -simd_ivec<S>(light_index) - 1;
+                    where(imask, inout_inter.t) = safe_div_pos(1.0f, cos_theta);
+                    inout_inter.t.store_to(inter_t, simd_mem_aligned);
+                } else if (l.type == LIGHT_TYPE_RECT) {
+                    float light_fwd[3];
+                    cross(l.rect.u, l.rect.v, light_fwd);
+                    normalize(light_fwd);
+
+                    const float plane_dist = dot3(light_fwd, l.rect.pos);
+
+                    const simd_fvec<S> cos_theta = dot3(r.d, light_fwd);
+                    const simd_fvec<S> t = safe_div_neg(plane_dist - dot3(light_fwd, r.o), cos_theta);
+
+                    const simd_ivec<S> imask =
+                        simd_cast((cos_theta < 0.0f) & (t > HIT_EPS) & ((t < inout_inter.t) | no_shadow)) & ray_mask;
+                    if (imask.not_all_zeros()) {
+                        const float dot_u = dot3(l.rect.u, l.rect.u);
+                        const float dot_v = dot3(l.rect.v, l.rect.v);
+
+                        const simd_fvec<S> p[3] = {fmadd(r.d[0], t, r.o[0]), fmadd(r.d[1], t, r.o[1]),
+                                                   fmadd(r.d[2], t, r.o[2])};
+                        const simd_fvec<S> vi[3] = {p[0] - l.rect.pos[0], p[1] - l.rect.pos[1], p[2] - l.rect.pos[2]};
+
+                        const simd_fvec<S> a1 = dot3(l.rect.u, vi) / dot_u;
+                        const simd_fvec<S> a2 = dot3(l.rect.v, vi) / dot_v;
+
+                        const simd_fvec<S> final_mask =
+                            (a1 >= -0.5f & a1 <= 0.5f) & (a2 >= -0.5f & a2 <= 0.5f) & simd_cast(imask);
+
+                        inout_inter.mask |= simd_cast(final_mask);
+                        where(final_mask, inout_inter.obj_index) = -simd_ivec<S>(light_index) - 1;
+                        where(final_mask, inout_inter.t) = t;
+                        inout_inter.t.store_to(inter_t, simd_mem_aligned);
+                    }
+                } else if (l.type == LIGHT_TYPE_DISK) {
+                    float light_fwd[3];
+                    cross(l.disk.u, l.disk.v, light_fwd);
+                    normalize(light_fwd);
+
+                    const float plane_dist = dot3(light_fwd, l.disk.pos);
+
+                    const simd_fvec<S> cos_theta = dot3(r.d, light_fwd);
+                    const simd_fvec<S> t = safe_div_neg(plane_dist - dot3(light_fwd, r.o), cos_theta);
+
+                    const simd_ivec<S> imask =
+                        simd_cast((cos_theta < 0.0f) & (t > HIT_EPS) & ((t < inout_inter.t) | no_shadow)) & ray_mask;
+                    if (imask.not_all_zeros()) {
+                        const float dot_u = dot3(l.disk.u, l.disk.u);
+                        const float dot_v = dot3(l.disk.v, l.disk.v);
+
+                        const simd_fvec<S> p[3] = {fmadd(r.d[0], t, r.o[0]), fmadd(r.d[1], t, r.o[1]),
+                                                   fmadd(r.d[2], t, r.o[2])};
+                        const simd_fvec<S> vi[3] = {p[0] - l.disk.pos[0], p[1] - l.disk.pos[1], p[2] - l.disk.pos[2]};
+
+                        const simd_fvec<S> a1 = dot3(l.disk.u, vi) / dot_u;
+                        const simd_fvec<S> a2 = dot3(l.disk.v, vi) / dot_v;
+
+                        const simd_fvec<S> final_mask = (sqrt(a1 * a1 + a2 * a2) <= 0.5f) & simd_cast(imask);
+
+                        inout_inter.mask |= simd_cast(final_mask);
+                        where(final_mask, inout_inter.obj_index) = -simd_ivec<S>(light_index) - 1;
+                        where(final_mask, inout_inter.t) = t;
+                        inout_inter.t.store_to(inter_t, simd_mem_aligned);
+                    }
+                } else if (l.type == LIGHT_TYPE_LINE) {
+                    const float *light_dir = l.line.v;
+
+                    float light_v[3];
+                    cross(l.line.u, light_dir, light_v);
+
+                    simd_fvec<S> _ro[3] = {r.o[0] - l.line.pos[0], r.o[1] - l.line.pos[1], r.o[2] - l.line.pos[2]};
+                    const simd_fvec<S> ro[3] = {dot3(_ro, light_dir), dot3(_ro, l.line.u), dot3(_ro, light_v)};
+                    const simd_fvec<S> rd[3] = {dot3(r.d, light_dir), dot3(r.d, l.line.u), dot3(r.d, light_v)};
+
+                    const simd_fvec<S> A = rd[2] * rd[2] + rd[1] * rd[1];
+                    const simd_fvec<S> B = 2.0f * (rd[2] * ro[2] + rd[1] * ro[1]);
+                    const simd_fvec<S> C = ro[2] * ro[2] + ro[1] * ro[1] - l.line.radius * l.line.radius;
+
+                    simd_fvec<S> t0, t1;
+                    simd_ivec<S> imask = quadratic(A, B, C, t0, t1);
+                    imask &= simd_cast(t0 > HIT_EPS) & simd_cast(t1 > HIT_EPS);
+
+                    const simd_fvec<S> t = min(t0, t1);
+                    const simd_fvec<S> p[3] = {fmadd(rd[0], t, ro[0]), fmadd(rd[1], t, ro[1]), fmadd(rd[2], t, ro[2])};
+
+                    imask &= simd_cast(abs(p[0]) < 0.5f * l.line.height) & simd_cast((t < inout_inter.t) | no_shadow);
+
+                    inout_inter.mask |= imask;
+                    where(imask, inout_inter.obj_index) = -simd_ivec<S>(light_index) - 1;
+                    where(imask, inout_inter.t) = t;
+                    inout_inter.t.store_to(inter_t, simd_mem_aligned);
+                }
             }
-        } else if (l.type == LIGHT_TYPE_DIR) {
-            const simd_fvec<S> cos_theta = dot3(r.d, l.dir.dir);
-            const simd_ivec<S> imask =
-                simd_cast(cos_theta > std::cos(l.dir.angle)) & ray_mask & (~inout_inter.mask | simd_cast(no_shadow));
-            inout_inter.mask |= imask;
-            where(imask, inout_inter.obj_index) = -simd_ivec<S>(light_index) - 1;
-            where(imask, inout_inter.t) = safe_div_pos(1.0f, cos_theta);
-        } else if (l.type == LIGHT_TYPE_RECT) {
-            float light_fwd[3];
-            cross(l.rect.u, l.rect.v, light_fwd);
-            normalize(light_fwd);
-
-            const float plane_dist = dot3(light_fwd, l.rect.pos);
-
-            const simd_fvec<S> cos_theta = dot3(r.d, light_fwd);
-            const simd_fvec<S> t = safe_div_neg(plane_dist - dot3(light_fwd, r.o), cos_theta);
-
-            const simd_ivec<S> imask =
-                simd_cast((cos_theta < 0.0f) & (t > HIT_EPS) & ((t < inout_inter.t) | no_shadow)) & ray_mask;
-            if (imask.not_all_zeros()) {
-                const float dot_u = dot3(l.rect.u, l.rect.u);
-                const float dot_v = dot3(l.rect.v, l.rect.v);
-
-                const simd_fvec<S> p[3] = {fmadd(r.d[0], t, r.o[0]), fmadd(r.d[1], t, r.o[1]),
-                                           fmadd(r.d[2], t, r.o[2])};
-                const simd_fvec<S> vi[3] = {p[0] - l.rect.pos[0], p[1] - l.rect.pos[1], p[2] - l.rect.pos[2]};
-
-                const simd_fvec<S> a1 = dot3(l.rect.u, vi) / dot_u;
-                const simd_fvec<S> a2 = dot3(l.rect.v, vi) / dot_v;
-
-                const simd_fvec<S> final_mask =
-                    (a1 >= -0.5f & a1 <= 0.5f) & (a2 >= -0.5f & a2 <= 0.5f) & simd_cast(imask);
-
-                inout_inter.mask |= simd_cast(final_mask);
-                where(final_mask, inout_inter.obj_index) = -simd_ivec<S>(light_index) - 1;
-                where(final_mask, inout_inter.t) = t;
-            }
-        } else if (l.type == LIGHT_TYPE_DISK) {
-            float light_fwd[3];
-            cross(l.disk.u, l.disk.v, light_fwd);
-            normalize(light_fwd);
-
-            const float plane_dist = dot3(light_fwd, l.disk.pos);
-
-            const simd_fvec<S> cos_theta = dot3(r.d, light_fwd);
-            const simd_fvec<S> t = safe_div_neg(plane_dist - dot3(light_fwd, r.o), cos_theta);
-
-            const simd_ivec<S> imask =
-                simd_cast((cos_theta < 0.0f) & (t > HIT_EPS) & ((t < inout_inter.t) | no_shadow)) & ray_mask;
-            if (imask.not_all_zeros()) {
-                const float dot_u = dot3(l.disk.u, l.disk.u);
-                const float dot_v = dot3(l.disk.v, l.disk.v);
-
-                const simd_fvec<S> p[3] = {fmadd(r.d[0], t, r.o[0]), fmadd(r.d[1], t, r.o[1]),
-                                           fmadd(r.d[2], t, r.o[2])};
-                const simd_fvec<S> vi[3] = {p[0] - l.disk.pos[0], p[1] - l.disk.pos[1], p[2] - l.disk.pos[2]};
-
-                const simd_fvec<S> a1 = dot3(l.disk.u, vi) / dot_u;
-                const simd_fvec<S> a2 = dot3(l.disk.v, vi) / dot_v;
-
-                const simd_fvec<S> final_mask = (sqrt(a1 * a1 + a2 * a2) <= 0.5f) & simd_cast(imask);
-
-                inout_inter.mask |= simd_cast(final_mask);
-                where(final_mask, inout_inter.obj_index) = -simd_ivec<S>(light_index) - 1;
-                where(final_mask, inout_inter.t) = t;
-            }
-        } else if (l.type == LIGHT_TYPE_LINE) {
-            const float *light_dir = l.line.v;
-
-            float light_v[3];
-            cross(l.line.u, light_dir, light_v);
-
-            simd_fvec<S> _ro[3] = {r.o[0] - l.line.pos[0], r.o[1] - l.line.pos[1], r.o[2] - l.line.pos[2]};
-            const simd_fvec<S> ro[3] = {dot3(_ro, light_dir), dot3(_ro, l.line.u), dot3(_ro, light_v)};
-            const simd_fvec<S> rd[3] = {dot3(r.d, light_dir), dot3(r.d, l.line.u), dot3(r.d, light_v)};
-
-            const simd_fvec<S> A = rd[2] * rd[2] + rd[1] * rd[1];
-            const simd_fvec<S> B = 2.0f * (rd[2] * ro[2] + rd[1] * ro[1]);
-            const simd_fvec<S> C = ro[2] * ro[2] + ro[1] * ro[1] - l.line.radius * l.line.radius;
-
-            simd_fvec<S> t0, t1;
-            simd_ivec<S> imask = quadratic(A, B, C, t0, t1);
-            imask &= simd_cast(t0 > HIT_EPS) & simd_cast(t1 > HIT_EPS);
-
-            const simd_fvec<S> t = min(t0, t1);
-            const simd_fvec<S> p[3] = {fmadd(rd[0], t, ro[0]), fmadd(rd[1], t, ro[1]), fmadd(rd[2], t, ro[2])};
-
-            imask &= simd_cast(abs(p[0]) < 0.5f * l.line.height) & simd_cast((t < inout_inter.t) | no_shadow);
-
-            inout_inter.mask |= imask;
-            where(imask, inout_inter.obj_index) = -simd_ivec<S>(light_index) - 1;
-            where(imask, inout_inter.t) = t;
         }
     }
 }
 
 template <int S>
-Ray::NS::simd_fvec<S> Ray::NS::IntersectAreaLights(const shadow_ray_t<S> &r, const light_t lights[],
-                                                   Span<const uint32_t> blocker_lights,
-                                                   const transform_t transforms[]) {
+Ray::NS::simd_fvec<S> Ray::NS::IntersectAreaLights(const shadow_ray_t<S> &r, Span<const light_t> lights,
+                                                   Span<const mbvh_node_t> nodes) {
+    simd_fvec<S> inv_d[3], inv_d_o[3];
+    comp_aux_inv_values(r.o, r.d, inv_d, inv_d_o);
+
     const simd_fvec<S> rdist = abs(r.dist);
     const simd_ivec<S> env_ray = simd_cast(r.dist < 0.0f);
     simd_fvec<S> ret = 1.0f;
 
     simd_ivec<S> ray_mask = r.mask;
 
-    for (uint32_t li = 0; li < uint32_t(blocker_lights.size()) && ray_mask.not_all_zeros(); ++li) {
-        const uint32_t light_index = blocker_lights[li];
-        const light_t &l = lights[light_index];
-        const simd_ivec<S> portal_mask = l.sky_portal ? env_ray : -1;
-        if (l.type == LIGHT_TYPE_RECT) {
-            float light_fwd[3];
-            cross(l.rect.u, l.rect.v, light_fwd);
-            normalize(light_fwd);
+    alignas(S * 4) int ray_masks[S];
+    alignas(S * 4) float inter_t[S];
+    ray_mask.store_to(ray_masks, simd_mem_aligned);
+    rdist.store_to(inter_t, simd_mem_aligned);
 
-            const float plane_dist = dot3(light_fwd, l.rect.pos);
+    for (int ri = 0; ri < S; ri++) {
+        if (!ray_masks[ri]) {
+            continue;
+        }
 
-            const simd_fvec<S> cos_theta = dot3(r.d, light_fwd);
-            const simd_fvec<S> t = safe_div_neg(plane_dist - dot3(light_fwd, r.o), cos_theta);
+        // recombine in AoS layout
+        const float _inv_d[3] = {inv_d[0][ri], inv_d[1][ri], inv_d[2][ri]},
+                    _inv_d_o[3] = {inv_d_o[0][ri], inv_d_o[1][ri], inv_d_o[2][ri]};
 
-            const simd_ivec<S> imask =
-                simd_cast((cos_theta < 0.0f) & (t > HIT_EPS) & (t < rdist)) & portal_mask & ray_mask;
-            if (imask.not_all_zeros()) {
-                const float dot_u = dot3(l.rect.u, l.rect.u);
-                const float dot_v = dot3(l.rect.v, l.rect.v);
+        TraversalStateStack_Single<MAX_STACK_SIZE> st;
+        st.push(0 /* root_index */, 0.0f);
 
-                const simd_fvec<S> p[3] = {fmadd(r.d[0], t, r.o[0]), fmadd(r.d[1], t, r.o[1]),
-                                           fmadd(r.d[2], t, r.o[2])};
-                const simd_fvec<S> vi[3] = {p[0] - l.rect.pos[0], p[1] - l.rect.pos[1], p[2] - l.rect.pos[2]};
+        while (!st.empty() && ray_masks[ri]) {
+            stack_entry_t cur = st.pop();
 
-                const simd_fvec<S> a1 = dot3(l.rect.u, vi) / dot_u;
-                const simd_fvec<S> a2 = dot3(l.rect.v, vi) / dot_v;
-
-                const simd_fvec<S> final_mask =
-                    (a1 >= -0.5f & a1 <= 0.5f) & (a2 >= -0.5f & a2 <= 0.5f) & simd_cast(imask);
-
-                ray_mask &= ~simd_cast(final_mask);
-                where(final_mask, ret) = 0.0f;
+            if (cur.dist > inter_t[ri]) {
+                continue;
             }
-        } else if (l.type == LIGHT_TYPE_DISK) {
-            float light_fwd[3];
-            cross(l.disk.u, l.disk.v, light_fwd);
-            normalize(light_fwd);
 
-            const float plane_dist = dot3(light_fwd, l.disk.pos);
+        TRAVERSE:
+            if (!is_leaf_node(nodes[cur.index])) {
+                alignas(32) float res_dist[8];
+                long mask = bbox_test_oct<S>(_inv_d, _inv_d_o, inter_t[ri], nodes[cur.index].bbox_min,
+                                             nodes[cur.index].bbox_max, res_dist);
+                if (mask) {
+                    long i = GetFirstBit(mask);
+                    mask = ClearBit(mask, i);
+                    if (mask == 0) { // only one box was hit
+                        cur.index = nodes[cur.index].child[i];
+                        goto TRAVERSE;
+                    }
 
-            const simd_fvec<S> cos_theta = dot3(r.d, light_fwd);
-            const simd_fvec<S> t = safe_div_neg(plane_dist - dot3(light_fwd, r.o), cos_theta);
+                    const long i2 = GetFirstBit(mask);
+                    mask = ClearBit(mask, i2);
+                    if (mask == 0) { // two boxes were hit
+                        if (res_dist[i] < res_dist[i2]) {
+                            st.push(nodes[cur.index].child[i2], res_dist[i2]);
+                            cur.index = nodes[cur.index].child[i];
+                        } else {
+                            st.push(nodes[cur.index].child[i], res_dist[i]);
+                            cur.index = nodes[cur.index].child[i2];
+                        }
+                        goto TRAVERSE;
+                    }
 
-            const simd_ivec<S> imask =
-                simd_cast((cos_theta < 0.0f) & (t > HIT_EPS) & (t < rdist)) & portal_mask & ray_mask;
-            if (imask.not_all_zeros()) {
-                const float dot_u = dot3(l.disk.u, l.disk.u);
-                const float dot_v = dot3(l.disk.v, l.disk.v);
+                    st.push(nodes[cur.index].child[i], res_dist[i]);
+                    st.push(nodes[cur.index].child[i2], res_dist[i2]);
 
-                const simd_fvec<S> p[3] = {fmadd(r.d[0], t, r.o[0]), fmadd(r.d[1], t, r.o[1]),
-                                           fmadd(r.d[2], t, r.o[2])};
-                const simd_fvec<S> vi[3] = {p[0] - l.disk.pos[0], p[1] - l.disk.pos[1], p[2] - l.disk.pos[2]};
+                    i = GetFirstBit(mask);
+                    mask = ClearBit(mask, i);
+                    st.push(nodes[cur.index].child[i], res_dist[i]);
+                    if (mask == 0) { // three boxes were hit
+                        st.sort_top3();
+                        cur.index = st.pop_index();
+                        goto TRAVERSE;
+                    }
 
-                const simd_fvec<S> a1 = dot3(l.disk.u, vi) / dot_u;
-                const simd_fvec<S> a2 = dot3(l.disk.v, vi) / dot_v;
+                    i = GetFirstBit(mask);
+                    mask = ClearBit(mask, i);
+                    st.push(nodes[cur.index].child[i], res_dist[i]);
+                    if (mask == 0) { // four boxes were hit
+                        st.sort_top4();
+                        cur.index = st.pop_index();
+                        goto TRAVERSE;
+                    }
 
-                const simd_fvec<S> final_mask = (sqrt(a1 * a1 + a2 * a2) <= 0.5f) & simd_cast(imask);
+                    const uint32_t size_before = st.stack_size;
 
-                ray_mask &= ~simd_cast(final_mask);
-                where(final_mask, ret) = 0.0f;
+                    // from five to eight boxes were hit
+                    do {
+                        i = GetFirstBit(mask);
+                        mask = ClearBit(mask, i);
+                        st.push(nodes[cur.index].child[i], res_dist[i]);
+                    } while (mask != 0);
+
+                    const int count = int(st.stack_size - size_before + 4);
+                    st.sort_topN(count);
+                    cur.index = st.pop_index();
+                    goto TRAVERSE;
+                }
+            } else {
+                const int light_index = int(nodes[cur.index].child[0] & PRIM_INDEX_BITS);
+                assert(nodes[cur.index].child[1] == 1);
+                const light_t &l = lights[light_index];
+                if (!l.blocking) {
+                    continue;
+                }
+                const simd_ivec<S> portal_mask = l.sky_portal ? env_ray : -1;
+                if (l.type == LIGHT_TYPE_RECT) {
+                    float light_fwd[3];
+                    cross(l.rect.u, l.rect.v, light_fwd);
+                    normalize(light_fwd);
+
+                    const float plane_dist = dot3(light_fwd, l.rect.pos);
+
+                    const simd_fvec<S> cos_theta = dot3(r.d, light_fwd);
+                    const simd_fvec<S> t = safe_div_neg(plane_dist - dot3(light_fwd, r.o), cos_theta);
+
+                    const simd_ivec<S> imask =
+                        simd_cast((cos_theta < 0.0f) & (t > HIT_EPS) & (t < rdist)) & portal_mask & ray_mask;
+                    if (imask.not_all_zeros()) {
+                        const float dot_u = dot3(l.rect.u, l.rect.u);
+                        const float dot_v = dot3(l.rect.v, l.rect.v);
+
+                        const simd_fvec<S> p[3] = {fmadd(r.d[0], t, r.o[0]), fmadd(r.d[1], t, r.o[1]),
+                                                   fmadd(r.d[2], t, r.o[2])};
+                        const simd_fvec<S> vi[3] = {p[0] - l.rect.pos[0], p[1] - l.rect.pos[1], p[2] - l.rect.pos[2]};
+
+                        const simd_fvec<S> a1 = dot3(l.rect.u, vi) / dot_u;
+                        const simd_fvec<S> a2 = dot3(l.rect.v, vi) / dot_v;
+
+                        const simd_fvec<S> final_mask =
+                            (a1 >= -0.5f & a1 <= 0.5f) & (a2 >= -0.5f & a2 <= 0.5f) & simd_cast(imask);
+
+                        ray_mask &= ~simd_cast(final_mask);
+                        where(final_mask, ret) = 0.0f;
+                        ray_mask.store_to(ray_masks, simd_mem_aligned);
+                    }
+                } else if (l.type == LIGHT_TYPE_DISK) {
+                    float light_fwd[3];
+                    cross(l.disk.u, l.disk.v, light_fwd);
+                    normalize(light_fwd);
+
+                    const float plane_dist = dot3(light_fwd, l.disk.pos);
+
+                    const simd_fvec<S> cos_theta = dot3(r.d, light_fwd);
+                    const simd_fvec<S> t = safe_div_neg(plane_dist - dot3(light_fwd, r.o), cos_theta);
+
+                    const simd_ivec<S> imask =
+                        simd_cast((cos_theta < 0.0f) & (t > HIT_EPS) & (t < rdist)) & portal_mask & ray_mask;
+                    if (imask.not_all_zeros()) {
+                        const float dot_u = dot3(l.disk.u, l.disk.u);
+                        const float dot_v = dot3(l.disk.v, l.disk.v);
+
+                        const simd_fvec<S> p[3] = {fmadd(r.d[0], t, r.o[0]), fmadd(r.d[1], t, r.o[1]),
+                                                   fmadd(r.d[2], t, r.o[2])};
+                        const simd_fvec<S> vi[3] = {p[0] - l.disk.pos[0], p[1] - l.disk.pos[1], p[2] - l.disk.pos[2]};
+
+                        const simd_fvec<S> a1 = dot3(l.disk.u, vi) / dot_u;
+                        const simd_fvec<S> a2 = dot3(l.disk.v, vi) / dot_v;
+
+                        const simd_fvec<S> final_mask = (sqrt(a1 * a1 + a2 * a2) <= 0.5f) & simd_cast(imask);
+
+                        ray_mask &= ~simd_cast(final_mask);
+                        where(final_mask, ret) = 0.0f;
+                        ray_mask.store_to(ray_masks, simd_mem_aligned);
+                    }
+                }
             }
         }
     }
@@ -5523,7 +5719,7 @@ void Ray::NS::Evaluate_EnvColor(const ray_data_t<S> &ray, const simd_ivec<S> &ma
 
 template <int S>
 void Ray::NS::Evaluate_LightColor(const simd_fvec<S> P[3], const ray_data_t<S> &ray, const simd_ivec<S> &mask,
-                                  const hit_data_t<S> &inter, const environment_t &env, const light_t *lights,
+                                  const hit_data_t<S> &inter, const environment_t &env, Span<const light_t> lights,
                                   const Cpu::TexStorageRGBA &tex_storage, const simd_fvec<S> rand[2],
                                   simd_fvec<S> light_col[3]) {
     simd_ivec<S> ray_queue[S];

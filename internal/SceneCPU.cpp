@@ -12,8 +12,6 @@
 #include "TextureUtils.h"
 #include "Time_.h"
 
-#define CLAMP(val, min, max) (val < min ? min : (val > max ? max : val))
-
 namespace Ray {
 namespace Cpu {
 Ref::simd_fvec4 rgb_to_rgbe(const Ref::simd_fvec4 &rgb) {
@@ -26,6 +24,14 @@ Ref::simd_fvec4 rgb_to_rgbe(const Ref::simd_fvec4 &rgb) {
     const float factor = std::frexp(max_component, &exponent) * 256.0f / max_component;
 
     return Ref::simd_fvec4{rgb.get<0>() * factor, rgb.get<1>() * factor, rgb.get<2>() * factor, float(exponent + 128)};
+}
+
+template <typename T> T clamp(T val, T min, T max) { return (val < min ? min : (val > max ? max : val)); }
+
+Ref::simd_fvec4 cross(const Ref::simd_fvec4 &v1, const Ref::simd_fvec4 &v2) {
+    return Ref::simd_fvec4{v1.get<1>() * v2.get<2>() - v1.get<2>() * v2.get<1>(),
+                           v1.get<2>() * v2.get<0>() - v1.get<0>() * v2.get<2>(),
+                           v1.get<0>() * v2.get<1>() - v1.get<1>() * v2.get<0>(), 0.0f};
 }
 } // namespace Cpu
 } // namespace Ray
@@ -235,7 +241,7 @@ Ray::MaterialHandle Ray::Cpu::Scene::AddMaterial_nolock(const shading_node_desc_
 
     mat.type = m.type;
     mat.textures[BASE_TEXTURE] = m.base_texture._index;
-    mat.roughness_unorm = pack_unorm_16(CLAMP(m.roughness, 0.0f, 1.0f));
+    mat.roughness_unorm = pack_unorm_16(clamp(m.roughness, 0.0f, 1.0f));
     mat.textures[ROUGH_TEXTURE] = m.roughness_texture._index;
     memcpy(&mat.base_color[0], &m.base_color[0], 3 * sizeof(float));
     mat.ior = m.ior;
@@ -243,13 +249,13 @@ Ray::MaterialHandle Ray::Cpu::Scene::AddMaterial_nolock(const shading_node_desc_
     mat.flags = 0;
 
     if (m.type == eShadingNode::Diffuse) {
-        mat.sheen_unorm = pack_unorm_16(CLAMP(0.5f * m.sheen, 0.0f, 1.0f));
-        mat.sheen_tint_unorm = pack_unorm_16(CLAMP(m.tint, 0.0f, 1.0f));
+        mat.sheen_unorm = pack_unorm_16(clamp(0.5f * m.sheen, 0.0f, 1.0f));
+        mat.sheen_tint_unorm = pack_unorm_16(clamp(m.tint, 0.0f, 1.0f));
         mat.textures[METALLIC_TEXTURE] = m.metallic_texture._index;
     } else if (m.type == eShadingNode::Glossy) {
         mat.tangent_rotation = 2.0f * PI * m.anisotropic_rotation;
         mat.textures[METALLIC_TEXTURE] = m.metallic_texture._index;
-        mat.tint_unorm = pack_unorm_16(CLAMP(m.tint, 0.0f, 1.0f));
+        mat.tint_unorm = pack_unorm_16(clamp(m.tint, 0.0f, 1.0f));
     } else if (m.type == eShadingNode::Refractive) {
     } else if (m.type == eShadingNode::Emissive) {
         mat.strength = m.strength;
@@ -267,7 +273,7 @@ Ray::MaterialHandle Ray::Cpu::Scene::AddMaterial_nolock(const shading_node_desc_
     }
 
     mat.textures[NORMALS_TEXTURE] = m.normal_map._index;
-    mat.normal_map_strength_unorm = pack_unorm_16(CLAMP(m.normal_map_intensity, 0.0f, 1.0f));
+    mat.normal_map_strength_unorm = pack_unorm_16(clamp(m.normal_map_intensity, 0.0f, 1.0f));
 
     const std::pair<uint32_t, uint32_t> ret = materials_.push(mat);
     return MaterialHandle{ret.first, ret.second};
@@ -279,25 +285,25 @@ Ray::MaterialHandle Ray::Cpu::Scene::AddMaterial(const principled_mat_desc_t &m)
     main_mat.type = eShadingNode::Principled;
     main_mat.textures[BASE_TEXTURE] = m.base_texture._index;
     memcpy(&main_mat.base_color[0], &m.base_color[0], 3 * sizeof(float));
-    main_mat.sheen_unorm = pack_unorm_16(CLAMP(0.5f * m.sheen, 0.0f, 1.0f));
-    main_mat.sheen_tint_unorm = pack_unorm_16(CLAMP(m.sheen_tint, 0.0f, 1.0f));
-    main_mat.roughness_unorm = pack_unorm_16(CLAMP(m.roughness, 0.0f, 1.0f));
-    main_mat.tangent_rotation = 2.0f * PI * CLAMP(m.anisotropic_rotation, 0.0f, 1.0f);
+    main_mat.sheen_unorm = pack_unorm_16(clamp(0.5f * m.sheen, 0.0f, 1.0f));
+    main_mat.sheen_tint_unorm = pack_unorm_16(clamp(m.sheen_tint, 0.0f, 1.0f));
+    main_mat.roughness_unorm = pack_unorm_16(clamp(m.roughness, 0.0f, 1.0f));
+    main_mat.tangent_rotation = 2.0f * PI * clamp(m.anisotropic_rotation, 0.0f, 1.0f);
     main_mat.textures[ROUGH_TEXTURE] = m.roughness_texture._index;
-    main_mat.metallic_unorm = pack_unorm_16(CLAMP(m.metallic, 0.0f, 1.0f));
+    main_mat.metallic_unorm = pack_unorm_16(clamp(m.metallic, 0.0f, 1.0f));
     main_mat.textures[METALLIC_TEXTURE] = m.metallic_texture._index;
     main_mat.ior = m.ior;
     main_mat.flags = 0;
-    main_mat.transmission_unorm = pack_unorm_16(CLAMP(m.transmission, 0.0f, 1.0f));
-    main_mat.transmission_roughness_unorm = pack_unorm_16(CLAMP(m.transmission_roughness, 0.0f, 1.0f));
+    main_mat.transmission_unorm = pack_unorm_16(clamp(m.transmission, 0.0f, 1.0f));
+    main_mat.transmission_roughness_unorm = pack_unorm_16(clamp(m.transmission_roughness, 0.0f, 1.0f));
     main_mat.textures[NORMALS_TEXTURE] = m.normal_map._index;
-    main_mat.normal_map_strength_unorm = pack_unorm_16(CLAMP(m.normal_map_intensity, 0.0f, 1.0f));
-    main_mat.anisotropic_unorm = pack_unorm_16(CLAMP(m.anisotropic, 0.0f, 1.0f));
-    main_mat.specular_unorm = pack_unorm_16(CLAMP(m.specular, 0.0f, 1.0f));
+    main_mat.normal_map_strength_unorm = pack_unorm_16(clamp(m.normal_map_intensity, 0.0f, 1.0f));
+    main_mat.anisotropic_unorm = pack_unorm_16(clamp(m.anisotropic, 0.0f, 1.0f));
+    main_mat.specular_unorm = pack_unorm_16(clamp(m.specular, 0.0f, 1.0f));
     main_mat.textures[SPECULAR_TEXTURE] = m.specular_texture._index;
-    main_mat.specular_tint_unorm = pack_unorm_16(CLAMP(m.specular_tint, 0.0f, 1.0f));
-    main_mat.clearcoat_unorm = pack_unorm_16(CLAMP(m.clearcoat, 0.0f, 1.0f));
-    main_mat.clearcoat_roughness_unorm = pack_unorm_16(CLAMP(m.clearcoat_roughness, 0.0f, 1.0f));
+    main_mat.specular_tint_unorm = pack_unorm_16(clamp(m.specular_tint, 0.0f, 1.0f));
+    main_mat.clearcoat_unorm = pack_unorm_16(clamp(m.clearcoat, 0.0f, 1.0f));
+    main_mat.clearcoat_roughness_unorm = pack_unorm_16(clamp(m.clearcoat_roughness, 0.0f, 1.0f));
 
     std::unique_lock<std::shared_timed_mutex> lock(mtx_);
 
@@ -581,6 +587,7 @@ Ray::LightHandle Ray::Cpu::Scene::AddLight(const directional_light_desc_t &_l) {
     l.type = LIGHT_TYPE_DIR;
     l.cast_shadow = _l.cast_shadow;
     l.visible = _l.visible;
+    l.blocking = false;
 
     memcpy(&l.col[0], &_l.color[0], 3 * sizeof(float));
     l.dir.dir[0] = -_l.direction[0];
@@ -611,6 +618,7 @@ Ray::LightHandle Ray::Cpu::Scene::AddLight(const sphere_light_desc_t &_l) {
     l.type = LIGHT_TYPE_SPHERE;
     l.cast_shadow = _l.cast_shadow;
     l.visible = _l.visible;
+    l.blocking = false;
 
     memcpy(&l.col[0], &_l.color[0], 3 * sizeof(float));
     memcpy(&l.sph.pos[0], &_l.position[0], 3 * sizeof(float));
@@ -635,6 +643,7 @@ Ray::LightHandle Ray::Cpu::Scene::AddLight(const spot_light_desc_t &_l) {
     l.type = LIGHT_TYPE_SPHERE;
     l.cast_shadow = _l.cast_shadow;
     l.visible = _l.visible;
+    l.blocking = false;
 
     memcpy(&l.col[0], &_l.color[0], 3 * sizeof(float));
     memcpy(&l.sph.pos[0], &_l.position[0], 3 * sizeof(float));
@@ -662,6 +671,7 @@ Ray::LightHandle Ray::Cpu::Scene::AddLight(const rect_light_desc_t &_l, const fl
     l.cast_shadow = _l.cast_shadow;
     l.visible = _l.visible;
     l.sky_portal = _l.sky_portal;
+    l.blocking = _l.sky_portal;
 
     memcpy(&l.col[0], &_l.color[0], 3 * sizeof(float));
 
@@ -697,6 +707,7 @@ Ray::LightHandle Ray::Cpu::Scene::AddLight(const disk_light_desc_t &_l, const fl
     l.cast_shadow = _l.cast_shadow;
     l.visible = _l.visible;
     l.sky_portal = _l.sky_portal;
+    l.blocking = _l.sky_portal;
 
     memcpy(&l.col[0], &_l.color[0], 3 * sizeof(float));
 
@@ -732,6 +743,7 @@ Ray::LightHandle Ray::Cpu::Scene::AddLight(const line_light_desc_t &_l, const fl
     l.cast_shadow = _l.cast_shadow;
     l.visible = _l.visible;
     l.sky_portal = _l.sky_portal;
+    l.blocking = false;
 
     memcpy(&l.col[0], &_l.color[0], 3 * sizeof(float));
 
@@ -822,6 +834,7 @@ Ray::MeshInstanceHandle Ray::Cpu::Scene::AddMeshInstance(const mesh_instance_des
                 new_light.type = LIGHT_TYPE_TRI;
                 new_light.visible = 0;
                 new_light.sky_portal = 0;
+                new_light.blocking = 0;
                 new_light.tri.tri_index = tri;
                 new_light.tri.xform_index = mi.tr_index;
                 new_light.col[0] = front_mat.base_color[0] * front_mat.strength;
@@ -891,6 +904,8 @@ void Ray::Cpu::Scene::Finalize() {
             li_indices_.push_back(env_map_light_._index);
         }
     }
+
+    RebuildLightTree_nolock();
 }
 
 void Ray::Cpu::Scene::RemoveNodes_nolock(uint32_t node_index, uint32_t node_count) {
@@ -1109,8 +1124,8 @@ void Ray::Cpu::Scene::PrepareEnvMapQTree_nolock() {
                         Ref::simd_fvec2 q;
                         DirToCanonical(value_ptr(dir), 0.0f, value_ptr(q));
 
-                        int qx = CLAMP(int(cur_res * q[0]), 0, cur_res - 1);
-                        int qy = CLAMP(int(cur_res * q[1]), 0, cur_res - 1);
+                        int qx = clamp(int(cur_res * q[0]), 0, cur_res - 1);
+                        int qy = clamp(int(cur_res * q[1]), 0, cur_res - 1);
 
                         int index = 0;
                         index |= (qx & 1) << 0;
@@ -1209,4 +1224,106 @@ void Ray::Cpu::Scene::PrepareEnvMapQTree_nolock() {
     log_->Info("Env map qtree res is %i", env_map_qtree_.res);
 }
 
-#undef CLAMP
+void Ray::Cpu::Scene::RebuildLightTree_nolock() {
+    aligned_vector<prim_t> primitives;
+    primitives.reserve(lights_.size());
+
+    for (const light_t &l : lights_) {
+        Ref::simd_fvec4 bbox_min = 0.0f, bbox_max = 0.0f;
+
+        switch (l.type) {
+        case LIGHT_TYPE_SPHERE: {
+            const auto pos = Ref::simd_fvec4{l.sph.pos[0], l.sph.pos[1], l.sph.pos[2], 0.0f};
+
+            bbox_min = pos - Ref::simd_fvec4{l.sph.radius, l.sph.radius, l.sph.radius, 0.0f};
+            bbox_max = pos + Ref::simd_fvec4{l.sph.radius, l.sph.radius, l.sph.radius, 0.0f};
+        } break;
+        case LIGHT_TYPE_SPOT:
+            break;
+        case LIGHT_TYPE_DIR: {
+            bbox_min = Ref::simd_fvec4{-MAX_DIST, -MAX_DIST, -MAX_DIST, 0.0f};
+            bbox_max = Ref::simd_fvec4{MAX_DIST, MAX_DIST, MAX_DIST, 0.0f};
+        } break;
+        case LIGHT_TYPE_LINE: {
+            const auto pos = Ref::simd_fvec4{l.line.pos[0], l.line.pos[1], l.line.pos[2], 0.0f};
+            auto light_u = Ref::simd_fvec4{l.line.u[0], l.line.u[1], l.line.u[2], 0.0f},
+                 light_dir = Ref::simd_fvec4{l.line.v[0], l.line.v[1], l.line.v[2], 0.0f};
+            Ref::simd_fvec4 light_v = Ray::Cpu::cross(light_u, light_dir);
+
+            light_u *= l.line.radius;
+            light_v *= l.line.radius;
+            light_dir *= 0.5f * l.line.height;
+
+            const Ref::simd_fvec4 p0 = pos + light_dir + light_u + light_v, p1 = pos + light_dir + light_u - light_v,
+                                  p2 = pos + light_dir - light_u + light_v, p3 = pos + light_dir - light_u - light_v,
+                                  p4 = pos - light_dir + light_u + light_v, p5 = pos - light_dir + light_u - light_v,
+                                  p6 = pos - light_dir - light_u + light_v, p7 = pos - light_dir - light_u - light_v;
+
+            bbox_min = min(min(min(p0, p1), min(p2, p3)), min(min(p4, p5), min(p6, p7)));
+            bbox_max = max(max(max(p0, p1), max(p2, p3)), max(max(p4, p5), max(p6, p7)));
+
+        } break;
+        case LIGHT_TYPE_RECT: {
+            const auto pos = Ref::simd_fvec4{l.rect.pos[0], l.rect.pos[1], l.rect.pos[2], 0.0f};
+            const auto u = 0.5f * Ref::simd_fvec4{l.rect.u[0], l.rect.u[1], l.rect.u[2], 0.0f};
+            const auto v = 0.5f * Ref::simd_fvec4{l.rect.v[0], l.rect.v[1], l.rect.v[2], 0.0f};
+
+            const Ref::simd_fvec4 p0 = pos + u + v, p1 = pos + u - v, p2 = pos - u + v, p3 = pos - u - v;
+            bbox_min = min(min(p0, p1), min(p2, p3));
+            bbox_max = max(max(p0, p1), max(p2, p3));
+        } break;
+        case LIGHT_TYPE_DISK: {
+            const auto pos = Ref::simd_fvec4{l.disk.pos[0], l.disk.pos[1], l.disk.pos[2], 0.0f};
+            const auto u = 0.5f * Ref::simd_fvec4{l.disk.u[0], l.disk.u[1], l.disk.u[2], 0.0f};
+            const auto v = 0.5f * Ref::simd_fvec4{l.disk.v[0], l.disk.v[1], l.disk.v[2], 0.0f};
+
+            const Ref::simd_fvec4 p0 = pos + u + v, p1 = pos + u - v, p2 = pos - u + v, p3 = pos - u - v;
+            bbox_min = min(min(p0, p1), min(p2, p3));
+            bbox_max = max(max(p0, p1), max(p2, p3));
+
+        } break;
+        case LIGHT_TYPE_TRI: {
+            // skip for now
+            continue;
+        } break;
+        case LIGHT_TYPE_ENV: {
+            bbox_min = Ref::simd_fvec4{-MAX_DIST, -MAX_DIST, -MAX_DIST, 0.0f};
+            bbox_max = Ref::simd_fvec4{MAX_DIST, MAX_DIST, MAX_DIST, 0.0f};
+        } break;
+        }
+
+        primitives.push_back({0, 0, 0, bbox_min, bbox_max});
+    }
+
+    light_nodes_.clear();
+    light_mnodes_.clear();
+
+    if (primitives.empty()) {
+        return;
+    }
+
+    std::vector<uint32_t> li_indices;
+    li_indices.reserve(primitives.size());
+
+    bvh_settings_t s;
+    s.oversplit_threshold = -1.0f;
+    s.allow_spatial_splits = false;
+    s.min_primitives_in_leaf = 1;
+    PreprocessPrims_SAH(primitives, nullptr, 0, s, light_nodes_, li_indices);
+
+    // Remove indices indirection
+    for (uint32_t i = 0; i < light_nodes_.size(); ++i) {
+        bvh_node_t &n = light_nodes_[i];
+        if ((n.prim_index & LEAF_NODE_BIT) != 0) {
+            const uint32_t li_index = li_indices[n.prim_index & PRIM_INDEX_BITS];
+            n.prim_index &= ~PRIM_INDEX_BITS;
+            n.prim_index |= li_index;
+        }
+    }
+
+    if (use_wide_bvh_) {
+        const uint32_t root_node = FlattenBVH_Recursive(light_nodes_.data(), 0, 0xffffffff, light_mnodes_);
+        assert(root_node == 0);
+        light_nodes_.clear();
+    }
+}

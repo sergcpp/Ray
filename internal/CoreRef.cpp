@@ -2007,8 +2007,9 @@ bool Ray::Ref::Traverse_BLAS_WithStack_ClosestHit(const float ro[3], const float
     while (stack_size) {
         const uint32_t cur = stack[--stack_size];
 
-        if (!bbox_test(ro, inv_d, inter.t, nodes[cur]))
+        if (!bbox_test(ro, inv_d, inter.t, nodes[cur])) {
             continue;
+        }
 
         if (!is_leaf_node(nodes[cur])) {
             stack[stack_size++] = far_child(rd, nodes[cur]);
@@ -3391,9 +3392,8 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
     }
 }
 
-void Ray::Ref::IntersectAreaLights(Span<const ray_data_t> rays, const light_t lights[],
-                                   Span<const uint32_t> visible_lights, const transform_t transforms[],
-                                   Span<hit_data_t> inout_inters) {
+void Ray::Ref::IntersectAreaLights(Span<const ray_data_t> rays, Span<const light_t> lights,
+                                   Span<const mbvh_node_t> nodes, Span<hit_data_t> inout_inters) {
     for (int i = 0; i < rays.size(); ++i) {
         const ray_data_t &ray = rays[i];
         hit_data_t &inout_inter = inout_inters[i];
@@ -3401,64 +3401,319 @@ void Ray::Ref::IntersectAreaLights(Span<const ray_data_t> rays, const light_t li
         const simd_fvec4 ro = make_fvec3(ray.o);
         const simd_fvec4 rd = make_fvec3(ray.d);
 
-        // TODO: BVH for light geometry
-        for (uint32_t li = 0; li < uint32_t(visible_lights.size()); ++li) {
-            const uint32_t light_index = visible_lights[li];
-            const light_t &l = lights[light_index];
-            if (l.sky_portal && inout_inter.mask != 0) {
-                // Portal lights affect only missed rays
+        float inv_d[3];
+        safe_invert(value_ptr(rd), inv_d);
+
+        ////
+
+        TraversalStack<MAX_STACK_SIZE> st;
+        st.push(0 /* root_index */, 0.0f);
+
+        while (!st.empty()) {
+            stack_entry_t cur = st.pop();
+
+            if (cur.dist > inout_inter.t) {
                 continue;
             }
-            const bool no_shadow = (l.cast_shadow == 0);
-            if (l.type == LIGHT_TYPE_SPHERE) {
-                const simd_fvec4 light_pos = make_fvec3(l.sph.pos);
-                const simd_fvec4 op = light_pos - ro;
-                const float b = dot(op, rd);
-                float det = b * b - dot(op, op) + l.sph.radius * l.sph.radius;
-                if (det >= 0.0f) {
-                    det = std::sqrt(det);
-                    const float t1 = b - det, t2 = b + det;
-                    if (t1 > HIT_EPS && (t1 < inout_inter.t || no_shadow)) {
-                        bool accept = true;
-                        if (l.sph.spot > 0.0f) {
-                            const float _dot = -dot(rd, simd_fvec4{l.sph.dir});
-                            if (_dot > 0.0f) {
-                                const float _angle = std::acos(clamp(_dot, 0.0f, 1.0f));
-                                accept &= (_angle <= l.sph.spot);
-                            } else {
-                                accept = false;
-                            }
+
+        TRAVERSE:
+            if (!is_leaf_node(nodes[cur.index])) {
+                alignas(16) float dist[8];
+                long mask = bbox_test_oct(value_ptr(ro), inv_d, inout_inter.t, nodes[cur.index], dist);
+                if (mask) {
+                    long i = GetFirstBit(mask);
+                    mask = ClearBit(mask, i);
+                    if (mask == 0) { // only one box was hit
+                        cur.index = nodes[cur.index].child[i];
+                        goto TRAVERSE;
+                    }
+
+                    const long i2 = GetFirstBit(mask);
+                    mask = ClearBit(mask, i2);
+                    if (mask == 0) { // two boxes were hit
+                        if (dist[i] < dist[i2]) {
+                            st.push(nodes[cur.index].child[i2], dist[i2]);
+                            cur.index = nodes[cur.index].child[i];
+                        } else {
+                            st.push(nodes[cur.index].child[i], dist[i]);
+                            cur.index = nodes[cur.index].child[i2];
                         }
-                        if (accept) {
+                        goto TRAVERSE;
+                    }
+
+                    st.push(nodes[cur.index].child[i], dist[i]);
+                    st.push(nodes[cur.index].child[i2], dist[i2]);
+
+                    i = GetFirstBit(mask);
+                    mask = ClearBit(mask, i);
+                    st.push(nodes[cur.index].child[i], dist[i]);
+                    if (mask == 0) { // three boxes were hit
+                        st.sort_top3();
+                        cur.index = st.pop_index();
+                        goto TRAVERSE;
+                    }
+
+                    i = GetFirstBit(mask);
+                    mask = ClearBit(mask, i);
+                    st.push(nodes[cur.index].child[i], dist[i]);
+                    if (mask == 0) { // four boxes were hit
+                        st.sort_top4();
+                        cur.index = st.pop_index();
+                        goto TRAVERSE;
+                    }
+
+                    uint32_t size_before = st.stack_size;
+
+                    // from five to eight boxes were hit
+                    do {
+                        i = GetFirstBit(mask);
+                        mask = ClearBit(mask, i);
+                        st.push(nodes[cur.index].child[i], dist[i]);
+                    } while (mask != 0);
+
+                    const int count = int(st.stack_size - size_before + 4);
+                    st.sort_topN(count);
+                    cur.index = st.pop_index();
+                    goto TRAVERSE;
+                }
+            } else {
+                const int light_index = int(nodes[cur.index].child[0] & PRIM_INDEX_BITS);
+                assert(nodes[cur.index].child[1] == 1);
+
+                ////
+
+                const light_t &l = lights[light_index];
+                if (!l.visible) {
+                    continue;
+                }
+                if (l.sky_portal && inout_inter.mask != 0) {
+                    // Portal lights affect only missed rays
+                    continue;
+                }
+
+                const bool no_shadow = (l.cast_shadow == 0);
+                if (l.type == LIGHT_TYPE_SPHERE) {
+                    const simd_fvec4 light_pos = make_fvec3(l.sph.pos);
+                    const simd_fvec4 op = light_pos - ro;
+                    const float b = dot(op, rd);
+                    float det = b * b - dot(op, op) + l.sph.radius * l.sph.radius;
+                    if (det >= 0.0f) {
+                        det = std::sqrt(det);
+                        const float t1 = b - det, t2 = b + det;
+                        if (t1 > HIT_EPS && (t1 < inout_inter.t || no_shadow)) {
+                            bool accept = true;
+                            if (l.sph.spot > 0.0f) {
+                                const float _dot = -dot(rd, simd_fvec4{l.sph.dir});
+                                if (_dot > 0.0f) {
+                                    const float _angle = std::acos(clamp(_dot, 0.0f, 1.0f));
+                                    accept &= (_angle <= l.sph.spot);
+                                } else {
+                                    accept = false;
+                                }
+                            }
+                            if (accept) {
+                                inout_inter.mask = -1;
+                                inout_inter.obj_index = -int(light_index) - 1;
+                                inout_inter.t = t1;
+                            }
+                        } else if (t2 > HIT_EPS && (t2 < inout_inter.t || no_shadow)) {
                             inout_inter.mask = -1;
                             inout_inter.obj_index = -int(light_index) - 1;
-                            inout_inter.t = t1;
+                            inout_inter.t = t2;
                         }
-                    } else if (t2 > HIT_EPS && (t2 < inout_inter.t || no_shadow)) {
+                    }
+                } else if (l.type == LIGHT_TYPE_DIR) {
+                    const simd_fvec4 light_dir = make_fvec3(l.dir.dir);
+                    const float cos_theta = dot(rd, light_dir);
+                    if ((inout_inter.mask == 0 || no_shadow) && cos_theta > std::cos(l.dir.angle)) {
                         inout_inter.mask = -1;
                         inout_inter.obj_index = -int(light_index) - 1;
-                        inout_inter.t = t2;
+                        inout_inter.t = 1.0f / cos_theta;
+                    }
+                } else if (l.type == LIGHT_TYPE_RECT) {
+                    const simd_fvec4 light_pos = make_fvec3(l.rect.pos);
+                    simd_fvec4 light_u = make_fvec3(l.rect.u), light_v = make_fvec3(l.rect.v);
+
+                    const simd_fvec4 light_forward = normalize(cross(light_u, light_v));
+
+                    const float plane_dist = dot(light_forward, light_pos);
+                    const float cos_theta = dot(rd, light_forward);
+                    const float t = (plane_dist - dot(light_forward, ro)) / std::min(cos_theta, -FLT_EPS);
+
+                    if (cos_theta < 0.0f && t > HIT_EPS && (t < inout_inter.t || no_shadow)) {
+                        light_u /= dot(light_u, light_u);
+                        light_v /= dot(light_v, light_v);
+
+                        const auto p = ro + rd * t;
+                        const simd_fvec4 vi = p - light_pos;
+                        const float a1 = dot(light_u, vi);
+                        if (a1 >= -0.5f && a1 <= 0.5f) {
+                            const float a2 = dot(light_v, vi);
+                            if (a2 >= -0.5f && a2 <= 0.5f) {
+                                inout_inter.mask = -1;
+                                inout_inter.obj_index = -int(light_index) - 1;
+                                inout_inter.t = t;
+                            }
+                        }
+                    }
+                } else if (l.type == LIGHT_TYPE_DISK) {
+                    const simd_fvec4 light_pos = make_fvec3(l.disk.pos);
+                    simd_fvec4 light_u = make_fvec3(l.disk.u), light_v = make_fvec3(l.disk.v);
+
+                    const simd_fvec4 light_forward = normalize(cross(light_u, light_v));
+
+                    const float plane_dist = dot(light_forward, light_pos);
+                    const float cos_theta = dot(rd, light_forward);
+                    const float t = safe_div_neg(plane_dist - dot(light_forward, ro), cos_theta);
+
+                    if (cos_theta < 0.0f && t > HIT_EPS && (t < inout_inter.t || no_shadow)) {
+                        light_u /= dot(light_u, light_u);
+                        light_v /= dot(light_v, light_v);
+
+                        const auto p = ro + rd * t;
+                        const simd_fvec4 vi = p - light_pos;
+                        const float a1 = dot(light_u, vi);
+                        const float a2 = dot(light_v, vi);
+
+                        if (std::sqrt(a1 * a1 + a2 * a2) <= 0.5f) {
+                            inout_inter.mask = -1;
+                            inout_inter.obj_index = -int(light_index) - 1;
+                            inout_inter.t = t;
+                        }
+                    }
+                } else if (l.type == LIGHT_TYPE_LINE) {
+                    const simd_fvec4 light_pos = make_fvec3(l.line.pos);
+                    const simd_fvec4 light_u = make_fvec3(l.line.u), light_dir = make_fvec3(l.line.v);
+                    const simd_fvec4 light_v = cross(light_u, light_dir);
+
+                    simd_fvec4 _ro = ro - light_pos;
+                    _ro = simd_fvec4{dot(_ro, light_dir), dot(_ro, light_u), dot(_ro, light_v), 0.0f};
+
+                    simd_fvec4 _rd = rd;
+                    _rd = simd_fvec4{dot(_rd, light_dir), dot(_rd, light_u), dot(_rd, light_v), 0.0f};
+
+                    const float A = _rd.get<2>() * _rd.get<2>() + _rd.get<1>() * _rd.get<1>();
+                    const float B = 2.0f * (_rd.get<2>() * _ro.get<2>() + _rd.get<1>() * _ro.get<1>());
+                    const float C = sqr(_ro.get<2>()) + sqr(_ro.get<1>()) - sqr(l.line.radius);
+
+                    float t0, t1;
+                    if (quadratic(A, B, C, t0, t1) && t0 > HIT_EPS && t1 > HIT_EPS) {
+                        const float t = std::min(t0, t1);
+                        const simd_fvec4 p = _ro + t * _rd;
+                        if (std::abs(p.get<0>()) < 0.5f * l.line.height && (t < inout_inter.t || no_shadow)) {
+                            inout_inter.mask = -1;
+                            inout_inter.obj_index = -int(light_index) - 1;
+                            inout_inter.t = t;
+                        }
                     }
                 }
-            } else if (l.type == LIGHT_TYPE_DIR) {
-                const simd_fvec4 light_dir = make_fvec3(l.dir.dir);
-                const float cos_theta = dot(rd, light_dir);
-                if ((inout_inter.mask == 0 || no_shadow) && cos_theta > std::cos(l.dir.angle)) {
-                    inout_inter.mask = -1;
-                    inout_inter.obj_index = -int(light_index) - 1;
-                    inout_inter.t = 1.0f / cos_theta;
+            }
+        }
+    }
+}
+
+float Ray::Ref::IntersectAreaLights(const shadow_ray_t &ray, Span<const light_t> lights,
+                                    Span<const mbvh_node_t> nodes) {
+    const float rdist = std::abs(ray.dist);
+
+    const simd_fvec4 ro = make_fvec3(ray.o);
+    const simd_fvec4 rd = make_fvec3(ray.d);
+
+    float inv_d[3];
+    safe_invert(value_ptr(rd), inv_d);
+
+    ////
+
+    TraversalStack<MAX_STACK_SIZE> st;
+    st.push(0 /* root_index */, 0.0f);
+
+    while (!st.empty()) {
+        stack_entry_t cur = st.pop();
+
+        if (cur.dist > rdist) {
+            continue;
+        }
+
+    TRAVERSE:
+        if (!is_leaf_node(nodes[cur.index])) {
+            alignas(16) float dist[8];
+            long mask = bbox_test_oct(value_ptr(ro), inv_d, rdist, nodes[cur.index], dist);
+            if (mask) {
+                long i = GetFirstBit(mask);
+                mask = ClearBit(mask, i);
+                if (mask == 0) { // only one box was hit
+                    cur.index = nodes[cur.index].child[i];
+                    goto TRAVERSE;
                 }
-            } else if (l.type == LIGHT_TYPE_RECT) {
+
+                const long i2 = GetFirstBit(mask);
+                mask = ClearBit(mask, i2);
+                if (mask == 0) { // two boxes were hit
+                    if (dist[i] < dist[i2]) {
+                        st.push(nodes[cur.index].child[i2], dist[i2]);
+                        cur.index = nodes[cur.index].child[i];
+                    } else {
+                        st.push(nodes[cur.index].child[i], dist[i]);
+                        cur.index = nodes[cur.index].child[i2];
+                    }
+                    goto TRAVERSE;
+                }
+
+                st.push(nodes[cur.index].child[i], dist[i]);
+                st.push(nodes[cur.index].child[i2], dist[i2]);
+
+                i = GetFirstBit(mask);
+                mask = ClearBit(mask, i);
+                st.push(nodes[cur.index].child[i], dist[i]);
+                if (mask == 0) { // three boxes were hit
+                    st.sort_top3();
+                    cur.index = st.pop_index();
+                    goto TRAVERSE;
+                }
+
+                i = GetFirstBit(mask);
+                mask = ClearBit(mask, i);
+                st.push(nodes[cur.index].child[i], dist[i]);
+                if (mask == 0) { // four boxes were hit
+                    st.sort_top4();
+                    cur.index = st.pop_index();
+                    goto TRAVERSE;
+                }
+
+                uint32_t size_before = st.stack_size;
+
+                // from five to eight boxes were hit
+                do {
+                    i = GetFirstBit(mask);
+                    mask = ClearBit(mask, i);
+                    st.push(nodes[cur.index].child[i], dist[i]);
+                } while (mask != 0);
+
+                const int count = int(st.stack_size - size_before + 4);
+                st.sort_topN(count);
+                cur.index = st.pop_index();
+                goto TRAVERSE;
+            }
+        } else {
+            const int light_index = int(nodes[cur.index].child[0] & PRIM_INDEX_BITS);
+            assert(nodes[cur.index].child[1] == 1);
+            const light_t &l = lights[light_index];
+            if (!l.blocking) {
+                continue;
+            }
+            if (l.sky_portal && ray.dist >= 0.0f) {
+                continue;
+            }
+            if (l.type == LIGHT_TYPE_RECT) {
                 const simd_fvec4 light_pos = make_fvec3(l.rect.pos);
                 simd_fvec4 light_u = make_fvec3(l.rect.u), light_v = make_fvec3(l.rect.v);
-
                 const simd_fvec4 light_forward = normalize(cross(light_u, light_v));
 
                 const float plane_dist = dot(light_forward, light_pos);
                 const float cos_theta = dot(rd, light_forward);
                 const float t = (plane_dist - dot(light_forward, ro)) / std::min(cos_theta, -FLT_EPS);
 
-                if (cos_theta < 0.0f && t > HIT_EPS && (t < inout_inter.t || no_shadow)) {
+                if (cos_theta < 0.0f && t > HIT_EPS && t < rdist) {
                     light_u /= dot(light_u, light_u);
                     light_v /= dot(light_v, light_v);
 
@@ -3468,9 +3723,7 @@ void Ray::Ref::IntersectAreaLights(Span<const ray_data_t> rays, const light_t li
                     if (a1 >= -0.5f && a1 <= 0.5f) {
                         const float a2 = dot(light_v, vi);
                         if (a2 >= -0.5f && a2 <= 0.5f) {
-                            inout_inter.mask = -1;
-                            inout_inter.obj_index = -int(light_index) - 1;
-                            inout_inter.t = t;
+                            return 0.0f;
                         }
                     }
                 }
@@ -3484,7 +3737,7 @@ void Ray::Ref::IntersectAreaLights(Span<const ray_data_t> rays, const light_t li
                 const float cos_theta = dot(rd, light_forward);
                 const float t = safe_div_neg(plane_dist - dot(light_forward, ro), cos_theta);
 
-                if (cos_theta < 0.0f && t > HIT_EPS && (t < inout_inter.t || no_shadow)) {
+                if (cos_theta < 0.0f && t > HIT_EPS && t < rdist) {
                     light_u /= dot(light_u, light_u);
                     light_v /= dot(light_v, light_v);
 
@@ -3494,104 +3747,12 @@ void Ray::Ref::IntersectAreaLights(Span<const ray_data_t> rays, const light_t li
                     const float a2 = dot(light_v, vi);
 
                     if (std::sqrt(a1 * a1 + a2 * a2) <= 0.5f) {
-                        inout_inter.mask = -1;
-                        inout_inter.obj_index = -int(light_index) - 1;
-                        inout_inter.t = t;
-                    }
-                }
-            } else if (l.type == LIGHT_TYPE_LINE) {
-                const simd_fvec4 light_pos = make_fvec3(l.line.pos);
-                const simd_fvec4 light_u = make_fvec3(l.line.u), light_dir = make_fvec3(l.line.v);
-                const simd_fvec4 light_v = cross(light_u, light_dir);
-
-                simd_fvec4 _ro = ro - light_pos;
-                _ro = simd_fvec4{dot(_ro, light_dir), dot(_ro, light_u), dot(_ro, light_v), 0.0f};
-
-                simd_fvec4 _rd = rd;
-                _rd = simd_fvec4{dot(_rd, light_dir), dot(_rd, light_u), dot(_rd, light_v), 0.0f};
-
-                const float A = _rd.get<2>() * _rd.get<2>() + _rd.get<1>() * _rd.get<1>();
-                const float B = 2.0f * (_rd.get<2>() * _ro.get<2>() + _rd.get<1>() * _ro.get<1>());
-                const float C = sqr(_ro.get<2>()) + sqr(_ro.get<1>()) - sqr(l.line.radius);
-
-                float t0, t1;
-                if (quadratic(A, B, C, t0, t1) && t0 > HIT_EPS && t1 > HIT_EPS) {
-                    const float t = std::min(t0, t1);
-                    const simd_fvec4 p = _ro + t * _rd;
-                    if (std::abs(p.get<0>()) < 0.5f * l.line.height && (t < inout_inter.t || no_shadow)) {
-                        inout_inter.mask = -1;
-                        inout_inter.obj_index = -int(light_index) - 1;
-                        inout_inter.t = t;
-                    }
-                }
-            }
-        }
-    }
-}
-
-float Ray::Ref::IntersectAreaLights(const shadow_ray_t &ray, const light_t lights[],
-                                    Span<const uint32_t> blocker_lights, const transform_t transforms[]) {
-    const simd_fvec4 ro = make_fvec3(ray.o);
-    const simd_fvec4 rd = make_fvec3(ray.d);
-
-    const float rdist = std::abs(ray.dist);
-
-    // TODO: BVH for light geometry
-    for (uint32_t li = 0; li < uint32_t(blocker_lights.size()); ++li) {
-        const uint32_t light_index = blocker_lights[li];
-        const light_t &l = lights[light_index];
-        if (l.sky_portal && ray.dist >= 0.0f) {
-            continue;
-        }
-        if (l.type == LIGHT_TYPE_RECT) {
-            const simd_fvec4 light_pos = make_fvec3(l.rect.pos);
-            simd_fvec4 light_u = make_fvec3(l.rect.u), light_v = make_fvec3(l.rect.v);
-            const simd_fvec4 light_forward = normalize(cross(light_u, light_v));
-
-            const float plane_dist = dot(light_forward, light_pos);
-            const float cos_theta = dot(rd, light_forward);
-            const float t = (plane_dist - dot(light_forward, ro)) / std::min(cos_theta, -FLT_EPS);
-
-            if (cos_theta < 0.0f && t > HIT_EPS && t < rdist) {
-                light_u /= dot(light_u, light_u);
-                light_v /= dot(light_v, light_v);
-
-                const auto p = ro + rd * t;
-                const simd_fvec4 vi = p - light_pos;
-                const float a1 = dot(light_u, vi);
-                if (a1 >= -0.5f && a1 <= 0.5f) {
-                    const float a2 = dot(light_v, vi);
-                    if (a2 >= -0.5f && a2 <= 0.5f) {
                         return 0.0f;
                     }
                 }
             }
-        } else if (l.type == LIGHT_TYPE_DISK) {
-            const simd_fvec4 light_pos = make_fvec3(l.disk.pos);
-            simd_fvec4 light_u = make_fvec3(l.disk.u), light_v = make_fvec3(l.disk.v);
-
-            const simd_fvec4 light_forward = normalize(cross(light_u, light_v));
-
-            const float plane_dist = dot(light_forward, light_pos);
-            const float cos_theta = dot(rd, light_forward);
-            const float t = safe_div_neg(plane_dist - dot(light_forward, ro), cos_theta);
-
-            if (cos_theta < 0.0f && t > HIT_EPS && t < rdist) {
-                light_u /= dot(light_u, light_u);
-                light_v /= dot(light_v, light_v);
-
-                const auto p = ro + rd * t;
-                const simd_fvec4 vi = p - light_pos;
-                const float a1 = dot(light_u, vi);
-                const float a2 = dot(light_v, vi);
-
-                if (std::sqrt(a1 * a1 + a2 * a2) <= 0.5f) {
-                    return 0.0f;
-                }
-            }
         }
     }
-
     return 1.0f;
 }
 
@@ -3599,8 +3760,8 @@ void Ray::Ref::TraceRays(Span<ray_data_t> rays, int min_transp_depth, int max_tr
                          uint32_t node_index, bool trace_lights, const Cpu::TexStorageBase *const textures[],
                          const float random_seq[], Span<hit_data_t> out_inter) {
     IntersectScene(rays, min_transp_depth, max_transp_depth, random_seq, sc, node_index, textures, out_inter);
-    if (trace_lights) {
-        IntersectAreaLights(rays, sc.lights, sc.visible_lights, sc.transforms, out_inter);
+    if (trace_lights && !sc.visible_lights.empty()) {
+        IntersectAreaLights(rays, sc.lights, sc.light_mnodes, out_inter);
     }
 }
 
@@ -3621,7 +3782,9 @@ void Ray::Ref::TraceShadowRays(Span<const shadow_ray_t> rays, int max_transp_dep
         const int y = sh_r.xy & 0x0000ffff;
 
         simd_fvec4 rc = IntersectScene(sh_r, max_transp_depth, sc, node_index, random_seq, textures);
-        rc *= IntersectAreaLights(sh_r, sc.lights, sc.blocker_lights, sc.transforms);
+        if (!sc.blocker_lights.empty()) {
+            rc *= IntersectAreaLights(sh_r, sc.lights, sc.light_mnodes);
+        }
 
         auto old_val = simd_fvec4{out_color[y * img_w + x].v, simd_mem_aligned};
         old_val += min(rc, clamp_val);
@@ -3667,7 +3830,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_EnvColor(const ray_data_t &ray, const en
 
 Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_LightColor(const ray_data_t &ray, const hit_data_t &inter,
                                                    const environment_t &env, const Cpu::TexStorageRGBA &tex_storage,
-                                                   const light_t *lights, const simd_fvec2 &rand) {
+                                                   Span<const light_t> lights, const simd_fvec2 &rand) {
     const simd_fvec4 I = make_fvec3(ray.d);
     const simd_fvec4 P = make_fvec3(ray.o) + inter.t * I;
 

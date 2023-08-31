@@ -53,12 +53,6 @@ class SIMDPolicy {
         Ref::IntersectScene(rays, min_transp_depth, max_transp_depth, random_seq, sc, root_index, textures, out_inter);
     }
 
-    static force_inline void IntersectAreaLights(Span<const ray_data_t> rays, const light_t lights[],
-                                                 Span<const uint32_t> visible_lights, const transform_t transforms[],
-                                                 Span<hit_data_t> inout_inters) {
-        Ref::IntersectAreaLights(rays, lights, visible_lights, transforms, inout_inters);
-    }
-
     static force_inline void TraceRays(Span<ray_data_t> rays, int min_transp_depth, int max_transp_depth,
                                        const scene_data_t &sc, uint32_t node_index, bool trace_lights,
                                        const Cpu::TexStorageBase *const textures[], const float random_seq[],
@@ -341,10 +335,12 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase *scene, RegionC
                                   s->mtris_.data(),
                                   s->tri_materials_.empty() ? nullptr : &s->tri_materials_[0],
                                   s->materials_.empty() ? nullptr : &s->materials_[0],
-                                  s->lights_.empty() ? nullptr : &s->lights_[0],
+                                  {s->lights_.data(), s->lights_.capacity()},
                                   {s->li_indices_},
                                   {s->visible_lights_},
-                                  {s->blocker_lights_}};
+                                  {s->blocker_lights_},
+                                  {s->light_nodes_},
+                                  {s->light_mnodes_}};
 
     const uint32_t macro_tree_root = s->macro_nodes_root_;
 

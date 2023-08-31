@@ -661,6 +661,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
                                   int(s->visible_lights_.size()),
                                   s->blocker_lights_.buf(),
                                   int(s->blocker_lights_.size()),
+                                  s->light_nodes_.buf(),
                                   s->rt_tlas_,
                                   s->env_map_qtree_.tex,
                                   int(s->env_map_qtree_.mips.size())};
@@ -2247,7 +2248,7 @@ void Ray::Vk::Renderer::kernel_IntersectSceneShadow(CommandBuffer cmd_buf, const
         {eBindTarget::SBufRO, IntersectSceneShadow::SH_RAYS_BUF_SLOT, sh_rays},
         {eBindTarget::SBufRO, IntersectSceneShadow::COUNTERS_BUF_SLOT, counters},
         {eBindTarget::SBufRO, IntersectSceneShadow::LIGHTS_BUF_SLOT, sc_data.lights},
-        {eBindTarget::SBufRO, IntersectSceneShadow::BLOCKER_LIGHTS_BUF_SLOT, sc_data.blocker_lights},
+        {eBindTarget::SBufRO, IntersectSceneShadow::LIGHT_NODES_BUF_SLOT, sc_data.light_nodes},
         {eBindTarget::SBufRO, IntersectSceneShadow::RANDOM_SEQ_BUF_SLOT, random_seq},
         {eBindTarget::Image, IntersectSceneShadow::INOUT_IMG_SLOT, out_img}};
 
@@ -2270,7 +2271,7 @@ void Ray::Vk::Renderer::kernel_IntersectSceneShadow(CommandBuffer cmd_buf, const
     IntersectSceneShadow::Params uniform_params = {};
     uniform_params.node_index = node_index;
     uniform_params.max_transp_depth = settings.max_transp_depth;
-    uniform_params.blocker_lights_count = sc_data.blocker_lights_count;
+    uniform_params.lights_node_index = 0; // tree root
     uniform_params.clamp_val = (clamp_val != 0.0f) ? clamp_val : std::numeric_limits<float>::max();
     uniform_params.hi = hi;
 

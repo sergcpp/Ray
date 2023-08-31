@@ -206,7 +206,8 @@ struct light_t {
     uint32_t cast_shadow : 1;
     uint32_t visible : 1;
     uint32_t sky_portal : 1;
-    uint32_t _unused : 24;
+    uint32_t blocking : 1;
+    uint32_t _unused : 23;
     float col[3];
     union {
         struct {
@@ -503,10 +504,12 @@ struct scene_data_t {
     const mtri_accel_t *mtris;
     const tri_mat_data_t *tri_materials;
     const material_t *materials;
-    const light_t *lights;
+    Span<const light_t> lights;
     Span<const uint32_t> li_indices;
     Span<const uint32_t> visible_lights;
     Span<const uint32_t> blocker_lights;
+    Span<const bvh_node_t> light_nodes;
+    Span<const mbvh_node_t> light_mnodes;
 };
 
 } // namespace Ray

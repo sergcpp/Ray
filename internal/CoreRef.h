@@ -271,10 +271,9 @@ void SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const simd_fvec
                        const float sample_off[2], light_sample_t &ls);
 
 // Account for visible lights contribution
-void IntersectAreaLights(Span<const ray_data_t> rays, const light_t lights[], Span<const uint32_t> visible_lights,
-                         const transform_t transforms[], Span<hit_data_t> inout_inters);
-float IntersectAreaLights(const shadow_ray_t &ray, const light_t lights[], Span<const uint32_t> blocker_lights,
-                          const transform_t transforms[]);
+void IntersectAreaLights(Span<const ray_data_t> rays, Span<const light_t> lights, Span<const mbvh_node_t> nodes,
+                         Span<hit_data_t> inout_inters);
+float IntersectAreaLights(const shadow_ray_t &ray, Span<const light_t> lights, Span<const mbvh_node_t> nodes);
 
 void TraceRays(Span<ray_data_t> rays, int min_transp_depth, int max_transp_depth, const scene_data_t &sc,
                uint32_t node_index, bool trace_lights, const Cpu::TexStorageBase *const textures[],
@@ -288,7 +287,8 @@ simd_fvec4 Evaluate_EnvColor(const ray_data_t &ray, const environment_t &env, co
                              const simd_fvec2 &rand);
 // Get light color at intersection point
 simd_fvec4 Evaluate_LightColor(const ray_data_t &ray, const hit_data_t &inter, const environment_t &env,
-                               const Cpu::TexStorageRGBA &tex_storage, const light_t *lights, const simd_fvec2 &rand);
+                               const Cpu::TexStorageRGBA &tex_storage, Span<const light_t> lights,
+                               const simd_fvec2 &rand);
 
 // Evaluate individual nodes
 simd_fvec4 Evaluate_DiffuseNode(const light_sample_t &ls, const ray_data_t &ray, const surface_t &surf,

@@ -8,7 +8,7 @@ INTERFACE_START(IntersectSceneShadow)
 struct Params {
     UINT_TYPE node_index;
     int max_transp_depth;
-    int blocker_lights_count;
+    UINT_TYPE lights_node_index;
     float clamp_val;
     int hi;
 };
@@ -30,7 +30,7 @@ const int VTX_INDICES_BUF_SLOT = 11;
 const int SH_RAYS_BUF_SLOT = 12;
 const int COUNTERS_BUF_SLOT = 13;
 const int LIGHTS_BUF_SLOT = 14;
-const int BLOCKER_LIGHTS_BUF_SLOT = 15;
+const int LIGHT_NODES_BUF_SLOT = 15;
 const int RANDOM_SEQ_BUF_SLOT = 16;
 const int TLAS_SLOT = 17;
 

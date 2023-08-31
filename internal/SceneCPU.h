@@ -81,6 +81,9 @@ class Scene : public SceneCommon {
     std::vector<uint32_t> visible_lights_; // compacted list of all visible lights
     std::vector<uint32_t> blocker_lights_; // compacted list of all light blocker lights
 
+    std::vector<bvh_node_t> light_nodes_;
+    aligned_vector<mbvh_node_t> light_mnodes_;
+
     environment_t env_;
     LightHandle env_map_light_ = InvalidLightHandle;
     TextureHandle physical_sky_texture_ = InvalidTextureHandle;
@@ -96,6 +99,7 @@ class Scene : public SceneCommon {
     void RemoveLight_nolock(LightHandle l);
     void RemoveNodes_nolock(uint32_t node_index, uint32_t node_count);
     void RebuildTLAS_nolock();
+    void RebuildLightTree_nolock();
 
     void PrepareSkyEnvMap_nolock();
     void PrepareEnvMapQTree_nolock();

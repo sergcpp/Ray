@@ -1,10 +1,18 @@
 #pragma once
 
+#include <cassert>
 #include <cstddef>
 #include <cstdint>
 
 #include <type_traits>
 #include <vector>
+
+#ifdef __GNUC__
+#define force_inline __attribute__((always_inline)) inline
+#endif
+#ifdef _MSC_VER
+#define force_inline __forceinline
+#endif
 
 namespace Ray {
 template <typename T> class Span {
@@ -17,6 +25,7 @@ template <typename T> class Span {
     Span(T *p_data, const size_t size) : p_data_(p_data), size_(size) {}
 #if INTPTR_MAX == INT64_MAX
     Span(T *p_data, const int size) : p_data_(p_data), size_(size) {}
+    Span(T *p_data, const uint32_t size) : p_data_(p_data), size_(size) {}
 #endif
     Span(T *p_begin, T *p_end) : p_data_(p_begin), size_(p_end - p_begin) {}
     template <typename Alloc>
@@ -31,19 +40,27 @@ template <typename T> class Span {
     Span(const Span &rhs) = default;
     Span &operator=(const Span &rhs) = default;
 
-    T *data() const { return p_data_; }
-    ptrdiff_t size() const { return size_; }
-    bool empty() const { return size_ == 0; }
+    force_inline T *data() const { return p_data_; }
+    force_inline ptrdiff_t size() const { return size_; }
+    force_inline bool empty() const { return size_ == 0; }
 
-    T &operator[](const ptrdiff_t i) const { return p_data_[i]; }
-    T &operator()(const ptrdiff_t i) const { return p_data_[i]; }
+    force_inline T &operator[](const ptrdiff_t i) const {
+        assert(i >= 0 && i < size_);
+        return p_data_[i];
+    }
+    force_inline T &operator()(const ptrdiff_t i) const {
+        assert(i >= 0 && i < size_);
+        return p_data_[i];
+    }
 
     using iterator = T *;
     using const_iterator = const T *;
 
-    iterator begin() const { return p_data_; }
-    iterator end() const { return p_data_ + size_; }
-    const_iterator cbegin() const { return p_data_; }
-    const_iterator cend() const { return p_data_ + size_; }
+    force_inline iterator begin() const { return p_data_; }
+    force_inline iterator end() const { return p_data_ + size_; }
+    force_inline const_iterator cbegin() const { return p_data_; }
+    force_inline const_iterator cend() const { return p_data_ + size_; }
 };
 } // namespace Ray
+
+#undef force_inline

@@ -16,6 +16,12 @@ template <class T> force_inline T clamp(const T &val, const T &min_val, const T 
     return std::min(std::max(val, min_val), max_val);
 }
 
+inline Ref::simd_fvec4 cross(const Ref::simd_fvec4 &v1, const Ref::simd_fvec4 &v2) {
+    return Ref::simd_fvec4{v1.get<1>() * v2.get<2>() - v1.get<2>() * v2.get<1>(),
+                           v1.get<2>() * v2.get<0>() - v1.get<0>() * v2.get<2>(),
+                           v1.get<0>() * v2.get<1>() - v1.get<1>() * v2.get<0>(), 0.0f};
+}
+
 inline Ref::simd_fvec4 rgb_to_rgbe(const Ref::simd_fvec4 &rgb) {
     float max_component = std::max(std::max(rgb.get<0>(), rgb.get<1>()), rgb.get<2>());
     if (max_component < 1e-32) {
@@ -72,6 +78,8 @@ class Scene : public SceneCommon {
     Vector<uint32_t> visible_lights_;
     Vector<uint32_t> blocker_lights_;
 
+    Vector<bvh_node_t> light_nodes_;
+
     environment_t env_;
     LightHandle env_map_light_ = InvalidLightHandle;
     TextureHandle physical_sky_texture_ = InvalidTextureHandle;
@@ -100,7 +108,7 @@ class Scene : public SceneCommon {
     void RemoveLight_nolock(LightHandle i);
     void RemoveNodes_nolock(uint32_t node_index, uint32_t node_count);
     void RebuildTLAS_nolock();
-    // void RebuildLightBVH();
+    void RebuildLightTree_nolock();
 
     void PrepareSkyEnvMap_nolock();
     void PrepareEnvMapQTree_nolock();
@@ -198,7 +206,7 @@ inline Ray::NS::Scene::Scene(Context *ctx, const bool use_hwrt, const bool use_b
           {ctx, "Atlas BC4", eTexFormat::BC4, eTexFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE},
           {ctx, "Atlas BC5", eTexFormat::BC5, eTexFilter::Nearest, TEXTURE_ATLAS_SIZE, TEXTURE_ATLAS_SIZE}},
       lights_(ctx, "Lights"), li_indices_(ctx, "LI Indices"), visible_lights_(ctx, "Visible Lights"),
-      blocker_lights_(ctx, "Blocker Lights") {
+      blocker_lights_(ctx, "Blocker Lights"), light_nodes_(ctx, "Light Nodes") {
     SceneBase::log_ = ctx->log();
     SetEnvironment({});
 }
@@ -1105,6 +1113,7 @@ inline Ray::LightHandle Ray::NS::Scene::AddLight(const directional_light_desc_t 
     l.type = LIGHT_TYPE_DIR;
     l.cast_shadow = _l.cast_shadow;
     l.visible = _l.visible;
+    l.blocking = false;
 
     memcpy(&l.col[0], &_l.color[0], 3 * sizeof(float));
     l.dir.dir[0] = -_l.direction[0];
@@ -1135,6 +1144,7 @@ inline Ray::LightHandle Ray::NS::Scene::AddLight(const sphere_light_desc_t &_l) 
     l.type = LIGHT_TYPE_SPHERE;
     l.cast_shadow = _l.cast_shadow;
     l.visible = _l.visible;
+    l.blocking = false;
 
     memcpy(&l.col[0], &_l.color[0], 3 * sizeof(float));
     memcpy(&l.sph.pos[0], &_l.position[0], 3 * sizeof(float));
@@ -1159,6 +1169,7 @@ inline Ray::LightHandle Ray::NS::Scene::AddLight(const spot_light_desc_t &_l) {
     l.type = LIGHT_TYPE_SPHERE;
     l.cast_shadow = _l.cast_shadow;
     l.visible = _l.visible;
+    l.blocking = false;
 
     memcpy(&l.col[0], &_l.color[0], 3 * sizeof(float));
     memcpy(&l.sph.pos[0], &_l.position[0], 3 * sizeof(float));
@@ -1186,6 +1197,7 @@ inline Ray::LightHandle Ray::NS::Scene::AddLight(const rect_light_desc_t &_l, co
     l.cast_shadow = _l.cast_shadow;
     l.visible = _l.visible;
     l.sky_portal = _l.sky_portal;
+    l.blocking = _l.sky_portal;
 
     memcpy(&l.col[0], &_l.color[0], 3 * sizeof(float));
 
@@ -1221,6 +1233,7 @@ inline Ray::LightHandle Ray::NS::Scene::AddLight(const disk_light_desc_t &_l, co
     l.cast_shadow = _l.cast_shadow;
     l.visible = _l.visible;
     l.sky_portal = _l.sky_portal;
+    l.blocking = _l.sky_portal;
 
     memcpy(&l.col[0], &_l.color[0], 3 * sizeof(float));
 
@@ -1256,6 +1269,7 @@ inline Ray::LightHandle Ray::NS::Scene::AddLight(const line_light_desc_t &_l, co
     l.cast_shadow = _l.cast_shadow;
     l.visible = _l.visible;
     l.sky_portal = _l.sky_portal;
+    l.blocking = false;
 
     memcpy(&l.col[0], &_l.color[0], 3 * sizeof(float));
 
@@ -1346,6 +1360,7 @@ inline Ray::MeshInstanceHandle Ray::NS::Scene::AddMeshInstance(const mesh_instan
                 new_light.cast_shadow = 1;
                 new_light.visible = 0;
                 new_light.sky_portal = 0;
+                new_light.blocking = 0;
                 new_light.tri.tri_index = tri;
                 new_light.tri.xform_index = mi.tr_index;
                 new_light.col[0] = front_mat.base_color[0] * front_mat.strength;
@@ -1437,6 +1452,7 @@ inline void Ray::NS::Scene::Finalize() {
     GenerateTextureMips_nolock();
     PrepareBindlessTextures_nolock();
     RebuildHWAccStructures_nolock();
+    RebuildLightTree_nolock();
 }
 
 inline void Ray::NS::Scene::RemoveNodes_nolock(uint32_t node_index, uint32_t node_count) {
@@ -1826,4 +1842,106 @@ inline void Ray::NS::Scene::PrepareEnvMapQTree_nolock() {
     temp_stage_buf.FreeImmediate();
 
     log_->Info("Env map qtree res is %i", env_map_qtree_.res);
+}
+
+inline void Ray::NS::Scene::RebuildLightTree_nolock() {
+    aligned_vector<prim_t> primitives;
+    primitives.reserve(lights_.size());
+
+    for (auto it = lights_.cbegin(); it != lights_.cend(); ++it) {
+        const light_t &l = *it;
+        Ref::simd_fvec4 bbox_min = 0.0f, bbox_max = 0.0f;
+
+        switch (l.type) {
+        case LIGHT_TYPE_SPHERE: {
+            const auto pos = Ref::simd_fvec4{l.sph.pos[0], l.sph.pos[1], l.sph.pos[2], 0.0f};
+
+            bbox_min = pos - Ref::simd_fvec4{l.sph.radius, l.sph.radius, l.sph.radius, 0.0f};
+            bbox_max = pos + Ref::simd_fvec4{l.sph.radius, l.sph.radius, l.sph.radius, 0.0f};
+        } break;
+        case LIGHT_TYPE_SPOT:
+            break;
+        case LIGHT_TYPE_DIR: {
+            bbox_min = Ref::simd_fvec4{-MAX_DIST, -MAX_DIST, -MAX_DIST, 0.0f};
+            bbox_max = Ref::simd_fvec4{MAX_DIST, MAX_DIST, MAX_DIST, 0.0f};
+        } break;
+        case LIGHT_TYPE_LINE: {
+            const auto pos = Ref::simd_fvec4{l.line.pos[0], l.line.pos[1], l.line.pos[2], 0.0f};
+            auto light_u = Ref::simd_fvec4{l.line.u[0], l.line.u[1], l.line.u[2], 0.0f},
+                 light_dir = Ref::simd_fvec4{l.line.v[0], l.line.v[1], l.line.v[2], 0.0f};
+            Ref::simd_fvec4 light_v = NS::cross(light_u, light_dir);
+
+            light_u *= l.line.radius;
+            light_v *= l.line.radius;
+            light_dir *= 0.5f * l.line.height;
+
+            const Ref::simd_fvec4 p0 = pos + light_dir + light_u + light_v, p1 = pos + light_dir + light_u - light_v,
+                                  p2 = pos + light_dir - light_u + light_v, p3 = pos + light_dir - light_u - light_v,
+                                  p4 = pos - light_dir + light_u + light_v, p5 = pos - light_dir + light_u - light_v,
+                                  p6 = pos - light_dir - light_u + light_v, p7 = pos - light_dir - light_u - light_v;
+
+            bbox_min = min(min(min(p0, p1), min(p2, p3)), min(min(p4, p5), min(p6, p7)));
+            bbox_max = max(max(max(p0, p1), max(p2, p3)), max(max(p4, p5), max(p6, p7)));
+
+        } break;
+        case LIGHT_TYPE_RECT: {
+            const auto pos = Ref::simd_fvec4{l.rect.pos[0], l.rect.pos[1], l.rect.pos[2], 0.0f};
+            const auto u = 0.5f * Ref::simd_fvec4{l.rect.u[0], l.rect.u[1], l.rect.u[2], 0.0f};
+            const auto v = 0.5f * Ref::simd_fvec4{l.rect.v[0], l.rect.v[1], l.rect.v[2], 0.0f};
+
+            const Ref::simd_fvec4 p0 = pos + u + v, p1 = pos + u - v, p2 = pos - u + v, p3 = pos - u - v;
+            bbox_min = min(min(p0, p1), min(p2, p3));
+            bbox_max = max(max(p0, p1), max(p2, p3));
+        } break;
+        case LIGHT_TYPE_DISK: {
+            const auto pos = Ref::simd_fvec4{l.disk.pos[0], l.disk.pos[1], l.disk.pos[2], 0.0f};
+            const auto u = 0.5f * Ref::simd_fvec4{l.disk.u[0], l.disk.u[1], l.disk.u[2], 0.0f};
+            const auto v = 0.5f * Ref::simd_fvec4{l.disk.v[0], l.disk.v[1], l.disk.v[2], 0.0f};
+
+            const Ref::simd_fvec4 p0 = pos + u + v, p1 = pos + u - v, p2 = pos - u + v, p3 = pos - u - v;
+            bbox_min = min(min(p0, p1), min(p2, p3));
+            bbox_max = max(max(p0, p1), max(p2, p3));
+
+        } break;
+        case LIGHT_TYPE_TRI: {
+            // skip for now
+            continue;
+        } break;
+        case LIGHT_TYPE_ENV: {
+            bbox_min = Ref::simd_fvec4{-MAX_DIST, -MAX_DIST, -MAX_DIST, 0.0f};
+            bbox_max = Ref::simd_fvec4{MAX_DIST, MAX_DIST, MAX_DIST, 0.0f};
+        } break;
+        }
+
+        primitives.push_back({0, 0, 0, bbox_min, bbox_max});
+    }
+
+    light_nodes_.Clear();
+
+    if (primitives.empty()) {
+        return;
+    }
+
+    std::vector<bvh_node_t> temp_nodes;
+
+    std::vector<uint32_t> li_indices;
+    li_indices.reserve(primitives.size());
+
+    bvh_settings_t s;
+    s.oversplit_threshold = -1.0f;
+    s.allow_spatial_splits = false;
+    s.min_primitives_in_leaf = 1;
+    PreprocessPrims_SAH(primitives, nullptr, 0, s, temp_nodes, li_indices);
+
+    // Remove indices indirection
+    for (uint32_t i = 0; i < temp_nodes.size(); ++i) {
+        bvh_node_t &n = temp_nodes[i];
+        if ((n.prim_index & LEAF_NODE_BIT) != 0) {
+            const uint32_t li_index = li_indices[n.prim_index & PRIM_INDEX_BITS];
+            n.prim_index &= ~PRIM_INDEX_BITS;
+            n.prim_index |= li_index;
+        }
+    }
+
+    light_nodes_.Append(temp_nodes.data(), temp_nodes.size());
 }

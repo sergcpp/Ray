@@ -82,12 +82,6 @@ layout(std430, binding = OUT_HITS_BUF_SLOT) writeonly buffer Hits {
 #define FETCH_TRI(j) g_tris[j]
 #include "traverse_bvh.glsl"
 
-#define near_child(rd, n)   \
-    (rd)[floatBitsToUint(n.bbox_max.w) >> 30] < 0 ? (floatBitsToUint(n.bbox_max.w) & RIGHT_CHILD_BITS) : floatBitsToUint(n.bbox_min.w)
-
-#define far_child(rd, n)    \
-    (rd)[floatBitsToUint(n.bbox_max.w) >> 30] < 0 ? floatBitsToUint(n.bbox_min.w) : (floatBitsToUint(n.bbox_max.w) & RIGHT_CHILD_BITS)
-
 shared uint g_stack[LOCAL_GROUP_SIZE_X * LOCAL_GROUP_SIZE_Y][MAX_STACK_SIZE];
 
 void Traverse_BLAS_WithStack(vec3 ro, vec3 rd, vec3 inv_d, int obj_index, uint node_index,
@@ -110,8 +104,8 @@ void Traverse_BLAS_WithStack(vec3 ro, vec3 rd, vec3 inv_d, int obj_index, uint n
             g_stack[gl_LocalInvocationIndex][stack_size++] = far_child(rd, n);
             g_stack[gl_LocalInvocationIndex][stack_size++] = near_child(rd, n);
         } else {
-            int tri_start = int(floatBitsToUint(n.bbox_min.w) & PRIM_INDEX_BITS);
-            int tri_end = tri_start + floatBitsToInt(n.bbox_max.w);
+            const int tri_start = int(floatBitsToUint(n.bbox_min.w) & PRIM_INDEX_BITS);
+            const int tri_end = tri_start + floatBitsToInt(n.bbox_max.w);
 
             IntersectTris_ClosestHit(ro, rd, tri_start, tri_end, obj_index, inter);
         }

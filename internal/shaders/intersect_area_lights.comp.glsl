@@ -3,6 +3,7 @@
 
 #include "intersect_area_lights_interface.h"
 #include "common.glsl"
+#include "traverse_bvh.glsl"
 
 LAYOUT_PARAMS uniform UniformParams {
     Params g_params;
@@ -12,12 +13,8 @@ layout(std430, binding = LIGHTS_BUF_SLOT) readonly buffer Lights {
     light_t g_lights[];
 };
 
-layout(std430, binding = VISIBLE_LIGHTS_BUF_SLOT) readonly buffer VisibleLights {
-    uint g_visible_lights[];
-};
-
-layout(std430, binding = TRANSFORMS_BUF_SLOT) readonly buffer Transforms {
-    transform_t g_transforms[];
+layout(std430, binding = NODES_BUF_SLOT) readonly buffer Nodes {
+    bvh_node_t g_nodes[];
 };
 
 layout(std430, binding = RAYS_BUF_SLOT) readonly buffer Rays {
@@ -51,6 +48,8 @@ bool quadratic(float a, float b, float c, out float t0, out float t1) {
     return true;
 }
 
+shared uint g_stack[LOCAL_GROUP_SIZE_X * LOCAL_GROUP_SIZE_Y][MAX_STACK_SIZE];
+
 layout (local_size_x = LOCAL_GROUP_SIZE_X, local_size_y = LOCAL_GROUP_SIZE_Y, local_size_z = 1) in;
 
 void main() {
@@ -80,130 +79,153 @@ void main() {
 
     hit_data_t inter = g_inout_hits[index];
 
-    for (uint li = 0; li < g_params.visible_lights_count; ++li) {
-        uint light_index = g_visible_lights[li];
-        light_t l = g_lights[light_index];
-        [[dont_flatten]] if (inter.mask != 0 && (l.type_and_param0.x & (1 << 7)) != 0) {
-            // Portal lights affect only missed rays
+    vec3 inv_d = safe_invert(rd);
+    vec3 neg_inv_do = -inv_d * ro;
+
+    uint stack_size = 0;
+    g_stack[gl_LocalInvocationIndex][stack_size++] = g_params.node_index;
+
+    while (stack_size != 0) {
+        uint cur = g_stack[gl_LocalInvocationIndex][--stack_size];
+
+        bvh_node_t n = g_nodes[cur];
+
+        if (!_bbox_test_fma(inv_d, neg_inv_do, inter.t, n.bbox_min.xyz, n.bbox_max.xyz)) {
             continue;
         }
 
-        bool no_shadow = (l.type_and_param0.x & (1 << 5)) == 0;
+        if ((floatBitsToUint(n.bbox_min.w) & LEAF_NODE_BIT) == 0) {
+            g_stack[gl_LocalInvocationIndex][stack_size++] = far_child(rd, n);
+            g_stack[gl_LocalInvocationIndex][stack_size++] = near_child(rd, n);
+        } else {
+            const int light_index = int(floatBitsToUint(n.bbox_min.w) & PRIM_INDEX_BITS);
+            light_t l = g_lights[light_index];
+            [[dont_flatten]] if ((l.type_and_param0.x & (1 << 6)) == 0) {
+                // Skip invisible light
+                continue;
+            }
+            [[dont_flatten]] if (inter.mask != 0 && (l.type_and_param0.x & (1 << 7)) != 0) {
+                // Portal lights affect only missed rays
+                continue;
+            }
 
-        uint light_type = (l.type_and_param0.x & 0x1f);
-        if (light_type == LIGHT_TYPE_SPHERE) {
-            vec3 light_pos = l.SPH_POS;
-            vec3 op = light_pos - ro;
-            float b = dot(op, rd);
-            float det = b * b - dot(op, op) + l.SPH_RADIUS * l.SPH_RADIUS;
-            if (det >= 0.0) {
-                det = sqrt(det);
-                float t1 = b - det, t2 = b + det;
-                if (t1 > HIT_EPS && (t1 < inter.t || no_shadow)) {
-                    bool accept = true;
-                    if (l.SPH_SPOT > 0.0) {
-                        const float _dot = -dot(rd, l.SPH_DIR);
-                        if (_dot > 0.0) {
-                            const float _angle = acos(clamp(_dot, 0.0, 1.0));
-                            accept = accept && (_angle <= l.SPH_SPOT);
-                        } else {
-                            accept = false;
+            bool no_shadow = (l.type_and_param0.x & (1 << 5)) == 0;
+
+            uint light_type = (l.type_and_param0.x & 0x1f);
+            if (light_type == LIGHT_TYPE_SPHERE) {
+                vec3 light_pos = l.SPH_POS;
+                vec3 op = light_pos - ro;
+                float b = dot(op, rd);
+                float det = b * b - dot(op, op) + l.SPH_RADIUS * l.SPH_RADIUS;
+                if (det >= 0.0) {
+                    det = sqrt(det);
+                    float t1 = b - det, t2 = b + det;
+                    if (t1 > HIT_EPS && (t1 < inter.t || no_shadow)) {
+                        bool accept = true;
+                        if (l.SPH_SPOT > 0.0) {
+                            const float _dot = -dot(rd, l.SPH_DIR);
+                            if (_dot > 0.0) {
+                                const float _angle = acos(clamp(_dot, 0.0, 1.0));
+                                accept = accept && (_angle <= l.SPH_SPOT);
+                            } else {
+                                accept = false;
+                            }
                         }
-                    }
-                    if (accept) {
+                        if (accept) {
+                            inter.mask = -1;
+                            inter.obj_index = -int(light_index) - 1;
+                            inter.t = t1;
+                        }
+                    } else if (t2 > HIT_EPS && (t2 < inter.t || no_shadow)) {
                         inter.mask = -1;
                         inter.obj_index = -int(light_index) - 1;
-                        inter.t = t1;
+                        inter.t = t2;
                     }
-                } else if (t2 > HIT_EPS && (t2 < inter.t || no_shadow)) {
+                }
+            } else if (light_type == LIGHT_TYPE_DIR) {
+                const float cos_theta = dot(rd, l.DIR_DIR);
+                if ((inter.mask == 0 || no_shadow) && cos_theta > cos(l.DIR_ANGLE)) {
                     inter.mask = -1;
                     inter.obj_index = -int(light_index) - 1;
-                    inter.t = t2;
+                    inter.t = 1.0 / cos_theta;
                 }
-            }
-        } else if (light_type == LIGHT_TYPE_DIR) {
-            const float cos_theta = dot(rd, l.DIR_DIR);
-            if ((inter.mask == 0 || no_shadow) && cos_theta > cos(l.DIR_ANGLE)) {
-                inter.mask = -1;
-                inter.obj_index = -int(light_index) - 1;
-                inter.t = 1.0 / cos_theta;
-            }
-        } else if (light_type == LIGHT_TYPE_RECT) {
-            vec3 light_pos = l.RECT_POS;
-            vec3 light_u = l.RECT_U;
-            vec3 light_v = l.RECT_V;
+            } else if (light_type == LIGHT_TYPE_RECT) {
+                vec3 light_pos = l.RECT_POS;
+                vec3 light_u = l.RECT_U;
+                vec3 light_v = l.RECT_V;
 
-            vec3 light_forward = normalize(cross(light_u, light_v));
+                vec3 light_forward = normalize(cross(light_u, light_v));
 
-            float plane_dist = dot(light_forward, light_pos);
-            float cos_theta = dot(rd, light_forward);
-            float t = (plane_dist - dot(light_forward, ro)) / cos_theta;
+                float plane_dist = dot(light_forward, light_pos);
+                float cos_theta = dot(rd, light_forward);
+                float t = (plane_dist - dot(light_forward, ro)) / cos_theta;
 
-            if (cos_theta < 0.0 && t > HIT_EPS && (t < inter.t || no_shadow)) {
-                light_u /= dot(light_u, light_u);
-                light_v /= dot(light_v, light_v);
+                if (cos_theta < 0.0 && t > HIT_EPS && (t < inter.t || no_shadow)) {
+                    light_u /= dot(light_u, light_u);
+                    light_v /= dot(light_v, light_v);
 
-                vec3 p = ro + rd * t;
-                vec3 vi = p - light_pos;
-                float a1 = dot(light_u, vi);
-                if (a1 >= -0.5 && a1 <= 0.5) {
+                    vec3 p = ro + rd * t;
+                    vec3 vi = p - light_pos;
+                    float a1 = dot(light_u, vi);
+                    if (a1 >= -0.5 && a1 <= 0.5) {
+                        float a2 = dot(light_v, vi);
+                        if (a2 >= -0.5 && a2 <= 0.5) {
+                            inter.mask = -1;
+                            inter.obj_index = -int(light_index) - 1;
+                            inter.t = t;
+                        }
+                    }
+                }
+            } else if (light_type == LIGHT_TYPE_DISK) {
+                vec3 light_pos = l.DISK_POS;
+                vec3 light_u = l.DISK_U;
+                vec3 light_v = l.DISK_V;
+
+                vec3 light_forward = normalize(cross(light_u, light_v));
+
+                float plane_dist = dot(light_forward, light_pos);
+                float cos_theta = dot(rd, light_forward);
+                float t = (plane_dist - dot(light_forward, ro)) / cos_theta;
+
+                if (cos_theta < 0.0 && t > HIT_EPS && (t < inter.t || no_shadow)) {
+                    light_u /= dot(light_u, light_u);
+                    light_v /= dot(light_v, light_v);
+
+                    vec3 p = ro + rd * t;
+                    vec3 vi = p - light_pos;
+                    float a1 = dot(light_u, vi);
                     float a2 = dot(light_v, vi);
-                    if (a2 >= -0.5 && a2 <= 0.5) {
+
+                    if (sqrt(a1 * a1 + a2 * a2) <= 0.5) {
                         inter.mask = -1;
                         inter.obj_index = -int(light_index) - 1;
                         inter.t = t;
                     }
                 }
-            }
-        } else if (light_type == LIGHT_TYPE_DISK) {
-            vec3 light_pos = l.DISK_POS;
-            vec3 light_u = l.DISK_U;
-            vec3 light_v = l.DISK_V;
+            } else if (light_type == LIGHT_TYPE_LINE) {
+                vec3 light_pos = l.LINE_POS;
+                vec3 light_u = l.LINE_U;
+                vec3 light_dir = l.LINE_V;
+                vec3 light_v = cross(light_u, light_dir);
 
-            vec3 light_forward = normalize(cross(light_u, light_v));
+                vec3 _ro = ro - light_pos;
+                _ro = vec3(dot(_ro, light_dir), dot(_ro, light_u), dot(_ro, light_v));
 
-            float plane_dist = dot(light_forward, light_pos);
-            float cos_theta = dot(rd, light_forward);
-            float t = (plane_dist - dot(light_forward, ro)) / cos_theta;
+                vec3 _rd = vec3(dot(rd, light_dir), dot(rd, light_u), dot(rd, light_v));
 
-            if (cos_theta < 0.0 && t > HIT_EPS && (t < inter.t || no_shadow)) {
-                light_u /= dot(light_u, light_u);
-                light_v /= dot(light_v, light_v);
+                float A = _rd[2] * _rd[2] + _rd[1] * _rd[1];
+                float B = 2.0 * (_rd[2] * _ro[2] + _rd[1] * _ro[1]);
+                float C = _ro[2] * _ro[2] + _ro[1] * _ro[1] - l.LINE_RADIUS * l.LINE_RADIUS;
 
-                vec3 p = ro + rd * t;
-                vec3 vi = p - light_pos;
-                float a1 = dot(light_u, vi);
-                float a2 = dot(light_v, vi);
-
-                if (sqrt(a1 * a1 + a2 * a2) <= 0.5) {
-                    inter.mask = -1;
-                    inter.obj_index = -int(light_index) - 1;
-                    inter.t = t;
-                }
-            }
-        } else if (light_type == LIGHT_TYPE_LINE) {
-            vec3 light_pos = l.LINE_POS;
-            vec3 light_u = l.LINE_U;
-            vec3 light_dir = l.LINE_V;
-            vec3 light_v = cross(light_u, light_dir);
-
-            vec3 _ro = ro - light_pos;
-            _ro = vec3(dot(_ro, light_dir), dot(_ro, light_u), dot(_ro, light_v));
-
-            vec3 _rd = vec3(dot(rd, light_dir), dot(rd, light_u), dot(rd, light_v));
-
-            float A = _rd[2] * _rd[2] + _rd[1] * _rd[1];
-            float B = 2.0 * (_rd[2] * _ro[2] + _rd[1] * _ro[1]);
-            float C = _ro[2] * _ro[2] + _ro[1] * _ro[1] - l.LINE_RADIUS * l.LINE_RADIUS;
-
-            float t0, t1;
-            if (quadratic(A, B, C, t0, t1) && t0 > HIT_EPS && t1 > HIT_EPS) {
-                const float t = min(t0, t1);
-                const vec3 p = _ro + t * _rd;
-                if (abs(p[0]) < 0.5 * l.LINE_HEIGHT && (t < inter.t || no_shadow)) {
-                    inter.mask = -1;
-                    inter.obj_index = -int(light_index) - 1;
-                    inter.t = t;
+                float t0, t1;
+                if (quadratic(A, B, C, t0, t1) && t0 > HIT_EPS && t1 > HIT_EPS) {
+                    const float t = min(t0, t1);
+                    const vec3 p = _ro + t * _rd;
+                    if (abs(p[0]) < 0.5 * l.LINE_HEIGHT && (t < inter.t || no_shadow)) {
+                        inter.mask = -1;
+                        inter.obj_index = -int(light_index) - 1;
+                        inter.t = t;
+                    }
                 }
             }
         }

@@ -85,15 +85,14 @@ void Ray::NS::Renderer::kernel_IntersectAreaLights(CommandBuffer cmd_buf, const 
     const Binding bindings[] = {
         {eBindTarget::SBufRO, IntersectAreaLights::RAYS_BUF_SLOT, rays},
         {eBindTarget::SBufRO, IntersectAreaLights::LIGHTS_BUF_SLOT, sc_data.lights},
-        {eBindTarget::SBufRO, IntersectAreaLights::VISIBLE_LIGHTS_BUF_SLOT, sc_data.visible_lights},
-        {eBindTarget::SBufRO, IntersectAreaLights::TRANSFORMS_BUF_SLOT, sc_data.transforms},
+        {eBindTarget::SBufRO, IntersectAreaLights::NODES_BUF_SLOT, sc_data.light_nodes},
         {eBindTarget::SBufRO, IntersectAreaLights::COUNTERS_BUF_SLOT, counters},
         {eBindTarget::SBufRW, IntersectAreaLights::INOUT_HITS_BUF_SLOT, inout_hits}};
 
     IntersectAreaLights::Params uniform_params = {};
     uniform_params.img_size[0] = w_;
     uniform_params.img_size[1] = h_;
-    uniform_params.visible_lights_count = sc_data.visible_lights_count;
+    uniform_params.node_index = 0; // tree root
 
     DispatchComputeIndirect(cmd_buf, pi_intersect_area_lights_, indir_args, 0, bindings, &uniform_params,
                             sizeof(uniform_params), ctx_->default_descr_alloc(), ctx_->log());
