@@ -156,7 +156,7 @@ namespace Cpu {
 template <typename SIMDPolicy> class Renderer : public RendererBase, private SIMDPolicy {
     ILog *log_;
 
-    bool use_wide_bvh_, use_tex_compression_;
+    bool use_tex_compression_;
     aligned_vector<color_rgba_t, 16> dual_buf_[2], base_color_buf_, depth_normals_buf_, temp_buf_, final_buf_,
         raw_final_buf_, raw_filtered_buf_;
     std::vector<uint16_t> required_samples_;
@@ -302,11 +302,10 @@ template <typename SIMDPolicy> PassData<SIMDPolicy> &get_per_thread_pass_data() 
 
 template <typename SIMDPolicy>
 Ray::Cpu::Renderer<SIMDPolicy>::Renderer(const settings_t &s, ILog *log)
-    : log_(log), use_wide_bvh_(s.use_wide_bvh), use_tex_compression_(s.use_tex_compression) {
+    : log_(log), use_tex_compression_(s.use_tex_compression) {
     permutations_ = Ray::ComputeRadicalInversePermutations(g_primes, PrimesCount);
 
     log->Info("===========================================");
-    log->Info("Wide BVH    is %s", use_wide_bvh_ ? "enabled" : "disabled");
     log->Info("Compression is %s", use_tex_compression_ ? "enabled" : "disabled");
     log->Info("===========================================");
 
@@ -314,7 +313,7 @@ Ray::Cpu::Renderer<SIMDPolicy>::Renderer(const settings_t &s, ILog *log)
 }
 
 template <typename SIMDPolicy> Ray::SceneBase *Ray::Cpu::Renderer<SIMDPolicy>::CreateScene() {
-    return new Cpu::Scene(log_, use_wide_bvh_, use_tex_compression_);
+    return new Cpu::Scene(log_, true /* use_wide_bvh */, use_tex_compression_);
 }
 
 template <typename SIMDPolicy>
