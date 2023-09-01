@@ -4440,8 +4440,8 @@ void Ray::NS::SampleLatlong_RGBE(const Cpu::TexStorageRGBA &storage, const uint3
     simd_fvec<S> uvs[2] = {clamp(u * sz[0], 0.0f, sz[0] - 1.0f), clamp(theta * sz[1], 0.0f, sz[1] - 1.0f)};
 
 #if USE_STOCH_TEXTURE_FILTERING
-    uvs[0] += rand[0];
-    uvs[1] += rand[1];
+    uvs[0] += rand[0] - 0.5f;
+    uvs[1] += rand[1] - 0.5f;
 
     const simd_ivec<S> iuvs[2] = {simd_ivec<S>(uvs[0]), simd_ivec<S>(uvs[1])};
 
