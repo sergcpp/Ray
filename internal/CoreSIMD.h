@@ -3233,14 +3233,14 @@ Ray::NS::simd_ivec<S> Ray::NS::Traverse_TLAS_WithStack_AnyHit(
         while (!st.empty()) {
             stack_entry_t cur = st.pop();
 
-            if (cur.dist > inter.t[ri]) {
+            if (cur.dist > inter_t[ri]) {
                 continue;
             }
 
         TRAVERSE:
             if (!is_leaf_node(nodes[cur.index])) {
                 alignas(32) float res_dist[8];
-                long mask = bbox_test_oct<S>(_inv_d, _inv_d_o, inter.t[ri], nodes[cur.index].bbox_min,
+                long mask = bbox_test_oct<S>(_inv_d, _inv_d_o, inter_t[ri], nodes[cur.index].bbox_min,
                                              nodes[cur.index].bbox_max, res_dist);
                 if (mask) {
                     long i = GetFirstBit(mask);
