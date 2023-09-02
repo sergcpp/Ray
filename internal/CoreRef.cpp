@@ -3398,11 +3398,6 @@ void Ray::Ref::IntersectAreaLights(Span<const ray_data_t> rays, const light_t li
         const ray_data_t &ray = rays[i];
         hit_data_t &inout_inter = inout_inters[i];
 
-        if ((ray.depth & 0x00ffffff) == 0) {
-            // skip transparency ray
-            continue;
-        }
-
         const simd_fvec4 ro = make_fvec3(ray.o);
         const simd_fvec4 rd = make_fvec3(ray.d);
 
