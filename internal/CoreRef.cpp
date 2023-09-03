@@ -1183,7 +1183,8 @@ Ray::Ref::hit_data_t::hit_data_t() {
 
 void Ray::Ref::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, const int w, const int h,
                                    const float random_seq[], const float filter_table[], const int iteration,
-                                   const uint16_t required_samples[], aligned_vector<ray_data_t> &out_rays) {
+                                   const uint16_t required_samples[], aligned_vector<ray_data_t> &out_rays,
+                                   aligned_vector<hit_data_t> &out_inters) {
     const simd_fvec4 cam_origin = make_fvec3(cam.origin), fwd = make_fvec3(cam.fwd), side = make_fvec3(cam.side),
                      up = make_fvec3(cam.up);
     const float focus_distance = cam.focus_distance;
@@ -1217,16 +1218,14 @@ void Ray::Ref::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, const i
     };
 
     size_t i = 0;
-    out_rays.reserve(size_t(r.w) * r.h);
     out_rays.resize(size_t(r.w) * r.h);
+    out_inters.resize(size_t(r.w) * r.h);
 
     for (int y = r.y; y < r.y + r.h; ++y) {
         for (int x = r.x; x < r.x + r.w; ++x) {
             if (required_samples[y * w + x] < iteration) {
                 continue;
             }
-
-            ray_data_t &out_r = out_rays[i++];
 
             auto fx = float(x);
             auto fy = float(y);
@@ -1278,6 +1277,8 @@ void Ray::Ref::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, const i
                 offset *= coc * cam.sensor_height;
             }
 
+            ray_data_t &out_r = out_rays[i];
+
             const simd_fvec4 _origin = cam_origin + side * offset.get<0>() + up * offset.get<1>();
             const simd_fvec4 _d = get_pix_dir(fx, fy, _origin);
             const float clip_start = cam.clip_start / dot(_d, fwd);
@@ -1297,10 +1298,15 @@ void Ray::Ref::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, const i
             out_r.pdf = 1e6f;
             out_r.xy = (x << 16) | y;
             out_r.depth = 0;
+
+            hit_data_t &out_i = out_inters[i++];
+            out_i = {};
+            out_i.t = (cam.clip_end / dot(_d, fwd)) - clip_start;
         }
     }
 
     out_rays.resize(i);
+    out_inters.resize(i);
 }
 
 void Ray::Ref::SampleMeshInTextureSpace(const int iteration, const int obj_index, const int uv_layer,

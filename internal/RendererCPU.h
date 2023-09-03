@@ -34,8 +34,10 @@ class SIMDPolicy {
     static force_inline void GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, int h,
                                                  const float random_seq[], const float filter_table[],
                                                  const int iteration, const uint16_t required_samples[],
-                                                 aligned_vector<Ref::ray_data_t> &out_rays) {
-        Ref::GeneratePrimaryRays(cam, r, w, h, random_seq, filter_table, iteration, required_samples, out_rays);
+                                                 aligned_vector<Ref::ray_data_t> &out_rays,
+                                                 aligned_vector<Ref::hit_data_t> &out_inters) {
+        Ref::GeneratePrimaryRays(cam, r, w, h, random_seq, filter_table, iteration, required_samples, out_rays,
+                                 out_inters);
     }
 
     static force_inline void SampleMeshInTextureSpace(int iteration, int obj_index, int uv_layer, const mesh_t &mesh,
@@ -433,13 +435,7 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase *scene, RegionC
 
     if (cam.type != eCamType::Geo) {
         SIMDPolicy::GeneratePrimaryRays(cam, rect, w_, h_, &region.halton_seq[hi], filter_table_.data(),
-                                        region.iteration, required_samples_.data(), p.primary_rays);
-
-        p.intersections.resize(p.primary_rays.size());
-        for (auto &inter : p.intersections) {
-            inter = {};
-            inter.t = cam.clip_end - cam.clip_start;
-        }
+                                        region.iteration, required_samples_.data(), p.primary_rays, p.intersections);
 
         time_after_ray_gen = high_resolution_clock::now();
 

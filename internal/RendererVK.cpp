@@ -822,11 +822,12 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
         timestamps_[ctx_->backend_frame].primary_trace[0] = ctx_->WriteTimestamp(cmd_buf, true);
         if (use_rt_pipeline) {
             kernel_IntersectScene_RTPipe(cmd_buf, indir_args_buf_, 1, cam.pass_settings, sc_data, halton_seq_buf_,
-                                         hi + RAND_DIM_BASE_COUNT, macro_tree_root, cam.clip_end - cam.clip_start,
-                                         s->tex_atlases_, s->bindless_tex_data_, prim_rays_buf_, prim_hits_buf_);
+                                         hi + RAND_DIM_BASE_COUNT, macro_tree_root, cam.fwd,
+                                         cam.clip_end - cam.clip_start, s->tex_atlases_, s->bindless_tex_data_,
+                                         prim_rays_buf_, prim_hits_buf_);
         } else {
             kernel_IntersectScene(cmd_buf, indir_args_buf_, 0, counters_buf_, cam.pass_settings, sc_data,
-                                  halton_seq_buf_, hi + RAND_DIM_BASE_COUNT, macro_tree_root,
+                                  halton_seq_buf_, hi + RAND_DIM_BASE_COUNT, macro_tree_root, cam.fwd,
                                   cam.clip_end - cam.clip_start, s->tex_atlases_, s->bindless_tex_data_, prim_rays_buf_,
                                   prim_hits_buf_);
         }
@@ -890,11 +891,11 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
             DebugMarker _(ctx_.get(), cmd_buf, "IntersectSceneSecondary");
             if (use_rt_pipeline) {
                 kernel_IntersectScene_RTPipe(cmd_buf, indir_args_buf_, 1, cam.pass_settings, sc_data, halton_seq_buf_,
-                                             hi + RAND_DIM_BASE_COUNT, macro_tree_root, MAX_DIST, s->tex_atlases_,
+                                             hi + RAND_DIM_BASE_COUNT, macro_tree_root, nullptr, -1.0f, s->tex_atlases_,
                                              s->bindless_tex_data_, secondary_rays_buf_, prim_hits_buf_);
             } else {
                 kernel_IntersectScene(cmd_buf, indir_args_buf_, 0, counters_buf_, cam.pass_settings, sc_data,
-                                      halton_seq_buf_, hi + RAND_DIM_BASE_COUNT, macro_tree_root, MAX_DIST,
+                                      halton_seq_buf_, hi + RAND_DIM_BASE_COUNT, macro_tree_root, nullptr, -1.0f,
                                       s->tex_atlases_, s->bindless_tex_data_, secondary_rays_buf_, prim_hits_buf_);
             }
         }
@@ -1851,9 +1852,10 @@ void Ray::Vk::Renderer::UpdateUNetFilterMemory(CommandBuffer cmd_buf) {
 
 void Ray::Vk::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const pass_settings_t &settings,
                                               const scene_data_t &sc_data, const Buffer &random_seq, const int hi,
-                                              const rect_t &rect, const uint32_t node_index, const float inter_t,
-                                              Span<const TextureAtlas> tex_atlases, const BindlessTexData &bindless_tex,
-                                              const Buffer &rays, const Buffer &out_hits) {
+                                              const rect_t &rect, const uint32_t node_index, const float cam_fwd[3],
+                                              const float clip_dist, Span<const TextureAtlas> tex_atlases,
+                                              const BindlessTexData &bindless_tex, const Buffer &rays,
+                                              const Buffer &out_hits) {
     const TransitionInfo res_transitions[] = {{&rays, eResState::UnorderedAccess},
                                               {&out_hits, eResState::UnorderedAccess}};
     TransitionResourceStates(cmd_buf, AllStages, AllStages, res_transitions);
@@ -1896,10 +1898,13 @@ void Ray::Vk::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const pass_
     uniform_params.rect[2] = rect.w;
     uniform_params.rect[3] = rect.h;
     uniform_params.node_index = node_index;
-    uniform_params.inter_t = inter_t;
+    uniform_params.clip_dist = clip_dist;
     uniform_params.min_transp_depth = settings.min_transp_depth;
     uniform_params.max_transp_depth = settings.max_transp_depth;
     uniform_params.hi = hi;
+    if (cam_fwd) {
+        memcpy(&uniform_params.cam_fwd[0], &cam_fwd[0], 3 * sizeof(float));
+    }
 
     const uint32_t grp_count[3] = {
         uint32_t((rect.w + IntersectScene::LOCAL_GROUP_SIZE_X - 1) / IntersectScene::LOCAL_GROUP_SIZE_X),
@@ -1912,7 +1917,8 @@ void Ray::Vk::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const pass_
 void Ray::Vk::Renderer::kernel_IntersectScene_RTPipe(CommandBuffer cmd_buf, const pass_settings_t &settings,
                                                      const scene_data_t &sc_data, const Buffer &random_seq,
                                                      const int hi, const rect_t &rect, const uint32_t node_index,
-                                                     const float inter_t, Span<const TextureAtlas> tex_atlases,
+                                                     const float cam_fwd[3], const float clip_dist,
+                                                     Span<const TextureAtlas> tex_atlases,
                                                      const BindlessTexData &bindless_tex, const Buffer &rays,
                                                      const Buffer &out_hits) {
     const TransitionInfo res_transitions[] = {{&rays, eResState::UnorderedAccess},
@@ -1940,10 +1946,13 @@ void Ray::Vk::Renderer::kernel_IntersectScene_RTPipe(CommandBuffer cmd_buf, cons
     uniform_params.rect[2] = rect.w;
     uniform_params.rect[3] = rect.h;
     uniform_params.node_index = node_index;
-    uniform_params.inter_t = inter_t;
+    uniform_params.clip_dist = clip_dist;
     uniform_params.min_transp_depth = settings.min_transp_depth;
     uniform_params.max_transp_depth = settings.max_transp_depth;
     uniform_params.hi = hi;
+    if (cam_fwd) {
+        memcpy(&uniform_params.cam_fwd[0], &cam_fwd[0], 3 * sizeof(float));
+    }
 
     const uint32_t dims[3] = {uint32_t(rect.w), uint32_t(rect.h), 1u};
 
@@ -1955,9 +1964,9 @@ void Ray::Vk::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const Buffe
                                               const int indir_args_index, const Buffer &counters,
                                               const pass_settings_t &settings, const scene_data_t &sc_data,
                                               const Buffer &random_seq, const int hi, uint32_t node_index,
-                                              const float inter_t, Span<const TextureAtlas> tex_atlases,
-                                              const BindlessTexData &bindless_tex, const Buffer &rays,
-                                              const Buffer &out_hits) {
+                                              const float cam_fwd[3], const float clip_dist,
+                                              Span<const TextureAtlas> tex_atlases, const BindlessTexData &bindless_tex,
+                                              const Buffer &rays, const Buffer &out_hits) {
     const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
                                               {&counters, eResState::ShaderResource},
                                               {&rays, eResState::UnorderedAccess},
@@ -2000,10 +2009,13 @@ void Ray::Vk::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const Buffe
 
     IntersectScene::Params uniform_params = {};
     uniform_params.node_index = node_index;
-    uniform_params.inter_t = inter_t;
+    uniform_params.clip_dist = clip_dist;
     uniform_params.min_transp_depth = settings.min_transp_depth;
     uniform_params.max_transp_depth = settings.max_transp_depth;
     uniform_params.hi = hi;
+    if (cam_fwd) {
+        memcpy(&uniform_params.cam_fwd[0], &cam_fwd[0], 3 * sizeof(float));
+    }
 
     DispatchComputeIndirect(cmd_buf, pi_intersect_scene_indirect_, indir_args,
                             indir_args_index * sizeof(DispatchIndirectCommand), bindings, &uniform_params,
@@ -2013,8 +2025,8 @@ void Ray::Vk::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const Buffe
 void Ray::Vk::Renderer::kernel_IntersectScene_RTPipe(CommandBuffer cmd_buf, const Buffer &indir_args,
                                                      const int indir_args_index, const pass_settings_t &settings,
                                                      const scene_data_t &sc_data, const Buffer &random_seq,
-                                                     const int hi, const uint32_t node_index, const float inter_t,
-                                                     Span<const TextureAtlas> tex_atlases,
+                                                     const int hi, const uint32_t node_index, const float cam_fwd[3],
+                                                     const float clip_dist, Span<const TextureAtlas> tex_atlases,
                                                      const BindlessTexData &bindless_tex, const Buffer &rays,
                                                      const Buffer &out_hits) {
     const TransitionInfo res_transitions[] = {{&indir_args, eResState::IndirectArgument},
@@ -2039,10 +2051,13 @@ void Ray::Vk::Renderer::kernel_IntersectScene_RTPipe(CommandBuffer cmd_buf, cons
 
     IntersectScene::Params uniform_params = {};
     uniform_params.node_index = node_index;
-    uniform_params.inter_t = inter_t;
+    uniform_params.clip_dist = clip_dist;
     uniform_params.min_transp_depth = settings.min_transp_depth;
     uniform_params.max_transp_depth = settings.max_transp_depth;
     uniform_params.hi = hi;
+    if (cam_fwd) {
+        memcpy(&uniform_params.cam_fwd[0], &cam_fwd[0], 3 * sizeof(float));
+    }
 
     TraceRaysIndirect(cmd_buf, pi_intersect_scene_indirect_rtpipe_, indir_args,
                       indir_args_index * sizeof(TraceRaysIndirectCommand), bindings, &uniform_params,

@@ -184,8 +184,12 @@ void main() {
     hit_data_t inter;
     inter.mask = 0;
     inter.obj_index = inter.prim_index = 0;
-    inter.t = g_params.inter_t;
     inter.u = inter.v = 0.0;
+    if (g_params.clip_dist >= 0.0) {
+        inter.t = g_params.clip_dist / dot(rd, g_params.cam_fwd.xyz);
+    } else {
+        inter.t = MAX_DIST;
+    }
 
     const vec2 rand_offset = vec2(construct_float(hash(g_rays[index].xy)),
                                   construct_float(hash(hash(g_rays[index].xy))));

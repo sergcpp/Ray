@@ -152,23 +152,24 @@ class Renderer : public RendererBase {
                                     const Texture2D &req_samples_img, const Buffer &inout_counters,
                                     const Buffer &out_rays);
     void kernel_IntersectScene(CommandBuffer cmd_buf, const pass_settings_t &settings, const scene_data_t &sc_data,
-                               const Buffer &random_seq, int hi, const rect_t &rect, uint32_t node_index, float inter_t,
-                               Span<const TextureAtlas> tex_atlases, const BindlessTexData &bindless_tex,
-                               const Buffer &rays, const Buffer &out_hits);
+                               const Buffer &random_seq, int hi, const rect_t &rect, uint32_t node_index,
+                               const float cam_fwd[3], float clip_dist, Span<const TextureAtlas> tex_atlases,
+                               const BindlessTexData &bindless_tex, const Buffer &rays, const Buffer &out_hits);
     void kernel_IntersectScene_RTPipe(CommandBuffer cmd_buf, const pass_settings_t &settings,
                                       const scene_data_t &sc_data, const Buffer &random_seq, int hi, const rect_t &rect,
-                                      uint32_t node_index, float inter_t, Span<const TextureAtlas> tex_atlases,
-                                      const BindlessTexData &bindless_tex, const Buffer &rays, const Buffer &out_hits);
-    void kernel_IntersectScene(CommandBuffer cmd_buf, const Buffer &indir_args, int indir_args_index,
-                               const Buffer &counters, const pass_settings_t &settings, const scene_data_t &sc_data,
-                               const Buffer &random_seq, int hi, uint32_t node_index, float inter_t,
-                               Span<const TextureAtlas> tex_atlases, const BindlessTexData &bindless_tex,
-                               const Buffer &rays, const Buffer &out_hits);
-    void kernel_IntersectScene_RTPipe(CommandBuffer cmd_buf, const Buffer &indir_args, int indir_args_index,
-                                      const pass_settings_t &settings, const scene_data_t &sc_data,
-                                      const Buffer &random_seq, int hi, uint32_t node_index, float inter_t,
+                                      uint32_t node_index, const float cam_fwd[3], float clip_dist,
                                       Span<const TextureAtlas> tex_atlases, const BindlessTexData &bindless_tex,
                                       const Buffer &rays, const Buffer &out_hits);
+    void kernel_IntersectScene(CommandBuffer cmd_buf, const Buffer &indir_args, int indir_args_index,
+                               const Buffer &counters, const pass_settings_t &settings, const scene_data_t &sc_data,
+                               const Buffer &random_seq, int hi, uint32_t node_index, const float cam_fwd[3],
+                               float clip_dist, Span<const TextureAtlas> tex_atlases,
+                               const BindlessTexData &bindless_tex, const Buffer &rays, const Buffer &out_hits);
+    void kernel_IntersectScene_RTPipe(CommandBuffer cmd_buf, const Buffer &indir_args, int indir_args_index,
+                                      const pass_settings_t &settings, const scene_data_t &sc_data,
+                                      const Buffer &random_seq, int hi, uint32_t node_index, const float cam_fwd[3],
+                                      float clip_dist, Span<const TextureAtlas> tex_atlases,
+                                      const BindlessTexData &bindless_tex, const Buffer &rays, const Buffer &out_hits);
     void kernel_IntersectSceneShadow(CommandBuffer cmd_buf, const pass_settings_t &settings, const Buffer &indir_args,
                                      int indir_args_index, const Buffer &counters, const scene_data_t &sc_data,
                                      const Buffer &random_seq, int hi, uint32_t node_index, float clamp_val,

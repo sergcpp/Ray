@@ -142,7 +142,8 @@ template <int S> force_inline simd_ivec<S> total_depth(const simd_ivec<S> &r_dep
 template <int DimX, int DimY>
 void GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, int h, const float random_seq[],
                          const float filter_table[], int iteration, const uint16_t required_samples[],
-                         aligned_vector<ray_data_t<DimX * DimY>> &out_rays);
+                         aligned_vector<ray_data_t<DimX * DimY>> &out_rays,
+                         aligned_vector<hit_data_t<DimX * DimY>> &out_inters);
 template <int DimX, int DimY>
 void SampleMeshInTextureSpace(int iteration, int obj_index, int uv_layer, const mesh_t &mesh, const transform_t &tr,
                               const uint32_t *vtx_indices, const vertex_t *vertices, const rect_t &r, int w, int h,
@@ -518,9 +519,10 @@ class SIMDPolicyBase {
     static force_inline void GeneratePrimaryRays(const camera_t &cam, const rect_t &r, const int w, const int h,
                                                  const float random_seq[], const float filter_table[],
                                                  const int iteration, const uint16_t required_samples[],
-                                                 aligned_vector<RayDataType> &out_rays) {
+                                                 aligned_vector<RayDataType> &out_rays,
+                                                 aligned_vector<HitDataType> &out_inters) {
         NS::GeneratePrimaryRays<RPDimX, RPDimY>(cam, r, w, h, random_seq, filter_table, iteration, required_samples,
-                                                out_rays);
+                                                out_rays, out_inters);
     }
 
     static force_inline void SampleMeshInTextureSpace(int iteration, int obj_index, int uv_layer, const mesh_t &mesh,
@@ -2245,7 +2247,8 @@ simd_fvec<S> peek_ior_stack(const simd_fvec<S> stack[4], const simd_ivec<S> &_sk
 template <int DimX, int DimY>
 void Ray::NS::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, int h, const float random_seq[],
                                   const float filter_table[], const int iteration, const uint16_t required_samples[],
-                                  aligned_vector<ray_data_t<DimX * DimY>> &out_rays) {
+                                  aligned_vector<ray_data_t<DimX * DimY>> &out_rays,
+                                  aligned_vector<hit_data_t<DimX * DimY>> &out_inters) {
     const int S = DimX * DimY;
     static_assert(S <= 16, "!");
 
@@ -2262,10 +2265,11 @@ void Ray::NS::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, i
 
     size_t i = 0;
     out_rays.resize(x_res * y_res);
+    out_inters.resize(x_res * y_res);
 
     for (int y = r.y; y < r.y + r.h; y += DimY) {
         for (int x = r.x; x < r.x + r.w; x += DimX) {
-            ray_data_t<S> &out_r = out_rays[i++];
+            ray_data_t<S> &out_r = out_rays[i];
 
             const simd_ivec<S> ixx = x + off_x, iyy = y + off_y;
             const simd_ivec<S> ixx_clamped = min(ixx, w - 1), iyy_clamped = min(iyy, h - 1);
@@ -2362,10 +2366,15 @@ void Ray::NS::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, i
             out_r.pdf = {1e6f};
             out_r.xy = (ixx << 16) | iyy;
             out_r.depth = 0;
+
+            hit_data_t<S> &out_i = out_inters[i++];
+            out_i = {};
+            out_i.t = (cam.clip_end / dot3(_d, cam.fwd)) - clip_start;
         }
     }
 
     out_rays.resize(i);
+    out_inters.resize(i);
 }
 
 template <int DimX, int DimY>
