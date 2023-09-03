@@ -467,7 +467,10 @@ void main() {
 
     shadow_ray_t sh_ray = g_sh_rays[index];
 
-    const vec3 rc = IntersectSceneShadow(sh_ray) * IntersectAreaLightsShadow(sh_ray);
+    vec3 rc = IntersectSceneShadow(sh_ray);
+    if (g_params.blocker_lights_count != 0) {
+        rc *= IntersectAreaLightsShadow(sh_ray);
+    }
     if (lum(rc) > 0.0) {
         const int x = (sh_ray.xy >> 16) & 0xffff;
         const int y = (sh_ray.xy & 0xffff);

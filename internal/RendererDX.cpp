@@ -2099,6 +2099,7 @@ void Ray::Dx::Renderer::kernel_IntersectSceneShadow(CommandBuffer cmd_buf, const
     uniform_params.node_index = node_index;
     uniform_params.max_transp_depth = settings.max_transp_depth;
     uniform_params.lights_node_index = 0; // tree root
+    uniform_params.blocker_lights_count = sc_data.blocker_lights_count;
     uniform_params.clamp_val = (clamp_val != 0.0f) ? clamp_val : std::numeric_limits<float>::max();
     uniform_params.hi = hi;
 
