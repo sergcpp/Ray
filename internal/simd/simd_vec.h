@@ -173,6 +173,7 @@ template <typename T, int S> class simd_vec {
     }
 
     force_inline T operator[](const int i) const { return comp_[i]; }
+    force_inline T operator[](const long i) const { return operator[](int(i)); }
 
     template <int i> force_inline T get() const { return comp_[i]; }
     template <int i> force_inline void set(const T f) { comp_[i] = f; }

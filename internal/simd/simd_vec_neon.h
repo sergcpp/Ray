@@ -61,6 +61,8 @@ template <> class simd_vec<float, 4> {
 #endif
     }
 
+    force_inline float operator[](const long i) const { return operator[](int(i)); }
+
     template <int i> force_inline float get() const { return vgetq_lane_f32(vec_, i & 3); }
     template <int i> force_inline void set(const float f) { vec_ = vsetq_lane_f32(f, vec_, i & 3); }
     force_inline void set(const int i, const float v) {
@@ -502,6 +504,8 @@ template <> class simd_vec<int, 4> {
         return temp[i];
 #endif
     }
+
+    force_inline int operator[](const long i) const { return operator[](int(i)); }
 
     template <int i> force_inline int get() const { return vgetq_lane_s32(vec_, i & 3); }
     template <int i> force_inline void set(const int f) { vec_ = vsetq_lane_s32(f, vec_, i & 3); }

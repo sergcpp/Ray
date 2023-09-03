@@ -61,6 +61,8 @@ template <> class simd_vec<float, 8> {
 #endif
     }
 
+    force_inline float operator[](const long i) const { return operator[](int(i)); }
+
     template <int _i> force_inline float get() const {
 #if defined(_MSC_VER) && !defined(__clang__)
         return vec_.m256_f32[_i & 7];
@@ -322,6 +324,8 @@ template <> class simd_vec<int, 8> {
         return comp[i];
 #endif
     }
+
+    force_inline int operator[](const long i) const { return operator[](int(i)); }
 
     template <int i> force_inline int get() const { return _mm256_extract_epi32(vec_, i & 7); }
     template <int i> force_inline void set(const int v) { vec_ = _mm256_insert_epi32(vec_, v, i & 7); }

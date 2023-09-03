@@ -57,6 +57,8 @@ template <> class simd_vec<float, 16> {
         return _mm512_cvtss_f32(temp);
     }
 
+    force_inline float operator[](const long i) const { return operator[](int(i)); }
+
     template <int i> force_inline float get() const {
         __m128 temp = _mm512_extractf32x4_ps(vec_, (i & 15) / 4);
         const int ndx = (i & 15) % 4;
@@ -260,6 +262,8 @@ template <> class simd_vec<int, 16> {
         __m512i temp = _mm512_maskz_compress_epi32(__mmask16(1u << (i & 15)), vec_);
         return _mm512_cvtsi512_si32(temp);
     }
+
+    force_inline int operator[](const long i) const { return operator[](int(i)); }
 
     template <int i> force_inline int get() const {
         __m128i temp = _mm512_extracti32x4_epi32(vec_, (i & 15) / 4);

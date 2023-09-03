@@ -47,6 +47,8 @@ template <> class simd_vec<float, 4> {
 #endif // _MSC_VER
     }
 
+    force_inline float operator[](const long i) const { return operator[](int(i)); }
+
     template <int i> force_inline float get() const {
 #if defined(_MSC_VER) && !defined(__clang__)
         return vec_.m128_f32[i];
@@ -540,6 +542,8 @@ template <> class simd_vec<int, 4> {
         return comp[i];
 #endif // _MSC_VER
     }
+
+    force_inline int operator[](const long i) const { return operator[](int(i)); }
 
     template <int i> force_inline int get() const {
 #if defined(USE_SSE41)
