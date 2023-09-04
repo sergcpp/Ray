@@ -1456,34 +1456,6 @@ void Ray::Dx::Renderer::DenoiseImage(const int pass, const RegionContext &region
     }
 }
 
-void Ray::Dx::Renderer::RadixSort(CommandBuffer cmd_buf, const Buffer &indir_args, Buffer _hashes[2],
-                                  Buffer &count_table, const Buffer &counters, const Buffer &reduce_table) {
-    DebugMarker _(ctx_.get(), cmd_buf, "Radix Sort");
-
-    static const char *MarkerStrings[] = {"Radix Sort Iter #0 [Bits   0-4]", "Radix Sort Iter #1 [Bits   4-8]",
-                                          "Radix Sort Iter #2 [Bits  8-12]", "Radix Sort Iter #3 [Bits 12-16]",
-                                          "Radix Sort Iter #4 [Bits 16-20]", "Radix Sort Iter #5 [Bits 20-24]",
-                                          "Radix Sort Iter #6 [Bits 24-28]", "Radix Sort Iter #7 [Bits 28-32]"};
-
-    Buffer *hashes[] = {&_hashes[0], &_hashes[1]};
-    for (int shift = 0; shift < 32; shift += 4) {
-        DebugMarker _(ctx_.get(), cmd_buf, MarkerStrings[shift / 4]);
-
-        kernel_SortInitCountTable(cmd_buf, shift, indir_args, 4, *hashes[0], counters, 4, count_table);
-
-        kernel_SortReduce(cmd_buf, indir_args, 5, count_table, counters, 5, reduce_table);
-
-        kernel_SortScan(cmd_buf, reduce_table, counters, 5, reduce_table);
-
-        kernel_SortScanAdd(cmd_buf, indir_args, 5, count_table, reduce_table, counters, 5, count_table);
-
-        kernel_SortScatter(cmd_buf, shift, indir_args, 4, *hashes[0], count_table, counters, 4, *hashes[1]);
-
-        std::swap(hashes[0], hashes[1]);
-    }
-    assert(hashes[0] == &_hashes[0]);
-}
-
 Ray::color_data_rgba_t Ray::Dx::Renderer::get_pixels_ref(const bool tonemap) const {
     if (frame_dirty_ || pixel_readback_is_tonemapped_ != tonemap) {
         CommandBuffer cmd_buf = BegSingleTimeCommands(ctx_->api(), ctx_->device(), ctx_->temp_command_pool());
@@ -1694,66 +1666,6 @@ bool Ray::Dx::Renderer::InitUNetPipelines() {
            pi_convolution_concat_64_6_64_.Init(ctx_.get(), &prog_convolution_concat_64_6_64_, log) &&
            pi_convolution_concat_64_9_64_.Init(ctx_.get(), &prog_convolution_concat_64_9_64_, log) &&
            pi_convolution_32_3_img_.Init(ctx_.get(), &prog_convolution_32_3_img_, log);
-}
-
-void Ray::Dx::Renderer::UpdateUNetFilterMemory(CommandBuffer cmd_buf) {
-    unet_tensors_heap_ = {};
-    if (!unet_weights_[0]) {
-        return;
-    }
-
-    const int el_sz = use_fp16_ ? sizeof(uint16_t) : sizeof(float);
-
-    const int required_memory =
-        SetupUNetFilter(w_, h_, unet_alias_memory_, true, unet_tensors_, unet_alias_dependencies_);
-    unet_tensors_heap_ = Buffer{"UNet Tensors", ctx_.get(), eBufType::Storage, uint32_t(required_memory * el_sz)};
-
-    if (use_fp16_) {
-#ifndef NDEBUG
-        const uint32_t fill_val = (f32_to_f16(NAN) << 16) | f32_to_f16(NAN);
-#else
-        const uint32_t fill_val = 0;
-#endif
-        unet_tensors_heap_.Fill(0, required_memory * el_sz, fill_val, cmd_buf);
-    } else {
-#ifndef NDEBUG
-        const float fill_val = NAN;
-#else
-        const float fill_val = 0.0f;
-#endif
-        unet_tensors_heap_.Fill(0, required_memory * el_sz, reinterpret_cast<const uint32_t &>(fill_val), cmd_buf);
-    }
-
-    unet_tensors_.enc_conv0_offset *= el_sz;
-    unet_tensors_.enc_conv0_size *= el_sz;
-    unet_tensors_.pool1_offset *= el_sz;
-    unet_tensors_.pool1_size *= el_sz;
-    unet_tensors_.pool2_offset *= el_sz;
-    unet_tensors_.pool2_size *= el_sz;
-    unet_tensors_.pool3_offset *= el_sz;
-    unet_tensors_.pool3_size *= el_sz;
-    unet_tensors_.pool4_offset *= el_sz;
-    unet_tensors_.pool4_size *= el_sz;
-    unet_tensors_.enc_conv5a_offset *= el_sz;
-    unet_tensors_.enc_conv5a_size *= el_sz;
-    unet_tensors_.upsample4_offset *= el_sz;
-    unet_tensors_.upsample4_size *= el_sz;
-    unet_tensors_.dec_conv4a_offset *= el_sz;
-    unet_tensors_.dec_conv4a_size *= el_sz;
-    unet_tensors_.upsample3_offset *= el_sz;
-    unet_tensors_.upsample3_size *= el_sz;
-    unet_tensors_.dec_conv3a_offset *= el_sz;
-    unet_tensors_.dec_conv3a_size *= el_sz;
-    unet_tensors_.upsample2_offset *= el_sz;
-    unet_tensors_.upsample2_size *= el_sz;
-    unet_tensors_.dec_conv2a_offset *= el_sz;
-    unet_tensors_.dec_conv2a_size *= el_sz;
-    unet_tensors_.upsample1_offset *= el_sz;
-    unet_tensors_.upsample1_size *= el_sz;
-    unet_tensors_.dec_conv1a_offset *= el_sz;
-    unet_tensors_.dec_conv1a_size *= el_sz;
-    unet_tensors_.dec_conv1b_offset *= el_sz;
-    unet_tensors_.dec_conv1b_size *= el_sz;
 }
 
 void Ray::Dx::Renderer::kernel_IntersectScene(CommandBuffer cmd_buf, const pass_settings_t &settings,

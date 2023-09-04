@@ -3,8 +3,6 @@
 #include <cstdint>
 #include <cstring>
 
-//#include "../CoreVK.h"
-
 #undef Always
 
 namespace Ray {

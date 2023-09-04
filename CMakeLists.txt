@@ -53,7 +53,6 @@ endif(MSVC)
 
 set(INTERNAL_SOURCE_FILES internal/Atmosphere.h
                           internal/Atmosphere.cpp
-                          internal/Bitmap.h
                           internal/BVHSplit.h
                           internal/BVHSplit.cpp
                           internal/CDFUtils.h

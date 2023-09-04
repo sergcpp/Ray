@@ -71,24 +71,44 @@ static_assert(sizeof(DDSHeader) == 128, "!");
 
 std::tuple<std::vector<float>, std::vector<uint32_t>, std::vector<uint32_t>> LoadBIN(const char file_name[]) {
     std::ifstream in_file(file_name, std::ios::binary);
+    if (!in_file) {
+        return {};
+    }
     uint32_t num_attrs;
     in_file.read((char *)&num_attrs, 4);
+    if (!in_file) {
+        return {};
+    }
     uint32_t num_indices;
     in_file.read((char *)&num_indices, 4);
+    if (!in_file) {
+        return {};
+    }
     uint32_t num_groups;
     in_file.read((char *)&num_groups, 4);
+    if (!in_file) {
+        return {};
+    }
 
     std::vector<float> attrs;
     attrs.resize(num_attrs);
     in_file.read((char *)&attrs[0], size_t(num_attrs) * sizeof(float));
+    if (!in_file) {
+        return {};
+    }
 
     std::vector<uint32_t> indices;
     indices.resize(num_indices);
     in_file.read((char *)&indices[0], size_t(num_indices) * sizeof(uint32_t));
-
+    if (!in_file) {
+        return {};
+    }
     std::vector<uint32_t> groups;
     groups.resize(num_groups);
     in_file.read((char *)&groups[0], size_t(num_groups) * sizeof(uint32_t));
+    if (!in_file) {
+        return {};
+    }
 
     return std::make_tuple(std::move(attrs), std::move(indices), std::move(groups));
 }
@@ -105,6 +125,9 @@ std::vector<uint8_t> LoadTGA(const char file_name[], bool flip_y, int &w, int &h
 
     std::vector<char> in_file_data(in_file_size);
     in_file.read(&in_file_data[0], in_file_size);
+    if (!in_file) {
+        return {};
+    }
 
     Ray::eTexFormat format;
     uint32_t img_size;
@@ -148,6 +171,9 @@ std::vector<uint8_t> LoadDDS(const char file_name[], int &w, int &h, int &mips, 
 
     DDSHeader dds_header = {};
     in_file.read((char *)&dds_header, sizeof(DDSHeader));
+    if (!in_file) {
+        return {};
+    }
 
     w = dds_header.dwWidth;
     h = dds_header.dwHeight;
@@ -170,6 +196,9 @@ std::vector<uint8_t> LoadDDS(const char file_name[], int &w, int &h, int &mips, 
 
     std::vector<uint8_t> ret(in_file_size - sizeof(DDSHeader));
     in_file.read((char *)&ret[0], in_file_size - sizeof(DDSHeader));
+    if (!in_file) {
+        return {};
+    }
 
     return ret;
 }

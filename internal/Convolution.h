@@ -73,7 +73,7 @@ static const float y1 = 3.22087631e-02f;
 static const float x0 = 2.23151711e-03f;
 static const float x1 = 3.70974749e-01f;
 
-template <Ray::ePreOp PreOp> force_inline float input(float val) {
+template <ePreOp PreOp> force_inline float input(float val) {
     static const float norm_scale = 0.318967164f;
 
     if (PreOp == ePreOp::HDRTransfer) {
@@ -91,7 +91,7 @@ template <Ray::ePreOp PreOp> force_inline float input(float val) {
     }
 }
 
-template <Ray::ePostOp PostOp> force_inline float output(float val) {
+template <ePostOp PostOp> force_inline float output(float val) {
     static const float norm_scale = 3.13511896f;
 
     if (PostOp == ePostOp::HDRTransfer) {
@@ -111,8 +111,8 @@ template <Ray::ePostOp PostOp> force_inline float output(float val) {
 }
 } // namespace transfer
 
-template <int RowsPortion, int S, int InChannels, int OutChannels, int OutPxPitch, Ray::ePostOp PostOp,
-          Ray::eActivation Activation>
+template <int RowsPortion, int S, int InChannels, int OutChannels, int OutPxPitch, ePostOp PostOp,
+          eActivation Activation>
 void Convolution3x3_Direct_ProcessRows(int y, const float *__restrict data, const rect_t &rect, int w, int h,
                                        int stride, const float *__restrict weights, const float *__restrict biases,
                                        float *__restrict output, const int output_stride) {
@@ -194,8 +194,8 @@ void Convolution3x3_Direct_ProcessRows(int y, const float *__restrict data, cons
 #undef index
 }
 
-template <int RowsPortion, int S, int InChannels1, int InChannels2, int OutChannels, Ray::ePreOp PreOp1,
-          Ray::ePostOp PostOp, Ray::eActivation Activation>
+template <int RowsPortion, int S, int InChannels1, int InChannels2, int OutChannels, ePreOp PreOp1, ePostOp PostOp,
+          eActivation Activation>
 void ConvolutionConcat3x3_Direct_ProcessRows(int y, const float *__restrict data1, const float *__restrict data2,
                                              const rect_t &rect, int w, int h, int stride1, int stride2,
                                              const float *__restrict weights, const float *__restrict biases,
@@ -313,8 +313,8 @@ void ConvolutionConcat3x3_Direct_ProcessRows(int y, const float *__restrict data
 #undef index2
 }
 
-template <int S, int InChannels1, int InChannels2, int InChannels3, int PxPitch, int OutChannels, Ray::ePreOp PreOp1,
-          Ray::ePreOp PreOp2, Ray::ePreOp PreOp3, Ray::ePostOp PostOp, Ray::eActivation Activation>
+template <int S, int InChannels1, int InChannels2, int InChannels3, int PxPitch, int OutChannels, ePreOp PreOp1,
+          ePreOp PreOp2, ePreOp PreOp3, ePostOp PostOp, eActivation Activation>
 void Convolution3x3_GEMM(const float data1[], const float data2[], const float data3[], const rect_t &rect, int in_w,
                          int in_h, int w, int h, int stride, const float weights[], const float biases[],
                          float output[], int output_stride) {
@@ -444,7 +444,7 @@ void Convolution3x3_GEMM(const float data1[], const float data2[], const float d
 #undef fetch3
 }
 
-template <int S, int InChannels1, int InChannels2, int OutChannels, Ray::ePreOp PreOp1, Ray::eActivation Activation>
+template <int S, int InChannels1, int InChannels2, int OutChannels, ePreOp PreOp1, eActivation Activation>
 void ConvolutionConcat3x3_GEMM(const float *__restrict data1, const float *__restrict data2, const rect_t &rect, int w,
                                int h, const float *__restrict weights, const float *__restrict biases,
                                float *__restrict output) {
@@ -673,8 +673,8 @@ void ConvolutionConcat3x3_GEMM(const float *__restrict data1, const float *__res
 }
 
 template <int RowsPortion, int S, int InChannels1, int InChannels2, int InChannels3, int InChannels4, int PxPitch234,
-          int OutChannels, Ray::ePreOp PreOp1, Ray::ePreOp PreOp2, Ray::ePreOp PreOp3, Ray::ePreOp PreOp4,
-          Ray::ePostOp PostOp, Ray::eActivation Activation>
+          int OutChannels, ePreOp PreOp1, ePreOp PreOp2, ePreOp PreOp3, ePreOp PreOp4, ePostOp PostOp,
+          eActivation Activation>
 void ConvolutionConcat3x3_1Direct_2GEMM_ProcessRows(int y, const float data1[], const float data2[],
                                                     const float data3[], const float data4[], const rect_t &rect, int w,
                                                     int h, int w234, int h234, int stride1, int stride234,

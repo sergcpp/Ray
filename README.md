@@ -254,7 +254,7 @@ With CPU backends it is safe to call RenderScene from different threads for non-
 
 ### Denoising
 
-The image can be denoised either with UNet (slower) of NLM filter (faster).
+The image can be denoised either with UNet (slower) or NLM filter (faster).
 
 ```c++
 ...
