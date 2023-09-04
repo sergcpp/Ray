@@ -3,59 +3,35 @@ stages:
   - test
   - deploy
 
-.windows-x86_64-build-job:
+.windows-build-job:
   stage: build
   tags:
     - windows
   script:
     - echo "Compiling the code..."
-    - mkdir build_nonunity
-    - cd build_nonunity
-    - cmake .. -G "Visual Studio 17 2022" -A x64 -DENABLE_REF_IMPL=ON
-    - cd ..
-    - cmake --build build_nonunity --target ALL_BUILD --config RelWithDebInfo --parallel 16
     - mkdir build
     - cd build
-    - cmake .. -G "Visual Studio 17 2022" -A x64 -DCMAKE_UNITY_BUILD=ON -DENABLE_REF_IMPL=ON
+    - echo $UNITY
+    - '& cmake .. -G "Visual Studio 17 2022" -A "$ARCH" -DCMAKE_UNITY_BUILD="$UNITY" -DENABLE_REF_IMPL=ON -DENABLE_VK_IMPL="$VK_IMPL" -DENABLE_DX_IMPL="$DX_IMPL"'
     - cd ..
-    - cmake --build build --target ALL_BUILD --config Release --parallel 16
-    - cmake --build build --target ALL_BUILD --config Asan --parallel 16
+    - cmake --build build --target ALL_BUILD --config $CONFIG --parallel 16
     - echo "Compile complete."
-    - mkdir windows-x86_64
-    - copy build/tests/Release/test_Ray.exe windows-x86_64
-    - copy build/tests/Asan/test_Ray-asan.exe windows-x86_64
+    - mkdir $BIN_DIR
+    - copy build/tests/$CONFIG/$BIN_NAME $BIN_DIR
   artifacts:
-    name: windows-x86_64
+    name: $BIN_DIR
     paths:
-      - windows-x86_64/
+      - $BIN_DIR/
     expire_in: 1 week
 
-.windows-arm64-build-job:
+.windows-shaders-check-job:
   stage: build
   tags:
     - windows
   script:
-    - echo "Compiling the code..."
-    - mkdir build_nonunity
-    - cd build_nonunity
-    - cmake .. -G "Visual Studio 17 2022" -A x64 -DENABLE_REF_IMPL=ON
-    - cd ..
-    - cmake --build build_nonunity --target ALL_BUILD --config RelWithDebInfo --parallel 16
-    - mkdir build
-    - cd build
-    - cmake .. -G "Visual Studio 17 2022" -A ARM64 -DCMAKE_UNITY_BUILD=ON -DENABLE_REF_IMPL=ON -DENABLE_VK_IMPL=OFF -DENABLE_DX_IMPL=ON
-    - cd ..
-    - cmake --build build --target ALL_BUILD --config Release --parallel 16
-    - cmake --build build --target ALL_BUILD --config Debug --parallel 16
-    - echo "Compile complete."
-    - mkdir windows-arm64
-    - copy build/tests/Release/test_Ray.exe windows-arm64
-    - copy build/tests/Debug/test_Ray-dbg.exe windows-arm64
-  artifacts:
-    name: windows-arm64
-    paths:
-      - windows-arm64/
-    expire_in: 1 week
+    - echo "Compiling shaders..."
+    - python scripts/compile_shaders.py
+    - git diff --quiet -- internal/shaders
 
 .linux-build-job:
   stage: build
@@ -65,27 +41,28 @@ stages:
     - echo "Compiling the code..."
     - mkdir build
     - cd build
-    - cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_UNITY_BUILD=ON -DENABLE_REF_IMPL=ON
-    - cd ..
-    - mkdir build_dbg
-    - cd build_dbg
-    - cmake .. -DCMAKE_BUILD_TYPE=Debug -DENABLE_REF_IMPL=ON
-    - cd ..
-    - mkdir build_dev
-    - cd build_dev
-    - cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo -DENABLE_REF_IMPL=ON
+    - cmake .. -DCMAKE_BUILD_TYPE=$CONFIG -DCMAKE_UNITY_BUILD=$UNITY -DENABLE_REF_IMPL=ON
     - cd ..
     - cmake --build build --target all --parallel 16
-    - cmake --build build_dbg --target all --parallel 16
-    - cmake --build build_dev --target all --parallel 16
     - echo "Compile complete."
-    - mkdir linux-x86_64
-    - cp build/tests/test_Ray linux-x86_64
-    - cp build_dbg/tests/test_Ray-dbg linux-x86_64
+    - mkdir $BIN_DIR
+    - cp build/tests/$BIN_NAME $BIN_DIR
   artifacts:
     paths:
-      - linux-x86_64/
+      - $BIN_DIR/
     expire_in: 1 week
+
+.linux-shaders-check-job:
+  stage: build
+  tags:
+    - linux
+  script:
+    - echo "Compiling shaders..."
+    - chmod +x third-party/spirv/linux/glslangValidator
+    - chmod +x third-party/spirv/linux/spirv-opt
+    - chmod +x third-party/spirv/linux/spirv-opt.sh
+    - python scripts/compile_shaders.py
+    - git diff --quiet -- internal/shaders
 
 .macos-universal-build-job:
   stage: build
@@ -95,23 +72,12 @@ stages:
     - echo "Compiling the code..."
     - mkdir build
     - cd build
-    - cmake .. -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_BUILD_TYPE=Release -DCMAKE_UNITY_BUILD=ON -DENABLE_REF_IMPL=ON
-    - cd ..
-    - mkdir build_dbg
-    - cd build_dbg
-    - cmake .. -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_BUILD_TYPE=Debug -DENABLE_REF_IMPL=ON
-    - cd ..
-    - mkdir build_dev
-    - cd build_dev
-    - cmake .. -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_BUILD_TYPE=RelWithDebInfo -DENABLE_REF_IMPL=ON
+    - cmake .. -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_BUILD_TYPE=$CONFIG -DCMAKE_UNITY_BUILD=$UNITY -DENABLE_REF_IMPL=ON
     - cd ..
     - cmake --build build --target all --parallel 16
-    - cmake --build build_dbg --target all --parallel 16
-    - cmake --build build_dev --target all --parallel 16
     - echo "Compile complete."
     - mkdir macos-universal
-    - cp build/tests/test_Ray macos-universal
-    - cp build_dbg/tests/test_Ray-dbg macos-universal
+    - cp build/tests/$BIN_NAME macos-universal
   artifacts:
     paths:
       - macos-universal/
@@ -217,29 +183,200 @@ stages:
       - errors.txt
     expire_in: 1 week
 
-windows-x86_64-build-job:
+windows-x86_64-build-rel-job:
+  variables:
+    BIN_DIR: 'windows-x86_64'
+    ARCH: 'x64'
+    CONFIG: 'Release'
+    BIN_NAME: 'test_Ray.exe'
+    UNITY: 'ON'
+    VK_IMPL: 'ON'
+    DX_IMPL: 'ON'
   extends:
-    - .windows-x86_64-build-job
+    - .windows-build-job
   tags:
     - windows,builder
 
-windows-arm64-build-job:
+windows-x86_64-build-dbg-job:
+  variables:
+    BIN_DIR: 'windows-x86_64'
+    ARCH: 'x64'
+    CONFIG: 'Debug'
+    BIN_NAME: 'test_Ray-dbg.exe'
+    UNITY: 'OFF'
+    VK_IMPL: 'ON'
+    DX_IMPL: 'ON'
   extends:
-    - .windows-arm64-build-job
+    - .windows-build-job
+  tags:
+    - windows,builder
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+
+windows-x86_64-build-dev-job:
+  variables:
+    BIN_DIR: 'windows-x86_64'
+    ARCH: 'x64'
+    CONFIG: 'RelWithDebInfo'
+    BIN_NAME: 'test_Ray-dev.exe'
+    UNITY: 'OFF'
+    VK_IMPL: 'ON'
+    DX_IMPL: 'ON'
+  extends:
+    - .windows-build-job
+  tags:
+    - windows,builder
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+
+windows-x86_64-build-asan-job:
+  variables:
+    BIN_DIR: 'windows-x86_64'
+    ARCH: 'x64'
+    CONFIG: 'Asan'
+    BIN_NAME: 'test_Ray-asan.exe'
+    UNITY: 'OFF'
+    VK_IMPL: 'ON'
+    DX_IMPL: 'ON'
+  extends:
+    - .windows-build-job
+  tags:
+    - windows,builder
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+
+windows-shaders-check-job:
+  extends:
+    - .windows-shaders-check-job
+  tags:
+    - windows,builder
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+
+windows-arm64-build-rel-job:
+  variables:
+    BIN_DIR: 'windows-arm64'
+    ARCH: 'ARM64'
+    CONFIG: 'Release'
+    BIN_NAME: 'test_Ray.exe'
+    UNITY: 'ON'
+    VK_IMPL: 'OFF'
+    DX_IMPL: 'ON'
+  extends:
+    - .windows-build-job
   tags:
     - windows,builder
 
-linux-x86_64-build-job:
+windows-arm64-build-dbg-job:
+  variables:
+    BIN_DIR: 'windows-arm64'
+    ARCH: 'ARM64'
+    CONFIG: 'Debug'
+    BIN_NAME: 'test_Ray-dbg.exe'
+    UNITY: 'OFF'
+    VK_IMPL: 'OFF'
+    DX_IMPL: 'ON'
+  extends:
+    - .windows-build-job
+  tags:
+    - windows,builder
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+
+windows-arm64-build-dev-job:
+  variables:
+    BIN_DIR: 'windows-arm64'
+    ARCH: 'ARM64'
+    CONFIG: 'RelWithDebInfo'
+    BIN_NAME: 'test_Ray-dev.exe'
+    UNITY: 'OFF'
+    VK_IMPL: 'OFF'
+    DX_IMPL: 'ON'
+  extends:
+    - .windows-build-job
+  tags:
+    - windows,builder
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+
+linux-x86_64-build-rel-job:
+  variables:
+    BIN_DIR: 'linux-x86_64'
+    CONFIG: 'Release'
+    BIN_NAME: 'test_Ray'
+    UNITY: 'ON'
   extends:
     - .linux-build-job
   tags:
     - linux,builder
 
-macos-universal-build-job:
+linux-x86_64-build-dbg-job:
+  variables:
+    BIN_DIR: 'linux-x86_64'
+    CONFIG: 'Debug'
+    BIN_NAME: 'test_Ray-dbg'
+    UNITY: 'OFF'
+  extends:
+    - .linux-build-job
+  tags:
+    - linux,builder
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+
+linux-x86_64-build-dev-job:
+  variables:
+    BIN_DIR: 'linux-x86_64'
+    CONFIG: 'RelWithDebInfo'
+    BIN_NAME: 'test_Ray-dev'
+    UNITY: 'OFF'
+  extends:
+    - .linux-build-job
+  tags:
+    - linux,builder
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+
+linux-shaders-check-job:
+  extends:
+    - .linux-shaders-check-job
+  tags:
+    - linux,builder
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+
+macos-universal-build-rel-job:
+  variables:
+    CONFIG: 'Release'
+    BIN_NAME: 'test_Ray'
+    UNITY: 'ON'
   extends:
     - .macos-universal-build-job
   tags:
     - macos,builder
+
+macos-universal-build-dbg-job:
+  variables:
+    CONFIG: 'Debug'
+    BIN_NAME: 'test_Ray-dbg'
+    UNITY: 'OFF'
+  extends:
+    - .macos-universal-build-job
+  tags:
+    - macos,builder
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+
+macos-universal-build-dev-job:
+  variables:
+    CONFIG: 'RelWithDebInfo'
+    BIN_NAME: 'test_Ray-dev'
+    UNITY: 'OFF'
+  extends:
+    - .macos-universal-build-job
+  tags:
+    - macos,builder
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
 
 windows-x86_64-cpu-test-job:
   variables:
@@ -248,7 +385,7 @@ windows-x86_64-cpu-test-job:
   extends:
     - .windows-test-job
   needs:
-    - windows-x86_64-build-job
+    - windows-x86_64-build-rel-job
   tags:
     - windows,x86_64
 
@@ -260,7 +397,7 @@ windows-x86_64-cpu-sse2-test-job:
   extends:
     - .windows-sde-test-job
   needs:
-    - windows-x86_64-build-job
+    - windows-x86_64-build-rel-job
   tags:
     - windows,x86_64,win10
   rules:
@@ -274,7 +411,7 @@ windows-x86_64-cpu-sse41-test-job:
   extends:
     - .windows-sde-test-job
   needs:
-    - windows-x86_64-build-job
+    - windows-x86_64-build-rel-job
   tags:
     - windows,x86_64,win10
   rules:
@@ -288,7 +425,7 @@ windows-x86_64-cpu-avx-test-job:
   extends:
     - .windows-sde-test-job
   needs:
-    - windows-x86_64-build-job
+    - windows-x86_64-build-rel-job
   tags:
     - windows,x86_64
   rules:
@@ -302,7 +439,7 @@ windows-x86_64-cpu-avx2-test-job:
   extends:
     - .windows-sde-test-job
   needs:
-    - windows-x86_64-build-job
+    - windows-x86_64-build-rel-job
   tags:
     - windows,x86_64
   rules:
@@ -316,7 +453,7 @@ windows-x86_64-cpu-avx512-test-job:
   extends:
     - .windows-sde-test-job
   needs:
-    - windows-x86_64-build-job
+    - windows-x86_64-build-rel-job
   tags:
     - windows,x86_64
   rules:
@@ -329,7 +466,7 @@ windows-x86_64-cpu-test-asan-job:
   extends:
     - .windows-test-asan-job
   needs:
-    - windows-x86_64-build-job
+    - windows-x86_64-build-asan-job
   tags:
     - windows,x86_64
   rules:
@@ -343,7 +480,7 @@ windows-x86_64-gpu-nv-test-asan-job:
   extends:
     - .windows-test-asan-job
   needs:
-    - windows-x86_64-build-job
+    - windows-x86_64-build-asan-job
   tags:
     - windows,x86_64,nv
   rules:
@@ -356,7 +493,7 @@ windows-x86_64-gpu-amd-test-job:
   extends:
     - .windows-test-job
   needs:
-    - windows-x86_64-build-job
+    - windows-x86_64-build-rel-job
   tags:
     - windows,x86_64,amd
 
@@ -367,7 +504,7 @@ windows-x86_64-gpu-nv-test-job:
   extends:
     - .windows-test-job
   needs:
-    - windows-x86_64-build-job
+    - windows-x86_64-build-rel-job
   tags:
     - windows,x86_64,nv
 
@@ -378,7 +515,7 @@ windows-x86_64-gpu-xe-test-job:
   extends:
     - .windows-test-job
   needs:
-    - windows-x86_64-build-job
+    - windows-x86_64-build-rel-job
   tags:
     - windows,x86_64,xe
 
@@ -389,7 +526,7 @@ windows-x86_64-gpu-arc-test-job:
   extends:
     - .windows-test-job
   needs:
-    - windows-x86_64-build-job
+    - windows-x86_64-build-rel-job
   tags:
     - windows,x86_64,arc
 
@@ -400,7 +537,7 @@ windows-arm64-cpu-test-job:
   extends:
     - .windows-test-job
   needs:
-    - windows-arm64-build-job
+    - windows-arm64-build-rel-job
   tags:
     - windows,arm64
 
@@ -411,7 +548,7 @@ windows-arm64-gpu-adreno-test-job:
   extends:
     - .windows-test-job
   needs:
-    - windows-arm64-build-job
+    - windows-arm64-build-rel-job
   tags:
     - windows,arm64,adreno
 
@@ -422,7 +559,7 @@ windows-arm64-cpu-perf-test-job:
   extends:
     - .windows-perf-test-job
   needs:
-    - windows-arm64-build-job
+    - windows-arm64-build-rel-job
   tags:
     - windows,arm64,perf
   rules:
@@ -435,7 +572,7 @@ windows-arm64-gpu-perf-test-job:
   extends:
     - .windows-perf-test-job
   needs:
-    - windows-arm64-build-job
+    - windows-arm64-build-rel-job
   tags:
     - windows,arm64,perf
   rules:
@@ -448,7 +585,7 @@ linux-x86_64-cpu-test-job:
   extends:
     - .test-job
   needs:
-    - linux-x86_64-build-job
+    - linux-x86_64-build-rel-job
   tags:
     - linux,x86_64
 
@@ -459,7 +596,7 @@ linux-x86_64-gpu-nv-test-job:
   extends:
     - .test-job
   needs:
-    - linux-x86_64-build-job
+    - linux-x86_64-build-rel-job
   tags:
     - linux,x86_64,nv
 
@@ -470,7 +607,7 @@ linux-x86_64-gpu-amd-test-job:
   extends:
     - .test-job
   needs:
-    - linux-x86_64-build-job
+    - linux-x86_64-build-rel-job
   tags:
     - linux,x86_64,amd
 
@@ -481,7 +618,7 @@ macos-x86_64-cpu-test-job:
   extends:
     - .test-job
   needs:
-    - macos-universal-build-job
+    - macos-universal-build-rel-job
   tags:
     - macos,x86_64
 
@@ -492,7 +629,7 @@ macos-arm64-cpu-test-job:
   extends:
     - .test-job
   needs:
-    - macos-universal-build-job
+    - macos-universal-build-rel-job
   tags:
     - macos,arm64
 
@@ -503,7 +640,7 @@ macos-arm64-gpu-m1-test-job:
   extends:
     - .test-job
   needs:
-    - macos-universal-build-job
+    - macos-universal-build-rel-job
   tags:
     - macos,arm64,m1
 
@@ -515,10 +652,28 @@ deploy-job:
     - echo "Deploying application..."
     - echo "Application successfully deployed."
   needs:
-    - windows-x86_64-build-job
-    - windows-arm64-build-job
-    - linux-x86_64-build-job
-    - macos-universal-build-job
+    - windows-x86_64-build-rel-job
+    - job: windows-x86_64-build-dbg-job
+      optional: true
+    - job: windows-x86_64-build-dev-job
+      optional: true
+    - job: windows-x86_64-build-asan-job
+      optional: true
+    - windows-arm64-build-rel-job
+    - job: windows-arm64-build-dbg-job
+      optional: true
+    - job: windows-arm64-build-dev-job
+      optional: true
+    - linux-x86_64-build-rel-job
+    - job: linux-x86_64-build-dbg-job
+      optional: true
+    - job: linux-x86_64-build-dev-job
+      optional: true
+    - macos-universal-build-rel-job
+    - job: macos-universal-build-dbg-job
+      optional: true
+    - job: macos-universal-build-dev-job
+      optional: true
   artifacts:
     paths:
       - windows-x86_64/
