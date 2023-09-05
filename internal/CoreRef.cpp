@@ -5130,7 +5130,7 @@ force_inline simd_fvec4 FetchLUT(const eViewTransform view_transform, const int 
 
 Ray::Ref::simd_fvec4 vectorcall Ray::Ref::TonemapFilmic(const eViewTransform view_transform, simd_fvec4 color) {
     const simd_fvec4 encoded = color / (color + 1.0f);
-    const simd_fvec4 uv = encoded * float(LUT_DIMS - 1) + 0.5f;
+    const simd_fvec4 uv = encoded * float(LUT_DIMS - 1);
     const simd_ivec4 xyz = simd_ivec4(uv);
     const simd_fvec4 f = fract(uv);
     const simd_ivec4 xyz_next = min(xyz + 1, simd_ivec4{LUT_DIMS - 1});

@@ -8,17 +8,14 @@ LUT_RES = 48
 def GenerateIdentityCube(res):
     data = np.empty((res, res, res, 3), dtype=np.float32)
     for iz in range(res):
-        fz = float(iz) / res
-        fz = (fz * res - 0.5) / (res - 1.0)
+        fz = float(iz) / (res - 1.0)
         for iy in range(res):
-            fy = float(iy) / res
-            fy = (fy * res - 0.5) / (res - 1.0)
+            fy = float(iy) / (res - 1.0)
             for ix in range(res):
-                fx = float(ix) / res
-                fx = (fx * res - 0.5) / (res - 1.0)
-                data[iz, iy, ix, 0] = fx / (1.0 - fx)
-                data[iz, iy, ix, 1] = fy / (1.0 - fy)
-                data[iz, iy, ix, 2] = fz / (1.0 - fz)
+                fx = float(ix) / (res - 1.0)
+                data[iz, iy, ix, 0] = fx / (1.0 - fx) if fx < 1.0 else 1000000.0
+                data[iz, iy, ix, 1] = fy / (1.0 - fy) if fy < 1.0 else 1000000.0
+                data[iz, iy, ix, 2] = fz / (1.0 - fz) if fz < 1.0 else 1000000.0
     return data
 
 def WriteAsCArray(lut_name, data, res):

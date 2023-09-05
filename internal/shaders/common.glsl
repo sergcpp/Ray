@@ -145,7 +145,7 @@ vec3 TonemapLUT(sampler3D lut, float inv_gamma, vec3 col) {
 
     // Align the encoded range to texel centers
     const float LUT_DIMS = 48.0;
-    const vec3 uv = encoded * ((LUT_DIMS - 1.0) / LUT_DIMS) + 0.5 / LUT_DIMS;
+    const vec3 uv = encoded * (LUT_DIMS - 1.0) / LUT_DIMS;
 
     vec3 ret = textureLod(lut, uv, 0.0).xyz;
     if (inv_gamma != 1.0) {
@@ -165,7 +165,7 @@ vec3 TonemapLUT_manual(sampler3D lut, float inv_gamma, vec3 col) {
 
     // Align the encoded range to texel centers
     const float LUT_DIMS = 48;
-    const vec3 uv = encoded * (LUT_DIMS - 1.0) + 0.5;
+    const vec3 uv = encoded * (LUT_DIMS - 1.0);
     const ivec3 xyz = ivec3(uv);
     const ivec3 xyz_next = min(xyz + 1, ivec3(LUT_DIMS - 1));
     const vec3 f = fract(uv);
