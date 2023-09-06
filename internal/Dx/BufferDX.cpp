@@ -40,17 +40,14 @@ eResState GetInitialDxResourceState(const eBufType type) {
 
 int Ray::Dx::Buffer::g_GenCounter = 0;
 
-Ray::Dx::Buffer::Buffer(const char *name, Context *ctx, const eBufType type, const uint32_t initial_size,
-                        const uint32_t suballoc_align)
-    : LinearAlloc(std::min(suballoc_align, initial_size), initial_size), ctx_(ctx), name_(name), type_(type), size_(0) {
+Ray::Dx::Buffer::Buffer(const char *name, Context *ctx, const eBufType type, const uint32_t initial_size)
+    : ctx_(ctx), name_(name), type_(type), size_(0) {
     Resize(initial_size);
 }
 
 Ray::Dx::Buffer::~Buffer() { Free(); }
 
 Ray::Dx::Buffer &Ray::Dx::Buffer::operator=(Buffer &&rhs) noexcept {
-    LinearAlloc::operator=(static_cast<LinearAlloc &&>(rhs));
-
     Free();
 
     assert(!mapped_ptr_);
@@ -75,51 +72,6 @@ Ray::Dx::Buffer &Ray::Dx::Buffer::operator=(Buffer &&rhs) noexcept {
     resource_state = exchange(rhs.resource_state, eResState::Undefined);
 
     return (*this);
-}
-
-uint32_t Ray::Dx::Buffer::AllocSubRegion(const uint32_t req_size, const char *tag, const Buffer *init_buf,
-                                         void *_cmd_buf, const uint32_t init_off) {
-    const uint32_t alloc_off = Alloc(req_size, tag);
-    if (alloc_off != 0xffffffff) {
-        if (init_buf) {
-            assert(init_buf->type_ == eBufType::Upload || init_buf->type_ == eBufType::Readback);
-            auto cmd_buf = reinterpret_cast<CommandBuffer>(_cmd_buf);
-
-            SmallVector<D3D12_RESOURCE_BARRIER, 2> barriers;
-
-            if (/*init_buf->resource_state != eResState::Undefined &&*/ init_buf->resource_state !=
-                eResState::CopySrc) {
-                auto &new_barrier = barriers.emplace_back();
-                new_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-                new_barrier.Transition.pResource = init_buf->dx_resource();
-                new_barrier.Transition.StateBefore = DXResourceState(init_buf->resource_state);
-                new_barrier.Transition.StateAfter = DXResourceState(eResState::CopySrc);
-                new_barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-            }
-
-            if (/*this->resource_state != eResState::Undefined &&*/ this->resource_state != eResState::CopyDst) {
-                auto &new_barrier = barriers.emplace_back();
-                new_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-                new_barrier.Transition.pResource = this->dx_resource();
-                new_barrier.Transition.StateBefore = DXResourceState(this->resource_state);
-                new_barrier.Transition.StateAfter = DXResourceState(eResState::CopyDst);
-                new_barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-            }
-
-            if (!barriers.empty()) {
-                cmd_buf->ResourceBarrier(UINT(barriers.size()), barriers.data());
-            }
-
-            cmd_buf->CopyBufferRegion(handle_.buf, alloc_off, init_buf->dx_resource(), init_off, req_size);
-
-            init_buf->resource_state = eResState::CopySrc;
-            this->resource_state = eResState::CopyDst;
-        }
-
-        return alloc_off;
-    }
-
-    return 0xffffffff;
 }
 
 void Ray::Dx::Buffer::UpdateSubRegion(const uint32_t offset, const uint32_t size, const Buffer &init_buf,
@@ -157,11 +109,6 @@ void Ray::Dx::Buffer::UpdateSubRegion(const uint32_t offset, const uint32_t size
     this->resource_state = eResState::CopyDst;
 }
 
-bool Ray::Dx::Buffer::FreeSubRegion(const uint32_t offset, const uint32_t size) {
-    LinearAlloc::Free(offset, size);
-    return true;
-}
-
 void Ray::Dx::Buffer::Resize(const uint32_t new_size, const bool keep_content) {
     if (size_ >= new_size) {
         return;
@@ -171,11 +118,6 @@ void Ray::Dx::Buffer::Resize(const uint32_t new_size, const bool keep_content) {
 
     size_ = new_size;
     assert(size_ > 0);
-
-    if (old_size) {
-        LinearAlloc::Resize(size_);
-        assert(size_ == size());
-    }
 
     ID3D12Device *device = ctx_->device();
 
@@ -302,7 +244,6 @@ void Ray::Dx::Buffer::Free() {
 
         handle_ = {};
         size_ = 0;
-        LinearAlloc::Clear();
     }
 }
 
@@ -313,7 +254,6 @@ void Ray::Dx::Buffer::FreeImmediate() {
 
         handle_ = {};
         size_ = 0;
-        LinearAlloc::Clear();
     }
 }
 

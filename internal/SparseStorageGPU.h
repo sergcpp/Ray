@@ -64,10 +64,8 @@ template <typename T> class SparseStorage {
         }
 
         if (!cpu_buf_.ctx()) {
-            cpu_buf_ =
-                Buffer{name_.c_str(), ctx_, eBufType::Upload, uint32_t(new_capacity * sizeof(T)), uint32_t(sizeof(T))};
-            gpu_buf_ =
-                Buffer{name_.c_str(), ctx_, eBufType::Storage, uint32_t(new_capacity * sizeof(T)), uint32_t(sizeof(T))};
+            cpu_buf_ = Buffer{name_.c_str(), ctx_, eBufType::Upload, uint32_t(new_capacity * sizeof(T))};
+            gpu_buf_ = Buffer{name_.c_str(), ctx_, eBufType::Storage, uint32_t(new_capacity * sizeof(T))};
         } else {
             cpu_buf_.Unmap();
             cpu_buf_.Resize(new_capacity * sizeof(T));
@@ -155,13 +153,9 @@ template <typename T> class SparseStorage {
         ++size_;
     }
 
-    force_inline const T &at(const uint32_t index) const {
-        return *(cpu_buf_.mapped_ptr<T>() + index);
-    }
+    force_inline const T &at(const uint32_t index) const { return *(cpu_buf_.mapped_ptr<T>() + index); }
 
-    force_inline const T &operator[](const uint32_t index) const {
-        return *(cpu_buf_.mapped_ptr<T>() + index);
-    }
+    force_inline const T &operator[](const uint32_t index) const { return *(cpu_buf_.mapped_ptr<T>() + index); }
 
     class SparseStorageIterator : public std::iterator<std::forward_iterator_tag, T> {
         friend class SparseStorage<T>;

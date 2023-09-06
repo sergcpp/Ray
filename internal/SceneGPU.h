@@ -443,8 +443,7 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
                               ? expected_mip_count
                               : std::min(_t.mips_count, expected_mip_count);
 
-    Buffer temp_stage_buf("Temp stage buf", ctx_, eBufType::Upload, 3 * _t.w * _t.h * 4 + 4096 * mip_count,
-                          4096); // allocate for worst case
+    Buffer temp_stage_buf("Temp stage buf", ctx_, eBufType::Upload, 3 * _t.w * _t.h * 4 + 4096 * mip_count); // allocate for worst case
     uint8_t *stage_data = temp_stage_buf.Map();
 
     bool use_compression = use_tex_compression_ && !_t.force_no_compression;

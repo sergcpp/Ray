@@ -12,7 +12,7 @@ template <typename T> class Vector {
 
   public:
     explicit Vector(Context *ctx, const char *name, const size_t capacity = 16) : ctx_(ctx), size_(0), cap_(capacity) {
-        buf_ = Buffer{name, ctx_, eBufType::Storage, uint32_t(sizeof(T) * cap_), sizeof(T)};
+        buf_ = Buffer{name, ctx_, eBufType::Storage, uint32_t(sizeof(T) * cap_)};
     }
 
     const Buffer &buf() const { return buf_; }
@@ -38,7 +38,7 @@ template <typename T> class Vector {
         Reserve(size_ + num);
 
         { // Write buffer
-            Buffer temp_stage_buf{"Temp Stage", ctx_, eBufType::Upload, uint32_t(sizeof(T) * num), uint32_t(sizeof(T))};
+            Buffer temp_stage_buf{"Temp Stage", ctx_, eBufType::Upload, uint32_t(sizeof(T) * num)};
 
             { // Prepare stage buffer
                 uint8_t *ptr = temp_stage_buf.Map();

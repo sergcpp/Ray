@@ -55,17 +55,14 @@ uint32_t FindMemoryType(uint32_t search_from, const VkPhysicalDeviceMemoryProper
 
 int Ray::Vk::Buffer::g_GenCounter = 0;
 
-Ray::Vk::Buffer::Buffer(const char *name, Context *ctx, const eBufType type, const uint32_t initial_size,
-                        const uint32_t suballoc_align)
-    : LinearAlloc(std::min(suballoc_align, initial_size), initial_size), ctx_(ctx), name_(name), type_(type), size_(0) {
+Ray::Vk::Buffer::Buffer(const char *name, Context *ctx, const eBufType type, const uint32_t initial_size)
+    : ctx_(ctx), name_(name), type_(type), size_(0) {
     Resize(initial_size);
 }
 
 Ray::Vk::Buffer::~Buffer() { Free(); }
 
 Ray::Vk::Buffer &Ray::Vk::Buffer::operator=(Buffer &&rhs) noexcept {
-    LinearAlloc::operator=(static_cast<LinearAlloc &&>(rhs));
-
     Free();
 
     assert(!mapped_ptr_);
@@ -95,69 +92,6 @@ VkDeviceAddress Ray::Vk::Buffer::vk_device_address() const {
     VkBufferDeviceAddressInfo addr_info = {VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO};
     addr_info.buffer = handle_.buf;
     return ctx_->api().vkGetBufferDeviceAddressKHR(ctx_->device(), &addr_info);
-}
-
-uint32_t Ray::Vk::Buffer::AllocSubRegion(const uint32_t req_size, const char *tag, const Buffer *init_buf,
-                                         void *_cmd_buf, const uint32_t init_off) {
-    const uint32_t alloc_off = Alloc(req_size, tag);
-    if (alloc_off != 0xffffffff) {
-        if (init_buf) {
-            assert(init_buf->type_ == eBufType::Upload || init_buf->type_ == eBufType::Readback);
-            auto cmd_buf = reinterpret_cast<VkCommandBuffer>(_cmd_buf);
-
-            VkPipelineStageFlags src_stages = 0, dst_stages = 0;
-            SmallVector<VkBufferMemoryBarrier, 2> barriers;
-
-            if (init_buf->resource_state != eResState::Undefined && init_buf->resource_state != eResState::CopySrc) {
-                auto &new_barrier = barriers.emplace_back();
-                new_barrier = {VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER};
-                new_barrier.srcAccessMask = VKAccessFlagsForState(init_buf->resource_state);
-                new_barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-                new_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-                new_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-                new_barrier.buffer = init_buf->vk_handle();
-                new_barrier.offset = VkDeviceSize{init_off};
-                new_barrier.size = VkDeviceSize{req_size};
-
-                src_stages |= VKPipelineStagesForState(init_buf->resource_state);
-                dst_stages |= VKPipelineStagesForState(eResState::CopySrc);
-            }
-
-            if (this->resource_state != eResState::Undefined && this->resource_state != eResState::CopyDst) {
-                auto &new_barrier = barriers.emplace_back();
-                new_barrier = {VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER};
-                new_barrier.srcAccessMask = VKAccessFlagsForState(this->resource_state);
-                new_barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-                new_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-                new_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-                new_barrier.buffer = handle_.buf;
-                new_barrier.offset = VkDeviceSize{alloc_off};
-                new_barrier.size = VkDeviceSize{req_size};
-
-                src_stages |= VKPipelineStagesForState(this->resource_state);
-                dst_stages |= VKPipelineStagesForState(eResState::CopyDst);
-            }
-
-            if (!barriers.empty()) {
-                ctx_->api().vkCmdPipelineBarrier(cmd_buf, src_stages, dst_stages, 0, 0, nullptr,
-                                                 uint32_t(barriers.size()), barriers.cdata(), 0, nullptr);
-            }
-
-            VkBufferCopy region_to_copy = {};
-            region_to_copy.srcOffset = VkDeviceSize{init_off};
-            region_to_copy.dstOffset = VkDeviceSize{alloc_off};
-            region_to_copy.size = VkDeviceSize{req_size};
-
-            ctx_->api().vkCmdCopyBuffer(cmd_buf, init_buf->handle_.buf, handle_.buf, 1, &region_to_copy);
-
-            init_buf->resource_state = eResState::CopySrc;
-            this->resource_state = eResState::CopyDst;
-        }
-
-        return alloc_off;
-    }
-
-    return 0xffffffff;
 }
 
 void Ray::Vk::Buffer::UpdateSubRegion(const uint32_t offset, const uint32_t size, const Buffer &init_buf,
@@ -215,11 +149,6 @@ void Ray::Vk::Buffer::UpdateSubRegion(const uint32_t offset, const uint32_t size
     this->resource_state = eResState::CopyDst;
 }
 
-bool Ray::Vk::Buffer::FreeSubRegion(const uint32_t offset, const uint32_t size) {
-    LinearAlloc::Free(offset, size);
-    return true;
-}
-
 void Ray::Vk::Buffer::Resize(const uint32_t new_size, const bool keep_content) {
     if (size_ >= new_size) {
         return;
@@ -229,11 +158,6 @@ void Ray::Vk::Buffer::Resize(const uint32_t new_size, const bool keep_content) {
 
     size_ = new_size;
     assert(size_ > 0);
-
-    if (old_size) {
-        LinearAlloc::Resize(size_);
-        assert(size_ == size());
-    }
 
     VkBufferCreateInfo buf_create_info = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
     buf_create_info.size = VkDeviceSize(AlignMapOffsetUp(size_));
@@ -337,7 +261,6 @@ void Ray::Vk::Buffer::Free() {
 
         handle_ = {};
         size_ = 0;
-        LinearAlloc::Clear();
     }
 }
 
@@ -349,7 +272,6 @@ void Ray::Vk::Buffer::FreeImmediate() {
 
         handle_ = {};
         size_ = 0;
-        LinearAlloc::Clear();
     }
 }
 

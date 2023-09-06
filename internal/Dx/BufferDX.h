@@ -1,8 +1,8 @@
 #pragma once
 
+#include <string>
 #include <vector>
 
-#include "../LinearAlloc.h"
 #include "../SmallVector.h"
 #include "DescriptorPoolDX.h"
 #include "FenceDX.h"
@@ -64,7 +64,7 @@ struct RangeFence {
         : range(_range), fence(std::move(_fence)) {}
 };
 
-class Buffer : public LinearAlloc {
+class Buffer {
     Context *ctx_ = nullptr;
     BufHandle handle_;
     std::string name_;
@@ -81,7 +81,7 @@ class Buffer : public LinearAlloc {
 
   public:
     Buffer() = default;
-    explicit Buffer(const char *name, Context *ctx, eBufType type, uint32_t initial_size, uint32_t suballoc_align = 1);
+    explicit Buffer(const char *name, Context *ctx, eBufType type, uint32_t initial_size);
     Buffer(const Buffer &rhs) = delete;
     Buffer(Buffer &&rhs) noexcept { (*this) = std::move(rhs); }
     ~Buffer();
@@ -105,11 +105,8 @@ class Buffer : public LinearAlloc {
     bool is_mapped() const { return mapped_ptr_ != nullptr; }
     template <typename T = uint8_t> T *mapped_ptr() const { return reinterpret_cast<T *>(mapped_ptr_); }
 
-    uint32_t AllocSubRegion(uint32_t size, const char *tag, const Buffer *init_buf = nullptr, void *cmd_buf = nullptr,
-                            uint32_t init_off = 0);
     void UpdateSubRegion(uint32_t offset, uint32_t size, const Buffer &init_buf, uint32_t init_off = 0,
                          void *cmd_buf = nullptr);
-    bool FreeSubRegion(uint32_t offset, uint32_t size);
 
     void Resize(uint32_t new_size, bool keep_content = true);
     void Free();
