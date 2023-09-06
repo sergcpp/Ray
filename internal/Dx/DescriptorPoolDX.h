@@ -1,7 +1,6 @@
 #pragma once
 
 #include "../FreelistAlloc.h"
-#include "../LinearAlloc.h"
 #include "../SmallVector.h"
 
 struct ID3D12DescriptorHeap;

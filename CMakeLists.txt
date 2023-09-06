@@ -70,8 +70,6 @@ set(INTERNAL_SOURCE_FILES internal/Atmosphere.h
                           internal/Halton.h
                           internal/Halton.cpp
                           internal/HashMap32.h
-                          internal/LinearAlloc.h
-                          internal/LinearAlloc.cpp
                           internal/RastState.h
                           internal/RendererCPU.h
                           internal/RendererGPU.h
