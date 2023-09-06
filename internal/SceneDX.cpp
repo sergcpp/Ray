@@ -60,7 +60,7 @@ void Ray::Dx::Scene::PrepareBindlessTextures_nolock() {
         log_->Error("Failed to init descriptor pool!");
     }
 
-    const uint32_t off = bindless_tex_data_.srv_descr_pool.Alloc(bindless_textures_.capacity());
+    const uint32_t off = bindless_tex_data_.srv_descr_pool.Alloc(bindless_textures_.capacity()).first;
     assert(off == 0);
 
     ID3D12Device *device = ctx_->device();

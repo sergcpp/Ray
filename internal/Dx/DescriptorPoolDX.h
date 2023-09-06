@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../FreelistAlloc.h"
 #include "../LinearAlloc.h"
 #include "../SmallVector.h"
 
@@ -29,35 +30,42 @@ class BumpAlloc {
 
     uint32_t capacity() const { return capacity_; }
 
-    uint32_t Alloc(const uint32_t count) {
+    std::pair<uint32_t, uint32_t> Alloc(const uint32_t count) {
         if (next_free_ + count >= capacity_) {
-            return 0xffffffff;
+            return std::make_pair(0xffffffff, 0xffffffff);
         }
 
         const uint32_t ret = next_free_;
         next_free_ += count;
-        return ret;
+        return std::make_pair(ret, count);
     }
-    void Free(uint32_t offset, uint32_t size) {}
+    void Free(const uint32_t offset, const uint32_t size) {
+        if (offset + size == next_free_) {
+            next_free_ -= size;
+        }
+    }
     void Reset() { next_free_ = 0; }
 };
 
-class LinearAllocAdapted : public LinearAlloc {
+class FreelistAllocAdapted : public FreelistAlloc {
+    uint32_t capacity_ = 0;
+
   public:
-    LinearAllocAdapted() = default;
-    explicit LinearAllocAdapted(const uint32_t capacity) : LinearAlloc(1, capacity) {}
-    /*LinearAllocAdapted(LinearAllocAdapted &&rhs) noexcept = default;
-    ~LinearAllocAdapted() {
-        for (uint32_t i = 0; i < size(); ++i) {
-            assert(!IsSet(i));
-        }
+    FreelistAllocAdapted() = default;
+    explicit FreelistAllocAdapted(const uint32_t capacity) : FreelistAlloc(capacity), capacity_(capacity) {}
+
+    uint32_t capacity() const { return capacity_; }
+
+    std::pair<uint32_t, uint32_t> Alloc(const uint32_t count) {
+        const auto alloc = FreelistAlloc::Alloc(count);
+        assert(FreelistAlloc::IntegrityCheck());
+        return std::make_pair(alloc.offset, alloc.block);
     }
-    LinearAllocAdapted &operator=(LinearAllocAdapted &rhs) noexcept = default;*/
-
-    uint32_t capacity() const { return size(); }
-
-    uint32_t Alloc(const uint32_t count) { return LinearAlloc::Alloc(count, nullptr); }
-    void Reset() { LinearAlloc::Clear(); }
+    void Free(const uint32_t offset, const uint32_t block) {
+        FreelistAlloc::Free(block);
+        assert(FreelistAlloc::IntegrityCheck());
+    }
+    void Reset() {}
 };
 
 template <class Allocator> class DescrPool {
@@ -83,18 +91,17 @@ template <class Allocator> class DescrPool {
     bool Init(uint32_t descr_count, bool shader_visible);
     void Destroy();
 
-    uint32_t Alloc(const uint32_t descr_count) { return alloc_.Alloc(descr_count); }
-    void Free(const uint32_t offset, const uint32_t size) { alloc_.Free(offset, size); }
+    std::pair<uint32_t, uint32_t> Alloc(const uint32_t descr_count) { return alloc_.Alloc(descr_count); }
+    void Free(const uint32_t offset, const uint32_t block) { alloc_.Free(offset, block); }
     void Reset();
 };
 
 extern template class DescrPool<BumpAlloc>;
-extern template class DescrPool<LinearAllocAdapted>;
+extern template class DescrPool<FreelistAllocAdapted>;
 
 struct PoolRef {
     ID3D12DescriptorHeap *heap = nullptr;
-    uint32_t offset = 0xffffffff;
-    uint32_t count = 0;
+    uint32_t offset = 0xffffffff, block = 0xffffffff;
 
     operator bool() const { return heap != nullptr; }
 };
@@ -119,7 +126,7 @@ template <class Allocator> class DescrPoolAlloc {
 };
 
 extern template class DescrPoolAlloc<BumpAlloc>;
-extern template class DescrPoolAlloc<LinearAllocAdapted>;
+extern template class DescrPoolAlloc<FreelistAllocAdapted>;
 
 struct DescrSizes {
     union {
@@ -165,7 +172,7 @@ template <class Allocator> class DescrMultiPoolAlloc {
 };
 
 extern template class DescrMultiPoolAlloc<BumpAlloc>;
-extern template class DescrMultiPoolAlloc<LinearAllocAdapted>;
+extern template class DescrMultiPoolAlloc<FreelistAllocAdapted>;
 
 } // namespace Dx
 } // namespace Ray

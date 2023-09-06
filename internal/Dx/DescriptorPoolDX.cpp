@@ -1,5 +1,7 @@
 #include "DescriptorPoolDX.h"
 
+#include <tuple>
+
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
@@ -79,15 +81,14 @@ template <class Allocator> void Ray::Dx::DescrPool<Allocator>::Destroy() {
 template <class Allocator> void Ray::Dx::DescrPool<Allocator>::Reset() { alloc_.Reset(); }
 
 template class Ray::Dx::DescrPool<Ray::Dx::BumpAlloc>;
-template class Ray::Dx::DescrPool<Ray::Dx::LinearAllocAdapted>;
+template class Ray::Dx::DescrPool<Ray::Dx::FreelistAllocAdapted>;
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 template <class Allocator> Ray::Dx::PoolRef Ray::Dx::DescrPoolAlloc<Allocator>::Alloc(const uint32_t descr_count) {
     PoolRef ref = {};
-    ref.count = descr_count;
     for (auto &pool : pools_) {
-        ref.offset = pool.Alloc(descr_count);
+        std::tie(ref.offset, ref.block) = pool.Alloc(descr_count);
         if (ref.offset != 0xffffffff) {
             ref.heap = pool.heap();
             break;
@@ -99,7 +100,7 @@ template <class Allocator> Ray::Dx::PoolRef Ray::Dx::DescrPoolAlloc<Allocator>::
         const uint32_t count_mul = (1u << pools_.size());
         auto &new_pool = pools_.emplace_back(ctx_, type_);
         if (new_pool.Init(count_mul * initial_descr_count_, shader_visible_)) {
-            ref.offset = new_pool.Alloc(descr_count);
+            std::tie(ref.offset, ref.block) = new_pool.Alloc(descr_count);
             if (ref.offset != 0xffffffff) {
                 ref.heap = new_pool.heap();
             }
@@ -112,7 +113,7 @@ template <class Allocator> Ray::Dx::PoolRef Ray::Dx::DescrPoolAlloc<Allocator>::
 template <class Allocator> void Ray::Dx::DescrPoolAlloc<Allocator>::Free(const PoolRef &ref) {
     for (auto &pool : pools_) {
         if (pool.heap() == ref.heap) {
-            pool.Free(ref.offset, ref.count);
+            pool.Free(ref.offset, ref.block);
             break;
         }
     }
@@ -125,7 +126,7 @@ template <class Allocator> void Ray::Dx::DescrPoolAlloc<Allocator>::Reset() {
 }
 
 template class Ray::Dx::DescrPoolAlloc<Ray::Dx::BumpAlloc>;
-template class Ray::Dx::DescrPoolAlloc<Ray::Dx::LinearAllocAdapted>;
+template class Ray::Dx::DescrPoolAlloc<Ray::Dx::FreelistAllocAdapted>;
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -172,4 +173,4 @@ template <class Allocator> void Ray::Dx::DescrMultiPoolAlloc<Allocator>::Reset()
 }
 
 template class Ray::Dx::DescrMultiPoolAlloc<Ray::Dx::BumpAlloc>;
-template class Ray::Dx::DescrMultiPoolAlloc<Ray::Dx::LinearAllocAdapted>;
+template class Ray::Dx::DescrMultiPoolAlloc<Ray::Dx::FreelistAllocAdapted>;

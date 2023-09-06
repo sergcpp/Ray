@@ -8,7 +8,7 @@
 // Based on : https://github.com/mattconte/tlsf
 
 namespace Ray {
-template <typename OffsetType, bool InPlace = true> struct tlsf_index_t {
+template <typename OffsetType, bool InPlace> struct tlsf_index_t {
     static const int ALIGN_SIZE_LOG2 = InPlace ? (sizeof(OffsetType) == 8 ? 3 : 2) : 0;
     static const int ALIGN_SIZE = (1 << ALIGN_SIZE_LOG2);
     static const int SL_INDEX_COUNT_LOG2 = 5;
@@ -18,6 +18,8 @@ template <typename OffsetType, bool InPlace = true> struct tlsf_index_t {
     static const int FL_INDEX_SHIFT = (SL_INDEX_COUNT_LOG2 + ALIGN_SIZE_LOG2);
     static const int FL_INDEX_COUNT = (FL_INDEX_MAX - FL_INDEX_SHIFT + 1);
     static const int SMALL_BLOCK_SIZE = (1 << FL_INDEX_SHIFT);
+
+    static_assert(InPlace || (SMALL_BLOCK_SIZE / SL_INDEX_COUNT) == 1, "!");
 
     // First and second level bitmap
     uint32_t fl_bitmap = 0; // zero means 'no free blocks'

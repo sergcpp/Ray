@@ -318,7 +318,7 @@ bool Ray::Dx::Context::Init(ILog *log, const char *preferred_device) {
     default_memory_allocs_ =
         std::make_unique<MemoryAllocators>("Default Allocs", this, 32 * 1024 * 1024 /* initial_pool_size */,
                                            1.5f /* growth_factor */, 128 * 1024 * 1024 /* max_pool_size */);
-    staging_descr_alloc_ = std::make_unique<DescrMultiPoolAlloc<LinearAllocAdapted>>(this, false, 16 * 1024);
+    staging_descr_alloc_ = std::make_unique<DescrMultiPoolAlloc<FreelistAllocAdapted>>(this, false, 16 * 1024);
 
     for (int i = 0; i < MaxFramesInFlight; ++i) {
         uniform_data_bufs[i] = Buffer{"Uniform data buf", this, eBufType::Upload, 1 * 1024 * 1024};

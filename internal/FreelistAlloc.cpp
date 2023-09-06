@@ -107,7 +107,7 @@ uint16_t Ray::FreelistAlloc::AddPool(const uint32_t size) {
     all_blocks_[main_block_index].next_free = 0xffffffff;
     all_blocks_[main_block_index].is_free = 1;
     all_blocks_[main_block_index].is_prev_free = 0;
-    insert_free_block(main_block_index, tlsf_index_t<uint32_t>::mapping_insert(size));
+    insert_free_block(main_block_index, tlsf_index_t<uint32_t, false>::mapping_insert(size));
 
     all_blocks_[zero_block_index].prev_phys = main_block_index;
     all_blocks_[zero_block_index].next_phys = 0xffffffff;
@@ -129,7 +129,7 @@ void Ray::FreelistAlloc::RemovePool(const uint16_t pool) {
     assert(!all_blocks_[all_blocks_[block_index].next_phys].is_free && "next block must not be free");
     assert(all_blocks_[all_blocks_[block_index].next_phys].size == 0 && "next block size must be zero");
 
-    disconnect_free_block(block_index, tlsf_index_t<uint32_t>::mapping_insert(all_blocks_[block_index].size));
+    disconnect_free_block(block_index, tlsf_index_t<uint32_t, false>::mapping_insert(all_blocks_[block_index].size));
 
     remove_block(all_blocks_[block_index].next_phys);
     remove_block(block_index);
@@ -148,11 +148,11 @@ void Ray::FreelistAlloc::ResizePool(uint16_t pool, uint32_t size) {
     }
 
     if (all_blocks_[prev_index].is_free) {
-        disconnect_free_block(prev_index, tlsf_index_t<uint32_t>::mapping_insert(all_blocks_[prev_index].size));
+        disconnect_free_block(prev_index, tlsf_index_t<uint32_t, false>::mapping_insert(all_blocks_[prev_index].size));
         // expand existing free block
         all_blocks_[prev_index].size = size - all_blocks_[prev_index].offset;
         all_blocks_[tail_index].offset = size;
-        insert_free_block(prev_index, tlsf_index_t<uint32_t>::mapping_insert(all_blocks_[prev_index].size));
+        insert_free_block(prev_index, tlsf_index_t<uint32_t, false>::mapping_insert(all_blocks_[prev_index].size));
     } else {
         // create new emply block
         const uint32_t new_block_index = create_block();
@@ -173,7 +173,8 @@ void Ray::FreelistAlloc::ResizePool(uint16_t pool, uint32_t size) {
         all_blocks_[tail_index].prev_phys = new_block_index;
         all_blocks_[tail_index].is_prev_free = 1;
 
-        insert_free_block(new_block_index, tlsf_index_t<uint32_t>::mapping_insert(all_blocks_[new_block_index].size));
+        insert_free_block(new_block_index,
+                          tlsf_index_t<uint32_t, false>::mapping_insert(all_blocks_[new_block_index].size));
     }
 }
 
@@ -209,7 +210,7 @@ void Ray::FreelistAlloc::Free(uint32_t block) {
     block = block_merge_prev(block);
     block_merge_next(block);
 
-    insert_free_block(block, tlsf_index_t<uint32_t>::mapping_insert(all_blocks_[block].size));
+    insert_free_block(block, tlsf_index_t<uint32_t, false>::mapping_insert(all_blocks_[block].size));
 }
 
 Ray::FreelistAlloc::Range Ray::FreelistAlloc::GetFirstOccupiedBlock(const uint16_t pool) const {
@@ -243,8 +244,8 @@ bool Ray::FreelistAlloc::IntegrityCheck() const {
         ++errors;                                                                                                      \
     }
 
-    for (int i = 0; i < tlsf_index_t<uint32_t>::FL_INDEX_COUNT; ++i) {
-        for (int j = 0; j < tlsf_index_t<uint32_t>::SL_INDEX_COUNT; ++j) {
+    for (int i = 0; i < tlsf_index_t<uint32_t, false>::FL_INDEX_COUNT; ++i) {
+        for (int j = 0; j < tlsf_index_t<uint32_t, false>::SL_INDEX_COUNT; ++j) {
             const uint32_t fl_map = index_.fl_bitmap & (1u << i);
             const uint32_t sl_list = index_.sl_bitmap[i];
             const uint32_t sl_map = sl_list & (1u << j);
@@ -269,7 +270,8 @@ bool Ray::FreelistAlloc::IntegrityCheck() const {
                 insist(!all_blocks_[all_blocks_[block_index].next_phys].is_free && "blocks should have coalesced");
                 insist(all_blocks_[all_blocks_[block_index].next_phys].is_prev_free && "block should be free");
 
-                const std::pair<int, int> index = tlsf_index_t<uint32_t>::mapping_insert(all_blocks_[block_index].size);
+                const std::pair<int, int> index =
+                    tlsf_index_t<uint32_t, false>::mapping_insert(all_blocks_[block_index].size);
                 insist(index.first == i && index.second == j && "block size indexed in wrong list");
                 assert(block_index != all_blocks_[block_index].next_free && "cycle detected");
                 block_index = all_blocks_[block_index].next_free;
@@ -300,8 +302,8 @@ uint32_t Ray::FreelistAlloc::block_locate_free(uint32_t size) {
     uint32_t block = 0xffffffff;
 
     if (size) {
-        index = tlsf_index_t<uint32_t>::mapping_search(size);
-        if (index.first < tlsf_index_t<uint32_t>::FL_INDEX_COUNT) {
+        index = tlsf_index_t<uint32_t, false>::mapping_search(size);
+        if (index.first < tlsf_index_t<uint32_t, false>::FL_INDEX_COUNT) {
             block = index_.search_suitable_block(index);
         }
     }
@@ -357,7 +359,8 @@ void Ray::FreelistAlloc::block_trim_free(uint32_t block_index, uint32_t size) {
 
         all_blocks_[all_blocks_[remaining_block].next_phys].prev_phys = remaining_block;
 
-        insert_free_block(remaining_block, tlsf_index_t<uint32_t>::mapping_insert(all_blocks_[remaining_block].size));
+        insert_free_block(remaining_block,
+                          tlsf_index_t<uint32_t, false>::mapping_insert(all_blocks_[remaining_block].size));
     }
 }
 
@@ -380,7 +383,7 @@ uint32_t Ray::FreelistAlloc::block_trim_free_leading(uint32_t block_index, uint3
 
         all_blocks_[all_blocks_[remaining_block].next_phys].prev_phys = remaining_block;
 
-        insert_free_block(block_index, tlsf_index_t<uint32_t>::mapping_insert(all_blocks_[block_index].size));
+        insert_free_block(block_index, tlsf_index_t<uint32_t, false>::mapping_insert(all_blocks_[block_index].size));
     }
     return remaining_block;
 }
@@ -421,7 +424,7 @@ uint32_t Ray::FreelistAlloc::block_merge_prev(uint32_t block_index) {
     assert(prev_index != 0xffffffff && "invalid prev physical block");
     assert(all_blocks_[prev_index].is_free);
 
-    disconnect_free_block(prev_index, tlsf_index_t<uint32_t>::mapping_insert(all_blocks_[prev_index].size));
+    disconnect_free_block(prev_index, tlsf_index_t<uint32_t, false>::mapping_insert(all_blocks_[prev_index].size));
 
     block_absorb(prev_index, block_index);
     return prev_index;
@@ -432,7 +435,7 @@ void Ray::FreelistAlloc::block_merge_next(uint32_t block_index) {
     assert(next != 0xffffffff);
 
     if (all_blocks_[next].is_free) {
-        disconnect_free_block(next, tlsf_index_t<uint32_t>::mapping_insert(all_blocks_[next].size));
+        disconnect_free_block(next, tlsf_index_t<uint32_t, false>::mapping_insert(all_blocks_[next].size));
         block_absorb(block_index, next);
     }
 }

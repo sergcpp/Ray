@@ -32,7 +32,7 @@ static const int MaxTimestampQueries = 256;
 
 class Buffer;
 class BumpAlloc;
-class LinearAllocAdapted;
+class FreelistAllocAdapted;
 template <class Allocator> class DescrMultiPoolAlloc;
 class MemoryAllocators;
 
@@ -81,7 +81,7 @@ class Context {
 
     std::unique_ptr<MemoryAllocators> default_memory_allocs_;
     std::unique_ptr<DescrMultiPoolAlloc<BumpAlloc>> default_descr_alloc_[MaxFramesInFlight];
-    std::unique_ptr<DescrMultiPoolAlloc<LinearAllocAdapted>> staging_descr_alloc_;
+    std::unique_ptr<DescrMultiPoolAlloc<FreelistAllocAdapted>> staging_descr_alloc_;
 
   public:
     Context();
@@ -130,7 +130,7 @@ class Context {
 
     MemoryAllocators *default_memory_allocs() { return default_memory_allocs_.get(); }
     DescrMultiPoolAlloc<BumpAlloc> *default_descr_alloc() { return default_descr_alloc_[backend_frame].get(); }
-    DescrMultiPoolAlloc<LinearAllocAdapted> *staging_descr_alloc() { return staging_descr_alloc_.get(); }
+    DescrMultiPoolAlloc<FreelistAllocAdapted> *staging_descr_alloc() { return staging_descr_alloc_.get(); }
 
     int WriteTimestamp(CommandBuffer cmd_buf, bool start);
     uint64_t GetTimestampIntervalDurationUs(int query_start, int query_end) const;

@@ -176,7 +176,6 @@ void Ray::Dx::PrepareDescriptors(Context *ctx, ID3D12GraphicsCommandList *cmd_bu
             }
         } else if (b.trg == eBindTarget::SBufRW) {
             if (b.offset == 0) {
-                assert(b.handle.buf->handle().srv_uav_ref.count == 2);
                 D3D12_CPU_DESCRIPTOR_HANDLE src_handle =
                     b.handle.buf->handle().srv_uav_ref.heap->GetCPUDescriptorHandleForHeapStart();
                 src_handle.ptr += CBV_SRV_UAV_INCR * (b.handle.buf->handle().srv_uav_ref.offset + 1);
@@ -201,7 +200,6 @@ void Ray::Dx::PrepareDescriptors(Context *ctx, ID3D12GraphicsCommandList *cmd_bu
                 device->CreateUnorderedAccessView(b.handle.buf->dx_resource(), nullptr, &uav_desc, dest_handle);
             }
         } else if (b.trg == eBindTarget::Image) {
-            assert(b.handle.tex->handle().views_ref.count == 2);
             D3D12_CPU_DESCRIPTOR_HANDLE src_handle =
                 b.handle.tex->handle().views_ref.heap->GetCPUDescriptorHandleForHeapStart();
             src_handle.ptr += CBV_SRV_UAV_INCR * (b.handle.tex->handle().views_ref.offset + 1);
