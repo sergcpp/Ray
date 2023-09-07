@@ -375,12 +375,14 @@ void TraceShadowRays(Span<const shadow_ray_t<S>> rays, int max_transp_depth, flo
 // Get environment collor at direction
 template <int S>
 void Evaluate_EnvColor(const ray_data_t<S> &ray, const simd_ivec<S> &mask, const environment_t &env,
-                       const Cpu::TexStorageRGBA &tex_storage, const simd_fvec<S> rand[2], simd_fvec<S> env_col[4]);
+                       const Cpu::TexStorageRGBA &tex_storage, uint32_t lights_count, const simd_fvec<S> rand[2],
+                       simd_fvec<S> env_col[4]);
 // Get light color at intersection point
 template <int S>
 void Evaluate_LightColor(const simd_fvec<S> P[3], const ray_data_t<S> &ray, const simd_ivec<S> &mask,
                          const hit_data_t<S> &inter, const environment_t &env, Span<const light_t> lights,
-                         const Cpu::TexStorageRGBA &tex_storage, const simd_fvec<S> rand[2], simd_fvec<S> light_col[3]);
+                         uint32_t lights_count, const Cpu::TexStorageRGBA &tex_storage, const simd_fvec<S> rand[2],
+                         simd_fvec<S> light_col[3]);
 
 // Evaluate individual nodes
 template <int S>
@@ -4936,7 +4938,7 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
 
         const light_t &l = sc.lights[sc.li_indices[first_li]];
 
-        UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.col[i]) = l.col[i] * float(sc.li_indices.size()); })
+        UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.col[i]) = l.col[i]; })
         where(ray_queue[index], ls.cast_shadow) = l.cast_shadow ? -1 : 0;
 
         if (l.type == LIGHT_TYPE_SPHERE) {
@@ -5263,6 +5265,8 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
 
         ++index;
     }
+
+    where(ray_mask, ls.pdf) /= float(sc.li_indices.size());
 }
 
 template <int S>
@@ -5683,8 +5687,8 @@ Ray::NS::simd_fvec<S> Ray::NS::IntersectAreaLights(const shadow_ray_t<S> &r, Spa
 
 template <int S>
 void Ray::NS::Evaluate_EnvColor(const ray_data_t<S> &ray, const simd_ivec<S> &mask, const environment_t &env,
-                                const Cpu::TexStorageRGBA &tex_storage, const simd_fvec<S> rand[2],
-                                simd_fvec<S> env_col[4]) {
+                                const Cpu::TexStorageRGBA &tex_storage, const uint32_t lights_count,
+                                const simd_fvec<S> rand[2], simd_fvec<S> env_col[4]) {
     const uint32_t env_map = env.env_map;
     const float env_map_rotation = env.env_map_rotation;
     const simd_ivec<S> env_map_mask = (ray.depth & 0x00ffffff) != 0;
@@ -5698,13 +5702,14 @@ void Ray::NS::Evaluate_EnvColor(const ray_data_t<S> &ray, const simd_ivec<S> &ma
         if (env.qtree_levels) {
             const auto *qtree_mips = reinterpret_cast<const simd_fvec4 *const *>(env.qtree_mips);
 
-            const simd_fvec<S> light_pdf = Evaluate_EnvQTree(env_map_rotation, qtree_mips, env.qtree_levels, ray.d);
+            const simd_fvec<S> light_pdf =
+                Evaluate_EnvQTree(env_map_rotation, qtree_mips, env.qtree_levels, ray.d) / float(lights_count);
             const simd_fvec<S> bsdf_pdf = ray.pdf;
 
             const simd_fvec<S> mis_weight = power_heuristic(bsdf_pdf, light_pdf);
             UNROLLED_FOR(i, 3, { env_col[i] *= mis_weight; })
         } else if (env.multiple_importance) {
-            const simd_fvec<S> light_pdf = 0.5f / PI;
+            const simd_fvec<S> light_pdf = 0.5f / (PI * float(lights_count));
             const simd_fvec<S> bsdf_pdf = ray.pdf;
 
             const simd_fvec<S> mis_weight = power_heuristic(bsdf_pdf, light_pdf);
@@ -5729,10 +5734,12 @@ void Ray::NS::Evaluate_EnvColor(const ray_data_t<S> &ray, const simd_ivec<S> &ma
 template <int S>
 void Ray::NS::Evaluate_LightColor(const simd_fvec<S> P[3], const ray_data_t<S> &ray, const simd_ivec<S> &mask,
                                   const hit_data_t<S> &inter, const environment_t &env, Span<const light_t> lights,
-                                  const Cpu::TexStorageRGBA &tex_storage, const simd_fvec<S> rand[2],
-                                  simd_fvec<S> light_col[3]) {
+                                  const uint32_t lights_count, const Cpu::TexStorageRGBA &tex_storage,
+                                  const simd_fvec<S> rand[2], simd_fvec<S> light_col[3]) {
     simd_ivec<S> ray_queue[S];
     ray_queue[0] = mask;
+
+    const float pdf_factor = float(lights_count);
 
     int index = 0, num = 1;
     while (index != num) {
@@ -5766,7 +5773,7 @@ void Ray::NS::Evaluate_LightColor(const simd_fvec<S> P[3], const ray_data_t<S> &
 
             const simd_fvec<S> cos_theta = dot3(ray.d, dd);
 
-            const simd_fvec<S> light_pdf = safe_div(inter.t * inter.t, 0.5f * l.sph.area * cos_theta);
+            const simd_fvec<S> light_pdf = safe_div(inter.t * inter.t, 0.5f * l.sph.area * cos_theta * pdf_factor);
             const simd_fvec<S> bsdf_pdf = ray.pdf;
 
             const simd_fvec<S> mis_weight = power_heuristic(bsdf_pdf, light_pdf);
@@ -5795,7 +5802,7 @@ void Ray::NS::Evaluate_LightColor(const simd_fvec<S> P[3], const ray_data_t<S> &
 
             const simd_fvec<S> cos_theta = dot3(ray.d, l.dir.dir);
 
-            const simd_fvec<S> light_pdf = safe_div(simd_fvec<S>{1.0f}, light_area * cos_theta);
+            const simd_fvec<S> light_pdf = safe_div(simd_fvec<S>{1.0f}, light_area * cos_theta * pdf_factor);
             const simd_fvec<S> bsdf_pdf = ray.pdf;
 
             const simd_fvec<S> mis_weight = power_heuristic(bsdf_pdf, light_pdf);
@@ -5807,7 +5814,7 @@ void Ray::NS::Evaluate_LightColor(const simd_fvec<S> P[3], const ray_data_t<S> &
 
             const simd_fvec<S> cos_theta = dot3(ray.d, light_fwd);
 
-            const simd_fvec<S> light_pdf = safe_div(inter.t * inter.t, l.rect.area * cos_theta);
+            const simd_fvec<S> light_pdf = safe_div(inter.t * inter.t, l.rect.area * cos_theta * pdf_factor);
             const simd_fvec<S> bsdf_pdf = ray.pdf;
 
             const simd_fvec<S> mis_weight = power_heuristic(bsdf_pdf, light_pdf);
@@ -5819,7 +5826,7 @@ void Ray::NS::Evaluate_LightColor(const simd_fvec<S> P[3], const ray_data_t<S> &
 
             const simd_fvec<S> cos_theta = dot3(ray.d, light_fwd);
 
-            const simd_fvec<S> light_pdf = safe_div(inter.t * inter.t, l.disk.area * cos_theta);
+            const simd_fvec<S> light_pdf = safe_div(inter.t * inter.t, l.disk.area * cos_theta * pdf_factor);
             const simd_fvec<S> bsdf_pdf = ray.pdf;
 
             const simd_fvec<S> mis_weight = power_heuristic(bsdf_pdf, light_pdf);
@@ -5829,7 +5836,7 @@ void Ray::NS::Evaluate_LightColor(const simd_fvec<S> P[3], const ray_data_t<S> &
 
             const simd_fvec<S> cos_theta = 1.0f - abs(dot3(ray.d, light_dir));
 
-            const simd_fvec<S> light_pdf = safe_div(inter.t * inter.t, l.line.area * cos_theta);
+            const simd_fvec<S> light_pdf = safe_div(inter.t * inter.t, l.line.area * cos_theta * pdf_factor);
             const simd_fvec<S> bsdf_pdf = ray.pdf;
 
             const simd_fvec<S> mis_weight = power_heuristic(bsdf_pdf, light_pdf);
@@ -6330,8 +6337,8 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
     const simd_ivec<S> ino_hit = ~inter.mask;
     if (ino_hit.not_all_zeros()) {
         simd_fvec<S> env_col[4] = {{1.0f}, {1.0f}, {1.0f}, {1.0f}};
-        Evaluate_EnvColor(ray, ino_hit, sc.env, *static_cast<const Cpu::TexStorageRGBA *>(textures[0]), tex_rand,
-                          env_col);
+        Evaluate_EnvColor(ray, ino_hit, sc.env, *static_cast<const Cpu::TexStorageRGBA *>(textures[0]),
+                          uint32_t(sc.li_indices.size()), tex_rand, env_col);
 
         UNROLLED_FOR(i, 3, { where(ino_hit, out_rgba[i]) = ray.c[i] * env_col[i]; })
         where(ino_hit, out_rgba[3]) = env_col[3];
@@ -6350,7 +6357,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
     const simd_ivec<S> is_light_hit = is_active_lane & (inter.obj_index < 0); // Area light intersection
     if (is_light_hit.not_all_zeros()) {
         simd_fvec<S> light_col[3] = {};
-        Evaluate_LightColor(surf.P, ray, is_light_hit, inter, sc.env, sc.lights,
+        Evaluate_LightColor(surf.P, ray, is_light_hit, inter, sc.env, sc.lights, uint32_t(sc.li_indices.size()),
                             *static_cast<const Cpu::TexStorageRGBA *>(textures[0]), tex_rand, light_col);
 
         UNROLLED_FOR(i, 3, { where(is_light_hit, out_rgba[i]) = ray.c[i] * light_col[i]; })
@@ -6873,7 +6880,8 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                     const simd_fvec<S> tri_area = 0.5f * light_forward_len;
 
                     const simd_fvec<S> cos_theta = abs(dot3(I, light_forward));
-                    const simd_fvec<S> light_pdf = safe_div(inter.t * inter.t, tri_area * cos_theta);
+                    const simd_fvec<S> light_pdf =
+                        safe_div(inter.t * inter.t, tri_area * cos_theta * float(sc.li_indices.size()));
                     const simd_fvec<S> &bsdf_pdf = ray.pdf;
 
                     where((cos_theta > 0.0f) & simd_cast((ray.depth & 0x00ffffff) != 0), mis_weight) =

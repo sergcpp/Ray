@@ -764,7 +764,7 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, int hi, vec2 sample_off, 
     const light_t l = g_lights[g_li_indices[light_index]];
 
     ls.col = uintBitsToFloat(l.type_and_param0.yzw);
-    ls.col *= float(g_params.li_count);
+    //ls.col *= float(g_params.li_count);
     ls.cast_shadow = (l.type_and_param0.x & (1 << 5)) != 0;
     ls.from_env = false;
 
@@ -1040,6 +1040,8 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, int hi, vec2 sample_off, 
         ls.pdf = dir_and_pdf.w;
         ls.from_env = true;
     }
+
+    ls.pdf /= float(g_params.li_count);
 }
 
 vec3 Evaluate_EnvColor(ray_data_t ray, const vec2 tex_rand) {
@@ -1063,13 +1065,13 @@ vec3 Evaluate_EnvColor(ray_data_t ray, const vec2 tex_rand) {
 
 #if USE_NEE
     if (g_params.env_qtree_levels > 0) {
-        const float light_pdf = Evaluate_EnvQTree(env_map_rotation, g_env_qtree, g_params.env_qtree_levels, rd);
+        const float light_pdf = Evaluate_EnvQTree(env_map_rotation, g_env_qtree, g_params.env_qtree_levels, rd) / float(g_params.li_count);
         const float bsdf_pdf = ray.pdf;
 
         const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
         env_col *= mis_weight;
     } else if (g_params.env_mult_importance != 0) {
-        const float light_pdf = 0.5 / PI;
+        const float light_pdf = 0.5 / (PI * float(g_params.li_count));
         const float bsdf_pdf = ray.pdf;
 
         const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
@@ -1087,6 +1089,7 @@ vec3 Evaluate_LightColor(ray_data_t ray, hit_data_t inter, const vec2 tex_rand) 
     const vec3 P = ro + inter.t * rd;
 
     const light_t l = g_lights[-inter.obj_index - 1];
+    const float pdf_factor = float(g_params.li_count);
 
     vec3 lcol = uintBitsToFloat(l.type_and_param0.yzw);
     [[dont_flatten]] if ((l.type_and_param0.x & (1 << 7)) != 0) { // sky portal
@@ -1113,7 +1116,7 @@ vec3 Evaluate_LightColor(ray_data_t ray, hit_data_t inter, const vec2 tex_rand) 
 
         const float cos_theta = dot(rd, normalize(light_pos - P));
 
-        const float light_pdf = (inter.t * inter.t) / (0.5 * light_area * cos_theta);
+        const float light_pdf = (inter.t * inter.t) / (0.5 * light_area * cos_theta * pdf_factor);
         const float bsdf_pdf = ray.pdf;
 
         const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
@@ -1132,7 +1135,7 @@ vec3 Evaluate_LightColor(ray_data_t ray, hit_data_t inter, const vec2 tex_rand) 
 
         const float cos_theta = dot(rd, l.DIR_DIR);
 
-        const float light_pdf = 1.0 / (light_area * cos_theta);
+        const float light_pdf = 1.0 / (light_area * cos_theta * pdf_factor);
         const float bsdf_pdf = ray.pdf;
 
         const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
@@ -1148,7 +1151,7 @@ vec3 Evaluate_LightColor(ray_data_t ray, hit_data_t inter, const vec2 tex_rand) 
         const float plane_dist = dot(light_forward, light_pos);
         const float cos_theta = dot(rd, light_forward);
 
-        const float light_pdf = (inter.t * inter.t) / (light_area * cos_theta);
+        const float light_pdf = (inter.t * inter.t) / (light_area * cos_theta * pdf_factor);
         const float bsdf_pdf = ray.pdf;
 
         const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
@@ -1164,7 +1167,7 @@ vec3 Evaluate_LightColor(ray_data_t ray, hit_data_t inter, const vec2 tex_rand) 
         const float plane_dist = dot(light_forward, light_pos);
         const float cos_theta = dot(rd, light_forward);
 
-        const float light_pdf = (inter.t * inter.t) / (light_area * cos_theta);
+        const float light_pdf = (inter.t * inter.t) / (light_area * cos_theta * pdf_factor);
         const float bsdf_pdf = ray.pdf;
 
         const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
@@ -1175,7 +1178,7 @@ vec3 Evaluate_LightColor(ray_data_t ray, hit_data_t inter, const vec2 tex_rand) 
 
         const float cos_theta = 1.0 - abs(dot(rd, light_dir));
 
-        const float light_pdf = (inter.t * inter.t) / (light_area * cos_theta);
+        const float light_pdf = (inter.t * inter.t) / (light_area * cos_theta * pdf_factor);
         const float bsdf_pdf = ray.pdf;
 
         const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
@@ -1897,7 +1900,7 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
 
             const float cos_theta = abs(dot(I, light_forward)); // abs for doublesided light
             if (cos_theta > 0.0) {
-                const float light_pdf = (inter.t * inter.t) / (tri_area * cos_theta);
+                const float light_pdf = (inter.t * inter.t) / (tri_area * cos_theta * float(g_params.li_count));
                 const float bsdf_pdf = ray.pdf;
 
                 mis_weight = power_heuristic(bsdf_pdf, light_pdf);
