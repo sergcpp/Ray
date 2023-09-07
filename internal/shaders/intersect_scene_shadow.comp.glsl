@@ -394,15 +394,15 @@ float IntersectAreaLightsShadow(shadow_ray_t r) {
         } else {
             const int light_index = int(floatBitsToUint(n.bbox_min.w) & PRIM_INDEX_BITS);
             light_t l = g_lights[light_index];
-            [[dont_flatten]] if ((l.type_and_param0.x & (1 << 8)) == 0) {
+            [[dont_flatten]] if ((l.type_and_param0.x & (1 << 7)) == 0) {
                 // Skip non-blocking light
                 continue;
             }
-            [[dont_flatten]] if ((l.type_and_param0.x & (1 << 7)) != 0 && r.dist >= 0.0) { // sky portal
+            [[dont_flatten]] if ((l.type_and_param0.x & (1 << 6)) != 0 && r.dist >= 0.0) { // sky portal
                 continue;
             }
 
-            uint light_type = (l.type_and_param0.x & 0x1f);
+            uint light_type = (l.type_and_param0.x & 0xf);
             if (light_type == LIGHT_TYPE_RECT) {
                 vec3 light_pos = l.RECT_POS;
                 vec3 light_u = l.RECT_U;

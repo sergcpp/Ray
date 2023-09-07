@@ -193,21 +193,20 @@ struct material_t {
 static_assert(sizeof(material_t) == 76, "!");
 
 const int LIGHT_TYPE_SPHERE = 0;
-const int LIGHT_TYPE_SPOT = 1;
-const int LIGHT_TYPE_DIR = 2;
-const int LIGHT_TYPE_LINE = 3;
-const int LIGHT_TYPE_RECT = 4;
-const int LIGHT_TYPE_DISK = 5;
-const int LIGHT_TYPE_TRI = 6;
-const int LIGHT_TYPE_ENV = 7;
+const int LIGHT_TYPE_DIR = 1;
+const int LIGHT_TYPE_LINE = 2;
+const int LIGHT_TYPE_RECT = 3;
+const int LIGHT_TYPE_DISK = 4;
+const int LIGHT_TYPE_TRI = 5;
+const int LIGHT_TYPE_ENV = 6;
 
 struct light_t {
-    uint32_t type : 5;
+    uint32_t type : 4;
     uint32_t cast_shadow : 1;
     uint32_t visible : 1;
     uint32_t sky_portal : 1;
     uint32_t blocking : 1;
-    uint32_t _unused : 23;
+    uint32_t _unused : 24;
     float col[3];
     union {
         struct {

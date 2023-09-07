@@ -66,13 +66,12 @@ const int MATERIAL_INDEX_BITS = 16383; // 0b0011111111111111
 #endif
 
 const int LIGHT_TYPE_SPHERE = 0;
-const int LIGHT_TYPE_SPOT = 1;
-const int LIGHT_TYPE_DIR = 2;
-const int LIGHT_TYPE_LINE = 3;
-const int LIGHT_TYPE_RECT = 4;
-const int LIGHT_TYPE_DISK = 5;
-const int LIGHT_TYPE_TRI = 6;
-const int LIGHT_TYPE_ENV = 7;
+const int LIGHT_TYPE_DIR = 1;
+const int LIGHT_TYPE_LINE = 2;
+const int LIGHT_TYPE_RECT = 3;
+const int LIGHT_TYPE_DISK = 4;
+const int LIGHT_TYPE_TRI = 5;
+const int LIGHT_TYPE_ENV = 6;
 
 const int DiffuseNode = 0;
 const int GlossyNode = 1;

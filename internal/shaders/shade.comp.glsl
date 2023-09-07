@@ -764,14 +764,13 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, int hi, vec2 sample_off, 
     const light_t l = g_lights[g_li_indices[light_index]];
 
     ls.col = uintBitsToFloat(l.type_and_param0.yzw);
-    //ls.col *= float(g_params.li_count);
-    ls.cast_shadow = (l.type_and_param0.x & (1 << 5)) != 0;
+    ls.cast_shadow = (l.type_and_param0.x & (1 << 4)) != 0;
     ls.from_env = false;
 
     const vec2 tex_rand = vec2(fract(g_random_seq[hi + RAND_DIM_TEX_U] + sample_off[0]),
                                fract(g_random_seq[hi + RAND_DIM_TEX_V] + sample_off[1]));
 
-    const uint l_type = (l.type_and_param0.x & 0x1f);
+    const uint l_type = (l.type_and_param0.x & 0xf);
     [[dont_flatten]] if (l_type == LIGHT_TYPE_SPHERE) {
         const float r1 = fract(g_random_seq[hi + RAND_DIM_LIGHT_U] + sample_off[0]);
         const float r2 = fract(g_random_seq[hi + RAND_DIM_LIGHT_V] + sample_off[1]);
@@ -832,7 +831,7 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, int hi, vec2 sample_off, 
         }
         ls.lp = P + ls.L;
 
-        if ((l.type_and_param0.x & (1 << 6)) == 0) { // !visible
+        if ((l.type_and_param0.x & (1 << 5)) == 0) { // !visible
             ls.area = 0.0;
         }
     } else [[dont_flatten]] if (l_type == LIGHT_TYPE_RECT) {
@@ -856,11 +855,11 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, int hi, vec2 sample_off, 
             ls.pdf = (ls_dist * ls_dist) / (ls.area * cos_theta);
         }
 
-        if ((l.type_and_param0.x & (1 << 6)) == 0) { // !visible
+        if ((l.type_and_param0.x & (1 << 5)) == 0) { // !visible
             ls.area = 0.0;
         }
 
-        [[dont_flatten]] if ((l.type_and_param0.x & (1 << 7)) != 0) { // sky portal
+        [[dont_flatten]] if ((l.type_and_param0.x & (1 << 6)) != 0) { // sky portal
             vec3 env_col = g_params.env_col.xyz;
             const uint env_map = floatBitsToUint(g_params.env_col.w);
             if (env_map != 0xffffffff) {
@@ -910,11 +909,11 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, int hi, vec2 sample_off, 
             ls.pdf = (ls_dist * ls_dist) / (ls.area * cos_theta);
         }
 
-        if ((l.type_and_param0.x & (1 << 6)) == 0) { // !visible
+        if ((l.type_and_param0.x & (1 << 5)) == 0) { // !visible
             ls.area = 0.0;
         }
 
-        [[dont_flatten]] if ((l.type_and_param0.x & (1 << 7)) != 0) { // sky portal
+        [[dont_flatten]] if ((l.type_and_param0.x & (1 << 6)) != 0) { // sky portal
             vec3 env_col = g_params.env_col.xyz;
             const uint env_map = floatBitsToUint(g_params.env_col.w);
             if (env_map != 0xffffffff) {
@@ -956,7 +955,7 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, int hi, vec2 sample_off, 
             ls.pdf = (ls_dist * ls_dist) / (ls.area * cos_theta);
         }
 
-        if ((l.type_and_param0.x & (1 << 6)) == 0) { // !visible
+        if ((l.type_and_param0.x & (1 << 5)) == 0) { // !visible
             ls.area = 0.0;
         }
     } else [[dont_flatten]] if (l_type == LIGHT_TYPE_TRI) {
@@ -1092,7 +1091,7 @@ vec3 Evaluate_LightColor(ray_data_t ray, hit_data_t inter, const vec2 tex_rand) 
     const float pdf_factor = float(g_params.li_count);
 
     vec3 lcol = uintBitsToFloat(l.type_and_param0.yzw);
-    [[dont_flatten]] if ((l.type_and_param0.x & (1 << 7)) != 0) { // sky portal
+    [[dont_flatten]] if ((l.type_and_param0.x & (1 << 6)) != 0) { // sky portal
         vec3 env_col = g_params.env_col.xyz;
         const uint env_map = floatBitsToUint(g_params.env_col.w);
         if (env_map != 0xffffffff) {
@@ -1105,7 +1104,7 @@ vec3 Evaluate_LightColor(ray_data_t ray, hit_data_t inter, const vec2 tex_rand) 
         lcol *= env_col;
     }
 
-    const uint l_type = (l.type_and_param0.x & 0x1f);
+    const uint l_type = (l.type_and_param0.x & 0xf);
     if (l_type == LIGHT_TYPE_SPHERE) {
         const vec3 light_pos = l.SPH_POS;
         const float light_area = l.SPH_AREA;

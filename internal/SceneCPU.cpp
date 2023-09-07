@@ -1238,8 +1238,6 @@ void Ray::Cpu::Scene::RebuildLightTree_nolock() {
             bbox_min = pos - Ref::simd_fvec4{l.sph.radius, l.sph.radius, l.sph.radius, 0.0f};
             bbox_max = pos + Ref::simd_fvec4{l.sph.radius, l.sph.radius, l.sph.radius, 0.0f};
         } break;
-        case LIGHT_TYPE_SPOT:
-            break;
         case LIGHT_TYPE_DIR: {
             bbox_min = Ref::simd_fvec4{-MAX_DIST, -MAX_DIST, -MAX_DIST, 0.0f};
             bbox_max = Ref::simd_fvec4{MAX_DIST, MAX_DIST, MAX_DIST, 0.0f};
