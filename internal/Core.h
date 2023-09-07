@@ -102,12 +102,28 @@ struct bvh_node_t {
 };
 static_assert(sizeof(bvh_node_t) == 32, "!");
 
+struct light_bvh_node_t : public bvh_node_t {
+    float flux;
+    float axis[3];
+    float omega_n; // cone angle enclosing light normals
+    float omega_e; // emission angle around each normal
+};
+static_assert(sizeof(light_bvh_node_t) == 56, "!");
+
 struct alignas(32) wbvh_node_t {
     float bbox_min[3][8];
     float bbox_max[3][8];
     uint32_t child[8];
 };
 static_assert(sizeof(wbvh_node_t) == 224, "!");
+
+struct light_wbvh_node_t : public wbvh_node_t {
+    float flux[8];
+    float axis[3][8];
+    float omega_n[8];
+    float omega_e[8];
+};
+static_assert(sizeof(light_wbvh_node_t) == 416, "!");
 
 const int NUM_MIP_LEVELS = 12;
 const int MAX_MIP_LEVEL = NUM_MIP_LEVELS - 1;
@@ -329,6 +345,8 @@ uint32_t PreprocessPrims_HLBVH(Span<const prim_t> prims, std::vector<bvh_node_t>
 
 uint32_t FlattenBVH_r(const bvh_node_t *nodes, uint32_t node_index, uint32_t parent_index,
                       aligned_vector<wbvh_node_t> &out_nodes);
+uint32_t FlattenBVH_r(const light_bvh_node_t *nodes, uint32_t node_index, uint32_t parent_index,
+                      aligned_vector<light_wbvh_node_t> &out_nodes);
 
 bool NaiivePluckerTest(const float p[9], const float o[3], const float d[3]);
 
@@ -512,8 +530,8 @@ struct scene_data_t {
     Span<const uint32_t> li_indices;
     Span<const uint32_t> visible_lights;
     Span<const uint32_t> blocker_lights;
-    Span<const bvh_node_t> light_nodes;
-    Span<const wbvh_node_t> light_wnodes;
+    Span<const light_bvh_node_t> light_nodes;
+    Span<const light_wbvh_node_t> light_wnodes;
 };
 
 } // namespace Ray

@@ -21,7 +21,7 @@ struct Params {
     int env_qtree_levels;
     float env_rotation;
     float back_rotation;
-    int env_mult_importance;
+    int env_light_index;
     float clamp_val;
     UINT_TYPE env_map_res;
     UINT_TYPE back_map_res;
@@ -42,7 +42,8 @@ const int MESH_INSTANCES_BUF_SLOT = 14;
 const int VERTICES_BUF_SLOT = 15;
 const int VTX_INDICES_BUF_SLOT = 16;
 const int RANDOM_SEQ_BUF_SLOT = 17;
-const int ENV_QTREE_TEX_SLOT = 18;
+const int LIGHT_WNODES_BUF_SLOT = 18;
+const int ENV_QTREE_TEX_SLOT = 19;
 
 const int OUT_IMG_SLOT = 0;
 const int OUT_RAYS_BUF_SLOT = 1;

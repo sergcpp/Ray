@@ -1775,7 +1775,7 @@ void test_complex_mat6_nlm_filter_bn(const char *arch_list[], const char *prefer
 
 void test_complex_mat6_unet_filter(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 38;
-    const int PixThres = 1012;
+    const int PixThres = 1022;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;

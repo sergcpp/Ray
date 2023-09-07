@@ -3,6 +3,7 @@
 
 #include "intersect_area_lights_interface.h"
 #include "common.glsl"
+#include "light_bvh.glsl"
 #include "traverse_bvh.glsl"
 
 LAYOUT_PARAMS uniform UniformParams {
@@ -13,8 +14,8 @@ layout(std430, binding = LIGHTS_BUF_SLOT) readonly buffer Lights {
     light_t g_lights[];
 };
 
-layout(std430, binding = NODES_BUF_SLOT) readonly buffer Nodes {
-    bvh_node_t g_nodes[];
+layout(std430, binding = WNODES_BUF_SLOT) readonly buffer WNodes {
+    light_wbvh_node_t g_wnodes[];
 };
 
 layout(std430, binding = RAYS_BUF_SLOT) readonly buffer Rays {
@@ -49,6 +50,7 @@ bool quadratic(float a, float b, float c, out float t0, out float t1) {
 }
 
 shared uint g_stack[LOCAL_GROUP_SIZE_X * LOCAL_GROUP_SIZE_Y][MAX_STACK_SIZE];
+shared float g_stack_factors[LOCAL_GROUP_SIZE_X * LOCAL_GROUP_SIZE_Y][MAX_STACK_SIZE];
 
 layout (local_size_x = LOCAL_GROUP_SIZE_X, local_size_y = LOCAL_GROUP_SIZE_Y, local_size_z = 1) in;
 
@@ -83,22 +85,30 @@ void main() {
     vec3 neg_inv_do = -inv_d * ro;
 
     uint stack_size = 0;
-    g_stack[gl_LocalInvocationIndex][stack_size++] = g_params.node_index;
+    g_stack[gl_LocalInvocationIndex][stack_size] = g_params.node_index;
+    g_stack_factors[gl_LocalInvocationIndex][stack_size++] = 1.0;
 
     while (stack_size != 0) {
         uint cur = g_stack[gl_LocalInvocationIndex][--stack_size];
+        float cur_factor = g_stack_factors[gl_LocalInvocationIndex][stack_size];
 
-        bvh_node_t n = g_nodes[cur];
+        light_wbvh_node_t n = g_wnodes[cur];
 
-        if (!_bbox_test_fma(inv_d, neg_inv_do, inter.t, n.bbox_min.xyz, n.bbox_max.xyz)) {
-            continue;
-        }
+        if ((n.child[0] & LEAF_NODE_BIT) == 0) {
+            float importance[8];
+            const float total_importance = calc_lnode_importance(n, ro, importance);
 
-        if ((floatBitsToUint(n.bbox_min.w) & LEAF_NODE_BIT) == 0) {
-            g_stack[gl_LocalInvocationIndex][stack_size++] = far_child(rd, n);
-            g_stack[gl_LocalInvocationIndex][stack_size++] = near_child(rd, n);
+            // TODO: loop in morton order based on ray direction
+            for (int j = 0; j < 8; ++j) {
+                if (importance[j] > 0.0 && _bbox_test_fma(inv_d, neg_inv_do, inter.t,
+                                                          vec3(n.bbox_min[0][j], n.bbox_min[1][j], n.bbox_min[2][j]),
+                                                          vec3(n.bbox_max[0][j], n.bbox_max[1][j], n.bbox_max[2][j]))) {
+                    g_stack_factors[gl_LocalInvocationIndex][stack_size] = cur_factor * importance[j] / total_importance;
+                    g_stack[gl_LocalInvocationIndex][stack_size++] = n.child[j];
+                }
+            }
         } else {
-            const int light_index = int(floatBitsToUint(n.bbox_min.w) & PRIM_INDEX_BITS);
+            const int light_index = int(n.child[0] & PRIM_INDEX_BITS);
             light_t l = g_lights[light_index];
             [[dont_flatten]] if ((l.type_and_param0.x & (1 << 5)) == 0) {
                 // Skip invisible light
@@ -135,11 +145,13 @@ void main() {
                             inter.mask = -1;
                             inter.obj_index = -int(light_index) - 1;
                             inter.t = t1;
+                            inter.u = cur_factor;
                         }
                     } else if (t2 > HIT_EPS && (t2 < inter.t || no_shadow)) {
                         inter.mask = -1;
                         inter.obj_index = -int(light_index) - 1;
                         inter.t = t2;
+                        inter.u = cur_factor;
                     }
                 }
             } else if (light_type == LIGHT_TYPE_DIR) {
@@ -148,6 +160,7 @@ void main() {
                     inter.mask = -1;
                     inter.obj_index = -int(light_index) - 1;
                     inter.t = 1.0 / cos_theta;
+                    inter.u = cur_factor;
                 }
             } else if (light_type == LIGHT_TYPE_RECT) {
                 vec3 light_pos = l.RECT_POS;
@@ -173,6 +186,7 @@ void main() {
                             inter.mask = -1;
                             inter.obj_index = -int(light_index) - 1;
                             inter.t = t;
+                            inter.u = cur_factor;
                         }
                     }
                 }
@@ -200,6 +214,7 @@ void main() {
                         inter.mask = -1;
                         inter.obj_index = -int(light_index) - 1;
                         inter.t = t;
+                        inter.u = cur_factor;
                     }
                 }
             } else if (light_type == LIGHT_TYPE_LINE) {
@@ -225,8 +240,13 @@ void main() {
                         inter.mask = -1;
                         inter.obj_index = -int(light_index) - 1;
                         inter.t = t;
+                        inter.u = cur_factor;
                     }
                 }
+            } else if (light_type == LIGHT_TYPE_ENV && inter.mask == 0) {
+                // NOTE: mask remains empty
+                inter.obj_index = -int(light_index) - 1;
+                inter.u = cur_factor;
             }
         }
     }

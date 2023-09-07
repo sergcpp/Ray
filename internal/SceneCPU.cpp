@@ -15,13 +15,13 @@
 namespace Ray {
 namespace Cpu {
 Ref::simd_fvec4 rgb_to_rgbe(const Ref::simd_fvec4 &rgb) {
-    float max_component = std::max(std::max(rgb.get<0>(), rgb.get<1>()), rgb.get<2>());
+    float max_component = fmax(fmax(rgb.get<0>(), rgb.get<1>()), rgb.get<2>());
     if (max_component < 1e-32) {
         return Ref::simd_fvec4{0.0f};
     }
 
     int exponent;
-    const float factor = std::frexp(max_component, &exponent) * 256.0f / max_component;
+    const float factor = frexpf(max_component, &exponent) * 256.0f / max_component;
 
     return Ref::simd_fvec4{rgb.get<0>() * factor, rgb.get<1>() * factor, rgb.get<2>() * factor, float(exponent + 128)};
 }
@@ -596,7 +596,7 @@ Ray::LightHandle Ray::Cpu::Scene::AddLight(const directional_light_desc_t &_l) {
     l.dir.dir[2] = -_l.direction[2];
     l.dir.angle = _l.angle * PI / 360.0f;
     if (l.dir.angle != 0.0f) {
-        const float radius = std::tan(l.dir.angle);
+        const float radius = tanf(l.dir.angle);
         const float mul = 1.0f / (PI * radius * radius);
         l.col[0] *= mul;
         l.col[1] *= mul;
@@ -932,6 +932,7 @@ void Ray::Cpu::Scene::Finalize() {
             light_t l = {};
 
             l.type = LIGHT_TYPE_ENV;
+            l.visible = 1;
             l.cast_shadow = 1;
             l.col[0] = l.col[1] = l.col[2] = 1.0f;
 
@@ -939,6 +940,7 @@ void Ray::Cpu::Scene::Finalize() {
             env_map_light_ = LightHandle{li.first, li.second};
             env_.light_index = env_map_light_._index;
             li_indices_.push_back(env_map_light_._index);
+            visible_lights_.push_back(env_map_light_._index);
         }
     }
 
@@ -1060,13 +1062,13 @@ void Ray::Cpu::Scene::PrepareSkyEnvMap_nolock() {
         }
     }
 
-    //if (dir_lights.empty()) {
-    //    env_.env_map = InvalidTextureHandle._index;
-    //    if (env_.back_map == PhysicalSkyTexture._index) {
-    //        env_.back_map = InvalidTextureHandle._index;
-    //    }
-    //    return;
-    //}
+    // if (dir_lights.empty()) {
+    //     env_.env_map = InvalidTextureHandle._index;
+    //     if (env_.back_map == PhysicalSkyTexture._index) {
+    //         env_.back_map = InvalidTextureHandle._index;
+    //     }
+    //     return;
+    // }
 
     static const int SkyEnvRes[] = {512, 256};
     std::vector<color_rgba8_t> rgbe_pixels(SkyEnvRes[0] * SkyEnvRes[1]);
@@ -1078,8 +1080,7 @@ void Ray::Cpu::Scene::PrepareSkyEnvMap_nolock() {
         for (int x = 0; x < SkyEnvRes[0]; ++x) {
             const float phi = 2.0f * PI * float(x) / float(SkyEnvRes[0]);
 
-            auto ray_dir = Ref::simd_fvec4{std::sin(theta) * std::cos(phi), std::cos(theta),
-                                           std::sin(theta) * std::sin(phi), 0.0f};
+            auto ray_dir = Ref::simd_fvec4{sinf(theta) * cosf(phi), cosf(theta), sinf(theta) * sinf(phi), 0.0f};
 
             Ref::simd_fvec4 color = 0.0f;
 
@@ -1090,7 +1091,7 @@ void Ray::Cpu::Scene::PrepareSkyEnvMap_nolock() {
                 const Ref::simd_fvec4 light_dir = {l.dir.dir[0], l.dir.dir[1], l.dir.dir[2], 0.0f};
                 Ref::simd_fvec4 light_col = {l.col[0], l.col[1], l.col[2], 0.0f};
                 if (l.dir.angle != 0.0f) {
-                    const float radius = std::tan(l.dir.angle);
+                    const float radius = tanf(l.dir.angle);
                     light_col *= (PI * radius * radius);
                 }
 
@@ -1155,8 +1156,7 @@ void Ray::Cpu::Scene::PrepareEnvMapQTree_nolock() {
                     for (int ii = -1; ii <= 1; ++ii) {
                         const float phi = 2.0f * PI * float(x + ii) / float(size[0]);
 
-                        auto dir = Ref::simd_fvec4{std::sin(theta) * std::cos(phi), std::cos(theta),
-                                                   std::sin(theta) * std::sin(phi), 0.0f};
+                        auto dir = Ref::simd_fvec4{sinf(theta) * cosf(phi), cosf(theta), sinf(theta) * sinf(phi), 0.0f};
 
                         Ref::simd_fvec2 q;
                         DirToCanonical(value_ptr(dir), 0.0f, value_ptr(q));
@@ -1173,7 +1173,7 @@ void Ray::Cpu::Scene::PrepareEnvMapQTree_nolock() {
 
                         auto &qvec =
                             reinterpret_cast<Ref::simd_fvec4 &>(env_map_qtree_.mips[0][4 * (qy * cur_res / 2 + qx)]);
-                        qvec.set(index, std::max(qvec[index], cur_lum));
+                        qvec.set(index, fmax(qvec[index], cur_lum));
                     }
                 }
             }
@@ -1265,8 +1265,16 @@ void Ray::Cpu::Scene::RebuildLightTree_nolock() {
     aligned_vector<prim_t> primitives;
     primitives.reserve(lights_.size());
 
+    struct additional_data_t {
+        Ref::simd_fvec4 axis;
+        float flux, omega_n, omega_e;
+    };
+    aligned_vector<additional_data_t> additional_data;
+    additional_data.reserve(lights_.size());
+
     for (const light_t &l : lights_) {
-        Ref::simd_fvec4 bbox_min = 0.0f, bbox_max = 0.0f;
+        Ref::simd_fvec4 bbox_min = 0.0f, bbox_max = 0.0f, axis = {0.0f, 1.0f, 0.0f, 0.0f};
+        float area = 1.0f, omega_n = 0.0f, omega_e = 0.0f;
 
         switch (l.type) {
         case LIGHT_TYPE_SPHERE: {
@@ -1274,10 +1282,22 @@ void Ray::Cpu::Scene::RebuildLightTree_nolock() {
 
             bbox_min = pos - Ref::simd_fvec4{l.sph.radius, l.sph.radius, l.sph.radius, 0.0f};
             bbox_max = pos + Ref::simd_fvec4{l.sph.radius, l.sph.radius, l.sph.radius, 0.0f};
+            if (l.sph.area != 0.0f) {
+                area = l.sph.area;
+            }
+            omega_n = PI; // normals in all directions
+            omega_e = PI / 2.0f;
         } break;
         case LIGHT_TYPE_DIR: {
             bbox_min = Ref::simd_fvec4{-MAX_DIST, -MAX_DIST, -MAX_DIST, 0.0f};
             bbox_max = Ref::simd_fvec4{MAX_DIST, MAX_DIST, MAX_DIST, 0.0f};
+            axis = Ref::simd_fvec4{l.dir.dir[0], l.dir.dir[1], l.dir.dir[2], 0.0f};
+            omega_n = 0.0f; // single normal
+            omega_e = l.dir.angle;
+            if (l.dir.angle != 0.0f) {
+                const float radius = tanf(l.dir.angle);
+                area = (PI * radius * radius);
+            }
         } break;
         case LIGHT_TYPE_LINE: {
             const auto pos = Ref::simd_fvec4{l.line.pos[0], l.line.pos[1], l.line.pos[2], 0.0f};
@@ -1296,7 +1316,9 @@ void Ray::Cpu::Scene::RebuildLightTree_nolock() {
 
             bbox_min = min(min(min(p0, p1), min(p2, p3)), min(min(p4, p5), min(p6, p7)));
             bbox_max = max(max(max(p0, p1), max(p2, p3)), max(max(p4, p5), max(p6, p7)));
-
+            area = l.line.area;
+            omega_n = PI; // normals in all directions
+            omega_e = PI / 2.0f;
         } break;
         case LIGHT_TYPE_RECT: {
             const auto pos = Ref::simd_fvec4{l.rect.pos[0], l.rect.pos[1], l.rect.pos[2], 0.0f};
@@ -1306,6 +1328,11 @@ void Ray::Cpu::Scene::RebuildLightTree_nolock() {
             const Ref::simd_fvec4 p0 = pos + u + v, p1 = pos + u - v, p2 = pos - u + v, p3 = pos - u - v;
             bbox_min = min(min(p0, p1), min(p2, p3));
             bbox_max = max(max(p0, p1), max(p2, p3));
+            area = l.rect.area;
+
+            axis = normalize(Ray::Cpu::cross(u, v));
+            omega_n = 0.0f; // single normal
+            omega_e = PI / 2.0f;
         } break;
         case LIGHT_TYPE_DISK: {
             const auto pos = Ref::simd_fvec4{l.disk.pos[0], l.disk.pos[1], l.disk.pos[2], 0.0f};
@@ -1315,19 +1342,50 @@ void Ray::Cpu::Scene::RebuildLightTree_nolock() {
             const Ref::simd_fvec4 p0 = pos + u + v, p1 = pos + u - v, p2 = pos - u + v, p3 = pos - u - v;
             bbox_min = min(min(p0, p1), min(p2, p3));
             bbox_max = max(max(p0, p1), max(p2, p3));
+            area = l.disk.area;
 
+            axis = normalize(Ray::Cpu::cross(u, v));
+            omega_n = 0.0f; // single normal
+            omega_e = PI / 2.0f;
         } break;
         case LIGHT_TYPE_TRI: {
-            // skip for now
-            continue;
+            const transform_t &ltr = transforms_[l.tri.xform_index];
+            const uint32_t ltri_index = l.tri.tri_index;
+
+            const vertex_t &v1 = vertices_[vtx_indices_[ltri_index * 3 + 0]];
+            const vertex_t &v2 = vertices_[vtx_indices_[ltri_index * 3 + 1]];
+            const vertex_t &v3 = vertices_[vtx_indices_[ltri_index * 3 + 2]];
+
+            auto p1 = Ref::simd_fvec4(v1.p[0], v1.p[1], v1.p[2], 0.0f),
+                 p2 = Ref::simd_fvec4(v2.p[0], v2.p[1], v2.p[2], 0.0f),
+                 p3 = Ref::simd_fvec4(v3.p[0], v3.p[1], v3.p[2], 0.0f);
+
+            p1 = TransformPoint(p1, ltr.xform);
+            p2 = TransformPoint(p2, ltr.xform);
+            p3 = TransformPoint(p3, ltr.xform);
+
+            bbox_min = min(p1, min(p2, p3));
+            bbox_max = max(p1, max(p2, p3));
+
+            Ref::simd_fvec4 light_forward = Ray::Cpu::cross(p2 - p1, p3 - p1);
+            area = 0.5f * length(light_forward);
+
+            axis = normalize(light_forward);
+            omega_n = PI; // normals in all directions (triangle lights are double-sided)
+            omega_e = PI / 2.0f;
         } break;
         case LIGHT_TYPE_ENV: {
             bbox_min = Ref::simd_fvec4{-MAX_DIST, -MAX_DIST, -MAX_DIST, 0.0f};
             bbox_max = Ref::simd_fvec4{MAX_DIST, MAX_DIST, MAX_DIST, 0.0f};
+            omega_n = PI; // normals in all directions
+            omega_e = PI / 2.0f;
         } break;
         }
 
         primitives.push_back({0, 0, 0, bbox_min, bbox_max});
+
+        const float flux = (l.col[0] + l.col[1] + l.col[2]) * area;
+        additional_data.push_back({axis, flux, omega_n, omega_e});
     }
 
     light_nodes_.clear();
@@ -1340,16 +1398,99 @@ void Ray::Cpu::Scene::RebuildLightTree_nolock() {
     std::vector<uint32_t> li_indices;
     li_indices.reserve(primitives.size());
 
+    std::vector<bvh_node_t> temp_nodes;
+
     bvh_settings_t s;
     s.oversplit_threshold = -1.0f;
     s.allow_spatial_splits = false;
     s.min_primitives_in_leaf = 1;
-    PreprocessPrims_SAH(primitives, nullptr, 0, s, light_nodes_, li_indices);
+    PreprocessPrims_SAH(primitives, nullptr, 0, s, temp_nodes, li_indices);
+
+    light_nodes_.resize(temp_nodes.size(), light_bvh_node_t{});
+    for (uint32_t i = 0; i < temp_nodes.size(); ++i) {
+        static_cast<bvh_node_t &>(light_nodes_[i]) = temp_nodes[i];
+        if ((temp_nodes[i].prim_index & LEAF_NODE_BIT) != 0) {
+            const uint32_t li_index = li_indices[temp_nodes[i].prim_index & PRIM_INDEX_BITS];
+            memcpy(light_nodes_[i].axis, value_ptr(additional_data[li_index].axis), 3 * sizeof(float));
+            light_nodes_[i].flux = additional_data[li_index].flux;
+            light_nodes_[i].omega_n = additional_data[li_index].omega_n;
+            light_nodes_[i].omega_e = additional_data[li_index].omega_e;
+        }
+    }
+
+    std::vector<uint32_t> parent_indices(light_nodes_.size());
+    parent_indices[0] = 0xffffffff; // root node has no parent
+
+    std::vector<uint32_t> leaf_indices;
+    leaf_indices.reserve(primitives.size());
+
+    SmallVector<uint32_t, 128> stack;
+    stack.push_back(0);
+    while (!stack.empty()) {
+        const uint32_t i = stack.back();
+        stack.pop_back();
+
+        if ((light_nodes_[i].prim_index & LEAF_NODE_BIT) == 0) {
+            const uint32_t left_child = (light_nodes_[i].left_child & LEFT_CHILD_BITS),
+                           right_child = (light_nodes_[i].right_child & RIGHT_CHILD_BITS);
+            parent_indices[left_child] = parent_indices[right_child] = i;
+
+            stack.push_back(left_child);
+            stack.push_back(right_child);
+        } else {
+            leaf_indices.push_back(i);
+        }
+    }
+
+    // Propagate flux and cone up the hierarchy
+    std::vector<uint32_t> to_process;
+    to_process.reserve(light_nodes_.size());
+    to_process.insert(end(to_process), begin(leaf_indices), end(leaf_indices));
+    for (uint32_t i = 0; i < uint32_t(to_process.size()); ++i) {
+        const uint32_t n = to_process[i];
+        const uint32_t parent = parent_indices[n];
+        if (parent == 0xffffffff) {
+            continue;
+        }
+
+        light_nodes_[parent].flux += light_nodes_[n].flux;
+        if (light_nodes_[parent].axis[0] == 0.0f && light_nodes_[parent].axis[1] == 0.0f &&
+            light_nodes_[parent].axis[2] == 0.0f) {
+            memcpy(light_nodes_[parent].axis, light_nodes_[n].axis, 3 * sizeof(float));
+            light_nodes_[parent].omega_n = light_nodes_[n].omega_n;
+        } else {
+            auto axis1 = Ref::simd_fvec4{light_nodes_[parent].axis}, axis2 = Ref::simd_fvec4{light_nodes_[n].axis};
+            axis1.set<3>(0.0f);
+            axis2.set<3>(0.0f);
+
+            const float angle_between = acosf(clamp(dot(axis1, axis2), -1.0f, 1.0f));
+
+            axis1 += axis2;
+            const float axis_length = length(axis1);
+            if (axis_length != 0.0f) {
+                axis1 /= axis_length;
+            } else {
+                axis1 = Ref::simd_fvec4{0.0f, 1.0f, 0.0f, 0.0f};
+            }
+
+            memcpy(light_nodes_[parent].axis, value_ptr(axis1), 3 * sizeof(float));
+
+            light_nodes_[parent].omega_n =
+                fmin(0.5f * (light_nodes_[parent].omega_n +
+                             fmax(light_nodes_[parent].omega_n, angle_between + light_nodes_[n].omega_n)),
+                     PI);
+        }
+        light_nodes_[parent].omega_e = fmax(light_nodes_[parent].omega_e, light_nodes_[n].omega_e);
+        if ((light_nodes_[parent].left_child & LEFT_CHILD_BITS) == n) {
+            to_process.push_back(parent);
+        }
+    }
 
     // Remove indices indirection
-    for (uint32_t i = 0; i < light_nodes_.size(); ++i) {
-        bvh_node_t &n = light_nodes_[i];
-        if ((n.prim_index & LEAF_NODE_BIT) != 0) {
+    for (uint32_t i = 0; i < leaf_indices.size(); ++i) {
+        light_bvh_node_t &n = light_nodes_[leaf_indices[i]];
+        assert((n.prim_index & LEAF_NODE_BIT) != 0);
+        {
             const uint32_t li_index = li_indices[n.prim_index & PRIM_INDEX_BITS];
             n.prim_index &= ~PRIM_INDEX_BITS;
             n.prim_index |= li_index;

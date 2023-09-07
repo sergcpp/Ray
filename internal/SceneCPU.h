@@ -81,8 +81,8 @@ class Scene : public SceneCommon {
     std::vector<uint32_t> visible_lights_; // compacted list of all visible lights
     std::vector<uint32_t> blocker_lights_; // compacted list of all light blocker lights
 
-    std::vector<bvh_node_t> light_nodes_;
-    aligned_vector<wbvh_node_t> light_wnodes_;
+    std::vector<light_bvh_node_t> light_nodes_;
+    aligned_vector<light_wbvh_node_t> light_wnodes_;
 
     environment_t env_;
     LightHandle env_map_light_ = InvalidLightHandle;

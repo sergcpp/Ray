@@ -30,6 +30,8 @@
 
 static_assert(sizeof(Types::tri_accel_t) == sizeof(Ray::tri_accel_t), "!");
 static_assert(sizeof(Types::bvh_node_t) == sizeof(Ray::bvh_node_t), "!");
+static_assert(sizeof(Types::light_bvh_node_t) == sizeof(Ray::light_bvh_node_t), "!");
+static_assert(sizeof(Types::light_wbvh_node_t) == sizeof(Ray::light_wbvh_node_t), "!");
 static_assert(sizeof(Types::vertex_t) == sizeof(Ray::vertex_t), "!");
 static_assert(sizeof(Types::mesh_t) == sizeof(Ray::mesh_t), "!");
 static_assert(sizeof(Types::transform_t) == sizeof(Ray::transform_t), "!");
@@ -660,7 +662,7 @@ void Ray::Vk::Renderer::RenderScene(const SceneBase *_s, RegionContext &region) 
                                   int(s->visible_lights_.size()),
                                   s->blocker_lights_.buf(),
                                   int(s->blocker_lights_.size()),
-                                  s->light_nodes_.buf(),
+                                  s->light_wnodes_.buf(),
                                   s->rt_tlas_,
                                   s->env_map_qtree_.tex,
                                   int(s->env_map_qtree_.mips.size())};
@@ -2005,6 +2007,7 @@ void Ray::Vk::Renderer::kernel_ShadePrimaryHits(
                                          {eBindTarget::SBufRO, Shade::VERTICES_BUF_SLOT, sc_data.vertices},
                                          {eBindTarget::SBufRO, Shade::VTX_INDICES_BUF_SLOT, sc_data.vtx_indices},
                                          {eBindTarget::SBufRO, Shade::RANDOM_SEQ_BUF_SLOT, random_seq},
+                                         {eBindTarget::SBufRO, Shade::LIGHT_WNODES_BUF_SLOT, sc_data.light_wnodes},
                                          {eBindTarget::Tex2D, Shade::ENV_QTREE_TEX_SLOT, sc_data.env_qtree},
                                          {eBindTarget::Image, Shade::OUT_IMG_SLOT, out_img},
                                          {eBindTarget::SBufRW, Shade::OUT_RAYS_BUF_SLOT, out_rays},
@@ -2045,10 +2048,9 @@ void Ray::Vk::Renderer::kernel_ShadePrimaryHits(
 
     uniform_params.env_rotation = env.env_map_rotation;
     uniform_params.back_rotation = env.back_map_rotation;
-    uniform_params.env_mult_importance = sc_data.env->light_index != 0xffffffff ? 1 : 0;
+    uniform_params.env_light_index = sc_data.env->light_index;
 
-    uniform_params.clamp_val =
-        (settings.clamp_direct != 0.0f) ? settings.clamp_direct : FLT_MAX;
+    uniform_params.clamp_val = (settings.clamp_direct != 0.0f) ? settings.clamp_direct : FLT_MAX;
 
     Pipeline *pi = &pi_shade_primary_;
     if (out_base_color.ready()) {
@@ -2103,6 +2105,7 @@ void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(CommandBuffer cmd_buf, const p
                                          {eBindTarget::SBufRO, Shade::VERTICES_BUF_SLOT, sc_data.vertices},
                                          {eBindTarget::SBufRO, Shade::VTX_INDICES_BUF_SLOT, sc_data.vtx_indices},
                                          {eBindTarget::SBufRO, Shade::RANDOM_SEQ_BUF_SLOT, random_seq},
+                                         {eBindTarget::SBufRO, Shade::LIGHT_WNODES_BUF_SLOT, sc_data.light_wnodes},
                                          {eBindTarget::Tex2D, Shade::ENV_QTREE_TEX_SLOT, sc_data.env_qtree},
                                          {eBindTarget::Image, Shade::OUT_IMG_SLOT, out_img},
                                          {eBindTarget::SBufRW, Shade::OUT_RAYS_BUF_SLOT, out_rays},
@@ -2132,7 +2135,7 @@ void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(CommandBuffer cmd_buf, const p
 
     uniform_params.env_rotation = env.env_map_rotation;
     uniform_params.back_rotation = env.back_map_rotation;
-    uniform_params.env_mult_importance = sc_data.env->light_index != 0xffffffff ? 1 : 0;
+    uniform_params.env_light_index = sc_data.env->light_index;
 
     uniform_params.clamp_val = (clamp_val != 0.0f) ? clamp_val : FLT_MAX;
 
@@ -2180,7 +2183,7 @@ void Ray::Vk::Renderer::kernel_IntersectSceneShadow(CommandBuffer cmd_buf, const
         {eBindTarget::SBufRO, IntersectSceneShadow::SH_RAYS_BUF_SLOT, sh_rays},
         {eBindTarget::SBufRO, IntersectSceneShadow::COUNTERS_BUF_SLOT, counters},
         {eBindTarget::SBufRO, IntersectSceneShadow::LIGHTS_BUF_SLOT, sc_data.lights},
-        {eBindTarget::SBufRO, IntersectSceneShadow::LIGHT_NODES_BUF_SLOT, sc_data.light_nodes},
+        {eBindTarget::SBufRO, IntersectSceneShadow::LIGHT_WNODES_BUF_SLOT, sc_data.light_wnodes},
         {eBindTarget::SBufRO, IntersectSceneShadow::RANDOM_SEQ_BUF_SLOT, random_seq},
         {eBindTarget::Image, IntersectSceneShadow::INOUT_IMG_SLOT, out_img}};
 

@@ -21,6 +21,7 @@
 //
 #define USE_VNDF_GGX_SAMPLING 1
 #define USE_NEE 1
+#define USE_HIERARCHICAL_NEE 1
 #define USE_PATH_TERMINATION 1
 // #define FORCE_TEXTURE_LOD 0
 #define USE_STOCH_TEXTURE_FILTERING 1
@@ -354,14 +355,19 @@ template <int S>
 void SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3], const simd_fvec<S> B[3],
                        const simd_fvec<S> N[3], const scene_data_t &sc, const Cpu::TexStorageBase *const tex_atlases[],
                        const float random_seq[], const simd_ivec<S> &rand_index, const simd_fvec<S> sample_off[2],
-                       const simd_ivec<S> &ray_mask, light_sample_t<S> &ls);
+                       simd_ivec<S> ray_mask, light_sample_t<S> &ls);
 
 // Account for visible lights contribution
 template <int S>
-void IntersectAreaLights(const ray_data_t<S> &r, Span<const light_t> lights, Span<const wbvh_node_t> nodes,
+void IntersectAreaLights(const ray_data_t<S> &r, Span<const light_t> lights, Span<const light_wbvh_node_t> nodes,
                          hit_data_t<S> &inout_inter);
 template <int S>
-simd_fvec<S> IntersectAreaLights(const shadow_ray_t<S> &r, Span<const light_t> lights, Span<const wbvh_node_t> nodes);
+simd_fvec<S> IntersectAreaLights(const shadow_ray_t<S> &r, Span<const light_t> lights,
+                                 Span<const light_wbvh_node_t> nodes);
+template <int S>
+simd_fvec<S> EvalTriLightFactor(const simd_fvec<S> P[3], const simd_fvec<S> ro[3], const simd_ivec<S> &mask,
+                                const simd_ivec<S> &tri_index, Span<const light_t> lights,
+                                Span<const light_wbvh_node_t> nodes);
 
 template <int S>
 void TraceRays(Span<ray_data_t<S>> rays, int min_transp_depth, int max_transp_depth, const scene_data_t &sc,
@@ -375,7 +381,7 @@ void TraceShadowRays(Span<const shadow_ray_t<S>> rays, int max_transp_depth, flo
 // Get environment collor at direction
 template <int S>
 void Evaluate_EnvColor(const ray_data_t<S> &ray, const simd_ivec<S> &mask, const environment_t &env,
-                       const Cpu::TexStorageRGBA &tex_storage, uint32_t lights_count, const simd_ivec<S> &mis_mask,
+                       const Cpu::TexStorageRGBA &tex_storage, const simd_fvec<S> &pdf_factor,
                        const simd_fvec<S> rand[2], simd_fvec<S> env_col[4]);
 // Get light color at intersection point
 template <int S>
@@ -1154,7 +1160,39 @@ force_inline void bbox_test_oct(const float p[3], const simd_fvec<S> bbox_min[3]
                                 simd_ivec<S> &out_mask) {
     const simd_fvec<S> mask = (bbox_min[0] < p[0]) & (bbox_max[0] > p[0]) & (bbox_min[1] < p[1]) &
                               (bbox_max[1] > p[1]) & (bbox_min[2] < p[2]) & (bbox_max[2] > p[2]);
-    out_mask = reinterpret_cast<const simd_ivec<S> &>(mask);
+    out_mask = simd_cast(mask);
+}
+
+template <int S>
+force_inline long bbox_test_oct(const float p[3], const float bbox_min[3][8], const float bbox_max[3][8]) {
+    long res = 0;
+
+    static const int LanesCount = (8 / S);
+
+    ITERATE_R(LanesCount, {
+        const simd_fvec<S> fmask = (simd_fvec<S>{&bbox_min[0][S * i], simd_mem_aligned} <= p[0]) &
+                                   (simd_fvec<S>{&bbox_max[0][S * i], simd_mem_aligned} >= p[0]) &
+                                   (simd_fvec<S>{&bbox_min[1][S * i], simd_mem_aligned} <= p[1]) &
+                                   (simd_fvec<S>{&bbox_max[1][S * i], simd_mem_aligned} >= p[1]) &
+                                   (simd_fvec<S>{&bbox_min[2][S * i], simd_mem_aligned} <= p[2]) &
+                                   (simd_fvec<S>{&bbox_max[2][S * i], simd_mem_aligned} >= p[2]);
+
+        res <<= S;
+        res |= simd_cast(fmask).movemask();
+    })
+
+    return res;
+}
+
+template <>
+force_inline long bbox_test_oct<16>(const float p[3], const float bbox_min[3][8], const float bbox_max[3][8]) {
+    const simd_fvec<8> fmask = (simd_fvec<8>{&bbox_min[0][0], simd_mem_aligned} <= p[0]) &
+                               (simd_fvec<8>{&bbox_max[0][0], simd_mem_aligned} >= p[0]) &
+                               (simd_fvec<8>{&bbox_min[1][0], simd_mem_aligned} <= p[1]) &
+                               (simd_fvec<8>{&bbox_max[1][0], simd_mem_aligned} >= p[1]) &
+                               (simd_fvec<8>{&bbox_min[2][0], simd_mem_aligned} <= p[2]) &
+                               (simd_fvec<8>{&bbox_max[2][0], simd_mem_aligned} >= p[2]);
+    return simd_cast(fmask).movemask();
 }
 
 force_inline bool bbox_test(const float inv_d[3], const float inv_do[3], const float t, const float bbox_min[3],
@@ -1284,17 +1322,23 @@ struct stack_entry_t {
     float dist;
 };
 
-template <int StackSize> class TraversalStateStack_Single {
+struct light_stack_entry_t {
+    uint32_t index;
+    float dist;
+    float factor;
+};
+
+template <int StackSize, typename T = stack_entry_t> class TraversalStateStack_Single {
   public:
-    stack_entry_t stack[StackSize];
+    T stack[StackSize];
     uint32_t stack_size = 0;
 
-    force_inline void push(uint32_t index, float dist) {
-        stack[stack_size++] = {index, dist};
+    template <class... Args> force_inline void push(Args &&...args) {
+        stack[stack_size++] = {std::forward<Args>(args)...};
         assert(stack_size < StackSize && "Traversal stack overflow!");
     }
 
-    force_inline stack_entry_t pop() {
+    force_inline T pop() {
         return stack[--stack_size];
         assert(stack_size >= 0 && "Traversal stack underflow!");
     }
@@ -1313,7 +1357,7 @@ template <int StackSize> class TraversalStateStack_Single {
             } else if (stack[i].dist > stack[i + 2].dist) {
                 std::swap(stack[i + 1], stack[i + 2]);
             } else {
-                const stack_entry_t tmp = stack[i];
+                const T tmp = stack[i];
                 stack[i] = stack[i + 2];
                 stack[i + 2] = stack[i + 1];
                 stack[i + 1] = tmp;
@@ -1324,7 +1368,7 @@ template <int StackSize> class TraversalStateStack_Single {
             } else if (stack[i + 2].dist > stack[i + 1].dist) {
                 std::swap(stack[i], stack[i + 2]);
             } else {
-                const stack_entry_t tmp = stack[i];
+                const T tmp = stack[i];
                 stack[i] = stack[i + 1];
                 stack[i + 1] = stack[i + 2];
                 stack[i + 2] = tmp;
@@ -1365,7 +1409,7 @@ template <int StackSize> class TraversalStateStack_Single {
         const int start = int(stack_size - count);
 
         for (int i = start + 1; i < int(stack_size); i++) {
-            const stack_entry_t key = stack[i];
+            const T key = stack[i];
 
             int j = i - 1;
 
@@ -2249,6 +2293,126 @@ simd_fvec<S> peek_ior_stack(const simd_fvec<S> stack[4], const simd_ivec<S> &_sk
     where(mask, ret) = stack[0];
 
     return ret;
+}
+
+template <int S> simd_fvec<S> approx_atan2(const simd_fvec<S> &y, const simd_fvec<S> &x) {
+    simd_fvec<S> t0, t1, t3, t4;
+
+    t3 = abs(x);
+    t1 = abs(y);
+    t0 = max(t3, t1);
+    t1 = min(t3, t1);
+    t3 = safe_inv(t0);
+    t3 = t1 * t3;
+
+    t4 = t3 * t3;
+    t0 = -0.013480470f;
+    t0 = t0 * t4 + 0.057477314f;
+    t0 = t0 * t4 - 0.121239071f;
+    t0 = t0 * t4 + 0.195635925f;
+    t0 = t0 * t4 - 0.332994597f;
+    t0 = t0 * t4 + 0.999995630f;
+    t3 = t0 * t3;
+
+    where(abs(y) > abs(x), t3) = 1.570796327f - t3;
+    where(x < 0.0f, t3) = 3.141592654f - t3;
+    where(y < 0.0f, t3) = -t3;
+
+    return t3;
+}
+
+template <int S> force_inline simd_fvec<S> approx_cos(simd_fvec<S> x) { // max error is 0.056010f
+    const float tp = 1.0f / (2.0f * PI);
+    x *= tp;
+    x -= 0.25f + floor(x + 0.25f);
+    x *= 16.0f * (abs(x) - 0.5f);
+    return x;
+}
+
+template <int S> force_inline simd_fvec<S> approx_acos(simd_fvec<S> x) { // max error is 0.000068f
+    simd_fvec<S> negate = 0.0f;
+    where(x < 0, negate) = 1.0f;
+    x = abs(x);
+    simd_fvec<S> ret = -0.0187293f;
+    ret = ret * x;
+    ret = ret + 0.0742610f;
+    ret = ret * x;
+    ret = ret - 0.2121144f;
+    ret = ret * x;
+    ret = ret + 1.5707288f;
+    ret = ret * sqrt(1.0f - min(x, 1.0f));
+    ret = ret - 2 * negate * ret;
+    return negate * PI + ret;
+}
+
+template <int S> void calc_lnode_importance(const light_wbvh_node_t &n, const float P[3], float importance[8]) {
+    for (int i = 0; i < 8; i += S) {
+        simd_fvec<S> mul = 1.0f, v_len2 = 1.0f;
+
+        const simd_ivec<S> mask = simd_cast(simd_fvec<S>{&n.bbox_min[0][i], simd_mem_aligned} > -MAX_DIST);
+        if (mask.not_all_zeros()) {
+            simd_fvec<S> v[3] = {P[0] - 0.5f * (simd_fvec<S>{&n.bbox_min[0][i], simd_mem_aligned} +
+                                                simd_fvec<S>{&n.bbox_max[0][i], simd_mem_aligned}),
+                                 P[1] - 0.5f * (simd_fvec<S>{&n.bbox_min[1][i], simd_mem_aligned} +
+                                                simd_fvec<S>{&n.bbox_max[1][i], simd_mem_aligned}),
+                                 P[2] - 0.5f * (simd_fvec<S>{&n.bbox_min[2][i], simd_mem_aligned} +
+                                                simd_fvec<S>{&n.bbox_max[2][i], simd_mem_aligned})};
+            const simd_fvec<S> ext[3] = {
+                simd_fvec<S>{&n.bbox_max[0][i], simd_mem_aligned} - simd_fvec<S>{&n.bbox_min[0][i], simd_mem_aligned},
+                simd_fvec<S>{&n.bbox_max[1][i], simd_mem_aligned} - simd_fvec<S>{&n.bbox_min[1][i], simd_mem_aligned},
+                simd_fvec<S>{&n.bbox_max[2][i], simd_mem_aligned} - simd_fvec<S>{&n.bbox_min[2][i], simd_mem_aligned}};
+
+            const simd_fvec<S> extent = 0.5f * length(ext);
+            where(mask, v_len2) = length2(v);
+            const simd_fvec<S> v_len = sqrt(v_len2);
+            const simd_fvec<S> omega_u = approx_atan2(extent, v_len) + 0.000005f;
+
+            const simd_fvec<S> axis[3] = {simd_fvec<S>{&n.axis[0][i], simd_mem_aligned},
+                                          simd_fvec<S>{&n.axis[1][i], simd_mem_aligned},
+                                          simd_fvec<S>{&n.axis[2][i], simd_mem_aligned}};
+
+            UNROLLED_FOR(j, 3, { v[j] /= v_len; })
+            const simd_fvec<S> omega = approx_acos(min(dot3(axis, v), 1.0f)) - 0.00007f;
+            const simd_fvec<S> omega_ = max(0.0f, omega - simd_fvec<S>{&n.omega_n[i], simd_mem_aligned} - omega_u);
+            where(mask, mul) = 0.0f;
+            where(mask & simd_cast(omega_ < simd_fvec<S>{&n.omega_e[i], simd_mem_aligned}), mul) =
+                approx_cos(omega_) + 0.057f;
+        }
+
+        const simd_fvec<S> imp = simd_fvec<S>{&n.flux[i], simd_mem_aligned} * mul / v_len2;
+        imp.store_to(&importance[i], simd_mem_aligned);
+    }
+}
+
+template <int S>
+void calc_lnode_importance(const light_wbvh_node_t &n, const simd_fvec<S> P[3], simd_fvec<S> importance[8]) {
+    for (int i = 0; i < 8; ++i) {
+        simd_fvec<S> mul = 1.0f, v_len2 = 1.0f;
+
+        if (n.bbox_min[0][i] > -MAX_DIST) {
+            simd_fvec<S> v[3] = {P[0] - 0.5f * (n.bbox_min[0][i] + n.bbox_max[0][i]),
+                                 P[1] - 0.5f * (n.bbox_min[1][i] + n.bbox_max[1][i]),
+                                 P[2] - 0.5f * (n.bbox_min[2][i] + n.bbox_max[2][i])};
+
+            const float ext[3] = {n.bbox_max[0][i] - n.bbox_min[0][i], n.bbox_max[1][i] - n.bbox_min[1][i],
+                                  n.bbox_max[2][i] - n.bbox_min[2][i]};
+            const float extent = 0.5f * sqrtf(ext[0] * ext[0] + ext[1] * ext[1] + ext[2] * ext[2]);
+
+            v_len2 = length2(v);
+            const simd_fvec<S> v_len = sqrt(v_len2);
+            const simd_fvec<S> omega_u = approx_atan2(simd_fvec<S>{extent}, v_len) + 0.000005f;
+
+            const float axis[3] = {n.axis[0][i], n.axis[1][i], n.axis[2][i]};
+
+            UNROLLED_FOR(j, 3, { v[j] = safe_div_pos(v[j], v_len); })
+            const simd_fvec<S> omega = approx_acos(min(dot3(axis, v), 1.0f)) - 0.00007f;
+            const simd_fvec<S> omega_ = max(0.0f, omega - n.omega_n[i] - omega_u);
+            mul = 0.0f;
+            where(omega_ < n.omega_e[i], mul) = approx_cos(omega_) + 0.057f;
+        }
+
+        importance[i] = safe_div_pos(n.flux[i] * mul, v_len2);
+    }
 }
 
 } // namespace NS
@@ -4917,8 +5081,8 @@ template <int S>
 void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3], const simd_fvec<S> B[3],
                                 const simd_fvec<S> N[3], const scene_data_t &sc,
                                 const Cpu::TexStorageBase *const textures[], const float random_seq[],
-                                const simd_ivec<S> &rand_index, const simd_fvec<S> sample_off[2],
-                                const simd_ivec<S> &ray_mask, light_sample_t<S> &ls) {
+                                const simd_ivec<S> &rand_index, const simd_fvec<S> sample_off[2], simd_ivec<S> ray_mask,
+                                light_sample_t<S> &ls) {
     simd_fvec<S> ri = fract(gather(random_seq + RAND_DIM_LIGHT_PICK, rand_index) + sample_off[0]);
     const simd_fvec<S> ru = fract(gather(random_seq + RAND_DIM_LIGHT_U, rand_index) + sample_off[0]);
     const simd_fvec<S> rv = fract(gather(random_seq + RAND_DIM_LIGHT_V, rand_index) + sample_off[1]);
@@ -4926,8 +5090,80 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
     const simd_fvec<S> tex_rand[2] = {fract(gather(random_seq + RAND_DIM_TEX_U, rand_index) + sample_off[0]),
                                       fract(gather(random_seq + RAND_DIM_TEX_V, rand_index) + sample_off[1])};
 
+#if USE_HIERARCHICAL_NEE
+    simd_ivec<S> light_index = -1;
+    simd_fvec<S> factor = 1.0f;
+
+    { // Traverse light tree structure
+        struct {
+            simd_ivec<S> mask;
+            uint32_t i;
+        } queue[S];
+
+        queue[0].mask = ray_mask;
+        queue[0].i = 0; // start from root
+
+        int index = 0, num = 1;
+        while (index != num) {
+            uint32_t i = queue[index].i;
+            while (!is_leaf_node(sc.light_wnodes[i])) {
+                simd_fvec<S> importance[8];
+                calc_lnode_importance(sc.light_wnodes[i], P, importance);
+
+                simd_fvec<S> total_importance = importance[0];
+                UNROLLED_FOR(j, 7, { total_importance += importance[j + 1]; })
+
+                queue[index].mask &= simd_cast(total_importance > 0.0f);
+                if (queue[index].mask.all_zeros()) {
+                    // failed to find lightsource for sampling
+                    break;
+                }
+
+                simd_fvec<S> factors[8];
+                UNROLLED_FOR(j, 8, { factors[j] = safe_div_pos(importance[j], total_importance); })
+
+                simd_fvec<S> factors_cdf[9] = {};
+                UNROLLED_FOR(j, 8, { factors_cdf[j + 1] = factors_cdf[j] + factors[j]; })
+                // make sure cdf ends with 1.0
+                UNROLLED_FOR(j, 8, { where(factors_cdf[j + 1] == factors_cdf[8], factors_cdf[j + 1]) = 1.01f; })
+
+                simd_ivec<S> next = 0;
+                UNROLLED_FOR(j, 8, { where(factors_cdf[j + 1] <= ri, next) += 1; })
+                assert((next >= 8).all_zeros());
+
+                const int first_next = next[GetFirstBit(queue[index].mask.movemask())];
+
+                const simd_ivec<S> same_next = (next == first_next);
+                const simd_ivec<S> diff_next = and_not(same_next, queue[index].mask);
+
+                if (diff_next.not_all_zeros()) {
+                    queue[index].mask &= same_next;
+                    // TODO: Avoid visiting node twice!
+                    queue[num++] = {diff_next, i};
+                }
+
+                where(queue[index].mask, ri) = fract(safe_div_pos(ri - factors_cdf[first_next], factors[first_next]));
+                i = sc.light_wnodes[i].child[first_next];
+                where(queue[index].mask, factor) *= factors[first_next];
+            }
+
+            where(queue[index].mask, light_index) = (sc.light_wnodes[i].child[0] & PRIM_INDEX_BITS);
+
+            ++index;
+        }
+    }
+
+    ray_mask &= (light_index != -1);
+    if (ray_mask.all_zeros()) {
+        // failed to find lightsources for sampling
+        return;
+    }
+    factor = 1.0f / factor;
+#else
     const simd_ivec<S> light_index = min(simd_ivec<S>{ri * float(sc.li_indices.size())}, int(sc.li_indices.size() - 1));
     ri = ri * float(sc.li_indices.size()) - simd_fvec<S>(light_index);
+    const simd_fvec<S> factor = float(sc.li_indices.size());
+#endif
 
     simd_ivec<S> ray_queue[S];
     ray_queue[0] = ray_mask;
@@ -4945,7 +5181,11 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
             ray_queue[num++] = diff_li;
         }
 
+#if USE_HIERARCHICAL_NEE
+        const light_t &l = sc.lights[first_li];
+#else
         const light_t &l = sc.lights[sc.li_indices[first_li]];
+#endif
 
         UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.col[i]) = l.col[i]; })
         where(ray_queue[index], ls.cast_shadow) = l.cast_shadow ? -1 : 0;
@@ -5282,12 +5522,14 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
         ++index;
     }
 
-    where(ray_mask, ls.pdf) /= float(sc.li_indices.size());
+    where(ray_mask, ls.pdf) /= factor;
 }
 
 template <int S>
-void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, Span<const light_t> lights, Span<const wbvh_node_t> nodes,
-                                  hit_data_t<S> &inout_inter) {
+void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, Span<const light_t> lights,
+                                  Span<const light_wbvh_node_t> nodes, hit_data_t<S> &inout_inter) {
+    const int SS = S <= 8 ? S : 8;
+
     simd_fvec<S> inv_d[3], inv_d_o[3];
     comp_aux_inv_values(r.o, r.d, inv_d, inv_d_o);
 
@@ -5302,14 +5544,15 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, Span<const light_t> li
         }
 
         // recombine in AoS layout
-        const float _inv_d[3] = {inv_d[0][ri], inv_d[1][ri], inv_d[2][ri]},
+        const float _ro[3] = {r.o[0][ri], r.o[1][ri], r.o[2][ri]},
+                    _inv_d[3] = {inv_d[0][ri], inv_d[1][ri], inv_d[2][ri]},
                     _inv_d_o[3] = {inv_d_o[0][ri], inv_d_o[1][ri], inv_d_o[2][ri]};
 
-        TraversalStateStack_Single<MAX_STACK_SIZE> st;
-        st.push(0 /* root_index */, 0.0f);
+        TraversalStateStack_Single<MAX_STACK_SIZE, light_stack_entry_t> st;
+        st.push(0u /* root_index */, 0.0f, 1.0f);
 
         while (!st.empty()) {
-            stack_entry_t cur = st.pop();
+            light_stack_entry_t cur = st.pop();
 
             if (cur.dist > inter_t[ri]) {
                 continue;
@@ -5318,13 +5561,27 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, Span<const light_t> li
         TRAVERSE:
             if (!is_leaf_node(nodes[cur.index])) {
                 alignas(32) float res_dist[8];
-                long mask = bbox_test_oct<S>(_inv_d, _inv_d_o, inter_t[ri], nodes[cur.index].bbox_min,
-                                             nodes[cur.index].bbox_max, res_dist);
+                long mask = bbox_test_oct<SS>(_inv_d, _inv_d_o, inter_t[ri], nodes[cur.index].bbox_min,
+                                              nodes[cur.index].bbox_max, res_dist);
                 if (mask) {
+                    simd_fvec<SS> importance[8 / SS];
+                    calc_lnode_importance<SS>(nodes[cur.index], _ro, value_ptr(importance[0]));
+
+                    simd_fvec<SS> total_importance_v = 0.0f;
+                    UNROLLED_FOR_S(i, 8 / SS, { total_importance_v += importance[i]; })
+                    const float total_importance = hsum(total_importance_v);
+
+                    alignas(32) float factors[8];
+                    UNROLLED_FOR_S(i, 8 / SS, {
+                        importance[i] = safe_div_pos(importance[i], total_importance);
+                        importance[i].store_to(&factors[i * SS], simd_mem_aligned);
+                    })
+
                     long i = GetFirstBit(mask);
                     mask = ClearBit(mask, i);
                     if (mask == 0) { // only one box was hit
                         cur.index = nodes[cur.index].child[i];
+                        cur.factor *= factors[i];
                         goto TRAVERSE;
                     }
 
@@ -5332,33 +5589,35 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, Span<const light_t> li
                     mask = ClearBit(mask, i2);
                     if (mask == 0) { // two boxes were hit
                         if (res_dist[i] < res_dist[i2]) {
-                            st.push(nodes[cur.index].child[i2], res_dist[i2]);
+                            st.push(nodes[cur.index].child[i2], res_dist[i2], cur.factor * factors[i2]);
                             cur.index = nodes[cur.index].child[i];
+                            cur.factor *= factors[i];
                         } else {
-                            st.push(nodes[cur.index].child[i], res_dist[i]);
+                            st.push(nodes[cur.index].child[i], res_dist[i], cur.factor * factors[i]);
                             cur.index = nodes[cur.index].child[i2];
+                            cur.factor *= factors[i2];
                         }
                         goto TRAVERSE;
                     }
 
-                    st.push(nodes[cur.index].child[i], res_dist[i]);
-                    st.push(nodes[cur.index].child[i2], res_dist[i2]);
+                    st.push(nodes[cur.index].child[i], res_dist[i], cur.factor * factors[i]);
+                    st.push(nodes[cur.index].child[i2], res_dist[i2], cur.factor * factors[i2]);
 
                     i = GetFirstBit(mask);
                     mask = ClearBit(mask, i);
-                    st.push(nodes[cur.index].child[i], res_dist[i]);
+                    st.push(nodes[cur.index].child[i], res_dist[i], cur.factor * factors[i]);
                     if (mask == 0) { // three boxes were hit
                         st.sort_top3();
-                        cur.index = st.pop_index();
+                        cur = st.pop();
                         goto TRAVERSE;
                     }
 
                     i = GetFirstBit(mask);
                     mask = ClearBit(mask, i);
-                    st.push(nodes[cur.index].child[i], res_dist[i]);
+                    st.push(nodes[cur.index].child[i], res_dist[i], cur.factor * factors[i]);
                     if (mask == 0) { // four boxes were hit
                         st.sort_top4();
-                        cur.index = st.pop_index();
+                        cur = st.pop();
                         goto TRAVERSE;
                     }
 
@@ -5368,12 +5627,12 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, Span<const light_t> li
                     do {
                         i = GetFirstBit(mask);
                         mask = ClearBit(mask, i);
-                        st.push(nodes[cur.index].child[i], res_dist[i]);
+                        st.push(nodes[cur.index].child[i], res_dist[i], cur.factor * factors[i]);
                     } while (mask != 0);
 
                     const int count = int(st.stack_size - size_before + 4);
                     st.sort_topN(count);
-                    cur.index = st.pop_index();
+                    cur = st.pop();
                     goto TRAVERSE;
                 }
             } else {
@@ -5425,6 +5684,7 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, Span<const light_t> li
                         where(mask1 | mask2, inout_inter.obj_index) = -simd_ivec<S>(light_index) - 1;
                         where(mask1, inout_inter.t) = t1;
                         where(mask2, inout_inter.t) = t2;
+                        where(mask1 | mask2, inout_inter.u) = cur.factor;
                         inout_inter.t.store_to(inter_t, simd_mem_aligned);
                     }
                 } else if (l.type == LIGHT_TYPE_DIR) {
@@ -5434,6 +5694,7 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, Span<const light_t> li
                     inout_inter.mask |= imask;
                     where(imask, inout_inter.obj_index) = -simd_ivec<S>(light_index) - 1;
                     where(imask, inout_inter.t) = safe_div_pos(1.0f, cos_theta);
+                    where(imask, inout_inter.u) = cur.factor;
                     inout_inter.t.store_to(inter_t, simd_mem_aligned);
                 } else if (l.type == LIGHT_TYPE_RECT) {
                     float light_fwd[3];
@@ -5464,6 +5725,7 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, Span<const light_t> li
                         inout_inter.mask |= simd_cast(final_mask);
                         where(final_mask, inout_inter.obj_index) = -simd_ivec<S>(light_index) - 1;
                         where(final_mask, inout_inter.t) = t;
+                        where(final_mask, inout_inter.u) = cur.factor;
                         inout_inter.t.store_to(inter_t, simd_mem_aligned);
                     }
                 } else if (l.type == LIGHT_TYPE_DISK) {
@@ -5494,6 +5756,7 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, Span<const light_t> li
                         inout_inter.mask |= simd_cast(final_mask);
                         where(final_mask, inout_inter.obj_index) = -simd_ivec<S>(light_index) - 1;
                         where(final_mask, inout_inter.t) = t;
+                        where(final_mask, inout_inter.u) = cur.factor;
                         inout_inter.t.store_to(inter_t, simd_mem_aligned);
                     }
                 } else if (l.type == LIGHT_TYPE_LINE) {
@@ -5517,12 +5780,18 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, Span<const light_t> li
                     const simd_fvec<S> t = min(t0, t1);
                     const simd_fvec<S> p[3] = {fmadd(rd[0], t, ro[0]), fmadd(rd[1], t, ro[1]), fmadd(rd[2], t, ro[2])};
 
-                    imask &= simd_cast(abs(p[0]) < 0.5f * l.line.height) & simd_cast((t < inout_inter.t) | no_shadow);
+                    imask &= simd_cast(abs(p[0]) < 0.5f * l.line.height) & simd_cast((t < inout_inter.t) | no_shadow) &
+                             ray_mask;
 
                     inout_inter.mask |= imask;
                     where(imask, inout_inter.obj_index) = -simd_ivec<S>(light_index) - 1;
                     where(imask, inout_inter.t) = t;
+                    where(imask, inout_inter.u) = cur.factor;
                     inout_inter.t.store_to(inter_t, simd_mem_aligned);
+                } else if (l.type == LIGHT_TYPE_ENV) {
+                    // NOTE: mask remains empty
+                    where(~inout_inter.mask & ray_mask, inout_inter.obj_index) = -simd_ivec<S>(light_index) - 1;
+                    where(~inout_inter.mask & ray_mask, inout_inter.u) = cur.factor;
                 }
             }
         }
@@ -5531,7 +5800,7 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, Span<const light_t> li
 
 template <int S>
 Ray::NS::simd_fvec<S> Ray::NS::IntersectAreaLights(const shadow_ray_t<S> &r, Span<const light_t> lights,
-                                                   Span<const wbvh_node_t> nodes) {
+                                                   Span<const light_wbvh_node_t> nodes) {
     simd_fvec<S> inv_d[3], inv_d_o[3];
     comp_aux_inv_values(r.o, r.d, inv_d, inv_d_o);
 
@@ -5556,7 +5825,7 @@ Ray::NS::simd_fvec<S> Ray::NS::IntersectAreaLights(const shadow_ray_t<S> &r, Spa
                     _inv_d_o[3] = {inv_d_o[0][ri], inv_d_o[1][ri], inv_d_o[2][ri]};
 
         TraversalStateStack_Single<MAX_STACK_SIZE> st;
-        st.push(0 /* root_index */, 0.0f);
+        st.push(0u /* root_index */, 0.0f);
 
         while (!st.empty() && ray_masks[ri]) {
             stack_entry_t cur = st.pop();
@@ -5702,9 +5971,71 @@ Ray::NS::simd_fvec<S> Ray::NS::IntersectAreaLights(const shadow_ray_t<S> &r, Spa
 }
 
 template <int S>
+Ray::NS::simd_fvec<S> Ray::NS::EvalTriLightFactor(const simd_fvec<S> P[3], const simd_fvec<S> ro[3],
+                                                  const simd_ivec<S> &mask, const simd_ivec<S> &tri_index,
+                                                  Span<const light_t> lights, Span<const light_wbvh_node_t> nodes) {
+    const int SS = S <= 8 ? S : 8;
+
+    simd_fvec<S> ret = 1.0f;
+
+    for (int ri = 0; ri < S; ri++) {
+        if (!mask[ri]) {
+            continue;
+        }
+
+        // recombine in AoS layout
+        const float _p[3] = {P[0][ri], P[1][ri], P[2][ri]}, _ro[3] = {ro[0][ri], ro[1][ri], ro[2][ri]};
+
+        uint32_t stack[MAX_STACK_SIZE];
+        float stack_factors[MAX_STACK_SIZE];
+        uint32_t stack_size = 0;
+
+        stack_factors[stack_size] = 1.0f;
+        stack[stack_size++] = 0;
+
+        while (stack_size) {
+            const uint32_t cur = stack[--stack_size];
+            const float cur_factor = stack_factors[stack_size];
+
+            if (!is_leaf_node(nodes[cur])) {
+                long mask = bbox_test_oct<S>(_p, nodes[cur].bbox_min, nodes[cur].bbox_max);
+                if (mask) {
+                    alignas(32) float importance[8];
+                    calc_lnode_importance<SS>(nodes[cur], _ro, importance);
+
+                    float total_importance = 0.0f;
+                    UNROLLED_FOR(j, 8, { total_importance += importance[j]; })
+                    assert(total_importance > 0.0f);
+
+                    do {
+                        const long i = GetFirstBit(mask);
+                        mask = ClearBit(mask, i);
+                        if (importance[i] > 0.0f) {
+                            stack_factors[stack_size] = cur_factor * importance[i] / total_importance;
+                            stack[stack_size++] = nodes[cur].child[i];
+                        }
+                    } while (mask != 0);
+                }
+            } else {
+                const int light_index = int(nodes[cur].child[0] & PRIM_INDEX_BITS);
+                assert((nodes[cur].child[1] & PRIM_COUNT_BITS) == 1);
+
+                const light_t &l = lights[light_index];
+                if (l.type == LIGHT_TYPE_TRI && l.tri.tri_index == tri_index[ri]) {
+                    // needed triangle found
+                    ret.set(ri, 1.0f / cur_factor);
+                }
+            }
+        }
+    }
+
+    return ret;
+}
+
+template <int S>
 void Ray::NS::Evaluate_EnvColor(const ray_data_t<S> &ray, const simd_ivec<S> &mask, const environment_t &env,
-                                const Cpu::TexStorageRGBA &tex_storage, const uint32_t lights_count,
-                                const simd_ivec<S> &mis_mask, const simd_fvec<S> rand[2], simd_fvec<S> env_col[4]) {
+                                const Cpu::TexStorageRGBA &tex_storage, const simd_fvec<S> &pdf_factor,
+                                const simd_fvec<S> rand[2], simd_fvec<S> env_col[4]) {
     const uint32_t env_map = env.env_map;
     const float env_map_rotation = env.env_map_rotation;
     const simd_ivec<S> env_map_mask = (ray.depth & 0x00ffffff) != 0;
@@ -5715,18 +6046,20 @@ void Ray::NS::Evaluate_EnvColor(const ray_data_t<S> &ray, const simd_ivec<S> &ma
             SampleLatlong_RGBE(tex_storage, env_map, ray.d, env_map_rotation, rand, (mask & env_map_mask), env_col);
         }
 #if USE_NEE
+        const simd_ivec<S> mis_mask =
+            simd_ivec<S>((env.light_index != 0xffffffff) ? -1 : 0) & simd_cast(pdf_factor >= 0.0f);
         if (mis_mask.not_all_zeros()) {
             if (env.qtree_levels) {
                 const auto *qtree_mips = reinterpret_cast<const simd_fvec4 *const *>(env.qtree_mips);
 
                 const simd_fvec<S> light_pdf =
-                    Evaluate_EnvQTree(env_map_rotation, qtree_mips, env.qtree_levels, ray.d) / float(lights_count);
+                    safe_div_pos(Evaluate_EnvQTree(env_map_rotation, qtree_mips, env.qtree_levels, ray.d), pdf_factor);
                 const simd_fvec<S> bsdf_pdf = ray.pdf;
 
                 const simd_fvec<S> mis_weight = power_heuristic(bsdf_pdf, light_pdf);
                 UNROLLED_FOR(i, 3, { where(mis_mask, env_col[i]) *= mis_weight; })
-            } else if (env.light_index != 0xffffffff) {
-                const simd_fvec<S> light_pdf = 0.5f / (PI * float(lights_count));
+            } else {
+                const simd_fvec<S> light_pdf = safe_div_pos(0.5f, PI * pdf_factor);
                 const simd_fvec<S> bsdf_pdf = ray.pdf;
 
                 const simd_fvec<S> mis_weight = power_heuristic(bsdf_pdf, light_pdf);
@@ -5757,7 +6090,11 @@ void Ray::NS::Evaluate_LightColor(const simd_fvec<S> P[3], const ray_data_t<S> &
     simd_ivec<S> ray_queue[S];
     ray_queue[0] = mask;
 
+#if USE_HIERARCHICAL_NEE
+    const simd_fvec<S> pdf_factor = safe_div_pos(1.0f, inter.u);
+#else
     const float pdf_factor = float(lights_count);
+#endif
 
     int index = 0, num = 1;
     while (index != num) {
@@ -6356,8 +6693,15 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
     const simd_ivec<S> ino_hit = ~inter.mask;
     if (ino_hit.not_all_zeros()) {
         simd_fvec<S> env_col[4] = {{1.0f}, {1.0f}, {1.0f}, {1.0f}};
-        Evaluate_EnvColor(ray, ino_hit, sc.env, *static_cast<const Cpu::TexStorageRGBA *>(textures[0]),
-                          uint32_t(sc.li_indices.size()), (total_depth < ps.max_total_depth), tex_rand, env_col);
+        simd_fvec<S> pdf_factor = -1.0f;
+        where(total_depth < ps.max_total_depth, pdf_factor) =
+#if USE_HIERARCHICAL_NEE
+            safe_div_pos(1.0f, inter.u);
+#else
+            float(sc.li_indices.size());
+#endif
+        Evaluate_EnvColor(ray, ino_hit, sc.env, *static_cast<const Cpu::TexStorageRGBA *>(textures[0]), pdf_factor,
+                          tex_rand, env_col);
 
         UNROLLED_FOR(i, 3, { where(ino_hit, out_rgba[i]) = ray.c[i] * env_col[i]; })
         where(ino_hit, out_rgba[3]) = env_col[3];
@@ -6674,7 +7018,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
 
 #if USE_NEE
     light_sample_t<S> ls;
-    if (!sc.li_indices.empty()) {
+    if (!sc.light_wnodes.empty()) {
         SampleLightSource(surf.P, surf.T, surf.B, surf.N, sc, textures, random_seq, rand_index, sample_off,
                           is_active_lane, ls);
     }
@@ -6892,6 +7236,13 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                 simd_fvec<S> mis_weight = 1.0f;
 #if USE_NEE
                 if ((ray.depth & 0x00ffffff).not_all_zeros() && (mat->flags & MAT_FLAG_MULT_IMPORTANCE)) {
+#if USE_HIERARCHICAL_NEE
+                    const simd_fvec<S> pdf_factor =
+                        EvalTriLightFactor(surf.P, ray.o, ray_queue[index], tri_index, sc.lights, sc.light_wnodes);
+#else
+                    const float pdf_factor = float(sc.li_indices.size());
+#endif
+
                     const simd_fvec<S> v1[3] = {p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2]},
                                        v2[3] = {p3[0] - p1[0], p3[1] - p1[1], p3[2] - p1[2]};
 
@@ -6904,8 +7255,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                     const simd_fvec<S> tri_area = 0.5f * light_forward_len;
 
                     const simd_fvec<S> cos_theta = abs(dot3(I, light_forward));
-                    const simd_fvec<S> light_pdf =
-                        safe_div(inter.t * inter.t, tri_area * cos_theta * float(sc.li_indices.size()));
+                    const simd_fvec<S> light_pdf = safe_div(inter.t * inter.t, tri_area * cos_theta * pdf_factor);
                     const simd_fvec<S> &bsdf_pdf = ray.pdf;
 
                     where((cos_theta > 0.0f) & simd_cast((ray.depth & 0x00ffffff) != 0), mis_weight) =

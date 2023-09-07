@@ -7,6 +7,7 @@
 #include "intersect_scene_shadow_interface.h"
 #include "common.glsl"
 #include "texture.glsl"
+#include "light_bvh.glsl"
 
 LAYOUT_PARAMS uniform UniformParams {
     Params g_params;
@@ -68,8 +69,8 @@ layout(std430, binding = LIGHTS_BUF_SLOT) readonly buffer Lights {
     light_t g_lights[];
 };
 
-layout(std430, binding = LIGHT_NODES_BUF_SLOT) readonly buffer LightNodes {
-    bvh_node_t g_light_nodes[];
+layout(std430, binding = LIGHT_WNODES_BUF_SLOT) readonly buffer LightWNodes {
+    light_wbvh_node_t g_light_wnodes[];
 };
 
 layout(std430, binding = RANDOM_SEQ_BUF_SLOT) readonly buffer Random {
@@ -382,17 +383,19 @@ float IntersectAreaLightsShadow(shadow_ray_t r) {
     while (stack_size != 0) {
         uint cur = g_stack[gl_LocalInvocationIndex][--stack_size];
 
-        bvh_node_t n = g_light_nodes[cur];
+        light_wbvh_node_t n = g_light_wnodes[cur];
 
-        if (!_bbox_test_fma(inv_d, neg_inv_do, rdist, n.bbox_min.xyz, n.bbox_max.xyz)) {
-            continue;
-        }
-
-        if ((floatBitsToUint(n.bbox_min.w) & LEAF_NODE_BIT) == 0) {
-            g_stack[gl_LocalInvocationIndex][stack_size++] = far_child(rd, n);
-            g_stack[gl_LocalInvocationIndex][stack_size++] = near_child(rd, n);
+        if ((n.child[0] & LEAF_NODE_BIT) == 0) {
+            // TODO: loop in morton order based on ray direction
+            for (int j = 0; j < 8; ++j) {
+                if (_bbox_test_fma(inv_d, neg_inv_do, rdist,
+                                   vec3(n.bbox_min[0][j], n.bbox_min[1][j], n.bbox_min[2][j]),
+                                   vec3(n.bbox_max[0][j], n.bbox_max[1][j], n.bbox_max[2][j]))) {
+                    g_stack[gl_LocalInvocationIndex][stack_size++] = n.child[j];
+                }
+            }
         } else {
-            const int light_index = int(floatBitsToUint(n.bbox_min.w) & PRIM_INDEX_BITS);
+            const int light_index = int(n.child[0] & PRIM_INDEX_BITS);
             light_t l = g_lights[light_index];
             [[dont_flatten]] if ((l.type_and_param0.x & (1 << 7)) == 0) {
                 // Skip non-blocking light

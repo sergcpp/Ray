@@ -46,7 +46,7 @@ const int MIX_MAT2 = 4;
 const int MATERIAL_SOLID_BIT = 32768; // 0b1000000000000000
 const int MATERIAL_INDEX_BITS = 16383; // 0b0011111111111111
 
-#define MAX_DIST 3.402823466e+30f
+#define MAX_DIST 3.402823466e+30
 
 #define HIT_EPS 0.000001
 
@@ -156,6 +156,27 @@ struct hit_data_t {
 struct bvh_node_t {
     VEC4_TYPE bbox_min; // w is prim_index/left_child
     VEC4_TYPE bbox_max; // w is prim_count/right_child
+};
+
+struct light_bvh_node_t {
+    float bbox_min[3];
+    UINT_TYPE left_child;
+    float bbox_max[3];
+    UINT_TYPE right_child;
+    float flux;
+    float axis[3];
+    float omega_n; // cone angle enclosing light normals
+    float omega_e; // emission angle around each normal
+};
+
+struct light_wbvh_node_t {
+    float bbox_min[3][8];
+    float bbox_max[3][8];
+    UINT_TYPE child[8];
+    float flux[8];
+    float axis[3][8];
+    float omega_n[8];
+    float omega_e[8];
 };
 
 struct vertex_t {

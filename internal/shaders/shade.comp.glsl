@@ -6,6 +6,8 @@
 #include "common.glsl"
 #include "envmap.glsl"
 #include "texture.glsl"
+#include "light_bvh.glsl"
+#include "traverse_bvh.glsl"
 
 LAYOUT_PARAMS uniform UniformParams {
     Params g_params;
@@ -57,6 +59,10 @@ layout(std430, binding = VTX_INDICES_BUF_SLOT) readonly buffer VtxIndices {
 
 layout(std430, binding = RANDOM_SEQ_BUF_SLOT) readonly buffer Random {
     float g_random_seq[];
+};
+
+layout(std430, binding = LIGHT_WNODES_BUF_SLOT) readonly buffer WNodes {
+    light_wbvh_node_t g_light_wnodes[];
 };
 
 layout(binding = ENV_QTREE_TEX_SLOT) uniform texture2D g_env_qtree;
@@ -759,10 +765,56 @@ vec3 MapToCone(float r1, float r2, vec3 N, float radius) {
 
 void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, int hi, vec2 sample_off, inout light_sample_t ls) {
     float u1 = fract(g_random_seq[hi + RAND_DIM_LIGHT_PICK] + sample_off[0]);
-    const uint light_index = min(uint(u1 * g_params.li_count), uint(g_params.li_count - 1));
-    u1 = u1 * float(g_params.li_count) - float(light_index);
 
-    const light_t l = g_lights[g_li_indices[light_index]];
+#if USE_HIERARCHICAL_NEE
+    float factor = 1.0;
+    uint i = 0; // start from root
+    while ((g_light_wnodes[i].child[0] & LEAF_NODE_BIT) == 0) {
+        float importance[8];
+        const float total_importance = calc_lnode_importance(g_light_wnodes[i], P, importance);
+        [[dont_flatten]] if (total_importance == 0.0) {
+            // failed to find lightsource for sampling
+            return;
+        }
+
+        // normalize
+        [[unroll]] for (int j = 0; j < 8; ++j) {
+            importance[j] /= total_importance;
+        }
+
+        float importance_cdf[9];
+        importance_cdf[0] = 0.0;
+        [[unroll]] for (int j = 0; j < 8; ++j) {
+            importance_cdf[j + 1] = importance_cdf[j] + importance[j];
+        }
+        // make sure cdf ends with 1.0
+        [[unroll]] for (int j = 0; j < 8; ++j) {
+            [[flatten]] if (importance_cdf[j + 1] == importance_cdf[8]) {
+                importance_cdf[j + 1] = 1.01;
+            }
+        }
+
+        int next = 0;
+        [[unroll]] for (int j = 1; j < 9; ++j) {
+            if (importance_cdf[j] <= u1) {
+                ++next;
+            }
+        }
+
+        u1 = fract((u1 - importance_cdf[next]) / importance[next]);
+        i = g_light_wnodes[i].child[next];
+        factor *= importance[next];
+    }
+    const uint light_index = (g_light_wnodes[i].child[0] & PRIM_INDEX_BITS);
+    factor = (1.0 / factor);
+#else
+    uint light_index = min(uint(u1 * g_params.li_count), uint(g_params.li_count - 1));
+    u1 = u1 * float(g_params.li_count) - float(light_index);
+    light_index = g_li_indices[light_index];
+    const float factor = float(g_params.li_count);
+#endif
+
+    const light_t l = g_lights[light_index];
 
     ls.col = uintBitsToFloat(l.type_and_param0.yzw);
     ls.cast_shadow = (l.type_and_param0.x & (1 << 4)) != 0;
@@ -1040,10 +1092,49 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, int hi, vec2 sample_off, 
         ls.from_env = true;
     }
 
-    ls.pdf /= float(g_params.li_count);
+    ls.pdf /= factor;
 }
 
-vec3 Evaluate_EnvColor(ray_data_t ray, const vec2 tex_rand, const bool use_mis) {
+shared uint g_stack[LOCAL_GROUP_SIZE_X * LOCAL_GROUP_SIZE_Y][MAX_STACK_SIZE];
+shared float g_stack_factors[LOCAL_GROUP_SIZE_X * LOCAL_GROUP_SIZE_Y][MAX_STACK_SIZE];
+
+float EvalTriLightFactor(const vec3 P, const vec3 ro, uint tri_index) {
+    uint stack_size = 0;
+    g_stack_factors[gl_LocalInvocationIndex][stack_size] = 1.0;
+    g_stack[gl_LocalInvocationIndex][stack_size++] = 0;
+
+    while (stack_size != 0) {
+        const uint cur = g_stack[gl_LocalInvocationIndex][--stack_size];
+        const float cur_factor = g_stack_factors[gl_LocalInvocationIndex][stack_size];
+
+        light_wbvh_node_t n = g_light_wnodes[cur];
+
+        if ((n.child[0] & LEAF_NODE_BIT) == 0) {
+            float importance[8];
+            const float total_importance = calc_lnode_importance(n, ro, importance);
+
+            for (int j = 0; j < 8; ++j) {
+                if (importance[j] > 0.0 && _bbox_test(P, vec3(n.bbox_min[0][j], n.bbox_min[1][j], n.bbox_min[2][j]),
+                                                         vec3(n.bbox_max[0][j], n.bbox_max[1][j], n.bbox_max[2][j]))) {
+                    g_stack_factors[gl_LocalInvocationIndex][stack_size] = cur_factor * importance[j] / total_importance;
+                    g_stack[gl_LocalInvocationIndex][stack_size++] = n.child[j];
+                }
+            }
+        } else {
+            const int light_index = int(n.child[0] & PRIM_INDEX_BITS);
+
+            light_t l = g_lights[light_index];
+            if ((l.type_and_param0.x & 0x7) == LIGHT_TYPE_TRI && floatBitsToUint(l.TRI_TRI_INDEX) == tri_index) {
+                // needed triangle found
+                return 1.0 / cur_factor;
+            }
+        }
+    }
+
+    return 1.0;
+}
+
+vec3 Evaluate_EnvColor(ray_data_t ray, const float pdf_factor, const vec2 tex_rand) {
     const vec3 rd = vec3(ray.d[0], ray.d[1], ray.d[2]);
 #if PRIMARY
     vec3 env_col = g_params.back_col.xyz;
@@ -1065,14 +1156,14 @@ vec3 Evaluate_EnvColor(ray_data_t ray, const vec2 tex_rand, const bool use_mis) 
     }
 
 #if USE_NEE
-    if (use_mis) {
+    if (g_params.env_light_index != 0xffffffff && pdf_factor >= 0.0) {
         if (g_params.env_qtree_levels > 0) {
             const float light_pdf = Evaluate_EnvQTree(env_map_rotation, g_env_qtree, g_params.env_qtree_levels, rd) / float(g_params.li_count);
             const float bsdf_pdf = ray.pdf;
 
             const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
             env_col *= mis_weight;
-        } else if (g_params.env_mult_importance != 0) {
+        } else {
             const float light_pdf = 0.5 / (PI * float(g_params.li_count));
             const float bsdf_pdf = ray.pdf;
 
@@ -1092,7 +1183,11 @@ vec3 Evaluate_LightColor(ray_data_t ray, hit_data_t inter, const vec2 tex_rand) 
     const vec3 P = ro + inter.t * rd;
 
     const light_t l = g_lights[-inter.obj_index - 1];
+#if USE_HIERARCHICAL_NEE
+    const float pdf_factor = (1.0 / inter.u);
+#else
     const float pdf_factor = float(g_params.li_count);
+#endif
 
     vec3 lcol = uintBitsToFloat(l.type_and_param0.yzw);
     [[dont_flatten]] if ((l.type_and_param0.x & (1 << 6)) != 0) { // sky portal
@@ -1648,7 +1743,13 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
                                fract(g_random_seq[hi + RAND_DIM_TEX_V] + sample_off[1]));
 
     [[dont_flatten]] if (inter.mask == 0) {
-        const vec3 env_col = Evaluate_EnvColor(ray, tex_rand, (total_depth < g_params.max_total_depth));
+#if USE_HIERARCHICAL_NEE
+        const float pdf_factor = (total_depth < g_params.max_total_depth) ? (1.0 / inter.u) : -1.0;
+#else
+        const float pdf_factor = (total_depth < g_params.max_total_depth) ? float(g_params.li_count) : -1.0;
+#endif
+
+        const vec3 env_col = Evaluate_EnvColor(ray, pdf_factor, tex_rand);
         return vec3(ray.c[0] * env_col[0], ray.c[1] * env_col[1], ray.c[2] * env_col[2]);
     }
 
@@ -1895,6 +1996,13 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
         float mis_weight = 1.0;
 #if USE_NEE && !PRIMARY
         [[dont_flatten]] if ((mat.flags & MAT_FLAG_MULT_IMPORTANCE) != 0) {
+#if USE_HIERARCHICAL_NEE
+            // TODO: maybe this can be done more efficiently
+            const float pdf_factor = EvalTriLightFactor(surf.P, ro, tri_index);
+#else
+            const float pdf_factor = float(g_params.li_count);
+#endif
+
             const vec3 p1 = vec3(v1.p[0], v1.p[1], v1.p[2]),
                        p2 = vec3(v2.p[0], v2.p[1], v2.p[2]),
                        p3 = vec3(v3.p[0], v3.p[1], v3.p[2]);
@@ -1906,7 +2014,7 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
 
             const float cos_theta = abs(dot(I, light_forward)); // abs for doublesided light
             if (cos_theta > 0.0) {
-                const float light_pdf = (inter.t * inter.t) / (tri_area * cos_theta * float(g_params.li_count));
+                const float light_pdf = (inter.t * inter.t) / (tri_area * cos_theta * pdf_factor);
                 const float bsdf_pdf = ray.pdf;
 
                 mis_weight = power_heuristic(bsdf_pdf, light_pdf);

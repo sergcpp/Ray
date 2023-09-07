@@ -43,6 +43,12 @@ bool _bbox_test_fma(vec3 inv_d, vec3 neg_inv_d_o, float t, vec3 bbox_min, vec3 b
     return tmin <= tmax && tmin <= t && tmax > 0.0;
 }
 
+bool _bbox_test(const vec3 p, const vec3 bbox_min, const vec3 bbox_max) {
+    return p.x >= bbox_min.x && p.x <= bbox_max.x &&
+           p.y >= bbox_min.y && p.y <= bbox_max.y &&
+           p.z >= bbox_min.z && p.z <= bbox_max.z;
+}
+
 #define near_child(rd, n)   \
     (rd)[floatBitsToUint(n.bbox_max.w) >> 30] < 0 ? (floatBitsToUint(n.bbox_max.w) & RIGHT_CHILD_BITS) : floatBitsToUint(n.bbox_min.w)
 

@@ -112,7 +112,7 @@ force_inline int hash(int x) {
 }
 
 force_inline simd_fvec4 rgbe_to_rgb(const color_t<uint8_t, 4> &rgbe) {
-    const float f = std::exp2(float(rgbe.v[3]) - 128.0f);
+    const float f = exp2f(float(rgbe.v[3]) - 128.0f);
     return simd_fvec4{to_norm_float(rgbe.v[0]) * f, to_norm_float(rgbe.v[1]) * f, to_norm_float(rgbe.v[2]) * f, 1.0f};
 }
 
@@ -271,20 +271,26 @@ void SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const simd_fvec
                        const float sample_off[2], light_sample_t &ls);
 
 // Account for visible lights contribution
-void IntersectAreaLights(Span<const ray_data_t> rays, Span<const light_t> lights, Span<const wbvh_node_t> nodes,
+void IntersectAreaLights(Span<const ray_data_t> rays, Span<const light_t> lights, Span<const light_wbvh_node_t> nodes,
                          Span<hit_data_t> inout_inters);
-float IntersectAreaLights(const shadow_ray_t &ray, Span<const light_t> lights, Span<const wbvh_node_t> nodes);
+void IntersectAreaLights(Span<const ray_data_t> rays, Span<const light_t> lights, Span<const light_bvh_node_t> nodes,
+                         Span<hit_data_t> inout_inters);
+float IntersectAreaLights(const shadow_ray_t &ray, Span<const light_t> lights, Span<const light_wbvh_node_t> nodes);
+float EvalTriLightFactor(const simd_fvec4 &P, const simd_fvec4 &ro, uint32_t tri_index, Span<const light_t> lights,
+                         Span<const light_bvh_node_t> nodes);
+float EvalTriLightFactor(const simd_fvec4 &P, const simd_fvec4 &ro, uint32_t tri_index, Span<const light_t> lights,
+                         Span<const light_wbvh_node_t> nodes);
 
 void TraceRays(Span<ray_data_t> rays, int min_transp_depth, int max_transp_depth, const scene_data_t &sc,
                uint32_t node_index, bool trace_lights, const Cpu::TexStorageBase *const textures[],
                const float random_seq[], Span<hit_data_t> out_inter);
-void TraceShadowRays(Span<const shadow_ray_t> rays, int max_transp_depth, float _clamp_val, const scene_data_t &sc,
+void TraceShadowRays(Span<const shadow_ray_t> rays, int max_transp_depth, float clamp_val, const scene_data_t &sc,
                      uint32_t node_index, const float random_seq[], const Cpu::TexStorageBase *const textures[],
                      int img_w, color_rgba_t *out_color);
 
 // Get environment collor at direction
 simd_fvec4 Evaluate_EnvColor(const ray_data_t &ray, const environment_t &env, const Cpu::TexStorageRGBA &tex_storage,
-                             uint32_t lights_count, bool use_mis, const simd_fvec2 &rand);
+                             float pdf_factor, const simd_fvec2 &rand);
 // Get light color at intersection point
 simd_fvec4 Evaluate_LightColor(const ray_data_t &ray, const hit_data_t &inter, const environment_t &env,
                                const Cpu::TexStorageRGBA &tex_storage, Span<const light_t> lights,
@@ -412,11 +418,11 @@ void ClearBorders(const rect_t &rect, int w, int h, bool downscaled, int out_cha
 
 // https://gpuopen.com/learn/optimized-reversible-tonemapper-for-resolve/
 force_inline simd_fvec4 vectorcall reversible_tonemap(const simd_fvec4 c) {
-    return c / (std::max(c.get<0>(), std::max(c.get<1>(), c.get<2>())) + 1.0f);
+    return c / (fmax(c.get<0>(), fmax(c.get<1>(), c.get<2>())) + 1.0f);
 }
 
 force_inline simd_fvec4 vectorcall reversible_tonemap_invert(const simd_fvec4 c) {
-    return c / (1.0f - std::max(c.get<0>(), std::max(c.get<1>(), c.get<2>())));
+    return c / (1.0f - fmax(c.get<0>(), fmax(c.get<1>(), c.get<2>())));
 }
 
 struct tonemap_params_t {
@@ -429,7 +435,7 @@ force_inline simd_fvec4 vectorcall TonemapStandard(simd_fvec4 c) {
         if (c.get<i>() < 0.0031308f) {
             c.set<i>(12.92f * c.get<i>());
         } else {
-            c.set<i>(1.055f * std::pow(c.get<i>(), (1.0f / 2.4f)) - 0.055f);
+            c.set<i>(1.055f * powf(c.get<i>(), (1.0f / 2.4f)) - 0.055f);
         }
     })
     return c;
