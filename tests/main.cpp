@@ -221,7 +221,7 @@ int main(int argc, char *argv[]) {
         arch_list = ArchListDefaultNoGPU;
     }
 
-    ThreadPool mt_run_pool(multithreaded ? 2 : 1);
+    ThreadPool mt_run_pool(multithreaded ? 4 : 1);
 
     if (g_tests_success) {
         const auto t2 = high_resolution_clock::now();

@@ -422,7 +422,7 @@ template <int N> class TexStorageBCn : public TexStorageBase {
                         idx += bit << 2;
                         ++next_bit;
 
-                        c.v[3] = decode_data[idx & 7];
+                        c.v[3 % N] = decode_data[idx & 7];
                     }
                     compressed_block += BlockSize_BC4;
                 }
@@ -453,9 +453,9 @@ template <int N> class TexStorageBCn : public TexStorageBase {
                     for (OutColorType &c : cache.decoded_block) {
                         const int idx = ((compressed_block[next_bit >> 3] >> (next_bit & 7)) & 3) * 3;
                         next_bit += 2;
-                        c.v[0] = decode_colors[idx + 0];
-                        c.v[1] = decode_colors[idx + 1];
-                        c.v[2] = decode_colors[idx + 2];
+                        c.v[0 % N] = decode_colors[idx + 0];
+                        c.v[1 % N] = decode_colors[idx + 1];
+                        c.v[2 % N] = decode_colors[idx + 2];
                     }
                 }
             } else if (N == 3) {

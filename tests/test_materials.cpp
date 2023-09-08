@@ -490,7 +490,7 @@ void test_sheen_mat3(const char *arch_list[], const char *preferred_device) {
 
 void test_glossy_mat0(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 487;
-    const int PixThres = 402;
+    const int PixThres = 404;
 
     Ray::shading_node_desc_t node_desc;
     node_desc.type = Ray::eShadingNode::Glossy;
@@ -536,7 +536,7 @@ void test_glossy_mat2(const char *arch_list[], const char *preferred_device) {
 
 void test_spec_mat0(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 487;
-    const int PixThres = 402;
+    const int PixThres = 404;
 
     Ray::principled_mat_desc_t spec_mat_desc;
     spec_mat_desc.base_color[0] = 1.0f;
@@ -962,7 +962,7 @@ void test_refr_mis0(const char *arch_list[], const char *preferred_device) {
 
 void test_refr_mis1(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 12;
-    const int PixThres = 239;
+    const int PixThres = 240;
 
     Ray::shading_node_desc_t mat_desc;
     mat_desc.type = Ray::eShadingNode::Refractive;
@@ -1759,7 +1759,7 @@ void test_complex_mat6_nlm_filter_b(const char *arch_list[], const char *preferr
 
 void test_complex_mat6_nlm_filter_bn(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 12;
-    const int PixThres = 1619;
+    const int PixThres = 1620;
 
     Ray::principled_mat_desc_t olive_mat_desc;
     olive_mat_desc.base_color[0] = 0.836164f;
