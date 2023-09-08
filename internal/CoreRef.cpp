@@ -183,7 +183,7 @@ force_inline uint32_t other_child(const bvh_node_t &node, const uint32_t cur_chi
 
 force_inline bool is_leaf_node(const bvh_node_t &node) { return (node.prim_index & LEAF_NODE_BIT) != 0; }
 
-force_inline bool is_leaf_node(const mbvh_node_t &node) { return (node.child[0] & LEAF_NODE_BIT) != 0; }
+force_inline bool is_leaf_node(const wbvh_node_t &node) { return (node.child[0] & LEAF_NODE_BIT) != 0; }
 
 force_inline bool bbox_test(const float o[3], const float inv_d[3], const float t, const float bbox_min[3],
                             const float bbox_max[3]) {
@@ -237,12 +237,12 @@ force_inline bool bbox_test(const float p[3], const bvh_node_t &node) {
     return bbox_test(p, node.bbox_min, node.bbox_max);
 }
 
-force_inline bool bbox_test_oct(const float p[3], const mbvh_node_t &node, const int i) {
+force_inline bool bbox_test_oct(const float p[3], const wbvh_node_t &node, const int i) {
     return p[0] > node.bbox_min[0][i] && p[0] < node.bbox_max[0][i] && p[1] > node.bbox_min[1][i] &&
            p[1] < node.bbox_max[1][i] && p[2] > node.bbox_min[2][i] && p[2] < node.bbox_max[2][i];
 }
 
-force_inline void bbox_test_oct(const float o[3], const float inv_d[3], const mbvh_node_t &node, int res[8],
+force_inline void bbox_test_oct(const float o[3], const float inv_d[3], const wbvh_node_t &node, int res[8],
                                 float dist[8]){
     UNROLLED_FOR(i, 8,
                  { // NOLINT
@@ -285,7 +285,7 @@ force_inline void bbox_test_oct(const float o[3], const float inv_d[3], const mb
                  }) // NOLINT
 }
 
-force_inline long bbox_test_oct(const float o[3], const float inv_d[3], const float t, const mbvh_node_t &node,
+force_inline long bbox_test_oct(const float o[3], const float inv_d[3], const float t, const wbvh_node_t &node,
                                 float out_dist[8]) {
     long mask = 0;
 #if VECTORIZE_BBOX_INTERSECTION
@@ -1698,7 +1698,7 @@ bool Ray::Ref::Traverse_TLAS_WithStack_ClosestHit(const float ro[3], const float
     return res;
 }
 
-bool Ray::Ref::Traverse_TLAS_WithStack_ClosestHit(const float ro[3], const float rd[3], const mbvh_node_t *nodes,
+bool Ray::Ref::Traverse_TLAS_WithStack_ClosestHit(const float ro[3], const float rd[3], const wbvh_node_t *nodes,
                                                   uint32_t root_index, const mesh_instance_t *mesh_instances,
                                                   const uint32_t *mi_indices, const mesh_t *meshes,
                                                   const transform_t *transforms, const mtri_accel_t *mtris,
@@ -1877,7 +1877,7 @@ bool Ray::Ref::Traverse_TLAS_WithStack_AnyHit(const float ro[3], const float rd[
 }
 
 bool Ray::Ref::Traverse_TLAS_WithStack_AnyHit(const float ro[3], const float rd[3], int ray_type,
-                                              const mbvh_node_t *nodes, const uint32_t root_index,
+                                              const wbvh_node_t *nodes, const uint32_t root_index,
                                               const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
                                               const mesh_t *meshes, const transform_t *transforms,
                                               const tri_accel_t *tris, const tri_mat_data_t *materials,
@@ -2031,7 +2031,7 @@ bool Ray::Ref::Traverse_BLAS_WithStack_ClosestHit(const float ro[3], const float
 }
 
 bool Ray::Ref::Traverse_BLAS_WithStack_ClosestHit(const float ro[3], const float rd[3], const float inv_d[3],
-                                                  const mbvh_node_t *nodes, const uint32_t root_index,
+                                                  const wbvh_node_t *nodes, const uint32_t root_index,
                                                   const mtri_accel_t *mtris, int obj_index, hit_data_t &inter) {
     bool res = false;
 
@@ -2155,7 +2155,7 @@ bool Ray::Ref::Traverse_BLAS_WithStack_AnyHit(const float ro[3], const float rd[
 }
 
 bool Ray::Ref::Traverse_BLAS_WithStack_AnyHit(const float ro[3], const float rd[3], const float inv_d[3],
-                                              const mbvh_node_t *nodes, const uint32_t root_index,
+                                              const wbvh_node_t *nodes, const uint32_t root_index,
                                               const tri_accel_t *tris, const tri_mat_data_t *materials,
                                               const uint32_t *tri_indices, int obj_index, hit_data_t &inter) {
     TraversalStack<MAX_STACK_SIZE> st;
@@ -2913,8 +2913,8 @@ void Ray::Ref::IntersectScene(Span<ray_data_t> rays, const int min_transp_depth,
             const float t_val = inter.t;
 
             bool hit_found = false;
-            if (sc.mnodes) {
-                hit_found = Traverse_TLAS_WithStack_ClosestHit(value_ptr(ro), value_ptr(rd), sc.mnodes, root_index,
+            if (sc.wnodes) {
+                hit_found = Traverse_TLAS_WithStack_ClosestHit(value_ptr(ro), value_ptr(rd), sc.wnodes, root_index,
                                                                sc.mesh_instances, sc.mi_indices, sc.meshes,
                                                                sc.transforms, sc.mtris, sc.tri_indices, inter);
             } else {
@@ -3031,8 +3031,8 @@ Ray::Ref::simd_fvec4 Ray::Ref::IntersectScene(const shadow_ray_t &r, const int m
         inter.t = dist;
 
         bool solid_hit = false;
-        if (sc.mnodes) {
-            solid_hit = Traverse_TLAS_WithStack_AnyHit(value_ptr(ro), value_ptr(rd), RAY_TYPE_SHADOW, sc.mnodes,
+        if (sc.wnodes) {
+            solid_hit = Traverse_TLAS_WithStack_AnyHit(value_ptr(ro), value_ptr(rd), RAY_TYPE_SHADOW, sc.wnodes,
                                                        root_index, sc.mesh_instances, sc.mi_indices, sc.meshes,
                                                        sc.transforms, sc.tris, sc.tri_materials, sc.tri_indices, inter);
         } else {
@@ -3400,7 +3400,7 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
 }
 
 void Ray::Ref::IntersectAreaLights(Span<const ray_data_t> rays, Span<const light_t> lights,
-                                   Span<const mbvh_node_t> nodes, Span<hit_data_t> inout_inters) {
+                                   Span<const wbvh_node_t> nodes, Span<hit_data_t> inout_inters) {
     for (int i = 0; i < rays.size(); ++i) {
         const ray_data_t &ray = rays[i];
         hit_data_t &inout_inter = inout_inters[i];
@@ -3620,7 +3620,7 @@ void Ray::Ref::IntersectAreaLights(Span<const ray_data_t> rays, Span<const light
 }
 
 float Ray::Ref::IntersectAreaLights(const shadow_ray_t &ray, Span<const light_t> lights,
-                                    Span<const mbvh_node_t> nodes) {
+                                    Span<const wbvh_node_t> nodes) {
     const float rdist = std::abs(ray.dist);
 
     const simd_fvec4 ro = make_fvec3(ray.o);
@@ -3768,7 +3768,7 @@ void Ray::Ref::TraceRays(Span<ray_data_t> rays, int min_transp_depth, int max_tr
                          const float random_seq[], Span<hit_data_t> out_inter) {
     IntersectScene(rays, min_transp_depth, max_transp_depth, random_seq, sc, node_index, textures, out_inter);
     if (trace_lights && !sc.visible_lights.empty()) {
-        IntersectAreaLights(rays, sc.lights, sc.light_mnodes, out_inter);
+        IntersectAreaLights(rays, sc.lights, sc.light_wnodes, out_inter);
     }
 }
 
@@ -3790,7 +3790,7 @@ void Ray::Ref::TraceShadowRays(Span<const shadow_ray_t> rays, int max_transp_dep
 
         simd_fvec4 rc = IntersectScene(sh_r, max_transp_depth, sc, node_index, random_seq, textures);
         if (!sc.blocker_lights.empty()) {
-            rc *= IntersectAreaLights(sh_r, sc.lights, sc.light_mnodes);
+            rc *= IntersectAreaLights(sh_r, sc.lights, sc.light_wnodes);
         }
 
         auto old_val = simd_fvec4{out_color[y * img_w + x].v, simd_mem_aligned};

@@ -331,7 +331,7 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase *scene, RegionC
                                   s->vtx_indices_.empty() ? nullptr : &s->vtx_indices_[0],
                                   s->vertices_.empty() ? nullptr : &s->vertices_[0],
                                   s->nodes_.empty() ? nullptr : &s->nodes_[0],
-                                  s->mnodes_.empty() ? nullptr : &s->mnodes_[0],
+                                  s->wnodes_.empty() ? nullptr : &s->wnodes_[0],
                                   s->tris_.empty() ? nullptr : &s->tris_[0],
                                   s->tri_indices_.empty() ? nullptr : &s->tri_indices_[0],
                                   s->mtris_.data(),
@@ -342,7 +342,7 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase *scene, RegionC
                                   {s->visible_lights_},
                                   {s->blocker_lights_},
                                   {s->light_nodes_},
-                                  {s->light_mnodes_}};
+                                  {s->light_wnodes_}};
 
     const uint32_t macro_tree_root = s->macro_nodes_root_;
 
@@ -350,8 +350,8 @@ void Ray::Cpu::Renderer<SIMDPolicy>::RenderScene(const SceneBase *scene, RegionC
     if (macro_tree_root != 0xffffffff) {
         float root_max[3];
 
-        if (sc_data.mnodes) {
-            const mbvh_node_t &root_node = sc_data.mnodes[macro_tree_root];
+        if (sc_data.wnodes) {
+            const wbvh_node_t &root_node = sc_data.wnodes[macro_tree_root];
 
             root_min[0] = root_min[1] = root_min[2] = MAX_DIST;
             root_max[0] = root_max[1] = root_max[2] = -MAX_DIST;

@@ -102,12 +102,12 @@ struct bvh_node_t {
 };
 static_assert(sizeof(bvh_node_t) == 32, "!");
 
-struct alignas(32) mbvh_node_t {
+struct alignas(32) wbvh_node_t {
     float bbox_min[3][8];
     float bbox_max[3][8];
     uint32_t child[8];
 };
-static_assert(sizeof(mbvh_node_t) == 224, "!");
+static_assert(sizeof(wbvh_node_t) == 224, "!");
 
 const int NUM_MIP_LEVELS = 12;
 const int MAX_MIP_LEVEL = NUM_MIP_LEVELS - 1;
@@ -326,7 +326,7 @@ uint32_t PreprocessPrims_HLBVH(Span<const prim_t> prims, std::vector<bvh_node_t>
                                std::vector<uint32_t> &out_indices);
 
 uint32_t FlattenBVH_Recursive(const bvh_node_t *nodes, uint32_t node_index, uint32_t parent_index,
-                              aligned_vector<mbvh_node_t> &out_nodes);
+                              aligned_vector<wbvh_node_t> &out_nodes);
 
 bool NaiivePluckerTest(const float p[9], const float o[3], const float d[3]);
 
@@ -498,7 +498,7 @@ struct scene_data_t {
     const uint32_t *vtx_indices;
     const vertex_t *vertices;
     const bvh_node_t *nodes;
-    const mbvh_node_t *mnodes;
+    const wbvh_node_t *wnodes;
     const tri_accel_t *tris;
     const uint32_t *tri_indices;
     const mtri_accel_t *mtris;
@@ -509,7 +509,7 @@ struct scene_data_t {
     Span<const uint32_t> visible_lights;
     Span<const uint32_t> blocker_lights;
     Span<const bvh_node_t> light_nodes;
-    Span<const mbvh_node_t> light_mnodes;
+    Span<const wbvh_node_t> light_wnodes;
 };
 
 } // namespace Ray

@@ -50,7 +50,7 @@ class Scene : public SceneCommon {
     bool use_wide_bvh_, use_tex_compression_;
 
     std::vector<bvh_node_t> nodes_;
-    aligned_vector<mbvh_node_t> mnodes_;
+    aligned_vector<wbvh_node_t> wnodes_;
     SparseStorage<tri_accel_t> tris_;
     SparseStorage<uint32_t> tri_indices_;
     SparseStorage<mtri_accel_t> mtris_;
@@ -82,7 +82,7 @@ class Scene : public SceneCommon {
     std::vector<uint32_t> blocker_lights_; // compacted list of all light blocker lights
 
     std::vector<bvh_node_t> light_nodes_;
-    aligned_vector<mbvh_node_t> light_mnodes_;
+    aligned_vector<wbvh_node_t> light_wnodes_;
 
     environment_t env_;
     LightHandle env_map_light_ = InvalidLightHandle;
@@ -165,7 +165,7 @@ class Scene : public SceneCommon {
     }
     uint32_t node_count() const override {
         std::shared_lock<std::shared_timed_mutex> lock(mtx_);
-        return use_wide_bvh_ ? uint32_t(mnodes_.size()) : uint32_t(nodes_.size());
+        return use_wide_bvh_ ? uint32_t(wnodes_.size()) : uint32_t(nodes_.size());
     }
 };
 } // namespace Cpu

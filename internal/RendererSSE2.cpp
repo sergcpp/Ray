@@ -25,9 +25,8 @@ template bool Traverse_TLAS_WithStack_ClosestHit<RPSize>(const simd_fvec<RPSize>
                                                          const transform_t *transforms, const tri_accel_t *tris,
                                                          const uint32_t *tri_indices, hit_data_t<RPSize> &inter);
 template bool Traverse_TLAS_WithStack_ClosestHit<RPSize>(const simd_fvec<RPSize> ro[3], const simd_fvec<RPSize> rd[3],
-                                                         const simd_ivec<RPSize> &ray_mask,
-                                                         const mbvh_node_t *oct_nodes, uint32_t node_index,
-                                                         const mesh_instance_t *mesh_instances,
+                                                         const simd_ivec<RPSize> &ray_mask, const wbvh_node_t *nodes,
+                                                         uint32_t node_index, const mesh_instance_t *mesh_instances,
                                                          const uint32_t *mi_indices, const mesh_t *meshes,
                                                          const transform_t *transforms, const mtri_accel_t *mtris,
                                                          const uint32_t *tri_indices, hit_data_t<RPSize> &inter);
@@ -38,7 +37,7 @@ template simd_ivec<RPSize> Traverse_TLAS_WithStack_AnyHit<RPSize>(
     const uint32_t *tri_indices, hit_data_t<RPSize> &inter);
 template simd_ivec<RPSize> Traverse_TLAS_WithStack_AnyHit<RPSize>(
     const simd_fvec<RPSize> ro[3], const simd_fvec<RPSize> rd[3], int ray_type, const simd_ivec<RPSize> &ray_mask,
-    const mbvh_node_t *oct_nodes, uint32_t node_index, const mesh_instance_t *mesh_instances,
+    const wbvh_node_t *oct_nodes, uint32_t node_index, const mesh_instance_t *mesh_instances,
     const uint32_t *mi_indices, const mesh_t *meshes, const transform_t *transforms, const mtri_accel_t *mtris,
     const tri_mat_data_t *materials, const uint32_t *tri_indices, hit_data_t<RPSize> &inter);
 template bool Traverse_BLAS_WithStack_ClosestHit<RPSize>(const simd_fvec<RPSize> ro[3], const simd_fvec<RPSize> rd[3],
@@ -46,17 +45,16 @@ template bool Traverse_BLAS_WithStack_ClosestHit<RPSize>(const simd_fvec<RPSize>
                                                          uint32_t node_index, const tri_accel_t *tris,
                                                          const uint32_t *tri_indices, int obj_index,
                                                          hit_data_t<RPSize> &inter);
-template bool Traverse_BLAS_WithStack_ClosestHit<RPSize>(const float ro[3], const float rd[3],
-                                                         const mbvh_node_t *mnodes, uint32_t node_index,
-                                                         const mtri_accel_t *mtris, const uint32_t *tri_indices,
-                                                         int &inter_prim_index, float &inter_t, float &inter_u,
-                                                         float &inter_v);
+template bool Traverse_BLAS_WithStack_ClosestHit<RPSize>(const float ro[3], const float rd[3], const wbvh_node_t *nodes,
+                                                         uint32_t node_index, const mtri_accel_t *mtris,
+                                                         const uint32_t *tri_indices, int &inter_prim_index,
+                                                         float &inter_t, float &inter_u, float &inter_v);
 template simd_ivec<RPSize>
 Traverse_BLAS_WithStack_AnyHit<RPSize>(const simd_fvec<RPSize> ro[3], const simd_fvec<RPSize> rd[3],
                                        const simd_ivec<RPSize> &ray_mask, const bvh_node_t *nodes, uint32_t node_index,
                                        const tri_accel_t *tris, const tri_mat_data_t *materials,
                                        const uint32_t *tri_indices, int obj_index, hit_data_t<RPSize> &inter);
-template int Traverse_BLAS_WithStack_AnyHit<RPSize>(const float ro[3], const float rd[3], const mbvh_node_t *mnodes,
+template int Traverse_BLAS_WithStack_AnyHit<RPSize>(const float ro[3], const float rd[3], const wbvh_node_t *nodes,
                                                     uint32_t node_index, const mtri_accel_t *mtris,
                                                     const tri_mat_data_t *materials, const uint32_t *tri_indices,
                                                     int &inter_prim_index, float &inter_t, float &inter_u,

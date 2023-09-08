@@ -197,7 +197,7 @@ bool Traverse_TLAS_WithStack_ClosestHit(const simd_fvec<S> ro[3], const simd_fve
                                         const uint32_t *tri_indices, hit_data_t<S> &inter);
 template <int S>
 bool Traverse_TLAS_WithStack_ClosestHit(const simd_fvec<S> ro[3], const simd_fvec<S> rd[3],
-                                        const simd_ivec<S> &ray_mask, const mbvh_node_t *mnodes, uint32_t node_index,
+                                        const simd_ivec<S> &ray_mask, const wbvh_node_t *nodes, uint32_t node_index,
                                         const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
                                         const mesh_t *meshes, const transform_t *transforms, const mtri_accel_t *mtris,
                                         const uint32_t *tri_indices, hit_data_t<S> &inter);
@@ -209,12 +209,12 @@ simd_ivec<S> Traverse_TLAS_WithStack_AnyHit(const simd_fvec<S> ro[3], const simd
                                             const tri_accel_t *tris, const tri_mat_data_t *materials,
                                             const uint32_t *tri_indices, hit_data_t<S> &inter);
 template <int S>
-simd_ivec<S>
-Traverse_TLAS_WithStack_AnyHit(const simd_fvec<S> ro[3], const simd_fvec<S> rd[3], int ray_type,
-                               const simd_ivec<S> &ray_mask, const mbvh_node_t *mnodes, uint32_t node_index,
-                               const mesh_instance_t *mesh_instances, const uint32_t *mi_indices, const mesh_t *meshes,
-                               const transform_t *transforms, const mtri_accel_t *mtris,
-                               const tri_mat_data_t *materials, const uint32_t *tri_indices, hit_data_t<S> &inter);
+simd_ivec<S> Traverse_TLAS_WithStack_AnyHit(const simd_fvec<S> ro[3], const simd_fvec<S> rd[3], int ray_type,
+                                            const simd_ivec<S> &ray_mask, const wbvh_node_t *nodes, uint32_t node_index,
+                                            const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
+                                            const mesh_t *meshes, const transform_t *transforms,
+                                            const mtri_accel_t *mtris, const tri_mat_data_t *materials,
+                                            const uint32_t *tri_indices, hit_data_t<S> &inter);
 // traditional bvh traversal with stack for inner nodes
 template <int S>
 bool Traverse_BLAS_WithStack_ClosestHit(const simd_fvec<S> ro[3], const simd_fvec<S> rd[3],
@@ -222,7 +222,7 @@ bool Traverse_BLAS_WithStack_ClosestHit(const simd_fvec<S> ro[3], const simd_fve
                                         const tri_accel_t *tris, const uint32_t *tri_indices, int obj_index,
                                         hit_data_t<S> &inter);
 template <int S>
-bool Traverse_BLAS_WithStack_ClosestHit(const float ro[3], const float rd[3], const mbvh_node_t *mnodes,
+bool Traverse_BLAS_WithStack_ClosestHit(const float ro[3], const float rd[3], const wbvh_node_t *nodes,
                                         uint32_t node_index, const mtri_accel_t *mtris, const uint32_t *tri_indices,
                                         int &inter_prim_index, float &inter_t, float &inter_u, float &inter_v);
 // returns 0 - no hit, 1 - hit, 2 - solid hit (no need to check for transparency)
@@ -232,7 +232,7 @@ simd_ivec<S> Traverse_BLAS_WithStack_AnyHit(const simd_fvec<S> ro[3], const simd
                                             const tri_accel_t *tris, const tri_mat_data_t *materials,
                                             const uint32_t *tri_indices, int obj_index, hit_data_t<S> &inter);
 template <int S>
-int Traverse_BLAS_WithStack_AnyHit(const float ro[3], const float rd[3], const mbvh_node_t *mnodes, uint32_t node_index,
+int Traverse_BLAS_WithStack_AnyHit(const float ro[3], const float rd[3], const wbvh_node_t *nodes, uint32_t node_index,
                                    const mtri_accel_t *mtris, const tri_mat_data_t *materials,
                                    const uint32_t *tri_indices, int &inter_prim_index, float &inter_t, float &inter_u,
                                    float &inter_v);
@@ -358,10 +358,10 @@ void SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3], const s
 
 // Account for visible lights contribution
 template <int S>
-void IntersectAreaLights(const ray_data_t<S> &r, Span<const light_t> lights, Span<const mbvh_node_t> nodes,
+void IntersectAreaLights(const ray_data_t<S> &r, Span<const light_t> lights, Span<const wbvh_node_t> nodes,
                          hit_data_t<S> &inout_inter);
 template <int S>
-simd_fvec<S> IntersectAreaLights(const shadow_ray_t<S> &r, Span<const light_t> lights, Span<const mbvh_node_t> nodes);
+simd_fvec<S> IntersectAreaLights(const shadow_ray_t<S> &r, Span<const light_t> lights, Span<const wbvh_node_t> nodes);
 
 template <int S>
 void TraceRays(Span<ray_data_t<S>> rays, int min_transp_depth, int max_transp_depth, const scene_data_t &sc,
@@ -1234,7 +1234,7 @@ force_inline uint32_t other_child(const bvh_node_t &node, uint32_t cur_child) {
 }
 
 force_inline bool is_leaf_node(const bvh_node_t &node) { return (node.prim_index & LEAF_NODE_BIT) != 0; }
-force_inline bool is_leaf_node(const mbvh_node_t &node) { return (node.child[0] & LEAF_NODE_BIT) != 0; }
+force_inline bool is_leaf_node(const wbvh_node_t &node) { return (node.child[0] & LEAF_NODE_BIT) != 0; }
 
 template <int S, int StackSize> struct TraversalStateStack_Multi {
     struct {
@@ -2970,7 +2970,7 @@ bool Ray::NS::Traverse_TLAS_WithStack_ClosestHit(const simd_fvec<S> ro[3], const
 
 template <int S>
 bool Ray::NS::Traverse_TLAS_WithStack_ClosestHit(const simd_fvec<S> ro[3], const simd_fvec<S> rd[3],
-                                                 const simd_ivec<S> &ray_mask, const mbvh_node_t *nodes,
+                                                 const simd_ivec<S> &ray_mask, const wbvh_node_t *nodes,
                                                  uint32_t node_index, const mesh_instance_t *mesh_instances,
                                                  const uint32_t *mi_indices, const mesh_t *meshes,
                                                  const transform_t *transforms, const mtri_accel_t *mtris,
@@ -3209,7 +3209,7 @@ Ray::NS::simd_ivec<S> Ray::NS::Traverse_TLAS_WithStack_AnyHit(
 template <int S>
 Ray::NS::simd_ivec<S> Ray::NS::Traverse_TLAS_WithStack_AnyHit(
     const simd_fvec<S> ro[3], const simd_fvec<S> rd[3], int ray_type, const simd_ivec<S> &ray_mask,
-    const mbvh_node_t *nodes, uint32_t node_index, const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
+    const wbvh_node_t *nodes, uint32_t node_index, const mesh_instance_t *mesh_instances, const uint32_t *mi_indices,
     const mesh_t *meshes, const transform_t *transforms, const mtri_accel_t *mtris, const tri_mat_data_t *materials,
     const uint32_t *tri_indices, hit_data_t<S> &inter) {
     const int ray_vismask = (1u << ray_type);
@@ -3413,7 +3413,7 @@ bool Ray::NS::Traverse_BLAS_WithStack_ClosestHit(const simd_fvec<S> ro[3], const
 }
 
 template <int S>
-bool Ray::NS::Traverse_BLAS_WithStack_ClosestHit(const float ro[3], const float rd[3], const mbvh_node_t *nodes,
+bool Ray::NS::Traverse_BLAS_WithStack_ClosestHit(const float ro[3], const float rd[3], const wbvh_node_t *nodes,
                                                  uint32_t node_index, const mtri_accel_t *mtris,
                                                  const uint32_t *tri_indices, int &inter_prim_index, float &inter_t,
                                                  float &inter_u, float &inter_v) {
@@ -3568,7 +3568,7 @@ Ray::NS::Traverse_BLAS_WithStack_AnyHit(const simd_fvec<S> ro[3], const simd_fve
 }
 
 template <int S>
-int Ray::NS::Traverse_BLAS_WithStack_AnyHit(const float ro[3], const float rd[3], const mbvh_node_t *nodes,
+int Ray::NS::Traverse_BLAS_WithStack_AnyHit(const float ro[3], const float rd[3], const wbvh_node_t *nodes,
                                             uint32_t node_index, const mtri_accel_t *mtris,
                                             const tri_mat_data_t *materials, const uint32_t *tri_indices,
                                             int &inter_prim_index, float &inter_t, float &inter_u, float &inter_v) {
@@ -4527,8 +4527,8 @@ void Ray::NS::IntersectScene(ray_data_t<S> &r, const int min_transp_depth, const
     while (keep_going.not_all_zeros()) {
         const simd_fvec<S> t_val = inter.t;
 
-        if (sc.mnodes) {
-            NS::Traverse_TLAS_WithStack_ClosestHit(ro, r.d, keep_going, sc.mnodes, root_index, sc.mesh_instances,
+        if (sc.wnodes) {
+            NS::Traverse_TLAS_WithStack_ClosestHit(ro, r.d, keep_going, sc.wnodes, root_index, sc.mesh_instances,
                                                    sc.mi_indices, sc.meshes, sc.transforms, sc.mtris, sc.tri_indices,
                                                    inter);
         } else {
@@ -4717,7 +4717,7 @@ void Ray::NS::TraceRays(Span<ray_data_t<S>> rays, int min_transp_depth, int max_
 
         IntersectScene(r, min_transp_depth, max_transp_depth, random_seq, sc, root_index, textures, inter);
         if (trace_lights && !sc.visible_lights.empty()) {
-            IntersectAreaLights(r, sc.lights, sc.light_mnodes, inter);
+            IntersectAreaLights(r, sc.lights, sc.light_wnodes, inter);
         }
     }
 }
@@ -4737,7 +4737,7 @@ void Ray::NS::TraceShadowRays(Span<const shadow_ray_t<S>> rays, int max_transp_d
         simd_fvec<S> rc[3];
         IntersectScene(sh_r, max_transp_depth, sc, root_index, random_seq, textures, rc);
         if (!sc.blocker_lights.empty()) {
-            const simd_fvec<S> k = IntersectAreaLights(sh_r, sc.lights, sc.light_mnodes);
+            const simd_fvec<S> k = IntersectAreaLights(sh_r, sc.lights, sc.light_wnodes);
             UNROLLED_FOR(j, 3, { rc[j] *= k; })
         }
         UNROLLED_FOR(j, 3, { rc[j] = min(rc[j], clamp_val); })
@@ -4775,8 +4775,8 @@ void Ray::NS::IntersectScene(const shadow_ray_t<S> &r, const int max_transp_dept
         inter.t = dist;
 
         simd_ivec<S> solid_hit;
-        if (sc.mnodes) {
-            solid_hit = Traverse_TLAS_WithStack_AnyHit(ro, r.d, RAY_TYPE_SHADOW, keep_going, sc.mnodes, node_index,
+        if (sc.wnodes) {
+            solid_hit = Traverse_TLAS_WithStack_AnyHit(ro, r.d, RAY_TYPE_SHADOW, keep_going, sc.wnodes, node_index,
                                                        sc.mesh_instances, sc.mi_indices, sc.meshes, sc.transforms,
                                                        sc.mtris, sc.tri_materials, sc.tri_indices, inter);
         } else {
@@ -5270,7 +5270,7 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
 }
 
 template <int S>
-void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, Span<const light_t> lights, Span<const mbvh_node_t> nodes,
+void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, Span<const light_t> lights, Span<const wbvh_node_t> nodes,
                                   hit_data_t<S> &inout_inter) {
     simd_fvec<S> inv_d[3], inv_d_o[3];
     comp_aux_inv_values(r.o, r.d, inv_d, inv_d_o);
@@ -5515,7 +5515,7 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, Span<const light_t> li
 
 template <int S>
 Ray::NS::simd_fvec<S> Ray::NS::IntersectAreaLights(const shadow_ray_t<S> &r, Span<const light_t> lights,
-                                                   Span<const mbvh_node_t> nodes) {
+                                                   Span<const wbvh_node_t> nodes) {
     simd_fvec<S> inv_d[3], inv_d_o[3];
     comp_aux_inv_values(r.o, r.d, inv_d, inv_d_o);
 
