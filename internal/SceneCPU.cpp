@@ -882,6 +882,7 @@ void Ray::Cpu::Scene::Finalize() {
     }
     env_map_qtree_ = {};
     env_.qtree_levels = 0;
+    env_.light_index = 0xffffffff;
 
     if (env_.env_map != InvalidTextureHandle._index &&
         (env_.env_map == PhysicalSkyTexture._index || env_.env_map == physical_sky_texture_._index)) {
@@ -901,6 +902,7 @@ void Ray::Cpu::Scene::Finalize() {
 
             const std::pair<uint32_t, uint32_t> li = lights_.push(l);
             env_map_light_ = LightHandle{li.first, li.second};
+            env_.light_index = env_map_light_._index;
             li_indices_.push_back(env_map_light_._index);
         }
     }

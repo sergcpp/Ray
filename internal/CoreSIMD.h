@@ -5708,7 +5708,7 @@ void Ray::NS::Evaluate_EnvColor(const ray_data_t<S> &ray, const simd_ivec<S> &ma
 
             const simd_fvec<S> mis_weight = power_heuristic(bsdf_pdf, light_pdf);
             UNROLLED_FOR(i, 3, { env_col[i] *= mis_weight; })
-        } else if (env.multiple_importance) {
+        } else if (env.light_index != 0xffffffff) {
             const simd_fvec<S> light_pdf = 0.5f / (PI * float(lights_count));
             const simd_fvec<S> bsdf_pdf = ray.pdf;
 

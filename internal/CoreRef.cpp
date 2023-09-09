@@ -3821,7 +3821,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_EnvColor(const ray_data_t &ray, const en
 
         const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
         env_col *= mis_weight;
-    } else if (env.multiple_importance) {
+    } else if (env.light_index != 0xffffffff) {
         const float light_pdf = 0.5f / (PI * float(lights_count));
         const float bsdf_pdf = ray.pdf;
 

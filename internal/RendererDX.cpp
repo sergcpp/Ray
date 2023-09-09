@@ -1863,7 +1863,7 @@ void Ray::Dx::Renderer::kernel_ShadePrimaryHits(
 
     uniform_params.env_rotation = env.env_map_rotation;
     uniform_params.back_rotation = env.back_map_rotation;
-    uniform_params.env_mult_importance = sc_data.env->multiple_importance ? 1 : 0;
+    uniform_params.env_mult_importance = sc_data.env->light_index != 0xffffffff ? 1 : 0;
 
     uniform_params.clamp_val =
         (settings.clamp_direct != 0.0f) ? settings.clamp_direct : std::numeric_limits<float>::max();
@@ -1944,7 +1944,7 @@ void Ray::Dx::Renderer::kernel_ShadeSecondaryHits(CommandBuffer cmd_buf, const p
 
     uniform_params.env_rotation = env.env_map_rotation;
     uniform_params.back_rotation = env.back_map_rotation;
-    uniform_params.env_mult_importance = sc_data.env->multiple_importance ? 1 : 0;
+    uniform_params.env_mult_importance = sc_data.env->light_index != 0xffffffff ? 1 : 0;
 
     uniform_params.clamp_val = (clamp_val != 0.0f) ? clamp_val : std::numeric_limits<float>::max();
 

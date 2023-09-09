@@ -423,6 +423,7 @@ struct environment_t {
     const float *qtree_mips[16];
     int qtree_levels;
     bool multiple_importance;
+    uint32_t light_index;
 };
 
 force_inline float to_norm_float(uint8_t v) {
