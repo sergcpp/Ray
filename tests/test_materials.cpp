@@ -1687,7 +1687,7 @@ void test_complex_mat5_sun_light(const char *arch_list[], const char *preferred_
                       PixThres, eDenoiseMethod::None, false, textures, eTestScene::Standard_SunLight);
 }
 
-void test_complex_mat5_hdr_light(const char *arch_list[], const char *preferred_device) {
+void test_complex_mat5_hdri_light(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 23;
     const double MinPSNR = 23.0;
     const int PixThres = 6378;
@@ -1705,7 +1705,7 @@ void test_complex_mat5_hdr_light(const char *arch_list[], const char *preferred_
         "test_data/textures/gold-scuffed_basecolor-boosted.tga", "test_data/textures/gold-scuffed_normal.tga",
         "test_data/textures/gold-scuffed_roughness.tga", "test_data/textures/gold-scuffed_metallic.tga"};
 
-    run_material_test(arch_list, preferred_device, "complex_mat5_hdr_light", metal_mat_desc, SampleCount, MinPSNR,
+    run_material_test(arch_list, preferred_device, "complex_mat5_hdri_light", metal_mat_desc, SampleCount, MinPSNR,
                       PixThres, eDenoiseMethod::None, false, textures, eTestScene::Standard_HDRLight);
 }
 
@@ -1905,7 +1905,7 @@ void test_complex_mat6_sun_light(const char *arch_list[], const char *preferred_
                       PixThres, eDenoiseMethod::None, false, nullptr, eTestScene::Standard_SunLight);
 }
 
-void test_complex_mat6_hdr_light(const char *arch_list[], const char *preferred_device) {
+void test_complex_mat6_hdri_light(const char *arch_list[], const char *preferred_device) {
     const int SampleCount = 64;
     const double MinPSNR = 21.0;
     const int PixThres = 6266;
@@ -1918,7 +1918,7 @@ void test_complex_mat6_hdr_light(const char *arch_list[], const char *preferred_
     olive_mat_desc.transmission = 1.0f;
     olive_mat_desc.ior = 2.3f;
 
-    run_material_test(arch_list, preferred_device, "complex_mat6_hdr_light", olive_mat_desc, SampleCount, MinPSNR,
+    run_material_test(arch_list, preferred_device, "complex_mat6_hdri_light", olive_mat_desc, SampleCount, MinPSNR,
                       PixThres, eDenoiseMethod::None, false, nullptr, eTestScene::Standard_HDRLight);
 }
 
