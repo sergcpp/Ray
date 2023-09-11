@@ -436,7 +436,7 @@ Ray::MeshHandle Ray::Cpu::Scene::AddMesh(const mesh_desc_t &_m) {
         const uint64_t t2 = Ray::GetTimeMs();
 
         const auto before_count = uint32_t(wnodes_.size());
-        const uint32_t new_root = FlattenBVH_Recursive(temp_nodes.data(), m.node_index, 0xffffffff, wnodes_);
+        const uint32_t new_root = FlattenBVH_r(temp_nodes.data(), m.node_index, 0xffffffff, wnodes_);
 
         m.node_index = new_root;
         m.node_count = uint32_t(wnodes_.size() - before_count);
@@ -1001,7 +1001,7 @@ void Ray::Cpu::Scene::RebuildTLAS_nolock() {
 
     if (use_wide_bvh_) {
         const auto before_count = uint32_t(wnodes_.size());
-        const uint32_t new_root = FlattenBVH_Recursive(nodes_.data(), macro_nodes_root_, 0xffffffff, wnodes_);
+        const uint32_t new_root = FlattenBVH_r(nodes_.data(), macro_nodes_root_, 0xffffffff, wnodes_);
 
         macro_nodes_root_ = new_root;
         macro_nodes_count_ = static_cast<uint32_t>(wnodes_.size() - before_count);
@@ -1322,7 +1322,7 @@ void Ray::Cpu::Scene::RebuildLightTree_nolock() {
     }
 
     if (use_wide_bvh_) {
-        const uint32_t root_node = FlattenBVH_Recursive(light_nodes_.data(), 0, 0xffffffff, light_wnodes_);
+        const uint32_t root_node = FlattenBVH_r(light_nodes_.data(), 0, 0xffffffff, light_wnodes_);
         assert(root_node == 0);
         light_nodes_.clear();
     }

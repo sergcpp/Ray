@@ -1,11 +1,12 @@
 #include "Core.h"
 
 #include <cassert>
+#include <cfloat>
+#include <climits>
 #include <cmath>
 #include <cstring>
 
 #include <deque>
-#include <limits>
 #include <vector>
 
 #include "BVHSplit.h"
@@ -358,8 +359,7 @@ uint32_t Ray::EmitLBVH_Recursive(const prim_t *prims, const uint32_t *indices, c
                                  uint32_t prim_index, uint32_t prim_count, uint32_t index_offset, int bit_index,
                                  std::vector<bvh_node_t> &out_nodes) {
     if (bit_index == -1 || prim_count < 8) {
-        Ref::simd_fvec4 bbox_min = {std::numeric_limits<float>::max()},
-                        bbox_max = {std::numeric_limits<float>::lowest()};
+        Ref::simd_fvec4 bbox_min = {FLT_MAX}, bbox_max = {-FLT_MAX};
 
         for (uint32_t i = prim_index; i < prim_index + prim_count; i++) {
             bbox_min = min(bbox_min, prims[indices[i]].bbox_min);
@@ -444,8 +444,7 @@ uint32_t Ray::EmitLBVH_NonRecursive(const prim_t *prims, const uint32_t *indices
         proc_item_t &cur = proc_stack[stack_size - 1];
 
         if (cur.bit_index == -1 || cur.prim_count < 8) {
-            Ref::simd_fvec4 bbox_min = {std::numeric_limits<float>::max()},
-                            bbox_max = {std::numeric_limits<float>::lowest()};
+            Ref::simd_fvec4 bbox_min = {FLT_MAX}, bbox_max = {-FLT_MAX};
 
             for (uint32_t i = cur.prim_index; i < cur.prim_index + cur.prim_count; i++) {
                 bbox_min = min(bbox_min, prims[indices[i]].bbox_min);
@@ -524,10 +523,7 @@ uint32_t Ray::PreprocessPrims_SAH(Span<const prim_t> prims, const float *positio
                                   std::vector<uint32_t> &out_indices) {
     struct prims_coll_t {
         std::vector<uint32_t> indices;
-        Ref::simd_fvec4 min = {std::numeric_limits<float>::max(), std::numeric_limits<float>::max(),
-                               std::numeric_limits<float>::max(), 0.0f},
-                        max = {std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest(),
-                               std::numeric_limits<float>::lowest(), 0.0f};
+        Ref::simd_fvec4 min = {FLT_MAX, FLT_MAX, FLT_MAX, 0.0f}, max = {-FLT_MAX, -FLT_MAX, -FLT_MAX, 0.0f};
         prims_coll_t() = default;
         prims_coll_t(std::vector<uint32_t> &&_indices, const Ref::simd_fvec4 &_min, const Ref::simd_fvec4 &_max)
             : indices(std::move(_indices)), min(_min), max(_max) {}
@@ -606,10 +602,7 @@ uint32_t Ray::PreprocessPrims_HLBVH(Span<const prim_t> prims, std::vector<bvh_no
                                     std::vector<uint32_t> &out_indices) {
     std::vector<uint32_t> morton_codes(prims.size());
 
-    Ref::simd_fvec4 whole_min = {std::numeric_limits<float>::max(), std::numeric_limits<float>::max(),
-                                 std::numeric_limits<float>::max(), 0.0f},
-                    whole_max = {std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest(),
-                                 std::numeric_limits<float>::lowest(), 0.0f};
+    Ref::simd_fvec4 whole_min = {FLT_MAX, FLT_MAX, FLT_MAX, 0.0f}, whole_max = {-FLT_MAX, -FLT_MAX, -FLT_MAX, 0.0f};
 
     const auto indices_start = uint32_t(out_indices.size());
     out_indices.reserve(out_indices.size() + prims.size());
@@ -624,7 +617,7 @@ uint32_t Ray::PreprocessPrims_HLBVH(Span<const prim_t> prims, std::vector<bvh_no
     uint32_t *indices = &out_indices[indices_start];
 
     const Ref::simd_fvec4 scale =
-        float(1 << BitsPerDim) / (whole_max - whole_min + std::numeric_limits<float>::epsilon());
+        float(1 << BitsPerDim) / (whole_max - whole_min + FLT_EPSILON);
 
     // compute morton codes
     for (int i = 0; i < int(prims.size()); i++) {
@@ -755,8 +748,8 @@ uint32_t Ray::PreprocessPrims_HLBVH(Span<const prim_t> prims, std::vector<bvh_no
     return uint32_t(out_nodes.size() - top_nodes_start);
 }
 
-uint32_t Ray::FlattenBVH_Recursive(const bvh_node_t *nodes, const uint32_t node_index, const uint32_t parent_index,
-                                   aligned_vector<wbvh_node_t> &out_nodes) {
+uint32_t Ray::FlattenBVH_r(const bvh_node_t *nodes, const uint32_t node_index, const uint32_t parent_index,
+                           aligned_vector<wbvh_node_t> &out_nodes) {
     const bvh_node_t &cur_node = nodes[node_index];
 
     // allocate new node
@@ -832,8 +825,7 @@ uint32_t Ray::FlattenBVH_Recursive(const bvh_node_t *nodes, const uint32_t node_
     }
 
     // Sort children in morton order
-    Ref::simd_fvec3 children_centers[8], whole_box_min = {std::numeric_limits<float>::max()},
-                                         whole_box_max = {std::numeric_limits<float>::lowest()};
+    Ref::simd_fvec3 children_centers[8], whole_box_min = {FLT_MAX}, whole_box_max = {-FLT_MAX};
     for (int i = 0; i < children_count; i++) {
         children_centers[i] =
             0.5f * (Ref::simd_fvec3{nodes[children[i]].bbox_min} + Ref::simd_fvec3{nodes[children[i]].bbox_max});
@@ -865,7 +857,7 @@ uint32_t Ray::FlattenBVH_Recursive(const bvh_node_t *nodes, const uint32_t node_
 
     for (int i = 0; i < 8; i++) {
         if (sorted_children[i] != 0xffffffff) {
-            new_children[i] = FlattenBVH_Recursive(nodes, sorted_children[i], node_index, out_nodes);
+            new_children[i] = FlattenBVH_r(nodes, sorted_children[i], node_index, out_nodes);
         } else {
             new_children[i] = 0x7fffffff;
         }

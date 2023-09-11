@@ -460,25 +460,25 @@ template <int StackSize> class TraversalStack {
 
 force_inline void safe_invert(const float v[3], float out_v[3]) {
     if (v[0] <= FLT_EPS && v[0] >= 0) {
-        out_v[0] = std::numeric_limits<float>::max();
+        out_v[0] = FLT_MAX;
     } else if (v[0] >= -FLT_EPS && v[0] < 0) {
-        out_v[0] = -std::numeric_limits<float>::max();
+        out_v[0] = -FLT_MAX;
     } else {
         out_v[0] = 1.0f / v[0];
     }
 
     if (v[1] <= FLT_EPS && v[1] >= 0) {
-        out_v[1] = std::numeric_limits<float>::max();
+        out_v[1] = FLT_MAX;
     } else if (v[1] >= -FLT_EPS && v[1] < 0) {
-        out_v[1] = -std::numeric_limits<float>::max();
+        out_v[1] = -FLT_MAX;
     } else {
         out_v[1] = 1.0f / v[1];
     }
 
     if (v[2] <= FLT_EPS && v[2] >= 0) {
-        out_v[2] = std::numeric_limits<float>::max();
+        out_v[2] = FLT_MAX;
     } else if (v[2] >= -FLT_EPS && v[2] < 0) {
-        out_v[2] = -std::numeric_limits<float>::max();
+        out_v[2] = -FLT_MAX;
     } else {
         out_v[2] = 1.0f / v[2];
     }
@@ -3775,7 +3775,7 @@ void Ray::Ref::TraceRays(Span<ray_data_t> rays, int min_transp_depth, int max_tr
 void Ray::Ref::TraceShadowRays(Span<const shadow_ray_t> rays, int max_transp_depth, float _clamp_val,
                                const scene_data_t &sc, uint32_t node_index, const float random_seq[],
                                const Cpu::TexStorageBase *const textures[], int img_w, color_rgba_t *out_color) {
-    simd_fvec4 clamp_val = simd_fvec4{std::numeric_limits<float>::max()};
+    simd_fvec4 clamp_val = simd_fvec4{FLT_MAX};
     if (_clamp_val) {
         clamp_val.set<0>(_clamp_val);
         clamp_val.set<1>(_clamp_val);
@@ -4697,7 +4697,7 @@ void Ray::Ref::ShadePrimary(const pass_settings_t &ps, Span<const hit_data_t> in
                             int *out_secondary_rays_count, shadow_ray_t *out_shadow_rays, int *out_shadow_rays_count,
                             int img_w, float mix_factor, color_rgba_t *out_color, color_rgba_t *out_base_color,
                             color_rgba_t *out_depth_normal) {
-    auto clamp_direct = simd_fvec4{std::numeric_limits<float>::max()};
+    auto clamp_direct = simd_fvec4{FLT_MAX};
     if (ps.clamp_direct != 0.0f) {
         clamp_direct.set<0>(ps.clamp_direct);
         clamp_direct.set<1>(ps.clamp_direct);
@@ -4737,7 +4737,7 @@ void Ray::Ref::ShadeSecondary(const pass_settings_t &ps, float clamp_val, Span<c
                               ray_data_t *out_secondary_rays, int *out_secondary_rays_count,
                               shadow_ray_t *out_shadow_rays, int *out_shadow_rays_count, int img_w,
                               color_rgba_t *out_color) {
-    auto clamp_indirect = simd_fvec4{std::numeric_limits<float>::max()};
+    auto clamp_indirect = simd_fvec4{FLT_MAX};
     if (clamp_val != 0.0f) {
         clamp_indirect.set<0>(clamp_val);
         clamp_indirect.set<1>(clamp_val);

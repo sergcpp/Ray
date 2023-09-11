@@ -1,7 +1,9 @@
 #include "BVHSplit.h"
 
+#include <cfloat>
+#include <climits>
+
 #include <algorithm>
-#include <limits>
 
 #include "SmallVector.h"
 
@@ -13,7 +15,7 @@ const float SpatialSplitAlpha = 0.00001f;
 const int NumSpatialSplitBins = 256;
 
 struct bbox_t {
-    Ref::simd_fvec4 min = {std::numeric_limits<float>::max()}, max = {std::numeric_limits<float>::lowest()};
+    Ref::simd_fvec4 min = {FLT_MAX}, max = {-FLT_MAX};
     bbox_t() = default;
     bbox_t(const Ref::simd_fvec4 &_min, const Ref::simd_fvec4 &_max) : min(_min), max(_max) {}
 
@@ -153,7 +155,7 @@ Ray::split_data_t Ray::SplitPrimitives_SAH(const prim_t *primitives, Span<const 
         }
     }
 
-    float res_sah = std::numeric_limits<float>::max();
+    float res_sah = FLT_MAX;
     if (s.oversplit_threshold > 0.0f) {
         res_sah = s.oversplit_threshold * whole_box.surface_area() * float(num_prims);
     }

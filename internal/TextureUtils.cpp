@@ -1,8 +1,9 @@
 #include "TextureUtils.h"
 
+#include <climits>
+
 #include <array>
 #include <fstream>
-#include <limits>
 
 #include "CoreRef.h"
 
@@ -659,7 +660,7 @@ void GetMinMaxColorByDistance(const uint8_t block[64], uint8_t min_color[4], uin
 }
 
 void GetMinMaxColorByLuma(const uint8_t block[64], uint8_t min_color[4], uint8_t max_color[4]) {
-    int max_luma = -1, min_luma = std::numeric_limits<int>::max();
+    int max_luma = -1, min_luma = INT_MAX;
 
     for (int i = 0; i < 16; i++) {
         const int luma = ColorLumaApprox(&block[i * 4]);

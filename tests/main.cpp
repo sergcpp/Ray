@@ -144,7 +144,7 @@ int main(int argc, char *argv[]) {
     bool full_tests = false, nogpu = false, nocpu = false, run_detail_tests_on_fail = false;
     const char *device_name = nullptr;
     const char *preferred_arch[] = {nullptr, nullptr};
-    double time_limit_m = std::numeric_limits<double>::max();
+    double time_limit_m = DBL_MAX;
     bool multithreaded = false;
 
     for (int i = 1; i < argc; i++) {

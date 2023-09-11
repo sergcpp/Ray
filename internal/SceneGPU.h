@@ -1,5 +1,8 @@
 #pragma once
 
+#include <cfloat>
+#include <climits>
+
 #include "../Log.h"
 #include "Atmosphere.h"
 #include "BVHSplit.h"
@@ -929,7 +932,7 @@ inline Ray::MeshHandle Ray::NS::Scene::AddMesh(const mesh_desc_t &_m) {
     s.allow_spatial_splits = _m.allow_spatial_splits;
     s.use_fast_bvh_build = _m.use_fast_bvh_build;
 
-    simd_fvec4 bbox_min{std::numeric_limits<float>::max()}, bbox_max{std::numeric_limits<float>::lowest()};
+    simd_fvec4 bbox_min{FLT_MAX}, bbox_max{-FLT_MAX};
 
     const size_t attr_stride = AttrStrides[int(_m.layout)];
     if (use_hwrt_) {

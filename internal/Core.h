@@ -325,8 +325,8 @@ uint32_t PreprocessPrims_SAH(Span<const prim_t> prims, const float *positions, s
 uint32_t PreprocessPrims_HLBVH(Span<const prim_t> prims, std::vector<bvh_node_t> &out_nodes,
                                std::vector<uint32_t> &out_indices);
 
-uint32_t FlattenBVH_Recursive(const bvh_node_t *nodes, uint32_t node_index, uint32_t parent_index,
-                              aligned_vector<wbvh_node_t> &out_nodes);
+uint32_t FlattenBVH_r(const bvh_node_t *nodes, uint32_t node_index, uint32_t parent_index,
+                      aligned_vector<wbvh_node_t> &out_nodes);
 
 bool NaiivePluckerTest(const float p[9], const float o[3], const float d[3]);
 

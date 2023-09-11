@@ -4728,7 +4728,7 @@ void Ray::NS::TraceShadowRays(Span<const shadow_ray_t<S>> rays, int max_transp_d
                               const Cpu::TexStorageBase *const textures[], int img_w, color_rgba_t *out_color) {
     simd_fvec<S> clamp_val = _clamp_val;
     if (_clamp_val == 0.0f) {
-        clamp_val = std::numeric_limits<float>::max();
+        clamp_val = FLT_MAX;
     }
 
     for (int i = 0; i < rays.size(); ++i) {
@@ -7039,7 +7039,7 @@ void Ray::NS::ShadePrimary(const pass_settings_t &ps, Span<const hit_data_t<S>> 
                            color_rgba_t *out_depth_normals) {
     simd_fvec<S> clamp_direct = ps.clamp_direct;
     if (ps.clamp_direct == 0.0f) {
-        clamp_direct = std::numeric_limits<float>::max();
+        clamp_direct = FLT_MAX;
     }
 
     for (int i = 0; i < inters.size(); ++i) {
@@ -7091,7 +7091,7 @@ void Ray::NS::ShadeSecondary(const pass_settings_t &ps, float clamp_val, Span<co
                              ray_data_t<S> *out_secondary_rays, int *out_secondary_rays_count,
                              shadow_ray_t<S> *out_shadow_rays, int *out_shadow_rays_count, int img_w,
                              color_rgba_t *out_color) {
-    simd_fvec<S> clamp_indirect = std::numeric_limits<float>::max();
+    simd_fvec<S> clamp_indirect = FLT_MAX;
     if (clamp_val != 0.0f) {
         clamp_indirect = clamp_val;
     }
