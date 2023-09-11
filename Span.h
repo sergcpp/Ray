@@ -35,7 +35,9 @@ template <typename T> class Span {
 
     template <size_t N> Span(T (&arr)[N]) : p_data_(arr), size_(N) {}
 
-    template <typename U> Span(const Span<U> &rhs) : Span(rhs.data(), rhs.size()) {}
+    template <typename U = typename std::remove_const<T>::type,
+              typename = typename std::enable_if<!std::is_same<T, U>::value>::type>
+    Span(const Span<U> &rhs) : Span(rhs.data(), rhs.size()) {}
 
     Span(const Span &rhs) = default;
     Span &operator=(const Span &rhs) = default;
