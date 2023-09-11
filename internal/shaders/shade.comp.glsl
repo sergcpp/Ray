@@ -1192,14 +1192,15 @@ struct surface_t {
 };
 
 vec3 Evaluate_DiffuseNode(const light_sample_t ls, const ray_data_t ray, const surface_t surf,
-                          const vec3 base_color, const float roughness, const float mix_weight, inout shadow_ray_t sh_r) {
+                          const vec3 base_color, const float roughness, const float mix_weight,
+                          const bool use_mis, inout shadow_ray_t sh_r) {
     const vec3 I = vec3(ray.d[0], ray.d[1], ray.d[2]);
 
     const vec4 diff_col = Evaluate_OrenDiffuse_BSDF(-I, surf.N, ls.L, roughness, base_color);
     const float bsdf_pdf = diff_col[3];
 
     float mis_weight = 1.0;
-    if (ls.area > 0.0) {
+    if (use_mis && ls.area > 0.0) {
         mis_weight = power_heuristic(ls.pdf, bsdf_pdf);
     }
 
@@ -1222,10 +1223,30 @@ vec3 Evaluate_DiffuseNode(const light_sample_t ls, const ray_data_t ray, const s
     return vec3(0.0);
 }
 
+void Sample_DiffuseNode(const ray_data_t ray, const surface_t surf, const vec3 base_color,
+                        const float roughness, const float rand_u, const float rand_v,
+                        const float mix_weight, inout ray_data_t new_ray) {
+    const vec3 I = vec3(ray.d[0], ray.d[1], ray.d[2]);
+
+    vec3 V;
+    const vec4 F = Sample_OrenDiffuse_BSDF(surf.T, surf.B, surf.N, I, roughness, base_color, rand_u, rand_v, V);
+
+    new_ray.depth = ray.depth + 0x00000001;
+
+    vec3 new_o = offset_ray(surf.P, surf.plane_N);
+    new_ray.o[0] = new_o[0]; new_ray.o[1] = new_o[1]; new_ray.o[2] = new_o[2];
+    new_ray.d[0] = V[0]; new_ray.d[1] = V[1]; new_ray.d[2] = V[2];
+
+    new_ray.c[0] = ray.c[0] * F[0] * mix_weight / F[3];
+    new_ray.c[1] = ray.c[1] * F[1] * mix_weight / F[3];
+    new_ray.c[2] = ray.c[2] * F[2] * mix_weight / F[3];
+    new_ray.pdf = F[3];
+}
+
 vec3 Evaluate_GlossyNode(const light_sample_t ls, const ray_data_t ray,
                          const surface_t surf, const vec3 base_color,
                          const float roughness, const float spec_ior, const float spec_F0,
-                         const float mix_weight, inout shadow_ray_t sh_r) {
+                         const float mix_weight, const bool use_mis, inout shadow_ray_t sh_r) {
     const vec3 I = vec3(ray.d[0], ray.d[1], ray.d[2]);
     const vec3 H = normalize(ls.L - I);
 
@@ -1240,7 +1261,7 @@ vec3 Evaluate_GlossyNode(const light_sample_t ls, const ray_data_t ray,
     const float bsdf_pdf = spec_col[3];
 
     float mis_weight = 1.0;
-    if (ls.area > 0.0) {
+    if (use_mis && ls.area > 0.0) {
         mis_weight = power_heuristic(ls.pdf, bsdf_pdf);
     }
     const vec3 lcol = ls.col * spec_col.rgb * (mix_weight * mis_weight / ls.pdf);
@@ -1283,30 +1304,10 @@ void Sample_GlossyNode(const ray_data_t ray, const surface_t surf, const vec3 ba
     new_ray.pdf = F[3];
 }
 
-void Sample_DiffuseNode(const ray_data_t ray, const surface_t surf, const vec3 base_color,
-                        const float roughness, const float rand_u, const float rand_v,
-                        const float mix_weight, inout ray_data_t new_ray) {
-    const vec3 I = vec3(ray.d[0], ray.d[1], ray.d[2]);
-
-    vec3 V;
-    const vec4 F = Sample_OrenDiffuse_BSDF(surf.T, surf.B, surf.N, I, roughness, base_color, rand_u, rand_v, V);
-
-    new_ray.depth = ray.depth + 0x00000001;
-
-    vec3 new_o = offset_ray(surf.P, surf.plane_N);
-    new_ray.o[0] = new_o[0]; new_ray.o[1] = new_o[1]; new_ray.o[2] = new_o[2];
-    new_ray.d[0] = V[0]; new_ray.d[1] = V[1]; new_ray.d[2] = V[2];
-
-    new_ray.c[0] = ray.c[0] * F[0] * mix_weight / F[3];
-    new_ray.c[1] = ray.c[1] * F[1] * mix_weight / F[3];
-    new_ray.c[2] = ray.c[2] * F[2] * mix_weight / F[3];
-    new_ray.pdf = F[3];
-}
-
 vec3 Evaluate_RefractiveNode(const light_sample_t ls, const ray_data_t ray,
                              const surface_t surf, const vec3 base_color,
                              const float roughness2, const float eta, const float mix_weight,
-                             inout shadow_ray_t sh_r) {
+                             const bool use_mis, inout shadow_ray_t sh_r) {
     const vec3 I = vec3(ray.d[0], ray.d[1], ray.d[2]);
     const vec3 H = normalize(ls.L - I * eta);
     const vec3 view_dir_ts = tangent_from_world(surf.T, surf.B, surf.N, -I);
@@ -1318,7 +1319,7 @@ vec3 Evaluate_RefractiveNode(const light_sample_t ls, const ray_data_t ray,
     const float bsdf_pdf = refr_col[3];
 
     float mis_weight = 1.0;
-    if (ls.area > 0.0) {
+    if (use_mis && ls.area > 0.0) {
         mis_weight = power_heuristic(ls.pdf, bsdf_pdf);
     }
     const vec3 lcol = ls.col * refr_col.rgb * (mix_weight * mis_weight / ls.pdf);
@@ -1406,7 +1407,7 @@ vec3 Evaluate_PrincipledNode(const light_sample_t ls, const ray_data_t ray,
                              const diff_params_t diff, const spec_params_t spec,
                              const clearcoat_params_t coat, const transmission_params_t trans,
                              const float metallic, const float transmission, const float N_dot_L,
-                             const float mix_weight, inout shadow_ray_t sh_r) {
+                             const float mix_weight, const bool use_mis, inout shadow_ray_t sh_r) {
     const vec3 I = vec3(ray.d[0], ray.d[1], ray.d[2]);
 
     vec3 lcol = vec3(0.0);
@@ -1474,7 +1475,7 @@ vec3 Evaluate_PrincipledNode(const light_sample_t ls, const ray_data_t ray,
     }
 
     float mis_weight = 1.0;
-    [[flatten]] if (ls.area > 0.0) {
+    [[flatten]] if (use_mis && ls.area > 0.0) {
         mis_weight = power_heuristic(ls.pdf, bsdf_pdf);
     }
     lcol *= mix_weight * mis_weight;
@@ -1851,7 +1852,8 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
     [[dont_flatten]] if (mat.type == DiffuseNode) {
 #if USE_NEE
         [[dont_flatten]] if (ls.pdf > 0.0 && N_dot_L > 0.0) {
-            col += Evaluate_DiffuseNode(ls, ray, surf, base_color, roughness, mix_weight, sh_r);
+            col += Evaluate_DiffuseNode(ls, ray, surf, base_color, roughness, mix_weight,
+                                        (total_depth < g_params.max_total_depth), sh_r);
         }
 #endif
         [[dont_flatten]] if (diff_depth < g_params.max_diff_depth && total_depth < g_params.max_total_depth) {
@@ -1866,7 +1868,7 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
 #if USE_NEE
         [[dont_flatten]] if (ls.pdf > 0.0 && sqr(roughness2) >= 1e-7 && N_dot_L > 0.0) {
             col += Evaluate_GlossyNode(ls, ray, surf, base_color, roughness, spec_ior,
-                                       spec_F0, mix_weight, sh_r);
+                                       spec_F0, mix_weight, (total_depth < g_params.max_total_depth), sh_r);
         }
 #endif
         [[dont_flatten]] if (spec_depth < g_params.max_spec_depth && total_depth < g_params.max_total_depth) {
@@ -1878,7 +1880,8 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
         const float roughness2 = sqr(roughness);
         [[dont_flatten]] if (ls.pdf > 0.0 && sqr(roughness2) >= 1e-7 && N_dot_L < 0.0) {
             const float eta = is_backfacing ? (mat.ior / ext_ior) : (ext_ior / mat.ior);
-            col += Evaluate_RefractiveNode(ls, ray, surf, base_color, roughness2, eta, mix_weight, sh_r);
+            col += Evaluate_RefractiveNode(ls, ray, surf, base_color, roughness2, eta, mix_weight,
+                                           (total_depth < g_params.max_total_depth), sh_r);
         }
 #endif
         [[dont_flatten]] if (refr_depth < g_params.max_refr_depth && total_depth < g_params.max_total_depth) {
@@ -1965,7 +1968,7 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
 #if USE_NEE
         [[dont_flatten]] if (ls.pdf > 0.0) {
             col += Evaluate_PrincipledNode(ls, ray, surf, lobe_weights, diff, spec, coat, trans,
-                                           metallic, transmission, N_dot_L, mix_weight, sh_r);
+                                           metallic, transmission, N_dot_L, mix_weight, (total_depth < g_params.max_total_depth), sh_r);
         }
 #endif
         Sample_PrincipledNode(ray, surf, lobe_weights, diff, spec, coat, trans, metallic, transmission, rand_u, rand_v, mix_rand, mix_weight, new_ray);

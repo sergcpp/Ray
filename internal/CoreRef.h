@@ -292,20 +292,21 @@ simd_fvec4 Evaluate_LightColor(const ray_data_t &ray, const hit_data_t &inter, c
 
 // Evaluate individual nodes
 simd_fvec4 Evaluate_DiffuseNode(const light_sample_t &ls, const ray_data_t &ray, const surface_t &surf,
-                                const simd_fvec4 &base_color, float roughness, float mix_weight, shadow_ray_t &sh_r);
+                                const simd_fvec4 &base_color, float roughness, float mix_weight, bool use_mis,
+                                shadow_ray_t &sh_r);
 void Sample_DiffuseNode(const ray_data_t &ray, const surface_t &surf, const simd_fvec4 &base_color, float roughness,
                         float rand_u, float rand_v, float mix_weight, ray_data_t &new_ray);
 
 simd_fvec4 Evaluate_GlossyNode(const light_sample_t &ls, const ray_data_t &ray, const surface_t &surf,
                                const simd_fvec4 &base_color, float roughness2, float spec_ior, float spec_F0,
-                               float mix_weight, shadow_ray_t &sh_r);
+                               float mix_weight, bool use_mis, shadow_ray_t &sh_r);
 void Sample_GlossyNode(const ray_data_t &ray, const surface_t &surf, const simd_fvec4 &base_color, float roughness,
                        float spec_ior, float spec_F0, float rand_u, float rand_v, float mix_weight,
                        ray_data_t &new_ray);
 
 simd_fvec4 Evaluate_RefractiveNode(const light_sample_t &ls, const ray_data_t &ray, const surface_t &surf,
                                    const simd_fvec4 &base_color, float roughness2, float eta, float mix_weight,
-                                   shadow_ray_t &sh_r);
+                                   bool use_mis, shadow_ray_t &sh_r);
 void Sample_RefractiveNode(const ray_data_t &ray, const surface_t &surf, const simd_fvec4 &base_color, float roughness,
                            bool is_backfacing, float int_ior, float ext_ior, float rand_u, float rand_v,
                            float mix_weight, ray_data_t &new_ray);
@@ -346,7 +347,7 @@ simd_fvec4 Evaluate_PrincipledNode(const light_sample_t &ls, const ray_data_t &r
                                    const lobe_weights_t &lobe_weights, const diff_params_t &diff,
                                    const spec_params_t &spec, const clearcoat_params_t &coat,
                                    const transmission_params_t &trans, float metallic, float transmission,
-                                   float N_dot_L, float mix_weight, shadow_ray_t &sh_r);
+                                   float N_dot_L, float mix_weight, bool use_mis, shadow_ray_t &sh_r);
 void Sample_PrincipledNode(const pass_settings_t &ps, const ray_data_t &ray, const surface_t &surf,
                            const lobe_weights_t &lobe_weights, const diff_params_t &diff, const spec_params_t &spec,
                            const clearcoat_params_t &coat, const transmission_params_t &trans, float metallic,

@@ -3932,14 +3932,15 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_LightColor(const ray_data_t &ray, const 
 
 Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_DiffuseNode(const light_sample_t &ls, const ray_data_t &ray,
                                                     const surface_t &surf, const simd_fvec4 &base_color,
-                                                    const float roughness, const float mix_weight, shadow_ray_t &sh_r) {
+                                                    const float roughness, const float mix_weight, const bool use_mis,
+                                                    shadow_ray_t &sh_r) {
     const simd_fvec4 I = make_fvec3(ray.d);
 
     const simd_fvec4 diff_col = Evaluate_OrenDiffuse_BSDF(-I, surf.N, ls.L, roughness, base_color);
     const float bsdf_pdf = diff_col[3];
 
     float mis_weight = 1.0f;
-    if (ls.area > 0.0f) {
+    if (use_mis && ls.area > 0.0f) {
         mis_weight = power_heuristic(ls.pdf, bsdf_pdf);
     }
 
@@ -3975,7 +3976,7 @@ void Ray::Ref::Sample_DiffuseNode(const ray_data_t &ray, const surface_t &surf, 
 Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_GlossyNode(const light_sample_t &ls, const ray_data_t &ray,
                                                    const surface_t &surf, const simd_fvec4 &base_color,
                                                    const float roughness, const float spec_ior, const float spec_F0,
-                                                   const float mix_weight, shadow_ray_t &sh_r) {
+                                                   const float mix_weight, const bool use_mis, shadow_ray_t &sh_r) {
     const simd_fvec4 I = make_fvec3(ray.d);
     const simd_fvec4 H = normalize(ls.L - I);
 
@@ -3988,7 +3989,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_GlossyNode(const light_sample_t &ls, con
     const float bsdf_pdf = spec_col[3];
 
     float mis_weight = 1.0f;
-    if (ls.area > 0.0f) {
+    if (use_mis && ls.area > 0.0f) {
         mis_weight = power_heuristic(ls.pdf, bsdf_pdf);
     }
     const simd_fvec4 lcol = ls.col * spec_col * (mix_weight * mis_weight / ls.pdf);
@@ -4027,7 +4028,7 @@ void Ray::Ref::Sample_GlossyNode(const ray_data_t &ray, const surface_t &surf, c
 Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_RefractiveNode(const light_sample_t &ls, const ray_data_t &ray,
                                                        const surface_t &surf, const simd_fvec4 &base_color,
                                                        const float roughness2, const float eta, const float mix_weight,
-                                                       shadow_ray_t &sh_r) {
+                                                       const bool use_mis, shadow_ray_t &sh_r) {
     const simd_fvec4 I = make_fvec3(ray.d);
 
     const simd_fvec4 H = normalize(ls.L - I * eta);
@@ -4040,7 +4041,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_RefractiveNode(const light_sample_t &ls,
     const float bsdf_pdf = refr_col[3];
 
     float mis_weight = 1.0f;
-    if (ls.area > 0.0f) {
+    if (use_mis && ls.area > 0.0f) {
         mis_weight = power_heuristic(ls.pdf, bsdf_pdf);
     }
     const simd_fvec4 lcol = ls.col * refr_col * (mix_weight * mis_weight / ls.pdf);
@@ -4090,7 +4091,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_PrincipledNode(const light_sample_t &ls,
                                                        const clearcoat_params_t &coat,
                                                        const transmission_params_t &trans, const float metallic,
                                                        const float transmission, const float N_dot_L,
-                                                       const float mix_weight, shadow_ray_t &sh_r) {
+                                                       const float mix_weight, const bool use_mis, shadow_ray_t &sh_r) {
     const simd_fvec4 I = make_fvec3(ray.d);
 
     simd_fvec4 lcol = 0.0f;
@@ -4161,7 +4162,7 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_PrincipledNode(const light_sample_t &ls,
     }
 
     float mis_weight = 1.0f;
-    if (ls.area > 0.0f) {
+    if (use_mis && ls.area > 0.0f) {
         mis_weight = power_heuristic(ls.pdf, bsdf_pdf);
     }
     lcol *= mix_weight * mis_weight;
@@ -4530,7 +4531,8 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
     if (mat->type == eShadingNode::Diffuse) {
 #if USE_NEE
         if (ls.pdf > 0.0f && N_dot_L > 0.0f) {
-            col += Evaluate_DiffuseNode(ls, ray, surf, base_color, roughness, mix_weight, sh_r);
+            col += Evaluate_DiffuseNode(ls, ray, surf, base_color, roughness, mix_weight,
+                                        (total_depth < ps.max_total_depth), sh_r);
         }
 #endif
         if (diff_depth < ps.max_diff_depth && total_depth < ps.max_total_depth) {
@@ -4543,7 +4545,8 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
         const float roughness2 = sqr(roughness);
 #if USE_NEE
         if (ls.pdf > 0.0f && sqr(roughness2) >= 1e-7f && N_dot_L > 0.0f) {
-            col += Evaluate_GlossyNode(ls, ray, surf, base_color, roughness, spec_ior, spec_F0, mix_weight, sh_r);
+            col += Evaluate_GlossyNode(ls, ray, surf, base_color, roughness, spec_ior, spec_F0, mix_weight,
+                                       (total_depth < ps.max_total_depth), sh_r);
         }
 #endif
         if (spec_depth < ps.max_spec_depth && total_depth < ps.max_total_depth) {
@@ -4554,7 +4557,8 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
         const float roughness2 = sqr(roughness);
         if (ls.pdf > 0.0f && sqr(roughness2) >= 1e-7f && N_dot_L < 0.0f) {
             const float eta = is_backfacing ? (mat->ior / ext_ior) : (ext_ior / mat->ior);
-            col += Evaluate_RefractiveNode(ls, ray, surf, base_color, roughness2, eta, mix_weight, sh_r);
+            col += Evaluate_RefractiveNode(ls, ray, surf, base_color, roughness2, eta, mix_weight,
+                                           (total_depth < ps.max_total_depth), sh_r);
         }
 #endif
         if (refr_depth < ps.max_refr_depth && total_depth < ps.max_total_depth) {
@@ -4646,7 +4650,7 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
 #if USE_NEE
         if (ls.pdf > 0.0f) {
             col += Evaluate_PrincipledNode(ls, ray, surf, lobe_weights, diff, spec, coat, trans, metallic, transmission,
-                                           N_dot_L, mix_weight, sh_r);
+                                           N_dot_L, mix_weight, (total_depth < ps.max_total_depth), sh_r);
         }
 #endif
         Sample_PrincipledNode(ps, ray, surf, lobe_weights, diff, spec, coat, trans, metallic, transmission, rand_u,

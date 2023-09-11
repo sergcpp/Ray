@@ -200,7 +200,7 @@ int main(int argc, char *argv[]) {
     static const char *ArchListFull[] = {"REF", "SSE2", "SSE41", "AVX", "AVX2", "AVX512", "NEON", "VK", "DX", nullptr};
     static const char *ArchListFullNoGPU[] = {"REF", "SSE2", "SSE41", "AVX", "AVX2", "AVX512", "NEON", nullptr};
     static const char *ArchListDefault[] = {"AVX2", "NEON", "VK", "DX", nullptr};
-    static const char *ArchListDefaultNoGPU[] = {"AVX2", "NEON", nullptr};
+    static const char *ArchListDefaultNoGPU[] = {"AVX2", "NEON", "REF", nullptr};
     static const char *ArchListGPUOnly[] = {"DX", "VK", nullptr};
 
     bool detailed_material_tests_needed = full_tests;
