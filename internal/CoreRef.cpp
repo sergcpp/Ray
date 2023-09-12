@@ -3801,7 +3801,7 @@ void Ray::Ref::TraceShadowRays(Span<const shadow_ray_t> rays, int max_transp_dep
 
 Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_EnvColor(const ray_data_t &ray, const environment_t &env,
                                                  const Cpu::TexStorageRGBA &tex_storage, const uint32_t lights_count,
-                                                 const simd_fvec2 &rand) {
+                                                 const bool use_mis, const simd_fvec2 &rand) {
     const simd_fvec4 I = make_fvec3(ray.d);
     simd_fvec4 env_col = {1.0f};
 
@@ -3812,21 +3812,23 @@ Ray::Ref::simd_fvec4 Ray::Ref::Evaluate_EnvColor(const ray_data_t &ray, const en
     }
 
 #if USE_NEE
-    if (env.qtree_levels) {
-        const auto *qtree_mips = reinterpret_cast<const simd_fvec4 *const *>(env.qtree_mips);
+    if (use_mis) {
+        if (env.qtree_levels) {
+            const auto *qtree_mips = reinterpret_cast<const simd_fvec4 *const *>(env.qtree_mips);
 
-        const float light_pdf =
-            Evaluate_EnvQTree(env_map_rotation, qtree_mips, env.qtree_levels, I) / float(lights_count);
-        const float bsdf_pdf = ray.pdf;
+            const float light_pdf =
+                Evaluate_EnvQTree(env_map_rotation, qtree_mips, env.qtree_levels, I) / float(lights_count);
+            const float bsdf_pdf = ray.pdf;
 
-        const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
-        env_col *= mis_weight;
-    } else if (env.light_index != 0xffffffff) {
-        const float light_pdf = 0.5f / (PI * float(lights_count));
-        const float bsdf_pdf = ray.pdf;
+            const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
+            env_col *= mis_weight;
+        } else if (env.light_index != 0xffffffff) {
+            const float light_pdf = 0.5f / (PI * float(lights_count));
+            const float bsdf_pdf = ray.pdf;
 
-        const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
-        env_col *= mis_weight;
+            const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
+            env_col *= mis_weight;
+        }
     }
 #endif
 
@@ -4313,7 +4315,7 @@ Ray::color_rgba_t Ray::Ref::ShadeSurface(const pass_settings_t &ps, const hit_da
     if (!inter.mask) {
         const simd_fvec4 env_col =
             Evaluate_EnvColor(ray, sc.env, *static_cast<const Cpu::TexStorageRGBA *>(textures[0]),
-                              uint32_t(sc.li_indices.size()), tex_rand);
+                              uint32_t(sc.li_indices.size()), (total_depth(ray) < ps.max_total_depth), tex_rand);
         return color_rgba_t{ray.c[0] * env_col[0], ray.c[1] * env_col[1], ray.c[2] * env_col[2], env_col[3]};
     }
 

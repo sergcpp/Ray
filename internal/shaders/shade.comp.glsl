@@ -1043,7 +1043,7 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, int hi, vec2 sample_off, 
     ls.pdf /= float(g_params.li_count);
 }
 
-vec3 Evaluate_EnvColor(ray_data_t ray, const vec2 tex_rand) {
+vec3 Evaluate_EnvColor(ray_data_t ray, const vec2 tex_rand, const bool use_mis) {
     const vec3 rd = vec3(ray.d[0], ray.d[1], ray.d[2]);
 #if PRIMARY
     vec3 env_col = g_params.back_col.xyz;
@@ -1063,18 +1063,20 @@ vec3 Evaluate_EnvColor(ray_data_t ray, const vec2 tex_rand) {
     }
 
 #if USE_NEE
-    if (g_params.env_qtree_levels > 0) {
-        const float light_pdf = Evaluate_EnvQTree(env_map_rotation, g_env_qtree, g_params.env_qtree_levels, rd) / float(g_params.li_count);
-        const float bsdf_pdf = ray.pdf;
+    if (use_mis) {
+        if (g_params.env_qtree_levels > 0) {
+            const float light_pdf = Evaluate_EnvQTree(env_map_rotation, g_env_qtree, g_params.env_qtree_levels, rd) / float(g_params.li_count);
+            const float bsdf_pdf = ray.pdf;
 
-        const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
-        env_col *= mis_weight;
-    } else if (g_params.env_mult_importance != 0) {
-        const float light_pdf = 0.5 / (PI * float(g_params.li_count));
-        const float bsdf_pdf = ray.pdf;
+            const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
+            env_col *= mis_weight;
+        } else if (g_params.env_mult_importance != 0) {
+            const float light_pdf = 0.5 / (PI * float(g_params.li_count));
+            const float bsdf_pdf = ray.pdf;
 
-        const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
-        env_col *= mis_weight;
+            const float mis_weight = power_heuristic(bsdf_pdf, light_pdf);
+            env_col *= mis_weight;
+        }
     }
 #endif
 
@@ -1644,7 +1646,7 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
                                fract(g_random_seq[hi + RAND_DIM_TEX_V] + sample_off[1]));
 
     [[dont_flatten]] if (inter.mask == 0) {
-        const vec3 env_col = Evaluate_EnvColor(ray, tex_rand);
+        const vec3 env_col = Evaluate_EnvColor(ray, tex_rand, (total_depth < g_params.max_total_depth));
         return vec3(ray.c[0] * env_col[0], ray.c[1] * env_col[1], ray.c[2] * env_col[2]);
     }
 

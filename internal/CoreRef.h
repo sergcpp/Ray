@@ -284,7 +284,7 @@ void TraceShadowRays(Span<const shadow_ray_t> rays, int max_transp_depth, float 
 
 // Get environment collor at direction
 simd_fvec4 Evaluate_EnvColor(const ray_data_t &ray, const environment_t &env, const Cpu::TexStorageRGBA &tex_storage,
-                             uint32_t lights_count, const simd_fvec2 &rand);
+                             uint32_t lights_count, bool use_mis, const simd_fvec2 &rand);
 // Get light color at intersection point
 simd_fvec4 Evaluate_LightColor(const ray_data_t &ray, const hit_data_t &inter, const environment_t &env,
                                const Cpu::TexStorageRGBA &tex_storage, Span<const light_t> lights,

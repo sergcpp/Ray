@@ -375,8 +375,8 @@ void TraceShadowRays(Span<const shadow_ray_t<S>> rays, int max_transp_depth, flo
 // Get environment collor at direction
 template <int S>
 void Evaluate_EnvColor(const ray_data_t<S> &ray, const simd_ivec<S> &mask, const environment_t &env,
-                       const Cpu::TexStorageRGBA &tex_storage, uint32_t lights_count, const simd_fvec<S> rand[2],
-                       simd_fvec<S> env_col[4]);
+                       const Cpu::TexStorageRGBA &tex_storage, uint32_t lights_count, const simd_ivec<S> &mis_mask,
+                       const simd_fvec<S> rand[2], simd_fvec<S> env_col[4]);
 // Get light color at intersection point
 template <int S>
 void Evaluate_LightColor(const simd_fvec<S> P[3], const ray_data_t<S> &ray, const simd_ivec<S> &mask,
@@ -5690,7 +5690,7 @@ Ray::NS::simd_fvec<S> Ray::NS::IntersectAreaLights(const shadow_ray_t<S> &r, Spa
 template <int S>
 void Ray::NS::Evaluate_EnvColor(const ray_data_t<S> &ray, const simd_ivec<S> &mask, const environment_t &env,
                                 const Cpu::TexStorageRGBA &tex_storage, const uint32_t lights_count,
-                                const simd_fvec<S> rand[2], simd_fvec<S> env_col[4]) {
+                                const simd_ivec<S> &mis_mask, const simd_fvec<S> rand[2], simd_fvec<S> env_col[4]) {
     const uint32_t env_map = env.env_map;
     const float env_map_rotation = env.env_map_rotation;
     const simd_ivec<S> env_map_mask = (ray.depth & 0x00ffffff) != 0;
@@ -5701,21 +5701,23 @@ void Ray::NS::Evaluate_EnvColor(const ray_data_t<S> &ray, const simd_ivec<S> &ma
             SampleLatlong_RGBE(tex_storage, env_map, ray.d, env_map_rotation, rand, (mask & env_map_mask), env_col);
         }
 #if USE_NEE
-        if (env.qtree_levels) {
-            const auto *qtree_mips = reinterpret_cast<const simd_fvec4 *const *>(env.qtree_mips);
+        if (mis_mask.not_all_zeros()) {
+            if (env.qtree_levels) {
+                const auto *qtree_mips = reinterpret_cast<const simd_fvec4 *const *>(env.qtree_mips);
 
-            const simd_fvec<S> light_pdf =
-                Evaluate_EnvQTree(env_map_rotation, qtree_mips, env.qtree_levels, ray.d) / float(lights_count);
-            const simd_fvec<S> bsdf_pdf = ray.pdf;
+                const simd_fvec<S> light_pdf =
+                    Evaluate_EnvQTree(env_map_rotation, qtree_mips, env.qtree_levels, ray.d) / float(lights_count);
+                const simd_fvec<S> bsdf_pdf = ray.pdf;
 
-            const simd_fvec<S> mis_weight = power_heuristic(bsdf_pdf, light_pdf);
-            UNROLLED_FOR(i, 3, { env_col[i] *= mis_weight; })
-        } else if (env.light_index != 0xffffffff) {
-            const simd_fvec<S> light_pdf = 0.5f / (PI * float(lights_count));
-            const simd_fvec<S> bsdf_pdf = ray.pdf;
+                const simd_fvec<S> mis_weight = power_heuristic(bsdf_pdf, light_pdf);
+                UNROLLED_FOR(i, 3, { where(mis_mask, env_col[i]) *= mis_weight; })
+            } else if (env.light_index != 0xffffffff) {
+                const simd_fvec<S> light_pdf = 0.5f / (PI * float(lights_count));
+                const simd_fvec<S> bsdf_pdf = ray.pdf;
 
-            const simd_fvec<S> mis_weight = power_heuristic(bsdf_pdf, light_pdf);
-            UNROLLED_FOR(i, 3, { env_col[i] *= mis_weight; })
+                const simd_fvec<S> mis_weight = power_heuristic(bsdf_pdf, light_pdf);
+                UNROLLED_FOR(i, 3, { where(mis_mask, env_col[i]) *= mis_weight; })
+            }
         }
 #endif
     }
@@ -6341,7 +6343,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
     if (ino_hit.not_all_zeros()) {
         simd_fvec<S> env_col[4] = {{1.0f}, {1.0f}, {1.0f}, {1.0f}};
         Evaluate_EnvColor(ray, ino_hit, sc.env, *static_cast<const Cpu::TexStorageRGBA *>(textures[0]),
-                          uint32_t(sc.li_indices.size()), tex_rand, env_col);
+                          uint32_t(sc.li_indices.size()), (total_depth < ps.max_total_depth), tex_rand, env_col);
 
         UNROLLED_FOR(i, 3, { where(ino_hit, out_rgba[i]) = ray.c[i] * env_col[i]; })
         where(ino_hit, out_rgba[3]) = env_col[3];
