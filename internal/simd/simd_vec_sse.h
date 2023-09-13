@@ -491,7 +491,6 @@ template <> class simd_vec<float, 4> {
         return v1 / v1.length();
     }
 
-
     friend force_inline simd_vec<float, 4> vectorcall inclusive_scan(simd_vec<float, 4> v1) {
         v1.vec_ = _mm_add_ps(v1.vec_, _mm_castsi128_ps(_mm_slli_si128(_mm_castps_si128(v1.vec_), 4)));
         v1.vec_ = _mm_add_ps(v1.vec_, _mm_castsi128_ps(_mm_slli_si128(_mm_castps_si128(v1.vec_), 8)));
@@ -766,6 +765,19 @@ template <> class simd_vec<int, 4> {
         simd_vec<float, 4> ret;
         ret.vec_ = _mm_cvtepi32_ps(vec_);
         return ret;
+    }
+
+    force_inline int hsum() const {
+#if defined(USE_SSE41)
+        __m128i temp = _mm_hadd_epi32(vec_, vec_);
+        temp = _mm_hadd_epi32(temp, temp);
+
+        return _mm_cvtsi128_si32(temp);
+#else
+        alignas(16) int comp[4];
+        _mm_store_si128((__m128i *)comp, vec_);
+        return comp[0] + comp[1] + comp[2] + comp[3];
+#endif
     }
 
     force_inline void store_to(int *f) const { _mm_storeu_si128((__m128i *)f, vec_); }

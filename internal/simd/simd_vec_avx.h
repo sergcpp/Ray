@@ -506,6 +506,27 @@ template <> class simd_vec<int, 8> {
         return ret;
     }
 
+    force_inline int hsum() const {
+#if defined(USE_AVX2) || defined(USE_AVX512)
+        __m256i temp = _mm256_hadd_epi32(vec_, vec_);
+        temp = _mm256_hadd_epi32(temp, temp);
+
+        __m256i ret = _mm256_permute2f128_si256(temp, temp, 1);
+        ret = _mm256_add_epi32(ret, temp);
+
+        return _mm256_cvtsi256_si32(ret);
+#elif defined(_MSC_VER) && !defined(__clang__)
+        int ret = vec_.m256i_i32[0];
+        UNROLLED_FOR(i, 7, { ret += vec_.m256i_i32[i + 1]; })
+        return ret;
+#else
+        alignas(32) int comp1[8];
+        _mm256_store_si256((__m256i *)comp1, vec_);
+        UNROLLED_FOR(i, 7, { comp1[0] += comp1[i + 1]; })
+        return comp1[0];
+#endif
+    }
+
     force_inline void store_to(int *f) const { _mm256_storeu_si256((__m256i *)f, vec_); }
     force_inline void store_to(int *f, simd_mem_aligned_tag) const { _mm256_store_si256((__m256i *)f, vec_); }
 

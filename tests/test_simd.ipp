@@ -314,6 +314,9 @@ using namespace Ray::NS;
     require(v9_masked[2] == 11);
     require(v9_masked[3] == 69);
 
+    simd_ivec4 v9_ = {3, 6, 7, 6};
+    require(hsum(v9_) == 22);
+
     int scatter_destination[18] = {};
     scatter(scatter_destination + 2, v9i, v9);
 
@@ -512,7 +515,6 @@ using namespace Ray::NS;
     require(v55[7] == Approx(0.4142));
 
     simd_fvec8 v9 = {3.0f, 6.0f, 7.0f, 6.0f, 2.0f, 12.0f, 18.0f, 0.0f};
-
     require(hsum(v9) == Approx(54.0f));
 
     auto v10 = simd_cast(v2 < v9);
@@ -758,6 +760,9 @@ using namespace Ray::NS;
     require(v9_masked[5] == 69);
     require(v9_masked[6] == 11);
     require(v9_masked[7] == 69);
+
+    simd_ivec8 v9_ = {3, 6, 7, 6, 2, 12, 18, 0};
+    require(hsum(v9_) == 54);
 
     int scatter_destination[36] = {};
     scatter(scatter_destination + 2, v9i, v9);
@@ -1087,7 +1092,6 @@ using namespace Ray::NS;
 
     simd_fvec16 v9 = {3.0f, 6.0f, 7.0f, 6.0f, 2.0f, 12.0f, 18.0f, 0.0f,
                       3.0f, 6.0f, 7.0f, 6.0f, 2.0f, 12.0f, 18.0f, 0.0f};
-
     require(hsum(v9) == Approx(108.0f));
 
     auto v10 = simd_cast(v2 < v9);
@@ -1486,6 +1490,9 @@ using namespace Ray::NS;
     require(v9_masked[13] == 69);
     require(v9_masked[14] == 11);
     require(v9_masked[15] == 69);
+
+    simd_fvec16 v9_ = {3, 6, 7, 6, 2, 12, 18, 0, 3, 6, 7, 6, 2, 12, 18, 0};
+    require(hsum(v9_) == 108);
 
     int scatter_destination[72] = {};
     scatter(scatter_destination + 2, v9i, v9);

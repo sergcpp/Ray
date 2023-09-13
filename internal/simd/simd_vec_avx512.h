@@ -405,6 +405,8 @@ template <> class simd_vec<int, 16> {
         return ret;
     }
 
+    force_inline int hsum() const { return _mm512_reduce_add_epi32(vec_); }
+
     force_inline void store_to(int *f) const { _mm512_storeu_si512((__m512i *)f, vec_); }
     force_inline void store_to(int *f, simd_mem_aligned_tag) const { _mm512_store_si512((__m512i *)f, vec_); }
 
