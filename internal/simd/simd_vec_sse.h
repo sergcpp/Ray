@@ -215,7 +215,7 @@ template <> class simd_vec<float, 4> {
     force_inline simd_vec<float, 4> vectorcall log() const {
         alignas(16) float comp[4];
         _mm_store_ps(comp, vec_);
-        UNROLLED_FOR(i, 4, { comp[i] = std::log(comp[i]); })
+        UNROLLED_FOR(i, 4, { comp[i] = logf(comp[i]); })
         return simd_vec<float, 4>{comp, simd_mem_aligned};
     }
 
@@ -483,7 +483,7 @@ template <> class simd_vec<float, 4> {
         alignas(16) float comp1[4], comp2[4];
         _mm_store_ps(comp1, v1.vec_);
         _mm_store_ps(comp2, v2.vec_);
-        UNROLLED_FOR(i, 4, { comp1[i] = std::pow(comp1[i], comp2[i]); })
+        UNROLLED_FOR(i, 4, { comp1[i] = powf(comp1[i], comp2[i]); })
         return simd_vec<float, 4>{comp1, simd_mem_aligned};
     }
 

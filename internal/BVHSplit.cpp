@@ -124,8 +124,8 @@ bbox_t GetClippedAABB(const Ref::simd_fvec3 &_v0, const Ref::simd_fvec3 &_v1, co
     for (int i = 0; i < vertex_count; ++i) {
         for (int j = 0; j < 3; ++j) {
             const double pos = vertices1[i][j];
-            extends.min.set(j, std::min(extends.min[j], castflt_down(pos)));
-            extends.max.set(j, std::max(extends.max[j], castflt_up(pos)));
+            extends.min.set(j, fmin(extends.min[j], castflt_down(pos)));
+            extends.max.set(j, fmax(extends.max[j], castflt_up(pos)));
         }
     }
 

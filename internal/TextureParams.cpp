@@ -157,7 +157,7 @@ uint32_t Ray::EstimateMemory(const Tex2DParams &params) {
 }
 
 //
-// All this is needed when reading KTX files
+// All this is needed for reading KTX files
 //
 
 #define GL_COMPRESSED_RGB_S3TC_DXT1_EXT 33776

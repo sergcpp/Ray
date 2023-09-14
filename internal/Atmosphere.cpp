@@ -68,7 +68,7 @@ Ref::simd_fvec2 AtmosphereIntersection(const Ref::simd_fvec4 &ray_start, const R
 // Phase functions
 float PhaseRayleigh(const float costh) { return 3 * (1 + costh * costh) / (16 * PI); }
 float PhaseMie(float costh, float g = 0.85f) {
-    g = std::min(g, 0.9381f);
+    g = fmin(g, 0.9381f);
     float k = 1.55f * g - 0.55f * g * g * g;
     float kcosth = k * costh;
     return (1 - k * k) / ((4 * PI) * (1 - kcosth) * (1 - kcosth));
@@ -138,7 +138,7 @@ Ray::Ref::simd_fvec4 Ray::IntegrateScattering(Ref::simd_fvec4 ray_start, const R
         1.0f + clamp(1.0f - ray_height / ATMOSPHERE_HEIGHT, 0.0f, 1.0f) * 8.0f; // Slightly arbitrary max exponent of 9
 
     const Ref::simd_fvec2 intersection = AtmosphereIntersection(ray_start, ray_dir);
-    ray_length = std::min(ray_length, intersection.get<1>());
+    ray_length = fmin(ray_length, intersection.get<1>());
     if (intersection.get<0>() > 0) {
         // Advance ray to the atmosphere entry point
         ray_start += ray_dir * intersection.get<0>();

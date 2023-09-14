@@ -687,7 +687,7 @@ template <int S> force_inline simd_fvec<S> safe_div_pos(const float a, const sim
 
 template <int S> force_inline simd_fvec<S> safe_div_pos(const simd_fvec<S> &a, const float b) {
 #if USE_SAFE_MATH
-    return a / std::max(b, FLT_EPS);
+    return a / fmax(b, FLT_EPS);
 #else
     return a / b;
 #endif
@@ -695,7 +695,7 @@ template <int S> force_inline simd_fvec<S> safe_div_pos(const simd_fvec<S> &a, c
 
 force_inline float safe_div_pos(const float a, const float b) {
 #if USE_SAFE_MATH
-    return a / std::max(b, FLT_EPS);
+    return a / fmax(b, FLT_EPS);
 #else
     return a / b;
 #endif
@@ -1480,7 +1480,7 @@ template <int S> force_inline void normalize(simd_fvec<S> v[3]) {
 }
 
 force_inline void normalize(float v[3]) {
-    const float l = std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+    const float l = sqrtf(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
     v[0] /= l;
     v[1] /= l;
     v[2] /= l;
@@ -1906,13 +1906,13 @@ force_inline void tangent_from_world(const simd_fvec<S> T[3], const simd_fvec<S>
 
 template <int S> force_inline simd_fvec<S> cos(const simd_fvec<S> &v) {
     simd_fvec<S> ret;
-    UNROLLED_FOR_S(i, S, { ret.template set<i>(std::cos(v.template get<i>())); })
+    UNROLLED_FOR_S(i, S, { ret.template set<i>(cosf(v.template get<i>())); })
     return ret;
 }
 
 template <int S> force_inline simd_fvec<S> sin(const simd_fvec<S> &v) {
     simd_fvec<S> ret;
-    UNROLLED_FOR_S(i, S, { ret.template set<i>(std::sin(v.template get<i>())); })
+    UNROLLED_FOR_S(i, S, { ret.template set<i>(sinf(v.template get<i>())); })
     return ret;
 }
 
@@ -1955,9 +1955,9 @@ void SampleVNDF_Hemisphere_CrossSect(const simd_fvec<S> Vh[3], const simd_fvec<S
     const simd_fvec<S> r = sqrt(U1);
     const simd_fvec<S> phi = 2.0f * PI * U2;
     simd_fvec<S> t1;
-    UNROLLED_FOR_S(i, S, { t1.template set<i>(r.template get<i>() * std::cos(phi.template get<i>())); })
+    UNROLLED_FOR_S(i, S, { t1.template set<i>(r.template get<i>() * cosf(phi.template get<i>())); })
     simd_fvec<S> t2;
-    UNROLLED_FOR_S(i, S, { t2.template set<i>(r.template get<i>() * std::sin(phi.template get<i>())); })
+    UNROLLED_FOR_S(i, S, { t2.template set<i>(r.template get<i>() * sinf(phi.template get<i>())); })
     const simd_fvec<S> s = 0.5f * (1.0f + Vh[2]);
     t2 = (1.0f - s) * sqrt(1.0f - t1 * t1) + s * t2;
     // reprojection onto hemisphere
@@ -2068,12 +2068,12 @@ template <int S> force_inline simd_fvec<S> schlick_weight(const simd_fvec<S> &u)
 
 force_inline float fresnel_dielectric_cos(float cosi, float eta) {
     // compute fresnel reflectance without explicitly computing the refracted direction
-    float c = std::abs(cosi);
+    float c = fabs(cosi);
     float g = eta * eta - 1 + c * c;
     float result;
 
     if (g > 0) {
-        g = std::sqrt(g);
+        g = sqrtf(g);
         float A = (g - c) / (g + c);
         float B = (c * (g + c) - 1) / (c * (g - c) + 1);
         result = 0.5f * A * A * (1 + B * B);
@@ -2146,9 +2146,9 @@ force_inline simd_ivec<S> quadratic(const simd_fvec<S> &a, const simd_fvec<S> &b
 template <int S> force_inline simd_fvec<S> ngon_rad(const simd_fvec<S> &theta, const float n) {
     simd_fvec<S> ret;
     UNROLLED_FOR_S(i, S, {
-        ret.template set<i>(std::cos(PI / n) /
-                            std::cos(theta.template get<i>() -
-                                     (2.0f * PI / n) * std::floor((n * theta.template get<i>() + PI) / (2.0f * PI))));
+        ret.template set<i>(
+            cosf(PI / n) /
+            cosf(theta.template get<i>() - (2.0f * PI / n) * floorf((n * theta.template get<i>() + PI) / (2.0f * PI))));
     })
     return ret;
 }
@@ -2258,9 +2258,9 @@ void Ray::NS::GeneratePrimaryRays(const camera_t &cam, const rect_t &r, int w, i
 
     const float k = float(w) / float(h);
 
-    const float temp = std::tan(0.5f * cam.fov * PI / 180.0f);
+    const float temp = tanf(0.5f * cam.fov * PI / 180.0f);
     const float fov_k = temp * cam.focus_distance;
-    const float spread_angle = std::atan(2.0f * temp / float(h));
+    const float spread_angle = atanf(2.0f * temp / float(h));
 
     const auto off_x = simd_ivec<S>{rays_layout_x, simd_mem_aligned},
                off_y = simd_ivec<S>{rays_layout_y, simd_mem_aligned};
@@ -2433,8 +2433,8 @@ void Ray::NS::SampleMeshInTextureSpace(int iteration, int obj_index, int uv_laye
         bbox_max = max(bbox_max, t1);
         bbox_max = max(bbox_max, t2);
 
-        simd_ivec4 ibbox_min = (simd_ivec4)(bbox_min),
-                   ibbox_max = simd_ivec4{int(std::round(bbox_max[0])), int(std::round(bbox_max[1])), 0, 0};
+        simd_ivec4 ibbox_min = simd_ivec4(bbox_min),
+                   ibbox_max = simd_ivec4{int(roundf(bbox_max[0])), int(roundf(bbox_max[1])), 0, 0};
 
         if (ibbox_max[0] < irect_min[0] || ibbox_max[1] < irect_min[1] || ibbox_min[0] > irect_max[0] ||
             ibbox_min[1] > irect_max[1]) {
@@ -2471,8 +2471,8 @@ void Ray::NS::SampleMeshInTextureSpace(int iteration, int obj_index, int uv_laye
 
                 UNROLLED_FOR_S(i, S, {
                     float _unused;
-                    rxx.template set<i>(std::modf(random_seq[RAND_DIM_FILTER_U] + rxx.template get<i>(), &_unused));
-                    ryy.template set<i>(std::modf(random_seq[RAND_DIM_FILTER_V] + ryy.template get<i>(), &_unused));
+                    rxx.template set<i>(modff(random_seq[RAND_DIM_FILTER_U] + rxx.template get<i>(), &_unused));
+                    ryy.template set<i>(modff(random_seq[RAND_DIM_FILTER_V] + ryy.template get<i>(), &_unused));
                 })
 
                 const simd_fvec<S> fxx = simd_fvec<S>{ixx} + rxx, fyy = simd_fvec<S>{iyy} + ryy;
@@ -3911,8 +3911,8 @@ void Ray::NS::Evaluate_GGXRefraction_BSDF(const simd_fvec<S> view_dir_ts[3], con
 #if USE_VNDF_GGX_SAMPLING == 1
     simd_fvec<S> pdf = safe_div(D * G1o * max(dot3(view_dir_ts, sampled_normal_ts), 0.0f) * jacobian, view_dir_ts[2]);
 #else
-    // const float pdf = D * std::max(sampled_normal_ts[2], 0.0f) * jacobian;
-    const float pdf = safe_div(D * sampled_normal_ts[2] * std::max(-dot3(refr_dir_ts, sampled_normal_ts), 0.0f), denom);
+    // const float pdf = D * fmax(sampled_normal_ts[2], 0.0f) * jacobian;
+    const float pdf = safe_div(D * sampled_normal_ts[2] * fmax(-dot3(refr_dir_ts, sampled_normal_ts), 0.0f), denom);
 #endif
 
     const simd_fvec<S> is_valid = (refr_dir_ts[2] < 0.0f) & (view_dir_ts[2] > 0.0f);
@@ -4285,7 +4285,7 @@ template <int S> void Ray::NS::DirToCanonical(const simd_fvec<S> d[3], float y_r
     const simd_fvec<S> cos_theta = clamp(d[1], -1.0f, 1.0f);
 
     simd_fvec<S> phi;
-    UNROLLED_FOR_S(i, S, { phi.template set<i>(-std::atan2(d[2].template get<i>(), d[0].template get<i>())); })
+    UNROLLED_FOR_S(i, S, { phi.template set<i>(-atan2f(d[2].template get<i>(), d[0].template get<i>())); })
 
     phi += y_rotation;
     where(phi < 0, phi) += 2 * PI;
@@ -4436,8 +4436,8 @@ void Ray::NS::SampleLatlong_RGBE(const Cpu::TexStorageRGBA &storage, const uint3
     simd_fvec<S> theta = 0.0f, phi = 0.0f;
     UNROLLED_FOR_S(i, S, {
         if (mask.template get<i>()) {
-            theta.template set<i>(std::acos(y.template get<i>()) / PI);
-            phi.template set<i>(std::atan2(dir[2].template get<i>(), dir[0].template get<i>()) + y_rotation);
+            theta.template set<i>(acosf(y.template get<i>()) / PI);
+            phi.template set<i>(atan2f(dir[2].template get<i>(), dir[0].template get<i>()) + y_rotation);
         }
     })
     where(phi < 0.0f, phi) += 2 * PI;
@@ -4464,7 +4464,7 @@ void Ray::NS::SampleLatlong_RGBE(const Cpu::TexStorageRGBA &storage, const uint3
 
         const auto &p00 = storage.Get(tex, iuvs[0][i], iuvs[1][i], 0);
 
-        const float f = std::exp2(float(p00.v[3]) - 128.0f);
+        const float f = exp2f(float(p00.v[3]) - 128.0f);
         out_rgb[0].set(i, to_norm_float(p00.v[0]) * f);
         out_rgb[1].set(i, to_norm_float(p00.v[1]) * f);
         out_rgb[2].set(i, to_norm_float(p00.v[2]) * f);
@@ -4484,22 +4484,22 @@ void Ray::NS::SampleLatlong_RGBE(const Cpu::TexStorageRGBA &storage, const uint3
         const auto &p10 = storage.Get(tex, int(uvs[0][i] + 0), int(uvs[1][i] + 1), 0);
         const auto &p11 = storage.Get(tex, int(uvs[0][i] + 1), int(uvs[1][i] + 1), 0);
 
-        float f = std::exp2(float(p00.v[3]) - 128.0f);
+        float f = exp2f(float(p00.v[3]) - 128.0f);
         _p00[0].set(i, to_norm_float(p00.v[0]) * f);
         _p00[1].set(i, to_norm_float(p00.v[1]) * f);
         _p00[2].set(i, to_norm_float(p00.v[2]) * f);
 
-        f = std::exp2(float(p01.v[3]) - 128.0f);
+        f = exp2f(float(p01.v[3]) - 128.0f);
         _p01[0].set(i, to_norm_float(p01.v[0]) * f);
         _p01[1].set(i, to_norm_float(p01.v[1]) * f);
         _p01[2].set(i, to_norm_float(p01.v[2]) * f);
 
-        f = std::exp2(float(p10.v[3]) - 128.0f);
+        f = exp2f(float(p10.v[3]) - 128.0f);
         _p10[0].set(i, to_norm_float(p10.v[0]) * f);
         _p10[1].set(i, to_norm_float(p10.v[1]) * f);
         _p10[2].set(i, to_norm_float(p10.v[2]) * f);
 
-        f = std::exp2(float(p11.v[3]) - 128.0f);
+        f = exp2f(float(p11.v[3]) - 128.0f);
         _p11[0].set(i, to_norm_float(p11.v[0]) * f);
         _p11[1].set(i, to_norm_float(p11.v[1]) * f);
         _p11[2].set(i, to_norm_float(p11.v[2]) * f);
@@ -5003,7 +5003,7 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
                     simd_fvec<S> _angle = 0.0f;
                     UNROLLED_FOR_S(i, S, {
                         if (mask.template get<i>()) {
-                            _angle.template set<i>(std::acos(_dot.template get<i>()));
+                            _angle.template set<i>(acosf(_dot.template get<i>()));
                         }
                     })
                     const simd_fvec<S> k = clamp((l.sph.spot - _angle) / l.sph.blend, 0.0f, 1.0f);
@@ -5017,7 +5017,7 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
             where(ray_queue[index], ls.pdf) = 1.0f;
             where(ray_queue[index], ls.dist_mul) = MAX_DIST;
             if (l.dir.angle != 0.0f) {
-                const float radius = std::tan(l.dir.angle);
+                const float radius = tanf(l.dir.angle);
 
                 simd_fvec<S> V[3];
                 MapToCone(ru, rv, ls.L, radius, V);
@@ -5204,8 +5204,8 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
             TransformDirection(_light_forward, ltr.xform, light_forward);
 
             const float light_fwd_len =
-                std::sqrt(light_forward[0] * light_forward[0] + light_forward[1] * light_forward[1] +
-                          light_forward[2] * light_forward[2]);
+                sqrtf(light_forward[0] * light_forward[0] + light_forward[1] * light_forward[1] +
+                      light_forward[2] * light_forward[2]);
             where(ray_queue[index], ls.area) = 0.5f * light_fwd_len;
             UNROLLED_FOR(i, 3, { light_forward[i] /= light_fwd_len; })
 
@@ -5399,7 +5399,7 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, Span<const light_t> li
                                 simd_fvec<S> _angle = 0.0f;
                                 UNROLLED_FOR_S(i, S, {
                                     if (imask1.template get<i>()) {
-                                        _angle.template set<i>(std::acos(_dot.template get<i>()));
+                                        _angle.template set<i>(acosf(_dot.template get<i>()));
                                     }
                                 })
                                 mask1 &= (_angle <= l.sph.spot);
@@ -5415,7 +5415,7 @@ void Ray::NS::IntersectAreaLights(const ray_data_t<S> &r, Span<const light_t> li
                     }
                 } else if (l.type == LIGHT_TYPE_DIR) {
                     const simd_fvec<S> cos_theta = dot3(r.d, l.dir.dir);
-                    const simd_ivec<S> imask = simd_cast(cos_theta > std::cos(l.dir.angle)) & ray_mask &
+                    const simd_ivec<S> imask = simd_cast(cos_theta > cosf(l.dir.angle)) & ray_mask &
                                                (~inout_inter.mask | simd_cast(no_shadow));
                     inout_inter.mask |= imask;
                     where(imask, inout_inter.obj_index) = -simd_ivec<S>(light_index) - 1;
@@ -5791,7 +5791,7 @@ void Ray::NS::Evaluate_LightColor(const simd_fvec<S> P[3], const ray_data_t<S> &
                 simd_fvec<S> _angle = 0.0f;
                 UNROLLED_FOR_S(i, S, {
                     if (ray_queue[index].template get<i>()) {
-                        _angle.template set<i>(std::acos(_dot.template get<i>()));
+                        _angle.template set<i>(acosf(_dot.template get<i>()));
                     }
                 })
                 assert((ray_queue[index] & simd_cast(_angle > l.sph.spot)).all_zeros());
@@ -5801,7 +5801,7 @@ void Ray::NS::Evaluate_LightColor(const simd_fvec<S> P[3], const ray_data_t<S> &
                 }
             }
         } else if (l.type == LIGHT_TYPE_DIR) {
-            const float radius = std::tan(l.dir.angle);
+            const float radius = tanf(l.dir.angle);
             const float light_area = PI * radius * radius;
 
             const simd_fvec<S> cos_theta = dot3(ray.d, l.dir.dir);
@@ -6825,7 +6825,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
                 }
             } else if (mat->type == eShadingNode::Glossy) {
                 const float specular = 0.5f;
-                const float spec_ior = (2.0f / (1.0f - std::sqrt(0.08f * specular))) - 1.0f;
+                const float spec_ior = (2.0f / (1.0f - sqrtf(0.08f * specular))) - 1.0f;
                 const float spec_F0 = fresnel_dielectric_cos(1.0f, spec_ior);
                 const simd_fvec<S> roughness2 = sqr(roughness);
 
@@ -6945,7 +6945,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
 
                 clearcoat_params_t<S> coat;
                 coat.roughness = clearcoat_roughness;
-                coat.ior = (2.0f / (1.0f - std::sqrt(0.08f * clearcoat))) - 1.0f;
+                coat.ior = (2.0f / (1.0f - sqrtf(0.08f * clearcoat))) - 1.0f;
                 coat.F0 = fresnel_dielectric_cos(simd_fvec<S>{1.0f}, coat.ior);
 
                 transmission_params_t<S> trans;

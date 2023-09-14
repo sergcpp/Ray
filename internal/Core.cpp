@@ -154,10 +154,10 @@ void Ray::CanonicalToDir(const float p[2], const float y_rotation, float out_d[3
         phi -= 2 * PI;
     }
 
-    const float sin_theta = std::sqrt(1 - cos_theta * cos_theta);
+    const float sin_theta = sqrtf(1 - cos_theta * cos_theta);
 
-    const float sin_phi = std::sin(phi);
-    const float cos_phi = std::cos(phi);
+    const float sin_phi = sinf(phi);
+    const float cos_phi = cosf(phi);
 
     out_d[0] = sin_theta * cos_phi;
     out_d[1] = cos_theta;
@@ -165,9 +165,9 @@ void Ray::CanonicalToDir(const float p[2], const float y_rotation, float out_d[3
 }
 
 void Ray::DirToCanonical(const float d[3], const float y_rotation, float out_p[2]) {
-    const float cos_theta = std::min(std::max(d[1], -1.0f), 1.0f);
+    const float cos_theta = fmin(fmax(d[1], -1.0f), 1.0f);
 
-    float phi = -std::atan2(d[2], d[0]) + y_rotation;
+    float phi = -atan2f(d[2], d[0]) + y_rotation;
     if (phi < 0) {
         phi += 2 * PI;
     }
@@ -268,7 +268,7 @@ bool Ray::PreprocessTri(const float *p, int stride, tri_accel_t *out_acc) {
     out_acc->v_plane[3] = -(v[0] * p[0] + v[1] * p[1] + v[2] * p[2]);
 
     // normal plane
-    const float l = std::sqrt(n_len_sqr);
+    const float l = sqrtf(n_len_sqr);
     n[0] /= l;
     n[1] /= l;
     n[2] /= l;
@@ -416,8 +416,8 @@ uint32_t Ray::EmitLBVH_Recursive(const prim_t *prims, const uint32_t *indices, c
         par_node.right_child = (space_axis << 30) + child1;
 
         for (int i = 0; i < 3; i++) {
-            par_node.bbox_min[i] = std::min(out_nodes[child0].bbox_min[i], out_nodes[child1].bbox_min[i]);
-            par_node.bbox_max[i] = std::max(out_nodes[child0].bbox_max[i], out_nodes[child1].bbox_max[i]);
+            par_node.bbox_min[i] = fmin(out_nodes[child0].bbox_min[i], out_nodes[child1].bbox_min[i]);
+            par_node.bbox_max[i] = fmax(out_nodes[child0].bbox_max[i], out_nodes[child1].bbox_max[i]);
         }
 
         return node_index;
@@ -498,9 +498,9 @@ uint32_t Ray::EmitLBVH_NonRecursive(const prim_t *prims, const uint32_t *indices
 
                 for (int i = 0; i < 3; i++) {
                     node.bbox_min[i] =
-                        std::min(out_nodes[node.left_child].bbox_min[i], out_nodes[node.right_child].bbox_min[i]);
+                        fmin(out_nodes[node.left_child].bbox_min[i], out_nodes[node.right_child].bbox_min[i]);
                     node.bbox_max[i] =
-                        std::max(out_nodes[node.left_child].bbox_max[i], out_nodes[node.right_child].bbox_max[i]);
+                        fmax(out_nodes[node.left_child].bbox_max[i], out_nodes[node.right_child].bbox_max[i]);
                 }
 
                 const uint32_t space_axis = (cur.bit_index % 3);
@@ -616,8 +616,7 @@ uint32_t Ray::PreprocessPrims_HLBVH(Span<const prim_t> prims, std::vector<bvh_no
 
     uint32_t *indices = &out_indices[indices_start];
 
-    const Ref::simd_fvec4 scale =
-        float(1 << BitsPerDim) / (whole_max - whole_min + FLT_EPSILON);
+    const Ref::simd_fvec4 scale = float(1 << BitsPerDim) / (whole_max - whole_min + FLT_EPSILON);
 
     // compute morton codes
     for (int i = 0; i < int(prims.size()); i++) {
@@ -930,7 +929,7 @@ void Ray::ConstructCamera(const eCamType type, const ePixelFilter filter, const 
         auto o = Ref::simd_fvec3{origin}, f = Ref::simd_fvec3{fwd}, u = Ref::simd_fvec3{up};
 
         if (u.length2() < FLT_EPS) {
-            if (std::abs(f[1]) >= 0.999f) {
+            if (fabs(f[1]) >= 0.999f) {
                 u = {1.0f, 0.0f, 0.0f};
             } else {
                 u = {0.0f, 1.0f, 0.0f};
@@ -949,8 +948,8 @@ void Ray::ConstructCamera(const eCamType type, const ePixelFilter filter, const 
         cam->exposure = exposure;
         cam->gamma = gamma;
         cam->sensor_height = sensor_height;
-        cam->focus_distance = std::max(focus_distance, 0.0f);
-        cam->focal_length = 0.5f * sensor_height / std::tan(0.5f * fov * PI / 180.0f);
+        cam->focus_distance = fmax(focus_distance, 0.0f);
+        cam->focal_length = 0.5f * sensor_height / tanf(0.5f * fov * PI / 180.0f);
         cam->fstop = fstop;
         cam->lens_rotation = lens_rotation;
         cam->lens_ratio = lens_ratio;

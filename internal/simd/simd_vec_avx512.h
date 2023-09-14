@@ -136,7 +136,7 @@ template <> class simd_vec<float, 16> {
     force_inline simd_vec<float, 16> sqrt() const;
     force_inline simd_vec<float, 16> log() const;
 
-    force_inline float length() const { return std::sqrt(length2()); }
+    force_inline float length() const { return sqrtf(length2()); }
 
     force_inline float length2() const {
         alignas(64) float comp[16];
@@ -741,7 +741,7 @@ force_inline simd_vec<float, 16> simd_vec<float, 16>::sqrt() const {
 force_inline simd_vec<float, 16> simd_vec<float, 16>::log() const {
     alignas(64) float comp[16];
     _mm512_store_ps(comp, vec_);
-    UNROLLED_FOR(i, 16, { comp[i] = std::log(comp[i]); })
+    UNROLLED_FOR(i, 16, { comp[i] = logf(comp[i]); })
     return simd_vec<float, 16>{comp, simd_mem_aligned};
 }
 
@@ -949,7 +949,7 @@ force_inline simd_vec<float, 16> vectorcall pow(const simd_vec<float, 16> v1, co
     alignas(64) float comp1[16], comp2[16];
     _mm512_store_ps(comp1, v1.vec_);
     _mm512_store_ps(comp2, v2.vec_);
-    UNROLLED_FOR(i, 16, { comp1[i] = std::pow(comp1[i], comp2[i]); })
+    UNROLLED_FOR(i, 16, { comp1[i] = powf(comp1[i], comp2[i]); })
     return simd_vec<float, 16>{comp1, simd_mem_aligned};
 }
 
