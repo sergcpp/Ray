@@ -758,8 +758,9 @@ vec3 MapToCone(float r1, float r2, vec3 N, float radius) {
 }
 
 void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, int hi, vec2 sample_off, inout light_sample_t ls) {
-    const float u1 = fract(g_random_seq[hi + RAND_DIM_LIGHT_PICK] + sample_off[0]);
+    float u1 = fract(g_random_seq[hi + RAND_DIM_LIGHT_PICK] + sample_off[0]);
     const uint light_index = min(uint(u1 * g_params.li_count), uint(g_params.li_count - 1));
+    u1 = u1 * float(g_params.li_count) - float(light_index);
 
     const light_t l = g_lights[g_li_indices[light_index]];
 
@@ -1000,15 +1001,13 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, int hi, vec2 sample_off, 
             ls.col *= SampleBilinear(lmat.textures[BASE_TEXTURE], luvs, 0 /* lod */, tex_rand).xyz;
         }
     } else [[dont_flatten]] if (l_type == LIGHT_TYPE_ENV) {
-        const float rand = u1 * float(g_params.li_count) - float(light_index);
-
         const float rx = fract(g_random_seq[hi + RAND_DIM_LIGHT_U] + sample_off[0]);
         const float ry = fract(g_random_seq[hi + RAND_DIM_LIGHT_V] + sample_off[1]);
 
         vec4 dir_and_pdf;
         if (g_params.env_qtree_levels > 0) {
             // Sample environment using quadtree
-            dir_and_pdf = Sample_EnvQTree(g_params.env_rotation, g_env_qtree, g_params.env_qtree_levels, rand, rx, ry);
+            dir_and_pdf = Sample_EnvQTree(g_params.env_rotation, g_env_qtree, g_params.env_qtree_levels, u1, rx, ry);
         } else {
             // Sample environment as hemishpere
             const float phi = 2 * PI * ry;

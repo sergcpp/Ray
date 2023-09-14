@@ -4913,7 +4913,7 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
                                 const Cpu::TexStorageBase *const textures[], const float random_seq[],
                                 const simd_ivec<S> &rand_index, const simd_fvec<S> sample_off[2],
                                 const simd_ivec<S> &ray_mask, light_sample_t<S> &ls) {
-    const simd_fvec<S> ri = fract(gather(random_seq + RAND_DIM_LIGHT_PICK, rand_index) + sample_off[0]);
+    simd_fvec<S> ri = fract(gather(random_seq + RAND_DIM_LIGHT_PICK, rand_index) + sample_off[0]);
     const simd_fvec<S> ru = fract(gather(random_seq + RAND_DIM_LIGHT_U, rand_index) + sample_off[0]);
     const simd_fvec<S> rv = fract(gather(random_seq + RAND_DIM_LIGHT_V, rand_index) + sample_off[1]);
 
@@ -4921,6 +4921,7 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
                                       fract(gather(random_seq + RAND_DIM_TEX_V, rand_index) + sample_off[1])};
 
     const simd_ivec<S> light_index = min(simd_ivec<S>{ri * float(sc.li_indices.size())}, int(sc.li_indices.size() - 1));
+    ri = ri * float(sc.li_indices.size()) - simd_fvec<S>(light_index);
 
     simd_ivec<S> ray_queue[S];
     ray_queue[0] = ray_mask;
@@ -5236,8 +5237,7 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
                 // Sample environment using quadtree
                 const auto *qtree_mips = reinterpret_cast<const simd_fvec4 *const *>(sc.env.qtree_mips);
 
-                const simd_fvec<S> rand = ri * float(sc.li_indices.size()) - simd_fvec<S>(light_index);
-                Sample_EnvQTree(sc.env.env_map_rotation, qtree_mips, sc.env.qtree_levels, rand, ru, rv, dir_and_pdf);
+                Sample_EnvQTree(sc.env.env_map_rotation, qtree_mips, sc.env.qtree_levels, ri, ru, rv, dir_and_pdf);
             } else {
                 // Sample environment as hemishpere
                 const simd_fvec<S> phi = 2 * PI * rv;

@@ -3120,10 +3120,11 @@ Ray::Ref::simd_fvec4 Ray::Ref::IntersectScene(const shadow_ray_t &r, const int m
 void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const simd_fvec4 &B, const simd_fvec4 &N,
                                  const scene_data_t &sc, const Cpu::TexStorageBase *const textures[],
                                  const float random_seq[], const float sample_off[2], light_sample_t &ls) {
-    const float u1 = fract(random_seq[RAND_DIM_LIGHT_PICK] + sample_off[0]);
+    float u1 = fract(random_seq[RAND_DIM_LIGHT_PICK] + sample_off[0]);
 
     // TODO: Hierarchical NEE
     const auto light_index = std::min(uint32_t(u1 * float(sc.li_indices.size())), uint32_t(sc.li_indices.size() - 1));
+    u1 = u1 * float(sc.li_indices.size()) - float(light_index);
     const light_t &l = sc.lights[sc.li_indices[light_index]];
 
     ls.col = make_fvec3(l.col);
@@ -3357,8 +3358,6 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
             ls.col *= SampleBilinear(textures, lmat.textures[BASE_TEXTURE], luvs, 0 /* lod */, tex_rand);
         }
     } else if (l.type == LIGHT_TYPE_ENV) {
-        const float rand = u1 * float(sc.li_indices.size()) - float(light_index);
-
         const float rx = fract(random_seq[RAND_DIM_LIGHT_U] + sample_off[0]);
         const float ry = fract(random_seq[RAND_DIM_LIGHT_V] + sample_off[1]);
 
@@ -3366,7 +3365,7 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
         if (sc.env.qtree_levels) {
             // Sample environment using quadtree
             const auto *qtree_mips = reinterpret_cast<const simd_fvec4 *const *>(sc.env.qtree_mips);
-            dir_and_pdf = Sample_EnvQTree(sc.env.env_map_rotation, qtree_mips, sc.env.qtree_levels, rand, rx, ry);
+            dir_and_pdf = Sample_EnvQTree(sc.env.env_map_rotation, qtree_mips, sc.env.qtree_levels, u1, rx, ry);
         } else {
             // Sample environment as hemishpere
             const float phi = 2 * PI * ry;
