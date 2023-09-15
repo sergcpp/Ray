@@ -212,6 +212,7 @@ struct light_t {
 
 #define TRI_TRI_INDEX param1.x
 #define TRI_XFORM_INDEX param1.y
+#define TRI_TEX_INDEX param1.z
 
 #define DIR_DIR param1.xyz
 #define DIR_ANGLE param1.w

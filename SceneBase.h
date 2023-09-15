@@ -113,6 +113,7 @@ struct principled_mat_desc_t {
     TextureHandle alpha_texture = InvalidTextureHandle;     ///< Transparency texture
     TextureHandle normal_map = InvalidTextureHandle;        ///< Material normalmap
     float normal_map_intensity = 1.0f;                      ///< Normalmap intensity
+    bool multiple_importance = false;                       ///< Enable explicit emissive geometry sampling
 };
 
 /// Defines mesh region with specific material

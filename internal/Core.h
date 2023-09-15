@@ -232,7 +232,8 @@ struct light_t {
         struct {
             uint32_t tri_index;
             uint32_t xform_index;
-            float _unused[10];
+            uint32_t tex_index;
+            float _unused[9];
         } tri;
         struct {
             float dir[3], angle;

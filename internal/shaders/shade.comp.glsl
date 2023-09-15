@@ -996,9 +996,9 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, int hi, vec2 sample_off, 
             ls.pdf = (ls_dist * ls_dist) / (ls.area * cos_theta);
         }
 
-        const material_t lmat = g_materials[(g_tri_materials[ltri_index] >> 16u) & MATERIAL_INDEX_BITS];
-        if (lmat.textures[BASE_TEXTURE] != 0xffffffff) {
-            ls.col *= SampleBilinear(lmat.textures[BASE_TEXTURE], luvs, 0 /* lod */, tex_rand).xyz;
+        const uint tex_index = floatBitsToUint(l.TRI_TEX_INDEX);
+        if (tex_index != 0xffffffff) {
+            ls.col *= SampleBilinear(tex_index, luvs, 0 /* lod */, tex_rand).xyz;
         }
     } else [[dont_flatten]] if (l_type == LIGHT_TYPE_ENV) {
         const float rx = fract(g_random_seq[hi + RAND_DIM_LIGHT_U] + sample_off[0]);

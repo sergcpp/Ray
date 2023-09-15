@@ -319,6 +319,7 @@ Ray::MaterialHandle Ray::Cpu::Scene::AddMaterial(const principled_mat_desc_t &m)
         memcpy(emissive_desc.base_color, m.emission_color, 3 * sizeof(float));
         emissive_desc.base_texture = m.emission_texture;
         emissive_desc.strength = m.emission_strength;
+        emissive_desc.multiple_importance = m.multiple_importance;
 
         emissive_node = AddMaterial_nolock(emissive_desc);
     }
@@ -827,21 +828,31 @@ Ray::MeshInstanceHandle Ray::Cpu::Scene::AddMeshInstance(const mesh_instance_des
         for (uint32_t tri = (m.vert_index / 3); tri < (m.vert_index + m.vert_count) / 3; ++tri) {
             const tri_mat_data_t &tri_mat = tri_materials_[tri];
 
-            const material_t &front_mat = materials_[tri_mat.front_mi & MATERIAL_INDEX_BITS];
-            if (front_mat.type == eShadingNode::Emissive && (front_mat.flags & MAT_FLAG_MULT_IMPORTANCE)) {
-                light_t new_light = {};
-                new_light.cast_shadow = 1;
-                new_light.type = LIGHT_TYPE_TRI;
-                new_light.visible = 0;
-                new_light.sky_portal = 0;
-                new_light.blocking = 0;
-                new_light.tri.tri_index = tri;
-                new_light.tri.xform_index = mi.tr_index;
-                new_light.col[0] = front_mat.base_color[0] * front_mat.strength;
-                new_light.col[1] = front_mat.base_color[1] * front_mat.strength;
-                new_light.col[2] = front_mat.base_color[2] * front_mat.strength;
-                const uint32_t index = lights_.push(new_light).first;
-                li_indices_.push_back(index);
+            SmallVector<uint16_t, 64> mat_indices;
+            mat_indices.push_back(tri_mat.front_mi & MATERIAL_INDEX_BITS);
+
+            for (int i = 0; i < int(mat_indices.size()); ++i) {
+                const material_t &mat = materials_[mat_indices[i]];
+                if (mat.type == eShadingNode::Emissive && (mat.flags & MAT_FLAG_MULT_IMPORTANCE)) {
+                    light_t new_light = {};
+                    new_light.cast_shadow = 1;
+                    new_light.type = LIGHT_TYPE_TRI;
+                    new_light.visible = 0;
+                    new_light.sky_portal = 0;
+                    new_light.blocking = 0;
+                    new_light.tri.tri_index = tri;
+                    new_light.tri.xform_index = mi.tr_index;
+                    new_light.tri.tex_index = mat.textures[BASE_TEXTURE];
+                    new_light.col[0] = mat.base_color[0] * mat.strength;
+                    new_light.col[1] = mat.base_color[1] * mat.strength;
+                    new_light.col[2] = mat.base_color[2] * mat.strength;
+                    const uint32_t index = lights_.push(new_light).first;
+                    li_indices_.push_back(index);
+                    break;
+                } else if (mat.type == eShadingNode::Mix) {
+                    mat_indices.push_back(mat.textures[MIX_MAT1]);
+                    mat_indices.push_back(mat.textures[MIX_MAT2]);
+                }
             }
         }
     }

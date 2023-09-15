@@ -5224,11 +5224,9 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
             where(simd_cast(cos_theta > 0.0f) & ray_queue[index], ls.pdf) =
                 safe_div_pos(ls_dist * ls_dist, ls.area * cos_theta);
 
-            const material_t &lmat = sc.materials[sc.tri_materials[ltri_index].front_mi & MATERIAL_INDEX_BITS];
-            if (lmat.textures[BASE_TEXTURE] != 0xffffffff) {
+            if (l.tri.tex_index != 0xffffffff) {
                 simd_fvec<S> tex_col[4] = {};
-                SampleBilinear(textures, lmat.textures[BASE_TEXTURE], luvs, simd_ivec<S>{0}, tex_rand, ray_mask,
-                               tex_col);
+                SampleBilinear(textures, l.tri.tex_index, luvs, simd_ivec<S>{0}, tex_rand, ray_mask, tex_col);
                 UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.col[i]) *= tex_col[i]; })
             }
         } else if (l.type == LIGHT_TYPE_ENV) {

@@ -3350,11 +3350,10 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
             ls.pdf = (ls_dist * ls_dist) / (ls.area * cos_theta);
         }
 
-        const material_t &lmat = sc.materials[sc.tri_materials[ltri_index].front_mi & MATERIAL_INDEX_BITS];
-        if (lmat.textures[BASE_TEXTURE] != 0xffffffff) {
+        if (l.tri.tex_index != 0xffffffff) {
             const simd_fvec2 tex_rand = simd_fvec2{fract(random_seq[RAND_DIM_TEX_U] + sample_off[0]),
                                                    fract(random_seq[RAND_DIM_TEX_V] + sample_off[1])};
-            ls.col *= SampleBilinear(textures, lmat.textures[BASE_TEXTURE], luvs, 0 /* lod */, tex_rand);
+            ls.col *= SampleBilinear(textures, l.tri.tex_index, luvs, 0 /* lod */, tex_rand);
         }
     } else if (l.type == LIGHT_TYPE_ENV) {
         const float rx = fract(random_seq[RAND_DIM_LIGHT_U] + sample_off[0]);
