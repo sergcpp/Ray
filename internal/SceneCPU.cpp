@@ -1036,13 +1036,13 @@ void Ray::Cpu::Scene::PrepareSkyEnvMap_nolock() {
         }
     }
 
-    if (dir_lights.empty()) {
-        env_.env_map = InvalidTextureHandle._index;
-        if (env_.back_map == PhysicalSkyTexture._index) {
-            env_.back_map = InvalidTextureHandle._index;
-        }
-        return;
-    }
+    //if (dir_lights.empty()) {
+    //    env_.env_map = InvalidTextureHandle._index;
+    //    if (env_.back_map == PhysicalSkyTexture._index) {
+    //        env_.back_map = InvalidTextureHandle._index;
+    //    }
+    //    return;
+    //}
 
     static const int SkyEnvRes[] = {512, 256};
     std::vector<color_rgba8_t> rgbe_pixels(SkyEnvRes[0] * SkyEnvRes[1]);

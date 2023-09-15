@@ -3353,7 +3353,14 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
         if (l.tri.tex_index != 0xffffffff) {
             const simd_fvec2 tex_rand = simd_fvec2{fract(random_seq[RAND_DIM_TEX_U] + sample_off[0]),
                                                    fract(random_seq[RAND_DIM_TEX_V] + sample_off[1])};
-            ls.col *= SampleBilinear(textures, l.tri.tex_index, luvs, 0 /* lod */, tex_rand);
+            simd_fvec4 tex_color = SampleBilinear(textures, l.tri.tex_index, luvs, 0 /* lod */, tex_rand);
+            if (l.tri.tex_index & TEX_YCOCG_BIT) {
+                tex_color = YCoCg_to_RGB(tex_color);
+            }
+            if (l.tri.tex_index & TEX_SRGB_BIT) {
+                tex_color = srgb_to_rgb(tex_color);
+            }
+            ls.col *= tex_color;
         }
     } else if (l.type == LIGHT_TYPE_ENV) {
         const float rx = fract(random_seq[RAND_DIM_LIGHT_U] + sample_off[0]);

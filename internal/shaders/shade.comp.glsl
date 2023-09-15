@@ -998,7 +998,7 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, int hi, vec2 sample_off, 
 
         const uint tex_index = floatBitsToUint(l.TRI_TEX_INDEX);
         if (tex_index != 0xffffffff) {
-            ls.col *= SampleBilinear(tex_index, luvs, 0 /* lod */, tex_rand).xyz;
+            ls.col *= SampleBilinear(tex_index, luvs, 0 /* lod */, tex_rand, true /* YCoCg */, true /* SRGB */).xyz;
         }
     } else [[dont_flatten]] if (l_type == LIGHT_TYPE_ENV) {
         const float rx = fract(g_random_seq[hi + RAND_DIM_LIGHT_U] + sample_off[0]);

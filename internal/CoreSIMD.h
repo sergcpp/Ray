@@ -5227,6 +5227,12 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
             if (l.tri.tex_index != 0xffffffff) {
                 simd_fvec<S> tex_col[4] = {};
                 SampleBilinear(textures, l.tri.tex_index, luvs, simd_ivec<S>{0}, tex_rand, ray_mask, tex_col);
+                if (l.tri.tex_index & TEX_YCOCG_BIT) {
+                    YCoCg_to_RGB(tex_col, tex_col);
+                }
+                if (l.tri.tex_index & TEX_SRGB_BIT) {
+                    srgb_to_rgb(tex_col, tex_col);
+                }
                 UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.col[i]) *= tex_col[i]; })
             }
         } else if (l.type == LIGHT_TYPE_ENV) {
