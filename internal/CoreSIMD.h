@@ -6495,7 +6495,7 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
 
     const simd_fvec<S> ext_ior = peek_ior_stack(ray.ior, is_backfacing);
 
-    const simd_ivec<S> mat_type =
+    simd_ivec<S> mat_type =
         gather(reinterpret_cast<const int *>(&sc.materials[0].type), mat_index * sizeof(material_t) / sizeof(int)) &
         0xff;
 
@@ -6503,8 +6503,8 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
     simd_fvec<S> mix_weight = 1.0f;
 
     // resolve mix material
-    const simd_ivec<S> is_mix_mat = (mat_type == int(eShadingNode::Mix));
-    if (is_mix_mat.not_all_zeros()) {
+    simd_ivec<S> is_mix_mat = (mat_type == int(eShadingNode::Mix));
+    while (is_mix_mat.not_all_zeros()) {
         const float *mix_values = &sc.materials[0].strength;
         simd_fvec<S> mix_val = gather(mix_values, mat_index * MatDWORDStride);
 
@@ -6576,6 +6576,11 @@ void Ray::NS::ShadeSurface(const pass_settings_t &ps, const float *random_seq, c
         where(is_add & use_mat2, mix_weight) = safe_div_pos(mix_weight, mix_val);
         where(use_mat2, mat_index) = mat2_index;
         where(use_mat2, mix_rand) = safe_div_pos(mix_rand, mix_val);
+
+        mat_type =
+            gather(reinterpret_cast<const int *>(&sc.materials[0].type), mat_index * sizeof(material_t) / sizeof(int)) &
+            0xff;
+        is_mix_mat = (mat_type == int(eShadingNode::Mix));
     }
 
     { // apply normal map
