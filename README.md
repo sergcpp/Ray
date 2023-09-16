@@ -5,14 +5,15 @@ Features:
 
 - Unidirectional pathtracing with NEE and skyportals
 - Principled BSDF, filmic tonemapping
+- Automatic texture compression
 - CPU backend accelerated using SSE/AVX/NEON extensions
 - GPU backends (Vulkan, DirectX 12) with optional HW raytracing
-- DNN denoiser (manual inference of OpenImageDenoise UNet), accelerated using VK_NV_cooperative_matrix if available
+- DNN denoising (manual inference of OpenImageDenoise UNet), accelerated using VK_NV_cooperative_matrix if available
 
 <details>
-  <summary>1-minute renders</summary>
+  <summary>Images</summary>
 
-  - Rendered with: <https://github.com/sergcpp/RayDemo>
+  - Rendered with time limit of 1 minute using: <https://github.com/sergcpp/RayDemo>
   - Links to the original scenes:  \
     https://benedikt-bitterli.me/resources/  \
     https://www.blender.org/download/demo-files/  \
