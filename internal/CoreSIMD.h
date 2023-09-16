@@ -1541,6 +1541,12 @@ force_inline void reflect(const simd_fvec<S> I[3], const simd_fvec<S> N[3], cons
 
 force_inline float pow5(const float v) { return (v * v) * (v * v) * v; }
 
+force_inline void TransformPoint(const float p[3], const float *xform, float out_p[3]) {
+    out_p[0] = xform[0] * p[0] + xform[4] * p[1] + xform[8] * p[2] + xform[12];
+    out_p[1] = xform[1] * p[0] + xform[5] * p[1] + xform[9] * p[2] + xform[13];
+    out_p[2] = xform[2] * p[0] + xform[6] * p[1] + xform[10] * p[2] + xform[14];
+}
+
 force_inline void TransformDirection(const float d[3], const float *xform, float out_d[3]) {
     out_d[0] = xform[0] * d[0] + xform[4] * d[1] + xform[8] * d[2];
     out_d[1] = xform[1] * d[0] + xform[5] * d[1] + xform[9] * d[2];
@@ -5187,21 +5193,22 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
 
             const simd_fvec<S> r1 = sqrt(ru), r2 = rv;
 
+            float p1[3], p2[3], p3[3];
+            TransformPoint(v1.p, ltr.xform, p1);
+            TransformPoint(v2.p, ltr.xform, p2);
+            TransformPoint(v3.p, ltr.xform, p3);
+
             const simd_fvec<S> luvs[2] = {v1.t[0] * (1.0f - r1) + r1 * (v2.t[0] * (1.0f - r2) + v3.t[0] * r2),
                                           v1.t[1] * (1.0f - r1) + r1 * (v2.t[1] * (1.0f - r2) + v3.t[1] * r2)};
 
-            const simd_fvec<S> lp_ls[3] = {v1.p[0] * (1.0f - r1) + r1 * (v2.p[0] * (1.0f - r2) + v3.p[0] * r2),
-                                           v1.p[1] * (1.0f - r1) + r1 * (v2.p[1] * (1.0f - r2) + v3.p[1] * r2),
-                                           v1.p[2] * (1.0f - r1) + r1 * (v2.p[2] * (1.0f - r2) + v3.p[2] * r2)};
+            const simd_fvec<S> lp[3] = {p1[0] * (1.0f - r1) + r1 * (p2[0] * (1.0f - r2) + p3[0] * r2),
+                                        p1[1] * (1.0f - r1) + r1 * (p2[1] * (1.0f - r2) + p3[1] * r2),
+                                        p1[2] * (1.0f - r1) + r1 * (p2[2] * (1.0f - r2) + p3[2] * r2)};
 
-            simd_fvec<S> lp[3];
-            TransformPoint(lp_ls, ltr.xform, lp);
-
-            const float temp1[3] = {v2.p[0] - v1.p[0], v2.p[1] - v1.p[1], v2.p[2] - v1.p[2]};
-            const float temp2[3] = {v3.p[0] - v1.p[0], v3.p[1] - v1.p[1], v3.p[2] - v1.p[2]};
-            float _light_forward[3], light_forward[3];
-            cross(temp1, temp2, _light_forward);
-            TransformDirection(_light_forward, ltr.xform, light_forward);
+            const float temp1[3] = {p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2]};
+            const float temp2[3] = {p3[0] - p1[0], p3[1] - p1[1], p3[2] - p1[2]};
+            float light_forward[3];
+            cross(temp1, temp2, light_forward);
 
             const float light_fwd_len =
                 sqrtf(light_forward[0] * light_forward[0] + light_forward[1] * light_forward[1] +

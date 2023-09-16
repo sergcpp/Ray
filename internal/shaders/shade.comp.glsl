@@ -967,9 +967,9 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, int hi, vec2 sample_off, 
         const vertex_t v2 = g_vertices[g_vtx_indices[ltri_index * 3 + 1]];
         const vertex_t v3 = g_vertices[g_vtx_indices[ltri_index * 3 + 2]];
 
-        const vec3 p1 = vec3(v1.p[0], v1.p[1], v1.p[2]),
-                   p2 = vec3(v2.p[0], v2.p[1], v2.p[2]),
-                   p3 = vec3(v3.p[0], v3.p[1], v3.p[2]);
+        const vec3 p1 = (ltr.xform * vec4(v1.p[0], v1.p[1], v1.p[2], 1.0)).xyz,
+                   p2 = (ltr.xform * vec4(v2.p[0], v2.p[1], v2.p[2], 1.0)).xyz,
+                   p3 = (ltr.xform * vec4(v3.p[0], v3.p[1], v3.p[2], 1.0)).xyz;
         const vec2 uv1 = vec2(v1.t[0], v1.t[1]),
                    uv2 = vec2(v2.t[0], v2.t[1]),
                    uv3 = vec2(v3.t[0], v3.t[1]);
@@ -978,9 +978,9 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, int hi, vec2 sample_off, 
         const float r2 = fract(g_random_seq[hi + RAND_DIM_LIGHT_V] + sample_off[1]);
 
         const vec2 luvs = uv1 * (1.0 - r1) + r1 * (uv2 * (1.0 - r2) + uv3 * r2);
-        const vec3 lp = (ltr.xform * vec4(p1 * (1.0 - r1) + r1 * (p2 * (1.0 - r2) + p3 * r2), 1.0)).xyz;
+        const vec3 lp = p1 * (1.0 - r1) + r1 * (p2 * (1.0 - r2) + p3 * r2);
 
-        vec3 light_forward = (ltr.xform * vec4(cross(p2 - p1, p3 - p1), 0.0)).xyz;
+        vec3 light_forward = cross(p2 - p1, p3 - p1);
         ls.area = 0.5 * length(light_forward);
         light_forward = normalize(light_forward);
 

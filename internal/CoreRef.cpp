@@ -3324,17 +3324,17 @@ void Ray::Ref::SampleLightSource(const simd_fvec4 &P, const simd_fvec4 &T, const
         const vertex_t &v2 = sc.vertices[sc.vtx_indices[ltri_index * 3 + 1]];
         const vertex_t &v3 = sc.vertices[sc.vtx_indices[ltri_index * 3 + 2]];
 
-        const simd_fvec4 p1 = simd_fvec4(v1.p[0], v1.p[1], v1.p[2], 0.0f),
-                         p2 = simd_fvec4(v2.p[0], v2.p[1], v2.p[2], 0.0f),
-                         p3 = simd_fvec4(v3.p[0], v3.p[1], v3.p[2], 0.0f);
+        const simd_fvec4 p1 = TransformPoint(simd_fvec4(v1.p[0], v1.p[1], v1.p[2], 0.0f), ltr.xform),
+                         p2 = TransformPoint(simd_fvec4(v2.p[0], v2.p[1], v2.p[2], 0.0f), ltr.xform),
+                         p3 = TransformPoint(simd_fvec4(v3.p[0], v3.p[1], v3.p[2], 0.0f), ltr.xform);
         const simd_fvec2 uv1 = simd_fvec2(v1.t), uv2 = simd_fvec2(v2.t), uv3 = simd_fvec2(v3.t);
 
         const float r1 = sqrtf(fract(random_seq[RAND_DIM_LIGHT_U] + sample_off[0]));
         const float r2 = fract(random_seq[RAND_DIM_LIGHT_V] + sample_off[1]);
 
         const simd_fvec2 luvs = uv1 * (1.0f - r1) + r1 * (uv2 * (1.0f - r2) + uv3 * r2);
-        const simd_fvec4 lp = TransformPoint(p1 * (1.0f - r1) + r1 * (p2 * (1.0f - r2) + p3 * r2), ltr.xform);
-        simd_fvec4 light_forward = TransformDirection(cross(p2 - p1, p3 - p1), ltr.xform);
+        const simd_fvec4 lp = p1 * (1.0f - r1) + r1 * (p2 * (1.0f - r2) + p3 * r2);
+        simd_fvec4 light_forward = cross(p2 - p1, p3 - p1);
         ls.area = 0.5f * length(light_forward);
         light_forward = normalize(light_forward);
 
