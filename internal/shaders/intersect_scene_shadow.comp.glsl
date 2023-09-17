@@ -118,8 +118,8 @@ bool Traverse_BLAS_WithStack(vec3 ro, vec3 rd, vec3 inv_d, int obj_index, uint n
                 const uint prim_index = is_backfacing ? -inter.prim_index - 1 : inter.prim_index;
                 const uint tri_index = g_tri_indices[prim_index];
 
-                const uint front_mi = (g_tri_materials[tri_index] >> 16u) & 0xffff;
-                const uint back_mi = (g_tri_materials[tri_index] & 0xffff);
+                const uint front_mi = (g_tri_materials[tri_index] & 0xffff);
+                const uint back_mi = (g_tri_materials[tri_index] >> 16u) & 0xffff;
 
                 if ((!is_backfacing && (front_mi & MATERIAL_SOLID_BIT) != 0) ||
                     (is_backfacing && (back_mi & MATERIAL_SOLID_BIT) != 0)) {
@@ -213,8 +213,8 @@ vec3 IntersectSceneShadow(shadow_ray_t r) {
 
         const uint tri_index = g_tri_indices[prim_index];
 
-        const uint front_mi = (g_tri_materials[tri_index] >> 16u) & 0xffff;
-        const uint back_mi = (g_tri_materials[tri_index] & 0xffff);
+        const uint front_mi = (g_tri_materials[tri_index] & 0xffff);
+        const uint back_mi = (g_tri_materials[tri_index] >> 16u) & 0xffff;
 
         const uint mat_index = (is_backfacing ? back_mi : front_mi) & MATERIAL_INDEX_BITS;
 
@@ -297,8 +297,8 @@ vec3 IntersectSceneShadow(shadow_ray_t r) {
             const int obj_index = rayQueryGetIntersectionInstanceIdEXT(rq, true);
             const int tri_index = primitive_offset + rayQueryGetIntersectionPrimitiveIndexEXT(rq, true);
 
-            const uint front_mi = (g_tri_materials[tri_index] >> 16u) & 0xffff;
-            const uint back_mi = (g_tri_materials[tri_index] & 0xffff);
+            const uint front_mi = (g_tri_materials[tri_index] & 0xffff);
+            const uint back_mi = (g_tri_materials[tri_index] >> 16u) & 0xffff;
 
             const bool is_backfacing = !rayQueryGetIntersectionFrontFaceEXT(rq, true);
             const bool solid_hit = (!is_backfacing && (front_mi & MATERIAL_SOLID_BIT) != 0) ||

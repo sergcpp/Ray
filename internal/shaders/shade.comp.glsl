@@ -1663,7 +1663,7 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
     const bool is_backfacing = (inter.prim_index < 0);
     const uint tri_index = is_backfacing ? -inter.prim_index - 1 : inter.prim_index;
 
-    material_t mat = g_materials[(g_tri_materials[tri_index] >> 16u) & MATERIAL_INDEX_BITS];
+    material_t mat = g_materials[g_tri_materials[tri_index] & MATERIAL_INDEX_BITS];
 
     const transform_t tr = g_transforms[floatBitsToUint(g_mesh_instances[inter.obj_index].bbox_min.w)];
 
@@ -1693,10 +1693,10 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
     surf.T = cross(surf.B, surf.N);
 
     if (is_backfacing) {
-        if ((g_tri_materials[tri_index] & 0xffff) == 0xffff) {
+        if (((g_tri_materials[tri_index] >> 16u) & 0xffff) == 0xffff) {
             return vec3(0.0);
         } else {
-            mat = g_materials[g_tri_materials[tri_index] & MATERIAL_INDEX_BITS];
+            mat = g_materials[(g_tri_materials[tri_index] >> 16u) & MATERIAL_INDEX_BITS];
             surf.plane_N = -surf.plane_N;
             surf.N = -surf.N;
             surf.B = -surf.B;

@@ -96,15 +96,15 @@ void main() {
         const bool is_backfacing = (inter.prim_index < 0);
         const uint tri_index = is_backfacing ? -inter.prim_index - 1 : inter.prim_index;
 
-        if ((!is_backfacing && ((g_tri_materials[tri_index] >> 16u) & MATERIAL_SOLID_BIT) != 0) ||
-            (is_backfacing && (g_tri_materials[tri_index] & MATERIAL_SOLID_BIT) != 0)) {
+        if ((!is_backfacing && (g_tri_materials[tri_index] & MATERIAL_SOLID_BIT) != 0) ||
+            (is_backfacing && ((g_tri_materials[tri_index] >> 16u) & MATERIAL_SOLID_BIT) != 0)) {
             // solid hit found
             break;
         }
 
-        material_t mat = g_materials[(g_tri_materials[tri_index] >> 16u) & MATERIAL_INDEX_BITS];
+        material_t mat = g_materials[g_tri_materials[tri_index] & MATERIAL_INDEX_BITS];
         if (is_backfacing) {
-            mat = g_materials[g_tri_materials[tri_index] & MATERIAL_INDEX_BITS];
+            mat = g_materials[(g_tri_materials[tri_index] >> 16u) & MATERIAL_INDEX_BITS];
         }
 
         const vertex_t v1 = g_vertices[g_vtx_indices[tri_index * 3 + 0]];
