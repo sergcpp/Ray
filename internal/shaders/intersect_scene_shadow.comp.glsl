@@ -402,7 +402,7 @@ float IntersectAreaLightsShadow(shadow_ray_t r) {
                 continue;
             }
 
-            uint light_type = (l.type_and_param0.x & 0xf);
+            const uint light_type = (l.type_and_param0.x & 0x7);
             if (light_type == LIGHT_TYPE_RECT) {
                 vec3 light_pos = l.RECT_POS;
                 vec3 light_u = l.RECT_U;

@@ -5220,27 +5220,30 @@ void Ray::NS::SampleLightSource(const simd_fvec<S> P[3], const simd_fvec<S> T[3]
             const simd_fvec<S> ls_dist = length(to_light);
             UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.L[i]) = safe_div_pos(to_light[i], ls_dist); })
 
-            simd_fvec<S> cos_theta = dot3(ls.L, light_forward);
+            simd_fvec<S> cos_theta = -dot3(ls.L, light_forward);
 
             simd_fvec<S> lp_biased[3], vlight_forward[3] = {light_forward[0], light_forward[1], light_forward[2]};
-            UNROLLED_FOR(i, 3, { where(cos_theta >= 0.0f, vlight_forward[i]) = -vlight_forward[i]; })
+            UNROLLED_FOR(i, 3, { where(cos_theta < 0.0f, vlight_forward[i]) = -vlight_forward[i]; })
             offset_ray(lp, vlight_forward, lp_biased);
             UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.lp[i]) = lp_biased[i]; })
+            if (l.doublesided) {
+                cos_theta = abs(cos_theta);
+            }
+            simd_ivec<S> accept = simd_cast(cos_theta > 0.0f) & ray_queue[index];
+            if (accept.not_all_zeros()) {
+                where(accept, ls.pdf) = safe_div_pos(ls_dist * ls_dist, ls.area * cos_theta);
 
-            cos_theta = abs(cos_theta);
-            where(simd_cast(cos_theta > 0.0f) & ray_queue[index], ls.pdf) =
-                safe_div_pos(ls_dist * ls_dist, ls.area * cos_theta);
-
-            if (l.tri.tex_index != 0xffffffff) {
-                simd_fvec<S> tex_col[4] = {};
-                SampleBilinear(textures, l.tri.tex_index, luvs, simd_ivec<S>{0}, tex_rand, ray_mask, tex_col);
-                if (l.tri.tex_index & TEX_YCOCG_BIT) {
-                    YCoCg_to_RGB(tex_col, tex_col);
+                if (l.tri.tex_index != 0xffffffff) {
+                    simd_fvec<S> tex_col[4] = {};
+                    SampleBilinear(textures, l.tri.tex_index, luvs, simd_ivec<S>{0}, tex_rand, accept, tex_col);
+                    if (l.tri.tex_index & TEX_YCOCG_BIT) {
+                        YCoCg_to_RGB(tex_col, tex_col);
+                    }
+                    if (l.tri.tex_index & TEX_SRGB_BIT) {
+                        srgb_to_rgb(tex_col, tex_col);
+                    }
+                    UNROLLED_FOR(i, 3, { where(accept, ls.col[i]) *= tex_col[i]; })
                 }
-                if (l.tri.tex_index & TEX_SRGB_BIT) {
-                    srgb_to_rgb(tex_col, tex_col);
-                }
-                UNROLLED_FOR(i, 3, { where(ray_queue[index], ls.col[i]) *= tex_col[i]; })
             }
         } else if (l.type == LIGHT_TYPE_ENV) {
             simd_fvec<S> dir_and_pdf[4];

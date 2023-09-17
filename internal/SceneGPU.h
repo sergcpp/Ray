@@ -1351,7 +1351,7 @@ inline Ray::MeshInstanceHandle Ray::NS::Scene::AddMeshInstance(const mesh_instan
 
     const std::pair<uint32_t, uint32_t> mi_index = mesh_instances_.push(mi);
 
-    { // find emissive triangles and add them as emitters
+    { // find emissive triangles and add them as light emitters
         const mesh_t &m = meshes_[mi_desc.mesh._index];
         for (uint32_t tri = (m.vert_index / 3); tri < (m.vert_index + m.vert_count) / 3; ++tri) {
             const tri_mat_data_t &tri_mat = tri_materials_cpu_[tri];
@@ -1359,27 +1359,51 @@ inline Ray::MeshInstanceHandle Ray::NS::Scene::AddMeshInstance(const mesh_instan
             SmallVector<uint16_t, 64> mat_indices;
             mat_indices.push_back(tri_mat.front_mi & MATERIAL_INDEX_BITS);
 
+            uint16_t front_emissive = 0xffff;
             for (int i = 0; i < int(mat_indices.size()); ++i) {
                 const material_t &mat = materials_[mat_indices[i]];
                 if (mat.type == eShadingNode::Emissive && (mat.flags & MAT_FLAG_MULT_IMPORTANCE)) {
-                    light_t new_light = {};
-                    new_light.type = LIGHT_TYPE_TRI;
-                    new_light.cast_shadow = 1;
-                    new_light.visible = 0;
-                    new_light.sky_portal = 0;
-                    new_light.blocking = 0;
-                    new_light.tri.tri_index = tri;
-                    new_light.tri.xform_index = mi.tr_index;
-                    new_light.tri.tex_index = mat.textures[BASE_TEXTURE];
-                    new_light.col[0] = mat.base_color[0] * mat.strength;
-                    new_light.col[1] = mat.base_color[1] * mat.strength;
-                    new_light.col[2] = mat.base_color[2] * mat.strength;
-                    const std::pair<uint32_t, uint32_t> index = lights_.push(new_light);
-                    li_indices_.PushBack(index.first);
+                    front_emissive = mat_indices[i];
+                    break;
                 } else if (mat.type == eShadingNode::Mix) {
                     mat_indices.push_back(mat.textures[MIX_MAT1]);
                     mat_indices.push_back(mat.textures[MIX_MAT2]);
                 }
+            }
+
+            mat_indices.clear();
+            mat_indices.push_back(tri_mat.back_mi & MATERIAL_INDEX_BITS);
+
+            uint16_t back_emissive = 0xffff;
+            for (int i = 0; i < int(mat_indices.size()); ++i) {
+                const material_t &mat = materials_[mat_indices[i]];
+                if (mat.type == eShadingNode::Emissive && (mat.flags & MAT_FLAG_MULT_IMPORTANCE)) {
+                    back_emissive = mat_indices[i];
+                    break;
+                } else if (mat.type == eShadingNode::Mix) {
+                    mat_indices.push_back(mat.textures[MIX_MAT1]);
+                    mat_indices.push_back(mat.textures[MIX_MAT2]);
+                }
+            }
+
+            if (front_emissive != 0xffff) {
+                const material_t &mat = materials_[front_emissive];
+
+                light_t new_light = {};
+                new_light.type = LIGHT_TYPE_TRI;
+                new_light.doublesided = (back_emissive != 0xffff) ? 1 : 0;
+                new_light.cast_shadow = 1;
+                new_light.visible = 0;
+                new_light.sky_portal = 0;
+                new_light.blocking = 0;
+                new_light.tri.tri_index = tri;
+                new_light.tri.xform_index = mi.tr_index;
+                new_light.tri.tex_index = mat.textures[BASE_TEXTURE];
+                new_light.col[0] = mat.base_color[0] * mat.strength;
+                new_light.col[1] = mat.base_color[1] * mat.strength;
+                new_light.col[2] = mat.base_color[2] * mat.strength;
+                const std::pair<uint32_t, uint32_t> index = lights_.push(new_light);
+                li_indices_.PushBack(index.first);
             }
         }
     }

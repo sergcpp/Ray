@@ -111,7 +111,7 @@ void main() {
 
             bool no_shadow = (l.type_and_param0.x & (1 << 4)) == 0;
 
-            uint light_type = (l.type_and_param0.x & 0xf);
+            const uint light_type = (l.type_and_param0.x & 0x7);
             if (light_type == LIGHT_TYPE_SPHERE) {
                 vec3 light_pos = l.SPH_POS;
                 vec3 op = light_pos - ro;

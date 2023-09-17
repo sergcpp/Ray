@@ -201,7 +201,8 @@ const int LIGHT_TYPE_TRI = 5;
 const int LIGHT_TYPE_ENV = 6;
 
 struct light_t {
-    uint32_t type : 4;
+    uint32_t type : 3;
+    uint32_t doublesided : 1;
     uint32_t cast_shadow : 1;
     uint32_t visible : 1;
     uint32_t sky_portal : 1;

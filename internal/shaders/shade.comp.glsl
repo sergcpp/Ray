@@ -771,7 +771,7 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, int hi, vec2 sample_off, 
     const vec2 tex_rand = vec2(fract(g_random_seq[hi + RAND_DIM_TEX_U] + sample_off[0]),
                                fract(g_random_seq[hi + RAND_DIM_TEX_V] + sample_off[1]));
 
-    const uint l_type = (l.type_and_param0.x & 0xf);
+    const uint l_type = (l.type_and_param0.x & 0x7);
     [[dont_flatten]] if (l_type == LIGHT_TYPE_SPHERE) {
         const float r1 = fract(g_random_seq[hi + RAND_DIM_LIGHT_U] + sample_off[0]);
         const float r2 = fract(g_random_seq[hi + RAND_DIM_LIGHT_V] + sample_off[1]);
@@ -988,17 +988,18 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, int hi, vec2 sample_off, 
         const float ls_dist = length(ls.L);
         ls.L /= ls_dist;
 
-        float cos_theta = dot(ls.L, light_forward);
-        ls.lp = offset_ray(lp, cos_theta >= 0.0 ? -light_forward : light_forward);
-
-        cos_theta = abs(cos_theta); // abs for doublesided light
-        [[flatten]] if (cos_theta > 0.0) {
-            ls.pdf = (ls_dist * ls_dist) / (ls.area * cos_theta);
+        float cos_theta = -dot(ls.L, light_forward);
+        ls.lp = offset_ray(lp, cos_theta >= 0.0 ? light_forward : -light_forward);
+        if ((l.type_and_param0.x & (1 << 3)) != 0) { // doublesided
+            cos_theta = abs(cos_theta);
         }
+        [[dont_flatten]] if (cos_theta > 0.0) {
+            ls.pdf = (ls_dist * ls_dist) / (ls.area * cos_theta);
 
-        const uint tex_index = floatBitsToUint(l.TRI_TEX_INDEX);
-        if (tex_index != 0xffffffff) {
-            ls.col *= SampleBilinear(tex_index, luvs, 0 /* lod */, tex_rand, true /* YCoCg */, true /* SRGB */).xyz;
+            const uint tex_index = floatBitsToUint(l.TRI_TEX_INDEX);
+            if (tex_index != 0xffffffff) {
+                ls.col *= SampleBilinear(tex_index, luvs, 0 /* lod */, tex_rand, true /* YCoCg */, true /* SRGB */).xyz;
+            }
         }
     } else [[dont_flatten]] if (l_type == LIGHT_TYPE_ENV) {
         const float rx = fract(g_random_seq[hi + RAND_DIM_LIGHT_U] + sample_off[0]);
@@ -1105,7 +1106,7 @@ vec3 Evaluate_LightColor(ray_data_t ray, hit_data_t inter, const vec2 tex_rand) 
         lcol *= env_col;
     }
 
-    const uint l_type = (l.type_and_param0.x & 0xf);
+    const uint l_type = (l.type_and_param0.x & 0x7);
     if (l_type == LIGHT_TYPE_SPHERE) {
         const vec3 light_pos = l.SPH_POS;
         const float light_area = l.SPH_AREA;
@@ -1800,7 +1801,7 @@ vec3 ShadeSurface(hit_data_t inter, ray_data_t ray, inout vec3 out_base_color, i
 #if USE_NEE
     light_sample_t ls;
     ls.col = ls.L = vec3(0.0);
-    ls.area = ls.pdf = 0;
+    ls.area = ls.pdf = 0.0;
     ls.dist_mul = 1.0;
     if (/*pi.should_add_direct_light() &&*/ g_params.li_count != 0 && mat.type != EmissiveNode) {
         SampleLightSource(surf.P, surf.T, surf.B, surf.N, hi, sample_off, ls);
