@@ -865,7 +865,7 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, int hi, vec2 sample_off, 
             const uint env_map = floatBitsToUint(g_params.env_col.w);
             if (env_map != 0xffffffff) {
 #if BINDLESS
-                env_col *= SampleLatlong_RGBE(env_map, ls.L, g_params.env_rotation, tex_rand);
+                env_col *= SampleLatlong_RGBE(env_map, ivec2(g_params.env_map_res >> 16u, g_params.env_map_res & 0xffff), ls.L, g_params.env_rotation, tex_rand);
 #else
                 env_col *= SampleLatlong_RGBE(g_textures[env_map], ls.L, g_params.env_rotation, tex_rand);
 #endif
@@ -919,7 +919,7 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, int hi, vec2 sample_off, 
             const uint env_map = floatBitsToUint(g_params.env_col.w);
             if (env_map != 0xffffffff) {
 #if BINDLESS
-                env_col *= SampleLatlong_RGBE(env_map, ls.L, g_params.env_rotation, tex_rand);
+                env_col *= SampleLatlong_RGBE(env_map, ivec2(g_params.env_map_res >> 16u, g_params.env_map_res & 0xffff), ls.L, g_params.env_rotation, tex_rand);
 #else
                 env_col *= SampleLatlong_RGBE(g_textures[env_map], ls.L, g_params.env_rotation, tex_rand);
 #endif
@@ -1027,7 +1027,7 @@ void SampleLightSource(vec3 P, vec3 T, vec3 B, vec3 N, int hi, vec2 sample_off, 
         const uint env_map = floatBitsToUint(g_params.env_col.w);
         if (env_map != 0xffffffff) {
 #if BINDLESS
-            ls.col *= SampleLatlong_RGBE(env_map, ls.L, g_params.env_rotation, tex_rand);
+            ls.col *= SampleLatlong_RGBE(env_map, ivec2(g_params.env_map_res >> 16u, g_params.env_map_res & 0xffff), ls.L, g_params.env_rotation, tex_rand);
 #else
             ls.col *= SampleLatlong_RGBE(g_textures[env_map], ls.L, g_params.env_rotation, tex_rand);
 #endif
@@ -1048,15 +1048,17 @@ vec3 Evaluate_EnvColor(ray_data_t ray, const vec2 tex_rand, const bool use_mis) 
 #if PRIMARY
     vec3 env_col = g_params.back_col.xyz;
     const uint env_map = floatBitsToUint(g_params.back_col.w);
+    const uint env_map_res = g_params.back_map_res;
     const float env_map_rotation = g_params.back_rotation;
 #else
     vec3 env_col = (ray.depth & 0x00ffffff) != 0 ? g_params.env_col.xyz : g_params.back_col.xyz;
     const uint env_map = (ray.depth & 0x00ffffff) != 0 ? floatBitsToUint(g_params.env_col.w) : floatBitsToUint(g_params.back_col.w);
+    const uint env_map_res = (ray.depth & 0x00ffffff) != 0 ? g_params.env_map_res : g_params.back_map_res;
     const float env_map_rotation = (ray.depth & 0x00ffffff) != 0 ? g_params.env_rotation : g_params.back_rotation;
 #endif
     if (env_map != 0xffffffff) {
 #if BINDLESS
-        env_col *= SampleLatlong_RGBE(env_map, rd, env_map_rotation, tex_rand);
+        env_col *= SampleLatlong_RGBE(env_map, ivec2(env_map_res >> 16u, env_map_res & 0xffff), rd, env_map_rotation, tex_rand);
 #else
         env_col *= SampleLatlong_RGBE(g_textures[env_map], rd, env_map_rotation, tex_rand);
 #endif
@@ -1098,7 +1100,7 @@ vec3 Evaluate_LightColor(ray_data_t ray, hit_data_t inter, const vec2 tex_rand) 
         const uint env_map = floatBitsToUint(g_params.env_col.w);
         if (env_map != 0xffffffff) {
 #if BINDLESS
-            env_col *= SampleLatlong_RGBE(env_map, rd, g_params.env_rotation, tex_rand);
+            env_col *= SampleLatlong_RGBE(env_map, ivec2(g_params.env_map_res >> 16u, g_params.env_map_res & 0xffff), rd, g_params.env_rotation, tex_rand);
 #else
             env_col *= SampleLatlong_RGBE(g_textures[env_map], rd, g_params.env_rotation, tex_rand);
 #endif

@@ -2040,6 +2040,9 @@ void Ray::Vk::Renderer::kernel_ShadePrimaryHits(
     memcpy(&uniform_params.back_col[0], env.back_col, 3 * sizeof(float));
     memcpy(&uniform_params.back_col[3], &env.back_map, sizeof(uint32_t));
 
+    uniform_params.env_map_res = env.env_map_res;
+    uniform_params.back_map_res = env.back_map_res;
+
     uniform_params.env_rotation = env.env_map_rotation;
     uniform_params.back_rotation = env.back_map_rotation;
     uniform_params.env_mult_importance = sc_data.env->light_index != 0xffffffff ? 1 : 0;
@@ -2123,6 +2126,9 @@ void Ray::Vk::Renderer::kernel_ShadeSecondaryHits(CommandBuffer cmd_buf, const p
     memcpy(&uniform_params.env_col[3], &env.env_map, sizeof(uint32_t));
     memcpy(&uniform_params.back_col[0], env.back_col, 3 * sizeof(float));
     memcpy(&uniform_params.back_col[3], &env.back_map, sizeof(uint32_t));
+
+    uniform_params.env_map_res = env.env_map_res;
+    uniform_params.back_map_res = env.back_map_res;
 
     uniform_params.env_rotation = env.env_map_rotation;
     uniform_params.back_rotation = env.back_map_rotation;

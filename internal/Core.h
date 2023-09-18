@@ -426,6 +426,8 @@ struct environment_t {
     int qtree_levels;
     bool multiple_importance;
     uint32_t light_index;
+    uint32_t env_map_res; // 16-bit
+    uint32_t back_map_res; // 16-bit
 };
 
 force_inline float to_norm_float(uint8_t v) {

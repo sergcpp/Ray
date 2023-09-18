@@ -43,7 +43,7 @@ vec4 SampleBilinear(const uint index, const vec2 uvs, const int lod, const vec2 
     return SampleBilinear(index, uvs, lod, rand, false, false);
 }
 
-vec3 SampleLatlong_RGBE(const uint index, const vec3 dir, const float y_rotation, const vec2 rand) {
+vec3 SampleLatlong_RGBE(const uint index, ivec2 tex_size, const vec3 dir, const float y_rotation, const vec2 rand) {
     const float theta = acos(clamp(dir[1], -1.0, 1.0)) / PI;
     const float r = sqrt(dir[0] * dir[0] + dir[2] * dir[2]);
 
@@ -58,11 +58,10 @@ vec3 SampleLatlong_RGBE(const uint index, const vec3 dir, const float y_rotation
     const float u = fract(0.5 * phi / PI);
 
     const uint tex = (index & 0x00ffffff);
-    ivec2 size = textureSize(g_textures[tex], 0);
-    const vec2 uvs = vec2(u, theta) * vec2(size);
+    const vec2 uvs = vec2(u, theta) * vec2(tex_size);
 
 #if USE_STOCH_TEXTURE_FILTERING
-    const vec4 p00 = texelFetch(g_textures[nonuniformEXT(tex)], min(ivec2(uvs + rand - 0.5), size - 1), 0);
+    const vec4 p00 = texelFetch(g_textures[nonuniformEXT(tex)], min(ivec2(uvs + rand - 0.5), tex_size - 1), 0);
     return rgbe_to_rgb(p00);
 #else // USE_STOCH_TEXTURE_FILTERING
     const vec4 p00 = texelFetchOffset(g_textures[nonuniformEXT(tex)], ivec2(uvs), 0, ivec2(0, 0));
@@ -80,6 +79,11 @@ vec3 SampleLatlong_RGBE(const uint index, const vec3 dir, const float y_rotation
 
     return (p1X * k[1] + p0X * (1 - k[1]));
 #endif // USE_STOCH_TEXTURE_FILTERING
+}
+
+vec3 SampleLatlong_RGBE(const uint index, const vec3 dir, const float y_rotation, const vec2 rand) {
+    ivec2 tex_size = textureSize(g_textures[nonuniformEXT(index & 0x00ffffff)], 0);
+    return SampleLatlong_RGBE(index, tex_size, dir, y_rotation, rand);
 }
 
 #else // BINDLESS

@@ -1485,6 +1485,20 @@ inline void Ray::NS::Scene::Finalize() {
         env_map_qtree_.tex = Texture2D("Env map qtree", ctx_, p, ctx_->default_memory_allocs(), log_);
     }
 
+    if (use_bindless_ && env_.env_map != InvalidTextureHandle._index) {
+        const auto &env_map_params = bindless_textures_[env_.env_map].params;
+        env_.env_map_res = (env_map_params.w << 16) | env_map_params.h;
+    } else {
+        env_.env_map_res = 0;
+    }
+
+    if (use_bindless_ && env_.back_map != InvalidTextureHandle._index) {
+        const auto &back_map_params = bindless_textures_[env_.back_map].params;
+        env_.back_map_res = (back_map_params.w << 16) | back_map_params.h;
+    } else {
+        env_.back_map_res = 0;
+    }
+
     GenerateTextureMips_nolock();
     PrepareBindlessTextures_nolock();
     RebuildHWAccStructures_nolock();
