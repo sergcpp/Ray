@@ -183,8 +183,14 @@ class Scene : public SceneCommon {
 
     void Finalize() override;
 
-    uint32_t triangle_count() const override { return 0; }
-    uint32_t node_count() const override { return 0; }
+    uint32_t triangle_count() const override {
+        std::shared_lock<std::shared_timed_mutex> lock(mtx_);
+        return uint32_t(vtx_indices_.size() / 3);
+    }
+    uint32_t node_count() const override {
+        std::shared_lock<std::shared_timed_mutex> lock(mtx_);
+        return uint32_t(nodes_.size());
+    }
 };
 } // namespace NS
 } // namespace Ray
@@ -446,7 +452,8 @@ inline Ray::TextureHandle Ray::NS::Scene::AddBindlessTexture_nolock(const tex_de
                               ? expected_mip_count
                               : std::min(_t.mips_count, expected_mip_count);
 
-    Buffer temp_stage_buf("Temp stage buf", ctx_, eBufType::Upload, 3 * _t.w * _t.h * 4 + 4096 * mip_count); // allocate for worst case
+    Buffer temp_stage_buf("Temp stage buf", ctx_, eBufType::Upload,
+                          3 * _t.w * _t.h * 4 + 4096 * mip_count); // allocate for worst case
     uint8_t *stage_data = temp_stage_buf.Map();
 
     bool use_compression = use_tex_compression_ && !_t.force_no_compression;
@@ -1600,13 +1607,13 @@ inline void Ray::NS::Scene::PrepareSkyEnvMap_nolock() {
         }
     }
 
-    //if (dir_lights.empty()) {
-    //    env_.env_map = InvalidTextureHandle._index;
-    //    if (env_.back_map == PhysicalSkyTexture._index) {
-    //        env_.back_map = InvalidTextureHandle._index;
-    //    }
-    //    return;
-    //}
+    // if (dir_lights.empty()) {
+    //     env_.env_map = InvalidTextureHandle._index;
+    //     if (env_.back_map == PhysicalSkyTexture._index) {
+    //         env_.back_map = InvalidTextureHandle._index;
+    //     }
+    //     return;
+    // }
 
     static const int SkyEnvRes[] = {512, 256};
     std::vector<uint8_t> rgbe_pixels(4 * SkyEnvRes[0] * SkyEnvRes[1]);
